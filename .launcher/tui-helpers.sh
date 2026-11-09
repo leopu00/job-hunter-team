@@ -233,6 +233,24 @@ _tui_norm() {
   LC_ALL=C sed 's/│//g; s/┃//g' | LC_ALL=C tr -d ' \t\r\n'
 }
 
+# La TUI di Pi (--tui-mode regular) non ha marker: la bozza sta fra due righe orizzontali, sotto c'e' la cartella e
+# l'ULTIMA riga e' quella dei totali («0.3%/272k (auto)   gpt-5.6-terra • low»; claude e codex non la disegnano).
+# Un messaggio gia' consegnato resta nella conversazione, SOPRA le righe: guardare «le ultime 10 righe» lo scambierebbe
+# per una bozza. Il turno in corso e' «⠹ Working» sulla riga alta, non «esc to interrupt».
+# _tui_pi_screen <pane>: 0 se il pane finisce come quello di Pi. _tui_pi_rows <pane>: la riga alta e le righe della bozza.
+_tui_pi_screen() {
+  printf '%s\n' "$1" | grep -v '^[[:space:]]*$' | tail -n 1 \
+    | LC_ALL=C grep -qE '(^|[[:space:]])([0-9]+(\.[0-9]+)?%|\?)/[0-9]+(\.[0-9]+)?[kM]?([[:space:]]|$)' || return 1
+  [ "$(printf '%s\n' "$1" | LC_ALL=C grep -cE '^(─){2}.*(─){10}[[:space:]]*$')" -ge 2 ]
+}
+_tui_pi_rows() {
+  local rules top bottom
+  rules=$(printf '%s\n' "$1" | LC_ALL=C grep -nE '^(─){2}.*(─){10}[[:space:]]*$' | cut -d: -f1 | tail -n 2)
+  top=$(printf '%s\n' "$rules" | head -n 1)
+  bottom=$(printf '%s\n' "$rules" | tail -n 1)
+  printf '%s\n' "$1" | sed -n "${top},$((bottom - 1))p"
+}
+
 # Il COMPOSER: dall'ULTIMA riga che inizia col marker di input ("❯" Claude
 # Code/Kimi, "›" Codex, ">" build vecchie, "▌" cursore a blocco), anche dietro
 # il bordo del box, fino in fondo al pane. L'ultima e non la prima: dopo un
@@ -242,6 +260,7 @@ _tui_norm() {
 # che costa un Enter in piu', mai un "SENT OK" falso.
 _tui_composer() {
   local start
+  _tui_pi_screen "$1" && { _tui_pi_rows "$1" | sed -n '2,$p'; return 0; }
   start=$(printf '%s\n' "$1" \
     | LC_ALL=C grep -nE '^[[:space:]]*[^[:alnum:][:space:]]{0,4}[[:space:]]*(❯|›|>|▌)' \
     | tail -n 1 | cut -d: -f1)
@@ -282,6 +301,7 @@ _tui_pane_busy() {
   done <<EOF
 $(printf '%s\n' "$1" | tail -n 10)
 EOF
+  _tui_pi_screen "$1" && case "$(_tui_pi_rows "$1" | head -n 1)" in *" Working "*) return 0 ;; esac
   return 1
 }
 

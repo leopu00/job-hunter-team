@@ -378,3 +378,74 @@ def test_manual_resolution_replaces_the_stale_timeout_with_an_explicit_observati
     assert state["code"] == "codex_dialog_ready" and state["attempted"] is False
     assert "no automatic recovery is claimed" in notices[-1]
     assert pane.keys == ["Down", "Enter"]
+
+
+# ── Pi: the same kickoff, without the Codex dialogs ──────────────────────
+
+def _pi_runtime(screens):
+    from pi_screens import screen as pi_screen
+
+    class Runtime(Pane):
+        def call(self, *args):
+            return "%4"
+
+        def capture(self, pane):
+            return screens.pop(0) if len(screens) > 1 else screens[0]
+    runtime = Runtime()
+    runtime.pi_screen = pi_screen
+    return runtime
+
+
+def test_kickoff_waits_for_pis_composer_and_delivers_whatever_the_provider(tmp_path):
+    import spawn_kickoff
+    from pi_screens import screen
+
+    booting = "fd not found. Downloading...\nripgrep not found. Downloading...\n"
+    runtime = _pi_runtime([booting, booting, screen()])
+    sleeps, delivered = [], []
+    for provider in ("openai", "anthropic", ""):
+        assert spawn_kickoff.kickoff("DOTTORE", "synthetic task", provider, tmp_path, tmux=runtime,
+                                      sleeper=sleeps.append, deliver=lambda *a: delivered.append(a) or True,
+                                      harness="pi")
+        runtime.capture = lambda pane: screen()
+    # the spawner of the Dottore and the Mantenitore names the CLI ("pi") as the provider
+    runtime.capture = lambda pane: screen()
+    assert spawn_kickoff.kickoff("DOTTORE", "synthetic task", "pi", tmp_path, tmux=runtime, sleeper=sleeps.append,
+                                  deliver=lambda *a: delivered.append(a) or True)
+    assert delivered == [("DOTTORE", "synthetic task")] * 4
+    assert sleeps[:3] == [6, 3, 3]
+    assert not runtime.keys, "no key is pressed on Pi's TUI by the kickoff"
+
+
+@pytest.mark.parametrize("draft", [["una bozza"], None])
+def test_kickoff_does_not_paste_over_a_draft_or_a_composer_that_never_appears(tmp_path, draft):
+    import spawn_kickoff
+    from pi_screens import screen
+
+    runtime = _pi_runtime([screen(draft) if draft else "fd not found. Downloading...\n"])
+    delivered = []
+    assert not spawn_kickoff.kickoff("DOTTORE", "synthetic task", "openai", tmp_path, tmux=runtime,
+                                      sleeper=lambda _: None, deliver=lambda *a: delivered.append(a) or True,
+                                      harness="pi")
+    assert not delivered
+    assert "message_not_delivered" in (tmp_path / "logs/runtime.log").read_text()
+
+
+def test_the_harness_of_a_session_is_read_from_its_option():
+    import spawn_kickoff
+
+    class Runtime:
+        def __init__(self, out):
+            self.out, self.seen = out, []
+
+        def call(self, *args):
+            self.seen.append(args)
+            if self.out is None:
+                raise OSError("no tmux")
+            return self.out
+    assert spawn_kickoff.session_harness("SCOUT-1", Runtime("pi\n")) == "pi"
+    assert spawn_kickoff.session_harness("SCOUT-1", Runtime("")) == ""
+    assert spawn_kickoff.session_harness("SCOUT-1", Runtime(None)) == ""
+    asked = Runtime("pi")
+    spawn_kickoff.session_harness("SCOUT-1", asked)
+    assert asked.seen == [("show-options", "-qv", "-t", "=SCOUT-1", "@jht_harness")]
