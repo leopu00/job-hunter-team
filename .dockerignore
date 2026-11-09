@@ -58,11 +58,14 @@ Dockerfile
 **/shared/data/*.log
 candidate_profile.yml
 candidate_profile.hr.yml
-# Le tre eccezioni, e sono contenuto che serve — non deroghe di comodo.
+# L'eccezione, ed e' contenuto che serve — non una deroga di comodo.
 # `shared/release/version.js` lo importa `cli/src/lib/release-check.js`, che
 # gira DENTRO il container: escluderlo romperebbe l'immagine invece di
-# ripulirla. Le altre due sono file dell'albero `web/`, dove `docs` e `game`
-# sono una route e degli asset, non documentazione e non un gioco.
+# ripulirla.
 !shared/release/
-!web/app/docs/
-!web/public/tutorials/game/
+# L'albero `web/` (sito, route, asset) gira solo in cloud, buildato altrove: nel
+# container non lo legge nessuno (nessun percorso `/app/web` nel runtime, nei
+# lanciatori, nelle skill) e pesava ~46 MB da scaricare a ogni primo setup.
+# Resta nel contesto di sviluppo (`docker-compose.dev.yml` lo monta a parte) e
+# la cartella vuota `/app/web/.next` la crea il Dockerfile.
+web/

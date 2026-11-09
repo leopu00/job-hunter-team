@@ -13,7 +13,7 @@ requests==2.34.2
 tldextract==5.4.0
 google-auth==2.56.2
 google-auth-oauthlib==1.4.0
-google-api-python-client==2.198.0
+# google-api-python-client (~100 MB, one script: db_to_drive.py) is NOT here: the first use installs it, pinned in shared/skills/db_to_drive.py
 gspread==6.2.1
 # Pin delle transitive con advisory noti, alzate a mano (04/11): requests porta
 # certifi (corretto nella 2026.10.18: CA di emSign con intermedi compromessi) e

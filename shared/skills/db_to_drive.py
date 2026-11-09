@@ -24,6 +24,7 @@ import json
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _db import get_db, ensure_schema
+from optional_libs import ensure as _ensure_library
 
 # Cartella root su Drive — configura JH_DRIVE_FOLDER_ID nel tuo .env
 DRIVE_FOLDER_ID = os.environ.get("JH_DRIVE_FOLDER_ID", "")
@@ -98,8 +99,14 @@ def get_oauth_creds():
     return creds
 
 
+def _ensure_drive_client():
+    """The Drive client is not in the image (~100 MB for this one script): the first use installs it."""
+    _ensure_library("googleapiclient", "google-api-python-client==2.198.0", "Google Drive")
+
+
 def get_drive_service():
     """Crea il servizio Google Drive API con OAuth2."""
+    _ensure_drive_client()
     from googleapiclient.discovery import build
     creds = get_oauth_creds()
     return build('drive', 'v3', credentials=creds)
@@ -164,6 +171,7 @@ def get_or_create_subfolder(service, parent_id, folder_name):
 
 def upload_file(service, local_path, parent_folder_id, filename=None):
     """Carica un file su Drive, ritorna file ID."""
+    _ensure_drive_client()
     from googleapiclient.http import MediaFileUpload
 
     if filename is None:
