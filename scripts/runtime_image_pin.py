@@ -274,6 +274,9 @@ def verify_tree(
                 raise RuntimeImagePinError("consumer_digest_drift")
         if MUTABLE_RELEASE_REF_RE.search(text):
             raise RuntimeImagePinError("consumer_mutable_ref")
+    if pin.core_digest and not CORE_CONSUMER_PATTERNS:
+        # a core digest with nobody checking that the copies carry it would pass for «verified»: refuse before the core is switched on
+        raise RuntimeImagePinError("core_consumers_missing")
     for relative, patterns in CORE_CONSUMER_PATTERNS.items():
         try:
             text = (root / relative).read_text(encoding="utf-8")
@@ -308,6 +311,7 @@ def update_tree(
     release_version: str | None = None,
     manifest_path: Path = MANIFEST_PATH,
     core_digest: str | None = None,
+    drop_core: bool = False,
 ) -> RuntimeImagePin:
     """Point the manifest and EVERY consumer at a new image, or change nothing.
 
@@ -326,6 +330,14 @@ def update_tree(
     if version != package_version:
         raise RuntimeImagePinError("release_version_mismatch")
     # the same validation the manifest gets when it is read back
+    if core_digest is None and not drop_core:
+        # the old manifest need not be readable (it is what is being replaced), but a core digest it HAS is not dropped in silence
+        try:
+            kept = load_manifest(manifest_path).core_digest
+        except RuntimeImagePinError:
+            kept = None
+        if kept:
+            raise RuntimeImagePinError("core_digest_dropped")
     pin = RuntimeImagePin(version, "ghcr.io/leopu00/jht", digest, source_revision, core_digest)
     if core_digest is not None and (not DIGEST_RE.fullmatch(core_digest) or core_digest == digest):
         raise RuntimeImagePinError("core_digest_invalid")
@@ -685,6 +697,7 @@ def _parser() -> argparse.ArgumentParser:
     update.add_argument("--digest", help="the multi-architecture index digest, sha256:...")
     update.add_argument("--source-revision", help="the commit the image was built from")
     update.add_argument("--core-digest", help="the digest of the core image (schema 2); without it the manifest stays schema 1")
+    update.add_argument("--drop-core", action="store_true", help="go back to schema 1: drop the core digest the manifest has (never done in silence)")
     update.add_argument(
         "--from-registry",
         action="store_true",
@@ -721,7 +734,7 @@ def main(argv: list[str] | None = None) -> int:
                 revision = found
             elif revision is None:
                 raise RuntimeImagePinError("update_source_ambiguous")
-            done = update_tree(args.root, digest, revision, args.release_version, args.manifest, args.core_digest)
+            done = update_tree(args.root, digest, revision, args.release_version, args.manifest, args.core_digest, args.drop_core)
             print(f"runtime-image-pin result=pass code=tree_updated image={done.image_ref} revision={done.source_revision}")
             return 0
         pin = load_manifest(manifest)
