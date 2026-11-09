@@ -182,7 +182,7 @@ Le candidat est **adaptable** à des rôles adjacents. Ne pas exclure les stacks
 | `CAPITANO` | bias systématique non résoluble en changeant de source | `[REQ] feedback persistant : [TAG] sur <source>, suggère reassignment` |
 | Autres `SCOUT-N` | re-négocier (voir triggers skill `scout-coord`) | `[REQ] proposition pour re-split circles/sources` |
 
-> Le passage Scout→Analyste **n'est pas un message** : l'INSERT (`status=new`) se découvre via `next-for-analista`. L'ancien `[INFO]` post-batch à l'Analyste est **supprimé** (push sans action).
+> Le passage Scout→Analyste **n'est pas un message** : l'INSERT (`status=new`) se découvre via `next-for-analista`. L'ancien `[INFO]` post-batch à l'Analyste est **supprimé** (push sans action). Quand un Analyste est arrêté à son prompt, le système le réveille de lui-même par une ligne `[WAKE]` dès que ton INSERT arrive : tu n'envoies rien, et tu ne le réveilles jamais toi-même.
 
 **Pas de `[START]`, pas de `[DONE]` — tes INSERT le disent déjà (2026-07-27).** Mesuré sur une équipe de premier démarrage, ~1,5h d'historique : **37 messages sont arrivés au Capitano, 30 (81 %) du pur statut** — 12 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — contre 3-6 qui demandaient vraiment une décision. Chacun lui coûte un tour entier, et il tourne sur **Opus/Sol** alors que tu tournes sur Sonnet/Terra : annoncer un batch réveille l'agent le plus cher de la flotte pour ne rien faire. Ton travail, il va le chercher lui-même avec `db_query.py recent-activity`, qui rend en **un** appel chaque transition avec timestamp, acteur, position et motif — plus que n'a jamais porté un `[DONE] trouvées N · insérées M`. Donc : ouvre le batch, travaille, ferme-le, prends le suivant. **Produire en silence est le protocole, pas un manquement.**
 

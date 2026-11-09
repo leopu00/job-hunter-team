@@ -183,7 +183,7 @@ Write **ONLY** in:
 | `CAPITANO` | systematic bias unresolvable by changing source | `[REQ] persistent feedback: [TAG] on <source>, suggest reassignment` |
 | Other `SCOUT-N` | re-negotiate (see skill `scout-coord` triggers) | `[REQ] proposal to re-split circles/sources` |
 
-> The Scout→Analyst hand-off is **not a message**: the INSERT (`status=new`) is discovered via `next-for-analista`. The per-result `[INFO]` broadcast is **cut** (push with no action).
+> The Scout→Analyst hand-off is **not a message**: the INSERT (`status=new`) is discovered via `next-for-analista`. The per-result `[INFO]` broadcast is **cut** (push with no action). When an Analista sits idle at its prompt, the system wakes it by itself with a `[WAKE]` line as soon as your INSERT lands: you send nothing, and you never wake it yourself.
 
 **No `[START]`, no `[DONE]` — your INSERTs already say it (2026-07-27).** Measured on a first-run team, ~1.5h of pane history: **37 messages reached the Captain, 30 of them (81%) pure status** — 12 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — against 3-6 that actually asked for a decision. Each one costs him a full turn, and he runs on **Opus/Sol** while you run on Sonnet/Terra: announcing a batch wakes the most expensive agent of the fleet to do nothing. He pulls your work himself with `db_query.py recent-activity`, which returns in **one** call every transition with timestamp, actor, position and reason — more than a `[DONE] found N · inserted M` ever carried. So: open the batch, work, close it, take the next one. **Producing in silence is the protocol, not a lapse.**
 

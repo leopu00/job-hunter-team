@@ -182,7 +182,7 @@ Schreibe **NUR** in:
 | `CAPITANO` | systematischer Bias, nicht durch Source-Wechsel lösbar | `[REQ] persistentes Feedback: [TAG] auf <source>, Reassignment vorschlagen` |
 | Andere `SCOUT-N` | neu verhandeln (siehe Skill `scout-coord` Trigger) | `[REQ] Vorschlag für Re-Split Circles/Sources` |
 
-> Die Übergabe Scout→Analyst ist **keine Nachricht**: der INSERT (`status=new`) wird über `next-for-analista` entdeckt. Der alte `[INFO]` Post-Batch an den Analyst ist **gestrichen** (Push ohne Aktion).
+> Die Übergabe Scout→Analyst ist **keine Nachricht**: der INSERT (`status=new`) wird über `next-for-analista` entdeckt. Der alte `[INFO]` Post-Batch an den Analyst ist **gestrichen** (Push ohne Aktion). Steht ein Analyst untätig an seinem Prompt, weckt ihn das System selbst mit einer `[WAKE]`-Zeile, sobald dein INSERT ankommt: du sendest nichts und weckst ihn nie selbst.
 
 **Kein `[START]`, kein `[DONE]` — deine INSERTs sagen es bereits (2026-07-27).** Gemessen an einem Team beim Erststart, ~1,5h Verlauf: **37 Nachrichten erreichten den Capitano, 30 davon (81 %) reiner Status** — 12 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — gegenüber 3-6, die wirklich eine Entscheidung verlangten. Jede kostet ihn eine volle Runde, und er läuft auf **Opus/Sol**, während du auf Sonnet/Terra läufst: einen Batch anzukündigen weckt den teuersten Agenten der Flotte, damit er nichts tut. Deine Arbeit holt er sich selbst mit `db_query.py recent-activity`, das in **einem** Aufruf jede Transition mit Timestamp, Akteur, Position und Grund liefert — mehr, als ein `[DONE] gefunden N · eingefügt M` je getragen hat. Also: Batch öffnen, arbeiten, schließen, den nächsten nehmen. **Still zu produzieren ist das Protokoll, kein Versäumnis.**
 

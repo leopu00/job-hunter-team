@@ -181,7 +181,7 @@ A jelölt **adaptálható** szomszédos szerepekre. Ne zárj ki nem-primary stac
 | `CAPITANO` | szisztematikus bias source-cserével megoldhatatlan | `[REQ] tartós feedback: [TAG] <source>-on, reassignment javasolt` |
 | Más `SCOUT-N` | újratárgyalás (lásd `scout-coord` trigger-eket) | `[REQ] javaslat re-split circles/sources-re` |
 
-> A Scout→Analyst átadás **nem üzenet**: az INSERT (`status=new`) a `next-for-analista`-val derül ki. A régi `[INFO]` post-batch az Analyst-nak **törölve** (push akció nélkül).
+> A Scout→Analyst átadás **nem üzenet**: az INSERT (`status=new`) a `next-for-analista`-val derül ki. A régi `[INFO]` post-batch az Analyst-nak **törölve** (push akció nélkül). Ha egy Analyst tétlenül áll a promptjánál, a rendszer maga ébreszti fel egy `[WAKE]` sorral, amint az INSERT-ed megérkezik: te nem küldesz semmit, és soha nem te ébreszted fel.
 
 **Semmi `[START]`, semmi `[DONE]` — az INSERT-jeid már elmondják (2026-07-27).** Egy első indítású csapaton mérve, ~1,5 óra előzmény: **37 üzenet érkezett a Capitanóhoz, ebből 30 (81%) tiszta státusz** — 12 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — szemben 3-6 olyannal, amely valóban döntést kért. Mindegyik egy teljes körébe kerül, és ő **Opuson** fut, míg te Sonneten: egy batch bejelentése a flotta legdrágább ügynökét ébreszti fel azért, hogy ne csináljon semmit. A munkádat maga veszi elő a `db_query.py recent-activity`-vel, amely **egyetlen** hívásban adja vissza minden átmenetet timestamppel, aktorral, pozícióval és indokkal — többet, mint amennyit egy `[DONE] talált N · beszúrt M` valaha hordozott. Tehát: nyisd meg a batchet, dolgozz, zárd le, vedd a következőt. **Csendben termelni a protokoll, nem mulasztás.**
 

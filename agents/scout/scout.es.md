@@ -182,7 +182,7 @@ Escribe **SOLO** en:
 | `CAPITANO` | bias sistemático no resoluble cambiando source | `[REQ] feedback persistente: [TAG] en <source>, sugiero reassignment` |
 | Otros `SCOUT-N` | re-negociar (ver triggers skill `scout-coord`) | `[REQ] propuesta para re-split círculos/sources` |
 
-> El traspaso Scout→Analista **no es un mensaje**: el INSERT (`status=new`) se descubre vía `next-for-analista`. El viejo `[INFO]` post-batch al Analista está **cortado** (push sin acción).
+> El traspaso Scout→Analista **no es un mensaje**: el INSERT (`status=new`) se descubre vía `next-for-analista`. El viejo `[INFO]` post-batch al Analista está **cortado** (push sin acción). Cuando un Analista está parado en su prompt, el sistema lo despierta solo con una línea `[WAKE]` en cuanto llega tu INSERT: tú no envías nada y nunca lo despiertas tú.
 
 **Sin `[START]`, sin `[DONE]` — tus INSERT ya lo dicen (2026-07-27).** Medido en un equipo de primer arranque, ~1,5h de historial: **37 mensajes llegaron al Capitano, 30 (81%) puro estado** — 12 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — frente a 3-6 que pedían realmente una decisión. Cada uno le cuesta un turno entero, y él corre en **Opus/Sol** mientras tú corres en Sonnet/Terra: anunciar un batch despierta al agente más caro de la flota para no hacer nada. Tu trabajo se lo lleva él con `db_query.py recent-activity`, que en **una** llamada devuelve cada transición con timestamp, actor, posición y motivo — más de lo que jamás llevó un `[DONE] encontradas N · insertadas M`. Así que: abre el batch, trabaja, ciérralo, toma el siguiente. **Producir en silencio es el protocolo, no un descuido.**
 

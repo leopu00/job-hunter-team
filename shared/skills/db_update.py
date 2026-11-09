@@ -37,7 +37,9 @@ from _db import get_db, ensure_schema, resolve_company_id, _column_exists, LOCAT
 from external_content import normalize_external_inline_fields
 import role_taxonomy
 import maintenance_log
+import event_wake
 from company_about import clean_about
+from text_escapes import interpret_escapes  # moved out to keep this file from growing; still reachable as db_update.interpret_escapes
 
 # Campi il cui valore racconta la manutenzione. Vengono fotografati PRIMA
 # dell'UPDATE e riletti dopo, così l'evento registra il diff e non il fatto
@@ -151,35 +153,6 @@ def _guard_role_family(conn, raw, _active=None):
             if role_taxonomy.normalize_key(a) == key:
                 return a, ""
     return _SENTINEL, v
-
-
-def interpret_escapes(text):
-    """Converte le escape LETTERALI \\n \\t \\r in caratteri veri.
-
-    Gli agenti (LLM) scrivono `\\n\\n` come separatori di paragrafo dentro una
-    stringa singola passata come arg CLI. Senza questa conversione finirebbero
-    LETTERALI in DB e quindi in dashboard (i `\\n` resterebbero visibili come
-    testo). Coerente con jht-telegram-send / jht-notify-user. Applicato ai soli
-    campi free-text leggibili dall'utente (notes, jd_summary), non ai campi
-    scraped (jd_text/requirements).
-    """
-    if text is None:
-        return None
-    text = text.replace("\\n", "\n").replace("\\t", "\t").replace("\\r", "\r")
-
-    # Alcuni LLM scrivono le emoji come escape Python (\U0001F916 / ✨)
-    # invece che come caratteri: senza conversione arrivano LETTERALI in
-    # dashboard. Surrogates (D800-DFFF) e code point fuori range restano
-    # com'erano.
-    def _chr(m):
-        cp = int(m.group(1), 16)
-        if 0xD800 <= cp <= 0xDFFF or cp > 0x10FFFF:
-            return m.group(0)
-        return chr(cp)
-
-    text = re.sub(r"\\U([0-9A-Fa-f]{8})", _chr, text)
-    text = re.sub(r"\\u([0-9A-Fa-f]{4})", _chr, text)
-    return text
 
 
 def _location_precision_writes(conn, args):
@@ -698,6 +671,8 @@ def update_position(args):
     conn.commit()
     print(f"Position {args.id} updated: {', '.join(changed)}")
     conn.close()
+    if args.status and previous_status != args.status:
+        event_wake.notify(args.status)  # JHT-T297: `new` wakes an idle Analista, `checked` an idle Scorer
 
 
 def update_company(args):

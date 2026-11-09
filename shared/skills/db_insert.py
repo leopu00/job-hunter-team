@@ -32,6 +32,7 @@ import maintenance_log
 from company_about import clean_about
 import profile_exclusions
 import first_run
+import event_wake
 
 # I flag di `db_insert.py position` che NON vengono dalla pagina: li sceglie
 # un agente nostro (o argparse, con `choices`/`type=int`). Gli altri sono
@@ -344,6 +345,8 @@ def insert_position(args):
     cid_info = f" (company_id={company_id})" if company_id else " (company_id=NULL — company not found in DB)"
     print(f"Position inserted with ID: {position_id}{cid_info}")
     conn.close()
+    # JHT-T297: an Analista sitting idle at its prompt is woken by the event, not left to find the queue.
+    event_wake.notify("new")
 
 
 def insert_company(args):
