@@ -16,6 +16,7 @@ notice, so the person and the Captain read the same number.
 """
 
 import json
+import os
 import re
 import subprocess
 import time
@@ -60,9 +61,8 @@ def _limits_of(payload):
     return bool(payload.get("rate_limits") or (payload.get("info") or {}).get("rate_limits"))
 
 
-def _recent_rollout_without_limits(sessions_dir, now):
-    """The newest rollout is alive and reports token counts, and NONE of its recent events carries a (non-empty) rate_limits:
-    Codex works and reports no limits. One event with a reading is enough to say the data exists, so a failed fetch stays an outage."""
+def _newest_rollout_tail(sessions_dir, now):
+    """The last bytes of the newest rollout when it is alive (touched in the last RECENT_ROLLOUT_SEC), else None."""
     newest = None
     try:
         for day in _day_dirs(sessions_dir, now):
@@ -74,13 +74,17 @@ def _recent_rollout_without_limits(sessions_dir, now):
                 if newest is None or mtime > newest[0]:
                     newest = (mtime, path)
         if newest is None or now - newest[0] > RECENT_ROLLOUT_SEC:
-            return False
+            return None
         with newest[1].open("rb") as handle:
             handle.seek(0, 2)
             handle.seek(max(0, handle.tell() - ROLLOUT_TAIL_BYTES))
-            tail = handle.read().decode("utf-8", errors="replace")
+            return handle.read().decode("utf-8", errors="replace")
     except OSError:
-        return False
+        return None
+
+
+def _rollout_events(tail):
+    """(has_limits, counted): does ANY recent event carry a (non-empty) rate_limits, and did a token_count show up."""
     counted = False
     for line in tail.splitlines():
         if '"token_count"' not in line and '"rate_limits"' not in line:
@@ -92,13 +96,45 @@ def _recent_rollout_without_limits(sessions_dir, now):
         if not isinstance(payload, dict):
             continue
         if _limits_of(payload):
-            return False
+            return True, counted
         counted = counted or payload.get("type") == "token_count"
-    return counted
+    return False, counted
 
 
-def no_quota_reason(provider, config, sessions_dir, now):
-    """Why this access has no quota data, or None when the missing reading may be an outage."""
+def _recent_rollout_without_limits(sessions_dir, now):
+    """The newest rollout is alive and reports token counts, and NONE of its recent events carries a (non-empty) rate_limits:
+    Codex works and reports no limits. One event with a reading is enough to say the data exists, so a failed fetch stays an outage."""
+    tail = _newest_rollout_tail(sessions_dir, now)
+    if tail is None:
+        return False
+    has_limits, counted = _rollout_events(tail)
+    return counted and not has_limits
+
+
+def _recent_rollout_with_limits(sessions_dir, now):
+    tail = _newest_rollout_tail(sessions_dir, now)
+    return tail is not None and _rollout_events(tail)[0]
+
+
+def _pi_worked_recently(jht_home, now):
+    """An agent on the pi harness wrote a session in the last RECENT_ROLLOUT_SEC (pi's own folder, see pi_sessions.py)."""
+    root = Path(jht_home) / ".pi" / "agent" / "sessions"
+    for folder, _dirs, names in os.walk(root):
+        for name in names:
+            try:
+                if name.endswith(".jsonl") and now - (Path(folder) / name).stat().st_mtime <= RECENT_ROLLOUT_SEC:
+                    return True
+            except OSError:
+                continue
+    return False
+
+
+def no_quota_reason(provider, config, sessions_dir, now, jht_home=None):
+    """Why this access has no quota data, or None when the missing reading may be an outage.
+
+    `jht_home` lets the harness be told: agents on the pi harness write no Codex rollout, so a team made of them
+    has no file to read the 5h and weekly windows from. That is structural only when pi is really working and no
+    Codex rollout with limits is alive (a team with both keeps reading the limits from the Codex ones)."""
     if _auth_method(config, provider) == "api_key":
         return "api_key"
     if str(provider).lower() in CODEX_PROVIDERS and sessions_dir is not None:
@@ -106,6 +142,9 @@ def no_quota_reason(provider, config, sessions_dir, now):
             return "custom_model_provider"
         if _recent_rollout_without_limits(sessions_dir, now):
             return "no_rate_limits_in_rollouts"
+        if jht_home is not None and not _recent_rollout_with_limits(sessions_dir, now) \
+                and _pi_worked_recently(jht_home, now):
+            return "harness_pi"
     return None
 
 
@@ -115,7 +154,11 @@ def classify_failure(api, provider, fail_reason):
     try:
         config = api._read_config_json()
         sessions = api._path("CODEX_SESSIONS_DIR")
-        why = no_quota_reason(provider, config, sessions, api.time.time())
+        try:
+            home = api._path("JHT_HOME")
+        except Exception:  # noqa: BLE001 - without the home the harness is not told, the rest still is
+            home = None
+        why = no_quota_reason(provider, config, sessions, api.time.time(), home)
     except Exception:  # noqa: BLE001 - unreadable evidence is not proof of a structural gap
         return fail_reason
     return NO_QUOTA_PREFIX + why if why else fail_reason
