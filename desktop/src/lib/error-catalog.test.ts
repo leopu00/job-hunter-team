@@ -591,6 +591,10 @@ const NOT_ERRORS: Record<string, string> = {
   // The Mac setup's own notice (windows_runtime.rs, INSTALL_NOTICES): the machine that exists has less
   // memory than the team needs; not a failure, told as ui_notice_podman_machine_memory_low.
   podman_machine_memory_low: "id of the notice of a Podman machine with too little memory, told as ui_notice_podman_machine_memory_low",
+  // profile_import.rs (the closed set of preference keys the profile import accepts): names of fields of the saved profile, not outcomes.
+  salary_annual_eur: "name of a preference field of the profile import (profile_import.rs), never an error",
+  work_mode: "name of a preference field of the profile import (profile_import.rs), never an error",
+  work_mode_flexibility: "name of a preference field of the profile import (profile_import.rs), never an error",
 };
 
 function compiledRustModules(): string[] {
