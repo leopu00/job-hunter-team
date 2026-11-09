@@ -1,19 +1,22 @@
 """How many workers this machine carries, from measurements and not from a flat constant.
 
-The old cap divided the RAM by 0.6 GiB per agent. A Windows PC with a 5.9 GiB VM came out at 1 worker, and one worker
-cannot make 20 scored positions in 30 minutes. What was measured (a Kimi team of 13 sessions on that VM, 4 vCPU, 08/11):
+A flat RAM-per-agent figure sizes the team wrong in both directions: too high and a machine with room runs a single
+worker, too low and a small one thrashes. The cap here comes from what the machine has and what a session of the harness
+costs:
 
-  * RAM: a Codex session is two processes of ~107 MiB each (89-114 over 94 samples), ~0.22 GiB per session; 13 sessions
-    held 2.8 GiB and the VM kept 3-4 GiB free, no OOM. The 0.6 GiB was ~3x too high.
-  * CPU: the same run saturated the host (100%) and the VM load reached 20-40 on 4 vCPU, yet it produced ~26 positions
-    and 7 scores an hour against ~3 positions and no score with the cap at 1. So the cores, not the RAM, are the limit,
-    and the cap has to look at them.
+  * RAM: the resident memory of one session of each harness, measured by sampling the processes of a running team, times
+    the agents, plus what the system and the fixed agents need. A harness nobody measured keeps a conservative
+    ESTIMATE, and the message says so (`MEASURED` below tells which are which).
+  * CPU: the cores bound the workers too. A team can fit in RAM and still saturate the processors, and then more workers
+    stop adding scored positions. So the cap is also a number of workers per core, and a very high load average halves it.
+  * Free RAM right now: little of it stops the cap from growing.
 
-Only Codex has a measured RSS. For the other harnesses the old 0.6 GiB stays as an ESTIMATE and is reported as such until
-somebody measures them (`MEASURED` below says which are which). The CPU factor and the load brake are calibrated on the one
-4-vCPU run above: they are the place to adjust when more machines are measured.
+Example with made-up round numbers: 8 GiB of RAM, 4 cores, a harness measured at 0.25 GiB per agent. The RAM would
+allow (8 - 2) / 0.25 - 5 = 19 workers, the cores allow 4 x 2 = 8, so the cap is 8 and the limit is "cpu". On a 3 GiB machine
+the RAM allows 0 and the cap is 1: nothing raises the cap above what the RAM holds.
 
-`capacity()` is pure (a probe in, a dict out) so the behaviour is tested with made-up RAM and cores.
+The per-core factor and the load brake were set from a single measured run: they are the knobs to adjust as more machines
+are measured. `capacity()` is pure (a probe in, a dict out) so the behaviour is tested with made-up machines.
 """
 
 import os
@@ -26,8 +29,8 @@ MEASURED = frozenset({"codex"})
 UNKNOWN_HARNESS_GIB = 0.6
 RAM_RESERVED_GIB = 2.0         # the system, the container runtime, the browser of a person who works on this machine
 FIXED_AGENTS = 5               # Capitano, Sentinella, Assistente, Mentor, Dottore are already running
-WORKERS_PER_CORE = 2.0         # 13 sessions on 4 vCPU saturated the host and still produced; 2 workers per core
-LOAD_BRAKE_PER_CORE = 8.0      # the run above peaked at ~9 per core; beyond 8 the cap is halved
+WORKERS_PER_CORE = 2.0         # set from one measured run; adjust as more machines are measured
+LOAD_BRAKE_PER_CORE = 8.0      # very high load per core: the cap is halved
 LOW_AVAILABLE_GIB = 0.75       # less than this free right now: no room to grow
 USEFUL_PIPELINE = 3            # one Scout, one Analista, one Scorer: the cap does not grow past it while RAM is short
 
