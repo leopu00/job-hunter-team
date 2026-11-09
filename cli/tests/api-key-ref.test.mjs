@@ -69,9 +69,9 @@ test('jht setup --secret-mode file finishes and writes the path, not the key', (
 });
 
 test('jht setup --secret-mode env finishes and writes the name of the variable, not the key', () => {
-  const { done, config: written, raw } = setup(['--secret-mode', 'env', '--secret-env', 'MY_RUN_KEY'], { MY_RUN_KEY: KEY });
+  const { done, config: written, raw } = setup(['--secret-mode', 'env', '--secret-env', 'MY_RUN_API_KEY'], { MY_RUN_API_KEY: KEY });
   assert.equal(done.status, 0, done.stderr + done.stdout);
-  assert.deepEqual(written.providers.openai.api_key_ref, { type: 'ref', source: 'env', id: 'MY_RUN_KEY' });
+  assert.deepEqual(written.providers.openai.api_key_ref, { type: 'ref', source: 'env', id: 'MY_RUN_API_KEY' });
   assert.equal(raw.includes(KEY), false);
 });
 
@@ -82,9 +82,9 @@ test('without --secret-file the file mode still says what is missing', () => {
 });
 
 test('only a key variable can be named: not a path, a service secret or a launcher variable', () => {
-  for (const ok of ['OPENAI_API_KEY', 'MY_RUN_KEY', 'run_key']) assert.equal(isKeyVariable(ok), true, ok);
+  for (const ok of ['OPENAI_API_KEY', 'MY_RUN_API_KEY', 'run_api_key']) assert.equal(isKeyVariable(ok), true, ok);
   for (const bad of ['PATH', 'HOME', 'FLEETD_TOKEN', 'JHT_SECRET_KEY', 'SUPABASE_SERVICE_KEY', 'TELEGRAM_BOT_KEY', 'NEXT_PUBLIC_KEY',
-    'LD_PRELOAD_KEY', 'has space', '1KEY', '', null, 'X'.repeat(70) + '_KEY']) {
+    'LD_PRELOAD_KEY', 'AWS_SECRET_ACCESS_KEY', 'SSH_PRIVATE_KEY', 'MY_RUN_KEY', 'has space', '1KEY', '', null, 'X'.repeat(70) + '_KEY']) {
     assert.equal(isKeyVariable(bad), false, String(bad));
     assert.equal(hasKeyRef({ type: 'ref', source: 'env', id: bad }), false, String(bad));
   }

@@ -46,7 +46,7 @@ export function readConfigFileSnapshot() {
 export function isKeyVariable(name) {
   if (typeof name !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(name)) return false;
   const upper = name.toUpperCase();
-  return upper.endsWith('_KEY') && !['JHT_', 'FLEET', 'SUPABASE', 'TELEGRAM', 'NEXT_', 'LD_', 'PYTHON', 'NODE_'].some((p) => upper.startsWith(p));
+  return upper.endsWith('_API_KEY') && !['JHT_', 'FLEET', 'SUPABASE', 'TELEGRAM', 'NEXT_', 'LD_', 'PYTHON', 'NODE_'].some((p) => upper.startsWith(p));
 }
 
 /** Un riferimento a una chiave (SecretRef: env, file o exec) scritto bene: la chiave non è nel config, ma si trova. */

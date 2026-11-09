@@ -129,7 +129,7 @@ def read_key(path=None, *, uid=None, mounts=Path("/proc/mounts")) -> str:
 
 _ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,63}")
 # The config names the variable, and whoever writes the config must not be able to hand an agent another secret of the
-# container: the name has to be a key variable (…_KEY), outside the variables of the launcher and the services, and
+# container: the name has to be an API key variable (…_API_KEY), outside the variables of the launcher and the services, and
 # never the key variable of ANOTHER provider.
 _DENIED_PREFIXES = ("JHT_", "FLEET", "SUPABASE", "TELEGRAM", "NEXT_", "LD_", "PYTHON", "NODE_")
 
@@ -139,8 +139,8 @@ def check_env_name(name: str, target: str | None = None) -> None:
     if not _ENV_NAME.fullmatch(name or ""):
         raise KeyFileError("the name of the environment variable is not valid")
     upper = name.upper()
-    if not upper.endswith("_KEY"):
-        raise KeyFileError("the name of the environment variable must end in _KEY")
+    if not upper.endswith("_API_KEY"):
+        raise KeyFileError("the name of the environment variable must end in _API_KEY")
     if upper.startswith(_DENIED_PREFIXES):
         raise KeyFileError("the environment variable %s is not one a key may be read from" % name)
     if name in KEY_ENV_NAMES and target is not None and name != target:

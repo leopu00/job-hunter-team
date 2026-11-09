@@ -62,7 +62,7 @@ def _ran(tmp_path: Path) -> list[str]:
 
 
 FILE_REF = {"auth_method": "api_key", "api_key_ref": {"type": "ref", "source": "file", "path": "/dev/shm/jht-run-key"}}
-ENV_REF = {"auth_method": "api_key", "api_key_ref": {"type": "ref", "source": "env", "id": "MY_RUN_KEY"}}
+ENV_REF = {"auth_method": "api_key", "api_key_ref": {"type": "ref", "source": "env", "id": "MY_RUN_API_KEY"}}
 
 
 def test_a_file_in_the_config_is_the_source_when_the_environment_names_none(tmp_path: Path) -> None:
@@ -82,13 +82,13 @@ def test_the_environment_wins_over_the_config(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(("provider", "name"), [("openai", "OPENAI_API_KEY"), ("claude", "ANTHROPIC_API_KEY"), ("kimi", "MOONSHOT_API_KEY")])
 def test_a_variable_in_the_config_is_named_in_the_pane_and_its_value_never(tmp_path: Path, provider: str, name: str) -> None:
-    result = _wrap(tmp_path, _config(tmp_path, ENV_REF, active=provider), provider, MY_RUN_KEY=KEY)
+    result = _wrap(tmp_path, _config(tmp_path, ENV_REF, active=provider), provider, MY_RUN_API_KEY=KEY)
     assert result.returncode == 0, result.stderr
     words = shlex.split(result.stdout)
     assert words[0] == "python3" and words[1].endswith("shared/skills/api_key_file.py")
-    assert words[2:] == ["exec", "--env", name, "--from-env", "MY_RUN_KEY", "--"]
+    assert words[2:] == ["exec", "--env", name, "--from-env", "MY_RUN_API_KEY", "--"]
     assert KEY not in result.stdout + result.stderr
-    assert _ran(tmp_path) == [f"check --from-env MY_RUN_KEY --env {name} | file=-"]
+    assert _ran(tmp_path) == [f"check --from-env MY_RUN_API_KEY --env {name} | file=-"]
 
 
 def test_a_refused_variable_stops_the_spawn_with_the_code_of_the_checker(tmp_path: Path) -> None:
@@ -184,7 +184,7 @@ def test_a_restart_by_the_watchdog_gets_the_key_the_first_launch_had(tmp_path: P
 
 def test_a_restart_by_the_watchdog_gets_a_variable_of_the_container(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.delenv("JHT_API_KEY_FILE", raising=False)
-    monkeypatch.setenv("MY_RUN_KEY", KEY)   # the container's own environment, which pid1 and its children share
+    monkeypatch.setenv("MY_RUN_API_KEY", KEY)   # the container's own environment, which pid1 and its children share
     wd = Harness(tmp_path)
     (wd.home / "jht.config.json").write_text(json.dumps({"active_provider": "openai", "providers": {"openai": ENV_REF}}), encoding="utf-8")
     wrap_out = tmp_path / "wrap.txt"
@@ -193,7 +193,7 @@ def test_a_restart_by_the_watchdog_gets_a_variable_of_the_container(tmp_path: Pa
     result = wd.run("respawn_worker scout 1 SCOUT-S1")
     assert result.returncode == 0, result.stderr
     words = shlex.split(wrap_out.read_text(encoding="utf-8"))
-    assert words[2:] == ["exec", "--env", "OPENAI_API_KEY", "--from-env", "MY_RUN_KEY", "--"]
+    assert words[2:] == ["exec", "--env", "OPENAI_API_KEY", "--from-env", "MY_RUN_API_KEY", "--"]
     assert KEY not in wrap_out.read_text(encoding="utf-8")
 
 
@@ -228,7 +228,7 @@ def _real_wrap(tmp_path: Path, variable: str, provider: str = "openai", **env: s
     return subprocess.run([_bash(), "-c", script], capture_output=True, text=True, check=False, env=base)
 
 
-@pytest.mark.parametrize("variable", ["MY_RUN_KEY", "OPENAI_API_KEY", "run_key"])
+@pytest.mark.parametrize("variable", ["MY_RUN_API_KEY", "OPENAI_API_KEY", "run_api_key"])
 def test_a_key_variable_is_accepted_by_the_real_checker(tmp_path: Path, variable: str) -> None:
     result = _real_wrap(tmp_path, variable, **{variable: KEY})
     assert result.returncode == 0, result.stderr
@@ -237,7 +237,7 @@ def test_a_key_variable_is_accepted_by_the_real_checker(tmp_path: Path, variable
 
 @pytest.mark.parametrize("variable", [
     "PATH", "HOME", "FLEETD_TOKEN", "JHT_SECRET_KEY", "SUPABASE_SERVICE_KEY", "TELEGRAM_BOT_KEY", "NEXT_PUBLIC_KEY",
-    "LD_PRELOAD_KEY", "ANTHROPIC_API_KEY", "MOONSHOT_API_KEY",
+    "LD_PRELOAD_KEY", "ANTHROPIC_API_KEY", "MOONSHOT_API_KEY", "AWS_SECRET_ACCESS_KEY", "SSH_PRIVATE_KEY", "MY_RUN_KEY",
 ])
 def test_a_variable_that_is_not_a_key_for_this_provider_is_refused_and_its_value_never_used(tmp_path: Path, variable: str) -> None:
     # PATH and HOME keep their own value: giving them a key would only break the shell of the test
