@@ -35,7 +35,7 @@ describe("the harness key of the config", () => {
     if (!r.success) expect(r.error.issues[0].path).toEqual(["harness"]);
   });
 
-  it.each(["kimi", "glm"] as const)("accepts pi with %s (they bill by the token, with an API key)", (provider) => {
+  it.each(["kimi", "glm"] as const)("accepts pi with %s (paid by the token, with an API key)", (provider) => {
     expect(validateConfig(base(provider, { harness: "pi" })).success).toBe(true);
   });
 
