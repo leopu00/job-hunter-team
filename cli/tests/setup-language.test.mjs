@@ -35,6 +35,13 @@ test('saving a language keeps the other keys of the file, refuses a code that is
   assert.equal(i18n.hasLanguageChoice(home()), false);
 });
 
+test('saving a language on a home whose folder does not exist yet creates the folder', () => {
+  const h = join(home(), 'not', 'yet');
+  assert.equal(i18n.saveLanguage('it', h), 'it');
+  assert.deepEqual(prefs(h), { locale: 'it' });
+  assert.deepEqual(readdirSync(h), ['i18n-prefs.json']);
+});
+
 test('--language saves the language; an invalid one stops the setup and writes nothing', () => {
   const h = home();
   process.env.JHT_HOME = h;
