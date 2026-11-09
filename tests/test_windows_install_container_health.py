@@ -60,6 +60,15 @@ def test_a_container_counts_only_after_it_ran_under_one_start():
     assert "2>$null })" in body
 
 
+def test_the_wait_after_up_is_short_and_sampled_often_and_the_ceiling_stays():
+    # A crash at start (a missing binary exits at once, and a restart gives a new StartedAt) shows within a few seconds: the
+    # window is 4 s sampled every second, not 10 s sampled every 2; the overall deadline is the same.
+    body = _function()
+    assert "[int]$SettleSeconds = 4," in body
+    assert "[int]$SampleSeconds = 1" in body
+    assert "[int]$TimeoutSeconds = 60," in body
+
+
 def test_the_runtime_image_pin_is_a_test_install_file_only():
     assert "if ($TestChannel) { $enablerArgs += '-PersistImagePin' }" in INSTALL
     assert INSTALL.count("-PersistImagePin") == 1

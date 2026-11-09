@@ -305,15 +305,17 @@ RUN useradd --create-home --shell /bin/bash jht \
          /opt/jht-deps/npm-cache /opt/jht-deps/uv-tools /opt/jht-deps/uv-cache \
          /opt/jht-deps/python \
     && chown -R jht:jht /jht_home /jht_user /opt/jht-deps \
-    # /opt/playwright: ricorsivo su tutto TRANNE il Chromium completo del
-    # CLOSER (chromium-<rev>). Un chown -R copia ogni file toccato in questo
-    # layer (copy-on-write, lo stesso motivo per cui /app è escluso sopra):
-    # sui 624M del Chromium completo erano +656M di immagine per un solo
-    # cambio di proprietario. Il browser si lancia da jht anche se resta di
-    # root, perché serve leggerlo ed eseguirlo, non scriverlo.
+    # /opt/playwright: la cartella resta di jht (un browser in più si installa da
+    # jht), ma i browser GIA' installati restano di root: il Chromium completo
+    # del CLOSER (chromium-<rev>) e la headless shell (chromium_headless_shell-
+    # <rev>). Un chown -R copia ogni file toccato in questo layer (copy-on-write,
+    # lo stesso motivo per cui /app è escluso sopra): il Chromium completo erano
+    # +656M di immagine, la headless shell altri ~114M da scaricare a ogni primo
+    # setup, per un solo cambio di proprietario. Un browser si lancia da jht
+    # anche se resta di root, perché serve leggerlo ed eseguirlo, non scriverlo.
     && chown jht:jht /opt/playwright \
     && find /opt/playwright -mindepth 1 -maxdepth 1 ! -name 'chromium-[0-9]*' \
-         -exec chown -R jht:jht {} + \
+         ! -name 'chromium_headless_shell-[0-9]*' -exec chown -R jht:jht {} + \
     # Espone i tool degli agenti (es. jht-send) in /usr/local/bin così
     # sono trovati anche dalle sub-shell login che Codex/Kimi --yolo
     # spawnano con PATH ripulito da /etc/login.defs. Senza questo,
