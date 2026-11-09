@@ -85,9 +85,13 @@ describe("team start — retry reattivo", () => {
       path.join(REPO, "cli", "src", "commands", "team", "start.js"),
       "utf-8",
     );
-    expect(source).toContain("let previousStarted = false");
-    expect(source).toContain("if (previousStarted && item.preDelayMs");
-    expect(source).toContain("previousStarted = result === 'started'");
+    // La pausa si fa solo dopo una voce che è davvero partita in questo giro,
+    // e nasce da quella voce (settleBefore: sonda di prontezza, tetto = preDelayMs).
+    expect(source).toContain("let previous = null");
+    expect(source).toContain("if (previous?.started && item.preDelayMs && item.preDelayMs > 0) await settleBefore(previous, item)");
+    expect(source).toContain("previous = { ...item, started: result === 'started' }");
+    // Le voci saltate non partite non devono far aspettare la successiva.
+    expect(source).toContain("previous = { ...item, started: false }");
   });
 
   it("lascia al preflight provider il tempo di completare uno start freddo", () => {
