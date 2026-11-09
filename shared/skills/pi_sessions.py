@@ -11,9 +11,12 @@ assistant message that carries its own `usage`:
 
 Read from pi 1.5.0 sessions (the format of its docs/session-format.md, version 3). Things worth knowing:
   * `output` already includes `reasoning`: do not add it again.
-  * With OpenAI the prompt cache is automatic; pi books the first sight of a prompt as `cacheWrite` and later hits as
-    `cacheRead`. OpenAI charges no premium for a write, and pi prices it anyway, so `cost.total` is an ESTIMATE
-    (`totalFromProvider: false`), a little above the invoice, never below it.
+  * With OpenAI, `cacheWrite` is the `cache_write_tokens` that OpenAI itself reports (the part of the prompt written to
+    the cache by this call), `cacheRead` its `cached_tokens`, and `input` the rest. OpenAI's pricing page (read 09/11)
+    has a column "30m write" at 1.25x the input price (terra 2.50 vs 2.00 USD per 1M), and pi sends no cache option, so
+    the default 30-minute retention applies: pi's price for the write is OpenAI's. `cost.total` is still pi's own
+    computation (`totalFromProvider: false`): it knows nothing of the long-context tier (above 272k input tokens) nor of
+    a web search fee. OUR exact cost is `exact_cost` below, from the shared price list.
   * The `system` message of a session is huge (the whole prompt and the tool schemas): only assistant lines are parsed.
 
 Pure reading: nothing is written, a missing or unreadable folder is "no usage", a half-written last line is skipped.
@@ -203,16 +206,16 @@ def role_of(agent) -> str:
 
 
 def exact_cost(event):
-    """The cost of one call by OUR shared price list (shared/skills/model_prices.py), or None while it is not there.
-    pi's own `cost` is an estimate: it prices the cache write, which OpenAI does not charge. What OpenAI bills is the
-    uncached input (pi's `input` plus its `cache_write`, which for OpenAI is the part of the prompt that was not cached
-    yet), the cached input, and the output (the reasoning is already inside it)."""
+    """The cost of one call by OUR shared price list (shared/skills/model_pricing.py), or None while the module is not
+    there or the model has no price (never a zero). What OpenAI bills: the uncached input (pi's `input`), the cached
+    input (`cache_read`), what was written to the cache (`cache_write`, at its own price: 1.25x the input for the default
+    30 minutes) and the output (the reasoning is already inside it), with the long-context tier on the whole call."""
     try:
-        import model_prices
+        import model_pricing
     except ImportError:
         return None
-    return model_prices.call_cost(event["model"], event["input"] + event["cache_write"], event["cache_read"],
-                                  event["output"])
+    return model_pricing.cost_usd(event["model"], event["input"], event["cache_read"], event["output"],
+                                  written_in=event["cache_write"])
 
 
 def breakdown(events, searches=()) -> dict:

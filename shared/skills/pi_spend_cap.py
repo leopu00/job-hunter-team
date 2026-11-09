@@ -8,7 +8,7 @@ Sentinella, with the ceiling the config declares:
   "no_quota_cap": {"eur": 10, "tokens_per_hour": 500000}
 
   eur               what pi spent TODAY (local day). pi prices in dollars and the figure is compared as it is, one to
-                    one: a little early, never late. It is pi's own estimate, a little above the invoice.
+                    one: a little early, never late. It is pi's own cost per call (its prices are OpenAI's, the long-context tier is not in it) plus the web search fee.
   tokens_per_hour   what pi's agents processed or produced in the last hour: input, cache writes, output (a cache
                     read is a tenth of the price and is left out).
 

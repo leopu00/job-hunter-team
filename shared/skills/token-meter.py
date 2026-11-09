@@ -430,7 +430,7 @@ def codex_weighted(t):
 
 def summarize_pi(events, searches=(), web_search=None):
     """Il blocco "pi" dello stato: quello che l'harness pi ha speso nella finestra, con il costo che calcola pi
-    (una STIMA: pi prezza anche la scrittura in cache, che OpenAI non fattura a parte) più la tariffa delle chiamate di
+    (il calcolo di pi: non conosce la fascia oltre 272k né la tariffa della ricerca; il costo esatto per ruolo e modello e' in by_role_model) più la tariffa delle chiamate di
     ricerca web, che pi non prezza (pi_sessions.SEARCH_CALL_USD). `web_search` dice, per agente, se la ricerca è accesa."""
     block = {"events": len(events), "sessions": len({e["session"] for e in events}),
              "input_raw": 0, "output_raw": 0, "cache_read_raw": 0, "cache_creation_raw": 0,

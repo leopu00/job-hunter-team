@@ -152,9 +152,9 @@ def test_the_agent_comes_from_the_header_cwd():
 
 # --- token_metrics_lib ----------------------------------------------------------------------------------------
 
-def test_pi_tokens_weigh_cache_reads_a_tenth_and_do_not_add_the_reasoning_twice():
+def test_pi_tokens_weigh_cache_reads_a_tenth_writes_a_quarter_more_and_do_not_add_the_reasoning_twice():
     tokens = {"input": 10, "output": 100, "cache_read": 1000, "cache_write": 50, "reasoning": 40}
-    assert tlib.billing_weighted(tokens, "pi") == 10 + 50 + 100 + 1000 * 0.1
+    assert tlib.billing_weighted(tokens, "pi") == 10 + 50 * 1.25 + 100 + 1000 * 0.1
 
 
 def test_read_pi_events_have_the_shape_of_the_kimi_ones_so_the_rates_work(tmp_path):
@@ -278,11 +278,13 @@ def test_the_meter_block_adds_the_search_fee_to_the_cost_and_shows_who_has_no_se
 
 @pytest.fixture
 def prices(monkeypatch):
-    """A stand-in for the shared price list: uncached input 2, cached 0.2, output 12 per million, whatever the model."""
+    """A stand-in for the shared price list (model_pricing.cost_usd): uncached input 2, cached 0.2, cache write 2.5, output 12
+    per million, whatever the model."""
     import types
-    module = types.ModuleType("model_prices")
-    module.call_cost = lambda model, uncached, cached, out, searches=0: (uncached * 2 + cached * 0.2 + out * 12) / 1e6
-    monkeypatch.setitem(sys.modules, "model_prices", module)
+    module = types.ModuleType("model_pricing")
+    module.cost_usd = lambda model, uncached, cached, out, searches=0, written_in=0, provider="openai", book=None: (
+        uncached * 2 + cached * 0.2 + written_in * 2.5 + out * 12) / 1e6
+    monkeypatch.setitem(sys.modules, "model_pricing", module)
 
 
 def test_roles_lose_their_instance_number(prices):
@@ -301,13 +303,13 @@ def test_the_breakdown_keeps_each_kind_of_token_apart_per_role_and_model(tmp_pat
     a = got["scout"]["gpt-a"]
     assert (a["calls"], a["input"], a["cache_read"], a["cache_write"], a["output"], a["reasoning"]) == (3, 13, 13_781, 15_356, 273, 28)
     assert a["pi_cost"] == pytest.approx(0.15)
-    # exact: uncached = input + cache_write (pi books the part OpenAI had not cached yet there), cached = cache_read
-    assert a["exact_cost"] == pytest.approx(((13 + 15_356) * 2 + 13_781 * 0.2 + 273 * 12) / 1e6, abs=1e-6)
+    # exact: the cache write at ITS price (OpenAI's "30m write", 1.25x the input), not as ordinary input
+    assert a["exact_cost"] == pytest.approx((13 * 2 + 13_781 * 0.2 + 15_356 * 2.5 + 273 * 12) / 1e6, abs=1e-6)
     assert got["scout"]["gpt-b"]["calls"] == 1
 
 
 def test_without_the_price_list_the_exact_cost_is_none_not_zero(tmp_path, monkeypatch):
-    monkeypatch.setitem(sys.modules, "model_prices", None)  # ImportError on import
+    monkeypatch.setitem(sys.modules, "model_pricing", None)  # ImportError on import
     session(tmp_path, "scout-1", [call(-60, 3, 4, cost=0.04)])
     cell = pi_sessions.breakdown(pi_sessions.usage_events(tmp_path))["scout"]["gpt-x"]
     assert cell["exact_cost"] is None and cell["pi_cost"] == 0.04

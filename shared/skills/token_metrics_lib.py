@@ -100,7 +100,7 @@ def billing_weighted(tokens: dict, provider: str = "kimi") -> float:
     Codex (openai):
         input_tokens + output_tokens + reasoning_output_tokens + cached_input_tokens*0.5
     pi (harness, see pi_sessions.py):
-        input + cache_write + output + cache_read*0.1
+        input + cache_write*1.25 + output + cache_read*0.1
     """
     if provider in ("kimi", "moonshot"):
         return (
@@ -124,11 +124,12 @@ def billing_weighted(tokens: dict, provider: str = "kimi") -> float:
             + tokens.get("cached_input_tokens", 0) * 0.5
         )
     if provider == "pi":
-        # pi on OpenAI: `input` is what was not cached, `cache_write` the first sight of a prompt (OpenAI charges no
-        # premium for it), `cache_read` a hit (a tenth of the price); `output` already includes the reasoning.
+        # pi on OpenAI: `input` is what was not cached, `cache_write` what this call wrote to the cache (OpenAI's
+        # "30m write" is 1.25x the input price), `cache_read` a hit (a tenth of the price); `output` already includes
+        # the reasoning. The exact money is model_pricing.py; this weight only feeds the calibration of the meter.
         return (
             tokens.get("input", 0)
-            + tokens.get("cache_write", 0)
+            + tokens.get("cache_write", 0) * CACHE_CREATION_WEIGHT
             + tokens.get("output", 0)
             + tokens.get("cache_read", 0) * CACHE_READ_WEIGHT
         )
