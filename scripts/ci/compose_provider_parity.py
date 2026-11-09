@@ -209,15 +209,38 @@ def _project_networks(value: Any, project: str) -> dict[str, dict[str, Any]]:
     return result
 
 
+def _mounted_volumes(services: dict[str, dict[str, Any]]) -> set[str]:
+    """The named volumes some rendered service mounts."""
+    return {
+        str(mount["source"])
+        for service in services.values()
+        for mount in service.get("volumes", [])
+        if mount.get("type") == "volume" and mount.get("source")
+    }
+
+
 def normalize_project(value: dict[str, Any], project: str = PROJECT) -> dict[str, Any]:
-    """Collapse provider-specific syntax while retaining effective semantics."""
+    """Collapse provider-specific syntax while retaining effective semantics.
+
+    A volume that no rendered service mounts is not part of what runs: docker-compose leaves it out of the project
+    (the optional Telegram service belongs to a profile, so with the profile off its own volumes mount nowhere) and
+    podman-compose keeps every declared volume. Only the mounted ones are compared; a volume that a service mounts
+    must still be declared the same way by both.
+    """
+    services = {
+        str(name): _service(service)
+        for name, service in (value.get("services") or {}).items()
+    }
+    mounted = _mounted_volumes(services)
+    volumes = {
+        name: options
+        for name, options in _project_volumes(value.get("volumes"), project).items()
+        if name in mounted
+    }
     result: dict[str, Any] = {
         "name": value.get("name", project),
-        "services": {
-            str(name): _service(service)
-            for name, service in (value.get("services") or {}).items()
-        },
-        "volumes": _project_volumes(value.get("volumes"), project),
+        "services": services,
+        "volumes": volumes,
         "networks": _project_networks(value.get("networks"), project),
     }
     for section in ("configs", "secrets"):
