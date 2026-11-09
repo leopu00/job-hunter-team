@@ -355,8 +355,70 @@ def active_plan() -> Optional[dict]:
     entry = ((cfg.get("providers") or {}).get(prov) or {})
     plan_id = entry.get("plan") or cfg.get("provider_plan")
     if not plan_id:
-        return None
+        return api_key_plan(cfg, prov)
     return find_plan(prov, str(plan_id))
+
+
+# ── No plan to ask for (JHT-T308) ───────────────────────────────────────
+# The card with the subscription plans must not hold the first burst. With an API key there is no subscription plan at
+# all: the roster comes from the spending ceiling the person set (`no_quota_cap.eur`, EUR per day), a tier per step and
+# the smallest roster when no ceiling is declared. With a subscription the person did not name («I do not know», no
+# answer) the burst opens on the provider's lowest plan, which is DECLARED: the plan carries `assumed`, the burst's
+# answer says so and the Capitano's diary gets the line. The card stays open: nothing here waits for it.
+_API_KEY_TIER_BY_EUR = ((30, 15), (10, 5))  # (ceiling EUR/day at least, roster tier); below, or no ceiling: tier 1
+
+
+def spend_ceiling_eur(cfg: dict) -> Optional[float]:
+    cap = cfg.get("no_quota_cap")
+    eur = cap.get("eur") if isinstance(cap, dict) else None
+    ok = isinstance(eur, (int, float)) and not isinstance(eur, bool) and eur > 0 and eur == eur and eur != float("inf")
+    return float(eur) if ok else None
+
+
+def api_key_plan(cfg: dict, prov: str) -> Optional[dict]:
+    """The plan of a provider used with an API key (`auth_method: api_key`): sized by the spending ceiling. None for any
+    other access."""
+    entry = (cfg.get("providers") or {}).get(prov)
+    if not isinstance(entry, dict) or entry.get("auth_method") != "api_key":
+        return None
+    eur = spend_ceiling_eur(cfg)
+    tier = next((t for floor, t in _API_KEY_TIER_BY_EUR if eur is not None and eur >= floor), 1)
+    plan = {"provider": prov, "id": "api-key", "tier": tier, "weekly_capped": False, "window_5h": False,
+            "label": "API key, ceiling %g EUR per day" % eur if eur is not None else "API key, no ceiling declared"}
+    if eur is None:
+        plan["assumed"] = ("API key with no spending ceiling declared: the burst opens on the smallest roster (1 Scout, "
+                           "1 Analista, 1 Scorer). Set the ceiling in the configuration (no_quota_cap.eur) for a larger one.")
+    return plan
+
+
+def default_plan(prov: str) -> Optional[dict]:
+    """The provider's lowest plan, marked `assumed`, for a burst whose person named none. None if the provider has none."""
+    plans = PLANS.get(normalize_provider(prov)) or []
+    if not plans:
+        return None
+    lowest = min(plans, key=lambda plan: plan["tier"])
+    return dict(lowest, provider=normalize_provider(prov), assumed=(
+        "Plan not declared (the person answered «I do not know» or did not answer): the burst opens on the default plan "
+        "%s. When the person names their plan, write it with plan_registry.py set %s:<plan>; this burst keeps its "
+        "roster." % (lowest["label"], normalize_provider(prov))))
+
+
+def report_assumed(info: dict) -> dict:
+    """What a burst that opened on an assumed plan says: `plan_assumed` in the answer, and the line in the Capitano's
+    diary (a diary that cannot be written is no reason to stop the burst). {} for a declared plan."""
+    note = info.get("assumed")
+    if not note:
+        return {}
+    try:
+        import contextlib, importlib.util, io
+        spec = importlib.util.spec_from_file_location("captain_diary", Path(__file__).with_name("captain_diary.py"))
+        diary = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(diary)
+        with contextlib.redirect_stdout(io.StringIO()):  # the answer of the burst is JSON: the diary's «saved to» is not
+            diary.add("First run: " + note)
+    except Exception:  # noqa: BLE001
+        pass
+    return {"plan_assumed": note}
 
 
 def set_plan(provider: str, plan_id: str) -> dict:
@@ -451,13 +513,15 @@ def _host_agent_cap(info: Optional[dict] = None) -> Optional[int]:
     return info["cap"] if info else None
 
 
-def burst_roster(plan: dict | None = None, host_cap: int | None = None) -> dict:
+def burst_roster(plan: dict | None = None, host_cap: int | None = None, assume_default: bool = False) -> dict:
     """Formazione di primo avvio per il piano dato.
 
     Ritorna sempre un dict; `ok=False` quando il piano non è dichiarato —
     il Capitano in quel caso NON deve indovinare, deve dirlo all'utente.
     """
     plan = plan or active_plan()
+    if plan is None and assume_default:
+        plan = default_plan(_read_config().get("active_provider"))
     if plan is None:
         return {"ok": False,
                 "reason": _t("plan.not_selected"),
@@ -493,6 +557,7 @@ def burst_roster(plan: dict | None = None, host_cap: int | None = None) -> dict:
         "provider": plan["provider"],
         "plan": plan["id"],
         "plan_label": plan["label"],
+        "assumed": plan.get("assumed"),
         "tier": plan["tier"],
         "weekly_capped": bool(plan.get("weekly_capped")),
         "window_5h": bool(plan.get("window_5h")),

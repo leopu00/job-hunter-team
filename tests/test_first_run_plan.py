@@ -189,10 +189,50 @@ def test_new_install_waits_for_the_profile(first_run):
     assert first_run.status()["phase"] == first_run.PHASE_AWAITING
 
 
-def test_burst_refuses_to_start_without_a_declared_plan(first_run):
+def test_burst_does_not_wait_for_the_plan_it_opens_on_the_default_and_declares_it(first_run, jht_home):
     out = first_run.begin_burst()
-    assert out["ok"] is False
-    assert out["reason"] == "subscription plan not selected"
+    assert out["ok"] is True and out["plan"]["plan"] == "adagio" and out["plan"]["assumed"]
+    assert out["plan_assumed"] == out["plan"]["assumed"] and out["roster"] == {"scout": 1, "analista": 1, "scorer": 1}
+    assert first_run.plan_gap(first_run.status()) == {}, "an assumed plan is not a missing plan"
+    assert "Plan not declared" in "".join(p.read_text(encoding="utf-8") for p in (jht_home / "logs").glob("captain-diary-*.md"))
+
+
+def test_burst_refuses_only_when_the_provider_has_no_plan_to_assume(first_run, jht_home):
+    (jht_home / "jht.config.json").write_text(json.dumps({"active_provider": "nobody"}), encoding="utf-8")
+    out = first_run.begin_burst()
+    assert out["ok"] is False and out["reason"] == "subscription plan not selected"
+
+
+def _api_key_config(jht_home, **extra):
+    (jht_home / "jht.config.json").write_text(json.dumps(
+        {"active_provider": "openai", "providers": {"openai": {"auth_method": "api_key"}}, **extra}), encoding="utf-8")
+
+
+@pytest.mark.parametrize(("ceiling", "roster"), [
+    (None, {"scout": 1, "analista": 1, "scorer": 1}),
+    (5, {"scout": 1, "analista": 1, "scorer": 1}),
+    (10, {"scout": 2, "analista": 1, "scorer": 1}),
+    (29.9, {"scout": 2, "analista": 1, "scorer": 1}),
+    (30, {"scout": 3, "analista": 2, "scorer": 1}),
+    ("30", {"scout": 1, "analista": 1, "scorer": 1}),
+    (True, {"scout": 1, "analista": 1, "scorer": 1}),
+    (-5, {"scout": 1, "analista": 1, "scorer": 1}),
+])
+def test_an_api_key_has_no_card_and_the_roster_comes_from_the_spending_ceiling(first_run, jht_home, ceiling, roster):
+    _api_key_config(jht_home, **({} if ceiling is None else {"no_quota_cap": {"eur": ceiling}}))
+    info = first_run.plan_info()
+    assert info["ok"] and info["plan"] == "api-key" and info["weekly_capped"] is False
+    out = first_run.begin_burst()
+    assert out["ok"] and out["roster"] == roster
+    declared_ceiling = isinstance(ceiling, (int, float)) and not isinstance(ceiling, bool) and ceiling > 0
+    assert bool(out.get("plan_assumed")) is (not declared_ceiling)
+
+
+def test_an_api_key_never_posts_the_plan_card_and_a_declared_plan_still_wins(first_run, jht_home):
+    _api_key_config(jht_home)
+    assert first_run.ask_plan(agent="capitano")["asked"] is False
+    plan_registry.set_plan("openai", "pro")
+    assert first_run.plan_info()["plan"] == "pro"
 
 
 def test_burst_carries_the_roster_and_the_goal(first_run):
