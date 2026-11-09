@@ -510,5 +510,9 @@
   "position_card.value.draft": "Rascunho",
   "position_card.value.approved": "Aprovada",
   "quota_mode.noquota": "ℹ️ Este fornecedor não comunica limites de utilização: a equipa não é regulada por uma quota e não é pausada por falta de dados. A despesa tem como único teto o que definiste no fornecedor para esta chave (declarado aqui: %s). Verifica-o e, se quiseres a equipa mais lenta ou parada, diz ao Capitão.",
-  "quota_mode.no_ceiling": "nenhum declarado"
+  "quota_mode.no_ceiling": "nenhum declarado",
+  "pi_cap.halt_eur": "⛔ A equipa está em pausa: os agentes no pi gastaram hoje %s e atingiram o teto que declaraste (%s). Não se perde nada. O trabalho retoma amanhã, ou assim que subires o teto na configuração.",
+  "pi_cap.halt_tokens": "⛔ A equipa está em pausa: os agentes no pi usaram %s tokens na última hora e atingiram o teto que declaraste (%s por hora). Não se perde nada. O trabalho retoma quando a contagem horária descer abaixo dele, ou assim que subires o teto na configuração.",
+  "pi_cap.resume": "▶️ O teto de gasto que declaraste volta a permitir trabalhar: a equipa pode retomar.",
+  "pi_cap.no_ceiling": "ℹ️ Os agentes no pi gastaram hoje %s e não há nenhum teto de gasto declarado. Este acesso não comunica limites de utilização, por isso nada mais trava o gasto. Para definir um, diz ao Capitão ou escreve no_quota_cap na configuração (por exemplo eur: 10)."
 }
