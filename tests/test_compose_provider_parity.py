@@ -75,6 +75,37 @@ def test_provider_syntax_differences_normalize_to_one_project():
     assert_projects_equal(PODMAN_PROJECT, DOCKER_PROJECT, **HOMES)
 
 
+def test_a_declared_volume_no_service_mounts_is_not_compared():
+    """The Telegram service belongs to a profile: off, its volumes are declared and mounted by nothing.
+
+    docker-compose leaves them out of the rendered project, podman-compose keeps every declared volume.
+    """
+    podman = deepcopy(PODMAN_PROJECT)
+    podman["volumes"].update({"telegram-secrets": None, "telegram-state": None})
+    assert_projects_equal(podman, DOCKER_PROJECT, **HOMES)
+    # The same volumes, declared with their own names on one side only, are still not compared while nothing mounts them.
+    docker = deepcopy(DOCKER_PROJECT)
+    docker["volumes"]["telegram-state"] = {"name": "jht_telegram-state"}
+    assert_projects_equal(podman, docker, **HOMES)
+
+
+def test_a_volume_a_service_mounts_must_still_be_declared_by_both():
+    podman = deepcopy(PODMAN_PROJECT)
+    podman["services"]["jht"]["volumes"].append("telegram-state:/jht_telegram_state")
+    podman["volumes"]["telegram-state"] = None
+    with pytest.raises(ComposeProviderParityError, match="merged Compose projects differ"):
+        assert_projects_equal(podman, DOCKER_PROJECT, **HOMES)
+    docker = deepcopy(DOCKER_PROJECT)
+    docker["services"]["jht"]["volumes"].append(
+        {"type": "volume", "source": "telegram-state", "target": "/jht_telegram_state", "volume": {}}
+    )
+    docker["volumes"]["telegram-state"] = {"name": "jht_foreign-state"}
+    with pytest.raises(ComposeProviderParityError, match="merged Compose projects differ"):
+        assert_projects_equal(podman, docker, **HOMES)
+    docker["volumes"]["telegram-state"] = {"name": "jht_telegram-state"}
+    assert_projects_equal(podman, docker, **HOMES)
+
+
 def test_each_provider_s_home_prefix_is_the_only_tolerated_host_difference():
     # Without the two HOMEs the POSIX and the Windows host paths differ.
     with pytest.raises(ComposeProviderParityError, match="merged Compose projects differ"):
