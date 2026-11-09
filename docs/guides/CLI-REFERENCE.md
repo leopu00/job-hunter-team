@@ -79,7 +79,7 @@ via wipe + re-pair, not concurrent runs.
 | Command                          | Layer | What it does                                                                            |
 |----------------------------------|-------|-----------------------------------------------------------------------------------------|
 | `jht setup [flags]`              | Both  | Host pre-flight (swap on low-RAM VPS, lang picker) → Node interactive wizard inside the container. |
-| `jht oauth-login` (legacy alias `claude-login`) | Host  | Reads `active_provider` and opens the matching subscription flow: Codex device code. |
+| `jht oauth-login` (legacy alias `claude-login`) | Host  | Reads `active_provider` and opens the matching subscription flow: Codex device code, or, with `harness: pi`, the sign-in of Pi (run it in a terminal: Pi has `/login` only in its screen). |
 | `jht doctor`                     | Node  | Surfaces Docker, Node, auth, DB checks. **Must** exit 0 before declaring setup done.    |
 | `jht health`                     | Node  | Granular service health (Supabase pairing, provider creds, bridge).                     |
 

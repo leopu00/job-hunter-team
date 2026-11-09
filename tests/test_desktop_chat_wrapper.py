@@ -129,7 +129,7 @@ case "$1" in
         fi
         exit 0 ;;
       python3:-I) [ "${JHT_TEST_NO_SCRIPT:-0}" != 1 ] || exit 2; exit 0 ;;   # 2: python3's, no such file
-      python3:-c|sh:-c|bash:) exit 0 ;;
+      python3:-c|sh:-c|bash:-c|bash:) exit 0 ;;
       *) exit 97 ;;
     esac ;;
   *) exit 92 ;;

@@ -1042,7 +1042,7 @@ const providers=config.providers||{}; const entry=providers[provider]||{};
 const configured=["claude","anthropic","codex","openai","kimi","moonshot"].includes(provider)
   && (entry.auth_method||"subscription")==="subscription";
 const markers={claude:"/jht_home/.claude/.credentials.json",anthropic:"/jht_home/.claude/.credentials.json",codex:"/jht_home/.codex/auth.json",openai:"/jht_home/.codex/auth.json",kimi:"/jht_home/.kimi/credentials/kimi-code.json",moonshot:"/jht_home/.kimi/credentials/kimi-code.json"};
-process.stdout.write(`${configured?1:0} ${markers[provider]&&fs.existsSync(markers[provider])?1:0} ${fs.existsSync("/jht_home/profile/welcomed.flag")?1:0}`);
+process.stdout.write(`${configured?1:0} ${(config.harness==="pi"&&(provider==="openai"||provider==="codex")?((p)=>{try{const s=fs.lstatSync(p);return s.isFile()&&s.size>0&&(s.uid===process.getuid()||s.uid===0)}catch{return false}})("/jht_home/.pi/agent/auth.json"):markers[provider]&&fs.existsSync(markers[provider]))?1:0} ${fs.existsSync("/jht_home/profile/welcomed.flag")?1:0}`);
 '@
     # Every native output here is read whole and then cut: see Get-RunningComposeServiceId (T79).
     # The script goes on stdin, never as an argument: Windows PowerShell 5.1 drops the double quotes
@@ -3605,7 +3605,7 @@ switch ($Sub) {
     }
     $Provider = (& { $ErrorActionPreference = 'Continue'; & docker exec $Container node -e "try{const c=require('/jht_home/jht.config.json');process.stdout.write(String(c.active_provider||''))}catch{}" 2>$null })
     switch (($Provider | Out-String).Trim().ToLowerInvariant()) {
-      { $_ -in @('openai', 'codex') } { & docker exec @ExecFlags $Container codex login --device-auth; break }
+      { $_ -in @('openai', 'codex') } { & docker exec @ExecFlags $Container bash -c '[ -f /app/.launcher/oauth-login-openai.sh ] && exec bash /app/.launcher/oauth-login-openai.sh; exec codex login --device-auth'; break }
       { $_ -in @('kimi', 'moonshot') } { & docker exec @ExecFlags $Container kimi --yolo; break }
       { $_ -in @('claude', 'anthropic') } { & docker exec @ExecFlags $Container claude --dangerously-skip-permissions; break }
       '' { throw "nessun provider attivo: scegline uno con 'jht providers use openai'" }
