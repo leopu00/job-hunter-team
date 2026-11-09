@@ -215,7 +215,14 @@ def load_manifest(path: Path) -> RuntimeImagePin:
 #   `core_image`   the full reference: the line exists only while the manifest has a core digest.
 # Empty until the installers and wrappers carry the constant; from then on a pin WITH a core digest needs every one of them to
 # carry it (a copy with one digest is refused), and a pin WITHOUT one needs them empty or absent.
-CORE_CONSUMER_PATTERNS: dict[Path, tuple[str, ...]] = {}
+_SH_CORE = r'^CORE_IMAGE_DIGEST="\$\{JHT_CORE_IMAGE_DIGEST:-(?P<core_digest>(?:sha256:[0-9a-f]{64})?)\}"$'
+_PS_CORE = r"^\$CoreImageDigest = if \(\$env:JHT_CORE_IMAGE_DIGEST\) \{ \$env:JHT_CORE_IMAGE_DIGEST \} else \{ '(?P<core_digest>(?:sha256:[0-9a-f]{64})?)' \}$"
+CORE_CONSUMER_PATTERNS: dict[Path, tuple[str, ...]] = {
+    Path("scripts/install.sh"): (_SH_CORE,),
+    Path("web/public/install.sh"): (_SH_CORE,),
+    Path("scripts/install.ps1"): (_PS_CORE,),
+    Path("web/public/install.ps1"): (_PS_CORE,),
+}
 
 
 def _pinned_group(pattern: str) -> str:

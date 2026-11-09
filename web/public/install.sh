@@ -108,6 +108,10 @@ else
   RUNTIME_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/job-hunter-team/host-runtime"
 fi
 IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht@sha256:fa78c975c04dd5f95d6225a35c8c3bb9646f8ef14b32c8ca558d5332de0cce00}"
+# The core image (tools come later): empty while the release has none; with one, the install uses it unless JHT_IMAGE names another.
+CORE_IMAGE_DIGEST="${JHT_CORE_IMAGE_DIGEST:-}"
+RUNTIME_TIER="" TIER_STAGED="" TIER_STAGED_SHA=""
+if [ -n "$CORE_IMAGE_DIGEST" ] && [ -z "${JHT_IMAGE:-}" ]; then RUNTIME_TIER="core"; IMAGE="ghcr.io/leopu00/jht@$CORE_IMAGE_DIGEST"; fi
 # Il compose scaricato può evolvere sul canale production; l'installer di
 # questa release deve comunque avviare l'immagine dichiarata qui.
 export JHT_IMAGE="$IMAGE"
@@ -266,6 +270,7 @@ if [ -n "$SOURCE_SHA$TEST_IMAGE$EXPECTED_IMAGE_DIGEST" ]; then
   [ "$USE_DOCKER" -eq 1 ] && [ "$PUBLISH_RUNTIME_BUNDLE" -eq 0 ] \
     || { printf '%s\n' "the test channel installs the container runtime only" >&2; exit 2; }
   TEST_CHANNEL=1
+  RUNTIME_TIER=""
   BRANCH="$SOURCE_SHA"
   IMAGE="$TEST_IMAGE"
   export JHT_IMAGE="$IMAGE"
@@ -1139,6 +1144,21 @@ install_podman_adapter() {
   fi
 }
 
+# runtime-tier: a host runtime file like runtime-image, attested in .runtime-integrity (staged for its hash, published after the manifest).
+stage_runtime_tier() {
+  local tier_file="$RUNTIME_DIR/runtime-tier"
+  TIER_STAGED="" TIER_STAGED_SHA=""
+  if [ "$RUNTIME_TIER" != "core" ]; then rm -f "$tier_file"; return 0; fi
+  TIER_STAGED="$(mktemp "$RUNTIME_DIR/.runtime-tier.XXXXXX")"
+  printf 'core\n' > "$TIER_STAGED" && chmod 600 "$TIER_STAGED"
+  TIER_STAGED_SHA="$({ sha256sum "$TIER_STAGED" 2>/dev/null || shasum -a 256 "$TIER_STAGED"; } | awk '{print $1}')"
+}
+
+publish_runtime_tier() {
+  [ -n "$TIER_STAGED" ] || return 0
+  mv -f "$TIER_STAGED" "$RUNTIME_DIR/runtime-tier" && ok "runtime tier: core (the tools come after the welcome)"
+}
+
 download_runtime_files() {
   step 4 "$TOTAL_STEPS_DOCKER" "Download wrapper + docker-compose.yml"
 
@@ -1257,6 +1277,7 @@ download_runtime_files() {
   elif [ -e "$image_pin" ] || [ -L "$image_pin" ]; then
     rm -f "$image_pin"
   fi
+  stage_runtime_tier
   local compose_sha hostsetup_sha wrapper_sha selection_sha="" machine_sha="" shim_sha=""
   if command -v sha256sum >/dev/null 2>&1; then
     compose_sha="$(sha256sum "$compose_dest" | awk '{print $1}')"
@@ -1302,6 +1323,9 @@ download_runtime_files() {
     if [ -n "$image_pin_sha" ]; then
       printf 'runtime-image=%s\n' "$image_pin_sha"
     fi
+    if [ -n "$TIER_STAGED_SHA" ]; then
+      printf 'runtime-tier=%s\n' "$TIER_STAGED_SHA"
+    fi
   } > "$manifest_tmp"
   chmod 600 "$manifest_tmp"
   # Publish manifest first: a crash between the two renames fails closed
@@ -1311,6 +1335,7 @@ download_runtime_files() {
     mv -f "$image_pin_publish" "$image_pin"
     ok "runtime image pinned: $(cat "$image_pin")"
   fi
+  publish_runtime_tier
   if [ -n "$selection_publish" ]; then
     mv -f "$selection_publish" "$RUNTIME_DIR/container-runtime"
     ok "JHT container runtime selected: docker (private Podman artifacts kept inert)"
