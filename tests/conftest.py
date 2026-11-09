@@ -9,6 +9,10 @@ import pytest
 # The screens of the CLI follow the language of the system (LC_ALL, LANG): the tests read their English, so they run
 # with the system's language off, as on the CI, and not with the one of the computer of whoever runs them.
 os.environ["LC_ALL"] = "C.UTF-8"
+# The writers of the database (db_insert, db_update) wake an idle agent of the role through tmux when one exists. A test
+# that writes must never reach a real session of the computer that runs it, nor start a process that outlives the
+# test: the wake is off for the whole suite (the tests of event_wake pass their own environment).
+os.environ["JHT_EVENT_WAKE"] = "0"
 
 
 def pytest_configure(config):

@@ -14,6 +14,7 @@ import os
 import sqlite3
 import sys
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -214,18 +215,15 @@ def test_every_decision_is_one_line_of_the_log(team_home):
 
 # ── the real checks that sit behind the injected ones ───────────────────────
 
-def test_the_halt_flags_and_the_standby_are_read_from_the_home(tmp_path):
+def test_the_halt_flags_and_the_standby_are_read_from_the_home(tmp_path, monkeypatch):
     assert ew.blocked_reason(tmp_path, T0) is None
     (tmp_path / ".weekly-halt.flag").write_text("x")
     assert ew.blocked_reason(tmp_path, T0) == "team_halted"
     (tmp_path / ".weekly-halt.flag").unlink()
     (tmp_path / ".team-standby.flag").write_text(json.dumps(
         {"since": int(T0), "until": None, "wake_on": {"weekly_below": 100}, "reason": "x", "requested_by": "user"}))
-    os.environ["JHT_HOME"] = str(tmp_path)
-    try:
-        assert ew.blocked_reason(tmp_path, T0) == "standby"
-    finally:
-        del os.environ["JHT_HOME"]
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    assert ew.blocked_reason(tmp_path, T0) == "standby"
 
 
 def test_sessions_of_matches_only_the_agents_of_the_role_whatever_the_case():
@@ -371,3 +369,43 @@ def test_the_writers_import_the_hook_and_never_depend_on_it_to_succeed():
     for name in ("db_insert.py", "db_update.py"):
         text = (SKILLS_DIR / name).read_text(encoding="utf-8")
         assert "import event_wake" in text and "event_wake.notify(" in text
+
+
+# ── no side effect on the tests that run after these ────────────────────────
+
+def test_no_test_of_this_file_writes_the_process_environment_by_hand():
+    """A test that sets or deletes a variable of the process by hand (instead of monkeypatch) breaks the files that run
+    after it: the isolated JHT_HOME of the suite once went missing this way, and the pipeline tests fell back to the
+    repository's own data."""
+    import ast
+    tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+    writes = [node.lineno for node in ast.walk(tree)
+              if isinstance(node, (ast.Assign, ast.Delete, ast.AugAssign))
+              for target in (node.targets if isinstance(node, (ast.Assign, ast.Delete)) else [node.target])
+              if isinstance(target, ast.Subscript) and ast.unparse(target.value) == "os.environ"]
+    assert writes == []
+
+
+def test_the_suite_keeps_the_wake_off_so_a_test_never_reaches_a_real_session():
+    assert os.environ.get(ew.DISABLE_ENV) == "0"
+
+
+def test_a_burst_of_inserts_starts_one_wake_per_role(tmp_path):
+    started = []
+    sessions = lambda role: {"X": 1.0}
+    assert ew.notify("new", spawn=started.append, sessions=sessions, environ={}, home=tmp_path) is True
+    assert ew.notify("new", spawn=started.append, sessions=sessions, environ={}, home=tmp_path) is False
+    assert ew.notify("checked", spawn=started.append, sessions=sessions, environ={}, home=tmp_path) is True  # other role
+    stamp = tmp_path / "logs" / ".event-wake-analista.stamp"
+    old = time.time() - ew.DEBOUNCE_SEC - 1
+    os.utime(stamp, (old, old))
+    assert ew.notify("new", spawn=started.append, sessions=sessions, environ={}, home=tmp_path) is True
+    assert started == ["analista", "scorer", "analista"]
+
+
+def test_a_home_that_cannot_be_written_does_not_stop_the_wake(tmp_path):
+    blocker = tmp_path / "file"
+    blocker.write_text("x")
+    started = []
+    assert ew.notify("new", spawn=started.append, sessions=lambda r: {"X": 1.0}, environ={}, home=blocker) is True
+    assert started == ["analista"]

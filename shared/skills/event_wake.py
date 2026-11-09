@@ -60,6 +60,7 @@ EARLY_MIN_LEFT_SEC = 15  # less than the engine tick plus a margin: the timer is
 HOURLY_CAP = 60
 HALT_FLAGS = (".team-halted.flag", ".weekly-halt.flag")
 DISABLE_ENV = "JHT_EVENT_WAKE"  # "0" turns the wake off
+DEBOUNCE_SEC = 5  # a burst of inserts starts one wake per role, not one process per position
 
 
 def _home() -> Path:
@@ -95,12 +96,31 @@ def sessions_of(role: str, runner=subprocess.run) -> dict[str, float]:
     return found
 
 
-def notify(to_state, spawn=None, sessions=None, environ=None) -> bool:
+def _debounced(role: str, home: Path) -> bool:
+    """True when a wake for `role` started in the last DEBOUNCE_SEC seconds (each writer is its own process, so the
+    memory is a stamp file). The stamp is taken here; a folder that cannot be written means no debounce."""
+    stamp = home / "logs" / f".event-wake-{role}.stamp"
+    try:
+        if time.time() - stamp.stat().st_mtime < DEBOUNCE_SEC:
+            return True
+    except OSError:
+        pass
+    try:
+        stamp.parent.mkdir(parents=True, exist_ok=True)
+        stamp.write_text("", encoding="utf-8")
+    except OSError:
+        pass
+    return False
+
+
+def notify(to_state, spawn=None, sessions=None, environ=None, home=None) -> bool:
     """Called by the writers after their commit. True if a wake was started. Never raises."""
     try:
         role = STATE_TO_ROLE.get(to_state)
         env = os.environ if environ is None else environ
         if role is None or env.get(DISABLE_ENV) == "0" or not (sessions or sessions_of)(role):
+            return False
+        if _debounced(role, home or _home()):
             return False
         (spawn or _spawn)(role)
         return True
