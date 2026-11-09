@@ -201,6 +201,9 @@ def test_the_service_agents_get_the_pi_command_of_the_team(tmp_path: Path) -> No
                             capture_output=True, text=True, check=True).stdout
     env = _fake_pi(tmp_path, pinned)
     env["JHT_HOME"] = str(tmp_path / "home")
+    login = tmp_path / "home" / ".pi" / "agent" / "auth.json"   # the pi login: without it the start is refused
+    login.parent.mkdir(parents=True)
+    login.write_text("{}", encoding="utf-8")
     result = subprocess.run(
         [_bash(), "-c", f'source "{SPAWN_LIB}"; jht_spawn_repl_cmd pi "{workdir}"'],
         capture_output=True, text=True, check=False, env=env,

@@ -1235,7 +1235,7 @@ if ! command -v "$CLI_BIN" &>/dev/null; then
   echo "Alternatively, edit ~/.jht/jht.config.json to use another provider."
   exit 1
 fi
-if [ "$CLI_BIN" = "pi" ] && ! jht_pi_version_check; then
+if [ "$CLI_BIN" = "pi" ] && { ! jht_pi_version_check || ! jht_pi_credentials_check "$JHT_CONFIG_FILE"; }; then
   exit 1
 fi
 if ! command -v tmux &>/dev/null; then

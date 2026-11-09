@@ -24,6 +24,7 @@
 JHT_SPAWN_LIB_DIR="${JHT_SPAWN_LIB_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)}"
 . "$JHT_SPAWN_LIB_DIR/spawn-harness.sh"
 . "$JHT_SPAWN_LIB_DIR/spawn-keyfile.sh"
+. "$JHT_SPAWN_LIB_DIR/spawn-pi-credentials.sh"
 . "$JHT_SPAWN_LIB_DIR/agent-environment.sh"
 if [ -f "$JHT_SPAWN_LIB_DIR/daemon-lib.sh" ]; then
   # shellcheck source=/dev/null

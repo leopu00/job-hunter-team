@@ -119,6 +119,7 @@ jht_spawn_pi_repl_cmd() {
     return 2
   fi
   jht_pi_version_check || return 2
+  jht_pi_credentials_check "${JHT_HOME:-/jht_home}/jht.config.json" || return 2
   jht_pi_settings "$(jht_pi_agent_dir)/settings.json" || return 2
   if [ -z "$model" ]; then
     # shellcheck source=/dev/null
