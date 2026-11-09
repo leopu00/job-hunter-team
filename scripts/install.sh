@@ -428,19 +428,13 @@ detect_os() {
 }
 
 # ── The runtime already chosen (macOS) ────────────────────────────────────
-# The marker container-runtime says which engine holds this computer's
-# container and volumes. A re-run without --runtime keeps it: podman stays
-# podman (it used to be rewritten to docker, i.e. Colima with empty volumes).
-# An explicit --runtime for the other engine is refused, because nothing
-# carries the volumes across yet. Colima and Docker Desktop are both docker.
-# On Linux the Docker path never writes the marker (only Podman and the Mac
-# do), so a server installed on Docker has none: there an install that was
-# completed (its .runtime-integrity manifest, published last, after the
-# Podman marker) without a marker is Docker. A first Podman install stopped
-# half way has no manifest yet, and may run again.
-# The refusal has an exit of its own, so the app can say what it means: a
-# line `JHT_ERROR runtime_change_requires_migration` on stderr, then exit 85
-# (the Linux Podman codes are 88-97, below).
+# The marker container-runtime says which engine holds this computer's container and volumes. A re-run without --runtime
+# keeps it: podman stays podman (it used to be rewritten to docker, i.e. Colima with empty volumes). An explicit --runtime for
+# the other engine is refused, because nothing carries the volumes across yet. Colima and Docker Desktop are both docker.
+# On Linux the Docker path never writes the marker, so a server installed on Docker has none: there a completed install (its
+# .runtime-integrity manifest, published last, after the Podman marker) without a marker is Docker. A first Podman install
+# stopped half way has no manifest yet, and may run again. The refusal has an exit of its own, so the app can say what it
+# means: a line `JHT_ERROR runtime_change_requires_migration` on stderr, then exit 85 (the Linux Podman codes are 88-97).
 RUNTIME_CHANGE_REQUIRES_MIGRATION_EXIT=85
 keep_chosen_runtime() {
   [ -n "${OS:-}" ] || detect_os
@@ -944,12 +938,11 @@ install_docker_linux() {
   if [ "$OS" = "wsl" ]; then
     run sudo_maybe service docker start 2>/dev/null || true
   fi
-  # Add the user to the docker group to avoid sudo (requires logout).
-  # Skipped for root: root uses docker without re-login and the warning
-  # would just be noise. Common on VPS where the install runs as root.
+  # Add the user to the docker group (a new login for other terminals; this run uses sg, see enable_docker_group_for_this_run).
+  # Skipped for root: root uses docker without re-login (common on VPS).
   if [ "$(id -u)" -ne 0 ] && ! groups 2>/dev/null | grep -q '\bdocker\b'; then
     run sudo_maybe usermod -aG docker "$USER" 2>/dev/null || true
-    warn "You have been added to the 'docker' group. Log out and back in (or run 'newgrp docker') to use it without sudo."
+    warn "You have been added to the 'docker' group. This installer goes on with it already active; in other terminals, log out and back in (or run 'newgrp docker') to use docker without sudo."
   fi
   ok "docker installed"
 }
@@ -1032,6 +1025,29 @@ resolve_macos_docker_cli() {
   DOCKER_CLI="$resolved"
 }
 
+# `usermod -aG docker` only takes effect at the next login: until then every docker command of this process says «permission
+# denied» (the image pull of the test channel, the ownership repair, the compose of the setup wizard). `sg docker` runs a command
+# with the group already; a private `docker` first in PATH does it for every docker this installer and its children start.
+# Fails (and changes nothing) when sg is missing, the account is not in the group, or sg does not give the daemon.
+enable_docker_group_for_this_run() {
+  local real; real="$(command -v docker)" && command -v sg >/dev/null 2>&1 || return 1
+  id -nG "$USER" 2>/dev/null | tr ' ' '\n' | grep -qx docker || return 1
+  sg docker -c "\"$real\" info" &>/dev/null || return 1
+  DOCKER_SHIM_DIR="$(mktemp -d)" || return 1
+  trap 'rm -rf "$DOCKER_SHIM_DIR"' EXIT
+  cat > "$DOCKER_SHIM_DIR/docker" <<'SHIM'
+#!/bin/sh
+args=''
+for a in "$@"; do
+  args="$args '$(printf '%s' "$a" | sed "s/'/'\\\\''/g")'"
+done
+exec sg docker -c "exec \"$JHT_REAL_DOCKER\"$args"
+SHIM
+  chmod 755 "$DOCKER_SHIM_DIR/docker"
+  export JHT_REAL_DOCKER="$real" PATH="$DOCKER_SHIM_DIR:$PATH"
+  "$DOCKER_CLI" info &>/dev/null
+}
+
 verify_docker_works() {
   step 3 "$TOTAL_STEPS_DOCKER" "Container runtime check"
   if podman_native_mode; then
@@ -1059,10 +1075,13 @@ verify_docker_works() {
   fi
   if ! "$DOCKER_CLI" info &>/dev/null; then
     if [ "$OS" = "linux" ] || [ "$OS" = "wsl" ]; then
-      warn "docker info fails: you probably need sudo or a re-login for the docker group."
-      info "Trying with sudo for the check..."
+      if enable_docker_group_for_this_run; then
+        ok "docker group active for this run (added a moment ago; other terminals need a new login)"
+        return 0
+      fi
       sudo docker info &>/dev/null \
         || fail "The Docker daemon is not responding. Check with 'sudo systemctl status docker' (Linux) or 'colima status' (Mac)."
+      fail "docker_group_not_active: Docker is running, but this terminal does not have the 'docker' group yet, so every docker command says «permission denied». Nothing was installed. Log out and back in (or run 'newgrp docker'), then run the installer again. If the account is not in the group at all: sudo usermod -aG docker \"\$USER\"."
     else
       fail "The Docker daemon is not responding. Check with 'colima status' (Mac) or 'systemctl status docker' (Linux)."
     fi
@@ -1304,15 +1323,10 @@ download_runtime_files() {
       PATH_READY=1
       ;;
     *)
-      # Auto-add to a persistent location so the next login shells see
-      # `jht` without manual intervention (BUG-INSTALL-PATH-NOT-EXPORTED).
-      # On Ubuntu Bash, ~/.profile already contains the guard
-      # `if [ -d "$HOME/.local/bin" ]; then PATH="$HOME/.local/bin:$PATH"; fi`,
-      # but that guard is evaluated ONLY at the login following the creation
-      # of the dir — installing JHT in an already open session, the dir did
-      # not exist at login → PATH not populated → `jht` not found.
-      # The `curl | bash` subshell cannot modify the parent PATH, so we
-      # must write to a file sourced by the next shell.
+      # Auto-add to a persistent location so the next login shells see `jht` (BUG-INSTALL-PATH-NOT-EXPORTED).
+      # Ubuntu's ~/.profile guards `[ -d "$HOME/.local/bin" ]` only at the login after the dir exists: installing in
+      # an open session, the dir did not exist at login → PATH not populated → `jht` not found. The `curl | bash`
+      # subshell cannot modify the parent PATH, so we write to a file sourced by the next shell.
       local persistent_added=0
       if [ "${EUID:-$(id -u)}" -eq 0 ] && [ -d /etc/profile.d ] && [ -w /etc/profile.d ]; then
         # System-wide (preferred on root VPS): /etc/profile.d/<file>.sh is
@@ -2127,15 +2141,11 @@ save_pairing_token() {
   local token_owner=""
   podman_native_mode || [ "${OS:-}" = "macos" ] || token_owner="1001:1001"
   printf '%s' "$PAIRING_TOKEN" | write_file_in_home "$token_file" 600 "$token_owner" || return 1
-  # 0600 — it is a bearer credential (it is exchanged for a Supabase
-  # access_token), so no other host user may read it. It used to be 0644
-  # "because the container runs as a non-root UID (jht/1001)": the right fix
-  # for that is ownership, not world-readability — run_host_setup() (called
-  # right after this) already does `chown -R 1001:1001 ~/.jht`, and we align
-  # this file explicitly here so the order of those two steps stops mattering.
-  # The file is deleted by `jht cloud pair` right after consumption
-  # (cli/src/commands/cloud.js handlePair), so the window is short either way.
-  # (Nor on the Mac: see align_bind_ownership.)
+  # 0600 — a bearer credential (exchanged for a Supabase access_token): no other host user may read it. It used to be
+  # 0644 "because the container runs as uid 1001": the fix for that is ownership, not world-readability —
+  # run_host_setup() (right after this) does `chown -R 1001:1001 ~/.jht`, and we align this file here so the order of
+  # the two steps stops mattering. `jht cloud pair` deletes it after consumption (cli/src/commands/cloud.js
+  # handlePair). (Nor on the Mac: see align_bind_ownership.)
   ok "Pairing token saved to $token_file (mode 0600)"
 }
 
@@ -2223,17 +2233,11 @@ repair_bind_ownership_in_container() {
 }
 
 run_host_setup() {
-  # host-setup.sh writes ~/.jht/host.env with JHT_HOST_TYPE (+ JHT_LANG + swap).
-  # WITHOUT this file the container boots in mode=local (compose backwards-compat
-  # default) and pid1 SKIPS the entire cloud block — push daemon + pair-on-boot +
-  # the "Sync now" handler — so cloud sync is silently dead. Must run on BOTH
-  # install paths:
-  #   • app-provisioned (--pairing-token present): force --host-type=vps —
-  #     no user at the terminal to confirm the auto-detection.
-  #   • manual `curl install.sh | bash`: NO flag → host-setup auto-detects
-  #     (detect_vps) and, with no TTY, writes the detected type without a prompt.
-  #     Regression fixed 2026-07-09: this path used to `return 0` early → host.env
-  #     never written → container in mode=local → cloud daemon never started.
+  # host-setup.sh writes ~/.jht/host.env (JHT_HOST_TYPE, JHT_LANG, swap). WITHOUT it the container boots in mode=local and
+  # pid1 SKIPS the entire cloud block (push daemon, pair-on-boot, "Sync now"): cloud sync silently dead. Must run on BOTH paths:
+  #   • app-provisioned (--pairing-token): force --host-type=vps (nobody at the terminal to confirm the auto-detection);
+  #   • manual `curl install.sh | bash`: NO flag → auto-detects (detect_vps) and, with no TTY, writes it without a prompt
+  #     (regression fixed 2026-07-09: this path used to `return 0` early → host.env never written).
   local hostsetup="$RUNTIME_DIR/host-setup.sh"
   if [ ! -x "$hostsetup" ]; then
     warn "host-setup.sh not available at $hostsetup — skipping preflight"
@@ -2387,13 +2391,7 @@ refuse_running_team() {
   if ! names="$("${RUNTIME_ENGINE[@]}" ps --format '{{.Names}}' 2>/dev/null)"; then
     # Nothing of JHT published here before: no team of ours can be running.
     [ -e "$RUNTIME_DIR/.runtime-integrity" ] || [ -L "$RUNTIME_DIR/.runtime-integrity" ] || return 0
-    # Docker on Linux without the docker group yet: the same sudo as verify_docker_works.
-    if [ "${RUNTIME_ENGINE[0]}" != podman ] && { [ "$OS" = "linux" ] || [ "$OS" = "wsl" ]; }; then
-      names="$(sudo docker ps --format '{{.Names}}' 2>/dev/null)" \
-        || fail "Cannot list the running containers with docker: nothing was installed."
-    else
-      fail "Cannot list the running containers with ${RUNTIME_ENGINE[*]}: nothing was installed."
-    fi
+    fail "Cannot list the running containers with ${RUNTIME_ENGINE[*]}: nothing was installed."
   fi
   for name in $TEAM_CONTAINERS; do
     printf '%s\n' "$names" | grep -Fqx "$name" && running="${running:+$running, }$name"
