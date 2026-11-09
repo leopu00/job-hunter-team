@@ -33,7 +33,12 @@
     "With the queue empty, or one that cannot be counted, the Capitano's pause as before. It yields to the",
     "same hold as empty_unit (keep_captains_pause: recovery after a freeze, team over its pace): then the",
     "Capitano's pause stays, the budget is protected. The user's burn intent (\"Lavora a tutta\") lifts that",
-    "hold and, with a queue waiting, takes the pause away altogether. A rule never lengthens a pause."
+    "hold and, with a queue waiting, takes the pause away altogether. A rule never lengthens a pause.",
+    "burst_wait (TUI only for now; shared/skills/throttle_burst.py, JHT-T309): during the FIRST BURST a worker with",
+    "nothing to do waits at most cap_sec, not the Capitano's pause. Nothing to do = an Analista or a Scorer whose",
+    "queue was read and is empty (the event wake, JHT-T297, brings it forward sooner; this is the net under a lost",
+    "signal), or a Scout that has inserted nothing since the burst began (nothing wakes a Scout). It yields to the",
+    "same spend hold as the rules above, and outside the burst nothing changes."
   ],
   "short_pause_sec": 60,
   "empty_unit": {
@@ -51,5 +56,9 @@
   "queued_work": {
     "roles": ["analista", "scorer"],
     "pause_sec": 60
+  },
+  "burst_wait": {
+    "roles": ["scout", "analista", "scorer"],
+    "cap_sec": 120
   }
 }

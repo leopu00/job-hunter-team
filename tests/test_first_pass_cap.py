@@ -174,7 +174,8 @@ def test_a_scout_at_the_cap_waits_the_hold_and_the_others_wait_what_they_did(tmp
     conn.execute("UPDATE positions SET status = 'scored'")
     conn.commit()
     conn.close()
-    assert eng.register("analista-1", now=now)["applied_sec"] == 300, "only a Scout is held"
+    res = eng.register("analista-1", now=now)
+    assert res["applied_sec"] == 120 and "first_pass_cap" not in res, "only a Scout is held; the others wait the burst cap"
 
 
 def test_the_hold_ends_with_the_burst_and_does_not_shorten_a_longer_pause(tmp_path, monkeypatch):
