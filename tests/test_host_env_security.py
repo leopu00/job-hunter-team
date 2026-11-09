@@ -65,22 +65,6 @@ def make_fake_docker(fake_bin: Path, log: Path) -> None:
         encoding="utf-8",
     )
     docker.chmod(0o755)
-    make_fake_getent(fake_bin)
-
-
-def make_fake_getent(fake_bin: Path) -> None:
-    """The wrapper refuses to start when uid 1001 is an account of the computer (bind_uid_conflict): on a Linux machine
-    that has such an account (a CI box, a test laptop) the tests that reach `up` died there, whatever they check.
-    This fake says nobody owns 1001 and leaves every other lookup to the real getent."""
-    real = shutil.which("getent", path=os.environ.get("PATH", ""))
-    getent = fake_bin / "getent"
-    getent.write_text(
-        "#!/bin/sh\n"
-        '[ "$1" = passwd ] && [ "$2" = 1001 ] && exit 2\n'
-        + (f'exec {shlex.quote(real)} "$@"\n' if real else "exit 2\n"),
-        encoding="utf-8",
-    )
-    getent.chmod(0o755)
 
 
 def wrapper_runtime_env(home: Path, runtime: Path, fake_bin: Path, log: Path) -> dict[str, str]:
@@ -92,6 +76,9 @@ def wrapper_runtime_env(home: Path, runtime: Path, fake_bin: Path, log: Path) ->
         "JHT_COMPOSE_FILE": str(runtime / "docker-compose.yml"),
         "JHT_HOST_SETUP_SCRIPT": str(runtime / "host-setup.sh"),
         "JHT_TEST_DOCKER_LOG": str(log),
+        # The folders of the test belong to the user who runs it: the wrapper must neither chown them to the
+        # container's uid 1001 (a normal user cannot) nor stop because 1001 is an account of this computer.
+        "JHT_BIND_OWNER": f"{os.getuid()}:{os.getgid()}",
     }
 
 

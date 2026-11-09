@@ -160,12 +160,12 @@ def test_missing_dependency_is_told_apart_from_a_failing_command():
 
 def test_team_status_exits_zero(jht_home):
     code, out, err = run_team_status(jht_home)
-    assert code == 0, err
+    assert code == 0, (out + err)[-600:]
 
 
 def test_team_status_no_agents_shows_hint(jht_home):
     code, out, err = run_team_status(jht_home)
-    assert code == 0, err
+    assert code == 0, (out + err)[-600:]
     # Con nessun agente attivo deve mostrare un messaggio informativo
     combined = out + err
     assert len(combined.strip()) > 0
