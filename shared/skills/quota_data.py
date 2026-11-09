@@ -54,18 +54,14 @@ def _day_dirs(sessions_dir, now):
     return sorted(days)
 
 
-def _window_has_reading(window):
-    return isinstance(window, dict) and window.get("used_percent") is not None
-
-
 def _limits_of(payload):
-    limits = payload.get("rate_limits") or (payload.get("info") or {}).get("rate_limits")
-    return isinstance(limits, dict) and (_window_has_reading(limits.get("primary"))
-                                         or _window_has_reading(limits.get("secondary")))
+    """True when the event carries a rate_limits of ANY non-empty shape. The shape is Codex's to change, so it is not
+    parsed: a reading we cannot understand is still data that exists, and a failed fetch then stays an outage."""
+    return bool(payload.get("rate_limits") or (payload.get("info") or {}).get("rate_limits"))
 
 
 def _recent_rollout_without_limits(sessions_dir, now):
-    """The newest rollout is alive and reports token counts, and NONE of its recent events carries a rate-limit reading:
+    """The newest rollout is alive and reports token counts, and NONE of its recent events carries a (non-empty) rate_limits:
     Codex works and reports no limits. One event with a reading is enough to say the data exists, so a failed fetch stays an outage."""
     newest = None
     try:

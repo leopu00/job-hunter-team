@@ -93,11 +93,25 @@ def test_one_event_with_a_reading_keeps_a_failed_fetch_an_outage(sessions):
     assert quota_data.no_quota_reason("openai", SUBSCRIPTION, sessions, NOW) is None
 
 
-def test_null_or_empty_limits_are_no_reading(sessions):
-    empty = {"payload": {"type": "token_count", "rate_limits": {"primary": None, "secondary": {}}}}
+def test_missing_null_or_empty_rate_limits_are_no_data(sessions):
+    empty = {"payload": {"type": "token_count", "rate_limits": {}}}
     nulls = {"payload": {"type": "token_count", "rate_limits": None}}
-    rollout(sessions, "rollout-a.jsonl", [TOKEN_COUNT, empty, nulls])
+    nested = {"payload": {"type": "token_count", "info": {"rate_limits": {}}}}
+    rollout(sessions, "rollout-a.jsonl", [TOKEN_COUNT, empty, nulls, nested])
     assert quota_data.no_quota_reason("openai", SUBSCRIPTION, sessions, NOW) == "no_rate_limits_in_rollouts"
+
+
+@pytest.mark.parametrize("shape", [
+    {"five_hour": {"pct": 3}},                       # names and fields changed
+    {"primary": None, "secondary": {}},              # windows with no reading, but the key is there
+    {"limit_id": "codex", "primary": {"pct": 1}},
+    [{"window": 300, "used": 4}],                    # not even a dict
+])
+def test_any_non_empty_rate_limits_shape_keeps_a_failed_fetch_an_outage(sessions, shape):
+    rollout(sessions, "rollout-a.jsonl", [TOKEN_COUNT, {"payload": {"type": "token_count", "rate_limits": shape}}])
+    assert quota_data.no_quota_reason("openai", SUBSCRIPTION, sessions, NOW) is None
+    rollout(sessions, "rollout-b.jsonl", [{"payload": {"type": "token_count", "info": {"rate_limits": shape}}}], age_sec=5)
+    assert quota_data.no_quota_reason("openai", SUBSCRIPTION, sessions, NOW) is None
 
 
 def test_only_recent_day_folders_are_read(sessions):
