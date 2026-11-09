@@ -153,6 +153,11 @@ def inner_exec():
             print("\n".join(state["team"]))
         return 0
 
+    if command[:2] == ["bash", "-c"] and "oauth-login-openai.sh" in command[2]:
+        # The wrapper hands the openai sign-in to the script of the image; with no pi harness in this runtime that
+        # script runs the sign-in of Codex, which is what the app has always waited for.
+        command = ["codex", "login", "--device-auth"]
+
     if command == ["codex", "login", "--device-auth"]:
         record("login", command, tty)
         if not tty:
@@ -518,7 +523,11 @@ def test_the_wrapper_runs_the_onboarding_sequence_on_a_stateful_runtime(tmp_path
 
     login = [row for row in cli.command_plan if row["kind"] == "login"]
     assert login == [{
-        "argv": ["exec", "-it", "aaaaaaaaaaaa", "codex", "login", "--device-auth"],
+        "argv": [
+            "exec", "-it", "aaaaaaaaaaaa", "bash", "-c",
+            "[ -f /app/.launcher/oauth-login-openai.sh ] && exec bash /app/.launcher/oauth-login-openai.sh; "
+            "exec codex login --device-auth",
+        ],
         "kind": "login",
         "logical": ["codex", "login", "--device-auth"],
         "tty": True,
