@@ -111,8 +111,8 @@ function Get-UnsettledJhtContainers {
     [Parameter(Mandatory)][string]$MachineName,
     [Parameter(Mandatory)][string[]]$Names,
     [int]$TimeoutSeconds = 60,
-    [int]$SettleSeconds = 10,
-    [int]$SampleSeconds = 2
+    [int]$SettleSeconds = 4,
+    [int]$SampleSeconds = 1
   )
   $watch = [Diagnostics.Stopwatch]::StartNew()
   $runningSince = @{}
