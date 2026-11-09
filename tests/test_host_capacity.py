@@ -137,10 +137,16 @@ def test_the_flat_constant_is_gone_and_a_failed_measurement_means_no_cap(monkeyp
 
 def test_the_cap_follows_the_active_provider(monkeypatch, tmp_path):
     monkeypatch.setenv("JHT_HOME", str(tmp_path))
-    monkeypatch.setattr(hc, "read_probe", lambda *a, **k: machine(5.9, 16))
+    # The module plan_registry reads the machine through is the one object it keeps: replacing the probe on it reaches
+    # the real code path, and the machine under test is a made-up one with many cores (so the cores never decide).
+    monkeypatch.setattr(plan_registry._host_capacity_module(), "read_probe", lambda *a, **k: machine(5.9, 64))
     (tmp_path / "jht.config.json").write_text('{"active_provider": "openai"}', encoding="utf-8")
     codex_cap = plan_registry._host_capacity()
     (tmp_path / "jht.config.json").write_text('{"active_provider": "claude"}', encoding="utf-8")
     claude_cap = plan_registry._host_capacity()
     assert codex_cap["ram_per_agent_measured"] and not claude_cap["ram_per_agent_measured"]
-    assert codex_cap["cap"] > claude_cap["cap"]
+    assert codex_cap["cap"] == 12 and claude_cap["cap"] == 1
+
+
+def test_the_capacity_module_is_loaded_once():
+    assert plan_registry._host_capacity_module() is plan_registry._host_capacity_module()

@@ -416,13 +416,25 @@ def _tier_bucket(tier: float) -> int:
     return 0
 
 
+_HOST_CAPACITY_MODULE = None
+
+
+def _host_capacity_module():
+    """host_capacity.py, loaded once and kept: every call gets the same module object, like an import."""
+    global _HOST_CAPACITY_MODULE
+    if _HOST_CAPACITY_MODULE is None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("host_capacity", Path(__file__).with_name("host_capacity.py"))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _HOST_CAPACITY_MODULE = module
+    return _HOST_CAPACITY_MODULE
+
+
 def _host_capacity() -> Optional[dict]:
     """Capacity of this machine from measurements (shared/skills/host_capacity.py), or None when it cannot be read."""
     try:
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("host_capacity", Path(__file__).with_name("host_capacity.py"))
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
+        mod = _host_capacity_module()
         provider = _read_config().get("active_provider")
         return mod.capacity(mod.read_probe(), mod.harness_of(normalize_provider(provider)))
     except Exception:  # noqa: BLE001 - an unreadable machine has no cap, as before
