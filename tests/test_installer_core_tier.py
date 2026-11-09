@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 INSTALL = ROOT / "scripts" / "install.sh"
 INSTALL_PS1 = ROOT / "scripts" / "install.ps1"
 CORE = "sha256:" + "cd" * 32
-FULL = re.search(r"JHT_IMAGE:-(ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64})", INSTALL.read_text()).group(1)
+FULL = re.search(r"JHT_IMAGE:-(ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64})", INSTALL.read_text(encoding="utf-8")).group(1)
 TEST_IMAGE = "ghcr.io/leopu00/jht@sha256:" + "ab" * 32
 bash_only = pytest.mark.skipif(sys.platform == "win32", reason="the bash installer is not run on Windows")
 
@@ -90,7 +90,7 @@ def test_the_pin_tool_moves_the_constant_in_the_four_copies_and_refuses_a_stale_
     tree = _tree_copy(tmp_path)
     pin_tool.update_tree(tree, NEW_DIGEST, NEW_REVISION, core_digest=CORE)
     for name in ("scripts/install.sh", "web/public/install.sh", "scripts/install.ps1", "web/public/install.ps1"):
-        text = (tree / name).read_text()
+        text = (tree / name).read_text(encoding="utf-8")
         assert f"{CORE}" in text, name
     assert pin_tool.verify_tree(tree).core_digest == CORE
     (tree / "web/public/install.sh").write_text((tree / "web/public/install.sh").read_text().replace(CORE, ""))
@@ -100,7 +100,7 @@ def test_the_pin_tool_moves_the_constant_in_the_four_copies_and_refuses_a_stale_
 
 
 def test_the_repository_copies_carry_the_empty_constant_while_the_pin_has_no_core_digest():
-    assert json.loads((ROOT / pin_tool.MANIFEST_PATH).read_text()).get("core_digest") is None
+    assert json.loads((ROOT / pin_tool.MANIFEST_PATH).read_text(encoding="utf-8")).get("core_digest") is None
     assert pin_tool.verify_tree(ROOT).core_digest is None
 
 
