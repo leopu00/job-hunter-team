@@ -74,10 +74,16 @@ function readSentinellaTickMinutes() {
 //      stabile quando inizia a operare.
 // Gli altri agenti (Scout, Analista, Scorer, Scrittore, Critico) li scala
 // il Capitano secondo le sue soglie, leggendo lo stato Bridge.
-function buildContainerBootstrap() {
+// How to SEE that a started item is ready for the one after it (the wait before the next item used to be a fixed number of
+// seconds): a tmux agent has its CLI on screen (not a shell, a drawn interface: the first two conditions the kick-off waits for),
+// a daemon has written its state file. Run in the container; exit 0 = ready.
+const readyWhenCliIsUp = (session) => ['bash', '-c', '. /app/.launcher/tui-helpers.sh; ! _tui_is_shell_pane "$1" && _tui_has_box_drawing "$1"', '_', session];
+const readyWhenStateFileExists = (name) => ['sh', '-c', 'test -s "${JHT_HOME:-/jht_home}/logs/$1"', '_', name];
+
+export function buildContainerBootstrap() {
   const tickMin = readSentinellaTickMinutes();
   return [
-    { role: 'assistente', session: 'ASSISTENTE' },
+    { role: 'assistente', session: 'ASSISTENTE', ready: readyWhenCliIsUp('ASSISTENTE') },
     {
       // tg-bridge spawna internamente 3 processi (assistente/capitano/mentor),
       // ciascuno legge channels.telegram.bots.<role> dal config e dispatch
@@ -86,19 +92,19 @@ function buildContainerBootstrap() {
       role: 'tg-bridge', session: 'TG-BRIDGE', notATmuxSession: true,
       preDelayMs: 5000, env: {},
     },
-    { role: 'sentinella', session: 'SENTINELLA', preDelayMs: 3000 },
+    { role: 'sentinella', session: 'SENTINELLA', preDelayMs: 3000, ready: readyWhenCliIsUp('SENTINELLA') },
     {
       role: 'bridge', session: 'BRIDGE', notATmuxSession: true,
-      preDelayMs: 20000, env: { JHT_TARGET_SESSION: 'CAPITANO' },
+      preDelayMs: 20000, env: { JHT_TARGET_SESSION: 'CAPITANO' }, ready: readyWhenStateFileExists('sentinel-bridge-state.json'),
     },
     {
       // Bridge V7 Step 5: daemon che osserva i log dei provider e calcola
       // weighted/pct + EMA ratio + per-agent rate. Spawnato dopo il sentinel
       // bridge (legge sentinel-bridge-state.json per la window dinamica).
       role: 'token-meter', session: 'TOKEN-METER', notATmuxSession: true,
-      preDelayMs: 5000, env: {},
+      preDelayMs: 5000, env: {}, ready: readyWhenStateFileExists('token-meter-state.json'),
     },
-    { role: 'mentor', session: 'MENTOR', preDelayMs: 3000 },
+    { role: 'mentor', session: 'MENTOR', preDelayMs: 3000, ready: readyWhenCliIsUp('MENTOR') },
     {
       role: 'capitano', session: 'CAPITANO',
       preDelayMs: 5000, env: { JHT_TICK_INTERVAL: String(tickMin) },
@@ -107,6 +113,33 @@ function buildContainerBootstrap() {
 }
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+// The wait before an item, as a check with a ceiling: ready when the probe passes twice in a row (a second apart), and never
+// longer than `ceilingMs` (the old fixed wait). `run`, `wait`, `now` are injectable for the tests.
+export async function waitForReady({ probe, ceilingMs, intervalMs = 1000, run = execArgvInContainer, wait = sleep, now = Date.now }) {
+  const started = now();
+  let passes = 0;
+  for (;;) {
+    passes = run(probe, { timeoutMs: 10_000 })?.code === 0 ? passes + 1 : 0;
+    if (passes >= 2) return { ready: true, waitedMs: now() - started };
+    if (now() - started + intervalMs > ceilingMs) return { ready: false, waitedMs: now() - started };
+    await wait(intervalMs);
+  }
+}
+
+// What the pause before `item` does: it waits for the item BEFORE it (`previous`, one that really started) to be ready, as long
+// as the pause used to last at most; an item with no probe keeps the fixed pause.
+async function settleBefore(previous, item) {
+  const seconds = (ms) => Math.max(1, Math.round(ms / 1000));
+  if (!previous.ready) {
+    console.log(c.dim(`  ⏳ Waiting ${seconds(item.preDelayMs)}s before ${item.session}...`));
+    await sleep(item.preDelayMs);
+    return;
+  }
+  console.log(c.dim(`  ⏳ Waiting for ${previous.session} to be ready (up to ${seconds(item.preDelayMs)}s) before ${item.session}...`));
+  const { ready, waitedMs } = await waitForReady({ probe: previous.ready, ceilingMs: item.preDelayMs });
+  console.log(c.dim(ready ? `  ✓ ${previous.session} ready after ${seconds(waitedMs)}s` : `  ⏭ ${previous.session} not seen ready after ${seconds(waitedMs)}s: going on`));
+}
 
 // The Mentor has no record to walk until the first positions have a score, and its first wake at every start
 // would be spent on nothing: it is not started while the first run is open (`first_run.py mentor-due` says 1),
@@ -359,7 +392,7 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
     // Il delay di ogni voce serve a far stabilizzare la voce precedente. In
     // un retry idempotente, se la precedente era già attiva, ripetere tutti i
     // 41 secondi di attesa non protegge nulla e fa sembrare morto il click.
-    let previousStarted = false;
+    let previous = null; // the item before, and whether it really started in this run
     let step = 0;
     for (const item of bootstrap) {
       step++;
@@ -367,6 +400,7 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
       if (item.role === 'mentor' && mentorWaits) {
         console.log(`  ${progress} ${c.yellow('⏭')} MENTOR — ${MENTOR_WAITING}`);
         deferred++;
+        previous = { ...item, started: false };
         continue;
       }
       if ((item.role === 'capitano' || item.role === 'sentinella') && captainWaits) {
@@ -375,18 +409,17 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
         deferred++;
         deferredCaptain = true;
         if (item.role === 'capitano') coordinatorReady = true; // the onboarding is the operative marker now: a start that waits is not a failed one
+        previous = { ...item, started: false };
         continue;
       }
-      if (previousStarted && item.preDelayMs && item.preDelayMs > 0) {
-        console.log(c.dim(`  ⏳ Waiting ${Math.round(item.preDelayMs / 1000)}s before ${item.session}...`));
-        await sleep(item.preDelayMs);
-      }
+      // nothing to settle when the item before did not start (already active, deferred, failed)
+      if (previous?.started && item.preDelayMs && item.preDelayMs > 0) await settleBefore(previous, item);
       const result = launchInContainer({ role: item.role, instance: null, mode, env: item.env, notATmuxSession: item.notATmuxSession, sessionLabel: item.session, progress });
       if (result === 'started') started++;
       else if (result === 'skipped') skipped++;
       else errored++;
       if (item.role === 'capitano') coordinatorReady = result !== 'error';
-      previousStarted = result === 'started';
+      previous = { ...item, started: result === 'started' };
     }
   } else {
     const parsed = parseAgentArg(agentArg);
