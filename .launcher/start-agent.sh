@@ -169,32 +169,20 @@ trap _spawn_on_exit EXIT
 #          ├─ warmup claude     30s  ← `timeout 30 claude -p ok`, piu' sotto
 #          └─ tmux new-session  45s  ← la guardia sullo spawn, piu' sotto
 #
-# `flock -w` deve superare il tempo che il detentore puo' bruciare, altrimenti
-# un ritardo legittimo del detentore arriva agli altri come "concurrent spawn"
-# — un errore che incolpa la concorrenza mentre la causa e' la lentezza. 75 =
-# 30 + 45, i due passi LUNGHI con un tetto esplicito; e resta sotto i 90s del
-# chiamante, cosi' la CLI non tronca il `docker exec` prima che l'errore vero
-# sia stampato (un troncamento a monte si vede come "unknown error" vuoto:
-# regressione gia' osservata, vedi il commento accanto a `timeoutMs` in
-# start.js). La coerenza qui RIDUCE i falsi "concurrent spawn", non li rende
-# impossibili: i probe aggiungono qualche secondo e i tratti senza tetto
-# (preflight provider/config, copia delle skill) possono da soli avvicinarsi
-# ai 30s. Senza telemetria dello spawn non si puo' fare meglio di cosi'.
+# `flock -w` deve superare il tempo che il detentore puo' bruciare, altrimenti un ritardo legittimo del detentore arriva
+# agli altri come "concurrent spawn" — un errore che incolpa la concorrenza mentre la causa e' la lentezza. 75 = 30 + 45,
+# i due passi LUNGHI con un tetto esplicito; e resta sotto i 90s del chiamante, cosi' la CLI non tronca il `docker exec`
+# prima che l'errore vero sia stampato (un troncamento a monte si vede come "unknown error" vuoto: regressione gia'
+# osservata, vedi il commento accanto a `timeoutMs` in start.js). La coerenza RIDUCE i falsi "concurrent spawn", non li
+# rende impossibili: i tratti senza tetto (preflight, copia delle skill) possono da soli avvicinarsi ai 30s.
 #
-# I probe hanno un tetto piccolo e a parte perche' sono domande secche a cui
-# il server risponde in millisecondi: o rispondono subito, o il server e'
-# incantato e nessuna attesa piu' lunga cambia l'esito. Valgono per il guard
-# di idempotenza e per la pulizia del ramo d'errore.
+# I probe (guard di idempotenza, pulizia del ramo d'errore) hanno un tetto piccolo e a parte: sono domande secche, o il
+# server risponde subito o e' incantato e nessuna attesa piu' lunga cambia l'esito.
 #
-# 45s per la new-session e non 20: il caso sano e' sotto i 2s (crea una
-# sessione detached, non avvia l'agente — l'avvio ha budget suoi, 120s per il
-# loop TUI e 270s per il welcome watchdog), ma su un bind mount Windows saturo
-# la stessa manciata di syscall e' stata misurata a ~56ms l'una
-# (docker-compose.yml), e la fascia 10-25s e' raggiungibile. 20s cadeva dentro
-# quella fascia; 45s la scavalca con margine, supera i 30s del warmup che nella
-# stessa sezione critica e' gia' accettato, e resta metà del budget del
-# chiamante. Oltre non serve: il guasto qui e' bimodale — o ritorna in pochi
-# secondi, o non ritorna mai — e alzare ancora ritarderebbe solo il recupero.
+# 45s per la new-session e non 20: il caso sano e' sotto i 2s (l'avvio dell'agente ha budget suoi), ma su un bind mount
+# Windows saturo la stessa manciata di syscall e' stata misurata a ~56ms l'una (docker-compose.yml) e la fascia 10-25s e'
+# raggiungibile; 45s la scavalca e resta meta' del budget del chiamante. Il guasto e' bimodale (pochi secondi o mai):
+# alzare ancora ritarderebbe solo il recupero.
 JHT_SPAWN_TMUX_TIMEOUT_SEC="${JHT_SPAWN_TMUX_TIMEOUT_SEC:-45}"
 JHT_SPAWN_LOCK_WAIT_SEC="${JHT_SPAWN_LOCK_WAIT_SEC:-75}"
 JHT_SPAWN_TMUX_PROBE_SEC="${JHT_SPAWN_TMUX_PROBE_SEC:-5}"
@@ -808,6 +796,18 @@ if [ "$ROLE" = "mentor" ] && [ "${JHT_MENTOR_NOW:-}" != "1" ] && ! tmux has-sess
   fi
 fi
 # --- fine cancello del Mentor
+# --- cancello del Capitano
+# Il Capitano parte a onboarding chiuso (captain_gate.py: 1 = non ancora, altro = e' ora): a profilo vuoto spende e non
+# puo' fare niente. Ne' il watchdog ne' `jht team start` lo accendono prima; una sessione viva non si tocca.
+if [ "$ROLE" = "capitano" ] && ! tmux has-session -t "=$SESSION" 2>/dev/null; then
+  _captain_rc=0
+  python3 /app/shared/skills/captain_gate.py >/dev/null 2>&1 || _captain_rc=$?
+  if [ "$_captain_rc" -eq 1 ]; then
+    echo "CAPITANO not started: the onboarding with the Assistente is not done (it starts by itself when it is; JHT_CAPTAIN_BEFORE_ONBOARDING=1 starts it anyway)." >&2
+    exit 75
+  fi
+fi
+# --- fine cancello del Capitano
 
 # --- cancello dei posti (spawn_gate.py)
 # Con host_agent_cap=4 il Capitano ha riempito i 4 posti di Scout e 12 posizioni sono rimaste ad aspettare un Analista e uno
