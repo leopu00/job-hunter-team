@@ -1,23 +1,22 @@
 /**
- * The language question of `jht setup`: asked once, when nobody has chosen a language yet.
+ * The language question of `jht setup`.
  *
- * The host setup (install) already asks it on a terminal and writes i18n-prefs.json; a team set up from a script, a
- * VPS without a terminal or the app has no such file, and every agent then writes in English whatever the person
- * speaks. Here the person is asked (the system's language, if it is one of the seven, is the default answer) and the
- * answer is saved where every reader looks first. A person who has already chosen is not asked again.
+ * The host setup (install) writes i18n-prefs.json even when nobody was asked (a server without a terminal gets the
+ * default, English), so the file cannot tell a choice from a default: the setup asks, and the answer in force (the
+ * saved language, else the system's) is the default one, so Enter keeps it. The answer is saved where every reader
+ * looks first. A team set up from a script says it with `--language` instead (setup-noninteractive.js).
  */
 import { LANGUAGES, hasLanguageChoice, saveLanguage, systemLanguage, currentLang } from './i18n.js';
 
 // The question is asked in all the languages: before the answer there is no language to ask it in.
 const QUESTION = 'Choose your language / Scegli la lingua / Válassz nyelvet / Elige tu idioma / Wähle deine Sprache / Choisis ta langue / Escolha seu idioma';
 
-/** Asks (when needed) and saves the language. Returns the language in force after the step. */
+/** Asks and saves the language. Returns the language in force after the step. */
 export async function askLanguage(prompter, { env = process.env, home } = {}) {
-  if (hasLanguageChoice(home)) return currentLang();
   const code = await prompter.select({
     message: QUESTION,
     options: LANGUAGES.map(({ value, label }) => ({ value, label })),
-    initialValue: systemLanguage(env) || 'en',
+    initialValue: hasLanguageChoice(home) ? currentLang() : (systemLanguage(env) || currentLang()),
   });
   try {
     saveLanguage(code, home);

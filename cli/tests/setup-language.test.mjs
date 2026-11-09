@@ -59,16 +59,22 @@ test('without --language the system language is used when nobody chose, and a la
   assert.equal(prefs(h).locale, 'fr', 'the first choice stands');
 });
 
-test('the wizard asks the language once, with the system language as the default answer, and never when it is already chosen', async () => {
-  const h = home();
+test('the wizard asks the language, with the saved one (else the system one) as the default answer, and saves the answer', async () => {
   const asked = [];
   const prompter = { select: async (p) => { asked.push(p); return p.initialValue; }, note: async () => {} };
+  const h = home();
   assert.equal(await askLanguage(prompter, { env: { LANG: 'es_ES.UTF-8' }, home: h }), 'es');
-  assert.equal(asked.length, 1);
   assert.equal(asked[0].options.length, 7);
   assert.equal(prefs(h).locale, 'es');
-  await askLanguage(prompter, { env: { LANG: 'es_ES.UTF-8' }, home: h });
-  assert.equal(asked.length, 1, 'chosen already: no second question');
+  // a file written by the host setup with the default must not hide the question: it is asked, the saved language is the default
+  const h2 = home();
+  writeFileSync(join(h2, 'i18n-prefs.json'), JSON.stringify({ locale: 'de' }));
+  process.env.JHT_HOME = h2;
+  assert.equal(await askLanguage(prompter, { env: { LANG: 'es_ES.UTF-8' }, home: h2 }), 'de');
+  assert.equal(asked.length, 2, 'asked again, Enter keeps the saved language');
+  prompter.select = async () => 'it';
+  assert.equal(await askLanguage(prompter, { env: {}, home: h2 }), 'it');
+  assert.equal(prefs(h2).locale, 'it');
 });
 
 test('a language that cannot be saved does not stop the setup', async () => {
