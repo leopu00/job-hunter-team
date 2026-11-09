@@ -117,6 +117,10 @@ describe("JHT-T31 · the language of a free text", () => {
     expect(guessLanguage(`${SAMPLES.en} ${SAMPLES.it}`)).toBeNull();
   });
 
+  it("does not take a short Italian sentence for Portuguese (JHT-T310)", () => {
+    expect(guessLanguage("Vivo a Bologna e preferisco lavorare da remoto o in modalità ibrida.")).toBe("it");
+  });
+
   it("follows the person's language: the file first, then JHT_LANG, then English", async () => {
     const home = await mkdtemp(join(tmpdir(), "jht-lang-"));
     try {
