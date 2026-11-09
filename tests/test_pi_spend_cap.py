@@ -291,3 +291,46 @@ def test_the_fee_of_the_web_searches_counts_against_the_ceiling(tmp_path):
     bridge.tick()
     assert bridge.esc == 1
     assert json.loads(bridge.flag.read_text(encoding="utf-8"))["pi_spend_cap"]["spent"] == 10.0
+
+
+# --- the first burst that stops on the ceiling (JHT-T313) -------------------------------------------------------
+
+def first_burst(home: Path, phase="burst", target=20, scored=3, at_start=0):
+    import sqlite3
+
+    (home / "state").mkdir(exist_ok=True)
+    (home / "state" / "first-run.json").write_text(json.dumps(
+        {"phase": phase, "target_scored": target, "scored_at_start": at_start}), encoding="utf-8")
+    conn = sqlite3.connect(str(home / "jobs.db"))
+    conn.execute("CREATE TABLE IF NOT EXISTS scores (position_id INTEGER, score REAL)")
+    conn.executemany("INSERT INTO scores VALUES (?, 7.0)", [(i,) for i in range(scored)])
+    conn.commit()
+    conn.close()
+
+
+def test_a_first_burst_stopped_by_the_ceiling_tells_the_capitano_how_far_it_got(tmp_path):
+    pi_calls(tmp_path, [(NOON - 600, 4.0, 100), (NOON - 300, 6.0, 100)])
+    first_burst(tmp_path, scored=7, at_start=2)
+    bridge = Bridge(tmp_path, {"no_quota_cap": EUR})
+    bridge.tick()
+    captain = [text for session, text in bridge.sent if session == "CAPITANO"][0]
+    assert "FIRST BURST" in captain and "5 of 20 scored positions" in captain and "no_quota_cap" in captain and "say so in the chat" in captain
+    assert "FIRST BURST" in [text for session, text in bridge.sent if session == "SENTINELLA"][0]
+
+
+@pytest.mark.parametrize("state", [dict(phase="steady"), dict(phase="awaiting_profile"), dict(scored=20), dict(scored=25), dict(target=0), dict(target=True)])
+def test_without_an_open_first_burst_short_of_its_target_the_alert_says_nothing_about_it(tmp_path, state):
+    pi_calls(tmp_path, [(NOON - 600, 4.0, 100), (NOON - 300, 6.0, 100)])
+    first_burst(tmp_path, **state)
+    bridge = Bridge(tmp_path, {"no_quota_cap": EUR})
+    bridge.tick()
+    assert bridge.esc == 1 and all("FIRST BURST" not in text for text in bridge.texts())
+
+
+def test_a_missing_or_broken_burst_state_does_not_stop_the_alert(tmp_path):
+    pi_calls(tmp_path, [(NOON - 600, 4.0, 100), (NOON - 300, 6.0, 100)])
+    (tmp_path / "state").mkdir()
+    (tmp_path / "state" / "first-run.json").write_text("{broken", encoding="utf-8")
+    bridge = Bridge(tmp_path, {"no_quota_cap": EUR})
+    bridge.tick()
+    assert bridge.esc == 1 and sorted(s for s, _ in bridge.sent) == ["CAPITANO", "SENTINELLA"]

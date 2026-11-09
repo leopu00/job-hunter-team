@@ -234,7 +234,7 @@ _BURST_SCOUT_CAP = {20: 25, 15: 20, 5: 15, 1: 10, 0: 8}
 
 # Obiettivo dichiarato del burst: quante posizioni PUNTEGGIATE far vedere
 # all'utente prima di passare al regime normale.
-_BURST_TARGET_SCORED = {20: 15, 15: 12, 5: 10, 1: 6, 0: 4}
+_BURST_TARGET_SCORED = {20: 20, 15: 20, 5: 20, 1: 20, 0: 20}
 
 def _jht_home() -> Path:
     return Path(os.environ.get("JHT_HOME") or str(Path.home() / ".jht"))

@@ -280,3 +280,15 @@ def test_upgrade_of_an_existing_install_gets_no_burst(first_run, jht_home):
     conn.close()
 
     assert first_run.status()["phase"] == first_run.PHASE_STEADY
+
+
+def test_the_first_burst_targets_twenty_scored_positions_in_every_band(jht_home):
+    """The promise of the product (JHT-T313): 20 scored positions, whatever the plan or the ceiling."""
+    for provider, plans in plan_registry.PLANS.items():
+        for plan in plans:
+            assert plan_registry.burst_roster(plan_registry.find_plan(provider, plan["id"]), host_cap=99)["target_scored"] == 20, (provider, plan["id"])
+    for eur in (None, 5, 10, 30):
+        (jht_home / "jht.config.json").write_text(json.dumps(
+            {"active_provider": "openai", "providers": {"openai": {"auth_method": "api_key"}},
+             **({} if eur is None else {"no_quota_cap": {"eur": eur}})}), encoding="utf-8")
+        assert plan_registry.burst_roster(host_cap=99)["target_scored"] == 20, eur
