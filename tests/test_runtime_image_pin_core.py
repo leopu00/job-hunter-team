@@ -12,6 +12,7 @@ from tests.test_runtime_image_pin import MANIFEST, NEW_DIGEST, NEW_REVISION, _tr
 
 CORE = "sha256:" + "cd" * 32
 CORE_LINE = r'^CORE_IMAGE="(?P<core_image>[^"]+)"$'
+CORE_DIGEST_LINE = r'^CORE_IMAGE_DIGEST="\$\{JHT_CORE_IMAGE_DIGEST:-(?P<core_digest>(?:sha256:[0-9a-f]{64})?)\}"$'
 
 
 def _manifest(tmp_path: Path, **changes) -> Path:
@@ -107,3 +108,34 @@ def test_the_core_digest_must_differ_from_the_full_one_in_an_update(tmp_path: Pa
     with pytest.raises(pin_tool.RuntimeImagePinError) as refused:
         pin_tool.update_tree(tree, NEW_DIGEST, NEW_REVISION, core_digest=NEW_DIGEST)
     assert refused.value.code == "core_digest_invalid"
+
+
+def _tree_with_core_digest_constant(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, value: str = "") -> Path:
+    """The installers' shape: the constant is always there, empty while the manifest has no core digest."""
+    tree = _tree_copy(tmp_path)
+    consumer = Path("scripts/installer-like.sh")
+    (tree / consumer).write_text('CORE_IMAGE_DIGEST="${JHT_CORE_IMAGE_DIGEST:-' + value + '}"\n')
+    monkeypatch.setattr(pin_tool, "CORE_CONSUMER_PATTERNS", {consumer: (CORE_DIGEST_LINE,)})
+    return tree
+
+
+def test_the_constant_is_empty_while_the_manifest_has_no_core_digest(tmp_path: Path, monkeypatch) -> None:
+    tree = _tree_with_core_digest_constant(tmp_path, monkeypatch, "")
+    assert pin_tool.verify_tree(tree).core_digest is None
+    done = pin_tool.update_tree(tree, NEW_DIGEST, NEW_REVISION)  # an update without a core digest keeps it empty
+    assert done.core_digest is None and 'CORE_IMAGE_DIGEST="${JHT_CORE_IMAGE_DIGEST:-}"' in (tree / "scripts/installer-like.sh").read_text()
+
+
+def test_the_constant_follows_the_core_digest_and_a_value_without_one_is_refused(tmp_path: Path, monkeypatch) -> None:
+    tree = _tree_with_core_digest_constant(tmp_path, monkeypatch, "")
+    done = pin_tool.update_tree(tree, NEW_DIGEST, NEW_REVISION, core_digest=CORE)
+    assert f":-{CORE}}}" in (tree / "scripts/installer-like.sh").read_text()
+    assert pin_tool.verify_tree(tree) == done
+    (tree / "scripts/installer-like.sh").write_text('CORE_IMAGE_DIGEST="${JHT_CORE_IMAGE_DIGEST:-}"\n')  # a copy left with no value
+    with pytest.raises(pin_tool.RuntimeImagePinError) as refused:
+        pin_tool.verify_tree(tree)
+    assert refused.value.code == "consumer_core_drift"
+    other = _tree_with_core_digest_constant(tmp_path / "x", monkeypatch, CORE)  # and a value the manifest does not have
+    with pytest.raises(pin_tool.RuntimeImagePinError) as stale:
+        pin_tool.verify_tree(other)
+    assert stale.value.code == "consumer_core_drift"

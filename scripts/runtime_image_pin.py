@@ -209,16 +209,19 @@ def load_manifest(path: Path) -> RuntimeImagePin:
     )
 
 
-# The places that name the CORE image, with the pattern of the line (group `core_image`: the full reference). Empty until the
-# installers and wrappers carry the second constant; from then on a pin WITH a core digest needs every one of them to carry it
-# (a copy with one digest is refused), and a pin WITHOUT one needs none of them to.
+# The places that name the CORE image, with the pattern of the line. Two kinds of group:
+#   `core_digest`  the bare sha256 (or EMPTY): the line is always there, as `CORE_IMAGE_DIGEST="${JHT_CORE_IMAGE_DIGEST:-<value>}"`
+#                  in the installers, and its value is the manifest's core digest, or empty when the manifest has none;
+#   `core_image`   the full reference: the line exists only while the manifest has a core digest.
+# Empty until the installers and wrappers carry the constant; from then on a pin WITH a core digest needs every one of them to
+# carry it (a copy with one digest is refused), and a pin WITHOUT one needs them empty or absent.
 CORE_CONSUMER_PATTERNS: dict[Path, tuple[str, ...]] = {}
 
 
 def _pinned_group(pattern: str) -> str:
     """`image` (the full reference) or `digest` (the bare sha256:...) of a consumer pattern."""
     names = re.compile(pattern).groupindex
-    if set(names) not in ({"image"}, {"digest"}, {"core_image"}):
+    if set(names) not in ({"image"}, {"digest"}, {"core_image"}, {"core_digest"}):
         raise RuntimeImagePinError("consumer_contract_invalid")
     return next(iter(names))
 
@@ -226,6 +229,8 @@ def _pinned_group(pattern: str) -> str:
 def _pinned_value(pin: "RuntimeImagePin", group: str) -> str:
     if group == "core_image":
         return pin.core_image_ref or ""
+    if group == "core_digest":
+        return pin.core_digest or ""
     return pin.image_ref if group == "image" else pin.digest
 
 
@@ -277,7 +282,11 @@ def verify_tree(
         for pattern in patterns:
             group = _pinned_group(pattern)
             values = [match.group(group) for match in re.finditer(pattern, text, flags=re.MULTILINE)]
-            if values != ([pin.core_image_ref] if pin.core_digest else []):
+            if group == "core_digest":
+                expected = [pin.core_digest or ""]  # the constant is always there, empty while the feature is off
+            else:
+                expected = [pin.core_image_ref] if pin.core_digest else []
+            if values != expected:
                 raise RuntimeImagePinError("consumer_core_drift")
     for installer, digest_file in INSTALLER_DIGESTS:
         if installer not in PINNED_CONSUMERS:
