@@ -52,11 +52,13 @@ def verify_state(operation: str, result: str) -> bool:
     value = message.strip()
     if code == "0":
         return value == ("true" if operation == "start" else "false")
-    if code != "1" or operation != "stop":
+    # An engine that has no such container answers `inspect` with exit 1 (Docker) or 125 (Podman 5).
+    if code not in ("1", "125") or operation != "stop":
         return False
     return bool(re.fullmatch(
         r'(?:Error response from daemon: )?No such (?:container|object): jht-telegram'
-        r'|Error: no container with name or ID "jht-telegram" found: no such container', value,
+        r'|Error: no container with name or ID "jht-telegram" found: no such container'
+        r'|Error: no such (?:container "|object: ")jht-telegram"', value,
     ))
 
 

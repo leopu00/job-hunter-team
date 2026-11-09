@@ -42,7 +42,9 @@ else:
 def source_for(language, mutant):
     if language == "bash":
         adapter = re.sub(r'^compose\(\) \{\n.*?^\}\n', 'compose() { "$NATIVE_DOCKER" compose "$@"; }\n', BASH_TRANSPORT, count=1, flags=re.M | re.S)
-        adapter = adapter.replace('docker() { cat "$ENGINE_STATE"; }', 'docker() { "$NATIVE_DOCKER" "$@"; }')
+        fake_docker = 'docker() { cat "$ENGINE_STATE"; }'
+        assert adapter.count(fake_docker) == 1
+        adapter = adapter.replace(fake_docker, 'docker() { "$NATIVE_DOCKER" "$@"; }')
         adapter += '\ntelegram_pair() { [ "$(cat)" = "$PAIR_INPUT" ] || return 91; "$PYTHON" "$MUTATE" pair "$1"; }\n'
         source = functions("telegram_lifecycle_plan", "telegram_lifecycle_verify", "telegram_lifecycle_steps", "telegram_lifecycle_command")
         if mutant:
@@ -55,7 +57,8 @@ def source_for(language, mutant):
         assert actual.count(old) == 1
         actual = actual.replace(old, 'elseif ($NoInput) { & docker compose')
     adapter = re.sub(r'^function Invoke-Compose \{\n.*?^\}\n', lambda _: actual, PS_TRANSPORT, count=1, flags=re.M | re.S)
-    adapter = re.sub(r'^function docker \{[^\n]+\}\n', '', adapter, count=1, flags=re.M)
+    adapter, removed = re.subn(r'^function docker \{[^\n]+\}\n', '', adapter, count=1, flags=re.M)
+    assert removed == 1
     adapter += r'''
 $JhtHome = $env:JHT_TELEGRAM_STATE
 $ComposeFile = 'synthetic.yml'; $RuntimeDir = '.'; $ContainerRuntime = 'docker'

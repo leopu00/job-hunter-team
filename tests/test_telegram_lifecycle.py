@@ -141,7 +141,17 @@ function Invoke-TelegramAdmin {
 '''
 
 
-def run_host(tmp_path, language, args, *, fail_pair=False, no_effect=""):
+# An engine that never created the container: Podman 5 answers inspect with exit 125. Defined after the transport,
+# so tests that swap the one-line fake `docker` above keep matching it.
+BASH_ABSENT = r'''
+docker() { printf 'Error: no such container "jht-telegram"\n' >&2; return 125; }
+'''
+PS_ABSENT = r'''
+function docker { 'Error: no such container "jht-telegram"'; $global:LASTEXITCODE = 125 }
+'''
+
+
+def run_host(tmp_path, language, args, *, fail_pair=False, no_effect="", absent=False):
     events = tmp_path / "events"
     events.write_text("", encoding="utf-8")
     engine_state = tmp_path / "engine-state"
@@ -160,12 +170,12 @@ def run_host(tmp_path, language, args, *, fail_pair=False, no_effect=""):
            "ENGINE_STATE": str(engine_state), "NO_EFFECT": no_effect}
     if language == "bash":
         body = functions("telegram_lifecycle_plan", "telegram_lifecycle_verify", "telegram_lifecycle_steps", "telegram_lifecycle_command")
-        script = BASH_TRANSPORT + '\nTELEGRAM_SERVICE=jht-telegram\n' + body + '\ntelegram_lifecycle_command "$@"\n'
+        script = BASH_TRANSPORT + '\nTELEGRAM_SERVICE=jht-telegram\n' + body + (BASH_ABSENT if absent else "") + '\ntelegram_lifecycle_command "$@"\n'
         command = ["bash", "-c", script, "test-host", *args]
     else:
         body = powershell_functions("Get-TelegramLifecyclePlan", "Confirm-TelegramLifecycle", "Invoke-TelegramLifecycleSteps", "Invoke-TelegramLifecycle")
         script = tmp_path / "transport.ps1"
-        script.write_text(PS_TRANSPORT + body + '\nexit (Invoke-TelegramLifecycle $args)\n', encoding="utf-8")
+        script.write_text(PS_TRANSPORT + body + (PS_ABSENT if absent else "") + '\nexit (Invoke-TelegramLifecycle $args)\n', encoding="utf-8")
         command = ["pwsh", "-NoProfile", "-File", str(script), *args]
     result = subprocess.run(command, env=env, capture_output=True, text=True, check=False, timeout=30)
     return result, events.read_text(encoding="utf-8-sig").splitlines()
@@ -180,6 +190,23 @@ def test_default_up_and_status_never_start_the_telegram_service(lifecycle_home, 
     assert result.returncode == 0, result.stdout + result.stderr
     assert events == []
     assert "non attivo: Telegram non configurato" in result.stdout
+
+
+@pytest.mark.parametrize("language", ["bash", "pwsh"])
+def test_stopping_a_telegram_service_that_never_existed_is_not_a_failure(lifecycle_home, language):
+    # Podman 5 answers `inspect` of a container that was never created with exit 125 and no such container.
+    result, events = run_host(lifecycle_home, language, ["resume"], absent=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert events == ["stop"]
+    assert "telegram_lifecycle_state_unconfirmed" not in result.stderr + result.stdout
+
+
+@pytest.mark.parametrize("language", ["bash", "pwsh"])
+def test_configured_telegram_that_is_not_there_after_start_is_still_an_error(lifecycle_home, language):
+    configure()
+    result, events = run_host(lifecycle_home, language, ["resume"], absent=True)
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "telegram_lifecycle_state_unconfirmed" in result.stderr + result.stdout
 
 
 @pytest.mark.parametrize("language", ["bash", "pwsh"])
@@ -234,6 +261,11 @@ def test_successful_engine_exit_without_the_requested_effect_is_refused(lifecycl
     ("stop", "1\nError response from daemon: No such container: jht-telegram", True),
     ("stop", '1\nError: no container with name or ID "jht-telegram" found: no such container', True),
     ("start", "0\nfalse", False), ("stop", "0\ntrue", False),
+    ("stop", '125\nError: no such container "jht-telegram"', True),
+    ("stop", '125\nError: no such object: "jht-telegram"', True),
+    ("stop", '125\nError: no such container "other"', False),
+    ("stop", '125\nError: cannot connect to Podman', False),
+    ("start", '125\nError: no such container "jht-telegram"', False),
     ("stop", "2\ndaemon unreachable", False),
     ("stop", "1\nNo such container: other", False),
     ("stop", "1\nNo such container: jht-telegram\nextra error", False),
