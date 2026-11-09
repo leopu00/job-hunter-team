@@ -16,9 +16,9 @@ def machine(total, cores, load5=1.0, avail=None):
             "cores": cores, "load5": load5}
 
 
-# A 12 GB Windows PC: the VM gets 5.9 GiB and 4 vCPU. The flat 0.6 GiB gave 1 worker here.
+# A machine with 6 GiB and 4 cores. A flat 0.6 GiB per agent gave 1 worker here.
 def test_the_windows_pc_that_was_stuck_at_one_worker_now_carries_a_full_pipeline():
-    got = hc.capacity(machine(5.9, 4), "codex")
+    got = hc.capacity(machine(6.0, 4), "codex")
     assert got["cap"] >= 8 and got["cap"] > 1
     assert got["limit"] == "cpu" and got["ram_per_agent_measured"] is True
 
@@ -51,12 +51,12 @@ def test_a_machine_that_cannot_hold_the_fixed_agents_plus_a_pipeline_gets_one_wo
     for harness in ("claude", "kimi", "pi"):
         got = hc.capacity(machine(4.0, 4), harness)
         assert got["cap"] == 1, harness
-    assert hc.capacity(machine(5.9, 4), "claude")["cap"] == 1     # the VM that the flat constant also gave 1 with
+    assert hc.capacity(machine(6.0, 4), "claude")["cap"] == 1     # the same 6 GiB: the flat constant gave 1 too
     assert hc.capacity(machine(4.0, 4), "codex")["cap"] >= 3      # the measured 0.22 GiB per Codex agent does fit
 
 
 def test_nothing_raises_the_cap_above_what_the_ram_holds():
-    for total in (1.0, 2.0, 3.0, 4.0, 5.9, 8.0, 12.0, 32.0):
+    for total in (1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 12.0, 32.0):
         for cores in (1, 2, 4, 16):
             for harness in ("codex", "claude", "kimi", "pi", None):
                 for load5, avail in ((0.5, total), (cores * 20.0, total), (1.0, 0.2)):
@@ -82,15 +82,15 @@ def test_a_machine_that_cannot_be_measured_has_no_cap():
 
 
 def test_missing_cores_or_load_do_not_invent_a_limit():
-    got = hc.capacity({"ram_total_gib": 5.9, "ram_avail_gib": 4, "cores": None, "load5": None}, "codex")
-    assert got["cap"] == 12 and got["limit"] == "ram" and got["cpu_cap"] is None
+    got = hc.capacity({"ram_total_gib": 6.0, "ram_avail_gib": 4, "cores": None, "load5": None}, "codex")
+    assert got["cap"] == 13 and got["limit"] == "ram" and got["cpu_cap"] is None
 
 
 def test_the_harness_comes_from_the_active_provider():
     assert hc.harness_of("openai") == hc.harness_of("Codex") == "codex"
     assert hc.harness_of("anthropic") == "claude" and hc.harness_of("moonshot") == "kimi"
     assert hc.harness_of("zzz") is None and hc.harness_of(None) is None
-    assert hc.capacity(machine(5.9, 16), None)["ram_per_agent_gib"] == hc.UNKNOWN_HARNESS_GIB
+    assert hc.capacity(machine(6.0, 16), None)["ram_per_agent_gib"] == hc.UNKNOWN_HARNESS_GIB
 
 
 def test_the_probe_reads_meminfo_and_the_container_limits(tmp_path):
@@ -114,7 +114,7 @@ def test_the_probe_reads_meminfo_and_the_container_limits(tmp_path):
 
 def test_the_big_roster_is_no_longer_cut_to_one_per_role_on_the_windows_pc(monkeypatch):
     plan = dict(plan_registry.find_plan("claude", "max20"))
-    monkeypatch.setattr(plan_registry, "_host_capacity", lambda: hc.capacity(machine(5.9, 4), "codex"))
+    monkeypatch.setattr(plan_registry, "_host_capacity", lambda: hc.capacity(machine(6.0, 4), "codex"))
     roster = plan_registry.burst_roster(plan)
     assert roster["total_workers"] == 8 and not roster["capped_by_host"]
     assert roster["roster"] == {"scout": 4, "analista": 2, "scorer": 2}
@@ -122,7 +122,7 @@ def test_the_big_roster_is_no_longer_cut_to_one_per_role_on_the_windows_pc(monke
 
 
 def test_the_roster_reads_the_machine_once_so_the_note_always_matches_the_cap(monkeypatch):
-    readings = iter([hc.capacity(machine(5.9, 4, load5=1.0), "codex"), hc.capacity(machine(5.9, 4, load5=99.0), "codex")])
+    readings = iter([hc.capacity(machine(6.0, 4, load5=1.0), "codex"), hc.capacity(machine(6.0, 4, load5=99.0), "codex")])
     monkeypatch.setattr(plan_registry, "_host_capacity", lambda: next(readings))
     roster = plan_registry.burst_roster(dict(plan_registry.find_plan("claude", "max20")))
     assert roster["host_agent_cap"] == 8 and "carries 8 workers" in roster["host_note"]
@@ -139,13 +139,13 @@ def test_the_cap_follows_the_active_provider(monkeypatch, tmp_path):
     monkeypatch.setenv("JHT_HOME", str(tmp_path))
     # The module plan_registry reads the machine through is the one object it keeps: replacing the probe on it reaches
     # the real code path, and the machine under test is a made-up one with many cores (so the cores never decide).
-    monkeypatch.setattr(plan_registry._host_capacity_module(), "read_probe", lambda *a, **k: machine(5.9, 64))
+    monkeypatch.setattr(plan_registry._host_capacity_module(), "read_probe", lambda *a, **k: machine(6.0, 64))
     (tmp_path / "jht.config.json").write_text('{"active_provider": "openai"}', encoding="utf-8")
     codex_cap = plan_registry._host_capacity()
     (tmp_path / "jht.config.json").write_text('{"active_provider": "claude"}', encoding="utf-8")
     claude_cap = plan_registry._host_capacity()
     assert codex_cap["ram_per_agent_measured"] and not claude_cap["ram_per_agent_measured"]
-    assert codex_cap["cap"] == 12 and claude_cap["cap"] == 1
+    assert codex_cap["cap"] == 13 and claude_cap["cap"] == 1
 
 
 def test_the_capacity_module_is_loaded_once():
