@@ -76,6 +76,9 @@ def wrapper_runtime_env(home: Path, runtime: Path, fake_bin: Path, log: Path) ->
         "JHT_COMPOSE_FILE": str(runtime / "docker-compose.yml"),
         "JHT_HOST_SETUP_SCRIPT": str(runtime / "host-setup.sh"),
         "JHT_TEST_DOCKER_LOG": str(log),
+        # The folders of the test belong to the user who runs it: the wrapper must neither chown them to the
+        # container's uid 1001 (a normal user cannot) nor stop because 1001 is an account of this computer.
+        "JHT_BIND_OWNER": f"{os.getuid()}:{os.getgid()}",
     }
 
 

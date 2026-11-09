@@ -137,12 +137,12 @@ def test_team_list_shows_default_team(jht_home):
 
 def test_team_status_exits_zero(jht_home):
     code, out, err = run_jht("team", "status", env={"HOME": str(jht_home)})
-    assert code == 0
+    assert code == 0, (out + err)[-600:]
 
 
 def test_team_status_no_agents_shows_hint(jht_home):
     code, out, err = run_jht("team", "status", env={"HOME": str(jht_home)})
-    assert code == 0
+    assert code == 0, (out + err)[-600:]
     # Con nessun agente attivo deve mostrare un messaggio informativo
     combined = out + err
     assert len(combined.strip()) > 0
