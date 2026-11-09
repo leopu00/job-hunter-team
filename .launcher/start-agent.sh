@@ -797,13 +797,13 @@ if [ "$ROLE" = "mentor" ] && [ "${JHT_MENTOR_NOW:-}" != "1" ] && ! tmux has-sess
 fi
 # --- fine cancello del Mentor
 # --- cancello del Capitano
-# Il Capitano parte a onboarding chiuso (captain_gate.py: 1 = non ancora, altro = e' ora): a profilo vuoto spende e non
-# puo' fare niente. Ne' il watchdog ne' `jht team start` lo accendono prima; una sessione viva non si tocca.
-if [ "$ROLE" = "capitano" ] && ! tmux has-session -t "=$SESSION" 2>/dev/null; then
+# Capitano e Sentinella partono a onboarding chiuso (captain_gate.py: 1 = non ancora, altro = e' ora): a profilo vuoto
+# spendono e non possono fare niente. Ne' il watchdog ne' `jht team start` li accendono prima; una sessione viva non si tocca.
+if { [ "$ROLE" = "capitano" ] || [ "$ROLE" = "sentinella" ]; } && ! tmux has-session -t "=$SESSION" 2>/dev/null; then
   _captain_rc=0
   python3 /app/shared/skills/captain_gate.py >/dev/null 2>&1 || _captain_rc=$?
   if [ "$_captain_rc" -eq 1 ]; then
-    echo "CAPITANO not started: the onboarding with the Assistente is not done (it starts by itself when it is; JHT_CAPTAIN_BEFORE_ONBOARDING=1 starts it anyway)." >&2
+    echo "$(echo "$ROLE" | tr a-z A-Z) not started: the onboarding with the Assistente is not done (it starts by itself when it is; JHT_CAPTAIN_BEFORE_ONBOARDING=1 starts it anyway)." >&2
     exit 75
   fi
 fi
