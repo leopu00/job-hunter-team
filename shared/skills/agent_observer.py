@@ -15,6 +15,10 @@ from agent_observer_inputs import append_errors, read_sessions, read_usage
 from agent_process_usage import ProcessMeter, read_processes
 from agent_session_logs import codex_index, inspect_session
 
+# Wire values of the agent state (agent_state.py, the desktop and the CLI view read them as they are): they are not
+# user-facing copy, the views turn them into words in the person's language.
+STATE_UNKNOWN, STATE_OFF = "sconosciuto", "spento"
+
 
 class Observer:
     def __init__(self, home=None, sessions=read_sessions, processes=read_processes, meter=None):
@@ -35,7 +39,7 @@ class Observer:
         cwd = state.agent_dir(self.home, uid)
         errors = list(self.index_errors)
         if cwd is None:
-            result = {"identity": None, "state": "sconosciuto", "reason": "fonti_illeggibili"}
+            result = {"identity": None, "state": STATE_UNKNOWN, "reason": "fonti_illeggibili"}
             errors.append("observer_session_logs_unavailable")
         else:
             try:
@@ -50,7 +54,7 @@ class Observer:
                                                   cpu_pct=cpu, cpu_age_s=age))
             result = {**verdict, "identity": identity}
         if errors:
-            result.update(state="sconosciuto", reason="fonti_illeggibili", identity=None)
+            result.update(state=STATE_UNKNOWN, reason="fonti_illeggibili", identity=None)
         result["errors"] = sorted(set(errors))
         result["observed_at"] = now
         self.cache[key] = (monotonic, result)
@@ -75,8 +79,8 @@ class Observer:
         for uid in sorted(set(sessions) | set(usage["agents"])):
             live = uid in sessions
             metadata = self.metadata(uid, sessions[uid], now, monotonic) if live else {
-                "state": "spento" if not errors or not any(e.startswith("observer_sessions_") for e in errors)
-                else "sconosciuto", "identity": None}
+                "state": STATE_OFF if not errors or not any(e.startswith("observer_sessions_") for e in errors)
+                else STATE_UNKNOWN, "identity": None}
             tokens = usage["agents"].get(uid) if not usage["reason"] else None
             errors.extend(metadata.get("errors", []))
             reason = usage["reason"] or ("observer_usage_unattributed" if tokens is None else None)
