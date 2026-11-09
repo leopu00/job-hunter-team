@@ -392,6 +392,17 @@ describe("the office of a local profile", () => {
     expect(calls("direct_chat_read")).toHaveLength(0);
   });
 
+  it("the agent's panel shows the last message without the agent's mood tag", async () => {
+    mount();
+    await waitFor(() => expect(entered()).toHaveLength(3));
+    rememberChatPage("assistente", { messages: [{ id: "1", role: "agent", text: "[caldo] Benvenuta! Ti guido io.", at: Math.floor(Date.now() / 1000) - 5 }] });
+    act(() => scene.options!.onClick({ kind: "agent", uid: "assistente", role: "assistente" }));
+    const panel = await screen.findByRole("complementary", { name: "Pannello di ASSISTENTE" });
+    const last = within(panel).getByTestId("office-agent-last-message");
+    expect(last).toHaveTextContent("Benvenuta! Ti guido io.");
+    expect(last).not.toHaveTextContent("[caldo]");
+  });
+
   it("the agent's panel asks the engine to hold it still while it is open and lets it go when it closes", async () => {
     const select = vi.fn();
     parts.value = {
