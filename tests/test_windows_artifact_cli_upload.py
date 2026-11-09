@@ -19,6 +19,10 @@ HOST_ROOT = r"C:\Users\Synthetic\Documents\Job Hunter Team"
 
 HARNESS = r"""
 $ErrorActionPreference = 'Stop'
+# A Windows-style HOME handed to pwsh at start makes its own initialisation fail on Linux once PSModulePath names the
+# user's real folder (pwsh 7.6.9 on the CI image: «Index was out of range ... startIndex»). The test needs HOME only
+# for what runs after the shell is up, so it is set here and not in the environment of the process.
+if ($env:UPLOAD_HOME) { $env:HOME = $env:UPLOAD_HOME }
 $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($env:UPLOAD_WRAPPER, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw "wrapper parse: $($errors[0])" }
@@ -142,7 +146,7 @@ def test_only_the_actual_mount_can_select_between_two_different_homonyms(upload_
     other = root.parent / 'other-host-folder'
     other.mkdir()
     (other / 'cv.pdf').write_bytes(selected)
-    env['HOME'] = r'C:\Users\Synthetic'
+    env['UPLOAD_HOME'] = r'C:\Users\Synthetic'
     claimed = r'D:\Other documents' if divergence == 'override-mount' else r'C:\Users\Other\Documents\Job Hunter Team'
     if divergence == 'home-profile':
         env['USERPROFILE'] = r'C:\Users\Other'
