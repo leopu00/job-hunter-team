@@ -508,5 +508,7 @@
   "position_card.value.NEEDS_WORK": "À retravailler",
   "position_card.value.REJECT": "Refusée en relecture",
   "position_card.value.draft": "Brouillon",
-  "position_card.value.approved": "Approuvée"
+  "position_card.value.approved": "Approuvée",
+  "quota_mode.noquota": "ℹ️ Ce fournisseur ne communique pas de limites d'utilisation : l'équipe n'est donc pas régulée par un quota et n'est pas mise en pause faute de données. La dépense n'a pour seul plafond que celui que tu as fixé chez le fournisseur pour cette clé (déclaré ici : %s). Vérifie-le et, si tu veux l'équipe plus lente ou à l'arrêt, dis-le au Capitaine.",
+  "quota_mode.no_ceiling": "aucun déclaré"
 }

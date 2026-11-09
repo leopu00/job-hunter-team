@@ -508,5 +508,7 @@
   "position_card.value.NEEDS_WORK": "Überarbeitung nötig",
   "position_card.value.REJECT": "Bei Prüfung abgelehnt",
   "position_card.value.draft": "Entwurf",
-  "position_card.value.approved": "Freigegeben"
+  "position_card.value.approved": "Freigegeben",
+  "quota_mode.noquota": "ℹ️ Dieser Anbieter meldet keine Nutzungslimits: Das Team wird daher nicht über ein Kontingent gesteuert und bei fehlenden Daten nicht pausiert. Die Ausgaben sind nur durch die Obergrenze begrenzt, die du beim Anbieter für diesen Schlüssel gesetzt hast (hier angegeben: %s). Prüfe sie und sag dem Kapitän, wenn das Team langsamer laufen oder stoppen soll.",
+  "quota_mode.no_ceiling": "keine angegeben"
 }

@@ -508,5 +508,7 @@
   "position_card.value.NEEDS_WORK": "A rever",
   "position_card.value.REJECT": "Rejeitada na revisão",
   "position_card.value.draft": "Rascunho",
-  "position_card.value.approved": "Aprovada"
+  "position_card.value.approved": "Aprovada",
+  "quota_mode.noquota": "ℹ️ Este fornecedor não comunica limites de utilização: a equipa não é regulada por uma quota e não é pausada por falta de dados. A despesa tem como único teto o que definiste no fornecedor para esta chave (declarado aqui: %s). Verifica-o e, se quiseres a equipa mais lenta ou parada, diz ao Capitão.",
+  "quota_mode.no_ceiling": "nenhum declarado"
 }

@@ -508,5 +508,7 @@
   "position_card.value.NEEDS_WORK": "Requiere cambios",
   "position_card.value.REJECT": "Rechazada en revisión",
   "position_card.value.draft": "Borrador",
-  "position_card.value.approved": "Aprobada"
+  "position_card.value.approved": "Aprobada",
+  "quota_mode.noquota": "ℹ️ Este proveedor no informa de límites de uso: el equipo no se regula por una cuota y no se pausa por falta de datos. El gasto solo tiene como tope el que fijaste en el proveedor para esta clave (declarado aquí: %s). Revísalo y, si quieres el equipo más lento o parado, díselo al Capitán.",
+  "quota_mode.no_ceiling": "ninguno declarado"
 }

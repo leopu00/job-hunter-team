@@ -3,12 +3,15 @@
 from types import SimpleNamespace
 from sentinel_delivery import notice, reset
 from delivery_status import checked, report
+import quota_data
 
 
 def _before_tick(api, run):
     run.now_h = api.datetime.now().strftime("%H:%M:%S")
     run.override_min, run.provider = api.read_config()
     run.parsed, run.fail_reason = api._do_fetch(run.provider)
+    if not run.parsed:
+        run.fail_reason = quota_data.classify_failure(api, run.provider, run.fail_reason)
     run.dyn_target, run.work_phase = api._read_dynamic_target()
     run.within_hours = api._within_working_hours(run.work_phase)
     api._burn_intent_notify_user()
@@ -277,9 +280,15 @@ def _notify(api, run):
     run.fail_streak = 0
     run.sentinel_alerted = False
     reset(run.state, "fetch_failure:")
+    quota_data.clear(run.state)
 
 
 def _failure(api, run):
+    if str(run.fail_reason).startswith(quota_data.NO_QUOTA_PREFIX):
+        # No quota data exists for this access: a declared mode, not an outage (no fallback, no FATAL, no pause).
+        run.fail_streak = 0
+        quota_data.declare(api, run)
+        return
     if run.fail_streak == 0:
         reset(run.state, "fetch_recovery")
         run.recovery_pending = False

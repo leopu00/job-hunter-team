@@ -547,5 +547,7 @@
   "position_card.value.NEEDS_WORK": "Changes needed",
   "position_card.value.REJECT": "Rejected in review",
   "position_card.value.draft": "Draft",
-  "position_card.value.approved": "Approved"
+  "position_card.value.approved": "Approved",
+  "quota_mode.noquota": "ℹ️ This provider does not report usage limits, so the team is not paced by a quota and is not paused for missing data. Spending is bounded only by the ceiling you set with the provider for this key (declared here: %s). Check it, and tell the Captain if you want the team slower or stopped.",
+  "quota_mode.no_ceiling": "none declared"
 }

@@ -511,5 +511,7 @@
   "position_card.value.NEEDS_WORK": "Da rivedere",
   "position_card.value.REJECT": "Respinta in revisione",
   "position_card.value.draft": "Bozza",
-  "position_card.value.approved": "Approvata"
+  "position_card.value.approved": "Approvata",
+  "quota_mode.noquota": "ℹ️ Questo provider non comunica i limiti di utilizzo: il team non è regolato da una quota e non viene messo in pausa per i dati mancanti. La spesa ha come unico tetto quello che hai impostato presso il provider per questa chiave (dichiarato qui: %s). Controllalo e, se vuoi il team più lento o fermo, dillo al Capitano.",
+  "quota_mode.no_ceiling": "nessuno dichiarato"
 }

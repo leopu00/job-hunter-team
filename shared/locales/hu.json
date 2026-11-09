@@ -509,5 +509,7 @@
   "position_card.value.NEEDS_WORK": "Javítás szükséges",
   "position_card.value.REJECT": "Ellenőrzés elutasítva",
   "position_card.value.draft": "Piszkozat",
-  "position_card.value.approved": "Jóváhagyva"
+  "position_card.value.approved": "Jóváhagyva",
+  "quota_mode.noquota": "ℹ️ Ez a szolgáltató nem közöl használati korlátokat, ezért a csapatot nem kvóta szabályozza, és hiányzó adat miatt nem állítjuk le. A költésnek csak az a plafonja, amelyet a szolgáltatónál állítottál be ehhez a kulcshoz (itt megadva: %s). Ellenőrizd, és ha lassabb vagy leállított csapatot szeretnél, szólj a Kapitánynak.",
+  "quota_mode.no_ceiling": "nincs megadva"
 }
