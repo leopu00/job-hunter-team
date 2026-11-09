@@ -97,6 +97,38 @@ def test_the_installer_never_runs_dependency_scripts() -> None:
     assert all("--ignore-scripts" in line for line in installs), installs
 
 
+# ── the image ────────────────────────────────────────────────────────────
+
+
+def _dockerfile() -> str:
+    return (ROOT / "Dockerfile").read_text(encoding="utf-8")
+
+
+def test_the_image_installs_pi_from_the_reviewed_lock_outside_the_deps_volume() -> None:
+    text = _dockerfile()
+    step = re.search(r"^RUN JHT_PI_PREFIX=(\S+)[^\n]*\\\n\s+bash (\S+install-pi\.sh)", text, re.MULTILINE)
+    assert step, "the Dockerfile no longer installs pi with install-pi.sh"
+    prefix, installer = step.groups()
+    assert installer == "/app/shared/runtime/pi-harness/install-pi.sh"
+    # /opt/jht-deps is a volume in compose: a volume made by an older image would hide pi.
+    assert not prefix.startswith("/opt/jht-deps")
+    assert f"ln -sf {prefix}/bin/pi /usr/local/bin/pi" in text
+
+
+def test_the_image_installs_pi_before_the_agent_user_and_does_not_hand_it_over() -> None:
+    text = _dockerfile()
+    assert text.index("install-pi.sh") < text.index("RUN useradd --create-home")
+    # the agents run pi, they cannot rewrite it: no chown of the pi prefix
+    assert not re.search(r"chown[^\n]*jht-pi", text)
+
+
+def test_pi_finds_fd_and_rg_on_the_path_so_it_downloads_nothing() -> None:
+    packages = re.search(r"^\s+poppler-utils [^\n]*\\$", _dockerfile(), re.MULTILINE)
+    assert packages, "the apt line with poppler-utils moved: update this test"
+    assert re.search(r"\bripgrep\b", packages.group(0))
+    assert re.search(r"\bfd-find\b", packages.group(0))
+
+
 # ── the installer, with npm faked ────────────────────────────────────────
 
 
@@ -120,7 +152,7 @@ def _fake_npm(tmp_path: Path, answers: str) -> Path:
 
 
 def _install(tmp_path: Path, bindir: Path, harness: Path = HARNESS,
-             node_version: str | None = None) -> subprocess.CompletedProcess[str]:
+             node_version: str | None = None, umask: str = "022") -> subprocess.CompletedProcess[str]:
     env = dict(os.environ)
     env["PATH"] = f"{bindir}:{env.get('PATH', '')}"
     env["JHT_PI_PREFIX"] = str(tmp_path / "deps")
@@ -132,11 +164,34 @@ def _install(tmp_path: Path, bindir: Path, harness: Path = HARNESS,
             encoding="utf-8",
         )
         env["NODE_OPTIONS"] = f"--require={fake}"
-    return subprocess.run([_bash(), str(harness / "install-pi.sh")], capture_output=True,
-                          text=True, check=False, env=env)
+    return subprocess.run([_bash(), "-c", f'umask {umask}; exec "$0" "$@"', str(harness / "install-pi.sh")],
+                          capture_output=True, text=True, check=False, env=env)
 
 
 requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="node required")
+
+
+@requires_node
+@pytest.mark.skipif(os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0),
+                    reason="needs mode bits that root does not feel")
+@pytest.mark.parametrize("umask", ["022", "077"])
+def test_the_installed_tree_is_readable_and_runnable_by_other_users(tmp_path: Path, umask: str) -> None:
+    """In the image root installs and `jht` runs: mktemp -d makes the stage 0700, and a 0700 root folder in the path
+    is a «Permission denied» for everyone else (the image check on GitHub, 09/11)."""
+    from stat import S_IMODE
+
+    pi = HARNESS and _lock()["packages"][PI]["version"]
+    done = _install(tmp_path, _fake_npm(tmp_path, pi), umask=umask)
+    assert done.returncode == 0, done.stderr
+    deps = tmp_path / "deps"
+    others = 0o005  # r-x for everyone else
+    for folder in (deps, deps / "pi", deps / "pi" / pi, deps / "pi" / pi / "node_modules",
+                   deps / "pi" / pi / "node_modules" / ".bin"):
+        assert S_IMODE(folder.stat().st_mode) & others == others, f"{folder} is not open to other users"
+        assert S_IMODE(folder.stat().st_mode) & 0o022 == 0, f"{folder} is writable by group or others"
+    binary = deps / "pi" / pi / "node_modules" / ".bin" / "pi"
+    assert S_IMODE(binary.stat().st_mode) & others == others
+    assert S_IMODE((deps / "pi" / pi / "package-lock.json").stat().st_mode) & 0o044 == 0o044
 
 
 @requires_node

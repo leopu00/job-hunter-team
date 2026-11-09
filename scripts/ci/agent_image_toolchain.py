@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""What an agent needs to start is in the image, and Codex installs at its pin.
+"""What an agent needs to start is in the image, pi is baked at its pin, and Codex installs at its pin.
 
 The launcher proof of 08/10 died before any agent started: `tmux
 new-session` answered rc=127 in an image without tmux, and nothing had said
@@ -15,9 +15,12 @@ image's own user and with no network:
   - the image resolves the same provider pins as this checkout's
     shared/config/provider-versions.json, through the product's own
     shared/runtime/provider-pins.js: a missing or unreadable manifest makes
-    it fall back to `latest`, which is the drift the pin exists to prevent.
+    it fall back to `latest`, which is the drift the pin exists to prevent;
+  - pi (the harness baked into the image, from the reviewed lock) runs, says the
+    version the launcher demands (JHT_PI_VERSION), accepts the flags jht_pi_args
+    gives it, and fd and rg are on the PATH so it downloads nothing at its first start.
 
-The provider CLIs are not baked into the image (Dockerfile: they install on
+The other provider CLIs are not baked into the image (Dockerfile: they install on
 first start into /opt/jht-deps). With `--install codex` a second container,
 with network, runs `jht providers update codex` the way the product does;
 `codex --version` must report the pinned version, and the installed CLI must
@@ -83,6 +86,46 @@ done
 for tool in bash node npm python3 pip3 jht git curl; do
   command -v "$tool" >/dev/null 2>&1 || fail tool "$tool is not on PATH"
 done
+# pi is the one provider harness baked into the image (Dockerfile, /opt/jht-pi, from the
+# reviewed lock). It must run, be the version the launcher demands, accept the flags
+# the launcher gives it, and find fd and rg on the PATH (else it downloads them from
+# GitHub at its first start). `pi --help` after the flags: an unknown flag does not
+# change its exit status, it prints "Unknown option", so that is what is looked for;
+# the control (a flag that does not exist) must be refused the same way.
+export PI_SKIP_VERSION_CHECK=1 PI_TELEMETRY=0
+export PI_CODING_AGENT_DIR="${TMPDIR:-/tmp}/jht-image-check-pi-$$"
+if [ -r "$app/.launcher/spawn-lib.sh" ]; then
+  want_pi="$(bash -c '. "$1" >/dev/null 2>&1; printf %s "$JHT_PI_VERSION"' _ "$app/.launcher/spawn-lib.sh")"
+  if got_pi="$(pi --version 2>&1)"; then
+    set -- $got_pi
+    got_pi="${1:-}"
+    echo "pi: $got_pi"
+    if [ -z "$want_pi" ] || [ "$got_pi" != "$want_pi" ]; then
+      fail pi-version "pi says '$got_pi', the launcher needs '$want_pi'"
+    fi
+    pi_flags="$(bash -c '. "$1" >/dev/null 2>&1; jht_pi_args /tmp/jht-image-check gpt-5.6-terra high' _ "$app/.launcher/spawn-lib.sh")"
+    if [ -z "$pi_flags" ]; then
+      fail pi-flags "the launcher gives no pi flags (jht_pi_args)"
+    else
+      control="$(pi --jht-not-a-flag --help 2>&1 >/dev/null)"
+      case "$control" in
+        *"Unknown option"*) ;;
+        *) fail pi-flags-probe "pi accepts an unknown flag before --help: the flag probe proves nothing" ;;
+      esac
+      refused="$(eval "pi $pi_flags --help" 2>&1 >/dev/null)"
+      case "$refused" in
+        *"Unknown option"*|*Invalid*|*"Error:"*) fail pi-flags "pi refuses the launcher flags ($pi_flags): $refused" ;;
+      esac
+    fi
+  else
+    fail pi "pi does not run: $got_pi"
+  fi
+else
+  echo "pi: not checked, the launcher library is absent (reported above)"
+fi
+command -v rg >/dev/null 2>&1 || fail pi-tools "rg is not on PATH: pi would download it at its first start"
+command -v fdfind >/dev/null 2>&1 || command -v fd >/dev/null 2>&1 \
+  || fail pi-tools "fd (fdfind) is not on PATH: pi would download it at its first start"
 resolved="$(node --input-type=module -e "
 import { pinnedVersion } from '$app/shared/runtime/provider-pins.js';
 for (const t of ['claude', 'codex', 'kimi']) console.log(t + '=' + pinnedVersion(t));

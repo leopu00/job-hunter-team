@@ -17,10 +17,13 @@
 # Uso: install-pi.sh            (prefisso di default /opt/jht-deps)
 #      JHT_PI_PREFIX=/altro install-pi.sh
 set -euo pipefail
+# Quello che installa lo leggono e lo eseguono anche altri utenti (nell'immagine lo installa root, lo lancia jht):
+# niente permessi più stretti di rwxr-xr-x / rw-r--r--, qualunque umask abbia chi lo chiama.
+umask 022
 
-readonly PI_VERSION="1.3.0"
-readonly PACKAGE_JSON_SHA256="6f9d531a4a915139e804e8ac90731d07c5ae74153bd2c60aa52336048791679e"
-readonly PACKAGE_LOCK_SHA256="2a278b4e75ad3ea9514e3c3686de38aba4264ce81d257e9ba3280e81db55037f"
+readonly PI_VERSION="1.5.0"
+readonly PACKAGE_JSON_SHA256="32c84b2ed30ef1ea4b4cd2f545fc32dd3d5ba941c4fff53cd0327582cdea9047"
+readonly PACKAGE_LOCK_SHA256="0840c59f805d063695a12a1fefa875298dfcc0bcce02413bdd435984ad7af44a"
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PREFIX="${JHT_PI_PREFIX:-/opt/jht-deps}"
@@ -87,6 +90,9 @@ else
   cp "$HERE/package.json" "$HERE/package-lock.json" "$STAGE/"
   (cd "$STAGE" && npm ci --ignore-scripts --no-audit --no-fund --loglevel=warn)
   pi_answers "$STAGE" || die "the installed pi does not answer $PI_VERSION"
+  # mktemp -d fa la cartella 0700 e l'umask non la tocca: senza questo, spostata in $TARGET, solo chi l'ha
+  # installata potrebbe attraversarla (root nell'immagine, e jht riceverebbe «Permission denied»).
+  chmod 0755 "$STAGE"
   mv "$STAGE" "$TARGET"
   trap - EXIT
   printf 'install-pi: installed pi %s at %s\n' "$PI_VERSION" "$TARGET"
