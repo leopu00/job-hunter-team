@@ -24,7 +24,7 @@ import json
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _db import get_db, ensure_schema
-from optional_libs import ensure as _ensure_library
+from optional_libs import ensure as _ensure_library, GOOGLE_DRIVE
 
 # Cartella root su Drive — configura JH_DRIVE_FOLDER_ID nel tuo .env
 DRIVE_FOLDER_ID = os.environ.get("JH_DRIVE_FOLDER_ID", "")
@@ -79,6 +79,7 @@ def _write_token(creds):
 
 def get_oauth_creds():
     """Carica credenziali OAuth2, refreshando il token se necessario."""
+    _ensure_drive_client()
     from google.oauth2.credentials import Credentials
     from google.auth.transport.requests import Request
 
@@ -101,7 +102,7 @@ def get_oauth_creds():
 
 def _ensure_drive_client():
     """The Drive client is not in the image (~100 MB for this one script): the first use installs it."""
-    _ensure_library("googleapiclient", "google-api-python-client==2.198.0", "Google Drive")
+    _ensure_library(*GOOGLE_DRIVE, "Google Drive")
 
 
 def get_drive_service():
@@ -114,6 +115,7 @@ def get_drive_service():
 
 def cmd_auth():
     """Esegue il flusso OAuth2: apre il browser per autorizzare."""
+    _ensure_drive_client()
     from google_auth_oauthlib.flow import InstalledAppFlow
 
     client_path = OAUTH_CLIENT_PATH

@@ -87,11 +87,10 @@ def supabase_patch(url, key, table, filters, data):
 
 def get_sheet():
     """Connette a Google Sheets e ritorna il worksheet."""
-    try:
-        import gspread
-    except ImportError:
-        print("ERROR: gspread is not installed. Run: pip3 install gspread")
-        sys.exit(1)
+    sys.path.insert(0, os.path.dirname(__file__))
+    from optional_libs import ensure, GOOGLE_SHEETS
+    ensure(*GOOGLE_SHEETS, "Google Sheets")  # not in the image: the first use installs it
+    import gspread
 
     gc = gspread.service_account(filename=SERVICE_ACCOUNT_PATH)
     sh = gc.open_by_key(SPREADSHEET_ID)

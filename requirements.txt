@@ -11,17 +11,14 @@
 pyyaml==6.0.3
 requests==2.34.2
 tldextract==5.4.0
-google-auth==2.56.2
-google-auth-oauthlib==1.4.0
-# google-api-python-client (~100 MB, one script: db_to_drive.py) is NOT here: the first use installs it, pinned in shared/skills/db_to_drive.py
-gspread==6.2.1
-# Pin delle transitive con advisory noti, alzate a mano (04/11): requests porta
-# certifi (corretto nella 2026.10.18: CA di emSign con intermedi compromessi) e
-# le librerie google-* portano protobuf (4.25: profondita' JSON fuori limite;
-# corretto nella 5.29.6 e nella 6.33.5). Nessun codice nostro li importa
-# direttamente: sono qui perche' l'immagine non risolva a caso una versione vecchia.
+# The Google integration (google-auth, google-auth-oauthlib, google-api-python-client, gspread, ~130 MB with what they pull) is NOT
+# here: the first use installs it, pinned in shared/skills/optional_libs.py (JHT-T315: nothing optional in the initial image).
+# Pin della transitiva con advisory noto, alzata a mano (04/11): requests porta
+# certifi (corretto nella 2026.10.18: CA di emSign con intermedi compromessi). Nessun
+# codice nostro lo importa direttamente: e' qui perche' l'immagine non risolva a caso
+# una versione vecchia. (protobuf, che portavano le librerie Google, e' fissato in
+# optional_libs.py insieme a loro.)
 certifi==2026.10.18
-protobuf==6.33.5
 # NB: niente SDK `anthropic` / `openai` qui. Gli agenti non parlano ai modelli
 # da Python: ogni ruolo è un processo CLI (`claude`, `codex`, `kimi`) in una
 # finestra tmux. I due SDK erano installati a ogni build per la sola
