@@ -34,6 +34,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import pi_sessions  # noqa: E402
 import token_metrics_lib as tlib  # noqa: E402
 
 JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
@@ -427,12 +428,14 @@ def codex_weighted(t):
     return tlib.billing_weighted(t, "openai")
 
 
-def summarize_pi(events):
+def summarize_pi(events, searches=(), web_search=None):
     """Il blocco "pi" dello stato: quello che l'harness pi ha speso nella finestra, con il costo che calcola pi
-    (una STIMA: pi prezza anche la scrittura in cache, che OpenAI non fattura a parte)."""
+    (una STIMA: pi prezza anche la scrittura in cache, che OpenAI non fattura a parte) più la tariffa delle chiamate di
+    ricerca web, che pi non prezza (pi_sessions.SEARCH_CALL_USD). `web_search` dice, per agente, se la ricerca è accesa."""
     block = {"events": len(events), "sessions": len({e["session"] for e in events}),
              "input_raw": 0, "output_raw": 0, "cache_read_raw": 0, "cache_creation_raw": 0,
-             "weighted": 0.0, "cost": 0.0, "cost_is_estimate": True, "agents": {}}
+             "weighted": 0.0, "cost": 0.0, "cost_is_estimate": True, "agents": {},
+             "searches": 0, "search_cost": 0.0, "web_search": dict(web_search or {})}
     for e in events:
         t = e["tokens"]
         block["input_raw"] += t["input"]
@@ -444,7 +447,14 @@ def summarize_pi(events):
         agent = block["agents"].setdefault(e["agent"] or "?unknown", {"events": 0, "cost": 0.0})
         agent["events"] += 1
         agent["cost"] = round(agent["cost"] + e["cost"], 6)
+    for e in searches:
+        block["searches"] += e["searches"]
+        block["search_cost"] += e["cost"]
+        block["cost"] += e["cost"]
+        agent = block["agents"].setdefault(e["agent"] or "?unknown", {"events": 0, "cost": 0.0})
+        agent["cost"] = round(agent["cost"] + e["cost"], 6)
     block["cost"] = round(block["cost"], 6)
+    block["search_cost"] = round(block["search_cost"], 6)
     return block
 
 
@@ -503,7 +513,8 @@ def main():
         # spendono lo stesso conto di Codex, quindi entrano nei totali e nel peso (che il bridge confronta con la
         # sua percentuale); con un altro provider restano nel solo blocco "pi" dello stato.
         pi_events = tlib.read_pi_events(window_start_ts, jht_home=JHT_HOME)
-        pi_block = summarize_pi(pi_events)
+        pi_block = summarize_pi(pi_events, pi_sessions.search_events(JHT_HOME, window_start_ts),
+                                pi_sessions.web_search_status(JHT_HOME, window_start_ts))
         if provider not in ("kimi", "claude"):
             totals = dict(totals)
             totals["events"] += pi_block["events"]

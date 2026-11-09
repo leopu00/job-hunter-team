@@ -57,15 +57,20 @@ def day_start(now_ts):
 
 
 def spend(home, now_ts):
-    """What pi spent: `cost` today (dollars, pi's estimate), `hour_tokens` in the last hour, `calls` today."""
+    """What pi spent: `cost` today (dollars: pi's estimate plus the fee of the web searches), `hour_tokens` in the last hour,
+    `calls` today."""
     start, hour = day_start(now_ts), now_ts - 3600
     out = {"cost": 0.0, "hour_tokens": 0, "calls": 0}
-    for event in pi_sessions.usage_events(home, min(start, hour)):
+    since = min(start, hour)
+    for event in pi_sessions.usage_events(home, since):
         if event["ts"] >= start:
             out["cost"] += event["cost"]
             out["calls"] += 1
         if event["ts"] >= hour:
             out["hour_tokens"] += event["input"] + event["cache_write"] + event["output"]
+    for event in pi_sessions.search_events(home, since):  # the fee of a search call, which pi does not price
+        if event["ts"] >= start:
+            out["cost"] += event["cost"]
     out["cost"] = round(out["cost"], 6)
     return out
 

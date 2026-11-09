@@ -18,6 +18,13 @@ Read from pi 1.5.0 sessions (the format of its docs/session-format.md, version 3
 
 Pure reading: nothing is written, a missing or unreadable folder is "no usage", a half-written last line is skipped.
 The state of the agent (running, idle, blocked) is read elsewhere (agent_pi_log.py); this file is for the meters.
+
+Web search: pi does not price the fee of a search call (the hosted `web_search` tool of OpenAI, 10 USD per 1000 calls on
+its pricing page, read 09/11). The extension shared/runtime/pi-harness/web-search.js writes, at the end of a turn that
+searched, a custom entry `{"type":"custom","customType":"jht-web-search","data":{"searches":n}}` in the same session file,
+and once per session a `jht-web-search-status` entry saying whether the search is on for that provider (and why not).
+`search_events` reads the first, `web_search_status` the second. The tokens of the search results are already in the
+call's own `usage`.
 """
 
 from __future__ import annotations
@@ -25,14 +32,14 @@ from __future__ import annotations
 import json
 import math
 import os
-import re
 from datetime import datetime, timezone
 from pathlib import Path
 
 SESSIONS = (".pi", "agent", "sessions")
+SEARCH_CALL_USD = 0.01  # OpenAI pricing page, 09/11: 10 USD / 1000 calls for the reasoning models
+SEARCH_ENTRY = "jht-web-search"
+STATUS_ENTRY = "jht-web-search-status"
 TOKEN_FIELDS = ("input", "output", "cache_read", "cache_write", "reasoning")
-# Only assistant lines carry usage; the (huge) system line is skipped without parsing it. Whitespace-tolerant on purpose.
-_ASSISTANT = re.compile(r'"role"\s*:\s*"assistant"')
 
 
 def sessions_root(jht_home) -> Path:
@@ -106,9 +113,9 @@ def _event(entry, session, agent):
     }
 
 
-def usage_events(jht_home, since_ts=None) -> list[dict]:
-    """One event per call to the model whose assistant message is stamped at or after `since_ts`, oldest first."""
-    events = []
+def _scan(jht_home, since_ts, needle):
+    """(entry, session, agent) for every line of the sessions touched since `since_ts` that contains `needle` and parses.
+    The huge system line is never parsed: it holds neither needle."""
     for path in iter_session_files(sessions_root(jht_home), since_ts):
         header = _header(path)
         session, agent = str(header.get("id") or path.stem), agent_of(header)
@@ -118,16 +125,57 @@ def usage_events(jht_home, since_ts=None) -> list[dict]:
             continue
         with handle:
             for line in handle:
-                if '"usage"' not in line or not _ASSISTANT.search(line):
+                if needle not in line:
                     continue
                 try:
                     entry = json.loads(line)
                 except ValueError:  # the line pi is writing right now
                     continue
-                event = _event(entry, session, agent)
-                if event and (since_ts is None or event["ts"] >= since_ts):
-                    events.append(event)
+                if isinstance(entry, dict):
+                    yield entry, session, agent
+
+
+def usage_events(jht_home, since_ts=None) -> list[dict]:
+    """One event per call to the model whose assistant message is stamped at or after `since_ts`, oldest first."""
+    events = []
+    for entry, session, agent in _scan(jht_home, since_ts, '"usage"'):
+        event = _event(entry, session, agent)
+        if event and (since_ts is None or event["ts"] >= since_ts):
+            events.append(event)
     return sorted(events, key=lambda event: event["ts"])
+
+
+def _custom(jht_home, since_ts, kind):
+    for entry, session, agent in _scan(jht_home, since_ts, kind):
+        data = entry.get("data")
+        moment = _epoch(entry.get("timestamp"))
+        if entry.get("type") == "custom" and entry.get("customType") == kind and isinstance(data, dict) \
+                and moment is not None and (since_ts is None or moment >= since_ts):
+            yield moment, session, agent, data
+
+
+def search_events(jht_home, since_ts=None) -> list[dict]:
+    """One event per turn that searched the web: `{ts, session, agent, searches, cost}`, the cost being the fee pi does not
+    price (`SEARCH_CALL_USD` each), oldest first."""
+    events = []
+    for moment, session, agent, data in _custom(jht_home, since_ts, SEARCH_ENTRY):
+        count = int(_number(data.get("searches")))
+        if count:
+            events.append({"ts": moment, "session": session, "agent": agent, "searches": count,
+                           "cost": round(count * SEARCH_CALL_USD, 6)})
+    return sorted(events, key=lambda event: event["ts"])
+
+
+def web_search_status(jht_home, since_ts=None) -> dict:
+    """The latest `jht-web-search-status` of each agent: `{agent: {enabled, provider, api, reason?, ts}}`. An agent that
+    never started with the extension is absent; one with `enabled: false` is running WITHOUT web search, and says why."""
+    latest: dict = {}
+    for moment, _session, agent, data in _custom(jht_home, since_ts, STATUS_ENTRY):
+        if agent not in latest or moment >= latest[agent]["ts"]:
+            latest[agent] = {"ts": moment, "enabled": data.get("enabled") is True,
+                             "provider": str(data.get("provider") or ""), "api": str(data.get("api") or ""),
+                             **({"reason": str(data["reason"])} if data.get("reason") else {})}
+    return latest
 
 
 def totals(events) -> dict:

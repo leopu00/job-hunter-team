@@ -278,3 +278,16 @@ def test_the_sentinella_tick_runs_the_brake_before_it_enforces_the_halt(tmp_path
         quota_data._notify_user = original
     assert ("enforce", True) in events, "the flag is already raised when the guard looks at it"
     assert bridge.esc == 1
+
+
+def test_the_fee_of_the_web_searches_counts_against_the_ceiling(tmp_path):
+    """9.60 of model calls + 40 searches at 0.01 = 10.00: AT the ceiling, which pi's own cost alone would miss."""
+    pi_calls(tmp_path, [(NOON - 600, 9.6, 100)])
+    path = next((tmp_path / ".pi").rglob("*.jsonl"))
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps({"type": "custom", "customType": "jht-web-search", "timestamp": stamp(NOON - 300),
+                                 "data": {"searches": 40}}) + "\n")
+    bridge = Bridge(tmp_path, {"no_quota_cap": EUR})
+    bridge.tick()
+    assert bridge.esc == 1
+    assert json.loads(bridge.flag.read_text(encoding="utf-8"))["pi_spend_cap"]["spent"] == 10.0

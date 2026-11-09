@@ -219,3 +219,56 @@ def test_boot_cost_does_not_follow_a_link_planted_in_the_pi_folder(tmp_path):
     root.mkdir(parents=True)
     (root / "--link--").symlink_to(outside, target_is_directory=True)
     assert list(boot_cost.sessions(tmp_path, NOW - 7200)) == []
+
+
+# --- web search: the fee pi does not price, and whether the search is on -------------------------------------------
+
+def searched(at, n):
+    return {"type": "custom", "id": "w%d" % at, "timestamp": stamp(at), "customType": "jht-web-search", "data": {"searches": n}}
+
+
+def status(at, enabled, provider="openai", api="openai-responses", reason=None):
+    data = {"enabled": enabled, "provider": provider, "api": api, **({"reason": reason} if reason else {})}
+    return {"type": "custom", "id": "t%d" % at, "timestamp": stamp(at), "customType": "jht-web-search-status", "data": data}
+
+
+def test_a_search_turn_costs_the_fee_pi_does_not_price(tmp_path):
+    session(tmp_path, "scout-1", [call(-200, 5, 5, cost=0.014), searched(-190, 2), searched(-100, 1)])
+    events = pi_sessions.search_events(tmp_path)
+    assert [(e["agent"], e["searches"], e["cost"]) for e in events] == [("scout-1", 2, 0.02), ("scout-1", 1, 0.01)]
+    assert pi_sessions.usage_events(tmp_path)[0]["cost"] == 0.014, "the model call itself is untouched"
+    assert [e["searches"] for e in pi_sessions.search_events(tmp_path, NOW - 150)] == [1]
+
+
+@pytest.mark.parametrize("bad", [0, -2, True, None, "3", float("nan")])
+def test_a_count_that_is_not_a_positive_number_is_no_search(tmp_path, bad):
+    session(tmp_path, "scout-1", [searched(-100, bad)])
+    assert pi_sessions.search_events(tmp_path) == []
+
+
+def test_other_custom_entries_and_assistant_lines_are_not_searches(tmp_path):
+    other = {"type": "custom", "timestamp": stamp(-50), "customType": "something-else", "data": {"searches": 9}}
+    session(tmp_path, "scout-1", [other, call(-40, 1, 1), status(-30, True)])
+    assert pi_sessions.search_events(tmp_path) == []
+
+
+def test_the_status_of_each_agent_is_its_latest_and_a_missing_search_says_why(tmp_path):
+    why = "the hosted web_search tool exists only on the Responses API of OpenAI"
+    session(tmp_path, "scout-1", [status(-300, False, "anthropic", "anthropic-messages", why), status(-100, True)], sid="a", name="a.jsonl")
+    session(tmp_path, "mentor", [status(-90, False, "anthropic", "anthropic-messages", why)], sid="b", name="b.jsonl")
+    got = pi_sessions.web_search_status(tmp_path)
+    assert got["scout-1"]["enabled"] is True and "reason" not in got["scout-1"]
+    assert got["mentor"] == {"ts": got["mentor"]["ts"], "enabled": False, "provider": "anthropic", "api": "anthropic-messages", "reason": why}
+    assert pi_sessions.web_search_status(tmp_path / "nowhere") == {}
+
+
+def test_the_meter_block_adds_the_search_fee_to_the_cost_and_shows_who_has_no_search(meter, tmp_path):
+    session(tmp_path, "scout-1", [call(-60, 10, 20, 100, 1000, cost=0.5), searched(-50, 3), status(-70, True)])
+    session(tmp_path, "mentor", [status(-70, False, "anthropic", "anthropic-messages", "no tool")], sid="m", name="m.jsonl")
+    since = NOW - 3600
+    block = meter.summarize_pi(tlib.read_pi_events(since, jht_home=tmp_path), pi_sessions.search_events(tmp_path, since),
+                               pi_sessions.web_search_status(tmp_path, since))
+    assert (block["searches"], block["search_cost"], block["cost"]) == (3, 0.03, 0.53)
+    assert block["agents"]["scout-1"]["cost"] == 0.53
+    assert block["web_search"]["scout-1"]["enabled"] is True and block["web_search"]["mentor"]["enabled"] is False
+    assert meter.summarize_pi([])["searches"] == 0 and meter.summarize_pi([])["web_search"] == {}
