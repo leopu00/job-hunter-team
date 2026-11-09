@@ -29,6 +29,21 @@ export const AI_PROVIDERS = [
   },
 ];
 
+// --- Config IO (compatibile con shared/config/io.ts) ---
+export function readConfigFileSnapshot() {
+  if (!fs.existsSync(JHT_CONFIG_PATH)) {
+    return { exists: false, config: null };
+  }
+  try {
+    const raw = fs.readFileSync(JHT_CONFIG_PATH, 'utf-8');
+    const config = JSON.parse(raw);
+    return { exists: true, config };
+  } catch {
+    return { exists: true, config: null };
+  }
+}
+
+// --- Providers that run only on pi (kept out of the catalog above, which is what the wizard offers) ---
 /**
  * The providers that run only on the pi harness with an API key (GLM of Z.ai, Kimi of Moonshot): offered by the
  * non-interactive setup (`--provider glm|kimi --harness pi`), not by the wizard's list. Same shape as AI_PROVIDERS,
@@ -48,20 +63,6 @@ export const PI_API_CHOICES = Object.entries(PI_API_PROVIDERS).map(([value, { la
 export function findProviderChoice(name) {
   const piApi = piApiProvider(name);
   return piApi ? PI_API_CHOICES.find((p) => p.value === piApi) : AI_PROVIDERS.find((p) => p.value === name);
-}
-
-// --- Config IO (compatibile con shared/config/io.ts) ---
-export function readConfigFileSnapshot() {
-  if (!fs.existsSync(JHT_CONFIG_PATH)) {
-    return { exists: false, config: null };
-  }
-  try {
-    const raw = fs.readFileSync(JHT_CONFIG_PATH, 'utf-8');
-    const config = JSON.parse(raw);
-    return { exists: true, config };
-  } catch {
-    return { exists: true, config: null };
-  }
 }
 
 /** Il nome di una variabile da cui il launcher può prendere una chiave (le stesse regole di shared/skills/api_key_file.py). */
