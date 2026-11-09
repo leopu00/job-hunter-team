@@ -2,7 +2,7 @@
  * JHT Config — Schema Zod per validazione jht.config.json
  *
  * Validazione centralizzata con regole condizionali:
- * - api_key obbligatoria se auth_method = "api_key"
+ * - api_key (o api_key_ref) obbligatoria se auth_method = "api_key"
  * - subscription opzionale (l'auth vera e' OAuth device-flow del CLI provider)
  */
 
@@ -15,21 +15,30 @@ export const SubscriptionSchema = z.object({
   session_token: z.string().optional(),
 });
 
+// Riferimento a una chiave API (SecretRef): la chiave non è nel config, ma in un file, in una variabile d'ambiente
+// del container o in un comando. Il launcher risolve file ed env a ogni lancio (.launcher/spawn-keyfile.sh).
+export const ApiKeyRefSchema = z.union([
+  z.object({ type: z.literal("ref"), source: z.literal("env"), id: z.string().min(1) }),
+  z.object({ type: z.literal("ref"), source: z.literal("file"), path: z.string().min(1) }),
+  z.object({ type: z.literal("ref"), source: z.literal("exec"), command: z.string().min(1) }),
+]);
+
 export const AIProviderSchema = z
   .object({
     name: z.enum(["claude", "openai", "kimi"]),
     auth_method: z.enum(["api_key", "subscription"]),
     api_key: z.string().optional(),
+    api_key_ref: ApiKeyRefSchema.optional(),
     subscription: SubscriptionSchema.optional(),
     model: z.string().optional(),
   })
   .refine(
     (p) => {
-      if (p.auth_method === "api_key") return !!p.api_key;
+      if (p.auth_method === "api_key") return !!p.api_key || !!p.api_key_ref;
       return true;
     },
     {
-      message: "api_key obbligatoria quando auth_method = 'api_key'",
+      message: "api_key obbligatoria quando auth_method = 'api_key' (o un api_key_ref)",
       path: ["api_key"],
     },
   );

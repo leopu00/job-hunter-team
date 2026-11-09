@@ -26,8 +26,8 @@ What is checked before a byte of the file is read (every refusal says what, neve
 The agent runs as the same user and can read the file too: this keeps the key out of argv, config and logs, it does not
 hide it from the agent's own account. The file is for the run and is removed by whoever created it when the run ends.
 
-    api_key_file.py check                          # exit 0 and «ok», or 78 and the reason
-    api_key_file.py exec --env NAME -- CMD [ARG..] # NAME in OPENAI_API_KEY ANTHROPIC_API_KEY MOONSHOT_API_KEY
+    api_key_file.py check [--from-env VAR]         # exit 0 and «ok», or 78 and the reason
+    api_key_file.py exec --env NAME [--from-env VAR] -- CMD [ARG..]   # NAME in OPENAI_API_KEY ANTHROPIC_API_KEY MOONSHOT_API_KEY
 """
 
 from __future__ import annotations
@@ -127,6 +127,40 @@ def read_key(path=None, *, uid=None, mounts=Path("/proc/mounts")) -> str:
     return key
 
 
+_ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,63}")
+# The config names the variable, and whoever writes the config must not be able to hand an agent another secret of the
+# container: the name has to be an API key variable (…_API_KEY), outside the variables of the launcher and the services, and
+# never the key variable of ANOTHER provider.
+_DENIED_PREFIXES = ("JHT_", "FLEET", "SUPABASE", "TELEGRAM", "NEXT_", "LD_", "PYTHON", "NODE_")
+
+
+def check_env_name(name: str, target: str | None = None) -> None:
+    """Raises KeyFileError unless `name` may be the source of a key (for the variable `target` of the provider)."""
+    if not _ENV_NAME.fullmatch(name or ""):
+        raise KeyFileError("the name of the environment variable is not valid")
+    upper = name.upper()
+    if not upper.endswith("_API_KEY"):
+        raise KeyFileError("the name of the environment variable must end in _API_KEY")
+    if upper.startswith(_DENIED_PREFIXES):
+        raise KeyFileError("the environment variable %s is not one a key may be read from" % name)
+    if name in KEY_ENV_NAMES and target is not None and name != target:
+        raise KeyFileError("%s is the key variable of another provider: refused" % name)
+
+
+def read_key_env(name: str, target: str | None = None) -> str:
+    """The key held by the environment variable `name` of this process (the container's), checked like a file's content.
+
+    For `api_key_ref` of source env in the config: the variable is in the environment of the container, so every launch
+    (team start, the watchdog's restart) sees it. Raises KeyFileError; the message never holds the value."""
+    check_env_name(name, target)
+    value = os.environ.get(name, "")
+    if not value:
+        raise KeyFileError("the environment variable %s is not set" % name)
+    if not _KEY.fullmatch(value):
+        raise KeyFileError("the value of %s is not one line of 16 to 512 printable characters without spaces" % name)
+    return value
+
+
 def _refuse(error: KeyFileError) -> int:
     print("api_key_file: %s" % error, file=sys.stderr)
     return EXIT_REFUSED
@@ -135,13 +169,16 @@ def _refuse(error: KeyFileError) -> int:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("check", help="check the key file, print ok")
+    check = sub.add_parser("check", help="check the key file, print ok")
+    check.add_argument("--from-env", metavar="VAR", help="take the key from this environment variable, not from the file")
+    check.add_argument("--env", choices=KEY_ENV_NAMES, help="the variable of the provider the key is for (with --from-env)")
     run = sub.add_parser("exec", help="start CMD with the key in the environment NAME")
     run.add_argument("--env", required=True, choices=KEY_ENV_NAMES)
+    run.add_argument("--from-env", metavar="VAR", help="take the key from this environment variable, not from the file")
     run.add_argument("cmd", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     try:
-        key = read_key()
+        key = read_key_env(args.from_env, args.env) if args.from_env else read_key()
     except KeyFileError as error:
         return _refuse(error)
     if args.command == "check":
@@ -150,7 +187,7 @@ def main(argv=None) -> int:
     cmd = args.cmd[1:] if args.cmd[:1] == ["--"] else args.cmd
     if not cmd:
         return _refuse(KeyFileError("no command to start"))
-    env = {name: value for name, value in os.environ.items() if name != FILE_ENV}
+    env = {name: value for name, value in os.environ.items() if name != FILE_ENV and name != args.from_env}
     env[args.env] = key
     try:
         os.execvpe(cmd[0], cmd, env)

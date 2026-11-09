@@ -964,7 +964,7 @@ try:
     active = c.get("active_provider", "") or ""
     prov = (c.get("providers") or {}).get(active, {}) if active else {}
     auth = prov.get("auth_method", "") or ""
-    key = "" if os.environ.get("JHT_API_KEY_FILE") else prov.get("api_key", "") or ""
+    key = "" if os.environ.get("JHT_API_KEY_FILE") or prov.get("api_key_ref") else prov.get("api_key", "") or ""
     print(f"{active}|{auth}|{key}")
 except Exception:
     print("||")
@@ -1492,7 +1492,7 @@ if [ "$CLI_BIN" = "pi" ]; then
 fi
 
 # Chiave da file (JHT_API_KEY_FILE): il wrapper sta dopo le assegnazioni e prima del binario; il comando del pane non la contiene.
-KEY_WRAP="$(jht_key_wrap "$PROVIDER")" || exit $?
+KEY_WRAP="$(jht_key_wrap "$PROVIDER" "$JHT_CONFIG_FILE")" || exit $?
 FULL_CMD="${CLI_ENV_PREFIX}${KEY_WRAP}$(jht_cli_exec "$CLI_BIN")${CLI_ARGS:+ $CLI_ARGS}"
 
 # Guscio di uno spawn interrotto. Col tetto sui client tmux qui sotto, un server

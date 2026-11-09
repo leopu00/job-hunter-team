@@ -127,7 +127,7 @@ def test_the_command_typed_into_the_pane_holds_the_path_and_never_the_key(tmp_pa
 
 def test_start_agent_wraps_the_command_and_stops_on_a_refusal() -> None:
     source = START_AGENT.read_text(encoding="utf-8")
-    assert 'KEY_WRAP="$(jht_key_wrap "$PROVIDER")" || exit $?' in source
+    assert 'KEY_WRAP="$(jht_key_wrap "$PROVIDER" "$JHT_CONFIG_FILE")" || exit $?' in source
     wrap = source.index('KEY_WRAP="$(jht_key_wrap')
     full = source.index('FULL_CMD="${CLI_ENV_PREFIX}${KEY_WRAP}$(jht_cli_exec')
     pane = source.index('send-keys -t "$SESSION" "$FULL_CMD" C-m')

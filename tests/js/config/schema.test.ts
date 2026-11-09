@@ -308,3 +308,40 @@ describe("validateConfig — errori schema", () => {
     expect(r.success).toBe(false);
   });
 });
+
+// --- api_key_ref: the key is in a file or a variable, not in the config ---
+
+describe("AIProviderSchema with api_key_ref", () => {
+  const base = { name: "openai", auth_method: "api_key" } as const;
+
+  it("accetta un riferimento a un file o a una variabile al posto della chiave", () => {
+    for (const api_key_ref of [
+      { type: "ref", source: "file", path: "/dev/shm/jht-run-key" },
+      { type: "ref", source: "env", id: "OPENAI_API_KEY" },
+      { type: "ref", source: "exec", command: "secret-tool lookup jht" },
+    ]) {
+      const r = AIProviderSchema.safeParse({ ...base, api_key_ref });
+      expect(r.success, JSON.stringify(api_key_ref)).toBe(true);
+    }
+  });
+
+  it("tiene il riferimento nel risultato (non lo scarta)", () => {
+    const api_key_ref = { type: "ref", source: "file", path: "/dev/shm/jht-run-key" };
+    const r = AIProviderSchema.safeParse({ ...base, api_key_ref });
+    expect(r.success && r.data.api_key_ref).toEqual(api_key_ref);
+  });
+
+  it("rifiuta un riferimento scritto male e continua a volere la chiave senza riferimento", () => {
+    for (const api_key_ref of [
+      { type: "ref", source: "file" },
+      { type: "ref", source: "file", path: "" },
+      { type: "ref", source: "vault", id: "x" },
+      "file:/x",
+    ]) {
+      expect(AIProviderSchema.safeParse({ ...base, api_key_ref }).success, JSON.stringify(api_key_ref)).toBe(false);
+    }
+    const none = AIProviderSchema.safeParse({ ...base });
+    expect(none.success).toBe(false);
+    expect(none.error?.issues[0].path).toContain("api_key");
+  });
+});
