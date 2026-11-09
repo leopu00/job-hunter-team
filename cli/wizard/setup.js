@@ -28,6 +28,7 @@ import {
 import { formatSecretForConfig } from './secret-ref.js';
 import { checkPrerequisites, runHealthCheck } from './setup-checks.js';
 import { t, tf } from './i18n.js';
+import { askLanguage } from './setup-language.js';
 import { runProviderLoginStep } from './provider-login.js';
 import { promptHarness, updateIdFor, loginCmdFor } from './setup-harness.js';
 import pc from 'picocolors';
@@ -109,6 +110,7 @@ function runProviderOauth(cmdName) {
  */
 export async function runSetupWizard(prompter) {
   await prompter.intro(t('wizard.intro_title'));
+  await askLanguage(prompter);
 
   // --- Step 1: Prerequisiti ---
   const prereqOk = await checkPrerequisites(prompter);

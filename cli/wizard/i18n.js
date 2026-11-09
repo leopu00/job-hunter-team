@@ -9,6 +9,7 @@
  * as the bash launcher (welcome messages, errors, common prompts).
  */
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -114,4 +115,57 @@ export function tf(key, ...args) {
 /** Current resolved language (useful for downstream decisions). */
 export function currentLang() {
   return resolveLang();
+}
+
+/** The seven languages of the product, in the order the picker shows them. */
+export const LANGUAGES = [
+  { value: 'en', label: 'English' },
+  { value: 'it', label: 'Italiano' },
+  { value: 'hu', label: 'Magyar' },
+  { value: 'es', label: 'Español' },
+  { value: 'de', label: 'Deutsch' },
+  { value: 'fr', label: 'Français' },
+  { value: 'pt', label: 'Português' },
+];
+
+function prefsFile(home) {
+  return path.join(home || process.env.JHT_HOME || '/jht_home', 'i18n-prefs.json');
+}
+
+/** True when the user (or the host setup) already chose a language: i18n-prefs.json has a valid `locale`. */
+export function hasLanguageChoice(home) {
+  try {
+    return VALID_LANGS.has(JSON.parse(fs.readFileSync(prefsFile(home), 'utf8'))?.locale);
+  } catch { return false; }
+}
+
+/** The language of the system (`LC_ALL`, `LC_MESSAGES`, `LANG`: `it_IT.UTF-8` -> `it`), or null if it is none of the seven. */
+export function systemLanguage(env = process.env) {
+  for (const name of ['LC_ALL', 'LC_MESSAGES', 'LANG']) {
+    const code = String(env[name] || '').trim().slice(0, 2).toLowerCase();
+    if (VALID_LANGS.has(code)) return code;
+    if (env[name] && !/^(c|posix)([._].*)?$/i.test(String(env[name]).trim())) return null; // a locale that is set and is not ours
+  }
+  return null;
+}
+
+/**
+ * Save the user's language in i18n-prefs.json (the place every reader looks first). The other keys of the file stay,
+ * the file is replaced whole. Throws for a code that is not one of the seven.
+ */
+export function saveLanguage(code, home) {
+  if (!VALID_LANGS.has(code)) throw new Error(`Unknown language "${code}". Use: ${[...VALID_LANGS].join(', ')}`);
+  const file = prefsFile(home);
+  let prefs = {};
+  try {
+    const loaded = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (loaded && typeof loaded === 'object' && !Array.isArray(loaded)) prefs = loaded;
+  } catch { /* no file or unreadable: start from an empty one */ }
+  prefs.locale = code;
+  const tmp = path.join(path.dirname(file), `.i18n-prefs.${process.pid}.${os.hostname()}.tmp`);
+  fs.writeFileSync(tmp, `${JSON.stringify(prefs, null, 2)}\n`, { mode: 0o644 });
+  fs.renameSync(tmp, file);
+  _cache = null;
+  _cacheLang = null;
+  return code;
 }

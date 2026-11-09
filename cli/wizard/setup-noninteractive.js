@@ -20,7 +20,7 @@ import {
 } from './setup-helpers.js';
 import { formatSecretForConfig, resolveSecret, describeSecret } from './secret-ref.js';
 import { runHealthCheck } from './setup-checks.js';
-import { t } from './i18n.js';
+import { t, LANGUAGES, hasLanguageChoice, systemLanguage, saveLanguage } from './i18n.js';
 import { summarizeRoleModels } from './setup-models.js';
 import { AGENT_HARNESSES, DEFAULT_HARNESS } from '../../shared/runtime/agent-harness.js';
 import { harnessRefusal } from './setup-harness.js';
@@ -46,11 +46,39 @@ function silentPrompter() {
 }
 
 /**
+ * La lingua dell'utente: `--language` se c'e' (e vale una delle sette); altrimenti, se nessuno l'ha ancora scelta
+ * (niente i18n-prefs.json), quella del sistema, se e' una delle sette. Chi l'ha gia' scelta (il setup dell'host, il
+ * picker, l'app) non viene toccato. Salva in i18n-prefs.json. Falso = lingua non valida, il setup si ferma.
+ */
+export function applyLanguage(opts, { env = process.env, log = console.log, error = console.error } = {}) {
+  if (opts.language !== undefined) {
+    const code = String(opts.language).trim().toLowerCase();
+    if (!LANGUAGES.some((l) => l.value === code)) {
+      error(pc.red(`Invalid --language "${opts.language}". Use: ${LANGUAGES.map((l) => l.value).join(', ')}`));
+      return false;
+    }
+    saveLanguage(code);
+    log(pc.dim(`  Language: ${LANGUAGES.find((l) => l.value === code).label} (${code})`));
+    return true;
+  }
+  if (!hasLanguageChoice()) {
+    const code = systemLanguage(env);
+    if (code) {
+      saveLanguage(code);
+      log(pc.dim(`  Language: ${LANGUAGES.find((l) => l.value === code).label} (${code}), from the system`));
+    }
+  }
+  return true;
+}
+
+/**
  * Esegue il setup in modalita' non-interattiva.
  * @param {object} opts — flag CLI da Commander
  */
 export async function runNonInteractiveSetup(opts) {
   console.log(pc.bold('\n  JHT Setup — Non-interactive mode\n'));
+
+  if (!applyLanguage(opts)) { process.exitCode = 1; return; }
 
   // --- Validazione flag obbligatori ---
   const providerName = opts.provider || RECOMMENDED_PROVIDER;

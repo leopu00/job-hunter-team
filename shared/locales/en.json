@@ -154,6 +154,7 @@
   "wizard.cli.subscription_email": "Provider account email (required for subscription auth)",
   "wizard.cli.subscription_token": "Subscription session token (optional; provider CLI handles OAuth login)",
   "wizard.cli.model": "Default AI model",
+  "wizard.cli.language": "Language of the team and the Assistant (en, it, hu, es, de, fr, pt)",
   "wizard.cli.skip_health": "Skip the API key health check",
   "wizard.cli.reset": "Restart configuration from scratch",
   "wizard.cli.interrupted": "Setup interrupted.",

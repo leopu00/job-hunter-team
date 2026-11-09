@@ -44,6 +44,7 @@ export function registerSetupCommand(program) {
     .option('--subscription-email <email>', t('wizard.cli.subscription_email'))
     .option('--subscription-token <token>', t('wizard.cli.subscription_token'))
     .option('--model <model>', t('wizard.cli.model'))
+    .option('--language <code>', t('wizard.cli.language'))
     .option('--skip-health', t('wizard.cli.skip_health'))
     .option('--reset', t('wizard.cli.reset'))
     .action(handleSetup);
