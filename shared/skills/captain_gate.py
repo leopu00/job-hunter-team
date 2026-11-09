@@ -2,8 +2,8 @@
 """captain_gate.py — is it time for the Capitano? A new user does the onboarding with the Assistente FIRST.
 
 `jht team start` used to light everything at once, the Capitano included, whatever the profile: with an empty profile
-the Capitano can do nothing (no profile, no worker to start) and, awake, it still spends: 1.10 USD of 1.33 USD in 31
-calls in the first test of a clean server. So the Capitano (and with it the rest of the squad, which only the Capitano
+the Capitano can do nothing (no profile, no worker to start) and, awake, it still spends: most of the cost of a
+first start measured on a clean server was the Capitano calling the model with nothing to do. So the Capitano (and with it the rest of the squad, which only the Capitano
 scales) waits until the onboarding has closed.
 
 The onboarding is closed when ANY of these holds (`reason`):
@@ -12,7 +12,7 @@ The onboarding is closed when ANY of these holds (`reason`):
   * `phase`        the first run is already past awaiting_profile (burst or steady): an installation that works, or an
                    update of one, never loses its Capitano;
   * `profile_fit`  the profile already passes the gate to start the search (a profile that existed before the flag);
-  * `override`     JHT_CAPTAIN_BEFORE_ONBOARDING=1 (an operator starting it by hand, a test);
+  * `override`     JHT_CAPTAIN_BEFORE_ONBOARDING=1 (someone starting it by hand, a test);
   * `unknown`      the state cannot be read: it starts, as it always did.
 Otherwise `onboarding_open`: only the Assistente (and the daemons) run.
 

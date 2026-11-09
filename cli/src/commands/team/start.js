@@ -122,7 +122,7 @@ const MENTOR_WAITING = 'not yet active (it starts when the first positions have 
 // A new user does the onboarding with the Assistente FIRST: the Capitano (and with it the rest of the squad, which only it
 // scales) is not started while `captain_gate.py` says the onboarding is open, and the agent watchdog starts it within a minute
 // of the onboarding closing. Any answer but a clear no (the script missing, a crash, no state) means «start it», as it always
-// did. A Capitano awake on an empty profile can do nothing and still spends (1.10 USD of 1.33 USD in the first test of a
+// did. A Capitano awake on an empty profile can do nothing and still spends (most of the cost of a first start on a
 // clean server).
 export function captainDeferred(run = execArgvInContainer) {
   const r = run(['python3', '/app/shared/skills/captain_gate.py'], { timeoutMs: 15_000 });

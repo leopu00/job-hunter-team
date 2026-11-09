@@ -559,9 +559,8 @@ EOF
   fi
 }
 
-# Il Mentor non ha niente da leggere finche' il primo giro dell'utente non e' chiuso (first_run.py mentor-due: 0 = e' ora,
-# 1 = non ancora): si accende da solo, entro un tick, quando la fase diventa `steady`. Altra risposta (script assente,
-# crash, stato illeggibile) = «e' ora»: riparte come ha sempre fatto.
+# Il Mentor non ha niente da leggere finche' il primo giro non e' chiuso (first_run.py mentor-due: 0 = e' ora, 1 = non
+# ancora): si accende da solo, entro un tick, a fase `steady`. Altra risposta (script assente, crash) = «e' ora».
 mentor_due() {
   local rc=0
   python3 /app/shared/skills/first_run.py mentor-due >/dev/null 2>&1 || rc=$?
