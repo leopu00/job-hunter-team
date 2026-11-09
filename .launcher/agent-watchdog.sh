@@ -567,7 +567,7 @@ mentor_due() {
   [ "$rc" -ne 1 ]
 }
 
-# Il Capitano aspetta la fine dell'onboarding con l'Assistente (captain_gate.py: 0 = e' ora, 1 = non ancora; altro = e' ora).
+# Capitano e Sentinella (guarda il budget PER lui) aspettano la fine dell'onboarding (captain_gate.py: 1 = non ancora).
 captain_due() { local rc=0; python3 /app/shared/skills/captain_gate.py >/dev/null 2>&1 || rc=$?; [ "$rc" -ne 1 ]; }
 
 ensure_agent() {
@@ -587,7 +587,7 @@ ensure_agent() {
     return 0
   fi
   # Non e' un guasto ne' un fallimento di spawn: il Mentor e il Capitano aspettano il loro momento.
-  if { [ "$session" = "MENTOR" ] && ! mentor_due; } || { [ "$session" = "CAPITANO" ] && ! captain_due; }; then
+  if { [ "$session" = "MENTOR" ] && ! mentor_due; } || { { [ "$session" = "CAPITANO" ] || [ "$session" = "SENTINELLA" ]; } && ! captain_due; }; then
     return 0
   fi
   # Backoff, non cap: dopo il gradino 1 si tenta piu' RADI, mai zero volte.

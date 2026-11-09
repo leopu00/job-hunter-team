@@ -141,6 +141,17 @@ def test_the_watchdog_starts_the_capitano_when_the_answer_is_not_a_clear_no(tmp_
     assert len(started) == 1, out
 
 
+def test_the_watchdog_leaves_the_sentinella_down_with_the_capitano(tmp_path: Path):
+    """The Sentinella watches the budget FOR the Capitano: while the Capitano waits it has nothing to watch."""
+    started, out = _ensure(tmp_path, "sentinella", answer=1)
+    assert started == [], out
+
+
+def test_the_watchdog_starts_the_sentinella_when_the_team_is_due(tmp_path: Path):
+    started, out = _ensure(tmp_path, "sentinella", answer=0)
+    assert len(started) == 1 and started[0].endswith("team start sentinella"), out
+
+
 def test_the_other_agents_do_not_wait_for_the_onboarding(tmp_path: Path):
     started, out = _ensure(tmp_path, "assistente", answer=1)
     assert len(started) == 1 and started[0].endswith("team start assistente"), out
@@ -171,8 +182,14 @@ def test_start_agent_refuses_the_capitano_while_the_onboarding_is_open(tmp_path:
     assert code == 75 and "went on" not in out and "CAPITANO not started" in out
 
 
+def test_start_agent_refuses_the_sentinella_with_the_capitano(tmp_path: Path):
+    code, out = _start_agent_gate(tmp_path, answer=1, session_alive=False, role="sentinella")
+    assert code == 75 and "went on" not in out and "SENTINELLA not started" in out
+
+
 @pytest.mark.parametrize("answer, alive, role", [(0, False, "capitano"), (2, False, "capitano"), (127, False, "capitano"),
-                                                 (1, True, "capitano"), (1, False, "scout")])
+                                                 (1, True, "capitano"), (1, False, "scout"), (1, True, "sentinella"),
+                                                 (0, False, "sentinella"), (1, False, "assistente")])
 def test_start_agent_lets_the_start_go_on(tmp_path: Path, answer: int, alive: bool, role: str):
     """Due, an unclear answer (set -e must not kill the script), a session already up, or another role."""
     code, out = _start_agent_gate(tmp_path, answer=answer, session_alive=alive, role=role)

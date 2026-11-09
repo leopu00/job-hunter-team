@@ -1,7 +1,7 @@
 ---
 name: onboarding-flow
 description: Protocolo conversacional que o Assistente segue para integrar o utilizador — primeira mensagem, ritmo iterativo de uma-pergunta-por-turno, checklist de bloqueio (o piso que desbloqueia o dashboard) vs checklist rica (o que torna os Scrittori realmente úteis), estilo de perguntas agnóstico de setor (NUNCA assumir IT), e a sequência obrigatória de checkpoints quando o utilizador carrega ficheiros. Fortemente combinado com `profile-yaml` (cada resposta = um Write+validate) e `profile-summaries` (MDs narrativos após marcos-chave). Abrir esta skill no início de uma sessão de onboarding e em cada turno do utilizador que traga nova informação.
-allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *), Bash(python3 /app/shared/skills/onboarding_questionnaire.py *)
+allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *), Bash(python3 /app/shared/skills/onboarding_questionnaire.py *), Bash(python3 /app/shared/skills/profile_apply.py *)
 ---
 <!-- @translation: pt, ai-translated 2026-06-06 -->
 
@@ -29,6 +29,8 @@ Após CADA turno do utilizador que traga nova informação:
    fazer a próxima pergunta no primeiro campo ainda vazio
 5. Se um trigger de summaries disparou, escrever/atualizar o MD         → skill profile-summaries
 ```
+
+**Num ÚNICO comando.** Os passos 1, 2, 4 e 5 são uma chamada, não quatro: `python3 /app/shared/skills/profile_apply.py` recebe um JSON por stdin (heredoc com aspas `<<'JSON'`): `{"set": {"location": "…"}, "append": {"skills.primary": ["…"]}, "summaries": {"about": "…"}, "say": "…"}`. `set` usa caminhos com pontos, `append` junta itens a uma lista, os `summaries` (`about`, `preferences`, `goals`, `strengths`) escrevem-se inteiros, `say` é a tua linha no chat e sai por último, só se o resto correu bem. Escreve o perfil num passo atómico, valida-o e responde `missing` / `invalid` / `launch_ready`. Não acrescentes no mesmo turno um Edit, uma verificação yaml ou um `jht-send` à parte: cada chamada extra relê a conversa toda. `launch_ready` é tudo o que diz sobre fechar o onboarding: `ready.flag` e a mensagem ao Capitano continuam a ser teus (skill profile-yaml).
 
 Uma resposta sem próxima pergunta é aceitável APENAS quando a checklist de bloqueio está totalmente satisfeita, **ou quando a pessoa não respondeu à pergunta pendente** (ver abaixo).
 

@@ -120,7 +120,7 @@ export function mentorDeferred(run = execArgvInContainer) {
 const MENTOR_WAITING = 'not yet active (it starts when the first positions have a score)';
 
 // A new user does the onboarding with the Assistente FIRST: the Capitano (and with it the rest of the squad, which only it
-// scales) is not started while `captain_gate.py` says the onboarding is open, and the agent watchdog starts it within a minute
+// scales, and the Sentinella, which watches the budget for it) is not started while `captain_gate.py` says the onboarding is open, and the agent watchdog starts it within a minute
 // of the onboarding closing. Any answer but a clear no (the script missing, a crash, no state) means «start it», as it always
 // did. A Capitano awake on an empty profile can do nothing and still spends (most of the cost of a first start on a
 // clean server).
@@ -290,7 +290,7 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
     // quattro agenti core vivi, Start e' quindi un no-op idempotente.
     const mentorWaits = !isSessionActive('MENTOR') && mentorDeferred();
     const captainWaits = !isSessionActive('CAPITANO') && captainDeferred();
-    const coreSessions = ['ASSISTENTE', 'SENTINELLA', ...(mentorWaits ? [] : ['MENTOR']), ...(captainWaits ? [] : ['CAPITANO'])];
+    const coreSessions = ['ASSISTENTE', ...(captainWaits ? [] : ['SENTINELLA']), ...(mentorWaits ? [] : ['MENTOR']), ...(captainWaits ? [] : ['CAPITANO'])];
     if (coreSessions.every((session) => isSessionActive(session))) {
       for (const session of coreSessions) {
         console.log(`  ${c.yellow('⏭')} ${session} — already active`);
@@ -369,11 +369,12 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
         deferred++;
         continue;
       }
-      if (item.role === 'capitano' && captainWaits) {
-        console.log(`  ${progress} ${c.yellow('⏭')} CAPITANO — ${say('team.captain_waits')}`);
+      if ((item.role === 'capitano' || item.role === 'sentinella') && captainWaits) {
+        // the Sentinella watches the budget FOR the Capitano: it has nothing to watch while the Capitano is down
+        console.log(`  ${progress} ${c.yellow('⏭')} ${item.role.toUpperCase()} — ${say('team.captain_waits')}`);
         deferred++;
         deferredCaptain = true;
-        coordinatorReady = true; // the onboarding is the operative marker now: a start that waits is not a failed one
+        if (item.role === 'capitano') coordinatorReady = true; // the onboarding is the operative marker now: a start that waits is not a failed one
         continue;
       }
       if (previousStarted && item.preDelayMs && item.preDelayMs > 0) {
@@ -395,8 +396,8 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
     } else if (parsed.role === 'mentor' && !isSessionActive('MENTOR') && mentorDeferred()) {
       console.log(`  ${c.yellow('⏭')} MENTOR — ${MENTOR_WAITING}`);
       deferred++;
-    } else if (parsed.role === 'capitano' && !isSessionActive('CAPITANO') && captainDeferred()) {
-      console.log(`  ${c.yellow('⏭')} CAPITANO — ${say('team.captain_waits')}`);
+    } else if ((parsed.role === 'capitano' || parsed.role === 'sentinella') && !isSessionActive(parsed.role.toUpperCase()) && captainDeferred()) {
+      console.log(`  ${c.yellow('⏭')} ${parsed.role.toUpperCase()} — ${say('team.captain_waits')}`);
       deferred++;
     } else {
       // a single start never lifts the global stop, but the agent's own Stop by the user goes
