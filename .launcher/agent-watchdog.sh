@@ -559,35 +559,36 @@ EOF
   fi
 }
 
-# Il Mentor non ha niente da leggere finche' il primo giro dell'utente non e' chiuso (first_run.py mentor-due:
-# 0 = e' ora, 1 = non ancora): si accende da solo, entro un tick, quando la fase diventa `steady`. Qualunque altra
-# risposta (script assente, crash, stato illeggibile) vale «e' ora»: il Mentor riparte come ha sempre fatto.
+# Il Mentor non ha niente da leggere finche' il primo giro dell'utente non e' chiuso (first_run.py mentor-due: 0 = e' ora,
+# 1 = non ancora): si accende da solo, entro un tick, quando la fase diventa `steady`. Altra risposta (script assente,
+# crash, stato illeggibile) = «e' ora»: riparte come ha sempre fatto.
 mentor_due() {
   local rc=0
   python3 /app/shared/skills/first_run.py mentor-due >/dev/null 2>&1 || rc=$?
   [ "$rc" -ne 1 ]
 }
 
+# Il Capitano aspetta la fine dell'onboarding con l'Assistente (captain_gate.py: 0 = e' ora, 1 = non ancora; altro = e' ora).
+captain_due() { local rc=0; python3 /app/shared/skills/captain_gate.py >/dev/null 2>&1 || rc=$?; [ "$rc" -ne 1 ]; }
+
 ensure_agent() {
   local role="$1"
   local session mark rc detail
   session="$(echo "$role" | tr '[:lower:]' '[:upper:]')"
-  # Un containment e' sticky e vale anche per i core: il normale `record`
-  # di start-agent non puo' revocarlo, soltanto `release` puo' farlo.
-  # Deliberatamente PRIMA di qualsiasi misura: una sessione tenuta giu' non e'
-  # un fallimento di spawn e non deve alimentare nessuna serie.
+  # Un containment e' sticky e vale anche per i core: il normale `record` di start-agent non puo' revocarlo, soltanto
+  # `release` puo' farlo. Deliberatamente PRIMA di qualsiasi misura: una sessione tenuta giu' non e' un fallimento di
+  # spawn e non deve alimentare nessuna serie.
   if agent_is_contained "$session"; then
     return 0
   fi
   if is_session_alive "$session"; then
-    # La serie deve essere CONSECUTIVA: se la sessione e' tornata su per una
-    # strada che non e' questa (Dottore, Capitano, riavvio), il conteggio va
-    # chiuso qui, altrimenti fallimenti di incidenti diversi si sommerebbero.
+    # La serie deve essere CONSECUTIVA: se la sessione e' tornata su per una strada che non e' questa (Dottore,
+    # Capitano, riavvio), il conteggio va chiuso qui, altrimenti fallimenti di incidenti diversi si sommerebbero.
     clear_spawn_failures "$session"
     return 0
   fi
-  # Non e' un guasto e non e' un fallimento di spawn: il Mentor aspetta il suo momento.
-  if [ "$session" = "MENTOR" ] && ! mentor_due; then
+  # Non e' un guasto ne' un fallimento di spawn: il Mentor e il Capitano aspettano il loro momento.
+  if { [ "$session" = "MENTOR" ] && ! mentor_due; } || { [ "$session" = "CAPITANO" ] && ! captain_due; }; then
     return 0
   fi
   # Backoff, non cap: dopo il gradino 1 si tenta piu' RADI, mai zero volte.

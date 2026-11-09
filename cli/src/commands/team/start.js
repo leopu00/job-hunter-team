@@ -119,6 +119,16 @@ export function mentorDeferred(run = execArgvInContainer) {
 
 const MENTOR_WAITING = 'not yet active (it starts when the first positions have a score)';
 
+// A new user does the onboarding with the Assistente FIRST: the Capitano (and with it the rest of the squad, which only it
+// scales) is not started while `captain_gate.py` says the onboarding is open, and the agent watchdog starts it within a minute
+// of the onboarding closing. Any answer but a clear no (the script missing, a crash, no state) means «start it», as it always
+// did. A Capitano awake on an empty profile can do nothing and still spends (1.10 USD of 1.33 USD in the first test of a
+// clean server).
+export function captainDeferred(run = execArgvInContainer) {
+  const r = run(['python3', '/app/shared/skills/captain_gate.py'], { timeoutMs: 15_000 });
+  return r?.code === 1;
+}
+
 // Disco quasi pieno (< 3% libero): nessun NUOVO avvio. Si chiede PRIMA di far
 // nascere una sessione, dopo che il controllo «gia' attiva» ha lasciato stare
 // quelle vive: un agente in corso non viene toccato. Il codice e' chiuso
@@ -263,6 +273,7 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
   let skipped = 0;
   let errored = 0;
   let deferred = 0;
+  let deferredCaptain = false;
   // La UI definisce il team operativo dalla presenza del CAPITANO. Tenere
   // separato questo esito dal conteggio aggregato evita il falso successo
   // osservato in #129: Assistente/Sentinella partivano, CAPITANO falliva, ma
@@ -278,7 +289,8 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
     // watchdog del container sorvegliano separatamente bridge e worker: con i
     // quattro agenti core vivi, Start e' quindi un no-op idempotente.
     const mentorWaits = !isSessionActive('MENTOR') && mentorDeferred();
-    const coreSessions = ['ASSISTENTE', 'SENTINELLA', ...(mentorWaits ? [] : ['MENTOR']), 'CAPITANO'];
+    const captainWaits = !isSessionActive('CAPITANO') && captainDeferred();
+    const coreSessions = ['ASSISTENTE', 'SENTINELLA', ...(mentorWaits ? [] : ['MENTOR']), ...(captainWaits ? [] : ['CAPITANO'])];
     if (coreSessions.every((session) => isSessionActive(session))) {
       for (const session of coreSessions) {
         console.log(`  ${c.yellow('⏭')} ${session} — already active`);
@@ -288,6 +300,7 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
       console.log(say('team.result', { started: c.green(say('team.n_started', { n: 0 })), skipped: c.yellow(say('team.n_already', { n: coreSessions.length })), errors: '' }));
       console.log(hint(say('team.next_agents')));
       if (mentorWaits) console.log(c.dim(`  MENTOR ${MENTOR_WAITING}`));
+      if (captainWaits) console.log(c.yellow(`  ${say('team.captain_waits')}`));
       console.log(c.dim('  Team already running: no bridge or sync process restarted.'));
       console.log('');
       return;
@@ -356,6 +369,13 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
         deferred++;
         continue;
       }
+      if (item.role === 'capitano' && captainWaits) {
+        console.log(`  ${progress} ${c.yellow('⏭')} CAPITANO — ${say('team.captain_waits')}`);
+        deferred++;
+        deferredCaptain = true;
+        coordinatorReady = true; // the onboarding is the operative marker now: a start that waits is not a failed one
+        continue;
+      }
       if (previousStarted && item.preDelayMs && item.preDelayMs > 0) {
         console.log(c.dim(`  ⏳ Waiting ${Math.round(item.preDelayMs / 1000)}s before ${item.session}...`));
         await sleep(item.preDelayMs);
@@ -375,6 +395,9 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
     } else if (parsed.role === 'mentor' && !isSessionActive('MENTOR') && mentorDeferred()) {
       console.log(`  ${c.yellow('⏭')} MENTOR — ${MENTOR_WAITING}`);
       deferred++;
+    } else if (parsed.role === 'capitano' && !isSessionActive('CAPITANO') && captainDeferred()) {
+      console.log(`  ${c.yellow('⏭')} CAPITANO — ${say('team.captain_waits')}`);
+      deferred++;
     } else {
       // a single start never lifts the global stop, but the agent's own Stop by the user goes
       reportUserHolds(agentArg, true);
@@ -392,7 +415,7 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
     errors: errored ? `, ${c.red(say('team.n_errors', { n: errored }))}` : '',
   }));
   if (useBootstrap) {
-    console.log(c.dim(`  ${say('team.captain_scales')}`));
+    if (!deferredCaptain) console.log(c.dim(`  ${say('team.captain_scales')}`));
     if (coordinatorReady && started > 0) {
       console.log(c.green(`  ${say('team.done', { n: started, s: Math.max(1, Math.round((Date.now() - startedAt) / 1000)) })}`));
     }
