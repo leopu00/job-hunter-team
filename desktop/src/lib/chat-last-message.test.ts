@@ -29,4 +29,12 @@ describe("the last message exchanged with each agent, kept from the chat's own r
     expect(lastChatMessage("critico")?.text).toHaveLength(LAST_MESSAGE_MAX);
     expect(lastChatMessage("mentor")?.text).toBe("ciao");
   });
+  it("keeps an agent's mood tag out of the text, and leaves the person's own words as written", () => {
+    rememberChatPage("assistente", { messages: [msg("1", "agent", "[caldo] Benvenuta! Ti guido io.", 10)] });
+    expect(lastChatMessage("assistente")?.text).toBe("Benvenuta! Ti guido io.");
+    rememberChatPage("capitano", { messages: [msg("2", "agent", "Fatto [caldo] davvero", 10), msg("3", "user", "[caldo] lo scrivo io", 20)] });
+    expect(lastChatMessage("capitano")?.text).toBe("[caldo] lo scrivo io");
+    rememberChatPage("mentor", { messages: [msg("4", "agent", "[caldo]", 5)] });
+    expect(lastChatMessage("mentor")?.text).toBe("[caldo]");
+  });
 });

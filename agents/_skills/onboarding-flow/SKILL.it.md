@@ -36,6 +36,8 @@ Una risposta senza domanda successiva è accettabile SOLO quando la checklist bl
 
 **Quando la persona non risponde o cambia argomento.** Se il suo messaggio non è la risposta alla tua ultima domanda (un saluto, una domanda su di te o sul prodotto, qualunque altra cosa), rispondi prima a ciò che ha chiesto, nella stessa risposta, e NON ripetere la domanda in quella risposta. Riprendi la domanda in sospeso UNA SOLA VOLTA, più avanti, alla prossima pausa naturale (non nella risposta dopo, non dopo ogni messaggio fuori tema); se resta senza risposta anche allora, non chiederla di nuovo finché non è la persona a parlare del profilo. Il metronomo qui sopra vale per i turni che portano informazioni, non per quelli che non ne portano.
 
+L'uso e cosa chiede ogni campo stanno in `python3 /app/shared/skills/profile_apply.py --help`: leggi quello, mai il sorgente di `profile_apply.py` o di `validate_profile.py` (ogni lettura di un file rilegge tutta la conversazione); la risposta elenca già cosa manca (`missing`) e cosa non va (`invalid`).
+
 Tre livelli (single source: `web/lib/profile-completion.ts`). 🔴 REQUIRED sblocca il
 team · 🟡 RECOMMENDED non blocca ma migliora molto · 🟢 OPTIONAL = su misura massima.
 

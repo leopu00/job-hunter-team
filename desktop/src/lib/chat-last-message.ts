@@ -1,3 +1,4 @@
+import { splitEmotion } from "./assistant-emotion";
 import type { DirectChatMessage, DirectChatPage } from "./direct-chat";
 
 /**
@@ -19,7 +20,10 @@ function newest(messages: readonly DirectChatMessage[]): LastChatMessage | null 
     // the person's words and the agent's: a system line («mail not taken») is not something said to the agent
     if (message.role !== "user" && message.role !== "agent") continue;
     if (typeof message.text !== "string" || message.text.trim() === "") continue;
-    if (found === null || message.at >= found.at) found = { role: message.role, text: message.text.slice(0, LAST_MESSAGE_MAX), at: message.at };
+    // the mood tag an agent may begin with («[caldo] Welcome!») is for the portrait, never for a line of text
+    const bare = message.role === "agent" ? splitEmotion(message.text).text : message.text;
+    const text = bare.trim() === "" ? message.text : bare; // a tag with no words after it stays as it was written
+    if (found === null || message.at >= found.at) found = { role: message.role, text: text.slice(0, LAST_MESSAGE_MAX), at: message.at };
   }
   return found;
 }

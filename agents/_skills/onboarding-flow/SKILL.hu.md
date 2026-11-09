@@ -36,6 +36,8 @@ Kérdés nélküli válasz CSAK akkor elfogadható, ha a blokkoló ellenőrzőli
 
 **Amikor a személy nem válaszol, vagy témát vált.** Ha az üzenete nem a legutóbbi kérdésedre adott válasz (köszönés, kérdés rólad vagy a termékről, bármi más), előbb arra válaszolj, amit kérdezett, ugyanabban a válaszban, és NE ismételd meg a kérdést abban a válaszban. A függő kérdést EGYSZER vedd fel újra, később, a következő természetes szünetben (nem a következő válaszban, nem minden témán kívüli üzenet után); ha akkor sem válaszol, ne kérdezd meg újra, amíg a személy maga nem hozza szóba a profilt. A fenti metronóm az információt hozó körökre vonatkozik, nem azokra, amelyek nem hoznak.
 
+A használata és az, hogy mit kér az egyes mező, a `python3 /app/shared/skills/profile_apply.py --help` kimenetében van: azt olvasd, soha a `profile_apply.py` vagy a `validate_profile.py` forrását (minden fájlolvasás újra beolvassa az egész beszélgetést); a válasz már felsorolja, mi hiányzik (`missing`) és mi hibás (`invalid`).
+
 Három szint (single source: `web/lib/profile-completion.ts`). 🔴 REQUIRED feloldja a
 csapatot · 🟡 RECOMMENDED nem blokkol, de sokat javít · 🟢 OPTIONAL = maximális személyre szabás.
 

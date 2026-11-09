@@ -30,6 +30,15 @@ are not in it yet. Every key is optional. The answer is one JSON object on stdou
 and is wrong, to fix with the next call. Exit 0 = applied; 1 = nothing was applied (the reason is in `error`).
 Closing the onboarding (ready.flag, the message to the Capitano, the plan card) stays a decision of the flow: this
 command only says `launch_ready`.
+
+What the check asks of a field (validate_profile.py; read this, not its source):
+  target_role, location, seniority_target (junior | mid | senior)   a non-empty string
+  experience_years                                                  an integer >= 0
+  languages                                                         [{"language": "English", "level": "B2"}], at least one
+  skills                                                            {"primary": ["SQL"], "secondary": ["Excel"]}
+  experience                                                        [{"company": "...", "role": "...", "years": "...", "summary": "..."}]
+A field that is not there yet is `missing` (normal); a field that is there and wrong is `invalid`, with the reason.
+`--help` prints this page and reads nothing from stdin.
 """
 from __future__ import annotations
 
@@ -196,6 +205,9 @@ def apply(request: dict) -> tuple[int, dict]:
 
 
 def main() -> int:
+    if any(arg in ("-h", "--help") for arg in sys.argv[1:]):
+        print((__doc__ or "").strip())
+        return 0
     raw = sys.stdin.read()
     try:
         request = json.loads(raw)
