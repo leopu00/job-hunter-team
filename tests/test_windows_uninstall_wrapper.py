@@ -79,6 +79,9 @@ def test_uninstall_preserves_user_data_and_only_removes_known_commands():
     ):
         assert f"'{filename}'" in uninstall
     assert "Get-ChildItem -LiteralPath $binPath -Force" in uninstall
+    # the folder that holds only the command shim goes too (and its PATH entry), or `jht` in PowerShell would stay half there
+    assert "(Join-Path $binPath 'shim\\jht.cmd'), (Join-Path $binPath 'shim')" in uninstall
+    assert "$normalizedShim" in uninstall
     assert "if ($foreignCommands.Count -eq 0)" in uninstall
     assert "'.jht'" not in uninstall
     assert "Documents\\Job Hunter Team" not in uninstall
@@ -169,7 +172,8 @@ def _run_harness(
 @pytest.mark.skipif(
     os.name != "nt" or not POWERSHELL, reason="requires Windows PowerShell"
 )
-def test_confirm_removes_only_the_jht_machine_and_is_idempotent(tmp_path: Path):
+@pytest.mark.parametrize("with_shim", [False, True], ids=["bin-only", "with-shim-folder"])
+def test_confirm_removes_only_the_jht_machine_and_is_idempotent(tmp_path: Path, with_shim: bool):
     profile = tmp_path / "profile"
     local = tmp_path / "local"
     runtime = local / "Job Hunter Team" / "host-runtime"
@@ -184,6 +188,10 @@ def test_confirm_removes_only_the_jht_machine_and_is_idempotent(tmp_path: Path):
     (runtime / "container-runtime").write_text("podman\n", encoding="utf-8")
     for filename in ("jht.ps1", "jht.cmd", "windows-private-acl.ps1", "podman-machine-bridge.ps1", "docker.exe"):
         (bin_dir / filename).write_text("jht\n", encoding="utf-8")
+    if with_shim:  # install.ps1: a folder with only the command shim, before the bin folder in the PATH
+        (bin_dir / "shim").mkdir()
+        (bin_dir / "shim" / "jht.cmd").write_text("jht\n", encoding="utf-8")
+    path_prefix = "$shim;" if with_shim else ""
     (data / "profile.json").write_text("keep\n", encoding="utf-8")
     (documents / "cv.txt").write_text("keep\n", encoding="utf-8")
     state.write_text("present\n", encoding="utf-8")
@@ -219,7 +227,8 @@ exit /b 0
 $profile = {_ps_literal(profile)}
 $local = {_ps_literal(local)}
 $bin = {_ps_literal(bin_dir)}
-[Environment]::SetEnvironmentVariable('Path', "$bin;C:\\Windows", [System.EnvironmentVariableTarget]::Process)
+$shim = Join-Path $bin 'shim'
+[Environment]::SetEnvironmentVariable('Path', "{path_prefix}$bin;C:\\Windows", [System.EnvironmentVariableTarget]::Process)
 [Environment]::SetEnvironmentVariable('JHT_CONTAINER_RUNTIME', 'podman', [System.EnvironmentVariableTarget]::Process)
 [Environment]::SetEnvironmentVariable('JHT_PODMAN_MACHINE', 'jht-podman', [System.EnvironmentVariableTarget]::Process)
 $first = Invoke-JhtWindowsUninstall -UninstallArgs @('--confirm') -ProfilePath $profile -LocalAppDataPath $local -PodmanPath {_ps_literal(podman)} -WslPath {_ps_literal(wsl)} -EnvironmentTarget Process
@@ -230,6 +239,8 @@ foreach ($name in @('jht.ps1','jht.cmd','windows-private-acl.ps1','podman-machin
 if (-not (Test-Path -LiteralPath {_ps_literal(data / 'profile.json')})) {{ throw 'user data was removed' }}
 if (-not (Test-Path -LiteralPath {_ps_literal(documents / 'cv.txt')})) {{ throw 'documents were removed' }}
 if ([Environment]::GetEnvironmentVariable('Path', 'Process') -split ';' -contains $bin) {{ throw 'owned PATH entry remained' }}
+if ([Environment]::GetEnvironmentVariable('Path', 'Process') -split ';' -contains $shim) {{ throw 'shim PATH entry remained' }}
+if (Test-Path -LiteralPath $shim) {{ throw 'shim folder remained' }}
 if ([Environment]::GetEnvironmentVariable('JHT_CONTAINER_RUNTIME', 'Process')) {{ throw 'runtime env remained' }}
 if ([Environment]::GetEnvironmentVariable('JHT_PODMAN_MACHINE', 'Process')) {{ throw 'machine env remained' }}
 $second = Invoke-JhtWindowsUninstall -UninstallArgs @('--confirm') -ProfilePath $profile -LocalAppDataPath $local -PodmanPath {_ps_literal(podman)} -WslPath {_ps_literal(wsl)} -EnvironmentTarget Process

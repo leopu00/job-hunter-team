@@ -137,15 +137,15 @@ function Remove-JhtUserEnvironment {
     }
     $userPath = [Environment]::GetEnvironmentVariable('Path', $Target)
     if ($userPath) {
-      $normalizedBin = Get-JhtNormalizedWindowsPath $BinPath
+      $normalizedBin = Get-JhtNormalizedWindowsPath $BinPath; $normalizedShim = Get-JhtNormalizedWindowsPath (Join-Path $BinPath 'shim')
       $kept = @($userPath -split ';' | Where-Object {
         $candidate = Get-JhtNormalizedWindowsPath $_
-        $_ -and (-not $candidate -or -not $candidate.Equals($normalizedBin, [StringComparison]::OrdinalIgnoreCase))
+        $_ -and (-not $candidate -or -not ($candidate.Equals($normalizedBin, [StringComparison]::OrdinalIgnoreCase) -or $candidate.Equals($normalizedShim, [StringComparison]::OrdinalIgnoreCase)))
       })
       [Environment]::SetEnvironmentVariable('Path', ($kept -join ';'), $Target)
       $remaining = @(([Environment]::GetEnvironmentVariable('Path', $Target)) -split ';' | Where-Object {
         $candidate = Get-JhtNormalizedWindowsPath $_
-        $_ -and $candidate -and $candidate.Equals($normalizedBin, [StringComparison]::OrdinalIgnoreCase)
+        $_ -and $candidate -and ($candidate.Equals($normalizedBin, [StringComparison]::OrdinalIgnoreCase) -or $candidate.Equals($normalizedShim, [StringComparison]::OrdinalIgnoreCase))
       })
       if ($remaining.Count -gt 0) { return $false }
     }
@@ -194,7 +194,7 @@ function Invoke-JhtWindowsUninstall {
   $selectionPath = Join-Path $runtimePath 'container-runtime'
   $knownCommands = @(
     (Join-Path $binPath 'jht.ps1'),
-    (Join-Path $binPath 'jht.cmd'),
+    (Join-Path $binPath 'jht.cmd'), (Join-Path $binPath 'shim\jht.cmd'), (Join-Path $binPath 'shim'),
     (Join-Path $binPath 'windows-private-acl.ps1'),
     (Join-Path $binPath 'podman-machine-bridge.ps1'),
     (Join-Path $binPath 'docker.exe')
