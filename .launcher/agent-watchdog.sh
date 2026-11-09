@@ -238,21 +238,20 @@ markers = {
   'codex':     f'{jht_home}/.codex/auth.json',
   'openai':    f'{jht_home}/.codex/auth.json',
 }
-has_creds = bool(prov) and os.path.exists(f'{jht_home}/.pi/agent/auth.json' if d.get('harness') == 'pi' and prov in ('openai', 'codex') else markers.get(prov, ''))  # harness pi: il login e' quello di pi
+# harness pi (campo `harness`, o JHT_AGENT_HARNESS_<RUOLO>=pi) con provider openai/codex: conta SOLO il login di pi, mai quello di codex
+pi = d.get('harness') == 'pi' or 'pi' in [v for k, v in os.environ.items() if k.startswith('JHT_AGENT_HARNESS_')]
+has_creds = bool(prov) and os.path.exists(f'{jht_home}/.pi/agent/auth.json' if pi and prov in ('openai', 'codex') else markers.get(prov, ''))
 sys.exit(0 if (prov and has_creds) else 1)
 PYEOF
 }
 
 is_session_alive() {
-  # Bug 2026-05-18 (post-mortem capitano-zombie-night): tmux has-session
-  # ritornava 0 anche quando il process LLM dentro al pane era morto
-  # (kimi crashato, pane ridotto a bash idle). 11h di silent watchdog
-  # mentre il Capitano era zombie e l'utente attendeva risposta.
+  # Bug 2026-05-18 (post-mortem capitano-zombie-night): tmux has-session ritornava 0 anche quando il process
+  # LLM dentro al pane era morto (kimi crashato, pane ridotto a bash idle): 11h di silent watchdog mentre il
+  # Capitano era zombie e l'utente attendeva risposta.
   #
-  # Fix: verifica anche pane_current_command. Se non è un LLM CLI noto
-  # (kimi/Kimi/claude/codex/node/python/python3), la sessione è zombie
-  # e va riavviata. La whitelist include 'node'/'python*' per
-  # supportare CLI custom che usano runtime di base (rare ma possibili).
+  # Fix: verifica anche pane_current_command. Se non è un LLM CLI noto (kimi/claude/codex/pi/node/python), la
+  # sessione è zombie e va riavviata. 'node'/'python*' coprono le CLI su un runtime di base (pi è sempre 'node').
   #
   # Target ANCORATI (2026-09-13). tmux risolve un nome esatto, poi per
   # PREFISSO: con SENTINELLA morta e SENTINELLA-WORKER viva, `has-session -t

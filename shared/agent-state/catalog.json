@@ -238,7 +238,6 @@
     }
   },
   "not_emitted_by_the_module": [
-    "pausa_pacing",
-    "accesso_scaduto"
+    "pausa_pacing"
   ]
 }

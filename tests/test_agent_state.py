@@ -485,9 +485,11 @@ def test_the_cpu_and_the_question_are_read_from_the_box(tmp_path):
 def test_every_reason_the_module_emits_is_declared():
     emitted = {st.verdict(*a)["reason"] for a in (("bloccato", r) for r in st.REASONS["bloccato"])}
     assert emitted == set(st.REASONS["bloccato"])
-    source = (ROOT / "shared/skills/agent_state.py").read_text(encoding="utf-8")
+    # the reasons Pi's reader gives (agent_pi_log.py) are declared here too
+    source = "".join((ROOT / "shared/skills" / name).read_text(encoding="utf-8")
+                     for name in ("agent_state.py", "agent_pi_log.py"))
     import re
-    quoted = set(re.findall(r'"((?:limite|rete|errore|fonti|formato|turno|avvio)[a-z0-9_]*)"', source))
+    quoted = set(re.findall(r'"((?:limite|rete|errore|fonti|formato|turno|avvio|accesso)[a-z0-9_]*)"', source))
     declared = {r for rs in st.REASONS.values() for r in rs}
     assert quoted <= declared, quoted - declared
     assert declared <= quoted, declared - quoted

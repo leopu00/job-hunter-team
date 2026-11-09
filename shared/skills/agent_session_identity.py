@@ -13,6 +13,7 @@ EFFORTS = frozenset({"none", "minimal", "low", "medium", "high", "xhigh", "max"}
 def identity(provider, lines, since, state):
     out = {"provider": provider, "model": None, "effort": None, "at": None,
            "source": "session_log", "reason": "identity_not_recorded"}
+    level = None  # Pi: the last thinking_level_change
     for record in state._objects(lines):
         at = state._iso(record.get("timestamp"))
         if at is None or at < since:
@@ -28,6 +29,19 @@ def identity(provider, lines, since, state):
             if not isinstance(message, dict):
                 continue
             model, effort = message.get("model"), record.get("effortLevel")
+        elif provider == "pi" and record.get("type") in {"model_change", "thinking_level_change", "message"}:
+            if record["type"] == "thinking_level_change":
+                # Pi writes the model first and the level after it: the level completes the model it follows
+                level = effort = record.get("thinkingLevel")
+                model = out["model"]
+            elif record["type"] == "model_change":
+                model, effort = record.get("modelId"), level
+            else:
+                message = record.get("message")
+                if not isinstance(message, dict) or message.get("role") != "assistant":
+                    continue
+                model, effort = message.get("model"), message.get("thinkingLevel") or level
+            effort = "none" if effort == "off" else effort
         else:
             continue
         if not isinstance(model, str) or not MODEL.fullmatch(model):

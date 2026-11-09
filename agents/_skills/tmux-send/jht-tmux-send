@@ -202,6 +202,9 @@ if sys.argv[2] == "state":
     print(agent_chat.composer_state(pane))
 elif sys.argv[2] == "gate":
     print(agent_chat.delivery_gate(pane))
+elif sys.argv[2] in ("pitext", "pibusy"):
+    pi = agent_chat.agent_chat_pi.screen(pane, agent_chat.strip_terminal_codes, 15)[1]   # Pi: no marker, two rules
+    print("" if not pi else ("PI:" + pi[2] if sys.argv[2] == "pitext" else "busy" if pi[1] else "idle"))
 else:
     sys.stdout.write(agent_chat.strip_terminal_codes(pane))
 ' "$CHAT_SKILLS" "$operation"
@@ -493,36 +496,26 @@ if [ "$enter_mode" -eq 1 ]; then
   signature_tail=$enter_signature
 fi
 
-# Busy-detection: codex / claude / kimi mostrano "esc to interrupt" mentre
-# l'agente e' a meta' turno. Un pane occupato e' un agente VIVO: il messaggio
-# viene comunque digitato/accodato subito; se la verifica non e' possibile,
-# il record durable dichiara queued/delivery-unverified, mai drop.
-# Causa radice dell'overspawn del 07/06: 6→16 agenti in 3 giorni, weekly Codex
-# al 100%, halt forzato di ~3,5 giorni.
+# Busy-detection: codex / claude / kimi mostrano "esc to interrupt" mentre l'agente e' a meta' turno
+# (pi: "⠹ Working" sulla riga alta, vedi _pane_busy). Un pane occupato e' un agente VIVO: il messaggio viene
+# comunque digitato/accodato subito; se la verifica non e' possibile, il record durable dichiara
+# queued/delivery-unverified, mai drop. Causa radice dell'overspawn del 07/06: 6→16 agenti in 3 giorni,
+# weekly Codex al 100%, halt forzato di ~3,5 giorni.
 #
-# ⚠️ FALSO-OCCUPATO (andris 30/07, seconda volta in un giorno). Fino al 30/07
-# questo match era una substring su TUTTO il pane, prosa del transcript inclusa.
-# Il Capitano ha scritto nella propria risposta:
-#     All three workers are idle at the prompt (no spinner, no "esc to
-#     interrupt") — halted as expected.
-# e da quel momento OGNI jht-tmux-send verso di lui ha visto il pane occupato,
-# atteso 90s e rinunciato con exit 4: 16 tick PACE-GUARD non consegnati, 10 di
-# fila. Si e' auto-zittito citando la stringa magica. Un agente puo' e deve
-# poter parlare del proprio stato senza diventare irraggiungibile.
-#
-# Ora si distingue la RIGA DI STATO dalla prosa con tre criteri, tarati su righe
-# vere raccolte dalla flotta:
+# ⚠️ FALSO-OCCUPATO (30/07, seconda volta in un giorno). Il match era una substring su TUTTO il pane,
+# prosa del transcript inclusa. Il Capitano scrisse «All three workers are idle at the prompt (no spinner,
+# no "esc to interrupt") — halted as expected.» e da quel momento OGNI jht-tmux-send verso di lui vide il
+# pane occupato, attese 90s e rinuncio' con exit 4: 16 tick PACE-GUARD non consegnati, 10 di fila. Si e'
+# auto-zittito citando la stringa magica: un agente deve poter parlare del proprio stato.
+# Ora si distingue la RIGA DI STATO dalla prosa con tre criteri, tarati su righe vere della flotta:
 #   ◦ Working (16s • esc to interrupt)                       → STATO   (leone)
 #   ● All three workers running (esc to interrupt). Recording…→ prosa (agent)
 #   All three are now running (esc to interrupt confirmed…).  → prosa (agent)
 #   …then confirm esc to interrupt before calling it fixed.   → prosa (delia)
-# 1. solo le ultime righe del pane: l'indicatore vive sopra al composer, il
-#    transcript scorre in alto;
-# 2. dopo la frase la riga deve finire quasi subito (una riga di stato chiude
-#    con ")" o con un token tipo "· ctrl+t to show todos", non con un discorso);
+# 1. solo le ultime righe del pane (l'indicatore vive sopra al composer, il transcript scorre in alto);
+# 2. dopo la frase la riga finisce quasi subito (")" o un token tipo "· ctrl+t to show todos", non un discorso);
 # 3. niente virgolette prima della frase: se e' citata, e' prosa.
-# Nel dubbio si risponde "non occupato": l'errore innocuo e' typeare in un pane
-# libero, non restare muti per ore.
+# Nel dubbio "non occupato": l'errore innocuo e' typeare in un pane libero, non restare muti per ore.
 busy_scan_lines="${JHT_TMUX_BUSY_SCAN_LINES:-10}"
 
 _pane_busy() {
@@ -558,6 +551,8 @@ _pane_busy() {
   done <<EOF
 $(printf '%s\n' "$plain" | tail -n "$busy_scan_lines")
 EOF
+  # Pi has no «esc to interrupt» row: its top rule carries «⠹ Working» while a turn runs
+  case "$plain" in *"%/"*|*"?/"*) [ "$(printf '%s' "$1" | _chat_parse pibusy)" = busy ] && return 0 ;; esac
   return 1
 }
 
@@ -586,7 +581,9 @@ busy_budget="${JHT_TMUX_BUSY_WAIT:-90}"
 # (Recuperato dalla versione dev7 di questa stessa verifica, che nasceva dallo
 # stesso guasto e copriva questi due casi in piu'.)
 _composer_line() {
-  local start
+  local start pi
+  case "$1" in *"%/"*|*"?/"*) pi=$(printf '%s' "$1" | _chat_parse pitext)
+    [ -z "$pi" ] || { printf '%s\n' "${pi#PI:}"; return 0; } ;; esac
   start=$(_plain "$1" \
     | grep -nE '^[[:space:]]*[^[:alnum:][:space:]]?[[:space:]]*(❯|›|>|▌)' \
     | tail -1 | cut -d: -f1 || true)
@@ -662,7 +659,7 @@ _in_composer() {
   esac
   if [ "$placeholder_before" -eq 0 ]; then
     case "$line" in
-      *"Pasted text"*|*"pasted text"*|*"Pasted Content"*|*"pasted content"*) return 0 ;;
+      *"Pasted text"*|*"pasted text"*|*"Pasted Content"*|*"pasted content"*|*"[paste #"*) return 0 ;;
     esac
   fi
   return 1
@@ -1113,7 +1110,7 @@ busy_before=0
 _pane_busy "$pane" && busy_before=1
 placeholder_before=0
 case "$(_composer_line "$pane")" in
-  *"Pasted text"*|*"pasted text"*|*"Pasted Content"*|*"pasted content"*) placeholder_before=1 ;;
+  *"Pasted text"*|*"pasted text"*|*"Pasted Content"*|*"pasted content"*|*"[paste #"*) placeholder_before=1 ;;
 esac
 
 # Il nostro testo e' gia' nella casella (una chiamata precedente lo ha digitato e non e' stata vista

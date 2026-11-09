@@ -2,14 +2,17 @@
 
 The state reader supplies its existing parsers and clock rules. The observer
 uses the same selection; identity always comes from the winning CLI's log.
+Claude, Codex, Kimi and Pi (agent_pi_log.py) are read; the newest event wins.
 """
 import hashlib
 from datetime import datetime
 
 try:
     from agent_session_identity import identity
+    from agent_pi_log import parse_pi, session_files, sessions_root
 except ModuleNotFoundError:
     from shared.skills.agent_session_identity import identity
+    from shared.skills.agent_pi_log import parse_pi, session_files, sessions_root
 
 
 def codex_index(state, src, since, errors=None):
@@ -86,6 +89,14 @@ def inspect_session(state, src, cwd, created, include_identity=True, index=None,
                     failures += state.kimi_log_failures(state.tail_lines(log))
                 for wire in state._newer(root.glob("*/wire.jsonl"), since)[:1]:
                     take("kimi", wire, lambda lines: state.parse_kimi(lines, wire.parent.name, failures))
+    except OSError:
+        if errors is not None:
+            errors.append("observer_session_logs_unavailable")
+    try:
+        if sessions_root(src).is_dir():
+            listed = True
+            for path in session_files(state, src, cwd, since):
+                take("pi", path, lambda lines: parse_pi(state, lines))
     except OSError:
         if errors is not None:
             errors.append("observer_session_logs_unavailable")

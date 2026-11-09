@@ -65,6 +65,9 @@ import time
 import unicodedata
 from pathlib import Path
 
+sys.path.append(str(Path(__file__).resolve().parent))  # agent_chat_pi sits beside this file, whoever loaded it
+import agent_chat_pi  # noqa: E402
+
 try:
     import fcntl
 except ImportError:  # pragma: no cover - the container is Linux
@@ -628,11 +631,9 @@ def composer_snapshot(pane: str) -> tuple[str, bool]:
     ``busy`` is presentation/status only.  A visible empty composer remains
     safe to paste into while a CLI is processing a previous turn.
     """
-    raw_lines = (pane or "").splitlines()
-    rows = [(raw, strip_terminal_codes(raw).rstrip()) for raw in raw_lines]
-    while rows and not rows[-1][1].strip():
-        rows.pop()
-    rows = rows[-PROMPT_TAIL:]
+    rows, pi = agent_chat_pi.screen(pane, strip_terminal_codes, PROMPT_TAIL)
+    if pi:
+        return pi[:2]
     busy = any(_status_line_busy(plain) for _raw, plain in rows[-10:])
     for index in range(len(rows) - 1, -1, -1):
         raw, plain = rows[index]
@@ -796,7 +797,7 @@ def delivery_gate(pane: str) -> str:
     state, _busy = composer_snapshot(pane)
     if state == "text":
         return "text"
-    if _certain_interlock(pane):
+    if _certain_interlock(pane) or agent_chat_pi.menu(pane):
         return "blocked"
     return state
 
@@ -823,11 +824,9 @@ def composer_text(pane: str) -> str | None:
     The transport uses this after paste and before Enter: the signature alone
     cannot prove that another draft did not join the paste in the meantime.
     """
-    raw_lines = (pane or "").splitlines()
-    rows = [(raw, strip_terminal_codes(raw).rstrip()) for raw in raw_lines]
-    while rows and not rows[-1][1].strip():
-        rows.pop()
-    rows = rows[-PROMPT_TAIL:]
+    rows, pi = agent_chat_pi.screen(pane, strip_terminal_codes, PROMPT_TAIL)
+    if pi:
+        return pi[2]
     for index in range(len(rows) - 1, -1, -1):
         _raw, plain = rows[index]
         match = _composer_match(plain)

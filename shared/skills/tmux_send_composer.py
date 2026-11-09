@@ -15,7 +15,11 @@ import agent_chat
 #   Codex   ``[Pasted Content 1024 chars]``  (the number of characters pasted; seen on a Codex 0.147 pane
 #           whose paste was a 1024-character message)
 #   Claude  ``[Pasted text #1 +12 lines]``    (a running id, then the number of extra lines; none for one line)
+#   Pi      ``[paste #1 1234 chars]``         (a running id, then the characters; past 10 lines instead
+#           ``[paste #1 +12 lines]``           the number of lines: editor.js of pi-tui, 1.5.0)
 _CODEX_PASTE = re.compile(r"^\[Pasted Content (\d+) chars\]$")
+_PI_CHARS = re.compile(r"^\[paste #\d+ (\d+) chars\]$")
+_PI_LINES = re.compile(r"^\[paste #\d+ \+(\d+) lines\]$")
 _CLAUDE_PASTE = re.compile(r"^\[Pasted text #\d+(?: \+(\d+) lines)?\]$")
 
 
@@ -25,9 +29,12 @@ def paste_placeholder_fits(actual: str | None, chars: int, newlines: int, *, cla
     (or nothing, for one line). Anything else, a token with other text beside it included, is False. With
     ``claude=False`` a Claude token never fits: its number is a line count, which proves nothing about WHOSE paste it is."""
     text = (actual or "").strip()
-    codex = _CODEX_PASTE.match(text)
+    codex = _CODEX_PASTE.match(text) or _PI_CHARS.match(text)
     if codex:
         return int(codex.group(1)) in {chars, chars - newlines}
+    pi_lines = _PI_LINES.match(text)
+    if pi_lines:
+        return claude and int(pi_lines.group(1)) in {newlines, newlines + 1}
     claude_token = _CLAUDE_PASTE.match(text)
     if claude_token and claude:
         shown = claude_token.group(1)
@@ -105,7 +112,7 @@ def _plain_relation(pane: str, expected: str, allow_placeholder: bool) -> tuple[
 _HEAD = re.compile(r"\[@([A-Za-z0-9_-]+)\s*->\s*@[A-Za-z0-9_-]+\]")
 _OPEN = re.compile(r"⟦UTENTE·([^⟦⟧\s]*)⟧")
 _CLOSE = re.compile(r"⟦/UTENTE·([^⟦⟧\s]*)⟧")
-_TOKEN = re.compile(r"\[Pasted Content \d+ chars\]|\[Pasted text #\d+(?: \+\d+ lines)?\]")
+_TOKEN = re.compile(r"\[Pasted Content \d+ chars\]|\[Pasted text #\d+(?: \+\d+ lines)?\]|\[paste #\d+ (?:\+\d+ lines|\d+ chars)\]")
 
 
 def signed_only(actual: str | None, token_ok=None, known=None) -> bool:
@@ -198,7 +205,7 @@ def registry_token_ok(record: list[str], now: float, window: float):
         return lambda token: False
 
     def explained(token: str) -> bool:
-        if _CODEX_PASTE.match(token):
+        if _CODEX_PASTE.match(token) or _PI_CHARS.match(token):
             return paste_placeholder_fits(token, chars, newlines, claude=False)
         return 0 <= age <= window and paste_placeholder_fits(token, chars, newlines, claude=True)
 

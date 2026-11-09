@@ -73,7 +73,7 @@ STATES = (
 REASONS = {
     "bloccato": (
         "limite_5h", "limite_settimanale", "limite_spesa_org", "limite_fornitore",
-        "rete", "errore_fornitore",
+        "rete", "errore_fornitore", "accesso_scaduto",
     ),
     "sconosciuto": (
         "fonti_illeggibili", "formato_non_riconosciuto", "turno_silenzioso",
@@ -82,7 +82,7 @@ REASONS = {
 }
 
 # In the catalog, waiting for a CLI that does not show them in the logs yet.
-NOT_EMITTED_REASONS = ("pausa_pacing", "accesso_scaduto")
+NOT_EMITTED_REASONS = ("pausa_pacing",)
 
 # ── thresholds ──────────────────────────────────────────────────────────
 
