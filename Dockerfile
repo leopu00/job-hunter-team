@@ -43,7 +43,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     # auto-install was depositing ~928M (full Chromium + headless shell
     # + ffmpeg) into the user's home on every fresh container.
     PLAYWRIGHT_BROWSERS_PATH=/opt/playwright \
-    # Agent CLIs (claude, codex, kimi) are NOT baked into the image: they
+    # Agent CLIs (claude, codex, kimi; pi is the exception, see /opt/jht-pi below)
+    # are NOT baked into the image: they
     # are installed lazily on first run. They used to land in
     # /jht_home/.npm-global, on the bind-mount — which on Windows is C:\
     # seen through WSL2, where writing costs ~158x more than the container
@@ -99,7 +100,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       # tool scrivevano parser PDF in Python puro impiegando minuti invece
       # di secondi. File/jq/unzip coprono il 90% dei casi. Niente sudo: un
       # pacchetto di sistema che serve agli agenti si aggiunge QUI (RULE-T13).
-      poppler-utils ripgrep file jq unzip \
+      # fd-find (the `fdfind` binary) and ripgrep are what pi looks for on the PATH:
+      # without them pi downloads fd and rg from GitHub at its first start.
+      poppler-utils ripgrep fd-find file jq unzip \
       # Multimodal user input: l'utente puo' mandare voice notes (ogg/mp3)
       # e foto/scansioni di documenti (CV cartacei, certificati). ffmpeg per
       # decodificare audio in formato Whisper-compatibile, tesseract-ocr per
@@ -260,6 +263,20 @@ RUN for pkg in shared/*/package.json; do \
          fi; \
        done \
     && npm cache clean --force
+
+# Pi (the agent harness chosen with JHT_AGENT_HARNESS_<ROLE>=pi) IS baked into the
+# image, unlike claude/codex/kimi: it installs from the reviewed lock of
+# shared/runtime/pi-harness (exact version, sha512 integrity on every dependency, no
+# install scripts, sha256 of the two files checked by the installer), so the first
+# run does not need the network to fetch it. It lives in /opt/jht-pi, OUTSIDE the
+# /opt/jht-deps volume (a volume made by an older image would hide it) and owned by
+# root: the agents run it and cannot change it. The npm cache of this step stays out
+# of the image.
+RUN JHT_PI_PREFIX=/opt/jht-pi NPM_CONFIG_CACHE=/tmp/jht-pi-npm-cache \
+      bash /app/shared/runtime/pi-harness/install-pi.sh \
+    && rm -rf /tmp/jht-pi-npm-cache \
+    && ln -sf /opt/jht-pi/bin/pi /usr/local/bin/pi \
+    && PI_SKIP_VERSION_CHECK=1 PI_TELEMETRY=0 pi --version
 
 RUN useradd --create-home --shell /bin/bash jht \
     # Il trasporto Telegram non condivide uid con gli agenti. Il gruppo serve

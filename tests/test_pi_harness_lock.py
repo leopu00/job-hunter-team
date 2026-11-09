@@ -97,6 +97,38 @@ def test_the_installer_never_runs_dependency_scripts() -> None:
     assert all("--ignore-scripts" in line for line in installs), installs
 
 
+# ── the image ────────────────────────────────────────────────────────────
+
+
+def _dockerfile() -> str:
+    return (ROOT / "Dockerfile").read_text(encoding="utf-8")
+
+
+def test_the_image_installs_pi_from_the_reviewed_lock_outside_the_deps_volume() -> None:
+    text = _dockerfile()
+    step = re.search(r"^RUN JHT_PI_PREFIX=(\S+)[^\n]*\\\n\s+bash (\S+install-pi\.sh)", text, re.MULTILINE)
+    assert step, "the Dockerfile no longer installs pi with install-pi.sh"
+    prefix, installer = step.groups()
+    assert installer == "/app/shared/runtime/pi-harness/install-pi.sh"
+    # /opt/jht-deps is a volume in compose: a volume made by an older image would hide pi.
+    assert not prefix.startswith("/opt/jht-deps")
+    assert f"ln -sf {prefix}/bin/pi /usr/local/bin/pi" in text
+
+
+def test_the_image_installs_pi_before_the_agent_user_and_does_not_hand_it_over() -> None:
+    text = _dockerfile()
+    assert text.index("install-pi.sh") < text.index("RUN useradd --create-home")
+    # the agents run pi, they cannot rewrite it: no chown of the pi prefix
+    assert not re.search(r"chown[^\n]*jht-pi", text)
+
+
+def test_pi_finds_fd_and_rg_on_the_path_so_it_downloads_nothing() -> None:
+    packages = re.search(r"^\s+poppler-utils [^\n]*\\$", _dockerfile(), re.MULTILINE)
+    assert packages, "the apt line with poppler-utils moved: update this test"
+    assert re.search(r"\bripgrep\b", packages.group(0))
+    assert re.search(r"\bfd-find\b", packages.group(0))
+
+
 # ── the installer, with npm faked ────────────────────────────────────────
 
 

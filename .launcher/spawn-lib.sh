@@ -415,7 +415,7 @@ jht_codex_web_search_role() {
 # rivisto di shared/runtime/pi-harness (integrity di ogni dipendenza, sha256 dei
 # due file, Node minimo controllato), con lo script che sta lì; si alza come
 # quelli di shared/config/provider-versions.json: changelog, e2e, commit.
-JHT_PI_VERSION="1.3.0"
+JHT_PI_VERSION="1.5.0"
 JHT_PI_INSTALL="/app/shared/runtime/pi-harness/install-pi.sh"
 # I tool di pi accesi per l'agente: read/bash/edit/write sono il suo default,
 # grep/find/ls vanno chiesti. Niente MCP, niente estensioni.

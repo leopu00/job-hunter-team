@@ -18,9 +18,9 @@
 #      JHT_PI_PREFIX=/altro install-pi.sh
 set -euo pipefail
 
-readonly PI_VERSION="1.3.0"
-readonly PACKAGE_JSON_SHA256="6f9d531a4a915139e804e8ac90731d07c5ae74153bd2c60aa52336048791679e"
-readonly PACKAGE_LOCK_SHA256="2a278b4e75ad3ea9514e3c3686de38aba4264ce81d257e9ba3280e81db55037f"
+readonly PI_VERSION="1.5.0"
+readonly PACKAGE_JSON_SHA256="32c84b2ed30ef1ea4b4cd2f545fc32dd3d5ba941c4fff53cd0327582cdea9047"
+readonly PACKAGE_LOCK_SHA256="0840c59f805d063695a12a1fefa875298dfcc0bcce02413bdd435984ad7af44a"
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PREFIX="${JHT_PI_PREFIX:-/opt/jht-deps}"
