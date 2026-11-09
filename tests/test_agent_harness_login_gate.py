@@ -62,9 +62,18 @@ def test_a_pi_login_does_not_open_the_gate_of_a_codex_team(tmp_path: Path) -> No
     assert _config_ready(tmp_path, config) == 1
 
 
-def test_pi_in_the_config_changes_nothing_for_another_provider(tmp_path: Path) -> None:
+def test_pi_in_the_config_changes_nothing_for_a_provider_that_pi_does_not_run(tmp_path: Path) -> None:
+    _login(tmp_path, ".claude/.credentials.json")
+    assert _config_ready(tmp_path, {"active_provider": "claude", "harness": "pi"}) == 0
+
+
+@pytest.mark.parametrize("provider", ["glm", "kimi", "moonshot"])
+def test_pi_with_an_api_provider_counts_only_the_login_of_pi(tmp_path: Path, provider: str) -> None:
+    config = {"active_provider": provider, "harness": "pi"}
     _login(tmp_path, ".kimi/credentials/kimi-code.json")
-    assert _config_ready(tmp_path, {"active_provider": "kimi", "harness": "pi"}) == 0
+    assert _config_ready(tmp_path, config) == 1, "the login of the Kimi program is not Pi's"
+    _login(tmp_path, ".pi/agent/auth.json")
+    assert _config_ready(tmp_path, config) == 0
 
 
 def test_the_pane_command_of_a_pi_agent_is_not_a_zombie() -> None:
