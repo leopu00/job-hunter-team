@@ -109,6 +109,7 @@ def _event(entry, session, agent):
     cost = usage.get("cost") if isinstance(usage.get("cost"), dict) else {}
     return {
         "ts": moment, "session": session, "agent": agent, "model": str(message.get("model") or ""),
+        "provider": str(message.get("provider") or ""),
         "input": _number(usage.get("input")), "output": _number(usage.get("output")),
         "cache_read": _number(usage.get("cacheRead")), "cache_write": _number(usage.get("cacheWrite")),
         "reasoning": _number(usage.get("reasoning")), "cost": float(_number(cost.get("total"))),

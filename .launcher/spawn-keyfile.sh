@@ -62,6 +62,7 @@ jht_key_wrap() {
     openai|codex) name=OPENAI_API_KEY ;;
     claude|anthropic) name=ANTHROPIC_API_KEY ;;
     kimi|moonshot) name=MOONSHOT_API_KEY ;;
+    glm) name=ZAI_API_KEY ;;
     *) echo "Error: a key source is set but provider '$provider' has no API key variable." >&2; return 78 ;;
   esac
   tool="$(cd "$JHT_SPAWN_LIB_DIR/../shared/skills" && pwd)/api_key_file.py"

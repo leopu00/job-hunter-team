@@ -464,19 +464,20 @@ def summarize_pi(events, searches=(), web_search=None):
 def cost_summary(provider, window_start_ts):
     """What the window cost in USD, per agent and per model, from the tokens of every call and the price of the model
     that answered (shared/config/model-prices.json, model_pricing.py): the same calculation for the calls of Codex and
-    for those of Pi. A model without a price is declared unknown, never zero. Kimi and Claude teams have no list yet."""
-    if provider in ("kimi", "claude"):
-        return None
+    for those of Pi (each call with the provider pi names in it: openai, zai, moonshotai). A model without a price is
+    declared unknown, never zero. A Claude team, or a Kimi team on its own CLI, has no calls to price: no block."""
     ledger = model_pricing.Ledger()
     for call in codex_usage.read_calls(CODEX_SESSIONS, window_start_ts):
         ledger.add(call["agent"], "openai", call["model"], call["fresh"], call["cached"], call["written"],
                    call["output"], call["reasoning"])
     for event in pi_sessions.usage_events(JHT_HOME, window_start_ts):
         tokens = model_pricing.from_pi(event)
-        ledger.add(event["agent"], "openai", event["model"], tokens["fresh"], tokens["cached"], tokens["written"],
-                   tokens["output"], tokens["reasoning"])
+        ledger.add(event["agent"], event.get("provider") or "openai", event["model"], tokens["fresh"], tokens["cached"],
+                   tokens["written"], tokens["output"], tokens["reasoning"])
     for event in pi_sessions.search_events(JHT_HOME, window_start_ts):
         ledger.add_searches(event["agent"], "openai", event["searches"])
+    if provider in ("kimi", "claude") and not ledger.total["calls"]:
+        return None
     return ledger.summary()
 
 

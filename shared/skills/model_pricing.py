@@ -35,7 +35,7 @@ PRICES_FILE = Path(__file__).resolve().parent.parent / "config" / "model-prices.
 MILLION = Decimal(1_000_000)
 MICRO = Decimal("0.000001")
 UNKNOWN_MODEL = "?unknown"
-PROVIDER_OF = {"codex": "openai", "claude": "anthropic", "moonshot": "kimi"}
+PROVIDER_OF = {"codex": "openai", "claude": "anthropic", "moonshot": "kimi", "moonshotai": "kimi", "zai": "glm"}
 
 
 class PriceListError(ValueError):

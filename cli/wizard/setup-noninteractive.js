@@ -11,7 +11,7 @@
 import { lstatSync, readFileSync } from 'node:fs';
 import pc from 'picocolors';
 import {
-  AI_PROVIDERS,
+  findProviderChoice,
   RECOMMENDED_PROVIDER,
   JHT_CONFIG_DIR,
   writeConfigFile,
@@ -81,17 +81,22 @@ export async function runNonInteractiveSetup(opts) {
   if (!applyLanguage(opts)) { process.exitCode = 1; return; }
 
   // --- Validazione flag obbligatori ---
-  const providerName = opts.provider || RECOMMENDED_PROVIDER;
-  const selectedProvider = AI_PROVIDERS.find((p) => p.value === providerName);
+  const selectedProvider = findProviderChoice(opts.provider || RECOMMENDED_PROVIDER);
   if (!selectedProvider) {
-    console.error(pc.red(`Invalid provider "${providerName}". Use: openai (Codex)`));
+    console.error(pc.red(`Invalid provider "${opts.provider}". Use: openai (Codex), glm (Z.ai) or kimi (Moonshot), the last two with --harness pi`));
     process.exitCode = 1;
     return;
   }
+  const providerName = selectedProvider.value; // moonshot is kimi
 
   const harness = opts.harness || DEFAULT_HARNESS;
   if (!AGENT_HARNESSES.includes(harness)) {
     console.error(pc.red(`Invalid harness "${harness}". Use: ${AGENT_HARNESSES.join(', ')}`));
+    process.exitCode = 1;
+    return;
+  }
+  if (selectedProvider.piOnly && harness !== 'pi') {
+    console.error(pc.red(`${selectedProvider.label} runs only on the pi harness: add --harness pi.`));
     process.exitCode = 1;
     return;
   }
@@ -105,7 +110,7 @@ export async function runNonInteractiveSetup(opts) {
   let subscriptionConfig;
   if (authMethod === 'api_key') {
     if (secretMode === 'env') {
-      const envName = opts.secretEnv || (providerName === 'claude' ? 'ANTHROPIC_API_KEY' : `${providerName.toUpperCase()}_API_KEY`);
+      const envName = opts.secretEnv || selectedProvider.keyVariable || (providerName === 'claude' ? 'ANTHROPIC_API_KEY' : `${providerName.toUpperCase()}_API_KEY`);
       apiKeySecret = formatSecretForConfig('env', envName);
     } else if (secretMode === 'file') {
       if (!opts.secretFile) {
@@ -155,7 +160,9 @@ export async function runNonInteractiveSetup(opts) {
   if (harnessIssue) { console.error(pc.red(`${harnessIssue}.`)); process.exitCode = 1; return; }
 
   // --- Health check ---
-  if (!opts.skipHealth && authMethod === 'api_key') {
+  if (selectedProvider.piOnly && !opts.skipHealth && authMethod === 'api_key') {
+    console.log(pc.dim('  No health check for this provider yet: the first call of an agent is the test.'));
+  } else if (!opts.skipHealth && authMethod === 'api_key') {
     const prompter = silentPrompter();
     const ok = await runHealthCheck(prompter, selectedProvider, apiKeySecret);
     if (!ok) console.log(pc.yellow(`  ${t('wizard.checks.health.failed_save_anyway')}`));

@@ -429,22 +429,29 @@ JHT_PI_TOOLS="read,bash,edit,write,grep,find,ls"
 jht_pi_provider_check() {
   case "${1:-}" in
     openai|codex) return 0 ;;
+    glm|kimi|moonshot)
+      # Z.ai and Moonshot charge by the token: the key, never a subscription login (pi has none for them)
+      [ "${2:-}" = "api_key" ] && return 0
+      echo "Error: the pi harness runs on ${1} only with an API key (auth_method api_key): set it up with jht setup --provider ${1} --harness pi --auth-method api_key --secret-mode file." >&2
+      return 1
+      ;;
     anthropic|claude)
       if [ "${2:-}" != "api_key" ]; then
         echo "Error: the pi harness is refused with a Claude subscription: Anthropic bills a subscription used from pi as extra usage, per token. Go back to the default harness: jht providers harness codex." >&2
       else
-        echo "Error: the pi harness supports only active_provider=openai for now (configured: '${1}'). Go back to the default harness: jht providers harness codex." >&2
+        echo "Error: the pi harness supports only active_provider=openai, glm or kimi (configured: '${1}'). Go back to the default harness: jht providers harness codex." >&2
       fi
       return 1
       ;;
     *)
-      echo "Error: the pi harness supports only active_provider=openai for now (configured: '${1:-}'). Go back to the default harness: jht providers harness codex." >&2
+      echo "Error: the pi harness supports only active_provider=openai, glm or kimi (configured: '${1:-}'). Go back to the default harness: jht providers harness codex." >&2
       return 1
       ;;
   esac
 }
 
-# jht_pi_args <agent_dir> <modello> <effort>
+# jht_pi_args <agent_dir> <modello> <effort> [provider]
+#   (provider = the one of jht.config.json; none = openai)
 #   Gli argomenti di pi per un agente. Ognuno chiude una porta:
 #   --tui-mode regular  la TUI di pi è a schermo intero di default (alternate
 #                       screen): capture-pane vedrebbe solo la finestra e lo
@@ -457,11 +464,12 @@ jht_pi_provider_check() {
 #                       (.agents/skills); -na evita la domanda di project trust
 #                       che le .agents/skills del progetto aprirebbero all'avvio.
 jht_pi_args() {
-  local agent_dir="$1" model="$2" effort="$3"
+  local agent_dir="$1" model="$2" effort="$3" pi_provider=openai api
+  if api="$(jht_pi_api_provider "${4:-}")"; then pi_provider="$(jht_provider_field "$api" pi)" || return 1; fi
   printf '%s' "--tui-mode regular -nc --append-system-prompt '$agent_dir/AGENTS.md'"
   printf '%s' " -na -ns --skill '$agent_dir/.agents/skills'"
   printf '%s' " --tools $JHT_PI_TOOLS --no-mcp -ne"
-  printf '%s\n' " --provider openai --model $model --thinking $effort"
+  printf '%s\n' " --provider $pi_provider --model $model --thinking $effort"
 }
 
 # jht_pi_agent_dir — la cartella di pi (settings, auth.json del /login,

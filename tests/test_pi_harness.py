@@ -246,12 +246,15 @@ def test_a_claude_subscription_is_refused_not_billed(tmp_path: Path, auth: str) 
     assert "per token" in result.stderr
 
 
-@pytest.mark.parametrize("provider", ["kimi", "moonshot", "anthropic-api", ""])
+@pytest.mark.parametrize("provider", ["anthropic-api", "gemini", ""])
 def test_other_providers_are_refused(tmp_path: Path, provider: str) -> None:
     result = _launch(tmp_path, provider=provider, auth="api_key")
     assert result.returncode != 0
     assert result.stdout == ""
     assert "only active_provider=openai" in result.stderr
+
+
+# kimi, moonshot and glm are not refused any more on pi with an API key: tests/test_pi_api_providers.py
 
 
 def test_a_missing_identity_file_stops_the_start(tmp_path: Path) -> None:

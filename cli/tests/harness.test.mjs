@@ -229,12 +229,18 @@ test('the harness of a config: absent is codex, an unknown value is not a harnes
   assert.equal(harnessOf({ harness: 'pi' }), 'pi');
   assert.equal(harnessOf({ harness: 'opencode' }), null);
   assert.equal(usesPi({ active_provider: 'openai', harness: 'pi' }), true);
-  assert.equal(usesPi({ active_provider: 'kimi', harness: 'pi' }), false);
+  assert.equal(usesPi({ active_provider: 'kimi', harness: 'pi' }), true);
+  assert.equal(usesPi({ active_provider: 'glm', harness: 'pi' }), true);
+  assert.equal(usesPi({ active_provider: 'glm', harness: 'codex' }), false);
   assert.equal(harnessProblem('pi', 'openai', 'subscription'), null);
   assert.equal(harnessProblem('codex', 'kimi', 'api_key'), null);
   assert.match(harnessProblem('pi', 'claude', 'subscription'), /Claude subscription.*per token/);
   assert.match(harnessProblem('pi', 'claude', 'api_key'), /only active_provider=openai/);
-  assert.match(harnessProblem('pi', 'kimi', 'subscription'), /only active_provider=openai/);
+  assert.match(harnessProblem('pi', 'kimi', 'subscription'), /only with an API key/);
+  assert.match(harnessProblem('pi', 'glm', 'subscription'), /only with an API key/);
+  assert.equal(harnessProblem('pi', 'glm', 'api_key'), null);
+  assert.equal(harnessProblem('pi', 'moonshot', 'api_key'), null);
+  assert.match(harnessProblem('pi', 'gemini', 'api_key'), /only active_provider=openai, glm or kimi/);
   assert.match(harnessProblem('x', 'openai'), /one of: codex, pi/);
 });
 

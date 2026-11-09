@@ -240,7 +240,7 @@ markers = {
 }
 # harness pi (campo `harness`, o JHT_AGENT_HARNESS_<RUOLO>=pi) con provider openai/codex: conta SOLO il login di pi, mai quello di codex
 pi = d.get('harness') == 'pi' or 'pi' in [v for k, v in os.environ.items() if k.startswith('JHT_AGENT_HARNESS_')]
-has_creds = bool(prov) and os.path.exists(f'{jht_home}/.pi/agent/auth.json' if pi and prov in ('openai', 'codex') else markers.get(prov, ''))
+has_creds = bool(prov) and os.path.exists(f'{jht_home}/.pi/agent/auth.json' if pi and prov in ('openai', 'codex', 'glm', 'kimi', 'moonshot') else markers.get(prov, ''))
 sys.exit(0 if (prov and has_creds) else 1)
 PYEOF
 }
