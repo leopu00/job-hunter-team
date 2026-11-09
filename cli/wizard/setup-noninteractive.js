@@ -119,6 +119,11 @@ export async function runNonInteractiveSetup(opts) {
         return;
       }
       apiKeySecret = formatSecretForConfig('file', opts.secretFile);
+    } else if (selectedProvider.piOnly) {
+      // Kimi and GLM put a plaintext key in the config and, for Kimi, in the command of the pane: only a reference
+      console.error(pc.red(`${selectedProvider.label} takes its key by reference: use --secret-mode env or --secret-mode file.`));
+      process.exitCode = 1;
+      return;
     } else {
       // the key comes from a file (never on the command line, where other programs and the history see it) or, as
       // before, from --api-key

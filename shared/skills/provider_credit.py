@@ -5,7 +5,7 @@ retries, and the team looks alive while it does nothing. pi writes the answer of
 (`pi_sessions.error_events`); here the answers that mean «no more credit» are told from the rest:
 
   Kimi (Moonshot)  HTTP 429, «... suspended due to insufficient balance ...»
-  GLM (Z.ai)       HTTP 429, business code 1113 («Insufficient balance or no resource package. Please recharge.»)
+  GLM (Z.ai)       HTTP 429, business code 1113 written as `"code": "1113"` («Insufficient balance or no resource package. Please recharge.»)
   OpenAI           HTTP 429, `insufficient_quota` («You exceeded your current quota»)
 
 A plain rate limit is a 429 too, and is NOT this: only these words count. The brake of the spending
@@ -22,7 +22,7 @@ import pi_sessions
 # wins when it is there (a proxy may answer with another vendor's words).
 SIGNS = (
     ("moonshotai", re.compile(r"suspended due to insufficient balance", re.IGNORECASE)),
-    ("zai", re.compile(r"\b1113\b|insufficient balance or no resource package", re.IGNORECASE)),
+    ("zai", re.compile(r"""["']?code["']?\s*[:=]\s*["']?1113\b|insufficient balance or no resource package""", re.IGNORECASE)),
     ("openai", re.compile(r"insufficient_quota|exceeded your current quota", re.IGNORECASE)),
 )
 WINDOW_S = 30 * 60  # an answer older than this no longer says the credit is gone: the person may have topped it up

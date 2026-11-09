@@ -22,7 +22,10 @@ RATE_LIMIT = "429 Rate limit reached for requests: please retry after 20 seconds
 
 
 @pytest.mark.parametrize(("message", "provider"), [(KIMI_429, "moonshotai"), (ZAI_1113, "zai"), (OPENAI_QUOTA, "openai"),
-                                                   (RATE_LIMIT, None), ("500 server error", None), ("", None), (None, None)])
+                                                   (RATE_LIMIT, None), ("500 server error", None), ("", None), (None, None),
+                                                   ("500 upstream error, request id 1113, try again", None),
+                                                   ("503 gateway at 11:13, port 1113 unreachable", None),
+                                                   ('429 {"error":{"code":1113,"message":"x"}}', "zai")])
 def test_only_the_words_of_a_credit_that_is_gone_are_told(message, provider):
     assert provider_credit.credit_gone(message) == provider
 
