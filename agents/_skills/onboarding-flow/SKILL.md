@@ -1,7 +1,7 @@
 ---
 name: onboarding-flow
 description: Conversational protocol the Assistente follows to onboard the user — first message, iterative one-question-per-turn pacing, blocking checklist (the floor that unlocks the dashboard) vs rich checklist (what makes Writers actually useful), settore-agnostic question style (NEVER assume IT), and the mandatory checkpoint sequence when the user uploads files. Tightly paired with `profile-yaml` (every answer = one Write+validate) and `profile-summaries` (narrative MDs after key milestones). Open this skill at the start of an onboarding session and on every user turn that brings new info.
-allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *), Bash(python3 /app/shared/skills/onboarding_questionnaire.py *)
+allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *), Bash(python3 /app/shared/skills/onboarding_questionnaire.py *), Bash(python3 /app/shared/skills/profile_apply.py *)
 ---
 
 # onboarding-flow — how the Assistente moves the conversation
@@ -28,6 +28,8 @@ After EVERY user turn that brings new information:
    ask the next question on the first still-empty field
 5. If a summaries trigger fired, write/refresh the MD                  → skill profile-summaries
 ```
+
+**In ONE command.** Steps 1, 2, 4 and 5 are one call, not four: `python3 /app/shared/skills/profile_apply.py` takes a JSON on stdin (quoted heredoc `<<'JSON'`): `{"set": {"location": "…"}, "append": {"skills.primary": ["…"]}, "summaries": {"about": "…"}, "say": "…"}`. `set` takes dotted paths, `append` adds list items, `summaries` (`about`, `preferences`, `goals`, `strengths`) are written whole, `say` is your chat line and goes out last, only if the rest held. It writes the profile in one atomic step, validates it and answers `missing` / `invalid` / `launch_ready`. Do not add a separate Edit, a separate yaml check or a separate `jht-send` in the same turn: every extra call re-reads the whole conversation. `launch_ready` is all it says about closing the onboarding: `ready.flag` and the message to the Capitano stay yours (skill profile-yaml).
 
 A response without a next question is acceptable ONLY when the blocking checklist is fully satisfied, **or when the person did not answer the pending question** (see below).
 

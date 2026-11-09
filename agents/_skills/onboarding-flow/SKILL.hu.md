@@ -1,7 +1,7 @@
 ---
 name: onboarding-flow
 description: Társalgási protokoll, amelyet az Assistente követ a felhasználó bevezető folyamatában — első üzenet, iteratív egy-kérdés-per-kör ütemezés, blokkoló ellenőrzőlista (a küszöb, ami feloldja a dashboardot) vs gazdag ellenőrzőlista (amitől a Writer-ek valóban hasznosak lesznek), szektoragnosztikus kérdésstílus (SOHA ne feltételezd, hogy IT), és a kötelező ellenőrzőpont-szekvencia, amikor a felhasználó fájlokat tölt fel. Szorosan összepárosítva a `profile-yaml`-lal (minden válasz = egy Write+validate) és a `profile-summaries`-szal (narratív MD-k kulcsfontosságú mérföldkövek után). Nyisd meg ezt a skillt egy onboarding munkamenet elején és minden olyan felhasználói körnél, ami új információt hoz.
-allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *), Bash(python3 /app/shared/skills/onboarding_questionnaire.py *)
+allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *), Bash(python3 /app/shared/skills/onboarding_questionnaire.py *), Bash(python3 /app/shared/skills/profile_apply.py *)
 ---
 <!-- @translation: hu, ai-translated 2026-06-06 -->
 
@@ -29,6 +29,8 @@ A felhasználó MINDEN olyan köre után, ami új információt hoz:
    tedd fel a következő kérdést az első még üres mezőre
 5. Ha egy summaries trigger kiváltódott, írd/frissítsd az MD-t           → skill profile-summaries
 ```
+
+**EGY paranccsal.** Az 1., 2., 4. és 5. lépés egy hívás, nem négy: a `python3 /app/shared/skills/profile_apply.py` JSON-t kap stdin-en (idézőjeles heredoc `<<'JSON'`): `{"set": {"location": "…"}, "append": {"skills.primary": ["…"]}, "summaries": {"about": "…"}, "say": "…"}`. A `set` pontozott útvonalakat fogad, az `append` listaelemeket ad hozzá, a `summaries` (`about`, `preferences`, `goals`, `strengths`) egészében íródik, a `say` a chatsorod, és utoljára megy ki, csak ha minden más sikerült. A profilt egy atomi lépésben írja, validálja, és `missing` / `invalid` / `launch_ready` választ ad. Ugyanabban a körben ne tegyél hozzá külön Edit-et, külön yaml-ellenőrzést vagy külön `jht-send`-et: minden további hívás újraolvassa az egész beszélgetést. A `launch_ready` minden, amit az onboarding lezárásáról mond: a `ready.flag` és a Capitano-nak szóló üzenet a tiéd marad (skill profile-yaml).
 
 Kérdés nélküli válasz CSAK akkor elfogadható, ha a blokkoló ellenőrzőlista teljesen teljesítve van, **vagy ha a személy nem válaszolt a függőben lévő kérdésre** (lásd lent).
 
