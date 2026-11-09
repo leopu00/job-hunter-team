@@ -132,6 +132,14 @@ jht_write_host_file() {
   tmp="$(mktemp "$dir/.jht-host-file.XXXXXX")" || { warn "cannot create a temporary file in $dir: not writing $target"; return 1; }
   # Il container lo legge con un altro utente: i permessi di sempre (umask), non quelli riservati di mktemp.
   if ! cat > "$tmp" || ! chmod 644 "$tmp"; then rm -f "$tmp"; return 1; fi
+  # Already as it should be: nothing to write. A second run finds ~/.jht in the hands of the container's user (the first run
+  # handed it over), where this user cannot replace a file, and a file that is already right needs no replacing.
+  if [ -f "$target" ] && [ ! -L "$target" ] && cmp -s "$tmp" "$target"; then rm -f "$tmp"; return 0; fi
+  if [ ! -w "$(dirname "$target")" ]; then
+    rm -f "$tmp"
+    warn "$target keeps its old content: its folder belongs to the container's user and this user cannot replace the file."
+    return 0  # a warning, not a stop: the rest of the preflight (the swap of a VPS) must still run
+  fi
   if [ -e "$target" ] || [ -L "$target" ]; then
     rm -f "$target" || { rm -f "$tmp"; return 1; }
   fi
@@ -241,10 +249,13 @@ mkdir -p "$JHT_HOME_HOST" 2>/dev/null || true
 # punto 3 del fuso) si legge PRIMA e si tiene, se no resta quello della macchina.
 PRESERVED_TZ=""
 PRESERVED_TZ="$(jht_read_host_env_value "$HOST_ENV_PATH" JHT_USER_TZ)" || PRESERVED_TZ=""
-{
-  printf 'JHT_LANG=%s\n' "$JHT_LANG"
-  if [ -n "$PRESERVED_TZ" ]; then printf 'JHT_USER_TZ=%s\n' "$PRESERVED_TZ"; fi
-} | jht_write_host_env
+# Con la stessa lingua gia' salvata non c'e' niente da conservare in anticipo (e il file, completo, si riscrive in fondo).
+if [ "$(jht_read_host_env_value "$HOST_ENV_PATH" JHT_LANG)" != "$JHT_LANG" ]; then
+  {
+    printf 'JHT_LANG=%s\n' "$JHT_LANG"
+    if [ -n "$PRESERVED_TZ" ]; then printf 'JHT_USER_TZ=%s\n' "$PRESERVED_TZ"; fi
+  } | jht_write_host_env
+fi
 printf '{\n  "locale": "%s"\n}\n' "$JHT_LANG" | jht_write_host_file "$I18N_PREFS_PATH"
 
 # ── i18n: soltanto dati, mai helper shell dal filesystem ─────────────────

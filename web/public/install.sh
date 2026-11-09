@@ -62,8 +62,8 @@
 # ║                            (default: XDG/App Support host-runtime)       ║
 # ║    JHT_BIN_DIR             Where to put the jht wrapper (default:        ║
 # ║                            $HOME/.local/bin)                             ║
-# ║    JHT_IMAGE               Container image override (default: immutable  ║
-# ║                            release digest)                               ║
+# ║    JHT_IMAGE               Image for THIS install only; a later          ║
+# ║                            `jht up` uses the release digest              ║
 # ║    JHT_RAW_BASE            Base URL override for downloads               ║
 # ║                            (default: https://raw.githubusercontent.com/  ║
 # ║                                      leopu00/job-hunter-team/<BRANCH>)   ║
@@ -228,7 +228,7 @@ while [ $# -gt 0 ]; do
       shift
       ;;
     -h|--help)
-      sed -n '2,62p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,74p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
