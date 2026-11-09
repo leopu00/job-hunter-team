@@ -7,6 +7,7 @@ with it.
 
 import os
 import pty
+import re
 import subprocess
 
 import pytest
@@ -344,6 +345,21 @@ def test_the_phase_marker_goes_to_the_app_on_a_pipe_and_not_to_a_person_at_a_ter
     # explicit wins in both directions: =1 on a terminal, =0 on a pipe
     assert "JHT_PHASE image_pull" in _phase_output(tmp_path, terminal=True, machine_output="1")
     assert "JHT_PHASE" not in _phase_output(tmp_path, terminal=False, machine_output="0")
+
+
+def test_the_phase_time_line_comes_only_when_asked_and_never_changes_the_phase_line(tmp_path: Path):
+    off = _phase_output(tmp_path, terminal=False, machine_output=None)
+    assert "JHT_TIME" not in off and "JHT_PHASE image_pull\n" in off
+    env = {"HOME": str(tmp_path), "PATH": "/usr/bin:/bin", "JHT_INSTALLER_SOURCE_ONLY": "1", "JHT_PHASE_TIMES": "1"}
+    command = ["bash", "-c", f'set -e; . "{INSTALLER}"; jht_phase image_pull; jht_phase machine_start; echo done']
+    lines = subprocess.run(command, env=env, text=True, capture_output=True, timeout=20, check=False).stdout.splitlines()
+    assert lines[0] == "JHT_PHASE image_pull" and lines[2] == "JHT_PHASE machine_start" and lines[-1] == "done"
+    assert re.fullmatch(r"JHT_TIME \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ image_pull", lines[1]), lines
+    assert lines[3].endswith(" machine_start")
+    # asked for times, refused marker: nothing at all
+    env["JHT_MACHINE_OUTPUT"] = "0"
+    quiet = subprocess.run(command, env=env, text=True, capture_output=True, timeout=20, check=False)
+    assert quiet.stdout == "done\n"
 
 
 @pytest.mark.parametrize("folder", ['/tmp/a"b', "/tmp/a$b", "/tmp/a`b", "/tmp/a\\b", "/tmp/a\nb"])

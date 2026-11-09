@@ -52,7 +52,7 @@ function Write-JhtPhase {
   )][string]$Id)
   # JHT_MACHINE_OUTPUT=1 asks for the line, =0 refuses it; unset, it follows whether the output is redirected.
   $machine = if ($env:JHT_MACHINE_OUTPUT -eq '1') { $true } elseif ($env:JHT_MACHINE_OUTPUT -eq '0') { $false } else { [Console]::IsOutputRedirected }
-  if ($machine) { [Console]::Out.WriteLine("JHT_PHASE $Id") }
+  if ($machine) { [Console]::Out.WriteLine("JHT_PHASE $Id"); if ($env:JHT_PHASE_TIMES -eq '1') { [Console]::Out.WriteLine("JHT_TIME $([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')) $Id") } }
 }
 
 # Podman's pull progress for the app: the layers it says it copies, one JHT_PULL line each (a redrawn
