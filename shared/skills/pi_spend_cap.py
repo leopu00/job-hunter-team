@@ -8,7 +8,10 @@ Sentinella, with the ceiling the config declares:
   "no_quota_cap": {"eur": 10, "tokens_per_hour": 500000}
 
   eur               what pi spent TODAY (local day). pi prices in dollars and the figure is compared as it is, one to
-                    one: a little early, never late. It is pi's own estimate, a little above the invoice.
+                    one. It is pi's own cost per call plus the web search fee. pi's price for a cache write is the
+                    provider's (1.25x the input for the default 30 minutes), so the figure follows the invoice; it
+                    falls BELOW it only for a call above 272k input tokens (the long-context tier is not in pi's cost),
+                    so the brake can come late by that surcharge, never by the cache.
   tokens_per_hour   what pi's agents processed or produced in the last hour: input, cache writes, output (a cache
                     read is a tenth of the price and is left out).
 

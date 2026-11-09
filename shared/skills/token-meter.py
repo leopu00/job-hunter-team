@@ -34,6 +34,8 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import codex_usage  # noqa: E402
+import model_pricing  # noqa: E402
 import pi_sessions  # noqa: E402
 import token_metrics_lib as tlib  # noqa: E402
 
@@ -430,12 +432,13 @@ def codex_weighted(t):
 
 def summarize_pi(events, searches=(), web_search=None):
     """Il blocco "pi" dello stato: quello che l'harness pi ha speso nella finestra, con il costo che calcola pi
-    (una STIMA: pi prezza anche la scrittura in cache, che OpenAI non fattura a parte) più la tariffa delle chiamate di
+    (il calcolo di pi: non conosce la fascia oltre 272k né la tariffa della ricerca; i dollari esatti, per agente e modello, stanno solo in state["cost"]; by_role_model ha i token per ruolo e modello) più la tariffa delle chiamate di
     ricerca web, che pi non prezza (pi_sessions.SEARCH_CALL_USD). `web_search` dice, per agente, se la ricerca è accesa."""
     block = {"events": len(events), "sessions": len({e["session"] for e in events}),
              "input_raw": 0, "output_raw": 0, "cache_read_raw": 0, "cache_creation_raw": 0,
              "weighted": 0.0, "cost": 0.0, "cost_is_estimate": True, "agents": {},
-             "searches": 0, "search_cost": 0.0, "web_search": dict(web_search or {})}
+             "searches": 0, "search_cost": 0.0, "web_search": dict(web_search or {}),
+             "by_role_model": pi_sessions.breakdown([e["raw"] for e in events], searches)}
     for e in events:
         t = e["tokens"]
         block["input_raw"] += t["input"]
@@ -456,6 +459,25 @@ def summarize_pi(events, searches=(), web_search=None):
     block["cost"] = round(block["cost"], 6)
     block["search_cost"] = round(block["search_cost"], 6)
     return block
+
+
+def cost_summary(provider, window_start_ts):
+    """What the window cost in USD, per agent and per model, from the tokens of every call and the price of the model
+    that answered (shared/config/model-prices.json, model_pricing.py): the same calculation for the calls of Codex and
+    for those of Pi. A model without a price is declared unknown, never zero. Kimi and Claude teams have no list yet."""
+    if provider in ("kimi", "claude"):
+        return None
+    ledger = model_pricing.Ledger()
+    for call in codex_usage.read_calls(CODEX_SESSIONS, window_start_ts):
+        ledger.add(call["agent"], "openai", call["model"], call["fresh"], call["cached"], call["written"],
+                   call["output"], call["reasoning"])
+    for event in pi_sessions.usage_events(JHT_HOME, window_start_ts):
+        tokens = model_pricing.from_pi(event)
+        ledger.add(event["agent"], "openai", event["model"], tokens["fresh"], tokens["cached"], tokens["written"],
+                   tokens["output"], tokens["reasoning"])
+    for event in pi_sessions.search_events(JHT_HOME, window_start_ts):
+        ledger.add_searches(event["agent"], "openai", event["searches"])
+    return ledger.summary()
 
 
 # ── Main loop ────────────────────────────────────────────────────────────
@@ -524,6 +546,11 @@ def main():
             out_raw += pi_block["output_raw"]
             cache_r += pi_block["cache_read_raw"]
 
+        try:
+            cost = cost_summary(provider, window_start_ts)
+        except (OSError, ValueError, model_pricing.PriceListError) as exc:  # a broken list is said, not a made-up cost
+            cost = {"error": str(exc)}
+
         bridge_pct = state.get("last_usage")
         bridge_proj = state.get("last_projection")
         bridge_status = state.get("last_status") or ""
@@ -555,6 +582,8 @@ def main():
         )
         if pi_block["events"]:
             line += f" | pi calls={pi_block['events']} cost=${pi_block['cost']:.4f}"
+        if cost and cost.get("calls"):
+            line += " | cost=" + (f"${cost['usd']:.4f}" if cost["usd"] is not None else f"?(price unknown: {','.join(cost['unknown_models']) or 'search'})")
         print(line, flush=True)
 
         with CSV_OUT.open("a") as f:
@@ -624,6 +653,7 @@ def main():
             # [JHT-TOKEN-MONITOR-WRITER-CRITIC].
             "per_writer_aggregated": tlib.aggregate_writer_critic_rates(per_agent_out),
             "pi": pi_block,
+            "cost": cost,
         }
         write_state_atomic(STATE_OUT, state_payload)
 

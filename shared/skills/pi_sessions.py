@@ -11,9 +11,12 @@ assistant message that carries its own `usage`:
 
 Read from pi 1.5.0 sessions (the format of its docs/session-format.md, version 3). Things worth knowing:
   * `output` already includes `reasoning`: do not add it again.
-  * With OpenAI the prompt cache is automatic; pi books the first sight of a prompt as `cacheWrite` and later hits as
-    `cacheRead`. OpenAI charges no premium for a write, and pi prices it anyway, so `cost.total` is an ESTIMATE
-    (`totalFromProvider: false`), a little above the invoice, never below it.
+  * With OpenAI, `cacheWrite` is the `cache_write_tokens` that OpenAI itself reports (the part of the prompt written to
+    the cache by this call), `cacheRead` its `cached_tokens`, and `input` the rest. OpenAI's pricing page (read 09/11)
+    has a column "30m write" at 1.25x the input price (terra 2.50 vs 2.00 USD per 1M), and pi sends no cache option, so
+    the default 30-minute retention applies: pi's price for the write is OpenAI's. `cost.total` is still pi's own
+    computation (`totalFromProvider: false`): it knows nothing of the long-context tier (above 272k input tokens) nor of
+    a web search fee. OUR exact cost is the token meter's `state["cost"]`, from the shared price list (model_pricing.py).
   * The `system` message of a session is huge (the whole prompt and the tool schemas): only assistant lines are parsed.
 
 Pure reading: nothing is written, a missing or unreadable folder is "no usage", a half-written last line is skipped.
@@ -32,6 +35,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -188,4 +192,40 @@ def totals(events) -> dict:
         out["cost"] += event["cost"]
         out["calls"] += 1
     out["cost"] = round(out["cost"], 6)
+    return out
+
+
+# ── by role and model ───────────────────────────────────────────────────
+
+_INSTANCE = re.compile(r"-s?\d+$", re.IGNORECASE)
+
+
+def role_of(agent) -> str:
+    """`scout-2` -> `scout`, `critico-S1` -> `critico`; an agent with no name is `?unknown`."""
+    return _INSTANCE.sub("", str(agent or "").strip().lower()) or "?unknown"
+
+
+def breakdown(events, searches=()) -> dict:
+    """`{role: {model: {calls, input, cache_read, cache_write, output, reasoning, pi_cost, searches, search_fee}}}`: the
+    tokens of each kind and pi's own cost, apart for every role and every model. `reasoning` is part of `output`, shown
+    apart. The exact dollars are NOT here: they are `state["cost"]` of the token meter (model_pricing.Ledger, per agent
+    and per model), the only place of the exact money."""
+    out: dict = {}
+
+    def cell(agent, model):
+        return out.setdefault(role_of(agent), {}).setdefault(model or "?unknown", {
+            "calls": 0, "input": 0, "cache_read": 0, "cache_write": 0, "output": 0, "reasoning": 0,
+            "pi_cost": 0.0, "searches": 0, "search_fee": 0.0})
+
+    for e in events:
+        c = cell(e["agent"], e["model"])
+        c["calls"] += 1
+        for name in ("input", "cache_read", "cache_write", "output", "reasoning"):
+            c[name] += e[name]
+        c["pi_cost"] = round(c["pi_cost"] + e["cost"], 6)
+    for e in searches:  # the search fee is not tied to a model in the session: it goes to the role's last model cell
+        models = out.get(role_of(e["agent"]), {})
+        c = cell(e["agent"], next(reversed(models)) if models else None)
+        c["searches"] += e["searches"]
+        c["search_fee"] = round(c["search_fee"] + e["cost"], 6)
     return out
