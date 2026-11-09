@@ -62,9 +62,10 @@ bugnál és a sentinel-bridge-nél, itt éppen a szinkron KURZORAIN).
 ```bash
 python3 /app/shared/skills/tool_health.py --json
 ```
-Eszközönként (browser/Playwright, linkedin_check, …) `{status: OK|BROKEN|UNKNOWN, evidence}` formában adja vissza a `tools_health` mezőt + a `broken[]` listát.
+Eszközönként (browser/Playwright, linkedin_check, …) `{status: OK|BROKEN|UNKNOWN|NOT_INSTALLED, evidence}` formában adja vissza a `tools_health` mezőt + a `broken[]` listát.
 - **BROKEN** → **JAVÍTSD** azonnal: `jht-install <dep>` (pl. a Chromium `.so` fájljai), majd futtasd újra az ellenőrzést. Ha sikerült → naplózd: `repaired`.
 - **BROKEN és nem javítható** → **ESZKALÁLD a Capitanóhoz** a PONTOS javítással `jht-tmux-send`-del (pl. „browser leállt: `sudo playwright install-deps`; amíg nincs megjavítva, LinkedIn = OPEN_UNVERIFIED"). Soha ne hagyd némán.
+- **NOT_INSTALLED** → NORMÁLIS, nem hiba: az az eszköz akkor települ, ha a felhasználó kéri, vagy az onboarding után a háttérben érkezik. NE telepítsd, NE javítsd és NE eszkaláld magadtól; csak akkor említsd, ha a felhasználó kérte.
 - Ez UGYANAZ a `tool_health.py`, amely a build-time gate-et (dev1) és a tick `tools_health` mezőjét is táplálja: egyetlen igazságforrás az eszközök állapotáról.
 
 ### 2. 📦 Nem szabványos függőségek auditja → összevonás

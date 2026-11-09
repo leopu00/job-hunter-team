@@ -7,38 +7,30 @@
 # ║  Invoke-Expression, no compile in memory): in our tests Microsoft        ║
 # ║  Defender has blocked that scheme as malicious content (AMSI),           ║
 # ║  whatever the script was.                                                ║
-# ║                                                                          ║
 # ║    $f = Join-Path $env:TEMP ("jht-install-{0}.ps1" -f [guid]::NewGuid().ToString('N'))
 # ║    iwr -useb https://jobhunterteam.ai/install.ps1 -OutFile $f            ║
 # ║    $published = (iwr -useb https://raw.githubusercontent.com/leopu00/job-hunter-team/master/desktop/src-tauri/installer-windows.sha256).Content.Trim()
 # ║    if ((Get-FileHash $f -Algorithm SHA256).Hash -eq $published) { powershell -NoProfile -ExecutionPolicy Bypass -File $f } else { Remove-Item $f; Write-Error 'SHA-256 does not match: stop, do not run it' }
-# ║                                                                          ║
 # ║  -ExecutionPolicy Bypass is the policy of that one process only (Windows ║
 # ║  clients refuse scripts by default); it does not touch Defender.         ║
 # ║  If the two SHA-256 differ, stop: do not run the file.                   ║
-# ║                                                                          ║
 # ║    # Alternative branch, to test dev-N: same file, with -Branch dev-1    ║
 # ║    powershell -NoProfile -ExecutionPolicy Bypass -File $f -Branch dev-1  ║
-# ║                                                                          ║
 # ║  Default: Podman rootless in a dedicated WSL machine. The desktop        ║
 # ║  obtains consent; this script installs the user-scope Podman CLI when    ║
 # ║  absent and the runtime's own Compose provider. Docker Desktop is not    ║
 # ║  used.                                                                   ║
-# ║                                                                          ║
 # ║  Downloads:                                                              ║
 # ║    - $env:LOCALAPPDATA\Job Hunter Team\host-runtime\docker-compose.yml   ║
 # ║    - $env:USERPROFILE\.local\bin\jht.ps1 (PowerShell wrapper)            ║
 # ║    - $env:USERPROFILE\.local\bin\windows-private-acl.ps1 (ACL helper)    ║
 # ║    - $env:USERPROFILE\.local\bin\jht.cmd (shim for CMD)                  ║
-# ║                                                                          ║
 # ║  The Node CLI, Python, tmux and the agents ALL run inside the long-      ║
 # ║  running container managed by compose. No Node/Python/tmux on the host.  ║
 # ║  No Docker socket inside the container.                                  ║
-# ║                                                                          ║
 # ║  Only two host folders are exposed to the container:                     ║
 # ║    $env:USERPROFILE\.jht                  → /jht_home                    ║
 # ║    $env:USERPROFILE\Documents\Job Hunter Team → /jht_user                ║
-# ║                                                                          ║
 # ║  Differences vs install.sh (Linux/macOS):                                ║
 # ║    - NO --no-docker: Windows native (Node+tmux+Claude standalone) is     ║
 # ║      not supported. The container is the only path.                      ║
@@ -47,7 +39,6 @@
 # ║      verified into the runtime, never taken from PATH.                   ║
 # ║    - PATH registered with [Environment]::SetEnvironmentVariable in the   ║
 # ║      User scope (no shell rc). Effective from the next terminal.         ║
-# ║                                                                          ║
 # ║  Parameters:                                                             ║
 # ║    -DryRun           Show the actions without running them               ║
 # ║    -Branch <name>    Source branch (default: production)                 ║
@@ -113,6 +104,7 @@ $LocalAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { [Environment
 if (-not $LocalAppData) { throw 'LOCALAPPDATA is unavailable: refusing an unprotected runtime fallback' }
 $RuntimeDir = if ($env:JHT_RUNTIME_DIR) { $env:JHT_RUNTIME_DIR } else { Join-Path $LocalAppData 'Job Hunter Team\host-runtime' }
 $BinDir     = if ($env:JHT_BIN_DIR)     { $env:JHT_BIN_DIR }     else { Join-Path $env:USERPROFILE '.local\bin' }
+$ShimBin    = Join-Path $BinDir 'shim'
 $JhtHome    = Join-Path $env:USERPROFILE '.jht'
 # Never Set-Acl. When the target's access rules are already protected (as a
 # previous install leaves ~/.jht), Windows PowerShell's Set-Acl writes the SACL
@@ -599,11 +591,29 @@ exit /b %errorlevel%
   $shimBytes = [Text.Encoding]::ASCII.GetBytes((($shimContent -replace "`r?`n", "`r`n") + "`r`n"))
   Publish-JhtFile -Destination $shimDest -Bytes $shimBytes
   Set-JhtNodeOwner -Path $shimDest
+  # PowerShell takes jht.ps1 before jht.cmd in the SAME folder and the default policy refuses it: this folder holds only the command shim, and comes first in the PATH
+  New-Item -ItemType Directory -Force -Path $ShimBin | Out-Null
+  $shimToWrapper = [Text.Encoding]::ASCII.GetBytes((($shimContent.Replace('%~dp0jht.ps1', '%~dp0..\jht.ps1') -replace "`r?`n", "`r`n") + "`r`n"))
+  Publish-JhtFile -Destination (Join-Path $ShimBin 'jht.cmd') -Bytes $shimToWrapper
+  Set-JhtNodeOwner -Path (Join-Path $ShimBin 'jht.cmd')
   Write-Ok "Podman runtime: $RuntimeDir"
   Write-Ok "wrapper: $wrapperDest"
 }
 
 # ── Step 4: PATH register ─────────────────────────────────────────────────
+# The user PATH with the shim folder right BEFORE the bin folder: PowerShell takes the first folder of the PATH that has a `jht`,
+# and in the bin folder jht.ps1 comes before jht.cmd (the default policy then refuses it). Everything else keeps its place.
+function Get-OrderedUserPath {
+  param([string]$UserPath, [string]$ShimBin, [string]$BinDir)
+  $ordered = New-Object System.Collections.Generic.List[string]; $hasBin = $false
+  foreach ($entry in @($UserPath -split ';' | Where-Object { $_ -and ($_.Trim() -ne '') })) {
+    if ($entry.TrimEnd('\') -ieq $ShimBin.TrimEnd('\')) { continue }
+    if ($entry.TrimEnd('\') -ieq $BinDir.TrimEnd('\')) { $hasBin = $true; $ordered.Add($ShimBin) }
+    $ordered.Add($entry)
+  }
+  if (-not $hasBin) { $ordered.Add($ShimBin); $ordered.Add($BinDir) }
+  return ($ordered -join ';')
+}
 function Add-ToUserPath {
   Write-Step 4 $TotalSteps "Registering the user PATH"
 
@@ -613,30 +623,20 @@ function Add-ToUserPath {
     $script:PathReady = $true
     return
   }
-
-  # Use the USER-scope PATH (HKCU). System-wide would require elevation;
-  # user scope survives multiple logins without a UAC prompt.
+  # The USER-scope PATH (HKCU): system-wide would require elevation.
   $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
   if (-not $userPath) { $userPath = '' }
-
-  $pathEntries = $userPath -split ';' | Where-Object { $_ -and ($_.Trim() -ne '') }
-  $normalizedBin = $BinDir.TrimEnd('\')
-  $alreadyPresent = $pathEntries | Where-Object { $_.TrimEnd('\') -ieq $normalizedBin }
-
-  if ($alreadyPresent) {
+  $newPath = Get-OrderedUserPath -UserPath $userPath -ShimBin $ShimBin -BinDir $BinDir
+  if ($newPath -ceq $userPath) {
     Write-Ok "$BinDir already in the user PATH"
   } else {
-    $newPath = if ($userPath) { "$userPath;$BinDir" } else { $BinDir }
     [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
     Write-Ok "User PATH updated (effective from the next terminal)"
   }
 
-  # Also update $env:Path for the current session so the installer's next
-  # commands (e.g. the wizard) find `jht.cmd` without reopening a terminal.
-  $sessionPath = $env:Path -split ';' | Where-Object { $_.TrimEnd('\') -ieq $normalizedBin }
-  if (-not $sessionPath) {
-    $env:Path = "$env:Path;$BinDir"
-  }
+  # The current session too, so the installer's next commands (e.g. the wizard) find `jht.cmd`.
+  $env:Path = "$ShimBin;" + (($env:Path -split ';' | Where-Object { $_ -and $_.TrimEnd('\') -ine $ShimBin.TrimEnd('\') }) -join ';')
+  if (-not ($env:Path -split ';' | Where-Object { $_.TrimEnd('\') -ieq $BinDir.TrimEnd('\') })) { $env:Path = "$env:Path;$BinDir" }
 
   $script:PathReady = $true
 }

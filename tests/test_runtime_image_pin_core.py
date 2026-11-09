@@ -139,3 +139,27 @@ def test_the_constant_follows_the_core_digest_and_a_value_without_one_is_refused
     with pytest.raises(pin_tool.RuntimeImagePinError) as stale:
         pin_tool.verify_tree(other)
     assert stale.value.code == "consumer_core_drift"
+
+
+def test_a_schema_2_manifest_with_no_core_consumers_listed_is_refused(tmp_path: Path, monkeypatch) -> None:
+    tree = _tree_copy(tmp_path)
+    manifest = json.loads((tree / pin_tool.MANIFEST_PATH).read_text())
+    manifest.update(schema_version=2, core_digest=CORE)
+    (tree / pin_tool.MANIFEST_PATH).write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    monkeypatch.setattr(pin_tool, "CORE_CONSUMER_PATTERNS", {})
+    with pytest.raises(pin_tool.RuntimeImagePinError) as refused:
+        pin_tool.verify_tree(tree)  # nothing would check the copies: it must not pass for verified
+    assert refused.value.code == "core_consumers_missing"
+
+
+def test_an_update_without_a_core_digest_does_not_drop_the_one_the_manifest_has(tmp_path: Path, monkeypatch) -> None:
+    tree = _tree_with_core_digest_constant(tmp_path, monkeypatch, "")
+    pin_tool.update_tree(tree, NEW_DIGEST, NEW_REVISION, core_digest=CORE)
+    other = "sha256:" + "ef" * 32
+    before = (tree / pin_tool.MANIFEST_PATH).read_bytes()
+    with pytest.raises(pin_tool.RuntimeImagePinError) as refused:
+        pin_tool.update_tree(tree, other, NEW_REVISION)
+    assert refused.value.code == "core_digest_dropped"
+    assert (tree / pin_tool.MANIFEST_PATH).read_bytes() == before  # all or nothing
+    done = pin_tool.update_tree(tree, other, NEW_REVISION, drop_core=True)  # said out loud, it goes back to schema 1
+    assert done.core_digest is None and json.loads((tree / pin_tool.MANIFEST_PATH).read_text())["schema_version"] == 1

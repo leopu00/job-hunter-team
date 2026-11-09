@@ -449,6 +449,20 @@ WRAPPER_TEXT = "# the wrapper, as install.ps1 publishes it\n"
 HELPER_TEXT = "# the ACL helper\n"
 
 
+def _shim_folder_text() -> str:
+    script = SCRIPT.read_text(encoding="utf-8-sig")
+    shim = script[script.index("$JhtCmdShim = @'\n") + len("$JhtCmdShim = @'\n") : script.index("\n'@", script.index("$JhtCmdShim"))]
+    return shim.replace("%~dp0jht.ps1", "%~dp0..\\jht.ps1")
+
+
+def test_the_scripts_shim_folder_cmd_is_the_one_install_ps1_writes():
+    """install.ps1 writes the shim of the `shim` folder from the same text, pointing one folder up."""
+    install = INSTALL_PS1.read_text(encoding="utf-8")
+    assert "$shimContent.Replace('%~dp0jht.ps1', '%~dp0..\\jht.ps1')" in install
+    assert "$JhtShimFolderCmd = $JhtCmdShim.Replace('%~dp0jht.ps1', '%~dp0..\\jht.ps1')" in SCRIPT.read_text(encoding="utf-8-sig")
+    assert '"%~dp0..\\jht.ps1"' in _shim_folder_text()
+
+
 def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -715,6 +729,35 @@ def test_the_documents_folder_jht_up_made_empty_stays_and_is_named(tmp_path, mod
     assert user.mydocs.is_dir() and not any(user.mydocs.iterdir())
     report = (user.keep_report if mode == "Keep" else user.remove_report).read_text(encoding="utf-8-sig")
     assert f"Your documents (CVs, attachments, output): stays ({user.mydocs})" in report
+
+
+@needs_powershell
+def test_remove_takes_the_shim_folder_and_both_path_entries(tmp_path):
+    """`jht` typed in PowerShell needs a folder with only the command shim before the bin folder in the PATH: it goes with the rest."""
+    user = User(tmp_path / "a")
+    shim_folder = user.bin / "shim"
+    shim_folder.mkdir()
+    (shim_folder / "jht.cmd").write_bytes((_shim_folder_text().replace("\n", "\r\n") + "\r\n").encode("ascii"))
+    run = _run(tmp_path, user, mode="Remove", path_value=f"%USERPROFILE%\\tools;{shim_folder};{user.bin};C:\\Other\\bin")
+    assert run.code == 0, run.stdout + run.stderr
+    assert not shim_folder.exists()
+    assert not user.bin.exists() or not any(user.bin.iterdir())
+    assert run.env["Path"] == {"Value": "%USERPROFILE%\\tools;C:\\Other\\bin", "Kind": "ExpandString"}
+    assert ("path", "removed") in run.items
+
+
+@needs_powershell
+def test_remove_keeps_a_shim_folder_that_holds_something_else(tmp_path):
+    user = User(tmp_path / "a")
+    shim_folder = user.bin / "shim"
+    shim_folder.mkdir()
+    (shim_folder / "jht.cmd").write_bytes((_shim_folder_text().replace("\n", "\r\n") + "\r\n").encode("ascii"))
+    (shim_folder / "mine.txt").write_text("not ours", encoding="utf-8")
+    run = _run(tmp_path, user, mode="Remove")
+    assert run.code == 0, run.stdout + run.stderr
+    assert not (shim_folder / "jht.cmd").exists()
+    assert (shim_folder / "mine.txt").read_text(encoding="utf-8") == "not ours"
+    assert ("path", "kept_for_others") in run.items
 
 
 @needs_powershell

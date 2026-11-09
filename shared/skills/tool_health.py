@@ -18,7 +18,7 @@ Output JSON:
     {
       "checked_at": "ISO-UTC",
       "tools": {
-        "playwright_browser": {"status": "OK|BROKEN|UNKNOWN", "evidence": "..."},
+        "playwright_browser": {"status": "OK|BROKEN|UNKNOWN|NOT_INSTALLED", "evidence": "..."},
         "linkedin_check":     {"status": "...", "evidence": "..."},
         ...
       },
@@ -224,11 +224,32 @@ CHECKS = {
     "manual_login_browser": check_manual_login_browser,
 }
 
+# A tool that is not in the image ON PURPOSE is not a fault. Two reasons, both normal (JHT-T315, T307 A):
+#   * the image tier is `core` (JHT_IMAGE_TIER=core): the tools of the full image arrive in the background after the onboarding;
+#   * the tool is an integration the user asks for (the manual LinkedIn sign-in): until then nothing of it is installed.
+# NOT_INSTALLED never counts as broken and nobody installs or repairs it on their own: the user asks, or the full image arrives.
+TOOLS_OF_THE_FULL_IMAGE = ("playwright_browser", "linkedin_check", "cv_pdf_render")
+ON_REQUEST_BROWSERS = ("chromium", "chromium-browser", "google-chrome-stable", "google-chrome")
+
+
+def not_installed(name, tier=None, which=shutil.which):
+    """The evidence when `name` is absent on purpose, else None (the check runs as always)."""
+    tier = (os.environ.get("JHT_IMAGE_TIER", "full") if tier is None else tier).strip().lower()
+    if name in TOOLS_OF_THE_FULL_IMAGE and tier == "core":
+        return "not installed yet: it arrives in the background after the onboarding (full image)"
+    if name == "manual_login_browser" and not any(which(b) for b in ON_REQUEST_BROWSERS) and not which("openbox"):
+        return "not installed (on request): it comes when the user asks to sign in to LinkedIn by hand"
+    return None
+
 
 def collect(only=None):
     tools = {}
     for name, fn in CHECKS.items():
         if only and name not in only:
+            continue
+        absent = not_installed(name)
+        if absent:
+            tools[name] = {"status": "NOT_INSTALLED", "evidence": absent}
             continue
         try:
             status, evidence = fn()

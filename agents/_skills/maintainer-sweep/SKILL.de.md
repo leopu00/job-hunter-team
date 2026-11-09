@@ -62,9 +62,10 @@ beim libatk-Bug und beim sentinel-bridge, hier auf den CURSORN der Sync).
 ```bash
 python3 /app/shared/skills/tool_health.py --json
 ```
-Es liefert `tools_health` mit `{status: OK|BROKEN|UNKNOWN, evidence}` für jedes Tool (browser/Playwright, linkedin_check, …) + `broken[]`.
+Es liefert `tools_health` mit `{status: OK|BROKEN|UNKNOWN|NOT_INSTALLED, evidence}` für jedes Tool (browser/Playwright, linkedin_check, …) + `broken[]`.
 - **BROKEN** → **REPARIERE** sofort: `jht-install <dep>` (z. B. die `.so`-Dateien von Chromium), dann den Check erneut ausführen. Wenn repariert → logge `repaired`.
 - **BROKEN und nicht reparierbar** → **ESKALIERE an den Capitano** mit dem EXAKTEN Fix via `jht-tmux-send` (z. B. „Browser down: `sudo playwright install-deps`; bis das behoben ist LinkedIn = OPEN_UNVERIFIED"). Lass es nie still verlaufen.
+- **NOT_INSTALLED** → NORMAL, kein Defekt: dieses Tool wird installiert, wenn der Nutzer es verlangt, oder kommt nach dem Onboarding im Hintergrund. Es NICHT von dir aus installieren, reparieren oder eskalieren; nur erwähnen, wenn der Nutzer danach gefragt hat.
 - Es ist DASSELBE `tool_health.py`, das den Build-time-Gate (dev1) und das Feld `tools_health` im Tick speist: eine einzige Quelle der Wahrheit über den Tool-Zustand.
 
 ### 2. 📦 Audit nicht standardkonformer Abhängigkeiten → konsolidieren
