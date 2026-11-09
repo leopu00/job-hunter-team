@@ -55,6 +55,11 @@ powershell -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
 exit /b %errorlevel%
 '@
 
+# The same shim, in the `shim` folder next to jht.ps1 (install.ps1 writes it with exactly this text): the folder that holds only
+# a command shim and comes first in the PATH, so that `jht` typed in PowerShell is the shim and not the script the default
+# execution policy refuses.
+$JhtShimFolderCmd = $JhtCmdShim.Replace('%~dp0jht.ps1', '%~dp0..\jht.ps1')
+
 $JhtUninstallText = @{
   it = @{
     Title = 'Job Hunter Team: disinstallazione'
@@ -345,6 +350,12 @@ function Get-JhtOwnCommands {
     # else's command is an empty file or the first lines of ours.
     if ($text -ceq $shim -or $shim.StartsWith($text, [StringComparison]::Ordinal)) { $own += $cmd }
   }
+  $shimCmd = [IO.Path]::Combine($Bin, 'shim', 'jht.cmd')
+  if ([IO.File]::Exists($shimCmd)) {
+    $text = ([IO.File]::ReadAllText($shimCmd)).Replace("`r`n", "`n").TrimEnd()
+    $shim = $JhtShimFolderCmd.Replace("`r`n", "`n").TrimEnd()
+    if ($text -ceq $shim -or $shim.StartsWith($text, [StringComparison]::Ordinal)) { $own += $shimCmd }
+  }
   return $own
 }
 
@@ -620,6 +631,11 @@ function Invoke-JhtAppUninstall {
   # too, which the uninstaller removes right after this, and then the empty folder.
   $items = @(, @('runtime', $t.Runtime, $plan.Runtime))
   foreach ($command in $ownCommands) { $items += , @('command', $t.Commands, $command) }
+  # the `shim` folder, once it holds nothing but our command (anything else in it stays, and so does the folder)
+  $shimFolder = [IO.Path]::Combine($plan.Bin, 'shim')
+  if ([IO.Directory]::Exists($shimFolder) -and @([IO.DirectoryInfo]::new($shimFolder).GetFileSystemInfos() | Where-Object { $_.Name -cne 'jht.cmd' }).Count -eq 0) {
+    $items += , @('command', $t.Commands, $shimFolder)
+  }
   $items += , @('appdata', $t.AppData, $plan.AppData[0])
   $items += , @('appdata', $t.AppData, $plan.AppData[1])
   if (-not $plan.GameInstalled) { $items += , @('jht_home', $t.JhtHome, $plan.JhtHome) }
@@ -637,6 +653,7 @@ function Invoke-JhtAppUninstall {
   # The PATH entry and the two JHT variables go once no command is left in
   # .local\bin: while other programs live there, the entry stays.
   if (-not $retry) {
+    if (-not [IO.Directory]::Exists($shimFolder)) { [void](Remove-JhtPathEntry -Bin $shimFolder) }
     $others = @()
     if ([IO.Directory]::Exists($plan.Bin)) { $others = @([IO.DirectoryInfo]::new($plan.Bin).GetFileSystemInfos()) }
     if ($others.Count -eq 0) {
