@@ -236,7 +236,8 @@ def test_a_tier_file_that_cannot_be_believed_is_untrusted(box, what):
     elif what == "next to a test pin":
         kwargs["pin"] = True
     else:
-        case = "[IO.File]::WriteAllText($RuntimeTierFile, \"core `n\")\n" + case
+        # same word, other bytes: only the hash in the manifest can tell
+        case = "[IO.File]::WriteAllText($RuntimeTierFile, \"core`r`n\")\n" + case
     done = _trust(box, case, **kwargs)
     assert _lines(done) == ["untrusted"], done.stdout + done.stderr
 
