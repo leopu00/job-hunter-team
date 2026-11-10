@@ -81,7 +81,13 @@ def box(tmp_path):
             "JHT_ENGINE_FILE": str(engine), "FAKE": str(fake), "T_RUNTIME": str(runtime), "T_HOME": str(home),
             "T_FULL": FULL, "T_CORE": CORE_DIGEST, "T_STUB": str(stub), "T_TOOLS": str(TOOLS), **extra,
         }
-        done = subprocess.run([*powershell_argv(), "-File", str(harness)], env=env, capture_output=True, text=True, timeout=180)
+        # Output goes to files, not pipes: on Linux the detached pull inherits the pipes of the harness and `capture_output` would wait
+        # for it to close them, that is for the whole pull (Windows starts it with a window of its own and holds nothing).
+        out, err = tmp_path / "harness.out", tmp_path / "harness.err"
+        with open(out, "wb") as stdout, open(err, "wb") as stderr:
+            ran = subprocess.run([*powershell_argv(), "-File", str(harness)], env=env, stdout=stdout, stderr=stderr, timeout=180)
+        done = subprocess.CompletedProcess(ran.args, ran.returncode, out.read_text(encoding="utf-8", errors="replace"),
+                                           err.read_text(encoding="utf-8", errors="replace"))
         assert_engine(engine, done.stderr)
         return done
 
