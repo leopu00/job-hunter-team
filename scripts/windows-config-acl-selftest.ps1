@@ -239,6 +239,7 @@ try {
   $RuntimeDir = Join-Path $cleanRoot 'host-runtime'
   $RuntimeShimDir = Join-Path $RuntimeDir 'bin'
   $BinDir = Join-Path $cleanRoot 'bin'
+  $ShimBin = Join-Path $BinDir 'shim'
   $JhtHome = Join-Path $cleanProfile '.jht'
   $RawBaseOverride = 'https://clean-start.invalid/revision'
   $Branch = 'clean-start-fixture'
