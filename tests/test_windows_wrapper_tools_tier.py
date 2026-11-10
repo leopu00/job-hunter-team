@@ -39,6 +39,7 @@ PRELUDE = r"""
 $ErrorActionPreference = 'Stop'
 $RuntimeDir = $env:T_RUNTIME; $JhtHome = $env:T_HOME; $DefaultRuntimeImage = $env:T_FULL; $CoreImageDigest = $env:T_CORE
 $RuntimeTierFile = Join-Path $RuntimeDir 'runtime-tier'; $RuntimeImageFile = Join-Path $RuntimeDir 'runtime-image'
+$RuntimeTierIntegrity = Join-Path $RuntimeDir '.runtime-tier-integrity'
 $RuntimeManifest = Join-Path $RuntimeDir '.runtime-integrity'; $RuntimeTierIntegrity = Join-Path $RuntimeDir '.runtime-tier-integrity'; $ComposeFile = Join-Path $RuntimeDir 'docker-compose.yml'
 $WrapperPath = $env:T_STUB; $ContainerRuntime = 'docker'
 function Write-Err { param([string]$Msg) [Console]::Error.WriteLine("error: $Msg") }
@@ -50,6 +51,7 @@ STUB = r"""
 param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest)
 $RuntimeDir = $env:T_RUNTIME; $JhtHome = $env:T_HOME; $DefaultRuntimeImage = $env:T_FULL
 $RuntimeTierFile = Join-Path $RuntimeDir 'runtime-tier'
+$RuntimeTierIntegrity = Join-Path $RuntimeDir '.runtime-tier-integrity'
 function Write-Err { param([string]$Msg) [Console]::Error.WriteLine("error: $Msg") }
 if ($Rest[0] -eq 'up') { Add-Content -LiteralPath (Join-Path $env:FAKE 'wrapper-calls') -Value ("up image=" + $env:JHT_IMAGE); exit 0 }
 . $env:T_TOOLS
@@ -176,16 +178,16 @@ def test_switch_is_silent_until_the_profile_is_ready_and_the_full_image_is_here(
     assert _lines(box.run("exit (Invoke-ToolsCommand @('switch'))")) == [] and tier.exists()
 
 
-def test_switch_drops_the_tier_rewrites_the_manifest_and_ups_the_full_image(box):
+def test_switch_drops_the_tier_and_its_integrity_and_ups_the_full_image(box):
     tier = box.tier()
+    integrity = box.runtime / ".runtime-tier-integrity"
+    integrity.write_text("runtime-tier=x\n", encoding="utf-8")
     (box.fake / "full-present").write_text("", encoding="utf-8")
     (box.home / "profile" / "ready.flag").write_text("2026-11-10T09:00:00Z\n", encoding="utf-8")
-    body = ("function Write-RuntimeManifest { Add-Content -LiteralPath (Join-Path $env:FAKE 'wrapper-calls') -Value 'manifest-written' }\n"
-            "$env:JHT_IMAGE = 'stale'\nexit (Invoke-ToolsCommand @('switch'))")
-    done = box.run(body)
+    done = box.run("$env:JHT_IMAGE = 'stale'\nexit (Invoke-ToolsCommand @('switch'))")
     assert done.returncode == 0 and _lines(done) == ["JHT_PHASE tools_ready"], done.stdout + done.stderr
-    assert not tier.exists()
-    assert (box.fake / "wrapper-calls").read_text(encoding="utf-8").split() == ["manifest-written", "up", "image="]
+    assert not tier.exists() and not integrity.exists()
+    assert (box.fake / "wrapper-calls").read_text(encoding="utf-8").split() == ["up", "image="]
     assert box.notice()["tier"] == "full" and box.notice()["state"] == "ready"
 
 
