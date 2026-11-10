@@ -376,7 +376,7 @@ jht_text_en() {
     uninstall.loss) printf '%s' "The saved mail password and Telegram tokens are deleted too; ~/.jht and Documents stay, and with them the saved LinkedIn session (secrets/linkedin-profile and .cache/linkedin): remove it with jht reset --scope creds." ;;
     uninstall.loss_purge) printf '%s' "The saved mail password and Telegram tokens are deleted too." ;;
     uninstall.purge_loss) printf '%s' "With --purge ~/.jht and ~/Documents/Job Hunter Team are deleted too: configuration, database, CVs and output. There is no way back." ;;
-    uninstall.machine_kept) printf '%s' "The Podman machine '%s' is not the standard JHT one (jht-podman), so it is not removed: it may be yours. The JHT volumes and image inside it stay with it. To remove it: podman machine stop %s, then podman machine rm %s." ;;
+    uninstall.machine_kept) printf '%s' "The Podman machine '%s' was not created by the JHT installer (it was already there, or it is not the standard jht-podman one), so it is not removed: it may be yours. The JHT volumes and image inside it stay with it. To remove it: podman machine stop %s, then podman machine rm %s." ;;
     uninstall.left.machine) printf '%s' "Not removed: the jht-podman Podman machine or JHT's containers and volumes, with the saved secrets. Run 'jht uninstall --confirm' again when Podman or Docker answer." ;;
     uninstall.left.runtime) printf '%s' "Not removed: JHT's host runtime." ;;
     uninstall.left.commands) printf '%s' "Not removed: the jht command or the PATH lines the installer added." ;;
@@ -444,7 +444,7 @@ jht_text_it() {
     uninstall.loss) printf '%s' "Vengono cancellati anche la password della posta e i token di Telegram salvati; ~/.jht e Documenti restano, e con loro la sessione LinkedIn salvata (secrets/linkedin-profile e .cache/linkedin): si toglie con jht reset --scope creds." ;;
     uninstall.loss_purge) printf '%s' "Vengono cancellati anche la password della posta e i token di Telegram salvati." ;;
     uninstall.purge_loss) printf '%s' "Con --purge vengono cancellati anche ~/.jht e ~/Documents/Job Hunter Team: configurazione, database, CV e output. Non si torna indietro." ;;
-    uninstall.machine_kept) printf '%s' "La macchina Podman '%s' non e' quella standard di JHT (jht-podman), quindi non la rimuovo: potrebbe essere tua. I volumi e l'immagine di JHT che ha dentro restano con lei. Per toglierla: podman machine stop %s, poi podman machine rm %s." ;;
+    uninstall.machine_kept) printf '%s' "La macchina Podman '%s' non risulta creata dall'installer di JHT (c'era gia', oppure non e' quella standard jht-podman), quindi non la rimuovo: potrebbe essere tua. I volumi e l'immagine di JHT che ha dentro restano con lei. Per toglierla: podman machine stop %s, poi podman machine rm %s." ;;
     uninstall.left.machine) printf '%s' "Non rimossi: la macchina Podman jht-podman o i container e i volumi di JHT, con i segreti salvati. Rilancia 'jht uninstall --confirm' quando Podman o Docker rispondono." ;;
     uninstall.left.runtime) printf '%s' "Non rimosso: il runtime host di JHT." ;;
     uninstall.left.commands) printf '%s' "Non rimossi: il comando jht o le righe PATH aggiunte dall'installer." ;;
@@ -1689,9 +1689,10 @@ rootless_netns_noise_filter() {
 
 # podman-compose scrive su `up -d` e su `down` gli id grezzi dei container, il nome della rete del progetto e, per i servizi che non sono
 # mai stati creati (Telegram, se non e' configurato), «Error: no container with name or ID "jht-telegram" found»: non e' un errore, e'
-# un servizio che non c'e'. Via quelle righe (e solo quelle): ogni altra riga passa com'e', stderr compreso.
+# un servizio che non c'e' (il servizio principale, jht, non e' fra questi: se manca, la riga resta). Via quelle righe (e solo quelle, a riga
+# intera): ogni altra riga passa com'e', stderr compreso.
 compose_noise_filter() {
-  grep -v -E '^[0-9a-f]{12,64}$|^(jht|host-runtime)_default$|^Error: no container with name or ID "(jht|jht-broker|jht-telegram)" found' || true
+  grep -v -E '^[0-9a-f]{12,64}$|^(jht|host-runtime)_default$|^Error: no container with name or ID "(jht-broker|jht-telegram)" found(: no such container)?$' || true
 }
 
 # `compose <argomenti>` come prima, ma con Podman l'output passa per compose_noise_filter (stdout su stdout, stderr su stderr).
@@ -1701,10 +1702,14 @@ compose_quiet() {
   if [ "$CONTAINER_RUNTIME" != podman ]; then compose "$@"; return $?; fi
   out="$(mktemp "${TMPDIR:-/tmp}/jht-compose-out.XXXXXX")" || { compose "$@"; return $?; }
   err="$(mktemp "${TMPDIR:-/tmp}/jht-compose-err.XXXXXX")" || { rm -f "$out"; compose "$@"; return $?; }
+  # Interrotto (Ctrl-C, chiusura del terminale): i due file temporanei non restano in $TMPDIR.
+  COMPOSE_QUIET_OUT="$out"; COMPOSE_QUIET_ERR="$err"
+  trap 'rm -f -- "$COMPOSE_QUIET_OUT" "$COMPOSE_QUIET_ERR"; exit 130' HUP INT TERM
   compose "$@" >"$out" 2>"$err" || rc=$?
+  trap - HUP INT TERM
   compose_noise_filter <"$out"
   compose_noise_filter <"$err" >&2
-  rm -f "$out" "$err"
+  rm -f -- "$out" "$err"
   return "$rc"
 }
 
@@ -6010,7 +6015,7 @@ uninstall_images() {
 
 # Il nome della macchina Podman che l'installer ha attestato in <runtime>/podman-machine, se e' un nome semplice e NON quello
 # standard (jht-podman, che si toglie sempre). L'installer adotta una macchina gia' esistente con il nome che gli si da
-# (la variabile del nome, in install.sh): un nome diverso puo' essere una macchina dell'utente, quindi non si rimuove, si dice che resta.
+# (la variabile del nome, in install.sh): un nome diverso si toglie solo se l'ha creata lui (uninstall_machine_created_by_installer).
 uninstall_attested_machine() {
   local file="$1/podman-machine" name
   [ -f "$file" ] && [ ! -L "$file" ] || return 1
@@ -6021,6 +6026,26 @@ uninstall_attested_machine() {
   printf '%s\n' "$name"
 }
 
+# Il nome in <runtime>/podman-machine e' di una macchina che l'installer ha CREATO solo se <runtime>/podman-machine-created e' un file
+# regolare (non un collegamento) la cui prima riga e' esattamente quel nome: l'installer lo scrive quando `podman machine init` riesce.
+uninstall_machine_created_by_installer() {
+  local file="$1/podman-machine-created" written
+  [ -f "$file" ] && [ ! -L "$file" ] || return 1
+  written="$(head -c 64 "$file" 2>/dev/null | head -n 1 | tr -d '\r\n')"
+  [ -n "$written" ] && [ "$written" = "$2" ]
+}
+
+# Toglie la macchina Podman $2 (ferma e rimuove, --force): 0 se alla fine non c'e' piu'.
+uninstall_remove_podman_machine() {
+  local podman_bin="$1" name="$2" state
+  state="$(uninstall_podman_machine_state "$podman_bin" "$name")" || return 1
+  if [ "$state" = "present" ]; then
+    "$podman_bin" machine rm --force "$name" >/dev/null 2>&1 || return 1
+    state="$(uninstall_podman_machine_state "$podman_bin" "$name")" || return 1
+    [ "$state" = "absent" ] || return 1
+  fi
+}
+
 uninstall_machine() {
   local selection="$1" runtime_dir="${2:-}" podman_bin docker_bin state endpoint kept
   # La macchina jht-podman esiste solo sul Mac. Va tolta anche se il runtime
@@ -6028,16 +6053,16 @@ uninstall_machine() {
   # i suoi volumi.
   if [ "$HOST_KERNEL" = "Darwin" ]; then
     if podman_bin="$(uninstall_tool podman)"; then
-      state="$(uninstall_podman_machine_state "$podman_bin")" || return 1
-      if [ "$state" = "present" ]; then
-        "$podman_bin" machine rm --force "$UNINSTALL_MACHINE_NAME" >/dev/null 2>&1 || return 1
-        state="$(uninstall_podman_machine_state "$podman_bin")" || return 1
-        [ "$state" = "absent" ] || return 1
-      fi
-      # Una macchina attestata con un altro nome non si rimuove (puo' essere dell'utente): resta, e si dice quale e perche'.
+      uninstall_remove_podman_machine "$podman_bin" "$UNINSTALL_MACHINE_NAME" || return 1
+      # Una macchina attestata con un altro nome si toglie solo se l'ha creata l'installer (marcatore con quel nome); se e' stata
+      # adottata (c'era gia': puo' essere dell'utente) resta, e si dice quale e perche'.
       if [ -n "$runtime_dir" ] && kept="$(uninstall_attested_machine "$runtime_dir")" \
           && [ "$(uninstall_podman_machine_state "$podman_bin" "$kept")" = "present" ]; then
-        warn "$(jht_say uninstall.machine_kept "$kept" "$kept" "$kept")"
+        if uninstall_machine_created_by_installer "$runtime_dir" "$kept"; then
+          uninstall_remove_podman_machine "$podman_bin" "$kept" || return 1
+        else
+          warn "$(jht_say uninstall.machine_kept "$kept" "$kept" "$kept")"
+        fi
       fi
     elif [ "$selection" = "podman" ]; then
       return 1
