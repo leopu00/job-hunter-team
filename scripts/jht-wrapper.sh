@@ -5665,6 +5665,83 @@ else
   EXEC_FLAGS="-i"
 fi
 
+# `jht setup --api-key-file <file on THIS computer>` (glm, kimi): the setup runs in the container, which sees a file of the host
+# only if it is under ~/.jht or the documents folder, and whose modes differ from the host's on a shared mount. The wrapper reads
+# the file HERE and hands the key to the setup on its standard input (--api-key-stdin), which keeps it in the container's own
+# key store with the right modes: the key is never in an argument, in a log or in the config. (The same as the Windows wrapper's
+# Convert-SetupKeyFileArgs.) A path that starts with «/» and is not a file of this computer is the container's own and goes
+# through untouched. Sets SETUP_KEY_ARGS (the arguments to pass, «setup» included), SETUP_KEY_VALUE (the key, or empty) and
+# SETUP_KEY_FILE (the file it came from); rc 1 with a sentence (never the key) on stderr when the file cannot be used.
+# Plain shell variables, never exported: the key is not in the environment of any process.
+convert_setup_key_args() {
+  local LC_ALL=C
+  SETUP_KEY_ARGS=("$@")
+  SETUP_KEY_VALUE=""
+  SETUP_KEY_FILE=""
+  local out=() host_file="" have_host=0 value arg found takes_next j has_stdin=0 i=1 n=$#
+  for arg in "$@"; do
+    if [ "$arg" = "--api-key-stdin" ]; then has_stdin=1; fi
+  done
+  while [ "$i" -le "$n" ]; do
+    arg="${!i}"
+    value=""; found=0; takes_next=0
+    case "$arg" in
+      --api-key-file) if [ "$i" -lt "$n" ]; then j=$((i + 1)); value="${!j}"; found=1; takes_next=1; fi ;;
+      --api-key-file=*) value="${arg#--api-key-file=}"; found=1 ;;
+    esac
+    if [ "$found" = 0 ] || { [ "${value#/}" != "$value" ] && [ ! -e "$value" ]; }; then
+      out+=("$arg"); i=$((i + 1)); continue
+    fi
+    if [ "$have_host" = 1 ]; then err "--api-key-file was given twice"; return 1; fi
+    have_host=1; host_file="$value"
+    if [ "$takes_next" = 1 ]; then i=$((i + 1)); fi
+    out+=("--api-key-stdin"); i=$((i + 1))
+  done
+  [ "$have_host" = 1 ] || return 0
+  if [ "$has_stdin" = 1 ]; then err "use --api-key-file or --api-key-stdin, not both"; return 1; fi
+  if [ -L "$host_file" ] || { [ -e "$host_file" ] && [ ! -f "$host_file" ]; }; then
+    err "the file given to --api-key-file must be a regular file, not a folder or a link: $host_file"; return 1
+  fi
+  if [ ! -f "$host_file" ] || [ ! -r "$host_file" ]; then err "the file given to --api-key-file cannot be read: $host_file"; return 1; fi
+  local size
+  size="$(wc -c < "$host_file" | tr -d ' ')"
+  if [ "$size" -lt 1 ] || [ "$size" -gt 4096 ]; then
+    err "the file given to --api-key-file is empty or too big for a key (1 to 4096 bytes): $host_file"; return 1
+  fi
+  # like ssh: a key that others can read is said, not refused
+  if [ -n "$(find "$host_file" -maxdepth 0 \( -perm -040 -o -perm -004 \) -print 2>/dev/null || true)" ]; then
+    warn "the file $host_file can be read by other users: chmod 600 it."
+  fi
+  local line="" shape='^[!-~]+$'
+  IFS= read -r line < "$host_file" || true
+  line="${line#$'\xef\xbb\xbf'}"      # a UTF-8 mark some editors add
+  line="${line%$'\r'}"
+  line="${line#"${line%%[![:space:]]*}"}"
+  line="${line%"${line##*[![:space:]]}"}"
+  if [ "${#line}" -lt 16 ] || [ "${#line}" -gt 512 ] || ! [[ "$line" =~ $shape ]]; then
+    err "the content of the file given to --api-key-file is not one line of 16 to 512 printable characters without spaces: $host_file"
+    return 1
+  fi
+  SETUP_KEY_ARGS=("${out[@]}")
+  SETUP_KEY_VALUE="$line"
+  SETUP_KEY_FILE="$host_file"
+  return 0
+}
+
+# The setup in the container: with a key from a file of this computer it goes on the standard input (-i only: a pipe is not a
+# terminal), otherwise exactly as before. The arguments are the ones the wrapper got («setup» first).
+setup_exec_container() {
+  local rc=0
+  if [ -n "${SETUP_KEY_VALUE:-}" ]; then
+    printf '%s\n' "$SETUP_KEY_VALUE" | docker exec -i -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" ${SETUP_KEY_ARGS[@]+"${SETUP_KEY_ARGS[@]}"} || rc=$?
+    SETUP_KEY_VALUE=""
+    if [ "$rc" -eq 0 ]; then info "The setup keeps the key: you can delete the file on this computer now ($SETUP_KEY_FILE)."; fi
+    return "$rc"
+  fi
+  docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@" || rc=$?
+  return "$rc"
+}
+
 # ── jht status: a sentence for a person, key=value for the app ───────────
 # The app (and the tests) read `name=… status=… started=… image=…` from a pipe; at a terminal the same facts come
 # as a short screen with the next step. JHT_MACHINE_OUTPUT=1 forces the first form, =0 the second.
@@ -6686,6 +6763,8 @@ case "$SUB" in
 
   # ── Setup: host-side preflight (swap, VPS detect) prima del wizard ────
   setup)
+    # --api-key-file of a file on this computer: the key goes to the setup on its standard input (convert_setup_key_args).
+    convert_setup_key_args "$@" || exit 1
     require_compose_file
     require_docker
     # Skip host-setup se utente ha passato --non-interactive (i flag CLI
@@ -6708,8 +6787,8 @@ case "$SUB" in
     jht_load_host_values
     jht_record_host_values
     ensure_up
-    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
-    rc=$?
+    rc=0
+    setup_exec_container "$@" || rc=$?
     if [ "${1:-}" = cloud ] && [ "${2:-}" = pair ] && [ "$rc" -eq 0 ]; then ensure_broker && broker_configure_web_authorisations; fi
     exit "$rc"
     ;;

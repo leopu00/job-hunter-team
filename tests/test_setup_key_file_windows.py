@@ -171,13 +171,6 @@ switch ($Sub) {{
     assert "you can delete the file on this computer" in done.stdout and str(path) in done.stdout
 
 
-def test_the_posix_wrapper_does_not_convert_a_key_file_it_passes_the_arguments_as_they_are():
-    # Linux and macOS: the setup gets the arguments untouched (a path of the container, or a file the container can see);
-    # the translation of a file of the host is the Windows wrapper's own: this change is for Windows.
-    posix = (ROOT / "scripts" / "jht-wrapper.sh").read_text(encoding="utf-8")
-    assert "--api-key-stdin" not in posix and "api-key-file" not in posix
-
-
 def test_the_setup_branch_stops_with_the_reason_before_touching_docker_when_the_file_is_wrong(tmp_path):
     body = f"""$ErrorActionPreference = 'Stop'
 {_function("Convert-SetupKeyFileArgs")}
