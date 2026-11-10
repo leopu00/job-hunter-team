@@ -46,6 +46,8 @@ test('the key file of the person goes to the key store: config has the path, nev
   assert.equal(readFileSync(join(STORE, 'glm.key'), 'utf8'), `${KEY}\n`);
   assert.ok(!readFileSync(CONFIG, 'utf8').includes(KEY));
   assert.ok(!text.includes(KEY));
+  assert.ok(!text.includes(STORE), 'the summary does not name the folder of the store');
+  assert.match(text, /API key kept by the setup/);
   if (posix) {
     assert.equal(statSync(STORE).mode & 0o777, 0o700);
     assert.equal(statSync(join(STORE, 'glm.key')).mode & 0o777, 0o600);
@@ -85,6 +87,16 @@ test('a new key replaces the old one whole and leaves no temporary file', async 
   assert.equal(second.code, 0, second.text);
   assert.equal(readFileSync(join(STORE, 'glm.key'), 'utf8'), `${next}\n`);
   assert.deepEqual(readdirSync(STORE), ['glm.key']);
+});
+
+test('a temporary file left by a setup that was killed is removed by the next setup of that provider, and only that one', async () => {
+  clean();
+  mkdirSync(STORE, { recursive: true, mode: 0o700 });
+  writeFileSync(join(STORE, '.glm.key.4242.tmp'), `${KEY}\n`);
+  writeFileSync(join(STORE, '.kimi.key.4242.tmp'), `${KEY}\n`);
+  const { code, text } = await setup({ apiKeyFile: keyFile('given.txt'), skipHealth: true });
+  assert.equal(code, 0, text);
+  assert.deepEqual(readdirSync(STORE).sort(), ['.kimi.key.4242.tmp', 'glm.key']);
 });
 
 test('what cannot be a key is said and nothing is stored: a terminal, an empty pipe, a big one, spaces, two sources', async () => {

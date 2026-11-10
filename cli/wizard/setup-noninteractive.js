@@ -111,6 +111,7 @@ export async function runNonInteractiveSetup(opts) {
   // --- Assembla API key (SecretRef) o subscription ---
   let apiKeySecret;
   let pendingKey = null; // the key of a glm/kimi setup, in memory until the provider has accepted it
+  let keptByTheSetup = false; // ... and, once stored, the summary says so instead of naming the folder
   let subscriptionConfig;
   if (authMethod === 'api_key') {
     if (secretMode === 'env') {
@@ -220,6 +221,7 @@ export async function runNonInteractiveSetup(opts) {
   if (pendingKey !== null) {
     try {
       apiKeySecret = formatSecretForConfig('file', storeApiKey(providerName, pendingKey));
+      keptByTheSetup = true;
     } catch (err) {
       console.error(pc.red(`Nothing was saved: ${err.message}.`));
       process.exitCode = 1;
@@ -229,7 +231,7 @@ export async function runNonInteractiveSetup(opts) {
     }
   }
 
-  saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, model, apiKeySecret, subscriptionConfig, harness });
+  saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, model, apiKeySecret, subscriptionConfig, harness, keptByTheSetup });
 }
 
 /** The key from the standard input, or null (and the reason said, exit code 1) when none came or it is too big for a key. */
@@ -279,7 +281,7 @@ function readApiKeyFile(file) {
   return key;
 }
 
-function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, model, apiKeySecret, subscriptionConfig, harness }) {
+function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, model, apiKeySecret, subscriptionConfig, harness, keptByTheSetup = false }) {
   // --- Assembla e salva config ---
   const providerConfig = { name: providerName, auth_method: authMethod, model };
   if (apiKeySecret) {
@@ -311,7 +313,7 @@ function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, 
   console.log(`  Provider:   ${selectedProvider.label}`);
   if (harness === 'pi') console.log('  Harness:    Pi');
   if (authMethod === 'api_key') {
-    console.log(`  Auth:       ${describeSecret(apiKeySecret)}`);
+    console.log(`  Auth:       ${keptByTheSetup ? 'API key kept by the setup (not in the config)' : describeSecret(apiKeySecret)}`);
   } else {
     console.log(`  Auth:       subscription (${subscriptionConfig.email}${subscriptionConfig.session_token ? ' · token preset' : ''})`);
   }

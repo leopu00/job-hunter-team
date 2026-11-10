@@ -3696,10 +3696,10 @@ function Invoke-RuntimeUpgrade {
 # (--api-key-stdin), which keeps it in the container's own key store with the right modes: the key is never in an argument,
 # in a log or in the config. A path that starts with «/» and is not a file of this computer is the container's own and goes
 # through untouched.
-# Returns @{ Args = the arguments to pass; Key = the key or $null; Error = a sentence (never the key) or $null }.
+# Returns @{ Args = the arguments to pass; Key = the key or $null; File = the host file it came from; Error = a sentence (never the key) or $null }.
 function Convert-SetupKeyFileArgs {
   param([string[]]$SetupArgs)
-  $plan = @{ Args = @($SetupArgs); Key = $null; Error = $null }
+  $plan = @{ Args = @($SetupArgs); Key = $null; Error = $null; File = $null }
   $out = New-Object 'System.Collections.Generic.List[string]'
   $hostFile = $null
   for ($i = 0; $i -lt $SetupArgs.Count; $i++) {
@@ -3731,6 +3731,7 @@ function Convert-SetupKeyFileArgs {
   if ($line -cnotmatch '^[\x21-\x7E]{16,512}$') { $plan.Error = "the content of the file given to --api-key-file is not one line of 16 to 512 printable characters without spaces: $hostFile"; return $plan }
   $plan.Args = $out.ToArray()
   $plan.Key = $line
+  $plan.File = $item.FullName
   return $plan
 }
 
@@ -4054,6 +4055,7 @@ switch ($Sub) {
         $OutputEncoding = New-Object System.Text.ASCIIEncoding
         [string[]]$setupArgs = $keyPlan.Args
         $keyPlan.Key | & docker exec -i -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry 'setup' @setupArgs
+        if ($LASTEXITCODE -eq 0) { Write-Host "The setup keeps the key: you can delete the file on this computer now ($($keyPlan.File))." }
       } finally {
         $OutputEncoding = $savedEncoding
         $keyPlan.Key = $null

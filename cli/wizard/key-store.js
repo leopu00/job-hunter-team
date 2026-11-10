@@ -8,7 +8,7 @@
  * The config holds only the path (`api_key_ref`), never the key, and api_key_file.py accepts exactly that folder
  * (KEY_STORE there: keep the two paths together).
  */
-import { chmodSync, closeSync, fsyncSync, lstatSync, mkdirSync, openSync, renameSync, rmSync, writeSync } from 'node:fs';
+import { chmodSync, closeSync, fsyncSync, lstatSync, mkdirSync, openSync, readdirSync, renameSync, rmSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 
 /** The most a file holding one API key can weigh (the launcher's limit). */
@@ -57,6 +57,13 @@ export function storeApiKey(provider, key, { dir = keyStoreDir() } = {}) {
   if (info.isSymbolicLink() || !info.isDirectory()) throw new Error(`the key store ${dir} is not a folder`);
   if (typeof process.getuid === 'function' && info.uid !== process.getuid()) throw new Error(`the key store ${dir} belongs to another user`);
   chmodSync(dir, 0o700);
+
+  // A setup killed between the write and the rename (kill -9, power cut) leaves `.<provider>.key.<pid>.tmp` with a key in it:
+  // the next setup of the provider takes it away first.
+  const stale = new RegExp(`^\\.${provider}\\.key\\.\\d+\\.tmp$`);
+  for (const name of readdirSync(dir)) {
+    if (stale.test(name)) { try { rmSync(join(dir, name), { force: true }); } catch { /* the write below says if the folder is not usable */ } }
+  }
 
   const target = join(dir, `${provider}.key`);
   const temp = join(dir, `.${provider}.key.${process.pid}.tmp`);
