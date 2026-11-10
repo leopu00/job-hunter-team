@@ -112,6 +112,18 @@ case "$1" in
         drop "$kind" "$3" ;;
       *) exit 97 ;;
     esac ;;
+  image)
+    # Images: one "<id> <repository>" per line in $FAKE_STATE/images. `image rm` is by ID, never forced, and an ID listed in
+    # $FAKE_STATE/image-refuses is refused as an engine does with an image another container uses.
+    case "$2" in
+      ls) [ "$3:$4:$5" = "--no-trunc:--format:{{.ID}} {{.Repository}}" ] || exit 101
+          [ ! -f "$FAKE_STATE/images" ] || cat "$FAKE_STATE/images" ;;
+      rm) [ $# -eq 3 ] || exit 102
+          if [ -f "$FAKE_STATE/image-refuses" ] && grep -qx "$3" "$FAKE_STATE/image-refuses"; then exit 1; fi
+          grep -v "^$3 " "$FAKE_STATE/images" > "$FAKE_STATE/images.new" || true
+          mv "$FAKE_STATE/images.new" "$FAKE_STATE/images" ;;
+      *) exit 97 ;;
+    esac ;;
   run)
     # The one-shot container `jht uninstall --confirm --purge` empties a data folder with: it runs as the folder's
     # owner (1001), keeps no capability, has no network, a read-only root and ONLY that folder mounted.
@@ -182,6 +194,9 @@ class Box:
 
     def machines(self, *names: str) -> None:
         (self.state / "machines").write_text("".join(f"{name}\n" for name in names), encoding="utf-8")
+
+    def images(self, *rows: str) -> None:
+        (self.state / "images").write_text("".join(f"{row}\n" for row in rows), encoding="utf-8")
 
     def objects(self, *rows: str) -> None:
         (self.state / "objects").write_text("".join(f"{row}\n" for row in rows), encoding="utf-8")
@@ -332,6 +347,88 @@ def test_docker_runtime_removes_the_jht_project_with_its_volumes(tmp_path: Path,
     assert not any(call.startswith("podman machine rm") for call in box.calls())
     assert not box.runtime.exists() and not box.wrapper.exists()
     assert_user_data_kept(box)
+
+
+CORE_ID, FULL_ID, OLD_ID = "c0" * 32, "f0" * 32, "01" * 32
+JHT_IMAGES = (
+    f"{CORE_ID} ghcr.io/leopu00/jht", f"{FULL_ID} ghcr.io/leopu00/jht", f"{OLD_ID} ghcr.io/leopu00/jht",
+)
+NOT_OURS = ("a1" * 32 + " postgres", "a2" * 32 + " ghcr.io/leopu00/jht-other")
+
+
+def images_removed(box: Box) -> list[str]:
+    return [call.rsplit(" ", 1)[1] for call in box.calls() if call.startswith("docker image rm ")]
+
+
+def test_docker_runtime_removes_the_core_and_the_full_image_with_the_old_ones_and_says_so(tmp_path: Path) -> None:
+    box = Box(tmp_path, "Linux")
+    box.select("docker")
+    box.images(*JHT_IMAGES, *NOT_OURS)
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert phases(result) == [
+        "JHT_PHASE uninstall_machine", "JHT_PHASE uninstall_images", "JHT_PHASE uninstall_runtime", "JHT_PHASE uninstall_commands",
+    ]
+    assert sorted(images_removed(box)) == sorted([CORE_ID, FULL_ID, OLD_ID])
+    # only the JHT images went: another program's image and another repository of the same owner stay
+    assert box.remaining("images").splitlines() == list(NOT_OURS)
+    assert "Tolte 3 immagini di JHT: il nucleo, quella piena e le vecchie." in result.stderr + result.stdout
+    # by ID, never forced, never a bulk cleanup
+    assert not any(" -f" in call or "prune" in call or "rmi" in call for call in box.calls() if call.startswith("docker image"))
+    assert_user_data_kept(box)
+
+
+def test_an_image_that_also_has_a_name_that_is_not_jhts_is_kept(tmp_path: Path) -> None:
+    box = Box(tmp_path, "Linux")
+    box.select("docker")
+    box.images(f"{CORE_ID} ghcr.io/leopu00/jht", f"{CORE_ID} example.invalid/mine", f"{FULL_ID} ghcr.io/leopu00/jht")
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert images_removed(box) == [FULL_ID]
+
+
+def test_an_image_the_engine_refuses_is_a_leftover_and_the_rerun_finishes(tmp_path: Path) -> None:
+    box = Box(tmp_path, "Linux")
+    box.select("docker")
+    box.images(*JHT_IMAGES)
+    (box.state / "image-refuses").write_text(FULL_ID + "\n", encoding="utf-8")
+
+    first = box.run("uninstall", "--confirm")
+
+    assert first.returncode == 24, first.stdout + first.stderr
+    assert phases(first) == ["JHT_PHASE uninstall_machine", "JHT_PHASE uninstall_images", "JHT_LEFT images"]
+    assert "Non tolte alcune immagini di JHT" in first.stderr
+    assert box.remaining("images").splitlines() == [f"{FULL_ID} ghcr.io/leopu00/jht"]
+    assert box.runtime.exists() and box.wrapper.exists(), "the command to run it again is still there"
+
+    (box.state / "image-refuses").unlink()
+    second = box.run("uninstall", "--confirm")
+    assert second.returncode == 0, second.stdout + second.stderr
+    assert box.remaining("images") == ""
+    assert not box.runtime.exists() and not box.wrapper.exists()
+
+
+def test_no_jht_image_means_no_phase_and_no_sentence(tmp_path: Path) -> None:
+    box = Box(tmp_path, "Linux")
+    box.select("docker")
+    box.images(*NOT_OURS)
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "uninstall_images" not in result.stdout and "Tolte" not in result.stderr + result.stdout
+    assert images_removed(box) == []
+
+
+def test_the_images_go_after_the_data_because_the_purge_container_needs_the_image_that_is_here() -> None:
+    body = re.search(r"^jht_uninstall\(\) \{\n.*?^\}\n", SOURCE, re.S | re.M).group(0)
+    assert body.index("uninstall_remove_data") < body.index("uninstall_images") < body.index("uninstall_phase uninstall_runtime")
+    # and it is said in the English text too
+    assert "the core and the full one" in SOURCE.split("jht_text_it()")[0]
 
 
 def test_the_cleanup_names_match_the_compose_file() -> None:
