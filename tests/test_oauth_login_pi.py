@@ -43,7 +43,7 @@ def _pinned() -> str:
     ).stdout
 
 
-def _fakes(tmp_path: Path, *, logs_in: bool = True) -> dict[str, str]:
+def _fakes(tmp_path: Path, *, logs_in: bool = True, login: str = '{"openai":{"type":"oauth"}}') -> dict[str, str]:
     """A `pi` and a `codex` on the PATH that only record how they were called; pi saves a login when asked."""
     bindir = tmp_path / "bin"
     bindir.mkdir()
@@ -52,7 +52,7 @@ def _fakes(tmp_path: Path, *, logs_in: bool = True) -> dict[str, str]:
         "#!/usr/bin/env bash\n"
         f'if [ "$1" = "--version" ]; then echo {_pinned()}; exit 0; fi\n'
         f'echo "pi $* | dir=$PI_CODING_AGENT_DIR skipcheck=$PI_SKIP_VERSION_CHECK telemetry=$PI_TELEMETRY" >> "{calls}"\n'
-        + ('mkdir -p "$PI_CODING_AGENT_DIR"; echo "{}" > "$PI_CODING_AGENT_DIR/auth.json"\n' if logs_in else ""),
+        + (f'mkdir -p "$PI_CODING_AGENT_DIR"; echo \'{login}\' > "$PI_CODING_AGENT_DIR/auth.json"\n' if logs_in else ""),
         encoding="utf-8",
     )
     (bindir / "codex").write_text(f'#!/usr/bin/env bash\necho "codex $*" >> "{calls}"\n', encoding="utf-8")
@@ -124,6 +124,28 @@ def test_with_the_pi_harness_the_login_is_the_one_of_pi_and_not_codex(tmp_path: 
     assert not any(line.startswith("codex") for line in calls)
     assert "/login" in done.stdout and "Pi login found" in done.stdout
     assert (tmp_path / "home" / ".pi" / "agent" / "auth.json").is_file()
+
+
+def test_the_person_is_told_what_to_do_in_pi_before_it_opens_and_what_was_found_after(tmp_path: Path) -> None:
+    env = _fakes(tmp_path)
+    _config(env, {"active_provider": "openai", "harness": "pi"})
+    done = _run(env, terminal=True)
+    assert done.returncode == 0, done.stderr
+    before = done.stdout.split("Pi login found")[0]
+    for words in ("type /login and choose ChatGPT (OpenAI)", "not Anthropic", "leave Pi with Ctrl+C (or type /quit)",
+                  "This operation was aborted", "--auth-method api_key"):
+        assert words in before, words
+    assert "Pi login found: openai (" in done.stdout
+
+
+def test_a_login_with_only_anthropic_is_not_found_and_says_what_it_holds(tmp_path: Path) -> None:
+    env = _fakes(tmp_path, login='{"anthropic":{"type":"oauth","access":"synthetic"}}')
+    _config(env, {"active_provider": "openai", "harness": "pi"})
+    done = _run(env, terminal=True)
+    assert done.returncode == 1
+    assert "Pi login found" not in done.stdout
+    assert "sign-in of: anthropic" in done.stderr and "billed by Anthropic per token" in done.stderr
+    assert "synthetic" not in done.stdout + done.stderr
 
 
 def test_the_login_arguments_are_the_ones_of_the_wizard() -> None:

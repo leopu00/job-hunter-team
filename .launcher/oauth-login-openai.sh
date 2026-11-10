@@ -12,7 +12,7 @@
 # identità, skill, estensioni o MCP intorno.
 JHT_PI_LOGIN_ARGS="-nc -na -ns -ne --no-mcp"
 
-# jht_oauth_login_pi → il login di Pi nel terminale di chi chiama; 0 se alla fine c'è il login (jht_pi_login_present).
+# jht_oauth_login_pi → il login di Pi nel terminale di chi chiama; 0 se alla fine c'è il login del provider del setup (jht_pi_login_check).
 jht_oauth_login_pi() {
   if ! { [ -t 0 ] && [ -t 1 ]; }; then
     echo "Error: the sign-in of pi needs a terminal (pi has /login only in its screen). Run in a terminal: jht oauth-login" >&2
@@ -21,13 +21,19 @@ jht_oauth_login_pi() {
   jht_pi_version_check || return 1
   mkdir -p "$(jht_pi_agent_dir)" || return 1
   chmod 700 "$(jht_pi_agent_dir)" 2>/dev/null || true
-  echo "Pi opens below: type /login, choose ChatGPT, open the URL in your browser and finish the sign-in, then type /quit."
+  echo "Pi opens below. What to do in it:"
+  echo "  1. type /login and choose ChatGPT (OpenAI): not Anthropic, the team on Pi runs on OpenAI, and a Claude subscription used from Pi is billed per token"
+  echo "  2. open the URL it shows in your browser and finish the sign-in"
+  echo "  3. leave Pi with Ctrl+C (or type /quit): the sign-in is checked here and the setup goes on"
+  echo "Behind a company proxy the sign-in can fail with \"This operation was aborted\": run jht oauth-login from a network without it, or give an OpenAI API key instead: jht setup --non-interactive --provider openai --harness pi --auth-method api_key --secret-mode file."
   # shellcheck disable=SC2086  # gli argomenti fissi sono parole separate
   PI_CODING_AGENT_DIR="$(jht_pi_agent_dir)" PI_SKIP_VERSION_CHECK=1 PI_TELEMETRY=0 "$(jht_pi_bin)" $JHT_PI_LOGIN_ARGS || true
-  if jht_pi_login_present; then
-    echo "Pi login found: $(jht_pi_agent_dir)/auth.json"
+  # What counts is the login of the provider of the setup, not a file that is there: jht_pi_login_check says what is wrong.
+  if jht_pi_login_check "${JHT_HOME:-/jht_home}/jht.config.json"; then
+    echo "Pi login found: ${JHT_PI_LOGIN_FOUND:-the provider of the setup} ($(jht_pi_agent_dir)/auth.json)"
     return 0
   fi
+  if jht_pi_login_present; then return 1; fi
   echo "Error: no pi login was saved ($(jht_pi_agent_dir)/auth.json is missing, empty or not yours). Run again: jht oauth-login" >&2
   return 1
 }
