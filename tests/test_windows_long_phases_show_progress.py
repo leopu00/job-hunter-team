@@ -28,7 +28,7 @@ PODMAN_CASES = """  "machine init "*)
     sleep 3
     echo 'Looking up Podman Machine image at quay.io/podman/machine-os:6.0 to create VM'
     echo 'Getting image source signatures' >&2
-    echo 'Copying blob sha256:e22b4f68624b81bba6f7f4c9c6ed6265ccacd7a4247765c7c5bd157230a5b7ec' >&2
+    echo 'Copying blob sha256:dddddddddddd4444' >&2
     echo 'your 131072x1 screen size is bogus. expect trouble' >&2
     [ "$FAKE_EXIT" = 0 ] || { echo 'Error: machine init failed' >&2; exit "$FAKE_EXIT"; }
     echo 'Machine init complete' ;;
