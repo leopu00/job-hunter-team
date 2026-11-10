@@ -414,7 +414,7 @@ header() {
 # Different step counts depending on the path
 TOTAL_STEPS_DOCKER=4
 # Host scripts of the runtime, besides the wrapper and host-setup.sh (same list as RUNTIME_HELPERS in jht-wrapper.sh).
-RUNTIME_HELPERS="jht-integration.sh"
+RUNTIME_HELPERS="jht-integration.sh jht-tools.sh"
 TOTAL_STEPS_NATIVE=7
 
 # ── OS Detection ──────────────────────────────────────────────────────────

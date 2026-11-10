@@ -2,7 +2,8 @@
 # jht-tools.sh — the tools of the full image, pulled in the background after the install (P4).
 #
 # A LIBRARY, not a program: the host wrapper loads it with `source` after checking its sha256 against the runtime manifest
-# (RUNTIME_HELPERS) and calls tools_main from its `tools)` arm. It uses what the wrapper has: RUNTIME_DIR, RUNTIME_TIER_FILE,
+# (RUNTIME_HELPERS) and calls tools_main from its `tools)` arm.
+# It uses what the wrapper has: RUNTIME_DIR, RUNTIME_TIER_FILE,
 # RUNTIME_MANIFEST, DEFAULT_RUNTIME_IMAGE (the full image), CORE_IMAGE_DIGEST, runtime_write_manifest, WRAPPER_PATH, err.
 #
 #   jht tools status --json   one line: {"ok":true,"state":"none|pending|pulling|ready|failed","tier":"core|full","reason":"<code>"}
@@ -12,6 +13,7 @@
 #
 # The state comes from the engine and from the host files of the runtime, never from a file the container can write. The file
 # $JHT_HOME/state/tools.json is a NOTICE for the container (the Capitano reads it): nothing here reads it back.
+# JHT_RUNTIME_HELPER=1
 
 TOOLS_STATE_DIR="${JHT_HOME_HOST:-$HOME/.jht}/state"
 TOOLS_LOCK="$RUNTIME_DIR/.tools-pull.lock"

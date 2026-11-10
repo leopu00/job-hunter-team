@@ -534,7 +534,7 @@ runtime_manifest_value() {
 # loaded with `source` only while the file still matches its line there. A runtime that has none yet (installed before them)
 # gets it from the release origin when the person runs `add` or `remove` (never from a read-only command), and at the end of
 # every upgrade.
-RUNTIME_HELPERS="jht-integration.sh"
+RUNTIME_HELPERS="jht-integration.sh jht-tools.sh"
 RUNTIME_HELPERS_MANIFEST="$RUNTIME_DIR/.runtime-helpers"
 
 runtime_helper_digest() {
@@ -581,12 +581,12 @@ runtime_helpers_install() {
   runtime_helpers_write_manifest
 }
 
-# $2 is the command of the person: only `add` and `remove` fetch a helper that is missing.
+# $2 is the command of the person: only `add`, `remove` and `pull` (of the tools) fetch a helper that is missing.
 runtime_helper_load() {
   local helper="$1"
   if [ -z "$(runtime_helper_digest "$helper")" ]; then
     case "${2:-}" in
-      add|remove) runtime_helpers_install || { err "script $helper non scaricabile: controlla la rete o fai 'jht upgrade'"; return 1; } ;;
+      add|remove|pull) runtime_helpers_install || { err "script $helper non scaricabile: controlla la rete o fai 'jht upgrade'"; return 1; } ;;
       *) err "script $helper non ancora installato: 'jht upgrade' (o un 'jht integration add/remove') e riprova"; return 1 ;;
     esac
   fi
@@ -3699,7 +3699,7 @@ serve_help_without_docker() {
 # falso errore; il loro aiuto resta quindi quello locale anche in quel caso.
 host_command_uses_local_help() {
   case "$1" in
-    up|start-container|down|stop-container|restart|recreate|upgrade|clean-images|logs|status|shell|oauth-login|claude-login|setup|download|podman-machine-recreate|mail|telegram|integration|reset|migrate-runtime)
+    up|start-container|down|stop-container|restart|recreate|upgrade|clean-images|logs|status|shell|oauth-login|claude-login|setup|download|podman-machine-recreate|mail|telegram|integration|tools|reset|migrate-runtime)
       return 0
       ;;
   esac
@@ -6197,6 +6197,13 @@ case "$SUB" in
     require_compose_file
     runtime_helper_load jht-integration.sh "${2:-}" || exit 1
     integration_main "${@:2}"
+    exit $?
+    ;;
+
+  tools)
+    require_compose_file
+    runtime_helper_load jht-tools.sh "${2:-}" || exit 1
+    tools_main "${@:2}"
     exit $?
     ;;
 

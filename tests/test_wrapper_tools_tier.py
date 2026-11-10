@@ -243,3 +243,17 @@ def test_switch_does_not_follow_a_ready_flag_that_is_a_link(box):
 def test_an_unknown_subcommand_is_a_usage_error(box):
     done = box.run("tools_main unknown")
     assert done.returncode == 2 and "uso:" in done.stderr
+
+
+# ── the wiring: `jht tools` is a host helper like `jht integration` ──────────────────────────────────────────────────────────
+
+def test_jht_tools_is_a_host_helper_loaded_after_its_digest_and_with_a_local_help():
+    wrapper = WRAPPER.read_text(encoding="utf-8")
+    assert re.search(r'^RUNTIME_HELPERS="[^"]*\bjht-tools\.sh\b[^"]*"', wrapper, re.M)
+    assert re.search(r'^  tools\)\n    require_compose_file\n    runtime_helper_load jht-tools\.sh "\$\{2:-\}" \|\| exit 1\n    tools_main "\$\{@:2\}"\n    exit \$\?\n', wrapper, re.M)
+    assert re.search(r"\|integration\|tools\|", wrapper), "its --help is the local one: no engine started by it"
+    assert TOOLS.read_text(encoding="utf-8").count("\n# JHT_RUNTIME_HELPER=1\n") == 1, "the marker the installer's download checks, on a line of its own"
+    # only `pull` of the tools may fetch a helper that is missing, as `add` and `remove` do: `status` and `switch` never download
+    assert "add|remove|pull) runtime_helpers_install" in wrapper
+    installer = (ROOT / "scripts" / "install.sh").read_text(encoding="utf-8")
+    assert re.search(r'^RUNTIME_HELPERS="[^"]*\bjht-tools\.sh\b[^"]*"', installer, re.M)
