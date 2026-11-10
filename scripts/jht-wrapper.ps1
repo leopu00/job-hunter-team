@@ -1323,10 +1323,35 @@ function Invoke-BrokerNetwork {
   return $true
 }
 
+# What stands under the broker's name: 'running' | 'stopped' (a container of this project and service that is not running) | 'absent' |
+# 'foreign' (a container of that name that is not this project's broker, or more than one, or one that cannot be read: not touched,
+# neither adopted nor replaced). The same three-way answer as the POSIX wrapper (attested / absent / present and not attestable).
+function Get-BrokerContainerState {
+  $expectedProject = Get-ComposeProjectName
+  if (-not $expectedProject) { return 'foreign' }
+  $ids = @(& { $ErrorActionPreference = 'Continue'; & docker ps -aq --filter "name=^$BrokerContainer$" 2>$null } | ForEach-Object { "$($_)".Trim() } | Where-Object { $_ })
+  if ($ids.Count -eq 0) { return 'absent' }
+  if ($ids.Count -ne 1 -or $ids[0] -notmatch '^[0-9a-fA-F]{12,64}$') { return 'foreign' }
+  $detailLines = @(& { $ErrorActionPreference = 'Continue'; & docker inspect --type container $ids[0] --format '{{.State.Running}}|{{json .Config.Labels}}' 2>$null })
+  $details = if ($detailLines.Count) { [string]$detailLines[0] } else { '' }
+  $cut = if ($details) { $details.IndexOf('|') } else { -1 }
+  if ($cut -lt 0) { return 'foreign' }
+  $labelsJson = $details.Substring($cut + 1)
+  if ((Get-ComposeLabel $labelsJson 'com.docker.compose.project') -ne $expectedProject) { return 'foreign' }
+  if ((Get-ComposeLabel $labelsJson 'com.docker.compose.service') -ne $BrokerContainer) { return 'foreign' }
+  if ($details.Substring(0, $cut).Trim() -eq 'true') { return 'running' }
+  return 'stopped'
+}
+
 # 0 when the broker runs and answers.
 function Ensure-Broker {
   param([switch]$Quiet)
   if (Get-RunningComposeServiceId $BrokerContainer) { return 0 }
+  $brokerState = Get-BrokerContainerState
+  if ($brokerState -eq 'foreign') {
+    Write-Err 'broker_unavailable: il broker dei segreti esiste ma non e'' attestabile come nostro: non lo tocco.'
+    return 1
+  }
   if ((Get-Content -LiteralPath $ComposeFile -Raw) -notmatch "(?m)^  $([regex]::Escape($BrokerContainer)):") {
     Write-Err 'broker_unavailable: il runtime installato e'' piu'' vecchio e non ha il broker dei segreti.'
     Write-Err 'Cosa fare: jht upgrade'
@@ -1354,12 +1379,17 @@ function Ensure-Broker {
 
 # After `up`: a broker made before comes back with the team (`down` removes its container); one that an older install made is adopted.
 function Resume-Broker {
+  $brokerState = Get-BrokerContainerState
+  if ($brokerState -eq 'foreign') {
+    # a container of that name that is not this project's broker is neither adopted nor started over
+    if (Test-Path -LiteralPath $BrokerMadeMarker) { Write-Warn "broker_restart_failed: il broker dei segreti non e' attestabile come nostro: non lo tocco. Cosa fare: jht mail status" }
+    return
+  }
   if (-not (Test-Path -LiteralPath $BrokerMadeMarker)) {
-    $existing = @(& { $ErrorActionPreference = 'Continue'; & docker ps -aq --filter "name=^$BrokerContainer$" 2>$null })
-    if (-not ($existing | Where-Object { $_ })) { return }
+    if ($brokerState -eq 'absent') { return }
     New-Item -ItemType File -Path $BrokerMadeMarker -Force -ErrorAction SilentlyContinue | Out-Null
   }
-  if (-not (Get-RunningComposeServiceId $BrokerContainer)) {
+  if ($brokerState -ne 'running') {
     Invoke-Compose '--profile' 'broker' 'up' '-d' '--no-deps' $BrokerContainer | Out-Host
     if ($LASTEXITCODE -ne 0) { Write-Warn "broker_restart_failed: il servizio della posta non e' ripartito. Cosa fare: jht mail status" }
   }

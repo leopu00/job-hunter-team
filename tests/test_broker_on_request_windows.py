@@ -30,7 +30,7 @@ $ErrorActionPreference = 'Stop'
 $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($env:JHT_UNDER_TEST, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw "parse: $($errors[0])" }
-foreach ($name in 'Write-EnsureLine', 'Invoke-BrokerNetwork', 'Ensure-Broker', 'Resume-Broker') {
+foreach ($name in 'Write-EnsureLine', 'Invoke-BrokerNetwork', 'Get-ComposeLabel', 'Get-BrokerContainerState', 'Ensure-Broker', 'Resume-Broker') {
   $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name }, $true)
   if (-not $fn) { throw "$name missing" }
   Invoke-Expression $fn.Extent.Text
@@ -48,6 +48,7 @@ $PodmanMachineBridgePath = Join-Path $RuntimeDir 'podman-machine-bridge.ps1'
 $env:CONTAINER_CONNECTION = 'jht-podman'
 $script:Declared = @(); if ($env:T_DECLARED -eq '1') { $script:Declared = @('configure-podman-windows-network.ps1', 'wsl-interop-connect-proxy.py') }
 function Get-RunningComposeServiceId { param([string]$Service) if ((Get-Content -LiteralPath $env:T_STATE) -eq 'running') { return 'aaaaaaaaaaaa' }; return $null }
+function Get-ComposeProjectName { return 'jht' }
 function Test-RuntimeHelperDeclared { param([string]$Name) return ($script:Declared -contains $Name) }
 function Test-RuntimeHelpersTrusted { return ($env:T_UNTRUSTED -ne '1') }
 function Install-RuntimeHelpers {
@@ -64,7 +65,13 @@ function Invoke-Compose {
 }
 function docker {
   Add-Content -LiteralPath $env:T_LOG -Value ('DOCKER ' + ($args -join ' '))
-  if ($args[0] -eq 'ps') { if ($env:T_EXISTS -eq '1') { 'bbbbbbbbbbbb' }; $global:LASTEXITCODE = 0; return }
+  if ($args[0] -eq 'ps') { if ($env:T_EXISTS -ge '1') { 'bbbbbbbbbbbb' }; if ($env:T_EXISTS -eq '2') { 'cccccccccccc' }; $global:LASTEXITCODE = 0; return }
+  if ($args[0] -eq 'inspect') {
+    $run = if ((Get-Content -LiteralPath $env:T_STATE) -eq 'running') { 'true' } else { 'false' }
+    $project = if ($env:T_FOREIGN -eq '1') { 'another' } else { 'jht' }
+    $run + '|{"com.docker.compose.project":"' + $project + '","com.docker.compose.service":"jht-broker"}'
+    $global:LASTEXITCODE = 0; return
+  }
   $global:LASTEXITCODE = [int]$env:T_ADMIN_RC
 }
 function Invoke-BrokerMigrateLegacyOnce { Add-Content -LiteralPath $env:T_LOG -Value 'MIGRATE'; return 0 }
@@ -76,7 +83,7 @@ $result = & ([scriptblock]::Create($env:T_BODY))
 
 
 def _run(tmp_path: Path, body: str, *, state="absent", kind="podman", declared=True, net_rc="0", up_rc="0", exists=False,
-         marker=False, install_fails=False, never_ready=False, admin_rc="0", untrusted=False):
+         marker=False, install_fails=False, never_ready=False, admin_rc="0", untrusted=False, foreign=False, count=None):
     tmp_path.mkdir(parents=True, exist_ok=True)
     runtime = tmp_path / "runtime"
     runtime.mkdir(exist_ok=True)
@@ -98,7 +105,7 @@ def _run(tmp_path: Path, body: str, *, state="absent", kind="podman", declared=T
         **(windows_env(tmp_path) if WINDOWS else os.environ),
         "JHT_UNDER_TEST": str(WRAPPER), "T_RUNTIME": str(runtime), "T_STATE": str(state_file), "T_LOG": str(log), "T_BODY": body,
         "T_RUNTIME_KIND": kind, "T_DECLARED": "1" if declared else "0", "T_NET_RC": net_rc, "T_UP_RC": up_rc,
-        "T_EXISTS": "1" if exists else "0", "T_INSTALL_FAILS": "1" if install_fails else "0", "T_NEVER_READY": "1" if never_ready else "0",
+        "T_EXISTS": str(count) if count is not None else ("1" if exists else "0"), "T_FOREIGN": "1" if foreign else "0", "T_INSTALL_FAILS": "1" if install_fails else "0", "T_NEVER_READY": "1" if never_ready else "0",
         "T_ADMIN_RC": admin_rc, "T_UNTRUSTED": "1" if untrusted else "0",
     }
     done = subprocess.run([*powershell_argv(), "-File", str(harness)], env=env, capture_output=True, text=True, timeout=180)
@@ -197,6 +204,31 @@ def test_up_brings_back_a_broker_made_before_and_adopts_one_an_older_install_mad
     assert not any(c.startswith("COMPOSE") for c in calls)  # it runs already: nothing is remade
 
 
+@needs_powershell
+def test_up_starts_a_stopped_broker_of_ours_it_finds_by_name_but_never_a_foreign_one(tmp_path):
+    # present, ours (project and service labels), not running: adopted and started
+    values, calls = _run(tmp_path / "stopped", "Resume-Broker; 'done'", state="absent", exists=True)
+    assert values["MARKER"] == "True"
+    assert [c for c in calls if c.startswith("COMPOSE")] == ["COMPOSE --profile broker up -d --no-deps jht-broker"]
+    # a container of that name that is another project's (or two of them): not adopted, not touched, no marker
+    for label, kwargs in (("foreign", {"exists": True, "foreign": True}), ("two", {"count": 2})):
+        values, calls = _run(tmp_path / label, "Resume-Broker; 'done'", state="running", **kwargs)
+        assert values["MARKER"] == "False", label
+        assert not any(c.startswith(("COMPOSE", "MIGRATE", "CONFIGURE")) for c in calls), label
+    # even with the marker (a broker made before) a foreign one is not started over
+    values, calls = _run(tmp_path / "marked", "Resume-Broker; 'done'", state="absent", exists=True, foreign=True, marker=True)
+    assert not any(c.startswith(("COMPOSE", "MIGRATE")) for c in calls)
+    assert any("broker_restart_failed" in c and "non lo tocco" in c for c in calls)
+
+
+@needs_powershell
+def test_a_broker_that_is_not_ours_is_not_made_over_by_ensure(tmp_path):
+    values, calls = _run(tmp_path, "Ensure-Broker -Quiet", state="absent", exists=True, foreign=True)
+    assert values["RESULT"] == "1" and values["MARKER"] == "False"
+    assert not any(c.startswith(("NETWORK", "COMPOSE", "INSTALL-HELPERS")) for c in calls)
+    assert any("broker_unavailable" in c and "non lo tocco" in c for c in calls)
+
+
 # ── what the wrapper does around them (source) ───────────────────────────────
 
 def _wrapper() -> str:
@@ -228,3 +260,14 @@ def test_every_whole_project_command_names_the_broker_profile_and_the_first_uses
     assert "$brokerCode = Ensure-Broker" in text  # Telegram's start
     assert "if ((Ensure-Broker) -eq 0) { Initialize-BrokerWebAuthorisations }" in text  # the link of the site
     assert "(Ensure-Broker -Quiet 6>$null) -eq 0" in text  # the first click of a person, quiet for the app
+
+
+def test_the_enabler_publishes_and_declares_all_four_helpers_so_a_fresh_install_is_not_fetched_from_the_branch_tip():
+    enabler = (ROOT / "scripts" / "enable-podman-windows-runtime.ps1").read_text(encoding="utf-8")
+    for name in ("jht-integration.ps1", "jht-tools.ps1", "configure-podman-windows-network.ps1", "wsl-interop-connect-proxy.py"):
+        assert f"(Join-Path $PSScriptRoot '{name}') = (Join-Path $RuntimeDir '{name}')" in enabler, name
+        assert f"(Join-Path $RuntimeDir '{name}')," in enabler, name   # the owner is set on it with the rest of the bundle
+    manifest = next(line for line in enabler.splitlines() if "'.runtime-helpers'), \"jht-integration.ps1=" in line)
+    for name, var in (("jht-integration.ps1", "$integrationHash"), ("jht-tools.ps1", "$toolsHash"),
+                      ("configure-podman-windows-network.ps1", "$networkHash"), ("wsl-interop-connect-proxy.py", "$proxyHash")):
+        assert f"{name}={var}" in manifest, name
