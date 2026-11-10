@@ -9,6 +9,7 @@ import { JHT_HOME } from '../jht-paths.js';
 import { writePrivateJson } from '../lib/secure-config-io.js';
 import { AGENT_HARNESSES, DEFAULT_HARNESS, PI_IMAGE_BIN, harnessOf, harnessProblem } from '../../../shared/runtime/agent-harness.js';
 import { c, DIM, RESET } from './_colors.js';
+import { handleHarnessJson } from './providers-harness-json.js';
 import { marks } from '../lib/ui.js';
 
 const CONFIG_PATH = join(JHT_HOME, 'jht.config.json');
@@ -41,7 +42,8 @@ export function registerProvidersHarness(program) {
   providers
     .command('harness [name]')
     .description('Which program drives the agents: codex (default) or pi. Without a name, print the current one.')
-    .action((name) => handleHarness(name));
+    .option('--json', 'One JSON line for the desktop app: the harness, whether pi is allowed, the state of the login')
+    .action((name, opts) => (opts.json ? handleHarnessJson(name, { configPath: CONFIG_PATH, home: JHT_HOME }) : handleHarness(name)));
 }
 
 // jht providers harness [codex|pi]: which program drives the agents. Without a name it says the current one.
