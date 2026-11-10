@@ -89,9 +89,9 @@ def test_an_analista_and_a_scorer_with_an_empty_queue_wait_the_cap(tmp_path, eng
 
 def test_no_worker_of_the_burst_waits_longer_than_the_cap_after_the_first_position(tmp_path, eng):
     """From the first position inserted to the first score nobody sleeps a fixed 300 s: the Analista's queue now
-    has the position (the queue rule, 60 s) and the Scorer, still empty, waits the cap."""
+    has the position (the queue rule: no pause at all) and the Scorer, still empty, waits the cap."""
     insert(tmp_path, 1, agent="scout-1")
-    assert eng.register("analista-1", now=NOW)["applied_sec"] == 60
+    assert eng.register("analista-1", now=NOW)["applied_sec"] == 0
     assert eng.register("scorer-1", now=NOW)["applied_sec"] == CAP
 
 

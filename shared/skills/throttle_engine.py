@@ -314,7 +314,8 @@ USER_WORK_PAUSE_SEC = int(_RULES.get("short_pause_sec") or 0)
 # coda in attesa, non c'e' nessuna pausa. Coda vuota o illeggibile: la pausa del Capitano, come prima.
 _QUEUED = _RULES.get("queued_work") or {}
 _QUEUED_ROLES = frozenset(_QUEUED.get("roles") or ())
-QUEUED_WORK_PAUSE_SEC = int(_QUEUED.get("pause_sec") or USER_WORK_PAUSE_SEC)
+# 0 is a value (no pause with a queue): only a file that says nothing falls back to the short pause
+QUEUED_WORK_PAUSE_SEC = int(_QUEUED["pause_sec"]) if isinstance(_QUEUED.get("pause_sec"), int) else USER_WORK_PAUSE_SEC
 _USER_REQUEST_ROLES = frozenset((_RULES.get("user_requests") or {}).get("roles") or ())
 # ── Lo SCOUT che non ha inserito niente (27/09) ──────────────────────────
 # Su una VPS lo SCOUT smaltiva una lista in cache piena di annunci già visti:

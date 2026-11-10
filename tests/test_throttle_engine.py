@@ -1322,8 +1322,10 @@ def test_an_orphan_wait_does_not_take_the_wake_up(home, shim):
 
 
 # ── Posizioni in coda per il ruolo: UNA regola per l'Analista e lo Scorer (02/11) ─────────────────────────────
-# Misurato: l'Analista lavora ~51 s a posizione e poi sta fermo 300-780 s anche con 15 posizioni `new` in coda.
-# La regola e' `queued_work` in pause-rules.json; la coda e' quella di next-for-analista / next-for-scorer.
+# Misurato: l'Analista lavora ~51 s a posizione e poi sta fermo 300-780 s anche con 15 posizioni `new` in coda; e dopo la
+# prima versione (60 s fissi) ancora 1140 s di pausa su 3300 s con 11-20 posizioni in coda (corsa del 10/11): con posizioni
+# in coda NESSUNA pausa (pause_sec 0). La regola e' `queued_work` in pause-rules.json; la coda e' quella di
+# next-for-analista / next-for-scorer.
 def _queue(db: Path, *, new=0, checked=0, checked_scored=0):
     """Posizioni `new`, `checked` senza punteggio, e `checked` CON punteggio (che non sono in coda)."""
     import sqlite3
@@ -1342,21 +1344,21 @@ def _queue(db: Path, *, new=0, checked=0, checked_scored=0):
 def test_the_queue_rule_is_one_rule_for_the_roles_the_file_lists():
     rules = json.loads((REPO_ROOT / "agents" / "_skills" / "throttle"
                         / "pause-rules.json").read_text(encoding="utf-8"))
-    assert rules["queued_work"] == {"roles": ["analista", "scorer"], "pause_sec": 60}
-    assert eng._QUEUED_ROLES == {"analista", "scorer"} and eng.QUEUED_WORK_PAUSE_SEC == 60
+    assert rules["queued_work"] == {"roles": ["analista", "scorer"], "pause_sec": 0}
+    assert eng._QUEUED_ROLES == {"analista", "scorer"} and eng.QUEUED_WORK_PAUSE_SEC == 0  # 0 is a value, not a missing one
 
 
 @pytest.mark.parametrize("agent,seed", [("analista-1", {"new": 3}), ("analista-2", {"new": 1}),
                                          ("scorer-4", {"checked": 5})])
-def test_a_role_with_positions_in_its_queue_pauses_short(home, monkeypatch, agent, seed):
+def test_a_role_with_positions_in_its_queue_does_not_pause_at_all(home, monkeypatch, agent, seed):
     set_config(home, **{agent: 780})
     _queue(_jobs_db(home, monkeypatch), **seed)
     res = eng.register(agent, reason="post-position checkpoint", now=T0)
     n = sum(seed.values())
-    assert res["applied_sec"] == 60 and res["shortened_from"] == 780 and res["queued_work"] == n
-    assert res["until"] == int(T0) + 60
-    armed = events("armed")[-1]
-    assert armed["applied_sec"] == 60 and armed["shortened_from"] == 780 and armed["queued_work"] == n
+    assert res["armed"] is False and res["applied_sec"] == 0 and res["until"] is None
+    assert res["shortened_from"] == 780 and res["queued_work"] == n
+    assert flag(agent)["state"] == eng.ACTIVE
+    assert not events("armed") and events("no_throttle")[-1]["queued_work"] == n
 
 
 @pytest.mark.parametrize("agent", ["analista-1", "scorer-4"])
@@ -1371,7 +1373,7 @@ def test_an_empty_queue_keeps_the_captains_full_pause(home, monkeypatch, agent):
 def test_each_role_counts_its_own_queue_only(home, monkeypatch):
     set_config(home, **{"analista-1": 780, "scorer-4": 780})
     _queue(_jobs_db(home, monkeypatch), new=2)  # positions waiting for the Analista, none for the Scorer
-    assert eng.register("analista-1", now=T0)["applied_sec"] == 60
+    assert eng.register("analista-1", now=T0)["applied_sec"] == 0
     assert eng.register("scorer-4", now=T0)["applied_sec"] == 780
 
 
@@ -1396,20 +1398,22 @@ def test_an_unreadable_queue_keeps_the_captains_pause_for_both_roles(home, monke
 def test_a_pause_shorter_than_the_cap_is_never_lengthened(home, monkeypatch):
     set_config(home, **{"scorer-4": 30})
     _queue(_jobs_db(home, monkeypatch), checked=2)
-    # the floor (300 s) lifts it to 300 first, then the queue shortens it: the cap is a ceiling
+    # the floor (300 s) lifts it to 300 first, then the queue takes the pause away: the cap is a ceiling
     res = eng.register("scorer-4", seconds=30, now=T0)
-    assert res["applied_sec"] == 60 and res["shortened_from"] == 300
+    assert res["applied_sec"] == 0 and res["shortened_from"] == 300
+    # with a rule that leaves a short pause (a file that says 45) a pause shorter than it is never lengthened
+    monkeypatch.setattr(eng, "QUEUED_WORK_PAUSE_SEC", 45)
+    assert eng.register("scorer-4", seconds=30, now=T0)["applied_sec"] == 45 and eng.register("scorer-4", now=T0)["applied_sec"] == 45
     monkeypatch.setattr(eng, "effective_seconds", lambda agent, requested=None: 30)
     assert eng.register("scorer-4", now=T0)["applied_sec"] == 30
 
 
-def test_user_requests_and_a_queue_together_are_still_one_short_pause(home, monkeypatch):
+def test_user_requests_and_a_queue_together_take_the_pause_away(home, monkeypatch):
     set_config(home, **{"analista-1": 780})
     db = _jobs_db(home, monkeypatch, geocode_requested=1, geocode_requested_at="2026-09-27 14:54:03")
     _queue(db, new=2)
     res = eng.register("analista-1", now=T0)
-    assert res["applied_sec"] == 60 and res["shortened_from"] == 780
-    assert res["user_requests_waiting"] == {"next-for-geocoding": 1}
+    assert res["applied_sec"] == 0 and res["shortened_from"] == 780 and res["queued_work"] == 2
 
 
 @pytest.mark.parametrize("agent,seed", [("analista-1", {"new": 3}), ("scorer-4", {"checked": 3})])
@@ -1425,9 +1429,9 @@ def test_a_budget_hold_keeps_the_captains_pause_even_with_a_queue(home, monkeypa
     _pacing_report(home, team=3.5, target=1.4)
     res = eng.register(agent, now=T0 + 10)
     assert res["applied_sec"] == 780 and res["queued_work_kept"] == "over-pace"
-    # the hold gone (team within its pace): the queue shortens again
+    # the hold gone (team within its pace): the queue takes the pause away again
     _pacing_report(home, team=1.5, target=1.4)
-    assert eng.register(agent, now=T0 + 20)["applied_sec"] == 60
+    assert eng.register(agent, now=T0 + 20)["applied_sec"] == 0
 
 
 @pytest.mark.parametrize("agent,seed", [("analista-1", {"new": 3}), ("scorer-4", {"checked": 3})])
@@ -1459,8 +1463,8 @@ def test_the_burn_intent_with_an_empty_queue_changes_nothing_for_the_queue_rule(
     assert res["applied_sec"] == 780 and "queued_work" not in res
 
 
-def test_a_whole_batch_is_drained_at_one_unit_per_minute_not_per_cycle(home, monkeypatch):
-    # 15 positions waiting (the scout's batch of the measured run): between two units the pause is 60 s, and it
+def test_a_whole_batch_is_drained_unit_after_unit_without_a_pause(home, monkeypatch):
+    # 15 positions waiting (the scout's batch of the measured run): between two units there is no pause, and the pause
     # becomes the Capitano's again only when the queue is empty
     set_config(home, **{"analista-1": 780})
     db = _jobs_db(home, monkeypatch)
@@ -1472,14 +1476,15 @@ def test_a_whole_batch_is_drained_at_one_unit_per_minute_not_per_cycle(home, mon
         pauses.append(res["applied_sec"])
         t += res["applied_sec"]
         eng.tick(now=t)
-        eng.ack("analista-1", now=t + 1)
+        if res["armed"]:
+            eng.ack("analista-1", now=t + 1)
         conn = sqlite3.connect(db)
         conn.execute("UPDATE positions SET status = 'checked' WHERE id = (SELECT MIN(id) FROM positions WHERE status = 'new')")
         conn.commit()
         conn.close()
         t += 50  # the unit
     # the 15th unit emptied the queue: the next pause is the full one
-    assert pauses[:14] == [60] * 14 or pauses[:15] == [60] * 15
+    assert pauses[:14] == [0] * 14 or pauses[:15] == [0] * 15
     assert eng.register("analista-1", now=t)["applied_sec"] == 780
 
 

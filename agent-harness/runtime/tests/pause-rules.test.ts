@@ -40,7 +40,7 @@ describe("the pause rules, one file for the TUI and the API team", () => {
     expect(FILE).toMatchObject({
       short_pause_sec: 60,
       empty_unit: { roles: ["scout"], max_streak: 10 },
-      queued_work: { roles: ["analista", "scorer"], pause_sec: 60 },
+      queued_work: { roles: ["analista", "scorer"], pause_sec: 0 },
     });
   });
 
