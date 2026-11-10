@@ -301,3 +301,12 @@ def test_a_link_in_place_of_tools_json_is_not_written_through(box, tmp_path):
 def test_a_real_state_folder_is_written_as_before(box):
     done = box.run("Write-ToolsNotice 'ready' 'core' '' '2026-11-10T00:00:00Z'\n[Console]::Out.WriteLine('done')")
     assert _lines(done) == ["done"] and box.notice()["state"] == "ready"
+
+
+def test_the_detached_pull_asks_for_a_hidden_window_only_where_the_parameter_exists():
+    """PowerShell 7 on Linux (the runner of the gate, the machine of the big suite) refuses `Start-Process -WindowStyle`."""
+    text = _text(TOOLS)
+    start = text.split("function Start-ToolsPull")[1].split("function ")[0]
+    assert "Start-Process -FilePath $shell -WindowStyle" not in start, "the parameter must not be on the command line itself"
+    assert "if ($PSVersionTable.PSEdition -eq 'Desktop' -or $IsWindows) { $start.WindowStyle = 'Hidden' }" in start
+    assert start.index("$start.WindowStyle") < start.index("Start-Process @start")

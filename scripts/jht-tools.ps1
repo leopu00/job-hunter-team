@@ -112,7 +112,10 @@ function Start-ToolsPull {
   [Console]::Out.WriteLine('JHT_PHASE tools_pull')
   Write-ToolsNotice 'pulling' 'core' '' $since
   $shell = (Get-Process -Id $PID).Path
-  $process = Start-Process -FilePath $shell -WindowStyle Hidden -PassThru -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $WrapperPath, 'tools', 'pull-job', $since)
+  $start = @{ FilePath = $shell; PassThru = $true; ArgumentList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $WrapperPath, 'tools', 'pull-job', $since) }
+  # -WindowStyle exists only on Windows: PowerShell 7 on Linux (a runner, a test) refuses the parameter.
+  if ($PSVersionTable.PSEdition -eq 'Desktop' -or $IsWindows) { $start.WindowStyle = 'Hidden' }
+  $process = Start-Process @start
   [IO.File]::WriteAllText((Join-Path $ToolsLock 'pid'), "$($process.Id)`n", [Text.UTF8Encoding]::new($false))
   return 0
 }
