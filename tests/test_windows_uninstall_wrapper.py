@@ -50,9 +50,10 @@ def test_uninstall_requires_one_explicit_confirmation_and_has_stable_output():
         "(secrets/linkedin-profile e .cache/linkedin): si toglie con jht reset --scope creds."
     )
 
-    assert (
-        "$UninstallArgs.Count -ne 1 -or $UninstallArgs[0] -cne '--confirm'" in uninstall
-    )
+    # --confirm alone, or --confirm with --purge (either order): nothing else
+    assert "$UninstallArgs[0] -ceq '--confirm'" in uninstall
+    assert "$_ -ceq '--confirm'" in uninstall and "$_ -ceq '--purge'" in uninstall
+    assert "uso: jht uninstall --confirm [--purge]" in uninstall
     assert "return 2" in uninstall
     for phase in ("uninstall_machine", "uninstall_runtime", "uninstall_commands"):
         assert f"'{phase}'" in uninstall
