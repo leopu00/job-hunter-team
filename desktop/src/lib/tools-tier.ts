@@ -45,9 +45,13 @@ export function toolsTierTextKey(seen: ToolsTier | null, justSwitched: boolean):
   return null;
 }
 
-/** Milliseconds to the next round: quick while the tools move, slow when there is nothing to move, never once on full. */
-export function toolsTierDelay(seen: ToolsTier | null): number | null {
-  if (!seen) return 60_000;
+/**
+ * Milliseconds to the next round: quick while the tools move, slow when there is nothing to move, never once on full.
+ * `misses` counts the rounds in a row that got no answer (a team that has no `jht tools` yet answers nothing): after
+ * three the app looks only every five minutes.
+ */
+export function toolsTierDelay(seen: ToolsTier | null, misses = 1): number | null {
+  if (!seen) return misses >= 3 ? 300_000 : 60_000;
   if (seen.tier === "full" && seen.state !== "none") return null;
   if (seen.state === "pending" || seen.state === "pulling" || seen.state === "ready") return 20_000;
   return seen.state === "failed" ? 60_000 : 300_000;

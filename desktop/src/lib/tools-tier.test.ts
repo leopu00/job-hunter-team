@@ -31,6 +31,8 @@ describe("tools tier", () => {
     expect(toolsTierDelay(seen("none", "full"))).toBe(300_000);
     expect(toolsTierDelay(seen("none"))).toBe(300_000);
     expect(toolsTierDelay(null)).toBe(60_000);
+    expect(toolsTierDelay(null, 2)).toBe(60_000);
+    expect(toolsTierDelay(null, 3)).toBe(300_000);
     expect(toolsTierDelay(seen("ready", "full"))).toBeNull();
   });
 

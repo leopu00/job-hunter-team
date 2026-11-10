@@ -20,6 +20,7 @@ export default function ToolsTierTicker({ tick = toolsTierTick }: { tick?: () =>
     alive.current = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let hide: ReturnType<typeof setTimeout> | undefined;
+    let misses = 0;
     const round = async () => {
       const answer = await tick();
       if (!alive.current) return;
@@ -28,7 +29,8 @@ export default function ToolsTierTicker({ tick = toolsTierTick }: { tick?: () =>
         setSwitched(true);
         hide = setTimeout(() => alive.current && setSwitched(false), READY_SHOWN_MS);
       }
-      const delay = toolsTierDelay(answer);
+      misses = answer ? 0 : misses + 1;
+      const delay = toolsTierDelay(answer, misses);
       if (delay !== null) timer = setTimeout(round, delay);
     };
     void round();
