@@ -61,6 +61,8 @@ $JHT_AGENT_CONTROL_PROTOCOL = 1
 # L'app del desktop registra nel broker l'autorizzazione a una candidatura con `desktop-apply record` solo se
 # trova questa riga: un wrapper che non la ha passerebbe il comando al ramo generico, che avvia il container.
 $JHT_DESKTOP_APPLY_PROTOCOL = 1
+# `jht integration list|status|add|remove --json` (the integrations added after the setup). The app asks for this line before it calls them.
+$JHT_INTEGRATION_PROTOCOL = 1
 $JHT_UNINSTALL_PROTOCOL = 1
 $JhtUninstallRemovalNotice = 'Vengono cancellati anche la password della posta e i token di Telegram salvati; ~/.jht e Documenti restano, e con loro la sessione LinkedIn salvata (secrets/linkedin-profile e .cache/linkedin): si toglie con jht reset --scope creds.'
 
@@ -548,6 +550,75 @@ function Test-RuntimePathAuthority {
   } catch { return $false }
 }
 
+# Host helpers: scripts of the runtime (scripts/<name>) attested like the wrapper, in a manifest of their own (.runtime-helpers,
+# `<name>=<sha256>`): the desktop app checks the main manifest key by key and must not meet a key it does not know. A helper is
+# dot-sourced only while the file still matches its line there. A runtime that has none yet gets it from the release origin the
+# first time it is needed (the `integration` command) and at the end of every upgrade.
+$RuntimeHelpers = @('jht-integration.ps1')
+$RuntimeHelpersManifest = Join-Path $RuntimeDir '.runtime-helpers'
+
+function Get-RuntimeHelperHash {
+  param([string]$Name)
+  return (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $RuntimeDir $Name)).Hash.ToLowerInvariant()
+}
+
+# name -> digest, as the helpers manifest declares them; $null when there is none or it is not the person's own file.
+function Read-RuntimeHelpersManifest {
+  if (-not (Test-Path -LiteralPath $RuntimeHelpersManifest -PathType Leaf)) { return @{} }
+  if (-not (Test-ProtectedRuntimeNode $RuntimeHelpersManifest)) { return $null }
+  $values = @{}
+  foreach ($line in @(Get-Content -LiteralPath $RuntimeHelpersManifest)) {
+    if ($line -match '^([a-z0-9][a-z0-9.\-]*)=([0-9a-f]{64})$') { $values[$Matches[1]] = $Matches[2] } else { return $null }
+  }
+  return $values
+}
+
+function Write-RuntimeHelpersManifest {
+  $content = ''
+  foreach ($name in $RuntimeHelpers) {
+    if (Test-Path -LiteralPath (Join-Path $RuntimeDir $name) -PathType Leaf) { $content += "$name=$(Get-RuntimeHelperHash $name)`n" }
+  }
+  Publish-JhtFile -Destination $RuntimeHelpersManifest -Bytes ([Text.UTF8Encoding]::new($false).GetBytes($content))
+}
+
+# $true when every helper the helpers manifest lists is the file it was written for; one it does not list is not loaded.
+function Test-RuntimeHelpersTrusted {
+  $values = Read-RuntimeHelpersManifest
+  if ($null -eq $values) { return $false }
+  foreach ($name in $RuntimeHelpers) {
+    if (-not $values.ContainsKey($name)) { continue }
+    if (-not (Test-ProtectedRuntimeNode (Join-Path $RuntimeDir $name))) { return $false }
+    if ($values[$name] -ne (Get-RuntimeHelperHash $name)) { return $false }
+  }
+  return $true
+}
+
+# The helpers manifest lists it (a file that is only there is not a helper).
+function Test-RuntimeHelperDeclared {
+  param([string]$Name)
+  $values = Read-RuntimeHelpersManifest
+  return ($null -ne $values -and $values.ContainsKey($Name))
+}
+
+function Install-RuntimeHelpers {
+  try {
+    Assert-TrustedRuntime
+    $base = Get-AttestedRawBase
+    foreach ($name in $RuntimeHelpers) {
+      $temp = Join-Path $RuntimeDir (".helper-$PID-" + [guid]::NewGuid().ToString('N'))
+      try {
+        Invoke-WebRequest -UseBasicParsing -Uri "$base/scripts/$name" -OutFile $temp
+        $text = [IO.File]::ReadAllText($temp)
+        [scriptblock]::Create($text) | Out-Null
+        if ($text -notmatch '(?m)^# JHT_RUNTIME_HELPER=1\r?$') { throw "$name lacks the helper marker" }
+        Publish-JhtFile -Destination (Join-Path $RuntimeDir $name) -Bytes ([IO.File]::ReadAllBytes($temp))
+      } finally { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue }
+    }
+    Write-RuntimeHelpersManifest
+    return $true
+  } catch { return $false }
+}
+
 function Write-RuntimeManifest {
   $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $ComposeFile).Hash.ToLowerInvariant()
   $wrapperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $WrapperPath).Hash.ToLowerInvariant()
@@ -599,6 +670,7 @@ function Test-RuntimeBundleTrusted {
     if ($values.'docker-compose.yml' -ne $actual -or $values.'jht-wrapper.ps1' -ne $wrapperActual -or $values.'windows-private-acl.ps1' -ne $helperActual) { return $false }
     $pinDeclared = $values.ContainsKey('runtime-image')
     if ($pinDeclared -ne $pinPresent) { return $false }
+    if (-not (Test-RuntimeHelpersTrusted)) { return $false }
     if ($pinDeclared) {
       if (-not (Test-ProtectedRuntimeNode $RuntimeImageFile)) { return $false }
       $pinHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $RuntimeImageFile).Hash.ToLowerInvariant()
@@ -794,6 +866,9 @@ jht - Job Hunter Team
     jht mail setup         salva la casella di posta nel broker dei segreti
     jht mail drafts        email scritte dagli agenti in attesa del tuo ok
     jht mail approve <id>  le manda; jht mail discard <id> le scarta
+    jht integration list|status [ID]|add ID|remove ID [--purge --yes] [--json]
+                           le integrazioni che si aggiungono dopo il setup
+                           (google, telegram, mail): stato letto dal motore
     jht telegram status    stato del servizio Telegram isolato
     jht telegram pair ROLE chiede il token senza eco sul computer host, poi
                            mostra un codice da mandare al bot dal tuo Telegram
@@ -832,7 +907,7 @@ function Test-HostCommandUsesLocalHelp {
   return $Command -in @(
     'up', 'start-container', 'down', 'stop-container', 'restart', 'recreate',
     'upgrade', 'logs', 'status', 'shell', 'oauth-login', 'claude-login',
-    'setup', 'download', 'mail', 'telegram', 'reset', 'migrate-runtime'
+    'setup', 'download', 'mail', 'telegram', 'integration', 'reset', 'migrate-runtime'
   )
 }
 
@@ -3334,6 +3409,7 @@ function Invoke-RuntimeUpgrade {
       }
       $null = Invoke-BrokerMigrateLegacyOnce
     }
+    if (-not (Install-RuntimeHelpers)) { Write-UpgradeNote "helper_install_failed: gli script host nuovi si prendono alla prima richiesta o con un altro 'jht upgrade'" }
     if ((Invoke-AvailableTelegramLifecycle 'resume') -ne 0) {
       Write-UpgradeNote "telegram_restart_failed: il servizio Telegram isolato non e' ripartito. Cosa fare: jht up"
     }
@@ -3545,6 +3621,23 @@ switch ($Sub) {
     }
     & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry $Sub @Rest
     exit $LASTEXITCODE
+  }
+
+  'integration' {
+    Require-ComposeFile
+    # Dot-sourced here, at script level, so that its functions outlive this block. Older runtime: the helper is fetched once.
+    $helperPath = Join-Path $RuntimeDir 'jht-integration.ps1'
+    # A helper that is missing is fetched only when the person runs `add` or `remove`, never from a read-only command.
+    if (-not (Test-RuntimeHelperDeclared 'jht-integration.ps1')) {
+      $mayFetch = $Rest.Count -gt 0 -and (@('add', 'remove') -ccontains [string]$Rest[0])
+      if (-not $mayFetch -or -not (Install-RuntimeHelpers)) {
+        Write-Err "script jht-integration.ps1 non ancora installato: 'jht upgrade' (o un 'jht integration add/remove') e riprova"
+        exit 1
+      }
+    }
+    Assert-TrustedRuntime
+    . $helperPath
+    exit (Invoke-IntegrationCommand $Rest)
   }
 
   'telegram' {
