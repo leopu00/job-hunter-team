@@ -218,7 +218,9 @@ def _api_key_config(jht_home, **extra):
     (True, {"scout": 1, "analista": 1, "scorer": 1}),
     (-5, {"scout": 1, "analista": 1, "scorer": 1}),
 ])
-def test_an_api_key_has_no_card_and_the_roster_comes_from_the_spending_ceiling(first_run, jht_home, ceiling, roster):
+def test_an_api_key_has_no_card_and_the_roster_comes_from_the_spending_ceiling(first_run, jht_home, ceiling, roster, monkeypatch):
+    # the table, not the machine that runs the test: the big rosters (10 workers) are cut on a small one
+    monkeypatch.setattr(plan_registry, "_host_capacity", lambda: {"cap": 99, "limit": "ram", "message": "test machine"})
     _api_key_config(jht_home, **({} if ceiling is None else {"no_quota_cap": {"eur": ceiling}}))
     info = first_run.plan_info()
     assert info["ok"] and info["plan"] == "api-key" and info["weekly_capped"] is False
