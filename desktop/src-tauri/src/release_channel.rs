@@ -14,13 +14,19 @@
 //! The coordinates are public and travel as installer arguments; stdin keeps
 //! its own contract (digest, pairing token, installer bytes).
 
-use crate::release_channel_rules::{resolve, TestChannel};
+use crate::release_channel_rules::{resolve_with_core, TestChannel};
 use std::path::Path;
 
 const PRODUCTION_INSTALL_URL: &str = "https://jobhunterteam.ai/install.sh";
 #[cfg_attr(not(windows), allow(dead_code))]
 const PRODUCTION_INSTALL_PS1_URL: &str = "https://jobhunterteam.ai/install.ps1";
 const SOURCE_REPOSITORY: &str = "leopu00/job-hunter-team";
+
+/// Whether install.sh / install.ps1 of the test commits know `--expected-core-digest` / `-ExpectedCoreDigest`.
+/// They do not yet (today the core image comes only from the release pin): an argument they do not know would stop
+/// them, so the second digest is carried by the build and is NOT passed until the installers take it. The day they
+/// do, this is the one line that changes (and `the_core_digest_waits_for_the_installers` below).
+const INSTALLERS_TAKE_CORE_DIGEST: bool = false;
 
 /// The channel compiled into this build. build.rs already refused a bad
 /// test build; a value that does not pass the rules again is an error here,
@@ -33,6 +39,7 @@ pub(crate) fn current() -> Result<Option<TestChannel>, &'static str> {
         env!("JHT_BUILD_RUNTIME_IMAGE_DIGEST"),
         env!("JHT_BUILD_INSTALL_SHA256"),
         env!("JHT_BUILD_INSTALL_PS1_SHA256"),
+        env!("JHT_BUILD_RUNTIME_CORE_IMAGE_DIGEST"),
     )
 }
 
@@ -43,14 +50,16 @@ fn from_build(
     image_digest: &str,
     install_sha256: &str,
     install_ps1_sha256: &str,
+    core_image_digest: &str,
 ) -> Result<Option<TestChannel>, &'static str> {
-    resolve(
+    resolve_with_core(
         Some(channel),
         Some(source_sha),
         Some(runtime_image),
         Some(image_digest),
         Some(install_sha256),
         Some(install_ps1_sha256),
+        Some(core_image_digest),
     )
     .map_err(|_| "installer_digest_invalid")
 }
@@ -74,14 +83,19 @@ pub(crate) fn install_digest<'a>(channel: Option<&'a TestChannel>, production: &
 /// The installer's extra arguments: none in production.
 pub(crate) fn installer_args(channel: Option<&TestChannel>) -> Vec<String> {
     channel.map_or_else(Vec::new, |test| {
-        vec![
+        let mut args = vec![
             "--source-sha".to_owned(),
             test.source_sha.clone(),
             "--image".to_owned(),
             test.runtime_image.clone(),
             "--expected-image-digest".to_owned(),
             test.image_digest.clone(),
-        ]
+        ];
+        // The two-level runtime: the installer pulls only the core image, checked against its own digest.
+        if let (true, Some(core)) = (INSTALLERS_TAKE_CORE_DIGEST, &test.core_image_digest) {
+            args.extend(["--expected-core-digest".to_owned(), core.clone()]);
+        }
+        args
     })
 }
 
@@ -112,14 +126,18 @@ pub(crate) fn install_ps1_digest<'a>(
 #[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) fn install_ps1_args(channel: Option<&TestChannel>) -> Vec<String> {
     channel.map_or_else(Vec::new, |test| {
-        vec![
+        let mut args = vec![
             "-SourceSha".to_owned(),
             test.source_sha.clone(),
             "-Image".to_owned(),
             test.runtime_image.clone(),
             "-ExpectedImageDigest".to_owned(),
             test.image_digest.clone(),
-        ]
+        ];
+        if let (true, Some(core)) = (INSTALLERS_TAKE_CORE_DIGEST, &test.core_image_digest) {
+            args.extend(["-ExpectedCoreDigest".to_owned(), core.clone()]);
+        }
+        args
     })
 }
 
@@ -147,11 +165,13 @@ pub(crate) fn installed_runtime_reusable(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::release_channel_rules::{resolve, resolve_with_core};
     use crate::release_channel_rules::{valid_image_digest, valid_runtime_image, valid_source_sha};
 
     const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
     const DIGEST: &str = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const INSTALL: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const CORE: &str = "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
     const INSTALL_PS1: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
 
     fn test_channel(image: &str) -> TestChannel {
@@ -170,7 +190,7 @@ mod tests {
     #[test]
     fn production_is_unchanged_without_any_variable() {
         assert_eq!(resolve(None, None, None, None, None, None), Ok(None));
-        assert_eq!(from_build("production", "", "", "", "", ""), Ok(None));
+        assert_eq!(from_build("production", "", "", "", "", "", ""), Ok(None));
         assert_eq!(install_url(None), "https://jobhunterteam.ai/install.sh");
         assert_eq!(install_digest(None, "compiled"), "compiled");
         assert!(installer_args(None).is_empty());
@@ -223,6 +243,24 @@ mod tests {
         assert_eq!(pinned.image_digest, DIGEST);
     }
 
+    #[test]
+    fn the_core_digest_waits_for_the_installers() {
+        let mut test = test_channel("ghcr.io/leopu00/jht:master-arthur");
+        test.core_image_digest = Some(CORE.to_owned());
+        assert!(!INSTALLERS_TAKE_CORE_DIGEST);
+        assert!(!installer_args(Some(&test)).iter().any(|arg| arg.contains("core")));
+        assert!(!install_ps1_args(Some(&test)).iter().any(|arg| arg.contains("Core")));
+        // the build carries it, refuses a malformed one and the full image's own digest
+        let with = |core| resolve_with_core(Some("test"), Some(SHA), Some("ghcr.io/leopu00/jht:master-arthur"), Some(DIGEST), Some(INSTALL), Some(INSTALL_PS1), core);
+        assert_eq!(with(Some(CORE)).unwrap().unwrap().core_image_digest.as_deref(), Some(CORE));
+        assert_eq!(with(None).unwrap().unwrap().core_image_digest, None);
+        for bad in ["sha256:abc", DIGEST, "eeee"] {
+            assert!(with(Some(bad)).is_err(), "{bad}");
+        }
+        // a core digest without the test channel is no build
+        assert!(resolve_with_core(None, None, None, None, None, None, Some(CORE)).is_err());
+    }
+
     /// build.rs's logic, run: what a build compiles in from the CI's
     /// variables, and the refusal of a half-configured test build.
     #[test]
@@ -235,6 +273,7 @@ mod tests {
             ("JHT_RUNTIME_IMAGE_DIGEST", DIGEST),
             ("JHT_INSTALL_SHA256", INSTALL),
             ("JHT_INSTALL_PS1_SHA256", INSTALL_PS1),
+            ("JHT_RUNTIME_CORE_IMAGE_DIGEST", CORE),
         ];
         assert_eq!(full.map(|(name, _)| name), BUILD_INPUTS);
         let build = |skip: &str| {
@@ -252,17 +291,19 @@ mod tests {
         for (name, _) in &compiled {
             assert!(source.contains(&format!("env!(\"{name}\")")), "{name}");
         }
-        let [c, s, i, d, sh, ps] = compiled.map(|(_, value)| value);
+        let [c, s, i, d, sh, ps, core] = compiled.map(|(_, value)| value);
         assert_eq!(c, "test");
         assert_eq!(
-            from_build(&c, &s, &i, &d, &sh, &ps),
+            from_build(&c, &s, &i, &d, &sh, &ps, &core),
             Ok(Some(test_channel("ghcr.io/leopu00/jht:master-arthur")))
         );
 
         // Any value missing: no build.
-        for name in &BUILD_INPUTS[1..] {
+        for name in &BUILD_INPUTS[1..6] {
             assert!(build(name).is_err(), "{name}");
         }
+        // The core digest is the one value a test build may leave out: then it is one image, as before.
+        assert!(build("JHT_RUNTIME_CORE_IMAGE_DIGEST").is_ok());
         // Nothing given: production, with empty values.
         let production = build_env(|_| None).unwrap();
         assert_eq!(
@@ -412,7 +453,7 @@ mod tests {
         ));
         // The runtime check is the same: a bad compiled value is an error.
         assert_eq!(
-            from_build("test", "", image, DIGEST, INSTALL, INSTALL_PS1),
+            from_build("test", "", image, DIGEST, INSTALL, INSTALL_PS1, ""),
             Err("installer_digest_invalid")
         );
 

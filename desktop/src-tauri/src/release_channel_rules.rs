@@ -24,6 +24,9 @@ pub struct TestChannel {
     pub install_sha256: String,
     /// sha256 of scripts/install.ps1 at `source_sha`, computed by the CI.
     pub install_ps1_sha256: String,
+    /// `sha256:<64 hex>`: the CORE image, when the commit has the two-level runtime (the installers pull
+    /// only this one; `image_digest` is then the full image). None: one image, as before.
+    pub core_image_digest: Option<String>,
 }
 
 fn lower_hex(value: &str, len: usize) -> bool {
@@ -82,13 +85,27 @@ pub fn resolve(
     install_sha256: Option<&str>,
     install_ps1_sha256: Option<&str>,
 ) -> Result<Option<TestChannel>, String> {
-    let (channel, source_sha, runtime_image, image_digest, install_sha256, install_ps1_sha256) = (
+    resolve_with_core(channel, source_sha, runtime_image, image_digest, install_sha256, install_ps1_sha256, None)
+}
+
+/// `resolve`, with the digest of the core image of the two-level runtime (None: one image, as before).
+pub fn resolve_with_core(
+    channel: Option<&str>,
+    source_sha: Option<&str>,
+    runtime_image: Option<&str>,
+    image_digest: Option<&str>,
+    install_sha256: Option<&str>,
+    install_ps1_sha256: Option<&str>,
+    core_image_digest: Option<&str>,
+) -> Result<Option<TestChannel>, String> {
+    let (channel, source_sha, runtime_image, image_digest, install_sha256, install_ps1_sha256, core_image_digest) = (
         given(channel),
         given(source_sha),
         given(runtime_image),
         given(image_digest),
         given(install_sha256),
         given(install_ps1_sha256),
+        given(core_image_digest),
     );
     match channel {
         None | Some("production") => {
@@ -97,8 +114,9 @@ pub fn resolve(
                 || image_digest.is_some()
                 || install_sha256.is_some()
                 || install_ps1_sha256.is_some()
+                || core_image_digest.is_some()
             {
-                return Err("JHT_SOURCE_SHA, JHT_RUNTIME_IMAGE, JHT_RUNTIME_IMAGE_DIGEST, JHT_INSTALL_SHA256 and JHT_INSTALL_PS1_SHA256 are only for JHT_CHANNEL=test".to_owned());
+                return Err("JHT_SOURCE_SHA, JHT_RUNTIME_IMAGE, JHT_RUNTIME_IMAGE_DIGEST, JHT_INSTALL_SHA256, JHT_INSTALL_PS1_SHA256 and JHT_RUNTIME_CORE_IMAGE_DIGEST are only for JHT_CHANNEL=test".to_owned());
             }
             Ok(None)
         }
@@ -125,12 +143,20 @@ pub fn resolve(
             let install_ps1_sha256 = install_ps1_sha256
                 .filter(|value| valid_sha256(value))
                 .ok_or("JHT_CHANNEL=test needs JHT_INSTALL_PS1_SHA256: 64 lowercase hex")?;
+            let core_image_digest = match core_image_digest {
+                None => None,
+                Some(value) if valid_image_digest(value) && value != image_digest => Some(value.to_owned()),
+                Some(_) => {
+                    return Err("JHT_RUNTIME_CORE_IMAGE_DIGEST: sha256:<64 lowercase hex>, not the digest of the full image".to_owned());
+                }
+            };
             Ok(Some(TestChannel {
                 source_sha: source_sha.to_owned(),
                 runtime_image: runtime_image.to_owned(),
                 image_digest: image_digest.to_owned(),
                 install_sha256: install_sha256.to_owned(),
                 install_ps1_sha256: install_ps1_sha256.to_owned(),
+                core_image_digest,
             }))
         }
         Some(other) => Err(format!(
@@ -141,13 +167,14 @@ pub fn resolve(
 
 /// The build's inputs: the CI's variables, read by build.rs.
 #[allow(dead_code)] // used by build.rs and by the app's tests
-pub const BUILD_INPUTS: [&str; 6] = [
+pub const BUILD_INPUTS: [&str; 7] = [
     "JHT_CHANNEL",
     "JHT_SOURCE_SHA",
     "JHT_RUNTIME_IMAGE",
     "JHT_RUNTIME_IMAGE_DIGEST",
     "JHT_INSTALL_SHA256",
     "JHT_INSTALL_PS1_SHA256",
+    "JHT_RUNTIME_CORE_IMAGE_DIGEST",
 ];
 
 /// What build.rs compiles in (`cargo:rustc-env`, read back by
@@ -157,16 +184,17 @@ pub const BUILD_INPUTS: [&str; 6] = [
 #[allow(dead_code)] // used by build.rs and by the app's tests
 pub fn build_env(
     lookup: impl Fn(&str) -> Option<String>,
-) -> Result<[(&'static str, String); 6], String> {
-    let [channel, source_sha, runtime_image, image_digest, install_sha256, install_ps1_sha256] =
+) -> Result<[(&'static str, String); 7], String> {
+    let [channel, source_sha, runtime_image, image_digest, install_sha256, install_ps1_sha256, core_image_digest] =
         BUILD_INPUTS.map(|name| lookup(name));
-    let resolved = resolve(
+    let resolved = resolve_with_core(
         channel.as_deref(),
         source_sha.as_deref(),
         runtime_image.as_deref(),
         image_digest.as_deref(),
         install_sha256.as_deref(),
         install_ps1_sha256.as_deref(),
+        core_image_digest.as_deref(),
     )?;
     let (channel, test) = match resolved {
         None => ("production", None),
@@ -189,6 +217,10 @@ pub fn build_env(
         (
             "JHT_BUILD_INSTALL_PS1_SHA256",
             value(|test| &test.install_ps1_sha256),
+        ),
+        (
+            "JHT_BUILD_RUNTIME_CORE_IMAGE_DIGEST",
+            test.as_ref().and_then(|test| test.core_image_digest.clone()).unwrap_or_default(),
         ),
     ])
 }

@@ -3056,6 +3056,7 @@ fn t55_each_command_that_acts_on_the_host_asks_before_anything_else() {
     let onboarding = include_str!("onboarding.rs").split("mod existing_team_assistant_tests").next().unwrap().replace("\r\n", "\n");
     let mail = include_str!("mail.rs").replace("\r\n", "\n");
     let harness = include_str!("harness_choice.rs").replace("\r\n", "\n");
+    let tools = include_str!("tools_tier.rs").replace("\r\n", "\n");
     let broker = include_str!("broker_view.rs").replace("\r\n", "\n");
     let lib = include_str!("lib.rs");
     let body = |source: &str, name: &str| -> String {
@@ -3063,7 +3064,7 @@ fn t55_each_command_that_acts_on_the_host_asks_before_anything_else() {
         source[at..].split("\n}\n").next().unwrap().to_owned()
     };
     // (source, command, the refusal it must call, the first thing it does that has an effect or takes a slot)
-    let commands: [(&str, &str, &str, &[&str]); 13] = [
+    let commands: [(&str, &str, &str, &[&str]); 14] = [
         (&onboarding, "onboarding_prepare", "host_action_refusal(", &["compare_exchange", "spawn_blocking", "prepare_impl("]),
         (&onboarding, "onboarding_team_start", "host_action_refusal(", &["compare_exchange", "spawn_blocking", "validate_host("]),
         (&onboarding, "onboarding_resume_team_start", "saved_host_action_refusal(", &["compare_exchange", "spawn_blocking", "load_persisted_host("]),
@@ -3075,6 +3076,7 @@ fn t55_each_command_that_acts_on_the_host_asks_before_anything_else() {
         (&onboarding, "onboarding_provider_login", "host_action_refusal(", &["spawn_blocking", "start_provider_login(", "state\n        .interactive", "validate_host(", "spawn("]),
         (&onboarding, "onboarding_provider_login_input", "host_action_refusal(&app, window.label(), scope.scope(), &session.host)", &["write_provider_input("]),
         (&harness, "harness_choice_set", "saved_host_action_refusal(", &["try_begin(", "spawn_blocking", "saved_host("]),
+        (&tools, "tools_tier_tick", "saved_host_action_refusal(", &["try_begin(", "spawn_blocking", "load_persisted_host("]),
         (&mail, "mail_save_password", "saved_host_action_refusal(", &["spawn_blocking", "active_host("]),
         (&broker, "broker_login_view_open", "saved_host_action_refusal(", &["get_webview_window", "compare_exchange", "spawn_blocking"]),
     ];
