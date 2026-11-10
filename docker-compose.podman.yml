@@ -38,6 +38,11 @@ services:
       # Node's fetch ignores HTTP(S)_PROXY unless told: with no direct route
       # it would time out (measured on the image's Node 22.22.2).
       - NODE_USE_ENV_PROXY=1
+      # With that switch Node 22 prints "[UNDICI-EHPA] Warning: EnvHttpProxyAgent
+      # is experimental" at its own start, before any code of ours runs, so the
+      # filter of the CLI entry point cannot drop it: the flag does, for that one
+      # code only (every other warning goes through).
+      - NODE_OPTIONS=--disable-warning=UNDICI-EHPA
       - HTTP_PROXY=${JHT_PODMAN_HTTP_PROXY:-}
       - HTTPS_PROXY=${JHT_PODMAN_HTTPS_PROXY:-}
       - ALL_PROXY=${JHT_PODMAN_ALL_PROXY:-}

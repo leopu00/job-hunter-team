@@ -57,10 +57,10 @@ foreach ($name in ($env:JHT_IMPORT -split ',')) {
 exit 0
 """
 
-NOTICE_FUNCTIONS = ["Show-WindowsSupportNotice", "Test-JhtWindows10Client", "Get-Windows10SupportWarning", "Write-JhtNotice", "Write-Warn"]
+NOTICE_FUNCTIONS = ["Show-WindowsSupportNotice", "Test-JhtWindows10Client", "Get-JhtTextLanguage", "Get-Windows10SupportWarning", "Write-JhtNotice", "Write-Warn"]
 
 
-def _run(tmp_path: Path, imports: list[str], body: str):
+def _run(tmp_path: Path, imports: list[str], body: str, extra_env: dict[str, str] | None = None):
     prelude = tmp_path / "prelude.ps1"
     prelude.write_text(PRELUDE, encoding="utf-8")
     env = {
@@ -69,6 +69,7 @@ def _run(tmp_path: Path, imports: list[str], body: str):
         "JHT_UNDER_TEST": str(INSTALLER),
         "JHT_IMPORT": ",".join(imports),
         "JHT_CASE_BODY": body,
+        **(extra_env or {}),
     }
     return subprocess.run(
         [_pwsh(), "-NoLogo", "-NoProfile", "-NonInteractive", "-File", str(prelude)],
@@ -218,7 +219,7 @@ def test_the_installer_text_says_podman_and_may_work_never_microsoft():
         ("unknown", WARNING),
     ],
 )
-def test_the_terminal_warning_uses_the_console_language(tmp_path, language, expected):
+def test_the_terminal_warning_uses_the_language_asked(tmp_path, language, expected):
     result = _run(
         tmp_path,
         ["Get-Windows10SupportWarning"],
@@ -226,6 +227,39 @@ def test_the_terminal_warning_uses_the_console_language(tmp_path, language, expe
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == expected
+
+
+# A runtime without culture data (invariant globalization) cannot be set to Italian: the test then only proves less.
+ITALIAN_WINDOWS = "try { [Globalization.CultureInfo]::CurrentUICulture = [Globalization.CultureInfo]::GetCultureInfo('it-IT') } catch { }\n"
+
+
+@pytest.mark.parametrize(
+    ("jht_lang", "expected"),
+    [
+        (None, WARNING),  # nothing chosen: English, like the rest of the output, even on an Italian Windows
+        ("", WARNING),
+        ("en", WARNING),
+        ("it_IT.UTF-8", "Podman non supporta piu' Windows 10: puo' funzionare, ma non lo garantiamo. Il sistema supportato e' Windows 11."),
+        ("DE", "Podman unterstuetzt Windows 10 nicht mehr: Es kann funktionieren, aber wir garantieren es nicht. Unterstuetzt wird Windows 11."),
+        ("zz", WARNING),
+    ],
+)
+def test_the_terminal_warning_follows_the_language_of_the_product_not_the_one_of_windows(tmp_path, jht_lang, expected):
+    extra = {} if jht_lang is None else {"JHT_LANG": jht_lang}
+    result = _run(
+        tmp_path,
+        ["Get-JhtTextLanguage", "Get-Windows10SupportWarning"],
+        ITALIAN_WINDOWS + "[Console]::Out.WriteLine((Get-Windows10SupportWarning))\n",
+        extra,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == expected
+
+
+def test_the_default_language_of_the_warning_does_not_read_the_culture_of_windows():
+    warning = _function_text("Get-Windows10SupportWarning")
+    assert "CurrentUICulture" not in warning
+    assert "Get-JhtTextLanguage" in warning
 
 
 def test_the_notice_only_switch_reads_no_runtime_or_network():
