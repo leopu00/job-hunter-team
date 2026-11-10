@@ -269,7 +269,12 @@ function Remove-JhtPodmanMachineThroughWsl {
   if ($listed -cnotcontains $distro) { return $false }
   $null = Invoke-JhtUninstallNative $WslPath @('--terminate', $distro)
   $unregister = Invoke-JhtUninstallNative $WslPath @('--unregister', $distro)
-  if ($unregister.Code -ne 0) { $script:JhtUninstallReason = "wsl --unregister $distro : $($unregister.Text)"; return $false }
+  if ($unregister.Code -ne 0) {
+    # What Podman said (already in the reason) and what WSL said: the person reads both.
+    $said = "wsl --unregister $distro : $($unregister.Text)"
+    $script:JhtUninstallReason = if ($script:JhtUninstallReason) { "$($script:JhtUninstallReason); $said" } else { $said }
+    return $false
+  }
   if ($PodmanPath) { $null = Invoke-JhtUninstallNative $PodmanPath @('machine', 'rm', '--force', $MachineName) }
   return (Get-JhtPodmanMachineState -PodmanPath $PodmanPath -WslPath $WslPath -MachineName $MachineName) -eq 'absent'
 }
