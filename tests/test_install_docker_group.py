@@ -40,6 +40,9 @@ FAKE_SUDO = """#!/bin/sh
 [ "$1" = docker ] || exit 1
 FAKE_GROUP=1 exec "$@"
 """
+FAKE_SUDO_REFUSES = """#!/bin/sh
+exit 1
+"""
 
 
 def run(tmp_path: Path, body: str, *, groups="app docker", sg=True, ok_already=False, sudo=True):
@@ -48,8 +51,8 @@ def run(tmp_path: Path, body: str, *, groups="app docker", sg=True, ok_already=F
     tools = {"docker": FAKE_DOCKER, "id": FAKE_ID}
     if sg:
         tools["sg"] = FAKE_SG
-    if sudo:
-        tools["sudo"] = FAKE_SUDO
+    # without a working sudo the fake one refuses: the real /usr/bin/sudo of the machine must never answer for the test
+    tools["sudo"] = FAKE_SUDO if sudo else FAKE_SUDO_REFUSES
     for name, text in tools.items():
         path = bin_dir / name
         path.write_text(text, encoding="utf-8")
