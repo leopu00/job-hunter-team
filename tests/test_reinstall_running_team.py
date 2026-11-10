@@ -118,7 +118,7 @@ FUNCTIONS = (
     "read_only_service_id", "read_only_service_id_attest", "attest_cache_lookup", "attest_cache_store", "attest_cache_key",
     "attest_cache_parse", "attest_cache_clear", "attest_cache_path", "attest_cache_folder_ok", "attest_cache_text_digest",
     "attest_cache_binary_identity", "attest_inspect_format", "attest_cache_ttl", "read_only_container_id", "container_up", "container_mutation_preflight", "stale_config_hint",
-    "container_down", "rootless_netns_noise_filter",
+    "container_down", "rootless_netns_noise_filter", "compose_noise_filter", "compose_stdout_quiet", "compose_quiet",
 )
 
 
@@ -141,7 +141,8 @@ def wrapper(tmp_path):
     def run(body: str, *, running_hash: str = OLD_HASH, working_dir: str | None = None, down_stderr: str = "",
             down_exit: int = 0, left_after_down: bool = False, broker_left: bool = False, no_container: bool = False,
             ps_fails: bool = False, runtime_kind: str = "podman", only_broker: bool = False, second_ps_fails: bool = False,
-            broker_not_ours: bool = False, broker_service: str = "jht-broker"):
+            broker_not_ours: bool = False, broker_service: str = "jht-broker", down_stdout: str = "",
+            up_stdout: str = "", up_stderr: str = "", up_exit: int = 0):
         compose_file = runtime / "docker-compose.yml"
         override = runtime / "podman-native-override.yml"
         details = "|".join([
@@ -166,6 +167,7 @@ COMPOSE_FILE="{compose_file}"
 err()  {{ echo "error: $*" >&2; }}
 warn() {{ echo "warn: $*" >&2; }}
 info() {{ echo "info: $*" >&2; }}
+jht_say() {{ echo "<$1>"; }}
 runtime_bundle_trusted() {{ return 0; }}
 docker_reachable() {{ return 0; }}
 compose_project_name() {{ echo jht; }}
@@ -200,7 +202,8 @@ compose_file() {{
           if [ "{int(not left_after_down)}" = 1 ]; then return 0; fi
         fi
         echo 0123456789ab ;;
-    down) echo "down" >> "{calls}"; printf '%b' '{down_stderr}' >&2; return {down_exit} ;;
+    down) echo "down" >> "{calls}"; printf '%b' '{down_stdout}'; printf '%b' '{down_stderr}' >&2; return {down_exit} ;;
+    up) echo "$*" >> "{calls}"; printf '%b' '{up_stdout}'; printf '%b' '{up_stderr}' >&2; return {up_exit} ;;
     *) echo "$*" >> "{calls}" ;;
   esac
 }}
@@ -356,3 +359,52 @@ def test_down_refuses_a_container_of_a_service_the_compose_does_not_have(wrapper
 def test_the_uninstall_chain_stops_when_a_service_left_does_not_attest(wrapper):
     done = wrapper.run("container_down && echo went-on", only_broker=True, runtime_kind="podman", broker_not_ours=True)
     assert "went-on" not in done.stdout and wrapper.downs() == []
+
+
+# ── `jht up` and `jht down` with Podman: one line for the state, no raw ids, no false errors ──
+
+IDS = ("a1b2c3d4e5f6" + "0" * 52 + "\\n" + "b2c3d4e5f6a1" + "0" * 52 + "\\n" + "jht_default\\n")
+NO_TELEGRAM = ('Error: no container with name or ID "jht-telegram" found: no such container\\n'
+               'Error: no container with name or ID "jht-telegram" found: no such container\\n')
+
+
+def test_down_with_podman_says_one_line_and_not_the_ids_nor_the_errors_of_a_service_never_created(wrapper):
+    done = wrapper.run("container_down; echo rc=$?", running_hash=NEW_HASH, down_stdout=IDS, down_stderr=NO_TELEGRAM)
+    assert done.stdout.splitlines() == ["<down.done>", "rc=0"], done.stdout
+    assert done.stderr == ""
+
+
+def test_down_with_podman_keeps_every_other_line(wrapper):
+    done = wrapper.run("container_down; echo rc=$?", running_hash=NEW_HASH, down_stdout=IDS + "stopping jht\\n",
+                       down_stderr=NO_TELEGRAM + "Error: something else\\n")
+    assert done.stdout.splitlines() == ["stopping jht", "<down.done>", "rc=0"], done.stdout
+    assert done.stderr.splitlines() == ["Error: something else"], done.stderr
+
+
+def test_down_with_podman_that_fails_does_not_say_stopped_and_keeps_the_exit(wrapper):
+    done = wrapper.run("container_down; echo rc=$?", running_hash=NEW_HASH, down_stderr="Error: boom\\n", down_exit=3)
+    assert "rc=3" in done.stdout and "<down.done>" not in done.stdout
+    assert "Error: boom" in done.stderr
+
+
+def test_with_docker_the_output_of_compose_is_left_as_it_was(wrapper):
+    ids = "a1b2c3d4e5f6" + "0" * 52 + "\\n"
+    done = wrapper.run("CONTAINER_RUNTIME=docker; compose_stdout_quiet down; echo rc=$?", down_stdout=ids, down_stderr=NO_TELEGRAM)
+    assert "a1b2c3d4e5f6" in done.stdout and "rc=0" in done.stdout
+    assert "no container with name or ID" in done.stderr
+    quiet = wrapper.run("CONTAINER_RUNTIME=docker; compose_quiet up -d; echo rc=$?", up_stdout=ids, up_stderr=NO_TELEGRAM)
+    assert "a1b2c3d4e5f6" in quiet.stdout and "no container with name or ID" in quiet.stderr
+
+
+def test_up_with_podman_hides_the_ids_and_the_false_errors_and_keeps_the_exit(wrapper):
+    done = wrapper.run("compose_quiet up -d; echo rc=$?", up_stdout=IDS + "started jht\\n", up_stderr=NO_TELEGRAM + "warn: x\\n")
+    assert done.stdout.splitlines() == ["started jht", "rc=0"], done.stdout
+    assert done.stderr.splitlines() == ["warn: x"], done.stderr
+    failed = wrapper.run("compose_quiet up -d; echo rc=$?", up_stdout=IDS, up_stderr="Error: no space\\n", up_exit=5)
+    assert "rc=5" in failed.stdout and "Error: no space" in failed.stderr
+
+
+def test_up_and_down_print_the_state_line_only_for_podman_in_the_wrapper_source():
+    text = WRAPPER.read_text(encoding="utf-8")
+    assert text.count('[ "$CONTAINER_RUNTIME" != podman ] || printf \'%s\\n\' "$(jht_say up.done)"') == 3
+    assert len(re.findall(r"^    compose_quiet up -d$", text, re.M)) == 3

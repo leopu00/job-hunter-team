@@ -347,6 +347,8 @@ jht_text_en() {
     download.fetching) printf '%s' "Downloading %s..." ;;
     download.saved_in) printf '%s' "Saved in: %s" ;;
     download.intel_mac) printf '%s' "The 0.4 macOS app only runs on Macs with Apple silicon (M1 and later); this is an Intel Mac, which 0.4 does not support. Nothing was downloaded." ;;
+    up.done) printf '%s' "Job Hunter Team started." ;;
+    down.done) printf '%s' "Job Hunter Team stopped." ;;
     uninstall.usage) printf '%s' "usage: jht uninstall --confirm [--purge]" ;;
     status.title) printf '%s' "Status" ;;
     status.container) printf '%s' "Container" ;;
@@ -413,6 +415,8 @@ jht_text_it() {
     download.fetching) printf '%s' "Scarico %s..." ;;
     download.saved_in) printf '%s' "Salvato in: %s" ;;
     download.intel_mac) printf '%s' "L'app per macOS della 0.4 gira solo su Mac con Apple silicon (M1 e successivi); questo e' un Mac Intel, non supportato nella 0.4. Non e' stato scaricato niente." ;;
+    up.done) printf '%s' "Job Hunter Team avviato." ;;
+    down.done) printf '%s' "Job Hunter Team fermato." ;;
     uninstall.usage) printf '%s' "uso: jht uninstall --confirm [--purge]" ;;
     status.title) printf '%s' "Stato" ;;
     status.container) printf '%s' "Container" ;;
@@ -1631,9 +1635,9 @@ container_down() {
   fi
   local status=0 errors
   errors="$(mktemp "${TMPDIR:-/tmp}/jht-down.XXXXXX")" || { COMPOSE_PROFILES=telegram compose down; return $?; }
-  COMPOSE_PROFILES=telegram compose down 2>"$errors" || status=$?
+  COMPOSE_PROFILES=telegram compose_stdout_quiet down 2>"$errors" || status=$?
   local shown left
-  shown="$(rootless_netns_noise_filter <"$errors")"
+  shown="$(compose_noise_filter <"$errors" | rootless_netns_noise_filter)"
   [ -z "$shown" ] || printf '%s\n' "$shown" >&2
   rm -f "$errors"
   # Podman exits non-zero with only that error even though the containers are gone:
@@ -1643,10 +1647,11 @@ container_down() {
       "nota: il processo di rete del team era gia' chiuso"*)
         # podman-compose lists every container of the project (broker and telegram too):
         # an empty answer, and not a failed one, is «nothing left».
-        left="$(COMPOSE_PROFILES=telegram compose ps -q 2>/dev/null)" && [ -z "$left" ] && return 0
+        left="$(COMPOSE_PROFILES=telegram compose ps -q 2>/dev/null)" && [ -z "$left" ] && { [ "$CONTAINER_RUNTIME" != podman ] || printf '%s\n' "$(jht_say down.done)"; return 0; }
         ;;
     esac
   fi
+  [ "$status" -ne 0 ] || [ "$CONTAINER_RUNTIME" != podman ] || printf '%s\n' "$(jht_say down.done)"
   return "$status"
 }
 
@@ -1670,6 +1675,38 @@ rootless_netns_noise_filter() {
     { print }
     END { if (held != "") print held }
   '
+}
+
+# podman-compose scrive su `up -d` e su `down` gli id grezzi dei container, il nome della rete del progetto e, per i servizi che non sono
+# mai stati creati (Telegram, se non e' configurato), «Error: no container with name or ID "jht-telegram" found»: non e' un errore, e'
+# un servizio che non c'e'. Via quelle righe (e solo quelle): ogni altra riga passa com'e', stderr compreso.
+compose_noise_filter() {
+  grep -v -E '^[0-9a-f]{12,64}$|^(jht|host-runtime)_default$|^Error: no container with name or ID "(jht|jht-broker|jht-telegram)" found' || true
+}
+
+# `compose <argomenti>` come prima, ma con Podman l'output passa per compose_noise_filter (stdout su stdout, stderr su stderr).
+# Il codice di uscita e' quello di compose.
+compose_quiet() {
+  local out err rc=0
+  if [ "$CONTAINER_RUNTIME" != podman ]; then compose "$@"; return $?; fi
+  out="$(mktemp "${TMPDIR:-/tmp}/jht-compose-out.XXXXXX")" || { compose "$@"; return $?; }
+  err="$(mktemp "${TMPDIR:-/tmp}/jht-compose-err.XXXXXX")" || { rm -f "$out"; compose "$@"; return $?; }
+  compose "$@" >"$out" 2>"$err" || rc=$?
+  compose_noise_filter <"$out"
+  compose_noise_filter <"$err" >&2
+  rm -f "$out" "$err"
+  return "$rc"
+}
+
+# Come compose_quiet, ma solo per stdout: lo stderr resta a chi chiama (container_down lo raccoglie in un file e lo filtra da se').
+compose_stdout_quiet() {
+  local out rc=0
+  if [ "$CONTAINER_RUNTIME" != podman ]; then compose "$@"; return $?; fi
+  out="$(mktemp "${TMPDIR:-/tmp}/jht-compose-out.XXXXXX")" || { compose "$@"; return $?; }
+  compose "$@" >"$out" || rc=$?
+  compose_noise_filter <"$out"
+  rm -f "$out"
+  return "$rc"
 }
 
 container_postcheck_running() {
@@ -6253,8 +6290,9 @@ case "$SUB" in
       err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
       exit 1
     }
-    compose up -d
+    compose_quiet up -d
     container_postcheck_running || exit 1
+    [ "$CONTAINER_RUNTIME" != podman ] || printf '%s\n' "$(jht_say up.done)"
     telegram_lifecycle_if_available resume || exit $?
     broker_migrate_legacy_once
     broker_configure_web_authorisations
@@ -6269,8 +6307,9 @@ case "$SUB" in
       err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
       exit 1
     }
-    compose up -d
+    compose_quiet up -d
     container_postcheck_running || exit 1
+    [ "$CONTAINER_RUNTIME" != podman ] || printf '%s\n' "$(jht_say up.done)"
     telegram_lifecycle_if_available resume || exit $?
     broker_migrate_legacy_once
     broker_configure_web_authorisations
@@ -6308,8 +6347,9 @@ case "$SUB" in
       err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
       exit 1
     }
-    compose up -d
+    compose_quiet up -d
     container_postcheck_running || exit 1
+    [ "$CONTAINER_RUNTIME" != podman ] || printf '%s\n' "$(jht_say up.done)"
     telegram_lifecycle_if_available resume || exit $?
     broker_migrate_legacy_once
     broker_configure_web_authorisations
