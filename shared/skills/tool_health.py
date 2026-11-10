@@ -232,8 +232,9 @@ TOOLS_OF_THE_FULL_IMAGE = ("playwright_browser", "linkedin_check", "cv_pdf_rende
 ON_REQUEST_BROWSERS = ("chromium", "chromium-browser", "google-chrome-stable", "google-chrome")
 
 
-def not_installed(name, tier=None, which=shutil.which):
+def not_installed(name, tier=None, which=None):
     """The evidence when `name` is absent on purpose, else None (the check runs as always)."""
+    which = shutil.which if which is None else which  # looked up per call, so a replaced shutil.which counts
     tier = (os.environ.get("JHT_IMAGE_TIER", "full") if tier is None else tier).strip().lower()
     if name in TOOLS_OF_THE_FULL_IMAGE and tier == "core":
         return "not installed yet: it arrives in the background after the onboarding (full image)"
