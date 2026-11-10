@@ -48,3 +48,20 @@ def test_a_broken_tool_of_the_full_image_is_still_broken(monkeypatch):
     monkeypatch.setitem(tool_health.CHECKS, "playwright_browser", lambda: ("BROKEN", "missing .so"))
     out = tool_health.collect(only={"playwright_browser"})
     assert out["broken"] == ["playwright_browser"] and out["any_broken"] is True
+
+
+def test_extras_tier_has_the_manual_login_browser_and_not_the_scout_or_the_cv_pdf_tools():
+    for name in ("playwright_browser", "linkedin_check", "cv_pdf_render"):
+        assert "not in the extras image" in tool_health.not_installed(name, tier="extras")
+    # the browser of the manual sign-in IS in the extras image: it is checked as always, and a missing one is BROKEN there
+    assert tool_health.not_installed("manual_login_browser", tier="extras") is None
+
+
+def test_an_extras_image_sweep_probes_the_manual_login_browser_only(monkeypatch):
+    monkeypatch.setenv("JHT_IMAGE_TIER", "extras")
+    ran = []
+    for name in tool_health.CHECKS:
+        monkeypatch.setitem(tool_health.CHECKS, name, lambda n=name: ran.append(n) or ("OK", "x"))
+    out = tool_health.collect()
+    assert ran == ["manual_login_browser"]
+    assert {n for n, t in out["tools"].items() if t["status"] == "NOT_INSTALLED"} == {"playwright_browser", "linkedin_check", "cv_pdf_render"}
