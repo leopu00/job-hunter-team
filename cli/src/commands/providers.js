@@ -9,6 +9,7 @@ import { readRegularFileText, writePrivateJson } from '../lib/secure-config-io.j
 import { declaredPlan, planTable, plansOf, suggestedPlan, withDeclaredPlan } from '../lib/provider-plan.js';
 import { refreshModelPin } from './model-pin.js';
 import { isContainer } from '../../../shared/runtime/container.js';
+import { PI_API_PROVIDERS, piApiProvider } from '../../../shared/runtime/provider-models.js';
 import { installSpec, pinnedVersion, pinnedPackage, manifestPath } from '../../../shared/runtime/provider-pins.js';
 import { c, GREEN, YELLOW, DIM, RESET } from './_colors.js';
 import { Command } from 'commander';
@@ -191,7 +192,40 @@ async function handleProviders() {
   }
 }
 
+// glm and kimi (Moonshot) run on the pi harness with an API key, which only `jht setup` can put in the config. `use` switches to
+// one that is already set up that way (and puts the harness on pi, the only one that runs it); without the key it says the
+// command that sets it up instead of an «archived» or «unrecognized» that the setup of the same provider contradicts.
+async function handleUsePiApi(piApi, config) {
+  const label = PI_API_PROVIDERS[piApi].label;
+  const entry = config.providers?.[piApi];
+  if (!entry || entry.auth_method !== 'api_key') {
+    console.error(`${ERR}  ${label} runs only on the pi harness, with an API key. Set it up with: jht setup --provider ${piApi} --harness pi --auth-method api_key --secret-mode file --secret-file <file with the key>`);
+    process.exitCode = 1;
+    return;
+  }
+  const prev = config.active_provider;
+  const prevHarness = config.harness ?? 'codex';
+  config.active_provider = piApi;
+  config.harness = 'pi';
+  writePrivateJson(CONFIG_PATH, config);
+  if (prev === piApi && prevHarness === 'pi') {
+    console.log(`  ${OK} provider already active: ${piApi}`);
+    return;
+  }
+  console.log(`  ${OK} active provider: ${prev || '(none)'} → ${piApi}`);
+  if (prevHarness !== 'pi') console.log(`  ${OK} harness: ${prevHarness} → pi (the only one that runs ${label})`);
+  console.log(`  ${DIM}Restart the team to apply: jht team stop --all && jht team start${RESET}`);
+}
+
 async function handleUse(id) {
+  const piApi = piApiProvider(id);
+  if (piApi) {
+    let current = {};
+    if (await fileExists(CONFIG_PATH)) {
+      try { current = JSON.parse(await readFile(CONFIG_PATH, 'utf-8')); } catch { /* start fresh */ }
+    }
+    return handleUsePiApi(piApi, current);
+  }
   const normalized = normalizeId(id);
   if (isArchived(id)) {
     console.error(`${ERR}  provider '${id}' is archived and can no longer be chosen. Supported: ${offeredProviders().join(', ')}`);
