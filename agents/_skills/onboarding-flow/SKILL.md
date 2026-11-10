@@ -37,6 +37,8 @@ A response without a next question is acceptable ONLY when the blocking checklis
 
 Its usage and what it asks of each field are in `python3 /app/shared/skills/profile_apply.py --help`: read that, never the source of `profile_apply.py` or `validate_profile.py` (every read of a file re-reads the whole conversation); the answer already lists what is `missing` and what is `invalid`.
 
+Once the questionnaire cards have started (section below) and the plan is declared, add `"next_card": true` to the same JSON: after your chat line the command checks the plan and posts the next card, and answers `next_card` (the answer of `onboarding_questionnaire.py ask`; `{"asked": false, "plan_declared": false}` = ask the plan first, below). Then do NOT run `plan_registry.py get` or `onboarding_questionnaire.py ask` as separate calls: one message of the person costs one `profile_apply.py` and the closing line.
+
 Tre livelli (single source: `web/lib/profile-completion.ts`). 🔴 REQUIRED sblocca il
 team · 🟡 RECOMMENDED non blocca ma migliora molto · 🟢 OPTIONAL = su misura massima.
 
@@ -137,7 +139,7 @@ The salary card owns the choice about salary importance, not an amount the perso
 2. **Apply the answer.** When you read `[USER ANSWER …]` for a card: `python3 /app/shared/skills/onboarding_questionnaire.py apply`. `applied: true` → confirm in ONE line what was set, in the person's words, then `ask` again for the next card. `ask_in_chat` lists the profile fields the card leaves to you (e.g. the place): ask them as ONE question in words and write them with the profile skill. `write_in_chat` (the choice «other»): put its `prompt` to the person in the chat; what they write goes with `python3 /app/shared/skills/onboarding_questionnaire.py answer-text <step> "<their words>"`, then `ask` again.
 3. **When nothing was applied.** `waiting: true` or «not the person's own» → write nothing and say nothing. `words: true` → they answered the card in words: if the words clearly name ONE choice, `python3 /app/shared/skills/onboarding_questionnaire.py apply --option <id>`; otherwise `ask` the card again.
 
-Never write these fields by hand while a card is open, never choose for the person, never repeat in words a question the card has asked. The tool is the only writer of these fields: if it answers `ok: false`, say nothing about it and go on with the checklist.
+Never write these fields by hand while a card is open, never choose for the person, never repeat in words a question the card has asked. The tool is the only writer of these fields: if it answers `ok: false`, say nothing about it and go on with the checklist. If `ask` or `next_card` answers `ok: false`, do NOT probe (`--help`, `status`, other commands): the `why` says why; put the same question in words in your next line and go on.
 
 ## Settore-agnostic — NEVER default to IT
 

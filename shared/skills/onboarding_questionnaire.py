@@ -49,9 +49,10 @@ PREFERENCES_TITLE_KEY = "onb.preferences.title"
 
 
 class QuestionnaireError(RuntimeError):
-    def __init__(self, code: str):
+    def __init__(self, code: str, why: str = ""):
         super().__init__(code)
         self.code = code
+        self.why = why  # what the caller may be told besides the code (never what the person wrote)
 
 
 def _home() -> Path:
@@ -269,9 +270,9 @@ def ask() -> dict[str, Any]:
         cards = card.get("cards", 0) if card.get("step") == step["id"] and isinstance(card.get("cards"), int) else 0
         if cards >= MAX_CARDS_PER_STEP:
             raise QuestionnaireError("too_many_cards")
-        posted, _why = first_run._post_plan_card(CARD_AGENT, _card_for(step, t))  # the one way a card is posted
+        posted, why = first_run._post_plan_card(CARD_AGENT, _card_for(step, t))  # the one way a card is posted
         if posted is None:
-            raise QuestionnaireError("card_not_posted")
+            raise QuestionnaireError("card_not_posted", why)
         state["card"] = {"step": step["id"], "question_id": posted, "cards": cards + 1}
         _write_state(state)
         return {"ok": True, "asked": True, "step": step["id"], "question_id": posted, **_progress(steps, answers, profile)}
@@ -503,7 +504,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             out = answer_text(args.step, args.text)
     except QuestionnaireError as error:
-        print(json.dumps({"ok": False, "error": error.code}))
+        print(json.dumps({"ok": False, "error": error.code, **({"why": error.why[:200]} if error.why else {})}))
         return 1
     print(json.dumps(out, ensure_ascii=False))
     return 0

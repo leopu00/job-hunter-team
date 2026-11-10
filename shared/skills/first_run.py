@@ -523,8 +523,29 @@ def _notify_command() -> list[str]:
     return [sys.executable, str(Path(__file__).resolve().parents[2] / "agents" / "_tools" / "jht-notify-user")]
 
 
+def _ensure_card_db() -> Optional[str]:
+    """The database the card is written to exists with its tables (idempotent); None, or why it could not be.
+
+    A new installation has no jobs.db until something opens it, and `jht-notify-user` refuses a database that is not
+    there, so the first card of the onboarding was never posted. The path is the one `jht-notify-user` reads."""
+    path = os.environ.get("JHT_DB") or str(_path("JHT_HOME") / "jobs.db")
+    try:
+        import _db  # type: ignore
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with contextlib.closing(sqlite3.connect(path, timeout=10)) as conn:
+            conn.row_factory = sqlite3.Row  # what ensure_schema reads its own tables with
+            _db.ensure_schema(conn)
+            conn.commit()
+    except Exception as error:  # a card that cannot be posted says why; it is not a crash
+        return f"the card was not posted: its database could not be prepared: {str(error)[:200]}"
+    return None
+
+
 def _post_plan_card(agent: str, card: dict) -> tuple[Optional[str], str]:
     """Post the card; (the question's id, "") or (None, why not)."""
+    unprepared = _ensure_card_db()
+    if unprepared is not None:
+        return None, unprepared
     command = _notify_command() + ["--agent", agent, "--oggetto", card["subject"]]
     for option in card["options"]:
         command += ["--option", f"{option['id']}={option['label']}"]

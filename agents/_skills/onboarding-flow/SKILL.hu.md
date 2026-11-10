@@ -38,6 +38,8 @@ Kérdés nélküli válasz CSAK akkor elfogadható, ha a blokkoló ellenőrzőli
 
 A használata és az, hogy mit kér az egyes mező, a `python3 /app/shared/skills/profile_apply.py --help` kimenetében van: azt olvasd, soha a `profile_apply.py` vagy a `validate_profile.py` forrását (minden fájlolvasás újra beolvassa az egész beszélgetést); a válasz már felsorolja, mi hiányzik (`missing`) és mi hibás (`invalid`).
 
+Amikor a kérdőív kártyái már elkezdődtek (lásd lent), és a csomag meg van adva, add hozzá ugyanahhoz a JSON-hoz a `"next_card": true` mezőt: a chatsorod után a parancs ellenőrzi a csomagot, kiteszi a következő kártyát, és `next_card` néven válaszol (az `onboarding_questionnaire.py ask` válasza; `{"asked": false, "plan_declared": false}` = előbb a csomagot kérdezd meg, lent). Ilyenkor NE futtasd külön hívásként a `plan_registry.py get` és az `onboarding_questionnaire.py ask` parancsot: a személy egy üzenete egy `profile_apply.py` hívásba és a záró sorba kerül.
+
 Három szint (single source: `web/lib/profile-completion.ts`). 🔴 REQUIRED feloldja a
 csapatot · 🟡 RECOMMENDED nem blokkol, de sokat javít · 🟢 OPTIONAL = maximális személyre szabás.
 
@@ -135,7 +137,7 @@ A bérkártya a fizetés fontosságáról szóló választ kezeli, nem a chatben
 2. **Alkalmazd a választ.** Amikor egy kártyához `[USER ANSWER …]`-t olvasol: `python3 /app/shared/skills/onboarding_questionnaire.py apply`. `applied: true` → erősítsd meg EGY sorban, mi lett beállítva, a személy szavaival, majd újra `ask` a következő kártyához. Az `ask_in_chat` felsorolja a profil azon mezőit, amelyeket a kártya rád hagy (például a helyet): kérdezd meg őket EGY kérdéssel, szavakkal, és írd be a profil skillel. A `write_in_chat` («más» választás): add a személy elé a `prompt`-ját a chatben; amit ír, azt a `python3 /app/shared/skills/onboarding_questionnaire.py answer-text <step> "<a szavai>"` viszi, majd újra `ask`.
 3. **Ha semmi nem lett alkalmazva.** `waiting: true` vagy «not the person's own» → ne írj és ne mondj semmit. `words: true` → szavakkal válaszolt a kártyára: ha a szavak egyértelműen EGY választást neveznek meg, `python3 /app/shared/skills/onboarding_questionnaire.py apply --option <id>`; különben az `ask` újra felteszi a kártyát.
 
-Soha ne írd ezeket a mezőket kézzel, amíg egy kártya nyitva van, soha ne válassz a személy helyett, soha ne ismételj szavakkal olyan kérdést, amelyet a kártya már feltett. Ezeket a mezőket egyedül az eszköz írja: ha `ok: false`-t válaszol, ne beszélj róla, és folytasd a checklisttel.
+Soha ne írd ezeket a mezőket kézzel, amíg egy kártya nyitva van, soha ne válassz a személy helyett, soha ne ismételj szavakkal olyan kérdést, amelyet a kártya már feltett. Ezeket a mezőket egyedül az eszköz írja: ha `ok: false`-t válaszol, ne beszélj róla, és folytasd a checklisttel. Ha az `ask` vagy a `next_card` `ok: false`-t válaszol, NE tapogatózz (`--help`, `status`, más parancsok): a `why` megmondja, miért; tedd fel ugyanazt a kérdést szavakkal a következő soraidban, és haladj tovább.
 
 ## Szektoragnosztikus — SOHA ne alapértelmezd IT-re
 
