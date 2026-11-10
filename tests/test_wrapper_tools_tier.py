@@ -27,7 +27,7 @@ FAKE_DOCKER = """#!/bin/sh
 case "$1" in
   info) [ -e "$FAKE/engine-down" ] && exit 1; exit 0 ;;
   image) [ -e "$FAKE/full-present" ] && exit 0; exit 1 ;;
-  pull) printf '%s\\n' "$*" >> "$FAKE/pulls"; sleep "${PULL_SLEEP:-0}"; [ -e "$FAKE/pull-fails" ] && exit 1; touch "$FAKE/full-present"; exit 0 ;;
+  pull) printf '%s\\n' "$*" >> "$FAKE/pulls"; n=0; while [ -e "$FAKE/pull-hold" ] && [ "$n" -lt 300 ]; do sleep 0.1; n=$((n+1)); done; [ -e "$FAKE/pull-fails" ] && exit 1; touch "$FAKE/full-present"; exit 0 ;;
 esac
 exit 0
 """
@@ -184,13 +184,16 @@ def test_status_is_an_error_when_the_engine_does_not_answer_and_one_line(box):
 
 def test_pull_prints_the_phase_once_and_ends_ready_with_the_notice(box):
     box.tier()
-    done = box.run("tools_main pull", PULL_SLEEP="1")
+    # the fake pull waits for the test to let it go: "pulling" is there to be seen by construction, not because a child is slower
+    (box.fake / "pull-hold").write_text("", encoding="utf-8")
+    done = box.run("tools_main pull")
     assert done.returncode == 0 and done.stdout == "JHT_PHASE tools_pull\n", done.stderr
     assert box.notice()["state"] == "pulling" and box.notice()["tier"] == "core" and box.notice()["since"]
     # a second call while it pulls: nothing printed, no second pull
-    again = box.run("tools_main pull", PULL_SLEEP="1")
+    again = box.run("tools_main pull")
     assert again.returncode == 0 and again.stdout == "", again.stderr
     assert status(box)["state"] == "pulling"
+    (box.fake / "pull-hold").unlink()
     ready = box.wait_for("ready")
     assert ready["schema"] == 1 and ready["reason"] == ""
     assert (box.fake / "pulls").read_text(encoding="utf-8").splitlines() == [f"pull {FULL}"]
@@ -273,7 +276,7 @@ def test_a_link_in_place_of_the_state_folder_sends_the_notice_nowhere(box, tmp_p
     elsewhere.mkdir()
     (box.home / "state").symlink_to(elsewhere)
     box.tier()
-    done = box.run("tools_main pull", PULL_SLEEP="0")
+    done = box.run("tools_main pull")
     assert done.returncode == 0 and done.stdout == "JHT_PHASE tools_pull\n", done.stderr
     box.wait_for_pull_end()
     assert list(elsewhere.iterdir()) == [], "nothing written through the link"

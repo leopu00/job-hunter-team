@@ -29,7 +29,7 @@ FAKE_DOCKER = r"""#!/bin/sh
 case "$1" in
   info) [ -e "$FAKE/engine-down" ] && exit 1; exit 0 ;;
   image) [ -e "$FAKE/full-present" ] && exit 0; exit 1 ;;
-  pull) echo "$*" >> "$FAKE/pulls"; sleep "${PULL_SLEEP:-0}"; [ -e "$FAKE/pull-fails" ] && exit 1; : > "$FAKE/full-present"; exit 0 ;;
+  pull) echo "$*" >> "$FAKE/pulls"; n=0; while [ -e "$FAKE/pull-hold" ] && [ "$n" -lt 300 ]; do sleep 0.1; n=$((n+1)); done; [ -e "$FAKE/pull-fails" ] && exit 1; : > "$FAKE/full-present"; exit 0 ;;
 esac
 exit 0
 """
@@ -136,11 +136,15 @@ def test_status_is_an_error_when_the_engine_does_not_answer(box):
 
 def test_pull_prints_the_phase_once_and_ends_ready_with_the_notice(box):
     box.tier()
-    done = box.run("exit (Invoke-ToolsCommand @('pull'))", PULL_SLEEP="2")
+    # the fake pull waits for the test to let it go: "pulling" is there to be seen by construction, not because a child is slower
+    (box.fake / "pull-hold").write_text("", encoding="utf-8")
+    done = box.run("exit (Invoke-ToolsCommand @('pull'))")
     assert done.returncode == 0 and _lines(done) == ["JHT_PHASE tools_pull"], done.stdout + done.stderr
     assert box.notice()["state"] == "pulling" and box.notice()["tier"] == "core"
-    again = box.run("exit (Invoke-ToolsCommand @('pull'))", PULL_SLEEP="2")
+    again = box.run("exit (Invoke-ToolsCommand @('pull'))")
     assert again.returncode == 0 and _lines(again) == [], again.stdout + again.stderr
+    assert status(box)["state"] == "pulling"
+    (box.fake / "pull-hold").unlink()
     ready = box.wait_for("ready")
     assert ready["schema"] == 1 and ready["reason"] == ""
     assert len((box.fake / "pulls").read_text(encoding="utf-8").splitlines()) == 1
