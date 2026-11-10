@@ -196,6 +196,7 @@ try {
       '*/scripts/configure-podman-windows-network.ps1' { Join-Path $PSScriptRoot 'configure-podman-windows-network.ps1'; break }
       '*/scripts/podman-machine-bridge.ps1' { Join-Path $PSScriptRoot 'podman-machine-bridge.ps1'; break }
       '*/scripts/jht-integration.ps1' { Join-Path $PSScriptRoot 'jht-integration.ps1'; break }
+      '*/scripts/jht-tools.ps1' { Join-Path $PSScriptRoot 'jht-tools.ps1'; break }
       '*/scripts/wsl-interop-connect-proxy.py' { Join-Path $PSScriptRoot 'wsl-interop-connect-proxy.py'; break }
       default { throw "unexpected clean-start URL: $Url" }
     }
@@ -213,7 +214,9 @@ try {
     # The host script that came after the main manifest, and the manifest of its own (the real enabler writes both).
     Copy-Item -LiteralPath (Join-Path $scripts 'jht-integration.ps1') -Destination (Join-Path $RuntimeDir 'jht-integration.ps1') -Force
     $integrationDigest = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $RuntimeDir 'jht-integration.ps1')).Hash.ToLowerInvariant()
-    [IO.File]::WriteAllText((Join-Path $RuntimeDir '.runtime-helpers'), "jht-integration.ps1=$integrationDigest`n", [Text.UTF8Encoding]::new($false))
+    Copy-Item -LiteralPath (Join-Path $scripts 'jht-tools.ps1') -Destination (Join-Path $RuntimeDir 'jht-tools.ps1') -Force
+    $toolsDigest = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $RuntimeDir 'jht-tools.ps1')).Hash.ToLowerInvariant()
+    [IO.File]::WriteAllText((Join-Path $RuntimeDir '.runtime-helpers'), "jht-integration.ps1=$integrationDigest`njht-tools.ps1=$toolsDigest`n", [Text.UTF8Encoding]::new($false))
     New-Item -ItemType Directory -Path $RuntimeShimDir -Force | Out-Null
     [IO.File]::WriteAllText((Join-Path $RuntimeDir 'container-runtime'), "podman`n", [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $RuntimeDir 'podman-machine'), "jht-podman`n", [Text.UTF8Encoding]::new($false))
@@ -277,6 +280,10 @@ try {
   }
   $helpersManifest = ConvertFrom-StringData (Get-Content -LiteralPath (Join-Path $RuntimeDir '.runtime-helpers') -Raw)
   $sourceIntegrationHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $PSScriptRoot 'jht-integration.ps1')).Hash.ToLowerInvariant()
+  $sourceToolsHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $PSScriptRoot 'jht-tools.ps1')).Hash.ToLowerInvariant()
+  if ($helpersManifest.'jht-tools.ps1' -ne $sourceToolsHash -or $manifestValues.ContainsKey('jht-tools.ps1')) {
+    throw 'clean-start jht-tools.ps1 is not exactly attested in the manifest of its own'
+  }
   if ($helpersManifest.'jht-integration.ps1' -ne $sourceIntegrationHash -or $manifestValues.ContainsKey('jht-integration.ps1')) {
     throw 'clean-start host script bytes are not exactly attested in the manifest of their own'
   }
@@ -463,6 +470,7 @@ exit /b 0
   $PodmanMachineFile = $appManifestFiles['podman-machine']
   $ContainerUnitFile = $appManifestFiles['jht-container.service']
   $RuntimeImageFile = Join-Path $RuntimeDir 'runtime-image'
+  $RuntimeTierFile = Join-Path $RuntimeDir 'runtime-tier'
   $RuntimeManifest = Join-Path $cleanRoot 'rewritten.runtime-integrity'
   Write-RuntimeManifest
   Assert-AppManifest -Path $RuntimeManifest -Stage 'after upgrade rewrite'

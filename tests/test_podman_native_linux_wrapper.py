@@ -27,7 +27,7 @@ FUNCTIONS = (
     "version_leading_numbers", "version_at_least", "podman_version_number", "podman_compose_version_number",
     "podman_compose_pair_supported", "podman_native_override_path", "podman_native_override_ensure",
     "compose_project_name", "podman_binary", "podman_compose_binary", "podman_native_rootless", "compose_file", "compose_file_run", "attest_cache_clear", "attest_cache_path", "attest_cache_folder_ok",
-    "podman_native_no_pod_arg", "podman_expected_config_hash", "runtime_image_pin_value",
+    "podman_native_no_pod_arg", "podman_expected_config_hash", "runtime_image_pin_value", "runtime_selected_image",
 )
 
 
@@ -78,7 +78,7 @@ def box(tmp_path):
             fakes()
         script = (
             f"set -u\nJHT_PODMAN_UP_TIMEOUT_S={up_cap}\n"
-            f'PATH="{bin_dir}:/usr/bin:/bin"\nRUNTIME_DIR="{runtime}"\nRUNTIME_IMAGE_PIN="{runtime}/runtime-image"\n'
+            f'PATH="{bin_dir}:/usr/bin:/bin"\nRUNTIME_DIR="{runtime}"\nRUNTIME_IMAGE_PIN="{runtime}/runtime-image"\nRUNTIME_TIER_FILE="{runtime}/runtime-tier"\n'
             f"PODMAN_RUNTIME_MODE={mode}\nPODMAN_MACHINE_NAME=jht-podman\n"
             "CONTAINER_RUNTIME=podman\nHOST_UID=1000\nPODMAN_NATIVE_REMOTE=0\nerr() { echo \"error: $*\" >&2; }\n" + _source() + "\n" + body
         )

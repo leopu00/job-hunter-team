@@ -45,6 +45,7 @@ OWNER_CHECKED = {
     "$PodmanMachineBridgePath": "(Join-Path $BinDir 'podman-machine-bridge.ps1')",
     "$DockerShim": "$shim",
     "$RuntimeImageFile": "$runtimeImageFile",
+    "$RuntimeTierFile": "$runtimeTierFile",
 }
 
 
