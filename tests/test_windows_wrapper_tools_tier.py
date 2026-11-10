@@ -270,3 +270,34 @@ def test_jht_tools_is_a_host_helper_the_installer_ships_the_enabler_attests_and_
     assert "$toolsHash" not in next(line for line in enabler.splitlines() if line.startswith('$manifest = "version=1'))
     assert _text(TOOLS).count("\n# JHT_RUNTIME_HELPER=1\n") == 1
     assert (ROOT / "web" / "public" / "install.ps1").read_bytes() == (ROOT / "scripts" / "install.ps1").read_bytes()
+
+
+# ── the notice for the container is written only into a real folder and over a plain file ────────────────────────────────────
+
+def test_a_junction_in_place_of_the_state_folder_sends_the_notice_nowhere(box, tmp_path):
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    body = ("New-Item -ItemType Junction -Path (Join-Path $JhtHome 'state') -Target $env:T_ELSEWHERE | Out-Null\n"
+            "Write-ToolsNotice 'ready' 'core' '' ''\n[Console]::Out.WriteLine('done')\n")
+    done = box.run(body, T_ELSEWHERE=str(elsewhere))
+    assert _lines(done) == ["done"], done.stdout + done.stderr
+    assert list(elsewhere.iterdir()) == [], "nothing written through the junction"
+
+
+def test_a_link_in_place_of_tools_json_is_not_written_through(box, tmp_path):
+    victim = tmp_path / "victim.txt"
+    victim.write_text("keep me\n", encoding="utf-8")
+    body = ("New-Item -ItemType Directory -Path (Join-Path $JhtHome 'state') -Force | Out-Null\n"
+            "try { New-Item -ItemType SymbolicLink -Path (Join-Path $JhtHome 'state\\tools.json') -Target $env:T_VICTIM -ErrorAction Stop | Out-Null }\n"
+            "catch { [Console]::Out.WriteLine('NO_SYMLINK'); exit 0 }\n"
+            "Write-ToolsNotice 'ready' 'core' '' ''\n[Console]::Out.WriteLine('done')\n")
+    done = box.run(body, T_VICTIM=str(victim))
+    if _lines(done) == ["NO_SYMLINK"]:
+        pytest.skip("this account may not create symbolic links")
+    assert _lines(done) == ["done"], done.stdout + done.stderr
+    assert victim.read_text(encoding="utf-8") == "keep me\n"
+
+
+def test_a_real_state_folder_is_written_as_before(box):
+    done = box.run("Write-ToolsNotice 'ready' 'core' '' '2026-11-10T00:00:00Z'\n[Console]::Out.WriteLine('done')")
+    assert _lines(done) == ["done"] and box.notice()["state"] == "ready"

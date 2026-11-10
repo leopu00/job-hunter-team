@@ -96,8 +96,15 @@ def box(tmp_path):
             time.sleep(0.1)
         raise AssertionError(f"the notice never reached {state}: {notice()}")
 
+    def wait_for_pull_end():
+        for _ in range(100):
+            if not (runtime / ".tools-pull.lock").exists():
+                return
+            time.sleep(0.1)
+        raise AssertionError("the pull job never ended")
+
     return type("Box", (), {"run": run, "tier": tier, "runtime": runtime, "home": home, "fake": fake, "notice": notice,
-                            "wait_for": wait_for})
+                            "wait_for": wait_for, "wait_for_pull_end": staticmethod(wait_for_pull_end)})
 
 
 # ── the wrapper: which image, and whether the tier file can be believed ──────────────────────────────────────────────────────
@@ -257,3 +264,47 @@ def test_jht_tools_is_a_host_helper_loaded_after_its_digest_and_with_a_local_hel
     assert "add|remove|pull) runtime_helpers_install" in wrapper
     installer = (ROOT / "scripts" / "install.sh").read_text(encoding="utf-8")
     assert re.search(r'^RUNTIME_HELPERS="[^"]*\bjht-tools\.sh\b[^"]*"', installer, re.M)
+
+
+# ── the notice for the container is written only into a real folder and over a plain file ────────────────────────────────────
+
+def test_a_link_in_place_of_the_state_folder_sends_the_notice_nowhere(box, tmp_path):
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (box.home / "state").symlink_to(elsewhere)
+    box.tier()
+    done = box.run("tools_main pull", PULL_SLEEP="0")
+    assert done.returncode == 0 and done.stdout == "JHT_PHASE tools_pull\n", done.stderr
+    box.wait_for_pull_end()
+    assert list(elsewhere.iterdir()) == [], "nothing written through the link"
+    assert (box.home / "state").is_symlink()
+
+
+def test_a_dangling_link_in_place_of_the_state_folder_is_not_made_a_folder(box, tmp_path):
+    (box.home / "state").symlink_to(tmp_path / "does-not-exist")
+    box.run('tools_notice ready core "" ""')
+    assert not (tmp_path / "does-not-exist").exists() and (box.home / "state").is_symlink()
+
+
+def test_a_link_in_place_of_tools_json_is_not_written_through_and_not_replaced(box, tmp_path):
+    victim = tmp_path / "victim.txt"
+    victim.write_text("keep me\n", encoding="utf-8")
+    (box.home / "state").mkdir()
+    (box.home / "state" / "tools.json").symlink_to(victim)
+    box.run('tools_notice ready core "" ""')
+    assert victim.read_text(encoding="utf-8") == "keep me\n"
+    assert (box.home / "state" / "tools.json").is_symlink()
+    assert [p.name for p in (box.home / "state").iterdir()] == ["tools.json"], "no temp file is left"
+
+
+def test_a_folder_in_place_of_tools_json_is_left_alone(box):
+    (box.home / "state" / "tools.json").mkdir(parents=True)
+    box.run('tools_notice ready core "" ""')
+    assert (box.home / "state" / "tools.json").is_dir() and list((box.home / "state" / "tools.json").iterdir()) == []
+
+
+def test_a_real_state_folder_and_a_plain_old_tools_json_are_written_as_before(box):
+    (box.home / "state").mkdir()
+    (box.home / "state" / "tools.json").write_text("{}\n", encoding="utf-8")
+    box.run('tools_notice ready core "" "2026-11-10T00:00:00Z"')
+    assert json.loads((box.home / "state" / "tools.json").read_text(encoding="utf-8"))["state"] == "ready"

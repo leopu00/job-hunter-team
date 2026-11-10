@@ -40,11 +40,18 @@ tools_pulling() {
 
 # state tier reason since -> the notice for the container, written whole (tmp + rename), readable by the container user.
 tools_notice() {
-  local state="$1" tier="$2" reason="$3" since="${4:-}" tmp
+  local state="$1" tier="$2" reason="$3" since="${4:-}" tmp target="$TOOLS_STATE_DIR/tools.json"
+  # $JHT_HOME is the folder the container writes in: a link in place of `state` or of tools.json must not send the notice somewhere
+  # else, and what is there must be a real folder and a plain file. (No owner check: the container makes files in `state` too, and
+  # the user it runs as may not be this one.)
+  [ ! -L "$TOOLS_STATE_DIR" ] || return 0
   mkdir -p "$TOOLS_STATE_DIR" 2>/dev/null || return 0
+  [ -d "$TOOLS_STATE_DIR" ] && [ ! -L "$TOOLS_STATE_DIR" ] || return 0
+  if [ -e "$target" ] || [ -L "$target" ]; then [ -f "$target" ] && [ ! -L "$target" ] || return 0; fi
   tmp="$(mktemp "$TOOLS_STATE_DIR/.tools.json.XXXXXX")" || return 0
   printf '{"schema":1,"state":"%s","tier":"%s","reason":"%s","since":"%s","updated":"%s"}\n' \
-    "$state" "$tier" "$reason" "$since" "$(tools_now)" > "$tmp" && chmod 644 "$tmp" && mv -f "$tmp" "$TOOLS_STATE_DIR/tools.json" || rm -f "$tmp"
+    "$state" "$tier" "$reason" "$since" "$(tools_now)" > "$tmp" && chmod 644 "$tmp" \
+    && [ ! -L "$TOOLS_STATE_DIR" ] && mv -f "$tmp" "$target" || rm -f "$tmp"
 }
 
 # state and reason as the engine and the host files say them.

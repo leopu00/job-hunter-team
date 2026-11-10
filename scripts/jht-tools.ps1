@@ -46,7 +46,15 @@ function Test-ToolsPulling {
 function Write-ToolsNotice {
   param([string]$State, [string]$Tier, [string]$Reason, [string]$Since)
   try {
+    # $JhtHome is the folder the container writes in: a link (a junction, a symlink) in place of `state` or of tools.json must not
+    # send the notice somewhere else, and what is there must be a real folder and a plain file.
+    $dir = Get-Item -LiteralPath $ToolsStateDir -Force -ErrorAction SilentlyContinue
+    if ($dir -and ((($dir.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) -or -not $dir.PSIsContainer)) { return }
     New-Item -ItemType Directory -Path $ToolsStateDir -Force | Out-Null
+    $dir = Get-Item -LiteralPath $ToolsStateDir -Force
+    if (($dir.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return }
+    $file = Get-Item -LiteralPath (Join-Path $ToolsStateDir 'tools.json') -Force -ErrorAction SilentlyContinue
+    if ($file -and ((($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) -or $file.PSIsContainer)) { return }
     $temp = Join-Path $ToolsStateDir ".tools.json.$PID-$([guid]::NewGuid().ToString('N'))"
     $json = '{{"schema":1,"state":"{0}","tier":"{1}","reason":"{2}","since":"{3}","updated":"{4}"}}' -f $State, $Tier, $Reason, $Since, (Get-ToolsNow)
     [IO.File]::WriteAllText($temp, "$json`n", [Text.UTF8Encoding]::new($false))
