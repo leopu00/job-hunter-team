@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -246,3 +247,25 @@ def test_a_manifest_that_attests_a_removed_tier_file_is_an_interrupted_switch(bo
     case = "Remove-Item -LiteralPath $RuntimeTierFile -Force\nif (Test-RuntimeBundleTrusted) { 'trusted [' + $env:JHT_IMAGE + ']' } else { 'untrusted' }"
     done = _trust(box, case, tier_text="core\n")
     assert _lines(done) == ["trusted []"], done.stdout + done.stderr
+
+
+# ── the wiring: `jht tools` is a host helper like `jht integration` (static: the same files the integration test reads) ─────
+
+def _text(path: Path) -> str:
+    return path.read_text(encoding="utf-8").replace("\r\n", "\n")
+
+
+def test_jht_tools_is_a_host_helper_the_installer_ships_the_enabler_attests_and_the_wrapper_loads_after_its_digest():
+    wrapper = _text(WRAPPER)
+    installer = _text(ROOT / "scripts" / "install.ps1")
+    enabler = _text(ROOT / "scripts" / "enable-podman-windows-runtime.ps1")
+    assert "$RuntimeHelpers = @('jht-integration.ps1', 'jht-tools.ps1')" in wrapper
+    assert re.search(r"'tools' \{\n    Require-ComposeFile\n", wrapper)
+    assert "[string]$Rest[0] -ceq 'pull'" in wrapper, "only pull fetches a missing helper"
+    assert ". (Join-Path $RuntimeDir 'jht-tools.ps1')\n    exit (Invoke-ToolsCommand $Rest)" in wrapper
+    assert "'integration', 'tools'," in wrapper, "its --help is the local one"
+    assert "'scripts/jht-tools.ps1'" in installer and "(Join-Path $RuntimeDir 'jht-tools.ps1')" in installer
+    assert "jht-tools.ps1=$toolsHash" in enabler and "(Join-Path $RuntimeDir 'jht-tools.ps1')" in enabler
+    assert "$toolsHash" not in next(line for line in enabler.splitlines() if line.startswith('$manifest = "version=1'))
+    assert _text(TOOLS).count("\n# JHT_RUNTIME_HELPER=1\n") == 1
+    assert (ROOT / "web" / "public" / "install.ps1").read_bytes() == (ROOT / "scripts" / "install.ps1").read_bytes()

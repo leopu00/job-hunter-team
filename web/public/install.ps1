@@ -445,7 +445,7 @@ function Show-PodmanSetupProblem {
 
 function Test-JhtDownloadedRuntimeScripts {
   param([string]$ScriptsPath)
-  foreach ($ps1 in @('jht-wrapper.ps1', 'windows-private-acl.ps1', 'enable-podman-windows-runtime.ps1', 'configure-podman-windows-network.ps1', 'podman-machine-bridge.ps1', 'jht-integration.ps1')) {
+  foreach ($ps1 in @('jht-wrapper.ps1', 'windows-private-acl.ps1', 'enable-podman-windows-runtime.ps1', 'configure-podman-windows-network.ps1', 'podman-machine-bridge.ps1', 'jht-integration.ps1', 'jht-tools.ps1')) {
     [scriptblock]::Create((Get-Content -LiteralPath (Join-Path $ScriptsPath $ps1) -Raw)) | Out-Null
   }
 }
@@ -473,7 +473,7 @@ function Get-RuntimeFiles {
     foreach ($relative in @(
       'docker-compose.yml', 'docker-compose.podman.yml', 'scripts/jht-wrapper.ps1',
       'scripts/windows-private-acl.ps1', 'scripts/enable-podman-windows-runtime.ps1',
-      'scripts/configure-podman-windows-network.ps1', 'scripts/podman-machine-bridge.ps1', 'scripts/jht-integration.ps1', 'scripts/wsl-interop-connect-proxy.py'
+      'scripts/configure-podman-windows-network.ps1', 'scripts/podman-machine-bridge.ps1', 'scripts/jht-integration.ps1', 'scripts/jht-tools.ps1', 'scripts/wsl-interop-connect-proxy.py'
     )) { Write-Dry "iwr $releaseBase/$relative" }
     Write-JhtPhase image_pull
     Write-Dry "podman pull $RuntimeImage"
@@ -535,6 +535,7 @@ function Get-RuntimeFiles {
       'scripts/configure-podman-windows-network.ps1' = (Join-Path $stageScripts 'configure-podman-windows-network.ps1')
       'scripts/podman-machine-bridge.ps1' = (Join-Path $stageScripts 'podman-machine-bridge.ps1')
       'scripts/jht-integration.ps1' = (Join-Path $stageScripts 'jht-integration.ps1')
+      'scripts/jht-tools.ps1' = (Join-Path $stageScripts 'jht-tools.ps1')
       'scripts/wsl-interop-connect-proxy.py' = (Join-Path $stageScripts 'wsl-interop-connect-proxy.py')
     }
     foreach ($relative in $downloads.Keys) { Get-File -Url "$releaseBase/$relative" -Dest $downloads[$relative] }
@@ -566,6 +567,7 @@ function Get-RuntimeFiles {
     $helperDest,
     (Join-Path $BinDir 'podman-machine-bridge.ps1'),
     (Join-Path $RuntimeDir 'jht-integration.ps1'),
+    (Join-Path $RuntimeDir 'jht-tools.ps1'),
     (Join-Path $RuntimeDir '.runtime-helpers'),
     (Join-Path $RuntimeDir 'bin\docker.exe')
   )

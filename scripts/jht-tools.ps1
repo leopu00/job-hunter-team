@@ -1,4 +1,5 @@
 # jht-tools.ps1 - the tools of the full image, pulled in the background after the install (P4). PowerShell port of jht-tools.sh.
+# JHT_RUNTIME_HELPER=1
 #
 # A LIBRARY, not a program: the host wrapper loads it (dot-sourced) after checking its sha256 against the runtime manifest and calls
 # Invoke-ToolsCommand from its `tools` branch. It uses what the wrapper has: $RuntimeDir, $RuntimeTierFile, $DefaultRuntimeImage,

@@ -556,7 +556,7 @@ function Test-RuntimePathAuthority {
 # `<name>=<sha256>`): the desktop app checks the main manifest key by key and must not meet a key it does not know. A helper is
 # dot-sourced only while the file still matches its line there. A runtime that has none yet gets it from the release origin the
 # first time it is needed (the `integration` command) and at the end of every upgrade.
-$RuntimeHelpers = @('jht-integration.ps1')
+$RuntimeHelpers = @('jht-integration.ps1', 'jht-tools.ps1')
 $RuntimeHelpersManifest = Join-Path $RuntimeDir '.runtime-helpers'
 
 function Get-RuntimeHelperHash {
@@ -923,7 +923,7 @@ function Test-HostCommandUsesLocalHelp {
   return $Command -in @(
     'up', 'start-container', 'down', 'stop-container', 'restart', 'recreate',
     'upgrade', 'logs', 'status', 'shell', 'oauth-login', 'claude-login',
-    'setup', 'download', 'mail', 'telegram', 'integration', 'reset', 'migrate-runtime'
+    'setup', 'download', 'mail', 'telegram', 'integration', 'tools', 'reset', 'migrate-runtime'
   )
 }
 
@@ -3654,6 +3654,21 @@ switch ($Sub) {
     Assert-TrustedRuntime
     . $helperPath
     exit (Invoke-IntegrationCommand $Rest)
+  }
+
+  'tools' {
+    Require-ComposeFile
+    # Same as `integration`: dot-sourced at script level; a helper that is missing is fetched only by `pull`.
+    if (-not (Test-RuntimeHelperDeclared 'jht-tools.ps1')) {
+      $mayFetch = $Rest.Count -gt 0 -and [string]$Rest[0] -ceq 'pull'
+      if (-not $mayFetch -or -not (Install-RuntimeHelpers)) {
+        Write-Err "script jht-tools.ps1 non ancora installato: 'jht upgrade' (o un 'jht tools pull') e riprova"
+        exit 1
+      }
+    }
+    Assert-TrustedRuntime
+    . (Join-Path $RuntimeDir 'jht-tools.ps1')
+    exit (Invoke-ToolsCommand $Rest)
   }
 
   'telegram' {
