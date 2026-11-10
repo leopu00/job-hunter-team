@@ -20,11 +20,14 @@ from __future__ import annotations
 import json
 import os
 import re
+import stat
 import time
 from pathlib import Path
 from typing import Optional
 
 TTL_SEC = 600
+FUTURE_MARGIN_SEC = 60   # a claim stamped later than this from now is not believed (it would hold the position for ever)
+MAX_CLAIM_BYTES = 4096   # a claim is a line of JSON; anything bigger is not one
 ROLES = ("analista", "scorer")
 _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
@@ -33,6 +36,11 @@ def agent_name() -> Optional[str]:
     """Who is asking: JHT_AGENT_NAME or JHT_AGENT_ID, lower case; None when it is not an agent."""
     name = (os.environ.get("JHT_AGENT_NAME") or os.environ.get("JHT_AGENT_ID") or "").strip().lower()
     return name if _NAME_RE.match(name) else None
+
+
+def role_of(agent: Optional[str]) -> str:
+    """The role of an agent name: `analista-2` is `analista` (the same rule as throttle_engine)."""
+    return re.sub(r"-\d+$", "", str(agent or "").strip().lower())
 
 
 def _dir() -> Path:
@@ -44,18 +52,34 @@ def _path(role: str, position_id: int) -> Path:
 
 
 def _read(path: Path) -> Optional[dict]:
+    """The claim in this file, or None. Only a regular file of a few bytes is read, and without following a link and
+    without waiting on a pipe: what sits where a claim should be is not always one (a FIFO or a huge file would hold
+    every `next-for-*` of the box)."""
+    fd = None
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_CLAIM_BYTES:
+            return None
+        data = json.loads(os.read(fd, MAX_CLAIM_BYTES + 1).decode("utf-8"))
         return data if isinstance(data, dict) else None
     except (OSError, ValueError):
         return None
+    finally:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
 
 
 def _fresh(entry: Optional[dict], now: float, ttl: float) -> bool:
     try:
-        return entry is not None and now - float(entry["at"]) < ttl
+        age = now - float(entry["at"]) if entry is not None else None
     except (KeyError, TypeError, ValueError):
         return False
+    # too old is over; stamped in the future by more than the margin is not believed either
+    return age is not None and -FUTURE_MARGIN_SEC < age < ttl
 
 
 def holder(role: str, position_id: int, now: Optional[float] = None, ttl: float = TTL_SEC) -> Optional[str]:
@@ -171,7 +195,7 @@ def claimed_by_others(role: str, agent: str, now: Optional[float] = None, ttl: f
     prefix = f"{role}-"
     for entry in names:
         name = entry.name
-        if not name.startswith(prefix) or not name[len(prefix):].isdigit():
+        if not name.startswith(prefix) or not re.fullmatch(r"[0-9]{1,18}", name[len(prefix):]):
             continue
         data = _read(entry)
         if _fresh(data, now, ttl) and data.get("agent") != agent:

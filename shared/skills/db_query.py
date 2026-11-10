@@ -1212,7 +1212,7 @@ def role_queue_count(conn, role, for_agent=None):
     if entry is None:
         return 0
     source, where = entry
-    if for_agent and role in queue_claims.ROLES:
+    if for_agent and role in queue_claims.ROLES and queue_claims.role_of(for_agent) == role:
         taken = queue_claims.claimed_by_others(role, str(for_agent).strip().lower())
         if taken:
             ids = [r[0] for r in conn.execute(f"SELECT p.id FROM {source} WHERE {where}").fetchall()]
@@ -1223,10 +1223,11 @@ def role_queue_count(conn, role, for_agent=None):
 def _claimed_queue(role, rows, lim):
     """The queue of an Analista or a Scorer as the caller may take it: without what a colleague holds, with the
     first free position claimed for the caller and put first (queue_claims.py). A caller that is not an agent
-    gets the queue as it is. `rows` are all the rows of the queue, not a page: the page is cut here."""
+    of this role gets the queue as it is. `rows` are all the rows of the queue, not a page: the page is cut here."""
     rows = [dict(r) for r in rows]
     me = queue_claims.agent_name()
-    if me:
+    # only an agent OF the role takes a position: a Capitano or a Critico looking at the queue lists it and holds nothing
+    if me and queue_claims.role_of(me) == role:
         taken = queue_claims.claimed_by_others(role, me)
         free = [r for r in rows if r['id'] not in taken]
         first = next((r for r in free if queue_claims.claim(role, r['id'], me)), None)

@@ -184,6 +184,77 @@ def test_a_claim_is_published_whole_and_leaves_no_file_behind(box):
     assert sorted(e.name for e in queue_claims._dir().iterdir()) == ["analista-4"]
 
 
+def test_an_agent_of_another_role_lists_the_queue_and_holds_nothing(box):
+    box.add("new", 3)
+    for other in ("capitano", "critico-1", "scout-2", "scorer-1"):
+        answer = box.ask("next-for-analista", other)
+        assert answer["total"] == 3                            # the queue as it was, nobody's position taken out of it
+    assert not queue_claims._dir().exists() or list(queue_claims._dir().iterdir()) == []
+    # and the Analista who comes after still gets the first one
+    assert ids(box.ask("next-for-analista", "analista-1"))[0] == ids(box.ask("next-for-analista"))[0]
+    assert [e.name for e in queue_claims._dir().iterdir()] == [f"analista-{ids(box.ask('next-for-analista'))[0]}"]
+
+
+def test_the_count_for_an_agent_of_another_role_leaves_nothing_out(box):
+    box.add("new", 3)
+    box.ask("next-for-analista", "analista-1")
+    sys.path.insert(0, str(SKILLS))
+    import importlib
+    import db_query
+    importlib.reload(db_query)
+    c = sqlite3.connect(box.db)
+    try:
+        assert db_query.role_queue_count(c, "analista", for_agent="critico-1") == 3
+        assert db_query.role_queue_count(c, "analista", for_agent="analista-2") == 2
+    finally:
+        c.close()
+
+
+def test_a_claim_file_with_a_digit_that_is_not_ascii_cannot_bring_the_queue_down(box):
+    # str.isdigit() is true for «²» and int() then raises: the whole next-for-* of the box would fall
+    box.add("new", 2)
+    directory = queue_claims._dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    for name in ("analista-\u00b2", "analista-\u0663", "analista-", "analista-1.old", "analista-" + "9" * 40):
+        (directory / name).write_text(json.dumps({"agent": "analista-9", "at": queue_claims.time.time()}), encoding="utf-8")
+    assert queue_claims.claimed_by_others("analista", "analista-1") == set()
+    answer = box.ask("next-for-analista", "analista-1")
+    assert answer["total"] == 2
+
+
+def test_what_sits_where_a_claim_should_be_is_not_read_when_it_is_not_one(box):
+    directory = queue_claims._dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    os.mkfifo(directory / "analista-5")
+    (directory / "analista-6").write_bytes(b" " * (queue_claims.MAX_CLAIM_BYTES + 10) + json.dumps({"agent": "analista-9", "at": queue_claims.time.time()}).encode())
+    real = directory.parent / "real.json"
+    real.write_text(json.dumps({"agent": "analista-9", "at": queue_claims.time.time()}), encoding="utf-8")
+    (directory / "analista-7").symlink_to(real)
+    outcome = {}
+
+    def go():
+        outcome["taken"] = queue_claims.claimed_by_others("analista", "analista-1")
+        outcome["holder"] = [queue_claims.holder("analista", n) for n in (5, 6, 7)]
+
+    thread = threading.Thread(target=go, daemon=True)
+    thread.start()
+    thread.join(10)
+    assert not thread.is_alive(), "reading a claim waited on a pipe"
+    assert outcome["taken"] == set() and outcome["holder"] == [None, None, None]
+
+
+def test_a_claim_stamped_in_the_future_does_not_hold_the_position_for_ever(box):
+    directory = queue_claims._dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    now = queue_claims.time.time()
+    (directory / "analista-3").write_text(json.dumps({"agent": "analista-9", "at": now + 10 * 365 * 86400}), encoding="utf-8")
+    assert queue_claims.holder("analista", 3) is None
+    assert queue_claims.claimed_by_others("analista", "analista-1") == set()
+    # a little skew between two clocks is believed
+    (directory / "analista-4").write_text(json.dumps({"agent": "analista-9", "at": now + 5}), encoding="utf-8")
+    assert queue_claims.holder("analista", 4) == "analista-9"
+
+
 def test_the_count_for_an_agent_leaves_out_what_a_colleague_holds(box):
     box.add("new", 3)
     box.ask("next-for-analista", "analista-1")
