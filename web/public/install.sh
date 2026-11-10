@@ -413,6 +413,8 @@ header() {
 
 # Different step counts depending on the path
 TOTAL_STEPS_DOCKER=4
+# Host scripts of the runtime, besides the wrapper and host-setup.sh (same list as RUNTIME_HELPERS in jht-wrapper.sh).
+RUNTIME_HELPERS="jht-integration.sh"
 TOTAL_STEPS_NATIVE=7
 
 # ── OS Detection ──────────────────────────────────────────────────────────
@@ -1169,6 +1171,7 @@ download_runtime_files() {
     release_base="$(attested_raw_base)" \
       || fail "Cannot resolve branch '$BRANCH' to an immutable release commit."
   fi
+  local helper
   local compose_url="$release_base/docker-compose.yml"
   local wrapper_url="$release_base/scripts/jht-wrapper.sh"
   local hostsetup_url="$release_base/scripts/host-setup.sh"
@@ -1182,6 +1185,9 @@ download_runtime_files() {
     printf "  ${DIM}[dry-run]${RESET} would download: %s -> %s\n" "$compose_url" "$compose_dest"
     printf "  ${DIM}[dry-run]${RESET} would download: %s -> %s\n" "$wrapper_url" "$wrapper_dest"
     printf "  ${DIM}[dry-run]${RESET} would download: %s -> %s\n" "$hostsetup_url" "$hostsetup_dest"
+    for helper in $RUNTIME_HELPERS; do
+      printf "  ${DIM}[dry-run]${RESET} would download: %s -> %s\n" "$release_base/scripts/$helper" "$RUNTIME_DIR/$helper"
+    done
     printf "  ${DIM}[dry-run]${RESET} would execute: chmod +x %s %s\n" "$wrapper_dest" "$hostsetup_dest"
     if [ "$RUNTIME_CHOICE" = "podman" ]; then
       printf "  ${DIM}[dry-run]${RESET} would publish an attested JHT-only docker→podman shim\n"
@@ -1252,6 +1258,22 @@ download_runtime_files() {
   fi
   chmod 700 "$hostsetup_tmp"
   mv -f "$hostsetup_tmp" "$hostsetup_dest"
+  # The host scripts of the runtime that came after host-setup.sh (the wrapper lists the same names in RUNTIME_HELPERS): attested like it.
+  local helper_tmp helper_lines=""
+  for helper in $RUNTIME_HELPERS; do
+    helper_tmp="$(mktemp "$RUNTIME_DIR/.helper.XXXXXX")"
+    if ! curl -fsSL "$release_base/scripts/$helper" -o "$helper_tmp" || ! bash -n "$helper_tmp" \
+        || ! grep -Fqx '# JHT_RUNTIME_HELPER=1' "$helper_tmp"; then
+      rm -f "$helper_tmp"
+      fail "$helper download or validation failed: $release_base/scripts/$helper"
+    fi
+    chmod 700 "$helper_tmp"
+    mv -f "$helper_tmp" "$RUNTIME_DIR/$helper"
+    helper_lines="$helper_lines$helper=$( { sha256sum "$RUNTIME_DIR/$helper" 2>/dev/null || shasum -a 256 "$RUNTIME_DIR/$helper"; } | awk '{print $1}')"$'\n'
+  done
+  # Their digests are in a manifest of their own: the desktop app checks the main one key by key.
+  printf '%s' "$helper_lines" > "$RUNTIME_DIR/.runtime-helpers.tmp" && chmod 600 "$RUNTIME_DIR/.runtime-helpers.tmp" \
+    && mv -f "$RUNTIME_DIR/.runtime-helpers.tmp" "$RUNTIME_DIR/.runtime-helpers" || fail "the digests of the host scripts were not written"
   local selection_source="$RUNTIME_DIR/container-runtime" selection_publish=""
   if [ "$RUNTIME_CHOICE" = "podman" ]; then
     install_podman_adapter

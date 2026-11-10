@@ -48,6 +48,8 @@ JHT_AGENT_CONTROL_PROTOCOL=1
 # L'app del desktop registra nel broker l'autorizzazione a una candidatura con `desktop-apply record` solo se
 # trova questa riga: un wrapper che non la ha passerebbe il comando al ramo generico, che avvia il container.
 JHT_DESKTOP_APPLY_PROTOCOL=1
+# `jht integration list|status|add|remove --json` (the integrations added after the setup). The app asks for this line before it calls them.
+JHT_INTEGRATION_PROTOCOL=1
 
 # Sistema e utente non cambiano durante una run: si leggono una volta sola. I
 # controlli d'integrita' del runtime (runtime_stat, runtime_node_safe) li
@@ -525,6 +527,70 @@ runtime_manifest_value() {
   sed -n "s/^${key}=//p" "$RUNTIME_MANIFEST" 2>/dev/null | head -n 1
 }
 
+# Host helpers: scripts of the runtime (scripts/<name>) attested like host-setup.sh, in a manifest of their own (.runtime-helpers,
+# `<name>=<sha256>`): the desktop app checks the main manifest key by key and must not meet a key it does not know. A helper is
+# loaded with `source` only while the file still matches its line there. A runtime that has none yet (installed before them)
+# gets it from the release origin when the person runs `add` or `remove` (never from a read-only command), and at the end of
+# every upgrade.
+RUNTIME_HELPERS="jht-integration.sh"
+RUNTIME_HELPERS_MANIFEST="$RUNTIME_DIR/.runtime-helpers"
+
+runtime_helper_digest() {
+  sed -n "s/^${1}=//p" "$RUNTIME_HELPERS_MANIFEST" 2>/dev/null | head -n 1
+}
+
+runtime_helpers_write_manifest() {
+  local tmp="${RUNTIME_HELPERS_MANIFEST}.tmp.$$" helper
+  umask 077
+  {
+    for helper in $RUNTIME_HELPERS; do
+      if [ -f "$RUNTIME_DIR/$helper" ]; then printf '%s=%s\n' "$helper" "$(runtime_sha256 "$RUNTIME_DIR/$helper")"; fi
+    done
+  } > "$tmp" || return 1
+  chmod 600 "$tmp" || { rm -f "$tmp"; return 1; }
+  mv -f "$tmp" "$RUNTIME_HELPERS_MANIFEST"
+}
+
+runtime_helpers_trusted() {
+  local helper want
+  [ -e "$RUNTIME_HELPERS_MANIFEST" ] || [ -L "$RUNTIME_HELPERS_MANIFEST" ] || return 0
+  runtime_node_safe "$RUNTIME_HELPERS_MANIFEST" file || return 1
+  for helper in $RUNTIME_HELPERS; do
+    want="$(runtime_helper_digest "$helper")"
+    [ -n "$want" ] || continue
+    runtime_node_safe "$RUNTIME_DIR/$helper" file || return 1
+    [ "$want" = "$(runtime_sha256 "$RUNTIME_DIR/$helper")" ] || return 1
+  done
+}
+
+runtime_helpers_install() {
+  local stage base helper
+  runtime_bundle_trusted || return 1
+  base="$(attested_raw_base)" || return 1
+  stage="$(mktemp -d "$RUNTIME_DIR/.helpers.XXXXXX")" || return 1
+  for helper in $RUNTIME_HELPERS; do
+    if ! { curl -fsSL "${base%/}/scripts/$helper" -o "$stage/$helper" && bash -n "$stage/$helper" \
+        && grep -Fqx '# JHT_RUNTIME_HELPER=1' "$stage/$helper" && upgrade_atomic_replace "$stage/$helper" "$RUNTIME_DIR/$helper" 700; }; then
+      rm -rf "$stage"
+      return 1
+    fi
+  done
+  rm -rf "$stage"
+  runtime_helpers_write_manifest
+}
+
+# $2 is the command of the person: only `add` and `remove` fetch a helper that is missing.
+runtime_helper_load() {
+  local helper="$1"
+  if [ -z "$(runtime_helper_digest "$helper")" ]; then
+    case "${2:-}" in
+      add|remove) runtime_helpers_install || { err "script $helper non scaricabile: controlla la rete o fai 'jht upgrade'"; return 1; } ;;
+      *) err "script $helper non ancora installato: 'jht upgrade' (o un 'jht integration add/remove') e riprova"; return 1 ;;
+    esac
+  fi
+  runtime_helpers_trusted && . "$RUNTIME_DIR/$helper"
+}
+
 runtime_write_manifest() {
   local tmp="${RUNTIME_MANIFEST}.tmp.$$"
   umask 077
@@ -622,6 +688,7 @@ runtime_bundle_trusted() {
     # all'immagine di produzione cambierebbe canale senza che nessuno lo chieda.
     return 1
   fi
+  runtime_helpers_trusted || return 1
   grep -Fqx 'JHT_HOST_RUNTIME_PROTOCOL=1' "$WRAPPER_PATH" || return 1
   grep -Fqx 'JHT_HOST_SETUP_PROTOCOL=1' "$HOST_SETUP_SCRIPT" || return 1
   grep -Eq '^[[:space:]]*-[[:space:]]*jht-runtime-mask:/jht_home/runtime([[:space:]]|$)' "$COMPOSE_FILE" || return 1
@@ -3552,6 +3619,9 @@ jht — Job Hunter Team
     jht mail setup         salva la casella di posta nel broker dei segreti
     jht mail drafts        email scritte dagli agenti in attesa del tuo ok
     jht mail approve <id>  le manda; jht mail discard <id> le scarta
+    jht integration list|status [ID]|add ID|remove ID [--purge --yes] [--json]
+                           le integrazioni che si aggiungono dopo il setup
+                           (google, telegram, mail): stato letto dal motore
     jht telegram status    stato del servizio Telegram isolato
     jht telegram pair ROLE chiede il token senza eco sul computer host, poi
                            mostra un codice da mandare al bot dal tuo Telegram
@@ -3602,7 +3672,7 @@ serve_help_without_docker() {
 # falso errore; il loro aiuto resta quindi quello locale anche in quel caso.
 host_command_uses_local_help() {
   case "$1" in
-    up|start-container|down|stop-container|restart|recreate|upgrade|clean-images|logs|status|shell|oauth-login|claude-login|setup|download|podman-machine-recreate|mail|telegram|reset|migrate-runtime)
+    up|start-container|down|stop-container|restart|recreate|upgrade|clean-images|logs|status|shell|oauth-login|claude-login|setup|download|podman-machine-recreate|mail|telegram|integration|reset|migrate-runtime)
       return 0
       ;;
   esac
@@ -5296,6 +5366,7 @@ handle_runtime_upgrade() {
   fi
 
   upgrade_remove_transaction
+  runtime_helpers_install || upgrade_note "helper_install_failed: gli script host nuovi si prendono alla prima richiesta o con un altro 'jht upgrade'"
   # Il broker dei segreti dei portali (P1 del 08/10) usa la stessa immagine
   # del team: dopo il commit riparte con quella nuova. Non decide l'esito
   # dell'upgrade (il team e' gia' verificato): se non parte, la posta resta
@@ -6093,6 +6164,13 @@ case "$SUB" in
       request|cancel) apply_host_command "$2" "${3:-}"; exit $? ;;
     esac
     docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
+    ;;
+
+  integration)
+    require_compose_file
+    runtime_helper_load jht-integration.sh "${2:-}" || exit 1
+    integration_main "${@:2}"
+    exit $?
     ;;
 
   telegram)
