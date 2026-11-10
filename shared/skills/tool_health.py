@@ -224,21 +224,20 @@ CHECKS = {
     "manual_login_browser": check_manual_login_browser,
 }
 
-# A tool that is not in the image ON PURPOSE is not a fault. Two reasons, both normal (JHT-T315, T307 A):
-#   * the image tier is `core` (JHT_IMAGE_TIER=core): the tools of the full image arrive in the background after the onboarding;
-#   * the tool is an integration the user asks for (the manual LinkedIn sign-in): until then nothing of it is installed.
-# NOT_INSTALLED never counts as broken and nobody installs or repairs it on their own: the user asks, or the full image arrives.
-TOOLS_OF_THE_FULL_IMAGE = ("playwright_browser", "linkedin_check", "cv_pdf_render")
-ON_REQUEST_BROWSERS = ("chromium", "chromium-browser", "google-chrome-stable", "google-chrome")
+# A tool that is not in the image ON PURPOSE is not a fault (JHT-T315, T307 A): the image tier is `core`
+# (ENV JHT_IMAGE_TIER of the image itself, set by the prefix stage of the Dockerfile and never by compose),
+# and the tools of the full image arrive in the background after the onboarding. NOT_INSTALLED never counts
+# as broken and nobody installs or repairs it on their own: the user asks, or the full image arrives.
+# On a `full` image (and on a machine with no tier: the default is `full`) a missing tool is BROKEN, as always:
+# a wrong tier must never be able to hide a real fault.
+TOOLS_OF_THE_FULL_IMAGE = ("playwright_browser", "linkedin_check", "cv_pdf_render", "manual_login_browser")
 
 
-def not_installed(name, tier=None, which=shutil.which):
+def not_installed(name, tier=None):
     """The evidence when `name` is absent on purpose, else None (the check runs as always)."""
     tier = (os.environ.get("JHT_IMAGE_TIER", "full") if tier is None else tier).strip().lower()
     if name in TOOLS_OF_THE_FULL_IMAGE and tier == "core":
         return "not installed yet: it arrives in the background after the onboarding (full image)"
-    if name == "manual_login_browser" and not any(which(b) for b in ON_REQUEST_BROWSERS) and not which("openbox"):
-        return "not installed (on request): it comes when the user asks to sign in to LinkedIn by hand"
     return None
 
 

@@ -20,6 +20,7 @@ on:
       - ".launcher/**"
       - "scripts/**"
       - "requirements.txt"
+      - "requirements-tools.txt"
       - ".github/workflows/docker.yml"
   pull_request:
     paths:
@@ -34,6 +35,7 @@ on:
       - ".launcher/**"
       - "scripts/**"
       - "requirements.txt"
+      - "requirements-tools.txt"
       - ".github/workflows/docker.yml"
   workflow_dispatch:
 
@@ -79,6 +81,21 @@ jobs:
             type=ref,event=pr
             type=raw,value=latest,enable={{is_default_branch}}
 
+      # La seconda immagine (T307 A): lo stesso Dockerfile, lo stesso commit, sul solo
+      # prefisso `core`. Stesso repository, nessun tag nuovo da fidarsi: il suo DIGEST
+      # e' quello che il pin fissa (`core_digest`); i tag `*-core` sono solo comodi.
+      - name: Extract image metadata (core)
+        id: meta-core
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            suffix=-core,onlatest=true
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=raw,value=latest,enable={{is_default_branch}}
+
       # Prima di pubblicare: dalla shell dell'agente niente porta a root (P1
       # del 08/10). Build amd64 caricata in locale (stessa cache del push),
       # avviata con i security_opt e cap_drop del compose: sudo -n true fallisce,
@@ -93,6 +110,24 @@ jobs:
           load: true
           push: false
           tags: jht:agent-shell-check
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+
+      # La stessa cosa sul nucleo, in locale: e' l'immagine su cui gira l'Assistente
+      # nei primi minuti, con le stesse garanzie della piena.
+      - name: Build the core image (amd64, local)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: runtime
+          build-args: |
+            BASE=prefix-core
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: jht:core-check
+          labels: ${{ steps.meta-core.outputs.labels }}
           cache-from: type=gha
 
       - name: Agent shell cannot reach root
@@ -118,7 +153,20 @@ jobs:
       - name: Agent toolchain in the image, Codex at its pin with the launcher's flags
         run: python3 scripts/ci/agent_image_toolchain.py jht:agent-shell-check --install codex
 
+      - name: Core image cannot reach root, and its broker answers
+        run: |
+          python3 scripts/ci/agent_shell_privileges.py jht:core-check
+          python3 scripts/ci/broker_smoke.py jht:core-check
+          python3 scripts/ci/agent_image_toolchain.py jht:core-check
+
+      # Quello che nessuna immagine puo' provare da sola: il livello che dichiara e' quello
+      # degli strumenti che porta, il nucleo non ne ha, e il codice, Pi, gli utenti sono
+      # IDENTICI nelle due (stessa revisione, stessi byte).
+      - name: Core and full carry the same code, and say what they are
+        run: python3 scripts/ci/image_tiers.py jht:core-check jht:agent-shell-check
+
       - name: Build & push
+        id: push-full
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
@@ -129,3 +177,30 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Build & push the core image
+        id: push-core
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: runtime
+          build-args: |
+            BASE=prefix-core
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta-core.outputs.tags }}
+          labels: ${{ steps.meta-core.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # I due digest che il pin fissa: si leggono qui, non dai tag.
+      - name: The two digests
+        if: github.event_name != 'pull_request'
+        run: |
+          {
+            echo "### Immagini del runtime"
+            echo "- piena: \`${{ steps.push-full.outputs.digest }}\`"
+            echo "- nucleo: \`${{ steps.push-core.outputs.digest }}\`"
+            echo "- revisione: \`${{ github.sha }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

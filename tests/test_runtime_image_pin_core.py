@@ -163,3 +163,90 @@ def test_an_update_without_a_core_digest_does_not_drop_the_one_the_manifest_has(
     assert (tree / pin_tool.MANIFEST_PATH).read_bytes() == before  # all or nothing
     done = pin_tool.update_tree(tree, other, NEW_REVISION, drop_core=True)  # said out loud, it goes back to schema 1
     assert done.core_digest is None and json.loads((tree / pin_tool.MANIFEST_PATH).read_text())["schema_version"] == 1
+
+
+# ── the release checks cover the core image too ──────────────────────────────────
+
+
+def _pin_with_core():
+    from tests.test_runtime_image_pin import _pin
+
+    full = _pin()
+    return pin_tool.RuntimeImagePin(full.release_version, full.repository, full.digest, full.source_revision, CORE)
+
+
+def test_verify_source_looks_at_both_images_and_each_must_carry_the_pinned_commit(monkeypatch) -> None:
+    pin = _pin_with_core()
+    asked: list[str] = []
+    labels = {pin.digest: [pin.source_revision] * 2, CORE: [pin.source_revision] * 2}
+    monkeypatch.setattr(pin_tool, "_platform_revisions", lambda _pin, digest=None: asked.append(digest) or iter(labels[digest]))
+    pin_tool.verify_source_labels(pin)
+    assert asked == [pin.digest, CORE]
+    labels[CORE] = [pin.source_revision, "0" * 40]  # one platform of the core built from another commit
+    with pytest.raises(pin_tool.RuntimeImagePinError) as refused:
+        pin_tool.verify_source_labels(pin)
+    assert refused.value.code == "source_revision_mismatch"
+
+
+def test_verify_source_without_a_core_digest_asks_only_for_the_full_image(monkeypatch) -> None:
+    from tests.test_runtime_image_pin import _pin
+
+    pin = _pin()
+    asked: list[str] = []
+    monkeypatch.setattr(pin_tool, "_platform_revisions", lambda _pin, digest=None: asked.append(digest) or iter([pin.source_revision]))
+    pin_tool.verify_source_labels(pin)
+    assert asked == [pin.digest]
+
+
+def test_the_core_release_tag_is_the_version_with_a_suffix_and_only_the_known_tags_are_asked(monkeypatch) -> None:
+    pin = _pin_with_core()
+    assert pin.core_release_tag == f"{pin.release_version}-core"
+    seen: list[str] = []
+    monkeypatch.setattr(pin_tool, "_anonymous_registry_token", lambda _pin: "t")
+    monkeypatch.setattr(pin_tool, "_registry_request", lambda _pin, **kw: seen.append(kw["identity"]) or ({"docker-content-digest": CORE}, b""))
+    for tag in (pin.release_version, "master", pin.core_release_tag, "master-core"):
+        assert pin_tool.registry_tag_digest(pin, tag) == CORE
+    for tag in ("latest", "latest-core", f"{pin.release_version}-other", "9.9.9-core"):
+        with pytest.raises(pin_tool.RuntimeImagePinError) as refused:
+            pin_tool.registry_tag_digest(pin, tag)
+        assert refused.value.code == "tag_invalid", tag
+
+
+def test_publish_tags_the_core_image_from_its_own_digest_and_never_moves_a_tag(monkeypatch) -> None:
+    pin = _pin_with_core()
+    commands: list[list[str]] = []
+    state = {pin.release_version: None, pin.core_release_tag: None}
+    monkeypatch.setattr(pin_tool, "verify_source_labels", lambda _pin: None)
+    monkeypatch.setattr(pin_tool, "registry_tag_digest", lambda _pin, tag: state[tag])
+
+    def run(command, **_kwargs):
+        commands.append(command)
+        tag = command[command.index("--tag") + 1].rsplit(":", 1)[1]
+        state[tag] = command[-1].rsplit("@", 1)[1]
+        import subprocess
+
+        return subprocess.CompletedProcess(command, 0, b"", b"")
+
+    monkeypatch.setattr(pin_tool.subprocess, "run", run)
+    assert pin_tool.publish_release_tag(pin, f"refs/tags/v{pin.release_version}") == "tag_published"
+    assert [c[-1] for c in commands] == [pin.image_ref, f"{pin.repository}@{CORE}"]
+    assert [c[c.index("--tag") + 1] for c in commands] == [f"{pin.repository}:{pin.release_version}", f"{pin.repository}:{pin.core_release_tag}"]
+    commands.clear()
+    assert pin_tool.publish_release_tag(pin, f"refs/tags/v{pin.release_version}") == "tag_verified"  # both exist: nothing created
+    assert commands == []
+    state[pin.core_release_tag] = "sha256:" + "ee" * 32  # a core tag that moved elsewhere is refused, not overwritten
+    with pytest.raises(pin_tool.RuntimeImagePinError) as refused:
+        pin_tool.publish_release_tag(pin, f"refs/tags/v{pin.release_version}")
+    assert refused.value.code == "release_tag_mismatch" and commands == []
+
+
+def test_verify_tag_refuses_a_core_tag_that_points_elsewhere(tmp_path: Path, monkeypatch, capsys) -> None:
+    manifest = _manifest(tmp_path, schema_version=2, core_digest=CORE)
+    pin = pin_tool.load_manifest(manifest)
+    digests = {"master": pin.digest, "master-core": "sha256:" + "ee" * 32}
+    monkeypatch.setattr(pin_tool, "registry_tag_digest", lambda _pin, tag: digests[tag])
+    monkeypatch.setattr(pin_tool, "verify_source_labels", lambda _pin: None)
+    assert pin_tool.main(["--manifest", str(manifest), "verify-tag", "--tag", "master"]) == 1
+    assert "tag_digest_mismatch" in capsys.readouterr().err
+    digests["master-core"] = CORE
+    assert pin_tool.main(["--manifest", str(manifest), "verify-tag", "--tag", "master"]) == 0
