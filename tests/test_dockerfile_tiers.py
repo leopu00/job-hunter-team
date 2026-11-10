@@ -89,5 +89,5 @@ def test_the_runtime_gates_know_both_tiers():
     gate = runtime[runtime.index('RUN case "$JHT_IMAGE_TIER" in'):]
     assert "core)" in gate.split("esac")[0] and "full)" in gate.split("esac")[0]
     # the tool gates of before are still there, for the full image
-    for gate_text in ("--only playwright_browser", "--only cv_pdf_render", "RUN Xvfb :98", "--only manual_login_browser"):
+    for gate_text in ("--only playwright_browser", "--only cv_pdf_render", "Xvfb :98 -screen", "--only manual_login_browser"):
         assert gate_text in runtime, gate_text

@@ -265,7 +265,8 @@ RUN python3 shared/skills/tool_health.py --only cv_pdf_render \
 # A native arm64 build (Colima on Apple Silicon) still runs it.
 ARG TARGETARCH
 ARG BUILDARCH
-RUN Xvfb :98 -screen 0 1280x1024x24 -nolisten tcp & xvfb_pid=$!; \
+RUN if [ "$JHT_IMAGE_TIER" != full ]; then echo "HEADED_LAUNCH_SKIPPED: the $JHT_IMAGE_TIER image has no browser and no X"; exit 0; fi; \
+    Xvfb :98 -screen 0 1280x1024x24 -nolisten tcp & xvfb_pid=$!; \
     for _ in $(seq 1 100); do [ -S /tmp/.X11-unix/X98 ] && break; sleep 0.1; done; \
     if [ -n "$TARGETARCH" ] && [ -n "$BUILDARCH" ] && [ "$TARGETARCH" != "$BUILDARCH" ]; then \
       echo "HEADED_LAUNCH_SKIPPED: emulated $TARGETARCH build on $BUILDARCH (QEMU cannot run headed Chromium)"; rc=0; \
