@@ -25,7 +25,10 @@ proof that closes a live position, rescore tickets, and the Critic's verdict gat
 native tool's UPDATE and need what only it has.
 
 A refusal exits 13, says why on stderr and appends one line to `$JHT_HOME/logs/db-role-refusals.jsonl` (time, role, who,
-entity, what was asked: names of flags, never their values).
+entity, what was asked: names of flags, never their values). The name is shown as [a-z0-9_-], at most 64 characters, and the
+log stops growing at 256 KB (the refusals go on). A name that is not exactly a role plus an optional number (`scout-2-x`)
+is not a role of the table and is not checked: the same limit as above. If the table cannot be read, an agent is NOT
+refused (the product keeps working) and the stderr and the log say the boundary is off.
 """
 from __future__ import annotations
 
@@ -59,9 +62,44 @@ def role_of(name) -> str | None:
 
 
 def caller(environ=None) -> tuple:
-    """(role, name) of who runs the tool, or (None, name) when it is not an agent of the table."""
+    """(role, name) of who runs the tool, or (None, name) when it is not an agent of the table.
+
+    The variable is read BEFORE the table: the person, the app and the tests have none, and a table that is missing or
+    broken must not stop them. For an agent, an unreadable table opens the boundary and says so loudly (stderr and the
+    refusal log): the product keeps working, and the day the file breaks is not silent."""
     name = str((os.environ if environ is None else environ).get("JHT_AGENT_NAME") or "").strip()
-    return role_of(name), name
+    if not name:
+        return None, ""
+    try:
+        return role_of(name), clean_name(name)
+    except (OSError, ValueError, KeyError):
+        print("⚠️  ROLE TABLE UNREADABLE (%s): the role boundary is NOT applied to %s" % (POLICY_FILE.name, clean_name(name)), file=sys.stderr)
+        _write_log({"ts": _now(), "agent": clean_name(name), "reason": "role table unreadable: boundary not applied", "enforced": False})
+        return None, clean_name(name)
+
+
+def clean_name(name) -> str:
+    """The agent's name as it is shown and written down: lower case, [a-z0-9_-], at most 64 characters."""
+    return re.sub(r"[^a-z0-9_-]", "?", str(name or "").strip().lower())[:64]
+
+
+def _now() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+LOG_MAX_BYTES = 262144   # an agent that repeats a refused command cannot fill the disk: past this the lines stop, the refusal stays
+
+
+def _write_log(line: dict) -> None:
+    try:
+        log = Path(os.environ.get("JHT_HOME") or str(Path.home() / ".jht")) / "logs" / "db-role-refusals.jsonl"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        if log.exists() and log.stat().st_size >= LOG_MAX_BYTES:
+            return
+        with open(log, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(line, ensure_ascii=False) + "\n")
+    except OSError:
+        pass   # the refusal stands even when it cannot be written down
 
 
 def _extra(role: str) -> dict:
@@ -90,15 +128,8 @@ def _refuse(role, name, verb, entity, flags, reason):
 
 def _answer(role: str, name: str, verb: str, refusal: _Refusal) -> None:
     warn = bool(_extra(role).get("warn_only"))
-    line = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "role": role, "agent": name, "tool": "db_" + verb,
-            "entity": refusal.entity, "flags": sorted(refusal.flags), "reason": refusal.reason, "enforced": not warn}
-    try:
-        log = Path(os.environ.get("JHT_HOME") or str(Path.home() / ".jht")) / "logs" / "db-role-refusals.jsonl"
-        log.parent.mkdir(parents=True, exist_ok=True)
-        with open(log, "a", encoding="utf-8") as handle:
-            handle.write(json.dumps(line, ensure_ascii=False) + "\n")
-    except OSError:
-        pass   # the refusal stands even when it cannot be written down
+    _write_log({"ts": _now(), "role": role, "agent": name, "tool": "db_" + verb, "entity": refusal.entity,
+                "flags": sorted(refusal.flags), "reason": refusal.reason, "enforced": not warn})
     print("⚠️  ROLE %s: %s (%s) may not run db_%s %s: %s" % ("WARNING" if warn else "REFUSED", name or role, role, verb, refusal.entity,
                                                               refusal.reason), file=sys.stderr)
     if not warn:

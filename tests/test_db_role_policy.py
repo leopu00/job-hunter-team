@@ -237,3 +237,57 @@ def test_the_python_only_additions_are_few_and_each_has_its_reason():
     assert set(only) == {"closer", "scrittore", "dottore", "capitano", "critico"}
     assert all(entry.get("note") for entry in only.values())
     assert set(rp.policy()["roles"]) == set(ROLES)
+
+
+# ── hardening from the security review ────────────────────────────────────────────────────────────────────────────────
+
+@pytest.fixture
+def broken_table(monkeypatch, tmp_path):
+    bad = tmp_path / "db_role_policy.json"
+    bad.write_text("{not json", encoding="utf-8")
+    monkeypatch.setattr(rp, "POLICY_FILE", bad)
+    monkeypatch.setattr(rp, "_cache", {})
+    return bad
+
+
+def test_a_broken_table_never_stops_the_person_the_app_or_a_test(broken_table):
+    rp.guard_insert(ns("score"), {})
+    rp.guard_update(ns("company", name="x"), environ={})
+
+
+def test_a_broken_table_opens_the_boundary_for_an_agent_and_says_so(broken_table, home, capsys):
+    rp.guard_insert(ns("score"), {"JHT_AGENT_NAME": "scout-1"})                # no exit: the product keeps working
+    assert "ROLE TABLE UNREADABLE" in capsys.readouterr().err
+    line = json.loads((home / "logs" / "db-role-refusals.jsonl").read_text().splitlines()[0])
+    assert line["enforced"] is False and "unreadable" in line["reason"]
+
+
+def test_a_missing_table_is_the_same_as_a_broken_one(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(rp, "POLICY_FILE", tmp_path / "absent.json")
+    monkeypatch.setattr(rp, "_cache", {})
+    rp.guard_insert(ns("score"), {"JHT_AGENT_NAME": "scout-1"})
+    assert "ROLE TABLE UNREADABLE" in capsys.readouterr().err
+
+
+def test_clean_name_keeps_only_safe_characters_and_a_length():
+    assert rp.clean_name(" SCOUT-2 ") == "scout-2"
+    assert rp.clean_name("a\x1b[31mb\nc d") == "a??31mb?c?d"
+    assert len(rp.clean_name("x" * 500)) == 64
+
+
+def test_a_refused_name_with_odd_characters_is_written_clean(home, capsys):
+    # a name that still resolves to a role keeps its role; only the characters change
+    refused(lambda: rp.guard_insert(ns("score"), {"JHT_AGENT_NAME": " Scout-3 "}))
+    err = capsys.readouterr().err
+    assert "scout-3" in err and "\x1b" not in err
+    line = json.loads((home / "logs" / "db-role-refusals.jsonl").read_text().splitlines()[-1])
+    assert line["agent"] == "scout-3"
+
+
+def test_an_agent_that_repeats_a_refused_command_cannot_fill_the_log(home, monkeypatch):
+    monkeypatch.setattr(rp, "LOG_MAX_BYTES", 600)
+    for _ in range(20):
+        with pytest.raises(SystemExit):
+            rp.guard_insert(ns("score"), {"JHT_AGENT_NAME": "scout-1"})
+    log = home / "logs" / "db-role-refusals.jsonl"
+    assert log.stat().st_size < 600 + 400 and len(log.read_text().splitlines()) < 20      # it stopped; every call was still refused
