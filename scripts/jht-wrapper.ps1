@@ -3109,6 +3109,57 @@ function New-UpgradePrune {
   return [ordered]@{ removed = $Removed; freedBytes = $Freed; refused = $Refused; inUse = $InUse; kept = @('current', 'previous'); skipped = $Skipped }
 }
 
+# ── Nucleo e immagine piena nell'upgrade (P7) ─────────────────────────────
+# Come nel wrapper POSIX: un'installazione a livello `core` (file runtime-tier) gira sul nucleo, e l'immagine piena puo' essere gia'
+# scaricata da `jht tools`. L'upgrade porta avanti il nucleo (il digest lo dice il wrapper candidato, non quello in uso) e, solo se
+# la piena di oggi e' gia' qui, anche la piena; la pulizia delle vecchie le tiene tutte e due.
+$script:UpgradeCoreRef = ''
+$script:UpgradeFullRef = ''
+$script:UpgradeFullKeep = ''
+
+function Get-UpgradeCandidateConstant {
+  param([string]$File, [string]$Name)
+  $line = Select-String -LiteralPath $File -Pattern ('^\$' + $Name + " = '([^']*)'\s*$") | Select-Object -First 1
+  if ($line) { return $line.Matches[0].Groups[1].Value }
+  return $null
+}
+
+# $false se il rilascio non porta un nucleo leggibile o non lo porta piu': un'installazione a livello core non si trasforma a meta'
+# di un upgrade (si reinstalla), e un digest malformato non si usa.
+function Initialize-UpgradeTierPlan {
+  param([string]$Wrapper)
+  $script:UpgradeCoreRef = ''; $script:UpgradeFullRef = ''; $script:UpgradeFullKeep = ''
+  if (-not (Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf)) { return $true }
+  $core = Get-UpgradeCandidateConstant $Wrapper 'CoreImageDigest'
+  $full = Get-UpgradeCandidateConstant $Wrapper 'DefaultRuntimeImage'
+  if ($core -cnotmatch '^sha256:[0-9a-f]{64}$' -or $full -cnotmatch '^ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64}$') { return $false }
+  $script:UpgradeCoreRef = "ghcr.io/leopu00/jht@$core"
+  & { $ErrorActionPreference = 'Continue'; & docker image inspect $DefaultRuntimeImage *> $null }
+  if ($LASTEXITCODE -eq 0) { $script:UpgradeFullRef = $full }
+  return $true
+}
+
+# Dopo il commit: la piena nuova, se la vecchia era gia' qui. Non decide l'esito dell'upgrade: se non arriva, resta la vecchia e
+# `jht tools` la riscarica da solo.
+function Invoke-UpgradeFullPull {
+  $script:UpgradeFullKeep = ''
+  if (-not $script:UpgradeFullRef) { return }
+  if ($script:UpgradeFullRef -eq $DefaultRuntimeImage) { $script:UpgradeFullKeep = $script:UpgradeFullRef; return }
+  Write-UpgradeNote "Scarico l'immagine piena aggiornata..."
+  & { $ErrorActionPreference = 'Continue'; & docker pull $script:UpgradeFullRef *> $null }
+  if ($LASTEXITCODE -eq 0) { $script:UpgradeFullKeep = $script:UpgradeFullRef }
+  else { Write-UpgradeNote "full_pull_failed: l'immagine piena nuova non e' arrivata, resta la vecchia. Cosa fare: jht tools pull" }
+}
+
+# L'ID (senza prefisso) della piena che un'installazione a livello core tiene; niente se non e' qui.
+function Get-UpgradeTierKeepIds {
+  if (-not (Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf)) { return @() }
+  $ref = if ($script:UpgradeFullKeep) { $script:UpgradeFullKeep } else { $DefaultRuntimeImage }
+  $id = ((& { $ErrorActionPreference = 'Continue'; & docker image inspect --format '{{.Id}}' $ref 2>$null } | Select-Object -First 1) -as [string])
+  if ($id -and $id.Trim()) { return @(Get-PlainImageId $id) }
+  return @()
+}
+
 function Remove-OldJhtImages {
   param([string]$Current, [string]$Previous)
   $script:UpgradePrune = $null
@@ -3122,6 +3173,8 @@ function Remove-OldJhtImages {
   $unknown = @('', 'none', 'sconosciuta', 'unknown')
   if ($unknown -contains $currentId) { $script:UpgradePrune = New-UpgradePrune 'current-unidentified'; return }
   if ($unknown -contains $previousId) { $script:UpgradePrune = New-UpgradePrune 'previous-unidentified'; return }
+  # A livello core la piena gia' scaricata aspetta il passaggio: non e' una vecchia versione, si tiene.
+  $keepIds = @($previousId) + @(Get-UpgradeTierKeepIds)
   # La corrente deve essere davvero quella del container che gira adesso.
   if ((Get-PlainImageId (Get-UpgradeImage)) -ne $currentId) { $script:UpgradePrune = New-UpgradePrune 'current-not-running'; return }
   # Immagini di TUTTI i container, anche fermi. Se non si leggono: niente.
@@ -3140,7 +3193,7 @@ function Remove-OldJhtImages {
     $parts = ([string]$line).Trim() -split '\s+', 2
     if ($parts.Count -ne 2 -or $JhtImageRepositories -cnotcontains $parts[1]) { continue }
     $plain = Get-PlainImageId $parts[0]
-    if ($plain -eq $currentId -or $plain -eq $previousId -or $seen.ContainsKey($plain)) { continue }
+    if ($plain -eq $currentId -or $keepIds -contains $plain -or $seen.ContainsKey($plain)) { continue }
     $seen[$plain] = $true
     if ($inUse -contains $plain) { $busy++; continue }
     $size = [long]0
@@ -3386,6 +3439,9 @@ function Invoke-RuntimeUpgrade {
     } catch { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Runtime remoto non valido o non raggiungibile' $false; return 1 }
     if (-not (Invoke-UpgradeCompose $newCompose 'config' '-q')) { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Compose remoto non valido' $false; return 1 }
     $metadataChanged = -not ((Get-FileHash $newCompose).Hash -eq (Get-FileHash $ComposeFile).Hash) -or -not ((Get-FileHash $newWrapper).Hash -eq (Get-FileHash $WrapperPath).Hash)
+    if (-not (Initialize-UpgradeTierPlan $newWrapper)) { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Il rilascio non porta un nucleo valido per questa installazione: reinstalla' $false; return 1 }
+    # A livello core il nucleo candidato e' l'immagine di tutto l'upgrade (pull, avvio, verifica, broker), come per `up`.
+    if ($script:UpgradeCoreRef) { $env:JHT_IMAGE = $script:UpgradeCoreRef }
     $script:UpgradeRollbackDir = Join-Path $RuntimeDir ('.upgrade-rollback-' + [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() + '-' + $PID)
     New-Item -ItemType Directory -Path $script:UpgradeRollbackDir -ErrorAction Stop | Out-Null
     Copy-Item -LiteralPath $ComposeFile -Destination (Join-Path $script:UpgradeRollbackDir 'docker-compose.yml')
@@ -3431,6 +3487,7 @@ function Invoke-RuntimeUpgrade {
     }
     # Solo qui: upgrade riuscito, container nuovo verificato e commit fatto.
     # Un errore della pulizia non deve mai far ripristinare un upgrade riuscito.
+    try { Invoke-UpgradeFullPull } catch { $script:UpgradeFullKeep = '' }
     try { Remove-OldJhtImages $candidateImage $oldImage } catch { $script:UpgradePrune = $null }
     $changed = ($candidateImage -ne $oldImage) -or $metadataChanged
     Write-UpgradeResult $true $changed 'complete' $oldVersion $oldImage $newVersion $candidateImage $false 'Nuova versione attiva e verificata' $false

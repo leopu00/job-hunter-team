@@ -323,7 +323,7 @@ def test_status_and_gui_probes_cannot_start_a_stopped_runtime():
     assert "read_only_container_id" in onboarding_probe
     # both ways of reading it, with and without the runtime log, ask the wrapper for the snapshot only
     assert snapshot.count("LocalCliOperation::Snapshot") == 2
-    assert "compose up -d" in up
+    assert "compose_quiet up -d" in up  # `up` goes through the filter of podman-compose noise; it is still `compose up -d`
 
     # Only two explicit mutators may wake Podman: `up`, and the destructive
     # machine recreation after its --confirm gate. Read-only paths stay cold.

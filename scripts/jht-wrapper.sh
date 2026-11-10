@@ -349,6 +349,8 @@ jht_text_en() {
     download.fetching) printf '%s' "Downloading %s..." ;;
     download.saved_in) printf '%s' "Saved in: %s" ;;
     download.intel_mac) printf '%s' "The 0.4 macOS app only runs on Macs with Apple silicon (M1 and later); this is an Intel Mac, which 0.4 does not support. Nothing was downloaded." ;;
+    up.done) printf '%s' "Job Hunter Team started." ;;
+    down.done) printf '%s' "Job Hunter Team stopped." ;;
     uninstall.usage) printf '%s' "usage: jht uninstall --confirm [--purge]" ;;
     status.title) printf '%s' "Status" ;;
     status.container) printf '%s' "Container" ;;
@@ -360,15 +362,19 @@ jht_text_en() {
     status.not_running) printf '%s' "The team's container is not running." ;;
     status.not_running_next) printf '%s' "Start it with: jht up" ;;
     uninstall.phase.machine) printf '%s' "Removing the Podman machine, or JHT's containers and volumes..." ;;
+    uninstall.phase.images) printf '%s' "Removing the JHT images (the core and the full one, and the old ones)..." ;;
+    uninstall.images_removed) printf '%s' "Removed %s JHT images: the core and the full one, and the old ones." ;;
+    uninstall.left.images) printf '%s' "Not removed: some JHT images (the engine refused). Run 'jht uninstall --confirm' again once nothing else uses them." ;;
     uninstall.phase.data) printf '%s' "Deleting ~/.jht and the Documents folder (--purge)..." ;;
     uninstall.phase.runtime) printf '%s' "Removing the host runtime..." ;;
     uninstall.phase.commands) printf '%s' "Removing the jht command and the PATH lines the installer added..." ;;
     migrate.left) printf '%s' "Not copied or not verified: the volume %s." ;;
-    uninstall.usage_what) printf '%s' "Removes the local JHT runtime: the jht-podman Podman machine or JHT's containers and volumes, the host runtime and the jht command." ;;
+    uninstall.usage_what) printf '%s' "Removes the local JHT runtime: the jht-podman Podman machine or JHT's containers, volumes and images (the core and the full one, by the repository names ghcr.io/leopu00/jht, jht and localhost/jht), the host runtime and the jht command." ;;
     uninstall.usage_stays) printf '%s' "Podman, podman-compose, Docker, Colima and Homebrew stay too." ;;
     uninstall.loss) printf '%s' "The saved mail password and Telegram tokens are deleted too; ~/.jht and Documents stay, and with them the saved LinkedIn session (secrets/linkedin-profile and .cache/linkedin): remove it with jht reset --scope creds." ;;
     uninstall.loss_purge) printf '%s' "The saved mail password and Telegram tokens are deleted too." ;;
     uninstall.purge_loss) printf '%s' "With --purge ~/.jht and ~/Documents/Job Hunter Team are deleted too: configuration, database, CVs and output. There is no way back." ;;
+    uninstall.machine_kept) printf '%s' "The Podman machine '%s' is not the standard JHT one (jht-podman), so it is not removed: it may be yours. The JHT volumes and image inside it stay with it. To remove it: podman machine stop %s, then podman machine rm %s." ;;
     uninstall.left.machine) printf '%s' "Not removed: the jht-podman Podman machine or JHT's containers and volumes, with the saved secrets. Run 'jht uninstall --confirm' again when Podman or Docker answer." ;;
     uninstall.left.runtime) printf '%s' "Not removed: JHT's host runtime." ;;
     uninstall.left.commands) printf '%s' "Not removed: the jht command or the PATH lines the installer added." ;;
@@ -411,6 +417,8 @@ jht_text_it() {
     download.fetching) printf '%s' "Scarico %s..." ;;
     download.saved_in) printf '%s' "Salvato in: %s" ;;
     download.intel_mac) printf '%s' "L'app per macOS della 0.4 gira solo su Mac con Apple silicon (M1 e successivi); questo e' un Mac Intel, non supportato nella 0.4. Non e' stato scaricato niente." ;;
+    up.done) printf '%s' "Job Hunter Team avviato." ;;
+    down.done) printf '%s' "Job Hunter Team fermato." ;;
     uninstall.usage) printf '%s' "uso: jht uninstall --confirm [--purge]" ;;
     status.title) printf '%s' "Stato" ;;
     status.container) printf '%s' "Container" ;;
@@ -422,15 +430,19 @@ jht_text_it() {
     status.not_running) printf '%s' "Il container della squadra non e' acceso." ;;
     status.not_running_next) printf '%s' "Accendilo con: jht up" ;;
     uninstall.phase.machine) printf '%s' "Rimuovo la macchina Podman, oppure i container e i volumi di JHT..." ;;
+    uninstall.phase.images) printf '%s' "Rimuovo le immagini di JHT (il nucleo, quella piena e le vecchie)..." ;;
+    uninstall.images_removed) printf '%s' "Tolte %s immagini di JHT: il nucleo, quella piena e le vecchie." ;;
+    uninstall.left.images) printf '%s' "Non tolte alcune immagini di JHT (il motore le ha rifiutate). Rilancia 'jht uninstall --confirm' quando nient'altro le usa." ;;
     uninstall.phase.data) printf '%s' "Cancello ~/.jht e la cartella Documenti (--purge)..." ;;
     uninstall.phase.runtime) printf '%s' "Rimuovo il runtime dell'host..." ;;
     uninstall.phase.commands) printf '%s' "Rimuovo il comando jht e le righe PATH aggiunte dall'installer..." ;;
     migrate.left) printf '%s' "Non copiato o non verificato: il volume %s." ;;
-    uninstall.usage_what) printf '%s' "Rimuove il runtime locale di JHT: la macchina Podman jht-podman oppure i container e i volumi di JHT, il runtime host e il comando jht." ;;
+    uninstall.usage_what) printf '%s' "Rimuove il runtime locale di JHT: la macchina Podman jht-podman oppure i container, i volumi e le immagini di JHT (il nucleo e quella piena, con i nomi di repository ghcr.io/leopu00/jht, jht e localhost/jht), il runtime host e il comando jht." ;;
     uninstall.usage_stays) printf '%s' "Restano anche Podman, podman-compose, Docker, Colima e Homebrew." ;;
     uninstall.loss) printf '%s' "Vengono cancellati anche la password della posta e i token di Telegram salvati; ~/.jht e Documenti restano, e con loro la sessione LinkedIn salvata (secrets/linkedin-profile e .cache/linkedin): si toglie con jht reset --scope creds." ;;
     uninstall.loss_purge) printf '%s' "Vengono cancellati anche la password della posta e i token di Telegram salvati." ;;
     uninstall.purge_loss) printf '%s' "Con --purge vengono cancellati anche ~/.jht e ~/Documents/Job Hunter Team: configurazione, database, CV e output. Non si torna indietro." ;;
+    uninstall.machine_kept) printf '%s' "La macchina Podman '%s' non e' quella standard di JHT (jht-podman), quindi non la rimuovo: potrebbe essere tua. I volumi e l'immagine di JHT che ha dentro restano con lei. Per toglierla: podman machine stop %s, poi podman machine rm %s." ;;
     uninstall.left.machine) printf '%s' "Non rimossi: la macchina Podman jht-podman o i container e i volumi di JHT, con i segreti salvati. Rilancia 'jht uninstall --confirm' quando Podman o Docker rispondono." ;;
     uninstall.left.runtime) printf '%s' "Non rimosso: il runtime host di JHT." ;;
     uninstall.left.commands) printf '%s' "Non rimossi: il comando jht o le righe PATH aggiunte dall'installer." ;;
@@ -1626,9 +1638,9 @@ container_down() {
   fi
   local status=0 errors
   errors="$(mktemp "${TMPDIR:-/tmp}/jht-down.XXXXXX")" || { COMPOSE_PROFILES=telegram compose down; return $?; }
-  COMPOSE_PROFILES=telegram compose down 2>"$errors" || status=$?
+  COMPOSE_PROFILES=telegram compose_stdout_quiet down 2>"$errors" || status=$?
   local shown left
-  shown="$(rootless_netns_noise_filter <"$errors")"
+  shown="$(compose_noise_filter <"$errors" | rootless_netns_noise_filter)"
   [ -z "$shown" ] || printf '%s\n' "$shown" >&2
   rm -f "$errors"
   # Podman exits non-zero with only that error even though the containers are gone:
@@ -1638,10 +1650,11 @@ container_down() {
       "nota: il processo di rete del team era gia' chiuso"*)
         # podman-compose lists every container of the project (broker and telegram too):
         # an empty answer, and not a failed one, is «nothing left».
-        left="$(COMPOSE_PROFILES=telegram compose ps -q 2>/dev/null)" && [ -z "$left" ] && return 0
+        left="$(COMPOSE_PROFILES=telegram compose ps -q 2>/dev/null)" && [ -z "$left" ] && { [ "$CONTAINER_RUNTIME" != podman ] || printf '%s\n' "$(jht_say down.done)"; return 0; }
         ;;
     esac
   fi
+  [ "$status" -ne 0 ] || [ "$CONTAINER_RUNTIME" != podman ] || printf '%s\n' "$(jht_say down.done)"
   return "$status"
 }
 
@@ -1665,6 +1678,38 @@ rootless_netns_noise_filter() {
     { print }
     END { if (held != "") print held }
   '
+}
+
+# podman-compose scrive su `up -d` e su `down` gli id grezzi dei container, il nome della rete del progetto e, per i servizi che non sono
+# mai stati creati (Telegram, se non e' configurato), «Error: no container with name or ID "jht-telegram" found»: non e' un errore, e'
+# un servizio che non c'e'. Via quelle righe (e solo quelle): ogni altra riga passa com'e', stderr compreso.
+compose_noise_filter() {
+  grep -v -E '^[0-9a-f]{12,64}$|^(jht|host-runtime)_default$|^Error: no container with name or ID "(jht|jht-broker|jht-telegram)" found' || true
+}
+
+# `compose <argomenti>` come prima, ma con Podman l'output passa per compose_noise_filter (stdout su stdout, stderr su stderr).
+# Il codice di uscita e' quello di compose.
+compose_quiet() {
+  local out err rc=0
+  if [ "$CONTAINER_RUNTIME" != podman ]; then compose "$@"; return $?; fi
+  out="$(mktemp "${TMPDIR:-/tmp}/jht-compose-out.XXXXXX")" || { compose "$@"; return $?; }
+  err="$(mktemp "${TMPDIR:-/tmp}/jht-compose-err.XXXXXX")" || { rm -f "$out"; compose "$@"; return $?; }
+  compose "$@" >"$out" 2>"$err" || rc=$?
+  compose_noise_filter <"$out"
+  compose_noise_filter <"$err" >&2
+  rm -f "$out" "$err"
+  return "$rc"
+}
+
+# Come compose_quiet, ma solo per stdout: lo stderr resta a chi chiama (container_down lo raccoglie in un file e lo filtra da se').
+compose_stdout_quiet() {
+  local out rc=0
+  if [ "$CONTAINER_RUNTIME" != podman ]; then compose "$@"; return $?; fi
+  out="$(mktemp "${TMPDIR:-/tmp}/jht-compose-out.XXXXXX")" || { compose "$@"; return $?; }
+  compose "$@" >"$out" || rc=$?
+  compose_noise_filter <"$out"
+  rm -f "$out"
+  return "$rc"
 }
 
 container_postcheck_running() {
@@ -4699,6 +4744,9 @@ upgrade_prune_old_images() {
   previous="$(upgrade_image_plain "$2")"
   case "$current" in ''|none|sconosciuta|unknown) upgrade_prune_result current-unidentified 0 0 0 0; return 0 ;; esac
   case "$previous" in ''|none|sconosciuta|unknown) upgrade_prune_result previous-unidentified 0 0 0 0; return 0 ;; esac
+  # A livello core la piena gia' scaricata aspetta il passaggio: non e' una vecchia versione, si tiene.
+  previous="$previous
+$(upgrade_tier_keep_ids)"
   # La corrente deve essere davvero quella del container che gira adesso.
   running_id="$(upgrade_image_plain "$(upgrade_image)")"
   if [ "$running_id" != "$current" ]; then
@@ -5178,6 +5226,56 @@ upgrade_acquire_lock() {
   printf '%s\n' "$$" > "$UPGRADE_LOCK/pid"
 }
 
+# ── Nucleo e immagine piena nell'upgrade (P7) ─────────────────────────────
+# Un'installazione a livello `core` (file runtime-tier) gira sul nucleo; l'immagine piena, se `jht tools` l'ha gia' scaricata in
+# background, sta li' ad aspettare il passaggio. L'upgrade porta avanti il nucleo (il digest lo dice il wrapper candidato, non quello
+# in uso) e, solo se la piena di oggi e' gia' qui, anche la piena; la pulizia delle vecchie le tiene tutte e due. Senza runtime-tier
+# l'installazione e' a un'immagine sola e niente di questo si applica.
+UPGRADE_CORE_REF=""   # il nucleo candidato; vuoto = installazione a un'immagine sola
+UPGRADE_FULL_REF=""   # la piena candidata, solo se quella di oggi e' gia' scaricata
+UPGRADE_FULL_KEEP=""  # la piena che la pulizia deve tenere dopo l'upgrade
+
+# $1 = file, $2 = nome della costante: il suo valore fra virgolette, o niente.
+upgrade_candidate_constant() {
+  sed -n "s/^$2=\"\(.*\)\"\$/\1/p" "$1" | head -n 1
+}
+
+# Letto dal wrapper candidato PRIMA di scaricare. Ritorna 1 se il rilascio non porta un nucleo leggibile o non porta piu' il
+# nucleo: un'installazione a livello core non si trasforma a meta' di un upgrade (si reinstalla), e un digest malformato non si usa.
+upgrade_tier_plan() {
+  local wrapper="$1" core full
+  UPGRADE_CORE_REF="" UPGRADE_FULL_REF="" UPGRADE_FULL_KEEP=""
+  [ -f "$RUNTIME_TIER_FILE" ] || return 0
+  core="$(upgrade_candidate_constant "$wrapper" CORE_IMAGE_DIGEST)"
+  full="$(upgrade_candidate_constant "$wrapper" DEFAULT_RUNTIME_IMAGE)"
+  printf '%s' "$core" | grep -Eqx 'sha256:[0-9a-f]{64}' || return 1
+  printf '%s' "$full" | grep -Eqx 'ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64}' || return 1
+  UPGRADE_CORE_REF="ghcr.io/leopu00/jht@$core"
+  if docker image inspect "$DEFAULT_RUNTIME_IMAGE" >/dev/null 2>&1; then UPGRADE_FULL_REF="$full"; fi
+}
+
+# Dopo il commit: la piena nuova, se la vecchia era gia' qui. Mai decide l'esito dell'upgrade (il team e' gia' verificato): se non
+# arriva, la vecchia resta e `jht tools` la riscarica da solo (il suo stato la vede mancante).
+upgrade_pull_full() {
+  UPGRADE_FULL_KEEP=""
+  [ -n "$UPGRADE_FULL_REF" ] || return 0
+  if [ "$UPGRADE_FULL_REF" = "$DEFAULT_RUNTIME_IMAGE" ]; then UPGRADE_FULL_KEEP="$UPGRADE_FULL_REF"; return 0; fi
+  upgrade_note "Scarico l'immagine piena aggiornata..."
+  if upgrade_run docker pull "$UPGRADE_FULL_REF"; then
+    UPGRADE_FULL_KEEP="$UPGRADE_FULL_REF"
+  else
+    upgrade_note "full_pull_failed: l'immagine piena nuova non e' arrivata, resta la vecchia. Cosa fare: jht tools pull"
+  fi
+}
+
+# L'ID (senza prefisso) della piena che un'installazione a livello core tiene, uno per riga; niente se non e' qui.
+upgrade_tier_keep_ids() {
+  local id
+  [ -f "$RUNTIME_TIER_FILE" ] || return 0
+  id="$(docker image inspect --format '{{.Id}}' "${UPGRADE_FULL_KEEP:-$DEFAULT_RUNTIME_IMAGE}" 2>/dev/null | head -n 1)" || return 0
+  [ -z "$id" ] || upgrade_image_plain "$id"
+}
+
 handle_runtime_upgrade() {
   local check_only=0 old_image old_version candidate_image candidate_version candidate_ref
   local was_running=0 changed=false rolled_back=false phase="preflight"
@@ -5308,6 +5406,12 @@ handle_runtime_upgrade() {
   if ! cmp -s "$candidate_compose" "$COMPOSE_FILE" || ! cmp -s "$candidate_wrapper" "$WRAPPER_PATH"; then
     metadata_changed=true
   fi
+  if ! upgrade_tier_plan "$candidate_wrapper"; then
+    upgrade_result false false preflight "$old_version" "$old_image" "$old_version" "$old_image" false "Il rilascio non porta un nucleo valido per questa installazione: reinstalla" false
+    return 1
+  fi
+  # A livello core il nucleo candidato e' l'immagine di tutto l'upgrade (pull, avvio, verifica, broker), come per `up`.
+  [ -z "$UPGRADE_CORE_REF" ] || export JHT_IMAGE="$UPGRADE_CORE_REF"
 
   UPGRADE_ROLLBACK_DIR="$RUNTIME_DIR/.upgrade-rollback-$(date +%s)-$$"
   if ! mkdir "$UPGRADE_ROLLBACK_DIR" \
@@ -5410,6 +5514,7 @@ handle_runtime_upgrade() {
     || upgrade_note "telegram_restart_failed: il servizio Telegram isolato non è ripartito. Cosa fare: jht up"
   # Solo qui: upgrade riuscito, container nuovo verificato e commit fatto.
   # Mai su check, fallimento o rollback, che escono prima.
+  upgrade_pull_full || true
   upgrade_prune_old_images "$candidate_image" "$old_image" || true
   if [ "$candidate_image" = "$old_image" ] && [ "$metadata_changed" = "false" ]; then
     changed=false
@@ -5512,6 +5617,7 @@ uninstall_left() {
     runtime) err "$(jht_say uninstall.left.runtime)" ;;
     commands) err "$(jht_say uninstall.left.commands)" ;;
     data) err "$(jht_say uninstall.left.data)" ;;
+    images) err "$(jht_say uninstall.left.images)" ;;
   esac
 }
 
@@ -5629,11 +5735,11 @@ uninstall_tool() {
 
 # present | absent; ritorna 1 quando Podman non sa rispondere.
 uninstall_podman_machine_state() {
-  local names name
+  local names name want="${2:-$UNINSTALL_MACHINE_NAME}"
   names="$("$1" machine list --format '{{.Name}}' 2>/dev/null)" || return 1
   while IFS= read -r name; do
     # Podman marca con * la macchina di default anche in questo formato.
-    if [ "${name%\*}" = "$UNINSTALL_MACHINE_NAME" ]; then
+    if [ "${name%\*}" = "$want" ]; then
       printf 'present\n'
       return 0
     fi
@@ -5718,8 +5824,83 @@ uninstall_docker_endpoint() {
   printf '%s\n' "$endpoint"
 }
 
+# Le immagini di JHT (nucleo, piena e le vecchie) nel Docker di questo computer, senza -f e senza pulizie di massa, dopo i container.
+# Si toglie per RIFERIMENTO (repository:tag), uno per uno: un ID con piu' tag non si toglie con `image rm <ID>` senza -f (il motore
+# rifiuta «referenced in multiple repositories») e la disinstallazione non finirebbe piu'. Senza tag (<none>) si toglie per ID.
+# Stesse regole della pulizia dell'upgrade: solo i repository JHT per nome esatto, e un ID che porta anche un nome non JHT e' di
+# qualcun altro e si tiene. Il rifiuto del motore e' un residuo: si dice e si rilancia. $1 = docker; scrive in UNINSTALL_IMAGES_REMOVED.
+uninstall_docker_images() {
+  local docker_bin="$1" listing pairs foreign id repo tag plain target ids="" failed="" n=0 left=0 announced=0 seen_ref=""
+  UNINSTALL_IMAGES_REMOVED=0
+  listing="$("$docker_bin" image ls --no-trunc --format '{{.ID}} {{.Repository}} {{.Tag}}' 2>/dev/null)" || return 1
+  pairs="$(printf '%s\n' "$listing" | while IFS=' ' read -r id repo tag; do printf '%s %s\n' "$id" "$repo"; done)"
+  foreign="$(upgrade_foreign_image_ids "$pairs")"
+  while IFS=' ' read -r id repo tag; do
+    [ -n "$id" ] || continue
+    upgrade_repo_is_jht "$repo" || continue
+    plain="$(upgrade_image_plain "$id")"
+    case "$foreign
+" in *"
+$plain
+"*) continue ;; esac
+    if [ -n "$tag" ] && [ "$tag" != "<none>" ]; then target="$repo:$tag"; else target="$id"; fi
+    case "
+$seen_ref
+" in *"
+$target
+"*) continue ;; esac
+    seen_ref="$seen_ref
+$target"
+    case "
+$ids
+" in *"
+$plain
+"*) ;; *) ids="$ids
+$plain"; n=$((n + 1)) ;; esac
+    # La fase si annuncia alla prima immagine da togliere: senza immagini JHT non c'e' niente da dire.
+    [ "$announced" -eq 1 ] || { uninstall_phase uninstall_images; announced=1; }
+    if ! "$docker_bin" image rm "$target" >/dev/null 2>&1; then
+      case "
+$failed
+" in *"
+$plain
+"*) ;; *) failed="$failed
+$plain"; left=$((left + 1)) ;; esac
+    fi
+  done <<EOF
+$listing
+EOF
+  UNINSTALL_IMAGES_REMOVED=$((n - left))
+  [ "$left" -eq 0 ]
+}
+
+# Il Docker di questo computer, se c'e' e risponde (la macchina Podman porta via le sue immagini con se'): lo stesso controllo
+# dell'endpoint di uninstall_machine, che ha gia' rifiutato un Docker che non e' qui.
+uninstall_images() {
+  local docker_bin endpoint
+  UNINSTALL_IMAGES_REMOVED=0
+  docker_bin="$(uninstall_tool docker)" || return 0
+  endpoint="$(uninstall_docker_endpoint "$docker_bin")" || return 0
+  case "$endpoint" in unix://*|npipe://*) ;; *) return 0 ;; esac
+  "$docker_bin" info >/dev/null 2>&1 || return 0
+  uninstall_docker_images "$docker_bin"
+}
+
+# Il nome della macchina Podman che l'installer ha attestato in <runtime>/podman-machine, se e' un nome semplice e NON quello
+# standard (jht-podman, che si toglie sempre). L'installer adotta una macchina gia' esistente con il nome che gli si da
+# (la variabile del nome, in install.sh): un nome diverso puo' essere una macchina dell'utente, quindi non si rimuove, si dice che resta.
+uninstall_attested_machine() {
+  local file="$1/podman-machine" name
+  [ -f "$file" ] && [ ! -L "$file" ] || return 1
+  name="$(head -c 64 "$file" 2>/dev/null | head -n 1 | tr -d '\r\n')"
+  case "$name" in
+    ''|-*|"$UNINSTALL_MACHINE_NAME"|*[!A-Za-z0-9_.-]*) return 1 ;;
+  esac
+  printf '%s\n' "$name"
+}
+
 uninstall_machine() {
-  local selection="$1" podman_bin docker_bin state endpoint
+  local selection="$1" runtime_dir="${2:-}" podman_bin docker_bin state endpoint kept
   # La macchina jht-podman esiste solo sul Mac. Va tolta anche se il runtime
   # scelto oggi e' Docker: una prova Podman precedente la lascia inerte, con
   # i suoi volumi.
@@ -5730,6 +5911,11 @@ uninstall_machine() {
         "$podman_bin" machine rm --force "$UNINSTALL_MACHINE_NAME" >/dev/null 2>&1 || return 1
         state="$(uninstall_podman_machine_state "$podman_bin")" || return 1
         [ "$state" = "absent" ] || return 1
+      fi
+      # Una macchina attestata con un altro nome non si rimuove (puo' essere dell'utente): resta, e si dice quale e perche'.
+      if [ -n "$runtime_dir" ] && kept="$(uninstall_attested_machine "$runtime_dir")" \
+          && [ "$(uninstall_podman_machine_state "$podman_bin" "$kept")" = "present" ]; then
+        warn "$(jht_say uninstall.machine_kept "$kept" "$kept" "$kept")"
       fi
     elif [ "$selection" = "podman" ]; then
       return 1
@@ -5876,7 +6062,7 @@ jht_uninstall() {
   fi
 
   uninstall_phase uninstall_machine
-  if ! uninstall_machine "$selection"; then
+  if ! uninstall_machine "$selection" "$runtime_dir"; then
     uninstall_left machine
     uninstall_report_rest "$runtime_dir"
     return 24
@@ -5890,6 +6076,13 @@ jht_uninstall() {
       return 24
     fi
   fi
+
+  # Le immagini DOPO i dati: con --purge il container usa-e-getta che svuota ~/.jht ha bisogno dell'immagine, gia' presente.
+  if ! uninstall_images; then
+    uninstall_left images
+    return 24
+  fi
+  [ "$UNINSTALL_IMAGES_REMOVED" -eq 0 ] || info "$(jht_say uninstall.images_removed "$UNINSTALL_IMAGES_REMOVED")"
 
   uninstall_phase uninstall_runtime
   if [ -e "$runtime_dir" ] || [ -L "$runtime_dir" ]; then
@@ -6100,8 +6293,9 @@ case "$SUB" in
       err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
       exit 1
     }
-    compose up -d
+    compose_quiet up -d
     container_postcheck_running || exit 1
+    [ "$CONTAINER_RUNTIME" != podman ] || printf '%s\n' "$(jht_say up.done)"
     telegram_lifecycle_if_available resume || exit $?
     broker_migrate_legacy_once
     broker_configure_web_authorisations
@@ -6116,8 +6310,9 @@ case "$SUB" in
       err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
       exit 1
     }
-    compose up -d
+    compose_quiet up -d
     container_postcheck_running || exit 1
+    [ "$CONTAINER_RUNTIME" != podman ] || printf '%s\n' "$(jht_say up.done)"
     telegram_lifecycle_if_available resume || exit $?
     broker_migrate_legacy_once
     broker_configure_web_authorisations
@@ -6155,8 +6350,9 @@ case "$SUB" in
       err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
       exit 1
     }
-    compose up -d
+    compose_quiet up -d
     container_postcheck_running || exit 1
+    [ "$CONTAINER_RUNTIME" != podman ] || printf '%s\n' "$(jht_say up.done)"
     telegram_lifecycle_if_available resume || exit $?
     broker_migrate_legacy_once
     broker_configure_web_authorisations

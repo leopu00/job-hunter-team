@@ -118,9 +118,11 @@ def run_prune(host, current=CURRENT, previous=PREVIOUS, running=CURRENT, extra_e
         f'upgrade_image() {{ echo "{sha(running, host.style) if running else ""}"; }}\n'
         'UPGRADE_PRUNE_JSON=""\n'
         + 'JHT_IMAGE_REPOSITORIES="ghcr.io/leopu00/jht jht localhost/jht"\n'
+        # an install of one image only (no tier file): the pruning keeps the current and the previous, as it always did
+        + 'RUNTIME_TIER_FILE="/nonexistent/runtime-tier"; DEFAULT_RUNTIME_IMAGE=""; UPGRADE_FULL_KEEP=""\n'
         + "\n".join(wrapper_function(n) for n in
                    ("upgrade_image_plain", "upgrade_repo_is_jht", "upgrade_foreign_image_ids",
-                    "upgrade_prune_result", "upgrade_prune_old_images"))
+                    "upgrade_prune_result", "upgrade_tier_keep_ids", "upgrade_prune_old_images"))
         + f'\nupgrade_prune_old_images "{sha(current, host.style) if current else ""}" "{previous if previous in ("none", "sconosciuta", "") else sha(previous, host.style)}"\n'
         'echo "rc=$?"\necho "JSON=$UPGRADE_PRUNE_JSON"\n'
     )
