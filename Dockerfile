@@ -463,7 +463,11 @@ RUN useradd --create-home --shell /bin/bash jht \
     # mancante o root-owned il volume nascerebbe non-scrivibile da jht
     # e Next.js crasha con "EACCES: mkdir '/app/web/.next/dev'".
     && mkdir -p /app/web/.next \
-    && chown jht:jht /app/web/.next
+    && chown jht:jht /app/web/.next \
+    # The two folders the media container shares with jht (named volumes copy owner and mode of the folder on first use).
+    && mkdir -p /jht_media/in /jht_media/out \
+    && chown jht:jht /jht_media /jht_media/in /jht_media/out \
+    && chmod 0755 /jht_media /jht_media/in /jht_media/out
 
 # Broker of the portal secrets (P1 del 08/10): un secondo container della
 # stessa immagine, con un uid suo. I tre mount point nascono qui con il
