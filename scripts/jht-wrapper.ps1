@@ -765,7 +765,13 @@ function Assert-TrustedRuntime {
   if (-not (Test-Path -LiteralPath $RuntimeDir)) {
     if (-not (Install-ProtectedRuntimeFromRelease)) { throw 'protected host runtime bootstrap failed' }
   }
-  if (-not (Test-RuntimeBundleTrusted)) { throw 'untrusted host runtime path, owner, reparse point or SHA-256' }
+  if (-not (Test-RuntimeBundleTrusted)) {
+    # A manifest that is not there at all is an install that never finished, not a file somebody changed: said as what it is.
+    if (-not (Test-Path -LiteralPath $RuntimeManifest)) {
+      throw "Job Hunter Team non e' installato del tutto: nella cartella del runtime manca il file di integrita (un'installazione interrotta?). Rilancia l'installer."
+    }
+    throw 'untrusted host runtime path, owner, reparse point or SHA-256'
+  }
 }
 
 # Deterministic, side-effect-free seam for the Windows security regression.
@@ -776,9 +782,18 @@ if ($env:JHT_RUNTIME_AUTHORITY_SELFTEST -eq '1') {
 }
 
 # ── Verifiche pre-flight ──────────────────────────────────────────────────
+# Why the private home is refused: a folder that is not there yet is a team that was never installed (the ACL of a folder that does not
+# exist cannot be read, and «ACL is not owner-only» sent the person to look at permissions); only a folder that is there is an ACL.
+function Get-JhtHomeAclFailure {
+  if (-not (Test-Path -LiteralPath $JhtHome)) {
+    return "Job Hunter Team non e' ancora installato: la cartella $JhtHome non esiste. Lancia l'installer, poi 'jht setup'."
+  }
+  return "JHT_HOME ACL is not owner-only: $JhtHome"
+}
+
 function Require-PrivateJhtHomeAcl {
   if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) {
-    throw "JHT_HOME ACL is not owner-only: $JhtHome"
+    throw (Get-JhtHomeAclFailure)
   }
 }
 
@@ -813,7 +828,7 @@ function Require-ComposeFile {
 function Invoke-Compose {
   [CmdletBinding(PositionalBinding=$false)]
   param([switch]$NoInput, [string]$InputText, [Parameter(ValueFromRemainingArguments)] $Args)
-  if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) { throw "JHT_HOME ACL is not owner-only: $JhtHome" }
+  if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) { throw (Get-JhtHomeAclFailure) }
   Assert-TrustedRuntime
   # Docker Desktop Windows accetta forward-slash o backslash. project-directory
   # punta al runtime dir per bind-mount relativi (anche se compose qui e'
@@ -918,6 +933,23 @@ function Invoke-HelpWithoutDocker {
   }
   Write-LocalHelp
   return 0
+}
+
+# `jht integration --help`: its usage line, not the generic help of the host. Fixed text: the command lives in a helper that
+# is fetched only when it is needed, and a help never fetches anything.
+function Write-IntegrationHelp {
+  [Console]::Out.WriteLine(@'
+Uso: jht integration <comando>
+
+  list [--json]                   le integrazioni e il loro stato
+  status [ID] [--json]            lo stato di una, o di tutte
+  add ID [--json]                 aggiunge un'integrazione
+  remove ID [--purge --yes] [--json]
+                                  la toglie; --purge cancella anche i suoi dati (serve --yes)
+
+Gli ID ammessi sono quelli che mostra `jht integration list`. Niente si scarica o si accende
+finche' non lo chiedi con `add`.
+'@)
 }
 
 function Test-HostCommandUsesLocalHelp {
@@ -1886,6 +1918,31 @@ function Invoke-AvailableTelegramLifecycle {
   if ((Get-Content -LiteralPath $ComposeFile -Raw) -notmatch '(?m)^  jht-telegram:') { return 0 }
   if ($Action -eq 'resume' -and (Test-TelegramStateVolumeAbsent)) { return 0 }
   return Invoke-TelegramLifecycle @($Action)
+}
+
+# Does the Telegram service hold a bot? Asked of the RUNNING service, read-only (an exec: no run container, no volume):
+# $true = at least one bot, $false = none, $null = it cannot be told (the service is off, not attestable, another answer).
+# The one place that says whether Telegram is configured: `jht status` and `jht integration` both ask it.
+function Get-TelegramBotsConfigured {
+  $id = Get-RunningComposeServiceId $TelegramContainer
+  if (-not $id) { return $null }
+  $out = ((& { $ErrorActionPreference = 'Continue'; & docker exec $id jht-telegram-admin bots status 2>$null }) -join "`n")
+  if ($LASTEXITCODE -ne 0 -or $out -notmatch '"ok":\s*true') { return $null }
+  return [bool]($out -match '"present"')
+}
+
+# The line `jht status` says about Telegram. A status command creates nothing and prints nothing of compose: no volume,
+# no run container, only questions to the engine. «Never configured» (no state volume) and «no bot» are said in one line.
+function Write-TelegramStatusLine {
+  if ((Get-Content -LiteralPath $ComposeFile -Raw) -notmatch '(?m)^  jht-telegram:') { return 0 }
+  if (Test-TelegramStateVolumeAbsent) { Write-Host 'Telegram non attivo: Telegram non configurato.'; return 0 }
+  $configured = Get-TelegramBotsConfigured
+  if ($null -eq $configured) {
+    Write-Host 'Telegram: stato non verificabile adesso (servizio spento o non raggiungibile). Dettagli: jht telegram status'
+    return 0
+  }
+  if (-not $configured) { Write-Host 'Telegram non attivo: Telegram non configurato.'; return 0 }
+  return (Invoke-TelegramAdmin -AdminArgs @('bots', 'status'))
 }
 
 function Invoke-TelegramLifecycle {
@@ -3662,6 +3719,10 @@ $HelpRequested = @($Rest | Where-Object { $_ -in @('-h', '--help') }).Count -gt 
 # `agent-control` ne resta fuori: le sue forme sono chiuse e un `--help` fra i
 # suoi argomenti e' una richiesta da rifiutare con il suo codice, non aiuto.
 if ($HelpRequested -and $Sub -notin @('game', 'gui', 'agent-control', 'desktop-apply')) {
+  if ($Sub -ceq 'integration' -and $Rest.Count -eq 1) {
+    Write-IntegrationHelp
+    exit 0
+  }
   if (Test-HostCommandUsesLocalHelp $Sub) {
     Write-LocalHelp
     exit 0
@@ -3894,7 +3955,7 @@ switch ($Sub) {
     if (Test-ContainerUp) {
       & docker inspect $Container --format 'name={{.Name}} status={{.State.Status}} started={{.State.StartedAt}} image={{.Config.Image}}'
       if (-not [Console]::IsOutputRedirected) {
-        $telegramCode = Invoke-AvailableTelegramLifecycle 'status'
+        $telegramCode = Write-TelegramStatusLine
         if ($telegramCode -ne 0) { exit $telegramCode }
       }
     } else {

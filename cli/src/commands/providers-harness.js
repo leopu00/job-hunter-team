@@ -3,11 +3,12 @@
  * (shared/runtime/agent-harness.js), kept out of providers.js.
  */
 import { readFile, access } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { JHT_HOME } from '../jht-paths.js';
 import { writePrivateJson } from '../lib/secure-config-io.js';
-import { AGENT_HARNESSES, DEFAULT_HARNESS, PI_IMAGE_BIN, harnessOf, harnessProblem } from '../../../shared/runtime/agent-harness.js';
+import { AGENT_HARNESSES, DEFAULT_HARNESS, PI_IMAGE_BIN, PI_LOGIN_MARKER, harnessOf, harnessProblem, piApiKeyConfigured } from '../../../shared/runtime/agent-harness.js';
 import { c, DIM, RESET } from './_colors.js';
 import { handleHarnessJson } from './providers-harness-json.js';
 import { marks } from '../lib/ui.js';
@@ -34,6 +35,11 @@ export function checkPi({ run = spawnSync, log = console } = {}) {
     return;
   }
   log.log(`  ${OK}  pi ${String(r.stdout).trim()}`);
+}
+
+/** True when Pi needs nothing more for this config: the API key of glm/kimi, or the login of Pi under the team's home. */
+export function piReady(config, home = JHT_HOME) {
+  return piApiKeyConfigured({ ...config, harness: 'pi' }) || existsSync(join(home, PI_LOGIN_MARKER));
 }
 
 /** `jht providers harness`: added to the providers command, so providers.js does not grow. */
@@ -92,7 +98,9 @@ export async function handleHarness(name) {
     return;
   }
   console.log(`  ${OK} harness: ${previous} → ${wanted}`);
-  if (wanted === 'pi') {
+  // Said only when Pi is not ready for this provider: a key already in the config (glm, kimi) or a login of Pi already
+  // there is everything it needs, and telling the person to install and sign in again is wrong.
+  if (wanted === 'pi' && !piReady(config)) {
     console.log(`  ${DIM}Install Pi and sign in to it: jht providers update pi, then jht setup (keep the configuration)${RESET}`);
   }
   console.log(`  ${DIM}Restart the team to apply: jht team stop --all && jht team start${RESET}`);

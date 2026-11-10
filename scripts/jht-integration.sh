@@ -13,7 +13,7 @@
 #   - nothing is turned on by an agent: this is the command the person types (or the button of the app).
 #
 # States (JSON `state`; the text in parentheses is what the person reads):
-#   not_installed (non installato) | downloading (in scaricamento) | ready (pronto) | running (acceso) | error (errore),
+#   not_installed (non installato) | downloading (in scaricamento) | ready (aggiunto) | running (acceso) | error (errore),
 #   always with a `reason` of one line.
 # Exit: 0 done · 1 failed · 2 wrong use · 3 not available yet.
 
@@ -24,7 +24,7 @@ integration_label() {
   case "$1" in
     not_installed) printf 'non installato' ;;
     downloading) printf 'in scaricamento' ;;
-    ready) printf 'pronto' ;;
+    ready) printf 'aggiunto' ;;
     running) printf 'acceso' ;;
     *) printf 'errore' ;;
   esac
@@ -104,17 +104,27 @@ integration_service_of() {
 
 # Prints "<state>|<reason>". The engine is only asked, never started.
 integration_state() {
-  local id="$1" service volume rc=0 line
+  local id="$1" service volume rc=0 line bots_rc=0
   if integration_not_yet "$id"; then printf 'not_installed|non disponibile ancora\n'; return 0; fi
   if integration_pending "$id"; then printf 'downloading|operazione in corso\n'; return 0; fi
   if [ "$id" = google ]; then
-    if integration_marker_read google ok >/dev/null; then printf 'ready|librerie di Google aggiunte al profilo\n'; return 0; fi
+    if integration_marker_read google ok >/dev/null; then printf 'ready|librerie di Google aggiunte al profilo; mancano le credenziali dell'"'"'account Google\n'; return 0; fi
   else
     read -r service volume <<< "$(integration_service_of "$id")"
     docker_reachable || { printf 'error|il motore dei container non risponde\n'; return 0; }
     read_only_service_id "$service" >/dev/null 2>&1 || rc=$?
     case "$rc" in
-      0) printf 'running|container acceso\n'; return 0 ;;
+      0)
+        # One true state: a Telegram service that is up but holds no bot is not «acceso» for the person, it is waiting for a token
+        # (the same question `jht status` asks). Any answer but a clear «none» keeps what the engine says.
+        if [ "$id" = telegram ]; then
+          telegram_bots_configured || bots_rc=$?
+          if [ "$bots_rc" -eq 1 ]; then
+            printf 'ready|servizio acceso, nessun bot abbinato: jht telegram pair assistente\n'
+            return 0
+          fi
+        fi
+        printf 'running|container acceso\n'; return 0 ;;
       3) ;;
       *) printf 'error|il container non e'"'"' attestabile\n'; return 0 ;;
     esac

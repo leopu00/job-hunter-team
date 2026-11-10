@@ -21,6 +21,7 @@ import { containerRunning, execArgvInContainer, CONTAINER_NAME } from '../utils/
 import { JHT_DB_PATH } from '../jht-paths.js';
 import { c } from './_colors.js';
 import { showHumanPosition, showHumanDashboard } from '../lib/position-show.js';
+import { say } from '../lib/texts.js';
 
 // Le skill si risolvono dal percorso di QUESTO modulo, mai dalla cwd: il CLI
 // e' installato via symlink in $JHT_BIN_DIR, quindi la cwd dell'utente e'
@@ -37,10 +38,34 @@ const SKILLS_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../../share
  * sviluppo locale e alle macchine senza container su.
  */
 export function runSkill(skill, args) {
-  const r = runSkillCaptured(skill, args);
+  // A command that only reads must not make the database it reads: on a home where nothing has run yet, say so.
+  const nothing = nothingYetAnswer(skill, args);
+  const r = nothing ?? runSkillCaptured(skill, args);
   process.stdout.write(r.stdout);
   if (r.stderr) process.stderr.write(r.stderr);
   return r.code;
+}
+
+// The calls that only READ jobs.db, by skill (the subcommands of the skill that do not write): positions, companies, the dashboard,
+// the board of directives, the tickets. Each skill creates the database on its first connection, so `jht positions` on a home where
+// the team never ran left a jobs.db behind. Here the file is looked for first, and its absence is the answer.
+const READ_ONLY_DB_CALLS = Object.freeze({
+  'db_query.py': new Set(['positions', 'position', 'companies', 'company', 'dashboard', 'stats', 'recent-activity']),
+  'team_directives.py': new Set(['active', 'list', 'show']),
+  'ticket.py': new Set(['list-open', 'count-open', 'show', 'for-position']),
+});
+// ...of which these ask for ONE thing by its id: «not there» is a failure (exit 1), as the skill says it; the others are lists and
+// totals, and an empty one is an answer (exit 0). With --json the answer is an empty list, or an empty object for the totals.
+const ONE_BY_ID = new Set(['position', 'company', 'show', 'for-position']);
+const JSON_LISTS = new Set(['positions', 'companies', 'recent-activity', 'list', 'list-open', 'active']);
+
+/** `{code, stdout, stderr}` when this call only reads the database and there is none yet, otherwise null (the call goes on). */
+export function nothingYetAnswer(skill, args, dbPath = JHT_DB_PATH, exists = existsSync) {
+  const sub = String(args?.[0] ?? '');
+  if (!READ_ONLY_DB_CALLS[skill]?.has(sub) || exists(dbPath)) return null;
+  const code = ONE_BY_ID.has(sub) ? 1 : 0;
+  if (args.map(String).includes('--json')) return { code, stdout: `${JSON_LISTS.has(sub) ? '[]' : '{}'}\n`, stderr: '' };
+  return { code, stdout: `${say('empty.nothing_yet')}\n`, stderr: '' };
 }
 
 /**
@@ -138,17 +163,22 @@ function showAction(id, options, command) {
     return;
   }
   const o = opts(options, command);
-  const code = o.json
-    ? runDbQuery(['position', String(id), '--json'])
-    : showHumanPosition(id, o, (args) => runSkillCaptured('db_query.py', args));
+  // the human views read the skill's JSON and print it themselves: the empty home is answered before they ask
+  const none = !o.json && nothingYetAnswer('db_query.py', ['position', String(id)]);
+  const code = none ? (process.stdout.write(none.stdout), none.code)
+    : o.json
+      ? runDbQuery(['position', String(id), '--json'])
+      : showHumanPosition(id, o, (args) => runSkillCaptured('db_query.py', args));
   if (code !== 0) process.exitCode = code;
 }
 
 function dashboardAction(options, command) {
   const o = opts(options, command);
-  const code = o.json
-    ? runDbQuery(['dashboard', '--json'])
-    : showHumanDashboard(o, (args) => runSkillCaptured('db_query.py', args));
+  const none = !o.json && nothingYetAnswer('db_query.py', ['dashboard']);
+  const code = none ? (process.stdout.write(none.stdout), none.code)
+    : o.json
+      ? runDbQuery(['dashboard', '--json'])
+      : showHumanDashboard(o, (args) => runSkillCaptured('db_query.py', args));
   if (code !== 0) process.exitCode = code;
 }
 

@@ -102,6 +102,7 @@ compose() {{
 }}
 telegram_lifecycle_verify() {{ grep -qx jht-telegram "$FAKE_RUNNING"; }}
 ensure_broker() {{ COMPOSE_PROFILES=broker compose up -d "$BROKER_SERVICE"; }}  # the step that makes it: tests/test_broker_on_request.py
+telegram_bots_configured() {{ case "${{FAKE_BOTS:-}}" in none) return 1 ;; some) return 0 ;; *) return 2 ;; esac; }}
 . "{LIBRARY}"
 integration_main {args}
 """
@@ -133,6 +134,21 @@ def test_state_is_running_ready_error_from_the_engine(host):
     down = states(run(host, "list --json", {"FAKE_INFO_RC": "1"}))
     assert down["mail"] == {"id": "mail", "state": "error", "reason": "il motore dei container non risponde"}
     assert down["google"]["state"] == "not_installed"  # needs no engine
+
+
+def test_telegram_up_without_a_bot_is_not_called_running(host):
+    """One true state with `jht status`: a service that is up but holds no bot waits for a token, it is not «acceso»."""
+    host.running.write_text("jht-telegram\n")
+    host.volumes.write_text("jht_jht-telegram-state\n")
+    waiting = states(run(host, "list --json", {"FAKE_BOTS": "none"}))["telegram"]
+    assert waiting["state"] == "ready"
+    assert "nessun bot abbinato" in waiting["reason"] and "jht telegram pair assistente" in waiting["reason"]
+    # a bot is there, or it cannot be told: what the engine says (acceso) stays
+    assert states(run(host, "list --json", {"FAKE_BOTS": "some"}))["telegram"]["state"] == "running"
+    assert states(run(host, "list --json"))["telegram"]["state"] == "running"
+    # the plain text and `status telegram` say the same
+    plain = run(host, "status telegram", {"FAKE_BOTS": "none"})
+    assert "aggiunto" in plain.stdout and "nessun bot abbinato" in plain.stdout and "pronto" not in plain.stdout
 
 
 def test_status_for_one_id_and_plain_text(host):
@@ -352,3 +368,14 @@ def test_the_library_takes_no_shell_path_from_the_person():
     assert not re.search(r"\b(eval|bash -c|sh -c)\b", code)
     # the only docker exec is the fixed Google text
     assert len(re.findall(r"docker exec", code)) == 1 and '"$INTEGRATION_GOOGLE_CODE"' in code
+
+
+def test_add_google_without_credentials_says_added_and_what_is_missing_not_ready(host):
+    """D4 of the 10/11 test: «pronto» for libraries nobody can use without a Google account was a promise the integration did not keep."""
+    plain = run(host, "add google")
+    assert plain.returncode == 0, plain.stderr
+    said = plain.stdout + plain.stderr
+    assert "aggiunto" in said and "mancano le credenziali" in said
+    assert "pronto" not in said
+    row = json.loads(run(host, "status google --json").stdout)
+    assert row["state"] == "ready" and "mancano le credenziali" in row["reason"]

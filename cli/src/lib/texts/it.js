@@ -138,6 +138,7 @@ export default {
   'help.host_down': 'La spegne',
   'help.host_restart': 'La riaccende',
   'help.host_uninstall': 'Toglie l’ambiente locale (chiede conferma)',
+  'help.host_integration': 'Aggiungi o togli ciò che è facoltativo: google, telegram, mail (list ne mostra lo stato)',
   'help.one_command': 'Aiuto su un comando: jht <comando> --help',
   // descriptions of the commands in the list of `jht help` (the ones not here keep the command's own English)
   'cmd.team': "Gestisce gli agenti della squadra",
@@ -224,6 +225,7 @@ export default {
   'team.captain_scales': 'Il CAPITANO regola gli altri agenti in base alle soglie del Bridge.',
   'team.captain_waits': 'Il resto della squadra parte da solo quando l’onboarding con l’Assistente è finito. Rispondi alle sue domande con: jht team chat assistente (o nella chat dell’Assistente nell’app).',
   'team.partial': 'La squadra NON è accesa del tutto: {n} non sono partiti (le righe ✗ sopra dicono perché). Correggi la causa e rilancia: jht team start',
+  'empty.nothing_yet': 'Ancora niente: la squadra non è ancora partita su questo computer. Accendila con: jht team start',
   'team.done': 'Squadra accesa: {n} agenti in {s} s',
   'team.next_agents': 'Guarda come va con: jht agents',
   'help.group_other': 'Altro',

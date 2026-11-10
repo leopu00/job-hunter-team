@@ -823,7 +823,12 @@ require_trusted_runtime() {
     }
   fi
   runtime_bundle_trusted || {
-    err "runtime host non attendibile (path, owner, permessi o SHA-256)"
+    # A manifest that is not there at all is an install that never finished, not a file somebody changed: said as what it is.
+    if [ ! -e "$RUNTIME_MANIFEST" ] && [ ! -L "$RUNTIME_MANIFEST" ]; then
+      err "Job Hunter Team non è installato del tutto: nella cartella del runtime manca il file di integrità (un'installazione interrotta?). Rilancia l'installer."
+    else
+      err "runtime host non attendibile (path, owner, permessi o SHA-256)"
+    fi
     return 1
   }
   # Il pin del canale di test vince su un JHT_IMAGE dell'ambiente: il canale
@@ -2354,6 +2359,31 @@ telegram_lifecycle_if_available() {
   telegram_lifecycle_command "$@"
 }
 
+# Does the Telegram service hold a bot? Asked of the RUNNING service, read-only (an exec, no run container, no volume):
+# 0 = at least one bot, 1 = none, 2 = it cannot be told (the service is off, not attestable, or answered something else).
+# The one place that says whether Telegram is configured: `jht status` and `jht integration` both ask it.
+telegram_bots_configured() {
+  local id out
+  id="$(read_only_service_id "$TELEGRAM_SERVICE" 2>/dev/null)" || return 2
+  out="$(docker exec "$id" jht-telegram-admin bots status 2>/dev/null)" || return 2
+  case "$out" in *'"ok": true'*) ;; *) return 2 ;; esac
+  case "$out" in *'"present"'*) return 0 ;; *) return 1 ;; esac
+}
+
+# The line `jht status` says about Telegram. A status command creates nothing and prints nothing of compose: no volume,
+# no run container, only questions to the engine. «Never configured» (no state volume) and «no bot» are said in one line.
+telegram_status_line() {
+  compose_lacks_service "$TELEGRAM_SERVICE" && return 0
+  local rc=0
+  if telegram_state_volume_absent; then printf '%s\n' 'Telegram non attivo: Telegram non configurato.'; return 0; fi
+  telegram_bots_configured || rc=$?
+  case "$rc" in
+    0) telegram_admin bots status ;;
+    1) printf '%s\n' 'Telegram non attivo: Telegram non configurato.' ;;
+    *) printf '%s\n' 'Telegram: stato non verificabile adesso (servizio spento o non raggiungibile). Dettagli: jht telegram status' ;;
+  esac
+}
+
 telegram_lifecycle_command() {
   local action="${1:-status}" role="${2:-}" steps result=0 cleanup
   [ "$action" != setup ] || role="${role:-assistente}"
@@ -3787,6 +3817,23 @@ jht — Job Hunter Team
 JHTHELP
 }
 
+# `jht integration --help`: la sua riga d'uso, non l'aiuto generico dell'host. Testo fisso: il comando vive in un helper
+# che si scarica solo quando serve, e un aiuto non scarica niente.
+integration_help() {
+  cat <<'JHTINTEGRATIONHELP'
+Uso: jht integration <comando>
+
+  list [--json]                   le integrazioni e il loro stato
+  status [ID] [--json]            lo stato di una, o di tutte
+  add ID [--json]                 aggiunge un'integrazione
+  remove ID [--purge --yes] [--json]
+                                  la toglie; --purge cancella anche i suoi dati (serve --yes)
+
+Gli ID ammessi sono quelli che mostra `jht integration list`. Niente si scarica o si accende
+finche' non lo chiedi con `add`.
+JHTINTEGRATIONHELP
+}
+
 # Richiesta di sola informazione: se il container e' gia' in piedi si serve
 # l'aiuto vero, altrimenti quello locale. In nessun caso si avvia qualcosa.
 serve_help_without_docker() {
@@ -3984,6 +4031,19 @@ ensure_up_for_stop() {
     return 0
   fi
   ensure_up
+}
+
+# A command that needs the running container, asked before it ever started: `read_only_service_id` says 3 for «no such container»
+# and 1 for «there is one and it cannot be attested». The first is a team that is not started (said as that, with the command that
+# starts it); only the second is «non attestabile». Always exits 1.
+not_started_or_unattestable() { # $1 = the status of the check, $2 = what is denied
+  if [ "${1:-1}" -eq 3 ]; then
+    err "Job Hunter Team non è ancora avviato: lancia 'jht up' (la prima volta, 'jht setup')."
+  else
+    err "Container JHT non attestabile; ${2:-operazione negata}."
+    stale_config_hint
+  fi
+  exit 1
 }
 
 ensure_up() {
@@ -6200,6 +6260,10 @@ if [ "$#" -gt 1 ] && [ "$SUB" != "game" ] && [ "$SUB" != "gui" ] && [ "$SUB" != 
   for arg in "${@:2}"; do
     case "$arg" in
       -h|--help)
+        if [ "$SUB" = integration ] && [ "$#" -eq 2 ]; then
+          integration_help
+          exit 0
+        fi
         if host_command_uses_local_help "$SUB"; then
           local_help
           exit 0
@@ -6388,9 +6452,7 @@ case "$SUB" in
     require_compose_file
     require_docker
     container_up >/dev/null || {
-      err "Container JHT non attestabile; riavvio negato."
-      stale_config_hint
-      exit 1
+      not_started_or_unattestable $? "riavvio negato"
     }
     compose restart "$CONTAINER_SERVICE"
     container_postcheck_running || exit 1
@@ -6400,9 +6462,7 @@ case "$SUB" in
     require_compose_file
     require_docker
     container_up >/dev/null || {
-      err "Container JHT non attestabile; ricreazione negata."
-      stale_config_hint
-      exit 1
+      not_started_or_unattestable $? "ricreazione negata"
     }
     ensure_bind_owner
     COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose down
@@ -6493,8 +6553,7 @@ case "$SUB" in
     require_docker
     shift || true
     container_id="$(read_only_container_id)" || {
-      err "Container JHT non attestabile; lettura log negata."
-      exit 1
+      not_started_or_unattestable $? "lettura log negata"
     }
     # Passa eventuali flag (-f, --tail N) a docker logs.
     docker logs "$@" "$container_id"
@@ -6519,7 +6578,7 @@ case "$SUB" in
           'name={{.Name}} status={{.State.Status}} started={{.State.StartedAt}} image={{.Config.Image}}'
       else
         status_human_running "$(docker inspect "$container_id" --format '{{.State.Status}}|{{.State.StartedAt}}|{{.Config.Image}}')"
-        telegram_lifecycle_if_available status || exit $?
+        telegram_status_line || exit $?
       fi
     else
       attest_status=$?

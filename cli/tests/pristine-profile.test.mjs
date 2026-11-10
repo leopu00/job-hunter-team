@@ -80,8 +80,10 @@ test('the reads that say "not set up yet" name the command that sets it up', { s
 });
 
 test('a read of a profile that has no data says there is none, and is not an error', { skip: SKIP }, () => {
-  for (const [words, hint] of [['positions', /No positions found/], ['cron list', /No job configured/], ['directives', /no active directives/i],
-    ['backup list', /No backup found/], ['ticket list', /No open tickets/], ['logs', /No log files found/]]) {
+  // positions, directives and ticket do not even open the database that is not there (cli/tests/reads-do-not-write.test.mjs): one sentence for the three
+  const NOTHING = /Nothing here yet: the team has not run on this computer\. Start it with: jht team start/;
+  for (const [words, hint] of [['positions', NOTHING], ['cron list', /No job configured/], ['directives', NOTHING],
+    ['backup list', /No backup found/], ['ticket list', NOTHING], ['logs', /No log files found/]]) {
     const { done, text } = runOnEmptyHome(words);
     assert.equal(done.status, 0, `${words}: exit ${done.status}`);
     assert.match(text, hint, `${words}: ${text.slice(0, 200)}`);

@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { readFile, writeFile, readdir, mkdir, access, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes, scryptSync } from 'node:crypto';
@@ -102,8 +103,8 @@ export async function secretFiles(dir) {
 }
 
 async function listSecrets() {
-  await mkdir(CREDS_DIR, { recursive: true });
-  const secrets = await secretFiles(CREDS_DIR);
+  // Listing is reading: a folder that is not there yet means no secret saved, and it is not made here (`set` makes it).
+  const secrets = existsSync(CREDS_DIR) ? await secretFiles(CREDS_DIR) : [];
 
   console.log(`\n  ${BOLD}JHT — Secrets${RESET} (${secrets.length})\n`);
 

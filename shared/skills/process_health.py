@@ -117,6 +117,23 @@ def _telegram_bots_configured():
                and b["bot_token"].strip() for b in bots.values())
 
 
+def _agents_run_on_pi():
+    """True se jht.config.json mette gli agenti sull'harness pi (`harness: "pi"`).
+
+    Il codex-auth-healer cura il refresh-token CONDIVISO di Codex (`.codex/auth.json`) leggendo i pane per i
+    messaggi di Codex: con pi non c'e' niente da curare, `start-agent.sh bridge` non lo avvia (stesso predicato,
+    jht_config_harness) e quindi non va atteso: attenderlo lo faceva risultare «morto» e il watchdog del bridge
+    rispawnava tutta la suite ogni ~38 s per sempre.
+    """
+    home = os.environ.get("JHT_HOME", "/jht_home")
+    try:
+        with open(os.path.join(home, "jht.config.json"), encoding="utf-8") as f:
+            cfg = json.load(f)
+    except (OSError, ValueError):
+        return False
+    return isinstance(cfg, dict) and cfg.get("harness") == "pi"
+
+
 def _cloud_daemon_expected():
     """Il cloud-daemon va atteso SOLO se il cloud sync è configurato e abilitato.
 
@@ -191,6 +208,7 @@ def scan():
 
     cloud_expected = _cloud_daemon_expected()
     tg_configured = _telegram_configured()
+    on_pi = _agents_run_on_pi()
     rows = []
     for name, marker, group in EXPECTED:
         n = count(marker)
@@ -207,6 +225,9 @@ def scan():
         # live-screen: spento di proposito con JHT_LIVE_SCREEN=0 (pid1 lo
         # salta). Stessa variabile, stesso ambiente del container.
         elif name == "live-screen" and os.environ.get("JHT_LIVE_SCREEN", "").strip() == "0":
+            row["optional"] = True
+        # codex-auth-healer: serve solo agli agenti Codex (auth.json condiviso). Con l'harness pi non parte.
+        elif name == "codex-auth-healer" and on_pi:
             row["optional"] = True
         rows.append(row)
     # Conteggio PER RUOLO (O-58): il ruolo è nel cmdline grazie a `--role`
