@@ -809,6 +809,12 @@ if { [ "$ROLE" = "capitano" ] || [ "$ROLE" = "sentinella" ]; } && ! tmux has-ses
 fi
 # --- fine cancello del Capitano
 
+# --- cancello degli strumenti (tools_tier.py): l'immagine core non ha browser ne' pandoc; 1 = il ruolo ne ha bisogno, 75 = «non ora»
+_tools_rc=0
+tmux has-session -t "=$SESSION" 2>/dev/null || python3 /app/shared/skills/tools_tier.py role-ready "$ROLE" >/dev/null 2>&1 || _tools_rc=$?
+if [ "$_tools_rc" -eq 1 ]; then echo "$ROLE not started: it needs the tools of the full image, still on their way." >&2; exit 75; fi
+# --- fine cancello degli strumenti
+
 # --- cancello dei posti (spawn_gate.py)
 # Con host_agent_cap=4 il Capitano ha riempito i 4 posti di Scout e 12 posizioni sono rimaste ad aspettare un Analista e uno
 # Scorer che nessuno ha acceso: il tetto era una frase del prompt, nessun codice decideva a chi andavano i posti. Un NUOVO

@@ -16,6 +16,10 @@ The onboarding is closed when ANY of these holds (`reason`):
   * `unknown`      the state cannot be read: it starts, as it always did.
 Otherwise `onboarding_open`: only the Assistente (and the daemons) run.
 
+A closed onboarding on the CORE image (the tools of the full image still on their way, tools_tier.py) holds the Capitano
+at most ten more minutes: `tools_pending`. After that, or when the pull failed, it is due with `tools` saying
+`degraded`: captain_boot.py tells it, and the roles that need the tools stay down (start-agent.sh).
+
   python3 captain_gate.py        # {"captain_due": bool, "reason": ..., "phase": ...}; exit 0 = due, 1 = wait
 Same contract as `first_run.py mentor-due`; the CLI (`jht team start`) and the agent watchdog both ask it.
 """
@@ -29,6 +33,22 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
+def _with_tools(answer: dict, flag: Path) -> dict:
+    """The tools of the full image: wait for them (a little), or start degraded. Never raises: no clock, no wait."""
+    try:
+        import tools_tier
+        seen = tools_tier.verdict(flag.stat().st_mtime, home=flag.parent.parent)
+    except Exception:
+        return answer
+    if seen is None:
+        return answer
+    if seen["wait"]:
+        return {"captain_due": False, "reason": "tools_pending", "phase": answer["phase"], "tools": seen}
+    if seen["degraded"]:
+        answer["tools"] = seen
+    return answer
+
+
 def check() -> dict:
     phase = None
     try:
@@ -38,7 +58,7 @@ def check() -> dict:
         flag = first_run._path("JHT_HOME") / "profile" / "ready.flag"
         phase = first_run.status().get("phase")
         if flag.is_file() and not flag.is_symlink():
-            return {"captain_due": True, "reason": "ready_flag", "phase": phase}
+            return _with_tools({"captain_due": True, "reason": "ready_flag", "phase": phase}, flag)
         if phase in (first_run.PHASE_BURST, first_run.PHASE_STEADY):
             return {"captain_due": True, "reason": "phase", "phase": phase}
         if first_run._profile_imported() is not None:
