@@ -878,3 +878,34 @@ try {
     assert_engine(engine, done.stderr)
     assert done.returncode == 0, done.stdout + done.stderr
     assert "RESULT=removed|absent|ExpandString|%USERPROFILE%\\tools;C:\\Other\\bin" in done.stdout, done.stdout + done.stderr
+
+
+# ── one Podman machine per Windows user (JHT-T305) ────────────────────────────────────────────────────────────────────
+
+@needs_powershell
+def test_remove_takes_a_machine_of_another_name_only_with_the_installers_mark(tmp_path):
+    marked = User(tmp_path / "marked", machine="team-box")
+    (marked.runtime / "podman-machine-created").write_text("team-box\n", encoding="utf-8")
+    (tmp_path / "marked-run").mkdir()
+    run = _run(tmp_path / "marked-run", marked, mode="Remove", machine_state="team-box stopped", task=True)
+    assert run.code == 0, run.stdout + run.stderr
+    assert run.podman_calls() == ["machine list --format json", "machine rm --force team-box", "machine list --format json"]
+    # a mark that names another machine is no mark
+    other = User(tmp_path / "other", machine="team-box")
+    (other.runtime / "podman-machine-created").write_text("somebody-else\n", encoding="utf-8")
+    (tmp_path / "other-run").mkdir()
+    run = _run(tmp_path / "other-run", other, mode="Remove", machine_state="team-box stopped")
+    assert ("machine", "not_ours") in run.items and not any(call.startswith("machine rm") for call in run.calls)
+
+
+@pytest.mark.skipif(not WINDOWS, reason="the name comes from the SID of a Windows user")
+def test_remove_takes_the_machine_named_after_this_users_sid(tmp_path):
+    import hashlib
+    sid = subprocess.run([*powershell_argv()[:1], "-NoLogo", "-NoProfile", "-Command", "[Security.Principal.WindowsIdentity]::GetCurrent().User.Value"],
+                         capture_output=True, text=True, check=True).stdout.strip()
+    name = "jht-podman-" + hashlib.sha256(sid.encode("ascii")).hexdigest()[:8]
+    user = User(tmp_path / "a", machine=name)
+    (tmp_path / "run").mkdir()
+    run = _run(tmp_path / "run", user, mode="Remove", machine_state=f"{name} stopped", task=True)
+    assert run.code == 0, run.stdout + run.stderr
+    assert f"machine rm --force {name}" in run.calls

@@ -364,12 +364,55 @@ function Get-File {
   }
 }
 
+# One Podman machine per Windows user (JHT-T305). The pipe a machine opens is named after it (\\.\pipe\podman-<machine>) and is
+# global to the computer: with a fixed name, the second user's installer found the pipe held by the first one's machine and stopped.
+# A user who has none gets jht-podman-<8 hex of the SHA-256 of their SID>: the same for the same user, another for every other.
+# (The same function is in the uninstall of the wrapper and in the one of the app: tests/test_windows_machine_per_user.py keeps them equal.)
+function Get-JhtUserMachineName {
+  param([string]$Sid = '')
+  if (-not $Sid) { try { $Sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value } catch { $Sid = '' } }
+  if ($Sid -notmatch '^S-1-\d+(-\d+)+$') { return 'jht-podman' }
+  $hash = [Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::ASCII.GetBytes($Sid))
+  return 'jht-podman-' + (([BitConverter]::ToString($hash, 0, 4) -replace '-', '').ToLowerInvariant())
+}
+
+# The machine this install uses: the one an earlier install of THIS user attested (the podman-machine file of the runtime: an old
+# install says jht-podman and keeps it), else a jht-podman machine this user already has (Podman machines belong to the user), else
+# the one of their own name. $ExistingMachines: the names `podman machine list` gives this user.
+function Resolve-JhtPodmanMachineName {
+  param([string]$RuntimePath, [string[]]$ExistingMachines = @(), [string]$Sid = '')
+  $attested = ''
+  try { $attested = ([IO.File]::ReadAllText((Join-Path $RuntimePath 'podman-machine'))).Trim() } catch { $attested = '' }
+  if ($attested -cmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$') { return $attested }
+  if (@($ExistingMachines) -ccontains 'jht-podman') { return 'jht-podman' }
+  return (Get-JhtUserMachineName -Sid $Sid)
+}
+
+# The names of this user's Podman machines, or none when Podman is not there yet (the enabler installs it) or does not answer.
+function Get-JhtExistingMachineNames {
+  $podman = Get-Command podman.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  $path = if ($podman) { $podman.Source } else { '' }
+  if (-not $path) {
+    foreach ($folder in @((Join-Path $env:LOCALAPPDATA 'Programs\Podman'), (Join-Path $env:ProgramFiles 'RedHat\Podman'))) {
+      if ($folder -and (Test-Path -LiteralPath (Join-Path $folder 'podman.exe'))) { $path = Join-Path $folder 'podman.exe'; break }
+    }
+  }
+  if (-not $path) { return @() }
+  try {
+    $raw = ((& { $ErrorActionPreference = 'Continue'; & $path machine list --format json 2>$null }) -join '')
+    if ($LASTEXITCODE -ne 0 -or -not $raw) { return @() }
+    return @(foreach ($listed in (ConvertFrom-Json -InputObject $raw)) { [string]$listed.Name })
+  } catch { return @() }
+}
+
 function Invoke-PodmanRuntimeEnabler {
   param([Parameter(Mandatory)][string]$ScriptPath)
   $powerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+  $machineName = Resolve-JhtPodmanMachineName -RuntimePath $RuntimeDir -ExistingMachines (Get-JhtExistingMachineNames)
+  Write-Info "Podman machine of this Windows user: $machineName"
   $enablerArgs = @(
     '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-    '-File', $ScriptPath, '-MachineName', 'jht-podman', '-InitializeMachine',
+    '-File', $ScriptPath, '-MachineName', $machineName, '-InitializeMachine',
     '-RuntimeImage', $RuntimeImage, '-ExpectedImageDigest', $RuntimeImageDigest
   )
   # docker-compose.exe is the runtime's own, which the enabler always

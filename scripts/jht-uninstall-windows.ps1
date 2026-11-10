@@ -298,14 +298,43 @@ function Remove-JhtTreeNoFollow {
 
 # ── Ownership ─────────────────────────────────────────────────────────────
 
-# The machine is ours only when this user's runtime says so, as install.ps1 wrote it.
+# One Podman machine per Windows user (JHT-T305): install.ps1 gives a user who has none jht-podman-<8 hex of the SHA-256 of their SID>.
+# The same function is in install.ps1 and in the uninstall of the wrapper; tests/test_windows_machine_per_user.py keeps the three equal.
+function Get-JhtUserMachineName {
+  param([string]$Sid = '')
+  if (-not $Sid) { try { $Sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value } catch { $Sid = '' } }
+  if ($Sid -notmatch '^S-1-\d+(-\d+)+$') { return 'jht-podman' }
+  $hash = [Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::ASCII.GetBytes($Sid))
+  return 'jht-podman-' + (([BitConverter]::ToString($hash, 0, 4) -replace '-', '').ToLowerInvariant())
+}
+
+# The mark the installer leaves when IT created the machine (its `machine init` succeeded): a regular file, never a link, whose first
+# line is the name of the machine.
+function Test-JhtMachineCreatedMark {
+  param([string]$RuntimePath, [string]$Name)
+  $file = Join-Path $RuntimePath 'podman-machine-created'
+  try {
+    $item = Get-Item -LiteralPath $file -Force -ErrorAction Stop
+    if ($item.PSIsContainer -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) { return $false }
+    $first = @([IO.File]::ReadAllLines($file) | Select-Object -First 1)
+    return ($first.Count -eq 1 -and ([string]$first[0]).Trim() -ceq $Name)
+  } catch { return $false }
+}
+
+# The machine is ours only when this user's runtime says so, as install.ps1 wrote it: jht-podman, the name of this user's own, or
+# another name the installer marked as created by it. The name it says becomes the one this uninstall acts on.
 function Test-JhtOwnedMachine {
   param([Parameter(Mandatory)][string]$Runtime)
   try {
     $machine = [IO.File]::ReadAllText([IO.Path]::Combine($Runtime, 'podman-machine')).Trim()
     $engine = [IO.File]::ReadAllText([IO.Path]::Combine($Runtime, 'container-runtime')).Trim()
   } catch { return $false }
-  return ($machine -ceq $JhtMachineName) -and ($engine -ceq 'podman')
+  if ($engine -cne 'podman' -or $machine -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$') { return $false }
+  if ($machine -ceq 'jht-podman' -or $machine -ceq (Get-JhtUserMachineName) -or (Test-JhtMachineCreatedMark -RuntimePath $Runtime -Name $machine)) {
+    $script:JhtMachineName = $machine
+    return $true
+  }
+  return $false
 }
 
 function Read-JhtRuntimeManifest {

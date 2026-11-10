@@ -807,6 +807,7 @@ try {
     Write-JhtPhase podman_machine_init
     Skip-WslWelcome
     Invoke-Checked $Podman 'machine' 'init' '--update-connection=false' '--provider' 'wsl' '--cpus' '2' '--memory' '3072' '--disk-size' '30' $MachineName
+    $machineCreatedHere = $true
     Write-JhtPhase podman_machine_start
     Invoke-Checked $Podman 'machine' 'start' '--update-connection=false' $MachineName
   } elseif (-not [bool]$machine.Running) {
@@ -908,6 +909,12 @@ $selectionFile = Join-Path $RuntimeDir 'container-runtime'
 [IO.File]::WriteAllText($selectionFile, "podman`n", [Text.UTF8Encoding]::new($false))
 $machineFile = Join-Path $RuntimeDir 'podman-machine'
 [IO.File]::WriteAllText($machineFile, "$MachineName`n", [Text.UTF8Encoding]::new($false))
+# The machine this run CREATED (its `machine init` succeeded) is marked: a machine that was already there (adopted, or made by an earlier
+# run) is not touched. The uninstall removes a machine of another name than the standard ones only with this mark and the same name in it.
+# It is not in the manifest: nothing the app trusts reads it.
+if ($machineCreatedHere) {
+  [IO.File]::WriteAllText((Join-Path $RuntimeDir 'podman-machine-created'), "$MachineName`n", [Text.UTF8Encoding]::new($false))
+}
 $containerUnitFile = Join-Path $RuntimeDir 'jht-container.service'
 # Environment=CONTAINERS_CGROUP_MANAGER in this unit sets nothing: it is not a Podman setting, and
 # these are `podman --remote` calls, where the cgroup manager is the service's. The service gets it
