@@ -26,6 +26,7 @@ needs_powershell = pytest.mark.skipif(not WINDOWS and shutil.which("pwsh") is No
 
 HARNESS = r"""
 $ErrorActionPreference = 'Stop'
+. (Join-Path (Split-Path -LiteralPath $env:JHT_UNDER_TEST) 'podman-machine-bridge.ps1')
 $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($env:JHT_UNDER_TEST, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw "parse: $($errors[0])" }

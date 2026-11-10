@@ -83,15 +83,34 @@ function ConvertTo-JhtPullLine {
 function Invoke-PodmanPull {
   param([Parameter(Mandatory)][string]$PodmanPath, [Parameter(Mandatory)][string]$Machine, [Parameter(Mandatory)][string]$Image)
   $others = New-Object System.Collections.Generic.List[string]
-  & { $ErrorActionPreference = 'Continue'
-    & $PodmanPath '--connection' $Machine 'pull' $Image 2>&1 | ForEach-Object {
-      $line = ConvertTo-JhtPullLine ([string]$_)
-      if ($line) { [Console]::Out.WriteLine("JHT_PULL $line"); return }
-      $other = ConvertTo-JhtPullLine ([string]$_) -AnyLine
-      if ($other) { $others.Add($other); if ($others.Count -gt 5) { $others.RemoveAt(0) } }
-    }
+  # JHT_PULL is for the app. A person at a terminal reads the wait in words and time instead (on a pipe Podman
+  # gives no bytes), with the layers Podman has started: the line comes from a timer, because the pipeline
+  # below is blocked while Podman works.
+  $human = Test-JhtHumanOutput
+  $layers = New-Object System.Collections.Generic.HashSet[string]
+  $wait = $null
+  if ($human) {
+    Write-Host '  > Downloading the Job Hunter Team runtime image: this can take several minutes.' -ForegroundColor Cyan
+    $wait = Start-JhtLiveWait -Label 'downloading the runtime image'
   }
-  $code = $LASTEXITCODE
+  try {
+    & { $ErrorActionPreference = 'Continue'
+      & $PodmanPath '--connection' $Machine 'pull' $Image 2>&1 | ForEach-Object {
+        $line = ConvertTo-JhtPullLine ([string]$_)
+        if ($line) {
+          if (-not $human) { [Console]::Out.WriteLine("JHT_PULL $line") }
+          # a redrawn bar repeats its layer: each one counts once
+          if ($wait -and $line -match '^Copying blob (\S+)') { [void]$layers.Add($Matches[1]); $wait.Detail = "$($layers.Count) layers started" }
+          return
+        }
+        $other = ConvertTo-JhtPullLine ([string]$_) -AnyLine
+        if ($other) { $others.Add($other); if ($others.Count -gt 5) { $others.RemoveAt(0) } }
+      }
+    }
+    $code = $LASTEXITCODE
+  } finally {
+    if ($wait) { $wait.Dispose() }
+  }
   if ($code -ne 0) {
     foreach ($other in $others) { [Console]::Error.WriteLine("podman pull: $other") }
     throw "Command failed ($code): $PodmanPath --connection $Machine pull $Image"

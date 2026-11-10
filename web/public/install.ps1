@@ -621,6 +621,37 @@ function Get-OrderedUserPath {
   if (-not $hasBin) { $ordered.Add($ShimBin); $ordered.Add($BinDir) }
   return ($ordered -join ';')
 }
+# What the registry has in the machine and user PATH and this process lacks goes at the end of this process's PATH: the
+# programs a step of this very install put there (Podman, from winget or from its release) are found by the commands that
+# follow. Only this process: the window the installer was started from is another process and keeps its own PATH, which
+# is why Show-Final says to open a new one.
+function Add-NewRegistryPathToSession {
+  param(
+    [string]$MachinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine'),
+    [string]$UserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+  )
+  $have = @($env:Path -split ';' | Where-Object { $_ } | ForEach-Object { $_.TrimEnd('\') })
+  foreach ($entry in @(($MachinePath -split ';') + ($UserPath -split ';'))) {
+    if (-not $entry) { continue }
+    $key = $entry.TrimEnd('\')
+    if ($have -icontains $key) { continue }
+    $env:Path = "$env:Path;$entry"
+    $have += $key
+  }
+}
+
+# The window that ran the installer was open before it: a program the install put on the PATH (jht, and Podman when
+# the install added it) is not in that window's PATH, and only a new window, or this line, brings it in.
+# No restart of the computer is needed.
+function Write-JhtNewWindowNotice {
+  Write-Host "  jht and podman are on your PATH from now on, but THIS PowerShell window was open before the" -ForegroundColor Yellow
+  Write-Host "  install and may not know them yet (""not recognized as the name of a cmdlet"")." -ForegroundColor Yellow
+  Write-Host "  Open a NEW PowerShell window to use jht and podman. No restart of the computer is needed." -ForegroundColor Yellow
+  Write-Host "  To use them in this window right away, paste:" -ForegroundColor DarkGray
+  Write-Host "    `$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')" -ForegroundColor White
+  Write-Host ""
+}
+
 function Add-ToUserPath {
   Write-Step 4 $TotalSteps "Registering the user PATH"
 
@@ -644,6 +675,7 @@ function Add-ToUserPath {
   # The current session too, so the installer's next commands (e.g. the wizard) find `jht.cmd`.
   $env:Path = "$ShimBin;" + (($env:Path -split ';' | Where-Object { $_ -and $_.TrimEnd('\') -ine $ShimBin.TrimEnd('\') }) -join ';')
   if (-not ($env:Path -split ';' | Where-Object { $_.TrimEnd('\') -ieq $BinDir.TrimEnd('\') })) { $env:Path = "$env:Path;$BinDir" }
+  Add-NewRegistryPathToSession
 
   $script:PathReady = $true
 }
@@ -766,6 +798,8 @@ function Show-Final {
   Write-Host "    $env:USERPROFILE\Documents\Job Hunter Team -> /jht_user (CVs, attachments, output)" -ForegroundColor DarkGray
   Write-Host ""
 
+  # Not for the desktop app, which reads this output through a pipe, nor for a dry run (nothing was installed).
+  if (-not $DryRun -and $env:JHT_MACHINE_OUTPUT -ne '1') { Write-JhtNewWindowNotice }
   if (-not (Test-WillAutoOnboard)) {
     Write-Host "  Next steps:" -ForegroundColor White
     Write-Host ""

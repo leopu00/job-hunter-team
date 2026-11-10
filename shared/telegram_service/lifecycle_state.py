@@ -53,7 +53,14 @@ def boot_operation() -> str:
     owner = int(os.environ.get("JHT_TELEGRAM_SERVICE_UID", "1003"))
     root = directory()
     _check_owner(root, owner, folder=True)
-    fd = os.open(root / "lifecycle.json", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        fd = os.open(root / "lifecycle.json", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        # Only `lifecycle.py prepare|complete` writes the hint, and a profile that never configured Telegram
+        # never runs it (`jht up` leaves Telegram alone while its state volume does not exist): no file in a
+        # folder that is the service's own and closed to everyone else is "never configured", not an error.
+        # A link, a FIFO, another owner, a writable file or any other trouble stays refused.
+        return "noop"
     with os.fdopen(fd, "rb") as stream:
         info = os.fstat(stream.fileno())
         if not stat.S_ISREG(info.st_mode) or info.st_uid != owner or info.st_mode & 0o222 or info.st_size > 128:
