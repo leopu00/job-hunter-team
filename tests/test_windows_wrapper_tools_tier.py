@@ -198,6 +198,7 @@ function Test-RuntimePathAuthority { $true }
 function Test-RuntimeAncestorsWithoutReparsePoint { param($p) $true }
 function Test-ProtectedRuntimeNode { param($p, [switch]$Directory) $true }
 function Test-RuntimeDirectoryAcl { $true }
+function Test-RuntimeHelpersTrusted { $true }
 $AclHelperPath = Join-Path $RuntimeDir 'windows-private-acl.ps1'
 $WrapperPath = $env:T_WRAPPER_SRC
 """
