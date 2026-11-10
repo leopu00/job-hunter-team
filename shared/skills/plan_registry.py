@@ -237,7 +237,10 @@ _BURST_ROSTER = [
 # Quante posizioni lo Scout porta a casa nel PRIMO giro prima di fermarsi e
 # lasciare la finestra al downstream. Senza questo cap lo scouting si mangia
 # la finestra e il punteggio non arriva mai (root cause del run 2026-07-26).
-_BURST_SCOUT_CAP = {20: 40, 15: 40, 5: 30, 1: 30, 0: 30}  # 20 punteggi al ~58% di resa: ~35 posizioni, con margine 40
+# Resa misurata sulla corsa del 10/11 (quarta): 19 posizioni su 37 analizzate arrivano a punteggio, il 51%. 20 punteggi chiedono ~40 posizioni
+# e con 40 si arriva a 20 solo una volta su due; con 50 i punteggi attesi sono ~25 e almeno 20 in ~95 casi su 100 (tre Analisti smaltiscono
+# 3 posizioni/min, piu' dei 5-6 Scout, ~2,3/min: il limite e' il numero di posizioni, non gli Analisti). Le fasce piccole restano a 30.
+_BURST_SCOUT_CAP = {20: 50, 15: 50, 5: 30, 1: 30, 0: 30}
 
 # Obiettivo dichiarato del burst: quante posizioni PUNTEGGIATE far vedere
 # all'utente prima di passare al regime normale.
