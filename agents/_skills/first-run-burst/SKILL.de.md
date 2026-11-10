@@ -55,7 +55,13 @@ Abonnement wird genauso angegeben: frag mit `python3 /app/shared/skills/first_ru
 
 **Das Abonnement kommt nur aus der Konfiguration oder vom Nutzer.** Schreibe es nie selbst aus dem Tagebuch, einer Notiz, dem Gedächtnis oder einem früheren Gespräch: „Der Nutzer hat Pro bestätigt“ in einer Notiz ist, was der Nutzer damals gesagt hat, keine Erklärung von jetzt (die Konfiguration kann zurückgesetzt worden sein, und das Abonnement kann sich geändert haben). Solange `plan_missing` da ist, fehlt das Abonnement: frage, nur einmal, und schreibe nur, was der Nutzer antwortet.
 
-**2. Spawne den gesamten Roster, um ~60 Sekunden versetzt.**
+**2. Spawne den gesamten Roster, einen Worker alle ~15 Sekunden, in dieser Reihenfolge.**
+
+Reihenfolge und Takt: zwei Scouts, dann ein Analista und ein Scorer, dann die übrigen Scouts, die übrigen Analisti und der letzte Scorer.
+So findet die erste Position schon einen laufenden Analista und die erste geprüfte einen Scorer, statt zuerst die Scouts und den Rest Minuten
+später (gemessen am 10.11.: erster Punktwert 10,7 Minuten nach der Öffnung des Burst, die Analisti ab Minute 5,8, die Scorer ab 8).
+Keine Pause zwischen zwei Workern über die 12 Sekunden hinaus, die das Briefing des ersten braucht. Der Haushalt deines Aufwachens
+(Tagebuch, Antworten, Direktiven, Postfach) kommt, wenn die Aufstellung steht, nicht davor: er kostete 2 Minuten vor dem ersten Scout.
 
 Nicht ein Worker alle zehn Minuten: die ganze Aufstellung, direkt nacheinander, wie immer über
 `start-agent.sh` (C-03). Das ist die bewusste Ausnahme von C-02.
