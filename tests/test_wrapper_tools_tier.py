@@ -141,6 +141,22 @@ def test_a_tier_file_that_cannot_be_believed_is_untrusted(box, what):
     assert done.stdout.split() == ["node-ok", "untrusted"], done.stderr  # the file is sound: it is the content that is refused
 
 
+@pytest.mark.parametrize("what", ["a link", "writable by others"])
+def test_an_integrity_file_that_is_not_the_users_own_plain_file_is_not_believed(box, tmp_path, what):
+    box.tier()
+    integrity = box.runtime / ".runtime-tier-integrity"
+    if what == "a link":
+        real = tmp_path / "real-integrity"
+        real.write_text(integrity.read_text(encoding="utf-8"), encoding="utf-8")
+        real.chmod(0o600)
+        integrity.unlink()
+        integrity.symlink_to(real)
+    else:
+        integrity.chmod(0o666)
+    done = box.run("runtime_tier_trusted && echo trusted || echo untrusted", library=False)
+    assert done.stdout.strip() == "untrusted", done.stderr
+
+
 def test_the_main_manifest_never_carries_the_tier_the_app_compares_its_exact_keys(box):
     box.tier()
     (box.runtime / "host-setup.sh").write_text("x\n", encoding="utf-8")
