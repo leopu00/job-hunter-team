@@ -1,11 +1,13 @@
 ---
 name: scout-coord
-description: Koordinationsprotokoll beim Start zwischen mehreren Scouts. Ohne diese Fähigkeit durchsuchen zwei Scouts denselben Kreis (Remote EU) auf derselben Ebene (LinkedIn) und erzeugen 100 % Duplikate, die das Dedup-Gate dann verwerfen muss — verschwendetes Budget und langsameres Team. Verwende sie als ERSTE Aktion in deiner Schleife, vor allem anderen. Gehört zur Scout-Rolle; SCOUT-1 ist normalerweise der Schiedsrichter, wenn mehrere Scouts gleichzeitig starten.
+description: Koordinationsprotokoll beim Start zwischen mehreren Scouts. Ohne diese Fähigkeit durchsuchen zwei Scouts denselben Kreis (Remote EU) auf derselben Ebene (LinkedIn) und erzeugen 100 % Duplikate, die das Dedup-Gate dann verwerfen muss — verschwendetes Budget und langsameres Team. Verwende sie als ERSTE Aktion in deiner Schleife, vor allem anderen. Gehört zur Scout-Rolle; SCOUT-1 ist normalerweise der Schiedsrichter, wenn mehrere Scouts gleichzeitig starten. Lies nur die Zeilen 1-86 (`limit` 86) — der Rest ist Referenz.
 allowed-tools: Bash(python3 /app/shared/skills/scout_coord.py *), Bash(tmux *), Bash(jht-tmux-send *)
 ---
 <!-- @translation: de, ai-translated 2026-06-06 -->
 
 # scout-coord — Territorium aufteilen
+
+> **In Stücken lesen.** Das ganze Protokoll steht in den Zeilen 1-86 dieser Datei (Steps 1-5): lies nur diese (`offset` 1, `limit` 86). Unter `## Reference` — Heuristiken für die Aufteilung, Anti-Patterns, wann neu verhandelt wird, siehe auch — nur lesen, wenn du eine Aufteilung aushandeln oder neu verhandeln musst.
 
 Mehrere Scouts laufen parallel (maximal 2 Instanzen laut Team-Richtlinie). Das Team funktioniert nur, wenn sie sich auf eine **überlappungsfreie Aufteilung** einigen:
 - welche **Kreise** jeder besitzt (1 = primäre Präferenz, 2 = Geo-Nachbarn, 3 = Umzug, 4 = Satellit, 5 = Grenzgebiet)
@@ -55,31 +57,7 @@ Tu cerchi 3+4 + tier 3-4 (niche board + WebSearch). OK?
 
 Der Peer antwortet mit `[ACK]` (akzeptiert) oder `[COUNTER]` (Gegenvorschlag). Halte es kurz — wenn ihr euch nicht in 3 Durchgängen einigen könnt, eskaliere zum Capitano.
 
-**Heuristiken für eine gute Aufteilung**:
-
-| Situation                                       | Empfohlene Aufteilung                                              |
-|-------------------------------------------------|--------------------------------------------------------------------|
-| 2 Scouts, Profil `work_mode = remote`          | S1: cerchi 1-2 + LinkedIn/ATS · S2: cerchi 1 + Nische-Remote-Board (RemoteOK, WeWorkRemotely) — beide in cerchio 1, komplementäre Quellen |
-| 2 Scouts, Profil `work_mode = on-site`         | S1: Basisstadt + cerchio 2 regional · S2: Umzug (cerchio 3) |
-| 2 Scouts, gemischt `work_mode = flessibile`    | S1: cerchi 1-2 (Vollmodus) · S2: cerchi 3-5 (Umzug + Satellit + Grenzgebiet) |
-
 Unabhängig von der gewählten Aufteilung gilt die Regel: **keine zwei Scouts auf derselben (Kreis, Ebenen-Set) Kombination zur gleichen Zeit.**
-
-**Volumen vs. kuratierte Aufteilung — empirisch aus dem VPS1-Lauf 2026-05-21 (vps1-run-postmortem #14):**
-
-> Scout-1 fand 130 Positionen mit einem Durchschnittsscore von 63,1 (40 % High-Score)
-> Scout-2 fand 76 Positionen mit einem Durchschnittsscore von 68,4 (54 % High-Score)
->
-> → Scout-2 war 1,4× qualitativer als Scout-1 beim selben Kandidaten.
-
-Empfohlenes Muster, wenn man die Freiheit hat, die Ebene für die 2 Scouts zu wählen:
-
-| Scout    | Zugewiesene Ebene                                       | Begründung                                     |
-|----------|---------------------------------------------------------|------------------------------------------------|
-| SCOUT-1  | LinkedIn (hohes Volumen, verrauscht)                    | Erfasst den Fluss, akzeptiert niedrigeren Score|
-| SCOUT-2  | Ashby / Greenhouse / Lever / company-careers (kuratiert)| Wenige, aber passende, höherer Durchschnittsscore |
-
-Das `next-for-analista` erhält dann einen ausgewogenen Mix aus Volumen + Qualität, und der Hard-Requirements-Filter des Analysten (RULE-06) konzentriert sich auf den Scout-1-Stream (wo mehr Rauschen ist). Dies ist keine starre Regel — an den `work_mode` anpassen wie in der Tabelle oben.
 
 ## Schritt 4 — Zuweisung festschreiben
 
@@ -106,6 +84,32 @@ Gegenprüfung: die Vereinigung aller `fonti` sollte die Ebenen abdecken, die das
 ```bash
 jht-tmux-send CAPITANO "[@$MY_ID -> @capitano] [INFO] scout-coord: tier 'niche-remote' senza scout, considera spawn aggiuntivo o riassegnamento."
 ```
+
+## Reference
+
+**Heuristiken für eine gute Aufteilung**:
+
+| Situation                                       | Empfohlene Aufteilung                                              |
+|-------------------------------------------------|--------------------------------------------------------------------|
+| 2 Scouts, Profil `work_mode = remote`          | S1: cerchi 1-2 + LinkedIn/ATS · S2: cerchi 1 + Nische-Remote-Board (RemoteOK, WeWorkRemotely) — beide in cerchio 1, komplementäre Quellen |
+| 2 Scouts, Profil `work_mode = on-site`         | S1: Basisstadt + cerchio 2 regional · S2: Umzug (cerchio 3) |
+| 2 Scouts, gemischt `work_mode = flessibile`    | S1: cerchi 1-2 (Vollmodus) · S2: cerchi 3-5 (Umzug + Satellit + Grenzgebiet) |
+
+**Volumen vs. kuratierte Aufteilung — empirisch aus dem VPS1-Lauf 2026-05-21 (vps1-run-postmortem #14):**
+
+> Scout-1 fand 130 Positionen mit einem Durchschnittsscore von 63,1 (40 % High-Score)
+> Scout-2 fand 76 Positionen mit einem Durchschnittsscore von 68,4 (54 % High-Score)
+>
+> → Scout-2 war 1,4× qualitativer als Scout-1 beim selben Kandidaten.
+
+Empfohlenes Muster, wenn man die Freiheit hat, die Ebene für die 2 Scouts zu wählen:
+
+| Scout    | Zugewiesene Ebene                                       | Begründung                                     |
+|----------|---------------------------------------------------------|------------------------------------------------|
+| SCOUT-1  | LinkedIn (hohes Volumen, verrauscht)                    | Erfasst den Fluss, akzeptiert niedrigeren Score|
+| SCOUT-2  | Ashby / Greenhouse / Lever / company-careers (kuratiert)| Wenige, aber passende, höherer Durchschnittsscore |
+
+Das `next-for-analista` erhält dann einen ausgewogenen Mix aus Volumen + Qualität, und der Hard-Requirements-Filter des Analysten (RULE-06) konzentriert sich auf den Scout-1-Stream (wo mehr Rauschen ist). Dies ist keine starre Regel — an den `work_mode` anpassen wie in der Tabelle oben.
 
 ## Anti-Patterns
 

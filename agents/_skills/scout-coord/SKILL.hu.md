@@ -1,11 +1,13 @@
 ---
 name: scout-coord
-description: Indulaskori koordinacios protokoll tobb Scout kozott. E kepesseg nelkul ket scout ugyanazt a kort (Remote EU) jarja ugyanazon a szinten (LinkedIn), es 100%-ban duplikatumokat allit elo, amelyeket a dedup gate-nek kell eldobnia — pazarolt koltsegvetes es lassabb csapat. Hasznald ELSO tevekenysegkent a ciklusodban, minden mas elott. A Scout szerephez tartozik; a SCOUT-1 altalaban dont, ha tobb scout egyszerre indul.
+description: Indulaskori koordinacios protokoll tobb Scout kozott. E kepesseg nelkul ket scout ugyanazt a kort (Remote EU) jarja ugyanazon a szinten (LinkedIn), es 100%-ban duplikatumokat allit elo, amelyeket a dedup gate-nek kell eldobnia — pazarolt koltsegvetes es lassabb csapat. Hasznald ELSO tevekenysegkent a ciklusodban, minden mas elott. A Scout szerephez tartozik; a SCOUT-1 altalaban dont, ha tobb scout egyszerre indul. Csak az 1-86. sort olvasd (`limit` 86) — a többi hivatkozás.
 allowed-tools: Bash(python3 /app/shared/skills/scout_coord.py *), Bash(tmux *), Bash(jht-tmux-send *)
 ---
 <!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # scout-coord — a terulet felosztasa
+
+> **Darabokban olvasd.** A teljes protokoll a fájl 1-86. sora (Steps 1-5): csak azokat olvasd (`offset` 1, `limit` 86). A `## Reference` alatti rész — felosztási heurisztikák, anti-minták, mikor kell újratárgyalni, lásd még — csak akkor olvasd, ha felosztást kell tárgyalnod vagy újratárgyalnod.
 
 Tobb Scout fut parhuzamosan (csapatszabalyzat szerint maximum 2 peldany). A csapat csak akkor mukodik, ha megegyeznek egy **atfedes nelkuli felosztasban**:
 - melyik **koroket** birtokolja mindegyik (1 = elsdleges preferencia, 2 = foldrajzi szomszedok, 3 = koltozes, 4 = szatellit, 5 = hatar)
@@ -55,31 +57,7 @@ Tu cerchi 3+4 + tier 3-4 (niche board + WebSearch). OK?
 
 A tars `[ACK]`-kal (elfogadas) vagy `[COUNTER]`-rel (ellenajanlat) valaszol. Tartsd rovidre — ha 3 fordulo alatt nem tudtok megegyezni, eszkalald a Capitano-hoz.
 
-**Heurisztikak a jo felosztashoz**:
-
-| Helyzet                                         | Javasolt felosztas                                                 |
-|-------------------------------------------------|--------------------------------------------------------------------|
-| 2 Scout, profil `work_mode = remote`           | S1: cerchi 1-2 + LinkedIn/ATS · S2: cerchi 1 + resteruleti nis board (RemoteOK, WeWorkRemotely) — mindketto cerchio 1-ben, komplementer forrasok |
-| 2 Scout, profil `work_mode = on-site`          | S1: bazisvaros + cerchio 2 regionalis · S2: koltozes (cerchio 3) |
-| 2 Scout, vegyes `work_mode = flessibile`       | S1: cerchi 1-2 (teljes mod) · S2: cerchi 3-5 (koltozes + szatellit + hatar) |
-
 Barmelyik felosztast is valasztod, a szabaly: **ket scout nem lehet ugyanazon (kor, szint-keszlet) kombinacion egyidoben.**
-
-**Mennyiseg vs. kuralt felosztas — empirikus adat a VPS1 2026-05-21-es futasbol (vps1-run-postmortem #14):**
-
-> Scout-1 130 poziciot talalt atlagos score-ral 63,1 (40% high-score)
-> Scout-2 76 poziciot talalt atlagos score-ral 68,4 (54% high-score)
->
-> → Scout-2 1,4×-szer minosegiesebb volt, mint Scout-1 ugyanannal a jeloltnel.
-
-Ajanlott minta, amikor szabadon valaszthato a szint a 2 scoutnak:
-
-| Scout    | Kijelolt szint                                          | Indoklas                                       |
-|----------|---------------------------------------------------------|------------------------------------------------|
-| SCOUT-1  | LinkedIn (nagy volumen, zajos)                          | Befogja az aramlast, elfogadja az alacsonyabb score-t |
-| SCOUT-2  | Ashby / Greenhouse / Lever / company-careers (kuralt)   | Keves de talalo, magasabb atlag score          |
-
-A `next-for-analista` ezutan egy kiegyensulyozott kevereket kap volumen + minoseg, es az Analiszt hard-requirements szuroje (RULE-06) a Scout-1 streamre osszpontosit (ahol tobb a zaj). Ez nem merev szabaly — igazitsd a `work_mode`-hoz a fenti tabla szerint.
 
 ## 4. lepes — Hozzarendeles veglegesitese
 
@@ -106,6 +84,32 @@ Keresztellenorzes: az osszes `fonti` uniojanak le kell fednie azokat a szinteket
 ```bash
 jht-tmux-send CAPITANO "[@$MY_ID -> @capitano] [INFO] scout-coord: tier 'niche-remote' senza scout, considera spawn aggiuntivo o riassegnamento."
 ```
+
+## Reference
+
+**Heurisztikak a jo felosztashoz**:
+
+| Helyzet                                         | Javasolt felosztas                                                 |
+|-------------------------------------------------|--------------------------------------------------------------------|
+| 2 Scout, profil `work_mode = remote`           | S1: cerchi 1-2 + LinkedIn/ATS · S2: cerchi 1 + resteruleti nis board (RemoteOK, WeWorkRemotely) — mindketto cerchio 1-ben, komplementer forrasok |
+| 2 Scout, profil `work_mode = on-site`          | S1: bazisvaros + cerchio 2 regionalis · S2: koltozes (cerchio 3) |
+| 2 Scout, vegyes `work_mode = flessibile`       | S1: cerchi 1-2 (teljes mod) · S2: cerchi 3-5 (koltozes + szatellit + hatar) |
+
+**Mennyiseg vs. kuralt felosztas — empirikus adat a VPS1 2026-05-21-es futasbol (vps1-run-postmortem #14):**
+
+> Scout-1 130 poziciot talalt atlagos score-ral 63,1 (40% high-score)
+> Scout-2 76 poziciot talalt atlagos score-ral 68,4 (54% high-score)
+>
+> → Scout-2 1,4×-szer minosegiesebb volt, mint Scout-1 ugyanannal a jeloltnel.
+
+Ajanlott minta, amikor szabadon valaszthato a szint a 2 scoutnak:
+
+| Scout    | Kijelolt szint                                          | Indoklas                                       |
+|----------|---------------------------------------------------------|------------------------------------------------|
+| SCOUT-1  | LinkedIn (nagy volumen, zajos)                          | Befogja az aramlast, elfogadja az alacsonyabb score-t |
+| SCOUT-2  | Ashby / Greenhouse / Lever / company-careers (kuralt)   | Keves de talalo, magasabb atlag score          |
+
+A `next-for-analista` ezutan egy kiegyensulyozott kevereket kap volumen + minoseg, es az Analiszt hard-requirements szuroje (RULE-06) a Scout-1 streamre osszpontosit (ahol tobb a zaj). Ez nem merev szabaly — igazitsd a `work_mode`-hoz a fenti tabla szerint.
 
 ## Anti-mintak
 
