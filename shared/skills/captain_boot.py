@@ -72,11 +72,27 @@ def first_run_line(gate: dict | None) -> str:
     return f"first run: phase {state.get('phase')}, {opened}{need}" + (f" roster_missing {json.dumps(missing)}." if missing else "")
 
 
+def tools_line(gate: dict | None) -> str | None:
+    """The full image's tools are not here yet: the Capitano starts anyway, with only the roles that do not need them."""
+    tools = (gate or {}).get("tools") or {}
+    if not tools.get("degraded"):
+        return None
+    why = ("the download did not finish in 10 minutes and goes on in the background" if tools["degraded"] == "timeout"
+           else f"the download failed ({tools.get('reason') or 'unknown reason'})")
+    return ("tools: NOT READY — the full set of tools (the browser, the CV PDF) is not in the image yet: " + why + ". "
+            "Start ONLY the roles that do not need them (Scorer, Critico, Sentinella): start-agent.sh refuses scout, analista, "
+            "scrittore and closer with exit 75 until the image has the tools; do not retry them in a loop. Tell the user ONCE, "
+            "now, with `notify-user`, in the user's language, that the tools are still arriving and the search starts as "
+            "soon as they do. Nothing for you to install or repair: the system switches the image and restarts the team by itself.")
+
+
 def briefing() -> str:
     gate = _json(str(SKILLS / "captain_gate.py"))
     lines = ["BOOT FACTS gathered by the system just now — do NOT run these commands again, the answers are here:",
              f"- onboarding: {(gate or {}).get('reason', 'unknown')}",
              "- " + first_run_line(gate)]
+    if tools := tools_line(gate):
+        lines.append("- " + tools)
     for label, argv in (("diary handoff", ("captain_diary.py", "handoff")), ("standing orders", ("team_directives.py", "active"))):
         text = _run(str(SKILLS / argv[0]), *argv[1:])
         lines.append(f"- {label}:\n" + (_cut(text) if text else "(could not be read — run it yourself)"))

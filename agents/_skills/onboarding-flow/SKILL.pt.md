@@ -38,6 +38,8 @@ Uma resposta sem próxima pergunta é aceitável APENAS quando a checklist de bl
 
 O uso e o que cada campo pede estão em `python3 /app/shared/skills/profile_apply.py --help`: lê isso, nunca o código-fonte de `profile_apply.py` ou de `validate_profile.py` (cada leitura de um ficheiro relê toda a conversa); a resposta já lista o que falta (`missing`) e o que está errado (`invalid`).
 
+Quando os cartões do questionário já começaram (secção abaixo) e o plano está declarado, junta `"next_card": true` ao mesmo JSON: depois da tua linha no chat o comando verifica o plano, publica o cartão seguinte e responde `next_card` (a resposta de `onboarding_questionnaire.py ask`; `{"asked": false, "plan_declared": false}` = pergunta primeiro o plano, abaixo). Então NÃO lances `plan_registry.py get` nem `onboarding_questionnaire.py ask` como chamadas separadas: uma mensagem da pessoa custa um `profile_apply.py` e a linha de fecho.
+
 Três níveis (single source: `web/lib/profile-completion.ts`). 🔴 REQUIRED desbloqueia a
 equipa · 🟡 RECOMMENDED não bloqueia mas melhora muito · 🟢 OPTIONAL = personalização máxima.
 
@@ -135,7 +137,7 @@ O cartão salarial gere a escolha sobre a importância do salário, não um valo
 2. **Aplica a resposta.** Quando leres `[USER ANSWER …]` de um cartão: `python3 /app/shared/skills/onboarding_questionnaire.py apply`. `applied: true` → confirma em UMA linha o que ficou definido, com as palavras da pessoa, e depois `ask` outra vez para o cartão seguinte. `ask_in_chat` lista os campos do perfil que o cartão te deixa a ti (por exemplo o local): pergunta-os com UMA pergunta em palavras e escreve-os com a skill do perfil. `write_in_chat` (a escolha «outro»): propõe à pessoa o seu `prompt` no chat; o que ela escrever vai com `python3 /app/shared/skills/onboarding_questionnaire.py answer-text <step> "<as suas palavras>"`, e depois `ask` outra vez.
 3. **Quando nada foi aplicado.** `waiting: true` ou «not the person's own» → não escrevas nem digas nada. `words: true` → respondeu ao cartão com palavras: se as palavras indicam claramente UMA escolha, `python3 /app/shared/skills/onboarding_questionnaire.py apply --option <id>`; se não, `ask` volta a propor o cartão.
 
-Nunca escrevas estes campos à mão enquanto um cartão estiver aberto, nunca escolhas pela pessoa, nunca repitas em palavras uma pergunta que o cartão já fez. A ferramenta é a única que escreve estes campos: se responder `ok: false`, não fales nisso e continua com a checklist.
+Nunca escrevas estes campos à mão enquanto um cartão estiver aberto, nunca escolhas pela pessoa, nunca repitas em palavras uma pergunta que o cartão já fez. A ferramenta é a única que escreve estes campos: se responder `ok: false`, não fales nisso e continua com a checklist. Se `ask` ou `next_card` responderem `ok: false`, NÃO sondes (`--help`, `status`, outros comandos): o `why` diz porquê; faz a mesma pergunta em palavras na tua próxima linha e segue.
 
 ## Agnóstico de setor — NUNCA padrão para IT
 

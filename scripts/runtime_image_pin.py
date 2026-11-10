@@ -221,11 +221,17 @@ def load_manifest(path: Path) -> RuntimeImagePin:
 # carry it (a copy with one digest is refused), and a pin WITHOUT one needs them empty or absent.
 _SH_CORE = r'^CORE_IMAGE_DIGEST="\$\{JHT_CORE_IMAGE_DIGEST:-(?P<core_digest>(?:sha256:[0-9a-f]{64})?)\}"$'
 _PS_CORE = r"^\$CoreImageDigest = if \(\$env:JHT_CORE_IMAGE_DIGEST\) \{ \$env:JHT_CORE_IMAGE_DIGEST \} else \{ '(?P<core_digest>(?:sha256:[0-9a-f]{64})?)' \}$"
+# The wrappers carry the core digest as a plain constant (no environment override: the installers' one is for tests of the
+# installer, the wrapper runs under whatever environment the user has).
+_SH_CORE_WRAPPER = r'^CORE_IMAGE_DIGEST="(?P<core_digest>(?:sha256:[0-9a-f]{64})?)"$'
+_PS_CORE_WRAPPER = r"^\$CoreImageDigest = '(?P<core_digest>(?:sha256:[0-9a-f]{64})?)'$"
 CORE_CONSUMER_PATTERNS: dict[Path, tuple[str, ...]] = {
     Path("scripts/install.sh"): (_SH_CORE,),
     Path("web/public/install.sh"): (_SH_CORE,),
     Path("scripts/install.ps1"): (_PS_CORE,),
     Path("web/public/install.ps1"): (_PS_CORE,),
+    Path("scripts/jht-wrapper.sh"): (_SH_CORE_WRAPPER,),
+    Path("scripts/jht-wrapper.ps1"): (_PS_CORE_WRAPPER,),
 }
 
 

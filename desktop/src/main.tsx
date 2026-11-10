@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import AppExitDialog from "./components/AppExitDialog";
 import AppMenu from "./components/AppMenu";
+import ToolsTierTicker from "./components/ToolsTierTicker";
 import PageErrorBoundary from "./shell/PageErrorBoundary";
 import { installCookieMirror } from "./lib/cookie-mirror";
 import { installExternalLinks } from "./lib/external-links";
@@ -24,5 +25,6 @@ createRoot(document.getElementById("root")!).render(
     </PageErrorBoundary>
     <AppExitDialog />
     <AppMenu />
+    <ToolsTierTicker />
   </StrictMode>,
 );

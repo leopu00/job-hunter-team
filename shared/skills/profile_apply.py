@@ -10,21 +10,28 @@ command does the four steps in one go, in the order the skill `profile-yaml` ask
      app polls the file, a half-written one blanks the left panel),
   2. check it with `validate_profile.py`; a profile that does not load or is not an object is put back as it was,
   3. write the summaries (`about`, `preferences`, `goals`, `strengths`: the four fixed names, rewritten whole),
-  4. only when 1-3 held, send `say` to the chat with `jht-send`.
+  4. only when 1-3 held, send `say` to the chat with `jht-send`,
+  5. only with `"next_card": true`, once 1-3 held: after the chat line, post the next card of the questionnaire
+     (`onboarding_questionnaire.py ask`) once the plan is declared (`plan_registry.py get`). One turn, not three.
 
   python3 /app/shared/skills/profile_apply.py <<'JSON'
   {"set": {"name": "Ada Example", "preferences.work_mode": "remote"},
    "append": {"skills.primary": ["SQL", "Python"]},
    "summaries": {"about": "I am a data analyst ..."},
    "say": "[caldo] Nice to meet you, Ada - ... Which city do you want to work in?",
-   "kind": "info"}
+   "kind": "info", "next_card": true}
   JSON
 
 `set` takes dotted paths and replaces the value there (a list is replaced whole); `append` adds the items of a list that
 are not in it yet. Every key is optional. The answer is one JSON object on stdout:
 
   {"ok": true, "written": [...], "missing": [...], "launch_missing": [...], "launch_ready": bool, "ready_flag": bool,
-   "invalid": [...], "language_warnings": [...], "said": bool}
+   "invalid": [...], "language_warnings": [...], "said": bool, "next_card": {...}}
+
+`next_card` is there only when asked for: the answer of `onboarding_questionnaire.py ask` (`asked: true` = the card is in
+the chat; `open` / `answered` / `done` / `waiting_text` as that tool says; `ok: false` with `error` and `why` = it was not
+posted: say nothing of it and go on in words), or `{"asked": false, "plan_declared": false}` when the plan is not declared
+yet (then the plan is asked first, with the card of `first_run.py ask-plan`, skill onboarding-flow).
 
 `missing` is what a complete profile still lacks (normal while it is being built); `invalid` is a field that IS there
 and is wrong, to fix with the next call. Exit 0 = applied; 1 = nothing was applied (the reason is in `error`).
@@ -162,6 +169,29 @@ def say(text: str, kind: str) -> bool:
     return subprocess.run(cmd, input=text, text=True, timeout=60, check=False).returncode == 0
 
 
+def _run_json(script: str, *args: str, timeout: int = 120) -> tuple[int, dict]:
+    done = subprocess.run([sys.executable, "-I", str(SKILLS / script), *args], capture_output=True, text=True,
+                          timeout=timeout, check=False)
+    try:
+        out = json.loads(done.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        out = {}
+    return done.returncode, out if isinstance(out, dict) else {}
+
+
+def next_card() -> dict:
+    """The next card of the questionnaire, once the plan is declared. Never raises: the profile is already written."""
+    try:
+        declared = subprocess.run([sys.executable, "-I", str(SKILLS / "plan_registry.py"), "get"], capture_output=True,
+                                  text=True, timeout=60, check=False).returncode == 0
+        if not declared:
+            return {"asked": False, "plan_declared": False}
+        _code, out = _run_json("onboarding_questionnaire.py", "ask")
+        return out or {"ok": False, "error": "no_answer"}
+    except (OSError, subprocess.SubprocessError) as exc:
+        return {"ok": False, "error": "next_card_failed", "why": str(exc)[:200]}
+
+
 def apply(request: dict) -> tuple[int, dict]:
     import yaml  # the container has it; the app's own files are written with it too
 
@@ -200,8 +230,11 @@ def apply(request: dict) -> tuple[int, dict]:
         return 1, {"ok": False, "error": str(exc)}
     said = say(str(request["say"]), kind) if request.get("say") is not None else False
     launch_ready = profile.is_file() and not report["launch_missing"]
-    return 0, {"ok": True, "written": written, **report, "launch_ready": launch_ready,
-               "ready_flag": (profile_dir / "ready.flag").is_file(), "said": said}
+    answer = {"ok": True, "written": written, **report, "launch_ready": launch_ready,
+              "ready_flag": (profile_dir / "ready.flag").is_file(), "said": said}
+    if request.get("next_card") is True:
+        answer["next_card"] = next_card()  # after the chat line: the card comes below the words
+    return 0, answer
 
 
 def main() -> int:

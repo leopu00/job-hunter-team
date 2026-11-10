@@ -33,7 +33,7 @@ import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { watch } from 'node:fs';
 import { dirname } from 'node:path';
-import { loginMarkerOf } from '../../../shared/runtime/agent-harness.js';
+import { loginMarkerOf, piApiKeyConfigured } from '../../../shared/runtime/agent-harness.js';
 
 const JHT_ENTRY = '/app/cli/bin/jht.js';
 const JHT_HOME = '/jht_home';
@@ -281,6 +281,8 @@ async function hasProviderCredentials() {
     // Il marker del login del provider (kimi, claude/anthropic, codex/openai), o di pi se il config
     // sceglie l'harness pi: shared/runtime/agent-harness.js. Specchio: config_ready() in
     // agent-watchdog.sh. Un provider sconosciuto non ha marker: false, e l'auto-start non parte.
+    // glm e kimi su pi: nessun login, vale la chiave API del config.
+    if (piApiKeyConfigured(cfg)) return true;
     const relative = loginMarkerOf(cfg);
     const marker = relative ? `${JHT_HOME}/${relative}` : null;
     if (!marker) return false;

@@ -151,6 +151,7 @@ def test_ask_plan_asks_nothing_once_the_plan_is_declared(box):
 def test_ask_plan_says_so_when_the_card_cannot_be_posted(box):
     configure(box)
     box.db.unlink()
+    box.db.mkdir()  # a database that cannot be opened (a missing one is created now)
 
     out = run(box, "ask-plan")
 
@@ -415,6 +416,7 @@ def test_a_net_that_cannot_post_says_failed_and_leaves_no_card(box):
     configure(box)
     import_profile(box, minutes_ago=60)
     box.db.unlink()
+    box.db.mkdir()  # a database that cannot be opened (a missing one is created now)
 
     out = run(box, "plan-question-check")
 

@@ -34,7 +34,7 @@ USAGE_MAX = 1000.0
 # (game/scripts/setup/setup_service.gd, AUTH_PATHS), perche' un accesso valido in uno qualsiasi di questi posti
 # vale come «collegato». Il nome-vendor (openai/anthropic/moonshot) e il nome-CLI (codex/claude/kimi) sono lo stesso provider.
 _CLAUDE = [".claude/.credentials.json", ".claude/credentials.json", ".config/claude/credentials.json", ".config/claude/auth.json"]
-_CODEX = [".codex/auth.json", ".codex/credentials.json", ".config/codex/credentials.json"]
+_CODEX = [".codex/auth.json", ".codex/credentials.json", ".config/codex/credentials.json", ".pi/agent/auth.json"]  # the last: Pi's own, when Pi drives the agents
 # Kimi: solo i file di LOGIN, gli stessi che toglie il logout (i due config.json sono configurazione, non accesso: dopo un
 # logout resterebbero e il fatto direbbe ancora «collegato»).
 _KIMI = [".kimi/credentials/kimi-code.json", ".config/kimi-cli/credentials.json", ".kimi/credentials.json"]

@@ -873,6 +873,7 @@ $files = @{
   $helperSource = (Join-Path $BinDir 'windows-private-acl.ps1')
   $bridgeSource = (Join-Path $BinDir 'podman-machine-bridge.ps1')
   (Join-Path $PSScriptRoot 'jht-integration.ps1') = (Join-Path $RuntimeDir 'jht-integration.ps1')
+  (Join-Path $PSScriptRoot 'jht-tools.ps1') = (Join-Path $RuntimeDir 'jht-tools.ps1')
 }
 # Each one takes its place by a temporary file beside it (Publish-JhtFile): a program that holds a file of the bin folder open for a
 # moment must not leave it truncated, and a file that is already these bytes is not touched.
@@ -924,6 +925,7 @@ $shimHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $shim).Hash.ToLowerInva
 $helperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $BinDir 'windows-private-acl.ps1')).Hash.ToLowerInvariant()
 $bridgeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $BinDir 'podman-machine-bridge.ps1')).Hash.ToLowerInvariant()
 $integrationHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $RuntimeDir 'jht-integration.ps1')).Hash.ToLowerInvariant()
+$toolsHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $RuntimeDir 'jht-tools.ps1')).Hash.ToLowerInvariant()
 $selectionHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $selectionFile).Hash.ToLowerInvariant()
 $machineHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $machineFile).Hash.ToLowerInvariant()
 $containerUnitHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $containerUnitFile).Hash.ToLowerInvariant()
@@ -947,7 +949,7 @@ if ($RuntimeTier -eq 'core') {
 $manifest = "version=1`ndocker-compose.yml=$composeHash`njht-wrapper.ps1=$wrapperHash`ndocker-compose.podman.yml=$podmanHash`ndocker.exe=$shimHash`ncontainer-runtime=$selectionHash`npodman-machine=$machineHash`njht-container.service=$containerUnitHash`nwindows-private-acl.ps1=$helperHash`npodman-machine-bridge.ps1=$bridgeHash`n$runtimeImageManifest$runtimeTierManifest"
 [IO.File]::WriteAllText((Join-Path $RuntimeDir '.runtime-integrity'), $manifest, [Text.UTF8Encoding]::new($false))
 # The host scripts that came after the main manifest have one of their own (the app checks that one key by key).
-[IO.File]::WriteAllText((Join-Path $RuntimeDir '.runtime-helpers'), "jht-integration.ps1=$integrationHash`n", [Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText((Join-Path $RuntimeDir '.runtime-helpers'), "jht-integration.ps1=$integrationHash`njht-tools.ps1=$toolsHash`n", [Text.UTF8Encoding]::new($false))
 # Every file the wrapper checks the owner of (Test-RuntimeBundleTrusted), before the wrapper runs (T103).
 $bundleFiles = @(
   (Join-Path $RuntimeDir 'docker-compose.yml'),
@@ -960,6 +962,7 @@ $bundleFiles = @(
   (Join-Path $BinDir 'windows-private-acl.ps1'),
   (Join-Path $BinDir 'podman-machine-bridge.ps1'),
   (Join-Path $RuntimeDir 'jht-integration.ps1'),
+  (Join-Path $RuntimeDir 'jht-tools.ps1'),
   (Join-Path $RuntimeDir '.runtime-helpers'),
   $shim
 )

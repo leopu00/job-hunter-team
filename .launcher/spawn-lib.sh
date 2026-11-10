@@ -586,7 +586,7 @@ try:
         value = str(json.load(handle).get("active_provider") or "").strip().lower()
 except Exception:
     raise SystemExit(2)
-if value not in {"claude", "anthropic", "openai", "codex", "kimi", "moonshot"}:
+if value not in {"claude", "anthropic", "openai", "codex", "kimi", "moonshot", "glm"}:
     raise SystemExit(2)
 print(value)
 PYEOF

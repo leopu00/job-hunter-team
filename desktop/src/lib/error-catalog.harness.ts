@@ -1,7 +1,8 @@
 import type { ErrorCopy } from "./error-catalog";
 import type { ErrorTranslations } from "./error-catalog.locales";
 
-/** The program that drives the agents (Codex or Pi), chosen in Settings: harness_choice.rs, `jht providers harness --json`. */
+/** The program that drives the agents (Codex or Pi), chosen in Settings: harness_choice.rs, `jht providers harness --json`.
+ * Also `tools_unavailable`, the tools' round of tools_tier.rs (it has no other catalog file to live in). */
 export const HARNESS_ERRORS: Readonly<Record<string, ErrorCopy>> = {
   harness_unavailable: {
     text: { it: "Non riesco a leggere quale programma guida gli agenti.", en: "The program that drives the agents cannot be read right now." },
@@ -14,6 +15,10 @@ export const HARNESS_ERRORS: Readonly<Record<string, ErrorCopy>> = {
   harness_refused: {
     text: { it: "Con questo accesso gli agenti non possono usare Pi.", en: "With this sign-in the agents cannot use Pi." },
     action: { it: "Resta su Codex, oppure cambia provider dal passo «Provider».", en: "Stay on Codex, or change the provider from the «Provider» step." },
+  },
+  tools_unavailable: {
+    text: { it: "Non riesco a controllare gli strumenti della squadra.", en: "The team’s tools cannot be checked right now." },
+    action: { it: "Non devi fare niente: ricontrollo tra poco.", en: "There is nothing for you to do: it is checked again shortly." },
   },
   harness_no_provider: {
     text: { it: "Prima di scegliere il programma degli agenti serve un provider attivo.", en: "An active provider is needed before choosing the program that drives the agents." },
@@ -42,6 +47,13 @@ export const HARNESS_ERROR_TRANSLATIONS: Readonly<Record<string, ErrorTranslatio
     fr: ["Avec cet accès, les agents ne peuvent pas utiliser Pi.", "Reste sur Codex, ou change de fournisseur à l’étape « Fournisseur »."],
     hu: ["Ezzel a bejelentkezéssel az ügynökök nem használhatják a Pi-t.", "Maradj a Codexnél, vagy válts szolgáltatót a «Szolgáltató» lépésben."],
     pt: ["Com este acesso os agentes não podem usar o Pi.", "Fica no Codex ou muda de fornecedor no passo «Fornecedor»."],
+  },
+  tools_unavailable: {
+    de: ["Die Werkzeuge des Teams lassen sich gerade nicht prüfen.", "Du musst nichts tun: Es wird gleich erneut geprüft."],
+    es: ["Ahora mismo no se pueden comprobar las herramientas del equipo.", "No tienes que hacer nada: se vuelve a comprobar enseguida."],
+    fr: ["Impossible de vérifier les outils de l’équipe pour l’instant.", "Tu n’as rien à faire : ils sont revérifiés dans un instant."],
+    hu: ["A csapat eszközeit most nem lehet ellenőrizni.", "Nincs teendőd: hamarosan újra ellenőrzöm."],
+    pt: ["Neste momento não é possível verificar as ferramentas da equipa.", "Não tens de fazer nada: volta a ser verificado daqui a pouco."],
   },
   harness_no_provider: {
     de: ["Vor der Wahl des Agenten-Programms ist ein aktiver Anbieter nötig.", "Schließe den Schritt «Anbieter» ab und versuche es dann erneut."],

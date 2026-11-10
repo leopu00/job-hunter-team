@@ -374,3 +374,24 @@ def test_the_next_card_does_not_come_while_the_old_one_stays_open(box):
     assert answer_of(box, qid)["origine"] == "sistema"  # one open card, not two
     open_cards = [c for c in cards(box) if answer_of(box, c["id"]) is None]
     assert [c["id"] for c in open_cards] == [asked["question_id"]]
+
+
+def test_the_first_card_is_posted_on_an_installation_with_no_database_and_a_failure_says_why(tmp_path):
+    script = Path(__file__).resolve().parents[1] / "shared" / "skills" / "onboarding_questionnaire.py"
+    home = tmp_path / "jht"
+    home.mkdir()
+    env = {"PATH": os.environ.get("PATH", ""), "JHT_HOME": str(home), "PYTHONDONTWRITEBYTECODE": "1"}
+
+    def run(extra=None):
+        done = subprocess.run([sys.executable, "-I", str(script), "ask"], capture_output=True, text=True, timeout=120,
+                              env={**env, **(extra or {})}, check=False)
+        return done.returncode, json.loads(done.stdout)
+
+    assert not (home / "jobs.db").exists()
+    code, out = run()
+    assert code == 0 and out["asked"] is True and (home / "jobs.db").is_file()
+    # a database that cannot be prepared: the error carries the reason, not only the code
+    blocked = tmp_path / "file"
+    blocked.write_text("x")
+    code, out = run({"JHT_HOME": str(tmp_path / "other"), "JHT_DB": str(blocked / "jobs.db")})
+    assert code == 1 and out["error"] == "card_not_posted" and out["why"]

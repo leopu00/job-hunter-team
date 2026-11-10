@@ -151,3 +151,31 @@ def test_every_language_of_the_onboarding_skill_sends_the_assistant_to_help_not_
         text = path.read_text(encoding="utf-8")
         assert "profile_apply.py --help" in text, path.name
         assert "validate_profile.py` " in text or "validate_profile.py`" in text, path.name
+
+
+# ── next_card: the card of the questionnaire in the same turn, on an installation with no database yet ──────────
+
+def _declare_plan(box: Box) -> None:
+    (box.home / "jht.config.json").write_text(
+        json.dumps({"active_provider": "kimi", "providers": {"kimi": {"plan": "moderato"}}}), encoding="utf-8")
+
+
+def test_next_card_is_not_asked_for_unless_the_request_says_so(box: Box):
+    _declare_plan(box)
+    _code, out = box.run({"set": {"name": "Ada Example"}})
+    assert "next_card" not in out and not (box.home / "jobs.db").exists()
+
+
+def test_next_card_waits_for_the_plan_and_posts_nothing_before(box: Box):
+    _code, out = box.run({"set": {"name": "Ada Example"}, "next_card": True})
+    assert out["next_card"] == {"asked": False, "plan_declared": False}
+    assert not (box.home / "jobs.db").exists()
+
+
+def test_next_card_posts_the_first_card_on_an_installation_with_no_database(box: Box):
+    _declare_plan(box)
+    assert not (box.home / "jobs.db").exists()
+    code, out = box.run({"set": {"name": "Ada Example"}, "say": "Hello Ada", "next_card": True})
+    assert code == 0 and out["said"] is True
+    assert out["next_card"]["ok"] is True and out["next_card"]["asked"] is True and out["next_card"]["step"] == "role"
+    assert (box.home / "jobs.db").is_file()

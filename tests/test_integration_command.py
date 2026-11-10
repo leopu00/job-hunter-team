@@ -331,11 +331,11 @@ def test_wrapper_installer_and_library_agree_on_the_helper():
     wrapper = WRAPPER.read_text(encoding="utf-8")
     installer = INSTALLER.read_text(encoding="utf-8")
     lists = [re.search(r'^RUNTIME_HELPERS="([^"]*)"', text, re.M).group(1) for text in (wrapper, installer)]
-    assert lists[0] == lists[1] == "jht-integration.sh"
+    assert lists[0] == lists[1] == "jht-integration.sh jht-tools.sh"
     assert LIBRARY.read_text(encoding="utf-8").count("\n# JHT_RUNTIME_HELPER=1\n") == 1
     assert "JHT_INTEGRATION_PROTOCOL=1\n" in wrapper
     assert re.search(r'^  integration\)\n    require_compose_file\n    runtime_helper_load jht-integration\.sh "\$\{2:-\}" \|\| exit 1\n', wrapper, re.M)
-    assert re.search(r"\|mail\|telegram\|integration\|", wrapper)  # its help is the local one: no engine started by --help
+    assert re.search(r"\|mail\|telegram\|integration\|tools\|", wrapper)  # its help is the local one: no engine started by --help
     assert '.runtime-helpers' in installer and 'printf \'%s\' "$helper_lines" > "$RUNTIME_DIR/.runtime-helpers.tmp"' in installer
     assert "jht-integration.sh=" not in installer.split("printf 'version=1")[1].split("} > \"$manifest_tmp\"")[0]
     public = (ROOT / "web" / "public" / "install.sh").read_text(encoding="utf-8")
