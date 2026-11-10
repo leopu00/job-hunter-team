@@ -239,3 +239,29 @@ def test_with_pi_in_charge_of_the_openai_account_the_sign_in_is_pis_file_and_cod
     # the word is `pi` and nothing else: any other value leaves Codex's file as the sign-in
     write_json(tmp_path / "jht.config.json", {"active_provider": "openai", "harness": "other", "providers": {"openai": {}}})
     assert state(tmp_path) == "missing"
+
+
+def test_a_pi_file_with_only_another_service_is_not_the_sign_in_of_the_openai_account(tmp_path):
+    """Pi keeps one entry per service. A Claude subscription used from Pi (billed per token) made the file «there», and the app said signed in."""
+    write_json(tmp_path / "jht.config.json", {"active_provider": "openai", "harness": "pi", "providers": {"openai": {"auth_method": "subscription"}}})
+    pi = tmp_path / ".pi" / "agent" / "auth.json"
+    write_json(pi, {"anthropic": {"type": "oauth", "access": "fake-pi-token"}})
+    assert state(tmp_path) == "missing"
+    write_json(pi, {"anthropic": {"type": "oauth"}, "openai-codex": {"type": "oauth"}})
+    assert state(tmp_path) == "missing", "the legacy id is not what the agents start with"
+    write_json(pi, {"anthropic": {"type": "oauth"}, "openai": {"type": "oauth"}})
+    assert state(tmp_path) == "ready"
+    for text in ("{}", '{"openai": {}}', '{"openai": "x"}'):
+        pi.write_text(text, encoding="utf-8")
+        assert state(tmp_path) == "missing", text
+    for text in ("not json", "[]"):
+        pi.write_text(text, encoding="utf-8")
+        assert state(tmp_path) == "unreadable", text
+    reply, _ = run(tmp_path)
+    assert "fake-pi-token" not in json.dumps(reply)
+
+
+def test_the_two_names_of_the_script_are_the_ones_of_the_shared_list():
+    names = next(line for line in SCRIPT.read_text(encoding="utf-8").splitlines() if line.startswith("PI_NAMES="))
+    listed = next(line for line in (SCRIPT.parents[3] / "shared" / "runtime" / "pi-login-keys.list").read_text(encoding="utf-8").splitlines() if line.startswith("openai|"))
+    assert sorted(eval(names.split("=", 1)[1].split("#")[0])) == sorted(listed.split("|")[1].split(","))

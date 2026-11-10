@@ -46,11 +46,29 @@ test('choosing pi writes the key and the login becomes Pi\'s own', () => {
   assert.deepEqual(set.reply, { ok: true, harness: 'pi', changed: true, provider: 'openai', pi_allowed: true, login: 'signed_out' });
   assert.equal(JSON.parse(readFileSync(join(home, 'jht.config.json'), 'utf8')).harness, 'pi');
   mkdirSync(join(home, '.pi/agent'), { recursive: true });
-  writeFileSync(join(home, '.pi/agent/auth.json'), '{"secret":"never printed"}');
+  writeFileSync(join(home, '.pi/agent/auth.json'), '{"openai":{"type":"oauth","secret":"never printed"}}');
   const again = jht(home, ['pi']);
   assert.equal(again.reply.changed, false);
   assert.equal(again.reply.login, 'signed_in');
   assert.doesNotMatch(again.lines.join('\n'), /never printed/);
+});
+
+test('with Pi the login is the one of the provider of the setup: a file with only Anthropic is signed out, and no value is printed', () => {
+  const home = box({ ...OPENAI, harness: 'pi' });
+  mkdirSync(join(home, '.pi/agent'), { recursive: true });
+  writeFileSync(join(home, '.pi/agent/auth.json'), '{"anthropic":{"type":"oauth","secret":"never printed"}}');
+  const r = jht(home, []);
+  assert.equal(r.reply.login, 'signed_out');
+  assert.doesNotMatch(r.lines.join('\n'), /never printed/);
+  for (const [text, login] of [['{"openai":{"type":"oauth"}}', 'signed_in'], ['{"openai-codex":{"type":"oauth"}}', 'signed_out'], ['{}', 'signed_out'], ['not json', 'signed_out'], ['{"openai":{}}', 'signed_out']]) {
+    writeFileSync(join(home, '.pi/agent/auth.json'), text);
+    assert.equal(jht(home, []).reply.login, login, text);
+  }
+  // a provider this release has no entry name for keeps the rule of before: the file is there
+  const other = box({ version: 1, active_provider: 'zzz', harness: 'pi', providers: { zzz: { name: 'zzz', auth_method: 'subscription' } }, channels: {} });
+  mkdirSync(join(other, '.pi/agent'), { recursive: true });
+  writeFileSync(join(other, '.pi/agent/auth.json'), '{"anthropic":{}}');
+  assert.notEqual(jht(other, []).reply.login, 'signed_in', 'zzz is not a provider that runs on pi');
 });
 
 test('a marker that is a link is not a login', () => {
