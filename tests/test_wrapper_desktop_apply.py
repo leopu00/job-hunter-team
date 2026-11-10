@@ -58,10 +58,14 @@ def fake(tmp_path):
     return env, log
 
 
-def _run(env, *args, broker_up=True):
+def _run(env, *args, broker_up=True, ensure_makes_it=False):
+    # `ensure_broker` is the one step that makes the broker (tests/test_broker_on_request.py): here it is a stub that
+    # either makes it (the next lookup finds it) or fails, and it logs that it was asked.
     script = (
         "set -u\nBROKER_SERVICE=jht-broker\n"
-        + ('read_only_service_id() { [ "$1" = jht-broker ] && echo broker-id; }\n' if broker_up else "read_only_service_id() { return 1; }\n")
+        + ('read_only_service_id() { [ "$1" = jht-broker ] && echo broker-id; }\n' if broker_up else
+           'MADE=0\nread_only_service_id() { [ "$MADE" = 1 ] && echo broker-id; }\n'
+           + ('ensure_broker() { MADE=1; printf "ENSURE\\n" >> "$FAKE_LOG"; }\n' if ensure_makes_it else 'ensure_broker() { printf "ENSURE\\n" >> "$FAKE_LOG"; return 1; }\n'))
         + _function("desktop_apply")
         + 'desktop_apply "$@"\n'
     )
@@ -95,11 +99,18 @@ def test_anything_but_a_recorded_answer_is_refused_in_a_closed_line_that_holds_n
     assert answer.strip() not in done.stdout or not answer.strip()
 
 
-def test_with_the_broker_down_it_says_so_and_starts_nothing(fake):
+def test_with_the_broker_that_cannot_be_made_it_says_so_and_starts_nothing(fake):
     env, log = fake
     done = _run(env, "record", "4", INSTANT, "portal:ashby", broker_up=False)
     assert (done.returncode, done.stdout) == (113, '{"ok":false,"error":"apply_record_no_broker"}\n')
-    assert log.read_text() == "", "docker was not even called"
+    assert log.read_text() == "ENSURE\n", "docker was not called: only the step that makes the broker was asked"
+
+
+def test_the_first_click_makes_the_broker_and_records_in_it(fake):
+    env, log = fake
+    done = _run(env, "record", "4", INSTANT, "portal:ashby", broker_up=False, ensure_makes_it=True)
+    assert (done.returncode, done.stdout) == (0, '{"ok":true}\n'), done.stderr
+    assert log.read_text().splitlines() == ["ENSURE", f"ARGV exec -i broker-id jht-broker-admin apply record 4 {INSTANT} portal:ashby"]
 
 
 @pytest.mark.parametrize("args", [
@@ -129,10 +140,11 @@ def test_a_request_that_is_not_closed_is_refused_before_the_broker_is_even_looke
     assert log.read_text() == ""
 
 
-def test_the_branch_never_starts_anything_and_the_protocol_marker_is_published_in_both_wrappers():
+def test_the_branch_starts_nothing_but_the_broker_and_the_protocol_marker_is_published_in_both_wrappers():
     function = _function("desktop_apply")
     for forbidden in ("ensure_up", "compose", "machine", "require_docker", " up ", "start"):
         assert forbidden not in function, forbidden
+    assert function.count("ensure_broker") == 1
     lines = WRAPPER.read_text(encoding="utf-8").splitlines()
     assert "JHT_DESKTOP_APPLY_PROTOCOL=1" in lines
     ps = POWERSHELL_WRAPPER.read_text(encoding="utf-8")

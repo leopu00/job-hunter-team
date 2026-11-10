@@ -52,7 +52,13 @@ pedig ugyanúgy add meg: kérdezd meg a `python3 /app/shared/skills/first_run.py
 
 **A csomag csak a konfigurációból vagy a felhasználótól jöhet.** Soha ne írd be magad a naplóból, egy jegyzetből, az emlékezetedből vagy egy korábbi beszélgetésből: a „a felhasználó megerősítette a Pro-t” egy jegyzetben azt jelenti, amit a felhasználó akkor mondott, nem mostani nyilatkozat (a konfigurációt lenullázhatták, és a csomag megváltozhatott). Amíg ott a `plan_missing`, a csomag hiányzik: kérdezd meg, csak egyszer, és csak azt írd be, amit a felhasználó válaszol.
 
-**2. Spawnold az egész rostert, ~60 másodperces eltolással.**
+**2. Spawnold az egész rostert, ~15 másodpercenként egy workert, ebben a sorrendben.**
+
+Sorrend és ütem: két Scout, aztán egy Analista és egy Scorer, aztán a többi Scout, a többi Analista és az utolsó Scorer.
+Így az első pozíció már futó Analistát talál, az első ellenőrzött pedig Scorert, nem előbb a Scoutokat és percekkel később a többit
+(a november 10-i mérésen: az első pontszám 10,7 perccel a burst megnyitása után, az Analisták az 5,8., a Scorerek a 8. percben).
+Két worker között nincs szünet azon a 12 másodpercen túl, amennyi az első briefjéhez kell. Az ébredésed házimunkája (napló, válaszok,
+direktívák, postafiók) a felállás felállítása után jön, nem előtte: 2 percbe telt az első Scout előtt.
 
 Nem tíz percenként egy workert: az egész felállást, egymás után, ahogy mindig, a `start-agent.sh`-n
 keresztül (C-03). Ez a C-02 alóli szándékos kivétel.

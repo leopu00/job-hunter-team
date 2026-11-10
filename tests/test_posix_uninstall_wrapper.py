@@ -57,6 +57,12 @@ case "$1:$2" in
     [ "$3:$4" = "--format:{{.Name}}" ] || exit 91
     [ ! -f "$machines" ] || cat "$machines"
     exit 0 ;;
+  machine:inspect)
+    # `machine inspect --format {{.Created}} <name>`: the creation time kept in $FAKE_STATE/created-<name>; absent = the engine does not answer
+    [ "$3:$4" = "--format:{{.Created}}" ] && [ $# -eq 5 ] || exit 93
+    [ -f "$FAKE_STATE/created-$5" ] || exit 125
+    cat "$FAKE_STATE/created-$5"
+    exit 0 ;;
   machine:rm)
     [ "$3" = --force ] && [ $# -eq 4 ] || exit 92
     [ ! -f "$FAKE_STATE/podman-rm-fails" ] || exit 1
@@ -110,6 +116,31 @@ case "$1" in
             $1 == "container" && $4 ~ /^jht(-broker|-telegram)?$/ { owners[$3] = 1 }
             END { exit !(project in owners) }' "$objects"; then exit 1; fi
         drop "$kind" "$3" ;;
+      *) exit 97 ;;
+    esac ;;
+  image)
+    # Images: one "<id> <repository> <tag>" per line in $FAKE_STATE/images. `image rm` takes ONE argument and is never forced:
+    # a <repository>:<tag> takes away that one name (the image goes with its last name); an ID that still carries more than one
+    # name is refused, as Docker does ("referenced in multiple repositories"). An ID listed in $FAKE_STATE/image-refuses is
+    # refused as an engine does with an image another container uses.
+    case "$2" in
+      ls) [ "$3:$4:$5" = "--no-trunc:--format:{{.ID}} {{.Repository}} {{.Tag}}" ] || exit 101
+          [ ! -f "$FAKE_STATE/images" ] || cat "$FAKE_STATE/images" ;;
+      rm) [ $# -eq 3 ] || exit 102
+          [ -f "$FAKE_STATE/images" ] || exit 1
+          rows="$(awk -v a="$3" '$1 == a || $2 ":" $3 == a' "$FAKE_STATE/images")"
+          [ -n "$rows" ] || exit 1
+          id="$(printf '%s\n' "$rows" | awk 'NR == 1 { print $1 }')"
+          names="$(awk -v i="$id" '$1 == i' "$FAKE_STATE/images" | wc -l | tr -d ' ')"
+          case "$3" in
+            *:*) ;;
+            *) [ "$names" -le 1 ] || exit 1 ;;
+          esac
+          if [ -f "$FAKE_STATE/image-refuses" ] && grep -qx "$id" "$FAKE_STATE/image-refuses"; then
+            [ "$names" -gt 1 ] || exit 1
+          fi
+          awk -v a="$3" '!($1 == a || $2 ":" $3 == a)' "$FAKE_STATE/images" > "$FAKE_STATE/images.new" || true
+          mv "$FAKE_STATE/images.new" "$FAKE_STATE/images" ;;
       *) exit 97 ;;
     esac ;;
   run)
@@ -182,6 +213,9 @@ class Box:
 
     def machines(self, *names: str) -> None:
         (self.state / "machines").write_text("".join(f"{name}\n" for name in names), encoding="utf-8")
+
+    def images(self, *rows: str) -> None:
+        (self.state / "images").write_text("".join(f"{row}\n" for row in rows), encoding="utf-8")
 
     def objects(self, *rows: str) -> None:
         (self.state / "objects").write_text("".join(f"{row}\n" for row in rows), encoding="utf-8")
@@ -299,6 +333,131 @@ def test_mac_podman_removes_only_the_jht_machine_and_is_idempotent(tmp_path: Pat
     assert [call for call in box.calls() if call.startswith("podman machine rm")] == removals
 
 
+SENTENCE = "La macchina Podman 'jht-giro-mac' non risulta creata dall'installer di JHT"
+
+
+def _custom_machine_box(tmp_path: Path, marker: str | None, now: str | None = "2026-11-10 16:46:00 +0100 CET") -> Box:
+    box = Box(tmp_path, "Darwin")
+    box.select("podman")
+    (box.runtime / "podman-machine").write_text("jht-giro-mac\n", encoding="utf-8")
+    if marker is not None:
+        (box.runtime / "podman-machine-created").write_text(marker, encoding="utf-8")
+    if now is not None:
+        (box.state / "created-jht-giro-mac").write_text(now + "\n", encoding="utf-8")
+    box.machines("jht-giro-mac*", "somebody-else")
+    return box
+
+
+CREATED_MARKER = "jht-giro-mac\n2026-11-10 16:46:00 +0100 CET\n"
+
+
+def test_a_machine_the_installer_created_with_another_name_is_removed(tmp_path: Path) -> None:
+    box = _custom_machine_box(tmp_path, CREATED_MARKER)
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Rimuovo la macchina Podman 'jht-giro-mac', creata dall'installer di JHT: con lei se ne va tutto quello che ha dentro" in result.stderr
+    assert box.remaining("machines").splitlines() == ["somebody-else"]
+    assert [c for c in box.calls() if c.startswith("podman machine rm")] == ["podman machine rm --force jht-giro-mac"]
+    assert "non risulta creata" not in result.stderr + result.stdout
+    assert not box.runtime.exists() and not box.wrapper.exists()
+
+
+def test_an_adopted_machine_with_another_name_is_left_and_says_so(tmp_path: Path) -> None:
+    # The installer adopts an existing machine of the name it is given: it wrote no marker, so it may be the person's own.
+    box = _custom_machine_box(tmp_path, None)
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert phases(result) == ["JHT_PHASE uninstall_machine", "JHT_PHASE uninstall_runtime", "JHT_PHASE uninstall_commands"]
+    assert box.remaining("machines").splitlines() == ["jht-giro-mac*", "somebody-else"]
+    assert not any(call.startswith("podman machine rm") for call in box.calls())
+    text = result.stderr + result.stdout
+    assert SENTENCE in text
+    assert "podman machine stop jht-giro-mac" in text and "podman machine rm jht-giro-mac" in text
+    assert "volumi" in text and "immagine" in text, "what stays with it is said"
+    assert not box.runtime.exists() and not box.wrapper.exists(), "the rest of the uninstall goes on"
+
+
+@pytest.mark.parametrize("marker", [
+    "somebody-else\n2026-11-10 16:46:00 +0100 CET\n", "jht-giro-mac-2\n2026-11-10 16:46:00 +0100 CET\n", "\n", " jht-giro-mac\n2026-11-10 16:46:00 +0100 CET\n",
+    "jht-giro-mac\n",  # no creation time: it cannot be told from another machine of the same name
+    "jht-giro-mac\n\n",
+    "jht-giro-mac\n2025-01-01 00:00:00 +0100 CET\n",  # the person made another machine with this name later: other creation time
+])
+def test_a_marker_that_names_another_machine_leaves_the_machine(tmp_path: Path, marker: str) -> None:
+    box = _custom_machine_box(tmp_path, marker)
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert box.remaining("machines").splitlines() == ["jht-giro-mac*", "somebody-else"]
+    assert SENTENCE in result.stderr + result.stdout
+
+
+def test_a_marker_is_not_believed_when_the_engine_cannot_say_when_the_machine_was_created(tmp_path: Path) -> None:
+    box = _custom_machine_box(tmp_path, CREATED_MARKER, now=None)
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert box.remaining("machines").splitlines() == ["jht-giro-mac*", "somebody-else"]
+    assert SENTENCE in result.stderr + result.stdout
+
+
+def test_a_marker_that_is_a_link_is_not_believed(tmp_path: Path) -> None:
+    box = _custom_machine_box(tmp_path, None)
+    real = tmp_path / "elsewhere"
+    real.write_text("jht-giro-mac\n", encoding="utf-8")
+    (box.runtime / "podman-machine-created").symlink_to(real)
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert box.remaining("machines").splitlines() == ["jht-giro-mac*", "somebody-else"]
+    assert SENTENCE in result.stderr + result.stdout
+
+
+def test_a_created_machine_that_cannot_be_removed_keeps_runtime_and_wrapper(tmp_path: Path) -> None:
+    box = _custom_machine_box(tmp_path, CREATED_MARKER)
+    (box.state / "podman-rm-fails").write_text("1\n", encoding="utf-8")
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 24, result.stdout + result.stderr
+    assert "JHT_LEFT machine" in result.stdout
+    assert box.runtime.is_dir() and box.wrapper.is_file()
+
+
+@pytest.mark.parametrize("content", ["-f\n", "a b\n", "../x\n", "\n"])
+def test_an_attested_machine_name_that_is_not_a_plain_name_is_not_acted_on(tmp_path: Path, content: str) -> None:
+    box = Box(tmp_path, "Darwin")
+    box.select("podman")
+    (box.runtime / "podman-machine").write_text(content, encoding="utf-8")
+    box.machines("jht-podman*", "-f", "a b")
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "non e' quella standard" not in result.stderr + result.stdout
+    assert box.remaining("machines").splitlines() == ["-f", "a b"]
+
+
+def test_the_standard_machine_attested_is_removed_without_the_leftover_sentence(tmp_path: Path) -> None:
+    box = Box(tmp_path, "Darwin")
+    box.select("podman")
+    (box.runtime / "podman-machine").write_text("jht-podman\n", encoding="utf-8")
+    box.machines("jht-podman*")
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert box.remaining("machines") == ""
+    assert "non e' quella standard" not in result.stderr + result.stdout
+
+
 @pytest.mark.parametrize("kernel", ["Darwin", "Linux"])
 @pytest.mark.parametrize("project", ["host-runtime", "jht"])
 def test_docker_runtime_removes_the_jht_project_with_its_volumes(tmp_path: Path, kernel: str, project: str) -> None:
@@ -332,6 +491,118 @@ def test_docker_runtime_removes_the_jht_project_with_its_volumes(tmp_path: Path,
     assert not any(call.startswith("podman machine rm") for call in box.calls())
     assert not box.runtime.exists() and not box.wrapper.exists()
     assert_user_data_kept(box)
+
+
+CORE_ID, FULL_ID, OLD_ID = "c0" * 32, "f0" * 32, "01" * 32
+CORE_REF, FULL_REF, OLD_REF = "ghcr.io/leopu00/jht:core", "ghcr.io/leopu00/jht:full", "ghcr.io/leopu00/jht:old"
+JHT_IMAGES = (f"{CORE_ID} ghcr.io/leopu00/jht core", f"{FULL_ID} ghcr.io/leopu00/jht full", f"{OLD_ID} ghcr.io/leopu00/jht old")
+NOT_OURS = ("a1" * 32 + " postgres 16", "a2" * 32 + " ghcr.io/leopu00/jht-other latest")
+
+
+def images_removed(box: Box) -> list[str]:
+    return [call.rsplit(" ", 1)[1] for call in box.calls() if call.startswith("docker image rm ")]
+
+
+def test_docker_runtime_removes_the_core_and_the_full_image_with_the_old_ones_and_says_so(tmp_path: Path) -> None:
+    box = Box(tmp_path, "Linux")
+    box.select("docker")
+    box.images(*JHT_IMAGES, *NOT_OURS)
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert phases(result) == [
+        "JHT_PHASE uninstall_machine", "JHT_PHASE uninstall_images", "JHT_PHASE uninstall_runtime", "JHT_PHASE uninstall_commands",
+    ]
+    assert sorted(images_removed(box)) == sorted([CORE_REF, FULL_REF, OLD_REF])
+    # only the JHT images went: another program's image and another repository of the same owner stay
+    assert box.remaining("images").splitlines() == list(NOT_OURS)
+    assert "Tolte 3 immagini di JHT: il nucleo, quella piena e le vecchie." in result.stderr + result.stdout
+    # by reference, never forced, never a bulk cleanup
+    assert not any(" -f" in call or "prune" in call or "rmi" in call for call in box.calls() if call.startswith("docker image"))
+    assert_user_data_kept(box)
+
+
+def test_an_image_that_also_has_a_name_that_is_not_jhts_is_kept(tmp_path: Path) -> None:
+    box = Box(tmp_path, "Linux")
+    box.select("docker")
+    box.images(f"{CORE_ID} ghcr.io/leopu00/jht core", f"{CORE_ID} example.invalid/mine latest", f"{FULL_ID} ghcr.io/leopu00/jht full")
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert images_removed(box) == [FULL_REF]
+
+
+def test_an_image_the_engine_refuses_is_a_leftover_and_the_rerun_finishes(tmp_path: Path) -> None:
+    box = Box(tmp_path, "Linux")
+    box.select("docker")
+    box.images(*JHT_IMAGES)
+    (box.state / "image-refuses").write_text(FULL_ID + "\n", encoding="utf-8")
+
+    first = box.run("uninstall", "--confirm")
+
+    assert first.returncode == 24, first.stdout + first.stderr
+    assert phases(first) == ["JHT_PHASE uninstall_machine", "JHT_PHASE uninstall_images", "JHT_LEFT images"]
+    assert "Non tolte alcune immagini di JHT" in first.stderr
+    assert box.remaining("images").splitlines() == [f"{FULL_ID} ghcr.io/leopu00/jht full"]
+    assert box.runtime.exists() and box.wrapper.exists(), "the command to run it again is still there"
+
+    (box.state / "image-refuses").unlink()
+    second = box.run("uninstall", "--confirm")
+    assert second.returncode == 0, second.stdout + second.stderr
+    assert box.remaining("images") == ""
+    assert not box.runtime.exists() and not box.wrapper.exists()
+
+
+def test_an_image_with_two_names_goes_name_by_name_and_the_uninstall_finishes(tmp_path: Path) -> None:
+    # `docker image rm <ID>` without -f refuses an ID that carries more than one name; each name is taken away by itself.
+    box = Box(tmp_path, "Linux")
+    box.select("docker")
+    box.images(f"{CORE_ID} ghcr.io/leopu00/jht core", f"{CORE_ID} ghcr.io/leopu00/jht latest", f"{FULL_ID} localhost/jht full", *NOT_OURS)
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert sorted(images_removed(box)) == sorted([CORE_REF, "ghcr.io/leopu00/jht:latest", "localhost/jht:full"])
+    assert box.remaining("images").splitlines() == list(NOT_OURS)
+    # two images, not three names
+    assert "Tolte 2 immagini di JHT" in result.stderr + result.stdout
+    assert not box.runtime.exists() and not box.wrapper.exists()
+
+
+def test_an_image_with_two_names_that_a_container_uses_is_a_leftover_and_the_runtime_still_stays(tmp_path: Path) -> None:
+    box = Box(tmp_path, "Linux")
+    box.select("docker")
+    box.images(f"{CORE_ID} ghcr.io/leopu00/jht core", f"{CORE_ID} ghcr.io/leopu00/jht latest")
+    (box.state / "image-refuses").write_text(CORE_ID + "\n", encoding="utf-8")
+
+    result = box.run("uninstall", "--confirm")
+
+    # the first name goes (the image keeps the other one), the last one is refused: the image is a leftover, said once
+    assert result.returncode == 24, result.stdout + result.stderr
+    assert phases(result) == ["JHT_PHASE uninstall_machine", "JHT_PHASE uninstall_images", "JHT_LEFT images"]
+    assert box.remaining("images").splitlines() == [f"{CORE_ID} ghcr.io/leopu00/jht latest"]
+    assert box.runtime.exists() and box.wrapper.exists()
+
+
+def test_no_jht_image_means_no_phase_and_no_sentence(tmp_path: Path) -> None:
+    box = Box(tmp_path, "Linux")
+    box.select("docker")
+    box.images(*NOT_OURS)
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "uninstall_images" not in result.stdout and "Tolte" not in result.stderr + result.stdout
+    assert images_removed(box) == []
+
+
+def test_the_images_go_after_the_data_because_the_purge_container_needs_the_image_that_is_here() -> None:
+    body = re.search(r"^jht_uninstall\(\) \{\n.*?^\}\n", SOURCE, re.S | re.M).group(0)
+    assert body.index("uninstall_remove_data") < body.index("uninstall_images") < body.index("uninstall_phase uninstall_runtime")
+    # and it is said in the English text too
+    assert "the core and the full one" in SOURCE.split("jht_text_it()")[0]
 
 
 def test_the_cleanup_names_match_the_compose_file() -> None:

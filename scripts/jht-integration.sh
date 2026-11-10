@@ -13,7 +13,7 @@
 #   - nothing is turned on by an agent: this is the command the person types (or the button of the app).
 #
 # States (JSON `state`; the text in parentheses is what the person reads):
-#   not_installed (non installato) | downloading (in scaricamento) | ready (pronto) | running (acceso) | error (errore),
+#   not_installed (non installato) | downloading (in scaricamento) | ready (aggiunto) | running (acceso) | error (errore),
 #   always with a `reason` of one line.
 # Exit: 0 done · 1 failed · 2 wrong use · 3 not available yet.
 
@@ -24,7 +24,7 @@ integration_label() {
   case "$1" in
     not_installed) printf 'non installato' ;;
     downloading) printf 'in scaricamento' ;;
-    ready) printf 'pronto' ;;
+    ready) printf 'aggiunto' ;;
     running) printf 'acceso' ;;
     *) printf 'errore' ;;
   esac
@@ -104,17 +104,27 @@ integration_service_of() {
 
 # Prints "<state>|<reason>". The engine is only asked, never started.
 integration_state() {
-  local id="$1" service volume rc=0 line
+  local id="$1" service volume rc=0 line bots_rc=0
   if integration_not_yet "$id"; then printf 'not_installed|non disponibile ancora\n'; return 0; fi
   if integration_pending "$id"; then printf 'downloading|operazione in corso\n'; return 0; fi
   if [ "$id" = google ]; then
-    if integration_marker_read google ok >/dev/null; then printf 'ready|librerie di Google aggiunte al profilo\n'; return 0; fi
+    if integration_marker_read google ok >/dev/null; then printf 'ready|librerie di Google aggiunte al profilo; mancano le credenziali dell'"'"'account Google\n'; return 0; fi
   else
     read -r service volume <<< "$(integration_service_of "$id")"
     docker_reachable || { printf 'error|il motore dei container non risponde\n'; return 0; }
     read_only_service_id "$service" >/dev/null 2>&1 || rc=$?
     case "$rc" in
-      0) printf 'running|container acceso\n'; return 0 ;;
+      0)
+        # One true state: a Telegram service that is up but holds no bot is not «acceso» for the person, it is waiting for a token
+        # (the same question `jht status` asks). Any answer but a clear «none» keeps what the engine says.
+        if [ "$id" = telegram ]; then
+          telegram_bots_configured || bots_rc=$?
+          if [ "$bots_rc" -eq 1 ]; then
+            printf 'ready|servizio acceso, nessun bot abbinato: jht telegram pair assistente\n'
+            return 0
+          fi
+        fi
+        printf 'running|container acceso\n'; return 0 ;;
       3) ;;
       *) printf 'error|il container non e'"'"' attestabile\n'; return 0 ;;
     esac
@@ -200,8 +210,7 @@ integration_do_add() { # id → 0 done · 1 failed (reason in INTEGRATION_WHY)
       telegram_lifecycle_verify start >/dev/null 2>&1 || { INTEGRATION_WHY="il servizio Telegram non risulta acceso"; return 1; }
       ;;
     mail)
-      COMPOSE_PROFILES=broker compose up -d "$BROKER_SERVICE" >/dev/null 2>&1 \
-        || { INTEGRATION_WHY="il broker della posta non parte"; return 1; }
+      ensure_broker >/dev/null 2>&1 || { INTEGRATION_WHY="il broker della posta non parte"; return 1; }
       read_only_service_id "$BROKER_SERVICE" >/dev/null 2>&1 || { INTEGRATION_WHY="il broker della posta non risulta acceso"; return 1; }
       ;;
   esac
@@ -232,12 +241,13 @@ integration_do_remove() { # id purge → 0 done · 1 failed
         || { INTEGRATION_WHY="il servizio Telegram non si ferma"; return 1; }
       ;;
     mail)
-      # The broker is part of `jht up` until it is made on request: removing it now would only be undone by the next start.
+      # An older compose still starts the broker with `jht up`: removing it there would only be undone by the next start.
       awk -v head="  $BROKER_SERVICE:" '$0 == head { in_service = 1; next } in_service && /^  [^ ]/ { exit } in_service && /^    profiles:/ { found = 1 } END { exit !found }' \
         "$COMPOSE_FILE" 2>/dev/null || { INTEGRATION_WHY="non disponibile ancora"; return 3; }
       COMPOSE_PROFILES=broker compose stop "$BROKER_SERVICE" >/dev/null 2>&1 \
         && COMPOSE_PROFILES=broker compose rm -f "$BROKER_SERVICE" >/dev/null 2>&1 \
         || { INTEGRATION_WHY="il broker della posta non si ferma"; return 1; }
+      rm -f -- "$BROKER_WANTED_MARKER"
       ;;
   esac
   if [ "$2" = 1 ]; then

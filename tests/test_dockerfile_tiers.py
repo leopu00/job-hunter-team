@@ -32,8 +32,9 @@ def code(text: str) -> str:
 
 def test_three_stages_in_this_order():
     names = re.findall(r"^FROM .* AS (\S+)\s*$", DOCKERFILE, re.M)
-    assert names == ["prefix-core", "prefix-full", "runtime"]
+    assert names == ["prefix-core", "prefix-full", "prefix-extras", "runtime"]
     assert re.search(r"^FROM prefix-core AS prefix-full\s*$", DOCKERFILE, re.M)
+    assert re.search(r"^FROM prefix-core AS prefix-extras\s*$", DOCKERFILE, re.M)
     assert re.search(r"^FROM \$\{BASE\} AS runtime\s*$", DOCKERFILE, re.M)
 
 
@@ -57,6 +58,7 @@ def test_the_core_prefix_has_no_tool_and_the_tools_prefix_has_them_all():
 def test_the_tier_is_the_env_of_the_prefix_and_never_a_build_argument():
     assert re.search(r"^ENV JHT_IMAGE_TIER=core\b", stage("prefix-core"), re.M)
     assert re.search(r"^ENV JHT_IMAGE_TIER=full\s*$", stage("prefix-full"), re.M)
+    assert re.search(r"^ENV JHT_IMAGE_TIER=extras\s*$", stage("prefix-extras"), re.M)
     runtime = code(stage("runtime"))
     assert "JHT_IMAGE_TIER=" not in runtime, "the runtime stage must inherit the tier from its BASE"
     assert not re.search(r"ARG\s+\w*TIER", DOCKERFILE), "a tier build argument could say core over the tools of full"
@@ -71,7 +73,7 @@ def test_heavy_layers_sit_below_the_code():
     assert copy_all > DOCKERFILE.index("playwright install chromium")
     assert copy_all > DOCKERFILE.index("pip3 install --no-cache-dir -r requirements.txt")
     assert DOCKERFILE.count("COPY . .") == 1 and "COPY . ." in stage("runtime")
-    assert "COPY . ." not in stage("prefix-core") + stage("prefix-full")
+    assert "COPY . ." not in stage("prefix-core") + stage("prefix-full") + stage("prefix-extras")
 
 
 def test_playwright_belongs_to_the_tools_requirements():
@@ -84,10 +86,29 @@ def test_playwright_belongs_to_the_tools_requirements():
 
 def test_the_runtime_gates_know_both_tiers():
     runtime = stage("runtime")
-    assert "BUILD GATE FAILED: JHT_IMAGE_TIER must be core or full" in runtime
+    assert "BUILD GATE FAILED: JHT_IMAGE_TIER must be core, full or extras" in runtime
     # the absence of the tools in core and their presence in full are checked in the same RUN
     gate = runtime[runtime.index('RUN case "$JHT_IMAGE_TIER" in'):]
-    assert "core)" in gate.split("esac")[0] and "full)" in gate.split("esac")[0]
+    assert all(f"{tier})" in gate.split("esac")[0] for tier in ("core", "full", "extras"))
     # the tool gates of before are still there, for the full image
     for gate_text in ("--only playwright_browser", "--only cv_pdf_render", "Xvfb :98 -screen", "--only manual_login_browser"):
         assert gate_text in runtime, gate_text
+
+
+def test_the_extras_prefix_has_the_three_on_request_tools_and_not_the_rest_of_the_full_image():
+    """Manual sign-in browser, live screen and media tools: yes. The scout's headless shell and the CV PDF toolchain: no."""
+    extras = code(stage("prefix-extras"))
+    for tool in ("chromium", "openbox", "xvfb", "x11vnc", "python3-websockify", "ffmpeg", "tesseract-ocr"):
+        assert re.search(rf"(?<![\w/-]){re.escape(tool)}(?![\w-])", extras), f"{tool} missing from the extras prefix"
+    for tool in ("pandoc", "wkhtmltopdf"):
+        assert tool not in extras, f"{tool} (CV PDF) in the extras prefix"
+    # the full Chromium build of the closer, without the headless shell
+    assert "playwright install --with-deps --no-shell chromium" in extras
+    assert "--only-shell" not in extras
+    assert "COPY requirements-tools.txt" in extras
+
+
+def test_the_headed_gate_runs_for_extras_and_skips_only_the_core():
+    runtime = stage("runtime")
+    assert '[ "$JHT_IMAGE_TIER" = core ]' in runtime and 'HEADED_LAUNCH_SKIPPED: the core image' in runtime
+    assert '!= full ]' not in runtime

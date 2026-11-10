@@ -381,3 +381,71 @@ def test_a_bin_folder_with_a_space_is_accepted(tmp_path: Path):
         text=True, capture_output=True, timeout=20, check=False,
     )
     assert result.returncode == 0 and "[/opt/Mary Ann/bin]" in result.stdout
+
+
+# ── the marker of a machine the installer created ──
+
+def _adapter_run(tmp_path: Path, *, created: str, machine: str = "jht-giro-mac", before: str | None = None, created_id: str = "2026-11-10 16:46:00 +0100 CET"):
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    if before is not None:
+        (runtime / "podman-machine-created").write_text(before, encoding="utf-8")
+    fakebin = tmp_path / "bin"
+    fakebin.mkdir()
+    (fakebin / "podman").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    (fakebin / "podman").chmod(0o755)
+    text = _source(INSTALLER)
+    body = re.search(r"^install_podman_adapter\(\) \{\n.*?^\}\n", text, re.S | re.M).group(0)
+    script = f"""
+set -eu
+RUNTIME_DIR="{runtime.resolve()}"
+PODMAN_MACHINE_NAME="{machine}"
+PODMAN_MACHINE_CREATED={created}
+PODMAN_MACHINE_CREATED_ID="{created_id}"
+podman_machine_mode() {{ return 0; }}
+podman_native_mode() {{ return 1; }}
+fail() {{ echo "fail: $*" >&2; exit 1; }}
+ok() {{ :; }}
+{body}
+install_podman_adapter
+"""
+    done = subprocess.run(["bash", "-c", script], capture_output=True, text=True, env={"PATH": f"{fakebin}:/usr/bin:/bin"})
+    return done, runtime
+
+
+def test_the_installer_marks_a_machine_it_created_with_its_name(tmp_path: Path):
+    done, runtime = _adapter_run(tmp_path, created="1")
+    assert done.returncode == 0, done.stderr
+    assert (runtime / "podman-machine").read_text(encoding="utf-8") == "jht-giro-mac\n"
+    marker = runtime / "podman-machine-created"
+    assert marker.read_text(encoding="utf-8") == "jht-giro-mac\n2026-11-10 16:46:00 +0100 CET\n"
+    assert marker.stat().st_mode & 0o777 == 0o600
+
+
+def test_the_marker_has_no_second_line_when_the_engine_did_not_say_when_it_was_created(tmp_path: Path):
+    done, runtime = _adapter_run(tmp_path, created="1", created_id="")
+    assert done.returncode == 0, done.stderr
+    assert (runtime / "podman-machine-created").read_text(encoding="utf-8") == "jht-giro-mac\n"
+
+
+def test_the_installer_does_not_mark_a_machine_that_was_already_there(tmp_path: Path):
+    done, runtime = _adapter_run(tmp_path, created="0")
+    assert done.returncode == 0, done.stderr
+    assert (runtime / "podman-machine").read_text(encoding="utf-8") == "jht-giro-mac\n"
+    assert not (runtime / "podman-machine-created").exists()
+
+
+def test_a_marker_of_an_earlier_run_is_kept_when_the_machine_is_found_again(tmp_path: Path):
+    done, runtime = _adapter_run(tmp_path, created="0", before="jht-giro-mac\n")
+    assert done.returncode == 0, done.stderr
+    assert (runtime / "podman-machine-created").read_text(encoding="utf-8") == "jht-giro-mac\n"
+
+
+def test_the_created_flag_is_set_only_after_machine_init_succeeds():
+    block = _source(INSTALLER)
+    init = block.index('"$podman_bin" machine init --now --update-connection=false')
+    failed = block.index('fail "Podman machine initialization failed; Colima was not changed."', init)
+    flag = block.index("PODMAN_MACHINE_CREATED=1", failed)
+    assert flag > failed and flag - failed < 160
+    assert block.count("PODMAN_MACHINE_CREATED=1") == 1
+    assert "machine inspect --format '{{.Created}}' \"$PODMAN_MACHINE_NAME\"" in block[flag:flag + 300]

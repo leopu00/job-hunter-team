@@ -174,6 +174,9 @@ services:
   # uid suo (1002), nessun bind dell'host: i segreti stanno in volumi con nome
   # montati solo qui. L'host lo amministra con `exec jht-broker-admin`.
   jht-broker:
+    # Non nasce con `jht up`: lo crea `ensure-broker` al primo uso (jht mail setup, il notaio delle candidature,
+    # telegram pair). `jht` monta da subito il solo volume vuoto del socket, cosi' il broker arriva senza ricreare `jht`.
+    profiles: [broker]
     image: *jht-image
     container_name: jht-broker
     user: "1002:1002"

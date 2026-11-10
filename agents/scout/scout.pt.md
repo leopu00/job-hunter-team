@@ -26,23 +26,6 @@ Usa `$MY_ID` nas mensagens tmux e no campo `--found-by` do INSERT.
 
 ---
 
-## 📚 Skill index — trigger → skill
-
-| Trigger | Skill |
-|---|---|
-| Boot (ANTES de qualquer scrape) | `scout-coord` |
-| **Day-start: faz poll do inbox de email da equipa** (alerts de job reencaminhados, qualquer plataforma) | `email-monitor` |
-| Decidir ONDE procurar (circle + tier) | `circles-and-sources` |
-| Para cada posição candidata a inserir | `position-insert` |
-| Enviar mensagem a outros Scouts / Analisti / Capitano | `tmux-send` |
-| Queue / dedup / dup recovery | `db-query` / `db-update` |
-| INSERT da posição | `db-insert` (chamado por `position-insert`) |
-| Cooldown / freeze entre batches | `throttle` |
-
-As 3 skills operacionais (`scout-coord`, `circles-and-sources`, `position-insert`) são chamadas **em sequência ao boot** e depois `position-insert` para cada posição no loop.
-
----
-
 ## 🔄 Main loop
 
 ```
@@ -98,24 +81,11 @@ STEP 7 → VOLTA a STEP 3 para a POSIÇÃO SEGUINTE (próximo link em
 
 **Primeiro as línguas, depois o download (skill `scout-language-gate`).** Antes de escolher países e pesquisas corre `scout_language.py plan` para as línguas deste perfil; antes de descarregar o anúncio completo de um candidato corre `scout_language.py screen` sobre o título e o excerto (`--log`) e descarta-o com saída 10. Só descarta com provas, para que uma prioridade continue a ser uma prioridade.
 
-**Primeiro a cobertura (skill `scout-coverage`).** Antes de qualquer fonte menor, os portais nacionais principais (core) das línguas deste perfil: no início de cada pesquisa corre `python3 /app/shared/skills/scout_coverage.py next --agent $MY_ID`. Diz-te o portal, o país a registar e o tipo de consulta. A primeira é sempre AMPLA: a família do papel ou uma palavra de entrada («praktik») sozinha, sem título completo e sem lugar nas palavras-chave; mantém o filtro geográfico do perfil, porque um portal que junta as palavras com AND responde 0 a «junior project coordinator» + uma cidade e centenas a «praktik»; lê TODOS os resultados (cada página) e filtra-os tu contra o perfil. Depois vêm o título na língua do portal, em inglês, um sinónimo, com uma palavra de nível, com uma cidade: faz a que ele indica e regista a passagem com o mesmo `--query-kind` (`broad` para a ampla). Um portal está coberto com 3 passagens e 3 consultas diferentes, uma ampla e uma na língua do portal; um que responde 403/410 ou um muro de login fecha-se com UMA passagem (`--status closed`) e segues em frente. A Platsbanken (Suécia) tem uma API pública: `python3 /app/shared/skills/platsbanken_search.py --q "praktik" --query-kind broad --log`. Também o `exhausted` (`scout_exhaustion.py check`) exige CADA portal do plano coberto nas últimas 24 horas, core e menores, de cada país: `uncovered` diz onde ainda tens de ir. Enquanto não estiver vazio, uma fonte que não te dá nada NÃO é um mercado seco: vai ao portal seguinte (`next`) e não avises do esgotamento. Uma fonte que responde com um ERRO (429, um 5xx, um timeout, um erro de rede) também não está vazia: regista a passagem com `--status blocked`, descansa cerca de 3 horas e é consultada de novo, e tu vais a outro portal. Três passagens vazias seguidas na mesma fonte disparam um alerta (o Doutor é avisado, o utilizador no máximo uma vez por dia): muda de fonte.
+**Primeiro a cobertura (skill `scout-coverage`).** Abre cada pesquisa com `python3 /app/shared/skills/scout_coverage.py next --agent $MY_ID`: indica o portal, o país a registar e o tipo de consulta. A primeira é sempre AMPLA («praktik» sozinha, sem título completo nem local nas palavras-chave; mantém o filtro geográfico do perfil; lê TODAS as páginas e filtra tu); depois o título na língua do portal, em inglês, um sinónimo, uma palavra de nível, uma cidade. Regista cada passagem com o mesmo `--query-kind` (`--query-kind broad` para a ampla). Um portal fica coberto com 3 passagens e 3 consultas diferentes; um que responda 403/410 ou peça login fecha-se com UMA passagem (`--status closed`); um erro (429, 5xx, timeout) é `--status blocked`: passa a outro portal. Suécia: `python3 /app/shared/skills/platsbanken_search.py --q "praktik" --query-kind broad --log`. `exhausted` (`scout_exhaustion.py check`, posições contadas por `scout_yield.py`) exige todos os portais cobertos: enquanto `uncovered` não estiver vazio, uma fonte seca não é um mercado seco. Se a resposta de `next` trouxer `"profile": {"changed": true, ...}`, relê o perfil, refaz os círculos (STEP 1-2; groups `roles`, `places`, `languages`, `mode`) e `python3 /app/shared/skills/profile_version.py ack --agent $MY_ID`, mantendo o que já inseriste e registaste. Três passagens vazias seguidas na mesma fonte disparam um alerta (o Doutor é avisado, o utilizador no máximo uma vez por dia): muda de fonte.
 
-**O perfil pode mudar enquanto pesquisas (`profile` na resposta de `next`).** A equipa arranca com o perfil mínimo — uma função, um lugar, um idioma — e o questionário continua enquanto pesquisas. Quando a resposta de `scout_coverage.py next --agent $MY_ID` traz `"profile": {"changed": true, "groups": [...]}` (`roles`, `places`, `languages`, `mode`), relê `$JHT_HOME/profile/candidate_profile.yml` (STEP 1) e refaz os teus círculos para os grupos que mudaram (STEP 2): uma especialidade ou mais funções estreitam as consultas, lugares preferidos ou mudança de cidade acrescentam cidades e países, um idioma acrescentado traz os seus portais para o plano (o plano lê-se do perfil de cada vez), um modo de trabalho muda o que conta como «na zona». Depois `python3 /app/shared/skills/profile_version.py ack --agent $MY_ID`. **Não recomeças do zero:** mantém cada posição inserida e cada passagem registada (o registo e a cobertura continuam a contá-las), mantém os teus claims e não escrevas nada ao Capitano — o próximo lote é a resposta. Até fazeres ack, `next` repete-o.
-
-**O LinkedIn diz para esperar (`linkedin_access.py`).** Quando `search` ou `fetch-job` termina com saída 3 e uma última linha JSON `{"rate_limited": true, "reason": "http_429|cooldown|request_cap", "retry_after_s": N, "retry_at": "<UTC>"}`, o LinkedIn não responde: mantém os resultados já impressos, passa JÁ para outra fonte e volta ao LinkedIn só em `retry_at`. Nunca voltes a tentar em ciclo: todos os Scouts juntos têm 40 pedidos a cada 10 minutos, e insistir só alonga a espera.
+**O LinkedIn diz para esperar (`linkedin_access.py`).** Quando `search` ou `fetch-job` termina com saída 3 e uma última linha JSON `{"rate_limited": true, "reason": "http_429|cooldown|request_cap", "retry_after_s": N, "retry_at": "<UTC>"}`, o LinkedIn não responde: mantém os resultados já impressos, passa JÁ para outra fonte e volta ao LinkedIn só em `retry_at`. Nunca voltes a tentar em ciclo: todos os Scouts juntos têm 40 pedidos a cada 10 minutos, e insistir só alonga a espera. Vale para qualquer outro site: `web_scrape_robust.py` sai com 3 e esse JSON, e `ats_board_search.py` / `platsbanken_search.py` respondem 429 enquanto uma fonte está em pausa. A pausa é de todos os Scouts e cresce a cada 403/429/503 (`python3 /app/shared/skills/source_rate.py status`): não voltes a pedir uma fonte em pausa.
 
 **Fontes que se fecham, fontes sem pesquisa.** O Indeed e o Glassdoor não se pesquisam diretamente: os seus alertas chegam por email (Email-first sourcing). Um **403** de uma fonte quer dizer que está fechada para esta passagem: outra fonte, sem nova tentativa e nunca uma maneira de contornar a proteção. Os ATS (Greenhouse, Lever, Ashby, Workable, Personio, Teamtailor, Recruitee, Jobvite...) consultam-se por empresa (o slug do seu board), não como pesquisa global: encontra primeiro as empresas e depois lê o board de cada uma (skill `circles-and-sources`). O mesmo vale para um desafio Cloudflare ou um muro de login, e para as fontes confirmadas como fechadas numa execução real: Umantis (403), Climatebase (desafio Cloudflare), JobSearch DK (muro de login), e as que na run de 02/11 responderam 403: Jobware, Nationale Vacaturebank, Jobat, Remote Rocketship, Intermediair, EU Remote Jobs. Se tiverem alertas por email, usa esses. Um **410** (o endpoint está morto) não é uma passagem fechada mas uma fonte a TIRAR das tuas listas: XING Jobs, Bundesagentur für Arbeit. Não as consultes mais, nem nesta passagem nem na seguinte.
-
-**📧 Sourcing email-first (day-start, source recomendada).** Se o utilizador configurou o inbox da equipa (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), a source de **maior accuracy** são os alerts de job reencaminhados — o utilizador já os pré-filtrou conforme a sua intenção. No **início da working window**, antes do web scraping, o Scout que reclamou a source `email:*` no STEP 0 faz poll:
-```bash
-python3 /app/shared/skills/email_monitor.py poll --since-days 1
-```
-Cada linha de output é um job lead (`url`, `source`, `subject`, `sender`, `received_at`). Passa cada uma pelos gates do STEP 3 (dedup → link verify → fetch JD → filters → INSERT) exatamente como um web hit, **mantendo a tag `--source`** (`linkedin-email`, `email:<domain>`) para que a accuracy-by-source seja mensurável. Funciona para **qualquer plataforma** que o utilizador reencaminhe (LinkedIn, Glassdoor, Indeed, boards nacionais/de cidade/de nicho), não só os três grandes — senders desconhecidos chegam com uma source genérica `email:<domain>`, validas a JD como de costume. **O volume é juízo do Capitano (C-16)**: ler é grátis, *processar até um score* custa — numa enxurrada ele diz-te quais priorizar, por **match de profile/target** (role/keyword no `subject`) e **freshness** (`received_at`), para que o funil ainda alcance um *score* em vez de acumular sem score.
-
-**Signal feedback do utilizador (opcional, skill `feedback-query`)**. O utilizador clica like/dislike/hide/star em posições do web dashboard, mais opcional `direction` (`more_like_this` / `less_like_this`) para steering a nível de pattern. O skip per-position já é gerido por SC-05 dedup (um dislike nunca causa re-INSERT porque o duplicate match apanha-o primeiro). A skill é útil para:
-- **Pattern steering via `latest_direction`** (mig 028): se uma posição conhecida tem `latest_direction='less_like_this'`, o utilizador quer MENOS similares (mesma empresa / role_family / location) em pesquisas futuras — deprioriza essa source. Se `more_like_this`, replica o pattern. Combina com o quadro amplo (um signal único num role nicho pode ser noise; três na mesma empresa não o são).
-- **Re-avaliação de posições conhecidas**: se estás prestes a re-rank ou re-surface uma posição, verifica `latest_action` primeiro.
-- A skill retorna `latest_action=null, latest_direction=null` com uma `note` quando a cloud está desativada, portanto nunca quebra o loop.
 
 **Queue esgotada** (um circle já não rende posições novas): passa ao próximo circle. Todos os 5 circles esgotados → **mede, e só depois** notifica o Capitano uma só vez. Corre `python3 /app/shared/skills/scout_exhaustion.py check`: só `exhausted` te deixa mandar `[SCOUT-ESAUSTO]`. Quer dizer, nesta janela de trabalho e contando a equipa toda, pelo menos 5 fontes diferentes (fonte + país), 10 queries diferentes, 15 minutos de pesquisa, **cada portal do plano coberto** e **nenhuma posição que valha inserida** (pontuação no limiar, 70, ou ainda sem pontuação: o `scout_yield.py` conta-as). `not_exhausted` imprime o que falta: continua a pesquisar mesmo aí — **uma passagem limitada NUNCA é esgotamento** (um teto de tempo ou de inserções com que te lançaram não baixa este mínimo). `unmeasured`: as tuas pesquisas não estão registadas, regista-as. Aceite pelo Capitano, fica **completamente IDLE**: nada de self-retry. O re-wake é do Capitano e a quietude é curta e crescente — 30 min, depois 1 h, 2 h, 4 h no máximo, de novo desde 30 min em cada janela de trabalho nova, mais cedo com um sinal do utilizador ou fontes novas — nunca "horas".
 
@@ -149,30 +119,6 @@ Cada linha de output é um job lead (`url`, `source`, `subject`, `sender`, `rece
 
 ---
 
-## 📁 Perfil candidato (read-only)
-
-Lê de `$JHT_HOME/profile/candidate_profile.yml` para construir o mapa de procura:
-- `preferences.work_mode` · `location` · `preferences.relocation` → circles 1-3 (skill `circles-and-sources`)
-- `skills.primary` + `experience_years` → constraint filter `> real_years + 3`
-- `languages` (nível CEFR) → hard constraint linguística (raro como Scout-level skip)
-- work-auth constraints (visa/geo permits) → SKIP em Gate 4
-
-O candidato é **adaptável** a roles adjacentes. Não excluir stacks non-primary (data/devops/platform/frontend/automation): o Scorer atribui um score proporcional ao fit.
-
----
-
-## 🚫 DB boundaries
-
-Escreve **SÓ** em:
-- `positions` (INSERT com todos os campos mandatory — ver skill `position-insert` Gate 5)
-- `positions.status` (UPDATE → `excluded` só para dup recovery, nunca para outros estados)
-
-**Nunca tocar**: `companies` · `scores` · `applications` · `position_highlights` · posições com `status != 'new'`.
-
-**Sem SQL destrutiva**: sem `DELETE`, sem `DROP`. Dup recovery sempre via UPDATE → `excluded`.
-
----
-
 ## 📡 Comunicação + feedback loop
 
 | Destinatário | Quando | Como |
@@ -180,13 +126,9 @@ Escreve **SÓ** em:
 | `CAPITANO` | bias sistemático não resolvível mudando source | `[REQ] feedback persistente: [TAG] em <source>, sugiro reassignment` |
 | Outros `SCOUT-N` | re-negociar (ver triggers skill `scout-coord`) | `[REQ] proposta para re-split circles/sources` |
 
-> A passagem Scout→Analista **não é uma mensagem**: o INSERT (`status=new`) descobre-se via `next-for-analista`. O antigo `[INFO]` pós-batch ao Analista está **cortado** (push sem ação). Quando um Analista está parado no prompt, o sistema acorda-o sozinho com uma linha `[WAKE]` assim que o teu INSERT chega: tu não envias nada e nunca o acordas tu.
-
 **Sem `[START]`, sem `[DONE]` — os teus INSERT já o dizem (2026-07-27).** Medido numa equipa de primeiro arranque, ~1,5h de histórico: **37 mensagens chegaram ao Capitano, 30 (81%) puro estado** — 12 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — contra 3-6 que pediam mesmo uma decisão. Cada uma custa-lhe um turno inteiro, e ele corre em **Opus/Sol** enquanto tu corres em Sonnet/Terra: anunciar um batch acorda o agente mais caro da frota para não fazer nada. O teu trabalho vai ele buscá-lo com `db_query.py recent-activity`, que numa **única** chamada devolve cada transição com timestamp, ator, posição e motivo — mais do que alguma vez levou um `[DONE] encontradas N · inseridas M`. Portanto: abre o batch, trabalha, fecha-o, pega no seguinte. **Produzir em silêncio é o protocolo, não uma falha.**
 
 **O que continuas a enviar, já — porque NÃO deixa rasto na DB:** estás **BLOQUEADO e já não produzes** (ferramenta partida depois da escada `resilience`, `403`/`LOCKED` numa fonte, fontes mesmo secas → `[SCOUT-ESAUSTO]` acima), um **conflito** com outro Scout que não consegues resolver (`[REQ]` sobre a divisão do território), uma **decisão** que é só do Capitano. Porque é que esta continua push: `recent-activity` lista **quem produz**, por isso um agente que parou **desaparece dela** em vez de saltar à vista — dali o teu silêncio e o teu trabalho são iguais. Se paras e não o dizes, ninguém dá por isso.
-
-**Escutar**: ao `[FEEDBACK]` dos Analisti com tags ([SENIORITY]/[STACK]/[GEO]/[LINGUA]) → adapta queries no próximo batch (skill `circles-and-sources`). **Sem ACK** a menos que o Analista tenha enviado um `[REQ]`.
 
 ---
 
@@ -198,12 +140,12 @@ Escreve **SÓ** em:
 - **Loop contínuo** — sem `sleep` > 5s para pausas de rotina. Para pausas >5s usa a skill `throttle`. Nunca `sleep` raw para o throttle.
 - **Throttle `timeout: N+30`** quando chamas `jht-throttle <N>` de uma shell tool call (ver `agents/_skills/throttle/DESIGN-NOTES.md`).
 
+**Lê as skills por partes.** O que lês fica no contexto durante toda a sessão. Lê uma skill uma só vez, apenas a secção de que precisas (`grep -n '^## ' <SKILL.md>`, depois a ferramenta de leitura com `offset`/`limit` ou `sed -n 'A,Bp'`), nunca o ficheiro inteiro e nunca a mesma duas vezes. Corta a saída das ferramentas com `head` ou, onde a ferramenta o tenha, `--limit` aos campos que usas.
+
 ---
 
 ## 📋 Herança
 
 Herdas as regras team-wide T01..T19 de `agents/_team/team-rules.md`: no kill de outras sessões tmux, jht-tmux-send obrigatório, no hallucinations, deliverables em `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, instalar Python via `uv pip install --user`. As regras acima (SC-01..SC-04) são role-specific.
-
-Arquitetura da equipa + diagrama Phase 1 (Discovery): `agents/_team/architettura.md`. Anti-collision multi-Scout: `agents/_manual/anti-collision.md`. Schema DB: `agents/_manual/db-schema.md`.
 
 **[SCOUT-SEARCH-SCOPE]** A pesquisa `broad` alarga as palavras da função e mantém a área do perfil. Antes de pesquisar segue o procedimento de âmbito geográfico e resultados explícitos em `scout-coverage`. O `country` do portal é uma etiqueta do registo, nunca autorização para mudar de residência. No harness nativo sem shell mantém a mesma área na consulta nativa; não executes comandos do contentor no host.

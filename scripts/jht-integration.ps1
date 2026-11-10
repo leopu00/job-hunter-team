@@ -23,7 +23,7 @@ function Get-IntegrationLabel {
   switch -CaseSensitive ($State) {
     'not_installed' { return 'non installato' }
     'downloading' { return 'in scaricamento' }
-    'ready' { return 'pronto' }
+    'ready' { return 'aggiunto' }
     'running' { return 'acceso' }
     default { return 'errore' }
   }
@@ -107,12 +107,20 @@ function Get-IntegrationState {
   if ($IntegrationNotYet -ccontains $Id) { return @('not_installed', 'non disponibile ancora') }
   if (Test-IntegrationPending $Id) { return @('downloading', 'operazione in corso') }
   if ($Id -ceq 'google') {
-    if ($null -ne (Read-IntegrationMarker 'google' 'ok')) { return @('ready', 'librerie di Google aggiunte al profilo') }
+    if ($null -ne (Read-IntegrationMarker 'google' 'ok')) { return @('ready', 'librerie di Google aggiunte al profilo; mancano le credenziali dell''account Google') }
   } else {
     $service = Get-IntegrationService $Id
     if (-not (Test-DockerReachable)) { return @('error', 'il motore dei container non risponde') }
     $running = Get-RunningComposeServiceId $service[0]
-    if ($running) { return @('running', 'container acceso') }
+    if ($running) {
+      # One true state: a Telegram service that is up but holds no bot is not «acceso» for the person, it waits for a token
+      # (the same question `jht status` asks). Any answer but a clear «none» keeps what the engine says.
+      if ($Id -ceq 'telegram' -and (Get-Command Get-TelegramBotsConfigured -ErrorAction SilentlyContinue)) {
+        $configured = Get-TelegramBotsConfigured
+        if ($configured -is [bool] -and -not $configured) { return @('ready', 'servizio acceso, nessun bot abbinato: jht telegram pair assistente') }
+      }
+      return @('running', 'container acceso')
+    }
     if ($script:ServiceLookupReason -notmatch '^(compose ps listed no running container|no running container of)') {
       return @('error', "il container non e' attestabile")
     }
@@ -195,8 +203,7 @@ function Invoke-IntegrationAdd {
       if ((Confirm-TelegramLifecycle 'start') -ne 0) { $script:IntegrationWhy = 'il servizio Telegram non risulta acceso'; return 1 }
     }
     'mail' {
-      Invoke-Compose '--profile' 'broker' up '-d' $BrokerContainer | Out-Null
-      if ($LASTEXITCODE -ne 0) { $script:IntegrationWhy = 'il broker della posta non parte'; return 1 }
+      if ((Ensure-Broker -Quiet 6>$null) -ne 0) { $script:IntegrationWhy = 'il broker della posta non parte'; return 1 }
       if (-not (Get-RunningComposeServiceId $BrokerContainer)) { $script:IntegrationWhy = 'il broker della posta non risulta acceso'; return 1 }
     }
   }
@@ -215,7 +222,7 @@ function Get-IntegrationVolumes {
   return @()
 }
 
-# The broker is part of `jht up` until it is made on request: removing it now would only be undone by the next start.
+# An older compose still starts the broker with `jht up`: removing it now would only be undone by the next start.
 function Test-IntegrationBrokerOnRequest {
   $inService = $false
   foreach ($line in @(Get-Content -LiteralPath $ComposeFile)) {
@@ -247,6 +254,7 @@ function Invoke-IntegrationRemove {
       $code = $LASTEXITCODE
       if ($code -eq 0) { Invoke-Compose '--profile' 'broker' rm '-f' $BrokerContainer | Out-Null; $code = $LASTEXITCODE }
       if ($code -ne 0) { $script:IntegrationWhy = 'il broker della posta non si ferma'; return 1 }
+      Remove-Item -LiteralPath $BrokerMadeMarker -Force -ErrorAction SilentlyContinue
     }
   }
   if ($Purge) {

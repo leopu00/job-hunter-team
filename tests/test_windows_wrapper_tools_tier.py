@@ -39,7 +39,8 @@ PRELUDE = r"""
 $ErrorActionPreference = 'Stop'
 $RuntimeDir = $env:T_RUNTIME; $JhtHome = $env:T_HOME; $DefaultRuntimeImage = $env:T_FULL; $CoreImageDigest = $env:T_CORE
 $RuntimeTierFile = Join-Path $RuntimeDir 'runtime-tier'; $RuntimeImageFile = Join-Path $RuntimeDir 'runtime-image'
-$RuntimeManifest = Join-Path $RuntimeDir '.runtime-integrity'; $ComposeFile = Join-Path $RuntimeDir 'docker-compose.yml'
+$RuntimeTierIntegrity = Join-Path $RuntimeDir '.runtime-tier-integrity'
+$RuntimeManifest = Join-Path $RuntimeDir '.runtime-integrity'; $RuntimeTierIntegrity = Join-Path $RuntimeDir '.runtime-tier-integrity'; $ComposeFile = Join-Path $RuntimeDir 'docker-compose.yml'
 $WrapperPath = $env:T_STUB; $ContainerRuntime = 'docker'
 function Write-Err { param([string]$Msg) [Console]::Error.WriteLine("error: $Msg") }
 . $env:T_TOOLS
@@ -50,6 +51,7 @@ STUB = r"""
 param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest)
 $RuntimeDir = $env:T_RUNTIME; $JhtHome = $env:T_HOME; $DefaultRuntimeImage = $env:T_FULL
 $RuntimeTierFile = Join-Path $RuntimeDir 'runtime-tier'
+$RuntimeTierIntegrity = Join-Path $RuntimeDir '.runtime-tier-integrity'
 function Write-Err { param([string]$Msg) [Console]::Error.WriteLine("error: $Msg") }
 if ($Rest[0] -eq 'up') { Add-Content -LiteralPath (Join-Path $env:FAKE 'wrapper-calls') -Value ("up image=" + $env:JHT_IMAGE); exit 0 }
 . $env:T_TOOLS
@@ -176,16 +178,16 @@ def test_switch_is_silent_until_the_profile_is_ready_and_the_full_image_is_here(
     assert _lines(box.run("exit (Invoke-ToolsCommand @('switch'))")) == [] and tier.exists()
 
 
-def test_switch_drops_the_tier_rewrites_the_manifest_and_ups_the_full_image(box):
+def test_switch_drops_the_tier_and_its_integrity_and_ups_the_full_image(box):
     tier = box.tier()
+    integrity = box.runtime / ".runtime-tier-integrity"
+    integrity.write_text("runtime-tier=x\n", encoding="utf-8")
     (box.fake / "full-present").write_text("", encoding="utf-8")
     (box.home / "profile" / "ready.flag").write_text("2026-11-10T09:00:00Z\n", encoding="utf-8")
-    body = ("function Write-RuntimeManifest { Add-Content -LiteralPath (Join-Path $env:FAKE 'wrapper-calls') -Value 'manifest-written' }\n"
-            "$env:JHT_IMAGE = 'stale'\nexit (Invoke-ToolsCommand @('switch'))")
-    done = box.run(body)
+    done = box.run("$env:JHT_IMAGE = 'stale'\nexit (Invoke-ToolsCommand @('switch'))")
     assert done.returncode == 0 and _lines(done) == ["JHT_PHASE tools_ready"], done.stdout + done.stderr
-    assert not tier.exists()
-    assert (box.fake / "wrapper-calls").read_text(encoding="utf-8").split() == ["manifest-written", "up", "image="]
+    assert not tier.exists() and not integrity.exists()
+    assert (box.fake / "wrapper-calls").read_text(encoding="utf-8").split() == ["up", "image="]
     assert box.notice()["tier"] == "full" and box.notice()["state"] == "ready"
 
 
@@ -221,6 +223,10 @@ def _trust(box, case: str, *, tier_text: str | None = None, core: str = CORE_DIG
         (box.runtime / "runtime-image").write_text(FULL + "\n", encoding="utf-8", newline="\n")
     if tier_text is not None:
         (box.runtime / "runtime-tier").write_text(tier_text, encoding="utf-8", newline="\n")
+        # what the installer writes beside it: the hash of the file as it was written
+        import hashlib
+        digest = hashlib.sha256((box.runtime / "runtime-tier").read_bytes()).hexdigest()
+        (box.runtime / ".runtime-tier-integrity").write_text(f"runtime-tier={digest}\n", encoding="utf-8", newline="\n")
     body = (TRUST + f"$CoreImageDigest = '{core}'\nWrite-RuntimeManifest\n"
             + case)
     return box.run(body, T_WRAPPER_SRC=str(WRAPPER))
@@ -229,7 +235,7 @@ def _trust(box, case: str, *, tier_text: str | None = None, core: str = CORE_DIG
 def test_an_attested_core_tier_selects_the_core_image_by_digest(box):
     done = _trust(box, "if (Test-RuntimeBundleTrusted) { 'trusted ' + $env:JHT_IMAGE } else { 'untrusted' }", tier_text="core\n")
     assert _lines(done) == [f"trusted ghcr.io/leopu00/jht@{CORE_DIGEST}"], done.stdout + done.stderr
-    assert "runtime-tier=" in (box.runtime / ".runtime-integrity").read_text(encoding="utf-8")
+    assert "runtime-tier" not in (box.runtime / ".runtime-integrity").read_text(encoding="utf-8"), "the app compares the exact keys of the main manifest"
 
 
 def test_no_tier_file_is_the_whole_image_of_before(box):
@@ -270,9 +276,10 @@ def test_jht_tools_is_a_host_helper_the_installer_ships_the_enabler_attests_and_
     wrapper = _text(WRAPPER)
     installer = _text(ROOT / "scripts" / "install.ps1")
     enabler = _text(ROOT / "scripts" / "enable-podman-windows-runtime.ps1")
-    assert "$RuntimeHelpers = @('jht-integration.ps1', 'jht-tools.ps1')" in wrapper
+    assert "$RuntimeHelpers = @('jht-integration.ps1', 'jht-tools.ps1', 'configure-podman-windows-network.ps1', 'wsl-interop-connect-proxy.py')" in wrapper
     assert re.search(r"'tools' \{\n    Require-ComposeFile\n", wrapper)
-    assert "[string]$Rest[0] -ceq 'pull'" in wrapper, "only pull fetches a missing helper"
+    tools_branch = wrapper.split("  'tools' {")[1].split("\n  'telegram' {")[0]
+    assert "Install-RuntimeHelpers" not in tools_branch, "no command of jht tools downloads a missing helper (A3)"
     assert ". (Join-Path $RuntimeDir 'jht-tools.ps1')\n    exit (Invoke-ToolsCommand $Rest)" in wrapper
     assert "'integration', 'tools'," in wrapper, "its --help is the local one"
     assert "'scripts/jht-tools.ps1'" in installer and "(Join-Path $RuntimeDir 'jht-tools.ps1')" in installer

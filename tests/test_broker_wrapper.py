@@ -93,7 +93,8 @@ def run(host, body: str, stdin: str = "") -> subprocess.CompletedProcess:
         "read_only_service_id() { [ \"$1\" = jht-broker ] && echo broker-id; }\n"
         f'RUNTIME_DIR="{host.runtime}"\nCOMPOSE_FILE="{host.runtime}/docker-compose.yml"\n'
         'BROKER_SERVICE="jht-broker"\nTELEGRAM_SERVICE="jht-telegram"\nLEGACY_SECRET_NAMES="email_monitor email_transport"\n'
-        'BROKER_LEGACY_MARKER="$RUNTIME_DIR/.broker-legacy-migrated"\n'
+        'BROKER_LEGACY_MARKER="$RUNTIME_DIR/.broker-legacy-migrated"\nBROKER_WANTED_MARKER="$RUNTIME_DIR/.broker-made"\n'
+        "ensure_broker() { return 0; }\n"  # making the broker is tests/test_broker_on_request.py
         + wrapper_functions("compose_lacks_service", "compose_unreadable", "broker_admin", "telegram_admin", "telegram_admin_input",
                           "broker_migrate_legacy", "broker_migrate_legacy_once", "mail_setup")
         + "\n" + body
@@ -230,6 +231,7 @@ def test_an_old_compose_without_the_service_points_to_upgrade_not_up(host, call,
 ])
 def test_a_compose_with_the_service_that_is_not_running_still_points_to_up(host, call, service):
     (host.runtime / "docker-compose.yml").write_text(OLD_COMPOSE + "  jht-broker:\n    image: x\n  jht-telegram:\n    image: x\n")
+    (host.runtime / ".broker-made").write_text("")  # a broker that was made before comes back with `jht up`
     result = run(host, f"read_only_service_id() {{ return 1; }}\n{call}; echo rc=$?")
     assert "rc=1" in result.stdout
     assert f"{service}_unavailable" in result.stderr
@@ -252,6 +254,7 @@ def test_an_unreadable_compose_is_not_called_an_old_runtime(host, call, service)
 
 def test_the_service_is_found_whatever_the_indentation(host):
     (host.runtime / "docker-compose.yml").write_text("services:\n    jht:\n        image: x\n    jht-broker:\n        image: x\n")
+    (host.runtime / ".broker-made").write_text("")
     result = run(host, "read_only_service_id() { return 1; }\nbroker_admin status; echo rc=$?")
     assert result.stderr.rstrip().endswith("Cosa fare: jht up")
     (host.runtime / "docker-compose.yml").write_text("services:\n    jht:\n        image: x\n")

@@ -40,6 +40,10 @@ EXPECTED_KEYS = {
     "source_revision",
 }
 EXPECTED_CORE_KEYS = EXPECTED_KEYS | {"core_digest"}
+# Schema 3 adds the digest of the EXTRAS image (the tools the user asks for, run in containers of their own). It only comes with a core
+# digest: the three images are the full one (`digest`), the core and the extras, three different digests of one repository.
+EXTRAS_SCHEMA_VERSION = 3
+EXPECTED_EXTRAS_KEYS = EXPECTED_CORE_KEYS | {"extras_digest"}
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$")
 DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -150,6 +154,7 @@ class RuntimeImagePin:
     digest: str
     source_revision: str
     core_digest: str | None = None
+    extras_digest: str | None = None
 
     @property
     def image_ref(self) -> str:
@@ -158,6 +163,14 @@ class RuntimeImagePin:
     @property
     def core_image_ref(self) -> str | None:
         return f"{self.repository}@{self.core_digest}" if self.core_digest else None
+
+    @property
+    def extras_image_ref(self) -> str | None:
+        return f"{self.repository}@{self.extras_digest}" if self.extras_digest else None
+
+    @property
+    def extras_release_tag(self) -> str:
+        return f"{self.release_version}-extras"
 
     @property
     def release_tag_ref(self) -> str:
@@ -174,12 +187,12 @@ def load_manifest(path: Path) -> RuntimeImagePin:
         data = json.loads(raw)
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise RuntimeImagePinError("manifest_invalid") from exc
-    if not isinstance(data, dict) or set(data) not in (EXPECTED_KEYS, EXPECTED_CORE_KEYS):
+    if not isinstance(data, dict) or set(data) not in (EXPECTED_KEYS, EXPECTED_CORE_KEYS, EXPECTED_EXTRAS_KEYS):
         raise RuntimeImagePinError("manifest_shape")
     # bool e' una sottoclasse di int in Python: `True == 1` non deve poter
     # selezionare uno schema che non e' stato dichiarato come intero JSON.
-    # Schema 1 has no core digest, schema 2 has one: the shape and the number agree or the manifest is refused.
-    expected_schema = CORE_SCHEMA_VERSION if "core_digest" in data else SCHEMA_VERSION
+    # Schema 1 has no core digest, schema 2 has one, schema 3 has the extras digest too: the shape and the number agree or the manifest is refused.
+    expected_schema = EXTRAS_SCHEMA_VERSION if "extras_digest" in data else CORE_SCHEMA_VERSION if "core_digest" in data else SCHEMA_VERSION
     if type(data.get("schema_version")) is not int or data["schema_version"] != expected_schema:
         raise RuntimeImagePinError("manifest_schema")
     if not isinstance(data.get("release_version"), str) or not VERSION_RE.fullmatch(
@@ -201,6 +214,11 @@ def load_manifest(path: Path) -> RuntimeImagePin:
         not isinstance(core, str) or not DIGEST_RE.fullmatch(core) or core == data["digest"]
     ):
         raise RuntimeImagePinError("core_digest_invalid")  # two images, two different digests
+    extras = data.get("extras_digest")
+    if "extras_digest" in data and (
+        not isinstance(extras, str) or not DIGEST_RE.fullmatch(extras) or extras in (data["digest"], core)
+    ):
+        raise RuntimeImagePinError("extras_digest_invalid")  # three images, three different digests
     canonical = json.dumps(data, indent=2, sort_keys=True) + "\n"
     if raw != canonical:
         raise RuntimeImagePinError("manifest_not_canonical")
@@ -210,6 +228,7 @@ def load_manifest(path: Path) -> RuntimeImagePin:
         digest=data["digest"],
         source_revision=data["source_revision"],
         core_digest=core,
+        extras_digest=extras,
     )
 
 
@@ -225,20 +244,23 @@ _PS_CORE = r"^\$CoreImageDigest = if \(\$env:JHT_CORE_IMAGE_DIGEST\) \{ \$env:JH
 # installer, the wrapper runs under whatever environment the user has).
 _SH_CORE_WRAPPER = r'^CORE_IMAGE_DIGEST="(?P<core_digest>(?:sha256:[0-9a-f]{64})?)"$'
 _PS_CORE_WRAPPER = r"^\$CoreImageDigest = '(?P<core_digest>(?:sha256:[0-9a-f]{64})?)'$"
+# The extras digest: the wrappers pull the extras image by it (`jht integration add`, `jht linkedin login`, `jht screen on`).
+_SH_EXTRAS_WRAPPER = r'^EXTRAS_IMAGE_DIGEST="(?P<extras_digest>(?:sha256:[0-9a-f]{64})?)"$'
+_PS_EXTRAS_WRAPPER = r"^\$ExtrasImageDigest = '(?P<extras_digest>(?:sha256:[0-9a-f]{64})?)'$"
 CORE_CONSUMER_PATTERNS: dict[Path, tuple[str, ...]] = {
     Path("scripts/install.sh"): (_SH_CORE,),
     Path("web/public/install.sh"): (_SH_CORE,),
     Path("scripts/install.ps1"): (_PS_CORE,),
     Path("web/public/install.ps1"): (_PS_CORE,),
-    Path("scripts/jht-wrapper.sh"): (_SH_CORE_WRAPPER,),
-    Path("scripts/jht-wrapper.ps1"): (_PS_CORE_WRAPPER,),
+    Path("scripts/jht-wrapper.sh"): (_SH_CORE_WRAPPER, _SH_EXTRAS_WRAPPER),
+    Path("scripts/jht-wrapper.ps1"): (_PS_CORE_WRAPPER, _PS_EXTRAS_WRAPPER),
 }
 
 
 def _pinned_group(pattern: str) -> str:
     """`image` (the full reference) or `digest` (the bare sha256:...) of a consumer pattern."""
     names = re.compile(pattern).groupindex
-    if set(names) not in ({"image"}, {"digest"}, {"core_image"}, {"core_digest"}):
+    if set(names) not in ({"image"}, {"digest"}, {"core_image"}, {"core_digest"}, {"extras_digest"}):
         raise RuntimeImagePinError("consumer_contract_invalid")
     return next(iter(names))
 
@@ -248,6 +270,8 @@ def _pinned_value(pin: "RuntimeImagePin", group: str) -> str:
         return pin.core_image_ref or ""
     if group == "core_digest":
         return pin.core_digest or ""
+    if group == "extras_digest":
+        return pin.extras_digest or ""
     return pin.image_ref if group == "image" else pin.digest
 
 
@@ -302,7 +326,9 @@ def verify_tree(
         for pattern in patterns:
             group = _pinned_group(pattern)
             values = [match.group(group) for match in re.finditer(pattern, text, flags=re.MULTILINE)]
-            if group == "core_digest":
+            if group == "extras_digest":
+                expected = [pin.extras_digest or ""]
+            elif group == "core_digest":
                 expected = [pin.core_digest or ""]  # the constant is always there, empty while the feature is off
             else:
                 expected = [pin.core_image_ref] if pin.core_digest else []
@@ -329,6 +355,8 @@ def update_tree(
     manifest_path: Path = MANIFEST_PATH,
     core_digest: str | None = None,
     drop_core: bool = False,
+    extras_digest: str | None = None,
+    drop_extras: bool = False,
 ) -> RuntimeImagePin:
     """Point the manifest and EVERY consumer at a new image, or change nothing.
 
@@ -355,9 +383,20 @@ def update_tree(
             kept = None
         if kept:
             raise RuntimeImagePinError("core_digest_dropped")
-    pin = RuntimeImagePin(version, "ghcr.io/leopu00/jht", digest, source_revision, core_digest)
+    if extras_digest is None and not drop_extras:
+        try:
+            kept_extras = load_manifest(manifest_path).extras_digest
+        except RuntimeImagePinError:
+            kept_extras = None
+        if kept_extras:
+            raise RuntimeImagePinError("extras_digest_dropped")
+    pin = RuntimeImagePin(version, "ghcr.io/leopu00/jht", digest, source_revision, core_digest, extras_digest)
     if core_digest is not None and (not DIGEST_RE.fullmatch(core_digest) or core_digest == digest):
         raise RuntimeImagePinError("core_digest_invalid")
+    if extras_digest is not None and (
+        not DIGEST_RE.fullmatch(extras_digest) or extras_digest in (digest, core_digest) or not core_digest
+    ):
+        raise RuntimeImagePinError("extras_digest_invalid")  # three different digests, and no extras without a core
     if not VERSION_RE.fullmatch(version):
         raise RuntimeImagePinError("version_invalid")
     if not DIGEST_RE.fullmatch(digest):
@@ -404,12 +443,13 @@ def update_tree(
                 raise RuntimeImagePinError("consumer_missing")
             digests[digest_file] = _installer_digest(raw_bytes[installer]) + "\n"
     manifest = {
-        "schema_version": CORE_SCHEMA_VERSION if core_digest else SCHEMA_VERSION,
+        "schema_version": EXTRAS_SCHEMA_VERSION if extras_digest else CORE_SCHEMA_VERSION if core_digest else SCHEMA_VERSION,
         "release_version": version,
         "repository": pin.repository,
         "digest": digest,
         "source_revision": source_revision,
         **({"core_digest": core_digest} if core_digest else {}),
+        **({"extras_digest": extras_digest} if extras_digest else {}),
     }
     # Every new content is written beside its file first: an I/O error there
     # (disk full, a read-only file) leaves the tree as it was. Only then the
@@ -468,7 +508,7 @@ def find_stray_pins(root: Path, pin: RuntimeImagePin) -> None:
         except (OSError, UnicodeError):
             continue  # not on disk (sparse checkout) or not text
         for found in STRAY_PIN_RE.findall(text):
-            if found not in (pin.image_ref, pin.core_image_ref):
+            if found not in (pin.image_ref, pin.core_image_ref, pin.extras_image_ref):
                 raise RuntimeImagePinError("unlisted_stale_pin")
 
 
@@ -537,7 +577,7 @@ def _registry_request(
 
 
 def registry_tag_digest(pin: RuntimeImagePin, tag: str) -> str | None:
-    if tag not in (pin.release_version, "master", pin.core_release_tag, "master-core"):
+    if tag not in (pin.release_version, "master", pin.core_release_tag, "master-core", pin.extras_release_tag, "master-extras"):
         raise RuntimeImagePinError("tag_invalid")
     token = _anonymous_registry_token(pin)
     try:
@@ -631,8 +671,8 @@ def _platform_revisions(pin: RuntimeImagePin, digest: str | None = None) -> Iter
 
 
 def verify_source_labels(pin: RuntimeImagePin) -> None:
-    """Every platform of the full image, and of the core image when the pin has one, was built from the pinned commit."""
-    for digest in (pin.digest, pin.core_digest):
+    """Every platform of the full image, and of the core and the extras image when the pin has them, was built from the pinned commit."""
+    for digest in (pin.digest, pin.core_digest, pin.extras_digest):
         if digest is None:
             continue
         for revision in _platform_revisions(pin, digest):
@@ -685,6 +725,8 @@ def publish_release_tag(pin: RuntimeImagePin, claim: str) -> str:
     if pin.core_digest:
         # the core image gets its own tag `<version>-core`, from its own digest: a convenience for people, never what the pin trusts
         codes.append(_publish_one_tag(pin, pin.core_release_tag, pin.core_digest))
+    if pin.extras_digest:
+        codes.append(_publish_one_tag(pin, pin.extras_release_tag, pin.extras_digest))
     return "tag_published" if "tag_published" in codes else "tag_verified"
 
 
@@ -704,6 +746,8 @@ def _parser() -> argparse.ArgumentParser:
             "image_ref",
             "core_digest",
             "core_image_ref",
+            "extras_digest",
+            "extras_image_ref",
         ),
     )
     verify = subparsers.add_parser("verify-tree")
@@ -721,6 +765,8 @@ def _parser() -> argparse.ArgumentParser:
     update.add_argument("--source-revision", help="the commit the image was built from")
     update.add_argument("--core-digest", help="the digest of the core image (schema 2); without it the manifest stays schema 1")
     update.add_argument("--drop-core", action="store_true", help="go back to schema 1: drop the core digest the manifest has (never done in silence)")
+    update.add_argument("--extras-digest", help="the digest of the extras image (schema 3, needs --core-digest); without it the manifest stays schema 2")
+    update.add_argument("--drop-extras", action="store_true", help="go back to schema 2: drop the extras digest the manifest has (never done in silence)")
     update.add_argument(
         "--from-registry",
         action="store_true",
@@ -757,7 +803,7 @@ def main(argv: list[str] | None = None) -> int:
                 revision = found
             elif revision is None:
                 raise RuntimeImagePinError("update_source_ambiguous")
-            done = update_tree(args.root, digest, revision, args.release_version, args.manifest, args.core_digest, args.drop_core)
+            done = update_tree(args.root, digest, revision, args.release_version, args.manifest, args.core_digest, args.drop_core, args.extras_digest, args.drop_extras)
             print(f"runtime-image-pin result=pass code=tree_updated image={done.image_ref} revision={done.source_revision}")
             return 0
         pin = load_manifest(manifest)
@@ -772,6 +818,8 @@ def main(argv: list[str] | None = None) -> int:
             if registry_tag_digest(pin, tag) != pin.digest:
                 raise RuntimeImagePinError("tag_digest_mismatch")
             if pin.core_digest and registry_tag_digest(pin, f"{tag}-core") != pin.core_digest:
+                raise RuntimeImagePinError("tag_digest_mismatch")
+            if pin.extras_digest and registry_tag_digest(pin, f"{tag}-extras") != pin.extras_digest:
                 raise RuntimeImagePinError("tag_digest_mismatch")
             verify_source_labels(pin)
             print("runtime-image-pin result=pass code=tag_verified")

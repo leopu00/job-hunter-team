@@ -4,7 +4,7 @@
 # A LIBRARY, not a program: the host wrapper loads it with `source` after checking its sha256 against the runtime manifest
 # (RUNTIME_HELPERS) and calls tools_main from its `tools)` arm.
 # It uses what the wrapper has: RUNTIME_DIR, RUNTIME_TIER_FILE,
-# RUNTIME_MANIFEST, DEFAULT_RUNTIME_IMAGE (the full image), CORE_IMAGE_DIGEST, runtime_write_manifest, WRAPPER_PATH, err.
+# RUNTIME_TIER_INTEGRITY, DEFAULT_RUNTIME_IMAGE (the full image), CORE_IMAGE_DIGEST, WRAPPER_PATH, err.
 #
 #   jht tools status --json   one line: {"ok":true,"state":"none|pending|pulling|ready|failed","tier":"core|full","reason":"<code>"}
 #   jht tools pull            starts the pull of the full image, detached; already pulling or pulled: exit 0 and nothing else
@@ -110,7 +110,8 @@ tools_switch() {
   [ -f "$RUNTIME_TIER_FILE" ] || return 0
   [ -f "$flag" ] && [ ! -L "$flag" ] || return 0
   tools_engine_up && tools_full_here || return 0
-  rm -f "$RUNTIME_TIER_FILE" && runtime_write_manifest || { err "tools: manifest del runtime non aggiornato"; return 1; }
+  # The file first, its integrity second: a crash between them leaves an integrity without a file, which reads as the whole image.
+  rm -f "$RUNTIME_TIER_FILE" && rm -f "$RUNTIME_TIER_INTEGRITY" || { err "tools: livello del runtime non tolto"; return 1; }
   unset JHT_IMAGE
   "$WRAPPER_PATH" up || return $?
   tools_notice ready full "" "$(tools_now)"

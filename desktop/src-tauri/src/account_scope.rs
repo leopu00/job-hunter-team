@@ -540,7 +540,8 @@ fn previous_local_data_with(home: &Path, marker: &Path) -> bool {
 }
 
 /// What makes the onboarding say «Job Hunter Team data is already on this computer». A list of its own, shorter
-/// than the one that decides who may claim the home (`recognized_legacy_local_home`, untouched): `host.env` is
+/// than the one that decides who may claim the home (`recognized_legacy_local_home`, which keeps `host.env` and `runtime`
+/// as markers and has `.pi` like this one): `host.env` is
 /// written by the installer of THIS version and `runtime` is the mount point the wrapper creates at every start,
 /// so a home with only those holds what a run leaves before a profile takes the home, not the data of someone
 /// who used the product before. Configuration, profile, credentials, the provider logins and the database are.

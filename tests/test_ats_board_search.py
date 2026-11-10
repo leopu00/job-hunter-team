@@ -83,7 +83,8 @@ def test_the_truecaller_case_says_which_ads_went_and_why():
     assert result["counts"]["in_country"] == 16 and result["counts"]["dropped_country"] == 1
     assert (result["counts"]["dropped_seniority"], result["counts"]["dropped_role"], result["counts"]["returned"]) == (12, 4, 0)
     assert result["status"] == "empty" and result["ok"] is True
-    assert {d["reason"] for d in result["dropped"]} == {"seniority", "role"} and len(result["dropped"]) == 16
+    assert {d["reason"] for d in result["dropped"]} == {"seniority", "role"}      # both reasons are shown, as a sample of each
+    assert len(result["dropped"]) == ab.MAX_DROPPED_PER_REASON + 4
     assert all("location" in d and "title" in d and "seniority" in d for d in result["dropped"])
 
 
@@ -96,7 +97,7 @@ def test_a_title_word_keeps_the_ad_without_regard_to_case_or_accents():
 def test_the_list_of_dropped_ads_is_capped_but_the_counts_are_not():
     body = gh(*[("Senior %d" % i, "Stockholm") for i in range(100)])
     result = ab.search("greenhouse", "wolt", "se", drop_seniority=["senior"], fetcher=answer(body), data=TABLE)
-    assert result["counts"]["dropped_seniority"] == 100 and len(result["dropped"]) == ab.MAX_DROPPED
+    assert result["counts"]["dropped_seniority"] == 100 and len(result["dropped"]) == ab.MAX_DROPPED_PER_REASON
 
 
 def test_lever_postings_are_read_with_their_country_and_all_their_places():

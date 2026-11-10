@@ -236,13 +236,21 @@ def test_the_cooldown_grows_when_it_happens_again_and_a_success_resets_it(linked
     assert _state()["strikes"] == 0 and _state()["cooldown_until"] == 0
 
 
-def test_another_error_is_not_a_rate_limit(linkedin):
+def test_a_403_answers_closed_for_this_call_and_pauses_linkedin_for_every_scout(linkedin):
     linkedin.script["job"] = [(403, {}, "")]
     job = la.fetch_job("9")
     assert job == {"job_id": "9", "url": f"{linkedin.url}/jobs/view/9", "status": 403, "blocked": True,
                    "search_status": "closed",
                    "http_status": 403, "search_outcome": True, "source": "linkedin",
                    "code": "scout_search_forbidden", "message": "The job source refused access."}
+    assert _state()["strikes"] == 1 and _state()["cooldown_until"] > la.time.time()     # the pause is shared, as after a 429
+    again = la.fetch_job("10")                                                         # the next call, of any Scout, is not sent
+    assert again["rate_limited"] and again["reason"] == "cooldown" and len(linkedin.hits) == 1
+
+
+def test_another_error_is_not_a_rate_limit(linkedin):
+    linkedin.script["job"] = [(410, {}, "")]
+    assert la.fetch_job("9")["search_status"] == "gone"
     assert not la.RATE_STATE.exists() or not _state().get("cooldown_until")
 
 

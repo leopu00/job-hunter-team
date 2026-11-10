@@ -16,7 +16,11 @@ import { checkPi } from '../src/commands/providers-harness.js';
 const cli = fileURLToPath(new URL('..', import.meta.url));
 const entry = join(cli, 'bin/jht.js');
 
-function sandbox({ piLogsIn = true } = {}) {
+// What Pi writes after a sign-in, one entry per service (synthetic values): the ChatGPT account is `openai`, Anthropic's `anthropic`.
+const OPENAI_LOGIN = '{"openai":{"type":"oauth","access":"synthetic"}}';
+const ANTHROPIC_LOGIN = '{"anthropic":{"type":"oauth","access":"synthetic","refresh":"synthetic"}}';
+
+function sandbox({ piLogsIn = true, piLogin = OPENAI_LOGIN } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'jht-harness-'));
   const home = join(root, '.jht');
   const bin = join(root, 'bin');
@@ -29,7 +33,7 @@ function sandbox({ piLogsIn = true } = {}) {
   const pi = join(bin, 'pi');
   writeFileSync(pi, `#!/bin/sh
 echo "pi $* dir=$PI_CODING_AGENT_DIR" >> ${JSON.stringify(calls)}
-${piLogsIn ? 'mkdir -p "$PI_CODING_AGENT_DIR" && echo "{}" > "$PI_CODING_AGENT_DIR/auth.json"' : 'true'}
+${piLogsIn ? `mkdir -p "$PI_CODING_AGENT_DIR" && echo '${piLogin}' > "$PI_CODING_AGENT_DIR/auth.json"` : 'true'}
 `);
   chmodSync(pi, 0o755);
   const driver = join(root, 'driver.mjs');
@@ -97,7 +101,10 @@ test('choosing pi: the note says what it needs, pi is installed, signed in by it
   assert.ok(order.indexOf('pi -nc -na -ns -ne --no-mcp') > order.indexOf('jht providers update pi'));
   assert.ok(order.indexOf('jht team start') > order.indexOf('pi -nc -na -ns -ne --no-mcp'));
   assert.match(calls.find((c) => c.startsWith('pi ')), new RegExp(`dir=${join(box.home, '.pi', 'agent').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
-  assert.ok(events.some((e) => e.kind === 'note' && /Pi opens below: type \/login/.test(e.message)));
+  assert.ok(events.some((e) => e.kind === 'note' && /Pi opens below\. What to do in it/.test(e.message) && /type \/login and choose OpenAI \(ChatGPT\)/.test(e.message)
+    && /Ctrl\+C \(or type \/quit\)/.test(e.message)));
+  // after it leaves, what it found: the provider, the entries and the model the team will use
+  assert.ok(events.some((e) => e.kind === 'note' && /Pi sign-in found: OpenAI \(ChatGPT\) \(entries in the file: openai\)\. Model of the team: gpt-/.test(e.message)));
   assert.ok(events.some((e) => e.kind === 'note' && e.title === 'Configuration saved' && /Harness: {4}Pi/.test(e.message)));
   assert.equal(events.at(-1).ok, true);
 });
@@ -113,7 +120,7 @@ test('a pi that exits without a login stops the setup before the team starts, an
 test('a pi login that is already there ends the step at once, and a kept configuration asks pi, not codex, for it', () => {
   const box = sandbox({ piLogsIn: false });
   mkdirSync(join(box.home, '.pi', 'agent'), { recursive: true });
-  writeFileSync(join(box.home, '.pi', 'agent', 'auth.json'), '{}');
+  writeFileSync(join(box.home, '.pi', 'agent', 'auth.json'), OPENAI_LOGIN);
   const first = wizard(box, { harness: 'pi' });
   assert.equal(first.events.at(-1).ok, true);
   assert.equal(first.calls.some((c) => c.startsWith('pi ')), false, 'pi is not started to sign in again');
@@ -124,7 +131,33 @@ test('a pi login that is already there ends the step at once, and a kept configu
   });
   const events = keep.stdout.split('\n').filter((l) => l.startsWith('EV ')).map((l) => JSON.parse(l.slice(3)));
   assert.equal(events.at(-1).ok, true);
-  assert.ok(events.some((e) => e.kind === 'note' && /detected/i.test(e.message) && /pi/.test(e.message) && /auth\.json/.test(e.message)));
+  assert.ok(events.some((e) => e.kind === 'note' && /Pi sign-in found: OpenAI \(ChatGPT\)/.test(e.message) && /auth\.json/.test(e.message)));
+});
+
+test('a pi login with only Anthropic is not the login of the OpenAI setup: said with what it holds, the team does not start, no «done»', () => {
+  const box = sandbox({ piLogin: ANTHROPIC_LOGIN });
+  const { events, calls } = wizard(box, { harness: 'pi' });
+  assert.equal(events.at(-1).ok, false, 'the setup stops');
+  const said = events.find((e) => e.kind === 'note' && /pi_login_wrong_provider/.test(e.message));
+  assert.ok(said, 'the refusal has its code');
+  assert.match(said.message, /not for OpenAI \(ChatGPT\): the file holds only: anthropic/);
+  assert.match(said.message, /may be billed per token/);
+  assert.equal(calls.includes('jht team start'), false, 'the team is not started on it');
+  assert.equal(events.some((e) => e.kind === 'note' && e.title === 'Configuration saved'), false, '«Sign-in: done» is not said');
+  assert.equal(events.some((e) => /All set/.test(e.message ?? '')), false);
+  assert.equal(JSON.stringify(events).includes('synthetic'), false, 'no value of the file is shown');
+});
+
+test('a file that is there with only Anthropic is said before pi opens, and pi still opens so the right sign-in can be made', () => {
+  const box = sandbox({ piLogsIn: false });
+  mkdirSync(join(box.home, '.pi', 'agent'), { recursive: true });
+  writeFileSync(join(box.home, '.pi', 'agent', 'auth.json'), ANTHROPIC_LOGIN);
+  const { events, calls } = wizard(box, { harness: 'pi' });
+  const wrong = events.findIndex((e) => e.kind === 'note' && /is not for OpenAI \(ChatGPT\): the file holds only: anthropic/.test(e.message));
+  const opens = events.findIndex((e) => e.kind === 'note' && /Pi opens below/.test(e.message));
+  assert.ok(wrong >= 0 && opens > wrong, 'told first, then pi opens');
+  assert.ok(calls.some((c) => c.startsWith('pi ')), 'pi was started to sign in again');
+  assert.equal(events.at(-1).ok, false, 'and without the right sign-in the setup stops');
 });
 
 function jht(box, args) {
@@ -234,6 +267,9 @@ test('the harness of a config: absent is codex, an unknown value is not a harnes
   assert.equal(usesPi({ active_provider: 'glm', harness: 'codex' }), false);
   assert.equal(harnessProblem('pi', 'openai', 'subscription'), null);
   assert.equal(harnessProblem('codex', 'kimi', 'api_key'), null);
+  // GLM has no CLI of its own: Codex cannot run it (Kimi keeps its legacy CLI under the default harness)
+  assert.match(harnessProblem('codex', 'glm', 'api_key'), /GLM \(Z\.ai\) runs only on the pi harness/);
+  assert.equal(harnessProblem('codex', 'openai', 'subscription'), null);
   assert.match(harnessProblem('pi', 'claude', 'subscription'), /Claude subscription.*per token/);
   assert.match(harnessProblem('pi', 'claude', 'api_key'), /only active_provider=openai/);
   assert.match(harnessProblem('pi', 'kimi', 'subscription'), /only with an API key/);
@@ -252,4 +288,13 @@ test('the sign-in runs the pi of the image by its own path, and the name only wh
   const stdin = { isRaw: false, isPaused: () => true, pause() {}, resume() {}, isTTY: false };
   runPiLogin({ spawn: (cmd, args) => { seen.push([cmd, args]); return { status: 0 }; }, stdin, env: { PATH: '/opt/jht-deps/bin' }, exists: () => true });
   assert.equal(seen[0][0], PI_IMAGE_BIN, 'not a pi from the folder the agents can write');
+});
+
+test('the boot gate reads the login of Pi only when it is a regular file of a sane size, and only then looks at the entry names', () => {
+  const pid1 = readFileSync(join(cli, 'src/commands/pid1.js'), 'utf-8');
+  const check = pid1.split('async function hasProviderCredentials()')[1].split('\n}\n')[0];
+  const guard = check.indexOf('lstat(marker)');
+  assert.ok(guard > 0 && guard < check.indexOf('readFile(marker'), 'lstat comes before the read');
+  assert.match(check, /!info\.isFile\(\) \|\| info\.size <= 0 \|\| info\.size > 256 \* 1024/);
+  assert.match(check, /inspectPiLogin\(/);
 });

@@ -46,6 +46,7 @@ OWNER_CHECKED = {
     "$DockerShim": "$shim",
     "$RuntimeImageFile": "$runtimeImageFile",
     "$RuntimeTierFile": "$runtimeTierFile",
+    "$RuntimeTierIntegrity": "$runtimeTierIntegrity",
 }
 
 

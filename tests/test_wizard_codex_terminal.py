@@ -64,7 +64,7 @@ const lines = readline.createInterface({ input: process.stdin });
 lines.on('line', line => {
   if (line.trim() !== 'finish') return;
   fs.mkdirSync(process.env.PI_CODING_AGENT_DIR, { recursive: true });
-  fs.writeFileSync(process.env.PI_CODING_AGENT_DIR + '/auth.json', '{}');
+  fs.writeFileSync(process.env.PI_CODING_AGENT_DIR + '/auth.json', '{"openai":{"type":"oauth"}}');
   console.log('SYNTHETIC pi authenticated');
   lines.close();
 });
@@ -235,15 +235,17 @@ def test_choosing_pi_signs_in_to_pi_here_and_not_to_codex(tmp_path):
         assert 'FAKE-PI-ARGV ["-nc","-na","-ns","-ne","--no-mcp"]' in screen
         assert f"FAKE-PI-DIR {home}/.pi/agent" in screen
         assert "FAKE-PI-TTY true,true,true" in screen
-        assert "type /login" in screen
+        assert "type /login and choose OpenAI (ChatGPT)" in screen
         assert "FAKE-ARGV" not in screen, "codex is not started for a team that runs on pi"
         assert not (home / ".pi/agent/auth.json").exists()
         terminal.send(b"finish\n")
         assert terminal.finish() == 0, terminal.output.decode("utf-8", "replace")
-        assert (home / ".pi/agent/auth.json").read_text() == "{}"
+        assert json.loads((home / ".pi/agent/auth.json").read_text()) == {"openai": {"type": "oauth"}}
         assert not (home / ".codex/auth.json").exists()
         assert json.loads((home / "jht.config.json").read_text())["harness"] == "pi"
-        assert "Login pi detected" in terminal.output.decode("utf-8", "replace")
+        shown = terminal.output.decode("utf-8", "replace")
+        assert "Pi sign-in found: OpenAI (ChatGPT)" in shown
+        assert "choose OpenAI (ChatGPT)" in shown and "Ctrl+C (or type /quit)" in shown
     finally:
         terminal.close()
 

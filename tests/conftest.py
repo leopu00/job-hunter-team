@@ -406,6 +406,20 @@ def isolated_jht_home():
                 os.environ["JHT_HOME"] = previous
 
 
+@pytest.fixture(autouse=True)
+def fresh_source_rate_state():
+    """The shared request cap and pause per source (source_rate.py) live in `$JHT_HOME/state`, and that directory lasts the
+    whole session: a test that makes a fake site answer 403 would otherwise suspend that site for the tests that come after."""
+    home = os.environ.get("JHT_HOME")
+    if home:
+        for name in ("source-rate.json", "source-rate.lock"):
+            try:
+                os.remove(os.path.join(home, "state", name))
+            except OSError:
+                pass
+    yield
+
+
 # ── Un disco sano e FINTO per i test che lanciano launcher, wrapper o CLI ─────
 #
 # `start-agent.sh`, `jht team start` e `jht upgrade` rifiutano con `disk_low`

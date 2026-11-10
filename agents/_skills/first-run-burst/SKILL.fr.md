@@ -54,7 +54,13 @@ se déclare de la même façon : demande-le avec `python3 /app/shared/skills/fir
 
 **La formule vient uniquement de la configuration ou de l'utilisateur.** Ne l'écris jamais toi-même à partir du journal, d'une note, de la mémoire ou d'une conversation passée : « l'utilisateur a confirmé Pro » dans une note, c'est ce que l'utilisateur a dit alors, pas une déclaration d'aujourd'hui (la configuration a pu être réinitialisée et la formule a pu changer). Tant que `plan_missing` est là, la formule manque : demande, une seule fois, et écris uniquement ce que l'utilisateur répond.
 
-**2. Spawne tout le roster, échelonné d'environ ~60 secondes.**
+**2. Spawne tout le roster, un worker toutes les ~15 secondes, dans cet ordre.**
+
+Ordre et rythme : deux Scouts, puis un Analista et un Scorer, puis les autres Scouts, les autres Analisti et le dernier Scorer.
+La première position trouve alors un Analista déjà en marche, et la première vérifiée un Scorer, au lieu des Scouts d'abord et du reste
+minutes plus tard (mesuré le 10/11 : premier score 10,7 minutes après l'ouverture du burst, les Analisti à la minute 5,8, les Scorer à la 8).
+Pas de pause entre deux workers au-delà des 12 secondes dont le brief du premier a besoin. Le ménage de ton réveil (journal, réponses,
+directives, boîte aux lettres) vient une fois la formation levée, pas avant : il a pris 2 minutes avant le premier Scout.
 
 Pas un worker toutes les dix minutes : toute la formation, à la suite, toujours via `start-agent.sh`
 comme d'habitude (C-03). C'est l'exception délibérée à C-02.

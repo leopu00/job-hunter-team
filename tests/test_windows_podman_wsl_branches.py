@@ -947,7 +947,7 @@ def test_every_compose_up_of_the_wrapper_is_followed_by_its_exit_code_check():
 # Compose creates the services in parallel, and Podman 6.0.2's API service loses the keep-id map of
 # one of two creates at once (libsubid is not thread safe, podman #29848): the Telegram service had
 # the user alone and never started. Each gets its own up, before the whole one.
-COMPOSE_TURN_CASES = """  "compose "*" up -d jht-broker") [ "$FAKE_FAIL" = broker ] && { echo 'Error: broker create failed' >&2; exit 4; } ;;
+COMPOSE_TURN_CASES = """  "compose "*" up -d --no-deps jht-broker") [ "$FAKE_FAIL" = broker ] && { echo 'Error: broker create failed' >&2; exit 4; } ;;
   "compose "*" up -d jht-telegram") ;;
   "compose "*" up -d") [ "$FAKE_FAIL" = up ] && { echo 'Error: compose up failed' >&2; exit 3; } ;;"""
 
@@ -957,6 +957,7 @@ function Assert-TrustedRuntime {}
 $ContainerRuntime = $env:RUNTIME
 $ComposeFile = $env:COMPOSE_UNDER_TEST; $PodmanComposeFile = 'docker-compose.podman.yml'; $RuntimeDir = '.'
 $BrokerContainer = 'jht-broker'; $TelegramContainer = 'jht-telegram'
+$BrokerMadeMarker = $env:MARKER_UNDER_TEST
 Stop-OnFailedComposeUp (Invoke-PodmanServicesUpInTurn)
 Invoke-Compose 'up' '-d'
 Stop-OnFailedComposeUp $LASTEXITCODE
@@ -964,21 +965,30 @@ Add-Content -LiteralPath $env:FAKE_LOG -Value 'after-up'
 """
 
 
-def _up_in_turn(tmp_path, *, runtime: str = "podman", fail: str = "", compose: Path = ROOT / "docker-compose.yml"):
+def _up_in_turn(tmp_path, *, runtime: str = "podman", fail: str = "", compose: Path = ROOT / "docker-compose.yml", made: bool = True):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
+    marker = tmp_path / ".broker-made"
+    if made:
+        marker.write_text("", encoding="utf-8")
     _fake(bin_dir, "docker", COMPOSE_TURN_CASES)
     result, calls = _run(
         tmp_path, WRAPPER, ["Invoke-PodmanServicesUpInTurn", "Invoke-Compose", "Stop-OnFailedComposeUp", "Write-Err"], UP_IN_TURN_BODY,
-        {"RUNTIME": runtime, "FAKE_FAIL": fail, "COMPOSE_UNDER_TEST": str(compose)},
+        {"RUNTIME": runtime, "FAKE_FAIL": fail, "COMPOSE_UNDER_TEST": str(compose), "MARKER_UNDER_TEST": str(marker)},
     )
     return result, [call[call.index(" up ") + 1:] if " up " in call else call for call in calls]
 
 
-def test_with_podman_only_the_unconditional_broker_precedes_the_team(tmp_path):
+def test_with_podman_a_broker_made_before_precedes_the_team_alone_and_by_its_profile(tmp_path):
     result, calls = _up_in_turn(tmp_path)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert calls == ["up -d jht-broker", "up -d", "after-up"]
+    assert calls == ["up -d --no-deps jht-broker", "up -d", "after-up"]
+
+
+def test_a_clean_install_makes_no_broker_at_up(tmp_path):
+    result, calls = _up_in_turn(tmp_path, made=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert calls == ["up -d", "after-up"]
 
 
 def test_with_docker_the_up_is_the_whole_one_as_before(tmp_path):
@@ -991,7 +1001,7 @@ def test_a_service_whose_up_fails_stops_jht_with_its_code_before_the_others(tmp_
     result, calls = _up_in_turn(tmp_path, fail="broker")
     assert result.returncode == 4, result.stdout + result.stderr
     assert "compose_up_failed" in result.stdout + result.stderr
-    assert calls == ["up -d jht-broker"]
+    assert calls == ["up -d --no-deps jht-broker"]
 
 
 def test_a_compose_file_without_the_services_gets_the_whole_up_alone(tmp_path):

@@ -43,7 +43,7 @@ def _pinned() -> str:
     ).stdout
 
 
-def _fakes(tmp_path: Path, *, logs_in: bool = True) -> dict[str, str]:
+def _fakes(tmp_path: Path, *, logs_in: bool = True, login: str = '{"openai":{"type":"oauth"}}') -> dict[str, str]:
     """A `pi` and a `codex` on the PATH that only record how they were called; pi saves a login when asked."""
     bindir = tmp_path / "bin"
     bindir.mkdir()
@@ -52,7 +52,7 @@ def _fakes(tmp_path: Path, *, logs_in: bool = True) -> dict[str, str]:
         "#!/usr/bin/env bash\n"
         f'if [ "$1" = "--version" ]; then echo {_pinned()}; exit 0; fi\n'
         f'echo "pi $* | dir=$PI_CODING_AGENT_DIR skipcheck=$PI_SKIP_VERSION_CHECK telemetry=$PI_TELEMETRY" >> "{calls}"\n'
-        + ('mkdir -p "$PI_CODING_AGENT_DIR"; echo "{}" > "$PI_CODING_AGENT_DIR/auth.json"\n' if logs_in else ""),
+        + (f'mkdir -p "$PI_CODING_AGENT_DIR"; echo \'{login}\' > "$PI_CODING_AGENT_DIR/auth.json"\n' if logs_in else ""),
         encoding="utf-8",
     )
     (bindir / "codex").write_text(f'#!/usr/bin/env bash\necho "codex $*" >> "{calls}"\n', encoding="utf-8")
@@ -124,6 +124,28 @@ def test_with_the_pi_harness_the_login_is_the_one_of_pi_and_not_codex(tmp_path: 
     assert not any(line.startswith("codex") for line in calls)
     assert "/login" in done.stdout and "Pi login found" in done.stdout
     assert (tmp_path / "home" / ".pi" / "agent" / "auth.json").is_file()
+
+
+def test_the_person_is_told_what_to_do_in_pi_before_it_opens_and_what_was_found_after(tmp_path: Path) -> None:
+    env = _fakes(tmp_path)
+    _config(env, {"active_provider": "openai", "harness": "pi"})
+    done = _run(env, terminal=True)
+    assert done.returncode == 0, done.stderr
+    before = done.stdout.split("Pi login found")[0]
+    for words in ("type /login and choose ChatGPT (OpenAI)", "not Anthropic", "leave Pi with Ctrl+C (or type /quit)",
+                  "This operation was aborted", "--auth-method api_key"):
+        assert words in before, words
+    assert "Pi login found: openai (" in done.stdout
+
+
+def test_a_login_with_only_anthropic_is_not_found_and_says_what_it_holds(tmp_path: Path) -> None:
+    env = _fakes(tmp_path, login='{"anthropic":{"type":"oauth","access":"synthetic"}}')
+    _config(env, {"active_provider": "openai", "harness": "pi"})
+    done = _run(env, terminal=True)
+    assert done.returncode == 1
+    assert "Pi login found" not in done.stdout
+    assert "sign-in of: anthropic" in done.stderr and "may be billed per token" in done.stderr
+    assert "synthetic" not in done.stdout + done.stderr
 
 
 def test_the_login_arguments_are_the_ones_of_the_wizard() -> None:
@@ -216,7 +238,11 @@ def _home(tmp_path: Path, config: dict, *, codex: bool = False, pi: str | None =
 @pytest.mark.parametrize("wrapper", [WRAPPER_SH, WRAPPER_PS1], ids=lambda p: p.name)
 def test_the_snapshot_reads_the_login_of_pi_when_the_harness_is_pi(tmp_path: Path, wrapper: Path) -> None:
     config = {"active_provider": "openai", "harness": "pi", "providers": {"openai": {"auth_method": "subscription"}}}
-    assert _snapshot(wrapper, _home(tmp_path, config, pi="{}")) == "1 1 0"
+    assert _snapshot(wrapper, _home(tmp_path, config, pi='{"openai":{"type":"oauth"}}')) == "1 1 0"
+    # a login of another service in Pi's file (Anthropic's) is not the sign-in of this provider
+    other = tmp_path / "other"
+    other.mkdir()
+    assert _snapshot(wrapper, _home(other, config, pi='{"anthropic":{"type":"oauth"}}')) == "1 0 0"
 
 
 @pytest.mark.parametrize("wrapper", [WRAPPER_SH, WRAPPER_PS1], ids=lambda p: p.name)
@@ -232,10 +258,10 @@ def test_a_codex_login_is_not_a_login_for_the_pi_harness(tmp_path: Path, wrapper
 ])
 def test_without_the_pi_harness_the_snapshot_still_reads_the_login_of_codex(
         tmp_path: Path, wrapper: Path, config: dict) -> None:
-    assert _snapshot(wrapper, _home(tmp_path, config, codex=True, pi="{}")) == "1 1 0"
+    assert _snapshot(wrapper, _home(tmp_path, config, codex=True, pi='{"openai":{"type":"oauth"}}')) == "1 1 0"
     other = tmp_path / "other"
     other.mkdir()
-    assert _snapshot(wrapper, _home(other, config, pi="{}")) == "1 0 0"
+    assert _snapshot(wrapper, _home(other, config, pi='{"openai":{"type":"oauth"}}')) == "1 0 0"
 
 
 @pytest.mark.parametrize("wrapper", [WRAPPER_SH, WRAPPER_PS1], ids=lambda p: p.name)
@@ -256,4 +282,7 @@ def test_the_owner_of_the_pi_login_is_the_user_or_root_in_both_wrappers() -> Non
     for wrapper in (WRAPPER_SH, WRAPPER_PS1):
         script = _snapshot_script(wrapper)
         assert "s.uid===process.getuid()||s.uid===0" in script and "lstatSync" in script
-        assert "readFileSync(p" not in script and "readFileSync(\"/jht_home/.pi" not in script   # the login is never opened
+        # the login is opened only after lstat says a regular file of a sane size, and only its entry names are used (never printed)
+        assert script.index("lstatSync(p)") < script.index("readFileSync(p")
+        assert "s.size<=262144" in script and "process.stdout.write" in script
+        assert "console.log(d" not in script and "write(d" not in script

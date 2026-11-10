@@ -560,12 +560,15 @@ if ($ContainerRuntime -eq 'podman') {
 $RuntimeManifest = Join-Path $RuntimeDir '.runtime-integrity'
 $RuntimeImageFile = Join-Path $RuntimeDir 'runtime-image'
 $RuntimeTierFile = Join-Path $RuntimeDir 'runtime-tier'
+$RuntimeTierIntegrity = Join-Path $RuntimeDir '.runtime-tier-integrity'
 $BrokerLegacyMarker = Join-Path $RuntimeDir '.broker-legacy-migrated'
+$BrokerMadeMarker = Join-Path $RuntimeDir '.broker-made'
 $NodeEntry   = if ($env:JHT_NODE_ENTRY)     { $env:JHT_NODE_ENTRY }     else { '/app/cli/bin/jht.js' }
 $RawBaseOverride = if ($env:JHT_RAW_BASE) { $env:JHT_RAW_BASE.TrimEnd('/') } else { '' }
 $ReleaseRef = if ($env:JHT_BRANCH) { $env:JHT_BRANCH } else { 'production' }
 $DefaultRuntimeImage = 'ghcr.io/leopu00/jht@sha256:fa78c975c04dd5f95d6225a35c8c3bb9646f8ef14b32c8ca558d5332de0cce00'
 $CoreImageDigest = ''
+$ExtrasImageDigest = ''
 $DefaultRuntimeVersion = '0.4.0'
 $GameControlDir = if ($env:JHT_GAME_CONTROL_DIR) { $env:JHT_GAME_CONTROL_DIR } else { Join-Path $env:APPDATA 'Godot\app_userdata\Job Hunter Team\client' }
 $GameExecutable = if ($env:JHT_GAME_EXECUTABLE) { $env:JHT_GAME_EXECUTABLE } else { Join-Path $env:LOCALAPPDATA 'Programs\Job Hunter Team\job-hunter-team.exe' }
@@ -728,7 +731,7 @@ function Test-RuntimePathAuthority {
 # `<name>=<sha256>`): the desktop app checks the main manifest key by key and must not meet a key it does not know. A helper is
 # dot-sourced only while the file still matches its line there. A runtime that has none yet gets it from the release origin the
 # first time it is needed (the `integration` command) and at the end of every upgrade.
-$RuntimeHelpers = @('jht-integration.ps1', 'jht-tools.ps1')
+$RuntimeHelpers = @('jht-integration.ps1', 'jht-tools.ps1', 'configure-podman-windows-network.ps1', 'wsl-interop-connect-proxy.py')
 $RuntimeHelpersManifest = Join-Path $RuntimeDir '.runtime-helpers'
 
 function Get-RuntimeHelperHash {
@@ -783,7 +786,7 @@ function Install-RuntimeHelpers {
       try {
         Invoke-WebRequest -UseBasicParsing -Uri "$base/scripts/$name" -OutFile $temp
         $text = [IO.File]::ReadAllText($temp)
-        [scriptblock]::Create($text) | Out-Null
+        if ($name -like '*.ps1') { [scriptblock]::Create($text) | Out-Null }
         if ($text -notmatch '(?m)^# JHT_RUNTIME_HELPER=1\r?$') { throw "$name lacks the helper marker" }
         Publish-JhtFile -Destination (Join-Path $RuntimeDir $name) -Bytes ([IO.File]::ReadAllBytes($temp))
       } finally { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue }
@@ -813,9 +816,6 @@ function Write-RuntimeManifest {
     $runtimeImageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $RuntimeImageFile).Hash.ToLowerInvariant()
     $content += "runtime-image=$runtimeImageHash`n"
   }
-  if (Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf) {
-    $content += "runtime-tier=$((Get-FileHash -Algorithm SHA256 -LiteralPath $RuntimeTierFile).Hash.ToLowerInvariant())`n"
-  }
   [IO.File]::WriteAllText($temp, $content, [Text.UTF8Encoding]::new($false))
   Move-Item -LiteralPath $temp -Destination $RuntimeManifest -Force
 }
@@ -840,10 +840,10 @@ function Test-RuntimeBundleTrusted {
     }
     $pinPresent = Test-Path -LiteralPath $RuntimeImageFile -PathType Leaf
     if ($pinPresent) { $expectedKeys += 'runtime-image' }
-    # runtime-tier: written by the installer when the release has a core image. A manifest that still attests a tier file taken away
-    # is a `tools switch` cut in half: the runtime is the whole image, and the next manifest drops the line.
+    # runtime-tier: written by the installer when the release has a core image, and attested in a file of its own
+    # (.runtime-tier-integrity), not here: the app compares the exact set of keys of this manifest. An integrity file without a tier
+    # file is a `tools switch` cut in half: the runtime is the whole image.
     $tierPresent = Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf
-    if ($tierPresent -or $values.ContainsKey('runtime-tier')) { $expectedKeys += 'runtime-tier' }
     if ($values.Count -ne $expectedKeys.Count -or @($values.Keys | Where-Object { $_ -notin $expectedKeys }).Count -ne 0) { return $false }
     $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $ComposeFile).Hash.ToLowerInvariant()
     $wrapperActual = (Get-FileHash -Algorithm SHA256 -LiteralPath $WrapperPath).Hash.ToLowerInvariant()
@@ -863,7 +863,8 @@ function Test-RuntimeBundleTrusted {
     if ($tierPresent) {
       if (-not (Test-ProtectedRuntimeNode $RuntimeTierFile)) { return $false }
       if ($pinPresent -or -not $CoreImageDigest) { return $false }
-      if ($values.'runtime-tier' -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $RuntimeTierFile).Hash.ToLowerInvariant()) { return $false }
+      if (-not (Test-ProtectedRuntimeNode $RuntimeTierIntegrity)) { return $false }
+      if (([IO.File]::ReadAllText($RuntimeTierIntegrity).Trim()) -ne "runtime-tier=$((Get-FileHash -Algorithm SHA256 -LiteralPath $RuntimeTierFile).Hash.ToLowerInvariant())") { return $false }
       if ([IO.File]::ReadAllText($RuntimeTierFile).TrimEnd("`r", "`n") -ne 'core') { return $false }
       $script:TrustedRuntimeImage = "ghcr.io/leopu00/jht@$CoreImageDigest"
     }
@@ -936,7 +937,13 @@ function Assert-TrustedRuntime {
   if (-not (Test-Path -LiteralPath $RuntimeDir)) {
     if (-not (Install-ProtectedRuntimeFromRelease)) { throw 'protected host runtime bootstrap failed' }
   }
-  if (-not (Test-RuntimeBundleTrusted)) { throw 'untrusted host runtime path, owner, reparse point or SHA-256' }
+  if (-not (Test-RuntimeBundleTrusted)) {
+    # A manifest that is not there at all is an install that never finished, not a file somebody changed: said as what it is.
+    if (-not (Test-Path -LiteralPath $RuntimeManifest)) {
+      throw "Job Hunter Team non e' installato del tutto: nella cartella del runtime manca il file di integrita (un'installazione interrotta?). Rilancia l'installer."
+    }
+    throw 'untrusted host runtime path, owner, reparse point or SHA-256'
+  }
 }
 
 # Deterministic, side-effect-free seam for the Windows security regression.
@@ -947,9 +954,18 @@ if ($env:JHT_RUNTIME_AUTHORITY_SELFTEST -eq '1') {
 }
 
 # ── Verifiche pre-flight ──────────────────────────────────────────────────
+# Why the private home is refused: a folder that is not there yet is a team that was never installed (the ACL of a folder that does not
+# exist cannot be read, and «ACL is not owner-only» sent the person to look at permissions); only a folder that is there is an ACL.
+function Get-JhtHomeAclFailure {
+  if (-not (Test-Path -LiteralPath $JhtHome)) {
+    return "Job Hunter Team non e' ancora installato: la cartella $JhtHome non esiste. Lancia l'installer, poi 'jht setup'."
+  }
+  return "JHT_HOME ACL is not owner-only: $JhtHome"
+}
+
 function Require-PrivateJhtHomeAcl {
   if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) {
-    throw "JHT_HOME ACL is not owner-only: $JhtHome"
+    throw (Get-JhtHomeAclFailure)
   }
 }
 
@@ -984,7 +1000,7 @@ function Require-ComposeFile {
 function Invoke-Compose {
   [CmdletBinding(PositionalBinding=$false)]
   param([switch]$NoInput, [string]$InputText, [Parameter(ValueFromRemainingArguments)] $Args)
-  if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) { throw "JHT_HOME ACL is not owner-only: $JhtHome" }
+  if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) { throw (Get-JhtHomeAclFailure) }
   Assert-TrustedRuntime
   # Docker Desktop Windows accetta forward-slash o backslash. project-directory
   # punta al runtime dir per bind-mount relativi (anche se compose qui e'
@@ -1017,9 +1033,10 @@ function Stop-OnFailedComposeUp {
 function Invoke-PodmanServicesUpInTurn {
   if ($ContainerRuntime -ne 'podman') { return 0 }
   $definition = Get-Content -LiteralPath $ComposeFile -Raw
+  # The broker only if it was made before (see Ensure-Broker): `up` never makes it.
   foreach ($service in @($BrokerContainer)) {
-    if ($definition -notmatch "(?m)^  $([regex]::Escape($service)):") { continue }
-    Invoke-Compose 'up' '-d' $service | Out-Host
+    if ($definition -notmatch "(?m)^  $([regex]::Escape($service)):" -or -not (Test-Path -LiteralPath $BrokerMadeMarker)) { continue }
+    Invoke-Compose '--profile' 'broker' 'up' '-d' '--no-deps' $service | Out-Host
     if ($LASTEXITCODE -ne 0) { return $LASTEXITCODE }
   }
   return 0
@@ -1088,6 +1105,23 @@ function Invoke-HelpWithoutDocker {
   }
   Write-LocalHelp
   return 0
+}
+
+# `jht integration --help`: its usage line, not the generic help of the host. Fixed text: the command lives in a helper that
+# is fetched only when it is needed, and a help never fetches anything.
+function Write-IntegrationHelp {
+  [Console]::Out.WriteLine(@'
+Uso: jht integration <comando>
+
+  list [--json]                   le integrazioni e il loro stato
+  status [ID] [--json]            lo stato di una, o di tutte
+  add ID [--json]                 aggiunge un'integrazione
+  remove ID [--purge --yes] [--json]
+                                  la toglie; --purge cancella anche i suoi dati (serve --yes)
+
+Gli ID ammessi sono quelli che mostra `jht integration list`. Niente si scarica o si accende
+finche' non lo chiedi con `add`.
+'@)
 }
 
 function Test-HostCommandUsesLocalHelp {
@@ -1208,7 +1242,7 @@ function Get-RunningComposeServiceId {
   if (-not $expectedProject) { $script:ServiceLookupReason = 'the compose project name could not be read'; return $null }
   $files = @('-f', $ComposeFile)
   if ($ContainerRuntime -eq 'podman') { $files += @('-f', $PodmanComposeFile) }
-  $composeArgs = @('compose') + $files + @('--project-directory', $RuntimeDir, '--profile', 'telegram', 'ps', '-q')
+  $composeArgs = @('compose') + $files + @('--project-directory', $RuntimeDir, '--profile', 'telegram', '--profile', 'broker', 'ps', '-q')
   if ($ContainerRuntime -ne 'podman') { $composeArgs += $Service }
   $ids = @(& { $ErrorActionPreference = 'Continue'; & docker @composeArgs 2>$null } | ForEach-Object { "$($_)".Trim() } | Where-Object { $_ })
   $psCode = $LASTEXITCODE
@@ -1305,7 +1339,7 @@ const providers=config.providers||{}; const entry=providers[provider]||{};
 const configured=["claude","anthropic","codex","openai","kimi","moonshot"].includes(provider)
   && (entry.auth_method||"subscription")==="subscription";
 const markers={claude:"/jht_home/.claude/.credentials.json",anthropic:"/jht_home/.claude/.credentials.json",codex:"/jht_home/.codex/auth.json",openai:"/jht_home/.codex/auth.json",kimi:"/jht_home/.kimi/credentials/kimi-code.json",moonshot:"/jht_home/.kimi/credentials/kimi-code.json"};
-process.stdout.write(`${configured?1:0} ${(config.harness==="pi"&&(provider==="openai"||provider==="codex")?((p)=>{try{const s=fs.lstatSync(p);return s.isFile()&&s.size>0&&(s.uid===process.getuid()||s.uid===0)}catch{return false}})("/jht_home/.pi/agent/auth.json"):markers[provider]&&fs.existsSync(markers[provider]))?1:0} ${fs.existsSync("/jht_home/profile/welcomed.flag")?1:0}`);
+process.stdout.write(`${configured?1:0} ${(config.harness==="pi"&&(provider==="openai"||provider==="codex")?((p)=>{try{const s=fs.lstatSync(p);if(!(s.isFile()&&s.size>0&&s.size<=262144&&(s.uid===process.getuid()||s.uid===0)))return false;const d=JSON.parse(fs.readFileSync(p,"utf8"));return!!d&&typeof d==="object"&&!Array.isArray(d)&&["openai"].some((n)=>!!d[n]&&typeof d[n]==="object"&&Object.keys(d[n]).length>0)}catch{return false}})("/jht_home/.pi/agent/auth.json"):markers[provider]&&fs.existsSync(markers[provider]))?1:0} ${fs.existsSync("/jht_home/profile/welcomed.flag")?1:0}`);
 '@
     # Every native output here is read whole and then cut: see Get-RunningComposeServiceId (T79).
     # The script goes on stdin, never as an argument: Windows PowerShell 5.1 drops the double quotes
@@ -1418,8 +1452,8 @@ function Invoke-AgentControl {
 
 # Autorizzazione a una candidatura, dal desktop (`jht desktop-apply record ID INSTANT DESTINATION`). Il CLOSER
 # invia solo cio' che il broker ha registrato, e il broker registra solo da canali che gli agenti non hanno:
-# l'host e' uno. Come Invoke-AgentControl NON avvia mai niente: col broker spento o non attestato risponde col
-# codice chiuso apply_record_no_broker (113). Ogni campo e' chiuso QUI (confronto che distingue le maiuscole,
+# l'host e' uno. Come Invoke-AgentControl NON avvia mai niente, salvo il primo clic di una persona (se il broker non c'e' ancora lo crea
+# Ensure-Broker, solo il suo container): col broker non attestato risponde col codice chiuso apply_record_no_broker (113). Ogni campo e' chiuso QUI (confronto che distingue le maiuscole,
 # cifre ASCII; fine stringa con \z: in .NET `$` accetta anche un a capo finale) prima di finire in una riga di comando; la risposta e' una riga sola, mai il testo del broker.
 # Il codice sta in $script:DesktopApplyExitCode, come per Invoke-AgentControl.
 $script:DesktopApplyExitCode = 2
@@ -1436,7 +1470,11 @@ function Invoke-DesktopApply {
     return
   }
   $brokerId = $null
-  if (Test-RuntimeBundleTrusted) { $brokerId = Get-RunningComposeServiceId $BrokerContainer }
+  if (Test-RuntimeBundleTrusted) {
+    $brokerId = Get-RunningComposeServiceId $BrokerContainer
+    # The first click of a person is the one thing that makes the broker here (Ensure-Broker): only its container, and only if the engine answers.
+    if (-not $brokerId -and (Test-DockerReachable) -and (Ensure-Broker -Quiet 6>$null) -eq 0) { $brokerId = Get-RunningComposeServiceId $BrokerContainer }
+  }
   if (-not $brokerId) {
     [Console]::Out.WriteLine('{"ok":false,"error":"apply_record_no_broker"}')
     $script:DesktopApplyExitCode = 113
@@ -1458,6 +1496,111 @@ function Test-BrokerUp {
   return [bool](Get-RunningComposeServiceId $BrokerContainer)
 }
 
+# The broker (the mail password, the notary of the authorisations to apply) is made at the first thing that needs it (`jht mail setup`, the
+# first record of an authorisation, the link of the site, Telegram) and by nothing else: `jht up` leaves it out unless a marker says it was
+# made before. `jht` has mounted the empty socket volume since it was made, so making the broker never recreates the team.
+# On Podman its proxy (3129) and its start at boot are made first, by the network script of the setup, which is a host script like the others
+# (attested in .runtime-helpers, fetched here the first time).
+# What the steps of Ensure-Broker print goes to the console, or nowhere for the app (-Quiet: its answer is one JSON line).
+function Write-EnsureLine {
+  param([Parameter(ValueFromPipeline)]$Line, [switch]$Quiet)
+  process { if (-not $Quiet) { $Line | Out-Host } }
+}
+
+function Invoke-BrokerNetwork {
+  param([switch]$Quiet)
+  if ($ContainerRuntime -ne 'podman') { return $true }
+  foreach ($name in @('configure-podman-windows-network.ps1', 'wsl-interop-connect-proxy.py')) {
+    if (-not (Test-RuntimeHelperDeclared $name)) {
+      if (-not (Install-RuntimeHelpers)) { Write-Err 'broker_network_unavailable: non riesco a scaricare gli script del proxy della posta. Cosa fare: jht upgrade'; return $false }
+      break
+    }
+  }
+  if (-not (Test-RuntimeHelpersTrusted) -or -not (Test-RuntimeHelperDeclared 'configure-podman-windows-network.ps1')) {
+    Write-Err 'broker_network_unavailable: gli script del proxy della posta non sono attestati. Cosa fare: jht upgrade'
+    return $false
+  }
+  $shell = (Get-Process -Id $PID).Path
+  & $shell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $RuntimeDir 'configure-podman-windows-network.ps1') `
+    -MachineName $env:CONTAINER_CONNECTION -BridgeScript $PodmanMachineBridgePath -WithBroker | Write-EnsureLine -Quiet:$Quiet
+  if ($LASTEXITCODE -ne 0) { Write-Err "broker_network_unavailable: il proxy della posta non e' pronto (codice $LASTEXITCODE)."; return $false }
+  return $true
+}
+
+# What stands under the broker's name: 'running' | 'stopped' (a container of this project and service that is not running) | 'absent' |
+# 'foreign' (a container of that name that is not this project's broker, or more than one, or one that cannot be read: not touched,
+# neither adopted nor replaced). The same three-way answer as the POSIX wrapper (attested / absent / present and not attestable).
+function Get-BrokerContainerState {
+  $expectedProject = Get-ComposeProjectName
+  if (-not $expectedProject) { return 'foreign' }
+  $ids = @(& { $ErrorActionPreference = 'Continue'; & docker ps -aq --filter "name=^$BrokerContainer$" 2>$null } | ForEach-Object { "$($_)".Trim() } | Where-Object { $_ })
+  if ($ids.Count -eq 0) { return 'absent' }
+  if ($ids.Count -ne 1 -or $ids[0] -notmatch '^[0-9a-fA-F]{12,64}$') { return 'foreign' }
+  $detailLines = @(& { $ErrorActionPreference = 'Continue'; & docker inspect --type container $ids[0] --format '{{.State.Running}}|{{json .Config.Labels}}' 2>$null })
+  $details = if ($detailLines.Count) { [string]$detailLines[0] } else { '' }
+  $cut = if ($details) { $details.IndexOf('|') } else { -1 }
+  if ($cut -lt 0) { return 'foreign' }
+  $labelsJson = $details.Substring($cut + 1)
+  if ((Get-ComposeLabel $labelsJson 'com.docker.compose.project') -ne $expectedProject) { return 'foreign' }
+  if ((Get-ComposeLabel $labelsJson 'com.docker.compose.service') -ne $BrokerContainer) { return 'foreign' }
+  if ($details.Substring(0, $cut).Trim() -eq 'true') { return 'running' }
+  return 'stopped'
+}
+
+# 0 when the broker runs and answers.
+function Ensure-Broker {
+  param([switch]$Quiet)
+  if (Get-RunningComposeServiceId $BrokerContainer) { return 0 }
+  $brokerState = Get-BrokerContainerState
+  if ($brokerState -eq 'foreign') {
+    Write-Err 'broker_unavailable: il broker dei segreti esiste ma non e'' attestabile come nostro: non lo tocco.'
+    return 1
+  }
+  if ((Get-Content -LiteralPath $ComposeFile -Raw) -notmatch "(?m)^  $([regex]::Escape($BrokerContainer)):") {
+    Write-Err 'broker_unavailable: il runtime installato e'' piu'' vecchio e non ha il broker dei segreti.'
+    Write-Err 'Cosa fare: jht upgrade'
+    return 1
+  }
+  Write-Info 'Preparo il servizio della posta (si crea solo la prima volta che serve)...'
+  if (-not (Invoke-BrokerNetwork -Quiet:$Quiet)) { return 1 }
+  Invoke-Compose '--profile' 'broker' 'up' '-d' '--no-deps' $BrokerContainer | Write-EnsureLine -Quiet:$Quiet
+  if ($LASTEXITCODE -ne 0) { Write-Err 'broker_start_failed: il servizio della posta non e'' partito.'; Write-Err 'Cosa fare: riprova il comando'; return 1 }
+  $ready = $false
+  for ($i = 0; $i -lt 30 -and -not $ready; $i++) {
+    $brokerId = Get-RunningComposeServiceId $BrokerContainer
+    if ($brokerId) {
+      $null = & { $ErrorActionPreference = 'Continue'; & docker exec $brokerId jht-broker-admin secrets status 2>&1 }
+      $ready = ($LASTEXITCODE -eq 0)
+    }
+    if (-not $ready) { Start-Sleep -Seconds 1 }
+  }
+  if (-not $ready) { Write-Err 'broker_start_failed: il servizio della posta non risponde dopo 30 secondi.'; Write-Err 'Cosa fare: riprova il comando'; return 1 }
+  New-Item -ItemType File -Path $BrokerMadeMarker -Force -ErrorAction SilentlyContinue | Out-Null
+  $null = Invoke-BrokerMigrateLegacyOnce
+  $null = Initialize-BrokerWebAuthorisations
+  return 0
+}
+
+# After `up`: a broker made before comes back with the team (`down` removes its container); one that an older install made is adopted.
+function Resume-Broker {
+  $brokerState = Get-BrokerContainerState
+  if ($brokerState -eq 'foreign') {
+    # a container of that name that is not this project's broker is neither adopted nor started over
+    if (Test-Path -LiteralPath $BrokerMadeMarker) { Write-Warn "broker_restart_failed: il broker dei segreti non e' attestabile come nostro: non lo tocco. Cosa fare: jht mail status" }
+    return
+  }
+  if (-not (Test-Path -LiteralPath $BrokerMadeMarker)) {
+    if ($brokerState -eq 'absent') { return }
+    New-Item -ItemType File -Path $BrokerMadeMarker -Force -ErrorAction SilentlyContinue | Out-Null
+  }
+  if ($brokerState -ne 'running') {
+    Invoke-Compose '--profile' 'broker' 'up' '-d' '--no-deps' $BrokerContainer | Out-Host
+    if ($LASTEXITCODE -ne 0) { Write-Warn "broker_restart_failed: il servizio della posta non e' ripartito. Cosa fare: jht mail status" }
+  }
+  $null = Invoke-BrokerMigrateLegacyOnce
+  Initialize-BrokerWebAuthorisations
+}
+
 # L'host amministra il broker con exec di jht-broker-admin; un segreto passa
 # solo su stdin ($InputText), mai negli argomenti.
 # I chiamanti passano SEMPRE -AdminArgs per nome (come Invoke-TelegramAdmin): InputText e' il primo
@@ -1467,8 +1610,13 @@ function Invoke-BrokerAdmin {
   param([string]$InputText = $null, [Parameter(ValueFromRemainingArguments)] [string[]]$AdminArgs)
   $brokerId = Get-RunningComposeServiceId $BrokerContainer
   if (-not $brokerId) {
-    Write-Err 'broker_unavailable: il broker dei segreti non e'' attivo.'
-    Write-Err 'Cosa fare: jht up'
+    if (Test-Path -LiteralPath $BrokerMadeMarker) {
+      Write-Err 'broker_unavailable: il broker dei segreti non e'' attivo.'
+      Write-Err 'Cosa fare: jht up'
+    } else {
+      Write-Err 'broker_unavailable: il servizio della posta non c''e'' ancora: si crea la prima volta che serve.'
+      Write-Err 'Cosa fare: jht mail setup'
+    }
     return 1
   }
   # Out-Host: la risposta JSON va a chi ha lanciato jht, non nel valore di
@@ -1902,6 +2050,8 @@ function Invoke-TelegramLifecycleSteps {
     switch -CaseSensitive ($step) {
       '' { continue }
       'start' {
+        $brokerCode = Ensure-Broker
+        if ($brokerCode -ne 0) { return $brokerCode }
         Invoke-Compose '--profile' 'telegram' up '-d' $TelegramContainer | Out-Host
         if ($LASTEXITCODE -ne 0) { return $LASTEXITCODE }
         if ((Confirm-TelegramLifecycle 'start') -ne 0) { return 1 }
@@ -1940,6 +2090,31 @@ function Invoke-AvailableTelegramLifecycle {
   if ((Get-Content -LiteralPath $ComposeFile -Raw) -notmatch '(?m)^  jht-telegram:') { return 0 }
   if ($Action -eq 'resume' -and (Test-TelegramStateVolumeAbsent)) { return 0 }
   return Invoke-TelegramLifecycle @($Action)
+}
+
+# Does the Telegram service hold a bot? Asked of the RUNNING service, read-only (an exec: no run container, no volume):
+# $true = at least one bot, $false = none, $null = it cannot be told (the service is off, not attestable, another answer).
+# The one place that says whether Telegram is configured: `jht status` and `jht integration` both ask it.
+function Get-TelegramBotsConfigured {
+  $id = Get-RunningComposeServiceId $TelegramContainer
+  if (-not $id) { return $null }
+  $out = ((& { $ErrorActionPreference = 'Continue'; & docker exec $id jht-telegram-admin bots status 2>$null }) -join "`n")
+  if ($LASTEXITCODE -ne 0 -or $out -notmatch '"ok":\s*true') { return $null }
+  return [bool]($out -match '"present"')
+}
+
+# The line `jht status` says about Telegram. A status command creates nothing and prints nothing of compose: no volume,
+# no run container, only questions to the engine. «Never configured» (no state volume) and «no bot» are said in one line.
+function Write-TelegramStatusLine {
+  if ((Get-Content -LiteralPath $ComposeFile -Raw) -notmatch '(?m)^  jht-telegram:') { return 0 }
+  if (Test-TelegramStateVolumeAbsent) { Write-Host 'Telegram non attivo: Telegram non configurato.'; return 0 }
+  $configured = Get-TelegramBotsConfigured
+  if ($null -eq $configured) {
+    Write-Host 'Telegram: stato non verificabile adesso (servizio spento o non raggiungibile). Dettagli: jht telegram status'
+    return 0
+  }
+  if (-not $configured) { Write-Host 'Telegram non attivo: Telegram non configurato.'; return 0 }
+  return (Invoke-TelegramAdmin -AdminArgs @('bots', 'status'))
 }
 
 function Invoke-TelegramLifecycle {
@@ -2086,7 +2261,7 @@ function Remove-BrokerResetData {
     Write-Err 'reset: non riesco a determinare il progetto Compose; i volumi del broker non sono stati toccati.'
     return 1
   }
-  Invoke-Compose '--profile' 'telegram' down
+  Invoke-Compose '--profile' 'telegram' '--profile' 'broker' down
   if ($LASTEXITCODE -ne 0) {
     Write-Err 'reset: non riesco a fermare il runtime; i volumi del broker non sono stati toccati.'
     return 1
@@ -2137,6 +2312,12 @@ function Remove-BrokerResetData {
       Write-Info "Cancellato: marcatore migrazione broker $BrokerLegacyMarker"
     } catch {
       Write-Err "reset: impossibile cancellare il marcatore migrazione broker $BrokerLegacyMarker."
+      $failed = $true
+    }
+  }
+  if (Test-Path -LiteralPath $BrokerMadeMarker) {
+    try { Remove-Item -LiteralPath $BrokerMadeMarker -Force -ErrorAction Stop } catch {
+      Write-Err "reset: impossibile cancellare il marcatore del broker $BrokerMadeMarker."
       $failed = $true
     }
   }
@@ -2451,6 +2632,8 @@ function Invoke-MailSetup {
   $adminArgs = @('mailbox', 'setup', '--user', $user, '--admission', $admission)
   if ($imapHost) { $adminArgs += @('--imap-host', $imapHost) }
   if ($smtpHost) { $adminArgs += @('--smtp-host', $smtpHost) }
+  $made = Ensure-Broker
+  if ($made -ne 0) { $password = $null; return $made }
   $code = Invoke-BrokerAdmin -InputText $password -AdminArgs $adminArgs
   $password = $null
   return $code
@@ -3281,6 +3464,57 @@ function New-UpgradePrune {
   return [ordered]@{ removed = $Removed; freedBytes = $Freed; refused = $Refused; inUse = $InUse; kept = @('current', 'previous'); skipped = $Skipped }
 }
 
+# ── Nucleo e immagine piena nell'upgrade (P7) ─────────────────────────────
+# Come nel wrapper POSIX: un'installazione a livello `core` (file runtime-tier) gira sul nucleo, e l'immagine piena puo' essere gia'
+# scaricata da `jht tools`. L'upgrade porta avanti il nucleo (il digest lo dice il wrapper candidato, non quello in uso) e, solo se
+# la piena di oggi e' gia' qui, anche la piena; la pulizia delle vecchie le tiene tutte e due.
+$script:UpgradeCoreRef = ''
+$script:UpgradeFullRef = ''
+$script:UpgradeFullKeep = ''
+
+function Get-UpgradeCandidateConstant {
+  param([string]$File, [string]$Name)
+  $line = Select-String -LiteralPath $File -Pattern ('^\$' + $Name + " = '([^']*)'\s*$") | Select-Object -First 1
+  if ($line) { return $line.Matches[0].Groups[1].Value }
+  return $null
+}
+
+# $false se il rilascio non porta un nucleo leggibile o non lo porta piu': un'installazione a livello core non si trasforma a meta'
+# di un upgrade (si reinstalla), e un digest malformato non si usa.
+function Initialize-UpgradeTierPlan {
+  param([string]$Wrapper)
+  $script:UpgradeCoreRef = ''; $script:UpgradeFullRef = ''; $script:UpgradeFullKeep = ''
+  if (-not (Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf)) { return $true }
+  $core = Get-UpgradeCandidateConstant $Wrapper 'CoreImageDigest'
+  $full = Get-UpgradeCandidateConstant $Wrapper 'DefaultRuntimeImage'
+  if ($core -cnotmatch '^sha256:[0-9a-f]{64}$' -or $full -cnotmatch '^ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64}$') { return $false }
+  $script:UpgradeCoreRef = "ghcr.io/leopu00/jht@$core"
+  & { $ErrorActionPreference = 'Continue'; & docker image inspect $DefaultRuntimeImage *> $null }
+  if ($LASTEXITCODE -eq 0) { $script:UpgradeFullRef = $full }
+  return $true
+}
+
+# Dopo il commit: la piena nuova, se la vecchia era gia' qui. Non decide l'esito dell'upgrade: se non arriva, resta la vecchia e
+# `jht tools` la riscarica da solo.
+function Invoke-UpgradeFullPull {
+  $script:UpgradeFullKeep = ''
+  if (-not $script:UpgradeFullRef) { return }
+  if ($script:UpgradeFullRef -eq $DefaultRuntimeImage) { $script:UpgradeFullKeep = $script:UpgradeFullRef; return }
+  Write-UpgradeNote "Scarico l'immagine piena aggiornata..."
+  & { $ErrorActionPreference = 'Continue'; & docker pull $script:UpgradeFullRef *> $null }
+  if ($LASTEXITCODE -eq 0) { $script:UpgradeFullKeep = $script:UpgradeFullRef }
+  else { Write-UpgradeNote "full_pull_failed: l'immagine piena nuova non e' arrivata, resta la vecchia. Cosa fare: jht tools pull" }
+}
+
+# L'ID (senza prefisso) della piena che un'installazione a livello core tiene; niente se non e' qui.
+function Get-UpgradeTierKeepIds {
+  if (-not (Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf)) { return @() }
+  $ref = if ($script:UpgradeFullKeep) { $script:UpgradeFullKeep } else { $DefaultRuntimeImage }
+  $id = ((& { $ErrorActionPreference = 'Continue'; & docker image inspect --format '{{.Id}}' $ref 2>$null } | Select-Object -First 1) -as [string])
+  if ($id -and $id.Trim()) { return @(Get-PlainImageId $id) }
+  return @()
+}
+
 function Remove-OldJhtImages {
   param([string]$Current, [string]$Previous)
   $script:UpgradePrune = $null
@@ -3294,6 +3528,8 @@ function Remove-OldJhtImages {
   $unknown = @('', 'none', 'sconosciuta', 'unknown')
   if ($unknown -contains $currentId) { $script:UpgradePrune = New-UpgradePrune 'current-unidentified'; return }
   if ($unknown -contains $previousId) { $script:UpgradePrune = New-UpgradePrune 'previous-unidentified'; return }
+  # A livello core la piena gia' scaricata aspetta il passaggio: non e' una vecchia versione, si tiene.
+  $keepIds = @($previousId) + @(Get-UpgradeTierKeepIds)
   # La corrente deve essere davvero quella del container che gira adesso.
   if ((Get-PlainImageId (Get-UpgradeImage)) -ne $currentId) { $script:UpgradePrune = New-UpgradePrune 'current-not-running'; return }
   # Immagini di TUTTI i container, anche fermi. Se non si leggono: niente.
@@ -3312,7 +3548,7 @@ function Remove-OldJhtImages {
     $parts = ([string]$line).Trim() -split '\s+', 2
     if ($parts.Count -ne 2 -or $JhtImageRepositories -cnotcontains $parts[1]) { continue }
     $plain = Get-PlainImageId $parts[0]
-    if ($plain -eq $currentId -or $plain -eq $previousId -or $seen.ContainsKey($plain)) { continue }
+    if ($plain -eq $currentId -or $keepIds -contains $plain -or $seen.ContainsKey($plain)) { continue }
     $seen[$plain] = $true
     if ($inUse -contains $plain) { $busy++; continue }
     $size = [long]0
@@ -3558,6 +3794,9 @@ function Invoke-RuntimeUpgrade {
     } catch { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Runtime remoto non valido o non raggiungibile' $false; return 1 }
     if (-not (Invoke-UpgradeCompose $newCompose 'config' '-q')) { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Compose remoto non valido' $false; return 1 }
     $metadataChanged = -not ((Get-FileHash $newCompose).Hash -eq (Get-FileHash $ComposeFile).Hash) -or -not ((Get-FileHash $newWrapper).Hash -eq (Get-FileHash $WrapperPath).Hash)
+    if (-not (Initialize-UpgradeTierPlan $newWrapper)) { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Il rilascio non porta un nucleo valido per questa installazione: reinstalla' $false; return 1 }
+    # A livello core il nucleo candidato e' l'immagine di tutto l'upgrade (pull, avvio, verifica, broker), come per `up`.
+    if ($script:UpgradeCoreRef) { $env:JHT_IMAGE = $script:UpgradeCoreRef }
     $script:UpgradeRollbackDir = Join-Path $RuntimeDir ('.upgrade-rollback-' + [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() + '-' + $PID)
     New-Item -ItemType Directory -Path $script:UpgradeRollbackDir -ErrorAction Stop | Out-Null
     Copy-Item -LiteralPath $ComposeFile -Destination (Join-Path $script:UpgradeRollbackDir 'docker-compose.yml')
@@ -3591,8 +3830,11 @@ function Invoke-RuntimeUpgrade {
     # Il broker dei segreti (P1 del 08/10) usa la stessa immagine del team:
     # dopo il commit riparte con quella nuova. Non decide l'esito
     # dell'upgrade; se non parte, la posta resta chiusa finche' `jht up`.
-    if ((Get-Content -LiteralPath $ComposeFile -Raw) -match "(?m)^  $([regex]::Escape($BrokerContainer)):") {
-      if (-not (Invoke-UpgradeCompose $ComposeFile 'up' '-d' '--force-recreate' $BrokerContainer)) {
+    # Only if it is there (or was made once): an install that never used the mail does not get it from the upgrade.
+    $brokerThere = (Test-Path -LiteralPath $BrokerMadeMarker) -or [bool](@(& { $ErrorActionPreference = 'Continue'; & docker ps -aq --filter "name=^$BrokerContainer$" 2>$null }) | Where-Object { $_ })
+    if ($brokerThere -and (Get-Content -LiteralPath $ComposeFile -Raw) -match "(?m)^  $([regex]::Escape($BrokerContainer)):") {
+      New-Item -ItemType File -Path $BrokerMadeMarker -Force -ErrorAction SilentlyContinue | Out-Null
+      if (-not (Invoke-UpgradeCompose $ComposeFile '--profile' 'broker' 'up' '-d' '--force-recreate' '--no-deps' $BrokerContainer)) {
         Write-UpgradeNote "broker_restart_failed: il broker dei segreti non e' ripartito. Cosa fare: jht up"
       }
       $null = Invoke-BrokerMigrateLegacyOnce
@@ -3603,6 +3845,7 @@ function Invoke-RuntimeUpgrade {
     }
     # Solo qui: upgrade riuscito, container nuovo verificato e commit fatto.
     # Un errore della pulizia non deve mai far ripristinare un upgrade riuscito.
+    try { Invoke-UpgradeFullPull } catch { $script:UpgradeFullKeep = '' }
     try { Remove-OldJhtImages $candidateImage $oldImage } catch { $script:UpgradePrune = $null }
     $changed = ($candidateImage -ne $oldImage) -or $metadataChanged
     Write-UpgradeResult $true $changed 'complete' $oldVersion $oldImage $newVersion $candidateImage $false 'Nuova versione attiva e verificata' $false
@@ -3648,6 +3891,10 @@ $HelpRequested = @($Rest | Where-Object { $_ -in @('-h', '--help') }).Count -gt 
 # `agent-control` ne resta fuori: le sue forme sono chiuse e un `--help` fra i
 # suoi argomenti e' una richiesta da rifiutare con il suo codice, non aiuto.
 if ($HelpRequested -and $Sub -notin @('game', 'gui', 'agent-control', 'desktop-apply')) {
+  if ($Sub -ceq 'integration' -and $Rest.Count -eq 1) {
+    Write-IntegrationHelp
+    exit 0
+  }
   if (Test-HostCommandUsesLocalHelp $Sub) {
     Write-LocalHelp
     exit 0
@@ -3743,8 +3990,7 @@ switch ($Sub) {
     Stop-OnFailedComposeUp $LASTEXITCODE
     $telegramCode = Invoke-AvailableTelegramLifecycle 'resume'
     if ($telegramCode -ne 0) { exit $telegramCode }
-    $null = Invoke-BrokerMigrateLegacyOnce
-    Initialize-BrokerWebAuthorisations
+    Resume-Broker
     # The up went well (a failed one has already stopped jht with its code): 0, not the code of
     # whichever native ran last. The setup reads it (enable-podman-windows-runtime.ps1, T89).
     exit 0
@@ -3753,7 +3999,7 @@ switch ($Sub) {
   { $_ -in @('down', 'stop-container') } {
     Require-ComposeFile
     Require-Docker
-    Invoke-Compose '--profile' 'telegram' down
+    Invoke-Compose '--profile' 'telegram' '--profile' 'broker' down
     break
   }
 
@@ -3767,7 +4013,7 @@ switch ($Sub) {
   'recreate' {
     Require-ComposeFile
     Require-Docker
-    Invoke-Compose '--profile' 'telegram' down
+    Invoke-Compose '--profile' 'telegram' '--profile' 'broker' down
     if (-not (Repair-MountOwnership)) { exit 1 }
     if (-not (Initialize-TelegramLegacyInventory)) {
       Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'
@@ -3778,8 +4024,7 @@ switch ($Sub) {
     Stop-OnFailedComposeUp $LASTEXITCODE
     $telegramCode = Invoke-AvailableTelegramLifecycle 'resume'
     if ($telegramCode -ne 0) { exit $telegramCode }
-    $null = Invoke-BrokerMigrateLegacyOnce
-    Initialize-BrokerWebAuthorisations
+    Resume-Broker
     # The up went well (a failed one has already stopped jht with its code): 0, not the code of
     # whichever native ran last. The setup reads it (enable-podman-windows-runtime.ps1, T89).
     exit 0
@@ -3830,13 +4075,11 @@ switch ($Sub) {
 
   'tools' {
     Require-ComposeFile
-    # Same as `integration`: dot-sourced at script level; a helper that is missing is fetched only by `pull`.
+    # Same as `integration`: dot-sourced at script level. A helper that is missing is never fetched from here: these commands run by
+    # themselves after the install, and a download at the tip of the branch is not something to start without the person asking.
     if (-not (Test-RuntimeHelperDeclared 'jht-tools.ps1')) {
-      $mayFetch = $Rest.Count -gt 0 -and [string]$Rest[0] -ceq 'pull'
-      if (-not $mayFetch -or -not (Install-RuntimeHelpers)) {
-        Write-Err "script jht-tools.ps1 non ancora installato: 'jht upgrade' (o un 'jht tools pull') e riprova"
-        exit 1
-      }
+      Write-Err "script jht-tools.ps1 non ancora installato: 'jht upgrade' e riprova"
+      exit 1
     }
     Assert-TrustedRuntime
     . (Join-Path $RuntimeDir 'jht-tools.ps1')
@@ -3884,7 +4127,7 @@ switch ($Sub) {
     if (Test-ContainerUp) {
       & docker inspect $Container --format 'name={{.Name}} status={{.State.Status}} started={{.State.StartedAt}} image={{.Config.Image}}'
       if (-not [Console]::IsOutputRedirected) {
-        $telegramCode = Invoke-AvailableTelegramLifecycle 'status'
+        $telegramCode = Write-TelegramStatusLine
         if ($telegramCode -ne 0) { exit $telegramCode }
       }
     } else {
@@ -3946,7 +4189,7 @@ switch ($Sub) {
     Ensure-Up
     & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry $Sub @Rest
     $code = $LASTEXITCODE
-    if ($Sub -eq 'cloud' -and $Rest.Count -gt 0 -and $Rest[0] -eq 'pair' -and $code -eq 0) { Initialize-BrokerWebAuthorisations }
+    if ($Sub -eq 'cloud' -and $Rest.Count -gt 0 -and $Rest[0] -eq 'pair' -and $code -eq 0) { if ((Ensure-Broker) -eq 0) { Initialize-BrokerWebAuthorisations } }
     exit $code
     break
   }

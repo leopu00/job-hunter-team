@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# JHT_RUNTIME_HELPER=1
 """Local HTTP proxy that opens outbound sockets through Windows WSL interop."""
 
 from __future__ import annotations

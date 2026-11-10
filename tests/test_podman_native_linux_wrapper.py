@@ -43,6 +43,7 @@ def _source() -> str:
     cap = re.search(r"^PODMAN_NATIVE_UP_TIMEOUT=300\ncase .*?^esac\n", text, re.S | re.M)
     assert cap
     constants.append(cap.group(0))
+    constants.append('COMPOSE_ALL_PROFILES="telegram,broker"')  # the dry run names every profile: the broker's hash is asked too
     return "\n".join(constants + parts)
 
 

@@ -44,6 +44,9 @@ function Get-RunningComposeServiceId {
   if ($Service -eq 'jht') { return 'aaaaaaaaaaaa' }
   return 'bbbbbbbbbbbb'
 }
+# what stands under the broker's name (the real one reads the labels with docker inspect): a broker made before is there and runs,
+# on a clean install there is none
+function Get-BrokerContainerState { if (Test-Path -LiteralPath (Join-Path $RuntimeDir '.broker-made')) { return 'running' }; return 'absent' }
 """
 
 FAKE_DOCKER = r"""#!/bin/sh
@@ -72,9 +75,11 @@ def _wrapper_under_test(folder: Path) -> Path:
     return script
 
 
-def _run(tmp_path: Path, command: str, compose_up: int = 0):
+def _run(tmp_path: Path, command: str, compose_up: int = 0, broker_made: bool = True):
     runtime = tmp_path / "runtime"
     runtime.mkdir()
+    if broker_made:
+        (runtime / ".broker-made").write_text("", encoding="utf-8")  # a broker made before comes back with the team (Resume-Broker)
     (runtime / "docker-compose.yml").write_text(
         "services:\n  jht:\n    image: x\n  jht-broker:\n    image: x\n  jht-telegram:\n    image: x\n",
         encoding="utf-8")
@@ -119,6 +124,15 @@ def test_a_start_that_went_well_exits_zero_after_a_migration_with_nothing_to_mov
         f"`jht {command}` went well and exited {done.returncode}: the setup reads it as a team that did "
         f"not start\n{done.stdout[-1500:]}{done.stderr[-1500:]}"
     )
+
+
+@pytest.mark.parametrize("command", ["up", "recreate"])
+def test_a_start_on_a_clean_install_exits_zero_and_makes_no_broker_and_no_migration(tmp_path, command):
+    done, calls, marker = _run(tmp_path, command, broker_made=False)
+    assert done.returncode == 0, done.stdout[-1500:] + done.stderr[-1500:]
+    # the one look at the engine is the adoption check (`docker ps` for a broker an older install made): nothing is made or migrated
+    assert not any("legacy.py" in call or "--no-deps jht-broker" in call for call in calls), calls
+    assert not marker.exists() and not (tmp_path / "runtime" / ".broker-made").exists()
 
 
 @pytest.mark.parametrize("command", ["up", "recreate"])

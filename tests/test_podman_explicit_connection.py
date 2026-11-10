@@ -61,9 +61,10 @@ NAMED_EXCEPTIONS = {
         "it lists the machines by name, and a list has no connection",
     ),
     "uninstall-machine-rm": (
-        'machine rm --force "$UNINSTALL_MACHINE_NAME"',
+        'machine rm --force "$name"',
         lambda lines, index: True,
-        "the uninstall removes the machine it names, by its own variable",
+        "the uninstall removes the machine it is told to by name (the standard one, or the one the installer created), "
+        "and a `machine` command takes the machine as its argument: it has no --connection",
     ),
     "linux-unshare": (
         "unshare rm -rf -- ",
@@ -154,7 +155,7 @@ def test_a_named_exception_holds_only_where_its_proof_holds():
         '    "$podman_bin" info >/dev/null 2>&1\n'
         '  fi\n'
         '  "$podman_bin" machine rm --force "$OTHER_MACHINE"\n'
-        '  "$podman_bin" machine rm --force "$UNINSTALL_MACHINE_NAME"\n')
+        '  "$podman_bin" machine rm --force "$name"\n')
     assert total == 6
     # Outside the native guard, a bare info anywhere (the native compose check
     # is the rootless probe now, not an exception), and a machine named by any
