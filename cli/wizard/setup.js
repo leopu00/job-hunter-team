@@ -154,6 +154,7 @@ export async function runSetupWizard(prompter) {
       if (keptCmd) {
         const keptLogin = await runProviderLoginStep({
           cmdName: keptCmd, label: keptCmd === 'pi' ? 'Pi' : keptProvider.label, isVps: (process.env.JHT_HOST_TYPE || '').toLowerCase() === 'vps', prompter, t, tf,
+          provider: baseConfig.active_provider, model: baseConfig.providers?.[baseConfig.active_provider]?.model,
         });
         if (!keptLogin) {
           await prompter.outro(t('wizard.oauth.aborted'));
@@ -295,6 +296,7 @@ export async function runSetupWizard(prompter) {
   console.log(stepLine(2, 3, t('wizard.step.login')));
   const loggedIn = await runProviderLoginStep({
     cmdName: oauthCmd, label: harness === 'pi' ? 'Pi' : selectedProvider.label, isVps, prompter, t, tf,
+    provider: providerChoice, model,
   });
   if (!loggedIn) {
     await prompter.outro(t('wizard.oauth.aborted'));

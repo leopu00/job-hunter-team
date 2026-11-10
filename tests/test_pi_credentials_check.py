@@ -27,6 +27,9 @@ pytestmark = pytest.mark.skipif(
 
 # A key-shaped value built from parts: it must never reach an output.
 SECRET = "-".join(["synthetic", "key", "0000", "aaaa", "1111"])
+# What Pi writes after a sign-in, one entry per service (synthetic values): the ChatGPT account is `openai`, Anthropic's is `anthropic`.
+OPENAI_LOGIN = json.dumps({"openai": {"type": "oauth", "access": SECRET}})
+ANTHROPIC_LOGIN = json.dumps({"anthropic": {"type": "oauth", "access": SECRET, "refresh": SECRET}})
 
 
 def _home(tmp_path: Path, *, config: dict | None = None, login: str | None = None) -> Path:
@@ -113,18 +116,61 @@ def test_an_unreadable_config_without_a_login_is_refused(tmp_path: Path) -> None
     assert _check(home).returncode == 1
 
 
-def test_a_pi_login_is_enough_and_its_content_is_not_read(tmp_path: Path) -> None:
-    home = _home(tmp_path, config={"active_provider": "openai", "providers": {"openai": {"auth_method": "subscription"}}},
-                 login="not even json, only its presence counts")
-    result = _check(home)
+OPENAI_CONFIG = {"active_provider": "openai", "providers": {"openai": {"auth_method": "subscription"}}}
+
+
+def test_a_pi_login_for_the_provider_of_the_setup_is_enough_and_no_value_is_printed(tmp_path: Path) -> None:
+    result = _check(_home(tmp_path, config=OPENAI_CONFIG, login=OPENAI_LOGIN))
     assert result.returncode == 0, result.stderr
-    assert result.stderr == ""
+    assert result.stderr == "" and SECRET not in result.stdout
 
 
-def test_the_login_is_looked_at_with_lstat_and_never_opened() -> None:
+def test_the_entry_of_the_provider_counts_wherever_it_is_and_whatever_else_is_there(tmp_path: Path) -> None:
+    login = json.dumps({"anthropic": {"type": "api_key", "key": SECRET}, "openai": {"type": "oauth"}})  # more services: ours is there
+    assert _check(_home(tmp_path, config=OPENAI_CONFIG, login=login)).returncode == 0
+
+
+def test_the_legacy_openai_codex_entry_is_not_the_login_the_agents_use(tmp_path: Path) -> None:
+    """Pi 1.5.0 saves the ChatGPT sign-in as `openai`; the agents start with --provider openai and would not find `openai-codex`."""
+    assert _check(_home(tmp_path, config=OPENAI_CONFIG, login=json.dumps({"openai-codex": {"type": "oauth"}}))).returncode == 1
+
+
+def test_a_login_with_only_anthropic_is_not_the_login_of_the_openai_setup(tmp_path: Path) -> None:
+    """The file that was there made the team start on a Claude subscription billed per token (extra usage)."""
+    result = _check(_home(tmp_path, config=OPENAI_CONFIG, login=ANTHROPIC_LOGIN))
+    assert result.returncode == 1
+    assert result.stdout == ""
+    for words in ("not a login for the provider of the setup (openai)", "sign-in of: anthropic", "may be billed per token",
+                  "jht oauth-login", "nothing starts on it"):
+        assert words in result.stderr, words
+    assert SECRET not in result.stdout + result.stderr, "the names of the entries are said, never a value"
+
+
+@pytest.mark.parametrize("login", ["{}", "not even json", "[]", '{"openai": {}}', '{"openai": "oops"}', '{"openai": null}'])
+def test_a_login_file_with_no_usable_entry_of_the_provider_is_refused(tmp_path: Path, login: str) -> None:
+    result = _check(_home(tmp_path, config=OPENAI_CONFIG, login=login))
+    assert result.returncode == 1
+    assert "not a login for the provider of the setup (openai)" in result.stderr
+
+
+def test_the_provider_that_has_no_entry_name_in_this_release_keeps_the_old_rule_the_file_is_there(tmp_path: Path) -> None:
+    config = {"active_provider": "somebody-else", "providers": {}}
+    assert _check(_home(tmp_path, config=config, login=ANTHROPIC_LOGIN)).returncode == 0
+
+
+def test_the_provider_name_in_the_message_is_plain_lowercase_words_only(tmp_path: Path) -> None:
+    # spelled with capitals and spaces in the config, said as `openai` (and the filter is in the script: only [a-z0-9._-], 40 characters)
+    result = _check(_home(tmp_path, config={"active_provider": "  OpenAI ", "providers": {}}, login=ANTHROPIC_LOGIN))
+    assert result.returncode == 1
+    assert "provider of the setup (openai)" in result.stderr
+    assert "tr -cd 'a-z0-9._-' | cut -c1-40" in CHECKER.read_text(encoding="utf-8")
+
+
+def test_the_login_file_is_looked_at_with_lstat_first_and_only_its_entry_names_are_read() -> None:
     text = CHECKER.read_text(encoding="utf-8")
     assert "os.lstat" in text
     assert "open(" not in text.split("jht_pi_config_key_present()")[0]
+    assert "pi_login.py" in text
 
 
 def test_an_empty_login_file_is_refused(tmp_path: Path) -> None:
@@ -188,7 +234,7 @@ def test_start_agent_stops_a_pi_agent_with_no_credentials_before_it_starts(tmp_p
 
 
 def test_start_agent_lets_a_pi_agent_with_a_login_start(tmp_path: Path) -> None:
-    result = _run_gate(tmp_path, _home(tmp_path, config={"active_provider": "openai"}, login="{}"))
+    result = _run_gate(tmp_path, _home(tmp_path, config={"active_provider": "openai"}, login=OPENAI_LOGIN))
     assert result.returncode == 0, result.stderr
     assert "STARTED" in result.stdout
 
@@ -220,7 +266,7 @@ def test_the_service_agents_stop_without_credentials_for_pi(tmp_path: Path) -> N
 
 
 def test_the_service_agents_get_their_pi_command_with_a_login(tmp_path: Path) -> None:
-    home = _home(tmp_path, config={"active_provider": "openai"}, login="{}")
+    home = _home(tmp_path, config={"active_provider": "openai"}, login=OPENAI_LOGIN)
     workdir = _workdir(tmp_path)
     script = (f'source "{SPAWN_LIB}"; jht_pi_version_check() {{ return 0; }}; '
               f'jht_spawn_pi_repl_cmd "{workdir}" gpt-5.6-sol')

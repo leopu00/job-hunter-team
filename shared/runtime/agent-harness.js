@@ -15,7 +15,7 @@
  * time and not when the team starts.
  */
 
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { PI_API_ALIASES, PI_API_PROVIDERS, piApiProvider } from './provider-models.js';
 
 export const AGENT_HARNESSES = Object.freeze(['codex', 'pi']);
@@ -23,6 +23,35 @@ export const DEFAULT_HARNESS = 'codex';
 
 /** Providers (the names jht.config.json uses, with the CLI aliases) on which pi may start. */
 export const PI_PROVIDERS = Object.freeze(['openai', 'codex', ...Object.keys(PI_API_PROVIDERS), ...Object.keys(PI_API_ALIASES)]);
+
+// Pi's own names for the sign-in of each provider, in <team home>/.pi/agent/auth.json (shared with shared/skills/pi_login.py).
+const loginText = readFileSync(new URL('./pi-login-keys.list', import.meta.url), 'utf8');
+const loginRows = typeof loginText === 'string' ? loginText.split(/\r?\n/).filter((line) => line && !line.startsWith('#')).map((line) => line.split('|')) : [];
+export const PI_LOGIN_KEYS = Object.freeze(Object.fromEntries(loginRows.map(([provider, keys]) => [provider, Object.freeze(keys.split(','))])));
+
+/**
+ * What the text of Pi's auth.json says about the sign-in of `provider`, never its values: only the NAMES of the entries are looked at.
+ *   ok              an entry of Pi for this provider is there and is not empty;
+ *   other_provider  the file has entries, none of them this provider's (a file with only Anthropic, say);
+ *   empty           no entry at all;  unreadable  not a JSON object;  no_rule  a provider this release has no entry name for.
+ * `found` is the names of the entries (lowercase words only, so nothing odd reaches a message), `needs` the names that would do.
+ */
+export function inspectPiLogin(text, provider) {
+  const key = typeof provider === 'string' ? provider.trim().toLowerCase() : '';
+  const needs = PI_LOGIN_KEYS[key] ?? [];
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return { state: 'unreadable', found: [], needs };
+  }
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) return { state: 'unreadable', found: [], needs };
+  const found = Object.keys(data).filter((name) => /^[a-z0-9._-]{1,40}$/.test(name));
+  const filled = (name) => data[name] !== null && typeof data[name] === 'object' && Object.keys(data[name]).length > 0;
+  if (needs.length === 0) return { state: 'no_rule', found, needs };
+  if (needs.some(filled)) return { state: 'ok', found, needs };
+  return { state: found.length > 0 ? 'other_provider' : 'empty', found, needs };
+}
 
 /** The harness of a config: the key, or the default when it is absent. Anything else is not a harness. */
 export function harnessOf(config) {
