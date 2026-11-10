@@ -201,7 +201,7 @@ function Get-JhtPodmanMachineState {
   }
   if ($WslPath) {
     try {
-      $distros = @(& { $ErrorActionPreference = 'Continue'; & $WslPath --list --quiet 2>$null } | ForEach-Object { ([string]$_).Replace([char]0, '').Trim() })
+      $distros = @(& { $ErrorActionPreference = 'Continue'; & $WslPath --list --quiet 2>$null } | ForEach-Object { ([string]$_).Replace([string][char]0, '').Trim() })
       if ($LASTEXITCODE -eq 0) {
         # The distro is «podman-<name>» (podman-jht-podman); the older spelling «podman-machine-<name>» is looked for too.
         if ($distros -ccontains (Get-JhtPodmanDistroName $MachineName) -or $distros -ccontains "podman-machine-$MachineName") { return 'present' }
@@ -265,7 +265,7 @@ function Remove-JhtPodmanMachineThroughWsl {
   param([string]$PodmanPath, [string]$WslPath, [string]$MachineName)
   if (-not $WslPath) { return $false }
   $distro = Get-JhtPodmanDistroName $MachineName
-  $listed = @(& { $ErrorActionPreference = 'Continue'; & $WslPath --list --quiet 2>$null } | ForEach-Object { ([string]$_).Replace([char]0, '').Trim() })
+  $listed = @(& { $ErrorActionPreference = 'Continue'; & $WslPath --list --quiet 2>$null } | ForEach-Object { ([string]$_).Replace([string][char]0, '').Trim() })
   if ($listed -cnotcontains $distro) { return $false }
   $null = Invoke-JhtUninstallNative $WslPath @('--terminate', $distro)
   $unregister = Invoke-JhtUninstallNative $WslPath @('--unregister', $distro)

@@ -601,3 +601,10 @@ def test_the_usage_line_names_purge_and_the_wsl_distro_follows_podmans_naming():
     function = function[:function.index("\n}\n")]
     assert "return \"podman-$MachineName\"" in function and "StartsWith('podman'" in function
     assert 'Get-JhtPodmanDistroName $MachineName) -or $distros -ccontains "podman-machine-$MachineName"' in SOURCE
+
+
+def test_the_nul_of_wsls_utf16_listing_is_removed_with_two_strings_not_a_char_and_an_empty_string():
+    # Windows PowerShell 5.1 picks Replace(char, char) for ([char]0, '') and cannot turn '' into a char: the listing of the
+    # distros failed there ("String must be exactly one character long") and the fallback through WSL never ran.
+    assert "Replace([char]0, '')" not in SOURCE
+    assert SOURCE.count("Replace([string][char]0, '')") == 2
