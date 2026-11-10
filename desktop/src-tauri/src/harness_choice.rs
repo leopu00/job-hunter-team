@@ -29,6 +29,9 @@ pub(crate) struct HarnessChoice {
     provider: String,
     pi_allowed: bool,
     login: &'static str,
+    /// The entry names of Pi's sign-in file when it is there but is not the one for this provider (a file with only Anthropic's):
+    /// lowercase words, at most eight, never a value. Empty in every other case.
+    login_found: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -42,6 +45,8 @@ struct Reply {
     pi_allowed: Option<bool>,
     #[serde(default)]
     login: Option<String>,
+    #[serde(default)]
+    login_found: Option<Vec<String>>,
     #[serde(default)]
     error: Option<String>,
 }
@@ -70,7 +75,14 @@ fn parse(result: &ProcessResult, unavailable: &'static str) -> Result<HarnessCho
         .provider
         .filter(|name| name.len() <= 16 && name.chars().all(|c| c.is_ascii_lowercase()))
         .ok_or(unavailable)?;
-    Ok(HarnessChoice { harness, provider, pi_allowed: reply.pi_allowed.ok_or(unavailable)?, login })
+    let login_found = reply
+        .login_found
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|name| (1..=40).contains(&name.len()) && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-')))
+        .take(8)
+        .collect();
+    Ok(HarnessChoice { harness, provider, pi_allowed: reply.pi_allowed.ok_or(unavailable)?, login, login_found })
 }
 
 /// `jht providers harness [name] --json` on the saved host, under the account scope the caller holds.
@@ -163,7 +175,7 @@ mod tests {
     #[test]
     fn the_cli_line_is_closed_to_the_shapes_the_page_knows() {
         let choice = parse(&out(0, GOOD), "harness_unavailable").unwrap();
-        assert_eq!(choice, HarnessChoice { harness: "pi", provider: "openai".into(), pi_allowed: true, login: "signed_out" });
+        assert_eq!(choice, HarnessChoice { harness: "pi", provider: "openai".into(), pi_allowed: true, login: "signed_out", login_found: vec![] });
         // noise before the line is ignored: the last JSON line counts
         assert!(parse(&out(0, &format!("warming up\n{GOOD}\n")), "x").is_ok());
         for bad in [
@@ -176,6 +188,19 @@ mod tests {
         ] {
             assert_eq!(parse(&out(0, bad), "harness_unavailable"), Err("harness_unavailable"), "{bad}");
         }
+    }
+
+    #[test]
+    fn the_names_in_a_sign_in_that_is_not_the_right_one_are_closed_to_plain_words() {
+        let line = r#"{"ok":true,"harness":"pi","provider":"openai","pi_allowed":true,"login":"signed_out","login_found":["anthropic","Bad Name","x\ny","a_b-c.1","","zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"]}"#;
+        let choice = parse(&out(0, line), "harness_unavailable").unwrap();
+        assert_eq!(choice.login_found, vec!["anthropic".to_owned(), "a_b-c.1".to_owned()], "a name that is not a plain lowercase word is dropped");
+        let nine = format!(r#"{{"ok":true,"harness":"pi","provider":"openai","pi_allowed":true,"login":"signed_out","login_found":[{}]}}"#,
+            (0..9).map(|i| format!("\"n{i}\"")).collect::<Vec<_>>().join(","));
+        assert_eq!(parse(&out(0, &nine), "x").unwrap().login_found.len(), 8, "at most eight");
+        // not a list of words: nothing, and the answer still stands
+        let odd = r#"{"ok":true,"harness":"pi","provider":"openai","pi_allowed":true,"login":"signed_out","login_found":"anthropic"}"#;
+        assert_eq!(parse(&out(0, odd), "x"), Err("x"), "a field of the wrong type is not an answer");
     }
 
     #[test]

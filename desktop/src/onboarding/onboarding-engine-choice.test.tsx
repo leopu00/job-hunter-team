@@ -9,7 +9,7 @@ import { OnboardingFlow } from "./OnboardingFlow";
 // signs in in a terminal, so while Pi is chosen and not signed in the step waits. Synthetic replies only.
 const choice = (over: Partial<HarnessChoice> = {}): HarnessOutcome => ({
   ok: true,
-  value: { harness: "codex", provider: "openai", piAllowed: true, login: "signed_out", ...over },
+  value: { harness: "codex", provider: "openai", piAllowed: true, login: "signed_out", loginFound: [], ...over },
 });
 
 const mocks = vi.hoisted(() => ({ read: vi.fn(), set: vi.fn() }));
@@ -54,6 +54,21 @@ describe("EngineChoice", () => {
     await waitFor(() => expect(screen.queryByTestId("engine-command")).toBeNull());
     expect(onBlock).toHaveBeenLastCalledWith(false);
     expect(screen.getByTestId("engine-login")).toHaveAttribute("data-login", "signed_in");
+  });
+
+  it("a Pi sign-in that is for another provider is said with what it holds, keeps the step held, and shows how to do it again", async () => {
+    const onBlock = vi.fn();
+    render(<EngineChoice onBlock={onBlock} read={async () => choice({ harness: "pi", loginFound: ["anthropic"] })} set={vi.fn()} />);
+    const login = await screen.findByTestId("engine-login");
+    expect(login).toHaveAttribute("data-login", "signed_out");
+    expect(login).toHaveTextContent("contiene solo anthropic");
+    expect(login).toHaveTextContent("ChatGPT");
+    expect(screen.getByTestId("engine-command")).toHaveTextContent("jht oauth-login");
+    expect(onBlock).toHaveBeenLastCalledWith(true);
+    // nothing in the file at all: the plain «not signed in yet» sentence, as before
+    cleanup();
+    render(<EngineChoice onBlock={vi.fn()} read={async () => choice({ harness: "pi" })} set={vi.fn()} />);
+    expect(await screen.findByTestId("engine-login")).not.toHaveTextContent("contiene solo");
   });
 
   it("a write that is not confirmed by the CLI shows its error and changes nothing on the screen", async () => {

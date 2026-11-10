@@ -80,7 +80,7 @@ export default function EngineChoice({ onBlock, read = readHarnessChoice, set = 
       {told && <p className="onboarding-error" role="alert" data-testid="engine-error">{told.text} {told.action}</p>}
       {current.harness === "pi" && current.login !== "not_needed" && (
         <div data-testid="engine-login" data-login={current.login}>
-          <small className="onboarding-hint">{current.login === "signed_in" ? t.loginIn : current.login === "signed_out" ? t.loginOut : t.loginUnknown}</small>
+          <small className="onboarding-hint">{current.login === "signed_in" ? t.loginIn : current.login === "signed_out" ? (current.loginFound.length > 0 ? t.loginOther.replace("{names}", current.loginFound.join(", ")) : t.loginOut) : t.loginUnknown}</small>
           {needsSignIn && <p><code data-testid="engine-command">{t.command}</code></p>}
           <div className="onboarding-runtime-actions">
             {needsSignIn && <button className="onboarding-secondary" type="button" data-testid="engine-copy" onClick={() => void copy()}>{copied ? t.copied : t.copy}</button>}

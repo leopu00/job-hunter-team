@@ -3293,7 +3293,7 @@ const providers=config.providers||{}; const entry=providers[provider]||{};
 const configured=["claude","anthropic","codex","openai","kimi","moonshot"].includes(provider)
   && (entry.auth_method||"subscription")==="subscription";
 const markers={claude:"/jht_home/.claude/.credentials.json",anthropic:"/jht_home/.claude/.credentials.json",codex:"/jht_home/.codex/auth.json",openai:"/jht_home/.codex/auth.json",kimi:"/jht_home/.kimi/credentials/kimi-code.json",moonshot:"/jht_home/.kimi/credentials/kimi-code.json"};
-process.stdout.write(`${configured?1:0} ${(config.harness==="pi"&&(provider==="openai"||provider==="codex")?((p)=>{try{const s=fs.lstatSync(p);return s.isFile()&&s.size>0&&(s.uid===process.getuid()||s.uid===0)}catch{return false}})("/jht_home/.pi/agent/auth.json"):markers[provider]&&fs.existsSync(markers[provider]))?1:0} ${fs.existsSync("/jht_home/profile/welcomed.flag")?1:0}`);
+process.stdout.write(`${configured?1:0} ${(config.harness==="pi"&&(provider==="openai"||provider==="codex")?((p)=>{try{const s=fs.lstatSync(p);if(!(s.isFile()&&s.size>0&&s.size<=262144&&(s.uid===process.getuid()||s.uid===0)))return false;const d=JSON.parse(fs.readFileSync(p,"utf8"));return!!d&&typeof d==="object"&&!Array.isArray(d)&&["openai"].some((n)=>!!d[n]&&typeof d[n]==="object"&&Object.keys(d[n]).length>0)}catch{return false}})("/jht_home/.pi/agent/auth.json"):markers[provider]&&fs.existsSync(markers[provider]))?1:0} ${fs.existsSync("/jht_home/profile/welcomed.flag")?1:0}`);
 ' "$expected_team" 2>/dev/null)" || metadata_status=$?
   if [ "$metadata_status" -ne 0 ]; then
     [ -z "$expected_team" ] || return "$metadata_status"
