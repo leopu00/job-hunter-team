@@ -1,11 +1,13 @@
 ---
 name: circles-and-sources
-description: Strategiekarte dafür, was WO gesucht wird, vollständig abgeleitet vom Kandidatenprofil. Die 5 konzentrischen Kreise (work_mode + Umzug) definieren den geografischen Scope; die 4 Quellenstufen (LinkedIn → ATS-Aggregatoren → Nische → Web) definieren, welche Plattformen in welcher Reihenfolge durchsucht werden. Ein Scout, der die falsche Stufe im falschen Kreis durchsucht, verschwendet sein Kontingent und seine `scout-coord`-Partition. Öffne diesen Skill beim Boot (nach `scout-coord`) und erneut, wenn ein Kreis erschöpft ist oder ein `[FEEDBACK]` vom Analysten eine Quellenänderung nahelegt.
+description: Strategiekarte dafür, was WO gesucht wird, vollständig abgeleitet vom Kandidatenprofil. Die 5 konzentrischen Kreise (work_mode + Umzug) definieren den geografischen Scope; die 4 Quellenstufen (LinkedIn → ATS-Aggregatoren → Nische → Web) definieren, welche Plattformen in welcher Reihenfolge durchsucht werden. Ein Scout, der die falsche Stufe im falschen Kreis durchsucht, verschwendet sein Kontingent und seine `scout-coord`-Partition. Öffne diesen Skill beim Boot (nach `scout-coord`) und erneut, wenn ein Kreis erschöpft ist oder ein `[FEEDBACK]` vom Analysten eine Quellenänderung nahelegt. Lies nur die Zeilen 1-98 (`limit` 98) — der Rest ist Referenz.
 allowed-tools: Bash(python3 /app/shared/skills/safe_fetch.py *), Bash(python3 /app/shared/skills/linkedin_check.py *), Bash(python3 /app/shared/skills/linkedin_access.py *)
 ---
 <!-- @translation: de, ai-translated 2026-06-06 -->
 
 # circles-and-sources — Profil lesen, Karte erstellen
+
+> **In Stücken lesen.** Die Zeilen 1-98 dieser Datei sind die Karte (Kreise, Tiers, Filter auf Scout-Ebene): lies sie einmal bei STEP 2 (`offset` 1, `limit` 98). Unter `## Reference` — geschlossene Quellen, die Anti-Bias-Prüfung am Ende eines Batches (Firma, Stadt, Arbeitserlaubnis), Feedback des Analysten, Anti-Patterns — nur den Teil lesen, den du brauchst, wenn sein Anlass eintritt.
 
 Zwei orthogonale Achsen:
 - **Kreise** = WO (geografischer / Arbeitsmodus-Scope)
@@ -73,8 +75,6 @@ Eine Stufe vollständig erschöpfen, bevor zur nächsten gewechselt wird.
 | 3     | **Nischen-Boards (profilspezifisch)** | Nach `work_mode` UND Domain auswählen                                                                       | (siehe Tabelle unten)                                                                          |
 | 4     | **WebSearch + Karriereseiten**       | `WebSearch`-Abfragen + Scraping von Firmen-Karriereseiten                                                    | Letzter Ausweg nur nach Erschöpfung der Stufen 1-3.                                           |
 
-**Quellen, die sich schließen, und Quellen ohne Suche.** Indeed und Glassdoor werden nicht direkt durchsucht (sie antworten einem automatischen Leser mit 403): ihre Job-Alerts kommen per E-Mail (Email-first sourcing in deinem Prompt). Ein **403** einer beliebigen Quelle heißt: für diesen Durchgang geschlossen. Wechsle zu einer anderen Quelle, versuche es nicht erneut und suche nie einen Weg, den Schutz zu umgehen. Die ATS (Greenhouse, Lever, Ashby, Workable, Personio, Teamtailor, Recruitee, Jobvite...) werden **pro Firma** abgefragt (der Slug ihres Boards), nicht als globale Suche: Sie haben keine. Finde zuerst die Firmen (LinkedIn, `WebSearch`, Karriereseiten) und lies das Board jeder einzelnen. Dasselbe gilt für eine Cloudflare-Prüfung oder eine Login-Wand und für die in einem realen Lauf als geschlossen bestätigten Quellen: Umantis (403), Climatebase (Cloudflare-Prüfung), JobSearch DK (Login-Wand) und die, die im Lauf vom 02/11 mit 403 geantwortet haben: Jobware, Nationale Vacaturebank, Jobat, Remote Rocketship, Intermediair, EU Remote Jobs. Haben sie E-Mail-Alerts, nutze diese. Ein **410** (der Endpunkt ist tot) ist kein geschlossener Durchgang, sondern eine Quelle, die aus deinen Listen ENTFERNT wird: XING Jobs, Bundesagentur für Arbeit. Frage sie nicht mehr ab, weder in diesem noch im nächsten Durchgang.
-
 ### Stufe 3 — Auswahl nach work_mode + Domain
 
 | `work_mode` des Kandidaten | Zu erwägende Nischen-Boards                                                                                |
@@ -85,6 +85,21 @@ Eine Stufe vollständig erschöpfen, bevor zur nächsten gewechselt wird.
 | Domain-spezifisch (beliebig) | Stack-spezifische Nische: PyJobs (Python), GoJobs (Go), Djinni (Osteuropa / Dev), 4dayweek.io (4-Tage-Woche), … |
 
 > ⚠️ **Bringe keine remote-spezifischen Boards in eine Nicht-Remote-Suche** und umgekehrt. WeWorkRemotely bei einem Kandidaten, der On-site in Mailand will, ist verschwendetes Scraping.
+
+## Durchlässige Filter auf SCOUT-Ebene
+
+Der Scout vorfiltert nur die **komplett außerhalb des Scopes** liegenden Fälle. **Mach nicht die Arbeit des Analysten** — der Kandidat wird als anpassungsfähig an angrenzende Rollen behandelt. Überspringe eine Stellenanzeige nur wenn:
+
+- 🚫 Titel enthält explizit: `senior`, `lead`, `staff`, `principal`, `head of`, `director` → ÜBERSPRINGEN (Senioritätslücke zu groß)
+- 🚫 Geografische Arbeitserlaubnis inkompatibel mit dem Profil (z.B. `US-only` / `Canada-only` und der Kandidat hat kein Visum) → ÜBERSPRINGEN
+- 🚫 Domain komplett außerhalb IT/Coding (z.B. Konditor, Buchhalter, Vertrieb) wenn der Kandidat in IT ist → ÜBERSPRINGEN
+- 🚫 Harte Anforderung von `> real_years + 3` Jahren Erfahrung → ÜBERSPRINGEN (moderate Lücke ist ok, der Scorer entscheidet)
+
+Alles andere: **einfügen**. Angrenzende Stacks (Data, DevOps, Platform, Frontend, Automation, ML-angrenzend, etc.) gehen alle durch; der Scorer weist einen fit-proportionalen Score zu und der Nutzer sieht sie.
+
+## Reference
+
+**Quellen, die sich schließen, und Quellen ohne Suche.** Indeed und Glassdoor werden nicht direkt durchsucht (sie antworten einem automatischen Leser mit 403): ihre Job-Alerts kommen per E-Mail (Email-first sourcing in deinem Prompt). Ein **403** einer beliebigen Quelle heißt: für diesen Durchgang geschlossen. Wechsle zu einer anderen Quelle, versuche es nicht erneut und suche nie einen Weg, den Schutz zu umgehen. Die ATS (Greenhouse, Lever, Ashby, Workable, Personio, Teamtailor, Recruitee, Jobvite...) werden **pro Firma** abgefragt (der Slug ihres Boards), nicht als globale Suche: Sie haben keine. Finde zuerst die Firmen (LinkedIn, `WebSearch`, Karriereseiten) und lies das Board jeder einzelnen. Dasselbe gilt für eine Cloudflare-Prüfung oder eine Login-Wand und für die in einem realen Lauf als geschlossen bestätigten Quellen: Umantis (403), Climatebase (Cloudflare-Prüfung), JobSearch DK (Login-Wand) und die, die im Lauf vom 02/11 mit 403 geantwortet haben: Jobware, Nationale Vacaturebank, Jobat, Remote Rocketship, Intermediair, EU Remote Jobs. Haben sie E-Mail-Alerts, nutze diese. Ein **410** (der Endpunkt ist tot) ist kein geschlossener Durchgang, sondern eine Quelle, die aus deinen Listen ENTFERNT wird: XING Jobs, Bundesagentur für Arbeit. Frage sie nicht mehr ab, weder in diesem noch im nächsten Durchgang.
 
 ## Anti-Bias-Regel (verpflichtend) — für **Firma UND Standort**
 
@@ -108,17 +123,6 @@ Standorte auszugleichen nützt nichts, wenn die Angebote nicht **arbeitsfähig**
 - 🇬🇧 **UK nach Brexit**: ein **EU-Bürger ohne UK-Visum** KANN ohne **Sponsorship** (Skilled Worker visa) nicht in London/UK arbeiten. Daher gelten für ein reines EU-Profil UK-Angebote **nur wenn** die JD explizit *visa sponsorship* erwähnt; ansonsten sind sie arbeitserlaubnis-inkompatibel → ÜBERSPRINGEN (siehe "Durchlässige Filter", Geo-Regel).
 - 🇨🇭 **Schweiz / Nicht-EU**: gleiche Logik — Arbeitserlaubnis überprüfen.
 - Praktische Regel: wenn der dominante Hub in einem Land ist, das eine Erlaubnis erfordert, die der Nutzer nicht hat (und die JDs kein Sponsoring anbieten), ist dieses Volumen **Phantom** — zählt nicht als Abdeckung und muss aus dem Pool ausgeschlossen werden, nicht nur ausbalanciert.
-
-## Durchlässige Filter auf SCOUT-Ebene
-
-Der Scout vorfiltert nur die **komplett außerhalb des Scopes** liegenden Fälle. **Mach nicht die Arbeit des Analysten** — der Kandidat wird als anpassungsfähig an angrenzende Rollen behandelt. Überspringe eine Stellenanzeige nur wenn:
-
-- 🚫 Titel enthält explizit: `senior`, `lead`, `staff`, `principal`, `head of`, `director` → ÜBERSPRINGEN (Senioritätslücke zu groß)
-- 🚫 Geografische Arbeitserlaubnis inkompatibel mit dem Profil (z.B. `US-only` / `Canada-only` und der Kandidat hat kein Visum) → ÜBERSPRINGEN
-- 🚫 Domain komplett außerhalb IT/Coding (z.B. Konditor, Buchhalter, Vertrieb) wenn der Kandidat in IT ist → ÜBERSPRINGEN
-- 🚫 Harte Anforderung von `> real_years + 3` Jahren Erfahrung → ÜBERSPRINGEN (moderate Lücke ist ok, der Scorer entscheidet)
-
-Alles andere: **einfügen**. Angrenzende Stacks (Data, DevOps, Platform, Frontend, Automation, ML-angrenzend, etc.) gehen alle durch; der Scorer weist einen fit-proportionalen Score zu und der Nutzer sieht sie.
 
 ## Auf Analysten-Feedback hören
 

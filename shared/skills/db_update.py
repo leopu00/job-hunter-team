@@ -1275,6 +1275,18 @@ def main():
     a.add_argument('--interview-round', type=int, help='Interview stage (1, 2, 3...)')
 
     args = parser.parse_args()
+
+    # What the caller's ROLE may update (db_role_policy.py): entity, columns and status; the Scout also only its own `new` rows.
+    import db_role_policy
+
+    def _row(position_id):
+        conn = get_db()
+        try:
+            return db_role_policy.fetch_position_row(conn, position_id)
+        finally:
+            conn.close()
+
+    db_role_policy.guard_update(args, fetch_position=_row)
     read_text_from_stdin(args)
 
     if args.entity == 'position':

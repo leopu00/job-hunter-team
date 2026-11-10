@@ -1,11 +1,13 @@
 ---
 name: circles-and-sources
-description: Mappa strategica di cosa cercare DOVE, derivata interamente dal profilo del candidato. I 5 cerchi concentrici (work_mode + relocation) indicano lo scope geografico; i 4 livelli di fonte (LinkedIn → ATS aggregatori → niche → web) indicano quali piattaforme drenare in ordine. Uno scout che cerca nel livello sbagliato nel cerchio sbagliato spreca la sua quota e la sua partizione `scout-coord`. Apri questa skill al boot (dopo `scout-coord`) e di nuovo ogni volta che un cerchio è esaurito o un `[FEEDBACK]` dall'Analista suggerisce di cambiare fonte.
+description: Mappa strategica di cosa cercare DOVE, derivata interamente dal profilo del candidato. I 5 cerchi concentrici (work_mode + relocation) indicano lo scope geografico; i 4 livelli di fonte (LinkedIn → ATS aggregatori → niche → web) indicano quali piattaforme drenare in ordine. Uno scout che cerca nel livello sbagliato nel cerchio sbagliato spreca la sua quota e la sua partizione `scout-coord`. Apri questa skill al boot (dopo `scout-coord`) e di nuovo ogni volta che un cerchio è esaurito o un `[FEEDBACK]` dall'Analista suggerisce di cambiare fonte. Leggi solo le righe 1-98 (`limit` 98) — il resto è riferimento.
 allowed-tools: Bash(python3 /app/shared/skills/safe_fetch.py *), Bash(python3 /app/shared/skills/linkedin_check.py *), Bash(python3 /app/shared/skills/linkedin_access.py *)
 ---
 <!-- @translation: it, ai-translated 2026-06-06 -->
 
 # circles-and-sources — leggi il profilo, costruisci la mappa
+
+> **Leggi a pezzi.** Le righe 1-98 di questo file sono la mappa (cerchi, tier, filtri a livello Scout): leggile una volta allo STEP 2 (`offset` 1, `limit` 98). Sotto `## Reference` — fonti chiuse, controllo anti-bias a fine batch (azienda, città, autorizzazione al lavoro), feedback dell'Analista, anti-pattern — leggi solo la parte che serve quando ne arriva il momento.
 
 Due assi ortogonali:
 - **Cerchi** = DOVE (scope geografico / modalità di lavoro)
@@ -73,8 +75,6 @@ Drena un livello completamente prima di passare al successivo.
 | 3       | **Board niche (specifiche per profilo)** | Scegli per `work_mode` E dominio                                                                       | (vedi tabella sotto)                                                                          |
 | 4       | **WebSearch + pagine career**       | Query `WebSearch` + scrape di pagine career aziendali                                                       | Ultimo ricorso solo dopo che i livelli 1-3 sono drenati.                                      |
 
-**Fonti che si chiudono e fonti senza ricerca.** Indeed e Glassdoor non si cercano direttamente (rispondono 403 a un lettore automatico): i loro avvisi di lavoro arrivano via email (Email-first sourcing nel tuo prompt). Un **403** da una fonte qualsiasi vuol dire che per questa passata è chiusa: passa a un'altra fonte, non riprovare e non cercare mai un modo di aggirare la protezione. Gli ATS (Greenhouse, Lever, Ashby, Workable, Personio, Teamtailor, Recruitee, Jobvite...) si interrogano **per azienda** (lo slug della sua bacheca), non come ricerca globale: non ne hanno una. Trova prima le aziende (LinkedIn, `WebSearch`, pagine carriere) e leggi la bacheca di ciascuna. Lo stesso vale per una sfida Cloudflare o un muro di login, e per le fonti confermate chiuse su una run reale: Umantis (403), Climatebase (sfida Cloudflare), JobSearch DK (muro di login), e quelle che nella run del 02/11 hanno risposto 403: Jobware, Nationale Vacaturebank, Jobat, Remote Rocketship, Intermediair, EU Remote Jobs. Se hanno avvisi via email, usa quelli. Un **410** (l'endpoint è morto) non è una passata chiusa ma una fonte da TOGLIERE dalle tue liste: XING Jobs, Bundesagentur für Arbeit. Non interrogarle più, né in questa passata né nella prossima.
-
 ### Livello 3 — scegli per work_mode + dominio
 
 | `work_mode` del candidato | Board niche da considerare                                                                                 |
@@ -85,6 +85,21 @@ Drena un livello completamente prima di passare al successivo.
 | Specifico per dominio (qualsiasi) | Niche per stack: PyJobs (Python), GoJobs (Go), Djinni (Europa dell'Est / dev), 4dayweek.io (settimana 4 giorni), ... |
 
 > ⚠️ **Non portare board specifiche per il remoto in una ricerca non-remoto**, e viceversa. WeWorkRemotely su un candidato che vuole lavoro in sede a Milano è scraping sprecato.
+
+## Filtri permissivi a livello SCOUT
+
+Lo Scout pre-filtra solo i casi **totalmente fuori scope**. **Non fare il lavoro dell'Analista** — il candidato è trattato come adattabile a ruoli adiacenti. Salta un annuncio solo se:
+
+- 🚫 Il titolo contiene esplicitamente: `senior`, `lead`, `staff`, `principal`, `head of`, `director` → SKIP (gap di seniority troppo ampio)
+- 🚫 Work-auth geografica incompatibile con il profilo (es. `US-only` / `Canada-only` e il candidato non ha il visto) → SKIP
+- 🚫 Dominio completamente fuori dall'IT/coding (es. pasticciere, contabile, vendite) quando il candidato è in IT → SKIP
+- 🚫 Requisito rigido di `> anni_reali + 3` anni di esperienza → SKIP (gap moderato va bene, lo Scorer decide)
+
+Tutto il resto: **inseriscilo**. Stack adiacenti (data, devops, platform, frontend, automazione, ML adiacente, ecc.) passano tutti; lo Scorer assegna un punteggio proporzionale al fit e l'utente li vede.
+
+## Reference
+
+**Fonti che si chiudono e fonti senza ricerca.** Indeed e Glassdoor non si cercano direttamente (rispondono 403 a un lettore automatico): i loro avvisi di lavoro arrivano via email (Email-first sourcing nel tuo prompt). Un **403** da una fonte qualsiasi vuol dire che per questa passata è chiusa: passa a un'altra fonte, non riprovare e non cercare mai un modo di aggirare la protezione. Gli ATS (Greenhouse, Lever, Ashby, Workable, Personio, Teamtailor, Recruitee, Jobvite...) si interrogano **per azienda** (lo slug della sua bacheca), non come ricerca globale: non ne hanno una. Trova prima le aziende (LinkedIn, `WebSearch`, pagine carriere) e leggi la bacheca di ciascuna. Lo stesso vale per una sfida Cloudflare o un muro di login, e per le fonti confermate chiuse su una run reale: Umantis (403), Climatebase (sfida Cloudflare), JobSearch DK (muro di login), e quelle che nella run del 02/11 hanno risposto 403: Jobware, Nationale Vacaturebank, Jobat, Remote Rocketship, Intermediair, EU Remote Jobs. Se hanno avvisi via email, usa quelli. Un **410** (l'endpoint è morto) non è una passata chiusa ma una fonte da TOGLIERE dalle tue liste: XING Jobs, Bundesagentur für Arbeit. Non interrogarle più, né in questa passata né nella prossima.
 
 ## Regola anti-bias (obbligatoria) — su **azienda E location**
 
@@ -108,17 +123,6 @@ Bilanciare le location non serve se le offerte non sono **lavorabili** dall'uten
 - 🇬🇧 **UK post-Brexit**: un cittadino **UE senza visto UK** NON può lavorare a Londra/UK senza **sponsorship** (Skilled Worker visa). Quindi per un profilo solo-UE le offerte UK valgono **solo se** il JD menziona esplicitamente *visa sponsorship*; altrimenti sono work-auth incompatibili → SKIP (vedi "Filtri permissivi", regola geo).
 - 🇨🇭 **Svizzera / non-UE**: stessa logica — verifica permesso di lavoro.
 - Regola pratica: se l'hub dominante è in un paese che richiede un permesso che l'utente non ha (e i JD non offrono sponsorship), quel volume è **fantasma** — non conta come copertura e va escluso dal pool, non solo bilanciato.
-
-## Filtri permissivi a livello SCOUT
-
-Lo Scout pre-filtra solo i casi **totalmente fuori scope**. **Non fare il lavoro dell'Analista** — il candidato è trattato come adattabile a ruoli adiacenti. Salta un annuncio solo se:
-
-- 🚫 Il titolo contiene esplicitamente: `senior`, `lead`, `staff`, `principal`, `head of`, `director` → SKIP (gap di seniority troppo ampio)
-- 🚫 Work-auth geografica incompatibile con il profilo (es. `US-only` / `Canada-only` e il candidato non ha il visto) → SKIP
-- 🚫 Dominio completamente fuori dall'IT/coding (es. pasticciere, contabile, vendite) quando il candidato è in IT → SKIP
-- 🚫 Requisito rigido di `> anni_reali + 3` anni di esperienza → SKIP (gap moderato va bene, lo Scorer decide)
-
-Tutto il resto: **inseriscilo**. Stack adiacenti (data, devops, platform, frontend, automazione, ML adiacente, ecc.) passano tutti; lo Scorer assegna un punteggio proporzionale al fit e l'utente li vede.
 
 ## Ascolto del feedback dell'Analista
 

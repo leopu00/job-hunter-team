@@ -1,11 +1,13 @@
 ---
 name: scout-coord
-description: Protocolo de coordenacao no arranque entre multiplos Scouts. Sem esta skill dois scouts rastreiam o mesmo circulo (Remote EU) no mesmo tier (LinkedIn) e produzem 100% de duplicatas que o gate de dedup tem de descartar — orcamento desperdicado e equipa mais lenta. Use-a como a PRIMEIRA acao no seu loop, antes de tudo o resto. Pertence ao papel Scout; SCOUT-1 normalmente arbitra se multiplos scouts arrancam simultaneamente.
+description: Protocolo de coordenacao no arranque entre multiplos Scouts. Sem esta skill dois scouts rastreiam o mesmo circulo (Remote EU) no mesmo tier (LinkedIn) e produzem 100% de duplicatas que o gate de dedup tem de descartar — orcamento desperdicado e equipa mais lenta. Use-a como a PRIMEIRA acao no seu loop, antes de tudo o resto. Pertence ao papel Scout; SCOUT-1 normalmente arbitra se multiplos scouts arrancam simultaneamente. Lê só as linhas 1-86 (`limit` 86) — o resto é referência.
 allowed-tools: Bash(python3 /app/shared/skills/scout_coord.py *), Bash(tmux *), Bash(jht-tmux-send *)
 ---
 <!-- @translation: pt, ai-translated 2026-06-06 -->
 
 # scout-coord — particionar o territorio
+
+> **Lê por partes.** O protocolo inteiro está nas linhas 1-86 deste ficheiro (Steps 1-5): lê só essas (`offset` 1, `limit` 86). Abaixo de `## Reference` — heurísticas de divisão, anti-padrões, quando renegociar, ver também — lê apenas quando tiveres de negociar uma divisão ou renegociar.
 
 Multiplos Scouts correm em paralelo (maximo 2 instancias pela politica da equipa). A equipa so funciona se concordarem numa **particao sem sobreposicao** de:
 - quais **circulos** cada um possui (1 = preferencia primaria, 2 = vizinhos geograficos, 3 = relocacao, 4 = satelite, 5 = fronteira)
@@ -55,31 +57,7 @@ Tu cerchi 3+4 + tier 3-4 (niche board + WebSearch). OK?
 
 O peer responde com `[ACK]` (aceita) ou `[COUNTER]` (contraproposta). Mantem breve — se nao chegarem a acordo em 3 rondas, escalem para o Capitano.
 
-**Heuristicas para uma boa divisao**:
-
-| Situacao                                        | Divisao sugerida                                                   |
-|-------------------------------------------------|--------------------------------------------------------------------|
-| 2 Scouts, perfil `work_mode = remote`          | S1: cerchi 1-2 + LinkedIn/ATS · S2: cerchi 1 + board remoto de nicho (RemoteOK, WeWorkRemotely) — ambos no cerchio 1, fontes complementares |
-| 2 Scouts, perfil `work_mode = on-site`         | S1: cidade base + cerchio 2 regional · S2: relocacao (cerchio 3) |
-| 2 Scouts, misto `work_mode = flessibile`       | S1: cerchi 1-2 (modo completo) · S2: cerchi 3-5 (relocacao + satelite + fronteira) |
-
 Seja qual for a divisao escolhida, a regra e: **nenhum par de scouts na mesma combinacao (circulo, conjunto_de_tiers) ao mesmo tempo.**
-
-**Volume vs. divisao curada — empirico do run VPS1 2026-05-21 (vps1-run-postmortem #14):**
-
-> Scout-1 encontrou 130 posicoes com score medio de 63,1 (40% high-score)
-> Scout-2 encontrou 76 posicoes com score medio de 68,4 (54% high-score)
->
-> → Scout-2 era 1,4× mais qualitativo que Scout-1 para o mesmo candidato.
-
-Padrao recomendado quando se tem liberdade para escolher o tier para os 2 scouts:
-
-| Scout    | Tier atribuido                                          | Racional                                       |
-|----------|---------------------------------------------------------|------------------------------------------------|
-| SCOUT-1  | LinkedIn (alto volume, ruidoso)                         | Captura o fluxo, aceita score medio mais baixo |
-| SCOUT-2  | Ashby / Greenhouse / Lever / company-careers (curado)   | Poucos mas certos, score medio mais alto       |
-
-O `next-for-analista` recebe entao um mix equilibrado de volume + qualidade, e o filtro de hard-requirements do Analista (RULE-06) concentra-se no stream do Scout-1 (onde ha mais ruido). Nao e uma regra rigida — adaptar ao `work_mode` conforme a tabela acima.
 
 ## Passo 4 — Solidificar a atribuicao
 
@@ -106,6 +84,32 @@ Verificacao cruzada: a uniao de todos os `fonti` deve cobrir os tiers que a equi
 ```bash
 jht-tmux-send CAPITANO "[@$MY_ID -> @capitano] [INFO] scout-coord: tier 'niche-remote' senza scout, considera spawn aggiuntivo o riassegnamento."
 ```
+
+## Reference
+
+**Heuristicas para uma boa divisao**:
+
+| Situacao                                        | Divisao sugerida                                                   |
+|-------------------------------------------------|--------------------------------------------------------------------|
+| 2 Scouts, perfil `work_mode = remote`          | S1: cerchi 1-2 + LinkedIn/ATS · S2: cerchi 1 + board remoto de nicho (RemoteOK, WeWorkRemotely) — ambos no cerchio 1, fontes complementares |
+| 2 Scouts, perfil `work_mode = on-site`         | S1: cidade base + cerchio 2 regional · S2: relocacao (cerchio 3) |
+| 2 Scouts, misto `work_mode = flessibile`       | S1: cerchi 1-2 (modo completo) · S2: cerchi 3-5 (relocacao + satelite + fronteira) |
+
+**Volume vs. divisao curada — empirico do run VPS1 2026-05-21 (vps1-run-postmortem #14):**
+
+> Scout-1 encontrou 130 posicoes com score medio de 63,1 (40% high-score)
+> Scout-2 encontrou 76 posicoes com score medio de 68,4 (54% high-score)
+>
+> → Scout-2 era 1,4× mais qualitativo que Scout-1 para o mesmo candidato.
+
+Padrao recomendado quando se tem liberdade para escolher o tier para os 2 scouts:
+
+| Scout    | Tier atribuido                                          | Racional                                       |
+|----------|---------------------------------------------------------|------------------------------------------------|
+| SCOUT-1  | LinkedIn (alto volume, ruidoso)                         | Captura o fluxo, aceita score medio mais baixo |
+| SCOUT-2  | Ashby / Greenhouse / Lever / company-careers (curado)   | Poucos mas certos, score medio mais alto       |
+
+O `next-for-analista` recebe entao um mix equilibrado de volume + qualidade, e o filtro de hard-requirements do Analista (RULE-06) concentra-se no stream do Scout-1 (onde ha mais ruido). Nao e uma regra rigida — adaptar ao `work_mode` conforme a tabela acima.
 
 ## Anti-padroes
 
