@@ -50,12 +50,15 @@ export function tmuxAvailable() {
 // ce n'e' una "di default": chi non ha scelto non ha la CLI di nessuno.
 const PROVIDER_CLI = Object.freeze({ openai: 'codex', codex: 'codex', anthropic: 'claude', claude: 'claude', kimi: 'kimi', moonshot: 'kimi' });
 
-// ...salvo che il config scelga l'harness pi (`jht setup`, `jht providers harness`): allora e' pi.
+// ...salvo che il config scelga l'harness pi (`jht setup`, `jht providers harness`): allora e' pi, anche per i provider
+// che girano SOLO su pi con la chiave API (glm, e kimi): non hanno una CLI loro, quella di Z.ai non esiste.
+// usesPi() e' vero solo con un provider che pi regge, quindi e' la stessa lista del setup e del launcher.
 export function providerCli(config) {
+  if (usesPi(config)) return 'pi';
   const id = typeof config?.active_provider === 'string' ? config.active_provider.trim().toLowerCase() : '';
-  const cli = PROVIDER_CLI[id] ?? null;
-  return cli && usesPi(config) ? 'pi' : cli;
+  return PROVIDER_CLI[id] ?? null;
 }
+
 
 export function cliAvailable(bin) {
   if (!/^[a-z]+$/.test(bin)) return false;

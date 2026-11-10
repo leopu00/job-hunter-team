@@ -91,7 +91,7 @@ export function validRoleModels(value) {
  * The role/model defaults are shared with the launcher through shared/runtime/role-models.list.
  * A test executes the launcher too, preserving the provider and per-role override rules.
  */
-const PROVIDER_OF = Object.freeze({ codex: 'codex', openai: 'codex', claude: 'claude', anthropic: 'claude', kimi: 'kimi', moonshot: 'kimi' });
+const PROVIDER_OF = Object.freeze({ codex: 'codex', openai: 'codex', claude: 'claude', anthropic: 'claude', kimi: 'kimi', moonshot: 'kimi', glm: 'glm' });
 
 /**
  * The model and effort each role is started with, as the launcher decides them at every spawn:
