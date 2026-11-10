@@ -1274,7 +1274,7 @@ function Get-RunningComposeServiceId {
   if (-not $expectedProject) { $script:ServiceLookupReason = 'the compose project name could not be read'; return $null }
   $files = @('-f', $ComposeFile)
   if ($ContainerRuntime -eq 'podman') { $files += @('-f', $PodmanComposeFile) }
-  $composeArgs = @('compose') + $files + @('--project-directory', $RuntimeDir, '--profile', 'telegram', '--profile', 'broker', 'ps', '-q')
+  $composeArgs = @('compose') + $files + @('--project-directory', $RuntimeDir, '--profile', 'telegram', '--profile', 'broker', '--profile', 'media', 'ps', '-q')
   if ($ContainerRuntime -ne 'podman') { $composeArgs += $Service }
   $ids = @(& { $ErrorActionPreference = 'Continue'; & docker @composeArgs 2>$null } | ForEach-Object { "$($_)".Trim() } | Where-Object { $_ })
   $psCode = $LASTEXITCODE
@@ -2293,7 +2293,7 @@ function Remove-BrokerResetData {
     Write-Err 'reset: non riesco a determinare il progetto Compose; i volumi del broker non sono stati toccati.'
     return 1
   }
-  Invoke-Compose '--profile' 'telegram' '--profile' 'broker' down
+  Invoke-Compose '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' down
   if ($LASTEXITCODE -ne 0) {
     Write-Err 'reset: non riesco a fermare il runtime; i volumi del broker non sono stati toccati.'
     return 1
@@ -4031,7 +4031,7 @@ switch ($Sub) {
   { $_ -in @('down', 'stop-container') } {
     Require-ComposeFile
     Require-Docker
-    Invoke-Compose '--profile' 'telegram' '--profile' 'broker' down
+    Invoke-Compose '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' down
     break
   }
 
@@ -4045,7 +4045,7 @@ switch ($Sub) {
   'recreate' {
     Require-ComposeFile
     Require-Docker
-    Invoke-Compose '--profile' 'telegram' '--profile' 'broker' down
+    Invoke-Compose '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' down
     if (-not (Repair-MountOwnership)) { exit 1 }
     if (-not (Initialize-TelegramLegacyInventory)) {
       Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'

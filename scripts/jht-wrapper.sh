@@ -62,7 +62,7 @@ CONTAINER_SERVICE="jht"
 # I servizi del compose: agenti e i due servizi isolati.
 COMPOSE_SERVICES="jht jht-broker jht-telegram"
 # Every profile of the project: what looks at or takes down the WHOLE project names them all (the broker and Telegram are made on request).
-COMPOSE_ALL_PROFILES="telegram,broker"
+COMPOSE_ALL_PROFILES="telegram,broker,media"
 RUNTIME_MIGRATION_VOLUMES="jht-broker-state jht-secrets jht-telegram-secrets jht-telegram-state"
 ATTESTED_CONTAINER_ID=""
 if [ -n "${JHT_RUNTIME_DIR:-}" ]; then
@@ -1653,7 +1653,7 @@ container_down() {
         info "niente da fermare: nessun container del progetto."
         return 0
       fi
-      for svc in "$BROKER_SERVICE" "$TELEGRAM_SERVICE"; do
+      for svc in "$BROKER_SERVICE" "$TELEGRAM_SERVICE" "$MEDIA_SERVICE"; do
         svc_status=0
         read_only_service_id "$svc" any-config >/dev/null || svc_status=$?
         case "$svc_status" in
@@ -1859,6 +1859,7 @@ broker_after_up() {
 # container uid 1003. Il container agenti vede soltanto gli hash dei token
 # legacy necessari a imporre la rotazione, mai il token nuovo.
 TELEGRAM_SERVICE="jht-telegram"
+MEDIA_SERVICE="jht-media"
 
 telegram_admin() {
   local telegram_id
