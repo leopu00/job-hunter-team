@@ -327,3 +327,65 @@ def test_the_detached_pull_asks_for_a_hidden_window_only_where_the_parameter_exi
     assert "Start-Process -FilePath $shell -WindowStyle" not in start, "the parameter must not be on the command line itself"
     assert "if ($PSVersionTable.PSEdition -eq 'Desktop' -or $IsWindows) { $start.WindowStyle = 'Hidden' }" in start
     assert start.index("$start.WindowStyle") < start.index("Start-Process @start")
+
+
+# ── before the helpers are there: the read-only commands the app reads answer «not installed yet» ──────────────────────────
+
+ABSENT = r"""
+$tokens = $null; $errors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile($env:T_WRAPPER_SRC, [ref]$tokens, [ref]$errors)
+if ($errors.Count) { throw "parse: $($errors[0])" }
+$null = Invoke-Expression ($ast.Extent.Text.Substring($ast.Extent.Text.IndexOf('$IntegrationIdsAbsent = ')).Split("`n")[0])
+$fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Write-RuntimeHelperAbsentAnswer' }, $true)
+Invoke-Expression $fn.Extent.Text
+$argv = @(ConvertFrom-Json -InputObject $env:T_ARGS | ForEach-Object { $_ })
+$answered = Write-RuntimeHelperAbsentAnswer $argv[0] ([string[]]@($argv | Select-Object -Skip 1))
+[Console]::Out.WriteLine("answered=$answered")
+"""
+
+
+def _absent(box, *args: str):
+    import json as _json
+    done = box.run(ABSENT, T_WRAPPER_SRC=str(WRAPPER), T_ARGS=_json.dumps(list(args)))
+    assert done.returncode == 0, done.stdout + done.stderr
+    lines = _lines(done)
+    return lines[:-1], lines[-1]
+
+
+IDS = ["google", "telegram", "mail", "linkedin-login", "screen", "media"]
+
+
+def test_tools_status_json_answers_a_valid_state(box):
+    out, answered = _absent(box, "tools", "status", "--json")
+    assert answered == "answered=True"
+    assert json.loads(out[0]) == {"ok": True, "state": "none", "tier": "full", "reason": "not_installed"} and len(out) == 1
+
+
+def test_integration_list_and_status_answer_for_every_id_in_json_and_in_words(box):
+    out, answered = _absent(box, "integration", "list", "--json")
+    rows = json.loads(out[0])["integrations"]
+    assert answered == "answered=True" and [r["id"] for r in rows] == IDS and {r["state"] for r in rows} == {"not_installed"}
+    one, _ = _absent(box, "integration", "status", "mail", "--json")
+    assert json.loads(one[0]) == {"id": "mail", "state": "not_installed", "reason": "non ancora installato"}
+    words, _ = _absent(box, "integration", "list")
+    assert [line.split()[0] for line in words] == IDS and all("non installato" in line for line in words)
+
+
+@pytest.mark.parametrize("args", [("integration", "status", "bogus", "--json"), ("integration", "list", "--bogus"), ("integration", "list", "mail"),
+                                  ("integration", "add", "media"), ("tools", "status"), ("tools", "pull"), ("tools", "switch")])
+def test_anything_else_is_left_to_the_helper_and_its_error(box, args):
+    out, answered = _absent(box, *args)
+    assert answered == "answered=False" and out == []
+
+
+def test_the_two_branches_ask_for_the_answer_only_while_the_helper_is_not_declared():
+    wrapper = _text(WRAPPER)
+    assert "if (-not (Test-RuntimeHelperDeclared 'jht-integration.ps1') -and (Write-RuntimeHelperAbsentAnswer 'integration' $Rest)) { exit 0 }" in wrapper
+    assert "if (-not (Test-RuntimeHelperDeclared 'jht-tools.ps1') -and (Write-RuntimeHelperAbsentAnswer 'tools' $Rest)) { exit 0 }" in wrapper
+    assert re.search(r"^\$IntegrationIdsAbsent = @\('google', 'telegram', 'mail', 'linkedin-login', 'screen', 'media'\)$", wrapper, re.M)
+
+
+def test_the_ids_of_the_answer_are_the_ones_of_the_helper():
+    theirs = re.search(r"^\$IntegrationIds = @\((.*)\)$", _text(ROOT / "scripts" / "jht-integration.ps1"), re.M).group(1)
+    ours = re.search(r"^\$IntegrationIdsAbsent = @\((.*)\)$", _text(WRAPPER), re.M).group(1)
+    assert ours == theirs, "two lists, one meaning: the wrapper answers for the ids the helper knows"

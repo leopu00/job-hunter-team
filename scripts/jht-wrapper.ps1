@@ -603,6 +603,36 @@ function Test-RuntimeHelperDeclared {
   return ($null -ne $values -and $values.ContainsKey($Name))
 }
 
+# Before the helper is there (an install whose first download of the tools has not happened yet) the read-only commands that the app
+# reads answer "not installed yet", in the shape the helper uses, instead of failing: `jht tools status --json` and
+# `jht integration list|status [id] [--json]`. $What is tools|integration, $Words what the person typed after it. $false for anything
+# else (add, remove, a wrong use): the caller goes on to the helper and its error.
+$IntegrationIdsAbsent = @('google', 'telegram', 'mail', 'linkedin-login', 'screen', 'media')
+function Write-RuntimeHelperAbsentAnswer {
+  param([string]$What, [string[]]$Words)
+  $Words = @($Words)
+  $word = if ($Words.Count -gt 0) { [string]$Words[0] } else { '' }
+  $json = $false; $id = ''
+  foreach ($arg in @($Words | Select-Object -Skip 1)) {
+    if ([string]$arg -ceq '--json') { $json = $true }
+    elseif ([string]$arg -like '-*' -or $id) { return $false }
+    else { $id = [string]$arg }
+  }
+  if ($What -ceq 'tools') {
+    if ($word -cne 'status' -or -not $json -or $id) { return $false }
+    [Console]::Out.WriteLine('{"ok":true,"state":"none","tier":"full","reason":"not_installed"}')
+    return $true
+  }
+  if (@('list', 'status') -cnotcontains $word -or ($word -ceq 'list' -and $id)) { return $false }
+  if ($id -and ($IntegrationIdsAbsent -cnotcontains $id)) { return $false }
+  $ids = if ($id) { @($id) } else { $IntegrationIdsAbsent }
+  $rows = @(foreach ($one in $ids) { '{"id":"' + $one + '","state":"not_installed","reason":"non ancora installato"}' })
+  if ($json -and $id) { [Console]::Out.WriteLine($rows[0]); return $true }
+  if ($json) { [Console]::Out.WriteLine('{"integrations":[' + ($rows -join ',') + ']}'); return $true }
+  foreach ($one in $ids) { [Console]::Out.WriteLine(('{0,-15} {1,-16} {2}' -f $one, 'non installato', 'non ancora installato')) }
+  return $true
+}
+
 function Install-RuntimeHelpers {
   try {
     Assert-TrustedRuntime
@@ -3640,6 +3670,7 @@ switch ($Sub) {
 
   'integration' {
     Require-ComposeFile
+    if (-not (Test-RuntimeHelperDeclared 'jht-integration.ps1') -and (Write-RuntimeHelperAbsentAnswer 'integration' $Rest)) { exit 0 }
     # Dot-sourced here, at script level, so that its functions outlive this block. Older runtime: the helper is fetched once.
     $helperPath = Join-Path $RuntimeDir 'jht-integration.ps1'
     # A helper that is missing is fetched only when the person runs `add` or `remove`, never from a read-only command.
@@ -3657,6 +3688,7 @@ switch ($Sub) {
 
   'tools' {
     Require-ComposeFile
+    if (-not (Test-RuntimeHelperDeclared 'jht-tools.ps1') -and (Write-RuntimeHelperAbsentAnswer 'tools' $Rest)) { exit 0 }
     # Same as `integration`: dot-sourced at script level. A helper that is missing is never fetched from here: these commands run by
     # themselves after the install, and a download at the tip of the branch is not something to start without the person asking.
     if (-not (Test-RuntimeHelperDeclared 'jht-tools.ps1')) {
