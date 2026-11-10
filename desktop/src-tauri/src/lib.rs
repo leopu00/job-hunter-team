@@ -26,6 +26,7 @@ mod host_db;
 #[cfg(windows)]
 #[allow(dead_code)]
 mod host_files_windows;
+mod harness_choice;
 mod host_positions;
 mod external_links;
 mod existing_team_register;
@@ -176,6 +177,8 @@ macro_rules! registered_native_commands {
             onboarding::onboarding_team_update,
             onboarding::onboarding_plans,
             onboarding::onboarding_plan_declare,
+            harness_choice::harness_choice_read,
+            harness_choice::harness_choice_set,
             onboarding::onboarding_local_uninstall_available,
             onboarding::onboarding_local_uninstall,
             runtime_log::onboarding_runtime_log,
