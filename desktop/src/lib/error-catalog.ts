@@ -18,7 +18,7 @@ import {
   type ErrorTranslationLocale,
   type ErrorTranslationPair,
 } from "./error-catalog.locales";
-import { PAGE_DATA_ERRORS } from "./error-catalog.page-data";
+import { EXTRA_ERRORS } from "./error-catalog.extra";
 
 export const ERROR_LOCALES = ["it", "en", ...ERROR_TRANSLATION_LOCALES] as const;
 export type ErrorLocale = (typeof ERROR_LOCALES)[number];
@@ -471,7 +471,7 @@ const APPLY_BAD_NUMBER = copy(
 );
 
 export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
-  ...PAGE_DATA_ERRORS,
+  ...EXTRA_ERRORS,
   // ── Generic and app state ────────────────────────────────────────────────
   unknown: RETRY,
   desktop_only: copy(
