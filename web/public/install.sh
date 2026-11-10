@@ -110,6 +110,8 @@ fi
 IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht@sha256:fa78c975c04dd5f95d6225a35c8c3bb9646f8ef14b32c8ca558d5332de0cce00}"
 # The core image (tools come later): empty while the release has none; with one, the install uses it unless JHT_IMAGE names another.
 CORE_IMAGE_DIGEST="${JHT_CORE_IMAGE_DIGEST:-}"
+# It becomes an image name, a file and a hash: only the exact shape of a digest goes through, whatever the environment says.
+[ -z "$CORE_IMAGE_DIGEST" ] || [[ "$CORE_IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { printf 'JHT_CORE_IMAGE_DIGEST is not a sha256 digest\n' >&2; exit 2; }
 RUNTIME_TIER="" TIER_STAGED="" TIER_STAGED_SHA=""
 if [ -n "$CORE_IMAGE_DIGEST" ] && [ -z "${JHT_IMAGE:-}" ]; then RUNTIME_TIER="core"; IMAGE="ghcr.io/leopu00/jht@$CORE_IMAGE_DIGEST"; fi
 # Il compose scaricato può evolvere sul canale production; l'installer di

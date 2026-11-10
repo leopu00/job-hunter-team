@@ -67,6 +67,22 @@ def test_the_test_channel_keeps_its_own_image_and_no_tier(tmp_path):
 
 
 @bash_only
+@pytest.mark.parametrize("hostile", ["sha256:xyz", "sha256:" + "cd" * 31, "sha256:" + "cd" * 32 + " --privileged", "sha256:" + "cd" * 32 + "\n", "$(touch HIT)",
+                                     "sha256:" + "CD" * 32, "ghcr.io/x@" + CORE])
+def test_a_core_digest_from_the_environment_that_is_not_a_digest_stops_the_installer(tmp_path, hostile):
+    done = source(tmp_path, SHOW, {"JHT_CORE_IMAGE_DIGEST": hostile})
+    assert done.returncode == 2 and "not a sha256 digest" in done.stderr and "image=" not in done.stdout
+    assert not (tmp_path / "HIT").exists()
+
+
+def test_the_powershell_installer_validates_the_core_digest_in_its_exact_shape_too():
+    text = INSTALL_PS1.read_text(encoding="utf-8").replace("\r\n", "\n")
+    guard = "if ($CoreImageDigest -and $CoreImageDigest -cnotmatch '^sha256:[0-9a-f]{64}\\z') { throw 'JHT_CORE_IMAGE_DIGEST is not a sha256 digest' }"
+    assert guard in text
+    assert text.index(guard) < text.index("$RuntimeTier = if ($CoreImageDigest")
+
+
+@bash_only
 def test_the_core_tier_is_staged_hashed_and_published(tmp_path):
     done = source(tmp_path, 'ok() { :; }; stage_runtime_tier; printf "sha=%s\\n" "$TIER_STAGED_SHA"; '
                   '[ ! -e "$JHT_RUNTIME_DIR/runtime-tier" ] && echo before-publish-absent; publish_runtime_tier', {"JHT_CORE_IMAGE_DIGEST": CORE})

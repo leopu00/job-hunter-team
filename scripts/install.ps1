@@ -177,6 +177,8 @@ function Set-JhtNodeOwner {
 $TestChannelImage = $Image
 $Image = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { 'ghcr.io/leopu00/jht@sha256:fa78c975c04dd5f95d6225a35c8c3bb9646f8ef14b32c8ca558d5332de0cce00' }
 $CoreImageDigest = if ($env:JHT_CORE_IMAGE_DIGEST) { $env:JHT_CORE_IMAGE_DIGEST } else { '' }
+# It becomes an image name, a file and a hash: only the exact shape of a digest goes through, whatever the environment says.
+if ($CoreImageDigest -and $CoreImageDigest -cnotmatch '^sha256:[0-9a-f]{64}\z') { throw 'JHT_CORE_IMAGE_DIGEST is not a sha256 digest' }
 $RuntimeTier = if ($CoreImageDigest -and -not $env:JHT_IMAGE -and -not $TestChannel) { 'core' } else { '' }  # core: the tools come later
 if ($RuntimeTier) { $Image = "ghcr.io/leopu00/jht@$CoreImageDigest" }
 $RuntimeImage = if ($TestChannel) { $TestChannelImage } else { $Image }
