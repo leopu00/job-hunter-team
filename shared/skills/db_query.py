@@ -73,6 +73,7 @@ from _db import get_db, ensure_schema, active_categories, SENIORITY_LEVELS
 # stale di `check_duplicate` dentro tests/test_scoring_logic.py.
 from db_insert import extract_linkedin_job_id
 import maintenance_log
+import queue_claims
 from external_content import (
     fence_external_content,
     flatten_external_value,
@@ -1201,13 +1202,40 @@ _ROLE_QUEUES = {
 }
 
 
-def role_queue_count(conn, role):
-    """Quante posizioni aspettano `role` (analista: `new`; scorer: `checked` senza punteggio). 0 per gli altri ruoli."""
+def role_queue_count(conn, role, for_agent=None):
+    """Quante posizioni aspettano `role` (analista: `new`; scorer: `checked` senza punteggio). 0 per gli altri ruoli.
+
+    Con `for_agent`: quelle che QUELL'agente puo' prendere, cioe' senza le posizioni che un altro agente tiene in questo
+    momento (queue_claims.py). Chi decide la pausa di un Analista o di uno Scorer chiede cosi': una coda tutta in mano ai
+    colleghi non e' lavoro che aspetta lui."""
     entry = _ROLE_QUEUES.get(role)
     if entry is None:
         return 0
     source, where = entry
+    if for_agent and role in queue_claims.ROLES:
+        taken = queue_claims.claimed_by_others(role, str(for_agent).strip().lower())
+        if taken:
+            ids = [r[0] for r in conn.execute(f"SELECT p.id FROM {source} WHERE {where}").fetchall()]
+            return sum(1 for pid in ids if pid not in taken)
     return conn.execute(f"SELECT COUNT(*) FROM {source} WHERE {where}").fetchone()[0]
+
+
+def _claimed_queue(role, rows, lim):
+    """The queue of an Analista or a Scorer as the caller may take it: without what a colleague holds, with the
+    first free position claimed for the caller and put first (queue_claims.py). A caller that is not an agent
+    gets the queue as it is. `rows` are all the rows of the queue, not a page: the page is cut here."""
+    rows = [dict(r) for r in rows]
+    me = queue_claims.agent_name()
+    if me:
+        taken = queue_claims.claimed_by_others(role, me)
+        free = [r for r in rows if r['id'] not in taken]
+        first = next((r for r in free if queue_claims.claim(role, r['id'], me)), None)
+        rows = ([first] + [r for r in free if r is not first]) if first is not None else free
+    total = len(rows)
+    page = rows if lim < 0 else rows[:lim]
+    for r in page:
+        r['_total'] = total
+    return page
 
 
 def waiting_user_requests(conn):
@@ -1227,24 +1255,22 @@ def next_for_role(role, min_score=None, older_than_days=None, limit=None,
     lim = _sql_limit(limit)
 
     if role == 'analista':
-        rows = conn.execute(f"""
+        rows = _claimed_queue(role, conn.execute(f"""
             SELECT p.id, p.title, p.company, p.found_at, COUNT(*) OVER () AS _total
             FROM positions p
             WHERE {ANALYST_QUEUE_WHERE}
             ORDER BY p.found_at ASC
-            LIMIT ?
-        """, (lim,)).fetchall()
+        """).fetchall(), lim)
         label = "New positions ready for analysis"
 
     elif role == 'scorer':
-        rows = conn.execute(f"""
+        rows = _claimed_queue(role, conn.execute(f"""
             SELECT p.id, p.title, p.company, p.found_at, COUNT(*) OVER () AS _total
             FROM positions p
             LEFT JOIN scores s ON s.position_id = p.id
             WHERE {SCORER_QUEUE_WHERE}
             ORDER BY p.found_at ASC
-            LIMIT ?
-        """, (lim,)).fetchall()
+        """).fetchall(), lim)
         label = "Checked positions without a score"
 
     elif role == 'scrittore':
