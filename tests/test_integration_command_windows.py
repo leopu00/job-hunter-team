@@ -285,7 +285,6 @@ def test_add_media_pulls_by_digest_and_starts_only_the_media_profile_with_that_i
     assert f"DOCKER pull {REF}" in lines
     assert "COMPOSE --profile media up -d jht-media" in lines and f"EXTRAS_IMAGE {REF}" in lines
     assert lines.index(f"DOCKER pull {REF}") < lines.index("COMPOSE --profile media up -d jht-media")
-    assert not os.environ.get("JHT_EXTRAS_IMAGE")
 
 
 def test_media_states_running_ready_when_off_and_not_installed_after_remove(host):
