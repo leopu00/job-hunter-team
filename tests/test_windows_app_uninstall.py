@@ -427,14 +427,20 @@ $global:LegacyTask = $true
 $global:FakeTask = ($env:T_TASK -eq '1')
 function Get-ScheduledTask {
   param([string]$TaskName)
-  if ($global:FakeTask -and $TaskName -ceq $global:ScopedTaskName) { return [pscustomobject]@{ TaskName = $TaskName } }
-  if ($global:LegacyTask -and $TaskName -ceq 'Job Hunter Team - Start runtime') { return [pscustomobject]@{ TaskName = $TaskName } }
+  # The real cmdlet takes -TaskName as a wildcard pattern: the [ ] of the scoped name make it throw, for everyone.
+  if ($TaskName -and $TaskName -match '[\[\]*?]') { throw 'The specified wildcard character pattern is not valid (what the real Get-ScheduledTask says)' }
+  $all = @()
+  if ($global:FakeTask) { $all += [pscustomobject]@{ TaskName = $global:ScopedTaskName; TaskPath = '\' } }
+  if ($global:LegacyTask) { $all += [pscustomobject]@{ TaskName = 'Job Hunter Team - Start runtime'; TaskPath = '\' } }
+  if ($TaskName) { return @($all | Where-Object { $_.TaskName -ceq $TaskName }) }
+  return $all
 }
 function Unregister-ScheduledTask {
-  param([string]$TaskName, [switch]$Confirm)
-  [IO.File]::AppendAllText($env:FAKE_LOG, "unregister $TaskName`n")
-  if ($TaskName -ceq 'Job Hunter Team - Start runtime') { throw 'legacy P23 task must stay untouched' }
-  if ($env:T_TASK_STUCK -ne '1' -and $TaskName -ceq $global:ScopedTaskName) { $global:FakeTask = $false }
+  param($InputObject, [string]$TaskName, [switch]$Confirm)
+  if ($TaskName) { throw 'by name: wildcards again' }
+  [IO.File]::AppendAllText($env:FAKE_LOG, "unregister $($InputObject.TaskName)`n")
+  if ($InputObject.TaskName -ceq 'Job Hunter Team - Start runtime') { throw 'legacy P23 task must stay untouched' }
+  if ($env:T_TASK_STUCK -ne '1' -and $InputObject.TaskName -ceq $global:ScopedTaskName) { $global:FakeTask = $false }
 }
 
 $roots = @{ Profile = $env:R_PROFILE; LocalAppData = $env:R_LOCAL; AppData = $env:R_ROAMING; Temp = $env:R_TEMP }

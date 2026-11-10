@@ -449,15 +449,21 @@ function Invoke-JhtPodmanWithin {
 
 # ── Scheduled task and the user's environment ─────────────────────────────
 
+# The tasks of this exact name, found by comparing names: -TaskName takes wildcards, and the [ ] of "... [<SID>]" are one, so a call with
+# the name raises "wildcard pattern not valid" and the task was never found. Throws when the list cannot be read.
+function Get-JhtStartupTaskExact {
+  return @(Get-ScheduledTask -ErrorAction Stop | Where-Object { $_.TaskName -ceq $JhtStartupTaskName -and $_.TaskPath -ceq '\' })
+}
+
 function Test-JhtStartupTaskPresent {
   if (-not $JhtStartupTaskName) { return $false }
-  try { return [bool](Get-ScheduledTask -TaskName $JhtStartupTaskName -ErrorAction SilentlyContinue) } catch { return $false }
+  try { return @(Get-JhtStartupTaskExact).Count -gt 0 } catch { return $false }
 }
 
 function Remove-JhtStartupTaskExact {
   try {
     if (-not (Test-JhtStartupTaskPresent)) { return 'absent' }
-    Unregister-ScheduledTask -TaskName $JhtStartupTaskName -Confirm:$false -ErrorAction Stop
+    foreach ($task in @(Get-JhtStartupTaskExact)) { Unregister-ScheduledTask -InputObject $task -Confirm:$false -ErrorAction Stop }
     if (Test-JhtStartupTaskPresent) { return 'left' }
     return 'removed'
   } catch { return 'left' }

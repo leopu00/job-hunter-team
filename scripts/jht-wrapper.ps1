@@ -88,7 +88,8 @@ function Get-JhtUninstallText {
     'done'           = @('Fatto: la macchina <machine> (e con lei le immagini di JHT, il nucleo e quella piena), il runtime e il comando jht sono stati tolti.', 'Done: the <machine> machine (and with it the JHT images, the core and the full one), the runtime and the jht command are gone.')
     'done.kept'      = @(' ~/.jht e Documents\Job Hunter Team restano (con --purge si cancellano).', ' ~/.jht and Documents\Job Hunter Team stay (--purge deletes them).')
     'secrets'        = @('I segreti salvati non sono stati rimossi: la password della posta e i token di Telegram stanno nei volumi jht-secrets e jht-telegram-secrets della macchina <machine>, che e'' ancora qui.', 'The saved secrets were not removed: the mail password and the Telegram tokens are in the jht-secrets and jht-telegram-secrets volumes of the <machine> machine, which is still there.')
-    'left.machine'   = @('Non tolta: la macchina Podman <machine>. Motivo: {0}. A mano: wsl --unregister {1}, poi podman machine rm --force <machine>; poi rilancia jht uninstall --confirm.', 'Not removed: the <machine> Podman machine. Reason: {0}. By hand: wsl --unregister {1}, then podman machine rm --force <machine>; then run jht uninstall --confirm again.')
+    'left.machine'   = @('Non tolta: la macchina Podman <machine>. Motivo: {0}. A mano: podman machine stop <machine>; wsl --unregister {1}; poi rilancia jht uninstall --confirm.', 'Not removed: the <machine> Podman machine. Reason: {0}. By hand: podman machine stop <machine>; wsl --unregister {1}; then run jht uninstall --confirm again.')
+    'left.task'      = @('Non tolta l''attivita'' di avvio al logon ''{0}'' (motivo: {1}). Il resto e'' stato tolto. A mano: schtasks /Delete /TN "{0}" /F.', 'Not removed: the logon start task ''{0}'' (reason: {1}). Everything else was removed. By hand: schtasks /Delete /TN "{0}" /F.')
     'left.data'      = @('Non cancellati i dati di JHT ({0}). A mano: Remove-Item -Recurse -Force {1}. Il comando jht e il runtime sono rimasti: rilancia jht uninstall --confirm --purge dopo aver risolto.', 'The JHT data was not deleted ({0}). By hand: Remove-Item -Recurse -Force {1}. The jht command and the runtime are still there: run jht uninstall --confirm --purge again once it is sorted out.')
     'left.runtime'   = @('Non tolto: il runtime di JHT in {0}. A mano: Remove-Item -Recurse -Force ''{0}''.', 'Not removed: the JHT runtime in {0}. By hand: Remove-Item -Recurse -Force ''{0}''.')
     'left.commands'  = @('Non tolti il comando jht o i file dell''installer in {0} ({1}), o le variabili e le righe PATH aggiunte dall''installer. A mano: Remove-Item il file; variabili JHT_CONTAINER_RUNTIME e JHT_PODMAN_MACHINE e la cartella {0} nel PATH da Impostazioni > Variabili d''ambiente.', 'Not removed: the jht command or the installer files in {0} ({1}), or the variables and PATH lines the installer added. By hand: Remove-Item the file; the JHT_CONTAINER_RUNTIME and JHT_PODMAN_MACHINE variables and the {0} folder in the PATH from Settings > Environment variables.')
@@ -251,15 +252,30 @@ function Get-JhtScopedStartupTaskName {
   return ''
 }
 
+# The tasks of this exact name, found by comparing names: -TaskName takes wildcards, and the [ ] of "... [<SID>]" are one, so a call with
+# the name raises "wildcard pattern not valid" for every user. Throws when the list itself cannot be read; no task is an empty list.
+function Get-JhtStartupTaskExact {
+  param([Parameter(Mandatory)][string]$TaskName)
+  return @(Get-ScheduledTask -ErrorAction Stop | Where-Object { $_.TaskName -ceq $TaskName -and $_.TaskPath -ceq '\' })
+}
+
+# $true when the task is gone (it was not there, or it was removed and the list confirms it). $false only for a real failure, with what
+# Windows said in $script:JhtStartupTaskReason: the caller reports it and goes on.
 function Remove-JhtStartupTask {
   param([string]$TaskName = (Get-JhtScopedStartupTaskName))
+  $script:JhtStartupTaskReason = ''
   if (-not $TaskName) { return $true }
   try {
-    $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-    if (-not $task) { return $true }
-    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction Stop
-    return -not [bool](Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue)
-  } catch { return $false }
+    $tasks = @(Get-JhtStartupTaskExact $TaskName)
+    if ($tasks.Count -eq 0) { return $true }
+    foreach ($task in $tasks) { Unregister-ScheduledTask -InputObject $task -Confirm:$false -ErrorAction Stop }
+    if (@(Get-JhtStartupTaskExact $TaskName).Count -eq 0) { return $true }
+    $script:JhtStartupTaskReason = 'la attivita'' risulta ancora registrata'
+    return $false
+  } catch {
+    $script:JhtStartupTaskReason = (Format-JhtUninstallReason $_.Exception.Message)
+    return $false
+  }
 }
 
 # Removes the machine when podman could not: the distro of OUR machine by its exact name (never another), ended and unregistered, then
@@ -270,6 +286,9 @@ function Remove-JhtPodmanMachineThroughWsl {
   $distro = Get-JhtPodmanDistroName $MachineName
   $listed = @(& { $ErrorActionPreference = 'Continue'; & $WslPath --list --quiet 2>$null } | ForEach-Object { ([string]$_).Replace([string][char]0, '').Trim() })
   if ($listed -cnotcontains $distro) { return $false }
+  # Podman's own stop first: it closes the machine's win-sshproxy and frees its pipe, which `machine rm` can no longer do once the
+  # distro is unregistered (WSL_E_DISTRO_NOT_FOUND). Its answer does not matter: the distro is ended and unregistered next.
+  if ($PodmanPath) { $null = Invoke-JhtUninstallNative $PodmanPath @('machine', 'stop', $MachineName) }
   $null = Invoke-JhtUninstallNative $WslPath @('--terminate', $distro)
   $unregister = Invoke-JhtUninstallNative $WslPath @('--unregister', $distro)
   if ($unregister.Code -ne 0) {
@@ -426,13 +445,11 @@ function Invoke-JhtWindowsUninstall {
   $machineState = Get-JhtPodmanMachineState -PodmanPath $PodmanPath -WslPath $WslPath -MachineName $machineName
   # Remove the logon trigger before deleting the machine, otherwise a concurrent
   # sign-in could recreate activity while uninstall is tearing the runtime down.
-  if (-not (Remove-JhtStartupTask)) {
-    $script:JhtUninstallReason = 'l''attivita'' di avvio al logon non si toglie'
-    if ($machineState -ne 'absent') { Write-JhtUninstallMachineLeft }
-    if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime @($runtimePath) }
-    Write-JhtUninstallLeft commands @($binPath, (& $leftCommands))
-    return 24
-  }
+  # A task that cannot be removed is reported at the end and does not stop the rest: the machine, the runtime and the commands go on.
+  $taskName = Get-JhtScopedStartupTaskName
+  $taskLeft = $false
+  $taskReason = ''
+  if (-not (Remove-JhtStartupTask -TaskName $taskName)) { $taskLeft = $true; $taskReason = $script:JhtStartupTaskReason }
   $leaveForRetry = {
     param([string]$Reason)
     if ($Reason) { $script:JhtUninstallReason = $Reason }
@@ -521,6 +538,7 @@ function Invoke-JhtWindowsUninstall {
     Write-JhtUninstallLeft commands @($binPath, (& $leftCommands))
     return 24
   }
+  if ($taskLeft) { [Console]::Error.WriteLine((Get-JhtUninstallText 'left.task' @($taskName, $taskReason))) }
   $done = Get-JhtUninstallText 'done'
   if (-not $purge) { $done += (Get-JhtUninstallText 'done.kept') }
   [Console]::Out.WriteLine($done)

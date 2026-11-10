@@ -634,7 +634,7 @@ def test_uninstall_removes_only_jht_and_preserves_the_users_default_connection(t
             "Get-JhtPodmanDistroName", "Format-JhtUninstallReason", "Invoke-JhtUninstallNative",
             "Find-JhtUninstallPodman", "Write-JhtUninstallMachineLeft",
             "Get-JhtNormalizedWindowsPath", "Get-JhtPodmanMachineState",
-            "Remove-JhtUserEnvironment", "Remove-JhtStartupTask",
+            "Remove-JhtUserEnvironment", "Get-JhtStartupTaskExact", "Remove-JhtStartupTask",
             "Remove-JhtPodmanMachineThroughWsl", "Remove-JhtUserDataFolder", "Remove-JhtDirectoryNoFollow",
             "Get-JhtUserMachineName", "Test-JhtMachineCreatedMark", "Resolve-JhtUninstallMachineName",
             "Invoke-JhtWindowsUninstall",
@@ -780,26 +780,32 @@ $script:LegacyTask = 'Job Hunter Team - Start runtime'
 $script:ScopedTask = Get-JhtScopedStartupTaskName
 function Get-ScheduledTask {
   param($TaskName, $ErrorAction)
-  if ($script:Present -and $TaskName -ceq $script:ScopedTask) { [pscustomobject]@{ TaskName = $TaskName } }
-  if ($TaskName -ceq $script:LegacyTask) { [pscustomobject]@{ TaskName = $TaskName } }
+  # The real cmdlet takes -TaskName as a wildcard pattern: the [ ] of the scoped name make it throw, for everyone.
+  if ($TaskName -and $TaskName -match '[\[\]*?]') { throw 'The specified wildcard character pattern is not valid (what the real Get-ScheduledTask says)' }
+  $all = @()
+  if ($script:Present) { $all += [pscustomobject]@{ TaskName = $script:ScopedTask; TaskPath = '\' } }
+  $all += [pscustomobject]@{ TaskName = $script:LegacyTask; TaskPath = '\' }
+  if ($TaskName) { return @($all | Where-Object { $_.TaskName -ceq $TaskName }) }
+  return $all
 }
 function Unregister-ScheduledTask {
-  param($TaskName, [switch]$Confirm, $ErrorAction)
-  if ($TaskName -ceq $script:LegacyTask) { throw 'legacy P23 task must stay untouched' }
-  if ($TaskName -cne $script:ScopedTask) { throw 'wrong task' }
+  param($InputObject, $TaskName, [switch]$Confirm, $ErrorAction)
+  if ($TaskName) { throw 'by name: wildcards again' }
+  if ($InputObject.TaskName -ceq $script:LegacyTask) { throw 'legacy P23 task must stay untouched' }
+  if ($InputObject.TaskName -cne $script:ScopedTask) { throw 'wrong task' }
   if ($Confirm) { throw 'interactive confirmation requested' }
   if ($env:UNREGISTER_FAIL -eq '1') { throw 'cannot unregister' }
   $script:Present = $false
 }
 if ((Remove-JhtStartupTask) -ne ($env:UNREGISTER_FAIL -ne '1')) { throw 'wrong removal result' }
-if (-not (Get-ScheduledTask -TaskName $script:LegacyTask)) { throw 'legacy P23 task was changed' }
+if (-not (Get-ScheduledTask | Where-Object { $_.TaskName -ceq $script:LegacyTask })) { throw 'legacy P23 task was changed' }
 """
 
 
 @pytest.mark.parametrize("fails", [False, True], ids=["removed-and-verified", "failure-is-reported"])
 def test_uninstall_removes_and_verifies_the_exact_logon_task(tmp_path, fails):
     result, _ = _run(
-        tmp_path, WRAPPER, ["Remove-JhtStartupTask"], REMOVE_STARTUP_TASK_BODY,
+        tmp_path, WRAPPER, ["Get-JhtStartupTaskExact", "Format-JhtUninstallReason", "Remove-JhtStartupTask"], REMOVE_STARTUP_TASK_BODY,
         {"UNREGISTER_FAIL": "1" if fails else "0"},
     )
     assert result.returncode == 0, result.stderr

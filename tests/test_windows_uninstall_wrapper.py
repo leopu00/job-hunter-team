@@ -103,7 +103,7 @@ def _write_batch(path: Path, source: str) -> None:
 STARTUP_TASK_LABEL = "Job Hunter Team - Start runtime"
 
 
-def _scheduled_task_fakes(state: Path, log: Path, unregister_fails: bool) -> str:
+def _scheduled_task_fakes(state: Path, log: Path, unregister_fails: bool, list_fails: bool = False) -> str:
     """Get-/Unregister-ScheduledTask as functions, which PowerShell runs before the
     cmdlets of the same name: the real ones would touch this computer's own JHT
     task (and need CIM rights a non-admin session lacks). The task exists while
@@ -113,6 +113,7 @@ def _scheduled_task_fakes(state: Path, log: Path, unregister_fails: bool) -> str
         if unregister_fails
         else "Remove-Item -LiteralPath $script:FakeTaskState -Force"
     )
+    list_error = "if (-not $TaskName) { throw 'Accesso negato (elenco finto)' }" if list_fails else ""
     return f"""
 $script:FakeTaskState = {_ps_literal(state)}
 $script:FakeTaskLog = {_ps_literal(log)}
@@ -122,16 +123,23 @@ if (-not $script:ScopedTask) {{ throw 'current user SID unavailable for scoped t
 function Get-ScheduledTask {{
   [CmdletBinding()] param([string]$TaskName)
   Add-Content -LiteralPath $script:FakeTaskLog -Value "task get $TaskName" -Encoding ascii
-  if ($TaskName -ceq $script:ScopedTask -and (Test-Path -LiteralPath $script:FakeTaskState)) {{
-    return [pscustomobject]@{{ TaskName = $TaskName }}
-  }}
-  if ($TaskName -ceq $script:LegacyTask) {{ return [pscustomobject]@{{ TaskName = $TaskName }} }}
+  # The real cmdlet takes -TaskName as a wildcard pattern: the [ ] of the scoped name make it throw, for everyone.
+  if ($TaskName -and $TaskName -match '[\\[\\]*?]') {{ throw 'The specified wildcard character pattern is not valid (what the real Get-ScheduledTask says)' }}
+  {list_error}
+  $all = @()
+  if (Test-Path -LiteralPath $script:FakeTaskState) {{ $all += [pscustomobject]@{{ TaskName = $script:ScopedTask; TaskPath = '\\' }} }}
+  # the P23 task and a task of the same name in another folder are not ours
+  $all += [pscustomobject]@{{ TaskName = $script:LegacyTask; TaskPath = '\\' }}
+  $all += [pscustomobject]@{{ TaskName = $script:ScopedTask; TaskPath = '\\Elsewhere\\' }}
+  if ($TaskName) {{ return @($all | Where-Object {{ $_.TaskName -ceq $TaskName }}) }}
+  return $all
 }}
 function Unregister-ScheduledTask {{
-  [CmdletBinding(SupportsShouldProcess = $true)] param([string]$TaskName)
-  Add-Content -LiteralPath $script:FakeTaskLog -Value "task unregister $TaskName" -Encoding ascii
-  if ($TaskName -ceq $script:LegacyTask) {{ throw 'legacy P23 task must stay untouched' }}
-  if ($TaskName -cne $script:ScopedTask) {{ throw 'wrong task' }}
+  [CmdletBinding(SupportsShouldProcess = $true)] param($InputObject, [string]$TaskName)
+  if ($TaskName) {{ throw 'by name: wildcards again' }}
+  Add-Content -LiteralPath $script:FakeTaskLog -Value "task unregister $($InputObject.TaskName) at $($InputObject.TaskPath)" -Encoding ascii
+  if ($InputObject.TaskName -ceq $script:LegacyTask) {{ throw 'legacy P23 task must stay untouched' }}
+  if ($InputObject.TaskName -cne $script:ScopedTask -or $InputObject.TaskPath -cne '\\') {{ throw 'wrong task' }}
   {unregister}
 }}
 foreach ($fake in 'Get-ScheduledTask', 'Unregister-ScheduledTask') {{
@@ -146,13 +154,14 @@ def _run_harness(
     *,
     task_present: bool = False,
     unregister_fails: bool = False,
+    list_fails: bool = False,
     log: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
     prefix = SOURCE[: SOURCE.index("$Container   =")]
     state = tmp_path / "startup-task-present"
     if task_present:
         state.write_text("present\n", encoding="utf-8")
-    fakes = _scheduled_task_fakes(state, log or tmp_path / "tasks.log", unregister_fails)
+    fakes = _scheduled_task_fakes(state, log or tmp_path / "tasks.log", unregister_fails, list_fails)
     harness = tmp_path / "uninstall-harness.ps1"
     harness.write_text(prefix + "\n" + fakes + "\n" + body, encoding="utf-8")
     return subprocess.run(
@@ -377,61 +386,6 @@ if (-not (Test-Path -LiteralPath {_ps_literal(bin_dir / 'jht.ps1')})) {{ throw '
     assert "Vengono cancellati anche la password della posta" in result.stderr
 
 
-@pytest.mark.skipif(
-    os.name != "nt" or not POWERSHELL, reason="requires Windows PowerShell"
-)
-def test_a_startup_task_that_cannot_be_removed_keeps_everything_for_retry(
-    tmp_path: Path,
-):
-    profile = tmp_path / "profile"
-    local = tmp_path / "local"
-    runtime = local / "Job Hunter Team" / "host-runtime"
-    bin_dir = profile / ".local" / "bin"
-    tools = tmp_path / "tools"
-    log = tmp_path / "calls.log"
-    for directory in (runtime, bin_dir, tools):
-        directory.mkdir(parents=True, exist_ok=True)
-    (runtime / "container-runtime").write_text("podman\n", encoding="utf-8")
-    for filename in ("jht.ps1", "jht.cmd", "windows-private-acl.ps1", "podman-machine-bridge.ps1", "docker.exe"):
-        (bin_dir / filename).write_text("jht\n", encoding="utf-8")
-    podman = tools / "podman.cmd"
-    wsl = tools / "wsl.cmd"
-    _write_batch(
-        podman,
-        f"""@echo off
-echo %*>>"{log}"
-if "%1"=="machine" if "%2"=="list" echo [{{"Name":"jht-podman"}}]& exit /b 0
-if "%1"=="machine" if "%2"=="rm" exit /b 0
-exit /b 90
-""",
-    )
-    _write_batch(
-        wsl,
-        """@echo off
-if "%1"=="--status" exit /b 0
-if "%1"=="--list" echo podman-machine-jht-podman
-exit /b 0
-""",
-    )
-    body = f"""
-$code = Invoke-JhtWindowsUninstall -UninstallArgs @('--confirm') -ProfilePath {_ps_literal(profile)} -LocalAppDataPath {_ps_literal(local)} -PodmanPath {_ps_literal(podman)} -WslPath {_ps_literal(wsl)} -EnvironmentTarget Process
-if ($code -ne 24) {{ throw "uninstall returned $code" }}
-if (-not (Test-Path -LiteralPath {_ps_literal(runtime)})) {{ throw 'runtime was removed' }}
-if (-not (Test-Path -LiteralPath {_ps_literal(bin_dir / 'jht.ps1')})) {{ throw 'wrapper was removed' }}
-"""
-    result = _run_harness(
-        tmp_path, body, task_present=True, unregister_fails=True, log=log
-    )
-    assert result.returncode == 0, result.stderr
-    calls = log.read_text(encoding="utf-8")
-    assert f"task unregister {STARTUP_TASK_LABEL} [S-1-" in calls
-    assert "machine rm" not in calls
-    assert (tmp_path / "startup-task-present").exists()
-    assert "JHT_LEFT machine" in result.stdout
-    assert "JHT_LEFT runtime" in result.stdout
-    assert "JHT_LEFT commands" in result.stdout
-
-
 # ── the machine that podman cannot remove, the data of --purge, and the words for a person ───────────────────────────────────────
 
 BIN_FILES = ("jht.ps1", "jht.cmd", "windows-private-acl.ps1", "podman-machine-bridge.ps1", "docker.exe")
@@ -511,6 +465,56 @@ $code = Invoke-JhtWindowsUninstall -UninstallArgs @({arguments}) -ProfilePath {_
 windows_only = pytest.mark.skipif(os.name != "nt" or not POWERSHELL, reason="requires Windows PowerShell")
 
 
+def _run_task_uninstall(box, tmp_path: Path, *, task_present: bool, unregister_fails: bool = False, list_fails: bool = False):
+    body = f"""
+$code = Invoke-JhtWindowsUninstall -UninstallArgs @('--confirm') -ProfilePath {_ps_literal(box.profile)} -LocalAppDataPath {_ps_literal(box.local)} -PodmanPath {_ps_literal(_fake_podman(box))} -WslPath {_ps_literal(_fake_wsl(box))} -EnvironmentTarget Process
+[Console]::Out.WriteLine("CODE=$code")
+"""
+    return _run_harness(tmp_path, body, task_present=task_present, unregister_fails=unregister_fails, list_fails=list_fails, log=box.log)
+
+
+@windows_only
+def test_a_startup_task_that_cannot_be_removed_is_reported_and_the_rest_is_removed(tmp_path: Path):
+    box = _box(tmp_path, data=True)
+    result = _run_task_uninstall(box, tmp_path, task_present=True, unregister_fails=True)
+    assert "CODE=0" in result.stdout, result.stdout + result.stderr
+    # the one that failed is said, with the reason and the command by hand ...
+    assert "Non tolta l'attivita' di avvio al logon 'Job Hunter Team - Start runtime [S-1-" in result.stderr
+    assert "Accesso negato (finto)" in result.stderr and "schtasks /Delete /TN" in result.stderr
+    assert (tmp_path / "startup-task-present").exists()
+    # ... and the machine, the runtime and the commands are gone anyway; the user's data stays
+    assert not box.state.exists() and not box.runtime.exists()
+    assert not any((box.bin / name).exists() for name in BIN_FILES)
+    assert (box.home / "profile.json").exists() and (box.documents / "cv.txt").exists()
+    assert "machine rm --force jht-podman" in box.log.read_text(encoding="utf-8")
+
+
+@windows_only
+def test_the_scoped_name_with_square_brackets_is_never_a_wildcard_and_no_task_is_fine(tmp_path: Path):
+    # The name is "Job Hunter Team - Start runtime [<SID>]": asked by -TaskName the real cmdlet throws (the fake does), and
+    # the uninstall stopped with rc 24 before it touched anything, on every PC, task or not.
+    absent = _run_task_uninstall(_box(tmp_path / "absent"), tmp_path / "absent", task_present=False)
+    assert "CODE=0" in absent.stdout, absent.stdout + absent.stderr
+    assert "schtasks" not in absent.stderr
+    present_box = _box(tmp_path / "present")
+    present = _run_task_uninstall(present_box, tmp_path / "present", task_present=True)
+    assert "CODE=0" in present.stdout, present.stdout + present.stderr
+    assert not (tmp_path / "present" / "startup-task-present").exists(), "the scoped task was removed"
+    calls = present_box.log.read_text(encoding="utf-8")
+    assert f"task unregister {STARTUP_TASK_LABEL} [S-1-" in calls and calls.count("task unregister") == 1
+    assert not any(line.startswith("task get ") and line != "task get " for line in calls.splitlines()), "no call with a name"
+    assert "task unregister Job Hunter Team - Start runtime at" not in calls, "the P23 task stays"
+
+
+@windows_only
+def test_when_the_task_list_cannot_be_read_it_is_reported_and_the_rest_is_removed(tmp_path: Path):
+    box = _box(tmp_path)
+    result = _run_task_uninstall(box, tmp_path, task_present=True, list_fails=True)
+    assert "CODE=0" in result.stdout, result.stdout + result.stderr
+    assert "Non tolta l'attivita' di avvio al logon" in result.stderr and "Accesso negato (elenco finto)" in result.stderr
+    assert not box.state.exists() and not box.runtime.exists()
+
+
 @windows_only
 def test_a_machine_podman_cannot_remove_is_unregistered_through_wsl_by_its_exact_distro_name(tmp_path: Path):
     box = _box(tmp_path)
@@ -518,6 +522,9 @@ def test_a_machine_podman_cannot_remove_is_unregistered_through_wsl_by_its_exact
     assert "CODE=0" in result.stdout, result.stdout + result.stderr
     calls = box.log.read_text(encoding="utf-8")
     assert "wsl --terminate podman-jht-podman" in calls and "wsl --unregister podman-jht-podman" in calls
+    # Podman's own stop comes BEFORE the unregister: afterwards `machine rm` fails (WSL_E_DISTRO_NOT_FOUND) and the machine's
+    # win-sshproxy and pipe are left behind.
+    assert calls.index("machine stop jht-podman") < calls.index("wsl --unregister podman-jht-podman")
     assert not box.state.exists() and not box.runtime.exists()
     assert not any(line.startswith("wsl --unregister") and "jht-podman" not in line for line in calls.splitlines())
 
