@@ -470,6 +470,7 @@ exit /b 0
   $PodmanMachineFile = $appManifestFiles['podman-machine']
   $ContainerUnitFile = $appManifestFiles['jht-container.service']
   $RuntimeImageFile = Join-Path $RuntimeDir 'runtime-image'
+  $RuntimeTierFile = Join-Path $RuntimeDir 'runtime-tier'
   $RuntimeManifest = Join-Path $cleanRoot 'rewritten.runtime-integrity'
   Write-RuntimeManifest
   Assert-AppManifest -Path $RuntimeManifest -Stage 'after upgrade rewrite'
