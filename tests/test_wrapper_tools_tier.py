@@ -63,7 +63,7 @@ def box(tmp_path):
         script = (
             f'set -u\nexport PATH="{bin_dir}:/usr/bin:/bin"\nexport FAKE="{fake}"\n'
             f'RUNTIME_DIR="{runtime}"\nRUNTIME_TIER_FILE="{runtime}/runtime-tier"\nRUNTIME_IMAGE_PIN="{runtime}/runtime-image"\n'
-            f'RUNTIME_MANIFEST="{runtime}/.runtime-integrity"\nCOMPOSE_FILE="{runtime}/docker-compose.yml"\n'
+            f'RUNTIME_TIER_INTEGRITY="{runtime}/.runtime-tier-integrity"\nRUNTIME_MANIFEST="{runtime}/.runtime-integrity"\nCOMPOSE_FILE="{runtime}/docker-compose.yml"\n'
             f'HOST_SETUP_SCRIPT="{runtime}/host-setup.sh"\nWRAPPER_PATH="{wrapper}"\nRUNTIME_SELECTION_FILE="{runtime}/container-runtime"\n'
             f'HOST_KERNEL="$(uname -s)"\nHOST_UID="$(id -u)"\nCORE_IMAGE_DIGEST="{core_digest}"\nDEFAULT_RUNTIME_IMAGE="{FULL}"\nJHT_HOME_HOST="{home}"\nCONTAINER_RUNTIME=docker\n'
             'err() { echo "error: $*" >&2; }\n' + _functions() + "\n"
@@ -80,8 +80,8 @@ def box(tmp_path):
         if attested:
             import hashlib
             digest = hashlib.sha256(path.read_bytes()).hexdigest()
-            with open(runtime / ".runtime-integrity", "a", encoding="utf-8") as manifest:
-                manifest.write(f"runtime-tier={digest}\n")
+            (runtime / ".runtime-tier-integrity").write_text(f"runtime-tier={digest}\n", encoding="utf-8")
+            (runtime / ".runtime-tier-integrity").chmod(0o600)
         return path
 
     def notice():
@@ -120,7 +120,7 @@ def test_an_attested_core_tier_selects_the_core_image_by_digest(box):
     assert done.stdout.split() == ["trusted", f"ghcr.io/leopu00/jht@{CORE_DIGEST}"], done.stderr
 
 
-@pytest.mark.parametrize("what", ["not attested", "other content", "wrapper without a core digest", "next to a test pin"])
+@pytest.mark.parametrize("what", ["not attested", "other content", "wrapper without a core digest", "next to a test pin", "changed after the attestation"])
 def test_a_tier_file_that_cannot_be_believed_is_untrusted(box, what):
     kwargs = {}
     if what == "not attested":
@@ -130,6 +130,9 @@ def test_a_tier_file_that_cannot_be_believed_is_untrusted(box, what):
     elif what == "wrapper without a core digest":
         box.tier()
         kwargs["core_digest"] = ""
+    elif what == "changed after the attestation":
+        path = box.tier()
+        path.write_text("core\r\n", encoding="utf-8", newline="")  # the same word, other bytes: only the hash can tell
     else:
         box.tier()
         (box.runtime / "runtime-image").write_text(FULL + "\n", encoding="utf-8")
@@ -138,17 +141,33 @@ def test_a_tier_file_that_cannot_be_believed_is_untrusted(box, what):
     assert done.stdout.split() == ["node-ok", "untrusted"], done.stderr  # the file is sound: it is the content that is refused
 
 
-def test_the_manifest_written_by_the_wrapper_keeps_the_tier_line(box):
-    box.tier(attested=False)
+@pytest.mark.parametrize("what", ["a link", "writable by others"])
+def test_an_integrity_file_that_is_not_the_users_own_plain_file_is_not_believed(box, tmp_path, what):
+    box.tier()
+    integrity = box.runtime / ".runtime-tier-integrity"
+    if what == "a link":
+        real = tmp_path / "real-integrity"
+        real.write_text(integrity.read_text(encoding="utf-8"), encoding="utf-8")
+        real.chmod(0o600)
+        integrity.unlink()
+        integrity.symlink_to(real)
+    else:
+        integrity.chmod(0o666)
+    done = box.run("runtime_tier_trusted && echo trusted || echo untrusted", library=False)
+    assert done.stdout.strip() == "untrusted", done.stderr
+
+
+def test_the_main_manifest_never_carries_the_tier_the_app_compares_its_exact_keys(box):
+    box.tier()
     (box.runtime / "host-setup.sh").write_text("x\n", encoding="utf-8")
     wrapper_copy = box.runtime / "jht-wrapper.sh"
     wrapper_copy.write_text("w\n", encoding="utf-8")
     done = box.run(f'WRAPPER_PATH="{wrapper_copy}"; runtime_write_manifest && runtime_tier_trusted && echo trusted', library=False)
     assert done.stdout.strip() == "trusted", done.stderr
-    assert "runtime-tier=" in (box.runtime / ".runtime-integrity").read_text(encoding="utf-8")
+    assert "runtime-tier" not in (box.runtime / ".runtime-integrity").read_text(encoding="utf-8")
 
 
-def test_a_manifest_that_attests_a_removed_tier_file_is_an_interrupted_switch_not_a_failure(box):
+def test_an_attestation_without_its_tier_file_is_an_interrupted_switch_not_a_failure(box):
     box.tier()
     (box.runtime / "runtime-tier").unlink()
     done = box.run('runtime_tier_trusted && echo trusted; echo "[$(runtime_selected_image)]"', library=False)
@@ -229,15 +248,14 @@ def test_switch_is_silent_and_does_nothing_until_the_profile_is_ready_and_the_fu
     assert box.run("tools_main switch").stdout == "" and tier.exists()
 
 
-def test_switch_drops_the_tier_rewrites_the_manifest_and_ups_the_full_image(box):
+def test_switch_drops_the_tier_and_its_integrity_and_ups_the_full_image(box):
     tier = box.tier()
     (box.fake / "full-present").write_text("", encoding="utf-8")
     (box.home / "profile" / "ready.flag").write_text("2026-11-10T09:00:00Z\n", encoding="utf-8")
-    done = box.run('runtime_write_manifest() { echo manifest-written >> "$FAKE/wrapper-calls"; }; JHT_IMAGE=stale; export JHT_IMAGE; '
-                   "tools_main switch")
+    done = box.run("JHT_IMAGE=stale; export JHT_IMAGE; tools_main switch")
     assert done.returncode == 0 and done.stdout == "JHT_PHASE tools_ready\n", done.stderr
-    assert not tier.exists()
-    assert (box.fake / "wrapper-calls").read_text(encoding="utf-8").splitlines() == ["manifest-written", "up", "image=unset"]
+    assert not tier.exists() and not (box.runtime / ".runtime-tier-integrity").exists()
+    assert (box.fake / "wrapper-calls").read_text(encoding="utf-8").splitlines() == ["up", "image=unset"]
     assert box.notice()["tier"] == "full" and box.notice()["state"] == "ready"
     # and the second call finds nothing to do
     assert box.run("tools_main switch").stdout == ""
@@ -263,8 +281,8 @@ def test_jht_tools_is_a_host_helper_loaded_after_its_digest_and_with_a_local_hel
     assert re.search(r'^  tools\)\n    require_compose_file\n    runtime_helper_load jht-tools\.sh "\$\{2:-\}" \|\| exit 1\n    tools_main "\$\{@:2\}"\n    exit \$\?\n', wrapper, re.M)
     assert re.search(r"\|integration\|tools\|", wrapper), "its --help is the local one: no engine started by it"
     assert TOOLS.read_text(encoding="utf-8").count("\n# JHT_RUNTIME_HELPER=1\n") == 1, "the marker the installer's download checks, on a line of its own"
-    # only `pull` of the tools may fetch a helper that is missing, as `add` and `remove` do: `status` and `switch` never download
-    assert "add|remove|pull) runtime_helpers_install" in wrapper
+    # only `add` and `remove` of the integrations fetch a helper that is missing: no command of `jht tools` ever downloads (A3)
+    assert "add|remove) runtime_helpers_install" in wrapper and "add|remove|pull)" not in wrapper
     installer = (ROOT / "scripts" / "install.sh").read_text(encoding="utf-8")
     assert re.search(r'^RUNTIME_HELPERS="[^"]*\bjht-tools\.sh\b[^"]*"', installer, re.M)
 

@@ -140,6 +140,7 @@ fi
 DEFAULT_RUNTIME_IMAGE="ghcr.io/leopu00/jht@sha256:fa78c975c04dd5f95d6225a35c8c3bb9646f8ef14b32c8ca558d5332de0cce00"
 CORE_IMAGE_DIGEST=""
 RUNTIME_TIER_FILE="$RUNTIME_DIR/runtime-tier"
+RUNTIME_TIER_INTEGRITY="$RUNTIME_DIR/.runtime-tier-integrity"
 DEFAULT_RUNTIME_VERSION="0.4.0"
 GAME_EXECUTABLE_OVERRIDE="${JHT_GAME_EXECUTABLE:-}"
 if [ -n "${JHT_GAME_CONTROL_DIR:-}" ]; then
@@ -581,12 +582,13 @@ runtime_helpers_install() {
   runtime_helpers_write_manifest
 }
 
-# $2 is the command of the person: only `add`, `remove` and `pull` (of the tools) fetch a helper that is missing.
+# $2 is the command of the person: only `add` and `remove` fetch a helper that is missing. `jht tools` never does: its commands run by
+# themselves after the install, and a download at the tip of the branch is not something to start without the person asking for it.
 runtime_helper_load() {
   local helper="$1"
   if [ -z "$(runtime_helper_digest "$helper")" ]; then
     case "${2:-}" in
-      add|remove|pull) runtime_helpers_install || { err "script $helper non scaricabile: controlla la rete o fai 'jht upgrade'"; return 1; } ;;
+      add|remove) runtime_helpers_install || { err "script $helper non scaricabile: controlla la rete o fai 'jht upgrade'"; return 1; } ;;
       *) err "script $helper non ancora installato: 'jht upgrade' (o un 'jht integration add/remove') e riprova"; return 1 ;;
     esac
   fi
@@ -612,9 +614,6 @@ runtime_write_manifest() {
     fi
     if [ -f "$RUNTIME_IMAGE_PIN" ]; then
       printf 'runtime-image=%s\n' "$(runtime_sha256 "$RUNTIME_IMAGE_PIN")"
-    fi
-    if [ -f "$RUNTIME_TIER_FILE" ]; then
-      printf 'runtime-tier=%s\n' "$(runtime_sha256 "$RUNTIME_TIER_FILE")"
     fi
   } > "$tmp" || return 1
   chmod 600 "$tmp" || { rm -f "$tmp"; return 1; }
@@ -712,12 +711,15 @@ runtime_image_pin_value() {
 
 # Il livello dell'immagine (P4): il file `runtime-tier` (solo `core`) lo scrive l'installer quando la release ha un nucleo; senza
 # file e' l'immagine intera di sempre. Un file con un contenuto diverso, non attestato, o un nucleo che questo wrapper non conosce
-# non si interpretano: runtime non attendibile. Il manifest che attesta un file tolto e' un `switch` interrotto a meta': il
-# runtime e' quello intero, e il prossimo manifest scritto lo lascia cadere.
+# non si interpretano: runtime non attendibile. L'attestazione sta in un file suo, `.runtime-tier-integrity`, non nel manifest principale
+# (l'app confronta l'insieme esatto delle sue chiavi). Un'attestazione senza il file di livello e' un `switch` interrotto a meta': il
+# runtime e' quello intero.
 runtime_tier_trusted() {
   if [ -e "$RUNTIME_TIER_FILE" ] || [ -L "$RUNTIME_TIER_FILE" ]; then
     runtime_node_safe "$RUNTIME_TIER_FILE" file || return 1
-    [ "$(runtime_manifest_value runtime-tier)" = "$(runtime_sha256 "$RUNTIME_TIER_FILE")" ] || return 1
+    # attested in a file of its own: the main manifest is the one whose exact set of keys the desktop app compares
+    runtime_node_safe "$RUNTIME_TIER_INTEGRITY" file || return 1
+    [ "$(sed -n 's/^runtime-tier=//p' "$RUNTIME_TIER_INTEGRITY" | head -n 1)" = "$(runtime_sha256 "$RUNTIME_TIER_FILE")" ] || return 1
     [ "$(tr -d '\r\n' < "$RUNTIME_TIER_FILE")" = "core" ] && [ -n "$CORE_IMAGE_DIGEST" ] || return 1
     [ ! -e "$RUNTIME_IMAGE_PIN" ] || return 1
   fi

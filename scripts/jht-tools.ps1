@@ -3,7 +3,7 @@
 #
 # A LIBRARY, not a program: the host wrapper loads it (dot-sourced) after checking its sha256 against the runtime manifest and calls
 # Invoke-ToolsCommand from its `tools` branch. It uses what the wrapper has: $RuntimeDir, $RuntimeTierFile, $DefaultRuntimeImage,
-# $JhtHome, $WrapperPath, Write-RuntimeManifest, Write-Err.
+# $JhtHome, $WrapperPath, $RuntimeTierIntegrity, Write-Err.
 #
 #   jht tools status --json   one line: {"ok":true,"state":"none|pending|pulling|ready|failed","tier":"core|full","reason":"<code>"}
 #   jht tools pull            starts the pull of the full image, detached; already pulling or pulled: exit 0 and nothing else
@@ -127,9 +127,10 @@ function Invoke-ToolsSwitch {
   if (-not (Test-Path -LiteralPath $flag -PathType Leaf) -or ((Get-Item -LiteralPath $flag -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { return 0 }
   if (-not ((Test-ToolsEngineUp) -and (Test-ToolsFullHere))) { return 0 }
   try {
+    # The file first, its integrity second: a crash between them leaves an integrity without a file, which reads as the whole image.
     Remove-Item -LiteralPath $RuntimeTierFile -Force
-    Write-RuntimeManifest
-  } catch { Write-Err 'tools: manifest del runtime non aggiornato'; return 1 }
+    Remove-Item -LiteralPath $RuntimeTierIntegrity -Force -ErrorAction SilentlyContinue
+  } catch { Write-Err 'tools: livello del runtime non tolto'; return 1 }
   Remove-Item Env:\JHT_IMAGE -ErrorAction SilentlyContinue
   $shell = (Get-Process -Id $PID).Path
   $up = Start-Process -FilePath $shell -NoNewWindow -Wait -PassThru -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $WrapperPath, 'up')

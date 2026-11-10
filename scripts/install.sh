@@ -110,6 +110,8 @@ fi
 IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht@sha256:fa78c975c04dd5f95d6225a35c8c3bb9646f8ef14b32c8ca558d5332de0cce00}"
 # The core image (tools come later): empty while the release has none; with one, the install uses it unless JHT_IMAGE names another.
 CORE_IMAGE_DIGEST="${JHT_CORE_IMAGE_DIGEST:-}"
+# It becomes an image name, a file and a hash: only the exact shape of a digest goes through, whatever the environment says.
+[ -z "$CORE_IMAGE_DIGEST" ] || [[ "$CORE_IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { printf 'JHT_CORE_IMAGE_DIGEST is not a sha256 digest\n' >&2; exit 2; }
 RUNTIME_TIER="" TIER_STAGED="" TIER_STAGED_SHA=""
 if [ -n "$CORE_IMAGE_DIGEST" ] && [ -z "${JHT_IMAGE:-}" ]; then RUNTIME_TIER="core"; IMAGE="ghcr.io/leopu00/jht@$CORE_IMAGE_DIGEST"; fi
 # Il compose scaricato può evolvere sul canale production; l'installer di
@@ -1146,11 +1148,13 @@ install_podman_adapter() {
   fi
 }
 
-# runtime-tier: a host runtime file like runtime-image, attested in .runtime-integrity (staged for its hash, published after the manifest).
+# runtime-tier: a host runtime file attested in an integrity file of its own (.runtime-tier-integrity), NOT in .runtime-integrity: the app
+# compares the exact set of keys of that one. Staged for its hash; the file first and its integrity second, so a crash between them
+# leaves a tier the wrapper refuses, never a tier it believes.
 stage_runtime_tier() {
   local tier_file="$RUNTIME_DIR/runtime-tier"
   TIER_STAGED="" TIER_STAGED_SHA=""
-  if [ "$RUNTIME_TIER" != "core" ]; then rm -f "$tier_file"; return 0; fi
+  if [ "$RUNTIME_TIER" != "core" ]; then rm -f "$tier_file" "$RUNTIME_DIR/.runtime-tier-integrity"; return 0; fi
   TIER_STAGED="$(mktemp "$RUNTIME_DIR/.runtime-tier.XXXXXX")"
   printf 'core\n' > "$TIER_STAGED" && chmod 600 "$TIER_STAGED"
   TIER_STAGED_SHA="$({ sha256sum "$TIER_STAGED" 2>/dev/null || shasum -a 256 "$TIER_STAGED"; } | awk '{print $1}')"
@@ -1158,7 +1162,10 @@ stage_runtime_tier() {
 
 publish_runtime_tier() {
   [ -n "$TIER_STAGED" ] || return 0
-  mv -f "$TIER_STAGED" "$RUNTIME_DIR/runtime-tier" && ok "runtime tier: core (the tools come after the welcome)"
+  mv -f "$TIER_STAGED" "$RUNTIME_DIR/runtime-tier" || return 1
+  printf 'runtime-tier=%s\n' "$TIER_STAGED_SHA" > "$RUNTIME_DIR/.runtime-tier-integrity.tmp" && chmod 600 "$RUNTIME_DIR/.runtime-tier-integrity.tmp" \
+    && mv -f "$RUNTIME_DIR/.runtime-tier-integrity.tmp" "$RUNTIME_DIR/.runtime-tier-integrity" \
+    && ok "runtime tier: core (the tools come after the welcome)"
 }
 
 download_runtime_files() {
@@ -1344,9 +1351,6 @@ download_runtime_files() {
     fi
     if [ -n "$image_pin_sha" ]; then
       printf 'runtime-image=%s\n' "$image_pin_sha"
-    fi
-    if [ -n "$TIER_STAGED_SHA" ]; then
-      printf 'runtime-tier=%s\n' "$TIER_STAGED_SHA"
     fi
   } > "$manifest_tmp"
   chmod 600 "$manifest_tmp"
