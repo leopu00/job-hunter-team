@@ -295,7 +295,10 @@ mod tests {
         assert_eq!(c, "test");
         assert_eq!(
             from_build(&c, &s, &i, &d, &sh, &ps, &core),
-            Ok(Some(test_channel("ghcr.io/leopu00/jht:master-arthur")))
+            Ok(Some(TestChannel {
+                core_image_digest: Some(CORE.to_owned()),
+                ..test_channel("ghcr.io/leopu00/jht:master-arthur")
+            }))
         );
 
         // Any value missing: no build.
