@@ -100,6 +100,15 @@ def test_node_in_the_container_goes_through_the_proxy():
     assert "NODE_USE_ENV_PROXY=1" in _services(OVERRIDE)["jht"]["environment"]
 
 
+def test_node_in_the_container_does_not_print_the_proxy_agent_warning():
+    # With NODE_USE_ENV_PROXY=1 Node 22 prints "[UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental" at its own
+    # start, before any code of ours: only the flag of the process can drop it (measured on Node 22.22.2), and only
+    # for that code, so a deprecation or a leak of listeners is still told.
+    environment = _services(OVERRIDE)["jht"]["environment"]
+    assert "NODE_OPTIONS=--disable-warning=UNDICI-EHPA" in environment
+    assert not [line for line in environment if line.startswith("NODE_OPTIONS=") and "no-warnings" in line]
+
+
 def test_no_compose_service_shares_the_host_network():
     for path in sorted(ROOT.glob("docker-compose*.yml")):
         for name, service in _services(path).items():

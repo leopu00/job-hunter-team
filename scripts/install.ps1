@@ -309,11 +309,19 @@ function Test-JhtWindows10Client {
   param([int]$ProductType, [int]$Build)
   return ($ProductType -eq 1 -and $Build -ge 10240 -and $Build -lt 22000)
 }
+# The language of the sentences of this script is the one of the product: JHT_LANG, as the CLI and the wrapper
+# read it, and English when none is chosen (what the rest of the output and the host.env written at the end say).
+# The language of Windows is not asked: one sentence in Italian inside an English output reads as a mistake.
+function Get-JhtTextLanguage {
+  $code = ([string]$env:JHT_LANG).ToLowerInvariant() -replace '[-_.@].*$', ''
+  if (@('en', 'it', 'de', 'fr', 'es', 'hu', 'pt') -contains $code) { return $code }
+  return 'en'
+}
 function Get-Windows10SupportWarning {
   # install.ps1 deliberately stays ASCII: Windows PowerShell 5.1 reads a
   # BOM-less script in the legacy console encoding. The desktop has the full
   # translated copy; this is what a person sees when running the downloaded file.
-  param([string]$Language = [Globalization.CultureInfo]::CurrentUICulture.TwoLetterISOLanguageName)
+  param([string]$Language = (Get-JhtTextLanguage))
   switch ($Language.ToLowerInvariant()) {
     'it' { return "Podman non supporta piu' Windows 10: puo' funzionare, ma non lo garantiamo. Il sistema supportato e' Windows 11." }
     'de' { return 'Podman unterstuetzt Windows 10 nicht mehr: Es kann funktionieren, aber wir garantieren es nicht. Unterstuetzt wird Windows 11.' }
