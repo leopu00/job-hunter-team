@@ -177,9 +177,10 @@ def test_the_big_roster_is_no_longer_cut_to_one_per_role_on_the_windows_pc(monke
     plan = dict(plan_registry.find_plan("claude", "max20"))
     monkeypatch.setattr(plan_registry, "_host_capacity", lambda: hc.capacity(machine(6.0, 4), "codex"))
     roster = plan_registry.burst_roster(plan)
-    # the table asks 6/3/2 (11 workers): the machine carries 8, cut from the head (the Scouts first), no role below one
+    # the table asks 6/3/2 (11 workers): the machine carries 8. The third Analista goes first (not below two: with no pause
+    # two keep up on their own), then the Scouts from the head; no role below one
     assert roster["total_workers"] == 8 and roster["capped_by_host"]
-    assert roster["roster"] == {"scout": 3, "analista": 3, "scorer": 2}
+    assert roster["roster"] == {"scout": 4, "analista": 2, "scorer": 2}
     assert "carries 8 workers" in roster["host_note"]
 
 
@@ -212,3 +213,16 @@ def test_the_cap_follows_the_active_provider(monkeypatch, tmp_path):
 
 def test_the_capacity_module_is_loaded_once():
     assert plan_registry._host_capacity_module() is plan_registry._host_capacity_module()
+
+
+@pytest.mark.parametrize("cap, expected", [
+    (10, {"scout": 5, "analista": 3, "scorer": 2}),   # the band of tier 15 as the table has it
+    (9, {"scout": 5, "analista": 2, "scorer": 2}),    # the third Analista goes first
+    (8, {"scout": 4, "analista": 2, "scorer": 2}),    # then the Scouts, from the head: the supply is what the burst waits for
+    (6, {"scout": 2, "analista": 2, "scorer": 2}),
+    (4, {"scout": 1, "analista": 1, "scorer": 2}),    # then, as before, Analista and Scorer after the Scouts
+    (3, {"scout": 1, "analista": 1, "scorer": 1}),
+])
+def test_a_small_host_drops_the_third_analista_before_any_scout(cap, expected):
+    plan = {"provider": "glm", "id": "api-key", "label": "API key", "tier": 15}  # the plan an API key makes (plan_registry)
+    assert plan_registry.burst_roster(plan, host_cap=cap)["roster"] == expected

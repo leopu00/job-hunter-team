@@ -549,16 +549,19 @@ def burst_roster(plan: dict | None = None, host_cap: int | None = None, assume_d
         # PUNTEGGIATE — cioè l'unico risultato che l'utente vede. Sotto un
         # worker per ruolo non si scende: una pipeline monca non produce
         # nulla, e a quel punto il limite non è più il roster ma la macchina.
-        for role in ("scout", "analista", "scorer"):
+        # Il terzo Analista, dove la tabella lo da', e' il primo a saltare ma non sotto due: con la pausa tolta due Analisti si mettono
+        # in pari da soli, e sono gli Scout a fare l'offerta (la simulazione dei tempi misurati: con tetto 8 la fascia 15 da 5/3/2 a
+        # 4/2/2 fa ~18 punteggi in 30 minuti, a 3/3/2 ~14). Poi, come prima, dalla testa: Scout, Analista, Scorer.
+        for role, floor in (("analista", 2), ("scout", 1), ("analista", 1), ("scorer", 1)):
             excess = scout + analista + scorer - cap
             if excess <= 0:
                 break
             if role == "scout":
-                scout = max(1, scout - excess)
+                scout = max(floor, scout - excess)
             elif role == "analista":
-                analista = max(1, analista - excess)
+                analista = max(floor, analista - excess) if analista > floor else analista
             else:
-                scorer = max(1, scorer - excess)
+                scorer = max(floor, scorer - excess)
 
     return {
         "ok": True,
