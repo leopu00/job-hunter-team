@@ -365,7 +365,7 @@ jht_text_en() {
     uninstall.phase.runtime) printf '%s' "Removing the host runtime..." ;;
     uninstall.phase.commands) printf '%s' "Removing the jht command and the PATH lines the installer added..." ;;
     migrate.left) printf '%s' "Not copied or not verified: the volume %s." ;;
-    uninstall.usage_what) printf '%s' "Removes the local JHT runtime: the jht-podman Podman machine or JHT's containers, volumes and images (the core and the full one), the host runtime and the jht command." ;;
+    uninstall.usage_what) printf '%s' "Removes the local JHT runtime: the jht-podman Podman machine or JHT's containers, volumes and images (the core and the full one, by the repository names ghcr.io/leopu00/jht, jht and localhost/jht), the host runtime and the jht command." ;;
     uninstall.usage_stays) printf '%s' "Podman, podman-compose, Docker, Colima and Homebrew stay too." ;;
     uninstall.loss) printf '%s' "The saved mail password and Telegram tokens are deleted too; ~/.jht and Documents stay, and with them the saved LinkedIn session (secrets/linkedin-profile and .cache/linkedin): remove it with jht reset --scope creds." ;;
     uninstall.loss_purge) printf '%s' "The saved mail password and Telegram tokens are deleted too." ;;
@@ -430,7 +430,7 @@ jht_text_it() {
     uninstall.phase.runtime) printf '%s' "Rimuovo il runtime dell'host..." ;;
     uninstall.phase.commands) printf '%s' "Rimuovo il comando jht e le righe PATH aggiunte dall'installer..." ;;
     migrate.left) printf '%s' "Non copiato o non verificato: il volume %s." ;;
-    uninstall.usage_what) printf '%s' "Rimuove il runtime locale di JHT: la macchina Podman jht-podman oppure i container, i volumi e le immagini di JHT (il nucleo e quella piena), il runtime host e il comando jht." ;;
+    uninstall.usage_what) printf '%s' "Rimuove il runtime locale di JHT: la macchina Podman jht-podman oppure i container, i volumi e le immagini di JHT (il nucleo e quella piena, con i nomi di repository ghcr.io/leopu00/jht, jht e localhost/jht), il runtime host e il comando jht." ;;
     uninstall.usage_stays) printf '%s' "Restano anche Podman, podman-compose, Docker, Colima e Homebrew." ;;
     uninstall.loss) printf '%s' "Vengono cancellati anche la password della posta e i token di Telegram salvati; ~/.jht e Documenti restano, e con loro la sessione LinkedIn salvata (secrets/linkedin-profile e .cache/linkedin): si toglie con jht reset --scope creds." ;;
     uninstall.loss_purge) printf '%s' "Vengono cancellati anche la password della posta e i token di Telegram salvati." ;;
@@ -5782,15 +5782,18 @@ uninstall_docker_endpoint() {
   printf '%s\n' "$endpoint"
 }
 
-# Le immagini di JHT (nucleo, piena e le vecchie) nel Docker di questo computer, per ID, senza -f e senza pulizie di massa, dopo i container.
+# Le immagini di JHT (nucleo, piena e le vecchie) nel Docker di questo computer, senza -f e senza pulizie di massa, dopo i container.
+# Si toglie per RIFERIMENTO (repository:tag), uno per uno: un ID con piu' tag non si toglie con `image rm <ID>` senza -f (il motore
+# rifiuta «referenced in multiple repositories») e la disinstallazione non finirebbe piu'. Senza tag (<none>) si toglie per ID.
 # Stesse regole della pulizia dell'upgrade: solo i repository JHT per nome esatto, e un ID che porta anche un nome non JHT e' di
 # qualcun altro e si tiene. Il rifiuto del motore e' un residuo: si dice e si rilancia. $1 = docker; scrive in UNINSTALL_IMAGES_REMOVED.
 uninstall_docker_images() {
-  local docker_bin="$1" listing foreign id repo plain seen="" left=0 announced=0
+  local docker_bin="$1" listing pairs foreign id repo tag plain target ids="" failed="" n=0 left=0 announced=0 seen_ref=""
   UNINSTALL_IMAGES_REMOVED=0
-  listing="$("$docker_bin" image ls --no-trunc --format '{{.ID}} {{.Repository}}' 2>/dev/null)" || return 1
-  foreign="$(upgrade_foreign_image_ids "$listing")"
-  while IFS=' ' read -r id repo; do
+  listing="$("$docker_bin" image ls --no-trunc --format '{{.ID}} {{.Repository}} {{.Tag}}' 2>/dev/null)" || return 1
+  pairs="$(printf '%s\n' "$listing" | while IFS=' ' read -r id repo tag; do printf '%s %s\n' "$id" "$repo"; done)"
+  foreign="$(upgrade_foreign_image_ids "$pairs")"
+  while IFS=' ' read -r id repo tag; do
     [ -n "$id" ] || continue
     upgrade_repo_is_jht "$repo" || continue
     plain="$(upgrade_image_plain "$id")"
@@ -5798,23 +5801,34 @@ uninstall_docker_images() {
 " in *"
 $plain
 "*) continue ;; esac
+    if [ -n "$tag" ] && [ "$tag" != "<none>" ]; then target="$repo:$tag"; else target="$id"; fi
     case "
-$seen
+$seen_ref
+" in *"
+$target
+"*) continue ;; esac
+    seen_ref="$seen_ref
+$target"
+    case "
+$ids
 " in *"
 $plain
-"*) continue ;; esac
-    seen="$seen
-$plain"
+"*) ;; *) ids="$ids
+$plain"; n=$((n + 1)) ;; esac
     # La fase si annuncia alla prima immagine da togliere: senza immagini JHT non c'e' niente da dire.
     [ "$announced" -eq 1 ] || { uninstall_phase uninstall_images; announced=1; }
-    if "$docker_bin" image rm "$id" >/dev/null 2>&1; then
-      UNINSTALL_IMAGES_REMOVED=$((UNINSTALL_IMAGES_REMOVED + 1))
-    else
-      left=$((left + 1))
+    if ! "$docker_bin" image rm "$target" >/dev/null 2>&1; then
+      case "
+$failed
+" in *"
+$plain
+"*) ;; *) failed="$failed
+$plain"; left=$((left + 1)) ;; esac
     fi
   done <<EOF
 $listing
 EOF
+  UNINSTALL_IMAGES_REMOVED=$((n - left))
   [ "$left" -eq 0 ]
 }
 

@@ -113,14 +113,27 @@ case "$1" in
       *) exit 97 ;;
     esac ;;
   image)
-    # Images: one "<id> <repository>" per line in $FAKE_STATE/images. `image rm` is by ID, never forced, and an ID listed in
-    # $FAKE_STATE/image-refuses is refused as an engine does with an image another container uses.
+    # Images: one "<id> <repository> <tag>" per line in $FAKE_STATE/images. `image rm` takes ONE argument and is never forced:
+    # a <repository>:<tag> takes away that one name (the image goes with its last name); an ID that still carries more than one
+    # name is refused, as Docker does ("referenced in multiple repositories"). An ID listed in $FAKE_STATE/image-refuses is
+    # refused as an engine does with an image another container uses.
     case "$2" in
-      ls) [ "$3:$4:$5" = "--no-trunc:--format:{{.ID}} {{.Repository}}" ] || exit 101
+      ls) [ "$3:$4:$5" = "--no-trunc:--format:{{.ID}} {{.Repository}} {{.Tag}}" ] || exit 101
           [ ! -f "$FAKE_STATE/images" ] || cat "$FAKE_STATE/images" ;;
       rm) [ $# -eq 3 ] || exit 102
-          if [ -f "$FAKE_STATE/image-refuses" ] && grep -qx "$3" "$FAKE_STATE/image-refuses"; then exit 1; fi
-          grep -v "^$3 " "$FAKE_STATE/images" > "$FAKE_STATE/images.new" || true
+          [ -f "$FAKE_STATE/images" ] || exit 1
+          rows="$(awk -v a="$3" '$1 == a || $2 ":" $3 == a' "$FAKE_STATE/images")"
+          [ -n "$rows" ] || exit 1
+          id="$(printf '%s\n' "$rows" | awk 'NR == 1 { print $1 }')"
+          names="$(awk -v i="$id" '$1 == i' "$FAKE_STATE/images" | wc -l | tr -d ' ')"
+          case "$3" in
+            *:*) ;;
+            *) [ "$names" -le 1 ] || exit 1 ;;
+          esac
+          if [ -f "$FAKE_STATE/image-refuses" ] && grep -qx "$id" "$FAKE_STATE/image-refuses"; then
+            [ "$names" -gt 1 ] || exit 1
+          fi
+          awk -v a="$3" '!($1 == a || $2 ":" $3 == a)' "$FAKE_STATE/images" > "$FAKE_STATE/images.new" || true
           mv "$FAKE_STATE/images.new" "$FAKE_STATE/images" ;;
       *) exit 97 ;;
     esac ;;
@@ -350,10 +363,9 @@ def test_docker_runtime_removes_the_jht_project_with_its_volumes(tmp_path: Path,
 
 
 CORE_ID, FULL_ID, OLD_ID = "c0" * 32, "f0" * 32, "01" * 32
-JHT_IMAGES = (
-    f"{CORE_ID} ghcr.io/leopu00/jht", f"{FULL_ID} ghcr.io/leopu00/jht", f"{OLD_ID} ghcr.io/leopu00/jht",
-)
-NOT_OURS = ("a1" * 32 + " postgres", "a2" * 32 + " ghcr.io/leopu00/jht-other")
+CORE_REF, FULL_REF, OLD_REF = "ghcr.io/leopu00/jht:core", "ghcr.io/leopu00/jht:full", "ghcr.io/leopu00/jht:old"
+JHT_IMAGES = (f"{CORE_ID} ghcr.io/leopu00/jht core", f"{FULL_ID} ghcr.io/leopu00/jht full", f"{OLD_ID} ghcr.io/leopu00/jht old")
+NOT_OURS = ("a1" * 32 + " postgres 16", "a2" * 32 + " ghcr.io/leopu00/jht-other latest")
 
 
 def images_removed(box: Box) -> list[str]:
@@ -371,11 +383,11 @@ def test_docker_runtime_removes_the_core_and_the_full_image_with_the_old_ones_an
     assert phases(result) == [
         "JHT_PHASE uninstall_machine", "JHT_PHASE uninstall_images", "JHT_PHASE uninstall_runtime", "JHT_PHASE uninstall_commands",
     ]
-    assert sorted(images_removed(box)) == sorted([CORE_ID, FULL_ID, OLD_ID])
+    assert sorted(images_removed(box)) == sorted([CORE_REF, FULL_REF, OLD_REF])
     # only the JHT images went: another program's image and another repository of the same owner stay
     assert box.remaining("images").splitlines() == list(NOT_OURS)
     assert "Tolte 3 immagini di JHT: il nucleo, quella piena e le vecchie." in result.stderr + result.stdout
-    # by ID, never forced, never a bulk cleanup
+    # by reference, never forced, never a bulk cleanup
     assert not any(" -f" in call or "prune" in call or "rmi" in call for call in box.calls() if call.startswith("docker image"))
     assert_user_data_kept(box)
 
@@ -383,12 +395,12 @@ def test_docker_runtime_removes_the_core_and_the_full_image_with_the_old_ones_an
 def test_an_image_that_also_has_a_name_that_is_not_jhts_is_kept(tmp_path: Path) -> None:
     box = Box(tmp_path, "Linux")
     box.select("docker")
-    box.images(f"{CORE_ID} ghcr.io/leopu00/jht", f"{CORE_ID} example.invalid/mine", f"{FULL_ID} ghcr.io/leopu00/jht")
+    box.images(f"{CORE_ID} ghcr.io/leopu00/jht core", f"{CORE_ID} example.invalid/mine latest", f"{FULL_ID} ghcr.io/leopu00/jht full")
 
     result = box.run("uninstall", "--confirm")
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert images_removed(box) == [FULL_ID]
+    assert images_removed(box) == [FULL_REF]
 
 
 def test_an_image_the_engine_refuses_is_a_leftover_and_the_rerun_finishes(tmp_path: Path) -> None:
@@ -402,7 +414,7 @@ def test_an_image_the_engine_refuses_is_a_leftover_and_the_rerun_finishes(tmp_pa
     assert first.returncode == 24, first.stdout + first.stderr
     assert phases(first) == ["JHT_PHASE uninstall_machine", "JHT_PHASE uninstall_images", "JHT_LEFT images"]
     assert "Non tolte alcune immagini di JHT" in first.stderr
-    assert box.remaining("images").splitlines() == [f"{FULL_ID} ghcr.io/leopu00/jht"]
+    assert box.remaining("images").splitlines() == [f"{FULL_ID} ghcr.io/leopu00/jht full"]
     assert box.runtime.exists() and box.wrapper.exists(), "the command to run it again is still there"
 
     (box.state / "image-refuses").unlink()
@@ -410,6 +422,37 @@ def test_an_image_the_engine_refuses_is_a_leftover_and_the_rerun_finishes(tmp_pa
     assert second.returncode == 0, second.stdout + second.stderr
     assert box.remaining("images") == ""
     assert not box.runtime.exists() and not box.wrapper.exists()
+
+
+def test_an_image_with_two_names_goes_name_by_name_and_the_uninstall_finishes(tmp_path: Path) -> None:
+    # `docker image rm <ID>` without -f refuses an ID that carries more than one name; each name is taken away by itself.
+    box = Box(tmp_path, "Linux")
+    box.select("docker")
+    box.images(f"{CORE_ID} ghcr.io/leopu00/jht core", f"{CORE_ID} ghcr.io/leopu00/jht latest", f"{FULL_ID} localhost/jht full", *NOT_OURS)
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert sorted(images_removed(box)) == sorted([CORE_REF, "ghcr.io/leopu00/jht:latest", "localhost/jht:full"])
+    assert box.remaining("images").splitlines() == list(NOT_OURS)
+    # two images, not three names
+    assert "Tolte 2 immagini di JHT" in result.stderr + result.stdout
+    assert not box.runtime.exists() and not box.wrapper.exists()
+
+
+def test_an_image_with_two_names_that_a_container_uses_is_a_leftover_and_the_runtime_still_stays(tmp_path: Path) -> None:
+    box = Box(tmp_path, "Linux")
+    box.select("docker")
+    box.images(f"{CORE_ID} ghcr.io/leopu00/jht core", f"{CORE_ID} ghcr.io/leopu00/jht latest")
+    (box.state / "image-refuses").write_text(CORE_ID + "\n", encoding="utf-8")
+
+    result = box.run("uninstall", "--confirm")
+
+    # the first name goes (the image keeps the other one), the last one is refused: the image is a leftover, said once
+    assert result.returncode == 24, result.stdout + result.stderr
+    assert phases(result) == ["JHT_PHASE uninstall_machine", "JHT_PHASE uninstall_images", "JHT_LEFT images"]
+    assert box.remaining("images").splitlines() == [f"{CORE_ID} ghcr.io/leopu00/jht latest"]
+    assert box.runtime.exists() and box.wrapper.exists()
 
 
 def test_no_jht_image_means_no_phase_and_no_sentence(tmp_path: Path) -> None:
