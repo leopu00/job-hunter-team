@@ -15,7 +15,11 @@ both loaded in the local engine, this checks what no single image can prove abou
   [size]      core is much smaller than full (a core that grew back is a core that lost
               its reason).
 
-Usage:  image_tiers.py CORE_IMAGE FULL_IMAGE [--revision SHA]
+With --extras IMAGE the extras image (the three tools the user asks for) is checked the same way: tier, the three tools and
+none of the CV PDF ones, a sweep that leaves only the manual sign-in browser to check, the same commit, the same code byte for
+byte, and smaller than full.
+
+Usage:  image_tiers.py CORE_IMAGE FULL_IMAGE [--revision SHA] [--extras EXTRAS_IMAGE]
 Exit 0 when everything holds; 1 with one FAIL line per broken check, each starting with a
 stable tag in brackets (the tests assert on the tags).
 """
@@ -29,6 +33,11 @@ import subprocess
 import sys
 
 TOOLS = ("chromium", "openbox", "Xvfb", "x11vnc", "websockify", "pandoc", "wkhtmltopdf", "ffmpeg", "tesseract", "playwright")
+# The extras image: the manual sign-in browser, the live screen and the media tools; not the CV PDF toolchain, and its sweep says
+# NOT_INSTALLED for the scout's headless shell, linkedin_check and the CV PDF render (they live in the full image).
+EXTRAS_TOOLS = ("chromium", "openbox", "Xvfb", "x11vnc", "websockify", "ffmpeg", "tesseract", "playwright")
+NOT_IN_EXTRAS = ("pandoc", "wkhtmltopdf")
+ABSENT_FROM_EXTRAS = ("playwright_browser", "linkedin_check", "cv_pdf_render")
 REVISION_LABEL = "org.opencontainers.image.revision"
 MIN_SAVING = 0.4  # core must weigh at most 60% of full
 
@@ -88,14 +97,41 @@ def content_digests(image: str) -> dict[str, str]:
     return dict(line.split(" ", 1) for line in out.stdout.splitlines() if " " in line)
 
 
-def compare(core: dict[str, str], full: dict[str, str]) -> list[str]:
-    fails = [f"FAIL [content] {key} differs between core and full" for key in sorted(set(core) | set(full)) if core.get(key) != full.get(key)]
+def compare(core: dict[str, str], full: dict[str, str], other: str = "full") -> list[str]:
+    fails = [f"FAIL [content] {key} differs between core and {other}" for key in sorted(set(core) | set(full)) if core.get(key) != full.get(key)]
     if not core:
         fails.append("FAIL [content] the probe printed nothing")
     return fails
 
 
-def check(core_image: str, full_image: str, revision: str | None) -> list[str]:
+def check_extras(extras_image: str, core_digests: dict[str, str], full: dict, revision: str | None) -> list[str]:
+    """The `extras` image (the tools the user asks for): the three tools and nothing of the scout's or the CV PDF's."""
+    info = inspect(extras_image)
+    fails: list[str] = []
+    if env_value(info, "JHT_IMAGE_TIER") != "extras":
+        fails.append(f"FAIL [tier] the extras image says JHT_IMAGE_TIER={env_value(info, 'JHT_IMAGE_TIER')!r}, not 'extras'")
+    present = tools_present(extras_image)
+    fails += [f"FAIL [tools] {tool} is missing from the extras image" for tool in sorted(set(EXTRAS_TOOLS) - present)]
+    fails += [f"FAIL [tools] {tool} is in the extras image" for tool in sorted(present & set(NOT_IN_EXTRAS))]
+    sweep = run_in(extras_image, "python3 /app/shared/skills/tool_health.py")
+    try:
+        statuses = {name: tool["status"] for name, tool in json.loads(sweep.stdout)["tools"].items()}
+    except (ValueError, KeyError):
+        statuses = {}
+    absent = {name for name, status in statuses.items() if status == "NOT_INSTALLED"}
+    if sweep.returncode != 0 or absent != set(ABSENT_FROM_EXTRAS):
+        fails.append(f"FAIL [sweep] tool_health in extras: exit {sweep.returncode}, not installed {sorted(absent)}")
+    label = (info.get("Config", {}).get("Labels") or {}).get(REVISION_LABEL)
+    if not label or (revision and label != revision):
+        fails.append(f"FAIL [revision] the extras image carries {label!r}, not {revision!r}")
+    fails += compare(core_digests, content_digests(extras_image), "extras")
+    if info["Size"] >= full["Size"]:
+        fails.append(f"FAIL [size] extras is {info['Size'] / 1e6:.0f} MB against {full['Size'] / 1e6:.0f} MB of full: it must be smaller")
+    print(f"extras {info['Size'] / 1e6:.0f} MB")
+    return fails
+
+
+def check(core_image: str, full_image: str, revision: str | None, extras_image: str | None = None) -> list[str]:
     fails: list[str] = []
     core, full = inspect(core_image), inspect(full_image)
     for name, info, tier in (("core", core, "core"), ("full", full, "full")):
@@ -116,10 +152,13 @@ def check(core_image: str, full_image: str, revision: str | None) -> list[str]:
         fails.append(f"FAIL [revision] core {labels['core']!r} and full {labels['full']!r} must carry the same commit")
     elif revision and labels["core"] != revision:
         fails.append(f"FAIL [revision] the images carry {labels['core']!r}, not {revision!r}")
-    fails += compare(content_digests(core_image), content_digests(full_image))
+    core_digests = content_digests(core_image)
+    fails += compare(core_digests, content_digests(full_image))
     if core["Size"] > full["Size"] * (1 - MIN_SAVING):
         fails.append(f"FAIL [size] core is {core['Size'] / 1e6:.0f} MB against {full['Size'] / 1e6:.0f} MB of full: not smaller enough")
     print(f"core {core['Size'] / 1e6:.0f} MB · full {full['Size'] / 1e6:.0f} MB · revision {labels['core']}")
+    if extras_image:
+        fails += check_extras(extras_image, core_digests, full, revision or labels["core"])
     return fails
 
 
@@ -128,8 +167,9 @@ def main(argv: list[str]) -> int:
     parser.add_argument("core_image")
     parser.add_argument("full_image")
     parser.add_argument("--revision")
+    parser.add_argument("--extras", help="the extras image too: same commit, same code, the three on-request tools and no more")
     args = parser.parse_args(argv)
-    fails = check(args.core_image, args.full_image, args.revision)
+    fails = check(args.core_image, args.full_image, args.revision, args.extras)
     for line in fails:
         print(line)
     print("OK" if not fails else f"{len(fails)} check(s) failed")

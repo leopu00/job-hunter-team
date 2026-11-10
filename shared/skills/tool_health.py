@@ -231,6 +231,9 @@ CHECKS = {
 # On a `full` image (and on a machine with no tier: the default is `full`) a missing tool is BROKEN, as always:
 # a wrong tier must never be able to hide a real fault.
 TOOLS_OF_THE_FULL_IMAGE = ("playwright_browser", "linkedin_check", "cv_pdf_render", "manual_login_browser")
+# The `extras` image (the tools the user asks for, in containers of their own) has the manual sign-in browser and none of the
+# scout's headless shell or the CV PDF toolchain.
+TOOLS_ABSENT_FROM_EXTRAS = ("playwright_browser", "linkedin_check", "cv_pdf_render")
 
 
 def not_installed(name, tier=None):
@@ -238,6 +241,8 @@ def not_installed(name, tier=None):
     tier = (os.environ.get("JHT_IMAGE_TIER", "full") if tier is None else tier).strip().lower()
     if name in TOOLS_OF_THE_FULL_IMAGE and tier == "core":
         return "not installed yet: it arrives in the background after the onboarding (full image)"
+    if name in TOOLS_ABSENT_FROM_EXTRAS and tier == "extras":
+        return "not in the extras image: it lives in the full image"
     return None
 
 

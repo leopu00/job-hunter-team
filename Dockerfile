@@ -8,10 +8,11 @@
 # CV PDF, X). Plain `docker build .` builds `full`: exactly the image of before.
 #
 #   prefix-core -> prefix-full          the stable prefix: heavy layers that change with a
-#                                       pin, not with a release. Each sets JHT_IMAGE_TIER.
+#   prefix-core -> prefix-extras        pin, not with a release. Each sets JHT_IMAGE_TIER.
 #   runtime (FROM ${BASE})              code, Pi, users, gates: built once on each prefix.
 #
 #   docker build --target runtime --build-arg BASE=prefix-core .    -> core
+#   docker build --target runtime --build-arg BASE=prefix-extras .   -> extras
 #   docker build --target runtime .                                  -> full
 #
 # The tier is NOT a build argument of the runtime stage: it is the ENV the prefix carries,
@@ -219,6 +220,30 @@ RUN pip3 install --no-cache-dir -r requirements-tools.txt \
     && playwright install chromium \
     && rm -rf /var/lib/apt/lists/*
 
+# ── prefix-extras: the three tools the user asks for, on the core and not on the full image ────────────────────────
+# The manual LinkedIn sign-in (Debian's chromium + openbox), the live screen of the CLOSER (Xvfb + x11vnc + websockify, and the
+# full Chromium build of Playwright for the headed browser) and the media tools (ffmpeg + tesseract). They run in containers of
+# their own, started on request from this image (one image, three entrypoints), so the tier is `extras` and not `full`: no
+# headless shell (the scout's), no CV PDF toolchain. Until the tools leave `prefix-full` (P1b) the lists below are the same ones.
+FROM prefix-core AS prefix-extras
+ENV JHT_IMAGE_TIER=extras
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ffmpeg tesseract-ocr \
+      libatk1.0-0 libatk-bridge2.0-0 libatspi2.0-0 \
+      libnss3 libnspr4 libcups2 libdrm2 libgbm1 libasound2 \
+      libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
+      libpango-1.0-0 libcairo2 libdbus-1-3 \
+      xvfb x11vnc python3-websockify \
+      chromium openbox \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements-tools.txt ./
+# --no-shell: the full Chromium build only (the headed browser of the CLOSER); the headless shell stays in the full image.
+RUN pip3 install --no-cache-dir -r requirements-tools.txt \
+    && playwright install --with-deps --no-shell chromium \
+    && rm -rf /var/lib/apt/lists/*
+
 # ── runtime: code, Pi, users, gates — built once on each prefix ───────────────────
 # BASE is a stage (`prefix-core`, `prefix-full`) or an image by digest. The tier of the
 # image is the one its BASE carries (ENV JHT_IMAGE_TIER above).
@@ -265,7 +290,7 @@ RUN python3 shared/skills/tool_health.py --only cv_pdf_render \
 # A native arm64 build (Colima on Apple Silicon) still runs it.
 ARG TARGETARCH
 ARG BUILDARCH
-RUN if [ "$JHT_IMAGE_TIER" != full ]; then echo "HEADED_LAUNCH_SKIPPED: the $JHT_IMAGE_TIER image has no browser and no X"; exit 0; fi; \
+RUN if [ "$JHT_IMAGE_TIER" = core ]; then echo "HEADED_LAUNCH_SKIPPED: the core image has no browser and no X"; exit 0; fi; \
     Xvfb :98 -screen 0 1280x1024x24 -nolisten tcp & xvfb_pid=$!; \
     for _ in $(seq 1 100); do [ -S /tmp/.X11-unix/X98 ] && break; sleep 0.1; done; \
     if [ -n "$TARGETARCH" ] && [ -n "$BUILDARCH" ] && [ "$TARGETARCH" != "$BUILDARCH" ]; then \
@@ -299,7 +324,14 @@ RUN case "$JHT_IMAGE_TIER" in \
       full) for b in chromium openbox Xvfb pandoc wkhtmltopdf ffmpeg tesseract playwright; do \
               command -v "$b" >/dev/null 2>&1 || { echo "BUILD GATE FAILED: $b is missing from an image that says full" >&2; exit 1; }; \
             done ;; \
-      *) echo "BUILD GATE FAILED: JHT_IMAGE_TIER must be core or full, not '$JHT_IMAGE_TIER'" >&2; exit 1 ;; \
+      extras) for b in chromium openbox Xvfb x11vnc websockify ffmpeg tesseract playwright; do \
+                command -v "$b" >/dev/null 2>&1 || { echo "BUILD GATE FAILED: $b is missing from an image that says extras" >&2; exit 1; }; \
+              done; \
+              for b in pandoc wkhtmltopdf; do \
+                if command -v "$b" >/dev/null 2>&1; then echo "BUILD GATE FAILED: $b (CV PDF) is in an image that says extras" >&2; exit 1; fi; \
+              done; \
+              if ls /opt/playwright 2>/dev/null | grep -q headless_shell; then echo "BUILD GATE FAILED: the headless shell of the scout is in an image that says extras" >&2; exit 1; fi ;; \
+      *) echo "BUILD GATE FAILED: JHT_IMAGE_TIER must be core, full or extras, not '$JHT_IMAGE_TIER'" >&2; exit 1 ;; \
     esac
 
 RUN for pkg in shared/*/package.json; do \

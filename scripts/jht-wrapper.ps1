@@ -395,6 +395,7 @@ $RawBaseOverride = if ($env:JHT_RAW_BASE) { $env:JHT_RAW_BASE.TrimEnd('/') } els
 $ReleaseRef = if ($env:JHT_BRANCH) { $env:JHT_BRANCH } else { 'production' }
 $DefaultRuntimeImage = 'ghcr.io/leopu00/jht@sha256:fa78c975c04dd5f95d6225a35c8c3bb9646f8ef14b32c8ca558d5332de0cce00'
 $CoreImageDigest = ''
+$ExtrasImageDigest = ''
 $DefaultRuntimeVersion = '0.4.0'
 $GameControlDir = if ($env:JHT_GAME_CONTROL_DIR) { $env:JHT_GAME_CONTROL_DIR } else { Join-Path $env:APPDATA 'Godot\app_userdata\Job Hunter Team\client' }
 $GameExecutable = if ($env:JHT_GAME_EXECUTABLE) { $env:JHT_GAME_EXECUTABLE } else { Join-Path $env:LOCALAPPDATA 'Programs\Job Hunter Team\job-hunter-team.exe' }
