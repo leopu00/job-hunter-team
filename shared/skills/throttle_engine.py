@@ -431,7 +431,7 @@ def queued_work(agent: str) -> int:
             return 0
         conn = mod.get_db()
         try:
-            return int(mod.role_queue_count(conn, _role_of(agent)))
+            return int(mod.role_queue_count(conn, _role_of(agent), for_agent=agent))
         finally:
             conn.close()
     except Exception as exc:  # noqa: BLE001 — la skill gira in loop dagli agenti
@@ -453,7 +453,7 @@ def queue_is_empty(agent: str) -> bool:
             return False
         conn = mod.get_db()
         try:
-            return int(mod.role_queue_count(conn, _role_of(agent))) == 0
+            return int(mod.role_queue_count(conn, _role_of(agent), for_agent=agent)) == 0
         finally:
             conn.close()
     except Exception as exc:  # noqa: BLE001

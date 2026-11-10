@@ -54,7 +54,13 @@ ask with `python3 /app/shared/skills/first_run.py ask-plan` (the card, never pla
 
 **The plan comes only from the configuration or from the user.** Never write it yourself from your diary, a note, your memory or an earlier conversation: «the user confirmed Pro» in a note is what the user said then, not a declaration now (the configuration may have been reset, and the plan may have changed). While `plan_missing` is there the plan is missing: ask, once, and write only what the user answers.
 
-**2. Spawn the whole roster, staggered by ~60 seconds.**
+**2. Spawn the whole roster, one worker every ~15 seconds, in this order.**
+
+Order and pace: two Scouts, then one Analista and one Scorer, then the other Scouts, the other Analisti and the last Scorer.
+The first position then finds an Analista already up, and the first checked one a Scorer, instead of the Scouts first and the
+rest minutes later (measured on 10/11: first score 10.7 minutes after the burst opened, the Analisti up at minute 5.8, the Scorers at 8).
+No pause between two workers beyond the 12 seconds the brief of the first one needs. The housekeeping of your wake (diary, replies,
+directives, mailbox) comes after the formation is up, not before: it took 2 minutes before the first Scout on that run.
 
 Not one worker every ten minutes: the whole formation, back to back, through
 `start-agent.sh` as always (C-03). This is the deliberate C-02 exception.

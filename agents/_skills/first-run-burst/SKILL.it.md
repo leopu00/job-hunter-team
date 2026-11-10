@@ -54,7 +54,13 @@ allo stesso modo: chiedilo con `python3 /app/shared/skills/first_run.py ask-plan
 
 **Il piano viene solo dalla configurazione o dall'utente.** Non scriverlo mai tu dal diario, da una nota, dalla memoria o da una conversazione passata: «l'utente ha confermato Pro» in una nota è ciò che l'utente ha detto allora, non una dichiarazione di adesso (la configurazione può essere stata azzerata e il piano può essere cambiato). Finché c'è `plan_missing` il piano manca: chiedi, una volta sola, e scrivi solo ciò che l'utente risponde.
 
-**2. Spawna tutto il roster, scaglionato di ~60 secondi.**
+**2. Spawna tutto il roster, un worker ogni ~15 secondi, in questo ordine.**
+
+Ordine e ritmo: due Scout, poi un Analista e uno Scorer, poi gli altri Scout, gli altri Analisti e l'ultimo Scorer.
+La prima posizione trova così un Analista già su, e la prima controllata uno Scorer, invece degli Scout prima e del resto
+minuti dopo (misurato il 10/11: primo punteggio 10,7 minuti dopo l'apertura del burst, gli Analisti al minuto 5,8, gli Scorer all'8).
+Nessuna pausa fra due worker oltre ai 12 secondi che servono al brief del primo. Le faccende del tuo risveglio (diario, risposte,
+direttive, casella) vengono dopo che la formazione è su, non prima: hanno richiesto 2 minuti prima del primo Scout.
 
 Non un worker ogni dieci minuti: tutta la formazione, di seguito, sempre
 tramite `start-agent.sh` (C-03). Questa è l'eccezione deliberata a C-02.

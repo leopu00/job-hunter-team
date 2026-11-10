@@ -1569,7 +1569,7 @@ def test_queue_is_empty_is_true_only_for_a_queue_role_with_a_queue_read_and_empt
         def close(self):
             pass
 
-        def role_queue_count(self, conn, role):
+        def role_queue_count(self, conn, role, for_agent=None):
             return self.n
 
     monkeypatch.setattr(eng, "_load_shared", lambda name, filename: Db(0))

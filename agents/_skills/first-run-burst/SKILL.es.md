@@ -54,7 +54,13 @@ usuario habla con él.
 
 **El plan sale solo de la configuración o del usuario.** No lo escribas nunca tú a partir del diario, de una nota, de la memoria o de una conversación anterior: «el usuario confirmó Pro» en una nota es lo que el usuario dijo entonces, no una declaración de ahora (la configuración puede haberse reiniciado y el plan puede haber cambiado). Mientras haya `plan_missing`, el plan falta: pregunta, una sola vez, y escribe solo lo que el usuario responda.
 
-**2. Spawnea todo el roster, escalonado unos ~60 segundos.**
+**2. Spawnea todo el roster, un worker cada ~15 segundos, en este orden.**
+
+Orden y ritmo: dos Scouts, luego un Analista y un Scorer, luego los otros Scouts, los otros Analisti y el último Scorer.
+Así la primera posición encuentra ya en marcha un Analista, y la primera revisada un Scorer, en lugar de los Scouts primero y el resto
+minutos después (medido el 10/11: primera puntuación 10,7 minutos después de abrir el burst, los Analisti en el minuto 5,8, los Scorer en el 8).
+Sin pausa entre dos workers más allá de los 12 segundos que necesita el brief del primero. Las tareas de tu despertar (diario, respuestas,
+directivas, buzón) van después de levantar la formación, no antes: tardaron 2 minutos antes del primer Scout.
 
 No un worker cada diez minutos: toda la formación, una detrás de otra, siempre a través de
 `start-agent.sh` (C-03). Esta es la excepción deliberada a C-02.
