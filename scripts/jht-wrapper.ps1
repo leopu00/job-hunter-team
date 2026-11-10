@@ -390,6 +390,7 @@ $RuntimeImageFile = Join-Path $RuntimeDir 'runtime-image'
 $RuntimeTierFile = Join-Path $RuntimeDir 'runtime-tier'
 $RuntimeTierIntegrity = Join-Path $RuntimeDir '.runtime-tier-integrity'
 $BrokerLegacyMarker = Join-Path $RuntimeDir '.broker-legacy-migrated'
+$BrokerMadeMarker = Join-Path $RuntimeDir '.broker-made'
 $NodeEntry   = if ($env:JHT_NODE_ENTRY)     { $env:JHT_NODE_ENTRY }     else { '/app/cli/bin/jht.js' }
 $RawBaseOverride = if ($env:JHT_RAW_BASE) { $env:JHT_RAW_BASE.TrimEnd('/') } else { '' }
 $ReleaseRef = if ($env:JHT_BRANCH) { $env:JHT_BRANCH } else { 'production' }
@@ -558,7 +559,7 @@ function Test-RuntimePathAuthority {
 # `<name>=<sha256>`): the desktop app checks the main manifest key by key and must not meet a key it does not know. A helper is
 # dot-sourced only while the file still matches its line there. A runtime that has none yet gets it from the release origin the
 # first time it is needed (the `integration` command) and at the end of every upgrade.
-$RuntimeHelpers = @('jht-integration.ps1', 'jht-tools.ps1')
+$RuntimeHelpers = @('jht-integration.ps1', 'jht-tools.ps1', 'configure-podman-windows-network.ps1', 'wsl-interop-connect-proxy.py')
 $RuntimeHelpersManifest = Join-Path $RuntimeDir '.runtime-helpers'
 
 function Get-RuntimeHelperHash {
@@ -613,7 +614,7 @@ function Install-RuntimeHelpers {
       try {
         Invoke-WebRequest -UseBasicParsing -Uri "$base/scripts/$name" -OutFile $temp
         $text = [IO.File]::ReadAllText($temp)
-        [scriptblock]::Create($text) | Out-Null
+        if ($name -like '*.ps1') { [scriptblock]::Create($text) | Out-Null }
         if ($text -notmatch '(?m)^# JHT_RUNTIME_HELPER=1\r?$') { throw "$name lacks the helper marker" }
         Publish-JhtFile -Destination (Join-Path $RuntimeDir $name) -Bytes ([IO.File]::ReadAllBytes($temp))
       } finally { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue }
@@ -845,9 +846,10 @@ function Stop-OnFailedComposeUp {
 function Invoke-PodmanServicesUpInTurn {
   if ($ContainerRuntime -ne 'podman') { return 0 }
   $definition = Get-Content -LiteralPath $ComposeFile -Raw
+  # The broker only if it was made before (see Ensure-Broker): `up` never makes it.
   foreach ($service in @($BrokerContainer)) {
-    if ($definition -notmatch "(?m)^  $([regex]::Escape($service)):") { continue }
-    Invoke-Compose 'up' '-d' $service | Out-Host
+    if ($definition -notmatch "(?m)^  $([regex]::Escape($service)):" -or -not (Test-Path -LiteralPath $BrokerMadeMarker)) { continue }
+    Invoke-Compose '--profile' 'broker' 'up' '-d' '--no-deps' $service | Out-Host
     if ($LASTEXITCODE -ne 0) { return $LASTEXITCODE }
   }
   return 0
@@ -1036,7 +1038,7 @@ function Get-RunningComposeServiceId {
   if (-not $expectedProject) { $script:ServiceLookupReason = 'the compose project name could not be read'; return $null }
   $files = @('-f', $ComposeFile)
   if ($ContainerRuntime -eq 'podman') { $files += @('-f', $PodmanComposeFile) }
-  $composeArgs = @('compose') + $files + @('--project-directory', $RuntimeDir, '--profile', 'telegram', 'ps', '-q')
+  $composeArgs = @('compose') + $files + @('--project-directory', $RuntimeDir, '--profile', 'telegram', '--profile', 'broker', 'ps', '-q')
   if ($ContainerRuntime -ne 'podman') { $composeArgs += $Service }
   $ids = @(& { $ErrorActionPreference = 'Continue'; & docker @composeArgs 2>$null } | ForEach-Object { "$($_)".Trim() } | Where-Object { $_ })
   $psCode = $LASTEXITCODE
@@ -1246,8 +1248,8 @@ function Invoke-AgentControl {
 
 # Autorizzazione a una candidatura, dal desktop (`jht desktop-apply record ID INSTANT DESTINATION`). Il CLOSER
 # invia solo cio' che il broker ha registrato, e il broker registra solo da canali che gli agenti non hanno:
-# l'host e' uno. Come Invoke-AgentControl NON avvia mai niente: col broker spento o non attestato risponde col
-# codice chiuso apply_record_no_broker (113). Ogni campo e' chiuso QUI (confronto che distingue le maiuscole,
+# l'host e' uno. Come Invoke-AgentControl NON avvia mai niente, salvo il primo clic di una persona (se il broker non c'e' ancora lo crea
+# Ensure-Broker, solo il suo container): col broker non attestato risponde col codice chiuso apply_record_no_broker (113). Ogni campo e' chiuso QUI (confronto che distingue le maiuscole,
 # cifre ASCII; fine stringa con \z: in .NET `$` accetta anche un a capo finale) prima di finire in una riga di comando; la risposta e' una riga sola, mai il testo del broker.
 # Il codice sta in $script:DesktopApplyExitCode, come per Invoke-AgentControl.
 $script:DesktopApplyExitCode = 2
@@ -1264,7 +1266,11 @@ function Invoke-DesktopApply {
     return
   }
   $brokerId = $null
-  if (Test-RuntimeBundleTrusted) { $brokerId = Get-RunningComposeServiceId $BrokerContainer }
+  if (Test-RuntimeBundleTrusted) {
+    $brokerId = Get-RunningComposeServiceId $BrokerContainer
+    # The first click of a person is the one thing that makes the broker here (Ensure-Broker): only its container, and only if the engine answers.
+    if (-not $brokerId -and (Test-DockerReachable) -and (Ensure-Broker -Quiet 6>$null) -eq 0) { $brokerId = Get-RunningComposeServiceId $BrokerContainer }
+  }
   if (-not $brokerId) {
     [Console]::Out.WriteLine('{"ok":false,"error":"apply_record_no_broker"}')
     $script:DesktopApplyExitCode = 113
@@ -1286,6 +1292,111 @@ function Test-BrokerUp {
   return [bool](Get-RunningComposeServiceId $BrokerContainer)
 }
 
+# The broker (the mail password, the notary of the authorisations to apply) is made at the first thing that needs it (`jht mail setup`, the
+# first record of an authorisation, the link of the site, Telegram) and by nothing else: `jht up` leaves it out unless a marker says it was
+# made before. `jht` has mounted the empty socket volume since it was made, so making the broker never recreates the team.
+# On Podman its proxy (3129) and its start at boot are made first, by the network script of the setup, which is a host script like the others
+# (attested in .runtime-helpers, fetched here the first time).
+# What the steps of Ensure-Broker print goes to the console, or nowhere for the app (-Quiet: its answer is one JSON line).
+function Write-EnsureLine {
+  param([Parameter(ValueFromPipeline)]$Line, [switch]$Quiet)
+  process { if (-not $Quiet) { $Line | Out-Host } }
+}
+
+function Invoke-BrokerNetwork {
+  param([switch]$Quiet)
+  if ($ContainerRuntime -ne 'podman') { return $true }
+  foreach ($name in @('configure-podman-windows-network.ps1', 'wsl-interop-connect-proxy.py')) {
+    if (-not (Test-RuntimeHelperDeclared $name)) {
+      if (-not (Install-RuntimeHelpers)) { Write-Err 'broker_network_unavailable: non riesco a scaricare gli script del proxy della posta. Cosa fare: jht upgrade'; return $false }
+      break
+    }
+  }
+  if (-not (Test-RuntimeHelpersTrusted) -or -not (Test-RuntimeHelperDeclared 'configure-podman-windows-network.ps1')) {
+    Write-Err 'broker_network_unavailable: gli script del proxy della posta non sono attestati. Cosa fare: jht upgrade'
+    return $false
+  }
+  $shell = (Get-Process -Id $PID).Path
+  & $shell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $RuntimeDir 'configure-podman-windows-network.ps1') `
+    -MachineName $env:CONTAINER_CONNECTION -BridgeScript $PodmanMachineBridgePath -WithBroker | Write-EnsureLine -Quiet:$Quiet
+  if ($LASTEXITCODE -ne 0) { Write-Err "broker_network_unavailable: il proxy della posta non e' pronto (codice $LASTEXITCODE)."; return $false }
+  return $true
+}
+
+# What stands under the broker's name: 'running' | 'stopped' (a container of this project and service that is not running) | 'absent' |
+# 'foreign' (a container of that name that is not this project's broker, or more than one, or one that cannot be read: not touched,
+# neither adopted nor replaced). The same three-way answer as the POSIX wrapper (attested / absent / present and not attestable).
+function Get-BrokerContainerState {
+  $expectedProject = Get-ComposeProjectName
+  if (-not $expectedProject) { return 'foreign' }
+  $ids = @(& { $ErrorActionPreference = 'Continue'; & docker ps -aq --filter "name=^$BrokerContainer$" 2>$null } | ForEach-Object { "$($_)".Trim() } | Where-Object { $_ })
+  if ($ids.Count -eq 0) { return 'absent' }
+  if ($ids.Count -ne 1 -or $ids[0] -notmatch '^[0-9a-fA-F]{12,64}$') { return 'foreign' }
+  $detailLines = @(& { $ErrorActionPreference = 'Continue'; & docker inspect --type container $ids[0] --format '{{.State.Running}}|{{json .Config.Labels}}' 2>$null })
+  $details = if ($detailLines.Count) { [string]$detailLines[0] } else { '' }
+  $cut = if ($details) { $details.IndexOf('|') } else { -1 }
+  if ($cut -lt 0) { return 'foreign' }
+  $labelsJson = $details.Substring($cut + 1)
+  if ((Get-ComposeLabel $labelsJson 'com.docker.compose.project') -ne $expectedProject) { return 'foreign' }
+  if ((Get-ComposeLabel $labelsJson 'com.docker.compose.service') -ne $BrokerContainer) { return 'foreign' }
+  if ($details.Substring(0, $cut).Trim() -eq 'true') { return 'running' }
+  return 'stopped'
+}
+
+# 0 when the broker runs and answers.
+function Ensure-Broker {
+  param([switch]$Quiet)
+  if (Get-RunningComposeServiceId $BrokerContainer) { return 0 }
+  $brokerState = Get-BrokerContainerState
+  if ($brokerState -eq 'foreign') {
+    Write-Err 'broker_unavailable: il broker dei segreti esiste ma non e'' attestabile come nostro: non lo tocco.'
+    return 1
+  }
+  if ((Get-Content -LiteralPath $ComposeFile -Raw) -notmatch "(?m)^  $([regex]::Escape($BrokerContainer)):") {
+    Write-Err 'broker_unavailable: il runtime installato e'' piu'' vecchio e non ha il broker dei segreti.'
+    Write-Err 'Cosa fare: jht upgrade'
+    return 1
+  }
+  Write-Info 'Preparo il servizio della posta (si crea solo la prima volta che serve)...'
+  if (-not (Invoke-BrokerNetwork -Quiet:$Quiet)) { return 1 }
+  Invoke-Compose '--profile' 'broker' 'up' '-d' '--no-deps' $BrokerContainer | Write-EnsureLine -Quiet:$Quiet
+  if ($LASTEXITCODE -ne 0) { Write-Err 'broker_start_failed: il servizio della posta non e'' partito.'; Write-Err 'Cosa fare: riprova il comando'; return 1 }
+  $ready = $false
+  for ($i = 0; $i -lt 30 -and -not $ready; $i++) {
+    $brokerId = Get-RunningComposeServiceId $BrokerContainer
+    if ($brokerId) {
+      $null = & { $ErrorActionPreference = 'Continue'; & docker exec $brokerId jht-broker-admin secrets status 2>&1 }
+      $ready = ($LASTEXITCODE -eq 0)
+    }
+    if (-not $ready) { Start-Sleep -Seconds 1 }
+  }
+  if (-not $ready) { Write-Err 'broker_start_failed: il servizio della posta non risponde dopo 30 secondi.'; Write-Err 'Cosa fare: riprova il comando'; return 1 }
+  New-Item -ItemType File -Path $BrokerMadeMarker -Force -ErrorAction SilentlyContinue | Out-Null
+  $null = Invoke-BrokerMigrateLegacyOnce
+  $null = Initialize-BrokerWebAuthorisations
+  return 0
+}
+
+# After `up`: a broker made before comes back with the team (`down` removes its container); one that an older install made is adopted.
+function Resume-Broker {
+  $brokerState = Get-BrokerContainerState
+  if ($brokerState -eq 'foreign') {
+    # a container of that name that is not this project's broker is neither adopted nor started over
+    if (Test-Path -LiteralPath $BrokerMadeMarker) { Write-Warn "broker_restart_failed: il broker dei segreti non e' attestabile come nostro: non lo tocco. Cosa fare: jht mail status" }
+    return
+  }
+  if (-not (Test-Path -LiteralPath $BrokerMadeMarker)) {
+    if ($brokerState -eq 'absent') { return }
+    New-Item -ItemType File -Path $BrokerMadeMarker -Force -ErrorAction SilentlyContinue | Out-Null
+  }
+  if ($brokerState -ne 'running') {
+    Invoke-Compose '--profile' 'broker' 'up' '-d' '--no-deps' $BrokerContainer | Out-Host
+    if ($LASTEXITCODE -ne 0) { Write-Warn "broker_restart_failed: il servizio della posta non e' ripartito. Cosa fare: jht mail status" }
+  }
+  $null = Invoke-BrokerMigrateLegacyOnce
+  Initialize-BrokerWebAuthorisations
+}
+
 # L'host amministra il broker con exec di jht-broker-admin; un segreto passa
 # solo su stdin ($InputText), mai negli argomenti.
 # I chiamanti passano SEMPRE -AdminArgs per nome (come Invoke-TelegramAdmin): InputText e' il primo
@@ -1295,8 +1406,13 @@ function Invoke-BrokerAdmin {
   param([string]$InputText = $null, [Parameter(ValueFromRemainingArguments)] [string[]]$AdminArgs)
   $brokerId = Get-RunningComposeServiceId $BrokerContainer
   if (-not $brokerId) {
-    Write-Err 'broker_unavailable: il broker dei segreti non e'' attivo.'
-    Write-Err 'Cosa fare: jht up'
+    if (Test-Path -LiteralPath $BrokerMadeMarker) {
+      Write-Err 'broker_unavailable: il broker dei segreti non e'' attivo.'
+      Write-Err 'Cosa fare: jht up'
+    } else {
+      Write-Err 'broker_unavailable: il servizio della posta non c''e'' ancora: si crea la prima volta che serve.'
+      Write-Err 'Cosa fare: jht mail setup'
+    }
     return 1
   }
   # Out-Host: la risposta JSON va a chi ha lanciato jht, non nel valore di
@@ -1730,6 +1846,8 @@ function Invoke-TelegramLifecycleSteps {
     switch -CaseSensitive ($step) {
       '' { continue }
       'start' {
+        $brokerCode = Ensure-Broker
+        if ($brokerCode -ne 0) { return $brokerCode }
         Invoke-Compose '--profile' 'telegram' up '-d' $TelegramContainer | Out-Host
         if ($LASTEXITCODE -ne 0) { return $LASTEXITCODE }
         if ((Confirm-TelegramLifecycle 'start') -ne 0) { return 1 }
@@ -1914,7 +2032,7 @@ function Remove-BrokerResetData {
     Write-Err 'reset: non riesco a determinare il progetto Compose; i volumi del broker non sono stati toccati.'
     return 1
   }
-  Invoke-Compose '--profile' 'telegram' down
+  Invoke-Compose '--profile' 'telegram' '--profile' 'broker' down
   if ($LASTEXITCODE -ne 0) {
     Write-Err 'reset: non riesco a fermare il runtime; i volumi del broker non sono stati toccati.'
     return 1
@@ -1965,6 +2083,12 @@ function Remove-BrokerResetData {
       Write-Info "Cancellato: marcatore migrazione broker $BrokerLegacyMarker"
     } catch {
       Write-Err "reset: impossibile cancellare il marcatore migrazione broker $BrokerLegacyMarker."
+      $failed = $true
+    }
+  }
+  if (Test-Path -LiteralPath $BrokerMadeMarker) {
+    try { Remove-Item -LiteralPath $BrokerMadeMarker -Force -ErrorAction Stop } catch {
+      Write-Err "reset: impossibile cancellare il marcatore del broker $BrokerMadeMarker."
       $failed = $true
     }
   }
@@ -2279,6 +2403,8 @@ function Invoke-MailSetup {
   $adminArgs = @('mailbox', 'setup', '--user', $user, '--admission', $admission)
   if ($imapHost) { $adminArgs += @('--imap-host', $imapHost) }
   if ($smtpHost) { $adminArgs += @('--smtp-host', $smtpHost) }
+  $made = Ensure-Broker
+  if ($made -ne 0) { $password = $null; return $made }
   $code = Invoke-BrokerAdmin -InputText $password -AdminArgs $adminArgs
   $password = $null
   return $code
@@ -3475,8 +3601,11 @@ function Invoke-RuntimeUpgrade {
     # Il broker dei segreti (P1 del 08/10) usa la stessa immagine del team:
     # dopo il commit riparte con quella nuova. Non decide l'esito
     # dell'upgrade; se non parte, la posta resta chiusa finche' `jht up`.
-    if ((Get-Content -LiteralPath $ComposeFile -Raw) -match "(?m)^  $([regex]::Escape($BrokerContainer)):") {
-      if (-not (Invoke-UpgradeCompose $ComposeFile 'up' '-d' '--force-recreate' $BrokerContainer)) {
+    # Only if it is there (or was made once): an install that never used the mail does not get it from the upgrade.
+    $brokerThere = (Test-Path -LiteralPath $BrokerMadeMarker) -or [bool](@(& { $ErrorActionPreference = 'Continue'; & docker ps -aq --filter "name=^$BrokerContainer$" 2>$null }) | Where-Object { $_ })
+    if ($brokerThere -and (Get-Content -LiteralPath $ComposeFile -Raw) -match "(?m)^  $([regex]::Escape($BrokerContainer)):") {
+      New-Item -ItemType File -Path $BrokerMadeMarker -Force -ErrorAction SilentlyContinue | Out-Null
+      if (-not (Invoke-UpgradeCompose $ComposeFile '--profile' 'broker' 'up' '-d' '--force-recreate' '--no-deps' $BrokerContainer)) {
         Write-UpgradeNote "broker_restart_failed: il broker dei segreti non e' ripartito. Cosa fare: jht up"
       }
       $null = Invoke-BrokerMigrateLegacyOnce
@@ -3628,8 +3757,7 @@ switch ($Sub) {
     Stop-OnFailedComposeUp $LASTEXITCODE
     $telegramCode = Invoke-AvailableTelegramLifecycle 'resume'
     if ($telegramCode -ne 0) { exit $telegramCode }
-    $null = Invoke-BrokerMigrateLegacyOnce
-    Initialize-BrokerWebAuthorisations
+    Resume-Broker
     # The up went well (a failed one has already stopped jht with its code): 0, not the code of
     # whichever native ran last. The setup reads it (enable-podman-windows-runtime.ps1, T89).
     exit 0
@@ -3638,7 +3766,7 @@ switch ($Sub) {
   { $_ -in @('down', 'stop-container') } {
     Require-ComposeFile
     Require-Docker
-    Invoke-Compose '--profile' 'telegram' down
+    Invoke-Compose '--profile' 'telegram' '--profile' 'broker' down
     break
   }
 
@@ -3652,7 +3780,7 @@ switch ($Sub) {
   'recreate' {
     Require-ComposeFile
     Require-Docker
-    Invoke-Compose '--profile' 'telegram' down
+    Invoke-Compose '--profile' 'telegram' '--profile' 'broker' down
     if (-not (Repair-MountOwnership)) { exit 1 }
     if (-not (Initialize-TelegramLegacyInventory)) {
       Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'
@@ -3663,8 +3791,7 @@ switch ($Sub) {
     Stop-OnFailedComposeUp $LASTEXITCODE
     $telegramCode = Invoke-AvailableTelegramLifecycle 'resume'
     if ($telegramCode -ne 0) { exit $telegramCode }
-    $null = Invoke-BrokerMigrateLegacyOnce
-    Initialize-BrokerWebAuthorisations
+    Resume-Broker
     # The up went well (a failed one has already stopped jht with its code): 0, not the code of
     # whichever native ran last. The setup reads it (enable-podman-windows-runtime.ps1, T89).
     exit 0
@@ -3829,7 +3956,7 @@ switch ($Sub) {
     Ensure-Up
     & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry $Sub @Rest
     $code = $LASTEXITCODE
-    if ($Sub -eq 'cloud' -and $Rest.Count -gt 0 -and $Rest[0] -eq 'pair' -and $code -eq 0) { Initialize-BrokerWebAuthorisations }
+    if ($Sub -eq 'cloud' -and $Rest.Count -gt 0 -and $Rest[0] -eq 'pair' -and $code -eq 0) { if ((Ensure-Broker) -eq 0) { Initialize-BrokerWebAuthorisations } }
     exit $code
     break
   }

@@ -276,7 +276,7 @@ def test_jht_tools_is_a_host_helper_the_installer_ships_the_enabler_attests_and_
     wrapper = _text(WRAPPER)
     installer = _text(ROOT / "scripts" / "install.ps1")
     enabler = _text(ROOT / "scripts" / "enable-podman-windows-runtime.ps1")
-    assert "$RuntimeHelpers = @('jht-integration.ps1', 'jht-tools.ps1')" in wrapper
+    assert "$RuntimeHelpers = @('jht-integration.ps1', 'jht-tools.ps1', 'configure-podman-windows-network.ps1', 'wsl-interop-connect-proxy.py')" in wrapper
     assert re.search(r"'tools' \{\n    Require-ComposeFile\n", wrapper)
     tools_branch = wrapper.split("  'tools' {")[1].split("\n  'telegram' {")[0]
     assert "Install-RuntimeHelpers" not in tools_branch, "no command of jht tools downloads a missing helper (A3)"

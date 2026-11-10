@@ -82,6 +82,7 @@ HOST_KERNEL="$(uname -s)"; HOST_UID="$(id -u)"
 err() {{ echo "error: $*" >&2; }}; info() {{ echo "info: $*" >&2; }}
 RUNTIME_DIR="{host.runtime}"; COMPOSE_FILE="{host.compose}"
 BROKER_SERVICE=jht-broker; TELEGRAM_SERVICE=jht-telegram; JHT_HOST_TYPE=local
+BROKER_WANTED_MARKER="$RUNTIME_DIR/.broker-made"
 {wrapper_functions("runtime_stat", "runtime_node_safe")}
 compose_project_name() {{ echo jht; }}
 docker_reachable() {{ docker info >/dev/null 2>&1; }}
@@ -100,6 +101,7 @@ compose() {{
   esac
 }}
 telegram_lifecycle_verify() {{ grep -qx jht-telegram "$FAKE_RUNNING"; }}
+ensure_broker() {{ COMPOSE_PROFILES=broker compose up -d "$BROKER_SERVICE"; }}  # the step that makes it: tests/test_broker_on_request.py
 . "{LIBRARY}"
 integration_main {args}
 """
@@ -221,11 +223,13 @@ def test_the_mail_broker_is_not_removable_while_jht_up_starts_it(host):
     assert result.returncode == 3
     assert "stop" not in host.log.read_text()
     host.compose.write_text(host.compose.read_text().replace("  jht-broker:\n", "  jht-broker:\n    profiles: [broker]\n"))
+    (host.runtime / ".broker-made").write_text("")
     assert run(host, "remove mail --json").returncode == 0
     assert "COMPOSE profiles=broker stop jht-broker" in host.log.read_text()
+    assert not (host.runtime / ".broker-made").exists()  # `jht up` does not bring it back
 
 
-def test_add_mail_asks_for_the_broker_profile_and_checks_it_runs(host):
+def test_add_mail_makes_the_broker_with_the_step_that_makes_it_and_checks_it_runs(host):
     result = run(host, "add mail --json")
     assert result.returncode == 0, result.stderr
     assert "COMPOSE profiles=broker up -d jht-broker" in host.log.read_text()

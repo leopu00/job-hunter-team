@@ -105,7 +105,7 @@ def test_persistent_network_config_uses_native_connector_and_localhost_proxy():
     assert "podman --cgroup-manager=cgroupfs --log-level=info system service" in source
     assert 'Environment="CONTAINERS_CGROUP_MANAGER' not in source
     assert "sudo timeout 90 systemctl restart $egressServices" in source
-    assert "jht-windows-egress-proxy.service jht-windows-egress-proxy-broker.service" in source
+    assert "jht-windows-egress-proxy.service jht-windows-egress-proxy-broker.service" in source  # with -WithBroker only
     assert "-Policy agent -ListenPort $Port" in source
     assert "-Policy broker -ListenPort $BrokerPort" in source
     assert "-Policy telegram -ListenPort $TelegramPort" in source
@@ -117,7 +117,7 @@ def test_persistent_network_config_uses_native_connector_and_localhost_proxy():
     assert "Agent, broker and Telegram proxy ports must be distinct" in source
     # each proxy against its own policy (the check runs in the machine with the three ports in
     # this order: tests/test_podman_windows_setup_retry.py runs it)
-    assert "bash -s -- $Port $BrokerPort $TelegramPort" in source
+    assert "bash -s -- $Port $checkedBrokerPort $TelegramPort" in source
     assert "agent=$1 broker=$2 telegram=$3" in source
     assert 'check agent "$agent" https://ghcr.io/v2/ 401' in source
     assert 'check broker "$broker" https://ghcr.io/v2/ 401' in source
@@ -217,7 +217,7 @@ def test_runtime_enabler_installs_persistent_container_lifecycle():
     assert "Requires=jht-windows-egress-proxy.service" in source
     assert "After=jht-windows-egress-proxy.service" in source
     assert "Requires=jht-rootless-podman.service" in source
-    assert "ExecStart=/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock start --sig-proxy=false jht-broker jht" in source
+    assert "ExecStart=/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock start --sig-proxy=false jht\n" in source.replace("\r\n", "\n")
     assert "ExecStop=-/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock stop --time 30 jht jht-telegram jht-broker" in source
     assert "WantedBy=multi-user.target" in source
     assert "systemctl enable --no-reload jht-container.service" in source

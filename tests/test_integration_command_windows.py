@@ -31,6 +31,7 @@ function Write-Info { param([string]$Msg) [Console]::Error.WriteLine($Msg) }
 $RuntimeDir = $env:T_RUNTIME
 $ComposeFile = Join-Path $RuntimeDir 'docker-compose.yml'
 $Container = 'jht'; $TelegramContainer = 'jht-telegram'; $BrokerContainer = 'jht-broker'
+$BrokerMadeMarker = Join-Path $RuntimeDir '.broker-made'
 function Test-ProtectedRuntimeNode {
   param([string]$Path, [switch]$Directory)
   $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
@@ -63,6 +64,8 @@ function Invoke-Compose {
   if ($words -contains 'stop') { $running = @($running | Where-Object { $_ -ne $service }) }
   [IO.File]::WriteAllLines($env:T_RUNNING, [string[]]$running)
 }
+# the step that makes the broker (tests/test_broker_on_request_windows.py)
+function Ensure-Broker { param([switch]$Quiet) Invoke-Compose '--profile' 'broker' up '-d' $BrokerContainer | Out-Null; return $LASTEXITCODE }
 function docker {
   Add-Content -LiteralPath $env:T_LOG -Value ('DOCKER ' + ($args -join ' '))
   $global:LASTEXITCODE = 0
@@ -204,8 +207,10 @@ def test_the_mail_broker_is_not_removable_while_jht_up_starts_it(host):
     assert run(host, ["remove", "mail", "--json"]).returncode == 3
     compose = host.runtime / "docker-compose.yml"
     compose.write_text(compose.read_text(encoding="utf-8").replace("  jht-broker:\n", "  jht-broker:\n    profiles: [broker]\n"), encoding="utf-8")
+    (host.runtime / ".broker-made").write_text("", encoding="utf-8")
     assert run(host, ["remove", "mail", "--json"]).returncode == 0
     assert "COMPOSE --profile broker stop jht-broker" in log(host)
+    assert not (host.runtime / ".broker-made").exists()  # `jht up` does not bring it back
 
 
 def test_purging_the_mail_broker_leaves_the_volume_of_all_the_portal_credentials(host):
@@ -234,7 +239,7 @@ def _text(path: Path) -> str:
 
 def test_wrapper_installer_enabler_and_library_agree_on_the_helper():
     wrapper, installer, enabler = _text(WRAPPER), _text(INSTALLER), _text(ENABLER)
-    assert "$RuntimeHelpers = @('jht-integration.ps1', 'jht-tools.ps1')" in wrapper
+    assert "$RuntimeHelpers = @('jht-integration.ps1', 'jht-tools.ps1', 'configure-podman-windows-network.ps1', 'wsl-interop-connect-proxy.py')" in wrapper
     assert "$JHT_INTEGRATION_PROTOCOL = 1\n" in wrapper
     assert re.search(r"'integration' \{\n    Require-ComposeFile\n", wrapper)
     assert "$mayFetch = $Rest.Count -gt 0" in wrapper                      # only add/remove fetch a missing helper
