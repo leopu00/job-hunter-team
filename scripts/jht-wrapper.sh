@@ -806,7 +806,12 @@ require_trusted_runtime() {
     }
   fi
   runtime_bundle_trusted || {
-    err "runtime host non attendibile (path, owner, permessi o SHA-256)"
+    # A manifest that is not there at all is an install that never finished, not a file somebody changed: said as what it is.
+    if [ ! -e "$RUNTIME_MANIFEST" ] && [ ! -L "$RUNTIME_MANIFEST" ]; then
+      err "Job Hunter Team non è installato del tutto: nella cartella del runtime manca il file di integrità (un'installazione interrotta?). Rilancia l'installer."
+    else
+      err "runtime host non attendibile (path, owner, permessi o SHA-256)"
+    fi
     return 1
   }
   # Il pin del canale di test vince su un JHT_IMAGE dell'ambiente: il canale
@@ -3921,6 +3926,19 @@ ensure_up_for_stop() {
   ensure_up
 }
 
+# A command that needs the running container, asked before it ever started: `read_only_service_id` says 3 for «no such container»
+# and 1 for «there is one and it cannot be attested». The first is a team that is not started (said as that, with the command that
+# starts it); only the second is «non attestabile». Always exits 1.
+not_started_or_unattestable() { # $1 = the status of the check, $2 = what is denied
+  if [ "${1:-1}" -eq 3 ]; then
+    err "Job Hunter Team non è ancora avviato: lancia 'jht up' (la prima volta, 'jht setup')."
+  else
+    err "Container JHT non attestabile; ${2:-operazione negata}."
+    stale_config_hint
+  fi
+  exit 1
+}
+
 ensure_up() {
   local status=0
   if container_up; then
@@ -6176,9 +6194,7 @@ case "$SUB" in
     require_compose_file
     require_docker
     container_up >/dev/null || {
-      err "Container JHT non attestabile; riavvio negato."
-      stale_config_hint
-      exit 1
+      not_started_or_unattestable $? "riavvio negato"
     }
     compose restart "$CONTAINER_SERVICE"
     container_postcheck_running || exit 1
@@ -6188,9 +6204,7 @@ case "$SUB" in
     require_compose_file
     require_docker
     container_up >/dev/null || {
-      err "Container JHT non attestabile; ricreazione negata."
-      stale_config_hint
-      exit 1
+      not_started_or_unattestable $? "ricreazione negata"
     }
     ensure_bind_owner
     COMPOSE_PROFILES=telegram compose down
@@ -6281,8 +6295,7 @@ case "$SUB" in
     require_docker
     shift || true
     container_id="$(read_only_container_id)" || {
-      err "Container JHT non attestabile; lettura log negata."
-      exit 1
+      not_started_or_unattestable $? "lettura log negata"
     }
     # Passa eventuali flag (-f, --tail N) a docker logs.
     docker logs "$@" "$container_id"
