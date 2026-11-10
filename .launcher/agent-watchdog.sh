@@ -251,6 +251,16 @@ if pi and prov in ('glm', 'kimi', 'moonshot'):
   has_creds = api_key_there()
 else:
   has_creds = bool(prov) and os.path.exists(f'{jht_home}/.pi/agent/auth.json' if pi and prov in ('openai', 'codex') else markers.get(prov, ''))
+  # Pi keeps one entry per service in its file: the sign-in of THIS provider is there only with its own entry (a file with only
+  # Anthropic's, a Claude subscription billed per token from pi, is not). Only the NAMES are looked at, never a value.
+  # The names are the ones of shared/runtime/pi-login-keys.list (tests/test_agent_watchdog_pi.py keeps them together).
+  if has_creds and pi and prov in ('openai', 'codex'):
+    try:
+      with open(f'{jht_home}/.pi/agent/auth.json', encoding='utf-8') as handle:
+        saved = json.load(handle)
+      has_creds = isinstance(saved, dict) and any(isinstance(saved.get(n), dict) and bool(saved.get(n)) for n in ('openai-codex', 'openai'))
+    except Exception:
+      has_creds = False
 sys.exit(0 if (prov and has_creds) else 1)
 PYEOF
 }

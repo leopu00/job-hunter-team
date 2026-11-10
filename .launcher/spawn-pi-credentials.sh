@@ -2,8 +2,8 @@
 # spawn-pi-credentials.sh — prima di accendere un agente su pi: c'è con cosa parlare al provider?
 # Caricato da spawn-lib.sh. Senza credenziali pi si accende lo stesso e sbaglia al primo messaggio
 # ("No API key found"): qui l'avvio si ferma prima, e dice cosa manca e come rimediare.
-# Il controllo guarda se le credenziali CI SONO, mai cosa contengono: del login di pi legge solo
-# esistenza, tipo, proprietario e se il file è vuoto (lstat), del config solo se c'è una chiave.
+# Il controllo guarda se le credenziali CI SONO, mai i valori: del login di pi legge esistenza, tipo, proprietario e se il file è
+# vuoto (lstat) e poi i NOMI delle voci (per quale provider è il login, shared/skills/pi_login.py), del config solo se c'è una chiave.
 
 # jht_pi_login_present → 0 se <JHT_HOME>/.pi/agent/auth.json c'è ed è credibile: un file regolare (non un
 #   link, non una cartella), non vuoto, di chi esegue o di root. Il file di un altro utente non vale: pi lo
@@ -41,13 +41,64 @@ raise SystemExit(0 if ok else 1)
 PYEOF
 }
 
+# jht_pi_active_provider <jht.config.json> → il provider attivo del config (minuscolo), o niente.
+jht_pi_active_provider() {
+  [ -f "${1:-}" ] || return 0
+  python3 - "$1" <<'PYEOF2'
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as handle:
+        value = json.load(handle).get("active_provider") or ""
+    print(str(value).strip().lower() if isinstance(value, str) else "")
+except Exception:
+    pass
+PYEOF2
+}
+
+# jht_pi_login_check <jht.config.json> → 0 se il login di pi vale per il provider del setup; altrimenti rc 1 e su stderr perché.
+#   Un file di login che c'è non dice di quale account è: pi tiene una voce per servizio (il login ChatGPT è `openai`, quello di
+#   Anthropic `anthropic`), e un auth.json con la sola voce di Anthropic (abbonamento Claude, a token come «extra usage» quando lo
+#   usa pi) è stato preso per il login dell'account OpenAI. Si leggono i NOMI delle voci (shared/skills/pi_login.py), mai i valori.
+jht_pi_login_check() {
+  local config="${1:-}" provider script out state found
+  JHT_PI_LOGIN_FOUND=""
+  jht_pi_login_present || return 1
+  provider="$(jht_pi_active_provider "$config")"
+  for script in "${JHT_SPAWN_LIB_DIR:-}/../shared/skills/pi_login.py" /app/shared/skills/pi_login.py; do [ -f "$script" ] && break; script=""; done
+  [ -n "$script" ] || return 0   # senza il controllo (immagine vecchia) vale la presenza, come prima
+  out="$(python3 -I "$script" "$(jht_pi_agent_dir)/auth.json" "$provider" 2>/dev/null)" || out=""
+  state="$(printf '%s' "$out" | sed -n 's/.*"state":"\([a-z_]*\)".*/\1/p')"
+  found="$(printf '%s' "$out" | sed -n 's/.*"found":\[\([^]]*\)\].*/\1/p' | tr -d '"')"
+  JHT_PI_LOGIN_FOUND="$found"
+  case "$state" in
+    ok|no_rule|"") return 0 ;;
+  esac
+  {
+    echo "Error: the pi login ($(jht_pi_agent_dir)/auth.json) is not a login for the provider of the setup (${provider:-none})."
+    if [ "$state" = unreadable ]; then
+      echo "  The file is not readable as the login of pi."
+    else
+      echo "  It holds the sign-in of: ${found:-nothing}."
+    fi
+    case ",$found," in
+      *,anthropic,*) echo "  A Claude subscription used from pi is billed by Anthropic per token, as extra usage: with Claude use the claude program (jht providers harness codex does not apply: choose Claude in jht setup)." ;;
+    esac
+    echo "  Fix:     sign in to pi with the provider of the setup: jht oauth-login (in pi type /login, choose the provider, then leave with Ctrl+C or /quit),"
+    echo "           or jht setup. This login is not used: nothing starts on it."
+  } >&2
+  return 1
+}
+
 # jht_pi_credentials_check <jht.config.json>
 #   0 se c'è una chiave (JHT_API_KEY_FILE, o api_key / api_key_ref del provider attivo nel config) o un login di
 #   pi. Altrimenti rc 1, con su stderr cosa manca e come si rimedia; non scrive niente e non avvia niente.
 jht_pi_credentials_check() {
   [ -z "${JHT_API_KEY_FILE:-}" ] || return 0   # il file lo controlla jht_key_wrap, prima del pane
   jht_pi_config_key_present "${1:-}" && return 0
-  jht_pi_login_present && return 0
+  if jht_pi_login_present; then
+    jht_pi_login_check "${1:-}"
+    return $?
+  fi
   cat >&2 <<EOF
 Error: the pi harness has no credentials, so pi would start and fail at its first message ("No API key found").
   Missing: an API key (JHT_API_KEY_FILE, or the api key of the active provider in the configuration)

@@ -6,15 +6,16 @@
  *   {"ok":true,"harness":"pi","changed":true,"provider":"openai","pi_allowed":true,"login":"signed_out"}
  *
  * `login` is whether the marker of the program that drives the agents is there (Pi: `.pi/agent/auth.json`, Codex:
- * `.codex/auth.json`, ...): looked at with lstat, a regular file and nothing else, and never read. `not_needed` is a
+ * `.codex/auth.json`, ...): looked at with lstat, a regular file and nothing else, and not read, except Pi's: its file has one entry per
+ * service, so only the NAMES of the entries are read, to see that the provider of the setup has its own (never a value). `not_needed` is a
  * provider used with an API key; `unknown` is a provider this release has no marker for, or a marker that cannot
  * be looked at.
  */
-import { lstatSync } from 'node:fs';
+import { lstatSync, readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { writePrivateJson } from '../lib/secure-config-io.js';
-import { AGENT_HARNESSES, DEFAULT_HARNESS, harnessOf, harnessProblem, loginMarkerOf } from '../../../shared/runtime/agent-harness.js';
+import { AGENT_HARNESSES, DEFAULT_HARNESS, PI_LOGIN_MARKER, harnessOf, harnessProblem, inspectPiLogin, loginMarkerOf } from '../../../shared/runtime/agent-harness.js';
 
 /** The state of the login that counts for this config, under `home`. */
 export function loginState(config, home) {
@@ -24,7 +25,14 @@ export function loginState(config, home) {
   if (!marker) return 'unknown';
   try {
     const info = lstatSync(join(home, marker));
-    return info.isFile() ? 'signed_in' : 'unknown';
+    if (!info.isFile()) return 'unknown';
+    // Pi keeps one entry per service in its file: it is the sign-in of THIS provider only when its own entry is there (a file with
+    // only Anthropic's is a Claude subscription, billed per token from Pi, and not the sign-in of the OpenAI account).
+    if (marker === PI_LOGIN_MARKER && info.size > 0 && info.size <= 256 * 1024) {
+      const seen = inspectPiLogin(readFileSync(join(home, marker), 'utf8'), config.active_provider);
+      return seen.state === 'ok' || seen.state === 'no_rule' ? 'signed_in' : 'signed_out';
+    }
+    return 'signed_in';
   } catch (error) {
     return error?.code === 'ENOENT' || error?.code === 'ENOTDIR' ? 'signed_out' : 'unknown';
   }

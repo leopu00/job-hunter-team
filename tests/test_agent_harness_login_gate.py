@@ -33,7 +33,8 @@ def _config_ready(home: Path, config: dict) -> int:
 def _login(home: Path, marker: str) -> None:
     target = home / marker
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text("{}", encoding="utf-8")
+    # the sign-in of Pi has one entry per service: the ChatGPT account is `openai` (synthetic content)
+    target.write_text('{"openai":{"type":"oauth"}}' if marker.startswith(".pi/") else "{}", encoding="utf-8")
 
 
 @pytest.mark.parametrize(("harness", "marker"), [

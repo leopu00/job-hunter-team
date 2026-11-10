@@ -235,7 +235,7 @@ def test_with_pi_in_charge_the_sign_in_is_pis_file_and_codexs_does_not_count(tmp
     home = home_with(tmp_path, {"active_provider": "openai", "harness": "pi"})
     put(home, ".codex/auth.json")
     assert ps.status(str(home)) == {"ok": True, "provider": "codex", "authenticated": False}
-    put(home, ".pi/agent/auth.json")
+    put(home, ".pi/agent/auth.json", '{"openai":{"type":"oauth"}}')
     assert ps.status(str(home)) == {"ok": True, "provider": "codex", "authenticated": True}
     # without the key, or with another word, the harness is Codex and Pi's file is not the marker
     for config in ({"active_provider": "openai"}, {"active_provider": "openai", "harness": "codex"}, {"active_provider": "openai", "harness": "../x"}):
@@ -269,3 +269,18 @@ def test_pis_file_goes_whole_even_with_other_services_in_it_because_every_check_
     assert ps.logout(str(home)) == {"ok": True, "provider": "codex", "authenticated": False, "removed": 1}
     assert not (home / ".pi/agent/auth.json").exists()
     assert ps.status(str(home))["authenticated"] is False
+
+
+def test_status_with_pi_is_signed_in_only_when_the_file_has_the_provider_s_own_entry(tmp_path):
+    home = home_with(tmp_path, {"active_provider": "openai", "harness": "pi"})
+    put(home, ".pi/agent/auth.json", '{"anthropic":{"type":"oauth","access":"synthetic"}}')
+    assert ps.status(str(home))["authenticated"] is False, "a Claude subscription used from Pi is not the sign-in of the OpenAI account"
+    put(home, ".pi/agent/auth.json", '{"anthropic":{"type":"oauth"},"openai":{"type":"oauth"}}')
+    assert ps.status(str(home))["authenticated"] is True
+    put(home, ".pi/agent/auth.json", "not json")
+    assert ps.status(str(home))["authenticated"] is False
+    # with the Codex harness the file of Pi is not what counts, and Codex's own marker works as it did
+    (tmp_path / "codex").mkdir()
+    other = home_with(tmp_path / "codex", {"active_provider": "openai", "harness": "codex"})
+    put(other, ".codex/auth.json")
+    assert ps.status(str(other))["authenticated"] is True

@@ -1,0 +1,9 @@
+# The name Pi gives, in <team home>/.pi/agent/auth.json, to the sign-in each provider of jht.config.json can run on Pi.
+# Read by shared/runtime/agent-harness.js (the wizard, `jht providers harness`) and shared/skills/pi_login.py (the launcher, the status
+# of the sign-in): a login of Pi counts for the provider of the setup only when its own entry is in the file.
+#   provider|Pi's names, comma separated (the ChatGPT subscription is `openai-codex`, an OpenAI API key is `openai`)
+openai|openai-codex,openai
+codex|openai-codex,openai
+glm|zai,zai-coding-cn
+kimi|kimi-coding
+moonshot|kimi-coding

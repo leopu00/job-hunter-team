@@ -33,7 +33,7 @@ import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { watch } from 'node:fs';
 import { dirname } from 'node:path';
-import { loginMarkerOf, piApiKeyConfigured } from '../../../shared/runtime/agent-harness.js';
+import { PI_LOGIN_MARKER, inspectPiLogin, loginMarkerOf, piApiKeyConfigured } from '../../../shared/runtime/agent-harness.js';
 
 const JHT_ENTRY = '/app/cli/bin/jht.js';
 const JHT_HOME = '/jht_home';
@@ -287,6 +287,12 @@ async function hasProviderCredentials() {
     const marker = relative ? `${JHT_HOME}/${relative}` : null;
     if (!marker) return false;
     await access(marker);
+    // Pi's file has one entry per service: it is the sign-in of THIS provider only when its own entry is there (a file with only
+    // Anthropic's, a Claude subscription billed per token from Pi, does not start the team). Only the entry names are looked at.
+    if (relative === PI_LOGIN_MARKER) {
+      const seen = inspectPiLogin(await readFile(marker, 'utf-8'), cfg.active_provider);
+      return seen.state === 'ok' || seen.state === 'no_rule';
+    }
     return true;
   } catch {
     return false;

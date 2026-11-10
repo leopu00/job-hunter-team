@@ -19,12 +19,21 @@ entry=providers.get(provider) if isinstance(providers.get(provider),dict) else {
 CLAUDE='.claude/.credentials.json'; CODEX='.codex/auth.json'; KIMI='.kimi/credentials/kimi-code.json'
 FILES={'claude':CLAUDE,'anthropic':CLAUDE,'codex':CODEX,'openai':CODEX,'kimi':KIMI,'moonshot':KIMI}
 if provider not in FILES or (entry.get('auth_method') or 'subscription')!='subscription': emit('not_applicable')
-# with Pi in charge of the OpenAI account the sign-in is Pi's own file: only that it is there, its content is Pi's business
+# with Pi in charge of the OpenAI account the sign-in is Pi's own file, with one entry per service: it is the sign-in of THIS account only when
+# its own entry is there (a file with only Anthropic's entry, a Claude subscription billed per token from Pi, is «not signed in»). The NAMES of
+# the entries are looked at, never a value. The two names are the ones of shared/runtime/pi-login-keys.list (tests/test_provider_login_state.py)
+PI_NAMES=('openai-codex','openai')
 if config.get('harness')=='pi' and FILES[provider]==CODEX:
- try: pi=os.stat(os.path.join(home,'.pi','agent','auth.json'))
+ pi_path=os.path.join(home,'.pi','agent','auth.json')
+ try: pi=os.stat(pi_path)
  except FileNotFoundError: emit('missing')
  except OSError: emit('unreadable')
- emit('ready' if pi.st_size>0 else 'unreadable')
+ if pi.st_size<=0 or pi.st_size>262144: emit('unreadable')
+ try:
+  with open(pi_path,'r',encoding='utf-8') as handle: pi_saved=json.load(handle)
+ except Exception: emit('unreadable')
+ if not isinstance(pi_saved,dict): emit('unreadable')
+ emit('ready' if any(isinstance(pi_saved.get(name),dict) and pi_saved.get(name) for name in PI_NAMES) else 'missing')
 CODEX_SAYS=r'access token could not be refreshed|log out and sign in again|refresh token (was|has been) (revoked|expired|already used)'
 CLAUDE_SAYS=r'OAuth token has (expired|been revoked)|Please run /login|API Error: 401'
 SAYS={CODEX:CODEX_SAYS,CLAUDE:CLAUDE_SAYS}.get(FILES[provider])
