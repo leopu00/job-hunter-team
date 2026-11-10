@@ -15,6 +15,7 @@
  * time and not when the team starts.
  */
 
+import { existsSync } from 'node:fs';
 import { PI_API_ALIASES, PI_API_PROVIDERS } from './provider-models.js';
 
 export const AGENT_HARNESSES = Object.freeze(['codex', 'pi']);
@@ -63,6 +64,20 @@ export const PI_LOGIN_MARKER = '.pi/agent/auth.json';
 export function usesPi(config) {
   const provider = typeof config?.active_provider === 'string' ? config.active_provider.trim().toLowerCase() : '';
   return harnessOf(config) === 'pi' && PI_PROVIDERS.includes(provider);
+}
+
+/**
+ * True when the config of a provider that runs on pi with an API key (glm, kimi) holds the key: a reference to a file that is there,
+ * another kind of reference, or the key itself. Pi has no login for them, so this is their «signed in». Mirrored by config_ready()
+ * in .launcher/agent-watchdog.sh.
+ */
+export function piApiKeyConfigured(config) {
+  const provider = typeof config?.active_provider === 'string' ? config.active_provider.trim().toLowerCase() : '';
+  if (!usesPi(config) || !(provider in PI_API_PROVIDERS || provider in PI_API_ALIASES)) return false;
+  const entry = config.providers?.[config.active_provider] ?? {};
+  const ref = entry.api_key_ref;
+  if (ref && typeof ref === 'object' && ref.source === 'file') return typeof ref.path === 'string' && existsSync(ref.path);
+  return Boolean(ref) || Boolean(entry.api_key);
 }
 
 const PROVIDER_LOGIN_MARKERS = Object.freeze({

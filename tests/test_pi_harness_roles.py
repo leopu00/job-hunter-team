@@ -348,3 +348,18 @@ def test_the_version_of_the_image_pi_is_the_one_checked_not_the_shadow(tmp_path:
                             capture_output=True, text=True, check=False, env=env)
     assert result.returncode != 0
     assert "pi 0.0.1 found" in result.stderr
+
+
+# ── glm runs only on pi: the service agents know it (JHT-P0) ─────────────
+
+
+def test_the_service_agents_start_glm_on_pi_and_refuse_it_on_another_harness(tmp_path: Path) -> None:
+    document = {"active_provider": "glm", "providers": {"glm": {"auth_method": "api_key", "api_key": "synthetic"}}}
+    on_pi = _service_home(tmp_path, {**document, "harness": "pi"})
+    assert _active_cli(on_pi, "dottore").stdout.strip() == "pi"
+    (tmp_path / "other").mkdir()
+    other = _service_home(tmp_path / "other", {**document, "harness": "codex"})
+    result = _active_cli(other, "mantenitore")
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "runs only on the pi harness" in result.stderr

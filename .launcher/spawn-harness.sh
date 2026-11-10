@@ -140,6 +140,10 @@ jht_spawn_active_cli() {
   cfg_harness="$(jht_config_harness "$home/jht.config.json")" || return 2
   harness="$(jht_agent_harness "$role" "$cfg_harness")" || return 2
   if [ "$harness" != "pi" ]; then
+    if [ "$provider" = "glm" ]; then
+      echo "Error: glm (Z.ai) runs only on the pi harness, with an API key: jht providers harness pi." >&2
+      return 2
+    fi
     printf '%s\n' "$provider"
     return 0
   fi

@@ -11,6 +11,7 @@ import {
 import { execArgvInContainer, execInContainer, execScriptInContainer } from '../../utils/container-proxy.js';
 import { diskLowRefusal } from '../../lib/disk-guard.js';
 import { harnessOf, harnessProblem } from '../../../../shared/runtime/agent-harness.js';
+import { PI_API_PROVIDERS, piApiProvider } from '../../../../shared/runtime/provider-models.js';
 import { readRegularFileText } from '../../lib/secure-config-io.js';
 import { say } from '../../lib/texts.js';
 import { hint } from '../../lib/ui.js';
@@ -540,7 +541,12 @@ function launchInContainer({ role, instance, mode, env, notATmuxSession, session
 // toglie solo dopo di questo: uno start che non puo' partire non annulla lo stop.
 export function startRefusal(config, { containerMode, hasTmux = tmuxAvailable, hasCli = cliAvailable } = {}) {
   const cliBin = providerCli(config);
-  if (!cliBin) return 'no active provider. Run: jht providers use openai';
+  if (!cliBin) {
+    // A provider the setup offers that runs only on pi (glm): chosen, but not on the harness it needs. Not «no provider».
+    const piOnly = piApiProvider(config?.active_provider);
+    if (piOnly) return `${PI_API_PROVIDERS[piOnly].label} runs only on the pi harness, with an API key. Run: jht providers harness pi`;
+    return 'no active provider. Run: jht providers use openai';
+  }
   const harnessIssue = harnessProblem(harnessOf(config), config.active_provider, config.providers?.[config.active_provider]?.auth_method);
   if (harnessIssue) return `${harnessIssue}. Go back to the default: jht providers harness codex`;
   if (containerMode) return null;
