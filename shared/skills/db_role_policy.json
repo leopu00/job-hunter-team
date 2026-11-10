@@ -1,0 +1,237 @@
+{
+  "roles": {
+    "analista": {
+      "insert": [
+        "company",
+        "highlight"
+      ],
+      "update": [
+        "position",
+        "company"
+      ],
+      "position": {
+        "fields": "*",
+        "moves": {
+          "checked": [
+            "new",
+            "checked"
+          ],
+          "excluded": [
+            "new",
+            "checked",
+            "scored",
+            "writing",
+            "review",
+            "ready"
+          ]
+        },
+        "touches": [
+          "new",
+          "checked",
+          "scored",
+          "writing",
+          "review",
+          "ready"
+        ],
+        "onlyWith": null,
+        "ownRowsOnly": false
+      }
+    },
+    "assistente": {
+      "insert": [],
+      "update": []
+    },
+    "capitano": {
+      "insert": [],
+      "update": []
+    },
+    "closer": {
+      "insert": [],
+      "update": []
+    },
+    "critico": {
+      "insert": [],
+      "update": []
+    },
+    "dottore": {
+      "insert": [],
+      "update": []
+    },
+    "mantenitore": {
+      "insert": [],
+      "update": []
+    },
+    "mentor": {
+      "insert": [],
+      "update": []
+    },
+    "scorer": {
+      "insert": [
+        "score"
+      ],
+      "update": [
+        "position"
+      ],
+      "position": {
+        "fields": [
+          "status",
+          "notes",
+          "last_checked"
+        ],
+        "moves": {
+          "scored": [
+            "checked"
+          ],
+          "excluded": [
+            "checked"
+          ]
+        },
+        "touches": [
+          "checked"
+        ],
+        "onlyWith": {
+          "notes": "excluded"
+        },
+        "ownRowsOnly": false
+      }
+    },
+    "scout": {
+      "insert": [
+        "position"
+      ],
+      "update": [
+        "position"
+      ],
+      "position": {
+        "fields": [
+          "status",
+          "notes"
+        ],
+        "moves": {
+          "excluded": [
+            "new"
+          ]
+        },
+        "touches": [
+          "new"
+        ],
+        "onlyWith": null,
+        "ownRowsOnly": true
+      }
+    },
+    "scrittore": {
+      "insert": [
+        "application"
+      ],
+      "update": [
+        "position",
+        "application"
+      ],
+      "position": {
+        "fields": [
+          "status",
+          "notes"
+        ],
+        "moves": {
+          "writing": [
+            "scored"
+          ],
+          "ready": [
+            "writing"
+          ],
+          "excluded": [
+            "scored",
+            "writing"
+          ]
+        },
+        "touches": [
+          "scored",
+          "writing"
+        ],
+        "onlyWith": {
+          "notes": "excluded"
+        },
+        "ownRowsOnly": false
+      },
+      "application": {
+        "fields": [
+          "cv_path",
+          "cv_pdf_path",
+          "cl_path",
+          "cl_pdf_path",
+          "written_at",
+          "critic_verdict",
+          "critic_score",
+          "critic_round",
+          "critic_notes",
+          "reviewed_by",
+          "status"
+        ],
+        "statuses": [
+          "draft",
+          "review",
+          "ready"
+        ]
+      }
+    },
+    "sentinella": {
+      "insert": [],
+      "update": []
+    }
+  },
+  "python_only": {
+    "closer": {
+      "note": "apply_flow_defaults.py and email_application.py run db_update.py as the closer identity to record the sent state; the native harness cannot (the sent flags are not ported there)",
+      "update": [
+        "application"
+      ],
+      "application": {
+        "fields": [
+          "applied_at",
+          "applied_via"
+        ],
+        "statuses": []
+      }
+    },
+    "scrittore": {
+      "note": "db_update.py application records who wrote the CV (--written-by); the native tool takes the agent's own name",
+      "application": {
+        "extra_fields": [
+          "written_by"
+        ]
+      }
+    },
+    "dottore": {
+      "note": "the cv-disk-audit skill (dottore's list) links an orphan CV pdf with db_update.py application --cv-pdf-path; the native dottore writes nothing",
+      "update": [
+        "application"
+      ],
+      "application": {
+        "fields": [
+          "cv_pdf_path"
+        ],
+        "statuses": []
+      }
+    },
+    "capitano": {
+      "note": "its skills list says \u00abDB access: read + targeted update\u00bb and its prompt names no command, so a refusal would change a role that may write today: logged as a warning (enforced=false), not refused, until the Capitano's real writes are listed",
+      "warn_only": true
+    },
+    "critico": {
+      "note": "in the TUI the Critic writes its own verdict on the application (db-update skill: critic_verdict + critic_score, never status); the native Critic writes nothing and the Scrittore persists it",
+      "update": [
+        "application"
+      ],
+      "application": {
+        "fields": [
+          "critic_verdict",
+          "critic_score",
+          "critic_notes",
+          "critic_round",
+          "reviewed_by"
+        ],
+        "statuses": []
+      }
+    }
+  }
+}

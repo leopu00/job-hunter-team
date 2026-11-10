@@ -102,7 +102,7 @@ def test_only_scouts_are_held_to_it(tmp_path):
     assert insert(tmp_path, 1, agent="scout-2").returncode == 3
     # What the person or another agent adds is not sourcing.
     assert insert(tmp_path, 2, agent="user").returncode == 0
-    assert insert(tmp_path, 3, agent="analista-1").returncode == 0
+    assert insert(tmp_path, 3, agent="relay-1").returncode == 0   # a service identity; a role that may not insert positions is refused before the cap
 
 
 def test_a_scout_that_declares_another_name_is_held_all_the_same(tmp_path):
