@@ -92,8 +92,10 @@ const SECRET_HOME_DIRS = [
   ".config/gh",
   "credentials",
   ".cache/linkedin",
+  // Kimi's sign-in (`credentials/kimi-code.json`) and whatever it keeps next to it.
+  ".kimi/credentials",
 ];
-/** Credential files under the home, as in `paths.ts`. */
+/** Credential files under the home, as in `paths.ts`, and the sign-ins of the CLI agents. */
 const SECRET_HOME_FILES = [
   ".git-credentials",
   ".netrc",
@@ -102,6 +104,8 @@ const SECRET_HOME_FILES = [
   ".pgpass",
   ".claude/.credentials.json",
   ".codex/auth.json",
+  // Pi keeps the OpenAI account it was signed in with here.
+  ".pi/agent/auth.json",
 ];
 /**
  * File names that hold credentials wherever they are, as `SECRET_FILE` in
