@@ -256,7 +256,7 @@ def verify_tree(
         manifest_path = root / manifest_path
     pin = load_manifest(manifest_path)
     try:
-        package_version = json.loads((root / "package.json").read_text())["version"]
+        package_version = json.loads((root / "package.json").read_text(encoding="utf-8"))["version"]
     except (OSError, KeyError, json.JSONDecodeError) as exc:
         raise RuntimeImagePinError("package_version_invalid") from exc
     if package_version != pin.release_version or (
@@ -330,7 +330,7 @@ def update_tree(
     if not manifest_path.is_absolute():
         manifest_path = root / manifest_path
     try:
-        package_version = json.loads((root / "package.json").read_text())["version"]
+        package_version = json.loads((root / "package.json").read_text(encoding="utf-8"))["version"]
     except (OSError, KeyError, json.JSONDecodeError) as exc:
         raise RuntimeImagePinError("package_version_invalid") from exc
     version = release_version or package_version
