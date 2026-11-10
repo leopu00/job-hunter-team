@@ -6,7 +6,9 @@ param(
   [string]$MachineName = 'jht-podman-probe',
   [int]$Port = 3128,
   [int]$BrokerPort = 3129,
-  [int]$TelegramPort = 3130
+  [int]$TelegramPort = 3130,
+  # The broker's proxy and its start at boot exist only once the broker does (it is made at its first use, never by the setup).
+  [switch]$WithBroker
 )
 
 $ErrorActionPreference = 'Stop'
@@ -200,6 +202,29 @@ WantedBy=multi-user.target
 
 $unit = New-JhtProxyUnit -Description 'JHT Windows agent egress proxy' -Policy agent -ListenPort $Port
 $brokerUnit = New-JhtProxyUnit -Description 'JHT Windows broker egress proxy' -Policy broker -ListenPort $BrokerPort
+# The broker container starts at boot by a unit of its own (never by the unit of the team, which a change would make a machine
+# restart): the leading dash lets it pass while the container is not there yet. The API service does not wait for the broker's proxy.
+$brokerContainerUnit = @"
+[Unit]
+Requires=jht-rootless-podman.service jht-windows-egress-proxy-broker.service
+After=jht-rootless-podman.service jht-windows-egress-proxy-broker.service jht-container.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=user
+Group=user
+Environment=HOME=/home/user
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=CONTAINERS_CGROUP_MANAGER=cgroupfs
+ExecStart=-/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock start --sig-proxy=false jht-broker
+ExecStop=-/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock stop --time 30 jht-broker
+TimeoutStartSec=90
+TimeoutStopSec=45
+
+[Install]
+WantedBy=multi-user.target
+"@
 $telegramUnit = New-JhtProxyUnit -Description 'JHT Windows Telegram egress proxy' -Policy telegram -ListenPort $TelegramPort
 # The containers are created by this service under the cgroupfs manager, given as Podman's own flag.
 # In Podman's WSL machine every cgroup systemd holds sits under /non-systemd with no controller at
@@ -212,8 +237,6 @@ $apiService = @"
 [Unit]
 Requires=jht-windows-egress-proxy.service
 After=jht-windows-egress-proxy.service
-Requires=jht-windows-egress-proxy-broker.service
-After=jht-windows-egress-proxy-broker.service
 Requires=jht-windows-egress-proxy-telegram.service
 After=jht-windows-egress-proxy-telegram.service
 Requires=user-runtime-dir@1000.service
@@ -245,11 +268,16 @@ $brokerUnitFile = Join-Path $stateDir 'jht-windows-egress-proxy-broker.service'
 $telegramUnitFile = Join-Path $stateDir 'jht-windows-egress-proxy-telegram.service'
 $apiServiceFile = Join-Path $stateDir 'jht-rootless-podman.service'
 [IO.File]::WriteAllText($unitFile, $unit, [Text.UTF8Encoding]::new($false))
-[IO.File]::WriteAllText($brokerUnitFile, $brokerUnit, [Text.UTF8Encoding]::new($false))
+$brokerContainerUnitFile = Join-Path $stateDir 'jht-broker-container.service'
+if ($WithBroker) {
+  [IO.File]::WriteAllText($brokerUnitFile, $brokerUnit, [Text.UTF8Encoding]::new($false))
+  [IO.File]::WriteAllText($brokerContainerUnitFile, $brokerContainerUnit, [Text.UTF8Encoding]::new($false))
+}
 [IO.File]::WriteAllText($telegramUnitFile, $telegramUnit, [Text.UTF8Encoding]::new($false))
 [IO.File]::WriteAllText($apiServiceFile, $apiService, [Text.UTF8Encoding]::new($false))
 $unitWsl = ConvertTo-WslPath $unitFile
 $brokerUnitWsl = ConvertTo-WslPath $brokerUnitFile
+$brokerContainerUnitWsl = ConvertTo-WslPath $brokerContainerUnitFile
 $telegramUnitWsl = ConvertTo-WslPath $telegramUnitFile
 $apiServiceWsl = ConvertTo-WslPath $apiServiceFile
 
@@ -265,15 +293,21 @@ $apiServiceWsl = ConvertTo-WslPath $apiServiceFile
 # already hold a unit it was asked about before its file existed, and then it
 # starts the stale copy ("Run 'systemctl daemon-reload'" on every command).
 # systemd says so itself (NeedDaemonReload=yes): that unit takes the restart too.
-$egressServices = 'jht-windows-egress-proxy.service jht-windows-egress-proxy-broker.service jht-windows-egress-proxy-telegram.service'
+$egressServices = 'jht-windows-egress-proxy.service jht-windows-egress-proxy-telegram.service'
+if ($WithBroker) { $egressServices = 'jht-windows-egress-proxy.service jht-windows-egress-proxy-broker.service jht-windows-egress-proxy-telegram.service' }
 $runtimeServices = "$egressServices jht-rootless-podman.service"
+if ($WithBroker) { $runtimeServices += ' jht-broker-container.service' }
 $unitInstall = ''
-foreach ($unitEntry in @(
+$unitEntries = @(
   @($unitWsl, 'jht-windows-egress-proxy.service'),
-  @($brokerUnitWsl, 'jht-windows-egress-proxy-broker.service'),
   @($telegramUnitWsl, 'jht-windows-egress-proxy-telegram.service'),
   @($apiServiceWsl, 'jht-rootless-podman.service')
-)) {
+)
+if ($WithBroker) {
+  $unitEntries += , @($brokerUnitWsl, 'jht-windows-egress-proxy-broker.service')
+  $unitEntries += , @($brokerContainerUnitWsl, 'jht-broker-container.service')
+}
+foreach ($unitEntry in $unitEntries) {
   $unitSource = Quote-Sh $unitEntry[0]
   $unitTarget = '/etc/systemd/system/' + $unitEntry[1]
   $unitInstall += "if [ -e $unitTarget ] && ! sudo cmp -s $unitSource $unitTarget; then units_changed=1; fi; " +
@@ -327,6 +361,7 @@ set -u
 agent=$1 broker=$2 telegram=$3
 deadline=$(( $(date +%s) + ${JHT_PROXY_READY_SECONDS:-60} ))
 for port in "$agent" "$broker" "$telegram"; do
+  [ "$port" != 0 ] || continue
   until (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; do
     if [ "$(date +%s)" -ge "$deadline" ]; then
       echo "JHT_PROXY_UNREADY $port"
@@ -383,18 +418,19 @@ check() {
   fi
 }
 check agent "$agent" https://ghcr.io/v2/ 401
-check broker "$broker" https://ghcr.io/v2/ 401
+[ "$broker" = 0 ] || check broker "$broker" https://ghcr.io/v2/ 401
 check telegram "$telegram" https://api.telegram.org/ reachable
 check agent "$agent" https://example.com:993/ 403
-check broker "$broker" http://example.com/ 403
+[ "$broker" = 0 ] || check broker "$broker" http://example.com/ 403
 check telegram "$telegram" https://example.com/ 403
 exit $failed
 '@
+$checkedBrokerPort = if ($WithBroker) { $BrokerPort } else { 0 }
 $proxyCheckEncoded = [Convert]::ToBase64String([Text.UTF8Encoding]::new($false).GetBytes($proxyCheck.Replace("`r`n", "`n")))
 $previousPreference = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
 try {
-  $checkOutput = @(Invoke-JhtPodmanMachine -FilePath $Podman -Arguments @('machine', 'ssh', $MachineName, "echo $proxyCheckEncoded | base64 -d | bash -s -- $Port $BrokerPort $TelegramPort") 2>&1 | ForEach-Object { [string]$_ })
+  $checkOutput = @(Invoke-JhtPodmanMachine -FilePath $Podman -Arguments @('machine', 'ssh', $MachineName, "echo $proxyCheckEncoded | base64 -d | bash -s -- $Port $checkedBrokerPort $TelegramPort") 2>&1 | ForEach-Object { [string]$_ })
   $checkCode = $LASTEXITCODE
 } finally {
   $ErrorActionPreference = $previousPreference
@@ -426,5 +462,5 @@ if ($hostInfo -notmatch '(^|\s)cgroups=cgroupfs(\s|$)') {
   throw "podman_cgroup_manager: the JHT Podman service does not run under cgroupfs ($hostInfo); its containers would not start."
 }
 
-Write-Host "PODMAN WINDOWS NETWORK READY ($MachineName via agent=$Port broker=$BrokerPort telegram=$TelegramPort)" -ForegroundColor Green
+Write-Host "PODMAN WINDOWS NETWORK READY ($MachineName via agent=$Port broker=$(if ($WithBroker) { $BrokerPort } else { 'none' }) telegram=$TelegramPort)" -ForegroundColor Green
 exit 0

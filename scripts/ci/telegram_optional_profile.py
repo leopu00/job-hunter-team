@@ -54,8 +54,9 @@ def check(provider: str, before: Path, expected: str) -> dict:
     current = ROOT / "docker-compose.yml"
     cases = [
         ("before_default", before, ["up", "-d"], {"jht", "jht-broker", "jht-telegram"}),
-        ("after_default", current, ["up", "-d"], {"jht", "jht-broker"}),
+        ("after_default", current, ["up", "-d"], {"jht"}),
         ("after_team_only", current, ["up", "-d", "jht"], {"jht"}),
+        ("after_broker", current, ["--profile", "broker", "up", "-d", "jht-broker"], {"jht-broker"}),
         ("after_telegram", current, ["--profile", "telegram", "up", "-d", "jht-telegram"], {"jht-telegram"}),
     ]
     observations = {}

@@ -325,7 +325,7 @@ def test_the_network_script_passes_a_refused_connect_and_names_a_missing_one(mac
         tmp_path,
         "$ErrorActionPreference = 'Stop'\n"
         f"$Podman = '{podman}'\n$MachineName = 'jht-podman'\n"
-        f"$Port = {agent}\n$BrokerPort = {broker}\n$TelegramPort = {telegram}\n"
+        f"$Port = {agent}\n$BrokerPort = {broker}\n$TelegramPort = {telegram}\n$WithBroker = [switch]::new($true)\n"
         + _network_check_block() + "\nexit 0\n",
         bin_dirs=[tmp_path / "bin"],
         extra={"CURL_TABLE": str(tmp_path / "curl-table"), "JHT_PROXY_READY_SECONDS": "5"},
@@ -379,7 +379,7 @@ def test_units_then_restart_when_systemd_asks_for_a_reload_then_start_then_readi
     start = code.index("systemctl start $runtimeServices", restart)
     machine_restart = code.index("'machine' 'stop' $MachineName", start)
     checks = code.index("$proxyCheck = @'", machine_restart)
-    run = code.index("base64 -d | bash -s -- $Port $BrokerPort $TelegramPort", checks)
+    run = code.index("base64 -d | bash -s -- $Port $checkedBrokerPort $TelegramPort", checks)
     assert install < enable < need < restart_flag < restart < start < machine_restart < checks < run
     assert "daemon-reload" not in code and "daemon-reexec" not in code
     # the readiness wait comes before the first check, inside the check itself
@@ -1148,3 +1148,24 @@ def test_any_failure_of_winget_but_the_second_pass_of_another_users_case_sets_th
     # the way it is told, in the output the app and the person read
     assert "winget could not install Podman ($wingetFailure): installing it for this Windows user from the official release instead." in block
     assert block.index("winget could not install Podman") < block.index("Install-PodmanForThisUser")
+
+
+@needs_powershell
+def test_without_the_broker_its_proxy_is_not_asked_for_nor_checked(machine, tmp_path):
+    """The setup makes no broker: the check runs with the port 0 for it and no line names the broker."""
+    podman = install_fake(tmp_path / "bin", "podman", FAKE_PODMAN)
+    agent, broker, telegram = machine.ports
+    machine.answers()
+    done = _ps(
+        tmp_path,
+        "$ErrorActionPreference = 'Stop'\n"
+        f"$Podman = '{podman}'\n$MachineName = 'jht-podman'\n"
+        f"$Port = {agent}\n$BrokerPort = {broker}\n$TelegramPort = {telegram}\n$WithBroker = [switch]::new($false)\n"
+        + _network_check_block() + "\nexit 0\n",
+        bin_dirs=[tmp_path / "bin"],
+        extra={"CURL_TABLE": str(tmp_path / "curl-table"), "JHT_PROXY_READY_SECONDS": "5"},
+        timeout=120,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "JHT_PROXY_CHECK agent" in done.stdout and "JHT_PROXY_CHECK telegram" in done.stdout
+    assert "JHT_PROXY_CHECK broker" not in done.stdout

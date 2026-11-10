@@ -102,7 +102,7 @@ def test_health_targets_keep_telegram_mandatory_when_configured(lifecycle_home, 
     result = subprocess.run([sys.executable, "-I", str(PLANNER), "expected-services"],
                             capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines() == ["jht", "jht-broker"] + (["jht-telegram"] if configured else [])
+    assert result.stdout.splitlines() == ["jht"] + (["jht-telegram"] if configured else [])
 
 
 @pytest.mark.parametrize("corruption", ["missing", "writable", "symlink", "wrong-owner", "invalid-schema"])
