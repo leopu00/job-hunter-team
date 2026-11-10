@@ -12,6 +12,7 @@ import { execArgvInContainer, execInContainer, execScriptInContainer } from '../
 import { diskLowRefusal } from '../../lib/disk-guard.js';
 import { harnessOf, harnessProblem } from '../../../../shared/runtime/agent-harness.js';
 import { PI_API_PROVIDERS, piApiProvider } from '../../../../shared/runtime/provider-models.js';
+import { KEY_REFUSED_EXIT_CODE } from '../providers-key-check.js';
 import { readRegularFileText } from '../../lib/secure-config-io.js';
 import { say } from '../../lib/texts.js';
 import { hint } from '../../lib/ui.js';
@@ -298,6 +299,24 @@ function reportSyncNotApplied(label, res) {
   if (note) console.log(c.dim(note));
 }
 
+// La frase se il provider rifiuta la chiave API (glm, kimi su pi), altrimenti null: anche quando la prova non si
+// poteva fare (niente rete, comando non in questa immagine), perché un avvio non si ferma per una prova mancata.
+function keyRefusedInContainer() {
+  const res = execInContainer('node /app/cli/bin/jht.js providers check-key --quiet', { timeoutMs: 25_000 });
+  // only the exit of a refused key counts: an unknown command, a missing file or a crash (all exit 1) are not a verdict
+  if (!res || res.code !== KEY_REFUSED_EXIT_CODE) return null;
+  // the last line the container wrote, with the colors and every other control character out: it is printed as it is
+  const line = String(res.stderr || res.stdout || '').replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '')
+    .trim().split('\n').map((l) => l.trim()).filter(Boolean).slice(-1)[0];
+  const said = (line || 'The provider rejected the API key. Run: jht setup').replace(/[.\s]*$/, '.');
+  return `${said} If the key is right (another plan, another route), start anyway: jht team start --skip-key-check`;
+}
+
+/** The person said the key is fine: the flag, or JHT_SKIP_KEY_CHECK=1 for the processes that start the team for them. */
+export function keyCheckSkipped(options = {}, env = process.env) {
+  return Boolean(options.skipKeyCheck) || /^(1|true|yes)$/i.test(String(env.JHT_SKIP_KEY_CHECK ?? ''));
+}
+
 // ── Container mode ─────────────────────────────────────────────────
 async function startActionContainer(agentArg, options = {}, releaseHaltGate = () => true) {
   const mode = options.mode || 'default';
@@ -354,6 +373,16 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
     // Qualcosa da avviare c'e': sotto il 3% di disco libero non si avvia niente,
     // ne' le sincronizzazioni cloud che scrivono su disco.
     if (refuseIfDiskLow('team')) {
+      console.log('');
+      process.exitCode = 1;
+      return;
+    }
+
+    // La chiave API di glm/kimi (pi) la rifiuta il provider: lo si dice qui, al comando, e non dopo dentro la sessione
+    // di Pi. Si prova DENTRO il container, dove il file della chiave c'è; solo un 401 ferma, e lo stop resta com'era.
+    const keyIssue = keyCheckSkipped(options) ? null : keyRefusedInContainer();
+    if (keyIssue) {
+      console.error(c.red(`Error: ${keyIssue}`));
       console.log('');
       process.exitCode = 1;
       return;
@@ -462,11 +491,13 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
   }));
   if (useBootstrap) {
     if (!deferredCaptain) console.log(c.dim(`  ${say('team.captain_scales')}`));
-    if (coordinatorReady && started > 0) {
+    // «Team on» is a claim that the start went well: with an agent that did not start it is not made.
+    if (coordinatorReady && started > 0 && errored === 0) {
       console.log(c.green(`  ${say('team.done', { n: started, s: Math.max(1, Math.round((Date.now() - startedAt) / 1000)) })}`));
     }
-    if (coordinatorReady) console.log(hint(say('team.next_agents')));
+    if (coordinatorReady && errored === 0) console.log(hint(say('team.next_agents')));
   }
+  if (errored > 0) console.log(c.red(`  ${say('team.partial', { n: errored })}`));
   console.log('');
 
   // Il bootstrap globale è riuscito soltanto quando il suo marker operativo
@@ -483,7 +514,10 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
   // l'output con un'uscita immediata gli toglierebbe proprio le righe d'errore
   // che registra. Il codice osservato non cambia: questa è l'ultima istruzione
   // della funzione. Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
-  if ((useBootstrap && !coordinatorReady)
+  //
+  // Un agente che non è partito è un errore anche quando il CAPITANO c'è: il ✗ sopra e il codice 0 si
+  // contraddicevano («1 errors» con exit 0 per uno script o per il poller = tutto a posto).
+  if ((useBootstrap && !coordinatorReady) || errored > 0
       || (!useBootstrap && started === 0 && skipped === 0 && deferred === 0)) {
     process.exitCode = 1;
   }
@@ -609,11 +643,13 @@ export async function startAction(agentArg, options) {
 
   let started = 0;
   let skipped = 0;
+  let errored = 0;
 
   for (const target of targets) {
     const parsed = parseAgentArg(target);
     if (!parsed) {
       console.log(`  ${c.red('✗')} ${target} — unrecognized role`);
+      errored++;
       continue;
     }
 
@@ -629,6 +665,7 @@ export async function startAction(agentArg, options) {
 
     if (refuseIfDiskLow(sName)) {
       process.exitCode = 1;
+      errored++;
       continue;
     }
 
@@ -665,10 +702,15 @@ export async function startAction(agentArg, options) {
       started++;
     } catch (err) {
       console.log(`  ${c.red('✗')} ${sName} — start error: ${err.message}`);
+      errored++;
     }
   }
 
   console.log('');
-  console.log(`Result: ${c.green(started + ' started')}, ${c.yellow(skipped + ' already active')}`);
+  console.log(`Result: ${c.green(started + ' started')}, ${c.yellow(skipped + ' already active')}${errored ? `, ${c.red(say('team.n_errors', { n: errored }))}` : ''}`);
+  if (errored > 0) {
+    console.log(c.red(`  ${say('team.partial', { n: errored })}`));
+    process.exitCode = 1;
+  }
   console.log('');
 }

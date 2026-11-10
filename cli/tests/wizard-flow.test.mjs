@@ -67,6 +67,8 @@ test('the setup says the provider instead of asking for the only one offered, nu
   assert.equal(events.at(-1).kind, 'result');
   assert.equal(events.at(-1).ok, true);
   assert.equal(events.at(-2).kind, 'outro');
+  // the person is told HOW to answer the Assistente, not only that the team is on
+  assert.match(events.at(-2).message, /jht team chat assistente/);
   assert.match(readFileSync(join(box.home, 'jht.config.json'), 'utf8'), /"active_provider": "openai"/);
 });
 

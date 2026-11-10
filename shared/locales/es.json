@@ -106,7 +106,7 @@
   "wizard.workhours.saved": "Horario de trabajo guardado: %s",
   "wizard.team.starting": "Arrancando el equipo (Sentinella + Bridge + Capitano)...",
   "wizard.team.start_failed": "Arranque del equipo fallido. Mira el log de arriba. Reintentar: jht team start",
-  "wizard.outro_done": "¡Todo listo! El equipo está trabajando.\n  Estado:  jht team status\n  Logs:    jht logs --tail 30\n  Parar:   jht team stop --all",
+  "wizard.outro_done": "¡Todo listo! El Assistente te espera: responde a sus preguntas para empezar el onboarding.\n  Responder: jht team chat assistente   (o en el chat del Assistente de la app)\n  Estado:  jht team status\n  Logs:    jht logs --tail 30\n  Parar:   jht team stop --all",
   "wizard.outro_aborted": "Setup interrumpido. Reintentar con: jht setup",
   "wizard.start.ready": "Todo listo. Arrancando el equipo...",
   "wizard.start.done": "El equipo está en marcha. Revisa Telegram para los mensajes de bienvenida.",

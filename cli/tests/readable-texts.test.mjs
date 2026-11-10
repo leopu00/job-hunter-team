@@ -65,7 +65,7 @@ test('setup runs a sub-step with its stderr inherited: no buffer cap, no questio
   assert.match(run, /existsSync\(entry\)/);
 });
 
-test('the SQLite experimental warning is dropped, any other warning passes, JHT_DEBUG keeps it', async () => {
+test('the experimental and undici warnings are dropped, any other warning passes, JHT_DEBUG keeps them', async () => {
   const { installWarningFilter } = await import('../src/lib/quiet-warnings.js');
   const make = (env = {}) => {
     const seen = [];
@@ -76,11 +76,26 @@ test('the SQLite experimental warning is dropped, any other warning passes, JHT_
   const quiet = make();
   quiet.proc.emitWarning('SQLite is an experimental feature and might change at any time', 'ExperimentalWarning');
   quiet.proc.emitWarning('Something else is experimental', 'ExperimentalWarning');
+  // what undici emits on a computer with a system proxy: the options form, type «Warning», its own code
+  quiet.proc.emitWarning('EnvHttpProxyAgent is experimental, expect them to change at any time.', { type: 'Warning', code: 'UNDICI-EHPA' });
+  quiet.proc.emitWarning('Another message of undici', 'Warning', 'UNDICI-XYZ');
   quiet.proc.emitWarning('The buffer is deprecated', 'DeprecationWarning');
-  assert.deepEqual(quiet.seen.map(([text]) => text), ['Something else is experimental', 'The buffer is deprecated']);
+  quiet.proc.emitWarning('Possible listeners leak', 'MaxListenersExceededWarning');
+  assert.deepEqual(quiet.seen.map(([text]) => text), ['The buffer is deprecated', 'Possible listeners leak']);
   const debug = make({ JHT_DEBUG: '1' });
   debug.proc.emitWarning('SQLite is an experimental feature', 'ExperimentalWarning');
-  assert.equal(debug.seen.length, 1);
+  debug.proc.emitWarning('EnvHttpProxyAgent is experimental', { type: 'Warning', code: 'UNDICI-EHPA' });
+  assert.equal(debug.seen.length, 2);
+});
+
+test('a real process: the proxy warning of undici never reaches stderr, the deprecation one does', () => {
+  const filter = new URL('../src/lib/quiet-warnings.js', import.meta.url).href;
+  const code = `import(${JSON.stringify(filter)}).then(({ installWarningFilter }) => { installWarningFilter();
+    process.emitWarning('EnvHttpProxyAgent is experimental, expect them to change at any time.', { type: 'Warning', code: 'UNDICI-EHPA' });
+    process.emitWarning('old thing', 'DeprecationWarning'); });`;
+  const run = spawnSync(process.execPath, ['-e', code], { encoding: 'utf8', env: { ...process.env, JHT_DEBUG: '' } });
+  assert.doesNotMatch(run.stderr, /UNDICI|EnvHttpProxyAgent/);
+  assert.match(run.stderr, /DeprecationWarning: old thing/);
 });
 
 test('the long help names the commands that live on the computer, up and down among them', () => {
