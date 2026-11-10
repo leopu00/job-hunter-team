@@ -106,7 +106,7 @@ function Test-JhtUninstallMachineOutput {
 
 function Write-JhtUninstallPhase {
   param([Parameter(Mandatory)][ValidateSet(
-    'uninstall_machine', 'uninstall_data', 'uninstall_runtime', 'uninstall_commands'
+    'uninstall_machine', 'uninstall_runtime', 'uninstall_commands'
   )][string]$Id)
   if (Test-JhtUninstallMachineOutput) { [Console]::Out.WriteLine("JHT_PHASE $Id"); return }
   [Console]::Out.WriteLine((Get-JhtUninstallText ('phase.' + $Id.Substring('uninstall_'.Length))))
@@ -114,7 +114,7 @@ function Write-JhtUninstallPhase {
 
 # What is left, as a line for the app and as a sentence with the exact way to remove it by hand, for the person.
 function Write-JhtUninstallLeft {
-  param([Parameter(Mandatory)][ValidateSet('machine', 'data', 'runtime', 'commands')][string]$Id, [string[]]$Values = @())
+  param([Parameter(Mandatory)][ValidateSet('machine', 'runtime', 'commands')][string]$Id, [string[]]$Values = @())
   if (Test-JhtUninstallMachineOutput) { [Console]::Out.WriteLine("JHT_LEFT $Id") }
   [Console]::Error.WriteLine((Get-JhtUninstallText ('left.' + $Id) $Values))
 }
@@ -415,13 +415,15 @@ function Invoke-JhtWindowsUninstall {
 
   # Con --purge i dati vanno PRIMA del runtime e del comando: se non si riesce, il comando jht resta e si puo' rilanciare.
   if ($purge) {
-    Write-JhtUninstallPhase uninstall_data
+    # --purge is for a person at a console: the desktop app never asks for it and knows no phase or leftover of the data, so these
+    # two are sentences only, never JHT_PHASE or JHT_LEFT lines (the app's list of the phases and the wrapper's must stay equal).
+    [Console]::Out.WriteLine((Get-JhtUninstallText 'phase.data'))
     $dataFailed = @()
     foreach ($folder in @([IO.Path]::Combine([IO.Path]::GetFullPath($ProfilePath), '.jht'), [IO.Path]::Combine([IO.Path]::GetFullPath($ProfilePath), 'Documents', 'Job Hunter Team'))) {
       if (-not (Remove-JhtUserDataFolder -Path $folder)) { $dataFailed += $folder }
     }
     if ($dataFailed.Count -gt 0) {
-      Write-JhtUninstallLeft data @($script:JhtUninstallReason, ("'" + ($dataFailed -join "', '") + "'"))
+      [Console]::Error.WriteLine((Get-JhtUninstallText 'left.data' @($script:JhtUninstallReason, ("'" + ($dataFailed -join "', '") + "'"))))
       return 24
     }
   }

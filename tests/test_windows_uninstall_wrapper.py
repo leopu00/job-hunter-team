@@ -554,7 +554,9 @@ def test_purge_deletes_the_two_data_folders_after_the_machine_and_before_the_run
     assert "CODE=0" in result.stdout, result.stdout + result.stderr
     assert not box.home.exists() and not box.documents.exists() and not box.runtime.exists()
     lines = [line for line in result.stdout.splitlines() if line.startswith("JHT_PHASE")]
-    assert lines == ["JHT_PHASE uninstall_machine", "JHT_PHASE uninstall_data", "JHT_PHASE uninstall_runtime", "JHT_PHASE uninstall_commands"]
+    # the app knows three phases and never asks for --purge: the data are a sentence for the person, not a protocol line
+    assert lines == ["JHT_PHASE uninstall_machine", "JHT_PHASE uninstall_runtime", "JHT_PHASE uninstall_commands"]
+    assert result.stdout.index("Cancello ~/.jht") < result.stdout.index("JHT_PHASE uninstall_runtime")
     assert "~/.jht e Documents\\Job Hunter Team" in result.stderr, "the loss is said before it happens"
 
 
@@ -579,7 +581,8 @@ def test_purge_never_follows_a_link_and_leaves_the_command_to_retry(tmp_path: Pa
     result = _uninstall(box, _fake_podman(box), _fake_wsl(box), "--confirm", "--purge", tmp_path=tmp_path, machine_output="1")
     assert "CODE=24" in result.stdout, result.stdout + result.stderr
     assert (elsewhere / "precious.txt").exists(), "what the link points at is never touched"
-    assert "JHT_LEFT data" in result.stdout and "JHT_PHASE uninstall_runtime" not in result.stdout
+    assert "JHT_LEFT data" not in result.stdout and "JHT_PHASE uninstall_runtime" not in result.stdout
+    assert "Non cancellati i dati di JHT" in result.stderr
     assert box.runtime.exists() and (box.bin / "jht.ps1").exists(), "the command stays so it can be run again"
     assert "e' un collegamento" in result.stderr
 
