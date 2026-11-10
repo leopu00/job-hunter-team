@@ -409,3 +409,81 @@ def test_a_home_that_cannot_be_written_does_not_stop_the_wake(tmp_path):
     started = []
     assert ew.notify("new", spawn=started.append, sessions=lambda r: {"X": 1.0}, environ={}, home=blocker) is True
     assert started == ["analista"]
+
+
+# ── the sweep of the engine's tick: nothing writes to the queue once the Scouts have stopped ─────────────────
+
+@pytest.fixture
+def wake_on(monkeypatch):
+    monkeypatch.setenv("JHT_EVENT_WAKE", "1")        # tests/conftest.py turns the wake off for every test
+
+
+def _sweep(team, now):
+    return ew.sweep(
+        now=now, home=team.home,
+        queue=lambda r: team.queue_n,
+        sessions=lambda r: {a.upper(): 1.0 for a in team.verdicts if a.startswith(r + "-")},
+        derive=lambda uid, created, n, h: team.verdicts[uid],
+        paused=lambda session, h: session.lower() in team.paused_set,
+        send=team._send, blocked=lambda h, n: team.blocked,
+        flag_of=lambda uid: team.flags.get(uid), pull=team._pull, hold=lambda n: team.hold)
+
+
+def test_the_sweep_wakes_an_idle_analista_with_the_queue_full_and_no_writer_in_sight(team_home, wake_on):
+    # the burst of 10/11: the Analista ended its turn at minute 19.5 with 20 `new` and the Scouts had stopped inserting
+    team = Team(team_home, "analista-6", queue=20)
+    out = _sweep(team, T0)
+    woken = [d["woken"] for d in out if d["woken"]]
+    assert woken == ["analista-6"], out
+    (session, text), = [(s, t) for s, t in team.sent if s == "ANALISTA-6"]
+    assert "20 new position(s)" in text and "db_query.py next-for-analista" in text
+
+
+def test_the_sweep_runs_at_most_every_sweep_sec_and_wakes_the_same_idle_turn_once(team_home, wake_on):
+    team = Team(team_home, "analista-6", queue=20)
+    assert [d["woken"] for d in _sweep(team, T0) if d["woken"]] == ["analista-6"]
+    assert _sweep(team, T0 + ew.SWEEP_SEC - 1) == []                       # not time yet
+    out = _sweep(team, T0 + ew.SWEEP_SEC + 1)                              # time, but the same idle turn: not again
+    assert [d["woken"] for d in out if d["woken"]] == [] and len(team.sent) == 1
+    team.worked("analista-6", T0 + 100)                                   # it worked and ended another turn: woken again
+    out = _sweep(team, T0 + 2 * ew.SWEEP_SEC + 5)
+    assert [d["woken"] for d in out if d["woken"]] == ["analista-6"] and len(team.sent) == 2
+
+
+def test_the_sweep_logs_only_the_wakes_not_every_round_that_found_nobody(team_home, wake_on):
+    team = Team(team_home, "analista-1", queue=4)
+    team.verdicts["analista-1"] = {"state": "lavora"}                       # busy: nobody to wake, nothing logged
+    _sweep(team, T0)
+    log = team_home / "logs" / "event-wakes.jsonl"
+    assert not log.exists() or log.read_text(encoding="utf-8").strip() == ""
+    team.verdicts["analista-1"] = {"state": "idle", "since": IDLE_SINCE}
+    _sweep(team, T0 + ew.SWEEP_SEC + 1)
+    lines = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert [(l["why"], l["woken"]) for l in lines] == [("woken", "analista-1")]
+
+
+def test_the_sweep_is_off_when_the_wake_is_off(team_home, monkeypatch):
+    monkeypatch.setenv("JHT_EVENT_WAKE", "0")
+    team = Team(team_home, "analista-6", queue=20)
+    assert _sweep(team, T0) == [] and team.sent == []
+
+
+def test_an_idle_agent_is_not_woken_for_a_queue_that_colleagues_hold(team_home):
+    team = Team(team_home, "analista-6", queue=20)
+    out = ew.wake("analista", now=T0, home=team.home, queue=lambda r: 20, queue_for=lambda r, u: 0,
+                  sessions=lambda r: {"ANALISTA-6": 1.0}, derive=lambda *a: team.verdicts["analista-6"],
+                  paused=lambda s, h: False, send=team._send, blocked=lambda h, n: None,
+                  flag_of=lambda uid: None, pull=team._pull, hold=lambda n: None)
+    assert out["woken"] is None and out["why"] == "held_by_others" and team.sent == []
+
+
+def test_the_tick_of_the_engine_runs_the_sweep(home, wake_on, monkeypatch):
+    monkeypatch.setattr(eng, "live_sessions", lambda: {})
+    eng.tick(T0)
+    assert (home / "logs" / ".event-wake-sweep.stamp").exists()
+
+
+def test_the_tick_without_tmux_does_not_sweep(home, wake_on):
+    # live_sessions() is None here (the fixture): there is nobody to ask for
+    eng.tick(T0)
+    assert not (home / "logs" / ".event-wake-sweep.stamp").exists()

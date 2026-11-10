@@ -255,6 +255,26 @@ def test_a_claim_stamped_in_the_future_does_not_hold_the_position_for_ever(box):
     assert queue_claims.holder("analista", 4) == "analista-9"
 
 
+def test_an_agent_of_the_role_is_shown_one_position_and_a_count_never_the_list_to_walk(box):
+    # 10/11 (third run): the Analisti were shown the list, walked the numbers one after the other and so did their
+    # colleagues: 65 decisions on 40 positions. The agent gets the position that is its own and how many wait.
+    box.add("new", 6)
+    answer = box.ask("next-for-analista", "analista-1", "--limit", "5")
+    assert len(answer["rows"]) == 1 and answer["total"] == 6 and answer["shown"] == 1
+    assert all("_yours" not in row and "_total" not in row for row in answer["rows"])
+    second = box.ask("next-for-analista", "analista-2", "--all")           # a limit or --all does not open the list either
+    assert len(second["rows"]) == 1 and second["total"] == 5 and second["rows"][0]["id"] != answer["rows"][0]["id"]
+    # the text says it is theirs and tells them not to open the others
+    env = {**box.env, "JHT_AGENT_NAME": "analista-3"}
+    text = subprocess.run([sys.executable, str(SKILLS / "db_query.py"), "next-for-analista"], env=env,
+                          capture_output=True, text=True, timeout=60).stdout
+    assert "yours now; 4 waiting in all" in text and "do not walk the numbers" in text
+    assert text.count("  #") == 1 and "more in the queue" not in text
+    # the caller that is not an agent of the role still lists the queue as it always did
+    assert len(box.ask("next-for-analista", "capitano")["rows"]) == 6
+    assert len(box.ask("next-for-analista")["rows"]) == 6
+
+
 def test_the_count_for_an_agent_leaves_out_what_a_colleague_holds(box):
     box.add("new", 3)
     box.ask("next-for-analista", "analista-1")

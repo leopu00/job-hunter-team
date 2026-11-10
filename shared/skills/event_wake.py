@@ -26,6 +26,12 @@ if there are some, starts `wake` in a detached process, so the Scout never waits
       IDLE at its prompt, no throttle (it drained the queue and ended its turn): the agent's own logs
         say `idle` (`agent_state.derive`) and it gets a one-line message. Not woken again since it last
         finished a turn, unless the wake went unanswered for RETRY_SEC: a wake is never a loop.
+The writers are not the only ones that look: the throttle engine's tick runs `sweep` every SWEEP_SEC. A wake that waits for an
+INSERT leaves an Analista idle for good once the Scouts have stopped inserting (the burst of 10/11: Analista-6 ended its turn at
+minute 19.5 with 20 positions `new` and nothing wrote to the queue again), and a position that an Analista leaves `checked`
+wakes only a Scorer. The sweep asks the same question as a writer would (same gates, same message, never twice for the same
+idle turn) and logs only when it wakes someone.
+
 A busy agent is not woken: it reads the queue by itself when it ends the unit. The message is a
 signal, not an order about one position.
 
@@ -61,6 +67,7 @@ HOURLY_CAP = 60
 HALT_FLAGS = (".team-halted.flag", ".weekly-halt.flag")
 DISABLE_ENV = "JHT_EVENT_WAKE"  # "0" turns the wake off
 DEBOUNCE_SEC = 5  # a burst of inserts starts one wake per role, not one process per position
+SWEEP_SEC = 45  # the engine's tick asks for an idle Analista or Scorer at most this often (see `sweep`)
 
 
 def _home() -> Path:
@@ -150,14 +157,15 @@ def blocked_reason(home: Path, now: float) -> str | None:
     return None
 
 
-def queue_count(role: str) -> int:
-    """Positions waiting for `role`; 0 if the database cannot be read (no wake without a certain read)."""
+def queue_count(role: str, for_agent: str | None = None) -> int:
+    """Positions waiting for `role` (for_agent: those that agent may take, leaving out what a colleague holds);
+    0 if the database cannot be read (no wake without a certain read)."""
     try:
         sys.path.insert(0, str(HERE))
         import db_query
         conn = db_query.get_db()
         try:
-            return int(db_query.role_queue_count(conn, role))
+            return int(db_query.role_queue_count(conn, role, for_agent=for_agent))
         finally:
             conn.close()
     except Exception:  # noqa: BLE001
@@ -305,8 +313,11 @@ def _eligible(now, home, found, ledger_data, paused, derive, flag_of):
 
 
 def wake(role, now=None, home=None, queue=None, sessions=None, derive=None, paused=None, send=None,
-         blocked=None, flag_of=None, pull=None, hold=None) -> dict:
-    """Wake one waiting agent of `role` if the rules in the module doc allow it. Returns the decision."""
+         blocked=None, flag_of=None, pull=None, hold=None, sweep=False, queue_for=None) -> dict:
+    """Wake one waiting agent of `role` if the rules in the module doc allow it. Returns the decision.
+
+    sweep: asked by the engine's tick and not by a writer; a decision that wakes nobody is not logged (it would be one
+    line per role every SWEEP_SEC for the whole run)."""
     home = Path(home) if home is not None else _home()
     now = time.time() if now is None else float(now)
     queue, sessions, derive = queue or queue_count, sessions or sessions_of, derive or state_of
@@ -315,7 +326,8 @@ def wake(role, now=None, home=None, queue=None, sessions=None, derive=None, paus
 
     def done(why, **extra):
         result.update(why=why, **extra)
-        _log({"ts": int(now), **result}, home)
+        if not sweep or why in ("woken", "send_failed"):
+            _log({"ts": int(now), **result}, home)
         return result
 
     if role not in QUEUE_COMMAND:
@@ -345,6 +357,10 @@ def wake(role, now=None, home=None, queue=None, sessions=None, derive=None, paus
         if not chosen:
             return done("nobody_waiting", waiting=waiting)
         _, kind, uid, session = chosen[0]
+        # what is in the queue may all be in the hands of colleagues (queue_claims.py): waking this one would find nothing
+        if kind == "idle" and (queue_for or (queue_count if queue is queue_count else None)) is not None:
+            if (queue_for or queue_count)(role, uid) <= 0:
+                return done("held_by_others", waiting=waiting)
         if kind == "throttle":
             pulled = pull(uid, now)
             if not pulled.get("pulled"):
@@ -363,6 +379,31 @@ def wake(role, now=None, home=None, queue=None, sessions=None, derive=None, paus
         data["sent"][role] = [t for t in data["sent"].get(role, []) if t != now]
         ledger.write(data)
     return done("send_failed", waiting=waiting, session=session)
+
+
+def sweep(now=None, home=None, **fakes) -> list[dict]:
+    """The engine's tick: ask for an idle Analista and an idle Scorer (the same `wake`, with its gates), at most every
+    SWEEP_SEC. Never raises; [] when it is not time or the wake is off."""
+    try:
+        if os.environ.get(DISABLE_ENV) == "0":
+            return []
+        home = Path(home) if home is not None else _home()
+        now = time.time() if now is None else float(now)
+        stamp = home / "logs" / ".event-wake-sweep.stamp"
+        try:
+            if now - stamp.stat().st_mtime < SWEEP_SEC:
+                return []
+        except OSError:
+            pass
+        try:
+            stamp.parent.mkdir(parents=True, exist_ok=True)
+            stamp.write_text("", encoding="utf-8")
+            os.utime(stamp, (now, now))
+        except OSError:
+            pass
+        return [wake(role, now=now, home=home, sweep=True, **fakes) for role in sorted(QUEUE_COMMAND)]
+    except Exception:  # noqa: BLE001 - a tick must never fail because of a wake
+        return []
 
 
 def main(argv: list[str]) -> int:

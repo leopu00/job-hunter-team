@@ -612,6 +612,10 @@ def main():
     parser = build_parser()
     args = parser.parse_args()
 
+    # What the caller's ROLE may insert (db_role_policy.py): a Scout that runs `score` is refused here, with the reason.
+    import db_role_policy
+    db_role_policy.guard_insert(args)
+
     if args.entity == 'position':
         insert_position(args)
     elif args.entity == 'company':

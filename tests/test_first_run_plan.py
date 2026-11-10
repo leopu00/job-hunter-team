@@ -293,10 +293,10 @@ def test_the_first_burst_targets_twenty_scored_positions_and_lets_the_scouts_fin
     for provider, plans in plan_registry.PLANS.items():
         for plan in plans:
             roster = plan_registry.burst_roster(plan_registry.find_plan(provider, plan["id"]), host_cap=99)
-            assert roster["target_scored"] == 20 and roster["scout_cap_first_pass"] == (40 if plan["tier"] >= 15 else 30), (provider, plan["id"])
+            assert roster["target_scored"] == 20 and roster["scout_cap_first_pass"] == (50 if plan["tier"] >= 15 else 30), (provider, plan["id"])
     for eur in (None, 5, 10, 30):
         (jht_home / "jht.config.json").write_text(json.dumps(
             {"active_provider": "openai", "providers": {"openai": {"auth_method": "api_key"}},
              **({} if eur is None else {"no_quota_cap": {"eur": eur}})}), encoding="utf-8")
         roster = plan_registry.burst_roster(host_cap=99)
-        assert roster["target_scored"] == 20 and roster["scout_cap_first_pass"] == (40 if eur == 30 else 30), eur
+        assert roster["target_scored"] == 20 and roster["scout_cap_first_pass"] == (50 if eur == 30 else 30), eur
