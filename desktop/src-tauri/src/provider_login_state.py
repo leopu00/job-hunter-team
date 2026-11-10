@@ -19,6 +19,12 @@ entry=providers.get(provider) if isinstance(providers.get(provider),dict) else {
 CLAUDE='.claude/.credentials.json'; CODEX='.codex/auth.json'; KIMI='.kimi/credentials/kimi-code.json'
 FILES={'claude':CLAUDE,'anthropic':CLAUDE,'codex':CODEX,'openai':CODEX,'kimi':KIMI,'moonshot':KIMI}
 if provider not in FILES or (entry.get('auth_method') or 'subscription')!='subscription': emit('not_applicable')
+# with Pi in charge of the OpenAI account the sign-in is Pi's own file: only that it is there, its content is Pi's business
+if config.get('harness')=='pi' and FILES[provider]==CODEX:
+ try: pi=os.stat(os.path.join(home,'.pi','agent','auth.json'))
+ except FileNotFoundError: emit('missing')
+ except OSError: emit('unreadable')
+ emit('ready' if pi.st_size>0 else 'unreadable')
 CODEX_SAYS=r'access token could not be refreshed|log out and sign in again|refresh token (was|has been) (revoked|expired|already used)'
 CLAUDE_SAYS=r'OAuth token has (expired|been revoked)|Please run /login|API Error: 401'
 SAYS={CODEX:CODEX_SAYS,CLAUDE:CLAUDE_SAYS}.get(FILES[provider])

@@ -222,3 +222,20 @@ def test_any_other_request_is_refused_with_a_closed_code(tmp_path):
     for request in ('{"op":"clear"}', '{"op":"state","extra":1}', "[]", "not json", ""):
         reply, _ = run(tmp_path, request=request)
         assert reply == {"ok": False, "error": "provider_login_unreadable"}
+
+
+def test_with_pi_in_charge_of_the_openai_account_the_sign_in_is_pis_file_and_codexs_is_not_looked_at(tmp_path):
+    write_json(tmp_path / "jht.config.json", {"active_provider": "openai", "harness": "pi", "providers": {"openai": {"auth_method": "subscription"}}})
+    fresh_codex(tmp_path)
+    assert state(tmp_path) == "missing", "a Codex login does not sign Pi in"
+    pi = tmp_path / ".pi" / "agent" / "auth.json"
+    pi.parent.mkdir(parents=True)
+    pi.write_text("", encoding="utf-8")
+    assert state(tmp_path) == "unreadable"
+    write_json(pi, {"openai": {"type": "oauth", "access": "fake-pi-token"}})
+    assert state(tmp_path) == "ready"
+    (tmp_path / ".codex" / "auth.json").unlink()
+    assert state(tmp_path) == "ready", "with Pi in charge Codex's file is not needed"
+    # the word is `pi` and nothing else: any other value leaves Codex's file as the sign-in
+    write_json(tmp_path / "jht.config.json", {"active_provider": "openai", "harness": "other", "providers": {"openai": {}}})
+    assert state(tmp_path) == "missing"

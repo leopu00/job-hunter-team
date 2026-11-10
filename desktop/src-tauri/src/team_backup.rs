@@ -74,7 +74,7 @@ MAX_ARCHIVE=2*1024**3
 DOC_EXT=('pdf','docx','doc','odt','txt','md','tex','rtf')
 BLOCK=524288
 SLACK=64*1024*1024
-DENY=('cloud.json','credentials','secrets','runtime','logs','host.env','suid','.claude','.codex','.kimi','.npm-global','.local','.cache','.config','.pairing-token','jobs.db')
+DENY=('cloud.json','credentials','secrets','runtime','logs','host.env','suid','.claude','.codex','.kimi','.pi','.npm-global','.local','.cache','.config','.pairing-token','jobs.db')
 SECRET=re.compile(r'(api[_-]?key|token|secret|passw|credential|authorization|bearer|private[_-]?key)',re.I)
 def emit(value): print(json.dumps(value,separators=(',',':'))); raise SystemExit(0)
 STATS_HOUR=re.compile(r'^\d{4}-\d{2}-\d{2}T\d{2}:00:00Z$')
@@ -878,6 +878,7 @@ put('.pairing-token','SECRET-PAIR')
 put('credentials/key.json','SECRET-CRED')
 put('.claude/.credentials.json','SECRET-CLAUDE')
 put('.codex/auth.json','SECRET-CODEX')
+put('.pi/agent/auth.json','SECRET-PI')
 put('host.env','JHT_LANG=it\n')
 put('logs/team.log','a log line with a private word\n')
 put('runtime/x','x')
@@ -961,7 +962,7 @@ db.commit()
         );
         // no secret anywhere in the archive, nor a file that was never on the list
         let everything = String::from_utf8_lossy(&python(&["-c", "import sys,tarfile,io\nt=tarfile.open(fileobj=io.BytesIO(sys.stdin.buffer.read()),mode='r:gz')\nfor m in t.getmembers():\n  sys.stdout.write(t.extractfile(m).read().decode('utf-8','replace'))"], &archive, None).1).into_owned();
-        for secret in ["TEXT-LINE-OF-AN-AD", "EXTRA-FIELD", "NOT-ON-THE-LIST", "SECRET-KEY-1", "SECRET-TOKEN-2", "SECRET-PASS-3", "SECRET-CLOUD", "SECRET-PAIR", "SECRET-CRED", "SECRET-CLAUDE", "SECRET-CODEX", "SECRET-DRIVE", "JSON-DOC", "NOEXT-DOC", "a log line", "must not go", "not in the backup", "HIDDEN-CONTENT"] {
+        for secret in ["TEXT-LINE-OF-AN-AD", "EXTRA-FIELD", "NOT-ON-THE-LIST", "SECRET-KEY-1", "SECRET-TOKEN-2", "SECRET-PASS-3", "SECRET-CLOUD", "SECRET-PAIR", "SECRET-CRED", "SECRET-CLAUDE", "SECRET-CODEX", "SECRET-PI", "SECRET-DRIVE", "JSON-DOC", "NOEXT-DOC", "a log line", "must not go", "not in the backup", "HIDDEN-CONTENT"] {
             assert!(!everything.contains(secret), "{secret} is in the backup");
         }
         assert!(everything.contains("\"model\": \"m\"") && everything.contains("\"api_key\": null") && everything.contains("\"refresh_token\": null") && everything.contains("\"password\": null"), "the config keeps its shape, with the secrets emptied");

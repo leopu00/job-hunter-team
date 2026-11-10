@@ -107,7 +107,7 @@ def test_the_login_is_a_credentials_file_that_is_not_empty_for_the_active_provid
     ("claude", ".claude/.credentials.json"), ("claude", ".claude/credentials.json"),
     ("claude", ".config/claude/credentials.json"), ("claude", ".config/claude/auth.json"),
     ("anthropic", ".config/claude/auth.json"),
-    ("codex", ".codex/credentials.json"), ("openai", ".config/codex/credentials.json"),
+    ("codex", ".codex/credentials.json"), ("openai", ".config/codex/credentials.json"), ("openai", ".pi/agent/auth.json"),
     ("kimi", ".kimi/credentials/kimi-code.json"), ("kimi", ".config/kimi-cli/credentials.json"), ("kimi", ".kimi/credentials.json"),
     ("moonshot", ".kimi/credentials.json"),
 ])

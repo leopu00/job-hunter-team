@@ -229,3 +229,31 @@ def test_the_script_never_names_a_path_from_outside_and_never_walks_by_a_whole_p
     assert "dir_fd=fd" in code and "O_NOFOLLOW" in code
     for forbidden in ("os.remove(", "shutil", "os.walk", "subprocess", "os.system", "rmtree", "os.environ", "sys.argv[2"):
         assert forbidden not in code, forbidden
+
+
+def test_with_pi_in_charge_the_sign_in_is_pis_file_and_codexs_does_not_count(tmp_path):
+    home = home_with(tmp_path, {"active_provider": "openai", "harness": "pi"})
+    put(home, ".codex/auth.json")
+    assert ps.status(str(home)) == {"ok": True, "provider": "codex", "authenticated": False}
+    put(home, ".pi/agent/auth.json")
+    assert ps.status(str(home)) == {"ok": True, "provider": "codex", "authenticated": True}
+    # without the key, or with another word, the harness is Codex and Pi's file is not the marker
+    for config in ({"active_provider": "openai"}, {"active_provider": "openai", "harness": "codex"}, {"active_provider": "openai", "harness": "../x"}):
+        (home / "jht.config.json").write_text(json.dumps(config))
+        assert ps.status(str(home))["authenticated"] is True  # Codex's file is there
+        (home / ".codex/auth.json").rename(home / ".codex/auth.json.keep")
+        assert ps.status(str(home))["authenticated"] is False, config
+        (home / ".codex/auth.json.keep").rename(home / ".codex/auth.json")
+
+
+def test_disconnecting_the_account_removes_pis_sign_in_too_whichever_program_is_in_charge(tmp_path):
+    for harness in ("pi", "codex"):
+        base = tmp_path / harness
+        base.mkdir()
+        home = home_with(base, {"active_provider": "codex", "harness": harness})
+        put(home, ".codex/auth.json")
+        put(home, ".pi/agent/auth.json")
+        put(home, ".pi/agent/settings.json", '{"synthetic":true}')
+        assert ps.logout(str(home)) == {"ok": True, "provider": "codex", "authenticated": False, "removed": 2}
+        assert not (home / ".pi/agent/auth.json").exists() and not (home / ".codex/auth.json").exists()
+        assert (home / ".pi/agent/settings.json").exists(), "only the sign-in goes, not Pi's settings"
