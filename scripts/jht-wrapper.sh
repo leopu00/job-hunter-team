@@ -599,6 +599,34 @@ runtime_helpers_install() {
   runtime_helpers_write_manifest
 }
 
+# Before the helper is there (an install whose first download of the tools has not happened yet) the read-only commands that the app
+# reads answer "not installed yet", in the same shape the helper uses, instead of failing: `jht tools status --json`,
+# `jht integration list|status [id] [--json]`. $1 is tools|integration, the rest what the person typed. Returns 3 for anything else
+# (the old path: add, remove, a wrong use), so the caller goes on to the helper and its error.
+INTEGRATION_IDS_ABSENT="google telegram mail linkedin-login screen media"
+runtime_helper_absent_answer() {
+  local what="$1" word="${2:-}" json=0 id="" arg
+  [ "$#" -gt 2 ] && shift 2 || shift "$#"
+  for arg in "$@"; do
+    case "$arg" in --json) json=1 ;; -*) return 3 ;; *) [ -z "$id" ] || return 3; id="$arg" ;; esac
+  done
+  case "$what:$word" in
+    tools:status) [ "$json" = 1 ] && [ -z "$id" ] || return 3; printf '{"ok":true,"state":"none","tier":"full","reason":"not_installed"}\n'; return 0 ;;
+    integration:list|integration:status) ;;
+    *) return 3 ;;
+  esac
+  [ "$word" = status ] || [ -z "$id" ] || return 3
+  case " $INTEGRATION_IDS_ABSENT " in *" $id "*) ;; *) [ -z "$id" ] || return 3 ;; esac
+  local ids="${id:-$INTEGRATION_IDS_ABSENT}" one first=1
+  if [ "$json" = 1 ] && [ -n "$id" ]; then printf '{"id":"%s","state":"not_installed","reason":"non ancora installato"}\n' "$id"; return 0; fi
+  [ "$json" = 0 ] || printf '{"integrations":['
+  for one in $ids; do
+    if [ "$json" = 1 ]; then [ "$first" = 1 ] || printf ','; first=0; printf '{"id":"%s","state":"not_installed","reason":"non ancora installato"}' "$one"
+    else printf '%-15s %-16s %s\n' "$one" "non installato" "non ancora installato"; fi
+  done
+  [ "$json" = 0 ] || printf ']}\n'
+}
+
 # $2 is the command of the person: only `add` and `remove` fetch a helper that is missing. `jht tools` never does: its commands run by
 # themselves after the install, and a download at the tip of the branch is not something to start without the person asking for it.
 runtime_helper_load() {
@@ -6547,6 +6575,7 @@ case "$SUB" in
 
   integration)
     require_compose_file
+    if [ -z "$(runtime_helper_digest jht-integration.sh)" ]; then runtime_helper_absent_answer integration "${@:2}" && exit 0; fi
     runtime_helper_load jht-integration.sh "${2:-}" || exit 1
     integration_main "${@:2}"
     exit $?
@@ -6554,6 +6583,7 @@ case "$SUB" in
 
   tools)
     require_compose_file
+    if [ -z "$(runtime_helper_digest jht-tools.sh)" ]; then runtime_helper_absent_answer tools "${@:2}" && exit 0; fi
     runtime_helper_load jht-tools.sh "${2:-}" || exit 1
     tools_main "${@:2}"
     exit $?
