@@ -176,6 +176,9 @@ function Set-JhtNodeOwner {
 }
 $TestChannelImage = $Image
 $Image = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { 'ghcr.io/leopu00/jht@sha256:fa78c975c04dd5f95d6225a35c8c3bb9646f8ef14b32c8ca558d5332de0cce00' }
+$CoreImageDigest = if ($env:JHT_CORE_IMAGE_DIGEST) { $env:JHT_CORE_IMAGE_DIGEST } else { '' }
+$RuntimeTier = if ($CoreImageDigest -and -not $env:JHT_IMAGE -and -not $TestChannel) { 'core' } else { '' }  # core: the tools come later
+if ($RuntimeTier) { $Image = "ghcr.io/leopu00/jht@$CoreImageDigest" }
 $RuntimeImage = if ($TestChannel) { $TestChannelImage } else { $Image }
 $RuntimeImageDigest = if ($TestChannel) { $ExpectedImageDigest } elseif ($RuntimeImage -match '@(sha256:[0-9a-f]{64})$') { $Matches[1] } else { '' }
 $env:JHT_IMAGE = $Image
@@ -373,6 +376,7 @@ function Invoke-PodmanRuntimeEnabler {
     $enablerArgs += '-InstallDependencies'
   }
   if ($TestChannel) { $enablerArgs += '-PersistImagePin' }
+  if ($RuntimeTier) { $enablerArgs += @('-RuntimeTier', $RuntimeTier) }
   $oldRuntimeDir = $env:JHT_RUNTIME_DIR
   $oldBinDir = $env:JHT_BIN_DIR
   $oldMachineOutput = $env:JHT_MACHINE_OUTPUT
@@ -564,6 +568,8 @@ function Get-RuntimeFiles {
   )
   $runtimeImageDest = Join-Path $RuntimeDir 'runtime-image'
   if (Test-Path -LiteralPath $runtimeImageDest -PathType Leaf) { $publishedNodes += $runtimeImageDest }
+  $runtimeTierDest = Join-Path $RuntimeDir 'runtime-tier'
+  if (Test-Path -LiteralPath $runtimeTierDest -PathType Leaf) { $publishedNodes += $runtimeTierDest }
   foreach ($published in $publishedNodes) {
     if (-not (Test-Path -LiteralPath $published -PathType Leaf)) { Write-Fail "Podman runtime artifact missing: $published" }
     Set-JhtNodeOwner -Path $published

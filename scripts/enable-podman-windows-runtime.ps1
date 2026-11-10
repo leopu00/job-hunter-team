@@ -9,7 +9,8 @@ param(
   [switch]$InitializeMachine,
   [string]$RuntimeImage = 'ghcr.io/leopu00/jht@sha256:fa78c975c04dd5f95d6225a35c8c3bb9646f8ef14b32c8ca558d5332de0cce00',
   [string]$ExpectedImageDigest = '',
-  [switch]$PersistImagePin
+  [switch]$PersistImagePin,
+  [ValidateSet('', 'core')][string]$RuntimeTier = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -933,7 +934,15 @@ if ($PersistImagePin) {
 } else {
   Remove-Item -LiteralPath $runtimeImageFile -Force -ErrorAction SilentlyContinue
 }
-$manifest = "version=1`ndocker-compose.yml=$composeHash`njht-wrapper.ps1=$wrapperHash`ndocker-compose.podman.yml=$podmanHash`ndocker.exe=$shimHash`ncontainer-runtime=$selectionHash`npodman-machine=$machineHash`njht-container.service=$containerUnitHash`nwindows-private-acl.ps1=$helperHash`npodman-machine-bridge.ps1=$bridgeHash`n$runtimeImageManifest"
+$runtimeTierFile = Join-Path $RuntimeDir 'runtime-tier'
+$runtimeTierManifest = ''
+if ($RuntimeTier -eq 'core') {
+  [IO.File]::WriteAllText($runtimeTierFile, "core`n", [Text.UTF8Encoding]::new($false))
+  $runtimeTierManifest = "runtime-tier=$((Get-FileHash -Algorithm SHA256 -LiteralPath $runtimeTierFile).Hash.ToLowerInvariant())`n"
+} else {
+  Remove-Item -LiteralPath $runtimeTierFile -Force -ErrorAction SilentlyContinue
+}
+$manifest = "version=1`ndocker-compose.yml=$composeHash`njht-wrapper.ps1=$wrapperHash`ndocker-compose.podman.yml=$podmanHash`ndocker.exe=$shimHash`ncontainer-runtime=$selectionHash`npodman-machine=$machineHash`njht-container.service=$containerUnitHash`nwindows-private-acl.ps1=$helperHash`npodman-machine-bridge.ps1=$bridgeHash`n$runtimeImageManifest$runtimeTierManifest"
 [IO.File]::WriteAllText((Join-Path $RuntimeDir '.runtime-integrity'), $manifest, [Text.UTF8Encoding]::new($false))
 # Every file the wrapper checks the owner of (Test-RuntimeBundleTrusted), before the wrapper runs (T103).
 $bundleFiles = @(
@@ -949,6 +958,7 @@ $bundleFiles = @(
   $shim
 )
 if (Test-Path -LiteralPath $runtimeImageFile -PathType Leaf) { $bundleFiles += $runtimeImageFile }
+if (Test-Path -LiteralPath $runtimeTierFile -PathType Leaf) { $bundleFiles += $runtimeTierFile }
 foreach ($bundleFile in $bundleFiles) { Set-JhtOwnerToCurrentUser -Path $bundleFile }
 if ($legacyShimOwned) {
   Remove-Item -LiteralPath $legacyShim -Force -ErrorAction Stop

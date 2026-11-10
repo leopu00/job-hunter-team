@@ -18,6 +18,7 @@ import VpsConnectionPage from "../vps-connection";
 import WorkHoursPage from "../work-hours";
 import AccountCard from "./AccountCard";
 import { EmbeddedContext } from "./embedded";
+import HarnessChoice from "./HarnessChoice";
 import { LinkedTeamNotice } from "./LinkedTeamGate";
 import NotifyCard from "./NotifyCard";
 import ProviderSignOut from "./ProviderSignOut";
@@ -91,6 +92,7 @@ export function TeamSection(_props: PageProps) {
                 <button type="button" onClick={providerSetup.open} className={smallButtonCls}>{t.providerButton}</button>
               </div>
               <ProviderSignOut />
+              {!readOnly && <HarnessChoice />}
             </>
           )}
         </section>

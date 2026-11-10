@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -26,7 +27,7 @@ def test_canonical_manifest_pins_every_distributed_consumer() -> None:
     pin = runtime_image_pin.verify_tree(ROOT)
     assert (
         pin.release_version
-        == json.loads((ROOT / "package.json").read_text())["version"]
+        == json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["version"]
     )
     assert pin.image_ref.startswith("ghcr.io/leopu00/jht@sha256:")
     assert len(pin.digest) == len("sha256:") + 64
@@ -36,7 +37,7 @@ def test_canonical_manifest_pins_every_distributed_consumer() -> None:
     # rompere il ciclo digest->commit->digest), la scrittura no, e contare una
     # stringa letterale la legava alla scrittura. Che l'immagine sia davvero
     # senza `release/` lo misura `tests/test_image_context.py` sul layer.
-    excludes = (ROOT / ".dockerignore").read_text().splitlines()
+    excludes = (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
     assert [line for line in excludes if line in ("release/", "**/release/")] == [
         "**/release/"
     ]
@@ -74,7 +75,7 @@ def test_tree_rejects_a_semver_fallback_even_when_digest_is_still_present(
     )
     manifest = tmp_path / runtime_image_pin.MANIFEST_PATH
     manifest.parent.mkdir()
-    manifest.write_text(MANIFEST.read_text())
+    manifest.write_bytes(MANIFEST.read_bytes())
     consumer = tmp_path / "consumer.txt"
     consumer.write_text(f"{pin.image_ref}\nghcr.io/leopu00/jht:{pin.release_version}\n")
     path = Path("consumer.txt")
@@ -99,7 +100,7 @@ def test_tree_reads_the_operational_value_not_a_correct_comment(
     )
     manifest = tmp_path / runtime_image_pin.MANIFEST_PATH
     manifest.parent.mkdir()
-    manifest.write_text(MANIFEST.read_text())
+    manifest.write_bytes(MANIFEST.read_bytes())
     consumer = tmp_path / "consumer.js"
     consumer.write_text(
         f"// const DEFAULT_RUNTIME_IMAGE = '{pin.image_ref}';\n"
@@ -258,8 +259,8 @@ def test_publish_creates_an_absent_tag_from_the_digest_then_reads_it_back(
 
 
 def test_release_workflow_is_the_only_semver_tag_publisher() -> None:
-    docker_workflow = (ROOT / ".github/workflows/docker.yml").read_text()
-    release_workflow = (ROOT / ".github/workflows/release.yml").read_text()
+    docker_workflow = (ROOT / ".github/workflows/docker.yml").read_text(encoding="utf-8")
+    release_workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
     assert 'tags:\n      - "v[0-9]+.[0-9]+.[0-9]*"' not in docker_workflow
     assert "type=semver" not in docker_workflow
     assert "publish-runtime:" in release_workflow
@@ -303,7 +304,7 @@ def _tree_copy(tmp_path: Path) -> Path:
 
 def test_the_contract_names_the_enabler_and_the_selftest_too() -> None:
     # they held the August image while verify-tree was green: they were not listed
-    names = {str(path) for path in runtime_image_pin.PINNED_CONSUMERS}
+    names = {path.as_posix() for path in runtime_image_pin.PINNED_CONSUMERS}
     assert {
         "scripts/enable-podman-windows-runtime.ps1",
         "scripts/windows-config-acl-selftest.ps1",
@@ -348,7 +349,7 @@ def test_update_keeps_the_mode_of_the_installers(tmp_path: Path) -> None:
     runtime_image_pin.update_tree(tree, NEW_DIGEST, NEW_REVISION)
     for relative in ("scripts/install.sh", "web/public/install.sh"):
         assert (tree / relative).stat().st_mode & 0o777 == 0o755, relative
-        assert NEW_DIGEST in (tree / relative).read_text()
+        assert NEW_DIGEST in (tree / relative).read_text(encoding="utf-8")
     assert (tree / "docker-compose.yml").stat().st_mode & 0o777 == (ROOT / "docker-compose.yml").stat().st_mode & 0o777
 
 
@@ -358,7 +359,7 @@ def _sha(path: Path) -> str:
 
 def test_the_digests_the_app_compiles_follow_their_installers_in_the_repository() -> None:
     for installer, digest_file in runtime_image_pin.INSTALLER_DIGESTS:
-        assert (ROOT / digest_file).read_text().strip() == _sha(ROOT / installer), digest_file
+        assert (ROOT / digest_file).read_text(encoding="ascii").strip() == _sha(ROOT / installer), digest_file
 
 
 def test_update_regenerates_the_digest_the_app_compiles_for_each_installer(tmp_path: Path) -> None:
@@ -366,7 +367,7 @@ def test_update_regenerates_the_digest_the_app_compiles_for_each_installer(tmp_p
     before = {d: (tree / d).read_bytes() for _, d in runtime_image_pin.INSTALLER_DIGESTS}
     runtime_image_pin.update_tree(tree, NEW_DIGEST, NEW_REVISION)
     for installer, digest_file in runtime_image_pin.INSTALLER_DIGESTS:
-        text = (tree / digest_file).read_text()
+        text = (tree / digest_file).read_text(encoding="ascii")
         assert text == _sha(tree / installer) + "\n", digest_file     # same format: one hex line
         assert (tree / digest_file).read_bytes() != before[digest_file], digest_file
     # the published copy is the installer byte for byte, so it hashes to the same value
@@ -379,7 +380,7 @@ def test_update_hashes_an_installer_as_git_stores_it_not_as_a_crlf_checkout_has_
     target = tree / "scripts/install.ps1"
     target.write_bytes(target.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
     runtime_image_pin.update_tree(tree, NEW_DIGEST, NEW_REVISION)
-    recorded = (tree / "desktop/src-tauri/installer-windows.sha256").read_text().strip()
+    recorded = (tree / "desktop/src-tauri/installer-windows.sha256").read_text(encoding="ascii").strip()
     assert recorded == hashlib.sha256(target.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
     assert runtime_image_pin.verify_tree(tree).digest == NEW_DIGEST
 
@@ -442,7 +443,7 @@ def test_an_update_that_cannot_write_changes_nothing(tmp_path: Path, monkeypatch
 def test_an_update_that_misses_a_consumer_changes_nothing(tmp_path: Path) -> None:
     tree = _tree_copy(tmp_path)
     odd = tree / "scripts/jht-wrapper.sh"
-    odd.write_text(odd.read_text().replace("DEFAULT_RUNTIME_IMAGE=", "DEFAULT_RUNTIME_IMAGE_X=", 1))
+    odd.write_bytes(odd.read_bytes().replace(b"DEFAULT_RUNTIME_IMAGE=", b"DEFAULT_RUNTIME_IMAGE_X=", 1))
     snapshot = {p: (tree / p).read_bytes() for p in runtime_image_pin.PINNED_CONSUMERS}
     manifest = (tree / runtime_image_pin.MANIFEST_PATH).read_bytes()
     with pytest.raises(runtime_image_pin.RuntimeImagePinError) as raised:
@@ -511,7 +512,24 @@ def _git_tree(tmp_path: Path, files: dict[str, str]) -> Path:
     return repo
 
 
+def _require_git_checkout() -> None:
+    """The scan reads `git ls-files`: a tree exported with `git archive` has no .git and cannot answer.
+
+    Skipped there with the reason spelled out; in CI a missing checkout is a failure, never a skip.
+    """
+    inside = subprocess.run(
+        ["git", "-C", str(ROOT), "rev-parse", "--is-inside-work-tree"],
+        capture_output=True, check=False,
+    )
+    if inside.returncode == 0:
+        return
+    if os.environ.get("CI"):
+        pytest.fail("CI must run this on a git checkout, but the tree has no usable git")
+    pytest.skip("the tree is not a git checkout (git archive export, or git missing): `git ls-files` has nothing to list")
+
+
 def test_the_repository_names_no_image_but_the_manifests() -> None:
+    _require_git_checkout()
     runtime_image_pin.find_stray_pins(ROOT, _pin())
 
 
@@ -528,4 +546,5 @@ def test_a_copy_of_the_pin_outside_the_contract_is_red(tmp_path: Path) -> None:
 
 
 def test_the_cli_gate_runs_the_scan_too(tmp_path: Path) -> None:
+    _require_git_checkout()
     assert runtime_image_pin.main(["verify-tree", "--root", str(ROOT)]) == 0
