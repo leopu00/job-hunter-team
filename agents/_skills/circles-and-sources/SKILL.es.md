@@ -93,31 +93,6 @@ Dos guardias independientes, ambos al final del lote:
 1. **Empresa**: si **> 30% de las posiciones de un solo lote provienen de una empresa**, cambia fuente/consulta para el siguiente lote. Una scaleup volcando 12 roles en un tablero inunda el pool — la diversidad importa más que el volumen.
 2. **Ubicación** (ciudad/área): si **> 40% de un solo lote proviene de una ciudad**, el siguiente lote DEBE apuntar a una *diferente* ciudad del círculo. Sin esto, un candidato abierto a un círculo multi-ciudad (ej. reubicación `"ovunque"`/`"Europa"`) obtiene un pool dominado por el único hub que tiene más publicaciones para su dominio — finanzas → **London**, tech → SF/Berlin. Incidente real (beta tester #2): un candidato de finanzas recibió una shortlist casi solo de London porque London supera a cualquier otro hub ~10×. Rota entre las ciudades del círculo en round-robin; no drenes el hub más denso primero.
 
-```python
-# pseudocódigo para la verificación al final del lote
-from collections import Counter
-batch = [...]
-n = len(batch)
-
-# guardia 1 — empresa
-top_company, c_count = Counter(p.company for p in batch).most_common(1)[0]
-if c_count / n > 0.30:
-    log(f"anti-bias company: {top_company} = {c_count}/{n} >30% → switch source/query")
-
-# guardia 2 — ubicación (ciudad), ACUMULATIVO sobre toda la ejecución (NO solo este lote)
-# El guardia por-lote no basta: un hub (London para finanzas) queda por debajo del umbral
-# en cada lote individual y sin embargo acumula el 60% de la DB con el tiempo (visto en vivo
-# en beta: London=57/97=59%). Mide sobre el TOTAL de la DB.
-db_by_city = dict(db.execute(
-    "SELECT COALESCE(loc_city, TRIM(SUBSTR(location,1,INSTR(location||',',',')-1))), COUNT(*) "
-    "FROM positions GROUP BY 1"))
-db_total = sum(db_by_city.values()) or 1
-top_city, top_n = max(db_by_city.items(), key=lambda kv: kv[1])
-if top_n / db_total > 0.35:                       # tope SUAVE: ninguna ciudad > ~35% de la ejecución
-    log(f"anti-bias location ACUMULATIVO: {top_city}={top_n}/{db_total} (>35%) → "
-        f"STOP consultas en {top_city}, próximo sweep en ciudades prioritarias sub-atendidas")
-```
-
 **Regla de balance geográfico (acumulativa, tope suave) — incentiva la distribución, no impone la paridad:**
 
 1. **Lee el perfil**: las `priority cities` (campo `location` / `preferences.relocation`) son el objetivo. Es normal y justo que las ciudades con más ajuste pesen más — NO fuerces una distribución uniforme.
@@ -133,17 +108,6 @@ Balancear las ubicaciones no sirve si las ofertas no son **trabajables** por el 
 - 🇬🇧 **UK post-Brexit**: un ciudadano **UE sin visado UK** NO puede trabajar en London/UK sin **sponsorship** (Skilled Worker visa). Entonces para un perfil solo-UE las ofertas UK valen **solo si** el JD menciona explícitamente *visa sponsorship*; de lo contrario son incompatibles en work-auth → SKIP (ver "Filtros permisivos", regla geo).
 - 🇨🇭 **Suiza / no-UE**: misma lógica — verificar permiso de trabajo.
 - Regla práctica: si el hub dominante está en un país que requiere un permiso que el usuario no tiene (y los JD no ofrecen sponsorship), ese volumen es **fantasma** — no cuenta como cobertura y debe excluirse del pool, no solo balancearse.
-
-### 🗣️ Búsqueda consciente del idioma — no recojas lo que será excluido por idioma
-
-Mismo principio que la work-auth, en el frente lingüístico. Si los **idiomas del usuario** (`languages`, con nivel) NO cubren el **idioma de trabajo local** de una ciudad objetivo, los roles que lo requieran serán descartados downstream por el Analyst (`[LANGUAGE]`) — recogerlos es desperdicio. Caso real (beta): candidato con inglés C1 + alemán solo conversacional + sin IT/ES/FR → de 18 excluidas, 11 eran por idioma local obligatorio (M&A en alemán en Munich/Zurich, IB en italiano en Milán, etc.).
-
-**Regla:** antes de consultar una ciudad cuyo idioma local el usuario no domina a nivel business, **sesga las consultas hacia roles English-first / internacionales**:
-- Añade calificadores a la consulta: `"English-speaking"`, `"international team"`, `"English required"`, nombre de multinacionales/firmas globales (Big4, bulge-bracket, scale-up internacionales) que trabajan en inglés incluso en mercados no anglófonos.
-- Para los roles que **requieren** el idioma local (y el usuario no lo tiene a nivel business): trátalos como los UK-sin-sponsor — no los insertes, o insértalos solo si el JD dice explícitamente que el idioma local no es requerido.
-- Inglés como idioma de trabajo ≠ país anglófono: en Amsterdam, Zurich, Luxembourg, Lisboa muchos roles de finanzas funcionan en inglés. Son el **punto dulce** para quien habla solo inglés pero quiere Europa continental.
-
-Resultado: el pool que sobrevive al Analyst es más pequeño pero **de alto rendimiento** (accesible por idioma Y por work-auth), en lugar de inflarse con roles que serán descartados.
 
 ## Filtros permisivos a nivel de SCOUT
 
@@ -164,8 +128,6 @@ Cuando el Analyst envía `[FEEDBACK]` con una etiqueta recurrente (`[SENIORITY] 
 2. Ajustar las consultas / fuentes del siguiente lote según la sugerencia
 3. Priorizar la fuente / filtro alternativo sugerido para la siguiente rotación
 4. Notificar al Capitano solo si emerge un sesgo sistémico (no solucionable con cambio de fuente)
-
-Ejemplo: el Analyst dice "4 de los últimos 5 de greenhouse.io requieren senior+, cambiar fuente". En el siguiente lote saltas greenhouse.io, pruebas un tablero Lever o una fuente nicho amigable con junior.
 
 ## Anti-patrones
 
