@@ -195,6 +195,7 @@ try {
       '*/scripts/enable-podman-windows-runtime.ps1' { Join-Path $PSScriptRoot 'enable-podman-windows-runtime.ps1'; break }
       '*/scripts/configure-podman-windows-network.ps1' { Join-Path $PSScriptRoot 'configure-podman-windows-network.ps1'; break }
       '*/scripts/podman-machine-bridge.ps1' { Join-Path $PSScriptRoot 'podman-machine-bridge.ps1'; break }
+      '*/scripts/jht-integration.ps1' { Join-Path $PSScriptRoot 'jht-integration.ps1'; break }
       '*/scripts/wsl-interop-connect-proxy.py' { Join-Path $PSScriptRoot 'wsl-interop-connect-proxy.py'; break }
       default { throw "unexpected clean-start URL: $Url" }
     }
@@ -209,6 +210,10 @@ try {
     Copy-Item -LiteralPath (Join-Path $scripts 'jht-wrapper.ps1') -Destination (Join-Path $BinDir 'jht.ps1') -Force
     Copy-Item -LiteralPath (Join-Path $scripts 'windows-private-acl.ps1') -Destination (Join-Path $BinDir 'windows-private-acl.ps1') -Force
     Copy-Item -LiteralPath (Join-Path $scripts 'podman-machine-bridge.ps1') -Destination (Join-Path $BinDir 'podman-machine-bridge.ps1') -Force
+    # The host script that came after the main manifest, and the manifest of its own (the real enabler writes both).
+    Copy-Item -LiteralPath (Join-Path $scripts 'jht-integration.ps1') -Destination (Join-Path $RuntimeDir 'jht-integration.ps1') -Force
+    $integrationDigest = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $RuntimeDir 'jht-integration.ps1')).Hash.ToLowerInvariant()
+    [IO.File]::WriteAllText((Join-Path $RuntimeDir '.runtime-helpers'), "jht-integration.ps1=$integrationDigest`n", [Text.UTF8Encoding]::new($false))
     New-Item -ItemType Directory -Path $RuntimeShimDir -Force | Out-Null
     [IO.File]::WriteAllText((Join-Path $RuntimeDir 'container-runtime'), "podman`n", [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $RuntimeDir 'podman-machine'), "jht-podman`n", [Text.UTF8Encoding]::new($false))
@@ -269,6 +274,11 @@ try {
   $manifestValues = ConvertFrom-StringData (Get-Content -LiteralPath $manifest -Raw)
   if ($installedHelperHash -ne $sourceHelperHash -or $manifestValues.'windows-private-acl.ps1' -ne $installedHelperHash) {
     throw 'clean-start ACL helper bytes are not exactly attested'
+  }
+  $helpersManifest = ConvertFrom-StringData (Get-Content -LiteralPath (Join-Path $RuntimeDir '.runtime-helpers') -Raw)
+  $sourceIntegrationHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $PSScriptRoot 'jht-integration.ps1')).Hash.ToLowerInvariant()
+  if ($helpersManifest.'jht-integration.ps1' -ne $sourceIntegrationHash -or $manifestValues.ContainsKey('jht-integration.ps1')) {
+    throw 'clean-start host script bytes are not exactly attested in the manifest of their own'
   }
   $installedWrapperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installedWrapper).Hash.ToLowerInvariant()
   $installedCompose = Join-Path $RuntimeDir 'docker-compose.yml'
