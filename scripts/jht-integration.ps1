@@ -112,7 +112,15 @@ function Get-IntegrationState {
     $service = Get-IntegrationService $Id
     if (-not (Test-DockerReachable)) { return @('error', 'il motore dei container non risponde') }
     $running = Get-RunningComposeServiceId $service[0]
-    if ($running) { return @('running', 'container acceso') }
+    if ($running) {
+      # One true state: a Telegram service that is up but holds no bot is not «acceso» for the person, it waits for a token
+      # (the same question `jht status` asks). Any answer but a clear «none» keeps what the engine says.
+      if ($Id -ceq 'telegram') {
+        $configured = Get-TelegramBotsConfigured
+        if ($configured -is [bool] -and -not $configured) { return @('ready', 'servizio acceso, nessun bot abbinato: jht telegram pair assistente') }
+      }
+      return @('running', 'container acceso')
+    }
     if ($script:ServiceLookupReason -notmatch '^(compose ps listed no running container|no running container of)') {
       return @('error', "il container non e' attestabile")
     }

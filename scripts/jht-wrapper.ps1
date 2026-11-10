@@ -1770,6 +1770,31 @@ function Invoke-AvailableTelegramLifecycle {
   return Invoke-TelegramLifecycle @($Action)
 }
 
+# Does the Telegram service hold a bot? Asked of the RUNNING service, read-only (an exec: no run container, no volume):
+# $true = at least one bot, $false = none, $null = it cannot be told (the service is off, not attestable, another answer).
+# The one place that says whether Telegram is configured: `jht status` and `jht integration` both ask it.
+function Get-TelegramBotsConfigured {
+  $id = Get-RunningComposeServiceId $TelegramContainer
+  if (-not $id) { return $null }
+  $out = ((& { $ErrorActionPreference = 'Continue'; & docker exec $id jht-telegram-admin bots status 2>$null }) -join "`n")
+  if ($LASTEXITCODE -ne 0 -or $out -notmatch '"ok":\s*true') { return $null }
+  return [bool]($out -match '"present"')
+}
+
+# The line `jht status` says about Telegram. A status command creates nothing and prints nothing of compose: no volume,
+# no run container, only questions to the engine. «Never configured» (no state volume) and «no bot» are said in one line.
+function Write-TelegramStatusLine {
+  if ((Get-Content -LiteralPath $ComposeFile -Raw) -notmatch '(?m)^  jht-telegram:') { return 0 }
+  if (Test-TelegramStateVolumeAbsent) { Write-Host 'Telegram non attivo: Telegram non configurato.'; return 0 }
+  $configured = Get-TelegramBotsConfigured
+  if ($null -eq $configured) {
+    Write-Host 'Telegram: stato non verificabile adesso (servizio spento o non raggiungibile). Dettagli: jht telegram status'
+    return 0
+  }
+  if (-not $configured) { Write-Host 'Telegram non attivo: Telegram non configurato.'; return 0 }
+  return (Invoke-TelegramAdmin -AdminArgs @('bots', 'status'))
+}
+
 function Invoke-TelegramLifecycle {
   param([string[]]$TelegramArgs)
   $action = if ($TelegramArgs.Count -gt 0) { $TelegramArgs[0] } else { 'status' }
@@ -3712,7 +3737,7 @@ switch ($Sub) {
     if (Test-ContainerUp) {
       & docker inspect $Container --format 'name={{.Name}} status={{.State.Status}} started={{.State.StartedAt}} image={{.Config.Image}}'
       if (-not [Console]::IsOutputRedirected) {
-        $telegramCode = Invoke-AvailableTelegramLifecycle 'status'
+        $telegramCode = Write-TelegramStatusLine
         if ($telegramCode -ne 0) { exit $telegramCode }
       }
     } else {

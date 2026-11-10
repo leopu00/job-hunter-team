@@ -100,6 +100,7 @@ compose() {{
   esac
 }}
 telegram_lifecycle_verify() {{ grep -qx jht-telegram "$FAKE_RUNNING"; }}
+telegram_bots_configured() {{ case "${{FAKE_BOTS:-}}" in none) return 1 ;; some) return 0 ;; *) return 2 ;; esac; }}
 . "{LIBRARY}"
 integration_main {args}
 """
@@ -131,6 +132,21 @@ def test_state_is_running_ready_error_from_the_engine(host):
     down = states(run(host, "list --json", {"FAKE_INFO_RC": "1"}))
     assert down["mail"] == {"id": "mail", "state": "error", "reason": "il motore dei container non risponde"}
     assert down["google"]["state"] == "not_installed"  # needs no engine
+
+
+def test_telegram_up_without_a_bot_is_not_called_running(host):
+    """One true state with `jht status`: a service that is up but holds no bot waits for a token, it is not «acceso»."""
+    host.running.write_text("jht-telegram\n")
+    host.volumes.write_text("jht_jht-telegram-state\n")
+    waiting = states(run(host, "list --json", {"FAKE_BOTS": "none"}))["telegram"]
+    assert waiting["state"] == "ready"
+    assert "nessun bot abbinato" in waiting["reason"] and "jht telegram pair assistente" in waiting["reason"]
+    # a bot is there, or it cannot be told: what the engine says (acceso) stays
+    assert states(run(host, "list --json", {"FAKE_BOTS": "some"}))["telegram"]["state"] == "running"
+    assert states(run(host, "list --json"))["telegram"]["state"] == "running"
+    # the plain text and `status telegram` say the same
+    plain = run(host, "status telegram", {"FAKE_BOTS": "none"})
+    assert "pronto" in plain.stdout and "nessun bot abbinato" in plain.stdout and "acceso" not in plain.stdout.split("servizio acceso")[0]
 
 
 def test_status_for_one_id_and_plain_text(host):

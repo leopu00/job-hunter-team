@@ -2253,6 +2253,31 @@ telegram_lifecycle_if_available() {
   telegram_lifecycle_command "$@"
 }
 
+# Does the Telegram service hold a bot? Asked of the RUNNING service, read-only (an exec, no run container, no volume):
+# 0 = at least one bot, 1 = none, 2 = it cannot be told (the service is off, not attestable, or answered something else).
+# The one place that says whether Telegram is configured: `jht status` and `jht integration` both ask it.
+telegram_bots_configured() {
+  local id out
+  id="$(read_only_service_id "$TELEGRAM_SERVICE" 2>/dev/null)" || return 2
+  out="$(docker exec "$id" jht-telegram-admin bots status 2>/dev/null)" || return 2
+  case "$out" in *'"ok": true'*) ;; *) return 2 ;; esac
+  case "$out" in *'"present"'*) return 0 ;; *) return 1 ;; esac
+}
+
+# The line `jht status` says about Telegram. A status command creates nothing and prints nothing of compose: no volume,
+# no run container, only questions to the engine. «Never configured» (no state volume) and «no bot» are said in one line.
+telegram_status_line() {
+  compose_lacks_service "$TELEGRAM_SERVICE" && return 0
+  local rc=0
+  if telegram_state_volume_absent; then printf '%s\n' 'Telegram non attivo: Telegram non configurato.'; return 0; fi
+  telegram_bots_configured || rc=$?
+  case "$rc" in
+    0) telegram_admin bots status ;;
+    1) printf '%s\n' 'Telegram non attivo: Telegram non configurato.' ;;
+    *) printf '%s\n' 'Telegram: stato non verificabile adesso (servizio spento o non raggiungibile). Dettagli: jht telegram status' ;;
+  esac
+}
+
 telegram_lifecycle_command() {
   local action="${1:-status}" role="${2:-}" steps result=0 cleanup
   [ "$action" != setup ] || role="${role:-assistente}"
@@ -6261,7 +6286,7 @@ case "$SUB" in
           'name={{.Name}} status={{.State.Status}} started={{.State.StartedAt}} image={{.Config.Image}}'
       else
         status_human_running "$(docker inspect "$container_id" --format '{{.State.Status}}|{{.State.StartedAt}}|{{.Config.Image}}')"
-        telegram_lifecycle_if_available status || exit $?
+        telegram_status_line || exit $?
       fi
     else
       attest_status=$?
