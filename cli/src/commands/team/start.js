@@ -305,8 +305,16 @@ function keyRefusedInContainer() {
   const res = execInContainer('node /app/cli/bin/jht.js providers check-key --quiet', { timeoutMs: 25_000 });
   // only the exit of a refused key counts: an unknown command, a missing file or a crash (all exit 1) are not a verdict
   if (!res || res.code !== KEY_REFUSED_EXIT_CODE) return null;
-  const line = String(res.stderr || res.stdout || '').replace(/\x1b\[[0-9;]*m/g, '').trim().split('\n').filter(Boolean).slice(-1)[0];
-  return line || 'the provider rejected the API key. Run: jht setup';
+  // the last line the container wrote, with the colors and every other control character out: it is printed as it is
+  const line = String(res.stderr || res.stdout || '').replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '')
+    .trim().split('\n').map((l) => l.trim()).filter(Boolean).slice(-1)[0];
+  const said = (line || 'The provider rejected the API key. Run: jht setup').replace(/[.\s]*$/, '.');
+  return `${said} If the key is right (another plan, another route), start anyway: jht team start --skip-key-check`;
+}
+
+/** The person said the key is fine: the flag, or JHT_SKIP_KEY_CHECK=1 for the processes that start the team for them. */
+export function keyCheckSkipped(options = {}, env = process.env) {
+  return Boolean(options.skipKeyCheck) || /^(1|true|yes)$/i.test(String(env.JHT_SKIP_KEY_CHECK ?? ''));
 }
 
 // ── Container mode ─────────────────────────────────────────────────
@@ -372,7 +380,7 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
 
     // La chiave API di glm/kimi (pi) la rifiuta il provider: lo si dice qui, al comando, e non dopo dentro la sessione
     // di Pi. Si prova DENTRO il container, dove il file della chiave c'è; solo un 401 ferma, e lo stop resta com'era.
-    const keyIssue = await keyRefusedInContainer();
+    const keyIssue = keyCheckSkipped(options) ? null : keyRefusedInContainer();
     if (keyIssue) {
       console.error(c.red(`Error: ${keyIssue}`));
       console.log('');

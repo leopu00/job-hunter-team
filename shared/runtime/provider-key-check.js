@@ -33,6 +33,8 @@ export async function checkPiApiKey(providerName, key, { fetchImpl = globalThis.
     const res = await fetchImpl(KEY_CHECK_URLS[provider], {
       method: 'GET',
       headers: { Authorization: `Bearer ${cleanKey}` },
+      // the key goes to the fixed route and nowhere else: a redirect is an error, never followed
+      redirect: 'error',
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (res.status === 401) return { state: 'rejected', label, httpStatus: 401 };

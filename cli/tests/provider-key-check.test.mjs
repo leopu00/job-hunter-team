@@ -10,6 +10,7 @@ const HOME = mkdtempSync(join(tmpdir(), 'jht-key-check-'));
 process.env.JHT_HOME = HOME;
 const { checkPiApiKey, KEY_CHECK_URLS } = await import('../../shared/runtime/provider-key-check.js');
 const { checkConfiguredKey, keyRefusal } = await import('../src/commands/providers-key-check.js');
+const { keyCheckSkipped } = await import('../src/commands/team/start.js');
 const { runNonInteractiveSetup } = await import('../wizard/setup-noninteractive.js');
 
 const KEY = 'finta'; // short and plain on purpose: a secret scanner has nothing to flag
@@ -31,10 +32,13 @@ test('401 is a refusal; 200 is valid; everything else is «could not verify», n
 
 test('the call is a GET with the key as a bearer, to the route of that provider (moonshot is kimi); no key, no call', async () => {
   const seen = [];
-  const fetchImpl = async (url, init) => { seen.push([url, init.method, init.headers.Authorization]); return { status: 200, ok: true }; };
+  const redirects = [];
+  const fetchImpl = async (url, init) => { seen.push([url, init.method, init.headers.Authorization]); redirects.push(init.redirect); return { status: 200, ok: true }; };
   await checkPiApiKey('glm', ` ${KEY}\n`, { fetchImpl });
   await checkPiApiKey('moonshot', KEY, { fetchImpl });
   assert.deepEqual(seen, [[KEY_CHECK_URLS.glm, 'GET', `Bearer ${KEY}`], [KEY_CHECK_URLS.kimi, 'GET', `Bearer ${KEY}`]]);
+  // the key travels to the fixed route only: a redirect is an error, never followed
+  assert.deepEqual(redirects, ['error', 'error']);
   const none = await checkPiApiKey('glm', '  ', { fetchImpl: () => assert.fail('no call without a key') });
   assert.equal(none.state, 'unverified');
   assert.equal((await checkPiApiKey('openai', KEY, { fetchImpl: () => assert.fail('not this provider') })).state, 'not_applicable');
@@ -103,4 +107,12 @@ test('setup with a key the provider accepts, or that could not be tried: saved (
   const skipped = await setup({ provider: 'glm', skipHealth: true }, 401);
   assert.equal(skipped.code, 0, skipped.text);
   assert.equal(saved().active_provider, 'glm');
+});
+
+test('the way out of a false refusal: the flag or JHT_SKIP_KEY_CHECK, nothing else', () => {
+  assert.equal(keyCheckSkipped({ skipKeyCheck: true }, {}), true);
+  assert.equal(keyCheckSkipped({}, { JHT_SKIP_KEY_CHECK: '1' }), true);
+  assert.equal(keyCheckSkipped({}, { JHT_SKIP_KEY_CHECK: 'true' }), true);
+  for (const value of [undefined, '', '0', 'no', 'false']) assert.equal(keyCheckSkipped({}, { JHT_SKIP_KEY_CHECK: value }), false);
+  assert.equal(keyCheckSkipped(), false);
 });

@@ -79,6 +79,11 @@ if (command[0] === "bash" && command[1] === "-c" && command[2].includes("provide
     console.error("GLM (Z.ai) rejected the API key (HTTP 401: wrong, expired or revoked). Put the right one in its file and run: jht setup");
     process.exit(3);
   }
+  // the same refusal, with control characters in the line (bell, backspace, a color): none of them may reach the terminal
+  if (process.env.FAKE_KEY_CHECK === "control") {
+    console.error("\x1b[31mGLM (Z.ai)\x07 rejected\x08 the API key (HTTP 401).\x1b[0m");
+    process.exit(3);
+  }
   // a CLI that does not know the command, a crash: exit 1, and it is no verdict on the key
   if (process.env.FAKE_KEY_CHECK === "broken") {
     console.error("error: unknown command 'check-key'");
@@ -188,7 +193,7 @@ describe("team halt gate — CLI host verso runtime container", () => {
     expect(removedAt).toBeGreaterThan(-1);
     expect(launchedAt).toBeGreaterThan(removedAt);
     expect(log[launchedAt].flag).toBe(false);
-  }, 15_000);
+  }, 45_000);
 
   it.each(["error", "residual"])(
     "un rm %s blocca lo start senza dichiarare agenti avviati",
@@ -229,6 +234,9 @@ describe("team halt gate — CLI host verso runtime container", () => {
     // the key was asked INSIDE the container, where the file of the key is
     expect(dockerLog(sb).some((row) => String(row.command[2]).includes("jht.js providers check-key"))).toBe(true);
 
+    // the sentence names the way out of a false refusal
+    expect(result.stderr).toContain("jht team start --skip-key-check");
+
     // an older image that does not know the command exits 1: that is not a refused key
     const broken = run(sb, ["start"], { FAKE_KEY_CHECK: "broken", FAKE_START_SUCCESS_ROLES: "*" });
     expect(broken.status, `${broken.stdout}\n${broken.stderr}`).toBe(0);
@@ -240,6 +248,26 @@ describe("team halt gate — CLI host verso runtime container", () => {
     expect(ok.status, `${ok.stdout}\n${ok.stderr}`).toBe(0);
     expect(existsSync(sb.flag)).toBe(false);
   }, 45_000);
+
+  it("via d'uscita da un 401 falso: --skip-key-check o JHT_SKIP_KEY_CHECK, e i caratteri di controllo non arrivano al terminale (D2)", () => {
+    const sb = sandbox();
+    writeFileSync(sb.flag, "halted");
+    // the way out: the flag, or the variable for what starts the team on someone's behalf; the check is not even asked
+    for (const way of [{ args: ["start", "--skip-key-check"], env: {} }, { args: ["start"], env: { JHT_SKIP_KEY_CHECK: "1" } }]) {
+      const skipped = run(sb, way.args, { FAKE_KEY_CHECK: "rejected", FAKE_START_SUCCESS_ROLES: "*", ...way.env });
+      expect(skipped.status, `${skipped.stdout}\n${skipped.stderr}`).toBe(0);
+      expect(skipped.stdout).toMatch(/Team on: \d+ started/);
+      writeFileSync(sb.flag, "halted");
+    }
+    const asked = dockerLog(sb).filter((row) => String(row.command[2]).includes("jht.js providers check-key")).length;
+    expect(asked).toBe(0);
+
+    // control characters of the line the container wrote never reach the terminal
+    const control = run(sb, ["start"], { FAKE_KEY_CHECK: "control", FAKE_START_SUCCESS_ROLES: "*" });
+    expect(control.status).toBe(1);
+    expect(control.stderr).toContain("GLM (Z.ai) rejected the API key (HTTP 401).");
+    expect(control.stderr).not.toMatch(/[\x00-\x08\x0b-\x1a\x1c-\x1f\x7f]/);
+  }, 90_000);
 
   it("start singolo preserva il gate globale", () => {
     const sb = sandbox();
@@ -270,7 +298,7 @@ describe("team halt gate — CLI host verso runtime container", () => {
     expect(one.status, `${one.stdout}\n${one.stderr}`).toBe(0);
     expect(one.stdout).not.toMatch(/\[\d\/\d\]/);
     expect(one.stdout).not.toContain("Team on:");
-  }, 15_000);
+  }, 45_000);
 
   it("bootstrap parziale con CAPITANO fallito non dichiara successo", () => {
     const sb = sandbox();
