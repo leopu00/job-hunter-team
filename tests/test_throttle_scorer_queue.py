@@ -56,8 +56,8 @@ def _all_out(burn, monkeypatch):
 def test_a_scorer_with_a_queue_pauses_short(home, monkeypatch):
     _scorer(home, monkeypatch, waiting=3)
     res = eng.register("scorer-1", reason="post-score", now=T0)
-    assert res["applied_sec"] <= SHORT_MAX, "la pausa del Capitano (660 s) e' il freno dei giri a vuoto: qui ci sono tre posizioni"
-    assert events("armed")[-1]["applied_sec"] <= SHORT_MAX
+    assert res["applied_sec"] == 0 and res["armed"] is False, "la pausa del Capitano (660 s) e' il freno dei giri a vuoto: qui ci sono tre posizioni, nessuna pausa"
+    assert events("no_throttle")[-1]["queued_work"] == 3 and not events("armed")
 
 
 def test_the_short_pause_is_a_cap_not_a_floor(home, monkeypatch):
