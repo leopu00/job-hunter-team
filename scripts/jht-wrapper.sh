@@ -138,6 +138,8 @@ if [ "$CONTAINER_RUNTIME" = "podman" ]; then
   fi
 fi
 DEFAULT_RUNTIME_IMAGE="ghcr.io/leopu00/jht@sha256:fa78c975c04dd5f95d6225a35c8c3bb9646f8ef14b32c8ca558d5332de0cce00"
+CORE_IMAGE_DIGEST=""
+RUNTIME_TIER_FILE="$RUNTIME_DIR/runtime-tier"
 DEFAULT_RUNTIME_VERSION="0.4.0"
 GAME_EXECUTABLE_OVERRIDE="${JHT_GAME_EXECUTABLE:-}"
 if [ -n "${JHT_GAME_CONTROL_DIR:-}" ]; then
@@ -611,6 +613,9 @@ runtime_write_manifest() {
     if [ -f "$RUNTIME_IMAGE_PIN" ]; then
       printf 'runtime-image=%s\n' "$(runtime_sha256 "$RUNTIME_IMAGE_PIN")"
     fi
+    if [ -f "$RUNTIME_TIER_FILE" ]; then
+      printf 'runtime-tier=%s\n' "$(runtime_sha256 "$RUNTIME_TIER_FILE")"
+    fi
   } > "$tmp" || return 1
   chmod 600 "$tmp" || { rm -f "$tmp"; return 1; }
   mv -f "$tmp" "$RUNTIME_MANIFEST"
@@ -689,6 +694,7 @@ runtime_bundle_trusted() {
     return 1
   fi
   runtime_helpers_trusted || return 1
+  runtime_tier_trusted || return 1
   grep -Fqx 'JHT_HOST_RUNTIME_PROTOCOL=1' "$WRAPPER_PATH" || return 1
   grep -Fqx 'JHT_HOST_SETUP_PROTOCOL=1' "$HOST_SETUP_SCRIPT" || return 1
   grep -Eq '^[[:space:]]*-[[:space:]]*jht-runtime-mask:/jht_home/runtime([[:space:]]|$)' "$COMPOSE_FILE" || return 1
@@ -702,6 +708,27 @@ runtime_image_pin_value() {
   value="$(tr -d '\n' < "$RUNTIME_IMAGE_PIN")"
   printf '%s' "$value" | grep -Eqx 'ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64}' || return 1
   printf '%s\n' "$value"
+}
+
+# Il livello dell'immagine (P4): il file `runtime-tier` (solo `core`) lo scrive l'installer quando la release ha un nucleo; senza
+# file e' l'immagine intera di sempre. Un file con un contenuto diverso, non attestato, o un nucleo che questo wrapper non conosce
+# non si interpretano: runtime non attendibile. Il manifest che attesta un file tolto e' un `switch` interrotto a meta': il
+# runtime e' quello intero, e il prossimo manifest scritto lo lascia cadere.
+runtime_tier_trusted() {
+  if [ -e "$RUNTIME_TIER_FILE" ] || [ -L "$RUNTIME_TIER_FILE" ]; then
+    runtime_node_safe "$RUNTIME_TIER_FILE" file || return 1
+    [ "$(runtime_manifest_value runtime-tier)" = "$(runtime_sha256 "$RUNTIME_TIER_FILE")" ] || return 1
+    [ "$(tr -d '\r\n' < "$RUNTIME_TIER_FILE")" = "core" ] && [ -n "$CORE_IMAGE_DIGEST" ] || return 1
+    [ ! -e "$RUNTIME_IMAGE_PIN" ] || return 1
+  fi
+}
+
+# L'immagine che il runtime ha scelto: il pin del canale di test, oppure il nucleo se l'installazione e' a livello `core`.
+# Vuota = il default del compose (l'immagine intera).
+runtime_selected_image() {
+  if [ -f "$RUNTIME_IMAGE_PIN" ]; then runtime_image_pin_value
+  elif [ -f "$RUNTIME_TIER_FILE" ]; then printf 'ghcr.io/leopu00/jht@%s\n' "$CORE_IMAGE_DIGEST"
+  fi
 }
 
 runtime_bootstrap_release() {
@@ -784,8 +811,8 @@ require_trusted_runtime() {
   }
   # Il pin del canale di test vince su un JHT_IMAGE dell'ambiente: il canale
   # e' deciso all'installazione, non da chi lancia il comando.
-  if [ -f "$RUNTIME_IMAGE_PIN" ]; then
-    JHT_IMAGE="$(runtime_image_pin_value)" || return 1
+  if [ -f "$RUNTIME_IMAGE_PIN" ] || [ -f "$RUNTIME_TIER_FILE" ]; then
+    JHT_IMAGE="$(runtime_selected_image)" || return 1
     export JHT_IMAGE
   fi
 }
@@ -2797,8 +2824,8 @@ podman_expected_config_hash() {
   # che non e' passato di li' (status, ensure_up, snapshot): senza il pin
   # ${JHT_IMAGE:-...} si risolve al default del compose, e su un'installazione di test la
   # hash non e' mai quella del container.
-  if [ -f "$RUNTIME_IMAGE_PIN" ]; then
-    pinned_image="$(runtime_image_pin_value)" || return 1
+  if [ -f "$RUNTIME_IMAGE_PIN" ] || [ -f "$RUNTIME_TIER_FILE" ]; then
+    pinned_image="$(runtime_selected_image)" || return 1
   fi
   if [ "$PODMAN_RUNTIME_MODE" = "machine" ]; then
     resolved="$({
