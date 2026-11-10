@@ -24,6 +24,7 @@ What the Capitano does with it (captain_gate.py, captain_boot.py, start-agent.sh
 from __future__ import annotations
 
 import json
+import re
 import os
 import sys
 import time
@@ -33,6 +34,7 @@ from pathlib import Path
 WAIT_SECONDS = 600  # the Capitano waits at most 10 minutes after the onboarding closed
 CLOCK_SLACK = 300  # a flag dated further in the future than this is a wrong clock: no wait
 STATES = ("pending", "pulling", "ready", "failed")
+REASON_CODE = re.compile(r"[a-z0-9_-]{1,40}")  # what a reason of the notice may be: lowercase code words, nothing else
 # The roles whose work needs what only the full image has: the Scout and the Analista render JS pages in the browser,
 # the Scrittore and the Closer make the CV PDF (pandoc, wkhtmltopdf) and the Closer drives the browser.
 ROLES_NEEDING_TOOLS = ("scout", "analista", "scrittore", "closer")
@@ -55,8 +57,13 @@ def read_state(home: Path | None = None) -> dict | None:
         return None
     if not isinstance(data, dict) or data.get("schema") != 1 or data.get("state") not in STATES:
         return None
-    reason = data.get("reason")
-    return {"state": data["state"], "reason": reason[:60] if isinstance(reason, str) else "", "since": _epoch(data.get("since"))}
+    return {"state": data["state"], "reason": _reason(data.get("reason")), "since": _epoch(data.get("since"))}
+
+
+def _reason(value: object) -> str:
+    """The reason as a short code, or nothing. The container writes this file too: what is not a code (a sentence, a line
+    break, a name that is too long) never reaches the Capitano's chat, the app or a log."""
+    return value if isinstance(value, str) and REASON_CODE.fullmatch(value) else ""
 
 
 def _epoch(stamp: object) -> float | None:
