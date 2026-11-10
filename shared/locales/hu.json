@@ -107,7 +107,7 @@
   "wizard.workhours.saved": "Munkaidő mentve: %s",
   "wizard.team.starting": "Csapat indítása (Sentinella + Bridge + Capitano)...",
   "wizard.team.start_failed": "Csapat indítása sikertelen. Lásd a fenti naplót. Próbáld újra: jht team start",
-  "wizard.outro_done": "Minden kész! A csapat dolgozik.\n  Állapot:  jht team status\n  Naplók:   jht logs --tail 30\n  Leállás:  jht team stop --all",
+  "wizard.outro_done": "Minden kész! Az Assistente vár rád: válaszolj a kérdéseire az onboarding indításához.\n  Válasz: jht team chat assistente   (vagy az alkalmazás Assistente chatjében)\n  Állapot:  jht team status\n  Naplók:   jht logs --tail 30\n  Leállás:  jht team stop --all",
   "wizard.outro_aborted": "Telepítés megszakítva. Próbáld újra: jht setup",
   "wizard.start.ready": "Minden kész. Csapat indítása...",
   "wizard.start.done": "A csapat fut. Nézd meg a Telegramot az üdvözlő üzenetekért.",
