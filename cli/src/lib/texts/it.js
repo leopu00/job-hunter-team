@@ -223,6 +223,7 @@ export default {
   'team.n_errors': '{n} errori',
   'team.captain_scales': 'Il CAPITANO regola gli altri agenti in base alle soglie del Bridge.',
   'team.captain_waits': 'Il resto della squadra parte da solo quando l’onboarding con l’Assistente è finito: rispondi prima alle sue domande.',
+  'team.partial': 'La squadra NON è accesa del tutto: {n} non sono partiti (le righe ✗ sopra dicono perché). Correggi la causa e rilancia: jht team start',
   'team.done': 'Squadra accesa: {n} agenti in {s} s',
   'team.next_agents': 'Guarda come va con: jht agents',
   'help.group_other': 'Altro',

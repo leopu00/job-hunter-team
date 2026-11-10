@@ -73,6 +73,19 @@ if (command[0] === "rm" && command.at(-1) === "/jht_home/.team-halted.flag") {
 if (command[0] === "test" && command.join(" ") === "test ! -e /jht_home/.team-halted.flag") {
   process.exit(fs.existsSync(flag) ? 1 : 0);
 }
+if (command[0] === "bash" && command[1] === "-c" && command[2].includes("providers check-key")) {
+  // the provider refuses the key (a 401): the CLI of the container says so on stderr and exits 3
+  if (process.env.FAKE_KEY_CHECK === "rejected") {
+    console.error("GLM (Z.ai) rejected the API key (HTTP 401: wrong, expired or revoked). Put the right one in its file and run: jht setup");
+    process.exit(3);
+  }
+  // a CLI that does not know the command, a crash: exit 1, and it is no verdict on the key
+  if (process.env.FAKE_KEY_CHECK === "broken") {
+    console.error("error: unknown command 'check-key'");
+    process.exit(1);
+  }
+  process.exit(0);
+}
 if (command[0] === "bash" && command[1] === "-c") {
   if (command[2].includes("tmux list-sessions")) {
     const sessions = process.env.FAKE_CONTAINER_SESSIONS || "";
@@ -86,7 +99,7 @@ if (command[0] === "bash" && command[1] === "/app/.launcher/start-agent.sh") {
   const successful = (process.env.FAKE_START_SUCCESS_ROLES || "")
     .split(",")
     .filter(Boolean);
-  if (successful.includes(role)) process.exit(0);
+  if (successful.includes(role) || successful.includes("*")) process.exit(0);
   console.error("synthetic launch failure");
   process.exit(1);
 }
@@ -162,11 +175,11 @@ describe("team halt gate — CLI host verso runtime container", () => {
     expect(existsSync(sb.flag)).toBe(true);
 
     const started = run(sb, ["start"], {
-      FAKE_START_SUCCESS_ROLES: "capitano",
+      FAKE_START_SUCCESS_ROLES: "*",
     });
     expect(started.status, `${started.stdout}\n${started.stderr}`).toBe(0);
     expect(existsSync(sb.flag)).toBe(false);
-    expect(started.stdout).toContain("1 started");
+    expect(started.stdout).toMatch(/[1-9]\d* started/);
     const log = dockerLog(sb);
     const removedAt = log.findIndex((row) => row.command[0] === "rm");
     const launchedAt = log.findIndex(
@@ -200,6 +213,34 @@ describe("team halt gate — CLI host verso runtime container", () => {
     },
   );
 
+  it("chiave API rifiutata dal provider: lo start si ferma col perché, rc 1, niente parte e lo stop resta (D2)", () => {
+    const sb = sandbox();
+    writeFileSync(sb.flag, "halted");
+    const result = run(sb, ["start"], { FAKE_KEY_CHECK: "rejected", FAKE_START_SUCCESS_ROLES: "*" });
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(1);
+    expect(result.stderr).toContain("GLM (Z.ai) rejected the API key (HTTP 401");
+    expect(result.stderr).toContain("jht setup");
+    expect(result.stdout).not.toMatch(/\d+ started/);
+    expect(result.stdout).not.toContain("Team on:");
+    // nothing launched, and the stop of the person is still there
+    expect(dockerLog(sb).some((row) => row.command[1] === "/app/.launcher/start-agent.sh")).toBe(false);
+    expect(existsSync(sb.flag)).toBe(true);
+    // the key was asked INSIDE the container, where the file of the key is
+    expect(dockerLog(sb).some((row) => String(row.command[2]).includes("jht.js providers check-key"))).toBe(true);
+
+    // an older image that does not know the command exits 1: that is not a refused key
+    const broken = run(sb, ["start"], { FAKE_KEY_CHECK: "broken", FAKE_START_SUCCESS_ROLES: "*" });
+    expect(broken.status, `${broken.stdout}\n${broken.stderr}`).toBe(0);
+    expect(existsSync(sb.flag)).toBe(false);
+
+    // a key that is not refused (or could not be tried) never stops a start
+    writeFileSync(sb.flag, "halted");
+    const ok = run(sb, ["start"], { FAKE_START_SUCCESS_ROLES: "*" });
+    expect(ok.status, `${ok.stdout}\n${ok.stderr}`).toBe(0);
+    expect(existsSync(sb.flag)).toBe(false);
+  }, 45_000);
+
   it("start singolo preserva il gate globale", () => {
     const sb = sandbox();
     writeFileSync(sb.flag, "halted");
@@ -215,11 +256,13 @@ describe("team halt gate — CLI host verso runtime container", () => {
 
   it("lo start del team numera i passi, dice quando ha finito e cosa fare adesso; il singolo agente non numera", () => {
     const sb = sandbox();
-    const all = run(sb, ["start"], { FAKE_START_SUCCESS_ROLES: "capitano" });
+    const all = run(sb, ["start"], { FAKE_START_SUCCESS_ROLES: "*" });
     expect(all.status, `${all.stdout}\n${all.stderr}`).toBe(0);
     expect(all.stdout).toMatch(/\[1\/\d\]/);
     expect(all.stdout).toMatch(/\[\d\/(\d)\].*CAPITANO started|\[\d\/\d\] .*✓ CAPITANO started/);
-    expect(all.stdout).toMatch(/Team on: 1 started in \d+ s/);
+    expect(all.stdout).toMatch(/Team on: \d+ started in \d+ s/);
+    expect(all.stdout).not.toContain("errors");
+    expect(all.stdout).not.toContain("NOT fully on");
     expect(all.stdout).toContain("See how it is going with: jht agents");
 
     const sb2 = sandbox();
@@ -248,23 +291,49 @@ describe("team halt gate — CLI host verso runtime container", () => {
   it("CAPITANO già attivo attesta il bootstrap anche se lo spawn è skipped", () => {
     const sb = sandbox();
     const result = run(sb, ["start"], {
-      // Non bastano tutti gli altri errori a negare un fatto già osservato:
       // CAPITANO esiste nel runtime ed è il marker operativo canonico usato
-      // anche dal probe del gioco.
+      // anche dal probe del gioco: il bootstrap non è negato dagli altri
+      // errori, ma NEPPURE li nasconde col codice 0 (D3 del collaudo del 10/11:
+      // «1 errors» con exit 0 = uno script crede che sia tutto a posto).
       FAKE_CONTAINER_SESSIONS: "CAPITANO",
+      FAKE_START_SUCCESS_ROLES: "assistente,sentinella,bridge,token-meter,mentor",
     });
 
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
     expect(result.stdout).toContain("CAPITANO — already active");
-    expect(result.stdout).toContain("0 started");
     expect(result.stdout).toContain("1 already active");
-    expect(result.stdout).toContain("5 errors");
+    expect(result.stdout).not.toContain("errors");
     // Stesso budget degli altri due bootstrap completi del file. Qui non c'e'
     // nessuna attesa (nulla parte, quindi nessun preDelayMs): il tempo e' tutto
     // processi, 63 invocazioni del docker finto da ~50ms l'una, ~3,5s a
     // macchina scarica. Col default di 5s il margine era 1,5s e il test andava
     // rosso con qualunque carico: 16 run su 20 sotto 8 processi CPU-bound,
     // tutte su questo caso.
+  }, 15_000);
+
+  it("un agente che non parte = codice di uscita 1 e frase chiara, anche col CAPITANO a posto (D3)", () => {
+    const sb = sandbox();
+    const result = run(sb, ["start"], {
+      FAKE_CONTAINER_SESSIONS: "CAPITANO",
+      // solo l'ASSISTENTE fallisce (come «command 'codex' not found»): il resto parte
+      FAKE_START_SUCCESS_ROLES: "sentinella,bridge,token-meter,mentor",
+    });
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(1);
+    expect(result.stdout).toContain("ASSISTENTE — synthetic launch failure");
+    expect(result.stdout).toContain("1 errors");
+    expect(result.stdout).toContain("The team is NOT fully on: 1 did not start");
+    expect(result.stdout).toContain("jht team start");
+    // un avvio andato male non si presenta come riuscito
+    expect(result.stdout).not.toContain("Team on:");
+    expect(result.stdout).not.toContain("See how it is going");
+  }, 15_000);
+
+  it("start di un singolo agente che fallisce: exit 1 e la stessa frase", () => {
+    const sb = sandbox();
+    const result = run(sb, ["start", "scout"], { FAKE_START_SUCCESS_ROLES: "" });
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(1);
+    expect(result.stdout).toContain("The team is NOT fully on: 1 did not start");
   }, 15_000);
 
   it("in modalità locale rimuove solo il gate sotto JHT_HOME", () => {
