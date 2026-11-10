@@ -40,7 +40,9 @@ elif os.environ.get('NO_EFFECT') != operation:
 
 
 def run_unit(home, *, configured, running=False, no_effect="", corrupt=False):
-    lifecycle_state.publish(configured)
+    # configured=None: no hint at all, as on a profile that never configured Telegram
+    if configured is not None:
+        lifecycle_state.publish(configured)
     metadata = home / "socket/lifecycle.json"
     if corrupt:
         metadata.chmod(0o600)
@@ -105,13 +107,11 @@ def test_health_targets_keep_telegram_mandatory_when_configured(lifecycle_home, 
     assert result.stdout.splitlines() == ["jht", "jht-broker"] + (["jht-telegram"] if configured else [])
 
 
-@pytest.mark.parametrize("corruption", ["missing", "writable", "symlink", "wrong-owner", "invalid-schema"])
+@pytest.mark.parametrize("corruption", ["writable", "symlink", "wrong-owner", "invalid-schema"])
 def test_boot_rejects_untrusted_public_state(lifecycle_home, corruption):
     lifecycle_state.publish(True)
     target = lifecycle_home / "socket/lifecycle.json"
-    if corruption == "missing":
-        target.unlink()
-    elif corruption == "writable":
+    if corruption == "writable":
         target.chmod(0o644)
     elif corruption == "symlink":
         saved = target.with_suffix(".saved")
@@ -162,3 +162,46 @@ def test_boot_refuses_a_real_fifo_without_waiting_for_a_writer(lifecycle_home, c
     after = subprocess.run(command, input="0\nfalse", capture_output=True,
                            text=True, check=False, timeout=5)
     assert after.returncode == 0 and after.stdout == expected and after.stderr == ""
+
+
+# A profile that never configured Telegram never ran `lifecycle.py prepare|complete` (`jht up` leaves Telegram
+# alone while its state volume does not exist), so the public hint was never written. On the first install
+# of a Windows computer that absence stopped the setup at the end: expected-services answered
+# telegram_lifecycle_state_unreadable and the enabler threw runtime_containers_plan_invalid (JHT-T319).
+def test_a_profile_that_never_configured_telegram_has_no_hint_and_that_is_not_an_error(lifecycle_home):
+    assert not (lifecycle_home / "socket/lifecycle.json").exists()
+    result = subprocess.run([sys.executable, "-I", str(PLANNER), "expected-services"],
+                            capture_output=True, text=True, check=False)
+    assert result.returncode == 0 and result.stderr == "", result.stderr
+    assert result.stdout.splitlines() == ["jht", "jht-broker"]
+
+
+@pytest.mark.parametrize(("observed", "expected"), [("0\nfalse", "noop\n"), ("0\ntrue", "stop\n")])
+def test_boot_without_a_hint_is_an_unconfigured_telegram(lifecycle_home, observed, expected):
+    result = subprocess.run([sys.executable, "-I", str(PLANNER), "boot"], input=observed,
+                            capture_output=True, text=True, check=False)
+    assert result.returncode == 0 and result.stdout == expected and result.stderr == "", result.stderr
+
+
+def test_the_unit_of_a_profile_without_a_hint_leaves_telegram_stopped_and_succeeds(lifecycle_home):
+    result, events, state = run_unit(lifecycle_home, configured=None)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert events == ["inspect", "exec"]
+    assert state == "false"
+
+
+@pytest.mark.parametrize("trouble", ["folder-of-another-owner", "folder-writable-by-others", "dangling-link"])
+def test_a_missing_hint_is_trusted_only_in_the_services_own_closed_folder(lifecycle_home, trouble):
+    folder = lifecycle_home / "socket"
+    env = {**os.environ}
+    if trouble == "folder-of-another-owner":
+        env["JHT_TELEGRAM_SERVICE_UID"] = str(os.getuid() + 1)
+    elif trouble == "folder-writable-by-others":
+        folder.chmod(0o777)
+    else:
+        (folder / "lifecycle.json").symlink_to(folder / "nowhere")
+    for command, stdin in ((["expected-services"], ""), (["boot"], "0\nfalse")):
+        result = subprocess.run([sys.executable, "-I", str(PLANNER), *command], input=stdin, env=env,
+                                capture_output=True, text=True, check=False)
+        assert result.returncode == 1 and result.stdout == "", (trouble, command, result.stdout)
+        assert "state_unreadable" in result.stderr
