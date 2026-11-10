@@ -517,11 +517,14 @@ def _require_git_checkout() -> None:
 
     Skipped there with the reason spelled out; in CI a missing checkout is a failure, never a skip.
     """
-    inside = subprocess.run(
-        ["git", "-C", str(ROOT), "rev-parse", "--is-inside-work-tree"],
-        capture_output=True, check=False,
-    )
-    if inside.returncode == 0:
+    try:
+        inside = subprocess.run(
+            ["git", "-C", str(ROOT), "rev-parse", "--is-inside-work-tree"],
+            capture_output=True, check=False,
+        )
+    except OSError:  # no git executable at all
+        inside = None
+    if inside is not None and inside.returncode == 0:
         return
     if os.environ.get("CI"):
         pytest.fail("CI must run this on a git checkout, but the tree has no usable git")
