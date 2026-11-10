@@ -76,3 +76,7 @@ def test_no_other_service_got_a_profile_or_a_mount_by_this():
     assert SERVICES["jht"].get("profiles") is None and SERVICES["jht-broker"]["profiles"] == ["broker"]
     assert SERVICES["jht-telegram"]["profiles"] == ["telegram"]
     assert "ports" in SERVICES["jht"] and SERVICES["jht"]["ports"] == ["127.0.0.1:${JHT_LIVE_SCREEN_PORT:-6080}:6080"]
+
+
+def test_the_tmpfs_of_the_media_container_runs_nothing_and_grants_no_privilege():
+    assert "/tmp:size=512m,mode=1777,noexec,nosuid" in SERVICES["jht-media"]["tmpfs"]

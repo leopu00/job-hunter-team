@@ -71,7 +71,7 @@ def process(name: str) -> str:
     try:
         if kind == "audio":
             temp = OUTBOX / f".{name}.wav.work"
-            done = _run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(source), "-t", str(MAX_AUDIO_SECONDS),
+            done = _run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-protocol_whitelist", "file,pipe", "-i", str(source), "-t", str(MAX_AUDIO_SECONDS),
                          "-vn", "-ac", "1", "-ar", "16000", "-f", "wav", str(temp)], TIMEOUT[kind])
             if done.returncode != 0 or not temp.is_file():
                 temp.unlink(missing_ok=True)

@@ -276,7 +276,7 @@ services:
       - jht-media-out:/jht_media/out
     read_only: true
     tmpfs:
-      - /tmp:size=512m,mode=1777
+      - /tmp:size=512m,mode=1777,noexec,nosuid
       # The image declares these two VOLUMEs for jht: masked here with empty folders nobody can write, as for jht-telegram.
       - /jht_home:size=64k,mode=0555
       - /jht_user:size=64k,mode=0555

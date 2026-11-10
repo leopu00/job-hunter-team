@@ -157,3 +157,8 @@ def test_a_leftover_work_file_goes_when_it_is_old(box):
 def test_the_program_is_run_without_a_shell_and_with_no_stdin():
     source = (ROOT / "shared" / "media" / "media_worker.py").read_text(encoding="utf-8")
     assert "shell=True" not in source and "os.system" not in source and "stdin=subprocess.DEVNULL" in source
+
+
+def test_ffmpeg_reads_only_files_and_pipes_before_it_opens_the_input():
+    source = (Path(__file__).resolve().parents[1] / "shared" / "media" / "media_worker.py").read_text(encoding="utf-8")
+    assert '"-protocol_whitelist", "file,pipe", "-i"' in source
