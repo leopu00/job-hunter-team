@@ -943,7 +943,7 @@ def _emit_queue(conn, role, label, rows, sql_limit, as_json):
             'total': total,
             'shown': shown,
             'limit': None if sql_limit < 0 else sql_limit,
-            'rows': [{k: v for k, v in dict(r).items() if k != '_total'}
+            'rows': [{k: v for k, v in dict(r).items() if k not in ('_total', '_yours')}
                      for r in rows],
         })
         conn.close()
@@ -954,8 +954,9 @@ def _emit_queue(conn, role, label, rows, sql_limit, as_json):
         conn.close()
         return
 
+    yours = 'yours' if '_yours' in rows[0].keys() else None
     counted = str(total) if shown == total else f"showing {shown} of {total}"
-    print(f"\n{label} ({counted}):")
+    print(f"\n{label} ({counted}):" if not yours else f"\n{label} (yours now; {total} waiting in all):")
     for r in rows:
         extra = ""
         if 'total_score' in r.keys():
@@ -972,7 +973,10 @@ def _emit_queue(conn, role, label, rows, sql_limit, as_json):
         title = flatten_external_value(r['title'])[:35]
         print(f"  #{r['id']} {prefix}{company:<20} "
               f"{title}{extra}{detail}")
-    if shown < total:
+    if yours:
+        print(f"  This one is yours now. The other {total - 1} are your colleagues' and your next turn's: do not open them "
+              f"and do not walk the numbers; when this one is done, ask for the queue again.")
+    elif shown < total:
         print(f"  … {total - shown} more in the queue. The limit is a default, not "
               f"a cap: use --limit N to see more, or --all to see everything.")
     conn.close()
@@ -1231,7 +1235,15 @@ def _claimed_queue(role, rows, lim):
         taken = queue_claims.claimed_by_others(role, me)
         free = [r for r in rows if r['id'] not in taken]
         first = next((r for r in free if queue_claims.claim(role, r['id'], me)), None)
-        rows = ([first] + [r for r in free if r is not first]) if first is not None else free
+        # ONE position, the one that is now this agent's: a list is a plan, and an agent that was shown the numbers
+        # walked them one after the other while its colleagues walked the same ones (run of 10/11, third attempt: 65
+        # decisions on 40 positions). The rest is a count, not a list.
+        rows = [{**first, '_yours': True}] if first is not None else []
+        lim = -1
+        total = len(free)
+        for r in rows:
+            r['_total'] = total
+        return rows
     total = len(rows)
     page = rows if lim < 0 else rows[:lim]
     for r in page:
