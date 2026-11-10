@@ -77,6 +77,7 @@ def test_unreadable_private_state_is_not_reported_as_unconfigured(lifecycle_home
 
 
 BASH_TRANSPORT = r'''
+ensure_broker() { return 0; }   # the broker is made before Telegram starts (tests/test_broker_on_request.py)
 compose() {
   case "$1" in
     run)
@@ -104,6 +105,7 @@ telegram_admin() {
 
 PS_TRANSPORT = r'''
 $TelegramContainer = 'jht-telegram'
+function Ensure-Broker { param([switch]$Quiet) return 0 }   # the broker is made before Telegram starts (tests/test_broker_on_request_windows.py)
 function Invoke-Compose {
   [CmdletBinding(PositionalBinding=$false)]
   param([switch]$NoInput, [string]$InputText, [Parameter(ValueFromRemainingArguments)] $Args)

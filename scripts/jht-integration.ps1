@@ -195,8 +195,7 @@ function Invoke-IntegrationAdd {
       if ((Confirm-TelegramLifecycle 'start') -ne 0) { $script:IntegrationWhy = 'il servizio Telegram non risulta acceso'; return 1 }
     }
     'mail' {
-      Invoke-Compose '--profile' 'broker' up '-d' $BrokerContainer | Out-Null
-      if ($LASTEXITCODE -ne 0) { $script:IntegrationWhy = 'il broker della posta non parte'; return 1 }
+      if ((Ensure-Broker -Quiet 6>$null) -ne 0) { $script:IntegrationWhy = 'il broker della posta non parte'; return 1 }
       if (-not (Get-RunningComposeServiceId $BrokerContainer)) { $script:IntegrationWhy = 'il broker della posta non risulta acceso'; return 1 }
     }
   }
@@ -215,7 +214,7 @@ function Get-IntegrationVolumes {
   return @()
 }
 
-# The broker is part of `jht up` until it is made on request: removing it now would only be undone by the next start.
+# An older compose still starts the broker with `jht up`: removing it now would only be undone by the next start.
 function Test-IntegrationBrokerOnRequest {
   $inService = $false
   foreach ($line in @(Get-Content -LiteralPath $ComposeFile)) {
@@ -247,6 +246,7 @@ function Invoke-IntegrationRemove {
       $code = $LASTEXITCODE
       if ($code -eq 0) { Invoke-Compose '--profile' 'broker' rm '-f' $BrokerContainer | Out-Null; $code = $LASTEXITCODE }
       if ($code -ne 0) { $script:IntegrationWhy = 'il broker della posta non si ferma'; return 1 }
+      Remove-Item -LiteralPath $BrokerMadeMarker -Force -ErrorAction SilentlyContinue
     }
   }
   if ($Purge) {

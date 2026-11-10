@@ -159,6 +159,7 @@ CONTAINER_RUNTIME={runtime_kind}
 PODMAN_RUNTIME_MODE=native
 CONTAINER_SERVICE=jht
 COMPOSE_SERVICES="jht jht-broker jht-telegram"
+COMPOSE_ALL_PROFILES="telegram,broker"
 BROKER_SERVICE=jht-broker
 TELEGRAM_SERVICE=jht-telegram
 RUNTIME_DIR="{runtime}"

@@ -270,7 +270,7 @@ def test_jht_tools_is_a_host_helper_the_installer_ships_the_enabler_attests_and_
     wrapper = _text(WRAPPER)
     installer = _text(ROOT / "scripts" / "install.ps1")
     enabler = _text(ROOT / "scripts" / "enable-podman-windows-runtime.ps1")
-    assert "$RuntimeHelpers = @('jht-integration.ps1', 'jht-tools.ps1')" in wrapper
+    assert "$RuntimeHelpers = @('jht-integration.ps1', 'jht-tools.ps1', 'configure-podman-windows-network.ps1', 'wsl-interop-connect-proxy.py')" in wrapper
     assert re.search(r"'tools' \{\n    Require-ComposeFile\n", wrapper)
     assert "[string]$Rest[0] -ceq 'pull'" in wrapper, "only pull fetches a missing helper"
     assert ". (Join-Path $RuntimeDir 'jht-tools.ps1')\n    exit (Invoke-ToolsCommand $Rest)" in wrapper

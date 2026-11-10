@@ -61,6 +61,8 @@ HOST_UID="$(id -u)"
 CONTAINER_SERVICE="jht"
 # I servizi del compose: agenti e i due servizi isolati.
 COMPOSE_SERVICES="jht jht-broker jht-telegram"
+# Every profile of the project: what looks at or takes down the WHOLE project names them all (the broker and Telegram are made on request).
+COMPOSE_ALL_PROFILES="telegram,broker"
 RUNTIME_MIGRATION_VOLUMES="jht-broker-state jht-secrets jht-telegram-secrets jht-telegram-state"
 ATTESTED_CONTAINER_ID=""
 if [ -n "${JHT_RUNTIME_DIR:-}" ]; then
@@ -1534,7 +1536,7 @@ container_up() {
 # A list that cannot be read counts as running.
 project_has_running_container() {
   local ids id
-  ids="$(COMPOSE_PROFILES=telegram compose ps -q 2>/dev/null)" || return 0
+  ids="$(COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose ps -q 2>/dev/null)" || return 0
   for id in $ids; do
     [ "$(docker inspect --type container "$id" --format '{{.State.Running}}' 2>/dev/null)" = false ] || return 0
   done
@@ -1557,7 +1559,7 @@ container_mutation_preflight() {
       && read_only_service_id "$CONTAINER_SERVICE" stopped-stale-config >/dev/null 2>&1 \
       && ! project_has_running_container; then
     warn "config_changed_stopped: i container del team, fermi, sono della versione di prima: li ricreo con la configurazione nuova (i volumi con i dati restano)."
-    COMPOSE_PROFILES=telegram compose down || { err "Non riesco a rimuovere i container fermi della versione di prima: «jht down», poi «jht up»."; return 1; }
+    COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose down || { err "Non riesco a rimuovere i container fermi della versione di prima: «jht down», poi «jht up»."; return 1; }
     return 0
   fi
   err "Container JHT esistente non attestabile; operazione interrotta."
@@ -1590,7 +1592,7 @@ container_down() {
       # only once the services left are attested like the agent's: `COMPOSE_PROFILES=telegram compose down` stops every container of the project, so one that
       # does not attest (or one of a service the compose does not have) is said and nothing is touched.
       local rest svc svc_status leftover=0 refused=""
-      if ! rest="$(COMPOSE_PROFILES=telegram compose ps -q 2>/dev/null)"; then
+      if ! rest="$(COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose ps -q 2>/dev/null)"; then
         err "Container JHT non attestabile; arresto negato."
         return 1
       fi
@@ -1622,8 +1624,8 @@ container_down() {
     fi
   fi
   local status=0 errors
-  errors="$(mktemp "${TMPDIR:-/tmp}/jht-down.XXXXXX")" || { COMPOSE_PROFILES=telegram compose down; return $?; }
-  COMPOSE_PROFILES=telegram compose down 2>"$errors" || status=$?
+  errors="$(mktemp "${TMPDIR:-/tmp}/jht-down.XXXXXX")" || { COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose down; return $?; }
+  COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose down 2>"$errors" || status=$?
   local shown left
   shown="$(rootless_netns_noise_filter <"$errors")"
   [ -z "$shown" ] || printf '%s\n' "$shown" >&2
@@ -1635,7 +1637,7 @@ container_down() {
       "nota: il processo di rete del team era gia' chiuso"*)
         # podman-compose lists every container of the project (broker and telegram too):
         # an empty answer, and not a failed one, is «nothing left».
-        left="$(COMPOSE_PROFILES=telegram compose ps -q 2>/dev/null)" && [ -z "$left" ] && return 0
+        left="$(COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose ps -q 2>/dev/null)" && [ -z "$left" ] && return 0
         ;;
     esac
   fi
@@ -1705,11 +1707,61 @@ broker_admin() {
       err "Cosa fare: jht upgrade"
       return 1
     fi
-    err "broker_unavailable: il broker dei segreti non è attivo o non è attestabile."
-    err "Cosa fare: jht up"
+    if [ -e "$BROKER_WANTED_MARKER" ]; then
+      err "broker_unavailable: il broker dei segreti non è attivo o non è attestabile."
+      err "Cosa fare: jht up"
+    else
+      err "broker_unavailable: il servizio della posta non c'è ancora: si crea la prima volta che serve."
+      err "Cosa fare: jht mail setup"
+    fi
     return 1
   }
   docker exec -i "$broker_id" jht-broker-admin "$@"
+}
+
+# The broker (the mail password, the notary of the authorisations to apply) is made at the first thing that needs it (`jht mail setup`,
+# the first record of an authorisation, the link of the site, Telegram) and by nothing else: `jht up` leaves it out unless a marker
+# says it was made before. `jht` has mounted the empty socket volume since it was made, so making the broker never recreates the team.
+BROKER_WANTED_MARKER="$RUNTIME_DIR/.broker-made"
+ensure_broker() {
+  local status=0 broker_id i
+  read_only_service_id "$BROKER_SERVICE" >/dev/null 2>&1 || status=$?
+  [ "$status" -ne 0 ] || return 0
+  if compose_unreadable; then
+    err "broker_unavailable: il compose del runtime installato non è leggibile, non si sa se ha il broker dei segreti."
+    err "Cosa fare: reinstalla il runtime con l'installer"
+    return 1
+  fi
+  if compose_lacks_service "$BROKER_SERVICE"; then
+    err "broker_unavailable: il runtime installato è più vecchio e non ha il broker dei segreti."
+    err "Cosa fare: jht upgrade"
+    return 1
+  fi
+  [ "$status" -eq 3 ] || { err "broker_unavailable: il broker dei segreti esiste ma non è attestabile come nostro: non lo tocco."; return 1; }
+  info "Preparo il servizio della posta (si crea solo la prima volta che serve)…"
+  COMPOSE_PROFILES=broker compose up -d --no-deps "$BROKER_SERVICE" >/dev/null \
+    || { err "broker_start_failed: il servizio della posta non è partito."; err "Cosa fare: riprova il comando"; return 1; }
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+    broker_id="$(read_only_service_id "$BROKER_SERVICE" 2>/dev/null)" \
+      && docker exec "$broker_id" jht-broker-admin secrets status >/dev/null 2>&1 && break
+    broker_id=""
+    sleep 1
+  done
+  [ -n "$broker_id" ] || { err "broker_start_failed: il servizio della posta non risponde dopo 30 secondi."; err "Cosa fare: riprova il comando"; return 1; }
+  : > "$BROKER_WANTED_MARKER" 2>/dev/null || true
+  broker_migrate_legacy_once
+  broker_configure_web_authorisations
+}
+
+# After `up`: a broker made before comes back with the team (`down` removes its container); one that an older install made is adopted.
+broker_after_up() {
+  if [ ! -e "$BROKER_WANTED_MARKER" ]; then
+    read_only_service_id "$BROKER_SERVICE" any-config >/dev/null 2>&1 || return 0
+    : > "$BROKER_WANTED_MARKER" 2>/dev/null || true
+  fi
+  ensure_broker || warn "broker_restart_failed: il servizio della posta non è ripartito. Cosa fare: jht mail status"
+  broker_migrate_legacy_once
+  broker_configure_web_authorisations
 }
 
 # Telegram isolato: il token nuovo va dallo stdin dell'host direttamente al
@@ -2217,6 +2269,7 @@ telegram_lifecycle_steps() {
     case "$step" in
       '') ;;
       start)
+        ensure_broker || return $?
         COMPOSE_PROFILES=telegram compose up -d "$TELEGRAM_SERVICE" >/dev/null || return $?
         telegram_lifecycle_verify start || return $?
         ;;
@@ -2403,7 +2456,7 @@ remove_broker_reset_data() {
     err "reset: non riesco a determinare il progetto Compose; i volumi del broker non sono stati toccati."
     return 1
   }
-  COMPOSE_PROFILES=telegram compose down || {
+  COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose down || {
     err "reset: non riesco a fermare il runtime; i volumi del broker non sono stati toccati."
     return 1
   }
@@ -2454,6 +2507,7 @@ remove_broker_reset_data() {
     err "reset: impossibile cancellare il marcatore migrazione broker $BROKER_LEGACY_MARKER."
     failed=1
   fi
+  rm -f -- "$BROKER_WANTED_MARKER" || { err "reset: impossibile cancellare il marcatore del broker $BROKER_WANTED_MARKER."; failed=1; }
   if [ "$failed" -eq 0 ]; then
     warn "I segreti e lo stato del broker sono stati cancellati: rifai i login dei portali e configura di nuovo la posta."
   fi
@@ -2755,6 +2809,7 @@ mail_setup() {
   set -- mailbox setup --user "$user" --admission "$admission"
   [ -z "$imap_host" ] || set -- "$@" --imap-host "$imap_host"
   [ -z "$smtp_host" ] || set -- "$@" --smtp-host "$smtp_host"
+  ensure_broker || { unset password; return 1; }
   printf '%s\n' "$password" | broker_admin "$@"
   local rc=$?
   unset password
@@ -2833,7 +2888,7 @@ podman_expected_config_hash() {
       [ "$env_mode" != clean ] || unset $PODMAN_CALLER_ENV
       [ -z "$pinned_image" ] || export JHT_IMAGE="$pinned_image"
       CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
-      COMPOSE_PROFILES=telegram PODMAN_COMPOSE_WARNING_LOGS=false \
+      COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" PODMAN_COMPOSE_WARNING_LOGS=false \
         "$compose_bin" --verbose --dry-run --project-name jht \
           --podman-path "$podman_bin" -f "$file" up -d --force-recreate "$service"
     } 2>&1)" || return 1
@@ -2846,7 +2901,7 @@ podman_expected_config_hash() {
       unset CONTAINER_CONNECTION
       [ "$env_mode" != clean ] || unset $PODMAN_CALLER_ENV
       [ -z "$pinned_image" ] || export JHT_IMAGE="$pinned_image"
-      COMPOSE_PROFILES=telegram PODMAN_COMPOSE_WARNING_LOGS=false \
+      COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" PODMAN_COMPOSE_WARNING_LOGS=false \
         "$compose_bin" "$no_pod" --verbose --dry-run --project-name jht \
           --podman-path "$podman_bin" -f "$file" -f "$override" up -d --force-recreate "$service"
     } 2>&1)" || return 1
@@ -3417,8 +3472,9 @@ agent_control() {
 # invia solo cio' che il broker ha registrato, e il broker registra solo da canali che gli agenti non hanno:
 # l'host e' uno. L'app mostra l'anteprima con il suo digest, la persona conferma con un clic, il container scrive il
 # flag solo per la posizione vista, e l'app chiede qui di registrare istante e destinazione. Come agent-control NON
-# avvia mai niente (niente ensure_up, niente compose, niente machine): col broker spento o non attestato risponde
-# col codice chiuso apply_record_no_broker (113). Ogni campo e' chiuso QUI prima di finire in una riga di comando;
+# avvia mai niente (niente ensure_up, niente machine): col broker non attestato risponde col codice chiuso
+# apply_record_no_broker (113). Fa eccezione il primo clic di una persona: se il broker non c'e' ancora (e il motore
+# risponde) lo crea `ensure_broker`, il solo passo con un compose, e solo il suo container. Ogni campo e' chiuso QUI prima di finire in una riga di comando;
 # la risposta e' una riga sola, mai il testo del broker.
 desktop_apply() {
   local action="${1:-}" id="${2:-}" instant="${3:-}" destination="${4:-}" broker_id answer
@@ -3432,6 +3488,9 @@ desktop_apply() {
     return 2
   fi
   broker_id="$(read_only_service_id "$BROKER_SERVICE" 2>/dev/null)" || {
+    ensure_broker >/dev/null 2>&1 || true
+    broker_id="$(read_only_service_id "$BROKER_SERVICE" 2>/dev/null)"
+  } || {
     printf '%s\n' '{"ok":false,"error":"apply_record_no_broker"}'
     return 113
   }
@@ -5398,8 +5457,11 @@ handle_runtime_upgrade() {
   # del team: dopo il commit riparte con quella nuova. Non decide l'esito
   # dell'upgrade (il team e' gia' verificato): se non parte, la posta resta
   # chiusa (broker_unavailable) finche' un `jht up` non lo riaccende.
-  if grep -q "^  $BROKER_SERVICE:" "$COMPOSE_FILE"; then
-    upgrade_run upgrade_compose "$COMPOSE_FILE" up -d --force-recreate "$BROKER_SERVICE" \
+  # Solo se esiste (o lo ha fatto una volta): un'installazione che non ha mai usato la posta non lo ottiene dall'upgrade.
+  if grep -q "^  $BROKER_SERVICE:" "$COMPOSE_FILE" \
+      && { [ -e "$BROKER_WANTED_MARKER" ] || read_only_service_id "$BROKER_SERVICE" any-config >/dev/null 2>&1; }; then
+    : > "$BROKER_WANTED_MARKER" 2>/dev/null || true
+    COMPOSE_PROFILES=broker upgrade_run upgrade_compose "$COMPOSE_FILE" up -d --force-recreate --no-deps "$BROKER_SERVICE" \
       || upgrade_note "broker_restart_failed: il broker dei segreti non e' ripartito. Cosa fare: jht up"
     broker_migrate_legacy_once
   fi
@@ -6045,7 +6107,7 @@ case "$SUB" in
       exit 1
       ;;
     esac
-    COMPOSE_PROFILES=telegram compose down \
+    COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose down \
       || { err "Non riesco a fermare i servizi prima di salvare lo stato del broker."; exit 1; }
     trap podman_state_backup_cleanup EXIT INT TERM
     podman_export_broker_state "$podman_bin" "$broker_state_image" \
@@ -6100,8 +6162,7 @@ case "$SUB" in
     compose up -d
     container_postcheck_running || exit 1
     telegram_lifecycle_if_available resume || exit $?
-    broker_migrate_legacy_once
-    broker_configure_web_authorisations
+    broker_after_up
     ;;
 
   start-container)
@@ -6116,8 +6177,7 @@ case "$SUB" in
     compose up -d
     container_postcheck_running || exit 1
     telegram_lifecycle_if_available resume || exit $?
-    broker_migrate_legacy_once
-    broker_configure_web_authorisations
+    broker_after_up
     ;;
 
   down|stop-container)
@@ -6147,7 +6207,7 @@ case "$SUB" in
       exit 1
     }
     ensure_bind_owner
-    COMPOSE_PROFILES=telegram compose down
+    COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose down
     telegram_prepare_legacy_inventory || {
       err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
       exit 1
@@ -6155,8 +6215,7 @@ case "$SUB" in
     compose up -d
     container_postcheck_running || exit 1
     telegram_lifecycle_if_available resume || exit $?
-    broker_migrate_legacy_once
-    broker_configure_web_authorisations
+    broker_after_up
     ;;
 
   upgrade)
@@ -6359,7 +6418,7 @@ case "$SUB" in
     ensure_up
     docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
     rc=$?
-    if [ "${1:-}" = cloud ] && [ "${2:-}" = pair ] && [ "$rc" -eq 0 ]; then broker_configure_web_authorisations; fi
+    if [ "${1:-}" = cloud ] && [ "${2:-}" = pair ] && [ "$rc" -eq 0 ]; then ensure_broker && broker_configure_web_authorisations; fi
     exit "$rc"
     ;;
 

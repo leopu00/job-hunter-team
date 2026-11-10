@@ -200,8 +200,7 @@ integration_do_add() { # id → 0 done · 1 failed (reason in INTEGRATION_WHY)
       telegram_lifecycle_verify start >/dev/null 2>&1 || { INTEGRATION_WHY="il servizio Telegram non risulta acceso"; return 1; }
       ;;
     mail)
-      COMPOSE_PROFILES=broker compose up -d "$BROKER_SERVICE" >/dev/null 2>&1 \
-        || { INTEGRATION_WHY="il broker della posta non parte"; return 1; }
+      ensure_broker >/dev/null 2>&1 || { INTEGRATION_WHY="il broker della posta non parte"; return 1; }
       read_only_service_id "$BROKER_SERVICE" >/dev/null 2>&1 || { INTEGRATION_WHY="il broker della posta non risulta acceso"; return 1; }
       ;;
   esac
@@ -232,12 +231,13 @@ integration_do_remove() { # id purge → 0 done · 1 failed
         || { INTEGRATION_WHY="il servizio Telegram non si ferma"; return 1; }
       ;;
     mail)
-      # The broker is part of `jht up` until it is made on request: removing it now would only be undone by the next start.
+      # An older compose still starts the broker with `jht up`: removing it there would only be undone by the next start.
       awk -v head="  $BROKER_SERVICE:" '$0 == head { in_service = 1; next } in_service && /^  [^ ]/ { exit } in_service && /^    profiles:/ { found = 1 } END { exit !found }' \
         "$COMPOSE_FILE" 2>/dev/null || { INTEGRATION_WHY="non disponibile ancora"; return 3; }
       COMPOSE_PROFILES=broker compose stop "$BROKER_SERVICE" >/dev/null 2>&1 \
         && COMPOSE_PROFILES=broker compose rm -f "$BROKER_SERVICE" >/dev/null 2>&1 \
         || { INTEGRATION_WHY="il broker della posta non si ferma"; return 1; }
+      rm -f -- "$BROKER_WANTED_MARKER"
       ;;
   esac
   if [ "$2" = 1 ]; then

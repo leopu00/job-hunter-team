@@ -31,6 +31,14 @@ $script:DesktopApplyExitCode = 2
 $BrokerContainer = 'jht-broker'
 function Test-RuntimeBundleTrusted { return $true }
 function Get-RunningComposeServiceId { param($Name) if ($env:FAKE_BROKER_UP -eq '1') { 'broker-id' } else { $null } }
+function Test-DockerReachable { return $true }
+# Ensure-Broker is the one step that makes the broker (tests/test_broker_on_request_windows.py): a stub that makes it or fails.
+function Ensure-Broker {
+  param([switch]$Quiet)
+  [IO.File]::AppendAllText($env:FAKE_LOG, "ENSURE`n")
+  if ($env:FAKE_ENSURE_MAKES -eq '1') { $env:FAKE_BROKER_UP = '1'; return 0 }
+  return 1
+}
 function docker {
   [IO.File]::AppendAllText($env:FAKE_LOG, 'ARGS=' + ($args -join '|') + "`n")
   if ($env:FAKE_BROKER_ANSWER -ne '') { $env:FAKE_BROKER_ANSWER }
@@ -42,7 +50,7 @@ Invoke-DesktopApply $list
 """
 
 
-def _run(tmp_path: Path, args: list[str], up="1", answer='{"ok": true, "status": "recorded"}', rc="0"):
+def _run(tmp_path: Path, args: list[str], up="1", answer='{"ok": true, "status": "recorded"}', rc="0", makes="0"):
     harness = tmp_path / "harness.ps1"
     engine = tmp_path / "engine.txt"
     log = tmp_path / "docker.log"
@@ -51,7 +59,7 @@ def _run(tmp_path: Path, args: list[str], up="1", answer='{"ok": true, "status":
     env = {
         **(windows_env(tmp_path) if WINDOWS else os.environ),
         "JHT_ENGINE_FILE": str(engine), "JHT_UNDER_TEST": str(WRAPPER), "FAKE_LOG": str(log),
-        "JHT_APPLY_ARGS": "\x1f".join(args), "FAKE_BROKER_UP": up, "FAKE_BROKER_ANSWER": answer, "FAKE_BROKER_RC": rc,
+        "JHT_APPLY_ARGS": "\x1f".join(args), "FAKE_BROKER_UP": up, "FAKE_ENSURE_MAKES": makes, "FAKE_BROKER_ANSWER": answer, "FAKE_BROKER_RC": rc,
     }
     done = subprocess.run([*powershell_argv(), "-File", str(harness)], env=env, capture_output=True, text=True, timeout=120)
     assert_engine(engine, done.stderr)
@@ -96,10 +104,17 @@ def test_every_field_is_closed_before_the_broker_is_asked(tmp_path, args):
 
 
 @needs_powershell
-def test_no_broker_up_answers_its_code_and_starts_nothing(tmp_path):
+def test_a_broker_that_cannot_be_made_answers_its_code_and_docker_is_never_called(tmp_path):
     out, calls = _run(tmp_path, OK, up="0")
     assert out == ['{"ok":false,"error":"apply_record_no_broker"}', "EXIT=113"]
-    assert calls == []
+    assert calls == ["ENSURE"]
+
+
+@needs_powershell
+def test_the_first_click_makes_the_broker_and_records_in_it(tmp_path):
+    out, calls = _run(tmp_path, OK, up="0", makes="1")
+    assert out == ['{"ok":true}', "EXIT=0"]
+    assert calls == ["ENSURE", f"ARGS=exec|-i|broker-id|jht-broker-admin|apply|record|42|{INSTANT}|web:jobs.example.com"]
 
 
 @needs_powershell

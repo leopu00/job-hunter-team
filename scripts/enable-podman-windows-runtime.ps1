@@ -803,7 +803,8 @@ try {
 # The network script leaves with its own code (23, podman_network_unready, the
 # reason on stderr): passed on as it is, never turned into a generic failure.
 # The broker is made at its first use, not here: a broker an earlier setup made keeps its proxy and its start at boot.
-$brokerMade = (& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName inspect --type container jht-broker --format '{{.Name}}' 2>$null } | Select-Object -First 1)
+$brokerLines = @(& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName inspect --type container jht-broker --format '{{.Name}}' 2>$null })
+$brokerMade = if ($brokerLines.Count) { [string]$brokerLines[0] } else { '' }
 & (Join-Path $PSScriptRoot 'configure-podman-windows-network.ps1') -MachineName $MachineName -WithBroker:([bool]$brokerMade)
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 

@@ -1,3 +1,4 @@
+# JHT_RUNTIME_HELPER=1
 # Configure a persistent, localhost-only proxy for Podman machine traffic on
 # managed Windows hosts where WSL TCP egress is blocked but WSL interop works.
 
@@ -8,7 +9,9 @@ param(
   [int]$BrokerPort = 3129,
   [int]$TelegramPort = 3130,
   # The broker's proxy and its start at boot exist only once the broker does (it is made at its first use, never by the setup).
-  [switch]$WithBroker
+  [switch]$WithBroker,
+  # Where the machine bridge is when this script runs from the runtime (a host script of `.runtime-helpers`), not from the install folder.
+  [string]$BridgeScript = (Join-Path $PSScriptRoot 'podman-machine-bridge.ps1')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -32,7 +35,7 @@ if (-not $Podman) {
 }
 if (-not $Podman) { throw 'podman.exe is unavailable.' }
 
-. (Join-Path $PSScriptRoot 'podman-machine-bridge.ps1')
+. $BridgeScript
 
 function ConvertTo-WslPath {
   param([Parameter(Mandatory)][string]$Path)
