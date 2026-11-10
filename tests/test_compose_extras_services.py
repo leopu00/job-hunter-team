@@ -73,6 +73,6 @@ def test_the_media_folders_are_made_by_the_image_with_the_owner_of_jht():
 
 
 def test_no_other_service_got_a_profile_or_a_mount_by_this():
-    assert SERVICES["jht"].get("profiles") is None and SERVICES["jht-broker"].get("profiles") is None
+    assert SERVICES["jht"].get("profiles") is None and SERVICES["jht-broker"]["profiles"] == ["broker"]
     assert SERVICES["jht-telegram"]["profiles"] == ["telegram"]
     assert "ports" in SERVICES["jht"] and SERVICES["jht"]["ports"] == ["127.0.0.1:${JHT_LIVE_SCREEN_PORT:-6080}:6080"]
