@@ -638,7 +638,8 @@ def test_the_machine_of_this_users_own_name_is_the_one_removed(tmp_path: Path):
     result = _uninstall(box, _fake_podman(box, machine=name), _fake_wsl(box, machine=name), "--confirm", tmp_path=tmp_path, machine_output="0")
     assert "CODE=0" in result.stdout, result.stdout + result.stderr
     calls = box.log.read_text(encoding="utf-8")
-    assert f"machine rm --force {name}" in calls and "machine rm --force jht-podman" not in calls
+    # whole lines: the standard name is the beginning of the user's own
+    assert f"machine rm --force {name}" in calls.splitlines() and "machine rm --force jht-podman" not in calls.splitlines()
     assert f"Tolgo la macchina Podman {name}" in result.stdout
     assert not box.state.exists() and not box.runtime.exists()
 
