@@ -70,21 +70,105 @@ $JhtUninstallRemovalNotice = 'Vengono cancellati anche la password della posta e
 # rimosso, quindi viene gestito prima di caricare manifest, helper ACL o shim.
 # I target ricevuti dal dispatcher sono cartelle standard calcolate dalle API
 # Windows, mai override d'ambiente o valori letti dal runtime da cancellare.
+# The words of the uninstall for a person: Italian, and English with JHT_LANG=en. The desktop app reads the JHT_PHASE and JHT_LEFT
+# lines from a pipe; at a console the person gets the sentences instead (JHT_MACHINE_OUTPUT=1 forces the lines, =0 forbids them).
+$script:JhtUninstallReason = ''
+$script:JhtUninstallPurgeNotice = 'Con --purge vengono cancellati anche ~/.jht e Documents\Job Hunter Team: configurazione, database, CV e output. Non si torna indietro.'
+
+function Get-JhtUninstallText {
+  param([Parameter(Mandatory)][string]$Key, [string[]]$Values = @())
+  $english = ($env:JHT_LANG -ceq 'en')
+  $texts = @{
+    'phase.machine'  = @('Tolgo la macchina Podman jht-podman (con i segreti e le immagini di JHT)...', 'Removing the jht-podman Podman machine (with the secrets and the images of JHT)...')
+    'phase.data'     = @('Cancello ~/.jht e Documents\Job Hunter Team (--purge)...', 'Deleting ~/.jht and Documents\Job Hunter Team (--purge)...')
+    'phase.runtime'  = @('Tolgo il runtime di JHT...', 'Removing the JHT runtime...')
+    'phase.commands' = @('Tolgo il comando jht, i file dell''installer e le righe PATH...', 'Removing the jht command, the installer files and the PATH lines...')
+    'done'           = @('Fatto: la macchina jht-podman (e con lei le immagini di JHT, il nucleo e quella piena), il runtime e il comando jht sono stati tolti.', 'Done: the jht-podman machine (and with it the JHT images, the core and the full one), the runtime and the jht command are gone.')
+    'done.kept'      = @(' ~/.jht e Documents\Job Hunter Team restano (con --purge si cancellano).', ' ~/.jht and Documents\Job Hunter Team stay (--purge deletes them).')
+    'secrets'        = @('I segreti salvati non sono stati rimossi: la password della posta e i token di Telegram stanno nei volumi jht-secrets e jht-telegram-secrets della macchina jht-podman, che e'' ancora qui.', 'The saved secrets were not removed: the mail password and the Telegram tokens are in the jht-secrets and jht-telegram-secrets volumes of the jht-podman machine, which is still there.')
+    'left.machine'   = @('Non tolta: la macchina Podman jht-podman. Motivo: {0}. A mano: wsl --unregister {1}, poi podman machine rm --force jht-podman; poi rilancia jht uninstall --confirm.', 'Not removed: the jht-podman Podman machine. Reason: {0}. By hand: wsl --unregister {1}, then podman machine rm --force jht-podman; then run jht uninstall --confirm again.')
+    'left.data'      = @('Non cancellati i dati di JHT ({0}). A mano: Remove-Item -Recurse -Force {1}. Il comando jht e il runtime sono rimasti: rilancia jht uninstall --confirm --purge dopo aver risolto.', 'The JHT data was not deleted ({0}). By hand: Remove-Item -Recurse -Force {1}. The jht command and the runtime are still there: run jht uninstall --confirm --purge again once it is sorted out.')
+    'left.runtime'   = @('Non tolto: il runtime di JHT in {0}. A mano: Remove-Item -Recurse -Force ''{0}''.', 'Not removed: the JHT runtime in {0}. By hand: Remove-Item -Recurse -Force ''{0}''.')
+    'left.commands'  = @('Non tolti il comando jht o i file dell''installer in {0} ({1}), o le variabili e le righe PATH aggiunte dall''installer. A mano: Remove-Item il file; variabili JHT_CONTAINER_RUNTIME e JHT_PODMAN_MACHINE e la cartella {0} nel PATH da Impostazioni > Variabili d''ambiente.', 'Not removed: the jht command or the installer files in {0} ({1}), or the variables and PATH lines the installer added. By hand: Remove-Item the file; the JHT_CONTAINER_RUNTIME and JHT_PODMAN_MACHINE variables and the {0} folder in the PATH from Settings > Environment variables.')
+    'bad.target'     = @('Rifiutato: {0} e'' un collegamento o non e'' una cartella: non lo seguo e non lo cancello.', 'Refused: {0} is a link or not a folder: it is not followed and not deleted.')
+  }
+  $pair = $texts[$Key]
+  if (-not $pair) { return $Key }
+  $format = if ($english) { $pair[1] } else { $pair[0] }
+  return ($format -f $Values)
+}
+
+function Test-JhtUninstallMachineOutput {
+  if ($env:JHT_MACHINE_OUTPUT -ceq '1') { return $true }
+  if ($env:JHT_MACHINE_OUTPUT -ceq '0') { return $false }
+  return [Console]::IsOutputRedirected
+}
+
 function Write-JhtUninstallPhase {
   param([Parameter(Mandatory)][ValidateSet(
     'uninstall_machine', 'uninstall_runtime', 'uninstall_commands'
   )][string]$Id)
-  [Console]::Out.WriteLine("JHT_PHASE $Id")
+  if (Test-JhtUninstallMachineOutput) { [Console]::Out.WriteLine("JHT_PHASE $Id"); return }
+  [Console]::Out.WriteLine((Get-JhtUninstallText ('phase.' + $Id.Substring('uninstall_'.Length))))
 }
 
+# What is left, as a line for the app and as a sentence with the exact way to remove it by hand, for the person.
 function Write-JhtUninstallLeft {
-  param([Parameter(Mandatory)][ValidateSet('machine', 'runtime', 'commands')][string]$Id)
-  [Console]::Out.WriteLine("JHT_LEFT $Id")
+  param([Parameter(Mandatory)][ValidateSet('machine', 'runtime', 'commands')][string]$Id, [string[]]$Values = @())
+  if (Test-JhtUninstallMachineOutput) { [Console]::Out.WriteLine("JHT_LEFT $Id") }
+  [Console]::Error.WriteLine((Get-JhtUninstallText ('left.' + $Id) $Values))
 }
 
+# The distro WSL gives a Podman machine: «podman-» in front of the name, unless the name already starts with «podman».
+function Get-JhtPodmanDistroName {
+  param([Parameter(Mandatory)][string]$MachineName)
+  if ($MachineName.StartsWith('podman', [StringComparison]::Ordinal)) { return $MachineName }
+  return "podman-$MachineName"
+}
+
+# One line of plain printable text out of what a program said: nothing a terminal could act on, at most 160 characters.
+function Format-JhtUninstallReason {
+  param([string]$Text)
+  $clean = (([string]$Text) -replace '[^\x20-\x7E]', ' ' -replace '\s+', ' ').Trim()
+  if ($clean.Length -gt 160) { $clean = $clean.Substring(0, 160) }
+  if (-not $clean) { return 'nessuna risposta' }
+  return $clean
+}
+
+# A program with its arguments, both streams read: the exit code and what it said.
+function Invoke-JhtUninstallNative {
+  param([Parameter(Mandatory)][string]$Program, [string[]]$Arguments = @())
+  $lines = @(& { $ErrorActionPreference = 'Continue'; & $Program @Arguments 2>&1 } | ForEach-Object { [string]$_ })
+  $code = $LASTEXITCODE
+  return @{ Code = $code; Text = (Format-JhtUninstallReason ($lines -join ' ')) }
+}
+
+# podman.exe where the uninstall can find it even when the terminal's PATH does not name it (a per-user Podman, or one installed after
+# the terminal was opened): the PATH as the process, the user and the machine have it, then the places Podman installs to.
+function Find-JhtUninstallPodman {
+  param([string]$FromPath)
+  if ($FromPath) { return $FromPath }
+  $folders = @()
+  foreach ($scope in 'Process', 'User', 'Machine') {
+    try { $folders += @(([string][Environment]::GetEnvironmentVariable('Path', $scope)) -split ';') } catch {}
+  }
+  foreach ($base in @($env:ProgramW6432, $env:ProgramFiles)) {
+    if ($base) { $folders += [IO.Path]::Combine($base, 'RedHat', 'Podman'); $folders += [IO.Path]::Combine($base, 'Podman') }
+  }
+  if ($env:LOCALAPPDATA) { $folders += [IO.Path]::Combine($env:LOCALAPPDATA, 'Programs', 'Podman') }
+  foreach ($folder in $folders) {
+    $clean = ([string]$folder).Trim().Trim('"')
+    if (-not $clean -or -not [IO.Path]::IsPathRooted($clean)) { continue }
+    $candidate = [IO.Path]::Combine($clean, 'podman.exe')
+    if ([IO.File]::Exists($candidate)) { return $candidate }
+  }
+  return ''
+}
+
+# The leftover of the machine, said with what is inside it and why it is still there.
 function Write-JhtUninstallMachineLeft {
-  Write-JhtUninstallLeft machine
-  [Console]::Error.WriteLine('I segreti salvati non sono stati rimossi.')
+  Write-JhtUninstallLeft machine @($script:JhtUninstallReason, (Get-JhtPodmanDistroName 'jht-podman'))
+  [Console]::Error.WriteLine((Get-JhtUninstallText 'secrets'))
 }
 
 function Get-JhtNormalizedWindowsPath {
@@ -117,9 +201,10 @@ function Get-JhtPodmanMachineState {
   }
   if ($WslPath) {
     try {
-      $distros = @(& { $ErrorActionPreference = 'Continue'; & $WslPath --list --quiet 2>$null } | ForEach-Object { ([string]$_).Replace([char]0, '').Trim() })
+      $distros = @(& { $ErrorActionPreference = 'Continue'; & $WslPath --list --quiet 2>$null } | ForEach-Object { ([string]$_).Replace([string][char]0, '').Trim() })
       if ($LASTEXITCODE -eq 0) {
-        if ($distros -ccontains "podman-machine-$MachineName") { return 'present' }
+        # The distro is «podman-<name>» (podman-jht-podman); the older spelling «podman-machine-<name>» is looked for too.
+        if ($distros -ccontains (Get-JhtPodmanDistroName $MachineName) -or $distros -ccontains "podman-machine-$MachineName") { return 'present' }
         return 'absent'
       }
     } catch {}
@@ -174,6 +259,63 @@ function Remove-JhtStartupTask {
   } catch { return $false }
 }
 
+# Removes the machine when podman could not: the distro of OUR machine by its exact name (never another), ended and unregistered, then
+# Podman's own record of it. $true when the machine is gone. The reason it could not be done goes in $script:JhtUninstallReason.
+function Remove-JhtPodmanMachineThroughWsl {
+  param([string]$PodmanPath, [string]$WslPath, [string]$MachineName)
+  if (-not $WslPath) { return $false }
+  $distro = Get-JhtPodmanDistroName $MachineName
+  $listed = @(& { $ErrorActionPreference = 'Continue'; & $WslPath --list --quiet 2>$null } | ForEach-Object { ([string]$_).Replace([string][char]0, '').Trim() })
+  if ($listed -cnotcontains $distro) { return $false }
+  $null = Invoke-JhtUninstallNative $WslPath @('--terminate', $distro)
+  $unregister = Invoke-JhtUninstallNative $WslPath @('--unregister', $distro)
+  if ($unregister.Code -ne 0) {
+    # What Podman said (already in the reason) and what WSL said: the person reads both.
+    $said = "wsl --unregister $distro : $($unregister.Text)"
+    $script:JhtUninstallReason = if ($script:JhtUninstallReason) { "$($script:JhtUninstallReason); $said" } else { $said }
+    return $false
+  }
+  if ($PodmanPath) { $null = Invoke-JhtUninstallNative $PodmanPath @('machine', 'rm', '--force', $MachineName) }
+  return (Get-JhtPodmanMachineState -PodmanPath $PodmanPath -WslPath $WslPath -MachineName $MachineName) -eq 'absent'
+}
+
+# The folders `--purge` deletes: fixed, never taken from the environment; each one a real folder, never a link.
+function Remove-JhtUserDataFolder {
+  param([Parameter(Mandatory)][string]$Path)
+  $attributes = $null
+  try { $attributes = [IO.File]::GetAttributes($Path) } catch { return $true }
+  if (($attributes -band [IO.FileAttributes]::Directory) -eq 0 -or ($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+    [Console]::Error.WriteLine((Get-JhtUninstallText 'bad.target' @($Path)))
+    $script:JhtUninstallReason = 'collegamento o non cartella'
+    return $false
+  }
+  try {
+    Remove-JhtDirectoryNoFollow ([IO.DirectoryInfo]::new($Path))
+  } catch {
+    $script:JhtUninstallReason = (Format-JhtUninstallReason $_.Exception.Message)
+    return $false
+  }
+  return -not (Test-Path -LiteralPath $Path)
+}
+
+# A junction or a link inside is removed as a link: Windows PowerShell 5.1's Remove-Item -Recurse can delete what one points at.
+function Remove-JhtDirectoryNoFollow {
+  param([Parameter(Mandatory)][IO.FileSystemInfo]$Item)
+  if (($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+    if ($Item -is [IO.DirectoryInfo]) { try { [IO.Directory]::Delete($Item.FullName, $false) } catch { [IO.File]::Delete($Item.FullName) } }
+    else { [IO.File]::Delete($Item.FullName) }
+    return
+  }
+  if ($Item -is [IO.DirectoryInfo]) {
+    foreach ($child in $Item.GetFileSystemInfos()) { Remove-JhtDirectoryNoFollow $child }
+    $Item.Attributes = [IO.FileAttributes]::Directory
+    [IO.Directory]::Delete($Item.FullName, $false)
+    return
+  }
+  if (($Item.Attributes -band [IO.FileAttributes]::ReadOnly) -ne 0) { $Item.Attributes = [IO.FileAttributes]::Normal }
+  [IO.File]::Delete($Item.FullName)
+}
+
 function Invoke-JhtWindowsUninstall {
   param(
     [string[]]$UninstallArgs,
@@ -183,17 +325,26 @@ function Invoke-JhtWindowsUninstall {
     [string]$WslPath,
     [System.EnvironmentVariableTarget]$EnvironmentTarget = [System.EnvironmentVariableTarget]::User
   )
-  if ($UninstallArgs.Count -ne 1 -or $UninstallArgs[0] -cne '--confirm') {
-    [Console]::Error.WriteLine('uso: jht uninstall --confirm')
+  $purge = $false
+  $argsOk = ($UninstallArgs.Count -eq 1 -and $UninstallArgs[0] -ceq '--confirm') -or
+    ($UninstallArgs.Count -eq 2 -and @($UninstallArgs | Where-Object { $_ -ceq '--confirm' }).Count -eq 1 -and @($UninstallArgs | Where-Object { $_ -ceq '--purge' }).Count -eq 1)
+  if (-not $argsOk) {
+    [Console]::Error.WriteLine('uso: jht uninstall --confirm [--purge]')
     [Console]::Error.WriteLine($JhtUninstallRemovalNotice)
+    [Console]::Error.WriteLine($script:JhtUninstallPurgeNotice)
     return 2
   }
+  $purge = $UninstallArgs.Count -eq 2
   [Console]::Error.WriteLine($JhtUninstallRemovalNotice)
+  if ($purge) { [Console]::Error.WriteLine($script:JhtUninstallPurgeNotice) }
+  $script:JhtUninstallReason = ''
 
   $machineName = 'jht-podman'
   $runtimePath = [IO.Path]::Combine([IO.Path]::GetFullPath($LocalAppDataPath), 'Job Hunter Team', 'host-runtime')
   $binPath = [IO.Path]::Combine([IO.Path]::GetFullPath($ProfilePath), '.local', 'bin')
   $selectionPath = Join-Path $runtimePath 'container-runtime'
+  # Every file install.ps1 publishes in the bin folder, and nothing else: another program's file stays (tests/test_windows_uninstall_files.py
+  # keeps this list, the one of the desktop uninstall and what the installer publishes together).
   $knownCommands = @(
     (Join-Path $binPath 'jht.ps1'),
     (Join-Path $binPath 'jht.cmd'), (Join-Path $binPath 'shim\jht.cmd'), (Join-Path $binPath 'shim'),
@@ -201,21 +352,24 @@ function Invoke-JhtWindowsUninstall {
     (Join-Path $binPath 'podman-machine-bridge.ps1'),
     (Join-Path $binPath 'docker.exe')
   )
+  $PodmanPath = Find-JhtUninstallPodman -FromPath $PodmanPath
+  $leftCommands = {
+    $present = @($knownCommands | Where-Object { Test-Path -LiteralPath $_ } | ForEach-Object { Split-Path -Leaf $_ })
+    return ($present -join ', ')
+  }
 
   # Un wrapper nuovo puo' essere arrivato anche sopra una vecchia installazione
   # Docker. In quel caso non cancelliamo i file host lasciando il container
   # legacy attivo sugli stessi dati: solo il runtime Podman ha questo comando.
   if (Test-Path -LiteralPath $runtimePath) {
+    $notPodman = $false
     try {
       if (-not (Test-Path -LiteralPath $selectionPath -PathType Leaf) -or
-          ([IO.File]::ReadAllText($selectionPath)).Trim() -cne 'podman') {
-        Write-JhtUninstallLeft runtime
-        Write-JhtUninstallLeft commands
-        return 24
-      }
-    } catch {
-      Write-JhtUninstallLeft runtime
-      Write-JhtUninstallLeft commands
+          ([IO.File]::ReadAllText($selectionPath)).Trim() -cne 'podman') { $notPodman = $true }
+    } catch { $notPodman = $true }
+    if ($notPodman) {
+      Write-JhtUninstallLeft runtime @($runtimePath)
+      Write-JhtUninstallLeft commands @($binPath, (& $leftCommands))
       return 24
     }
   }
@@ -225,47 +379,62 @@ function Invoke-JhtWindowsUninstall {
   # Remove the logon trigger before deleting the machine, otherwise a concurrent
   # sign-in could recreate activity while uninstall is tearing the runtime down.
   if (-not (Remove-JhtStartupTask)) {
+    $script:JhtUninstallReason = 'l''attivita'' di avvio al logon non si toglie'
     if ($machineState -ne 'absent') { Write-JhtUninstallMachineLeft }
-    if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime }
-    Write-JhtUninstallLeft commands
+    if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime @($runtimePath) }
+    Write-JhtUninstallLeft commands @($binPath, (& $leftCommands))
     return 24
   }
-  if ($machineState -eq 'present') {
-    if (-not $PodmanPath -or -not $WslPath) {
-      Write-JhtUninstallMachineLeft
-      if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime }
-      if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
-      return 24
-    }
-    & { $ErrorActionPreference = 'Continue'; & $WslPath --status *> $null }
-    if ($LASTEXITCODE -ne 0) {
-      Write-JhtUninstallMachineLeft
-      if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime }
-      if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
-      return 24
-    }
-    & { $ErrorActionPreference = 'Continue'; & $PodmanPath machine rm --force $machineName *> $null }
-    if ($LASTEXITCODE -ne 0 -or
-        (Get-JhtPodmanMachineState -PodmanPath $PodmanPath -WslPath $WslPath -MachineName $machineName) -ne 'absent') {
-      Write-JhtUninstallMachineLeft
-      if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime }
-      if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
-      return 24
-    }
-  } elseif ($machineState -ne 'absent') {
+  $leaveForRetry = {
+    param([string]$Reason)
+    if ($Reason) { $script:JhtUninstallReason = $Reason }
     Write-JhtUninstallMachineLeft
-    if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime }
-    if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
+    if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime @($runtimePath) }
+    if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands @($binPath, (& $leftCommands)) }
+  }
+  if ($machineState -eq 'present') {
+    if (-not $WslPath) { & $leaveForRetry 'wsl.exe non trovato'; return 24 }
+    & { $ErrorActionPreference = 'Continue'; & $WslPath --status *> $null }
+    if ($LASTEXITCODE -ne 0) { & $leaveForRetry 'WSL non risponde (wsl --status)'; return 24 }
+    $gone = $false
+    if ($PodmanPath) {
+      $removal = Invoke-JhtUninstallNative $PodmanPath @('machine', 'rm', '--force', $machineName)
+      $gone = ($removal.Code -eq 0) -and
+        ((Get-JhtPodmanMachineState -PodmanPath $PodmanPath -WslPath $WslPath -MachineName $machineName) -eq 'absent')
+      if (-not $gone) { $script:JhtUninstallReason = "podman machine rm --force $machineName : exit $($removal.Code), $($removal.Text)" }
+    } else {
+      $script:JhtUninstallReason = 'podman.exe non trovato'
+    }
+    # Podman could not (or is not there): the distro of our machine, by its exact name, through WSL.
+    if (-not $gone) { $gone = Remove-JhtPodmanMachineThroughWsl -PodmanPath $PodmanPath -WslPath $WslPath -MachineName $machineName }
+    if (-not $gone) { & $leaveForRetry ''; return 24 }
+  } elseif ($machineState -ne 'absent') {
+    & $leaveForRetry 'lo stato della macchina non si legge (podman e wsl non rispondono)'
     return 24
+  }
+
+  # Con --purge i dati vanno PRIMA del runtime e del comando: se non si riesce, il comando jht resta e si puo' rilanciare.
+  if ($purge) {
+    # --purge is for a person at a console: the desktop app never asks for it and knows no phase or leftover of the data, so these
+    # two are sentences only, never JHT_PHASE or JHT_LEFT lines (the app's list of the phases and the wrapper's must stay equal).
+    [Console]::Out.WriteLine((Get-JhtUninstallText 'phase.data'))
+    $dataFailed = @()
+    foreach ($folder in @([IO.Path]::Combine([IO.Path]::GetFullPath($ProfilePath), '.jht'), [IO.Path]::Combine([IO.Path]::GetFullPath($ProfilePath), 'Documents', 'Job Hunter Team'))) {
+      if (-not (Remove-JhtUserDataFolder -Path $folder)) { $dataFailed += $folder }
+    }
+    if ($dataFailed.Count -gt 0) {
+      [Console]::Error.WriteLine((Get-JhtUninstallText 'left.data' @($script:JhtUninstallReason, ("'" + ($dataFailed -join "', '") + "'"))))
+      return 24
+    }
   }
 
   Write-JhtUninstallPhase uninstall_runtime
   if (Test-Path -LiteralPath $runtimePath) {
-    try { Remove-Item -LiteralPath $runtimePath -Recurse -Force -ErrorAction Stop } catch {}
+    try { Remove-Item -LiteralPath $runtimePath -Recurse -Force -ErrorAction Stop } catch { $script:JhtUninstallReason = (Format-JhtUninstallReason $_.Exception.Message) }
   }
   if (Test-Path -LiteralPath $runtimePath) {
-    Write-JhtUninstallLeft runtime
-    if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
+    Write-JhtUninstallLeft runtime @($runtimePath)
+    if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands @($binPath, (& $leftCommands)) }
     return 24
   }
 
@@ -301,9 +470,12 @@ function Invoke-JhtWindowsUninstall {
     try { Remove-Item -LiteralPath $wrapperPath -Force -ErrorAction Stop } catch { $commandFailure = $true }
   }
   if ($commandFailure -or @($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) {
-    Write-JhtUninstallLeft commands
+    Write-JhtUninstallLeft commands @($binPath, (& $leftCommands))
     return 24
   }
+  $done = Get-JhtUninstallText 'done'
+  if (-not $purge) { $done += (Get-JhtUninstallText 'done.kept') }
+  [Console]::Out.WriteLine($done)
   return 0
 }
 

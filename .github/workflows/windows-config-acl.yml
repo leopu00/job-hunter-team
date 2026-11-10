@@ -24,6 +24,10 @@ on:
       - 'tests/test_podman_windows_cgroupfs.py'
       - 'tests/test_podman_windows_bundle_owner.py'
       - 'tests/test_windows_pull_progress.py'
+      - 'tests/test_windows_long_phases_show_progress.py'
+      - 'tests/test_windows_install_path_notice.py'
+      - 'tests/test_windows_uninstall_wrapper.py'
+      - 'tests/test_windows_uninstall_files.py'
       - 'tests/windows_native_fakes.py'
       - 'tests/test_windows_powershell51_native_quotes.py'
       - 'tests/test_windows_powershell51_native_stderr.py'
@@ -171,4 +175,25 @@ jobs:
             $summary = "$($out[-1])"
             if ($summary -notmatch '^=+ (\d+) passed(, \d+ warnings?)? in [0-9.]+s') { throw "unexpected pytest summary under ${shell}: $summary" }
             if ([int]$Matches[1] -lt 165) { throw "only $($Matches[1]) tests ran under $shell, expected at least 165" }
+          }
+
+      # The long phases of the setup told in words and time (the wait lines, Podman's stderr as notes), the
+      # new-window notice at the end of the install, and `jht uninstall` of the wrapper (the machine Podman
+      # cannot remove, the sentences, --purge, the list of the installer's files in bin): once under each
+      # shell. A skip fails the count. 37 = the four whole files (10 + 3 + 19 + 5).
+      - name: Long phases, new-window notice and the wrapper's uninstall under Windows PowerShell 5.1 and pwsh
+        shell: pwsh
+        env:
+          JHT_REQUIRE_WINDOWS_SHELLS: "1"
+        run: |
+          foreach ($shell in 'powershell', 'pwsh') {
+            $env:JHT_TEST_SHELL = $shell
+            $out = python -m pytest tests/test_windows_long_phases_show_progress.py tests/test_windows_install_path_notice.py tests/test_windows_uninstall_wrapper.py tests/test_windows_uninstall_files.py `
+              -n 4 -p no:cacheprovider -rs 2>&1
+            $code = $LASTEXITCODE
+            $out | ForEach-Object { "$_" }
+            if ($code -ne 0) { exit $code }
+            $summary = "$($out[-1])"
+            if ($summary -notmatch '^=+ (\d+) passed(, \d+ warnings?)? in [0-9.]+s') { throw "unexpected pytest summary under ${shell}: $summary" }
+            if ([int]$Matches[1] -lt 37) { throw "only $($Matches[1]) tests ran under $shell, expected at least 37" }
           }
