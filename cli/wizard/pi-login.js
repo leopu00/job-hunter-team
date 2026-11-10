@@ -48,11 +48,29 @@ async function failed(key, code, { prompter, t, report }) {
   return null;
 }
 
-/** The marker found, or null when the login did not come (the wizard stops there). */
+/** What the person sees for the provider of the setup, in the words of the product. */
+export const PI_PROVIDER_LABEL = { openai: 'OpenAI (ChatGPT)', codex: 'OpenAI (ChatGPT)', glm: 'GLM (Z.ai)', kimi: 'Kimi', moonshot: 'Kimi' };
+const labelOf = (provider) => PI_PROVIDER_LABEL[String(provider || '').toLowerCase()] ?? String(provider || 'the provider of the setup');
+
+/** After a sign-in that is there and is the right one: the provider it is for and the model the team will use. */
+export async function announcePiLogin({ prompter, tf, provider, model, path, read }) {
+  const seen = typeof read === 'function' ? read(provider) : null;
+  const names = seen && seen.found.length > 0 ? seen.found.join(', ') : '-';
+  await prompter.note(tf('wizard.oauth.pi_found', labelOf(provider), names, model || '-', path), tf('wizard.oauth.inline_title', 'Pi'));
+}
+
+/**
+ * The marker found, or null when the login did not come (the wizard stops there). A file that is there counts only when it holds the
+ * provider of the setup: a file with only Anthropic's entry (the Claude subscription, billed per token from Pi) is said and refused.
+ */
 export async function runPiLoginStep({
-  prompter, t, tf, find, login = runPiLogin, report = recordLoginFailure,
+  prompter, t, tf, find, login = runPiLogin, report = recordLoginFailure, provider, model, read = null,
 }) {
-  await prompter.note(t('wizard.oauth.pi_inline_body'), tf('wizard.oauth.inline_title', 'Pi'));
+  const before = typeof read === 'function' ? read(provider) : null;
+  if (before && before.state !== 'ok' && before.state !== 'no_rule') {
+    await prompter.note(tf('wizard.oauth.pi_wrong_provider', labelOf(provider), before.found.join(', ') || '-', labelOf(provider)), tf('wizard.oauth.inline_title', 'Pi'));
+  }
+  await prompter.note(tf('wizard.oauth.pi_inline_body', labelOf(provider)), tf('wizard.oauth.inline_title', 'Pi'));
   let result;
   try {
     result = login();
@@ -65,9 +83,21 @@ export async function runPiLoginStep({
   }
   const found = find('pi');
   if (!found) {
+    const seen = typeof read === 'function' ? read(provider) : null;
+    if (seen && seen.state !== 'ok' && seen.state !== 'no_rule') {
+      // the file is there but it is not the login of the provider of the setup: said with what it holds, and the setup stops
+      const names = seen.found.join(', ') || '-';
+      try {
+        report('pi_login_wrong_provider', t('wizard.oauth.pi_failed'));
+      } catch {
+        // the failure is told below anyway
+      }
+      await prompter.note(`pi_login_wrong_provider: ${tf('wizard.oauth.pi_wrong_provider', labelOf(provider), names, labelOf(provider))}`);
+      return null;
+    }
     return failed(result.error || result.signal || result.status !== 0 ? 'wizard.oauth.pi_failed' : 'wizard.oauth.pi_missing',
       result.error || result.signal || result.status !== 0 ? 'pi_login_failed' : 'pi_login_missing', { prompter, t, report });
   }
-  await prompter.note(tf('wizard.oauth.detected', 'pi', found), tf('wizard.oauth.inline_title', 'Pi'));
+  await announcePiLogin({ prompter, tf, provider, model, path: found, read });
   return found;
 }

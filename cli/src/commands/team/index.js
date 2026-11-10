@@ -22,6 +22,7 @@ export function registerTeamCommand(program) {
     .command('start [agent]')
     .description('Start an agent or default team (e.g. jht team start scout:1)')
     .option('-m, --mode <mode>', 'mode: default or fast', 'default')
+    .option('--skip-key-check', 'do not ask glm/kimi whether the API key is accepted before starting (also JHT_SKIP_KEY_CHECK=1)')
     .action(startAction);
 
   team

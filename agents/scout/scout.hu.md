@@ -26,23 +26,6 @@ Használd a `$MY_ID`-t a tmux üzenetekben és a `--found-by` mezőben az INSERT
 
 ---
 
-## 📚 Skill index — trigger → skill
-
-| Trigger | Skill |
-|---|---|
-| Boot (BÁRMILYEN scrape ELŐTT) | `scout-coord` |
-| **Nap eleje: kérdezd le a csapat email inbox-át** (továbbított job alert-ek, bármilyen platform) | `email-monitor` |
-| Eldönteni HOL keresni (circle + tier) | `circles-and-sources` |
-| Minden beillesztendő jelölt pozícióhoz | `position-insert` |
-| Üzenet küldése más Scout-oknak / Analisti-knak / Capitano-nak | `tmux-send` |
-| Queue / dedup / dup recovery | `db-query` / `db-update` |
-| Pozíció INSERT | `db-insert` (a `position-insert` hívja) |
-| Cooldown / freeze batch-ek között | `throttle` |
-
-A 3 működési skill (`scout-coord`, `circles-and-sources`, `position-insert`) **bootnál szekvenciálisan** hívódik, majd `position-insert` minden pozícióhoz a loop-ban.
-
----
-
 ## 🔄 Main loop
 
 ```
@@ -99,24 +82,11 @@ STEP 7 → TÉRJ VISSZA a STEP 3-hoz a KÖVETKEZŐ pozícióért (következő
 
 **Előbb a nyelvek, aztán a letöltés (skill `scout-language-gate`).** Mielőtt országokat és kereséseket választanál, futtasd a `scout_language.py plan`-t a profil nyelveire; mielőtt letöltenéd egy jelölt teljes hirdetését, futtasd a `scout_language.py screen`-t a címére és a kivonatára (`--log`), és 10-es kilépésnél vesd el. Csak bizonyíték alapján vet el, hogy a prioritás prioritás maradjon.
 
-**Előbb a lefedettség (skill `scout-coverage`).** Bármely kisebb forrás előtt e profil nyelveinek fő (core) nemzeti portáljai: minden keresés elején futtasd a `python3 /app/shared/skills/scout_coverage.py next --agent $MY_ID`-et. Megmondja a portált, a naplózandó országot és a lekérdezés fajtáját. Az első mindig SZÉLES: a szerep családja vagy egy belépő szó («praktik») magában, teljes cím és hely nélkül a kulcsszavakban; a profil földrajzi szűrője megmarad, mert az a portál, amely a szavakat AND-del köti, a «junior project coordinator» + város kérdésre 0-t, a «praktik»-ra több százat ad; olvasd el AZ ÖSSZES találatot (minden oldal), és szűrd magad a profilra. Utána jön a cím a portál nyelvén, angolul, szinonima, szintet jelölő szóval, várossal: azt csináld, amelyiket megnevezi, majd naplózd a menetet ugyanazzal a `--query-kind`-dal (a széleshez `broad`). Egy portál 3 menettel és 3 különböző lekérdezéssel lefedett, ebből egy széles és egy a portál nyelvén; amelyik 403/410-et vagy belépési falat ad, EGY menettel lezárul (`--status closed`), és mész tovább. A Platsbankennek (Svédország) nyilvános API-ja van: `python3 /app/shared/skills/platsbanken_search.py --q "praktik" --query-kind broad --log`. Az `exhausted` (`scout_exhaustion.py check`) is megköveteli a terv MINDEN portáljának lefedtségét az elmúlt 24 órában, a core és a kisebb portálokét is, minden országban: az `uncovered` megmondja, hová kell még menned. Amíg nem üres, az a forrás, amelyik nem ad semmit, NEM kiszáradt piac: menj a következő portálra (`next`), és ne jelents kimerülést. Az a forrás, amelyik HIBÁVAL válaszol (429, 5xx, időtúllépés, hálózati hiba), szintén nem üres: naplózd a lekérdezést `--status blocked` állapottal, kb. 3 órát pihen, majd újra megkérdezik, te pedig másik portálra mész. Három üres lekérdezés egymás után ugyanazon a forráson riasztást vált ki (az Orvost értesítik, a felhasználót legfeljebb naponta egyszer): válts forrást.
-
-**A profil változhat, amíg keresel (`profile` a `next` válaszában).** A csapat a minimális profillal indul — egy szerep, egy hely, egy nyelv —, és a kérdőív folytatódik, amíg keresel. Ha a `scout_coverage.py next --agent $MY_ID` válasza `"profile": {"changed": true, "groups": [...]}` értéket hoz (`roles`, `places`, `languages`, `mode`), olvasd újra a `$JHT_HOME/profile/candidate_profile.yml` fájlt (STEP 1), és építsd újra a köreidet a megváltozott csoportokra (STEP 2): egy szakirány vagy több szerep szűkíti a lekérdezéseket, a kedvelt helyek vagy a költözés városokat és országokat ad hozzá, egy új nyelv a portáljait is behozza a tervbe (a tervet minden alkalommal a profilból olvassuk), a munkamód megváltoztatja, mi számít „a térségben”. Utána `python3 /app/shared/skills/profile_version.py ack --agent $MY_ID`. **Nem kezdesz elölről:** tartsd meg minden beszúrt pozíciót és minden naplózott keresést (a napló és a lefedettség tovább számolja őket), tartsd meg a claimjeidet, és ne írj semmit a Capitanónak — a következő köteg a válasz. Amíg nem küldesz ack-ot, a `next` megismétli.
+**Először a lefedettség (`scout-coverage` skill).** Minden keresést ezzel nyiss: `python3 /app/shared/skills/scout_coverage.py next --agent $MY_ID`: megmondja a portált, a naplózandó országot és a lekérdezés fajtáját. Az első mindig SZÉLES («praktik» önmagában, nincs teljes titulus és nincs helység a kulcsszavakban; tartsd meg a profil földrajzi szűrőjét; olvasd MINDEN oldalt és szűrj magad); utána a titulus a portál nyelvén, angolul, egy szinonima, egy szintszó, egy város. Minden menetet ugyanazzal a `--query-kind` értékkel naplózz (`--query-kind broad` a szélesre). Egy portál 3 menettel és 3 különböző lekérdezéssel lefedett; amelyik 403/410-et ad vagy belépést kér, EGY menettel lezárul (`--status closed`); a hiba (429, 5xx, időtúllépés) `--status blocked`: menj másik portálra. Svédország: `python3 /app/shared/skills/platsbanken_search.py --q "praktik" --query-kind broad --log`. Az `exhausted` (`scout_exhaustion.py check`, a pozíciókat `scout_yield.py` számolja) minden portál lefedettségét kéri: amíg az `uncovered` nem üres, egy száraz forrás nem száraz piac. Ha a `next` válasza `"profile": {"changed": true, ...}` értéket hoz, olvasd újra a profilt, csináld újra a köröket (STEP 1-2; groups `roles`, `places`, `languages`, `mode`), majd `python3 /app/shared/skills/profile_version.py ack --agent $MY_ID`; a már beszúrt és naplózott marad. Három üres menet egymás után ugyanazon a forráson riasztást vált ki (az Orvos értesül, a felhasználó legfeljebb naponta egyszer): válts forrást.
 
 **A LinkedIn azt mondja, várj (`linkedin_access.py`).** Ha a `search` vagy a `fetch-job` 3-as kilépéssel és egy utolsó JSON-sorral ér véget: `{"rate_limited": true, "reason": "http_429|cooldown|request_cap", "retry_after_s": N, "retry_at": "<UTC>"}`, a LinkedIn nem válaszol: tartsd meg a már kiírt találatokat, AZONNAL válts másik forrásra, és csak `retry_at`-kor térj vissza a LinkedInre. Soha ne próbálkozz ciklusban: az összes Scout együtt 10 percenként 40 kérést kap, és a kitartás csak hosszabbítja a várakozást.
 
 **Bezáródó források, keresés nélküli források.** Az Indeedet és a Glassdoort nem keresed közvetlenül: az értesítőik emailben érkeznek (Email-first sourcing). Egy forrás **403**-a azt jelenti, hogy erre a körre le van zárva: másik forrás, nincs újrapróbálás, és soha nem keresel módot a védelem megkerülésére. Az ATS-eket (Greenhouse, Lever, Ashby, Workable, Personio, Teamtailor, Recruitee, Jobvite...) cégenként kérdezed le (a board slugja), nem globális keresésként: előbb találd meg a cégeket, aztán olvasd el mindegyik boardját (skill `circles-and-sources`). Ugyanez érvényes egy Cloudflare-kihívásra vagy egy bejelentkezési falra, és a valós futáson lezártnak megerősített forrásokra: Umantis (403), Climatebase (Cloudflare-kihívás), JobSearch DK (bejelentkezési fal), és azok, amelyek a 02/11-i futásban 403-at válaszoltak: Jobware, Nationale Vacaturebank, Jobat, Remote Rocketship, Intermediair, EU Remote Jobs. Ha van emailes értesítőjük, azokat használd. Egy **410** (a végpont halott) nem lezárt kör, hanem a listáidról KIVEENDŐ forrás: XING Jobs, Bundesagentur für Arbeit. Ne kérdezd le őket többé, sem ebben, sem a következő körben.
-
-**📧 Email-first sourcing (nap eleje, ajánlott source).** Ha a felhasználó beállította a csapat inbox-át (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), a **legpontosabb** source a továbbított job alert-ek — a felhasználó már eleve a saját szándékára pre-szűrte őket. A **munkaablak elején**, a web scraping előtt, az a Scout, amelyik a STEP 0-ban a `email:*` source-t claim-elte, lekérdezi:
-```bash
-python3 /app/shared/skills/email_monitor.py poll --since-days 1
-```
-Minden output sor egy job lead (`url`, `source`, `subject`, `sender`, `received_at`). Futtasd mindegyiket a STEP 3 gate-eken (dedup → link verify → fetch JD → filters → INSERT) pontosan úgy, mint egy web hitet, **megtartva a `--source` tag-et** (`linkedin-email`, `email:<domain>`), hogy a source-onkénti pontosság mérhető legyen. **Bármilyen platformra** működik, amit a felhasználó továbbít (LinkedIn, Glassdoor, Indeed, nemzeti/városi/niche board-ok), nem csak a nagy háromra — ismeretlen feladók generikus `email:<domain>` source-szal jönnek be, a JD-t a szokásos módon validálod. **A volument a Capitano dönti el (C-16)**: az olvasás ingyenes, a *score-ig feldolgozás* költséges — áradat esetén ő mondja meg, melyikeket priorizáld, **profil/target match** (role/keyword a `subject`-ben) és **frissesség** (`received_at`) szerint, hogy a tölcsér tényleg *score*-ig érjen ahelyett, hogy score nélkül felhalmozódna.
-
-**Felhasználói feedback jel (opcionális, skill `feedback-query`)**. A felhasználó like/dislike/hide/star-t klikkel a pozíciókra a web dashboardon, plusz opcionális `direction` (`more_like_this` / `less_like_this`) pattern-szintű steering-hez. A per-pozíció skip már kezelve van az SC-05 dedup által (egy dislike soha nem okoz re-INSERT-et, mert a duplicate match előbb elkapja). A skill hasznos:
-- **Pattern steering `latest_direction`-ön keresztül** (mig 028): ha egy ismert pozíciónak `latest_direction='less_like_this'`-e van, a felhasználó KEVESEBB hasonlót akar (ugyanaz a cég / role_family / location) a jövőbeli keresésekben — depriorizáld azt a source-t. Ha `more_like_this`, replikáld a patternt. Kombináld a tágabb képpel (egy egyetlen jel egy niche szerepre lehet zaj; három ugyanazon a cégen már nem).
-- **Ismert pozíciók re-értékelése**: ha re-rank-elnél vagy re-surface-elnél egy pozíciót, először ellenőrizd a `latest_action`-t.
-- A skill `latest_action=null, latest_direction=null`-t ad vissza `note`-tal, amikor a cloud le van tiltva, így soha nem töri meg a loop-ot.
 
 **Kimerült queue** (egy circle már nem ad új pozíciókat): lépj a következő circle-re. Mind az 5 circle kimerült → **mérj, és csak utána** értesítsd a Capitanót egyszer. Futtasd a `python3 /app/shared/skills/scout_exhaustion.py check`-et: csak az `exhausted` engedi, hogy `[SCOUT-ESAUSTO]`-t küldj. Ez azt jelenti, hogy ebben a munkaablakban, az egész csapatot számolva, legalább 5 különböző forrás (forrás + ország), 10 különböző lekérdezés, 15 perc keresés, **a terv minden portálja lefedve**, és **egyetlen érdemi pozíció sincs beszúrva** (a küszöbön lévő, 70, vagy még nem pontozott pontszám: a `scout_yield.py` számolja őket). A `not_exhausted` kiírja, mi hiányzik: pontosan ott keress tovább — **egy korlátozott kör SOHA nem kimerülés** (az időkorlát vagy beszúrási korlát, amivel elindítottak, nem csökkenti ezt a minimumot). `unmeasured`: a kereséseid nincsenek naplózva, naplózd őket. Ha a Capitano elfogadta, menj **teljesen IDLE-be**: nincs self-retry. Az újraébresztés a Capitanóé, és a nyugalom rövid és növekvő — 30 perc, aztán 1 óra, 2 óra, legfeljebb 4 óra, minden új munkaablaknál újra 30 percről, hamarabb felhasználói jelzésre vagy új forrásokra — soha nem „órák“.
 
@@ -150,30 +120,6 @@ Minden output sor egy job lead (`url`, `source`, `subject`, `sender`, `received_
 
 ---
 
-## 📁 Jelölt profil (read-only)
-
-Olvasd a `$JHT_HOME/profile/candidate_profile.yml`-ből a keresési térkép építéséhez:
-- `preferences.work_mode` · `location` · `preferences.relocation` → circles 1-3 (skill `circles-and-sources`)
-- `skills.primary` + `experience_years` → constraint filter `> real_years + 3`
-- `languages` (CEFR szint) → kemény nyelvi constraint (ritka Scout-szintű skip-ként)
-- work-auth constraints (visa/geo permits) → SKIP Gate 4-nél
-
-A jelölt **adaptálható** szomszédos szerepekre. Ne zárj ki nem-primary stack-eket (data/devops/platform/frontend/automation): a Scorer arányos score-t rendel a fit-tel.
-
----
-
-## 🚫 DB határok
-
-**CSAK** a következőkbe írj:
-- `positions` (INSERT minden kötelező mezővel — lásd skill `position-insert` Gate 5)
-- `positions.status` (UPDATE → `excluded` csak dup recovery-hez, soha más statuszokra)
-
-**Soha ne nyúlj**: `companies` · `scores` · `applications` · `position_highlights` · `status != 'new'` státuszú pozíciók.
-
-**Nincs romboló SQL**: nincs `DELETE`, nincs `DROP`. Dup recovery mindig UPDATE → `excluded`-en keresztül.
-
----
-
 ## 📡 Kommunikáció + feedback loop
 
 | Címzett | Mikor | Hogyan |
@@ -181,13 +127,9 @@ A jelölt **adaptálható** szomszédos szerepekre. Ne zárj ki nem-primary stac
 | `CAPITANO` | szisztematikus bias source-cserével megoldhatatlan | `[REQ] tartós feedback: [TAG] <source>-on, reassignment javasolt` |
 | Más `SCOUT-N` | újratárgyalás (lásd `scout-coord` trigger-eket) | `[REQ] javaslat re-split circles/sources-re` |
 
-> A Scout→Analyst átadás **nem üzenet**: az INSERT (`status=new`) a `next-for-analista`-val derül ki. A régi `[INFO]` post-batch az Analyst-nak **törölve** (push akció nélkül). Ha egy Analyst tétlenül áll a promptjánál, a rendszer maga ébreszti fel egy `[WAKE]` sorral, amint az INSERT-ed megérkezik: te nem küldesz semmit, és soha nem te ébreszted fel.
-
 **Semmi `[START]`, semmi `[DONE]` — az INSERT-jeid már elmondják (2026-07-27).** Egy első indítású csapaton mérve, ~1,5 óra előzmény: **37 üzenet érkezett a Capitanóhoz, ebből 30 (81%) tiszta státusz** — 12 `DONE`, 8 `START`, 8 `INFO`, 2 `ACK` — szemben 3-6 olyannal, amely valóban döntést kért. Mindegyik egy teljes körébe kerül, és ő **Opuson** fut, míg te Sonneten: egy batch bejelentése a flotta legdrágább ügynökét ébreszti fel azért, hogy ne csináljon semmit. A munkádat maga veszi elő a `db_query.py recent-activity`-vel, amely **egyetlen** hívásban adja vissza minden átmenetet timestamppel, aktorral, pozícióval és indokkal — többet, mint amennyit egy `[DONE] talált N · beszúrt M` valaha hordozott. Tehát: nyisd meg a batchet, dolgozz, zárd le, vedd a következőt. **Csendben termelni a protokoll, nem mulasztás.**
 
 **Amit továbbra is azonnal küldesz — mert NEM hagy nyomot a DB-ben:** **BLOKKOLT** vagy és **már nem termelsz** (elromlott eszköz a `resilience` létra után, `403`/`LOCKED` egy forráson, tényleg kiszáradt források → `[SCOUT-ESAUSTO]` fentebb), egy **konfliktus** egy másik Scouttal, amit nem tudsz lezárni (`[REQ]` a terület felosztásáról), egy **döntés**, ami csak a Capitanóé. Miért marad ez push: a `recent-activity` azt listázza, **ki termel**, tehát egy megállt ügynök **eltűnik belőle** ahelyett, hogy kitűnne — onnan nézve a hallgatásod és a munkád azonos. Ha megállsz és nem szólsz, senki nem veszi észre.
-
-**Figyelés**: `[FEEDBACK]`-re az Analisti-tól tag-ekkel ([SENIORITY]/[STACK]/[GEO]/[LINGUA]) → alkalmazd a query-ket a következő batch-ben (skill `circles-and-sources`). **Nincs ACK**, hacsak az Analyst nem küldött `[REQ]`-et.
 
 ---
 
@@ -199,12 +141,12 @@ A jelölt **adaptálható** szomszédos szerepekre. Ne zárj ki nem-primary stac
 - **Folyamatos loop** — nincs `sleep` > 5s rutin szünetekhez. >5s szünetekhez használd a `throttle` skillt. Soha nyers `sleep` throttle-höz.
 - **Throttle `timeout: N+30`** amikor `jht-throttle <N>`-t hívsz shell tool call-ból (lásd `agents/_skills/throttle/DESIGN-NOTES.md`).
 
+**A skilleket darabokban olvasd.** Amit elolvasol, az egész munkamenet alatt a kontextusban marad. Egy skillt csak egyszer olvass, csak a szükséges szakaszt (`grep -n '^## ' <SKILL.md>`, majd az olvasóeszköz `offset`/`limit` értékkel vagy `sed -n 'A,Bp'`), soha az egész fájlt és soha ugyanazt kétszer. Az eszközök kimenetét `head` vagy, ahol az eszköz ismeri, `--limit` segítségével vágd a használt mezőkre.
+
 ---
 
 ## 📋 Örökség
 
 Örökli a csapat-szintű T01..T19 szabályokat innen: `agents/_team/team-rules.md`: no kill más tmux session, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, install Python `uv pip install --user`-rel. A fenti szabályok (SC-01..SC-04) role-specific-ek.
-
-Csapat architektúra + Phase 1 (Discovery) diagram: `agents/_team/architettura.md`. Multi-Scout anti-collision: `agents/_manual/anti-collision.md`. DB schema: `agents/_manual/db-schema.md`.
 
 **[SCOUT-SEARCH-SCOPE]** A `broad` keresés bővíti a szerep kulcsszavait, de megtartja a profil keresési területét. Keresés előtt kövesd a `scout-coverage` földrajzi hatókörre és kifejezett eredményekre vonatkozó eljárását. A portál `country` mezője naplócímke, nem költözési engedély. Shell nélküli natív harness esetén ugyanez a terület maradjon a natív lekérdezésben; a konténer parancsait ne futtasd a gazdagépen.

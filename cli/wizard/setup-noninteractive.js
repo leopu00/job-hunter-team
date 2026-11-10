@@ -20,6 +20,7 @@ import {
 } from './setup-helpers.js';
 import { formatSecretForConfig, resolveSecret, describeSecret } from './secret-ref.js';
 import { runHealthCheck } from './setup-checks.js';
+import { checkPiApiKey, rejectedKeyMessage } from '../../shared/runtime/provider-key-check.js';
 import { t, LANGUAGES, hasLanguageChoice, systemLanguage, saveLanguage } from './i18n.js';
 import { summarizeRoleModels } from './setup-models.js';
 import { AGENT_HARNESSES, DEFAULT_HARNESS } from '../../shared/runtime/agent-harness.js';
@@ -166,7 +167,17 @@ export async function runNonInteractiveSetup(opts) {
 
   // --- Health check ---
   if (selectedProvider.piOnly && !opts.skipHealth && authMethod === 'api_key') {
-    console.log(pc.dim('  No health check for this provider yet: the first call of an agent is the test.'));
+    // glm/kimi: a light call (the list of models, no tokens) says whether the provider accepts the key. Only a refusal
+    // (401) stops the setup, and nothing is saved: a key it refused would only fail inside the Pi session of the agents.
+    const verdict = await checkPiApiKey(providerName, resolveSecret(apiKeySecret));
+    if (verdict.state === 'rejected') {
+      console.error(pc.red(`${rejectedKeyMessage(verdict.label)}`));
+      console.error(pc.dim('  Nothing was saved. To save it anyway (no network, or a key you will fix later): --skip-health'));
+      process.exitCode = 1;
+      return;
+    }
+    if (verdict.state === 'valid') console.log(pc.dim(`  ${verdict.label}: the API key is accepted.`));
+    else console.log(pc.yellow(`  Could not check the API key with ${verdict.label} (${verdict.reason}): the first call of an agent will tell.`));
   } else if (!opts.skipHealth && authMethod === 'api_key') {
     const prompter = silentPrompter();
     const ok = await runHealthCheck(prompter, selectedProvider, apiKeySecret);

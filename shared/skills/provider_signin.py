@@ -33,6 +33,9 @@ import os
 import stat
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pi_login  # noqa: E402  (the same folder: Pi's file is looked at for the provider's own entry)
+
 HOME = "/jht_home"
 
 # The credential files of each provider, relative to the home; the first one is the marker of a sign-in.
@@ -143,7 +146,12 @@ def status(home: str = HOME) -> dict:
     provider, error = _active_provider(home)
     if provider is None:
         return _fail(error)
-    return {"ok": True, "provider": provider, "authenticated": classify(home, _marker(home, provider)) != "absent"}
+    marker = _marker(home, provider)
+    signed_in = classify(home, marker) != "absent"
+    # Pi's file has one entry per service: it is the sign-in of THIS provider only when its own entry is there (shared/skills/pi_login.py).
+    if signed_in and marker == PI_FILES.get(provider, (None,))[0]:
+        signed_in = pi_login.inspect_file(os.path.join(home, marker), provider)["state"] in ("ok", "no_rule")
+    return {"ok": True, "provider": provider, "authenticated": signed_in}
 
 
 def logout(home: str = HOME, unlink=os.unlink) -> dict:

@@ -93,31 +93,6 @@ Két független őr, mindkettő a köteg végén:
 1. **Cég**: ha **egy köteg pozícióinak > 30%-a egyetlen cégtől** származik, válts forrást/lekérdezést a következő köteghez. Egy scaleup, ami 12 szerepkört dob egy boardra, elárasztja a pool-t — a diverzitás fontosabb, mint a mennyiség.
 2. **Helyszín** (város/terület): ha **egy köteg > 40%-a egyetlen városból** származik, a következő kötegnek MUSZÁJ egy *másik* kör-várost céloznia. Enélkül egy több városra nyitott jelölt (pl. relocation `"ovunque"`/`"Europa"`) egy pool-t kap, amelyet egyetlen központ dominál, amelynek a legtöbb hirdetése van a szakterületére — pénzügy → **London**, tech → SF/Berlin. Valós incidens (2. béta tesztelő): egy pénzügyi jelölt szinte kizárólag londoni shortlistet kapott, mert London ~10×-szer többet posztol minden más központnál. Rotálj a kör városai között round-robin; ne merítsed ki a legsűrűbb központot először.
 
-```python
-# pszeudokód az ellenőrzéshez köteg végén
-from collections import Counter
-batch = [...]
-n = len(batch)
-
-# 1. őr — cég
-top_company, c_count = Counter(p.company for p in batch).most_common(1)[0]
-if c_count / n > 0.30:
-    log(f"anti-torzitas ceg: {top_company} = {c_count}/{n} >30% → valts forras/lekerdzest")
-
-# 2. őr — helyszín (város), KUMULATÍV az egész futáson (NEM csak ezen a kötegen)
-# A kötegenkénti őr nem elég: egy központ (London a pénzügyeknél) küszöb alatt marad
-# minden egyes kötegben, mégis idővel a DB 60%-át halmozza fel (élőben látott
-# bétában: London=57/97=59%). Mérj a DB TELJES ÖSSZEGÉN.
-db_by_city = dict(db.execute(
-    "SELECT COALESCE(loc_city, TRIM(SUBSTR(location,1,INSTR(location||',',',')-1))), COUNT(*) "
-    "FROM positions GROUP BY 1"))
-db_total = sum(db_by_city.values()) or 1
-top_city, top_n = max(db_by_city.items(), key=lambda kv: kv[1])
-if top_n / db_total > 0.35:                       # SOFT korlát: egyetlen város sem > ~35% a futásban
-    log(f"anti-torzitas helyszin KUMULATIV: {top_city}={top_n}/{db_total} (>35%) → "
-        f"STOP lekerdezesek {top_city}-ra, kovetkezo sweep az alulszolgalt prioritasos varosokra")
-```
-
 **Földrajzi kiegyensúlyozási szabály (kumulatív, soft-cap) — a szórást ösztönzi, nem a paritást kényszeríti:**
 
 1. **Olvasd a profilt**: a `priority cities` (`location` / `preferences.relocation` mező) a cél. Normális és helyes, hogy a több illeszkedéssel rendelkező városok nagyobb súlyt kapnak — NE kényszeríts egyenletes elosztást.
@@ -133,17 +108,6 @@ A helyszínek kiegyensúlyozása nem segít, ha az ajánlatok nem **dolgozhatók
 - 🇬🇧 **UK post-Brexit**: egy **vízum nélküli EU állampolgár** NEM dolgozhat Londonban/UK-ban **szponzorálás** (Skilled Worker visa) nélkül. Tehát egy csak-EU profilnál az UK ajánlatok **csak akkor** érvényesek, ha a JD kifejezetten megemlíti a *visa sponsorship*-et; egyébként munkavállalási engedéllyel nem kompatibilisek → KIHAGYÁS (lásd "Megengedő szűrők", geo szabály).
 - 🇨🇭 **Svájc / nem-EU**: ugyanaz a logika — ellenőrizd a munkavállalási engedélyt.
 - Gyakorlati szabály: ha a domináns központ olyan országban van, amelyhez a felhasználónak nincs engedélye (és a JD-k nem kínálnak szponzorálást), az a volumen **fantom** — nem számít lefedettségnek és ki kell zárni a pool-ból, nem csak kiegyensúlyozni.
-
-### 🗣️ Nyelvtudatos forráskeresés — ne gyűjtsd azt, ami nyelv miatt kizáródik
-
-Ugyanaz az elv, mint a munkavállalási engedélynél, nyelvi fronton. Ha a **felhasználó nyelvei** (`languages`, szinttel) NEM fedik a célváros **helyi munkafelületét**, az azt megkövetelő pozíciókat az Analyst (`[LANGUAGE]`) downstream kizárja — összegyűjtésük pazarlás. Valós eset (béta): jelölt C1 angollal + csak társalgási szintű némettel + semmi IT/ES/FR → 18 kizárásból 11 helyi nyelvi kötelezettség miatt (M&A németül Münchenben/Zürichben, IB olaszul Milánóban, stb.).
-
-**Szabály:** mielőtt egy olyan várost kérdeznél le, amelynek helyi nyelvét a felhasználó nem beszéli üzleti szinten, **torzítsd a lekérdezéseket angolul elsődleges / nemzetközi szerepkörök felé**:
-- Adj kvalifikálókat a lekérdezéshez: `"English-speaking"`, `"international team"`, `"English required"`, multinacionális/globális cégek nevei (Big4, bulge-bracket, nemzetközi scale-upok), amelyek nem-anglofón piacokon is angolul dolgoznak.
-- A **helyi nyelvet megkövetelő** szerepkörök esetén (és a felhasználó nem beszéli üzleti szinten): kezeld úgy, mint a UK-no-sponsor — ne szúrd be, vagy csak akkor, ha a JD kifejezetten mondja, hogy a helyi nyelv nem szükséges.
-- Angol mint munkafelület ≠ anglofón ország: Amszterdamban, Zürichben, Luxemburgban, Lisszabonban sok pénzügyi pozíció angolul zajlik. Ezek az **ideális terep** annak, aki csak angolul beszél, de kontinentális Európát akar.
-
-Eredmény: az Analyst-on túlélő pool kisebb, de **magas hozamú** (nyelvileg ÉS munkavállalási engedéllyel elérhető), ahelyett, hogy kizárandó pozíciókkal duzzadna.
 
 ## Megengedő szűrők SCOUT szinten
 
@@ -164,8 +128,6 @@ Amikor az Analyst `[FEEDBACK]`-et küld ismétlődő címkével (`[SENIORITY] ·
 2. Igazítsd a következő köteg lekérdezéseit / forrásait a javaslat szerint
 3. Priorizáld a javasolt alternatív forrást/szűrőt a következő rotációhoz
 4. Csak akkor értesítsd a Capitano-t, ha rendszerszintű torzítás merül fel (nem megoldható forrásváltással)
-
-Példa: Analyst azt mondja "az utolsó 5-ből 4 a greenhouse.io-ról senior+-t igényel, válts forrást". A következő kötegben kihagyod a greenhouse.io-t, próbálj egy Lever boardot vagy egy niche junior-barát forrást.
 
 ## Anti-minták
 
