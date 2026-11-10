@@ -584,7 +584,7 @@ def test_setup_forwards_the_subcommand_and_arguments_to_the_container(tmp_path):
     bin_dir.mkdir()
     argv_file = tmp_path / "docker-argv"
     _fake(bin_dir, "docker", r'''  "exec "*) printf '%s\0' "$@" > "$FAKE_ARGV" ;;''')
-    result, calls = _run(tmp_path, WRAPPER, [], SETUP_BODY,
+    result, calls = _run(tmp_path, WRAPPER, ["Convert-SetupKeyFileArgs"], SETUP_BODY,
                          {"FAKE_ARGV": str(argv_file), "JHT_HOST_TYPE": "windows"})
     assert result.returncode == 0, result.stdout + result.stderr
     argv = argv_file.read_bytes().split(b"\0")

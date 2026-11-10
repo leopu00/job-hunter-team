@@ -5,6 +5,7 @@ import * as clack from '@clack/prompts'
 import pc from 'picocolors'
 import { JHT_HOME } from '../jht-paths.js';
 import { isInteractive } from './_colors.js'
+import { keyStoreDir } from '../../wizard/key-store.js'
 
 /**
  * Spinner solo su TTY. [CLI-OUTPUT-NOT-MACHINE-SAFE]
@@ -32,6 +33,9 @@ const SESSIONS_DIR = join(JHT_DIR, 'sessions')
 const SECRETS_DIR  = join(JHT_DIR, 'secrets')
 // La sessione del browser di linkedin_apply (profilo + lock) sta in .cache/linkedin.
 const LINKEDIN_SESSION_DIR = join(JHT_DIR, '.cache', 'linkedin')
+// The API keys that `jht setup --api-key-file|--api-key-stdin` keeps for glm and kimi live on the container's volume, not in
+// ~/.jht: a reset of the credentials (or of everything) must take them too, or a key would outlive the config that names it.
+const KEY_STORE_TARGET = { path: keyStoreDir(), label: 'the API keys kept by the setup (container volume)', dir: true }
 // The host wrapper owns the container volumes. Exit 20 is an internal
 // handshake: the CLI reached the end only after the existing confirmation,
 // so the wrapper may now stop Compose and remove the broker data.
@@ -55,12 +59,13 @@ const SCOPES = {
       { path: SESSIONS_DIR, label: '~/.jht/sessions/',       dir: true },
       { path: SECRETS_DIR,  label: '~/.jht/secrets/',        dir: true },
       { path: LINKEDIN_SESSION_DIR, label: '~/.jht/.cache/linkedin/', dir: true },
+      KEY_STORE_TARGET,
     ],
     warn:    'Configuration, credentials and saved browser sessions (secrets/) will be deleted. The workspace will be preserved.',
   },
   full: {
     label:   'full — all ~/.jht/',
-    targets: [{ path: JHT_DIR, label: '~/.jht/', dir: true }],
+    targets: [{ path: JHT_DIR, label: '~/.jht/', dir: true }, KEY_STORE_TARGET],
     warn:    pc.red('WARNING: ALL of ~/.jht/ will be permanently deleted.'),
   },
 }

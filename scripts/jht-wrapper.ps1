@@ -3942,6 +3942,51 @@ function Invoke-RuntimeUpgrade {
   } finally { Clear-UpgradeEphemeral }
 }
 
+# `jht setup --api-key-file <file on THIS computer>` (glm, kimi): the setup runs in the container, which cannot see a file of
+# the host: a Windows path is not a path there, and ~/.jht (the one folder it sees) shows no file modes, so a key put there is
+# refused at the first start. The wrapper reads the file HERE and hands the key to the setup on its standard input
+# (--api-key-stdin), which keeps it in the container's own key store with the right modes: the key is never in an argument,
+# in a log or in the config. A path that starts with «/» and is not a file of this computer is the container's own and goes
+# through untouched.
+# Returns @{ Args = the arguments to pass; Key = the key or $null; File = the host file it came from; Error = a sentence (never the key) or $null }.
+function Convert-SetupKeyFileArgs {
+  param([string[]]$SetupArgs)
+  $plan = @{ Args = @($SetupArgs); Key = $null; Error = $null; File = $null }
+  $out = New-Object 'System.Collections.Generic.List[string]'
+  $hostFile = $null
+  for ($i = 0; $i -lt $SetupArgs.Count; $i++) {
+    $arg = $SetupArgs[$i]
+    $value = $null
+    $takesNext = $false
+    if (($arg -ceq '--api-key-file') -and (($i + 1) -lt $SetupArgs.Count)) { $value = $SetupArgs[$i + 1]; $takesNext = $true }
+    elseif ($arg.StartsWith('--api-key-file=', [System.StringComparison]::Ordinal)) { $value = $arg.Substring(15) }
+    if (($null -eq $value) -or ($value.StartsWith('/') -and -not (Test-Path -LiteralPath $value))) { $out.Add($arg); continue }
+    if ($null -ne $hostFile) { $plan.Error = '--api-key-file was given twice'; return $plan }
+    $hostFile = $value
+    if ($takesNext) { $i++ }
+    $out.Add('--api-key-stdin')
+  }
+  if ($null -eq $hostFile) { return $plan }
+  if (@($SetupArgs | Where-Object { $_ -ceq '--api-key-stdin' }).Count -gt 0) { $plan.Error = 'use --api-key-file or --api-key-stdin, not both'; return $plan }
+  $item = $null
+  try { $item = Get-Item -LiteralPath $hostFile -Force -ErrorAction Stop } catch { $plan.Error = "the file given to --api-key-file cannot be read: $hostFile"; return $plan }
+  if ($item.PSIsContainer -or (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)) { $plan.Error = "the file given to --api-key-file must be a regular file, not a folder or a link: $hostFile"; return $plan }
+  if (($item.Length -lt 1) -or ($item.Length -gt 4096)) { $plan.Error = "the file given to --api-key-file is empty or too big for a key (1 to 4096 bytes): $hostFile"; return $plan }
+  $bytes = $null
+  try { $bytes = [System.IO.File]::ReadAllBytes($item.FullName) } catch { $plan.Error = "the file given to --api-key-file cannot be read: $hostFile"; return $plan }
+  # A file written by `echo key > file` in Windows PowerShell 5.1 is UTF-16; Notepad may add a UTF-8 mark: both are read.
+  if (($bytes.Length -ge 2) -and ($bytes[0] -eq 0xFF) -and ($bytes[1] -eq 0xFE)) { $text = [System.Text.Encoding]::Unicode.GetString($bytes, 2, $bytes.Length - 2) }
+  elseif (($bytes.Length -ge 2) -and ($bytes[0] -eq 0xFE) -and ($bytes[1] -eq 0xFF)) { $text = [System.Text.Encoding]::BigEndianUnicode.GetString($bytes, 2, $bytes.Length - 2) }
+  elseif (($bytes.Length -ge 3) -and ($bytes[0] -eq 0xEF) -and ($bytes[1] -eq 0xBB) -and ($bytes[2] -eq 0xBF)) { $text = [System.Text.Encoding]::UTF8.GetString($bytes, 3, $bytes.Length - 3) }
+  else { $text = [System.Text.Encoding]::UTF8.GetString($bytes) }
+  $line = ([string](($text -split "\r?\n")[0])).Trim()
+  if ($line -cnotmatch '^[\x21-\x7E]{16,512}$') { $plan.Error = "the content of the file given to --api-key-file is not one line of 16 to 512 printable characters without spaces: $hostFile"; return $plan }
+  $plan.Args = $out.ToArray()
+  $plan.Key = $line
+  $plan.File = $item.FullName
+  return $plan
+}
+
 # Decide se passare -it a docker exec: serve solo se stdin/stdout sono terminali.
 # Su Windows pwsh, [Console]::IsInputRedirected restituisce true quando lo
 # script gira sotto pipe / redirect — in quel caso usiamo -i (no TTY).
@@ -4251,10 +4296,27 @@ switch ($Sub) {
   # Setup: skip host-setup (non esiste su Windows), delega tutto al wizard
   # Node nel container che leggera' JHT_HOST_TYPE dall'env passato.
   'setup' {
+    # --api-key-file of a file on this computer: the key goes to the setup on its standard input (Convert-SetupKeyFileArgs).
+    $keyPlan = Convert-SetupKeyFileArgs $Rest
+    if ($keyPlan.Error) { [Console]::Error.WriteLine("error: $($keyPlan.Error)"); exit 1 }
     Require-ComposeFile
     Require-Docker
     Ensure-Up
-    & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry 'setup' @Rest
+    if ($null -ne $keyPlan.Key) {
+      # -i only: a pipe is not a terminal. ASCII, so that no byte-order mark goes in front of the key.
+      $savedEncoding = $OutputEncoding
+      try {
+        $OutputEncoding = New-Object System.Text.ASCIIEncoding
+        [string[]]$setupArgs = $keyPlan.Args
+        $keyPlan.Key | & docker exec -i -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry 'setup' @setupArgs
+        if ($LASTEXITCODE -eq 0) { Write-Host "The setup keeps the key: you can delete the file on this computer now ($($keyPlan.File))." }
+      } finally {
+        $OutputEncoding = $savedEncoding
+        $keyPlan.Key = $null
+      }
+    } else {
+      & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry 'setup' @Rest
+    }
     break
   }
 
