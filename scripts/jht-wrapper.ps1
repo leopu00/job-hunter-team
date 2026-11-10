@@ -73,29 +73,32 @@ $JhtUninstallRemovalNotice = 'Vengono cancellati anche la password della posta e
 # The words of the uninstall for a person: Italian, and English with JHT_LANG=en. The desktop app reads the JHT_PHASE and JHT_LEFT
 # lines from a pipe; at a console the person gets the sentences instead (JHT_MACHINE_OUTPUT=1 forces the lines, =0 forbids them).
 $script:JhtUninstallReason = ''
+# The machine this uninstall removes: jht-podman, or the one the runtime attests (Resolve-JhtUninstallMachineName).
+$script:JhtUninstallMachine = 'jht-podman'
 $script:JhtUninstallPurgeNotice = 'Con --purge vengono cancellati anche ~/.jht e Documents\Job Hunter Team: configurazione, database, CV e output. Non si torna indietro.'
 
 function Get-JhtUninstallText {
   param([Parameter(Mandatory)][string]$Key, [string[]]$Values = @())
   $english = ($env:JHT_LANG -ceq 'en')
   $texts = @{
-    'phase.machine'  = @('Tolgo la macchina Podman jht-podman (con i segreti e le immagini di JHT)...', 'Removing the jht-podman Podman machine (with the secrets and the images of JHT)...')
+    'phase.machine'  = @('Tolgo la macchina Podman <machine> (con i segreti e le immagini di JHT)...', 'Removing the <machine> Podman machine (with the secrets and the images of JHT)...')
     'phase.data'     = @('Cancello ~/.jht e Documents\Job Hunter Team (--purge)...', 'Deleting ~/.jht and Documents\Job Hunter Team (--purge)...')
     'phase.runtime'  = @('Tolgo il runtime di JHT...', 'Removing the JHT runtime...')
     'phase.commands' = @('Tolgo il comando jht, i file dell''installer e le righe PATH...', 'Removing the jht command, the installer files and the PATH lines...')
-    'done'           = @('Fatto: la macchina jht-podman (e con lei le immagini di JHT, il nucleo e quella piena), il runtime e il comando jht sono stati tolti.', 'Done: the jht-podman machine (and with it the JHT images, the core and the full one), the runtime and the jht command are gone.')
+    'done'           = @('Fatto: la macchina <machine> (e con lei le immagini di JHT, il nucleo e quella piena), il runtime e il comando jht sono stati tolti.', 'Done: the <machine> machine (and with it the JHT images, the core and the full one), the runtime and the jht command are gone.')
     'done.kept'      = @(' ~/.jht e Documents\Job Hunter Team restano (con --purge si cancellano).', ' ~/.jht and Documents\Job Hunter Team stay (--purge deletes them).')
-    'secrets'        = @('I segreti salvati non sono stati rimossi: la password della posta e i token di Telegram stanno nei volumi jht-secrets e jht-telegram-secrets della macchina jht-podman, che e'' ancora qui.', 'The saved secrets were not removed: the mail password and the Telegram tokens are in the jht-secrets and jht-telegram-secrets volumes of the jht-podman machine, which is still there.')
-    'left.machine'   = @('Non tolta: la macchina Podman jht-podman. Motivo: {0}. A mano: wsl --unregister {1}, poi podman machine rm --force jht-podman; poi rilancia jht uninstall --confirm.', 'Not removed: the jht-podman Podman machine. Reason: {0}. By hand: wsl --unregister {1}, then podman machine rm --force jht-podman; then run jht uninstall --confirm again.')
+    'secrets'        = @('I segreti salvati non sono stati rimossi: la password della posta e i token di Telegram stanno nei volumi jht-secrets e jht-telegram-secrets della macchina <machine>, che e'' ancora qui.', 'The saved secrets were not removed: the mail password and the Telegram tokens are in the jht-secrets and jht-telegram-secrets volumes of the <machine> machine, which is still there.')
+    'left.machine'   = @('Non tolta: la macchina Podman <machine>. Motivo: {0}. A mano: wsl --unregister {1}, poi podman machine rm --force <machine>; poi rilancia jht uninstall --confirm.', 'Not removed: the <machine> Podman machine. Reason: {0}. By hand: wsl --unregister {1}, then podman machine rm --force <machine>; then run jht uninstall --confirm again.')
     'left.data'      = @('Non cancellati i dati di JHT ({0}). A mano: Remove-Item -Recurse -Force {1}. Il comando jht e il runtime sono rimasti: rilancia jht uninstall --confirm --purge dopo aver risolto.', 'The JHT data was not deleted ({0}). By hand: Remove-Item -Recurse -Force {1}. The jht command and the runtime are still there: run jht uninstall --confirm --purge again once it is sorted out.')
     'left.runtime'   = @('Non tolto: il runtime di JHT in {0}. A mano: Remove-Item -Recurse -Force ''{0}''.', 'Not removed: the JHT runtime in {0}. By hand: Remove-Item -Recurse -Force ''{0}''.')
     'left.commands'  = @('Non tolti il comando jht o i file dell''installer in {0} ({1}), o le variabili e le righe PATH aggiunte dall''installer. A mano: Remove-Item il file; variabili JHT_CONTAINER_RUNTIME e JHT_PODMAN_MACHINE e la cartella {0} nel PATH da Impostazioni > Variabili d''ambiente.', 'Not removed: the jht command or the installer files in {0} ({1}), or the variables and PATH lines the installer added. By hand: Remove-Item the file; the JHT_CONTAINER_RUNTIME and JHT_PODMAN_MACHINE variables and the {0} folder in the PATH from Settings > Environment variables.')
+    'kept.machine'   = @('La macchina Podman {0} non risulta creata dall''installer: resta dov''e''. A mano, se e'' tua da togliere: podman machine stop {0}; podman machine rm {0}.', 'The Podman machine {0} is not marked as created by the installer: it stays where it is. By hand, if it is yours to remove: podman machine stop {0}; podman machine rm {0}.')
     'bad.target'     = @('Rifiutato: {0} e'' un collegamento o non e'' una cartella: non lo seguo e non lo cancello.', 'Refused: {0} is a link or not a folder: it is not followed and not deleted.')
   }
   $pair = $texts[$Key]
   if (-not $pair) { return $Key }
   $format = if ($english) { $pair[1] } else { $pair[0] }
-  return ($format -f $Values)
+  return (($format -f $Values).Replace('<machine>', $script:JhtUninstallMachine))
 }
 
 function Test-JhtUninstallMachineOutput {
@@ -167,7 +170,7 @@ function Find-JhtUninstallPodman {
 
 # The leftover of the machine, said with what is inside it and why it is still there.
 function Write-JhtUninstallMachineLeft {
-  Write-JhtUninstallLeft machine @($script:JhtUninstallReason, (Get-JhtPodmanDistroName 'jht-podman'))
+  Write-JhtUninstallLeft machine @($script:JhtUninstallReason, (Get-JhtPodmanDistroName $script:JhtUninstallMachine))
   [Console]::Error.WriteLine((Get-JhtUninstallText 'secrets'))
 }
 
@@ -316,6 +319,47 @@ function Remove-JhtDirectoryNoFollow {
   [IO.File]::Delete($Item.FullName)
 }
 
+# One Podman machine per Windows user (JHT-T305): install.ps1 gives a user who has none jht-podman-<8 hex of the SHA-256 of their SID>.
+# The same function is in install.ps1 and in the uninstall of the app; tests/test_windows_machine_per_user.py keeps the three equal.
+function Get-JhtUserMachineName {
+  param([string]$Sid = '')
+  if (-not $Sid) { try { $Sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value } catch { $Sid = '' } }
+  if ($Sid -notmatch '^S-1-\d+(-\d+)+$') { return 'jht-podman' }
+  $hash = [Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::ASCII.GetBytes($Sid))
+  return 'jht-podman-' + (([BitConverter]::ToString($hash, 0, 4) -replace '-', '').ToLowerInvariant())
+}
+
+# The mark the installer leaves when IT created the machine (its `machine init` succeeded): a regular file, never a link, whose first
+# line is the name of the machine.
+function Test-JhtMachineCreatedMark {
+  param([string]$RuntimePath, [string]$Name)
+  $file = Join-Path $RuntimePath 'podman-machine-created'
+  try {
+    $item = Get-Item -LiteralPath $file -Force -ErrorAction Stop
+    if ($item.PSIsContainer -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) { return $false }
+    $first = @([IO.File]::ReadAllLines($file) | Select-Object -First 1)
+    return ($first.Count -eq 1 -and ([string]$first[0]).Trim() -ceq $Name)
+  } catch { return $false }
+}
+
+# The machine this uninstall removes. The runtime attests it (podman-machine): jht-podman, the name of this user's own, or any other
+# name only with the installer's mark (another machine of the same name, adopted from the user, stays: Kept says which). Without the
+# attestation (the runtime is gone or partly gone): the user's own machine when it is there, else jht-podman, as before.
+function Resolve-JhtUninstallMachineName {
+  param([string]$RuntimePath, [string]$PodmanPath, [string]$WslPath, [string]$Sid = '')
+  $standard = 'jht-podman'
+  $own = Get-JhtUserMachineName -Sid $Sid
+  $attested = ''
+  try { $attested = ([IO.File]::ReadAllText((Join-Path $RuntimePath 'podman-machine'))).Trim() } catch { $attested = '' }
+  if ($attested) {
+    if ($attested -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$') { return @{ Name = $standard; Kept = '' } }
+    if ($attested -ceq $standard -or $attested -ceq $own -or (Test-JhtMachineCreatedMark -RuntimePath $RuntimePath -Name $attested)) { return @{ Name = $attested; Kept = '' } }
+    return @{ Name = $standard; Kept = $attested }
+  }
+  if ($own -cne $standard -and (Get-JhtPodmanMachineState -PodmanPath $PodmanPath -WslPath $WslPath -MachineName $own) -eq 'present') { return @{ Name = $own; Kept = '' } }
+  return @{ Name = $standard; Kept = '' }
+}
+
 function Invoke-JhtWindowsUninstall {
   param(
     [string[]]$UninstallArgs,
@@ -353,6 +397,10 @@ function Invoke-JhtWindowsUninstall {
     (Join-Path $binPath 'docker.exe')
   )
   $PodmanPath = Find-JhtUninstallPodman -FromPath $PodmanPath
+  $resolved = Resolve-JhtUninstallMachineName -RuntimePath $runtimePath -PodmanPath $PodmanPath -WslPath $WslPath
+  $machineName = $resolved.Name
+  $script:JhtUninstallMachine = $machineName
+  if ($resolved.Kept) { [Console]::Error.WriteLine((Get-JhtUninstallText 'kept.machine' @($resolved.Kept))) }
   $leftCommands = {
     $present = @($knownCommands | Where-Object { Test-Path -LiteralPath $_ } | ForEach-Object { Split-Path -Leaf $_ })
     return ($present -join ', ')

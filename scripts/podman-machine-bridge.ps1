@@ -386,6 +386,16 @@ function Get-JhtPodmanMachineAnnouncement {
   }
 }
 
+# What Podman says on stderr while it succeeds («Created symlink», «daemon-reload», «Getting image source signatures»): notes, not
+# errors. A person reads them grey and indented; the app gets them as plain lines on stderr, the same words and no error record.
+function Write-JhtPodmanNotes {
+  param([AllowNull()][string[]]$Lines, [bool]$Human)
+  foreach ($line in @($Lines)) {
+    if (-not $line) { continue }
+    if ($Human) { Write-Host "    $line" -ForegroundColor DarkGray } else { [Console]::Error.WriteLine("podman: $line") }
+  }
+}
+
 function Invoke-JhtPodmanMachine {
   param([Parameter(Mandatory)][string]$FilePath, [Parameter(Mandatory)][AllowEmptyString()][string[]]$Arguments)
   if ($Arguments.Count -lt 2 -or $Arguments[0] -ne 'machine' -or $Arguments[1] -notin @('ssh', 'start', 'init', 'stop', 'list')) {
@@ -397,7 +407,12 @@ function Invoke-JhtPodmanMachine {
   if (-not $announcement) {
     # ssh and list: their output is data for the caller, handed back as it came.
     $result = Invoke-JhtPodmanProcess -FilePath $FilePath -Arguments $Arguments -Phase ('podman_machine_' + $Arguments[1]) -RequireCompleteOutput:$requireComplete
-    if ($result.Stderr.Length) { Write-Error -Message $result.Stderr -ErrorAction Continue }
+    if ($result.Stderr.Length) {
+      # A command that succeeded and said things on stderr (systemctl enable, daemon-reload): notes, not red error records. A command that
+      # failed keeps its stderr as an error, which a caller that redirects it (`2>$null`) can still hold back.
+      if ($result.ExitCode -eq 0) { Write-JhtPodmanNotes -Lines (Get-JhtPodmanTextLines -Text $result.Stderr) -Human (Test-JhtHumanOutput) }
+      else { Write-Error -Message $result.Stderr -ErrorAction Continue }
+    }
     if ($result.Stdout.Length) {
       $lines = [regex]::Split($result.Stdout, '\r?\n')
       if ($lines[-1] -eq '') { $lines = @($lines | Select-Object -First ($lines.Count - 1)) }
@@ -421,18 +436,47 @@ function Invoke-JhtPodmanMachine {
   $errorLines = Get-JhtPodmanTextLines -Text $result.Stderr
   if ($human) {
     foreach ($line in (Get-JhtPodmanTextLines -Text $result.Stdout)) { Write-Host "    $line" -ForegroundColor DarkGray }
-    foreach ($line in $errorLines) {
-      if ($result.ExitCode -eq 0) { Write-Host "    $line" -ForegroundColor DarkGray } else { [Console]::Error.WriteLine("podman: $line") }
-    }
+    # on a failure the lines go to stderr as plain text, as the app reads them
+    Write-JhtPodmanNotes -Lines $errorLines -Human ($result.ExitCode -eq 0)
   } else {
     if ($result.Stdout.Length) {
       $lines = [regex]::Split($result.Stdout, '\r?\n')
       if ($lines[-1] -eq '') { $lines = @($lines | Select-Object -First ($lines.Count - 1)) }
       $lines | ForEach-Object { Write-Output $_ }
     }
-    foreach ($line in $errorLines) { [Console]::Error.WriteLine("podman: $line") }
+    Write-JhtPodmanNotes -Lines $errorLines -Human $false
   }
   $global:LASTEXITCODE = $result.ExitCode
+}
+
+# The pipe a Podman machine opens (\\.\pipe\podman-<machine>) is global to the computer, and the program that holds it
+# (win-sshproxy.exe) can outlive its machine. 'absent': nobody holds it; 'connected': it answers this user (their own machine's);
+# 'denied': it exists and this user may not open it, so another Windows user's program holds it; 'unknown'/'busy': not told apart.
+function Get-JhtPodmanPipeState {
+  param([Parameter(Mandatory)][string]$MachineName)
+  $pipe = "podman-$MachineName"
+  try { $listed = @([IO.Directory]::GetFiles('\\.\pipe\') | ForEach-Object { [IO.Path]::GetFileName([string]$_) }) } catch { return 'unknown' }
+  if ($listed -cnotcontains $pipe) { return 'absent' }
+  $client = $null
+  try {
+    $client = New-Object IO.Pipes.NamedPipeClientStream('.', $pipe, [IO.Pipes.PipeDirection]::InOut, [IO.Pipes.PipeOptions]::None)
+    $client.Connect(300)
+    return 'connected'
+  } catch [UnauthorizedAccessException] { return 'denied' }
+  catch { return 'busy' }
+  finally { if ($client) { $client.Dispose() } }
+}
+
+# What to tell a person whose pipe is held by another user's program: who holds it, and what to do.
+function Get-JhtPodmanPipeAdvice {
+  param([Parameter(Mandatory)][string]$MachineName)
+  $ids = @()
+  try { $ids = @(Get-Process -Name 'win-sshproxy' -ErrorAction SilentlyContinue | ForEach-Object { [string]$_.Id }) } catch { $ids = @() }
+  $who = if ($ids.Count -gt 0) { "win-sshproxy.exe, process id $($ids -join ', ')" } else { 'win-sshproxy.exe' }
+  return ("The Podman pipe \\.\pipe\podman-$MachineName is held by a program of another Windows user of this computer ($who). " +
+    'It can stay alive after that user''s Podman machine has stopped. To free it: sign in as that user and run "podman machine stop", ' +
+    'or end win-sshproxy.exe in Task Manager (Details tab, with the User name column; an administrator can do it for you). ' +
+    'Then run the installer again.')
 }
 
 function Invoke-Checked {

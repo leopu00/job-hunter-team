@@ -491,7 +491,8 @@ def test_a_stopped_docker_desktop_distro_is_never_selected_or_started():
     runtime_path = installer + enabler
     assert "docker-desktop" not in runtime_path.lower()
     assert "Docker.DockerDesktop" not in runtime_path
-    assert "'-MachineName', 'jht-podman'" in installer
+    # the machine of each Windows user (JHT-T305): the name install.ps1 resolved, jht-podman for a user who already has it
+    assert "'-MachineName', $machineName" in installer and "Resolve-JhtPodmanMachineName" in installer
     assert "'--provider' 'wsl'" in enabler
 
 

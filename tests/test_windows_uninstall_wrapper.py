@@ -458,7 +458,7 @@ def _box(tmp_path: Path, *, machine: bool = True, data: bool = False):
                             "log": log, "home": home, "documents": documents})
 
 
-def _fake_podman(box, *, rm_exit: int = 0, rm_says: str = "") -> Path:
+def _fake_podman(box, *, rm_exit: int = 0, rm_says: str = "", machine: str = "jht-podman") -> Path:
     podman = box.tools / "podman.cmd"
     _write_batch(podman, f"""@echo off
 echo %*>>"{box.log}"
@@ -466,7 +466,7 @@ if "%1"=="machine" if "%2"=="list" goto list
 if "%1"=="machine" if "%2"=="rm" goto remove
 exit /b 90
 :list
-if exist "{box.state}" (echo [{{"Name":"jht-podman"}}]) else (echo [{{"Name":"somebody-else"}}])
+if exist "{box.state}" (echo [{{"Name":"{machine}"}}]) else (echo [{{"Name":"somebody-else"}}])
 exit /b 0
 :remove
 {f'echo {rm_says} 1>&2' if rm_says else 'rem'}
@@ -477,18 +477,19 @@ exit /b 0
     return podman
 
 
-def _fake_wsl(box, *, unregister_exit: int = 0) -> Path:
+def _fake_wsl(box, *, unregister_exit: int = 0, machine: str = "jht-podman") -> Path:
     """The distro of a Podman machine is `podman-<name>`: podman-jht-podman."""
     wsl = box.tools / "wsl.cmd"
+    distro = f"podman-{machine}"
     _write_batch(wsl, f"""@echo off
 echo wsl %*>>"{box.log}"
 if "%1"=="--status" exit /b 0
-if "%1"=="--list" if exist "{box.state}" echo podman-jht-podman
+if "%1"=="--list" if exist "{box.state}" echo {distro}
 if "%1"=="--terminate" exit /b 0
 if "%1"=="--unregister" goto unregister
 exit /b 0
 :unregister
-if not "%2"=="podman-jht-podman" exit /b 91
+if not "%2"=="{distro}" exit /b 91
 if {unregister_exit} NEQ 0 (echo The process cannot access the file 1>&2 & exit /b {unregister_exit})
 del /q "{box.state}"
 exit /b 0
@@ -611,3 +612,62 @@ def test_the_nul_of_wsls_utf16_listing_is_removed_with_two_strings_not_a_char_an
     # distros failed there ("String must be exactly one character long") and the fallback through WSL never ran.
     assert "Replace([char]0, '')" not in SOURCE
     assert SOURCE.count("Replace([string][char]0, '')") == 2
+
+
+# ── one Podman machine per Windows user (JHT-T305) ────────────────────────────────────────────────────────────────────
+
+def _current_machine_name() -> str:
+    """The name install.ps1 gives the user running this test: the SHA-256 of their SID, as Python computes it."""
+    import hashlib
+    sid = subprocess.run([POWERSHELL, "-NoLogo", "-NoProfile", "-Command", "[Security.Principal.WindowsIdentity]::GetCurrent().User.Value"],
+                         capture_output=True, text=True, check=True).stdout.strip()
+    return "jht-podman-" + hashlib.sha256(sid.encode("ascii")).hexdigest()[:8]
+
+
+def _attest(box, name: str, *, mark: str | None = None) -> None:
+    (box.runtime / "podman-machine").write_text(name + "\n", encoding="utf-8")
+    if mark is not None:
+        (box.runtime / "podman-machine-created").write_text(mark + "\n", encoding="utf-8")
+
+
+@windows_only
+def test_the_machine_of_this_users_own_name_is_the_one_removed(tmp_path: Path):
+    name = _current_machine_name()
+    box = _box(tmp_path)
+    _attest(box, name)
+    result = _uninstall(box, _fake_podman(box, machine=name), _fake_wsl(box, machine=name), "--confirm", tmp_path=tmp_path, machine_output="0")
+    assert "CODE=0" in result.stdout, result.stdout + result.stderr
+    calls = box.log.read_text(encoding="utf-8")
+    # whole lines: the standard name is the beginning of the user's own
+    assert f"machine rm --force {name}" in calls.splitlines() and "machine rm --force jht-podman" not in calls.splitlines()
+    assert f"Tolgo la macchina Podman {name}" in result.stdout
+    assert not box.state.exists() and not box.runtime.exists()
+
+
+@windows_only
+def test_another_name_is_removed_only_with_the_mark_of_the_installer_that_created_it(tmp_path: Path):
+    # created by the installer: the mark names the machine
+    marked = _box(tmp_path / "marked")
+    _attest(marked, "team-box", mark="team-box")
+    result = _uninstall(marked, _fake_podman(marked, machine="team-box"), _fake_wsl(marked, machine="team-box"), "--confirm", tmp_path=tmp_path / "marked")
+    assert "CODE=0" in result.stdout, result.stdout + result.stderr
+    assert "machine rm --force team-box" in marked.log.read_text(encoding="utf-8") and not marked.state.exists()
+    # no mark, or the mark of another machine: adopted from the user, it stays and the sentence says so
+    for label, mark in (("none", None), ("other", "somebody-else")):
+        box = _box(tmp_path / label)
+        _attest(box, "team-box", mark=mark)
+        result = _uninstall(box, _fake_podman(box, machine="team-box"), _fake_wsl(box, machine="team-box"), "--confirm", tmp_path=tmp_path / label)
+        assert "CODE=0" in result.stdout, (label, result.stdout + result.stderr)
+        calls = box.log.read_text(encoding="utf-8")
+        assert "machine rm --force team-box" not in calls and "wsl --unregister podman-team-box" not in calls, label
+        assert box.state.exists(), label
+        assert "team-box non risulta creata dall'installer" in result.stderr, label
+
+
+@windows_only
+def test_without_the_attestation_the_machine_of_this_users_own_name_is_still_found(tmp_path: Path):
+    name = _current_machine_name()
+    box = _box(tmp_path)
+    result = _uninstall(box, _fake_podman(box, machine=name), _fake_wsl(box, machine=name), "--confirm", tmp_path=tmp_path)
+    assert "CODE=0" in result.stdout, result.stdout + result.stderr
+    assert f"machine rm --force {name}" in box.log.read_text(encoding="utf-8") and not box.state.exists()

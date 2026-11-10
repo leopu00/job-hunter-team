@@ -636,6 +636,7 @@ def test_uninstall_removes_only_jht_and_preserves_the_users_default_connection(t
             "Get-JhtNormalizedWindowsPath", "Get-JhtPodmanMachineState",
             "Remove-JhtUserEnvironment", "Remove-JhtStartupTask",
             "Remove-JhtPodmanMachineThroughWsl", "Remove-JhtUserDataFolder", "Remove-JhtDirectoryNoFollow",
+            "Get-JhtUserMachineName", "Test-JhtMachineCreatedMark", "Resolve-JhtUninstallMachineName",
             "Invoke-JhtWindowsUninstall",
         ],
         UNINSTALL_BODY,
