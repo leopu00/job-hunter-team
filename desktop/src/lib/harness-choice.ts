@@ -18,6 +18,8 @@ export interface HarnessChoice {
   /** Whether Pi may be chosen with this provider and this kind of access. */
   piAllowed: boolean;
   login: HarnessLogin;
+  /** The entry names of Pi's sign-in file when it is there but is not the one for this provider (lowercase words, never a value). */
+  loginFound: string[];
 }
 
 export type HarnessOutcome = { ok: true; value: HarnessChoice } | { ok: false; code: string };
@@ -32,7 +34,9 @@ export function parseHarnessChoice(value: unknown): HarnessChoice | null {
   if (typeof provider !== "string" || !/^[a-z]{0,16}$/.test(provider)) return null;
   if (typeof piAllowed !== "boolean") return null;
   if (typeof login !== "string" || !(HARNESS_LOGINS as readonly string[]).includes(login)) return null;
-  return { harness: harness as HarnessName, provider, piAllowed, login: login as HarnessLogin };
+  const found = r.loginFound;
+  const loginFound = Array.isArray(found) ? found.filter((name): name is string => typeof name === "string" && /^[a-z0-9._-]{1,40}$/.test(name)).slice(0, 8) : [];
+  return { harness: harness as HarnessName, provider, piAllowed, login: login as HarnessLogin, loginFound };
 }
 
 async function ask(command: string, args: Record<string, unknown>): Promise<HarnessOutcome> {

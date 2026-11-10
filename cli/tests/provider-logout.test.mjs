@@ -135,7 +135,7 @@ test('the boot check and the onboarding snapshot only READ the credential files:
     assert.ok(!check.includes(write), write);
   }
   const wrapper = readFileSync(join(root, 'scripts/jht-wrapper.sh'), 'utf-8');
-  const snapshot = wrapper.split('const markers={claude:')[1].slice(0, 600);
+  const snapshot = wrapper.split('const markers={claude:')[1].slice(0, 1400);
   assert.match(snapshot, /existsSync/);
   for (const write of ['writeFile', 'copyFile', 'renameSync', 'symlinkSync', 'appendFile']) {
     assert.ok(!snapshot.includes(write), write);
