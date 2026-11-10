@@ -625,6 +625,9 @@ runtime_helper_absent_answer() {
     else printf '%-15s %-16s %s\n' "$one" "non installato" "non ancora installato"; fi
   done
   [ "$json" = 0 ] || printf ']}\n'
+  # In words, the person is told which command installs them (the lines above stay the shape the helper gives).
+  [ "$json" = 1 ] || printf "per installarli: 'jht upgrade' (o un 'jht integration add <id>')\n" >&2
+  return 0
 }
 
 # $2 is the command of the person: only `add` and `remove` fetch a helper that is missing. `jht tools` never does: its commands run by

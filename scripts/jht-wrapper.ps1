@@ -804,6 +804,8 @@ function Write-RuntimeHelperAbsentAnswer {
   if ($json -and $id) { [Console]::Out.WriteLine($rows[0]); return $true }
   if ($json) { [Console]::Out.WriteLine('{"integrations":[' + ($rows -join ',') + ']}'); return $true }
   foreach ($one in $ids) { [Console]::Out.WriteLine(('{0,-15} {1,-16} {2}' -f $one, 'non installato', 'non ancora installato')) }
+  # In words, the person is told which command installs them (the lines above stay the shape the helper gives).
+  [Console]::Error.WriteLine("per installarli: 'jht upgrade' (o un 'jht integration add <id>')")
   return $true
 }
 
