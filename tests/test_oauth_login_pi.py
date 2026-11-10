@@ -144,7 +144,7 @@ def test_a_login_with_only_anthropic_is_not_found_and_says_what_it_holds(tmp_pat
     done = _run(env, terminal=True)
     assert done.returncode == 1
     assert "Pi login found" not in done.stdout
-    assert "sign-in of: anthropic" in done.stderr and "billed by Anthropic per token" in done.stderr
+    assert "sign-in of: anthropic" in done.stderr and "may be billed per token" in done.stderr
     assert "synthetic" not in done.stdout + done.stderr
 
 

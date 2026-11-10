@@ -27,7 +27,7 @@
  *   3. default `local` (sicuro: comportamento storico)
  */
 
-import { readFile, access, unlink, writeFile } from 'node:fs/promises';
+import { readFile, access, unlink, writeFile, lstat } from 'node:fs/promises';
 import { existsSync, createWriteStream, mkdirSync, statSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -290,6 +290,9 @@ async function hasProviderCredentials() {
     // Pi's file has one entry per service: it is the sign-in of THIS provider only when its own entry is there (a file with only
     // Anthropic's, a Claude subscription billed per token from Pi, does not start the team). Only the entry names are looked at.
     if (relative === PI_LOGIN_MARKER) {
+      // a regular file of a sane size only (as shared/skills/pi_login.py): a FIFO or a huge file must not stop the boot on a read
+      const info = await lstat(marker);
+      if (!info.isFile() || info.size <= 0 || info.size > 256 * 1024) return false;
       const seen = inspectPiLogin(await readFile(marker, 'utf-8'), cfg.active_provider);
       return seen.state === 'ok' || seen.state === 'no_rule';
     }

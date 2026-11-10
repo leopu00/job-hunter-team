@@ -264,7 +264,7 @@ def test_pis_file_goes_whole_even_with_other_services_in_it_because_every_check_
     # file being there as «signed in», so a file left with the other services' entries would read as signed in: the account is
     # disconnected by removing the file, and the confirmation says that every sign-in saved for the team goes.
     home = home_with(tmp_path, {"active_provider": "codex", "harness": "pi"})
-    put(home, ".pi/agent/auth.json", '{"openai-codex":{"type":"oauth"},"anthropic":{"type":"api_key","key":"synthetic"}}')
+    put(home, ".pi/agent/auth.json", '{"openai":{"type":"oauth"},"anthropic":{"type":"api_key","key":"synthetic"}}')
     assert ps.status(str(home))["authenticated"] is True
     assert ps.logout(str(home)) == {"ok": True, "provider": "codex", "authenticated": False, "removed": 1}
     assert not (home / ".pi/agent/auth.json").exists()

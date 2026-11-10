@@ -256,9 +256,13 @@ else:
   # The names are the ones of shared/runtime/pi-login-keys.list (tests/test_agent_watchdog_pi.py keeps them together).
   if has_creds and pi and prov in ('openai', 'codex'):
     try:
-      with open(f'{jht_home}/.pi/agent/auth.json', encoding='utf-8') as handle:
+      pi_file = f'{jht_home}/.pi/agent/auth.json'
+      # a regular file of a sane size only: a FIFO or a huge file must not stop the watchdog on a read
+      if not os.path.isfile(pi_file) or not (0 < os.path.getsize(pi_file) <= 262144):
+        raise ValueError('not a login file')
+      with open(pi_file, encoding='utf-8') as handle:
         saved = json.load(handle)
-      has_creds = isinstance(saved, dict) and any(isinstance(saved.get(n), dict) and bool(saved.get(n)) for n in ('openai-codex', 'openai'))
+      has_creds = isinstance(saved, dict) and any(isinstance(saved.get(n), dict) and bool(saved.get(n)) for n in ('openai',))
     except Exception:
       has_creds = False
 sys.exit(0 if (prov and has_creds) else 1)

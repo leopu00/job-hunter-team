@@ -248,6 +248,8 @@ def test_a_pi_file_with_only_another_service_is_not_the_sign_in_of_the_openai_ac
     write_json(pi, {"anthropic": {"type": "oauth", "access": "fake-pi-token"}})
     assert state(tmp_path) == "missing"
     write_json(pi, {"anthropic": {"type": "oauth"}, "openai-codex": {"type": "oauth"}})
+    assert state(tmp_path) == "missing", "the legacy id is not what the agents start with"
+    write_json(pi, {"anthropic": {"type": "oauth"}, "openai": {"type": "oauth"}})
     assert state(tmp_path) == "ready"
     for text in ("{}", '{"openai": {}}', '{"openai": "x"}'):
         pi.write_text(text, encoding="utf-8")

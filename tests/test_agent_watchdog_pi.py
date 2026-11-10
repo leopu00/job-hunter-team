@@ -59,7 +59,7 @@ def test_a_pi_file_with_only_another_service_does_not_make_the_openai_team_ready
     assert not _ready(capable_bash, tmux, config, files=[".pi/agent/auth.json"], pi_login=only_anthropic)
     for login in ("{}", "not json", json.dumps({"openai": {}}), json.dumps(["openai"])):
         assert not _ready(capable_bash, tmux, config, files=[".pi/agent/auth.json"], pi_login=login), login
-    assert _ready(capable_bash, tmux, config, files=[".pi/agent/auth.json"], pi_login=json.dumps({"anthropic": {"a": 1}, "openai-codex": {"a": 1}}))
+    assert _ready(capable_bash, tmux, config, files=[".pi/agent/auth.json"], pi_login=json.dumps({"anthropic": {"a": 1}, "openai": {"a": 1}}))
 
 
 def test_the_names_the_watchdog_looks_for_are_the_ones_of_the_shared_list():
@@ -67,5 +67,19 @@ def test_the_names_the_watchdog_looks_for_are_the_ones_of_the_shared_list():
     root = Path(__file__).resolve().parents[1]
     watchdog = (root / ".launcher" / "agent-watchdog.sh").read_text(encoding="utf-8")
     listed = next(line for line in (root / "shared" / "runtime" / "pi-login-keys.list").read_text(encoding="utf-8").splitlines() if line.startswith("openai|"))
-    assert tuple(listed.split("|")[1].split(",")) == ("openai-codex", "openai")
-    assert "('openai-codex', 'openai')" in watchdog
+    assert tuple(listed.split("|")[1].split(",")) == ("openai",)
+    assert "for n in ('openai',))" in watchdog
+
+
+def test_a_fifo_or_a_huge_login_file_does_not_stop_the_watchdog_it_is_just_not_a_login(capable_bash, tmux):
+    """The check reads the file only when it is a regular file of a sane size: a FIFO would block the read for ever."""
+    import os
+    config = {"active_provider": "openai", "harness": "pi"}
+    home = tmux.tmp / "home"
+    fifo = home / ".pi" / "agent" / "auth.json"
+    fifo.parent.mkdir(parents=True, exist_ok=True)
+    os.mkfifo(fifo)
+    assert not _ready(capable_bash, tmux, config)   # no files given: the FIFO is the only thing there
+    fifo.unlink()
+    fifo.write_text(json.dumps({"openai": {"a": "x" * (300 * 1024)}}), encoding="utf-8")
+    assert not _ready(capable_bash, tmux, config)

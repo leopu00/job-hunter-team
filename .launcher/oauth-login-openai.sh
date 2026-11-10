@@ -22,7 +22,7 @@ jht_oauth_login_pi() {
   mkdir -p "$(jht_pi_agent_dir)" || return 1
   chmod 700 "$(jht_pi_agent_dir)" 2>/dev/null || true
   echo "Pi opens below. What to do in it:"
-  echo "  1. type /login and choose ChatGPT (OpenAI): not Anthropic, the team on Pi runs on OpenAI, and a Claude subscription used from Pi is billed per token"
+  echo "  1. type /login and choose ChatGPT (OpenAI): not Anthropic, the team on Pi runs on OpenAI, and a Claude subscription used from Pi may be billed per token, as Pi itself warns"
   echo "  2. open the URL it shows in your browser and finish the sign-in"
   echo "  3. leave Pi with Ctrl+C (or type /quit): the sign-in is checked here and the setup goes on"
   echo "Behind a company proxy the sign-in can fail with \"This operation was aborted\": run jht oauth-login from a network without it, or give an OpenAI API key instead: jht setup --non-interactive --provider openai --harness pi --auth-method api_key --secret-mode file."

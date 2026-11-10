@@ -27,7 +27,7 @@ ENTRY = {"type": "oauth", "access": SECRET}
 CASES = [
     # (provider, auth.json text, state)
     ("openai", json.dumps({"openai": ENTRY}), "ok"),
-    ("openai", json.dumps({"openai-codex": ENTRY}), "ok"),
+    ("openai", json.dumps({"openai-codex": ENTRY}), "other_provider"),   # the legacy id: the agents start with --provider openai
     ("codex", json.dumps({"openai": ENTRY}), "ok"),
     ("OpenAI", json.dumps({"openai": ENTRY}), "ok"),
     ("openai", json.dumps({"anthropic": ENTRY, "openai": ENTRY}), "ok"),
@@ -41,9 +41,11 @@ CASES = [
     ("openai", "[]", "unreadable"),
     ("openai", "null", "unreadable"),
     ("glm", json.dumps({"zai": ENTRY}), "ok"),
+    ("glm", json.dumps({"zai-coding-cn": ENTRY}), "other_provider"),   # another provider of Pi (China): the agents start with --provider zai
     ("glm", json.dumps({"anthropic": ENTRY}), "other_provider"),
-    ("kimi", json.dumps({"kimi-coding": ENTRY}), "ok"),
-    ("moonshot", json.dumps({"kimi-coding": ENTRY}), "ok"),
+    ("kimi", json.dumps({"moonshotai": ENTRY}), "ok"),
+    ("moonshot", json.dumps({"moonshotai": ENTRY}), "ok"),
+    ("kimi", json.dumps({"kimi-coding": ENTRY}), "other_provider"),
     ("somebody-else", json.dumps({"anthropic": ENTRY}), "no_rule"),
     ("", json.dumps({"anthropic": ENTRY}), "no_rule"),
 ]
@@ -98,7 +100,7 @@ def test_the_command_line_prints_one_json_line_without_any_value(tmp_path: Path)
     done = subprocess.run([sys.executable, "-I", str(ROOT / "shared" / "skills" / "pi_login.py"), str(auth), "openai"],
                           capture_output=True, text=True, timeout=30)
     assert done.returncode == 0
-    assert json.loads(done.stdout) == {"state": "other_provider", "found": ["anthropic"], "needs": ["openai-codex", "openai"]}
+    assert json.loads(done.stdout) == {"state": "other_provider", "found": ["anthropic"], "needs": ["openai"]}
     assert SECRET not in done.stdout + done.stderr
 
 
@@ -108,3 +110,28 @@ def test_every_provider_pi_can_run_on_has_an_entry_name() -> None:
     assert "inspectPiLogin" in harness
     for provider in ("openai", "codex", "glm", "kimi", "moonshot"):
         assert names.get(provider), provider
+
+
+# The names of the sign-ins in auth.json of Pi 1.5.0 (the version of the image), read in its code: `/login` saves under the id of the provider
+# chosen, and these are the ids the agents start with. Anthropic's is refused for the team on Pi (billed per token as extra usage).
+PI_1_5_0 = {
+    "openai": ("openai",),        # ChatGPT sign-in and an OpenAI API key: the same entry
+    "codex": ("openai",),
+    "glm": ("zai",),
+    "kimi": ("moonshotai",),      # Moonshot's key: the provider JHT starts pi with
+    "moonshot": ("moonshotai",),
+}
+
+
+def test_the_names_are_those_of_pi_1_5_0_and_the_list_says_so():
+    assert pi_login.login_keys() == PI_1_5_0
+    text = (ROOT / "shared" / "runtime" / "pi-login-keys.list").read_text(encoding="utf-8")
+    spawn = (ROOT / ".launcher" / "spawn-lib.sh").read_text(encoding="utf-8")
+    pinned = next(line for line in spawn.splitlines() if line.startswith("JHT_PI_VERSION=")).split('"')[1]
+    assert f"# PI_NAMES_FROM={pinned}" in text, "Pi was updated: read the names of its auth.json again, then change the version in the list"
+
+
+def test_an_entry_the_agents_would_not_use_does_not_pass_the_check():
+    # the ids the agents start with: --provider openai | zai | moonshotai (never openai-codex, zai-coding-cn or kimi-coding)
+    for provider, other in (("openai", "openai-codex"), ("glm", "zai-coding-cn"), ("kimi", "kimi-coding")):
+        assert pi_login.inspect_text(json.dumps({other: ENTRY}), provider)["state"] == "other_provider"

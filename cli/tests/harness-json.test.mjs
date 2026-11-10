@@ -60,7 +60,7 @@ test('with Pi the login is the one of the provider of the setup: a file with onl
   const r = jht(home, []);
   assert.equal(r.reply.login, 'signed_out');
   assert.doesNotMatch(r.lines.join('\n'), /never printed/);
-  for (const [text, login] of [['{"openai-codex":{"type":"oauth"}}', 'signed_in'], ['{}', 'signed_out'], ['not json', 'signed_out'], ['{"openai":{}}', 'signed_out']]) {
+  for (const [text, login] of [['{"openai":{"type":"oauth"}}', 'signed_in'], ['{"openai-codex":{"type":"oauth"}}', 'signed_out'], ['{}', 'signed_out'], ['not json', 'signed_out'], ['{"openai":{}}', 'signed_out']]) {
     writeFileSync(join(home, '.pi/agent/auth.json'), text);
     assert.equal(jht(home, []).reply.login, login, text);
   }

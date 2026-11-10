@@ -22,7 +22,7 @@ if provider not in FILES or (entry.get('auth_method') or 'subscription')!='subsc
 # with Pi in charge of the OpenAI account the sign-in is Pi's own file, with one entry per service: it is the sign-in of THIS account only when
 # its own entry is there (a file with only Anthropic's entry, a Claude subscription billed per token from Pi, is «not signed in»). The NAMES of
 # the entries are looked at, never a value. The two names are the ones of shared/runtime/pi-login-keys.list (tests/test_provider_login_state.py)
-PI_NAMES=('openai-codex','openai')
+PI_NAMES=('openai',)
 if config.get('harness')=='pi' and FILES[provider]==CODEX:
  pi_path=os.path.join(home,'.pi','agent','auth.json')
  try: pi=os.stat(pi_path)

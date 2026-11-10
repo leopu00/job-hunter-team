@@ -63,7 +63,7 @@ jht_pi_login_check() {
   local config="${1:-}" provider script out state found
   JHT_PI_LOGIN_FOUND=""
   jht_pi_login_present || return 1
-  provider="$(jht_pi_active_provider "$config")"
+  provider="$(jht_pi_active_provider "$config" | tr -cd 'a-z0-9._-' | cut -c1-40)"   # the name goes into a message: plain lowercase words only
   for script in "${JHT_SPAWN_LIB_DIR:-}/../shared/skills/pi_login.py" /app/shared/skills/pi_login.py; do [ -f "$script" ] && break; script=""; done
   [ -n "$script" ] || return 0   # senza il controllo (immagine vecchia) vale la presenza, come prima
   out="$(python3 -I "$script" "$(jht_pi_agent_dir)/auth.json" "$provider" 2>/dev/null)" || out=""
@@ -81,7 +81,7 @@ jht_pi_login_check() {
       echo "  It holds the sign-in of: ${found:-nothing}."
     fi
     case ",$found," in
-      *,anthropic,*) echo "  A Claude subscription used from pi is billed by Anthropic per token, as extra usage: with Claude use the claude program (jht providers harness codex does not apply: choose Claude in jht setup)." ;;
+      *,anthropic,*) echo "  Pi itself warns that a Claude subscription used from pi may be billed per token, as extra usage: with Claude, use the claude program (choose Claude in jht setup)." ;;
     esac
     echo "  Fix:     sign in to pi with the provider of the setup: jht oauth-login (in pi type /login, choose the provider, then leave with Ctrl+C or /quit),"
     echo "           or jht setup. This login is not used: nothing starts on it."

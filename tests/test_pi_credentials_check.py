@@ -125,12 +125,14 @@ def test_a_pi_login_for_the_provider_of_the_setup_is_enough_and_no_value_is_prin
     assert result.stderr == "" and SECRET not in result.stdout
 
 
-@pytest.mark.parametrize("login", [
-    json.dumps({"openai-codex": {"type": "oauth"}}),                                   # the name older versions of Pi gave it
-    json.dumps({"anthropic": {"type": "api_key", "key": SECRET}, "openai": {"type": "oauth"}}),  # more services: ours is there
-], ids=["codex-name", "among-others"])
-def test_the_entry_of_the_provider_counts_wherever_it_is_and_whatever_else_is_there(tmp_path: Path, login: str) -> None:
+def test_the_entry_of_the_provider_counts_wherever_it_is_and_whatever_else_is_there(tmp_path: Path) -> None:
+    login = json.dumps({"anthropic": {"type": "api_key", "key": SECRET}, "openai": {"type": "oauth"}})  # more services: ours is there
     assert _check(_home(tmp_path, config=OPENAI_CONFIG, login=login)).returncode == 0
+
+
+def test_the_legacy_openai_codex_entry_is_not_the_login_the_agents_use(tmp_path: Path) -> None:
+    """Pi 1.5.0 saves the ChatGPT sign-in as `openai`; the agents start with --provider openai and would not find `openai-codex`."""
+    assert _check(_home(tmp_path, config=OPENAI_CONFIG, login=json.dumps({"openai-codex": {"type": "oauth"}}))).returncode == 1
 
 
 def test_a_login_with_only_anthropic_is_not_the_login_of_the_openai_setup(tmp_path: Path) -> None:
@@ -138,7 +140,7 @@ def test_a_login_with_only_anthropic_is_not_the_login_of_the_openai_setup(tmp_pa
     result = _check(_home(tmp_path, config=OPENAI_CONFIG, login=ANTHROPIC_LOGIN))
     assert result.returncode == 1
     assert result.stdout == ""
-    for words in ("not a login for the provider of the setup (openai)", "sign-in of: anthropic", "billed by Anthropic per token",
+    for words in ("not a login for the provider of the setup (openai)", "sign-in of: anthropic", "may be billed per token",
                   "jht oauth-login", "nothing starts on it"):
         assert words in result.stderr, words
     assert SECRET not in result.stdout + result.stderr, "the names of the entries are said, never a value"
@@ -154,6 +156,14 @@ def test_a_login_file_with_no_usable_entry_of_the_provider_is_refused(tmp_path: 
 def test_the_provider_that_has_no_entry_name_in_this_release_keeps_the_old_rule_the_file_is_there(tmp_path: Path) -> None:
     config = {"active_provider": "somebody-else", "providers": {}}
     assert _check(_home(tmp_path, config=config, login=ANTHROPIC_LOGIN)).returncode == 0
+
+
+def test_the_provider_name_in_the_message_is_plain_lowercase_words_only(tmp_path: Path) -> None:
+    # spelled with capitals and spaces in the config, said as `openai` (and the filter is in the script: only [a-z0-9._-], 40 characters)
+    result = _check(_home(tmp_path, config={"active_provider": "  OpenAI ", "providers": {}}, login=ANTHROPIC_LOGIN))
+    assert result.returncode == 1
+    assert "provider of the setup (openai)" in result.stderr
+    assert "tr -cd 'a-z0-9._-' | cut -c1-40" in CHECKER.read_text(encoding="utf-8")
 
 
 def test_the_login_file_is_looked_at_with_lstat_first_and_only_its_entry_names_are_read() -> None:

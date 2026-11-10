@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """pi_login.py — does the sign-in of Pi in auth.json belong to the provider the team runs on?
 
-Pi keeps ONE entry per service in <team home>/.pi/agent/auth.json (the ChatGPT subscription is `openai-codex`, Anthropic `anthropic`, ...).
+Pi keeps ONE entry per service in <team home>/.pi/agent/auth.json (ChatGPT and an OpenAI key are `openai`, Anthropic `anthropic`, ...; the names are those of Pi 1.5.0, see the list).
 A file that is there says nothing about which account it is for: a login to Anthropic with the Claude subscription (billed per token as
 extra usage when used from Pi) is a file that is there, and it used to be taken for the sign-in of the OpenAI account. This reads the NAMES of
 the entries, never their values, and says whether the provider of the setup has its own.

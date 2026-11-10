@@ -1,9 +1,16 @@
 # The name Pi gives, in <team home>/.pi/agent/auth.json, to the sign-in each provider of jht.config.json can run on Pi.
 # Read by shared/runtime/agent-harness.js (the wizard, `jht providers harness`) and shared/skills/pi_login.py (the launcher, the status
 # of the sign-in): a login of Pi counts for the provider of the setup only when its own entry is in the file.
-#   provider|Pi's names, comma separated (the ChatGPT subscription is `openai-codex`, an OpenAI API key is `openai`)
-openai|openai-codex,openai
-codex|openai-codex,openai
-glm|zai,zai-coding-cn
-kimi|kimi-coding
-moonshot|kimi-coding
+#
+# THE NAMES ARE THOSE OF Pi 1.5.0 (PI_NAMES_FROM below), read in its code and not in its docs: `/login` saves under the id of the provider
+# that was chosen. They are the ids the agents start with (`--provider openai|zai|moonshotai`), so a file that passes this check is one the
+# agents can use. At every update of Pi (JHT_PI_VERSION in .launcher/spawn-lib.sh) read them again: tests/test_pi_login.py fails until
+# the line below names the new version.
+# PI_NAMES_FROM=1.5.0
+#
+#   provider|Pi's names, comma separated (ChatGPT sign-in and an OpenAI API key are both `openai` in 1.5.0)
+openai|openai
+codex|openai
+glm|zai
+kimi|moonshotai
+moonshot|moonshotai

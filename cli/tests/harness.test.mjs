@@ -141,7 +141,7 @@ test('a pi login with only Anthropic is not the login of the OpenAI setup: said 
   const said = events.find((e) => e.kind === 'note' && /pi_login_wrong_provider/.test(e.message));
   assert.ok(said, 'the refusal has its code');
   assert.match(said.message, /not for OpenAI \(ChatGPT\): the file holds only: anthropic/);
-  assert.match(said.message, /billed per token/);
+  assert.match(said.message, /may be billed per token/);
   assert.equal(calls.includes('jht team start'), false, 'the team is not started on it');
   assert.equal(events.some((e) => e.kind === 'note' && e.title === 'Configuration saved'), false, '«Sign-in: done» is not said');
   assert.equal(events.some((e) => /All set/.test(e.message ?? '')), false);
@@ -285,4 +285,13 @@ test('the sign-in runs the pi of the image by its own path, and the name only wh
   const stdin = { isRaw: false, isPaused: () => true, pause() {}, resume() {}, isTTY: false };
   runPiLogin({ spawn: (cmd, args) => { seen.push([cmd, args]); return { status: 0 }; }, stdin, env: { PATH: '/opt/jht-deps/bin' }, exists: () => true });
   assert.equal(seen[0][0], PI_IMAGE_BIN, 'not a pi from the folder the agents can write');
+});
+
+test('the boot gate reads the login of Pi only when it is a regular file of a sane size, and only then looks at the entry names', () => {
+  const pid1 = readFileSync(join(cli, 'src/commands/pid1.js'), 'utf-8');
+  const check = pid1.split('async function hasProviderCredentials()')[1].split('\n}\n')[0];
+  const guard = check.indexOf('lstat(marker)');
+  assert.ok(guard > 0 && guard < check.indexOf('readFile(marker'), 'lstat comes before the read');
+  assert.match(check, /!info\.isFile\(\) \|\| info\.size <= 0 \|\| info\.size > 256 \* 1024/);
+  assert.match(check, /inspectPiLogin\(/);
 });
