@@ -386,6 +386,16 @@ function Get-JhtPodmanMachineAnnouncement {
   }
 }
 
+# What Podman says on stderr while it succeeds («Created symlink», «daemon-reload», «Getting image source signatures»): notes, not
+# errors. A person reads them grey and indented; the app gets them as plain lines on stderr, the same words and no error record.
+function Write-JhtPodmanNotes {
+  param([AllowNull()][string[]]$Lines, [bool]$Human)
+  foreach ($line in @($Lines)) {
+    if (-not $line) { continue }
+    if ($Human) { Write-Host "    $line" -ForegroundColor DarkGray } else { [Console]::Error.WriteLine("podman: $line") }
+  }
+}
+
 function Invoke-JhtPodmanMachine {
   param([Parameter(Mandatory)][string]$FilePath, [Parameter(Mandatory)][AllowEmptyString()][string[]]$Arguments)
   if ($Arguments.Count -lt 2 -or $Arguments[0] -ne 'machine' -or $Arguments[1] -notin @('ssh', 'start', 'init', 'stop', 'list')) {
@@ -397,7 +407,12 @@ function Invoke-JhtPodmanMachine {
   if (-not $announcement) {
     # ssh and list: their output is data for the caller, handed back as it came.
     $result = Invoke-JhtPodmanProcess -FilePath $FilePath -Arguments $Arguments -Phase ('podman_machine_' + $Arguments[1]) -RequireCompleteOutput:$requireComplete
-    if ($result.Stderr.Length) { Write-Error -Message $result.Stderr -ErrorAction Continue }
+    if ($result.Stderr.Length) {
+      # A command that succeeded and said things on stderr (systemctl enable, daemon-reload): notes, not red error records. A command that
+      # failed keeps its stderr as an error, which a caller that redirects it (`2>$null`) can still hold back.
+      if ($result.ExitCode -eq 0) { Write-JhtPodmanNotes -Lines (Get-JhtPodmanTextLines -Text $result.Stderr) -Human (Test-JhtHumanOutput) }
+      else { Write-Error -Message $result.Stderr -ErrorAction Continue }
+    }
     if ($result.Stdout.Length) {
       $lines = [regex]::Split($result.Stdout, '\r?\n')
       if ($lines[-1] -eq '') { $lines = @($lines | Select-Object -First ($lines.Count - 1)) }
@@ -421,16 +436,15 @@ function Invoke-JhtPodmanMachine {
   $errorLines = Get-JhtPodmanTextLines -Text $result.Stderr
   if ($human) {
     foreach ($line in (Get-JhtPodmanTextLines -Text $result.Stdout)) { Write-Host "    $line" -ForegroundColor DarkGray }
-    foreach ($line in $errorLines) {
-      if ($result.ExitCode -eq 0) { Write-Host "    $line" -ForegroundColor DarkGray } else { [Console]::Error.WriteLine("podman: $line") }
-    }
+    # on a failure the lines go to stderr as plain text, as the app reads them
+    Write-JhtPodmanNotes -Lines $errorLines -Human ($result.ExitCode -eq 0)
   } else {
     if ($result.Stdout.Length) {
       $lines = [regex]::Split($result.Stdout, '\r?\n')
       if ($lines[-1] -eq '') { $lines = @($lines | Select-Object -First ($lines.Count - 1)) }
       $lines | ForEach-Object { Write-Output $_ }
     }
-    foreach ($line in $errorLines) { [Console]::Error.WriteLine("podman: $line") }
+    Write-JhtPodmanNotes -Lines $errorLines -Human $false
   }
   $global:LASTEXITCODE = $result.ExitCode
 }

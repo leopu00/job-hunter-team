@@ -38,6 +38,11 @@ PODMAN_CASES = """  "machine init "*)
     echo 'your 131072x1 screen size is bogus. expect trouble' >&2
     echo 'Machine "jht-podman" started successfully' ;;
   "machine list --format json") printf '%s' '[{"Name":"jht-podman","Running":true}]' ;;
+  "machine ssh jht-podman "*)
+    echo 'Created symlink /home/user/.config/systemd/user/default.target.wants/jht.service -> /home/user/.config/systemd/user/jht.service.' >&2
+    echo 'daemon-reload done' >&2
+    echo 'unit enabled'
+    [ "$FAKE_EXIT" = 0 ] || { echo 'Error: ssh command failed' >&2; exit "$FAKE_EXIT"; } ;;
   "--connection jht-podman pull "*)
     echo 'Trying to pull ghcr.io/leopu00/jht@sha256:abc...' >&2
     echo 'Getting image source signatures' >&2
@@ -66,7 +71,7 @@ def require_the_requested_engine(monkeypatch):
 
 def _case(tmp_path, body: str, *, machine_output: str, exit_code: int = 0):
     bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
+    bin_dir.mkdir(parents=True)
     _fake(bin_dir, "podman.exe", PODMAN_CASES)
     result, calls = _run(
         tmp_path, ENABLER, ["Invoke-Checked", "Write-JhtPhase", "Invoke-PodmanPull", "ConvertTo-JhtPullLine"], body,
@@ -189,3 +194,36 @@ def test_the_wait_line_is_ascii_and_stops_with_the_command():
     block = source[source.index("JhtLiveWait"):source.index("function ConvertTo-JhtPodmanNativeArguments")]
     assert block.isascii()
     assert "Console.Out.WriteLine" in block and "stopped" in block
+
+
+SSH_CALL = "$out = @(Invoke-JhtPodmanMachine -FilePath $env:FAKE_PODMAN -Arguments @('machine', 'ssh', 'jht-podman', 'systemctl --user enable jht')); [Console]::Out.WriteLine('OUT ' + ($out -join '|'))"
+
+
+def test_what_a_command_in_the_machine_says_on_stderr_while_it_succeeds_is_a_grey_note_not_a_red_error(tmp_path):
+    # «Created symlink» and «daemon-reload» came out as two red error blocks during the enabler
+    result, _ = _case(tmp_path, SSH_CALL, machine_output="0")
+    out = _words(result)
+    assert result.returncode == 0, out + result.stderr
+    assert "OUT unit enabled" in out, "the command's stdout is still handed back as data"
+    assert "    Created symlink /home/user/.config/systemd/user/default.target.wants/jht.service" in out
+    assert "    daemon-reload done" in out
+    for noise in RED_NOISE:
+        assert noise not in out + result.stderr, (noise, out + result.stderr)
+    assert result.stderr.strip() == ""
+
+
+def test_the_app_gets_the_same_words_as_plain_lines_on_stderr(tmp_path):
+    result, _ = _case(tmp_path, SSH_CALL, machine_output="1")
+    err = result.stderr.replace("\r\n", "\n")
+    assert result.returncode == 0, _words(result) + err
+    assert "podman: Created symlink" in err and "podman: daemon-reload done" in err
+    for noise in RED_NOISE:
+        assert noise not in _words(result) + err
+
+
+def test_a_command_in_the_machine_that_fails_keeps_its_stderr_as_an_error_a_caller_can_hold_back(tmp_path):
+    shown, _ = _case(tmp_path / "shown", SSH_CALL, machine_output="0", exit_code=3)
+    assert "ssh command failed" in shown.stderr, shown.stdout + shown.stderr
+    hidden_call = SSH_CALL.replace("'systemctl --user enable jht'))", "'systemctl --user enable jht') 2>$null)")
+    hidden, _ = _case(tmp_path / "hidden", hidden_call, machine_output="0", exit_code=3)
+    assert "ssh command failed" not in hidden.stderr, hidden.stdout + hidden.stderr
