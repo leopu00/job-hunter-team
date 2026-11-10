@@ -374,6 +374,13 @@ def test_down_with_podman_says_one_line_and_not_the_ids_nor_the_errors_of_a_serv
     assert done.stderr == ""
 
 
+def test_down_with_podman_keeps_the_error_of_the_main_service_and_lines_that_only_start_alike(wrapper):
+    main = 'Error: no container with name or ID "jht" found: no such container\\n'
+    longer = 'Error: no container with name or ID "jht-telegram" found: and then something else\\n'
+    done = wrapper.run("container_down; echo rc=$?", running_hash=NEW_HASH, down_stderr=main + longer)
+    assert done.stderr.splitlines() == [main.removesuffix("\\n"), longer.removesuffix("\\n")], done.stderr
+
+
 def test_down_with_podman_keeps_every_other_line(wrapper):
     done = wrapper.run("container_down; echo rc=$?", running_hash=NEW_HASH, down_stdout=IDS + "stopping jht\\n",
                        down_stderr=NO_TELEGRAM + "Error: something else\\n")

@@ -327,13 +327,34 @@ def test_mac_podman_removes_only_the_jht_machine_and_is_idempotent(tmp_path: Pat
     assert [call for call in box.calls() if call.startswith("podman machine rm")] == removals
 
 
-def test_mac_podman_with_another_attested_machine_name_leaves_it_and_says_so(tmp_path: Path) -> None:
-    # The installer adopts an existing machine of the name it is given (JHT_PODMAN_MACHINE), so a name that is not the standard
-    # one may be the person's own machine: it is not removed, and the uninstall says which one stays, why, and how to remove it.
+SENTENCE = "La macchina Podman 'jht-giro-mac' non risulta creata dall'installer di JHT"
+
+
+def _custom_machine_box(tmp_path: Path, marker: str | None) -> Box:
     box = Box(tmp_path, "Darwin")
     box.select("podman")
     (box.runtime / "podman-machine").write_text("jht-giro-mac\n", encoding="utf-8")
+    if marker is not None:
+        (box.runtime / "podman-machine-created").write_text(marker, encoding="utf-8")
     box.machines("jht-giro-mac*", "somebody-else")
+    return box
+
+
+def test_a_machine_the_installer_created_with_another_name_is_removed(tmp_path: Path) -> None:
+    box = _custom_machine_box(tmp_path, "jht-giro-mac\n")
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert box.remaining("machines").splitlines() == ["somebody-else"]
+    assert [c for c in box.calls() if c.startswith("podman machine rm")] == ["podman machine rm --force jht-giro-mac"]
+    assert "non risulta creata" not in result.stderr + result.stdout
+    assert not box.runtime.exists() and not box.wrapper.exists()
+
+
+def test_an_adopted_machine_with_another_name_is_left_and_says_so(tmp_path: Path) -> None:
+    # The installer adopts an existing machine of the name it is given: it wrote no marker, so it may be the person's own.
+    box = _custom_machine_box(tmp_path, None)
 
     result = box.run("uninstall", "--confirm")
 
@@ -342,10 +363,45 @@ def test_mac_podman_with_another_attested_machine_name_leaves_it_and_says_so(tmp
     assert box.remaining("machines").splitlines() == ["jht-giro-mac*", "somebody-else"]
     assert not any(call.startswith("podman machine rm") for call in box.calls())
     text = result.stderr + result.stdout
-    assert "La macchina Podman 'jht-giro-mac' non e' quella standard di JHT (jht-podman)" in text
+    assert SENTENCE in text
     assert "podman machine stop jht-giro-mac" in text and "podman machine rm jht-giro-mac" in text
     assert "volumi" in text and "immagine" in text, "what stays with it is said"
     assert not box.runtime.exists() and not box.wrapper.exists(), "the rest of the uninstall goes on"
+
+
+@pytest.mark.parametrize("marker", ["somebody-else\n", "jht-giro-mac-2\n", "\n", " jht-giro-mac\n"])
+def test_a_marker_that_names_another_machine_leaves_the_machine(tmp_path: Path, marker: str) -> None:
+    box = _custom_machine_box(tmp_path, marker)
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert box.remaining("machines").splitlines() == ["jht-giro-mac*", "somebody-else"]
+    assert SENTENCE in result.stderr + result.stdout
+
+
+def test_a_marker_that_is_a_link_is_not_believed(tmp_path: Path) -> None:
+    box = _custom_machine_box(tmp_path, None)
+    real = tmp_path / "elsewhere"
+    real.write_text("jht-giro-mac\n", encoding="utf-8")
+    (box.runtime / "podman-machine-created").symlink_to(real)
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert box.remaining("machines").splitlines() == ["jht-giro-mac*", "somebody-else"]
+    assert SENTENCE in result.stderr + result.stdout
+
+
+def test_a_created_machine_that_cannot_be_removed_keeps_runtime_and_wrapper(tmp_path: Path) -> None:
+    box = _custom_machine_box(tmp_path, "jht-giro-mac\n")
+    (box.state / "podman-rm-fails").write_text("1\n", encoding="utf-8")
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 24, result.stdout + result.stderr
+    assert "JHT_LEFT machine" in result.stdout
+    assert box.runtime.is_dir() and box.wrapper.is_file()
 
 
 @pytest.mark.parametrize("content", ["-f\n", "a b\n", "../x\n", "\n"])

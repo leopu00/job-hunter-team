@@ -143,6 +143,8 @@ PODMAN_MACHINE_NAME="${JHT_PODMAN_MACHINE:-jht-podman}"
 PODMAN_MACHINE_CPUS=2
 PODMAN_MACHINE_MEMORY_MIB=4096
 PODMAN_MACHINE_DISK_GIB=30
+# 1 only when THIS run created the machine (machine init succeeded): what `jht uninstall` may remove besides the standard one.
+PODMAN_MACHINE_CREATED=0
 DOCKER_CLI="docker"
 # Position-based parser: handles both standalone flags (--no-docker) and
 # key/value pairs (--branch dev-1). We do not use `for arg in "$@"` because
@@ -880,6 +882,7 @@ install_podman_macos() {
       report_podman_machine_conflict "$podman_bin" "$init_error" && exit 79
       fail "Podman machine initialization failed; Colima was not changed."
     fi
+    PODMAN_MACHINE_CREATED=1
   fi
   "$podman_bin" --connection "$PODMAN_MACHINE_NAME" info &>/dev/null \
     || fail "Podman machine '$PODMAN_MACHINE_NAME' is not reachable."
@@ -1138,6 +1141,12 @@ install_podman_adapter() {
   if podman_machine_mode; then
     printf '%s\n' "$PODMAN_MACHINE_NAME" > "$machine_file"
     chmod 600 "$machine_file"
+    # The machine this run created is JHT's own and `jht uninstall` removes it whatever its name; one that was already there (adopted)
+    # is not marked, and stays. A machine of an earlier run keeps its marker: it is written only on creation.
+    if [ "$PODMAN_MACHINE_CREATED" = 1 ]; then
+      printf '%s\n' "$PODMAN_MACHINE_NAME" > "$RUNTIME_DIR/podman-machine-created"
+      chmod 600 "$RUNTIME_DIR/podman-machine-created"
+    fi
     ok "Private JHT docker shim: $shim_dest (not added to global PATH; Colima untouched)"
   else
     # Native Linux has no machine: the wrapper refuses a machine file here.
