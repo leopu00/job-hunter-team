@@ -146,7 +146,7 @@ def test_telegram_up_without_a_bot_is_not_called_running(host):
     assert states(run(host, "list --json"))["telegram"]["state"] == "running"
     # the plain text and `status telegram` say the same
     plain = run(host, "status telegram", {"FAKE_BOTS": "none"})
-    assert "pronto" in plain.stdout and "nessun bot abbinato" in plain.stdout and "acceso" not in plain.stdout.split("servizio acceso")[0]
+    assert "aggiunto" in plain.stdout and "nessun bot abbinato" in plain.stdout and "pronto" not in plain.stdout
 
 
 def test_status_for_one_id_and_plain_text(host):
@@ -364,3 +364,14 @@ def test_the_library_takes_no_shell_path_from_the_person():
     assert not re.search(r"\b(eval|bash -c|sh -c)\b", code)
     # the only docker exec is the fixed Google text
     assert len(re.findall(r"docker exec", code)) == 1 and '"$INTEGRATION_GOOGLE_CODE"' in code
+
+
+def test_add_google_without_credentials_says_added_and_what_is_missing_not_ready(host):
+    """D4 of the 10/11 test: «pronto» for libraries nobody can use without a Google account was a promise the integration did not keep."""
+    plain = run(host, "add google")
+    assert plain.returncode == 0, plain.stderr
+    said = plain.stdout + plain.stderr
+    assert "aggiunto" in said and "mancano le credenziali" in said
+    assert "pronto" not in said
+    row = json.loads(run(host, "status google --json").stdout)
+    assert row["state"] == "ready" and "mancano le credenziali" in row["reason"]

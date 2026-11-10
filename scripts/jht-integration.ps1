@@ -23,7 +23,7 @@ function Get-IntegrationLabel {
   switch -CaseSensitive ($State) {
     'not_installed' { return 'non installato' }
     'downloading' { return 'in scaricamento' }
-    'ready' { return 'pronto' }
+    'ready' { return 'aggiunto' }
     'running' { return 'acceso' }
     default { return 'errore' }
   }
@@ -107,7 +107,7 @@ function Get-IntegrationState {
   if ($IntegrationNotYet -ccontains $Id) { return @('not_installed', 'non disponibile ancora') }
   if (Test-IntegrationPending $Id) { return @('downloading', 'operazione in corso') }
   if ($Id -ceq 'google') {
-    if ($null -ne (Read-IntegrationMarker 'google' 'ok')) { return @('ready', 'librerie di Google aggiunte al profilo') }
+    if ($null -ne (Read-IntegrationMarker 'google' 'ok')) { return @('ready', 'librerie di Google aggiunte al profilo; mancano le credenziali dell''account Google') }
   } else {
     $service = Get-IntegrationService $Id
     if (-not (Test-DockerReachable)) { return @('error', 'il motore dei container non risponde') }

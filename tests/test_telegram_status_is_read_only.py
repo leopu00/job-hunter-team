@@ -161,3 +161,25 @@ def test_the_status_command_of_both_wrappers_calls_the_read_only_line_and_not_th
     assert "telegram_status_line" in status_sh and "telegram_lifecycle" not in status_sh
     status_ps = re.search(r"^  'status' \{\n    Require-Docker.*?\n  \}\n", ps, re.S | re.M).group(0)
     assert "Write-TelegramStatusLine" in status_ps and "Invoke-AvailableTelegramLifecycle" not in status_ps
+
+
+def test_integration_help_is_its_own_usage_and_both_wrappers_serve_it_before_the_generic_help():
+    sh = _source("jht-wrapper.sh")
+    ps = _source("jht-wrapper.ps1")
+    text = re.search(r"^integration_help\(\) \{\n.*?^\}\n", sh, re.S | re.M).group(0)
+    for needed in ("jht integration <comando>", "list [--json]", "status [ID]", "add ID", "remove ID", "--purge"):
+        assert needed in text, needed
+    assert re.search(r'if \[ "\$SUB" = integration \] && \[ "\$#" -eq 2 \]; then\n\s+integration_help', sh)
+    assert re.search(r"-ceq 'integration' -and \$Rest.Count -eq 1\) \{\n\s+Write-IntegrationHelp", ps)
+    # the same text in the two wrappers
+    ps_text = re.search(r"Write-IntegrationHelp \{.*?@'\n(.*?)\n'@", ps, re.S).group(1)
+    sh_text = re.search(r"<<'JHTINTEGRATIONHELP'\n(.*?)\nJHTINTEGRATIONHELP", sh, re.S).group(1)
+    assert ps_text == sh_text
+
+
+def test_integration_help_runs_and_prints_the_usage():
+    if sys.platform == "win32":
+        pytest.skip("the bash wrapper is not run on Windows")
+    script = "set -u\n" + functions("integration_help") + "\nintegration_help\n"
+    result = subprocess.run(["bash", "-c", script], text=True, capture_output=True, timeout=30)
+    assert result.returncode == 0 and result.stdout.startswith("Uso: jht integration <comando>")

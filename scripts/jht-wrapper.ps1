@@ -918,6 +918,23 @@ function Invoke-HelpWithoutDocker {
   return 0
 }
 
+# `jht integration --help`: its usage line, not the generic help of the host. Fixed text: the command lives in a helper that
+# is fetched only when it is needed, and a help never fetches anything.
+function Write-IntegrationHelp {
+  [Console]::Out.WriteLine(@'
+Uso: jht integration <comando>
+
+  list [--json]                   le integrazioni e il loro stato
+  status [ID] [--json]            lo stato di una, o di tutte
+  add ID [--json]                 aggiunge un'integrazione
+  remove ID [--purge --yes] [--json]
+                                  la toglie; --purge cancella anche i suoi dati (serve --yes)
+
+Gli ID ammessi sono quelli che mostra `jht integration list`. Niente si scarica o si accende
+finche' non lo chiedi con `add`.
+'@)
+}
+
 function Test-HostCommandUsesLocalHelp {
   param([string]$Command)
   return $Command -in @(
@@ -3501,6 +3518,10 @@ $HelpRequested = @($Rest | Where-Object { $_ -in @('-h', '--help') }).Count -gt 
 # `agent-control` ne resta fuori: le sue forme sono chiuse e un `--help` fra i
 # suoi argomenti e' una richiesta da rifiutare con il suo codice, non aiuto.
 if ($HelpRequested -and $Sub -notin @('game', 'gui', 'agent-control', 'desktop-apply')) {
+  if ($Sub -ceq 'integration' -and $Rest.Count -eq 1) {
+    Write-IntegrationHelp
+    exit 0
+  }
   if (Test-HostCommandUsesLocalHelp $Sub) {
     Write-LocalHelp
     exit 0

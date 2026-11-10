@@ -3705,6 +3705,23 @@ jht — Job Hunter Team
 JHTHELP
 }
 
+# `jht integration --help`: la sua riga d'uso, non l'aiuto generico dell'host. Testo fisso: il comando vive in un helper
+# che si scarica solo quando serve, e un aiuto non scarica niente.
+integration_help() {
+  cat <<'JHTINTEGRATIONHELP'
+Uso: jht integration <comando>
+
+  list [--json]                   le integrazioni e il loro stato
+  status [ID] [--json]            lo stato di una, o di tutte
+  add ID [--json]                 aggiunge un'integrazione
+  remove ID [--purge --yes] [--json]
+                                  la toglie; --purge cancella anche i suoi dati (serve --yes)
+
+Gli ID ammessi sono quelli che mostra `jht integration list`. Niente si scarica o si accende
+finche' non lo chiedi con `add`.
+JHTINTEGRATIONHELP
+}
+
 # Richiesta di sola informazione: se il container e' gia' in piedi si serve
 # l'aiuto vero, altrimenti quello locale. In nessun caso si avvia qualcosa.
 serve_help_without_docker() {
@@ -5967,6 +5984,10 @@ if [ "$#" -gt 1 ] && [ "$SUB" != "game" ] && [ "$SUB" != "gui" ] && [ "$SUB" != 
   for arg in "${@:2}"; do
     case "$arg" in
       -h|--help)
+        if [ "$SUB" = integration ] && [ "$#" -eq 2 ]; then
+          integration_help
+          exit 0
+        fi
         if host_command_uses_local_help "$SUB"; then
           local_help
           exit 0

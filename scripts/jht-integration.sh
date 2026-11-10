@@ -13,7 +13,7 @@
 #   - nothing is turned on by an agent: this is the command the person types (or the button of the app).
 #
 # States (JSON `state`; the text in parentheses is what the person reads):
-#   not_installed (non installato) | downloading (in scaricamento) | ready (pronto) | running (acceso) | error (errore),
+#   not_installed (non installato) | downloading (in scaricamento) | ready (aggiunto) | running (acceso) | error (errore),
 #   always with a `reason` of one line.
 # Exit: 0 done · 1 failed · 2 wrong use · 3 not available yet.
 
@@ -24,7 +24,7 @@ integration_label() {
   case "$1" in
     not_installed) printf 'non installato' ;;
     downloading) printf 'in scaricamento' ;;
-    ready) printf 'pronto' ;;
+    ready) printf 'aggiunto' ;;
     running) printf 'acceso' ;;
     *) printf 'errore' ;;
   esac
@@ -108,7 +108,7 @@ integration_state() {
   if integration_not_yet "$id"; then printf 'not_installed|non disponibile ancora\n'; return 0; fi
   if integration_pending "$id"; then printf 'downloading|operazione in corso\n'; return 0; fi
   if [ "$id" = google ]; then
-    if integration_marker_read google ok >/dev/null; then printf 'ready|librerie di Google aggiunte al profilo\n'; return 0; fi
+    if integration_marker_read google ok >/dev/null; then printf 'ready|librerie di Google aggiunte al profilo; mancano le credenziali dell'"'"'account Google\n'; return 0; fi
   else
     read -r service volume <<< "$(integration_service_of "$id")"
     docker_reachable || { printf 'error|il motore dei container non risponde\n'; return 0; }

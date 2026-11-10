@@ -138,6 +138,7 @@ export default {
   'help.host_down': 'La spegne',
   'help.host_restart': 'La riaccende',
   'help.host_uninstall': 'Toglie l’ambiente locale (chiede conferma)',
+  'help.host_integration': 'Aggiungi o togli ciò che è facoltativo: google, telegram, mail (list ne mostra lo stato)',
   'help.one_command': 'Aiuto su un comando: jht <comando> --help',
   // descriptions of the commands in the list of `jht help` (the ones not here keep the command's own English)
   'cmd.team': "Gestisce gli agenti della squadra",

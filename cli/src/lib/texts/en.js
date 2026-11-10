@@ -143,6 +143,7 @@ export default {
   'help.host_down': 'Stop it',
   'help.host_restart': 'Restart it',
   'help.host_uninstall': 'Remove the local runtime (asks to confirm)',
+  'help.host_integration': 'Add or remove what is optional: google, telegram, mail (list shows the state)',
   'help.one_command': 'Help for one command: jht <command> --help',
   'help.essential': 'Usage: jht [command]\n\nJob Hunter Team — CLI\n\nEssential commands:\n  setup        Initial configuration (starts the wizard)\n  team         Start and stop agents (jht team start)\n  status       System status (container, agents, database)\n  agents       List agents and current tasks\n  doctor       Diagnose setup and dependencies\n\nFor the complete command list:\n  jht help\n',
   'help.long_description': 'Show all available commands (long form)',
