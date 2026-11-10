@@ -44,6 +44,8 @@ function Get-RunningComposeServiceId {
   if ($Service -eq 'jht') { return 'aaaaaaaaaaaa' }
   return 'bbbbbbbbbbbb'
 }
+# what stands under the broker's name: the stand-in above says it runs (the real one reads the labels with docker inspect)
+function Get-BrokerContainerState { return 'running' }
 """
 
 FAKE_DOCKER = r"""#!/bin/sh

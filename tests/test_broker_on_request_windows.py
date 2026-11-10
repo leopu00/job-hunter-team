@@ -126,10 +126,12 @@ def test_a_broker_that_runs_is_left_alone(tmp_path):
 def test_on_podman_the_network_script_runs_before_one_compose_call_that_names_the_broker_alone(tmp_path):
     values, calls = _run(tmp_path, "Ensure-Broker -Quiet")
     assert values["RESULT"] == "0", calls
-    assert calls[0] == "NETWORK jht-podman bridge=podman-machine-bridge.ps1 broker=True"
+    # what stands under the broker's name is looked up first (a read-only docker ps), then the network script runs
+    assert calls[0].startswith("DOCKER ps -aq")
+    assert calls[1] == "NETWORK jht-podman bridge=podman-machine-bridge.ps1 broker=True"
     compose_calls = [c for c in calls if c.startswith("COMPOSE")]
     assert compose_calls == ["COMPOSE --profile broker up -d --no-deps jht-broker"]  # never `jht`: the team is not recreated
-    assert calls.index(compose_calls[0]) > 0
+    assert calls.index(compose_calls[0]) > 1
     assert "MIGRATE" in calls and "CONFIGURE" in calls
     assert values["MARKER"] == "True"
 
