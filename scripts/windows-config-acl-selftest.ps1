@@ -195,6 +195,7 @@ try {
       '*/scripts/enable-podman-windows-runtime.ps1' { Join-Path $PSScriptRoot 'enable-podman-windows-runtime.ps1'; break }
       '*/scripts/configure-podman-windows-network.ps1' { Join-Path $PSScriptRoot 'configure-podman-windows-network.ps1'; break }
       '*/scripts/podman-machine-bridge.ps1' { Join-Path $PSScriptRoot 'podman-machine-bridge.ps1'; break }
+      '*/scripts/jht-integration.ps1' { Join-Path $PSScriptRoot 'jht-integration.ps1'; break }
       '*/scripts/wsl-interop-connect-proxy.py' { Join-Path $PSScriptRoot 'wsl-interop-connect-proxy.py'; break }
       default { throw "unexpected clean-start URL: $Url" }
     }
@@ -209,6 +210,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $scripts 'jht-wrapper.ps1') -Destination (Join-Path $BinDir 'jht.ps1') -Force
     Copy-Item -LiteralPath (Join-Path $scripts 'windows-private-acl.ps1') -Destination (Join-Path $BinDir 'windows-private-acl.ps1') -Force
     Copy-Item -LiteralPath (Join-Path $scripts 'podman-machine-bridge.ps1') -Destination (Join-Path $BinDir 'podman-machine-bridge.ps1') -Force
+    Copy-Item -LiteralPath (Join-Path $scripts 'jht-integration.ps1') -Destination (Join-Path $RuntimeDir 'jht-integration.ps1') -Force
     New-Item -ItemType Directory -Path $RuntimeShimDir -Force | Out-Null
     [IO.File]::WriteAllText((Join-Path $RuntimeDir 'container-runtime'), "podman`n", [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $RuntimeDir 'podman-machine'), "jht-podman`n", [Text.UTF8Encoding]::new($false))
@@ -231,6 +233,9 @@ try {
       $manifestText += "$name=$digest`n"
     }
     [IO.File]::WriteAllText((Join-Path $RuntimeDir '.runtime-integrity'), $manifestText, [Text.UTF8Encoding]::new($false))
+    # the host scripts that came after the main manifest have one of their own, as the enabler writes it
+    $integrationDigest = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $RuntimeDir 'jht-integration.ps1')).Hash.ToLowerInvariant()
+    [IO.File]::WriteAllText((Join-Path $RuntimeDir '.runtime-helpers'), "jht-integration.ps1=$integrationDigest`n", [Text.UTF8Encoding]::new($false))
   }
 
   $cleanRoot = Join-Path $root 'clean-start'
