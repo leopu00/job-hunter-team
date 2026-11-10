@@ -262,6 +262,16 @@ def test_a_broken_table_opens_the_boundary_for_an_agent_and_says_so(broken_table
     assert line["enforced"] is False and "unreadable" in line["reason"]
 
 
+@pytest.mark.parametrize("text", ["[]", "3", "null", '{"roles": []}', '{"roles": {"scout": 3}}'])
+def test_a_valid_json_that_is_not_the_table_is_the_same_as_a_broken_one(text, monkeypatch, tmp_path, capsys):
+    odd = tmp_path / "odd.json"
+    odd.write_text(text, encoding="utf-8")
+    monkeypatch.setattr(rp, "POLICY_FILE", odd)
+    monkeypatch.setattr(rp, "_cache", {})
+    rp.guard_insert(ns("score"), {"JHT_AGENT_NAME": "scout-1"})
+    assert "ROLE TABLE UNREADABLE" in capsys.readouterr().err
+
+
 def test_a_missing_table_is_the_same_as_a_broken_one(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(rp, "POLICY_FILE", tmp_path / "absent.json")
     monkeypatch.setattr(rp, "_cache", {})

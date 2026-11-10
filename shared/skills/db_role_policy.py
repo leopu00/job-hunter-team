@@ -49,9 +49,21 @@ LOG_FLAGS = {"action", "outcome", "evidence_kind", "evidence_url", "evidence_cod
 _cache: dict = {}
 
 
+def _validated(data) -> dict:
+    """The table or a ValueError: valid JSON that is not the table must open the boundary loudly, not crash a tool halfway."""
+    if not isinstance(data, dict) or not isinstance(data.get("roles"), dict) or not data["roles"]:
+        raise ValueError("no roles")
+    for role, entry in data["roles"].items():
+        if not isinstance(entry, dict) or not isinstance(entry.get("insert"), list) or not isinstance(entry.get("update"), list):
+            raise ValueError("role %s" % role)
+    if not isinstance(data.get("python_only", {}), dict):
+        raise ValueError("python_only")
+    return data
+
+
 def policy() -> dict:
     if not _cache:
-        _cache.update(json.loads(POLICY_FILE.read_text(encoding="utf-8")))
+        _cache.update(_validated(json.loads(POLICY_FILE.read_text(encoding="utf-8"))))
     return _cache
 
 
@@ -72,7 +84,7 @@ def caller(environ=None) -> tuple:
         return None, ""
     try:
         return role_of(name), clean_name(name)
-    except (OSError, ValueError, KeyError):
+    except Exception:   # a missing file, broken JSON, or valid JSON that is not the table: the boundary opens, loudly
         print("⚠️  ROLE TABLE UNREADABLE (%s): the role boundary is NOT applied to %s" % (POLICY_FILE.name, clean_name(name)), file=sys.stderr)
         _write_log({"ts": _now(), "agent": clean_name(name), "reason": "role table unreadable: boundary not applied", "enforced": False})
         return None, clean_name(name)
