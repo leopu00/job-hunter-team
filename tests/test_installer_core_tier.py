@@ -72,7 +72,7 @@ def test_the_core_tier_is_staged_hashed_and_published(tmp_path):
                   '[ ! -e "$JHT_RUNTIME_DIR/runtime-tier" ] && echo before-publish-absent; publish_runtime_tier', {"JHT_CORE_IMAGE_DIGEST": CORE})
     assert done.returncode == 0, done.stderr
     tier = tmp_path / "runtime" / "runtime-tier"
-    assert tier.read_text() == "core\n" and oct(tier.stat().st_mode & 0o777) == "0o600"
+    assert tier.read_text(encoding="utf-8") == "core\n" and oct(tier.stat().st_mode & 0o777) == "0o600"
     assert f"sha={hashlib.sha256(b'core\n').hexdigest()}" in done.stdout and "before-publish-absent" in done.stdout
     assert [p.name for p in (tmp_path / "runtime").iterdir()] == ["runtime-tier"], "no staged file is left"
 
@@ -80,7 +80,7 @@ def test_the_core_tier_is_staged_hashed_and_published(tmp_path):
 @bash_only
 def test_a_full_install_drops_a_tier_left_by_a_core_one(tmp_path):
     (tmp_path / "runtime").mkdir()
-    (tmp_path / "runtime" / "runtime-tier").write_text("core\n")
+    (tmp_path / "runtime" / "runtime-tier").write_text("core\n", encoding="utf-8")
     done = source(tmp_path, 'ok() { :; }; stage_runtime_tier; publish_runtime_tier; printf "sha=[%s]\\n" "$TIER_STAGED_SHA"')
     assert done.returncode == 0, done.stderr
     assert not (tmp_path / "runtime" / "runtime-tier").exists() and "sha=[]" in done.stdout
@@ -93,7 +93,8 @@ def test_the_pin_tool_moves_the_constant_in_the_four_copies_and_refuses_a_stale_
         text = (tree / name).read_text(encoding="utf-8")
         assert f"{CORE}" in text, name
     assert pin_tool.verify_tree(tree).core_digest == CORE
-    (tree / "web/public/install.sh").write_text((tree / "web/public/install.sh").read_text().replace(CORE, ""))
+    mirror = tree / "web/public/install.sh"
+    mirror.write_text(mirror.read_text(encoding="utf-8").replace(CORE, ""), encoding="utf-8", newline="")
     with pytest.raises(pin_tool.RuntimeImagePinError) as refused:
         pin_tool.verify_tree(tree)
     assert refused.value.code in {"consumer_core_drift", "installer_digest_drift"}
