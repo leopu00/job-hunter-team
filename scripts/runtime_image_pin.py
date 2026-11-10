@@ -163,6 +163,10 @@ class RuntimeImagePin:
     def release_tag_ref(self) -> str:
         return f"{self.repository}:{self.release_version}"
 
+    @property
+    def core_release_tag(self) -> str:
+        return f"{self.release_version}-core"
+
 
 def load_manifest(path: Path) -> RuntimeImagePin:
     try:
@@ -527,7 +531,7 @@ def _registry_request(
 
 
 def registry_tag_digest(pin: RuntimeImagePin, tag: str) -> str | None:
-    if tag != pin.release_version and tag != "master":
+    if tag not in (pin.release_version, "master", pin.core_release_tag, "master-core"):
         raise RuntimeImagePinError("tag_invalid")
     token = _anonymous_registry_token(pin)
     try:
@@ -549,17 +553,18 @@ def registry_tag_digest(pin: RuntimeImagePin, tag: str) -> str | None:
     return digest
 
 
-def _platform_revisions(pin: RuntimeImagePin) -> Iterator[Any]:
-    """The `org.opencontainers.image.revision` label of each platform of the image at pin.digest, one by one."""
+def _platform_revisions(pin: RuntimeImagePin, digest: str | None = None) -> Iterator[Any]:
+    """The `org.opencontainers.image.revision` label of each platform of the image at `digest` (default pin.digest), one by one."""
+    digest = digest or pin.digest
     token = _anonymous_registry_token(pin)
     _, raw_index = _registry_request(
         pin,
         kind="manifests",
-        identity=pin.digest,
+        identity=digest,
         accept=INDEX_ACCEPT,
         token=token,
     )
-    if f"sha256:{hashlib.sha256(raw_index).hexdigest()}" != pin.digest:
+    if f"sha256:{hashlib.sha256(raw_index).hexdigest()}" != digest:
         raise RuntimeImagePinError("index_digest_mismatch")
     try:
         index = json.loads(raw_index)
@@ -575,15 +580,15 @@ def _platform_revisions(pin: RuntimeImagePin) -> Iterator[Any]:
             continue
         platform = entry["platform"]
         key = (platform.get("os"), platform.get("architecture"))
-        digest = entry.get("digest")
+        platform_digest = entry.get("digest")
         if key in {("linux", "amd64"), ("linux", "arm64")}:
             if (
                 key in platform_manifests
-                or not isinstance(digest, str)
-                or not DIGEST_RE.fullmatch(digest)
+                or not isinstance(platform_digest, str)
+                or not DIGEST_RE.fullmatch(platform_digest)
             ):
                 raise RuntimeImagePinError("platform_manifest_invalid")
-            platform_manifests[key] = digest
+            platform_manifests[key] = platform_digest
     if set(platform_manifests) != {("linux", "amd64"), ("linux", "arm64")}:
         raise RuntimeImagePinError("platform_set_invalid")
 
@@ -620,9 +625,13 @@ def _platform_revisions(pin: RuntimeImagePin) -> Iterator[Any]:
 
 
 def verify_source_labels(pin: RuntimeImagePin) -> None:
-    for revision in _platform_revisions(pin):
-        if revision != pin.source_revision:
-            raise RuntimeImagePinError("source_revision_mismatch")
+    """Every platform of the full image, and of the core image when the pin has one, was built from the pinned commit."""
+    for digest in (pin.digest, pin.core_digest):
+        if digest is None:
+            continue
+        for revision in _platform_revisions(pin, digest):
+            if revision != pin.source_revision:
+                raise RuntimeImagePinError("source_revision_mismatch")
 
 
 def registry_source_revision(repository: str, digest: str) -> str:
@@ -637,28 +646,15 @@ def registry_source_revision(repository: str, digest: str) -> str:
     return revision
 
 
-def publish_release_tag(pin: RuntimeImagePin, claim: str) -> str:
-    # Il claim e' valido solo dentro il workflow Release, la cui concurrency
-    # group e' il medesimo ref. Questo rende seriale la finestra registry
-    # check->create->readback; il post-check resta la prova dell'effetto.
-    if claim != f"refs/tags/v{pin.release_version}":
-        raise RuntimeImagePinError("release_claim_invalid")
-    verify_source_labels(pin)
-    existing = registry_tag_digest(pin, pin.release_version)
+def _publish_one_tag(pin: RuntimeImagePin, tag: str, digest: str) -> str:
+    ref = f"{pin.repository}:{tag}"
+    existing = registry_tag_digest(pin, tag)
     if existing is not None:
-        if existing != pin.digest:
+        if existing != digest:
             raise RuntimeImagePinError("release_tag_mismatch")
         return "tag_verified"
 
-    command = [
-        "docker",
-        "buildx",
-        "imagetools",
-        "create",
-        "--tag",
-        pin.release_tag_ref,
-        pin.image_ref,
-    ]
+    command = ["docker", "buildx", "imagetools", "create", "--tag", ref, f"{pin.repository}@{digest}"]
     try:
         result = subprocess.run(
             command, capture_output=True, text=False, check=False, timeout=120
@@ -667,9 +663,23 @@ def publish_release_tag(pin: RuntimeImagePin, claim: str) -> str:
         raise RuntimeImagePinError("release_tag_publish_failed") from exc
     if result.returncode != 0:
         raise RuntimeImagePinError("release_tag_publish_failed")
-    if registry_tag_digest(pin, pin.release_version) != pin.digest:
+    if registry_tag_digest(pin, tag) != digest:
         raise RuntimeImagePinError("release_tag_verify_failed")
     return "tag_published"
+
+
+def publish_release_tag(pin: RuntimeImagePin, claim: str) -> str:
+    # Il claim e' valido solo dentro il workflow Release, la cui concurrency
+    # group e' il medesimo ref. Questo rende seriale la finestra registry
+    # check->create->readback; il post-check resta la prova dell'effetto.
+    if claim != f"refs/tags/v{pin.release_version}":
+        raise RuntimeImagePinError("release_claim_invalid")
+    verify_source_labels(pin)
+    codes = [_publish_one_tag(pin, pin.release_version, pin.digest)]
+    if pin.core_digest:
+        # the core image gets its own tag `<version>-core`, from its own digest: a convenience for people, never what the pin trusts
+        codes.append(_publish_one_tag(pin, pin.core_release_tag, pin.core_digest))
+    return "tag_published" if "tag_published" in codes else "tag_verified"
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -754,6 +764,8 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "verify-tag":
             tag = "master" if args.tag == "master" else pin.release_version
             if registry_tag_digest(pin, tag) != pin.digest:
+                raise RuntimeImagePinError("tag_digest_mismatch")
+            if pin.core_digest and registry_tag_digest(pin, f"{tag}-core") != pin.core_digest:
                 raise RuntimeImagePinError("tag_digest_mismatch")
             verify_source_labels(pin)
             print("runtime-image-pin result=pass code=tag_verified")

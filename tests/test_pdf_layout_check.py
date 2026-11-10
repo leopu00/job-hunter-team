@@ -368,9 +368,13 @@ def test_base_css_resets_the_pandoc_column():
 
 def test_image_bakes_the_cv_toolchain_and_gates_the_build():
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
-    apt = dockerfile[dockerfile.index("RUN apt-get update"):dockerfile.index("rm -rf /var/lib/apt/lists/*")]
-    packages = {w for line in apt.splitlines() if not line.strip().startswith("#") for w in line.split()}
+    # poppler is in the core tier, the CV toolchain is in the tools tier (stage prefix-full)
+    blocks = dockerfile.split("RUN apt-get update")[1:]
+    packages = {w for block in blocks for line in block[:block.index("rm -rf /var/lib/apt/lists/*")].splitlines()
+                if not line.strip().startswith("#") for w in line.split()}
     assert {"pandoc", "wkhtmltopdf", "poppler-utils"} <= packages
+    tools_stage = dockerfile[dockerfile.index("AS prefix-full"):dockerfile.index("AS runtime")]
+    assert "pandoc" in tools_stage and "wkhtmltopdf" in tools_stage
     gate = dockerfile.index("tool_health.py --only cv_pdf_render")
     assert dockerfile.index("COPY . .") < gate
     assert "exit 1" in dockerfile[gate:dockerfile.index("\n\n", gate)]

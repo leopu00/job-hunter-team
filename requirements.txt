@@ -1,4 +1,5 @@
-# Dipendenze Python del container (Dockerfile: `pip3 install -r requirements.txt`).
+# Dipendenze Python del container, tier `core` (Dockerfile: `pip3 install -r requirements.txt`).
+# I browser (playwright) stanno in requirements-tools.txt, nel tier `full`.
 #
 # VERSIONI PINNATE (2026-07-26). Prima erano tutte libere: due build della
 # stessa immagine, a giorni di distanza, installavano librerie diverse — e il
@@ -28,10 +29,4 @@ pypdf==6.21.4
 # BeautifulSoup per gli agenti che parsano pagine job boards (LinkedIn, etc.)
 beautifulsoup4==4.15.0
 lxml==6.1.1
-# Playwright (headless browser): usato da shared/skills/linkedin_check.py
-# per verificare se un annuncio LinkedIn e' ancora attivo via screenshot
-# autenticato. Solo --only-shell chromium viene scaricato a build-time
-# nel Dockerfile (PLAYWRIGHT_BROWSERS_PATH=/opt/playwright): il browser è
-# legato a QUESTA versione del driver, quindi il pin qui sotto è quello che
-# tiene allineati i due pezzi.
-playwright==1.61.0
+# Playwright (the browsers' driver) is in requirements-tools.txt: only the `full` tier of the image has it.

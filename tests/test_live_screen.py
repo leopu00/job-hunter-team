@@ -410,7 +410,8 @@ def test_image_installs_full_chromium_and_exports_the_display():
 
 
 def test_image_build_gate_launches_headed_chromium_on_xvfb():
-    gate = DOCKERFILE[DOCKERFILE.index("RUN Xvfb :98"):]
+    at = DOCKERFILE.index("Xvfb :98 -screen")
+    gate = DOCKERFILE[DOCKERFILE.rindex("RUN ", 0, at):]
     gate = gate[: gate.index("exit 1; }") + len("exit 1; }")]
     assert "headless=False" in gate
     assert "DISPLAY=:98" in gate

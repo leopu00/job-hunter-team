@@ -3,12 +3,29 @@
 # ║  Immagine agenti + CLI (interazione via app desktop, no web locale).     ║
 # ║  Stato persistente nei bind-mount /jht_home e /jht_user.                 ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
+# ONE Dockerfile, TWO images (JHT-T307 A): `core` has what the Assistente, the broker and Pi
+# need in the first minutes, `full` is `core` plus the tools that arrive later (browsers,
+# CV PDF, X). Plain `docker build .` builds `full`: exactly the image of before.
+#
+#   prefix-core -> prefix-full          the stable prefix: heavy layers that change with a
+#                                       pin, not with a release. Each sets JHT_IMAGE_TIER.
+#   runtime (FROM ${BASE})              code, Pi, users, gates: built once on each prefix.
+#
+#   docker build --target runtime --build-arg BASE=prefix-core .    -> core
+#   docker build --target runtime .                                  -> full
+#
+# The tier is NOT a build argument of the runtime stage: it is the ENV the prefix carries,
+# so an image cannot say `core` over the tools of `full` (or the other way round) and hide a
+# real fault. BASE may also be an image by digest (`ghcr.io/...@sha256:...`), never a tag.
+ARG BASE=prefix-full
+
 # Base image pinned by digest (multi-arch index). Update tracked by
 # Renovate (.github/renovate.json). Changing the tag without the digest
 # silently re-introduces unverified upstream content.
-FROM node:22-bookworm-slim@sha256:d415caac2f1f77b98caaf9415c5f807e14bc8d7bdea62561ea2fef4fbd08a73c
+FROM node:22-bookworm-slim@sha256:d415caac2f1f77b98caaf9415c5f807e14bc8d7bdea62561ea2fef4fbd08a73c AS prefix-core
 
-ENV DEBIAN_FRONTEND=noninteractive \
+ENV JHT_IMAGE_TIER=core \
+    DEBIAN_FRONTEND=noninteractive \
     PIP_BREAK_SYSTEM_PACKAGES=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
@@ -80,6 +97,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     DISPLAY=:99 \
     PATH=/app/agents/_tools:/opt/jht-deps/bin:/opt/jht-deps/npm-global/bin:/opt/jht-deps/python/bin:/jht_home/.npm-global/bin:/home/jht/.local/bin:$PATH
 
+# ── prefix-core: what the Assistente, the broker and Pi need ──────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
       python3 python3-pip \
       tmux git bash curl ca-certificates \
@@ -103,6 +121,46 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       # fd-find (the `fdfind` binary) and ripgrep are what pi looks for on the PATH:
       # without them pi downloads fd and rg from GitHub at its first start.
       poppler-utils ripgrep fd-find file jq unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+COPY cli/package.json cli/package-lock.json* ./cli/
+
+# web/ NON è installato nel container: la dashboard web locale è stata
+# ritirata (2026-07-23) e niente qui dentro avvia Next.js — le sue dipendenze
+# (Next/React/eslint/tailwind, ~centinaia di MB) erano peso morto. Il web gira
+# solo in cloud, buildato altrove. /app/web/.next viene comunque creata più
+# sotto per il fix-ownership del vecchio compose dev (Leone 24/07).
+#
+# tui/ non compare più: smesso di compilarla qui il 2026-07-25, rimossa dal
+# repo lo stesso giorno. Nessun `bin`, nessun `main`, zero invocatori — era
+# install + build TypeScript a ogni immagine per una schermata che nessuno
+# poteva aprire. Il cockpit del team è l'ufficio Godot; il resto è questo CLI.
+RUN npm ci --prefix cli \
+    && npm cache clean --force
+
+COPY requirements.txt ./
+RUN pip3 install --no-cache-dir -r requirements.txt \
+    # Drop the C toolchain: it only existed to compile the wheels installed
+    # above (nothing in the runtime image compiles anything), and it is ~250MB.
+    # The purge MUST live in this same RUN: in a separate one the files would
+    # stay in the previous layer and the image would not shrink by a byte.
+    # autoremove sweeps the transitive dev packages (gcc, libc6-dev, …) that
+    # nothing else pulls in — packages installed explicitly above are flagged
+    # manual and survive it.
+    && apt-get purge -y build-essential pkg-config \
+    && apt-get autoremove -y --purge \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── prefix-full: the tools that arrive after the onboarding ───────────────────────
+# Heavy layers (browsers, CV PDF, X) that change with a pin, not with a release: they sit
+# BELOW the code, so an update never downloads them again.
+FROM prefix-core AS prefix-full
+ENV JHT_IMAGE_TIER=full
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
       # Multimodal user input: l'utente puo' mandare voice notes (ogg/mp3)
       # e foto/scansioni di documenti (CV cartacei, certificati). ffmpeg per
       # decodificare audio in formato Whisper-compatibile, tesseract-ocr per
@@ -142,26 +200,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       pandoc wkhtmltopdf \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
-
-COPY package.json package-lock.json* ./
-COPY cli/package.json cli/package-lock.json* ./cli/
-
-# web/ NON è installato nel container: la dashboard web locale è stata
-# ritirata (2026-07-23) e niente qui dentro avvia Next.js — le sue dipendenze
-# (Next/React/eslint/tailwind, ~centinaia di MB) erano peso morto. Il web gira
-# solo in cloud, buildato altrove. /app/web/.next viene comunque creata più
-# sotto per il fix-ownership del vecchio compose dev (Leone 24/07).
-#
-# tui/ non compare più: smesso di compilarla qui il 2026-07-25, rimossa dal
-# repo lo stesso giorno. Nessun `bin`, nessun `main`, zero invocatori — era
-# install + build TypeScript a ogni immagine per una schermata che nessuno
-# poteva aprire. Il cockpit del team è l'ufficio Godot; il resto è questo CLI.
-RUN npm ci --prefix cli \
-    && npm cache clean --force
-
-COPY requirements.txt ./
-RUN pip3 install --no-cache-dir -r requirements.txt \
+COPY requirements-tools.txt ./
+RUN pip3 install --no-cache-dir -r requirements-tools.txt \
     # Pre-install the headless shell (used by linkedin_check.py with
     # headless=True). The full Chromium build was removed as 602M of dead
     # weight and is installed again right below for the headed CLOSER browser.
@@ -177,16 +217,12 @@ RUN pip3 install --no-cache-dir -r requirements.txt \
     # shell cannot draw to a display, and Playwright launches the full build
     # whenever headless=False. linkedin_check.py keeps using the shell.
     && playwright install chromium \
-    # Drop the C toolchain: it only existed to compile the wheels installed
-    # above (nothing in the runtime image compiles anything), and it is ~250MB.
-    # The purge MUST live in this same RUN: in a separate one the files would
-    # stay in the previous layer and the image would not shrink by a byte.
-    # autoremove sweeps the transitive dev packages (gcc, libc6-dev, …) that
-    # nothing else pulls in — packages installed explicitly above are flagged
-    # manual and survive it.
-    && apt-get purge -y build-essential pkg-config \
-    && apt-get autoremove -y --purge \
     && rm -rf /var/lib/apt/lists/*
+
+# ── runtime: code, Pi, users, gates — built once on each prefix ───────────────────
+# BASE is a stage (`prefix-core`, `prefix-full`) or an image by digest. The tier of the
+# image is the one its BASE carries (ENV JHT_IMAGE_TIER above).
+FROM ${BASE} AS runtime
 
 COPY . .
 
@@ -229,7 +265,8 @@ RUN python3 shared/skills/tool_health.py --only cv_pdf_render \
 # A native arm64 build (Colima on Apple Silicon) still runs it.
 ARG TARGETARCH
 ARG BUILDARCH
-RUN Xvfb :98 -screen 0 1280x1024x24 -nolisten tcp & xvfb_pid=$!; \
+RUN if [ "$JHT_IMAGE_TIER" != full ]; then echo "HEADED_LAUNCH_SKIPPED: the $JHT_IMAGE_TIER image has no browser and no X"; exit 0; fi; \
+    Xvfb :98 -screen 0 1280x1024x24 -nolisten tcp & xvfb_pid=$!; \
     for _ in $(seq 1 100); do [ -S /tmp/.X11-unix/X98 ] && break; sleep 0.1; done; \
     if [ -n "$TARGETARCH" ] && [ -n "$BUILDARCH" ] && [ "$TARGETARCH" != "$BUILDARCH" ]; then \
       echo "HEADED_LAUNCH_SKIPPED: emulated $TARGETARCH build on $BUILDARCH (QEMU cannot run headed Chromium)"; rc=0; \
@@ -249,6 +286,21 @@ RUN if [ -n "$TARGETARCH" ] && [ -n "$BUILDARCH" ] && [ "$TARGETARCH" != "$BUILD
       python3 shared/skills/tool_health.py --only manual_login_browser \
       || { echo "BUILD GATE FAILED: no system Chromium or window manager for the manual LinkedIn sign-in — see shared/skills/linkedin_apply.py" >&2; exit 1; }; \
     fi
+
+# The tier the image declares must be the tools it carries, both ways. The core image has no
+# browser, no X, no CV PDF toolchain and no media tools; the full one has them (and the gates
+# above already proved they work). A wrong tier would let tool_health.py call a broken tool
+# "not installed", or a tool that should not be there "fine".
+RUN case "$JHT_IMAGE_TIER" in \
+      core) for b in chromium openbox Xvfb x11vnc websockify pandoc wkhtmltopdf ffmpeg tesseract playwright; do \
+              if command -v "$b" >/dev/null 2>&1; then echo "BUILD GATE FAILED: $b is in an image that says core" >&2; exit 1; fi; \
+            done; \
+            if [ -e /opt/playwright ] && [ -n "$(ls -A /opt/playwright)" ]; then echo "BUILD GATE FAILED: browsers in an image that says core" >&2; exit 1; fi ;; \
+      full) for b in chromium openbox Xvfb pandoc wkhtmltopdf ffmpeg tesseract playwright; do \
+              command -v "$b" >/dev/null 2>&1 || { echo "BUILD GATE FAILED: $b is missing from an image that says full" >&2; exit 1; }; \
+            done ;; \
+      *) echo "BUILD GATE FAILED: JHT_IMAGE_TIER must be core or full, not '$JHT_IMAGE_TIER'" >&2; exit 1 ;; \
+    esac
 
 RUN for pkg in shared/*/package.json; do \
          [ -f "$pkg" ] || continue; \
@@ -313,6 +365,7 @@ RUN useradd --create-home --shell /bin/bash jht \
     # +656M di immagine, la headless shell altri ~114M da scaricare a ogni primo
     # setup, per un solo cambio di proprietario. Un browser si lancia da jht
     # anche se resta di root, perché serve leggerlo ed eseguirlo, non scriverlo.
+    && mkdir -p /opt/playwright \
     && chown jht:jht /opt/playwright \
     && find /opt/playwright -mindepth 1 -maxdepth 1 ! -name 'chromium-[0-9]*' \
          ! -name 'chromium_headless_shell-[0-9]*' -exec chown -R jht:jht {} + \

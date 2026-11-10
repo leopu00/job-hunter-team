@@ -1,0 +1,12 @@
+# Python dependencies of the TOOLS tier of the image (Dockerfile stage `prefix-full`); the core tier
+# installs requirements.txt only. The `full` image has both, `core` has no browser at all.
+#
+# Playwright (headless browser): used by shared/skills/linkedin_check.py
+# to check whether a LinkedIn posting is still live via an authenticated screenshot.
+# Only `--only-shell chromium` is downloaded at build time (Dockerfile,
+# PLAYWRIGHT_BROWSERS_PATH=/opt/playwright): the browser is tied to THIS version of the
+# driver, so the pin below is what keeps the two pieces aligned. A driver that advances
+# by itself breaks `playwright install` and, with it, linkedin_check.py (≈68% of the
+# sources would report new=0 in silence). To update: raise the pin and rebuild the image,
+# NEVER let it resolve by chance.
+playwright==1.61.0
