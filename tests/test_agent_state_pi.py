@@ -131,6 +131,12 @@ def test_the_reason_of_an_error_line():
     assert block_reason("No API key found for openai.") == "accesso_scaduto"
     assert block_reason('Authentication failed for "openai". Credentials may have expired') == "accesso_scaduto"
     assert block_reason("OpenAI API error (401): Incorrect API key provided") == "accesso_scaduto"
+    # the refusals of the two providers that run on a key (made-up bodies in the shape they answer with): the
+    # number may be cut off, the sentence is what is left
+    assert block_reason("Authentication Fails (no such user)") == "accesso_scaduto"
+    assert block_reason("Invalid Authentication") == "accesso_scaduto"
+    assert block_reason("The API Key appears to be invalid or may have expired.") == "accesso_scaduto"
+    assert block_reason("token expired or incorrect") == "accesso_scaduto"
     # a spent quota is not a login problem
     assert block_reason('OpenAI API error (429): {"type":"insufficient_quota","code":"insufficient_quota"}') == "limite_fornitore"
     # the two 429 of OpenAI as Pi records them (live capture, 09/11): a spent quota stops at once, a rate limit is retried
@@ -278,3 +284,16 @@ def test_the_observer_reads_a_pi_agent(tmp_path):
     assert row["state"] == "lavora"
     assert row["identity"]["provider"] == "pi" and row["identity"]["model"] == "m-1"
     assert row["identity"]["effort"] == "medium"
+
+
+def test_a_key_the_provider_refuses_is_a_blocked_agent_with_the_login_reason_in_the_row(tmp_path):
+    """The Assistant of a team on glm with a wrong key (made-up key, made-up answer of the engine): the row the
+    CLI reads says «bloccato» and why, so that `jht agents` can name the key and the command that puts it right."""
+    box = Box(tmp_path, uid="assistente")
+    box.pi([p_user(T), p_error(T + 3, '401 {"error":{"code":"1002","message":"Authentication Fails (made-up key)"}}')])
+    observer = Observer(box.home, sessions=lambda: ({"assistente": {"session": "ASSISTENTE", "created": int(CREATED),
+                                                                    "pids": []}}, []),
+                        processes=lambda: ({}, ["observer_processes_unavailable"]))
+    row = next(r for r in observer.sample(now=NOW, monotonic=100.0)["agents"] if r["id"] == "assistente")
+    assert (row["state"], row["reason"]) == ("bloccato", "accesso_scaduto")
+    assert json.loads(json.dumps(row))["reason"] == "accesso_scaduto"
