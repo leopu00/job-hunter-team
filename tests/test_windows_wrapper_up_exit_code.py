@@ -44,8 +44,9 @@ function Get-RunningComposeServiceId {
   if ($Service -eq 'jht') { return 'aaaaaaaaaaaa' }
   return 'bbbbbbbbbbbb'
 }
-# what stands under the broker's name: the stand-in above says it runs (the real one reads the labels with docker inspect)
-function Get-BrokerContainerState { return 'running' }
+# what stands under the broker's name (the real one reads the labels with docker inspect): a broker made before is there and runs,
+# on a clean install there is none
+function Get-BrokerContainerState { if (Test-Path -LiteralPath (Join-Path $RuntimeDir '.broker-made')) { return 'running' }; return 'absent' }
 """
 
 FAKE_DOCKER = r"""#!/bin/sh
