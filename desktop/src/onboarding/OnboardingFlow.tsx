@@ -27,6 +27,7 @@ import { savedVpsBridge, type SavedVps } from "../lib/saved-vps";
 import { SetupSupportReport } from "./SetupSupportReport";
 import RuntimePhaseDetail, { pullBar } from "./RuntimePhaseDetail";
 import PlanChoice from "./PlanChoice";
+import EngineChoice from "./EngineChoice";
 import { isUntouched, wizardStart } from "./wizard-draft";
 import "./onboarding.css";
 
@@ -162,6 +163,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
   const [actionFailed, setActionFailed] = useState(false);
   // The plan is still to be chosen: the team does not start before the person chooses it or leaves it to the chat.
   const [planBlocked, setPlanBlocked] = useState(false);
+  const [engineBlocked, setEngineBlocked] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const pendingRef = useRef(false);
   // Which call of `invoke` is the latest: a screen that changed ends the calls started before it, so one that
@@ -280,6 +282,8 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
     (completedSteps > 0 || !!activity?.events.some((event) => event.status === "completed"));
   // After the provider's login, before the team starts: the plan the Capitano's first run needs is chosen here.
   const planAsked = runtime.stage === "team-start" && actionRequired && !!onLoadPlans && !!onDeclarePlan;
+  // Before the provider's sign-in, on this computer: the program of the agents (Codex, or Pi where the provider allows it).
+  const engineAsked = runtime.stage === "provider-login" && actionRequired && host.kind === "local";
   const currentActivity = !failed && activity?.current?.stage === runtime.stage ? activity.current : undefined;
   const currentActivityName = currentActivity ? t.activityStages[currentActivity.nativeStage] : undefined;
   const elapsed = activity ? formatElapsed(now - activity.startedAt) : "00:00";
@@ -599,6 +603,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
           {actionFailed && <p className="onboarding-error" role="alert">{t.actionFailed}</p>}
           {failed && runtime.retryable === false && !runtime.action && runtime.code !== "container_version_incompatible" && <p className="onboarding-error">{t.fixData}</p>}
           {resumable && <p className="onboarding-hint" data-testid="onboarding-resume-note">{t.resumeNote}</p>}
+          {engineAsked && <EngineChoice onBlock={setEngineBlocked} />}
           {planAsked && onLoadPlans && onDeclarePlan && <PlanChoice t={t} load={onLoadPlans} declare={onDeclarePlan} onBlock={setPlanBlocked} />}
           <div className="onboarding-runtime-actions" ref={actionsRef}>
             {!failed && <button className="onboarding-secondary" type="button" onClick={() => invoke(onRestart)} disabled={pending}>
@@ -659,7 +664,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
             {((failed && runtime.retryable !== false) || actionRequired) && (
               <>
               {runtime.stage === "ssh-host-key" && !failed && <button className="onboarding-secondary" type="button" onClick={onCancelHostKey} disabled={pending}>{t.cancel}</button>}
-              <button className="onboarding-primary" type="button" onClick={() => invoke(action, !failed)} disabled={pending || (planAsked && planBlocked)}>
+              <button className="onboarding-primary" type="button" onClick={() => invoke(action, !failed)} disabled={pending || (planAsked && planBlocked) || (engineAsked && engineBlocked)}>
                 {pending ? failed ? t.verifying : t.wait : failed ? resumable ? t.resumeSetup : t.retryPrepare : actionLabel}<span aria-hidden="true">→</span>
               </button>
               </>

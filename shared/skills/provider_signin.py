@@ -42,6 +42,11 @@ CREDENTIAL_FILES: dict[str, tuple[str, ...]] = {
     "kimi": (".kimi/credentials/kimi-code.json", ".config/kimi-cli/credentials.json", ".kimi/credentials.json"),
 }
 
+# The sign-in of Pi, the other program that can drive the agents of the OpenAI account (`harness: pi` in the config): its own
+# file, in a folder of its own. It is the marker of the sign-in while the harness is Pi, and it goes with the others when
+# the account is disconnected, whichever program was in charge.
+PI_FILES: dict[str, tuple[str, ...]] = {"codex": (".pi/agent/auth.json",)}
+
 # The names the config may hold for each (the vendor's and the CLI's), the same ones the boot check accepts.
 PROVIDER_OF = {"claude": "claude", "anthropic": "claude", "codex": "codex", "openai": "codex", "kimi": "kimi", "moonshot": "kimi"}
 
@@ -121,12 +126,24 @@ def _active_provider(home: str) -> tuple[str | None, str]:
     return provider, ""
 
 
+def _marker(home: str, provider: str) -> str:
+    """The file whose presence is the sign-in: Pi's while the harness is Pi (a closed word of the config, never a path)."""
+    try:
+        with open(os.path.join(home, "jht.config.json"), encoding="utf-8") as handle:
+            config = json.loads(handle.read(CONFIG_MAX_BYTES))
+    except (OSError, ValueError):
+        config = None
+    if isinstance(config, dict) and config.get("harness") == "pi" and provider in PI_FILES:
+        return PI_FILES[provider][0]
+    return CREDENTIAL_FILES[provider][0]
+
+
 def status(home: str = HOME) -> dict:
     """Signed in = the marker of the active provider is there, in any form."""
     provider, error = _active_provider(home)
     if provider is None:
         return _fail(error)
-    return {"ok": True, "provider": provider, "authenticated": classify(home, CREDENTIAL_FILES[provider][0]) != "absent"}
+    return {"ok": True, "provider": provider, "authenticated": classify(home, _marker(home, provider)) != "absent"}
 
 
 def logout(home: str = HOME, unlink=os.unlink) -> dict:
@@ -136,7 +153,8 @@ def logout(home: str = HOME, unlink=os.unlink) -> dict:
     if provider is None:
         return _fail(error)
     removed = 0
-    for relative in CREDENTIAL_FILES[provider]:
+    files = CREDENTIAL_FILES[provider] + PI_FILES.get(provider, ())
+    for relative in files:
         state, fd, name = _locate(home, relative)
         if state != "file":
             continue
@@ -151,7 +169,7 @@ def logout(home: str = HOME, unlink=os.unlink) -> dict:
         finally:
             os.close(fd)
     # After, not before: a running agent may have written its file back.
-    if any(classify(home, relative) != "absent" for relative in CREDENTIAL_FILES[provider]):
+    if any(classify(home, relative) != "absent" for relative in files):
         return _fail("provider_logout_incomplete")
     return {"ok": True, "provider": provider, "authenticated": False, "removed": removed}
 
