@@ -113,6 +113,11 @@ def fetch(url: str) -> tuple:
     """(http status, body bytes) of one GET; (0, b"") when the portal did not answer. Never raises, never follows a redirect."""
     if not url.startswith(BASE + "?"):
         raise Refused("only the JobSearch API is asked")
+    import source_rate   # one request cap and one pause for this API, shared by every Scout
+    return source_rate.guarded_fetch("platsbanken", _get, url)
+
+
+def _get(url: str) -> tuple:
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
     opener = urllib.request.build_opener(_NoRedirect)
     try:

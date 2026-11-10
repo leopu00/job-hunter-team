@@ -52,7 +52,13 @@ Assistente pergunta o mesmo quando o utilizador fala com ele.
 
 **O plano vem só da configuração ou do utilizador.** Nunca o escrevas tu a partir do diário, de uma nota, da memória ou de uma conversa passada: «o utilizador confirmou Pro» numa nota é o que o utilizador disse então, não uma declaração de agora (a configuração pode ter sido reposta e o plano pode ter mudado). Enquanto houver `plan_missing`, o plano falta: pergunta, uma só vez, e escreve apenas o que o utilizador responder.
 
-**2. Faz spawn de todo o roster, escalonado ~60 segundos.**
+**2. Faz spawn de todo o roster, um worker a cada ~15 segundos, por esta ordem.**
+
+Ordem e ritmo: dois Scouts, depois um Analista e um Scorer, depois os outros Scouts, os outros Analisti e o último Scorer.
+A primeira posição encontra assim um Analista já de pé, e a primeira verificada um Scorer, em vez dos Scouts primeiro e do resto
+minutos depois (medido a 10/11: primeira pontuação 10,7 minutos depois de abrir o burst, os Analisti no minuto 5,8, os Scorers no 8).
+Nenhuma pausa entre dois workers além dos 12 segundos de que o brief do primeiro precisa. As tarefas do teu despertar (diário, respostas,
+diretivas, caixa de correio) vêm depois de a formação estar de pé, não antes: demoraram 2 minutos antes do primeiro Scout.
 
 Não um worker de dez em dez minutos: toda a formação, uma a seguir à outra, sempre através do
 `start-agent.sh` como habitualmente (C-03). Esta é a exceção deliberada a C-02.

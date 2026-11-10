@@ -30,7 +30,7 @@ others) and `--drop-seniority` drops the listed levels (reason `seniority`). Ads
 Prints one JSON object:
   {ok, status, provider, board, country, counts:{board_total, in_country, remote_unplaced, returned, dropped_country,
    dropped_role, dropped_seniority}, hits:[{id, title, url, location, place, seniority, posted}],
-   dropped:[{title, location, seniority, reason}]}      (dropped: at most 60, only ads in the country)
+   dropped:[{title, location, seniority, reason}]}      (dropped: a sample of at most 6 per reason, only ads in the country; `counts` is the full tally)
 `seniority` is read from the TITLE: intern | junior | unknown | senior | lead. `status` is the word for
 `scout_pass_log.py --status` (ok | empty | closed | gone). With `--log` the pass is written (source = the provider, the
 country, how many ads the board has) and, for each reason that left ads out, ONE line worth that many candidates
@@ -58,6 +58,7 @@ TIMEOUT_S = 20
 MAX_BYTES = 8 * 1024 * 1024
 FIELD = 200
 MAX_DROPPED = 60
+MAX_DROPPED_PER_REASON = 6   # a sample of each reason: `counts` says how many, and a long list only fills the Scout's context
 PROVIDERS = ("greenhouse", "lever", "teamtailor")
 SENIORITIES = ("intern", "junior", "unknown", "senior", "lead")
 SLUG = re.compile(r"^[a-z0-9][a-z0-9._-]{0,59}$")
@@ -213,9 +214,17 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def fetch(url: str) -> tuple:
-    """(http status, body bytes) of one GET; (0, b"") when the board did not answer. Never raises, never follows a redirect."""
+    """(http status, body bytes) of one GET; (0, b"") when the board did not answer. Never raises, never follows a redirect.
+
+    The board's host has ONE request cap and ONE pause shared by every Scout (source_rate.py): a refused call makes no request
+    and answers 429; a 403/429/503 suspends the host for everyone, for longer each time."""
     if not url.startswith("https://"):
         raise Refused("only https addresses are asked")
+    import source_rate
+    return source_rate.guarded_fetch(urllib.parse.urlsplit(url).hostname or "", _get, url)
+
+
+def _get(url: str) -> tuple:
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json, application/rss+xml"})
     try:
         with urllib.request.build_opener(_NoRedirect).open(request, timeout=TIMEOUT_S) as response:
@@ -328,7 +337,7 @@ def select(ads: list, country: str, title_any=(), drop_seniority=(), include_rem
             reason = "role"
         if reason:
             counts["dropped_" + reason] += 1
-            if len(dropped) < MAX_DROPPED:
+            if len(dropped) < MAX_DROPPED and sum(1 for d in dropped if d["reason"] == reason) < MAX_DROPPED_PER_REASON:
                 dropped.append({"title": ad["title"], "location": ad["location"], "seniority": ad["seniority"], "reason": reason})
         else:
             hits.append(ad)
