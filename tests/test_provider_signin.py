@@ -257,3 +257,15 @@ def test_disconnecting_the_account_removes_pis_sign_in_too_whichever_program_is_
         assert ps.logout(str(home)) == {"ok": True, "provider": "codex", "authenticated": False, "removed": 2}
         assert not (home / ".pi/agent/auth.json").exists() and not (home / ".codex/auth.json").exists()
         assert (home / ".pi/agent/settings.json").exists(), "only the sign-in goes, not Pi's settings"
+
+
+def test_pis_file_goes_whole_even_with_other_services_in_it_because_every_check_reads_the_file_as_the_sign_in(tmp_path):
+    # Pi keeps one entry per service in this file. The agents' launch, the watchdog, the onboarding and the wrappers all take the
+    # file being there as «signed in», so a file left with the other services' entries would read as signed in: the account is
+    # disconnected by removing the file, and the confirmation says that every sign-in saved for the team goes.
+    home = home_with(tmp_path, {"active_provider": "codex", "harness": "pi"})
+    put(home, ".pi/agent/auth.json", '{"openai-codex":{"type":"oauth"},"anthropic":{"type":"api_key","key":"synthetic"}}')
+    assert ps.status(str(home))["authenticated"] is True
+    assert ps.logout(str(home)) == {"ok": True, "provider": "codex", "authenticated": False, "removed": 1}
+    assert not (home / ".pi/agent/auth.json").exists()
+    assert ps.status(str(home))["authenticated"] is False
