@@ -895,7 +895,8 @@ def test_remove_takes_a_machine_of_another_name_only_with_the_installers_mark(tm
     (other.runtime / "podman-machine-created").write_text("somebody-else\n", encoding="utf-8")
     (tmp_path / "other-run").mkdir()
     run = _run(tmp_path / "other-run", other, mode="Remove", machine_state="team-box stopped")
-    assert ("machine", "not_ours") in run.items and not any(call.startswith("machine rm") for call in run.calls)
+    assert not any(call.startswith("machine rm") for call in run.calls) and ("runtime", "not_podman") in run.items
+    assert other.runtime.is_dir() and run.code == 24
 
 
 @pytest.mark.skipif(not WINDOWS, reason="the name comes from the SID of a Windows user")

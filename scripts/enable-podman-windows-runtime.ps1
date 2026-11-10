@@ -794,7 +794,11 @@ try { Install-PrivateComposeProvider -Destination $ComposeProvider } catch {
   exit 21
 }
 
+$machineCreatedHere = $false
 try {
+  # Another user's win-sshproxy.exe that outlived its machine holds the pipe of this machine's name: said plainly, before the minutes of
+  # a machine init or a start that could only fail with «permission denied».
+  if ((Get-JhtPodmanPipeState -MachineName $MachineName) -ceq 'denied') { throw (Get-JhtPodmanPipeAdvice -MachineName $MachineName) }
   # Windows PowerShell 5.1 gives a JSON array to the pipeline as ONE object: with a
   # second machine of this user, `$machine` was the whole list. Parse with -InputObject
   # and enumerate with foreach, the same in 5.1 and in PowerShell 7.
@@ -816,7 +820,10 @@ try {
   }
   Invoke-Checked $Podman '--connection' $MachineName 'info' | Out-Null
 } catch {
-  [Console]::Error.WriteLine("podman_machine_unavailable: $($_.Exception.Message)")
+  $why = $_.Exception.Message
+  # A failure to reach the machine while its pipe is held by another user's program: the cause, in plain words, after Podman's own.
+  if ((Get-JhtPodmanPipeState -MachineName $MachineName) -ceq 'denied' -and $why -notmatch 'held by a program of another Windows user') { $why = "$why $(Get-JhtPodmanPipeAdvice -MachineName $MachineName)" }
+  [Console]::Error.WriteLine("podman_machine_unavailable: $why")
   exit 22
 }
 

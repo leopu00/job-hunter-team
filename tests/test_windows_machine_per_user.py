@@ -140,3 +140,45 @@ def test_the_installer_hands_the_resolved_name_to_the_enabler_and_not_a_fixed_on
     source = INSTALLER.read_text(encoding="utf-8")
     assert "'-MachineName', 'jht-podman'" not in source
     assert "'-MachineName', $machineName" in source
+
+
+# A win-sshproxy.exe of another user can outlive its machine and keep the pipe: said plainly instead of a mute «permission denied».
+PIPE_FAKE = "function Get-JhtPodmanPipeState { param([string]$MachineName) return $env:FAKE_PIPE }\n"
+
+
+def _machine_block(tmp_path, pipe: str, machines: str):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _fake(bin_dir, "podman.exe", PODMAN_CASES)
+    return _run(tmp_path, ENABLER, ["Invoke-Checked", "Write-JhtPhase", "Get-JhtPodmanPipeAdvice"], PIPE_FAKE + MACHINE_BLOCK_BODY, {
+        "FAKE_PODMAN": str(bin_dir / "podman.exe"), "FAKE_MACHINES": machines, "INITIALIZE": "1", "FAKE_FAIL": "",
+        "WELCOME": "Skip-WslWelcome", "FAKE_PIPE": pipe,
+    })
+
+
+@pytest.mark.parametrize("machines", [_machines(), _machines(("jht-podman", False))], ids=["no-machine-yet", "stopped-machine"])
+def test_a_pipe_held_by_another_users_program_is_said_before_anything_is_started(tmp_path, machines):
+    result, calls = _machine_block(tmp_path, "denied", machines)
+    err = result.stderr.replace("\r\n", "\n")
+    assert result.returncode == 22, result.stdout + err
+    assert "podman_machine_unavailable:" in err and "held by a program of another Windows user" in err
+    assert "podman-jht-podman" in err and "win-sshproxy.exe" in err and "Task Manager" in err and "run the installer again" in err
+    assert not any(call.startswith("machine init") or call.startswith("machine start") for call in calls), calls
+
+
+@pytest.mark.parametrize("pipe", ["absent", "connected", "unknown", "busy"])
+def test_a_pipe_nobody_holds_or_that_answers_this_user_changes_nothing(tmp_path, pipe):
+    result, calls = _machine_block(tmp_path, pipe, _machines(("jht-podman", True)))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert any(call.endswith("info") for call in calls)
+
+
+def test_the_pipe_state_is_unknown_where_there_are_no_windows_pipes_and_the_advice_names_the_way_out(tmp_path):
+    (tmp_path / "bin").mkdir()
+    body = "[Console]::Out.WriteLine('STATE ' + (Get-JhtPodmanPipeState -MachineName 'jht-podman-ab12cd34'))\n[Console]::Out.WriteLine('ADVICE ' + (Get-JhtPodmanPipeAdvice -MachineName 'jht-podman-ab12cd34'))"
+    result, _ = _run(tmp_path, ENABLER, ["Get-JhtPodmanPipeState", "Get-JhtPodmanPipeAdvice"], body, {})
+    out = result.stdout.replace("\r\n", "\n")
+    assert result.returncode == 0, out + result.stderr
+    assert "ADVICE The Podman pipe" in out and "podman-jht-podman-ab12cd34" in out and "win-sshproxy.exe" in out
+    state = re.search(r"^STATE (\S+)", out, flags=re.MULTILINE).group(1)
+    assert state in {"unknown", "absent"}, state

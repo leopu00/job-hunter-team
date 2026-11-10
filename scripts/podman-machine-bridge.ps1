@@ -435,6 +435,36 @@ function Invoke-JhtPodmanMachine {
   $global:LASTEXITCODE = $result.ExitCode
 }
 
+# The pipe a Podman machine opens (\\.\pipe\podman-<machine>) is global to the computer, and the program that holds it
+# (win-sshproxy.exe) can outlive its machine. 'absent': nobody holds it; 'connected': it answers this user (their own machine's);
+# 'denied': it exists and this user may not open it, so another Windows user's program holds it; 'unknown'/'busy': not told apart.
+function Get-JhtPodmanPipeState {
+  param([Parameter(Mandatory)][string]$MachineName)
+  $pipe = "podman-$MachineName"
+  try { $listed = @([IO.Directory]::GetFiles('\\.\pipe\') | ForEach-Object { [IO.Path]::GetFileName([string]$_) }) } catch { return 'unknown' }
+  if ($listed -cnotcontains $pipe) { return 'absent' }
+  $client = $null
+  try {
+    $client = New-Object IO.Pipes.NamedPipeClientStream('.', $pipe, [IO.Pipes.PipeDirection]::InOut, [IO.Pipes.PipeOptions]::None)
+    $client.Connect(300)
+    return 'connected'
+  } catch [UnauthorizedAccessException] { return 'denied' }
+  catch { return 'busy' }
+  finally { if ($client) { $client.Dispose() } }
+}
+
+# What to tell a person whose pipe is held by another user's program: who holds it, and what to do.
+function Get-JhtPodmanPipeAdvice {
+  param([Parameter(Mandatory)][string]$MachineName)
+  $ids = @()
+  try { $ids = @(Get-Process -Name 'win-sshproxy' -ErrorAction SilentlyContinue | ForEach-Object { [string]$_.Id }) } catch { $ids = @() }
+  $who = if ($ids.Count -gt 0) { "win-sshproxy.exe, process id $($ids -join ', ')" } else { 'win-sshproxy.exe' }
+  return ("The Podman pipe \\.\pipe\podman-$MachineName is held by a program of another Windows user of this computer ($who). " +
+    'It can stay alive after that user''s Podman machine has stopped. To free it: sign in as that user and run "podman machine stop", ' +
+    'or end win-sshproxy.exe in Task Manager (Details tab, with the User name column; an administrator can do it for you). ' +
+    'Then run the installer again.')
+}
+
 function Invoke-Checked {
   param([Parameter(Mandatory)][string]$FilePath, [Parameter(ValueFromRemainingArguments)][AllowEmptyString()][string[]]$Arguments)
   Invoke-JhtPodmanMachine -FilePath $FilePath -Arguments $Arguments
