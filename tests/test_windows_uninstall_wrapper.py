@@ -62,7 +62,7 @@ def test_uninstall_requires_one_explicit_confirmation_and_has_stable_output():
     assert notice in SOURCE
     assert uninstall.count("WriteLine($JhtUninstallRemovalNotice)") == 2
     assert "Write-JhtUninstallMachineLeft" in uninstall
-    assert "I segreti salvati non sono stati rimossi." in uninstall
+    assert "I segreti salvati non sono stati rimossi" in SOURCE
     assert "--remove-data" not in uninstall
     assert "--remove-podman" not in uninstall
 
@@ -83,9 +83,12 @@ def test_uninstall_preserves_user_data_and_only_removes_known_commands():
     assert "(Join-Path $binPath 'shim\\jht.cmd'), (Join-Path $binPath 'shim')" in uninstall
     assert "$normalizedShim" in uninstall
     assert "if ($foreignCommands.Count -eq 0)" in uninstall
-    assert "'.jht'" not in uninstall
-    assert "Documents\\Job Hunter Team" not in uninstall
+    # the data goes only with --purge (never by default), and only the two fixed folders
     assert "machine reset" not in uninstall
+    body = uninstall[uninstall.index("function Invoke-JhtWindowsUninstall"):]
+    purge_block = body[body.index("if ($purge) {"):body.index("Write-JhtUninstallPhase uninstall_runtime")]
+    assert "'.jht'" in purge_block and "'Documents', 'Job Hunter Team'" in purge_block
+    assert "'.jht'" not in body.replace(purge_block, "") and "'Documents'" not in body.replace(purge_block, "")
 
 
 def _ps_literal(path: Path) -> str:
@@ -300,7 +303,10 @@ if (-not (Test-Path -LiteralPath {_ps_literal(bin_dir / 'jht.ps1')})) {{ throw '
     assert "JHT_LEFT runtime" in result.stdout
     assert "JHT_LEFT commands" in result.stdout
     assert "machine rm" not in log.read_text(encoding="utf-8")
-    assert "I segreti salvati non sono stati rimossi." in result.stderr
+    assert "I segreti salvati non sono stati rimossi" in result.stderr
+    assert "jht-secrets" in result.stderr and "jht-telegram-secrets" in result.stderr, "which secrets, and where"
+    assert "wsl --unregister podman-jht-podman" in result.stderr, "the exact way to remove it by hand"
+    assert "WSL non risponde" in result.stderr, "and why it was left"
 
 
 @pytest.mark.skipif(
@@ -423,3 +429,174 @@ if (-not (Test-Path -LiteralPath {_ps_literal(bin_dir / 'jht.ps1')})) {{ throw '
     assert "JHT_LEFT machine" in result.stdout
     assert "JHT_LEFT runtime" in result.stdout
     assert "JHT_LEFT commands" in result.stdout
+
+
+# ── the machine that podman cannot remove, the data of --purge, and the words for a person ───────────────────────────────────────
+
+BIN_FILES = ("jht.ps1", "jht.cmd", "windows-private-acl.ps1", "podman-machine-bridge.ps1", "docker.exe")
+
+
+def _box(tmp_path: Path, *, machine: bool = True, data: bool = False):
+    profile, local = tmp_path / "profile", tmp_path / "local"
+    runtime = local / "Job Hunter Team" / "host-runtime"
+    bin_dir = profile / ".local" / "bin"
+    tools, state, log = tmp_path / "tools", tmp_path / "jht-machine-present", tmp_path / "calls.log"
+    for directory in (runtime, bin_dir, tools):
+        directory.mkdir(parents=True, exist_ok=True)
+    (runtime / "container-runtime").write_text("podman\n", encoding="utf-8")
+    for filename in BIN_FILES:
+        (bin_dir / filename).write_text("jht\n", encoding="utf-8")
+    home, documents = profile / ".jht", profile / "Documents" / "Job Hunter Team"
+    if data:
+        for folder, name in ((home, "profile.json"), (documents, "cv.txt")):
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / name).write_text("synthetic\n", encoding="utf-8")
+    if machine:
+        state.write_text("present\n", encoding="utf-8")
+    return type("Box", (), {"profile": profile, "local": local, "runtime": runtime, "bin": bin_dir, "tools": tools, "state": state,
+                            "log": log, "home": home, "documents": documents})
+
+
+def _fake_podman(box, *, rm_exit: int = 0, rm_says: str = "") -> Path:
+    podman = box.tools / "podman.cmd"
+    _write_batch(podman, f"""@echo off
+echo %*>>"{box.log}"
+if "%1"=="machine" if "%2"=="list" goto list
+if "%1"=="machine" if "%2"=="rm" goto remove
+exit /b 90
+:list
+if exist "{box.state}" (echo [{{"Name":"jht-podman"}}]) else (echo [{{"Name":"somebody-else"}}])
+exit /b 0
+:remove
+{f'echo {rm_says} 1>&2' if rm_says else 'rem'}
+if {rm_exit} NEQ 0 exit /b {rm_exit}
+del /q "{box.state}"
+exit /b 0
+""")
+    return podman
+
+
+def _fake_wsl(box, *, unregister_exit: int = 0) -> Path:
+    """The distro of a Podman machine is `podman-<name>`: podman-jht-podman."""
+    wsl = box.tools / "wsl.cmd"
+    _write_batch(wsl, f"""@echo off
+echo wsl %*>>"{box.log}"
+if "%1"=="--status" exit /b 0
+if "%1"=="--list" if exist "{box.state}" echo podman-jht-podman
+if "%1"=="--terminate" exit /b 0
+if "%1"=="--unregister" goto unregister
+exit /b 0
+:unregister
+if not "%2"=="podman-jht-podman" exit /b 91
+if {unregister_exit} NEQ 0 (echo The process cannot access the file 1>&2 & exit /b {unregister_exit})
+del /q "{box.state}"
+exit /b 0
+""")
+    return wsl
+
+
+def _uninstall(box, podman: Path, wsl: Path, *args: str, tmp_path: Path, machine_output: str | None = None):
+    arguments = ", ".join(f"'{a}'" for a in args)
+    body = f"""
+$code = Invoke-JhtWindowsUninstall -UninstallArgs @({arguments}) -ProfilePath {_ps_literal(box.profile)} -LocalAppDataPath {_ps_literal(box.local)} -PodmanPath {_ps_literal(podman)} -WslPath {_ps_literal(wsl)} -EnvironmentTarget Process
+[Console]::Out.WriteLine("CODE=$code")
+"""
+    if machine_output is not None:
+        body = f"$env:JHT_MACHINE_OUTPUT = '{machine_output}'\n" + body
+    return _run_harness(tmp_path, body)
+
+
+windows_only = pytest.mark.skipif(os.name != "nt" or not POWERSHELL, reason="requires Windows PowerShell")
+
+
+@windows_only
+def test_a_machine_podman_cannot_remove_is_unregistered_through_wsl_by_its_exact_distro_name(tmp_path: Path):
+    box = _box(tmp_path)
+    result = _uninstall(box, _fake_podman(box, rm_exit=1, rm_says="Error: unable to remove the machine"), _fake_wsl(box), "--confirm", tmp_path=tmp_path)
+    assert "CODE=0" in result.stdout, result.stdout + result.stderr
+    calls = box.log.read_text(encoding="utf-8")
+    assert "wsl --terminate podman-jht-podman" in calls and "wsl --unregister podman-jht-podman" in calls
+    assert not box.state.exists() and not box.runtime.exists()
+    assert not any(line.startswith("wsl --unregister") and "jht-podman" not in line for line in calls.splitlines())
+
+
+@windows_only
+def test_when_nothing_can_remove_the_machine_the_reason_the_secrets_and_the_manual_command_are_said(tmp_path: Path):
+    box = _box(tmp_path)
+    podman = _fake_podman(box, rm_exit=1, rm_says="Error: machine is in use by another process")
+    result = _uninstall(box, podman, _fake_wsl(box, unregister_exit=1), "--confirm", tmp_path=tmp_path)
+    assert "CODE=24" in result.stdout, result.stdout + result.stderr
+    assert box.runtime.exists() and (box.bin / "jht.ps1").exists(), "everything stays for a retry"
+    for words in ("machine is in use by another process", "The process cannot access the file", "wsl --unregister podman-jht-podman",
+                  "jht-secrets", "jht-telegram-secrets", "rilancia jht uninstall --confirm"):
+        assert words in result.stderr, words
+
+
+@windows_only
+def test_a_console_gets_sentences_and_a_pipe_gets_the_lines_of_the_app(tmp_path: Path):
+    for mode, shown, hidden in (("0", "Tolgo la macchina Podman jht-podman", "JHT_PHASE"), ("1", "JHT_PHASE uninstall_machine", "Tolgo la macchina")):
+        box = _box(tmp_path / mode)
+        result = _uninstall(box, _fake_podman(box), _fake_wsl(box), "--confirm", tmp_path=tmp_path / mode, machine_output=mode)
+        assert "CODE=0" in result.stdout, result.stdout + result.stderr
+        assert shown in result.stdout and hidden not in result.stdout, (mode, result.stdout)
+    left = _box(tmp_path / "left")
+    result = _uninstall(left, _fake_podman(left, rm_exit=1), _fake_wsl(left, unregister_exit=1), "--confirm", tmp_path=tmp_path / "left", machine_output="0")
+    assert "JHT_LEFT" not in result.stdout and "JHT_PHASE" not in result.stdout
+    assert "Non tolta: la macchina Podman jht-podman" in result.stderr
+
+
+@windows_only
+@pytest.mark.parametrize("arguments", [("--confirm", "--purge"), ("--purge", "--confirm")], ids=["confirm-purge", "purge-confirm"])
+def test_purge_deletes_the_two_data_folders_after_the_machine_and_before_the_runtime(tmp_path: Path, arguments):
+    box = _box(tmp_path, data=True)
+    result = _uninstall(box, _fake_podman(box), _fake_wsl(box), *arguments, tmp_path=tmp_path, machine_output="1")
+    assert "CODE=0" in result.stdout, result.stdout + result.stderr
+    assert not box.home.exists() and not box.documents.exists() and not box.runtime.exists()
+    lines = [line for line in result.stdout.splitlines() if line.startswith("JHT_PHASE")]
+    assert lines == ["JHT_PHASE uninstall_machine", "JHT_PHASE uninstall_data", "JHT_PHASE uninstall_runtime", "JHT_PHASE uninstall_commands"]
+    assert "~/.jht e Documents\\Job Hunter Team" in result.stderr, "the loss is said before it happens"
+
+
+@windows_only
+def test_without_purge_the_data_stays_and_the_sentence_says_so(tmp_path: Path):
+    box = _box(tmp_path, data=True)
+    result = _uninstall(box, _fake_podman(box), _fake_wsl(box), "--confirm", tmp_path=tmp_path, machine_output="0")
+    assert "CODE=0" in result.stdout
+    assert (box.home / "profile.json").exists() and (box.documents / "cv.txt").exists()
+    assert "restano (con --purge si cancellano)" in result.stdout
+
+
+@windows_only
+def test_purge_never_follows_a_link_and_leaves_the_command_to_retry(tmp_path: Path):
+    box = _box(tmp_path, data=True)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "precious.txt").write_text("synthetic\n", encoding="utf-8")
+    import shutil as _shutil
+    _shutil.rmtree(box.documents)
+    subprocess.run(["cmd", "/c", "mklink", "/J", str(box.documents), str(elsewhere)], check=True, capture_output=True)
+    result = _uninstall(box, _fake_podman(box), _fake_wsl(box), "--confirm", "--purge", tmp_path=tmp_path, machine_output="1")
+    assert "CODE=24" in result.stdout, result.stdout + result.stderr
+    assert (elsewhere / "precious.txt").exists(), "what the link points at is never touched"
+    assert "JHT_LEFT data" in result.stdout and "JHT_PHASE uninstall_runtime" not in result.stdout
+    assert box.runtime.exists() and (box.bin / "jht.ps1").exists(), "the command stays so it can be run again"
+    assert "e' un collegamento" in result.stderr
+
+
+@windows_only
+def test_a_file_of_another_program_in_the_bin_folder_is_left_alone(tmp_path: Path):
+    box = _box(tmp_path)
+    for name in ("kimi.exe", "uv.exe"):
+        (box.bin / name).write_text("keep\n", encoding="utf-8")
+    result = _uninstall(box, _fake_podman(box), _fake_wsl(box), "--confirm", tmp_path=tmp_path)
+    assert "CODE=0" in result.stdout, result.stdout + result.stderr
+    assert (box.bin / "kimi.exe").exists() and (box.bin / "uv.exe").exists()
+    assert not any((box.bin / name).exists() for name in BIN_FILES)
+
+
+def test_the_usage_line_names_purge_and_the_wsl_distro_follows_podmans_naming():
+    assert "uso: jht uninstall --confirm [--purge]" in SOURCE
+    function = SOURCE[SOURCE.index("function Get-JhtPodmanDistroName"):]
+    function = function[:function.index("\n}\n")]
+    assert "return \"podman-$MachineName\"" in function and "StartsWith('podman'" in function
+    assert 'Get-JhtPodmanDistroName $MachineName) -or $distros -ccontains "podman-machine-$MachineName"' in SOURCE
