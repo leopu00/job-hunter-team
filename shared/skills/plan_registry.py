@@ -218,10 +218,17 @@ def _plan_the_reading_is_about(prov: str, reading: dict) -> Optional[str]:
 # Il rapporto conta più del numero assoluto: uno Scout produce materiale che
 # Analista e Scorer devono digerire. Roster tutto-Scout = 50 posizioni grezze
 # e 3 punteggiate (run reale 2026-07-26), che per l'utente vale zero.
+#
+# Misurato sulla corsa del 10/11 (tier 15, 3/2/1, API key): l'Analista e lo Scorer non lavoravano, aspettavano (pausa fissa
+# dopo ogni unita', ora tolta quando la coda del ruolo ha posizioni: pause-rules.json, queued_work). Tolta quella, un Analista
+# fa ~0,85 posizioni/min e due ne smaltiscono 1,7/min: si mettono in pari da soli con gli Scout (~2,1/min nei primi 11 minuti),
+# e il limite torna all'offerta degli Scout (29 posizioni in 34 minuti) e allo Scorer (56 s a posizione, 1/min).
+# Per 20 punteggi in 30 minuti, con ~58% delle posizioni che arrivano a punteggio, servono ~35-40 posizioni: piu' Scout,
+# 3 Analisti e 2 Scorer. Una simulazione con quei tempi: 3/2/1 ~14 punteggi, 4/3/2 ~18, 5/3/2 col tetto a 40 ~22.
 _BURST_ROSTER = [
     # (tier minimo, scout, analista, scorer)
-    (20, 4, 2, 2),
-    (15, 3, 2, 1),
+    (20, 6, 3, 2),
+    (15, 5, 3, 2),
     (5,  2, 1, 1),
     (1,  1, 1, 1),
     (0,  1, 1, 1),
@@ -230,7 +237,7 @@ _BURST_ROSTER = [
 # Quante posizioni lo Scout porta a casa nel PRIMO giro prima di fermarsi e
 # lasciare la finestra al downstream. Senza questo cap lo scouting si mangia
 # la finestra e il punteggio non arriva mai (root cause del run 2026-07-26).
-_BURST_SCOUT_CAP = {20: 30, 15: 30, 5: 30, 1: 30, 0: 30}
+_BURST_SCOUT_CAP = {20: 40, 15: 40, 5: 30, 1: 30, 0: 30}  # 20 punteggi al ~58% di resa: ~35 posizioni, con margine 40
 
 # Obiettivo dichiarato del burst: quante posizioni PUNTEGGIATE far vedere
 # all'utente prima di passare al regime normale.

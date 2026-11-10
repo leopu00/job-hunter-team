@@ -177,8 +177,9 @@ def test_the_big_roster_is_no_longer_cut_to_one_per_role_on_the_windows_pc(monke
     plan = dict(plan_registry.find_plan("claude", "max20"))
     monkeypatch.setattr(plan_registry, "_host_capacity", lambda: hc.capacity(machine(6.0, 4), "codex"))
     roster = plan_registry.burst_roster(plan)
-    assert roster["total_workers"] == 8 and not roster["capped_by_host"]
-    assert roster["roster"] == {"scout": 4, "analista": 2, "scorer": 2}
+    # the table asks 6/3/2 (11 workers): the machine carries 8, cut from the head (the Scouts first), no role below one
+    assert roster["total_workers"] == 8 and roster["capped_by_host"]
+    assert roster["roster"] == {"scout": 3, "analista": 3, "scorer": 2}
     assert "carries 8 workers" in roster["host_note"]
 
 
