@@ -582,12 +582,13 @@ runtime_helpers_install() {
   runtime_helpers_write_manifest
 }
 
-# $2 is the command of the person: only `add`, `remove` and `pull` (of the tools) fetch a helper that is missing.
+# $2 is the command of the person: only `add` and `remove` fetch a helper that is missing. `jht tools` never does: its commands run by
+# themselves after the install, and a download at the tip of the branch is not something to start without the person asking for it.
 runtime_helper_load() {
   local helper="$1"
   if [ -z "$(runtime_helper_digest "$helper")" ]; then
     case "${2:-}" in
-      add|remove|pull) runtime_helpers_install || { err "script $helper non scaricabile: controlla la rete o fai 'jht upgrade'"; return 1; } ;;
+      add|remove) runtime_helpers_install || { err "script $helper non scaricabile: controlla la rete o fai 'jht upgrade'"; return 1; } ;;
       *) err "script $helper non ancora installato: 'jht upgrade' (o un 'jht integration add/remove') e riprova"; return 1 ;;
     esac
   fi

@@ -3657,13 +3657,11 @@ switch ($Sub) {
 
   'tools' {
     Require-ComposeFile
-    # Same as `integration`: dot-sourced at script level; a helper that is missing is fetched only by `pull`.
+    # Same as `integration`: dot-sourced at script level. A helper that is missing is never fetched from here: these commands run by
+    # themselves after the install, and a download at the tip of the branch is not something to start without the person asking.
     if (-not (Test-RuntimeHelperDeclared 'jht-tools.ps1')) {
-      $mayFetch = $Rest.Count -gt 0 -and [string]$Rest[0] -ceq 'pull'
-      if (-not $mayFetch -or -not (Install-RuntimeHelpers)) {
-        Write-Err "script jht-tools.ps1 non ancora installato: 'jht upgrade' (o un 'jht tools pull') e riprova"
-        exit 1
-      }
+      Write-Err "script jht-tools.ps1 non ancora installato: 'jht upgrade' e riprova"
+      exit 1
     }
     Assert-TrustedRuntime
     . (Join-Path $RuntimeDir 'jht-tools.ps1')
