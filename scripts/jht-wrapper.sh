@@ -370,6 +370,7 @@ jht_text_en() {
     uninstall.loss) printf '%s' "The saved mail password and Telegram tokens are deleted too; ~/.jht and Documents stay, and with them the saved LinkedIn session (secrets/linkedin-profile and .cache/linkedin): remove it with jht reset --scope creds." ;;
     uninstall.loss_purge) printf '%s' "The saved mail password and Telegram tokens are deleted too." ;;
     uninstall.purge_loss) printf '%s' "With --purge ~/.jht and ~/Documents/Job Hunter Team are deleted too: configuration, database, CVs and output. There is no way back." ;;
+    uninstall.machine_kept) printf '%s' "The Podman machine '%s' is not the standard JHT one (jht-podman), so it is not removed: it may be yours. The JHT volumes and image inside it stay with it. To remove it: podman machine stop %s, then podman machine rm %s." ;;
     uninstall.left.machine) printf '%s' "Not removed: the jht-podman Podman machine or JHT's containers and volumes, with the saved secrets. Run 'jht uninstall --confirm' again when Podman or Docker answer." ;;
     uninstall.left.runtime) printf '%s' "Not removed: JHT's host runtime." ;;
     uninstall.left.commands) printf '%s' "Not removed: the jht command or the PATH lines the installer added." ;;
@@ -435,6 +436,7 @@ jht_text_it() {
     uninstall.loss) printf '%s' "Vengono cancellati anche la password della posta e i token di Telegram salvati; ~/.jht e Documenti restano, e con loro la sessione LinkedIn salvata (secrets/linkedin-profile e .cache/linkedin): si toglie con jht reset --scope creds." ;;
     uninstall.loss_purge) printf '%s' "Vengono cancellati anche la password della posta e i token di Telegram salvati." ;;
     uninstall.purge_loss) printf '%s' "Con --purge vengono cancellati anche ~/.jht e ~/Documents/Job Hunter Team: configurazione, database, CV e output. Non si torna indietro." ;;
+    uninstall.machine_kept) printf '%s' "La macchina Podman '%s' non e' quella standard di JHT (jht-podman), quindi non la rimuovo: potrebbe essere tua. I volumi e l'immagine di JHT che ha dentro restano con lei. Per toglierla: podman machine stop %s, poi podman machine rm %s." ;;
     uninstall.left.machine) printf '%s' "Non rimossi: la macchina Podman jht-podman o i container e i volumi di JHT, con i segreti salvati. Rilancia 'jht uninstall --confirm' quando Podman o Docker rispondono." ;;
     uninstall.left.runtime) printf '%s' "Non rimosso: il runtime host di JHT." ;;
     uninstall.left.commands) printf '%s' "Non rimossi: il comando jht o le righe PATH aggiunte dall'installer." ;;
@@ -5693,11 +5695,11 @@ uninstall_tool() {
 
 # present | absent; ritorna 1 quando Podman non sa rispondere.
 uninstall_podman_machine_state() {
-  local names name
+  local names name want="${2:-$UNINSTALL_MACHINE_NAME}"
   names="$("$1" machine list --format '{{.Name}}' 2>/dev/null)" || return 1
   while IFS= read -r name; do
     # Podman marca con * la macchina di default anche in questo formato.
-    if [ "${name%\*}" = "$UNINSTALL_MACHINE_NAME" ]; then
+    if [ "${name%\*}" = "$want" ]; then
       printf 'present\n'
       return 0
     fi
@@ -5844,8 +5846,21 @@ uninstall_images() {
   uninstall_docker_images "$docker_bin"
 }
 
+# Il nome della macchina Podman che l'installer ha attestato in <runtime>/podman-machine, se e' un nome semplice e NON quello
+# standard (jht-podman, che si toglie sempre). L'installer adotta una macchina gia' esistente con il nome che gli si da
+# (la variabile del nome, in install.sh): un nome diverso puo' essere una macchina dell'utente, quindi non si rimuove, si dice che resta.
+uninstall_attested_machine() {
+  local file="$1/podman-machine" name
+  [ -f "$file" ] && [ ! -L "$file" ] || return 1
+  name="$(head -c 64 "$file" 2>/dev/null | head -n 1 | tr -d '\r\n')"
+  case "$name" in
+    ''|-*|"$UNINSTALL_MACHINE_NAME"|*[!A-Za-z0-9_.-]*) return 1 ;;
+  esac
+  printf '%s\n' "$name"
+}
+
 uninstall_machine() {
-  local selection="$1" podman_bin docker_bin state endpoint
+  local selection="$1" runtime_dir="${2:-}" podman_bin docker_bin state endpoint kept
   # La macchina jht-podman esiste solo sul Mac. Va tolta anche se il runtime
   # scelto oggi e' Docker: una prova Podman precedente la lascia inerte, con
   # i suoi volumi.
@@ -5856,6 +5871,11 @@ uninstall_machine() {
         "$podman_bin" machine rm --force "$UNINSTALL_MACHINE_NAME" >/dev/null 2>&1 || return 1
         state="$(uninstall_podman_machine_state "$podman_bin")" || return 1
         [ "$state" = "absent" ] || return 1
+      fi
+      # Una macchina attestata con un altro nome non si rimuove (puo' essere dell'utente): resta, e si dice quale e perche'.
+      if [ -n "$runtime_dir" ] && kept="$(uninstall_attested_machine "$runtime_dir")" \
+          && [ "$(uninstall_podman_machine_state "$podman_bin" "$kept")" = "present" ]; then
+        warn "$(jht_say uninstall.machine_kept "$kept" "$kept" "$kept")"
       fi
     elif [ "$selection" = "podman" ]; then
       return 1
@@ -6002,7 +6022,7 @@ jht_uninstall() {
   fi
 
   uninstall_phase uninstall_machine
-  if ! uninstall_machine "$selection"; then
+  if ! uninstall_machine "$selection" "$runtime_dir"; then
     uninstall_left machine
     uninstall_report_rest "$runtime_dir"
     return 24

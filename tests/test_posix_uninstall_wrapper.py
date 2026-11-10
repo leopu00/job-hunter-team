@@ -327,6 +327,54 @@ def test_mac_podman_removes_only_the_jht_machine_and_is_idempotent(tmp_path: Pat
     assert [call for call in box.calls() if call.startswith("podman machine rm")] == removals
 
 
+def test_mac_podman_with_another_attested_machine_name_leaves_it_and_says_so(tmp_path: Path) -> None:
+    # The installer adopts an existing machine of the name it is given (JHT_PODMAN_MACHINE), so a name that is not the standard
+    # one may be the person's own machine: it is not removed, and the uninstall says which one stays, why, and how to remove it.
+    box = Box(tmp_path, "Darwin")
+    box.select("podman")
+    (box.runtime / "podman-machine").write_text("jht-giro-mac\n", encoding="utf-8")
+    box.machines("jht-giro-mac*", "somebody-else")
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert phases(result) == ["JHT_PHASE uninstall_machine", "JHT_PHASE uninstall_runtime", "JHT_PHASE uninstall_commands"]
+    assert box.remaining("machines").splitlines() == ["jht-giro-mac*", "somebody-else"]
+    assert not any(call.startswith("podman machine rm") for call in box.calls())
+    text = result.stderr + result.stdout
+    assert "La macchina Podman 'jht-giro-mac' non e' quella standard di JHT (jht-podman)" in text
+    assert "podman machine stop jht-giro-mac" in text and "podman machine rm jht-giro-mac" in text
+    assert "volumi" in text and "immagine" in text, "what stays with it is said"
+    assert not box.runtime.exists() and not box.wrapper.exists(), "the rest of the uninstall goes on"
+
+
+@pytest.mark.parametrize("content", ["-f\n", "a b\n", "../x\n", "\n"])
+def test_an_attested_machine_name_that_is_not_a_plain_name_is_not_acted_on(tmp_path: Path, content: str) -> None:
+    box = Box(tmp_path, "Darwin")
+    box.select("podman")
+    (box.runtime / "podman-machine").write_text(content, encoding="utf-8")
+    box.machines("jht-podman*", "-f", "a b")
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "non e' quella standard" not in result.stderr + result.stdout
+    assert box.remaining("machines").splitlines() == ["-f", "a b"]
+
+
+def test_the_standard_machine_attested_is_removed_without_the_leftover_sentence(tmp_path: Path) -> None:
+    box = Box(tmp_path, "Darwin")
+    box.select("podman")
+    (box.runtime / "podman-machine").write_text("jht-podman\n", encoding="utf-8")
+    box.machines("jht-podman*")
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert box.remaining("machines") == ""
+    assert "non e' quella standard" not in result.stderr + result.stdout
+
+
 @pytest.mark.parametrize("kernel", ["Darwin", "Linux"])
 @pytest.mark.parametrize("project", ["host-runtime", "jht"])
 def test_docker_runtime_removes_the_jht_project_with_its_volumes(tmp_path: Path, kernel: str, project: str) -> None:
