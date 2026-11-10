@@ -192,6 +192,7 @@ export default {
   'team.captain_scales': 'CAPITANO will scale the other agents according to the Bridge thresholds.',
   'team.captain_waits': 'The rest of the team starts by itself when the onboarding with the Assistente is done. Answer its questions with: jht team chat assistente (or in the Assistente chat of the app).',
   'team.partial': 'The team is NOT fully on: {n} did not start (the ✗ lines above say why). Fix the cause and run again: jht team start',
+  'empty.nothing_yet': 'Nothing here yet: the team has not run on this computer. Start it with: jht team start',
   'team.done': 'Team on: {n} started in {s} s',
   'team.next_agents': 'See how it is going with: jht agents',
   'help.group_other': 'Other',
