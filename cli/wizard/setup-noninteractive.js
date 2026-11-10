@@ -7,6 +7,7 @@
  * Uso:
  *   jht setup --non-interactive --provider claude --api-key sk-ant-... --model claude-sonnet-4-6
  *   jht setup --non-interactive --provider claude --secret-mode env --secret-env ANTHROPIC_API_KEY
+ *   jht setup --non-interactive --provider glm --harness pi --api-key-file key.txt   (or --api-key-stdin)
  */
 import { lstatSync, readFileSync } from 'node:fs';
 import pc from 'picocolors';
@@ -25,9 +26,10 @@ import { t, LANGUAGES, hasLanguageChoice, systemLanguage, saveLanguage } from '.
 import { summarizeRoleModels } from './setup-models.js';
 import { AGENT_HARNESSES, DEFAULT_HARNESS } from '../../shared/runtime/agent-harness.js';
 import { harnessRefusal } from './setup-harness.js';
+import { API_KEY_MAX_BYTES, firstLine, isLauncherSafePath, keyShapeProblem, keyStoreDir, readKeyFromStream, storeApiKey } from './key-store.js';
 
 /** The most a file holding one API key can weigh. */
-const API_KEY_FILE_MAX_BYTES = 4096;
+const API_KEY_FILE_MAX_BYTES = API_KEY_MAX_BYTES;
 
 /**
  * Crea un prompter finto per passare a runHealthCheck (serve solo progress).
@@ -108,6 +110,7 @@ export async function runNonInteractiveSetup(opts) {
 
   // --- Assembla API key (SecretRef) o subscription ---
   let apiKeySecret;
+  let pendingKey = null; // the key of a glm/kimi setup, in memory until the provider has accepted it
   let subscriptionConfig;
   if (authMethod === 'api_key') {
     if (secretMode === 'env') {
@@ -119,28 +122,58 @@ export async function runNonInteractiveSetup(opts) {
         process.exitCode = 1;
         return;
       }
+      // The launcher types this path into the pane of every agent: only an absolute path of the container, of letters,
+      // digits and _ . / - . A path of the host (C:\\...) would be saved here and refused at the first start.
+      // (The CLI runs in the container; a Windows node only gets here in tests.)
+      if (process.platform !== 'win32' && !isLauncherSafePath(opts.secretFile)) {
+        console.error(pc.red('--secret-file must be an absolute path inside the container, of letters, digits and _ . / - only, without "..".'));
+        console.error(pc.dim('  A key file on your computer: give it to --api-key-file (glm, kimi) and the setup keeps it for you.'));
+        process.exitCode = 1;
+        return;
+      }
       apiKeySecret = formatSecretForConfig('file', opts.secretFile);
-    } else if (selectedProvider.piOnly) {
+    } else if (selectedProvider.piOnly && !opts.apiKeyFile && !opts.apiKeyStdin) {
       // Kimi and GLM put a plaintext key in the config and, for Kimi, in the command of the pane: only a reference
-      console.error(pc.red(`${selectedProvider.label} takes its key by reference: use --secret-mode env or --secret-mode file.`));
+      console.error(pc.red(`${selectedProvider.label} takes its key by reference: use --api-key-file or --api-key-stdin (the setup keeps the key for you), or --secret-mode env or --secret-mode file.`));
       process.exitCode = 1;
       return;
     } else {
-      // the key comes from a file (never on the command line, where other programs and the history see it) or, as
-      // before, from --api-key
+      // the key comes from a file or the standard input (never on the command line, where other programs and the
+      // history see it) or, as before, from --api-key
+      if (opts.apiKeyFile && opts.apiKeyStdin) {
+        console.error(pc.red('Use --api-key-file or --api-key-stdin, not both.'));
+        process.exitCode = 1;
+        return;
+      }
       let key = opts.apiKey;
       if (opts.apiKeyFile) {
         key = readApiKeyFile(opts.apiKeyFile);
         if (key === null) return;
+      } else if (opts.apiKeyStdin) {
+        key = await readStdinKey(opts.stdin ?? process.stdin);
+        if (key === null) return;
       }
       if (!key || !key.trim()) {
-        console.error(pc.red(opts.apiKeyFile ? 'The file given to --api-key-file is empty.' : '--api-key-file (or --api-key) is required, or use --secret-mode env/file'));
+        console.error(pc.red(opts.apiKeyStdin ? 'Nothing came on the standard input: pipe the key in (one line).' : opts.apiKeyFile ? 'The file given to --api-key-file is empty.' : '--api-key-file (or --api-key) is required, or use --secret-mode env/file'));
         process.exitCode = 1;
         return;
       }
+      key = key.trim();
       const err = validateApiKey(selectedProvider, key);
       if (err) { console.error(pc.red(err)); process.exitCode = 1; return; }
-      apiKeySecret = formatSecretForConfig('plaintext', key.trim());
+      if (selectedProvider.piOnly) {
+        // Kept in the container's key store AFTER the provider has accepted it (below): a refused key leaves nothing.
+        const shape = keyShapeProblem(key);
+        if (shape) { console.error(pc.red(shape)); process.exitCode = 1; return; }
+        if (process.platform !== 'win32' && !isLauncherSafePath(keyStoreDir())) {
+          console.error(pc.red(`The key store ${keyStoreDir()} has characters the launcher cannot use (letters, digits and _ . / - only).`));
+          process.exitCode = 1;
+          return;
+        }
+        pendingKey = key;
+      } else {
+        apiKeySecret = formatSecretForConfig('plaintext', key);
+      }
     }
   } else if (authMethod === 'subscription') {
     if (!opts.subscriptionEmail) {
@@ -169,7 +202,7 @@ export async function runNonInteractiveSetup(opts) {
   if (selectedProvider.piOnly && !opts.skipHealth && authMethod === 'api_key') {
     // glm/kimi: a light call (the list of models, no tokens) says whether the provider accepts the key. Only a refusal
     // (401) stops the setup, and nothing is saved: a key it refused would only fail inside the Pi session of the agents.
-    const verdict = await checkPiApiKey(providerName, resolveSecret(apiKeySecret));
+    const verdict = await checkPiApiKey(providerName, pendingKey ?? resolveSecret(apiKeySecret));
     if (verdict.state === 'rejected') {
       console.error(pc.red(`${rejectedKeyMessage(verdict.label)}`));
       console.error(pc.dim('  Nothing was saved. To save it anyway (no network, or a key you will fix later): --skip-health'));
@@ -184,7 +217,34 @@ export async function runNonInteractiveSetup(opts) {
     if (!ok) console.log(pc.yellow(`  ${t('wizard.checks.health.failed_save_anyway')}`));
   }
 
+  if (pendingKey !== null) {
+    try {
+      apiKeySecret = formatSecretForConfig('file', storeApiKey(providerName, pendingKey));
+    } catch (err) {
+      console.error(pc.red(`Nothing was saved: ${err.message}.`));
+      process.exitCode = 1;
+      return;
+    } finally {
+      pendingKey = null;
+    }
+  }
+
   saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, model, apiKeySecret, subscriptionConfig, harness });
+}
+
+/** The key from the standard input, or null (and the reason said, exit code 1) when none came or it is too big for a key. */
+async function readStdinKey(stream) {
+  if (stream.isTTY) {
+    console.error(pc.red('--api-key-stdin reads the key from a pipe: nothing is typed here (example: "type key.txt | jht setup ... --api-key-stdin").'));
+    process.exitCode = 1;
+    return null;
+  }
+  const key = await readKeyFromStream(stream);
+  if (key === null) {
+    console.error(pc.red(`The standard input is empty or too big for a key (over ${API_KEY_FILE_MAX_BYTES} bytes).`));
+    process.exitCode = 1;
+  }
+  return key;
 }
 
 function readApiKeyFile(file) {

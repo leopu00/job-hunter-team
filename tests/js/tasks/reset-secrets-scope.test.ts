@@ -30,14 +30,14 @@ function homeWithProfile() {
   return home;
 }
 
-function reset(home: string, scope: string) {
+function reset(home: string, scope: string, deps?: string) {
   return spawnSync(
     process.execPath,
     ["--input-type=module", "-e",
       "import { Command } from 'commander'; import { registerResetCommand } from './src/commands/reset.js'; " +
       "const p = new Command(); registerResetCommand(p); " +
       `await p.parseAsync(['node','jht','reset','--scope','${scope}','--non-interactive','--confirm-reset']);`],
-    { cwd: CLI, encoding: "utf-8", env: { ...process.env, JHT_HOME: home } },
+    { cwd: CLI, encoding: "utf-8", env: { ...process.env, JHT_HOME: home, ...(deps ? { JHT_DEPS_PREFIX: deps } : {}) } },
   );
 }
 
@@ -81,6 +81,43 @@ describe("jht reset e secrets/linkedin-profile", () => {
       expect(fs.existsSync(path.join(home, ".cache"))).toBe(false);
     } finally {
       fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  // The keys of glm and kimi that `jht setup` keeps live on the container's volume (JHT_DEPS_PREFIX/keys), not in ~/.jht.
+  function homeWithStoredKey() {
+    const home = homeWithProfile();
+    const deps = fs.mkdtempSync(path.join(os.tmpdir(), "jht-reset-deps-"));
+    fs.mkdirSync(path.join(deps, "keys"), { mode: 0o700 });
+    fs.writeFileSync(path.join(deps, "keys", "glm.key"), "synthetic-key-not-real\n", { mode: 0o600 });
+    fs.mkdirSync(path.join(deps, "npm-global"));
+    return { home, deps };
+  }
+
+  it("lo scope creds e lo scope full cancellano anche le chiavi tenute dal setup, e solo quelle (non il resto del volume)", () => {
+    for (const scope of ["creds", "full"]) {
+      const { home, deps } = homeWithStoredKey();
+      try {
+        const run = reset(home, scope, deps);
+        expect(run.status).toBe(0);
+        expect(fs.existsSync(path.join(deps, "keys"))).toBe(false);
+        expect(fs.existsSync(path.join(deps, "npm-global"))).toBe(true);
+        expect(run.stdout + run.stderr).toContain("API keys kept by the setup");
+      } finally {
+        fs.rmSync(home, { recursive: true, force: true });
+        fs.rmSync(deps, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it("lo scope config lascia le chiavi dov'erano", () => {
+    const { home, deps } = homeWithStoredKey();
+    try {
+      expect(reset(home, "config", deps).status).toBe(0);
+      expect(fs.readFileSync(path.join(deps, "keys", "glm.key"), "utf-8")).toBe("synthetic-key-not-real\n");
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+      fs.rmSync(deps, { recursive: true, force: true });
     }
   });
 });

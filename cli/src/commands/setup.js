@@ -38,6 +38,7 @@ export function registerSetupCommand(program) {
     .option('--auth-method <method>', t('wizard.cli.auth_method'), 'api_key')
     .option('--api-key <key>', t('wizard.cli.api_key'))
     .option('--api-key-file <path>', t('wizard.cli.api_key_file'))
+    .option('--api-key-stdin', t('wizard.cli.api_key_stdin'))
     .option('--secret-mode <mode>', t('wizard.cli.secret_mode'), 'plaintext')
     .option('--secret-env <name>', t('wizard.cli.secret_env'))
     .option('--secret-file <path>', t('wizard.cli.secret_file'))

@@ -172,6 +172,72 @@ def test_a_folder_others_can_write_in_is_refused_unless_it_is_sticky(home):
         folder.chmod(0o700)
 
 
+# --- the key store of the setup (a key a person gave `jht setup`, kept on the container's volume) -----------------------
+
+@pytest.fixture
+def store(tmp_path):
+    """A key store on a DISK (the fake mounts file says ext4): its own rule applies, not the tmpfs one."""
+    folder = tmp_path / "keys"
+    folder.mkdir(mode=0o700)
+    mounts = tmp_path / "mounts-disk"
+    mounts.write_text("overlay / overlay rw 0 0\next4 %s ext4 rw 0 0\n" % folder, encoding="utf-8")
+    return folder, mounts
+
+
+def test_a_key_in_the_key_store_is_read_though_the_store_is_not_tmpfs(store):
+    folder, mounts = store
+    assert akf.read_key(str(write(folder, name="glm.key")), mounts=mounts, store=folder) == KEY
+    assert "not on tmpfs" in refused(write(folder, name="glm.key"), mounts)  # the same file, outside the rule of the store
+
+
+def test_only_the_key_store_itself_counts_not_a_folder_in_it_or_beside_it(store, tmp_path):
+    folder, mounts = store
+    (folder / "sub").mkdir(mode=0o700)
+    other = tmp_path / "keys2"
+    other.mkdir(mode=0o700)
+    for where in (folder / "sub", other):
+        assert "not on tmpfs" in refused(write(where, name="glm.key"), mounts, store=folder)
+
+
+def test_the_key_store_must_be_the_users_and_closed_to_group_and_others(store):
+    folder, mounts = store
+    path = write(folder, name="glm.key")
+    folder.chmod(0o750)
+    try:
+        assert "must be 0700" in refused(path, mounts, store=folder)
+        folder.chmod(0o705)
+        assert "must be 0700" in refused(path, mounts, store=folder)
+    finally:
+        folder.chmod(0o700)
+    assert "another user" in refused(path, mounts, store=folder, uid=os.geteuid() + 1)
+
+
+def test_a_key_store_that_is_a_link_is_refused(store, tmp_path):
+    folder, mounts = store
+    write(folder, name="glm.key")
+    link = tmp_path / "keys-link"
+    link.symlink_to(folder)
+    # the path as written goes through the link: the store is the link, which is not a folder
+    assert "not a folder" in refused(link / "glm.key", mounts, store=link)
+
+
+def test_the_key_in_the_store_gets_every_other_check(store):
+    folder, mounts = store
+    assert "permissions" in refused(write(folder, name="glm.key", mode=0o640), mounts, store=folder)
+    assert "empty or too big" in refused(write(folder, text="", name="glm.key"), mounts, store=folder)
+    assert "one line" in refused(write(folder, text="short", name="glm.key"), mounts, store=folder)
+    target = write(folder, name="real")
+    (folder / "glm.key").unlink()
+    (folder / "glm.key").symlink_to(target)
+    assert "link" in refused(folder / "glm.key", mounts, store=folder)
+
+
+def test_the_default_store_is_the_one_the_setup_writes():
+    assert str(akf.KEY_STORE) == "/opt/jht-deps/keys"
+    source = (ROOT / "cli" / "wizard" / "key-store.js").read_text(encoding="utf-8")
+    assert "'/opt/jht-deps'" in source and "'keys'" in source
+
+
 # --- exec: the key goes to the environment of the command and nowhere else -----------------------------------------
 
 CHILD = """\
