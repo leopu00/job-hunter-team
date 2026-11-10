@@ -199,7 +199,9 @@ async function handleUsePiApi(piApi, config) {
   const label = PI_API_PROVIDERS[piApi].label;
   const entry = config.providers?.[piApi];
   if (!entry || entry.auth_method !== 'api_key') {
-    console.error(`${ERR}  ${label} runs only on the pi harness, with an API key. Set it up with: jht setup --provider ${piApi} --harness pi --auth-method api_key --secret-mode file --secret-file <file with the key>`);
+    // Kimi's own CLI is archived (it is not offered as a provider any more): said first, then the way that does work
+    const archived = isArchived(piApi) ? `provider '${piApi}' is archived and can no longer be chosen as a CLI. ` : '';
+    console.error(`${ERR}  ${archived}${label} runs only on the pi harness, with an API key. Set it up with: jht setup --provider ${piApi} --harness pi --auth-method api_key --secret-mode file --secret-file <file with the key>`);
     process.exitCode = 1;
     return;
   }

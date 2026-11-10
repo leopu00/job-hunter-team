@@ -44,14 +44,16 @@ test('use glm / kimi / moonshot with the key set up: the provider is active and 
   assert.equal(jht(dir, 'providers', 'use', 'openai').code, 0);
 });
 
-test('use glm / kimi without the key: the command that sets it up, not «archived» or «unrecognized»; nothing is written', () => {
+test('use glm / kimi without the key: the command that sets it up, never «Supported: codex»; nothing is written', () => {
   const dir = home({ active_provider: 'openai', harness: 'codex', providers: { openai: { auth_method: 'subscription' } } });
   for (const name of ['glm', 'kimi']) {
     const r = jht(dir, 'providers', 'use', name);
     assert.equal(r.code, 1, r.out);
     assert.match(r.out, /runs only on the pi harness, with an API key/);
     assert.match(r.out, new RegExp(`jht setup --provider ${name} --harness pi`));
-    assert.doesNotMatch(r.out, /archived|unrecognized|Supported/);
+    // Kimi's own CLI is archived and it says so, but it never says «Supported: codex»: the way that works comes with it
+    assert.doesNotMatch(r.out, /unrecognized|Supported/);
+    if (name === 'glm') assert.doesNotMatch(r.out, /archived/);
     assert.equal(r.config().active_provider, 'openai');
     assert.equal(r.config().harness, 'codex');
   }

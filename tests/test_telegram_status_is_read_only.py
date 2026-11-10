@@ -65,7 +65,7 @@ function Get-RunningComposeServiceId { param([string]$Service); if ($env:RUNNING
 function Invoke-TelegramAdmin {
   param([string]$InputText = $null, [Parameter(ValueFromRemainingArguments)] [string[]]$AdminArgs)
   Add-Content -LiteralPath $env:LOG -Value "admin $AdminArgs"
-  & docker exec id-telegram jht-telegram-admin @AdminArgs
+  & docker exec id-telegram jht-telegram-admin @AdminArgs | Out-Host
   return 0
 }
 ''' + powershell_functions("Get-ComposeProjectName", "Test-TelegramStateVolumeAbsent", "Get-TelegramBotsConfigured", "Write-TelegramStatusLine") + '''

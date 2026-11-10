@@ -115,7 +115,7 @@ function Get-IntegrationState {
     if ($running) {
       # One true state: a Telegram service that is up but holds no bot is not «acceso» for the person, it waits for a token
       # (the same question `jht status` asks). Any answer but a clear «none» keeps what the engine says.
-      if ($Id -ceq 'telegram') {
+      if ($Id -ceq 'telegram' -and (Get-Command Get-TelegramBotsConfigured -ErrorAction SilentlyContinue)) {
         $configured = Get-TelegramBotsConfigured
         if ($configured -is [bool] -and -not $configured) { return @('ready', 'servizio acceso, nessun bot abbinato: jht telegram pair assistente') }
       }
