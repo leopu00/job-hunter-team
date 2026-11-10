@@ -39,7 +39,7 @@ PRELUDE = r"""
 $ErrorActionPreference = 'Stop'
 $RuntimeDir = $env:T_RUNTIME; $JhtHome = $env:T_HOME; $DefaultRuntimeImage = $env:T_FULL; $CoreImageDigest = $env:T_CORE
 $RuntimeTierFile = Join-Path $RuntimeDir 'runtime-tier'; $RuntimeImageFile = Join-Path $RuntimeDir 'runtime-image'
-$RuntimeManifest = Join-Path $RuntimeDir '.runtime-integrity'; $ComposeFile = Join-Path $RuntimeDir 'docker-compose.yml'
+$RuntimeManifest = Join-Path $RuntimeDir '.runtime-integrity'; $RuntimeTierIntegrity = Join-Path $RuntimeDir '.runtime-tier-integrity'; $ComposeFile = Join-Path $RuntimeDir 'docker-compose.yml'
 $WrapperPath = $env:T_STUB; $ContainerRuntime = 'docker'
 function Write-Err { param([string]$Msg) [Console]::Error.WriteLine("error: $Msg") }
 . $env:T_TOOLS
@@ -221,6 +221,10 @@ def _trust(box, case: str, *, tier_text: str | None = None, core: str = CORE_DIG
         (box.runtime / "runtime-image").write_text(FULL + "\n", encoding="utf-8", newline="\n")
     if tier_text is not None:
         (box.runtime / "runtime-tier").write_text(tier_text, encoding="utf-8", newline="\n")
+        # what the installer writes beside it: the hash of the file as it was written
+        import hashlib
+        digest = hashlib.sha256((box.runtime / "runtime-tier").read_bytes()).hexdigest()
+        (box.runtime / ".runtime-tier-integrity").write_text(f"runtime-tier={digest}\n", encoding="utf-8", newline="\n")
     body = (TRUST + f"$CoreImageDigest = '{core}'\nWrite-RuntimeManifest\n"
             + case)
     return box.run(body, T_WRAPPER_SRC=str(WRAPPER))
@@ -229,7 +233,7 @@ def _trust(box, case: str, *, tier_text: str | None = None, core: str = CORE_DIG
 def test_an_attested_core_tier_selects_the_core_image_by_digest(box):
     done = _trust(box, "if (Test-RuntimeBundleTrusted) { 'trusted ' + $env:JHT_IMAGE } else { 'untrusted' }", tier_text="core\n")
     assert _lines(done) == [f"trusted ghcr.io/leopu00/jht@{CORE_DIGEST}"], done.stdout + done.stderr
-    assert "runtime-tier=" in (box.runtime / ".runtime-integrity").read_text(encoding="utf-8")
+    assert "runtime-tier" not in (box.runtime / ".runtime-integrity").read_text(encoding="utf-8"), "the app compares the exact keys of the main manifest"
 
 
 def test_no_tier_file_is_the_whole_image_of_before(box):

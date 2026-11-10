@@ -74,16 +74,32 @@ def test_the_core_tier_is_staged_hashed_and_published(tmp_path):
     tier = tmp_path / "runtime" / "runtime-tier"
     assert tier.read_text(encoding="utf-8") == "core\n" and oct(tier.stat().st_mode & 0o777) == "0o600"
     assert f"sha={hashlib.sha256(b'core\n').hexdigest()}" in done.stdout and "before-publish-absent" in done.stdout
-    assert [p.name for p in (tmp_path / "runtime").iterdir()] == ["runtime-tier"], "no staged file is left"
+    assert sorted(p.name for p in (tmp_path / "runtime").iterdir()) == [".runtime-tier-integrity", "runtime-tier"], "no staged file is left"
+    integrity = tmp_path / "runtime" / ".runtime-tier-integrity"
+    assert integrity.read_text(encoding="utf-8") == f"runtime-tier={hashlib.sha256(b'core\n').hexdigest()}\n"
+    assert oct(integrity.stat().st_mode & 0o777) == "0o600"
 
 
 @bash_only
 def test_a_full_install_drops_a_tier_left_by_a_core_one(tmp_path):
     (tmp_path / "runtime").mkdir()
     (tmp_path / "runtime" / "runtime-tier").write_text("core\n", encoding="utf-8")
+    (tmp_path / "runtime" / ".runtime-tier-integrity").write_text("runtime-tier=x\n", encoding="utf-8")
     done = source(tmp_path, 'ok() { :; }; stage_runtime_tier; publish_runtime_tier; printf "sha=[%s]\\n" "$TIER_STAGED_SHA"')
     assert done.returncode == 0, done.stderr
-    assert not (tmp_path / "runtime" / "runtime-tier").exists() and "sha=[]" in done.stdout
+    assert not (tmp_path / "runtime" / "runtime-tier").exists() and not (tmp_path / "runtime" / ".runtime-tier-integrity").exists()
+    assert "sha=[]" in done.stdout
+
+
+def test_no_installer_puts_the_tier_in_the_main_manifest_the_app_compares_key_by_key():
+    """The desktop app refuses a runtime whose .runtime-integrity has a key it does not know (direct_chat.rs, onboarding.rs)."""
+    posix = (ROOT / "scripts" / "install.sh").read_text(encoding="utf-8")
+    manifest = posix.split("printf 'version=1")[1].split('} > "$manifest_tmp"')[0]
+    assert "runtime-tier" not in manifest
+    enabler = (ROOT / "scripts" / "enable-podman-windows-runtime.ps1").read_text(encoding="utf-8")
+    line = next(row for row in enabler.splitlines() if row.startswith('$manifest = "version=1'))
+    assert "runtime-tier" not in line and "runtimeTierManifest" not in line
+    assert ".runtime-tier-integrity" in posix and ".runtime-tier-integrity" in enabler
 
 
 def test_the_pin_tool_moves_the_constant_in_the_four_copies_and_refuses_a_stale_one(tmp_path):

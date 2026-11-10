@@ -388,6 +388,7 @@ if ($ContainerRuntime -eq 'podman') {
 $RuntimeManifest = Join-Path $RuntimeDir '.runtime-integrity'
 $RuntimeImageFile = Join-Path $RuntimeDir 'runtime-image'
 $RuntimeTierFile = Join-Path $RuntimeDir 'runtime-tier'
+$RuntimeTierIntegrity = Join-Path $RuntimeDir '.runtime-tier-integrity'
 $BrokerLegacyMarker = Join-Path $RuntimeDir '.broker-legacy-migrated'
 $NodeEntry   = if ($env:JHT_NODE_ENTRY)     { $env:JHT_NODE_ENTRY }     else { '/app/cli/bin/jht.js' }
 $RawBaseOverride = if ($env:JHT_RAW_BASE) { $env:JHT_RAW_BASE.TrimEnd('/') } else { '' }
@@ -641,9 +642,6 @@ function Write-RuntimeManifest {
     $runtimeImageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $RuntimeImageFile).Hash.ToLowerInvariant()
     $content += "runtime-image=$runtimeImageHash`n"
   }
-  if (Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf) {
-    $content += "runtime-tier=$((Get-FileHash -Algorithm SHA256 -LiteralPath $RuntimeTierFile).Hash.ToLowerInvariant())`n"
-  }
   [IO.File]::WriteAllText($temp, $content, [Text.UTF8Encoding]::new($false))
   Move-Item -LiteralPath $temp -Destination $RuntimeManifest -Force
 }
@@ -668,10 +666,10 @@ function Test-RuntimeBundleTrusted {
     }
     $pinPresent = Test-Path -LiteralPath $RuntimeImageFile -PathType Leaf
     if ($pinPresent) { $expectedKeys += 'runtime-image' }
-    # runtime-tier: written by the installer when the release has a core image. A manifest that still attests a tier file taken away
-    # is a `tools switch` cut in half: the runtime is the whole image, and the next manifest drops the line.
+    # runtime-tier: written by the installer when the release has a core image, and attested in a file of its own
+    # (.runtime-tier-integrity), not here: the app compares the exact set of keys of this manifest. An integrity file without a tier
+    # file is a `tools switch` cut in half: the runtime is the whole image.
     $tierPresent = Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf
-    if ($tierPresent -or $values.ContainsKey('runtime-tier')) { $expectedKeys += 'runtime-tier' }
     if ($values.Count -ne $expectedKeys.Count -or @($values.Keys | Where-Object { $_ -notin $expectedKeys }).Count -ne 0) { return $false }
     $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $ComposeFile).Hash.ToLowerInvariant()
     $wrapperActual = (Get-FileHash -Algorithm SHA256 -LiteralPath $WrapperPath).Hash.ToLowerInvariant()
@@ -691,7 +689,8 @@ function Test-RuntimeBundleTrusted {
     if ($tierPresent) {
       if (-not (Test-ProtectedRuntimeNode $RuntimeTierFile)) { return $false }
       if ($pinPresent -or -not $CoreImageDigest) { return $false }
-      if ($values.'runtime-tier' -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $RuntimeTierFile).Hash.ToLowerInvariant()) { return $false }
+      if (-not (Test-ProtectedRuntimeNode $RuntimeTierIntegrity)) { return $false }
+      if (([IO.File]::ReadAllText($RuntimeTierIntegrity).Trim()) -ne "runtime-tier=$((Get-FileHash -Algorithm SHA256 -LiteralPath $RuntimeTierFile).Hash.ToLowerInvariant())") { return $false }
       if ([IO.File]::ReadAllText($RuntimeTierFile).TrimEnd("`r", "`n") -ne 'core') { return $false }
       $script:TrustedRuntimeImage = "ghcr.io/leopu00/jht@$CoreImageDigest"
     }

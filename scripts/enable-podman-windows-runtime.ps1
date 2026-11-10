@@ -938,15 +938,17 @@ if ($PersistImagePin) {
 } else {
   Remove-Item -LiteralPath $runtimeImageFile -Force -ErrorAction SilentlyContinue
 }
+# The tier file is attested in an integrity file of its own, not in the main manifest (the app compares the exact keys of that one):
+# the file first and its integrity second, so a crash between them leaves a tier the wrapper refuses.
 $runtimeTierFile = Join-Path $RuntimeDir 'runtime-tier'
-$runtimeTierManifest = ''
+$runtimeTierIntegrity = Join-Path $RuntimeDir '.runtime-tier-integrity'
 if ($RuntimeTier -eq 'core') {
   [IO.File]::WriteAllText($runtimeTierFile, "core`n", [Text.UTF8Encoding]::new($false))
-  $runtimeTierManifest = "runtime-tier=$((Get-FileHash -Algorithm SHA256 -LiteralPath $runtimeTierFile).Hash.ToLowerInvariant())`n"
+  [IO.File]::WriteAllText($runtimeTierIntegrity, "runtime-tier=$((Get-FileHash -Algorithm SHA256 -LiteralPath $runtimeTierFile).Hash.ToLowerInvariant())`n", [Text.UTF8Encoding]::new($false))
 } else {
-  Remove-Item -LiteralPath $runtimeTierFile -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath $runtimeTierFile, $runtimeTierIntegrity -Force -ErrorAction SilentlyContinue
 }
-$manifest = "version=1`ndocker-compose.yml=$composeHash`njht-wrapper.ps1=$wrapperHash`ndocker-compose.podman.yml=$podmanHash`ndocker.exe=$shimHash`ncontainer-runtime=$selectionHash`npodman-machine=$machineHash`njht-container.service=$containerUnitHash`nwindows-private-acl.ps1=$helperHash`npodman-machine-bridge.ps1=$bridgeHash`n$runtimeImageManifest$runtimeTierManifest"
+$manifest = "version=1`ndocker-compose.yml=$composeHash`njht-wrapper.ps1=$wrapperHash`ndocker-compose.podman.yml=$podmanHash`ndocker.exe=$shimHash`ncontainer-runtime=$selectionHash`npodman-machine=$machineHash`njht-container.service=$containerUnitHash`nwindows-private-acl.ps1=$helperHash`npodman-machine-bridge.ps1=$bridgeHash`n$runtimeImageManifest"
 [IO.File]::WriteAllText((Join-Path $RuntimeDir '.runtime-integrity'), $manifest, [Text.UTF8Encoding]::new($false))
 # The host scripts that came after the main manifest have one of their own (the app checks that one key by key).
 [IO.File]::WriteAllText((Join-Path $RuntimeDir '.runtime-helpers'), "jht-integration.ps1=$integrationHash`njht-tools.ps1=$toolsHash`n", [Text.UTF8Encoding]::new($false))
@@ -967,7 +969,7 @@ $bundleFiles = @(
   $shim
 )
 if (Test-Path -LiteralPath $runtimeImageFile -PathType Leaf) { $bundleFiles += $runtimeImageFile }
-if (Test-Path -LiteralPath $runtimeTierFile -PathType Leaf) { $bundleFiles += $runtimeTierFile }
+if (Test-Path -LiteralPath $runtimeTierFile -PathType Leaf) { $bundleFiles += $runtimeTierFile, $runtimeTierIntegrity }
 foreach ($bundleFile in $bundleFiles) { Set-JhtOwnerToCurrentUser -Path $bundleFile }
 if ($legacyShimOwned) {
   Remove-Item -LiteralPath $legacyShim -Force -ErrorAction Stop

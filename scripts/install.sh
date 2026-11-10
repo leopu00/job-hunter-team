@@ -1146,11 +1146,13 @@ install_podman_adapter() {
   fi
 }
 
-# runtime-tier: a host runtime file like runtime-image, attested in .runtime-integrity (staged for its hash, published after the manifest).
+# runtime-tier: a host runtime file attested in an integrity file of its own (.runtime-tier-integrity), NOT in .runtime-integrity: the app
+# compares the exact set of keys of that one. Staged for its hash; the file first and its integrity second, so a crash between them
+# leaves a tier the wrapper refuses, never a tier it believes.
 stage_runtime_tier() {
   local tier_file="$RUNTIME_DIR/runtime-tier"
   TIER_STAGED="" TIER_STAGED_SHA=""
-  if [ "$RUNTIME_TIER" != "core" ]; then rm -f "$tier_file"; return 0; fi
+  if [ "$RUNTIME_TIER" != "core" ]; then rm -f "$tier_file" "$RUNTIME_DIR/.runtime-tier-integrity"; return 0; fi
   TIER_STAGED="$(mktemp "$RUNTIME_DIR/.runtime-tier.XXXXXX")"
   printf 'core\n' > "$TIER_STAGED" && chmod 600 "$TIER_STAGED"
   TIER_STAGED_SHA="$({ sha256sum "$TIER_STAGED" 2>/dev/null || shasum -a 256 "$TIER_STAGED"; } | awk '{print $1}')"
@@ -1158,7 +1160,10 @@ stage_runtime_tier() {
 
 publish_runtime_tier() {
   [ -n "$TIER_STAGED" ] || return 0
-  mv -f "$TIER_STAGED" "$RUNTIME_DIR/runtime-tier" && ok "runtime tier: core (the tools come after the welcome)"
+  mv -f "$TIER_STAGED" "$RUNTIME_DIR/runtime-tier" || return 1
+  printf 'runtime-tier=%s\n' "$TIER_STAGED_SHA" > "$RUNTIME_DIR/.runtime-tier-integrity.tmp" && chmod 600 "$RUNTIME_DIR/.runtime-tier-integrity.tmp" \
+    && mv -f "$RUNTIME_DIR/.runtime-tier-integrity.tmp" "$RUNTIME_DIR/.runtime-tier-integrity" \
+    && ok "runtime tier: core (the tools come after the welcome)"
 }
 
 download_runtime_files() {
@@ -1344,9 +1349,6 @@ download_runtime_files() {
     fi
     if [ -n "$image_pin_sha" ]; then
       printf 'runtime-image=%s\n' "$image_pin_sha"
-    fi
-    if [ -n "$TIER_STAGED_SHA" ]; then
-      printf 'runtime-tier=%s\n' "$TIER_STAGED_SHA"
     fi
   } > "$manifest_tmp"
   chmod 600 "$manifest_tmp"

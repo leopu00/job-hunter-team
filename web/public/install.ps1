@@ -574,7 +574,7 @@ function Get-RuntimeFiles {
   $runtimeImageDest = Join-Path $RuntimeDir 'runtime-image'
   if (Test-Path -LiteralPath $runtimeImageDest -PathType Leaf) { $publishedNodes += $runtimeImageDest }
   $runtimeTierDest = Join-Path $RuntimeDir 'runtime-tier'
-  if (Test-Path -LiteralPath $runtimeTierDest -PathType Leaf) { $publishedNodes += $runtimeTierDest }
+  if (Test-Path -LiteralPath $runtimeTierDest -PathType Leaf) { $publishedNodes += $runtimeTierDest, (Join-Path $RuntimeDir '.runtime-tier-integrity') }
   foreach ($published in $publishedNodes) {
     if (-not (Test-Path -LiteralPath $published -PathType Leaf)) { Write-Fail "Podman runtime artifact missing: $published" }
     Set-JhtNodeOwner -Path $published
