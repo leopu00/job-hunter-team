@@ -92,6 +92,17 @@ describe("ProviderSignOut", () => {
       expect(text, locale).not.toMatch(/prossimo messaggio|next message|nächsten Nachricht|próximo mensaje|prochain message|következő üzenet|mensagem seguinte/i);
     }
     expect(PROVIDER_SIGNOUT_TEXT.it.confirmText).toMatch(/^La squadra si ferma/);
+  });
+
+  it("the confirmation says that every sign-in the agents' program saved for the team goes, not only the one of the provider, in the seven languages", () => {
+    const says = {
+      it: /Vengono tolti tutti gli accessi/, en: /All the sign-ins .* are removed/, de: /Alle Anmeldungen/, es: /Se quitan todos los accesos/,
+      fr: /Tous les accès/, hu: /összes hozzáférés törlődik/, pt: /Todos os acessos/,
+    } as const;
+    for (const locale of Object.keys(says) as (keyof typeof says)[]) expect(PROVIDER_SIGNOUT_TEXT[locale].confirmText, locale).toMatch(says[locale]);
+  });
+
+  it("the confirmation keeps its opening words in the seven languages", () => {
     expect(PROVIDER_SIGNOUT_TEXT.en.confirmText).toMatch(/^The team stops/);
     expect(PROVIDER_SIGNOUT_TEXT.de.confirmText).toMatch(/^Das Team hält an/);
     expect(PROVIDER_SIGNOUT_TEXT.es.confirmText).toMatch(/^El equipo se detiene/);

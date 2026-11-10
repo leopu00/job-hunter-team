@@ -1207,7 +1207,10 @@ if [ "$AGENT_HARNESS" = "pi" ]; then
   fi
   # glm and kimi: the model of the role's class from provider-models.list; openai: the Codex model of that class
   if pi_api="$(jht_pi_api_provider "$PROVIDER")"; then
-    pi_model="$(jht_provider_model "$pi_api" "${role_model:-$model_override}")" || exit 1
+    # a pin in the config wins; without it the table of the provider may give the role a class of its own (provider-models.list)
+    pi_table_role=""
+    [ -n "$role_model" ] || pi_table_role="$ROLE"
+    pi_model="$(jht_provider_model "$pi_api" "${role_model:-$model_override}" "$pi_table_role")" || exit 1
   elif ! pi_model="$(resolve_codex_model "${role_model:-$model_override}")"; then
     exit 1
   fi

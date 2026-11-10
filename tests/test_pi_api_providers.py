@@ -30,7 +30,10 @@ def launch(tmp_path, provider, role="scout", **kw):
 
 
 @pytest.mark.parametrize(("provider", "role", "pi_provider", "model"), [
-    ("glm", "scout", "zai", "glm-5.3"),           # terra
+    ("glm", "scout", "zai", "glm-5.3-flash"),     # the light roles of GLM (provider-models.list, `rolemodel`)
+    ("glm", "analista", "zai", "glm-5.3-flash"),
+    ("glm", "sentinella", "zai", "glm-5.3-flash"),
+    ("glm", "scorer", "zai", "glm-5.3"),          # terra: the judgement stays on the strong model
     ("glm", "capitano", "zai", "glm-5.3"),        # sol
     ("glm", "assistente", "zai", "glm-5.3"),      # terra
     ("kimi", "scout", "moonshotai", "kimi-k3.1-pro"),
@@ -46,9 +49,26 @@ def test_pi_gets_the_provider_pi_knows_and_the_model_of_the_class(tmp_path, prov
 
 
 def test_a_role_pinned_to_the_light_class_gets_the_light_model(tmp_path):
-    done = launch(tmp_path, "glm", role_models={"scout": {"model": "luna"}})
+    done = launch(tmp_path, "glm", role="scorer", role_models={"scorer": {"model": "luna"}})
     assert done.returncode == 0, done.stdout + done.stderr
     assert _after(_argv(done.stdout.strip())[1], "--model") == "glm-5.3-flash"
+
+
+def test_a_pin_in_the_config_beats_the_light_role_of_the_table(tmp_path):
+    done = launch(tmp_path, "glm", role="scout", role_models={"scout": {"model": "terra"}})
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert _after(_argv(done.stdout.strip())[1], "--model") == "glm-5.3"
+
+
+def test_the_table_of_light_roles_names_only_roles_and_classes_that_exist():
+    rows = [line.split("|") for line in (ROOT / "shared" / "runtime" / "provider-models.list").read_text(encoding="utf-8").splitlines()
+            if line.startswith("rolemodel|")]
+    roles = {line.split("|")[1] for line in (ROOT / "shared" / "runtime" / "role-models.list").read_text(encoding="utf-8").splitlines()
+             if line.startswith("role|")}
+    classes = {line.split("|")[1] for line in (ROOT / "shared" / "runtime" / "role-models.list").read_text(encoding="utf-8").splitlines()
+               if line.startswith("model|")}
+    assert rows and {r[1] for r in rows} <= {"glm"}  # Kimi's light model is retiring: it keeps the classes of the roles
+    assert all(r[2] in roles and r[3] in classes for r in rows), rows
 
 
 @pytest.mark.parametrize("provider", ["glm", "kimi"])

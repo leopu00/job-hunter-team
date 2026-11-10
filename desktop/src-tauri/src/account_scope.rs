@@ -551,6 +551,7 @@ fn home_holds_data_to_say_so(home: &Path) -> Result<bool, &'static str> {
         ".claude",
         ".codex",
         ".kimi",
+        ".pi",
         "credentials",
         "profile",
         "src",
@@ -1204,6 +1205,7 @@ fn recognized_legacy_local_home(home: &Path) -> Result<bool, &'static str> {
         ".claude",
         ".codex",
         ".kimi",
+        ".pi",
         "credentials",
         "profile",
         "runtime",
@@ -2316,6 +2318,16 @@ mod tests {
     }
 
     #[test]
+    fn pi_sign_in_alone_is_data_already_here_and_a_home_that_may_be_claimed() {
+        let home = temp_home("pi-login-only");
+        std::fs::create_dir_all(home.join(".pi").join("agent")).unwrap();
+        std::fs::write(home.join(".pi").join("agent").join("auth.json"), "{}").unwrap();
+        assert!(super::previous_local_data_at(&home));
+        assert_eq!(super::recognized_legacy_local_home(&home), Ok(true));
+        let _ = std::fs::remove_dir_all(home.parent().unwrap());
+    }
+
+    #[test]
     fn each_marker_of_the_notice_is_enough_and_a_link_or_a_wrong_kind_is_not() {
         for file in ["jht.config.json", ".local-token", "cloud.json", "jobs.db"] {
             let home = temp_home("file-marker");
@@ -2323,7 +2335,7 @@ mod tests {
             assert!(super::previous_local_data_at(&home), "{file}");
             let _ = std::fs::remove_dir_all(home.parent().unwrap());
         }
-        for dir in [".npm-global", ".claude", ".codex", ".kimi", "credentials", "profile", "src"] {
+        for dir in [".npm-global", ".claude", ".codex", ".kimi", ".pi", "credentials", "profile", "src"] {
             let home = temp_home("dir-marker");
             std::fs::create_dir_all(home.join(dir)).unwrap();
             std::fs::write(home.join(dir).join("x"), "x").unwrap();

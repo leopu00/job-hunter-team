@@ -39,6 +39,9 @@ describe("seatbeltProfile", () => {
     expect(profile).toContain('(subpath "/Users/me/.config/gcloud")');
     expect(profile).toContain('(subpath "/Users/me/.config/gh")');
     expect(profile).toContain('(literal "/Users/me/.codex/auth.json")');
+    // The sign-ins of the CLI agents: Pi's file and Kimi's folder, like Codex's and Claude's.
+    expect(profile).toContain('(literal "/Users/me/.pi/agent/auth.json")');
+    expect(profile).toContain('(subpath "/Users/me/.kimi/credentials")');
     // `subpath`, not `literal`: a protected path can be a folder (the portal
     // secrets), and `subpath` on a file still matches that file alone.
     expect(profile).toContain('(subpath "/etc/jht/mcp.json")');
@@ -111,6 +114,24 @@ describe("bubblewrapArgs", () => {
     expect(joined).toContain("--ro-bind /dev/null /etc/jht/mcp.json");
     expect(joined).not.toContain(".aws");
     expect(joined).not.toContain(".env.example");
+  });
+
+  it("masks the sign-in of Pi and of Kimi when they are there, like Codex's and Claude's", () => {
+    const signedIn = bubblewrapArgs({
+      writableRoots: ["/work"],
+      home: "/home/me",
+      protectedPaths: [],
+      workdir: "/work",
+      lookup: fakeFs(
+        ["/home/me/.kimi/credentials"],
+        ["/home/me/.pi/agent/auth.json", "/home/me/.codex/auth.json", "/home/me/.claude/.credentials.json"],
+      ),
+      listDir: () => [],
+    }).join(" ");
+    expect(signedIn).toContain("--ro-bind /dev/null /home/me/.pi/agent/auth.json");
+    expect(signedIn).toContain("--tmpfs /home/me/.kimi/credentials");
+    expect(signedIn).toContain("--ro-bind /dev/null /home/me/.codex/auth.json");
+    expect(signedIn).toContain("--ro-bind /dev/null /home/me/.claude/.credentials.json");
   });
 
   it("masks after binding, so a mask inside a writable root still holds", () => {

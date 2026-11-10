@@ -218,10 +218,17 @@ def _plan_the_reading_is_about(prov: str, reading: dict) -> Optional[str]:
 # Il rapporto conta più del numero assoluto: uno Scout produce materiale che
 # Analista e Scorer devono digerire. Roster tutto-Scout = 50 posizioni grezze
 # e 3 punteggiate (run reale 2026-07-26), che per l'utente vale zero.
+#
+# Misurato sulla corsa del 10/11 (tier 15, 3/2/1, API key): l'Analista e lo Scorer non lavoravano, aspettavano (pausa fissa
+# dopo ogni unita', ora tolta quando la coda del ruolo ha posizioni: pause-rules.json, queued_work). Tolta quella, un Analista
+# fa ~0,85 posizioni/min e due ne smaltiscono 1,7/min: si mettono in pari da soli con gli Scout (~2,1/min nei primi 11 minuti),
+# e il limite torna all'offerta degli Scout (29 posizioni in 34 minuti) e allo Scorer (56 s a posizione, 1/min).
+# Per 20 punteggi in 30 minuti, con ~58% delle posizioni che arrivano a punteggio, servono ~35-40 posizioni: piu' Scout,
+# 3 Analisti e 2 Scorer. Una simulazione con quei tempi: 3/2/1 ~14 punteggi, 4/3/2 ~18, 5/3/2 col tetto a 40 ~22.
 _BURST_ROSTER = [
     # (tier minimo, scout, analista, scorer)
-    (20, 4, 2, 2),
-    (15, 3, 2, 1),
+    (20, 6, 3, 2),
+    (15, 5, 3, 2),
     (5,  2, 1, 1),
     (1,  1, 1, 1),
     (0,  1, 1, 1),
@@ -230,7 +237,7 @@ _BURST_ROSTER = [
 # Quante posizioni lo Scout porta a casa nel PRIMO giro prima di fermarsi e
 # lasciare la finestra al downstream. Senza questo cap lo scouting si mangia
 # la finestra e il punteggio non arriva mai (root cause del run 2026-07-26).
-_BURST_SCOUT_CAP = {20: 30, 15: 30, 5: 30, 1: 30, 0: 30}
+_BURST_SCOUT_CAP = {20: 40, 15: 40, 5: 30, 1: 30, 0: 30}  # 20 punteggi al ~58% di resa: ~35 posizioni, con margine 40
 
 # Obiettivo dichiarato del burst: quante posizioni PUNTEGGIATE far vedere
 # all'utente prima di passare al regime normale.
@@ -542,16 +549,19 @@ def burst_roster(plan: dict | None = None, host_cap: int | None = None, assume_d
         # PUNTEGGIATE — cioè l'unico risultato che l'utente vede. Sotto un
         # worker per ruolo non si scende: una pipeline monca non produce
         # nulla, e a quel punto il limite non è più il roster ma la macchina.
-        for role in ("scout", "analista", "scorer"):
+        # Il terzo Analista, dove la tabella lo da', e' il primo a saltare ma non sotto due: con la pausa tolta due Analisti si mettono
+        # in pari da soli, e sono gli Scout a fare l'offerta (la simulazione dei tempi misurati: con tetto 8 la fascia 15 da 5/3/2 a
+        # 4/2/2 fa ~18 punteggi in 30 minuti, a 3/3/2 ~14). Poi, come prima, dalla testa: Scout, Analista, Scorer.
+        for role, floor in (("analista", 2), ("scout", 1), ("analista", 1), ("scorer", 1)):
             excess = scout + analista + scorer - cap
             if excess <= 0:
                 break
             if role == "scout":
-                scout = max(1, scout - excess)
+                scout = max(floor, scout - excess)
             elif role == "analista":
-                analista = max(1, analista - excess)
+                analista = max(floor, analista - excess) if analista > floor else analista
             else:
-                scorer = max(1, scorer - excess)
+                scorer = max(floor, scorer - excess)
 
     return {
         "ok": True,

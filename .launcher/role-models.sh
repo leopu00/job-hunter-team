@@ -59,9 +59,19 @@ jht_provider_field() {
   return 1
 }
 
-# jht_provider_model <glm|kimi> <class or alias of the role: sol, terra, luna, sonnet…> — the model id pi gets.
+# jht_provider_model <glm|kimi> <class or alias of the role: sol, terra, luna, sonnet…> [role] — the model id pi gets.
+# The third argument is given only when the config pins nothing for the role: then a `rolemodel` row of the table, if the provider has
+# one for that role, gives the class instead of the role's own.
 jht_provider_model() {
-  local provider="$1" requested="$2" class kind name modelclass model
+  local provider="$1" requested="$2" role="${3:-}" class kind name modelclass model
+  role="$(printf '%s' "$role" | tr '[:upper:]' '[:lower:]')"
+  if [ -n "$role" ]; then
+    while IFS='|' read -r kind name modelclass model; do
+      [ "$kind" = rolemodel ] && [ "$name" = "$provider" ] && [ "$modelclass" = "$role" ] || continue
+      requested="$model"
+      break
+    done < "$JHT_PROVIDER_MODELS_FILE"
+  fi
   class="$(jht_role_model_value "$requested" class)" || return 1
   while IFS='|' read -r kind name modelclass model; do
     [ "$kind" = model ] && [ "$name" = "$provider" ] && [ "$modelclass" = "$class" ] || continue

@@ -29,11 +29,13 @@
     "listed, the Analista and the Scorer. The Capitano's pause is the brake against empty rounds, and a",
     "round with positions waiting in the role's own queue (db_query.role_queue_count: the Analista's `new`,",
     "the Scorer's `checked` without a score, the queues next-for-analista and next-for-scorer print) is",
-    "not empty: the pause after a unit is at most pause_sec (a checkpoint between two units, only short).",
-    "With the queue empty, or one that cannot be counted, the Capitano's pause as before. It yields to the",
+    "not empty: the pause after a unit is at most pause_sec. pause_sec is 0: with positions waiting there is",
+    "NO pause, the worker goes to the next one (measured on the burst of 10/11: 1140 s of fixed 60 s pauses on",
+    "3300 s with 11-20 positions waiting in every queue, and the Scorer idle 604 s waiting for them). With the",
+    "queue empty, or one that cannot be counted, the Capitano's pause as before. It yields to the",
     "same hold as empty_unit (keep_captains_pause: recovery after a freeze, team over its pace): then the",
     "Capitano's pause stays, the budget is protected. The user's burn intent (\"Lavora a tutta\") lifts that",
-    "hold and, with a queue waiting, takes the pause away altogether. A rule never lengthens a pause.",
+    "hold, as before. A rule never lengthens a pause.",
     "burst_wait (TUI only for now; shared/skills/throttle_burst.py, JHT-T309): during the FIRST BURST a worker with",
     "nothing to do waits at most cap_sec, not the Capitano's pause. Nothing to do = an Analista or a Scorer whose",
     "queue was read and is empty (the event wake, JHT-T297, brings it forward sooner; this is the net under a lost",
@@ -55,7 +57,7 @@
   },
   "queued_work": {
     "roles": ["analista", "scorer"],
-    "pause_sec": 60
+    "pause_sec": 0
   },
   "burst_wait": {
     "roles": ["scout", "analista", "scorer"],
