@@ -240,6 +240,11 @@ def _get(url: str, **kwargs):
         if blocked is not None:
             return None, {**blocked, "source_attempted": attempt > 0}
         r = requests.get(url, headers=_headers(), **kwargs)
+        if r.status_code == 403:
+            # A 403 is not retried (this call answers «closed» as before), but LinkedIn is suspended for EVERY Scout, for
+            # longer each time, exactly like after a 429 the backoff did not clear.
+            _note_rate_limit(time.time(), parse_retry_after(r.headers.get("Retry-After")))
+            return r, None
         if r.status_code not in RATE_LIMITED_STATUS:
             if r.status_code == 200:
                 _note_success()

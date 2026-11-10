@@ -344,6 +344,25 @@ def fetch(url: str, max_level: int = 3, profile_dir: Path | None = None,
     except UrlRejected as exc:
         return _refused(url, exc)
 
+    # One request cap and one pause PER SITE, shared by every Scout (source_rate.py): a site that said 403/429/503 is not
+    # asked again by anyone until its pause ends, and the call below makes no request while it lasts.
+    import source_rate
+    host = parts.hostname or ""
+    limited = source_rate.gate(host)
+    if limited is not None:
+        return {"level": 0, "status": 429, "html": "", "blocked": True, **limited}
+
+    result = _fetch_levels(url, max_level, profile_dir, retries_per_level)
+    if result.get("refused"):
+        return result
+    if result.get("status") in source_rate.HIT_STATUSES:
+        result = {**result, **source_rate.note_hit(host, result["status"])}
+    elif result.get("status") == 200 and not result.get("blocked"):
+        source_rate.note_success(host)
+    return result
+
+
+def _fetch_levels(url: str, max_level: int, profile_dir, retries_per_level: int) -> dict:
     results = []
     last = None
 
@@ -413,6 +432,8 @@ def main(argv):
     # URL non validi, cosi' il chiamante non lo mette in coda di retry.
     if result.get("refused"):
         return 1
+    if result.get("rate_limited"):
+        return 3   # the site is suspended for every Scout: another source now, back at `retry_at` (same code as LinkedIn)
     return 0 if not result.get("error") and result.get("status", 0) > 0 else 2
 
 
