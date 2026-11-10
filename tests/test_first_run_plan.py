@@ -213,12 +213,17 @@ def _api_key_config(jht_home, **extra):
     (5, {"scout": 1, "analista": 1, "scorer": 1}),
     (10, {"scout": 2, "analista": 1, "scorer": 1}),
     (29.9, {"scout": 2, "analista": 1, "scorer": 1}),
-    (30, {"scout": 3, "analista": 2, "scorer": 1}),
+    (30, {"scout": 5, "analista": 3, "scorer": 2}),
     ("30", {"scout": 1, "analista": 1, "scorer": 1}),
     (True, {"scout": 1, "analista": 1, "scorer": 1}),
     (-5, {"scout": 1, "analista": 1, "scorer": 1}),
 ])
-def test_an_api_key_has_no_card_and_the_roster_comes_from_the_spending_ceiling(first_run, jht_home, ceiling, roster):
+def test_an_api_key_has_no_card_and_the_roster_comes_from_the_spending_ceiling(first_run, jht_home, ceiling, roster, monkeypatch):
+    # the table, not the machine that runs the test: the big rosters (10 workers) are cut on a small one. first_run loads its own
+    # copy of plan_registry on every call, so the one this test patched is handed to it.
+    monkeypatch.setattr(plan_registry, "_host_agent_cap", lambda *a: None)
+    original = first_run._load_module
+    monkeypatch.setattr(first_run, "_load_module", lambda name, filename: plan_registry if name == "plan_registry" else original(name, filename))
     _api_key_config(jht_home, **({} if ceiling is None else {"no_quota_cap": {"eur": ceiling}}))
     info = first_run.plan_info()
     assert info["ok"] and info["plan"] == "api-key" and info["weekly_capped"] is False
@@ -282,15 +287,16 @@ def test_upgrade_of_an_existing_install_gets_no_burst(first_run, jht_home):
     assert first_run.status()["phase"] == first_run.PHASE_STEADY
 
 
-def test_the_first_burst_targets_twenty_scored_positions_and_lets_the_scouts_find_thirty_in_every_band(jht_home):
-    """The promise of the product (JHT-T313): 20 scored positions, whatever the plan or the ceiling."""
+def test_the_first_burst_targets_twenty_scored_positions_and_lets_the_scouts_find_enough_for_them_in_every_band(jht_home):
+    """The promise of the product (JHT-T313): 20 scored positions, whatever the plan or the ceiling. About 58% of the positions
+    reach a score (the run of 10/11): the two bands with the big rosters (tier 15 and 20) may find 40, the others 30."""
     for provider, plans in plan_registry.PLANS.items():
         for plan in plans:
             roster = plan_registry.burst_roster(plan_registry.find_plan(provider, plan["id"]), host_cap=99)
-        assert roster["target_scored"] == 20 and roster["scout_cap_first_pass"] == 30, (provider, plan["id"])
+            assert roster["target_scored"] == 20 and roster["scout_cap_first_pass"] == (40 if plan["tier"] >= 15 else 30), (provider, plan["id"])
     for eur in (None, 5, 10, 30):
         (jht_home / "jht.config.json").write_text(json.dumps(
             {"active_provider": "openai", "providers": {"openai": {"auth_method": "api_key"}},
              **({} if eur is None else {"no_quota_cap": {"eur": eur}})}), encoding="utf-8")
         roster = plan_registry.burst_roster(host_cap=99)
-        assert roster["target_scored"] == 20 and roster["scout_cap_first_pass"] == 30, eur
+        assert roster["target_scored"] == 20 and roster["scout_cap_first_pass"] == (40 if eur == 30 else 30), eur
