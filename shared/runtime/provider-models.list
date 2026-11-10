@@ -9,6 +9,13 @@ provider|kimi|moonshotai|MOONSHOT_API_KEY|Kimi (Moonshot)
 model|glm|sol|glm-5.3
 model|glm|terra|glm-5.3
 model|glm|luna|glm-5.3-flash
+# rolemodel|provider|role|class: the class a role has on THIS provider instead of its own in role-models.list. A pin in the config
+# (team.role_models.<role>.model) still wins. The roles that read, search and extract (scout, analista, sentinella) are the ones
+# that make most of the calls (about 3 in 4 on a measured run of the burst); the judgement (scorer) and the roles that talk to the person stay on 5.3.
+# Kimi has no row: its light model (K2.7 Code) is retired by Moonshot at the end of December 2026.
+rolemodel|glm|scout|luna
+rolemodel|glm|analista|luna
+rolemodel|glm|sentinella|luna
 # Kimi: K3.1 Pro where the work is hard; K2.7 Code is cheaper but Moonshot retires the K2 models by the end of December 2026.
 model|kimi|sol|kimi-k3.1-pro
 model|kimi|terra|kimi-k3.1-pro
