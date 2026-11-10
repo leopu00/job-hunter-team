@@ -162,6 +162,7 @@ export function saveLanguage(code, home) {
     if (loaded && typeof loaded === 'object' && !Array.isArray(loaded)) prefs = loaded;
   } catch { /* no file or unreadable: start from an empty one */ }
   prefs.locale = code;
+  fs.mkdirSync(path.dirname(file), { recursive: true }); // a setup on a home that has no such folder yet
   const tmp = path.join(path.dirname(file), `.i18n-prefs.${process.pid}.${os.hostname()}.tmp`);
   fs.writeFileSync(tmp, `${JSON.stringify(prefs, null, 2)}\n`, { mode: 0o644 });
   fs.renameSync(tmp, file);

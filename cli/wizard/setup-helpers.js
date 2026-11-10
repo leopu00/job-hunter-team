@@ -6,6 +6,7 @@ import { writePrivateJson } from '../src/lib/secure-config-io.js';
 import path from 'node:path';
 import os from 'node:os';
 import { CODEX_MODEL } from '../../shared/runtime/role-models.js';
+import { PI_API_MODELS, PI_API_PROVIDERS, piApiProvider } from '../../shared/runtime/provider-models.js';
 import { summarizeRoleModels } from './setup-models.js';
 import { harnessProblem } from '../../shared/runtime/agent-harness.js';
 
@@ -42,6 +43,28 @@ export function readConfigFileSnapshot() {
   }
 }
 
+// --- Providers that run only on pi (kept out of the catalog above, which is what the wizard offers) ---
+/**
+ * The providers that run only on the pi harness with an API key (GLM of Z.ai, Kimi of Moonshot): offered by the
+ * non-interactive setup (`--provider glm|kimi --harness pi`), not by the wizard's list. Same shape as AI_PROVIDERS,
+ * plus the variable their key goes in. The names, variables and models are shared/runtime/provider-models.list.
+ */
+export const PI_API_CHOICES = Object.entries(PI_API_PROVIDERS).map(([value, { label, keyVariable }]) => ({
+  value,
+  label,
+  keyVariable,
+  keyPrefix: '',
+  keyPlaceholder: '',
+  piOnly: true,
+  models: [...new Set(Object.values(PI_API_MODELS[value]))].map((id) => ({ value: id, label: id })),
+}));
+
+/** The choice of a provider typed on the command line (moonshot is kimi), among the two lists. */
+export function findProviderChoice(name) {
+  const piApi = piApiProvider(name);
+  return piApi ? PI_API_CHOICES.find((p) => p.value === piApi) : AI_PROVIDERS.find((p) => p.value === name);
+}
+
 /** Il nome di una variabile da cui il launcher può prendere una chiave (le stesse regole di shared/skills/api_key_file.py). */
 export function isKeyVariable(name) {
   if (typeof name !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(name)) return false;
@@ -69,7 +92,7 @@ export function validateConfigBeforeWrite(config) {
   // lista mescolava i registri ('claude' CLI + 'openai' vendor): un active_provider
   // vendor-canonico come 'anthropic' veniva rifiutato. Allineato a config_ready()
   // in .launcher/agent-watchdog.sh. Vedi postmortem 2026-07-18-provider-vendor-enum-config-ready.
-  const validProviders = ['claude', 'anthropic', 'openai', 'codex', 'kimi'];
+  const validProviders = ['claude', 'anthropic', 'openai', 'codex', 'kimi', 'glm'];
 
   if (typeof config.version !== 'number' || config.version < 1) {
     errors.push('version must be a positive number');

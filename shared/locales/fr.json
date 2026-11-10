@@ -513,6 +513,7 @@
   "quota_mode.no_ceiling": "aucun déclaré",
   "pi_cap.halt_eur": "⛔ L'équipe est en pause : les agents sur pi ont dépensé %s aujourd'hui et ont atteint le plafond que tu as déclaré (%s). Rien n'est perdu. Le travail reprend demain, ou dès que tu relèves le plafond dans la configuration.",
   "pi_cap.halt_tokens": "⛔ L'équipe est en pause : les agents sur pi ont utilisé %s tokens dans la dernière heure et ont atteint le plafond que tu as déclaré (%s par heure). Rien n'est perdu. Le travail reprend quand le compte horaire repasse en dessous, ou dès que tu relèves le plafond dans la configuration.",
+  "pi_cap.halt_credit": "⛔ L'équipe est en pause : %s indique que le crédit de ton compte est épuisé. Rien n'est perdu. Recharge le compte chez le fournisseur : le travail reprend tout seul quand un appel repasse.",
   "pi_cap.resume": "▶️ Le plafond de dépense que tu as déclaré permet de retravailler : l'équipe peut reprendre.",
   "pi_cap.no_ceiling": "ℹ️ Les agents sur pi ont dépensé %s aujourd'hui et aucun plafond de dépense n'est déclaré. Cet accès ne communique pas de limites d'utilisation, donc rien d'autre ne freine la dépense. Pour en fixer un, dis-le au Capitaine ou écris no_quota_cap dans la configuration (par exemple eur: 10)."
 }

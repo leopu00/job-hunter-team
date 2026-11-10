@@ -15,11 +15,13 @@
  * time and not when the team starts.
  */
 
+import { PI_API_ALIASES, PI_API_PROVIDERS } from './provider-models.js';
+
 export const AGENT_HARNESSES = Object.freeze(['codex', 'pi']);
 export const DEFAULT_HARNESS = 'codex';
 
 /** Providers (the names jht.config.json uses, with the CLI aliases) on which pi may start. */
-export const PI_PROVIDERS = Object.freeze(['openai', 'codex']);
+export const PI_PROVIDERS = Object.freeze(['openai', 'codex', ...Object.keys(PI_API_PROVIDERS), ...Object.keys(PI_API_ALIASES)]);
 
 /** The harness of a config: the key, or the default when it is absent. Anything else is not a harness. */
 export function harnessOf(config) {
@@ -36,11 +38,15 @@ export function harnessProblem(harness, provider, authMethod) {
   if (!AGENT_HARNESSES.includes(harness)) {
     return `harness must be one of: ${AGENT_HARNESSES.join(', ')}`;
   }
+  if (harness === 'pi' && (provider in PI_API_PROVIDERS || provider in PI_API_ALIASES)) {
+    // Z.ai and Moonshot charge by the token and pi has no subscription login for them: the API key only
+    return authMethod === 'api_key' ? null : `the pi harness runs on ${provider} only with an API key (auth_method api_key)`;
+  }
   if (harness !== 'pi' || PI_PROVIDERS.includes(provider)) return null;
   if ((provider === 'claude' || provider === 'anthropic') && authMethod !== 'api_key') {
     return 'the pi harness is refused with a Claude subscription: Anthropic bills a subscription used from pi as extra usage, per token';
   }
-  return `the pi harness supports only active_provider=openai for now (configured: '${provider ?? ''}')`;
+  return `the pi harness supports only active_provider=openai, glm or kimi for now (configured: '${provider ?? ''}')`;
 }
 
 /**

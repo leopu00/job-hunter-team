@@ -1170,6 +1170,12 @@ case "$PROVIDER" in
       CLI_ENV_PREFIX="MOONSHOT_API_KEY='${API_KEY}' "
     fi
     ;;
+  glm)
+    # GLM (Z.ai) runs only on the pi harness, with an API key: the harness block below puts pi in place of this stub
+    # (jht_pi_provider_check refuses it on any other harness).
+    CLI_BIN="pi"
+    CLI_ARGS=""
+    ;;
   *)
     echo "Error: active_provider is missing or unsupported in '$JHT_CONFIG_FILE'." >&2
     echo "Configure it with jht setup or jht config before starting the team." >&2
@@ -1185,11 +1191,18 @@ esac
 # l'effort sono quelli che lo stesso ruolo avrebbe su Codex; gli argomenti si
 # compongono più sotto, quando la workdir con AGENTS.md e le skill esiste.
 AGENT_HARNESS="$(jht_role_harness "$ROLE" "$JHT_CONFIG_FILE")" || exit 1
+if [ "$PROVIDER" = "glm" ] && [ "$AGENT_HARNESS" != "pi" ]; then
+  echo "Error: GLM runs only on the pi harness (harness is '$AGENT_HARNESS'): jht setup --provider glm --harness pi, or jht providers harness pi." >&2
+  exit 1
+fi
 if [ "$AGENT_HARNESS" = "pi" ]; then
   if ! jht_pi_provider_check "$PROVIDER" "$AUTH_METHOD"; then
     exit 1
   fi
-  if ! pi_model="$(resolve_codex_model "${role_model:-$model_override}")"; then
+  # glm and kimi: the model of the role's class from provider-models.list; openai: the Codex model of that class
+  if pi_api="$(jht_pi_api_provider "$PROVIDER")"; then
+    pi_model="$(jht_provider_model "$pi_api" "${role_model:-$model_override}")" || exit 1
+  elif ! pi_model="$(resolve_codex_model "${role_model:-$model_override}")"; then
     exit 1
   fi
   CLI_BIN="pi"
@@ -1488,7 +1501,7 @@ if [ "$CLI_BIN" = "pi" ]; then
   if ! jht_pi_settings "$(jht_pi_agent_dir)/settings.json"; then
     exit 1
   fi
-  CLI_ARGS="$(jht_pi_args "$AGENT_DIR" "$pi_model" "$effort")$(jht_pi_extension_args "$ROLE")"
+  CLI_ARGS="$(jht_pi_args "$AGENT_DIR" "$pi_model" "$effort" "$PROVIDER")$(jht_pi_extension_args "$ROLE")"
 fi
 
 # Chiave da file (JHT_API_KEY_FILE): il wrapper sta dopo le assegnazioni e prima del binario; il comando del pane non la contiene.

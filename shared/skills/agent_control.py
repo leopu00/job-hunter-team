@@ -284,7 +284,7 @@ def _disk_low() -> bool:
 
 # The providers start-agent.sh knows (its `case "$PROVIDER"`): any other value,
 # or none, ends its preflight with «active_provider is missing or unsupported».
-PROVIDERS = frozenset({"anthropic", "claude", "openai", "codex", "kimi", "moonshot"})
+PROVIDERS = frozenset({"anthropic", "claude", "openai", "codex", "kimi", "moonshot", "glm"})
 
 
 def _provider_configured() -> bool:

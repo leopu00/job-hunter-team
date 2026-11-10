@@ -8,7 +8,7 @@ MANIFEST = ROOT / "shared/config/provider-touchpoints.json"
 
 def test_provider_touchpoint_inventory_is_machine_verifiable():
     inventory = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert inventory["canonical_team_providers"] == ["claude", "openai", "kimi"]
+    assert inventory["canonical_team_providers"] == ["claude", "openai", "kimi", "glm"]
     rows = inventory["touchpoints"]
     assert len(rows) >= 10
     assert len({row["id"] for row in rows}) == len(rows)

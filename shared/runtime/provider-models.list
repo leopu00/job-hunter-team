@@ -1,0 +1,15 @@
+# The providers that run only on the pi harness, with an API key (read by shared/runtime/provider-models.js, the CLI,
+# and .launcher/role-models.sh, the launcher; one table, no copy). The model of each role comes from the class the role
+# has in role-models.list (sol | terra | luna): the same classes, another provider's models.
+# provider|name for pi (--provider)|variable of the key|label
+provider|glm|zai|ZAI_API_KEY|GLM (Z.ai)
+provider|kimi|moonshotai|MOONSHOT_API_KEY|Kimi (Moonshot)
+# model|provider|class|model id in pi
+# GLM: 5.3 where the work is hard, 5.3-Flash (ten times cheaper) for the light roles.
+model|glm|sol|glm-5.3
+model|glm|terra|glm-5.3
+model|glm|luna|glm-5.3-flash
+# Kimi: K3.1 Pro where the work is hard; K2.7 Code is cheaper but Moonshot retires the K2 models by the end of December 2026.
+model|kimi|sol|kimi-k3.1-pro
+model|kimi|terra|kimi-k3.1-pro
+model|kimi|luna|kimi-k2.7-code
