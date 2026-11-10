@@ -145,6 +145,45 @@ def test_of_many_callers_at_once_exactly_one_gets_a_position(box):
     assert wins.count(True) == 1
 
 
+def test_of_many_callers_at_once_on_many_positions_each_position_has_one_winner(box):
+    # the claim must never be seen empty between its creation and its body (a reader took an empty file for an
+    # old claim, moved it and took the position too: 3 winners instead of 1 on 16 processors)
+    positions = range(100, 160)
+    wins = {p: [] for p in positions}
+    barrier = threading.Barrier(8)
+
+    def go(n):
+        barrier.wait()
+        for p in positions:
+            if queue_claims.claim("analista", p, f"analista-{n}"):
+                wins[p].append(n)
+
+    threads = [threading.Thread(target=go, args=(n,)) for n in range(8)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert [p for p in positions if len(wins[p]) != 1] == []
+
+
+def test_an_empty_claim_file_that_is_young_is_still_held(box, monkeypatch):
+    # a claim file made by a caller that has not written its body yet (a disk with no hard links) holds the position
+    directory = queue_claims._dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "analista-9").write_text("", encoding="utf-8")
+    assert queue_claims.claim("analista", 9, "analista-2") is False
+    assert queue_claims.claim("analista", 9, "analista-2", now=queue_claims.time.time() + queue_claims.TTL_SEC + 5) is True
+
+
+def test_a_claim_is_published_whole_and_leaves_no_file_behind(box):
+    assert queue_claims.claim("analista", 4, "analista-1") is True
+    names = sorted(e.name for e in queue_claims._dir().iterdir())
+    assert names == ["analista-4"]
+    assert json.loads((queue_claims._dir() / "analista-4").read_text(encoding="utf-8"))["agent"] == "analista-1"
+    # the same agent again renews it in place; nobody else gets it
+    assert queue_claims.claim("analista", 4, "analista-1") is True
+    assert queue_claims.claim("analista", 4, "analista-2") is False
+    assert sorted(e.name for e in queue_claims._dir().iterdir()) == ["analista-4"]
+
+
 def test_the_count_for_an_agent_leaves_out_what_a_colleague_holds(box):
     box.add("new", 3)
     box.ask("next-for-analista", "analista-1")
