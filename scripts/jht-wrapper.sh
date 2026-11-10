@@ -376,6 +376,7 @@ jht_text_en() {
     uninstall.loss) printf '%s' "The saved mail password and Telegram tokens are deleted too; ~/.jht and Documents stay, and with them the saved LinkedIn session (secrets/linkedin-profile and .cache/linkedin): remove it with jht reset --scope creds." ;;
     uninstall.loss_purge) printf '%s' "The saved mail password and Telegram tokens are deleted too." ;;
     uninstall.purge_loss) printf '%s' "With --purge ~/.jht and ~/Documents/Job Hunter Team are deleted too: configuration, database, CVs and output. There is no way back." ;;
+    uninstall.machine_removing) printf '%s' "Removing the Podman machine '%s', which the JHT installer created: everything inside it goes with it (the JHT volumes and image); your folders on the Mac stay." ;;
     uninstall.machine_kept) printf '%s' "The Podman machine '%s' was not created by the JHT installer (it was already there, or it is not the standard jht-podman one), so it is not removed: it may be yours. The JHT volumes and image inside it stay with it. To remove it: podman machine stop %s, then podman machine rm %s." ;;
     uninstall.left.machine) printf '%s' "Not removed: the jht-podman Podman machine or JHT's containers and volumes, with the saved secrets. Run 'jht uninstall --confirm' again when Podman or Docker answer." ;;
     uninstall.left.runtime) printf '%s' "Not removed: JHT's host runtime." ;;
@@ -444,6 +445,7 @@ jht_text_it() {
     uninstall.loss) printf '%s' "Vengono cancellati anche la password della posta e i token di Telegram salvati; ~/.jht e Documenti restano, e con loro la sessione LinkedIn salvata (secrets/linkedin-profile e .cache/linkedin): si toglie con jht reset --scope creds." ;;
     uninstall.loss_purge) printf '%s' "Vengono cancellati anche la password della posta e i token di Telegram salvati." ;;
     uninstall.purge_loss) printf '%s' "Con --purge vengono cancellati anche ~/.jht e ~/Documents/Job Hunter Team: configurazione, database, CV e output. Non si torna indietro." ;;
+    uninstall.machine_removing) printf '%s' "Rimuovo la macchina Podman '%s', creata dall'installer di JHT: con lei se ne va tutto quello che ha dentro (i volumi e l'immagine di JHT); le tue cartelle sul Mac restano." ;;
     uninstall.machine_kept) printf '%s' "La macchina Podman '%s' non risulta creata dall'installer di JHT (c'era gia', oppure non e' quella standard jht-podman), quindi non la rimuovo: potrebbe essere tua. I volumi e l'immagine di JHT che ha dentro restano con lei. Per toglierla: podman machine stop %s, poi podman machine rm %s." ;;
     uninstall.left.machine) printf '%s' "Non rimossi: la macchina Podman jht-podman o i container e i volumi di JHT, con i segreti salvati. Rilancia 'jht uninstall --confirm' quando Podman o Docker rispondono." ;;
     uninstall.left.runtime) printf '%s' "Non rimosso: il runtime host di JHT." ;;
@@ -6026,13 +6028,19 @@ uninstall_attested_machine() {
   printf '%s\n' "$name"
 }
 
-# Il nome in <runtime>/podman-machine e' di una macchina che l'installer ha CREATO solo se <runtime>/podman-machine-created e' un file
-# regolare (non un collegamento) la cui prima riga e' esattamente quel nome: l'installer lo scrive quando `podman machine init` riesce.
+# Il nome in <runtime>/podman-machine e' di QUESTA macchina, creata dall'installer, solo se <runtime>/podman-machine-created e' un file
+# regolare (non un collegamento) che dice il nome (1a riga) e il momento della creazione (2a riga), e il motore dice lo stesso momento per
+# la macchina di quel nome: una macchina che la persona ha ricreato con lo stesso nome ha un altro momento e non e' questa.
+# $1 = cartella runtime, $2 = nome, $3 = podman. Senza 2a riga, o con un motore che non risponde, non e' dimostrato: la macchina resta.
 uninstall_machine_created_by_installer() {
-  local file="$1/podman-machine-created" written
+  local file="$1/podman-machine-created" content written created now
   [ -f "$file" ] && [ ! -L "$file" ] || return 1
-  written="$(head -c 64 "$file" 2>/dev/null | head -n 1 | tr -d '\r\n')"
-  [ -n "$written" ] && [ "$written" = "$2" ]
+  content="$(head -c 256 "$file" 2>/dev/null)" || return 1
+  written="$(printf '%s\n' "$content" | sed -n '1p' | tr -d '\r')"
+  created="$(printf '%s\n' "$content" | sed -n '2p' | tr -d '\r')"
+  [ -n "$written" ] && [ "$written" = "$2" ] && [ -n "$created" ] || return 1
+  now="$("$3" machine inspect --format '{{.Created}}' "$2" 2>/dev/null | head -n 1 | tr -d '\r')" || return 1
+  [ -n "$now" ] && [ "$now" = "$created" ]
 }
 
 # Toglie la macchina Podman $2 (ferma e rimuove, --force): 0 se alla fine non c'e' piu'.
@@ -6058,7 +6066,8 @@ uninstall_machine() {
       # adottata (c'era gia': puo' essere dell'utente) resta, e si dice quale e perche'.
       if [ -n "$runtime_dir" ] && kept="$(uninstall_attested_machine "$runtime_dir")" \
           && [ "$(uninstall_podman_machine_state "$podman_bin" "$kept")" = "present" ]; then
-        if uninstall_machine_created_by_installer "$runtime_dir" "$kept"; then
+        if uninstall_machine_created_by_installer "$runtime_dir" "$kept" "$podman_bin"; then
+          info "$(jht_say uninstall.machine_removing "$kept")"
           uninstall_remove_podman_machine "$podman_bin" "$kept" || return 1
         else
           warn "$(jht_say uninstall.machine_kept "$kept" "$kept" "$kept")"

@@ -57,6 +57,12 @@ case "$1:$2" in
     [ "$3:$4" = "--format:{{.Name}}" ] || exit 91
     [ ! -f "$machines" ] || cat "$machines"
     exit 0 ;;
+  machine:inspect)
+    # `machine inspect --format {{.Created}} <name>`: the creation time kept in $FAKE_STATE/created-<name>; absent = the engine does not answer
+    [ "$3:$4" = "--format:{{.Created}}" ] && [ $# -eq 5 ] || exit 93
+    [ -f "$FAKE_STATE/created-$5" ] || exit 125
+    cat "$FAKE_STATE/created-$5"
+    exit 0 ;;
   machine:rm)
     [ "$3" = --force ] && [ $# -eq 4 ] || exit 92
     [ ! -f "$FAKE_STATE/podman-rm-fails" ] || exit 1
@@ -330,22 +336,28 @@ def test_mac_podman_removes_only_the_jht_machine_and_is_idempotent(tmp_path: Pat
 SENTENCE = "La macchina Podman 'jht-giro-mac' non risulta creata dall'installer di JHT"
 
 
-def _custom_machine_box(tmp_path: Path, marker: str | None) -> Box:
+def _custom_machine_box(tmp_path: Path, marker: str | None, now: str | None = "2026-11-10 16:46:00 +0100 CET") -> Box:
     box = Box(tmp_path, "Darwin")
     box.select("podman")
     (box.runtime / "podman-machine").write_text("jht-giro-mac\n", encoding="utf-8")
     if marker is not None:
         (box.runtime / "podman-machine-created").write_text(marker, encoding="utf-8")
+    if now is not None:
+        (box.state / "created-jht-giro-mac").write_text(now + "\n", encoding="utf-8")
     box.machines("jht-giro-mac*", "somebody-else")
     return box
 
 
+CREATED_MARKER = "jht-giro-mac\n2026-11-10 16:46:00 +0100 CET\n"
+
+
 def test_a_machine_the_installer_created_with_another_name_is_removed(tmp_path: Path) -> None:
-    box = _custom_machine_box(tmp_path, "jht-giro-mac\n")
+    box = _custom_machine_box(tmp_path, CREATED_MARKER)
 
     result = box.run("uninstall", "--confirm")
 
     assert result.returncode == 0, result.stdout + result.stderr
+    assert "Rimuovo la macchina Podman 'jht-giro-mac', creata dall'installer di JHT: con lei se ne va tutto quello che ha dentro" in result.stderr
     assert box.remaining("machines").splitlines() == ["somebody-else"]
     assert [c for c in box.calls() if c.startswith("podman machine rm")] == ["podman machine rm --force jht-giro-mac"]
     assert "non risulta creata" not in result.stderr + result.stdout
@@ -369,9 +381,24 @@ def test_an_adopted_machine_with_another_name_is_left_and_says_so(tmp_path: Path
     assert not box.runtime.exists() and not box.wrapper.exists(), "the rest of the uninstall goes on"
 
 
-@pytest.mark.parametrize("marker", ["somebody-else\n", "jht-giro-mac-2\n", "\n", " jht-giro-mac\n"])
+@pytest.mark.parametrize("marker", [
+    "somebody-else\n2026-11-10 16:46:00 +0100 CET\n", "jht-giro-mac-2\n2026-11-10 16:46:00 +0100 CET\n", "\n", " jht-giro-mac\n2026-11-10 16:46:00 +0100 CET\n",
+    "jht-giro-mac\n",  # no creation time: it cannot be told from another machine of the same name
+    "jht-giro-mac\n\n",
+    "jht-giro-mac\n2025-01-01 00:00:00 +0100 CET\n",  # the person made another machine with this name later: other creation time
+])
 def test_a_marker_that_names_another_machine_leaves_the_machine(tmp_path: Path, marker: str) -> None:
     box = _custom_machine_box(tmp_path, marker)
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert box.remaining("machines").splitlines() == ["jht-giro-mac*", "somebody-else"]
+    assert SENTENCE in result.stderr + result.stdout
+
+
+def test_a_marker_is_not_believed_when_the_engine_cannot_say_when_the_machine_was_created(tmp_path: Path) -> None:
+    box = _custom_machine_box(tmp_path, CREATED_MARKER, now=None)
 
     result = box.run("uninstall", "--confirm")
 
@@ -394,7 +421,7 @@ def test_a_marker_that_is_a_link_is_not_believed(tmp_path: Path) -> None:
 
 
 def test_a_created_machine_that_cannot_be_removed_keeps_runtime_and_wrapper(tmp_path: Path) -> None:
-    box = _custom_machine_box(tmp_path, "jht-giro-mac\n")
+    box = _custom_machine_box(tmp_path, CREATED_MARKER)
     (box.state / "podman-rm-fails").write_text("1\n", encoding="utf-8")
 
     result = box.run("uninstall", "--confirm")
