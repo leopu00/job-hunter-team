@@ -179,6 +179,11 @@ jobs:
           python3 scripts/ci/broker_smoke.py jht:extras-check
           python3 scripts/ci/agent_image_toolchain.py jht:extras-check
 
+      # The browser of the manual LinkedIn sign-in, run for real on Docker against a page of its own (no account): the sandbox is on with
+      # the one capability the compose file gives it, and the profile keeps no saved password, no autofill, no user name, no password.
+      - name: Extras image, sign-in browser sandboxed and nothing kept of the sign-in
+        run: python3 scripts/ci/login_live_probe.py jht:extras-check --engine docker --controls
+
       # Quello che nessuna immagine puo' provare da sola: il livello che dichiara e' quello
       # degli strumenti che porta, il nucleo non ne ha, e il codice, Pi, gli utenti sono
       # IDENTICI nelle due (stessa revisione, stessi byte).
