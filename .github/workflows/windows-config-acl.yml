@@ -120,7 +120,7 @@ jobs:
       - name: Install pytest
         run: pip install --require-hashes -r tests/requirements-ci.txt
       # A skip here is a failure: with a shell missing the step would be green
-      # having proved nothing. 179 = 41 cases of the native file (its shim only
+      # having proved nothing. 194 = 41 cases of the native file (its shim only
       # under Windows PowerShell 5.1) + the probe's shim under powershell and pwsh
       # + 14 cases of the JSON the scripts read from Podman, under both shells:
       # the app runs them with Windows PowerShell 5.1, whose ConvertFrom-Json
@@ -132,7 +132,8 @@ jobs:
       # checks, a junction in the folder, one turned into a junction while the
       # walk runs, under both shells) + 18 cases of the wrapper on a profile with no host.env,
       # no private folder and no integrity manifest yet (the reading block under both shells,
-      # the ACL and node checks answering False for what is not there). The count may grow, never shrink.
+      # the ACL and node checks answering False for what is not there) + 15 cases of the onboarding snapshot
+      # under Windows PowerShell 5.1 (the provider script reaches node whole and without a byte order mark). The count may grow, never shrink.
       - name: Native Windows pieces of the Podman runtime
         shell: pwsh
         env:
@@ -149,13 +150,14 @@ jobs:
             tests/test_windows_download_is_verified_on_the_host.py `
             tests/test_windows_acl_skips_links.py `
             tests/test_windows_pristine_profile.py `
+            tests/test_windows_onboarding_snapshot_reason.py `
             -n 4 -p no:cacheprovider -rs 2>&1
           $code = $LASTEXITCODE
           $out | ForEach-Object { "$_" }
           if ($code -ne 0) { exit $code }
           $summary = "$($out[-1])"
           if ($summary -notmatch '^=+ (\d+) passed(, \d+ warnings?)? in [0-9.]+s') { throw "unexpected pytest summary: $summary" }
-          if ([int]$Matches[1] -lt 179) { throw "only $($Matches[1]) native Windows tests ran, expected at least 179" }
+          if ([int]$Matches[1] -lt 194) { throw "only $($Matches[1]) native Windows tests ran, expected at least 194" }
 
       # Measures for T80: under 5.1 the step below takes 12.5 minutes here and
       # 2 on a real Windows PC, under pwsh 44 s. What one start of each shell
