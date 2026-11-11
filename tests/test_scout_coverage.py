@@ -121,14 +121,16 @@ def test_at_most_eight_core_portals_per_group_and_the_table_is_well_formed():
 
 def test_a_403_seen_only_from_the_mac_does_not_close_a_source_in_the_table_the_scout_on_the_field_does(profile):
     by = {(e["slug"], e["country"]): e for e in cov.load_plan()["entries"]}
-    for key in (("jobbsafari", "se"), ("jobbland", "se"), ("weworkremotely", "remote"), ("himalayas", "remote"), ("jooble", "se")):
+    for key in (("jobbsafari", "se"), ("jobbland", "se"), ("weworkremotely", "remote"), ("himalayas", "remote")):
         assert by[key]["access"] == "search", key             # «to try», not «closed»
         assert _state([], key[0], key[1])["state"] == "untouched"
         assert _state([_pass(key[0], key[1], "role_language", "a", returned=0, status="closed")], key[0], key[1])["state"] == "closed"
     assert by[("jobbsafari", "se")]["tier"] == "core"
     # what the table closes was seen closed on a real run (the squad's own pass log), nothing from one network alone
     # (irishjobs 403 and jobgether's JavaScript shell on the runs of 10/11 and 11/11; the others on earlier ones)
-    assert sorted(e["slug"] for e in by.values() if e["access"] == "closed") == ["careerjet", "eu-remote-jobs", "flexjobs", "irishjobs", "jobgether", "jobs-ie", "remote-rocketship"]
+    assert sorted(e["slug"] for e in by.values() if e["access"] == "closed") == [
+        "careerjet", "eu-remote-jobs", "flexjobs", "gradireland", "irishjobs", "jobgether", "jobs-ie", "jooble", "remote-rocketship",
+        "wellfound", "wellfound"]
     hub = by[("thehub", "se")]
     assert hub["tier"] == "core" and hub["portal_language"] == "en"
     rows = [_pass("thehub", "se", "role", "developer"), _pass("thehub", "se", "role", "engineer"), _pass("thehub", "se", "broad", "internship")]
@@ -449,12 +451,13 @@ def test_the_portals_that_were_seen_dead_on_the_runs_are_closed_in_the_table_wit
     data = cov.table()
     by = {(e["slug"], e["country"]): e for g in data["groups"].values() for e in g}
     for key in (("infojobs-it", "it"), ("irishjobs", "ie"), ("cliclavoro", "it"), ("jobgether", "remote"),
-                ("jobs-ie", "ie"), ("careerjet", "se"), ("flexjobs", "remote")):
+                ("jobs-ie", "ie"), ("careerjet", "se"), ("flexjobs", "remote"), ("monster-it", "it"), ("jooble", "se"),
+                ("wellfound", "se"), ("wellfound", "remote"), ("gradireland", "ie")):
         assert by[key]["access"] == "closed" and by[key]["hint"], key
     assert "shut down" in by[("infojobs-it", "it")]["hint"]
     # not closed: a 403 seen on one run only, or a path that was guessed wrong
-    # (totaljobs answers from another network and was blocked only from the VPS: one network alone does not close it)
-    for key in (("monster-it", "it"), ("gradireland", "ie"), ("weworkremotely", "remote"), ("himalayas", "remote"), ("totaljobs", "gb")):
+    # (the UK portals are not closed doors: they are a rule of the plan, `needs_work_right`, see below)
+    for key in (("weworkremotely", "remote"), ("himalayas", "remote"), ("totaljobs", "gb"), ("reed", "gb")):
         assert by[key]["access"] == "search", key
     assert "api" in by[("himalayas", "remote")]["hint"].lower() and "403" in by[("himalayas", "remote")]["hint"]
 
@@ -502,3 +505,33 @@ def test_next_prints_the_avoid_list_and_it_never_grows_past_its_limit(profile, t
     step = json.loads(out.stdout)
     assert 4 <= len(step["avoid"]) == cov.AVOID_MAX
     assert step["avoid"][0]["source"] == "eures" and all(set(a) == {"source", "why"} for a in step["avoid"])
+
+
+# ── the UK is a rule of the plan, not a closed door ───────────────────────────────────────────────────────────────────
+def _gb(plan):
+    return sorted(e["slug"] for e in plan["entries"] if e["country"] == "gb")
+
+
+def test_the_uk_portals_are_left_out_of_the_plan_unless_the_profile_has_the_right_to_work_there(profile):
+    profile.write_text(PROFILE_SV_EN + "work_authorization:\n  - region: eu\n    status: EU citizen, free movement\n", encoding="utf-8")
+    plan = cov.load_plan()
+    assert _gb(plan) == [] and plan["skipped_no_work_right"] == ["gb"]
+    assert "totaljobs" in {e["slug"] for g in cov.table()["groups"].values() for e in g if e.get("needs_work_right") == "gb"}
+    # nothing declared: no right is assumed
+    profile.write_text(PROFILE_SV_EN, encoding="utf-8")
+    assert _gb(cov.load_plan()) == []
+    # a UK right (top level, or under preferences) puts them back, and they are NOT closed
+    for body in ("work_authorization:\n  - region: uk\n    status: settled status\n",
+                 "preferences:\n  work_mode: remote\n  work_authorization:\n    - region: gb\n      status: British citizen\n",
+                 "work_authorization:\n  - region: eu\n    status: Skilled Worker visa, United Kingdom\n"):
+        profile.write_text(PROFILE_SV_EN + body, encoding="utf-8")
+        plan = cov.load_plan()
+        assert _gb(plan) == ["linkedin", "reed", "totaljobs"] and plan["skipped_no_work_right"] == [], body
+        assert all(e["access"] == "search" for e in plan["entries"] if e["country"] == "gb")
+
+
+def test_a_profile_that_cannot_be_read_gives_no_work_right(tmp_path):
+    assert cov.work_rights(tmp_path / "nothing.yml") == frozenset()
+    broken = tmp_path / "p.yml"
+    broken.write_text("work_authorization: [unclosed", encoding="utf-8")
+    assert cov.work_rights(broken) == frozenset()

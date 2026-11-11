@@ -8,6 +8,7 @@ import { DICTATION_LOCALE } from "../messages/direct-chat.i18n";
 import { AGENT_PAGE_TEXT } from "./AgentPage.i18n";
 import { ago, fill, identityLine, identityParts, isUp, Led, readFailureText, stateLine, Terminal, TONE } from "./AgentsPanel";
 import AgentStatusBar from "./AgentStatusBar";
+import KeyRefusedNotice from "../../components/KeyRefusedNotice";
 import { Lanes, SessionHistory } from "./AgentHistory";
 import { roleOfSession } from "./history";
 
@@ -27,6 +28,7 @@ function AgentHeading({ data, back }: { data: Ready; back: ReactNode }) {
           <span className="text-[12px] uppercase tracking-widest text-[var(--color-dim)]">{row.session}</span>
         </div>
         <p data-testid="agent-page-state" className="m-0 mt-1 text-[14px]" style={{ color: tone }}>{stateLine(t, row)}</p>
+        {row.agent && isUp(row) && <KeyRefusedNotice state={row.agent.state} />}
       </div>
       <div className="flex flex-col items-end gap-1">
         {chatId !== null ? <Link href={`/messages?agent=${chatId}`} data-testid="agent-page-chat"

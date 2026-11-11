@@ -174,6 +174,12 @@ pub(crate) enum LocalCliOperation {
     LinkedinLogin,
     LinkedinLoginStop,
     LinkedinStatus,
+    /// `jht screen status --json`: the state of the live screen of the CLOSER (screen_control.rs).
+    ScreenStatus,
+    /// `jht screen on --json`: turns the live screen on (the first time it pulls the tools image).
+    ScreenOn,
+    /// `jht screen off --json`: turns it off and removes its container.
+    ScreenOff,
     CleanImages,
     /// `jht providers plan --json`: the plans of the active provider, the declared one, the suggestion.
     ProviderPlans,
@@ -186,7 +192,7 @@ pub(crate) enum LocalCliOperation {
 }
 
 impl LocalCliOperation {
-    fn argv(self) -> Vec<&'static str> {
+    pub(crate) fn argv(self) -> Vec<&'static str> {
         match self {
             Self::Up => vec!["up"],
             Self::Status => vec!["status"],
@@ -203,6 +209,9 @@ impl LocalCliOperation {
             Self::LinkedinLogin => vec!["linkedin", "login"],
             Self::LinkedinLoginStop => vec!["linkedin", "login", "--stop"],
             Self::LinkedinStatus => vec!["linkedin", "status", "--json"],
+            Self::ScreenStatus => vec!["screen", "status", "--json"],
+            Self::ScreenOn => vec!["screen", "on", "--json"],
+            Self::ScreenOff => vec!["screen", "off", "--json"],
             Self::CleanImages => vec!["clean-images", "--json"],
             Self::ProviderPlans => vec!["providers", "plan", "--json"],
             Self::ProviderPlanSet(id) => vec!["providers", "plan", id, "--json"],
@@ -228,6 +237,9 @@ impl LocalCliOperation {
             Self::LinkedinLogin => "linkedin-login",
             Self::LinkedinLoginStop => "linkedin-login-stop",
             Self::LinkedinStatus => "linkedin-status",
+            Self::ScreenStatus => "screen-status",
+            Self::ScreenOn => "screen-on",
+            Self::ScreenOff => "screen-off",
             Self::CleanImages => "clean-images",
             Self::ProviderPlans => "provider-plans",
             Self::ProviderPlanSet(_) => "provider-plan-set",
@@ -2754,6 +2766,17 @@ pub(crate) fn run_linkedin_command(
     }
 }
 
+/// One operation of the attested wrapper of THIS computer, for the account's scope (the live screen's switch, screen_control.rs).
+pub(crate) fn run_local_operation(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    operation: LocalCliOperation,
+    timeout: Duration,
+) -> Result<ProcessResult, &'static str> {
+    let wrapper = wrapper_path(app).ok_or_else(|| runtime_refusal(app))?;
+    run_scoped_local(app, scope, &wrapper, operation, timeout)
+}
+
 /// The host's `jht` with arguments built at run time and an optional stdin:
 /// the attested wrapper on this computer, `jht` over SSH on a VPS. Every
 /// argument is single-quoted in the remote command; secrets go only on
@@ -3473,7 +3496,7 @@ fn native_team_snapshot_with(
         limits_verified: None,
         local_host: None,
     };
-    const METADATA: &[u8] = br#"const fs=require('fs');let config={};try{config=JSON.parse(fs.readFileSync('/jht_home/jht.config.json','utf8'))}catch{}const provider=String(config.active_provider||'').toLowerCase();const providers=config.providers||{};const entry=providers[provider]||{};const configured=['claude','anthropic','codex','openai','kimi','moonshot'].includes(provider)&&(entry.auth_method||'subscription')==='subscription';const piOk=(p)=>{try{const s=fs.lstatSync(p);if(!s.isFile()||s.size<=0||s.size>262144)return false;const d=JSON.parse(fs.readFileSync(p,'utf8'));return!!d&&typeof d==='object'&&!Array.isArray(d)&&['openai'].some((n)=>!!d[n]&&typeof d[n]==='object'&&Object.keys(d[n]).length>0)}catch{return false}};const openaiMarker=config.harness==='pi'?'/jht_home/.pi/agent/auth.json':'/jht_home/.codex/auth.json';const markers={claude:'/jht_home/.claude/.credentials.json',anthropic:'/jht_home/.claude/.credentials.json',codex:openaiMarker,openai:openaiMarker,kimi:'/jht_home/.kimi/credentials/kimi-code.json',moonshot:'/jht_home/.kimi/credentials/kimi-code.json'};process.stdout.write(`${configured?1:0} ${markers[provider]&&(config.harness==='pi'&&(provider==='openai'||provider==='codex')?piOk(markers[provider]):fs.existsSync(markers[provider]))?1:0} ${fs.existsSync('/jht_home/profile/welcomed.flag')?1:0}`);"#;
+    const METADATA: &[u8] = br#"const fs=require('fs');let config={};try{config=JSON.parse(fs.readFileSync('/jht_home/jht.config.json','utf8'))}catch{}const provider=String(config.active_provider||'').toLowerCase();const providers=config.providers||{};const entry=providers[provider]||{};const piApi=config.harness==='pi'&&['glm','kimi','moonshot'].includes(provider);const keyThere=(()=>{const ref=entry.api_key_ref;if(ref&&typeof ref==='object'&&ref.source==='file'){try{const p=String(ref.path||'');const s=fs.lstatSync(p);return p.startsWith('/')&&s.isFile()&&s.size>0&&s.size<=4096}catch{return false}}return !!ref||!!entry.api_key})();const configured=piApi?entry.auth_method==='api_key':(['claude','anthropic','codex','openai','kimi','moonshot'].includes(provider)&&(entry.auth_method||'subscription')==='subscription');const piOk=(p)=>{try{const s=fs.lstatSync(p);if(!s.isFile()||s.size<=0||s.size>262144)return false;const d=JSON.parse(fs.readFileSync(p,'utf8'));return!!d&&typeof d==='object'&&!Array.isArray(d)&&['openai'].some((n)=>!!d[n]&&typeof d[n]==='object'&&Object.keys(d[n]).length>0)}catch{return false}};const openaiMarker=config.harness==='pi'?'/jht_home/.pi/agent/auth.json':'/jht_home/.codex/auth.json';const markers={claude:'/jht_home/.claude/.credentials.json',anthropic:'/jht_home/.claude/.credentials.json',codex:openaiMarker,openai:openaiMarker,kimi:'/jht_home/.kimi/credentials/kimi-code.json',moonshot:'/jht_home/.kimi/credentials/kimi-code.json'};process.stdout.write(`${configured?1:0} ${(piApi?keyThere:markers[provider]&&(config.harness==='pi'&&(provider==='openai'||provider==='codex')?piOk(markers[provider]):fs.existsSync(markers[provider])))?1:0} ${fs.existsSync('/jht_home/profile/welcomed.flag')?1:0}`);"#;
 
     let command = |words: &[&str]| words.iter().map(OsString::from).collect::<Vec<_>>();
     let started = Instant::now();

@@ -40,7 +40,7 @@ export const createRfb: ConnectionFactory = async (target, url, options) => {
 
 const WAITING_COPY: Record<"not_running" | "disconnected" | "rejected", string> = {
   not_running:
-    "Lo schermo del CLOSER non è acceso. Avvia il container jht: la finestra si collega da sola.",
+    "Lo schermo del CLOSER non è acceso. Accendilo con «jht screen on»: la finestra si collega da sola.",
   disconnected: "Collegamento interrotto. Nuovo tentativo tra pochi secondi…",
   rejected: "Lo schermo si è riavviato con una nuova chiave. Mi ricollego…",
 };
