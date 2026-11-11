@@ -8,6 +8,7 @@ import {
   mailtoForSetupSupport,
   SETUP_SUPPORT_MAILTO_MAX,
   showSupportReportsFolder,
+  operatingSystem,
 } from "./onboarding-support";
 
 const native = vi.hoisted(() => ({ tauri: false, invoke: vi.fn(async (..._args: unknown[]): Promise<unknown> => null) }));
@@ -279,5 +280,22 @@ describe("the redaction of the support reports", () => {
     expect(value.preview).not.toMatch(/\]\]/);
     expect(value.payload.diagnostics).toBe(value.preview);
     for (const piece of SECRET_PIECES) expect(value.preview, piece).not.toContain(piece);
+  });
+});
+
+describe("the operating system line of a report", () => {
+  const ua = (release: string) => `Mozilla/5.0 (Macintosh; Intel Mac OS X ${release}) AppleWebKit/605.1.15 (KHTML, like Gecko)`;
+
+  it("does not pass 10.15.7 off as the version of a Mac: WebKit keeps that number on every newer macOS", () => {
+    const line = operatingSystem(ua("10_15_7"));
+    expect(line).toContain("webview reports 10.15.7");
+    expect(line).toContain("the real one is unknown");
+    expect(line).not.toBe("macOS 10.15.7");
+  });
+
+  it("keeps any other number as it is, and the other systems", () => {
+    expect(operatingSystem(ua("13_6_1"))).toBe("macOS 13.6.1");
+    expect(operatingSystem("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")).toBe("Windows 10.0");
+    expect(operatingSystem("Mozilla/5.0 (X11; Linux x86_64)")).toBe("Linux (version unavailable)");
   });
 });
