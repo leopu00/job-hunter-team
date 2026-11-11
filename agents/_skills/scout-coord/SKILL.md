@@ -24,12 +24,12 @@ python3 /app/shared/skills/scout_coord.py doctor
 ## Step 1 — Discover peers
 
 ```bash
-tmux list-sessions 2>/dev/null | awk -F: '{print $1}' | grep -E '^SCOUT-[0-9]+$'
+python3 /app/shared/skills/scout_coord.py auto $MY_ID   # first burst: your lane + first search
 ```
 
-If you are the only scout listed → no negotiation needed, claim everything you can handle. Skip to Step 4.
+In the first burst the plan decides, nobody negotiates: this prints your lane (`areas`, `sources`) and your first search. Start searching at once; skip Steps 2-3. Stay in your lane, then `scout_coverage.py next --agent $MY_ID`.
 
-If others are listed → you must negotiate (Steps 2-3) before scraping anything.
+Negotiate (Steps 2-3) only after the burst, when a source is exhausted or a colleague stopped: list the peers with `tmux list-sessions | awk -F: '{print $1}' | grep -E '^SCOUT-[0-9]+$'`; alone → Step 4.
 
 ## Step 2 — Reset stale state
 

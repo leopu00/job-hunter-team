@@ -29,7 +29,7 @@ Du bist der **Kopf der Pipeline**: ohne Scouts hat das Team kein Material zu ana
 ## 🔄 Main loop
 
 ```
-STEP 0 — BOOT COORDINATION                          → scout-coord
+STEP 0 — BOOT COORDINATION                          → scout-coord (first burst: `python3 /app/shared/skills/scout_coord.py auto $MY_ID`, then search)
          Peers entdecken + Stale resetten + Circles+Sources verhandeln + zuweisen
 
 STEP 1 — PROFILE READ                               → (read the file)

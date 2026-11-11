@@ -5,6 +5,24 @@
   "xing-jobs",
   "bundesagentur-fuer-arbeit"
  ],
+ "avoid": [
+  {
+   "source": "eures",
+   "why": "JavaScript app, old endpoints answer 404 (3 runs)"
+  },
+  {
+   "source": "duckduckgo",
+   "why": "bot challenge 403: a search engine is not a source"
+  },
+  {
+   "source": "smartrecruiters-search",
+   "why": "JavaScript page, API paths answer 404"
+  },
+  {
+   "source": "welcome-to-the-jungle",
+   "why": "JavaScript shell, no ads in the static page (11/11)"
+  }
+ ],
  "level_terms": {
   "sv": [
    "junior",
@@ -742,8 +760,9 @@
     "name": "InfoJobs Italy",
     "country": "it",
     "tier": "core",
-    "access": "search",
-    "host": "infojobs.it"
+    "access": "closed",
+    "host": "infojobs.it",
+    "hint": "Closed: InfoJobs Italy has shut down, infojobs.it shows a goodbye page. Seen on the runs of 10/11 and 11/11. Log nothing there."
    },
    {
     "slug": "monster-it",
@@ -758,8 +777,9 @@
     "name": "Cliclavoro",
     "country": "it",
     "tier": "minor",
-    "access": "search",
-    "host": "cliclavoro.gov.it"
+    "access": "closed",
+    "host": "cliclavoro.gov.it",
+    "hint": "Closed to the Scout's tools: the search is a form that returns a page with no results in it (11/11). Log nothing there."
    }
   ],
   "es": [
@@ -923,9 +943,10 @@
     "name": "IrishJobs",
     "country": "ie",
     "tier": "core",
-    "access": "search",
+    "access": "closed",
     "host": "irishjobs.ie",
-    "portal_language": "en"
+    "portal_language": "en",
+    "hint": "Closed to programs: answers 403 to every request. Seen on the runs of 10/11 and 11/11. Log nothing there."
    },
    {
     "slug": "thehub",
@@ -1116,7 +1137,7 @@
     "tier": "core",
     "access": "search",
     "host": "himalayas.app",
-    "hint": "403 seen only from the Mac on 02/11 (another network): to try. The Scout closes it on the field with --status closed."
+    "hint": "Take the list and the text of every ad from the public jobs API (himalayas.app/jobs/api, allowed by its robots.txt): the ad pages answer 403 to programs, do not open them."
    },
    {
     "slug": "working-nomads",
@@ -1127,7 +1148,8 @@
     "host": "workingnomads.com",
     "aliases": [
      "workingnomads"
-    ]
+    ],
+    "hint": "Public JSON list at workingnomads.com/api/exposed_jobs/ (its robots.txt allows everything): read it whole and filter against the profile."
    },
    {
     "slug": "jobspresso",
@@ -1150,8 +1172,9 @@
     "name": "Jobgether",
     "country": "remote",
     "tier": "minor",
-    "access": "search",
-    "host": "jobgether.com"
+    "access": "closed",
+    "host": "jobgether.com",
+    "hint": "Closed to the Scout's tools: the page is a JavaScript shell, the ads are not in it (11/11). Log nothing there."
    },
    {
     "slug": "flexjobs",
