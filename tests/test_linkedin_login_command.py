@@ -3,10 +3,12 @@ the three containers of the profile `login` started only by `login`, the line th
 contract and nothing else, the state of the engine. Same fake engine and compose as test_integration_screen.py; the view is a fake too."""
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import stat
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -15,23 +17,28 @@ from test_integration_command import LIBRARY, host, wrapper_functions  # noqa: F
 DIGEST = "sha256:" + "e" * 64
 REF = f"ghcr.io/leopu00/jht@{DIGEST}"
 TOKEN = "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_AbCdE"
+PROFILE_SOURCE = Path(__file__).resolve().parents[1] / "shared" / "login" / "seccomp" / "jht-login.json"
+PROFILE_SHA256 = hashlib.sha256(PROFILE_SOURCE.read_bytes()).hexdigest()
 GOOD = ('{"ok": true, "port": 6081, "path": "/websockify", "token": "%s", "expires_at": "2026-11-11T10:00:00Z", "session": "a1b2c3d4e5f6"}' % TOKEN)
 
 
-def run(host, args: str, **env) -> subprocess.CompletedProcess:
+def run(host, args: str, runtime_dir=None, **env) -> subprocess.CompletedProcess:
+    runtime_dir = runtime_dir or host.runtime
+    env = {"TEST_RUNTIME_DIR": str(runtime_dir), **env}
     script = f"""
 set -euo pipefail
 HOST_KERNEL="$(uname -s)"; HOST_UID="$(id -u)"
 err() {{ echo "error: $*" >&2; }}; info() {{ echo "info: $*" >&2; }}
-RUNTIME_DIR="{host.runtime}"; COMPOSE_FILE="{host.compose}"
+RUNTIME_DIR="$TEST_RUNTIME_DIR"; COMPOSE_FILE="{host.compose}"
 BROKER_SERVICE=jht-broker; TELEGRAM_SERVICE=jht-telegram; JHT_HOST_TYPE=local
-{wrapper_functions("runtime_stat", "runtime_node_safe")}
+{wrapper_functions("runtime_stat", "runtime_node_safe", "runtime_sha256")}
 compose_project_name() {{ echo jht; }}
 docker_reachable() {{ docker info >/dev/null 2>&1; }}
 require_docker() {{ docker_reachable || {{ err "motore spento"; exit 1; }}; }}
 read_only_service_id() {{ grep -qx "$1" "$FAKE_RUNNING" && {{ echo "id-$1"; return 0; }}; return 3; }}
 compose() {{
   printf 'COMPOSE profiles=%s image=%s %s\\n' "${{COMPOSE_PROFILES:-}}" "${{JHT_EXTRAS_IMAGE:-}}" "$*" >> "$FAKE_LOG"
+  [ -z "${{COMPOSE_EXTRA_FILE:-}}" ] || printf 'COMPOSE_EXTRA %s\\n' "$COMPOSE_EXTRA_FILE" >> "$FAKE_LOG"
   [ -z "${{FAKE_COMPOSE_FAIL:-}}" ] || return 1
   if [ "$1" = run ]; then echo "${{FAKE_CHECK_WORD:-login_required}}"; return 0; fi
   case "$1" in
@@ -49,6 +56,7 @@ docker() {{
       esac ;;
     inspect) [ -z "${{FAKE_EXIT_CODE:-}}" ] || echo "$FAKE_EXIT_CODE" ;;
     image) [ -z "${{FAKE_NO_IMAGE:-}}" ] && return 0 || return 1 ;;
+    run) case "$*" in *"--entrypoint cat "*) cat "${{FAKE_PROFILE_SRC:-{PROFILE_SOURCE}}}" ;; esac; [ -z "${{FAKE_PROFILE_FAIL:-}}" ] || return 1 ;;
     info|pull|rmi|volume) : ;;
   esac
   return 0
@@ -200,3 +208,165 @@ def test_anything_else_is_the_usage_with_code_2_and_the_engine_is_not_asked(host
     done = run(host, args)
     assert done.returncode == 2 and "uso: jht linkedin" in done.stderr
     assert host.log.read_text() == ""
+
+
+# ── the seccomp profile of the browser on Docker ─────────────────────────────────────────────────────────────────────────────────────────
+
+
+def test_the_helper_holds_the_digest_of_the_profile_of_the_repository():
+    from test_integration_command import LIBRARY as library
+    text = Path(library).read_text(encoding="utf-8")
+    assert re.search(r'^LOGIN_SECCOMP_SHA256="%s"$' % PROFILE_SHA256, text, re.M), "the profile changed: the digest in the helper goes with it"
+    assert 'LOGIN_SECCOMP_IN_IMAGE="/app/shared/login/seccomp/jht-login.json"' in text
+
+
+def test_on_docker_the_profile_comes_from_the_image_into_the_runtime_folder_and_only_the_login_service_gets_it(host):
+    done = run(host, "login", FAKE_GRANT=GOOD)
+    assert done.returncode == 0, done.stderr
+    target, overlay = host.runtime / "jht-login-seccomp.json", host.runtime / "docker-compose.login-seccomp.yml"
+    assert hashlib.sha256(target.read_bytes()).hexdigest() == PROFILE_SHA256 and stat.S_IMODE(target.stat().st_mode) == 0o644
+    assert overlay.read_text() == f'services:\n  jht-login:\n    security_opt:\n      - "seccomp:{target}"\n'
+    log = host.log.read_text().splitlines()
+    extraction = next(line for line in log if line.startswith("DOCKER run "))
+    for flag in ("--rm", "--network none", "--read-only", "--cap-drop ALL", "--security-opt no-new-privileges", "--user 1001:1001", "--entrypoint cat"):
+        assert flag in extraction
+    assert extraction.endswith(f"{REF} /app/shared/login/seccomp/jht-login.json")
+    up = log.index(f"COMPOSE profiles=login image={REF} up -d jht-login-proxy jht-login-view jht-login")
+    assert log[up + 1] == f"COMPOSE_EXTRA {overlay}"
+    assert not [line for line in log if line.startswith("COMPOSE_EXTRA") and line != f"COMPOSE_EXTRA {overlay}"]
+    assert [p.name for p in host.runtime.iterdir() if ".XXXX" in p.name or p.suffix not in (".json", ".yml", "")] == []
+
+
+def test_a_copy_that_matches_is_used_as_it_is_and_one_that_does_not_is_taken_again_from_the_image(host):
+    first = run(host, "login", FAKE_GRANT=GOOD)
+    assert first.returncode == 0
+    host.log.write_text("")
+    host.running.write_text("")
+    second = run(host, "login", FAKE_GRANT=GOOD)
+    assert second.returncode == 0 and "DOCKER run " not in host.log.read_text(), "a good copy is not fetched again"
+    (host.runtime / "jht-login-seccomp.json").write_text('{"defaultAction": "SCMP_ACT_ALLOW"}\n')  # an altered copy
+    host.log.write_text("")
+    host.running.write_text("")
+    third = run(host, "login", FAKE_GRANT=GOOD)
+    assert third.returncode == 0 and "DOCKER run " in host.log.read_text()
+    assert hashlib.sha256((host.runtime / "jht-login-seccomp.json").read_bytes()).hexdigest() == PROFILE_SHA256
+
+
+def test_an_image_whose_profile_is_not_the_attested_one_stops_the_login_and_leaves_nothing_behind(host, tmp_path):
+    other = tmp_path / "other.json"
+    other.write_text('{"defaultAction": "SCMP_ACT_ALLOW"}\n')
+    done = run(host, "login", FAKE_GRANT=GOOD, FAKE_PROFILE_SRC=str(other))
+    assert done.returncode == 1 and last_line(done) == {"ok": False, "reason": "chromium_sandbox_unavailable"}
+    assert "up -d" not in host.log.read_text()
+    assert not (host.runtime / "jht-login-seccomp.json").exists() and not (host.runtime / "docker-compose.login-seccomp.yml").exists()
+    assert sorted(p.name for p in host.runtime.iterdir()) == ["docker-compose.yml"]
+
+
+def test_an_image_that_does_not_answer_stops_the_login_the_same_way(host):
+    done = run(host, "login", FAKE_GRANT=GOOD, FAKE_PROFILE_FAIL="1")
+    assert done.returncode == 1 and last_line(done) == {"ok": False, "reason": "chromium_sandbox_unavailable"}
+    assert "up -d" not in host.log.read_text()
+
+
+@pytest.mark.parametrize("which", ["profile", "overlay"])
+def test_a_link_in_the_place_of_the_profile_or_of_the_overlay_stops_the_login_and_is_not_followed(host, tmp_path, which):
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.write_text("not ours\n")
+    name = "jht-login-seccomp.json" if which == "profile" else "docker-compose.login-seccomp.yml"
+    (host.runtime / name).symlink_to(elsewhere)
+    done = run(host, "login", FAKE_GRANT=GOOD)
+    assert done.returncode == 1 and last_line(done) == {"ok": False, "reason": "chromium_sandbox_unavailable"}
+    assert elsewhere.read_text() == "not ours\n" and "up -d" not in host.log.read_text()
+
+
+def _runtime_named(host, tmp_path, *parts):
+    folder = tmp_path.joinpath(*parts)
+    folder.mkdir(parents=True, mode=0o700)
+    (folder / "docker-compose.yml").write_text(host.compose.read_text())
+    return folder
+
+
+@pytest.mark.parametrize("parts", [("with space",), ("Library", "Application Support", "Job Hunter Team", "host-runtime"), ("quote's",), ("caf\u00e9",)])
+def test_a_runtime_folder_with_spaces_or_accents_works_the_default_folder_of_a_mac_has_two_spaces(host, tmp_path, parts):
+    folder = _runtime_named(host, tmp_path, *parts)
+    done = run(host, "login", runtime_dir=str(folder), FAKE_GRANT=GOOD)
+    assert done.returncode == 0, done.stderr
+    target = folder / "jht-login-seccomp.json"
+    assert hashlib.sha256(target.read_bytes()).hexdigest() == PROFILE_SHA256
+    overlay = folder / "docker-compose.login-seccomp.yml"
+    assert overlay.read_text() == f'services:\n  jht-login:\n    security_opt:\n      - "seccomp:{target}"\n'
+    import yaml
+    assert yaml.safe_load(overlay.read_text())["services"]["jht-login"]["security_opt"] == [f"seccomp:{target}"]
+    assert f"COMPOSE_EXTRA {overlay}" in host.log.read_text().splitlines()
+
+
+@pytest.mark.parametrize("name", ['with"quote', "with$dollar", "with:colon", "with\\backslash", "with#hash", "with\nnewline", "with\ttab", "with\x01ctl"])
+def test_a_runtime_folder_whose_name_would_end_or_change_the_yaml_string_stops_the_login(host, tmp_path, name):
+    folder = _runtime_named(host, tmp_path, name)
+    done = run(host, "login", runtime_dir=str(folder), FAKE_GRANT=GOOD)
+    assert done.returncode == 1 and last_line(done) == {"ok": False, "reason": "chromium_sandbox_unavailable"}
+    assert "up -d" not in host.log.read_text() and not (folder / "jht-login-seccomp.json").exists()
+
+
+def test_a_relative_runtime_folder_stops_the_login(host):
+    done = run(host, "login", runtime_dir="relative/runtime", FAKE_GRANT=GOOD)
+    assert done.returncode == 1 and last_line(done) == {"ok": False, "reason": "chromium_sandbox_unavailable"}
+
+
+def test_on_podman_nothing_of_this_happens_the_default_profile_of_the_engine_stays(host):
+    done = run(host, "login", FAKE_GRANT=GOOD, CONTAINER_RUNTIME="podman")
+    assert done.returncode == 0, done.stderr
+    log = host.log.read_text()
+    assert "DOCKER run " not in log and "COMPOSE_EXTRA" not in log
+    assert not (host.runtime / "jht-login-seccomp.json").exists() and not (host.runtime / "docker-compose.login-seccomp.yml").exists()
+
+
+def test_the_profile_is_never_asked_for_by_stop_or_status(host):
+    for args in ("login --stop", "status --json"):
+        run(host, args)
+    log = host.log.read_text()
+    assert "DOCKER run " not in log and "COMPOSE_EXTRA" not in log
+
+
+def _compose_file_run(host, extra: str, runtime: str = "docker") -> subprocess.CompletedProcess:
+    script = f"""
+set -u
+err() {{ echo "error: $*" >&2; }}
+RUNTIME_DIR="{host.runtime}"; CONTAINER_RUNTIME={runtime}; COMPOSE_EXTRA_FILE="{extra}"
+compose_project_name() {{ echo jht; }}
+docker() {{ printf 'DOCKER %s\\n' "$*"; }}
+{wrapper_functions("compose_file_run")}
+compose_file_run "{host.compose}" up -d jht-login
+"""
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30)
+
+
+def test_docker_compose_gets_the_overlay_as_a_second_file_only_when_it_is_the_one_the_helper_makes(host):
+    overlay = host.runtime / "docker-compose.login-seccomp.yml"
+    overlay.write_text("services: {}\n")
+    done = _compose_file_run(host, str(overlay))
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == f"DOCKER compose -f {host.compose} -f {overlay} --project-directory {host.runtime} up -d jht-login"
+    none = _compose_file_run(host, "")
+    assert none.stdout.strip() == f"DOCKER compose -f {host.compose} --project-directory {host.runtime} up -d jht-login"
+
+
+@pytest.mark.parametrize("extra", ["/etc/passwd", "relative.yml", "$RUNTIME_DIR/other.yml", "$RUNTIME_DIR/docker-compose.login-seccomp.yml.bak"])
+def test_any_other_value_of_the_variable_starts_nothing(host, extra):
+    done = _compose_file_run(host, extra.replace("$RUNTIME_DIR", str(host.runtime)))
+    assert done.returncode == 1 and done.stdout == "" and "COMPOSE_EXTRA_FILE" in done.stderr
+
+
+def test_the_overlay_that_is_a_link_or_is_not_there_starts_nothing(host, tmp_path):
+    overlay = host.runtime / "docker-compose.login-seccomp.yml"
+    assert _compose_file_run(host, str(overlay)).returncode == 1  # not there
+    target = tmp_path / "elsewhere.yml"
+    target.write_text("services: {}\n")
+    overlay.symlink_to(target)
+    done = _compose_file_run(host, str(overlay))
+    assert done.returncode == 1 and done.stdout == ""
+
+
+def test_the_wrapper_forgets_what_the_environment_says_about_the_variable():
+    text = (Path(__file__).resolve().parents[1] / "scripts" / "jht-wrapper.sh").read_text(encoding="utf-8")
+    assert re.search(r'^COMPOSE_EXTRA_FILE=""', text, re.M)

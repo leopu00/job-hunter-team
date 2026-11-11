@@ -73,6 +73,7 @@ else
   RUNTIME_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/job-hunter-team/host-runtime"
 fi
 COMPOSE_FILE="${JHT_COMPOSE_FILE:-$RUNTIME_DIR/docker-compose.yml}"
+COMPOSE_EXTRA_FILE=""  # never taken from the environment: only jht-integration.sh sets it, for one call, to the seccomp overlay of the sign-in
 NODE_ENTRY="${JHT_NODE_ENTRY:-/app/cli/bin/jht.js}"
 HOST_SETUP_SCRIPT="${JHT_HOST_SETUP_SCRIPT:-$RUNTIME_DIR/host-setup.sh}"
 RUNTIME_MANIFEST="$RUNTIME_DIR/.runtime-integrity"
@@ -1647,7 +1648,15 @@ compose_file_run() {
   # Il project Docker/VPS storico deriva da --project-directory. Non migrarlo
   # implicitamente al literal Podman: un secondo project colliderebbe sul
   # container_name jht senza poter adottare il runtime esistente.
-  MSYS_NO_PATHCONV=1 docker compose -f "$file" --project-directory "$RUNTIME_DIR" "$@"
+  # One more file, and only this one: the overlay that gives jht-login its seccomp profile on Docker (jht-integration.sh makes it). Whatever
+  # else is in COMPOSE_EXTRA_FILE is not a compose file of ours, and nothing is started.
+  case "${COMPOSE_EXTRA_FILE:-}" in
+    '') MSYS_NO_PATHCONV=1 docker compose -f "$file" --project-directory "$RUNTIME_DIR" "$@" ;;
+    "$RUNTIME_DIR/docker-compose.login-seccomp.yml")
+      [ -f "$COMPOSE_EXTRA_FILE" ] && [ ! -L "$COMPOSE_EXTRA_FILE" ] || { err "L'overlay seccomp dell'accesso non e' un file normale."; return 1; }
+      MSYS_NO_PATHCONV=1 docker compose -f "$file" -f "$COMPOSE_EXTRA_FILE" --project-directory "$RUNTIME_DIR" "$@" ;;
+    *) err "COMPOSE_EXTRA_FILE non e' l'overlay seccomp dell'accesso: non faccio niente."; return 1 ;;
+  esac
 }
 
 compose() {

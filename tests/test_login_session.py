@@ -256,6 +256,45 @@ def test_the_supervisor_stops_what_it_started_when_it_ends(fakes, monkeypatch):
     assert left == []
 
 
+@pytest.mark.parametrize("relative", ls.RESTORE_STATE)
+def test_the_files_the_browser_restores_its_tabs_from_are_removed_and_the_cookies_stay(tmp_path, relative):
+    profile = tmp_path / "profile"
+    target = profile / relative
+    if relative.endswith("Sessions"):
+        target.mkdir(parents=True)
+        (target / "Session_1").write_bytes(b"typed text")
+    else:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"typed text")
+    cookies = profile / "Default" / "Network" / "Cookies"
+    make_cookies(cookies, [(".linkedin.com", "li_at", 0)])
+    ls.forget_restore_state(str(profile))
+    assert not target.exists()
+    assert cookies.is_file() and ls.logged_in(str(profile))
+
+
+def test_a_link_in_the_place_of_a_restore_file_is_left_alone_and_not_followed(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "precious").write_text("keep")
+    profile = tmp_path / "profile" / "Default"
+    profile.mkdir(parents=True)
+    (profile / "Sessions").symlink_to(outside)
+    ls.forget_restore_state(str(tmp_path / "profile"))
+    assert (outside / "precious").read_text() == "keep" and (profile / "Sessions").is_symlink()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="unix sockets and programs on the PATH")
+def test_the_supervisor_removes_the_restore_state_after_the_browser_has_closed(fakes, monkeypatch):
+    make_cookies(fakes.profile / "Default" / "Network" / "Cookies", [(".linkedin.com", "li_at", int(time.time() * 1e6) + ls.CHROME_UNIX_EPOCH_US + 10**12)])
+    sessions = fakes.profile / "Default" / "Sessions"
+    sessions.mkdir(parents=True)
+    (sessions / "Session_1").write_bytes(b"typed text")
+    assert _run(fakes) == 0
+    assert not sessions.exists()
+    assert (fakes.dir / "hint").read_text() == "logged_in\n"
+
+
 def test_the_main_refuses_the_wrong_number_of_arguments():
     assert ls.main([]) == 2 and ls.main(["a", "b", "c"]) == 2
 
