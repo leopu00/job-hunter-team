@@ -45,6 +45,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -112,8 +113,38 @@ def entry_keys(entry: dict) -> frozenset:
     return frozenset({_lang.portal_slug(entry["slug"])} | {_lang.portal_slug(a) for a in entry.get("aliases", [])})
 
 
-def build_plan(spoken: dict, mode: str = "", data: dict | None = None) -> dict:
-    """{languages, unmapped, remote, entries}: the portals to cover, core ones of every group first."""
+WORK_RIGHT_WORDS = {"gb": re.compile(r"\b(gb|uk|u\.k\.|united kingdom|great britain|british)\b", re.I)}
+
+
+def work_rights(profile_path=None) -> frozenset:
+    """The countries (`gb`) where the profile says the person already has the right to work: `work_authorization` (top level or
+    under `preferences`/`candidate`), each item's `region` or `status`. Empty when the profile or the field cannot be read: no
+    right is ever assumed."""
+    path = Path(profile_path) if profile_path else Path(os.environ.get("JHT_HOME") or str(Path.home() / ".jht")) / "profile" / "candidate_profile.yml"
+    try:
+        import yaml
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception:  # noqa: BLE001
+        return frozenset()
+    raw = None
+    if isinstance(data, dict):
+        for holder in (data, data.get("preferences"), data.get("candidate")):
+            if isinstance(holder, dict) and holder.get("work_authorization") is not None:
+                raw = holder["work_authorization"]
+                break
+    items = raw if isinstance(raw, list) else ([raw] if raw else [])
+    found = set()
+    for item in items:
+        text = " ".join(str(v) for v in item.values()) if isinstance(item, dict) else str(item)
+        for country, pattern in WORK_RIGHT_WORDS.items():
+            if pattern.search(text):
+                found.add(country)
+    return frozenset(found)
+
+
+def build_plan(spoken: dict, mode: str = "", data: dict | None = None, rights=frozenset()) -> dict:
+    """{languages, unmapped, remote, entries}: the portals to cover, core ones of every group first. A portal that needs a right
+    to work (`needs_work_right`) is left out unless `rights` (see `work_rights`) has it, and `skipped` says which country it was."""
     data = data or table()
     strong = sorted(_lang.business_languages(spoken), key=lambda code: (-spoken[code], code))
     groups = [code for code in strong if code != "en"]
@@ -122,13 +153,16 @@ def build_plan(spoken: dict, mode: str = "", data: dict | None = None) -> dict:
     remote = bool(strong) and not any(word in mode for word in REMOTE_BLOCKERS)
     if remote:
         groups.append("remote")
-    entries, unmapped = [], []
+    entries, unmapped, skipped = [], [], set()
     for rank, code in enumerate(groups):
         listed = data["groups"].get(code)
         if not listed:
             unmapped.append(code)
             continue
         for order, item in enumerate(listed):
+            if item.get("needs_work_right") and item["needs_work_right"] not in rights:
+                skipped.add(item["needs_work_right"])
+                continue
             entry = dict(item)
             entry["language"] = code
             entry["portal_language"] = _portal_language(code, item)
@@ -138,7 +172,7 @@ def build_plan(spoken: dict, mode: str = "", data: dict | None = None) -> dict:
     for position, entry in enumerate(entries, 1):
         entry.pop("_rank")
         entry["priority"] = position
-    return {"languages": strong, "unmapped": unmapped, "remote": remote, "entries": entries}
+    return {"languages": strong, "unmapped": unmapped, "remote": remote, "entries": entries, "skipped_no_work_right": sorted(skipped)}
 
 
 def _portal_language(group: str, item: dict) -> str:
@@ -459,7 +493,7 @@ def default_since(now: float) -> float:
 
 
 def load_plan(profile_path=None) -> dict:
-    return build_plan(_lang.read_languages(profile_path), work_mode(profile_path))
+    return build_plan(_lang.read_languages(profile_path), work_mode(profile_path), rights=work_rights(profile_path))
 
 
 def rows_since(since_ts: float) -> list:

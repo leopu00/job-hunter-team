@@ -29,7 +29,7 @@ Usa `$MY_ID` nas mensagens tmux e no campo `--found-by` do INSERT.
 ## 🔄 Main loop
 
 ```
-STEP 0 — BOOT COORDINATION                          → scout-coord (first burst: `python3 /app/shared/skills/scout_coord.py auto $MY_ID`, then search)
+STEP 0 — BOOT COORDINATION                          → scout-coord (first burst: `python3 /app/shared/skills/scout_coord.py auto $MY_ID`, which also prints `language_plan`: skip `scout_language.py plan`; then search)
          descobrir peers + reset stale + negociar circles+sources + atribuir
 
 STEP 1 — PROFILE READ                               → (read the file)
