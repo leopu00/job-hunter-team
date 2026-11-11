@@ -941,10 +941,14 @@ def test_a_failed_compose_up_stops_jht_with_its_code_and_nothing_after_it_runs(t
 
 def test_every_compose_up_of_the_wrapper_is_followed_by_its_exit_code_check():
     lines = WRAPPER.read_text(encoding="utf-8").splitlines()
+    # Ensure-Up keeps the compose lines (it starts the team for another command); `jht up` and `jht recreate` say the phase only
+    # (Invoke-ComposeQuiet) and check the code compose gave
     ups = [i for i, line in enumerate(lines) if line.strip() == "Invoke-Compose 'up' '-d'"]
-    assert len(ups) == 3
+    assert len(ups) == 1
     for i in ups:
         assert lines[i + 1].strip() == "Stop-OnFailedComposeUp $LASTEXITCODE", lines[i + 1]
+    quiet = [i for i, line in enumerate(lines) if line.strip() == "Stop-OnFailedComposeUp (Invoke-ComposeQuiet 'up' '-d')"]
+    assert len(quiet) == 2
 
 
 # ---------------------------------------------------------------------------
@@ -980,7 +984,7 @@ def _up_in_turn(tmp_path, *, runtime: str = "podman", fail: str = "", compose: P
         marker.write_text("", encoding="utf-8")
     _fake(bin_dir, "docker", COMPOSE_TURN_CASES)
     result, calls = _run(
-        tmp_path, WRAPPER, ["Invoke-PodmanServicesUpInTurn", "Invoke-Compose", "Stop-OnFailedComposeUp", "Write-Err"], UP_IN_TURN_BODY,
+        tmp_path, WRAPPER, ["Invoke-PodmanServicesUpInTurn", "Invoke-ComposeQuiet", "Invoke-Compose", "Stop-OnFailedComposeUp", "Write-Err"], UP_IN_TURN_BODY,
         {"RUNTIME": runtime, "FAKE_FAIL": fail, "COMPOSE_UNDER_TEST": str(compose), "MARKER_UNDER_TEST": str(marker)},
     )
     return result, [call[call.index(" up ") + 1:] if " up " in call else call for call in calls]
@@ -1021,7 +1025,7 @@ def test_a_compose_file_without_the_services_gets_the_whole_up_alone(tmp_path):
 
 def test_every_whole_compose_up_of_the_wrapper_comes_after_the_services_in_turn():
     lines = WRAPPER.read_text(encoding="utf-8").splitlines()
-    ups = [i for i, line in enumerate(lines) if line.strip() == "Invoke-Compose 'up' '-d'"]
+    ups = [i for i, line in enumerate(lines) if line.strip() in ("Invoke-Compose 'up' '-d'", "Stop-OnFailedComposeUp (Invoke-ComposeQuiet 'up' '-d')")]
     assert len(ups) == 3
     for i in ups:
         assert lines[i - 1].strip() == "Stop-OnFailedComposeUp (Invoke-PodmanServicesUpInTurn)", lines[i - 1]
