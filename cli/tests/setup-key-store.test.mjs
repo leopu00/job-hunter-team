@@ -67,7 +67,7 @@ test('the key from the standard input is kept the same way (kimi, with its own f
 test('a key the provider refuses is not stored and nothing is saved; one it accepts is stored after the check', async () => {
   clean();
   const refused = await setup({ apiKeyFile: keyFile('given.txt') }, 401);
-  assert.equal(refused.code, 1, refused.text);
+  assert.equal(refused.code, 3, refused.text);
   assert.match(refused.text, /Nothing was saved/);
   assert.equal(existsSync(STORE), false, 'the store is not even made');
   assert.equal(config(), null);
