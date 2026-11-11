@@ -28,6 +28,7 @@ sys.path.insert(0, str(SKILLS_DIR))
 
 NOW = 1_800_000_000
 CAP = json.loads((REPO_ROOT / "agents/_skills/throttle/pause-rules.json").read_text(encoding="utf-8"))["burst_wait"]["cap_sec"]
+AFTER_CAP = json.loads((REPO_ROOT / "agents/_skills/throttle/pause-rules.json").read_text(encoding="utf-8"))["burst_wait"]["scout_after_insert"]["cap_sec"]
 
 
 def first_run_state(home, phase="burst", began=None):
@@ -73,12 +74,74 @@ def test_a_scout_that_found_nothing_in_the_burst_waits_the_cap(tmp_path, eng):
     assert res["burst_wait"] == {"cap_sec": CAP, "from_sec": 300, "role": "scout"} and res["shortened_from"] == 300
 
 
-def test_a_scout_that_has_inserted_in_the_burst_keeps_its_pause(tmp_path, eng):
+def test_a_scout_that_has_inserted_in_the_burst_waits_the_after_insert_cap(tmp_path, eng):
+    """Measured 11/11: 15 of 16 Scout pauses were 300 s after an insert, half of the Scouts' time asleep, 17 positions in
+    30 minutes. After an insert the pause is cut to scout_after_insert.cap_sec."""
     insert(tmp_path, 1, agent="scout-1")
     res = eng.register("scout-1", reason="post-insert", now=NOW)
-    assert res["applied_sec"] == 300 and "burst_wait" not in res
+    assert res["applied_sec"] == AFTER_CAP == 60 and res["until"] == NOW + AFTER_CAP
+    assert res["burst_wait"] == {"cap_sec": AFTER_CAP, "from_sec": 300, "role": "scout", "after_insert": True}
     # another Scout that has found nothing is on its own count
     assert eng.register("scout-2", now=NOW)["applied_sec"] == CAP
+
+
+def test_the_spend_brake_keeps_the_pause_of_a_scout_that_has_inserted(tmp_path, eng, monkeypatch):
+    insert(tmp_path, 1, agent="scout-1")
+    monkeypatch.setattr(eng, "captains_pause_stays", lambda now: {"reason": "team over its pace"})
+    res = eng.register("scout-1", now=NOW)
+    assert res["applied_sec"] == 300 and "burst_wait" not in res
+
+
+def suspend_sources(home, names, monkeypatch):
+    """Sources refused by a 429 (source_rate.py state in the fake home, real clock: the engine reads it with its own now)."""
+    monkeypatch.setenv("JHT_HOME", str(home))
+    spec = importlib.util.spec_from_file_location("source_rate_t", SKILLS_DIR / "source_rate.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    for name in names:
+        mod.note_hit(name, 429, now=NOW)
+
+
+@pytest.mark.parametrize("names,cut", [(["remoteok"], True), (["remoteok", "jobspresso"], True),
+                                       (["remoteok", "jobspresso", "himalayas"], False),
+                                       (["a", "b", "c", "d"], False)])
+def test_sources_that_refuse_the_scouts_keep_the_pause_after_an_insert(tmp_path, eng, monkeypatch, names, cut):
+    """Fewer than max_suspended_sources suspended: the Scout takes another source and the cap holds; at or above it the
+    Capitano's pause stays (the team is being refused widely)."""
+    insert(tmp_path, 1, agent="scout-1")
+    suspend_sources(tmp_path, names, monkeypatch)
+    res = eng.register("scout-1", now=NOW)
+    assert (res["applied_sec"] == AFTER_CAP) is cut, res
+    assert ("burst_wait" in res) is cut
+
+
+def test_a_source_pause_that_has_ended_does_not_count(tmp_path, eng, monkeypatch):
+    insert(tmp_path, 1, agent="scout-1")
+    suspend_sources(tmp_path, ["a", "b", "c"], monkeypatch)
+    res = eng.register("scout-1", now=NOW + 24 * 3600)      # past the longest first pause (5 min): none is suspended now
+    assert res["applied_sec"] == AFTER_CAP
+
+
+def test_a_source_state_that_cannot_be_read_keeps_the_pause(tmp_path, eng, monkeypatch):
+    insert(tmp_path, 1, agent="scout-1")
+    monkeypatch.setattr(eng, "_load_shared", lambda name, filename, _o=eng._load_shared: None if name == "source_rate" else _o(name, filename))
+    assert eng.register("scout-1", now=NOW)["applied_sec"] == 300
+
+
+def test_the_first_pass_ceiling_still_wins_over_the_after_insert_cap(tmp_path, eng):
+    state = json.loads((tmp_path / "state" / "first-run.json").read_text(encoding="utf-8"))
+    state["scout_cap_first_pass"] = 1
+    (tmp_path / "state" / "first-run.json").write_text(json.dumps(state), encoding="utf-8")
+    insert(tmp_path, 1, agent="scout-1")
+    assert eng.register("scout-1", now=NOW)["applied_sec"] == eng.FIRST_PASS_HOLD_SEC
+
+
+@pytest.mark.parametrize("phase", ["steady", "awaiting_profile"])
+def test_outside_the_burst_a_scout_that_inserted_keeps_its_pause(tmp_path, eng, phase):
+    insert(tmp_path, 1, agent="scout-1")
+    first_run_state(tmp_path, phase=phase)
+    res = eng.register("scout-1", now=NOW)
+    assert res["applied_sec"] == 300 and "burst_wait" not in res
 
 
 def test_an_analista_and_a_scorer_with_an_empty_queue_wait_the_cap(tmp_path, eng):
