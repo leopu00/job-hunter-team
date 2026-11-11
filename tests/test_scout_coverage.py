@@ -128,7 +128,7 @@ def test_a_403_seen_only_from_the_mac_does_not_close_a_source_in_the_table_the_s
     assert by[("jobbsafari", "se")]["tier"] == "core"
     # what the table closes was seen closed on a real run (the squad's own pass log), nothing from one network alone
     # (irishjobs 403 and jobgether's JavaScript shell on the runs of 10/11 and 11/11; the others on earlier ones)
-    assert sorted(e["slug"] for e in by.values() if e["access"] == "closed") == ["eu-remote-jobs", "irishjobs", "jobgether", "remote-rocketship"]
+    assert sorted(e["slug"] for e in by.values() if e["access"] == "closed") == ["careerjet", "eu-remote-jobs", "flexjobs", "irishjobs", "jobgether", "jobs-ie", "remote-rocketship"]
     hub = by[("thehub", "se")]
     assert hub["tier"] == "core" and hub["portal_language"] == "en"
     rows = [_pass("thehub", "se", "role", "developer"), _pass("thehub", "se", "role", "engineer"), _pass("thehub", "se", "broad", "internship")]
@@ -448,11 +448,13 @@ PROFILE_IT_EN = "languages:\n  - language: Italiano\n    level: native\n  - lang
 def test_the_portals_that_were_seen_dead_on_the_runs_are_closed_in_the_table_with_the_reason():
     data = cov.table()
     by = {(e["slug"], e["country"]): e for g in data["groups"].values() for e in g}
-    for key in (("infojobs-it", "it"), ("irishjobs", "ie"), ("cliclavoro", "it"), ("jobgether", "remote")):
+    for key in (("infojobs-it", "it"), ("irishjobs", "ie"), ("cliclavoro", "it"), ("jobgether", "remote"),
+                ("jobs-ie", "ie"), ("careerjet", "se"), ("flexjobs", "remote")):
         assert by[key]["access"] == "closed" and by[key]["hint"], key
     assert "shut down" in by[("infojobs-it", "it")]["hint"]
     # not closed: a 403 seen on one run only, or a path that was guessed wrong
-    for key in (("monster-it", "it"), ("gradireland", "ie"), ("weworkremotely", "remote"), ("himalayas", "remote")):
+    # (totaljobs answers from another network and was blocked only from the VPS: one network alone does not close it)
+    for key in (("monster-it", "it"), ("gradireland", "ie"), ("weworkremotely", "remote"), ("himalayas", "remote"), ("totaljobs", "gb")):
         assert by[key]["access"] == "search", key
     assert "api" in by[("himalayas", "remote")]["hint"].lower() and "403" in by[("himalayas", "remote")]["hint"]
 

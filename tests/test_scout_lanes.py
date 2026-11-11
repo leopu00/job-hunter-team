@@ -170,3 +170,25 @@ def test_next_for_a_scout_with_a_lane_names_a_portal_of_its_lane_first_and_the_r
     assert rest["source"] not in second["sources"], "the lane is done: the plan's other portals follow"
     nothing = cov.next_step(plan, [], lane=None)
     assert nothing["source"] == cov.next_step(plan, [])["source"]
+
+
+def test_next_says_when_a_portal_is_in_the_scouts_lane_and_when_its_lane_has_nothing_left(home):
+    _auto(home, "scout-1", lanes=3)
+    second = _auto(home, "scout-2", lanes=3)
+    plan = cov.load_plan()
+    keys = frozenset(cov._lang.portal_slug(f) for f in second["sources"])
+    first = cov.next_step(plan, [], lane=keys)
+    assert first["in_lane"] is True and "lane_done" not in first and first["source"] in second["sources"]
+    done = [{"kind": "pass", "ts": 1000.0 + i, "agent": "scout-2", "source": e["slug"], "country": e["country"], "returned": 0,
+             "query_kind": "broad", "status": "closed"} for i, e in enumerate(plan["entries"]) if keys & cov.entry_keys(e)]
+    outside = cov.next_step(plan, done, lane=keys)
+    assert outside["in_lane"] is False and "lane has nothing left" in outside["lane_done"]
+    assert "in_lane" not in cov.next_step(plan, [], lane=None), "a Scout without a lane sees the plan as before"
+
+
+def test_no_lane_holds_a_portal_the_table_closed(home):
+    plan = cov.load_plan()
+    closed = {e["slug"] for e in plan["entries"] if e["access"] == "closed"}
+    assert {"jobs-ie", "careerjet", "flexjobs", "irishjobs", "infojobs-it"} <= closed
+    for count in (3, 5):
+        assert not closed & {f for l in cov.lanes(plan, count) for f in l["sources"]}
