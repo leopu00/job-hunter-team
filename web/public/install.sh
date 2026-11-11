@@ -150,7 +150,7 @@ PODMAN_MACHINE_CREATED=0
 # When it was created (podman machine inspect «Created»): the marker says WHICH machine, not only the name, so a machine the person
 # creates later with the same name is not taken for this one.
 PODMAN_MACHINE_CREATED_ID=""
-# 1 only when THIS run started Colima (it was not running): `jht uninstall` stops it again only then (marker colima-started).
+# 1 only when THIS run started Colima (it was not running): `jht uninstall` stops that profile again only then (marker colima-started).
 COLIMA_STARTED_BY_INSTALLER=0
 DOCKER_CLI="docker"
 # Position-based parser: handles both standalone flags (--no-docker) and
@@ -1419,7 +1419,8 @@ download_runtime_files() {
     # Colima started by THIS run: `jht uninstall` stops it again (when nothing else runs in it). A Colima that was already running is
     # not marked, and stays on. A marker of an earlier run is kept: it is written only when the installer starts Colima.
     if [ "$COLIMA_STARTED_BY_INSTALLER" = 1 ]; then
-      printf 'colima\n' > "$RUNTIME_DIR/colima-started"
+      # Second line: the profile that was started (the installer starts the default one): the uninstall stops that profile only.
+      printf 'colima\ndefault\n' > "$RUNTIME_DIR/colima-started"
       chmod 600 "$RUNTIME_DIR/colima-started"
     fi
   fi

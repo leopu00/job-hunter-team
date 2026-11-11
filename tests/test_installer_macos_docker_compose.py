@@ -144,4 +144,4 @@ def test_the_marker_of_a_colima_started_by_the_installer_is_written_only_then(tm
         marker = runtime / "colima-started"
         assert marker.exists() is expected
         if expected:
-            assert marker.read_text() == "colima\n" and oct(marker.stat().st_mode & 0o777) == "0o600"
+            assert marker.read_text() == "colima\ndefault\n" and oct(marker.stat().st_mode & 0o777) == "0o600"

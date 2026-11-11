@@ -6151,28 +6151,35 @@ uninstall_docker_endpoint() {
   printf '%s\n' "$endpoint"
 }
 
-# Colima (Mac, Docker scelto): l'installer la accende quando non c'e' e lo scrive in <runtime>/colima-started. Finito di togliere
-# container, volumi e immagini di JHT, se e' stato lui ad accenderla e dentro non gira piu' niente, la si ferma (colima stop, normale)
-# e si controlla che sia ferma; altrimenti resta accesa e si dice perche' e come fermarla. Non si cancella mai la macchina.
-# Solo se il Docker di questo computer e' quello di Colima (profilo default): con Docker Desktop attivo una Colima accesa non c'entra e non si dice niente.
-# Mai un errore di disinstallazione: al peggio un avviso.
+# Colima (Mac, Docker scelto): l'installer la accende quando non c'e' e lo scrive in <runtime>/colima-started (1a riga «colima», 2a il
+# profilo). Finito di togliere container, volumi e immagini di JHT, se e' stato lui ad accenderla e dentro non gira piu' niente, la si
+# ferma (colima stop, normale) e si controlla che sia ferma; altrimenti resta accesa e si dice perche' e come fermarla. Non si cancella
+# mai la macchina. Il profilo si ricava dal socket del Docker di questo computer (…/.colima/<profilo>/docker.sock) e SOLO quel profilo
+# si interroga e si ferma (colima status|stop -p <profilo>): un profilo di un altro (la Colima dell'operatore, quella di un collaudo)
+# non si guarda e non si tocca; il marcatore deve dire lo stesso profilo. Con Docker Desktop attivo (o un altro socket) una Colima
+# accesa non c'entra e non si dice niente. Mai un errore di disinstallazione: al peggio un avviso.
 uninstall_colima() {
-  local runtime_dir="$1" selection="$2" colima_bin docker_bin endpoint marker="$1/colima-started" others
+  local runtime_dir="$1" selection="$2" colima_bin docker_bin endpoint profile rest marker="$1/colima-started" others
   [ "$HOST_KERNEL" = "Darwin" ] && [ "$selection" != "podman" ] || return 0
   colima_bin="$(uninstall_tool colima)" || return 0
-  "$colima_bin" status >/dev/null 2>&1 || return 0
   docker_bin="$(uninstall_tool docker)" || return 0
   endpoint="$(uninstall_docker_endpoint "$docker_bin")" || return 0
-  # `colima status` e `colima stop` parlano del profilo «default»: solo se il Docker del computer e' quello.
-  case "$endpoint" in unix://*/.colima/default/*) ;; *) return 0 ;; esac
-  if [ -f "$marker" ] && [ ! -L "$marker" ] && [ "$(head -c 16 "$marker" 2>/dev/null | head -n 1 | tr -d '\r\n')" = colima ]; then
+  case "$endpoint" in unix://*/.colima/*/docker.sock) ;; *) return 0 ;; esac
+  rest="${endpoint#*/.colima/}"
+  profile="${rest%%/*}"
+  [ "$rest" = "$profile/docker.sock" ] || return 0
+  case "$profile" in ''|-*|*[!A-Za-z0-9_.-]*) return 0 ;; esac
+  "$colima_bin" status -p "$profile" >/dev/null 2>&1 || return 0
+  if [ -f "$marker" ] && [ ! -L "$marker" ] \
+      && [ "$(head -c 64 "$marker" 2>/dev/null | sed -n '1p' | tr -d '\r')" = colima ] \
+      && [ "$(head -c 64 "$marker" 2>/dev/null | sed -n '2p' | tr -d '\r')" = "$profile" ]; then
     others="$("$docker_bin" ps -q 2>/dev/null)" || others="unknown"
     if [ -n "$others" ]; then
       warn "$(jht_say uninstall.colima_busy)"
       return 0
     fi
     info "$(jht_say uninstall.colima_stopping)"
-    if "$colima_bin" stop >/dev/null 2>&1 && ! "$colima_bin" status >/dev/null 2>&1; then
+    if "$colima_bin" stop -p "$profile" >/dev/null 2>&1 && ! "$colima_bin" status -p "$profile" >/dev/null 2>&1; then
       return 0
     fi
     warn "$(jht_say uninstall.colima_stop_failed)"
