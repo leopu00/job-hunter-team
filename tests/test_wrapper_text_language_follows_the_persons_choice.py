@@ -87,6 +87,15 @@ def test_a_choice_that_is_not_one_of_the_seven_or_too_big_is_ignored(tmp_path, p
     assert ENGLISH in out and ITALIAN not in out
 
 
+@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root reads any file")
+def test_a_file_that_cannot_be_read_falls_back_to_host_env_without_a_word_on_stderr(tmp_path):
+    home = _home(tmp_path, host_env=HOST_EN, prefs=PREFS_IT)
+    (home / ".jht" / "i18n-prefs.json").chmod(0)
+    env = {"HOME": str(home), "PATH": f"{tmp_path / 'bin'}:/usr/bin:/bin"}
+    done = subprocess.run(["bash", str(WRAPPER), "uninstall"], capture_output=True, text=True, env=env, timeout=60)
+    assert ENGLISH in done.stdout + done.stderr and "Permission denied" not in done.stderr
+
+
 def test_a_link_in_place_of_the_file_is_not_read(tmp_path):
     home = _home(tmp_path, host_env=HOST_EN, prefs=None)
     target = tmp_path / "elsewhere.json"

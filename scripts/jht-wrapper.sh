@@ -315,7 +315,7 @@ jht_record_host_values() {
 jht_ui_language() {
   local prefs line value size
   prefs="$(dirname "$HOST_ENV_FILE")/i18n-prefs.json"
-  if [ -f "$prefs" ] && [ ! -L "$prefs" ]; then
+  if [ -f "$prefs" ] && [ ! -L "$prefs" ] && [ -r "$prefs" ]; then
     size="$(wc -c < "$prefs" 2>/dev/null)" || size=0
     if [ "$((size + 0))" -le 4096 ]; then
       line="$(tr -d '\r\n' < "$prefs" 2>/dev/null | sed -n 's/.*"locale"[[:space:]]*:[[:space:]]*"\([a-z][a-z]\)".*/\1/p' | head -n 1)"
