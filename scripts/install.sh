@@ -2230,14 +2230,13 @@ final_message() {
 
   printf "  ${DIM}To uninstall (keeps your data in ~/.jht and ~/Documents/Job Hunter Team):${RESET}\n"
   if [ "$USE_DOCKER" -eq 1 ]; then
+    # `jht uninstall` removes the containers, the networks and the VOLUMES of the project (broker, secrets, deps…: the
+    # ten host-runtime_jht-* that `jht down && rm -rf` left behind, TEST 19i A2), then the runtime, the PATH lines and itself.
+    # It is the only command printed for the engine: no `docker rmi`, no `rm -rf` and no `sudo` for the person to type.
+    printf "  ${DIM}  jht uninstall --confirm${RESET}\n"
     if [ "$RUNTIME_CHOICE" = "podman" ]; then
-      printf "  ${DIM}  jht down && %s/bin/docker rmi %s && rm -rf %s %s/jht${RESET}\n" \
-        "$RUNTIME_DIR" "$IMAGE" "$RUNTIME_DIR" "$BIN_DIR"
       podman_native_mode || printf "  ${DIM}  (the Podman machine and Colima are both kept)${RESET}\n"
     else
-      # `jht uninstall` removes the containers, the networks and the VOLUMES of the project (broker, secrets, deps…: the
-      # ten host-runtime_jht-* that `jht down && rm -rf` left behind, TEST 19i A2), then the runtime, the PATH lines and itself.
-      printf "  ${DIM}  jht uninstall --confirm && docker rmi %s${RESET}\n" "$IMAGE"
       printf "  ${DIM}  (it also deletes the mail password and the Telegram tokens saved for the team)${RESET}\n"
     fi
   else
@@ -2248,24 +2247,14 @@ final_message() {
     # With a container engine on Linux ~/.jht belongs to the container (uid 1001, often mode 700; with rootless Podman, to a
     # sub-uid): `rm -rf` from this account fails with "Permission denied" (TEST, Linux gate). `jht uninstall --confirm --purge`
     # empties the folders the right way for the engine (a one-shot container for Docker, `podman unshare` for Podman), without
-    # sudo and without changing a permission, so it is the command printed for every engine. The Podman machine of a Mac goes
-    # with its images; the Podman of a Linux computer keeps the image, hence the `podman rmi`.
-    if [ "$RUNTIME_CHOICE" = "podman" ]; then
-      if podman_native_mode; then
-        printf "  ${DIM}  jht uninstall --confirm --purge && podman rmi %s${RESET}\n" "$IMAGE"
-      else
-        printf "  ${DIM}  jht uninstall --confirm --purge${RESET}\n"
-      fi
-    else
-      printf "  ${DIM}  jht uninstall --confirm --purge && docker rmi %s${RESET}\n" "$IMAGE"
-    fi
-    # (`%b`, not `%s`: DIM and RESET hold the characters backslash-0-3-3, and only `%b` or the format string turns them into the escape.)
-    # Last resort, only when the jht command is already gone. The text the person pastes keeps the variable: the shell expands
-    # it in the right place, and a path with a space stays one word. (A tilde inside the quotes would not expand: TEST 19b.)
-    printf "  ${DIM}  If the jht command is already gone (on Linux the container owns these folders, hence sudo):${RESET}\n"
-    printf '  %b  sudo rm -rf "$HOME/.jht" "$HOME/Documents/Job Hunter Team"%b\n' "${DIM}" "${RESET}"
+    # sudo and without changing a permission, so it is the command printed for every engine.
+    printf "  ${DIM}  jht uninstall --confirm --purge${RESET}\n"
+    printf "  ${DIM}  (same as above, and it empties ~/.jht and ~/Documents/Job Hunter Team too)${RESET}\n"
   else
     # Native mode: nothing ran in a container, the folders are the person's own and `jht` has no uninstall.
+    # (`%b`, not `%s`: DIM and RESET hold the characters backslash-0-3-3, and only `%b` or the format string turns them into the escape.)
+    # The text the person pastes keeps the variable: the shell expands it in the right place, and a path with a space stays one
+    # word. (A tilde inside the quotes would not expand: TEST 19b.)
     printf '  %b  rm -rf "$HOME/.jht" "$HOME/Documents/Job Hunter Team"%b\n' "${DIM}" "${RESET}"
   fi
   printf "\n"
