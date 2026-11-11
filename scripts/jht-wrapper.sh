@@ -680,7 +680,7 @@ runtime_helper_load() {
     esac
   fi
   runtime_helpers_trusted || return 1
-  . "$RUNTIME_DIR/$helper"
+  . "$RUNTIME_DIR/$helper" || return 1
   extras_digest="$(runtime_extras_digest)" || { err "pin dell'immagine degli strumenti non attendibile"; return 1; }
   EXTRAS_IMAGE_DIGEST="$extras_digest"
 }

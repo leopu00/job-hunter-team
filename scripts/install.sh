@@ -281,8 +281,8 @@ esac
 if [ -n "$EXTRAS_IMAGE_DIGEST_OPT" ]; then
   [ -n "$SOURCE_SHA$TEST_IMAGE$EXPECTED_IMAGE_DIGEST" ] \
     || { printf '%s\n' "--extras-image-digest belongs to the test channel (with --source-sha, --image and --expected-image-digest)" >&2; exit 2; }
-  printf '%s' "$EXTRAS_IMAGE_DIGEST_OPT" | grep -Eq '^sha256:[0-9a-f]{64}$' \
-    || { printf '%s\n' "--extras-image-digest needs sha256:<64 lowercase hex>" >&2; exit 2; }
+  [[ "$EXTRAS_IMAGE_DIGEST_OPT" =~ ^sha256:[0-9a-f]{64}$ ]] \
+    || { printf '%s\n' "--extras-image-digest needs sha256:<64 lowercase hex>" >&2; exit 2; }  # whole string: grep checks line by line
 fi
 if [ -n "$SOURCE_SHA$TEST_IMAGE$EXPECTED_IMAGE_DIGEST" ]; then
   printf '%s' "$SOURCE_SHA" | grep -Eq '^[0-9a-f]{40}$' \
