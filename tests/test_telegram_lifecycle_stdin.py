@@ -53,9 +53,10 @@ def source_for(language, mutant):
         return adapter + '\nTELEGRAM_SERVICE=jht-telegram\n' + source + '\ntelegram_lifecycle_command pair assistente\n'
     actual = powershell_functions("Invoke-Compose")
     if mutant:
-        old = 'elseif ($NoInput) { $null | & docker compose'
+        # the line goes through Invoke-NativeWithStdin (no BOM in front of what is piped): the mutant drops the `$null |` inside it
+        old = 'elseif ($NoInput) { Invoke-NativeWithStdin { $null | & docker compose'
         assert actual.count(old) == 1
-        actual = actual.replace(old, 'elseif ($NoInput) { & docker compose')
+        actual = actual.replace(old, 'elseif ($NoInput) { Invoke-NativeWithStdin { & docker compose')
     adapter = re.sub(r'^function Invoke-Compose \{\n.*?^\}\n', lambda _: actual, PS_TRANSPORT, count=1, flags=re.M | re.S)
     adapter, removed = re.subn(r'^function docker \{[^\n]+\}\n', '', adapter, count=1, flags=re.M)
     assert removed == 1
