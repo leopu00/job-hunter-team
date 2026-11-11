@@ -5,8 +5,9 @@ What it starts, all in this container and nowhere else:
     display has no isolation and the person types a password on it;
   - openbox, and Debian's Chromium on the LinkedIn profile, with the sandbox of Chromium on (a browser that does not start says why in
     the hint file, from a closed list, and the view turns it into the reason the app shows);
-  - x11vnc on that display, interactive, listening on a unix socket in the folder it shares with the view and on the loopback of this
-    container, which has nothing else;
+  - x11vnc on that display, interactive, listening ONLY on a unix socket in the folder it shares with the view: no TCP port at all (`-rfbport 0`)
+    (`-localhost` and `-allow` are not used: x11vnc applies them to the address of the client and turns a unix-socket client away right
+    after its banner, measured);
   - a relay: 127.0.0.1:3128 of this container to the socket of the proxy that has the network. Chromium is told to use it for everything
     and to resolve no name itself.
 A watcher reads the cookies of the profile every few seconds (the NAME of the session cookie only, never a value): when LinkedIn has set
@@ -61,7 +62,7 @@ def chromium_command(profile: str) -> list[str]:
 
 
 def x11vnc_command(vnc_socket: str) -> list[str]:
-    return ["x11vnc", "-display", DISPLAY, "-unixsock", vnc_socket, "-localhost", "-rfbport", "5900", "-nopw", "-forever", "-noxdamage", "-quiet"]
+    return ["x11vnc", "-display", DISPLAY, "-unixsock", vnc_socket, "-rfbport", "0", "-nopw", "-forever", "-noxdamage", "-quiet"]
 
 
 def write_hint(path: str, word: str) -> None:

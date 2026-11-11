@@ -43,9 +43,11 @@ def test_chromium_keeps_its_sandbox_goes_through_the_relay_and_resolves_no_name(
     assert "--remote-debugging-port" not in " ".join(command) and "--remote-debugging-pipe" not in command
 
 
-def test_x11vnc_listens_on_the_shared_socket_and_the_loopback_only_and_is_not_view_only():
+def test_x11vnc_listens_only_on_the_shared_socket_and_is_not_view_only():
     command = ls.x11vnc_command("/ipc/vnc.sock")
-    assert command[command.index("-unixsock") + 1] == "/ipc/vnc.sock" and "-localhost" in command
+    assert command[command.index("-unixsock") + 1] == "/ipc/vnc.sock" and command[command.index("-rfbport") + 1] == "0"  # no TCP port at all
+    # the address filters turn a unix-socket client away right after the banner (measured): they must not come back
+    assert "-localhost" not in command and "-allow" not in command
     assert "-viewonly" not in command and "-nopw" in command
     assert command[command.index("-display") + 1] == ":97"
 
