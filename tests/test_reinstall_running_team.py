@@ -166,6 +166,9 @@ TELEGRAM_SERVICE=jht-telegram
 MEDIA_SERVICE=jht-media
 PLAYWRIGHT_POPULATE_SERVICE=jht-playwright-populate
 SCREEN_SERVICE=jht-screen
+LOGIN_SERVICE=jht-login
+LOGIN_PROXY_SERVICE=jht-login-proxy
+LOGIN_VIEW_SERVICE=jht-login-view
 RUNTIME_DIR="{runtime}"
 COMPOSE_FILE="{compose_file}"
 err()  {{ echo "error: $*" >&2; }}

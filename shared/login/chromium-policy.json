@@ -1,0 +1,7 @@
+{
+  "PasswordManagerEnabled": false,
+  "AutofillAddressEnabled": false,
+  "AutofillCreditCardEnabled": false,
+  "SyncDisabled": true,
+  "BrowserSignin": 0
+}

@@ -202,10 +202,11 @@ TRUST = r"""
 $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($env:T_WRAPPER_SRC, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw "parse: $($errors[0])" }
-foreach ($name in @('Write-RuntimeManifest', 'Test-RuntimeBundleTrusted')) {
+foreach ($name in @('Write-RuntimeManifest', 'Test-RuntimeExtrasPin', 'Test-RuntimeBundleTrusted')) {
   $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name }, $true)
   Invoke-Expression $fn.Extent.Text
 }
+$RuntimeExtrasFile = Join-Path $RuntimeDir 'runtime-extras-image'; $RuntimeExtrasIntegrity = Join-Path $RuntimeDir '.runtime-extras-integrity'
 function Test-RuntimePathAuthority { $true }
 function Test-RuntimeAncestorsWithoutReparsePoint { param($p) $true }
 function Test-ProtectedRuntimeNode { param($p, [switch]$Directory) $true }
@@ -281,7 +282,7 @@ def test_jht_tools_is_a_host_helper_the_installer_ships_the_enabler_attests_and_
     tools_branch = wrapper.split("  'tools' {")[1].split("\n  'telegram' {")[0]
     assert "Install-RuntimeHelpers" not in tools_branch, "no command of jht tools downloads a missing helper (A3)"
     assert ". (Join-Path $RuntimeDir 'jht-tools.ps1')\n    exit (Invoke-ToolsCommand $Rest)" in wrapper
-    assert "'integration', 'screen', 'tools'," in wrapper, "its --help is the local one"
+    assert "'integration', 'screen', 'linkedin', 'tools'," in wrapper, "its --help is the local one"
     assert "'scripts/jht-tools.ps1'" in installer and "(Join-Path $RuntimeDir 'jht-tools.ps1')" in installer
     assert "jht-tools.ps1=$toolsHash" in enabler and "(Join-Path $RuntimeDir 'jht-tools.ps1')" in enabler
     assert "$toolsHash" not in next(line for line in enabler.splitlines() if line.startswith('$manifest = "version=1'))

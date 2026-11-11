@@ -12,7 +12,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 COMPOSE = yaml.safe_load((ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
 SERVICES = COMPOSE["services"]
-ON_REQUEST = {"jht-media": "media", "jht-screen": "screen", "jht-playwright-populate": "playwright"}
+ON_REQUEST = {"jht-media": "media", "jht-screen": "screen", "jht-playwright-populate": "playwright", "jht-login": "login", "jht-login-proxy": "login", "jht-login-view": "login"}
 FORBIDDEN_MOUNTS = ("docker.sock", "podman.sock", "/var/run", "/run/user")
 
 
@@ -96,3 +96,51 @@ def test_the_volume_of_the_closers_browser_is_read_only_in_jht_and_written_only_
 def test_the_mount_folder_of_the_closers_browser_is_made_by_the_image_with_the_owner_of_jht():
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     assert "mkdir -p /opt/playwright-extras" in dockerfile and "chown jht:jht /opt/playwright-extras" in dockerfile
+
+
+def test_the_login_browser_has_no_network_and_is_the_only_one_with_the_profile_and_the_display_stays_in_its_own_container():
+    login = SERVICES["jht-login"]
+    assert login["network_mode"] == "none"
+    assert any(item.endswith(":/linkedin-profile") and item.startswith("${HOME}/.jht/secrets/linkedin-profile") for item in login["volumes"])
+    for name, spec in SERVICES.items():
+        if name != "jht-login":
+            assert not any("linkedin-profile" in item for item in spec.get("volumes", [])), name
+            assert not any(item.startswith("jht-login-") for item in spec.get("volumes", [])) or name in ("jht-login-proxy", "jht-login-view"), name
+    assert not login.get("ports") and "/tmp/.X11-unix" not in " ".join(login.get("volumes", [])), "its display is its own"
+    assert "jht-x11" not in " ".join(login["volumes"])
+
+
+def test_each_folder_of_sockets_of_the_login_is_mounted_by_two_of_the_three_and_the_proxy_has_no_port_and_no_profile():
+    def mounted(volume):
+        return sorted(name for name, spec in SERVICES.items() if any(item.split(":")[0] == volume for item in spec.get("volumes", [])))
+    assert mounted("jht-login-vnc") == ["jht-login", "jht-login-view"]
+    assert mounted("jht-login-egress") == ["jht-login", "jht-login-proxy"]
+    proxy = SERVICES["jht-login-proxy"]
+    assert not proxy.get("ports") and proxy["volumes"] == ["jht-login-egress:/ipc/egress"]
+    assert SERVICES["jht-login-view"]["ports"] == ["127.0.0.1:6081:6081"] and SERVICES["jht-login-view"]["volumes"] == ["jht-login-vnc:/ipc/vnc"]
+    assert {"jht-login-vnc", "jht-login-egress"} <= set(COMPOSE["volumes"])
+
+
+def test_the_login_services_run_the_modules_of_the_repository_with_the_paths_the_other_two_use():
+    def last(name):
+        return " ".join(SERVICES[name]["entrypoint"])
+    assert "login_session.py /ipc/vnc/vnc.sock /ipc/egress/proxy.sock /ipc/vnc/hint /linkedin-profile" in last("jht-login")
+    assert "login_proxy.py /ipc/egress/proxy.sock" in last("jht-login-proxy")
+    assert "login_view.py serve /ipc/vnc/vnc.sock /ipc/vnc/hint" in last("jht-login-view")
+    for module in ("login_session.py", "login_proxy.py", "login_view.py", "allowed_hosts.txt"):
+        assert (ROOT / "shared" / "login" / module).is_file(), module
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert "mkdir -p /ipc/vnc /ipc/egress" in dockerfile and "chown jht:jht /ipc /ipc/vnc /ipc/egress" in dockerfile
+
+
+def test_only_the_login_browser_has_a_capability_and_it_is_the_one_the_sandbox_of_chromium_needs():
+    assert SERVICES["jht-login"]["cap_add"] == ["SYS_CHROOT"] and SERVICES["jht-login"]["cap_drop"] == ["ALL"]
+    assert [name for name, spec in SERVICES.items() if spec.get("cap_add")] == ["jht-login"]
+    assert not any("seccomp" in option for option in SERVICES["jht-login"]["security_opt"]), "the default seccomp profile"
+    assert "--no-sandbox" not in " ".join(SERVICES["jht-login"]["entrypoint"])
+
+
+def test_the_tmpfs_of_an_on_request_container_holds_the_8_mb_the_image_has_in_its_tmp_or_the_engine_cannot_create_it():
+    for name in ("jht-login", "jht-login-proxy", "jht-login-view", "jht-screen", "jht-media", "jht-playwright-populate"):
+        size = [item for item in SERVICES[name]["tmpfs"] if item.startswith("/tmp:")][0].split("size=")[1].split(",")[0]
+        assert int(size.rstrip("mg")) * (1024 if size.endswith("g") else 1) >= 16, (name, size)

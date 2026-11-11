@@ -40,7 +40,11 @@
     "nothing to do waits at most cap_sec, not the Capitano's pause. Nothing to do = an Analista or a Scorer whose",
     "queue was read and is empty (the event wake, JHT-T297, brings it forward sooner; this is the net under a lost",
     "signal), or a Scout that has inserted nothing since the burst began (nothing wakes a Scout). It yields to the",
-    "same spend hold as the rules above, and outside the burst nothing changes."
+    "same spend hold as the rules above, and outside the burst nothing changes. scout_after_insert: a Scout that",
+    "HAS inserted waits at most its cap_sec after each position (the first pass has its own ceiling, first_pass_cap),",
+    "unless the pause is longer than max_from_sec (set on purpose: it stays), the spend hold applies or max_suspended_sources or more sources are suspended by source_rate.py (the",
+    "sources are refusing the Scouts) or that state cannot be read: then the Capitano's pause stays (measured on the",
+    "burst of 11/11: 15 of the 16 Scout pauses were 300 s after an insert, half of the Scouts' time asleep)."
   ],
   "short_pause_sec": 60,
   "empty_unit": {
@@ -61,6 +65,11 @@
   },
   "burst_wait": {
     "roles": ["scout", "analista", "scorer"],
-    "cap_sec": 60
+    "cap_sec": 60,
+    "scout_after_insert": {
+      "cap_sec": 60,
+      "max_from_sec": 300,
+      "max_suspended_sources": 3
+    }
   }
 }

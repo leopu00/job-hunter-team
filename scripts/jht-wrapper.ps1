@@ -685,6 +685,10 @@ $RuntimeManifest = Join-Path $RuntimeDir '.runtime-integrity'
 $RuntimeImageFile = Join-Path $RuntimeDir 'runtime-image'
 $RuntimeTierFile = Join-Path $RuntimeDir 'runtime-tier'
 $RuntimeTierIntegrity = Join-Path $RuntimeDir '.runtime-tier-integrity'
+# The test channel also pins the image of the tools that come on request (screen, media, playwright), which the installer does not pull:
+# `jht screen on` pulls it by this digest. Its own file, attested in its own file (the app compares the exact keys of the main manifest).
+$RuntimeExtrasFile = Join-Path $RuntimeDir 'runtime-extras-image'
+$RuntimeExtrasIntegrity = Join-Path $RuntimeDir '.runtime-extras-integrity'
 $BrokerLegacyMarker = Join-Path $RuntimeDir '.broker-legacy-migrated'
 $BrokerMadeMarker = Join-Path $RuntimeDir '.broker-made'
 $NodeEntry   = if ($env:JHT_NODE_ENTRY)     { $env:JHT_NODE_ENTRY }     else { '/app/cli/bin/jht.js' }
@@ -976,6 +980,26 @@ function Write-RuntimeManifest {
   Move-Item -LiteralPath $temp -Destination $RuntimeManifest -Force
 }
 
+# The pin of the image of the tools on request (test channel): both files regular and of the owner, attested, canonical, and only next
+# to the pin of the test channel. Anything else is not trusted (never a fall back to the constant of the release). A good pin becomes
+# the digest the integration helper uses.
+function Test-RuntimeExtrasPin {
+  param([bool]$PinPresent)
+  if (-not ((Test-Path -LiteralPath $RuntimeExtrasFile) -or (Test-Path -LiteralPath $RuntimeExtrasIntegrity))) { return $true }
+  if (-not $PinPresent) { return $false }
+  # both there: the integrity of a pin that is gone (or a pin without its integrity) is a runtime somebody changed
+  if (-not ((Test-Path -LiteralPath $RuntimeExtrasFile -PathType Leaf) -and (Test-Path -LiteralPath $RuntimeExtrasIntegrity -PathType Leaf))) { return $false }
+  if (-not (Test-ProtectedRuntimeNode $RuntimeExtrasFile)) { return $false }
+  if (-not (Test-ProtectedRuntimeNode $RuntimeExtrasIntegrity)) { return $false }
+  $extrasBytes = [IO.File]::ReadAllText($RuntimeExtrasFile)
+  $extrasRef = $extrasBytes.TrimEnd("`n")
+  if (([IO.File]::ReadAllText($RuntimeExtrasIntegrity).Trim()) -ne "runtime-extras-image=$((Get-FileHash -Algorithm SHA256 -LiteralPath $RuntimeExtrasFile).Hash.ToLowerInvariant())") { return $false }
+  $extrasMatch = [regex]::Match($extrasRef, '^ghcr\.io/leopu00/jht@(sha256:[0-9a-f]{64})\z')
+  if (-not $extrasMatch.Success -or $extrasBytes -cne "$extrasRef`n") { return $false }
+  $script:ExtrasImageDigest = $extrasMatch.Groups[1].Value
+  return $true
+}
+
 function Test-RuntimeBundleTrusted {
   $script:TrustedRuntimeImage = $null
   if (-not (Test-RuntimePathAuthority)) { return $false }
@@ -1024,6 +1048,7 @@ function Test-RuntimeBundleTrusted {
       if ([IO.File]::ReadAllText($RuntimeTierFile).TrimEnd("`r", "`n") -ne 'core') { return $false }
       $script:TrustedRuntimeImage = "ghcr.io/leopu00/jht@$CoreImageDigest"
     }
+    if (-not (Test-RuntimeExtrasPin -PinPresent $pinPresent)) { return $false }
     if ($ContainerRuntime -eq 'podman') {
       if (-not (Test-ProtectedRuntimeNode $PodmanMachineBridgePath)) { return $false }
       if (-not (Test-ProtectedRuntimeNode $RuntimeSelectionFile)) { return $false }
@@ -1351,12 +1376,25 @@ Niente si scarica o si accende finche' non lo chiedi con `on`. Lo stream e' in s
 '@)
 }
 
+# `jht linkedin --help`: its line of use, fixed text: a help downloads nothing.
+function Write-LinkedinHelp {
+  [Console]::Out.WriteLine(@'
+Uso: jht linkedin <comando>
+
+  login [--stop]    l'accesso a mano a LinkedIn (con Google): un browser in un container a parte, senza rete, di cui vedi
+                    e usi la finestra dall'app; --stop chiude tutto
+  status --json     dice se l'accesso e' in corso e se la sessione di LinkedIn e' salvata
+
+Niente si scarica o si accende finche' non lo chiedi con `login`.
+'@)
+}
+
 function Test-HostCommandUsesLocalHelp {
   param([string]$Command)
   return $Command -in @(
     'up', 'start-container', 'down', 'stop-container', 'restart', 'recreate',
     'upgrade', 'logs', 'status', 'shell', 'oauth-login', 'claude-login',
-    'setup', 'download', 'mail', 'telegram', 'integration', 'screen', 'tools', 'reset', 'migrate-runtime'
+    'setup', 'download', 'mail', 'telegram', 'integration', 'screen', 'linkedin', 'tools', 'reset', 'migrate-runtime'
   )
 }
 
@@ -1469,7 +1507,7 @@ function Get-RunningComposeServiceId {
   if (-not $expectedProject) { $script:ServiceLookupReason = 'the compose project name could not be read'; return $null }
   $files = @('-f', $ComposeFile)
   if ($ContainerRuntime -eq 'podman') { $files += @('-f', $PodmanComposeFile) }
-  $composeArgs = @('compose') + $files + @('--project-directory', $RuntimeDir, '--profile', 'telegram', '--profile', 'broker', '--profile', 'media', '--profile', 'playwright', '--profile', 'screen', 'ps', '-q')
+  $composeArgs = @('compose') + $files + @('--project-directory', $RuntimeDir, '--profile', 'telegram', '--profile', 'broker', '--profile', 'media', '--profile', 'playwright', '--profile', 'screen', '--profile', 'login', 'ps', '-q')
   if ($ContainerRuntime -ne 'podman') { $composeArgs += $Service }
   $ids = @(& { $ErrorActionPreference = 'Continue'; & docker @composeArgs 2>$null } | ForEach-Object { "$($_)".Trim() } | Where-Object { $_ })
   $psCode = $LASTEXITCODE
@@ -2488,7 +2526,7 @@ function Remove-BrokerResetData {
     Write-Err 'reset: non riesco a determinare il progetto Compose; i volumi del broker non sono stati toccati.'
     return 1
   }
-  Invoke-Compose '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' down
+  Invoke-Compose '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' '--profile' 'login' down
   if ($LASTEXITCODE -ne 0) {
     Write-Err 'reset: non riesco a fermare il runtime; i volumi del broker non sono stati toccati.'
     return 1
@@ -4173,6 +4211,10 @@ if ($HelpRequested -and $Sub -notin @('game', 'gui', 'agent-control', 'desktop-a
     Write-ScreenHelp
     exit 0
   }
+  if ($Sub -ceq 'linkedin' -and $Rest.Count -eq 1) {
+    Write-LinkedinHelp
+    exit 0
+  }
   if ($Sub -ceq 'setup') {
     Write-SetupHelp
     exit 0
@@ -4286,7 +4328,7 @@ switch ($Sub) {
   { $_ -in @('down', 'stop-container') } {
     Require-ComposeFile
     Require-Docker
-    $downCode = Invoke-ComposeQuiet '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' 'down'
+    $downCode = Invoke-ComposeQuiet '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' '--profile' 'login' 'down'
     if ($downCode -eq 0) { Write-JhtLifecycleDone 'down' }
     exit $downCode
   }
@@ -4301,7 +4343,7 @@ switch ($Sub) {
   'recreate' {
     Require-ComposeFile
     Require-Docker
-    $null = Invoke-ComposeQuiet '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' 'down'
+    $null = Invoke-ComposeQuiet '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' '--profile' 'login' 'down'
     if (-not (Repair-MountOwnership)) { exit 1 }
     if (-not (Initialize-TelegramLegacyInventory)) {
       Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'
@@ -4381,6 +4423,27 @@ switch ($Sub) {
     Assert-TrustedRuntime
     . $helperPath
     exit (Invoke-IntegrationCommand $screenArgs)
+  }
+
+  'linkedin' {
+    # The manual sign-in to LinkedIn. The lines the app reads are the same with or without the helper: a read-only question or a stop
+    # needs nothing to be installed, and only `login` fetches the helper if it is not there.
+    Require-ComposeFile
+    $linkedinWords = (@($Rest) -join ' ')
+    if (-not (Test-RuntimeHelperDeclared 'jht-integration.ps1')) {
+      if ($linkedinWords -ceq 'status --json') { [Console]::Out.WriteLine('{"ok": true, "view": "idle", "linkedin": "login_required"}'); exit 0 }
+      if ($linkedinWords -ceq 'login --stop') { [Console]::Out.WriteLine('{"ok": true}'); exit 0 }
+    }
+    $helperPath = Join-Path $RuntimeDir 'jht-integration.ps1'
+    if (-not (Test-RuntimeHelperDeclared 'jht-integration.ps1')) {
+      if (-not (Install-RuntimeHelpers)) {
+        Write-Err "script jht-integration.ps1 non ancora installato: 'jht upgrade' (o un 'jht integration add/remove') e riprova"
+        exit 1
+      }
+    }
+    Assert-TrustedRuntime
+    . $helperPath
+    exit (Invoke-LinkedinCommand @($Rest))
   }
 
   'tools' {

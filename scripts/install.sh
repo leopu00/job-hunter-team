@@ -50,6 +50,11 @@
 # ║                            and published only if its RepoDigests carry   ║
 # ║                            this digest; `jht up` then runs exactly it.   ║
 # ║                            The three go together, or none of them.       ║
+# ║    --extras-image-digest sha256:<64>  Test channel, optional: the image  ║
+# ║                            of the tools that come on request (screen,    ║
+# ║                            media, playwright). Pinned like the image     ║
+# ║                            above; it is NOT downloaded here: `jht screen ║
+# ║                            on` pulls it, by this digest, when asked.     ║
 # ║    --branch <name>         Source branch for wrapper+compose             ║
 # ║                            (same as JHT_BRANCH=<name>, default           ║
 # ║                            production). Example to test dev-1:           ║
@@ -133,6 +138,7 @@ EXPECTED_RUNTIME_VERSION=""
 SOURCE_SHA=""
 TEST_IMAGE=""
 EXPECTED_IMAGE_DIGEST=""
+EXTRAS_IMAGE_DIGEST_OPT=""
 TEST_CHANNEL=0
 RUNTIME_PUBLISH_FAILPOINT="${JHT_RUNTIME_PUBLISH_FAILPOINT:-}"
 RUNTIME_PUBLISH_FAILURE="${JHT_RUNTIME_PUBLISH_FAILURE:-error}"
@@ -150,6 +156,12 @@ PODMAN_MACHINE_CREATED=0
 # When it was created (podman machine inspect «Created»): the marker says WHICH machine, not only the name, so a machine the person
 # creates later with the same name is not taken for this one.
 PODMAN_MACHINE_CREATED_ID=""
+# The link to the Compose plugin that THIS run made in the plugin folder of the docker client (empty when it made none, or when something
+# was already there): `jht uninstall` removes exactly that link (marker docker-compose-plugin-link: its path, its target, and whether
+# this run also made the folder).
+COMPOSE_PLUGIN_LINK_PATH=""
+COMPOSE_PLUGIN_LINK_TARGET=""
+COMPOSE_PLUGIN_DIR_CREATED=0
 # 1 only when THIS run started Colima (it was not running): `jht uninstall` stops that profile again only then (marker colima-started).
 COLIMA_STARTED_BY_INSTALLER=0
 DOCKER_CLI="docker"
@@ -207,6 +219,12 @@ while [ $# -gt 0 ]; do
       esac
       shift 2
       ;;
+    --extras-image-digest)
+      [ -n "${2:-}" ] || { printf "%s requires an argument\n" "$1" >&2; exit 2; }
+      EXTRAS_IMAGE_DIGEST_OPT="$2"
+      shift 2
+      ;;
+    --extras-image-digest=*) EXTRAS_IMAGE_DIGEST_OPT="${1#*=}"; shift ;;
     --source-sha=*) SOURCE_SHA="${1#*=}"; shift ;;
     --image=*) TEST_IMAGE="${1#*=}"; shift ;;
     --expected-image-digest=*) EXPECTED_IMAGE_DIGEST="${1#*=}"; shift ;;
@@ -241,7 +259,7 @@ while [ $# -gt 0 ]; do
       shift
       ;;
     -h|--help)
-      sed -n '2,74p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,/^# ╚/p' "$0" | sed 's/^# \{0,1\}//'  # the whole header box, whatever its length
       exit 0
       ;;
     *)
@@ -260,6 +278,12 @@ esac
 
 # The test channel is all three coordinates or none: a half-given channel
 # would install one commit's files with another image, or the reverse.
+if [ -n "$EXTRAS_IMAGE_DIGEST_OPT" ]; then
+  [ -n "$SOURCE_SHA$TEST_IMAGE$EXPECTED_IMAGE_DIGEST" ] \
+    || { printf '%s\n' "--extras-image-digest belongs to the test channel (with --source-sha, --image and --expected-image-digest)" >&2; exit 2; }
+  [[ "$EXTRAS_IMAGE_DIGEST_OPT" =~ ^sha256:[0-9a-f]{64}$ ]] \
+    || { printf '%s\n' "--extras-image-digest needs sha256:<64 lowercase hex>" >&2; exit 2; }  # whole string: grep checks line by line
+fi
 if [ -n "$SOURCE_SHA$TEST_IMAGE$EXPECTED_IMAGE_DIGEST" ]; then
   printf '%s' "$SOURCE_SHA" | grep -Eq '^[0-9a-f]{40}$' \
     || { printf '%s\n' "--source-sha needs 40 lowercase hex (with --image and --expected-image-digest)" >&2; exit 2; }
@@ -751,7 +775,19 @@ ensure_docker_compose_macos() {
   plugin_dir="${DOCKER_CONFIG:-$HOME/.docker}/cli-plugins"
   plugin_dest="$plugin_dir/docker-compose"
   if [ -x "$plugin_src" ] && { [ ! -e "$plugin_dest" ] || [ -L "$plugin_dest" ]; }; then
-    mkdir -p "$plugin_dir" && ln -sfn "$plugin_src" "$plugin_dest" || warn "Could not register the Compose plugin in $plugin_dir."
+    local link_was_absent=0 folder_was_there=0
+    if [ ! -e "$plugin_dest" ] && [ ! -L "$plugin_dest" ]; then link_was_absent=1; fi
+    if [ -d "$plugin_dir" ]; then folder_was_there=1; fi
+    if mkdir -p "$plugin_dir" && ln -sfn "$plugin_src" "$plugin_dest"; then
+      # Marked only when there was nothing at that path: a link of the person that this run replaced is not ours to remove later.
+      if [ "$link_was_absent" -eq 1 ]; then
+        COMPOSE_PLUGIN_LINK_PATH="$plugin_dest"
+        COMPOSE_PLUGIN_LINK_TARGET="$plugin_src"
+        COMPOSE_PLUGIN_DIR_CREATED=$((1 - folder_was_there))
+      fi
+    else
+      warn "Could not register the Compose plugin in $plugin_dir."
+    fi
   fi
   "$DOCKER_CLI" compose version &>/dev/null \
     || fail "docker compose is still not available after installing the plugin. Run: mkdir -p \"$plugin_dir\" && ln -sfn \"$plugin_src\" \"$plugin_dest\" ; docker compose version ; then run the installer again."
@@ -1219,6 +1255,29 @@ publish_runtime_tier() {
     && ok "runtime tier: core (the tools come after the welcome)"
 }
 
+# runtime-extras-image: the image of the tools that come on request, pinned by the test channel (`--extras-image-digest`), in a host runtime
+# file attested in an integrity file of its own (.runtime-extras-integrity), NOT in .runtime-integrity (the app compares the exact keys of
+# that one). The installer does not pull it: `jht screen on` does, by this digest. File first and integrity second: a crash between them
+# leaves a pin the wrapper refuses, never one it believes. Without the option (or outside the test channel) an earlier pin is dropped.
+stage_runtime_extras_pin() {
+  EXTRAS_STAGED="" EXTRAS_STAGED_SHA=""
+  if [ "$TEST_CHANNEL" -ne 1 ] || [ -z "$EXTRAS_IMAGE_DIGEST_OPT" ]; then
+    rm -f "$RUNTIME_DIR/runtime-extras-image" "$RUNTIME_DIR/.runtime-extras-integrity"
+    return 0
+  fi
+  EXTRAS_STAGED="$(mktemp "$RUNTIME_DIR/.runtime-extras.XXXXXX")"
+  printf 'ghcr.io/leopu00/jht@%s\n' "$EXTRAS_IMAGE_DIGEST_OPT" > "$EXTRAS_STAGED" && chmod 600 "$EXTRAS_STAGED"
+  EXTRAS_STAGED_SHA="$({ sha256sum "$EXTRAS_STAGED" 2>/dev/null || shasum -a 256 "$EXTRAS_STAGED"; } | awk '{print $1}')"
+}
+
+publish_runtime_extras_pin() {
+  [ -n "$EXTRAS_STAGED" ] || return 0
+  mv -f "$EXTRAS_STAGED" "$RUNTIME_DIR/runtime-extras-image" || return 1
+  printf 'runtime-extras-image=%s\n' "$EXTRAS_STAGED_SHA" > "$RUNTIME_DIR/.runtime-extras-integrity.tmp" && chmod 600 "$RUNTIME_DIR/.runtime-extras-integrity.tmp" \
+    && mv -f "$RUNTIME_DIR/.runtime-extras-integrity.tmp" "$RUNTIME_DIR/.runtime-extras-integrity" \
+    && ok "extras image pinned: ghcr.io/leopu00/jht@$EXTRAS_IMAGE_DIGEST_OPT (pulled when a tool is asked for)"
+}
+
 download_runtime_files() {
   step 4 "$TOTAL_STEPS_DOCKER" "Download wrapper + docker-compose.yml"
 
@@ -1357,6 +1416,7 @@ download_runtime_files() {
   elif [ -e "$image_pin" ] || [ -L "$image_pin" ]; then
     rm -f "$image_pin"
   fi
+  stage_runtime_extras_pin
   stage_runtime_tier
   local compose_sha hostsetup_sha wrapper_sha selection_sha="" machine_sha="" shim_sha=""
   if command -v sha256sum >/dev/null 2>&1; then
@@ -1412,6 +1472,7 @@ download_runtime_files() {
     mv -f "$image_pin_publish" "$image_pin"
     ok "runtime image pinned: $(cat "$image_pin")"
   fi
+  publish_runtime_extras_pin
   publish_runtime_tier
   if [ -n "$selection_publish" ]; then
     mv -f "$selection_publish" "$RUNTIME_DIR/container-runtime"
@@ -1422,6 +1483,12 @@ download_runtime_files() {
       # Second line: the profile that was started (the installer starts the default one): the uninstall stops that profile only.
       printf 'colima\ndefault\n' > "$RUNTIME_DIR/colima-started"
       chmod 600 "$RUNTIME_DIR/colima-started"
+    fi
+    # The Compose plugin link that THIS run made: `jht uninstall` removes that link, never the plugin Homebrew installed. Lines: the
+    # link's path, what it points to, 1 when this run made the plugin folder too (removed only if empty). A marker of an earlier run is kept.
+    if [ -n "$COMPOSE_PLUGIN_LINK_PATH" ]; then
+      printf '%s\n%s\n%s\n' "$COMPOSE_PLUGIN_LINK_PATH" "$COMPOSE_PLUGIN_LINK_TARGET" "$COMPOSE_PLUGIN_DIR_CREATED" > "$RUNTIME_DIR/docker-compose-plugin-link"
+      chmod 600 "$RUNTIME_DIR/docker-compose-plugin-link"
     fi
   fi
   ok "host-setup: $hostsetup_dest"

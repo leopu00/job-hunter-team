@@ -20,7 +20,10 @@ EXPECTED_EFFECTIVE_PERMISSIONS = {
     },
     "deploy.yml": {"verify": READ_CONTENTS},
     "docker.yml": {
-        "build-and-push": {"contents": "read", "packages": "write"},
+        # The checks only read; the per-architecture builds push by digest; publish tags the indexes.
+        "check": READ_CONTENTS,
+        "build": {"contents": "read", "packages": "write"},
+        "publish": {"contents": "read", "packages": "write"},
     },
     "game.yml": {"build-tauri": READ_CONTENTS},
     "lint.yml": {

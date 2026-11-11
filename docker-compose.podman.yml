@@ -86,6 +86,20 @@ services:
   jht-playwright-populate:
     userns_mode: "keep-id:uid=1001,gid=1001"
 
+  # The manual sign-in to LinkedIn (profile login): the same map of uids for the three (they share sockets, and the browser writes the profile
+  # the closer reads). The browser has no network. The proxy and the view have pasta without the way to the gateway of the host: the proxy
+  # needs the internet (its list decides what), the view only publishes the port of the base file on 127.0.0.1.
+  jht-login:
+    userns_mode: "keep-id:uid=1001,gid=1001"
+
+  jht-login-proxy:
+    userns_mode: "keep-id:uid=1001,gid=1001"
+    network_mode: "pasta:--no-udp,--no-icmp,--no-map-gw,-4"
+
+  jht-login-view:
+    userns_mode: "keep-id:uid=1001,gid=1001"
+    network_mode: "pasta:--no-udp,--no-icmp,--no-map-gw,-4"
+
   jht-telegram:
     # SO_PEERCRED è tradotto nel namespace del server. Client e server devono
     # quindi usare la stessa mappa: uid 1001 deve restare 1001 su entrambi.

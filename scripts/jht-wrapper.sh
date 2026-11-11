@@ -62,7 +62,7 @@ CONTAINER_SERVICE="jht"
 # I servizi del compose: agenti e i due servizi isolati.
 COMPOSE_SERVICES="jht jht-broker jht-telegram"
 # Every profile of the project: what looks at or takes down the WHOLE project names them all (the broker and Telegram are made on request).
-COMPOSE_ALL_PROFILES="telegram,broker,media,playwright,screen"
+COMPOSE_ALL_PROFILES="telegram,broker,media,playwright,screen,login"
 RUNTIME_MIGRATION_VOLUMES="jht-broker-state jht-secrets jht-telegram-secrets jht-telegram-state"
 ATTESTED_CONTAINER_ID=""
 if [ -n "${JHT_RUNTIME_DIR:-}" ]; then
@@ -82,6 +82,11 @@ RUNTIME_MIGRATION_MARKER="$RUNTIME_DIR/.runtime-migrated-podman"
 # container, ed e' coperto dal manifest: nessuna variabile d'ambiente serve
 # ai `jht up` successivi. Assente = produzione (immagine del compose).
 RUNTIME_IMAGE_PIN="$RUNTIME_DIR/runtime-image"
+# Il canale di test fissa anche l'immagine degli strumenti su richiesta (schermo, media, playwright), che l'installer non scarica:
+# `jht screen on` la scarica per questo digest. Sta in un file suo, attestato in un file suo (non nel manifest principale: l'app ne
+# confronta l'insieme esatto delle chiavi).
+RUNTIME_EXTRAS_PIN="$RUNTIME_DIR/runtime-extras-image"
+RUNTIME_EXTRAS_INTEGRITY="$RUNTIME_DIR/.runtime-extras-integrity"
 # `jht upgrade` aggiorna anche i due file host scaricati dall'installer. Il
 # wrapper non puo' fidarsi di un checkout Git (la distribuzione utente e'
 # image-only), quindi la fonte e' la stessa raw release dell'installer. Chi
@@ -397,6 +402,8 @@ jht_text_en() {
     uninstall.loss_purge) printf '%s' "The saved mail password and Telegram tokens are deleted too." ;;
     uninstall.purge_loss) printf '%s' "With --purge ~/.jht and ~/Documents/Job Hunter Team are deleted too: configuration, database, CVs and output. There is no way back." ;;
     compose.missing) printf '%s' "docker compose is missing: the engine answers, but the «docker compose» command does not exist (JHT needs the Compose v2 plugin). On a Mac: brew install docker-compose, then mkdir -p ~/.docker/cli-plugins && ln -sfn \"\$(brew --prefix)/opt/docker-compose/bin/docker-compose\" ~/.docker/cli-plugins/docker-compose. On Linux: install the docker-compose-v2 package (apt) or docker-compose-plugin (dnf). Then run the command again." ;;
+    uninstall.compose_link_removed) printf '%s' "Removed the link to the Docker Compose plugin that the JHT installer made: %s. The plugin that Homebrew installed stays (brew uninstall docker-compose removes it)." ;;
+    uninstall.compose_link_left) printf '%s' "The link to the Docker Compose plugin that the JHT installer made could not be removed: %s. You can delete it." ;;
     uninstall.colima_stopping) printf '%s' "Stopping the Colima virtual machine, which the JHT installer started and where nothing else is running; your folders on the Mac stay." ;;
     uninstall.colima_busy) printf '%s' "Colima is still running: the JHT installer started it, but other containers are running in it, so it is left on. To stop it: colima stop." ;;
     uninstall.colima_stop_failed) printf '%s' "Colima could not be stopped. To stop it: colima stop." ;;
@@ -471,6 +478,8 @@ jht_text_it() {
     uninstall.loss_purge) printf '%s' "Vengono cancellati anche la password della posta e i token di Telegram salvati." ;;
     uninstall.purge_loss) printf '%s' "Con --purge vengono cancellati anche ~/.jht e ~/Documents/Job Hunter Team: configurazione, database, CV e output. Non si torna indietro." ;;
     compose.missing) printf '%s' "manca docker compose: il motore risponde, ma il comando «docker compose» non esiste (a JHT serve il plugin Compose v2). Su Mac: brew install docker-compose, poi mkdir -p ~/.docker/cli-plugins && ln -sfn \"\$(brew --prefix)/opt/docker-compose/bin/docker-compose\" ~/.docker/cli-plugins/docker-compose. Su Linux: installa il pacchetto docker-compose-v2 (apt) o docker-compose-plugin (dnf). Poi rilancia il comando." ;;
+    uninstall.compose_link_removed) printf '%s' "Ho tolto il collegamento al plugin Docker Compose che aveva messo l'installer di JHT: %s. Il plugin installato con Homebrew resta (lo toglie brew uninstall docker-compose)." ;;
+    uninstall.compose_link_left) printf '%s' "Non sono riuscito a togliere il collegamento al plugin Docker Compose che aveva messo l'installer di JHT: %s. Lo puoi cancellare." ;;
     uninstall.colima_stopping) printf '%s' "Fermo la macchina virtuale Colima, che ha acceso l'installer di JHT e dove non gira nient'altro; le tue cartelle sul Mac restano." ;;
     uninstall.colima_busy) printf '%s' "Colima resta accesa: l'ha accesa l'installer di JHT, ma dentro girano altri container, quindi la lascio. Per fermarla: colima stop." ;;
     uninstall.colima_stop_failed) printf '%s' "Non sono riuscito a fermare Colima. Per fermarla: colima stop." ;;
@@ -663,14 +672,17 @@ runtime_helper_absent_answer() {
 # $2 is the command of the person: only `add` and `remove` fetch a helper that is missing. `jht tools` never does: its commands run by
 # themselves after the install, and a download at the tip of the branch is not something to start without the person asking for it.
 runtime_helper_load() {
-  local helper="$1"
+  local helper="$1" extras_digest
   if [ -z "$(runtime_helper_digest "$helper")" ]; then
     case "${2:-}" in
       add|remove) runtime_helpers_install || { err "script $helper non scaricabile: controlla la rete o fai 'jht upgrade'"; return 1; } ;;
       *) err "script $helper non ancora installato: 'jht upgrade' (o un 'jht integration add/remove') e riprova"; return 1 ;;
     esac
   fi
-  runtime_helpers_trusted && . "$RUNTIME_DIR/$helper"
+  runtime_helpers_trusted || return 1
+  . "$RUNTIME_DIR/$helper" || return 1
+  extras_digest="$(runtime_extras_digest)" || { err "pin dell'immagine degli strumenti non attendibile"; return 1; }
+  EXTRAS_IMAGE_DIGEST="$extras_digest"
 }
 
 runtime_write_manifest() {
@@ -772,6 +784,7 @@ runtime_bundle_trusted() {
   fi
   runtime_helpers_trusted || return 1
   runtime_tier_trusted || return 1
+  runtime_extras_pin_trusted || return 1
   grep -Fqx 'JHT_HOST_RUNTIME_PROTOCOL=1' "$WRAPPER_PATH" || return 1
   grep -Fqx 'JHT_HOST_SETUP_PROTOCOL=1' "$HOST_SETUP_SCRIPT" || return 1
   grep -Eq '^[[:space:]]*-[[:space:]]*jht-runtime-mask:/jht_home/runtime([[:space:]]|$)' "$COMPOSE_FILE" || return 1
@@ -785,6 +798,37 @@ runtime_image_pin_value() {
   value="$(tr -d '\n' < "$RUNTIME_IMAGE_PIN")"
   printf '%s' "$value" | grep -Eqx 'ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64}' || return 1
   printf '%s\n' "$value"
+}
+
+# Il digest del pin degli strumenti su richiesta, solo nella forma canonica scritta da install.sh (`ghcr.io/leopu00/jht@sha256:<64>`).
+runtime_extras_pin_value() {
+  local value
+  [ -f "$RUNTIME_EXTRAS_PIN" ] || return 1
+  [ "$(wc -l < "$RUNTIME_EXTRAS_PIN" | tr -d ' ')" = "1" ] || return 1
+  value="$(tr -d '\n' < "$RUNTIME_EXTRAS_PIN")"
+  printf '%s' "$value" | grep -Eqx 'ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64}' || return 1
+  printf '%s\n' "${value#ghcr.io/leopu00/jht@}"
+}
+
+# Il pin degli strumenti: file regolare del proprietario, attestato nel suo file di integrita', forma canonica, e solo accanto al pin
+# del canale di test (e' li' che l'installer lo scrive). Un'attestazione senza il pin, o un pin senza attestazione: runtime non attendibile.
+runtime_extras_pin_trusted() {
+  if [ -e "$RUNTIME_EXTRAS_PIN" ] || [ -L "$RUNTIME_EXTRAS_PIN" ]; then
+    runtime_node_safe "$RUNTIME_EXTRAS_PIN" file || return 1
+    runtime_node_safe "$RUNTIME_EXTRAS_INTEGRITY" file || return 1
+    [ "$(sed -n 's/^runtime-extras-image=//p' "$RUNTIME_EXTRAS_INTEGRITY" | head -n 1)" = "$(runtime_sha256 "$RUNTIME_EXTRAS_PIN")" ] || return 1
+    runtime_extras_pin_value >/dev/null || return 1
+    [ -f "$RUNTIME_IMAGE_PIN" ] || return 1
+  elif [ -e "$RUNTIME_EXTRAS_INTEGRITY" ] || [ -L "$RUNTIME_EXTRAS_INTEGRITY" ]; then
+    return 1
+  fi
+}
+
+# Il digest degli strumenti che questo runtime usa: quello del pin attestato se c'e' (vince sulla costante della release, come il pin
+# dell'immagine vince su quella del compose), altrimenti la costante, vuota finche' la release non ha l'immagine degli strumenti.
+runtime_extras_digest() {
+  runtime_extras_pin_trusted || return 1
+  if [ -e "$RUNTIME_EXTRAS_PIN" ]; then runtime_extras_pin_value; else printf '%s\n' "$EXTRAS_IMAGE_DIGEST"; fi
 }
 
 # Il livello dell'immagine (P4): il file `runtime-tier` (solo `core`) lo scrive l'installer quando la release ha un nucleo; senza
@@ -1707,7 +1751,7 @@ container_down() {
         info "niente da fermare: nessun container del progetto."
         return 0
       fi
-      for svc in "$BROKER_SERVICE" "$TELEGRAM_SERVICE" "$MEDIA_SERVICE" "$PLAYWRIGHT_POPULATE_SERVICE" "$SCREEN_SERVICE"; do
+      for svc in "$BROKER_SERVICE" "$TELEGRAM_SERVICE" "$MEDIA_SERVICE" "$PLAYWRIGHT_POPULATE_SERVICE" "$SCREEN_SERVICE" "$LOGIN_SERVICE" "$LOGIN_PROXY_SERVICE" "$LOGIN_VIEW_SERVICE"; do
         svc_status=0
         read_only_service_id "$svc" any-config >/dev/null || svc_status=$?
         case "$svc_status" in
@@ -1943,6 +1987,9 @@ TELEGRAM_SERVICE="jht-telegram"
 MEDIA_SERVICE="jht-media"
 PLAYWRIGHT_POPULATE_SERVICE="jht-playwright-populate"
 SCREEN_SERVICE="jht-screen"
+LOGIN_SERVICE="jht-login"
+LOGIN_PROXY_SERVICE="jht-login-proxy"
+LOGIN_VIEW_SERVICE="jht-login-view"
 
 telegram_admin() {
   local telegram_id
@@ -4003,6 +4050,19 @@ Niente si scarica o si accende finche' non lo chiedi con `on`. Lo stream e' in s
 JHTSCREENHELP
 }
 
+# `jht linkedin --help`: la sua riga d'uso, a testo fisso: un aiuto non scarica niente.
+linkedin_help() {
+  cat <<'JHTLINKEDINHELP'
+Uso: jht linkedin <comando>
+
+  login [--stop]    l'accesso a mano a LinkedIn (con Google): un browser in un container a parte, senza rete, di cui vedi
+                    e usi la finestra dall'app; --stop chiude tutto
+  status --json     dice se l'accesso e' in corso e se la sessione di LinkedIn e' salvata
+
+Niente si scarica o si accende finche' non lo chiedi con `login`.
+JHTLINKEDINHELP
+}
+
 # Richiesta di sola informazione: se il container e' gia' in piedi si serve
 # l'aiuto vero, altrimenti quello locale. In nessun caso si avvia qualcosa.
 serve_help_without_docker() {
@@ -4022,7 +4082,7 @@ serve_help_without_docker() {
 # falso errore; il loro aiuto resta quindi quello locale anche in quel caso.
 host_command_uses_local_help() {
   case "$1" in
-    up|start-container|down|stop-container|restart|recreate|upgrade|clean-images|logs|status|shell|oauth-login|claude-login|setup|download|podman-machine-recreate|mail|telegram|integration|screen|tools|reset|migrate-runtime)
+    up|start-container|down|stop-container|restart|recreate|upgrade|clean-images|logs|status|shell|oauth-login|claude-login|setup|download|podman-machine-recreate|mail|telegram|integration|screen|linkedin|tools|reset|migrate-runtime)
       return 0
       ;;
   esac
@@ -6121,8 +6181,8 @@ uninstall_podman_machine_state() {
 # generico per cancellare: oltre al progetto si chiede il servizio, il volume
 # logico o la rete di default di QUESTO compose, come fa `jht reset`.
 UNINSTALL_PROJECTS="jht host-runtime"
-UNINSTALL_SERVICES="jht jht-broker jht-telegram jht-media jht-playwright-populate jht-screen"
-UNINSTALL_VOLUMES="jht-deps jht-runtime-mask jht-secrets jht-broker-state jht-broker-sock jht-telegram-broker-sock jht-telegram-secrets jht-telegram-state jht-telegram-sock jht-telegram-inbox jht-media-in jht-media-out jht-playwright jht-x11"
+UNINSTALL_SERVICES="jht jht-broker jht-telegram jht-media jht-playwright-populate jht-screen jht-login jht-login-proxy jht-login-view"
+UNINSTALL_VOLUMES="jht-deps jht-runtime-mask jht-secrets jht-broker-state jht-broker-sock jht-telegram-broker-sock jht-telegram-secrets jht-telegram-state jht-telegram-sock jht-telegram-inbox jht-media-in jht-media-out jht-playwright jht-x11 jht-login-vnc jht-login-egress"
 
 uninstall_docker_ids() {
   local docker_bin="$1" kind="$2" project name ids id
@@ -6227,6 +6287,33 @@ uninstall_colima() {
     return 0
   fi
   warn "$(jht_say uninstall.colima_running)"
+}
+
+# Il collegamento al plugin Compose che l'installer ha messo nella cartella dei plugin del client docker: <runtime>/docker-compose-plugin-link
+# dice (3 righe) il percorso del collegamento, dove punta, e se la cartella l'ha fatta l'installer. Si toglie SOLO quel collegamento
+# (rm del link, mai del plugin di Homebrew), se il marcatore e' un file normale, il percorso e' quello della cartella del client di
+# questa persona (~/.docker o DOCKER_CONFIG) e il collegamento e' ancora un link che punta a quello che dice il marcatore: un link che la
+# persona ha rifatto altrove non si tocca. La cartella la si toglie solo se l'ha fatta l'installer e ormai e' vuota (rmdir). Mai un
+# errore di disinstallazione: al peggio un avviso.
+uninstall_compose_plugin_link() {
+  local marker="$1/docker-compose-plugin-link" link target made
+  [ -f "$marker" ] && [ ! -L "$marker" ] || return 0
+  link="$(head -c 1024 "$marker" 2>/dev/null | sed -n '1p' | tr -d '\r')"
+  target="$(head -c 1024 "$marker" 2>/dev/null | sed -n '2p' | tr -d '\r')"
+  made="$(head -c 1024 "$marker" 2>/dev/null | sed -n '3p' | tr -d '\r')"
+  [ -n "$link" ] && [ -n "$target" ] || return 0
+  case "$link" in
+    "$HOME/.docker/cli-plugins/docker-compose") ;;
+    *) [ -n "${DOCKER_CONFIG:-}" ] && [ "$link" = "${DOCKER_CONFIG%/}/cli-plugins/docker-compose" ] || return 0 ;;
+  esac
+  [ -L "$link" ] && [ "$(readlink "$link" 2>/dev/null)" = "$target" ] || return 0
+  if rm -f -- "$link" 2>/dev/null && [ ! -e "$link" ] && [ ! -L "$link" ]; then
+    info "$(jht_say uninstall.compose_link_removed "$link")"
+    [ "$made" != 1 ] || rmdir -- "$(dirname "$link")" 2>/dev/null || true
+  else
+    warn "$(jht_say uninstall.compose_link_left "$link")"
+  fi
+  return 0
 }
 
 # Le immagini di JHT (nucleo, piena e le vecchie) nel Docker di questo computer, senza -f e senza pulizie di massa, dopo i container.
@@ -6517,6 +6604,7 @@ jht_uninstall() {
   [ "$UNINSTALL_IMAGES_REMOVED" -eq 0 ] || info "$(jht_say uninstall.images_removed "$UNINSTALL_IMAGES_REMOVED")"
   # La macchina Colima dopo le immagini (servono il motore acceso) e prima della cartella del runtime (che ne tiene il marcatore).
   uninstall_colima "$runtime_dir" "$selection"
+  uninstall_compose_plugin_link "$runtime_dir"
 
   uninstall_phase uninstall_runtime
   if [ -e "$runtime_dir" ] || [ -L "$runtime_dir" ]; then
@@ -6578,6 +6666,10 @@ if [ "$#" -gt 1 ] && [ "$SUB" != "game" ] && [ "$SUB" != "gui" ] && [ "$SUB" != 
         fi
         if [ "$SUB" = screen ] && [ "$#" -eq 2 ]; then
           screen_help
+          exit 0
+        fi
+        if [ "$SUB" = linkedin ] && [ "$#" -eq 2 ]; then
+          linkedin_help
           exit 0
         fi
         if [ "$SUB" = setup ]; then
@@ -6862,6 +6954,21 @@ case "$SUB" in
     fi
     runtime_helper_load jht-integration.sh "$screen_verb" || exit 1
     integration_main "$screen_verb" screen "${@:3}"
+    exit $?
+    ;;
+
+  linkedin)
+    # The manual sign-in to LinkedIn. The lines the app reads are the same with or without the helper: a read-only question or a stop
+    # needs nothing to be installed, and only `login` fetches the helper if it is not there.
+    require_compose_file
+    if [ -z "$(runtime_helper_digest jht-integration.sh)" ]; then
+      case "${*:2}" in
+        "status --json") printf '{"ok": true, "view": "idle", "linkedin": "login_required"}\n'; exit 0 ;;
+        "login --stop") printf '{"ok": true}\n'; exit 0 ;;
+      esac
+    fi
+    runtime_helper_load jht-integration.sh add || exit 1
+    linkedin_main "${@:2}"
     exit $?
     ;;
 

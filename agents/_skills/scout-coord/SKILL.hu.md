@@ -25,12 +25,12 @@ python3 /app/shared/skills/scout_coord.py doctor
 ## 1. lepes — Tarsak felderitese
 
 ```bash
-tmux list-sessions 2>/dev/null | awk -F: '{print $1}' | grep -E '^SCOUT-[0-9]+$'
+python3 /app/shared/skills/scout_coord.py auto $MY_ID   # első burst: a sávod + az első keresés
 ```
 
-Ha te vagy az egyetlen felsorolt scout → nincs szukseg targyalasra, igenyelj mindent, amit kezelni tudsz. Ugorj a 4. lepesre.
+Az első burstben a terv dönt, senki sem tárgyal: ez kiírja a sávodat (`areas`, `sources`) és az első keresésedet. Azonnal kezdj keresni; hagyd ki a 2-3. lépést. Maradj a sávodban, utána `scout_coverage.py next --agent $MY_ID`.
 
-Ha masok is fel vannak sorolva → targyalnod kell (2-3. lepes), mielott barmit scrapelnel.
+Csak a burst után tárgyalj (2-3. lépés), ha egy forrás kimerült vagy egy társ leállt: a társakat listázd így: `tmux list-sessions | awk -F: '{print $1}' | grep -E '^SCOUT-[0-9]+$'`; ha egyedül vagy → 4. lépés.
 
 ## 2. lepes — Elavult allapot torlese
 

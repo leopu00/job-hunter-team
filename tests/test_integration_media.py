@@ -138,4 +138,4 @@ def test_every_down_and_listing_of_the_wrapper_names_the_media_profile_with_the_
     power = WRAPPER_PS1.read_text(encoding="utf-8")
     downs = [line for line in power.splitlines() if re.search(r"'--profile'(,| ')\s*'?telegram'?.*\b(down|ps)\b", line)]
     assert len(downs) >= 4
-    assert not [line for line in downs if not all(f"'{name}'" in line for name in ("media", "playwright", "screen"))], "a profile is missing"
+    assert not [line for line in downs if not all(f"'{name}'" in line for name in ("media", "playwright", "screen", "login"))], "a profile is missing"

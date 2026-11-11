@@ -16,13 +16,23 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from windows_native_fakes import powershell_argv
+from windows_native_fakes import install_fake, powershell_argv
 
 ROOT = Path(__file__).resolve().parent.parent
 LIBRARY = ROOT / "scripts" / "jht-integration.ps1"
 WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
 INSTALLER = ROOT / "scripts" / "install.ps1"
 ENABLER = ROOT / "scripts" / "enable-podman-windows-runtime.ps1"
+
+FAKE_PODMAN = """#!/bin/sh
+echo "PODMAN $*" >> "$T_LOG"
+case "$1" in
+  system)
+    echo 'jht-podman ssh://user@127.0.0.1:49650/run/user/1000/podman/podman.sock default=true'
+    echo 'work-server ssh://admin@buildhost:22/run/podman/podman.sock default=false' ;;
+  machine) echo 'jht-podman running=true starting=false port=49650 lastup=2 minutes ago' ;;
+esac
+"""
 
 CASE = r"""
 $ErrorActionPreference = 'Stop'
@@ -34,6 +44,8 @@ $Container = 'jht'; $TelegramContainer = 'jht-telegram'; $BrokerContainer = 'jht
 $BrokerMadeMarker = Join-Path $RuntimeDir '.broker-made'
 $ExtrasImageDigest = $env:T_EXTRAS
 $JhtHome = $env:T_JHT_HOME
+$ContainerRuntime = if ($env:T_RUNTIME_KIND) { $env:T_RUNTIME_KIND } else { 'docker' }
+$script:IntegrationRuntimeLogPath = $env:T_RT_LOG
 function Test-ProtectedRuntimeNode {
   param([string]$Path, [switch]$Directory)
   $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
@@ -63,10 +75,25 @@ function Invoke-Compose {
   $global:LASTEXITCODE = 0
   if ($env:T_COMPOSE_FAIL -eq '1') { $global:LASTEXITCODE = 1; return }
   $words = @($Rest); $service = $words[$words.Count - 1]
+  # what Podman does for a service that is not there: a line on the REAL stderr of a native program, and exit 0
+  if ($env:T_NOISY_STDERR -eq '1' -and (($words -contains 'rm') -or ($words -contains 'stop'))) {
+    if ($env:OS -eq 'Windows_NT') { & cmd /c 'echo No stopped containers 1>&2' } else { & sh -c 'echo No stopped containers >&2' }
+    $global:LASTEXITCODE = 0
+  }
   if ($words -contains 'run' -and $env:T_SWAP_LINK) {
     $folder = Join-Path $JhtHome 'live-screen'
     Remove-Item -LiteralPath $folder -Recurse -Force -ErrorAction SilentlyContinue
     New-Item -ItemType SymbolicLink -Path $folder -Target $env:T_SWAP_LINK | Out-Null
+  }
+  # the first `up` of a tool that finds its connection gone, as Podman words it
+  if ($env:T_UP_FAILS -and ($words -contains 'up')) {
+    $seen = Get-Content -LiteralPath $env:T_UP_COUNTER -ErrorAction SilentlyContinue | Select-Object -First 1
+    $tries = 1 + $(if ($seen) { [int]$seen } else { 0 })
+    Set-Content -LiteralPath $env:T_UP_COUNTER -Value $tries
+    if ($tries -le [int]$env:T_UP_FAILS) {
+      [Console]::Error.WriteLine('Error: get machine connection URI: could not find a matching machine for connection "ssh://user@127.0.0.1:49649/run/user/1000/podman/podman.sock"')
+      $global:LASTEXITCODE = 1; return
+    }
   }
   $running = @(Get-Content -LiteralPath $env:T_RUNNING)
   if ($words -contains 'up') { $running += $service }
@@ -87,6 +114,7 @@ function docker {
   if ($args[0] -eq 'exec' -and $env:T_EXEC_FAIL -eq '1') { $global:LASTEXITCODE = 1; 'No matching distribution found for gspread' }
 }
 . $env:T_LIBRARY
+$IntegrationRetryWaitSeconds = 0
 # Windows PowerShell 5.1 hands an array over as ONE object; the pipeline makes it the elements, as 7 does
 $argv = @(ConvertFrom-Json -InputObject $env:T_ARGS | ForEach-Object { $_ })
 $done = @(Invoke-IntegrationCommand ([string[]]$argv))
@@ -112,13 +140,17 @@ def host(tmp_path):
     h.tmp, h.runtime, h.script = tmp_path, runtime, script
     h.log, h.volumes, h.running = tmp_path / "log", tmp_path / "volumes", tmp_path / "running"
     h.argv = powershell_argv()
+    # the program podman.exe of the engine, found on the PATH like the real one (not a function of the profile)
+    h.bin = tmp_path / "bin"
+    h.bin.mkdir()
+    install_fake(h.bin, "podman.exe", FAKE_PODMAN)
     return h
 
 
 def run(host, args: list[str], **extra: str) -> subprocess.CompletedProcess:
     env = {**os.environ, "T_RUNTIME": str(host.runtime), "T_LOG": str(host.log), "T_VOLUMES": str(host.volumes),
            "T_RUNNING": str(host.running), "T_LIBRARY": str(LIBRARY), "T_ARGS": json.dumps(args),
-           "T_JHT_HOME": str(host.tmp / "jht-home"), **extra}
+           "T_JHT_HOME": str(host.tmp / "jht-home"), "PATH": f"{host.bin}{os.pathsep}{os.environ['PATH']}", **extra}
     return subprocess.run([*host.argv, "-File", str(host.script)], env=env, capture_output=True, text=True, timeout=120)
 
 
@@ -130,13 +162,13 @@ def log(host) -> str:
     return host.log.read_text(encoding="utf-8")
 
 
-def test_list_json_nothing_added_and_one_not_available_yet(host):
+def test_list_json_nothing_added_and_the_login_says_how_it_is_switched_on(host):
     result = run(host, ["list", "--json"])
     assert result.returncode == 0, result.stderr
     found = rows(result)
     assert list(found) == ["google", "telegram", "mail", "linkedin-login", "screen", "media"]
     assert {found[i]["state"] for i in ("google", "telegram", "mail", "screen", "media")} == {"not_installed"}
-    assert found["linkedin-login"] == {"id": "linkedin-login", "state": "not_installed", "reason": "non disponibile ancora"}
+    assert found["linkedin-login"] == {"id": "linkedin-login", "state": "not_installed", "reason": "si accende con: jht linkedin login"}
 
 
 def test_state_is_running_ready_error_from_the_engine(host):
@@ -179,12 +211,11 @@ def test_add_google_runs_the_fixed_text_and_a_failure_is_kept_one_line(host):
     assert rows(run(host, ["list", "--json"]))["google"]["state"] == "error"
 
 
-def test_what_is_not_available_yet_is_refused_with_its_own_code(host):
-    for action in ("add", "remove"):
-        result = run(host, [action, "linkedin-login", "--json"])
-        assert result.returncode == 3, (action, result.stderr)
-        assert json.loads(result.stdout)["reason"] == "non disponibile ancora"
-    assert log(host) == ""
+def test_the_sign_in_to_linkedin_is_not_added_it_is_switched_on_by_its_own_command_and_add_touches_nothing(host):
+    result = run(host, ["add", "linkedin-login", "--json"])
+    assert result.returncode == 3, result.stderr
+    assert "jht linkedin login" in json.loads(result.stdout)["reason"]
+    assert not [line for line in log(host).splitlines() if line.startswith("COMPOSE")], "nothing is started by an add"
 
 
 @pytest.mark.parametrize("hostile", ["google;touch HIT", "../x", "$(Get-Date)", "Google", "all", "-x", "`ls`"])
@@ -251,7 +282,7 @@ def test_wrapper_installer_enabler_and_library_agree_on_the_helper():
     assert "$JHT_INTEGRATION_PROTOCOL = 1\n" in wrapper
     assert re.search(r"'integration' \{\n    Require-ComposeFile\n", wrapper)
     assert "$mayFetch = $Rest.Count -gt 0" in wrapper                      # only add/remove fetch a missing helper
-    assert "'integration', 'screen', 'tools'," in wrapper                          # its help is the local one, and so is the one of tools
+    assert "'integration', 'screen', 'linkedin', 'tools'," in wrapper                          # its help is the local one, and so is the one of tools
     assert "jht-integration.ps1" in installer and "scripts/jht-integration.ps1" in installer
     assert "jht-integration.ps1=$integrationHash" in enabler and "'.runtime-helpers'" in enabler
     assert "$integrationHash" not in next(l for l in enabler.splitlines() if l.startswith('$manifest = "version=1'))   # the main manifest is the app's
@@ -262,7 +293,10 @@ def test_wrapper_installer_enabler_and_library_agree_on_the_helper():
 def test_the_library_passes_nothing_the_person_typed_to_a_native_command():
     code = "\n".join(line for line in _text(LIBRARY).splitlines() if not line.lstrip().startswith("#"))
     assert not re.search(r"\b(Invoke-Expression|iex)\b|&\s*\$", code)
-    assert len(re.findall(r"docker exec", code)) == 1 and "$IntegrationGoogleCode" in code
+    # the docker exec are fixed texts: the Google one, and the two questions to the view of the login, on the id the wrapper attested
+    execs = re.findall(r"docker exec[^\n]*", code)
+    assert len(execs) == 3 and sum("$IntegrationGoogleCode" in e for e in execs) == 1
+    assert sum(bool(re.search(r"docker exec \$id python3 /app/shared/login/login_view\.py (grant|status) 2>\$null", e)) for e in execs) == 2
 
 
 # ---- media: the extras image by the digest the wrapper carries, then the `media` profile ----
@@ -357,6 +391,14 @@ def test_remove_screen_takes_the_container_and_the_image_and_purge_only_the_disp
     assert [line for line in lines if line.startswith("DOCKER volume rm")] == ["DOCKER volume rm jht_jht-x11"]
 
 
+@pytest.mark.parametrize("tool", ["screen", "media", "telegram"])
+def test_removing_a_tool_that_is_not_there_lets_no_stderr_of_the_engine_through(host, tool):
+    done = run(host, ["remove", tool, "--json"], T_EXTRAS=DIGEST, T_NOISY_STDERR="1")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "No stopped containers" not in done.stdout + done.stderr
+    assert f"COMPOSE --profile {tool} rm -f jht-{tool}" in log(host).splitlines()
+
+
 def _link_or_skip(link: Path, target: Path) -> None:
     try:
         link.symlink_to(target, target_is_directory=True)
@@ -386,3 +428,47 @@ def test_a_link_put_there_while_the_browser_was_copied_stops_the_run_before_the_
     done = run(host, ["add", "screen", "--json"], T_EXTRAS=DIGEST, T_SWAP_LINK=str(target))
     assert done.returncode == 1 and "non e' una cartella normale" in json.loads(done.stdout)["reason"], done.stdout + done.stderr
     assert "run --rm" in log(host) and "up -d" not in log(host)
+
+
+# ---- the engine: the state of a failed `up` is written down, and the `up` is tried once more ----
+@pytest.mark.parametrize("tool", ["screen", "media"])
+def test_a_first_up_that_loses_the_podman_connection_leaves_the_state_in_the_log_and_is_tried_again(host, tool):
+    rt_log = host.tmp / "logs" / "runtime.log"
+    done = run(host, ["add", tool, "--json"], T_EXTRAS=DIGEST, T_RUNTIME_KIND="podman", T_UP_FAILS="1", T_UP_COUNTER=str(host.tmp / "ups"),
+               T_RT_LOG=str(rt_log), CONTAINER_CONNECTION="jht-podman")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert json.loads(done.stdout)["state"] == "running"
+    assert log(host).count(f"COMPOSE --profile {tool} up -d jht-{tool}") == 2
+    text = rt_log.read_text(encoding="utf-8")
+    assert f"integration_engine_failed: tool={tool} exit=1" in text and f"integration_engine_retried: tool={tool} exit=0" in text
+    assert "connection_used=jht-podman" in text and "port=49650" in text and "ssh://user@127.0.0.1:49650" in text
+    assert "PODMAN system connection list" in log(host) and "PODMAN machine list" in log(host)
+    # names, ports and running state: never an identity file or a key
+    assert "identity" not in text.lower() and "BEGIN" not in text
+    # the person's connections to other hosts stay out of it
+    assert "work-server" not in text and "buildhost" not in text
+
+
+def test_a_second_failure_ends_the_command_and_says_where_the_state_is(host):
+    rt_log = host.tmp / "logs" / "runtime.log"
+    done = run(host, ["add", "screen", "--json"], T_EXTRAS=DIGEST, T_RUNTIME_KIND="podman", T_UP_FAILS="2", T_UP_COUNTER=str(host.tmp / "ups"),
+               T_RT_LOG=str(rt_log))
+    assert done.returncode == 1
+    assert json.loads(done.stdout)["reason"] == "il container dello schermo non parte"
+    assert str(rt_log) in done.stderr
+    assert "integration_engine_retried: tool=screen exit=1" in rt_log.read_text(encoding="utf-8")
+
+
+def test_a_good_first_up_writes_nothing_and_asks_the_engine_nothing(host):
+    rt_log = host.tmp / "logs" / "runtime.log"
+    done = run(host, ["add", "screen", "--json"], T_EXTRAS=DIGEST, T_RUNTIME_KIND="podman", T_RT_LOG=str(rt_log))
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert not rt_log.exists() and "PODMAN" not in log(host)
+    assert log(host).count("up -d jht-screen") == 1
+
+
+def test_without_a_podman_machine_a_failed_up_is_not_repeated_and_nothing_is_written(host):
+    rt_log = host.tmp / "logs" / "runtime.log"
+    done = run(host, ["add", "screen", "--json"], T_EXTRAS=DIGEST, T_UP_FAILS="1", T_UP_COUNTER=str(host.tmp / "ups"), T_RT_LOG=str(rt_log))
+    assert done.returncode == 1
+    assert log(host).count("up -d jht-screen") == 1 and not rt_log.exists() and "PODMAN" not in log(host)

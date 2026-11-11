@@ -25,12 +25,12 @@ python3 /app/shared/skills/scout_coord.py doctor
 ## Schritt 1 — Peers entdecken
 
 ```bash
-tmux list-sessions 2>/dev/null | awk -F: '{print $1}' | grep -E '^SCOUT-[0-9]+$'
+python3 /app/shared/skills/scout_coord.py auto $MY_ID   # erster Burst: deine Spur + erste Suche
 ```
 
-Wenn du der einzige gelistete Scout bist → keine Verhandlung nötig, beanspruche alles, was du bewältigen kannst. Springe zu Schritt 4.
+Im ersten Burst entscheidet der Plan, niemand verhandelt: Das gibt deine Spur (`areas`, `sources`) und deine erste Suche aus. Such sofort los; überspringe Schritte 2-3. Bleib in deiner Spur, danach `scout_coverage.py next --agent $MY_ID`.
 
-Wenn andere gelistet sind → du musst verhandeln (Schritte 2-3), bevor du irgendetwas scrapst.
+Verhandle (Schritte 2-3) erst nach dem Burst, wenn eine Quelle erschöpft ist oder ein Kollege stoppte: Peers mit `tmux list-sessions | awk -F: '{print $1}' | grep -E '^SCOUT-[0-9]+$'` auflisten; allein → Schritt 4.
 
 ## Schritt 2 — Veralteten Zustand zurücksetzen
 

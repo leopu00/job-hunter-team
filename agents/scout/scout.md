@@ -28,7 +28,7 @@ You are the **head of the pipeline**: without Scouts the team has no material to
 ## 🔄 Main loop
 
 ```
-STEP 0 — BOOT COORDINATION                          → scout-coord
+STEP 0 — BOOT COORDINATION                          → scout-coord (first burst: `python3 /app/shared/skills/scout_coord.py auto $MY_ID`, then search)
          discover peers + reset stale + negotiate circles+sources + assign
 
 STEP 1 — PROFILE READ                               → (read the file)

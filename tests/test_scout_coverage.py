@@ -127,7 +127,8 @@ def test_a_403_seen_only_from_the_mac_does_not_close_a_source_in_the_table_the_s
         assert _state([_pass(key[0], key[1], "role_language", "a", returned=0, status="closed")], key[0], key[1])["state"] == "closed"
     assert by[("jobbsafari", "se")]["tier"] == "core"
     # what the table closes was seen closed on a real run (the squad's own pass log), nothing from one network alone
-    assert sorted(e["slug"] for e in by.values() if e["access"] == "closed") == ["eu-remote-jobs", "remote-rocketship"]
+    # (irishjobs 403 and jobgether's JavaScript shell on the runs of 10/11 and 11/11; the others on earlier ones)
+    assert sorted(e["slug"] for e in by.values() if e["access"] == "closed") == ["careerjet", "eu-remote-jobs", "flexjobs", "irishjobs", "jobgether", "jobs-ie", "remote-rocketship"]
     hub = by[("thehub", "se")]
     assert hub["tier"] == "core" and hub["portal_language"] == "en"
     rows = [_pass("thehub", "se", "role", "developer"), _pass("thehub", "se", "role", "engineer"), _pass("thehub", "se", "broad", "internship")]
@@ -162,8 +163,8 @@ def test_three_different_queries_without_a_wide_one_are_not_coverage_and_the_nex
     assert (state["state"], state["passes"], state["distinct_queries"]) == ("partial", 3, 3)
     assert any("BROAD" in m and "broad" in m for m in state["missing"]) and not any("role_language" in m for m in state["missing"])
     assert state["next_kind"] == "broad"
-    english = [_pass("irishjobs", "ie", "role", q) for q in ("developer", "engineer", "junior developer")]
-    assert _state(english, "irishjobs", "ie")["state"] == "partial"
+    english = [_pass("thehub", "se", "role", q) for q in ("developer", "engineer", "junior developer")]
+    assert _state(english, "thehub", "se")["state"] == "partial"
 
 
 def test_three_passes_of_the_same_query_are_not_coverage(profile):
@@ -178,8 +179,8 @@ def test_a_portal_in_another_language_needs_a_query_in_it(profile):
     state = _state(rows, "arbetsformedlingen")
     assert state["state"] == "partial" and any("role_language" in m for m in state["missing"])    # wide, but not in its language
     assert state["next_kind"] == "role_language"
-    english = [_pass("irishjobs", "ie", "role", q) for q in ("developer", "engineer")] + [_pass("irishjobs", "ie", "broad", "internship")]
-    assert _state(english, "irishjobs", "ie")["state"] == "covered"
+    english = [_pass("thehub", "se", "role", q) for q in ("developer", "engineer")] + [_pass("thehub", "se", "broad", "internship")]
+    assert _state(english, "thehub", "se")["state"] == "covered"
 
 
 def test_one_closed_pass_settles_the_portal_and_it_is_shown_as_closed_never_covered(profile):
@@ -219,8 +220,8 @@ def test_candidates_and_inserted_are_counted_per_portal(profile):
 def test_the_thresholds_come_from_the_environment(profile, monkeypatch):
     monkeypatch.setenv("JHT_SCOUT_COVER_PASSES", "1")
     monkeypatch.setenv("JHT_SCOUT_COVER_QUERIES", "1")
-    assert _state([_pass("irishjobs", "ie", "broad", "internship")], "irishjobs", "ie")["state"] == "covered"
-    assert _state([_pass("irishjobs", "ie", "role", "developer")], "irishjobs", "ie")["state"] == "partial"      # still no wide one
+    assert _state([_pass("thehub", "se", "broad", "internship")], "thehub", "se")["state"] == "covered"
+    assert _state([_pass("thehub", "se", "role", "developer")], "thehub", "se")["state"] == "partial"      # still no wide one
     assert _state([_pass("arbetsformedlingen", "se", "broad", "praktik")], "arbetsformedlingen")["state"] == "partial"
 
 
@@ -234,7 +235,7 @@ def test_core_missing_names_the_core_portals_not_done_and_nothing_else(profile):
         [_pass("arbetsformedlingen", "se", "role_language", "a")]))
     assert not any(m.startswith("indeed/") for m in missing)            # email: done
     assert not any(m.startswith(("ledigajobb", "jobbland")) for m in missing)   # minor
-    assert "irishjobs/ie 0/3 +broad" in missing
+    assert "thehub/se 0/3 +broad" in missing
 
 
 def test_core_missing_is_empty_when_the_whole_core_is_done(profile):
@@ -438,3 +439,66 @@ def test_a_source_whose_robots_txt_disallows_programs_is_closed_in_the_table_wit
         assert entry["access"] == "closed" and "api" not in entry and "robots.txt" in entry["hint"], slug
     landing = next(e for e in data["groups"]["pt"] if e["slug"] == "landing-jobs")
     assert "api" not in landing and "robots.txt" in landing["hint"]
+
+
+# ── dead portals: not the first thing a Scout opens (measured 11/11: 11-17 of 30 minutes on them) ──────────────────────
+PROFILE_IT_EN = "languages:\n  - language: Italiano\n    level: native\n  - language: English\n    level: B2\npreferences:\n  work_mode: remote\n"
+
+
+def test_the_portals_that_were_seen_dead_on_the_runs_are_closed_in_the_table_with_the_reason():
+    data = cov.table()
+    by = {(e["slug"], e["country"]): e for g in data["groups"].values() for e in g}
+    for key in (("infojobs-it", "it"), ("irishjobs", "ie"), ("cliclavoro", "it"), ("jobgether", "remote"),
+                ("jobs-ie", "ie"), ("careerjet", "se"), ("flexjobs", "remote")):
+        assert by[key]["access"] == "closed" and by[key]["hint"], key
+    assert "shut down" in by[("infojobs-it", "it")]["hint"]
+    # not closed: a 403 seen on one run only, or a path that was guessed wrong
+    # (totaljobs answers from another network and was blocked only from the VPS: one network alone does not close it)
+    for key in (("monster-it", "it"), ("gradireland", "ie"), ("weworkremotely", "remote"), ("himalayas", "remote"), ("totaljobs", "gb")):
+        assert by[key]["access"] == "search", key
+    assert "api" in by[("himalayas", "remote")]["hint"].lower() and "403" in by[("himalayas", "remote")]["hint"]
+
+
+def test_an_italian_profile_does_not_start_on_a_closed_portal(profile):
+    profile.write_text(PROFILE_IT_EN, encoding="utf-8")
+    plan = cov.load_plan()
+    first = []
+    rows = []
+    for _ in range(6):
+        step = cov.next_step(plan, rows)
+        assert step["source"] not in ("infojobs-it", "irishjobs", "cliclavoro", "jobgether"), step["source"]
+        first.append(step["source"])
+        rows += [_pass(step["source"], step["country"], k, q) for k, q in (("broad", "a"), ("role_language", "b"), ("role", "c"))]
+    assert "thehub" in first or "remotive" in first or "weworkremotely" in first
+
+
+def test_avoid_lists_the_tables_dead_sources_and_the_ones_this_run_found_dead(profile):
+    plan = cov.load_plan()
+    out = {a["source"]: a["why"] for a in cov.avoid_list(plan, [])}
+    assert {"eures", "duckduckgo", "smartrecruiters-search", "welcome-to-the-jungle"} <= set(out) and all(out.values())
+    rows = [_pass("some-board", "se", "broad", "x", returned=0, status="closed"),
+            _pass("other-board", "se", "broad", "x", returned=0, status="blocked"),
+            _pass("other-board", "se", "role", "y", returned=0, status="blocked"),
+            _pass("flaky-board", "se", "broad", "x", returned=0, status="blocked"),
+            _pass("flaky-board", "se", "role", "y", returned=3),
+            _pass("gone-then-back", "se", "broad", "x", returned=0, status="gone"),
+            _pass("gone-then-back", "se", "role", "y", returned=4)]
+    out = {a["source"] for a in cov.avoid_list(plan, rows)}
+    assert {"some-board", "other-board"} <= out
+    assert "flaky-board" not in out              # one blocked pass and a good one: it answered
+    assert "gone-then-back" not in out            # the LAST pass says what it is now: it answered again
+    # a portal of the plan shows its own state, it is not listed twice
+    plan_rows = [_pass("arbetsformedlingen", "se", "broad", "x", returned=0, status="closed")]
+    assert "arbetsformedlingen" not in {a["source"] for a in cov.avoid_list(plan, plan_rows)}
+
+
+def test_next_prints_the_avoid_list_and_it_never_grows_past_its_limit(profile, tmp_path):
+    for n in range(cov.AVOID_MAX + 5):
+        done = _run(str(SKILLS / "scout_pass_log.py"), "pass", "--source", "dead-%d" % n, "--country", "se", "--returned", "0",
+                    "--status", "closed", home=tmp_path)
+        assert done.returncode == 0, done.stderr
+    out = _run(str(SKILLS / "scout_coverage.py"), "next", "--agent", "scout-1", home=tmp_path)
+    assert out.returncode == 0, out.stderr
+    step = json.loads(out.stdout)
+    assert 4 <= len(step["avoid"]) == cov.AVOID_MAX
+    assert step["avoid"][0]["source"] == "eures" and all(set(a) == {"source", "why"} for a in step["avoid"])

@@ -46,25 +46,254 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: leopu00/jht
 
+# Tre lavori invece di uno solo in fila (da ~33 min a ~10-12):
+# - `check` costruisce in locale le tre immagini amd64 e fa le prove (shell dell'agente, broker, strumenti,
+#   livelli); non pubblica niente.
+# - `build` costruisce OGNI immagine (piena, nucleo, extras) su OGNI architettura in parallelo, su runner
+#   nativi (arm64 su ubuntu-24.04-arm, niente QEMU), e la carica nel registro solo per digest: nessun tag,
+#   nessun nome, nessun annuncio.
+# - `publish` parte solo se `check` e `build` sono verdi: unisce i due digest di ogni immagine in un indice
+#   (amd64 + arm64), gli mette i tag e scrive i tre digest che il pin fissa. Se una prova fallisce, nessuna
+#   immagine ha un tag ne' un digest annunciato: l'immagine non esce.
+# La cache gha ha uno scope per architettura e immagine, cosi' le build parallele non si buttano via i layer.
 jobs:
-  build-and-push:
-    name: Build & push to GHCR
-    runs-on: ubuntu-22.04
+  check:
+    name: Check the three images (amd64, local)
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
-      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      - name: Extract image metadata (core)
+        id: meta-core
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            suffix=-core,onlatest=true
+
+      - name: Extract image metadata (extras)
+        id: meta-extras
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            suffix=-extras,onlatest=true
+
+      # Prima di pubblicare: dalla shell dell'agente niente porta a root (P1
+      # del 08/10). Build amd64 caricata in locale (stessa cache del push),
+      # avviata con i security_opt e cap_drop del compose: sudo -n true fallisce,
+      # uid 1001, CapEff 0, NoNewPrivs 1, chown 0 fallisce, un setuid in
+      # /jht_home non gira come root. Se torna sudo, l'immagine non esce.
+      - name: Build for the agent-shell check (amd64, local)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: jht:agent-shell-check
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=amd64-full
+
+      # La stessa cosa sul nucleo, in locale: e' l'immagine su cui gira l'Assistente
+      # nei primi minuti, con le stesse garanzie della piena.
+      - name: Build the core image (amd64, local)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: runtime
+          build-args: |
+            BASE=prefix-core
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: jht:core-check
+          labels: ${{ steps.meta-core.outputs.labels }}
+          cache-from: |
+            type=gha,scope=amd64-core
+            type=gha,scope=amd64-full
+
+      - name: Build the extras image (amd64, local)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: runtime
+          build-args: |
+            BASE=prefix-extras
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: jht:extras-check
+          labels: ${{ steps.meta-extras.outputs.labels }}
+          cache-from: |
+            type=gha,scope=amd64-extras
+            type=gha,scope=amd64-full
+
+      - name: Agent shell cannot reach root
+        run: python3 scripts/ci/agent_shell_privileges.py jht:agent-shell-check
+
+      # Broker dei segreti dei portali (P1 del 08/10), sull'immagine vera: utente
+      # 1002, mount point creati dall'immagine (i volumi con nome ne copiano
+      # proprietario e modo), tini e il symlink in /usr/local/bin. L'agente
+      # (1001, socket montato :ro) deve ricevere una risposta dal broker; un
+      # altro uid deve essere rifiutato.
+      - name: Portal-secrets broker answers the agents and only them
+        run: python3 scripts/ci/broker_smoke.py jht:agent-shell-check
+
+      # Quello che serve a un agente per partire, sull'immagine vera (la prova
+      # del launcher del 08/10 e' morta su `tmux new-session` rc=127, senza che
+      # niente l'avesse detto prima): tmux apre una sessione, il launcher e'
+      # eseguibile e si legge, gli installatori delle CLI ci sono e i pin dei
+      # provider sono quelli del commit. Poi Codex installato come lo installa
+      # il prodotto, al pin, e i flag che il launcher gli passa (--yolo,
+      # --search, -c project_doc_max_bytes=131072) accettati, senza chiamare il
+      # modello e senza login. Le CLI non stanno nell'immagine (Dockerfile):
+      # questo passo e' l'unico a installarne una prima del giro dal vivo.
+      - name: Agent toolchain in the image, Codex at its pin with the launcher's flags
+        run: python3 scripts/ci/agent_image_toolchain.py jht:agent-shell-check --install codex
+
+      - name: Core image cannot reach root, and its broker answers
+        run: |
+          python3 scripts/ci/agent_shell_privileges.py jht:core-check
+          python3 scripts/ci/broker_smoke.py jht:core-check
+          python3 scripts/ci/agent_image_toolchain.py jht:core-check
+
+      - name: Extras image cannot reach root, and its broker answers
+        run: |
+          python3 scripts/ci/agent_shell_privileges.py jht:extras-check
+          python3 scripts/ci/broker_smoke.py jht:extras-check
+          python3 scripts/ci/agent_image_toolchain.py jht:extras-check
+
+      # Quello che nessuna immagine puo' provare da sola: il livello che dichiara e' quello
+      # degli strumenti che porta, il nucleo non ne ha, e il codice, Pi, gli utenti sono
+      # IDENTICI nelle due (stessa revisione, stessi byte).
+      - name: Core, full and extras carry the same code, and say what they are
+        run: python3 scripts/ci/image_tiers.py jht:core-check jht:agent-shell-check --extras jht:extras-check
+
+  build:
+    name: Build ${{ matrix.image }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        arch: [amd64, arm64]
+        image: [full, core, extras]
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+          # La piena e' la build di default; nucleo ed extras sono lo stesso Dockerfile sul loro prefisso.
+          - image: full
+            target: ""
+            build-args: ""
+          - image: core
+            target: runtime
+            build-args: BASE=prefix-core
+          - image: extras
+            target: runtime
+            build-args: BASE=prefix-extras
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GHCR
         if: github.event_name != 'pull_request'
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Solo le etichette (la revisione che le ricette verificano su ogni architettura): i tag li mette `publish`.
+      - name: Extract image labels
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      # Caricata solo per digest (push-by-digest): nessun tag finche' `publish` non ha visto verdi le prove.
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: ${{ matrix.target }}
+          build-args: ${{ matrix.build-args }}
+          platforms: linux/${{ matrix.arch }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=${{ github.event_name != 'pull_request' }}
+          cache-from: |
+            type=gha,scope=${{ matrix.arch }}-${{ matrix.image }}
+            type=gha,scope=${{ matrix.arch }}-full
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}-${{ matrix.image }}
+
+      - name: Write the digest down
+        if: github.event_name != 'pull_request'
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE: ${{ matrix.image }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "no digest: $DIGEST" >&2; exit 1; }
+          mkdir -p digests
+          printf '%s\n' "$DIGEST" > "digests/${IMAGE}-${ARCH}"
+
+      - name: Keep the digest for publish
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: digest-${{ matrix.image }}-${{ matrix.arch }}
+          path: digests/${{ matrix.image }}-${{ matrix.arch }}
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Publish the three images
+    needs: [check, build]
+    if: github.event_name != 'pull_request'
+    # Un publish alla volta per ramo: il digest dell'indice si rilegge dal tag, e due publish insieme se lo scambierebbero.
+    concurrency:
+      group: docker-publish-${{ github.ref }}
+      cancel-in-progress: false
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Collect the digests
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: digest-*
+          path: digests
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -111,149 +340,52 @@ jobs:
             type=ref,event=pr
             type=raw,value=latest,enable={{is_default_branch}}
 
-      # Prima di pubblicare: dalla shell dell'agente niente porta a root (P1
-      # del 08/10). Build amd64 caricata in locale (stessa cache del push),
-      # avviata con i security_opt e cap_drop del compose: sudo -n true fallisce,
-      # uid 1001, CapEff 0, NoNewPrivs 1, chown 0 fallisce, un setuid in
-      # /jht_home non gira come root. Se torna sudo, l'immagine non esce.
-      - name: Build for the agent-shell check (amd64, local)
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64
-          load: true
-          push: false
-          tags: jht:agent-shell-check
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-
-      # La stessa cosa sul nucleo, in locale: e' l'immagine su cui gira l'Assistente
-      # nei primi minuti, con le stesse garanzie della piena.
-      - name: Build the core image (amd64, local)
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: .
-          file: ./Dockerfile
-          target: runtime
-          build-args: |
-            BASE=prefix-core
-          platforms: linux/amd64
-          load: true
-          push: false
-          tags: jht:core-check
-          labels: ${{ steps.meta-core.outputs.labels }}
-          cache-from: type=gha
-
-      - name: Build the extras image (amd64, local)
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: .
-          file: ./Dockerfile
-          target: runtime
-          build-args: |
-            BASE=prefix-extras
-          platforms: linux/amd64
-          load: true
-          push: false
-          tags: jht:extras-check
-          labels: ${{ steps.meta-extras.outputs.labels }}
-          cache-from: type=gha
-
-      - name: Agent shell cannot reach root
-        run: python3 scripts/ci/agent_shell_privileges.py jht:agent-shell-check
-
-      # Broker dei segreti dei portali (P1 del 08/10), sull'immagine vera: utente
-      # 1002, mount point creati dall'immagine (i volumi con nome ne copiano
-      # proprietario e modo), tini e il symlink in /usr/local/bin. L'agente
-      # (1001, socket montato :ro) deve ricevere una risposta dal broker; un
-      # altro uid deve essere rifiutato.
-      - name: Portal-secrets broker answers the agents and only them
-        run: python3 scripts/ci/broker_smoke.py jht:agent-shell-check
-
-      # Quello che serve a un agente per partire, sull'immagine vera (la prova
-      # del launcher del 08/10 e' morta su `tmux new-session` rc=127, senza che
-      # niente l'avesse detto prima): tmux apre una sessione, il launcher e'
-      # eseguibile e si legge, gli installatori delle CLI ci sono e i pin dei
-      # provider sono quelli del commit. Poi Codex installato come lo installa
-      # il prodotto, al pin, e i flag che il launcher gli passa (--yolo,
-      # --search, -c project_doc_max_bytes=131072) accettati, senza chiamare il
-      # modello e senza login. Le CLI non stanno nell'immagine (Dockerfile):
-      # questo passo e' l'unico a installarne una prima del giro dal vivo.
-      - name: Agent toolchain in the image, Codex at its pin with the launcher's flags
-        run: python3 scripts/ci/agent_image_toolchain.py jht:agent-shell-check --install codex
-
-      - name: Core image cannot reach root, and its broker answers
+      # Ogni immagine diventa un indice con amd64 e arm64; il digest dell'indice e' quello che il pin fissa.
+      - name: Join amd64 and arm64 into one index per image
+        id: join
+        env:
+          REPO: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          TAGS_FULL: ${{ steps.meta.outputs.tags }}
+          TAGS_CORE: ${{ steps.meta-core.outputs.tags }}
+          TAGS_EXTRAS: ${{ steps.meta-extras.outputs.tags }}
         run: |
-          python3 scripts/ci/agent_shell_privileges.py jht:core-check
-          python3 scripts/ci/broker_smoke.py jht:core-check
-          python3 scripts/ci/agent_image_toolchain.py jht:core-check
-
-      - name: Extras image cannot reach root, and its broker answers
-        run: |
-          python3 scripts/ci/agent_shell_privileges.py jht:extras-check
-          python3 scripts/ci/broker_smoke.py jht:extras-check
-          python3 scripts/ci/agent_image_toolchain.py jht:extras-check
-
-      # Quello che nessuna immagine puo' provare da sola: il livello che dichiara e' quello
-      # degli strumenti che porta, il nucleo non ne ha, e il codice, Pi, gli utenti sono
-      # IDENTICI nelle due (stessa revisione, stessi byte).
-      - name: Core, full and extras carry the same code, and say what they are
-        run: python3 scripts/ci/image_tiers.py jht:core-check jht:agent-shell-check --extras jht:extras-check
-
-      - name: Build & push
-        id: push-full
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build & push the core image
-        id: push-core
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: .
-          file: ./Dockerfile
-          target: runtime
-          build-args: |
-            BASE=prefix-core
-          platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta-core.outputs.tags }}
-          labels: ${{ steps.meta-core.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build & push the extras image
-        id: push-extras
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: .
-          file: ./Dockerfile
-          target: runtime
-          build-args: |
-            BASE=prefix-extras
-          platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta-extras.outputs.tags }}
-          labels: ${{ steps.meta-extras.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          set -euo pipefail
+          join() {
+            local image="$1" tags="$2" args=() tag amd arm digest
+            amd="$(cat "digests/${image}-amd64")"; arm="$(cat "digests/${image}-arm64")"
+            for digest in "$amd" "$arm"; do [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "bad digest for $image: $digest" >&2; exit 1; }; done
+            while IFS= read -r tag; do [ -n "$tag" ] && args+=(-t "$tag"); done <<< "$tags"
+            [ "${#args[@]}" -gt 0 ] || { echo "no tags for $image" >&2; exit 1; }
+            docker buildx imagetools create "${args[@]}" "$REPO@$amd" "$REPO@$arm"
+            # Il digest dell'indice si rilegge dal tag; l'indice deve elencare proprio le voci dei due indici di questo
+            # run (ogni build per architettura e' un indice: immagine + attestazione), ne' una di piu' ne' una di meno.
+            docker buildx imagetools inspect --raw "$REPO@$amd" > own-amd.json
+            docker buildx imagetools inspect --raw "$REPO@$arm" > own-arm.json
+            digest="$(docker buildx imagetools inspect "${args[1]}" --format '{{json .Manifest}}' | python3 -c '
+          import json, sys
+          index = json.load(sys.stdin)
+          own = set()
+          for name in ("own-amd.json", "own-arm.json"):
+              with open(name, encoding="utf-8") as f:
+                  own |= {m["digest"] for m in json.load(f).get("manifests", [])}
+          listed = {m["digest"] for m in index.get("manifests", [])}
+          if not own or listed != own:
+              sys.exit("the index under the tag is not the one of this run")
+          print(index["digest"])')"
+            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "no index digest for $image" >&2; exit 1; }
+            echo "${image}=${digest}" >> "$GITHUB_OUTPUT"
+          }
+          join full "$TAGS_FULL"
+          join core "$TAGS_CORE"
+          join extras "$TAGS_EXTRAS"
 
       # I tre digest che il pin fissa: si leggono qui, non dai tag.
       - name: The three digests
-        if: github.event_name != 'pull_request'
         run: |
           {
             echo "### Immagini del runtime"
-            echo "- piena: \`${{ steps.push-full.outputs.digest }}\`"
-            echo "- nucleo: \`${{ steps.push-core.outputs.digest }}\`"
-            echo "- su richiesta: \`${{ steps.push-extras.outputs.digest }}\`"
+            echo "- piena: \`${{ steps.join.outputs.full }}\`"
+            echo "- nucleo: \`${{ steps.join.outputs.core }}\`"
+            echo "- su richiesta: \`${{ steps.join.outputs.extras }}\`"
             echo "- revisione: \`${{ github.sha }}\`"
           } >> "$GITHUB_STEP_SUMMARY"

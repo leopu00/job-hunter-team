@@ -18,7 +18,7 @@
 # Exit: 0 done · 1 failed · 2 wrong use · 3 not available yet.
 
 INTEGRATION_IDS="google telegram mail linkedin-login screen media"
-INTEGRATION_NOT_YET="linkedin-login"
+INTEGRATION_NOT_YET=""
 
 integration_label() {
   case "$1" in
@@ -109,6 +109,10 @@ integration_state() {
   if integration_pending "$id"; then printf 'downloading|operazione in corso\n'; return 0; fi
   if [ "$id" = google ]; then
     if integration_marker_read google ok >/dev/null; then printf 'ready|librerie di Google aggiunte al profilo; mancano le credenziali dell'"'"'account Google\n'; return 0; fi
+  elif [ "$id" = linkedin-login ]; then
+    docker_reachable || { printf 'error|il motore dei container non risponde\n'; return 0; }
+    if linkedin_any_running; then printf 'running|accesso a LinkedIn in corso\n'; return 0; fi
+    printf 'not_installed|si accende con: jht linkedin login\n'; return 0
   elif [ "$id" = screen ]; then
     docker_reachable || { printf 'error|il motore dei container non risponde\n'; return 0; }
     read_only_service_id "$SCREEN_SERVICE" >/dev/null 2>&1 || rc=$?
@@ -256,6 +260,10 @@ integration_do_add() { # id → 0 done · 1 failed (reason in INTEGRATION_WHY)
       read_only_service_id "$MEDIA_SERVICE" >/dev/null 2>&1 || { INTEGRATION_WHY="il container dei media non risulta acceso"; return 1; }
       integration_marker_write media ok ok || { INTEGRATION_WHY="marcatore non scritto"; return 1; }
       ;;
+    linkedin-login)
+      INTEGRATION_WHY="non si aggiunge: si accende con jht linkedin login"
+      return 3
+      ;;
     screen)
       ref="$(integration_extras_ref)"
       [ -n "$ref" ] || { INTEGRATION_WHY="non disponibile ancora"; return 3; }
@@ -293,6 +301,7 @@ integration_volumes_of() {
     telegram) printf 'jht-telegram-secrets jht-telegram-state jht-telegram-inbox' ;;
     mail) printf 'jht-broker-state' ;;
     screen) printf 'jht-x11' ;;
+    linkedin-login) printf 'jht-login-vnc jht-login-egress' ;;
   esac
 }
 
@@ -320,6 +329,9 @@ integration_do_remove() { # id purge → 0 done · 1 failed
       if [ -n "$ref" ] && ! integration_marker_read linkedin-login ok >/dev/null && ! integration_marker_read screen ok >/dev/null; then
         docker rmi "$ref" >/dev/null 2>&1 || true
       fi
+      ;;
+    linkedin-login)
+      linkedin_remove_all || { INTEGRATION_WHY="i container dell'accesso a LinkedIn non si fermano"; return 1; }
       ;;
     screen)
       COMPOSE_PROFILES=screen compose stop "$SCREEN_SERVICE" >/dev/null 2>&1 \
@@ -361,6 +373,8 @@ integration_do_remove() { # id purge → 0 done · 1 failed
     fi
   elif [ "$1" = screen ]; then
     INTEGRATION_WHY="schermo spento e container tolto"
+  elif [ "$1" = linkedin-login ]; then
+    INTEGRATION_WHY="container tolti; la sessione di LinkedIn nel profilo resta (jht reset --scope creds la toglie)"
   else
     INTEGRATION_WHY="container tolto; i dati restano (per cancellarli: --purge --yes)"
   fi
@@ -415,5 +429,152 @@ integration_main() {
       integration_not_yet "$id" || require_docker
       integration_change "$action" "$id" "$json" "$purge"
       ;;
+  esac
+}
+
+
+# ── `jht linkedin login|status` ───────────────────────────────────────────
+# The manual sign-in to LinkedIn: three containers of the profile `login` (shared/login/). The line the desktop app reads is the one the
+# view prints (login_view.py grant); here it is only checked in its exact shape, so nothing else ever reaches the app as a token.
+LOGIN_SERVICE="jht-login"
+LOGIN_PROXY_SERVICE="jht-login-proxy"
+LOGIN_VIEW_SERVICE="jht-login-view"
+LOGIN_SERVICES="$LOGIN_PROXY_SERVICE $LOGIN_VIEW_SERVICE $LOGIN_SERVICE"
+LINKEDIN_REASONS="view_busy view_unavailable login_timeout token_expired chromium_sandbox_unavailable"
+
+linkedin_base() { printf '%s' "${JHT_HOME_HOST:-$HOME/.jht}"; }
+linkedin_profile_dir() { printf '%s/secrets/linkedin-profile' "$(linkedin_base)"; }
+
+# Nothing, or a plain folder, at every step under ~/.jht down to the profile: never a link (the folder is mounted writable in the browser
+# container, and the agents of the team container write under ~/.jht).
+linkedin_profile_ok() {
+  local path
+  for path in "$(linkedin_base)" "$(linkedin_base)/secrets" "$(linkedin_profile_dir)"; do
+    [ ! -L "$path" ] && { [ ! -e "$path" ] || [ -d "$path" ]; } || return 1
+  done
+}
+
+linkedin_profile_make() {
+  linkedin_profile_ok || return 1
+  (
+    umask 077
+    [ -d "$(linkedin_base)" ] || mkdir -p -- "$(linkedin_base)"
+    [ -d "$(linkedin_base)/secrets" ] || mkdir -- "$(linkedin_base)/secrets"
+    [ -d "$(linkedin_profile_dir)" ] || mkdir -- "$(linkedin_profile_dir)"
+  ) 2>/dev/null && linkedin_profile_ok
+}
+
+linkedin_fail() { printf '{"ok": false, "reason": "%s"}\n' "$1"; }
+
+linkedin_grant_line_ok() {
+  printf '%s' "$1" | grep -Eq '^\{"ok": true, "port": 6081, "path": "/websockify", "token": "[A-Za-z0-9_-]{43}", "expires_at": "[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z", "session": "[0-9a-f]{1,32}"\}$'
+}
+
+# The reason of a failure line of the view, from the closed list, or nothing.
+linkedin_reason_of() {
+  local reason
+  reason="$(printf '%s' "$1" | sed -n 's/^{"ok": false, "reason": "\([a-z_]*\)"}$/\1/p')"
+  case " $LINKEDIN_REASONS " in *" $reason "*) printf '%s' "$reason" ;; esac
+}
+
+linkedin_any_running() {
+  local svc
+  for svc in $LOGIN_SERVICES; do
+    read_only_service_id "$svc" >/dev/null 2>&1 && return 0
+  done
+  return 1
+}
+
+linkedin_remove_all() {
+  local svc rc=0
+  for svc in $LOGIN_SERVICES; do
+    COMPOSE_PROFILES=login compose stop "$svc" >/dev/null 2>&1 || rc=1
+    COMPOSE_PROFILES=login compose rm -f "$svc" >/dev/null 2>&1 || rc=1
+  done
+  return $rc
+}
+
+linkedin_login() {
+  local ref line reason id tries
+  docker_reachable || { err "il motore dei container non risponde"; linkedin_fail view_unavailable; return 1; }
+  ref="$(integration_extras_ref)"
+  [ -n "$ref" ] || { err "non disponibile ancora"; linkedin_fail view_unavailable; return 1; }
+  if linkedin_any_running; then linkedin_fail view_busy; return 1; fi
+  linkedin_remove_all   # what an ended session left, stopped
+  linkedin_profile_make || { err "il profilo di LinkedIn in ~/.jht non e' una cartella normale (un collegamento?): non lo uso"; linkedin_fail view_unavailable; return 1; }
+  docker pull "$ref" >/dev/null 2>&1 || { err "download dell'immagine degli strumenti non riuscito"; linkedin_fail view_unavailable; return 1; }
+  # Checked again right before the up (the pull took time): what is left is the instant between this test and the mount of the engine.
+  linkedin_profile_ok && [ -d "$(linkedin_profile_dir)" ] \
+    || { err "il profilo di LinkedIn in ~/.jht non e' una cartella normale (un collegamento?): non lo uso"; linkedin_fail view_unavailable; return 1; }
+  JHT_EXTRAS_IMAGE="$ref" COMPOSE_PROFILES=login compose up -d $LOGIN_SERVICES >/dev/null 2>&1 \
+    || { linkedin_remove_all; linkedin_fail view_unavailable; return 1; }
+  for tries in $(seq 1 40); do
+    id="$(read_only_service_id "$LOGIN_VIEW_SERVICE" 2>/dev/null)" || id=""
+    line=""
+    if [ -n "$id" ]; then
+      line="$(docker exec "$id" python3 /app/shared/login/login_view.py grant 2>/dev/null | tail -n 1)" || line=""
+    fi
+    if linkedin_grant_line_ok "$line"; then printf '%s\n' "$line"; return 0; fi
+    reason="$(linkedin_reason_of "$line")"
+    case "$reason" in
+      ""|view_unavailable)
+        # the browser is not ready yet (the token is not used up): ask again, unless the containers are gone
+        if [ "$tries" -gt 3 ] && ! linkedin_any_running; then break; fi
+        sleep "${LINKEDIN_POLL_SECONDS:-1}" ;;
+      *) linkedin_remove_all; linkedin_fail "$reason"; return 1 ;;
+    esac
+  done
+  linkedin_remove_all
+  linkedin_fail view_unavailable
+  return 1
+}
+
+linkedin_stop() {
+  linkedin_remove_all || { linkedin_fail view_unavailable; return 1; }
+  printf '{"ok": true}\n'
+}
+
+# How the last session ended, from the exit code the engine keeps of the stopped view.
+linkedin_last_reason() {
+  local code
+  code="$(docker inspect -f '{{.State.ExitCode}}' "$LOGIN_VIEW_SERVICE" 2>/dev/null)" || return 0
+  case "$code" in
+    10) printf 'logged_in' ;;
+    11) printf 'login_timeout' ;;
+    12) printf 'token_expired' ;;
+    13) printf 'stopped' ;;
+  esac
+}
+
+linkedin_status() {
+  local id view="idle" out last="" word ref linkedin="login_required"
+  docker_reachable || { linkedin_fail view_unavailable; return 1; }
+  if id="$(read_only_service_id "$LOGIN_VIEW_SERVICE" 2>/dev/null)"; then
+    out="$(docker exec "$id" python3 /app/shared/login/login_view.py status 2>/dev/null | tail -n 1)" || out=""
+    case "$out" in
+      *'"view": "waiting"'*) view=waiting ;;
+      *'"view": "connected"'*) view=connected ;;
+    esac
+  else
+    last="$(linkedin_last_reason)"
+  fi
+  ref="$(integration_extras_ref)"
+  if [ -n "$ref" ] && [ ! -L "$(linkedin_profile_dir)" ] && [ -d "$(linkedin_profile_dir)" ] && linkedin_profile_ok && docker image inspect "$ref" >/dev/null 2>&1; then
+    word="$(JHT_EXTRAS_IMAGE="$ref" COMPOSE_PROFILES=login compose run --rm --no-deps -T --entrypoint python3 "$LOGIN_SERVICE" /app/shared/login/login_session.py check /linkedin-profile 2>/dev/null | tail -n 1)" || word=""
+    [ "$word" != logged_in ] || linkedin=logged_in
+  fi
+  if [ -n "$last" ]; then
+    printf '{"ok": true, "view": "%s", "linkedin": "%s", "last_session": {"reason": "%s"}}\n' "$view" "$linkedin" "$last"
+  else
+    printf '{"ok": true, "view": "%s", "linkedin": "%s"}\n' "$view" "$linkedin"
+  fi
+}
+
+linkedin_main() {
+  case "$*" in
+    "login") require_docker; linkedin_login ;;
+    "login --stop") require_docker; linkedin_stop ;;
+    "status --json") linkedin_status ;;
+    *) err "uso: jht linkedin login [--stop] | status --json"; return 2 ;;
   esac
 }
