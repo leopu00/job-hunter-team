@@ -78,6 +78,7 @@ def test_unreadable_private_state_is_not_reported_as_unconfigured(lifecycle_home
 
 BASH_TRANSPORT = r'''
 ensure_broker() { return 0; }   # the broker is made before Telegram starts (tests/test_broker_on_request.py)
+compose_quiet() { compose "$@"; }   # the real one only keeps compose's progress lines out of sight (tests/test_up_down_say_the_phase.py)
 compose() {
   case "$1" in
     run)
@@ -175,7 +176,7 @@ def run_host(tmp_path, language, args, *, fail_pair=False, no_effect="", absent=
         script = BASH_TRANSPORT + '\nTELEGRAM_SERVICE=jht-telegram\n' + body + (BASH_ABSENT if absent else "") + '\ntelegram_lifecycle_command "$@"\n'
         command = ["bash", "-c", script, "test-host", *args]
     else:
-        body = powershell_functions("Get-TelegramLifecyclePlan", "Confirm-TelegramLifecycle", "Invoke-TelegramLifecycleSteps", "Invoke-TelegramLifecycle")
+        body = powershell_functions("Get-TelegramLifecyclePlan", "Confirm-TelegramLifecycle", "Invoke-ComposeQuiet", "Invoke-TelegramLifecycleSteps", "Invoke-TelegramLifecycle")
         script = tmp_path / "transport.ps1"
         script.write_text(PS_TRANSPORT + body + (PS_ABSENT if absent else "") + '\nexit (Invoke-TelegramLifecycle $args)\n', encoding="utf-8")
         command = ["pwsh", "-NoProfile", "-File", str(script), *args]

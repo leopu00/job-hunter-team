@@ -29,6 +29,10 @@ python3 /app/shared/skills/scout_language.py screen --title "<title>" --snippet 
 python3 /app/shared/skills/scout_language.py portal --source jobs.ch --country ch
 ```
 
+## 3. Metti per ultimo il livello che non è quello del profilo (mai scartarlo)
+
+`screen` risponde anche `"seniority": "above"` o `"below"` quando il TITOLO nomina un livello (Senior, Principal, Head of, Junior, Trainee...) che non è quello di QUESTO profilo: il suo `seniority_target`, altrimenti gli anni di esperienza. Per un profilo senior `Senior` e `Principal` non danno nessun codice: sono il suo bersaglio. È un ORDINE, non un verdetto: nello stesso passaggio inserisci prima i candidati senza `seniority` e dopo quelli che ce l'hanno, e non ne scarti mai uno per questo (il gap di seniority lo decide lo Scorer; regola SC-04). Al primo avvio ciascuno di quelli che l'Analista ha dovuto escludere per livello è costato un fetch e un INSERT e ha spostato più in là il 20° punteggio.
+
 ## Regole
 
 - Non saltare mai un candidato che `screen` non ha scartato perché ne indovini la lingua: lo strumento scarta su prove, tu no.

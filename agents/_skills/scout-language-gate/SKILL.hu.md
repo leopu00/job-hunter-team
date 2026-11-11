@@ -29,6 +29,10 @@ python3 /app/shared/skills/scout_language.py screen --title "<title>" --snippet 
 python3 /app/shared/skills/scout_language.py portal --source jobs.ch --country ch
 ```
 
+## 3. A profil szintjétől eltérő szintet tedd a végére (soha ne dobd el)
+
+A `screen` azt is válaszolja, hogy `"seniority": "above"` vagy `"below"`, ha a CÍM olyan szintet nevez meg (Senior, Principal, Head of, Junior, Trainee...), amely nem ennek a profilnak a szintje: a `seniority_target`-je, ennek híján a szakmai évei. Egy senior profilnál a `Senior` és a `Principal` nem ad kódot: ez a célja. Ez SORREND, nem ítélet: ugyanabban a körben előbb a `seniority` nélküli jelölteket szúrd be, utána a kóddal rendelkezőket, és emiatt soha ne dobj el egyet sem (a seniority-rést a Scorer dönti el; SC-04 szabály). Az első indításnál mindegyik, amelyet az Analistának szint miatt ki kellett zárnia, egy letöltésbe és egy INSERT-be került, és hátrébb tolta a 20. pontszámot.
+
 ## Szabályok
 
 - Soha ne hagyj ki olyan jelöltet, akit a `screen` nem vetett el, mert kitaláltad a nyelvét: az eszköz bizonyíték alapján vet el, te nem.

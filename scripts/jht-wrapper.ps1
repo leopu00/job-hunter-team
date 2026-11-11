@@ -70,7 +70,7 @@ $JhtUninstallRemovalNotice = 'Vengono cancellati anche la password della posta e
 # rimosso, quindi viene gestito prima di caricare manifest, helper ACL o shim.
 # I target ricevuti dal dispatcher sono cartelle standard calcolate dalle API
 # Windows, mai override d'ambiente o valori letti dal runtime da cancellare.
-# The words of the uninstall for a person: Italian, and English with JHT_LANG=en. The desktop app reads the JHT_PHASE and JHT_LEFT
+# The words of the uninstall for a person: Italian, and English in the language the person chose (see Get-JhtTextLanguage). The desktop app reads the JHT_PHASE and JHT_LEFT
 # lines from a pipe; at a console the person gets the sentences instead (JHT_MACHINE_OUTPUT=1 forces the lines, =0 forbids them).
 $script:JhtUninstallReason = ''
 # The machine this uninstall removes: jht-podman, or the one the runtime attests (Resolve-JhtUninstallMachineName).
@@ -79,9 +79,30 @@ $script:JhtUninstallMachine = 'jht-podman'
 $script:JhtUninstallPurgeRemovalNotice = 'Vengono cancellati anche la password della posta e i token di Telegram salvati.'
 $script:JhtUninstallPurgeNotice = 'Con --purge vengono cancellati anche ~/.jht e Documents\Job Hunter Team: configurazione, database, CV e output. Non si torna indietro.'
 
+# The language of the sentences the wrapper prints: the one the person chose with `jht setup --language` or the picker (saved in
+# i18n-prefs.json next to host.env), then JHT_LANG. The file is in a folder the container can write: it is read as DATA (not a link, a
+# small file, the value one of the seven codes) and only chooses which text is printed. Italian and English are written: another
+# language reads English; where nothing says a language the sentences stay Italian, as they were. Returns 'it' or 'en'.
+function Get-JhtTextLanguage {
+  $code = ''
+  try {
+    # inside the try: a text must never fail because the folder of the choice cannot be worked out
+    $hostEnv = if ($env:JHT_HOST_ENV_FILE) { $env:JHT_HOST_ENV_FILE } else { Join-Path $env:USERPROFILE '.jht\host.env' }
+    $prefs = Join-Path (Split-Path -Parent $hostEnv) 'i18n-prefs.json'
+    $item = Get-Item -LiteralPath $prefs -Force -ErrorAction Stop
+    if (-not $item.PSIsContainer -and -not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -and $item.Length -le 4096) {
+      $match = [regex]::Match(([IO.File]::ReadAllText($prefs) -replace '[\r\n]', ''), '"locale"\s*:\s*"(en|it|hu|es|de|fr|pt)"')
+      if ($match.Success) { $code = $match.Groups[1].Value }
+    }
+  } catch { $code = '' }
+  if (-not $code -and ([string]$env:JHT_LANG) -cmatch '^(en|it|hu|es|de|fr|pt)\z') { $code = [string]$env:JHT_LANG }
+  if ($code -and $code -cne 'it') { return 'en' }
+  return 'it'
+}
+
 function Get-JhtUninstallText {
   param([Parameter(Mandatory)][string]$Key, [string[]]$Values = @())
-  $english = ($env:JHT_LANG -ceq 'en')
+  $english = ((Get-JhtTextLanguage) -ceq 'en')
   $texts = @{
     'phase.machine'  = @('Tolgo la macchina Podman <machine> (con i segreti e le immagini di JHT)...', 'Removing the <machine> Podman machine (with the secrets and the images of JHT)...')
     'phase.data'     = @('Cancello ~/.jht e Documents\Job Hunter Team (--purge)...', 'Deleting ~/.jht and Documents\Job Hunter Team (--purge)...')
@@ -89,6 +110,7 @@ function Get-JhtUninstallText {
     'phase.commands' = @('Tolgo il comando jht, i file dell''installer e le righe PATH...', 'Removing the jht command, the installer files and the PATH lines...')
     'done'           = @('Fatto: la macchina <machine> (e con lei le immagini di JHT, il nucleo e quella piena), il runtime e il comando jht sono stati tolti.', 'Done: the <machine> machine (and with it the JHT images, the core and the full one), the runtime and the jht command are gone.')
     'done.kept'      = @(' ~/.jht e Documents\Job Hunter Team restano (con --purge si cancellano).', ' ~/.jht and Documents\Job Hunter Team stay (--purge deletes them).')
+    'done.wsl'       = @('WSL resta in memoria: vmmem, wslservice e wslrelay sono componenti di Windows (non li ha installati Job Hunter Team) e servono anche alle altre macchine WSL di questo utente; di norma si fermano da soli dopo un po'' di inattivita''. Per fermarli subito: wsl --shutdown (ferma TUTTE le macchine WSL aperte).', 'WSL stays in memory: vmmem, wslservice and wslrelay are parts of Windows (Job Hunter Team did not install them) and the other WSL machines of this user need them too; they normally stop by themselves after a while of inactivity. To stop them now: wsl --shutdown (it stops ALL the open WSL machines).')
     'secrets'        = @('I segreti salvati non sono stati rimossi: la password della posta e i token di Telegram stanno nei volumi jht-secrets e jht-telegram-secrets della macchina <machine>, che e'' ancora qui.', 'The saved secrets were not removed: the mail password and the Telegram tokens are in the jht-secrets and jht-telegram-secrets volumes of the <machine> machine, which is still there.')
     'left.machine'   = @('Non tolta: la macchina Podman <machine>. Motivo: {0}. A mano: podman machine stop <machine>; wsl --unregister {1}; poi rilancia jht uninstall --confirm.', 'Not removed: the <machine> Podman machine. Reason: {0}. By hand: podman machine stop <machine>; wsl --unregister {1}; then run jht uninstall --confirm again.')
     'left.task'      = @('Non tolta l''attivita'' di avvio al logon ''{0}'' (motivo: {1}). Il resto e'' stato tolto. A mano: schtasks /Delete /TN "{0}" /F.', 'Not removed: the logon start task ''{0}'' (reason: {1}). Everything else was removed. By hand: schtasks /Delete /TN "{0}" /F.')
@@ -579,6 +601,8 @@ function Invoke-JhtWindowsUninstall {
   $done = Get-JhtUninstallText 'done'
   if (-not $purge) { $done += (Get-JhtUninstallText 'done.kept') }
   [Console]::Out.WriteLine($done)
+  # What the person sees running after the uninstall and may take for ours: it is WSL's own, shared with their other machines, so it is explained, not ended.
+  [Console]::Out.WriteLine((Get-JhtUninstallText 'done.wsl'))
   return 0
 }
 
@@ -1204,6 +1228,30 @@ function Invoke-Compose {
   else { & docker compose @files --project-directory $RuntimeDir @Args }
 }
 
+# `jht up` and `jht down` say the phase and the result: compose's own lines (Network, Volume, Container Creating, Created, Started...) are
+# kept out of sight when all went well, and shown, whole, when it did not. With --verbose (or JHT_VERBOSE=1) they come as they are.
+# Returns the exit code of compose.
+function Invoke-ComposeQuiet {
+  [CmdletBinding(PositionalBinding=$false)]
+  param([Parameter(ValueFromRemainingArguments)] $ComposeArgs)
+  if ($script:JhtComposeVerbose) {
+    Invoke-Compose @ComposeArgs | Out-Host
+    return $LASTEXITCODE
+  }
+  $lines = & { $ErrorActionPreference = 'Continue'; Invoke-Compose @ComposeArgs 2>&1 | ForEach-Object { [string]$_ } }
+  $code = $LASTEXITCODE
+  if ($code -ne 0) { foreach ($line in @($lines)) { [Console]::Error.WriteLine($line) } }
+  return $code
+}
+
+function Write-JhtLifecycleDone {
+  param([Parameter(Mandatory)][ValidateSet('up', 'down')][string]$What)
+  $english = ((Get-JhtTextLanguage) -ceq 'en')
+  $text = if ($What -ceq 'up') { if ($english) { 'Job Hunter Team started.' } else { 'Job Hunter Team avviato.' } }
+          else { if ($english) { 'Job Hunter Team stopped.' } else { 'Job Hunter Team fermato.' } }
+  [Console]::Out.WriteLine($text)
+}
+
 # A failed `docker compose up` is the failure of the command that asked for it. What runs after it
 # (the broker's migration) calls native programs too, and $LASTEXITCODE would then say the start
 # went well: the setup went on to systemctl after "statfs ... no such file or directory" (T83).
@@ -1228,8 +1276,8 @@ function Invoke-PodmanServicesUpInTurn {
   # The broker only if it was made before (see Ensure-Broker): `up` never makes it.
   foreach ($service in @($BrokerContainer)) {
     if ($definition -notmatch "(?m)^  $([regex]::Escape($service)):" -or -not (Test-Path -LiteralPath $BrokerMadeMarker)) { continue }
-    Invoke-Compose '--profile' 'broker' 'up' '-d' '--no-deps' $service | Out-Host
-    if ($LASTEXITCODE -ne 0) { return $LASTEXITCODE }
+    $code = Invoke-ComposeQuiet '--profile' 'broker' 'up' '-d' '--no-deps' $service
+    if ($code -ne 0) { return $code }
   }
   return 0
 }
@@ -1251,6 +1299,7 @@ jht - Job Hunter Team
   Comandi dell'host (funzionano da qui):
     jht up                 avvia il container del team
     jht down               lo ferma
+                           (con --verbose si vedono anche le righe del motore)
     jht restart            lo riavvia
     jht status             stato di container e team
     jht logs [-f]          log del container
@@ -1590,10 +1639,12 @@ const fs=require("fs"); let config={};
 try { config=JSON.parse(fs.readFileSync("/jht_home/jht.config.json","utf8")); } catch {}
 const provider=String(config.active_provider||"").toLowerCase();
 const providers=config.providers||{}; const entry=providers[provider]||{};
-const configured=["claude","anthropic","codex","openai","kimi","moonshot"].includes(provider)
-  && (entry.auth_method||"subscription")==="subscription";
+const piApi=config.harness==="pi"&&["glm","kimi","moonshot"].includes(provider);
+const keyThere=(()=>{const ref=entry.api_key_ref;if(ref&&typeof ref==="object"&&ref.source==="file"){try{const p=String(ref.path||"");const s=fs.lstatSync(p);return p.startsWith("/")&&s.isFile()&&s.size>0&&s.size<=4096}catch{return false}}return !!ref||!!entry.api_key})();
+const configured=piApi?entry.auth_method==="api_key":(["claude","anthropic","codex","openai","kimi","moonshot"].includes(provider)
+  && (entry.auth_method||"subscription")==="subscription");
 const markers={claude:"/jht_home/.claude/.credentials.json",anthropic:"/jht_home/.claude/.credentials.json",codex:"/jht_home/.codex/auth.json",openai:"/jht_home/.codex/auth.json",kimi:"/jht_home/.kimi/credentials/kimi-code.json",moonshot:"/jht_home/.kimi/credentials/kimi-code.json"};
-process.stdout.write(`${configured?1:0} ${(config.harness==="pi"&&(provider==="openai"||provider==="codex")?((p)=>{try{const s=fs.lstatSync(p);if(!(s.isFile()&&s.size>0&&s.size<=262144&&(s.uid===process.getuid()||s.uid===0)))return false;const d=JSON.parse(fs.readFileSync(p,"utf8"));return!!d&&typeof d==="object"&&!Array.isArray(d)&&["openai"].some((n)=>!!d[n]&&typeof d[n]==="object"&&Object.keys(d[n]).length>0)}catch{return false}})("/jht_home/.pi/agent/auth.json"):markers[provider]&&fs.existsSync(markers[provider]))?1:0} ${fs.existsSync("/jht_home/profile/welcomed.flag")?1:0}`);
+process.stdout.write(`${configured?1:0} ${(piApi?keyThere:config.harness==="pi"&&(provider==="openai"||provider==="codex")?((p)=>{try{const s=fs.lstatSync(p);if(!(s.isFile()&&s.size>0&&s.size<=262144&&(s.uid===process.getuid()||s.uid===0)))return false;const d=JSON.parse(fs.readFileSync(p,"utf8"));return!!d&&typeof d==="object"&&!Array.isArray(d)&&["openai"].some((n)=>!!d[n]&&typeof d[n]==="object"&&Object.keys(d[n]).length>0)}catch{return false}})("/jht_home/.pi/agent/auth.json"):markers[provider]&&fs.existsSync(markers[provider]))?1:0} ${fs.existsSync("/jht_home/profile/welcomed.flag")?1:0}`);
 '@
     # Every native output here is read whole and then cut: see Get-RunningComposeServiceId (T79).
     # The script goes on stdin, never as an argument: Windows PowerShell 5.1 drops the double quotes
@@ -1848,8 +1899,8 @@ function Resume-Broker {
     New-Item -ItemType File -Path $BrokerMadeMarker -Force -ErrorAction SilentlyContinue | Out-Null
   }
   if ($brokerState -ne 'running') {
-    Invoke-Compose '--profile' 'broker' 'up' '-d' '--no-deps' $BrokerContainer | Out-Host
-    if ($LASTEXITCODE -ne 0) { Write-Warn "broker_restart_failed: il servizio della posta non e' ripartito. Cosa fare: jht mail status" }
+    $brokerCode = Invoke-ComposeQuiet '--profile' 'broker' 'up' '-d' '--no-deps' $BrokerContainer
+    if ($brokerCode -ne 0) { Write-Warn "broker_restart_failed: il servizio della posta non e' ripartito. Cosa fare: jht mail status" }
   }
   $null = Invoke-BrokerMigrateLegacyOnce
   Initialize-BrokerWebAuthorisations
@@ -2306,8 +2357,8 @@ function Invoke-TelegramLifecycleSteps {
       'start' {
         $brokerCode = Ensure-Broker
         if ($brokerCode -ne 0) { return $brokerCode }
-        Invoke-Compose '--profile' 'telegram' up '-d' $TelegramContainer | Out-Host
-        if ($LASTEXITCODE -ne 0) { return $LASTEXITCODE }
+        $startCode = Invoke-ComposeQuiet '--profile' 'telegram' 'up' '-d' $TelegramContainer
+        if ($startCode -ne 0) { return $startCode }
         if ((Confirm-TelegramLifecycle 'start') -ne 0) { return 1 }
       }
       'stop' {
@@ -4183,6 +4234,8 @@ $Sub = if ($args.Count -ge 1) { $args[0] } else { '' }
 # instead of `cloud login`. Forziamo array via @() per garantire splat
 # corretto anche con 1 solo arg di coda.
 [string[]]$Rest = if ($args.Count -gt 1) { @($args[1..($args.Count - 1)]) } else { @() }
+# `--verbose` on `jht up` / `jht down` / `jht recreate` (or JHT_VERBOSE=1): compose's own lines as they come (see Invoke-ComposeQuiet).
+$script:JhtComposeVerbose = (($Rest -ccontains '--verbose') -or ($env:JHT_VERBOSE -ceq '1'))
 
 if ($Sub -ceq 'monitor' -and $Rest -ccontains '--window') {
   exit (Open-JhtMonitorWindow -CommandPath $PSCommandPath -WindowArgs $Rest)
@@ -4229,6 +4282,11 @@ switch ($Sub) {
 
   # `jht help` is the LONG list: the short help sends the person to it, so it must not answer with the short one.
   'help' {
+    # `jht help setup` is `jht setup --help`: the same text, not the long list (the setup runs in the container and a help starts nothing).
+    if ($Rest.Count -eq 1 -and $Rest[0] -ceq 'setup') {
+      Write-SetupHelp
+      exit 0
+    }
     exit (Invoke-HelpWithoutDocker 'help')
   }
 
@@ -4302,8 +4360,8 @@ switch ($Sub) {
       exit 1
     }
     Stop-OnFailedComposeUp (Invoke-PodmanServicesUpInTurn)
-    Invoke-Compose 'up' '-d'
-    Stop-OnFailedComposeUp $LASTEXITCODE
+    Stop-OnFailedComposeUp (Invoke-ComposeQuiet 'up' '-d')
+    Write-JhtLifecycleDone 'up'
     $telegramCode = Invoke-AvailableTelegramLifecycle 'resume'
     if ($telegramCode -ne 0) { exit $telegramCode }
     Resume-Broker
@@ -4315,8 +4373,9 @@ switch ($Sub) {
   { $_ -in @('down', 'stop-container') } {
     Require-ComposeFile
     Require-Docker
-    Invoke-Compose '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' '--profile' 'login' down
-    break
+    $downCode = Invoke-ComposeQuiet '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' '--profile' 'login' 'down'
+    if ($downCode -eq 0) { Write-JhtLifecycleDone 'down' }
+    exit $downCode
   }
 
   'restart' {
@@ -4329,15 +4388,15 @@ switch ($Sub) {
   'recreate' {
     Require-ComposeFile
     Require-Docker
-    Invoke-Compose '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' '--profile' 'login' down
+    $null = Invoke-ComposeQuiet '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' '--profile' 'login' 'down'
     if (-not (Repair-MountOwnership)) { exit 1 }
     if (-not (Initialize-TelegramLegacyInventory)) {
       Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'
       exit 1
     }
     Stop-OnFailedComposeUp (Invoke-PodmanServicesUpInTurn)
-    Invoke-Compose 'up' '-d'
-    Stop-OnFailedComposeUp $LASTEXITCODE
+    Stop-OnFailedComposeUp (Invoke-ComposeQuiet 'up' '-d')
+    Write-JhtLifecycleDone 'up'
     $telegramCode = Invoke-AvailableTelegramLifecycle 'resume'
     if ($telegramCode -ne 0) { exit $telegramCode }
     Resume-Broker

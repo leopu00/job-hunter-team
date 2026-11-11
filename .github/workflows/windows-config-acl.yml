@@ -49,9 +49,54 @@ on:
 permissions:
   contents: read
 
+# The gate took 38-49 minutes in one job, one step after the other, and 25-30 of them were the sh-faked tests
+# under Windows PowerShell 5.1 (the same tests take 2 minutes under pwsh: each one starts a 5.1 shell, 3-4 s each
+# on this runner, and its fakes run under Git for Windows' bash). The pieces now run side by side on their own runners:
+#   host    the host ACL selftest, the Podman machine deadline, the native pieces, the start-up measure and the
+#           count of what the shell jobs below must run;
+#   shells  the 14 test files of the Podman-in-WSL setup, the app's uninstaller and the long phases, once under pwsh
+#           and, in five slices of the same list (tests/conftest.py, JHT_TEST_SLICE=k/5), under Windows PowerShell 5.1;
+#   acl     the gate: green only when every job above is. Its name is the one the check always had.
+# The tests are the same ones, none removed: a slice keeps the tests at place k, k+5, k+10... of the collection, so
+# the five slices together run each test once.
+env:
+  # The sh-faked tests of the Podman-in-WSL setup (seven files): the setup's repair of a broker or Telegram service
+  # (T85, T87), the cgroup manager of the Podman service (T87), the logon task's user compared as a SID on this
+  # Windows (T100), and the bundle's files given to the user by an elevated setup, as this runner is (T103). The
+  # fakes run under Git for Windows' bash behind a native launcher (tests/windows_native_fakes.py); every case
+  # checks the engine it ran under.
+  PODMAN_WSL_TESTS: >-
+    tests/test_windows_podman_wsl_branches.py
+    tests/test_windows_podman_readiness.py
+    tests/test_podman_windows_setup_retry.py
+    tests/test_podman_windows_sidecar_idmap.py
+    tests/test_podman_windows_cgroupfs.py
+    tests/test_podman_windows_bundle_owner.py
+    tests/test_windows_pull_progress.py
+  # The desktop app's Windows uninstaller and the team (T72): its NSIS hook run by an interpreter, and
+  # jht-uninstall-windows.ps1 on two fake profiles with a fake podman.exe (the sh fakes above), fake scheduled
+  # tasks and a fake HKCU\Environment, plus the real HKCU\Environment on a scratch value. The uninstaller runs the
+  # script with Windows PowerShell 5.1.
+  UNINSTALLER_TESTS: >-
+    tests/test_windows_app_uninstall.py
+  # The long phases of the setup told in words and time (the wait lines, Podman's stderr as notes), the new-window
+  # notice at the end of the install, and `jht uninstall` of the wrapper (the machine Podman cannot remove, the
+  # sentences, --purge, the list of the installer's files in bin); the Podman machine of each Windows user and the
+  # pipe another user's program can hold (JHT-T305), and the command shim run for real under cmd (its exit code when
+  # jht deletes it).
+  LONG_PHASES_TESTS: >-
+    tests/test_windows_long_phases_show_progress.py
+    tests/test_windows_install_path_notice.py
+    tests/test_windows_uninstall_wrapper.py
+    tests/test_windows_uninstall_files.py
+    tests/test_windows_machine_per_user.py
+    tests/test_windows_shim_exit_code.py
+
 jobs:
-  acl:
+  host:
+    name: Host ACL, Podman machine, native pieces
     runs-on: windows-2022
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -75,7 +120,7 @@ jobs:
       - name: Install pytest
         run: pip install --require-hashes -r tests/requirements-ci.txt
       # A skip here is a failure: with a shell missing the step would be green
-      # having proved nothing. 93 = 41 cases of the native file (its shim only
+      # having proved nothing. 179 = 41 cases of the native file (its shim only
       # under Windows PowerShell 5.1) + the probe's shim under powershell and pwsh
       # + 14 cases of the JSON the scripts read from Podman, under both shells:
       # the app runs them with Windows PowerShell 5.1, whose ConvertFrom-Json
@@ -130,72 +175,93 @@ jobs:
             $line | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           }
 
-      # The sh-faked tests of the Podman-in-WSL setup, once under each shell:
-      # the app runs Windows PowerShell 5.1, the ubuntu pytest job PowerShell 7.
-      # The fakes run under Git for Windows' bash behind a native launcher
-      # (tests/windows_native_fakes.py); every case checks the engine it ran
-      # under. A missing shell, bash or compiler fails, and so does a real
-      # Podman visible to Find-Podman here (CI is set). A skip fails the count.
-      # 118 = the six whole files (48 + 41 + 11 + 7 + 5 + 6): the setup's repair of a broker
-      # or Telegram service (T85, T87), the cgroup manager of the Podman service (T87),
-      # the logon task's user compared as a SID on this Windows (T100), and the bundle's files
-      # given to the user by an elevated setup, as this runner is (T103).
-      - name: Podman-in-WSL setup tests under Windows PowerShell 5.1 and pwsh
+      # The floor of the shell jobs below: they run a slice of each group, so the whole of it is counted here, once.
+      # A test that disappears from a file (or a file out of the lists above) fails here. 180 / 175 / 73 are the
+      # tests of the three groups as they run today. The count may grow, never shrink.
+      - name: Count of the tests the shell jobs run
         shell: pwsh
-        env:
-          JHT_REQUIRE_WINDOWS_SHELLS: "1"
         run: |
-          foreach ($shell in 'powershell', 'pwsh') {
-            $env:JHT_TEST_SHELL = $shell
-            $out = python -m pytest tests/test_windows_podman_wsl_branches.py tests/test_windows_podman_readiness.py tests/test_podman_windows_setup_retry.py tests/test_podman_windows_sidecar_idmap.py tests/test_podman_windows_cgroupfs.py tests/test_podman_windows_bundle_owner.py tests/test_windows_pull_progress.py `
-              -n 4 -p no:cacheprovider -rs --durations=15 --durations-min=1 2>&1
-            $code = $LASTEXITCODE
-            $out | ForEach-Object { "$_" }
-            if ($code -ne 0) { exit $code }
-            $summary = "$($out[-1])"
-            if ($summary -notmatch '^=+ (\d+) passed(, \d+ warnings?)? in [0-9.]+s') { throw "unexpected pytest summary under ${shell}: $summary" }
-            if ([int]$Matches[1] -lt 118) { throw "only $($Matches[1]) tests ran under $shell, expected at least 118" }
+          $groups = @(
+            @{ Name = 'Podman-in-WSL setup'; Files = $env:PODMAN_WSL_TESTS; Min = 180 },
+            @{ Name = "The app's uninstaller script"; Files = $env:UNINSTALLER_TESTS; Min = 175 },
+            @{ Name = 'Long phases, new-window notice, wrapper uninstall'; Files = $env:LONG_PHASES_TESTS; Min = 73 }
+          )
+          foreach ($group in $groups) {
+            $files = @($group.Files -split '\s+' | Where-Object { $_ })
+            $out = python -m pytest @files --collect-only -q -p no:cacheprovider 2>&1
+            $out | Select-Object -Last 3 | ForEach-Object { "$_" }
+            $line = @($out | ForEach-Object { "$_" } | Where-Object { $_ -match '^\d+ tests? collected' }) | Select-Object -Last 1
+            if (-not $line -or $line -notmatch '^(\d+) tests? collected') { throw "no collected count for $($group.Name)" }
+            if ([int]$Matches[1] -lt $group.Min) { throw "$($group.Name): only $($Matches[1]) tests collected, expected at least $($group.Min)" }
+            "$($group.Name): $($Matches[1]) tests (at least $($group.Min))"
           }
 
-      # The desktop app's Windows uninstaller and the team (T72): its NSIS hook
-      # run by an interpreter, and jht-uninstall-windows.ps1 on two fake
-      # profiles with a fake podman.exe (the sh fakes above), fake scheduled
-      # tasks and a fake HKCU\Environment, plus the real HKCU\Environment on a
-      # scratch value. Once under each shell: the uninstaller runs the script
-      # with Windows PowerShell 5.1. A skip fails the count. 165 = the whole file.
-      - name: The app's uninstaller script under Windows PowerShell 5.1 and pwsh
+  shells:
+    name: ${{ matrix.title }}
+    runs-on: windows-2022
+    # A slice takes about 10 minutes; a hung step must not hold the gate for hours.
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      # A red slice does not cancel the others: the run says every test that fails, not only the first slice's.
+      fail-fast: false
+      matrix:
+        include:
+          # 428 = 180 + 175 + 73 tests of the three groups. `min` is the size of the slice today: the slices at place
+          # 0, 1 and 2 hold 86 tests, 3 and 4 hold 85 (428 = 3 x 86 + 2 x 85), pwsh holds all of them. A skip fails the
+          # job twice: the summary «N passed, M skipped» does not match the pattern of the step, and N would be below
+          # `min`. The count may grow, never shrink (a test added moves the slices up, never below `min`).
+          - { title: "Windows PowerShell 5.1, slice 1 of 5", shell: powershell, slice: "0/5", min: 86 }
+          - { title: "Windows PowerShell 5.1, slice 2 of 5", shell: powershell, slice: "1/5", min: 86 }
+          - { title: "Windows PowerShell 5.1, slice 3 of 5", shell: powershell, slice: "2/5", min: 86 }
+          - { title: "Windows PowerShell 5.1, slice 4 of 5", shell: powershell, slice: "3/5", min: 85 }
+          - { title: "Windows PowerShell 5.1, slice 5 of 5", shell: powershell, slice: "4/5", min: 85 }
+          - { title: "PowerShell 7 (pwsh), all tests", shell: pwsh, slice: "0/1", min: 428 }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+      - name: Install pytest
+        run: pip install --require-hashes -r tests/requirements-ci.txt
+      # The Podman-in-WSL setup, the app's uninstaller script, the long phases and the wrapper's uninstall (the three
+      # groups of env above) under one shell. The app runs Windows PowerShell 5.1, the ubuntu pytest job PowerShell 7.
+      # A missing shell, bash or compiler fails, and so does a real Podman visible to Find-Podman here (CI is set).
+      # A skip fails the count.
+      - name: ${{ matrix.title }}
         shell: pwsh
         env:
           JHT_REQUIRE_WINDOWS_SHELLS: "1"
+          JHT_TEST_SHELL: ${{ matrix.shell }}
+          JHT_TEST_SLICE: ${{ matrix.slice }}
+          MIN_TESTS: ${{ matrix.min }}
         run: |
-          foreach ($shell in 'powershell', 'pwsh') {
-            $env:JHT_TEST_SHELL = $shell
-            $out = python -m pytest tests/test_windows_app_uninstall.py -n 4 -p no:cacheprovider -rs 2>&1
-            $code = $LASTEXITCODE
-            $out | ForEach-Object { "$_" }
-            if ($code -ne 0) { exit $code }
-            $summary = "$($out[-1])"
-            if ($summary -notmatch '^=+ (\d+) passed(, \d+ warnings?)? in [0-9.]+s') { throw "unexpected pytest summary under ${shell}: $summary" }
-            if ([int]$Matches[1] -lt 165) { throw "only $($Matches[1]) tests ran under $shell, expected at least 165" }
-          }
+          $files = @("$env:PODMAN_WSL_TESTS $env:UNINSTALLER_TESTS $env:LONG_PHASES_TESTS" -split '\s+' | Where-Object { $_ })
+          $out = python -m pytest @files -n 4 -p no:cacheprovider -rs --durations=15 --durations-min=1 2>&1
+          $code = $LASTEXITCODE
+          $out | ForEach-Object { "$_" }
+          if ($code -ne 0) { exit $code }
+          $summary = "$($out[-1])"
+          if ($summary -notmatch '^=+ (\d+) passed(, \d+ warnings?)? in [0-9.]+s') { throw "unexpected pytest summary under ${env:JHT_TEST_SHELL}: $summary" }
+          if ([int]$Matches[1] -lt [int]$env:MIN_TESTS) { throw "only $($Matches[1]) tests ran under ${env:JHT_TEST_SHELL}, expected at least $env:MIN_TESTS" }
+          "${{ matrix.title }}: $($Matches[1]) tests" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
-      # The long phases of the setup told in words and time (the wait lines, Podman's stderr as notes), the
-      # new-window notice at the end of the install, and `jht uninstall` of the wrapper (the machine Podman
-      # cannot remove, the sentences, --purge, the list of the installer's files in bin): once under each
-      # shell. A skip fails the count. 73 = the six whole files (13 + 3 + 26 + 5 + 18 + 8); the Podman machine of each Windows user and the pipe another user's program can hold (JHT-T305), and the command shim run for real under cmd (its exit code when jht deletes it).
-      - name: Long phases, new-window notice and the wrapper's uninstall under Windows PowerShell 5.1 and pwsh
-        shell: pwsh
+  # The gate: the check this workflow has always had. It runs even when a job above failed, and is green only when
+  # the host job and every shell job are.
+  acl:
+    needs: [host, shells]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Every part of the gate is green
         env:
-          JHT_REQUIRE_WINDOWS_SHELLS: "1"
+          HOST_RESULT: ${{ needs.host.result }}
+          SHELLS_RESULT: ${{ needs.shells.result }}
         run: |
-          foreach ($shell in 'powershell', 'pwsh') {
-            $env:JHT_TEST_SHELL = $shell
-            $out = python -m pytest tests/test_windows_long_phases_show_progress.py tests/test_windows_install_path_notice.py tests/test_windows_uninstall_wrapper.py tests/test_windows_uninstall_files.py tests/test_windows_machine_per_user.py tests/test_windows_shim_exit_code.py `
-              -n 4 -p no:cacheprovider -rs 2>&1
-            $code = $LASTEXITCODE
-            $out | ForEach-Object { "$_" }
-            if ($code -ne 0) { exit $code }
-            $summary = "$($out[-1])"
-            if ($summary -notmatch '^=+ (\d+) passed(, \d+ warnings?)? in [0-9.]+s') { throw "unexpected pytest summary under ${shell}: $summary" }
-            if ([int]$Matches[1] -lt 73) { throw "only $($Matches[1]) tests ran under $shell, expected at least 73" }
-          }
+          echo "host: $HOST_RESULT"
+          echo "shells: $SHELLS_RESULT"
+          [ "$HOST_RESULT" = "success" ] && [ "$SHELLS_RESULT" = "success" ]

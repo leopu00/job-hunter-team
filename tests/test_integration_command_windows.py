@@ -16,7 +16,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from windows_native_fakes import install_fake, powershell_argv
+from windows_native_fakes import WINDOWS, git_bash, install_fake, powershell_argv
 
 ROOT = Path(__file__).resolve().parent.parent
 LIBRARY = ROOT / "scripts" / "jht-integration.ps1"
@@ -159,7 +159,10 @@ def host(tmp_path):
 
 
 def run(host, args: list[str], **extra: str) -> subprocess.CompletedProcess:
-    env = {**os.environ, "T_RUNTIME": str(host.runtime), "T_LOG": str(host.log), "T_VOLUMES": str(host.volumes),
+    # On Windows the fake podman.exe is a launcher that starts its .sh with the bash named by JHT_FAKE_BASH: without it the launcher has no file to start
+    # and the engine question of the state in the log answers an error of .NET instead of the connections the test gives it.
+    fake_bash = {"JHT_FAKE_BASH": str(git_bash())} if WINDOWS else {}
+    env = {**os.environ, **fake_bash, "T_RUNTIME": str(host.runtime), "T_LOG": str(host.log), "T_VOLUMES": str(host.volumes),
            "T_RUNNING": str(host.running), "T_LIBRARY": str(LIBRARY), "T_ARGS": json.dumps(args),
            "T_JHT_HOME": str(host.tmp / "jht-home"), "PATH": f"{host.bin}{os.pathsep}{os.environ['PATH']}", **extra}
     return subprocess.run([*host.argv, "-File", str(host.script)], env=env, capture_output=True, text=True, timeout=120)

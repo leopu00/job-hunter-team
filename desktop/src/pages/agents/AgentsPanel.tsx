@@ -32,6 +32,7 @@ import {
 } from "../../lib/agent-control";
 import type { AgentIdentity, AgentQuestion, QuestionOption, TeamAgent } from "../../lib/existing-team-agents";
 import OwnVpsClaim from "../../components/OwnVpsClaim";
+import KeyRefusedNotice from "../../components/KeyRefusedNotice";
 import { useRefresh } from "../../shell/router";
 import { AGENTS_START_READ_WAITS, StartTeamAction } from "../../shell/StartTeamAction";
 import { useTeamOff } from "../../lib/team-off";
@@ -880,6 +881,7 @@ export default function AgentsPanel({ search, only, agent }: PageProps & { only?
                       >
                         {stateLine(t, current)}
                       </p>
+                      {current.agent && isUp(current) && <KeyRefusedNotice state={current.agent.state} className="m-0 mt-1 text-[11px] break-words" />}
                       {current.agent && (
                         <p
                           data-testid="panel-times"

@@ -464,6 +464,52 @@ LOGIN_VIEW_SERVICE="jht-login-view"
 LOGIN_SERVICES="$LOGIN_PROXY_SERVICE $LOGIN_VIEW_SERVICE $LOGIN_SERVICE"
 LINKEDIN_REASONS="view_busy view_unavailable login_timeout token_expired chromium_sandbox_unavailable"
 
+# On Docker (Linux, Colima, Docker Desktop) the browser of the sign-in runs under a seccomp profile of ours: the default profile of Docker plus
+# the user, pid and net namespaces the sandbox of Chromium makes (shared/login/seccomp/, tests/test_login_seccomp_profile.py). The default
+# one refuses them, and the browser would not start. The profile ships in the extras image, which is pinned by digest, and its digest is here,
+# in the helper the wrapper attests: the copy kept in the runtime folder next to the compose file is checked against it at every start and
+# taken again from the image when it differs, and with no matching copy the sign-in does not start (it reports chromium_sandbox_unavailable).
+# Podman keeps its own default profile, which lets the sandbox through: nothing changes there. Never `seccomp=unconfined`.
+LOGIN_SECCOMP_SHA256="5f5ac5bbb2f97aa4b866ba5fa83a2dc9f8b7ddfd725cc1d2949f2c6e245a68c7"
+LOGIN_SECCOMP_IN_IMAGE="/app/shared/login/seccomp/jht-login.json"
+login_seccomp_path() { printf '%s\n' "$RUNTIME_DIR/jht-login-seccomp.json"; }
+login_seccomp_overlay_path() { printf '%s\n' "$RUNTIME_DIR/docker-compose.login-seccomp.yml"; }
+
+# The profile and the overlay file that gives it to jht-login (and to nothing else), both in the runtime folder, which the agents do not
+# mount. The folder is an absolute path, and a name that would not stay one string in YAML is refused (see below).
+linkedin_seccomp_ensure() {
+  local ref="$1" target overlay tmp content
+  target="$(login_seccomp_path)"; overlay="$(login_seccomp_overlay_path)"
+  # The folder name goes into a double-quoted YAML string and is read back by Compose: a space is fine (the default folder on a Mac has two),
+  # what would end the string or be read as something else is not: a quote, a backslash, a dollar, a colon, a hash, any control character.
+  case "$RUNTIME_DIR" in
+    ''|/|*[[:cntrl:]]*|*'"'*|*\\*|*'$'*|*:*|*'#'*) return 1 ;;
+    /*) ;;
+    *) return 1 ;;
+  esac
+  [ ! -L "$target" ] && [ ! -L "$overlay" ] || return 1
+  if ! { [ -f "$target" ] && [ "$(runtime_sha256 "$target")" = "$LOGIN_SECCOMP_SHA256" ]; }; then
+    tmp="$(mktemp "$target.XXXXXX")" || return 1
+    if docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --user 1001:1001 \
+         --entrypoint cat "$ref" "$LOGIN_SECCOMP_IN_IMAGE" > "$tmp" 2>/dev/null \
+       && [ "$(runtime_sha256 "$tmp")" = "$LOGIN_SECCOMP_SHA256" ]; then
+      chmod 0644 "$tmp" && mv -f "$tmp" "$target" || { rm -f "$tmp"; return 1; }
+    else
+      rm -f "$tmp"
+      return 1
+    fi
+  fi
+  content="services:
+  $LOGIN_SERVICE:
+    security_opt:
+      - \"seccomp:$target\""
+  if ! { [ -f "$overlay" ] && [ "$(cat "$overlay" 2>/dev/null)" = "$content" ]; }; then
+    tmp="$(mktemp "$overlay.XXXXXX")" || return 1
+    { printf '%s\n' "$content" > "$tmp" && mv -f "$tmp" "$overlay"; } || { rm -f "$tmp"; return 1; }
+  fi
+  printf '%s\n' "$overlay"
+}
+
 linkedin_base() { printf '%s' "${JHT_HOME_HOST:-$HOME/.jht}"; }
 linkedin_profile_dir() { printf '%s/secrets/linkedin-profile' "$(linkedin_base)"; }
 
@@ -528,7 +574,12 @@ linkedin_login() {
   # Checked again right before the up (the pull took time): what is left is the instant between this test and the mount of the engine.
   linkedin_profile_ok && [ -d "$(linkedin_profile_dir)" ] \
     || { err "il profilo di LinkedIn in ~/.jht non e' una cartella normale (un collegamento?): non lo uso"; linkedin_fail view_unavailable; return 1; }
-  JHT_EXTRAS_IMAGE="$ref" COMPOSE_PROFILES=login compose up -d $LOGIN_SERVICES >/dev/null 2>&1 \
+  local overlay=""
+  if [ "${CONTAINER_RUNTIME:-docker}" != "podman" ]; then
+    overlay="$(linkedin_seccomp_ensure "$ref")" \
+      || { err "il profilo seccomp del browser di accesso non c'e' o non coincide con quello attestato: non parto"; linkedin_fail chromium_sandbox_unavailable; return 1; }
+  fi
+  JHT_EXTRAS_IMAGE="$ref" COMPOSE_PROFILES=login COMPOSE_EXTRA_FILE="$overlay" compose up -d $LOGIN_SERVICES >/dev/null 2>&1 \
     || { linkedin_remove_all; linkedin_fail view_unavailable; return 1; }
   for tries in $(seq 1 40); do
     id="$(read_only_service_id "$LOGIN_VIEW_SERVICE" 2>/dev/null)" || id=""
@@ -568,8 +619,56 @@ linkedin_last_reason() {
   esac
 }
 
+# `jht linkedin status --json` is asked every time the window of the app is looked at, so it must cost nothing: no container is started to read
+# the profile. Three layers: no cookie file in the profile means nobody is signed in, and nothing else is asked; the cookie files as they are
+# (size and time of each, read by the host) and the image make a key, and the answer of the one-shot that reads the profile is kept for that key
+# for LINKEDIN_STATUS_TTL seconds (5 minutes: the longest a cookie that ran out is still shown as a sign-in); only when the key changes (the
+# person signed in, the browser wrote its cookies, the image moved) or the time is up is the one-shot run again. The cache is a file of the runtime
+# folder, which the containers do not mount; the answers it can hold are the two words of the closed list and nothing else.
+LINKEDIN_STATUS_TTL="${LINKEDIN_STATUS_TTL:-300}"
+linkedin_status_cache_path() { printf '%s/linkedin-status.cache' "$RUNTIME_DIR"; }
+
+# The cookie files of the profile as the host sees them, one `name=size:seconds;` each; nothing when there is no cookie database at all.
+linkedin_cookie_stamp() {
+  local dir file out="" database="" meta
+  dir="$(linkedin_profile_dir)"
+  for file in Default/Network/Cookies Default/Network/Cookies-journal Default/Network/Cookies-wal Default/Cookies Default/Cookies-journal; do
+    if [ -f "$dir/$file" ] && [ ! -L "$dir/$file" ]; then
+      if [ "$HOST_KERNEL" = Darwin ]; then meta="$(stat -f '%z:%m' "$dir/$file" 2>/dev/null)"; else meta="$(stat -c '%s:%Y' "$dir/$file" 2>/dev/null)"; fi
+      out="$out$file=$meta;"
+      case "$file" in *Cookies) database=1 ;; esac
+    else
+      out="$out$file=-;"
+    fi
+  done
+  [ -n "$database" ] || return 1
+  printf '%s' "$out"
+}
+
+# The word kept for this key, when it is younger than the time allowed; nothing (status 1) otherwise.
+linkedin_status_cache_read() {
+  local file epoch key word now
+  file="$(linkedin_status_cache_path)"
+  [ -f "$file" ] && [ ! -L "$file" ] || return 1
+  IFS='|' read -r epoch key word < "$file" || [ -n "$word" ] || return 1
+  case "$epoch" in ''|*[!0-9]*) return 1 ;; esac
+  case "$LINKEDIN_STATUS_TTL" in ''|*[!0-9]*) return 1 ;; esac
+  now="$(date +%s)"
+  [ "$key" = "$1" ] && [ "$now" -ge "$epoch" ] && [ $((now - epoch)) -lt "$LINKEDIN_STATUS_TTL" ] || return 1
+  case "$word" in logged_in|login_required) printf '%s' "$word" ;; *) return 1 ;; esac
+}
+
+linkedin_status_cache_write() {
+  local file tmp
+  file="$(linkedin_status_cache_path)"
+  [ ! -L "$file" ] || return 0
+  tmp="$(mktemp "$file.XXXXXX" 2>/dev/null)" || return 0
+  { printf '%s|%s|%s\n' "$(date +%s)" "$1" "$2" > "$tmp" && mv -f "$tmp" "$file"; } 2>/dev/null || rm -f "$tmp"
+  return 0
+}
+
 linkedin_status() {
-  local id view="idle" out last="" word ref linkedin="login_required"
+  local id view="idle" out last="" word ref stamp key linkedin="login_required"
   docker_reachable || { linkedin_fail view_unavailable; return 1; }
   if id="$(read_only_service_id "$LOGIN_VIEW_SERVICE" 2>/dev/null)"; then
     out="$(docker exec "$id" python3 /app/shared/login/login_view.py status 2>/dev/null | tail -n 1)" || out=""
@@ -581,8 +680,16 @@ linkedin_status() {
     last="$(linkedin_last_reason)"
   fi
   ref="$(integration_extras_ref)"
-  if [ -n "$ref" ] && [ ! -L "$(linkedin_profile_dir)" ] && [ -d "$(linkedin_profile_dir)" ] && linkedin_profile_ok && docker image inspect "$ref" >/dev/null 2>&1; then
-    word="$(JHT_EXTRAS_IMAGE="$ref" COMPOSE_PROFILES=login compose run --rm --no-deps -T --entrypoint python3 "$LOGIN_SERVICE" /app/shared/login/login_session.py check /linkedin-profile 2>/dev/null | tail -n 1)" || word=""
+  if [ -n "$ref" ] && [ ! -L "$(linkedin_profile_dir)" ] && [ -d "$(linkedin_profile_dir)" ] && linkedin_profile_ok && stamp="$(linkedin_cookie_stamp)"; then
+    key="$ref;$stamp"
+    if word="$(linkedin_status_cache_read "$key")"; then
+      :
+    elif docker image inspect "$ref" >/dev/null 2>&1; then
+      word="$(JHT_EXTRAS_IMAGE="$ref" COMPOSE_PROFILES=login compose run --rm --no-deps -T --entrypoint python3 "$LOGIN_SERVICE" /app/shared/login/login_session.py check /linkedin-profile 2>/dev/null | tail -n 1)" || word=""
+      case "$word" in logged_in|login_required) linkedin_status_cache_write "$key" "$word" ;; esac
+    else
+      word=""
+    fi
     [ "$word" != logged_in ] || linkedin=logged_in
   fi
   if [ -n "$last" ]; then

@@ -1,7 +1,7 @@
 ---
 name: first-run-burst
 description: The first half-hour a brand-new user ever watches the team work. Open this skill when you receive `[PROFILO-PRONTO]` from the Assistente, or at wake when `first_run.py status` reports phase `awaiting_profile` / `burst`. It overrides the gradual calibration (C-02) for the first window only, and it defines success as SCORED positions on screen — not as positions found.
-allowed-tools: Bash(python3 /app/shared/skills/first_run.py *), Bash(python3 /app/shared/skills/plan_registry.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(/app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/throttle-config.py *), Bash(jht-tmux-send *), Bash(jht-send *)
+allowed-tools: Bash(python3 /app/shared/skills/first_run.py *), Bash(python3 /app/shared/skills/burst_roster.py *), Bash(python3 /app/shared/skills/plan_registry.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(/app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/throttle-config.py *), Bash(jht-tmux-send *), Bash(jht-send *)
 ---
 
 # first-run-burst — the demo that decides whether the user stays
@@ -54,7 +54,9 @@ ask with `python3 /app/shared/skills/first_run.py ask-plan` (the card, never pla
 
 **The plan comes only from the configuration or from the user.** Never write it yourself from your diary, a note, your memory or an earlier conversation: «the user confirmed Pro» in a note is what the user said then, not a declaration now (the configuration may have been reset, and the plan may have changed). While `plan_missing` is there the plan is missing: ask, once, and write only what the user answers.
 
-**2. Spawn the whole roster, one worker every ~15 seconds, in this order.**
+**2. The whole roster is started in one go, in this order.**
+
+**The system starts it for you, at your boot, before you wake.** `captain_boot.py` runs `python3 /app/shared/skills/burst_roster.py start --auto --detach` when the burst is open and no worker of the roster is alive, and the BOOT FACTS say "THE SYSTEM IS STARTING THE ROSTER NOW". It briefs each worker itself (`start-agent.sh` sends the brief when the REPL is up): a Scout has its first command seconds after the profile is ready, instead of 0.9 to 2.8 minutes (measured 11/11). So in your first minutes you do **not** start workers and you do not run `roll_worker_number.py` for the roster: a second Scout would be a duplicate. After about two minutes look at `first_run.py status` and complete only what is still in `roster_missing` with `python3 /app/shared/skills/burst_roster.py start` (one command, the same order, it briefs them). If the BOOT FACTS do not say the system started it, run that command as your first action, before anything else of your wake.
 
 Order and pace: two Scouts, then one Analista and one Scorer, then the other Scouts, the other Analisti and the last Scorer.
 The first position then finds an Analista already up, and the first checked one a Scorer, instead of the Scouts first and the

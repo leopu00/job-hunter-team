@@ -63,9 +63,18 @@ export function canonicalProviderLoginUrl(
   }
 }
 
+/** The providers that run on Pi with an API key (not a subscription): there is no sign-in, the team takes the key. */
+export type ApiKeyProviderName = "glm" | "kimi";
+
 export interface OnboardingSubmission {
   host: ExecutionHost;
   provider: SubscriptionProvider;
+  /**
+   * glm or kimi with an API key: the native side takes the provider step from this (and ignores `provider`, which keeps the
+   * subscription proposed). The key itself is NEVER part of this request: it is staged apart (stageOnboardingProviderKey) and is
+   * taken from the native memory when the provider step runs.
+   */
+  apiKeyProvider?: ApiKeyProviderName;
 }
 
 export type CollectionStage = "host" | "provider";
@@ -180,6 +189,8 @@ export interface OnboardingFlowProps {
   runtime: OnboardingRuntimeState;
   activity?: OnboardingActivityState | null;
   onSubmit: (submission: OnboardingSubmission) => Promise<void>;
+  /** Gives the native side the API key of glm or kimi before the setup starts (the tests replace it; the app uses stageOnboardingProviderKey). */
+  onStageProviderKey?: (provider: ApiKeyProviderName, key: string) => Promise<void>;
   /** Explicit existing VPS connection; never prepares a new team. */
   onConnectExistingTeam?: (host: Extract<ExecutionHost, { kind: "vps" }>) => void;
   /** Back to the sign-in screen from a local profile (a team on a VPS needs the Google account). */

@@ -27,6 +27,11 @@ const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
 
 /** Literals that look like codes but never reach the person, and why. */
 const NOT_ERRORS: Record<string, string> = {
+  glm: "word of `jht providers harness --json` read by provider_key.rs, never an error",
+  moonshot: "word of `jht providers harness --json` read by provider_key.rs, never an error",
+  not_needed: "word of `jht providers harness --json` read by provider_key.rs, never an error",
+  pi: "word of `jht providers harness --json` read by provider_key.rs, never an error",
+  not_installed: "state word of `jht screen status --json` (screen_control.rs), shown by the Settings card as «off», never an error",
   expired_held: "closed queue outcome (direct_chat.rs QUEUE_ENDINGS), rendered by ChatMessageRow as text that may still be in the composer; never an error",
   // runtime_up.rs (the machine and the folders `jht up` needs, got ready by the app): the closed reason words of the runtime log; the
   // person reads the error of the exit code (podman_missing, podman_start_failed), never these.

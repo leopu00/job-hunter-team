@@ -2,6 +2,7 @@ import { Fragment, FormEvent, KeyboardEvent, useEffect, useLayoutEffect, useRef,
 import type { Locale } from "@/i18n/config";
 import SshKeyPicker from "../components/SshKeyPicker";
 import type {
+  ApiKeyProviderName,
   ExecutionHost,
   OnboardingFlowProps,
   OperationalStage,
@@ -28,6 +29,10 @@ import { SetupSupportReport } from "./SetupSupportReport";
 import RuntimePhaseDetail, { pullBar } from "./RuntimePhaseDetail";
 import PlanChoice from "./PlanChoice";
 import EngineChoice from "./EngineChoice";
+import ApiKeyChoice from "./ApiKeyChoice";
+import { ONBOARDING_API_KEY_TEXT } from "./onboarding-api-key.i18n";
+import { keyShapeOk } from "../lib/provider-key";
+import { stageOnboardingProviderKey } from "../lib/onboarding-runtime";
 import { isUntouched, wizardStart } from "./wizard-draft";
 import "./onboarding.css";
 
@@ -676,7 +681,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
   );
 }
 
-export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtime, activity, onSubmit, onConnectExistingTeam, onSignInWithGoogle, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onUseLocalData, onSetAsideLocalData, localOwner, onFreeDiskSpace, onLoadPlans, onDeclarePlan, runtimeLogPath, onOpenRuntimeLog, onOpenWithoutTeam, previousLocalData = false, interruption, onResumeInterrupted, onDiscardInterruption, draft, onDraftChange, providerOnly, locale: localeOverride }: OnboardingFlowProps) {
+export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtime, activity, onSubmit, onStageProviderKey, onConnectExistingTeam, onSignInWithGoogle, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onUseLocalData, onSetAsideLocalData, localOwner, onFreeDiskSpace, onLoadPlans, onDeclarePlan, runtimeLogPath, onOpenRuntimeLog, onOpenWithoutTeam, previousLocalData = false, interruption, onResumeInterrupted, onDiscardInterruption, draft, onDraftChange, providerOnly, locale: localeOverride }: OnboardingFlowProps) {
   const locale = localeOverride ?? appLocale();
   const t = ONBOARDING_TEXT[locale];
   const providerChoices = providers(t);
@@ -696,6 +701,12 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
   const [step, setStep] = useState(start.step);
   const [host, setHost] = useState<ExecutionHost>(start.host);
   const [provider, setProvider] = useState<SubscriptionProvider | null>(start.provider);
+  // glm or kimi with an API key, in the FIRST setup only (changing the provider of a team that exists keeps the subscription's way): the key
+  // lives in this state until the review's button sends it to the native side, which keeps it in memory apart from the setup's request.
+  const [keyProvider, setKeyProvider] = useState<ApiKeyProviderName | null>(null);
+  const [apiKey, setApiKey] = useState("");
+  const [keyShapeWrong, setKeyShapeWrong] = useState(false);
+  const [keyError, setKeyError] = useState<string | null>(null);
   const [draftNote, setDraftNote] = useState(start.restored);
   const draftChangeRef = useRef(onDraftChange);
   draftChangeRef.current = onDraftChange;
@@ -770,18 +781,31 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
 
   function next(event: FormEvent) {
     event.preventDefault();
+    if (step === 2 && keyProvider !== null && !keyShapeOk(apiKey)) { setKeyShapeWrong(true); return; }
     if (step === 0 && account.identity === "local" && onRenameLocalProfile && profileName.trim() && profileName.trim() !== account.displayName) onRenameLocalProfile(profileName);
     setSubmitError(false); setStep((current) => Math.min(current + 1, COLLECTION_STEP_COUNT - 1));
   }
   async function finish(event: FormEvent) {
     event.preventDefault();
     if (!hostIsValid || !provider || submitting) return;
-    setSubmitting(true); setSubmitError(false);
+    setSubmitting(true); setSubmitError(false); setKeyError(null);
+    const chosenHost = host.kind === "vps" ? { ...host, address: host.address.trim(), user: host.user.trim(), keyPath: host.keyPath.trim() } : host;
     try {
-      await onSubmit({
-        host: host.kind === "vps" ? { ...host, address: host.address.trim(), user: host.user.trim(), keyPath: host.keyPath.trim() } : host,
-        provider,
-      });
+      if (keyProvider !== null) {
+        // The key goes to the native side first, apart from the setup's request, and the field is empty from then on.
+        const sent = apiKey;
+        try {
+          await (onStageProviderKey ?? stageOnboardingProviderKey)(keyProvider, sent);
+        } catch (error) {
+          setKeyError(errorCodeOf(error) ?? "provider_key_failed");
+          return;
+        } finally {
+          setApiKey("");
+        }
+        await onSubmit({ host: chosenHost, provider, apiKeyProvider: keyProvider });
+      } else {
+        await onSubmit({ host: chosenHost, provider });
+      }
     } catch { setSubmitError(true); } finally { setSubmitting(false); }
   }
 
@@ -789,6 +813,7 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
   function startOver() {
     const fresh = freshChoices();
     setStep(0); setHost(fresh.host); setProvider(fresh.provider);
+    setKeyProvider(null); setApiKey(""); setKeyShapeWrong(false); setKeyError(null);
     setSubmitError(false); setDraftNote(false);
     onDraftChange?.(null);
   }
@@ -889,17 +914,20 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
             <OnboardingArtwork name={collectionArtwork(step, host)} />
             <p className="onboarding-eyebrow">{t.providerEyebrow}</p><h2 ref={headingRef} tabIndex={-1}>{t.providerTitle}</h2><p className="onboarding-lede">{t.providerLede}</p>
             <div className="onboarding-choice-grid onboarding-choice-grid--providers" role="radiogroup" aria-label={t.providerGroupAria}>
-              {providerChoices.map((item, index) => <button key={item.value} data-radio-value={item.value} tabIndex={provider === item.value || (provider === null && index === 0) ? 0 : -1} className={`onboarding-choice${provider === item.value ? " is-selected" : ""}`} type="button" role="radio" aria-checked={provider === item.value} onKeyDown={(event) => moveRadio(event, selectableProviders, provider, setProvider)} onClick={() => setProvider(item.value)}><span className="onboarding-choice__icon">{item.mark}</span><strong>{item.label}{item.recommended && <span className="onboarding-choice__badge">{item.recommended}</span>}</strong><small>{item.vendor}</small><span className="onboarding-choice__check">✓</span></button>)}
+              {providerChoices.map((item, index) => <button key={item.value} data-radio-value={item.value} tabIndex={provider === item.value || (provider === null && index === 0) ? 0 : -1} className={`onboarding-choice${provider === item.value && keyProvider === null ? " is-selected" : ""}`} type="button" role="radio" aria-checked={provider === item.value && keyProvider === null} onKeyDown={(event) => moveRadio(event, selectableProviders, provider, setProvider)} onClick={() => { setProvider(item.value); setKeyProvider(null); setApiKey(""); setKeyShapeWrong(false); }}><span className="onboarding-choice__icon">{item.mark}</span><strong>{item.label}{item.recommended && <span className="onboarding-choice__badge">{item.recommended}</span>}</strong><small>{item.vendor}</small><span className="onboarding-choice__check">✓</span></button>)}
             </div>
             <p className="onboarding-subscription-note"><strong>{t.subscriptionStrong}</strong> {t.subscriptionText}</p>
-            <div className="onboarding-actions"><button className="onboarding-secondary" type="button" onClick={() => providerOnly ? providerOnly.onCancel() : setStep(1)}>{providerOnly ? t.cancel : t.back}</button><button className="onboarding-primary" type="submit" disabled={!provider}>{t.reviewSetup} <span aria-hidden="true">→</span></button></div>
+            {!providerOnly && <ApiKeyChoice locale={locale} provider={keyProvider} apiKey={apiKey} shapeWrong={keyShapeWrong}
+              onProvider={(chosen) => { setKeyProvider(chosen); setApiKey(""); setKeyShapeWrong(false); }}
+              onKey={(value) => { setApiKey(value); setKeyShapeWrong(false); }} />}
+            <div className="onboarding-actions"><button className="onboarding-secondary" type="button" onClick={() => providerOnly ? providerOnly.onCancel() : setStep(1)}>{providerOnly ? t.cancel : t.back}</button><button className="onboarding-primary" type="submit" disabled={!provider || (keyProvider !== null && apiKey.length === 0)}>{t.reviewSetup} <span aria-hidden="true">→</span></button></div>
           </form>}
 
           {step === 3 && provider && <form onSubmit={finish} className="onboarding-panel">
             <OnboardingArtwork name={collectionArtwork(step, host)} />
             <p className="onboarding-eyebrow">{t.reviewEyebrow}</p><h2 ref={headingRef} tabIndex={-1}>{t.reviewTitle}</h2><p className="onboarding-lede">{t.reviewLede}</p>
             <dl className="onboarding-review">
-              <div><dt>{t.environment}</dt><dd>{hostName(host, t)}</dd></div><div><dt>{t.provider}</dt><dd>{providerName(provider, t)}<small>{t.viaSubscription}</small></dd></div>
+              <div><dt>{t.environment}</dt><dd>{hostName(host, t)}</dd></div><div><dt>{t.provider}</dt><dd>{keyProvider === null ? <>{providerName(provider, t)}<small>{t.viaSubscription}</small></> : <>{ONBOARDING_API_KEY_TEXT[locale][keyProvider]}<small>{ONBOARDING_API_KEY_TEXT[locale].review}</small></>}</dd></div>
             </dl>
             {!providerOnly && host.kind === "local" && platform === "windows" && <div className="onboarding-review-note" role="note" aria-label={t.installsAria}>
               <p>{t.installsIntro}</p>
@@ -909,6 +937,7 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
             {!providerOnly && host.kind === "local" && previousLocalData && <p className="onboarding-review-note" role="note" aria-label={t.previousAria}>{account.identity === "local"
               ? t.previousLocal
               : t.previousAccount}</p>}
+            {keyError && (() => { const told = describeError(keyError, { locale, fallback: "provider_key_failed" }); return <p className="onboarding-error" role="alert" data-testid="api-key-error">{told.text} {told.action}</p>; })()}
             {submitError && <p className="onboarding-error" role="alert">{t.submitError}</p>}
             <div className="onboarding-actions"><button className="onboarding-secondary" type="button" onClick={() => { setSubmitError(false); setStep(2); }} disabled={submitting}>{t.edit}</button><button className="onboarding-primary" type="submit" disabled={submitting}>{submitting ? t.starting : t.prepareTeam}<span aria-hidden="true">→</span></button></div>
           </form>}

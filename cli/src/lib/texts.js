@@ -1,9 +1,11 @@
 /**
  * The words of the screens, in the language of the person.
  *
- * The language is the one the person already chose, looked for in this order: `JHT_LANG`, the app's own choice
- * (`i18n-prefs.json` in the team's home), the `language` of the configuration, the system's (`LC_ALL`,
- * `LC_MESSAGES`, `LANG`), and English. A language whose texts are not written yet answers in English, never in
+ * The language is the one the person already chose, looked for in this order: the app's own choice
+ * (`i18n-prefs.json` in the team's home: `jht setup --language` and the picker save it there), `JHT_LANG`, the
+ * `language` of the configuration, the system's (`LC_ALL`, `LC_MESSAGES`, `LANG`), and English. The saved choice
+ * comes before `JHT_LANG` because the container gets `JHT_LANG` once, from the installation, and a language chosen
+ * later with `jht setup --language` must win over it (the wizard and the Python and TypeScript readers do the same). A language whose texts are not written yet answers in English, never in
  * a mix: a text missing from a language falls back to the English one.
  *
  * Machine output (`--json`, the markers) is never translated.
@@ -28,10 +30,10 @@ function readJson(path) {
 
 /** The language of the person: one of the seven, whether or not its texts are written yet. */
 export function resolveLanguage(env = process.env, home = JHT_HOME) {
-  const asked = fromTag(env.JHT_LANG);
-  if (asked) return asked;
   const app = fromTag(readJson(join(home, 'i18n-prefs.json'))?.locale);
   if (app) return app;
+  const asked = fromTag(env.JHT_LANG);
+  if (asked) return asked;
   const configured = fromTag(readJson(join(home, 'jht.config.json'))?.language);
   if (configured) return configured;
   // like the system's own rule: the first of these that is set decides, and «C» / «POSIX» / a language we do not

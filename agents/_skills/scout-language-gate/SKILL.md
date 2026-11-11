@@ -28,6 +28,10 @@ python3 /app/shared/skills/scout_language.py screen --title "<title>" --snippet 
 python3 /app/shared/skills/scout_language.py portal --source jobs.ch --country ch
 ```
 
+## 3. Put the level that is not the profile's last (never drop it)
+
+`screen` also answers `"seniority": "above"` or `"below"` when the TITLE names a level (Senior, Principal, Head of, Junior, Trainee...) that is not the level of THIS profile: the profile's `seniority_target`, else its years of experience. For a senior profile `Senior` and `Principal` give no code: they are its target. It is an ORDER, not a verdict: in the same pass insert the candidates that carry no `seniority` first and the ones that do after them, and never drop one for it (the Scorer owns the seniority gap; rule SC-04). On a first run each of those that the Analista had to exclude for its level cost a fetch and an INSERT and moved the 20th score later.
+
 ## Rules
 
 - Never skip a candidate that `screen` did not drop because you guess its language: the tool drops on evidence, you do not.

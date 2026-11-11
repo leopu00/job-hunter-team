@@ -283,7 +283,7 @@ def test_every_up_of_the_windows_wrapper_repairs_first():
     # before a whole up; here the calls of that function are checked, not its body.
     ups = [
         i for i, line in enumerate(lines)
-        if re.search(r"Invoke-Compose 'up'|Invoke-UpgradeCompose \$newCompose 'up'|\(Invoke-PodmanServicesUpInTurn\)", line)
+        if re.search(r"Invoke-Compose 'up'|Invoke-ComposeQuiet 'up'|Invoke-UpgradeCompose \$newCompose 'up'|\(Invoke-PodmanServicesUpInTurn\)", line)
         and "$TelegramContainer" not in line and "$service" not in line
     ]
     assert len(ups) == 7

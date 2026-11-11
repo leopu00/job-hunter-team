@@ -71,7 +71,7 @@ function Invoke-TelegramPair {
   return $LASTEXITCODE
 }
 '''
-    source = powershell_functions("Get-TelegramLifecyclePlan", "Confirm-TelegramLifecycle", "Invoke-TelegramLifecycleSteps", "Invoke-TelegramLifecycle")
+    source = powershell_functions("Get-TelegramLifecyclePlan", "Confirm-TelegramLifecycle", "Invoke-ComposeQuiet", "Invoke-TelegramLifecycleSteps", "Invoke-TelegramLifecycle")
     return adapter + source + '\nexit (Invoke-TelegramLifecycle @(\'pair\', \'assistente\'))\n'
 
 

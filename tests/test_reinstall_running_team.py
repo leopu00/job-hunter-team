@@ -118,7 +118,7 @@ FUNCTIONS = (
     "read_only_service_id", "read_only_service_id_attest", "attest_cache_lookup", "attest_cache_store", "attest_cache_key",
     "attest_cache_parse", "attest_cache_clear", "attest_cache_path", "attest_cache_folder_ok", "attest_cache_text_digest",
     "attest_cache_binary_identity", "attest_inspect_format", "attest_cache_ttl", "read_only_container_id", "container_up", "container_mutation_preflight", "stale_config_hint", "err_unattestable", "docker_compose_plugin_missing",
-    "container_down", "rootless_netns_noise_filter", "compose_noise_filter", "compose_stdout_quiet", "compose_quiet",
+    "container_down", "rootless_netns_noise_filter", "compose_noise_filter", "jht_compose_verbose_requested", "compose_stdout_quiet", "compose_quiet",
 )
 
 
@@ -409,13 +409,44 @@ def test_down_with_podman_that_fails_does_not_say_stopped_and_keeps_the_exit(wra
     assert "Error: boom" in done.stderr
 
 
-def test_with_docker_the_output_of_compose_is_left_as_it_was(wrapper):
+def test_with_docker_the_lines_of_compose_are_kept_out_of_sight_when_it_went_well_and_shown_when_it_did_not(wrapper):
     ids = "a1b2c3d4e5f6" + "0" * 52 + "\\n"
-    done = wrapper.run("CONTAINER_RUNTIME=docker; compose_stdout_quiet down; echo rc=$?", down_stdout=ids, down_stderr=NO_TELEGRAM)
-    assert "a1b2c3d4e5f6" in done.stdout and "rc=0" in done.stdout
-    assert "no container with name or ID" in done.stderr
-    quiet = wrapper.run("CONTAINER_RUNTIME=docker; compose_quiet up -d; echo rc=$?", up_stdout=ids, up_stderr=NO_TELEGRAM)
-    assert "a1b2c3d4e5f6" in quiet.stdout and "no container with name or ID" in quiet.stderr
+    progress = " Container jht  Stopping\\n Container jht  Stopped\\n"
+    # the stderr of the stdout-only one stays with the caller (container_down reads it, below)
+    done = wrapper.run("CONTAINER_RUNTIME=docker; compose_stdout_quiet down; echo rc=$?", down_stdout=ids)
+    assert done.stdout.splitlines() == ["rc=0"], done.stdout
+    refused = wrapper.run("CONTAINER_RUNTIME=docker; compose_stdout_quiet down; echo rc=$?", down_stdout=ids, down_exit=3)
+    assert "rc=3" in refused.stdout and "a1b2c3d4e5f6" in refused.stdout
+    quiet = wrapper.run("CONTAINER_RUNTIME=docker; compose_quiet up -d; echo rc=$?", up_stdout=ids, up_stderr=progress)
+    assert quiet.stdout.splitlines() == ["rc=0"] and quiet.stderr == "", (quiet.stdout, quiet.stderr)
+    failed = wrapper.run("CONTAINER_RUNTIME=docker; compose_quiet up -d; echo rc=$?", up_stdout=ids, up_stderr=progress + "Error: no space\\n", up_exit=5)
+    assert "rc=5" in failed.stdout and "a1b2c3d4e5f6" in failed.stdout
+    assert "Container jht  Stopping" in failed.stderr and "Error: no space" in failed.stderr
+
+
+def test_with_verbose_the_lines_of_compose_come_as_they_are(wrapper):
+    ids = "a1b2c3d4e5f6" + "0" * 52 + "\\n"
+    done = wrapper.run("CONTAINER_RUNTIME=docker; jht_compose_verbose_requested up --verbose; compose_quiet up -d; echo rc=$?",
+                       up_stdout=ids, up_stderr=" Container jht  Started\\n")
+    assert "a1b2c3d4e5f6" in done.stdout and "rc=0" in done.stdout and "Container jht  Started" in done.stderr
+    off = wrapper.run("CONTAINER_RUNTIME=docker; jht_compose_verbose_requested up; compose_quiet up -d; echo rc=$?", up_stdout=ids)
+    assert off.stdout.splitlines() == ["rc=0"]
+    env = wrapper.run("CONTAINER_RUNTIME=docker; JHT_VERBOSE=1; jht_compose_verbose_requested up; compose_quiet up -d", up_stdout=ids)
+    assert "a1b2c3d4e5f6" in env.stdout
+
+
+def test_down_with_docker_says_the_result_and_not_the_progress_of_compose(wrapper):
+    progress = " Container jht  Stopping\\n Container jht  Stopped\\n Network jht_default  Removed\\n"
+    # the attestation of a Docker container is not what this fixture fakes: the container is there, as far as container_down asks
+    up = "container_up() { return 0; }; "
+    done = wrapper.run(up + "container_down; echo rc=$?", running_hash=NEW_HASH, down_stderr=progress, runtime_kind="docker")
+    assert done.stdout.splitlines() == ["<down.done>", "rc=0"], done.stdout
+    assert done.stderr == "", done.stderr
+    verbose = wrapper.run(up + "JHT_COMPOSE_VERBOSE=1; container_down; echo rc=$?", running_hash=NEW_HASH, down_stderr=progress, runtime_kind="docker")
+    assert "Container jht  Stopped" in verbose.stderr and "<down.done>" in verbose.stdout
+    failed = wrapper.run(up + "container_down; echo rc=$?", running_hash=NEW_HASH, down_stderr=progress + "Error: boom\\n", down_exit=3, runtime_kind="docker")
+    assert "rc=3" in failed.stdout and "<down.done>" not in failed.stdout
+    assert "Container jht  Stopped" in failed.stderr and "Error: boom" in failed.stderr
 
 
 def test_up_with_podman_hides_the_ids_and_the_false_errors_and_keeps_the_exit(wrapper):
@@ -426,7 +457,10 @@ def test_up_with_podman_hides_the_ids_and_the_false_errors_and_keeps_the_exit(wr
     assert "rc=5" in failed.stdout and "Error: no space" in failed.stderr
 
 
-def test_up_and_down_print_the_state_line_only_for_podman_in_the_wrapper_source():
+def test_up_and_down_print_the_state_line_for_every_runtime_in_the_wrapper_source():
     text = WRAPPER.read_text(encoding="utf-8")
-    assert text.count('[ "$CONTAINER_RUNTIME" != podman ] || printf \'%s\\n\' "$(jht_say up.done)"') == 3
+    assert text.count('printf \'%s\\n\' "$(jht_say up.done)"') == 3
+    assert not re.search(r'!= podman \] \|\| printf .%s\\n. "\$\(jht_say (up|down)\.done', text)
+    for branch in ("  up)\n", "  start-container)\n", "  down|stop-container)\n", "  recreate)\n"):
+        assert branch + '    jht_compose_verbose_requested "${@:2}"\n' in text, branch
     assert len(re.findall(r"^    compose_quiet up -d$", text, re.M)) == 3

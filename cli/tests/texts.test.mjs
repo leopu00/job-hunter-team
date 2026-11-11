@@ -18,7 +18,7 @@ function home(files = {}) {
   return dir;
 }
 
-test('the language comes from JHT_LANG, then the app, then the configuration, then the system, then English', () => {
+test('the language comes from the saved choice of the app, then JHT_LANG, then the configuration, then the system, then English', () => {
   const none = home();
   assert.equal(resolveLanguage({}, none), 'en');
   assert.equal(resolveLanguage({ LANG: 'it_IT.UTF-8' }, none), 'it');
@@ -30,7 +30,10 @@ test('the language comes from JHT_LANG, then the app, then the configuration, th
   assert.equal(resolveLanguage({ LANG: 'it_IT.UTF-8' }, config), 'fr');
   const app = home({ 'jht.config.json': JSON.stringify({ language: 'fr' }), 'i18n-prefs.json': JSON.stringify({ locale: 'es' }) });
   assert.equal(resolveLanguage({ LANG: 'it_IT.UTF-8' }, app), 'es');
-  assert.equal(resolveLanguage({ JHT_LANG: 'pt', LANG: 'it_IT.UTF-8' }, app), 'pt');
+  assert.equal(resolveLanguage({ JHT_LANG: 'pt', LANG: 'it_IT.UTF-8' }, app), 'es', 'the language chosen with jht setup wins over the JHT_LANG of the installation');
+  assert.equal(resolveLanguage({ JHT_LANG: 'pt', LANG: 'it_IT.UTF-8' }, config), 'pt');
+  const unreadable = home({ 'i18n-prefs.json': '{"locale": "xx"}' });
+  assert.equal(resolveLanguage({ JHT_LANG: 'pt' }, unreadable), 'pt', 'a saved choice that is not one of the seven is ignored');
   assert.equal(resolveLanguage({ JHT_LANG: 'xx', LANG: 'it_IT.UTF-8' }, none), 'it', 'a language that does not exist is ignored');
 });
 
@@ -102,6 +105,17 @@ test('the every-day screens come out in the language of the person, and in Engli
   // the system's language is followed when nothing else is said
   assert.match(jht(['status'], box, { LANG: 'it_IT.UTF-8' }).out, /Configurazione/);
   assert.match(jht(['status'], box, { LANG: 'en_US.UTF-8' }).out, /Configuration/);
+});
+
+test('a language chosen with jht setup after the installation wins over the JHT_LANG the container was started with', () => {
+  const box = sandbox();
+  // the container is given JHT_LANG=it once (from the installation); the person then ran `jht setup --language en`
+  writeFileSync(join(box.home, 'i18n-prefs.json'), JSON.stringify({ locale: 'en' }));
+  const english = jht(['agents'], box, { JHT_LANG: 'it' }).out;
+  assert.match(english, /Agents/);
+  assert.doesNotMatch(english, /Agenti|Nessun agente/);
+  writeFileSync(join(box.home, 'i18n-prefs.json'), JSON.stringify({ locale: 'it' }));
+  assert.match(jht(['agents'], box, { JHT_LANG: 'en' }).out, /Agenti/);
 });
 
 test('--json is the same in every language', () => {

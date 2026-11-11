@@ -769,6 +769,59 @@ function Get-LinkedinLastReason {
   return ''
 }
 
+# `jht linkedin status --json` is asked every time the window of the app is looked at, so it must cost nothing: no container is started to read the
+# profile. No cookie file in the profile means nobody is signed in, and nothing else is asked; the cookie files as they are (size and time of each) and
+# the image make a key, and the answer of the one-shot is kept for that key for $LinkedinStatusTtl seconds (5 minutes: the longest a cookie that ran
+# out is still shown as a sign-in); the one-shot runs again only when the key changes or the time is up. The cache is a file of the runtime folder,
+# which the containers do not mount, and the answers it can hold are the two words of the closed list.
+$LinkedinStatusTtl = 300
+function Get-LinkedinStatusCachePath { return (Join-Path $RuntimeDir 'linkedin-status.cache') }
+
+# The cookie files of the profile as the host sees them, one `name=size:ticks;` each; '' when there is no cookie database at all.
+function Get-LinkedinCookieStamp {
+  $dir = Get-LinkedinProfileDir
+  $out = ''; $database = $false
+  foreach ($file in @('Default/Network/Cookies', 'Default/Network/Cookies-journal', 'Default/Network/Cookies-wal', 'Default/Cookies', 'Default/Cookies-journal')) {
+    $item = Get-Item -LiteralPath (Join-Path $dir $file) -Force -ErrorAction SilentlyContinue
+    if ($item -and -not $item.PSIsContainer -and -not (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) -and -not $item.LinkType) {
+      $out += ('{0}={1}:{2};' -f $file, $item.Length, $item.LastWriteTimeUtc.Ticks)
+      if ($file -like '*Cookies') { $database = $true }
+    } else {
+      $out += ('{0}=-;' -f $file)
+    }
+  }
+  if ($database) { return $out }
+  return ''
+}
+
+# The word kept for this key when it is younger than the time allowed; '' otherwise.
+function Read-LinkedinStatusCache {
+  param([string]$Key)
+  $path = Get-LinkedinStatusCachePath
+  $item = Get-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+  if (-not $item -or $item.PSIsContainer -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) -or $item.LinkType) { return '' }
+  $line = ''
+  try { $line = [string](Get-Content -LiteralPath $path -TotalCount 1 -ErrorAction Stop) } catch { return '' }
+  $parts = $line.Split('|')
+  if ($parts.Count -ne 3 -or $parts[0] -notmatch '^[0-9]{1,12}$' -or $parts[1] -cne $Key) { return '' }
+  $age = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() - [int64]$parts[0]
+  if ($age -lt 0 -or $age -ge $LinkedinStatusTtl) { return '' }
+  if ($parts[2] -ceq 'logged_in' -or $parts[2] -ceq 'login_required') { return $parts[2] }
+  return ''
+}
+
+function Write-LinkedinStatusCache {
+  param([string]$Key, [string]$Word)
+  $path = Get-LinkedinStatusCachePath
+  $item = Get-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+  if ($item -and ((($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) -or $item.LinkType)) { return }
+  $temp = '{0}.{1}' -f $path, [guid]::NewGuid().ToString('N')
+  try {
+    [IO.File]::WriteAllText($temp, ('{0}|{1}|{2}' -f [DateTimeOffset]::UtcNow.ToUnixTimeSeconds(), $Key, $Word) + "`n")
+    Move-Item -LiteralPath $temp -Destination $path -Force -ErrorAction Stop
+  } catch { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue }
+}
+
 function Invoke-LinkedinStatus {
   if (-not (Test-DockerReachable)) { Write-LinkedinFail 'view_unavailable'; return 1 }
   $view = 'idle'; $last = ''; $linkedin = 'login_required'
@@ -782,16 +835,24 @@ function Invoke-LinkedinStatus {
   }
   $ref = Get-IntegrationExtrasRef
   $profile = Get-LinkedinProfileDir
-  if ($ref -and (Test-LinkedinProfileOk) -and (Test-Path -LiteralPath $profile -PathType Container)) {
-    & { $ErrorActionPreference = 'Continue'; & docker image inspect $ref *> $null }
-    if ($LASTEXITCODE -eq 0) {
-      $before = $env:JHT_EXTRAS_IMAGE
-      try {
-        $env:JHT_EXTRAS_IMAGE = $ref
-        $answer = @(Invoke-Compose '--profile' 'login' run '--rm' '--no-deps' '-T' '--entrypoint' 'python3' $LoginBrowserContainer '/app/shared/login/login_session.py' 'check' '/linkedin-profile')
-      } finally { if ($null -eq $before) { Remove-Item Env:\JHT_EXTRAS_IMAGE -ErrorAction SilentlyContinue } else { $env:JHT_EXTRAS_IMAGE = $before } }
-      if ($answer.Count -and ([string]$answer[$answer.Count - 1]).Trim() -ceq 'logged_in') { $linkedin = 'logged_in' }
+  $stamp = ''
+  if ($ref -and (Test-LinkedinProfileOk) -and (Test-Path -LiteralPath $profile -PathType Container)) { $stamp = Get-LinkedinCookieStamp }
+  if ($ref -and $stamp) {
+    $key = '{0};{1}' -f $ref, $stamp
+    $word = Read-LinkedinStatusCache $key
+    if (-not $word) {
+      & { $ErrorActionPreference = 'Continue'; & docker image inspect $ref *> $null }
+      if ($LASTEXITCODE -eq 0) {
+        $before = $env:JHT_EXTRAS_IMAGE
+        try {
+          $env:JHT_EXTRAS_IMAGE = $ref
+          $answer = @(Invoke-Compose '--profile' 'login' run '--rm' '--no-deps' '-T' '--entrypoint' 'python3' $LoginBrowserContainer '/app/shared/login/login_session.py' 'check' '/linkedin-profile')
+        } finally { if ($null -eq $before) { Remove-Item Env:\JHT_EXTRAS_IMAGE -ErrorAction SilentlyContinue } else { $env:JHT_EXTRAS_IMAGE = $before } }
+        $said = if ($answer.Count) { ([string]$answer[$answer.Count - 1]).Trim() } else { '' }
+        if ($said -ceq 'logged_in' -or $said -ceq 'login_required') { $word = $said; Write-LinkedinStatusCache $key $word }
+      }
     }
+    if ($word -ceq 'logged_in') { $linkedin = 'logged_in' }
   }
   if ($last) {
     [Console]::Out.WriteLine(('{{"ok": true, "view": "{0}", "linkedin": "{1}", "last_session": {{"reason": "{2}"}}}}' -f $view, $linkedin, $last))

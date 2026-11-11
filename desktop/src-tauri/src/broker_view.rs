@@ -51,7 +51,9 @@ const SESSION_MAX: Duration = Duration::from_secs(15 * 60);
 /// The app closes the view a little after the broker would have, as a second
 /// lock: a broker that never ends the session does not keep the window open.
 const DEADLINE_MARGIN: Duration = Duration::from_secs(30);
-const LOGIN_TIMEOUT: Duration = Duration::from_secs(120);
+/// `jht linkedin login` pulls the tools image when it is not on the computer yet, then starts three containers and waits for the
+/// browser: the first time it takes minutes, not seconds.
+const LOGIN_TIMEOUT: Duration = Duration::from_secs(300);
 const STOP_TIMEOUT: Duration = Duration::from_secs(30);
 const STATUS_TIMEOUT: Duration = Duration::from_secs(25);
 const TUNNEL_READY_TIMEOUT: Duration = Duration::from_secs(15);
@@ -170,6 +172,12 @@ fn command_failure(result: &Result<ProcessResult, &'static str>) -> &'static str
             .map(|line| broker_reason(line.reason.as_deref()))
             .unwrap_or("view_unavailable"),
     }
+}
+
+/// The command removes its own containers when it fails with an answer; one that was cut off by the app's deadline may have left
+/// them running, and the next login would find them and answer `view_busy` until the broker's own limit ends them.
+fn may_have_left_containers(code: &str) -> bool {
+    code == "timeout"
 }
 
 fn valid_token(token: &str) -> bool {
@@ -449,7 +457,7 @@ pub(crate) fn teardown(app: &tauri::AppHandle) {
     close_view(app, None);
 }
 
-fn active_host(
+pub(crate) fn active_host(
     app: &tauri::AppHandle,
     scope: &AccountScope,
 ) -> Result<ValidatedHost, &'static str> {
@@ -459,13 +467,27 @@ fn active_host(
 
 fn start_view(app: &tauri::AppHandle, scope: AccountScope) -> Result<ActiveView, &'static str> {
     let host = active_host(app, &scope)?;
-    let grant = parse_grant(run_linkedin_command(
+    let grant = match parse_grant(run_linkedin_command(
         app,
         &scope,
         &host,
         LocalCliOperation::LinkedinLogin,
         LOGIN_TIMEOUT,
-    ))?;
+    )) {
+        Ok(grant) => grant,
+        Err(code) => {
+            if may_have_left_containers(code) {
+                let _ = run_linkedin_command(
+                    app,
+                    &scope,
+                    &host,
+                    LocalCliOperation::LinkedinLoginStop,
+                    STOP_TIMEOUT,
+                );
+            }
+            return Err(code);
+        }
+    };
     let opened = Instant::now();
     let (local_port, tunnel) = match &host {
         ValidatedHost::Local => (grant.port, None),
@@ -866,6 +888,13 @@ mod tests {
             );
         }
         assert_eq!(parse_grant(Err("process_timeout")).err(), Some("timeout"));
+        // only a command cut off by the deadline needs the stop: the others cleaned up after themselves
+        assert!(may_have_left_containers("timeout"));
+        for code in ["view_busy", "view_unavailable", "login_timeout", "token_expired", "chromium_sandbox_unavailable", "runtime_missing"] {
+            assert!(!may_have_left_containers(code), "{code}");
+        }
+        // the first login pulls the tools image: the deadline is minutes
+        assert!(LOGIN_TIMEOUT >= Duration::from_secs(300));
         assert_eq!(
             parse_grant(Err("ssh_unavailable")).err(),
             Some("view_unavailable")

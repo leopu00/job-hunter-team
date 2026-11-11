@@ -69,7 +69,8 @@ EXPECTED_EFFECTIVE_PERMISSIONS = {
         "e2e-local-supabase": READ_CONTENTS,
         "smoke": READ_CONTENTS,
     },
-    "windows-config-acl.yml": {"acl": READ_CONTENTS},
+    # The gate in parallel jobs (host, one job per shell and slice) and `acl`, which is green only when they all are.
+    "windows-config-acl.yml": {"host": READ_CONTENTS, "shells": READ_CONTENTS, "acl": READ_CONTENTS},
     "windows-dev-smoke.yml": {"next-dev": READ_CONTENTS},
     "windows-installer-smoke.yml": {"nsis": READ_CONTENTS},
     # Not a required check: the user's install with the real Podman (T80).

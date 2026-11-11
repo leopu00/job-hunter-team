@@ -1,7 +1,7 @@
 ---
 name: first-run-burst
 description: "Az első fél óra, amikor egy vadonatúj felhasználó egyáltalán látja dolgozni a csapatot. Akkor nyisd meg ezt a skillt, amikor `[PROFILO-PRONTO]`-t kapsz az Assistentétől, vagy ébredéskor, ha a `first_run.py status` `awaiting_profile` / `burst` fázist jelent. Kizárólag az első ablakra felülírja a fokozatos kalibrációt (C-02), és a sikert a képernyőn megjelenő, PONTOZOTT pozíciókként definiálja — nem megtalált pozíciókként."
-allowed-tools: Bash(python3 /app/shared/skills/first_run.py *), Bash(python3 /app/shared/skills/plan_registry.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(/app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/throttle-config.py *), Bash(jht-tmux-send *), Bash(jht-send *)
+allowed-tools: Bash(python3 /app/shared/skills/first_run.py *), Bash(python3 /app/shared/skills/burst_roster.py *), Bash(python3 /app/shared/skills/plan_registry.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(/app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/throttle-config.py *), Bash(jht-tmux-send *), Bash(jht-send *)
 ---
 <!-- @translation: hu, ai-translated 2026-08-03 -->
 
@@ -52,7 +52,9 @@ pedig ugyanúgy add meg: kérdezd meg a `python3 /app/shared/skills/first_run.py
 
 **A csomag csak a konfigurációból vagy a felhasználótól jöhet.** Soha ne írd be magad a naplóból, egy jegyzetből, az emlékezetedből vagy egy korábbi beszélgetésből: a „a felhasználó megerősítette a Pro-t” egy jegyzetben azt jelenti, amit a felhasználó akkor mondott, nem mostani nyilatkozat (a konfigurációt lenullázhatták, és a csomag megváltozhatott). Amíg ott a `plan_missing`, a csomag hiányzik: kérdezd meg, csak egyszer, és csak azt írd be, amit a felhasználó válaszol.
 
-**2. Spawnold az egész rostert, ~15 másodpercenként egy workert, ebben a sorrendben.**
+**2. Az egész roster egyszerre indul, ebben a sorrendben.**
+
+**A rendszer indítja el helyetted, a bootodkor, mielőtt felébredsz.** A `captain_boot.py` lefuttatja a `python3 /app/shared/skills/burst_roster.py start --auto --detach` parancsot, ha a burst nyitva van és a rosterből egyetlen worker sem él, a BOOT FACTS pedig ezt írja: "THE SYSTEM IS STARTING THE ROSTER NOW". A briefet maga küldi el minden workernek (a `start-agent.sh` küldi, amint a REPL feláll): egy Scout az első parancsát másodpercekkel a profil elkészülte után kapja, nem 0,9–2,8 perc múlva (mérve 11/11-én). Az első perceidben tehát **nem** indítasz workert, és nem futtatod a `roll_worker_number.py`-t a rosterhez: egy második Scout duplikátum lenne. Körülbelül két perc után nézd meg a `first_run.py status`-t, és csak azt egészítsd ki, ami még a `roster_missing`-ben van, a `python3 /app/shared/skills/burst_roster.py start` paranccsal (egy parancs, ugyanaz a sorrend, elküldi a briefeket). Ha a BOOT FACTS nem mondja, hogy a rendszer elindította, futtasd ezt a parancsot első teendőként, az ébredésed minden más lépése előtt.
 
 Sorrend és ütem: két Scout, aztán egy Analista és egy Scorer, aztán a többi Scout, a többi Analista és az utolsó Scorer.
 Így az első pozíció már futó Analistát talál, az első ellenőrzött pedig Scorert, nem előbb a Scoutokat és percekkel később a többit
