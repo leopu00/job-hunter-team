@@ -110,6 +110,7 @@ function Get-JhtUninstallText {
     'phase.commands' = @('Tolgo il comando jht, i file dell''installer e le righe PATH...', 'Removing the jht command, the installer files and the PATH lines...')
     'done'           = @('Fatto: la macchina <machine> (e con lei le immagini di JHT, il nucleo e quella piena), il runtime e il comando jht sono stati tolti.', 'Done: the <machine> machine (and with it the JHT images, the core and the full one), the runtime and the jht command are gone.')
     'done.kept'      = @(' ~/.jht e Documents\Job Hunter Team restano (con --purge si cancellano).', ' ~/.jht and Documents\Job Hunter Team stay (--purge deletes them).')
+    'done.wsl'       = @('WSL resta in memoria: vmmem, wslservice e wslrelay sono componenti di Windows (non li ha installati Job Hunter Team) e servono anche alle altre macchine WSL di questo utente; si fermano da soli quando nessuna e'' in uso. Per fermarli subito: wsl --shutdown (ferma TUTTE le macchine WSL aperte).', 'WSL stays in memory: vmmem, wslservice and wslrelay are parts of Windows (Job Hunter Team did not install them) and the other WSL machines of this user need them too; they stop by themselves when none is in use. To stop them now: wsl --shutdown (it stops ALL the open WSL machines).')
     'secrets'        = @('I segreti salvati non sono stati rimossi: la password della posta e i token di Telegram stanno nei volumi jht-secrets e jht-telegram-secrets della macchina <machine>, che e'' ancora qui.', 'The saved secrets were not removed: the mail password and the Telegram tokens are in the jht-secrets and jht-telegram-secrets volumes of the <machine> machine, which is still there.')
     'left.machine'   = @('Non tolta: la macchina Podman <machine>. Motivo: {0}. A mano: podman machine stop <machine>; wsl --unregister {1}; poi rilancia jht uninstall --confirm.', 'Not removed: the <machine> Podman machine. Reason: {0}. By hand: podman machine stop <machine>; wsl --unregister {1}; then run jht uninstall --confirm again.')
     'left.task'      = @('Non tolta l''attivita'' di avvio al logon ''{0}'' (motivo: {1}). Il resto e'' stato tolto. A mano: schtasks /Delete /TN "{0}" /F.', 'Not removed: the logon start task ''{0}'' (reason: {1}). Everything else was removed. By hand: schtasks /Delete /TN "{0}" /F.')
@@ -600,6 +601,8 @@ function Invoke-JhtWindowsUninstall {
   $done = Get-JhtUninstallText 'done'
   if (-not $purge) { $done += (Get-JhtUninstallText 'done.kept') }
   [Console]::Out.WriteLine($done)
+  # What the person sees running after the uninstall and may take for ours: it is WSL's own, shared with their other machines, so it is explained, not ended.
+  [Console]::Out.WriteLine((Get-JhtUninstallText 'done.wsl'))
   return 0
 }
 
