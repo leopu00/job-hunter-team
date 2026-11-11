@@ -41,6 +41,7 @@ def _installed(tmp_path: Path, *extra: str) -> tuple[dict[str, str], Path]:
         _extras_args(),  # no test channel at all
         _channel() + _extras_args("sha256:short"),
         _channel() + _extras_args("sha256:" + "E" * 64),
+        _channel() + _extras_args("sha256:" + "e" * 64 + "\nsha256:" + "e" * 64),  # a second line: grep alone checks line by line
         _channel() + _extras_args("ghcr.io/leopu00/jht@" + EXTRAS),
     ],
 )
