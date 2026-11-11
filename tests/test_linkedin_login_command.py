@@ -171,19 +171,114 @@ def test_status_idle_waiting_connected_and_how_the_last_session_ended(host):
     assert "last_session" not in last_line(run(host, "status --json", FAKE_EXIT_CODE="99"))
 
 
-def test_status_asks_the_profile_in_a_one_shot_only_when_there_is_one_and_the_image(host):
+def cookies(host, content: bytes = b"cookies") -> Path:
+    """The cookie database of the profile, as the browser leaves it (the content is not read by the host: only its size and time)."""
+    path = host.tmp / "jht-home" / "secrets" / "linkedin-profile" / "Default" / "Network" / "Cookies"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
+    return path
+
+
+def runs(host) -> int:
+    return host.log.read_text().count("run --rm")
+
+
+def test_status_asks_the_profile_in_a_one_shot_only_when_there_is_a_cookie_file_and_the_image(host):
     profile = host.tmp / "jht-home" / "secrets" / "linkedin-profile"
     nothing = run(host, "status --json", FAKE_CHECK_WORD="logged_in")
     assert last_line(nothing)["linkedin"] == "login_required" and "run --rm" not in host.log.read_text()
     profile.mkdir(parents=True)
+    empty = run(host, "status --json", FAKE_CHECK_WORD="logged_in")  # a profile with no cookie file: nobody is signed in, nothing is asked
+    assert last_line(empty)["linkedin"] == "login_required" and runs(host) == 0
+    cookies(host)
     run(host, "status --json", FAKE_NO_IMAGE="1", FAKE_CHECK_WORD="logged_in")
-    assert "run --rm" not in host.log.read_text()
+    assert runs(host) == 0
     yes = last_line(run(host, "status --json", FAKE_CHECK_WORD="logged_in"))
     assert yes["linkedin"] == "logged_in"
-    other = last_line(run(host, "status --json", FAKE_CHECK_WORD="whatever; rm"))
-    assert other["linkedin"] == "login_required"
     log = host.log.read_text()
     assert "profiles=login" in log and "--no-deps -T --entrypoint python3 jht-login /app/shared/login/login_session.py check /linkedin-profile" in log
+
+
+def test_a_word_that_is_not_in_the_closed_list_is_not_a_sign_in_and_is_not_kept(host):
+    cookies(host)
+    other = last_line(run(host, "status --json", FAKE_CHECK_WORD="whatever; rm"))
+    assert other["linkedin"] == "login_required" and not (host.runtime / "linkedin-status.cache").exists()
+    run(host, "status --json", FAKE_CHECK_WORD="whatever; rm")
+    assert runs(host) == 2, "what was not a clean answer is asked again"
+
+
+def test_looking_again_and_again_costs_one_container_not_one_per_look(host):
+    cookies(host)
+    answers = [last_line(run(host, "status --json", FAKE_CHECK_WORD="logged_in"))["linkedin"] for _ in range(6)]
+    assert answers == ["logged_in"] * 6 and runs(host) == 1
+    cache = (host.runtime / "linkedin-status.cache").read_text().strip().split("|")
+    assert len(cache) == 3 and cache[0].isdigit() and cache[2] == "logged_in" and REF in cache[1]
+    assert stat.S_IMODE((host.runtime / "linkedin-status.cache").stat().st_mode) == 0o600
+    assert not [line for line in host.log.read_text().splitlines() if line.startswith("DOCKER image inspect")][1:], "the image is not asked after the first answer"
+
+
+def test_a_no_is_kept_the_same_way(host):
+    cookies(host)
+    for _ in range(3):
+        assert last_line(run(host, "status --json", FAKE_CHECK_WORD="login_required"))["linkedin"] == "login_required"
+    assert runs(host) == 1
+
+
+def test_the_one_shot_runs_again_when_the_cookie_files_change_when_the_image_moves_and_when_the_time_is_up(host):
+    path = cookies(host)
+    run(host, "status --json", FAKE_CHECK_WORD="login_required")
+    assert runs(host) == 1
+    path.write_bytes(b"the person signed in: more bytes")  # the browser wrote its cookies
+    assert last_line(run(host, "status --json", FAKE_CHECK_WORD="logged_in"))["linkedin"] == "logged_in" and runs(host) == 2
+    (path.parent / "Cookies-journal").write_bytes(b"x")  # a journal of the database appears
+    run(host, "status --json", FAKE_CHECK_WORD="logged_in")
+    assert runs(host) == 3
+    run(host, "status --json", FAKE_CHECK_WORD="logged_in", EXTRAS_IMAGE_DIGEST="sha256:" + "a" * 64)  # another image
+    assert runs(host) == 4
+    run(host, "status --json", FAKE_CHECK_WORD="logged_in", EXTRAS_IMAGE_DIGEST="sha256:" + "a" * 64, LINKEDIN_STATUS_TTL="0")  # time is up
+    assert runs(host) == 5
+    run(host, "status --json", FAKE_CHECK_WORD="logged_in", EXTRAS_IMAGE_DIGEST="sha256:" + "a" * 64)
+    assert runs(host) == 5  # the entry the run above wrote is fresh again for the default time
+
+
+def test_an_old_entry_is_not_used_and_neither_is_one_that_says_something_else(host):
+    cookies(host)
+    run(host, "status --json", FAKE_CHECK_WORD="login_required")
+    cache = host.runtime / "linkedin-status.cache"
+    epoch, key, word = cache.read_text().strip().split("|")
+    for line in (f"{int(epoch) - 400}|{key}|logged_in", f"{epoch}|{key}|logged_in; rm", f"{epoch}|other|logged_in", f"x|{key}|logged_in",
+                 f"{int(epoch) + 4000}|{key}|logged_in", f"{epoch}|{key}", f"{epoch}|{key}|logged_in|more"):
+        cache.write_text(line + "\n")
+        before = runs(host)
+        answer = last_line(run(host, "status --json", FAKE_CHECK_WORD="login_required"))
+        assert answer["linkedin"] == "login_required" and runs(host) == before + 1, line
+
+
+def test_the_cache_is_never_written_through_a_link(host, tmp_path):
+    cookies(host)
+    target = tmp_path / "elsewhere.txt"
+    target.write_text("not ours\n")
+    (host.runtime / "linkedin-status.cache").symlink_to(target)
+    done = run(host, "status --json", FAKE_CHECK_WORD="logged_in")
+    assert last_line(done)["linkedin"] == "logged_in" and target.read_text() == "not ours\n"
+    assert not [p for p in host.runtime.iterdir() if ".XXXX" in p.name or p.name.startswith("linkedin-status.cache.")]
+
+
+def test_a_cookie_file_that_is_a_link_is_not_a_cookie_file(host, tmp_path):
+    folder = host.tmp / "jht-home" / "secrets" / "linkedin-profile" / "Default" / "Network"
+    folder.mkdir(parents=True)
+    target = tmp_path / "somewhere"
+    target.write_bytes(b"x")
+    (folder / "Cookies").symlink_to(target)
+    done = run(host, "status --json", FAKE_CHECK_WORD="logged_in")
+    assert last_line(done)["linkedin"] == "login_required" and runs(host) == 0
+
+
+def test_the_view_state_is_still_read_without_a_container_of_its_own(host):
+    host.running.write_text("jht-login-view\n")
+    cookies(host)
+    done = run(host, "status --json", FAKE_CHECK_WORD="logged_in", FAKE_VIEW_STATUS='{"ok": true, "view": "connected"}')
+    assert last_line(done) == {"ok": True, "view": "connected", "linkedin": "logged_in"}
 
 
 def test_status_does_not_run_the_one_shot_over_a_link(host):
