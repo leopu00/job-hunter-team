@@ -161,6 +161,52 @@ def test_the_page_of_our_own_sets_the_cookie_the_watcher_looks_for(inside):
     assert handler.do_POST and handler.do_GET
 
 
+def test_a_profile_dir_with_things_in_it_is_never_written_to_or_emptied(host, tmp_path):
+    """The probe makes a NEW folder inside the one it is given; what was there stays, and only the new one is mounted and emptied."""
+    parent = tmp_path / "profile-of-someone"
+    parent.mkdir()
+    (parent / "precious").write_text("keep me")
+    (parent / "Default").mkdir()
+    (parent / "Default" / "Cookies").write_text("keep me too")
+    log = tmp_path / "calls.txt"
+    engine = tmp_path / "fake-engine"
+    engine.write_text(f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> {log}\necho 'RESULT [probe] OK'\n")
+    engine.chmod(0o755)
+    probe = host.Probe([str(engine)], "image:test", str(parent))
+    code, output = probe.run()
+    assert code == 0 and "RESULT [probe] OK" in output
+    assert (parent / "precious").read_text() == "keep me" and (parent / "Default" / "Cookies").read_text() == "keep me too"
+    calls = log.read_text().splitlines()
+    mounts = [word for call in calls for word in call.split() if word.endswith(":/p") or word.endswith(":/linkedin-profile")]
+    assert mounts, calls
+    for mount in mounts:
+        source = mount.rsplit(":", 1)[0]
+        assert source != str(parent) and source.startswith(str(parent) + "/jht-login-probe-")
+    assert [p.name for p in parent.iterdir() if p.name.startswith("jht-login-probe-")] == []  # its own folder is gone (the fake left it empty)
+
+
+@pytest.mark.parametrize("kind", ["missing", "file", "link"])
+def test_a_profile_dir_that_is_not_a_real_folder_is_refused_before_anything_starts(host, tmp_path, kind):
+    target = tmp_path / "x"
+    if kind == "file":
+        target.write_text("not a folder")
+    elif kind == "link":
+        real = tmp_path / "real"
+        real.mkdir()
+        target.symlink_to(real)
+    probe = host.Probe(["false"], "image:test", str(target))
+    with pytest.raises(ValueError):
+        probe.make_profile_dir()
+
+
+def test_the_command_line_refuses_a_bad_profile_dir_with_exit_2(tmp_path):
+    import subprocess
+
+    done = subprocess.run([sys.executable, str(HOST), "image:test", "--engine", "docker", "--profile-dir", str(tmp_path / "nope")],
+                          capture_output=True, text=True, timeout=60)
+    assert done.returncode == 2 and "existing folder" in done.stderr
+
+
 # ── the run for real ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 
