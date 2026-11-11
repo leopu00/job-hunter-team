@@ -1138,6 +1138,7 @@ pub(crate) fn failure(code: &'static str) -> OnboardingError {
             // refused is not worth sending twice. The person goes back and pastes it again.
             | "provider_key_missing"
             | "provider_key_refused"
+            | "provider_key_not_active"
     ) && !code.starts_with("invalid_");
     OnboardingError {
         code,
@@ -3318,6 +3319,9 @@ fn prepare_impl(
                 // glm or kimi with an API key: no sign-in and no `providers use`: the setup of the CLI writes the config of the team and keeps the key,
                 // which goes on its standard input and nowhere else (provider_key.rs). The key is wiped when `staged` is dropped here.
                 let stdin = crate::provider_key::key_stdin(&staged.key).map_err(failure)?;
+                // The setup writes the team's config: only a fresh team, or the same provider with a key (the first setup is not the way to
+                // replace the config of a team that exists, whatever the page asked).
+                crate::provider_key::team_allows_key_setup(&app, &scope, &validated, staged.provider.cli_id()).map_err(failure)?;
                 let args = crate::provider_key::setup_args(staged.provider.cli_id());
                 let kept = crate::provider_key::parse_setup(run_host_jht(&app, &scope, &validated, &args, Some(&stdin), COMMAND_TIMEOUT))
                     .map_err(failure)?;
@@ -3425,7 +3429,10 @@ pub(crate) async fn onboarding_provider_key_stage(
     scopes.active().map_err(failure)?;
     // Only a key of the shape the setup asks for is kept; the check wipes its own copy.
     crate::provider_key::key_stdin(&request.key).map_err(failure)?;
-    let key = Zeroizing::new(std::mem::take(&mut request.key).trim().to_owned());
+    // the String taken out of the request is wiped too, not only the copy that is kept
+    let mut raw = std::mem::take(&mut request.key);
+    let key = Zeroizing::new(raw.trim().to_owned());
+    raw.zeroize();
     state.stage_key(request.provider, key);
     Ok(())
 }
@@ -9211,6 +9218,8 @@ mod tests {
         let source = include_str!("onboarding.rs").split("mod existing_team_assistant_tests").next().unwrap();
         let prepare = source.split("fn prepare_impl(").nth(1).and_then(|rest| rest.split("pub(crate) async fn onboarding_prepare(").next()).unwrap();
         assert!(prepare.contains("crate::provider_key::setup_args(staged.provider.cli_id())"));
+        let allowed = prepare.find("team_allows_key_setup(").expect("the first setup asks whether the team allows it");
+        assert!(allowed < prepare.find("setup_args(staged.provider").unwrap(), "the check comes before the setup");
         assert!(prepare.contains("Some(&stdin)"));
         let stage = source.split("pub(crate) async fn onboarding_provider_key_stage(").nth(1).and_then(|rest| rest.split("pub(crate) async fn onboarding_prepare(").next()).unwrap();
         assert!(!stage.contains("run_host_jht") && !stage.contains("println") && !stage.contains("format!"), "the stage only keeps the key in memory");
