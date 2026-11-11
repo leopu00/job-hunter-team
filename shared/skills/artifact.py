@@ -26,12 +26,19 @@ that names a file, so it gets the same treatment as the desktop client gives it
 traversal, the declared kind must match the suffix, no double extension, and
 every path component is opened with openat + O_NOFOLLOW — no window between
 checking a path and opening it in which a component can become a symlink.
+Where that does not exist (Windows: no O_DIRECTORY, no O_NOFOLLOW, no dir_fd)
+the same refusal is made in two steps: no component under the root may be a
+symlink or a junction (a reparse point), and what is opened is then asked its
+own final path, which must be the root plus the components that were meant —
+a link swapped in between the two steps shows up there, before a byte is read
+or the file is truncated.
 `tests/test_artifact_skill.py` runs the adversarial table against BOTH
 implementations and fails when they disagree, because two copies of a security
 rule that drift are worse than one.
 """
 import argparse
 import base64
+import errno
 import json
 import os
 import stat
@@ -88,11 +95,97 @@ def emit(payload: dict) -> int:
     return 0 if payload.get("ok") else 1
 
 
+# openat con O_NOFOLLOW dove il sistema li ha (Linux, macOS); altrove (Windows) il controllo equivalente sotto.
+_BACKEND = "posix" if (hasattr(os, "O_DIRECTORY") and hasattr(os, "O_NOFOLLOW")
+                       and os.open in getattr(os, "supports_dir_fd", ())) else "portable"
+
+_IO_REPARSE_TAG_MOUNT_POINT = 0xA0000003  # junction
+_IO_REPARSE_TAG_SYMLINK = 0xA000000C
+
+
+def _refused_link(what: str) -> OSError:
+    return OSError(errno.ELOOP, f"{what} is a link: refused")
+
+
+def _is_link(info: os.stat_result) -> bool:
+    """Symlink o junction. Gli altri reparse point (i segnaposto di OneDrive, per esempio) non sono link: se fanno
+    uscire dalla radice li ferma il controllo del percorso finale; se il sistema non dice il tipo, vale come link."""
+    if stat.S_ISLNK(info.st_mode):
+        return True
+    if not getattr(info, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400):
+        return False
+    tag = getattr(info, "st_reparse_tag", None)
+    return tag is None or tag in (_IO_REPARSE_TAG_MOUNT_POINT, _IO_REPARSE_TAG_SYMLINK)
+
+
+def _strip_extended_prefix(path: str) -> str:
+    if path.startswith("\\\\?\\UNC\\"):
+        return "\\\\" + path[8:]
+    if path.startswith("\\\\?\\"):
+        return path[4:]
+    return path
+
+
+def _final_path_of_fd(fd: int) -> str:
+    """Il percorso che il sistema dà al file GIÀ aperto (non quello con cui lo abbiamo chiesto)."""
+    if os.name != "nt":
+        raise OSError(errno.ENOSYS, "no way to ask an open file its path here")
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.GetFinalPathNameByHandleW.argtypes = [wintypes.HANDLE, wintypes.LPWSTR, wintypes.DWORD, wintypes.DWORD]
+    kernel.GetFinalPathNameByHandleW.restype = wintypes.DWORD
+    handle = msvcrt.get_osfhandle(fd)
+    size = 1024
+    while True:
+        buffer = ctypes.create_unicode_buffer(size)
+        length = kernel.GetFinalPathNameByHandleW(handle, buffer, size, 0)
+        if length == 0:
+            raise ctypes.WinError(ctypes.get_last_error())
+        if length < size:
+            return _strip_extended_prefix(buffer.value)
+        size = length + 1
+
+
+def _same_path(left: str, right: str) -> bool:
+    return os.path.normcase(os.path.normpath(left)) == os.path.normcase(os.path.normpath(right))
+
+
+def _portable_root(root: str) -> str:
+    """La radice è il confine fidato: una directory vera (non un link), e il suo nome vero è la base dei confronti."""
+    info = os.lstat(root)
+    if _is_link(info) or not stat.S_ISDIR(info.st_mode):
+        raise _refused_link("the root of the documents")
+    return os.path.realpath(root)
+
+
+def _portable_check_dirs(real_root: str, parts: list[str]) -> None:
+    here = real_root
+    for part in parts:
+        here = os.path.join(here, part)
+        info = os.lstat(here)
+        if _is_link(info):
+            raise _refused_link("a folder of the path")
+        if not stat.S_ISDIR(info.st_mode):
+            raise NotADirectoryError(errno.ENOTDIR, os.strerror(errno.ENOTDIR))
+
+
+def _portable_confirm(fd: int, real_root: str, parts: list[str]) -> None:
+    """Il file aperto è proprio quello che il percorso diceva? Se un componente è diventato un link dopo il
+    controllo, il sistema lo dice qui: prima di leggere un byte o di troncare il file."""
+    if not _same_path(_final_path_of_fd(fd), os.path.join(real_root, *parts)):
+        raise _refused_link("the opened document")
+
+
 def _open_beneath(root: str, relative: str) -> int:
     """openat + O_NOFOLLOW su ogni componente. Copia fedele di
     `open_beneath` nel payload del client desktop: qualunque componente sia (o
     diventi) un symlink fa fallire l'apertura, invece di seguire il link fuori
-    dalla radice."""
+    dalla radice. Senza openat (Windows): controllo dei link componente per
+    componente e poi del percorso finale del file aperto."""
+    if _BACKEND == "portable":
+        return _portable_open_beneath(root, relative)
     dflags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
     fd = os.open(root, dflags)
     try:
@@ -106,6 +199,25 @@ def _open_beneath(root: str, relative: str) -> int:
                        dir_fd=fd)
     finally:
         os.close(fd)
+
+
+def _portable_open_beneath(root: str, relative: str) -> int:
+    parts = relative.split("/")
+    real_root = _portable_root(root)
+    _portable_check_dirs(real_root, parts[:-1])
+    leaf = os.path.join(real_root, *parts)
+    info = os.lstat(leaf)
+    if _is_link(info):
+        raise _refused_link("the document")
+    if not stat.S_ISREG(info.st_mode):
+        raise OSError(errno.EINVAL, "the document must be a regular file")
+    fd = os.open(leaf, os.O_RDONLY | getattr(os, "O_BINARY", 0))
+    try:
+        _portable_confirm(fd, real_root, parts)
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
 
 
 def is_allowed_request(path: str, kind: str) -> bool:
@@ -200,17 +312,9 @@ def is_uploaded_document_path(path: str) -> bool:
     return ext in UPLOAD_EXTS
 
 
-def upload(name: str, data: bytes) -> dict:
-    safe = safe_filename(name)
-    ext = safe.rsplit(".", 1)[-1].lower() if "." in safe else ""
-    if ext not in UPLOAD_EXTS:
-        return {"ok": False,
-                "error": f"extension not allowed: {ext or '(none)'}",
-                "allowed": list(UPLOAD_EXTS)}
-    if not data:
-        return {"ok": False, "error": "empty file"}
-    if len(data) > MAX_BYTES:
-        return {"ok": False, "error": "file over 10 MB"}
+def _write_document(safe: str, data: bytes) -> None:
+    if _BACKEND == "portable":
+        return _portable_write_document(safe, data)
     root_fd = None
     target_fd = None
     fd = None
@@ -232,8 +336,6 @@ def upload(name: str, data: bytes) -> dict:
         with os.fdopen(fd, "wb") as fh:
             fd = None  # ownership passata al file object
             fh.write(data)
-    except OSError as exc:
-        return {"ok": False, "error": f"cannot write the document: {exc.strerror}"}
     finally:
         if fd is not None:
             os.close(fd)
@@ -241,6 +343,66 @@ def upload(name: str, data: bytes) -> dict:
             os.close(target_fd)
         if root_fd is not None:
             os.close(root_fd)
+
+
+def _portable_write_document(safe: str, data: bytes) -> None:
+    """Senza openat: radice e `allegati` vere directory (non link), il file creato o aperto SENZA troncarlo, il suo
+    percorso finale confermato, e solo allora svuotato e scritto: un link comparso nel frattempo non porta via niente."""
+    real_root = _portable_root(user_root())
+    folder = os.path.join(real_root, UPLOAD_SUBDIR)
+    try:
+        os.mkdir(folder, 0o755)
+    except FileExistsError:
+        pass
+    _portable_check_dirs(real_root, [UPLOAD_SUBDIR])
+    leaf = os.path.join(folder, safe)
+    binary = getattr(os, "O_BINARY", 0)
+    created = False
+    try:
+        fd = os.open(leaf, os.O_WRONLY | os.O_CREAT | os.O_EXCL | binary, 0o644)
+        created = True
+    except FileExistsError:
+        info = os.lstat(leaf)
+        if _is_link(info):
+            raise _refused_link("the document")
+        if not stat.S_ISREG(info.st_mode):
+            raise OSError(errno.EINVAL, "the document must be a regular file")
+        fd = os.open(leaf, os.O_WRONLY | binary)
+    try:
+        _portable_confirm(fd, real_root, [UPLOAD_SUBDIR, safe])
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise OSError(errno.EINVAL, "the document must be a regular file")
+        with os.fdopen(fd, "wb") as fh:
+            fd = None  # ownership passata al file object
+            fh.truncate(0)
+            fh.write(data)
+    except BaseException:
+        if fd is not None:
+            os.close(fd)
+            fd = None
+        if created:  # il file vuoto è nostro (O_EXCL): se non si è potuto confermare dov'è, non lo lasciamo
+            try:
+                os.unlink(leaf)
+            except OSError:
+                pass
+        raise
+
+
+def upload(name: str, data: bytes) -> dict:
+    safe = safe_filename(name)
+    ext = safe.rsplit(".", 1)[-1].lower() if "." in safe else ""
+    if ext not in UPLOAD_EXTS:
+        return {"ok": False,
+                "error": f"extension not allowed: {ext or '(none)'}",
+                "allowed": list(UPLOAD_EXTS)}
+    if not data:
+        return {"ok": False, "error": "empty file"}
+    if len(data) > MAX_BYTES:
+        return {"ok": False, "error": "file over 10 MB"}
+    try:
+        _write_document(safe, data)
+    except OSError as exc:
+        return {"ok": False, "error": f"cannot write the document: {exc.strerror}"}
     # Il path tornato è quello che il team userà: sempre in forma container,
     # perché è quella che finisce nel jobs.db e nei prompt degli agenti.
     container_path = CONTAINER_ROOT + "/" + UPLOAD_SUBDIR + "/" + safe
