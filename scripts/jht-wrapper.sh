@@ -307,8 +307,28 @@ jht_record_host_values() {
   return 0
 }
 
+# La lingua dei TESTI del wrapper (jht_say: uninstall, avvio del container...). `jht setup --language it` e il picker la salvano in
+# i18n-prefs.json, accanto a host.env: e' la scelta della persona e passa avanti a quella di host-values (che resta com'era, en finche'
+# nessun host-setup la cambia, ed e' quella che entra nell'hash del container: JHT_LANG non si tocca). Cascata dei lettori Node:
+# i18n-prefs.json, poi JHT_LANG. Il file sta in una cartella che il container puo' scrivere: si legge come DATO (non e' un link, e'
+# un file piccolo, il valore e' uno dei sette codici) e serve solo a scegliere il testo che si stampa. Stampa il codice.
+jht_ui_language() {
+  local prefs line value size
+  prefs="$(dirname "$HOST_ENV_FILE")/i18n-prefs.json"
+  if [ -f "$prefs" ] && [ ! -L "$prefs" ] && [ -r "$prefs" ]; then
+    size="$(wc -c < "$prefs" 2>/dev/null)" || size=0
+    if [ "$((size + 0))" -le 4096 ]; then
+      line="$(tr -d '\r\n' < "$prefs" 2>/dev/null | sed -n 's/.*"locale"[[:space:]]*:[[:space:]]*"\([a-z][a-z]\)".*/\1/p' | head -n 1)"
+      value="$line"
+      if jht_host_env_value_valid JHT_LANG "$value"; then printf '%s' "$value"; return 0; fi
+    fi
+  fi
+  printf '%s' "${JHT_LANG:-en}"
+}
+
 jht_load_host_values
 jht_record_host_values
+JHT_SAY_LANG="$(jht_ui_language)"
 # Export per docker compose: il compose file fa `${JHT_HOST_TYPE:-}` /
 # `${JHT_LANG:-}` / `${JHT_USER_TZ:-}` substitution per passare i valori al
 # container. Senza export restano variabili di shell e compose non le vede.
@@ -463,7 +483,7 @@ jht_text_it() {
 jht_say() {
   local key="$1" format
   shift
-  case "${JHT_LANG:-en}" in
+  case "${JHT_SAY_LANG:-${JHT_LANG:-en}}" in
     it) format="$(jht_text_it "$key")" || format="$(jht_text_en "$key")" || format="$key" ;;
     *) format="$(jht_text_en "$key")" || format="$key" ;;
   esac
