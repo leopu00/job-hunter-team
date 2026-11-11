@@ -24,11 +24,12 @@ GOOD = ('{"ok": true, "port": 6081, "path": "/websockify", "token": "%s", "expir
 
 def run(host, args: str, runtime_dir=None, **env) -> subprocess.CompletedProcess:
     runtime_dir = runtime_dir or host.runtime
+    env = {"TEST_RUNTIME_DIR": str(runtime_dir), **env}
     script = f"""
 set -euo pipefail
 HOST_KERNEL="$(uname -s)"; HOST_UID="$(id -u)"
 err() {{ echo "error: $*" >&2; }}; info() {{ echo "info: $*" >&2; }}
-RUNTIME_DIR="{runtime_dir}"; COMPOSE_FILE="{host.compose}"
+RUNTIME_DIR="$TEST_RUNTIME_DIR"; COMPOSE_FILE="{host.compose}"
 BROKER_SERVICE=jht-broker; TELEGRAM_SERVICE=jht-telegram; JHT_HOST_TYPE=local
 {wrapper_functions("runtime_stat", "runtime_node_safe", "runtime_sha256")}
 compose_project_name() {{ echo jht; }}
@@ -278,14 +279,38 @@ def test_a_link_in_the_place_of_the_profile_or_of_the_overlay_stops_the_login_an
     assert elsewhere.read_text() == "not ours\n" and "up -d" not in host.log.read_text()
 
 
-@pytest.mark.parametrize("folder", ["with space", 'with"quote', "with$dollar", "with:colon"])
-def test_a_runtime_folder_whose_name_would_not_stay_one_word_in_yaml_stops_the_login(host, tmp_path, folder):
-    odd = tmp_path / folder
-    odd.mkdir(mode=0o700)
-    (odd / "docker-compose.yml").write_text(host.compose.read_text())
-    done = run(host, "login", runtime_dir=str(odd).replace("$", "\\$").replace('"', '\\"'), FAKE_GRANT=GOOD)
+def _runtime_named(host, tmp_path, *parts):
+    folder = tmp_path.joinpath(*parts)
+    folder.mkdir(parents=True, mode=0o700)
+    (folder / "docker-compose.yml").write_text(host.compose.read_text())
+    return folder
+
+
+@pytest.mark.parametrize("parts", [("with space",), ("Library", "Application Support", "Job Hunter Team", "host-runtime"), ("quote's",), ("caf\u00e9",)])
+def test_a_runtime_folder_with_spaces_or_accents_works_the_default_folder_of_a_mac_has_two_spaces(host, tmp_path, parts):
+    folder = _runtime_named(host, tmp_path, *parts)
+    done = run(host, "login", runtime_dir=str(folder), FAKE_GRANT=GOOD)
+    assert done.returncode == 0, done.stderr
+    target = folder / "jht-login-seccomp.json"
+    assert hashlib.sha256(target.read_bytes()).hexdigest() == PROFILE_SHA256
+    overlay = folder / "docker-compose.login-seccomp.yml"
+    assert overlay.read_text() == f'services:\n  jht-login:\n    security_opt:\n      - "seccomp:{target}"\n'
+    import yaml
+    assert yaml.safe_load(overlay.read_text())["services"]["jht-login"]["security_opt"] == [f"seccomp:{target}"]
+    assert f"COMPOSE_EXTRA {overlay}" in host.log.read_text().splitlines()
+
+
+@pytest.mark.parametrize("name", ['with"quote', "with$dollar", "with:colon", "with\\backslash", "with#hash", "with\nnewline", "with\ttab", "with\x01ctl"])
+def test_a_runtime_folder_whose_name_would_end_or_change_the_yaml_string_stops_the_login(host, tmp_path, name):
+    folder = _runtime_named(host, tmp_path, name)
+    done = run(host, "login", runtime_dir=str(folder), FAKE_GRANT=GOOD)
     assert done.returncode == 1 and last_line(done) == {"ok": False, "reason": "chromium_sandbox_unavailable"}
-    assert "up -d" not in host.log.read_text()
+    assert "up -d" not in host.log.read_text() and not (folder / "jht-login-seccomp.json").exists()
+
+
+def test_a_relative_runtime_folder_stops_the_login(host):
+    done = run(host, "login", runtime_dir="relative/runtime", FAKE_GRANT=GOOD)
+    assert done.returncode == 1 and last_line(done) == {"ok": False, "reason": "chromium_sandbox_unavailable"}
 
 
 def test_on_podman_nothing_of_this_happens_the_default_profile_of_the_engine_stays(host):

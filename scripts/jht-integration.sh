@@ -454,11 +454,17 @@ login_seccomp_path() { printf '%s\n' "$RUNTIME_DIR/jht-login-seccomp.json"; }
 login_seccomp_overlay_path() { printf '%s\n' "$RUNTIME_DIR/docker-compose.login-seccomp.yml"; }
 
 # The profile and the overlay file that gives it to jht-login (and to nothing else), both in the runtime folder, which the agents do not
-# mount. The file name goes into a YAML string and into the engine's argument: only the usual characters of a path are accepted.
+# mount. The folder is an absolute path, and a name that would not stay one string in YAML is refused (see below).
 linkedin_seccomp_ensure() {
   local ref="$1" target overlay tmp content
   target="$(login_seccomp_path)"; overlay="$(login_seccomp_overlay_path)"
-  case "$RUNTIME_DIR" in ''|*[!A-Za-z0-9_./-]*|/) return 1 ;; esac
+  # The folder name goes into a double-quoted YAML string and is read back by Compose: a space is fine (the default folder on a Mac has two),
+  # what would end the string or be read as something else is not: a quote, a backslash, a dollar, a colon, a hash, any control character.
+  case "$RUNTIME_DIR" in
+    ''|/|*[[:cntrl:]]*|*'"'*|*\\*|*'$'*|*:*|*'#'*) return 1 ;;
+    /*) ;;
+    *) return 1 ;;
+  esac
   [ ! -L "$target" ] && [ ! -L "$overlay" ] || return 1
   if ! { [ -f "$target" ] && [ "$(runtime_sha256 "$target")" = "$LOGIN_SECCOMP_SHA256" ]; }; then
     tmp="$(mktemp "$target.XXXXXX")" || return 1
