@@ -723,6 +723,16 @@ function Read-LinkedinToken {
   return ''
 }
 
+# Asks the view for the grant, with the token of the window on the stdin of `docker exec -i`: without a byte order mark in front of it (a token
+# with a BOM is another token: the view would answer `token_required` for good), through the wrapper's Invoke-NativeWithStdin; a wrapper from
+# before that function is plain.
+function Invoke-LinkedinGrant {
+  param([string]$Id, [string]$Token)
+  $ask = { & { $ErrorActionPreference = 'Continue'; $Token | & docker exec -i $Id python3 /app/shared/login/login_view.py grant 2>$null } }
+  if (Get-Command Invoke-NativeWithStdin -CommandType Function -ErrorAction SilentlyContinue) { return @(Invoke-NativeWithStdin $ask) }
+  return @($ask.Invoke())
+}
+
 function Invoke-LinkedinLogin {
   $token = Read-LinkedinToken
   if (-not $token) { [Console]::Error.WriteLine("il token della finestra arriva dall'app, sullo standard input"); Write-LinkedinFail 'token_required'; return 1 }
@@ -750,7 +760,7 @@ function Invoke-LinkedinLogin {
     $id = Get-RunningComposeServiceId $LoginViewContainer
     $line = ''
     if ($id) {
-      $out = @(& { $ErrorActionPreference = 'Continue'; $token | & docker exec -i $id python3 /app/shared/login/login_view.py grant 2>$null })
+      $out = @(Invoke-LinkedinGrant $id $token)
       if ($out.Count) { $line = [string]$out[$out.Count - 1] }
     }
     if (Test-LinkedinGrantLine $line) { [Console]::Out.WriteLine($line); return 0 }
