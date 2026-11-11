@@ -40,7 +40,8 @@ PODMAN_CASES = """  "machine init "*)
   "machine list --format json") printf '%s' '[{"Name":"jht-podman","Running":true}]' ;;
   "machine ssh jht-podman "*)
     echo 'Created symlink /home/user/.config/systemd/user/default.target.wants/jht.service -> /home/user/.config/systemd/user/jht.service.' >&2
-    echo 'daemon-reload done' >&2
+    echo "Warning: The unit file, source configuration file or drop-ins of jht.service changed on disk. Run 'systemctl daemon-reload' to reload units." >&2
+    echo 'some other note from the machine' >&2
     echo 'unit enabled'
     [ "$FAKE_EXIT" = 0 ] || { echo 'Error: ssh command failed' >&2; exit "$FAKE_EXIT"; } ;;
   "--connection jht-podman pull "*)
@@ -200,13 +201,14 @@ SSH_CALL = "$out = @(Invoke-JhtPodmanMachine -FilePath $env:FAKE_PODMAN -Argumen
 
 
 def test_what_a_command_in_the_machine_says_on_stderr_while_it_succeeds_is_a_grey_note_not_a_red_error(tmp_path):
-    # «Created symlink» and «daemon-reload» came out as two red error blocks during the enabler
+    # «Created symlink» and the «daemon-reload» reminder came out as two red error blocks during the enabler, then as grey noise
     result, _ = _case(tmp_path, SSH_CALL, machine_output="0")
     out = _words(result)
     assert result.returncode == 0, out + result.stderr
     assert "OUT unit enabled" in out, "the command's stdout is still handed back as data"
-    assert "    Created symlink /home/user/.config/systemd/user/default.target.wants/jht.service" in out
-    assert "    daemon-reload done" in out
+    # systemd's routine words are not shown to a person; anything else the machine says is still a grey note
+    assert "Created symlink" not in out and "changed on disk" not in out and "daemon-reload" not in out
+    assert "    some other note from the machine" in out
     for noise in RED_NOISE:
         assert noise not in out + result.stderr, (noise, out + result.stderr)
     assert result.stderr.strip() == ""
@@ -216,7 +218,7 @@ def test_the_app_gets_the_same_words_as_plain_lines_on_stderr(tmp_path):
     result, _ = _case(tmp_path, SSH_CALL, machine_output="1")
     err = result.stderr.replace("\r\n", "\n")
     assert result.returncode == 0, _words(result) + err
-    assert "podman: Created symlink" in err and "podman: daemon-reload done" in err
+    assert "podman: Created symlink" in err and "podman: Warning: The unit file" in err and "podman: some other note from the machine" in err
     for noise in RED_NOISE:
         assert noise not in _words(result) + err
 

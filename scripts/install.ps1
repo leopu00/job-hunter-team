@@ -635,15 +635,17 @@ function Get-RuntimeFiles {
   . $helperDest
   if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) { Write-Fail "JHT_HOME ACL verification failed after repair: $JhtHome" }
 
+  # One line each: `(goto) 2>nul` leaves the batch context first, then the rest of the line (already read whole: %~dp0 and %* are
+  # expanded) runs jht. cmd reopens a batch file after every command it runs from it, also before `goto :eof` or `exit /b`, and `jht
+  # uninstall` deletes this very file while it runs: "cannot find the batch file" and rc 1 after a good uninstall. Out of the batch
+  # context there is nothing to reopen, the code of jht arrives intact, and a caller's `call jht` goes on with its errorlevel.
   $shimContent = @"
 @echo off
 where pwsh.exe >nul 2>&1
 if errorlevel 1 goto jht_windows_powershell
-pwsh -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
-exit /b %errorlevel%
+(goto) 2>nul & pwsh -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
 :jht_windows_powershell
-powershell -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
-exit /b %errorlevel%
+(goto) 2>nul & powershell -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
 "@
   # Taken in place by a temporary file, never written in place: a program that holds the file for a moment must not leave it empty.
   $shimBytes = [Text.Encoding]::ASCII.GetBytes((($shimContent -replace "`r?`n", "`r`n") + "`r`n"))

@@ -48,6 +48,15 @@ $JhtCmdShim = @'
 @echo off
 where pwsh.exe >nul 2>&1
 if errorlevel 1 goto jht_windows_powershell
+(goto) 2>nul & pwsh -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
+:jht_windows_powershell
+(goto) 2>nul & powershell -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
+'@
+# What installs before the one-line form wrote (an exit line after the call): still ours, still removed.
+$JhtCmdShimBefore = @'
+@echo off
+where pwsh.exe >nul 2>&1
+if errorlevel 1 goto jht_windows_powershell
 pwsh -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
 exit /b %errorlevel%
 :jht_windows_powershell
@@ -59,6 +68,7 @@ exit /b %errorlevel%
 # a command shim and comes first in the PATH, so that `jht` typed in PowerShell is the shim and not the script the default
 # execution policy refuses.
 $JhtShimFolderCmd = $JhtCmdShim.Replace('%~dp0jht.ps1', '%~dp0..\jht.ps1')
+$JhtShimFolderCmdBefore = $JhtCmdShimBefore.Replace('%~dp0jht.ps1', '%~dp0..\jht.ps1')
 
 $JhtUninstallText = @{
   it = @{
@@ -371,19 +381,17 @@ function Get-JhtOwnCommands {
     $expected = $Manifest[$pair[1]]
     if ($expected -and [IO.File]::Exists($path) -and (Get-JhtFileSha256 $path) -ceq $expected) { $own += $path }
   }
-  $cmd = [IO.Path]::Combine($Bin, 'jht.cmd')
-  if ([IO.File]::Exists($cmd)) {
-    $text = ([IO.File]::ReadAllText($cmd)).Replace("`r`n", "`n").TrimEnd()
-    $shim = $JhtCmdShim.Replace("`r`n", "`n").TrimEnd()
-    # The whole text, or the beginning of it: a write that was cut short leaves an empty file or the first lines, and nobody
-    # else's command is an empty file or the first lines of ours.
-    if ($text -ceq $shim -or $shim.StartsWith($text, [StringComparison]::Ordinal)) { $own += $cmd }
-  }
-  $shimCmd = [IO.Path]::Combine($Bin, 'shim', 'jht.cmd')
-  if ([IO.File]::Exists($shimCmd)) {
-    $text = ([IO.File]::ReadAllText($shimCmd)).Replace("`r`n", "`n").TrimEnd()
-    $shim = $JhtShimFolderCmd.Replace("`r`n", "`n").TrimEnd()
-    if ($text -ceq $shim -or $shim.StartsWith($text, [StringComparison]::Ordinal)) { $own += $shimCmd }
+  foreach ($entry in @(
+      @([IO.Path]::Combine($Bin, 'jht.cmd'), @($JhtCmdShim, $JhtCmdShimBefore)),
+      @([IO.Path]::Combine($Bin, 'shim', 'jht.cmd'), @($JhtShimFolderCmd, $JhtShimFolderCmdBefore)))) {
+    if (-not [IO.File]::Exists($entry[0])) { continue }
+    $text = ([IO.File]::ReadAllText($entry[0])).Replace("`r`n", "`n").TrimEnd()
+    foreach ($candidate in $entry[1]) {
+      $shim = $candidate.Replace("`r`n", "`n").TrimEnd()
+      # The whole text, or the beginning of it: a write that was cut short leaves an empty file or the first lines, and nobody
+      # else's command is an empty file or the first lines of ours.
+      if ($text -ceq $shim -or $shim.StartsWith($text, [StringComparison]::Ordinal)) { $own += $entry[0]; break }
+    }
   }
   return $own
 }

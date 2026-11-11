@@ -800,6 +800,27 @@ def test_remove_takes_a_command_file_that_a_write_cut_short(tmp_path, left):
     assert not (user.bin / "jht.cmd").exists()
 
 
+BEFORE_ONE_LINE = (
+    "@echo off\r\nwhere pwsh.exe >nul 2>&1\r\nif errorlevel 1 goto jht_windows_powershell\r\n"
+    'pwsh -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*\r\nexit /b %errorlevel%\r\n'
+    ":jht_windows_powershell\r\n"
+    'powershell -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*\r\nexit /b %errorlevel%\r\n'
+)
+
+
+@needs_powershell
+def test_remove_takes_the_shims_that_earlier_installs_wrote_with_an_exit_line(tmp_path):
+    """The shim was one line shorter in installs before the exit code fix: those files are ours too, in both folders."""
+    user = User(tmp_path / "a")
+    (user.bin / "jht.cmd").write_bytes(BEFORE_ONE_LINE.encode("ascii"))
+    shim_folder = user.bin / "shim"
+    shim_folder.mkdir()
+    (shim_folder / "jht.cmd").write_bytes(BEFORE_ONE_LINE.replace("%~dp0jht.ps1", "%~dp0..\\jht.ps1").encode("ascii"))
+    run = _run(tmp_path, user, mode="Remove")
+    assert run.code == 0, run.stdout + run.stderr
+    assert not (user.bin / "jht.cmd").exists() and not shim_folder.exists()
+
+
 @needs_powershell
 def test_remove_keeps_a_command_file_that_is_not_the_beginning_of_ours(tmp_path):
     user = User(tmp_path / "a")

@@ -561,6 +561,9 @@ def test_purge_deletes_the_two_data_folders_after_the_machine_and_before_the_run
     result = _uninstall(box, _fake_podman(box), _fake_wsl(box), *arguments, tmp_path=tmp_path, machine_output="1")
     assert "CODE=0" in result.stdout, result.stdout + result.stderr
     assert not box.home.exists() and not box.documents.exists() and not box.runtime.exists()
+    # the first notice must not say that ~/.jht and Documents stay: with --purge they go
+    assert "restano" not in result.stderr and "Con --purge vengono cancellati anche ~/.jht" in result.stderr
+    assert "Vengono cancellati anche la password della posta e i token di Telegram salvati." in result.stderr
     lines = [line for line in result.stdout.splitlines() if line.startswith("JHT_PHASE")]
     # the app knows three phases and never asks for --purge: the data are a sentence for the person, not a protocol line
     assert lines == ["JHT_PHASE uninstall_machine", "JHT_PHASE uninstall_runtime", "JHT_PHASE uninstall_commands"]
@@ -678,3 +681,40 @@ def test_without_the_attestation_the_machine_of_this_users_own_name_is_still_fou
     result = _uninstall(box, _fake_podman(box, machine=name), _fake_wsl(box, machine=name), "--confirm", tmp_path=tmp_path)
     assert "CODE=0" in result.stdout, result.stdout + result.stderr
     assert f"machine rm --force {name}" in box.log.read_text(encoding="utf-8") and not box.state.exists()
+
+
+NETWORK_UNITS = ("jht-windows-egress-proxy.service", "jht-windows-egress-proxy-broker.service", "jht-windows-egress-proxy-telegram.service",
+                 "jht-rootless-podman.service", "jht-broker-container.service")
+
+
+@windows_only
+def test_what_the_installer_left_in_podman_network_goes_and_only_that(tmp_path: Path):
+    box = _box(tmp_path)
+    network = box.local / "Job Hunter Team" / "podman-network"
+    network.mkdir(parents=True)
+    for name in (*NETWORK_UNITS, "jht-windows-connect-1d6ba098a310.exe"):
+        (network / name).write_text("synthetic\n", encoding="utf-8")
+    (network / "somebody-elses.txt").write_text("keep\n", encoding="utf-8")
+    (network / "jht-windows-connect-notmine.exe").write_text("keep\n", encoding="utf-8")
+    result = _uninstall(box, _fake_podman(box), _fake_wsl(box), "--confirm", tmp_path=tmp_path)
+    assert "CODE=0" in result.stdout, result.stdout + result.stderr
+    assert sorted(p.name for p in network.iterdir()) == ["jht-windows-connect-notmine.exe", "somebody-elses.txt"]
+    assert not box.runtime.exists()
+
+
+@windows_only
+def test_the_empty_folders_the_installer_made_go_with_the_last_file(tmp_path: Path):
+    box = _box(tmp_path)
+    network = box.local / "Job Hunter Team" / "podman-network"
+    network.mkdir(parents=True)
+    for name in (*NETWORK_UNITS, "jht-windows-connect-1d6ba098a310.exe"):
+        (network / name).write_text("synthetic\n", encoding="utf-8")
+    result = _uninstall(box, _fake_podman(box), _fake_wsl(box), "--confirm", tmp_path=tmp_path)
+    assert "CODE=0" in result.stdout, result.stdout + result.stderr
+    assert not network.exists() and not (box.local / "Job Hunter Team").exists(), "the empty folders of the runtime are gone"
+    assert not box.bin.exists(), ".local\\bin is gone once no command is in it"
+    other = _box(tmp_path / "other")
+    (other.bin / "other-tool.exe").write_bytes(b"MZ")
+    result = _uninstall(other, _fake_podman(other), _fake_wsl(other), "--confirm", tmp_path=tmp_path / "other")
+    assert "CODE=0" in result.stdout, result.stdout + result.stderr
+    assert (other.bin / "other-tool.exe").exists(), "another program's file keeps the folder"

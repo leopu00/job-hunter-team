@@ -392,6 +392,9 @@ function Write-JhtPodmanNotes {
   param([AllowNull()][string[]]$Lines, [bool]$Human)
   foreach ($line in @($Lines)) {
     if (-not $line) { continue }
+    # systemd's routine words when a unit is enabled (the link it made, the reminder that its files changed): a person has no use for
+    # them, so they are left out of the console; everything else Podman says stays, and the app still gets every line.
+    if ($Human -and $line -cmatch '^(Created symlink |Warning: The unit file, source configuration file or drop-ins of \S+ changed on disk\.)') { continue }
     if ($Human) { Write-Host "    $line" -ForegroundColor DarkGray } else { [Console]::Error.WriteLine("podman: $line") }
   }
 }

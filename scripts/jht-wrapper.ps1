@@ -75,6 +75,8 @@ $JhtUninstallRemovalNotice = 'Vengono cancellati anche la password della posta e
 $script:JhtUninstallReason = ''
 # The machine this uninstall removes: jht-podman, or the one the runtime attests (Resolve-JhtUninstallMachineName).
 $script:JhtUninstallMachine = 'jht-podman'
+# With --purge the first notice must not say that ~/.jht and Documents stay: only the secrets are named, the purge notice says the rest.
+$script:JhtUninstallPurgeRemovalNotice = 'Vengono cancellati anche la password della posta e i token di Telegram salvati.'
 $script:JhtUninstallPurgeNotice = 'Con --purge vengono cancellati anche ~/.jht e Documents\Job Hunter Team: configurazione, database, CV e output. Non si torna indietro.'
 
 function Get-JhtUninstallText {
@@ -301,6 +303,32 @@ function Remove-JhtPodmanMachineThroughWsl {
   return (Get-JhtPodmanMachineState -PodmanPath $PodmanPath -WslPath $WslPath -MachineName $MachineName) -eq 'absent'
 }
 
+# What the installer left in %LOCALAPPDATA%\Job Hunter Team\podman-network: the units of the machine and the native connector, by their
+# exact names (the connector's name ends in the digest of its source). Another file in that folder stays, and so does the folder then.
+# $true when nothing of ours is left; the folder (and its parent, the one of the app) go only when they are empty, never recursively.
+function Remove-JhtPodmanNetworkFiles {
+  param([Parameter(Mandatory)][string]$LocalAppDataPath)
+  $parent = [IO.Path]::Combine([IO.Path]::GetFullPath($LocalAppDataPath), 'Job Hunter Team')
+  $folder = [IO.Path]::Combine($parent, 'podman-network')
+  $ownNames = @('jht-windows-egress-proxy.service', 'jht-windows-egress-proxy-broker.service', 'jht-windows-egress-proxy-telegram.service',
+    'jht-rootless-podman.service', 'jht-broker-container.service')
+  $ok = $true
+  try {
+    $attributes = [IO.File]::GetAttributes($folder)
+    if (($attributes -band [IO.FileAttributes]::Directory) -eq 0 -or ($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return $true }
+  } catch { return $true }
+  foreach ($file in [IO.DirectoryInfo]::new($folder).GetFiles()) {
+    if (($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { continue }
+    if ($ownNames -cnotcontains $file.Name -and $file.Name -cnotmatch '^jht-windows-connect-[0-9a-f]{12}\.exe$') { continue }
+    try {
+      if (($file.Attributes -band [IO.FileAttributes]::ReadOnly) -ne 0) { $file.Attributes = [IO.FileAttributes]::Normal }
+      [IO.File]::Delete($file.FullName)
+    } catch { $ok = $false; $script:JhtUninstallReason = (Format-JhtUninstallReason $_.Exception.Message) }
+  }
+  foreach ($empty in @($folder, $parent)) { try { [IO.Directory]::Delete($empty, $false) } catch {} }
+  return $ok
+}
+
 # The folders `--purge` deletes: fixed, never taken from the environment; each one a real folder, never a link.
 function Remove-JhtUserDataFolder {
   param([Parameter(Mandatory)][string]$Path)
@@ -398,7 +426,7 @@ function Invoke-JhtWindowsUninstall {
     return 2
   }
   $purge = $UninstallArgs.Count -eq 2
-  [Console]::Error.WriteLine($JhtUninstallRemovalNotice)
+  if ($purge) { [Console]::Error.WriteLine($script:JhtUninstallPurgeRemovalNotice) } else { [Console]::Error.WriteLine($JhtUninstallRemovalNotice) }
   if ($purge) { [Console]::Error.WriteLine($script:JhtUninstallPurgeNotice) }
   $script:JhtUninstallReason = ''
 
@@ -497,6 +525,13 @@ function Invoke-JhtWindowsUninstall {
   if (Test-Path -LiteralPath $runtimePath) {
     try { Remove-Item -LiteralPath $runtimePath -Recurse -Force -ErrorAction Stop } catch { $script:JhtUninstallReason = (Format-JhtUninstallReason $_.Exception.Message) }
   }
+  $networkFolder = [IO.Path]::Combine([IO.Path]::GetFullPath($LocalAppDataPath), 'Job Hunter Team', 'podman-network')
+  $networkClean = Remove-JhtPodmanNetworkFiles -LocalAppDataPath $LocalAppDataPath
+  if (-not $networkClean) {
+    Write-JhtUninstallLeft runtime @($networkFolder)
+    if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands @($binPath, (& $leftCommands)) }
+    return 24
+  }
   if (Test-Path -LiteralPath $runtimePath) {
     Write-JhtUninstallLeft runtime @($runtimePath)
     if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands @($binPath, (& $leftCommands)) }
@@ -538,6 +573,8 @@ function Invoke-JhtWindowsUninstall {
     Write-JhtUninstallLeft commands @($binPath, (& $leftCommands))
     return 24
   }
+  # The folder the installer made, once nothing is in it: never recursively, so another program's file keeps it.
+  try { [IO.Directory]::Delete($binPath, $false) } catch {}
   if ($taskLeft) { [Console]::Error.WriteLine((Get-JhtUninstallText 'left.task' @($taskName, $taskReason))) }
   $done = Get-JhtUninstallText 'done'
   if (-not $purge) { $done += (Get-JhtUninstallText 'done.kept') }
