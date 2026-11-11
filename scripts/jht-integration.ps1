@@ -541,10 +541,8 @@ function Test-LinkedinAnyRunning {
 function Remove-LinkedinContainers {
   $ok = $true
   foreach ($service in $LoginServices) {
-    Invoke-Compose '--profile' 'login' stop $service | Out-Null
-    if ($LASTEXITCODE -ne 0) { $ok = $false }
-    Invoke-Compose '--profile' 'login' rm '-f' $service | Out-Null
-    if ($LASTEXITCODE -ne 0) { $ok = $false }
+    if ((Invoke-IntegrationComposeQuiet '--profile' 'login' stop $service) -ne 0) { $ok = $false }
+    if ((Invoke-IntegrationComposeQuiet '--profile' 'login' rm '-f' $service) -ne 0) { $ok = $false }
   }
   return $ok
 }

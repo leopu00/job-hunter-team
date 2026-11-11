@@ -251,6 +251,12 @@ FROM ${BASE} AS runtime
 
 COPY . .
 
+# The browser of the manual sign-in must not keep what the person types: the profile sits under ~/.jht, which the agents read, and an
+# accepted «Save password?» would leave the password in Default/Login Data. Managed policy of Chromium (it wins over any user setting),
+# in every tier: password manager, address and card autofill off, no sync, no sign-in to the browser itself (the web sign-in of Google
+# is not that). Tested in tests/test_login_chromium_policy.py.
+COPY shared/login/chromium-policy.json /etc/chromium/policies/managed/jht-login.json
+
 # Normalizza i line-ending degli script ESEGUIBILI degli agenti — quelli SENZA
 # estensione (jht-send, jht-tmux-send, wrapper in _tools/): su un checkout
 # Windows git li materializza CRLF e il container Linux fallisce l'exec con
