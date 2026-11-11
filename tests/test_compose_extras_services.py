@@ -12,7 +12,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 COMPOSE = yaml.safe_load((ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
 SERVICES = COMPOSE["services"]
-ON_REQUEST = {"jht-media": "media"}
+ON_REQUEST = {"jht-media": "media", "jht-screen": "screen", "jht-playwright-populate": "playwright"}
 FORBIDDEN_MOUNTS = ("docker.sock", "podman.sock", "/var/run", "/run/user")
 
 
@@ -75,7 +75,7 @@ def test_the_media_folders_are_made_by_the_image_with_the_owner_of_jht():
 def test_no_other_service_got_a_profile_or_a_mount_by_this():
     assert SERVICES["jht"].get("profiles") is None and SERVICES["jht-broker"]["profiles"] == ["broker"]
     assert SERVICES["jht-telegram"]["profiles"] == ["telegram"]
-    assert "ports" in SERVICES["jht"] and SERVICES["jht"]["ports"] == ["127.0.0.1:${JHT_LIVE_SCREEN_PORT:-6080}:6080"]
+    assert "ports" not in SERVICES["jht"] and SERVICES["jht-screen"]["ports"] == ["127.0.0.1:${JHT_LIVE_SCREEN_PORT:-6080}:6080"]
 
 
 def test_the_tmpfs_of_the_media_container_runs_nothing_and_grants_no_privilege():

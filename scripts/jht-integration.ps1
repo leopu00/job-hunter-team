@@ -13,7 +13,7 @@
 # Exit: 0 done - 1 failed - 2 wrong use - 3 not available yet.
 
 $IntegrationIds = @('google', 'telegram', 'mail', 'linkedin-login', 'screen', 'media')
-$IntegrationNotYet = @('linkedin-login', 'screen')
+$IntegrationNotYet = @('linkedin-login')
 # Fixed text, run inside the team's container: the libraries of Google go to the person's own store (jht-install).
 # Single quotes only: Windows PowerShell 5.1 drops a double quote inside a native argument.
 $IntegrationGoogleCode = "import sys; sys.path.insert(0, '/app/shared/skills'); from optional_libs import ensure, GOOGLE_DRIVE, GOOGLE_SHEETS; ensure(*GOOGLE_DRIVE, 'Google Drive'); ensure(*GOOGLE_SHEETS, 'Google Sheets')"
@@ -108,6 +108,13 @@ function Get-IntegrationState {
   if (Test-IntegrationPending $Id) { return @('downloading', 'operazione in corso') }
   if ($Id -ceq 'google') {
     if ($null -ne (Read-IntegrationMarker 'google' 'ok')) { return @('ready', 'librerie di Google aggiunte al profilo; mancano le credenziali dell''account Google') }
+  } elseif ($Id -ceq 'screen') {
+    if (-not (Test-DockerReachable)) { return @('error', 'il motore dei container non risponde') }
+    if (Get-RunningComposeServiceId $ScreenContainer) { return @('running', 'schermo acceso, stream in sola vista su 127.0.0.1') }
+    if ($script:ServiceLookupReason -notmatch '^(compose ps listed no running container|no running container of)') {
+      return @('error', "il container non e' attestabile")
+    }
+    if ($null -ne (Read-IntegrationMarker 'screen' 'ok')) { return @('ready', "chiesto acceso ma il container e' spento: jht screen on lo riaccende") }
   } elseif ($Id -ceq 'media') {
     # The two folders it shares with jht are made by `jht up` whether it is added or not: its own marker says "added".
     if (-not (Test-DockerReachable)) { return @('error', 'il motore dei container non risponde') }
@@ -191,11 +198,24 @@ function Write-IntegrationResult {
 
 # The media container (voice notes and photos): the extras image by the digest this wrapper carries, then the profile of the compose.
 $MediaContainer = 'jht-media'
+# The live screen of the closer, and the one-shot that copies its browser into a volume (see jht-integration.sh).
+$ScreenContainer = 'jht-screen'
+$PlaywrightPopulateContainer = 'jht-playwright-populate'
 
 # The reference of the extras image, or '' while the release has none (the digest is checked in its exact shape first).
 function Get-IntegrationExtrasRef {
   if ($ExtrasImageDigest -cmatch '^sha256:[0-9a-f]{64}$') { return "ghcr.io/leopu00/jht@$ExtrasImageDigest" }
   return ''
+}
+
+# The folder of the viewer password of the live screen, and whether what is there is fit to be mounted: nothing, or a plain folder,
+# never a link (a symlink, a junction: anything with a reparse point).
+function Get-IntegrationScreenFolder { return (Join-Path $JhtHome 'live-screen') }
+function Test-IntegrationScreenFolder {
+  $item = Get-Item -LiteralPath (Get-IntegrationScreenFolder) -Force -ErrorAction SilentlyContinue
+  if ($null -eq $item) { return $true }
+  if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or $item.LinkType) { return $false }
+  return [bool]$item.PSIsContainer
 }
 
 # ---- add ----
@@ -234,6 +254,44 @@ function Invoke-IntegrationAdd {
       if (-not (Get-RunningComposeServiceId $MediaContainer)) { $script:IntegrationWhy = 'il container dei media non risulta acceso'; return 1 }
       if (-not (Write-IntegrationMarker 'media' 'ok' 'ok')) { $script:IntegrationWhy = 'marcatore non scritto'; return 1 }
     }
+    'screen' {
+      $ref = Get-IntegrationExtrasRef
+      if (-not $ref) { $script:IntegrationWhy = 'non disponibile ancora'; return 3 }
+      & { $ErrorActionPreference = 'Continue'; & docker pull $ref *> $null }
+      if ($LASTEXITCODE -ne 0) { $script:IntegrationWhy = "download dell'immagine degli strumenti non riuscito"; return 1 }
+      # The folder the desktop app reads the viewer password from is made here, by the person: a bind mount of a folder that is not there
+      # would be made by the engine, with its own owner.
+      # It is mounted writable in the screen container, and the agents write in this folder: a link (a reparse point) in its place would
+      # have the engine mount what it points to. A plain folder or the run stops.
+      if (-not (Test-IntegrationScreenFolder)) { $script:IntegrationWhy = "live-screen in ~/.jht non e' una cartella normale (un collegamento?): non la uso"; return 1 }
+      if (-not (Test-Path -LiteralPath (Get-IntegrationScreenFolder))) {
+        try { New-Item -ItemType Directory -Path (Get-IntegrationScreenFolder) -ErrorAction Stop | Out-Null }
+        catch { $script:IntegrationWhy = 'cartella della password dello schermo non creata'; return 1 }
+      }
+      $beforeImage = $env:JHT_EXTRAS_IMAGE; $beforeDigest = $env:JHT_EXTRAS_DIGEST
+      try {
+        $env:JHT_EXTRAS_IMAGE = $ref
+        # The closer's browser with a window comes from the volume the one-shot fills: ready before the screen is.
+        $env:JHT_EXTRAS_DIGEST = $ExtrasImageDigest
+        Invoke-Compose '--profile' 'playwright' 'run' '--rm' '--no-deps' '-T' $PlaywrightPopulateContainer | Out-Null
+        $code = $LASTEXITCODE
+        if ($code -ne 0) { $script:IntegrationWhy = 'il browser del closer non si copia nel volume'; return 1 }
+        Remove-Item Env:\JHT_EXTRAS_DIGEST -ErrorAction SilentlyContinue
+        # Checked again right before the up (the copy above took time): what is left is the instant between this test and the engine's
+        # mount, which an agent that wins the race can use; the folder holds nothing but a viewer password.
+        if (-not ((Test-IntegrationScreenFolder) -and (Test-Path -LiteralPath (Get-IntegrationScreenFolder) -PathType Container))) {
+          $script:IntegrationWhy = "live-screen in ~/.jht non e' una cartella normale (un collegamento?): non la uso"; return 1
+        }
+        Invoke-Compose '--profile' 'screen' up '-d' $ScreenContainer | Out-Null
+        $code = $LASTEXITCODE
+      } finally {
+        if ($null -eq $beforeImage) { Remove-Item Env:\JHT_EXTRAS_IMAGE -ErrorAction SilentlyContinue } else { $env:JHT_EXTRAS_IMAGE = $beforeImage }
+        if ($null -eq $beforeDigest) { Remove-Item Env:\JHT_EXTRAS_DIGEST -ErrorAction SilentlyContinue } else { $env:JHT_EXTRAS_DIGEST = $beforeDigest }
+      }
+      if ($code -ne 0) { $script:IntegrationWhy = 'il container dello schermo non parte'; return 1 }
+      if (-not (Get-RunningComposeServiceId $ScreenContainer)) { $script:IntegrationWhy = 'il container dello schermo non risulta acceso'; return 1 }
+      if (-not (Write-IntegrationMarker 'screen' 'ok' 'ok')) { $script:IntegrationWhy = 'marcatore non scritto'; return 1 }
+    }
     'mail' {
       if ((Ensure-Broker -Quiet 6>$null) -ne 0) { $script:IntegrationWhy = 'il broker della posta non parte'; return 1 }
       if (-not (Get-RunningComposeServiceId $BrokerContainer)) { $script:IntegrationWhy = 'il broker della posta non risulta acceso'; return 1 }
@@ -250,6 +308,7 @@ function Get-IntegrationVolumes {
   switch -CaseSensitive ($Id) {
     'telegram' { return @('jht-telegram-secrets', 'jht-telegram-state', 'jht-telegram-inbox') }
     'mail' { return @('jht-broker-state') }
+    'screen' { return @('jht-x11') }
   }
   return @()
 }
@@ -292,6 +351,17 @@ function Invoke-IntegrationRemove {
         & { $ErrorActionPreference = 'Continue'; & docker rmi $ref *> $null }
       }
     }
+    'screen' {
+      Invoke-Compose '--profile' 'screen' stop $ScreenContainer | Out-Null
+      $code = $LASTEXITCODE
+      if ($code -eq 0) { Invoke-Compose '--profile' 'screen' rm '-f' $ScreenContainer | Out-Null; $code = $LASTEXITCODE }
+      if ($code -ne 0) { $script:IntegrationWhy = 'il container dello schermo non si ferma'; return 1 }
+      Clear-IntegrationMarker 'screen' 'ok'
+      $ref = Get-IntegrationExtrasRef
+      if ($ref -and $null -eq (Read-IntegrationMarker 'linkedin-login' 'ok') -and $null -eq (Read-IntegrationMarker 'media' 'ok')) {
+        & { $ErrorActionPreference = 'Continue'; & docker rmi $ref *> $null }
+      }
+    }
     'mail' {
       if (-not (Test-IntegrationBrokerOnRequest)) { $script:IntegrationWhy = 'non disponibile ancora'; return 3 }
       Invoke-Compose '--profile' 'broker' stop $BrokerContainer | Out-Null
@@ -309,8 +379,11 @@ function Invoke-IntegrationRemove {
       }
     }
     $script:IntegrationWhy = 'container e dati cancellati'
+    if ($Id -ceq 'screen') { $script:IntegrationWhy = "container e immagine tolti; la cartella del display condivisa con jht e' stata cancellata" }
     if ($Id -ceq 'media') { $script:IntegrationWhy = 'container e immagine tolti; le due cartelle di scambio con jht restano (sono di jht e non contengono i tuoi file)' }
     if ($Id -ceq 'mail') { $script:IntegrationWhy = 'container e stato del broker cancellati; la password della posta e le credenziali dei portali restano nel volume dei segreti (jht reset --scope creds)' }
+  } elseif ($Id -ceq 'screen') {
+    $script:IntegrationWhy = 'schermo spento e container tolto'
   } else {
     $script:IntegrationWhy = 'container tolto; i dati restano (per cancellarli: --purge --yes)'
   }

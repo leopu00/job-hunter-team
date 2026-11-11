@@ -18,7 +18,7 @@
 # Exit: 0 done · 1 failed · 2 wrong use · 3 not available yet.
 
 INTEGRATION_IDS="google telegram mail linkedin-login screen media"
-INTEGRATION_NOT_YET="linkedin-login screen"
+INTEGRATION_NOT_YET="linkedin-login"
 
 integration_label() {
   case "$1" in
@@ -109,6 +109,15 @@ integration_state() {
   if integration_pending "$id"; then printf 'downloading|operazione in corso\n'; return 0; fi
   if [ "$id" = google ]; then
     if integration_marker_read google ok >/dev/null; then printf 'ready|librerie di Google aggiunte al profilo; mancano le credenziali dell'"'"'account Google\n'; return 0; fi
+  elif [ "$id" = screen ]; then
+    docker_reachable || { printf 'error|il motore dei container non risponde\n'; return 0; }
+    read_only_service_id "$SCREEN_SERVICE" >/dev/null 2>&1 || rc=$?
+    case "$rc" in
+      0) printf 'running|schermo acceso, stream in sola vista su 127.0.0.1\n'; return 0 ;;
+      3) ;;
+      *) printf 'error|il container non e'"'"' attestabile\n'; return 0 ;;
+    esac
+    if integration_marker_read screen ok >/dev/null; then printf 'ready|chiesto acceso ma il container e'"'"' spento: jht screen on lo riaccende\n'; return 0; fi
   elif [ "$id" = media ]; then
     # The two folders it shares with jht are made by `jht up` whether it is added or not: its own marker says "added".
     docker_reachable || { printf 'error|il motore dei container non risponde\n'; return 0; }
@@ -203,10 +212,21 @@ INTEGRATION_GOOGLE_CODE="import sys; sys.path.insert(0, '/app/shared/skills'); f
 
 # The media container (voice notes and photos): the extras image by the digest this wrapper carries, then the profile of the compose.
 MEDIA_SERVICE="jht-media"
+SCREEN_SERVICE="jht-screen"
+PLAYWRIGHT_POPULATE_SERVICE="jht-playwright-populate"
 
 integration_extras_ref() { # prints the reference of the extras image, or nothing while the release has none
   [[ "${EXTRAS_IMAGE_DIGEST:-}" =~ ^sha256:[0-9a-f]{64}$ ]] && printf 'ghcr.io/leopu00/jht@%s\n' "$EXTRAS_IMAGE_DIGEST"
   return 0
+}
+
+# The folder of the viewer password of the live screen, and whether what is there is fit to be mounted: nothing, or a plain folder,
+# never a link.
+integration_screen_folder() { printf '%s/live-screen' "${JHT_HOME_HOST:-$HOME/.jht}"; }
+integration_screen_folder_ok() {
+  local dir
+  dir="$(integration_screen_folder)"
+  [ ! -L "$dir" ] && { [ ! -e "$dir" ] || [ -d "$dir" ]; }
 }
 
 integration_do_add() { # id → 0 done · 1 failed (reason in INTEGRATION_WHY)
@@ -236,6 +256,28 @@ integration_do_add() { # id → 0 done · 1 failed (reason in INTEGRATION_WHY)
       read_only_service_id "$MEDIA_SERVICE" >/dev/null 2>&1 || { INTEGRATION_WHY="il container dei media non risulta acceso"; return 1; }
       integration_marker_write media ok ok || { INTEGRATION_WHY="marcatore non scritto"; return 1; }
       ;;
+    screen)
+      ref="$(integration_extras_ref)"
+      [ -n "$ref" ] || { INTEGRATION_WHY="non disponibile ancora"; return 3; }
+      docker pull "$ref" >/dev/null 2>&1 || { INTEGRATION_WHY="download dell'immagine degli strumenti non riuscito"; return 1; }
+      # The folder the desktop app reads the viewer password from is made here, by the person: a bind mount of a folder that is not
+      # there would be made by the engine, with its own owner. It is mounted writable in the screen container, and ~/.jht is written by
+      # the agents: a link in its place would have the engine mount what the link points to. It is a plain folder or the run stops.
+      integration_screen_folder_ok || { INTEGRATION_WHY="live-screen in ~/.jht non e' una cartella normale (un collegamento?): non la uso"; return 1; }
+      [ -d "$(integration_screen_folder)" ] || (umask 077 && mkdir -p -- "${JHT_HOME_HOST:-$HOME/.jht}" && mkdir -- "$(integration_screen_folder)") 2>/dev/null \
+        || { INTEGRATION_WHY="cartella della password dello schermo non creata"; return 1; }
+      # The closer's browser with a window comes from the volume the one-shot fills: ready before the screen is.
+      JHT_EXTRAS_IMAGE="$ref" JHT_EXTRAS_DIGEST="$EXTRAS_IMAGE_DIGEST" COMPOSE_PROFILES=playwright compose run --rm --no-deps -T "$PLAYWRIGHT_POPULATE_SERVICE" >/dev/null 2>&1 \
+        || { INTEGRATION_WHY="il browser del closer non si copia nel volume"; return 1; }
+      # Checked again right before the up (the copy above took time): what is left is the instant between this test and the engine's
+      # mount, which an agent that wins the race can use; the folder holds nothing but a viewer password.
+      integration_screen_folder_ok && [ -d "$(integration_screen_folder)" ] \
+        || { INTEGRATION_WHY="live-screen in ~/.jht non e' una cartella normale (un collegamento?): non la uso"; return 1; }
+      JHT_EXTRAS_IMAGE="$ref" COMPOSE_PROFILES=screen compose up -d "$SCREEN_SERVICE" >/dev/null 2>&1 \
+        || { INTEGRATION_WHY="il container dello schermo non parte"; return 1; }
+      read_only_service_id "$SCREEN_SERVICE" >/dev/null 2>&1 || { INTEGRATION_WHY="il container dello schermo non risulta acceso"; return 1; }
+      integration_marker_write screen ok ok || { INTEGRATION_WHY="marcatore non scritto"; return 1; }
+      ;;
     mail)
       ensure_broker >/dev/null 2>&1 || { INTEGRATION_WHY="il broker della posta non parte"; return 1; }
       read_only_service_id "$BROKER_SERVICE" >/dev/null 2>&1 || { INTEGRATION_WHY="il broker della posta non risulta acceso"; return 1; }
@@ -250,6 +292,7 @@ integration_volumes_of() {
   case "$1" in
     telegram) printf 'jht-telegram-secrets jht-telegram-state jht-telegram-inbox' ;;
     mail) printf 'jht-broker-state' ;;
+    screen) printf 'jht-x11' ;;
   esac
 }
 
@@ -278,6 +321,16 @@ integration_do_remove() { # id purge → 0 done · 1 failed
         docker rmi "$ref" >/dev/null 2>&1 || true
       fi
       ;;
+    screen)
+      COMPOSE_PROFILES=screen compose stop "$SCREEN_SERVICE" >/dev/null 2>&1 \
+        && COMPOSE_PROFILES=screen compose rm -f "$SCREEN_SERVICE" >/dev/null 2>&1 \
+        || { INTEGRATION_WHY="il container dello schermo non si ferma"; return 1; }
+      integration_marker_clear screen ok
+      ref="$(integration_extras_ref)"
+      if [ -n "$ref" ] && ! integration_marker_read linkedin-login ok >/dev/null && ! integration_marker_read media ok >/dev/null; then
+        docker rmi "$ref" >/dev/null 2>&1 || true
+      fi
+      ;;
     mail)
       # An older compose still starts the broker with `jht up`: removing it there would only be undone by the next start.
       awk -v head="  $BROKER_SERVICE:" '$0 == head { in_service = 1; next } in_service && /^  [^ ]/ { exit } in_service && /^    profiles:/ { found = 1 } END { exit !found }' \
@@ -297,13 +350,17 @@ integration_do_remove() { # id purge → 0 done · 1 failed
         docker volume rm "$id" >/dev/null 2>&1 || { INTEGRATION_WHY="un volume non si cancella: $volume"; return 1; }
       }
     done
-    if [ "$1" = media ]; then
+    if [ "$1" = screen ]; then
+      INTEGRATION_WHY="container e immagine tolti; la cartella del display condivisa con jht e' stata cancellata"
+    elif [ "$1" = media ]; then
       INTEGRATION_WHY="container e immagine tolti; le due cartelle di scambio con jht restano (sono di jht e non contengono i tuoi file)"
     elif [ "$1" = mail ]; then
       INTEGRATION_WHY="container e stato del broker cancellati; la password della posta e le credenziali dei portali restano nel volume dei segreti (jht reset --scope creds)"
     else
       INTEGRATION_WHY="container e dati cancellati"
     fi
+  elif [ "$1" = screen ]; then
+    INTEGRATION_WHY="schermo spento e container tolto"
   else
     INTEGRATION_WHY="container tolto; i dati restano (per cancellarli: --purge --yes)"
   fi

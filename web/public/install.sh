@@ -150,6 +150,8 @@ PODMAN_MACHINE_CREATED=0
 # When it was created (podman machine inspect «Created»): the marker says WHICH machine, not only the name, so a machine the person
 # creates later with the same name is not taken for this one.
 PODMAN_MACHINE_CREATED_ID=""
+# 1 only when THIS run started Colima (it was not running): `jht uninstall` stops that profile again only then (marker colima-started).
+COLIMA_STARTED_BY_INSTALLER=0
 DOCKER_CLI="docker"
 # Position-based parser: handles both standalone flags (--no-docker) and
 # key/value pairs (--branch dev-1). We do not use `for arg in "$@"` because
@@ -726,6 +728,36 @@ install_brew_if_missing() {
   exit 80
 }
 
+# Colima and Docker Desktop's CLI come with `docker`, but Homebrew's `docker` formula is only the client: it has no `docker compose`,
+# and JHT runs the team with it (the Linux branch below installs the plugin for the same reason). Without it the installer used to end
+# with «Installation complete!» and every `jht` command failed. Here: when `docker compose version` does not answer, install the plugin
+# with Homebrew, register it for this Docker client (a link in the plugin folder of the client, beside any other plugin; a file that is
+# already there is not replaced) and check again; if it still does not answer, stop saying what to run. Client-side: needs no daemon.
+ensure_docker_compose_macos() {
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf "  ${DIM}[dry-run]${RESET} would verify: docker compose version (and, if missing: brew install docker-compose + register the plugin)\n"
+    return 0
+  fi
+  if "$DOCKER_CLI" compose version &>/dev/null; then
+    ok "docker compose already available"
+    return 0
+  fi
+  install_brew_if_missing
+  jht_phase compose_install
+  info "Installing the Docker Compose plugin (docker compose)..."
+  run brew install docker-compose || fail "docker compose is missing and its installation failed. Run: brew install docker-compose, then register it as the Homebrew caveats say, and run the installer again."
+  local plugin_src plugin_dir plugin_dest
+  plugin_src="$(brew --prefix)/opt/docker-compose/bin/docker-compose"
+  plugin_dir="${DOCKER_CONFIG:-$HOME/.docker}/cli-plugins"
+  plugin_dest="$plugin_dir/docker-compose"
+  if [ -x "$plugin_src" ] && { [ ! -e "$plugin_dest" ] || [ -L "$plugin_dest" ]; }; then
+    mkdir -p "$plugin_dir" && ln -sfn "$plugin_src" "$plugin_dest" || warn "Could not register the Compose plugin in $plugin_dir."
+  fi
+  "$DOCKER_CLI" compose version &>/dev/null \
+    || fail "docker compose is still not available after installing the plugin. Run: mkdir -p \"$plugin_dir\" && ln -sfn \"$plugin_src\" \"$plugin_dest\" ; docker compose version ; then run the installer again."
+  ok "docker compose installed and registered"
+}
+
 install_colima_macos() {
   install_brew_if_missing
   if ! command -v colima &>/dev/null; then
@@ -745,6 +777,7 @@ install_colima_macos() {
   else
     ok "docker CLI already installed"
   fi
+  ensure_docker_compose_macos
   # Start Colima if not already running
   if [ "$DRY_RUN" -eq 1 ]; then
     printf "  ${DIM}[dry-run]${RESET} would execute: colima start (if not already running)\n"
@@ -755,6 +788,7 @@ install_colima_macos() {
   else
     info "Starting Colima (may take 30-60s the first time)..."
     colima start || fail "colima start failed. Retry manually with 'colima start'."
+    COLIMA_STARTED_BY_INSTALLER=1
     ok "colima started"
   fi
 }
@@ -1103,6 +1137,8 @@ verify_docker_works() {
     fi
   fi
   ok "docker daemon reachable"
+  # An engine that was already there (detect-first) may have no Compose either; Docker Desktop has it built in.
+  if [ "$OS" = "macos" ]; then ensure_docker_compose_macos; fi
 }
 
 install_podman_adapter() {
@@ -1380,6 +1416,13 @@ download_runtime_files() {
   if [ -n "$selection_publish" ]; then
     mv -f "$selection_publish" "$RUNTIME_DIR/container-runtime"
     ok "JHT container runtime selected: docker (private Podman artifacts kept inert)"
+    # Colima started by THIS run: `jht uninstall` stops it again (when nothing else runs in it). A Colima that was already running is
+    # not marked, and stays on. A marker of an earlier run is kept: it is written only when the installer starts Colima.
+    if [ "$COLIMA_STARTED_BY_INSTALLER" = 1 ]; then
+      # Second line: the profile that was started (the installer starts the default one): the uninstall stops that profile only.
+      printf 'colima\ndefault\n' > "$RUNTIME_DIR/colima-started"
+      chmod 600 "$RUNTIME_DIR/colima-started"
+    fi
   fi
   ok "host-setup: $hostsetup_dest"
 

@@ -471,7 +471,11 @@ RUN useradd --create-home --shell /bin/bash jht \
     # The folder the volume of the closer's Chromium is mounted on, made here for the same reason (owner and mode are copied on first use).
     && mkdir -p /opt/playwright-extras \
     && chown jht:jht /opt/playwright-extras \
-    && chmod 0755 /opt/playwright-extras
+    && chmod 0755 /opt/playwright-extras \
+    # Where the X socket of the live screen is: the sticky world-writable folder X wants, made here so the volume that holds the socket
+    # (shared by jht and jht-screen) takes it on first use.
+    && mkdir -p /tmp/.X11-unix \
+    && chmod 1777 /tmp/.X11-unix
 
 # Broker of the portal secrets (P1 del 08/10): un secondo container della
 # stessa immagine, con un uid suo. I tre mount point nascono qui con il

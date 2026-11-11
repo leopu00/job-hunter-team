@@ -130,6 +130,7 @@ def test_every_down_and_listing_of_the_wrapper_names_the_media_profile_with_the_
     shell = WRAPPER_SH.read_text(encoding="utf-8")
     assert re.search(r'^COMPOSE_ALL_PROFILES="[^"]*\bmedia\b[^"]*"$', shell, re.M)
     assert re.search(r'^COMPOSE_ALL_PROFILES="[^"]*\bplaywright\b[^"]*"$', shell, re.M)
+    assert re.search(r'^COMPOSE_ALL_PROFILES="[^"]*\bscreen\b[^"]*"$', shell, re.M)
     code = [line for line in shell.splitlines() if not line.lstrip().startswith("#")]
     seen = [line for line in code if re.search(r"COMPOSE_PROFILES=\S+ compose(_stdout_quiet)? (down|ps -q)", line)]
     assert len(seen) >= 8
@@ -137,4 +138,4 @@ def test_every_down_and_listing_of_the_wrapper_names_the_media_profile_with_the_
     power = WRAPPER_PS1.read_text(encoding="utf-8")
     downs = [line for line in power.splitlines() if re.search(r"'--profile'(,| ')\s*'?telegram'?.*\b(down|ps)\b", line)]
     assert len(downs) >= 4
-    assert not [line for line in downs if "'media'" not in line or "'playwright'" not in line], "the media or the playwright profile is missing"
+    assert not [line for line in downs if not all(f"'{name}'" in line for name in ("media", "playwright", "screen"))], "a profile is missing"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import stat
 import subprocess
@@ -681,7 +682,8 @@ def test_compose_mounts_agent_socket_and_inbox_read_only() -> None:
     assert "network_mode: bridge" in compose
     assert "- /jht_home:size=64k,mode=0555" in compose
     assert "- /jht_user:size=64k,mode=0555" in compose
-    service = compose.split("  jht-telegram:", 1)[1].split("\nvolumes:", 1)[0]
+    # its own block: up to the next service of the file, not to the end of the services
+    service = re.split(r"\n  (?=[a-z])", compose.split("  jht-telegram:", 1)[1], maxsplit=1)[0]
     assert "${HOME}/.jht" not in service
     assert "jht-secrets" not in service and "jht-broker-state" not in service
 

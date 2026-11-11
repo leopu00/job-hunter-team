@@ -1337,12 +1337,25 @@ Esempio, con una chiave GLM in un file:
 '@)
 }
 
+# `jht screen --help`: its line of use, fixed text like the one of `jht integration`: a help downloads nothing.
+function Write-ScreenHelp {
+  [Console]::Out.WriteLine(@'
+Uso: jht screen <comando>
+
+  on [--json]       accende lo schermo dal vivo del closer: un container a parte, con lo stream solo su 127.0.0.1
+  off [--json]      lo spegne e toglie il container
+  status [--json]   dice se e' acceso
+
+Niente si scarica o si accende finche' non lo chiedi con `on`. Lo stream e' in sola visione.
+'@)
+}
+
 function Test-HostCommandUsesLocalHelp {
   param([string]$Command)
   return $Command -in @(
     'up', 'start-container', 'down', 'stop-container', 'restart', 'recreate',
     'upgrade', 'logs', 'status', 'shell', 'oauth-login', 'claude-login',
-    'setup', 'download', 'mail', 'telegram', 'integration', 'tools', 'reset', 'migrate-runtime'
+    'setup', 'download', 'mail', 'telegram', 'integration', 'screen', 'tools', 'reset', 'migrate-runtime'
   )
 }
 
@@ -1455,7 +1468,7 @@ function Get-RunningComposeServiceId {
   if (-not $expectedProject) { $script:ServiceLookupReason = 'the compose project name could not be read'; return $null }
   $files = @('-f', $ComposeFile)
   if ($ContainerRuntime -eq 'podman') { $files += @('-f', $PodmanComposeFile) }
-  $composeArgs = @('compose') + $files + @('--project-directory', $RuntimeDir, '--profile', 'telegram', '--profile', 'broker', '--profile', 'media', '--profile', 'playwright', 'ps', '-q')
+  $composeArgs = @('compose') + $files + @('--project-directory', $RuntimeDir, '--profile', 'telegram', '--profile', 'broker', '--profile', 'media', '--profile', 'playwright', '--profile', 'screen', 'ps', '-q')
   if ($ContainerRuntime -ne 'podman') { $composeArgs += $Service }
   $ids = @(& { $ErrorActionPreference = 'Continue'; & docker @composeArgs 2>$null } | ForEach-Object { "$($_)".Trim() } | Where-Object { $_ })
   $psCode = $LASTEXITCODE
@@ -2474,7 +2487,7 @@ function Remove-BrokerResetData {
     Write-Err 'reset: non riesco a determinare il progetto Compose; i volumi del broker non sono stati toccati.'
     return 1
   }
-  Invoke-Compose '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' down
+  Invoke-Compose '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' down
   if ($LASTEXITCODE -ne 0) {
     Write-Err 'reset: non riesco a fermare il runtime; i volumi del broker non sono stati toccati.'
     return 1
@@ -4155,6 +4168,10 @@ if ($HelpRequested -and $Sub -notin @('game', 'gui', 'agent-control', 'desktop-a
     Write-IntegrationHelp
     exit 0
   }
+  if ($Sub -ceq 'screen' -and $Rest.Count -eq 1) {
+    Write-ScreenHelp
+    exit 0
+  }
   if ($Sub -ceq 'setup') {
     Write-SetupHelp
     exit 0
@@ -4268,7 +4285,7 @@ switch ($Sub) {
   { $_ -in @('down', 'stop-container') } {
     Require-ComposeFile
     Require-Docker
-    $downCode = Invoke-ComposeQuiet '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' 'down'
+    $downCode = Invoke-ComposeQuiet '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' 'down'
     if ($downCode -eq 0) { Write-JhtLifecycleDone 'down' }
     exit $downCode
   }
@@ -4283,7 +4300,7 @@ switch ($Sub) {
   'recreate' {
     Require-ComposeFile
     Require-Docker
-    $null = Invoke-ComposeQuiet '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' 'down'
+    $null = Invoke-ComposeQuiet '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' 'down'
     if (-not (Repair-MountOwnership)) { exit 1 }
     if (-not (Initialize-TelegramLegacyInventory)) {
       Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'
@@ -4342,6 +4359,27 @@ switch ($Sub) {
     Assert-TrustedRuntime
     . $helperPath
     exit (Invoke-IntegrationCommand $Rest)
+  }
+
+  'screen' {
+    # The live screen of the closer is the integration `screen`: on = add, off = remove, status = status.
+    Require-ComposeFile
+    $screenWord = if ($Rest.Count -gt 0) { [string]$Rest[0] } else { '' }
+    $screenVerb = switch -CaseSensitive ($screenWord) { 'on' { 'add' } 'off' { 'remove' } 'status' { 'status' } default { '' } }
+    if (-not $screenVerb) { Write-Err 'uso: jht screen on | off | status [--json]'; exit 2 }
+    $screenArgs = @($screenVerb, 'screen') + @($Rest | Select-Object -Skip 1)
+    if (-not (Test-RuntimeHelperDeclared 'jht-integration.ps1') -and $screenVerb -ceq 'status' -and (Write-RuntimeHelperAbsentAnswer 'integration' $screenArgs)) { exit 0 }
+    $helperPath = Join-Path $RuntimeDir 'jht-integration.ps1'
+    # Same as `integration`: a helper that is missing is fetched only for `on` and `off`, never from a read-only command.
+    if (-not (Test-RuntimeHelperDeclared 'jht-integration.ps1')) {
+      if (@('add', 'remove') -cnotcontains $screenVerb -or -not (Install-RuntimeHelpers)) {
+        Write-Err "script jht-integration.ps1 non ancora installato: 'jht upgrade' (o un 'jht integration add/remove') e riprova"
+        exit 1
+      }
+    }
+    Assert-TrustedRuntime
+    . $helperPath
+    exit (Invoke-IntegrationCommand $screenArgs)
   }
 
   'tools' {
