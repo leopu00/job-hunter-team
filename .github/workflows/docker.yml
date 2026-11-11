@@ -274,6 +274,10 @@ jobs:
     name: Publish the three images
     needs: [check, build]
     if: github.event_name != 'pull_request'
+    # Un publish alla volta per ramo: il digest dell'indice si rilegge dal tag, e due publish insieme se lo scambierebbero.
+    concurrency:
+      group: docker-publish-${{ github.ref }}
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -353,7 +357,21 @@ jobs:
             while IFS= read -r tag; do [ -n "$tag" ] && args+=(-t "$tag"); done <<< "$tags"
             [ "${#args[@]}" -gt 0 ] || { echo "no tags for $image" >&2; exit 1; }
             docker buildx imagetools create "${args[@]}" "$REPO@$amd" "$REPO@$arm"
-            digest="$(docker buildx imagetools inspect "${args[1]}" --format '{{json .Manifest}}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])')"
+            # Il digest dell'indice si rilegge dal tag; l'indice deve elencare proprio le voci dei due indici di questo
+            # run (ogni build per architettura e' un indice: immagine + attestazione), ne' una di piu' ne' una di meno.
+            docker buildx imagetools inspect --raw "$REPO@$amd" > own-amd.json
+            docker buildx imagetools inspect --raw "$REPO@$arm" > own-arm.json
+            digest="$(docker buildx imagetools inspect "${args[1]}" --format '{{json .Manifest}}' | python3 -c '
+          import json, sys
+          index = json.load(sys.stdin)
+          own = set()
+          for name in ("own-amd.json", "own-arm.json"):
+              with open(name, encoding="utf-8") as f:
+                  own |= {m["digest"] for m in json.load(f).get("manifests", [])}
+          listed = {m["digest"] for m in index.get("manifests", [])}
+          if not own or listed != own:
+              sys.exit("the index under the tag is not the one of this run")
+          print(index["digest"])')"
             [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "no index digest for $image" >&2; exit 1; }
             echo "${image}=${digest}" >> "$GITHUB_OUTPUT"
           }
