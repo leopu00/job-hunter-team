@@ -273,3 +273,31 @@ def test_live_the_browser_is_sandboxed_and_keeps_nothing_of_the_sign_in(engine):
                             capture_output=True, text=True, timeout=1200)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "RESULT: OK" in result.stdout
+
+
+def test_on_docker_the_probe_runs_under_the_profile_of_ours_on_podman_under_none_and_a_named_one_replaces_ours(host, tmp_path):
+    ours = host.Probe(["docker"], "image:test", None)
+    assert ours.seccomp == ["--security-opt", f"seccomp={host.LOGIN_SECCOMP.resolve()}"]
+    assert host.Probe(["docker", "--context", "colima"], "image:test", None).seccomp == ours.seccomp
+    assert host.Probe(["podman", "--connection", "m"], "image:test", None).seccomp == []
+    candidate = tmp_path / "candidate.json"
+    candidate.write_text("{}")
+    assert host.Probe(["docker"], "image:test", None, str(candidate)).seccomp == ["--security-opt", f"seccomp={candidate.resolve()}"]
+
+
+def test_the_control_with_the_default_profile_of_the_engine_leaves_ours_out_of_that_run_only(host, tmp_path):
+    log = tmp_path / "calls.txt"
+    engine = tmp_path / "docker"
+    engine.write_text(f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> {log}\n")
+    engine.chmod(0o755)
+    probe = host.Probe([str(engine)], "image:test", None)
+    probe.seccomp = ["--security-opt", "seccomp=/ours.json"]
+    probe.run()
+    probe.run(engine_default_seccomp=True)
+    runs = [line for line in log.read_text().splitlines() if line.startswith("run --rm --name ") and "inside.py" in line]
+    assert "seccomp=/ours.json" in runs[0] and "seccomp" not in runs[1]
+
+
+def test_the_probe_never_uses_an_unconfined_profile_to_run_the_browser(host):
+    flags = " ".join(host.hardening_flags(host.service(), without_chroot=False) + host.Probe(["docker"], "i", None).seccomp)
+    assert "unconfined" not in flags

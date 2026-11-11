@@ -2,7 +2,7 @@
 """Does the browser of the manual LinkedIn sign-in keep its sandbox and keep nothing of the person? Answered on a real engine, with no account.
 
 Starts IMAGE (the extras image) the way docker-compose.yml starts `jht-login` — the user, the read-only root, the tmpfs, the limits,
-`cap_drop`, `cap_add`, `security_opt` and `network_mode: none` are read from the compose file, not copied — with ONE difference: the
+`cap_drop`, `cap_add`, `security_opt` and `network_mode: none` are read from the compose file, not copied — with ONE difference (and, on Docker, the seccomp profile of ours that the wrapper installs for it, shared/login/seccomp/jht-login.json): the
 command is scripts/ci/login_live_probe_inside.py, which runs the real sign-in code of the image against a page of its own (see there).
 
   1. main run     the sandbox is on (chrome://sandbox), the form is typed and sent, the cookie is seen, the browser is closed by the
@@ -39,6 +39,7 @@ COMPOSE = ROOT / "docker-compose.yml"
 INSIDE = Path(__file__).with_name("login_live_probe_inside.py")
 SERVICE = "jht-login"
 PROFILE_MOUNT = "/linkedin-profile"
+LOGIN_SECCOMP = ROOT / "shared" / "login" / "seccomp" / "jht-login.json"  # what the wrapper gives jht-login on Docker
 POLICY_DIR = "/etc/chromium/policies/managed"
 TIMEOUT = 240
 
@@ -98,9 +99,11 @@ def engine_report(engine: list[str], kind: str) -> str:
 class Probe:
     def __init__(self, engine: list[str], image: str, profile_parent: str | None, seccomp_profile: str | None = None) -> None:
         self.engine, self.image = engine, image
-        # a profile of our own for the engine's seccomp filter (the one Docker applies by default stops the namespace sandbox of Chromium)
-        self.seccomp = ["--security-opt", f"seccomp={Path(seccomp_profile).resolve()}"] if seccomp_profile else []
         self.profile_parent = Path(profile_parent) if profile_parent else None
+        # On Docker the container runs under the profile of ours the wrapper installs (the default profile of Docker stops the namespace sandbox of
+        # Chromium); a profile named here replaces it, to test a candidate. Podman keeps its default, as the wrapper leaves it.
+        chosen = seccomp_profile or (str(LOGIN_SECCOMP) if engine[0] == "docker" else None)
+        self.seccomp = ["--security-opt", f"seccomp={Path(chosen).resolve()}"] if chosen else []
         self.spec = service()
 
     def make_profile_dir(self) -> Path:
@@ -113,7 +116,8 @@ class Probe:
         folder.chmod(0o777)  # the browser's user (1001) writes here, whoever owns the host folder
         return folder
 
-    def run(self, *, without_chroot: bool = False, cover_policy: bool = False, extra: tuple[str, ...] = (), mode: tuple[str, ...] = ()) -> tuple[int, str]:
+    def run(self, *, without_chroot: bool = False, cover_policy: bool = False, extra: tuple[str, ...] = (), mode: tuple[str, ...] = (),
+            engine_default_seccomp: bool = False) -> tuple[int, str]:
         name = "jht-login-probe-" + secrets.token_hex(3)
         volume = name + "-profile"
         cleanup: list[list[str]] = []
@@ -129,7 +133,7 @@ class Probe:
             else:
                 host_folder = self.make_profile_dir()
                 profile = str(host_folder)
-            cmd = [*self.engine, "run", "--rm", "--name", name, *hardening_flags(self.spec, without_chroot), *self.seccomp, *extra,
+            cmd = [*self.engine, "run", "--rm", "--name", name, *hardening_flags(self.spec, without_chroot), *([] if engine_default_seccomp else self.seccomp), *extra,
                    "-v", f"{INSIDE}:/probe/inside.py:ro", "-v", f"{profile}:{PROFILE_MOUNT}"]
             if cover_policy:
                 # an empty folder over the folder of managed policies: no host path, so it works where the host's folders are not shared
@@ -169,7 +173,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--connection", default="", help="Podman connection, or Docker context (never the default machine of a Mac or Windows)")
     parser.add_argument("--profile-dir", default=None, help="an EXISTING folder of the host; the profile is a new folder made inside it (how the product mounts it)")
     parser.add_argument("--controls", action="store_true")
-    parser.add_argument("--seccomp-profile", default=None, help="run with this seccomp profile instead of the engine's default (to test a candidate)")
+    parser.add_argument("--seccomp-profile", default=None, help="Docker: run under this seccomp profile instead of ours (to test a candidate)")
     parser.add_argument("--diagnose", action="store_true",
                         help="only report what the kernel and the engine's filters say about the user namespace and chroot the sandbox needs, "
                              "in the container as the service has it and in three looser ones (the looser ones are a diagnosis, never a way to run)")
@@ -184,12 +188,14 @@ def main(argv: list[str]) -> int:
     print("engine: " + engine_report(probe.engine, args.engine) + f"; image: {args.image}; profile: "
           f"{'new folder inside ' + args.profile_dir if args.profile_dir else 'volume'}")
     if args.diagnose:
-        looser = [("as the service has it", ()), ("seccomp=unconfined", ("--security-opt", "seccomp=unconfined")),
-                  ("apparmor=unconfined", ("--security-opt", "apparmor=unconfined")),
-                  ("seccomp and apparmor unconfined", ("--security-opt", "seccomp=unconfined", "--security-opt", "apparmor=unconfined"))]
-        for label, flags in looser:
+        looser = [("as the wrapper starts it (on Docker, the profile of ours)", (), False),
+                  ("the engine's own default seccomp profile", (), True),
+                  ("seccomp=unconfined", ("--security-opt", "seccomp=unconfined"), True),
+                  ("apparmor=unconfined, default seccomp", ("--security-opt", "apparmor=unconfined"), True),
+                  ("seccomp and apparmor unconfined", ("--security-opt", "seccomp=unconfined", "--security-opt", "apparmor=unconfined"), True)]
+        for label, flags, default in looser:
             print(f"--- {label}")
-            _, text = probe.run(extra=flags, mode=("--syscalls",))
+            _, text = probe.run(extra=flags, mode=("--syscalls",), engine_default_seccomp=default)
             print(text, end="" if text.endswith("\n") else "\n")
         return 0
     code, output = probe.run()
@@ -204,6 +210,14 @@ def main(argv: list[str]) -> int:
             print("PASS [control-policy] without the policy the browser keeps something of the sign-in: the policy is what keeps it clean")
         else:
             print("INFO [control-policy] without the policy nothing was kept either in this run: the policy is not proven necessary here")
+        if args.engine == "docker" and not args.seccomp_profile:
+            print("--- control 3: Docker's own default seccomp profile instead of ours (the browser must not start)")
+            code3, out3 = probe.run(engine_default_seccomp=True)
+            print(out3, end="" if out3.endswith("\n") else "\n")
+            if code3 != 0 and ("hint 'sandbox_failed'" in out3 or "hint 'browser_failed'" in out3):
+                print("PASS [control-seccomp] with the default profile of the engine the browser does not start: the profile of ours is what lets it")
+            else:
+                print("INFO [control-seccomp] the browser started under the default profile of this engine: the profile of ours is not proven necessary here")
         print("--- control 2: without SYS_CHROOT (the sandbox must not start)")
         code2, out2 = probe.run(without_chroot=True)
         print(out2, end="" if out2.endswith("\n") else "\n")
