@@ -1,0 +1,22 @@
+{
+  "_note": "The level words of a job title, folded (lower case, no accents), by level: the product's seven languages and the English every list uses. A word is matched whole; a phrase (two words or more) as written, with hyphens read as spaces. `ignore` phrases are cut out of the title first («lead generation» is a job, not a level). `manager` alone is NOT a level word («Product Manager» is a job), nor `staff`, `entry` or `expert` (Staff Accountant, Data Entry, SAP Expert).",
+  "levels": {
+    "junior": {
+      "words": ["junior", "jr", "trainee", "intern", "internship", "graduate", "apprentice", "apprenticeship", "stagista", "tirocinante", "tirocinio", "neolaureato", "neodiplomato", "apprendista", "praktikant", "praktikum", "werkstudent", "berufseinsteiger", "absolvent", "azubi", "stagiaire", "alternant", "alternance", "debutant", "becario", "practicas", "practicante", "estagiario", "estagio", "gyakornok", "palyakezdo"],
+      "phrases": ["entry level", "first job", "primo impiego", "jeune diplome", "recien graduado", "recem formado"]
+    },
+    "mid": {
+      "words": ["intermediate", "intermedio", "pleno"],
+      "phrases": ["mid level", "mid career", "middle level"]
+    },
+    "senior": {
+      "words": ["senior", "sr", "lead", "principal", "teamleiter", "erfahrener", "erfahrene", "experto", "tapasztalt"],
+      "phrases": ["team lead", "tech lead", "technical lead", "lead engineer", "capo progetto", "staff engineer"]
+    },
+    "executive": {
+      "words": ["director", "directeur", "directrice", "direttore", "direttrice", "direktor", "direktorin", "diretor", "diretora", "vp", "cto", "cfo", "coo", "ceo", "cio", "ciso", "chief", "leiter", "leiterin", "abteilungsleiter", "bereichsleiter", "igazgato"],
+      "phrases": ["head of", "vice president", "responsabile di funzione", "responsable de departement", "jefe de", "chefe de", "leiter von", "responsabile area"]
+    }
+  },
+  "ignore": ["lead generation", "lead gen", "lead scoring", "lead nurturing", "lead qualification", "lead management", "lead capture", "leads", "principal component", "principal investigator", "senior citizens"]
+}
