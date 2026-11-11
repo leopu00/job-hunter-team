@@ -74,10 +74,15 @@ export function telegramServiceEnabled(markerExists = existsSync) {
  * Acceso di default, perché è lo schermo su cui `apply_flow.py --headful`
  * disegna: spento, il browser headed del CLOSER non avrebbe dove aprirsi.
  * `JHT_LIVE_SCREEN=0` lo spegne (macchina senza app desktop, RAM contata).
+ * `JHT_LIVE_SCREEN_EXTERNAL=1` dice che lo schermo è un contenitore a parte (`jht screen on`): il display X è nel suo
+ * volume, montato qui, e pid1 non ne accende uno suo.
  */
 export function liveScreenDecision({ env = process.env, scriptExists = existsSync, binaryOnPath = onPath } = {}) {
   if (String(env.JHT_LIVE_SCREEN ?? '').trim() === '0') {
     return { start: false, reason: 'JHT_LIVE_SCREEN=0' };
+  }
+  if (String(env.JHT_LIVE_SCREEN_EXTERNAL ?? '').trim() === '1') {
+    return { start: false, reason: 'JHT_LIVE_SCREEN_EXTERNAL=1' };
   }
   if (!scriptExists(LIVE_SCREEN_SCRIPT)) {
     return { start: false, reason: `${LIVE_SCREEN_SCRIPT} not found` };
