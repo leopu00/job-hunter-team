@@ -6959,6 +6959,8 @@ mod tests {
         clean_images_with, ensure_team_started, parse_clean_images, CleanImagesOutcome,
         CLEAN_IMAGES_TIMEOUT, REMOTE_CLEAN_IMAGES,
     };
+    use super::{teardown, ApiKeyProvider, OnboardingNativeState, StagedKey, STAGED_KEY_TTL};
+    use zeroize::Zeroizing;
     use super::{
         known_plan_id, parse_plan_declared, parse_plans, remote_provider_plan_set, KNOWN_PLAN_IDS,
         REMOTE_PROVIDER_PLANS,
