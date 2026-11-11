@@ -118,13 +118,18 @@ $done = Replace-UpgradeFile $source $target
 """
 
 
-@pytest.mark.parametrize("exists", ["0", "1"])
+# `File.Replace` with no backup name (how the upgrade replaces a file that is there) throws on the pwsh of a Linux machine; it is the call of Windows
+REPLACE_IS_WINDOWS = pytest.mark.skipif(sys.platform != "win32", reason="File.Replace without a backup name is a call of Windows")
+
+
+@pytest.mark.parametrize("exists", ["0", pytest.param("1", marks=REPLACE_IS_WINDOWS)])
 @pytest.mark.parametrize("elevated", ["0", "1"])
 def test_a_file_the_upgrade_puts_in_place_is_the_persons(tmp_path, elevated, exists):
     done = run_case(tmp_path, ["Replace-UpgradeFile"], REPLACE_BODY, T_ELEVATED=elevated, T_TARGET_EXISTS=exists)
     assert last_json(done) == {"done": True, "text": "new", "trusted": True}
 
 
+@REPLACE_IS_WINDOWS
 def test_a_file_the_upgrade_cannot_give_to_the_person_is_a_failed_replace(tmp_path):
     (tmp_path / "runtime").mkdir()
     target = tmp_path / "runtime" / "docker-compose.yml"
