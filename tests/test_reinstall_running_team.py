@@ -165,6 +165,7 @@ BROKER_SERVICE=jht-broker
 TELEGRAM_SERVICE=jht-telegram
 MEDIA_SERVICE=jht-media
 PLAYWRIGHT_POPULATE_SERVICE=jht-playwright-populate
+SCREEN_SERVICE=jht-screen
 RUNTIME_DIR="{runtime}"
 COMPOSE_FILE="{compose_file}"
 err()  {{ echo "error: $*" >&2; }}

@@ -45,6 +45,7 @@ PRISTINE_COMMANDS = [
     (["down"], {0}),
     (["providers", "plan"], {1}),
     (["integration", "list"], {0}),
+    (["screen", "status"], {0}),   # the live screen: «not installed yet», in the words of the integrations
     (["tools", "status"], {1}),
     (["uninstall"], {2}),          # asks for --confirm and says so; removes nothing
 ]
@@ -98,7 +99,7 @@ def test_the_status_and_the_plan_of_a_team_never_started_say_the_container_is_no
     assert "non attivo" in (done.stdout + done.stderr), done.stdout + done.stderr
 
 
-@pytest.mark.parametrize(("command", "code"), [(["integration", "list"], 0), (["tools", "status"], 1)])
+@pytest.mark.parametrize(("command", "code"), [(["integration", "list"], 0), (["screen", "status"], 0), (["tools", "status"], 1)])
 def test_the_helpers_not_installed_yet_are_named_with_the_command_that_installs_them(tmp_path, command, code):
     done, calls, _ = run_wrapper(tmp_path, *command)
     text = done.stdout + done.stderr
@@ -114,3 +115,15 @@ def test_a_runtime_folder_without_its_integrity_manifest_is_untrusted_and_stops_
     assert done.returncode != 0
     assert not log.exists(), log.read_text(encoding="utf-8") if log.exists() else ""
     assert (done.stdout + done.stderr).strip()
+
+
+def test_screen_without_a_known_word_says_its_usage_and_asks_the_engine_nothing(tmp_path):
+    done, calls, _ = run_wrapper(tmp_path, "screen", "toggle")
+    assert done.returncode == 2 and "jht screen on | off | status" in done.stderr, done.stderr
+    assert calls == []
+
+
+def test_screen_help_is_the_fixed_text_and_starts_nothing(tmp_path):
+    done, calls, _ = run_wrapper(tmp_path, "screen", "--help")
+    assert done.returncode == 0 and "jht screen" in done.stdout and "sola visione" in done.stdout, done.stdout
+    assert calls == []

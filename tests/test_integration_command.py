@@ -113,14 +113,13 @@ def states(result) -> dict:
     return {row["id"]: row for row in json.loads(result.stdout)["integrations"]}
 
 
-def test_list_json_nothing_added_and_two_not_available_yet(host):
+def test_list_json_nothing_added_and_one_not_available_yet(host):
     result = run(host, "list --json")
     assert result.returncode == 0, result.stderr
     rows = states(result)
     assert list(rows) == ["google", "telegram", "mail", "linkedin-login", "screen", "media"]
-    assert {rows[i]["state"] for i in ("google", "telegram", "mail", "media")} == {"not_installed"}
-    for name in ("linkedin-login", "screen"):
-        assert rows[name] == {"id": name, "state": "not_installed", "reason": "non disponibile ancora"}
+    assert {rows[i]["state"] for i in ("google", "telegram", "mail", "screen", "media")} == {"not_installed"}
+    assert rows["linkedin-login"] == {"id": "linkedin-login", "state": "not_installed", "reason": "non disponibile ancora"}
 
 
 def test_state_is_running_ready_error_from_the_engine(host):
@@ -196,11 +195,10 @@ def test_a_failed_add_says_why_in_one_line_and_the_next_status_keeps_it(host):
 
 
 def test_what_is_not_available_yet_is_refused_with_its_own_code_and_touches_nothing(host):
-    for name in ("linkedin-login", "screen"):
-        for action in ("add", "remove"):
-            result = run(host, f"{action} {name} --json")
-            assert result.returncode == 3, (name, action, result.stderr)
-            assert json.loads(result.stdout)["reason"] == "non disponibile ancora"
+    for action in ("add", "remove"):
+        result = run(host, f"{action} linkedin-login --json")
+        assert result.returncode == 3, (action, result.stderr)
+        assert json.loads(result.stdout)["reason"] == "non disponibile ancora"
     assert host.log.read_text() == ""
 
 
@@ -356,7 +354,7 @@ def test_wrapper_installer_and_library_agree_on_the_helper():
     assert "JHT_INTEGRATION_PROTOCOL=1\n" in wrapper
     # the answer «not installed yet» for a helper that is not declared comes first; the load of a declared one is as it was
     assert re.search(r'^  integration\)\n    require_compose_file\n(    if \[ -z "\$\(runtime_helper_digest jht-integration\.sh\)" \]; then runtime_helper_absent_answer integration "\$\{@:2\}" && exit 0; fi\n)?    runtime_helper_load jht-integration\.sh "\$\{2:-\}" \|\| exit 1\n', wrapper, re.M)
-    assert re.search(r"\|mail\|telegram\|integration\|tools\|", wrapper)  # its help is the local one: no engine started by --help
+    assert re.search(r"\|mail\|telegram\|integration\|screen\|tools\|", wrapper)  # its help is the local one: no engine started by --help
     assert '.runtime-helpers' in installer and 'printf \'%s\' "$helper_lines" > "$RUNTIME_DIR/.runtime-helpers.tmp"' in installer
     assert "jht-integration.sh=" not in installer.split("printf 'version=1")[1].split("} > \"$manifest_tmp\"")[0]
     public = (ROOT / "web" / "public" / "install.sh").read_text(encoding="utf-8")

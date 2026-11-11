@@ -62,7 +62,7 @@ CONTAINER_SERVICE="jht"
 # I servizi del compose: agenti e i due servizi isolati.
 COMPOSE_SERVICES="jht jht-broker jht-telegram"
 # Every profile of the project: what looks at or takes down the WHOLE project names them all (the broker and Telegram are made on request).
-COMPOSE_ALL_PROFILES="telegram,broker,media,playwright"
+COMPOSE_ALL_PROFILES="telegram,broker,media,playwright,screen"
 RUNTIME_MIGRATION_VOLUMES="jht-broker-state jht-secrets jht-telegram-secrets jht-telegram-state"
 ATTESTED_CONTAINER_ID=""
 if [ -n "${JHT_RUNTIME_DIR:-}" ]; then
@@ -1673,7 +1673,7 @@ container_down() {
         info "niente da fermare: nessun container del progetto."
         return 0
       fi
-      for svc in "$BROKER_SERVICE" "$TELEGRAM_SERVICE" "$MEDIA_SERVICE" "$PLAYWRIGHT_POPULATE_SERVICE"; do
+      for svc in "$BROKER_SERVICE" "$TELEGRAM_SERVICE" "$MEDIA_SERVICE" "$PLAYWRIGHT_POPULATE_SERVICE" "$SCREEN_SERVICE"; do
         svc_status=0
         read_only_service_id "$svc" any-config >/dev/null || svc_status=$?
         case "$svc_status" in
@@ -1882,6 +1882,7 @@ broker_after_up() {
 TELEGRAM_SERVICE="jht-telegram"
 MEDIA_SERVICE="jht-media"
 PLAYWRIGHT_POPULATE_SERVICE="jht-playwright-populate"
+SCREEN_SERVICE="jht-screen"
 
 telegram_admin() {
   local telegram_id
@@ -3928,6 +3929,19 @@ Esempio, con una chiave GLM in un file:
 JHTSETUPHELP
 }
 
+# `jht screen --help`: la sua riga d'uso, a testo fisso come quella di `jht integration`: un aiuto non scarica niente.
+screen_help() {
+  cat <<'JHTSCREENHELP'
+Uso: jht screen <comando>
+
+  on [--json]       accende lo schermo dal vivo del closer: un container a parte, con lo stream solo su 127.0.0.1
+  off [--json]      lo spegne e toglie il container
+  status [--json]   dice se e' acceso
+
+Niente si scarica o si accende finche' non lo chiedi con `on`. Lo stream e' in sola visione.
+JHTSCREENHELP
+}
+
 # Richiesta di sola informazione: se il container e' gia' in piedi si serve
 # l'aiuto vero, altrimenti quello locale. In nessun caso si avvia qualcosa.
 serve_help_without_docker() {
@@ -3947,7 +3961,7 @@ serve_help_without_docker() {
 # falso errore; il loro aiuto resta quindi quello locale anche in quel caso.
 host_command_uses_local_help() {
   case "$1" in
-    up|start-container|down|stop-container|restart|recreate|upgrade|clean-images|logs|status|shell|oauth-login|claude-login|setup|download|podman-machine-recreate|mail|telegram|integration|tools|reset|migrate-runtime)
+    up|start-container|down|stop-container|restart|recreate|upgrade|clean-images|logs|status|shell|oauth-login|claude-login|setup|download|podman-machine-recreate|mail|telegram|integration|screen|tools|reset|migrate-runtime)
       return 0
       ;;
   esac
@@ -6046,8 +6060,8 @@ uninstall_podman_machine_state() {
 # generico per cancellare: oltre al progetto si chiede il servizio, il volume
 # logico o la rete di default di QUESTO compose, come fa `jht reset`.
 UNINSTALL_PROJECTS="jht host-runtime"
-UNINSTALL_SERVICES="jht jht-broker jht-telegram jht-media jht-playwright-populate"
-UNINSTALL_VOLUMES="jht-deps jht-runtime-mask jht-secrets jht-broker-state jht-broker-sock jht-telegram-broker-sock jht-telegram-secrets jht-telegram-state jht-telegram-sock jht-telegram-inbox jht-media-in jht-media-out jht-playwright"
+UNINSTALL_SERVICES="jht jht-broker jht-telegram jht-media jht-playwright-populate jht-screen"
+UNINSTALL_VOLUMES="jht-deps jht-runtime-mask jht-secrets jht-broker-state jht-broker-sock jht-telegram-broker-sock jht-telegram-secrets jht-telegram-state jht-telegram-sock jht-telegram-inbox jht-media-in jht-media-out jht-playwright jht-x11"
 
 uninstall_docker_ids() {
   local docker_bin="$1" kind="$2" project name ids id
@@ -6466,6 +6480,10 @@ if [ "$#" -gt 1 ] && [ "$SUB" != "game" ] && [ "$SUB" != "gui" ] && [ "$SUB" != 
           setup_help
           exit 0
         fi
+        if [ "$SUB" = screen ] && [ "$#" -eq 2 ]; then
+          screen_help
+          exit 0
+        fi
         if host_command_uses_local_help "$SUB"; then
           local_help
           exit 0
@@ -6718,6 +6736,23 @@ case "$SUB" in
     if [ -z "$(runtime_helper_digest jht-integration.sh)" ]; then runtime_helper_absent_answer integration "${@:2}" && exit 0; fi
     runtime_helper_load jht-integration.sh "${2:-}" || exit 1
     integration_main "${@:2}"
+    exit $?
+    ;;
+
+  screen)
+    # The live screen of the closer is the integration `screen`: on = add, off = remove, status = status.
+    require_compose_file
+    case "${2:-}" in
+      on) screen_verb=add ;;
+      off) screen_verb=remove ;;
+      status) screen_verb=status ;;
+      *) err "uso: jht screen on | off | status [--json]"; exit 2 ;;
+    esac
+    if [ -z "$(runtime_helper_digest jht-integration.sh)" ] && [ "$screen_verb" = status ]; then
+      runtime_helper_absent_answer integration status screen "${@:3}" && exit 0
+    fi
+    runtime_helper_load jht-integration.sh "$screen_verb" || exit 1
+    integration_main "$screen_verb" screen "${@:3}"
     exit $?
     ;;
 

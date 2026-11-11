@@ -33,6 +33,7 @@ $ComposeFile = Join-Path $RuntimeDir 'docker-compose.yml'
 $Container = 'jht'; $TelegramContainer = 'jht-telegram'; $BrokerContainer = 'jht-broker'
 $BrokerMadeMarker = Join-Path $RuntimeDir '.broker-made'
 $ExtrasImageDigest = $env:T_EXTRAS
+$JhtHome = $env:T_JHT_HOME
 function Test-ProtectedRuntimeNode {
   param([string]$Path, [switch]$Directory)
   $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
@@ -58,6 +59,7 @@ function Invoke-Compose {
   param([Parameter(ValueFromRemainingArguments)] $Rest)
   Add-Content -LiteralPath $env:T_LOG -Value ('COMPOSE ' + (@($Rest) -join ' '))
   if ($env:JHT_EXTRAS_IMAGE) { Add-Content -LiteralPath $env:T_LOG -Value ('EXTRAS_IMAGE ' + $env:JHT_EXTRAS_IMAGE) }
+  if ($env:JHT_EXTRAS_DIGEST) { Add-Content -LiteralPath $env:T_LOG -Value ('EXTRAS_DIGEST ' + $env:JHT_EXTRAS_DIGEST) }
   $global:LASTEXITCODE = 0
   if ($env:T_COMPOSE_FAIL -eq '1') { $global:LASTEXITCODE = 1; return }
   $words = @($Rest); $service = $words[$words.Count - 1]
@@ -110,7 +112,8 @@ def host(tmp_path):
 
 def run(host, args: list[str], **extra: str) -> subprocess.CompletedProcess:
     env = {**os.environ, "T_RUNTIME": str(host.runtime), "T_LOG": str(host.log), "T_VOLUMES": str(host.volumes),
-           "T_RUNNING": str(host.running), "T_LIBRARY": str(LIBRARY), "T_ARGS": json.dumps(args), **extra}
+           "T_RUNNING": str(host.running), "T_LIBRARY": str(LIBRARY), "T_ARGS": json.dumps(args),
+           "T_JHT_HOME": str(host.tmp / "jht-home"), **extra}
     return subprocess.run([*host.argv, "-File", str(host.script)], env=env, capture_output=True, text=True, timeout=120)
 
 
@@ -122,14 +125,13 @@ def log(host) -> str:
     return host.log.read_text(encoding="utf-8")
 
 
-def test_list_json_nothing_added_and_two_not_available_yet(host):
+def test_list_json_nothing_added_and_one_not_available_yet(host):
     result = run(host, ["list", "--json"])
     assert result.returncode == 0, result.stderr
     found = rows(result)
     assert list(found) == ["google", "telegram", "mail", "linkedin-login", "screen", "media"]
-    assert {found[i]["state"] for i in ("google", "telegram", "mail", "media")} == {"not_installed"}
-    for name in ("linkedin-login", "screen"):
-        assert found[name] == {"id": name, "state": "not_installed", "reason": "non disponibile ancora"}
+    assert {found[i]["state"] for i in ("google", "telegram", "mail", "screen", "media")} == {"not_installed"}
+    assert found["linkedin-login"] == {"id": "linkedin-login", "state": "not_installed", "reason": "non disponibile ancora"}
 
 
 def test_state_is_running_ready_error_from_the_engine(host):
@@ -173,11 +175,10 @@ def test_add_google_runs_the_fixed_text_and_a_failure_is_kept_one_line(host):
 
 
 def test_what_is_not_available_yet_is_refused_with_its_own_code(host):
-    for name in ("linkedin-login", "screen"):
-        for action in ("add", "remove"):
-            result = run(host, [action, name, "--json"])
-            assert result.returncode == 3, (name, action, result.stderr)
-            assert json.loads(result.stdout)["reason"] == "non disponibile ancora"
+    for action in ("add", "remove"):
+        result = run(host, [action, "linkedin-login", "--json"])
+        assert result.returncode == 3, (action, result.stderr)
+        assert json.loads(result.stdout)["reason"] == "non disponibile ancora"
     assert log(host) == ""
 
 
@@ -312,3 +313,40 @@ def test_remove_media_takes_the_container_and_the_image_and_never_the_folders_of
     assert f"DOCKER rmi {REF}" in lines
     assert not any(line.startswith("DOCKER volume rm") for line in lines)
     assert "restano" in json.loads(done.stdout)["reason"]
+
+
+def test_add_screen_pulls_fills_the_browser_volume_and_only_then_starts_only_the_screen_profile(host):
+    done = run(host, ["add", "screen", "--json"], T_EXTRAS=DIGEST)
+    assert done.returncode == 0, done.stdout + done.stderr
+    answer = json.loads(done.stdout)
+    assert answer["ok"] is True and answer["state"] == "running"
+    lines = log(host).splitlines()
+    populate = "COMPOSE --profile playwright run --rm --no-deps -T jht-playwright-populate"
+    start = "COMPOSE --profile screen up -d jht-screen"
+    assert lines.index(f"DOCKER pull {REF}") < lines.index(populate) < lines.index(start)
+    assert f"EXTRAS_DIGEST {DIGEST}" in lines[lines.index(populate):lines.index(start)], "the one-shot is told the digest it copies for"
+    assert not any(line.startswith("EXTRAS_DIGEST") for line in lines[lines.index(start):]), "and nobody else"
+    assert (host.tmp / "jht-home" / "live-screen").is_dir()
+
+
+def test_screen_states_running_ready_when_off_and_not_installed_after_remove(host):
+    assert rows(run(host, ["list", "--json"]))["screen"]["state"] == "not_installed"
+    run(host, ["add", "screen", "--json"], T_EXTRAS=DIGEST)
+    running = rows(run(host, ["list", "--json"]))["screen"]
+    assert running["state"] == "running" and "sola vista" in running["reason"]
+    host.running.write_text("", encoding="utf-8")
+    ready = rows(run(host, ["list", "--json"]))["screen"]
+    assert ready["state"] == "ready" and "jht screen on" in ready["reason"]
+    run(host, ["remove", "screen", "--json"], T_EXTRAS=DIGEST)
+    assert rows(run(host, ["list", "--json"]))["screen"]["state"] == "not_installed"
+
+
+def test_remove_screen_takes_the_container_and_the_image_and_purge_only_the_display_volume(host):
+    run(host, ["add", "screen", "--json"], T_EXTRAS=DIGEST)
+    host.volumes.write_text("jht_jht-x11\njht_jht-playwright\n", encoding="utf-8")
+    done = run(host, ["remove", "screen", "--purge", "--yes", "--json"], T_EXTRAS=DIGEST)
+    assert done.returncode == 0, done.stdout + done.stderr
+    lines = log(host).splitlines()
+    assert "COMPOSE --profile screen stop jht-screen" in lines and "COMPOSE --profile screen rm -f jht-screen" in lines
+    assert f"DOCKER rmi {REF}" in lines
+    assert [line for line in lines if line.startswith("DOCKER volume rm")] == ["DOCKER volume rm jht_jht-x11"]
