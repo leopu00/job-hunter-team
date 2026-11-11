@@ -279,6 +279,19 @@ def insert_position(args):
                       "Tell the Capitano in one line that your share is done, then throttle at the maximum "
                       "(jht-throttle) and wait: the Analista and the Scorer have the positions to work on.")
                 sys.exit(3)
+        # L'area del profilo: uno Scout non inserisce un annuncio onsite o ibrido in un altro paese per chi vive altrove, vuole
+        # remoto o ibrido e non ha detto di volersi trasferire (scout_area.py: solo il PROVATO, ogni dubbio e' «ok»). Misurato
+        # 11/11: 19 posizioni su 30 scartate dall'Analista per questo, ognuna con la sua ricerca, il suo INSERT e la sua analisi.
+        if first_run.is_scout(actor) or first_run.is_scout(args.found_by):
+            import scout_area
+            area = scout_area.check_position(getattr(args, 'location', None), getattr(args, 'remote_type', None))
+            if area["verdict"] == "outside":
+                _rollback_quietly(conn)
+                conn.close()
+                print(f"AREA_MISMATCH: {area['reason']}. INSERT refused: do not insert this position and do not look for more of "
+                      "the same kind (the same portal and country). Take the next candidate. If the ad is in fact "
+                      "remote, or its place is the profile's, correct --remote-type or --location and insert it again.")
+                sys.exit(4)
         # Check duplicati PRIMA dell'inserimento (bug #25 SC-05: 4 livelli)
         existing, match_type = check_duplicate(
             conn, args.url, args.company, args.title, getattr(args, 'location', None),
