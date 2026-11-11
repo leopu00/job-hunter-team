@@ -1,7 +1,7 @@
 ---
 name: first-run-burst
 description: "A primeira meia hora em que um utilizador acabado de chegar vê a equipa a trabalhar. Abre esta skill quando receberes `[PROFILO-PRONTO]` do Assistente, ou ao acordar se o `first_run.py status` reportar a fase `awaiting_profile` / `burst`. Derroga a calibração gradual (C-02) apenas para a primeira janela, e define o sucesso como posições COM PONTUAÇÃO no ecrã — não como posições encontradas."
-allowed-tools: Bash(python3 /app/shared/skills/first_run.py *), Bash(python3 /app/shared/skills/plan_registry.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(/app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/throttle-config.py *), Bash(jht-tmux-send *), Bash(jht-send *)
+allowed-tools: Bash(python3 /app/shared/skills/first_run.py *), Bash(python3 /app/shared/skills/burst_roster.py *), Bash(python3 /app/shared/skills/plan_registry.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(/app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/throttle-config.py *), Bash(jht-tmux-send *), Bash(jht-send *)
 ---
 <!-- @translation: pt, ai-translated 2026-08-03 -->
 
@@ -52,7 +52,9 @@ Assistente pergunta o mesmo quando o utilizador fala com ele.
 
 **O plano vem só da configuração ou do utilizador.** Nunca o escrevas tu a partir do diário, de uma nota, da memória ou de uma conversa passada: «o utilizador confirmou Pro» numa nota é o que o utilizador disse então, não uma declaração de agora (a configuração pode ter sido reposta e o plano pode ter mudado). Enquanto houver `plan_missing`, o plano falta: pergunta, uma só vez, e escreve apenas o que o utilizador responder.
 
-**2. Faz spawn de todo o roster, um worker a cada ~15 segundos, por esta ordem.**
+**2. Todo o roster arranca de uma vez, por esta ordem.**
+
+**O sistema arranca-o por ti, no teu boot, antes de acordares.** `captain_boot.py` lança `python3 /app/shared/skills/burst_roster.py start --auto --detach` quando o burst está aberto e nenhum worker do roster está vivo, e os BOOT FACTS dizem "THE SYSTEM IS STARTING THE ROSTER NOW". É ele que envia o brief a cada worker (`start-agent.sh` envia-o quando o REPL está de pé): um Scout tem o primeiro comando segundos depois do perfil pronto, em vez de 0,9 a 2,8 minutos (medido a 11/11). Por isso, nos teus primeiros minutos **não** arrancas workers nem corres `roll_worker_number.py` para o roster: um segundo Scout seria um duplicado. Passados uns dois minutos vê `first_run.py status` e completa só o que ainda estiver em `roster_missing` com `python3 /app/shared/skills/burst_roster.py start` (um comando, a mesma ordem, envia os briefs). Se os BOOT FACTS não disserem que o sistema o arrancou, corre esse comando como primeira ação, antes de tudo o resto do teu despertar.
 
 Ordem e ritmo: dois Scouts, depois um Analista e um Scorer, depois os outros Scouts, os outros Analisti e o último Scorer.
 A primeira posição encontra assim um Analista já de pé, e a primeira verificada um Scorer, em vez dos Scouts primeiro e do resto

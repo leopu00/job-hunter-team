@@ -2081,4 +2081,13 @@ if [ "$ROLE" = "sentinella" ]; then
   _kickoff "$SESSION" "$_msg"
 fi
 
+# Il brief di un worker numerato mandato dal sistema (burst_roster.py, primo avvio): lo manda questo script, dopo la
+# stessa attesa del REPL di ogni altro kick-off, invece di un `sleep 12` fisso scritto in un comando del Capitano.
+case "$ROLE" in
+  scout|analista|scorer)
+    if [ -n "${JHT_WORKER_BRIEF:-}" ]; then
+      _kickoff "$SESSION" "$JHT_WORKER_BRIEF"
+    fi ;;
+esac
+
 _spawn_stage="complete"
