@@ -152,16 +152,73 @@ def test_status_idle_waiting_connected_and_how_the_last_session_ended(lhost):
     assert "last_session" not in last(lrun(lhost, ["status", "--json"], T_EXIT_CODE="14"))
 
 
-def test_status_asks_the_profile_in_a_one_shot_only_when_there_is_one_and_the_image(lhost):
+def cookies(host, content: bytes = b"cookies") -> Path:
+    path = host.tmp / "jht-home" / "secrets" / "linkedin-profile" / "Default" / "Network" / "Cookies"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
+    return path
+
+
+def runs(host) -> int:
+    return log(host).count(" run --rm")
+
+
+def test_status_asks_the_profile_in_a_one_shot_only_when_there_is_a_cookie_file_and_the_image(lhost):
     profile = lhost.tmp / "jht-home" / "secrets" / "linkedin-profile"
     assert last(lrun(lhost, ["status", "--json"], T_CHECK_WORD="logged_in"))["linkedin"] == "login_required"
-    assert " run --rm" not in log(lhost)
+    assert runs(lhost) == 0
     profile.mkdir(parents=True)
+    assert last(lrun(lhost, ["status", "--json"], T_CHECK_WORD="logged_in"))["linkedin"] == "login_required" and runs(lhost) == 0  # no cookie file
+    cookies(lhost)
     lrun(lhost, ["status", "--json"], T_NO_IMAGE="1", T_CHECK_WORD="logged_in")
-    assert " run --rm" not in log(lhost)
+    assert runs(lhost) == 0
     assert last(lrun(lhost, ["status", "--json"], T_CHECK_WORD="logged_in"))["linkedin"] == "logged_in"
-    assert last(lrun(lhost, ["status", "--json"], T_CHECK_WORD="whatever; rm"))["linkedin"] == "login_required"
     assert "--no-deps -T --entrypoint python3 jht-login /app/shared/login/login_session.py check /linkedin-profile" in log(lhost)
+
+
+def test_a_word_that_is_not_in_the_closed_list_is_not_a_sign_in_and_is_not_kept(lhost):
+    cookies(lhost)
+    assert last(lrun(lhost, ["status", "--json"], T_CHECK_WORD="whatever; rm"))["linkedin"] == "login_required"
+    assert not (lhost.runtime / "linkedin-status.cache").exists()
+    lrun(lhost, ["status", "--json"], T_CHECK_WORD="whatever; rm")
+    assert runs(lhost) == 2
+
+
+def test_looking_again_and_again_costs_one_container_not_one_per_look(lhost):
+    cookies(lhost)
+    answers = [last(lrun(lhost, ["status", "--json"], T_CHECK_WORD="logged_in"))["linkedin"] for _ in range(4)]
+    assert answers == ["logged_in"] * 4 and runs(lhost) == 1
+    parts = (lhost.runtime / "linkedin-status.cache").read_text(encoding="utf-8").strip().split("|")
+    assert len(parts) == 3 and parts[0].isdigit() and parts[2] == "logged_in"
+    assert last(lrun(lhost, ["status", "--json"], T_CHECK_WORD="login_required"))["linkedin"] == "logged_in", "inside the time the kept answer is the answer"
+
+
+def test_the_one_shot_runs_again_when_the_cookie_files_change_and_when_the_entry_is_old_or_not_clean(lhost):
+    path = cookies(lhost)
+    lrun(lhost, ["status", "--json"], T_CHECK_WORD="login_required")
+    assert runs(lhost) == 1
+    path.write_bytes(b"the person signed in: more bytes")
+    assert last(lrun(lhost, ["status", "--json"], T_CHECK_WORD="logged_in"))["linkedin"] == "logged_in" and runs(lhost) == 2
+    cache = lhost.runtime / "linkedin-status.cache"
+    epoch, key, word = cache.read_text(encoding="utf-8").strip().split("|")
+    for line in (f"{int(epoch) - 400}|{key}|logged_in", f"{epoch}|{key}|logged_in; rm", f"{epoch}|other|logged_in", f"x|{key}|logged_in",
+                 f"{int(epoch) + 4000}|{key}|logged_in", f"{epoch}|{key}", f"{epoch}|{key}|logged_in|more"):
+        cache.write_text(line + "\n", encoding="utf-8")
+        before = runs(lhost)
+        assert last(lrun(lhost, ["status", "--json"], T_CHECK_WORD="login_required"))["linkedin"] == "login_required", line
+        assert runs(lhost) == before + 1, line
+
+
+def test_a_cookie_file_that_is_a_link_is_not_a_cookie_file(lhost, tmp_path):
+    folder = lhost.tmp / "jht-home" / "secrets" / "linkedin-profile" / "Default" / "Network"
+    folder.mkdir(parents=True)
+    target = tmp_path / "somewhere"
+    target.write_bytes(b"x")
+    try:
+        (folder / "Cookies").symlink_to(target)
+    except OSError:
+        pytest.skip("this machine does not let the test make a symbolic link")
+    assert last(lrun(lhost, ["status", "--json"], T_CHECK_WORD="logged_in"))["linkedin"] == "login_required" and runs(lhost) == 0
 
 
 @pytest.mark.parametrize("args", [[], ["login", "now"], ["status"], ["logout"], ["login", "--stop", "now"]])

@@ -24,3 +24,30 @@ function Invoke-Timed {
   "$Name`t$([Math]::Round($clock.Elapsed.TotalSeconds, 1))`t$code" | Out-File -FilePath $env:TIMES -Append -Encoding ascii
   return $code
 }
+
+
+# What `jht uninstall --purge` must leave nowhere: the names of the things still there, none when it is clean.
+# The Podman machine is looked for by name and by its WSL distribution; the startup task by the product's name.
+function Get-JhtLeftovers {
+  $left = New-Object 'System.Collections.Generic.List[string]'
+  $runtime = Join-Path $env:LOCALAPPDATA 'Job Hunter Team'
+  if (Test-Path -LiteralPath $runtime) { $left.Add("folder $runtime") }
+  $bin = Join-Path $env:USERPROFILE '.local\bin'
+  foreach ($name in 'jht.ps1', 'jht.cmd', 'shim', 'windows-private-acl.ps1', 'podman-machine-bridge.ps1', 'docker.exe') {
+    $path = Join-Path $bin $name
+    if (Test-Path -LiteralPath $path) { $left.Add("command $path") }
+  }
+  foreach ($data in (Join-Path $env:USERPROFILE '.jht'), (Join-Path $env:USERPROFILE 'Documents\Job Hunter Team')) {
+    if (Test-Path -LiteralPath $data) { $left.Add("data folder $data") }
+  }
+  $podman = Get-Command podman.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($podman) {
+    $machines = @(& $podman.Source machine list --format '{{.Name}}' 2>$null | Where-Object { "$_" -match 'jht' })
+    foreach ($machine in $machines) { $left.Add("podman machine $machine") }
+  }
+  $distros = @(& wsl.exe --list --quiet 2>$null | ForEach-Object { ("$_" -replace "`0", '').Trim() } | Where-Object { $_ -match 'jht' })
+  foreach ($distro in $distros) { $left.Add("WSL distribution $distro") }
+  $tasks = @(Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.TaskName -like '*Job Hunter*' -or $_.TaskName -like '*jht*' })
+  foreach ($task in $tasks) { $left.Add("scheduled task $($task.TaskName)") }
+  return $left.ToArray()
+}

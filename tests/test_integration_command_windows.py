@@ -16,7 +16,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from windows_native_fakes import install_fake, powershell_argv
+from windows_native_fakes import WINDOWS, git_bash, install_fake, powershell_argv
 
 ROOT = Path(__file__).resolve().parent.parent
 LIBRARY = ROOT / "scripts" / "jht-integration.ps1"
@@ -95,6 +95,16 @@ function Invoke-Compose {
       $global:LASTEXITCODE = 1; return
     }
   }
+  # the copy of the browser (`run`) that finds its connection gone, the same way
+  if ($env:T_RUN_FAILS -and ($words -contains 'run')) {
+    $seen = Get-Content -LiteralPath $env:T_RUN_COUNTER -ErrorAction SilentlyContinue | Select-Object -First 1
+    $tries = 1 + $(if ($seen) { [int]$seen } else { 0 })
+    Set-Content -LiteralPath $env:T_RUN_COUNTER -Value $tries
+    if ($tries -le [int]$env:T_RUN_FAILS) {
+      [Console]::Error.WriteLine('Error: get machine connection URI: could not find a matching machine for connection "ssh://user@127.0.0.1:49649/run/user/1000/podman/podman.sock"')
+      $global:LASTEXITCODE = 1; return
+    }
+  }
   $running = @(Get-Content -LiteralPath $env:T_RUNNING)
   if ($words -contains 'up') { $running += $service }
   if ($words -contains 'stop') { $running = @($running | Where-Object { $_ -ne $service }) }
@@ -115,6 +125,7 @@ function docker {
 }
 . $env:T_LIBRARY
 $IntegrationRetryWaitSeconds = 0
+if ($env:T_SLOW) { $IntegrationSlowSeconds = [int]$env:T_SLOW }
 # Windows PowerShell 5.1 hands an array over as ONE object; the pipeline makes it the elements, as 7 does
 $argv = @(ConvertFrom-Json -InputObject $env:T_ARGS | ForEach-Object { $_ })
 $done = @(Invoke-IntegrationCommand ([string[]]$argv))
@@ -148,7 +159,10 @@ def host(tmp_path):
 
 
 def run(host, args: list[str], **extra: str) -> subprocess.CompletedProcess:
-    env = {**os.environ, "T_RUNTIME": str(host.runtime), "T_LOG": str(host.log), "T_VOLUMES": str(host.volumes),
+    # On Windows the fake podman.exe is a launcher that starts its .sh with the bash named by JHT_FAKE_BASH: without it the launcher has no file to start
+    # and the engine question of the state in the log answers an error of .NET instead of the connections the test gives it.
+    fake_bash = {"JHT_FAKE_BASH": str(git_bash())} if WINDOWS else {}
+    env = {**os.environ, **fake_bash, "T_RUNTIME": str(host.runtime), "T_LOG": str(host.log), "T_VOLUMES": str(host.volumes),
            "T_RUNNING": str(host.running), "T_LIBRARY": str(LIBRARY), "T_ARGS": json.dumps(args),
            "T_JHT_HOME": str(host.tmp / "jht-home"), "PATH": f"{host.bin}{os.pathsep}{os.environ['PATH']}", **extra}
     return subprocess.run([*host.argv, "-File", str(host.script)], env=env, capture_output=True, text=True, timeout=120)
@@ -449,14 +463,73 @@ def test_a_first_up_that_loses_the_podman_connection_leaves_the_state_in_the_log
     assert "work-server" not in text and "buildhost" not in text
 
 
-def test_a_second_failure_ends_the_command_and_says_where_the_state_is(host):
+def test_a_failure_that_lasts_all_the_tries_ends_the_command_and_says_where_the_state_is(host):
     rt_log = host.tmp / "logs" / "runtime.log"
-    done = run(host, ["add", "screen", "--json"], T_EXTRAS=DIGEST, T_RUNTIME_KIND="podman", T_UP_FAILS="2", T_UP_COUNTER=str(host.tmp / "ups"),
+    done = run(host, ["add", "screen", "--json"], T_EXTRAS=DIGEST, T_RUNTIME_KIND="podman", T_UP_FAILS="3", T_UP_COUNTER=str(host.tmp / "ups"),
                T_RT_LOG=str(rt_log))
     assert done.returncode == 1
     assert json.loads(done.stdout)["reason"] == "il container dello schermo non parte"
     assert str(rt_log) in done.stderr
-    assert "integration_engine_retried: tool=screen exit=1" in rt_log.read_text(encoding="utf-8")
+    text = rt_log.read_text(encoding="utf-8")
+    assert "integration_engine_retried: tool=screen exit=1" in text and "tries=3" in text
+    # three tries and no more
+    assert log(host).count("COMPOSE --profile screen up -d jht-screen") == 3
+
+
+@pytest.mark.parametrize("tool", ["screen", "media"])
+def test_a_connection_that_is_lost_twice_in_a_row_is_found_again_at_the_third_try(host, tool):
+    # Podman answers «could not find a matching machine» when the question of the state of the machine fails, and that happens while the machine
+    # is busy with the pull and the copy of the browser: one more try after 5 s was not always enough
+    rt_log = host.tmp / "logs" / "runtime.log"
+    done = run(host, ["add", tool, "--json"], T_EXTRAS=DIGEST, T_RUNTIME_KIND="podman", T_UP_FAILS="2", T_UP_COUNTER=str(host.tmp / "ups"),
+               T_RT_LOG=str(rt_log))
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert json.loads(done.stdout)["state"] == "running"
+    assert log(host).count(f"COMPOSE --profile {tool} up -d jht-{tool}") == 3
+    text = rt_log.read_text(encoding="utf-8")
+    assert f"integration_engine_retried: tool={tool} exit=0" in text and "tries=3" in text
+    # the state of the engine is written once, at the first failure
+    assert text.count("integration_engine_failed") == 1
+
+
+def test_the_copy_of_the_browser_that_loses_the_connection_is_tried_again_like_the_start(host):
+    rt_log = host.tmp / "logs" / "runtime.log"
+    done = run(host, ["add", "screen", "--json"], T_EXTRAS=DIGEST, T_RUNTIME_KIND="podman", T_RUN_FAILS="1", T_RUN_COUNTER=str(host.tmp / "runs"),
+               T_RT_LOG=str(rt_log))
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert json.loads(done.stdout)["state"] == "running"
+    assert log(host).count("COMPOSE --profile playwright run --rm --no-deps -T jht-playwright-populate") == 2
+    assert "integration_engine_failed: tool=screen-browser exit=1" in rt_log.read_text(encoding="utf-8")
+    # the start is not tried more than once: it did not fail
+    assert log(host).count("up -d jht-screen") == 1
+
+
+def test_a_copy_of_the_browser_that_fails_every_time_ends_with_its_own_reason(host):
+    done = run(host, ["add", "screen", "--json"], T_EXTRAS=DIGEST, T_RUNTIME_KIND="podman", T_RUN_FAILS="3", T_RUN_COUNTER=str(host.tmp / "runs"),
+               T_RT_LOG=str(host.tmp / "logs" / "runtime.log"))
+    assert done.returncode == 1
+    assert json.loads(done.stdout)["reason"] == "il browser del closer non si copia nel volume"
+    assert "up -d" not in log(host)
+
+
+@pytest.mark.parametrize("tool", ["screen", "media"])
+def test_a_slow_start_writes_where_the_time_went(host, tool):
+    rt_log = host.tmp / "logs" / "runtime.log"
+    done = run(host, ["add", tool, "--json"], T_EXTRAS=DIGEST, T_RUNTIME_KIND="podman", T_RT_LOG=str(rt_log), T_SLOW="0")
+    assert done.returncode == 0, done.stdout + done.stderr
+    text = rt_log.read_text(encoding="utf-8")
+    assert f"integration_engine_slow: tool={tool} exit=0" in text
+    assert re.search(r"total=\d+s", text) and re.search(r"pull=\d+s", text) and re.search(r"up=\d+s", text)
+    assert ("browser=" in text) == (tool == "screen")
+    # only a time, no state of the engine, and no engine asked
+    assert "connection_used" not in text and "PODMAN" not in log(host)
+
+
+def test_a_slow_start_with_another_engine_writes_nothing(host):
+    rt_log = host.tmp / "logs" / "runtime.log"
+    done = run(host, ["add", "screen", "--json"], T_EXTRAS=DIGEST, T_RT_LOG=str(rt_log), T_SLOW="0")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert not rt_log.exists()
 
 
 def test_a_good_first_up_writes_nothing_and_asks_the_engine_nothing(host):

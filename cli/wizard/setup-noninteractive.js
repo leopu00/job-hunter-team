@@ -26,6 +26,7 @@ import { checkPiApiKey, rejectedKeyMessage } from '../../shared/runtime/provider
 import { t, LANGUAGES, hasLanguageChoice, systemLanguage, saveLanguage } from './i18n.js';
 import { summarizeRoleModels } from './setup-models.js';
 import { AGENT_HARNESSES, DEFAULT_HARNESS } from '../../shared/runtime/agent-harness.js';
+import { piApiProvider } from '../../shared/runtime/provider-models.js';
 import { harnessRefusal } from './setup-harness.js';
 import { KEY_REFUSED_EXIT_CODE } from '../src/commands/providers-key-check.js';
 import { API_KEY_MAX_BYTES, firstLine, isLauncherSafePath, keyShapeProblem, keyStoreDir, readKeyFromStream, storeApiKey } from './key-store.js';
@@ -292,9 +293,11 @@ function readApiKeyFile(file) {
  */
 export function sameTeamConfig(previous, providerName, harness) {
   if (!previous || typeof previous !== 'object' || Array.isArray(previous)) return null;
-  if (previous.active_provider !== providerName) return null;
+  // «moonshot» is Moonshot's own name for kimi: an old or hand-written config may carry it, and it is the same team
+  const name = typeof previous.active_provider === 'string' ? (piApiProvider(previous.active_provider) ?? previous.active_provider) : null;
+  if (name !== providerName) return null;
   if ((previous.harness ?? DEFAULT_HARNESS) !== harness) return null;
-  const entry = previous.providers?.[providerName];
+  const entry = previous.providers?.[previous.active_provider];
   return entry && typeof entry === 'object' && !Array.isArray(entry) ? previous : null;
 }
 
@@ -313,12 +316,14 @@ function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, 
   let config;
   if (previous) {
     // the entry of the provider keeps its fields (the model chosen before, when none is given now) except how it signs in, which is what this setup sets
-    const { api_key: _key, api_key_ref: _ref, subscription: _subscription, ...kept } = previous.providers[providerName];
+    const { api_key: _key, api_key_ref: _ref, subscription: _subscription, ...kept } = previous.providers[previous.active_provider];
+    // the entry under its old name (moonshot) moves to the name the setup writes (kimi); the other providers' entries stay as they are
+    const { [previous.active_provider]: _old, ...others } = previous.providers;
     config = {
       ...previous,
       version: 1,
       active_provider: providerName,
-      providers: { ...previous.providers, [providerName]: { ...kept, ...providerConfig, ...(modelGiven || !kept.model ? {} : { model: kept.model }) } },
+      providers: { ...others, [providerName]: { ...kept, ...providerConfig, ...(modelGiven || !kept.model ? {} : { model: kept.model }) } },
       channels: previous.channels ?? {},
       harness,
     };

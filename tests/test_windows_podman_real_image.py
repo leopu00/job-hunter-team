@@ -60,8 +60,9 @@ def test_the_job_runs_under_windows_powershell_51_where_the_step_is_written():
     workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     assert workflow["jobs"]["real-podman"]["defaults"]["run"]["shell"] == "powershell"
     script = next(step for step in _steps() if step.get("name") == STEP)["run"]
-    # 5.1 has neither `?.` nor `-Parallel`; the step uses -UseBasicParsing on both calls (no IE engine on the runner)
-    assert "?." not in script and script.count("-UseBasicParsing") == 2
+    # 5.1 has neither `?.` nor `-Parallel`; the step uses -UseBasicParsing on all three calls (the token, the manifest of
+    # the image and the manifest of the image of the tools on request): no IE engine on the runner
+    assert "?." not in script and script.count("-UseBasicParsing") == 3
 
 
 def test_every_command_a_compose_service_starts_by_name_is_made_by_the_dockerfile():
@@ -102,3 +103,45 @@ def test_the_job_serves_every_script_install_ps1_downloads():
     # the names found above are files of the folder the step copies (a name with a typo would be a 404 again)
     missing = sorted(name for name in names if (name.endswith(".ps1") or name.endswith(".py")) and not (ROOT / name).is_file())
     assert not missing, missing
+
+
+def test_the_job_goes_from_the_install_to_the_team_the_screen_and_the_way_out_in_this_order():
+    """The round after the install (T-round of a person): setup with a key from a file, the team, the live screen, the
+    counter-check, and the uninstall that leaves nothing. Each step must be there, in this order, and the installs must
+    be on the test channel with the image of the tools on request (without it `jht screen on` is «non disponibile ancora»)."""
+    steps = _steps()
+    names = _names(steps)
+    order = [
+        "Install (first",
+        "Start the container (jht up)",
+        "Install again over the running container",
+        "Setup with a made-up key from a file, then the team",
+        "The live screen on and off",
+        "Counter-check",
+        "Uninstall (--purge) and check that nothing is left",
+        "Times",
+    ]
+    positions = [next(index for index, name in enumerate(names) if name.startswith(part)) for part in order]
+    assert positions == sorted(positions), positions
+
+    by_name = {step.get("name", ""): step for step in steps}
+    team = by_name["Setup with a made-up key from a file, then the team"]["run"]
+    for word in ("--api-key-file", "'--skip-health'", "'team', 'start', '--skip-key-check'", "'team', 'stop'"):
+        assert word in team, word
+    # the made-up key is not written in the repository: built in the step, from pieces
+    assert "'fake' + ('0' * 40)" in team
+    screen = by_name["The live screen on and off"]["run"]
+    for word in ("'screen', 'on'", "'screen', 'off'", "'screen', 'status'"):
+        assert word in screen, word
+    for install in ("Install (first, fresh machine, a user with no Documents\\Job Hunter Team)", "Install again over the running container (an app update)"):
+        run = by_name[install]["run"]
+        for word in ("'-SourceSha'", "'-Image'", "'-ExpectedImageDigest'", "'-ExtrasImageDigest'"):
+            assert word in run, (install, word)
+    out = by_name["Uninstall (--purge) and check that nothing is left"]["run"]
+    assert "'uninstall', '--confirm', '--purge'" in out and "Get-JhtLeftovers" in out
+
+    helper = (ROOT / "scripts" / "ci" / "windows_podman_real_run.ps1").read_text(encoding="utf-8")
+    assert "function Get-JhtLeftovers" in helper
+    # what it looks for is what the uninstaller removes: the machine, the runtime, the commands, the data, the task
+    for what in ("podman machine", "WSL distribution", "host-runtime", "'.local\\bin'", "Documents\\Job Hunter Team", "scheduled task"):
+        assert what.replace("host-runtime", "Job Hunter Team") in helper or what in helper, what

@@ -193,7 +193,9 @@ def test_wsl_preflight_is_hidden_actionable_and_retried_on_the_next_prepare():
     assert '"wsl_not_ready",' in contract
     assert 'assert_eq!(serialized["retryable"], true)' in contract
     prepare = onboarding[onboarding.index("pub(crate) async fn onboarding_prepare(") :]
-    assert prepare.index("let result =") < prepare.index("state.preparing.store(false")
+    # the flag is released after the run, whatever the early exits before it (a missing provider key) release themselves
+    result_at = prepare.index("let result =")
+    assert "state.preparing.store(false" in prepare[result_at:]
 
     catalog = ERROR_CATALOG.read_text(encoding="utf-8")
     wsl_copy = catalog[catalog.index("wsl_not_ready: copy(") : catalog.index("podman_not_ready: copy(")]
