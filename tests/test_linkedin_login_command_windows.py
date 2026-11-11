@@ -14,7 +14,7 @@ import pytest
 from test_integration_command_windows import CASE, DIGEST, REF, host, log  # noqa: F401
 
 TOKEN = "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_AbCdE"
-GOOD = '{"ok": true, "port": 6081, "path": "/websockify", "token": "%s", "expires_at": "2026-11-11T10:00:00Z", "session": "a1b2c3d4e5f6"}' % TOKEN
+GOOD = '{"ok": true, "port": 6081, "path": "/websockify", "expires_at": "2026-11-11T10:00:00Z", "session": "a1b2c3d4e5f6"}'
 
 # the compose and the docker of the stand-ins, for this command
 COMPOSE_FAKE = r"""function Invoke-Compose {
@@ -35,7 +35,7 @@ DOCKER_FAKE = r"""function docker {
   Add-Content -LiteralPath $env:T_LOG -Value ('DOCKER ' + ($args -join ' '))
   $global:LASTEXITCODE = 0
   if ($args[0] -eq 'exec') {
-    if ($args -contains 'grant') { if ($env:T_GRANT) { $env:T_GRANT }; return }
+    if ($args -contains 'grant') { Add-Content -LiteralPath $env:T_STDIN -Value (@($input) -join '|'); if ($env:T_GRANT) { $env:T_GRANT }; return }
     if ($args -contains 'status') { if ($env:T_VIEW_STATUS) { $env:T_VIEW_STATUS } else { '{"ok": true, "view": "waiting"}' }; return }
   }
   if ($args[0] -eq 'inspect') { if ($env:T_EXIT_CODE) { $env:T_EXIT_CODE } else { $global:LASTEXITCODE = 1 }; return }
@@ -53,12 +53,13 @@ def lhost(host):
     return host
 
 
-def lrun(host, args: list[str], **extra: str) -> subprocess.CompletedProcess:
+def lrun(host, args: list[str], stdin: str | None = TOKEN + "\n", **extra: str) -> subprocess.CompletedProcess:
+    """The app brings the token of the window on stdin: it is what `login` is given unless a test says otherwise."""
     env = {**os.environ, "T_RUNTIME": str(host.runtime), "T_LOG": str(host.log), "T_VOLUMES": str(host.volumes),
            "T_RUNNING": str(host.running), "T_LIBRARY": str(Path(host.script).parent.parent.parent / "scripts" / "jht-integration.ps1")
            if False else str(__import__("test_integration_command_windows").LIBRARY),
-           "T_ARGS": json.dumps(args), "T_JHT_HOME": str(host.tmp / "jht-home"), "T_EXTRAS": DIGEST, **extra}
-    return subprocess.run([*host.argv, "-File", str(host.script)], env=env, capture_output=True, text=True, timeout=120)
+           "T_STDIN": str(host.tmp / "grant-stdin"), "T_ARGS": json.dumps(args), "T_JHT_HOME": str(host.tmp / "jht-home"), "T_EXTRAS": DIGEST, **extra}
+    return subprocess.run([*host.argv, "-File", str(host.script)], env=env, input=stdin, capture_output=True, text=True, timeout=120)
 
 
 def last(done) -> dict:
@@ -76,11 +77,26 @@ def test_login_makes_the_profile_pulls_starts_only_the_login_profile_and_prints_
     done = lrun(lhost, ["login"], T_GRANT=GOOD)
     assert done.returncode == 0, done.stdout + done.stderr
     assert done.stdout.strip().splitlines()[-1] == GOOD
+    assert TOKEN not in done.stdout + done.stderr + log(lhost), "the token is in no output, no argument, no log"
+    assert (lhost.tmp / "grant-stdin").read_text(encoding="utf-8").strip() == TOKEN, "the view is given the token of the app, on stdin"
     assert (lhost.tmp / "jht-home" / "secrets" / "linkedin-profile").is_dir()
     lines = log(lhost).splitlines()
     up = "COMPOSE --profile login up -d jht-login-proxy jht-login-view jht-login"
     assert lines.index(f"DOCKER pull {REF}") < lines.index(up) and f"EXTRAS_IMAGE {REF}" in lines
     assert not [line for line in lines if " up -d" in line and "--profile login" not in line]
+
+
+@pytest.mark.parametrize("stdin", [None, "", "\n", "short\n", TOKEN + "x\n", TOKEN[:-1] + "!\n", "a b\n"])
+def test_without_a_well_formed_token_on_stdin_nothing_is_touched_and_the_reason_is_token_required(lhost, stdin):
+    done = lrun(lhost, ["login"], stdin=stdin, T_GRANT=GOOD)
+    assert done.returncode == 1 and last(done) == {"ok": False, "reason": "token_required"}, done.stdout + done.stderr
+    assert " up -d" not in log(lhost) and "DOCKER pull" not in log(lhost) and not (lhost.tmp / "jht-home").exists()
+
+
+def test_a_token_with_a_carriage_return_still_goes_on_clean(lhost):
+    done = lrun(lhost, ["login"], stdin=TOKEN + "\r\n", T_GRANT=GOOD)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert (lhost.tmp / "grant-stdin").read_text(encoding="utf-8").strip() == TOKEN
 
 
 def test_a_release_without_an_extras_image_touches_nothing(lhost):
@@ -116,7 +132,7 @@ def test_a_link_or_a_file_down_to_the_profile_is_refused_and_never_followed(lhos
 
 
 @pytest.mark.parametrize("line", [
-    "", "not json", '{"ok": true}', GOOD.replace(TOKEN, TOKEN[:-1]), GOOD.replace("6081", "6082"), GOOD + ', "extra": 1',
+    "", "not json", '{"ok": true}', GOOD.replace('"expires_at"', '"token": "%s", "expires_at"' % TOKEN), GOOD.replace("6081", "6082"), GOOD + ', "extra": 1',
     '{"ok": false, "reason": "something_new"}', '{"ok": false, "reason": "view_busy; rm"}',
 ])
 def test_a_line_that_is_not_exactly_the_contract_never_reaches_the_app_as_a_grant(lhost, line):

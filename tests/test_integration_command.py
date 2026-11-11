@@ -366,7 +366,9 @@ def test_the_library_takes_no_shell_path_from_the_person():
     assert not re.search(r"\b(eval|bash -c|sh -c)\b", code)
     # the docker exec are fixed texts: the Google one, and the two questions to the view of the login, on the id the wrapper attested
     assert len(re.findall(r"docker exec", code)) == 3 and '"$INTEGRATION_GOOGLE_CODE"' in code
-    assert re.findall(r'docker exec "\$id" python3 /app/shared/login/login_view\.py (grant|status)\b', code) == ["grant", "status"]
+    assert re.findall(r'docker exec (?:-i )?"\$id" python3 /app/shared/login/login_view\.py (grant|status)\b', code) == ["grant", "status"]
+    # the token of the window goes IN, on stdin, to `grant` only: never in an argument, and `status` has no stdin to give
+    assert re.search(r"""printf '%s\\n' "\$token" \| docker exec -i "\$id" python3 /app/shared/login/login_view\.py grant\b""", code)
 
 
 def test_add_google_without_credentials_says_added_and_what_is_missing_not_ready(host):

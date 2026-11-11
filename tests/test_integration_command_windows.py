@@ -310,7 +310,7 @@ def test_the_library_passes_nothing_the_person_typed_to_a_native_command():
     # the docker exec are fixed texts: the Google one, and the two questions to the view of the login, on the id the wrapper attested
     execs = re.findall(r"docker exec[^\n]*", code)
     assert len(execs) == 3 and sum("$IntegrationGoogleCode" in e for e in execs) == 1
-    assert sum(bool(re.search(r"docker exec \$id python3 /app/shared/login/login_view\.py (grant|status) 2>\$null", e)) for e in execs) == 2
+    assert sum(bool(re.search(r"docker exec (?:-i )?\$id python3 /app/shared/login/login_view\.py (grant|status) 2>\$null", e)) for e in execs) == 2
 
 
 # ---- media: the extras image by the digest the wrapper carries, then the `media` profile ----

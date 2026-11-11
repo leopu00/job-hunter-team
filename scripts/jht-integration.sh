@@ -440,7 +440,7 @@ LOGIN_SERVICE="jht-login"
 LOGIN_PROXY_SERVICE="jht-login-proxy"
 LOGIN_VIEW_SERVICE="jht-login-view"
 LOGIN_SERVICES="$LOGIN_PROXY_SERVICE $LOGIN_VIEW_SERVICE $LOGIN_SERVICE"
-LINKEDIN_REASONS="view_busy view_unavailable login_timeout token_expired chromium_sandbox_unavailable"
+LINKEDIN_REASONS="view_busy view_unavailable login_timeout token_expired chromium_sandbox_unavailable token_required"
 
 # On Docker (Linux, Colima, Docker Desktop) the browser of the sign-in runs under a seccomp profile of ours: the default profile of Docker plus
 # the user, pid and net namespaces the sandbox of Chromium makes (shared/login/seccomp/, tests/test_login_seccomp_profile.py). The default
@@ -513,7 +513,7 @@ linkedin_profile_make() {
 linkedin_fail() { printf '{"ok": false, "reason": "%s"}\n' "$1"; }
 
 linkedin_grant_line_ok() {
-  printf '%s' "$1" | grep -Eq '^\{"ok": true, "port": 6081, "path": "/websockify", "token": "[A-Za-z0-9_-]{43}", "expires_at": "[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z", "session": "[0-9a-f]{1,32}"\}$'
+  printf '%s' "$1" | grep -Eq '^\{"ok": true, "port": 6081, "path": "/websockify", "expires_at": "[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z", "session": "[0-9a-f]{1,32}"\}$'
 }
 
 # The reason of a failure line of the view, from the closed list, or nothing.
@@ -540,8 +540,21 @@ linkedin_remove_all() {
   return $rc
 }
 
+# The token of the window is made by whoever opens it (the desktop app) and comes on the standard input, one line of 43 characters of
+# base64url; it goes on, the same way, to the view, and no output of this command ever holds it. A terminal (nobody to pipe it) or a
+# line that is not a token is `token_required`, before anything else is touched.
+LINKEDIN_TOKEN_PATTERN='^[A-Za-z0-9_-]{43}$'
+linkedin_read_token() {
+  local token=""
+  [ ! -t 0 ] || return 1
+  token="$(head -c 200 2>/dev/null | head -n 1 | tr -d '\r')" || return 1
+  printf '%s' "$token" | grep -Eq "$LINKEDIN_TOKEN_PATTERN" || return 1
+  printf '%s' "$token"
+}
+
 linkedin_login() {
-  local ref line reason id tries
+  local ref line reason id tries token
+  token="$(linkedin_read_token)" || { err "il token della finestra arriva dall'app, sullo standard input"; linkedin_fail token_required; return 1; }
   docker_reachable || { err "il motore dei container non risponde"; linkedin_fail view_unavailable; return 1; }
   ref="$(integration_extras_ref)"
   [ -n "$ref" ] || { err "non disponibile ancora"; linkedin_fail view_unavailable; return 1; }
@@ -563,7 +576,7 @@ linkedin_login() {
     id="$(read_only_service_id "$LOGIN_VIEW_SERVICE" 2>/dev/null)" || id=""
     line=""
     if [ -n "$id" ]; then
-      line="$(docker exec "$id" python3 /app/shared/login/login_view.py grant 2>/dev/null | tail -n 1)" || line=""
+      line="$(printf '%s\n' "$token" | docker exec -i "$id" python3 /app/shared/login/login_view.py grant 2>/dev/null | tail -n 1)" || line=""
     fi
     if linkedin_grant_line_ok "$line"; then printf '%s\n' "$line"; return 0; fi
     reason="$(linkedin_reason_of "$line")"

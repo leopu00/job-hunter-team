@@ -4,6 +4,7 @@ fixed answer for anything else; the exit code that says how the session ended. A
 from __future__ import annotations
 
 import asyncio
+import io
 import base64
 import hashlib
 import importlib.util
@@ -60,6 +61,7 @@ class Rig:
         self.monkeypatch = monkeypatch
         self.exit_code: int | None = None
         self.clock = [0.0]
+        self.token = lv.new_token()  # what the app brings: the view never makes the token it hands over
 
     async def start(self):
         if self.make_vnc:
@@ -92,13 +94,21 @@ class Rig:
         if self.make_vnc:
             self.vnc_server.close()
 
-    async def ctl(self, word: str) -> dict:
+    async def ctl_raw(self, line: str) -> dict:
         reader, writer = await asyncio.open_unix_connection(self.control)
-        writer.write((word + "\n").encode())
+        writer.write((line + "\n").encode())
         await writer.drain()
-        line = await reader.readline()
+        answer = await reader.readline()
         writer.close()
-        return json.loads(line)
+        return json.loads(answer)
+
+    async def ctl(self, word: str) -> dict:
+        """`grant` brings the token of the rig; the answer of the view has none, so the rig adds it for the tests that connect with it."""
+        if word != "grant":
+            return await self.ctl_raw(word)
+        answer = await self.ctl_raw("grant " + self.token)
+        assert "token" not in answer, "the answer of the view must never hold the token"
+        return {**answer, "token": self.token} if answer.get("ok") else answer
 
     async def raw(self, request: bytes):
         reader, writer = await asyncio.open_connection("127.0.0.1", self.port)
@@ -155,9 +165,44 @@ def test_the_grant_is_the_line_the_app_reads_and_is_handed_out_once(monkeypatch)
         return first, second
     first, second = case(monkeypatch, body)
     assert first["ok"] is True and first["port"] == 6081 and first["path"] == "/websockify"
-    assert re.fullmatch(r"[A-Za-z0-9_-]{43}", first["token"]) and re.fullmatch(r"[0-9a-f]{1,32}", first["session"])
+    assert re.fullmatch(r"[0-9a-f]{1,32}", first["session"])
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", first["expires_at"])
     assert second == {"ok": False, "reason": "view_busy"}
+
+
+def test_the_answer_of_the_grant_holds_no_token_and_the_one_brought_is_the_one_that_opens(monkeypatch):
+    async def body(rig):
+        raw = await rig.ctl_raw("grant " + rig.token)
+        reader, writer = await rig.raw(rig.upgrade(rig.token))
+        status = await status_line(reader)
+        writer.close()
+        return raw, status
+    raw, status = case(monkeypatch, body)
+    assert raw["ok"] is True and set(raw) == {"ok", "port", "path", "expires_at", "session"}
+    assert " 101 " in status
+
+
+def test_the_token_the_view_made_for_itself_opens_nothing(monkeypatch):
+    """Until a grant brings a token the only one is a random one nobody has seen; once the app's is in, only that one works."""
+    async def body(rig):
+        mine = lv.new_token()
+        await rig.ctl_raw("grant " + mine)
+        reader, writer = await rig.raw(rig.upgrade(lv.new_token()))
+        refused = await status_line(reader)
+        writer.close()
+        return refused
+    assert " 101 " not in case(monkeypatch, body)
+
+
+@pytest.mark.parametrize("line", ["grant", "grant ", "grant short", "grant " + "a" * 44, "grant " + "a" * 42 + "!", "grant a b", "grant " + "a" * 43 + " extra"])
+def test_a_grant_without_a_well_formed_token_is_refused_and_does_not_use_the_view_up(monkeypatch, line):
+    async def body(rig):
+        refused = await rig.ctl_raw(line)
+        later = await rig.ctl("grant")
+        return refused, later
+    refused, later = case(monkeypatch, body)
+    assert refused == {"ok": False, "reason": "token_required"}
+    assert later["ok"] is True
 
 
 def test_the_token_is_never_the_same_twice_and_has_256_bits():
@@ -430,9 +475,27 @@ def test_the_control_socket_is_private(monkeypatch):
 
 
 def test_the_docker_exec_side_prints_the_answer_and_says_unavailable_when_nobody_listens(tmp_path, capsys):
-    assert lv.ask("grant", str(tmp_path / "none.sock")) == 1
-    assert json.loads(capsys.readouterr().out) == {"ok": False, "reason": "view_unavailable"}
+    token = lv.new_token()
+    assert lv.ask("grant", str(tmp_path / "none.sock"), io.StringIO(token + "\n")) == 1
+    out = capsys.readouterr().out
+    assert json.loads(out) == {"ok": False, "reason": "view_unavailable"} and token not in out
     assert lv.main(["frobnicate"]) == 2 and lv.main([]) == 2
+
+
+@pytest.mark.parametrize("text", ["", "\n", "short\n", "a" * 44 + "\n", "a" * 42 + "!\n"])
+def test_the_docker_exec_side_asks_nothing_without_a_well_formed_token_on_its_stdin(tmp_path, capsys, text):
+    assert lv.ask("grant", str(tmp_path / "none.sock"), io.StringIO(text)) == 1
+    assert json.loads(capsys.readouterr().out) == {"ok": False, "reason": "token_required"}
+
+
+def test_the_docker_exec_side_never_prints_the_token_it_carries(monkeypatch, tmp_path, capsys):
+    async def body(rig):
+        token = lv.new_token()
+        done = await asyncio.to_thread(lv.ask, "grant", rig.control, io.StringIO(token + "\n"))
+        return token, done
+    token, done = case(monkeypatch, body)
+    out = capsys.readouterr().out
+    assert done == 0 and json.loads(out)["ok"] is True and token not in out
 
 
 def test_the_frame_helper_writes_the_three_sizes_unmasked():
