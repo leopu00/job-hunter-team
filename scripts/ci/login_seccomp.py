@@ -8,7 +8,8 @@ CAP_SYS_ADMIN (clone and unshare with CLONE_NEWUSER fail with EPERM), so on Dock
 container, never `seccomp=unconfined`.
 
 What. shared/login/seccomp/moby-default.json is the file `seccomp/default.json` of github.com/moby/profiles at the commit named below, byte for
-byte. shared/login/seccomp/jht-login.json is that file with one rule appended to `syscalls`:
+byte. shared/login/seccomp/jht-login.json is that file with one rule appended to `syscalls` (the file is rewritten by json.dumps with indent 2, so the comparison with the default is by content, not by lines;
+`login_seccomp.py diff` prints it):
 
     clone, unshare   ALLOW  when  flags & (CLONE_NEWNS | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWCGROUP) == 0     (not on s390/s390x)
 
@@ -18,7 +19,9 @@ a mount, uts, ipc or cgroup namespace is still refused; setns, mount, umount2, p
 CAP_SYS_ADMIN stay refused; clone3 keeps answering ENOSYS (glibc and Chromium fall back to clone).
 
 Cost, to be said where this is used: a user namespace inside the container gives a process in it capabilities over that namespace, which widens
-what of the host's kernel it can reach (that is why Docker refuses it by default). The container has no network, a read-only root, no capability
+what of the host's kernel it can reach, and with the net namespace it has CAP_NET_ADMIN over its own network namespace (Docker does not filter
+AF_NETLINK): that is the cost of the user, pid and net namespaces, and why Docker refuses them by default. The net namespace cannot be left out: with
+the flag refused the browser does not start (measured on Docker 29 on Colima, mask 0x4E020000). The container has no network, a read-only root, no capability
 beyond SYS_CHROOT, no-new-privileges and a user that is not root; the browser's own sandbox is what the namespaces are for.
 
     login_seccomp.py build      writes jht-login.json from moby-default.json (the test fails when the committed file is not exactly that)
