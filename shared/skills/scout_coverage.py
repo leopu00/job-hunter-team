@@ -300,12 +300,17 @@ def status(plan: dict, rows: list, need: dict | None = None, now: float | None =
     return out
 
 
-def next_step(plan: dict, rows: list, need: dict | None = None, profile=None, now: float | None = None) -> dict:
+def next_step(plan: dict, rows: list, need: dict | None = None, profile=None, now: float | None = None, lane=None) -> dict:
+    """The next thing to search. `lane` (a set of portal keys: the Scout's own sources of the burst, see `lanes`) puts the portals
+    of that lane first, in the plan's order; the rest of the plan follows, so a Scout whose lane is done goes on to what is left."""
     need = need or needed()
     now = time.time() if now is None else now
     data = table()
     paused = []
-    for entry in plan["entries"]:
+    entries = plan["entries"]
+    if lane:
+        entries = [e for e in entries if lane & entry_keys(e)] + [e for e in entries if not lane & entry_keys(e)]
+    for entry in entries:
         numbers = measure(entry, rows, need, now)
         if numbers["state"] in DONE_STATES:
             continue
@@ -347,6 +352,31 @@ def next_step(plan: dict, rows: list, need: dict | None = None, profile=None, no
 
 
 AVOID_MAX = 12
+ATS_FAMILIES = ("greenhouse", "lever", "ashby")      # the public company-board APIs ats_board_search.py reads
+SHARED_CAP_SOURCES = ("linkedin",)                   # one shared request cap for the whole team: one Scout holds it
+
+
+def lanes(plan: dict, count: int) -> list:
+    """The partition of a burst of `count` Scouts, decided by the plan and not negotiated: `[{"lane", "areas", "sources"}]`, one
+    per Scout, no source in two of them. The sources are the plan's own (a search a Scout reads; not the email ones, not the
+    closed ones), in the plan's order. LinkedIn, which has one request cap for the whole team, is lane 0's alone; the others are
+    dealt round robin from lane 1, so every lane gets core portals first; the company-board APIs (Greenhouse, Lever, Ashby) are
+    the last lane's when there are three Scouts or more. Same plan and same count: same lanes, whoever asks. Measured 11/11: the
+    Scouts spent their first 3.5 minutes agreeing on exactly this by message."""
+    count = max(1, int(count))
+    slugs = []
+    for entry in plan["entries"]:
+        if entry["access"] == "search" and entry["slug"] not in slugs:
+            slugs.append(entry["slug"])
+    out = [{"lane": k, "areas": "1,2", "sources": []} for k in range(count)]
+    out[0]["sources"].extend(slug for slug in slugs if slug in SHARED_CAP_SOURCES)
+    others = [slug for slug in slugs if slug not in SHARED_CAP_SOURCES]
+    order = list(range(1, count)) or [0]
+    for number, slug in enumerate(others):
+        out[order[number % len(order)]]["sources"].append(slug)
+    if count >= 3:
+        out[-1]["sources"].extend(family for family in ATS_FAMILIES if family not in out[-1]["sources"])
+    return out
 
 
 def avoid_list(plan: dict, rows: list, data: dict | None = None) -> list:
@@ -378,6 +408,18 @@ def avoid_list(plan: dict, rows: list, data: dict | None = None) -> list:
             seen.add(key)
             out.append({"source": key, "why": "closed or blocked on this run"})
     return out[:AVOID_MAX]
+
+
+def lane_of(agent):
+    """The portal keys of `agent`'s lane of the burst (scout_coord.py auto), or None: no lane, or it cannot be read."""
+    if not agent:
+        return None
+    try:
+        import scout_coord
+        fonti = scout_coord.lane_sources(agent.strip().lower())
+        return frozenset(_lang.portal_slug(f) for f in fonti) if fonti else None
+    except Exception:  # noqa: BLE001 — a lane that cannot be read is no lane: the plan's own order
+        return None
 
 
 def profile_news(agent: str, profile_path=None) -> dict:
@@ -467,7 +509,7 @@ def main(argv=None) -> int:
         else:
             print(render(plan, report))
         return 0
-    step = next_step(plan, rows, profile=args.profile, now=now)
+    step = next_step(plan, rows, profile=args.profile, now=now, lane=lane_of(args.agent))
     avoid = avoid_list(plan, rows)
     if avoid:
         step["avoid"] = avoid          # do not open these: they fail with certainty (the table, or this run's own pass log)

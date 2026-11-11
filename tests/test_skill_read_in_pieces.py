@@ -19,7 +19,8 @@ MUST_BE_IN_THE_FIRST_PART = {
     "scout-coord": ("scout_coord.py doctor", "scout_coord.py reset", "scout_coord.py assign", "scout_coord.py show", "jht-tmux-send"),
     "circles-and-sources": ("candidate_profile.yml", "work_mode", "relocation", "senior"),
 }
-MAX_FIRST_PART_BYTES = {"scout-coord": 5300, "circles-and-sources": 10700}
+# scout-coord: +100 for Step 1 of the first burst (`scout_coord.py auto`, the plan splits the work, no negotiation)
+MAX_FIRST_PART_BYTES = {"scout-coord": 5400, "circles-and-sources": 10700}
 
 
 def _parts(skill: str, suffix: str):
