@@ -28,6 +28,7 @@ export default {
   "observation.blocked_key_fix": "Dagli la chiave giusta: jht setup --non-interactive --provider {name} --harness pi --api-key-file <file> (oppure passa la chiave da pipe con --api-key-stdin), poi riavvia la squadra: jht team stop, jht team start.",
   "observation.blocked_login": "{id} è bloccato: {provider} ha rifiutato l'accesso (scaduto o revocato).",
   "observation.blocked_login_fix": "Accedi di nuovo con: jht setup",
+  "observation.chat_blocked_see": "Nessuno risponderà finché non è sistemato. Cosa sta facendo ogni agente: jht agents.",
   "observation.the_provider": "il fornitore",
   "observation.blocked_limit": "{id} è bloccato: il fornitore ha raggiunto il limite d'uso; riprende quando il limite si libera.",
   "observation.blocked_network": "{id} è bloccato: il fornitore non è raggiungibile (rete o proxy). Controlla la connessione.",

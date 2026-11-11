@@ -44,9 +44,9 @@ function fixture({ workSeconds = 0 } = {}) {
 }
 
 /** Runs the chat REPL; `script` is [delayMs, text] pairs written to its stdin. Resolves with what it printed and sent. */
-function runChat(script, work) {
+function runChat(script, work, chatOptions = '{}') {
   const { bin, home, sent } = fixture(work);
-  const code = `import { chatAction } from '${CHAT}'; await chatAction('assistente', {});`;
+  const code = `import { chatAction } from '${CHAT}'; await chatAction('assistente', ${chatOptions});`;
   const child = spawn(process.execPath, ['--input-type=module', '-e', code], {
     env: { PATH: `${bin}:/usr/bin:/bin`, HOME: home, JHT_HOME: home, NO_COLOR: '1' },
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -78,3 +78,26 @@ test('lines typed while the agent is at work wait for it and are delivered, with
   assert.deepEqual(r.sent, ['one', 'two', 'three'], r.out);
   assert.match(r.out, /still answering/, 'the person is told their line is waiting');
 });
+
+// A blocked agent (giro Mac 2 of 8e41de34f, 11/11): the chat says why and where to fix it instead of «no reply yet».
+const blockedOptions = `{ blockedNotice: {
+  provider: { name: 'glm', label: 'GLM (Z.ai)', apiKey: true }, width: 200,
+  read: () => ({ agents: [{ id: 'assistente', session: 'ASSISTENTE', running: true, state: 'bloccato', reason: 'accesso_scaduto' }] }),
+} }`;
+const plain = (text) => text.replace(/\x1b\[[0-9;]*m/g, '').replace(/\s+/g, ' ');
+
+test('a blocked agent: the chat says why, the command, and jht agents; never a bare «no reply yet»', async () => {
+  const r = await runChat([[300, 'hello'], [500, '/read'], [500, '/exit']], {}, blockedOptions);
+  const out = plain(r.out);
+  assert.match(out, /assistente is blocked: GLM \(Z\.ai\) rejected the API key/, r.out);
+  assert.match(out, /jht setup --non-interactive --provider glm --harness pi --api-key-file <file>/);
+  assert.match(out, /Nobody will answer until that is fixed\. What every agent is doing: jht agents\./);
+  assert.doesNotMatch(out, /no reply yet|no new messages/);
+}, { timeout: 60_000 });
+
+test('an agent that is not blocked keeps the old words', async () => {
+  const notBlocked = `{ blockedNotice: { read: () => ({ agents: [{ id: 'assistente', session: 'JHT-ASSISTENTE', running: true, state: 'attivo', reason: null }] }) } }`;
+  const r = await runChat([[300, '/read'], [300, '/exit']], {}, notBlocked);
+  assert.match(r.out, /no new messages/);
+  assert.doesNotMatch(r.out, /is blocked/);
+}, { timeout: 60_000 });
