@@ -208,6 +208,16 @@ function Get-IntegrationExtrasRef {
   return ''
 }
 
+# The folder of the viewer password of the live screen, and whether what is there is fit to be mounted: nothing, or a plain folder,
+# never a link (a symlink, a junction: anything with a reparse point).
+function Get-IntegrationScreenFolder { return (Join-Path $JhtHome 'live-screen') }
+function Test-IntegrationScreenFolder {
+  $item = Get-Item -LiteralPath (Get-IntegrationScreenFolder) -Force -ErrorAction SilentlyContinue
+  if ($null -eq $item) { return $true }
+  if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or $item.LinkType) { return $false }
+  return [bool]$item.PSIsContainer
+}
+
 # ---- add ----
 function Invoke-IntegrationAdd {
   param([string]$Id)
@@ -251,8 +261,13 @@ function Invoke-IntegrationAdd {
       if ($LASTEXITCODE -ne 0) { $script:IntegrationWhy = "download dell'immagine degli strumenti non riuscito"; return 1 }
       # The folder the desktop app reads the viewer password from is made here, by the person: a bind mount of a folder that is not there
       # would be made by the engine, with its own owner.
-      try { New-Item -ItemType Directory -Path (Join-Path $JhtHome 'live-screen') -Force -ErrorAction Stop | Out-Null }
-      catch { $script:IntegrationWhy = 'cartella della password dello schermo non creata'; return 1 }
+      # It is mounted writable in the screen container, and the agents write in this folder: a link (a reparse point) in its place would
+      # have the engine mount what it points to. A plain folder or the run stops.
+      if (-not (Test-IntegrationScreenFolder)) { $script:IntegrationWhy = "live-screen in ~/.jht non e' una cartella normale (un collegamento?): non la uso"; return 1 }
+      if (-not (Test-Path -LiteralPath (Get-IntegrationScreenFolder))) {
+        try { New-Item -ItemType Directory -Path (Get-IntegrationScreenFolder) -ErrorAction Stop | Out-Null }
+        catch { $script:IntegrationWhy = 'cartella della password dello schermo non creata'; return 1 }
+      }
       $beforeImage = $env:JHT_EXTRAS_IMAGE; $beforeDigest = $env:JHT_EXTRAS_DIGEST
       try {
         $env:JHT_EXTRAS_IMAGE = $ref
@@ -262,6 +277,11 @@ function Invoke-IntegrationAdd {
         $code = $LASTEXITCODE
         if ($code -ne 0) { $script:IntegrationWhy = 'il browser del closer non si copia nel volume'; return 1 }
         Remove-Item Env:\JHT_EXTRAS_DIGEST -ErrorAction SilentlyContinue
+        # Checked again right before the up (the copy above took time): what is left is the instant between this test and the engine's
+        # mount, which an agent that wins the race can use; the folder holds nothing but a viewer password.
+        if (-not ((Test-IntegrationScreenFolder) -and (Test-Path -LiteralPath (Get-IntegrationScreenFolder) -PathType Container))) {
+          $script:IntegrationWhy = "live-screen in ~/.jht non e' una cartella normale (un collegamento?): non la uso"; return 1
+        }
         Invoke-Compose '--profile' 'screen' up '-d' $ScreenContainer | Out-Null
         $code = $LASTEXITCODE
       } finally {

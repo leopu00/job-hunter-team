@@ -220,6 +220,15 @@ integration_extras_ref() { # prints the reference of the extras image, or nothin
   return 0
 }
 
+# The folder of the viewer password of the live screen, and whether what is there is fit to be mounted: nothing, or a plain folder,
+# never a link.
+integration_screen_folder() { printf '%s/live-screen' "${JHT_HOME_HOST:-$HOME/.jht}"; }
+integration_screen_folder_ok() {
+  local dir
+  dir="$(integration_screen_folder)"
+  [ ! -L "$dir" ] && { [ ! -e "$dir" ] || [ -d "$dir" ]; }
+}
+
 integration_do_add() { # id → 0 done · 1 failed (reason in INTEGRATION_WHY)
   local out ref
   INTEGRATION_WHY=""
@@ -252,12 +261,18 @@ integration_do_add() { # id → 0 done · 1 failed (reason in INTEGRATION_WHY)
       [ -n "$ref" ] || { INTEGRATION_WHY="non disponibile ancora"; return 3; }
       docker pull "$ref" >/dev/null 2>&1 || { INTEGRATION_WHY="download dell'immagine degli strumenti non riuscito"; return 1; }
       # The folder the desktop app reads the viewer password from is made here, by the person: a bind mount of a folder that is not
-      # there would be made by the engine, with its own owner.
-      (umask 077 && mkdir -p -- "${JHT_HOME_HOST:-$HOME/.jht}/live-screen") 2>/dev/null \
+      # there would be made by the engine, with its own owner. It is mounted writable in the screen container, and ~/.jht is written by
+      # the agents: a link in its place would have the engine mount what the link points to. It is a plain folder or the run stops.
+      integration_screen_folder_ok || { INTEGRATION_WHY="live-screen in ~/.jht non e' una cartella normale (un collegamento?): non la uso"; return 1; }
+      [ -d "$(integration_screen_folder)" ] || (umask 077 && mkdir -p -- "${JHT_HOME_HOST:-$HOME/.jht}" && mkdir -- "$(integration_screen_folder)") 2>/dev/null \
         || { INTEGRATION_WHY="cartella della password dello schermo non creata"; return 1; }
       # The closer's browser with a window comes from the volume the one-shot fills: ready before the screen is.
       JHT_EXTRAS_IMAGE="$ref" JHT_EXTRAS_DIGEST="$EXTRAS_IMAGE_DIGEST" COMPOSE_PROFILES=playwright compose run --rm --no-deps -T "$PLAYWRIGHT_POPULATE_SERVICE" >/dev/null 2>&1 \
         || { INTEGRATION_WHY="il browser del closer non si copia nel volume"; return 1; }
+      # Checked again right before the up (the copy above took time): what is left is the instant between this test and the engine's
+      # mount, which an agent that wins the race can use; the folder holds nothing but a viewer password.
+      integration_screen_folder_ok && [ -d "$(integration_screen_folder)" ] \
+        || { INTEGRATION_WHY="live-screen in ~/.jht non e' una cartella normale (un collegamento?): non la uso"; return 1; }
       JHT_EXTRAS_IMAGE="$ref" COMPOSE_PROFILES=screen compose up -d "$SCREEN_SERVICE" >/dev/null 2>&1 \
         || { INTEGRATION_WHY="il container dello schermo non parte"; return 1; }
       read_only_service_id "$SCREEN_SERVICE" >/dev/null 2>&1 || { INTEGRATION_WHY="il container dello schermo non risulta acceso"; return 1; }

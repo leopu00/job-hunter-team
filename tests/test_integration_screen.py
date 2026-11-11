@@ -32,6 +32,7 @@ read_only_service_id() {{ grep -qx "$1" "$FAKE_RUNNING" && {{ echo "id-$1"; retu
 compose() {{
   printf 'COMPOSE profiles=%s image=%s digest=%s %s\\n' "${{COMPOSE_PROFILES:-}}" "${{JHT_EXTRAS_IMAGE:-}}" "${{JHT_EXTRAS_DIGEST:-}}" "$*" >> "$FAKE_LOG"
   [ -z "${{FAKE_COMPOSE_FAIL_PROFILE:-}}" ] || [ "${{FAKE_COMPOSE_FAIL_PROFILE}}" != "${{COMPOSE_PROFILES:-}}" ] || return 1
+  if [ "$1" = run ] && [ -n "${{FAKE_SWAP_FOR_LINK:-}}" ]; then rm -rf "$JHT_HOME_HOST/live-screen"; ln -s "$FAKE_SWAP_FOR_LINK" "$JHT_HOME_HOST/live-screen"; fi
   case "$1 $2" in
     "up -d") echo "$3" >> "$FAKE_RUNNING" ;;
     "stop "*) grep -vx "$2" "$FAKE_RUNNING" > "$FAKE_RUNNING.new" || true; mv "$FAKE_RUNNING.new" "$FAKE_RUNNING" ;;
@@ -140,3 +141,42 @@ def test_the_powershell_wrapper_has_the_same_screen_command_as_the_bash_one():
     assert "Write-RuntimeHelperAbsentAnswer 'integration' $screenArgs" in power
     assert 'runtime_helper_absent_answer integration status screen' in shell
     assert "@('add', 'remove') -cnotcontains $screenVerb" in power
+
+
+def test_a_link_in_place_of_the_password_folder_is_refused_and_never_followed(host):
+    target = host.tmp / "somewhere-else"
+    target.mkdir()
+    home = host.tmp / "jht-home"
+    home.mkdir()
+    (home / "live-screen").symlink_to(target, target_is_directory=True)
+    done = add(host)
+    assert done.returncode == 1 and "non e' una cartella normale" in json.loads(done.stdout)["reason"]
+    log = host.log.read_text()
+    assert "up -d" not in log and "run --rm" not in log
+    assert list(target.iterdir()) == [], "nothing was made in what the link points to"
+    assert not list((host.runtime / "integrations").glob("screen.ok"))
+
+
+def test_a_file_in_place_of_the_password_folder_is_refused(host):
+    home = host.tmp / "jht-home"
+    home.mkdir()
+    (home / "live-screen").write_text("x", encoding="utf-8")
+    done = add(host)
+    assert done.returncode == 1 and "up -d" not in host.log.read_text()
+
+
+def test_a_link_put_there_while_the_browser_was_copied_stops_the_run_before_the_screen_starts(host):
+    target = host.tmp / "elsewhere"
+    target.mkdir()
+    done = add(host, FAKE_SWAP_FOR_LINK=str(target))
+    assert done.returncode == 1 and "non e' una cartella normale" in json.loads(done.stdout)["reason"]
+    log = host.log.read_text()
+    assert "run --rm" in log and "up -d" not in log
+
+
+def test_a_plain_folder_already_there_is_used_as_it_is(host):
+    folder = host.tmp / "jht-home" / "live-screen"
+    folder.mkdir(parents=True)
+    folder.chmod(0o755)
+    assert add(host).returncode == 0
+    assert stat.S_IMODE(folder.stat().st_mode) == 0o755, "a folder that exists is not touched"

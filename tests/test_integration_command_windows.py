@@ -63,6 +63,11 @@ function Invoke-Compose {
   $global:LASTEXITCODE = 0
   if ($env:T_COMPOSE_FAIL -eq '1') { $global:LASTEXITCODE = 1; return }
   $words = @($Rest); $service = $words[$words.Count - 1]
+  if ($words -contains 'run' -and $env:T_SWAP_LINK) {
+    $folder = Join-Path $JhtHome 'live-screen'
+    Remove-Item -LiteralPath $folder -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType SymbolicLink -Path $folder -Target $env:T_SWAP_LINK | Out-Null
+  }
   $running = @(Get-Content -LiteralPath $env:T_RUNNING)
   if ($words -contains 'up') { $running += $service }
   if ($words -contains 'stop') { $running = @($running | Where-Object { $_ -ne $service }) }
@@ -350,3 +355,34 @@ def test_remove_screen_takes_the_container_and_the_image_and_purge_only_the_disp
     assert "COMPOSE --profile screen stop jht-screen" in lines and "COMPOSE --profile screen rm -f jht-screen" in lines
     assert f"DOCKER rmi {REF}" in lines
     assert [line for line in lines if line.startswith("DOCKER volume rm")] == ["DOCKER volume rm jht_jht-x11"]
+
+
+def _link_or_skip(link: Path, target: Path) -> None:
+    try:
+        link.symlink_to(target, target_is_directory=True)
+    except OSError:
+        pytest.skip("this machine does not let the test make a symbolic link")
+
+
+def test_a_link_in_place_of_the_screen_password_folder_is_refused_and_never_followed(host):
+    target = host.tmp / "somewhere-else"
+    target.mkdir()
+    home = host.tmp / "jht-home"
+    home.mkdir()
+    _link_or_skip(home / "live-screen", target)
+    done = run(host, ["add", "screen", "--json"], T_EXTRAS=DIGEST)
+    assert done.returncode == 1 and "non e' una cartella normale" in json.loads(done.stdout)["reason"], done.stdout + done.stderr
+    assert "up -d" not in log(host) and "run --rm" not in log(host)
+    assert list(target.iterdir()) == []
+
+
+def test_a_link_put_there_while_the_browser_was_copied_stops_the_run_before_the_screen_starts(host):
+    target = host.tmp / "elsewhere"
+    target.mkdir()
+    try:
+        (host.tmp / "probe-link").symlink_to(target, target_is_directory=True)
+    except OSError:
+        pytest.skip("this machine does not let the test make a symbolic link")
+    done = run(host, ["add", "screen", "--json"], T_EXTRAS=DIGEST, T_SWAP_LINK=str(target))
+    assert done.returncode == 1 and "non e' una cartella normale" in json.loads(done.stdout)["reason"], done.stdout + done.stderr
+    assert "run --rm" in log(host) and "up -d" not in log(host)
