@@ -150,6 +150,12 @@ PODMAN_MACHINE_CREATED=0
 # When it was created (podman machine inspect «Created»): the marker says WHICH machine, not only the name, so a machine the person
 # creates later with the same name is not taken for this one.
 PODMAN_MACHINE_CREATED_ID=""
+# The link to the Compose plugin that THIS run made in the plugin folder of the docker client (empty when it made none, or when something
+# was already there): `jht uninstall` removes exactly that link (marker docker-compose-plugin-link: its path, its target, and whether
+# this run also made the folder).
+COMPOSE_PLUGIN_LINK_PATH=""
+COMPOSE_PLUGIN_LINK_TARGET=""
+COMPOSE_PLUGIN_DIR_CREATED=0
 # 1 only when THIS run started Colima (it was not running): `jht uninstall` stops that profile again only then (marker colima-started).
 COLIMA_STARTED_BY_INSTALLER=0
 DOCKER_CLI="docker"
@@ -751,7 +757,19 @@ ensure_docker_compose_macos() {
   plugin_dir="${DOCKER_CONFIG:-$HOME/.docker}/cli-plugins"
   plugin_dest="$plugin_dir/docker-compose"
   if [ -x "$plugin_src" ] && { [ ! -e "$plugin_dest" ] || [ -L "$plugin_dest" ]; }; then
-    mkdir -p "$plugin_dir" && ln -sfn "$plugin_src" "$plugin_dest" || warn "Could not register the Compose plugin in $plugin_dir."
+    local link_was_absent=0 folder_was_there=0
+    if [ ! -e "$plugin_dest" ] && [ ! -L "$plugin_dest" ]; then link_was_absent=1; fi
+    if [ -d "$plugin_dir" ]; then folder_was_there=1; fi
+    if mkdir -p "$plugin_dir" && ln -sfn "$plugin_src" "$plugin_dest"; then
+      # Marked only when there was nothing at that path: a link of the person that this run replaced is not ours to remove later.
+      if [ "$link_was_absent" -eq 1 ]; then
+        COMPOSE_PLUGIN_LINK_PATH="$plugin_dest"
+        COMPOSE_PLUGIN_LINK_TARGET="$plugin_src"
+        COMPOSE_PLUGIN_DIR_CREATED=$((1 - folder_was_there))
+      fi
+    else
+      warn "Could not register the Compose plugin in $plugin_dir."
+    fi
   fi
   "$DOCKER_CLI" compose version &>/dev/null \
     || fail "docker compose is still not available after installing the plugin. Run: mkdir -p \"$plugin_dir\" && ln -sfn \"$plugin_src\" \"$plugin_dest\" ; docker compose version ; then run the installer again."
@@ -1422,6 +1440,12 @@ download_runtime_files() {
       # Second line: the profile that was started (the installer starts the default one): the uninstall stops that profile only.
       printf 'colima\ndefault\n' > "$RUNTIME_DIR/colima-started"
       chmod 600 "$RUNTIME_DIR/colima-started"
+    fi
+    # The Compose plugin link that THIS run made: `jht uninstall` removes that link, never the plugin Homebrew installed. Lines: the
+    # link's path, what it points to, 1 when this run made the plugin folder too (removed only if empty). A marker of an earlier run is kept.
+    if [ -n "$COMPOSE_PLUGIN_LINK_PATH" ]; then
+      printf '%s\n%s\n%s\n' "$COMPOSE_PLUGIN_LINK_PATH" "$COMPOSE_PLUGIN_LINK_TARGET" "$COMPOSE_PLUGIN_DIR_CREATED" > "$RUNTIME_DIR/docker-compose-plugin-link"
+      chmod 600 "$RUNTIME_DIR/docker-compose-plugin-link"
     fi
   fi
   ok "host-setup: $hostsetup_dest"

@@ -69,6 +69,7 @@ DOCKER_CLI="{bin_dir}/docker"
 {extra}
 ensure_docker_compose_macos
 echo "RC=$?"
+echo "LINK=$COMPOSE_PLUGIN_LINK_PATH|$COMPOSE_PLUGIN_LINK_TARGET|$COMPOSE_PLUGIN_DIR_CREATED"
 """
     env = {"HOME": str(home), "PATH": f"{bin_dir}:/usr/bin:/bin", "JHT_INSTALLER_SOURCE_ONLY": "1", "JHT_MACHINE_OUTPUT": "0"}
     return subprocess.run(["bash", "-c", script], capture_output=True, text=True, env=env, timeout=60)
@@ -145,3 +146,50 @@ def test_the_marker_of_a_colima_started_by_the_installer_is_written_only_then(tm
         assert marker.exists() is expected
         if expected:
             assert marker.read_text() == "colima\ndefault\n" and oct(marker.stat().st_mode & 0o777) == "0o600"
+
+
+def _link_line(done) -> str:
+    return next(line for line in done.stdout.splitlines() if line.startswith("LINK="))
+
+
+def test_the_link_the_installer_made_is_remembered_with_its_target_and_the_folder_it_made(tmp_path):
+    home, prefix, bin_dir, log, plugin_dir = _world(tmp_path)
+    done = _run(tmp_path, home, bin_dir)
+    assert _link_line(done) == f"LINK={plugin_dir}/docker-compose|{prefix}/opt/docker-compose/bin/docker-compose|1"
+
+
+def test_a_plugin_folder_that_was_there_is_not_remembered_as_made(tmp_path):
+    home, prefix, bin_dir, log, plugin_dir = _world(tmp_path)
+    plugin_dir.mkdir(parents=True)
+    done = _run(tmp_path, home, bin_dir)
+    assert _link_line(done).endswith("|0")
+
+
+def test_a_link_of_the_person_that_the_run_replaced_is_not_remembered(tmp_path):
+    home, prefix, bin_dir, log, plugin_dir = _world(tmp_path)
+    plugin_dir.mkdir(parents=True)
+    (plugin_dir / "docker-compose").symlink_to(tmp_path / "somewhere-else")
+    done = _run(tmp_path, home, bin_dir)
+    assert _link_line(done) == "LINK=||0"
+
+
+def test_nothing_is_remembered_when_compose_was_already_there(tmp_path):
+    home, prefix, bin_dir, log, plugin_dir = _world(tmp_path, preexisting_plugin=True)
+    done = _run(tmp_path, home, bin_dir)
+    assert _link_line(done) == "LINK=||0"
+
+
+def test_the_marker_of_the_plugin_link_is_written_only_when_the_run_made_one(tmp_path):
+    block = re.search(r'(    if \[ -n "\$COMPOSE_PLUGIN_LINK_PATH" \]; then\n.*?\n    fi)\n', SOURCE, re.S).group(1)
+    for path, expected in (("/x/.docker/cli-plugins/docker-compose", True), ("", False)):
+        runtime = tmp_path / f"runtime{int(expected)}"
+        runtime.mkdir()
+        script = (f'RUNTIME_DIR="{runtime}"\nCOMPOSE_PLUGIN_LINK_PATH="{path}"\nCOMPOSE_PLUGIN_LINK_TARGET="/p/docker-compose"\n'
+                  f'COMPOSE_PLUGIN_DIR_CREATED=1\n{block}\n')
+        done = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30)
+        assert done.returncode == 0, done.stderr
+        marker = runtime / "docker-compose-plugin-link"
+        assert marker.exists() is expected
+        if expected:
+            assert marker.read_text() == "/x/.docker/cli-plugins/docker-compose\n/p/docker-compose\n1\n"
+            assert oct(marker.stat().st_mode & 0o777) == "0o600"

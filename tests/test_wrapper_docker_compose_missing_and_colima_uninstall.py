@@ -239,3 +239,108 @@ def test_the_stop_comes_after_the_images_and_before_the_runtime_folder_with_its_
 def test_the_texts_exist_in_english_and_italian():
     for key in ("compose.missing", "uninstall.colima_stopping", "uninstall.colima_busy", "uninstall.colima_stop_failed", "uninstall.colima_running"):
         assert SOURCE.count(f"    {key}) printf") == 2, key
+
+
+# ── 3. the uninstall and the link to the Compose plugin ───────────────────
+
+def _link_world(tmp_path: Path, *, folder_made="1", repoint=False, regular=False, marker_path=None, marker_is_link=False, no_marker=False,
+                other_inside=False):
+    home = tmp_path / "home"
+    folder = home / ".docker" / "cli-plugins"
+    folder.mkdir(parents=True)
+    brew_plugin = tmp_path / "brew" / "docker-compose"
+    brew_plugin.parent.mkdir()
+    brew_plugin.write_text("#!/bin/sh\n", encoding="utf-8")
+    link = folder / "docker-compose"
+    if regular:
+        link.write_text("the person's own file", encoding="utf-8")
+    elif repoint:
+        link.symlink_to(tmp_path / "another-target")
+    else:
+        link.symlink_to(brew_plugin)
+    if other_inside:
+        (folder / "docker-buildx").write_text("x", encoding="utf-8")
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    if not no_marker:
+        text = f"{marker_path or link}\n{brew_plugin}\n{folder_made}\n"
+        if marker_is_link:
+            (tmp_path / "elsewhere").write_text(text, encoding="utf-8")
+            (runtime / "docker-compose-plugin-link").symlink_to(tmp_path / "elsewhere")
+        else:
+            (runtime / "docker-compose-plugin-link").write_text(text, encoding="utf-8")
+    return home, folder, link, brew_plugin, runtime
+
+
+def _uninstall_link(tmp_path: Path, home: Path, runtime: Path, docker_config: str = ""):
+    script = f"""set -u
+jht_say() {{ printf '<%s|%s>' "$1" "${{2:-}}"; }}
+info() {{ printf 'info: %s\\n' "$*"; }}
+warn() {{ printf 'warn: %s\\n' "$*"; }}
+{_functions("uninstall_compose_plugin_link")}
+uninstall_compose_plugin_link "{runtime}"
+echo "RC=$?"
+"""
+    env = {"HOME": str(home), "PATH": "/usr/bin:/bin"}
+    if docker_config:
+        env["DOCKER_CONFIG"] = docker_config
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True, env=env, timeout=30)
+
+
+def test_the_link_the_installer_made_is_removed_and_the_plugin_of_brew_stays(tmp_path):
+    home, folder, link, brew_plugin, runtime = _link_world(tmp_path)
+    done = _uninstall_link(tmp_path, home, runtime)
+    assert not link.exists() and not link.is_symlink() and brew_plugin.exists()
+    assert f"info: <uninstall.compose_link_removed|{link}>" in done.stdout and "RC=0" in done.stdout
+    assert not folder.exists() and (home / ".docker").exists()
+
+
+def test_the_folder_stays_when_the_installer_did_not_make_it_or_when_something_else_is_in_it(tmp_path):
+    home, folder, link, brew_plugin, runtime = _link_world(tmp_path, folder_made="0")
+    _uninstall_link(tmp_path, home, runtime)
+    assert not link.is_symlink() and folder.exists()
+    sub = tmp_path / "second"
+    sub.mkdir()
+    home, folder, link, brew_plugin, runtime = _link_world(sub, other_inside=True)
+    _uninstall_link(sub, home, runtime)
+    assert not link.is_symlink() and (folder / "docker-buildx").exists()
+
+
+@pytest.mark.parametrize("kind", ["repointed", "a file", "no marker", "marker is a link", "path outside the client folder"])
+def test_a_link_that_is_not_the_one_the_installer_made_is_left_alone_and_nothing_is_said(tmp_path, kind):
+    kwargs = {"repointed": {"repoint": True}, "a file": {"regular": True}, "no marker": {"no_marker": True},
+              "marker is a link": {"marker_is_link": True}, "path outside the client folder": {}}[kind]
+    home, folder, link, brew_plugin, runtime = _link_world(tmp_path, **kwargs)
+    if kind == "path outside the client folder":
+        elsewhere = tmp_path / "elsewhere-dir"
+        elsewhere.mkdir()
+        other = elsewhere / "docker-compose"
+        other.symlink_to(brew_plugin)
+        (runtime / "docker-compose-plugin-link").write_text(f"{other}\n{brew_plugin}\n1\n", encoding="utf-8")
+        done = _uninstall_link(tmp_path, home, runtime)
+        assert other.is_symlink() and link.is_symlink()
+    else:
+        done = _uninstall_link(tmp_path, home, runtime)
+        assert (link.exists() or link.is_symlink())
+    assert done.stdout.strip() == "RC=0", done.stdout
+
+
+def test_the_folder_of_docker_config_is_accepted_too(tmp_path):
+    home, folder, link, brew_plugin, runtime = _link_world(tmp_path)
+    config = tmp_path / "dockercfg"
+    (config / "cli-plugins").mkdir(parents=True)
+    mine = config / "cli-plugins" / "docker-compose"
+    mine.symlink_to(brew_plugin)
+    (runtime / "docker-compose-plugin-link").write_text(f"{mine}\n{brew_plugin}\n0\n", encoding="utf-8")
+    _uninstall_link(tmp_path, home, runtime, docker_config=str(config))
+    assert not mine.is_symlink() and link.is_symlink()
+
+
+def test_the_link_goes_after_colima_and_before_the_runtime_folder_with_its_marker_goes():
+    body = re.search(r"^jht_uninstall\(\) \{\n.*?^\}\n", SOURCE, re.S | re.M).group(0)
+    assert body.index("uninstall_colima ") < body.index("uninstall_compose_plugin_link") < body.index("uninstall_phase uninstall_runtime")
+
+
+def test_the_link_texts_exist_in_english_and_italian():
+    for key in ("uninstall.compose_link_removed", "uninstall.compose_link_left"):
+        assert SOURCE.count(f"    {key}) printf") == 2, key
