@@ -488,6 +488,26 @@ def test_the_docker_exec_side_asks_nothing_without_a_well_formed_token_on_its_st
     assert json.loads(capsys.readouterr().out) == {"ok": False, "reason": "token_required"}
 
 
+def test_the_command_as_docker_exec_runs_it_takes_the_token_on_a_real_stdin_and_prints_none(monkeypatch):
+    """`docker exec -i … login_view.py grant`: a process of its own, the token on a pipe, the answer on stdout."""
+    import subprocess
+    import sys
+
+    async def body(rig):
+        token = lv.new_token()
+        done = await asyncio.to_thread(
+            subprocess.run, [sys.executable, "-I", str(Path(lv.__file__)), "grant", rig.control],
+            input=(token + "\n").encode(), capture_output=True, timeout=20)
+        # the token the process brought is the one that opens the window
+        reader, writer = await rig.raw(rig.upgrade(token))
+        status = await status_line(reader)
+        writer.close()
+        return token, done, status
+    token, done, status = case(monkeypatch, body)
+    assert done.returncode == 0 and token.encode() not in done.stdout + done.stderr
+    assert json.loads(done.stdout)["ok"] is True and " 101 " in status
+
+
 def test_the_docker_exec_side_never_prints_the_token_it_carries(monkeypatch, tmp_path, capsys):
     async def body(rig):
         token = lv.new_token()
