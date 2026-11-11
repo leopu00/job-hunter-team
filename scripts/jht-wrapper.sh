@@ -396,6 +396,11 @@ jht_text_en() {
     uninstall.loss) printf '%s' "The saved mail password and Telegram tokens are deleted too; ~/.jht and Documents stay, and with them the saved LinkedIn session (secrets/linkedin-profile and .cache/linkedin): remove it with jht reset --scope creds." ;;
     uninstall.loss_purge) printf '%s' "The saved mail password and Telegram tokens are deleted too." ;;
     uninstall.purge_loss) printf '%s' "With --purge ~/.jht and ~/Documents/Job Hunter Team are deleted too: configuration, database, CVs and output. There is no way back." ;;
+    compose.missing) printf '%s' "docker compose is missing: the engine answers, but the «docker compose» command does not exist (JHT needs the Compose v2 plugin). On a Mac: brew install docker-compose, then mkdir -p ~/.docker/cli-plugins && ln -sfn \"\$(brew --prefix)/opt/docker-compose/bin/docker-compose\" ~/.docker/cli-plugins/docker-compose. On Linux: install the docker-compose-v2 package (apt) or docker-compose-plugin (dnf). Then run the command again." ;;
+    uninstall.colima_stopping) printf '%s' "Stopping the Colima virtual machine, which the JHT installer started and where nothing else is running; your folders on the Mac stay." ;;
+    uninstall.colima_busy) printf '%s' "Colima is still running: the JHT installer started it, but other containers are running in it, so it is left on. To stop it: colima stop." ;;
+    uninstall.colima_stop_failed) printf '%s' "Colima could not be stopped. To stop it: colima stop." ;;
+    uninstall.colima_running) printf '%s' "Colima is still running: the JHT installer did not start it (it was already on, or it is not the standard one), so it is left on, and it may be yours. To stop it: colima stop." ;;
     uninstall.machine_removing) printf '%s' "Removing the Podman machine '%s', which the JHT installer created: everything inside it goes with it (the JHT volumes and image); your folders on the Mac stay." ;;
     uninstall.machine_kept) printf '%s' "The Podman machine '%s' was not created by the JHT installer (it was already there, or it is not the standard jht-podman one), so it is not removed: it may be yours. The JHT volumes and image inside it stay with it. To remove it: podman machine stop %s, then podman machine rm %s." ;;
     uninstall.left.machine) printf '%s' "Not removed: the jht-podman Podman machine or JHT's containers and volumes, with the saved secrets. Run 'jht uninstall --confirm' again when Podman or Docker answer." ;;
@@ -465,6 +470,11 @@ jht_text_it() {
     uninstall.loss) printf '%s' "Vengono cancellati anche la password della posta e i token di Telegram salvati; ~/.jht e Documenti restano, e con loro la sessione LinkedIn salvata (secrets/linkedin-profile e .cache/linkedin): si toglie con jht reset --scope creds." ;;
     uninstall.loss_purge) printf '%s' "Vengono cancellati anche la password della posta e i token di Telegram salvati." ;;
     uninstall.purge_loss) printf '%s' "Con --purge vengono cancellati anche ~/.jht e ~/Documents/Job Hunter Team: configurazione, database, CV e output. Non si torna indietro." ;;
+    compose.missing) printf '%s' "manca docker compose: il motore risponde, ma il comando «docker compose» non esiste (a JHT serve il plugin Compose v2). Su Mac: brew install docker-compose, poi mkdir -p ~/.docker/cli-plugins && ln -sfn \"\$(brew --prefix)/opt/docker-compose/bin/docker-compose\" ~/.docker/cli-plugins/docker-compose. Su Linux: installa il pacchetto docker-compose-v2 (apt) o docker-compose-plugin (dnf). Poi rilancia il comando." ;;
+    uninstall.colima_stopping) printf '%s' "Fermo la macchina virtuale Colima, che ha acceso l'installer di JHT e dove non gira nient'altro; le tue cartelle sul Mac restano." ;;
+    uninstall.colima_busy) printf '%s' "Colima resta accesa: l'ha accesa l'installer di JHT, ma dentro girano altri container, quindi la lascio. Per fermarla: colima stop." ;;
+    uninstall.colima_stop_failed) printf '%s' "Non sono riuscito a fermare Colima. Per fermarla: colima stop." ;;
+    uninstall.colima_running) printf '%s' "Colima resta accesa: non l'ha accesa l'installer di JHT (era gia' accesa, oppure non e' quella standard), quindi la lascio, e potrebbe essere tua. Per fermarla: colima stop." ;;
     uninstall.machine_removing) printf '%s' "Rimuovo la macchina Podman '%s', creata dall'installer di JHT: con lei se ne va tutto quello che ha dentro (i volumi e l'immagine di JHT); le tue cartelle sul Mac restano." ;;
     uninstall.machine_kept) printf '%s' "La macchina Podman '%s' non risulta creata dall'installer di JHT (c'era gia', oppure non e' quella standard jht-podman), quindi non la rimuovo: potrebbe essere tua. I volumi e l'immagine di JHT che ha dentro restano con lei. Per toglierla: podman machine stop %s, poi podman machine rm %s." ;;
     uninstall.left.machine) printf '%s' "Non rimossi: la macchina Podman jht-podman o i container e i volumi di JHT, con i segreti salvati. Rilancia 'jht uninstall --confirm' quando Podman o Docker rispondono." ;;
@@ -893,6 +903,26 @@ require_trusted_runtime() {
 }
 
 # ── Verifiche pre-flight ──────────────────────────────────────────────────
+# Con Docker (non con Podman) il team si governa con `docker compose`: se il motore risponde ma il comando non c'e' (Colima con il
+# solo client docker di Homebrew, un Docker Engine senza il plugin), ogni lettura di Compose fallisce e il resto del wrapper lo
+# racconterebbe come «container non attestabile». Lo si riconosce dalle parole del client, non dal solo codice di uscita: un Compose che
+# c'e' e fallisce per altro non e' «manca». Vero = manca.
+docker_compose_plugin_missing() {
+  local out
+  [ -z "${PODMAN_RUNTIME_MODE:-}" ] && [ "${CONTAINER_RUNTIME:-docker}" != podman ] || return 1
+  out="$(docker compose version 2>&1)" && return 1
+  case "$out" in
+    *"unknown command"*|*"is not a docker command"*|*"unknown shorthand"*) return 0 ;;
+  esac
+  return 1
+}
+
+# «Non attestabile» e' la risposta a un motore che non si riesce a interrogare; con Docker senza il plugin Compose il motore risponde e
+# a mancare e' `docker compose`: lo si dice con le sue parole (e il comando che lo mette), non come un container da non toccare.
+err_unattestable() {
+  if docker_compose_plugin_missing; then err "$(jht_say compose.missing)"; else err "$1"; fi
+}
+
 require_docker() {
   if [ -n "${err_runtime:-}" ]; then
     err "$err_runtime"
@@ -914,6 +944,10 @@ require_docker() {
     else
       err "Docker daemon non risponde. Avvialo (systemctl start docker / Docker Desktop)."
     fi
+    exit 1
+  fi
+  if docker_compose_plugin_missing; then
+    err "$(jht_say compose.missing)"
     exit 1
   fi
 }
@@ -1635,7 +1669,7 @@ container_mutation_preflight() {
     COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose down || { err "Non riesco a rimuovere i container fermi della versione di prima: «jht down», poi «jht up»."; return 1; }
     return 0
   fi
-  err "Container JHT esistente non attestabile; operazione interrotta."
+  err_unattestable "Container JHT esistente non attestabile; operazione interrotta."
   stale_config_hint
   return 1
 }
@@ -1666,7 +1700,7 @@ container_down() {
       # does not attest (or one of a service the compose does not have) is said and nothing is touched.
       local rest svc svc_status leftover=0 refused=""
       if ! rest="$(COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose ps -q 2>/dev/null)"; then
-        err "Container JHT non attestabile; arresto negato."
+        err_unattestable "Container JHT non attestabile; arresto negato."
         return 1
       fi
       if [ -z "$rest" ]; then
@@ -1692,7 +1726,7 @@ container_down() {
       fi
       info "il container '$CONTAINER_SERVICE' non c'e', ma altri servizi del progetto girano: li fermo."
     else
-      err "Container JHT non attestabile; arresto negato."
+      err_unattestable "Container JHT non attestabile; arresto negato."
       return 1
     fi
   fi
@@ -4148,7 +4182,7 @@ not_started_or_unattestable() { # $1 = the status of the check, $2 = what is den
   if [ "${1:-1}" -eq 3 ]; then
     err "Job Hunter Team non è ancora avviato: lancia 'jht up' (la prima volta, 'jht setup')."
   else
-    err "Container JHT non attestabile; ${2:-operazione negata}."
+    err_unattestable "Container JHT non attestabile; ${2:-operazione negata}."
     stale_config_hint
   fi
   exit 1
@@ -4162,7 +4196,7 @@ ensure_up() {
     status=$?
   fi
   [ "$status" -eq 3 ] || {
-    err "Container JHT esistente non attestabile; avvio automatico negato."
+    err_unattestable "Container JHT esistente non attestabile; avvio automatico negato."
     stale_config_hint
     exit 1
   }
@@ -6131,6 +6165,43 @@ uninstall_docker_endpoint() {
   printf '%s\n' "$endpoint"
 }
 
+# Colima (Mac, Docker scelto): l'installer la accende quando non c'e' e lo scrive in <runtime>/colima-started (1a riga «colima», 2a il
+# profilo). Finito di togliere container, volumi e immagini di JHT, se e' stato lui ad accenderla e dentro non gira piu' niente, la si
+# ferma (colima stop, normale) e si controlla che sia ferma; altrimenti resta accesa e si dice perche' e come fermarla. Non si cancella
+# mai la macchina. Il profilo si ricava dal socket del Docker di questo computer (…/.colima/<profilo>/docker.sock) e SOLO quel profilo
+# si interroga e si ferma (colima status|stop -p <profilo>): un profilo di un altro (la Colima dell'operatore, quella di un collaudo)
+# non si guarda e non si tocca; il marcatore deve dire lo stesso profilo. Con Docker Desktop attivo (o un altro socket) una Colima
+# accesa non c'entra e non si dice niente. Mai un errore di disinstallazione: al peggio un avviso.
+uninstall_colima() {
+  local runtime_dir="$1" selection="$2" colima_bin docker_bin endpoint profile rest marker="$1/colima-started" others
+  [ "$HOST_KERNEL" = "Darwin" ] && [ "$selection" != "podman" ] || return 0
+  colima_bin="$(uninstall_tool colima)" || return 0
+  docker_bin="$(uninstall_tool docker)" || return 0
+  endpoint="$(uninstall_docker_endpoint "$docker_bin")" || return 0
+  case "$endpoint" in unix://*/.colima/*/docker.sock) ;; *) return 0 ;; esac
+  rest="${endpoint#*/.colima/}"
+  profile="${rest%%/*}"
+  [ "$rest" = "$profile/docker.sock" ] || return 0
+  case "$profile" in ''|-*|*[!A-Za-z0-9_.-]*) return 0 ;; esac
+  "$colima_bin" status -p "$profile" >/dev/null 2>&1 || return 0
+  if [ -f "$marker" ] && [ ! -L "$marker" ] \
+      && [ "$(head -c 64 "$marker" 2>/dev/null | sed -n '1p' | tr -d '\r')" = colima ] \
+      && [ "$(head -c 64 "$marker" 2>/dev/null | sed -n '2p' | tr -d '\r')" = "$profile" ]; then
+    others="$("$docker_bin" ps -q 2>/dev/null)" || others="unknown"
+    if [ -n "$others" ]; then
+      warn "$(jht_say uninstall.colima_busy)"
+      return 0
+    fi
+    info "$(jht_say uninstall.colima_stopping)"
+    if "$colima_bin" stop -p "$profile" >/dev/null 2>&1 && ! "$colima_bin" status -p "$profile" >/dev/null 2>&1; then
+      return 0
+    fi
+    warn "$(jht_say uninstall.colima_stop_failed)"
+    return 0
+  fi
+  warn "$(jht_say uninstall.colima_running)"
+}
+
 # Le immagini di JHT (nucleo, piena e le vecchie) nel Docker di questo computer, senza -f e senza pulizie di massa, dopo i container.
 # Si toglie per RIFERIMENTO (repository:tag), uno per uno: un ID con piu' tag non si toglie con `image rm <ID>` senza -f (il motore
 # rifiuta «referenced in multiple repositories») e la disinstallazione non finirebbe piu'. Senza tag (<none>) si toglie per ID.
@@ -6417,6 +6488,8 @@ jht_uninstall() {
     return 24
   fi
   [ "$UNINSTALL_IMAGES_REMOVED" -eq 0 ] || info "$(jht_say uninstall.images_removed "$UNINSTALL_IMAGES_REMOVED")"
+  # La macchina Colima dopo le immagini (servono il motore acceso) e prima della cartella del runtime (che ne tiene il marcatore).
+  uninstall_colima "$runtime_dir" "$selection"
 
   uninstall_phase uninstall_runtime
   if [ -e "$runtime_dir" ] || [ -L "$runtime_dir" ]; then
@@ -6827,7 +6900,11 @@ case "$SUB" in
       if [ "$attest_status" -eq 3 ]; then
         if jht_machine_output; then printf "container '%s' non attivo\n" "$CONTAINER_SERVICE"; else status_human_not_running; fi
       else
-        printf "container '%s' non attestabile: c'e' qualcosa che non si riesce a verificare (una configurazione diversa dall'attesa, o il motore che non risponde); non vuol dire che non giri.\n" "$CONTAINER_SERVICE"
+        if docker_compose_plugin_missing; then
+          err "$(jht_say compose.missing)"
+        else
+          printf "container '%s' non attestabile: c'e' qualcosa che non si riesce a verificare (una configurazione diversa dall'attesa, o il motore che non risponde); non vuol dire che non giri.\n" "$CONTAINER_SERVICE"
+        fi
         if [ "$CONTAINER_RUNTIME" = podman ] && podman_caller_env_set; then
           printf "  Nell'ambiente di questo terminale sono impostate: %s. Il container e' stato creato senza: togli la variabile (unset) e riprova.\n" "$(podman_caller_env_names)"
         fi
