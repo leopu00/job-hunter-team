@@ -200,6 +200,7 @@ macro_rules! registered_native_commands {
             runtime_log::onboarding_support_report_save,
             runtime_log::onboarding_support_reports_open,
             onboarding::onboarding_prepare,
+            onboarding::onboarding_provider_key_stage,
             onboarding::onboarding_provider_login,
             onboarding::onboarding_provider_login_close,
             onboarding::onboarding_provider_login_input,

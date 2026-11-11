@@ -81,14 +81,11 @@ struct SetupInvocation {
     stdin: Zeroizing<Vec<u8>>,
 }
 
-fn setup_invocation(request: &ProviderKeyRequest) -> Result<SetupInvocation, &'static str> {
-    let provider = PROVIDERS
-        .iter()
-        .find(|known| **known == request.provider)
-        .copied()
-        .ok_or("provider_key_provider_invalid")?;
+/// The key as the setup reads it from its standard input: trimmed, one line of 16 to 512 printable characters without spaces (the shape
+/// the setup demands), with the line break. The text of a refusal never holds the key.
+pub(crate) fn key_stdin(key: &str) -> Result<Zeroizing<Vec<u8>>, &'static str> {
     // A pasted key often comes with a line break or a space at the end.
-    let key = request.key.trim();
+    let key = key.trim();
     let printable = key.bytes().all(|byte| (b'!'..=b'~').contains(&byte));
     if !(MIN_KEY_LEN..=MAX_KEY_LEN).contains(&key.len()) || !printable {
         return Err("provider_key_invalid");
@@ -96,15 +93,30 @@ fn setup_invocation(request: &ProviderKeyRequest) -> Result<SetupInvocation, &'s
     let mut stdin = Zeroizing::new(Vec::with_capacity(key.len() + 1));
     stdin.extend_from_slice(key.as_bytes());
     stdin.push(b'\n');
+    Ok(stdin)
+}
+
+/// The arguments of the setup that takes the key on its standard input. `provider` is one of the two closed words.
+pub(crate) fn setup_args(provider: &'static str) -> [&'static str; 7] {
+    ["setup", "--non-interactive", "--provider", provider, "--harness", "pi", "--api-key-stdin"]
+}
+
+fn setup_invocation(request: &ProviderKeyRequest) -> Result<SetupInvocation, &'static str> {
+    let provider = PROVIDERS
+        .iter()
+        .find(|known| **known == request.provider)
+        .copied()
+        .ok_or("provider_key_provider_invalid")?;
+    let stdin = key_stdin(&request.key)?;
     Ok(SetupInvocation {
         provider,
-        args: ["setup", "--non-interactive", "--provider", provider, "--harness", "pi", "--api-key-stdin"],
+        args: setup_args(provider),
         stdin,
     })
 }
 
 /// What a command that did not answer says, as a code of the catalog. Never the command's own text.
-fn run_failure(error: &'static str) -> &'static str {
+pub(crate) fn run_failure(error: &'static str) -> &'static str {
     match error {
         "process_timeout" => "timeout",
         "runtime_missing" => "runtime_missing",
@@ -114,7 +126,7 @@ fn run_failure(error: &'static str) -> &'static str {
 }
 
 /// The setup counts only by its exit: 0 is saved, 3 is a key the provider refused (nothing saved), anything else a failure.
-fn parse_setup(result: Result<ProcessResult, &'static str>) -> Result<&'static str, &'static str> {
+pub(crate) fn parse_setup(result: Result<ProcessResult, &'static str>) -> Result<&'static str, &'static str> {
     let output = result.map_err(run_failure)?;
     match output.code {
         0 => Ok("saved"),

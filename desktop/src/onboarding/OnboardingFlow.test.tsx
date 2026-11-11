@@ -157,9 +157,10 @@ describe("OnboardingFlow technical setup", () => {
     const user = userEvent.setup();
     const { props } = renderFlow();
     await reachProviderLocal(user);
-    const providers = screen.getAllByRole("radio");
+    // The subscriptions: Codex is the only one (0.4: one subscription) and carries the recommended label. The two providers with an
+    // API key (glm, kimi) are a group of their own under it (OnboardingApiKey.test.tsx).
+    const providers = within(screen.getByRole("radiogroup", { name: /provider in abbonamento/i })).getAllByRole("radio");
     expect(providers[0]).toHaveTextContent("Codex");
-    // Codex is the only choice (0.4: one subscription) and carries the recommended label.
     expect(providers).toHaveLength(1);
     expect(providers[0]).toHaveTextContent("consigliato");
     expect(screen.getByRole("radio", { name: /Codex/i })).toHaveAttribute("aria-checked", "true");
@@ -305,11 +306,15 @@ describe("OnboardingFlow technical setup", () => {
       const user = userEvent.setup();
       const view = renderFlow({ platform });
       await reachProviderLocal(user);
-      expect(screen.getAllByRole("radio").map((radio) => radio.textContent?.replace(/consigliato/i, "").trim())).toEqual([
+      const subscriptions = screen.getByRole("radiogroup", { name: /provider in abbonamento/i });
+      expect(within(subscriptions).getAllByRole("radio").map((radio) => radio.textContent?.replace(/consigliato/i, "").trim())).toEqual([
         expect.stringContaining("Codex"),
       ]);
-      expect(screen.queryByText(/Kimi|Moonshot|Claude|Anthropic/i)).not.toBeInTheDocument();
-      expect(document.body.textContent).not.toMatch(/Kimi|Moonshot|Claude|Anthropic/i);
+      // Kimi's subscription stays archived; the Kimi that is offered works with an API key, in a group of its own
+      expect(subscriptions.textContent).not.toMatch(/Kimi|Moonshot|Claude|Anthropic/i);
+      expect(screen.queryByText(/Claude|Anthropic/i)).not.toBeInTheDocument();
+      expect(document.body.textContent).not.toMatch(/Claude|Anthropic/i);
+      expect(screen.getByTestId("api-key-choice")).toHaveTextContent(/GLM.*Kimi/s);
       view.unmount();
     }
   });

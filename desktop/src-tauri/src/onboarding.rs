@@ -75,9 +75,29 @@ pub(crate) struct OnboardingNativeState {
     /// The receipt of the last successful in-app team discovery. Memory only,
     /// never on disk; cleared with the rest of the state on a scope change.
     pub(crate) receipt: Mutex<Option<crate::existing_team_register::Receipt>>,
+    /// The API key waiting for the provider step of the setup (`onboarding_provider_key_stage`).
+    staged_key: Mutex<Option<StagedKey>>,
 }
 
 impl OnboardingNativeState {
+    fn stage_key(&self, provider: ApiKeyProvider, key: Zeroizing<String>) {
+        if let Ok(mut slot) = self.staged_key.lock() {
+            *slot = Some(StagedKey { provider, key, at: Instant::now() });
+        }
+    }
+
+    /// The staged key for this provider, once: a key for the other provider, or one older than the limit, is wiped and not given.
+    fn take_staged_key(&self, provider: ApiKeyProvider) -> Option<StagedKey> {
+        let staged = self.staged_key.lock().ok()?.take()?;
+        (staged.provider == provider && staged.at.elapsed() <= STAGED_KEY_TTL).then_some(staged)
+    }
+
+    pub(crate) fn clear_staged_key(&self) {
+        if let Ok(mut slot) = self.staged_key.lock() {
+            *slot = None;
+        }
+    }
+
     /// Takes the one-operation-at-a-time gate; false if another holds it.
     pub(crate) fn try_begin(&self) -> bool {
         self.preparing
@@ -115,6 +135,7 @@ pub(crate) fn teardown(state: &OnboardingNativeState) {
     if let Ok(mut receipt) = state.receipt.lock() {
         *receipt = None;
     }
+    state.clear_staged_key();
     state.preparing.store(false, Ordering::Release);
 }
 
@@ -250,10 +271,43 @@ impl LocalCliOperation {
 }
 
 #[derive(Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct OnboardingSubmission {
     host: ExecutionHost,
+    /// The subscription the team signs in with. Ignored when `api_key_provider` is set: a provider used with an API key has no sign-in.
     provider: SubscriptionProvider,
+    /// glm or kimi with an API key (on Pi): the key was given to `onboarding_provider_key_stage` first and is taken from memory when the
+    /// provider step runs; it is never part of this request.
+    #[serde(default)]
+    api_key_provider: Option<ApiKeyProvider>,
+}
+
+/// The providers that run on Pi with an API key. The words are the CLI's (`--provider glm|kimi`).
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum ApiKeyProvider {
+    Glm,
+    Kimi,
+}
+
+impl ApiKeyProvider {
+    fn cli_id(self) -> &'static str {
+        match self {
+            Self::Glm => "glm",
+            Self::Kimi => "kimi",
+        }
+    }
+}
+
+/// How long a key given to the setup waits in memory for the setup to use it (the SSH identity of a VPS may be asked in between).
+const STAGED_KEY_TTL: Duration = Duration::from_secs(20 * 60);
+
+/// The key of the provider the person chose, between the form and the provider step: memory only, wiped when used, when it is
+/// replaced, when it is old and when the state goes away.
+pub(crate) struct StagedKey {
+    provider: ApiKeyProvider,
+    key: Zeroizing<String>,
+    at: Instant,
 }
 
 #[derive(Clone, Deserialize)]
@@ -1080,6 +1134,10 @@ pub(crate) fn failure(code: &'static str) -> OnboardingError {
             // and a host key that is not the pinned one is not something to retry.
             | "ssh_auth_failed"
             | "host_key_changed"
+            // The API key is not kept after the step that used it: asking again would only find it gone, and a key the provider
+            // refused is not worth sending twice. The person goes back and pastes it again.
+            | "provider_key_missing"
+            | "provider_key_refused"
     ) && !code.starts_with("invalid_");
     OnboardingError {
         code,
@@ -3104,6 +3162,7 @@ fn prepare_impl(
     scope: AccountScope,
     submission: OnboardingSubmission,
     pairing_token: Option<String>,
+    provider_key: Option<StagedKey>,
     channel: Channel<OnboardingProgress>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
     let diagnostics = OnboardingDiagnosticSink::new(
@@ -3255,48 +3314,60 @@ fn prepare_impl(
         "ui_provider_progress",
         "ui_provider_done",
         || {
-            match &validated {
-                ValidatedHost::Local => {
-                    let wrapper = wrapper.as_ref().ok_or_else(|| failure("runtime_missing"))?;
-                    ensure_success_with_timeout(
-                        run_scoped_local(
-                            &app,
-                            &scope,
-                            wrapper,
-                            LocalCliOperation::ProviderUse(submission.provider),
-                            COMMAND_TIMEOUT,
-                        ),
-                        "provider_config_failed",
-                        "provider_timeout",
-                    )?;
-                    ensure_success_with_timeout(
-                        run_scoped_local(
-                            &app,
-                            &scope,
-                            wrapper,
-                            LocalCliOperation::ProviderUpdate(submission.provider),
-                            PREPARE_TIMEOUT,
-                        ),
-                        "provider_install_failed",
-                        "provider_timeout",
-                    )?;
+            if let Some(staged) = provider_key {
+                // glm or kimi with an API key: no sign-in and no `providers use`: the setup of the CLI writes the config of the team and keeps the key,
+                // which goes on its standard input and nowhere else (provider_key.rs). The key is wiped when `staged` is dropped here.
+                let stdin = crate::provider_key::key_stdin(&staged.key).map_err(failure)?;
+                let args = crate::provider_key::setup_args(staged.provider.cli_id());
+                let kept = crate::provider_key::parse_setup(run_host_jht(&app, &scope, &validated, &args, Some(&stdin), COMMAND_TIMEOUT))
+                    .map_err(failure)?;
+                if kept == "refused" {
+                    return Err(failure("provider_key_refused"));
                 }
-                ValidatedHost::Vps { .. } => {
-                    let (use_command, update_command) = match submission.provider {
-                        SubscriptionProvider::Claude => (REMOTE_USE_CLAUDE, REMOTE_UPDATE_CLAUDE),
-                        SubscriptionProvider::Codex => (REMOTE_USE_CODEX, REMOTE_UPDATE_CODEX),
-                        SubscriptionProvider::Kimi => (REMOTE_USE_KIMI, REMOTE_UPDATE_KIMI),
-                    };
-                    ensure_remote_success_with_timeout(
-                        run_ssh(&validated, use_command, None, COMMAND_TIMEOUT, None),
-                        "provider_config_failed",
-                        "provider_timeout",
-                    )?;
-                    ensure_remote_success_with_timeout(
-                        run_ssh(&validated, update_command, None, PREPARE_TIMEOUT, None),
-                        "provider_install_failed",
-                        "provider_timeout",
-                    )?;
+            } else {
+                match &validated {
+                    ValidatedHost::Local => {
+                        let wrapper = wrapper.as_ref().ok_or_else(|| failure("runtime_missing"))?;
+                        ensure_success_with_timeout(
+                            run_scoped_local(
+                                &app,
+                                &scope,
+                                wrapper,
+                                LocalCliOperation::ProviderUse(submission.provider),
+                                COMMAND_TIMEOUT,
+                            ),
+                            "provider_config_failed",
+                            "provider_timeout",
+                        )?;
+                        ensure_success_with_timeout(
+                            run_scoped_local(
+                                &app,
+                                &scope,
+                                wrapper,
+                                LocalCliOperation::ProviderUpdate(submission.provider),
+                                PREPARE_TIMEOUT,
+                            ),
+                            "provider_install_failed",
+                            "provider_timeout",
+                        )?;
+                    }
+                    ValidatedHost::Vps { .. } => {
+                        let (use_command, update_command) = match submission.provider {
+                            SubscriptionProvider::Claude => (REMOTE_USE_CLAUDE, REMOTE_UPDATE_CLAUDE),
+                            SubscriptionProvider::Codex => (REMOTE_USE_CODEX, REMOTE_UPDATE_CODEX),
+                            SubscriptionProvider::Kimi => (REMOTE_USE_KIMI, REMOTE_UPDATE_KIMI),
+                        };
+                        ensure_remote_success_with_timeout(
+                            run_ssh(&validated, use_command, None, COMMAND_TIMEOUT, None),
+                            "provider_config_failed",
+                            "provider_timeout",
+                        )?;
+                        ensure_remote_success_with_timeout(
+                            run_ssh(&validated, update_command, None, PREPARE_TIMEOUT, None),
+                            "provider_install_failed",
+                            "provider_timeout",
+                        )?;
+                    }
                 }
             }
             // The snapshot is the check here too, in the runtime log with its command, exit and stderr:
@@ -3324,6 +3395,41 @@ fn prepare_impl(
     Ok(snapshot)
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ProviderKeyStageRequest {
+    provider: ApiKeyProvider,
+    key: String,
+}
+
+impl Drop for ProviderKeyStageRequest {
+    fn drop(&mut self) {
+        self.key.zeroize();
+    }
+}
+
+/// The API key of glm or kimi for the setup that is about to start: checked for its shape and kept in memory (wiped when used, replaced,
+/// old, or when the account changes) until the provider step gives it to the setup's standard input. It is not part of the setup's
+/// request, so it is in no diagnostic, and the page empties its field when it has sent it.
+#[tauri::command]
+pub(crate) async fn onboarding_provider_key_stage(
+    window: tauri::Window,
+    state: State<'_, OnboardingNativeState>,
+    scopes: State<'_, AccountScopeState>,
+    request: ProviderKeyStageRequest,
+) -> Result<(), OnboardingError> {
+    let mut request = request;
+    if !crate::direct_chat::window_may_write(window.label()) {
+        return Err(failure("window_not_allowed"));
+    }
+    scopes.active().map_err(failure)?;
+    // Only a key of the shape the setup asks for is kept; the check wipes its own copy.
+    crate::provider_key::key_stdin(&request.key).map_err(failure)?;
+    let key = Zeroizing::new(std::mem::take(&mut request.key).trim().to_owned());
+    state.stage_key(request.provider, key);
+    Ok(())
+}
+
 #[tauri::command]
 pub(crate) async fn onboarding_prepare(
     window: tauri::Window,
@@ -3347,13 +3453,24 @@ pub(crate) async fn onboarding_prepare(
     {
         return Err(failure("operation_in_progress"));
     }
+    // A team on an API key needs the key the person gave: staged in memory, taken once. Without it nothing is run.
+    let provider_key = match submission.api_key_provider {
+        Some(provider) => match state.take_staged_key(provider) {
+            Some(staged) => Some(staged),
+            None => {
+                state.preparing.store(false, Ordering::Release);
+                return Err(failure("provider_key_missing"));
+            }
+        },
+        None => None,
+    };
     let scope_state = scopes.inner().clone();
     let worker_expected = expected.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
         let _scope = scope_state
             .lock_expected(&worker_expected)
             .map_err(failure)?;
-        prepare_impl(app, worker_expected, submission, pairing_token, on_progress)
+        prepare_impl(app, worker_expected, submission, pairing_token, provider_key, on_progress)
     })
     .await
     .unwrap_or_else(|_| Err(failure("runtime_failed")));
@@ -9034,6 +9151,69 @@ mod tests {
             "provider": "codex"
         }));
         assert!(rejected.is_err());
+    }
+
+    #[test]
+    fn the_prepare_payload_names_an_api_key_provider_and_never_carries_the_key() {
+        let submission: OnboardingSubmission = serde_json::from_value(serde_json::json!({
+            "host": {"kind": "local"},
+            "provider": "codex",
+            "apiKeyProvider": "glm"
+        }))
+        .unwrap();
+        assert_eq!(submission.api_key_provider, Some(ApiKeyProvider::Glm));
+        assert_eq!(ApiKeyProvider::Glm.cli_id(), "glm");
+        assert_eq!(ApiKeyProvider::Kimi.cli_id(), "kimi");
+        // no provider of an API key is the default, and nothing but the two words is one
+        let plain: OnboardingSubmission = serde_json::from_value(serde_json::json!({"host": {"kind": "local"}, "provider": "codex"})).unwrap();
+        assert_eq!(plain.api_key_provider, None);
+        for bad in [serde_json::json!("openai"), serde_json::json!("moonshot"), serde_json::json!("GLM")] {
+            assert!(serde_json::from_value::<OnboardingSubmission>(serde_json::json!({"host": {"kind": "local"}, "provider": "codex", "apiKeyProvider": bad})).is_err());
+        }
+        // a key in the request is a field it does not have
+        for field in ["apiKey", "key", "secret"] {
+            assert!(serde_json::from_value::<OnboardingSubmission>(serde_json::json!({
+                "host": {"kind": "local"}, "provider": "codex", "apiKeyProvider": "kimi", field: "synthetic-value-for-the-test"
+            }))
+            .is_err());
+        }
+    }
+
+    #[test]
+    fn a_staged_key_is_given_once_and_only_for_its_own_provider() {
+        let state = OnboardingNativeState::default();
+        let key = || Zeroizing::new("synthetic-value-for-the-test-0000".to_owned());
+        assert!(state.take_staged_key(ApiKeyProvider::Glm).is_none(), "nothing staged, nothing given");
+        state.stage_key(ApiKeyProvider::Glm, key());
+        assert_eq!(state.take_staged_key(ApiKeyProvider::Glm).map(|staged| staged.provider), Some(ApiKeyProvider::Glm));
+        assert!(state.take_staged_key(ApiKeyProvider::Glm).is_none(), "taken once");
+        // the key of the other provider is not handed out, and it is gone
+        state.stage_key(ApiKeyProvider::Kimi, key());
+        assert!(state.take_staged_key(ApiKeyProvider::Glm).is_none());
+        assert!(state.take_staged_key(ApiKeyProvider::Kimi).is_none(), "the wrong ask wiped it");
+        // a new key replaces the old one; the account going away wipes it
+        state.stage_key(ApiKeyProvider::Glm, key());
+        state.stage_key(ApiKeyProvider::Kimi, key());
+        assert!(state.take_staged_key(ApiKeyProvider::Glm).is_none());
+        state.stage_key(ApiKeyProvider::Glm, key());
+        teardown(&state);
+        assert!(state.take_staged_key(ApiKeyProvider::Glm).is_none());
+        // an old key is not handed out (a machine up for less than the limit cannot make one: nothing to assert there)
+        if let Some(old) = Instant::now().checked_sub(STAGED_KEY_TTL + Duration::from_secs(60)) {
+            *state.staged_key.lock().unwrap() = Some(StagedKey { provider: ApiKeyProvider::Glm, key: key(), at: old });
+            assert!(state.take_staged_key(ApiKeyProvider::Glm).is_none());
+        }
+    }
+
+    #[test]
+    fn the_key_of_the_setup_is_only_ever_on_the_standard_input() {
+        // the provider step with a key runs the setup with the fixed arguments of provider_key.rs and the key as input: never in `args`
+        let source = include_str!("onboarding.rs").split("mod existing_team_assistant_tests").next().unwrap();
+        let prepare = source.split("fn prepare_impl(").nth(1).and_then(|rest| rest.split("pub(crate) async fn onboarding_prepare(").next()).unwrap();
+        assert!(prepare.contains("crate::provider_key::setup_args(staged.provider.cli_id())"));
+        assert!(prepare.contains("Some(&stdin)"));
+        let stage = source.split("pub(crate) async fn onboarding_provider_key_stage(").nth(1).and_then(|rest| rest.split("pub(crate) async fn onboarding_prepare(").next()).unwrap();
+        assert!(!stage.contains("run_host_jht") && !stage.contains("println") && !stage.contains("format!"), "the stage only keeps the key in memory");
     }
 
     #[test]
