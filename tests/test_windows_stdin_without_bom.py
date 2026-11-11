@@ -23,6 +23,8 @@ from windows_native_fakes import ENGINE_CHECK, WINDOWS, assert_engine, install_f
 
 ROOT = Path(__file__).resolve().parent.parent
 WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
+INTEGRATION = ROOT / "scripts" / "jht-integration.ps1"
+TOKEN = "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_AbCdE"  # the shape of the token of the sign-in window; synthetic
 needs_powershell = pytest.mark.skipif(not WINDOWS and shutil.which("pwsh") is None, reason="needs PowerShell")
 
 BOM = b"\xef\xbb\xbf"
@@ -38,6 +40,11 @@ foreach ($name in @('Invoke-NativeWithStdin', 'Invoke-Compose', 'Invoke-BrokerAd
   if (-not $fn) { throw "$name missing" }
   Invoke-Expression $fn.Extent.Text
 }
+$integrationAst = [System.Management.Automation.Language.Parser]::ParseFile($env:JHT_INTEGRATION_UNDER_TEST, [ref]$tokens, [ref]$errors)
+if ($errors.Count) { throw "parse: $($errors[0])" }
+$grant = $integrationAst.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Invoke-LinkedinGrant' }, $true)
+if (-not $grant) { throw 'Invoke-LinkedinGrant missing' }
+Invoke-Expression $grant.Extent.Text
 $BrokerContainer = 'jht-broker'; $TelegramContainer = 'jht-telegram'
 $JhtHome = '.'; $ComposeFile = 'docker-compose.yml'; $PodmanComposeFile = 'docker-compose.podman.yml'; $RuntimeDir = '.'
 $ContainerRuntime = 'docker'
@@ -53,6 +60,11 @@ $null = Invoke-BrokerAdmin -InputText $value -AdminArgs @('mailbox', 'setup', '-
 $null = Invoke-TelegramAdmin -InputText $value -AdminArgs @('token', 'set')
 $null = Invoke-Compose -InputText $value 'run' '--rm' 'jht'
 $null = Get-AgentCloudField -AgentId 'scout-1' -Field 'token'
+$null = Invoke-LinkedinGrant 'abc123' $env:JHT_TEST_TOKEN
+# a wrapper from before Invoke-NativeWithStdin: the same call, plain (its own file: it is the old behaviour, a BOM may come with it)
+Remove-Item Function:\Invoke-NativeWithStdin
+$env:FAKE_TAG = '-plain'
+$null = Invoke-LinkedinGrant 'abc123' $env:JHT_TEST_TOKEN
 """
 
 # docker writes the stdin of the call to a file named after the path
@@ -62,6 +74,7 @@ case "$*" in
   *jht-telegram-admin*) cat > "$FAKE_STATE/stdin-telegram" ;;
   compose*) cat > "$FAKE_STATE/stdin-compose" ;;
   *" node -") cat > "$FAKE_STATE/stdin-node" ;;
+  *login_view.py*) cat > "$FAKE_STATE/stdin-grant${FAKE_TAG:-}" ;;
 esac
 exit 0
 """
@@ -81,6 +94,7 @@ def _run(tmp_path: Path, session_bom: bool) -> dict[str, bytes]:
         "PATH": str(bin_dir) if WINDOWS else f"{bin_dir}{os.pathsep}/usr/bin{os.pathsep}/bin",
         "JHT_ENGINE_FILE": str(engine), "JHT_UNDER_TEST": str(WRAPPER), "FAKE_STATE": str(state),
         "JHT_SESSION_BOM": "1" if session_bom else "", "JHT_TEST_VALUE": VALUE,
+        "JHT_INTEGRATION_UNDER_TEST": str(INTEGRATION), "JHT_TEST_TOKEN": TOKEN,
     }
     done = subprocess.run([*powershell_argv(), "-File", str(harness)], env=env, capture_output=True, text=True, timeout=120)
     assert_engine(engine, done.stderr)
@@ -101,6 +115,29 @@ def test_a_secret_reaches_the_native_command_without_a_bom(stdins, path):
     assert not raw.startswith(BOM), f"a BOM went to docker in front of the stdin of the {path} path"
     # the pipe adds the end of line; the value itself arrives whole, as UTF-8
     assert raw.rstrip(b"\r\n") == VALUE.encode("utf-8"), f"the stdin of the {path} path is not the value that was piped"
+
+
+@needs_powershell
+def test_the_token_of_the_signin_window_reaches_the_view_without_a_bom(stdins):
+    """A token with EF BB BF in front is not a token: the view would answer `token_required` for good."""
+    assert "grant" in stdins, "docker did not receive the stdin of the grant of the sign-in view"
+    raw = stdins["grant"]
+    assert not raw.startswith(BOM), "a BOM went to the view in front of the token of the sign-in window"
+    assert raw.rstrip(b"\r\n") == TOKEN.encode("ascii")
+
+
+@needs_powershell
+def test_a_wrapper_without_the_helper_still_asks_the_view_for_the_grant(stdins):
+    assert TOKEN.encode("ascii") in stdins.get("grant-plain", b""), "the plain pipe of an older wrapper did not reach the view"
+
+
+def test_the_pipe_to_the_view_of_the_signin_is_the_helpers_or_a_plain_one_only_when_the_wrapper_has_none():
+    source = INTEGRATION.read_text(encoding="utf-8")
+    piped = [line for line in source.splitlines() if re.search(r"\|\s*&\s*docker\b", line)]
+    assert len(piped) == 1, "the pipes into docker of the integration helper are not the one that was held"
+    body = source[source.index("function Invoke-LinkedinGrant") :]
+    body = body[: body.index("\n}\n")]
+    assert "Invoke-NativeWithStdin $ask" in body and "Get-Command Invoke-NativeWithStdin -CommandType Function" in body
 
 
 @needs_powershell

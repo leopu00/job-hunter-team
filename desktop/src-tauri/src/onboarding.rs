@@ -2802,12 +2802,14 @@ fn run_local(
 
 /// The broker's LinkedIn login view commands (`jht linkedin ...`), on this
 /// computer through the attested wrapper, on a VPS through SSH. Used by
-/// broker_view.rs; the answer is the command's own JSON line.
+/// broker_view.rs; the answer is the command's own JSON line. `input` is what goes on the command's standard input (the token of the
+/// login window: never an argument).
 pub(crate) fn run_linkedin_command(
     app: &tauri::AppHandle,
     scope: &AccountScope,
     host: &ValidatedHost,
     operation: LocalCliOperation,
+    input: Option<&[u8]>,
     timeout: Duration,
 ) -> Result<ProcessResult, &'static str> {
     let remote = match operation {
@@ -2819,9 +2821,21 @@ pub(crate) fn run_linkedin_command(
     match host {
         ValidatedHost::Local => {
             let wrapper = wrapper_path(app).ok_or_else(|| runtime_refusal(app))?;
-            run_scoped_local(app, scope, &wrapper, operation, timeout)
+            match input {
+                None => run_scoped_local(app, scope, &wrapper, operation, timeout),
+                // The login gets its token on stdin: the same attested wrapper, the same refusals, with an input.
+                Some(input) => {
+                    crate::account_scope::validate_local_runtime(app, scope)?;
+                    refuse_broad_podman_machine(run_verified_local_wrapper(
+                        &wrapper,
+                        &operation.argv(),
+                        Some(input),
+                        timeout,
+                    ))
+                }
+            }
         }
-        ValidatedHost::Vps { .. } => run_ssh(host, remote, None, timeout, None),
+        ValidatedHost::Vps { .. } => run_ssh(host, remote, input, timeout, None),
     }
 }
 

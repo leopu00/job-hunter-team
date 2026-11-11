@@ -2,8 +2,9 @@
 
 Runs in `jht-login-view`, the only container of the login with a published port (127.0.0.1:6081 of the host, never another address).
 It forwards bytes and keeps the limits of the contract the desktop app reads (broker_view.rs):
-  - ONE token, 43 characters of base64url (256 bits), kept in memory only and handed out once, through the control socket of this
-    container (`docker exec … login_view.py grant`): never in a file, never in a log;
+  - ONE token, 43 characters of base64url (256 bits), made by whoever opens the window (the desktop app) and handed IN, once, on the
+    standard input of `docker exec -i … login_view.py grant`, through the control socket of this container: it is kept in memory only
+    and no output of any command ever contains it (until the grant the only token here is a random one nobody has seen);
   - the token opens ONE connection, within 120 s of the start; it is used up by the first well-formed attempt with the right value;
   - the session lasts at most 15 minutes from that connection; the whole container at most 18 minutes from its start;
   - the answer to anything but `GET /websockify?token=…` as a WebSocket is a fixed line.
@@ -14,7 +15,8 @@ The WebSocket side is the small part of RFC 6455 that noVNC uses: binary message
 close. A message is at most 1 MiB.
 
     python3 login_view.py serve <vnc socket> <hint file> [<control socket>]
-    python3 login_view.py grant|status|stop [<control socket>]       (the commands the wrapper runs with `docker exec`)
+    python3 login_view.py grant|status|stop [<control socket>]       (the commands the wrapper runs with `docker exec`;
+                                                                      `grant` reads the token, one line, on its standard input)
 
 The exit code of `serve` says how the session ended (the engine keeps it): 10 logged_in, 11 login_timeout, 12 token_expired, 13 stopped,
 14 view_unavailable.
@@ -134,8 +136,11 @@ class View:
             self.state = "ended"
             self.done.set()
 
-    def grant(self) -> dict:
-        """The line the desktop app reads. Once: a second ask is `view_busy`."""
+    def grant(self, offered: str | None = None) -> dict:
+        """The line the desktop app reads, WITHOUT the token: the token is the one the caller brings, and it is only kept from here on.
+        Once: a second ask is `view_busy`. A grant that fails (the browser is not there yet) keeps nothing: the caller asks again."""
+        if offered is None or not TOKEN_RE.fullmatch(offered):
+            return {"ok": False, "reason": "token_required"}
         if self.granted or self.state != "waiting" or self.token is None:
             return {"ok": False, "reason": "view_busy"}
         if self.token_left() <= 0:
@@ -150,10 +155,10 @@ class View:
                 raise OSError
         except OSError:
             return {"ok": False, "reason": "view_unavailable"}  # the browser is not there yet: the token is not used up, ask again
+        self.token = offered
         self.granted = True
         expires = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=self.token_left())
-        return {"ok": True, "port": PORT, "path": PATH, "token": self.token, "expires_at": expires.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "session": self.session}
+        return {"ok": True, "port": PORT, "path": PATH, "expires_at": expires.strftime("%Y-%m-%dT%H:%M:%SZ"), "session": self.session}
 
     def status(self) -> dict:
         out = {"ok": True, "view": {"waiting": "waiting", "connected": "connected", "ended": "idle"}[self.state]}
@@ -339,12 +344,13 @@ async def bridge(view: View, reader, writer, up_reader, up_writer) -> None:
 
 async def control(view: View, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
     try:
-        word = (await asyncio.wait_for(reader.readline(), 5)).decode("ascii", "ignore").strip()
+        line = (await asyncio.wait_for(reader.readline(), 5)).decode("ascii", "ignore").strip()
+        word, _, argument = line.partition(" ")
         if word == "grant":
-            answer = view.grant()
-        elif word == "status":
+            answer = view.grant(argument or None)
+        elif line == "status":
             answer = view.status()
-        elif word == "stop":
+        elif line == "stop":
             view.end("stopped")
             answer = {"ok": True}
         else:
@@ -390,8 +396,18 @@ async def serve(vnc_socket: str, hint_file: str, control_path: str = CONTROL_SOC
     return EXIT[view.reason or "stopped"]
 
 
-def ask(command: str, control_path: str = CONTROL_SOCKET) -> int:
-    """The side of `docker exec`: one line to the control socket, the answer printed as it is."""
+def ask(command: str, control_path: str = CONTROL_SOCKET, stdin=None) -> int:
+    """The side of `docker exec`: one line to the control socket, the answer printed as it is. `grant` carries the token it reads from
+    its standard input (one line); the token is never printed, and without a well-formed one nothing is asked."""
+    if command == "grant":
+        try:
+            offered = (sys.stdin if stdin is None else stdin).readline(100).strip()
+        except Exception:
+            offered = ""
+        if not TOKEN_RE.fullmatch(offered):
+            print(json.dumps({"ok": False, "reason": "token_required"}))
+            return 1
+        command = "grant " + offered
     try:
         with socket.socket(socket.AF_UNIX) as sock:
             sock.settimeout(5)
