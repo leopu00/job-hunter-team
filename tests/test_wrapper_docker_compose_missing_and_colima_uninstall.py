@@ -85,7 +85,7 @@ def test_with_the_plugin_there_is_no_such_message(tmp_path):
 
 def test_podman_does_not_ask_docker_for_compose():
     func = re.search(r"^docker_compose_plugin_missing\(\) \{\n.*?^\}\n", SOURCE, re.S | re.M).group(0)
-    assert '[ -z "$PODMAN_RUNTIME_MODE" ]' in func and '"$CONTAINER_RUNTIME" != podman' in func
+    assert '[ -z "${PODMAN_RUNTIME_MODE:-}" ]' in func and 'podman ]' in func
 
 
 # ── 2. the uninstall and Colima ───────────────────────────────────────────

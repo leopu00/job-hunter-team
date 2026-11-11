@@ -909,7 +909,7 @@ require_trusted_runtime() {
 # c'e' e fallisce per altro non e' «manca». Vero = manca.
 docker_compose_plugin_missing() {
   local out
-  [ -z "$PODMAN_RUNTIME_MODE" ] && [ "$CONTAINER_RUNTIME" != podman ] || return 1
+  [ -z "${PODMAN_RUNTIME_MODE:-}" ] && [ "${CONTAINER_RUNTIME:-docker}" != podman ] || return 1
   out="$(docker compose version 2>&1)" && return 1
   case "$out" in
     *"unknown command"*|*"is not a docker command"*|*"unknown shorthand"*) return 0 ;;
