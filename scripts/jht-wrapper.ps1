@@ -1231,7 +1231,7 @@ jht - Job Hunter Team
     jht mail setup         salva la casella di posta nel broker dei segreti
     jht mail drafts        email scritte dagli agenti in attesa del tuo ok
     jht mail approve <id>  le manda; jht mail discard <id> le scarta
-    jht integration list|status [ID]|add ID|remove ID [--purge --yes] [--json]
+    jht integration list|status [ID]|add ID|remove ID [--purge --yes] [--remove-image] [--json]
                            le integrazioni che si aggiungono dopo il setup
                            (google, telegram, mail): stato letto dal motore
     jht telegram status    stato del servizio Telegram isolato
@@ -1276,8 +1276,9 @@ Uso: jht integration <comando>
   list [--json]                   le integrazioni e il loro stato
   status [ID] [--json]            lo stato di una, o di tutte
   add ID [--json]                 aggiunge un'integrazione
-  remove ID [--purge --yes] [--json]
-                                  la toglie; --purge cancella anche i suoi dati (serve --yes)
+  remove ID [--purge --yes] [--remove-image] [--json]
+                                  la toglie; --purge cancella anche i suoi dati (serve --yes);
+                                  --remove-image (solo screen e media) toglie anche l'immagine degli strumenti
 
 Gli ID ammessi sono quelli che mostra `jht integration list`. Niente si scarica o si accende
 finche' non lo chiedi con `add`.
@@ -1323,7 +1324,9 @@ function Write-ScreenHelp {
 Uso: jht screen <comando>
 
   on [--json]       accende lo schermo dal vivo del closer: un container a parte, con lo stream solo su 127.0.0.1
-  off [--json]      lo spegne e toglie il container
+  off [--remove-image] [--json]
+                    lo spegne e toglie il container; l'immagine degli strumenti resta sul disco, per riaccenderlo
+                    senza riscaricarla: --remove-image la toglie e libera lo spazio
   status [--json]   dice se e' acceso
 
 Niente si scarica o si accende finche' non lo chiedi con `on`. Lo stream e' in sola visione.

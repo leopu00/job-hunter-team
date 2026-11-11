@@ -460,8 +460,44 @@ function Test-IntegrationBrokerOnRequest {
   return $false
 }
 
+# The extras image (the browser, the screen, the media tools) stays on the disk when a tool made of it is switched off: it was downloaded when the
+# person asked for the tool, and the next `on` finds it instead of downloading it again. It goes with `--remove-image`, or with the uninstall (the
+# Podman machine goes with everything in it). What the engine reports as the size of the image is the whole of it, and a part is shared with the
+# core image: «fino a». Returns 0 done, 1 when the engine does not take the image away.
+function Set-IntegrationExtrasAfterOff {
+  param([string]$Tool, [bool]$RemoveImage)
+  $ref = Get-IntegrationExtrasRef
+  if (-not $ref) { return 0 }
+  $lines = @(& { $ErrorActionPreference = 'Continue'; & docker image inspect --format '{{.Size}}' $ref 2>$null })
+  if ($LASTEXITCODE -ne 0) { return 0 }   # the image is not there: nothing to say
+  $mb = ''
+  $bytes = if ($lines.Count) { ([string]$lines[0]).Trim() } else { '' }
+  if ($bytes -cmatch '^[0-9]+$') { $mb = " (fino a $([long][Math]::Floor([double]$bytes / 1000000)) MB)" }
+  if ($RemoveImage) {
+    $other = ''
+    foreach ($candidate in @('linkedin-login', 'media', 'screen')) {
+      if ($candidate -ceq $Tool) { continue }
+      if ($null -ne (Read-IntegrationMarker $candidate 'ok')) { $other = $candidate; break }
+    }
+    if ($other) {
+      $script:IntegrationWhy = "$($script:IntegrationWhy); l'immagine degli strumenti$mb non e' tolta: la usa ancora $other"
+      return 0
+    }
+    $null = & { $ErrorActionPreference = 'Continue'; & docker rmi $ref 2>&1 }
+    if ($LASTEXITCODE -ne 0) {
+      $script:IntegrationWhy = "container tolto, ma il motore non toglie l'immagine degli strumenti${mb}: la usa ancora qualcosa"
+      return 1
+    }
+    $script:IntegrationWhy = "$($script:IntegrationWhy); immagine degli strumenti tolta$mb"
+    return 0
+  }
+  $command = if ($Tool -ceq 'screen') { 'jht screen off --remove-image' } else { "jht integration remove $Tool --remove-image" }
+  $script:IntegrationWhy = "$($script:IntegrationWhy); l'immagine degli strumenti$mb resta sul disco per riaccenderlo senza riscaricarla: per liberare lo spazio, $command"
+  return 0
+}
+
 function Invoke-IntegrationRemove {
-  param([string]$Id, [bool]$Purge)
+  param([string]$Id, [bool]$Purge, [bool]$RemoveImage = $false)
   $script:IntegrationWhy = ''
   switch -CaseSensitive ($Id) {
     'google' {
@@ -479,11 +515,6 @@ function Invoke-IntegrationRemove {
       if ($code -eq 0) { $code = Invoke-IntegrationComposeQuiet '--profile' 'media' rm '-f' $MediaContainer }
       if ($code -ne 0) { $script:IntegrationWhy = 'il container dei media non si ferma'; return 1 }
       Clear-IntegrationMarker 'media' 'ok'
-      # The image goes with it unless another tool of the extras image is still added (jht-login, jht-screen, when they exist).
-      $ref = Get-IntegrationExtrasRef
-      if ($ref -and $null -eq (Read-IntegrationMarker 'linkedin-login' 'ok') -and $null -eq (Read-IntegrationMarker 'screen' 'ok')) {
-        & { $ErrorActionPreference = 'Continue'; & docker rmi $ref *> $null }
-      }
     }
     'linkedin-login' {
       if (-not (Remove-LinkedinContainers)) { $script:IntegrationWhy = "i container dell'accesso a LinkedIn non si fermano"; return 1 }
@@ -493,10 +524,6 @@ function Invoke-IntegrationRemove {
       if ($code -eq 0) { $code = Invoke-IntegrationComposeQuiet '--profile' 'screen' rm '-f' $ScreenContainer }
       if ($code -ne 0) { $script:IntegrationWhy = 'il container dello schermo non si ferma'; return 1 }
       Clear-IntegrationMarker 'screen' 'ok'
-      $ref = Get-IntegrationExtrasRef
-      if ($ref -and $null -eq (Read-IntegrationMarker 'linkedin-login' 'ok') -and $null -eq (Read-IntegrationMarker 'media' 'ok')) {
-        & { $ErrorActionPreference = 'Continue'; & docker rmi $ref *> $null }
-      }
     }
     'mail' {
       if (-not (Test-IntegrationBrokerOnRequest)) { $script:IntegrationWhy = 'non disponibile ancora'; return 3 }
@@ -515,8 +542,8 @@ function Invoke-IntegrationRemove {
     }
     $script:IntegrationWhy = 'container e dati cancellati'
     if ($Id -ceq 'linkedin-login') { $script:IntegrationWhy = 'container tolti; la sessione di LinkedIn nel profilo resta (jht reset --scope creds la toglie)' }
-    if ($Id -ceq 'screen') { $script:IntegrationWhy = "container e immagine tolti; la cartella del display condivisa con jht e' stata cancellata" }
-    if ($Id -ceq 'media') { $script:IntegrationWhy = 'container e immagine tolti; le due cartelle di scambio con jht restano (sono di jht e non contengono i tuoi file)' }
+    if ($Id -ceq 'screen') { $script:IntegrationWhy = "container tolto; la cartella del display condivisa con jht e' stata cancellata" }
+    if ($Id -ceq 'media') { $script:IntegrationWhy = 'container tolto; le due cartelle di scambio con jht restano (sono di jht e non contengono i tuoi file)' }
     if ($Id -ceq 'mail') { $script:IntegrationWhy = 'container e stato del broker cancellati; la password della posta e le credenziali dei portali restano nel volume dei segreti (jht reset --scope creds)' }
   } elseif ($Id -ceq 'screen') {
     $script:IntegrationWhy = 'schermo spento e container tolto'
@@ -525,12 +552,13 @@ function Invoke-IntegrationRemove {
   } else {
     $script:IntegrationWhy = 'container tolto; i dati restano (per cancellarli: --purge --yes)'
   }
+  if ($Id -ceq 'screen' -or $Id -ceq 'media') { return (Set-IntegrationExtrasAfterOff $Id $RemoveImage) }
   return 0
 }
 
 # add|remove, with the run marked as in progress and the outcome left for the next status.
 function Invoke-IntegrationChange {
-  param([string]$Action, [string]$Id, [bool]$Json, [bool]$Purge)
+  param([string]$Action, [string]$Id, [bool]$Json, [bool]$Purge, [bool]$RemoveImage = $false)
   if ($IntegrationNotYet -ccontains $Id) { return (Write-IntegrationResult $Id $Json 3 'non disponibile ancora') }
   if (-not (Test-IntegrationDirReady)) { return (Write-IntegrationResult $Id $Json 1 'cartella dei marcatori non sicura') }
   if (-not (Write-IntegrationMarker $Id 'pending' ([string]$PID))) { return (Write-IntegrationResult $Id $Json 1 'marcatore non scritto') }
@@ -538,7 +566,7 @@ function Invoke-IntegrationChange {
   $code = 1
   try {
     # what the steps print (compose, Ensure-Up) must not become part of the code: the code is the LAST thing returned
-    if ($Action -ceq 'add') { $done = @(Invoke-IntegrationAdd $Id) } else { $done = @(Invoke-IntegrationRemove $Id $Purge) }
+    if ($Action -ceq 'add') { $done = @(Invoke-IntegrationAdd $Id) } else { $done = @(Invoke-IntegrationRemove $Id $Purge $RemoveImage) }
     $code = [int]$done[$done.Count - 1]
   } catch {
     $script:IntegrationWhy = Get-IntegrationForeign ([string]$_.Exception.Message)
@@ -552,7 +580,7 @@ function Invoke-IntegrationChange {
 
 # ---- Entry point ----
 function Write-IntegrationUsage {
-  Write-Err 'uso: jht integration list [--json] | status [<id>] [--json] | add <id> [--json] | remove <id> [--purge --yes] [--json]'
+  Write-Err 'uso: jht integration list [--json] | status [<id>] [--json] | add <id> [--json] | remove <id> [--purge --yes] [--remove-image] [--json]'
   Write-Err ('id: ' + ($IntegrationIds -join ' '))
   return 2
 }
@@ -562,12 +590,13 @@ function Invoke-IntegrationCommand {
   $action = if ($IntegrationArgs.Count -gt 0) { [string]$IntegrationArgs[0] } else { '' }
   if (@('list', 'status', 'add', 'remove') -cnotcontains $action) { return (Write-IntegrationUsage) }
   $id = ''
-  $json = $false; $purge = $false; $yes = $false
+  $json = $false; $purge = $false; $yes = $false; $removeImage = $false
   foreach ($arg in @($IntegrationArgs | Select-Object -Skip 1)) {
     switch -CaseSensitive ([string]$arg) {
       '--json' { $json = $true }
       '--purge' { if ($action -cne 'remove') { return (Write-IntegrationUsage) }; $purge = $true }
       '--yes' { if ($action -cne 'remove') { return (Write-IntegrationUsage) }; $yes = $true }
+      '--remove-image' { if ($action -cne 'remove') { return (Write-IntegrationUsage) }; $removeImage = $true }
       default {
         if ([string]$arg -like '-*' -or $id) { return (Write-IntegrationUsage) }
         $id = [string]$arg
@@ -580,6 +609,7 @@ function Invoke-IntegrationCommand {
     Write-Err ('integrazione sconosciuta. id ammessi: ' + ($IntegrationIds -join ' '))
     return 2
   }
+  if ($removeImage -and $id -cne 'screen' -and $id -cne 'media') { Write-Err "--remove-image vale per screen e media: sono i due che si fanno con l'immagine degli strumenti"; return 2 }
   if ($purge -and -not $yes) { Write-Err "--purge cancella i dati dell'integrazione: serve anche --yes"; return 2 }
   if ($yes -and -not $purge) { return (Write-IntegrationUsage) }
   switch -CaseSensitive ($action) {
@@ -590,7 +620,7 @@ function Invoke-IntegrationCommand {
     }
     default {
       if ($IntegrationNotYet -cnotcontains $id) { Require-Docker }
-      return (Invoke-IntegrationChange $action $id $json $purge)
+      return (Invoke-IntegrationChange $action $id $json $purge $removeImage)
     }
   }
 }
