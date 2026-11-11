@@ -5992,8 +5992,8 @@ uninstall_podman_machine_state() {
 # generico per cancellare: oltre al progetto si chiede il servizio, il volume
 # logico o la rete di default di QUESTO compose, come fa `jht reset`.
 UNINSTALL_PROJECTS="jht host-runtime"
-UNINSTALL_SERVICES="jht jht-broker jht-telegram jht-media"
-UNINSTALL_VOLUMES="jht-deps jht-runtime-mask jht-secrets jht-broker-state jht-broker-sock jht-telegram-broker-sock jht-telegram-secrets jht-telegram-state jht-telegram-sock jht-telegram-inbox jht-media-in jht-media-out"
+UNINSTALL_SERVICES="jht jht-broker jht-telegram jht-media jht-playwright-populate"
+UNINSTALL_VOLUMES="jht-deps jht-runtime-mask jht-secrets jht-broker-state jht-broker-sock jht-telegram-broker-sock jht-telegram-secrets jht-telegram-state jht-telegram-sock jht-telegram-inbox jht-media-in jht-media-out jht-playwright"
 
 uninstall_docker_ids() {
   local docker_bin="$1" kind="$2" project name ids id
