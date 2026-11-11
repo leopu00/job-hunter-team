@@ -60,6 +60,14 @@ export const HARNESS_ERRORS: Readonly<Record<string, ErrorCopy>> = {
     text: { it: "La chiave si può cambiare solo per il provider che il team usa già con una chiave.", en: "The key can only be changed for the provider the team already uses with a key." },
     action: { it: "Riapri le Impostazioni e riprova; per cambiare provider o tornare a un abbonamento serve la configurazione del team.", en: "Open the Settings again and try again; to change provider or go back to a subscription the team has to be set up again." },
   },
+  provider_key_missing: {
+    text: { it: "La chiave API non è più in memoria: l’app non la tiene dopo un errore o dopo un’attesa lunga.", en: "The API key is no longer held: the app does not keep it after an error or a long wait." },
+    action: { it: "Torna al passo del provider e incollala di nuovo.", en: "Go back to the provider step and paste it again." },
+  },
+  provider_key_refused: {
+    text: { it: "Il provider ha rifiutato la chiave API: non è stata salvata.", en: "The provider refused the API key: it was not saved." },
+    action: { it: "Controlla di aver copiato la chiave giusta, torna al passo del provider e incollane un’altra.", en: "Check that you copied the right key, go back to the provider step and paste another one." },
+  },
 };
 
 export const HARNESS_ERROR_TRANSLATIONS: Readonly<Record<string, ErrorTranslations>> = {
@@ -160,5 +168,19 @@ export const HARNESS_ERROR_TRANSLATIONS: Readonly<Record<string, ErrorTranslatio
     fr: ["La clé ne peut être changée que pour le fournisseur que l’équipe utilise déjà avec une clé.", "Rouvre les réglages et réessaie ; pour changer de fournisseur ou revenir à un abonnement, l’équipe doit être reconfigurée."],
     hu: ["A kulcs csak azon szolgáltatónál módosítható, amelyet a csapat már kulccsal használ.", "Nyisd meg újra a beállításokat, és próbáld újra; szolgáltatóváltáshoz vagy előfizetéshez a csapatot újra be kell állítani."],
     pt: ["A chave só se pode mudar para o fornecedor que a equipa já usa com uma chave.", "Volta a abrir as definições e tenta novamente; para mudar de fornecedor ou voltar a uma subscrição é preciso configurar de novo a equipa."],
+  },
+  provider_key_missing: {
+    de: ["Der API-Schlüssel ist nicht mehr im Speicher: Die App behält ihn nach einem Fehler oder einer langen Wartezeit nicht.", "Geh zum Anbieter-Schritt zurück und füge ihn erneut ein."],
+    es: ["La clave de API ya no está en memoria: la aplicación no la conserva tras un error o una espera larga.", "Vuelve al paso del proveedor y pégala de nuevo."],
+    fr: ["La clé d’API n’est plus en mémoire : l’application ne la garde pas après une erreur ou une longue attente.", "Reviens à l’étape du fournisseur et colle-la de nouveau."],
+    hu: ["Az API-kulcs már nincs a memóriában: az alkalmazás hiba vagy hosszú várakozás után nem őrzi meg.", "Menj vissza a szolgáltató lépéséhez, és illeszd be újra."],
+    pt: ["A chave de API já não está em memória: a aplicação não a guarda depois de um erro ou de uma espera longa.", "Volta ao passo do fornecedor e cola-a de novo."],
+  },
+  provider_key_refused: {
+    de: ["Der Anbieter hat den API-Schlüssel abgelehnt: Er wurde nicht gespeichert.", "Prüfe, ob du den richtigen Schlüssel kopiert hast, geh zum Anbieter-Schritt zurück und füge einen anderen ein."],
+    es: ["El proveedor ha rechazado la clave de API: no se guardó.", "Comprueba que copiaste la clave correcta, vuelve al paso del proveedor y pega otra."],
+    fr: ["Le fournisseur a refusé la clé d’API : elle n’a pas été enregistrée.", "Vérifie que tu as copié la bonne clé, reviens à l’étape du fournisseur et colles-en une autre."],
+    hu: ["A szolgáltató elutasította az API-kulcsot: nem lett elmentve.", "Ellenőrizd, hogy a jó kulcsot másoltad-e, menj vissza a szolgáltató lépéséhez, és illessz be egy másikat."],
+    pt: ["O fornecedor recusou a chave de API: não foi guardada.", "Verifica se copiaste a chave certa, volta ao passo do fornecedor e cola outra."],
   },
 };

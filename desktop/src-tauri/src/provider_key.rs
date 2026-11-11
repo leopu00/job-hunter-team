@@ -81,14 +81,11 @@ struct SetupInvocation {
     stdin: Zeroizing<Vec<u8>>,
 }
 
-fn setup_invocation(request: &ProviderKeyRequest) -> Result<SetupInvocation, &'static str> {
-    let provider = PROVIDERS
-        .iter()
-        .find(|known| **known == request.provider)
-        .copied()
-        .ok_or("provider_key_provider_invalid")?;
+/// The key as the setup reads it from its standard input: trimmed, one line of 16 to 512 printable characters without spaces (the shape
+/// the setup demands), with the line break. The text of a refusal never holds the key.
+pub(crate) fn key_stdin(key: &str) -> Result<Zeroizing<Vec<u8>>, &'static str> {
     // A pasted key often comes with a line break or a space at the end.
-    let key = request.key.trim();
+    let key = key.trim();
     let printable = key.bytes().all(|byte| (b'!'..=b'~').contains(&byte));
     if !(MIN_KEY_LEN..=MAX_KEY_LEN).contains(&key.len()) || !printable {
         return Err("provider_key_invalid");
@@ -96,15 +93,30 @@ fn setup_invocation(request: &ProviderKeyRequest) -> Result<SetupInvocation, &'s
     let mut stdin = Zeroizing::new(Vec::with_capacity(key.len() + 1));
     stdin.extend_from_slice(key.as_bytes());
     stdin.push(b'\n');
+    Ok(stdin)
+}
+
+/// The arguments of the setup that takes the key on its standard input. `provider` is one of the two closed words.
+pub(crate) fn setup_args(provider: &'static str) -> [&'static str; 7] {
+    ["setup", "--non-interactive", "--provider", provider, "--harness", "pi", "--api-key-stdin"]
+}
+
+fn setup_invocation(request: &ProviderKeyRequest) -> Result<SetupInvocation, &'static str> {
+    let provider = PROVIDERS
+        .iter()
+        .find(|known| **known == request.provider)
+        .copied()
+        .ok_or("provider_key_provider_invalid")?;
+    let stdin = key_stdin(&request.key)?;
     Ok(SetupInvocation {
         provider,
-        args: ["setup", "--non-interactive", "--provider", provider, "--harness", "pi", "--api-key-stdin"],
+        args: setup_args(provider),
         stdin,
     })
 }
 
 /// What a command that did not answer says, as a code of the catalog. Never the command's own text.
-fn run_failure(error: &'static str) -> &'static str {
+pub(crate) fn run_failure(error: &'static str) -> &'static str {
     match error {
         "process_timeout" => "timeout",
         "runtime_missing" => "runtime_missing",
@@ -114,7 +126,7 @@ fn run_failure(error: &'static str) -> &'static str {
 }
 
 /// The setup counts only by its exit: 0 is saved, 3 is a key the provider refused (nothing saved), anything else a failure.
-fn parse_setup(result: Result<ProcessResult, &'static str>) -> Result<&'static str, &'static str> {
+pub(crate) fn parse_setup(result: Result<ProcessResult, &'static str>) -> Result<&'static str, &'static str> {
     let output = result.map_err(run_failure)?;
     match output.code {
         0 => Ok("saved"),
@@ -132,6 +144,40 @@ struct HarnessLine {
     provider: Option<String>,
     #[serde(default)]
     login: Option<String>,
+}
+
+/// May the first setup give this provider's key to the team on its host? The setup writes the team's config, so only a team with no
+/// provider yet (a fresh install) or the SAME provider on Pi with a key may have it written; a team on a subscription or on another
+/// provider is refused (`provider_key_not_active`), so a first-setup request cannot replace the config of a team that exists. An answer
+/// that cannot be read is `provider_key_failed`: nothing is run.
+pub(crate) fn team_allows_key_setup(
+    app: &tauri::AppHandle,
+    scope: &crate::account_scope::AccountScope,
+    host: &crate::runtime_host::ValidatedHost,
+    wanted: &'static str,
+) -> Result<(), &'static str> {
+    let result = run_host_jht(app, scope, host, &["providers", "harness", "--json"], None, HARNESS_TIMEOUT);
+    key_setup_verdict(result, wanted)
+}
+
+fn key_setup_verdict(result: Result<ProcessResult, &'static str>, wanted: &'static str) -> Result<(), &'static str> {
+    let output = result.map_err(run_failure)?;
+    let line: HarnessLine = std::str::from_utf8(&output.stdout)
+        .ok()
+        .and_then(|text| text.lines().map(str::trim).filter(|line| line.starts_with('{')).last())
+        .and_then(|line| serde_json::from_str(line).ok())
+        .ok_or("provider_key_failed")?;
+    if !line.ok {
+        return Err("provider_key_failed");
+    }
+    if line.provider.as_deref().map_or(true, str::is_empty) {
+        return Ok(());
+    }
+    if output.success() && active_key_provider(Ok(output)) == Some(wanted) {
+        Ok(())
+    } else {
+        Err("provider_key_not_active")
+    }
 }
 
 /// The provider whose API key the team uses, from `jht providers harness --json`: Pi with a login that is «not needed» (a key) and
@@ -294,6 +340,26 @@ mod tests {
             code,
             stdout: format!("a line before\n{line}\n").into_bytes(),
         })
+    }
+
+    #[test]
+    fn the_first_setup_may_write_a_fresh_team_or_the_same_provider_and_nothing_else() {
+        let team = |harness_name: &str, provider: &str, login: &str| {
+            format!(r#"{{"ok":true,"harness":"{harness_name}","changed":false,"provider":"{provider}","pi_allowed":true,"login":"{login}"}}"#)
+        };
+        // a fresh install: no provider yet
+        assert_eq!(key_setup_verdict(harness(0, &team("codex", "", "unknown")), "glm"), Ok(()));
+        // the same provider, on Pi, with a key (moonshot is kimi)
+        assert_eq!(key_setup_verdict(harness(0, &team("pi", "glm", "not_needed")), "glm"), Ok(()));
+        assert_eq!(key_setup_verdict(harness(0, &team("pi", "moonshot", "not_needed")), "kimi"), Ok(()));
+        // a team that exists on anything else keeps its config
+        for other in [team("pi", "kimi", "not_needed"), team("pi", "openai", "signed_in"), team("codex", "openai", "signed_in"), team("pi", "glm", "signed_in"), team("codex", "glm", "not_needed")] {
+            assert_eq!(key_setup_verdict(harness(0, &other), "glm"), Err("provider_key_not_active"), "{other}");
+        }
+        // not an answer: nothing is run
+        assert_eq!(key_setup_verdict(harness(1, r#"{"ok":false,"error":"harness_config_unreadable"}"#), "glm"), Err("provider_key_failed"));
+        assert_eq!(key_setup_verdict(harness(0, "not json"), "glm"), Err("provider_key_failed"));
+        assert_eq!(key_setup_verdict(Err("process_timeout"), "glm"), Err("timeout"));
     }
 
     #[test]

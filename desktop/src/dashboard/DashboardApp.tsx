@@ -959,14 +959,15 @@ export default function DashboardApp() {
         : runtimeStateFromSnapshot(snapshot));
       return;
     }
-    if (markerId) rememberProviderSignedIn(markerId, submission.provider);
+    // an API key has no sign-in to remember (the subscription stays proposed in the submission, and the native side ignores it)
+    if (markerId && !submission.apiKeyProvider) rememberProviderSignedIn(markerId, submission.provider);
     await startTeam(submission);
   }, [beginActivityInvocation, failLocalRuntime, identityKey, localProfile?.profileId, markerId, recordActivityProgress, session, setRuntime, startTeam]);
 
   const submit = useCallback(async (submission: OnboardingSubmission) => {
     if (!identityKey || !markerId) throw new Error("identity-missing");
     submissionRef.current = submission;
-    rememberChosenProvider(markerId, submission.provider);
+    if (!submission.apiKeyProvider) rememberChosenProvider(markerId, submission.provider);
     if (submission.host.kind === "vps") setVpsSetupKey(identityKey);
     setActivity((current) => current ?? createOnboardingActivity());
     try {

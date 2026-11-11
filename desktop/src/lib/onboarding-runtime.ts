@@ -1,6 +1,7 @@
 import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
 import {
   canonicalProviderLoginUrl,
+  type ApiKeyProviderName,
   type OnboardingProviderLoginAction,
   type ExecutionHost,
   type OnboardingProviderLoginInputRequest,
@@ -283,6 +284,16 @@ export async function confirmOnboardingSshHostKey(
 export async function recreateOnboardingPodmanMachine(): Promise<void> {
   if (!isTauri()) desktopOnly();
   await invoke("onboarding_podman_machine_recreate");
+}
+
+/**
+ * Gives the native side the API key of glm or kimi for the setup that is about to start. The key travels to memory that is wiped when
+ * used (nothing is stored, logged or put in the setup's own request), and the page empties its field once this has returned.
+ * Rejects with `{ code }`: the shape the setup asks for (`provider_key_invalid`), or `desktop_only` outside the app.
+ */
+export async function stageOnboardingProviderKey(provider: ApiKeyProviderName, key: string): Promise<void> {
+  if (!isTauri()) desktopOnly();
+  await invoke("onboarding_provider_key_stage", { request: { provider, key } });
 }
 
 export async function prepareOnboardingRuntime(
