@@ -23,6 +23,26 @@ def pytest_configure(config):
     )
 
 
+# ── Una fetta della raccolta (gate Windows a job paralleli) ──────────────
+#
+# `JHT_TEST_SLICE=k/n` (k da 0 a n-1) tiene solo i test di posto k, k+n, k+2n... della raccolta: n job con k diverso
+# provano insieme tutta la raccolta, ognuno una parte, e nessun test si perde ne' si ripete. Il giro e' per posto e non
+# per file perche' i test lenti stanno in pochi file, uno accanto all'altro (le varianti di una stessa prova). I test
+# fuori dalla fetta si tolgono dalla lista SENZA dirli «deselected»: la riga finale di una fetta e' «N passed», e il
+# gate legge quella. Con xdist ogni worker raccoglie tutto e tiene la stessa fetta: l'ordine della raccolta e' uguale.
+def pytest_collection_modifyitems(config, items):
+    spec = os.environ.get("JHT_TEST_SLICE", "").strip()
+    if not spec:
+        return
+    try:
+        k, n = (int(part) for part in spec.split("/"))
+    except ValueError:
+        raise pytest.UsageError(f"JHT_TEST_SLICE must be k/n, got {spec!r}")
+    if n < 1 or not 0 <= k < n:
+        raise pytest.UsageError(f"JHT_TEST_SLICE must be k/n with 0 <= k < n, got {spec!r}")
+    items[:] = [item for index, item in enumerate(items) if index % n == k]
+
+
 # ── I deselezionati nella riga finale anche con pytest-xdist ─────────────
 #
 # Con xdist la raccolta la fanno i worker, e la riga finale del controller
