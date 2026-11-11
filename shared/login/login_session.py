@@ -46,6 +46,9 @@ EARLY_EXIT_SECONDS = 10
 CHUNK = 65536
 IDLE_SECONDS = 300
 COOKIE_FILES = ("Default/Network/Cookies", "Default/Cookies")
+# What Chromium keeps to restore the tabs after a crash: it holds the text that was in the page (the user name typed, measured; never the
+# password). Nothing here needs it, so it goes when the browser has closed.
+RESTORE_STATE = ("Default/Sessions", "Default/Current Session", "Default/Current Tabs", "Default/Last Session", "Default/Last Tabs")
 CHROME_UNIX_EPOCH_US = 11644473600 * 1_000_000  # Chromium counts microseconds from 1601
 
 
@@ -103,6 +106,21 @@ def logged_in(profile: str, now_us: int | None = None) -> bool:
             if (host == COOKIE_HOST_SUFFIX or host.endswith("." + COOKIE_HOST_SUFFIX)) and (not expires or int(expires) > now_us):
                 return True
     return False
+
+
+def forget_restore_state(profile: str) -> None:
+    """Remove the files the browser restores its tabs from. Real files and folders only: a link is left alone, and never followed."""
+    for relative in RESTORE_STATE:
+        target = Path(profile) / relative
+        try:
+            if target.is_symlink():
+                continue
+            if target.is_dir():
+                shutil.rmtree(target)
+            elif target.is_file():
+                target.unlink()
+        except OSError:
+            continue
 
 
 async def relay(listen_host: str, listen_port: int, proxy_socket: str) -> asyncio.AbstractServer:
@@ -196,6 +214,7 @@ async def run(vnc_socket: str, proxy_socket: str, hint_file: str, profile: str) 
         return 0
     finally:
         stop(chromium)  # first: the profile is written when the browser ends
+        forget_restore_state(profile)  # then: what it wrote to restore its tabs is not kept
         for process in reversed(processes):
             stop(process)
         if server is not None:
