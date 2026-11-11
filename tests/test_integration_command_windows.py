@@ -357,13 +357,13 @@ def test_the_folders_every_jht_up_makes_do_not_make_media_added(host):
     assert rows(run(host, ["list", "--json"]))["media"]["state"] == "not_installed"
 
 
-def test_remove_media_takes_the_container_and_the_image_and_never_the_folders_of_jht(host):
+def test_remove_media_takes_the_container_and_never_the_image_or_the_folders_of_jht(host):
     run(host, ["add", "media", "--json"], T_EXTRAS=DIGEST)
     done = run(host, ["remove", "media", "--purge", "--yes", "--json"], T_EXTRAS=DIGEST)
     assert done.returncode == 0, done.stdout + done.stderr
     lines = log(host).splitlines()
     assert "COMPOSE --profile media stop jht-media" in lines and "COMPOSE --profile media rm -f jht-media" in lines
-    assert f"DOCKER rmi {REF}" in lines
+    assert not any(line.startswith("DOCKER rmi") for line in lines), "the image stays on the disk: it goes with --remove-image or the uninstall"
     assert not any(line.startswith("DOCKER volume rm") for line in lines)
     assert "restano" in json.loads(done.stdout)["reason"]
 
@@ -394,14 +394,14 @@ def test_screen_states_running_ready_when_off_and_not_installed_after_remove(hos
     assert rows(run(host, ["list", "--json"]))["screen"]["state"] == "not_installed"
 
 
-def test_remove_screen_takes_the_container_and_the_image_and_purge_only_the_display_volume(host):
+def test_remove_screen_takes_the_container_and_purge_only_the_display_volume_never_the_image(host):
     run(host, ["add", "screen", "--json"], T_EXTRAS=DIGEST)
     host.volumes.write_text("jht_jht-x11\njht_jht-playwright\n", encoding="utf-8")
     done = run(host, ["remove", "screen", "--purge", "--yes", "--json"], T_EXTRAS=DIGEST)
     assert done.returncode == 0, done.stdout + done.stderr
     lines = log(host).splitlines()
     assert "COMPOSE --profile screen stop jht-screen" in lines and "COMPOSE --profile screen rm -f jht-screen" in lines
-    assert f"DOCKER rmi {REF}" in lines
+    assert not any(line.startswith("DOCKER rmi") for line in lines), "the image stays on the disk: it goes with --remove-image or the uninstall"
     assert [line for line in lines if line.startswith("DOCKER volume rm")] == ["DOCKER volume rm jht_jht-x11"]
 
 
