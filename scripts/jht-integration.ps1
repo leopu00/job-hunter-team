@@ -13,7 +13,7 @@
 # Exit: 0 done - 1 failed - 2 wrong use - 3 not available yet.
 
 $IntegrationIds = @('google', 'telegram', 'mail', 'linkedin-login', 'screen', 'media')
-$IntegrationNotYet = @('linkedin-login')
+$IntegrationNotYet = @()
 # Fixed text, run inside the team's container: the libraries of Google go to the person's own store (jht-install).
 # Single quotes only: Windows PowerShell 5.1 drops a double quote inside a native argument.
 $IntegrationGoogleCode = "import sys; sys.path.insert(0, '/app/shared/skills'); from optional_libs import ensure, GOOGLE_DRIVE, GOOGLE_SHEETS; ensure(*GOOGLE_DRIVE, 'Google Drive'); ensure(*GOOGLE_SHEETS, 'Google Sheets')"
@@ -108,6 +108,10 @@ function Get-IntegrationState {
   if (Test-IntegrationPending $Id) { return @('downloading', 'operazione in corso') }
   if ($Id -ceq 'google') {
     if ($null -ne (Read-IntegrationMarker 'google' 'ok')) { return @('ready', 'librerie di Google aggiunte al profilo; mancano le credenziali dell''account Google') }
+  } elseif ($Id -ceq 'linkedin-login') {
+    if (-not (Test-DockerReachable)) { return @('error', 'il motore dei container non risponde') }
+    if (Test-LinkedinAnyRunning) { return @('running', 'accesso a LinkedIn in corso') }
+    return @('not_installed', 'si accende con: jht linkedin login')
   } elseif ($Id -ceq 'screen') {
     if (-not (Test-DockerReachable)) { return @('error', 'il motore dei container non risponde') }
     if (Get-RunningComposeServiceId $ScreenContainer) { return @('running', 'schermo acceso, stream in sola vista su 127.0.0.1') }
@@ -262,6 +266,10 @@ function Invoke-IntegrationAdd {
       if (-not (Get-RunningComposeServiceId $MediaContainer)) { $script:IntegrationWhy = 'il container dei media non risulta acceso'; return 1 }
       if (-not (Write-IntegrationMarker 'media' 'ok' 'ok')) { $script:IntegrationWhy = 'marcatore non scritto'; return 1 }
     }
+    'linkedin-login' {
+      $script:IntegrationWhy = 'non si aggiunge: si accende con jht linkedin login'
+      return 3
+    }
     'screen' {
       $ref = Get-IntegrationExtrasRef
       if (-not $ref) { $script:IntegrationWhy = 'non disponibile ancora'; return 3 }
@@ -317,6 +325,7 @@ function Get-IntegrationVolumes {
     'telegram' { return @('jht-telegram-secrets', 'jht-telegram-state', 'jht-telegram-inbox') }
     'mail' { return @('jht-broker-state') }
     'screen' { return @('jht-x11') }
+    'linkedin-login' { return @('jht-login-vnc', 'jht-login-egress') }
   }
   return @()
 }
@@ -357,6 +366,9 @@ function Invoke-IntegrationRemove {
         & { $ErrorActionPreference = 'Continue'; & docker rmi $ref *> $null }
       }
     }
+    'linkedin-login' {
+      if (-not (Remove-LinkedinContainers)) { $script:IntegrationWhy = "i container dell'accesso a LinkedIn non si fermano"; return 1 }
+    }
     'screen' {
       $code = Invoke-IntegrationComposeQuiet '--profile' 'screen' stop $ScreenContainer
       if ($code -eq 0) { $code = Invoke-IntegrationComposeQuiet '--profile' 'screen' rm '-f' $ScreenContainer }
@@ -383,11 +395,14 @@ function Invoke-IntegrationRemove {
       }
     }
     $script:IntegrationWhy = 'container e dati cancellati'
+    if ($Id -ceq 'linkedin-login') { $script:IntegrationWhy = 'container tolti; la sessione di LinkedIn nel profilo resta (jht reset --scope creds la toglie)' }
     if ($Id -ceq 'screen') { $script:IntegrationWhy = "container e immagine tolti; la cartella del display condivisa con jht e' stata cancellata" }
     if ($Id -ceq 'media') { $script:IntegrationWhy = 'container e immagine tolti; le due cartelle di scambio con jht restano (sono di jht e non contengono i tuoi file)' }
     if ($Id -ceq 'mail') { $script:IntegrationWhy = 'container e stato del broker cancellati; la password della posta e le credenziali dei portali restano nel volume dei segreti (jht reset --scope creds)' }
   } elseif ($Id -ceq 'screen') {
     $script:IntegrationWhy = 'schermo spento e container tolto'
+  } elseif ($Id -ceq 'linkedin-login') {
+    $script:IntegrationWhy = 'container tolti; la sessione di LinkedIn nel profilo resta (jht reset --scope creds la toglie)'
   } else {
     $script:IntegrationWhy = 'container tolto; i dati restano (per cancellarli: --purge --yes)'
   }
@@ -459,4 +474,176 @@ function Invoke-IntegrationCommand {
       return (Invoke-IntegrationChange $action $id $json $purge)
     }
   }
+}
+
+
+# ---- `jht linkedin login|status` ----
+# The manual sign-in to LinkedIn: three containers of the profile `login` (shared/login/). The line the desktop app reads is the one the view
+# prints (login_view.py grant); here it is only checked in its exact shape, so nothing else ever reaches the app as a token.
+$LoginServices = @('jht-login-proxy', 'jht-login-view', 'jht-login')
+$LoginViewContainer = 'jht-login-view'
+$LoginBrowserContainer = 'jht-login'
+$LinkedinReasons = @('view_busy', 'view_unavailable', 'login_timeout', 'token_expired', 'chromium_sandbox_unavailable')
+$LinkedinPollSeconds = 1
+
+function Get-LinkedinProfileDir { return (Join-Path (Join-Path $JhtHome 'secrets') 'linkedin-profile') }
+
+# Nothing, or a plain folder: never a link (a symbolic link, a junction: anything with a reparse point).
+function Test-LinkedinPlain {
+  param([string]$Path)
+  $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+  if ($null -eq $item) { return $true }
+  if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or $item.LinkType) { return $false }
+  return [bool]$item.PSIsContainer
+}
+
+# At every step under ~/.jht down to the profile: the folder is mounted writable in the browser container and the agents of the team
+# container write under ~/.jht.
+function Test-LinkedinProfileOk {
+  foreach ($path in @($JhtHome, (Join-Path $JhtHome 'secrets'), (Get-LinkedinProfileDir))) {
+    if (-not (Test-LinkedinPlain $path)) { return $false }
+  }
+  return $true
+}
+
+function New-LinkedinProfile {
+  if (-not (Test-LinkedinProfileOk)) { return $false }
+  try {
+    foreach ($path in @($JhtHome, (Join-Path $JhtHome 'secrets'), (Get-LinkedinProfileDir))) {
+      if (-not (Test-Path -LiteralPath $path)) { New-Item -ItemType Directory -Path $path -ErrorAction Stop | Out-Null }
+    }
+  } catch { return $false }
+  return (Test-LinkedinProfileOk)
+}
+
+function Write-LinkedinFail {
+  param([string]$Reason)
+  [Console]::Out.WriteLine('{"ok": false, "reason": "' + $Reason + '"}')
+}
+
+function Test-LinkedinGrantLine {
+  param([string]$Line)
+  return ($Line -cmatch '^\{"ok": true, "port": 6081, "path": "/websockify", "token": "[A-Za-z0-9_-]{43}", "expires_at": "[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z", "session": "[0-9a-f]{1,32}"\}\z')
+}
+
+# The reason of a failure line of the view, from the closed list, or nothing.
+function Get-LinkedinReasonOf {
+  param([string]$Line)
+  if ($Line -cmatch '^\{"ok": false, "reason": "([a-z_]+)"\}\z' -and ($LinkedinReasons -ccontains $Matches[1])) { return $Matches[1] }
+  return ''
+}
+
+function Test-LinkedinAnyRunning {
+  foreach ($service in $LoginServices) { if (Get-RunningComposeServiceId $service) { return $true } }
+  return $false
+}
+
+function Remove-LinkedinContainers {
+  $ok = $true
+  foreach ($service in $LoginServices) {
+    if ((Invoke-IntegrationComposeQuiet '--profile' 'login' stop $service) -ne 0) { $ok = $false }
+    if ((Invoke-IntegrationComposeQuiet '--profile' 'login' rm '-f' $service) -ne 0) { $ok = $false }
+  }
+  return $ok
+}
+
+function Invoke-LinkedinLogin {
+  $plainMessage = "il profilo di LinkedIn in ~/.jht non e' una cartella normale (un collegamento?): non lo uso"
+  if (-not (Test-DockerReachable)) { [Console]::Error.WriteLine('il motore dei container non risponde'); Write-LinkedinFail 'view_unavailable'; return 1 }
+  $ref = Get-IntegrationExtrasRef
+  if (-not $ref) { [Console]::Error.WriteLine('non disponibile ancora'); Write-LinkedinFail 'view_unavailable'; return 1 }
+  if (Test-LinkedinAnyRunning) { Write-LinkedinFail 'view_busy'; return 1 }
+  $null = Remove-LinkedinContainers   # what an ended session left, stopped
+  if (-not (New-LinkedinProfile)) { [Console]::Error.WriteLine($plainMessage); Write-LinkedinFail 'view_unavailable'; return 1 }
+  & { $ErrorActionPreference = 'Continue'; & docker pull $ref *> $null }
+  if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine("download dell'immagine degli strumenti non riuscito"); Write-LinkedinFail 'view_unavailable'; return 1 }
+  # Checked again right before the up (the pull took time): what is left is the instant between this test and the mount of the engine.
+  if (-not ((Test-LinkedinProfileOk) -and (Test-Path -LiteralPath (Get-LinkedinProfileDir) -PathType Container))) {
+    [Console]::Error.WriteLine($plainMessage); Write-LinkedinFail 'view_unavailable'; return 1
+  }
+  $before = $env:JHT_EXTRAS_IMAGE
+  try {
+    $env:JHT_EXTRAS_IMAGE = $ref
+    Invoke-Compose '--profile' 'login' up '-d' @LoginServices | Out-Null
+    $code = $LASTEXITCODE
+  } finally { if ($null -eq $before) { Remove-Item Env:\JHT_EXTRAS_IMAGE -ErrorAction SilentlyContinue } else { $env:JHT_EXTRAS_IMAGE = $before } }
+  if ($code -ne 0) { $null = Remove-LinkedinContainers; Write-LinkedinFail 'view_unavailable'; return 1 }
+  for ($tries = 1; $tries -le 40; $tries++) {
+    $id = Get-RunningComposeServiceId $LoginViewContainer
+    $line = ''
+    if ($id) {
+      $out = @(& { $ErrorActionPreference = 'Continue'; & docker exec $id python3 /app/shared/login/login_view.py grant 2>$null })
+      if ($out.Count) { $line = [string]$out[$out.Count - 1] }
+    }
+    if (Test-LinkedinGrantLine $line) { [Console]::Out.WriteLine($line); return 0 }
+    $reason = Get-LinkedinReasonOf $line
+    if ($reason -and $reason -cne 'view_unavailable') { $null = Remove-LinkedinContainers; Write-LinkedinFail $reason; return 1 }
+    # the browser is not ready yet (the token is not used up): ask again, unless the containers are gone
+    if ($tries -gt 3 -and -not (Test-LinkedinAnyRunning)) { break }
+    if ($LinkedinPollSeconds -gt 0) { Start-Sleep -Seconds $LinkedinPollSeconds }
+  }
+  $null = Remove-LinkedinContainers
+  Write-LinkedinFail 'view_unavailable'
+  return 1
+}
+
+function Invoke-LinkedinStop {
+  if (-not (Remove-LinkedinContainers)) { Write-LinkedinFail 'view_unavailable'; return 1 }
+  [Console]::Out.WriteLine('{"ok": true}')
+  return 0
+}
+
+# How the last session ended, from the exit code the engine keeps of the stopped view.
+function Get-LinkedinLastReason {
+  $code = @(& { $ErrorActionPreference = 'Continue'; & docker inspect -f '{{.State.ExitCode}}' $LoginViewContainer 2>$null })
+  if ($LASTEXITCODE -ne 0 -or -not $code.Count) { return '' }
+  switch -CaseSensitive (([string]$code[0]).Trim()) {
+    '10' { return 'logged_in' }
+    '11' { return 'login_timeout' }
+    '12' { return 'token_expired' }
+    '13' { return 'stopped' }
+  }
+  return ''
+}
+
+function Invoke-LinkedinStatus {
+  if (-not (Test-DockerReachable)) { Write-LinkedinFail 'view_unavailable'; return 1 }
+  $view = 'idle'; $last = ''; $linkedin = 'login_required'
+  $id = Get-RunningComposeServiceId $LoginViewContainer
+  if ($id) {
+    $out = @(& { $ErrorActionPreference = 'Continue'; & docker exec $id python3 /app/shared/login/login_view.py status 2>$null })
+    $text = if ($out.Count) { [string]$out[$out.Count - 1] } else { '' }
+    if ($text -clike '*"view": "waiting"*') { $view = 'waiting' } elseif ($text -clike '*"view": "connected"*') { $view = 'connected' }
+  } else {
+    $last = Get-LinkedinLastReason
+  }
+  $ref = Get-IntegrationExtrasRef
+  $profile = Get-LinkedinProfileDir
+  if ($ref -and (Test-LinkedinProfileOk) -and (Test-Path -LiteralPath $profile -PathType Container)) {
+    & { $ErrorActionPreference = 'Continue'; & docker image inspect $ref *> $null }
+    if ($LASTEXITCODE -eq 0) {
+      $before = $env:JHT_EXTRAS_IMAGE
+      try {
+        $env:JHT_EXTRAS_IMAGE = $ref
+        $answer = @(Invoke-Compose '--profile' 'login' run '--rm' '--no-deps' '-T' '--entrypoint' 'python3' $LoginBrowserContainer '/app/shared/login/login_session.py' 'check' '/linkedin-profile')
+      } finally { if ($null -eq $before) { Remove-Item Env:\JHT_EXTRAS_IMAGE -ErrorAction SilentlyContinue } else { $env:JHT_EXTRAS_IMAGE = $before } }
+      if ($answer.Count -and ([string]$answer[$answer.Count - 1]).Trim() -ceq 'logged_in') { $linkedin = 'logged_in' }
+    }
+  }
+  if ($last) {
+    [Console]::Out.WriteLine(('{{"ok": true, "view": "{0}", "linkedin": "{1}", "last_session": {{"reason": "{2}"}}}}' -f $view, $linkedin, $last))
+  } else {
+    [Console]::Out.WriteLine(('{{"ok": true, "view": "{0}", "linkedin": "{1}"}}' -f $view, $linkedin))
+  }
+  return 0
+}
+
+function Invoke-LinkedinCommand {
+  param([string[]]$LinkedinArgs)
+  $joined = (@($LinkedinArgs) -join ' ')
+  if ($joined -ceq 'login') { Require-Docker; return (Invoke-LinkedinLogin) }
+  if ($joined -ceq 'login --stop') { Require-Docker; return (Invoke-LinkedinStop) }
+  if ($joined -ceq 'status --json') { return (Invoke-LinkedinStatus) }
+  Write-Err 'uso: jht linkedin login [--stop] | status --json'
+  return 2
 }

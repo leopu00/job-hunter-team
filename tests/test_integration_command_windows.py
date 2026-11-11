@@ -135,13 +135,13 @@ def log(host) -> str:
     return host.log.read_text(encoding="utf-8")
 
 
-def test_list_json_nothing_added_and_one_not_available_yet(host):
+def test_list_json_nothing_added_and_the_login_says_how_it_is_switched_on(host):
     result = run(host, ["list", "--json"])
     assert result.returncode == 0, result.stderr
     found = rows(result)
     assert list(found) == ["google", "telegram", "mail", "linkedin-login", "screen", "media"]
     assert {found[i]["state"] for i in ("google", "telegram", "mail", "screen", "media")} == {"not_installed"}
-    assert found["linkedin-login"] == {"id": "linkedin-login", "state": "not_installed", "reason": "non disponibile ancora"}
+    assert found["linkedin-login"] == {"id": "linkedin-login", "state": "not_installed", "reason": "si accende con: jht linkedin login"}
 
 
 def test_state_is_running_ready_error_from_the_engine(host):
@@ -184,12 +184,11 @@ def test_add_google_runs_the_fixed_text_and_a_failure_is_kept_one_line(host):
     assert rows(run(host, ["list", "--json"]))["google"]["state"] == "error"
 
 
-def test_what_is_not_available_yet_is_refused_with_its_own_code(host):
-    for action in ("add", "remove"):
-        result = run(host, [action, "linkedin-login", "--json"])
-        assert result.returncode == 3, (action, result.stderr)
-        assert json.loads(result.stdout)["reason"] == "non disponibile ancora"
-    assert log(host) == ""
+def test_the_sign_in_to_linkedin_is_not_added_it_is_switched_on_by_its_own_command_and_add_touches_nothing(host):
+    result = run(host, ["add", "linkedin-login", "--json"])
+    assert result.returncode == 3, result.stderr
+    assert "jht linkedin login" in json.loads(result.stdout)["reason"]
+    assert not [line for line in log(host).splitlines() if line.startswith("COMPOSE")], "nothing is started by an add"
 
 
 @pytest.mark.parametrize("hostile", ["google;touch HIT", "../x", "$(Get-Date)", "Google", "all", "-x", "`ls`"])
@@ -256,7 +255,7 @@ def test_wrapper_installer_enabler_and_library_agree_on_the_helper():
     assert "$JHT_INTEGRATION_PROTOCOL = 1\n" in wrapper
     assert re.search(r"'integration' \{\n    Require-ComposeFile\n", wrapper)
     assert "$mayFetch = $Rest.Count -gt 0" in wrapper                      # only add/remove fetch a missing helper
-    assert "'integration', 'screen', 'tools'," in wrapper                          # its help is the local one, and so is the one of tools
+    assert "'integration', 'screen', 'linkedin', 'tools'," in wrapper                          # its help is the local one, and so is the one of tools
     assert "jht-integration.ps1" in installer and "scripts/jht-integration.ps1" in installer
     assert "jht-integration.ps1=$integrationHash" in enabler and "'.runtime-helpers'" in enabler
     assert "$integrationHash" not in next(l for l in enabler.splitlines() if l.startswith('$manifest = "version=1'))   # the main manifest is the app's
@@ -267,7 +266,10 @@ def test_wrapper_installer_enabler_and_library_agree_on_the_helper():
 def test_the_library_passes_nothing_the_person_typed_to_a_native_command():
     code = "\n".join(line for line in _text(LIBRARY).splitlines() if not line.lstrip().startswith("#"))
     assert not re.search(r"\b(Invoke-Expression|iex)\b|&\s*\$", code)
-    assert len(re.findall(r"docker exec", code)) == 1 and "$IntegrationGoogleCode" in code
+    # the docker exec are fixed texts: the Google one, and the two questions to the view of the login, on the id the wrapper attested
+    execs = re.findall(r"docker exec[^\n]*", code)
+    assert len(execs) == 3 and sum("$IntegrationGoogleCode" in e for e in execs) == 1
+    assert sum(bool(re.search(r"docker exec \$id python3 /app/shared/login/login_view\.py (grant|status) 2>\$null", e)) for e in execs) == 2
 
 
 # ---- media: the extras image by the digest the wrapper carries, then the `media` profile ----

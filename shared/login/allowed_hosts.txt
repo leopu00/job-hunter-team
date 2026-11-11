@@ -1,0 +1,13 @@
+# The hosts the browser of the manual LinkedIn sign-in may reach (port 443 only), one per line, exact names.
+# Measured with a real run on 11/11/2026: the login page of LinkedIn, its button «Sign in with Google» (the frame of Google it loads) and
+# the Google sign-in page, with every request of the browser recorded. Nothing is here that the run did not ask for, and no wildcard:
+# a name that a real sign-in needs and this list lacks is added from a measurement, not from a guess.
+# TLS is not inspected: a host of this list can carry any content, so the list stays short.
+www.linkedin.com
+static.licdn.com
+accounts.google.com
+accounts.youtube.com
+www.google.com
+www.gstatic.com
+fonts.gstatic.com
+play.google.com

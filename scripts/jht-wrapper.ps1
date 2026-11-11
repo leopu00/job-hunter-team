@@ -1330,12 +1330,25 @@ Niente si scarica o si accende finche' non lo chiedi con `on`. Lo stream e' in s
 '@)
 }
 
+# `jht linkedin --help`: its line of use, fixed text: a help downloads nothing.
+function Write-LinkedinHelp {
+  [Console]::Out.WriteLine(@'
+Uso: jht linkedin <comando>
+
+  login [--stop]    l'accesso a mano a LinkedIn (con Google): un browser in un container a parte, senza rete, di cui vedi
+                    e usi la finestra dall'app; --stop chiude tutto
+  status --json     dice se l'accesso e' in corso e se la sessione di LinkedIn e' salvata
+
+Niente si scarica o si accende finche' non lo chiedi con `login`.
+'@)
+}
+
 function Test-HostCommandUsesLocalHelp {
   param([string]$Command)
   return $Command -in @(
     'up', 'start-container', 'down', 'stop-container', 'restart', 'recreate',
     'upgrade', 'logs', 'status', 'shell', 'oauth-login', 'claude-login',
-    'setup', 'download', 'mail', 'telegram', 'integration', 'screen', 'tools', 'reset', 'migrate-runtime'
+    'setup', 'download', 'mail', 'telegram', 'integration', 'screen', 'linkedin', 'tools', 'reset', 'migrate-runtime'
   )
 }
 
@@ -1448,7 +1461,7 @@ function Get-RunningComposeServiceId {
   if (-not $expectedProject) { $script:ServiceLookupReason = 'the compose project name could not be read'; return $null }
   $files = @('-f', $ComposeFile)
   if ($ContainerRuntime -eq 'podman') { $files += @('-f', $PodmanComposeFile) }
-  $composeArgs = @('compose') + $files + @('--project-directory', $RuntimeDir, '--profile', 'telegram', '--profile', 'broker', '--profile', 'media', '--profile', 'playwright', '--profile', 'screen', 'ps', '-q')
+  $composeArgs = @('compose') + $files + @('--project-directory', $RuntimeDir, '--profile', 'telegram', '--profile', 'broker', '--profile', 'media', '--profile', 'playwright', '--profile', 'screen', '--profile', 'login', 'ps', '-q')
   if ($ContainerRuntime -ne 'podman') { $composeArgs += $Service }
   $ids = @(& { $ErrorActionPreference = 'Continue'; & docker @composeArgs 2>$null } | ForEach-Object { "$($_)".Trim() } | Where-Object { $_ })
   $psCode = $LASTEXITCODE
@@ -2467,7 +2480,7 @@ function Remove-BrokerResetData {
     Write-Err 'reset: non riesco a determinare il progetto Compose; i volumi del broker non sono stati toccati.'
     return 1
   }
-  Invoke-Compose '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' down
+  Invoke-Compose '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' '--profile' 'login' down
   if ($LASTEXITCODE -ne 0) {
     Write-Err 'reset: non riesco a fermare il runtime; i volumi del broker non sono stati toccati.'
     return 1
@@ -4150,6 +4163,10 @@ if ($HelpRequested -and $Sub -notin @('game', 'gui', 'agent-control', 'desktop-a
     Write-ScreenHelp
     exit 0
   }
+  if ($Sub -ceq 'linkedin' -and $Rest.Count -eq 1) {
+    Write-LinkedinHelp
+    exit 0
+  }
   if ($Sub -ceq 'setup') {
     Write-SetupHelp
     exit 0
@@ -4258,7 +4275,7 @@ switch ($Sub) {
   { $_ -in @('down', 'stop-container') } {
     Require-ComposeFile
     Require-Docker
-    Invoke-Compose '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' down
+    Invoke-Compose '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' '--profile' 'login' down
     break
   }
 
@@ -4272,7 +4289,7 @@ switch ($Sub) {
   'recreate' {
     Require-ComposeFile
     Require-Docker
-    Invoke-Compose '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' down
+    Invoke-Compose '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' '--profile' 'login' down
     if (-not (Repair-MountOwnership)) { exit 1 }
     if (-not (Initialize-TelegramLegacyInventory)) {
       Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'
@@ -4352,6 +4369,27 @@ switch ($Sub) {
     Assert-TrustedRuntime
     . $helperPath
     exit (Invoke-IntegrationCommand $screenArgs)
+  }
+
+  'linkedin' {
+    # The manual sign-in to LinkedIn. The lines the app reads are the same with or without the helper: a read-only question or a stop
+    # needs nothing to be installed, and only `login` fetches the helper if it is not there.
+    Require-ComposeFile
+    $linkedinWords = (@($Rest) -join ' ')
+    if (-not (Test-RuntimeHelperDeclared 'jht-integration.ps1')) {
+      if ($linkedinWords -ceq 'status --json') { [Console]::Out.WriteLine('{"ok": true, "view": "idle", "linkedin": "login_required"}'); exit 0 }
+      if ($linkedinWords -ceq 'login --stop') { [Console]::Out.WriteLine('{"ok": true}'); exit 0 }
+    }
+    $helperPath = Join-Path $RuntimeDir 'jht-integration.ps1'
+    if (-not (Test-RuntimeHelperDeclared 'jht-integration.ps1')) {
+      if (-not (Install-RuntimeHelpers)) {
+        Write-Err "script jht-integration.ps1 non ancora installato: 'jht upgrade' (o un 'jht integration add/remove') e riprova"
+        exit 1
+      }
+    }
+    Assert-TrustedRuntime
+    . $helperPath
+    exit (Invoke-LinkedinCommand @($Rest))
   }
 
   'tools' {

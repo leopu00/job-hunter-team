@@ -251,6 +251,12 @@ FROM ${BASE} AS runtime
 
 COPY . .
 
+# The browser of the manual sign-in must not keep what the person types: the profile sits under ~/.jht, which the agents read, and an
+# accepted «Save password?» would leave the password in Default/Login Data. Managed policy of Chromium (it wins over any user setting),
+# in every tier: password manager, address and card autofill off, no sync, no sign-in to the browser itself (the web sign-in of Google
+# is not that). Tested in tests/test_login_chromium_policy.py.
+COPY shared/login/chromium-policy.json /etc/chromium/policies/managed/jht-login.json
+
 # Normalizza i line-ending degli script ESEGUIBILI degli agenti — quelli SENZA
 # estensione (jht-send, jht-tmux-send, wrapper in _tools/): su un checkout
 # Windows git li materializza CRLF e il container Linux fallisce l'exec con
@@ -475,7 +481,11 @@ RUN useradd --create-home --shell /bin/bash jht \
     # Where the X socket of the live screen is: the sticky world-writable folder X wants, made here so the volume that holds the socket
     # (shared by jht and jht-screen) takes it on first use.
     && mkdir -p /tmp/.X11-unix \
-    && chmod 1777 /tmp/.X11-unix
+    && chmod 1777 /tmp/.X11-unix \
+    # The folders of sockets of the manual sign-in to LinkedIn (each volume takes owner and mode from the one in the image on first use).
+    && mkdir -p /ipc/vnc /ipc/egress \
+    && chown jht:jht /ipc /ipc/vnc /ipc/egress \
+    && chmod 0700 /ipc/vnc /ipc/egress
 
 # Broker of the portal secrets (P1 del 08/10): un secondo container della
 # stessa immagine, con un uid suo. I tre mount point nascono qui con il
