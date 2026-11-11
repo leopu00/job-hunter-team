@@ -476,7 +476,7 @@ const NOT_ERRORS: Record<string, string> = {
   install_failed: "debug trace event",
   install_required: "debug trace event",
   install_reused: "debug trace event",
-  installed_on_another_engine: "debug trace event",
+  adopting_existing_engine: "debug trace event",
   not_ready: "debug trace event",
   start_failed: "debug trace event",
   snapshot_not_ready: "debug trace event",
