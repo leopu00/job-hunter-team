@@ -1599,5 +1599,237 @@
     "read": 100
    }
   ]
+ },
+ "language_home": {
+  "sv": [
+   "se"
+  ],
+  "da": [
+   "dk"
+  ],
+  "no": [
+   "no"
+  ],
+  "fi": [
+   "fi"
+  ],
+  "nl": [
+   "nl",
+   "be"
+  ],
+  "de": [
+   "de",
+   "at",
+   "ch"
+  ],
+  "fr": [
+   "fr",
+   "be",
+   "ch"
+  ],
+  "it": [
+   "it"
+  ],
+  "es": [
+   "es"
+  ],
+  "pt": [
+   "pt"
+  ]
+ },
+ "country_names": {
+  "it": [
+   "italy",
+   "italia"
+  ],
+  "se": [
+   "sweden",
+   "sverige",
+   "svezia"
+  ],
+  "dk": [
+   "denmark",
+   "danmark",
+   "danimarca"
+  ],
+  "no": [
+   "norway",
+   "norge",
+   "norvegia"
+  ],
+  "fi": [
+   "finland",
+   "suomi",
+   "finlandia"
+  ],
+  "nl": [
+   "netherlands",
+   "the netherlands",
+   "nederland",
+   "holland",
+   "olanda",
+   "paesi bassi"
+  ],
+  "be": [
+   "belgium",
+   "belgie",
+   "belgique",
+   "belgio"
+  ],
+  "de": [
+   "germany",
+   "deutschland",
+   "germania"
+  ],
+  "at": [
+   "austria",
+   "osterreich"
+  ],
+  "ch": [
+   "switzerland",
+   "schweiz",
+   "suisse",
+   "svizzera"
+  ],
+  "fr": [
+   "france",
+   "francia"
+  ],
+  "es": [
+   "spain",
+   "espana",
+   "spagna"
+  ],
+  "pt": [
+   "portugal",
+   "portogallo"
+  ],
+  "ie": [
+   "ireland",
+   "eire",
+   "irlanda"
+  ],
+  "gb": [
+   "united kingdom",
+   "uk",
+   "great britain",
+   "england",
+   "scotland",
+   "wales",
+   "regno unito",
+   "inghilterra"
+  ],
+  "mt": [
+   "malta"
+  ],
+  "pl": [
+   "poland",
+   "polska",
+   "polonia"
+  ],
+  "cz": [
+   "czech republic",
+   "czechia",
+   "cesko"
+  ],
+  "hu": [
+   "hungary",
+   "magyarorszag",
+   "ungheria"
+  ],
+  "ro": [
+   "romania"
+  ],
+  "gr": [
+   "greece",
+   "grecia"
+  ],
+  "lu": [
+   "luxembourg",
+   "lussemburgo"
+  ],
+  "us": [
+   "united states",
+   "usa",
+   "u.s.",
+   "america",
+   "stati uniti"
+  ],
+  "ca": [
+   "canada"
+  ],
+  "au": [
+   "australia"
+  ],
+  "in": [
+   "india"
+  ],
+  "sg": [
+   "singapore",
+   "singapour"
+  ],
+  "ae": [
+   "united arab emirates",
+   "uae",
+   "emirati arabi"
+  ],
+  "br": [
+   "brazil",
+   "brasil",
+   "brasile"
+  ],
+  "mx": [
+   "mexico",
+   "messico"
+  ],
+  "jp": [
+   "japan",
+   "giappone"
+  ],
+  "cn": [
+   "china",
+   "cina"
+  ],
+  "il": [
+   "israel"
+  ],
+  "tr": [
+   "turkey",
+   "turkiye",
+   "turchia"
+  ],
+  "ua": [
+   "ukraine",
+   "ucraina"
+  ],
+  "bg": [
+   "bulgaria"
+  ],
+  "hr": [
+   "croatia",
+   "croazia"
+  ],
+  "sk": [
+   "slovakia",
+   "slovacchia"
+  ],
+  "si": [
+   "slovenia"
+  ],
+  "ee": [
+   "estonia"
+  ],
+  "lv": [
+   "latvia",
+   "lettonia"
+  ],
+  "lt": [
+   "lithuania",
+   "lituania"
+  ],
+  "is": [
+   "iceland",
+   "islanda"
+  ]
  }
 }

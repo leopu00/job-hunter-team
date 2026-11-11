@@ -142,9 +142,12 @@ def work_rights(profile_path=None) -> frozenset:
     return frozenset(found)
 
 
-def build_plan(spoken: dict, mode: str = "", data: dict | None = None, rights=frozenset()) -> dict:
+def build_plan(spoken: dict, mode: str = "", data: dict | None = None, rights=frozenset(), home=(), relocation: bool = True) -> dict:
     """{languages, unmapped, remote, entries}: the portals to cover, core ones of every group first. A portal that needs a right
-    to work (`needs_work_right`) is left out unless `rights` (see `work_rights`) has it, and `skipped` says which country it was."""
+    to work (`needs_work_right`) is left out unless `rights` (see `work_rights`) has it, and `skipped` says which country it was. With
+    `home` (the profile's home countries, see scout_area.read_area) and no `relocation`, a portal of ANOTHER country is left out too
+    (`skipped_abroad`): its ads are onsite there, and the person lives elsewhere and did not say she would move. `remote` is nobody's
+    country. No home known, or willingness to relocate: nothing is left out for this."""
     data = data or table()
     strong = sorted(_lang.business_languages(spoken), key=lambda code: (-spoken[code], code))
     groups = [code for code in strong if code != "en"]
@@ -153,7 +156,7 @@ def build_plan(spoken: dict, mode: str = "", data: dict | None = None, rights=fr
     remote = bool(strong) and not any(word in mode for word in REMOTE_BLOCKERS)
     if remote:
         groups.append("remote")
-    entries, unmapped, skipped = [], [], set()
+    entries, unmapped, skipped, abroad = [], [], set(), set()
     for rank, code in enumerate(groups):
         listed = data["groups"].get(code)
         if not listed:
@@ -162,6 +165,9 @@ def build_plan(spoken: dict, mode: str = "", data: dict | None = None, rights=fr
         for order, item in enumerate(listed):
             if item.get("needs_work_right") and item["needs_work_right"] not in rights:
                 skipped.add(item["needs_work_right"])
+                continue
+            if home and not relocation and item["country"] != "remote" and item["country"] not in home:
+                abroad.add(item["country"])
                 continue
             entry = dict(item)
             entry["language"] = code
@@ -172,7 +178,7 @@ def build_plan(spoken: dict, mode: str = "", data: dict | None = None, rights=fr
     for position, entry in enumerate(entries, 1):
         entry.pop("_rank")
         entry["priority"] = position
-    return {"languages": strong, "unmapped": unmapped, "remote": remote, "entries": entries, "skipped_no_work_right": sorted(skipped)}
+    return {"languages": strong, "unmapped": unmapped, "remote": remote, "entries": entries, "skipped_no_work_right": sorted(skipped), "skipped_abroad": sorted(abroad)}
 
 
 def _portal_language(group: str, item: dict) -> str:
@@ -493,7 +499,15 @@ def default_since(now: float) -> float:
 
 
 def load_plan(profile_path=None) -> dict:
-    return build_plan(_lang.read_languages(profile_path), work_mode(profile_path), rights=work_rights(profile_path))
+    home, relocation = (), True
+    try:
+        import scout_area
+        area = scout_area.read_area(profile_path)
+        if area:
+            home, relocation = tuple(area["home"]), area["relocation"]
+    except Exception:  # noqa: BLE001 — no area, nothing is left out for being abroad
+        pass
+    return build_plan(_lang.read_languages(profile_path), work_mode(profile_path), rights=work_rights(profile_path), home=home, relocation=relocation)
 
 
 def rows_since(since_ts: float) -> list:
