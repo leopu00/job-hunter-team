@@ -23,6 +23,7 @@ Prints one JSON object; exit 0 always except a bad command line (2).
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import subprocess
@@ -97,6 +98,33 @@ def _recent() -> bool:
     return 0 <= time.time() - started < RECENT_S
 
 
+@contextlib.contextmanager
+def _exclusive():
+    """One run at a time: an exclusive lock on a file of its own, taken BEFORE a number is rolled and held to the end of
+    the run (a child process does not inherit it). Yields False when another run holds it; a system without fcntl yields True."""
+    try:
+        import fcntl
+    except ImportError:
+        yield True
+        return
+    try:
+        path = _home() / "state" / "burst-roster.lock"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handle = path.open("a", encoding="utf-8")
+    except OSError:
+        yield True  # no lock can be made: the marker still refuses a second run that comes later
+        return
+    try:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            yield False
+            return
+        yield True
+    finally:
+        handle.close()
+
+
 def _write_marker() -> None:
     try:
         _marker().parent.mkdir(parents=True, exist_ok=True)
@@ -139,13 +167,20 @@ def start(auto: bool, force: bool) -> dict:
     decision = plan(state, auto)
     if not decision["start"]:
         return {"started": [], "note": decision["why_not"]}
-    if _recent() and not force:
-        return {"started": [], "note": f"the roster was started less than {RECENT_S} s ago: look at `first_run.py status` in a minute"}
-    _write_marker()
+    with _exclusive() as free:
+        if not free:
+            return {"started": [], "note": "another run is starting the roster right now: look at `first_run.py status` in a minute"}
+        if _recent() and not force:
+            return {"started": [], "note": f"the roster was started less than {RECENT_S} s ago: look at `first_run.py status` in a minute"}
+        _write_marker()
+        return {"started": _spawn(decision["start"], state), "note": "start-agent.sh sends each brief when the REPL is up"}
+
+
+def _spawn(roles: list[str], state: dict) -> list[dict]:
     cap = state.get("scout_cap_first_pass")
     cap = cap if isinstance(cap, int) and not isinstance(cap, bool) and cap > 0 else None
     done: list[dict] = []
-    for role in decision["start"]:
+    for role in roles:
         number = _number(role)
         if number is None:
             done.append({"role": role, "ok": False, "why": "no free number"})
@@ -161,7 +196,7 @@ def start(auto: bool, force: bool) -> dict:
             row = {"role": role, "number": number, "ok": False, "why": type(exc).__name__}
         done.append(row)
         _log(row)
-    return {"started": done, "note": "start-agent.sh sends each brief when the REPL is up"}
+    return done
 
 
 def main(argv: list[str]) -> int:

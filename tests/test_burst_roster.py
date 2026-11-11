@@ -179,6 +179,45 @@ def test_the_start_of_the_capitano_starts_the_roster_in_the_background_and_says_
     assert [c["role"] for c in _calls(world)] == expected
 
 
+def test_the_boot_block_does_not_promise_a_start_that_will_not_happen(tmp_path: Path):
+    world = _world(tmp_path, sessions=["CAPITANO", "SCOUT-3"])  # a Capitano restarted in an open burst with a worker up
+    done = subprocess.run([sys.executable, "-I", str(BOOT)], capture_output=True, text=True, timeout=120, env=world["env"], check=False)
+    assert done.returncode == 0 and "first run: phase burst" in done.stdout
+    assert "STARTING THE ROSTER" not in done.stdout
+    time.sleep(1)
+    assert _calls(world) == []
+
+
+def test_the_plan_names_what_would_start_and_starts_nothing(tmp_path: Path):
+    world = _world(tmp_path)
+    out = _run(world, "plan", "--auto")
+    assert out["start"] == FULL_ORDER and _calls(world) == []
+    world["listing"].write_text("SCOUT-2\n", encoding="utf-8")
+    assert _run(world, "plan", "--auto")["start"] == []
+
+
+def test_a_run_that_holds_the_lock_keeps_a_second_one_from_rolling_numbers(tmp_path: Path):
+    import fcntl
+    world = _world(tmp_path)
+    lock = world["home"] / "state" / "burst-roster.lock"
+    with lock.open("a") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        out = _run(world, "start", "--auto")
+    assert out["started"] == [] and "another run" in out["note"] and _calls(world) == []
+    assert len(_run(world, "start", "--auto")["started"]) == 10  # the lock is free again: it starts
+
+
+def test_two_runs_at_the_same_time_start_the_roster_once(tmp_path: Path):
+    world = _world(tmp_path)
+    launcher = Path(world["env"]["JHT_START_AGENT"])
+    launcher.write_text(launcher.read_text().replace("#!/bin/bash\n", "#!/bin/bash\nsleep 0.3\n", 1), encoding="utf-8")
+    argv = [sys.executable, "-I", str(SCRIPT), "start", "--auto"]
+    procs = [subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=world["env"]) for _ in range(2)]
+    outs = [json.loads(p.communicate(timeout=90)[0]) for p in procs]
+    assert sorted(len(o["started"]) for o in outs) == [0, 10]
+    assert len(_calls(world)) == 10
+
+
 @pytest.mark.parametrize("suffix", LANGS)
 def test_every_language_of_the_skill_tells_the_capitano_the_system_starts_the_roster(suffix: str):
     text = (ROOT / "agents" / "_skills" / "first-run-burst" / f"SKILL{suffix}.md").read_text(encoding="utf-8")

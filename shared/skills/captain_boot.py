@@ -81,6 +81,8 @@ def _start_roster(state: dict) -> str:
     """Start the roster of an open burst in the background, when nothing of it is alive; the words for the block."""
     if state.get("phase") != "burst":
         return ""
+    if not (_json(str(SKILLS / "burst_roster.py"), "plan", "--auto") or {}).get("start"):
+        return ""  # nothing to start (a worker is already up, the roster is complete, the sessions cannot be read): say nothing
     out = _json(str(SKILLS / "burst_roster.py"), "start", "--auto", "--detach")
     if not (out or {}).get("detached"):
         return ""
