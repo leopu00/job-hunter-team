@@ -37,6 +37,10 @@ on:
         description: "test only: sha256:<64 hex> of that image, from the docker.yml push; must match runtime_image when it is a digest"
         type: string
         default: ""
+      runtime_extras_image_digest:
+        description: "test only, optional: sha256:<64 hex> of the extras image of the same commit (live screen, LinkedIn sign-in)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -132,6 +136,7 @@ jobs:
         env:
           RUNTIME_IMAGE: ${{ inputs.runtime_image }}
           RUNTIME_IMAGE_DIGEST: ${{ inputs.runtime_image_digest }}
+          RUNTIME_EXTRAS_IMAGE_DIGEST: ${{ inputs.runtime_extras_image_digest }}
           SOURCE_SHA: ${{ github.sha }}
         run: |
           # [[ =~ ]] confronta la stringa intera: grep andrebbe riga per riga e
@@ -147,6 +152,10 @@ jobs:
           fi
           if [[ "$RUNTIME_IMAGE" == *@sha256:* && "${RUNTIME_IMAGE#*@}" != "$RUNTIME_IMAGE_DIGEST" ]]; then
             echo "::error::runtime_image and runtime_image_digest name two different digests"
+            exit 1
+          fi
+          if [[ -n "$RUNTIME_EXTRAS_IMAGE_DIGEST" ]] && { ! [[ "$RUNTIME_EXTRAS_IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || [[ "$RUNTIME_EXTRAS_IMAGE_DIGEST" == "$RUNTIME_IMAGE_DIGEST" ]]; }; then
+            echo "::error::runtime_extras_image_digest = sha256:<64 hex> of the extras image, not the full image's digest"
             exit 1
           fi
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
@@ -170,8 +179,11 @@ jobs:
             echo "JHT_RUNTIME_IMAGE_DIGEST=$RUNTIME_IMAGE_DIGEST"
             echo "JHT_INSTALL_SHA256=$install_sha256"
             echo "JHT_INSTALL_PS1_SHA256=$install_ps1_sha256"
+            if [[ -n "$RUNTIME_EXTRAS_IMAGE_DIGEST" ]]; then
+              echo "JHT_RUNTIME_EXTRAS_IMAGE_DIGEST=$RUNTIME_EXTRAS_IMAGE_DIGEST"
+            fi
           } >> "$GITHUB_ENV"
-          echo "test channel: source $SOURCE_SHA, image $RUNTIME_IMAGE ($RUNTIME_IMAGE_DIGEST), install.sh sha256 $install_sha256, install.ps1 sha256 $install_ps1_sha256"
+          echo "test channel: source $SOURCE_SHA, image $RUNTIME_IMAGE ($RUNTIME_IMAGE_DIGEST), extras ${RUNTIME_EXTRAS_IMAGE_DIGEST:-none}, install.sh sha256 $install_sha256, install.ps1 sha256 $install_ps1_sha256"
 
       # La matrice di integrazione prova il packaging con firma ad-hoc su Mac.
       # Firma Developer ID e notarizzazione sono obbligatorie nel tag workflow.

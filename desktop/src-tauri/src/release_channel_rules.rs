@@ -27,6 +27,9 @@ pub struct TestChannel {
     /// `sha256:<64 hex>`: the CORE image, when the commit has the two-level runtime (the installers pull
     /// only this one; `image_digest` is then the full image). None: one image, as before.
     pub core_image_digest: Option<String>,
+    /// `sha256:<64 hex>`: the EXTRAS image (live screen, LinkedIn sign-in) of the same commit, which the installers
+    /// pin with `--extras-image-digest` / `-ExtrasImageDigest`. None: the tools on request are not offered.
+    pub extras_image_digest: Option<String>,
 }
 
 fn lower_hex(value: &str, len: usize) -> bool {
@@ -157,6 +160,7 @@ pub fn resolve_with_core(
                 install_sha256: install_sha256.to_owned(),
                 install_ps1_sha256: install_ps1_sha256.to_owned(),
                 core_image_digest,
+                extras_image_digest: None,
             }))
         }
         Some(other) => Err(format!(
@@ -167,7 +171,7 @@ pub fn resolve_with_core(
 
 /// The build's inputs: the CI's variables, read by build.rs.
 #[allow(dead_code)] // used by build.rs and by the app's tests
-pub const BUILD_INPUTS: [&str; 7] = [
+pub const BUILD_INPUTS: [&str; 8] = [
     "JHT_CHANNEL",
     "JHT_SOURCE_SHA",
     "JHT_RUNTIME_IMAGE",
@@ -175,6 +179,7 @@ pub const BUILD_INPUTS: [&str; 7] = [
     "JHT_INSTALL_SHA256",
     "JHT_INSTALL_PS1_SHA256",
     "JHT_RUNTIME_CORE_IMAGE_DIGEST",
+    "JHT_RUNTIME_EXTRAS_IMAGE_DIGEST",
 ];
 
 /// What build.rs compiles in (`cargo:rustc-env`, read back by
@@ -184,8 +189,8 @@ pub const BUILD_INPUTS: [&str; 7] = [
 #[allow(dead_code)] // used by build.rs and by the app's tests
 pub fn build_env(
     lookup: impl Fn(&str) -> Option<String>,
-) -> Result<[(&'static str, String); 7], String> {
-    let [channel, source_sha, runtime_image, image_digest, install_sha256, install_ps1_sha256, core_image_digest] =
+) -> Result<[(&'static str, String); 8], String> {
+    let [channel, source_sha, runtime_image, image_digest, install_sha256, install_ps1_sha256, core_image_digest, extras_image_digest] =
         BUILD_INPUTS.map(|name| lookup(name));
     let resolved = resolve_with_core(
         channel.as_deref(),
@@ -196,6 +201,7 @@ pub fn build_env(
         install_ps1_sha256.as_deref(),
         core_image_digest.as_deref(),
     )?;
+    let resolved = with_extras(resolved, extras_image_digest.as_deref())?;
     let (channel, test) = match resolved {
         None => ("production", None),
         Some(test) => (TEST_CHANNEL, Some(test)),
@@ -222,5 +228,32 @@ pub fn build_env(
             "JHT_BUILD_RUNTIME_CORE_IMAGE_DIGEST",
             test.as_ref().and_then(|test| test.core_image_digest.clone()).unwrap_or_default(),
         ),
+        (
+            "JHT_BUILD_RUNTIME_EXTRAS_IMAGE_DIGEST",
+            test.as_ref().and_then(|test| test.extras_image_digest.clone()).unwrap_or_default(),
+        ),
     ])
+}
+
+#[allow(dead_code)] // used by build.rs and by the app
+/// The digest of the extras image on a resolved channel. Optional, like the core one, but only with the test channel,
+/// well formed and not the digest of the full or the core image: a value without the test channel is no build.
+pub fn with_extras(
+    resolved: Option<TestChannel>,
+    extras_image_digest: Option<&str>,
+) -> Result<Option<TestChannel>, String> {
+    match (resolved, given(extras_image_digest)) {
+        (resolved, None) => Ok(resolved),
+        (None, Some(_)) => Err("JHT_RUNTIME_EXTRAS_IMAGE_DIGEST is only for JHT_CHANNEL=test".to_owned()),
+        (Some(mut test), Some(value)) => {
+            if !valid_image_digest(value)
+                || value == test.image_digest
+                || test.core_image_digest.as_deref() == Some(value)
+            {
+                return Err("JHT_RUNTIME_EXTRAS_IMAGE_DIGEST: sha256:<64 lowercase hex>, not the digest of the full or the core image".to_owned());
+            }
+            test.extras_image_digest = Some(value.to_owned());
+            Ok(Some(test))
+        }
+    }
 }
