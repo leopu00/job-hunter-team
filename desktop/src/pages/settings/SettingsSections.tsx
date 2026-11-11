@@ -19,6 +19,8 @@ import WorkHoursPage from "../work-hours";
 import AccountCard from "./AccountCard";
 import { EmbeddedContext } from "./embedded";
 import HarnessChoice from "./HarnessChoice";
+import LiveScreenCard from "./LiveScreenCard";
+import ProviderKeyCard from "./ProviderKeyCard";
 import { LinkedTeamNotice } from "./LinkedTeamGate";
 import NotifyCard from "./NotifyCard";
 import ProviderSignOut from "./ProviderSignOut";
@@ -81,6 +83,8 @@ export function TeamSection(_props: PageProps) {
         </>
       )}
       {!readOnly && <TeamLanguageCard />}
+      {!readOnly && <ProviderKeyCard />}
+      {!readOnly && <LiveScreenCard />}
       {(providerSetup || providerLogin) && (
         <section data-testid="settings-provider" aria-labelledby="settings-provider-title" className={cardCls}>
           <h2 id="settings-provider-title" className="text-[13px] font-semibold text-[var(--color-bright)]">{t.providerTitle}</h2>

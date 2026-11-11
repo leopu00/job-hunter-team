@@ -80,11 +80,11 @@ async function setup(opts, status) {
 }
 const saved = () => existsSync(join(HOME, 'jht.config.json')) ? JSON.parse(readFileSync(join(HOME, 'jht.config.json'), 'utf8')) : null;
 
-test('setup with a key the provider refuses: exit 1, a clear sentence, nothing saved, the key nowhere', async () => {
+test('setup with a key the provider refuses: exit 3 (like check-key), a clear sentence, nothing saved, the key nowhere', async () => {
   writeFileSync(join(HOME, 'setup.key'), `${KEY}\n`);
   for (const provider of ['glm', 'kimi']) {
     const { code, text } = await setup({ provider }, 401);
-    assert.equal(code, 1, text);
+    assert.equal(code, 3, text);
     assert.match(text, /rejected the API key \(HTTP 401/);
     assert.match(text, /Nothing was saved/);
     assert.ok(!text.includes(KEY));

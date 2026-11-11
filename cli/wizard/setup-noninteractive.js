@@ -15,6 +15,7 @@ import {
   findProviderChoice,
   RECOMMENDED_PROVIDER,
   JHT_CONFIG_DIR,
+  readConfigFileSnapshot,
   writeConfigFile,
   validateApiKey,
   validateEmail,
@@ -26,6 +27,7 @@ import { t, LANGUAGES, hasLanguageChoice, systemLanguage, saveLanguage } from '.
 import { summarizeRoleModels } from './setup-models.js';
 import { AGENT_HARNESSES, DEFAULT_HARNESS } from '../../shared/runtime/agent-harness.js';
 import { harnessRefusal } from './setup-harness.js';
+import { KEY_REFUSED_EXIT_CODE } from '../src/commands/providers-key-check.js';
 import { API_KEY_MAX_BYTES, firstLine, isLauncherSafePath, keyShapeProblem, keyStoreDir, readKeyFromStream, storeApiKey } from './key-store.js';
 
 /** The most a file holding one API key can weigh. */
@@ -207,7 +209,8 @@ export async function runNonInteractiveSetup(opts) {
     if (verdict.state === 'rejected') {
       console.error(pc.red(`${rejectedKeyMessage(verdict.label)}`));
       console.error(pc.dim('  Nothing was saved. To save it anyway (no network, or a key you will fix later): --skip-health'));
-      process.exitCode = 1;
+      // 3, like `jht providers check-key`: the desktop app tells a key the provider refused from any other failure of the setup
+      process.exitCode = KEY_REFUSED_EXIT_CODE;
       return;
     }
     if (verdict.state === 'valid') console.log(pc.dim(`  ${verdict.label}: the API key is accepted.`));
@@ -231,7 +234,7 @@ export async function runNonInteractiveSetup(opts) {
     }
   }
 
-  saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, model, apiKeySecret, subscriptionConfig, harness, keptByTheSetup });
+  saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, model, modelGiven: Boolean(opts.model), apiKeySecret, subscriptionConfig, harness, keptByTheSetup });
 }
 
 /** The key from the standard input, or null (and the reason said, exit code 1) when none came or it is too big for a key. */
@@ -281,7 +284,21 @@ function readApiKeyFile(file) {
   return key;
 }
 
-function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, model, apiKeySecret, subscriptionConfig, harness, keptByTheSetup = false }) {
+/**
+ * The config of the team as it is now, when this setup is for the SAME team: the same provider on the same harness. Giving a new key (the
+ * command the CLI and the app both use when a provider refuses the old one) must not lose what the setup does not ask: the channels
+ * (the Telegram bots), the model already chosen, the other fields of the config. A setup for another provider or harness starts a new
+ * config, as it always did.
+ */
+export function sameTeamConfig(previous, providerName, harness) {
+  if (!previous || typeof previous !== 'object' || Array.isArray(previous)) return null;
+  if (previous.active_provider !== providerName) return null;
+  if ((previous.harness ?? DEFAULT_HARNESS) !== harness) return null;
+  const entry = previous.providers?.[providerName];
+  return entry && typeof entry === 'object' && !Array.isArray(entry) ? previous : null;
+}
+
+function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, model, modelGiven = true, apiKeySecret, subscriptionConfig, harness, keptByTheSetup = false }) {
   // --- Assembla e salva config ---
   const providerConfig = { name: providerName, auth_method: authMethod, model };
   if (apiKeySecret) {
@@ -292,13 +309,28 @@ function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, 
     providerConfig.subscription = subscriptionConfig;
   }
 
-  const config = {
-    version: 1,
-    active_provider: providerName,
-    providers: { [providerName]: providerConfig },
-    channels: {},
-    harness,
-  };
+  const previous = sameTeamConfig(readConfigFileSnapshot().config, providerName, harness);
+  let config;
+  if (previous) {
+    // the entry of the provider keeps its fields (the model chosen before, when none is given now) except how it signs in, which is what this setup sets
+    const { api_key: _key, api_key_ref: _ref, subscription: _subscription, ...kept } = previous.providers[providerName];
+    config = {
+      ...previous,
+      version: 1,
+      active_provider: providerName,
+      providers: { ...previous.providers, [providerName]: { ...kept, ...providerConfig, ...(modelGiven || !kept.model ? {} : { model: kept.model }) } },
+      channels: previous.channels ?? {},
+      harness,
+    };
+  } else {
+    config = {
+      version: 1,
+      active_provider: providerName,
+      providers: { [providerName]: providerConfig },
+      channels: {},
+      harness,
+    };
+  }
 
   try {
     writeConfigFile(config);

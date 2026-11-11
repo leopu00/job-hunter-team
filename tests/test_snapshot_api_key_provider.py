@@ -103,6 +103,26 @@ def test_an_empty_key_file_or_a_folder_is_not_a_key(tmp_path, variant):
 
 
 @pytest.mark.parametrize("variant", VARIANTS)
+def test_a_link_or_a_file_too_big_for_a_key_is_not_a_key(tmp_path, variant):
+    """Stricter than the watchdog on purpose: lstat sees a link and not its target, and the setup never writes more than 4096 bytes."""
+    real = tmp_path / "real.key"
+    real.write_text("synthetic-key-for-the-test-0000\n", encoding="utf-8")
+    link = tmp_path / "link.key"
+    link.symlink_to(real)
+    assert _run(variant, _home(tmp_path, _api("glm", _file_ref(link)))) == ["1", "0", "0"]
+    big = tmp_path / "big.key"
+    big.write_text("x" * 4097, encoding="utf-8")
+    other = tmp_path / "other"
+    other.mkdir()
+    assert _run(variant, _home(other, _api("glm", _file_ref(big)))) == ["1", "0", "0"]
+    edge = tmp_path / "edge.key"
+    edge.write_text("x" * 4096, encoding="utf-8")
+    third = tmp_path / "third"
+    third.mkdir()
+    assert _run(variant, _home(third, _api("glm", _file_ref(edge)))) == ["1", "1", "0"]
+
+
+@pytest.mark.parametrize("variant", VARIANTS)
 def test_a_relative_key_path_is_not_a_key(tmp_path, variant):
     home = _home(tmp_path, _api("glm", {"type": "ref", "source": "file", "path": "keys/glm.key"}))
     assert _run(variant, home) == ["1", "0", "0"]

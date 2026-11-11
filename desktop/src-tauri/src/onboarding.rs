@@ -174,6 +174,12 @@ pub(crate) enum LocalCliOperation {
     LinkedinLogin,
     LinkedinLoginStop,
     LinkedinStatus,
+    /// `jht screen status --json`: the state of the live screen of the CLOSER (screen_control.rs).
+    ScreenStatus,
+    /// `jht screen on --json`: turns the live screen on (the first time it pulls the tools image).
+    ScreenOn,
+    /// `jht screen off --json`: turns it off and removes its container.
+    ScreenOff,
     CleanImages,
     /// `jht providers plan --json`: the plans of the active provider, the declared one, the suggestion.
     ProviderPlans,
@@ -186,7 +192,7 @@ pub(crate) enum LocalCliOperation {
 }
 
 impl LocalCliOperation {
-    fn argv(self) -> Vec<&'static str> {
+    pub(crate) fn argv(self) -> Vec<&'static str> {
         match self {
             Self::Up => vec!["up"],
             Self::Status => vec!["status"],
@@ -203,6 +209,9 @@ impl LocalCliOperation {
             Self::LinkedinLogin => vec!["linkedin", "login"],
             Self::LinkedinLoginStop => vec!["linkedin", "login", "--stop"],
             Self::LinkedinStatus => vec!["linkedin", "status", "--json"],
+            Self::ScreenStatus => vec!["screen", "status", "--json"],
+            Self::ScreenOn => vec!["screen", "on", "--json"],
+            Self::ScreenOff => vec!["screen", "off", "--json"],
             Self::CleanImages => vec!["clean-images", "--json"],
             Self::ProviderPlans => vec!["providers", "plan", "--json"],
             Self::ProviderPlanSet(id) => vec!["providers", "plan", id, "--json"],
@@ -228,6 +237,9 @@ impl LocalCliOperation {
             Self::LinkedinLogin => "linkedin-login",
             Self::LinkedinLoginStop => "linkedin-login-stop",
             Self::LinkedinStatus => "linkedin-status",
+            Self::ScreenStatus => "screen-status",
+            Self::ScreenOn => "screen-on",
+            Self::ScreenOff => "screen-off",
             Self::CleanImages => "clean-images",
             Self::ProviderPlans => "provider-plans",
             Self::ProviderPlanSet(_) => "provider-plan-set",
@@ -2752,6 +2764,17 @@ pub(crate) fn run_linkedin_command(
         }
         ValidatedHost::Vps { .. } => run_ssh(host, remote, None, timeout, None),
     }
+}
+
+/// One operation of the attested wrapper of THIS computer, for the account's scope (the live screen's switch, screen_control.rs).
+pub(crate) fn run_local_operation(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    operation: LocalCliOperation,
+    timeout: Duration,
+) -> Result<ProcessResult, &'static str> {
+    let wrapper = wrapper_path(app).ok_or_else(|| runtime_refusal(app))?;
+    run_scoped_local(app, scope, &wrapper, operation, timeout)
 }
 
 /// The host's `jht` with arguments built at run time and an optional stdin:
