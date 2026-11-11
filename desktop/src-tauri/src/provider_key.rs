@@ -12,8 +12,11 @@
 //!   on `input`»); on an existing team only the full link may change anything (`saved_host_action_refusal`);
 //! - the provider is one of two closed words and the key one line of 16 to 512 printable characters without spaces, the same shape
 //!   the setup demands, checked here before anything is run;
-//! - afterwards `jht providers check-key` asks the provider whether it accepts the key (exit 3 only when it refuses): the page
-//!   says «saved» or «saved, but the provider refused it».
+//! - the setup itself asks the provider whether it accepts the key before it saves anything, and exits 3 (like `jht providers check-key`)
+//!   when it refuses: the page then says «refused, not saved», and the key that was there stays as it was. Exit 0 is saved;
+//! - the provider can only be the one the team already has: before anything is sent the team's own `jht providers harness --json` must
+//!   say Pi with a key and name that provider (a team on a login, or on another provider, is refused), because the setup writes the
+//!   team's config. It keeps what the setup does not ask (the channels, the model already chosen) when it is the same team.
 //!
 //! Nothing the commands print reaches the page: the answer is one of two words or a code of the app's catalog.
 
@@ -33,8 +36,8 @@ const MIN_KEY_LEN: usize = 16;
 const MAX_KEY_LEN: usize = 512;
 /// The setup may have to start the team's container first.
 const SETUP_TIMEOUT: Duration = Duration::from_secs(180);
-const CHECK_TIMEOUT: Duration = Duration::from_secs(60);
-/// What `jht providers check-key` exits with when the provider refuses the key (and only then).
+const HARNESS_TIMEOUT: Duration = Duration::from_secs(40);
+/// What the setup exits with when the provider refuses the key (the same exit as `jht providers check-key`), and only then.
 const KEY_REFUSED_EXIT: i32 = 3;
 
 #[derive(Debug, Serialize)]
@@ -62,7 +65,7 @@ impl Drop for ProviderKeyRequest {
 #[derive(Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ProviderKeySaved {
-    /// `saved`: kept, and not refused by the provider (or the provider could not be asked); `refused`: kept, and refused.
+    /// `saved`: kept (the provider accepted it, or could not be asked); `refused`: the provider refused it and nothing was saved.
     state: &'static str,
 }
 
@@ -73,6 +76,7 @@ pub(crate) struct ProviderKeyState {
 
 /// The command and its standard input. The key is only in `stdin`.
 struct SetupInvocation {
+    provider: &'static str,
     args: [&'static str; 7],
     stdin: Zeroizing<Vec<u8>>,
 }
@@ -93,6 +97,7 @@ fn setup_invocation(request: &ProviderKeyRequest) -> Result<SetupInvocation, &'s
     stdin.extend_from_slice(key.as_bytes());
     stdin.push(b'\n');
     Ok(SetupInvocation {
+        provider,
         args: ["setup", "--non-interactive", "--provider", provider, "--harness", "pi", "--api-key-stdin"],
         stdin,
     })
@@ -108,21 +113,45 @@ fn run_failure(error: &'static str) -> &'static str {
     }
 }
 
-/// The setup counts only by its exit: 0 is saved.
-fn parse_setup(result: Result<ProcessResult, &'static str>) -> Result<(), &'static str> {
+/// The setup counts only by its exit: 0 is saved, 3 is a key the provider refused (nothing saved), anything else a failure.
+fn parse_setup(result: Result<ProcessResult, &'static str>) -> Result<&'static str, &'static str> {
     let output = result.map_err(run_failure)?;
-    if output.success() {
-        Ok(())
-    } else {
-        Err("provider_key_failed")
+    match output.code {
+        0 => Ok("saved"),
+        KEY_REFUSED_EXIT => Ok("refused"),
+        _ => Err("provider_key_failed"),
     }
 }
 
-/// The check can only refuse (exit 3): anything else, including a check that could not be made, leaves the key as saved.
-fn parse_check(result: Result<ProcessResult, &'static str>) -> &'static str {
-    match result {
-        Ok(output) if output.code == KEY_REFUSED_EXIT => "refused",
-        _ => "saved",
+#[derive(Deserialize)]
+struct HarnessLine {
+    ok: bool,
+    #[serde(default)]
+    harness: Option<String>,
+    #[serde(default)]
+    provider: Option<String>,
+    #[serde(default)]
+    login: Option<String>,
+}
+
+/// The provider whose API key the team uses, from `jht providers harness --json`: Pi with a login that is «not needed» (a key) and
+/// glm or kimi (moonshot is Moonshot's name for kimi). None for a team on a login, on another provider, or an answer that is not that.
+fn active_key_provider(result: Result<ProcessResult, &'static str>) -> Option<&'static str> {
+    let output = result.ok().filter(ProcessResult::success)?;
+    let line: HarnessLine = std::str::from_utf8(&output.stdout)
+        .ok()?
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with('{'))
+        .last()
+        .and_then(|line| serde_json::from_str(line).ok())?;
+    if !line.ok || line.harness.as_deref() != Some("pi") || line.login.as_deref() != Some("not_needed") {
+        return None;
+    }
+    match line.provider.as_deref() {
+        Some("glm") => Some("glm"),
+        Some("kimi") | Some("moonshot") => Some("kimi"),
+        _ => None,
     }
 }
 
@@ -152,7 +181,19 @@ pub(crate) async fn provider_key_save(
         request.key.zeroize();
         let invocation = invocation?;
         let host = crate::broker_view::active_host(&app, &scope)?;
-        parse_setup(run_host_jht(
+        // The setup writes the team's config: only the provider the team already has, and only a team that works with a key.
+        let active = active_key_provider(run_host_jht(
+            &app,
+            &scope,
+            &host,
+            &["providers", "harness", "--json"],
+            None,
+            HARNESS_TIMEOUT,
+        ));
+        if active != Some(invocation.provider) {
+            return Err("provider_key_not_active");
+        }
+        let state = parse_setup(run_host_jht(
             &app,
             &scope,
             &host,
@@ -160,15 +201,7 @@ pub(crate) async fn provider_key_save(
             Some(&invocation.stdin),
             SETUP_TIMEOUT,
         ))?;
-        let checked = parse_check(run_host_jht(
-            &app,
-            &scope,
-            &host,
-            &["providers", "check-key"],
-            None,
-            CHECK_TIMEOUT,
-        ));
-        Ok(ProviderKeySaved { state: checked })
+        Ok(ProviderKeySaved { state })
     })
     .await
     .unwrap_or(Err("provider_key_failed"));
@@ -244,8 +277,10 @@ mod tests {
 
     #[test]
     fn what_the_commands_print_never_reaches_the_page() {
-        assert_eq!(parse_setup(output(0)), Ok(()));
+        assert_eq!(parse_setup(output(0)), Ok("saved"));
+        assert_eq!(parse_setup(output(KEY_REFUSED_EXIT)), Ok("refused"));
         assert_eq!(parse_setup(output(1)), Err("provider_key_failed"));
+        assert_eq!(parse_setup(output(2)), Err("provider_key_failed"));
         assert_eq!(parse_setup(Err("process_timeout")), Err("timeout"));
         assert_eq!(parse_setup(Err("runtime_missing")), Err("runtime_missing"));
         assert_eq!(parse_setup(Err("account_scope_changed")), Err("account_scope_changed"));
@@ -254,12 +289,31 @@ mod tests {
         assert!(!said.contains(KEY));
     }
 
+    fn harness(code: i32, line: &str) -> Result<ProcessResult, &'static str> {
+        Ok(ProcessResult {
+            code,
+            stdout: format!("a line before\n{line}\n").into_bytes(),
+        })
+    }
+
     #[test]
-    fn only_an_exit_of_three_is_a_refused_key() {
-        assert_eq!(parse_check(output(KEY_REFUSED_EXIT)), "refused");
-        assert_eq!(parse_check(output(0)), "saved");
-        assert_eq!(parse_check(output(1)), "saved");
-        assert_eq!(parse_check(Err("process_timeout")), "saved");
+    fn only_the_provider_the_team_has_with_a_key_on_pi_is_accepted() {
+        let team = |harness_name: &str, provider: &str, login: &str| {
+            format!(r#"{{"ok":true,"harness":"{harness_name}","changed":false,"provider":"{provider}","pi_allowed":true,"login":"{login}"}}"#)
+        };
+        assert_eq!(active_key_provider(harness(0, &team("pi", "glm", "not_needed"))), Some("glm"));
+        assert_eq!(active_key_provider(harness(0, &team("pi", "kimi", "not_needed"))), Some("kimi"));
+        assert_eq!(active_key_provider(harness(0, &team("pi", "moonshot", "not_needed"))), Some("kimi"));
+        // a team on a login, on Codex, or on another provider is not a team whose key this can change
+        assert_eq!(active_key_provider(harness(0, &team("pi", "openai", "signed_out"))), None);
+        assert_eq!(active_key_provider(harness(0, &team("pi", "glm", "signed_in"))), None);
+        assert_eq!(active_key_provider(harness(0, &team("codex", "glm", "not_needed"))), None);
+        assert_eq!(active_key_provider(harness(0, &team("pi", "claude", "not_needed"))), None);
+        // anything that is not an answer
+        assert_eq!(active_key_provider(harness(1, &team("pi", "glm", "not_needed"))), None);
+        assert_eq!(active_key_provider(harness(0, r#"{"ok":false,"error":"harness_no_provider"}"#)), None);
+        assert_eq!(active_key_provider(harness(0, "not json")), None);
+        assert_eq!(active_key_provider(Err("process_timeout")), None);
     }
 
     #[test]

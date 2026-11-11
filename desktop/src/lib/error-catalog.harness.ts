@@ -56,6 +56,10 @@ export const HARNESS_ERRORS: Readonly<Record<string, ErrorCopy>> = {
     text: { it: "Non sono riuscito a salvare la chiave nel team.", en: "The key could not be saved in the team." },
     action: { it: "Controlla che la squadra sia raggiungibile e riprova.", en: "Check that the team can be reached and try again." },
   },
+  provider_key_not_active: {
+    text: { it: "La chiave si può cambiare solo per il provider che il team usa già con una chiave.", en: "The key can only be changed for the provider the team already uses with a key." },
+    action: { it: "Riapri le Impostazioni e riprova; per cambiare provider o tornare a un abbonamento serve la configurazione del team.", en: "Open the Settings again and try again; to change provider or go back to a subscription the team has to be set up again." },
+  },
 };
 
 export const HARNESS_ERROR_TRANSLATIONS: Readonly<Record<string, ErrorTranslations>> = {
@@ -149,5 +153,12 @@ export const HARNESS_ERROR_TRANSLATIONS: Readonly<Record<string, ErrorTranslatio
     fr: ["La clé n’a pas pu être enregistrée dans l’équipe.", "Vérifie que l’équipe est joignable et réessaie."],
     hu: ["A kulcsot nem sikerült elmenteni a csapatban.", "Ellenőrizd, hogy a csapat elérhető-e, és próbáld újra."],
     pt: ["Não foi possível guardar a chave na equipa.", "Verifica se a equipa está acessível e tenta novamente."],
+  },
+  provider_key_not_active: {
+    de: ["Der Schlüssel lässt sich nur für den Anbieter ändern, den das Team bereits mit einem Schlüssel nutzt.", "Öffne die Einstellungen erneut und versuche es noch einmal; für einen anderen Anbieter oder ein Abonnement muss das Team neu eingerichtet werden."],
+    es: ["La clave solo se puede cambiar para el proveedor que el equipo ya usa con una clave.", "Vuelve a abrir los ajustes e inténtalo de nuevo; para cambiar de proveedor o volver a una suscripción hay que configurar de nuevo el equipo."],
+    fr: ["La clé ne peut être changée que pour le fournisseur que l’équipe utilise déjà avec une clé.", "Rouvre les réglages et réessaie ; pour changer de fournisseur ou revenir à un abonnement, l’équipe doit être reconfigurée."],
+    hu: ["A kulcs csak azon szolgáltatónál módosítható, amelyet a csapat már kulccsal használ.", "Nyisd meg újra a beállításokat, és próbáld újra; szolgáltatóváltáshoz vagy előfizetéshez a csapatot újra be kell állítani."],
+    pt: ["A chave só se pode mudar para o fornecedor que a equipa já usa com uma chave.", "Volta a abrir as definições e tenta novamente; para mudar de fornecedor ou voltar a uma subscrição é preciso configurar de novo a equipa."],
   },
 };

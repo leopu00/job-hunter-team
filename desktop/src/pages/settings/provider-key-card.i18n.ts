@@ -10,7 +10,7 @@ const it = {
   saving: "Salvo la chiave…",
   shape: "Una chiave è una sola riga, da 16 a 512 caratteri, senza spazi.",
   saved: "Chiave salvata. Per far partire gli agenti con la chiave nuova, riavvia la squadra.",
-  refused: "Chiave salvata, ma {provider} l’ha rifiutata: controlla di aver copiato la chiave giusta e incollane un’altra.",
+  refused: "{provider} ha rifiutato la chiave: non è stata salvata e resta quella di prima. Controlla di aver copiato la chiave giusta e incollane un’altra.",
 };
 
 export type ProviderKeyCardText = typeof it;
@@ -26,7 +26,7 @@ export const PROVIDER_KEY_CARD_TEXT: Record<Locale, ProviderKeyCardText> = {
     saving: "Saving the key…",
     shape: "A key is a single line of 16 to 512 characters, without spaces.",
     saved: "Key saved. To start the agents with the new key, restart the team.",
-    refused: "Key saved, but {provider} refused it: check that you copied the right key and paste another one.",
+    refused: "{provider} refused the key: it was not saved and the previous one stays. Check that you copied the right key and paste another one.",
   },
   de: {
     title: "API-Schlüssel",
@@ -37,7 +37,7 @@ export const PROVIDER_KEY_CARD_TEXT: Record<Locale, ProviderKeyCardText> = {
     saving: "Schlüssel wird gespeichert…",
     shape: "Ein Schlüssel ist eine einzelne Zeile mit 16 bis 512 Zeichen, ohne Leerzeichen.",
     saved: "Schlüssel gespeichert. Starte das Team neu, damit die Agenten mit dem neuen Schlüssel starten.",
-    refused: "Schlüssel gespeichert, aber {provider} hat ihn abgelehnt: Prüfe, ob du den richtigen Schlüssel kopiert hast, und füge einen anderen ein.",
+    refused: "{provider} hat den Schlüssel abgelehnt: Er wurde nicht gespeichert, der bisherige bleibt. Prüfe, ob du den richtigen Schlüssel kopiert hast, und füge einen anderen ein.",
   },
   es: {
     title: "Clave de API",
@@ -48,7 +48,7 @@ export const PROVIDER_KEY_CARD_TEXT: Record<Locale, ProviderKeyCardText> = {
     saving: "Guardando la clave…",
     shape: "Una clave es una sola línea de 16 a 512 caracteres, sin espacios.",
     saved: "Clave guardada. Para que los agentes arranquen con la clave nueva, reinicia el equipo.",
-    refused: "Clave guardada, pero {provider} la ha rechazado: comprueba que copiaste la clave correcta y pega otra.",
+    refused: "{provider} ha rechazado la clave: no se guardó y se mantiene la anterior. Comprueba que copiaste la clave correcta y pega otra.",
   },
   fr: {
     title: "Clé d’API",
@@ -59,7 +59,7 @@ export const PROVIDER_KEY_CARD_TEXT: Record<Locale, ProviderKeyCardText> = {
     saving: "Enregistrement de la clé…",
     shape: "Une clé tient sur une seule ligne de 16 à 512 caractères, sans espaces.",
     saved: "Clé enregistrée. Pour démarrer les agents avec la nouvelle clé, redémarre l’équipe.",
-    refused: "Clé enregistrée, mais {provider} l’a refusée : vérifie que tu as copié la bonne clé et colles-en une autre.",
+    refused: "{provider} a refusé la clé : elle n’a pas été enregistrée et la précédente reste en place. Vérifie que tu as copié la bonne clé et colles-en une autre.",
   },
   hu: {
     title: "API-kulcs",
@@ -70,7 +70,7 @@ export const PROVIDER_KEY_CARD_TEXT: Record<Locale, ProviderKeyCardText> = {
     saving: "A kulcs mentése…",
     shape: "A kulcs egyetlen sor, 16–512 karakter, szóközök nélkül.",
     saved: "A kulcs elmentve. Hogy az ügynökök az új kulccsal induljanak, indítsd újra a csapatot.",
-    refused: "A kulcs elmentve, de a(z) {provider} elutasította: ellenőrizd, hogy a jó kulcsot másoltad-e, és illessz be egy másikat.",
+    refused: "A(z) {provider} elutasította a kulcsot: nem lett elmentve, a korábbi marad. Ellenőrizd, hogy a jó kulcsot másoltad-e, és illessz be egy másikat.",
   },
   pt: {
     title: "Chave de API",
@@ -81,6 +81,6 @@ export const PROVIDER_KEY_CARD_TEXT: Record<Locale, ProviderKeyCardText> = {
     saving: "A guardar a chave…",
     shape: "Uma chave é uma única linha de 16 a 512 caracteres, sem espaços.",
     saved: "Chave guardada. Para os agentes arrancarem com a chave nova, reinicia a equipa.",
-    refused: "Chave guardada, mas {provider} recusou-a: verifica se copiaste a chave certa e cola outra.",
+    refused: "{provider} recusou a chave: não foi guardada e a anterior mantém-se. Verifica se copiaste a chave certa e cola outra.",
   },
 };

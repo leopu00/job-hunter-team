@@ -102,7 +102,7 @@ describe("the key on its way to the native side", () => {
   });
 
   it("has every error of the key in the catalog, in seven languages", () => {
-    for (const code of ["provider_key_invalid", "provider_key_provider_invalid", "provider_key_failed"]) {
+    for (const code of ["provider_key_invalid", "provider_key_provider_invalid", "provider_key_failed", "provider_key_not_active"]) {
       for (const locale of ["it", "en", "de", "es", "fr", "hu", "pt"]) {
         expect(describeError(code, { locale }).known, `${code}/${locale}`).toBe(true);
       }
