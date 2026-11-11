@@ -82,6 +82,16 @@ describe("save_review", () => {
     expect(readFileSync(join(root, "critiche", "review-acme-srl-2026-09-21.md"), "utf8")).toBe("SCORE: 5.0/10\n");
   });
 
+  it("saves the review of a cover letter under its own name, and takes no other kind", async () => {
+    const t = tool();
+    const letter = await t.execute(t.spec.schema.parse({ position_id: 1, text: "VERDICT: FAIL\n", kind: "cover_letter" }), context);
+    expect(letter.ok).toBe(true);
+    await save(1, "SCORE: 6.0/10\n");
+    expect(readdirSync(join(root, "critiche")).sort()).toEqual(["letter-review-acme-srl-2026-09-21.md", "review-acme-srl-2026-09-21.md"]);
+    expect(reviewFileName("Acme Srl", "2026-09-21", "cover_letter")).toBe("letter-review-acme-srl-2026-09-21.md");
+    expect(() => t.spec.schema.parse({ position_id: 1, text: "x", kind: "poem" })).toThrow();
+  });
+
   it("takes the position and the text, and nothing that could choose a path", async () => {
     const t = tool();
     expect(() => t.spec.schema.parse({ position_id: 1, text: "x", path: "/etc/passwd" })).toThrow();
@@ -123,6 +133,10 @@ describe("save_review", () => {
     expect(ok.ok).toBe(true);
     expect(ok.content).toContain("/jht_out/critiche/review-acme-2026-09-21.md");
     expect(calls).toEqual([{ path: "/v1/review", body: { position_id: 1, text: "SCORE: 6/10\n" } }]);
+    // A letter's review says so to the hub, which names the file; a CV's request is unchanged.
+    calls.length = 0;
+    await withHub.execute(withHub.spec.schema.parse({ position_id: 1, text: "VERDICT: PASS", kind: "cover_letter" }), context);
+    expect(calls).toEqual([{ path: "/v1/review", body: { position_id: 1, text: "VERDICT: PASS\n", kind: "cover_letter" } }]);
     // Nothing is written here: the hub has the uid the Writer must not have.
     expect(existsSync(join(root, "critiche"))).toBe(false);
     const refused = await withHub.execute(withHub.spec.schema.parse({ position_id: 99, text: "x" }), context);

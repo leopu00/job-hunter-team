@@ -24,7 +24,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { openJobsDb, type Database } from "../src/db/jobs-db.ts";
 import { HubClient } from "../src/hub/client.ts";
 import { HUB_PATHS } from "../src/hub/protocol.ts";
-import { MAX_REVIEW_CHARS, reviewFileName, reviewPrefix, saveReview, verdictPosition } from "../src/hub/review.ts";
+import { MAX_REVIEW_CHARS, reviewFileName, reviewPrefix, reviewsFor, saveReview, verdictPosition } from "../src/hub/review.ts";
 import { createHub } from "../src/hub/server.ts";
 import { prepareProductRole } from "../src/parity/product-role.ts";
 import { RUNTIME } from "./helpers/python-skills.ts";
@@ -67,6 +67,23 @@ describe("the review the hub writes", () => {
     const result = saveReview(db, { userDir, positionId: 1, text: "# Review\n\nSCORE: 6.5/10", now: DAY });
     expect(result).toMatchObject({ ok: true, path: join(critiche(), "review-acme-s-p-a-2026-09-21.md") });
     expect(readFileSync(result.path!, "utf8")).toBe("# Review\n\nSCORE: 6.5/10\n");
+  });
+
+  it("names the review of a cover letter apart: it never takes a round of the CV", () => {
+    const cv1 = saveReview(db, { userDir, positionId: 1, text: "cv round 1", now: DAY });
+    const letter = saveReview(db, { userDir, positionId: 1, text: "letter review", kind: "cover_letter", now: DAY });
+    const letter2 = saveReview(db, { userDir, positionId: 1, text: "letter review 2", kind: "cover_letter", now: DAY });
+    const cv2 = saveReview(db, { userDir, positionId: 1, text: "cv round 2", now: DAY });
+    expect([cv1, letter, letter2, cv2].map((r) => r.ok)).toEqual([true, true, true, true]);
+    expect(written()).toEqual([
+      "letter-review-acme-s-p-a-2026-09-21-v2.md",
+      "letter-review-acme-s-p-a-2026-09-21.md",
+      "review-acme-s-p-a-2026-09-21-v2.md",
+      "review-acme-s-p-a-2026-09-21.md",
+    ]);
+    // The CV's own history is the CV's: its verdict is not told "missing" for a letter, nor satisfied by one.
+    expect(reviewsFor(userDir, "Acme S.p.A.")).toEqual(["review-acme-s-p-a-2026-09-21-v2.md", "review-acme-s-p-a-2026-09-21.md"]);
+    expect(readFileSync(letter.path!, "utf8")).toBe("letter review\n");
   });
 
   it("never replaces the one before it: the three rounds are the history", () => {
@@ -123,6 +140,9 @@ describe("the review the hub writes", () => {
     // the same words: a verdict with its review beside it must not be told the
     // review is missing.
     expect(reviewFileName("Acme S.p.A.", "2026-09-21").startsWith(reviewPrefix("Acme S.p.A."))).toBe(true);
+    expect(reviewFileName("Acme S.p.A.", "2026-09-21", "cover_letter")).toBe("letter-review-acme-s-p-a-2026-09-21.md");
+    // A letter's name does not begin with the CV's prefix, so a company named "Letter" cannot make one pass for the other.
+    expect(reviewFileName("Acme", "2026-09-21", "cover_letter").startsWith(reviewPrefix("Acme"))).toBe(false);
   });
 
   it("warns only for a verdict, not for every application update", () => {
@@ -178,6 +198,14 @@ describe("who may save a review", () => {
     const scout = await post(HUB_PATHS.review, SCOUT, { position_id: 1, text: "not mine to write" });
     expect(scout.status).toBe(403);
     expect(written()).toHaveLength(1);
+  });
+
+  it("takes the kind of the review: a cover letter's lands under its own name, a bad kind is refused", async () => {
+    await hub();
+    const letter = await post(HUB_PATHS.review, SCRITTORE, { position_id: 1, kind: "cover_letter", text: "# Letter review\n\nVERDICT: PASS" });
+    expect(letter.status).toBe(200);
+    expect(letter.body).toMatchObject({ ok: true, path: expect.stringContaining(join("critiche", "letter-review-acme-s-p-a-")) });
+    expect((await post(HUB_PATHS.review, SCRITTORE, { position_id: 1, kind: "other", text: "r" })).status).toBe(400);
   });
 
   it("refuses a body with anything more, and says so when it has no deliverables folder", async () => {

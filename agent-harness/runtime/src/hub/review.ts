@@ -41,6 +41,13 @@ export const MAX_REVIEW_CHARS = 40_000;
 /** Tries before giving up on a name: three rounds is the protocol, ten is a wall. */
 const MAX_VERSIONS = 10;
 
+/**
+ * What a review judges. A cover letter has its own rubric and its own files (`letter-review-<company>-<date>.md`),
+ * so that the three rounds of a CV stay the three files of its history and a letter never takes a round's name.
+ */
+export type ReviewKind = "cv" | "cover_letter";
+export const REVIEW_KINDS: readonly ReviewKind[] = ["cv", "cover_letter"];
+
 export interface SaveReviewResult {
   ok: boolean;
   /** Absolute path of the file written. */
@@ -54,8 +61,8 @@ export interface SaveReviewResult {
  * keeps letters and digits and nothing else: no dot, no separator, no space,
  * so the name cannot become a path however the ad spelled the company.
  */
-export function reviewFileName(company: string, day: string): string {
-  return `${reviewPrefix(company)}-${day}.md`;
+export function reviewFileName(company: string, day: string, kind: ReviewKind = "cv"): string {
+  return `${reviewPrefix(company, kind)}-${day}.md`;
 }
 
 /**
@@ -68,7 +75,7 @@ export function reviewFileName(company: string, day: string): string {
  * company. Decomposing first keeps the letters of an accented name ("Ünïcødé"
  * gives "unicde", not a row of dashes).
  */
-export function reviewPrefix(company: string): string {
+export function reviewPrefix(company: string, kind: ReviewKind = "cv"): string {
   const slug = company
     .normalize("NFKD")
     .replace(/[^\x00-\x7f]/g, "")
@@ -76,7 +83,7 @@ export function reviewPrefix(company: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 40);
-  return `review-${slug || "azienda"}`;
+  return `${kind === "cover_letter" ? "letter-review" : "review"}-${slug || "azienda"}`;
 }
 
 export interface SaveReviewOptions {
@@ -84,6 +91,8 @@ export interface SaveReviewOptions {
   userDir: string;
   positionId: number;
   text: string;
+  /** The CV (default) or the cover letter of the position: the letter's review is named apart. */
+  kind?: ReviewKind;
   now?: () => Date;
 }
 
@@ -106,7 +115,7 @@ export function saveReview(db: Database, options: SaveReviewOptions): SaveReview
   // The deliverables, not `critiche/` itself: a folder that is a link out of
   // them writes nothing, and the slug cannot climb even one level.
   const root = realPath(options.userDir);
-  const name = reviewFileName(row.company ?? "", day);
+  const name = reviewFileName(row.company ?? "", day, options.kind ?? "cv");
 
   for (let version = 1; version <= MAX_VERSIONS; version++) {
     const candidate = join(dir, version === 1 ? name : name.replace(/\.md$/, `-v${version}.md`));

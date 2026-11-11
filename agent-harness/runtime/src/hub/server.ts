@@ -261,7 +261,7 @@ export function createHub(options: HubOptions): Server {
           throw new HttpError(403, `A review is saved by the CRITICO of the review loop, not by ${agent}.`);
         }
         const request = parse(ReviewRequest, body);
-        return saveReview(db(), { userDir: options.userDir, positionId: request.position_id, text: request.text });
+        return saveReview(db(), { userDir: options.userDir, positionId: request.position_id, text: request.text, kind: request.kind });
       }
       case HUB_PATHS.send: {
         const request = parse(SendRequest, body);

@@ -41,7 +41,7 @@ import { z } from "zod";
 import type { Database } from "../../db/jobs-db.ts";
 import type { HubClient } from "../../hub/client.ts";
 import { HUB_PATHS } from "../../hub/protocol.ts";
-import { MAX_REVIEW_CHARS, saveReview } from "../../hub/review.ts";
+import { MAX_REVIEW_CHARS, REVIEW_KINDS, saveReview, type ReviewKind } from "../../hub/review.ts";
 import type { ToolHandler } from "../../tools/registry.ts";
 
 export interface ReviewToolOptions {
@@ -62,6 +62,8 @@ const schema = z
     // The ceiling is the hub's: one number, so a review the tool accepts is
     // never one the hub then refuses.
     text: z.string().min(1).max(MAX_REVIEW_CHARS),
+    // The review of a cover letter is named apart from the rounds of the CV.
+    kind: z.enum(REVIEW_KINDS as [string, ...string[]]).default("cv"),
   })
   .strict();
 
@@ -71,8 +73,8 @@ export function createSaveReviewTool(options: ReviewToolOptions): ToolHandler {
       name: "save_review",
         description:
         "Save the blind review where the person reads it (critiche/). Give the position it judges and the review " +
-        "text; the file name is the harness's, a new review never overwrites an older one, and the answer is the " +
-        "path to cite in your [RES].",
+        "text (kind \"cover_letter\" for the review of a cover letter, which is saved as letter-review-…); the file name " +
+        "is the harness's, a new review never overwrites an older one, and the answer is the path to cite in your [RES].",
       schema,
     },
     classify: (args) => {
@@ -87,6 +89,8 @@ export function createSaveReviewTool(options: ReviewToolOptions): ToolHandler {
           const answer = await options.hub.post<{ ok?: boolean; path?: string; error?: string }>(HUB_PATHS.review, {
             position_id: a.position_id,
             text,
+            // Said only for a letter: the request of a CV review is the same words it always was.
+            ...(a.kind === "cover_letter" ? { kind: a.kind } : {}),
           });
           if (answer.ok === false || !answer.path) {
             return { ok: false, content: `The review was not saved: ${answer.error ?? "the hub refused it"}` };
@@ -106,6 +110,7 @@ export function createSaveReviewTool(options: ReviewToolOptions): ToolHandler {
           userDir: options.userDir,
           positionId: a.position_id,
           text,
+          kind: a.kind as ReviewKind,
           ...(options.now ? { now: options.now } : {}),
         });
         if (!written.ok || !written.path) {
