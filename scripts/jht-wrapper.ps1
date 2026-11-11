@@ -806,6 +806,32 @@ function Test-ProtectedRuntimeNode {
   } catch { return $false }
 }
 
+# What this wrapper (or a helper it loads) makes in the runtime and checks again with Test-ProtectedRuntimeNode must be the person's. From an
+# ELEVATED process what is made is owned by the group Administrators, and the check, which is NOT relaxed, would refuse it: the folder of the
+# integration markers (`jht screen on`), the helpers and their manifest, the manifest of the runtime, the files an upgrade replaces and the
+# journal and the snapshots of its rollback. So the node is given to the person right after it is made, the way the installer does (Set-JhtNodeOwner).
+# Only a node the person already owns is left as it is (nothing is written), and only one owned by Administrators (what an elevated run
+# leaves, also from an earlier run) is taken: a node of anybody else stays what it is, and the check refuses it. A link is never touched, no
+# ACL is rewritten (only the owner, through SetAccessControl: Set-Acl would write the SACL too, which only an elevated process may). $true when
+# the node is the person's after the call. Off Windows there is no such owner.
+function Set-ProtectedRuntimeNodeOwner {
+  param([string]$Path)
+  if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { return $true }
+  try {
+    $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return $false }
+    $person = [Security.Principal.WindowsIdentity]::GetCurrent().User
+    $acl = Get-Acl -LiteralPath $Path -ErrorAction Stop
+    $owner = ([Security.Principal.NTAccount]$acl.Owner).Translate([Security.Principal.SecurityIdentifier])
+    if ($owner.Value -eq $person.Value) { return $true }
+    if ($owner.Value -ne 'S-1-5-32-544') { return $false }
+    $acl.SetOwner($person)
+    if ($PSVersionTable.PSEdition -eq 'Core') { [IO.FileSystemAclExtensions]::SetAccessControl($item, $acl) } else { $item.SetAccessControl($acl) }
+    $after = ([Security.Principal.NTAccount](Get-Acl -LiteralPath $Path -ErrorAction Stop).Owner).Translate([Security.Principal.SecurityIdentifier])
+    return ($after.Value -eq $person.Value)
+  } catch { return $false }
+}
+
 function Test-RuntimeAncestorsWithoutReparsePoint {
   param([string]$Path)
   try {
@@ -887,6 +913,7 @@ function Write-RuntimeHelpersManifest {
     if (Test-Path -LiteralPath (Join-Path $RuntimeDir $name) -PathType Leaf) { $content += "$name=$(Get-RuntimeHelperHash $name)`n" }
   }
   Publish-JhtFile -Destination $RuntimeHelpersManifest -Bytes ([Text.UTF8Encoding]::new($false).GetBytes($content))
+  if (-not (Set-ProtectedRuntimeNodeOwner $RuntimeHelpersManifest)) { throw 'the helpers manifest cannot be given to the person' }
 }
 
 # $true when every helper the helpers manifest lists is the file it was written for; one it does not list is not loaded.
@@ -952,6 +979,7 @@ function Install-RuntimeHelpers {
         if ($name -like '*.ps1') { [scriptblock]::Create($text) | Out-Null }
         if ($text -notmatch '(?m)^# JHT_RUNTIME_HELPER=1\r?$') { throw "$name lacks the helper marker" }
         Publish-JhtFile -Destination (Join-Path $RuntimeDir $name) -Bytes ([IO.File]::ReadAllBytes($temp))
+        if (-not (Set-ProtectedRuntimeNodeOwner (Join-Path $RuntimeDir $name))) { throw "$name cannot be given to the person" }
       } finally { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue }
     }
     Write-RuntimeHelpersManifest
@@ -981,6 +1009,7 @@ function Write-RuntimeManifest {
   }
   [IO.File]::WriteAllText($temp, $content, [Text.UTF8Encoding]::new($false))
   Move-Item -LiteralPath $temp -Destination $RuntimeManifest -Force
+  if (-not (Set-ProtectedRuntimeNodeOwner $RuntimeManifest)) { throw 'the integrity manifest of the runtime cannot be given to the person' }
 }
 
 # The pin of the image of the tools on request (test channel): both files regular and of the owner, attested, canonical, and only next
@@ -1085,6 +1114,7 @@ function Install-ProtectedRuntimeFromRelease {
   $wrapperTemp = $null
   try {
     New-Item -ItemType Directory -Path $RuntimeDir -Force | Out-Null
+    if (-not (Set-ProtectedRuntimeNodeOwner $RuntimeDir)) { throw 'the runtime folder cannot be given to the person' }
     $acl = Get-Acl -LiteralPath $RuntimeDir
     $acl.SetAccessRuleProtection($true, $false)
     $rule = New-Object Security.AccessControl.FileSystemAccessRule(
@@ -1097,6 +1127,7 @@ function Install-ProtectedRuntimeFromRelease {
     Invoke-WebRequest -UseBasicParsing -Uri "$releaseBase/docker-compose.yml" -OutFile $temp
     if (-not (Select-String -LiteralPath $temp -Pattern '^\s*-\s*jht-runtime-mask:/jht_home/runtime(?:\s|$)' -Quiet)) { throw 'release compose lacks protected runtime mask' }
     Move-Item -LiteralPath $temp -Destination $ComposeFile
+    if (-not (Set-ProtectedRuntimeNodeOwner $ComposeFile)) { throw 'the compose file cannot be given to the person' }
     if (-not (Select-String -LiteralPath $WrapperPath -SimpleMatch '$JHT_HOST_RUNTIME_PROTOCOL = 1' -Quiet)) {
       if ($env:JHT_ALLOW_LEGACY_WRAPPER_MIGRATION -ne '1') { throw 'legacy wrapper migration is not authorized' }
       $wrapperTemp = Join-Path (Split-Path -LiteralPath $WrapperPath -Parent) ('.jht-wrapper-' + [guid]::NewGuid().ToString('N') + '.ps1')
@@ -1104,6 +1135,7 @@ function Install-ProtectedRuntimeFromRelease {
       [scriptblock]::Create((Get-Content -LiteralPath $wrapperTemp -Raw)) | Out-Null
       if (-not (Select-String -LiteralPath $wrapperTemp -SimpleMatch '$JHT_HOST_RUNTIME_PROTOCOL = 1' -Quiet)) { throw 'release wrapper lacks protected runtime protocol' }
       Move-Item -LiteralPath $wrapperTemp -Destination $WrapperPath -Force
+      if (-not (Set-ProtectedRuntimeNodeOwner $WrapperPath)) { throw 'the wrapper cannot be given to the person' }
     }
     Write-RuntimeManifest
     return (Test-RuntimeBundleTrusted)
@@ -1181,6 +1213,28 @@ function Require-ComposeFile {
   try { Assert-TrustedRuntime } catch { Write-Err $_.Exception.Message; exit 1 }
 }
 
+# Runs a pipeline whose input goes to a native command, with the stdin of that command free of a byte order mark.
+# Windows PowerShell 5.1 can put EF BB BF in front of what it pipes to a native program: with a console in UTF-8 (code page 65001: a console
+# inherited from pwsh 7, a UTF-8 system code page) it does so whatever $OutputEncoding is, because it writes the preamble of the console's
+# input encoding (measured on windows-2022); with a $OutputEncoding that carries a BOM (a profile that sets it) it writes that one too.
+# A password, a token or a key with a BOM in front is a wrong secret. Both encodings are set to UTF-8 WITHOUT a BOM for the call and put
+# back after it (the console one only if it could be read: with no console, the $OutputEncoding half still holds). What the pipeline
+# writes goes out as it does, and $LASTEXITCODE is the one of its native command. The pipeline is a script block; it sees the variables
+# of its caller.
+function Invoke-NativeWithStdin {
+  param([Parameter(Mandatory)][scriptblock]$Pipeline)
+  $nativeStdinOutputEncoding = $OutputEncoding
+  $nativeStdinConsoleEncoding = $null
+  $OutputEncoding = [Text.UTF8Encoding]::new($false)
+  try { $nativeStdinConsoleEncoding = [Console]::InputEncoding; [Console]::InputEncoding = [Text.UTF8Encoding]::new($false) } catch { $nativeStdinConsoleEncoding = $null }
+  try {
+    & $Pipeline
+  } finally {
+    $OutputEncoding = $nativeStdinOutputEncoding
+    if ($nativeStdinConsoleEncoding) { try { [Console]::InputEncoding = $nativeStdinConsoleEncoding } catch { $null = $_ } }
+  }
+}
+
 function Invoke-Compose {
   [CmdletBinding(PositionalBinding=$false)]
   param([switch]$NoInput, [string]$InputText, [Parameter(ValueFromRemainingArguments)] $Args)
@@ -1191,8 +1245,10 @@ function Invoke-Compose {
   # image-only, lasciamo per simmetria col bash wrapper).
   $files = @('-f', $ComposeFile)
   if ($ContainerRuntime -eq 'podman') { $files += @('-f', $PodmanComposeFile) }
-  if ($PSBoundParameters.ContainsKey('InputText')) { $InputText | & docker compose @files --project-directory $RuntimeDir @Args }
-  elseif ($NoInput) { $null | & docker compose @files --project-directory $RuntimeDir @Args }
+  # $Args is the script block's own inside Invoke-NativeWithStdin: the arguments go in a variable of theirs.
+  $composeArgs = @($Args)
+  if ($PSBoundParameters.ContainsKey('InputText')) { Invoke-NativeWithStdin { $InputText | & docker compose @files --project-directory $RuntimeDir @composeArgs } }
+  elseif ($NoInput) { Invoke-NativeWithStdin { $null | & docker compose @files --project-directory $RuntimeDir @composeArgs } }
   else { & docker compose @files --project-directory $RuntimeDir @Args }
 }
 
@@ -1280,7 +1336,7 @@ jht - Job Hunter Team
     jht mail setup         salva la casella di posta nel broker dei segreti
     jht mail drafts        email scritte dagli agenti in attesa del tuo ok
     jht mail approve <id>  le manda; jht mail discard <id> le scarta
-    jht integration list|status [ID]|add ID|remove ID [--purge --yes] [--json]
+    jht integration list|status [ID]|add ID|remove ID [--purge --yes] [--remove-image] [--json]
                            le integrazioni che si aggiungono dopo il setup
                            (google, telegram, mail): stato letto dal motore
     jht telegram status    stato del servizio Telegram isolato
@@ -1325,8 +1381,9 @@ Uso: jht integration <comando>
   list [--json]                   le integrazioni e il loro stato
   status [ID] [--json]            lo stato di una, o di tutte
   add ID [--json]                 aggiunge un'integrazione
-  remove ID [--purge --yes] [--json]
-                                  la toglie; --purge cancella anche i suoi dati (serve --yes)
+  remove ID [--purge --yes] [--remove-image] [--json]
+                                  la toglie; --purge cancella anche i suoi dati (serve --yes);
+                                  --remove-image (solo screen e media) toglie anche l'immagine degli strumenti
 
 Gli ID ammessi sono quelli che mostra `jht integration list`. Niente si scarica o si accende
 finche' non lo chiedi con `add`.
@@ -1372,7 +1429,9 @@ function Write-ScreenHelp {
 Uso: jht screen <comando>
 
   on [--json]       accende lo schermo dal vivo del closer: un container a parte, con lo stream solo su 127.0.0.1
-  off [--json]      lo spegne e toglie il container
+  off [--remove-image] [--json]
+                    lo spegne e toglie il container; l'immagine degli strumenti resta sul disco, per riaccenderlo
+                    senza riscaricarla: --remove-image la toglie e libera lo spazio
   status [--json]   dice se e' acceso
 
 Niente si scarica o si accende finche' non lo chiedi con `on`. Lo stream e' in sola visione.
@@ -1614,7 +1673,8 @@ process.stdout.write(`${configured?1:0} ${(piApi?keyThere:config.harness==="pi"&
     # Every native output here is read whole and then cut: see Get-RunningComposeServiceId (T79).
     # The script goes on stdin, never as an argument: Windows PowerShell 5.1 drops the double quotes
     # inside a native argument, and node then fails on it (T106).
-    $metadataLines = @(& { $ErrorActionPreference = 'Continue'; $metadataScript | & docker exec -i $containerId node - 2>$null })
+    # No byte order mark in front of the script whatever the console and the session encode (Invoke-NativeWithStdin).
+    $metadataLines = @(Invoke-NativeWithStdin { & { $ErrorActionPreference = 'Continue'; $metadataScript | & docker exec -i $containerId node - 2>$null } })
     $metadataCode = $LASTEXITCODE
     $metadata = if ($metadataLines.Count) { [string]$metadataLines[0] } else { '' }
     $values = if ($metadata) { @($metadata.Trim() -split '\s+') } else { @() }
@@ -1751,7 +1811,7 @@ function Invoke-DesktopApply {
     return
   }
   # stdin aperto e vuoto, come `apply record`; l'errore nativo non diventa un'eccezione (5.1)
-  $answer = ('' | & { $ErrorActionPreference = 'Continue'; $input | & docker exec -i $brokerId jht-broker-admin apply record $ApplyArgs[1] $ApplyArgs[2] $ApplyArgs[3] 2>$null }) -join ''
+  $answer = (Invoke-NativeWithStdin { '' | & { $ErrorActionPreference = 'Continue'; $input | & docker exec -i $brokerId jht-broker-admin apply record $ApplyArgs[1] $ApplyArgs[2] $ApplyArgs[3] 2>$null } }) -join ''
   $code = $LASTEXITCODE
   if ($code -ne 0 -or $answer -cnotmatch '"status": ?"(recorded|already_recorded)"') {
     [Console]::Out.WriteLine('{"ok":false,"error":"apply_record_refused"}')
@@ -1897,13 +1957,8 @@ function Invoke-BrokerAdmin {
   if ($PSBoundParameters.ContainsKey('InputText')) {
     # Una password con caratteri non ASCII arriverebbe come '?' con la
     # codifica di default di Windows PowerShell 5.1.
-    $previousEncoding = $OutputEncoding
-    $OutputEncoding = [Text.UTF8Encoding]::new($false)
-    try {
-      $InputText | & docker exec -i $brokerId jht-broker-admin @AdminArgs | Out-Host
-    } finally {
-      $OutputEncoding = $previousEncoding
-    }
+    # Nor a byte order mark in front of it: a password with a BOM is another password (Invoke-NativeWithStdin).
+    Invoke-NativeWithStdin { $InputText | & docker exec -i $brokerId jht-broker-admin @AdminArgs | Out-Host }
   } else {
     & docker exec -i $brokerId jht-broker-admin @AdminArgs | Out-Host
   }
@@ -2026,10 +2081,7 @@ function Invoke-TelegramAdmin {
   # [string] trasforma $null in "": solo un -InputText passato davvero (anche
   # vuoto, come le impronte di un inventario senza token) apre lo stdin.
   if ($PSBoundParameters.ContainsKey('InputText')) {
-    $previousEncoding = $OutputEncoding
-    $OutputEncoding = [Text.UTF8Encoding]::new($false)
-    try { $InputText | & docker exec -i $telegramId jht-telegram-admin @AdminArgs | Out-Host }
-    finally { $OutputEncoding = $previousEncoding }
+    Invoke-NativeWithStdin { $InputText | & docker exec -i $telegramId jht-telegram-admin @AdminArgs | Out-Host }
   } else {
     & docker exec $telegramId jht-telegram-admin @AdminArgs | Out-Host
   }
@@ -2439,7 +2491,7 @@ function Invoke-BrokerMigrateLegacy {
     if ($LASTEXITCODE -ne 0) { continue }
     $envelope = (& { $ErrorActionPreference = 'Continue'; & docker exec -u 1001 $agentId /usr/bin/python3 -I /app/shared/broker/legacy.py read $name 2>$null } | Select-Object -First 1)
     $answer = ''
-    if ($envelope) { $answer = ($envelope | & { $ErrorActionPreference = 'Continue'; $input | & docker exec -i $brokerId jht-broker-admin secrets import-legacy $name 2>$null }) -join '' }
+    if ($envelope) { $answer = (Invoke-NativeWithStdin { $envelope | & { $ErrorActionPreference = 'Continue'; $input | & docker exec -i $brokerId jht-broker-admin secrets import-legacy $name 2>$null } }) -join '' }
     if ($answer -match '"ok": true' -and $answer -match '"state": "imported"') {
       & { $ErrorActionPreference = 'Continue'; & docker exec -u 1001 $agentId /usr/bin/python3 -I /app/shared/broker/legacy.py remove $name *> $null }
       if ($LASTEXITCODE -ne 0) { Write-Warn "legacy_remove_failed: $name e' nel broker ma la copia in ~/.jht/credentials e' rimasta." }
@@ -2493,7 +2545,8 @@ const fs=require('fs');try{const c=JSON.parse(fs.readFileSync('/jht_home/cloud.j
 const fs=require('fs');try{const c=JSON.parse(fs.readFileSync('/jht_home/cloud.json','utf8'));if(typeof c.user_id==='string'&&/^[0-9a-f-]{36}$/i.test(c.user_id))process.stdout.write(c.user_id)}catch{}
 '@
   }
-  return ((& { $ErrorActionPreference = 'Continue'; $script | & docker exec -i -u 1001 $AgentId node - 2>$null }) -join '')
+  # The script goes to node's stdin without a BOM (Invoke-NativeWithStdin).
+  return ((Invoke-NativeWithStdin { & { $ErrorActionPreference = 'Continue'; $script | & docker exec -i -u 1001 $AgentId node - 2>$null } }) -join '')
 }
 
 # First pairing may take user_id from cloud.json in the box, a box-writable
@@ -3892,7 +3945,7 @@ function Replace-UpgradeFile {
   try {
     [IO.File]::Copy($Source, $temp, $true)
     if (Test-Path $Target) { [IO.File]::Replace($temp, $Target, $null) } else { [IO.File]::Move($temp, $Target) }
-    return $true
+    return (Set-ProtectedRuntimeNodeOwner $Target)
   } catch {
     Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
     return $false
@@ -3906,7 +3959,7 @@ function Write-UpgradeJournal {
   try {
     [IO.File]::WriteAllText($temp, ($value | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
     if (Test-Path $script:UpgradeJournal) { [IO.File]::Replace($temp, $script:UpgradeJournal, $null) } else { [IO.File]::Move($temp, $script:UpgradeJournal) }
-    return $true
+    return (Set-ProtectedRuntimeNodeOwner $script:UpgradeJournal)
   } catch {
     Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
     return $false
@@ -4072,7 +4125,12 @@ function Invoke-RuntimeUpgrade {
     Copy-Item -LiteralPath $ComposeFile -Destination (Join-Path $script:UpgradeRollbackDir 'docker-compose.yml')
     Copy-Item -LiteralPath $WrapperPath -Destination (Join-Path $script:UpgradeRollbackDir 'jht-wrapper.ps1')
     Copy-Item -LiteralPath $RuntimeManifest -Destination (Join-Path $script:UpgradeRollbackDir '.runtime-integrity')
-    if (-not (Write-UpgradeJournal 'prepared' $oldImage $wasRunning)) { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Impossibile preparare il rollback' $false; return 1 }
+    # the rollback is trusted only when the folder and its three files are the person's (Restore-UpgradePrevious): from an elevated process they are given to the person
+    $rollbackOwned = Set-ProtectedRuntimeNodeOwner $script:UpgradeRollbackDir
+    foreach ($snapshot in @('docker-compose.yml', 'jht-wrapper.ps1', '.runtime-integrity')) {
+      if (-not (Set-ProtectedRuntimeNodeOwner (Join-Path $script:UpgradeRollbackDir $snapshot))) { $rollbackOwned = $false }
+    }
+    if (-not $rollbackOwned -or -not (Write-UpgradeJournal 'prepared' $oldImage $wasRunning)) { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Impossibile preparare il rollback' $false; return 1 }
     Write-UpgradeNote 'Scarico l immagine piu recente...'
     if (-not (Invoke-UpgradeCompose $newCompose 'pull' $Container)) { Remove-UpgradeTransaction; Write-UpgradeResult $false $false 'pull' $oldVersion $oldImage $oldVersion $oldImage $false 'Download immagine non riuscito' $false; return 1 }
     $candidateFiles = @('-f', $newCompose)
@@ -4555,15 +4613,12 @@ switch ($Sub) {
     Require-Docker
     Ensure-Up
     if ($null -ne $keyPlan.Key) {
-      # -i only: a pipe is not a terminal. ASCII, so that no byte-order mark goes in front of the key.
-      $savedEncoding = $OutputEncoding
+      # -i only: a pipe is not a terminal. No byte-order mark goes in front of the key (Invoke-NativeWithStdin).
       try {
-        $OutputEncoding = New-Object System.Text.ASCIIEncoding
         [string[]]$setupArgs = $keyPlan.Args
-        $keyPlan.Key | & docker exec -i -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry 'setup' @setupArgs
+        Invoke-NativeWithStdin { $keyPlan.Key | & docker exec -i -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry 'setup' @setupArgs }
         if ($LASTEXITCODE -eq 0) { Write-Host "The setup keeps the key: you can delete the file on this computer now ($($keyPlan.File))." }
       } finally {
-        $OutputEncoding = $savedEncoding
         $keyPlan.Key = $null
       }
     } else {

@@ -27,6 +27,9 @@ if ($errors.Count) { throw "parse: $($errors[0])" }
 $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Invoke-DesktopApply' }, $true)
 if (-not $fn) { throw 'Invoke-DesktopApply missing' }
 Invoke-Expression $fn.Extent.Text
+$helper = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Invoke-NativeWithStdin' }, $true)
+if (-not $helper) { throw 'Invoke-NativeWithStdin missing' }
+Invoke-Expression $helper.Extent.Text
 $script:DesktopApplyExitCode = 2
 $BrokerContainer = 'jht-broker'
 function Test-RuntimeBundleTrusted { return $true }

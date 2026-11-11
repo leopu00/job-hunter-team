@@ -32,6 +32,9 @@ if ($errors.Count) { throw "parse: $($errors[0])" }
 $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Invoke-BrokerAdmin' }, $true)
 if (-not $fn) { throw 'Invoke-BrokerAdmin missing' }
 Invoke-Expression $fn.Extent.Text
+$helper = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Invoke-NativeWithStdin' }, $true)
+if (-not $helper) { throw 'Invoke-NativeWithStdin missing' }
+Invoke-Expression $helper.Extent.Text
 $BrokerContainer = 'jht-broker'
 function Get-RunningComposeServiceId { param($Name) 'abc123' }
 function Write-Err { param($Message) [Console]::Error.WriteLine($Message) }

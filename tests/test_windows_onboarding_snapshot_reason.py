@@ -46,7 +46,7 @@ $ErrorActionPreference = 'Stop'
 $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($env:JHT_UNDER_TEST, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw "parse: $($errors[0])" }
-$wanted = @('Get-ComposeProjectName', 'Get-ComposeLabel', 'Get-RunningComposeServiceId', 'Write-InactiveOnboardingSnapshot',
+$wanted = @('Invoke-NativeWithStdin', 'Get-ComposeProjectName', 'Get-ComposeLabel', 'Get-RunningComposeServiceId', 'Write-InactiveOnboardingSnapshot',
   'Write-OnboardingSnapshotReason', 'Write-OnboardingSnapshot')
 foreach ($name in $wanted) {
   $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name }, $true)
@@ -65,6 +65,9 @@ $ContainerRuntime = 'podman'
 $ComposeFile = 'docker-compose.yml'; $PodmanComposeFile = 'docker-compose.podman.yml'; $RuntimeDir = '.'
 $Container = 'jht'; $BrokerContainer = 'jht-broker'; $TelegramContainer = 'jht-telegram'
 $NodeEntry = '/app/cli/bin/jht.js'
+# a session whose encodings carry a BOM (a profile, a console in UTF-8): Windows PowerShell 5.1 then puts EF BB BF in front of
+# what it pipes to a native command, and the wrapper has to send the script to node without it all the same
+if ($env:JHT_SESSION_BOM -eq '1') { $OutputEncoding = [System.Text.Encoding]::UTF8; try { [Console]::InputEncoding = [System.Text.Encoding]::UTF8 } catch { $null = $_ } }
 Write-OnboardingSnapshot
 """
 
@@ -102,7 +105,7 @@ def _labels(service: str, project: str = "jht", extra: dict[str, str] | None = N
 
 
 def _snapshot(tmp_path: Path, listing: list[str], details: dict[str, str], trusted: bool = True,
-              old_form: bool = False):
+              old_form: bool = False, session_bom: bool = False):
     state = tmp_path / "state"
     state.mkdir()
     (state / "ps.txt").write_text("".join(f"{line}\n" for line in listing), encoding="utf-8", newline="\n")
@@ -120,6 +123,7 @@ def _snapshot(tmp_path: Path, listing: list[str], details: dict[str, str], trust
         "JHT_ENGINE_FILE": str(engine), "JHT_UNDER_TEST": str(WRAPPER),
         "FAKE_STATE": str(state), "FAKE_TRUSTED": "1" if trusted else "0",
         "JHT_OLD_FORM": "1" if old_form else "",
+        "JHT_SESSION_BOM": "1" if session_bom else "",
     }
     done = subprocess.run([*powershell_argv(), "-File", str(harness)], env=env, capture_output=True, text=True, timeout=120)
     assert_engine(engine, done.stderr)
@@ -215,9 +219,23 @@ def _provider_script() -> str:
 def test_the_provider_script_reaches_node_whole_on_stdin(tmp_path):
     values, reasons = _snapshot(tmp_path, [BROKER, TELEGRAM, JHT], TEAM)
     assert values["providerConfigured"] == "1" and values["providerAuthenticated"] == "1", reasons
-    received = (tmp_path / "state" / "node-stdin.js").read_text(encoding="utf-8").replace("\r\n", "\n")
+    raw = (tmp_path / "state" / "node-stdin.js").read_bytes()
+    assert not raw.startswith(b"\xef\xbb\xbf"), "a BOM went to node in front of the script"
+    received = raw.decode("utf-8").replace("\r\n", "\n")
     assert received.strip() == _provider_script().strip()
     assert not (tmp_path / "state" / "node-arg.js").exists()
+
+
+def test_the_provider_script_reaches_node_without_a_bom_whatever_the_session_encoding(tmp_path):
+    """Windows PowerShell 5.1 puts EF BB BF in front of what it pipes to a native command when the console is in UTF-8 (code page 65001,
+    whatever $OutputEncoding is: measured on windows-2022, «\\ufeffconst fs=…») or when $OutputEncoding carries a BOM. The wrapper sets
+    both encodings to UTF-8 without a BOM for the call and puts them back. Under PowerShell 7 the BOM is never piped, so there the case
+    only keeps the result the same; under 5.1 it is red without the fix."""
+    values, reasons = _snapshot(tmp_path, [BROKER, TELEGRAM, JHT], TEAM, session_bom=True)
+    assert values["providerConfigured"] == "1" and values["providerAuthenticated"] == "1", reasons
+    raw = (tmp_path / "state" / "node-stdin.js").read_bytes()
+    assert not raw.startswith(b"\xef\xbb\xbf"), "a BOM went to node in front of the script"
+    assert raw.decode("utf-8").replace("\r\n", "\n").strip() == _provider_script().strip()
 
 
 def test_the_script_as_an_argument_loses_its_quotes_under_51_only(tmp_path):

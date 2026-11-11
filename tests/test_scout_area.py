@@ -31,7 +31,7 @@ area = _load("scout_area_under_test", SKILLS / "scout_area.py")
 cov = _load("scout_coverage_area_test", SKILLS / "scout_coverage.py")
 
 IT_PROFILE = ("languages:\n  - language: Italiano\n    level: native\n  - language: English\n    level: B2\n"
-              "location: Bologna\npreferences:\n  work_mode: remote o ibrido\n")
+              "location: Bologna, Italy\npreferences:\n  work_mode: remote o ibrido\n")
 
 
 @pytest.fixture
@@ -64,16 +64,28 @@ def test_relocation_is_allowed_only_when_the_profile_says_so(value, allowed):
 
 
 # ── the area of the profile ──────────────────────────────────────────────────────────────────────────────────────────
-def test_the_home_comes_from_the_country_written_in_the_profile_else_from_the_native_language(home):
+def test_the_home_is_only_the_country_written_in_the_profile_never_the_language(home):
     assert area.read_area()["home"] == ["it"] and area.read_area()["relocation"] is False
-    _profile(home, IT_PROFILE.replace("location: Bologna", "location: Berlin, Germany"))
+    _profile(home, IT_PROFILE.replace("location: Bologna, Italy", "location: Berlin, Germany"))
     assert area.read_area()["home"] == ["de"]
-    _profile(home, IT_PROFILE.replace("level: native", "level: B1"))     # English B2 is now the strongest language: it says nothing
-    assert area.read_area() is None
-    _profile(home, IT_PROFILE.replace("Italiano", "English").replace("English\n    level: B2", "Deutsch\n    level: B2"))
-    assert area.read_area() is None, "English as the strongest language says nothing about where the person lives"
     _profile(home, IT_PROFILE + "  relocation: true\n")
     assert area.read_area()["relocation"] is True
+
+
+@pytest.mark.parametrize("place,language", [
+    ("Bologna", "Italiano"), ("Lugano", "Italiano"), ("Salzburg", "Deutsch"), ("Zürich", "Deutsch"), ("Genève", "Français"),
+])
+def test_a_place_that_names_no_country_gives_no_area_whatever_the_native_language(home, place, language):
+    """Italian is spoken in Ticino, German in Austria and Switzerland: the language proves nothing about where a person lives."""
+    _profile(home, IT_PROFILE.replace("location: Bologna, Italy", "location: " + place).replace("Italiano", language))
+    assert area.read_area() is None
+    assert area.check_position("Stockholm, Sweden", "onsite")["verdict"] == "ok"
+
+
+def test_a_profile_with_no_place_at_all_gives_no_area(home):
+    _profile(home, IT_PROFILE.replace("location: Bologna, Italy\n", ""))
+    assert area.read_area() is None
+    assert area.check_position("Stockholm, Sweden", "onsite")["verdict"] == "ok"
 
 
 def test_a_profile_that_cannot_be_read_gives_no_area_and_no_refusal(home):
@@ -159,6 +171,12 @@ def test_the_plan_of_a_profile_willing_to_relocate_has_the_other_countries_back(
     assert {"ie", "se", "mt"} <= {e["country"] for e in plan["entries"]} and plan["skipped_abroad"] == []
 
 
-def test_the_plan_leaves_nothing_out_when_the_home_is_unknown(home):
-    _profile(home, IT_PROFILE.replace("Italiano", "English").replace("English\n    level: B2", "Deutsch\n    level: B2"))
+@pytest.mark.parametrize("place", ["Bologna", "Lugano", ""])
+def test_the_plan_leaves_nothing_out_when_the_profile_names_no_country(home, place):
+    _profile(home, IT_PROFILE.replace("location: Bologna, Italy", ("location: " + place) if place else "x: y"))
     assert cov.load_plan()["skipped_abroad"] == []
+
+
+def test_a_scout_inserts_abroad_when_the_profile_names_no_country(home):
+    _profile(home, IT_PROFILE.replace("location: Bologna, Italy", "location: Lugano"))
+    assert _insert(home, "scout-1", 1, "Zürich, CH", "onsite").returncode == 0
