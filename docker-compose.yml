@@ -144,6 +144,9 @@ services:
       # writes the questions. Empty volumes while the integration is not there.
       - jht-media-in:/jht_media/in
       - jht-media-out:/jht_media/out:ro
+      # The full Chromium of the closer, copied here from the extras image by jht-playwright-populate when the person asks for a tool
+      # that needs it. Read-only: the agents cannot change a binary they are about to launch. Empty until then.
+      - jht-playwright:/opt/playwright-extras:ro
     # Permette allo spike Scorer di raggiungere Ollama/llama.cpp avviato
     # sull'host anche su Docker Engine Linux. L'endpoint resta opt-in e il
     # runner accetta esclusivamente host locali.
@@ -289,6 +292,34 @@ services:
     cap_drop:
       - ALL
 
+  # One-shot, off until it is asked for: copies the full Chromium of the extras image into the volume jht-playwright, the marker last
+  # (shared/skills/playwright_extras.py). No network, the volume is the only thing it writes.
+  jht-playwright-populate:
+    profiles: [playwright]
+    image: ${JHT_EXTRAS_IMAGE:-jht-extras-unpinned}
+    container_name: jht-playwright-populate
+    user: "1001:1001"
+    entrypoint: ["/usr/bin/tini", "-g", "--", "python3", "/app/shared/skills/playwright_extras.py", "populate", "${JHT_EXTRAS_DIGEST:-sha256:unset}", "/opt/playwright", "/opt/playwright-extras"]
+    network_mode: none
+    environment:
+      - LANG=C.UTF-8
+      - HOME=/tmp
+    volumes:
+      - jht-playwright:/opt/playwright-extras
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777,noexec,nosuid
+      - /jht_home:size=64k,mode=0555
+      - /jht_user:size=64k,mode=0555
+    pids_limit: 64
+    mem_limit: 512m
+    cpus: 1
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
 volumes:
   jht-deps:
   jht-runtime-mask:
@@ -302,6 +333,7 @@ volumes:
   jht-telegram-inbox:
   jht-media-in:
   jht-media-out:
+  jht-playwright:
 
 # ── Dev mode ────────────────────────────────────────────────────────────
 #

@@ -62,7 +62,7 @@ CONTAINER_SERVICE="jht"
 # I servizi del compose: agenti e i due servizi isolati.
 COMPOSE_SERVICES="jht jht-broker jht-telegram"
 # Every profile of the project: what looks at or takes down the WHOLE project names them all (the broker and Telegram are made on request).
-COMPOSE_ALL_PROFILES="telegram,broker,media"
+COMPOSE_ALL_PROFILES="telegram,broker,media,playwright"
 RUNTIME_MIGRATION_VOLUMES="jht-broker-state jht-secrets jht-telegram-secrets jht-telegram-state"
 ATTESTED_CONTAINER_ID=""
 if [ -n "${JHT_RUNTIME_DIR:-}" ]; then
@@ -1653,7 +1653,7 @@ container_down() {
         info "niente da fermare: nessun container del progetto."
         return 0
       fi
-      for svc in "$BROKER_SERVICE" "$TELEGRAM_SERVICE" "$MEDIA_SERVICE"; do
+      for svc in "$BROKER_SERVICE" "$TELEGRAM_SERVICE" "$MEDIA_SERVICE" "$PLAYWRIGHT_POPULATE_SERVICE"; do
         svc_status=0
         read_only_service_id "$svc" any-config >/dev/null || svc_status=$?
         case "$svc_status" in
@@ -1860,6 +1860,7 @@ broker_after_up() {
 # legacy necessari a imporre la rotazione, mai il token nuovo.
 TELEGRAM_SERVICE="jht-telegram"
 MEDIA_SERVICE="jht-media"
+PLAYWRIGHT_POPULATE_SERVICE="jht-playwright-populate"
 
 telegram_admin() {
   local telegram_id
@@ -2965,7 +2966,7 @@ mail_command() {
 # config-hash of the service, so a terminal that has one of them set (an `export OPENAI_API_KEY=…` for a login test) gets
 # another expected hash than the app that created the container with a clean environment, and every read said «container
 # non attivo» while the team ran (TEST 19g). docker-compose.yml and this list are held equal by a test.
-PODMAN_CALLER_ENV="JHT_EXTRAS_IMAGE ANTHROPIC_API_KEY OPENAI_API_KEY MOONSHOT_API_KEY NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY NEXT_PUBLIC_JHT_DEPLOY JHT_SCOUT_COORD_DB JHT_LIVE_SCREEN_PORT JHT_TELEGRAM_SERVICE_ENABLED JHT_TELEGRAM_BURST_LIMIT JHT_TELEGRAM_DAILY_LIMIT"
+PODMAN_CALLER_ENV="JHT_EXTRAS_IMAGE JHT_EXTRAS_DIGEST ANTHROPIC_API_KEY OPENAI_API_KEY MOONSHOT_API_KEY NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY NEXT_PUBLIC_JHT_DEPLOY JHT_SCOUT_COORD_DB JHT_LIVE_SCREEN_PORT JHT_TELEGRAM_SERVICE_ENABLED JHT_TELEGRAM_BURST_LIMIT JHT_TELEGRAM_DAILY_LIMIT"
 
 # 0 when the caller's environment sets (non-empty) at least one of them: only then does a «clean» hash differ.
 podman_caller_env_set() {
@@ -5991,8 +5992,8 @@ uninstall_podman_machine_state() {
 # generico per cancellare: oltre al progetto si chiede il servizio, il volume
 # logico o la rete di default di QUESTO compose, come fa `jht reset`.
 UNINSTALL_PROJECTS="jht host-runtime"
-UNINSTALL_SERVICES="jht jht-broker jht-telegram jht-media"
-UNINSTALL_VOLUMES="jht-deps jht-runtime-mask jht-secrets jht-broker-state jht-broker-sock jht-telegram-broker-sock jht-telegram-secrets jht-telegram-state jht-telegram-sock jht-telegram-inbox jht-media-in jht-media-out"
+UNINSTALL_SERVICES="jht jht-broker jht-telegram jht-media jht-playwright-populate"
+UNINSTALL_VOLUMES="jht-deps jht-runtime-mask jht-secrets jht-broker-state jht-broker-sock jht-telegram-broker-sock jht-telegram-secrets jht-telegram-state jht-telegram-sock jht-telegram-inbox jht-media-in jht-media-out jht-playwright"
 
 uninstall_docker_ids() {
   local docker_bin="$1" kind="$2" project name ids id
