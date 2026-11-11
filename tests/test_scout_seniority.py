@@ -152,3 +152,11 @@ def test_the_skill_says_it_is_an_order_and_never_a_reason_to_drop(suffix: str):
     section = text[start:text.index("\n## ", start + 5)]
     for key in ('"seniority": "above"', "`\"below\"`".replace('`', ''), "seniority_target", "SC-04", "Scorer", "`Principal`"):
         assert key in section, (suffix, key)
+
+
+@pytest.mark.parametrize("suffix", ["", ".it", ".de", ".es", ".fr", ".hu", ".pt"])
+def test_the_scout_prompt_says_the_code_is_an_order_after_the_gate_line(suffix: str):
+    text = (SKILLS.parents[1] / "agents" / "scout" / f"scout{suffix}.md").read_text(encoding="utf-8")
+    line = next(l for l in text.splitlines() if "scout-language-gate" in l and l.startswith("**"))
+    assert "seniority: above|below" in line and "`scout_language.py screen`" in line
+    assert "SC-04" not in line  # the tests of the score-integrity rules read the FIRST line that names SC-04 as the rule itself
