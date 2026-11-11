@@ -50,7 +50,10 @@ PWSH = shutil.which("pwsh")
 needs_powershell = pytest.mark.skipif(not WINDOWS and PWSH is None, reason="needs PowerShell")
 
 
-def _ps(tmp_path: Path, text: str, *, bin_dirs=(), extra=None, timeout=60) -> subprocess.CompletedProcess:
+# Only stops a hung shell. Windows PowerShell 5.1 on a Windows runner with four of these tests running at once takes 40-65 s
+# for a script of a few lines (a start of 5.1 is 3-4 s of CPU there): 60 s failed a run that was otherwise green. The other
+# files of the gate that start a shell wait 120 s.
+def _ps(tmp_path: Path, text: str, *, bin_dirs=(), extra=None, timeout=120) -> subprocess.CompletedProcess:
     """Runs `text` as a script under the PowerShell under test and checks the engine that ran it.
     On Windows the case gets windows_env and a PATH with only `bin_dirs`."""
     script = tmp_path / "case.ps1"
