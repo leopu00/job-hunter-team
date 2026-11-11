@@ -251,7 +251,7 @@ def test_wrapper_installer_enabler_and_library_agree_on_the_helper():
     assert "$JHT_INTEGRATION_PROTOCOL = 1\n" in wrapper
     assert re.search(r"'integration' \{\n    Require-ComposeFile\n", wrapper)
     assert "$mayFetch = $Rest.Count -gt 0" in wrapper                      # only add/remove fetch a missing helper
-    assert "'integration', 'tools'," in wrapper                            # its help is the local one, and so is the one of tools
+    assert "'integration', 'screen', 'tools'," in wrapper                          # its help is the local one, and so is the one of tools
     assert "jht-integration.ps1" in installer and "scripts/jht-integration.ps1" in installer
     assert "jht-integration.ps1=$integrationHash" in enabler and "'.runtime-helpers'" in enabler
     assert "$integrationHash" not in next(l for l in enabler.splitlines() if l.startswith('$manifest = "version=1'))   # the main manifest is the app's
