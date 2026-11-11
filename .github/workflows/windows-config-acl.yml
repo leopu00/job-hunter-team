@@ -12,40 +12,27 @@ on:
       - 'scripts/podman-machine-bridge.ps1'
       - 'scripts/podman-machine-bridge-selftest.ps1'
       - 'scripts/ci/podman_machine_bridge_gate.ps1'
-      - 'tests/test_windows_podman_readiness.py'
+      - 'scripts/ci/windows_gate_group.ps1'
       - 'scripts/podman-windows-probe.ps1'
       - 'web/public/install.ps1'
-      - 'tests/test_windows_native_runtime_pieces.py'
-      - 'tests/test_podman_windows_probe.py'
-      - 'tests/test_windows_powershell51_json.py'
-      - 'tests/test_windows_podman_wsl_branches.py'
-      - 'tests/test_podman_windows_setup_retry.py'
-      - 'tests/test_podman_windows_sidecar_idmap.py'
-      - 'tests/test_podman_windows_cgroupfs.py'
-      - 'tests/test_podman_windows_bundle_owner.py'
-      - 'tests/test_windows_pull_progress.py'
-      - 'tests/test_windows_long_phases_show_progress.py'
-      - 'tests/test_windows_install_path_notice.py'
-      - 'tests/test_windows_uninstall_wrapper.py'
-      - 'tests/test_windows_uninstall_files.py'
-      - 'tests/test_windows_machine_per_user.py'
-      - 'tests/test_windows_shim_exit_code.py'
-      - 'tests/windows_native_fakes.py'
-      - 'tests/test_windows_powershell51_native_quotes.py'
-      - 'tests/test_windows_powershell51_native_stderr.py'
-      - 'tests/test_windows_powershell51_wrapper_native_stderr.py'
-      - 'tests/test_windows_host_env_is_not_written_through_a_link.py'
-      - 'tests/test_windows_host_env_values_have_a_domain.py'
-      - 'tests/test_windows_download_is_verified_on_the_host.py'
-      - 'tests/test_windows_acl_skips_links.py'
-      - 'tests/test_windows_pristine_profile.py'
-      - 'tests/test_windows_onboarding_snapshot_reason.py'
-      - 'tests/test_windows_stdin_without_bom.py'
       - 'scripts/jht-uninstall-windows.ps1'
       - 'desktop/src-tauri/windows/installer-hooks.nsi'
-      - 'tests/test_windows_app_uninstall.py'
+      # The test files: every one that says «windows», the list of the others (tests/windows_gate_files.py), the files
+      # that list names without «windows» in their name, and what the tests stand on.
+      - 'tests/test_*windows*.py'
+      - 'tests/windows_gate_files.py'
+      - 'tests/test_*powershell*.py'
+      - 'tests/test_first_start_messages_powershell.py'
+      - 'tests/test_installer_core_tier.py'
+      - 'tests/test_runtime_volume_migration.py'
+      - 'tests/test_setup_help_names_the_key_options.py'
+      - 'tests/test_telegram_never_configured.py'
+      - 'tests/test_telegram_status_is_read_only.py'
+      - 'tests/test_wrapper_desktop_apply.py'
+      - 'tests/windows_native_fakes.py'
       - 'tests/conftest.py'
       - 'tests/requirements-ci.txt'
+      - 'tests/requirements-windows-gate.txt'
       - '.github/workflows/windows-config-acl.yml'
 
 permissions:
@@ -53,52 +40,21 @@ permissions:
 
 # The gate took 38-49 minutes in one job, one step after the other, and 25-30 of them were the sh-faked tests
 # under Windows PowerShell 5.1 (the same tests take 2 minutes under pwsh: each one starts a 5.1 shell, 3-4 s each
-# on this runner, and its fakes run under Git for Windows' bash). The pieces now run side by side on their own runners:
-#   host    the host ACL selftest, the Podman machine deadline, the native pieces, the start-up measure and the
-#           count of what the shell jobs below must run;
-#   shells  the 14 test files of the Podman-in-WSL setup, the app's uninstaller and the long phases, once under pwsh
-#           and, in five slices of the same list (tests/conftest.py, JHT_TEST_SLICE=k/5), under Windows PowerShell 5.1;
-#   acl     the gate: green only when every job above is. Its name is the one the check always had.
-# The tests are the same ones, none removed: a slice keeps the tests at place k, k+5, k+10... of the collection, so
-# the five slices together run each test once.
-env:
-  # The sh-faked tests of the Podman-in-WSL setup (seven files): the setup's repair of a broker or Telegram service
-  # (T85, T87), the cgroup manager of the Podman service (T87), the logon task's user compared as a SID on this
-  # Windows (T100), and the bundle's files given to the user by an elevated setup, as this runner is (T103). The
-  # fakes run under Git for Windows' bash behind a native launcher (tests/windows_native_fakes.py); every case
-  # checks the engine it ran under.
-  PODMAN_WSL_TESTS: >-
-    tests/test_windows_podman_wsl_branches.py
-    tests/test_windows_podman_readiness.py
-    tests/test_podman_windows_setup_retry.py
-    tests/test_podman_windows_sidecar_idmap.py
-    tests/test_podman_windows_cgroupfs.py
-    tests/test_podman_windows_bundle_owner.py
-    tests/test_windows_pull_progress.py
-  # The desktop app's Windows uninstaller and the team (T72): its NSIS hook run by an interpreter, and
-  # jht-uninstall-windows.ps1 on two fake profiles with a fake podman.exe (the sh fakes above), fake scheduled
-  # tasks and a fake HKCU\Environment, plus the real HKCU\Environment on a scratch value. The uninstaller runs the
-  # script with Windows PowerShell 5.1.
-  UNINSTALLER_TESTS: >-
-    tests/test_windows_app_uninstall.py
-  # The long phases of the setup told in words and time (the wait lines, Podman's stderr as notes), the new-window
-  # notice at the end of the install, and `jht uninstall` of the wrapper (the machine Podman cannot remove, the
-  # sentences, --purge, the list of the installer's files in bin); the Podman machine of each Windows user and the
-  # pipe another user's program can hold (JHT-T305), and the command shim run for real under cmd (its exit code when
-  # jht deletes it).
-  LONG_PHASES_TESTS: >-
-    tests/test_windows_long_phases_show_progress.py
-    tests/test_windows_install_path_notice.py
-    tests/test_windows_uninstall_wrapper.py
-    tests/test_windows_uninstall_files.py
-    tests/test_windows_machine_per_user.py
-    tests/test_windows_shim_exit_code.py
+# on this runner, and its fakes run under Git for Windows' bash). Seven jobs run side by side, each on its own runner:
+#   host    the host ACL selftest, the Podman machine deadline, the native pieces, the start-up measure, the count of
+#           what every job must run, and then both groups of tests under pwsh;
+#   shells  six slices (tests/conftest.py, JHT_TEST_SLICE=k/6) of both groups under Windows PowerShell 5.1.
+# The list of the files is ONE: tests/windows_gate_files.py (every tests/test_*windows*.py is in it by its name). The
+# workflow names no test file. Two groups: STRICT (the Podman-in-WSL setup, the app's uninstaller, the long phases: a
+# skip fails) and OPEN (every other file meant for Windows: it may skip for what Windows is, up to a number).
+# The run's conclusion is the gate: nothing reads a job by its name.
 
 jobs:
   host:
     name: Host ACL, Podman machine, native pieces
     runs-on: windows-2022
-    timeout-minutes: 30
+    # The host checks and both groups under pwsh take about 15 minutes; a hung step must not hold the gate for hours.
+    timeout-minutes: 40
     permissions:
       contents: read
     steps:
@@ -119,8 +75,10 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.12"
-      - name: Install pytest
-        run: pip install --require-hashes -r tests/requirements-ci.txt
+      - name: Install pytest and PyYAML
+        run: |
+          pip install --require-hashes -r tests/requirements-ci.txt
+          pip install --require-hashes -r tests/requirements-windows-gate.txt
       # A skip here is a failure: with a shell missing the step would be green
       # having proved nothing. 203 = 41 cases of the native file (its shim only
       # under Windows PowerShell 5.1) + the probe's shim under powershell and pwsh
@@ -134,29 +92,14 @@ jobs:
       # checks, a junction in the folder, one turned into a junction while the
       # walk runs, under both shells) + 18 cases of the wrapper on a profile with no host.env,
       # no private folder and no integrity manifest yet (the reading block under both shells,
-      # the ACL and node checks answering False for what is not there) + 15 cases of the onboarding snapshot
-      # under Windows PowerShell 5.1 (the provider script reaches node whole and without a byte order mark)
-      # + 9 cases of what the wrapper pipes to docker (a secret, a token, the cloud field script) on a console in UTF-8, under 5.1 without a BOM.
-      # The count may grow, never shrink.
+      # the ACL and node checks answering False for what is not there). The count may grow, never shrink.
       - name: Native Windows pieces of the Podman runtime
         shell: pwsh
         env:
           JHT_REQUIRE_WINDOWS_SHELLS: "1"
         run: |
-          $out = python -m pytest tests/test_windows_native_runtime_pieces.py `
-            'tests/test_podman_windows_probe.py::test_native_shim_compiles_and_propagates_backend_exit_code' `
-            tests/test_windows_powershell51_json.py `
-            tests/test_windows_powershell51_native_quotes.py `
-            tests/test_windows_powershell51_native_stderr.py `
-            tests/test_windows_powershell51_wrapper_native_stderr.py `
-            tests/test_windows_host_env_is_not_written_through_a_link.py `
-            tests/test_windows_host_env_values_have_a_domain.py `
-            tests/test_windows_download_is_verified_on_the_host.py `
-            tests/test_windows_acl_skips_links.py `
-            tests/test_windows_pristine_profile.py `
-            tests/test_windows_onboarding_snapshot_reason.py `
-            tests/test_windows_stdin_without_bom.py `
-            -n 4 -p no:cacheprovider -rs 2>&1
+          $files = @(python tests/windows_gate_files.py --host)
+          $out = python -m pytest @files -n 4 -p no:cacheprovider -rs 2>&1
           $code = $LASTEXITCODE
           $out | ForEach-Object { "$_" }
           if ($code -ne 0) { exit $code }
@@ -183,31 +126,62 @@ jobs:
           }
 
       # The floor of the shell jobs below: they run a slice of each group, so the whole of it is counted here, once.
-      # A test that disappears from a file (or a file out of the lists above) fails here. 180 / 175 / 73 are the
-      # tests of the three groups as they run today. The count may grow, never shrink.
+      # A test that disappears from a file (or a file out of the list) fails here. STRICT 428 and OPEN 556 are the tests
+      # of the two groups as they run today. The count may grow, never shrink.
       - name: Count of the tests the shell jobs run
         shell: pwsh
         run: |
           $groups = @(
-            @{ Name = 'Podman-in-WSL setup'; Files = $env:PODMAN_WSL_TESTS; Min = 180 },
-            @{ Name = "The app's uninstaller script"; Files = $env:UNINSTALLER_TESTS; Min = 175 },
-            @{ Name = 'Long phases, new-window notice, wrapper uninstall'; Files = $env:LONG_PHASES_TESTS; Min = 73 }
+            @{ Name = 'strict'; Min = 428 },
+            @{ Name = 'open'; Min = 556 }
           )
           foreach ($group in $groups) {
-            $files = @($group.Files -split '\s+' | Where-Object { $_ })
+            $files = @(python tests/windows_gate_files.py "--$($group.Name)")
+            if ($files.Count -eq 0) { throw "the list of the group $($group.Name) is empty" }
             $out = python -m pytest @files --collect-only -q -p no:cacheprovider 2>&1
             $out | Select-Object -Last 3 | ForEach-Object { "$_" }
             $line = @($out | ForEach-Object { "$_" } | Where-Object { $_ -match '^\d+ tests? collected' }) | Select-Object -Last 1
             if (-not $line -or $line -notmatch '^(\d+) tests? collected') { throw "no collected count for $($group.Name)" }
             if ([int]$Matches[1] -lt $group.Min) { throw "$($group.Name): only $($Matches[1]) tests collected, expected at least $($group.Min)" }
-            "$($group.Name): $($Matches[1]) tests (at least $($group.Min))"
+            "$($group.Name): $($Matches[1]) tests ($($files.Count) files, at least $($group.Min))"
           }
+
+      # Some of the open group's tests start the CLI of the repository (the upload of a document from Windows
+      # paths): its packages, and those of shared/ and shared/cron that it imports, are not on a fresh runner.
+      - name: Install the packages of the CLI
+        run: |
+          foreach ($folder in 'cli', 'shared', 'shared/cron') {
+            npm ci --prefix $folder --ignore-scripts --no-audit --no-fund
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      # Both groups of tests under pwsh, in the same job as the host checks (the 5.1 slices are the other six jobs).
+      - name: PowerShell 7 (pwsh), strict group
+        shell: pwsh
+        env:
+          JHT_REQUIRE_WINDOWS_SHELLS: "1"
+          JHT_TEST_SHELL: pwsh
+          JHT_TEST_SLICE: "0/1"
+        run: |
+          . "$env:GITHUB_WORKSPACE\scripts\ci\windows_gate_group.ps1"
+          exit (Invoke-GateGroup -Group strict -MaxSkipped 0)
+
+      # `skipped` 114 = the 89 skips of what Windows is at the measure of 11/11 and a margin of 25.
+      - name: PowerShell 7 (pwsh), open group
+        shell: pwsh
+        env:
+          JHT_REQUIRE_WINDOWS_SHELLS: "1"
+          JHT_TEST_SHELL: pwsh
+          JHT_TEST_SLICE: "0/1"
+        run: |
+          . "$env:GITHUB_WORKSPACE\scripts\ci\windows_gate_group.ps1"
+          exit (Invoke-GateGroup -Group open -MaxSkipped 114)
 
   shells:
     name: ${{ matrix.title }}
     runs-on: windows-2022
-    # A slice takes about 10 minutes; a hung step must not hold the gate for hours.
-    timeout-minutes: 30
+    # A slice takes about 12 minutes; a hung step must not hold the gate for hours.
+    timeout-minutes: 35
     permissions:
       contents: read
     strategy:
@@ -215,60 +189,50 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # 428 = 180 + 175 + 73 tests of the three groups. `min` is the size of the slice today: the slices at place
-          # 0, 1 and 2 hold 86 tests, 3 and 4 hold 85 (428 = 3 x 86 + 2 x 85), pwsh holds all of them. A skip fails the
-          # job twice: the summary «N passed, M skipped» does not match the pattern of the step, and N would be below
-          # `min`. The count may grow, never shrink (a test added moves the slices up, never below `min`).
-          - { title: "Windows PowerShell 5.1, slice 1 of 5", shell: powershell, slice: "0/5", min: 86 }
-          - { title: "Windows PowerShell 5.1, slice 2 of 5", shell: powershell, slice: "1/5", min: 86 }
-          - { title: "Windows PowerShell 5.1, slice 3 of 5", shell: powershell, slice: "2/5", min: 86 }
-          - { title: "Windows PowerShell 5.1, slice 4 of 5", shell: powershell, slice: "3/5", min: 85 }
-          - { title: "Windows PowerShell 5.1, slice 5 of 5", shell: powershell, slice: "4/5", min: 85 }
-          - { title: "PowerShell 7 (pwsh), all tests", shell: pwsh, slice: "0/1", min: 428 }
+          # Slice k of 6 of the strict group and of the open group, under Windows PowerShell 5.1. What a slice must run is
+          # read from its own collection (windows_gate_group.ps1): every test passed or skipped, none lost; the strict group
+          # may skip none, the open one up to 35 a slice (what Windows is: no bash, no Linux container; 89 in all, about 15
+          # a slice, at the measure of 11/11). The total of each group is counted by the host job (it may grow, never shrink).
+          - { title: "Windows PowerShell 5.1, slice 1 of 6", slice: "0/6" }
+          - { title: "Windows PowerShell 5.1, slice 2 of 6", slice: "1/6" }
+          - { title: "Windows PowerShell 5.1, slice 3 of 6", slice: "2/6" }
+          - { title: "Windows PowerShell 5.1, slice 4 of 6", slice: "3/6" }
+          - { title: "Windows PowerShell 5.1, slice 5 of 6", slice: "4/6" }
+          - { title: "Windows PowerShell 5.1, slice 6 of 6", slice: "5/6" }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.12"
-      - name: Install pytest
-        run: pip install --require-hashes -r tests/requirements-ci.txt
-      # The Podman-in-WSL setup, the app's uninstaller script, the long phases and the wrapper's uninstall (the three
-      # groups of env above) under one shell. The app runs Windows PowerShell 5.1, the ubuntu pytest job PowerShell 7.
-      # A missing shell, bash or compiler fails, and so does a real Podman visible to Find-Podman here (CI is set).
-      # A skip fails the count.
-      - name: ${{ matrix.title }}
+      - name: Install pytest and PyYAML
+        run: |
+          pip install --require-hashes -r tests/requirements-ci.txt
+          pip install --require-hashes -r tests/requirements-windows-gate.txt
+      # Some of the open group's tests start the CLI of the repository (the upload of a document from Windows
+      # paths): its packages, and those of shared/ and shared/cron that it imports, are not on a fresh runner.
+      - name: Install the packages of the CLI
+        run: |
+          foreach ($folder in 'cli', 'shared', 'shared/cron') {
+            npm ci --prefix $folder --ignore-scripts --no-audit --no-fund
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      # A missing shell, bash or compiler fails (JHT_REQUIRE_WINDOWS_SHELLS), and so does a real Podman visible to
+      # Find-Podman here (CI is set).
+      - name: Strict group under Windows PowerShell 5.1
         shell: pwsh
         env:
           JHT_REQUIRE_WINDOWS_SHELLS: "1"
-          JHT_TEST_SHELL: ${{ matrix.shell }}
+          JHT_TEST_SHELL: powershell
           JHT_TEST_SLICE: ${{ matrix.slice }}
-          MIN_TESTS: ${{ matrix.min }}
         run: |
-          $files = @("$env:PODMAN_WSL_TESTS $env:UNINSTALLER_TESTS $env:LONG_PHASES_TESTS" -split '\s+' | Where-Object { $_ })
-          $out = python -m pytest @files -n 4 -p no:cacheprovider -rs --durations=15 --durations-min=1 2>&1
-          $code = $LASTEXITCODE
-          $out | ForEach-Object { "$_" }
-          if ($code -ne 0) { exit $code }
-          $summary = "$($out[-1])"
-          if ($summary -notmatch '^=+ (\d+) passed(, \d+ warnings?)? in [0-9.]+s') { throw "unexpected pytest summary under ${env:JHT_TEST_SHELL}: $summary" }
-          if ([int]$Matches[1] -lt [int]$env:MIN_TESTS) { throw "only $($Matches[1]) tests ran under ${env:JHT_TEST_SHELL}, expected at least $env:MIN_TESTS" }
-          "${{ matrix.title }}: $($Matches[1]) tests" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-
-  # The gate: the check this workflow has always had. It runs even when a job above failed, and is green only when
-  # the host job and every shell job are.
-  acl:
-    needs: [host, shells]
-    if: ${{ always() }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      contents: read
-    steps:
-      - name: Every part of the gate is green
+          . "$env:GITHUB_WORKSPACE\scripts\ci\windows_gate_group.ps1"
+          exit (Invoke-GateGroup -Group strict -MaxSkipped 0)
+      - name: Open group under Windows PowerShell 5.1
+        shell: pwsh
         env:
-          HOST_RESULT: ${{ needs.host.result }}
-          SHELLS_RESULT: ${{ needs.shells.result }}
+          JHT_REQUIRE_WINDOWS_SHELLS: "1"
+          JHT_TEST_SHELL: powershell
+          JHT_TEST_SLICE: ${{ matrix.slice }}
         run: |
-          echo "host: $HOST_RESULT"
-          echo "shells: $SHELLS_RESULT"
-          [ "$HOST_RESULT" = "success" ] && [ "$SHELLS_RESULT" = "success" ]
+          . "$env:GITHUB_WORKSPACE\scripts\ci\windows_gate_group.ps1"
+          exit (Invoke-GateGroup -Group open -MaxSkipped 35)
