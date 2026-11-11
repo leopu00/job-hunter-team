@@ -966,6 +966,8 @@ function Test-RuntimeExtrasPin {
   param([bool]$PinPresent)
   if (-not ((Test-Path -LiteralPath $RuntimeExtrasFile) -or (Test-Path -LiteralPath $RuntimeExtrasIntegrity))) { return $true }
   if (-not $PinPresent) { return $false }
+  # both there: the integrity of a pin that is gone (or a pin without its integrity) is a runtime somebody changed
+  if (-not ((Test-Path -LiteralPath $RuntimeExtrasFile -PathType Leaf) -and (Test-Path -LiteralPath $RuntimeExtrasIntegrity -PathType Leaf))) { return $false }
   if (-not (Test-ProtectedRuntimeNode $RuntimeExtrasFile)) { return $false }
   if (-not (Test-ProtectedRuntimeNode $RuntimeExtrasIntegrity)) { return $false }
   $extrasBytes = [IO.File]::ReadAllText($RuntimeExtrasFile)
