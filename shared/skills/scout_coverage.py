@@ -328,6 +328,11 @@ def next_step(plan: dict, rows: list, need: dict | None = None, profile=None, no
         for field in ("api", "hint"):
             if entry.get(field):
                 step[field] = entry[field]
+        if lane:
+            # a Scout with a lane gets the search of ITS lane; a portal of another lane only when its own has nothing left, and it says so
+            step["in_lane"] = bool(lane & entry_keys(entry))
+            if not step["in_lane"]:
+                step["lane_done"] = "your lane has nothing left: this portal is another Scout's lane, asked only because yours is done"
         if kind == "broad":
             step["broad_terms"] = list(data.get("broad_terms", {}).get(entry["portal_language"], data.get("broad_terms", {}).get("en", []))) + list(terms)
             step["broad_worked_in_english"] = [e["term"] for e in data.get("broad_examples", {}).get("en", [])]

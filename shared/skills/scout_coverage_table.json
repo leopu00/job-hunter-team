@@ -966,9 +966,10 @@
     "name": "Jobs.ie",
     "country": "ie",
     "tier": "minor",
-    "access": "search",
+    "access": "closed",
     "host": "jobs.ie",
-    "portal_language": "en"
+    "portal_language": "en",
+    "hint": "Closed to the Scout's tools: no answer from the VPS (timeout, then an HTTP/2 error, on two runs) and none from another network either. Log nothing there."
    },
    {
     "slug": "gradireland",
@@ -1073,9 +1074,10 @@
     "name": "Careerjet Sweden",
     "country": "se",
     "tier": "minor",
-    "access": "search",
+    "access": "closed",
     "host": "careerjet.se",
-    "portal_language": "en"
+    "portal_language": "en",
+    "hint": "Closed to programs: every search answers a «verify you are human» challenge page, from the VPS and from another network (11/11). Log nothing there."
    },
    {
     "slug": "jooble",
@@ -1181,8 +1183,9 @@
     "name": "FlexJobs",
     "country": "remote",
     "tier": "minor",
-    "access": "search",
-    "host": "flexjobs.com"
+    "access": "closed",
+    "host": "flexjobs.com",
+    "hint": "Closed to programs: the connection is refused from another network and the VPS gets a 429 on the first search (11/11). Log nothing there."
    },
    {
     "slug": "remote-rocketship",
