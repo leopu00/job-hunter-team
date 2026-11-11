@@ -376,6 +376,14 @@ def test_down_with_podman_says_one_line_and_not_the_ids_nor_the_errors_of_a_serv
     assert done.stderr == ""
 
 
+def test_down_with_podman_says_nothing_of_any_service_that_is_not_there_the_media_one_and_the_broker_included(wrapper):
+    lines = "".join(f'Error: no container with name or ID "{name}" found: no such container\\n'
+                    for name in ("jht-media", "jht-telegram", "jht-broker", "jht-telegram"))
+    done = wrapper.run("container_down; echo rc=$?", running_hash=NEW_HASH, down_stdout=IDS, down_stderr=lines)
+    assert done.stdout.splitlines() == ["<down.done>", "rc=0"], done.stdout
+    assert done.stderr == ""
+
+
 def test_down_with_podman_keeps_the_error_of_the_main_service_and_lines_that_only_start_alike(wrapper):
     main = 'Error: no container with name or ID "jht" found: no such container\\n'
     longer = 'Error: no container with name or ID "jht-telegram" found: and then something else\\n'
