@@ -40,28 +40,15 @@ function Get-IntegrationForeign {
 # ---- Host markers: <id>.pending (pid of the run in progress), <id>.error (one line), google.ok ----
 function Get-IntegrationDir { return (Join-Path $RuntimeDir 'integrations') }
 
-# Run from an ELEVATED process, what is made here is owned by the group Administrators, not by the person; the runtime is attested as owned by the
-# person (Test-ProtectedRuntimeNode, which is NOT relaxed: it still wants the person as the owner), and the folder of the markers and every marker
-# in it would be refused. So the node is given to the person right after it is made, the way the installer gives the runtime (Set-JhtNodeOwner).
-# Only a node the person already owns is left as it is, and only one owned by Administrators (what an elevated run leaves, also from an earlier
-# run) is taken: a node of anybody else stays what it is, and the check refuses it. A link is never touched. Off Windows there is no such owner.
+# Run from an ELEVATED process, what is made here is owned by the group Administrators, not by the person, and the check of the wrapper
+# (Test-ProtectedRuntimeNode, NOT relaxed: it still wants the person as the owner) would refuse the folder of the markers and every marker in it.
+# The node is given to the person right after it is made by the one function the wrapper has for it (Set-ProtectedRuntimeNodeOwner: only a
+# node of Administrators is taken, a node of anybody else or a link is not). A wrapper that does not have it yet (an older install that gets this
+# helper from the release) leaves the node as it is, as this helper did before.
 function Set-IntegrationNodeOwner {
   param([string]$Path)
-  if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { return $true }
-  try {
-    $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
-    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return $false }
-    $person = [Security.Principal.WindowsIdentity]::GetCurrent().User
-    $acl = Get-Acl -LiteralPath $Path -ErrorAction Stop
-    $owner = ([Security.Principal.NTAccount]$acl.Owner).Translate([Security.Principal.SecurityIdentifier])
-    if ($owner.Value -eq $person.Value) { return $true }
-    if ($owner.Value -ne 'S-1-5-32-544') { return $false }
-    # never Set-Acl: on a protected ACL it writes the SACL too, which only an elevated process may (windows-private-acl.ps1)
-    $acl.SetOwner($person)
-    if ($PSVersionTable.PSEdition -eq 'Core') { [IO.FileSystemAclExtensions]::SetAccessControl($item, $acl) } else { $item.SetAccessControl($acl) }
-    $after = ([Security.Principal.NTAccount](Get-Acl -LiteralPath $Path -ErrorAction Stop).Owner).Translate([Security.Principal.SecurityIdentifier])
-    return ($after.Value -eq $person.Value)
-  } catch { return $false }
+  if (-not (Get-Command Set-ProtectedRuntimeNodeOwner -CommandType Function -ErrorAction SilentlyContinue)) { return $true }
+  return (Set-ProtectedRuntimeNodeOwner $Path)
 }
 
 function Test-IntegrationDirReady {

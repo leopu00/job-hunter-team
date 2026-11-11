@@ -210,6 +210,7 @@ $RuntimeExtrasFile = Join-Path $RuntimeDir 'runtime-extras-image'; $RuntimeExtra
 function Test-RuntimePathAuthority { $true }
 function Test-RuntimeAncestorsWithoutReparsePoint { param($p) $true }
 function Test-ProtectedRuntimeNode { param($p, [switch]$Directory) $true }
+function Set-ProtectedRuntimeNodeOwner { param($p) $true }
 function Test-RuntimeDirectoryAcl { $true }
 function Test-RuntimeHelpersTrusted { $true }
 $AclHelperPath = Join-Path $RuntimeDir 'windows-private-acl.ps1'

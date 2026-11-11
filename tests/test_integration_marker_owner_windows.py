@@ -1,7 +1,7 @@
 """`jht integration` from an ELEVATED Windows process: «cartella dei marcatori non sicura».
 
 What the helper makes in <runtime>\\integrations (the folder, then every marker) is owned by the group Administrators when the process is elevated,
-and Test-ProtectedRuntimeNode wants the person as the owner. The helper now gives each node it made to the person (Set-IntegrationNodeOwner, the
+and Test-ProtectedRuntimeNode wants the person as the owner. The helper now gives each node it made to the person (Set-ProtectedRuntimeNodeOwner of the wrapper, the
 way the installer gives the runtime), takes only a node owned by the person or by Administrators, and the check itself is the one of the wrapper.
 
 Two kinds of test:
@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -25,38 +24,9 @@ import pytest
 from windows_native_fakes import install_fake, powershell_argv
 
 from test_integration_command_windows import CASE, FAKE_PODMAN, LIBRARY, WRAPPER
+from windows_owner_fakes import STAND_INS, function_text, owners_of
 
-NODES = r"""
-# who owns what: <path>|<owner> lines, 'user' or 'admin' or 'other'; a node that is not in it is owned by who made it: the Administrators in an elevated run
-function Get-FakeOwner {
-  param([string]$Path)
-  $row = @(Get-Content -LiteralPath $env:T_OWNERS -ErrorAction SilentlyContinue | Where-Object { $_ -like "$Path|*" })
-  if ($row.Count) { return ($row[$row.Count - 1] -split '\|')[1] }
-  if ($env:T_ELEVATED -eq '1') { return 'admin' }
-  return 'user'
-}
-function Set-FakeOwner { param([string]$Path, [string]$Owner) Add-Content -LiteralPath $env:T_OWNERS -Value "$Path|$Owner" }
-# the rule of the wrapper: a plain node of the right kind, and the person as its owner
-function Test-ProtectedRuntimeNode {
-  param([string]$Path, [switch]$Directory)
-  $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
-  if (-not $item) { return $false }
-  if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return $false }
-  if ([bool]$Directory -ne [bool]$item.PSIsContainer) { return $false }
-  return ((Get-FakeOwner $Path) -ceq 'user')
-}
-if ($env:T_NO_FIX -eq '1') {
-  function Set-IntegrationNodeOwner { param([string]$Path) return $true }   # the helper before the fix
-} else {
-  function Set-IntegrationNodeOwner {
-    param([string]$Path)
-    $owner = Get-FakeOwner $Path
-    if ($owner -ceq 'user') { return $true }
-    if ($owner -ceq 'admin') { Set-FakeOwner $Path 'user'; return $true }
-    return $false
-  }
-}
-"""
+NODES = STAND_INS
 ANCHOR = "$IntegrationRetryWaitSeconds = 0\n"
 
 
@@ -93,8 +63,7 @@ def run(host, args: list[str], **extra: str) -> subprocess.CompletedProcess:
 
 
 def owners(host) -> dict[str, str]:
-    rows = [line.rsplit("|", 1) for line in host.owners.read_text(encoding="utf-8").splitlines() if "|" in line]
-    return {path: who for path, who in rows}
+    return owners_of(host.owners)
 
 
 @pytest.mark.parametrize("elevated", ["0", "1"])
@@ -174,12 +143,6 @@ $fileOwner = ([Security.Principal.NTAccount](Get-Acl -LiteralPath (Join-Path (Ge
 """
 
 
-def _function_text(source: str, name: str) -> str:
-    match = re.search(rf"^function {re.escape(name)} \{{\n.*?^\}}\n", source, re.S | re.M)
-    assert match, name
-    return match.group(0)
-
-
 @pytest.mark.skipif(sys.platform != "win32", reason="the owner of a node is a Windows ACL")
 def test_the_real_check_of_the_wrapper_accepts_what_the_helper_makes_whoever_runs_it(tmp_path):
     # On a CI runner the process is elevated: the folder this makes is the Administrators' until the helper gives it to the person.
@@ -187,7 +150,8 @@ def test_the_real_check_of_the_wrapper_accepts_what_the_helper_makes_whoever_run
     runtime.mkdir()
     (runtime / "docker-compose.yml").write_text("services:\n  jht:\n    image: x\n", encoding="utf-8")
     rule = tmp_path / "node-rule.ps1"
-    rule.write_text(_function_text(WRAPPER.read_text(encoding="utf-8"), "Test-ProtectedRuntimeNode"), encoding="utf-8-sig")
+    wrapper = WRAPPER.read_text(encoding="utf-8")
+    rule.write_text(function_text(wrapper, "Test-ProtectedRuntimeNode") + function_text(wrapper, "Set-ProtectedRuntimeNodeOwner"), encoding="utf-8-sig")
     script = tmp_path / "real.ps1"
     script.write_text(REAL, encoding="utf-8-sig")
     env = {**os.environ, "T_RUNTIME": str(runtime), "T_JHT_HOME": str(tmp_path / "jht-home"), "T_LIBRARY": str(LIBRARY),

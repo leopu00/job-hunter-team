@@ -782,6 +782,32 @@ function Test-ProtectedRuntimeNode {
   } catch { return $false }
 }
 
+# What this wrapper (or a helper it loads) makes in the runtime and checks again with Test-ProtectedRuntimeNode must be the person's. From an
+# ELEVATED process what is made is owned by the group Administrators, and the check, which is NOT relaxed, would refuse it: the folder of the
+# integration markers (`jht screen on`), the helpers and their manifest, the manifest of the runtime, the files an upgrade replaces and the
+# journal and the snapshots of its rollback. So the node is given to the person right after it is made, the way the installer does (Set-JhtNodeOwner).
+# Only a node the person already owns is left as it is (nothing is written), and only one owned by Administrators (what an elevated run
+# leaves, also from an earlier run) is taken: a node of anybody else stays what it is, and the check refuses it. A link is never touched, no
+# ACL is rewritten (only the owner, through SetAccessControl: Set-Acl would write the SACL too, which only an elevated process may). $true when
+# the node is the person's after the call. Off Windows there is no such owner.
+function Set-ProtectedRuntimeNodeOwner {
+  param([string]$Path)
+  if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { return $true }
+  try {
+    $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return $false }
+    $person = [Security.Principal.WindowsIdentity]::GetCurrent().User
+    $acl = Get-Acl -LiteralPath $Path -ErrorAction Stop
+    $owner = ([Security.Principal.NTAccount]$acl.Owner).Translate([Security.Principal.SecurityIdentifier])
+    if ($owner.Value -eq $person.Value) { return $true }
+    if ($owner.Value -ne 'S-1-5-32-544') { return $false }
+    $acl.SetOwner($person)
+    if ($PSVersionTable.PSEdition -eq 'Core') { [IO.FileSystemAclExtensions]::SetAccessControl($item, $acl) } else { $item.SetAccessControl($acl) }
+    $after = ([Security.Principal.NTAccount](Get-Acl -LiteralPath $Path -ErrorAction Stop).Owner).Translate([Security.Principal.SecurityIdentifier])
+    return ($after.Value -eq $person.Value)
+  } catch { return $false }
+}
+
 function Test-RuntimeAncestorsWithoutReparsePoint {
   param([string]$Path)
   try {
@@ -863,6 +889,7 @@ function Write-RuntimeHelpersManifest {
     if (Test-Path -LiteralPath (Join-Path $RuntimeDir $name) -PathType Leaf) { $content += "$name=$(Get-RuntimeHelperHash $name)`n" }
   }
   Publish-JhtFile -Destination $RuntimeHelpersManifest -Bytes ([Text.UTF8Encoding]::new($false).GetBytes($content))
+  if (-not (Set-ProtectedRuntimeNodeOwner $RuntimeHelpersManifest)) { throw 'the helpers manifest cannot be given to the person' }
 }
 
 # $true when every helper the helpers manifest lists is the file it was written for; one it does not list is not loaded.
@@ -928,6 +955,7 @@ function Install-RuntimeHelpers {
         if ($name -like '*.ps1') { [scriptblock]::Create($text) | Out-Null }
         if ($text -notmatch '(?m)^# JHT_RUNTIME_HELPER=1\r?$') { throw "$name lacks the helper marker" }
         Publish-JhtFile -Destination (Join-Path $RuntimeDir $name) -Bytes ([IO.File]::ReadAllBytes($temp))
+        if (-not (Set-ProtectedRuntimeNodeOwner (Join-Path $RuntimeDir $name))) { throw "$name cannot be given to the person" }
       } finally { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue }
     }
     Write-RuntimeHelpersManifest
@@ -957,6 +985,7 @@ function Write-RuntimeManifest {
   }
   [IO.File]::WriteAllText($temp, $content, [Text.UTF8Encoding]::new($false))
   Move-Item -LiteralPath $temp -Destination $RuntimeManifest -Force
+  if (-not (Set-ProtectedRuntimeNodeOwner $RuntimeManifest)) { throw 'the integrity manifest of the runtime cannot be given to the person' }
 }
 
 # The pin of the image of the tools on request (test channel): both files regular and of the owner, attested, canonical, and only next
@@ -1061,6 +1090,7 @@ function Install-ProtectedRuntimeFromRelease {
   $wrapperTemp = $null
   try {
     New-Item -ItemType Directory -Path $RuntimeDir -Force | Out-Null
+    if (-not (Set-ProtectedRuntimeNodeOwner $RuntimeDir)) { throw 'the runtime folder cannot be given to the person' }
     $acl = Get-Acl -LiteralPath $RuntimeDir
     $acl.SetAccessRuleProtection($true, $false)
     $rule = New-Object Security.AccessControl.FileSystemAccessRule(
@@ -1073,6 +1103,7 @@ function Install-ProtectedRuntimeFromRelease {
     Invoke-WebRequest -UseBasicParsing -Uri "$releaseBase/docker-compose.yml" -OutFile $temp
     if (-not (Select-String -LiteralPath $temp -Pattern '^\s*-\s*jht-runtime-mask:/jht_home/runtime(?:\s|$)' -Quiet)) { throw 'release compose lacks protected runtime mask' }
     Move-Item -LiteralPath $temp -Destination $ComposeFile
+    if (-not (Set-ProtectedRuntimeNodeOwner $ComposeFile)) { throw 'the compose file cannot be given to the person' }
     if (-not (Select-String -LiteralPath $WrapperPath -SimpleMatch '$JHT_HOST_RUNTIME_PROTOCOL = 1' -Quiet)) {
       if ($env:JHT_ALLOW_LEGACY_WRAPPER_MIGRATION -ne '1') { throw 'legacy wrapper migration is not authorized' }
       $wrapperTemp = Join-Path (Split-Path -LiteralPath $WrapperPath -Parent) ('.jht-wrapper-' + [guid]::NewGuid().ToString('N') + '.ps1')
@@ -1080,6 +1111,7 @@ function Install-ProtectedRuntimeFromRelease {
       [scriptblock]::Create((Get-Content -LiteralPath $wrapperTemp -Raw)) | Out-Null
       if (-not (Select-String -LiteralPath $wrapperTemp -SimpleMatch '$JHT_HOST_RUNTIME_PROTOCOL = 1' -Quiet)) { throw 'release wrapper lacks protected runtime protocol' }
       Move-Item -LiteralPath $wrapperTemp -Destination $WrapperPath -Force
+      if (-not (Set-ProtectedRuntimeNodeOwner $WrapperPath)) { throw 'the wrapper cannot be given to the person' }
     }
     Write-RuntimeManifest
     return (Test-RuntimeBundleTrusted)
@@ -3844,7 +3876,7 @@ function Replace-UpgradeFile {
   try {
     [IO.File]::Copy($Source, $temp, $true)
     if (Test-Path $Target) { [IO.File]::Replace($temp, $Target, $null) } else { [IO.File]::Move($temp, $Target) }
-    return $true
+    return (Set-ProtectedRuntimeNodeOwner $Target)
   } catch {
     Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
     return $false
@@ -3858,7 +3890,7 @@ function Write-UpgradeJournal {
   try {
     [IO.File]::WriteAllText($temp, ($value | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
     if (Test-Path $script:UpgradeJournal) { [IO.File]::Replace($temp, $script:UpgradeJournal, $null) } else { [IO.File]::Move($temp, $script:UpgradeJournal) }
-    return $true
+    return (Set-ProtectedRuntimeNodeOwner $script:UpgradeJournal)
   } catch {
     Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
     return $false
@@ -4024,7 +4056,12 @@ function Invoke-RuntimeUpgrade {
     Copy-Item -LiteralPath $ComposeFile -Destination (Join-Path $script:UpgradeRollbackDir 'docker-compose.yml')
     Copy-Item -LiteralPath $WrapperPath -Destination (Join-Path $script:UpgradeRollbackDir 'jht-wrapper.ps1')
     Copy-Item -LiteralPath $RuntimeManifest -Destination (Join-Path $script:UpgradeRollbackDir '.runtime-integrity')
-    if (-not (Write-UpgradeJournal 'prepared' $oldImage $wasRunning)) { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Impossibile preparare il rollback' $false; return 1 }
+    # the rollback is trusted only when the folder and its three files are the person's (Restore-UpgradePrevious): from an elevated process they are given to the person
+    $rollbackOwned = Set-ProtectedRuntimeNodeOwner $script:UpgradeRollbackDir
+    foreach ($snapshot in @('docker-compose.yml', 'jht-wrapper.ps1', '.runtime-integrity')) {
+      if (-not (Set-ProtectedRuntimeNodeOwner (Join-Path $script:UpgradeRollbackDir $snapshot))) { $rollbackOwned = $false }
+    }
+    if (-not $rollbackOwned -or -not (Write-UpgradeJournal 'prepared' $oldImage $wasRunning)) { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Impossibile preparare il rollback' $false; return 1 }
     Write-UpgradeNote 'Scarico l immagine piu recente...'
     if (-not (Invoke-UpgradeCompose $newCompose 'pull' $Container)) { Remove-UpgradeTransaction; Write-UpgradeResult $false $false 'pull' $oldVersion $oldImage $oldVersion $oldImage $false 'Download immagine non riuscito' $false; return 1 }
     $candidateFiles = @('-f', $newCompose)
