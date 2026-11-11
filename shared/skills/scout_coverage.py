@@ -346,6 +346,40 @@ def next_step(plan: dict, rows: list, need: dict | None = None, profile=None, no
     return {"plan_done": True, "core_done": not core_missing(portal_states(rows, profile, now)), "entries": len(plan["entries"])}
 
 
+AVOID_MAX = 12
+
+
+def avoid_list(plan: dict, rows: list, data: dict | None = None) -> list:
+    """The sources the Scout must NOT open, `[{"source", "why"}]`: the ones the table says fail with certainty (`avoid`: not in the
+    plan, so no state of their own), and the ones that failed with certainty on THIS run, for any Scout (the last pass logged says
+    closed or gone, or two passes were blocked and none was good). The portals of the plan are not here: they show their own
+    state (closed, blocked). A Scout that spends 11-17 minutes of a 30-minute burst on dead portals does not insert (measured 11/11)."""
+    data = data or table()
+    inplan = set()
+    for entry in plan["entries"]:
+        inplan |= entry_keys(entry)
+    out, seen = [], set()
+    for item in data.get("avoid", []):
+        key = _lang.portal_slug(item["source"])
+        if key not in seen:
+            seen.add(key)
+            out.append({"source": item["source"], "why": item["why"]})
+    by_source: dict = {}
+    for row in rows:
+        if row.get("kind") == "pass" and isinstance(row.get("source"), str):
+            by_source.setdefault(_lang.portal_slug(row["source"]), []).append(row)
+    for key, passes in sorted(by_source.items()):
+        if key in inplan or key in seen:
+            continue
+        last = max(passes, key=lambda r: r["ts"])
+        blocked = [r for r in passes if r.get("status") == BLOCKED_STATUS]
+        good = [r for r in passes if r.get("status") not in CLOSED_STATUSES and r.get("status") != BLOCKED_STATUS]
+        if last.get("status") in CLOSED_STATUSES or (len(blocked) >= 2 and not good):
+            seen.add(key)
+            out.append({"source": key, "why": "closed or blocked on this run"})
+    return out[:AVOID_MAX]
+
+
 def profile_news(agent: str, profile_path=None) -> dict:
     """What the Scout `agent` has to know about the profile it built its circles on: `changed`, the `groups` that changed
     (roles, places, languages, mode) and, when it did, what to do. Silence (no version file, a profile that cannot be read,
@@ -434,6 +468,9 @@ def main(argv=None) -> int:
             print(render(plan, report))
         return 0
     step = next_step(plan, rows, profile=args.profile, now=now)
+    avoid = avoid_list(plan, rows)
+    if avoid:
+        step["avoid"] = avoid          # do not open these: they fail with certainty (the table, or this run's own pass log)
     if args.agent:
         step["profile"] = profile_news(args.agent, args.profile)
     print(json.dumps(step, sort_keys=True, ensure_ascii=False))
