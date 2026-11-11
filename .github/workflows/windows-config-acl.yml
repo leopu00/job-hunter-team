@@ -208,11 +208,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # 428 = 180 + 175 + 73 tests of the three groups; `min` is what a slice runs at least (428 / 5 rounded
-          # down for a slice of five, all of them for pwsh). A skip fails the count; the count may grow, never shrink.
-          - { title: "Windows PowerShell 5.1, slice 1 of 5", shell: powershell, slice: "0/5", min: 85 }
-          - { title: "Windows PowerShell 5.1, slice 2 of 5", shell: powershell, slice: "1/5", min: 85 }
-          - { title: "Windows PowerShell 5.1, slice 3 of 5", shell: powershell, slice: "2/5", min: 85 }
+          # 428 = 180 + 175 + 73 tests of the three groups. `min` is the size of the slice today: the slices at place
+          # 0, 1 and 2 hold 86 tests, 3 and 4 hold 85 (428 = 3 x 86 + 2 x 85), pwsh holds all of them. A skip fails the
+          # job twice: the summary «N passed, M skipped» does not match the pattern of the step, and N would be below
+          # `min`. The count may grow, never shrink (a test added moves the slices up, never below `min`).
+          - { title: "Windows PowerShell 5.1, slice 1 of 5", shell: powershell, slice: "0/5", min: 86 }
+          - { title: "Windows PowerShell 5.1, slice 2 of 5", shell: powershell, slice: "1/5", min: 86 }
+          - { title: "Windows PowerShell 5.1, slice 3 of 5", shell: powershell, slice: "2/5", min: 86 }
           - { title: "Windows PowerShell 5.1, slice 4 of 5", shell: powershell, slice: "3/5", min: 85 }
           - { title: "Windows PowerShell 5.1, slice 5 of 5", shell: powershell, slice: "4/5", min: 85 }
           - { title: "PowerShell 7 (pwsh), all tests", shell: pwsh, slice: "0/1", min: 428 }
