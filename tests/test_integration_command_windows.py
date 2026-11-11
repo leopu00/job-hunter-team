@@ -63,6 +63,11 @@ function Invoke-Compose {
   $global:LASTEXITCODE = 0
   if ($env:T_COMPOSE_FAIL -eq '1') { $global:LASTEXITCODE = 1; return }
   $words = @($Rest); $service = $words[$words.Count - 1]
+  # what Podman does for a service that is not there: a line on the REAL stderr of a native program, and exit 0
+  if ($env:T_NOISY_STDERR -eq '1' -and (($words -contains 'rm') -or ($words -contains 'stop'))) {
+    if ($env:OS -eq 'Windows_NT') { & cmd /c 'echo No stopped containers 1>&2' } else { & sh -c 'echo No stopped containers >&2' }
+    $global:LASTEXITCODE = 0
+  }
   if ($words -contains 'run' -and $env:T_SWAP_LINK) {
     $folder = Join-Path $JhtHome 'live-screen'
     Remove-Item -LiteralPath $folder -Recurse -Force -ErrorAction SilentlyContinue
@@ -355,6 +360,14 @@ def test_remove_screen_takes_the_container_and_the_image_and_purge_only_the_disp
     assert "COMPOSE --profile screen stop jht-screen" in lines and "COMPOSE --profile screen rm -f jht-screen" in lines
     assert f"DOCKER rmi {REF}" in lines
     assert [line for line in lines if line.startswith("DOCKER volume rm")] == ["DOCKER volume rm jht_jht-x11"]
+
+
+@pytest.mark.parametrize("tool", ["screen", "media", "telegram"])
+def test_removing_a_tool_that_is_not_there_lets_no_stderr_of_the_engine_through(host, tool):
+    done = run(host, ["remove", tool, "--json"], T_EXTRAS=DIGEST, T_NOISY_STDERR="1")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "No stopped containers" not in done.stdout + done.stderr
+    assert f"COMPOSE --profile {tool} rm -f jht-{tool}" in log(host).splitlines()
 
 
 def _link_or_skip(link: Path, target: Path) -> None:

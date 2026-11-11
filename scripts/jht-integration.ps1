@@ -177,6 +177,14 @@ function Write-IntegrationList {
   foreach ($id in $IntegrationIds) { Write-IntegrationStatus $id $false }
 }
 
+# `compose stop` and `compose rm -f` of a service that is not there write «No stopped containers» (Podman) to stderr and succeed: in PowerShell
+# that is a red error record for something that is not one. Their stderr is dropped here (the reason shown is ours) and the exit code is the answer.
+function Invoke-IntegrationComposeQuiet {
+  $words = @($args)  # inside the script block below `$args` would be the block's own, empty
+  $code = & { $ErrorActionPreference = 'Continue'; Invoke-Compose @words *> $null; $LASTEXITCODE }
+  return [int]$code
+}
+
 # The result of add/remove, in the form the person asked for.
 function Write-IntegrationResult {
   param([string]$Id, [bool]$Json, [int]$Code, [string]$Reason)
@@ -334,15 +342,13 @@ function Invoke-IntegrationRemove {
       return 0
     }
     'telegram' {
-      Invoke-Compose '--profile' 'telegram' stop $TelegramContainer | Out-Null
-      $code = $LASTEXITCODE
-      if ($code -eq 0) { Invoke-Compose '--profile' 'telegram' rm '-f' $TelegramContainer | Out-Null; $code = $LASTEXITCODE }
+      $code = Invoke-IntegrationComposeQuiet '--profile' 'telegram' stop $TelegramContainer
+      if ($code -eq 0) { $code = Invoke-IntegrationComposeQuiet '--profile' 'telegram' rm '-f' $TelegramContainer }
       if ($code -ne 0) { $script:IntegrationWhy = 'il servizio Telegram non si ferma'; return 1 }
     }
     'media' {
-      Invoke-Compose '--profile' 'media' stop $MediaContainer | Out-Null
-      $code = $LASTEXITCODE
-      if ($code -eq 0) { Invoke-Compose '--profile' 'media' rm '-f' $MediaContainer | Out-Null; $code = $LASTEXITCODE }
+      $code = Invoke-IntegrationComposeQuiet '--profile' 'media' stop $MediaContainer
+      if ($code -eq 0) { $code = Invoke-IntegrationComposeQuiet '--profile' 'media' rm '-f' $MediaContainer }
       if ($code -ne 0) { $script:IntegrationWhy = 'il container dei media non si ferma'; return 1 }
       Clear-IntegrationMarker 'media' 'ok'
       # The image goes with it unless another tool of the extras image is still added (jht-login, jht-screen, when they exist).
@@ -352,9 +358,8 @@ function Invoke-IntegrationRemove {
       }
     }
     'screen' {
-      Invoke-Compose '--profile' 'screen' stop $ScreenContainer | Out-Null
-      $code = $LASTEXITCODE
-      if ($code -eq 0) { Invoke-Compose '--profile' 'screen' rm '-f' $ScreenContainer | Out-Null; $code = $LASTEXITCODE }
+      $code = Invoke-IntegrationComposeQuiet '--profile' 'screen' stop $ScreenContainer
+      if ($code -eq 0) { $code = Invoke-IntegrationComposeQuiet '--profile' 'screen' rm '-f' $ScreenContainer }
       if ($code -ne 0) { $script:IntegrationWhy = 'il container dello schermo non si ferma'; return 1 }
       Clear-IntegrationMarker 'screen' 'ok'
       $ref = Get-IntegrationExtrasRef
@@ -364,9 +369,8 @@ function Invoke-IntegrationRemove {
     }
     'mail' {
       if (-not (Test-IntegrationBrokerOnRequest)) { $script:IntegrationWhy = 'non disponibile ancora'; return 3 }
-      Invoke-Compose '--profile' 'broker' stop $BrokerContainer | Out-Null
-      $code = $LASTEXITCODE
-      if ($code -eq 0) { Invoke-Compose '--profile' 'broker' rm '-f' $BrokerContainer | Out-Null; $code = $LASTEXITCODE }
+      $code = Invoke-IntegrationComposeQuiet '--profile' 'broker' stop $BrokerContainer
+      if ($code -eq 0) { $code = Invoke-IntegrationComposeQuiet '--profile' 'broker' rm '-f' $BrokerContainer }
       if ($code -ne 0) { $script:IntegrationWhy = 'il broker della posta non si ferma'; return 1 }
       Remove-Item -LiteralPath $BrokerMadeMarker -Force -ErrorAction SilentlyContinue
     }
