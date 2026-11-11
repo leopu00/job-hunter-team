@@ -116,7 +116,8 @@ def functions(*names: str) -> str:
 def powershell_functions(*names: str) -> str:
     source = POWERSHELL_WRAPPER.read_text(encoding="utf-8")
     found = []
-    for name in names:
+    # what the wrapper pipes to docker goes through this one (no byte order mark in front of a token)
+    for name in ("Invoke-NativeWithStdin", *names):
         match = re.search(rf"^function {name} \{{\n.*?^\}}\n", source, re.S | re.M)
         assert match, name
         found.append(match.group(0))

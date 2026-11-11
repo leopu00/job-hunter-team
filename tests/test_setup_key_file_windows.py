@@ -138,6 +138,7 @@ def test_the_setup_branch_pipes_the_key_to_docker_and_never_puts_it_in_an_argume
     recorded = tmp_path / "recorded.txt"
     body = f"""$ErrorActionPreference = 'Stop'
 {_function("Convert-SetupKeyFileArgs")}
+{_function("Invoke-NativeWithStdin")}
 $Rest = [string[]]@('--non-interactive', '--provider', 'glm', '--harness', 'pi', '--api-key-file', '{path}')
 $Container = 'jht'
 $NodeEntry = '/app/cli/bin/jht.js'
@@ -174,6 +175,7 @@ switch ($Sub) {{
 def test_the_setup_branch_stops_with_the_reason_before_touching_docker_when_the_file_is_wrong(tmp_path):
     body = f"""$ErrorActionPreference = 'Stop'
 {_function("Convert-SetupKeyFileArgs")}
+{_function("Invoke-NativeWithStdin")}
 $Rest = [string[]]@('--api-key-file', 'nope.txt')
 function Require-ComposeFile {{ throw 'docker must not be asked' }}
 {_branch()}

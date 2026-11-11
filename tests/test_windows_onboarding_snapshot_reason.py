@@ -46,7 +46,7 @@ $ErrorActionPreference = 'Stop'
 $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($env:JHT_UNDER_TEST, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw "parse: $($errors[0])" }
-$wanted = @('Get-ComposeProjectName', 'Get-ComposeLabel', 'Get-RunningComposeServiceId', 'Write-InactiveOnboardingSnapshot',
+$wanted = @('Invoke-NativeWithStdin', 'Get-ComposeProjectName', 'Get-ComposeLabel', 'Get-RunningComposeServiceId', 'Write-InactiveOnboardingSnapshot',
   'Write-OnboardingSnapshotReason', 'Write-OnboardingSnapshot')
 foreach ($name in $wanted) {
   $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name }, $true)

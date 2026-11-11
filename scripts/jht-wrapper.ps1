@@ -1213,6 +1213,28 @@ function Require-ComposeFile {
   try { Assert-TrustedRuntime } catch { Write-Err $_.Exception.Message; exit 1 }
 }
 
+# Runs a pipeline whose input goes to a native command, with the stdin of that command free of a byte order mark.
+# Windows PowerShell 5.1 can put EF BB BF in front of what it pipes to a native program: with a console in UTF-8 (code page 65001: a console
+# inherited from pwsh 7, a UTF-8 system code page) it does so whatever $OutputEncoding is, because it writes the preamble of the console's
+# input encoding (measured on windows-2022); with a $OutputEncoding that carries a BOM (a profile that sets it) it writes that one too.
+# A password, a token or a key with a BOM in front is a wrong secret. Both encodings are set to UTF-8 WITHOUT a BOM for the call and put
+# back after it (the console one only if it could be read: with no console, the $OutputEncoding half still holds). What the pipeline
+# writes goes out as it does, and $LASTEXITCODE is the one of its native command. The pipeline is a script block; it sees the variables
+# of its caller.
+function Invoke-NativeWithStdin {
+  param([Parameter(Mandatory)][scriptblock]$Pipeline)
+  $nativeStdinOutputEncoding = $OutputEncoding
+  $nativeStdinConsoleEncoding = $null
+  $OutputEncoding = [Text.UTF8Encoding]::new($false)
+  try { $nativeStdinConsoleEncoding = [Console]::InputEncoding; [Console]::InputEncoding = [Text.UTF8Encoding]::new($false) } catch { $nativeStdinConsoleEncoding = $null }
+  try {
+    & $Pipeline
+  } finally {
+    $OutputEncoding = $nativeStdinOutputEncoding
+    if ($nativeStdinConsoleEncoding) { try { [Console]::InputEncoding = $nativeStdinConsoleEncoding } catch { $null = $_ } }
+  }
+}
+
 function Invoke-Compose {
   [CmdletBinding(PositionalBinding=$false)]
   param([switch]$NoInput, [string]$InputText, [Parameter(ValueFromRemainingArguments)] $Args)
@@ -1223,8 +1245,10 @@ function Invoke-Compose {
   # image-only, lasciamo per simmetria col bash wrapper).
   $files = @('-f', $ComposeFile)
   if ($ContainerRuntime -eq 'podman') { $files += @('-f', $PodmanComposeFile) }
-  if ($PSBoundParameters.ContainsKey('InputText')) { $InputText | & docker compose @files --project-directory $RuntimeDir @Args }
-  elseif ($NoInput) { $null | & docker compose @files --project-directory $RuntimeDir @Args }
+  # $Args is the script block's own inside Invoke-NativeWithStdin: the arguments go in a variable of theirs.
+  $composeArgs = @($Args)
+  if ($PSBoundParameters.ContainsKey('InputText')) { Invoke-NativeWithStdin { $InputText | & docker compose @files --project-directory $RuntimeDir @composeArgs } }
+  elseif ($NoInput) { Invoke-NativeWithStdin { $null | & docker compose @files --project-directory $RuntimeDir @composeArgs } }
   else { & docker compose @files --project-directory $RuntimeDir @Args }
 }
 
@@ -1649,21 +1673,9 @@ process.stdout.write(`${configured?1:0} ${(piApi?keyThere:config.harness==="pi"&
     # Every native output here is read whole and then cut: see Get-RunningComposeServiceId (T79).
     # The script goes on stdin, never as an argument: Windows PowerShell 5.1 drops the double quotes
     # inside a native argument, and node then fails on it (T106).
-    # Windows PowerShell 5.1 can put EF BB BF in front of what it pipes to a native command, and node would get them before the script:
-    # with a console in UTF-8 (code page 65001: a console inherited from pwsh 7, a UTF-8 system code page) it does so whatever $OutputEncoding
-    # is, because it writes the preamble of the console's input encoding (measured on windows-2022); with a $OutputEncoding that carries a BOM
-    # (a profile that sets it) it writes that one too. Both encodings are set to UTF-8 WITHOUT a BOM for this call and put back after it.
-    $previousEncoding = $OutputEncoding
-    $previousInputEncoding = $null
-    $OutputEncoding = [Text.UTF8Encoding]::new($false)
-    try { $previousInputEncoding = [Console]::InputEncoding; [Console]::InputEncoding = [Text.UTF8Encoding]::new($false) } catch { $previousInputEncoding = $null }
-    try {
-      $metadataLines = @(& { $ErrorActionPreference = 'Continue'; $metadataScript | & docker exec -i $containerId node - 2>$null })
-      $metadataCode = $LASTEXITCODE
-    } finally {
-      $OutputEncoding = $previousEncoding
-      if ($previousInputEncoding) { try { [Console]::InputEncoding = $previousInputEncoding } catch { $null = $_ } }
-    }
+    # No byte order mark in front of the script whatever the console and the session encode (Invoke-NativeWithStdin).
+    $metadataLines = @(Invoke-NativeWithStdin { & { $ErrorActionPreference = 'Continue'; $metadataScript | & docker exec -i $containerId node - 2>$null } })
+    $metadataCode = $LASTEXITCODE
     $metadata = if ($metadataLines.Count) { [string]$metadataLines[0] } else { '' }
     $values = if ($metadata) { @($metadata.Trim() -split '\s+') } else { @() }
     if ($metadataCode -ne 0 -or $values.Count -ne 3 -or @($values | Where-Object { $_ -notin @('0', '1') }).Count -gt 0) {
@@ -1799,7 +1811,7 @@ function Invoke-DesktopApply {
     return
   }
   # stdin aperto e vuoto, come `apply record`; l'errore nativo non diventa un'eccezione (5.1)
-  $answer = ('' | & { $ErrorActionPreference = 'Continue'; $input | & docker exec -i $brokerId jht-broker-admin apply record $ApplyArgs[1] $ApplyArgs[2] $ApplyArgs[3] 2>$null }) -join ''
+  $answer = (Invoke-NativeWithStdin { '' | & { $ErrorActionPreference = 'Continue'; $input | & docker exec -i $brokerId jht-broker-admin apply record $ApplyArgs[1] $ApplyArgs[2] $ApplyArgs[3] 2>$null } }) -join ''
   $code = $LASTEXITCODE
   if ($code -ne 0 -or $answer -cnotmatch '"status": ?"(recorded|already_recorded)"') {
     [Console]::Out.WriteLine('{"ok":false,"error":"apply_record_refused"}')
@@ -1945,13 +1957,8 @@ function Invoke-BrokerAdmin {
   if ($PSBoundParameters.ContainsKey('InputText')) {
     # Una password con caratteri non ASCII arriverebbe come '?' con la
     # codifica di default di Windows PowerShell 5.1.
-    $previousEncoding = $OutputEncoding
-    $OutputEncoding = [Text.UTF8Encoding]::new($false)
-    try {
-      $InputText | & docker exec -i $brokerId jht-broker-admin @AdminArgs | Out-Host
-    } finally {
-      $OutputEncoding = $previousEncoding
-    }
+    # Nor a byte order mark in front of it: a password with a BOM is another password (Invoke-NativeWithStdin).
+    Invoke-NativeWithStdin { $InputText | & docker exec -i $brokerId jht-broker-admin @AdminArgs | Out-Host }
   } else {
     & docker exec -i $brokerId jht-broker-admin @AdminArgs | Out-Host
   }
@@ -2074,10 +2081,7 @@ function Invoke-TelegramAdmin {
   # [string] trasforma $null in "": solo un -InputText passato davvero (anche
   # vuoto, come le impronte di un inventario senza token) apre lo stdin.
   if ($PSBoundParameters.ContainsKey('InputText')) {
-    $previousEncoding = $OutputEncoding
-    $OutputEncoding = [Text.UTF8Encoding]::new($false)
-    try { $InputText | & docker exec -i $telegramId jht-telegram-admin @AdminArgs | Out-Host }
-    finally { $OutputEncoding = $previousEncoding }
+    Invoke-NativeWithStdin { $InputText | & docker exec -i $telegramId jht-telegram-admin @AdminArgs | Out-Host }
   } else {
     & docker exec $telegramId jht-telegram-admin @AdminArgs | Out-Host
   }
@@ -2487,7 +2491,7 @@ function Invoke-BrokerMigrateLegacy {
     if ($LASTEXITCODE -ne 0) { continue }
     $envelope = (& { $ErrorActionPreference = 'Continue'; & docker exec -u 1001 $agentId /usr/bin/python3 -I /app/shared/broker/legacy.py read $name 2>$null } | Select-Object -First 1)
     $answer = ''
-    if ($envelope) { $answer = ($envelope | & { $ErrorActionPreference = 'Continue'; $input | & docker exec -i $brokerId jht-broker-admin secrets import-legacy $name 2>$null }) -join '' }
+    if ($envelope) { $answer = (Invoke-NativeWithStdin { $envelope | & { $ErrorActionPreference = 'Continue'; $input | & docker exec -i $brokerId jht-broker-admin secrets import-legacy $name 2>$null } }) -join '' }
     if ($answer -match '"ok": true' -and $answer -match '"state": "imported"') {
       & { $ErrorActionPreference = 'Continue'; & docker exec -u 1001 $agentId /usr/bin/python3 -I /app/shared/broker/legacy.py remove $name *> $null }
       if ($LASTEXITCODE -ne 0) { Write-Warn "legacy_remove_failed: $name e' nel broker ma la copia in ~/.jht/credentials e' rimasta." }
@@ -2541,18 +2545,8 @@ const fs=require('fs');try{const c=JSON.parse(fs.readFileSync('/jht_home/cloud.j
 const fs=require('fs');try{const c=JSON.parse(fs.readFileSync('/jht_home/cloud.json','utf8'));if(typeof c.user_id==='string'&&/^[0-9a-f-]{36}$/i.test(c.user_id))process.stdout.write(c.user_id)}catch{}
 '@
   }
-  # The script goes to node's stdin without a BOM whatever the session's $OutputEncoding and the console's input code page are
-  # (see Write-OnboardingSnapshot).
-  $previousEncoding = $OutputEncoding
-  $previousInputEncoding = $null
-  $OutputEncoding = [Text.UTF8Encoding]::new($false)
-  try { $previousInputEncoding = [Console]::InputEncoding; [Console]::InputEncoding = [Text.UTF8Encoding]::new($false) } catch { $previousInputEncoding = $null }
-  try {
-    return ((& { $ErrorActionPreference = 'Continue'; $script | & docker exec -i -u 1001 $AgentId node - 2>$null }) -join '')
-  } finally {
-    $OutputEncoding = $previousEncoding
-    if ($previousInputEncoding) { try { [Console]::InputEncoding = $previousInputEncoding } catch { $null = $_ } }
-  }
+  # The script goes to node's stdin without a BOM (Invoke-NativeWithStdin).
+  return ((Invoke-NativeWithStdin { & { $ErrorActionPreference = 'Continue'; $script | & docker exec -i -u 1001 $AgentId node - 2>$null } }) -join '')
 }
 
 # First pairing may take user_id from cloud.json in the box, a box-writable
@@ -4619,15 +4613,12 @@ switch ($Sub) {
     Require-Docker
     Ensure-Up
     if ($null -ne $keyPlan.Key) {
-      # -i only: a pipe is not a terminal. ASCII, so that no byte-order mark goes in front of the key.
-      $savedEncoding = $OutputEncoding
+      # -i only: a pipe is not a terminal. No byte-order mark goes in front of the key (Invoke-NativeWithStdin).
       try {
-        $OutputEncoding = New-Object System.Text.ASCIIEncoding
         [string[]]$setupArgs = $keyPlan.Args
-        $keyPlan.Key | & docker exec -i -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry 'setup' @setupArgs
+        Invoke-NativeWithStdin { $keyPlan.Key | & docker exec -i -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry 'setup' @setupArgs }
         if ($LASTEXITCODE -eq 0) { Write-Host "The setup keeps the key: you can delete the file on this computer now ($($keyPlan.File))." }
       } finally {
-        $OutputEncoding = $savedEncoding
         $keyPlan.Key = $null
       }
     } else {
