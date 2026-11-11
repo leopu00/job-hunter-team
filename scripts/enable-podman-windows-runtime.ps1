@@ -796,10 +796,18 @@ try { Install-PrivateComposeProvider -Destination $ComposeProvider } catch {
 }
 
 $machineCreatedHere = $false
+$machineStartedHere = $false
 try {
   # Another user's win-sshproxy.exe that outlived its machine holds the pipe of this machine's name: said plainly, before the minutes of
   # a machine init or a start that could only fail with «permission denied».
-  if ((Get-JhtPodmanPipeState -MachineName $MachineName) -ceq 'denied') { throw (Get-JhtPodmanPipeAdvice -MachineName $MachineName) }
+  $pipeAtStart = Get-JhtPodmanPipeState -MachineName $MachineName
+  if ($pipeAtStart -ceq 'denied') { throw (Get-JhtPodmanPipeAdvice -MachineName $MachineName) }
+  # A win-sshproxy.exe that stops at once when this logon may not write to the event log (ssh, a service, a scheduled task) would be
+  # started for nothing: said before the machine is created or started, and only with no pipe there already.
+  $podmanNeedsEventLog = [bool](Test-JhtWinSshProxyNeedsEventLog -PodmanVersion (Get-PodmanVersion $Podman))
+  if ($pipeAtStart -ceq 'absent' -and $podmanNeedsEventLog -and (Test-JhtEventLogWritable) -ceq 'denied') {
+    throw (Get-JhtApiForwardingFailure -MachineName $MachineName -EventLogDenied $true -Started $false)
+  }
   # Windows PowerShell 5.1 gives a JSON array to the pipeline as ONE object: with a
   # second machine of this user, `$machine` was the whole list. Parse with -InputObject
   # and enumerate with foreach, the same in 5.1 and in PowerShell 7.
@@ -814,14 +822,44 @@ try {
     Invoke-Checked $Podman 'machine' 'init' '--update-connection=false' '--provider' 'wsl' '--cpus' '2' '--memory' '3072' '--disk-size' '30' $MachineName
     $machineCreatedHere = $true
     Write-JhtPhase podman_machine_start
+    $machineStartedHere = $true
     Invoke-Checked $Podman 'machine' 'start' '--update-connection=false' $MachineName
   } elseif (-not [bool]$machine.Running) {
     Write-JhtPhase podman_machine_start
+    $machineStartedHere = $true
     Invoke-Checked $Podman 'machine' 'start' '--update-connection=false' $MachineName
   }
   Invoke-Checked $Podman '--connection' $MachineName 'info' | Out-Null
+  # `podman machine start` leaves with 0 when its win-sshproxy.exe did not start («API forwarding for Docker API clients is not
+  # available»), and Podman's own calls go on working over ssh: only compose, which reaches the machine by its pipe, fails, at the very
+  # end of the setup and after the network and the pulls. Said here instead, before them. One stop and start of the machine is
+  # tried, only when nothing of the team can be running in it (this run started it, or it holds no container).
+  $pipeState = Wait-JhtPodmanPipe -MachineName $MachineName
+  if ($pipeState -ceq 'denied') { throw (Get-JhtPodmanPipeAdvice -MachineName $MachineName) }
+  if ($pipeState -ceq 'absent') {
+    $mayRestart = [bool]$machineStartedHere
+    if (-not $mayRestart) {
+      $running = @(& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName ps --quiet 2>$null })
+      $mayRestart = ($LASTEXITCODE -eq 0 -and $running.Count -eq 0)
+    }
+    $restarted = $false
+    if ($mayRestart) {
+      Write-Host "  Podman's connection for Docker tools is not up: restarting the machine once." -ForegroundColor Yellow
+      Invoke-Checked $Podman 'machine' 'stop' $MachineName
+      Invoke-Checked $Podman 'machine' 'start' '--update-connection=false' $MachineName
+      Invoke-Checked $Podman '--connection' $MachineName 'info' | Out-Null
+      $restarted = $true
+      $pipeState = Wait-JhtPodmanPipe -MachineName $MachineName
+      if ($pipeState -ceq 'denied') { throw (Get-JhtPodmanPipeAdvice -MachineName $MachineName) }
+    }
+    if ($pipeState -ceq 'absent') {
+      throw (Get-JhtApiForwardingFailure -MachineName $MachineName -Reason (Get-JhtWinSshProxyReason -MachineName $MachineName) -Restarted $restarted -SessionId (Get-JhtWindowsSessionId) -EventLogDenied ($podmanNeedsEventLog -and (Test-JhtEventLogWritable) -ceq 'denied'))
+    }
+  }
 } catch {
   $why = $_.Exception.Message
+  # Its own code (26): the machine is there and answers, what is missing is the pipe Docker tools use.
+  if ($why -clike 'podman_api_forwarding_unavailable: *') { [Console]::Error.WriteLine($why); exit 26 }
   # A failure to reach the machine while its pipe is held by another user's program: the cause, in plain words, after Podman's own.
   if ((Get-JhtPodmanPipeState -MachineName $MachineName) -ceq 'denied' -and $why -notmatch 'held by a program of another Windows user') { $why = "$why $(Get-JhtPodmanPipeAdvice -MachineName $MachineName)" }
   [Console]::Error.WriteLine("podman_machine_unavailable: $why")

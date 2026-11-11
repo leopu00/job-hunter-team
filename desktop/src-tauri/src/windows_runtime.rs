@@ -622,8 +622,10 @@ pub(crate) fn wsl_state(
 /// what it answered is on stderr), 24 another version of Podman installed
 /// than the one JHT pins, 25 Podman registered for the computer by winget
 /// while this Windows user reaches no podman.exe (it sits in another user's
-/// profile) and installing it for this user did not succeed. Any other
-/// failure is the caller's generic code.
+/// profile) and installing it for this user did not succeed, 26 the machine
+/// runs but Podman's connection for Docker tools (win-sshproxy.exe) did not
+/// start, so the pipe compose uses is missing. Any other failure is the
+/// caller's generic code.
 pub(crate) fn exit_failure(code: i32) -> Option<&'static str> {
     match code {
         20 => Some("wsl_not_ready"),
@@ -632,6 +634,7 @@ pub(crate) fn exit_failure(code: i32) -> Option<&'static str> {
         23 => Some("podman_network_unready"),
         24 => Some("podman_version_mismatch"),
         25 => Some("podman_other_user"),
+        26 => Some("podman_api_forwarding_unavailable"),
         _ => None,
     }
 }
@@ -1533,7 +1536,8 @@ mod tests {
         assert_eq!(exit_failure(23), Some("podman_network_unready"));
         assert_eq!(exit_failure(24), Some("podman_version_mismatch"));
         assert_eq!(exit_failure(25), Some("podman_other_user"));
-        for generic in [0, 1, 2, 19, 26, 78, -1] {
+        assert_eq!(exit_failure(26), Some("podman_api_forwarding_unavailable"));
+        for generic in [0, 1, 2, 19, 27, 78, -1] {
             assert_eq!(exit_failure(generic), None, "{generic}");
         }
     }
@@ -1549,7 +1553,9 @@ mod tests {
         assert_eq!(installer_outcome(Ok(24)), Err("podman_version_mismatch"));
         // Podman in another Windows user's profile: its own code, never «check your internet»
         assert_eq!(installer_outcome(Ok(25)), Err("podman_other_user"));
-        assert_eq!(installer_outcome(Ok(26)), Err("runtime_install_failed"));
+        // the machine runs but Podman's connection for Docker tools did not start: its own code, never «check your internet»
+        assert_eq!(installer_outcome(Ok(26)), Err("podman_api_forwarding_unavailable"));
+        assert_eq!(installer_outcome(Ok(27)), Err("runtime_install_failed"));
         assert_eq!(installer_outcome(Ok(1)), Err("runtime_install_failed"));
         assert_eq!(installer_outcome(Err("process_timeout")), Err("timeout"));
         assert_eq!(installer_outcome(Err("process_start_failed")), Err("runtime_install_failed"));

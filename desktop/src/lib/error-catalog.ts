@@ -582,6 +582,14 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Podman is installed on this computer, but for another Windows user: this user cannot reach it, and installing it for this user too did not succeed.",
     "From the Windows account that installed Podman, uninstall “Podman CLI” from Windows’ apps, then come back to this account and press Try again: the app installs it for you.",
   ),
+  // install.ps1 exit 26: the Podman machine runs and answers, but win-sshproxy.exe (the pipe compose uses) did not start. Trying
+  // again from the same place changes nothing: from session 0 (ssh, a service, a scheduled task) it has not started on any computer tried.
+  podman_api_forwarding_unavailable: copy(
+    "Podman ha avviato la macchina, ma la sua connessione per gli strumenti Docker (win-sshproxy.exe) non è partita: la squadra non può essere avviata.",
+    "Se la preparazione è partita da una sessione SSH, da un servizio o da un’attività pianificata, rilanciala dal desktop di Windows di questo utente (menu Start). Altrimenti riavvia il computer e premi Riprova.",
+    "Podman started the machine, but its connection for Docker tools (win-sshproxy.exe) did not start, so the team cannot be started.",
+    "If the setup was started from an SSH session, a service or a scheduled task, run it again from this user’s Windows desktop (Start menu). Otherwise restart the computer and press Try again.",
+  ),
   // Not the network and not a failed install: the PowerShell that ran the setup could not load one of its own modules.
   powershell_modules_unavailable: copy(
     "Windows PowerShell non riesce a caricare i suoi moduli di sistema, quindi la preparazione dell’ambiente non può andare avanti.",
