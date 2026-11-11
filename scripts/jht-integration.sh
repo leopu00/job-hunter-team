@@ -442,6 +442,46 @@ LOGIN_VIEW_SERVICE="jht-login-view"
 LOGIN_SERVICES="$LOGIN_PROXY_SERVICE $LOGIN_VIEW_SERVICE $LOGIN_SERVICE"
 LINKEDIN_REASONS="view_busy view_unavailable login_timeout token_expired chromium_sandbox_unavailable"
 
+# On Docker (Linux, Colima, Docker Desktop) the browser of the sign-in runs under a seccomp profile of ours: the default profile of Docker plus
+# the user, pid and net namespaces the sandbox of Chromium makes (shared/login/seccomp/, tests/test_login_seccomp_profile.py). The default
+# one refuses them, and the browser would not start. The profile ships in the extras image, which is pinned by digest, and its digest is here,
+# in the helper the wrapper attests: the copy kept in the runtime folder next to the compose file is checked against it at every start and
+# taken again from the image when it differs, and with no matching copy the sign-in does not start (it reports chromium_sandbox_unavailable).
+# Podman keeps its own default profile, which lets the sandbox through: nothing changes there. Never `seccomp=unconfined`.
+LOGIN_SECCOMP_SHA256="5f5ac5bbb2f97aa4b866ba5fa83a2dc9f8b7ddfd725cc1d2949f2c6e245a68c7"
+LOGIN_SECCOMP_IN_IMAGE="/app/shared/login/seccomp/jht-login.json"
+login_seccomp_path() { printf '%s\n' "$RUNTIME_DIR/jht-login-seccomp.json"; }
+login_seccomp_overlay_path() { printf '%s\n' "$RUNTIME_DIR/docker-compose.login-seccomp.yml"; }
+
+# The profile and the overlay file that gives it to jht-login (and to nothing else), both in the runtime folder, which the agents do not
+# mount. The file name goes into a YAML string and into the engine's argument: only the usual characters of a path are accepted.
+linkedin_seccomp_ensure() {
+  local ref="$1" target overlay tmp content
+  target="$(login_seccomp_path)"; overlay="$(login_seccomp_overlay_path)"
+  case "$RUNTIME_DIR" in ''|*[!A-Za-z0-9_./-]*|/) return 1 ;; esac
+  [ ! -L "$target" ] && [ ! -L "$overlay" ] || return 1
+  if ! { [ -f "$target" ] && [ "$(runtime_sha256 "$target")" = "$LOGIN_SECCOMP_SHA256" ]; }; then
+    tmp="$(mktemp "$target.XXXXXX")" || return 1
+    if docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --user 1001:1001 \
+         --entrypoint cat "$ref" "$LOGIN_SECCOMP_IN_IMAGE" > "$tmp" 2>/dev/null \
+       && [ "$(runtime_sha256 "$tmp")" = "$LOGIN_SECCOMP_SHA256" ]; then
+      chmod 0644 "$tmp" && mv -f "$tmp" "$target" || { rm -f "$tmp"; return 1; }
+    else
+      rm -f "$tmp"
+      return 1
+    fi
+  fi
+  content="services:
+  $LOGIN_SERVICE:
+    security_opt:
+      - \"seccomp:$target\""
+  if ! { [ -f "$overlay" ] && [ "$(cat "$overlay" 2>/dev/null)" = "$content" ]; }; then
+    tmp="$(mktemp "$overlay.XXXXXX")" || return 1
+    { printf '%s\n' "$content" > "$tmp" && mv -f "$tmp" "$overlay"; } || { rm -f "$tmp"; return 1; }
+  fi
+  printf '%s\n' "$overlay"
+}
+
 linkedin_base() { printf '%s' "${JHT_HOME_HOST:-$HOME/.jht}"; }
 linkedin_profile_dir() { printf '%s/secrets/linkedin-profile' "$(linkedin_base)"; }
 
@@ -506,7 +546,12 @@ linkedin_login() {
   # Checked again right before the up (the pull took time): what is left is the instant between this test and the mount of the engine.
   linkedin_profile_ok && [ -d "$(linkedin_profile_dir)" ] \
     || { err "il profilo di LinkedIn in ~/.jht non e' una cartella normale (un collegamento?): non lo uso"; linkedin_fail view_unavailable; return 1; }
-  JHT_EXTRAS_IMAGE="$ref" COMPOSE_PROFILES=login compose up -d $LOGIN_SERVICES >/dev/null 2>&1 \
+  local overlay=""
+  if [ "${CONTAINER_RUNTIME:-docker}" != "podman" ]; then
+    overlay="$(linkedin_seccomp_ensure "$ref")" \
+      || { err "il profilo seccomp del browser di accesso non c'e' o non coincide con quello attestato: non parto"; linkedin_fail chromium_sandbox_unavailable; return 1; }
+  fi
+  JHT_EXTRAS_IMAGE="$ref" COMPOSE_PROFILES=login COMPOSE_EXTRA_FILE="$overlay" compose up -d $LOGIN_SERVICES >/dev/null 2>&1 \
     || { linkedin_remove_all; linkedin_fail view_unavailable; return 1; }
   for tries in $(seq 1 40); do
     id="$(read_only_service_id "$LOGIN_VIEW_SERVICE" 2>/dev/null)" || id=""
