@@ -597,8 +597,56 @@ linkedin_last_reason() {
   esac
 }
 
+# `jht linkedin status --json` is asked every time the window of the app is looked at, so it must cost nothing: no container is started to read
+# the profile. Three layers: no cookie file in the profile means nobody is signed in, and nothing else is asked; the cookie files as they are
+# (size and time of each, read by the host) and the image make a key, and the answer of the one-shot that reads the profile is kept for that key
+# for LINKEDIN_STATUS_TTL seconds (5 minutes: the longest a cookie that ran out is still shown as a sign-in); only when the key changes (the
+# person signed in, the browser wrote its cookies, the image moved) or the time is up is the one-shot run again. The cache is a file of the runtime
+# folder, which the containers do not mount; the answers it can hold are the two words of the closed list and nothing else.
+LINKEDIN_STATUS_TTL="${LINKEDIN_STATUS_TTL:-300}"
+linkedin_status_cache_path() { printf '%s/linkedin-status.cache' "$RUNTIME_DIR"; }
+
+# The cookie files of the profile as the host sees them, one `name=size:seconds;` each; nothing when there is no cookie database at all.
+linkedin_cookie_stamp() {
+  local dir file out="" database="" meta
+  dir="$(linkedin_profile_dir)"
+  for file in Default/Network/Cookies Default/Network/Cookies-journal Default/Network/Cookies-wal Default/Cookies Default/Cookies-journal; do
+    if [ -f "$dir/$file" ] && [ ! -L "$dir/$file" ]; then
+      if [ "$HOST_KERNEL" = Darwin ]; then meta="$(stat -f '%z:%m' "$dir/$file" 2>/dev/null)"; else meta="$(stat -c '%s:%Y' "$dir/$file" 2>/dev/null)"; fi
+      out="$out$file=$meta;"
+      case "$file" in *Cookies) database=1 ;; esac
+    else
+      out="$out$file=-;"
+    fi
+  done
+  [ -n "$database" ] || return 1
+  printf '%s' "$out"
+}
+
+# The word kept for this key, when it is younger than the time allowed; nothing (status 1) otherwise.
+linkedin_status_cache_read() {
+  local file epoch key word now
+  file="$(linkedin_status_cache_path)"
+  [ -f "$file" ] && [ ! -L "$file" ] || return 1
+  IFS='|' read -r epoch key word < "$file" || [ -n "$word" ] || return 1
+  case "$epoch" in ''|*[!0-9]*) return 1 ;; esac
+  case "$LINKEDIN_STATUS_TTL" in ''|*[!0-9]*) return 1 ;; esac
+  now="$(date +%s)"
+  [ "$key" = "$1" ] && [ "$now" -ge "$epoch" ] && [ $((now - epoch)) -lt "$LINKEDIN_STATUS_TTL" ] || return 1
+  case "$word" in logged_in|login_required) printf '%s' "$word" ;; *) return 1 ;; esac
+}
+
+linkedin_status_cache_write() {
+  local file tmp
+  file="$(linkedin_status_cache_path)"
+  [ ! -L "$file" ] || return 0
+  tmp="$(mktemp "$file.XXXXXX" 2>/dev/null)" || return 0
+  { printf '%s|%s|%s\n' "$(date +%s)" "$1" "$2" > "$tmp" && mv -f "$tmp" "$file"; } 2>/dev/null || rm -f "$tmp"
+  return 0
+}
+
 linkedin_status() {
-  local id view="idle" out last="" word ref linkedin="login_required"
+  local id view="idle" out last="" word ref stamp key linkedin="login_required"
   docker_reachable || { linkedin_fail view_unavailable; return 1; }
   if id="$(read_only_service_id "$LOGIN_VIEW_SERVICE" 2>/dev/null)"; then
     out="$(docker exec "$id" python3 /app/shared/login/login_view.py status 2>/dev/null | tail -n 1)" || out=""
@@ -610,8 +658,16 @@ linkedin_status() {
     last="$(linkedin_last_reason)"
   fi
   ref="$(integration_extras_ref)"
-  if [ -n "$ref" ] && [ ! -L "$(linkedin_profile_dir)" ] && [ -d "$(linkedin_profile_dir)" ] && linkedin_profile_ok && docker image inspect "$ref" >/dev/null 2>&1; then
-    word="$(JHT_EXTRAS_IMAGE="$ref" COMPOSE_PROFILES=login compose run --rm --no-deps -T --entrypoint python3 "$LOGIN_SERVICE" /app/shared/login/login_session.py check /linkedin-profile 2>/dev/null | tail -n 1)" || word=""
+  if [ -n "$ref" ] && [ ! -L "$(linkedin_profile_dir)" ] && [ -d "$(linkedin_profile_dir)" ] && linkedin_profile_ok && stamp="$(linkedin_cookie_stamp)"; then
+    key="$ref;$stamp"
+    if word="$(linkedin_status_cache_read "$key")"; then
+      :
+    elif docker image inspect "$ref" >/dev/null 2>&1; then
+      word="$(JHT_EXTRAS_IMAGE="$ref" COMPOSE_PROFILES=login compose run --rm --no-deps -T --entrypoint python3 "$LOGIN_SERVICE" /app/shared/login/login_session.py check /linkedin-profile 2>/dev/null | tail -n 1)" || word=""
+      case "$word" in logged_in|login_required) linkedin_status_cache_write "$key" "$word" ;; esac
+    else
+      word=""
+    fi
     [ "$word" != logged_in ] || linkedin=logged_in
   fi
   if [ -n "$last" ]; then
