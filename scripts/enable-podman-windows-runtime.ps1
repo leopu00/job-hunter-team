@@ -10,6 +10,7 @@ param(
   [string]$RuntimeImage = 'ghcr.io/leopu00/jht@sha256:fa78c975c04dd5f95d6225a35c8c3bb9646f8ef14b32c8ca558d5332de0cce00',
   [string]$ExpectedImageDigest = '',
   [switch]$PersistImagePin,
+  [string]$ExtrasImageDigest = '',
   [ValidateSet('', 'core')][string]$RuntimeTier = ''
 )
 
@@ -990,6 +991,17 @@ if ($RuntimeTier -eq 'core') {
 } else {
   Remove-Item -LiteralPath $runtimeTierFile, $runtimeTierIntegrity -Force -ErrorAction SilentlyContinue
 }
+# The image of the tools that come on request, pinned by the test channel: a file and an integrity file of their own (not the main
+# manifest). Not pulled here. The file first and its integrity second, so a crash between them leaves a pin the wrapper refuses.
+$runtimeExtrasFile = Join-Path $RuntimeDir 'runtime-extras-image'
+$runtimeExtrasIntegrity = Join-Path $RuntimeDir '.runtime-extras-integrity'
+if ($ExtrasImageDigest) {
+  if ($ExtrasImageDigest -cnotmatch '^sha256:[0-9a-f]{64}\z' -or -not $PersistImagePin) { throw 'Extras image digest is invalid.' }
+  [IO.File]::WriteAllText($runtimeExtrasFile, "ghcr.io/leopu00/jht@$ExtrasImageDigest`n", [Text.UTF8Encoding]::new($false))
+  [IO.File]::WriteAllText($runtimeExtrasIntegrity, "runtime-extras-image=$((Get-FileHash -Algorithm SHA256 -LiteralPath $runtimeExtrasFile).Hash.ToLowerInvariant())`n", [Text.UTF8Encoding]::new($false))
+} else {
+  Remove-Item -LiteralPath $runtimeExtrasFile, $runtimeExtrasIntegrity -Force -ErrorAction SilentlyContinue
+}
 $manifest = "version=1`ndocker-compose.yml=$composeHash`njht-wrapper.ps1=$wrapperHash`ndocker-compose.podman.yml=$podmanHash`ndocker.exe=$shimHash`ncontainer-runtime=$selectionHash`npodman-machine=$machineHash`njht-container.service=$containerUnitHash`nwindows-private-acl.ps1=$helperHash`npodman-machine-bridge.ps1=$bridgeHash`n$runtimeImageManifest"
 [IO.File]::WriteAllText((Join-Path $RuntimeDir '.runtime-integrity'), $manifest, [Text.UTF8Encoding]::new($false))
 # The host scripts that came after the main manifest have one of their own (the app checks that one key by key).
@@ -1014,6 +1026,7 @@ $bundleFiles = @(
 )
 if (Test-Path -LiteralPath $runtimeImageFile -PathType Leaf) { $bundleFiles += $runtimeImageFile }
 if (Test-Path -LiteralPath $runtimeTierFile -PathType Leaf) { $bundleFiles += $runtimeTierFile, $runtimeTierIntegrity }
+if (Test-Path -LiteralPath $runtimeExtrasFile -PathType Leaf) { $bundleFiles += $runtimeExtrasFile, $runtimeExtrasIntegrity }
 foreach ($bundleFile in $bundleFiles) { Set-JhtOwnerToCurrentUser -Path $bundleFile }
 if ($legacyShimOwned) {
   Remove-Item -LiteralPath $legacyShim -Force -ErrorAction Stop

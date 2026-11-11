@@ -82,6 +82,11 @@ RUNTIME_MIGRATION_MARKER="$RUNTIME_DIR/.runtime-migrated-podman"
 # container, ed e' coperto dal manifest: nessuna variabile d'ambiente serve
 # ai `jht up` successivi. Assente = produzione (immagine del compose).
 RUNTIME_IMAGE_PIN="$RUNTIME_DIR/runtime-image"
+# Il canale di test fissa anche l'immagine degli strumenti su richiesta (schermo, media, playwright), che l'installer non scarica:
+# `jht screen on` la scarica per questo digest. Sta in un file suo, attestato in un file suo (non nel manifest principale: l'app ne
+# confronta l'insieme esatto delle chiavi).
+RUNTIME_EXTRAS_PIN="$RUNTIME_DIR/runtime-extras-image"
+RUNTIME_EXTRAS_INTEGRITY="$RUNTIME_DIR/.runtime-extras-integrity"
 # `jht upgrade` aggiorna anche i due file host scaricati dall'installer. Il
 # wrapper non puo' fidarsi di un checkout Git (la distribuzione utente e'
 # image-only), quindi la fonte e' la stessa raw release dell'installer. Chi
@@ -667,14 +672,17 @@ runtime_helper_absent_answer() {
 # $2 is the command of the person: only `add` and `remove` fetch a helper that is missing. `jht tools` never does: its commands run by
 # themselves after the install, and a download at the tip of the branch is not something to start without the person asking for it.
 runtime_helper_load() {
-  local helper="$1"
+  local helper="$1" extras_digest
   if [ -z "$(runtime_helper_digest "$helper")" ]; then
     case "${2:-}" in
       add|remove) runtime_helpers_install || { err "script $helper non scaricabile: controlla la rete o fai 'jht upgrade'"; return 1; } ;;
       *) err "script $helper non ancora installato: 'jht upgrade' (o un 'jht integration add/remove') e riprova"; return 1 ;;
     esac
   fi
-  runtime_helpers_trusted && . "$RUNTIME_DIR/$helper"
+  runtime_helpers_trusted || return 1
+  . "$RUNTIME_DIR/$helper"
+  extras_digest="$(runtime_extras_digest)" || { err "pin dell'immagine degli strumenti non attendibile"; return 1; }
+  EXTRAS_IMAGE_DIGEST="$extras_digest"
 }
 
 runtime_write_manifest() {
@@ -776,6 +784,7 @@ runtime_bundle_trusted() {
   fi
   runtime_helpers_trusted || return 1
   runtime_tier_trusted || return 1
+  runtime_extras_pin_trusted || return 1
   grep -Fqx 'JHT_HOST_RUNTIME_PROTOCOL=1' "$WRAPPER_PATH" || return 1
   grep -Fqx 'JHT_HOST_SETUP_PROTOCOL=1' "$HOST_SETUP_SCRIPT" || return 1
   grep -Eq '^[[:space:]]*-[[:space:]]*jht-runtime-mask:/jht_home/runtime([[:space:]]|$)' "$COMPOSE_FILE" || return 1
@@ -789,6 +798,37 @@ runtime_image_pin_value() {
   value="$(tr -d '\n' < "$RUNTIME_IMAGE_PIN")"
   printf '%s' "$value" | grep -Eqx 'ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64}' || return 1
   printf '%s\n' "$value"
+}
+
+# Il digest del pin degli strumenti su richiesta, solo nella forma canonica scritta da install.sh (`ghcr.io/leopu00/jht@sha256:<64>`).
+runtime_extras_pin_value() {
+  local value
+  [ -f "$RUNTIME_EXTRAS_PIN" ] || return 1
+  [ "$(wc -l < "$RUNTIME_EXTRAS_PIN" | tr -d ' ')" = "1" ] || return 1
+  value="$(tr -d '\n' < "$RUNTIME_EXTRAS_PIN")"
+  printf '%s' "$value" | grep -Eqx 'ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64}' || return 1
+  printf '%s\n' "${value#ghcr.io/leopu00/jht@}"
+}
+
+# Il pin degli strumenti: file regolare del proprietario, attestato nel suo file di integrita', forma canonica, e solo accanto al pin
+# del canale di test (e' li' che l'installer lo scrive). Un'attestazione senza il pin, o un pin senza attestazione: runtime non attendibile.
+runtime_extras_pin_trusted() {
+  if [ -e "$RUNTIME_EXTRAS_PIN" ] || [ -L "$RUNTIME_EXTRAS_PIN" ]; then
+    runtime_node_safe "$RUNTIME_EXTRAS_PIN" file || return 1
+    runtime_node_safe "$RUNTIME_EXTRAS_INTEGRITY" file || return 1
+    [ "$(sed -n 's/^runtime-extras-image=//p' "$RUNTIME_EXTRAS_INTEGRITY" | head -n 1)" = "$(runtime_sha256 "$RUNTIME_EXTRAS_PIN")" ] || return 1
+    runtime_extras_pin_value >/dev/null || return 1
+    [ -f "$RUNTIME_IMAGE_PIN" ] || return 1
+  elif [ -e "$RUNTIME_EXTRAS_INTEGRITY" ] || [ -L "$RUNTIME_EXTRAS_INTEGRITY" ]; then
+    return 1
+  fi
+}
+
+# Il digest degli strumenti che questo runtime usa: quello del pin attestato se c'e' (vince sulla costante della release, come il pin
+# dell'immagine vince su quella del compose), altrimenti la costante, vuota finche' la release non ha l'immagine degli strumenti.
+runtime_extras_digest() {
+  runtime_extras_pin_trusted || return 1
+  if [ -e "$RUNTIME_EXTRAS_PIN" ]; then runtime_extras_pin_value; else printf '%s\n' "$EXTRAS_IMAGE_DIGEST"; fi
 }
 
 # Il livello dell'immagine (P4): il file `runtime-tier` (solo `core`) lo scrive l'installer quando la release ha un nucleo; senza

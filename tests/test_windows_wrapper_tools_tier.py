@@ -202,10 +202,11 @@ TRUST = r"""
 $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($env:T_WRAPPER_SRC, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw "parse: $($errors[0])" }
-foreach ($name in @('Write-RuntimeManifest', 'Test-RuntimeBundleTrusted')) {
+foreach ($name in @('Write-RuntimeManifest', 'Test-RuntimeExtrasPin', 'Test-RuntimeBundleTrusted')) {
   $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name }, $true)
   Invoke-Expression $fn.Extent.Text
 }
+$RuntimeExtrasFile = Join-Path $RuntimeDir 'runtime-extras-image'; $RuntimeExtrasIntegrity = Join-Path $RuntimeDir '.runtime-extras-integrity'
 function Test-RuntimePathAuthority { $true }
 function Test-RuntimeAncestorsWithoutReparsePoint { param($p) $true }
 function Test-ProtectedRuntimeNode { param($p, [switch]$Directory) $true }

@@ -48,6 +48,9 @@
 # ║    -SourceSha        Test channel source commit (with next two options)  ║
 # ║    -Image            Test channel image reference                        ║
 # ║    -ExpectedImageDigest  Expected test image sha256                      ║
+# ║    -ExtrasImageDigest    Test channel, optional: sha256 of the image of  ║
+# ║                          the tools that come on request. Pinned, not     ║
+# ║                          downloaded here: `jht screen on` pulls it.      ║
 # ║                                                                          ║
 # ║  Design reference: docs/internal/ops/vps.md                              ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
@@ -61,7 +64,8 @@ param(
   [switch]$WindowsSupportNoticeOnly,
   [string]$SourceSha = '',
   [string]$Image = '',
-  [string]$ExpectedImageDigest = ''
+  [string]$ExpectedImageDigest = '',
+  [string]$ExtrasImageDigest = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -98,6 +102,11 @@ if ($channelPresent -notin @(0, 3) -or
   exit 2
 }
 $TestChannel = ($channelPresent -eq 3)
+# The image of the tools on request belongs to the test channel and has the exact shape of a digest (it becomes an image name and a file).
+if ($ExtrasImageDigest -and (-not $TestChannel -or $ExtrasImageDigest -cnotmatch '^sha256:[0-9a-f]{64}\z')) {
+  [Console]::Error.WriteLine('invalid test-channel parameters')
+  exit 2
+}
 
 # ── Config ────────────────────────────────────────────────────────────────
 $LocalAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { [Environment]::GetFolderPath('LocalApplicationData') }
@@ -429,6 +438,7 @@ function Invoke-PodmanRuntimeEnabler {
     $enablerArgs += '-InstallDependencies'
   }
   if ($TestChannel) { $enablerArgs += '-PersistImagePin' }
+  if ($TestChannel -and $ExtrasImageDigest) { $enablerArgs += @('-ExtrasImageDigest', $ExtrasImageDigest) }
   if ($RuntimeTier) { $enablerArgs += @('-RuntimeTier', $RuntimeTier) }
   $oldRuntimeDir = $env:JHT_RUNTIME_DIR
   $oldBinDir = $env:JHT_BIN_DIR
@@ -626,6 +636,8 @@ function Get-RuntimeFiles {
   )
   $runtimeImageDest = Join-Path $RuntimeDir 'runtime-image'
   if (Test-Path -LiteralPath $runtimeImageDest -PathType Leaf) { $publishedNodes += $runtimeImageDest }
+  $runtimeExtrasDest = Join-Path $RuntimeDir 'runtime-extras-image'
+  if (Test-Path -LiteralPath $runtimeExtrasDest -PathType Leaf) { $publishedNodes += $runtimeExtrasDest, (Join-Path $RuntimeDir '.runtime-extras-integrity') }
   $runtimeTierDest = Join-Path $RuntimeDir 'runtime-tier'
   if (Test-Path -LiteralPath $runtimeTierDest -PathType Leaf) { $publishedNodes += $runtimeTierDest, (Join-Path $RuntimeDir '.runtime-tier-integrity') }
   foreach ($published in $publishedNodes) {

@@ -664,6 +664,10 @@ $RuntimeManifest = Join-Path $RuntimeDir '.runtime-integrity'
 $RuntimeImageFile = Join-Path $RuntimeDir 'runtime-image'
 $RuntimeTierFile = Join-Path $RuntimeDir 'runtime-tier'
 $RuntimeTierIntegrity = Join-Path $RuntimeDir '.runtime-tier-integrity'
+# The test channel also pins the image of the tools that come on request (screen, media, playwright), which the installer does not pull:
+# `jht screen on` pulls it by this digest. Its own file, attested in its own file (the app compares the exact keys of the main manifest).
+$RuntimeExtrasFile = Join-Path $RuntimeDir 'runtime-extras-image'
+$RuntimeExtrasIntegrity = Join-Path $RuntimeDir '.runtime-extras-integrity'
 $BrokerLegacyMarker = Join-Path $RuntimeDir '.broker-legacy-migrated'
 $BrokerMadeMarker = Join-Path $RuntimeDir '.broker-made'
 $NodeEntry   = if ($env:JHT_NODE_ENTRY)     { $env:JHT_NODE_ENTRY }     else { '/app/cli/bin/jht.js' }
@@ -955,6 +959,26 @@ function Write-RuntimeManifest {
   Move-Item -LiteralPath $temp -Destination $RuntimeManifest -Force
 }
 
+# The pin of the image of the tools on request (test channel): both files regular and of the owner, attested, canonical, and only next
+# to the pin of the test channel. Anything else is not trusted (never a fall back to the constant of the release). A good pin becomes
+# the digest the integration helper uses.
+function Test-RuntimeExtrasPin {
+  param([bool]$PinPresent)
+  if (-not ((Test-Path -LiteralPath $RuntimeExtrasFile) -or (Test-Path -LiteralPath $RuntimeExtrasIntegrity))) { return $true }
+  if (-not $PinPresent) { return $false }
+  # both there: the integrity of a pin that is gone (or a pin without its integrity) is a runtime somebody changed
+  if (-not ((Test-Path -LiteralPath $RuntimeExtrasFile -PathType Leaf) -and (Test-Path -LiteralPath $RuntimeExtrasIntegrity -PathType Leaf))) { return $false }
+  if (-not (Test-ProtectedRuntimeNode $RuntimeExtrasFile)) { return $false }
+  if (-not (Test-ProtectedRuntimeNode $RuntimeExtrasIntegrity)) { return $false }
+  $extrasBytes = [IO.File]::ReadAllText($RuntimeExtrasFile)
+  $extrasRef = $extrasBytes.TrimEnd("`n")
+  if (([IO.File]::ReadAllText($RuntimeExtrasIntegrity).Trim()) -ne "runtime-extras-image=$((Get-FileHash -Algorithm SHA256 -LiteralPath $RuntimeExtrasFile).Hash.ToLowerInvariant())") { return $false }
+  $extrasMatch = [regex]::Match($extrasRef, '^ghcr\.io/leopu00/jht@(sha256:[0-9a-f]{64})\z')
+  if (-not $extrasMatch.Success -or $extrasBytes -cne "$extrasRef`n") { return $false }
+  $script:ExtrasImageDigest = $extrasMatch.Groups[1].Value
+  return $true
+}
+
 function Test-RuntimeBundleTrusted {
   $script:TrustedRuntimeImage = $null
   if (-not (Test-RuntimePathAuthority)) { return $false }
@@ -1003,6 +1027,7 @@ function Test-RuntimeBundleTrusted {
       if ([IO.File]::ReadAllText($RuntimeTierFile).TrimEnd("`r", "`n") -ne 'core') { return $false }
       $script:TrustedRuntimeImage = "ghcr.io/leopu00/jht@$CoreImageDigest"
     }
+    if (-not (Test-RuntimeExtrasPin -PinPresent $pinPresent)) { return $false }
     if ($ContainerRuntime -eq 'podman') {
       if (-not (Test-ProtectedRuntimeNode $PodmanMachineBridgePath)) { return $false }
       if (-not (Test-ProtectedRuntimeNode $RuntimeSelectionFile)) { return $false }
