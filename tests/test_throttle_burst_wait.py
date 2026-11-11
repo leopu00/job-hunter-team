@@ -85,6 +85,15 @@ def test_a_scout_that_has_inserted_in_the_burst_waits_the_after_insert_cap(tmp_p
     assert eng.register("scout-2", now=NOW)["applied_sec"] == CAP
 
 
+@pytest.mark.parametrize("pause", [780, 1860])
+def test_a_pause_longer_than_the_usual_one_is_never_shortened_after_an_insert(tmp_path, eng, pause):
+    """A pause above the Capitano's usual 300 s (a ladder step, set on purpose) stays: the cap only trims the usual pause."""
+    (tmp_path / "config" / "throttle.json").write_text(json.dumps({"scout-1": pause}), encoding="utf-8")
+    insert(tmp_path, 1, agent="scout-1")
+    res = eng.register("scout-1", now=NOW)
+    assert res["applied_sec"] == pause and "burst_wait" not in res
+
+
 def test_the_spend_brake_keeps_the_pause_of_a_scout_that_has_inserted(tmp_path, eng, monkeypatch):
     insert(tmp_path, 1, agent="scout-1")
     monkeypatch.setattr(eng, "captains_pause_stays", lambda now: {"reason": "team over its pace"})

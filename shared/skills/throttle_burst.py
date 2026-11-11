@@ -61,12 +61,15 @@ def _scout_after_insert(engine: dict, rule: dict, agent: str, applied: int, now:
     ceiling (first_pass_cap, handled by the engine before this rule): the Capitano's 300 s after each insert is the pace of a
     steady day, not of the burst. Measured 11/11: 15 of the 16 Scout pauses were 300 s after an insert, half of the Scouts'
     time asleep, 17 positions in 30 minutes. So after an insert the pause is capped at `scout_after_insert.cap_sec`, unless
-    the spend brake holds the Capitano's pause or the sources are refusing the Scouts: `max_suspended_sources` or more
+    the pause is longer than `max_from_sec` (a deliberate slow-down), the spend brake holds the Capitano's pause or the sources are refusing the Scouts: `max_suspended_sources` or more
     sources suspended by source_rate.py (or a state that cannot be read) and the pause stays."""
     after = rule.get("scout_after_insert") or {}
     cap = int(after.get("cap_sec") or 0)
+    longest = int(after.get("max_from_sec") or 0)
     if cap <= 0 or applied <= cap or engine["captains_pause_stays"](now) is not None:
         return None
+    if longest > 0 and applied > longest:
+        return None       # a pause longer than the Capitano's usual one was set on purpose: it stays, it is never shortened
     suspended = suspended_sources(engine, now)
     limit = after.get("max_suspended_sources")
     if suspended is None or (isinstance(limit, int) and limit > 0 and suspended >= limit):
