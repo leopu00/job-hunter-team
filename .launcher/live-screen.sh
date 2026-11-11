@@ -46,11 +46,13 @@ GEOMETRY="${JHT_LIVE_SCREEN_GEOMETRY:-1440x1000x24}"
 WS_PORT="${JHT_LIVE_SCREEN_PORT:-6080}"
 WS_BIND="${JHT_LIVE_SCREEN_BIND:-0.0.0.0}"
 VNC_PORT=5900
-STATE_DIR="$JHT_HOME/live-screen"
+# In the jht-screen container the home is masked: the password goes to a folder the host binds (JHT_LIVE_SCREEN_STATE_DIR, which the
+# desktop app reads as ~/.jht/live-screen) and the logs to the folder of JHT_LOGS_DIR.
+STATE_DIR="${JHT_LIVE_SCREEN_STATE_DIR:-$JHT_HOME/live-screen}"
 PASSWORD_FILE="$STATE_DIR/viewer-password"
 RUN_DIR="${TMPDIR:-/tmp}/jht-live-screen"
 
-LOGS_DIR="$JHT_HOME/logs"
+LOGS_DIR="${JHT_LOGS_DIR:-$JHT_HOME/logs}"
 mkdir -p "$LOGS_DIR"
 
 # daemon-lib.sh (inerte: solo definizioni) per jht_daemon_log — path del diario

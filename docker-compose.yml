@@ -38,6 +38,8 @@ services:
       - HOME=/jht_home
       - JHT_HOME=/jht_home
       - JHT_USER_DIR=/jht_user
+      # The live screen is the jht-screen container, not a process of pid1 (cli/src/commands/pid1.js).
+      - JHT_LIVE_SCREEN_EXTERNAL=1
       # JHT_HOST_TYPE letto da pid1 dispatcher. Default `local` per
       # backwards-compat: solo VPS via host-setup.sh setta esplicitamente
       # `vps` in ~/.jht/host.env (montato come /jht_home/host.env).
@@ -147,19 +149,17 @@ services:
       # The full Chromium of the closer, copied here from the extras image by jht-playwright-populate when the person asks for a tool
       # that needs it. Read-only: the agents cannot change a binary they are about to launch. Empty until then.
       - jht-playwright:/opt/playwright-extras:ro
+      # The display of the live screen is the one of the jht-screen container (`jht screen on`): its X socket arrives here through this
+      # volume, read-only (connecting to a unix socket works the same), and the closer opens a browser with a window only when the
+      # socket is there. Empty while the screen is off.
+      - jht-x11:/tmp/.X11-unix:ro
     # Permette allo spike Scorer di raggiungere Ollama/llama.cpp avviato
     # sull'host anche su Docker Engine Linux. L'endpoint resta opt-in e il
     # runner accetta esclusivamente host locali.
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    # Una sola porta, e solo sul loopback dell'host: lo stream in sola visione
-    # dello schermo del CLOSER (.launcher/live-screen.sh), che l'app desktop
-    # mostra in una finestra staccata. Lo schermo contiene CV e form di
-    # candidatura: il prefisso 127.0.0.1 NON si toglie — senza, Docker pubblica
-    # su 0.0.0.0 e lo stream diventa raggiungibile dalla rete locale. La
-    # dashboard web locale resta ritirata (2026-07-23).
-    ports:
-      - "127.0.0.1:${JHT_LIVE_SCREEN_PORT:-6080}:6080"
+    # No port is published here any more: the stream of the live screen is published by the jht-screen container, on 127.0.0.1 only
+    # (the 127.0.0.1 prefix stays: without it the stream would be reachable from the local network).
     stdin_open: true
     tty: true
     restart: unless-stopped
@@ -292,6 +292,41 @@ services:
     cap_drop:
       - ALL
 
+  # The live screen of the closer, on request (`jht screen on`): Xvfb, x11vnc in view-only and websockify, the three of
+  # .launcher/live-screen.sh, in a container of their own. The X socket goes to the volume jht-x11 that jht mounts read-only, and the
+  # password of the viewer to ~/.jht/live-screen, where the desktop app reads it. The only port is the stream, on 127.0.0.1.
+  # The X socket is visible to every agent of jht, so the stream stays view-only: nobody types a password on this screen.
+  jht-screen:
+    profiles: [screen]
+    image: ${JHT_EXTRAS_IMAGE:-jht-extras-unpinned}
+    container_name: jht-screen
+    user: "1001:1001"
+    entrypoint: ["/usr/bin/tini", "-g", "--", "/bin/bash", "/app/.launcher/live-screen.sh"]
+    environment:
+      - LANG=C.UTF-8
+      - HOME=/tmp
+      - JHT_LIVE_SCREEN_STATE_DIR=/jht_screen_state
+      - JHT_LOGS_DIR=/tmp/logs
+    ports:
+      - "127.0.0.1:${JHT_LIVE_SCREEN_PORT:-6080}:6080"
+    volumes:
+      - jht-x11:/tmp/.X11-unix
+      - ${HOME}/.jht/live-screen:/jht_screen_state
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777,noexec,nosuid
+      # The image declares these two VOLUMEs for jht: masked here with empty folders nobody can write, as for the others.
+      - /jht_home:size=64k,mode=0555
+      - /jht_user:size=64k,mode=0555
+    pids_limit: 64
+    mem_limit: 512m
+    cpus: 1
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
   # One-shot, off until it is asked for: copies the full Chromium of the extras image into the volume jht-playwright, the marker last
   # (shared/skills/playwright_extras.py). No network, the volume is the only thing it writes.
   jht-playwright-populate:
@@ -334,6 +369,7 @@ volumes:
   jht-media-in:
   jht-media-out:
   jht-playwright:
+  jht-x11:
 
 # ── Dev mode ────────────────────────────────────────────────────────────
 #
