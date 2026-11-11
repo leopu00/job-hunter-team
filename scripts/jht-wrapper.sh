@@ -397,6 +397,8 @@ jht_text_en() {
     uninstall.loss_purge) printf '%s' "The saved mail password and Telegram tokens are deleted too." ;;
     uninstall.purge_loss) printf '%s' "With --purge ~/.jht and ~/Documents/Job Hunter Team are deleted too: configuration, database, CVs and output. There is no way back." ;;
     compose.missing) printf '%s' "docker compose is missing: the engine answers, but the «docker compose» command does not exist (JHT needs the Compose v2 plugin). On a Mac: brew install docker-compose, then mkdir -p ~/.docker/cli-plugins && ln -sfn \"\$(brew --prefix)/opt/docker-compose/bin/docker-compose\" ~/.docker/cli-plugins/docker-compose. On Linux: install the docker-compose-v2 package (apt) or docker-compose-plugin (dnf). Then run the command again." ;;
+    uninstall.compose_link_removed) printf '%s' "Removed the link to the Docker Compose plugin that the JHT installer made: %s. The plugin that Homebrew installed stays (brew uninstall docker-compose removes it)." ;;
+    uninstall.compose_link_left) printf '%s' "The link to the Docker Compose plugin that the JHT installer made could not be removed: %s. You can delete it." ;;
     uninstall.colima_stopping) printf '%s' "Stopping the Colima virtual machine, which the JHT installer started and where nothing else is running; your folders on the Mac stay." ;;
     uninstall.colima_busy) printf '%s' "Colima is still running: the JHT installer started it, but other containers are running in it, so it is left on. To stop it: colima stop." ;;
     uninstall.colima_stop_failed) printf '%s' "Colima could not be stopped. To stop it: colima stop." ;;
@@ -471,6 +473,8 @@ jht_text_it() {
     uninstall.loss_purge) printf '%s' "Vengono cancellati anche la password della posta e i token di Telegram salvati." ;;
     uninstall.purge_loss) printf '%s' "Con --purge vengono cancellati anche ~/.jht e ~/Documents/Job Hunter Team: configurazione, database, CV e output. Non si torna indietro." ;;
     compose.missing) printf '%s' "manca docker compose: il motore risponde, ma il comando «docker compose» non esiste (a JHT serve il plugin Compose v2). Su Mac: brew install docker-compose, poi mkdir -p ~/.docker/cli-plugins && ln -sfn \"\$(brew --prefix)/opt/docker-compose/bin/docker-compose\" ~/.docker/cli-plugins/docker-compose. Su Linux: installa il pacchetto docker-compose-v2 (apt) o docker-compose-plugin (dnf). Poi rilancia il comando." ;;
+    uninstall.compose_link_removed) printf '%s' "Ho tolto il collegamento al plugin Docker Compose che aveva messo l'installer di JHT: %s. Il plugin installato con Homebrew resta (lo toglie brew uninstall docker-compose)." ;;
+    uninstall.compose_link_left) printf '%s' "Non sono riuscito a togliere il collegamento al plugin Docker Compose che aveva messo l'installer di JHT: %s. Lo puoi cancellare." ;;
     uninstall.colima_stopping) printf '%s' "Fermo la macchina virtuale Colima, che ha acceso l'installer di JHT e dove non gira nient'altro; le tue cartelle sul Mac restano." ;;
     uninstall.colima_busy) printf '%s' "Colima resta accesa: l'ha accesa l'installer di JHT, ma dentro girano altri container, quindi la lascio. Per fermarla: colima stop." ;;
     uninstall.colima_stop_failed) printf '%s' "Non sono riuscito a fermare Colima. Per fermarla: colima stop." ;;
@@ -6202,6 +6206,33 @@ uninstall_colima() {
   warn "$(jht_say uninstall.colima_running)"
 }
 
+# Il collegamento al plugin Compose che l'installer ha messo nella cartella dei plugin del client docker: <runtime>/docker-compose-plugin-link
+# dice (3 righe) il percorso del collegamento, dove punta, e se la cartella l'ha fatta l'installer. Si toglie SOLO quel collegamento
+# (rm del link, mai del plugin di Homebrew), se il marcatore e' un file normale, il percorso e' quello della cartella del client di
+# questa persona (~/.docker o DOCKER_CONFIG) e il collegamento e' ancora un link che punta a quello che dice il marcatore: un link che la
+# persona ha rifatto altrove non si tocca. La cartella la si toglie solo se l'ha fatta l'installer e ormai e' vuota (rmdir). Mai un
+# errore di disinstallazione: al peggio un avviso.
+uninstall_compose_plugin_link() {
+  local marker="$1/docker-compose-plugin-link" link target made
+  [ -f "$marker" ] && [ ! -L "$marker" ] || return 0
+  link="$(head -c 1024 "$marker" 2>/dev/null | sed -n '1p' | tr -d '\r')"
+  target="$(head -c 1024 "$marker" 2>/dev/null | sed -n '2p' | tr -d '\r')"
+  made="$(head -c 1024 "$marker" 2>/dev/null | sed -n '3p' | tr -d '\r')"
+  [ -n "$link" ] && [ -n "$target" ] || return 0
+  case "$link" in
+    "$HOME/.docker/cli-plugins/docker-compose") ;;
+    *) [ -n "${DOCKER_CONFIG:-}" ] && [ "$link" = "${DOCKER_CONFIG%/}/cli-plugins/docker-compose" ] || return 0 ;;
+  esac
+  [ -L "$link" ] && [ "$(readlink "$link" 2>/dev/null)" = "$target" ] || return 0
+  if rm -f -- "$link" 2>/dev/null && [ ! -e "$link" ] && [ ! -L "$link" ]; then
+    info "$(jht_say uninstall.compose_link_removed "$link")"
+    [ "$made" != 1 ] || rmdir -- "$(dirname "$link")" 2>/dev/null || true
+  else
+    warn "$(jht_say uninstall.compose_link_left "$link")"
+  fi
+  return 0
+}
+
 # Le immagini di JHT (nucleo, piena e le vecchie) nel Docker di questo computer, senza -f e senza pulizie di massa, dopo i container.
 # Si toglie per RIFERIMENTO (repository:tag), uno per uno: un ID con piu' tag non si toglie con `image rm <ID>` senza -f (il motore
 # rifiuta «referenced in multiple repositories») e la disinstallazione non finirebbe piu'. Senza tag (<none>) si toglie per ID.
@@ -6490,6 +6521,7 @@ jht_uninstall() {
   [ "$UNINSTALL_IMAGES_REMOVED" -eq 0 ] || info "$(jht_say uninstall.images_removed "$UNINSTALL_IMAGES_REMOVED")"
   # La macchina Colima dopo le immagini (servono il motore acceso) e prima della cartella del runtime (che ne tiene il marcatore).
   uninstall_colima "$runtime_dir" "$selection"
+  uninstall_compose_plugin_link "$runtime_dir"
 
   uninstall_phase uninstall_runtime
   if [ -e "$runtime_dir" ] || [ -L "$runtime_dir" ]; then
