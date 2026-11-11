@@ -578,6 +578,8 @@ def test_without_purge_the_data_stays_and_the_sentence_says_so(tmp_path: Path):
     assert "CODE=0" in result.stdout
     assert (box.home / "profile.json").exists() and (box.documents / "cv.txt").exists()
     assert "restano (con --purge si cancellano)" in result.stdout
+    # WSL's own processes stay running after the uninstall: the person is told why, not left to wonder
+    assert "wslrelay" in result.stdout and "wsl --shutdown" in result.stdout and "non li ha installati Job Hunter Team" in result.stdout
 
 
 @windows_only
