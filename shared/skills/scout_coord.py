@@ -456,6 +456,10 @@ def cmd_auto(scout):
             answer["avoid"] = avoid
     except Exception:  # noqa: BLE001 — the lane stands; `scout_coverage.py next --agent` gives the first search
         answer["next"] = None
+    try:
+        answer["language_plan"] = cov._lang.plan(cov._lang.read_languages())   # what `scout_language.py plan` prints: one command less
+    except Exception:  # noqa: BLE001 — then the Scout runs `scout_language.py plan` itself, as before
+        pass
     print(json.dumps(answer, sort_keys=True, ensure_ascii=False))
 
 

@@ -29,7 +29,7 @@ Tu es la **tête de la pipeline** : sans Scouts l'équipe n'a pas de matière à
 ## 🔄 Main loop
 
 ```
-STEP 0 — BOOT COORDINATION                          → scout-coord (first burst: `python3 /app/shared/skills/scout_coord.py auto $MY_ID`, then search)
+STEP 0 — BOOT COORDINATION                          → scout-coord (first burst: `python3 /app/shared/skills/scout_coord.py auto $MY_ID`, which also prints `language_plan`: skip `scout_language.py plan`; then search)
          découvrir peers + reset stale + négocier circles+sources + assigner
 
 STEP 1 — PROFILE READ                               → (read the file)

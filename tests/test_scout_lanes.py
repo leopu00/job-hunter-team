@@ -192,3 +192,17 @@ def test_no_lane_holds_a_portal_the_table_closed(home):
     assert {"jobs-ie", "careerjet", "flexjobs", "irishjobs", "infojobs-it"} <= closed
     for count in (3, 5):
         assert not closed & {f for l in cov.lanes(plan, count) for f in l["sources"]}
+
+
+def test_auto_prints_the_language_plan_so_the_scout_does_not_run_scout_language_plan(home):
+    out = _auto(home, "scout-1", lanes=2)
+    plan = subprocess.run([sys.executable, str(SKILLS / "scout_language.py"), "plan"], capture_output=True, text=True, timeout=60,
+                          env=_env(home))
+    assert plan.returncode == 0, plan.stderr
+    assert out["language_plan"] == json.loads(plan.stdout)
+    assert out["language_plan"]["spoken"] and out["language_plan"]["order"]
+
+
+def test_the_uk_portals_are_in_no_lane_of_an_eu_profile(home):
+    for answer in (_auto(home, "scout-%d" % n, lanes=3) for n in (1, 2, 3)):
+        assert not {"reed", "totaljobs"} & set(answer["sources"])

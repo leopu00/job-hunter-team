@@ -1,6 +1,6 @@
 {
  "version": 1,
- "note": "Where the Scout searches FIRST, by the language the profile speaks. DATA, not code: a portal that changes address, closes or opens is corrected here and nowhere else. `host` is a hint for the Scout, not a promise that it answers. access: search (a list the Scout reads), email (not searched: its alerts arrive by mail, so it counts as covered), closed (confirmed closed on a real run: 403, login wall, challenge; it counts as covered, say so). tier: core (covered BEFORE any minor source and required for `exhausted`) or minor. Retired (410, dead endpoint, taken off the lists): xing-jobs, bundesagentur-fuer-arbeit. broad_terms: an entry word on its own (internship); with level_terms they are the WIDE queries (query-kind broad): a portal that ANDs words answers 0 to a full title plus a place and hundreds to «praktik». api: a public, documented API address, no key, that answered 200 on the date in its hint (a hint, not a promise): the Scout asks it instead of the site's page. Only public pages and documented public APIs are read, and a page or address that the site's robots.txt disallows is not (access closed, with the reason in the hint). The kit of 03/11 for FR, DE, ES, PT, NL, BE, CH and AT was checked from the Mac with one request per address, nothing bypassed; a refusal seen only there closes nothing.",
+ "note": "Where the Scout searches FIRST, by the language the profile speaks. DATA, not code: a portal that changes address, closes or opens is corrected here and nowhere else. `host` is a hint for the Scout, not a promise that it answers. access: search (a list the Scout reads), email (not searched: its alerts arrive by mail, so it counts as covered), closed (confirmed closed on a real run: 403, login wall, challenge; it counts as covered, say so). tier: core (covered BEFORE any minor source and required for `exhausted`) or minor. Retired (410, dead endpoint, taken off the lists): xing-jobs, bundesagentur-fuer-arbeit. broad_terms: an entry word on its own (internship); with level_terms they are the WIDE queries (query-kind broad): a portal that ANDs words answers 0 to a full title plus a place and hundreds to «praktik». api: a public, documented API address, no key, that answered 200 on the date in its hint (a hint, not a promise): the Scout asks it instead of the site's page. Only public pages and documented public APIs are read, and a page or address that the site's robots.txt disallows is not (access closed, with the reason in the hint). The kit of 03/11 for FR, DE, ES, PT, NL, BE, CH and AT was checked from the Mac with one request per address, nothing bypassed; a refusal seen only there closes nothing. needs_work_right: a country whose ads are for a candidate who already has the right to work there (a UK job needs a visa for an EU citizen): the portal is left out of the plan unless the profile's work_authorization has that region. It is a rule of the plan, not a closed portal.",
  "retired": [
   "xing-jobs",
   "bundesagentur-fuer-arbeit"
@@ -769,8 +769,9 @@
     "name": "Monster Italy",
     "country": "it",
     "tier": "minor",
-    "access": "search",
-    "host": "monster.it"
+    "access": "closed",
+    "host": "monster.it",
+    "hint": "Closed to programs: the search sends you to the Monster home page behind a captcha (403), on the VPS (10/11) and from another network, and the page the Scout reached on 11/11 was an empty JavaScript shell. Log nothing there."
    },
    {
     "slug": "cliclavoro",
@@ -976,9 +977,10 @@
     "name": "GradIreland",
     "country": "ie",
     "tier": "minor",
-    "access": "search",
+    "access": "closed",
     "host": "gradireland.com",
-    "portal_language": "en"
+    "portal_language": "en",
+    "hint": "Closed: the search paths answer 404 on the VPS and from another network, and the listings are behind a login. Log nothing there."
    },
    {
     "slug": "linkedin",
@@ -1014,7 +1016,8 @@
      "Manchester",
      "Edinburgh"
     ],
-    "portal_language": "en"
+    "portal_language": "en",
+    "needs_work_right": "gb"
    },
    {
     "slug": "reed",
@@ -1023,7 +1026,8 @@
     "tier": "minor",
     "access": "search",
     "host": "reed.co.uk",
-    "portal_language": "en"
+    "portal_language": "en",
+    "needs_work_right": "gb"
    },
    {
     "slug": "totaljobs",
@@ -1032,16 +1036,18 @@
     "tier": "minor",
     "access": "search",
     "host": "totaljobs.com",
-    "portal_language": "en"
+    "portal_language": "en",
+    "needs_work_right": "gb",
+    "hint": "UK: only for a candidate with the right to work there (see needs_work_right)."
    },
    {
     "slug": "wellfound",
     "name": "Wellfound (Sweden)",
     "country": "se",
     "tier": "minor",
-    "access": "search",
+    "access": "closed",
     "host": "wellfound.com/location/sweden",
-    "hint": "Details need a login.",
+    "hint": "Closed: the ads are behind a login wall (the VPS is blocked and another network only reaches the sign-in). Log nothing there.",
     "portal_language": "en"
    },
    {
@@ -1084,9 +1090,9 @@
     "name": "Jooble Sweden",
     "country": "se",
     "tier": "minor",
-    "access": "search",
+    "access": "closed",
     "host": "se.jooble.org",
-    "hint": "403 seen only from the Mac on 02/11 (another network): to try. The Scout closes it on the field with --status closed.",
+    "hint": "Closed to programs: every search answers a Cloudflare «Just a moment» JavaScript challenge (403), on the VPS and from another network. Log nothing there.",
     "portal_language": "en"
    }
   ],
@@ -1217,8 +1223,9 @@
     "name": "Wellfound remote",
     "country": "remote",
     "tier": "minor",
-    "access": "search",
-    "host": "wellfound.com"
+    "access": "closed",
+    "host": "wellfound.com",
+    "hint": "Closed: the ads are behind a login wall (the VPS is blocked and another network only reaches the sign-in). Log nothing there."
    },
    {
     "slug": "thehub",
