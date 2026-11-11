@@ -39,6 +39,7 @@ on:
       - 'tests/test_windows_download_is_verified_on_the_host.py'
       - 'tests/test_windows_acl_skips_links.py'
       - 'tests/test_windows_pristine_profile.py'
+      - 'tests/test_windows_onboarding_snapshot_reason.py'
       - 'scripts/jht-uninstall-windows.ps1'
       - 'desktop/src-tauri/windows/installer-hooks.nsi'
       - 'tests/test_windows_app_uninstall.py'
