@@ -179,6 +179,7 @@ def test_nothing_is_said_when_colima_is_off_or_is_not_the_engine_of_this_compute
     for case, kwargs, extra in (
         ("off", {"running": False}, {}),
         ("docker desktop", {"endpoint": "unix:///Users/x/.docker/run/docker.sock"}, {}),
+        ("another colima profile", {"endpoint": "unix:///Users/x/.colima/work/docker.sock"}, {}),
         ("podman", {}, {"selection": "podman"}),
         ("linux", {}, {"kernel": "Linux"}),
     ):

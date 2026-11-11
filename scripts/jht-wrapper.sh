@@ -6154,7 +6154,7 @@ uninstall_docker_endpoint() {
 # Colima (Mac, Docker scelto): l'installer la accende quando non c'e' e lo scrive in <runtime>/colima-started. Finito di togliere
 # container, volumi e immagini di JHT, se e' stato lui ad accenderla e dentro non gira piu' niente, la si ferma (colima stop, normale)
 # e si controlla che sia ferma; altrimenti resta accesa e si dice perche' e come fermarla. Non si cancella mai la macchina.
-# Solo se il Docker di questo computer e' quello di Colima: con Docker Desktop attivo una Colima accesa non c'entra e non si dice niente.
+# Solo se il Docker di questo computer e' quello di Colima (profilo default): con Docker Desktop attivo una Colima accesa non c'entra e non si dice niente.
 # Mai un errore di disinstallazione: al peggio un avviso.
 uninstall_colima() {
   local runtime_dir="$1" selection="$2" colima_bin docker_bin endpoint marker="$1/colima-started" others
@@ -6163,7 +6163,8 @@ uninstall_colima() {
   "$colima_bin" status >/dev/null 2>&1 || return 0
   docker_bin="$(uninstall_tool docker)" || return 0
   endpoint="$(uninstall_docker_endpoint "$docker_bin")" || return 0
-  case "$endpoint" in unix://*/.colima/*) ;; *) return 0 ;; esac
+  # `colima status` e `colima stop` parlano del profilo «default»: solo se il Docker del computer e' quello.
+  case "$endpoint" in unix://*/.colima/default/*) ;; *) return 0 ;; esac
   if [ -f "$marker" ] && [ ! -L "$marker" ] && [ "$(head -c 16 "$marker" 2>/dev/null | head -n 1 | tr -d '\r\n')" = colima ]; then
     others="$("$docker_bin" ps -q 2>/dev/null)" || others="unknown"
     if [ -n "$others" ]; then
