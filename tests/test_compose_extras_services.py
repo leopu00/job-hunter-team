@@ -131,3 +131,16 @@ def test_the_login_services_run_the_modules_of_the_repository_with_the_paths_the
         assert (ROOT / "shared" / "login" / module).is_file(), module
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     assert "mkdir -p /ipc/vnc /ipc/egress" in dockerfile and "chown jht:jht /ipc /ipc/vnc /ipc/egress" in dockerfile
+
+
+def test_only_the_login_browser_has_a_capability_and_it_is_the_one_the_sandbox_of_chromium_needs():
+    assert SERVICES["jht-login"]["cap_add"] == ["SYS_CHROOT"] and SERVICES["jht-login"]["cap_drop"] == ["ALL"]
+    assert [name for name, spec in SERVICES.items() if spec.get("cap_add")] == ["jht-login"]
+    assert not any("seccomp" in option for option in SERVICES["jht-login"]["security_opt"]), "the default seccomp profile"
+    assert "--no-sandbox" not in " ".join(SERVICES["jht-login"]["entrypoint"])
+
+
+def test_the_tmpfs_of_an_on_request_container_holds_the_8_mb_the_image_has_in_its_tmp_or_the_engine_cannot_create_it():
+    for name in ("jht-login", "jht-login-proxy", "jht-login-view", "jht-screen", "jht-media", "jht-playwright-populate"):
+        size = [item for item in SERVICES[name]["tmpfs"] if item.startswith("/tmp:")][0].split("size=")[1].split(",")[0]
+        assert int(size.rstrip("mg")) * (1024 if size.endswith("g") else 1) >= 16, (name, size)

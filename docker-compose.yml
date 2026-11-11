@@ -364,6 +364,12 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    # The sandbox of Chromium chroots into an empty folder after it makes its own user namespace, and the default seccomp profile lets
+    # chroot through only to a container that holds this capability (measured: with every capability dropped the browser dies on its
+    # chroot and the sandbox is gone). One capability, in a container with no network, a root that cannot be written and nothing mounted
+    # but the profile, is what keeps the sandbox on instead of `--no-sandbox`.
+    cap_add:
+      - SYS_CHROOT
 
   jht-login-proxy:
     profiles: [login]
@@ -378,7 +384,8 @@ services:
       - jht-login-egress:/ipc/egress
     read_only: true
     tmpfs:
-      - /tmp:size=16m,mode=1777,noexec,nosuid
+      # 32m and not less: the image has 8 MB in its /tmp and an empty tmpfs mounted on it takes a copy of them first
+      - /tmp:size=32m,mode=1777,noexec,nosuid
       - /jht_home:size=64k,mode=0555
       - /jht_user:size=64k,mode=0555
     pids_limit: 64
@@ -405,7 +412,7 @@ services:
       - jht-login-vnc:/ipc/vnc
     read_only: true
     tmpfs:
-      - /tmp:size=4m,mode=1777,noexec,nosuid
+      - /tmp:size=32m,mode=1777,noexec,nosuid
       - /jht_home:size=64k,mode=0555
       - /jht_user:size=64k,mode=0555
     pids_limit: 64
