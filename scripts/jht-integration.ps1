@@ -196,6 +196,14 @@ function Invoke-IntegrationComposeQuiet {
 # machines Podman lists (names, ports and running state only: no identity file, no key), and which variables name a host. The `up` is
 # idempotent, so it is tried once more after a few seconds; a second failure says where the state is.
 $IntegrationRetryWaitSeconds = 5
+# Podman's `compose` finds the machine of a connection by asking the engine of the machine for its state (WSL, on Windows), and WHEN THAT
+# QUESTION FAILS IT SAYS «could not find a matching machine» (podman 6.0.2, internal/localapi FindMachineByPort: the error of the state is
+# dropped, the loop goes on and ends with that sentence). The question fails while the machine is busy: the first start of a tool copies
+# a browser of hundreds of MB into a volume and pulls an image of about 1 GB at the same time, on a machine of 2 CPUs. One more try after 5 s
+# is not always enough then, so the steps are tried up to this many times, the wait growing ×3 each time (5 s, 15 s).
+$IntegrationEngineTries = 3
+# A start of a tool that takes longer than this writes where the time went (pull, copy of the browser, start) to the same log.
+$IntegrationSlowSeconds = 60
 
 function Get-IntegrationRuntimeLogPath {
   if ($script:IntegrationRuntimeLogPath) { return [string]$script:IntegrationRuntimeLogPath }
@@ -242,19 +250,52 @@ function Write-IntegrationEngineLog {
   } catch { }
 }
 
-# One `up` of a tool, once more after a failure when the engine is a Podman machine. Returns the exit code of the last try.
-function Invoke-IntegrationUpStep {
+# One compose step of a tool (the copy of the browser, the `up`), tried again after a failure when the engine is a Podman machine: the
+# steps are idempotent (the copy ends with a marker, the `up` leaves a container that is there and unchanged as it is). Returns the exit code
+# of the last try. The state of the engine is written once, at the first failure, while it is still what made it fail.
+function Invoke-IntegrationEngineStep {
   param([string]$Tool, [string[]]$ComposeArguments)
   Invoke-Compose @ComposeArguments | Out-Null
   $code = $LASTEXITCODE
   if ($code -eq 0 -or $ContainerRuntime -ne 'podman') { return [int]$code }
   Write-IntegrationEngineLog -Tool $Tool -Code 'failed' -ExitCode $code -Lines (Get-IntegrationEngineState)
-  Start-Sleep -Seconds $IntegrationRetryWaitSeconds
-  Invoke-Compose @ComposeArguments | Out-Null
-  $retry = $LASTEXITCODE
-  Write-IntegrationEngineLog -Tool $Tool -Code 'retried' -ExitCode $retry
-  if ($retry -ne 0) { [Console]::Error.WriteLine("stato del motore Podman scritto in $(Get-IntegrationRuntimeLogPath)") }
-  return [int]$retry
+  $wait = $IntegrationRetryWaitSeconds
+  $tries = 1
+  while ($code -ne 0 -and $tries -lt $IntegrationEngineTries) {
+    Start-Sleep -Seconds $wait
+    $wait = $wait * 3
+    Invoke-Compose @ComposeArguments | Out-Null
+    $code = $LASTEXITCODE
+    $tries++
+  }
+  Write-IntegrationEngineLog -Tool $Tool -Code 'retried' -ExitCode $code -Lines @("tries=$tries")
+  if ($code -ne 0) { [Console]::Error.WriteLine("stato del motore Podman scritto in $(Get-IntegrationRuntimeLogPath)") }
+  return [int]$code
+}
+
+# Where the time of a start goes: seconds of each phase, written to the runtime log only when the whole took longer than a minute (a good
+# quick start writes nothing). On Windows 11 and 10 the first start has taken from 2 to 6 minutes with nothing on the screen to tell the
+# pull of the image from the copy of the browser from the start of the container.
+function Start-IntegrationPhases {
+  $script:IntegrationPhaseWatch = [Diagnostics.Stopwatch]::StartNew()
+  $script:IntegrationPhaseSeconds = [ordered]@{}
+  $script:IntegrationPhaseMark = 0
+}
+function Complete-IntegrationPhase {
+  param([string]$Name)
+  if (-not $script:IntegrationPhaseWatch) { return }
+  $now = [int][Math]::Round($script:IntegrationPhaseWatch.Elapsed.TotalSeconds)
+  $script:IntegrationPhaseSeconds[$Name] = $now - $script:IntegrationPhaseMark
+  $script:IntegrationPhaseMark = $now
+}
+function Write-IntegrationPhasesLog {
+  param([string]$Tool)
+  if (-not $script:IntegrationPhaseWatch -or $ContainerRuntime -ne 'podman') { return }
+  $total = [int][Math]::Round($script:IntegrationPhaseWatch.Elapsed.TotalSeconds)
+  if ($total -lt $IntegrationSlowSeconds) { return }
+  $lines = @("total=${total}s")
+  foreach ($name in $script:IntegrationPhaseSeconds.Keys) { $lines += "$name=$($script:IntegrationPhaseSeconds[$name])s" }
+  Write-IntegrationEngineLog -Tool $Tool -Code 'slow' -ExitCode 0 -Lines $lines
 }
 
 # The result of add/remove, in the form the person asked for.
@@ -302,6 +343,12 @@ function Test-IntegrationScreenFolder {
 function Invoke-IntegrationAdd {
   param([string]$Id)
   $script:IntegrationWhy = ''
+  Start-IntegrationPhases
+  try { return (Invoke-IntegrationAddStep $Id) } finally { Write-IntegrationPhasesLog $Id }
+}
+
+function Invoke-IntegrationAddStep {
+  param([string]$Id)
   switch -CaseSensitive ($Id) {
     'google' {
       Ensure-Up
@@ -323,11 +370,14 @@ function Invoke-IntegrationAdd {
       $ref = Get-IntegrationExtrasRef
       if (-not $ref) { $script:IntegrationWhy = 'non disponibile ancora'; return 3 }
       & { $ErrorActionPreference = 'Continue'; & docker pull $ref *> $null }
-      if ($LASTEXITCODE -ne 0) { $script:IntegrationWhy = "download dell'immagine degli strumenti non riuscito"; return 1 }
+      $pullCode = $LASTEXITCODE
+      Complete-IntegrationPhase 'pull'
+      if ($pullCode -ne 0) { $script:IntegrationWhy = "download dell'immagine degli strumenti non riuscito"; return 1 }
       $before = $env:JHT_EXTRAS_IMAGE
       try {
         $env:JHT_EXTRAS_IMAGE = $ref
-        $code = Invoke-IntegrationUpStep 'media' @('--profile', 'media', 'up', '-d', $MediaContainer)
+        $code = Invoke-IntegrationEngineStep 'media' @('--profile', 'media', 'up', '-d', $MediaContainer)
+        Complete-IntegrationPhase 'up'
       } finally { if ($null -eq $before) { Remove-Item Env:\JHT_EXTRAS_IMAGE -ErrorAction SilentlyContinue } else { $env:JHT_EXTRAS_IMAGE = $before } }
       if ($code -ne 0) { $script:IntegrationWhy = 'il container dei media non parte'; return 1 }
       if (-not (Get-RunningComposeServiceId $MediaContainer)) { $script:IntegrationWhy = 'il container dei media non risulta acceso'; return 1 }
@@ -341,7 +391,9 @@ function Invoke-IntegrationAdd {
       $ref = Get-IntegrationExtrasRef
       if (-not $ref) { $script:IntegrationWhy = 'non disponibile ancora'; return 3 }
       & { $ErrorActionPreference = 'Continue'; & docker pull $ref *> $null }
-      if ($LASTEXITCODE -ne 0) { $script:IntegrationWhy = "download dell'immagine degli strumenti non riuscito"; return 1 }
+      $pullCode = $LASTEXITCODE
+      Complete-IntegrationPhase 'pull'
+      if ($pullCode -ne 0) { $script:IntegrationWhy = "download dell'immagine degli strumenti non riuscito"; return 1 }
       # The folder the desktop app reads the viewer password from is made here, by the person: a bind mount of a folder that is not there
       # would be made by the engine, with its own owner.
       # It is mounted writable in the screen container, and the agents write in this folder: a link (a reparse point) in its place would
@@ -356,8 +408,8 @@ function Invoke-IntegrationAdd {
         $env:JHT_EXTRAS_IMAGE = $ref
         # The closer's browser with a window comes from the volume the one-shot fills: ready before the screen is.
         $env:JHT_EXTRAS_DIGEST = $ExtrasImageDigest
-        Invoke-Compose '--profile' 'playwright' 'run' '--rm' '--no-deps' '-T' $PlaywrightPopulateContainer | Out-Null
-        $code = $LASTEXITCODE
+        $code = Invoke-IntegrationEngineStep 'screen-browser' @('--profile', 'playwright', 'run', '--rm', '--no-deps', '-T', $PlaywrightPopulateContainer)
+        Complete-IntegrationPhase 'browser'
         if ($code -ne 0) { $script:IntegrationWhy = 'il browser del closer non si copia nel volume'; return 1 }
         Remove-Item Env:\JHT_EXTRAS_DIGEST -ErrorAction SilentlyContinue
         # Checked again right before the up (the copy above took time): what is left is the instant between this test and the engine's
@@ -365,7 +417,8 @@ function Invoke-IntegrationAdd {
         if (-not ((Test-IntegrationScreenFolder) -and (Test-Path -LiteralPath (Get-IntegrationScreenFolder) -PathType Container))) {
           $script:IntegrationWhy = "live-screen in ~/.jht non e' una cartella normale (un collegamento?): non la uso"; return 1
         }
-        $code = Invoke-IntegrationUpStep 'screen' @('--profile', 'screen', 'up', '-d', $ScreenContainer)
+        $code = Invoke-IntegrationEngineStep 'screen' @('--profile', 'screen', 'up', '-d', $ScreenContainer)
+        Complete-IntegrationPhase 'up'
       } finally {
         if ($null -eq $beforeImage) { Remove-Item Env:\JHT_EXTRAS_IMAGE -ErrorAction SilentlyContinue } else { $env:JHT_EXTRAS_IMAGE = $beforeImage }
         if ($null -eq $beforeDigest) { Remove-Item Env:\JHT_EXTRAS_DIGEST -ErrorAction SilentlyContinue } else { $env:JHT_EXTRAS_DIGEST = $beforeDigest }
