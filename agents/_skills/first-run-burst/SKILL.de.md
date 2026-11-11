@@ -1,7 +1,7 @@
 ---
 name: first-run-burst
 description: "Die erste halbe Stunde, in der ein brandneuer Nutzer dem Team überhaupt bei der Arbeit zusieht. Öffne diese Skill, wenn du `[PROFILO-PRONTO]` vom Assistente bekommst, oder beim Aufwachen, wenn `first_run.py status` die Phase `awaiting_profile` / `burst` meldet. Sie setzt die schrittweise Kalibrierung (C-02) nur für das erste Fenster außer Kraft und definiert Erfolg als BEWERTETE Positionen auf dem Bildschirm — nicht als gefundene Positionen."
-allowed-tools: Bash(python3 /app/shared/skills/first_run.py *), Bash(python3 /app/shared/skills/plan_registry.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(/app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/throttle-config.py *), Bash(jht-tmux-send *), Bash(jht-send *)
+allowed-tools: Bash(python3 /app/shared/skills/first_run.py *), Bash(python3 /app/shared/skills/burst_roster.py *), Bash(python3 /app/shared/skills/plan_registry.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(/app/.launcher/start-agent.sh *), Bash(python3 /app/shared/skills/throttle-config.py *), Bash(jht-tmux-send *), Bash(jht-send *)
 ---
 <!-- @translation: de, ai-translated 2026-08-03 -->
 
@@ -55,7 +55,9 @@ Abonnement wird genauso angegeben: frag mit `python3 /app/shared/skills/first_ru
 
 **Das Abonnement kommt nur aus der Konfiguration oder vom Nutzer.** Schreibe es nie selbst aus dem Tagebuch, einer Notiz, dem Gedächtnis oder einem früheren Gespräch: „Der Nutzer hat Pro bestätigt“ in einer Notiz ist, was der Nutzer damals gesagt hat, keine Erklärung von jetzt (die Konfiguration kann zurückgesetzt worden sein, und das Abonnement kann sich geändert haben). Solange `plan_missing` da ist, fehlt das Abonnement: frage, nur einmal, und schreibe nur, was der Nutzer antwortet.
 
-**2. Spawne den gesamten Roster, einen Worker alle ~15 Sekunden, in dieser Reihenfolge.**
+**2. Der gesamte Roster startet in einem Zug, in dieser Reihenfolge.**
+
+**Das System startet ihn für dich, bei deinem Boot, bevor du aufwachst.** `captain_boot.py` ruft `python3 /app/shared/skills/burst_roster.py start --auto --detach` auf, wenn der Burst offen ist und kein Worker des Rosters lebt; die BOOT FACTS sagen "THE SYSTEM IS STARTING THE ROSTER NOW". Das System schickt jedem Worker selbst das Briefing (`start-agent.sh` sendet es, sobald das REPL läuft): ein Scout hat seinen ersten Befehl Sekunden nach dem fertigen Profil statt nach 0,9 bis 2,8 Minuten (gemessen am 11.11.). In deinen ersten Minuten startest du also **keine** Worker und rufst `roll_worker_number.py` für den Roster nicht auf: ein zweiter Scout wäre ein Duplikat. Sieh nach etwa zwei Minuten in `first_run.py status` und ergänze nur, was noch in `roster_missing` steht, mit `python3 /app/shared/skills/burst_roster.py start` (ein Befehl, gleiche Reihenfolge, er schickt die Briefings). Sagen die BOOT FACTS nicht, dass das System gestartet hat, führe diesen Befehl als erste Aktion aus, vor allem anderen deines Aufwachens.
 
 Reihenfolge und Takt: zwei Scouts, dann ein Analista und ein Scorer, dann die übrigen Scouts, die übrigen Analisti und der letzte Scorer.
 So findet die erste Position schon einen laufenden Analista und die erste geprüfte einen Scorer, statt zuerst die Scouts und den Rest Minuten

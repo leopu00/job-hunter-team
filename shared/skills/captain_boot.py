@@ -10,8 +10,11 @@ the block is appended to the welcome message the Capitano is sent at its start (
     profile that already passes the gate to start the search) and the run has not begun: `first_run.py begin-burst`,
     exactly the command the skill first-run-burst asks for. It is idempotent, and it does not wait for the plan: an API
     key sizes the roster by its spending ceiling, a subscription nobody named opens on the lowest plan and the block says
-    so (`plan_assumed`). Only a provider with no plan to assume stays closed: then the block says how to ask the card. The roster is NOT
-    started here: that stays the Capitano's (staggered, through start-agent.sh).
+    so (`plan_assumed`). Only a provider with no plan to assume stays closed: then the block says how to ask the card.
+  * The roster of the burst IS started here, as the system, when no worker of it is alive (the burst has just opened, or every
+    session is gone): `burst_roster.py start --auto --detach`, in the background, so the Scouts are briefed seconds after the
+    profile is ready and not after the Capitano's own turns (measured 11/11: 0.9 to 2.8 minutes). The Capitano starts only
+    what is still missing afterwards.
   * Nothing is drained: mail, user replies and the bridge are the Capitano's to read, so nothing is lost or read twice.
 
 Whatever cannot be read leaves its line out, and the block says so; a failure never stops the start. Printed to stdout;
@@ -66,10 +69,25 @@ def first_run_line(gate: dict | None) -> str:
             state, opened = result, "opened now by the system with begin-burst. " + (
                 f"PLAN ASSUMED, already in your diary: {result['plan_assumed']} " if result.get("plan_assumed") else "")
     roster = state.get("roster")
+    roster_start = _start_roster(state)
     need = f" roster {json.dumps(roster, sort_keys=True)}, target_scored {state.get('target_scored')}," \
            f" scout_cap_first_pass {state.get('scout_cap_first_pass')}." if roster else ""
     missing = state.get("roster_missing")
-    return f"first run: phase {state.get('phase')}, {opened}{need}" + (f" roster_missing {json.dumps(missing)}." if missing else "")
+    return (f"first run: phase {state.get('phase')}, {opened}{need}" + (f" roster_missing {json.dumps(missing)}." if missing else "")
+            + roster_start)
+
+
+def _start_roster(state: dict) -> str:
+    """Start the roster of an open burst in the background, when nothing of it is alive; the words for the block."""
+    if state.get("phase") != "burst":
+        return ""
+    out = _json(str(SKILLS / "burst_roster.py"), "start", "--auto", "--detach")
+    if not (out or {}).get("detached"):
+        return ""
+    return (" THE SYSTEM IS STARTING THE ROSTER NOW, in the order of your skill, and briefs each worker itself: do NOT start workers "
+            "and do not run roll_worker_number.py for the roster in your first minutes (a second Scout would be a duplicate). "
+            "Your first action is the rest of your wake; look at `first_run.py status` after about two minutes and start only "
+            "what is still in roster_missing (`burst_roster.py start` does that in one command).")
 
 
 def tools_line(gate: dict | None) -> str | None:
@@ -97,7 +115,7 @@ def briefing() -> str:
         text = _run(str(SKILLS / argv[0]), *argv[1:])
         lines.append(f"- {label}:\n" + (_cut(text) if text else "(could not be read — run it yourself)"))
     lines.append("Still yours: the mailbox and the user replies (read them as usual), the roster of the first run "
-                 "(start it staggered, through start-agent.sh), and everything after.")
+                 "(started by the system; you complete what is missing), and everything after.")
     return "\n".join(lines)
 
 
