@@ -2297,15 +2297,15 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   ),
   live_screen_failed: copy(
     "Non riesco a collegarmi allo schermo del CLOSER.",
-    "Controlla che la squadra sia accesa, poi riapri la finestra.",
+    "Controlla con «jht screen status» che lo schermo sia acceso (se no, «jht screen on»), poi riapri la finestra.",
     "I cannot connect to the CLOSER’s screen.",
-    "Check that the team is running, then reopen the window.",
+    "Check with “jht screen status” that the screen is on (if not, “jht screen on”), then reopen the window.",
   ),
   screen_not_running: copy(
     "Lo schermo del CLOSER non è acceso.",
-    "Accendi la squadra: la finestra si collega da sola.",
+    "Accendilo con «jht screen on»: la finestra si collega da sola.",
     "The CLOSER’s screen is not on.",
-    "Start the team: the window connects by itself.",
+    "Turn it on with “jht screen on”: the window connects by itself.",
   ),
 
   // ── LinkedIn login in the broker (broker_view.rs) ──────────────────────
