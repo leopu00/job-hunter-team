@@ -3,12 +3,13 @@ import { say } from '../lib/texts.js';
 import { readObservation } from '../lib/agent-observation.js';
 import { errorText, renderObservation } from '../lib/agent-observation-view.js';
 import { appendDiagnostic } from '../lib/runtime-diagnostic.js';
+import { readActiveProvider } from '../lib/agent-observation-provider.js';
 
 export function handleAgents(options = {}, read = readObservation) {
   try {
     const snapshot = read();
     if (options.json) console.log(JSON.stringify(snapshot, null, 2));
-    else process.stdout.write(renderObservation(snapshot, { usage: Boolean(options.usage) }));
+    else process.stdout.write(renderObservation(snapshot, { usage: Boolean(options.usage), provider: readActiveProvider() }));
     if (options.verbose && !options.json) {
       console.log(say('agents.sessions_in_tmux'));
       for (const row of snapshot.agents.filter((r) => r.running)) console.log(`  ${row.session}`);

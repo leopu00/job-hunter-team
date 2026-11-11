@@ -30,6 +30,36 @@ function state(row) {
   return labels[row.state] || labels.sconosciuto;
 }
 
+const LIMIT_REASONS = new Set(['limite_5h', 'limite_settimanale', 'limite_spesa_org', 'limite_fornitore']);
+
+/**
+ * Why each blocked agent is blocked, in a line a person can act on, and for a key the provider refused the command
+ * that puts it right. `provider` is what readActiveProvider says (null when unknown).
+ */
+export function blockedLines(snapshot, provider = null, width = terminalWidth()) {
+  const out = [];
+  const sentence = (text) => `  ${text}`;
+  for (const row of snapshot.agents) {
+    if (row.state !== 'bloccato' || row.running === false) continue;
+    const id = safe(row.id);
+    const why = typeof row.reason === 'string' ? row.reason : null;
+    if (why === 'accesso_scaduto' && provider?.apiKey) {
+      out.push(sentence(say('observation.blocked_key', { id, provider: safe(provider.label) })),
+        hint(say('observation.blocked_key_fix', { name: safe(provider.name) }), 2, width));
+    } else if (why === 'accesso_scaduto') {
+      out.push(sentence(say('observation.blocked_login', { id, provider: provider ? safe(provider.label) : say('observation.the_provider') })),
+        hint(say('observation.blocked_login_fix'), 2, width));
+    } else if (LIMIT_REASONS.has(why)) {
+      out.push(sentence(say('observation.blocked_limit', { id })));
+    } else if (why === 'rete') {
+      out.push(sentence(say('observation.blocked_network', { id })));
+    } else {
+      out.push(sentence(say('observation.blocked_error', { id })));
+    }
+  }
+  return out;
+}
+
 function usageLines(snapshot) {
   const meter = snapshot.usage;
   const lines = [say('observation.tokens'), say('observation.updated', {
@@ -39,7 +69,7 @@ function usageLines(snapshot) {
   return lines;
 }
 
-export function renderObservation(snapshot, { usage = true, live = false, width = terminalWidth() } = {}) {
+export function renderObservation(snapshot, { usage = true, live = false, width = terminalWidth(), provider = null } = {}) {
   const out = [title(live ? say('observation.monitor') : say('agents.title'),
     say('agents.running_of', { running: snapshot.running, total: snapshot.total }))];
   const columns = [{ label: say('agents.col_agent') }, { label: say('agents.col_session'), drop: true },
@@ -50,6 +80,7 @@ export function renderObservation(snapshot, { usage = true, live = false, width 
     rows.forEach((cells, i) => cells.push(value(snapshot.agents[i].usage.tokens)));
   }
   out.push(table(columns, rows));
+  out.push(...blockedLines(snapshot, provider, width));
   if (!snapshot.agents.length && snapshot.ok) out.push(say('observation.empty'), hint(say('team.next_start')));
   if (live) {
     for (const row of snapshot.agents) {

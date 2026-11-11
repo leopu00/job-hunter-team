@@ -267,6 +267,9 @@ test('the harness of a config: absent is codex, an unknown value is not a harnes
   assert.equal(usesPi({ active_provider: 'glm', harness: 'codex' }), false);
   assert.equal(harnessProblem('pi', 'openai', 'subscription'), null);
   assert.equal(harnessProblem('codex', 'kimi', 'api_key'), null);
+  // GLM has no CLI of its own: Codex cannot run it (Kimi keeps its legacy CLI under the default harness)
+  assert.match(harnessProblem('codex', 'glm', 'api_key'), /GLM \(Z\.ai\) runs only on the pi harness/);
+  assert.equal(harnessProblem('codex', 'openai', 'subscription'), null);
   assert.match(harnessProblem('pi', 'claude', 'subscription'), /Claude subscription.*per token/);
   assert.match(harnessProblem('pi', 'claude', 'api_key'), /only active_provider=openai/);
   assert.match(harnessProblem('pi', 'kimi', 'subscription'), /only with an API key/);

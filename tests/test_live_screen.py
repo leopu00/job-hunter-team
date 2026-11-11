@@ -211,6 +211,38 @@ def test_password_is_fresh_private_and_removed_on_shutdown(env):
 
 
 @needs_bash
+def test_in_its_own_container_the_password_and_the_logs_go_where_the_environment_says(env, tmp_path):
+    state, logs = tmp_path / "bound-state", tmp_path / "container-logs"
+    state.mkdir()
+    env = {**env, "JHT_LIVE_SCREEN_STATE_DIR": str(state), "JHT_LOGS_DIR": str(logs)}
+    proc = _start(env)
+    try:
+        assert _wait_for(lambda: _args(env, "websockify") is not None), proc.stdout
+        assert (state / "viewer-password").is_file() and stat.S_IMODE((state / "viewer-password").stat().st_mode) == 0o600
+        assert not _password_file(env).exists(), "nothing is written under the masked home"
+        assert (logs / "live-screen-loop.log").is_file()
+    finally:
+        assert _stop(proc) == 0
+    assert not (state / "viewer-password").exists()
+
+
+@needs_bash
+@pytest.mark.skipif(os.geteuid() == 0, reason="root writes anywhere")
+def test_a_password_that_cannot_be_written_is_an_error_and_the_screen_does_not_come_up(env, tmp_path):
+    locked = tmp_path / "locked"
+    locked.mkdir()
+    locked.chmod(0o500)  # the script would make a folder of its own with chmod 700: a folder it cannot make is the case
+    state = locked / "state"
+    proc = _start({**env, "JHT_LIVE_SCREEN_STATE_DIR": str(state)})
+    try:
+        assert proc.wait(timeout=10) == 5, proc.stdout.read() if proc.stdout else ""
+        assert _args(env, "websockify") is None and _args(env, "x11vnc") is None
+    finally:
+        locked.chmod(0o700)
+        _stop(proc)
+
+
+@needs_bash
 def test_bind_and_port_follow_the_environment(env):
     env = {**env, "JHT_LIVE_SCREEN_BIND": "127.0.0.1", "JHT_LIVE_SCREEN_PORT": "7090"}
     proc = _start(env)
@@ -302,27 +334,28 @@ class _ComposeLoader(yaml.SafeLoader):
 _ComposeLoader.add_constructor("!reset", lambda loader, node: {"__reset__": loader.construct_sequence(node)})
 
 
-def _service(path):
-    return yaml.load(path.read_text(encoding="utf-8"), Loader=_ComposeLoader)["services"]["jht"]
+def _service(path, name="jht-screen"):
+    return yaml.load(path.read_text(encoding="utf-8"), Loader=_ComposeLoader)["services"][name]
 
 
-def test_base_compose_publishes_only_on_host_loopback():
+def test_base_compose_publishes_only_on_host_loopback_and_only_from_the_screen_container():
     ports = _service(COMPOSE).get("ports")
     assert ports, "the live screen port must be published for the desktop app"
     for entry in ports:
         assert isinstance(entry, str) and entry.startswith("127.0.0.1:"), entry
     assert any(entry.endswith(":6080") for entry in ports)
+    assert _service(COMPOSE, "jht").get("ports") is None, "the team container publishes nothing: the screen is its own container"
 
 
 def test_podman_override_keeps_the_base_loopback_port_in_its_own_network():
     # pasta gives the container its own namespace: the base file's
     # 127.0.0.1-only port is what reaches the stream, and the stream keeps
     # its 0.0.0.0 default inside the namespace (on 127.0.0.1 pasta's
-    # forwarding gets a reset: measured).
+    # forwarding gets a reset: measured). The screen has no way out at all (no -T port).
     service = _service(PODMAN_COMPOSE)
-    assert service["network_mode"].startswith("pasta:")
-    assert "ports" not in service
-    assert not any(entry.startswith("JHT_LIVE_SCREEN_") for entry in service["environment"])
+    assert service["network_mode"].startswith("pasta:") and "-T" not in service["network_mode"].split(",")
+    assert service["userns_mode"] == "keep-id:uid=1001,gid=1001"
+    assert "ports" not in service and "environment" not in service
 
 
 def _compose_command():
@@ -345,16 +378,17 @@ def _compose_command():
 def test_podman_override_merges_to_the_base_loopback_port_only(tmp_path):
     """Il merge vero di Compose, non la lettura dei due file separati."""
     result = subprocess.run(
-        [*_compose_command(), "-f", str(COMPOSE), "-f", str(PODMAN_COMPOSE), "config", "--format", "json"],
+        [*_compose_command(), "-f", str(COMPOSE), "-f", str(PODMAN_COMPOSE), "--profile", "screen", "config", "--format", "json"],
         capture_output=True, text=True, check=False,
         env={**os.environ, "HOME": str(tmp_path)},
     )
     assert result.returncode == 0, result.stderr
 
-    service = json.loads(result.stdout)["services"]["jht"]
+    services = json.loads(result.stdout)["services"]
+    service = services["jht-screen"]
     assert service["network_mode"].startswith("pasta:")
     assert [(port["host_ip"], int(port["target"])) for port in service["ports"]] == [("127.0.0.1", 6080)]
-    assert "JHT_LIVE_SCREEN_BIND" not in service["environment"]
+    assert "JHT_LIVE_SCREEN_BIND" not in service["environment"] and not services["jht"].get("ports")
 
 
 # ── 2b. La morte dello schermo non è invisibile ────────────────────────────

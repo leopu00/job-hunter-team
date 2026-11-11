@@ -238,7 +238,11 @@ def _home(tmp_path: Path, config: dict, *, codex: bool = False, pi: str | None =
 @pytest.mark.parametrize("wrapper", [WRAPPER_SH, WRAPPER_PS1], ids=lambda p: p.name)
 def test_the_snapshot_reads_the_login_of_pi_when_the_harness_is_pi(tmp_path: Path, wrapper: Path) -> None:
     config = {"active_provider": "openai", "harness": "pi", "providers": {"openai": {"auth_method": "subscription"}}}
-    assert _snapshot(wrapper, _home(tmp_path, config, pi="{}")) == "1 1 0"
+    assert _snapshot(wrapper, _home(tmp_path, config, pi='{"openai":{"type":"oauth"}}')) == "1 1 0"
+    # a login of another service in Pi's file (Anthropic's) is not the sign-in of this provider
+    other = tmp_path / "other"
+    other.mkdir()
+    assert _snapshot(wrapper, _home(other, config, pi='{"anthropic":{"type":"oauth"}}')) == "1 0 0"
 
 
 @pytest.mark.parametrize("wrapper", [WRAPPER_SH, WRAPPER_PS1], ids=lambda p: p.name)
@@ -254,10 +258,10 @@ def test_a_codex_login_is_not_a_login_for_the_pi_harness(tmp_path: Path, wrapper
 ])
 def test_without_the_pi_harness_the_snapshot_still_reads_the_login_of_codex(
         tmp_path: Path, wrapper: Path, config: dict) -> None:
-    assert _snapshot(wrapper, _home(tmp_path, config, codex=True, pi="{}")) == "1 1 0"
+    assert _snapshot(wrapper, _home(tmp_path, config, codex=True, pi='{"openai":{"type":"oauth"}}')) == "1 1 0"
     other = tmp_path / "other"
     other.mkdir()
-    assert _snapshot(wrapper, _home(other, config, pi="{}")) == "1 0 0"
+    assert _snapshot(wrapper, _home(other, config, pi='{"openai":{"type":"oauth"}}')) == "1 0 0"
 
 
 @pytest.mark.parametrize("wrapper", [WRAPPER_SH, WRAPPER_PS1], ids=lambda p: p.name)
@@ -278,4 +282,7 @@ def test_the_owner_of_the_pi_login_is_the_user_or_root_in_both_wrappers() -> Non
     for wrapper in (WRAPPER_SH, WRAPPER_PS1):
         script = _snapshot_script(wrapper)
         assert "s.uid===process.getuid()||s.uid===0" in script and "lstatSync" in script
-        assert "readFileSync(p" not in script and "readFileSync(\"/jht_home/.pi" not in script   # the login is never opened
+        # the login is opened only after lstat says a regular file of a sane size, and only its entry names are used (never printed)
+        assert script.index("lstatSync(p)") < script.index("readFileSync(p")
+        assert "s.size<=262144" in script and "process.stdout.write" in script
+        assert "console.log(d" not in script and "write(d" not in script

@@ -32,6 +32,7 @@ try:
     from apply_flow_recipes import (
         _linkedin_module, _recipe_class,
     )
+    from playwright_extras import headful_executable
 except ImportError:  # package-style import outside the CLI
     from shared.skills.apply_flow_constants import (
         LOG, SUPPORTED_PLATFORMS, _OPTIONAL_IMPORT_ERRORS, _linkedin_module,
@@ -49,6 +50,7 @@ except ImportError:  # package-style import outside the CLI
     from shared.skills.apply_flow_recipes import (
         _linkedin_module, _recipe_class,
     )
+    from shared.skills.playwright_extras import headful_executable
 
 
 class FlowBrowserMixin:
@@ -63,6 +65,13 @@ class FlowBrowserMixin:
         if getattr(verdict, "allowed", None) is not True:
             LOG.warning(getattr(verdict, "log_line", lambda: "[apply-gate] DENY invalid_verdict")())
         return verdict
+
+    def _window_browser(self) -> dict:
+        """A browser with a window is the full Chromium of the volume of the extras image when it is there; the headless one is never moved."""
+        if self.headless:
+            return {}
+        path = headful_executable()
+        return {"executable_path": path} if path else {}
 
     @contextlib.contextmanager
     def _managed_page(self) -> Iterator[Any]:
@@ -80,6 +89,7 @@ class FlowBrowserMixin:
                     context = runtime.chromium.launch_persistent_context(
                         str(profile),
                         headless=self.headless,
+                        **self._window_browser(),
                         args=["--no-sandbox", "--disable-dev-shm-usage"],
                         locale="en-US",
                         viewport={"width": 1280, "height": 900},
@@ -91,6 +101,7 @@ class FlowBrowserMixin:
                 return
             browser = runtime.chromium.launch(
                 headless=self.headless,
+                **self._window_browser(),
                 args=["--no-sandbox", "--disable-dev-shm-usage"],
             )
             try:

@@ -46,11 +46,13 @@ GEOMETRY="${JHT_LIVE_SCREEN_GEOMETRY:-1440x1000x24}"
 WS_PORT="${JHT_LIVE_SCREEN_PORT:-6080}"
 WS_BIND="${JHT_LIVE_SCREEN_BIND:-0.0.0.0}"
 VNC_PORT=5900
-STATE_DIR="$JHT_HOME/live-screen"
+# In the jht-screen container the home is masked: the password goes to a folder the host binds (JHT_LIVE_SCREEN_STATE_DIR, which the
+# desktop app reads as ~/.jht/live-screen) and the logs to the folder of JHT_LOGS_DIR.
+STATE_DIR="${JHT_LIVE_SCREEN_STATE_DIR:-$JHT_HOME/live-screen}"
 PASSWORD_FILE="$STATE_DIR/viewer-password"
 RUN_DIR="${TMPDIR:-/tmp}/jht-live-screen"
 
-LOGS_DIR="$JHT_HOME/logs"
+LOGS_DIR="${JHT_LOGS_DIR:-$JHT_HOME/logs}"
 mkdir -p "$LOGS_DIR"
 
 # daemon-lib.sh (inerte: solo definizioni) per jht_daemon_log — path del diario
@@ -133,7 +135,11 @@ if [ "${#password}" -ne 8 ]; then
   exit 5
 fi
 umask 077
-printf '%s\n' "$password" > "$PASSWORD_FILE.tmp" && mv -f "$PASSWORD_FILE.tmp" "$PASSWORD_FILE"
+# A password the app cannot read is a stream nobody can open: that is an error, said, not a screen that looks up.
+{ printf '%s\n' "$password" > "$PASSWORD_FILE.tmp" && mv -f "$PASSWORD_FILE.tmp" "$PASSWORD_FILE"; } 2>/dev/null || {
+  log "ERROR: could not write the viewer password in $STATE_DIR"
+  exit 5
+}
 x11vnc -storepasswd "$password" "$RUN_DIR/rfbauth" >/dev/null 2>&1 || {
   log "ERROR: x11vnc -storepasswd failed"
   exit 5

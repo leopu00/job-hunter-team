@@ -92,7 +92,7 @@ export default function HarnessChoice({
       {current.harness === "pi" && current.login !== "not_needed" && (
         <div className="flex flex-col gap-2 rounded border border-[var(--color-border)] p-3" data-testid="harness-login" data-login={current.login}>
           <strong className="text-[12px] text-[var(--color-bright)]">{t.loginTitle}</strong>
-          <p className="text-[12px] text-[var(--color-muted)]">{current.login === "signed_in" ? t.loginIn : current.login === "signed_out" ? t.loginOut : t.loginUnknown}</p>
+          <p className="text-[12px] text-[var(--color-muted)]">{current.login === "signed_in" ? t.loginIn : current.login === "signed_out" ? (current.loginFound.length > 0 ? t.loginOther.replace("{names}", current.loginFound.join(", ")) : t.loginOut) : t.loginUnknown}</p>
           {current.login !== "signed_in" && (
             <code className="text-[12px] text-[var(--color-bright)]" data-testid="harness-command">{t.command}</code>
           )}

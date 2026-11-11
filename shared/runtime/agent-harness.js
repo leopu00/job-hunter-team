@@ -16,7 +16,7 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs';
-import { PI_API_ALIASES, PI_API_PROVIDERS } from './provider-models.js';
+import { PI_API_ALIASES, PI_API_PROVIDERS, piApiProvider } from './provider-models.js';
 
 export const AGENT_HARNESSES = Object.freeze(['codex', 'pi']);
 export const DEFAULT_HARNESS = 'codex';
@@ -71,6 +71,11 @@ export function harnessProblem(harness, provider, authMethod) {
   if (harness === 'pi' && (provider in PI_API_PROVIDERS || provider in PI_API_ALIASES)) {
     // Z.ai and Moonshot charge by the token and pi has no subscription login for them: the API key only
     return authMethod === 'api_key' ? null : `the pi harness runs on ${provider} only with an API key (auth_method api_key)`;
+  }
+  // GLM has no CLI of its own (Z.ai has none): on codex there is nothing to run it. Kimi still has its legacy CLI, which a
+  // team already on it keeps using under the default harness.
+  if (harness === 'codex' && piApiProvider(provider) === 'glm') {
+    return `${PI_API_PROVIDERS.glm.label} runs only on the pi harness, with an API key (auth_method api_key)`;
   }
   if (harness !== 'pi' || PI_PROVIDERS.includes(provider)) return null;
   if ((provider === 'claude' || provider === 'anthropic') && authMethod !== 'api_key') {

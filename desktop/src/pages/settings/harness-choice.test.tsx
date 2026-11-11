@@ -10,7 +10,7 @@ import HarnessChoice from "./HarnessChoice";
 // shown when there is nothing to choose. Synthetic replies only.
 const choice = (over: Partial<Choice> = {}): HarnessOutcome => ({
   ok: true,
-  value: { harness: "codex", provider: "openai", piAllowed: true, login: "signed_out", ...over },
+  value: { harness: "codex", provider: "openai", piAllowed: true, login: "signed_out", loginFound: [], ...over },
 });
 
 beforeEach(() => {

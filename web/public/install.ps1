@@ -48,6 +48,9 @@
 # ║    -SourceSha        Test channel source commit (with next two options)  ║
 # ║    -Image            Test channel image reference                        ║
 # ║    -ExpectedImageDigest  Expected test image sha256                      ║
+# ║    -ExtrasImageDigest    Test channel, optional: sha256 of the image of  ║
+# ║                          the tools that come on request. Pinned, not     ║
+# ║                          downloaded here: `jht screen on` pulls it.      ║
 # ║                                                                          ║
 # ║  Design reference: docs/internal/ops/vps.md                              ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
@@ -61,7 +64,8 @@ param(
   [switch]$WindowsSupportNoticeOnly,
   [string]$SourceSha = '',
   [string]$Image = '',
-  [string]$ExpectedImageDigest = ''
+  [string]$ExpectedImageDigest = '',
+  [string]$ExtrasImageDigest = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -98,6 +102,11 @@ if ($channelPresent -notin @(0, 3) -or
   exit 2
 }
 $TestChannel = ($channelPresent -eq 3)
+# The image of the tools on request belongs to the test channel and has the exact shape of a digest (it becomes an image name and a file).
+if ($ExtrasImageDigest -and (-not $TestChannel -or $ExtrasImageDigest -cnotmatch '^sha256:[0-9a-f]{64}\z')) {
+  [Console]::Error.WriteLine('invalid test-channel parameters')
+  exit 2
+}
 
 # ── Config ────────────────────────────────────────────────────────────────
 $LocalAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { [Environment]::GetFolderPath('LocalApplicationData') }
@@ -177,6 +186,8 @@ function Set-JhtNodeOwner {
 $TestChannelImage = $Image
 $Image = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { 'ghcr.io/leopu00/jht@sha256:fa78c975c04dd5f95d6225a35c8c3bb9646f8ef14b32c8ca558d5332de0cce00' }
 $CoreImageDigest = if ($env:JHT_CORE_IMAGE_DIGEST) { $env:JHT_CORE_IMAGE_DIGEST } else { '' }
+# It becomes an image name, a file and a hash: only the exact shape of a digest goes through, whatever the environment says.
+if ($CoreImageDigest -and $CoreImageDigest -cnotmatch '^sha256:[0-9a-f]{64}\z') { throw 'JHT_CORE_IMAGE_DIGEST is not a sha256 digest' }
 $RuntimeTier = if ($CoreImageDigest -and -not $env:JHT_IMAGE -and -not $TestChannel) { 'core' } else { '' }  # core: the tools come later
 if ($RuntimeTier) { $Image = "ghcr.io/leopu00/jht@$CoreImageDigest" }
 $RuntimeImage = if ($TestChannel) { $TestChannelImage } else { $Image }
@@ -307,11 +318,19 @@ function Test-JhtWindows10Client {
   param([int]$ProductType, [int]$Build)
   return ($ProductType -eq 1 -and $Build -ge 10240 -and $Build -lt 22000)
 }
+# The language of the sentences of this script is the one of the product: JHT_LANG, as the CLI and the wrapper
+# read it, and English when none is chosen (what the rest of the output and the host.env written at the end say).
+# The language of Windows is not asked: one sentence in Italian inside an English output reads as a mistake.
+function Get-JhtTextLanguage {
+  $code = ([string]$env:JHT_LANG).ToLowerInvariant() -replace '[-_.@].*$', ''
+  if (@('en', 'it', 'de', 'fr', 'es', 'hu', 'pt') -contains $code) { return $code }
+  return 'en'
+}
 function Get-Windows10SupportWarning {
   # install.ps1 deliberately stays ASCII: Windows PowerShell 5.1 reads a
   # BOM-less script in the legacy console encoding. The desktop has the full
   # translated copy; this is what a person sees when running the downloaded file.
-  param([string]$Language = [Globalization.CultureInfo]::CurrentUICulture.TwoLetterISOLanguageName)
+  param([string]$Language = (Get-JhtTextLanguage))
   switch ($Language.ToLowerInvariant()) {
     'it' { return "Podman non supporta piu' Windows 10: puo' funzionare, ma non lo garantiamo. Il sistema supportato e' Windows 11." }
     'de' { return 'Podman unterstuetzt Windows 10 nicht mehr: Es kann funktionieren, aber wir garantieren es nicht. Unterstuetzt wird Windows 11.' }
@@ -362,12 +381,55 @@ function Get-File {
   }
 }
 
+# One Podman machine per Windows user (JHT-T305). The pipe a machine opens is named after it (\\.\pipe\podman-<machine>) and is
+# global to the computer: with a fixed name, the second user's installer found the pipe held by the first one's machine and stopped.
+# A user who has none gets jht-podman-<8 hex of the SHA-256 of their SID>: the same for the same user, another for every other.
+# (The same function is in the uninstall of the wrapper and in the one of the app: tests/test_windows_machine_per_user.py keeps them equal.)
+function Get-JhtUserMachineName {
+  param([string]$Sid = '')
+  if (-not $Sid) { try { $Sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value } catch { $Sid = '' } }
+  if ($Sid -notmatch '^S-1-\d+(-\d+)+$') { return 'jht-podman' }
+  $hash = [Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::ASCII.GetBytes($Sid))
+  return 'jht-podman-' + (([BitConverter]::ToString($hash, 0, 4) -replace '-', '').ToLowerInvariant())
+}
+
+# The machine this install uses: the one an earlier install of THIS user attested (the podman-machine file of the runtime: an old
+# install says jht-podman and keeps it), else a jht-podman machine this user already has (Podman machines belong to the user), else
+# the one of their own name. $ExistingMachines: the names `podman machine list` gives this user.
+function Resolve-JhtPodmanMachineName {
+  param([string]$RuntimePath, [string[]]$ExistingMachines = @(), [string]$Sid = '')
+  $attested = ''
+  try { $attested = ([IO.File]::ReadAllText((Join-Path $RuntimePath 'podman-machine'))).Trim() } catch { $attested = '' }
+  if ($attested -cmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$') { return $attested }
+  if (@($ExistingMachines) -ccontains 'jht-podman') { return 'jht-podman' }
+  return (Get-JhtUserMachineName -Sid $Sid)
+}
+
+# The names of this user's Podman machines, or none when Podman is not there yet (the enabler installs it) or does not answer.
+function Get-JhtExistingMachineNames {
+  $podman = Get-Command podman.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  $path = if ($podman) { $podman.Source } else { '' }
+  if (-not $path) {
+    foreach ($folder in @((Join-Path $env:LOCALAPPDATA 'Programs\Podman'), (Join-Path $env:ProgramFiles 'RedHat\Podman'))) {
+      if ($folder -and (Test-Path -LiteralPath (Join-Path $folder 'podman.exe'))) { $path = Join-Path $folder 'podman.exe'; break }
+    }
+  }
+  if (-not $path) { return @() }
+  try {
+    $raw = ((& { $ErrorActionPreference = 'Continue'; & $path machine list --format json 2>$null }) -join '')
+    if ($LASTEXITCODE -ne 0 -or -not $raw) { return @() }
+    return @(foreach ($listed in (ConvertFrom-Json -InputObject $raw)) { [string]$listed.Name })
+  } catch { return @() }
+}
+
 function Invoke-PodmanRuntimeEnabler {
   param([Parameter(Mandatory)][string]$ScriptPath)
   $powerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+  $machineName = Resolve-JhtPodmanMachineName -RuntimePath $RuntimeDir -ExistingMachines (Get-JhtExistingMachineNames)
+  Write-Info "Podman machine of this Windows user: $machineName"
   $enablerArgs = @(
     '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-    '-File', $ScriptPath, '-MachineName', 'jht-podman', '-InitializeMachine',
+    '-File', $ScriptPath, '-MachineName', $machineName, '-InitializeMachine',
     '-RuntimeImage', $RuntimeImage, '-ExpectedImageDigest', $RuntimeImageDigest
   )
   # docker-compose.exe is the runtime's own, which the enabler always
@@ -376,6 +438,7 @@ function Invoke-PodmanRuntimeEnabler {
     $enablerArgs += '-InstallDependencies'
   }
   if ($TestChannel) { $enablerArgs += '-PersistImagePin' }
+  if ($TestChannel -and $ExtrasImageDigest) { $enablerArgs += @('-ExtrasImageDigest', $ExtrasImageDigest) }
   if ($RuntimeTier) { $enablerArgs += @('-RuntimeTier', $RuntimeTier) }
   $oldRuntimeDir = $env:JHT_RUNTIME_DIR
   $oldBinDir = $env:JHT_BIN_DIR
@@ -573,8 +636,10 @@ function Get-RuntimeFiles {
   )
   $runtimeImageDest = Join-Path $RuntimeDir 'runtime-image'
   if (Test-Path -LiteralPath $runtimeImageDest -PathType Leaf) { $publishedNodes += $runtimeImageDest }
+  $runtimeExtrasDest = Join-Path $RuntimeDir 'runtime-extras-image'
+  if (Test-Path -LiteralPath $runtimeExtrasDest -PathType Leaf) { $publishedNodes += $runtimeExtrasDest, (Join-Path $RuntimeDir '.runtime-extras-integrity') }
   $runtimeTierDest = Join-Path $RuntimeDir 'runtime-tier'
-  if (Test-Path -LiteralPath $runtimeTierDest -PathType Leaf) { $publishedNodes += $runtimeTierDest }
+  if (Test-Path -LiteralPath $runtimeTierDest -PathType Leaf) { $publishedNodes += $runtimeTierDest, (Join-Path $RuntimeDir '.runtime-tier-integrity') }
   foreach ($published in $publishedNodes) {
     if (-not (Test-Path -LiteralPath $published -PathType Leaf)) { Write-Fail "Podman runtime artifact missing: $published" }
     Set-JhtNodeOwner -Path $published
@@ -582,15 +647,17 @@ function Get-RuntimeFiles {
   . $helperDest
   if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) { Write-Fail "JHT_HOME ACL verification failed after repair: $JhtHome" }
 
+  # One line each: `(goto) 2>nul` leaves the batch context first, then the rest of the line (already read whole: %~dp0 and %* are
+  # expanded) runs jht. cmd reopens a batch file after every command it runs from it, also before `goto :eof` or `exit /b`, and `jht
+  # uninstall` deletes this very file while it runs: "cannot find the batch file" and rc 1 after a good uninstall. Out of the batch
+  # context there is nothing to reopen, the code of jht arrives intact, and a caller's `call jht` goes on with its errorlevel.
   $shimContent = @"
 @echo off
 where pwsh.exe >nul 2>&1
 if errorlevel 1 goto jht_windows_powershell
-pwsh -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
-exit /b %errorlevel%
+(goto) 2>nul & pwsh -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
 :jht_windows_powershell
-powershell -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
-exit /b %errorlevel%
+(goto) 2>nul & powershell -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
 "@
   # Taken in place by a temporary file, never written in place: a program that holds the file for a moment must not leave it empty.
   $shimBytes = [Text.Encoding]::ASCII.GetBytes((($shimContent -replace "`r?`n", "`r`n") + "`r`n"))
@@ -619,6 +686,37 @@ function Get-OrderedUserPath {
   if (-not $hasBin) { $ordered.Add($ShimBin); $ordered.Add($BinDir) }
   return ($ordered -join ';')
 }
+# What the registry has in the machine and user PATH and this process lacks goes at the end of this process's PATH: the
+# programs a step of this very install put there (Podman, from winget or from its release) are found by the commands that
+# follow. Only this process: the window the installer was started from is another process and keeps its own PATH, which
+# is why Show-Final says to open a new one.
+function Add-NewRegistryPathToSession {
+  param(
+    [string]$MachinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine'),
+    [string]$UserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+  )
+  $have = @($env:Path -split ';' | Where-Object { $_ } | ForEach-Object { $_.TrimEnd('\') })
+  foreach ($entry in @(($MachinePath -split ';') + ($UserPath -split ';'))) {
+    if (-not $entry) { continue }
+    $key = $entry.TrimEnd('\')
+    if ($have -icontains $key) { continue }
+    $env:Path = "$env:Path;$entry"
+    $have += $key
+  }
+}
+
+# The window that ran the installer was open before it: a program the install put on the PATH (jht, and Podman when
+# the install added it) is not in that window's PATH, and only a new window, or this line, brings it in.
+# No restart of the computer is needed.
+function Write-JhtNewWindowNotice {
+  Write-Host "  jht and podman are on your PATH from now on, but THIS PowerShell window was open before the" -ForegroundColor Yellow
+  Write-Host "  install and may not know them yet (""not recognized as the name of a cmdlet"")." -ForegroundColor Yellow
+  Write-Host "  Open a NEW PowerShell window to use jht and podman. No restart of the computer is needed." -ForegroundColor Yellow
+  Write-Host "  To use them in this window right away, paste:" -ForegroundColor DarkGray
+  Write-Host "    `$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')" -ForegroundColor White
+  Write-Host ""
+}
+
 function Add-ToUserPath {
   Write-Step 4 $TotalSteps "Registering the user PATH"
 
@@ -642,6 +740,7 @@ function Add-ToUserPath {
   # The current session too, so the installer's next commands (e.g. the wizard) find `jht.cmd`.
   $env:Path = "$ShimBin;" + (($env:Path -split ';' | Where-Object { $_ -and $_.TrimEnd('\') -ine $ShimBin.TrimEnd('\') }) -join ';')
   if (-not ($env:Path -split ';' | Where-Object { $_.TrimEnd('\') -ieq $BinDir.TrimEnd('\') })) { $env:Path = "$env:Path;$BinDir" }
+  Add-NewRegistryPathToSession
 
   $script:PathReady = $true
 }
@@ -764,6 +863,8 @@ function Show-Final {
   Write-Host "    $env:USERPROFILE\Documents\Job Hunter Team -> /jht_user (CVs, attachments, output)" -ForegroundColor DarkGray
   Write-Host ""
 
+  # Not for the desktop app, which reads this output through a pipe, nor for a dry run (nothing was installed).
+  if (-not $DryRun -and $env:JHT_MACHINE_OUTPUT -ne '1') { Write-JhtNewWindowNotice }
   if (-not (Test-WillAutoOnboard)) {
     Write-Host "  Next steps:" -ForegroundColor White
     Write-Host ""

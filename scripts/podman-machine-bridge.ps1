@@ -179,6 +179,52 @@ public sealed class JhtPodmanBridgeSnapshot {
 '@
 }
 
+# A line every few seconds while a long command runs, from a timer thread of its own: a PowerShell
+# pipeline that waits for a native program (the image pull) cannot print while it waits. Plain
+# Console.Out lines (the installer's output reaches a person through the same pipe), ASCII only,
+# and nothing after Dispose returns. C# 5: this compiles in Windows PowerShell 5.1 too.
+if (-not ('JhtLiveWait' -as [type])) {
+  Add-Type -TypeDefinition @'
+using System;
+using System.Diagnostics;
+using System.Threading;
+
+public sealed class JhtLiveWait : IDisposable {
+    private readonly object gate = new object();
+    private readonly Stopwatch watch = Stopwatch.StartNew();
+    private readonly Timer timer;
+    private readonly string label;
+    private string detail = "";
+    private bool stopped;
+    public JhtLiveWait(string label, int seconds) {
+        this.label = label;
+        int milliseconds = Math.Max(1, seconds) * 1000;
+        timer = new Timer(Tick, null, milliseconds, milliseconds);
+    }
+    public string Detail {
+        get { lock (gate) { return detail; } }
+        set { lock (gate) { detail = value ?? ""; } }
+    }
+    public static string Format(TimeSpan span) {
+        long seconds = (long)span.TotalSeconds;
+        if (seconds >= 3600) return String.Format("{0}:{1:00}:{2:00}", seconds / 3600, (seconds / 60) % 60, seconds % 60);
+        return String.Format("{0}:{1:00}", seconds / 60, seconds % 60);
+    }
+    private void Tick(object state) {
+        lock (gate) {
+            if (stopped) return;
+            string line = "  ... still " + label + " (" + Format(watch.Elapsed) + (detail.Length > 0 ? ", " + detail : "") + ")";
+            try { Console.Out.WriteLine(line); } catch (Exception) { }
+        }
+    }
+    public void Dispose() {
+        lock (gate) { stopped = true; }
+        timer.Dispose();
+    }
+}
+'@
+}
+
 function ConvertTo-JhtPodmanNativeArguments {
   param([AllowEmptyCollection()][AllowEmptyString()][string[]]$Arguments)
   # Windows argv quoting, including embedded quotes and backslashes before the closing quote (.NET Framework/PS5.1).
@@ -299,6 +345,60 @@ function New-JhtPodmanCommandFailure {
   return $failure
 }
 
+# Whether a person reads this output, as the enabler and the installer decide it (JHT_MACHINE_OUTPUT=1
+# is the desktop app reading through a pipe, =0 a person); unset, it follows whether the output is redirected.
+function Test-JhtHumanOutput {
+  if ($env:JHT_MACHINE_OUTPUT -eq '1') { return $false }
+  if ($env:JHT_MACHINE_OUTPUT -eq '0') { return $true }
+  return (-not [Console]::IsOutputRedirected)
+}
+
+# The "still doing it" line for a long wait, for a person only (the app has its own phases). The seconds
+# between two lines are 10, or JHT_LIVE_WAIT_SECONDS (1 to 60, ASCII digits) for the tests.
+function Start-JhtLiveWait {
+  param([Parameter(Mandatory)][string]$Label)
+  if (-not (Test-JhtHumanOutput)) { return $null }
+  $seconds = 10
+  if ($env:JHT_LIVE_WAIT_SECONDS -cmatch '^[0-9]{1,2}$' -and [int]$env:JHT_LIVE_WAIT_SECONDS -ge 1 -and [int]$env:JHT_LIVE_WAIT_SECONDS -le 60) { $seconds = [int]$env:JHT_LIVE_WAIT_SECONDS }
+  return [JhtLiveWait]::new($Label, $seconds)
+}
+
+# What Podman says that only worries a person who reads it: the size of a terminal it does not have.
+function Test-JhtPodmanNoiseLine {
+  param([AllowNull()][string]$Line)
+  return ($null -ne $Line -and $Line -match 'screen size is bogus')
+}
+
+function Get-JhtPodmanTextLines {
+  param([AllowNull()][string]$Text)
+  if (-not $Text) { return @() }
+  return @([regex]::Split($Text, '\r?\n') | ForEach-Object { ([string]$_).TrimEnd() } | Where-Object { $_ -and -not (Test-JhtPodmanNoiseLine $_) })
+}
+
+# What a person is told before each long machine command, and what the wait line says it is doing.
+function Get-JhtPodmanMachineAnnouncement {
+  param([string]$Verb)
+  switch ($Verb) {
+    'init' { return @{ Said = 'Creating the Linux machine for Podman: it downloads its system image (several hundred MB) and sets it up. This takes several minutes.'; Doing = 'creating the Linux machine' } }
+    'start' { return @{ Said = 'Starting the Linux machine (about a minute).'; Doing = 'starting the Linux machine' } }
+    'stop' { return @{ Said = 'Stopping the Linux machine.'; Doing = 'stopping the Linux machine' } }
+    default { return $null }
+  }
+}
+
+# What Podman says on stderr while it succeeds («Created symlink», «daemon-reload», «Getting image source signatures»): notes, not
+# errors. A person reads them grey and indented; the app gets them as plain lines on stderr, the same words and no error record.
+function Write-JhtPodmanNotes {
+  param([AllowNull()][string[]]$Lines, [bool]$Human)
+  foreach ($line in @($Lines)) {
+    if (-not $line) { continue }
+    # systemd's routine words when a unit is enabled (the link it made, the reminder that its files changed): a person has no use for
+    # them, so they are left out of the console; everything else Podman says stays, and the app still gets every line.
+    if ($Human -and $line -cmatch '^(Created symlink |Warning: The unit file, source configuration file or drop-ins of \S+ changed on disk\.)') { continue }
+    if ($Human) { Write-Host "    $line" -ForegroundColor DarkGray } else { [Console]::Error.WriteLine("podman: $line") }
+  }
+}
+
 function Invoke-JhtPodmanMachine {
   param([Parameter(Mandatory)][string]$FilePath, [Parameter(Mandatory)][AllowEmptyString()][string[]]$Arguments)
   if ($Arguments.Count -lt 2 -or $Arguments[0] -ne 'machine' -or $Arguments[1] -notin @('ssh', 'start', 'init', 'stop', 'list')) {
@@ -306,14 +406,80 @@ function Invoke-JhtPodmanMachine {
     return
   }
   $requireComplete = $Arguments[1] -in @('ssh', 'list')
-  $result = Invoke-JhtPodmanProcess -FilePath $FilePath -Arguments $Arguments -Phase ('podman_machine_' + $Arguments[1]) -RequireCompleteOutput:$requireComplete
-  if ($result.Stderr.Length) { Write-Error -Message $result.Stderr -ErrorAction Continue }
-  if ($result.Stdout.Length) {
-    $lines = [regex]::Split($result.Stdout, '\r?\n')
-    if ($lines[-1] -eq '') { $lines = @($lines | Select-Object -First ($lines.Count - 1)) }
-    $lines | ForEach-Object { Write-Output $_ }
+  $announcement = Get-JhtPodmanMachineAnnouncement -Verb $Arguments[1]
+  if (-not $announcement) {
+    # ssh and list: their output is data for the caller, handed back as it came.
+    $result = Invoke-JhtPodmanProcess -FilePath $FilePath -Arguments $Arguments -Phase ('podman_machine_' + $Arguments[1]) -RequireCompleteOutput:$requireComplete
+    if ($result.Stderr.Length) {
+      # A command that succeeded and said things on stderr (systemctl enable, daemon-reload): notes, not red error records. A command that
+      # failed keeps its stderr as an error, which a caller that redirects it (`2>$null`) can still hold back.
+      if ($result.ExitCode -eq 0) { Write-JhtPodmanNotes -Lines (Get-JhtPodmanTextLines -Text $result.Stderr) -Human (Test-JhtHumanOutput) }
+      else { Write-Error -Message $result.Stderr -ErrorAction Continue }
+    }
+    if ($result.Stdout.Length) {
+      $lines = [regex]::Split($result.Stdout, '\r?\n')
+      if ($lines[-1] -eq '') { $lines = @($lines | Select-Object -First ($lines.Count - 1)) }
+      $lines | ForEach-Object { Write-Output $_ }
+    }
+    $global:LASTEXITCODE = $result.ExitCode
+    return
+  }
+  # init, start and stop take minutes and say nothing until they end (the output is captured): a person is told
+  # what is going on, sees a line every few seconds, and reads Podman's own words afterwards as plain notes,
+  # not as the error records of PowerShell. A command that fails still leaves its stderr, and the caller's
+  # own message with the code.
+  $human = Test-JhtHumanOutput
+  if ($human) { Write-Host "  > $($announcement.Said)" -ForegroundColor Cyan }
+  $wait = if ($human) { Start-JhtLiveWait -Label $announcement.Doing } else { $null }
+  try {
+    $result = Invoke-JhtPodmanProcess -FilePath $FilePath -Arguments $Arguments -Phase ('podman_machine_' + $Arguments[1])
+  } finally {
+    if ($wait) { $wait.Dispose() }
+  }
+  $errorLines = Get-JhtPodmanTextLines -Text $result.Stderr
+  if ($human) {
+    foreach ($line in (Get-JhtPodmanTextLines -Text $result.Stdout)) { Write-Host "    $line" -ForegroundColor DarkGray }
+    # on a failure the lines go to stderr as plain text, as the app reads them
+    Write-JhtPodmanNotes -Lines $errorLines -Human ($result.ExitCode -eq 0)
+  } else {
+    if ($result.Stdout.Length) {
+      $lines = [regex]::Split($result.Stdout, '\r?\n')
+      if ($lines[-1] -eq '') { $lines = @($lines | Select-Object -First ($lines.Count - 1)) }
+      $lines | ForEach-Object { Write-Output $_ }
+    }
+    Write-JhtPodmanNotes -Lines $errorLines -Human $false
   }
   $global:LASTEXITCODE = $result.ExitCode
+}
+
+# The pipe a Podman machine opens (\\.\pipe\podman-<machine>) is global to the computer, and the program that holds it
+# (win-sshproxy.exe) can outlive its machine. 'absent': nobody holds it; 'connected': it answers this user (their own machine's);
+# 'denied': it exists and this user may not open it, so another Windows user's program holds it; 'unknown'/'busy': not told apart.
+function Get-JhtPodmanPipeState {
+  param([Parameter(Mandatory)][string]$MachineName)
+  $pipe = "podman-$MachineName"
+  try { $listed = @([IO.Directory]::GetFiles('\\.\pipe\') | ForEach-Object { [IO.Path]::GetFileName([string]$_) }) } catch { return 'unknown' }
+  if ($listed -cnotcontains $pipe) { return 'absent' }
+  $client = $null
+  try {
+    $client = New-Object IO.Pipes.NamedPipeClientStream('.', $pipe, [IO.Pipes.PipeDirection]::InOut, [IO.Pipes.PipeOptions]::None)
+    $client.Connect(300)
+    return 'connected'
+  } catch [UnauthorizedAccessException] { return 'denied' }
+  catch { return 'busy' }
+  finally { if ($client) { $client.Dispose() } }
+}
+
+# What to tell a person whose pipe is held by another user's program: who holds it, and what to do.
+function Get-JhtPodmanPipeAdvice {
+  param([Parameter(Mandatory)][string]$MachineName)
+  $ids = @()
+  try { $ids = @(Get-Process -Name 'win-sshproxy' -ErrorAction SilentlyContinue | ForEach-Object { [string]$_.Id }) } catch { $ids = @() }
+  $who = if ($ids.Count -gt 0) { "win-sshproxy.exe, process id $($ids -join ', ')" } else { 'win-sshproxy.exe' }
+  return ("The Podman pipe \\.\pipe\podman-$MachineName is held by a program of another Windows user of this computer ($who). " +
+    'It can stay alive after that user''s Podman machine has stopped. To free it: sign in as that user and run "podman machine stop", ' +
+    'or end win-sshproxy.exe in Task Manager (Details tab, with the User name column; an administrator can do it for you). ' +
+    'Then run the installer again.')
 }
 
 function Invoke-Checked {

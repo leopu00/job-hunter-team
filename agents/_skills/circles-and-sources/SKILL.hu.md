@@ -1,11 +1,13 @@
 ---
 name: circles-and-sources
-description: Stratégiai térkép arról, mit hol keress, teljes egészében a jelölt profiljából származtatva. Az 5 koncentrikus kör (work_mode + relocation) megadja a földrajzi hatókört; a 4 forrás szint (LinkedIn → ATS aggregátorok → niche → web) megadja, mely platformokat ürítsed ki sorrendben. Egy scout, aki rossz szintben keres rossz körben, elpazarolja a kvótáját és a `scout-coord` partícióját. Nyisd meg ezt a skill-t boot-kor (a `scout-coord` után) és újra, amikor egy kör kimerül vagy az Analyst `[FEEDBACK]`-je forrásváltást javasol.
+description: Stratégiai térkép arról, mit hol keress, teljes egészében a jelölt profiljából származtatva. Az 5 koncentrikus kör (work_mode + relocation) megadja a földrajzi hatókört; a 4 forrás szint (LinkedIn → ATS aggregátorok → niche → web) megadja, mely platformokat ürítsed ki sorrendben. Egy scout, aki rossz szintben keres rossz körben, elpazarolja a kvótáját és a `scout-coord` partícióját. Nyisd meg ezt a skill-t boot-kor (a `scout-coord` után) és újra, amikor egy kör kimerül vagy az Analyst `[FEEDBACK]`-je forrásváltást javasol. Csak az 1-98. sort olvasd (`limit` 98) — a többi hivatkozás.
 allowed-tools: Bash(python3 /app/shared/skills/safe_fetch.py *), Bash(python3 /app/shared/skills/linkedin_check.py *), Bash(python3 /app/shared/skills/linkedin_access.py *)
 ---
 <!-- @translation: hu, ai-translated 2026-06-06 -->
 
 # circles-and-sources — olvasd a profilt, építsd a térképet
+
+> **Darabokban olvasd.** A fájl 1-98. sora a térkép (körök, tierek, Scout-szintű szűrők): egyszer olvasd el a STEP 2-nél (`offset` 1, `limit` 98). A `## Reference` alatti rész — lezárt források, az anti-bias ellenőrzés a köteg végén (cég, város, munkavállalási engedély), az Elemző visszajelzése, anti-minták — csak azt olvasd, amelyikre éppen szükséged van.
 
 Két ortogonális tengely:
 - **Körök** = HOL (földrajzi / munkamód hatókör)
@@ -73,8 +75,6 @@ Meríts ki teljesen egy szintet, mielőtt a következőre lépnél.
 | 3     | **Niche boardok (profil-specifikus)** | Válassz `work_mode` ÉS szakterület alapján                                                                 | (lásd alábbi táblázat)                                                                         |
 | 4     | **WebSearch + karrieroldalak**      | `WebSearch` lekérdezések + cég karrieroldalak scrape-elése                                                  | Végső megoldás, csak az 1-3. szintek kiürítése után.                                           |
 
-**Bezáródó források és keresés nélküli források.** Az Indeedet és a Glassdoort nem keresed közvetlenül (403-at válaszolnak egy automatikus olvasónak): az állásértesítőik emailben érkeznek (Email-first sourcing a promptodban). Bármely forrás **403**-a azt jelenti, hogy erre a körre le van zárva: válts másik forrásra, ne próbálkozz újra, és soha ne keress módot a védelem megkerülésére. Az ATS-eket (Greenhouse, Lever, Ashby, Workable, Personio, Teamtailor, Recruitee, Jobvite...) **cégenként** kérdezed le (a board slugja), nem globális keresésként: nekik nincs olyan. Előbb találd meg a cégeket (LinkedIn, `WebSearch`, karrieroldalak), és olvasd el mindegyik boardját. Ugyanez érvényes egy Cloudflare-kihívásra vagy egy bejelentkezési falra, és a valós futáson lezártnak megerősített forrásokra: Umantis (403), Climatebase (Cloudflare-kihívás), JobSearch DK (bejelentkezési fal), és azok, amelyek a 02/11-i futásban 403-at válaszoltak: Jobware, Nationale Vacaturebank, Jobat, Remote Rocketship, Intermediair, EU Remote Jobs. Ha van emailes értesítőjük, azokat használd. Egy **410** (a végpont halott) nem lezárt kör, hanem a listáidról KIVEENDŐ forrás: XING Jobs, Bundesagentur für Arbeit. Ne kérdezd le őket többé, sem ebben, sem a következő körben.
-
 ### 3. szint — válassz work_mode + szakterület alapján
 
 | Jelölt `work_mode`-ja | Megfontolandó niche boardok                                                                                    |
@@ -85,6 +85,21 @@ Meríts ki teljesen egy szintet, mielőtt a következőre lépnél.
 | Szakterület-specifikus (bármely) | Stack-specifikus niche: PyJobs (Python), GoJobs (Go), Djinni (Kelet-Európa / dev), 4dayweek.io (4 napos munkahét), ... |
 
 > ⚠️ **Ne vigyél remote-specifikus boardokat nem-remote keresésbe**, és fordítva. WeWorkRemotely egy on-site Milánó-t kereső jelöltnél pazarolt scraping.
+
+## Megengedő szűrők SCOUT szinten
+
+A Scout csak a **teljesen hatókörön kívüli** eseteket szűri előre. **Ne végezd az Analyst munkáját** — a jelöltet alkalmazkodóképesnek tekintjük szomszédos szerepkörökhöz. Hagyj ki egy hirdetést csak ha:
+
+- 🚫 A cím kifejezetten tartalmazza: `senior`, `lead`, `staff`, `principal`, `head of`, `director` → KIHAGYÁS (túl nagy szenioritási szakadék)
+- 🚫 Földrajzi munkavállalási engedély nem kompatibilis a profillal (pl. `US-only` / `Canada-only` és a jelöltnek nincs vízuma) → KIHAGYÁS
+- 🚫 Szakterület teljesen az IT/kódolás területén kívül (pl. cukrász, könyvelő, értékesítő), amikor a jelölt IT-ben van → KIHAGYÁS
+- 🚫 Kemény követelmény `> real_years + 3` évnyi tapasztalatra → KIHAGYÁS (mérsékelt eltérés rendben, a Scorer dönt)
+
+Minden más: **szúrd be**. Szomszédos stackek (data, devops, platform, frontend, automatizáció, ML szomszédos, stb.) mind átmennek; a Scorer illeszkedés-arányos pontszámot ad és a felhasználó látja őket.
+
+## Reference
+
+**Bezáródó források és keresés nélküli források.** Az Indeedet és a Glassdoort nem keresed közvetlenül (403-at válaszolnak egy automatikus olvasónak): az állásértesítőik emailben érkeznek (Email-first sourcing a promptodban). Bármely forrás **403**-a azt jelenti, hogy erre a körre le van zárva: válts másik forrásra, ne próbálkozz újra, és soha ne keress módot a védelem megkerülésére. Az ATS-eket (Greenhouse, Lever, Ashby, Workable, Personio, Teamtailor, Recruitee, Jobvite...) **cégenként** kérdezed le (a board slugja), nem globális keresésként: nekik nincs olyan. Előbb találd meg a cégeket (LinkedIn, `WebSearch`, karrieroldalak), és olvasd el mindegyik boardját. Ugyanez érvényes egy Cloudflare-kihívásra vagy egy bejelentkezési falra, és a valós futáson lezártnak megerősített forrásokra: Umantis (403), Climatebase (Cloudflare-kihívás), JobSearch DK (bejelentkezési fal), és azok, amelyek a 02/11-i futásban 403-at válaszoltak: Jobware, Nationale Vacaturebank, Jobat, Remote Rocketship, Intermediair, EU Remote Jobs. Ha van emailes értesítőjük, azokat használd. Egy **410** (a végpont halott) nem lezárt kör, hanem a listáidról KIVEENDŐ forrás: XING Jobs, Bundesagentur für Arbeit. Ne kérdezd le őket többé, sem ebben, sem a következő körben.
 
 ## Anti-torzítási szabály (kötelező) — **cégre ÉS helyszínre**
 
@@ -108,17 +123,6 @@ A helyszínek kiegyensúlyozása nem segít, ha az ajánlatok nem **dolgozhatók
 - 🇬🇧 **UK post-Brexit**: egy **vízum nélküli EU állampolgár** NEM dolgozhat Londonban/UK-ban **szponzorálás** (Skilled Worker visa) nélkül. Tehát egy csak-EU profilnál az UK ajánlatok **csak akkor** érvényesek, ha a JD kifejezetten megemlíti a *visa sponsorship*-et; egyébként munkavállalási engedéllyel nem kompatibilisek → KIHAGYÁS (lásd "Megengedő szűrők", geo szabály).
 - 🇨🇭 **Svájc / nem-EU**: ugyanaz a logika — ellenőrizd a munkavállalási engedélyt.
 - Gyakorlati szabály: ha a domináns központ olyan országban van, amelyhez a felhasználónak nincs engedélye (és a JD-k nem kínálnak szponzorálást), az a volumen **fantom** — nem számít lefedettségnek és ki kell zárni a pool-ból, nem csak kiegyensúlyozni.
-
-## Megengedő szűrők SCOUT szinten
-
-A Scout csak a **teljesen hatókörön kívüli** eseteket szűri előre. **Ne végezd az Analyst munkáját** — a jelöltet alkalmazkodóképesnek tekintjük szomszédos szerepkörökhöz. Hagyj ki egy hirdetést csak ha:
-
-- 🚫 A cím kifejezetten tartalmazza: `senior`, `lead`, `staff`, `principal`, `head of`, `director` → KIHAGYÁS (túl nagy szenioritási szakadék)
-- 🚫 Földrajzi munkavállalási engedély nem kompatibilis a profillal (pl. `US-only` / `Canada-only` és a jelöltnek nincs vízuma) → KIHAGYÁS
-- 🚫 Szakterület teljesen az IT/kódolás területén kívül (pl. cukrász, könyvelő, értékesítő), amikor a jelölt IT-ben van → KIHAGYÁS
-- 🚫 Kemény követelmény `> real_years + 3` évnyi tapasztalatra → KIHAGYÁS (mérsékelt eltérés rendben, a Scorer dönt)
-
-Minden más: **szúrd be**. Szomszédos stackek (data, devops, platform, frontend, automatizáció, ML szomszédos, stb.) mind átmennek; a Scorer illeszkedés-arányos pontszámot ad és a felhasználó látja őket.
 
 ## Analyst visszajelzésre reagálás
 

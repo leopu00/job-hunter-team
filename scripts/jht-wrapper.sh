@@ -61,6 +61,8 @@ HOST_UID="$(id -u)"
 CONTAINER_SERVICE="jht"
 # I servizi del compose: agenti e i due servizi isolati.
 COMPOSE_SERVICES="jht jht-broker jht-telegram"
+# Every profile of the project: what looks at or takes down the WHOLE project names them all (the broker and Telegram are made on request).
+COMPOSE_ALL_PROFILES="telegram,broker,media,playwright,screen,login"
 RUNTIME_MIGRATION_VOLUMES="jht-broker-state jht-secrets jht-telegram-secrets jht-telegram-state"
 ATTESTED_CONTAINER_ID=""
 if [ -n "${JHT_RUNTIME_DIR:-}" ]; then
@@ -80,6 +82,11 @@ RUNTIME_MIGRATION_MARKER="$RUNTIME_DIR/.runtime-migrated-podman"
 # container, ed e' coperto dal manifest: nessuna variabile d'ambiente serve
 # ai `jht up` successivi. Assente = produzione (immagine del compose).
 RUNTIME_IMAGE_PIN="$RUNTIME_DIR/runtime-image"
+# Il canale di test fissa anche l'immagine degli strumenti su richiesta (schermo, media, playwright), che l'installer non scarica:
+# `jht screen on` la scarica per questo digest. Sta in un file suo, attestato in un file suo (non nel manifest principale: l'app ne
+# confronta l'insieme esatto delle chiavi).
+RUNTIME_EXTRAS_PIN="$RUNTIME_DIR/runtime-extras-image"
+RUNTIME_EXTRAS_INTEGRITY="$RUNTIME_DIR/.runtime-extras-integrity"
 # `jht upgrade` aggiorna anche i due file host scaricati dall'installer. Il
 # wrapper non puo' fidarsi di un checkout Git (la distribuzione utente e'
 # image-only), quindi la fonte e' la stessa raw release dell'installer. Chi
@@ -139,7 +146,9 @@ if [ "$CONTAINER_RUNTIME" = "podman" ]; then
 fi
 DEFAULT_RUNTIME_IMAGE="ghcr.io/leopu00/jht@sha256:fa78c975c04dd5f95d6225a35c8c3bb9646f8ef14b32c8ca558d5332de0cce00"
 CORE_IMAGE_DIGEST=""
+EXTRAS_IMAGE_DIGEST=""
 RUNTIME_TIER_FILE="$RUNTIME_DIR/runtime-tier"
+RUNTIME_TIER_INTEGRITY="$RUNTIME_DIR/.runtime-tier-integrity"
 DEFAULT_RUNTIME_VERSION="0.4.0"
 GAME_EXECUTABLE_OVERRIDE="${JHT_GAME_EXECUTABLE:-}"
 if [ -n "${JHT_GAME_CONTROL_DIR:-}" ]; then
@@ -303,8 +312,28 @@ jht_record_host_values() {
   return 0
 }
 
+# La lingua dei TESTI del wrapper (jht_say: uninstall, avvio del container...). `jht setup --language it` e il picker la salvano in
+# i18n-prefs.json, accanto a host.env: e' la scelta della persona e passa avanti a quella di host-values (che resta com'era, en finche'
+# nessun host-setup la cambia, ed e' quella che entra nell'hash del container: JHT_LANG non si tocca). Cascata dei lettori Node:
+# i18n-prefs.json, poi JHT_LANG. Il file sta in una cartella che il container puo' scrivere: si legge come DATO (non e' un link, e'
+# un file piccolo, il valore e' uno dei sette codici) e serve solo a scegliere il testo che si stampa. Stampa il codice.
+jht_ui_language() {
+  local prefs line value size
+  prefs="$(dirname "$HOST_ENV_FILE")/i18n-prefs.json"
+  if [ -f "$prefs" ] && [ ! -L "$prefs" ] && [ -r "$prefs" ]; then
+    size="$(wc -c < "$prefs" 2>/dev/null)" || size=0
+    if [ "$((size + 0))" -le 4096 ]; then
+      line="$(tr -d '\r\n' < "$prefs" 2>/dev/null | sed -n 's/.*"locale"[[:space:]]*:[[:space:]]*"\([a-z][a-z]\)".*/\1/p' | head -n 1)"
+      value="$line"
+      if jht_host_env_value_valid JHT_LANG "$value"; then printf '%s' "$value"; return 0; fi
+    fi
+  fi
+  printf '%s' "${JHT_LANG:-en}"
+}
+
 jht_load_host_values
 jht_record_host_values
+JHT_SAY_LANG="$(jht_ui_language)"
 # Export per docker compose: il compose file fa `${JHT_HOST_TYPE:-}` /
 # `${JHT_LANG:-}` / `${JHT_USER_TZ:-}` substitution per passare i valori al
 # container. Senza export restano variabili di shell e compose non le vede.
@@ -347,6 +376,8 @@ jht_text_en() {
     download.fetching) printf '%s' "Downloading %s..." ;;
     download.saved_in) printf '%s' "Saved in: %s" ;;
     download.intel_mac) printf '%s' "The 0.4 macOS app only runs on Macs with Apple silicon (M1 and later); this is an Intel Mac, which 0.4 does not support. Nothing was downloaded." ;;
+    up.done) printf '%s' "Job Hunter Team started." ;;
+    down.done) printf '%s' "Job Hunter Team stopped." ;;
     uninstall.usage) printf '%s' "usage: jht uninstall --confirm [--purge]" ;;
     status.title) printf '%s' "Status" ;;
     status.container) printf '%s' "Container" ;;
@@ -358,15 +389,27 @@ jht_text_en() {
     status.not_running) printf '%s' "The team's container is not running." ;;
     status.not_running_next) printf '%s' "Start it with: jht up" ;;
     uninstall.phase.machine) printf '%s' "Removing the Podman machine, or JHT's containers and volumes..." ;;
+    uninstall.phase.images) printf '%s' "Removing the JHT images (the core and the full one, and the old ones)..." ;;
+    uninstall.images_removed) printf '%s' "Removed %s JHT images: the core and the full one, and the old ones." ;;
+    uninstall.left.images) printf '%s' "Not removed: some JHT images (the engine refused). Run 'jht uninstall --confirm' again once nothing else uses them." ;;
     uninstall.phase.data) printf '%s' "Deleting ~/.jht and the Documents folder (--purge)..." ;;
     uninstall.phase.runtime) printf '%s' "Removing the host runtime..." ;;
     uninstall.phase.commands) printf '%s' "Removing the jht command and the PATH lines the installer added..." ;;
     migrate.left) printf '%s' "Not copied or not verified: the volume %s." ;;
-    uninstall.usage_what) printf '%s' "Removes the local JHT runtime: the jht-podman Podman machine or JHT's containers and volumes, the host runtime and the jht command." ;;
+    uninstall.usage_what) printf '%s' "Removes the local JHT runtime: the jht-podman Podman machine or JHT's containers, volumes and images (the core and the full one, by the repository names ghcr.io/leopu00/jht, jht and localhost/jht), the host runtime and the jht command." ;;
     uninstall.usage_stays) printf '%s' "Podman, podman-compose, Docker, Colima and Homebrew stay too." ;;
     uninstall.loss) printf '%s' "The saved mail password and Telegram tokens are deleted too; ~/.jht and Documents stay, and with them the saved LinkedIn session (secrets/linkedin-profile and .cache/linkedin): remove it with jht reset --scope creds." ;;
     uninstall.loss_purge) printf '%s' "The saved mail password and Telegram tokens are deleted too." ;;
     uninstall.purge_loss) printf '%s' "With --purge ~/.jht and ~/Documents/Job Hunter Team are deleted too: configuration, database, CVs and output. There is no way back." ;;
+    compose.missing) printf '%s' "docker compose is missing: the engine answers, but the «docker compose» command does not exist (JHT needs the Compose v2 plugin). On a Mac: brew install docker-compose, then mkdir -p ~/.docker/cli-plugins && ln -sfn \"\$(brew --prefix)/opt/docker-compose/bin/docker-compose\" ~/.docker/cli-plugins/docker-compose. On Linux: install the docker-compose-v2 package (apt) or docker-compose-plugin (dnf). Then run the command again." ;;
+    uninstall.compose_link_removed) printf '%s' "Removed the link to the Docker Compose plugin that the JHT installer made: %s. The plugin that Homebrew installed stays (brew uninstall docker-compose removes it)." ;;
+    uninstall.compose_link_left) printf '%s' "The link to the Docker Compose plugin that the JHT installer made could not be removed: %s. You can delete it." ;;
+    uninstall.colima_stopping) printf '%s' "Stopping the Colima virtual machine, which the JHT installer started and where nothing else is running; your folders on the Mac stay." ;;
+    uninstall.colima_busy) printf '%s' "Colima is still running: the JHT installer started it, but other containers are running in it, so it is left on. To stop it: colima stop." ;;
+    uninstall.colima_stop_failed) printf '%s' "Colima could not be stopped. To stop it: colima stop." ;;
+    uninstall.colima_running) printf '%s' "Colima is still running: the JHT installer did not start it (it was already on, or it is not the standard one), so it is left on, and it may be yours. To stop it: colima stop." ;;
+    uninstall.machine_removing) printf '%s' "Removing the Podman machine '%s', which the JHT installer created: everything inside it goes with it (the JHT volumes and image); your folders on the Mac stay." ;;
+    uninstall.machine_kept) printf '%s' "The Podman machine '%s' was not created by the JHT installer (it was already there, or it is not the standard jht-podman one), so it is not removed: it may be yours. The JHT volumes and image inside it stay with it. To remove it: podman machine stop %s, then podman machine rm %s." ;;
     uninstall.left.machine) printf '%s' "Not removed: the jht-podman Podman machine or JHT's containers and volumes, with the saved secrets. Run 'jht uninstall --confirm' again when Podman or Docker answer." ;;
     uninstall.left.runtime) printf '%s' "Not removed: JHT's host runtime." ;;
     uninstall.left.commands) printf '%s' "Not removed: the jht command or the PATH lines the installer added." ;;
@@ -409,6 +452,8 @@ jht_text_it() {
     download.fetching) printf '%s' "Scarico %s..." ;;
     download.saved_in) printf '%s' "Salvato in: %s" ;;
     download.intel_mac) printf '%s' "L'app per macOS della 0.4 gira solo su Mac con Apple silicon (M1 e successivi); questo e' un Mac Intel, non supportato nella 0.4. Non e' stato scaricato niente." ;;
+    up.done) printf '%s' "Job Hunter Team avviato." ;;
+    down.done) printf '%s' "Job Hunter Team fermato." ;;
     uninstall.usage) printf '%s' "uso: jht uninstall --confirm [--purge]" ;;
     status.title) printf '%s' "Stato" ;;
     status.container) printf '%s' "Container" ;;
@@ -420,15 +465,27 @@ jht_text_it() {
     status.not_running) printf '%s' "Il container della squadra non e' acceso." ;;
     status.not_running_next) printf '%s' "Accendilo con: jht up" ;;
     uninstall.phase.machine) printf '%s' "Rimuovo la macchina Podman, oppure i container e i volumi di JHT..." ;;
+    uninstall.phase.images) printf '%s' "Rimuovo le immagini di JHT (il nucleo, quella piena e le vecchie)..." ;;
+    uninstall.images_removed) printf '%s' "Tolte %s immagini di JHT: il nucleo, quella piena e le vecchie." ;;
+    uninstall.left.images) printf '%s' "Non tolte alcune immagini di JHT (il motore le ha rifiutate). Rilancia 'jht uninstall --confirm' quando nient'altro le usa." ;;
     uninstall.phase.data) printf '%s' "Cancello ~/.jht e la cartella Documenti (--purge)..." ;;
     uninstall.phase.runtime) printf '%s' "Rimuovo il runtime dell'host..." ;;
     uninstall.phase.commands) printf '%s' "Rimuovo il comando jht e le righe PATH aggiunte dall'installer..." ;;
     migrate.left) printf '%s' "Non copiato o non verificato: il volume %s." ;;
-    uninstall.usage_what) printf '%s' "Rimuove il runtime locale di JHT: la macchina Podman jht-podman oppure i container e i volumi di JHT, il runtime host e il comando jht." ;;
+    uninstall.usage_what) printf '%s' "Rimuove il runtime locale di JHT: la macchina Podman jht-podman oppure i container, i volumi e le immagini di JHT (il nucleo e quella piena, con i nomi di repository ghcr.io/leopu00/jht, jht e localhost/jht), il runtime host e il comando jht." ;;
     uninstall.usage_stays) printf '%s' "Restano anche Podman, podman-compose, Docker, Colima e Homebrew." ;;
     uninstall.loss) printf '%s' "Vengono cancellati anche la password della posta e i token di Telegram salvati; ~/.jht e Documenti restano, e con loro la sessione LinkedIn salvata (secrets/linkedin-profile e .cache/linkedin): si toglie con jht reset --scope creds." ;;
     uninstall.loss_purge) printf '%s' "Vengono cancellati anche la password della posta e i token di Telegram salvati." ;;
     uninstall.purge_loss) printf '%s' "Con --purge vengono cancellati anche ~/.jht e ~/Documents/Job Hunter Team: configurazione, database, CV e output. Non si torna indietro." ;;
+    compose.missing) printf '%s' "manca docker compose: il motore risponde, ma il comando «docker compose» non esiste (a JHT serve il plugin Compose v2). Su Mac: brew install docker-compose, poi mkdir -p ~/.docker/cli-plugins && ln -sfn \"\$(brew --prefix)/opt/docker-compose/bin/docker-compose\" ~/.docker/cli-plugins/docker-compose. Su Linux: installa il pacchetto docker-compose-v2 (apt) o docker-compose-plugin (dnf). Poi rilancia il comando." ;;
+    uninstall.compose_link_removed) printf '%s' "Ho tolto il collegamento al plugin Docker Compose che aveva messo l'installer di JHT: %s. Il plugin installato con Homebrew resta (lo toglie brew uninstall docker-compose)." ;;
+    uninstall.compose_link_left) printf '%s' "Non sono riuscito a togliere il collegamento al plugin Docker Compose che aveva messo l'installer di JHT: %s. Lo puoi cancellare." ;;
+    uninstall.colima_stopping) printf '%s' "Fermo la macchina virtuale Colima, che ha acceso l'installer di JHT e dove non gira nient'altro; le tue cartelle sul Mac restano." ;;
+    uninstall.colima_busy) printf '%s' "Colima resta accesa: l'ha accesa l'installer di JHT, ma dentro girano altri container, quindi la lascio. Per fermarla: colima stop." ;;
+    uninstall.colima_stop_failed) printf '%s' "Non sono riuscito a fermare Colima. Per fermarla: colima stop." ;;
+    uninstall.colima_running) printf '%s' "Colima resta accesa: non l'ha accesa l'installer di JHT (era gia' accesa, oppure non e' quella standard), quindi la lascio, e potrebbe essere tua. Per fermarla: colima stop." ;;
+    uninstall.machine_removing) printf '%s' "Rimuovo la macchina Podman '%s', creata dall'installer di JHT: con lei se ne va tutto quello che ha dentro (i volumi e l'immagine di JHT); le tue cartelle sul Mac restano." ;;
+    uninstall.machine_kept) printf '%s' "La macchina Podman '%s' non risulta creata dall'installer di JHT (c'era gia', oppure non e' quella standard jht-podman), quindi non la rimuovo: potrebbe essere tua. I volumi e l'immagine di JHT che ha dentro restano con lei. Per toglierla: podman machine stop %s, poi podman machine rm %s." ;;
     uninstall.left.machine) printf '%s' "Non rimossi: la macchina Podman jht-podman o i container e i volumi di JHT, con i segreti salvati. Rilancia 'jht uninstall --confirm' quando Podman o Docker rispondono." ;;
     uninstall.left.runtime) printf '%s' "Non rimosso: il runtime host di JHT." ;;
     uninstall.left.commands) printf '%s' "Non rimossi: il comando jht o le righe PATH aggiunte dall'installer." ;;
@@ -445,7 +502,7 @@ jht_text_it() {
 jht_say() {
   local key="$1" format
   shift
-  case "${JHT_LANG:-en}" in
+  case "${JHT_SAY_LANG:-${JHT_LANG:-en}}" in
     it) format="$(jht_text_it "$key")" || format="$(jht_text_en "$key")" || format="$key" ;;
     *) format="$(jht_text_en "$key")" || format="$key" ;;
   esac
@@ -581,16 +638,51 @@ runtime_helpers_install() {
   runtime_helpers_write_manifest
 }
 
-# $2 is the command of the person: only `add`, `remove` and `pull` (of the tools) fetch a helper that is missing.
+# Before the helper is there (an install whose first download of the tools has not happened yet) the read-only commands that the app
+# reads answer "not installed yet", in the same shape the helper uses, instead of failing: `jht tools status --json`,
+# `jht integration list|status [id] [--json]`. $1 is tools|integration, the rest what the person typed. Returns 3 for anything else
+# (the old path: add, remove, a wrong use), so the caller goes on to the helper and its error.
+INTEGRATION_IDS_ABSENT="google telegram mail linkedin-login screen media"
+runtime_helper_absent_answer() {
+  local what="$1" word="${2:-}" json=0 id="" arg
+  [ "$#" -gt 2 ] && shift 2 || shift "$#"
+  for arg in "$@"; do
+    case "$arg" in --json) json=1 ;; -*) return 3 ;; *) [ -z "$id" ] || return 3; id="$arg" ;; esac
+  done
+  case "$what:$word" in
+    tools:status) [ "$json" = 1 ] && [ -z "$id" ] || return 3; printf '{"ok":true,"state":"none","tier":"full","reason":"not_installed"}\n'; return 0 ;;
+    integration:list|integration:status) ;;
+    *) return 3 ;;
+  esac
+  [ "$word" = status ] || [ -z "$id" ] || return 3
+  case " $INTEGRATION_IDS_ABSENT " in *" $id "*) ;; *) [ -z "$id" ] || return 3 ;; esac
+  local ids="${id:-$INTEGRATION_IDS_ABSENT}" one first=1
+  if [ "$json" = 1 ] && [ -n "$id" ]; then printf '{"id":"%s","state":"not_installed","reason":"non ancora installato"}\n' "$id"; return 0; fi
+  [ "$json" = 0 ] || printf '{"integrations":['
+  for one in $ids; do
+    if [ "$json" = 1 ]; then [ "$first" = 1 ] || printf ','; first=0; printf '{"id":"%s","state":"not_installed","reason":"non ancora installato"}' "$one"
+    else printf '%-15s %-16s %s\n' "$one" "non installato" "non ancora installato"; fi
+  done
+  [ "$json" = 0 ] || printf ']}\n'
+  # In words, the person is told which command installs them (the lines above stay the shape the helper gives).
+  [ "$json" = 1 ] || printf "per installarli: 'jht upgrade' (o un 'jht integration add <id>')\n" >&2
+  return 0
+}
+
+# $2 is the command of the person: only `add` and `remove` fetch a helper that is missing. `jht tools` never does: its commands run by
+# themselves after the install, and a download at the tip of the branch is not something to start without the person asking for it.
 runtime_helper_load() {
-  local helper="$1"
+  local helper="$1" extras_digest
   if [ -z "$(runtime_helper_digest "$helper")" ]; then
     case "${2:-}" in
-      add|remove|pull) runtime_helpers_install || { err "script $helper non scaricabile: controlla la rete o fai 'jht upgrade'"; return 1; } ;;
+      add|remove) runtime_helpers_install || { err "script $helper non scaricabile: controlla la rete o fai 'jht upgrade'"; return 1; } ;;
       *) err "script $helper non ancora installato: 'jht upgrade' (o un 'jht integration add/remove') e riprova"; return 1 ;;
     esac
   fi
-  runtime_helpers_trusted && . "$RUNTIME_DIR/$helper"
+  runtime_helpers_trusted || return 1
+  . "$RUNTIME_DIR/$helper" || return 1
+  extras_digest="$(runtime_extras_digest)" || { err "pin dell'immagine degli strumenti non attendibile"; return 1; }
+  EXTRAS_IMAGE_DIGEST="$extras_digest"
 }
 
 runtime_write_manifest() {
@@ -612,9 +704,6 @@ runtime_write_manifest() {
     fi
     if [ -f "$RUNTIME_IMAGE_PIN" ]; then
       printf 'runtime-image=%s\n' "$(runtime_sha256 "$RUNTIME_IMAGE_PIN")"
-    fi
-    if [ -f "$RUNTIME_TIER_FILE" ]; then
-      printf 'runtime-tier=%s\n' "$(runtime_sha256 "$RUNTIME_TIER_FILE")"
     fi
   } > "$tmp" || return 1
   chmod 600 "$tmp" || { rm -f "$tmp"; return 1; }
@@ -695,6 +784,7 @@ runtime_bundle_trusted() {
   fi
   runtime_helpers_trusted || return 1
   runtime_tier_trusted || return 1
+  runtime_extras_pin_trusted || return 1
   grep -Fqx 'JHT_HOST_RUNTIME_PROTOCOL=1' "$WRAPPER_PATH" || return 1
   grep -Fqx 'JHT_HOST_SETUP_PROTOCOL=1' "$HOST_SETUP_SCRIPT" || return 1
   grep -Eq '^[[:space:]]*-[[:space:]]*jht-runtime-mask:/jht_home/runtime([[:space:]]|$)' "$COMPOSE_FILE" || return 1
@@ -710,14 +800,48 @@ runtime_image_pin_value() {
   printf '%s\n' "$value"
 }
 
+# Il digest del pin degli strumenti su richiesta, solo nella forma canonica scritta da install.sh (`ghcr.io/leopu00/jht@sha256:<64>`).
+runtime_extras_pin_value() {
+  local value
+  [ -f "$RUNTIME_EXTRAS_PIN" ] || return 1
+  [ "$(wc -l < "$RUNTIME_EXTRAS_PIN" | tr -d ' ')" = "1" ] || return 1
+  value="$(tr -d '\n' < "$RUNTIME_EXTRAS_PIN")"
+  printf '%s' "$value" | grep -Eqx 'ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64}' || return 1
+  printf '%s\n' "${value#ghcr.io/leopu00/jht@}"
+}
+
+# Il pin degli strumenti: file regolare del proprietario, attestato nel suo file di integrita', forma canonica, e solo accanto al pin
+# del canale di test (e' li' che l'installer lo scrive). Un'attestazione senza il pin, o un pin senza attestazione: runtime non attendibile.
+runtime_extras_pin_trusted() {
+  if [ -e "$RUNTIME_EXTRAS_PIN" ] || [ -L "$RUNTIME_EXTRAS_PIN" ]; then
+    runtime_node_safe "$RUNTIME_EXTRAS_PIN" file || return 1
+    runtime_node_safe "$RUNTIME_EXTRAS_INTEGRITY" file || return 1
+    [ "$(sed -n 's/^runtime-extras-image=//p' "$RUNTIME_EXTRAS_INTEGRITY" | head -n 1)" = "$(runtime_sha256 "$RUNTIME_EXTRAS_PIN")" ] || return 1
+    runtime_extras_pin_value >/dev/null || return 1
+    [ -f "$RUNTIME_IMAGE_PIN" ] || return 1
+  elif [ -e "$RUNTIME_EXTRAS_INTEGRITY" ] || [ -L "$RUNTIME_EXTRAS_INTEGRITY" ]; then
+    return 1
+  fi
+}
+
+# Il digest degli strumenti che questo runtime usa: quello del pin attestato se c'e' (vince sulla costante della release, come il pin
+# dell'immagine vince su quella del compose), altrimenti la costante, vuota finche' la release non ha l'immagine degli strumenti.
+runtime_extras_digest() {
+  runtime_extras_pin_trusted || return 1
+  if [ -e "$RUNTIME_EXTRAS_PIN" ]; then runtime_extras_pin_value; else printf '%s\n' "$EXTRAS_IMAGE_DIGEST"; fi
+}
+
 # Il livello dell'immagine (P4): il file `runtime-tier` (solo `core`) lo scrive l'installer quando la release ha un nucleo; senza
 # file e' l'immagine intera di sempre. Un file con un contenuto diverso, non attestato, o un nucleo che questo wrapper non conosce
-# non si interpretano: runtime non attendibile. Il manifest che attesta un file tolto e' un `switch` interrotto a meta': il
-# runtime e' quello intero, e il prossimo manifest scritto lo lascia cadere.
+# non si interpretano: runtime non attendibile. L'attestazione sta in un file suo, `.runtime-tier-integrity`, non nel manifest principale
+# (l'app confronta l'insieme esatto delle sue chiavi). Un'attestazione senza il file di livello e' un `switch` interrotto a meta': il
+# runtime e' quello intero.
 runtime_tier_trusted() {
   if [ -e "$RUNTIME_TIER_FILE" ] || [ -L "$RUNTIME_TIER_FILE" ]; then
     runtime_node_safe "$RUNTIME_TIER_FILE" file || return 1
-    [ "$(runtime_manifest_value runtime-tier)" = "$(runtime_sha256 "$RUNTIME_TIER_FILE")" ] || return 1
+    # attested in a file of its own: the main manifest is the one whose exact set of keys the desktop app compares
+    runtime_node_safe "$RUNTIME_TIER_INTEGRITY" file || return 1
+    [ "$(sed -n 's/^runtime-tier=//p' "$RUNTIME_TIER_INTEGRITY" | head -n 1)" = "$(runtime_sha256 "$RUNTIME_TIER_FILE")" ] || return 1
     [ "$(tr -d '\r\n' < "$RUNTIME_TIER_FILE")" = "core" ] && [ -n "$CORE_IMAGE_DIGEST" ] || return 1
     [ ! -e "$RUNTIME_IMAGE_PIN" ] || return 1
   fi
@@ -806,7 +930,12 @@ require_trusted_runtime() {
     }
   fi
   runtime_bundle_trusted || {
-    err "runtime host non attendibile (path, owner, permessi o SHA-256)"
+    # A manifest that is not there at all is an install that never finished, not a file somebody changed: said as what it is.
+    if [ ! -e "$RUNTIME_MANIFEST" ] && [ ! -L "$RUNTIME_MANIFEST" ]; then
+      err "Job Hunter Team non è installato del tutto: nella cartella del runtime manca il file di integrità (un'installazione interrotta?). Rilancia l'installer."
+    else
+      err "runtime host non attendibile (path, owner, permessi o SHA-256)"
+    fi
     return 1
   }
   # Il pin del canale di test vince su un JHT_IMAGE dell'ambiente: il canale
@@ -818,6 +947,26 @@ require_trusted_runtime() {
 }
 
 # ── Verifiche pre-flight ──────────────────────────────────────────────────
+# Con Docker (non con Podman) il team si governa con `docker compose`: se il motore risponde ma il comando non c'e' (Colima con il
+# solo client docker di Homebrew, un Docker Engine senza il plugin), ogni lettura di Compose fallisce e il resto del wrapper lo
+# racconterebbe come «container non attestabile». Lo si riconosce dalle parole del client, non dal solo codice di uscita: un Compose che
+# c'e' e fallisce per altro non e' «manca». Vero = manca.
+docker_compose_plugin_missing() {
+  local out
+  [ -z "${PODMAN_RUNTIME_MODE:-}" ] && [ "${CONTAINER_RUNTIME:-docker}" != podman ] || return 1
+  out="$(docker compose version 2>&1)" && return 1
+  case "$out" in
+    *"unknown command"*|*"is not a docker command"*|*"unknown shorthand"*) return 0 ;;
+  esac
+  return 1
+}
+
+# «Non attestabile» e' la risposta a un motore che non si riesce a interrogare; con Docker senza il plugin Compose il motore risponde e
+# a mancare e' `docker compose`: lo si dice con le sue parole (e il comando che lo mette), non come un container da non toccare.
+err_unattestable() {
+  if docker_compose_plugin_missing; then err "$(jht_say compose.missing)"; else err "$1"; fi
+}
+
 require_docker() {
   if [ -n "${err_runtime:-}" ]; then
     err "$err_runtime"
@@ -839,6 +988,10 @@ require_docker() {
     else
       err "Docker daemon non risponde. Avvialo (systemctl start docker / Docker Desktop)."
     fi
+    exit 1
+  fi
+  if docker_compose_plugin_missing; then
+    err "$(jht_say compose.missing)"
     exit 1
   fi
 }
@@ -1534,7 +1687,7 @@ container_up() {
 # A list that cannot be read counts as running.
 project_has_running_container() {
   local ids id
-  ids="$(COMPOSE_PROFILES=telegram compose ps -q 2>/dev/null)" || return 0
+  ids="$(COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose ps -q 2>/dev/null)" || return 0
   for id in $ids; do
     [ "$(docker inspect --type container "$id" --format '{{.State.Running}}' 2>/dev/null)" = false ] || return 0
   done
@@ -1557,10 +1710,10 @@ container_mutation_preflight() {
       && read_only_service_id "$CONTAINER_SERVICE" stopped-stale-config >/dev/null 2>&1 \
       && ! project_has_running_container; then
     warn "config_changed_stopped: i container del team, fermi, sono della versione di prima: li ricreo con la configurazione nuova (i volumi con i dati restano)."
-    COMPOSE_PROFILES=telegram compose down || { err "Non riesco a rimuovere i container fermi della versione di prima: «jht down», poi «jht up»."; return 1; }
+    COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose down || { err "Non riesco a rimuovere i container fermi della versione di prima: «jht down», poi «jht up»."; return 1; }
     return 0
   fi
-  err "Container JHT esistente non attestabile; operazione interrotta."
+  err_unattestable "Container JHT esistente non attestabile; operazione interrotta."
   stale_config_hint
   return 1
 }
@@ -1590,15 +1743,15 @@ container_down() {
       # only once the services left are attested like the agent's: `COMPOSE_PROFILES=telegram compose down` stops every container of the project, so one that
       # does not attest (or one of a service the compose does not have) is said and nothing is touched.
       local rest svc svc_status leftover=0 refused=""
-      if ! rest="$(COMPOSE_PROFILES=telegram compose ps -q 2>/dev/null)"; then
-        err "Container JHT non attestabile; arresto negato."
+      if ! rest="$(COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose ps -q 2>/dev/null)"; then
+        err_unattestable "Container JHT non attestabile; arresto negato."
         return 1
       fi
       if [ -z "$rest" ]; then
         info "niente da fermare: nessun container del progetto."
         return 0
       fi
-      for svc in "$BROKER_SERVICE" "$TELEGRAM_SERVICE"; do
+      for svc in "$BROKER_SERVICE" "$TELEGRAM_SERVICE" "$MEDIA_SERVICE" "$PLAYWRIGHT_POPULATE_SERVICE" "$SCREEN_SERVICE" "$LOGIN_SERVICE" "$LOGIN_PROXY_SERVICE" "$LOGIN_VIEW_SERVICE"; do
         svc_status=0
         read_only_service_id "$svc" any-config >/dev/null || svc_status=$?
         case "$svc_status" in
@@ -1617,15 +1770,15 @@ container_down() {
       fi
       info "il container '$CONTAINER_SERVICE' non c'e', ma altri servizi del progetto girano: li fermo."
     else
-      err "Container JHT non attestabile; arresto negato."
+      err_unattestable "Container JHT non attestabile; arresto negato."
       return 1
     fi
   fi
   local status=0 errors
-  errors="$(mktemp "${TMPDIR:-/tmp}/jht-down.XXXXXX")" || { COMPOSE_PROFILES=telegram compose down; return $?; }
-  COMPOSE_PROFILES=telegram compose down 2>"$errors" || status=$?
+  errors="$(mktemp "${TMPDIR:-/tmp}/jht-down.XXXXXX")" || { COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose down; return $?; }
+  COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose_stdout_quiet down 2>"$errors" || status=$?
   local shown left
-  shown="$(rootless_netns_noise_filter <"$errors")"
+  shown="$(compose_noise_filter <"$errors" | rootless_netns_noise_filter)"
   [ -z "$shown" ] || printf '%s\n' "$shown" >&2
   rm -f "$errors"
   # Podman exits non-zero with only that error even though the containers are gone:
@@ -1635,10 +1788,11 @@ container_down() {
       "nota: il processo di rete del team era gia' chiuso"*)
         # podman-compose lists every container of the project (broker and telegram too):
         # an empty answer, and not a failed one, is «nothing left».
-        left="$(COMPOSE_PROFILES=telegram compose ps -q 2>/dev/null)" && [ -z "$left" ] && return 0
+        left="$(COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose ps -q 2>/dev/null)" && [ -z "$left" ] && { [ "$CONTAINER_RUNTIME" != podman ] || printf '%s\n' "$(jht_say down.done)"; return 0; }
         ;;
     esac
   fi
+  [ "$status" -ne 0 ] || [ "$CONTAINER_RUNTIME" != podman ] || printf '%s\n' "$(jht_say down.done)"
   return "$status"
 }
 
@@ -1662,6 +1816,44 @@ rootless_netns_noise_filter() {
     { print }
     END { if (held != "") print held }
   '
+}
+
+# podman-compose scrive su `up -d` e su `down` gli id grezzi dei container, il nome della rete del progetto e, per i servizi che non sono
+# mai stati creati (Telegram, il servizio dei media, il broker: dipende da cosa e' acceso), «Error: no container with name or ID
+# "jht-telegram" found»: non e' un errore, e' un servizio che non c'e' (il servizio principale, jht, non e' fra questi: se manca, la riga
+# resta). Sono i servizi di nome jht-<qualcosa>, cosi' uno nuovo non rimette quelle righe in vista. Via quelle righe (e solo quelle, a
+# riga intera): ogni altra riga passa com'e', stderr compreso.
+compose_noise_filter() {
+  grep -v -E '^[0-9a-f]{12,64}$|^(jht|host-runtime)_default$|^Error: no container with name or ID "jht-[a-z][a-z0-9-]*" found(: no such container)?$' || true
+}
+
+# `compose <argomenti>` come prima, ma con Podman l'output passa per compose_noise_filter (stdout su stdout, stderr su stderr).
+# Il codice di uscita e' quello di compose.
+compose_quiet() {
+  local out err rc=0
+  if [ "$CONTAINER_RUNTIME" != podman ]; then compose "$@"; return $?; fi
+  out="$(mktemp "${TMPDIR:-/tmp}/jht-compose-out.XXXXXX")" || { compose "$@"; return $?; }
+  err="$(mktemp "${TMPDIR:-/tmp}/jht-compose-err.XXXXXX")" || { rm -f "$out"; compose "$@"; return $?; }
+  # Interrotto (Ctrl-C, chiusura del terminale): i due file temporanei non restano in $TMPDIR.
+  COMPOSE_QUIET_OUT="$out"; COMPOSE_QUIET_ERR="$err"
+  trap 'rm -f -- "$COMPOSE_QUIET_OUT" "$COMPOSE_QUIET_ERR"; exit 130' HUP INT TERM
+  compose "$@" >"$out" 2>"$err" || rc=$?
+  trap - HUP INT TERM
+  compose_noise_filter <"$out"
+  compose_noise_filter <"$err" >&2
+  rm -f -- "$out" "$err"
+  return "$rc"
+}
+
+# Come compose_quiet, ma solo per stdout: lo stderr resta a chi chiama (container_down lo raccoglie in un file e lo filtra da se').
+compose_stdout_quiet() {
+  local out rc=0
+  if [ "$CONTAINER_RUNTIME" != podman ]; then compose "$@"; return $?; fi
+  out="$(mktemp "${TMPDIR:-/tmp}/jht-compose-out.XXXXXX")" || { compose "$@"; return $?; }
+  compose "$@" >"$out" || rc=$?
+  compose_noise_filter <"$out"
+  rm -f "$out"
+  return "$rc"
 }
 
 container_postcheck_running() {
@@ -1705,17 +1897,73 @@ broker_admin() {
       err "Cosa fare: jht upgrade"
       return 1
     fi
-    err "broker_unavailable: il broker dei segreti non è attivo o non è attestabile."
-    err "Cosa fare: jht up"
+    if [ -e "$BROKER_WANTED_MARKER" ]; then
+      err "broker_unavailable: il broker dei segreti non è attivo o non è attestabile."
+      err "Cosa fare: jht up"
+    else
+      err "broker_unavailable: il servizio della posta non c'è ancora: si crea la prima volta che serve."
+      err "Cosa fare: jht mail setup"
+    fi
     return 1
   }
   docker exec -i "$broker_id" jht-broker-admin "$@"
+}
+
+# The broker (the mail password, the notary of the authorisations to apply) is made at the first thing that needs it (`jht mail setup`,
+# the first record of an authorisation, the link of the site, Telegram) and by nothing else: `jht up` leaves it out unless a marker
+# says it was made before. `jht` has mounted the empty socket volume since it was made, so making the broker never recreates the team.
+BROKER_WANTED_MARKER="$RUNTIME_DIR/.broker-made"
+ensure_broker() {
+  local status=0 broker_id i
+  read_only_service_id "$BROKER_SERVICE" >/dev/null 2>&1 || status=$?
+  [ "$status" -ne 0 ] || return 0
+  if compose_unreadable; then
+    err "broker_unavailable: il compose del runtime installato non è leggibile, non si sa se ha il broker dei segreti."
+    err "Cosa fare: reinstalla il runtime con l'installer"
+    return 1
+  fi
+  if compose_lacks_service "$BROKER_SERVICE"; then
+    err "broker_unavailable: il runtime installato è più vecchio e non ha il broker dei segreti."
+    err "Cosa fare: jht upgrade"
+    return 1
+  fi
+  [ "$status" -eq 3 ] || { err "broker_unavailable: il broker dei segreti esiste ma non è attestabile come nostro: non lo tocco."; return 1; }
+  info "Preparo il servizio della posta (si crea solo la prima volta che serve)…"
+  COMPOSE_PROFILES=broker compose up -d --no-deps "$BROKER_SERVICE" >/dev/null \
+    || { err "broker_start_failed: il servizio della posta non è partito."; err "Cosa fare: riprova il comando"; return 1; }
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+    broker_id="$(read_only_service_id "$BROKER_SERVICE" 2>/dev/null)" \
+      && docker exec "$broker_id" jht-broker-admin secrets status >/dev/null 2>&1 && break
+    broker_id=""
+    sleep 1
+  done
+  [ -n "$broker_id" ] || { err "broker_start_failed: il servizio della posta non risponde dopo 30 secondi."; err "Cosa fare: riprova il comando"; return 1; }
+  : > "$BROKER_WANTED_MARKER" 2>/dev/null || true
+  broker_migrate_legacy_once
+  broker_configure_web_authorisations
+}
+
+# After `up`: a broker made before comes back with the team (`down` removes its container); one that an older install made is adopted.
+broker_after_up() {
+  if [ ! -e "$BROKER_WANTED_MARKER" ]; then
+    read_only_service_id "$BROKER_SERVICE" any-config >/dev/null 2>&1 || return 0
+    : > "$BROKER_WANTED_MARKER" 2>/dev/null || true
+  fi
+  ensure_broker || warn "broker_restart_failed: il servizio della posta non è ripartito. Cosa fare: jht mail status"
+  broker_migrate_legacy_once
+  broker_configure_web_authorisations
 }
 
 # Telegram isolato: il token nuovo va dallo stdin dell'host direttamente al
 # container uid 1003. Il container agenti vede soltanto gli hash dei token
 # legacy necessari a imporre la rotazione, mai il token nuovo.
 TELEGRAM_SERVICE="jht-telegram"
+MEDIA_SERVICE="jht-media"
+PLAYWRIGHT_POPULATE_SERVICE="jht-playwright-populate"
+SCREEN_SERVICE="jht-screen"
+LOGIN_SERVICE="jht-login"
+LOGIN_PROXY_SERVICE="jht-login-proxy"
+LOGIN_VIEW_SERVICE="jht-login-view"
 
 telegram_admin() {
   local telegram_id
@@ -2217,6 +2465,7 @@ telegram_lifecycle_steps() {
     case "$step" in
       '') ;;
       start)
+        ensure_broker || return $?
         COMPOSE_PROFILES=telegram compose up -d "$TELEGRAM_SERVICE" >/dev/null || return $?
         telegram_lifecycle_verify start || return $?
         ;;
@@ -2251,6 +2500,31 @@ telegram_lifecycle_if_available() {
   compose_lacks_service "$TELEGRAM_SERVICE" && return 0
   if [ "${1:-}" = resume ] && telegram_state_volume_absent; then return 0; fi
   telegram_lifecycle_command "$@"
+}
+
+# Does the Telegram service hold a bot? Asked of the RUNNING service, read-only (an exec, no run container, no volume):
+# 0 = at least one bot, 1 = none, 2 = it cannot be told (the service is off, not attestable, or answered something else).
+# The one place that says whether Telegram is configured: `jht status` and `jht integration` both ask it.
+telegram_bots_configured() {
+  local id out
+  id="$(read_only_service_id "$TELEGRAM_SERVICE" 2>/dev/null)" || return 2
+  out="$(docker exec "$id" jht-telegram-admin bots status 2>/dev/null)" || return 2
+  case "$out" in *'"ok": true'*) ;; *) return 2 ;; esac
+  case "$out" in *'"present"'*) return 0 ;; *) return 1 ;; esac
+}
+
+# The line `jht status` says about Telegram. A status command creates nothing and prints nothing of compose: no volume,
+# no run container, only questions to the engine. «Never configured» (no state volume) and «no bot» are said in one line.
+telegram_status_line() {
+  compose_lacks_service "$TELEGRAM_SERVICE" && return 0
+  local rc=0
+  if telegram_state_volume_absent; then printf '%s\n' 'Telegram non attivo: Telegram non configurato.'; return 0; fi
+  telegram_bots_configured || rc=$?
+  case "$rc" in
+    0) telegram_admin bots status ;;
+    1) printf '%s\n' 'Telegram non attivo: Telegram non configurato.' ;;
+    *) printf '%s\n' 'Telegram: stato non verificabile adesso (servizio spento o non raggiungibile). Dettagli: jht telegram status' ;;
+  esac
 }
 
 telegram_lifecycle_command() {
@@ -2403,7 +2677,7 @@ remove_broker_reset_data() {
     err "reset: non riesco a determinare il progetto Compose; i volumi del broker non sono stati toccati."
     return 1
   }
-  COMPOSE_PROFILES=telegram compose down || {
+  COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose down || {
     err "reset: non riesco a fermare il runtime; i volumi del broker non sono stati toccati."
     return 1
   }
@@ -2454,6 +2728,7 @@ remove_broker_reset_data() {
     err "reset: impossibile cancellare il marcatore migrazione broker $BROKER_LEGACY_MARKER."
     failed=1
   fi
+  rm -f -- "$BROKER_WANTED_MARKER" || { err "reset: impossibile cancellare il marcatore del broker $BROKER_WANTED_MARKER."; failed=1; }
   if [ "$failed" -eq 0 ]; then
     warn "I segreti e lo stato del broker sono stati cancellati: rifai i login dei portali e configura di nuovo la posta."
   fi
@@ -2755,6 +3030,7 @@ mail_setup() {
   set -- mailbox setup --user "$user" --admission "$admission"
   [ -z "$imap_host" ] || set -- "$@" --imap-host "$imap_host"
   [ -z "$smtp_host" ] || set -- "$@" --smtp-host "$smtp_host"
+  ensure_broker || { unset password; return 1; }
   printf '%s\n' "$password" | broker_admin "$@"
   local rc=$?
   unset password
@@ -2793,7 +3069,7 @@ mail_command() {
 # config-hash of the service, so a terminal that has one of them set (an `export OPENAI_API_KEY=…` for a login test) gets
 # another expected hash than the app that created the container with a clean environment, and every read said «container
 # non attivo» while the team ran (TEST 19g). docker-compose.yml and this list are held equal by a test.
-PODMAN_CALLER_ENV="ANTHROPIC_API_KEY OPENAI_API_KEY MOONSHOT_API_KEY NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY NEXT_PUBLIC_JHT_DEPLOY JHT_SCOUT_COORD_DB JHT_LIVE_SCREEN_PORT JHT_TELEGRAM_SERVICE_ENABLED JHT_TELEGRAM_BURST_LIMIT JHT_TELEGRAM_DAILY_LIMIT"
+PODMAN_CALLER_ENV="JHT_EXTRAS_IMAGE JHT_EXTRAS_DIGEST ANTHROPIC_API_KEY OPENAI_API_KEY MOONSHOT_API_KEY NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY NEXT_PUBLIC_JHT_DEPLOY JHT_SCOUT_COORD_DB JHT_LIVE_SCREEN_PORT JHT_TELEGRAM_SERVICE_ENABLED JHT_TELEGRAM_BURST_LIMIT JHT_TELEGRAM_DAILY_LIMIT"
 
 # 0 when the caller's environment sets (non-empty) at least one of them: only then does a «clean» hash differ.
 podman_caller_env_set() {
@@ -2833,7 +3109,7 @@ podman_expected_config_hash() {
       [ "$env_mode" != clean ] || unset $PODMAN_CALLER_ENV
       [ -z "$pinned_image" ] || export JHT_IMAGE="$pinned_image"
       CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
-      COMPOSE_PROFILES=telegram PODMAN_COMPOSE_WARNING_LOGS=false \
+      COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" PODMAN_COMPOSE_WARNING_LOGS=false \
         "$compose_bin" --verbose --dry-run --project-name jht \
           --podman-path "$podman_bin" -f "$file" up -d --force-recreate "$service"
     } 2>&1)" || return 1
@@ -2846,7 +3122,7 @@ podman_expected_config_hash() {
       unset CONTAINER_CONNECTION
       [ "$env_mode" != clean ] || unset $PODMAN_CALLER_ENV
       [ -z "$pinned_image" ] || export JHT_IMAGE="$pinned_image"
-      COMPOSE_PROFILES=telegram PODMAN_COMPOSE_WARNING_LOGS=false \
+      COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" PODMAN_COMPOSE_WARNING_LOGS=false \
         "$compose_bin" "$no_pod" --verbose --dry-run --project-name jht \
           --podman-path "$podman_bin" -f "$file" -f "$override" up -d --force-recreate "$service"
     } 2>&1)" || return 1
@@ -3293,7 +3569,7 @@ const providers=config.providers||{}; const entry=providers[provider]||{};
 const configured=["claude","anthropic","codex","openai","kimi","moonshot"].includes(provider)
   && (entry.auth_method||"subscription")==="subscription";
 const markers={claude:"/jht_home/.claude/.credentials.json",anthropic:"/jht_home/.claude/.credentials.json",codex:"/jht_home/.codex/auth.json",openai:"/jht_home/.codex/auth.json",kimi:"/jht_home/.kimi/credentials/kimi-code.json",moonshot:"/jht_home/.kimi/credentials/kimi-code.json"};
-process.stdout.write(`${configured?1:0} ${(config.harness==="pi"&&(provider==="openai"||provider==="codex")?((p)=>{try{const s=fs.lstatSync(p);return s.isFile()&&s.size>0&&(s.uid===process.getuid()||s.uid===0)}catch{return false}})("/jht_home/.pi/agent/auth.json"):markers[provider]&&fs.existsSync(markers[provider]))?1:0} ${fs.existsSync("/jht_home/profile/welcomed.flag")?1:0}`);
+process.stdout.write(`${configured?1:0} ${(config.harness==="pi"&&(provider==="openai"||provider==="codex")?((p)=>{try{const s=fs.lstatSync(p);if(!(s.isFile()&&s.size>0&&s.size<=262144&&(s.uid===process.getuid()||s.uid===0)))return false;const d=JSON.parse(fs.readFileSync(p,"utf8"));return!!d&&typeof d==="object"&&!Array.isArray(d)&&["openai"].some((n)=>!!d[n]&&typeof d[n]==="object"&&Object.keys(d[n]).length>0)}catch{return false}})("/jht_home/.pi/agent/auth.json"):markers[provider]&&fs.existsSync(markers[provider]))?1:0} ${fs.existsSync("/jht_home/profile/welcomed.flag")?1:0}`);
 ' "$expected_team" 2>/dev/null)" || metadata_status=$?
   if [ "$metadata_status" -ne 0 ]; then
     [ -z "$expected_team" ] || return "$metadata_status"
@@ -3417,8 +3693,9 @@ agent_control() {
 # invia solo cio' che il broker ha registrato, e il broker registra solo da canali che gli agenti non hanno:
 # l'host e' uno. L'app mostra l'anteprima con il suo digest, la persona conferma con un clic, il container scrive il
 # flag solo per la posizione vista, e l'app chiede qui di registrare istante e destinazione. Come agent-control NON
-# avvia mai niente (niente ensure_up, niente compose, niente machine): col broker spento o non attestato risponde
-# col codice chiuso apply_record_no_broker (113). Ogni campo e' chiuso QUI prima di finire in una riga di comando;
+# avvia mai niente (niente ensure_up, niente machine): col broker non attestato risponde col codice chiuso
+# apply_record_no_broker (113). Fa eccezione il primo clic di una persona: se il broker non c'e' ancora (e il motore
+# risponde) lo crea `ensure_broker`, il solo passo con un compose, e solo il suo container. Ogni campo e' chiuso QUI prima di finire in una riga di comando;
 # la risposta e' una riga sola, mai il testo del broker.
 desktop_apply() {
   local action="${1:-}" id="${2:-}" instant="${3:-}" destination="${4:-}" broker_id answer
@@ -3432,6 +3709,9 @@ desktop_apply() {
     return 2
   fi
   broker_id="$(read_only_service_id "$BROKER_SERVICE" 2>/dev/null)" || {
+    ensure_broker >/dev/null 2>&1 || true
+    broker_id="$(read_only_service_id "$BROKER_SERVICE" 2>/dev/null)"
+  } || {
     printf '%s\n' '{"ok":false,"error":"apply_record_no_broker"}'
     return 113
   }
@@ -3680,6 +3960,82 @@ jht — Job Hunter Team
 JHTHELP
 }
 
+# `jht integration --help`: la sua riga d'uso, non l'aiuto generico dell'host. Testo fisso: il comando vive in un helper
+# che si scarica solo quando serve, e un aiuto non scarica niente.
+integration_help() {
+  cat <<'JHTINTEGRATIONHELP'
+Uso: jht integration <comando>
+
+  list [--json]                   le integrazioni e il loro stato
+  status [ID] [--json]            lo stato di una, o di tutte
+  add ID [--json]                 aggiunge un'integrazione
+  remove ID [--purge --yes] [--json]
+                                  la toglie; --purge cancella anche i suoi dati (serve --yes)
+
+Gli ID ammessi sono quelli che mostra `jht integration list`. Niente si scarica o si accende
+finche' non lo chiedi con `add`.
+JHTINTEGRATIONHELP
+}
+
+# `jht setup --help`: le sue opzioni, non l'aiuto generico dell'host. Testo fisso, come quello di integration: il setup vero gira nel
+# container e un aiuto non lo avvia. Tenerlo d'accordo con le opzioni di cli/src/commands/setup.js (c'e' un test che le confronta).
+setup_help() {
+  cat <<'JHTSETUPHELP'
+Uso: jht setup [opzioni]
+
+Senza opzioni parte l'installazione guidata. Con --non-interactive non chiede niente:
+tutto si da' con le opzioni.
+
+  --non-interactive            nessuna domanda
+  --provider <nome>            openai (predefinito), glm (Z.ai) o kimi (Moonshot)
+  --harness <nome>             codex (predefinito) o pi; glm e kimi vanno solo con pi
+  --auth-method <metodo>       api_key (predefinito) o subscription
+  --api-key-file <percorso>    file che contiene la chiave API (una riga, leggibile solo da te).
+                               Un file del tuo computer lo legge jht e lo passa al setup: con glm e kimi
+                               il setup tiene la chiave per conto suo, mai nella configurazione
+  --api-key-stdin              legge la chiave API dallo standard input (una riga): mai sulla riga di comando
+  --api-key <chiave>           la chiave scritta qui, in chiaro (non ammessa per glm e kimi)
+  --secret-mode <modo>         come si salva la chiave: plaintext (predefinito), env o file
+  --secret-env <nome>          con --secret-mode env: la variabile d'ambiente che la contiene
+  --secret-file <percorso>     con --secret-mode file: il file che la contiene
+  --subscription-email <email> con --auth-method subscription: l'email dell'account
+  --subscription-token <token> con --auth-method subscription: il token
+  --model <modello>            il modello da usare
+  --language <codice>          la lingua (per esempio it o en)
+  --skip-health                salta il controllo finale
+  --reset                      riparte da una configurazione pulita
+
+Esempio, con una chiave GLM in un file:
+  jht setup --non-interactive --provider glm --harness pi --api-key-file chiave.txt
+JHTSETUPHELP
+}
+
+# `jht screen --help`: la sua riga d'uso, a testo fisso come quella di `jht integration`: un aiuto non scarica niente.
+screen_help() {
+  cat <<'JHTSCREENHELP'
+Uso: jht screen <comando>
+
+  on [--json]       accende lo schermo dal vivo del closer: un container a parte, con lo stream solo su 127.0.0.1
+  off [--json]      lo spegne e toglie il container
+  status [--json]   dice se e' acceso
+
+Niente si scarica o si accende finche' non lo chiedi con `on`. Lo stream e' in sola visione.
+JHTSCREENHELP
+}
+
+# `jht linkedin --help`: la sua riga d'uso, a testo fisso: un aiuto non scarica niente.
+linkedin_help() {
+  cat <<'JHTLINKEDINHELP'
+Uso: jht linkedin <comando>
+
+  login [--stop]    l'accesso a mano a LinkedIn (con Google): un browser in un container a parte, senza rete, di cui vedi
+                    e usi la finestra dall'app; --stop chiude tutto
+  status --json     dice se l'accesso e' in corso e se la sessione di LinkedIn e' salvata
+
+Niente si scarica o si accende finche' non lo chiedi con `login`.
+JHTLINKEDINHELP
+}
+
 # Richiesta di sola informazione: se il container e' gia' in piedi si serve
 # l'aiuto vero, altrimenti quello locale. In nessun caso si avvia qualcosa.
 serve_help_without_docker() {
@@ -3699,7 +4055,7 @@ serve_help_without_docker() {
 # falso errore; il loro aiuto resta quindi quello locale anche in quel caso.
 host_command_uses_local_help() {
   case "$1" in
-    up|start-container|down|stop-container|restart|recreate|upgrade|clean-images|logs|status|shell|oauth-login|claude-login|setup|download|podman-machine-recreate|mail|telegram|integration|tools|reset|migrate-runtime)
+    up|start-container|down|stop-container|restart|recreate|upgrade|clean-images|logs|status|shell|oauth-login|claude-login|setup|download|podman-machine-recreate|mail|telegram|integration|screen|linkedin|tools|reset|migrate-runtime)
       return 0
       ;;
   esac
@@ -3879,6 +4235,19 @@ ensure_up_for_stop() {
   ensure_up
 }
 
+# A command that needs the running container, asked before it ever started: `read_only_service_id` says 3 for «no such container»
+# and 1 for «there is one and it cannot be attested». The first is a team that is not started (said as that, with the command that
+# starts it); only the second is «non attestabile». Always exits 1.
+not_started_or_unattestable() { # $1 = the status of the check, $2 = what is denied
+  if [ "${1:-1}" -eq 3 ]; then
+    err "Job Hunter Team non è ancora avviato: lancia 'jht up' (la prima volta, 'jht setup')."
+  else
+    err_unattestable "Container JHT non attestabile; ${2:-operazione negata}."
+    stale_config_hint
+  fi
+  exit 1
+}
+
 ensure_up() {
   local status=0
   if container_up; then
@@ -3887,7 +4256,7 @@ ensure_up() {
     status=$?
   fi
   [ "$status" -eq 3 ] || {
-    err "Container JHT esistente non attestabile; avvio automatico negato."
+    err_unattestable "Container JHT esistente non attestabile; avvio automatico negato."
     stale_config_hint
     exit 1
   }
@@ -4696,6 +5065,9 @@ upgrade_prune_old_images() {
   previous="$(upgrade_image_plain "$2")"
   case "$current" in ''|none|sconosciuta|unknown) upgrade_prune_result current-unidentified 0 0 0 0; return 0 ;; esac
   case "$previous" in ''|none|sconosciuta|unknown) upgrade_prune_result previous-unidentified 0 0 0 0; return 0 ;; esac
+  # A livello core la piena gia' scaricata aspetta il passaggio: non e' una vecchia versione, si tiene.
+  previous="$previous
+$(upgrade_tier_keep_ids)"
   # La corrente deve essere davvero quella del container che gira adesso.
   running_id="$(upgrade_image_plain "$(upgrade_image)")"
   if [ "$running_id" != "$current" ]; then
@@ -5175,6 +5547,56 @@ upgrade_acquire_lock() {
   printf '%s\n' "$$" > "$UPGRADE_LOCK/pid"
 }
 
+# ── Nucleo e immagine piena nell'upgrade (P7) ─────────────────────────────
+# Un'installazione a livello `core` (file runtime-tier) gira sul nucleo; l'immagine piena, se `jht tools` l'ha gia' scaricata in
+# background, sta li' ad aspettare il passaggio. L'upgrade porta avanti il nucleo (il digest lo dice il wrapper candidato, non quello
+# in uso) e, solo se la piena di oggi e' gia' qui, anche la piena; la pulizia delle vecchie le tiene tutte e due. Senza runtime-tier
+# l'installazione e' a un'immagine sola e niente di questo si applica.
+UPGRADE_CORE_REF=""   # il nucleo candidato; vuoto = installazione a un'immagine sola
+UPGRADE_FULL_REF=""   # la piena candidata, solo se quella di oggi e' gia' scaricata
+UPGRADE_FULL_KEEP=""  # la piena che la pulizia deve tenere dopo l'upgrade
+
+# $1 = file, $2 = nome della costante: il suo valore fra virgolette, o niente.
+upgrade_candidate_constant() {
+  sed -n "s/^$2=\"\(.*\)\"\$/\1/p" "$1" | head -n 1
+}
+
+# Letto dal wrapper candidato PRIMA di scaricare. Ritorna 1 se il rilascio non porta un nucleo leggibile o non porta piu' il
+# nucleo: un'installazione a livello core non si trasforma a meta' di un upgrade (si reinstalla), e un digest malformato non si usa.
+upgrade_tier_plan() {
+  local wrapper="$1" core full
+  UPGRADE_CORE_REF="" UPGRADE_FULL_REF="" UPGRADE_FULL_KEEP=""
+  [ -f "$RUNTIME_TIER_FILE" ] || return 0
+  core="$(upgrade_candidate_constant "$wrapper" CORE_IMAGE_DIGEST)"
+  full="$(upgrade_candidate_constant "$wrapper" DEFAULT_RUNTIME_IMAGE)"
+  printf '%s' "$core" | grep -Eqx 'sha256:[0-9a-f]{64}' || return 1
+  printf '%s' "$full" | grep -Eqx 'ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64}' || return 1
+  UPGRADE_CORE_REF="ghcr.io/leopu00/jht@$core"
+  if docker image inspect "$DEFAULT_RUNTIME_IMAGE" >/dev/null 2>&1; then UPGRADE_FULL_REF="$full"; fi
+}
+
+# Dopo il commit: la piena nuova, se la vecchia era gia' qui. Mai decide l'esito dell'upgrade (il team e' gia' verificato): se non
+# arriva, la vecchia resta e `jht tools` la riscarica da solo (il suo stato la vede mancante).
+upgrade_pull_full() {
+  UPGRADE_FULL_KEEP=""
+  [ -n "$UPGRADE_FULL_REF" ] || return 0
+  if [ "$UPGRADE_FULL_REF" = "$DEFAULT_RUNTIME_IMAGE" ]; then UPGRADE_FULL_KEEP="$UPGRADE_FULL_REF"; return 0; fi
+  upgrade_note "Scarico l'immagine piena aggiornata..."
+  if upgrade_run docker pull "$UPGRADE_FULL_REF"; then
+    UPGRADE_FULL_KEEP="$UPGRADE_FULL_REF"
+  else
+    upgrade_note "full_pull_failed: l'immagine piena nuova non e' arrivata, resta la vecchia. Cosa fare: jht tools pull"
+  fi
+}
+
+# L'ID (senza prefisso) della piena che un'installazione a livello core tiene, uno per riga; niente se non e' qui.
+upgrade_tier_keep_ids() {
+  local id
+  [ -f "$RUNTIME_TIER_FILE" ] || return 0
+  id="$(docker image inspect --format '{{.Id}}' "${UPGRADE_FULL_KEEP:-$DEFAULT_RUNTIME_IMAGE}" 2>/dev/null | head -n 1)" || return 0
+  [ -z "$id" ] || upgrade_image_plain "$id"
+}
+
 handle_runtime_upgrade() {
   local check_only=0 old_image old_version candidate_image candidate_version candidate_ref
   local was_running=0 changed=false rolled_back=false phase="preflight"
@@ -5305,6 +5727,12 @@ handle_runtime_upgrade() {
   if ! cmp -s "$candidate_compose" "$COMPOSE_FILE" || ! cmp -s "$candidate_wrapper" "$WRAPPER_PATH"; then
     metadata_changed=true
   fi
+  if ! upgrade_tier_plan "$candidate_wrapper"; then
+    upgrade_result false false preflight "$old_version" "$old_image" "$old_version" "$old_image" false "Il rilascio non porta un nucleo valido per questa installazione: reinstalla" false
+    return 1
+  fi
+  # A livello core il nucleo candidato e' l'immagine di tutto l'upgrade (pull, avvio, verifica, broker), come per `up`.
+  [ -z "$UPGRADE_CORE_REF" ] || export JHT_IMAGE="$UPGRADE_CORE_REF"
 
   UPGRADE_ROLLBACK_DIR="$RUNTIME_DIR/.upgrade-rollback-$(date +%s)-$$"
   if ! mkdir "$UPGRADE_ROLLBACK_DIR" \
@@ -5398,8 +5826,11 @@ handle_runtime_upgrade() {
   # del team: dopo il commit riparte con quella nuova. Non decide l'esito
   # dell'upgrade (il team e' gia' verificato): se non parte, la posta resta
   # chiusa (broker_unavailable) finche' un `jht up` non lo riaccende.
-  if grep -q "^  $BROKER_SERVICE:" "$COMPOSE_FILE"; then
-    upgrade_run upgrade_compose "$COMPOSE_FILE" up -d --force-recreate "$BROKER_SERVICE" \
+  # Solo se esiste (o lo ha fatto una volta): un'installazione che non ha mai usato la posta non lo ottiene dall'upgrade.
+  if grep -q "^  $BROKER_SERVICE:" "$COMPOSE_FILE" \
+      && { [ -e "$BROKER_WANTED_MARKER" ] || read_only_service_id "$BROKER_SERVICE" any-config >/dev/null 2>&1; }; then
+    : > "$BROKER_WANTED_MARKER" 2>/dev/null || true
+    COMPOSE_PROFILES=broker upgrade_run upgrade_compose "$COMPOSE_FILE" up -d --force-recreate --no-deps "$BROKER_SERVICE" \
       || upgrade_note "broker_restart_failed: il broker dei segreti non e' ripartito. Cosa fare: jht up"
     broker_migrate_legacy_once
   fi
@@ -5407,6 +5838,7 @@ handle_runtime_upgrade() {
     || upgrade_note "telegram_restart_failed: il servizio Telegram isolato non è ripartito. Cosa fare: jht up"
   # Solo qui: upgrade riuscito, container nuovo verificato e commit fatto.
   # Mai su check, fallimento o rollback, che escono prima.
+  upgrade_pull_full || true
   upgrade_prune_old_images "$candidate_image" "$old_image" || true
   if [ "$candidate_image" = "$old_image" ] && [ "$metadata_changed" = "false" ]; then
     changed=false
@@ -5427,6 +5859,83 @@ if [ -t 0 ] && [ -t 1 ]; then
 else
   EXEC_FLAGS="-i"
 fi
+
+# `jht setup --api-key-file <file on THIS computer>` (glm, kimi): the setup runs in the container, which sees a file of the host
+# only if it is under ~/.jht or the documents folder, and whose modes differ from the host's on a shared mount. The wrapper reads
+# the file HERE and hands the key to the setup on its standard input (--api-key-stdin), which keeps it in the container's own
+# key store with the right modes: the key is never in an argument, in a log or in the config. (The same as the Windows wrapper's
+# Convert-SetupKeyFileArgs.) A path that starts with «/» and is not a file of this computer is the container's own and goes
+# through untouched. Sets SETUP_KEY_ARGS (the arguments to pass, «setup» included), SETUP_KEY_VALUE (the key, or empty) and
+# SETUP_KEY_FILE (the file it came from); rc 1 with a sentence (never the key) on stderr when the file cannot be used.
+# Plain shell variables, never exported: the key is not in the environment of any process.
+convert_setup_key_args() {
+  local LC_ALL=C
+  SETUP_KEY_ARGS=("$@")
+  SETUP_KEY_VALUE=""
+  SETUP_KEY_FILE=""
+  local out=() host_file="" have_host=0 value arg found takes_next j has_stdin=0 i=1 n=$#
+  for arg in "$@"; do
+    if [ "$arg" = "--api-key-stdin" ]; then has_stdin=1; fi
+  done
+  while [ "$i" -le "$n" ]; do
+    arg="${!i}"
+    value=""; found=0; takes_next=0
+    case "$arg" in
+      --api-key-file) if [ "$i" -lt "$n" ]; then j=$((i + 1)); value="${!j}"; found=1; takes_next=1; fi ;;
+      --api-key-file=*) value="${arg#--api-key-file=}"; found=1 ;;
+    esac
+    if [ "$found" = 0 ] || { [ "${value#/}" != "$value" ] && [ ! -e "$value" ]; }; then
+      out+=("$arg"); i=$((i + 1)); continue
+    fi
+    if [ "$have_host" = 1 ]; then err "--api-key-file was given twice"; return 1; fi
+    have_host=1; host_file="$value"
+    if [ "$takes_next" = 1 ]; then i=$((i + 1)); fi
+    out+=("--api-key-stdin"); i=$((i + 1))
+  done
+  [ "$have_host" = 1 ] || return 0
+  if [ "$has_stdin" = 1 ]; then err "use --api-key-file or --api-key-stdin, not both"; return 1; fi
+  if [ -L "$host_file" ] || { [ -e "$host_file" ] && [ ! -f "$host_file" ]; }; then
+    err "the file given to --api-key-file must be a regular file, not a folder or a link: $host_file"; return 1
+  fi
+  if [ ! -f "$host_file" ] || [ ! -r "$host_file" ]; then err "the file given to --api-key-file cannot be read: $host_file"; return 1; fi
+  local size
+  size="$(wc -c < "$host_file" | tr -d ' ')"
+  if [ "$size" -lt 1 ] || [ "$size" -gt 4096 ]; then
+    err "the file given to --api-key-file is empty or too big for a key (1 to 4096 bytes): $host_file"; return 1
+  fi
+  # like ssh: a key that others can read is said, not refused
+  if [ -n "$(find "$host_file" -maxdepth 0 \( -perm -040 -o -perm -004 \) -print 2>/dev/null || true)" ]; then
+    warn "the file $host_file can be read by other users: chmod 600 it."
+  fi
+  local line="" shape='^[!-~]+$'
+  IFS= read -r line < "$host_file" || true
+  line="${line#$'\xef\xbb\xbf'}"      # a UTF-8 mark some editors add
+  line="${line%$'\r'}"
+  line="${line#"${line%%[![:space:]]*}"}"
+  line="${line%"${line##*[![:space:]]}"}"
+  if [ "${#line}" -lt 16 ] || [ "${#line}" -gt 512 ] || ! [[ "$line" =~ $shape ]]; then
+    err "the content of the file given to --api-key-file is not one line of 16 to 512 printable characters without spaces: $host_file"
+    return 1
+  fi
+  SETUP_KEY_ARGS=("${out[@]}")
+  SETUP_KEY_VALUE="$line"
+  SETUP_KEY_FILE="$host_file"
+  return 0
+}
+
+# The setup in the container: with a key from a file of this computer it goes on the standard input (-i only: a pipe is not a
+# terminal), otherwise exactly as before. The arguments are the ones the wrapper got («setup» first).
+setup_exec_container() {
+  local rc=0
+  if [ -n "${SETUP_KEY_VALUE:-}" ]; then
+    printf '%s\n' "$SETUP_KEY_VALUE" | docker exec -i -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" ${SETUP_KEY_ARGS[@]+"${SETUP_KEY_ARGS[@]}"} || rc=$?
+    SETUP_KEY_VALUE=""
+    if [ "$rc" -eq 0 ]; then info "The setup keeps the key: you can delete the file on this computer now ($SETUP_KEY_FILE)."; fi
+    return "$rc"
+  fi
+  docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@" || rc=$?
+  return "$rc"
+}
 
 # ── jht status: a sentence for a person, key=value for the app ───────────
 # The app (and the tests) read `name=… status=… started=… image=…` from a pipe; at a terminal the same facts come
@@ -5509,6 +6018,7 @@ uninstall_left() {
     runtime) err "$(jht_say uninstall.left.runtime)" ;;
     commands) err "$(jht_say uninstall.left.commands)" ;;
     data) err "$(jht_say uninstall.left.data)" ;;
+    images) err "$(jht_say uninstall.left.images)" ;;
   esac
 }
 
@@ -5626,11 +6136,11 @@ uninstall_tool() {
 
 # present | absent; ritorna 1 quando Podman non sa rispondere.
 uninstall_podman_machine_state() {
-  local names name
+  local names name want="${2:-$UNINSTALL_MACHINE_NAME}"
   names="$("$1" machine list --format '{{.Name}}' 2>/dev/null)" || return 1
   while IFS= read -r name; do
     # Podman marca con * la macchina di default anche in questo formato.
-    if [ "${name%\*}" = "$UNINSTALL_MACHINE_NAME" ]; then
+    if [ "${name%\*}" = "$want" ]; then
       printf 'present\n'
       return 0
     fi
@@ -5644,8 +6154,8 @@ uninstall_podman_machine_state() {
 # generico per cancellare: oltre al progetto si chiede il servizio, il volume
 # logico o la rete di default di QUESTO compose, come fa `jht reset`.
 UNINSTALL_PROJECTS="jht host-runtime"
-UNINSTALL_SERVICES="jht jht-broker jht-telegram"
-UNINSTALL_VOLUMES="jht-deps jht-runtime-mask jht-secrets jht-broker-state jht-broker-sock jht-telegram-broker-sock jht-telegram-secrets jht-telegram-state jht-telegram-sock jht-telegram-inbox"
+UNINSTALL_SERVICES="jht jht-broker jht-telegram jht-media jht-playwright-populate jht-screen jht-login jht-login-proxy jht-login-view"
+UNINSTALL_VOLUMES="jht-deps jht-runtime-mask jht-secrets jht-broker-state jht-broker-sock jht-telegram-broker-sock jht-telegram-secrets jht-telegram-state jht-telegram-sock jht-telegram-inbox jht-media-in jht-media-out jht-playwright jht-x11 jht-login-vnc jht-login-egress"
 
 uninstall_docker_ids() {
   local docker_bin="$1" kind="$2" project name ids id
@@ -5715,18 +6225,189 @@ uninstall_docker_endpoint() {
   printf '%s\n' "$endpoint"
 }
 
+# Colima (Mac, Docker scelto): l'installer la accende quando non c'e' e lo scrive in <runtime>/colima-started (1a riga «colima», 2a il
+# profilo). Finito di togliere container, volumi e immagini di JHT, se e' stato lui ad accenderla e dentro non gira piu' niente, la si
+# ferma (colima stop, normale) e si controlla che sia ferma; altrimenti resta accesa e si dice perche' e come fermarla. Non si cancella
+# mai la macchina. Il profilo si ricava dal socket del Docker di questo computer (…/.colima/<profilo>/docker.sock) e SOLO quel profilo
+# si interroga e si ferma (colima status|stop -p <profilo>): un profilo di un altro (la Colima dell'operatore, quella di un collaudo)
+# non si guarda e non si tocca; il marcatore deve dire lo stesso profilo. Con Docker Desktop attivo (o un altro socket) una Colima
+# accesa non c'entra e non si dice niente. Mai un errore di disinstallazione: al peggio un avviso.
+uninstall_colima() {
+  local runtime_dir="$1" selection="$2" colima_bin docker_bin endpoint profile rest marker="$1/colima-started" others
+  [ "$HOST_KERNEL" = "Darwin" ] && [ "$selection" != "podman" ] || return 0
+  colima_bin="$(uninstall_tool colima)" || return 0
+  docker_bin="$(uninstall_tool docker)" || return 0
+  endpoint="$(uninstall_docker_endpoint "$docker_bin")" || return 0
+  case "$endpoint" in unix://*/.colima/*/docker.sock) ;; *) return 0 ;; esac
+  rest="${endpoint#*/.colima/}"
+  profile="${rest%%/*}"
+  [ "$rest" = "$profile/docker.sock" ] || return 0
+  case "$profile" in ''|-*|*[!A-Za-z0-9_.-]*) return 0 ;; esac
+  "$colima_bin" status -p "$profile" >/dev/null 2>&1 || return 0
+  if [ -f "$marker" ] && [ ! -L "$marker" ] \
+      && [ "$(head -c 64 "$marker" 2>/dev/null | sed -n '1p' | tr -d '\r')" = colima ] \
+      && [ "$(head -c 64 "$marker" 2>/dev/null | sed -n '2p' | tr -d '\r')" = "$profile" ]; then
+    others="$("$docker_bin" ps -q 2>/dev/null)" || others="unknown"
+    if [ -n "$others" ]; then
+      warn "$(jht_say uninstall.colima_busy)"
+      return 0
+    fi
+    info "$(jht_say uninstall.colima_stopping)"
+    if "$colima_bin" stop -p "$profile" >/dev/null 2>&1 && ! "$colima_bin" status -p "$profile" >/dev/null 2>&1; then
+      return 0
+    fi
+    warn "$(jht_say uninstall.colima_stop_failed)"
+    return 0
+  fi
+  warn "$(jht_say uninstall.colima_running)"
+}
+
+# Il collegamento al plugin Compose che l'installer ha messo nella cartella dei plugin del client docker: <runtime>/docker-compose-plugin-link
+# dice (3 righe) il percorso del collegamento, dove punta, e se la cartella l'ha fatta l'installer. Si toglie SOLO quel collegamento
+# (rm del link, mai del plugin di Homebrew), se il marcatore e' un file normale, il percorso e' quello della cartella del client di
+# questa persona (~/.docker o DOCKER_CONFIG) e il collegamento e' ancora un link che punta a quello che dice il marcatore: un link che la
+# persona ha rifatto altrove non si tocca. La cartella la si toglie solo se l'ha fatta l'installer e ormai e' vuota (rmdir). Mai un
+# errore di disinstallazione: al peggio un avviso.
+uninstall_compose_plugin_link() {
+  local marker="$1/docker-compose-plugin-link" link target made
+  [ -f "$marker" ] && [ ! -L "$marker" ] || return 0
+  link="$(head -c 1024 "$marker" 2>/dev/null | sed -n '1p' | tr -d '\r')"
+  target="$(head -c 1024 "$marker" 2>/dev/null | sed -n '2p' | tr -d '\r')"
+  made="$(head -c 1024 "$marker" 2>/dev/null | sed -n '3p' | tr -d '\r')"
+  [ -n "$link" ] && [ -n "$target" ] || return 0
+  case "$link" in
+    "$HOME/.docker/cli-plugins/docker-compose") ;;
+    *) [ -n "${DOCKER_CONFIG:-}" ] && [ "$link" = "${DOCKER_CONFIG%/}/cli-plugins/docker-compose" ] || return 0 ;;
+  esac
+  [ -L "$link" ] && [ "$(readlink "$link" 2>/dev/null)" = "$target" ] || return 0
+  if rm -f -- "$link" 2>/dev/null && [ ! -e "$link" ] && [ ! -L "$link" ]; then
+    info "$(jht_say uninstall.compose_link_removed "$link")"
+    [ "$made" != 1 ] || rmdir -- "$(dirname "$link")" 2>/dev/null || true
+  else
+    warn "$(jht_say uninstall.compose_link_left "$link")"
+  fi
+  return 0
+}
+
+# Le immagini di JHT (nucleo, piena e le vecchie) nel Docker di questo computer, senza -f e senza pulizie di massa, dopo i container.
+# Si toglie per RIFERIMENTO (repository:tag), uno per uno: un ID con piu' tag non si toglie con `image rm <ID>` senza -f (il motore
+# rifiuta «referenced in multiple repositories») e la disinstallazione non finirebbe piu'. Senza tag (<none>) si toglie per ID.
+# Stesse regole della pulizia dell'upgrade: solo i repository JHT per nome esatto, e un ID che porta anche un nome non JHT e' di
+# qualcun altro e si tiene. Il rifiuto del motore e' un residuo: si dice e si rilancia. $1 = docker; scrive in UNINSTALL_IMAGES_REMOVED.
+uninstall_docker_images() {
+  local docker_bin="$1" listing pairs foreign id repo tag plain target ids="" failed="" n=0 left=0 announced=0 seen_ref=""
+  UNINSTALL_IMAGES_REMOVED=0
+  listing="$("$docker_bin" image ls --no-trunc --format '{{.ID}} {{.Repository}} {{.Tag}}' 2>/dev/null)" || return 1
+  pairs="$(printf '%s\n' "$listing" | while IFS=' ' read -r id repo tag; do printf '%s %s\n' "$id" "$repo"; done)"
+  foreign="$(upgrade_foreign_image_ids "$pairs")"
+  while IFS=' ' read -r id repo tag; do
+    [ -n "$id" ] || continue
+    upgrade_repo_is_jht "$repo" || continue
+    plain="$(upgrade_image_plain "$id")"
+    case "$foreign
+" in *"
+$plain
+"*) continue ;; esac
+    if [ -n "$tag" ] && [ "$tag" != "<none>" ]; then target="$repo:$tag"; else target="$id"; fi
+    case "
+$seen_ref
+" in *"
+$target
+"*) continue ;; esac
+    seen_ref="$seen_ref
+$target"
+    case "
+$ids
+" in *"
+$plain
+"*) ;; *) ids="$ids
+$plain"; n=$((n + 1)) ;; esac
+    # La fase si annuncia alla prima immagine da togliere: senza immagini JHT non c'e' niente da dire.
+    [ "$announced" -eq 1 ] || { uninstall_phase uninstall_images; announced=1; }
+    if ! "$docker_bin" image rm "$target" >/dev/null 2>&1; then
+      case "
+$failed
+" in *"
+$plain
+"*) ;; *) failed="$failed
+$plain"; left=$((left + 1)) ;; esac
+    fi
+  done <<EOF
+$listing
+EOF
+  UNINSTALL_IMAGES_REMOVED=$((n - left))
+  [ "$left" -eq 0 ]
+}
+
+# Il Docker di questo computer, se c'e' e risponde (la macchina Podman porta via le sue immagini con se'): lo stesso controllo
+# dell'endpoint di uninstall_machine, che ha gia' rifiutato un Docker che non e' qui.
+uninstall_images() {
+  local docker_bin endpoint
+  UNINSTALL_IMAGES_REMOVED=0
+  docker_bin="$(uninstall_tool docker)" || return 0
+  endpoint="$(uninstall_docker_endpoint "$docker_bin")" || return 0
+  case "$endpoint" in unix://*|npipe://*) ;; *) return 0 ;; esac
+  "$docker_bin" info >/dev/null 2>&1 || return 0
+  uninstall_docker_images "$docker_bin"
+}
+
+# Il nome della macchina Podman che l'installer ha attestato in <runtime>/podman-machine, se e' un nome semplice e NON quello
+# standard (jht-podman, che si toglie sempre). L'installer adotta una macchina gia' esistente con il nome che gli si da
+# (la variabile del nome, in install.sh): un nome diverso si toglie solo se l'ha creata lui (uninstall_machine_created_by_installer).
+uninstall_attested_machine() {
+  local file="$1/podman-machine" name
+  [ -f "$file" ] && [ ! -L "$file" ] || return 1
+  name="$(head -c 64 "$file" 2>/dev/null | head -n 1 | tr -d '\r\n')"
+  case "$name" in
+    ''|-*|"$UNINSTALL_MACHINE_NAME"|*[!A-Za-z0-9_.-]*) return 1 ;;
+  esac
+  printf '%s\n' "$name"
+}
+
+# Il nome in <runtime>/podman-machine e' di QUESTA macchina, creata dall'installer, solo se <runtime>/podman-machine-created e' un file
+# regolare (non un collegamento) che dice il nome (1a riga) e il momento della creazione (2a riga), e il motore dice lo stesso momento per
+# la macchina di quel nome: una macchina che la persona ha ricreato con lo stesso nome ha un altro momento e non e' questa.
+# $1 = cartella runtime, $2 = nome, $3 = podman. Senza 2a riga, o con un motore che non risponde, non e' dimostrato: la macchina resta.
+uninstall_machine_created_by_installer() {
+  local file="$1/podman-machine-created" content written created now
+  [ -f "$file" ] && [ ! -L "$file" ] || return 1
+  content="$(head -c 256 "$file" 2>/dev/null)" || return 1
+  written="$(printf '%s\n' "$content" | sed -n '1p' | tr -d '\r')"
+  created="$(printf '%s\n' "$content" | sed -n '2p' | tr -d '\r')"
+  [ -n "$written" ] && [ "$written" = "$2" ] && [ -n "$created" ] || return 1
+  now="$("$3" machine inspect --format '{{.Created}}' "$2" 2>/dev/null | head -n 1 | tr -d '\r')" || return 1
+  [ -n "$now" ] && [ "$now" = "$created" ]
+}
+
+# Toglie la macchina Podman $2 (ferma e rimuove, --force): 0 se alla fine non c'e' piu'.
+uninstall_remove_podman_machine() {
+  local podman_bin="$1" name="$2" state
+  state="$(uninstall_podman_machine_state "$podman_bin" "$name")" || return 1
+  if [ "$state" = "present" ]; then
+    "$podman_bin" machine rm --force "$name" >/dev/null 2>&1 || return 1
+    state="$(uninstall_podman_machine_state "$podman_bin" "$name")" || return 1
+    [ "$state" = "absent" ] || return 1
+  fi
+}
+
 uninstall_machine() {
-  local selection="$1" podman_bin docker_bin state endpoint
+  local selection="$1" runtime_dir="${2:-}" podman_bin docker_bin state endpoint kept
   # La macchina jht-podman esiste solo sul Mac. Va tolta anche se il runtime
   # scelto oggi e' Docker: una prova Podman precedente la lascia inerte, con
   # i suoi volumi.
   if [ "$HOST_KERNEL" = "Darwin" ]; then
     if podman_bin="$(uninstall_tool podman)"; then
-      state="$(uninstall_podman_machine_state "$podman_bin")" || return 1
-      if [ "$state" = "present" ]; then
-        "$podman_bin" machine rm --force "$UNINSTALL_MACHINE_NAME" >/dev/null 2>&1 || return 1
-        state="$(uninstall_podman_machine_state "$podman_bin")" || return 1
-        [ "$state" = "absent" ] || return 1
+      uninstall_remove_podman_machine "$podman_bin" "$UNINSTALL_MACHINE_NAME" || return 1
+      # Una macchina attestata con un altro nome si toglie solo se l'ha creata l'installer (marcatore con quel nome); se e' stata
+      # adottata (c'era gia': puo' essere dell'utente) resta, e si dice quale e perche'.
+      if [ -n "$runtime_dir" ] && kept="$(uninstall_attested_machine "$runtime_dir")" \
+          && [ "$(uninstall_podman_machine_state "$podman_bin" "$kept")" = "present" ]; then
+        if uninstall_machine_created_by_installer "$runtime_dir" "$kept" "$podman_bin"; then
+          info "$(jht_say uninstall.machine_removing "$kept")"
+          uninstall_remove_podman_machine "$podman_bin" "$kept" || return 1
+        else
+          warn "$(jht_say uninstall.machine_kept "$kept" "$kept" "$kept")"
+        fi
       fi
     elif [ "$selection" = "podman" ]; then
       return 1
@@ -5873,7 +6554,7 @@ jht_uninstall() {
   fi
 
   uninstall_phase uninstall_machine
-  if ! uninstall_machine "$selection"; then
+  if ! uninstall_machine "$selection" "$runtime_dir"; then
     uninstall_left machine
     uninstall_report_rest "$runtime_dir"
     return 24
@@ -5887,6 +6568,16 @@ jht_uninstall() {
       return 24
     fi
   fi
+
+  # Le immagini DOPO i dati: con --purge il container usa-e-getta che svuota ~/.jht ha bisogno dell'immagine, gia' presente.
+  if ! uninstall_images; then
+    uninstall_left images
+    return 24
+  fi
+  [ "$UNINSTALL_IMAGES_REMOVED" -eq 0 ] || info "$(jht_say uninstall.images_removed "$UNINSTALL_IMAGES_REMOVED")"
+  # La macchina Colima dopo le immagini (servono il motore acceso) e prima della cartella del runtime (che ne tiene il marcatore).
+  uninstall_colima "$runtime_dir" "$selection"
+  uninstall_compose_plugin_link "$runtime_dir"
 
   uninstall_phase uninstall_runtime
   if [ -e "$runtime_dir" ] || [ -L "$runtime_dir" ]; then
@@ -5942,6 +6633,22 @@ if [ "$#" -gt 1 ] && [ "$SUB" != "game" ] && [ "$SUB" != "gui" ] && [ "$SUB" != 
   for arg in "${@:2}"; do
     case "$arg" in
       -h|--help)
+        if [ "$SUB" = integration ] && [ "$#" -eq 2 ]; then
+          integration_help
+          exit 0
+        fi
+        if [ "$SUB" = screen ] && [ "$#" -eq 2 ]; then
+          screen_help
+          exit 0
+        fi
+        if [ "$SUB" = linkedin ] && [ "$#" -eq 2 ]; then
+          linkedin_help
+          exit 0
+        fi
+        if [ "$SUB" = setup ]; then
+          setup_help
+          exit 0
+        fi
         if host_command_uses_local_help "$SUB"; then
           local_help
           exit 0
@@ -6045,7 +6752,7 @@ case "$SUB" in
       exit 1
       ;;
     esac
-    COMPOSE_PROFILES=telegram compose down \
+    COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose down \
       || { err "Non riesco a fermare i servizi prima di salvare lo stato del broker."; exit 1; }
     trap podman_state_backup_cleanup EXIT INT TERM
     podman_export_broker_state "$podman_bin" "$broker_state_image" \
@@ -6097,11 +6804,11 @@ case "$SUB" in
       err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
       exit 1
     }
-    compose up -d
+    compose_quiet up -d
     container_postcheck_running || exit 1
+    [ "$CONTAINER_RUNTIME" != podman ] || printf '%s\n' "$(jht_say up.done)"
     telegram_lifecycle_if_available resume || exit $?
-    broker_migrate_legacy_once
-    broker_configure_web_authorisations
+    broker_after_up
     ;;
 
   start-container)
@@ -6113,11 +6820,11 @@ case "$SUB" in
       err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
       exit 1
     }
-    compose up -d
+    compose_quiet up -d
     container_postcheck_running || exit 1
+    [ "$CONTAINER_RUNTIME" != podman ] || printf '%s\n' "$(jht_say up.done)"
     telegram_lifecycle_if_available resume || exit $?
-    broker_migrate_legacy_once
-    broker_configure_web_authorisations
+    broker_after_up
     ;;
 
   down|stop-container)
@@ -6130,9 +6837,7 @@ case "$SUB" in
     require_compose_file
     require_docker
     container_up >/dev/null || {
-      err "Container JHT non attestabile; riavvio negato."
-      stale_config_hint
-      exit 1
+      not_started_or_unattestable $? "riavvio negato"
     }
     compose restart "$CONTAINER_SERVICE"
     container_postcheck_running || exit 1
@@ -6142,21 +6847,19 @@ case "$SUB" in
     require_compose_file
     require_docker
     container_up >/dev/null || {
-      err "Container JHT non attestabile; ricreazione negata."
-      stale_config_hint
-      exit 1
+      not_started_or_unattestable $? "ricreazione negata"
     }
     ensure_bind_owner
-    COMPOSE_PROFILES=telegram compose down
+    COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose down
     telegram_prepare_legacy_inventory || {
       err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
       exit 1
     }
-    compose up -d
+    compose_quiet up -d
     container_postcheck_running || exit 1
+    [ "$CONTAINER_RUNTIME" != podman ] || printf '%s\n' "$(jht_say up.done)"
     telegram_lifecycle_if_available resume || exit $?
-    broker_migrate_legacy_once
-    broker_configure_web_authorisations
+    broker_after_up
     ;;
 
   upgrade)
@@ -6195,13 +6898,47 @@ case "$SUB" in
 
   integration)
     require_compose_file
+    if [ -z "$(runtime_helper_digest jht-integration.sh)" ]; then runtime_helper_absent_answer integration "${@:2}" && exit 0; fi
     runtime_helper_load jht-integration.sh "${2:-}" || exit 1
     integration_main "${@:2}"
     exit $?
     ;;
 
+  screen)
+    # The live screen of the closer is the integration `screen`: on = add, off = remove, status = status.
+    require_compose_file
+    case "${2:-}" in
+      on) screen_verb=add ;;
+      off) screen_verb=remove ;;
+      status) screen_verb=status ;;
+      *) err "uso: jht screen on | off | status [--json]"; exit 2 ;;
+    esac
+    if [ -z "$(runtime_helper_digest jht-integration.sh)" ] && [ "$screen_verb" = status ]; then
+      runtime_helper_absent_answer integration status screen "${@:3}" && exit 0
+    fi
+    runtime_helper_load jht-integration.sh "$screen_verb" || exit 1
+    integration_main "$screen_verb" screen "${@:3}"
+    exit $?
+    ;;
+
+  linkedin)
+    # The manual sign-in to LinkedIn. The lines the app reads are the same with or without the helper: a read-only question or a stop
+    # needs nothing to be installed, and only `login` fetches the helper if it is not there.
+    require_compose_file
+    if [ -z "$(runtime_helper_digest jht-integration.sh)" ]; then
+      case "${*:2}" in
+        "status --json") printf '{"ok": true, "view": "idle", "linkedin": "login_required"}\n'; exit 0 ;;
+        "login --stop") printf '{"ok": true}\n'; exit 0 ;;
+      esac
+    fi
+    runtime_helper_load jht-integration.sh add || exit 1
+    linkedin_main "${@:2}"
+    exit $?
+    ;;
+
   tools)
     require_compose_file
+    if [ -z "$(runtime_helper_digest jht-tools.sh)" ]; then runtime_helper_absent_answer tools "${@:2}" && exit 0; fi
     runtime_helper_load jht-tools.sh "${2:-}" || exit 1
     tools_main "${@:2}"
     exit $?
@@ -6235,8 +6972,7 @@ case "$SUB" in
     require_docker
     shift || true
     container_id="$(read_only_container_id)" || {
-      err "Container JHT non attestabile; lettura log negata."
-      exit 1
+      not_started_or_unattestable $? "lettura log negata"
     }
     # Passa eventuali flag (-f, --tail N) a docker logs.
     docker logs "$@" "$container_id"
@@ -6261,7 +6997,7 @@ case "$SUB" in
           'name={{.Name}} status={{.State.Status}} started={{.State.StartedAt}} image={{.Config.Image}}'
       else
         status_human_running "$(docker inspect "$container_id" --format '{{.State.Status}}|{{.State.StartedAt}}|{{.Config.Image}}')"
-        telegram_lifecycle_if_available status || exit $?
+        telegram_status_line || exit $?
       fi
     else
       attest_status=$?
@@ -6271,7 +7007,11 @@ case "$SUB" in
       if [ "$attest_status" -eq 3 ]; then
         if jht_machine_output; then printf "container '%s' non attivo\n" "$CONTAINER_SERVICE"; else status_human_not_running; fi
       else
-        printf "container '%s' non attestabile: c'e' qualcosa che non si riesce a verificare (una configurazione diversa dall'attesa, o il motore che non risponde); non vuol dire che non giri.\n" "$CONTAINER_SERVICE"
+        if docker_compose_plugin_missing; then
+          err "$(jht_say compose.missing)"
+        else
+          printf "container '%s' non attestabile: c'e' qualcosa che non si riesce a verificare (una configurazione diversa dall'attesa, o il motore che non risponde); non vuol dire che non giri.\n" "$CONTAINER_SERVICE"
+        fi
         if [ "$CONTAINER_RUNTIME" = podman ] && podman_caller_env_set; then
           printf "  Nell'ambiente di questo terminale sono impostate: %s. Il container e' stato creato senza: togli la variabile (unset) e riprova.\n" "$(podman_caller_env_names)"
         fi
@@ -6335,6 +7075,8 @@ case "$SUB" in
 
   # ── Setup: host-side preflight (swap, VPS detect) prima del wizard ────
   setup)
+    # --api-key-file of a file on this computer: the key goes to the setup on its standard input (convert_setup_key_args).
+    convert_setup_key_args "$@" || exit 1
     require_compose_file
     require_docker
     # Skip host-setup se utente ha passato --non-interactive (i flag CLI
@@ -6357,9 +7099,9 @@ case "$SUB" in
     jht_load_host_values
     jht_record_host_values
     ensure_up
-    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
-    rc=$?
-    if [ "${1:-}" = cloud ] && [ "${2:-}" = pair ] && [ "$rc" -eq 0 ]; then broker_configure_web_authorisations; fi
+    rc=0
+    setup_exec_container "$@" || rc=$?
+    if [ "${1:-}" = cloud ] && [ "${2:-}" = pair ] && [ "$rc" -eq 0 ]; then ensure_broker && broker_configure_web_authorisations; fi
     exit "$rc"
     ;;
 

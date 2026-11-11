@@ -107,7 +107,7 @@ def test_the_login_is_a_credentials_file_that_is_not_empty_for_the_active_provid
     ("claude", ".claude/.credentials.json"), ("claude", ".claude/credentials.json"),
     ("claude", ".config/claude/credentials.json"), ("claude", ".config/claude/auth.json"),
     ("anthropic", ".config/claude/auth.json"),
-    ("codex", ".codex/credentials.json"), ("openai", ".config/codex/credentials.json"), ("openai", ".pi/agent/auth.json"),
+    ("codex", ".codex/credentials.json"), ("openai", ".config/codex/credentials.json"),
     ("kimi", ".kimi/credentials/kimi-code.json"), ("kimi", ".config/kimi-cli/credentials.json"), ("kimi", ".kimi/credentials.json"),
     ("moonshot", ".kimi/credentials.json"),
 ])
@@ -186,3 +186,22 @@ def test_it_is_a_program_with_one_verb_that_writes_nothing(home):
         assert bad.returncode == 2
         assert json.loads(bad.stdout) == {"ok": False, "code": "request_invalid"}
     assert sorted(str(p) for p in home.rglob("*")) == before
+
+
+def test_a_pi_file_counts_as_the_openai_login_only_with_the_openai_entry(home):
+    """Pi keeps one entry per service: a file with only Anthropic's (a Claude subscription, billed per token from Pi) is not «signed in»."""
+    config(home, "openai")
+    target = home / ".pi" / "agent" / "auth.json"
+    target.parent.mkdir(parents=True)
+    target.write_text(json.dumps({"anthropic": {"type": "oauth"}}))
+    assert team_quiet.provider_ready(home) is False
+    for text in ("{}", "not json", '{"openai": {}}'):
+        target.write_text(text)
+        assert team_quiet.provider_ready(home) is False, text
+    target.write_text(json.dumps({"anthropic": {"type": "oauth"}, "openai": {"type": "oauth"}}))
+    assert team_quiet.provider_ready(home) is True
+    # Codex's own file still counts by itself
+    target.write_text(json.dumps({"anthropic": {"type": "oauth"}}))
+    (home / ".codex").mkdir()
+    (home / ".codex" / "auth.json").write_text("{}")
+    assert team_quiet.provider_ready(home) is True

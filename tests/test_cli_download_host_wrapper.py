@@ -26,9 +26,9 @@ def test_powershell_wrapper_downloads_on_the_host_and_publishes_without_clobberi
 def test_powershell_wrapper_forwards_detached_compose_flag_as_a_literal():
     source = POWERSHELL_WRAPPER.read_text(encoding="utf-8")
     assert "Invoke-Compose up -d" not in source
-    # the three whole ups, and on Podman the up of each service in turn before them (T85)
-    assert source.count("Invoke-Compose 'up' '-d'") == 4
-    assert source.count("Invoke-Compose 'up' '-d' $service") == 1
+    # the three whole ups, and on Podman the up of the broker (only one made before, T316) in turn before them (T85)
+    assert source.count("Invoke-Compose 'up' '-d'") == 3
+    assert source.count("Invoke-Compose '--profile' 'broker' 'up' '-d' '--no-deps' $service") == 1
 
 
 def test_powershell_download_exit_code_cannot_degrade_to_zero():
@@ -54,7 +54,10 @@ def test_windows_cmd_shim_propagates_powershell_exit_code_on_both_paths():
     shim = source[source.index('$shimContent = @"') : source.index('"@', source.index('$shimContent = @"'))]
     assert "if errorlevel 1 goto jht_windows_powershell" in shim
     assert ":jht_windows_powershell" in shim
-    assert shim.count("exit /b %errorlevel%") == 2
+    # one line each, after `(goto) 2>nul` (out of the batch context first): a line AFTER the call, or `goto :eof`/`exit /b` on it, made
+    # cmd reopen the file that `jht uninstall` had just deleted (tests/test_windows_shim_exit_code.py runs the shim for real)
+    assert shim.count('(goto) 2>nul & ') == 2
+    assert "exit /b" not in shim and "goto :eof" not in shim
 
 
 def test_windows_clean_install_publishes_acl_helper_and_attests_exact_bytes_before_up():

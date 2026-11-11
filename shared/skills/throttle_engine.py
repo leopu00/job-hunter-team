@@ -1528,7 +1528,23 @@ def tick(now=None) -> dict:
         if heartbeat is not None:
             fresh["last_heartbeat"] = heartbeat
         write_flags(fresh)
+    _idle_wake_sweep(now, sessions)
     return fresh
+
+
+def _idle_wake_sweep(now: float, sessions) -> None:
+    """An Analista or a Scorer that ended its turn with work in its queue is woken by the tick, not only by a writer:
+    nothing writes to the queue once the Scouts have stopped (event_wake.sweep). Never fails the tick.
+    `sessions` None = tmux cannot be asked (a test, a machine without it): there is nobody to wake."""
+    if sessions is None:
+        return
+    try:
+        spec = importlib.util.spec_from_file_location("event_wake", Path(__file__).resolve().parent / "event_wake.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        module.sweep(now=now)
+    except Exception as exc:  # noqa: BLE001
+        _log("idle wake sweep failed: %s" % exc)
 
 
 # ── Freschezza del log (check del Dottore) ────────────────────────────────

@@ -10,6 +10,7 @@ param(
   [string]$RuntimeImage = 'ghcr.io/leopu00/jht@sha256:fa78c975c04dd5f95d6225a35c8c3bb9646f8ef14b32c8ca558d5332de0cce00',
   [string]$ExpectedImageDigest = '',
   [switch]$PersistImagePin,
+  [string]$ExtrasImageDigest = '',
   [ValidateSet('', 'core')][string]$RuntimeTier = ''
 )
 
@@ -83,15 +84,34 @@ function ConvertTo-JhtPullLine {
 function Invoke-PodmanPull {
   param([Parameter(Mandatory)][string]$PodmanPath, [Parameter(Mandatory)][string]$Machine, [Parameter(Mandatory)][string]$Image)
   $others = New-Object System.Collections.Generic.List[string]
-  & { $ErrorActionPreference = 'Continue'
-    & $PodmanPath '--connection' $Machine 'pull' $Image 2>&1 | ForEach-Object {
-      $line = ConvertTo-JhtPullLine ([string]$_)
-      if ($line) { [Console]::Out.WriteLine("JHT_PULL $line"); return }
-      $other = ConvertTo-JhtPullLine ([string]$_) -AnyLine
-      if ($other) { $others.Add($other); if ($others.Count -gt 5) { $others.RemoveAt(0) } }
-    }
+  # JHT_PULL is for the app. A person at a terminal reads the wait in words and time instead (on a pipe Podman
+  # gives no bytes), with the layers Podman has started: the line comes from a timer, because the pipeline
+  # below is blocked while Podman works.
+  $human = Test-JhtHumanOutput
+  $layers = New-Object System.Collections.Generic.HashSet[string]
+  $wait = $null
+  if ($human) {
+    Write-Host '  > Downloading the Job Hunter Team runtime image: this can take several minutes.' -ForegroundColor Cyan
+    $wait = Start-JhtLiveWait -Label 'downloading the runtime image'
   }
-  $code = $LASTEXITCODE
+  try {
+    & { $ErrorActionPreference = 'Continue'
+      & $PodmanPath '--connection' $Machine 'pull' $Image 2>&1 | ForEach-Object {
+        $line = ConvertTo-JhtPullLine ([string]$_)
+        if ($line) {
+          if (-not $human) { [Console]::Out.WriteLine("JHT_PULL $line") }
+          # a redrawn bar repeats its layer: each one counts once
+          if ($wait -and $line -match '^Copying blob (\S+)') { [void]$layers.Add($Matches[1]); $wait.Detail = "$($layers.Count) layers started" }
+          return
+        }
+        $other = ConvertTo-JhtPullLine ([string]$_) -AnyLine
+        if ($other) { $others.Add($other); if ($others.Count -gt 5) { $others.RemoveAt(0) } }
+      }
+    }
+    $code = $LASTEXITCODE
+  } finally {
+    if ($wait) { $wait.Dispose() }
+  }
   if ($code -ne 0) {
     foreach ($other in $others) { [Console]::Error.WriteLine("podman pull: $other") }
     throw "Command failed ($code): $PodmanPath --connection $Machine pull $Image"
@@ -775,7 +795,11 @@ try { Install-PrivateComposeProvider -Destination $ComposeProvider } catch {
   exit 21
 }
 
+$machineCreatedHere = $false
 try {
+  # Another user's win-sshproxy.exe that outlived its machine holds the pipe of this machine's name: said plainly, before the minutes of
+  # a machine init or a start that could only fail with «permission denied».
+  if ((Get-JhtPodmanPipeState -MachineName $MachineName) -ceq 'denied') { throw (Get-JhtPodmanPipeAdvice -MachineName $MachineName) }
   # Windows PowerShell 5.1 gives a JSON array to the pipeline as ONE object: with a
   # second machine of this user, `$machine` was the whole list. Parse with -InputObject
   # and enumerate with foreach, the same in 5.1 and in PowerShell 7.
@@ -788,6 +812,7 @@ try {
     Write-JhtPhase podman_machine_init
     Skip-WslWelcome
     Invoke-Checked $Podman 'machine' 'init' '--update-connection=false' '--provider' 'wsl' '--cpus' '2' '--memory' '3072' '--disk-size' '30' $MachineName
+    $machineCreatedHere = $true
     Write-JhtPhase podman_machine_start
     Invoke-Checked $Podman 'machine' 'start' '--update-connection=false' $MachineName
   } elseif (-not [bool]$machine.Running) {
@@ -796,13 +821,19 @@ try {
   }
   Invoke-Checked $Podman '--connection' $MachineName 'info' | Out-Null
 } catch {
-  [Console]::Error.WriteLine("podman_machine_unavailable: $($_.Exception.Message)")
+  $why = $_.Exception.Message
+  # A failure to reach the machine while its pipe is held by another user's program: the cause, in plain words, after Podman's own.
+  if ((Get-JhtPodmanPipeState -MachineName $MachineName) -ceq 'denied' -and $why -notmatch 'held by a program of another Windows user') { $why = "$why $(Get-JhtPodmanPipeAdvice -MachineName $MachineName)" }
+  [Console]::Error.WriteLine("podman_machine_unavailable: $why")
   exit 22
 }
 
 # The network script leaves with its own code (23, podman_network_unready, the
 # reason on stderr): passed on as it is, never turned into a generic failure.
-& (Join-Path $PSScriptRoot 'configure-podman-windows-network.ps1') -MachineName $MachineName
+# The broker is made at its first use, not here: a broker an earlier setup made keeps its proxy and its start at boot.
+$brokerLines = @(& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName inspect --type container jht-broker --format '{{.Name}}' 2>$null })
+$brokerMade = if ($brokerLines.Count) { [string]$brokerLines[0] } else { '' }
+& (Join-Path $PSScriptRoot 'configure-podman-windows-network.ps1') -MachineName $MachineName -WithBroker:([bool]$brokerMade)
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 if ($RuntimeImage -notmatch '^ghcr\.io/leopu00/jht(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}|@sha256:[0-9a-f]{64})$') {
@@ -874,6 +905,10 @@ $files = @{
   $bridgeSource = (Join-Path $BinDir 'podman-machine-bridge.ps1')
   (Join-Path $PSScriptRoot 'jht-integration.ps1') = (Join-Path $RuntimeDir 'jht-integration.ps1')
   (Join-Path $PSScriptRoot 'jht-tools.ps1') = (Join-Path $RuntimeDir 'jht-tools.ps1')
+  # the network script (it is run, with a bypassed policy, when the mail broker is made) and the proxy policy it installs: attested
+  # here with the other helpers, so they are never taken from the branch tip on a fresh install
+  (Join-Path $PSScriptRoot 'configure-podman-windows-network.ps1') = (Join-Path $RuntimeDir 'configure-podman-windows-network.ps1')
+  (Join-Path $PSScriptRoot 'wsl-interop-connect-proxy.py') = (Join-Path $RuntimeDir 'wsl-interop-connect-proxy.py')
 }
 # Each one takes its place by a temporary file beside it (Publish-JhtFile): a program that holds a file of the bin folder open for a
 # moment must not leave it truncated, and a file that is already these bytes is not touched.
@@ -882,6 +917,12 @@ $selectionFile = Join-Path $RuntimeDir 'container-runtime'
 [IO.File]::WriteAllText($selectionFile, "podman`n", [Text.UTF8Encoding]::new($false))
 $machineFile = Join-Path $RuntimeDir 'podman-machine'
 [IO.File]::WriteAllText($machineFile, "$MachineName`n", [Text.UTF8Encoding]::new($false))
+# The machine this run CREATED (its `machine init` succeeded) is marked: a machine that was already there (adopted, or made by an earlier
+# run) is not touched. The uninstall removes a machine of another name than the standard ones only with this mark and the same name in it.
+# It is not in the manifest: nothing the app trusts reads it.
+if ($machineCreatedHere) {
+  [IO.File]::WriteAllText((Join-Path $RuntimeDir 'podman-machine-created'), "$MachineName`n", [Text.UTF8Encoding]::new($false))
+}
 $containerUnitFile = Join-Path $RuntimeDir 'jht-container.service'
 # Environment=CONTAINERS_CGROUP_MANAGER in this unit sets nothing: it is not a Podman setting, and
 # these are `podman --remote` calls, where the cgroup manager is the service's. The service gets it
@@ -905,7 +946,7 @@ Group=user
 Environment=HOME=/home/user
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=CONTAINERS_CGROUP_MANAGER=cgroupfs
-ExecStart=/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock start --sig-proxy=false jht-broker jht
+ExecStart=/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock start --sig-proxy=false jht
 ExecStartPost=/bin/sh -ec 'p() { /usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock "$$@"; }; probe() { rc=0; out=$$(p inspect --type container jht-telegram --format "{{.State.Running}}" 2>&1) || rc=$$?; printf "%%s\n%%s" "$$rc" "$$out"; }; op=$$(probe | p exec -i jht /usr/bin/python3 -I /app/shared/telegram_service/lifecycle.py boot); case "$$op" in start) p start --sig-proxy=false jht-telegram ;; stop) p stop --time 30 jht-telegram ;; noop) exit 0 ;; *) exit 1 ;; esac; probe | p exec -i jht /usr/bin/python3 -I /app/shared/telegram_service/lifecycle.py verify "$$op"'
 ExecStop=-/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock stop --time 30 jht jht-telegram jht-broker
 TimeoutStartSec=90
@@ -926,6 +967,8 @@ $helperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $BinDir 'w
 $bridgeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $BinDir 'podman-machine-bridge.ps1')).Hash.ToLowerInvariant()
 $integrationHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $RuntimeDir 'jht-integration.ps1')).Hash.ToLowerInvariant()
 $toolsHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $RuntimeDir 'jht-tools.ps1')).Hash.ToLowerInvariant()
+$networkHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $RuntimeDir 'configure-podman-windows-network.ps1')).Hash.ToLowerInvariant()
+$proxyHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $RuntimeDir 'wsl-interop-connect-proxy.py')).Hash.ToLowerInvariant()
 $selectionHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $selectionFile).Hash.ToLowerInvariant()
 $machineHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $machineFile).Hash.ToLowerInvariant()
 $containerUnitHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $containerUnitFile).Hash.ToLowerInvariant()
@@ -938,18 +981,31 @@ if ($PersistImagePin) {
 } else {
   Remove-Item -LiteralPath $runtimeImageFile -Force -ErrorAction SilentlyContinue
 }
+# The tier file is attested in an integrity file of its own, not in the main manifest (the app compares the exact keys of that one):
+# the file first and its integrity second, so a crash between them leaves a tier the wrapper refuses.
 $runtimeTierFile = Join-Path $RuntimeDir 'runtime-tier'
-$runtimeTierManifest = ''
+$runtimeTierIntegrity = Join-Path $RuntimeDir '.runtime-tier-integrity'
 if ($RuntimeTier -eq 'core') {
   [IO.File]::WriteAllText($runtimeTierFile, "core`n", [Text.UTF8Encoding]::new($false))
-  $runtimeTierManifest = "runtime-tier=$((Get-FileHash -Algorithm SHA256 -LiteralPath $runtimeTierFile).Hash.ToLowerInvariant())`n"
+  [IO.File]::WriteAllText($runtimeTierIntegrity, "runtime-tier=$((Get-FileHash -Algorithm SHA256 -LiteralPath $runtimeTierFile).Hash.ToLowerInvariant())`n", [Text.UTF8Encoding]::new($false))
 } else {
-  Remove-Item -LiteralPath $runtimeTierFile -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath $runtimeTierFile, $runtimeTierIntegrity -Force -ErrorAction SilentlyContinue
 }
-$manifest = "version=1`ndocker-compose.yml=$composeHash`njht-wrapper.ps1=$wrapperHash`ndocker-compose.podman.yml=$podmanHash`ndocker.exe=$shimHash`ncontainer-runtime=$selectionHash`npodman-machine=$machineHash`njht-container.service=$containerUnitHash`nwindows-private-acl.ps1=$helperHash`npodman-machine-bridge.ps1=$bridgeHash`n$runtimeImageManifest$runtimeTierManifest"
+# The image of the tools that come on request, pinned by the test channel: a file and an integrity file of their own (not the main
+# manifest). Not pulled here. The file first and its integrity second, so a crash between them leaves a pin the wrapper refuses.
+$runtimeExtrasFile = Join-Path $RuntimeDir 'runtime-extras-image'
+$runtimeExtrasIntegrity = Join-Path $RuntimeDir '.runtime-extras-integrity'
+if ($ExtrasImageDigest) {
+  if ($ExtrasImageDigest -cnotmatch '^sha256:[0-9a-f]{64}\z' -or -not $PersistImagePin) { throw 'Extras image digest is invalid.' }
+  [IO.File]::WriteAllText($runtimeExtrasFile, "ghcr.io/leopu00/jht@$ExtrasImageDigest`n", [Text.UTF8Encoding]::new($false))
+  [IO.File]::WriteAllText($runtimeExtrasIntegrity, "runtime-extras-image=$((Get-FileHash -Algorithm SHA256 -LiteralPath $runtimeExtrasFile).Hash.ToLowerInvariant())`n", [Text.UTF8Encoding]::new($false))
+} else {
+  Remove-Item -LiteralPath $runtimeExtrasFile, $runtimeExtrasIntegrity -Force -ErrorAction SilentlyContinue
+}
+$manifest = "version=1`ndocker-compose.yml=$composeHash`njht-wrapper.ps1=$wrapperHash`ndocker-compose.podman.yml=$podmanHash`ndocker.exe=$shimHash`ncontainer-runtime=$selectionHash`npodman-machine=$machineHash`njht-container.service=$containerUnitHash`nwindows-private-acl.ps1=$helperHash`npodman-machine-bridge.ps1=$bridgeHash`n$runtimeImageManifest"
 [IO.File]::WriteAllText((Join-Path $RuntimeDir '.runtime-integrity'), $manifest, [Text.UTF8Encoding]::new($false))
 # The host scripts that came after the main manifest have one of their own (the app checks that one key by key).
-[IO.File]::WriteAllText((Join-Path $RuntimeDir '.runtime-helpers'), "jht-integration.ps1=$integrationHash`njht-tools.ps1=$toolsHash`n", [Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText((Join-Path $RuntimeDir '.runtime-helpers'), "jht-integration.ps1=$integrationHash`njht-tools.ps1=$toolsHash`nconfigure-podman-windows-network.ps1=$networkHash`nwsl-interop-connect-proxy.py=$proxyHash`n", [Text.UTF8Encoding]::new($false))
 # Every file the wrapper checks the owner of (Test-RuntimeBundleTrusted), before the wrapper runs (T103).
 $bundleFiles = @(
   (Join-Path $RuntimeDir 'docker-compose.yml'),
@@ -963,11 +1019,14 @@ $bundleFiles = @(
   (Join-Path $BinDir 'podman-machine-bridge.ps1'),
   (Join-Path $RuntimeDir 'jht-integration.ps1'),
   (Join-Path $RuntimeDir 'jht-tools.ps1'),
+  (Join-Path $RuntimeDir 'configure-podman-windows-network.ps1'),
+  (Join-Path $RuntimeDir 'wsl-interop-connect-proxy.py'),
   (Join-Path $RuntimeDir '.runtime-helpers'),
   $shim
 )
 if (Test-Path -LiteralPath $runtimeImageFile -PathType Leaf) { $bundleFiles += $runtimeImageFile }
-if (Test-Path -LiteralPath $runtimeTierFile -PathType Leaf) { $bundleFiles += $runtimeTierFile }
+if (Test-Path -LiteralPath $runtimeTierFile -PathType Leaf) { $bundleFiles += $runtimeTierFile, $runtimeTierIntegrity }
+if (Test-Path -LiteralPath $runtimeExtrasFile -PathType Leaf) { $bundleFiles += $runtimeExtrasFile, $runtimeExtrasIntegrity }
 foreach ($bundleFile in $bundleFiles) { Set-JhtOwnerToCurrentUser -Path $bundleFile }
 if ($legacyShimOwned) {
   Remove-Item -LiteralPath $legacyShim -Force -ErrorAction Stop
@@ -1066,7 +1125,11 @@ $composeDefinition = Get-Content -LiteralPath (Join-Path $RuntimeDir 'docker-com
 $expectedContainers = @(& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName exec jht /usr/bin/python3 -I /app/shared/telegram_service/lifecycle.py expected-services })
 $expectedCode = $LASTEXITCODE
 $invalidNames = @($expectedContainers | Where-Object { $_ -cnotin @('jht', 'jht-broker', 'jht-telegram') -or $composeDefinition -notmatch "(?m)^  $([regex]::Escape($_)):" })
-if ($expectedCode -ne 0 -or $invalidNames.Count -or @($expectedContainers | Select-Object -Unique).Count -ne $expectedContainers.Count -or $expectedContainers -cnotcontains 'jht' -or $expectedContainers -cnotcontains 'jht-broker') { throw 'runtime_containers_plan_invalid' }
+if ($expectedCode -ne 0 -or $invalidNames.Count -or @($expectedContainers | Select-Object -Unique).Count -ne $expectedContainers.Count -or $expectedContainers -cnotcontains 'jht') { throw 'runtime_containers_plan_invalid' }
+# The broker is not part of the team the setup starts (it is created at the first use of the mail or of the apply notary): it is
+# checked only when an earlier setup already made it.
+$brokerThere = (& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName inspect --type container jht-broker --format '{{.Name}}' 2>$null } | Select-Object -First 1)
+if ($brokerThere) { $expectedContainers += 'jht-broker' }
 $unsettledContainers = @(Get-UnsettledJhtContainers -Podman $Podman -MachineName $MachineName -Names $expectedContainers)
 if ($unsettledContainers.Count -gt 0) { throw "runtime_containers_unhealthy: $($unsettledContainers -join '; '). Run 'jht logs' to see why." }
 

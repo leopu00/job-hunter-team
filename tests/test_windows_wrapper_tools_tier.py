@@ -39,7 +39,8 @@ PRELUDE = r"""
 $ErrorActionPreference = 'Stop'
 $RuntimeDir = $env:T_RUNTIME; $JhtHome = $env:T_HOME; $DefaultRuntimeImage = $env:T_FULL; $CoreImageDigest = $env:T_CORE
 $RuntimeTierFile = Join-Path $RuntimeDir 'runtime-tier'; $RuntimeImageFile = Join-Path $RuntimeDir 'runtime-image'
-$RuntimeManifest = Join-Path $RuntimeDir '.runtime-integrity'; $ComposeFile = Join-Path $RuntimeDir 'docker-compose.yml'
+$RuntimeTierIntegrity = Join-Path $RuntimeDir '.runtime-tier-integrity'
+$RuntimeManifest = Join-Path $RuntimeDir '.runtime-integrity'; $RuntimeTierIntegrity = Join-Path $RuntimeDir '.runtime-tier-integrity'; $ComposeFile = Join-Path $RuntimeDir 'docker-compose.yml'
 $WrapperPath = $env:T_STUB; $ContainerRuntime = 'docker'
 function Write-Err { param([string]$Msg) [Console]::Error.WriteLine("error: $Msg") }
 . $env:T_TOOLS
@@ -50,6 +51,7 @@ STUB = r"""
 param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest)
 $RuntimeDir = $env:T_RUNTIME; $JhtHome = $env:T_HOME; $DefaultRuntimeImage = $env:T_FULL
 $RuntimeTierFile = Join-Path $RuntimeDir 'runtime-tier'
+$RuntimeTierIntegrity = Join-Path $RuntimeDir '.runtime-tier-integrity'
 function Write-Err { param([string]$Msg) [Console]::Error.WriteLine("error: $Msg") }
 if ($Rest[0] -eq 'up') { Add-Content -LiteralPath (Join-Path $env:FAKE 'wrapper-calls') -Value ("up image=" + $env:JHT_IMAGE); exit 0 }
 . $env:T_TOOLS
@@ -176,16 +178,16 @@ def test_switch_is_silent_until_the_profile_is_ready_and_the_full_image_is_here(
     assert _lines(box.run("exit (Invoke-ToolsCommand @('switch'))")) == [] and tier.exists()
 
 
-def test_switch_drops_the_tier_rewrites_the_manifest_and_ups_the_full_image(box):
+def test_switch_drops_the_tier_and_its_integrity_and_ups_the_full_image(box):
     tier = box.tier()
+    integrity = box.runtime / ".runtime-tier-integrity"
+    integrity.write_text("runtime-tier=x\n", encoding="utf-8")
     (box.fake / "full-present").write_text("", encoding="utf-8")
     (box.home / "profile" / "ready.flag").write_text("2026-11-10T09:00:00Z\n", encoding="utf-8")
-    body = ("function Write-RuntimeManifest { Add-Content -LiteralPath (Join-Path $env:FAKE 'wrapper-calls') -Value 'manifest-written' }\n"
-            "$env:JHT_IMAGE = 'stale'\nexit (Invoke-ToolsCommand @('switch'))")
-    done = box.run(body)
+    done = box.run("$env:JHT_IMAGE = 'stale'\nexit (Invoke-ToolsCommand @('switch'))")
     assert done.returncode == 0 and _lines(done) == ["JHT_PHASE tools_ready"], done.stdout + done.stderr
-    assert not tier.exists()
-    assert (box.fake / "wrapper-calls").read_text(encoding="utf-8").split() == ["manifest-written", "up", "image="]
+    assert not tier.exists() and not integrity.exists()
+    assert (box.fake / "wrapper-calls").read_text(encoding="utf-8").split() == ["up", "image="]
     assert box.notice()["tier"] == "full" and box.notice()["state"] == "ready"
 
 
@@ -200,10 +202,11 @@ TRUST = r"""
 $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($env:T_WRAPPER_SRC, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw "parse: $($errors[0])" }
-foreach ($name in @('Write-RuntimeManifest', 'Test-RuntimeBundleTrusted')) {
+foreach ($name in @('Write-RuntimeManifest', 'Test-RuntimeExtrasPin', 'Test-RuntimeBundleTrusted')) {
   $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name }, $true)
   Invoke-Expression $fn.Extent.Text
 }
+$RuntimeExtrasFile = Join-Path $RuntimeDir 'runtime-extras-image'; $RuntimeExtrasIntegrity = Join-Path $RuntimeDir '.runtime-extras-integrity'
 function Test-RuntimePathAuthority { $true }
 function Test-RuntimeAncestorsWithoutReparsePoint { param($p) $true }
 function Test-ProtectedRuntimeNode { param($p, [switch]$Directory) $true }
@@ -221,6 +224,10 @@ def _trust(box, case: str, *, tier_text: str | None = None, core: str = CORE_DIG
         (box.runtime / "runtime-image").write_text(FULL + "\n", encoding="utf-8", newline="\n")
     if tier_text is not None:
         (box.runtime / "runtime-tier").write_text(tier_text, encoding="utf-8", newline="\n")
+        # what the installer writes beside it: the hash of the file as it was written
+        import hashlib
+        digest = hashlib.sha256((box.runtime / "runtime-tier").read_bytes()).hexdigest()
+        (box.runtime / ".runtime-tier-integrity").write_text(f"runtime-tier={digest}\n", encoding="utf-8", newline="\n")
     body = (TRUST + f"$CoreImageDigest = '{core}'\nWrite-RuntimeManifest\n"
             + case)
     return box.run(body, T_WRAPPER_SRC=str(WRAPPER))
@@ -229,7 +236,7 @@ def _trust(box, case: str, *, tier_text: str | None = None, core: str = CORE_DIG
 def test_an_attested_core_tier_selects_the_core_image_by_digest(box):
     done = _trust(box, "if (Test-RuntimeBundleTrusted) { 'trusted ' + $env:JHT_IMAGE } else { 'untrusted' }", tier_text="core\n")
     assert _lines(done) == [f"trusted ghcr.io/leopu00/jht@{CORE_DIGEST}"], done.stdout + done.stderr
-    assert "runtime-tier=" in (box.runtime / ".runtime-integrity").read_text(encoding="utf-8")
+    assert "runtime-tier" not in (box.runtime / ".runtime-integrity").read_text(encoding="utf-8"), "the app compares the exact keys of the main manifest"
 
 
 def test_no_tier_file_is_the_whole_image_of_before(box):
@@ -270,11 +277,12 @@ def test_jht_tools_is_a_host_helper_the_installer_ships_the_enabler_attests_and_
     wrapper = _text(WRAPPER)
     installer = _text(ROOT / "scripts" / "install.ps1")
     enabler = _text(ROOT / "scripts" / "enable-podman-windows-runtime.ps1")
-    assert "$RuntimeHelpers = @('jht-integration.ps1', 'jht-tools.ps1')" in wrapper
+    assert "$RuntimeHelpers = @('jht-integration.ps1', 'jht-tools.ps1', 'configure-podman-windows-network.ps1', 'wsl-interop-connect-proxy.py')" in wrapper
     assert re.search(r"'tools' \{\n    Require-ComposeFile\n", wrapper)
-    assert "[string]$Rest[0] -ceq 'pull'" in wrapper, "only pull fetches a missing helper"
+    tools_branch = wrapper.split("  'tools' {")[1].split("\n  'telegram' {")[0]
+    assert "Install-RuntimeHelpers" not in tools_branch, "no command of jht tools downloads a missing helper (A3)"
     assert ". (Join-Path $RuntimeDir 'jht-tools.ps1')\n    exit (Invoke-ToolsCommand $Rest)" in wrapper
-    assert "'integration', 'tools'," in wrapper, "its --help is the local one"
+    assert "'integration', 'screen', 'linkedin', 'tools'," in wrapper, "its --help is the local one"
     assert "'scripts/jht-tools.ps1'" in installer and "(Join-Path $RuntimeDir 'jht-tools.ps1')" in installer
     assert "jht-tools.ps1=$toolsHash" in enabler and "(Join-Path $RuntimeDir 'jht-tools.ps1')" in enabler
     assert "$toolsHash" not in next(line for line in enabler.splitlines() if line.startswith('$manifest = "version=1'))
@@ -320,3 +328,65 @@ def test_the_detached_pull_asks_for_a_hidden_window_only_where_the_parameter_exi
     assert "Start-Process -FilePath $shell -WindowStyle" not in start, "the parameter must not be on the command line itself"
     assert "if ($PSVersionTable.PSEdition -eq 'Desktop' -or $IsWindows) { $start.WindowStyle = 'Hidden' }" in start
     assert start.index("$start.WindowStyle") < start.index("Start-Process @start")
+
+
+# ── before the helpers are there: the read-only commands the app reads answer «not installed yet» ──────────────────────────
+
+ABSENT = r"""
+$tokens = $null; $errors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile($env:T_WRAPPER_SRC, [ref]$tokens, [ref]$errors)
+if ($errors.Count) { throw "parse: $($errors[0])" }
+$null = Invoke-Expression ($ast.Extent.Text.Substring($ast.Extent.Text.IndexOf('$IntegrationIdsAbsent = ')).Split("`n")[0])
+$fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Write-RuntimeHelperAbsentAnswer' }, $true)
+Invoke-Expression $fn.Extent.Text
+$argv = @(ConvertFrom-Json -InputObject $env:T_ARGS | ForEach-Object { $_ })
+$answered = Write-RuntimeHelperAbsentAnswer $argv[0] ([string[]]@($argv | Select-Object -Skip 1))
+[Console]::Out.WriteLine("answered=$answered")
+"""
+
+
+def _absent(box, *args: str):
+    import json as _json
+    done = box.run(ABSENT, T_WRAPPER_SRC=str(WRAPPER), T_ARGS=_json.dumps(list(args)))
+    assert done.returncode == 0, done.stdout + done.stderr
+    lines = _lines(done)
+    return lines[:-1], lines[-1]
+
+
+IDS = ["google", "telegram", "mail", "linkedin-login", "screen", "media"]
+
+
+def test_tools_status_json_answers_a_valid_state(box):
+    out, answered = _absent(box, "tools", "status", "--json")
+    assert answered == "answered=True"
+    assert json.loads(out[0]) == {"ok": True, "state": "none", "tier": "full", "reason": "not_installed"} and len(out) == 1
+
+
+def test_integration_list_and_status_answer_for_every_id_in_json_and_in_words(box):
+    out, answered = _absent(box, "integration", "list", "--json")
+    rows = json.loads(out[0])["integrations"]
+    assert answered == "answered=True" and [r["id"] for r in rows] == IDS and {r["state"] for r in rows} == {"not_installed"}
+    one, _ = _absent(box, "integration", "status", "mail", "--json")
+    assert json.loads(one[0]) == {"id": "mail", "state": "not_installed", "reason": "non ancora installato"}
+    words, _ = _absent(box, "integration", "list")
+    assert [line.split()[0] for line in words] == IDS and all("non installato" in line for line in words)
+
+
+@pytest.mark.parametrize("args", [("integration", "status", "bogus", "--json"), ("integration", "list", "--bogus"), ("integration", "list", "mail"),
+                                  ("integration", "add", "media"), ("tools", "status"), ("tools", "pull"), ("tools", "switch")])
+def test_anything_else_is_left_to_the_helper_and_its_error(box, args):
+    out, answered = _absent(box, *args)
+    assert answered == "answered=False" and out == []
+
+
+def test_the_two_branches_ask_for_the_answer_only_while_the_helper_is_not_declared():
+    wrapper = _text(WRAPPER)
+    assert "if (-not (Test-RuntimeHelperDeclared 'jht-integration.ps1') -and (Write-RuntimeHelperAbsentAnswer 'integration' $Rest)) { exit 0 }" in wrapper
+    assert "if (-not (Test-RuntimeHelperDeclared 'jht-tools.ps1') -and (Write-RuntimeHelperAbsentAnswer 'tools' $Rest)) { exit 0 }" in wrapper
+    assert re.search(r"^\$IntegrationIdsAbsent = @\('google', 'telegram', 'mail', 'linkedin-login', 'screen', 'media'\)$", wrapper, re.M)
+
+
+def test_the_ids_of_the_answer_are_the_ones_of_the_helper():
+    theirs = re.search(r"^\$IntegrationIds = @\((.*)\)$", _text(ROOT / "scripts" / "jht-integration.ps1"), re.M).group(1)
+    ours = re.search(r"^\$IntegrationIdsAbsent = @\((.*)\)$", _text(WRAPPER), re.M).group(1)
+    assert ours == theirs, "two lists, one meaning: the wrapper answers for the ids the helper knows"

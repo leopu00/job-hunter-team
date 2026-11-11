@@ -38,6 +38,24 @@ export function loginState(config, home) {
   }
 }
 
+/**
+ * The entry NAMES of Pi's sign-in file when it is there but is not the sign-in of the provider of the setup (a file with only Anthropic's
+ * entry, say), so the app can say what it holds: lowercase words only, at most eight, never a value. Empty in every other case.
+ */
+export function loginFound(config, home) {
+  if (loginMarkerOf(config) !== PI_LOGIN_MARKER) return [];
+  try {
+    const info = lstatSync(join(home, PI_LOGIN_MARKER));
+    if (!info.isFile() || info.size <= 0 || info.size > 256 * 1024) return [];
+    const seen = inspectPiLogin(readFileSync(join(home, PI_LOGIN_MARKER), 'utf8'), config.active_provider);
+    // an entry that carries the provider's own name but is empty is a broken login, not «another provider»: no names to say
+    const others = seen.found.filter((name) => !seen.needs.includes(name));
+    return seen.state === 'other_provider' ? others.slice(0, 8) : [];
+  } catch {
+    return [];
+  }
+}
+
 function report(config, home, changed) {
   const provider = typeof config.active_provider === 'string' ? config.active_provider.trim().toLowerCase() : '';
   const method = config.providers?.[config.active_provider]?.auth_method;
@@ -48,6 +66,7 @@ function report(config, home, changed) {
     provider: /^[a-z]{1,16}$/.test(provider) ? provider : '',
     pi_allowed: provider !== '' && harnessProblem('pi', config.active_provider, method) === null,
     login: loginState(config, home),
+    ...(loginFound(config, home).length > 0 ? { login_found: loginFound(config, home) } : {}),
   };
 }
 

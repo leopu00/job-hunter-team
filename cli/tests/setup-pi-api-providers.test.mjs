@@ -53,11 +53,11 @@ test('the key variable of an env reference is the provider\'s, not a guess', asy
   assert.equal(config().providers.kimi.api_key_ref.id, 'MOONSHOT_API_KEY');
 });
 
-test('their key is never plaintext: by reference only, from env or file', async () => {
-  for (const extra of [{}, { secretMode: 'plaintext', apiKey: 'synthetic-key' }, { apiKeyFile: '/dev/shm/jht-key' }]) {
+test('their key is never plaintext: by reference only (a file the setup keeps, env or file); the file of the person is in setup-key-store.test.mjs', async () => {
+  for (const extra of [{}, { secretMode: 'plaintext', apiKey: 'synthetic-key' }]) {
     const { code, text } = await setup({ provider: 'kimi', harness: 'pi', ...extra });
     assert.equal(code, 1, text);
-    assert.match(text, /by reference: use --secret-mode env or --secret-mode file/);
+    assert.match(text, /by reference: use --api-key-file or --api-key-stdin .* or --secret-mode env or --secret-mode file/);
   }
 });
 

@@ -59,10 +59,14 @@ test('with Pi the login is the one of the provider of the setup: a file with onl
   writeFileSync(join(home, '.pi/agent/auth.json'), '{"anthropic":{"type":"oauth","secret":"never printed"}}');
   const r = jht(home, []);
   assert.equal(r.reply.login, 'signed_out');
+  assert.deepEqual(r.reply.login_found, ['anthropic'], 'the app is told what the file holds, by name only');
   assert.doesNotMatch(r.lines.join('\n'), /never printed/);
   for (const [text, login] of [['{"openai":{"type":"oauth"}}', 'signed_in'], ['{"openai-codex":{"type":"oauth"}}', 'signed_out'], ['{}', 'signed_out'], ['not json', 'signed_out'], ['{"openai":{}}', 'signed_out']]) {
     writeFileSync(join(home, '.pi/agent/auth.json'), text);
-    assert.equal(jht(home, []).reply.login, login, text);
+    const reply = jht(home, []).reply;
+    assert.equal(reply.login, login, text);
+    // names only when the file holds an entry that is for another provider; nothing else changes the reply
+    assert.equal('login_found' in reply, text === '{"openai-codex":{"type":"oauth"}}', text);
   }
   // a provider this release has no entry name for keeps the rule of before: the file is there
   const other = box({ version: 1, active_provider: 'zzz', harness: 'pi', providers: { zzz: { name: 'zzz', auth_method: 'subscription' } }, channels: {} });

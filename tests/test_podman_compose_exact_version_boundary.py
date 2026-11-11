@@ -51,12 +51,12 @@ HASH_PROBE_CHILD = [
     "--format",
     "json",
 ]
-# After a successful `up` the wrapper hands the broker its web authorisations
-# (broker_configure_web_authorisations): it looks up the agent container and
-# the broker service, each one a read-only `compose ps -q` plus the hash probe.
-WEB_AUTHORISATION_LOOKUPS = [PS_Q_CHILD, HASH_PROBE_CHILD] * 2
-# ... and each lookup attests the container it found with one docker inspect.
-WEB_AUTHORISATION_INSPECTS = 2
+# After a successful `up` the wrapper only checks whether a broker is there to be brought back or adopted
+# (broker_after_up): one read-only `compose ps -q` for the broker service, no hash probe and no attestation,
+# because an install without a broker has nothing to configure (the broker is made at its first use).
+WEB_AUTHORISATION_LOOKUPS = [PS_Q_CHILD]
+# ... and the container it finds (the fixture's) is attested with one docker inspect.
+WEB_AUTHORISATION_INSPECTS = 1
 UNTRUSTED_CONTAINER_CASES = (
     ("zero", False),
     ("wrong-name", True),

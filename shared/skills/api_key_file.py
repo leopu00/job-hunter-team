@@ -21,6 +21,9 @@ What is checked before a byte of the file is read (every refusal says what, neve
   * its folder belongs to this user or to root and nobody else can write in it (or it is sticky, like /dev/shm);
   * it lives on tmpfs or ramfs (`/proc/mounts`, the longest mount point above the real path): on a disk the key would
     outlive the run. Without `/proc/mounts` (not Linux) it is refused: the launcher runs in the container;
+    ONE other place is accepted, the key store of the setup (KEY_STORE, `jht setup --api-key-file|--api-key-stdin` for glm
+    and kimi): a folder of the container's own volume, the user's, mode 0700 (a key a person gave the setup must outlive
+    the container; on the bind mount of ~/.jht, which shows every file as 0777 on Windows, it never could);
   * the content is one line of 16 to 512 printable ASCII characters, no spaces (a trailing newline is dropped).
 
 The agent runs as the same user and can read the file too: this keeps the key out of argv, config and logs, it does not
@@ -45,6 +48,9 @@ MAX_BYTES = 4096
 TMPFS_TYPES = ("tmpfs", "ramfs")
 _KEY = re.compile(r"[!-~]{16,512}")
 EXIT_REFUSED = 78  # EX_CONFIG
+# The folder of the setup's keys: on the volume of the container (not the bind mount of the host's ~/.jht), made 0700 by
+# `jht setup` (cli/wizard/key-store.js writes there; keep the two paths together).
+KEY_STORE = Path("/opt/jht-deps/keys")
 
 
 class KeyFileError(Exception):
@@ -80,7 +86,27 @@ def _folder(path: Path, uid: int) -> None:
         raise KeyFileError("the folder of the key file is writable by others and not sticky")
 
 
-def read_key(path=None, *, uid=None, mounts=Path("/proc/mounts")) -> str:
+def _store(path: Path, uid: int, store: Path) -> bool:
+    """True when `path` is a file straight inside the key store; raises when the store is there but not safe.
+
+    The folder named in the path is compared as written (no «..», no link in the file itself: checked by the caller);
+    the store itself must be a real folder of this user that nobody else can enter."""
+    if str(path.parent) != str(store):
+        return False
+    try:
+        info = os.lstat(store)
+    except OSError as error:
+        raise KeyFileError("the key store cannot be read: %s" % error.strerror) from error
+    if not stat.S_ISDIR(info.st_mode):
+        raise KeyFileError("the key store is not a folder")
+    if info.st_uid != uid:
+        raise KeyFileError("the key store belongs to another user")
+    if info.st_mode & 0o077:
+        raise KeyFileError("the key store has permissions for group or others (%s): it must be 0700" % oct(info.st_mode & 0o777))
+    return True
+
+
+def read_key(path=None, *, uid=None, mounts=Path("/proc/mounts"), store=KEY_STORE) -> str:
     """The key of the file named by JHT_API_KEY_FILE (or `path`), after every check. Raises KeyFileError."""
     raw = path if path is not None else os.environ.get(FILE_ENV, "")
     if not raw:
@@ -109,7 +135,8 @@ def read_key(path=None, *, uid=None, mounts=Path("/proc/mounts")) -> str:
         raise KeyFileError("the key file is empty or too big (1 to %d bytes)" % MAX_BYTES)
     try:
         _folder(target, uid)
-        _tmpfs(target.resolve(strict=True), Path(mounts))
+        if not _store(target, uid, Path(store)):
+            _tmpfs(target.resolve(strict=True), Path(mounts))
         fd = os.open(target, os.O_RDONLY | os.O_NOFOLLOW)
     except OSError as error:
         raise KeyFileError("the key file cannot be opened: %s" % error.strerror) from error

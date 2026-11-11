@@ -1,10 +1,12 @@
 ---
 name: circles-and-sources
-description: Strategy map for what to search WHERE, derived entirely from the candidate profile. The 5 concentric circles (work_mode + relocation) tell you the geographic scope; the 4 source tiers (LinkedIn → ATS aggregators → niche → web) tell you which platforms to drain in order. A scout that searches the wrong tier in the wrong circle wastes its quota and its `scout-coord` partition. Open this skill at boot (after `scout-coord`) and again whenever a circle is exhausted or a `[FEEDBACK]` from the Analyst suggests changing source.
+description: Strategy map for what to search WHERE, derived entirely from the candidate profile. The 5 concentric circles (work_mode + relocation) tell you the geographic scope; the 4 source tiers (LinkedIn → ATS aggregators → niche → web) tell you which platforms to drain in order. A scout that searches the wrong tier in the wrong circle wastes its quota and its `scout-coord` partition. Open this skill at boot (after `scout-coord`) and again whenever a circle is exhausted or a `[FEEDBACK]` from the Analyst suggests changing source. Read only lines 1-97 (`limit` 97) — the rest is reference.
 allowed-tools: Bash(python3 /app/shared/skills/safe_fetch.py *), Bash(python3 /app/shared/skills/linkedin_check.py *), Bash(python3 /app/shared/skills/linkedin_access.py *)
 ---
 
 # circles-and-sources — read the profile, build the map
+
+> **Read in pieces.** Lines 1-97 of this file are the map (circles, tiers, Scout-level filters): read them once at STEP 2 (`offset` 1, `limit` 97). Below `## Reference` — closed sources, the anti-bias check at the end of a batch (company, city, work authorization), Analyst feedback, anti-patterns — read only the part you need when its trigger comes.
 
 Two orthogonal axes:
 - **Circles** = WHERE (geographic / work-mode scope)
@@ -72,8 +74,6 @@ Drain a tier completely before moving to the next.
 | 3    | **Niche boards (profile-specific)** | Pick by `work_mode` AND domain                                                                              | (see table below)                                                                              |
 | 4    | **WebSearch + career pages**        | `WebSearch` queries + scrape of company career pages                                                        | Last resort only after tier 1-3 are drained.                                                   |
 
-**Sources that close, and sources with no search.** Indeed and Glassdoor are not searched directly (they answer 403 to an automated reader): their job alerts arrive by email (Email-first sourcing in your prompt). A **403** from any source means it is closed for this pass: go to another source, do not retry, and never look for a way around the protection. The ATS (Greenhouse, Lever, Ashby, Workable, Personio, Teamtailor, Recruitee, Jobvite...) are queried **per company** (its board slug), not as a global search: they have none. Find the companies first (LinkedIn, `WebSearch`, career pages) and read each one's board. The same goes for a Cloudflare challenge or a login wall, and for the sources confirmed closed on a real run: Umantis (403), Climatebase (Cloudflare challenge), JobSearch DK (login wall), and the ones that answered 403 on the run of 02/11: Jobware, Nationale Vacaturebank, Jobat, Remote Rocketship, Intermediair, EU Remote Jobs. If they have email alerts, use those. A **410** (the endpoint is dead) is not a pass closed but a source to REMOVE from your lists: XING Jobs, Bundesagentur für Arbeit. Do not query them again, this pass or the next.
-
 ### Tier 3 — choose by work_mode + domain
 
 | Candidate's `work_mode` | Niche boards to consider                                                                                          |
@@ -84,6 +84,21 @@ Drain a tier completely before moving to the next.
 | Domain-specific (any)   | Stack-specific niche: PyJobs (Python), GoJobs (Go), Djinni (Eastern Europe / dev), 4dayweek.io (4-day-week), ...   |
 
 > ⚠️ **Don't bring remote-specific boards into a non-remote search**, and vice versa. WeWorkRemotely on a candidate who wants on-site Milan is wasted scraping.
+
+## Permissive filters at SCOUT level
+
+The Scout pre-filters only the **totally out-of-scope** cases. **Do not do the Analyst's job** — the candidate is treated as adaptable to adjacent roles. Skip a posting only if:
+
+- 🚫 Title contains explicitly: `senior`, `lead`, `staff`, `principal`, `head of`, `director` → SKIP (seniority gap too wide)
+- 🚫 Geographic work-auth incompatible with the profile (e.g. `US-only` / `Canada-only` and the candidate doesn't have visa) → SKIP
+- 🚫 Domain completely outside IT/coding (e.g. pastry chef, accountant, sales) when the candidate is in IT → SKIP
+- 🚫 Hard requirement of `> real_years + 3` years of experience → SKIP (moderate gap is fine, the Scorer decides)
+
+Everything else: **insert it**. Adjacent stacks (data, devops, platform, frontend, automation, ML adjacent, etc.) all go through; the Scorer assigns a fit-proportional score and the user sees them.
+
+## Reference
+
+**Sources that close, and sources with no search.** Indeed and Glassdoor are not searched directly (they answer 403 to an automated reader): their job alerts arrive by email (Email-first sourcing in your prompt). A **403** from any source means it is closed for this pass: go to another source, do not retry, and never look for a way around the protection. The ATS (Greenhouse, Lever, Ashby, Workable, Personio, Teamtailor, Recruitee, Jobvite...) are queried **per company** (its board slug), not as a global search: they have none. Find the companies first (LinkedIn, `WebSearch`, career pages) and read each one's board. The same goes for a Cloudflare challenge or a login wall, and for the sources confirmed closed on a real run: Umantis (403), Climatebase (Cloudflare challenge), JobSearch DK (login wall), and the ones that answered 403 on the run of 02/11: Jobware, Nationale Vacaturebank, Jobat, Remote Rocketship, Intermediair, EU Remote Jobs. If they have email alerts, use those. A **410** (the endpoint is dead) is not a pass closed but a source to REMOVE from your lists: XING Jobs, Bundesagentur für Arbeit. Do not query them again, this pass or the next.
 
 ## Anti-bias rule (mandatory) — on **company AND location**
 
@@ -107,17 +122,6 @@ Bilanciare le location non serve se le offerte non sono **lavorabili** dall'uten
 - 🇬🇧 **UK post-Brexit**: un cittadino **UE senza visto UK** NON può lavorare a Londra/UK senza **sponsorship** (Skilled Worker visa). Quindi per un profilo solo-UE le offerte UK valgono **solo se** il JD menziona esplicitamente *visa sponsorship*; altrimenti sono work-auth incompatibili → SKIP (vedi "Permissive filters", regola geo).
 - 🇨🇭 **Svizzera / non-UE**: stessa logica — verifica permesso di lavoro.
 - Regola pratica: se l'hub dominante è in un paese che richiede un permesso che l'utente non ha (e i JD non offrono sponsorship), quel volume è **fantasma** — non conta come copertura e va escluso dal pool, non solo bilanciato.
-
-## Permissive filters at SCOUT level
-
-The Scout pre-filters only the **totally out-of-scope** cases. **Do not do the Analyst's job** — the candidate is treated as adaptable to adjacent roles. Skip a posting only if:
-
-- 🚫 Title contains explicitly: `senior`, `lead`, `staff`, `principal`, `head of`, `director` → SKIP (seniority gap too wide)
-- 🚫 Geographic work-auth incompatible with the profile (e.g. `US-only` / `Canada-only` and the candidate doesn't have visa) → SKIP
-- 🚫 Domain completely outside IT/coding (e.g. pastry chef, accountant, sales) when the candidate is in IT → SKIP
-- 🚫 Hard requirement of `> real_years + 3` years of experience → SKIP (moderate gap is fine, the Scorer decides)
-
-Everything else: **insert it**. Adjacent stacks (data, devops, platform, frontend, automation, ML adjacent, etc.) all go through; the Scorer assigns a fit-proportional score and the user sees them.
 
 ## Listening to Analyst feedback
 

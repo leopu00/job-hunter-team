@@ -38,6 +38,8 @@ services:
       - HOME=/jht_home
       - JHT_HOME=/jht_home
       - JHT_USER_DIR=/jht_user
+      # The live screen is the jht-screen container, not a process of pid1 (cli/src/commands/pid1.js).
+      - JHT_LIVE_SCREEN_EXTERNAL=1
       # JHT_HOST_TYPE letto da pid1 dispatcher. Default `local` per
       # backwards-compat: solo VPS via host-setup.sh setta esplicitamente
       # `vps` in ~/.jht/host.env (montato come /jht_home/host.env).
@@ -139,19 +141,25 @@ services:
       # entry. Gli allegati inbound sono copiabili, mai modificabili in loco.
       - jht-telegram-sock:/run/jht-telegram:ro
       - jht-telegram-inbox:/jht_telegram_inbox:ro
+      # The media container (voice notes and photos, on request): the inbox is where jht writes the files to open, the outbox
+      # is where the container answers. Opposite modes, as the security opinions ask: jht never writes the answers, the container never
+      # writes the questions. Empty volumes while the integration is not there.
+      - jht-media-in:/jht_media/in
+      - jht-media-out:/jht_media/out:ro
+      # The full Chromium of the closer, copied here from the extras image by jht-playwright-populate when the person asks for a tool
+      # that needs it. Read-only: the agents cannot change a binary they are about to launch. Empty until then.
+      - jht-playwright:/opt/playwright-extras:ro
+      # The display of the live screen is the one of the jht-screen container (`jht screen on`): its X socket arrives here through this
+      # volume, read-only (connecting to a unix socket works the same), and the closer opens a browser with a window only when the
+      # socket is there. Empty while the screen is off.
+      - jht-x11:/tmp/.X11-unix:ro
     # Permette allo spike Scorer di raggiungere Ollama/llama.cpp avviato
     # sull'host anche su Docker Engine Linux. L'endpoint resta opt-in e il
     # runner accetta esclusivamente host locali.
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    # Una sola porta, e solo sul loopback dell'host: lo stream in sola visione
-    # dello schermo del CLOSER (.launcher/live-screen.sh), che l'app desktop
-    # mostra in una finestra staccata. Lo schermo contiene CV e form di
-    # candidatura: il prefisso 127.0.0.1 NON si toglie — senza, Docker pubblica
-    # su 0.0.0.0 e lo stream diventa raggiungibile dalla rete locale. La
-    # dashboard web locale resta ritirata (2026-07-23).
-    ports:
-      - "127.0.0.1:${JHT_LIVE_SCREEN_PORT:-6080}:6080"
+    # No port is published here any more: the stream of the live screen is published by the jht-screen container, on 127.0.0.1 only
+    # (the 127.0.0.1 prefix stays: without it the stream would be reachable from the local network).
     stdin_open: true
     tty: true
     restart: unless-stopped
@@ -174,6 +182,9 @@ services:
   # uid suo (1002), nessun bind dell'host: i segreti stanno in volumi con nome
   # montati solo qui. L'host lo amministra con `exec jht-broker-admin`.
   jht-broker:
+    # Non nasce con `jht up`: lo crea `ensure-broker` al primo uso (jht mail setup, il notaio delle candidature,
+    # telegram pair). `jht` monta da subito il solo volume vuoto del socket, cosi' il broker arriva senza ricreare `jht`.
+    profiles: [broker]
     image: *jht-image
     container_name: jht-broker
     user: "1002:1002"
@@ -245,6 +256,202 @@ services:
       - ALL
     restart: unless-stopped
 
+  # ── Tools the user asks for (profiles: off until `jht integration add`) ──────────────────────────────────────────────────
+  # One image (the extras one, by the digest the wrapper carries and exports as JHT_EXTRAS_IMAGE) and one container per tool.
+  # No socket of the engine, no capability, no new privileges, the default seccomp profile, a process cap, a memory cap, a
+  # root that cannot be written and a tmpfs of fixed size. They start on command and stay off on their own (restart "no"):
+  # nothing here comes up at boot. Without the wrapper's pin the image name does not exist, and the profile cannot start.
+
+  # Voice notes to WAV and photos to text, on files nobody has vetted: no network at all, the inbox read-only, the outbox the
+  # only place it writes. The worker is shared/media/media_worker.py.
+  jht-media:
+    profiles: [media]
+    image: ${JHT_EXTRAS_IMAGE:-jht-extras-unpinned}
+    container_name: jht-media
+    user: "1001:1001"
+    entrypoint: ["/usr/bin/tini", "-g", "--", "python3", "/app/shared/media/media_worker.py"]
+    network_mode: none
+    environment:
+      - LANG=C.UTF-8
+      - HOME=/tmp
+    volumes:
+      - jht-media-in:/jht_media/in:ro
+      - jht-media-out:/jht_media/out
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777,noexec,nosuid
+      # The image declares these two VOLUMEs for jht: masked here with empty folders nobody can write, as for jht-telegram.
+      - /jht_home:size=64k,mode=0555
+      - /jht_user:size=64k,mode=0555
+    pids_limit: 128
+    mem_limit: 1g
+    cpus: 2
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  # The live screen of the closer, on request (`jht screen on`): Xvfb, x11vnc in view-only and websockify, the three of
+  # .launcher/live-screen.sh, in a container of their own. The X socket goes to the volume jht-x11 that jht mounts read-only, and the
+  # password of the viewer to ~/.jht/live-screen, where the desktop app reads it. The only port is the stream, on 127.0.0.1.
+  # The X socket is visible to every agent of jht, so the stream stays view-only: nobody types a password on this screen.
+  jht-screen:
+    profiles: [screen]
+    image: ${JHT_EXTRAS_IMAGE:-jht-extras-unpinned}
+    container_name: jht-screen
+    user: "1001:1001"
+    entrypoint: ["/usr/bin/tini", "-g", "--", "/bin/bash", "/app/.launcher/live-screen.sh"]
+    environment:
+      - LANG=C.UTF-8
+      - HOME=/tmp
+      - JHT_LIVE_SCREEN_STATE_DIR=/jht_screen_state
+      - JHT_LOGS_DIR=/tmp/logs
+    ports:
+      - "127.0.0.1:${JHT_LIVE_SCREEN_PORT:-6080}:6080"
+    volumes:
+      - jht-x11:/tmp/.X11-unix
+      - ${HOME}/.jht/live-screen:/jht_screen_state
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777,noexec,nosuid
+      # The image declares these two VOLUMEs for jht: masked here with empty folders nobody can write, as for the others.
+      - /jht_home:size=64k,mode=0555
+      - /jht_user:size=64k,mode=0555
+    pids_limit: 64
+    mem_limit: 512m
+    cpus: 1
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  # The manual sign-in to LinkedIn (`jht linkedin login`), on request, in three containers of the profile `login` (shared/login/):
+  #   jht-login        the browser (Xvfb, openbox, Chromium, x11vnc) on the profile of the person: NO network at all, a display of its own
+  #                    that nothing else mounts; it reaches the world only through a socket of the egress folder and the view only through
+  #                    a socket of the vnc folder;
+  #   jht-login-proxy  the one way out: a CONNECT proxy on a unix socket that lets through a short list of names on port 443. It has the
+  #                    network and no profile, no display, no port; it sees bytes of TLS, never what is typed;
+  #   jht-login-view   the window onto the browser: the one published port, 127.0.0.1:6081, a token that opens one connection, a session
+  #                    of 15 minutes at most. It forwards bytes: it holds no profile and no network of its own beyond the port.
+  # The two folders of sockets are volumes mounted by two of the three each, never by jht.
+  jht-login:
+    profiles: [login]
+    image: ${JHT_EXTRAS_IMAGE:-jht-extras-unpinned}
+    container_name: jht-login
+    user: "1001:1001"
+    entrypoint: ["/usr/bin/tini", "-g", "--", "python3", "/app/shared/login/login_session.py", "/ipc/vnc/vnc.sock", "/ipc/egress/proxy.sock", "/ipc/vnc/hint", "/linkedin-profile"]
+    network_mode: none
+    environment:
+      - LANG=C.UTF-8
+      - HOME=/tmp
+    volumes:
+      - jht-login-vnc:/ipc/vnc
+      - jht-login-egress:/ipc/egress
+      - ${HOME}/.jht/secrets/linkedin-profile:/linkedin-profile
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777,nosuid
+      # The image declares these two VOLUMEs for jht: masked here with empty folders nobody can write, as for the others.
+      - /jht_home:size=64k,mode=0555
+      - /jht_user:size=64k,mode=0555
+    pids_limit: 512
+    mem_limit: 1536m
+    cpus: 2
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # The sandbox of Chromium chroots into an empty folder after it makes its own user namespace, and the default seccomp profile lets
+    # chroot through only to a container that holds this capability (measured: with every capability dropped the browser dies on its
+    # chroot and the sandbox is gone). One capability, in a container with no network, a root that cannot be written and nothing mounted
+    # but the profile, is what keeps the sandbox on instead of `--no-sandbox`.
+    cap_add:
+      - SYS_CHROOT
+
+  jht-login-proxy:
+    profiles: [login]
+    image: ${JHT_EXTRAS_IMAGE:-jht-extras-unpinned}
+    container_name: jht-login-proxy
+    user: "1001:1001"
+    entrypoint: ["/usr/bin/tini", "-g", "--", "python3", "/app/shared/login/login_proxy.py", "/ipc/egress/proxy.sock"]
+    environment:
+      - LANG=C.UTF-8
+      - HOME=/tmp
+    volumes:
+      - jht-login-egress:/ipc/egress
+    read_only: true
+    tmpfs:
+      # 32m and not less: the image has 8 MB in its /tmp and an empty tmpfs mounted on it takes a copy of them first
+      - /tmp:size=32m,mode=1777,noexec,nosuid
+      - /jht_home:size=64k,mode=0555
+      - /jht_user:size=64k,mode=0555
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: 1
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  jht-login-view:
+    profiles: [login]
+    image: ${JHT_EXTRAS_IMAGE:-jht-extras-unpinned}
+    container_name: jht-login-view
+    user: "1001:1001"
+    entrypoint: ["/usr/bin/tini", "-g", "--", "python3", "/app/shared/login/login_view.py", "serve", "/ipc/vnc/vnc.sock", "/ipc/vnc/hint"]
+    environment:
+      - LANG=C.UTF-8
+      - HOME=/tmp
+    ports:
+      - "127.0.0.1:6081:6081"
+    volumes:
+      - jht-login-vnc:/ipc/vnc
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777,noexec,nosuid
+      - /jht_home:size=64k,mode=0555
+      - /jht_user:size=64k,mode=0555
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: 1
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  # One-shot, off until it is asked for: copies the full Chromium of the extras image into the volume jht-playwright, the marker last
+  # (shared/skills/playwright_extras.py). No network, the volume is the only thing it writes.
+  jht-playwright-populate:
+    profiles: [playwright]
+    image: ${JHT_EXTRAS_IMAGE:-jht-extras-unpinned}
+    container_name: jht-playwright-populate
+    user: "1001:1001"
+    entrypoint: ["/usr/bin/tini", "-g", "--", "python3", "/app/shared/skills/playwright_extras.py", "populate", "${JHT_EXTRAS_DIGEST:-sha256:unset}", "/opt/playwright", "/opt/playwright-extras"]
+    network_mode: none
+    environment:
+      - LANG=C.UTF-8
+      - HOME=/tmp
+    volumes:
+      - jht-playwright:/opt/playwright-extras
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777,noexec,nosuid
+      - /jht_home:size=64k,mode=0555
+      - /jht_user:size=64k,mode=0555
+    pids_limit: 64
+    mem_limit: 512m
+    cpus: 1
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
 volumes:
   jht-deps:
   jht-runtime-mask:
@@ -256,6 +463,12 @@ volumes:
   jht-telegram-state:
   jht-telegram-sock:
   jht-telegram-inbox:
+  jht-media-in:
+  jht-media-out:
+  jht-playwright:
+  jht-x11:
+  jht-login-vnc:
+  jht-login-egress:
 
 # ── Dev mode ────────────────────────────────────────────────────────────
 #

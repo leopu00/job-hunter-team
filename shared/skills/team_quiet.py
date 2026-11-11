@@ -26,6 +26,9 @@ import os
 import sys
 from pathlib import Path
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pi_login  # noqa: E402  (the same folder: Pi's file is judged by the provider's own entry)
+
 # Quanto del fondo del file dei campioni si guarda: l'ultimo campione sta in fondo, e il file cresce.
 TAIL_BYTES = 64 * 1024
 USAGE_MAX = 1000.0
@@ -35,6 +38,7 @@ USAGE_MAX = 1000.0
 # vale come «collegato». Il nome-vendor (openai/anthropic/moonshot) e il nome-CLI (codex/claude/kimi) sono lo stesso provider.
 _CLAUDE = [".claude/.credentials.json", ".claude/credentials.json", ".config/claude/credentials.json", ".config/claude/auth.json"]
 _CODEX = [".codex/auth.json", ".codex/credentials.json", ".config/codex/credentials.json", ".pi/agent/auth.json"]  # the last: Pi's own, when Pi drives the agents
+PI_LOGIN_FILE = ".pi/agent/auth.json"
 # Kimi: solo i file di LOGIN, gli stessi che toglie il logout (i due config.json sono configurazione, non accesso: dopo un
 # logout resterebbero e il fatto direbbe ancora «collegato»).
 _KIMI = [".kimi/credentials/kimi-code.json", ".config/kimi-cli/credentials.json", ".kimi/credentials.json"]
@@ -121,6 +125,9 @@ def provider_ready(home: Path) -> bool | None:
     for name in files:
         try:
             if (home / name).is_file() and (home / name).stat().st_size > 0:
+                # Pi keeps one entry per service: its file is the sign-in of THIS provider only with the provider's own entry
+                if name == PI_LOGIN_FILE and pi_login.inspect_file(home / name, active)["state"] not in ("ok", "no_rule"):
+                    continue
                 return True
         except OSError:
             continue

@@ -427,14 +427,20 @@ $global:LegacyTask = $true
 $global:FakeTask = ($env:T_TASK -eq '1')
 function Get-ScheduledTask {
   param([string]$TaskName)
-  if ($global:FakeTask -and $TaskName -ceq $global:ScopedTaskName) { return [pscustomobject]@{ TaskName = $TaskName } }
-  if ($global:LegacyTask -and $TaskName -ceq 'Job Hunter Team - Start runtime') { return [pscustomobject]@{ TaskName = $TaskName } }
+  # The real cmdlet takes -TaskName as a wildcard pattern: the [ ] of the scoped name make it throw, for everyone.
+  if ($TaskName -and $TaskName -match '[\[\]*?]') { throw 'The specified wildcard character pattern is not valid (what the real Get-ScheduledTask says)' }
+  $all = @()
+  if ($global:FakeTask) { $all += [pscustomobject]@{ TaskName = $global:ScopedTaskName; TaskPath = '\' } }
+  if ($global:LegacyTask) { $all += [pscustomobject]@{ TaskName = 'Job Hunter Team - Start runtime'; TaskPath = '\' } }
+  if ($TaskName) { return @($all | Where-Object { $_.TaskName -ceq $TaskName }) }
+  return $all
 }
 function Unregister-ScheduledTask {
-  param([string]$TaskName, [switch]$Confirm)
-  [IO.File]::AppendAllText($env:FAKE_LOG, "unregister $TaskName`n")
-  if ($TaskName -ceq 'Job Hunter Team - Start runtime') { throw 'legacy P23 task must stay untouched' }
-  if ($env:T_TASK_STUCK -ne '1' -and $TaskName -ceq $global:ScopedTaskName) { $global:FakeTask = $false }
+  param($InputObject, [string]$TaskName, [switch]$Confirm)
+  if ($TaskName) { throw 'by name: wildcards again' }
+  [IO.File]::AppendAllText($env:FAKE_LOG, "unregister $($InputObject.TaskName)`n")
+  if ($InputObject.TaskName -ceq 'Job Hunter Team - Start runtime') { throw 'legacy P23 task must stay untouched' }
+  if ($env:T_TASK_STUCK -ne '1' -and $InputObject.TaskName -ceq $global:ScopedTaskName) { $global:FakeTask = $false }
 }
 
 $roots = @{ Profile = $env:R_PROFILE; LocalAppData = $env:R_LOCAL; AppData = $env:R_ROAMING; Temp = $env:R_TEMP }
@@ -794,6 +800,27 @@ def test_remove_takes_a_command_file_that_a_write_cut_short(tmp_path, left):
     assert not (user.bin / "jht.cmd").exists()
 
 
+BEFORE_ONE_LINE = (
+    "@echo off\r\nwhere pwsh.exe >nul 2>&1\r\nif errorlevel 1 goto jht_windows_powershell\r\n"
+    'pwsh -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*\r\nexit /b %errorlevel%\r\n'
+    ":jht_windows_powershell\r\n"
+    'powershell -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*\r\nexit /b %errorlevel%\r\n'
+)
+
+
+@needs_powershell
+def test_remove_takes_the_shims_that_earlier_installs_wrote_with_an_exit_line(tmp_path):
+    """The shim was one line shorter in installs before the exit code fix: those files are ours too, in both folders."""
+    user = User(tmp_path / "a")
+    (user.bin / "jht.cmd").write_bytes(BEFORE_ONE_LINE.encode("ascii"))
+    shim_folder = user.bin / "shim"
+    shim_folder.mkdir()
+    (shim_folder / "jht.cmd").write_bytes(BEFORE_ONE_LINE.replace("%~dp0jht.ps1", "%~dp0..\\jht.ps1").encode("ascii"))
+    run = _run(tmp_path, user, mode="Remove")
+    assert run.code == 0, run.stdout + run.stderr
+    assert not (user.bin / "jht.cmd").exists() and not shim_folder.exists()
+
+
 @needs_powershell
 def test_remove_keeps_a_command_file_that_is_not_the_beginning_of_ours(tmp_path):
     user = User(tmp_path / "a")
@@ -878,3 +905,35 @@ try {
     assert_engine(engine, done.stderr)
     assert done.returncode == 0, done.stdout + done.stderr
     assert "RESULT=removed|absent|ExpandString|%USERPROFILE%\\tools;C:\\Other\\bin" in done.stdout, done.stdout + done.stderr
+
+
+# ── one Podman machine per Windows user (JHT-T305) ────────────────────────────────────────────────────────────────────
+
+@needs_powershell
+def test_remove_takes_a_machine_of_another_name_only_with_the_installers_mark(tmp_path):
+    marked = User(tmp_path / "marked", machine="team-box")
+    (marked.runtime / "podman-machine-created").write_text("team-box\n", encoding="utf-8")
+    (tmp_path / "marked-run").mkdir()
+    run = _run(tmp_path / "marked-run", marked, mode="Remove", machine_state="team-box stopped", task=True)
+    assert run.code == 0, run.stdout + run.stderr
+    assert run.podman_calls() == ["machine list --format json", "machine rm --force team-box", "machine list --format json"]
+    # a mark that names another machine is no mark
+    other = User(tmp_path / "other", machine="team-box")
+    (other.runtime / "podman-machine-created").write_text("somebody-else\n", encoding="utf-8")
+    (tmp_path / "other-run").mkdir()
+    run = _run(tmp_path / "other-run", other, mode="Remove", machine_state="team-box stopped")
+    assert not any(call.startswith("machine rm") for call in run.calls) and ("runtime", "not_podman") in run.items
+    assert other.runtime.is_dir() and run.code == 24
+
+
+@pytest.mark.skipif(not WINDOWS, reason="the name comes from the SID of a Windows user")
+def test_remove_takes_the_machine_named_after_this_users_sid(tmp_path):
+    import hashlib
+    sid = subprocess.run([*powershell_argv()[:1], "-NoLogo", "-NoProfile", "-Command", "[Security.Principal.WindowsIdentity]::GetCurrent().User.Value"],
+                         capture_output=True, text=True, check=True).stdout.strip()
+    name = "jht-podman-" + hashlib.sha256(sid.encode("ascii")).hexdigest()[:8]
+    user = User(tmp_path / "a", machine=name)
+    (tmp_path / "run").mkdir()
+    run = _run(tmp_path / "run", user, mode="Remove", machine_state=f"{name} stopped", task=True)
+    assert run.code == 0, run.stdout + run.stderr
+    assert f"machine rm --force {name}" in run.calls

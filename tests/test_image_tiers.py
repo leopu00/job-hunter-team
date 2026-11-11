@@ -18,6 +18,10 @@ SAME = {"app-names": "1", "app-bytes": "2", "pi-names": "3", "pi-bytes": "4", "u
 SWEEP_OK = json.dumps({"tools": {"playwright_browser": {"status": "NOT_INSTALLED"}, "cv_pdf_render": {"status": "NOT_INSTALLED"}}})
 
 
+SWEEP_EXTRAS_OK = json.dumps({"tools": {"playwright_browser": {"status": "NOT_INSTALLED"}, "linkedin_check": {"status": "NOT_INSTALLED"},
+                                        "cv_pdf_render": {"status": "NOT_INSTALLED"}, "manual_login_browser": {"status": "OK"}}})
+
+
 def info(tier, size, revision=REVISION):
     return {"Size": size, "Config": {"Env": ["PATH=/bin", f"JHT_IMAGE_TIER={tier}"], "Labels": {tiers.REVISION_LABEL: revision}}}
 
@@ -26,10 +30,11 @@ class World:
     """Two fake images; every field can be broken one at a time."""
 
     def __init__(self):
-        self.infos = {"core": info("core", 600), "full": info("full", 2000)}
-        self.tools = {"core": set(), "full": set(tiers.TOOLS)}
-        self.digests = {"core": dict(SAME), "full": dict(SAME)}
+        self.infos = {"core": info("core", 600), "full": info("full", 2000), "extras": info("extras", 1200)}
+        self.tools = {"core": set(), "full": set(tiers.TOOLS), "extras": set(tiers.EXTRAS_TOOLS)}
+        self.digests = {"core": dict(SAME), "full": dict(SAME), "extras": dict(SAME)}
         self.sweep = (0, SWEEP_OK)
+        self.extras_sweep = (0, SWEEP_EXTRAS_OK)
 
     def install(self, monkeypatch):
         monkeypatch.setattr(tiers, "inspect", lambda image: self.infos[image])
@@ -40,7 +45,7 @@ class World:
             def __init__(self, rc, out):
                 self.returncode, self.stdout, self.stderr = rc, out, ""
 
-        monkeypatch.setattr(tiers, "run_in", lambda image, script: Done(*self.sweep))
+        monkeypatch.setattr(tiers, "run_in", lambda image, script: Done(*(self.extras_sweep if image == "extras" else self.sweep)))
 
 
 def tags(fails):
@@ -126,3 +131,54 @@ def test_the_engine_is_docker_unless_the_machine_says_otherwise(monkeypatch):
     monkeypatch.setattr(tiers, "ENGINE", "podman")
     tiers.docker("image", "inspect", "x")
     assert [command[0] for command in seen] == ["docker", "podman"]
+
+
+def run_extras(monkeypatch, world):
+    world.install(monkeypatch)
+    return tiers.check("core", "full", REVISION, "extras")
+
+
+def test_three_good_images_pass(monkeypatch):
+    assert run_extras(monkeypatch, World()) == []
+
+
+def test_the_extras_image_must_say_extras(monkeypatch):
+    world = World()
+    world.infos["extras"] = info("full", 1200)
+    assert tags(run_extras(monkeypatch, world)) == ["tier"]
+
+
+def test_the_extras_image_has_the_three_tools_and_not_the_cv_pdf_ones(monkeypatch):
+    world = World()
+    world.tools["extras"] = set(tiers.EXTRAS_TOOLS) - {"ffmpeg"}
+    fails = run_extras(monkeypatch, world)
+    assert tags(fails) == ["tools"] and "ffmpeg is missing from the extras image" in fails[0]
+    world = World()
+    world.tools["extras"] = set(tiers.EXTRAS_TOOLS) | {"pandoc"}
+    fails = run_extras(monkeypatch, world)
+    assert tags(fails) == ["tools"] and "pandoc is in the extras image" in fails[0]
+
+
+def test_the_extras_sweep_must_leave_only_the_manual_login_browser_to_check(monkeypatch):
+    world = World()
+    world.extras_sweep = (0, json.dumps({"tools": {"playwright_browser": {"status": "NOT_INSTALLED"}, "manual_login_browser": {"status": "OK"}}}))
+    assert tags(run_extras(monkeypatch, world)) == ["sweep"]
+    world = World()
+    world.extras_sweep = (1, SWEEP_EXTRAS_OK)
+    assert tags(run_extras(monkeypatch, world)) == ["sweep"]
+
+
+def test_the_extras_image_carries_the_same_commit_and_the_same_code(monkeypatch):
+    world = World()
+    world.infos["extras"] = info("extras", 1200, revision="b" * 40)
+    assert tags(run_extras(monkeypatch, world)) == ["revision"]
+    world = World()
+    world.digests["extras"] = {**SAME, "pi-bytes": "other"}
+    fails = run_extras(monkeypatch, world)
+    assert tags(fails) == ["content"] and "pi-bytes differs between core and extras" in fails[0]
+
+
+def test_the_extras_image_is_smaller_than_the_full_one(monkeypatch):
+    world = World()
+    world.infos["extras"] = info("extras", 2000)
+    assert tags(run_extras(monkeypatch, world)) == ["size"]

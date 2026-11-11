@@ -51,6 +51,7 @@ export const HOST_COMMANDS = [
   ['down', 'help.host_down'],
   ['restart', 'help.host_restart'],
   ['uninstall', 'help.host_uninstall'],
+  ['integration', 'help.host_integration'],
 ];
 
 /** The visible commands of a program with the group each belongs to. */

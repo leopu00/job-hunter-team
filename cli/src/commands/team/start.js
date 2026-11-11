@@ -582,7 +582,11 @@ export function startRefusal(config, { containerMode, hasTmux = tmuxAvailable, h
     return 'no active provider. Run: jht providers use openai';
   }
   const harnessIssue = harnessProblem(harnessOf(config), config.active_provider, config.providers?.[config.active_provider]?.auth_method);
-  if (harnessIssue) return `${harnessIssue}. Go back to the default: jht providers harness codex`;
+  if (harnessIssue) {
+    // a provider that runs only on pi is brought to pi, not sent back to the default harness it cannot use
+    const needsPi = harnessOf(config) === 'codex' && piApiProvider(config.active_provider);
+    return needsPi ? `${harnessIssue}. Switch to it: jht providers harness pi` : `${harnessIssue}. Go back to the default: jht providers harness codex`;
+  }
   if (containerMode) return null;
   if (!hasTmux()) return 'tmux not found. Install it with: brew install tmux';
   if (!hasCli(cliBin)) return `the ${cliBin} CLI of the active provider was not found.`;

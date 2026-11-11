@@ -50,6 +50,11 @@
 # ║                            and published only if its RepoDigests carry   ║
 # ║                            this digest; `jht up` then runs exactly it.   ║
 # ║                            The three go together, or none of them.       ║
+# ║    --extras-image-digest sha256:<64>  Test channel, optional: the image  ║
+# ║                            of the tools that come on request (screen,    ║
+# ║                            media, playwright). Pinned like the image     ║
+# ║                            above; it is NOT downloaded here: `jht screen ║
+# ║                            on` pulls it, by this digest, when asked.     ║
 # ║    --branch <name>         Source branch for wrapper+compose             ║
 # ║                            (same as JHT_BRANCH=<name>, default           ║
 # ║                            production). Example to test dev-1:           ║
@@ -110,6 +115,8 @@ fi
 IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht@sha256:fa78c975c04dd5f95d6225a35c8c3bb9646f8ef14b32c8ca558d5332de0cce00}"
 # The core image (tools come later): empty while the release has none; with one, the install uses it unless JHT_IMAGE names another.
 CORE_IMAGE_DIGEST="${JHT_CORE_IMAGE_DIGEST:-}"
+# It becomes an image name, a file and a hash: only the exact shape of a digest goes through, whatever the environment says.
+[ -z "$CORE_IMAGE_DIGEST" ] || [[ "$CORE_IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { printf 'JHT_CORE_IMAGE_DIGEST is not a sha256 digest\n' >&2; exit 2; }
 RUNTIME_TIER="" TIER_STAGED="" TIER_STAGED_SHA=""
 if [ -n "$CORE_IMAGE_DIGEST" ] && [ -z "${JHT_IMAGE:-}" ]; then RUNTIME_TIER="core"; IMAGE="ghcr.io/leopu00/jht@$CORE_IMAGE_DIGEST"; fi
 # Il compose scaricato può evolvere sul canale production; l'installer di
@@ -131,6 +138,7 @@ EXPECTED_RUNTIME_VERSION=""
 SOURCE_SHA=""
 TEST_IMAGE=""
 EXPECTED_IMAGE_DIGEST=""
+EXTRAS_IMAGE_DIGEST_OPT=""
 TEST_CHANNEL=0
 RUNTIME_PUBLISH_FAILPOINT="${JHT_RUNTIME_PUBLISH_FAILPOINT:-}"
 RUNTIME_PUBLISH_FAILURE="${JHT_RUNTIME_PUBLISH_FAILURE:-error}"
@@ -143,6 +151,19 @@ PODMAN_MACHINE_NAME="${JHT_PODMAN_MACHINE:-jht-podman}"
 PODMAN_MACHINE_CPUS=2
 PODMAN_MACHINE_MEMORY_MIB=4096
 PODMAN_MACHINE_DISK_GIB=30
+# 1 only when THIS run created the machine (machine init succeeded): what `jht uninstall` may remove besides the standard one.
+PODMAN_MACHINE_CREATED=0
+# When it was created (podman machine inspect «Created»): the marker says WHICH machine, not only the name, so a machine the person
+# creates later with the same name is not taken for this one.
+PODMAN_MACHINE_CREATED_ID=""
+# The link to the Compose plugin that THIS run made in the plugin folder of the docker client (empty when it made none, or when something
+# was already there): `jht uninstall` removes exactly that link (marker docker-compose-plugin-link: its path, its target, and whether
+# this run also made the folder).
+COMPOSE_PLUGIN_LINK_PATH=""
+COMPOSE_PLUGIN_LINK_TARGET=""
+COMPOSE_PLUGIN_DIR_CREATED=0
+# 1 only when THIS run started Colima (it was not running): `jht uninstall` stops that profile again only then (marker colima-started).
+COLIMA_STARTED_BY_INSTALLER=0
 DOCKER_CLI="docker"
 # Position-based parser: handles both standalone flags (--no-docker) and
 # key/value pairs (--branch dev-1). We do not use `for arg in "$@"` because
@@ -198,6 +219,12 @@ while [ $# -gt 0 ]; do
       esac
       shift 2
       ;;
+    --extras-image-digest)
+      [ -n "${2:-}" ] || { printf "%s requires an argument\n" "$1" >&2; exit 2; }
+      EXTRAS_IMAGE_DIGEST_OPT="$2"
+      shift 2
+      ;;
+    --extras-image-digest=*) EXTRAS_IMAGE_DIGEST_OPT="${1#*=}"; shift ;;
     --source-sha=*) SOURCE_SHA="${1#*=}"; shift ;;
     --image=*) TEST_IMAGE="${1#*=}"; shift ;;
     --expected-image-digest=*) EXPECTED_IMAGE_DIGEST="${1#*=}"; shift ;;
@@ -232,7 +259,7 @@ while [ $# -gt 0 ]; do
       shift
       ;;
     -h|--help)
-      sed -n '2,74p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,/^# ╚/p' "$0" | sed 's/^# \{0,1\}//'  # the whole header box, whatever its length
       exit 0
       ;;
     *)
@@ -251,6 +278,12 @@ esac
 
 # The test channel is all three coordinates or none: a half-given channel
 # would install one commit's files with another image, or the reverse.
+if [ -n "$EXTRAS_IMAGE_DIGEST_OPT" ]; then
+  [ -n "$SOURCE_SHA$TEST_IMAGE$EXPECTED_IMAGE_DIGEST" ] \
+    || { printf '%s\n' "--extras-image-digest belongs to the test channel (with --source-sha, --image and --expected-image-digest)" >&2; exit 2; }
+  [[ "$EXTRAS_IMAGE_DIGEST_OPT" =~ ^sha256:[0-9a-f]{64}$ ]] \
+    || { printf '%s\n' "--extras-image-digest needs sha256:<64 lowercase hex>" >&2; exit 2; }  # whole string: grep checks line by line
+fi
 if [ -n "$SOURCE_SHA$TEST_IMAGE$EXPECTED_IMAGE_DIGEST" ]; then
   printf '%s' "$SOURCE_SHA" | grep -Eq '^[0-9a-f]{40}$' \
     || { printf '%s\n' "--source-sha needs 40 lowercase hex (with --image and --expected-image-digest)" >&2; exit 2; }
@@ -719,6 +752,48 @@ install_brew_if_missing() {
   exit 80
 }
 
+# Colima and Docker Desktop's CLI come with `docker`, but Homebrew's `docker` formula is only the client: it has no `docker compose`,
+# and JHT runs the team with it (the Linux branch below installs the plugin for the same reason). Without it the installer used to end
+# with «Installation complete!» and every `jht` command failed. Here: when `docker compose version` does not answer, install the plugin
+# with Homebrew, register it for this Docker client (a link in the plugin folder of the client, beside any other plugin; a file that is
+# already there is not replaced) and check again; if it still does not answer, stop saying what to run. Client-side: needs no daemon.
+ensure_docker_compose_macos() {
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf "  ${DIM}[dry-run]${RESET} would verify: docker compose version (and, if missing: brew install docker-compose + register the plugin)\n"
+    return 0
+  fi
+  if "$DOCKER_CLI" compose version &>/dev/null; then
+    ok "docker compose already available"
+    return 0
+  fi
+  install_brew_if_missing
+  jht_phase compose_install
+  info "Installing the Docker Compose plugin (docker compose)..."
+  run brew install docker-compose || fail "docker compose is missing and its installation failed. Run: brew install docker-compose, then register it as the Homebrew caveats say, and run the installer again."
+  local plugin_src plugin_dir plugin_dest
+  plugin_src="$(brew --prefix)/opt/docker-compose/bin/docker-compose"
+  plugin_dir="${DOCKER_CONFIG:-$HOME/.docker}/cli-plugins"
+  plugin_dest="$plugin_dir/docker-compose"
+  if [ -x "$plugin_src" ] && { [ ! -e "$plugin_dest" ] || [ -L "$plugin_dest" ]; }; then
+    local link_was_absent=0 folder_was_there=0
+    if [ ! -e "$plugin_dest" ] && [ ! -L "$plugin_dest" ]; then link_was_absent=1; fi
+    if [ -d "$plugin_dir" ]; then folder_was_there=1; fi
+    if mkdir -p "$plugin_dir" && ln -sfn "$plugin_src" "$plugin_dest"; then
+      # Marked only when there was nothing at that path: a link of the person that this run replaced is not ours to remove later.
+      if [ "$link_was_absent" -eq 1 ]; then
+        COMPOSE_PLUGIN_LINK_PATH="$plugin_dest"
+        COMPOSE_PLUGIN_LINK_TARGET="$plugin_src"
+        COMPOSE_PLUGIN_DIR_CREATED=$((1 - folder_was_there))
+      fi
+    else
+      warn "Could not register the Compose plugin in $plugin_dir."
+    fi
+  fi
+  "$DOCKER_CLI" compose version &>/dev/null \
+    || fail "docker compose is still not available after installing the plugin. Run: mkdir -p \"$plugin_dir\" && ln -sfn \"$plugin_src\" \"$plugin_dest\" ; docker compose version ; then run the installer again."
+  ok "docker compose installed and registered"
+}
+
 install_colima_macos() {
   install_brew_if_missing
   if ! command -v colima &>/dev/null; then
@@ -738,6 +813,7 @@ install_colima_macos() {
   else
     ok "docker CLI already installed"
   fi
+  ensure_docker_compose_macos
   # Start Colima if not already running
   if [ "$DRY_RUN" -eq 1 ]; then
     printf "  ${DIM}[dry-run]${RESET} would execute: colima start (if not already running)\n"
@@ -748,6 +824,7 @@ install_colima_macos() {
   else
     info "Starting Colima (may take 30-60s the first time)..."
     colima start || fail "colima start failed. Retry manually with 'colima start'."
+    COLIMA_STARTED_BY_INSTALLER=1
     ok "colima started"
   fi
 }
@@ -880,6 +957,8 @@ install_podman_macos() {
       report_podman_machine_conflict "$podman_bin" "$init_error" && exit 79
       fail "Podman machine initialization failed; Colima was not changed."
     fi
+    PODMAN_MACHINE_CREATED=1
+    PODMAN_MACHINE_CREATED_ID="$("$podman_bin" machine inspect --format '{{.Created}}' "$PODMAN_MACHINE_NAME" 2>/dev/null | head -n 1 || true)"
   fi
   "$podman_bin" --connection "$PODMAN_MACHINE_NAME" info &>/dev/null \
     || fail "Podman machine '$PODMAN_MACHINE_NAME' is not reachable."
@@ -1094,6 +1173,8 @@ verify_docker_works() {
     fi
   fi
   ok "docker daemon reachable"
+  # An engine that was already there (detect-first) may have no Compose either; Docker Desktop has it built in.
+  if [ "$OS" = "macos" ]; then ensure_docker_compose_macos; fi
 }
 
 install_podman_adapter() {
@@ -1138,6 +1219,14 @@ install_podman_adapter() {
   if podman_machine_mode; then
     printf '%s\n' "$PODMAN_MACHINE_NAME" > "$machine_file"
     chmod 600 "$machine_file"
+    # The machine this run created is JHT's own and `jht uninstall` removes it whatever its name; one that was already there (adopted)
+    # is not marked, and stays. A machine of an earlier run keeps its marker: it is written only on creation.
+    if [ "$PODMAN_MACHINE_CREATED" = 1 ]; then
+      printf '%s\n' "$PODMAN_MACHINE_NAME" > "$RUNTIME_DIR/podman-machine-created"
+      # Second line: when this machine was created. Without it the uninstall cannot tell it from another of the same name: it leaves it.
+      [ -z "$PODMAN_MACHINE_CREATED_ID" ] || printf '%s\n' "$PODMAN_MACHINE_CREATED_ID" >> "$RUNTIME_DIR/podman-machine-created"
+      chmod 600 "$RUNTIME_DIR/podman-machine-created"
+    fi
     ok "Private JHT docker shim: $shim_dest (not added to global PATH; Colima untouched)"
   else
     # Native Linux has no machine: the wrapper refuses a machine file here.
@@ -1146,11 +1235,13 @@ install_podman_adapter() {
   fi
 }
 
-# runtime-tier: a host runtime file like runtime-image, attested in .runtime-integrity (staged for its hash, published after the manifest).
+# runtime-tier: a host runtime file attested in an integrity file of its own (.runtime-tier-integrity), NOT in .runtime-integrity: the app
+# compares the exact set of keys of that one. Staged for its hash; the file first and its integrity second, so a crash between them
+# leaves a tier the wrapper refuses, never a tier it believes.
 stage_runtime_tier() {
   local tier_file="$RUNTIME_DIR/runtime-tier"
   TIER_STAGED="" TIER_STAGED_SHA=""
-  if [ "$RUNTIME_TIER" != "core" ]; then rm -f "$tier_file"; return 0; fi
+  if [ "$RUNTIME_TIER" != "core" ]; then rm -f "$tier_file" "$RUNTIME_DIR/.runtime-tier-integrity"; return 0; fi
   TIER_STAGED="$(mktemp "$RUNTIME_DIR/.runtime-tier.XXXXXX")"
   printf 'core\n' > "$TIER_STAGED" && chmod 600 "$TIER_STAGED"
   TIER_STAGED_SHA="$({ sha256sum "$TIER_STAGED" 2>/dev/null || shasum -a 256 "$TIER_STAGED"; } | awk '{print $1}')"
@@ -1158,7 +1249,33 @@ stage_runtime_tier() {
 
 publish_runtime_tier() {
   [ -n "$TIER_STAGED" ] || return 0
-  mv -f "$TIER_STAGED" "$RUNTIME_DIR/runtime-tier" && ok "runtime tier: core (the tools come after the welcome)"
+  mv -f "$TIER_STAGED" "$RUNTIME_DIR/runtime-tier" || return 1
+  printf 'runtime-tier=%s\n' "$TIER_STAGED_SHA" > "$RUNTIME_DIR/.runtime-tier-integrity.tmp" && chmod 600 "$RUNTIME_DIR/.runtime-tier-integrity.tmp" \
+    && mv -f "$RUNTIME_DIR/.runtime-tier-integrity.tmp" "$RUNTIME_DIR/.runtime-tier-integrity" \
+    && ok "runtime tier: core (the tools come after the welcome)"
+}
+
+# runtime-extras-image: the image of the tools that come on request, pinned by the test channel (`--extras-image-digest`), in a host runtime
+# file attested in an integrity file of its own (.runtime-extras-integrity), NOT in .runtime-integrity (the app compares the exact keys of
+# that one). The installer does not pull it: `jht screen on` does, by this digest. File first and integrity second: a crash between them
+# leaves a pin the wrapper refuses, never one it believes. Without the option (or outside the test channel) an earlier pin is dropped.
+stage_runtime_extras_pin() {
+  EXTRAS_STAGED="" EXTRAS_STAGED_SHA=""
+  if [ "$TEST_CHANNEL" -ne 1 ] || [ -z "$EXTRAS_IMAGE_DIGEST_OPT" ]; then
+    rm -f "$RUNTIME_DIR/runtime-extras-image" "$RUNTIME_DIR/.runtime-extras-integrity"
+    return 0
+  fi
+  EXTRAS_STAGED="$(mktemp "$RUNTIME_DIR/.runtime-extras.XXXXXX")"
+  printf 'ghcr.io/leopu00/jht@%s\n' "$EXTRAS_IMAGE_DIGEST_OPT" > "$EXTRAS_STAGED" && chmod 600 "$EXTRAS_STAGED"
+  EXTRAS_STAGED_SHA="$({ sha256sum "$EXTRAS_STAGED" 2>/dev/null || shasum -a 256 "$EXTRAS_STAGED"; } | awk '{print $1}')"
+}
+
+publish_runtime_extras_pin() {
+  [ -n "$EXTRAS_STAGED" ] || return 0
+  mv -f "$EXTRAS_STAGED" "$RUNTIME_DIR/runtime-extras-image" || return 1
+  printf 'runtime-extras-image=%s\n' "$EXTRAS_STAGED_SHA" > "$RUNTIME_DIR/.runtime-extras-integrity.tmp" && chmod 600 "$RUNTIME_DIR/.runtime-extras-integrity.tmp" \
+    && mv -f "$RUNTIME_DIR/.runtime-extras-integrity.tmp" "$RUNTIME_DIR/.runtime-extras-integrity" \
+    && ok "extras image pinned: ghcr.io/leopu00/jht@$EXTRAS_IMAGE_DIGEST_OPT (pulled when a tool is asked for)"
 }
 
 download_runtime_files() {
@@ -1299,6 +1416,7 @@ download_runtime_files() {
   elif [ -e "$image_pin" ] || [ -L "$image_pin" ]; then
     rm -f "$image_pin"
   fi
+  stage_runtime_extras_pin
   stage_runtime_tier
   local compose_sha hostsetup_sha wrapper_sha selection_sha="" machine_sha="" shim_sha=""
   if command -v sha256sum >/dev/null 2>&1; then
@@ -1345,9 +1463,6 @@ download_runtime_files() {
     if [ -n "$image_pin_sha" ]; then
       printf 'runtime-image=%s\n' "$image_pin_sha"
     fi
-    if [ -n "$TIER_STAGED_SHA" ]; then
-      printf 'runtime-tier=%s\n' "$TIER_STAGED_SHA"
-    fi
   } > "$manifest_tmp"
   chmod 600 "$manifest_tmp"
   # Publish manifest first: a crash between the two renames fails closed
@@ -1357,10 +1472,24 @@ download_runtime_files() {
     mv -f "$image_pin_publish" "$image_pin"
     ok "runtime image pinned: $(cat "$image_pin")"
   fi
+  publish_runtime_extras_pin
   publish_runtime_tier
   if [ -n "$selection_publish" ]; then
     mv -f "$selection_publish" "$RUNTIME_DIR/container-runtime"
     ok "JHT container runtime selected: docker (private Podman artifacts kept inert)"
+    # Colima started by THIS run: `jht uninstall` stops it again (when nothing else runs in it). A Colima that was already running is
+    # not marked, and stays on. A marker of an earlier run is kept: it is written only when the installer starts Colima.
+    if [ "$COLIMA_STARTED_BY_INSTALLER" = 1 ]; then
+      # Second line: the profile that was started (the installer starts the default one): the uninstall stops that profile only.
+      printf 'colima\ndefault\n' > "$RUNTIME_DIR/colima-started"
+      chmod 600 "$RUNTIME_DIR/colima-started"
+    fi
+    # The Compose plugin link that THIS run made: `jht uninstall` removes that link, never the plugin Homebrew installed. Lines: the
+    # link's path, what it points to, 1 when this run made the plugin folder too (removed only if empty). A marker of an earlier run is kept.
+    if [ -n "$COMPOSE_PLUGIN_LINK_PATH" ]; then
+      printf '%s\n%s\n%s\n' "$COMPOSE_PLUGIN_LINK_PATH" "$COMPOSE_PLUGIN_LINK_TARGET" "$COMPOSE_PLUGIN_DIR_CREATED" > "$RUNTIME_DIR/docker-compose-plugin-link"
+      chmod 600 "$RUNTIME_DIR/docker-compose-plugin-link"
+    fi
   fi
   ok "host-setup: $hostsetup_dest"
 

@@ -33,7 +33,8 @@ pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="the bash wrappe
 MUTATING = {"restart", "stop", "down", "rm", "up", "kill", "create", "run", "pull", "start", "recreate", "build", "exec"}
 SHELL_ERRORS = ("unbound variable", "command not found", "syntax error", "No such file or directory", "bad substitution")
 
-# (the command, the exit codes that are an answer). 1 is "there is nothing to read yet", said in words.
+# (the command, the exit codes that are an answer). 1 is "there is nothing to read yet", said in words; 0 is the read-only answer
+# "not installed yet" of the commands the app reads.
 PRISTINE_COMMANDS = [
     (["help"], {0}),
     (["version"], {0}),
@@ -43,7 +44,8 @@ PRISTINE_COMMANDS = [
     (["recreate"], {1}),
     (["down"], {0}),
     (["providers", "plan"], {1}),
-    (["integration", "list"], {1}),
+    (["integration", "list"], {0}),
+    (["screen", "status"], {0}),   # the live screen: «not installed yet», in the words of the integrations
     (["tools", "status"], {1}),
     (["uninstall"], {2}),          # asks for --confirm and says so; removes nothing
 ]
@@ -97,10 +99,11 @@ def test_the_status_and_the_plan_of_a_team_never_started_say_the_container_is_no
     assert "non attivo" in (done.stdout + done.stderr), done.stdout + done.stderr
 
 
-@pytest.mark.parametrize("command", [["integration", "list"], ["tools", "status"]])
-def test_the_helpers_not_installed_yet_are_named_with_the_command_that_installs_them(tmp_path, command):
+@pytest.mark.parametrize(("command", "code"), [(["integration", "list"], 0), (["screen", "status"], 0), (["tools", "status"], 1)])
+def test_the_helpers_not_installed_yet_are_named_with_the_command_that_installs_them(tmp_path, command, code):
     done, calls, _ = run_wrapper(tmp_path, *command)
-    assert done.returncode == 1 and "jht upgrade" in done.stderr, done.stderr
+    text = done.stdout + done.stderr
+    assert done.returncode == code and "jht upgrade" in text and "non ancora installato" in text, text
     assert calls == [], "the helper is looked for before the engine is asked anything"
 
 
@@ -112,3 +115,15 @@ def test_a_runtime_folder_without_its_integrity_manifest_is_untrusted_and_stops_
     assert done.returncode != 0
     assert not log.exists(), log.read_text(encoding="utf-8") if log.exists() else ""
     assert (done.stdout + done.stderr).strip()
+
+
+def test_screen_without_a_known_word_says_its_usage_and_asks_the_engine_nothing(tmp_path):
+    done, calls, _ = run_wrapper(tmp_path, "screen", "toggle")
+    assert done.returncode == 2 and "jht screen on | off | status" in done.stderr, done.stderr
+    assert calls == []
+
+
+def test_screen_help_is_the_fixed_text_and_starts_nothing(tmp_path):
+    done, calls, _ = run_wrapper(tmp_path, "screen", "--help")
+    assert done.returncode == 0 and "jht screen" in done.stdout and "sola visione" in done.stdout, done.stdout
+    assert calls == []

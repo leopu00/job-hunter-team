@@ -1,11 +1,13 @@
 ---
 name: scout-coord
-description: Protocollo di coordinamento all'avvio tra più Scout. Senza questa skill due scout esplorano lo stesso cerchio (Remote EU) sullo stesso tier (LinkedIn) e producono il 100% di duplicati che il gate di dedup deve poi scartare — budget sprecato e team più lento. Usala come PRIMA azione nel tuo loop, prima di qualsiasi altra cosa. Di proprietà del ruolo Scout; SCOUT-1 di solito arbitra se più scout si avviano contemporaneamente.
+description: Protocollo di coordinamento all'avvio tra più Scout. Senza questa skill due scout esplorano lo stesso cerchio (Remote EU) sullo stesso tier (LinkedIn) e producono il 100% di duplicati che il gate di dedup deve poi scartare — budget sprecato e team più lento. Usala come PRIMA azione nel tuo loop, prima di qualsiasi altra cosa. Di proprietà del ruolo Scout; SCOUT-1 di solito arbitra se più scout si avviano contemporaneamente. Leggi solo le righe 1-86 (`limit` 86) — il resto è riferimento.
 allowed-tools: Bash(python3 /app/shared/skills/scout_coord.py *), Bash(tmux *), Bash(jht-tmux-send *)
 ---
 <!-- @translation: it, ai-translated 2026-06-06 -->
 
 # scout-coord — partizionare il territorio
+
+> **Leggi a pezzi.** Il protocollo intero sta nelle righe 1-86 di questo file (Step 1-5): leggi solo quelle (`offset` 1, `limit` 86). Sotto `## Reference` — euristiche di divisione, anti-pattern, quando rinegoziare, vedi anche — leggi solo quando devi negoziare una divisione o rinegoziare.
 
 Più Scout girano in parallelo (max 2 istanze per policy del team). Il team funziona solo se concordano una **partizione non sovrapposta** di:
 - quali **cerchi** possiede ciascuno (1 = preferenza primaria, 2 = vicini geografici, 3 = rilocazione, 4 = satellite, 5 = frontiera)
@@ -23,12 +25,12 @@ python3 /app/shared/skills/scout_coord.py doctor
 ## Step 1 — Scoprire i peer
 
 ```bash
-tmux list-sessions 2>/dev/null | awk -F: '{print $1}' | grep -E '^SCOUT-[0-9]+$'
+python3 /app/shared/skills/scout_coord.py auto $MY_ID   # primo burst: la tua corsia + la prima ricerca
 ```
 
-Se sei l'unico scout elencato → nessuna negoziazione necessaria, rivendica tutto ciò che puoi gestire. Vai allo Step 4.
+Nel primo burst decide il piano, nessuno negozia: stampa la tua corsia (`areas`, `sources`) e la tua prima ricerca. Cerca subito; salta gli Step 2-3. Resta nella tua corsia, poi `scout_coverage.py next --agent $MY_ID`.
 
-Se ce ne sono altri → devi negoziare (Step 2-3) prima di fare qualsiasi scraping.
+Negozia (Step 2-3) solo dopo il burst, se una fonte si esaurisce o un collega si ferma: elenca i peer con `tmux list-sessions | awk -F: '{print $1}' | grep -E '^SCOUT-[0-9]+$'`; da solo → Step 4.
 
 ## Step 2 — Resettare lo stato stale
 
@@ -55,31 +57,7 @@ Tu cerchi 3+4 + tier 3-4 (niche board + WebSearch). OK?
 
 Il peer risponde con `[ACK]` (accetta) o `[COUNTER]` (controproposta). Sii breve — se non riesci ad accordarti in 3 round-trip, escala al Capitano.
 
-**Euristiche per una buona suddivisione**:
-
-| Situazione                                      | Suddivisione suggerita                                             |
-|-------------------------------------------------|--------------------------------------------------------------------|
-| 2 Scout, profilo `work_mode = remote`           | S1: cerchi 1-2 + LinkedIn/ATS · S2: cerchi 1 + niche remote board (RemoteOK, WeWorkRemotely) — entrambi nel cerchio 1, fonti complementari |
-| 2 Scout, profilo `work_mode = on-site`          | S1: città base + cerchio 2 regionale · S2: rilocazione (cerchio 3) |
-| 2 Scout, misto `work_mode = flessibile`         | S1: cerchi 1-2 (full mode) · S2: cerchi 3-5 (rilocazione + satellite + frontiera) |
-
 Qualunque suddivisione scegli, la regola è: **nessun due scout sulla stessa combinazione (cerchio, set_tier) allo stesso tempo.**
-
-**Suddivisione volume vs curata — dati empirici dal run VPS1 2026-05-21 (vps1-run-postmortem #14):**
-
-> Scout-1 trovava 130 position con score avg 63.1 (40% high-score)
-> Scout-2 trovava 76 position con score avg 68.4 (54% high-score)
->
-> → Scout-2 era 1.4× più qualitativo di Scout-1 sullo stesso candidato.
-
-Pattern raccomandato quando si ha la libertà di scegliere il tier per i 2 scout:
-
-| Scout    | Tier assegnato                                          | Razionale                                      |
-|----------|---------------------------------------------------------|------------------------------------------------|
-| SCOUT-1  | LinkedIn (alto volume, rumoroso)                        | Cattura il flusso, accetta lo score medio basso|
-| SCOUT-2  | Ashby / Greenhouse / Lever / company-careers (curato)   | Pochi ma giusti, score medio più alto          |
-
-Il `next-for-analista` riceve poi un mix bilanciato di volume + qualità, e il filtro hard-requirements dell'Analista (RULE-06) si concentra sul flusso di Scout-1 (dove c'è più rumore). Non è una regola rigida — adattare al `work_mode` come da tabella sopra.
 
 ## Step 4 — Consolidare l'assegnazione
 
@@ -106,6 +84,32 @@ Controllo incrociato: l'unione di tutte le `fonti` dovrebbe coprire i tier che i
 ```bash
 jht-tmux-send CAPITANO "[@$MY_ID -> @capitano] [INFO] scout-coord: tier 'niche-remote' senza scout, considera spawn aggiuntivo o riassegnamento."
 ```
+
+## Reference
+
+**Euristiche per una buona suddivisione**:
+
+| Situazione                                      | Suddivisione suggerita                                             |
+|-------------------------------------------------|--------------------------------------------------------------------|
+| 2 Scout, profilo `work_mode = remote`           | S1: cerchi 1-2 + LinkedIn/ATS · S2: cerchi 1 + niche remote board (RemoteOK, WeWorkRemotely) — entrambi nel cerchio 1, fonti complementari |
+| 2 Scout, profilo `work_mode = on-site`          | S1: città base + cerchio 2 regionale · S2: rilocazione (cerchio 3) |
+| 2 Scout, misto `work_mode = flessibile`         | S1: cerchi 1-2 (full mode) · S2: cerchi 3-5 (rilocazione + satellite + frontiera) |
+
+**Suddivisione volume vs curata — dati empirici dal run VPS1 2026-05-21 (vps1-run-postmortem #14):**
+
+> Scout-1 trovava 130 position con score avg 63.1 (40% high-score)
+> Scout-2 trovava 76 position con score avg 68.4 (54% high-score)
+>
+> → Scout-2 era 1.4× più qualitativo di Scout-1 sullo stesso candidato.
+
+Pattern raccomandato quando si ha la libertà di scegliere il tier per i 2 scout:
+
+| Scout    | Tier assegnato                                          | Razionale                                      |
+|----------|---------------------------------------------------------|------------------------------------------------|
+| SCOUT-1  | LinkedIn (alto volume, rumoroso)                        | Cattura il flusso, accetta lo score medio basso|
+| SCOUT-2  | Ashby / Greenhouse / Lever / company-careers (curato)   | Pochi ma giusti, score medio più alto          |
+
+Il `next-for-analista` riceve poi un mix bilanciato di volume + qualità, e il filtro hard-requirements dell'Analista (RULE-06) si concentra sul flusso di Scout-1 (dove c'è più rumore). Non è una regola rigida — adattare al `work_mode` come da tabella sopra.
 
 ## Anti-pattern
 

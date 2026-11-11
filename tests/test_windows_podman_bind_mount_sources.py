@@ -40,6 +40,11 @@ def _function(text: str, name: str) -> str:
     return match.group(0)
 
 
+# Made by the command that asks for the service (`jht screen on` makes the folder of the viewer password, `jht linkedin login` the folder of
+# the profile, as the person, and both refuse a link there), not by `up`: the service is off until then, and nothing of it exists before.
+ON_REQUEST_SOURCES = {".jht/live-screen", ".jht/secrets/linkedin-profile"}
+
+
 def _home_sources() -> list[str]:
     sources = re.findall(r"^\s*- \$\{HOME\}/([^:]+):/", COMPOSE.read_text(encoding="utf-8"), re.M)
     assert ".jht" in sources and "Documents/Job Hunter Team" in sources, sources
@@ -52,14 +57,14 @@ def _ps_literal(value: str) -> str:
 
 def test_the_compose_mounts_two_folders_of_the_home():
     # If the compose gains or loses a ${HOME} mount, the test below follows it.
-    assert _home_sources() == [".jht", "Documents/Job Hunter Team"]
+    assert _home_sources() == [".jht", "Documents/Job Hunter Team", ".jht/live-screen", ".jht/secrets/linkedin-profile"]
 
 
 @pytest.mark.skipif(_shell() is None, reason="needs PowerShell (pwsh or powershell)")
 def test_under_podman_the_mount_preparation_creates_every_home_source(tmp_path: Path):
     home = tmp_path / "home"
     home.mkdir()
-    sources = _home_sources()
+    sources = [source for source in _home_sources() if source not in ON_REQUEST_SOURCES]
     function = _function(WRAPPER.read_text(encoding="utf-8"), "Repair-MountOwnership")
     checks = "\n".join(
         f"if (-not (Test-Path -LiteralPath (Join-Path $env:HOME {_ps_literal(s)}) -PathType Container)) "

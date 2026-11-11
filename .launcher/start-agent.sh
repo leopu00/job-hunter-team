@@ -519,7 +519,14 @@ if [ "$ROLE" = "bridge" ]; then
   # token stale in memoria). Standalone, non tocca agent-watchdog/Dottore.
   # Stesso pattern: setsid + singleton via marker cmdline + cooldown anti-storm.
   HEALER_SCRIPT="/app/.launcher/codex-auth-healer.sh"
-  if [ -f "$HEALER_SCRIPT" ]; then
+  # It heals the refresh token SHARED by the Codex agents and reads their panes for Codex's own messages: with the pi
+  # harness there is nothing to heal. Not started, and not expected by process_health.py either (the same key), or the
+  # watchdog of the bridge would see it «dead» and respawn the whole suite every ~38 s.
+  # (the bridge branch runs before JHT_CONFIG_FILE is set further down: the same file, by its own path)
+  if [ "$(jht_config_harness "${JHT_HOME:-/jht_home}/jht.config.json" 2>/dev/null)" = "pi" ]; then
+    jht_kill_by_marker "$HEALER_SCRIPT" 0 0.5 || true
+    echo "• codex-auth-healer not needed (the agents run on the pi harness)"
+  elif [ -f "$HEALER_SCRIPT" ]; then
     if jht_kill_by_marker "$HEALER_SCRIPT" 0 0.5; then
       HEALER_LOG="$(jht_daemon_log codex-auth-healer.log)"
       setsid sh -c "

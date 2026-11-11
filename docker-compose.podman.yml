@@ -30,14 +30,15 @@ services:
     # tests/test_podman_network_egress.py checks the line, and on a real
     # Podman machine what the container can reach.
     network_mode: "pasta:--no-udp,--no-icmp,--no-map-gw,-4,-o,127.0.0.1,-T,3128"
-    # The live-screen port of the base file (127.0.0.1:6080 of the VM) is
-    # published again: pasta forwards it to the container's own address, so
-    # the stream keeps the 0.0.0.0 default of .launcher/live-screen.sh,
-    # which inside this namespace is reachable only through that port.
     environment:
       # Node's fetch ignores HTTP(S)_PROXY unless told: with no direct route
       # it would time out (measured on the image's Node 22.22.2).
       - NODE_USE_ENV_PROXY=1
+      # With that switch Node 22 prints "[UNDICI-EHPA] Warning: EnvHttpProxyAgent
+      # is experimental" at its own start, before any code of ours runs, so the
+      # filter of the CLI entry point cannot drop it: the flag does, for that one
+      # code only (every other warning goes through).
+      - NODE_OPTIONS=--disable-warning=UNDICI-EHPA
       - HTTP_PROXY=${JHT_PODMAN_HTTP_PROXY:-}
       - HTTPS_PROXY=${JHT_PODMAN_HTTPS_PROXY:-}
       - ALL_PROXY=${JHT_PODMAN_ALL_PROXY:-}
@@ -68,6 +69,36 @@ services:
     environment:
       - HTTPS_PROXY=http://127.0.0.1:3129
       - https_proxy=http://127.0.0.1:3129
+
+  # The live screen (profile screen). Same map of uids as jht, so the X socket in the shared volume is of the same user for both. Its
+  # own network namespace on pasta, with no way out at all (no -T: the stream is the only thing it has): the port of the base file
+  # (127.0.0.1:6080 of the VM) is published again, pasta forwards it to the container's own address, so the stream keeps the 0.0.0.0
+  # default of .launcher/live-screen.sh, which inside this namespace is reachable only through that port.
+  jht-screen:
+    userns_mode: "keep-id:uid=1001,gid=1001"
+    network_mode: "pasta:--no-udp,--no-icmp,--no-map-gw,-4,-o,127.0.0.1"
+
+  # The media container and the one-shot of the closer's browser write volumes that jht reads (and the other way round): the same map
+  # of uids as jht, or the files of one would belong to an uid the other does not have. Both keep the no-network they have in the base.
+  jht-media:
+    userns_mode: "keep-id:uid=1001,gid=1001"
+
+  jht-playwright-populate:
+    userns_mode: "keep-id:uid=1001,gid=1001"
+
+  # The manual sign-in to LinkedIn (profile login): the same map of uids for the three (they share sockets, and the browser writes the profile
+  # the closer reads). The browser has no network. The proxy and the view have pasta without the way to the gateway of the host: the proxy
+  # needs the internet (its list decides what), the view only publishes the port of the base file on 127.0.0.1.
+  jht-login:
+    userns_mode: "keep-id:uid=1001,gid=1001"
+
+  jht-login-proxy:
+    userns_mode: "keep-id:uid=1001,gid=1001"
+    network_mode: "pasta:--no-udp,--no-icmp,--no-map-gw,-4"
+
+  jht-login-view:
+    userns_mode: "keep-id:uid=1001,gid=1001"
+    network_mode: "pasta:--no-udp,--no-icmp,--no-map-gw,-4"
 
   jht-telegram:
     # SO_PEERCRED è tradotto nel namespace del server. Client e server devono

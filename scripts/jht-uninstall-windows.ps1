@@ -48,6 +48,15 @@ $JhtCmdShim = @'
 @echo off
 where pwsh.exe >nul 2>&1
 if errorlevel 1 goto jht_windows_powershell
+(goto) 2>nul & pwsh -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
+:jht_windows_powershell
+(goto) 2>nul & powershell -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
+'@
+# What installs before the one-line form wrote (an exit line after the call): still ours, still removed.
+$JhtCmdShimBefore = @'
+@echo off
+where pwsh.exe >nul 2>&1
+if errorlevel 1 goto jht_windows_powershell
 pwsh -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
 exit /b %errorlevel%
 :jht_windows_powershell
@@ -59,6 +68,7 @@ exit /b %errorlevel%
 # a command shim and comes first in the PATH, so that `jht` typed in PowerShell is the shim and not the script the default
 # execution policy refuses.
 $JhtShimFolderCmd = $JhtCmdShim.Replace('%~dp0jht.ps1', '%~dp0..\jht.ps1')
+$JhtShimFolderCmdBefore = $JhtCmdShimBefore.Replace('%~dp0jht.ps1', '%~dp0..\jht.ps1')
 
 $JhtUninstallText = @{
   it = @{
@@ -298,14 +308,43 @@ function Remove-JhtTreeNoFollow {
 
 # ── Ownership ─────────────────────────────────────────────────────────────
 
-# The machine is ours only when this user's runtime says so, as install.ps1 wrote it.
+# One Podman machine per Windows user (JHT-T305): install.ps1 gives a user who has none jht-podman-<8 hex of the SHA-256 of their SID>.
+# The same function is in install.ps1 and in the uninstall of the wrapper; tests/test_windows_machine_per_user.py keeps the three equal.
+function Get-JhtUserMachineName {
+  param([string]$Sid = '')
+  if (-not $Sid) { try { $Sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value } catch { $Sid = '' } }
+  if ($Sid -notmatch '^S-1-\d+(-\d+)+$') { return 'jht-podman' }
+  $hash = [Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::ASCII.GetBytes($Sid))
+  return 'jht-podman-' + (([BitConverter]::ToString($hash, 0, 4) -replace '-', '').ToLowerInvariant())
+}
+
+# The mark the installer leaves when IT created the machine (its `machine init` succeeded): a regular file, never a link, whose first
+# line is the name of the machine.
+function Test-JhtMachineCreatedMark {
+  param([string]$RuntimePath, [string]$Name)
+  $file = Join-Path $RuntimePath 'podman-machine-created'
+  try {
+    $item = Get-Item -LiteralPath $file -Force -ErrorAction Stop
+    if ($item.PSIsContainer -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) { return $false }
+    $first = @([IO.File]::ReadAllLines($file) | Select-Object -First 1)
+    return ($first.Count -eq 1 -and ([string]$first[0]).Trim() -ceq $Name)
+  } catch { return $false }
+}
+
+# The machine is ours only when this user's runtime says so, as install.ps1 wrote it: jht-podman, the name of this user's own, or
+# another name the installer marked as created by it. The name it says becomes the one this uninstall acts on.
 function Test-JhtOwnedMachine {
   param([Parameter(Mandatory)][string]$Runtime)
   try {
     $machine = [IO.File]::ReadAllText([IO.Path]::Combine($Runtime, 'podman-machine')).Trim()
     $engine = [IO.File]::ReadAllText([IO.Path]::Combine($Runtime, 'container-runtime')).Trim()
   } catch { return $false }
-  return ($machine -ceq $JhtMachineName) -and ($engine -ceq 'podman')
+  if ($engine -cne 'podman' -or $machine -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$') { return $false }
+  if ($machine -ceq 'jht-podman' -or $machine -ceq (Get-JhtUserMachineName) -or (Test-JhtMachineCreatedMark -RuntimePath $Runtime -Name $machine)) {
+    $script:JhtMachineName = $machine
+    return $true
+  }
+  return $false
 }
 
 function Read-JhtRuntimeManifest {
@@ -342,19 +381,17 @@ function Get-JhtOwnCommands {
     $expected = $Manifest[$pair[1]]
     if ($expected -and [IO.File]::Exists($path) -and (Get-JhtFileSha256 $path) -ceq $expected) { $own += $path }
   }
-  $cmd = [IO.Path]::Combine($Bin, 'jht.cmd')
-  if ([IO.File]::Exists($cmd)) {
-    $text = ([IO.File]::ReadAllText($cmd)).Replace("`r`n", "`n").TrimEnd()
-    $shim = $JhtCmdShim.Replace("`r`n", "`n").TrimEnd()
-    # The whole text, or the beginning of it: a write that was cut short leaves an empty file or the first lines, and nobody
-    # else's command is an empty file or the first lines of ours.
-    if ($text -ceq $shim -or $shim.StartsWith($text, [StringComparison]::Ordinal)) { $own += $cmd }
-  }
-  $shimCmd = [IO.Path]::Combine($Bin, 'shim', 'jht.cmd')
-  if ([IO.File]::Exists($shimCmd)) {
-    $text = ([IO.File]::ReadAllText($shimCmd)).Replace("`r`n", "`n").TrimEnd()
-    $shim = $JhtShimFolderCmd.Replace("`r`n", "`n").TrimEnd()
-    if ($text -ceq $shim -or $shim.StartsWith($text, [StringComparison]::Ordinal)) { $own += $shimCmd }
+  foreach ($entry in @(
+      @([IO.Path]::Combine($Bin, 'jht.cmd'), @($JhtCmdShim, $JhtCmdShimBefore)),
+      @([IO.Path]::Combine($Bin, 'shim', 'jht.cmd'), @($JhtShimFolderCmd, $JhtShimFolderCmdBefore)))) {
+    if (-not [IO.File]::Exists($entry[0])) { continue }
+    $text = ([IO.File]::ReadAllText($entry[0])).Replace("`r`n", "`n").TrimEnd()
+    foreach ($candidate in $entry[1]) {
+      $shim = $candidate.Replace("`r`n", "`n").TrimEnd()
+      # The whole text, or the beginning of it: a write that was cut short leaves an empty file or the first lines, and nobody
+      # else's command is an empty file or the first lines of ours.
+      if ($text -ceq $shim -or $shim.StartsWith($text, [StringComparison]::Ordinal)) { $own += $entry[0]; break }
+    }
   }
   return $own
 }
@@ -420,15 +457,21 @@ function Invoke-JhtPodmanWithin {
 
 # ── Scheduled task and the user's environment ─────────────────────────────
 
+# The tasks of this exact name, found by comparing names: -TaskName takes wildcards, and the [ ] of "... [<SID>]" are one, so a call with
+# the name raises "wildcard pattern not valid" and the task was never found. Throws when the list cannot be read.
+function Get-JhtStartupTaskExact {
+  return @(Get-ScheduledTask -ErrorAction Stop | Where-Object { $_.TaskName -ceq $JhtStartupTaskName -and $_.TaskPath -ceq '\' })
+}
+
 function Test-JhtStartupTaskPresent {
   if (-not $JhtStartupTaskName) { return $false }
-  try { return [bool](Get-ScheduledTask -TaskName $JhtStartupTaskName -ErrorAction SilentlyContinue) } catch { return $false }
+  try { return @(Get-JhtStartupTaskExact).Count -gt 0 } catch { return $false }
 }
 
 function Remove-JhtStartupTaskExact {
   try {
     if (-not (Test-JhtStartupTaskPresent)) { return 'absent' }
-    Unregister-ScheduledTask -TaskName $JhtStartupTaskName -Confirm:$false -ErrorAction Stop
+    foreach ($task in @(Get-JhtStartupTaskExact)) { Unregister-ScheduledTask -InputObject $task -Confirm:$false -ErrorAction Stop }
     if (Test-JhtStartupTaskPresent) { return 'left' }
     return 'removed'
   } catch { return 'left' }

@@ -20,6 +20,7 @@ import {
 import { execInContainer, execScriptInContainer } from '../../utils/container-proxy.js';
 import { answerTyped, describeAnswer } from '../../lib/terminal-answer.js';
 import { errorBlock } from '../../lib/ui.js';
+import { blockedNoticeFor } from '../../lib/chat-blocked-notice.js';
 
 // Escape per passare il messaggio dentro single-quote bash:
 //   ' -> '\''   $ -> \$   ` -> \`
@@ -456,12 +457,16 @@ export async function chatAction(agentArg, options = {}) {
   const agent = chatAgentOf(session);
   const feed = agent ? createChatFeed(agent, readChatPage, readOpenCards) : null;
   const pump = feed ? createChatPump(feed) : null;
+  // A blocked agent never answers: say why (and the command that puts it right) instead of «no reply yet».
+  const notice = () => blockedNoticeFor(session, options.blockedNotice || {});
+  const printNotice = (lines) => { for (const line of lines) console.log(c.yellow(line)); };
   const show = (rows) => { for (const row of rows) console.log(`${row.card ? formatCard(row.card) : formatChatMessage(row, agent)}\n`); };
   if (feed) {
     const past = feed.history();
     if (past === null) console.log(c.dim('  (the chat cannot be read here: /pane shows the terminal)\n'));
     else if (past.length) show(past);
   }
+  printNotice(notice());
   // A message that arrives while the person is at the prompt is printed above it.
   let poller = null;
   if (feed && !options.quiet) {
@@ -493,7 +498,8 @@ export async function chatAction(agentArg, options = {}) {
       if (msg === '/pane') { showPane(30); continue; }
       if (msg === '/read') {
         const rows = feed ? feed.fresh() : [];
-        if (rows.length) show(rows); else console.log(c.dim('  (no new messages)'));
+        if (rows.length) show(rows);
+        else { const why = notice(); if (why.length) printNotice(why); else console.log(c.dim('  (no new messages)')); }
         continue;
       }
       if (msg === '/cards') {
@@ -531,7 +537,8 @@ export async function chatAction(agentArg, options = {}) {
       if (!options.quiet) {
         if (feed) {
           const rows = await pump.awaitReply({ stop: typedLines.pending });
-          if (rows.length) show(rows); else if (!typedLines.pending()) console.log(c.dim('  (no reply yet: /read shows it when it comes)'));
+          if (rows.length) show(rows);
+          else if (!typedLines.pending()) { const why = notice(); if (why.length) printNotice(why); else console.log(c.dim('  (no reply yet: /read shows it when it comes)')); }
         } else {
           await new Promise((res) => setTimeout(res, 3000));
           showPane(8);

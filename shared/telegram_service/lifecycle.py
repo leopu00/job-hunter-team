@@ -96,7 +96,7 @@ def main(argv: list[str]) -> int:
         except (lifecycle_state.StateError, OSError, ValueError):
             print("telegram_lifecycle_state_unreadable", file=sys.stderr)
             return 1
-        print("jht\njht-broker" + ("\njht-telegram" if configured else ""))
+        print("jht" + ("\njht-telegram" if configured else ""))  # the broker is made at its first use: the host adds it when it is there
         return 0
     parser = argparse.ArgumentParser(prog="telegram-lifecycle")
     parser.add_argument("phase", choices=("prepare", "complete"))

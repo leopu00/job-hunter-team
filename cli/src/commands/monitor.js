@@ -3,6 +3,7 @@ import { once } from 'node:events';
 import { say } from '../lib/texts.js';
 import { openObservationStream, readObservation, validObservation } from '../lib/agent-observation.js';
 import { errorText, renderObservation } from '../lib/agent-observation-view.js';
+import { readActiveProvider } from '../lib/agent-observation-provider.js';
 import { appendDiagnostic } from '../lib/runtime-diagnostic.js';
 
 // Request pacing bounds work to one sample outstanding. Closing the view
@@ -14,7 +15,7 @@ export async function monitor(options, {
   if (options.window) throw new Error('observer_window_host_required');
   if (options.once || options.json) {
     const snapshot = read();
-    output.write(options.json ? `${JSON.stringify(snapshot)}\n` : renderObservation(snapshot, { live: true }));
+    output.write(options.json ? `${JSON.stringify(snapshot)}\n` : renderObservation(snapshot, { live: true, provider: readActiveProvider() }));
     return snapshot.ok ? 0 : 1;
   }
   if (!output.isTTY) throw new Error('observer_terminal_required');
@@ -43,7 +44,7 @@ export async function monitor(options, {
     try {
       const snapshot = JSON.parse(line);
       if (!validObservation(snapshot)) throw new Error('invalid');
-      output.write(`\x1b[H\x1b[2J${renderObservation(snapshot, { live: true })}`);
+      output.write(`\x1b[H\x1b[2J${renderObservation(snapshot, { live: true, provider: readActiveProvider() })}`);
     } catch { fail('observer_read_invalid'); return; }
     timer = setTimeout(request, intervalMs);
   });

@@ -31,6 +31,7 @@ Uso:
   python3 scout_coord.py history                       # Storico distribuzioni
   python3 scout_coord.py assign scout-1 --cerchi "1,2" --fonti "remoteok,pyjobs"
   python3 scout_coord.py assign scout-2 --cerchi "3,4" --fonti "greenhouse,lever"
+  python3 scout_coord.py auto scout-1                 # Il burst: la tua corsia dal piano + la prima ricerca, senza negoziare
   python3 scout_coord.py reset                         # Chiudi sessione corrente
   python3 scout_coord.py claim <job_id>  <scout_name>  # Claim posizione (anti-collisione)
   python3 scout_coord.py check-claim <job_id>          # Verifica se gia' claimata
@@ -38,10 +39,12 @@ Uso:
   python3 scout_coord.py doctor [--json]               # Quale DB si sta usando davvero
 """
 
+import json
 import re
 import sqlite3
 import sys
 import os
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -328,6 +331,134 @@ def cmd_assign(scout, cerchi=None, fonti=None, note=None):
     db.close()
 
 
+# ── The burst: the plan decides, nobody negotiates ──────────────────────────────────────────────────
+# Measured 11/11: the five Scouts of the first burst spent ~3.5 minutes exchanging messages to split circles and sources, and
+# the first position came at 5.6 minutes at best. In the burst the split is a function of the plan (scout_coverage.lanes) and of
+# how many Scouts the plan has: `auto` takes the first lane nobody holds, in ONE write under a lock, and prints it with the first
+# search. Negotiation stays for what comes after the burst (a source exhausted, a colleague stopped).
+LANE_NOTE = re.compile(r"^auto lane (\d+)/(\d+)$")
+
+
+def _live_scouts():
+    """The names (`scout-3`) of the Scout sessions alive now, or None when tmux cannot be asked."""
+    import subprocess
+    try:
+        out = subprocess.run(["tmux", "list-sessions", "-F", "#{session_name}"], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if out.returncode != 0:
+        return None
+    return {name.strip().lower() for name in out.stdout.split() if re.match(r"^SCOUT-\d+$", name.strip())}
+
+
+def planned_scouts(live=None):
+    """How many Scouts the plan has: `JHT_SCOUT_LANES`, else the roster of the first run, else the Scouts alive now (at least 1)."""
+    try:
+        forced = int(os.environ.get("JHT_SCOUT_LANES", ""))
+        if 1 <= forced <= 32:
+            return forced
+    except ValueError:
+        pass
+    try:
+        import first_run
+        roster = first_run._read().get("roster") or {}
+        planned = int(roster.get("scout"))
+        if 1 <= planned <= 32:
+            return planned
+    except Exception:  # noqa: BLE001 — no first run, no roster: count who is here
+        pass
+    return max(1, len(live or ()))
+
+
+def lane_sources(scout):
+    """The sources of `scout`'s lane (its active `auto` assignment), or [] when it has none."""
+    db = get_db()
+    try:
+        row = db.execute("SELECT fonti, note FROM scout_coordination WHERE scout=? AND superseded_at IS NULL", (scout,)).fetchone()
+    finally:
+        db.close()
+    if not row or not LANE_NOTE.match(row["note"] or ""):
+        return []
+    return [f for f in (row["fonti"] or "").split(",") if f]
+
+
+def _get_db_waiting():
+    """get_db(), asked again a few times when the file is busy: five Scouts that boot together all open the database at once (the
+    switch to WAL and the schema want it alone for a moment). Any other failure is reported at once, as always."""
+    last = None
+    for attempt in range(10):
+        try:
+            return get_db()
+        except CoordinationDbError as err:
+            if "locked" not in str(err):
+                raise
+            last = err
+            time.sleep(0.15 + 0.1 * attempt)
+    raise last
+
+
+def cmd_auto(scout):
+    if not valid_scout_name(scout):
+        raise CoordinationDbError(f"{scout!r} is not a Scout name (expected something like `scout-1`). Nothing was written.")
+    import scout_coverage as cov
+    live = _live_scouts()
+    if live is not None and scout not in live:
+        live = None        # tmux does not show this Scout among its sessions (another naming): who is alive is unknown, no lane is taken back
+    plan = cov.load_plan()
+    count = planned_scouts(live)
+    lanes = cov.lanes(plan, count)
+    db = _get_db_waiting()
+    db.isolation_level = None
+    try:
+        db.execute("BEGIN IMMEDIATE")          # the lock: two Scouts booting together take two lanes, never the same
+        active = db.execute("SELECT id, scout, note FROM scout_coordination WHERE superseded_at IS NULL").fetchall()
+        mine = next((r for r in active if r["scout"] == scout and LANE_NOTE.match(r["note"] or "")), None)
+        if mine is not None:
+            lane = int(LANE_NOTE.match(mine["note"]).group(1))      # a respawned Scout keeps its lane
+            if lane >= len(lanes):
+                lane = lane % len(lanes)
+        else:
+            taken = {}
+            for r in active:
+                m = LANE_NOTE.match(r["note"] or "")
+                if not m or r["scout"] == scout:
+                    continue
+                if live is not None and r["scout"] not in live:
+                    db.execute("UPDATE scout_coordination SET superseded_at=? WHERE id=?", (datetime.now().isoformat(), r["id"]))
+                    continue                    # its Scout is gone: the lane is free again
+                taken[int(m.group(1))] = taken.get(int(m.group(1)), 0) + 1
+            free = [k for k in range(len(lanes)) if k not in taken]
+            lane = free[0] if free else min(range(len(lanes)), key=lambda k: (taken.get(k, 0), k))   # more Scouts than lanes: share the lightest
+            chosen = lanes[lane]
+            db.execute("UPDATE scout_coordination SET superseded_at=? WHERE scout=? AND superseded_at IS NULL",
+                       (datetime.now().isoformat(), scout))
+            db.execute("INSERT INTO scout_coordination (scout, cerchi, fonti, note) VALUES (?, ?, ?, ?)",
+                       (scout, chosen["areas"], ",".join(chosen["sources"]), f"auto lane {lane}/{len(lanes)}"))
+        db.execute("COMMIT")
+    except BaseException:
+        try:
+            db.execute("ROLLBACK")
+        except sqlite3.Error:
+            pass
+        raise
+    finally:
+        db.close()
+    chosen = lanes[lane]
+    answer = {"scout": scout, "lane": lane, "of": len(lanes), "areas": chosen["areas"], "sources": chosen["sources"],
+              "negotiate": False, "do": "search now: no message to the other Scouts, no reset; `next` below is your first search"}
+    try:
+        now = time.time()
+        rows = cov.rows_since(cov.default_since(now))
+        keys = frozenset(cov._lang.portal_slug(f) for f in chosen["sources"])
+        answer["next"] = cov.next_step(plan, rows, now=now, lane=keys)
+        avoid = cov.avoid_list(plan, rows)
+        if avoid:
+            answer["avoid"] = avoid
+    except Exception:  # noqa: BLE001 — the lane stands; `scout_coverage.py next --agent` gives the first search
+        answer["next"] = None
+    print(json.dumps(answer, sort_keys=True, ensure_ascii=False))
+
+
 def cmd_reset():
     db = get_db()
     now = datetime.now().isoformat()
@@ -461,6 +592,8 @@ def _dispatch(cmd):
             elif arg == "--note" and i + 1 < len(args):
                 note = args[i + 1]
         cmd_assign(scout, cerchi, fonti, note)
+    elif cmd == "auto" and len(sys.argv) >= 3:
+        cmd_auto(sys.argv[2].strip().lower())
     elif cmd == "reset":
         cmd_reset()
     elif cmd == "claim" and len(sys.argv) >= 4:

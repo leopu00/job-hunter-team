@@ -4,7 +4,7 @@
 #
 # Uso:
 #   scripts/live-screen-tunnel.sh <alias-ssh> [--ssh-config FILE]
-#       [--container jht] [--local-port 16080] [--viewer tauri|none]
+#       [--container jht-screen] [--local-port 16080] [--viewer tauri|none]
 #
 # Cosa fa, e cosa NON fa:
 #   1. chiede via SSH l'IP del container sulla rete bridge della VPS e apre un
@@ -30,7 +30,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-CONTAINER="jht"
+CONTAINER="jht-screen"
 LOCAL_PORT=16080
 VIEWER="tauri"
 SSH_CONFIG=""
@@ -77,7 +77,7 @@ done
 [ -n "$TARGET_HOST" ] || TARGET_HOST="127.0.0.1"
 
 remote "docker exec $CONTAINER test -f $REMOTE_PASSWORD_FILE" \
-  || fail "nel container $CONTAINER di $ALIAS lo schermo live non è acceso (immagine senza live-screen o JHT_LIVE_SCREEN=0)"
+  || fail "nel container $CONTAINER di $ALIAS lo schermo live non è acceso (sulla VPS: jht screen on)"
 
 # ── 2. Password in una JHT_HOME temporanea privata ───────────────────────────
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/jht-live-screen-tunnel.XXXXXX")"

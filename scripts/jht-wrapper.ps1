@@ -70,21 +70,111 @@ $JhtUninstallRemovalNotice = 'Vengono cancellati anche la password della posta e
 # rimosso, quindi viene gestito prima di caricare manifest, helper ACL o shim.
 # I target ricevuti dal dispatcher sono cartelle standard calcolate dalle API
 # Windows, mai override d'ambiente o valori letti dal runtime da cancellare.
+# The words of the uninstall for a person: Italian, and English with JHT_LANG=en. The desktop app reads the JHT_PHASE and JHT_LEFT
+# lines from a pipe; at a console the person gets the sentences instead (JHT_MACHINE_OUTPUT=1 forces the lines, =0 forbids them).
+$script:JhtUninstallReason = ''
+# The machine this uninstall removes: jht-podman, or the one the runtime attests (Resolve-JhtUninstallMachineName).
+$script:JhtUninstallMachine = 'jht-podman'
+# With --purge the first notice must not say that ~/.jht and Documents stay: only the secrets are named, the purge notice says the rest.
+$script:JhtUninstallPurgeRemovalNotice = 'Vengono cancellati anche la password della posta e i token di Telegram salvati.'
+$script:JhtUninstallPurgeNotice = 'Con --purge vengono cancellati anche ~/.jht e Documents\Job Hunter Team: configurazione, database, CV e output. Non si torna indietro.'
+
+function Get-JhtUninstallText {
+  param([Parameter(Mandatory)][string]$Key, [string[]]$Values = @())
+  $english = ($env:JHT_LANG -ceq 'en')
+  $texts = @{
+    'phase.machine'  = @('Tolgo la macchina Podman <machine> (con i segreti e le immagini di JHT)...', 'Removing the <machine> Podman machine (with the secrets and the images of JHT)...')
+    'phase.data'     = @('Cancello ~/.jht e Documents\Job Hunter Team (--purge)...', 'Deleting ~/.jht and Documents\Job Hunter Team (--purge)...')
+    'phase.runtime'  = @('Tolgo il runtime di JHT...', 'Removing the JHT runtime...')
+    'phase.commands' = @('Tolgo il comando jht, i file dell''installer e le righe PATH...', 'Removing the jht command, the installer files and the PATH lines...')
+    'done'           = @('Fatto: la macchina <machine> (e con lei le immagini di JHT, il nucleo e quella piena), il runtime e il comando jht sono stati tolti.', 'Done: the <machine> machine (and with it the JHT images, the core and the full one), the runtime and the jht command are gone.')
+    'done.kept'      = @(' ~/.jht e Documents\Job Hunter Team restano (con --purge si cancellano).', ' ~/.jht and Documents\Job Hunter Team stay (--purge deletes them).')
+    'secrets'        = @('I segreti salvati non sono stati rimossi: la password della posta e i token di Telegram stanno nei volumi jht-secrets e jht-telegram-secrets della macchina <machine>, che e'' ancora qui.', 'The saved secrets were not removed: the mail password and the Telegram tokens are in the jht-secrets and jht-telegram-secrets volumes of the <machine> machine, which is still there.')
+    'left.machine'   = @('Non tolta: la macchina Podman <machine>. Motivo: {0}. A mano: podman machine stop <machine>; wsl --unregister {1}; poi rilancia jht uninstall --confirm.', 'Not removed: the <machine> Podman machine. Reason: {0}. By hand: podman machine stop <machine>; wsl --unregister {1}; then run jht uninstall --confirm again.')
+    'left.task'      = @('Non tolta l''attivita'' di avvio al logon ''{0}'' (motivo: {1}). Il resto e'' stato tolto. A mano: schtasks /Delete /TN "{0}" /F.', 'Not removed: the logon start task ''{0}'' (reason: {1}). Everything else was removed. By hand: schtasks /Delete /TN "{0}" /F.')
+    'left.data'      = @('Non cancellati i dati di JHT ({0}). A mano: Remove-Item -Recurse -Force {1}. Il comando jht e il runtime sono rimasti: rilancia jht uninstall --confirm --purge dopo aver risolto.', 'The JHT data was not deleted ({0}). By hand: Remove-Item -Recurse -Force {1}. The jht command and the runtime are still there: run jht uninstall --confirm --purge again once it is sorted out.')
+    'left.runtime'   = @('Non tolto: il runtime di JHT in {0}. A mano: Remove-Item -Recurse -Force ''{0}''.', 'Not removed: the JHT runtime in {0}. By hand: Remove-Item -Recurse -Force ''{0}''.')
+    'left.commands'  = @('Non tolti il comando jht o i file dell''installer in {0} ({1}), o le variabili e le righe PATH aggiunte dall''installer. A mano: Remove-Item il file; variabili JHT_CONTAINER_RUNTIME e JHT_PODMAN_MACHINE e la cartella {0} nel PATH da Impostazioni > Variabili d''ambiente.', 'Not removed: the jht command or the installer files in {0} ({1}), or the variables and PATH lines the installer added. By hand: Remove-Item the file; the JHT_CONTAINER_RUNTIME and JHT_PODMAN_MACHINE variables and the {0} folder in the PATH from Settings > Environment variables.')
+    'kept.machine'   = @('La macchina Podman {0} non risulta creata dall''installer: resta dov''e''. A mano, se e'' tua da togliere: podman machine stop {0}; podman machine rm {0}.', 'The Podman machine {0} is not marked as created by the installer: it stays where it is. By hand, if it is yours to remove: podman machine stop {0}; podman machine rm {0}.')
+    'bad.target'     = @('Rifiutato: {0} e'' un collegamento o non e'' una cartella: non lo seguo e non lo cancello.', 'Refused: {0} is a link or not a folder: it is not followed and not deleted.')
+  }
+  $pair = $texts[$Key]
+  if (-not $pair) { return $Key }
+  $format = if ($english) { $pair[1] } else { $pair[0] }
+  return (($format -f $Values).Replace('<machine>', $script:JhtUninstallMachine))
+}
+
+function Test-JhtUninstallMachineOutput {
+  if ($env:JHT_MACHINE_OUTPUT -ceq '1') { return $true }
+  if ($env:JHT_MACHINE_OUTPUT -ceq '0') { return $false }
+  return [Console]::IsOutputRedirected
+}
+
 function Write-JhtUninstallPhase {
   param([Parameter(Mandatory)][ValidateSet(
     'uninstall_machine', 'uninstall_runtime', 'uninstall_commands'
   )][string]$Id)
-  [Console]::Out.WriteLine("JHT_PHASE $Id")
+  if (Test-JhtUninstallMachineOutput) { [Console]::Out.WriteLine("JHT_PHASE $Id"); return }
+  [Console]::Out.WriteLine((Get-JhtUninstallText ('phase.' + $Id.Substring('uninstall_'.Length))))
 }
 
+# What is left, as a line for the app and as a sentence with the exact way to remove it by hand, for the person.
 function Write-JhtUninstallLeft {
-  param([Parameter(Mandatory)][ValidateSet('machine', 'runtime', 'commands')][string]$Id)
-  [Console]::Out.WriteLine("JHT_LEFT $Id")
+  param([Parameter(Mandatory)][ValidateSet('machine', 'runtime', 'commands')][string]$Id, [string[]]$Values = @())
+  if (Test-JhtUninstallMachineOutput) { [Console]::Out.WriteLine("JHT_LEFT $Id") }
+  [Console]::Error.WriteLine((Get-JhtUninstallText ('left.' + $Id) $Values))
 }
 
+# The distro WSL gives a Podman machine: «podman-» in front of the name, unless the name already starts with «podman».
+function Get-JhtPodmanDistroName {
+  param([Parameter(Mandatory)][string]$MachineName)
+  if ($MachineName.StartsWith('podman', [StringComparison]::Ordinal)) { return $MachineName }
+  return "podman-$MachineName"
+}
+
+# One line of plain printable text out of what a program said: nothing a terminal could act on, at most 160 characters.
+function Format-JhtUninstallReason {
+  param([string]$Text)
+  $clean = (([string]$Text) -replace '[^\x20-\x7E]', ' ' -replace '\s+', ' ').Trim()
+  if ($clean.Length -gt 160) { $clean = $clean.Substring(0, 160) }
+  if (-not $clean) { return 'nessuna risposta' }
+  return $clean
+}
+
+# A program with its arguments, both streams read: the exit code and what it said.
+function Invoke-JhtUninstallNative {
+  param([Parameter(Mandatory)][string]$Program, [string[]]$Arguments = @())
+  $lines = @(& { $ErrorActionPreference = 'Continue'; & $Program @Arguments 2>&1 } | ForEach-Object { [string]$_ })
+  $code = $LASTEXITCODE
+  return @{ Code = $code; Text = (Format-JhtUninstallReason ($lines -join ' ')) }
+}
+
+# podman.exe where the uninstall can find it even when the terminal's PATH does not name it (a per-user Podman, or one installed after
+# the terminal was opened): the PATH as the process, the user and the machine have it, then the places Podman installs to.
+function Find-JhtUninstallPodman {
+  param([string]$FromPath)
+  if ($FromPath) { return $FromPath }
+  $folders = @()
+  foreach ($scope in 'Process', 'User', 'Machine') {
+    try { $folders += @(([string][Environment]::GetEnvironmentVariable('Path', $scope)) -split ';') } catch {}
+  }
+  foreach ($base in @($env:ProgramW6432, $env:ProgramFiles)) {
+    if ($base) { $folders += [IO.Path]::Combine($base, 'RedHat', 'Podman'); $folders += [IO.Path]::Combine($base, 'Podman') }
+  }
+  if ($env:LOCALAPPDATA) { $folders += [IO.Path]::Combine($env:LOCALAPPDATA, 'Programs', 'Podman') }
+  foreach ($folder in $folders) {
+    $clean = ([string]$folder).Trim().Trim('"')
+    if (-not $clean -or -not [IO.Path]::IsPathRooted($clean)) { continue }
+    $candidate = [IO.Path]::Combine($clean, 'podman.exe')
+    if ([IO.File]::Exists($candidate)) { return $candidate }
+  }
+  return ''
+}
+
+# The leftover of the machine, said with what is inside it and why it is still there.
 function Write-JhtUninstallMachineLeft {
-  Write-JhtUninstallLeft machine
-  [Console]::Error.WriteLine('I segreti salvati non sono stati rimossi.')
+  Write-JhtUninstallLeft machine @($script:JhtUninstallReason, (Get-JhtPodmanDistroName $script:JhtUninstallMachine))
+  [Console]::Error.WriteLine((Get-JhtUninstallText 'secrets'))
 }
 
 function Get-JhtNormalizedWindowsPath {
@@ -117,9 +207,10 @@ function Get-JhtPodmanMachineState {
   }
   if ($WslPath) {
     try {
-      $distros = @(& { $ErrorActionPreference = 'Continue'; & $WslPath --list --quiet 2>$null } | ForEach-Object { ([string]$_).Replace([char]0, '').Trim() })
+      $distros = @(& { $ErrorActionPreference = 'Continue'; & $WslPath --list --quiet 2>$null } | ForEach-Object { ([string]$_).Replace([string][char]0, '').Trim() })
       if ($LASTEXITCODE -eq 0) {
-        if ($distros -ccontains "podman-machine-$MachineName") { return 'present' }
+        # The distro is «podman-<name>» (podman-jht-podman); the older spelling «podman-machine-<name>» is looked for too.
+        if ($distros -ccontains (Get-JhtPodmanDistroName $MachineName) -or $distros -ccontains "podman-machine-$MachineName") { return 'present' }
         return 'absent'
       }
     } catch {}
@@ -163,15 +254,157 @@ function Get-JhtScopedStartupTaskName {
   return ''
 }
 
+# The tasks of this exact name, found by comparing names: -TaskName takes wildcards, and the [ ] of "... [<SID>]" are one, so a call with
+# the name raises "wildcard pattern not valid" for every user. Throws when the list itself cannot be read; no task is an empty list.
+function Get-JhtStartupTaskExact {
+  param([Parameter(Mandatory)][string]$TaskName)
+  return @(Get-ScheduledTask -ErrorAction Stop | Where-Object { $_.TaskName -ceq $TaskName -and $_.TaskPath -ceq '\' })
+}
+
+# $true when the task is gone (it was not there, or it was removed and the list confirms it). $false only for a real failure, with what
+# Windows said in $script:JhtStartupTaskReason: the caller reports it and goes on.
 function Remove-JhtStartupTask {
   param([string]$TaskName = (Get-JhtScopedStartupTaskName))
+  $script:JhtStartupTaskReason = ''
   if (-not $TaskName) { return $true }
   try {
-    $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-    if (-not $task) { return $true }
-    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction Stop
-    return -not [bool](Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue)
+    $tasks = @(Get-JhtStartupTaskExact $TaskName)
+    if ($tasks.Count -eq 0) { return $true }
+    foreach ($task in $tasks) { Unregister-ScheduledTask -InputObject $task -Confirm:$false -ErrorAction Stop }
+    if (@(Get-JhtStartupTaskExact $TaskName).Count -eq 0) { return $true }
+    $script:JhtStartupTaskReason = 'la attivita'' risulta ancora registrata'
+    return $false
+  } catch {
+    $script:JhtStartupTaskReason = (Format-JhtUninstallReason $_.Exception.Message)
+    return $false
+  }
+}
+
+# Removes the machine when podman could not: the distro of OUR machine by its exact name (never another), ended and unregistered, then
+# Podman's own record of it. $true when the machine is gone. The reason it could not be done goes in $script:JhtUninstallReason.
+function Remove-JhtPodmanMachineThroughWsl {
+  param([string]$PodmanPath, [string]$WslPath, [string]$MachineName)
+  if (-not $WslPath) { return $false }
+  $distro = Get-JhtPodmanDistroName $MachineName
+  $listed = @(& { $ErrorActionPreference = 'Continue'; & $WslPath --list --quiet 2>$null } | ForEach-Object { ([string]$_).Replace([string][char]0, '').Trim() })
+  if ($listed -cnotcontains $distro) { return $false }
+  # Podman's own stop first: it closes the machine's win-sshproxy and frees its pipe, which `machine rm` can no longer do once the
+  # distro is unregistered (WSL_E_DISTRO_NOT_FOUND). Its answer does not matter: the distro is ended and unregistered next.
+  if ($PodmanPath) { $null = Invoke-JhtUninstallNative $PodmanPath @('machine', 'stop', $MachineName) }
+  $null = Invoke-JhtUninstallNative $WslPath @('--terminate', $distro)
+  $unregister = Invoke-JhtUninstallNative $WslPath @('--unregister', $distro)
+  if ($unregister.Code -ne 0) {
+    # What Podman said (already in the reason) and what WSL said: the person reads both.
+    $said = "wsl --unregister $distro : $($unregister.Text)"
+    $script:JhtUninstallReason = if ($script:JhtUninstallReason) { "$($script:JhtUninstallReason); $said" } else { $said }
+    return $false
+  }
+  if ($PodmanPath) { $null = Invoke-JhtUninstallNative $PodmanPath @('machine', 'rm', '--force', $MachineName) }
+  return (Get-JhtPodmanMachineState -PodmanPath $PodmanPath -WslPath $WslPath -MachineName $MachineName) -eq 'absent'
+}
+
+# What the installer left in %LOCALAPPDATA%\Job Hunter Team\podman-network: the units of the machine and the native connector, by their
+# exact names (the connector's name ends in the digest of its source). Another file in that folder stays, and so does the folder then.
+# $true when nothing of ours is left; the folder (and its parent, the one of the app) go only when they are empty, never recursively.
+function Remove-JhtPodmanNetworkFiles {
+  param([Parameter(Mandatory)][string]$LocalAppDataPath)
+  $parent = [IO.Path]::Combine([IO.Path]::GetFullPath($LocalAppDataPath), 'Job Hunter Team')
+  $folder = [IO.Path]::Combine($parent, 'podman-network')
+  $ownNames = @('jht-windows-egress-proxy.service', 'jht-windows-egress-proxy-broker.service', 'jht-windows-egress-proxy-telegram.service',
+    'jht-rootless-podman.service', 'jht-broker-container.service')
+  $ok = $true
+  try {
+    $attributes = [IO.File]::GetAttributes($folder)
+    if (($attributes -band [IO.FileAttributes]::Directory) -eq 0 -or ($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return $true }
+  } catch { return $true }
+  foreach ($file in [IO.DirectoryInfo]::new($folder).GetFiles()) {
+    if (($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { continue }
+    if ($ownNames -cnotcontains $file.Name -and $file.Name -cnotmatch '^jht-windows-connect-[0-9a-f]{12}\.exe$') { continue }
+    try {
+      if (($file.Attributes -band [IO.FileAttributes]::ReadOnly) -ne 0) { $file.Attributes = [IO.FileAttributes]::Normal }
+      [IO.File]::Delete($file.FullName)
+    } catch { $ok = $false; $script:JhtUninstallReason = (Format-JhtUninstallReason $_.Exception.Message) }
+  }
+  foreach ($empty in @($folder, $parent)) { try { [IO.Directory]::Delete($empty, $false) } catch {} }
+  return $ok
+}
+
+# The folders `--purge` deletes: fixed, never taken from the environment; each one a real folder, never a link.
+function Remove-JhtUserDataFolder {
+  param([Parameter(Mandatory)][string]$Path)
+  $attributes = $null
+  try { $attributes = [IO.File]::GetAttributes($Path) } catch { return $true }
+  if (($attributes -band [IO.FileAttributes]::Directory) -eq 0 -or ($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+    [Console]::Error.WriteLine((Get-JhtUninstallText 'bad.target' @($Path)))
+    $script:JhtUninstallReason = 'collegamento o non cartella'
+    return $false
+  }
+  try {
+    Remove-JhtDirectoryNoFollow ([IO.DirectoryInfo]::new($Path))
+  } catch {
+    $script:JhtUninstallReason = (Format-JhtUninstallReason $_.Exception.Message)
+    return $false
+  }
+  return -not (Test-Path -LiteralPath $Path)
+}
+
+# A junction or a link inside is removed as a link: Windows PowerShell 5.1's Remove-Item -Recurse can delete what one points at.
+function Remove-JhtDirectoryNoFollow {
+  param([Parameter(Mandatory)][IO.FileSystemInfo]$Item)
+  if (($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+    if ($Item -is [IO.DirectoryInfo]) { try { [IO.Directory]::Delete($Item.FullName, $false) } catch { [IO.File]::Delete($Item.FullName) } }
+    else { [IO.File]::Delete($Item.FullName) }
+    return
+  }
+  if ($Item -is [IO.DirectoryInfo]) {
+    foreach ($child in $Item.GetFileSystemInfos()) { Remove-JhtDirectoryNoFollow $child }
+    $Item.Attributes = [IO.FileAttributes]::Directory
+    [IO.Directory]::Delete($Item.FullName, $false)
+    return
+  }
+  if (($Item.Attributes -band [IO.FileAttributes]::ReadOnly) -ne 0) { $Item.Attributes = [IO.FileAttributes]::Normal }
+  [IO.File]::Delete($Item.FullName)
+}
+
+# One Podman machine per Windows user (JHT-T305): install.ps1 gives a user who has none jht-podman-<8 hex of the SHA-256 of their SID>.
+# The same function is in install.ps1 and in the uninstall of the app; tests/test_windows_machine_per_user.py keeps the three equal.
+function Get-JhtUserMachineName {
+  param([string]$Sid = '')
+  if (-not $Sid) { try { $Sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value } catch { $Sid = '' } }
+  if ($Sid -notmatch '^S-1-\d+(-\d+)+$') { return 'jht-podman' }
+  $hash = [Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::ASCII.GetBytes($Sid))
+  return 'jht-podman-' + (([BitConverter]::ToString($hash, 0, 4) -replace '-', '').ToLowerInvariant())
+}
+
+# The mark the installer leaves when IT created the machine (its `machine init` succeeded): a regular file, never a link, whose first
+# line is the name of the machine.
+function Test-JhtMachineCreatedMark {
+  param([string]$RuntimePath, [string]$Name)
+  $file = Join-Path $RuntimePath 'podman-machine-created'
+  try {
+    $item = Get-Item -LiteralPath $file -Force -ErrorAction Stop
+    if ($item.PSIsContainer -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) { return $false }
+    $first = @([IO.File]::ReadAllLines($file) | Select-Object -First 1)
+    return ($first.Count -eq 1 -and ([string]$first[0]).Trim() -ceq $Name)
   } catch { return $false }
+}
+
+# The machine this uninstall removes. The runtime attests it (podman-machine): jht-podman, the name of this user's own, or any other
+# name only with the installer's mark (another machine of the same name, adopted from the user, stays: Kept says which). Without the
+# attestation (the runtime is gone or partly gone): the user's own machine when it is there, else jht-podman, as before.
+function Resolve-JhtUninstallMachineName {
+  param([string]$RuntimePath, [string]$PodmanPath, [string]$WslPath, [string]$Sid = '')
+  $standard = 'jht-podman'
+  $own = Get-JhtUserMachineName -Sid $Sid
+  $attested = ''
+  try { $attested = ([IO.File]::ReadAllText((Join-Path $RuntimePath 'podman-machine'))).Trim() } catch { $attested = '' }
+  if ($attested) {
+    if ($attested -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$') { return @{ Name = $standard; Kept = '' } }
+    if ($attested -ceq $standard -or $attested -ceq $own -or (Test-JhtMachineCreatedMark -RuntimePath $RuntimePath -Name $attested)) { return @{ Name = $attested; Kept = '' } }
+    return @{ Name = $standard; Kept = $attested }
+  }
+  if ($own -cne $standard -and (Get-JhtPodmanMachineState -PodmanPath $PodmanPath -WslPath $WslPath -MachineName $own) -eq 'present') { return @{ Name = $own; Kept = '' } }
+  return @{ Name = $standard; Kept = '' }
 }
 
 function Invoke-JhtWindowsUninstall {
@@ -183,17 +416,26 @@ function Invoke-JhtWindowsUninstall {
     [string]$WslPath,
     [System.EnvironmentVariableTarget]$EnvironmentTarget = [System.EnvironmentVariableTarget]::User
   )
-  if ($UninstallArgs.Count -ne 1 -or $UninstallArgs[0] -cne '--confirm') {
-    [Console]::Error.WriteLine('uso: jht uninstall --confirm')
+  $purge = $false
+  $argsOk = ($UninstallArgs.Count -eq 1 -and $UninstallArgs[0] -ceq '--confirm') -or
+    ($UninstallArgs.Count -eq 2 -and @($UninstallArgs | Where-Object { $_ -ceq '--confirm' }).Count -eq 1 -and @($UninstallArgs | Where-Object { $_ -ceq '--purge' }).Count -eq 1)
+  if (-not $argsOk) {
+    [Console]::Error.WriteLine('uso: jht uninstall --confirm [--purge]')
     [Console]::Error.WriteLine($JhtUninstallRemovalNotice)
+    [Console]::Error.WriteLine($script:JhtUninstallPurgeNotice)
     return 2
   }
-  [Console]::Error.WriteLine($JhtUninstallRemovalNotice)
+  $purge = $UninstallArgs.Count -eq 2
+  if ($purge) { [Console]::Error.WriteLine($script:JhtUninstallPurgeRemovalNotice) } else { [Console]::Error.WriteLine($JhtUninstallRemovalNotice) }
+  if ($purge) { [Console]::Error.WriteLine($script:JhtUninstallPurgeNotice) }
+  $script:JhtUninstallReason = ''
 
   $machineName = 'jht-podman'
   $runtimePath = [IO.Path]::Combine([IO.Path]::GetFullPath($LocalAppDataPath), 'Job Hunter Team', 'host-runtime')
   $binPath = [IO.Path]::Combine([IO.Path]::GetFullPath($ProfilePath), '.local', 'bin')
   $selectionPath = Join-Path $runtimePath 'container-runtime'
+  # Every file install.ps1 publishes in the bin folder, and nothing else: another program's file stays (tests/test_windows_uninstall_files.py
+  # keeps this list, the one of the desktop uninstall and what the installer publishes together).
   $knownCommands = @(
     (Join-Path $binPath 'jht.ps1'),
     (Join-Path $binPath 'jht.cmd'), (Join-Path $binPath 'shim\jht.cmd'), (Join-Path $binPath 'shim'),
@@ -201,21 +443,28 @@ function Invoke-JhtWindowsUninstall {
     (Join-Path $binPath 'podman-machine-bridge.ps1'),
     (Join-Path $binPath 'docker.exe')
   )
+  $PodmanPath = Find-JhtUninstallPodman -FromPath $PodmanPath
+  $resolved = Resolve-JhtUninstallMachineName -RuntimePath $runtimePath -PodmanPath $PodmanPath -WslPath $WslPath
+  $machineName = $resolved.Name
+  $script:JhtUninstallMachine = $machineName
+  if ($resolved.Kept) { [Console]::Error.WriteLine((Get-JhtUninstallText 'kept.machine' @($resolved.Kept))) }
+  $leftCommands = {
+    $present = @($knownCommands | Where-Object { Test-Path -LiteralPath $_ } | ForEach-Object { Split-Path -Leaf $_ })
+    return ($present -join ', ')
+  }
 
   # Un wrapper nuovo puo' essere arrivato anche sopra una vecchia installazione
   # Docker. In quel caso non cancelliamo i file host lasciando il container
   # legacy attivo sugli stessi dati: solo il runtime Podman ha questo comando.
   if (Test-Path -LiteralPath $runtimePath) {
+    $notPodman = $false
     try {
       if (-not (Test-Path -LiteralPath $selectionPath -PathType Leaf) -or
-          ([IO.File]::ReadAllText($selectionPath)).Trim() -cne 'podman') {
-        Write-JhtUninstallLeft runtime
-        Write-JhtUninstallLeft commands
-        return 24
-      }
-    } catch {
-      Write-JhtUninstallLeft runtime
-      Write-JhtUninstallLeft commands
+          ([IO.File]::ReadAllText($selectionPath)).Trim() -cne 'podman') { $notPodman = $true }
+    } catch { $notPodman = $true }
+    if ($notPodman) {
+      Write-JhtUninstallLeft runtime @($runtimePath)
+      Write-JhtUninstallLeft commands @($binPath, (& $leftCommands))
       return 24
     }
   }
@@ -224,48 +473,68 @@ function Invoke-JhtWindowsUninstall {
   $machineState = Get-JhtPodmanMachineState -PodmanPath $PodmanPath -WslPath $WslPath -MachineName $machineName
   # Remove the logon trigger before deleting the machine, otherwise a concurrent
   # sign-in could recreate activity while uninstall is tearing the runtime down.
-  if (-not (Remove-JhtStartupTask)) {
-    if ($machineState -ne 'absent') { Write-JhtUninstallMachineLeft }
-    if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime }
-    Write-JhtUninstallLeft commands
-    return 24
+  # A task that cannot be removed is reported at the end and does not stop the rest: the machine, the runtime and the commands go on.
+  $taskName = Get-JhtScopedStartupTaskName
+  $taskLeft = $false
+  $taskReason = ''
+  if (-not (Remove-JhtStartupTask -TaskName $taskName)) { $taskLeft = $true; $taskReason = $script:JhtStartupTaskReason }
+  $leaveForRetry = {
+    param([string]$Reason)
+    if ($Reason) { $script:JhtUninstallReason = $Reason }
+    Write-JhtUninstallMachineLeft
+    if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime @($runtimePath) }
+    if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands @($binPath, (& $leftCommands)) }
   }
   if ($machineState -eq 'present') {
-    if (-not $PodmanPath -or -not $WslPath) {
-      Write-JhtUninstallMachineLeft
-      if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime }
-      if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
-      return 24
-    }
+    if (-not $WslPath) { & $leaveForRetry 'wsl.exe non trovato'; return 24 }
     & { $ErrorActionPreference = 'Continue'; & $WslPath --status *> $null }
-    if ($LASTEXITCODE -ne 0) {
-      Write-JhtUninstallMachineLeft
-      if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime }
-      if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
-      return 24
+    if ($LASTEXITCODE -ne 0) { & $leaveForRetry 'WSL non risponde (wsl --status)'; return 24 }
+    $gone = $false
+    if ($PodmanPath) {
+      $removal = Invoke-JhtUninstallNative $PodmanPath @('machine', 'rm', '--force', $machineName)
+      $gone = ($removal.Code -eq 0) -and
+        ((Get-JhtPodmanMachineState -PodmanPath $PodmanPath -WslPath $WslPath -MachineName $machineName) -eq 'absent')
+      if (-not $gone) { $script:JhtUninstallReason = "podman machine rm --force $machineName : exit $($removal.Code), $($removal.Text)" }
+    } else {
+      $script:JhtUninstallReason = 'podman.exe non trovato'
     }
-    & { $ErrorActionPreference = 'Continue'; & $PodmanPath machine rm --force $machineName *> $null }
-    if ($LASTEXITCODE -ne 0 -or
-        (Get-JhtPodmanMachineState -PodmanPath $PodmanPath -WslPath $WslPath -MachineName $machineName) -ne 'absent') {
-      Write-JhtUninstallMachineLeft
-      if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime }
-      if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
-      return 24
-    }
+    # Podman could not (or is not there): the distro of our machine, by its exact name, through WSL.
+    if (-not $gone) { $gone = Remove-JhtPodmanMachineThroughWsl -PodmanPath $PodmanPath -WslPath $WslPath -MachineName $machineName }
+    if (-not $gone) { & $leaveForRetry ''; return 24 }
   } elseif ($machineState -ne 'absent') {
-    Write-JhtUninstallMachineLeft
-    if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime }
-    if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
+    & $leaveForRetry 'lo stato della macchina non si legge (podman e wsl non rispondono)'
     return 24
+  }
+
+  # Con --purge i dati vanno PRIMA del runtime e del comando: se non si riesce, il comando jht resta e si puo' rilanciare.
+  if ($purge) {
+    # --purge is for a person at a console: the desktop app never asks for it and knows no phase or leftover of the data, so these
+    # two are sentences only, never JHT_PHASE or JHT_LEFT lines (the app's list of the phases and the wrapper's must stay equal).
+    [Console]::Out.WriteLine((Get-JhtUninstallText 'phase.data'))
+    $dataFailed = @()
+    foreach ($folder in @([IO.Path]::Combine([IO.Path]::GetFullPath($ProfilePath), '.jht'), [IO.Path]::Combine([IO.Path]::GetFullPath($ProfilePath), 'Documents', 'Job Hunter Team'))) {
+      if (-not (Remove-JhtUserDataFolder -Path $folder)) { $dataFailed += $folder }
+    }
+    if ($dataFailed.Count -gt 0) {
+      [Console]::Error.WriteLine((Get-JhtUninstallText 'left.data' @($script:JhtUninstallReason, ("'" + ($dataFailed -join "', '") + "'"))))
+      return 24
+    }
   }
 
   Write-JhtUninstallPhase uninstall_runtime
   if (Test-Path -LiteralPath $runtimePath) {
-    try { Remove-Item -LiteralPath $runtimePath -Recurse -Force -ErrorAction Stop } catch {}
+    try { Remove-Item -LiteralPath $runtimePath -Recurse -Force -ErrorAction Stop } catch { $script:JhtUninstallReason = (Format-JhtUninstallReason $_.Exception.Message) }
+  }
+  $networkFolder = [IO.Path]::Combine([IO.Path]::GetFullPath($LocalAppDataPath), 'Job Hunter Team', 'podman-network')
+  $networkClean = Remove-JhtPodmanNetworkFiles -LocalAppDataPath $LocalAppDataPath
+  if (-not $networkClean) {
+    Write-JhtUninstallLeft runtime @($networkFolder)
+    if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands @($binPath, (& $leftCommands)) }
+    return 24
   }
   if (Test-Path -LiteralPath $runtimePath) {
-    Write-JhtUninstallLeft runtime
-    if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
+    Write-JhtUninstallLeft runtime @($runtimePath)
+    if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands @($binPath, (& $leftCommands)) }
     return 24
   }
 
@@ -301,9 +570,15 @@ function Invoke-JhtWindowsUninstall {
     try { Remove-Item -LiteralPath $wrapperPath -Force -ErrorAction Stop } catch { $commandFailure = $true }
   }
   if ($commandFailure -or @($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) {
-    Write-JhtUninstallLeft commands
+    Write-JhtUninstallLeft commands @($binPath, (& $leftCommands))
     return 24
   }
+  # The folder the installer made, once nothing is in it: never recursively, so another program's file keeps it.
+  try { [IO.Directory]::Delete($binPath, $false) } catch {}
+  if ($taskLeft) { [Console]::Error.WriteLine((Get-JhtUninstallText 'left.task' @($taskName, $taskReason))) }
+  $done = Get-JhtUninstallText 'done'
+  if (-not $purge) { $done += (Get-JhtUninstallText 'done.kept') }
+  [Console]::Out.WriteLine($done)
   return 0
 }
 
@@ -388,12 +663,19 @@ if ($ContainerRuntime -eq 'podman') {
 $RuntimeManifest = Join-Path $RuntimeDir '.runtime-integrity'
 $RuntimeImageFile = Join-Path $RuntimeDir 'runtime-image'
 $RuntimeTierFile = Join-Path $RuntimeDir 'runtime-tier'
+$RuntimeTierIntegrity = Join-Path $RuntimeDir '.runtime-tier-integrity'
+# The test channel also pins the image of the tools that come on request (screen, media, playwright), which the installer does not pull:
+# `jht screen on` pulls it by this digest. Its own file, attested in its own file (the app compares the exact keys of the main manifest).
+$RuntimeExtrasFile = Join-Path $RuntimeDir 'runtime-extras-image'
+$RuntimeExtrasIntegrity = Join-Path $RuntimeDir '.runtime-extras-integrity'
 $BrokerLegacyMarker = Join-Path $RuntimeDir '.broker-legacy-migrated'
+$BrokerMadeMarker = Join-Path $RuntimeDir '.broker-made'
 $NodeEntry   = if ($env:JHT_NODE_ENTRY)     { $env:JHT_NODE_ENTRY }     else { '/app/cli/bin/jht.js' }
 $RawBaseOverride = if ($env:JHT_RAW_BASE) { $env:JHT_RAW_BASE.TrimEnd('/') } else { '' }
 $ReleaseRef = if ($env:JHT_BRANCH) { $env:JHT_BRANCH } else { 'production' }
 $DefaultRuntimeImage = 'ghcr.io/leopu00/jht@sha256:fa78c975c04dd5f95d6225a35c8c3bb9646f8ef14b32c8ca558d5332de0cce00'
 $CoreImageDigest = ''
+$ExtrasImageDigest = ''
 $DefaultRuntimeVersion = '0.4.0'
 $GameControlDir = if ($env:JHT_GAME_CONTROL_DIR) { $env:JHT_GAME_CONTROL_DIR } else { Join-Path $env:APPDATA 'Godot\app_userdata\Job Hunter Team\client' }
 $GameExecutable = if ($env:JHT_GAME_EXECUTABLE) { $env:JHT_GAME_EXECUTABLE } else { Join-Path $env:LOCALAPPDATA 'Programs\Job Hunter Team\job-hunter-team.exe' }
@@ -556,7 +838,7 @@ function Test-RuntimePathAuthority {
 # `<name>=<sha256>`): the desktop app checks the main manifest key by key and must not meet a key it does not know. A helper is
 # dot-sourced only while the file still matches its line there. A runtime that has none yet gets it from the release origin the
 # first time it is needed (the `integration` command) and at the end of every upgrade.
-$RuntimeHelpers = @('jht-integration.ps1', 'jht-tools.ps1')
+$RuntimeHelpers = @('jht-integration.ps1', 'jht-tools.ps1', 'configure-podman-windows-network.ps1', 'wsl-interop-connect-proxy.py')
 $RuntimeHelpersManifest = Join-Path $RuntimeDir '.runtime-helpers'
 
 function Get-RuntimeHelperHash {
@@ -602,6 +884,38 @@ function Test-RuntimeHelperDeclared {
   return ($null -ne $values -and $values.ContainsKey($Name))
 }
 
+# Before the helper is there (an install whose first download of the tools has not happened yet) the read-only commands that the app
+# reads answer "not installed yet", in the shape the helper uses, instead of failing: `jht tools status --json` and
+# `jht integration list|status [id] [--json]`. $What is tools|integration, $Words what the person typed after it. $false for anything
+# else (add, remove, a wrong use): the caller goes on to the helper and its error.
+$IntegrationIdsAbsent = @('google', 'telegram', 'mail', 'linkedin-login', 'screen', 'media')
+function Write-RuntimeHelperAbsentAnswer {
+  param([string]$What, [string[]]$Words)
+  $Words = @($Words)
+  $word = if ($Words.Count -gt 0) { [string]$Words[0] } else { '' }
+  $json = $false; $id = ''
+  foreach ($arg in @($Words | Select-Object -Skip 1)) {
+    if ([string]$arg -ceq '--json') { $json = $true }
+    elseif ([string]$arg -like '-*' -or $id) { return $false }
+    else { $id = [string]$arg }
+  }
+  if ($What -ceq 'tools') {
+    if ($word -cne 'status' -or -not $json -or $id) { return $false }
+    [Console]::Out.WriteLine('{"ok":true,"state":"none","tier":"full","reason":"not_installed"}')
+    return $true
+  }
+  if (@('list', 'status') -cnotcontains $word -or ($word -ceq 'list' -and $id)) { return $false }
+  if ($id -and ($IntegrationIdsAbsent -cnotcontains $id)) { return $false }
+  $ids = if ($id) { @($id) } else { $IntegrationIdsAbsent }
+  $rows = @(foreach ($one in $ids) { '{"id":"' + $one + '","state":"not_installed","reason":"non ancora installato"}' })
+  if ($json -and $id) { [Console]::Out.WriteLine($rows[0]); return $true }
+  if ($json) { [Console]::Out.WriteLine('{"integrations":[' + ($rows -join ',') + ']}'); return $true }
+  foreach ($one in $ids) { [Console]::Out.WriteLine(('{0,-15} {1,-16} {2}' -f $one, 'non installato', 'non ancora installato')) }
+  # In words, the person is told which command installs them (the lines above stay the shape the helper gives).
+  [Console]::Error.WriteLine("per installarli: 'jht upgrade' (o un 'jht integration add <id>')")
+  return $true
+}
+
 function Install-RuntimeHelpers {
   try {
     Assert-TrustedRuntime
@@ -611,7 +925,7 @@ function Install-RuntimeHelpers {
       try {
         Invoke-WebRequest -UseBasicParsing -Uri "$base/scripts/$name" -OutFile $temp
         $text = [IO.File]::ReadAllText($temp)
-        [scriptblock]::Create($text) | Out-Null
+        if ($name -like '*.ps1') { [scriptblock]::Create($text) | Out-Null }
         if ($text -notmatch '(?m)^# JHT_RUNTIME_HELPER=1\r?$') { throw "$name lacks the helper marker" }
         Publish-JhtFile -Destination (Join-Path $RuntimeDir $name) -Bytes ([IO.File]::ReadAllBytes($temp))
       } finally { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue }
@@ -641,11 +955,28 @@ function Write-RuntimeManifest {
     $runtimeImageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $RuntimeImageFile).Hash.ToLowerInvariant()
     $content += "runtime-image=$runtimeImageHash`n"
   }
-  if (Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf) {
-    $content += "runtime-tier=$((Get-FileHash -Algorithm SHA256 -LiteralPath $RuntimeTierFile).Hash.ToLowerInvariant())`n"
-  }
   [IO.File]::WriteAllText($temp, $content, [Text.UTF8Encoding]::new($false))
   Move-Item -LiteralPath $temp -Destination $RuntimeManifest -Force
+}
+
+# The pin of the image of the tools on request (test channel): both files regular and of the owner, attested, canonical, and only next
+# to the pin of the test channel. Anything else is not trusted (never a fall back to the constant of the release). A good pin becomes
+# the digest the integration helper uses.
+function Test-RuntimeExtrasPin {
+  param([bool]$PinPresent)
+  if (-not ((Test-Path -LiteralPath $RuntimeExtrasFile) -or (Test-Path -LiteralPath $RuntimeExtrasIntegrity))) { return $true }
+  if (-not $PinPresent) { return $false }
+  # both there: the integrity of a pin that is gone (or a pin without its integrity) is a runtime somebody changed
+  if (-not ((Test-Path -LiteralPath $RuntimeExtrasFile -PathType Leaf) -and (Test-Path -LiteralPath $RuntimeExtrasIntegrity -PathType Leaf))) { return $false }
+  if (-not (Test-ProtectedRuntimeNode $RuntimeExtrasFile)) { return $false }
+  if (-not (Test-ProtectedRuntimeNode $RuntimeExtrasIntegrity)) { return $false }
+  $extrasBytes = [IO.File]::ReadAllText($RuntimeExtrasFile)
+  $extrasRef = $extrasBytes.TrimEnd("`n")
+  if (([IO.File]::ReadAllText($RuntimeExtrasIntegrity).Trim()) -ne "runtime-extras-image=$((Get-FileHash -Algorithm SHA256 -LiteralPath $RuntimeExtrasFile).Hash.ToLowerInvariant())") { return $false }
+  $extrasMatch = [regex]::Match($extrasRef, '^ghcr\.io/leopu00/jht@(sha256:[0-9a-f]{64})\z')
+  if (-not $extrasMatch.Success -or $extrasBytes -cne "$extrasRef`n") { return $false }
+  $script:ExtrasImageDigest = $extrasMatch.Groups[1].Value
+  return $true
 }
 
 function Test-RuntimeBundleTrusted {
@@ -668,10 +999,10 @@ function Test-RuntimeBundleTrusted {
     }
     $pinPresent = Test-Path -LiteralPath $RuntimeImageFile -PathType Leaf
     if ($pinPresent) { $expectedKeys += 'runtime-image' }
-    # runtime-tier: written by the installer when the release has a core image. A manifest that still attests a tier file taken away
-    # is a `tools switch` cut in half: the runtime is the whole image, and the next manifest drops the line.
+    # runtime-tier: written by the installer when the release has a core image, and attested in a file of its own
+    # (.runtime-tier-integrity), not here: the app compares the exact set of keys of this manifest. An integrity file without a tier
+    # file is a `tools switch` cut in half: the runtime is the whole image.
     $tierPresent = Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf
-    if ($tierPresent -or $values.ContainsKey('runtime-tier')) { $expectedKeys += 'runtime-tier' }
     if ($values.Count -ne $expectedKeys.Count -or @($values.Keys | Where-Object { $_ -notin $expectedKeys }).Count -ne 0) { return $false }
     $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $ComposeFile).Hash.ToLowerInvariant()
     $wrapperActual = (Get-FileHash -Algorithm SHA256 -LiteralPath $WrapperPath).Hash.ToLowerInvariant()
@@ -691,10 +1022,12 @@ function Test-RuntimeBundleTrusted {
     if ($tierPresent) {
       if (-not (Test-ProtectedRuntimeNode $RuntimeTierFile)) { return $false }
       if ($pinPresent -or -not $CoreImageDigest) { return $false }
-      if ($values.'runtime-tier' -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $RuntimeTierFile).Hash.ToLowerInvariant()) { return $false }
+      if (-not (Test-ProtectedRuntimeNode $RuntimeTierIntegrity)) { return $false }
+      if (([IO.File]::ReadAllText($RuntimeTierIntegrity).Trim()) -ne "runtime-tier=$((Get-FileHash -Algorithm SHA256 -LiteralPath $RuntimeTierFile).Hash.ToLowerInvariant())") { return $false }
       if ([IO.File]::ReadAllText($RuntimeTierFile).TrimEnd("`r", "`n") -ne 'core') { return $false }
       $script:TrustedRuntimeImage = "ghcr.io/leopu00/jht@$CoreImageDigest"
     }
+    if (-not (Test-RuntimeExtrasPin -PinPresent $pinPresent)) { return $false }
     if ($ContainerRuntime -eq 'podman') {
       if (-not (Test-ProtectedRuntimeNode $PodmanMachineBridgePath)) { return $false }
       if (-not (Test-ProtectedRuntimeNode $RuntimeSelectionFile)) { return $false }
@@ -764,7 +1097,13 @@ function Assert-TrustedRuntime {
   if (-not (Test-Path -LiteralPath $RuntimeDir)) {
     if (-not (Install-ProtectedRuntimeFromRelease)) { throw 'protected host runtime bootstrap failed' }
   }
-  if (-not (Test-RuntimeBundleTrusted)) { throw 'untrusted host runtime path, owner, reparse point or SHA-256' }
+  if (-not (Test-RuntimeBundleTrusted)) {
+    # A manifest that is not there at all is an install that never finished, not a file somebody changed: said as what it is.
+    if (-not (Test-Path -LiteralPath $RuntimeManifest)) {
+      throw "Job Hunter Team non e' installato del tutto: nella cartella del runtime manca il file di integrita (un'installazione interrotta?). Rilancia l'installer."
+    }
+    throw 'untrusted host runtime path, owner, reparse point or SHA-256'
+  }
 }
 
 # Deterministic, side-effect-free seam for the Windows security regression.
@@ -775,9 +1114,18 @@ if ($env:JHT_RUNTIME_AUTHORITY_SELFTEST -eq '1') {
 }
 
 # ── Verifiche pre-flight ──────────────────────────────────────────────────
+# Why the private home is refused: a folder that is not there yet is a team that was never installed (the ACL of a folder that does not
+# exist cannot be read, and «ACL is not owner-only» sent the person to look at permissions); only a folder that is there is an ACL.
+function Get-JhtHomeAclFailure {
+  if (-not (Test-Path -LiteralPath $JhtHome)) {
+    return "Job Hunter Team non e' ancora installato: la cartella $JhtHome non esiste. Lancia l'installer, poi 'jht setup'."
+  }
+  return "JHT_HOME ACL is not owner-only: $JhtHome"
+}
+
 function Require-PrivateJhtHomeAcl {
   if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) {
-    throw "JHT_HOME ACL is not owner-only: $JhtHome"
+    throw (Get-JhtHomeAclFailure)
   }
 }
 
@@ -812,7 +1160,7 @@ function Require-ComposeFile {
 function Invoke-Compose {
   [CmdletBinding(PositionalBinding=$false)]
   param([switch]$NoInput, [string]$InputText, [Parameter(ValueFromRemainingArguments)] $Args)
-  if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) { throw "JHT_HOME ACL is not owner-only: $JhtHome" }
+  if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) { throw (Get-JhtHomeAclFailure) }
   Assert-TrustedRuntime
   # Docker Desktop Windows accetta forward-slash o backslash. project-directory
   # punta al runtime dir per bind-mount relativi (anche se compose qui e'
@@ -845,9 +1193,10 @@ function Stop-OnFailedComposeUp {
 function Invoke-PodmanServicesUpInTurn {
   if ($ContainerRuntime -ne 'podman') { return 0 }
   $definition = Get-Content -LiteralPath $ComposeFile -Raw
+  # The broker only if it was made before (see Ensure-Broker): `up` never makes it.
   foreach ($service in @($BrokerContainer)) {
-    if ($definition -notmatch "(?m)^  $([regex]::Escape($service)):") { continue }
-    Invoke-Compose 'up' '-d' $service | Out-Host
+    if ($definition -notmatch "(?m)^  $([regex]::Escape($service)):" -or -not (Test-Path -LiteralPath $BrokerMadeMarker)) { continue }
+    Invoke-Compose '--profile' 'broker' 'up' '-d' '--no-deps' $service | Out-Host
     if ($LASTEXITCODE -ne 0) { return $LASTEXITCODE }
   }
   return 0
@@ -918,12 +1267,88 @@ function Invoke-HelpWithoutDocker {
   return 0
 }
 
+# `jht integration --help`: its usage line, not the generic help of the host. Fixed text: the command lives in a helper that
+# is fetched only when it is needed, and a help never fetches anything.
+function Write-IntegrationHelp {
+  [Console]::Out.WriteLine(@'
+Uso: jht integration <comando>
+
+  list [--json]                   le integrazioni e il loro stato
+  status [ID] [--json]            lo stato di una, o di tutte
+  add ID [--json]                 aggiunge un'integrazione
+  remove ID [--purge --yes] [--json]
+                                  la toglie; --purge cancella anche i suoi dati (serve --yes)
+
+Gli ID ammessi sono quelli che mostra `jht integration list`. Niente si scarica o si accende
+finche' non lo chiedi con `add`.
+'@)
+}
+
+# `jht setup --help`: its options, not the generic help of the host. Fixed text: the setup itself runs in the container and a help
+# never starts it. Keep it in step with the options of cli/src/commands/setup.js (a test compares them).
+function Write-SetupHelp {
+  [Console]::Out.WriteLine(@'
+Uso: jht setup [opzioni]
+
+Senza opzioni parte l'installazione guidata. Con --non-interactive non chiede niente:
+tutto si da' con le opzioni.
+
+  --non-interactive            nessuna domanda
+  --provider <nome>            openai (predefinito), glm (Z.ai) o kimi (Moonshot)
+  --harness <nome>             codex (predefinito) o pi; glm e kimi vanno solo con pi
+  --auth-method <metodo>       api_key (predefinito) o subscription
+  --api-key-file <percorso>    file che contiene la chiave API (una riga, leggibile solo da te).
+                               Un file del tuo computer lo legge jht e lo passa al setup: con glm e kimi
+                               il setup tiene la chiave per conto suo, mai nella configurazione
+  --api-key-stdin              legge la chiave API dallo standard input (una riga): mai sulla riga di comando
+  --api-key <chiave>           la chiave scritta qui, in chiaro (non ammessa per glm e kimi)
+  --secret-mode <modo>         come si salva la chiave: plaintext (predefinito), env o file
+  --secret-env <nome>          con --secret-mode env: la variabile d'ambiente che la contiene
+  --secret-file <percorso>     con --secret-mode file: il file che la contiene
+  --subscription-email <email> con --auth-method subscription: l'email dell'account
+  --subscription-token <token> con --auth-method subscription: il token
+  --model <modello>            il modello da usare
+  --language <codice>          la lingua (per esempio it o en)
+  --skip-health                salta il controllo finale
+  --reset                      riparte da una configurazione pulita
+
+Esempio, con una chiave GLM in un file:
+  jht setup --non-interactive --provider glm --harness pi --api-key-file chiave.txt
+'@)
+}
+
+# `jht screen --help`: its line of use, fixed text like the one of `jht integration`: a help downloads nothing.
+function Write-ScreenHelp {
+  [Console]::Out.WriteLine(@'
+Uso: jht screen <comando>
+
+  on [--json]       accende lo schermo dal vivo del closer: un container a parte, con lo stream solo su 127.0.0.1
+  off [--json]      lo spegne e toglie il container
+  status [--json]   dice se e' acceso
+
+Niente si scarica o si accende finche' non lo chiedi con `on`. Lo stream e' in sola visione.
+'@)
+}
+
+# `jht linkedin --help`: its line of use, fixed text: a help downloads nothing.
+function Write-LinkedinHelp {
+  [Console]::Out.WriteLine(@'
+Uso: jht linkedin <comando>
+
+  login [--stop]    l'accesso a mano a LinkedIn (con Google): un browser in un container a parte, senza rete, di cui vedi
+                    e usi la finestra dall'app; --stop chiude tutto
+  status --json     dice se l'accesso e' in corso e se la sessione di LinkedIn e' salvata
+
+Niente si scarica o si accende finche' non lo chiedi con `login`.
+'@)
+}
+
 function Test-HostCommandUsesLocalHelp {
   param([string]$Command)
   return $Command -in @(
     'up', 'start-container', 'down', 'stop-container', 'restart', 'recreate',
     'upgrade', 'logs', 'status', 'shell', 'oauth-login', 'claude-login',
-    'setup', 'download', 'mail', 'telegram', 'integration', 'tools', 'reset', 'migrate-runtime'
+    'setup', 'download', 'mail', 'telegram', 'integration', 'screen', 'linkedin', 'tools', 'reset', 'migrate-runtime'
   )
 }
 
@@ -1036,7 +1461,7 @@ function Get-RunningComposeServiceId {
   if (-not $expectedProject) { $script:ServiceLookupReason = 'the compose project name could not be read'; return $null }
   $files = @('-f', $ComposeFile)
   if ($ContainerRuntime -eq 'podman') { $files += @('-f', $PodmanComposeFile) }
-  $composeArgs = @('compose') + $files + @('--project-directory', $RuntimeDir, '--profile', 'telegram', 'ps', '-q')
+  $composeArgs = @('compose') + $files + @('--project-directory', $RuntimeDir, '--profile', 'telegram', '--profile', 'broker', '--profile', 'media', '--profile', 'playwright', '--profile', 'screen', '--profile', 'login', 'ps', '-q')
   if ($ContainerRuntime -ne 'podman') { $composeArgs += $Service }
   $ids = @(& { $ErrorActionPreference = 'Continue'; & docker @composeArgs 2>$null } | ForEach-Object { "$($_)".Trim() } | Where-Object { $_ })
   $psCode = $LASTEXITCODE
@@ -1133,7 +1558,7 @@ const providers=config.providers||{}; const entry=providers[provider]||{};
 const configured=["claude","anthropic","codex","openai","kimi","moonshot"].includes(provider)
   && (entry.auth_method||"subscription")==="subscription";
 const markers={claude:"/jht_home/.claude/.credentials.json",anthropic:"/jht_home/.claude/.credentials.json",codex:"/jht_home/.codex/auth.json",openai:"/jht_home/.codex/auth.json",kimi:"/jht_home/.kimi/credentials/kimi-code.json",moonshot:"/jht_home/.kimi/credentials/kimi-code.json"};
-process.stdout.write(`${configured?1:0} ${(config.harness==="pi"&&(provider==="openai"||provider==="codex")?((p)=>{try{const s=fs.lstatSync(p);return s.isFile()&&s.size>0&&(s.uid===process.getuid()||s.uid===0)}catch{return false}})("/jht_home/.pi/agent/auth.json"):markers[provider]&&fs.existsSync(markers[provider]))?1:0} ${fs.existsSync("/jht_home/profile/welcomed.flag")?1:0}`);
+process.stdout.write(`${configured?1:0} ${(config.harness==="pi"&&(provider==="openai"||provider==="codex")?((p)=>{try{const s=fs.lstatSync(p);if(!(s.isFile()&&s.size>0&&s.size<=262144&&(s.uid===process.getuid()||s.uid===0)))return false;const d=JSON.parse(fs.readFileSync(p,"utf8"));return!!d&&typeof d==="object"&&!Array.isArray(d)&&["openai"].some((n)=>!!d[n]&&typeof d[n]==="object"&&Object.keys(d[n]).length>0)}catch{return false}})("/jht_home/.pi/agent/auth.json"):markers[provider]&&fs.existsSync(markers[provider]))?1:0} ${fs.existsSync("/jht_home/profile/welcomed.flag")?1:0}`);
 '@
     # Every native output here is read whole and then cut: see Get-RunningComposeServiceId (T79).
     # The script goes on stdin, never as an argument: Windows PowerShell 5.1 drops the double quotes
@@ -1246,8 +1671,8 @@ function Invoke-AgentControl {
 
 # Autorizzazione a una candidatura, dal desktop (`jht desktop-apply record ID INSTANT DESTINATION`). Il CLOSER
 # invia solo cio' che il broker ha registrato, e il broker registra solo da canali che gli agenti non hanno:
-# l'host e' uno. Come Invoke-AgentControl NON avvia mai niente: col broker spento o non attestato risponde col
-# codice chiuso apply_record_no_broker (113). Ogni campo e' chiuso QUI (confronto che distingue le maiuscole,
+# l'host e' uno. Come Invoke-AgentControl NON avvia mai niente, salvo il primo clic di una persona (se il broker non c'e' ancora lo crea
+# Ensure-Broker, solo il suo container): col broker non attestato risponde col codice chiuso apply_record_no_broker (113). Ogni campo e' chiuso QUI (confronto che distingue le maiuscole,
 # cifre ASCII; fine stringa con \z: in .NET `$` accetta anche un a capo finale) prima di finire in una riga di comando; la risposta e' una riga sola, mai il testo del broker.
 # Il codice sta in $script:DesktopApplyExitCode, come per Invoke-AgentControl.
 $script:DesktopApplyExitCode = 2
@@ -1264,7 +1689,11 @@ function Invoke-DesktopApply {
     return
   }
   $brokerId = $null
-  if (Test-RuntimeBundleTrusted) { $brokerId = Get-RunningComposeServiceId $BrokerContainer }
+  if (Test-RuntimeBundleTrusted) {
+    $brokerId = Get-RunningComposeServiceId $BrokerContainer
+    # The first click of a person is the one thing that makes the broker here (Ensure-Broker): only its container, and only if the engine answers.
+    if (-not $brokerId -and (Test-DockerReachable) -and (Ensure-Broker -Quiet 6>$null) -eq 0) { $brokerId = Get-RunningComposeServiceId $BrokerContainer }
+  }
   if (-not $brokerId) {
     [Console]::Out.WriteLine('{"ok":false,"error":"apply_record_no_broker"}')
     $script:DesktopApplyExitCode = 113
@@ -1286,6 +1715,111 @@ function Test-BrokerUp {
   return [bool](Get-RunningComposeServiceId $BrokerContainer)
 }
 
+# The broker (the mail password, the notary of the authorisations to apply) is made at the first thing that needs it (`jht mail setup`, the
+# first record of an authorisation, the link of the site, Telegram) and by nothing else: `jht up` leaves it out unless a marker says it was
+# made before. `jht` has mounted the empty socket volume since it was made, so making the broker never recreates the team.
+# On Podman its proxy (3129) and its start at boot are made first, by the network script of the setup, which is a host script like the others
+# (attested in .runtime-helpers, fetched here the first time).
+# What the steps of Ensure-Broker print goes to the console, or nowhere for the app (-Quiet: its answer is one JSON line).
+function Write-EnsureLine {
+  param([Parameter(ValueFromPipeline)]$Line, [switch]$Quiet)
+  process { if (-not $Quiet) { $Line | Out-Host } }
+}
+
+function Invoke-BrokerNetwork {
+  param([switch]$Quiet)
+  if ($ContainerRuntime -ne 'podman') { return $true }
+  foreach ($name in @('configure-podman-windows-network.ps1', 'wsl-interop-connect-proxy.py')) {
+    if (-not (Test-RuntimeHelperDeclared $name)) {
+      if (-not (Install-RuntimeHelpers)) { Write-Err 'broker_network_unavailable: non riesco a scaricare gli script del proxy della posta. Cosa fare: jht upgrade'; return $false }
+      break
+    }
+  }
+  if (-not (Test-RuntimeHelpersTrusted) -or -not (Test-RuntimeHelperDeclared 'configure-podman-windows-network.ps1')) {
+    Write-Err 'broker_network_unavailable: gli script del proxy della posta non sono attestati. Cosa fare: jht upgrade'
+    return $false
+  }
+  $shell = (Get-Process -Id $PID).Path
+  & $shell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $RuntimeDir 'configure-podman-windows-network.ps1') `
+    -MachineName $env:CONTAINER_CONNECTION -BridgeScript $PodmanMachineBridgePath -WithBroker | Write-EnsureLine -Quiet:$Quiet
+  if ($LASTEXITCODE -ne 0) { Write-Err "broker_network_unavailable: il proxy della posta non e' pronto (codice $LASTEXITCODE)."; return $false }
+  return $true
+}
+
+# What stands under the broker's name: 'running' | 'stopped' (a container of this project and service that is not running) | 'absent' |
+# 'foreign' (a container of that name that is not this project's broker, or more than one, or one that cannot be read: not touched,
+# neither adopted nor replaced). The same three-way answer as the POSIX wrapper (attested / absent / present and not attestable).
+function Get-BrokerContainerState {
+  $expectedProject = Get-ComposeProjectName
+  if (-not $expectedProject) { return 'foreign' }
+  $ids = @(& { $ErrorActionPreference = 'Continue'; & docker ps -aq --filter "name=^$BrokerContainer$" 2>$null } | ForEach-Object { "$($_)".Trim() } | Where-Object { $_ })
+  if ($ids.Count -eq 0) { return 'absent' }
+  if ($ids.Count -ne 1 -or $ids[0] -notmatch '^[0-9a-fA-F]{12,64}$') { return 'foreign' }
+  $detailLines = @(& { $ErrorActionPreference = 'Continue'; & docker inspect --type container $ids[0] --format '{{.State.Running}}|{{json .Config.Labels}}' 2>$null })
+  $details = if ($detailLines.Count) { [string]$detailLines[0] } else { '' }
+  $cut = if ($details) { $details.IndexOf('|') } else { -1 }
+  if ($cut -lt 0) { return 'foreign' }
+  $labelsJson = $details.Substring($cut + 1)
+  if ((Get-ComposeLabel $labelsJson 'com.docker.compose.project') -ne $expectedProject) { return 'foreign' }
+  if ((Get-ComposeLabel $labelsJson 'com.docker.compose.service') -ne $BrokerContainer) { return 'foreign' }
+  if ($details.Substring(0, $cut).Trim() -eq 'true') { return 'running' }
+  return 'stopped'
+}
+
+# 0 when the broker runs and answers.
+function Ensure-Broker {
+  param([switch]$Quiet)
+  if (Get-RunningComposeServiceId $BrokerContainer) { return 0 }
+  $brokerState = Get-BrokerContainerState
+  if ($brokerState -eq 'foreign') {
+    Write-Err 'broker_unavailable: il broker dei segreti esiste ma non e'' attestabile come nostro: non lo tocco.'
+    return 1
+  }
+  if ((Get-Content -LiteralPath $ComposeFile -Raw) -notmatch "(?m)^  $([regex]::Escape($BrokerContainer)):") {
+    Write-Err 'broker_unavailable: il runtime installato e'' piu'' vecchio e non ha il broker dei segreti.'
+    Write-Err 'Cosa fare: jht upgrade'
+    return 1
+  }
+  Write-Info 'Preparo il servizio della posta (si crea solo la prima volta che serve)...'
+  if (-not (Invoke-BrokerNetwork -Quiet:$Quiet)) { return 1 }
+  Invoke-Compose '--profile' 'broker' 'up' '-d' '--no-deps' $BrokerContainer | Write-EnsureLine -Quiet:$Quiet
+  if ($LASTEXITCODE -ne 0) { Write-Err 'broker_start_failed: il servizio della posta non e'' partito.'; Write-Err 'Cosa fare: riprova il comando'; return 1 }
+  $ready = $false
+  for ($i = 0; $i -lt 30 -and -not $ready; $i++) {
+    $brokerId = Get-RunningComposeServiceId $BrokerContainer
+    if ($brokerId) {
+      $null = & { $ErrorActionPreference = 'Continue'; & docker exec $brokerId jht-broker-admin secrets status 2>&1 }
+      $ready = ($LASTEXITCODE -eq 0)
+    }
+    if (-not $ready) { Start-Sleep -Seconds 1 }
+  }
+  if (-not $ready) { Write-Err 'broker_start_failed: il servizio della posta non risponde dopo 30 secondi.'; Write-Err 'Cosa fare: riprova il comando'; return 1 }
+  New-Item -ItemType File -Path $BrokerMadeMarker -Force -ErrorAction SilentlyContinue | Out-Null
+  $null = Invoke-BrokerMigrateLegacyOnce
+  $null = Initialize-BrokerWebAuthorisations
+  return 0
+}
+
+# After `up`: a broker made before comes back with the team (`down` removes its container); one that an older install made is adopted.
+function Resume-Broker {
+  $brokerState = Get-BrokerContainerState
+  if ($brokerState -eq 'foreign') {
+    # a container of that name that is not this project's broker is neither adopted nor started over
+    if (Test-Path -LiteralPath $BrokerMadeMarker) { Write-Warn "broker_restart_failed: il broker dei segreti non e' attestabile come nostro: non lo tocco. Cosa fare: jht mail status" }
+    return
+  }
+  if (-not (Test-Path -LiteralPath $BrokerMadeMarker)) {
+    if ($brokerState -eq 'absent') { return }
+    New-Item -ItemType File -Path $BrokerMadeMarker -Force -ErrorAction SilentlyContinue | Out-Null
+  }
+  if ($brokerState -ne 'running') {
+    Invoke-Compose '--profile' 'broker' 'up' '-d' '--no-deps' $BrokerContainer | Out-Host
+    if ($LASTEXITCODE -ne 0) { Write-Warn "broker_restart_failed: il servizio della posta non e' ripartito. Cosa fare: jht mail status" }
+  }
+  $null = Invoke-BrokerMigrateLegacyOnce
+  Initialize-BrokerWebAuthorisations
+}
+
 # L'host amministra il broker con exec di jht-broker-admin; un segreto passa
 # solo su stdin ($InputText), mai negli argomenti.
 # I chiamanti passano SEMPRE -AdminArgs per nome (come Invoke-TelegramAdmin): InputText e' il primo
@@ -1295,8 +1829,13 @@ function Invoke-BrokerAdmin {
   param([string]$InputText = $null, [Parameter(ValueFromRemainingArguments)] [string[]]$AdminArgs)
   $brokerId = Get-RunningComposeServiceId $BrokerContainer
   if (-not $brokerId) {
-    Write-Err 'broker_unavailable: il broker dei segreti non e'' attivo.'
-    Write-Err 'Cosa fare: jht up'
+    if (Test-Path -LiteralPath $BrokerMadeMarker) {
+      Write-Err 'broker_unavailable: il broker dei segreti non e'' attivo.'
+      Write-Err 'Cosa fare: jht up'
+    } else {
+      Write-Err 'broker_unavailable: il servizio della posta non c''e'' ancora: si crea la prima volta che serve.'
+      Write-Err 'Cosa fare: jht mail setup'
+    }
     return 1
   }
   # Out-Host: la risposta JSON va a chi ha lanciato jht, non nel valore di
@@ -1730,6 +2269,8 @@ function Invoke-TelegramLifecycleSteps {
     switch -CaseSensitive ($step) {
       '' { continue }
       'start' {
+        $brokerCode = Ensure-Broker
+        if ($brokerCode -ne 0) { return $brokerCode }
         Invoke-Compose '--profile' 'telegram' up '-d' $TelegramContainer | Out-Host
         if ($LASTEXITCODE -ne 0) { return $LASTEXITCODE }
         if ((Confirm-TelegramLifecycle 'start') -ne 0) { return 1 }
@@ -1768,6 +2309,31 @@ function Invoke-AvailableTelegramLifecycle {
   if ((Get-Content -LiteralPath $ComposeFile -Raw) -notmatch '(?m)^  jht-telegram:') { return 0 }
   if ($Action -eq 'resume' -and (Test-TelegramStateVolumeAbsent)) { return 0 }
   return Invoke-TelegramLifecycle @($Action)
+}
+
+# Does the Telegram service hold a bot? Asked of the RUNNING service, read-only (an exec: no run container, no volume):
+# $true = at least one bot, $false = none, $null = it cannot be told (the service is off, not attestable, another answer).
+# The one place that says whether Telegram is configured: `jht status` and `jht integration` both ask it.
+function Get-TelegramBotsConfigured {
+  $id = Get-RunningComposeServiceId $TelegramContainer
+  if (-not $id) { return $null }
+  $out = ((& { $ErrorActionPreference = 'Continue'; & docker exec $id jht-telegram-admin bots status 2>$null }) -join "`n")
+  if ($LASTEXITCODE -ne 0 -or $out -notmatch '"ok":\s*true') { return $null }
+  return [bool]($out -match '"present"')
+}
+
+# The line `jht status` says about Telegram. A status command creates nothing and prints nothing of compose: no volume,
+# no run container, only questions to the engine. «Never configured» (no state volume) and «no bot» are said in one line.
+function Write-TelegramStatusLine {
+  if ((Get-Content -LiteralPath $ComposeFile -Raw) -notmatch '(?m)^  jht-telegram:') { return 0 }
+  if (Test-TelegramStateVolumeAbsent) { Write-Host 'Telegram non attivo: Telegram non configurato.'; return 0 }
+  $configured = Get-TelegramBotsConfigured
+  if ($null -eq $configured) {
+    Write-Host 'Telegram: stato non verificabile adesso (servizio spento o non raggiungibile). Dettagli: jht telegram status'
+    return 0
+  }
+  if (-not $configured) { Write-Host 'Telegram non attivo: Telegram non configurato.'; return 0 }
+  return (Invoke-TelegramAdmin -AdminArgs @('bots', 'status'))
 }
 
 function Invoke-TelegramLifecycle {
@@ -1914,7 +2480,7 @@ function Remove-BrokerResetData {
     Write-Err 'reset: non riesco a determinare il progetto Compose; i volumi del broker non sono stati toccati.'
     return 1
   }
-  Invoke-Compose '--profile' 'telegram' down
+  Invoke-Compose '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' '--profile' 'login' down
   if ($LASTEXITCODE -ne 0) {
     Write-Err 'reset: non riesco a fermare il runtime; i volumi del broker non sono stati toccati.'
     return 1
@@ -1965,6 +2531,12 @@ function Remove-BrokerResetData {
       Write-Info "Cancellato: marcatore migrazione broker $BrokerLegacyMarker"
     } catch {
       Write-Err "reset: impossibile cancellare il marcatore migrazione broker $BrokerLegacyMarker."
+      $failed = $true
+    }
+  }
+  if (Test-Path -LiteralPath $BrokerMadeMarker) {
+    try { Remove-Item -LiteralPath $BrokerMadeMarker -Force -ErrorAction Stop } catch {
+      Write-Err "reset: impossibile cancellare il marcatore del broker $BrokerMadeMarker."
       $failed = $true
     }
   }
@@ -2279,6 +2851,8 @@ function Invoke-MailSetup {
   $adminArgs = @('mailbox', 'setup', '--user', $user, '--admission', $admission)
   if ($imapHost) { $adminArgs += @('--imap-host', $imapHost) }
   if ($smtpHost) { $adminArgs += @('--smtp-host', $smtpHost) }
+  $made = Ensure-Broker
+  if ($made -ne 0) { $password = $null; return $made }
   $code = Invoke-BrokerAdmin -InputText $password -AdminArgs $adminArgs
   $password = $null
   return $code
@@ -3109,6 +3683,57 @@ function New-UpgradePrune {
   return [ordered]@{ removed = $Removed; freedBytes = $Freed; refused = $Refused; inUse = $InUse; kept = @('current', 'previous'); skipped = $Skipped }
 }
 
+# ── Nucleo e immagine piena nell'upgrade (P7) ─────────────────────────────
+# Come nel wrapper POSIX: un'installazione a livello `core` (file runtime-tier) gira sul nucleo, e l'immagine piena puo' essere gia'
+# scaricata da `jht tools`. L'upgrade porta avanti il nucleo (il digest lo dice il wrapper candidato, non quello in uso) e, solo se
+# la piena di oggi e' gia' qui, anche la piena; la pulizia delle vecchie le tiene tutte e due.
+$script:UpgradeCoreRef = ''
+$script:UpgradeFullRef = ''
+$script:UpgradeFullKeep = ''
+
+function Get-UpgradeCandidateConstant {
+  param([string]$File, [string]$Name)
+  $line = Select-String -LiteralPath $File -Pattern ('^\$' + $Name + " = '([^']*)'\s*$") | Select-Object -First 1
+  if ($line) { return $line.Matches[0].Groups[1].Value }
+  return $null
+}
+
+# $false se il rilascio non porta un nucleo leggibile o non lo porta piu': un'installazione a livello core non si trasforma a meta'
+# di un upgrade (si reinstalla), e un digest malformato non si usa.
+function Initialize-UpgradeTierPlan {
+  param([string]$Wrapper)
+  $script:UpgradeCoreRef = ''; $script:UpgradeFullRef = ''; $script:UpgradeFullKeep = ''
+  if (-not (Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf)) { return $true }
+  $core = Get-UpgradeCandidateConstant $Wrapper 'CoreImageDigest'
+  $full = Get-UpgradeCandidateConstant $Wrapper 'DefaultRuntimeImage'
+  if ($core -cnotmatch '^sha256:[0-9a-f]{64}$' -or $full -cnotmatch '^ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64}$') { return $false }
+  $script:UpgradeCoreRef = "ghcr.io/leopu00/jht@$core"
+  & { $ErrorActionPreference = 'Continue'; & docker image inspect $DefaultRuntimeImage *> $null }
+  if ($LASTEXITCODE -eq 0) { $script:UpgradeFullRef = $full }
+  return $true
+}
+
+# Dopo il commit: la piena nuova, se la vecchia era gia' qui. Non decide l'esito dell'upgrade: se non arriva, resta la vecchia e
+# `jht tools` la riscarica da solo.
+function Invoke-UpgradeFullPull {
+  $script:UpgradeFullKeep = ''
+  if (-not $script:UpgradeFullRef) { return }
+  if ($script:UpgradeFullRef -eq $DefaultRuntimeImage) { $script:UpgradeFullKeep = $script:UpgradeFullRef; return }
+  Write-UpgradeNote "Scarico l'immagine piena aggiornata..."
+  & { $ErrorActionPreference = 'Continue'; & docker pull $script:UpgradeFullRef *> $null }
+  if ($LASTEXITCODE -eq 0) { $script:UpgradeFullKeep = $script:UpgradeFullRef }
+  else { Write-UpgradeNote "full_pull_failed: l'immagine piena nuova non e' arrivata, resta la vecchia. Cosa fare: jht tools pull" }
+}
+
+# L'ID (senza prefisso) della piena che un'installazione a livello core tiene; niente se non e' qui.
+function Get-UpgradeTierKeepIds {
+  if (-not (Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf)) { return @() }
+  $ref = if ($script:UpgradeFullKeep) { $script:UpgradeFullKeep } else { $DefaultRuntimeImage }
+  $id = ((& { $ErrorActionPreference = 'Continue'; & docker image inspect --format '{{.Id}}' $ref 2>$null } | Select-Object -First 1) -as [string])
+  if ($id -and $id.Trim()) { return @(Get-PlainImageId $id) }
+  return @()
+}
+
 function Remove-OldJhtImages {
   param([string]$Current, [string]$Previous)
   $script:UpgradePrune = $null
@@ -3122,6 +3747,8 @@ function Remove-OldJhtImages {
   $unknown = @('', 'none', 'sconosciuta', 'unknown')
   if ($unknown -contains $currentId) { $script:UpgradePrune = New-UpgradePrune 'current-unidentified'; return }
   if ($unknown -contains $previousId) { $script:UpgradePrune = New-UpgradePrune 'previous-unidentified'; return }
+  # A livello core la piena gia' scaricata aspetta il passaggio: non e' una vecchia versione, si tiene.
+  $keepIds = @($previousId) + @(Get-UpgradeTierKeepIds)
   # La corrente deve essere davvero quella del container che gira adesso.
   if ((Get-PlainImageId (Get-UpgradeImage)) -ne $currentId) { $script:UpgradePrune = New-UpgradePrune 'current-not-running'; return }
   # Immagini di TUTTI i container, anche fermi. Se non si leggono: niente.
@@ -3140,7 +3767,7 @@ function Remove-OldJhtImages {
     $parts = ([string]$line).Trim() -split '\s+', 2
     if ($parts.Count -ne 2 -or $JhtImageRepositories -cnotcontains $parts[1]) { continue }
     $plain = Get-PlainImageId $parts[0]
-    if ($plain -eq $currentId -or $plain -eq $previousId -or $seen.ContainsKey($plain)) { continue }
+    if ($plain -eq $currentId -or $keepIds -contains $plain -or $seen.ContainsKey($plain)) { continue }
     $seen[$plain] = $true
     if ($inUse -contains $plain) { $busy++; continue }
     $size = [long]0
@@ -3386,6 +4013,9 @@ function Invoke-RuntimeUpgrade {
     } catch { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Runtime remoto non valido o non raggiungibile' $false; return 1 }
     if (-not (Invoke-UpgradeCompose $newCompose 'config' '-q')) { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Compose remoto non valido' $false; return 1 }
     $metadataChanged = -not ((Get-FileHash $newCompose).Hash -eq (Get-FileHash $ComposeFile).Hash) -or -not ((Get-FileHash $newWrapper).Hash -eq (Get-FileHash $WrapperPath).Hash)
+    if (-not (Initialize-UpgradeTierPlan $newWrapper)) { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Il rilascio non porta un nucleo valido per questa installazione: reinstalla' $false; return 1 }
+    # A livello core il nucleo candidato e' l'immagine di tutto l'upgrade (pull, avvio, verifica, broker), come per `up`.
+    if ($script:UpgradeCoreRef) { $env:JHT_IMAGE = $script:UpgradeCoreRef }
     $script:UpgradeRollbackDir = Join-Path $RuntimeDir ('.upgrade-rollback-' + [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() + '-' + $PID)
     New-Item -ItemType Directory -Path $script:UpgradeRollbackDir -ErrorAction Stop | Out-Null
     Copy-Item -LiteralPath $ComposeFile -Destination (Join-Path $script:UpgradeRollbackDir 'docker-compose.yml')
@@ -3419,8 +4049,11 @@ function Invoke-RuntimeUpgrade {
     # Il broker dei segreti (P1 del 08/10) usa la stessa immagine del team:
     # dopo il commit riparte con quella nuova. Non decide l'esito
     # dell'upgrade; se non parte, la posta resta chiusa finche' `jht up`.
-    if ((Get-Content -LiteralPath $ComposeFile -Raw) -match "(?m)^  $([regex]::Escape($BrokerContainer)):") {
-      if (-not (Invoke-UpgradeCompose $ComposeFile 'up' '-d' '--force-recreate' $BrokerContainer)) {
+    # Only if it is there (or was made once): an install that never used the mail does not get it from the upgrade.
+    $brokerThere = (Test-Path -LiteralPath $BrokerMadeMarker) -or [bool](@(& { $ErrorActionPreference = 'Continue'; & docker ps -aq --filter "name=^$BrokerContainer$" 2>$null }) | Where-Object { $_ })
+    if ($brokerThere -and (Get-Content -LiteralPath $ComposeFile -Raw) -match "(?m)^  $([regex]::Escape($BrokerContainer)):") {
+      New-Item -ItemType File -Path $BrokerMadeMarker -Force -ErrorAction SilentlyContinue | Out-Null
+      if (-not (Invoke-UpgradeCompose $ComposeFile '--profile' 'broker' 'up' '-d' '--force-recreate' '--no-deps' $BrokerContainer)) {
         Write-UpgradeNote "broker_restart_failed: il broker dei segreti non e' ripartito. Cosa fare: jht up"
       }
       $null = Invoke-BrokerMigrateLegacyOnce
@@ -3431,6 +4064,7 @@ function Invoke-RuntimeUpgrade {
     }
     # Solo qui: upgrade riuscito, container nuovo verificato e commit fatto.
     # Un errore della pulizia non deve mai far ripristinare un upgrade riuscito.
+    try { Invoke-UpgradeFullPull } catch { $script:UpgradeFullKeep = '' }
     try { Remove-OldJhtImages $candidateImage $oldImage } catch { $script:UpgradePrune = $null }
     $changed = ($candidateImage -ne $oldImage) -or $metadataChanged
     Write-UpgradeResult $true $changed 'complete' $oldVersion $oldImage $newVersion $candidateImage $false 'Nuova versione attiva e verificata' $false
@@ -3445,6 +4079,51 @@ function Invoke-RuntimeUpgrade {
     Write-UpgradeResult $false $false 'unexpected' 'unknown' 'none' 'unknown' 'none' $false 'Errore inatteso durante l aggiornamento' $rolledBack
     return 1
   } finally { Clear-UpgradeEphemeral }
+}
+
+# `jht setup --api-key-file <file on THIS computer>` (glm, kimi): the setup runs in the container, which cannot see a file of
+# the host: a Windows path is not a path there, and ~/.jht (the one folder it sees) shows no file modes, so a key put there is
+# refused at the first start. The wrapper reads the file HERE and hands the key to the setup on its standard input
+# (--api-key-stdin), which keeps it in the container's own key store with the right modes: the key is never in an argument,
+# in a log or in the config. A path that starts with «/» and is not a file of this computer is the container's own and goes
+# through untouched.
+# Returns @{ Args = the arguments to pass; Key = the key or $null; File = the host file it came from; Error = a sentence (never the key) or $null }.
+function Convert-SetupKeyFileArgs {
+  param([string[]]$SetupArgs)
+  $plan = @{ Args = @($SetupArgs); Key = $null; Error = $null; File = $null }
+  $out = New-Object 'System.Collections.Generic.List[string]'
+  $hostFile = $null
+  for ($i = 0; $i -lt $SetupArgs.Count; $i++) {
+    $arg = $SetupArgs[$i]
+    $value = $null
+    $takesNext = $false
+    if (($arg -ceq '--api-key-file') -and (($i + 1) -lt $SetupArgs.Count)) { $value = $SetupArgs[$i + 1]; $takesNext = $true }
+    elseif ($arg.StartsWith('--api-key-file=', [System.StringComparison]::Ordinal)) { $value = $arg.Substring(15) }
+    if (($null -eq $value) -or ($value.StartsWith('/') -and -not (Test-Path -LiteralPath $value))) { $out.Add($arg); continue }
+    if ($null -ne $hostFile) { $plan.Error = '--api-key-file was given twice'; return $plan }
+    $hostFile = $value
+    if ($takesNext) { $i++ }
+    $out.Add('--api-key-stdin')
+  }
+  if ($null -eq $hostFile) { return $plan }
+  if (@($SetupArgs | Where-Object { $_ -ceq '--api-key-stdin' }).Count -gt 0) { $plan.Error = 'use --api-key-file or --api-key-stdin, not both'; return $plan }
+  $item = $null
+  try { $item = Get-Item -LiteralPath $hostFile -Force -ErrorAction Stop } catch { $plan.Error = "the file given to --api-key-file cannot be read: $hostFile"; return $plan }
+  if ($item.PSIsContainer -or (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)) { $plan.Error = "the file given to --api-key-file must be a regular file, not a folder or a link: $hostFile"; return $plan }
+  if (($item.Length -lt 1) -or ($item.Length -gt 4096)) { $plan.Error = "the file given to --api-key-file is empty or too big for a key (1 to 4096 bytes): $hostFile"; return $plan }
+  $bytes = $null
+  try { $bytes = [System.IO.File]::ReadAllBytes($item.FullName) } catch { $plan.Error = "the file given to --api-key-file cannot be read: $hostFile"; return $plan }
+  # A file written by `echo key > file` in Windows PowerShell 5.1 is UTF-16; Notepad may add a UTF-8 mark: both are read.
+  if (($bytes.Length -ge 2) -and ($bytes[0] -eq 0xFF) -and ($bytes[1] -eq 0xFE)) { $text = [System.Text.Encoding]::Unicode.GetString($bytes, 2, $bytes.Length - 2) }
+  elseif (($bytes.Length -ge 2) -and ($bytes[0] -eq 0xFE) -and ($bytes[1] -eq 0xFF)) { $text = [System.Text.Encoding]::BigEndianUnicode.GetString($bytes, 2, $bytes.Length - 2) }
+  elseif (($bytes.Length -ge 3) -and ($bytes[0] -eq 0xEF) -and ($bytes[1] -eq 0xBB) -and ($bytes[2] -eq 0xBF)) { $text = [System.Text.Encoding]::UTF8.GetString($bytes, 3, $bytes.Length - 3) }
+  else { $text = [System.Text.Encoding]::UTF8.GetString($bytes) }
+  $line = ([string](($text -split "\r?\n")[0])).Trim()
+  if ($line -cnotmatch '^[\x21-\x7E]{16,512}$') { $plan.Error = "the content of the file given to --api-key-file is not one line of 16 to 512 printable characters without spaces: $hostFile"; return $plan }
+  $plan.Args = $out.ToArray()
+  $plan.Key = $line
+  $plan.File = $item.FullName
+  return $plan
 }
 
 # Decide se passare -it a docker exec: serve solo se stdin/stdout sono terminali.
@@ -3476,6 +4155,22 @@ $HelpRequested = @($Rest | Where-Object { $_ -in @('-h', '--help') }).Count -gt 
 # `agent-control` ne resta fuori: le sue forme sono chiuse e un `--help` fra i
 # suoi argomenti e' una richiesta da rifiutare con il suo codice, non aiuto.
 if ($HelpRequested -and $Sub -notin @('game', 'gui', 'agent-control', 'desktop-apply')) {
+  if ($Sub -ceq 'integration' -and $Rest.Count -eq 1) {
+    Write-IntegrationHelp
+    exit 0
+  }
+  if ($Sub -ceq 'screen' -and $Rest.Count -eq 1) {
+    Write-ScreenHelp
+    exit 0
+  }
+  if ($Sub -ceq 'linkedin' -and $Rest.Count -eq 1) {
+    Write-LinkedinHelp
+    exit 0
+  }
+  if ($Sub -ceq 'setup') {
+    Write-SetupHelp
+    exit 0
+  }
   if (Test-HostCommandUsesLocalHelp $Sub) {
     Write-LocalHelp
     exit 0
@@ -3571,8 +4266,7 @@ switch ($Sub) {
     Stop-OnFailedComposeUp $LASTEXITCODE
     $telegramCode = Invoke-AvailableTelegramLifecycle 'resume'
     if ($telegramCode -ne 0) { exit $telegramCode }
-    $null = Invoke-BrokerMigrateLegacyOnce
-    Initialize-BrokerWebAuthorisations
+    Resume-Broker
     # The up went well (a failed one has already stopped jht with its code): 0, not the code of
     # whichever native ran last. The setup reads it (enable-podman-windows-runtime.ps1, T89).
     exit 0
@@ -3581,7 +4275,7 @@ switch ($Sub) {
   { $_ -in @('down', 'stop-container') } {
     Require-ComposeFile
     Require-Docker
-    Invoke-Compose '--profile' 'telegram' down
+    Invoke-Compose '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' '--profile' 'login' down
     break
   }
 
@@ -3595,7 +4289,7 @@ switch ($Sub) {
   'recreate' {
     Require-ComposeFile
     Require-Docker
-    Invoke-Compose '--profile' 'telegram' down
+    Invoke-Compose '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' '--profile' 'login' down
     if (-not (Repair-MountOwnership)) { exit 1 }
     if (-not (Initialize-TelegramLegacyInventory)) {
       Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'
@@ -3606,8 +4300,7 @@ switch ($Sub) {
     Stop-OnFailedComposeUp $LASTEXITCODE
     $telegramCode = Invoke-AvailableTelegramLifecycle 'resume'
     if ($telegramCode -ne 0) { exit $telegramCode }
-    $null = Invoke-BrokerMigrateLegacyOnce
-    Initialize-BrokerWebAuthorisations
+    Resume-Broker
     # The up went well (a failed one has already stopped jht with its code): 0, not the code of
     # whichever native ran last. The setup reads it (enable-podman-windows-runtime.ps1, T89).
     exit 0
@@ -3641,6 +4334,7 @@ switch ($Sub) {
 
   'integration' {
     Require-ComposeFile
+    if (-not (Test-RuntimeHelperDeclared 'jht-integration.ps1') -and (Write-RuntimeHelperAbsentAnswer 'integration' $Rest)) { exit 0 }
     # Dot-sourced here, at script level, so that its functions outlive this block. Older runtime: the helper is fetched once.
     $helperPath = Join-Path $RuntimeDir 'jht-integration.ps1'
     # A helper that is missing is fetched only when the person runs `add` or `remove`, never from a read-only command.
@@ -3656,15 +4350,56 @@ switch ($Sub) {
     exit (Invoke-IntegrationCommand $Rest)
   }
 
-  'tools' {
+  'screen' {
+    # The live screen of the closer is the integration `screen`: on = add, off = remove, status = status.
     Require-ComposeFile
-    # Same as `integration`: dot-sourced at script level; a helper that is missing is fetched only by `pull`.
-    if (-not (Test-RuntimeHelperDeclared 'jht-tools.ps1')) {
-      $mayFetch = $Rest.Count -gt 0 -and [string]$Rest[0] -ceq 'pull'
-      if (-not $mayFetch -or -not (Install-RuntimeHelpers)) {
-        Write-Err "script jht-tools.ps1 non ancora installato: 'jht upgrade' (o un 'jht tools pull') e riprova"
+    $screenWord = if ($Rest.Count -gt 0) { [string]$Rest[0] } else { '' }
+    $screenVerb = switch -CaseSensitive ($screenWord) { 'on' { 'add' } 'off' { 'remove' } 'status' { 'status' } default { '' } }
+    if (-not $screenVerb) { Write-Err 'uso: jht screen on | off | status [--json]'; exit 2 }
+    $screenArgs = @($screenVerb, 'screen') + @($Rest | Select-Object -Skip 1)
+    if (-not (Test-RuntimeHelperDeclared 'jht-integration.ps1') -and $screenVerb -ceq 'status' -and (Write-RuntimeHelperAbsentAnswer 'integration' $screenArgs)) { exit 0 }
+    $helperPath = Join-Path $RuntimeDir 'jht-integration.ps1'
+    # Same as `integration`: a helper that is missing is fetched only for `on` and `off`, never from a read-only command.
+    if (-not (Test-RuntimeHelperDeclared 'jht-integration.ps1')) {
+      if (@('add', 'remove') -cnotcontains $screenVerb -or -not (Install-RuntimeHelpers)) {
+        Write-Err "script jht-integration.ps1 non ancora installato: 'jht upgrade' (o un 'jht integration add/remove') e riprova"
         exit 1
       }
+    }
+    Assert-TrustedRuntime
+    . $helperPath
+    exit (Invoke-IntegrationCommand $screenArgs)
+  }
+
+  'linkedin' {
+    # The manual sign-in to LinkedIn. The lines the app reads are the same with or without the helper: a read-only question or a stop
+    # needs nothing to be installed, and only `login` fetches the helper if it is not there.
+    Require-ComposeFile
+    $linkedinWords = (@($Rest) -join ' ')
+    if (-not (Test-RuntimeHelperDeclared 'jht-integration.ps1')) {
+      if ($linkedinWords -ceq 'status --json') { [Console]::Out.WriteLine('{"ok": true, "view": "idle", "linkedin": "login_required"}'); exit 0 }
+      if ($linkedinWords -ceq 'login --stop') { [Console]::Out.WriteLine('{"ok": true}'); exit 0 }
+    }
+    $helperPath = Join-Path $RuntimeDir 'jht-integration.ps1'
+    if (-not (Test-RuntimeHelperDeclared 'jht-integration.ps1')) {
+      if (-not (Install-RuntimeHelpers)) {
+        Write-Err "script jht-integration.ps1 non ancora installato: 'jht upgrade' (o un 'jht integration add/remove') e riprova"
+        exit 1
+      }
+    }
+    Assert-TrustedRuntime
+    . $helperPath
+    exit (Invoke-LinkedinCommand @($Rest))
+  }
+
+  'tools' {
+    Require-ComposeFile
+    if (-not (Test-RuntimeHelperDeclared 'jht-tools.ps1') -and (Write-RuntimeHelperAbsentAnswer 'tools' $Rest)) { exit 0 }
+    # Same as `integration`: dot-sourced at script level. A helper that is missing is never fetched from here: these commands run by
+    # themselves after the install, and a download at the tip of the branch is not something to start without the person asking.
+    if (-not (Test-RuntimeHelperDeclared 'jht-tools.ps1')) {
+      Write-Err "script jht-tools.ps1 non ancora installato: 'jht upgrade' e riprova"
+      exit 1
     }
     Assert-TrustedRuntime
     . (Join-Path $RuntimeDir 'jht-tools.ps1')
@@ -3712,7 +4447,7 @@ switch ($Sub) {
     if (Test-ContainerUp) {
       & docker inspect $Container --format 'name={{.Name}} status={{.State.Status}} started={{.State.StartedAt}} image={{.Config.Image}}'
       if (-not [Console]::IsOutputRedirected) {
-        $telegramCode = Invoke-AvailableTelegramLifecycle 'status'
+        $telegramCode = Write-TelegramStatusLine
         if ($telegramCode -ne 0) { exit $telegramCode }
       }
     } else {
@@ -3754,10 +4489,27 @@ switch ($Sub) {
   # Setup: skip host-setup (non esiste su Windows), delega tutto al wizard
   # Node nel container che leggera' JHT_HOST_TYPE dall'env passato.
   'setup' {
+    # --api-key-file of a file on this computer: the key goes to the setup on its standard input (Convert-SetupKeyFileArgs).
+    $keyPlan = Convert-SetupKeyFileArgs $Rest
+    if ($keyPlan.Error) { [Console]::Error.WriteLine("error: $($keyPlan.Error)"); exit 1 }
     Require-ComposeFile
     Require-Docker
     Ensure-Up
-    & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry 'setup' @Rest
+    if ($null -ne $keyPlan.Key) {
+      # -i only: a pipe is not a terminal. ASCII, so that no byte-order mark goes in front of the key.
+      $savedEncoding = $OutputEncoding
+      try {
+        $OutputEncoding = New-Object System.Text.ASCIIEncoding
+        [string[]]$setupArgs = $keyPlan.Args
+        $keyPlan.Key | & docker exec -i -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry 'setup' @setupArgs
+        if ($LASTEXITCODE -eq 0) { Write-Host "The setup keeps the key: you can delete the file on this computer now ($($keyPlan.File))." }
+      } finally {
+        $OutputEncoding = $savedEncoding
+        $keyPlan.Key = $null
+      }
+    } else {
+      & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry 'setup' @Rest
+    }
     break
   }
 
@@ -3774,7 +4526,7 @@ switch ($Sub) {
     Ensure-Up
     & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry $Sub @Rest
     $code = $LASTEXITCODE
-    if ($Sub -eq 'cloud' -and $Rest.Count -gt 0 -and $Rest[0] -eq 'pair' -and $code -eq 0) { Initialize-BrokerWebAuthorisations }
+    if ($Sub -eq 'cloud' -and $Rest.Count -gt 0 -and $Rest[0] -eq 'pair' -and $code -eq 0) { if ((Ensure-Broker) -eq 0) { Initialize-BrokerWebAuthorisations } }
     exit $code
     break
   }

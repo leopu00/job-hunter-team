@@ -37,8 +37,9 @@ PI_TYPES = frozenset({
 })
 # The credentials, not the quota: Pi records the provider's 401 (or its own «No API key» / «Authentication failed»
 # when a call inside a run cannot get its key); before a run starts the same errors are only on the screen.
-_AUTH = re.compile(r"No API key|Authentication failed|\b401\b|invalid[_ ]api[_ ]key|incorrect api key|unauthori[sz]ed|"
-                   r"credentials? (?:may have )?expired|token (?:has )?expired", re.I)
+_AUTH = re.compile(r"No API key|Authentication fail|\b401\b|invalid[_ ]authentication|invalid[_ ]api[_ ]key|"
+                   r"api key appears to be invalid|incorrect api key|unauthori[sz]ed|"
+                   r"credentials? (?:may have )?expired|token (?:has )?expired|token expired or incorrect", re.I)
 _LIMIT = re.compile(r"usage limit|rate.?limit|\b429\b|quota|too many requests|hit your limit", re.I)
 _NETWORK = re.compile(
     r"connection error|ECONN|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|fetch failed|socket|network|timed out|reach the API", re.I)
