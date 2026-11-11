@@ -139,6 +139,11 @@ services:
       # entry. Gli allegati inbound sono copiabili, mai modificabili in loco.
       - jht-telegram-sock:/run/jht-telegram:ro
       - jht-telegram-inbox:/jht_telegram_inbox:ro
+      # The media container (voice notes and photos, on request): the inbox is where jht writes the files to open, the outbox
+      # is where the container answers. Opposite modes, as the security opinions ask: jht never writes the answers, the container never
+      # writes the questions. Empty volumes while the integration is not there.
+      - jht-media-in:/jht_media/in
+      - jht-media-out:/jht_media/out:ro
     # Permette allo spike Scorer di raggiungere Ollama/llama.cpp avviato
     # sull'host anche su Docker Engine Linux. L'endpoint resta opt-in e il
     # runner accetta esclusivamente host locali.
@@ -248,6 +253,42 @@ services:
       - ALL
     restart: unless-stopped
 
+  # ── Tools the user asks for (profiles: off until `jht integration add`) ──────────────────────────────────────────────────
+  # One image (the extras one, by the digest the wrapper carries and exports as JHT_EXTRAS_IMAGE) and one container per tool.
+  # No socket of the engine, no capability, no new privileges, the default seccomp profile, a process cap, a memory cap, a
+  # root that cannot be written and a tmpfs of fixed size. They start on command and stay off on their own (restart "no"):
+  # nothing here comes up at boot. Without the wrapper's pin the image name does not exist, and the profile cannot start.
+
+  # Voice notes to WAV and photos to text, on files nobody has vetted: no network at all, the inbox read-only, the outbox the
+  # only place it writes. The worker is shared/media/media_worker.py.
+  jht-media:
+    profiles: [media]
+    image: ${JHT_EXTRAS_IMAGE:-jht-extras-unpinned}
+    container_name: jht-media
+    user: "1001:1001"
+    entrypoint: ["/usr/bin/tini", "-g", "--", "python3", "/app/shared/media/media_worker.py"]
+    network_mode: none
+    environment:
+      - LANG=C.UTF-8
+      - HOME=/tmp
+    volumes:
+      - jht-media-in:/jht_media/in:ro
+      - jht-media-out:/jht_media/out
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777,noexec,nosuid
+      # The image declares these two VOLUMEs for jht: masked here with empty folders nobody can write, as for jht-telegram.
+      - /jht_home:size=64k,mode=0555
+      - /jht_user:size=64k,mode=0555
+    pids_limit: 128
+    mem_limit: 1g
+    cpus: 2
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
 volumes:
   jht-deps:
   jht-runtime-mask:
@@ -259,6 +300,8 @@ volumes:
   jht-telegram-state:
   jht-telegram-sock:
   jht-telegram-inbox:
+  jht-media-in:
+  jht-media-out:
 
 # ── Dev mode ────────────────────────────────────────────────────────────
 #

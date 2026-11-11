@@ -13,7 +13,7 @@
 # Exit: 0 done - 1 failed - 2 wrong use - 3 not available yet.
 
 $IntegrationIds = @('google', 'telegram', 'mail', 'linkedin-login', 'screen', 'media')
-$IntegrationNotYet = @('linkedin-login', 'screen', 'media')
+$IntegrationNotYet = @('linkedin-login', 'screen')
 # Fixed text, run inside the team's container: the libraries of Google go to the person's own store (jht-install).
 # Single quotes only: Windows PowerShell 5.1 drops a double quote inside a native argument.
 $IntegrationGoogleCode = "import sys; sys.path.insert(0, '/app/shared/skills'); from optional_libs import ensure, GOOGLE_DRIVE, GOOGLE_SHEETS; ensure(*GOOGLE_DRIVE, 'Google Drive'); ensure(*GOOGLE_SHEETS, 'Google Sheets')"
@@ -108,6 +108,14 @@ function Get-IntegrationState {
   if (Test-IntegrationPending $Id) { return @('downloading', 'operazione in corso') }
   if ($Id -ceq 'google') {
     if ($null -ne (Read-IntegrationMarker 'google' 'ok')) { return @('ready', 'librerie di Google aggiunte al profilo; mancano le credenziali dell''account Google') }
+  } elseif ($Id -ceq 'media') {
+    # The two folders it shares with jht are made by `jht up` whether it is added or not: its own marker says "added".
+    if (-not (Test-DockerReachable)) { return @('error', 'il motore dei container non risponde') }
+    if (Get-RunningComposeServiceId $MediaContainer) { return @('running', 'container acceso') }
+    if ($script:ServiceLookupReason -notmatch '^(compose ps listed no running container|no running container of)') {
+      return @('error', "il container non e' attestabile")
+    }
+    if ($null -ne (Read-IntegrationMarker 'media' 'ok')) { return @('ready', 'aggiunto, container spento: jht integration add media lo riaccende') }
   } else {
     $service = Get-IntegrationService $Id
     if (-not (Test-DockerReachable)) { return @('error', 'il motore dei container non risponde') }
@@ -181,6 +189,15 @@ function Write-IntegrationResult {
   return $Code
 }
 
+# The media container (voice notes and photos): the extras image by the digest this wrapper carries, then the profile of the compose.
+$MediaContainer = 'jht-media'
+
+# The reference of the extras image, or '' while the release has none (the digest is checked in its exact shape first).
+function Get-IntegrationExtrasRef {
+  if ($ExtrasImageDigest -cmatch '^sha256:[0-9a-f]{64}$') { return "ghcr.io/leopu00/jht@$ExtrasImageDigest" }
+  return ''
+}
+
 # ---- add ----
 function Invoke-IntegrationAdd {
   param([string]$Id)
@@ -201,6 +218,21 @@ function Invoke-IntegrationAdd {
       Invoke-Compose '--profile' 'telegram' up '-d' $TelegramContainer | Out-Null
       if ($LASTEXITCODE -ne 0) { $script:IntegrationWhy = 'il servizio Telegram non parte'; return 1 }
       if ((Confirm-TelegramLifecycle 'start') -ne 0) { $script:IntegrationWhy = 'il servizio Telegram non risulta acceso'; return 1 }
+    }
+    'media' {
+      $ref = Get-IntegrationExtrasRef
+      if (-not $ref) { $script:IntegrationWhy = 'non disponibile ancora'; return 3 }
+      & { $ErrorActionPreference = 'Continue'; & docker pull $ref *> $null }
+      if ($LASTEXITCODE -ne 0) { $script:IntegrationWhy = "download dell'immagine degli strumenti non riuscito"; return 1 }
+      $before = $env:JHT_EXTRAS_IMAGE
+      try {
+        $env:JHT_EXTRAS_IMAGE = $ref
+        Invoke-Compose '--profile' 'media' up '-d' $MediaContainer | Out-Null
+        $code = $LASTEXITCODE
+      } finally { if ($null -eq $before) { Remove-Item Env:\JHT_EXTRAS_IMAGE -ErrorAction SilentlyContinue } else { $env:JHT_EXTRAS_IMAGE = $before } }
+      if ($code -ne 0) { $script:IntegrationWhy = 'il container dei media non parte'; return 1 }
+      if (-not (Get-RunningComposeServiceId $MediaContainer)) { $script:IntegrationWhy = 'il container dei media non risulta acceso'; return 1 }
+      if (-not (Write-IntegrationMarker 'media' 'ok' 'ok')) { $script:IntegrationWhy = 'marcatore non scritto'; return 1 }
     }
     'mail' {
       if ((Ensure-Broker -Quiet 6>$null) -ne 0) { $script:IntegrationWhy = 'il broker della posta non parte'; return 1 }
@@ -248,6 +280,18 @@ function Invoke-IntegrationRemove {
       if ($code -eq 0) { Invoke-Compose '--profile' 'telegram' rm '-f' $TelegramContainer | Out-Null; $code = $LASTEXITCODE }
       if ($code -ne 0) { $script:IntegrationWhy = 'il servizio Telegram non si ferma'; return 1 }
     }
+    'media' {
+      Invoke-Compose '--profile' 'media' stop $MediaContainer | Out-Null
+      $code = $LASTEXITCODE
+      if ($code -eq 0) { Invoke-Compose '--profile' 'media' rm '-f' $MediaContainer | Out-Null; $code = $LASTEXITCODE }
+      if ($code -ne 0) { $script:IntegrationWhy = 'il container dei media non si ferma'; return 1 }
+      Clear-IntegrationMarker 'media' 'ok'
+      # The image goes with it unless another tool of the extras image is still added (jht-login, jht-screen, when they exist).
+      $ref = Get-IntegrationExtrasRef
+      if ($ref -and $null -eq (Read-IntegrationMarker 'linkedin-login' 'ok') -and $null -eq (Read-IntegrationMarker 'screen' 'ok')) {
+        & { $ErrorActionPreference = 'Continue'; & docker rmi $ref *> $null }
+      }
+    }
     'mail' {
       if (-not (Test-IntegrationBrokerOnRequest)) { $script:IntegrationWhy = 'non disponibile ancora'; return 3 }
       Invoke-Compose '--profile' 'broker' stop $BrokerContainer | Out-Null
@@ -265,6 +309,7 @@ function Invoke-IntegrationRemove {
       }
     }
     $script:IntegrationWhy = 'container e dati cancellati'
+    if ($Id -ceq 'media') { $script:IntegrationWhy = 'container e immagine tolti; le due cartelle di scambio con jht restano (sono di jht e non contengono i tuoi file)' }
     if ($Id -ceq 'mail') { $script:IntegrationWhy = 'container e stato del broker cancellati; la password della posta e le credenziali dei portali restano nel volume dei segreti (jht reset --scope creds)' }
   } else {
     $script:IntegrationWhy = 'container tolto; i dati restano (per cancellarli: --purge --yes)'

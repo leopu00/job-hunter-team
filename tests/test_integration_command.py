@@ -113,13 +113,13 @@ def states(result) -> dict:
     return {row["id"]: row for row in json.loads(result.stdout)["integrations"]}
 
 
-def test_list_json_nothing_added_and_three_not_available_yet(host):
+def test_list_json_nothing_added_and_two_not_available_yet(host):
     result = run(host, "list --json")
     assert result.returncode == 0, result.stderr
     rows = states(result)
     assert list(rows) == ["google", "telegram", "mail", "linkedin-login", "screen", "media"]
-    assert {rows[i]["state"] for i in ("google", "telegram", "mail")} == {"not_installed"}
-    for name in ("linkedin-login", "screen", "media"):
+    assert {rows[i]["state"] for i in ("google", "telegram", "mail", "media")} == {"not_installed"}
+    for name in ("linkedin-login", "screen"):
         assert rows[name] == {"id": name, "state": "not_installed", "reason": "non disponibile ancora"}
 
 
@@ -196,7 +196,7 @@ def test_a_failed_add_says_why_in_one_line_and_the_next_status_keeps_it(host):
 
 
 def test_what_is_not_available_yet_is_refused_with_its_own_code_and_touches_nothing(host):
-    for name in ("linkedin-login", "screen", "media"):
+    for name in ("linkedin-login", "screen"):
         for action in ("add", "remove"):
             result = run(host, f"{action} {name} --json")
             assert result.returncode == 3, (name, action, result.stderr)

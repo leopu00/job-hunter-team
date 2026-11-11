@@ -18,7 +18,7 @@
 # Exit: 0 done · 1 failed · 2 wrong use · 3 not available yet.
 
 INTEGRATION_IDS="google telegram mail linkedin-login screen media"
-INTEGRATION_NOT_YET="linkedin-login screen media"
+INTEGRATION_NOT_YET="linkedin-login screen"
 
 integration_label() {
   case "$1" in
@@ -109,6 +109,16 @@ integration_state() {
   if integration_pending "$id"; then printf 'downloading|operazione in corso\n'; return 0; fi
   if [ "$id" = google ]; then
     if integration_marker_read google ok >/dev/null; then printf 'ready|librerie di Google aggiunte al profilo; mancano le credenziali dell'"'"'account Google\n'; return 0; fi
+  elif [ "$id" = media ]; then
+    # The two folders it shares with jht are made by `jht up` whether it is added or not: its own marker says "added".
+    docker_reachable || { printf 'error|il motore dei container non risponde\n'; return 0; }
+    read_only_service_id "$MEDIA_SERVICE" >/dev/null 2>&1 || rc=$?
+    case "$rc" in
+      0) printf 'running|container acceso\n'; return 0 ;;
+      3) ;;
+      *) printf 'error|il container non e'"'"' attestabile\n'; return 0 ;;
+    esac
+    if integration_marker_read media ok >/dev/null; then printf 'ready|aggiunto, container spento: jht integration add media lo riaccende\n'; return 0; fi
   else
     read -r service volume <<< "$(integration_service_of "$id")"
     docker_reachable || { printf 'error|il motore dei container non risponde\n'; return 0; }
@@ -191,8 +201,16 @@ integration_result() {
 # Single quotes inside, like the .ps1 one: Windows PowerShell 5.1 drops a double quote in a native argument.
 INTEGRATION_GOOGLE_CODE="import sys; sys.path.insert(0, '/app/shared/skills'); from optional_libs import ensure, GOOGLE_DRIVE, GOOGLE_SHEETS; ensure(*GOOGLE_DRIVE, 'Google Drive'); ensure(*GOOGLE_SHEETS, 'Google Sheets')"
 
+# The media container (voice notes and photos): the extras image by the digest this wrapper carries, then the profile of the compose.
+MEDIA_SERVICE="jht-media"
+
+integration_extras_ref() { # prints the reference of the extras image, or nothing while the release has none
+  [[ "${EXTRAS_IMAGE_DIGEST:-}" =~ ^sha256:[0-9a-f]{64}$ ]] && printf 'ghcr.io/leopu00/jht@%s\n' "$EXTRAS_IMAGE_DIGEST"
+  return 0
+}
+
 integration_do_add() { # id → 0 done · 1 failed (reason in INTEGRATION_WHY)
-  local out
+  local out ref
   INTEGRATION_WHY=""
   case "$1" in
     google)
@@ -208,6 +226,15 @@ integration_do_add() { # id → 0 done · 1 failed (reason in INTEGRATION_WHY)
       COMPOSE_PROFILES=telegram compose up -d "$TELEGRAM_SERVICE" >/dev/null 2>&1 \
         || { INTEGRATION_WHY="il servizio Telegram non parte"; return 1; }
       telegram_lifecycle_verify start >/dev/null 2>&1 || { INTEGRATION_WHY="il servizio Telegram non risulta acceso"; return 1; }
+      ;;
+    media)
+      ref="$(integration_extras_ref)"
+      [ -n "$ref" ] || { INTEGRATION_WHY="non disponibile ancora"; return 3; }
+      docker pull "$ref" >/dev/null 2>&1 || { INTEGRATION_WHY="download dell'immagine degli strumenti non riuscito"; return 1; }
+      JHT_EXTRAS_IMAGE="$ref" COMPOSE_PROFILES=media compose up -d "$MEDIA_SERVICE" >/dev/null 2>&1 \
+        || { INTEGRATION_WHY="il container dei media non parte"; return 1; }
+      read_only_service_id "$MEDIA_SERVICE" >/dev/null 2>&1 || { INTEGRATION_WHY="il container dei media non risulta acceso"; return 1; }
+      integration_marker_write media ok ok || { INTEGRATION_WHY="marcatore non scritto"; return 1; }
       ;;
     mail)
       ensure_broker >/dev/null 2>&1 || { INTEGRATION_WHY="il broker della posta non parte"; return 1; }
@@ -227,7 +254,7 @@ integration_volumes_of() {
 }
 
 integration_do_remove() { # id purge → 0 done · 1 failed
-  local volume rc id
+  local volume rc id ref
   INTEGRATION_WHY=""
   case "$1" in
     google)
@@ -239,6 +266,17 @@ integration_do_remove() { # id purge → 0 done · 1 failed
       COMPOSE_PROFILES=telegram compose stop "$TELEGRAM_SERVICE" >/dev/null 2>&1 \
         && COMPOSE_PROFILES=telegram compose rm -f "$TELEGRAM_SERVICE" >/dev/null 2>&1 \
         || { INTEGRATION_WHY="il servizio Telegram non si ferma"; return 1; }
+      ;;
+    media)
+      COMPOSE_PROFILES=media compose stop "$MEDIA_SERVICE" >/dev/null 2>&1 \
+        && COMPOSE_PROFILES=media compose rm -f "$MEDIA_SERVICE" >/dev/null 2>&1 \
+        || { INTEGRATION_WHY="il container dei media non si ferma"; return 1; }
+      integration_marker_clear media ok
+      # The image goes with it unless another tool of the extras image is still added (jht-login, jht-screen, when they exist).
+      ref="$(integration_extras_ref)"
+      if [ -n "$ref" ] && ! integration_marker_read linkedin-login ok >/dev/null && ! integration_marker_read screen ok >/dev/null; then
+        docker rmi "$ref" >/dev/null 2>&1 || true
+      fi
       ;;
     mail)
       # An older compose still starts the broker with `jht up`: removing it there would only be undone by the next start.
@@ -259,7 +297,9 @@ integration_do_remove() { # id purge → 0 done · 1 failed
         docker volume rm "$id" >/dev/null 2>&1 || { INTEGRATION_WHY="un volume non si cancella: $volume"; return 1; }
       }
     done
-    if [ "$1" = mail ]; then
+    if [ "$1" = media ]; then
+      INTEGRATION_WHY="container e immagine tolti; le due cartelle di scambio con jht restano (sono di jht e non contengono i tuoi file)"
+    elif [ "$1" = mail ]; then
       INTEGRATION_WHY="container e stato del broker cancellati; la password della posta e le credenziali dei portali restano nel volume dei segreti (jht reset --scope creds)"
     else
       INTEGRATION_WHY="container e dati cancellati"

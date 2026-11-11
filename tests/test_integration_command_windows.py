@@ -32,6 +32,7 @@ $RuntimeDir = $env:T_RUNTIME
 $ComposeFile = Join-Path $RuntimeDir 'docker-compose.yml'
 $Container = 'jht'; $TelegramContainer = 'jht-telegram'; $BrokerContainer = 'jht-broker'
 $BrokerMadeMarker = Join-Path $RuntimeDir '.broker-made'
+$ExtrasImageDigest = $env:T_EXTRAS
 function Test-ProtectedRuntimeNode {
   param([string]$Path, [switch]$Directory)
   $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
@@ -56,6 +57,7 @@ function Get-RunningComposeServiceId {
 function Invoke-Compose {
   param([Parameter(ValueFromRemainingArguments)] $Rest)
   Add-Content -LiteralPath $env:T_LOG -Value ('COMPOSE ' + (@($Rest) -join ' '))
+  if ($env:JHT_EXTRAS_IMAGE) { Add-Content -LiteralPath $env:T_LOG -Value ('EXTRAS_IMAGE ' + $env:JHT_EXTRAS_IMAGE) }
   $global:LASTEXITCODE = 0
   if ($env:T_COMPOSE_FAIL -eq '1') { $global:LASTEXITCODE = 1; return }
   $words = @($Rest); $service = $words[$words.Count - 1]
@@ -120,13 +122,13 @@ def log(host) -> str:
     return host.log.read_text(encoding="utf-8")
 
 
-def test_list_json_nothing_added_and_three_not_available_yet(host):
+def test_list_json_nothing_added_and_two_not_available_yet(host):
     result = run(host, ["list", "--json"])
     assert result.returncode == 0, result.stderr
     found = rows(result)
     assert list(found) == ["google", "telegram", "mail", "linkedin-login", "screen", "media"]
-    assert {found[i]["state"] for i in ("google", "telegram", "mail")} == {"not_installed"}
-    for name in ("linkedin-login", "screen", "media"):
+    assert {found[i]["state"] for i in ("google", "telegram", "mail", "media")} == {"not_installed"}
+    for name in ("linkedin-login", "screen"):
         assert found[name] == {"id": name, "state": "not_installed", "reason": "non disponibile ancora"}
 
 
@@ -171,7 +173,7 @@ def test_add_google_runs_the_fixed_text_and_a_failure_is_kept_one_line(host):
 
 
 def test_what_is_not_available_yet_is_refused_with_its_own_code(host):
-    for name in ("linkedin-login", "screen", "media"):
+    for name in ("linkedin-login", "screen"):
         for action in ("add", "remove"):
             result = run(host, [action, name, "--json"])
             assert result.returncode == 3, (name, action, result.stderr)
@@ -255,3 +257,58 @@ def test_the_library_passes_nothing_the_person_typed_to_a_native_command():
     code = "\n".join(line for line in _text(LIBRARY).splitlines() if not line.lstrip().startswith("#"))
     assert not re.search(r"\b(Invoke-Expression|iex)\b|&\s*\$", code)
     assert len(re.findall(r"docker exec", code)) == 1 and "$IntegrationGoogleCode" in code
+
+
+# ---- media: the extras image by the digest the wrapper carries, then the `media` profile ----
+DIGEST = "sha256:" + "e" * 64
+REF = f"ghcr.io/leopu00/jht@{DIGEST}"
+
+
+def test_media_without_an_extras_image_says_not_available_yet_and_pulls_nothing(host):
+    done = run(host, ["add", "media", "--json"])
+    assert done.returncode == 3 and json.loads(done.stdout)["reason"] == "non disponibile ancora"
+    assert "pull" not in log(host)
+
+
+@pytest.mark.parametrize("digest", ["sha256:xyz", "sha256:e;touch HIT", "sha256:" + "e" * 64 + " --privileged", "sha256:" + "e" * 63])
+def test_a_digest_that_is_not_one_is_not_used(host, digest):
+    done = run(host, ["add", "media", "--json"], T_EXTRAS=digest)
+    assert done.returncode == 3 and "pull" not in log(host)
+
+
+def test_add_media_pulls_by_digest_and_starts_only_the_media_profile_with_that_image(host):
+    done = run(host, ["add", "media", "--json"], T_EXTRAS=DIGEST)
+    assert done.returncode == 0, done.stdout + done.stderr
+    answer = json.loads(done.stdout)
+    assert answer["ok"] is True and answer["state"] == "running"
+    lines = log(host).splitlines()
+    assert f"DOCKER pull {REF}" in lines
+    assert "COMPOSE --profile media up -d jht-media" in lines and f"EXTRAS_IMAGE {REF}" in lines
+    assert lines.index(f"DOCKER pull {REF}") < lines.index("COMPOSE --profile media up -d jht-media")
+
+
+def test_media_states_running_ready_when_off_and_not_installed_after_remove(host):
+    assert rows(run(host, ["list", "--json"]))["media"]["state"] == "not_installed"
+    run(host, ["add", "media", "--json"], T_EXTRAS=DIGEST)
+    assert rows(run(host, ["list", "--json"]))["media"]["state"] == "running"
+    host.running.write_text("", encoding="utf-8")
+    ready = rows(run(host, ["list", "--json"]))["media"]
+    assert ready["state"] == "ready" and "jht integration add media" in ready["reason"]
+    run(host, ["remove", "media", "--json"], T_EXTRAS=DIGEST)
+    assert rows(run(host, ["list", "--json"]))["media"]["state"] == "not_installed"
+
+
+def test_the_folders_every_jht_up_makes_do_not_make_media_added(host):
+    host.volumes.write_text("jht_jht-media-in\njht_jht-media-out\n", encoding="utf-8")
+    assert rows(run(host, ["list", "--json"]))["media"]["state"] == "not_installed"
+
+
+def test_remove_media_takes_the_container_and_the_image_and_never_the_folders_of_jht(host):
+    run(host, ["add", "media", "--json"], T_EXTRAS=DIGEST)
+    done = run(host, ["remove", "media", "--purge", "--yes", "--json"], T_EXTRAS=DIGEST)
+    assert done.returncode == 0, done.stdout + done.stderr
+    lines = log(host).splitlines()
+    assert "COMPOSE --profile media stop jht-media" in lines and "COMPOSE --profile media rm -f jht-media" in lines
+    assert f"DOCKER rmi {REF}" in lines
+    assert not any(line.startswith("DOCKER volume rm") for line in lines)
+    assert "restano" in json.loads(done.stdout)["reason"]
