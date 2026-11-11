@@ -459,6 +459,10 @@ exit /b 0
   $writerAst = $wrapperAst.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Write-RuntimeManifest' }, $true)
   if (-not $writerAst) { throw 'installed wrapper Write-RuntimeManifest missing' }
   . ([scriptblock]::Create($writerAst.Extent.Text))
+  # the function the writer gives the manifest to the person with: from this elevated process the manifest it writes is the Administrators' until then
+  $ownerAst = $wrapperAst.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Set-ProtectedRuntimeNodeOwner' }, $true)
+  if (-not $ownerAst) { throw 'installed wrapper Set-ProtectedRuntimeNodeOwner missing' }
+  . ([scriptblock]::Create($ownerAst.Extent.Text))
   $ContainerRuntime = 'podman'
   $ComposeFile = $appManifestFiles['docker-compose.yml']
   $WrapperPath = $installedWrapper
@@ -474,6 +478,8 @@ exit /b 0
   $RuntimeManifest = Join-Path $cleanRoot 'rewritten.runtime-integrity'
   Write-RuntimeManifest
   Assert-AppManifest -Path $RuntimeManifest -Stage 'after upgrade rewrite'
+  $rewrittenOwner = ([Security.Principal.NTAccount](Get-Acl -LiteralPath $RuntimeManifest).Owner).Translate([Security.Principal.SecurityIdentifier]).Value
+  if ($rewrittenOwner -ne [Security.Principal.WindowsIdentity]::GetCurrent().User.Value) { throw 'the rewritten runtime manifest is not owned by the current user' }
   $RuntimeManifest = $manifest
   Write-Host 'E04 MANIFEST app-accepted-keys PASS'
 
