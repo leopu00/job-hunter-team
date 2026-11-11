@@ -535,3 +535,11 @@ def test_a_profile_that_cannot_be_read_gives_no_work_right(tmp_path):
     broken = tmp_path / "p.yml"
     broken.write_text("work_authorization: [unclosed", encoding="utf-8")
     assert cov.work_rights(broken) == frozenset()
+
+
+def test_jobspresso_stays_open_with_its_robots_rule_written_in_the_hint():
+    """Its robots.txt disallows only the URLs with a query string (`Disallow: /*?`): the category pages are allowed, so the portal is
+    not closed; the hint says what the Scout must not open."""
+    by = {(e["slug"], e["country"]): e for g in cov.table()["groups"].values() for e in g}
+    entry = by[("jobspresso", "remote")]
+    assert entry["access"] == "search" and "query string" in entry["hint"] and "right to work" in entry["hint"]

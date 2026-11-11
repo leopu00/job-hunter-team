@@ -1165,7 +1165,8 @@
     "country": "remote",
     "tier": "minor",
     "access": "search",
-    "host": "jobspresso.co"
+    "host": "jobspresso.co",
+    "hint": "Its robots.txt disallows every URL with a query string (Disallow: /*?): never open a search with «?», use the category pages and the listing addresses without it. Many of its remote ads are for the US, UK or Canada only: check the right to work before you open a lot of them."
    },
    {
     "slug": "nodesk",
