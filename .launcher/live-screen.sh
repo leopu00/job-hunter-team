@@ -135,7 +135,11 @@ if [ "${#password}" -ne 8 ]; then
   exit 5
 fi
 umask 077
-printf '%s\n' "$password" > "$PASSWORD_FILE.tmp" && mv -f "$PASSWORD_FILE.tmp" "$PASSWORD_FILE"
+# A password the app cannot read is a stream nobody can open: that is an error, said, not a screen that looks up.
+{ printf '%s\n' "$password" > "$PASSWORD_FILE.tmp" && mv -f "$PASSWORD_FILE.tmp" "$PASSWORD_FILE"; } 2>/dev/null || {
+  log "ERROR: could not write the viewer password in $STATE_DIR"
+  exit 5
+}
 x11vnc -storepasswd "$password" "$RUN_DIR/rfbauth" >/dev/null 2>&1 || {
   log "ERROR: x11vnc -storepasswd failed"
   exit 5

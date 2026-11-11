@@ -227,6 +227,22 @@ def test_in_its_own_container_the_password_and_the_logs_go_where_the_environment
 
 
 @needs_bash
+@pytest.mark.skipif(os.geteuid() == 0, reason="root writes anywhere")
+def test_a_password_that_cannot_be_written_is_an_error_and_the_screen_does_not_come_up(env, tmp_path):
+    locked = tmp_path / "locked"
+    locked.mkdir()
+    locked.chmod(0o500)  # the script would make a folder of its own with chmod 700: a folder it cannot make is the case
+    state = locked / "state"
+    proc = _start({**env, "JHT_LIVE_SCREEN_STATE_DIR": str(state)})
+    try:
+        assert proc.wait(timeout=10) == 5, proc.stdout.read() if proc.stdout else ""
+        assert _args(env, "websockify") is None and _args(env, "x11vnc") is None
+    finally:
+        locked.chmod(0o700)
+        _stop(proc)
+
+
+@needs_bash
 def test_bind_and_port_follow_the_environment(env):
     env = {**env, "JHT_LIVE_SCREEN_BIND": "127.0.0.1", "JHT_LIVE_SCREEN_PORT": "7090"}
     proc = _start(env)
