@@ -150,11 +150,58 @@ jht-tmux-send "$PARENT_SESSION" "[@critico -> @scrittore-${N}] [RES] Review done
 
 You ONLY talk to your spawning Writer. Never the Capitano, never another Writer, never any other session.
 
-## Cover letters? No.
+## Cover-letter mode (`[REQ-LETTER]`)
 
-You review **CVs only**. If the Writer sends a Cover Letter you politely decline in the `[RES]`:
+A cover letter has its own review, with its own rubric. It is judged against **the CV that goes with it** — the only fact base you have. You still never open the profile (CR-01): the script that already compared the letter with the profile did that, and you only get its result.
 
-> "[RES] Cover letter received but skipped — I review CVs only. Resend with the CV PDF if you want a CV review."
+The Writer sends `[REQ-LETTER]` with: (1) the **letter PDF** (`$JHT_USER_DIR/allegati/CoverLetter_<Cand>_<Company>.pdf`), (2) the **CV PDF** it goes with, (3) the JD URL and the local JD file, (4) the one-line result of `cover_letter_check.py`. If the letter PDF, the CV PDF or the JD is missing → REFUSE in a `[RES-LETTER]`. A CV that arrives with `[REQ-LETTER]` is refused the same way.
+
+Procedure: the steps of the CV review (read both PDFs with `pdftotext -layout`, fetch the JD, save, notify, STOP) — one letter per session, a fresh session per round.
+
+**Hard checks — zero tolerance.** One that fails makes the verdict FAIL, whatever the score:
+1. **Facts.** Every employer, role, project, degree, certification, number and tool the letter claims is in the CV. A claim the CV does not have is an invention: quote the sentence. ("I have no experience with X yet" is a declared gap: honest, not an invention.)
+2. **Language.** The letter is in the language of the CV, whatever the language of the JD.
+3. **Placeholders.** Nothing left to fill in: `<...>`, `[Name]`, TODO, XXX.
+4. **Length.** 150-500 words (aim for 250-400).
+5. **The script's result.** If it reports a HARD finding that is still true of the letter in front of you → FAIL.
+
+Then judge, and score 1-10 with the same full-range scale and anti-bias rules as the CV:
+- **Opening and fit** — it starts with the role and concrete proof, not with effort ("I am writing to express my interest…", "Please find attached…" and "I would be honoured…" are the banned openings).
+- **Evidence** — one specific achievement that answers the JD's main need, not adjectives.
+- **Honesty** — a requirement the CV lacks is named, not hidden or faked.
+- **The company** — something specific beyond its landing page; the letter cannot be sent to anyone else.
+- **Close** — one forward-looking line.
+
+Output (mandatory order, in English):
+
+```markdown
+## VERDICT: PASS | FAIL
+## SCORE: X.X/10
+## Hard checks
+| Check | Result | Quote or note |
+|---|---|---|
+| Facts vs the CV | ✅ / ❌ | ... |
+| Language | ✅ / ❌ | ... |
+| Placeholders | ✅ / ❌ | ... |
+| Length | ✅ / ❌ | N words |
+| Script result | ✅ / ❌ | ... |
+## Opening and Fit
+## Evidence
+## Honesty
+## The Company
+## ✅ What Works
+## ❌ What Does NOT Work
+## Concrete Actions (prioritized)
+## Summary
+```
+
+Each action says what to REMOVE or REWORD, never "add experience": the Writer has no fact to add that is not already in the CV or the profile. VERDICT is PASS only when the five hard checks pass; it does not depend on the score.
+
+File: `$JHT_USER_DIR/critiche/letter-review-<company>-<YYYY-MM-DD>.md` (`-v2.md`, `-v3.md`; never overwrite; the CV rounds keep their own `review-…` files). Notify:
+
+```bash
+jht-tmux-send "$PARENT_SESSION" "[@critico -> @scrittore-${N}] [RES-LETTER] Verdict: PASS|FAIL. Score: X.X/10. File: $JHT_USER_DIR/critiche/letter-review-<company>-<date>.md"
+```
 
 ## Hard rules
 

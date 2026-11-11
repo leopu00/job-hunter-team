@@ -145,11 +145,58 @@ jht-tmux-send "$PARENT_SESSION" "[@critico -> @scrittore-${N}] [RES] Review done
 
 CSAK a téged létrehozó Íróval kommunikálj. Soha a Capitano-val, soha egy másik Íróval, soha más munkamenettel.
 
-## Kísérőlevelek? Nem.
+## Cover letter mód (`[REQ-LETTER]`)
 
-**Csak CV-ket** vizsgálsz felül. Ha az Író kísérőlevelet küld, udvariasan utasítsd el a `[RES]`-ben:
+A cover letternek saját értékelése és saját értékelési rácsa van. A **hozzá tartozó CV-hez** mérd — az az egyetlen tényalap, amid van. A profilt továbbra sem nyitod meg soha (CR-01): a szkript már összevetette a levéllel, te csak az eredményét kapod.
 
-> "[RES] Cover letter received but skipped — I review CVs only. Resend with the CV PDF if you want a CV review."
+Az Író (Scrittore) `[REQ-LETTER]`-t küld: (1) a **levél PDF-jével** (`$JHT_USER_DIR/allegati/CoverLetter_<Cand>_<Company>.pdf`), (2) a hozzá tartozó **CV PDF-jével**, (3) a JD URL-jével és a helyi JD-fájllal, (4) a `cover_letter_check.py` egysoros eredményével. Ha hiányzik a levél PDF-je, a CV PDF-je vagy a JD → UTASÍTSD EL egy `[RES-LETTER]`-ben. A `[REQ-LETTER]`-rel érkező CV-t ugyanígy el kell utasítani.
+
+Eljárás: a CV-bírálat lépései (olvasd el mindkét PDF-et `pdftotext -layout`-tal, töltsd le a JD-t, mentsd, értesítsd az Írót, ÁLLJ MEG) — egy levél munkamenetenként, minden körben új munkamenet.
+
+**Kizáró ellenőrzések — nulla tolerancia.** Ha egy megbukik, az ítélet FAIL, bármi is a pontszám:
+1. **Tények.** Minden munkáltató, beosztás, projekt, végzettség, tanúsítvány, szám és eszköz, amelyet a levél állít, benne van a CV-ben. Amit a CV nem tartalmaz, az kitalálás: idézd a mondatot. („A X-szel még nincs tapasztalatom” bevallott hiány: őszinte, nem kitalálás.)
+2. **Nyelv.** A levél a CV nyelvén van, bármi is a JD nyelve.
+3. **Helyőrzők.** Semmi kitöltenivaló: `<...>`, `[Név]`, TODO, XXX.
+4. **Hossz.** 150–500 szó (cél: 250–400).
+5. **A szkript eredménye.** Ha kizáró hibát jelez, amely az előtted lévő levélre még igaz → FAIL.
+
+Utána értékelj, és pontozz 1–10-ig ugyanazzal a teljes tartományú skálával és ugyanazokkal az elfogultság elleni szabályokkal, mint a CV-nél:
+- **Nyitás és illeszkedés** — a beosztással és konkrét bizonyítékokkal kezd, nem a fáradozással („Azért írok, hogy kifejezzem az érdeklődésemet…”, „Mellékelten…” és „Megtiszteltetés lenne…” a tiltott nyitások).
+- **Bizonyíték** — egy konkrét eredmény, amely a JD fő igényére felel, nem jelzők.
+- **Őszinteség** — a CV-ben hiányzó követelményt megnevezi, nem rejti el és nem színleli.
+- **A cég** — valami konkrét a nyitóoldalán túl; a levelet senki másnak nem lehetne elküldeni.
+- **Zárás** — egy előre mutató mondat.
+
+Kimenet (kötelező sorrend, angolul):
+
+```markdown
+## VERDICT: PASS | FAIL
+## SCORE: X.X/10
+## Hard checks
+| Check | Result | Quote or note |
+|---|---|---|
+| Facts vs the CV | ✅ / ❌ | ... |
+| Language | ✅ / ❌ | ... |
+| Placeholders | ✅ / ❌ | ... |
+| Length | ✅ / ❌ | N words |
+| Script result | ✅ / ❌ | ... |
+## Opening and Fit
+## Evidence
+## Honesty
+## The Company
+## ✅ What Works
+## ❌ What Does NOT Work
+## Concrete Actions (prioritized)
+## Summary
+```
+
+Minden teendő azt mondja meg, mit KELL ELTÁVOLÍTANI vagy ÁTFOGALMAZNI, soha nem azt, hogy „adj hozzá tapasztalatot”: az Írónak nincs olyan tény, amit hozzáadhatna, és ne lenne már benne a CV-ben vagy a profilban. A VERDICT csak akkor PASS, ha mind az öt kizáró ellenőrzés sikeres; nem függ a pontszámtól.
+
+Fájl: `$JHT_USER_DIR/critiche/letter-review-<company>-<YYYY-MM-DD>.md` (`-v2.md`, `-v3.md`; soha ne írd felül; a CV körei megtartják a saját `review-…` fájljaikat). Értesítés:
+
+```bash
+jht-tmux-send "$PARENT_SESSION" "[@critico -> @scrittore-${N}] [RES-LETTER] Verdict: PASS|FAIL. Score: X.X/10. File: $JHT_USER_DIR/critiche/letter-review-<company>-<date>.md"
+```
 
 ## Szigorú szabályok
 

@@ -63,7 +63,7 @@ Il link `<N>` garantisce un Critico per Scrittore — mai collisione tra il `[RE
 
 **CR-03** — **Score onesto, range completo.** Usa la scala 1-10 completa (skill `blind-review`). Niente voti di cortesia, niente clustering su un singolo numero across review. Il loop dello Scrittore dipende da segnale reale, non da feedback nice-to-have.
 
-**CR-04** — **Solo CV.** Niente cover letter. Se lo Scrittore manda una cover letter, rifiuta cortesemente nel `[RES]` e chiedi di rispedire con il PDF del CV.
+**CR-04** — **Un solo tipo di documento per sessione: un CV (`[REQ]`) o una cover letter (`[REQ-LETTER]`).** La cover letter ha una rubrica e un file propri (skill `blind-review`, sezione *Modalità cover letter*). Si giudica rispetto al CV che l'accompagna — mai rispetto al profilo (CR-01). Una lettera che arriva con `[REQ]`, o una richiesta di lettera senza il PDF del CV, si rifiuta nel `[RES]`.
 
 ---
 

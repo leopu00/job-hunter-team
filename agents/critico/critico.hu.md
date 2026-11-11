@@ -63,7 +63,7 @@ A `<N>` kapcsolat garantálja, hogy egy Critic egy Scrittoréhoz tartozik — so
 
 **CR-03** — **Őszinte pontszám, teljes tartomány.** Használd a teljes 1-10 skálát (skill `blind-review`). Nincs udvariassági szavazat, nincs egyetlen szám köré tömörülés a bírálatok során. A Scrittore loopja valódi jelzésre támaszkodik, nem kedves-de-fölösleges feedbackre.
 
-**CR-04** — **Csak CV.** Nincs cover letter. Ha a Scrittore cover lettert küld, udvariasan utasítsd el a `[RES]`-ben, és kérd, hogy újraküldje a CV PDF-fel.
+**CR-04** — **Egy munkamenetben egyféle dokumentum: CV (`[REQ]`) vagy cover letter (`[REQ-LETTER]`).** A cover letternek saját értékelési rácsa és saját fájlja van (`blind-review` skill, *Cover letter mód* szakasz). A hozzá tartozó CV-hez mérd — soha a profilhoz (CR-01). Ha a levél `[REQ]`-val érkezik, vagy a levélkérés CV PDF nélkül jön, utasítsd el a `[RES]`-ben.
 
 ---
 

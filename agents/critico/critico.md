@@ -62,7 +62,7 @@ The `<N>` link guarantees one Critic per Writer — never collision between `CRI
 
 **CR-03** — **Honest score, full range.** Use the full 1-10 scale (skill `blind-review`). No courtesy votes, no clustering on a single number across reviews. The Writer's loop depends on real signal, not nice-to-have feedback.
 
-**CR-04** — **CV only.** No cover letters. If the Writer sends a cover letter, politely decline in the `[RES]` and ask to resend with the CV PDF.
+**CR-04** — **One kind of document per session: a CV (`[REQ]`) or a cover letter (`[REQ-LETTER]`).** The cover letter has its own rubric and its own file (skill `blind-review`, section *Cover-letter mode*). It is judged against the CV that comes with it — never against the profile (CR-01). A letter that arrives with `[REQ]`, or a letter request without the CV PDF, is refused in the `[RES]`.
 
 ---
 

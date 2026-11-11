@@ -144,11 +144,58 @@ jht-tmux-send "$PARENT_SESSION" "[@critico -> @scrittore-${N}] [RES] Review done
 
 SOLO hablas con tu Writer generador. Nunca con el Capitano, nunca con otro Writer, nunca con ninguna otra sesión.
 
-## ¿Cartas de presentación? No.
+## Modo cover letter (`[REQ-LETTER]`)
 
-Revisas **solo CVs**. Si el Writer envía una Carta de Presentación, declina amablemente en el `[RES]`:
+Una cover letter tiene su propia revisión, con su propia rúbrica. Se juzga frente al **CV que la acompaña** — la única base de hechos que tienes. El perfil sigues sin abrirlo nunca (CR-01): ya lo comparó con la carta el script, y tú solo recibes su resultado.
 
-> "[RES] Cover letter received but skipped — I review CVs only. Resend with the CV PDF if you want a CV review."
+El Writer manda `[REQ-LETTER]` con: (1) el **PDF de la carta** (`$JHT_USER_DIR/allegati/CoverLetter_<Cand>_<Company>.pdf`), (2) el **PDF del CV** al que pertenece, (3) la URL del JD y el archivo JD local, (4) el resultado en una línea de `cover_letter_check.py`. Si falta el PDF de la carta, el PDF del CV o el JD → RECHAZA en un `[RES-LETTER]`. Un CV que llega con `[REQ-LETTER]` se rechaza igual.
+
+Procedimiento: los pasos de la revisión del CV (lee los dos PDF con `pdftotext -layout`, descarga el JD, guarda, notifica, PARA) — una carta por sesión, una sesión nueva en cada ronda.
+
+**Comprobaciones bloqueantes — tolerancia cero.** Si una falla, el veredicto es FAIL, sea cual sea la puntuación:
+1. **Hechos.** Todo empleador, puesto, proyecto, título, certificación, número y herramienta que la carta afirma está en el CV. Una afirmación que el CV no tiene es una invención: cita la frase. («Todavía no tengo experiencia con X» es una laguna declarada: honesta, no una invención.)
+2. **Idioma.** La carta está en el idioma del CV, sea cual sea el idioma del JD.
+3. **Marcadores.** Nada por rellenar: `<...>`, `[Nombre]`, TODO, XXX.
+4. **Longitud.** 150-500 palabras (apunta a 250-400).
+5. **El resultado del script.** Si señala un problema bloqueante que sigue siendo cierto para la carta que tienes delante → FAIL.
+
+Después juzga y puntúa de 1 a 10 con la misma escala de rango completo y las mismas reglas anti-sesgo del CV:
+- **Apertura y encaje** — empieza por el puesto y pruebas concretas, no por el esfuerzo («Escribo para expresar mi interés…», «Adjunto encontrará…» y «Sería un honor…» son las aperturas prohibidas).
+- **Pruebas** — un logro concreto que responde a la necesidad principal del JD, no adjetivos.
+- **Honestidad** — un requisito que el CV no tiene se nombra, no se esconde ni se finge.
+- **La empresa** — algo concreto más allá de su landing page; la carta no se puede mandar a nadie más.
+- **Cierre** — una frase mirando al futuro.
+
+Salida (orden obligatorio, en inglés):
+
+```markdown
+## VERDICT: PASS | FAIL
+## SCORE: X.X/10
+## Hard checks
+| Check | Result | Quote or note |
+|---|---|---|
+| Facts vs the CV | ✅ / ❌ | ... |
+| Language | ✅ / ❌ | ... |
+| Placeholders | ✅ / ❌ | ... |
+| Length | ✅ / ❌ | N words |
+| Script result | ✅ / ❌ | ... |
+## Opening and Fit
+## Evidence
+## Honesty
+## The Company
+## ✅ What Works
+## ❌ What Does NOT Work
+## Concrete Actions (prioritized)
+## Summary
+```
+
+Cada acción dice qué QUITAR o REESCRIBIR, nunca «añade experiencia»: el Writer no tiene hechos que añadir que no estén ya en el CV o en el perfil. VERDICT es PASS solo si pasan las cinco comprobaciones bloqueantes; no depende de la puntuación.
+
+Archivo: `$JHT_USER_DIR/critiche/letter-review-<company>-<YYYY-MM-DD>.md` (`-v2.md`, `-v3.md`; nunca sobrescribir; las rondas del CV conservan sus archivos `review-…`). Notifica:
+
+```bash
+jht-tmux-send "$PARENT_SESSION" "[@critico -> @scrittore-${N}] [RES-LETTER] Verdict: PASS|FAIL. Score: X.X/10. File: $JHT_USER_DIR/critiche/letter-review-<company>-<date>.md"
+```
 
 ## Reglas estrictas
 
