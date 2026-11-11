@@ -36,6 +36,8 @@ or the file is truncated.
 implementations and fails when they disagree, because two copies of a security
 rule that drift are worse than one.
 """
+from __future__ import annotations
+
 import argparse
 import base64
 import errno
@@ -74,20 +76,9 @@ def user_root() -> str:
             or DEFAULT_ROOT).rstrip("/") or "/"
 
 
-def roots() -> tuple[str, ...]:
-    base = user_root()
+def roots(base: str | None = None) -> tuple[str, ...]:
+    base = user_root() if base is None else base
     return tuple(base + "/" + name for name in SUBDIRS)
-
-
-def remap(path: str) -> str:
-    """I path nel jobs.db sono scritti dal container (/jht_user/...). Quando la
-    skill gira con un'altra radice — host o test — vanno riportati lì, ma solo
-    riscrivendo il PREFISSO: tutto il resto del path resta l'input non fidato
-    che era, e passa comunque dai controlli sotto."""
-    base = user_root()
-    if base != CONTAINER_ROOT and path.startswith(CONTAINER_ROOT + "/"):
-        return base + path[len(CONTAINER_ROOT):]
-    return path
 
 
 def emit(payload: dict) -> int:
@@ -220,7 +211,7 @@ def _portable_open_beneath(root: str, relative: str) -> int:
     return fd
 
 
-def is_allowed_request(path: str, kind: str) -> bool:
+def is_allowed_request(path: str, kind: str, base: str | None = None) -> bool:
     """Il path è canonico, dentro una radice nota e coerente col tipo
     dichiarato? Nessuna normalizzazione permissiva: traversal, slash doppi,
     spazi ai bordi e separatori Windows sono input non canonico, non modi
@@ -231,7 +222,7 @@ def is_allowed_request(path: str, kind: str) -> bool:
     parts = path.split("/")
     if "." in parts or ".." in parts or "//" in path:
         return False
-    if not any(path.startswith(root + "/") for root in roots()):
+    if not any(path.startswith(root + "/") for root in roots(base)):
         return False
     suffix = EXTS.get(kind, "")
     if not suffix:
@@ -253,12 +244,17 @@ def is_pdf_bytes(data: bytes) -> bool:
 
 def fetch(path: str, kind: str) -> dict:
     requested = path
-    path = remap(path)
-    if not is_allowed_request(path, kind):
+    # Il path si giudica nella forma in cui arriva (quella del container, o già sotto la radice di qui): è la stringa non
+    # fidata, e deve essere canonica così com'è. Solo dopo si sceglie la cartella vera, che su Windows ha lettera di
+    # unità e barre rovesciate e non è mai passata da quei controlli.
+    base = CONTAINER_ROOT if requested.startswith(CONTAINER_ROOT + "/") else user_root()
+    if not is_allowed_request(requested, kind, base):
         return {"ok": False, "error": "invalid document", "path": requested}
-    root = next(r for r in roots() if path.startswith(r + "/"))
+    area = next(name for name in SUBDIRS if requested.startswith(base + "/" + name + "/"))
+    root = os.path.join(user_root(), area)
+    path = requested[len(base) + len(area) + 2:]
     try:
-        fd = _open_beneath(root, path[len(root) + 1:])
+        fd = _open_beneath(root, path)
     except FileNotFoundError:
         return {"ok": False, "error": "file not found", "path": requested}
     except OSError:
