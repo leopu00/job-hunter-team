@@ -327,6 +327,96 @@ services:
     cap_drop:
       - ALL
 
+  # The manual sign-in to LinkedIn (`jht linkedin login`), on request, in three containers of the profile `login` (shared/login/):
+  #   jht-login        the browser (Xvfb, openbox, Chromium, x11vnc) on the profile of the person: NO network at all, a display of its own
+  #                    that nothing else mounts; it reaches the world only through a socket of the egress folder and the view only through
+  #                    a socket of the vnc folder;
+  #   jht-login-proxy  the one way out: a CONNECT proxy on a unix socket that lets through a short list of names on port 443. It has the
+  #                    network and no profile, no display, no port; it sees bytes of TLS, never what is typed;
+  #   jht-login-view   the window onto the browser: the one published port, 127.0.0.1:6081, a token that opens one connection, a session
+  #                    of 15 minutes at most. It forwards bytes: it holds no profile and no network of its own beyond the port.
+  # The two folders of sockets are volumes mounted by two of the three each, never by jht.
+  jht-login:
+    profiles: [login]
+    image: ${JHT_EXTRAS_IMAGE:-jht-extras-unpinned}
+    container_name: jht-login
+    user: "1001:1001"
+    entrypoint: ["/usr/bin/tini", "-g", "--", "python3", "/app/shared/login/login_session.py", "/ipc/vnc/vnc.sock", "/ipc/egress/proxy.sock", "/ipc/vnc/hint", "/linkedin-profile"]
+    network_mode: none
+    environment:
+      - LANG=C.UTF-8
+      - HOME=/tmp
+    volumes:
+      - jht-login-vnc:/ipc/vnc
+      - jht-login-egress:/ipc/egress
+      - ${HOME}/.jht/secrets/linkedin-profile:/linkedin-profile
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777,nosuid
+      # The image declares these two VOLUMEs for jht: masked here with empty folders nobody can write, as for the others.
+      - /jht_home:size=64k,mode=0555
+      - /jht_user:size=64k,mode=0555
+    pids_limit: 512
+    mem_limit: 1536m
+    cpus: 2
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  jht-login-proxy:
+    profiles: [login]
+    image: ${JHT_EXTRAS_IMAGE:-jht-extras-unpinned}
+    container_name: jht-login-proxy
+    user: "1001:1001"
+    entrypoint: ["/usr/bin/tini", "-g", "--", "python3", "/app/shared/login/login_proxy.py", "/ipc/egress/proxy.sock"]
+    environment:
+      - LANG=C.UTF-8
+      - HOME=/tmp
+    volumes:
+      - jht-login-egress:/ipc/egress
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777,noexec,nosuid
+      - /jht_home:size=64k,mode=0555
+      - /jht_user:size=64k,mode=0555
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: 1
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  jht-login-view:
+    profiles: [login]
+    image: ${JHT_EXTRAS_IMAGE:-jht-extras-unpinned}
+    container_name: jht-login-view
+    user: "1001:1001"
+    entrypoint: ["/usr/bin/tini", "-g", "--", "python3", "/app/shared/login/login_view.py", "serve", "/ipc/vnc/vnc.sock", "/ipc/vnc/hint"]
+    environment:
+      - LANG=C.UTF-8
+      - HOME=/tmp
+    ports:
+      - "127.0.0.1:6081:6081"
+    volumes:
+      - jht-login-vnc:/ipc/vnc
+    read_only: true
+    tmpfs:
+      - /tmp:size=4m,mode=1777,noexec,nosuid
+      - /jht_home:size=64k,mode=0555
+      - /jht_user:size=64k,mode=0555
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: 1
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
   # One-shot, off until it is asked for: copies the full Chromium of the extras image into the volume jht-playwright, the marker last
   # (shared/skills/playwright_extras.py). No network, the volume is the only thing it writes.
   jht-playwright-populate:
@@ -370,6 +460,8 @@ volumes:
   jht-media-out:
   jht-playwright:
   jht-x11:
+  jht-login-vnc:
+  jht-login-egress:
 
 # ── Dev mode ────────────────────────────────────────────────────────────
 #

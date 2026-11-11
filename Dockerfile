@@ -475,7 +475,11 @@ RUN useradd --create-home --shell /bin/bash jht \
     # Where the X socket of the live screen is: the sticky world-writable folder X wants, made here so the volume that holds the socket
     # (shared by jht and jht-screen) takes it on first use.
     && mkdir -p /tmp/.X11-unix \
-    && chmod 1777 /tmp/.X11-unix
+    && chmod 1777 /tmp/.X11-unix \
+    # The folders of sockets of the manual sign-in to LinkedIn (each volume takes owner and mode from the one in the image on first use).
+    && mkdir -p /ipc/vnc /ipc/egress \
+    && chown jht:jht /ipc /ipc/vnc /ipc/egress \
+    && chmod 0700 /ipc/vnc /ipc/egress
 
 # Broker of the portal secrets (P1 del 08/10): un secondo container della
 # stessa immagine, con un uid suo. I tre mount point nascono qui con il
