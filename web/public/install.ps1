@@ -864,12 +864,11 @@ function Show-Final {
     Write-Host ""
   }
 
+  # `jht uninstall` stops the team and takes away the machine (with its images), the runtime and the `jht` command; the data stays.
   Write-Host "  To uninstall (keeps the data in ~/.jht and ~/Documents/Job Hunter Team):" -ForegroundColor DarkGray
-  Write-Host "    jht down" -ForegroundColor DarkGray
-  Write-Host "    Remove-Item -Recurse -Force '$RuntimeDir', '$BinDir\jht.ps1', '$BinDir\windows-private-acl.ps1', '$BinDir\jht.cmd'" -ForegroundColor DarkGray
-  Write-Host "    podman image rm $RuntimeImage" -ForegroundColor DarkGray
+  Write-Host "    jht uninstall --confirm" -ForegroundColor DarkGray
   Write-Host "  To delete the data as well (config, db, CVs, output):" -ForegroundColor DarkGray
-  Write-Host "    Remove-Item -Recurse -Force '$JhtHome', '$env:USERPROFILE\Documents\Job Hunter Team'" -ForegroundColor DarkGray
+  Write-Host "    jht uninstall --confirm --purge" -ForegroundColor DarkGray
   Write-Host ""
 }
 
