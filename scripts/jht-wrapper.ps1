@@ -1259,6 +1259,39 @@ finche' non lo chiedi con `add`.
 '@)
 }
 
+# `jht setup --help`: its options, not the generic help of the host. Fixed text: the setup itself runs in the container and a help
+# never starts it. Keep it in step with the options of cli/src/commands/setup.js (a test compares them).
+function Write-SetupHelp {
+  [Console]::Out.WriteLine(@'
+Uso: jht setup [opzioni]
+
+Senza opzioni parte l'installazione guidata. Con --non-interactive non chiede niente:
+tutto si da' con le opzioni.
+
+  --non-interactive            nessuna domanda
+  --provider <nome>            openai (predefinito), glm (Z.ai) o kimi (Moonshot)
+  --harness <nome>             codex (predefinito) o pi; glm e kimi vanno solo con pi
+  --auth-method <metodo>       api_key (predefinito) o subscription
+  --api-key-file <percorso>    file che contiene la chiave API (una riga, leggibile solo da te).
+                               Un file del tuo computer lo legge jht e lo passa al setup: con glm e kimi
+                               il setup tiene la chiave per conto suo, mai nella configurazione
+  --api-key-stdin              legge la chiave API dallo standard input (una riga): mai sulla riga di comando
+  --api-key <chiave>           la chiave scritta qui, in chiaro (non ammessa per glm e kimi)
+  --secret-mode <modo>         come si salva la chiave: plaintext (predefinito), env o file
+  --secret-env <nome>          con --secret-mode env: la variabile d'ambiente che la contiene
+  --secret-file <percorso>     con --secret-mode file: il file che la contiene
+  --subscription-email <email> con --auth-method subscription: l'email dell'account
+  --subscription-token <token> con --auth-method subscription: il token
+  --model <modello>            il modello da usare
+  --language <codice>          la lingua (per esempio it o en)
+  --skip-health                salta il controllo finale
+  --reset                      riparte da una configurazione pulita
+
+Esempio, con una chiave GLM in un file:
+  jht setup --non-interactive --provider glm --harness pi --api-key-file chiave.txt
+'@)
+}
+
 function Test-HostCommandUsesLocalHelp {
   param([string]$Command)
   return $Command -in @(
@@ -4073,6 +4106,10 @@ $HelpRequested = @($Rest | Where-Object { $_ -in @('-h', '--help') }).Count -gt 
 if ($HelpRequested -and $Sub -notin @('game', 'gui', 'agent-control', 'desktop-apply')) {
   if ($Sub -ceq 'integration' -and $Rest.Count -eq 1) {
     Write-IntegrationHelp
+    exit 0
+  }
+  if ($Sub -ceq 'setup') {
+    Write-SetupHelp
     exit 0
   }
   if (Test-HostCommandUsesLocalHelp $Sub) {
