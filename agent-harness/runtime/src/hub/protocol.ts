@@ -58,7 +58,12 @@ export const EmptyRequest = z.object({}).strict();
  * own uid. The model gives the text and the position; the path is the hub's.
  */
 export const ReviewRequest = z
-  .object({ position_id: z.number().int().positive(), text: z.string().min(1).max(40_000) })
+  .object({
+    position_id: z.number().int().positive(),
+    text: z.string().min(1).max(40_000),
+    // A cover letter's review is saved under its own name, never as a round of the CV.
+    kind: z.enum(["cv", "cover_letter"]).default("cv"),
+  })
   .strict();
 
 export const UserWriteRequest = z

@@ -28,7 +28,7 @@ import type { ToolExecution, ToolHandler } from "../tools/registry.ts";
 export interface BlindReviewOptions {
   /** The person's profile, which this role does not read. */
   profileDir: string;
-  /** The deliverables folder: what comes out of `cv/` is fenced. */
+  /** The deliverables folder: what comes out of `cv/` and `allegati/` (the CV, the cover letter) is fenced. */
   userDir: string;
   /** The folder relative paths resolve against, as the file tools resolve them. */
   workdir: string;
@@ -45,7 +45,8 @@ const inside = (path: string, root: string) => path === root || path.startsWith(
 /** The file tools as the CRITICO gets them: no profile, and the document under review fenced. */
 export function blindReviewTools(tools: ToolHandler[], options: BlindReviewOptions): ToolHandler[] {
   const profile = realPath(options.profileDir);
-  const cv = join(realPath(options.userDir), "cv");
+  // The CV is under review, and so is the cover letter (`allegati/`): both reach the Critic written by another agent.
+  const documents = ["cv", "allegati"].map((folder) => join(realPath(options.userDir), folder));
   const at = (path: string) => realPath(resolveUserPath(path, options.workdir));
   // What comes back holding the document's own words: `glob` returns names, not content.
   const fenced = new Set(["read_file", "grep"]);
@@ -65,7 +66,7 @@ export function blindReviewTools(tools: ToolHandler[], options: BlindReviewOptio
         }
         const result = (await tool.execute(args, context)) as ToolExecution;
         // A grep is fenced when it can reach the deliverables at all, from inside or from above.
-        const reachesCv = target !== undefined && (inside(target, cv) || inside(cv, target));
+        const reachesCv = target !== undefined && documents.some((folder) => inside(target, folder) || inside(folder, target));
         if (!result.ok || !fenced.has(tool.spec.name) || !reachesCv) return result;
         const fence = new Fence(options.nonce?.());
         return { ...result, content: fence.block(result.content, "DOCUMENT_UNDER_REVIEW") };

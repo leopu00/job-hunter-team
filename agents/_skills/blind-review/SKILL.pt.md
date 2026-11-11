@@ -144,11 +144,58 @@ jht-tmux-send "$PARENT_SESSION" "[@critico -> @scrittore-${N}] [RES] Review done
 
 Você APENAS fala com o seu Scrittore gerador. Nunca o Capitano, nunca outro Scrittore, nunca qualquer outra sessão.
 
-## Cartas de apresentação? Não.
+## Modo cover letter (`[REQ-LETTER]`)
 
-Você revisa **apenas CVs**. Se o Scrittore enviar uma Carta de Apresentação, decline educadamente no `[RES]`:
+Uma cover letter tem a sua própria revisão, com a sua própria grelha. É avaliada em relação ao **CV que a acompanha** — a única base de factos que tens. O perfil continuas a nunca o abrir (CR-01): já o comparou com a carta o script, e tu só recebes o resultado.
 
-> "[RES] Cover letter received but skipped — I review CVs only. Resend with the CV PDF if you want a CV review."
+O Scrittore envia `[REQ-LETTER]` com: (1) o **PDF da carta** (`$JHT_USER_DIR/allegati/CoverLetter_<Cand>_<Company>.pdf`), (2) o **PDF do CV** a que pertence, (3) o URL do JD e o ficheiro JD local, (4) o resultado numa linha de `cover_letter_check.py`. Se faltar o PDF da carta, o PDF do CV ou o JD → RECUSA num `[RES-LETTER]`. Um CV que chega com `[REQ-LETTER]` é recusado da mesma forma.
+
+Procedimento: os passos da revisão do CV (lê os dois PDF com `pdftotext -layout`, obtém o JD, guarda, notifica, PARA) — uma carta por sessão, uma sessão nova em cada ronda.
+
+**Verificações bloqueantes — tolerância zero.** Se uma falhar, o veredicto é FAIL, qualquer que seja a pontuação:
+1. **Factos.** Todo empregador, cargo, projeto, grau, certificação, número e ferramenta que a carta afirma está no CV. Uma afirmação que o CV não tem é uma invenção: cita a frase. («Ainda não tenho experiência com X» é uma lacuna declarada: honesta, não uma invenção.)
+2. **Idioma.** A carta está no idioma do CV, seja qual for o idioma do JD.
+3. **Marcadores.** Nada por preencher: `<...>`, `[Nome]`, TODO, XXX.
+4. **Comprimento.** 150-500 palavras (aponta a 250-400).
+5. **O resultado do script.** Se assinala um problema bloqueante que continua a valer para a carta que tens à frente → FAIL.
+
+Depois avalia e pontua de 1 a 10 com a mesma escala de gama completa e as mesmas regras anti-viés do CV:
+- **Abertura e adequação** — começa pelo cargo e por provas concretas, não pelo esforço («Escrevo para expressar o meu interesse…», «Por favor encontre em anexo…» e «Teria a honra…» são as aberturas proibidas).
+- **Provas** — uma realização concreta que responde à necessidade principal do JD, não adjetivos.
+- **Honestidade** — um requisito que o CV não tem é nomeado, não escondido nem fingido.
+- **A empresa** — algo concreto para além da landing page; a carta não se pode enviar a mais ninguém.
+- **Fecho** — uma frase virada para o futuro.
+
+Saída (ordem obrigatória, em inglês):
+
+```markdown
+## VERDICT: PASS | FAIL
+## SCORE: X.X/10
+## Hard checks
+| Check | Result | Quote or note |
+|---|---|---|
+| Facts vs the CV | ✅ / ❌ | ... |
+| Language | ✅ / ❌ | ... |
+| Placeholders | ✅ / ❌ | ... |
+| Length | ✅ / ❌ | N words |
+| Script result | ✅ / ❌ | ... |
+## Opening and Fit
+## Evidence
+## Honesty
+## The Company
+## ✅ What Works
+## ❌ What Does NOT Work
+## Concrete Actions (prioritized)
+## Summary
+```
+
+Cada ação diz o que RETIRAR ou REESCREVER, nunca «acrescenta experiência»: o Scrittore não tem factos para acrescentar que não estejam já no CV ou no perfil. VERDICT é PASS só se as cinco verificações bloqueantes passarem; não depende da pontuação.
+
+Ficheiro: `$JHT_USER_DIR/critiche/letter-review-<company>-<YYYY-MM-DD>.md` (`-v2.md`, `-v3.md`; nunca sobrescrever; as rondas do CV mantêm os seus ficheiros `review-…`). Notifica:
+
+```bash
+jht-tmux-send "$PARENT_SESSION" "[@critico -> @scrittore-${N}] [RES-LETTER] Verdict: PASS|FAIL. Score: X.X/10. File: $JHT_USER_DIR/critiche/letter-review-<company>-<date>.md"
+```
 
 ## Regras rígidas
 
