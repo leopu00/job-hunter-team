@@ -28,6 +28,7 @@ export default {
   "observation.blocked_key_fix": "Give it the right key: jht setup --non-interactive --provider {name} --harness pi --api-key-file <file> (or pipe the key in with --api-key-stdin), then restart the team: jht team stop, jht team start.",
   "observation.blocked_login": "{id} is blocked: {provider} refused the login (expired or revoked).",
   "observation.blocked_login_fix": "Sign in again with: jht setup",
+  "observation.chat_blocked_see": "Nobody will answer until that is fixed. What every agent is doing: jht agents.",
   "observation.the_provider": "the provider",
   "observation.blocked_limit": "{id} is blocked: the usage limit of the provider was reached; it goes on when the limit is lifted.",
   "observation.blocked_network": "{id} is blocked: the provider could not be reached (network or proxy). Check the connection.",
