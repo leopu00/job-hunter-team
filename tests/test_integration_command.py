@@ -32,6 +32,8 @@ case "$1 $2" in
   "volume ls") cat "$FAKE_VOLUMES" 2>/dev/null; exit 0 ;;
   "volume rm") grep -vx "$3" "$FAKE_VOLUMES" > "$FAKE_VOLUMES.new"; mv "$FAKE_VOLUMES.new" "$FAKE_VOLUMES"; exit 0 ;;
   "info "*) exit "${FAKE_INFO_RC:-0}" ;;
+  "image inspect") [ -z "${FAKE_IMAGE_ABSENT:-}" ] || exit 1; echo "${FAKE_IMAGE_SIZE:-}"; exit 0 ;;
+  "rmi "*) exit "${FAKE_RMI_RC:-0}" ;;
 esac
 if [ "$1" = exec ]; then
   [ -z "$FAKE_EXEC_FAIL" ] || { echo "No matching distribution found for gspread"; exit 1; }

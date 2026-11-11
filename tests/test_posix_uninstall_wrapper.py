@@ -523,6 +523,21 @@ def test_docker_runtime_removes_the_core_and_the_full_image_with_the_old_ones_an
     assert_user_data_kept(box)
 
 
+def test_the_image_of_the_tools_downloaded_on_request_goes_with_the_uninstall_it_is_not_taken_away_by_screen_off(tmp_path: Path) -> None:
+    # `jht screen off` leaves the extras image on the disk (it is taken with `--remove-image`); the uninstall is the other way it goes. It is
+    # pulled by digest, so the engine lists it with the repository of the others and no tag: it goes by its ID, with the others.
+    box = Box(tmp_path, "Linux")
+    box.select("docker")
+    extras_id = "e7" * 32
+    box.images(*JHT_IMAGES, f"{extras_id} ghcr.io/leopu00/jht <none>", *NOT_OURS)
+
+    result = box.run("uninstall", "--confirm")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert sorted(images_removed(box)) == sorted([CORE_REF, FULL_REF, OLD_REF, extras_id])
+    assert box.remaining("images").splitlines() == list(NOT_OURS)
+
+
 def test_an_image_that_also_has_a_name_that_is_not_jhts_is_kept(tmp_path: Path) -> None:
     box = Box(tmp_path, "Linux")
     box.select("docker")

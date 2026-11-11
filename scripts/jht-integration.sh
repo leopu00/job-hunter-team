@@ -305,7 +305,35 @@ integration_volumes_of() {
   esac
 }
 
-integration_do_remove() { # id purge → 0 done · 1 failed
+# The extras image (the browser, the screen, the media tools) stays on the disk when a tool made of it is switched off: it was downloaded when the
+# person asked for the tool, and the next `on` finds it instead of downloading it again. It goes with `--remove-image`, or with the uninstall.
+# What the engine reports as the size of the image is the whole of it, and a part is shared with the core image: «fino a».
+integration_extras_after_off() { # tool remove_image → appends to INTEGRATION_WHY · 0 done · 1 the engine does not take the image away
+  local tool="$1" remove_image="$2" ref bytes mb="" other="" command
+  ref="$(integration_extras_ref)"
+  [ -n "$ref" ] || return 0
+  bytes="$(docker image inspect --format '{{.Size}}' "$ref" 2>/dev/null)" || return 0   # the image is not there: nothing to say
+  [[ "$bytes" =~ ^[0-9]+$ ]] && mb=" (fino a $((bytes / 1000000)) MB)"
+  if [ "$remove_image" = 1 ]; then
+    for command in linkedin-login media screen; do
+      [ "$command" != "$tool" ] || continue
+      if integration_marker_read "$command" ok >/dev/null; then other="$command"; break; fi
+    done
+    if [ -n "$other" ]; then
+      INTEGRATION_WHY="$INTEGRATION_WHY; l'immagine degli strumenti$mb non e' tolta: la usa ancora $other"
+    elif docker rmi "$ref" >/dev/null 2>&1; then
+      INTEGRATION_WHY="$INTEGRATION_WHY; immagine degli strumenti tolta$mb"
+    else
+      INTEGRATION_WHY="container tolto, ma il motore non toglie l'immagine degli strumenti$mb: la usa ancora qualcosa"
+      return 1
+    fi
+    return 0
+  fi
+  if [ "$tool" = screen ]; then command="jht screen off --remove-image"; else command="jht integration remove $tool --remove-image"; fi
+  INTEGRATION_WHY="$INTEGRATION_WHY; l'immagine degli strumenti$mb resta sul disco per riaccenderlo senza riscaricarla: per liberare lo spazio, $command"
+}
+
+integration_do_remove() { # id purge remove_image → 0 done · 1 failed
   local volume rc id ref
   INTEGRATION_WHY=""
   case "$1" in
@@ -324,11 +352,6 @@ integration_do_remove() { # id purge → 0 done · 1 failed
         && COMPOSE_PROFILES=media compose rm -f "$MEDIA_SERVICE" >/dev/null 2>&1 \
         || { INTEGRATION_WHY="il container dei media non si ferma"; return 1; }
       integration_marker_clear media ok
-      # The image goes with it unless another tool of the extras image is still added (jht-login, jht-screen, when they exist).
-      ref="$(integration_extras_ref)"
-      if [ -n "$ref" ] && ! integration_marker_read linkedin-login ok >/dev/null && ! integration_marker_read screen ok >/dev/null; then
-        docker rmi "$ref" >/dev/null 2>&1 || true
-      fi
       ;;
     linkedin-login)
       linkedin_remove_all || { INTEGRATION_WHY="i container dell'accesso a LinkedIn non si fermano"; return 1; }
@@ -338,10 +361,6 @@ integration_do_remove() { # id purge → 0 done · 1 failed
         && COMPOSE_PROFILES=screen compose rm -f "$SCREEN_SERVICE" >/dev/null 2>&1 \
         || { INTEGRATION_WHY="il container dello schermo non si ferma"; return 1; }
       integration_marker_clear screen ok
-      ref="$(integration_extras_ref)"
-      if [ -n "$ref" ] && ! integration_marker_read linkedin-login ok >/dev/null && ! integration_marker_read media ok >/dev/null; then
-        docker rmi "$ref" >/dev/null 2>&1 || true
-      fi
       ;;
     mail)
       # An older compose still starts the broker with `jht up`: removing it there would only be undone by the next start.
@@ -363,9 +382,9 @@ integration_do_remove() { # id purge → 0 done · 1 failed
       }
     done
     if [ "$1" = screen ]; then
-      INTEGRATION_WHY="container e immagine tolti; la cartella del display condivisa con jht e' stata cancellata"
+      INTEGRATION_WHY="container tolto; la cartella del display condivisa con jht e' stata cancellata"
     elif [ "$1" = media ]; then
-      INTEGRATION_WHY="container e immagine tolti; le due cartelle di scambio con jht restano (sono di jht e non contengono i tuoi file)"
+      INTEGRATION_WHY="container tolto; le due cartelle di scambio con jht restano (sono di jht e non contengono i tuoi file)"
     elif [ "$1" = mail ]; then
       INTEGRATION_WHY="container e stato del broker cancellati; la password della posta e le credenziali dei portali restano nel volume dei segreti (jht reset --scope creds)"
     else
@@ -378,17 +397,18 @@ integration_do_remove() { # id purge → 0 done · 1 failed
   else
     INTEGRATION_WHY="container tolto; i dati restano (per cancellarli: --purge --yes)"
   fi
+  case "$1" in screen|media) integration_extras_after_off "$1" "${3:-0}" || return $? ;; esac
   return 0
 }
 
 # add|remove, with the run marked as in progress and the outcome left for the next status.
-integration_change() { # action id json purge
-  local action="$1" id="$2" json="$3" purge="$4" rc=0
+integration_change() { # action id json purge remove_image
+  local action="$1" id="$2" json="$3" purge="$4" remove_image="${5:-0}" rc=0
   if integration_not_yet "$id"; then integration_result "$json" "$id" 3 "non disponibile ancora"; return $?; fi
   integration_dir_ready || { integration_result "$json" "$id" 1 "cartella dei marcatori non sicura"; return $?; }
   integration_marker_write "$id" pending "$$" || { integration_result "$json" "$id" 1 "marcatore non scritto"; return $?; }
   integration_marker_clear "$id" error
-  if [ "$action" = add ]; then integration_do_add "$id" || rc=$?; else integration_do_remove "$id" "$purge" || rc=$?; fi
+  if [ "$action" = add ]; then integration_do_add "$id" || rc=$?; else integration_do_remove "$id" "$purge" "$remove_image" || rc=$?; fi
   integration_marker_clear "$id" pending
   [ "$rc" -eq 0 ] || { [ "$rc" -eq 3 ] || integration_marker_write "$id" error "$INTEGRATION_WHY" || true; }
   integration_result "$json" "$id" "$rc" "$INTEGRATION_WHY"
@@ -396,13 +416,13 @@ integration_change() { # action id json purge
 
 # ── Entry point ───────────────────────────────────────────────────────────
 integration_usage() {
-  err "uso: jht integration list [--json] | status [<id>] [--json] | add <id> [--json] | remove <id> [--purge --yes] [--json]"
+  err "uso: jht integration list [--json] | status [<id>] [--json] | add <id> [--json] | remove <id> [--purge --yes] [--remove-image] [--json]"
   err "id: $INTEGRATION_IDS"
   return 2
 }
 
 integration_main() {
-  local action="${1:-}" id="" json=0 purge=0 yes=0 arg
+  local action="${1:-}" id="" json=0 purge=0 yes=0 remove_image=0 arg
   [ "$#" -gt 0 ] && shift
   case "$action" in list|status|add|remove) ;; *) integration_usage; return $? ;; esac
   for arg in "$@"; do
@@ -410,6 +430,7 @@ integration_main() {
       --json) json=1 ;;
       --purge) [ "$action" = remove ] || { integration_usage; return $?; }; purge=1 ;;
       --yes) [ "$action" = remove ] || { integration_usage; return $?; }; yes=1 ;;
+      --remove-image) [ "$action" = remove ] || { integration_usage; return $?; }; remove_image=1 ;;
       -*) integration_usage; return $? ;;
       *) [ -z "$id" ] || { integration_usage; return $?; }; id="$arg" ;;
     esac
@@ -417,6 +438,7 @@ integration_main() {
   if [ "$action" = list ] && [ -n "$id" ]; then integration_usage; return $?; fi
   if [ "$action" != list ] && [ "$action" != status ] && [ -z "$id" ]; then integration_usage; return $?; fi
   if [ -n "$id" ] && ! integration_id_valid "$id"; then err "integrazione sconosciuta. id ammessi: $INTEGRATION_IDS"; return 2; fi
+  if [ "$remove_image" = 1 ] && [ "$id" != screen ] && [ "$id" != media ]; then err "--remove-image vale per screen e media: sono i due che si fanno con l'immagine degli strumenti"; return 2; fi
   if [ "$purge" = 1 ] && [ "$yes" = 0 ]; then err "--purge cancella i dati dell'integrazione: serve anche --yes"; return 2; fi
   [ "$yes" = 0 ] || [ "$purge" = 1 ] || { integration_usage; return $?; }
 
@@ -427,7 +449,7 @@ integration_main() {
       ;;
     add|remove)
       integration_not_yet "$id" || require_docker
-      integration_change "$action" "$id" "$json" "$purge"
+      integration_change "$action" "$id" "$json" "$purge" "$remove_image"
       ;;
   esac
 }

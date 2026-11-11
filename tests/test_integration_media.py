@@ -95,24 +95,34 @@ def test_a_failed_pull_or_start_is_an_error_with_a_reason_and_no_marker(host):
     assert not list((host.runtime / "integrations").glob("media.ok"))
 
 
-def test_remove_takes_the_container_and_the_image_but_not_the_folders_of_jht(host):
+def test_remove_takes_the_container_but_neither_the_image_nor_the_folders_of_jht(host):
     add(host)
-    done = run(host, "remove media --purge --yes --json", EXTRAS_IMAGE_DIGEST=DIGEST)
+    done = run(host, "remove media --purge --yes --json", EXTRAS_IMAGE_DIGEST=DIGEST, FAKE_IMAGE_SIZE="3084123456")
     assert done.returncode == 0, done.stderr
     log = host.log.read_text().splitlines()
     assert "COMPOSE profiles=media image= stop jht-media" in log and "COMPOSE profiles=media image= rm -f jht-media" in log
-    assert f"DOCKER rmi {REF}" in log
+    assert not any(line.startswith("DOCKER rmi") for line in log)
     assert not any(line.startswith("DOCKER volume rm") for line in log), "the two folders belong to jht: never removed by this"
-    assert "restano" in json.loads(done.stdout)["reason"]
+    reason = json.loads(done.stdout)["reason"]
+    assert "restano" in reason and "3084 MB" in reason and "jht integration remove media --remove-image" in reason
 
 
-def test_remove_keeps_the_image_while_another_tool_of_it_is_still_added(host):
+def test_remove_image_takes_the_image_of_the_media_tools_away(host):
+    add(host)
+    done = run(host, "remove media --remove-image --json", EXTRAS_IMAGE_DIGEST=DIGEST, FAKE_IMAGE_SIZE="3084123456")
+    assert done.returncode == 0, done.stderr
+    assert f"DOCKER rmi {REF}" in host.log.read_text().splitlines()
+    assert "immagine degli strumenti tolta (fino a 3084 MB)" in json.loads(done.stdout)["reason"]
+
+
+def test_remove_image_keeps_the_image_while_another_tool_of_it_is_still_added(host):
     add(host)
     integ = host.runtime / "integrations"
     (integ / "screen.ok").write_text("ok\n")
     (integ / "screen.ok").chmod(0o600)
-    run(host, "remove media --json", EXTRAS_IMAGE_DIGEST=DIGEST)
+    done = run(host, "remove media --remove-image --json", EXTRAS_IMAGE_DIGEST=DIGEST)
     assert not any(line.startswith("DOCKER rmi") for line in host.log.read_text().splitlines())
+    assert "la usa ancora screen" in json.loads(done.stdout)["reason"]
 
 
 def test_the_library_never_builds_the_image_name_from_what_the_person_typed():

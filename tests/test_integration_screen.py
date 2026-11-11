@@ -98,28 +98,83 @@ def test_a_screen_that_does_not_start_is_an_error_with_a_reason_and_no_marker(ho
     assert not list((host.runtime / "integrations").glob("screen.ok"))
 
 
-def test_remove_takes_the_container_and_the_image_and_purge_the_shared_display_folder(host):
+def test_remove_takes_the_container_and_purge_the_shared_display_folder_but_the_image_stays(host):
     add(host)
     done = run(host, "remove screen --purge --yes --json", EXTRAS_IMAGE_DIGEST=DIGEST)
     assert done.returncode == 0, done.stderr
     log = host.log.read_text().splitlines()
     assert "COMPOSE profiles=screen image= digest= stop jht-screen" in log and "COMPOSE profiles=screen image= digest= rm -f jht-screen" in log
+    assert not any(line.startswith("DOCKER rmi") for line in log)
+
+
+def test_off_keeps_the_extras_image_and_says_its_weight_and_the_command_that_frees_the_space(host):
+    add(host)
+    done = run(host, "remove screen --json", EXTRAS_IMAGE_DIGEST=DIGEST, FAKE_IMAGE_SIZE="3084123456")
+    assert done.returncode == 0, done.stderr
+    assert not any(line.startswith("DOCKER rmi") for line in host.log.read_text().splitlines())
+    reason = json.loads(done.stdout)["reason"]
+    assert "3084 MB" in reason and "resta sul disco" in reason and "jht screen off --remove-image" in reason
+    assert reason.startswith("schermo spento e container tolto")
+
+
+def test_off_without_a_size_from_the_engine_still_says_the_image_stays_and_does_not_invent_a_number(host):
+    add(host)
+    reason = json.loads(run(host, "remove screen --json", EXTRAS_IMAGE_DIGEST=DIGEST).stdout)["reason"]
+    assert "resta sul disco" in reason and "MB" not in reason
+
+
+def test_off_with_no_image_on_the_disk_says_nothing_about_it(host):
+    add(host)
+    reason = json.loads(run(host, "remove screen --json", EXTRAS_IMAGE_DIGEST=DIGEST, FAKE_IMAGE_ABSENT="1").stdout)["reason"]
+    assert reason == "schermo spento e container tolto"
+
+
+def test_the_next_on_after_an_off_finds_the_image_and_starts_again(host):
+    add(host)
+    run(host, "remove screen --json", EXTRAS_IMAGE_DIGEST=DIGEST)
+    done = add(host)
+    assert done.returncode == 0 and json.loads(done.stdout)["state"] == "running"
+
+
+def test_off_with_remove_image_takes_the_image_away_and_says_what_was_freed(host):
+    add(host)
+    done = run(host, "remove screen --remove-image --json", EXTRAS_IMAGE_DIGEST=DIGEST, FAKE_IMAGE_SIZE="3084123456")
+    assert done.returncode == 0, done.stderr
+    log = host.log.read_text().splitlines()
     assert f"DOCKER rmi {REF}" in log
+    assert log.index("COMPOSE profiles=screen image= digest= rm -f jht-screen") < log.index(f"DOCKER rmi {REF}")
+    assert "immagine degli strumenti tolta (fino a 3084 MB)" in json.loads(done.stdout)["reason"]
+
+
+def test_remove_image_keeps_the_image_while_another_tool_of_it_is_still_added_and_says_which(host):
+    add(host)
+    integ = host.runtime / "integrations"
+    (integ / "media.ok").write_text("ok\n")
+    (integ / "media.ok").chmod(0o600)
+    done = run(host, "remove screen --remove-image --json", EXTRAS_IMAGE_DIGEST=DIGEST)
+    assert done.returncode == 0, done.stderr
+    assert not any(line.startswith("DOCKER rmi") for line in host.log.read_text().splitlines())
+    assert "non e' tolta: la usa ancora media" in json.loads(done.stdout)["reason"]
+
+
+def test_remove_image_that_the_engine_refuses_is_an_error_with_a_reason(host):
+    add(host)
+    done = run(host, "remove screen --remove-image --json", EXTRAS_IMAGE_DIGEST=DIGEST, FAKE_RMI_RC="1")
+    assert done.returncode == 1
+    assert "non toglie l'immagine" in json.loads(done.stdout)["reason"]
+
+
+@pytest.mark.parametrize("args", ["add screen --remove-image", "status screen --remove-image", "remove telegram --remove-image",
+                                   "remove google --remove-image"])
+def test_remove_image_is_only_for_remove_of_screen_or_media(host, args):
+    done = run(host, args, EXTRAS_IMAGE_DIGEST=DIGEST)
+    assert done.returncode == 2 and not any(line.startswith("DOCKER rmi") for line in host.log.read_text().splitlines())
 
 
 def test_remove_without_purge_leaves_the_volumes_alone(host):
     add(host)
     run(host, "remove screen --json", EXTRAS_IMAGE_DIGEST=DIGEST)
     assert not any(line.startswith("DOCKER volume rm") for line in host.log.read_text().splitlines())
-
-
-def test_remove_keeps_the_image_while_another_tool_of_it_is_still_added(host):
-    add(host)
-    integ = host.runtime / "integrations"
-    (integ / "media.ok").write_text("ok\n")
-    (integ / "media.ok").chmod(0o600)
-    run(host, "remove screen --json", EXTRAS_IMAGE_DIGEST=DIGEST)
-    assert not any(line.startswith("DOCKER rmi") for line in host.log.read_text().splitlines())
 
 
 @pytest.mark.parametrize("digest", ["sha256:xyz", "$(touch HIT)", "sha256:e;touch HIT", "sha256:" + "e" * 64 + " --privileged"])
