@@ -69,6 +69,26 @@ test('a model given now replaces the one chosen before; a plaintext key or a sub
   assert.ok(entry.api_key_ref);
 });
 
+test('a config that says moonshot is the team of kimi: kept, and the entry moves to the name the setup writes', async () => {
+  put({
+    version: 1,
+    active_provider: 'moonshot',
+    providers: { moonshot: { name: 'moonshot', auth_method: 'api_key', model: 'kimi-chosen-before', api_key: 'old-plaintext' }, glm: { name: 'glm', auth_method: 'api_key', model: 'glm-other', api_key_ref: { type: 'ref', source: 'env', id: 'ZAI_API_KEY' } } },
+    channels: TELEGRAM,
+    harness: 'pi',
+  });
+  const { code, text } = await setup({ provider: 'kimi' });
+  assert.equal(code, 0, text);
+  const saved = read();
+  assert.equal(saved.active_provider, 'kimi');
+  assert.deepEqual(saved.channels, TELEGRAM);
+  assert.equal(saved.providers.kimi.model, 'kimi-chosen-before');
+  assert.equal(saved.providers.kimi.api_key, undefined);
+  assert.equal(saved.providers.moonshot, undefined, 'no entry left under the old name');
+  assert.equal(saved.providers.glm.model, 'glm-other', 'the other providers keep their entries');
+  assert.equal(sameTeamConfig({ active_provider: 'kimi', harness: 'pi', providers: { kimi: {} } }, 'moonshot', 'pi'), null, 'the setup names kimi');
+});
+
 test('another provider or another harness starts a new config, as before', async () => {
   put(before());
   const other = await setup({ provider: 'kimi' });
