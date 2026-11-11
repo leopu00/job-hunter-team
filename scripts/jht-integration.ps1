@@ -189,6 +189,74 @@ function Invoke-IntegrationComposeQuiet {
   return [int]$code
 }
 
+# ---- the engine, when `up` of a tool fails ----
+# On Windows the engine is a Podman machine reached through a connection. A first `up` of a tool that failed with «get machine connection URI:
+# could not find a matching machine for connection ssh://…» (the next tries worked) left nothing to understand it by. The state is written
+# to the runtime log of the desktop (the same file the machine start writes to): the connection this run uses, the connections and the
+# machines Podman lists (names, ports and running state only: no identity file, no key), and which variables name a host. The `up` is
+# idempotent, so it is tried once more after a few seconds; a second failure says where the state is.
+$IntegrationRetryWaitSeconds = 5
+
+function Get-IntegrationRuntimeLogPath {
+  if ($script:IntegrationRuntimeLogPath) { return [string]$script:IntegrationRuntimeLogPath }
+  return (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'ai.jobhunterteam.desktop\logs\runtime.log')
+}
+
+function Get-IntegrationEngineState {
+  $lines = New-Object System.Collections.Generic.List[string]
+  $lines.Add("connection_used=$($env:CONTAINER_CONNECTION)")
+  $lines.Add("host_variables=CONTAINER_HOST:$([bool]$env:CONTAINER_HOST) DOCKER_HOST:$([bool]$env:DOCKER_HOST)")
+  # The program itself, never an alias or a function of the person's profile (the wrapper runs with it loaded): found as an application,
+  # and called by the name with its extension, which no alias or function of a profile takes.
+  $podman = Get-Command podman.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $podman) { $lines.Add('podman=not found'); return $lines.ToArray() }
+  $queries = @(
+    @('connections', @('system', 'connection', 'list', '--format', '{{.Name}} {{.URI}} default={{.Default}}')),
+    @('machines', @('machine', 'list', '--format', '{{.Name}} running={{.Running}} starting={{.Starting}} port={{.Port}} lastup={{.LastUp}}'))
+  )
+  foreach ($query in $queries) {
+    $lines.Add("$($query[0]):")
+    $podmanArguments = [string[]]$query[1]
+    $out = @(& { $ErrorActionPreference = 'Continue'; & podman.exe @podmanArguments 2>&1 })
+    $lines.Add("  exit=$LASTEXITCODE")
+    $rows = @($out | ForEach-Object { ([string]$_).Trim() })
+    # The connections of the person to other hosts are not ours to write down: this runtime's own, and the ones on this computer.
+    if ($query[0] -ceq 'connections') { $rows = @($rows | Where-Object { $_.StartsWith("$($env:CONTAINER_CONNECTION) ") -or $_ -match '@(127\.0\.0\.1|localhost)[:/]' }) }
+    foreach ($row in @($rows | Select-Object -First 20)) { $lines.Add('  ' + $row.Substring(0, [Math]::Min(300, $row.Length))) }
+  }
+  return $lines.ToArray()
+}
+
+function Write-IntegrationEngineLog {
+  param([string]$Tool, [string]$Code, [int]$ExitCode, [string[]]$Lines = @())
+  try {
+    $path = Get-IntegrationRuntimeLogPath
+    $directory = Split-Path -LiteralPath $path
+    [void][IO.Directory]::CreateDirectory($directory)
+    foreach ($node in @($directory, $path)) {
+      if ((Test-Path -LiteralPath $node) -and (((Get-Item -LiteralPath $node -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) { return }
+    }
+    $text = "=== $([DateTime]::UtcNow.ToString('o')) integration_engine_${Code}: tool=$Tool exit=$ExitCode`n"
+    foreach ($line in $Lines) { $text += "    $line`n" }
+    [IO.File]::AppendAllText($path, $text, [Text.UTF8Encoding]::new($false))
+  } catch { }
+}
+
+# One `up` of a tool, once more after a failure when the engine is a Podman machine. Returns the exit code of the last try.
+function Invoke-IntegrationUpStep {
+  param([string]$Tool, [string[]]$ComposeArguments)
+  Invoke-Compose @ComposeArguments | Out-Null
+  $code = $LASTEXITCODE
+  if ($code -eq 0 -or $ContainerRuntime -ne 'podman') { return [int]$code }
+  Write-IntegrationEngineLog -Tool $Tool -Code 'failed' -ExitCode $code -Lines (Get-IntegrationEngineState)
+  Start-Sleep -Seconds $IntegrationRetryWaitSeconds
+  Invoke-Compose @ComposeArguments | Out-Null
+  $retry = $LASTEXITCODE
+  Write-IntegrationEngineLog -Tool $Tool -Code 'retried' -ExitCode $retry
+  if ($retry -ne 0) { [Console]::Error.WriteLine("stato del motore Podman scritto in $(Get-IntegrationRuntimeLogPath)") }
+  return [int]$retry
+}
+
 # The result of add/remove, in the form the person asked for.
 function Write-IntegrationResult {
   param([string]$Id, [bool]$Json, [int]$Code, [string]$Reason)
@@ -259,8 +327,7 @@ function Invoke-IntegrationAdd {
       $before = $env:JHT_EXTRAS_IMAGE
       try {
         $env:JHT_EXTRAS_IMAGE = $ref
-        Invoke-Compose '--profile' 'media' up '-d' $MediaContainer | Out-Null
-        $code = $LASTEXITCODE
+        $code = Invoke-IntegrationUpStep 'media' @('--profile', 'media', 'up', '-d', $MediaContainer)
       } finally { if ($null -eq $before) { Remove-Item Env:\JHT_EXTRAS_IMAGE -ErrorAction SilentlyContinue } else { $env:JHT_EXTRAS_IMAGE = $before } }
       if ($code -ne 0) { $script:IntegrationWhy = 'il container dei media non parte'; return 1 }
       if (-not (Get-RunningComposeServiceId $MediaContainer)) { $script:IntegrationWhy = 'il container dei media non risulta acceso'; return 1 }
@@ -298,8 +365,7 @@ function Invoke-IntegrationAdd {
         if (-not ((Test-IntegrationScreenFolder) -and (Test-Path -LiteralPath (Get-IntegrationScreenFolder) -PathType Container))) {
           $script:IntegrationWhy = "live-screen in ~/.jht non e' una cartella normale (un collegamento?): non la uso"; return 1
         }
-        Invoke-Compose '--profile' 'screen' up '-d' $ScreenContainer | Out-Null
-        $code = $LASTEXITCODE
+        $code = Invoke-IntegrationUpStep 'screen' @('--profile', 'screen', 'up', '-d', $ScreenContainer)
       } finally {
         if ($null -eq $beforeImage) { Remove-Item Env:\JHT_EXTRAS_IMAGE -ErrorAction SilentlyContinue } else { $env:JHT_EXTRAS_IMAGE = $beforeImage }
         if ($null -eq $beforeDigest) { Remove-Item Env:\JHT_EXTRAS_DIGEST -ErrorAction SilentlyContinue } else { $env:JHT_EXTRAS_DIGEST = $beforeDigest }

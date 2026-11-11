@@ -16,13 +16,23 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from windows_native_fakes import powershell_argv
+from windows_native_fakes import install_fake, powershell_argv
 
 ROOT = Path(__file__).resolve().parent.parent
 LIBRARY = ROOT / "scripts" / "jht-integration.ps1"
 WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
 INSTALLER = ROOT / "scripts" / "install.ps1"
 ENABLER = ROOT / "scripts" / "enable-podman-windows-runtime.ps1"
+
+FAKE_PODMAN = """#!/bin/sh
+echo "PODMAN $*" >> "$T_LOG"
+case "$1" in
+  system)
+    echo 'jht-podman ssh://user@127.0.0.1:49650/run/user/1000/podman/podman.sock default=true'
+    echo 'work-server ssh://admin@buildhost:22/run/podman/podman.sock default=false' ;;
+  machine) echo 'jht-podman running=true starting=false port=49650 lastup=2 minutes ago' ;;
+esac
+"""
 
 CASE = r"""
 $ErrorActionPreference = 'Stop'
@@ -34,6 +44,8 @@ $Container = 'jht'; $TelegramContainer = 'jht-telegram'; $BrokerContainer = 'jht
 $BrokerMadeMarker = Join-Path $RuntimeDir '.broker-made'
 $ExtrasImageDigest = $env:T_EXTRAS
 $JhtHome = $env:T_JHT_HOME
+$ContainerRuntime = if ($env:T_RUNTIME_KIND) { $env:T_RUNTIME_KIND } else { 'docker' }
+$script:IntegrationRuntimeLogPath = $env:T_RT_LOG
 function Test-ProtectedRuntimeNode {
   param([string]$Path, [switch]$Directory)
   $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
@@ -73,6 +85,16 @@ function Invoke-Compose {
     Remove-Item -LiteralPath $folder -Recurse -Force -ErrorAction SilentlyContinue
     New-Item -ItemType SymbolicLink -Path $folder -Target $env:T_SWAP_LINK | Out-Null
   }
+  # the first `up` of a tool that finds its connection gone, as Podman words it
+  if ($env:T_UP_FAILS -and ($words -contains 'up')) {
+    $seen = Get-Content -LiteralPath $env:T_UP_COUNTER -ErrorAction SilentlyContinue | Select-Object -First 1
+    $tries = 1 + $(if ($seen) { [int]$seen } else { 0 })
+    Set-Content -LiteralPath $env:T_UP_COUNTER -Value $tries
+    if ($tries -le [int]$env:T_UP_FAILS) {
+      [Console]::Error.WriteLine('Error: get machine connection URI: could not find a matching machine for connection "ssh://user@127.0.0.1:49649/run/user/1000/podman/podman.sock"')
+      $global:LASTEXITCODE = 1; return
+    }
+  }
   $running = @(Get-Content -LiteralPath $env:T_RUNNING)
   if ($words -contains 'up') { $running += $service }
   if ($words -contains 'stop') { $running = @($running | Where-Object { $_ -ne $service }) }
@@ -92,6 +114,7 @@ function docker {
   if ($args[0] -eq 'exec' -and $env:T_EXEC_FAIL -eq '1') { $global:LASTEXITCODE = 1; 'No matching distribution found for gspread' }
 }
 . $env:T_LIBRARY
+$IntegrationRetryWaitSeconds = 0
 # Windows PowerShell 5.1 hands an array over as ONE object; the pipeline makes it the elements, as 7 does
 $argv = @(ConvertFrom-Json -InputObject $env:T_ARGS | ForEach-Object { $_ })
 $done = @(Invoke-IntegrationCommand ([string[]]$argv))
@@ -117,13 +140,17 @@ def host(tmp_path):
     h.tmp, h.runtime, h.script = tmp_path, runtime, script
     h.log, h.volumes, h.running = tmp_path / "log", tmp_path / "volumes", tmp_path / "running"
     h.argv = powershell_argv()
+    # the program podman.exe of the engine, found on the PATH like the real one (not a function of the profile)
+    h.bin = tmp_path / "bin"
+    h.bin.mkdir()
+    install_fake(h.bin, "podman.exe", FAKE_PODMAN)
     return h
 
 
 def run(host, args: list[str], **extra: str) -> subprocess.CompletedProcess:
     env = {**os.environ, "T_RUNTIME": str(host.runtime), "T_LOG": str(host.log), "T_VOLUMES": str(host.volumes),
            "T_RUNNING": str(host.running), "T_LIBRARY": str(LIBRARY), "T_ARGS": json.dumps(args),
-           "T_JHT_HOME": str(host.tmp / "jht-home"), **extra}
+           "T_JHT_HOME": str(host.tmp / "jht-home"), "PATH": f"{host.bin}{os.pathsep}{os.environ['PATH']}", **extra}
     return subprocess.run([*host.argv, "-File", str(host.script)], env=env, capture_output=True, text=True, timeout=120)
 
 
@@ -401,3 +428,47 @@ def test_a_link_put_there_while_the_browser_was_copied_stops_the_run_before_the_
     done = run(host, ["add", "screen", "--json"], T_EXTRAS=DIGEST, T_SWAP_LINK=str(target))
     assert done.returncode == 1 and "non e' una cartella normale" in json.loads(done.stdout)["reason"], done.stdout + done.stderr
     assert "run --rm" in log(host) and "up -d" not in log(host)
+
+
+# ---- the engine: the state of a failed `up` is written down, and the `up` is tried once more ----
+@pytest.mark.parametrize("tool", ["screen", "media"])
+def test_a_first_up_that_loses_the_podman_connection_leaves_the_state_in_the_log_and_is_tried_again(host, tool):
+    rt_log = host.tmp / "logs" / "runtime.log"
+    done = run(host, ["add", tool, "--json"], T_EXTRAS=DIGEST, T_RUNTIME_KIND="podman", T_UP_FAILS="1", T_UP_COUNTER=str(host.tmp / "ups"),
+               T_RT_LOG=str(rt_log), CONTAINER_CONNECTION="jht-podman")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert json.loads(done.stdout)["state"] == "running"
+    assert log(host).count(f"COMPOSE --profile {tool} up -d jht-{tool}") == 2
+    text = rt_log.read_text(encoding="utf-8")
+    assert f"integration_engine_failed: tool={tool} exit=1" in text and f"integration_engine_retried: tool={tool} exit=0" in text
+    assert "connection_used=jht-podman" in text and "port=49650" in text and "ssh://user@127.0.0.1:49650" in text
+    assert "PODMAN system connection list" in log(host) and "PODMAN machine list" in log(host)
+    # names, ports and running state: never an identity file or a key
+    assert "identity" not in text.lower() and "BEGIN" not in text
+    # the person's connections to other hosts stay out of it
+    assert "work-server" not in text and "buildhost" not in text
+
+
+def test_a_second_failure_ends_the_command_and_says_where_the_state_is(host):
+    rt_log = host.tmp / "logs" / "runtime.log"
+    done = run(host, ["add", "screen", "--json"], T_EXTRAS=DIGEST, T_RUNTIME_KIND="podman", T_UP_FAILS="2", T_UP_COUNTER=str(host.tmp / "ups"),
+               T_RT_LOG=str(rt_log))
+    assert done.returncode == 1
+    assert json.loads(done.stdout)["reason"] == "il container dello schermo non parte"
+    assert str(rt_log) in done.stderr
+    assert "integration_engine_retried: tool=screen exit=1" in rt_log.read_text(encoding="utf-8")
+
+
+def test_a_good_first_up_writes_nothing_and_asks_the_engine_nothing(host):
+    rt_log = host.tmp / "logs" / "runtime.log"
+    done = run(host, ["add", "screen", "--json"], T_EXTRAS=DIGEST, T_RUNTIME_KIND="podman", T_RT_LOG=str(rt_log))
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert not rt_log.exists() and "PODMAN" not in log(host)
+    assert log(host).count("up -d jht-screen") == 1
+
+
+def test_without_a_podman_machine_a_failed_up_is_not_repeated_and_nothing_is_written(host):
+    rt_log = host.tmp / "logs" / "runtime.log"
+    done = run(host, ["add", "screen", "--json"], T_EXTRAS=DIGEST, T_UP_FAILS="1", T_UP_COUNTER=str(host.tmp / "ups"), T_RT_LOG=str(rt_log))
+    assert done.returncode == 1
+    assert log(host).count("up -d jht-screen") == 1 and not rt_log.exists() and "PODMAN" not in log(host)
