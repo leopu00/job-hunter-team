@@ -65,9 +65,9 @@ $ContainerRuntime = 'podman'
 $ComposeFile = 'docker-compose.yml'; $PodmanComposeFile = 'docker-compose.podman.yml'; $RuntimeDir = '.'
 $Container = 'jht'; $BrokerContainer = 'jht-broker'; $TelegramContainer = 'jht-telegram'
 $NodeEntry = '/app/cli/bin/jht.js'
-# a session whose output encoding carries a BOM (a profile, a UTF-8 system code page): Windows PowerShell 5.1 then puts EF BB BF in front of
+# a session whose encodings carry a BOM (a profile, a console in UTF-8): Windows PowerShell 5.1 then puts EF BB BF in front of
 # what it pipes to a native command, and the wrapper has to send the script to node without it all the same
-if ($env:JHT_SESSION_BOM -eq '1') { $OutputEncoding = [System.Text.Encoding]::UTF8 }
+if ($env:JHT_SESSION_BOM -eq '1') { $OutputEncoding = [System.Text.Encoding]::UTF8; try { [Console]::InputEncoding = [System.Text.Encoding]::UTF8 } catch { $null = $_ } }
 Write-OnboardingSnapshot
 """
 
@@ -227,9 +227,10 @@ def test_the_provider_script_reaches_node_whole_on_stdin(tmp_path):
 
 
 def test_the_provider_script_reaches_node_without_a_bom_whatever_the_session_encoding(tmp_path):
-    """Windows PowerShell 5.1 pipes the preamble of $OutputEncoding to a native command: a session with a UTF-8 that has a BOM
-    (found on windows-2022: «\\ufeffconst fs=…») sent EF BB BF in front of the script. The wrapper sets UTF-8 without a BOM for the call.
-    Under PowerShell 7 the BOM is never piped, so there the case only keeps the result the same; under 5.1 it is red without the fix."""
+    """Windows PowerShell 5.1 puts EF BB BF in front of what it pipes to a native command when the console is in UTF-8 (code page 65001,
+    whatever $OutputEncoding is: measured on windows-2022, «\\ufeffconst fs=…») or when $OutputEncoding carries a BOM. The wrapper sets
+    both encodings to UTF-8 without a BOM for the call and puts them back. Under PowerShell 7 the BOM is never piped, so there the case
+    only keeps the result the same; under 5.1 it is red without the fix."""
     values, reasons = _snapshot(tmp_path, [BROKER, TELEGRAM, JHT], TEAM, session_bom=True)
     assert values["providerConfigured"] == "1" and values["providerAuthenticated"] == "1", reasons
     raw = (tmp_path / "state" / "node-stdin.js").read_bytes()
