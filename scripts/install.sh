@@ -259,7 +259,7 @@ while [ $# -gt 0 ]; do
       shift
       ;;
     -h|--help)
-      sed -n '2,74p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,/^# ╚/p' "$0" | sed 's/^# \{0,1\}//'  # the whole header box, whatever its length
       exit 0
       ;;
     *)
