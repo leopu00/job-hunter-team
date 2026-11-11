@@ -629,7 +629,7 @@ def test_uninstall_removes_only_jht_and_preserves_the_users_default_connection(t
         tmp_path,
         WRAPPER,
         [
-            "Get-JhtUninstallText", "Test-JhtUninstallMachineOutput",
+            "Get-JhtTextLanguage", "Get-JhtUninstallText", "Test-JhtUninstallMachineOutput",
             "Write-JhtUninstallPhase", "Write-JhtUninstallLeft",
             "Get-JhtPodmanDistroName", "Format-JhtUninstallReason", "Invoke-JhtUninstallNative",
             "Find-JhtUninstallPodman", "Write-JhtUninstallMachineLeft",
