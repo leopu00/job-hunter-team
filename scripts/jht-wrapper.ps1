@@ -4121,12 +4121,12 @@ if ($HelpRequested -and $Sub -notin @('game', 'gui', 'agent-control', 'desktop-a
     Write-IntegrationHelp
     exit 0
   }
-  if ($Sub -ceq 'setup') {
-    Write-SetupHelp
-    exit 0
-  }
   if ($Sub -ceq 'screen' -and $Rest.Count -eq 1) {
     Write-ScreenHelp
+    exit 0
+  }
+  if ($Sub -ceq 'setup') {
+    Write-SetupHelp
     exit 0
   }
   if (Test-HostCommandUsesLocalHelp $Sub) {

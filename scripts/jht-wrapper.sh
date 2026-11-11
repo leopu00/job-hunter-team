@@ -6476,12 +6476,12 @@ if [ "$#" -gt 1 ] && [ "$SUB" != "game" ] && [ "$SUB" != "gui" ] && [ "$SUB" != 
           integration_help
           exit 0
         fi
-        if [ "$SUB" = setup ]; then
-          setup_help
-          exit 0
-        fi
         if [ "$SUB" = screen ] && [ "$#" -eq 2 ]; then
           screen_help
+          exit 0
+        fi
+        if [ "$SUB" = setup ]; then
+          setup_help
           exit 0
         fi
         if host_command_uses_local_help "$SUB"; then
