@@ -186,7 +186,7 @@ def test_the_compose_keeps_the_broker_out_of_a_plain_up_and_jht_mounts_only_the_
 def test_nothing_that_looks_at_or_takes_down_the_whole_project_forgets_the_broker_profile():
     source = WRAPPER.read_text(encoding="utf-8")
     listed = re.search(r'^COMPOSE_ALL_PROFILES="([^"]*)"$', source, re.M)
-    assert listed and set(listed.group(1).split(",")) == {"telegram", "broker", "media"}, "every profile of the project, the broker among them"
+    assert listed and set(listed.group(1).split(",")) == {"telegram", "broker", "media", "playwright"}, "every profile of the project, the broker among them"
     code = [line for line in source.splitlines() if not line.lstrip().startswith("#")]
     for line in code:
         if "COMPOSE_PROFILES=telegram " in line:

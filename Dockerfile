@@ -467,7 +467,11 @@ RUN useradd --create-home --shell /bin/bash jht \
     # The two folders the media container shares with jht (named volumes copy owner and mode of the folder on first use).
     && mkdir -p /jht_media/in /jht_media/out \
     && chown jht:jht /jht_media /jht_media/in /jht_media/out \
-    && chmod 0755 /jht_media /jht_media/in /jht_media/out
+    && chmod 0755 /jht_media /jht_media/in /jht_media/out \
+    # The folder the volume of the closer's Chromium is mounted on, made here for the same reason (owner and mode are copied on first use).
+    && mkdir -p /opt/playwright-extras \
+    && chown jht:jht /opt/playwright-extras \
+    && chmod 0755 /opt/playwright-extras
 
 # Broker of the portal secrets (P1 del 08/10): un secondo container della
 # stessa immagine, con un uid suo. I tre mount point nascono qui con il

@@ -80,3 +80,19 @@ def test_no_other_service_got_a_profile_or_a_mount_by_this():
 
 def test_the_tmpfs_of_the_media_container_runs_nothing_and_grants_no_privilege():
     assert "/tmp:size=512m,mode=1777,noexec,nosuid" in SERVICES["jht-media"]["tmpfs"]
+
+
+def test_the_volume_of_the_closers_browser_is_read_only_in_jht_and_written_only_by_the_one_shot_populator():
+    assert mounts("jht")["/opt/playwright-extras"] == "ro"
+    populate = SERVICES["jht-playwright-populate"]
+    assert populate["profiles"] == ["playwright"] and populate["network_mode"] == "none" and populate["read_only"] is True
+    assert populate["cap_drop"] == ["ALL"] and populate["restart"] == "no" and populate["user"] == "1001:1001"
+    assert populate["volumes"] == ["jht-playwright:/opt/playwright-extras"] and "jht-playwright" in COMPOSE["volumes"]
+    assert populate["entrypoint"][-5:-3] == ["/app/shared/skills/playwright_extras.py", "populate"] and populate["entrypoint"][-2:] == ["/opt/playwright", "/opt/playwright-extras"]
+    assert (ROOT / "shared" / "skills" / "playwright_extras.py").is_file()
+    assert not [var for var in SERVICES["jht"]["environment"] if "EXTRAS" in var], "a variable here would change the hash the wrapper attests jht by"
+
+
+def test_the_mount_folder_of_the_closers_browser_is_made_by_the_image_with_the_owner_of_jht():
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert "mkdir -p /opt/playwright-extras" in dockerfile and "chown jht:jht /opt/playwright-extras" in dockerfile
