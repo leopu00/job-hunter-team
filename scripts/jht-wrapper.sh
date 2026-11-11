@@ -1721,11 +1721,12 @@ rootless_netns_noise_filter() {
 }
 
 # podman-compose scrive su `up -d` e su `down` gli id grezzi dei container, il nome della rete del progetto e, per i servizi che non sono
-# mai stati creati (Telegram, se non e' configurato), «Error: no container with name or ID "jht-telegram" found»: non e' un errore, e'
-# un servizio che non c'e' (il servizio principale, jht, non e' fra questi: se manca, la riga resta). Via quelle righe (e solo quelle, a riga
-# intera): ogni altra riga passa com'e', stderr compreso.
+# mai stati creati (Telegram, il servizio dei media, il broker: dipende da cosa e' acceso), «Error: no container with name or ID
+# "jht-telegram" found»: non e' un errore, e' un servizio che non c'e' (il servizio principale, jht, non e' fra questi: se manca, la riga
+# resta). Sono i servizi di nome jht-<qualcosa>, cosi' uno nuovo non rimette quelle righe in vista. Via quelle righe (e solo quelle, a
+# riga intera): ogni altra riga passa com'e', stderr compreso.
 compose_noise_filter() {
-  grep -v -E '^[0-9a-f]{12,64}$|^(jht|host-runtime)_default$|^Error: no container with name or ID "(jht-broker|jht-telegram)" found(: no such container)?$' || true
+  grep -v -E '^[0-9a-f]{12,64}$|^(jht|host-runtime)_default$|^Error: no container with name or ID "jht-[a-z][a-z0-9-]*" found(: no such container)?$' || true
 }
 
 # `compose <argomenti>` come prima, ma con Podman l'output passa per compose_noise_filter (stdout su stdout, stderr su stderr).
@@ -3871,6 +3872,39 @@ Uso: jht integration <comando>
 Gli ID ammessi sono quelli che mostra `jht integration list`. Niente si scarica o si accende
 finche' non lo chiedi con `add`.
 JHTINTEGRATIONHELP
+}
+
+# `jht setup --help`: le sue opzioni, non l'aiuto generico dell'host. Testo fisso, come quello di integration: il setup vero gira nel
+# container e un aiuto non lo avvia. Tenerlo d'accordo con le opzioni di cli/src/commands/setup.js (c'e' un test che le confronta).
+setup_help() {
+  cat <<'JHTSETUPHELP'
+Uso: jht setup [opzioni]
+
+Senza opzioni parte l'installazione guidata. Con --non-interactive non chiede niente:
+tutto si da' con le opzioni.
+
+  --non-interactive            nessuna domanda
+  --provider <nome>            openai (predefinito), glm (Z.ai) o kimi (Moonshot)
+  --harness <nome>             codex (predefinito) o pi; glm e kimi vanno solo con pi
+  --auth-method <metodo>       api_key (predefinito) o subscription
+  --api-key-file <percorso>    file che contiene la chiave API (una riga, leggibile solo da te).
+                               Un file del tuo computer lo legge jht e lo passa al setup: con glm e kimi
+                               il setup tiene la chiave per conto suo, mai nella configurazione
+  --api-key-stdin              legge la chiave API dallo standard input (una riga): mai sulla riga di comando
+  --api-key <chiave>           la chiave scritta qui, in chiaro (non ammessa per glm e kimi)
+  --secret-mode <modo>         come si salva la chiave: plaintext (predefinito), env o file
+  --secret-env <nome>          con --secret-mode env: la variabile d'ambiente che la contiene
+  --secret-file <percorso>     con --secret-mode file: il file che la contiene
+  --subscription-email <email> con --auth-method subscription: l'email dell'account
+  --subscription-token <token> con --auth-method subscription: il token
+  --model <modello>            il modello da usare
+  --language <codice>          la lingua (per esempio it o en)
+  --skip-health                salta il controllo finale
+  --reset                      riparte da una configurazione pulita
+
+Esempio, con una chiave GLM in un file:
+  jht setup --non-interactive --provider glm --harness pi --api-key-file chiave.txt
+JHTSETUPHELP
 }
 
 # Richiesta di sola informazione: se il container e' gia' in piedi si serve
@@ -6405,6 +6439,10 @@ if [ "$#" -gt 1 ] && [ "$SUB" != "game" ] && [ "$SUB" != "gui" ] && [ "$SUB" != 
       -h|--help)
         if [ "$SUB" = integration ] && [ "$#" -eq 2 ]; then
           integration_help
+          exit 0
+        fi
+        if [ "$SUB" = setup ]; then
+          setup_help
           exit 0
         fi
         if host_command_uses_local_help "$SUB"; then
