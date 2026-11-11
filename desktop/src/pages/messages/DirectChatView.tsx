@@ -7,6 +7,7 @@ import { ChatTranscript, ChatReplyMenu } from "./DirectChatTranscript";
 import { ChatComposer, ReadOnlyInvite } from "./DirectChatComposer";
 import TeamQuietNotice from "./TeamQuietNotice";
 import OwnVpsClaim from "../../components/OwnVpsClaim";
+import KeyRefusedNotice from "../../components/KeyRefusedNotice";
 import { isOwnVpsClaimCode } from "../../lib/own-vps-claim";
 
 function ChatPane({ m }: { m: ChatScreenModel }) {
@@ -14,6 +15,7 @@ function ChatPane({ m }: { m: ChatScreenModel }) {
     loadQuietFacts, embedded, unread, writeLocked, clearOperationError } = m;
   return <>
     <StatusBar status={status} operationError={operationError} reconnecting={reconnecting} agentLine={agentLine} onRetry={() => void retry()} onReadAgain={readAgain} />
+    {status.state === "ready" && <KeyRefusedNotice state={m.selected.state} className="shrink-0 m-0 px-4 py-2 text-[14px] border-b border-[var(--color-border)]" />}
     {loadQuietFacts && !embedded && status.state === "ready" && (
       <TeamQuietNotice lastAgentAt={unread.lastAgentAt} loadFacts={loadQuietFacts} />
     )}

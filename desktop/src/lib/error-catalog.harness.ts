@@ -24,6 +24,14 @@ export const HARNESS_ERRORS: Readonly<Record<string, ErrorCopy>> = {
     text: { it: "Prima di scegliere il programma degli agenti serve un provider attivo.", en: "An active provider is needed before choosing the program that drives the agents." },
     action: { it: "Completa il passo «Provider» e poi riprova.", en: "Complete the «Provider» step, then try again." },
   },
+  agent_key_refused_glm: {
+    text: { it: "GLM (Z.ai) ha rifiutato la chiave API: l’agente è bloccato (chiave sbagliata, scaduta o revocata).", en: "GLM (Z.ai) rejected the API key: the agent is blocked (wrong, expired or revoked)." },
+    action: { it: "Dagli la chiave giusta con «jht setup --non-interactive --provider glm --harness pi --api-key-file <file>» (oppure con «--api-key-stdin»), poi riavvia la squadra: «jht team stop», «jht team start».", en: "Give it the right key with “jht setup --non-interactive --provider glm --harness pi --api-key-file <file>” (or with “--api-key-stdin”), then restart the team: “jht team stop”, “jht team start”." },
+  },
+  agent_key_refused_kimi: {
+    text: { it: "Kimi (Moonshot) ha rifiutato la chiave API: l’agente è bloccato (chiave sbagliata, scaduta o revocata).", en: "Kimi (Moonshot) rejected the API key: the agent is blocked (wrong, expired or revoked)." },
+    action: { it: "Dagli la chiave giusta con «jht setup --non-interactive --provider kimi --harness pi --api-key-file <file>» (oppure con «--api-key-stdin»), poi riavvia la squadra: «jht team stop», «jht team start».", en: "Give it the right key with “jht setup --non-interactive --provider kimi --harness pi --api-key-file <file>” (or with “--api-key-stdin”), then restart the team: “jht team stop”, “jht team start”." },
+  },
 };
 
 export const HARNESS_ERROR_TRANSLATIONS: Readonly<Record<string, ErrorTranslations>> = {
@@ -61,5 +69,19 @@ export const HARNESS_ERROR_TRANSLATIONS: Readonly<Record<string, ErrorTranslatio
     fr: ["Il faut un fournisseur actif avant de choisir le programme des agents.", "Termine l’étape « Fournisseur », puis réessaie."],
     hu: ["Az ügynökök programjának kiválasztása előtt aktív szolgáltató kell.", "Fejezd be a «Szolgáltató» lépést, majd próbáld újra."],
     pt: ["É preciso um fornecedor ativo antes de escolher o programa dos agentes.", "Conclui o passo «Fornecedor» e tenta novamente."],
+  },
+  agent_key_refused_glm: {
+    de: ["GLM (Z.ai) hat den API-Schlüssel abgelehnt: Der Agent ist blockiert (Schlüssel falsch, abgelaufen oder widerrufen).", "Gib ihm den richtigen Schlüssel mit «jht setup --non-interactive --provider glm --harness pi --api-key-file <file>» (oder mit «--api-key-stdin») und starte dann das Team neu: «jht team stop», «jht team start»."],
+    es: ["GLM (Z.ai) ha rechazado la clave de API: el agente está bloqueado (clave incorrecta, caducada o revocada).", "Dale la clave correcta con «jht setup --non-interactive --provider glm --harness pi --api-key-file <file>» (o con «--api-key-stdin») y reinicia el equipo: «jht team stop», «jht team start»."],
+    fr: ["GLM (Z.ai) a refusé la clé d’API : l’agent est bloqué (clé erronée, expirée ou révoquée).", "Donne-lui la bonne clé avec « jht setup --non-interactive --provider glm --harness pi --api-key-file <file> » (ou avec « --api-key-stdin »), puis redémarre l’équipe : « jht team stop », « jht team start »."],
+    hu: ["A(z) GLM (Z.ai) elutasította az API-kulcsot: az ügynök blokkolva van (hibás, lejárt vagy visszavont kulcs).", "Add meg neki a helyes kulcsot a „jht setup --non-interactive --provider glm --harness pi --api-key-file <file>” paranccsal (vagy a „--api-key-stdin” kapcsolóval), majd indítsd újra a csapatot: „jht team stop”, „jht team start”."],
+    pt: ["GLM (Z.ai) rejeitou a chave de API: o agente está bloqueado (chave errada, expirada ou revogada).", "Dá-lhe a chave certa com «jht setup --non-interactive --provider glm --harness pi --api-key-file <file>» (ou com «--api-key-stdin») e reinicia a equipa: «jht team stop», «jht team start»."],
+  },
+  agent_key_refused_kimi: {
+    de: ["Kimi (Moonshot) hat den API-Schlüssel abgelehnt: Der Agent ist blockiert (Schlüssel falsch, abgelaufen oder widerrufen).", "Gib ihm den richtigen Schlüssel mit «jht setup --non-interactive --provider kimi --harness pi --api-key-file <file>» (oder mit «--api-key-stdin») und starte dann das Team neu: «jht team stop», «jht team start»."],
+    es: ["Kimi (Moonshot) ha rechazado la clave de API: el agente está bloqueado (clave incorrecta, caducada o revocada).", "Dale la clave correcta con «jht setup --non-interactive --provider kimi --harness pi --api-key-file <file>» (o con «--api-key-stdin») y reinicia el equipo: «jht team stop», «jht team start»."],
+    fr: ["Kimi (Moonshot) a refusé la clé d’API : l’agent est bloqué (clé erronée, expirée ou révoquée).", "Donne-lui la bonne clé avec « jht setup --non-interactive --provider kimi --harness pi --api-key-file <file> » (ou avec « --api-key-stdin »), puis redémarre l’équipe : « jht team stop », « jht team start »."],
+    hu: ["A(z) Kimi (Moonshot) elutasította az API-kulcsot: az ügynök blokkolva van (hibás, lejárt vagy visszavont kulcs).", "Add meg neki a helyes kulcsot a „jht setup --non-interactive --provider kimi --harness pi --api-key-file <file>” paranccsal (vagy a „--api-key-stdin” kapcsolóval), majd indítsd újra a csapatot: „jht team stop”, „jht team start”."],
+    pt: ["Kimi (Moonshot) rejeitou a chave de API: o agente está bloqueado (chave errada, expirada ou revogada).", "Dá-lhe a chave certa com «jht setup --non-interactive --provider kimi --harness pi --api-key-file <file>» (ou com «--api-key-stdin») e reinicia a equipa: «jht team stop», «jht team start»."],
   },
 };
