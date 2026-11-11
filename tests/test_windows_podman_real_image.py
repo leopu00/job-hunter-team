@@ -81,3 +81,24 @@ def test_every_command_a_compose_service_starts_by_name_is_made_by_the_dockerfil
     assert {"jht-broker", "jht-telegram-service"} <= set(wanted), wanted
     missing = {binary: service for binary, service in wanted.items() if binary not in made and binary != "pid1"}
     assert not missing, f"the compose starts them and no image built from this Dockerfile has them: {missing}"
+
+
+def test_the_job_serves_every_script_install_ps1_downloads():
+    """Every run since 10/11 failed in 2 s, «Download failed: .../scripts/jht-integration.ps1 (404)» (and jht-tools.ps1 came
+    next): the step served a list of names and install.ps1's list had grown. The step serves the folder, and every
+    runtime file install.ps1 names must exist in it."""
+    install = (ROOT / "web" / "public" / "install.ps1").read_text(encoding="utf-8")
+    # the list the install parses after the download (bare names) and the one it downloads from (scripts/<name>)
+    checked = re.search(r"function Test-JhtDownloadedRuntimeScripts.*?foreach \(\$ps1 in @\((.*?)\)\)", install, re.S).group(1)
+    names = set(re.findall(r"'(scripts/[A-Za-z0-9._-]+)'", install)) | set(
+        "scripts/" + name for name in re.findall(r"'([A-Za-z0-9._-]+\.ps1)'", checked)
+    )
+    assert {"scripts/jht-integration.ps1", "scripts/jht-tools.ps1", "scripts/jht-wrapper.ps1"} <= names
+    served = _steps()
+    step = next(step for step in served if step.get("name", "").startswith("Serve this commit's runtime files"))
+    script = step["run"]
+    assert "Copy-Item -Path 'scripts\\*'" in script and "-Recurse" in script
+    assert "docker-compose.yml" in script and "docker-compose.podman.yml" in script
+    # the names found above are files of the folder the step copies (a name with a typo would be a 404 again)
+    missing = sorted(name for name in names if (name.endswith(".ps1") or name.endswith(".py")) and not (ROOT / name).is_file())
+    assert not missing, missing
