@@ -1600,43 +1600,6 @@
    }
   ]
  },
- "language_home": {
-  "sv": [
-   "se"
-  ],
-  "da": [
-   "dk"
-  ],
-  "no": [
-   "no"
-  ],
-  "fi": [
-   "fi"
-  ],
-  "nl": [
-   "nl",
-   "be"
-  ],
-  "de": [
-   "de",
-   "at",
-   "ch"
-  ],
-  "fr": [
-   "fr",
-   "be",
-   "ch"
-  ],
-  "it": [
-   "it"
-  ],
-  "es": [
-   "es"
-  ],
-  "pt": [
-   "pt"
-  ]
- },
  "country_names": {
   "it": [
    "italy",

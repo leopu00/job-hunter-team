@@ -8,11 +8,12 @@ remote or hybrid and did not say she would relocate. Each of them cost a Scout s
 A position is OUTSIDE when ALL of these hold; any doubt is «ok», because a city name proves nothing about distance:
   * its work is onsite or hybrid (`remote_type`), and its location does not say «remote»;
   * the location NAMES a country (a country name, in English or the country's own language, or a country code such as `CH`);
-  * that country is not one of the profile's home countries: the country written in the profile's own places («Bologna, Italy»),
-    else the home of its native language (`language_home` in scout_coverage_table.json; English says nothing);
+  * that country is not one of the profile's home countries: the country WRITTEN in the profile's own places («Bologna, Italy»).
+    The language never says where a person lives (Italian is spoken in Ticino, German in Austria and Switzerland): a profile
+    whose places name no country has no border at all, in the plan or at the INSERT;
   * the profile does not say it is willing to relocate (`preferences.relocation`: true or a text that is not a no).
 No place is geocoded and nothing goes out on the network. A profile that cannot be read, or says nothing about where the person
-lives, gives «ok».
+lives (no place naming a country), gives «ok».
 
     python3 scout_area.py check --location "Stockholm, Sweden" --remote-type onsite [--profile FILE]
 
@@ -92,19 +93,11 @@ def read_area(profile=None, table: dict | None = None) -> dict | None:
     table = table or _table()
     try:
         import scout_search_scope as scope_mod
-        import scout_language as lang
         path = _profile_path(profile)
         scope = scope_mod.read_scope(path)
-        spoken = lang.read_languages(path)
     except Exception:  # noqa: BLE001 — no profile, no yaml, a broken file: no answer, never a guess
         return None
     home = sorted({c for c in (country_of(place, table) for place in scope.places) if c})
-    if not home and spoken:
-        top = max(spoken.values())
-        for code, score in sorted(spoken.items()):
-            if score == top and code in table.get("language_home", {}):
-                home.extend(table["language_home"][code])
-        home = sorted(set(home))
     if not home:
         return None
     return {"home": home, "relocation": relocation_allowed(scope.relocation), "work_mode": scope.work_mode}
