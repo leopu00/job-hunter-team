@@ -457,7 +457,7 @@ pub(crate) fn teardown(app: &tauri::AppHandle) {
     close_view(app, None);
 }
 
-fn active_host(
+pub(crate) fn active_host(
     app: &tauri::AppHandle,
     scope: &AccountScope,
 ) -> Result<ValidatedHost, &'static str> {

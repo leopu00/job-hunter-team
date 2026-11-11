@@ -37,6 +37,7 @@ mod existing_team_register_tests;
 mod existing_team_runtime;
 mod linux_render;
 mod live_screen;
+mod screen_control;
 mod local_action_log;
 mod local_position_act;
 mod local_swipe;
@@ -159,6 +160,8 @@ macro_rules! registered_native_commands {
             desktop_platform::desktop_platform,
             live_screen::live_screen_session,
             live_screen::open_live_screen,
+            screen_control::screen_set,
+            screen_control::screen_status,
             mail::mail_save_password,
             mail::mail_status,
             onboarding::onboarding_assistant_open,
@@ -253,6 +256,7 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .manage(account_scope::AccountScopeState::default())
         .manage(broker_view::BrokerViewState::default())
+        .manage(screen_control::ScreenControlState::default())
         .manage(direct_chat::DirectChatState::default())
         .manage(state_stream::StateStreamState::default())
         .manage(onboarding::OnboardingNativeState::default())

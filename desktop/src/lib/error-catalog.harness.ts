@@ -32,6 +32,18 @@ export const HARNESS_ERRORS: Readonly<Record<string, ErrorCopy>> = {
     text: { it: "Kimi (Moonshot) ha rifiutato la chiave API: l’agente è bloccato (chiave sbagliata, scaduta o revocata).", en: "Kimi (Moonshot) rejected the API key: the agent is blocked (wrong, expired or revoked)." },
     action: { it: "Dagli la chiave giusta con «jht setup --non-interactive --provider kimi --harness pi --api-key-file <file>» (oppure con «--api-key-stdin»), poi riavvia la squadra: «jht team stop», «jht team start».", en: "Give it the right key with “jht setup --non-interactive --provider kimi --harness pi --api-key-file <file>” (or with “--api-key-stdin”), then restart the team: “jht team stop”, “jht team start”." },
   },
+  screen_unavailable: {
+    text: { it: "Lo schermo live non è ancora disponibile in questa installazione.", en: "The live screen is not available in this installation yet." },
+    action: { it: "Aggiorna Job Hunter Team e la squadra, poi riprova.", en: "Update Job Hunter Team and the team, then try again." },
+  },
+  screen_failed: {
+    text: { it: "Non sono riuscito ad accendere o spegnere lo schermo live.", en: "The live screen could not be turned on or off." },
+    action: { it: "Controlla che il motore dei container sia acceso e riprova.", en: "Check that the container engine is running, then try again." },
+  },
+  screen_local_only: {
+    text: { it: "Lo schermo live si vede solo dal computer su cui gira la squadra.", en: "The live screen can only be seen from the computer the team runs on." },
+    action: { it: "Usalo dal computer dove la squadra è installata.", en: "Use it from the computer where the team is installed." },
+  },
 };
 
 export const HARNESS_ERROR_TRANSLATIONS: Readonly<Record<string, ErrorTranslations>> = {
@@ -83,5 +95,26 @@ export const HARNESS_ERROR_TRANSLATIONS: Readonly<Record<string, ErrorTranslatio
     fr: ["Kimi (Moonshot) a refusé la clé d’API : l’agent est bloqué (clé erronée, expirée ou révoquée).", "Donne-lui la bonne clé avec « jht setup --non-interactive --provider kimi --harness pi --api-key-file <file> » (ou avec « --api-key-stdin »), puis redémarre l’équipe : « jht team stop », « jht team start »."],
     hu: ["A(z) Kimi (Moonshot) elutasította az API-kulcsot: az ügynök blokkolva van (hibás, lejárt vagy visszavont kulcs).", "Add meg neki a helyes kulcsot a „jht setup --non-interactive --provider kimi --harness pi --api-key-file <file>” paranccsal (vagy a „--api-key-stdin” kapcsolóval), majd indítsd újra a csapatot: „jht team stop”, „jht team start”."],
     pt: ["Kimi (Moonshot) rejeitou a chave de API: o agente está bloqueado (chave errada, expirada ou revogada).", "Dá-lhe a chave certa com «jht setup --non-interactive --provider kimi --harness pi --api-key-file <file>» (ou com «--api-key-stdin») e reinicia a equipa: «jht team stop», «jht team start»."],
+  },
+  screen_unavailable: {
+    de: ["Der Live-Bildschirm ist in dieser Installation noch nicht verfügbar.", "Aktualisiere Job Hunter Team und das Team und versuche es dann erneut."],
+    es: ["La pantalla en vivo todavía no está disponible en esta instalación.", "Actualiza Job Hunter Team y el equipo y vuelve a intentarlo."],
+    fr: ["L’écran en direct n’est pas encore disponible dans cette installation.", "Mets à jour Job Hunter Team et l’équipe, puis réessaie."],
+    hu: ["Az élő képernyő ebben a telepítésben még nem érhető el.", "Frissítsd a Job Hunter Teamet és a csapatot, majd próbáld újra."],
+    pt: ["O ecrã em direto ainda não está disponível nesta instalação.", "Atualiza o Job Hunter Team e a equipa e tenta novamente."],
+  },
+  screen_failed: {
+    de: ["Der Live-Bildschirm konnte nicht ein- oder ausgeschaltet werden.", "Prüfe, ob die Container-Engine läuft, und versuche es erneut."],
+    es: ["No se pudo encender o apagar la pantalla en vivo.", "Comprueba que el motor de contenedores esté en marcha y vuelve a intentarlo."],
+    fr: ["L’écran en direct n’a pas pu être allumé ou éteint.", "Vérifie que le moteur de conteneurs fonctionne, puis réessaie."],
+    hu: ["Az élő képernyőt nem sikerült be- vagy kikapcsolni.", "Ellenőrizd, hogy fut-e a konténermotor, majd próbáld újra."],
+    pt: ["Não foi possível ligar ou desligar o ecrã em direto.", "Verifica se o motor de contentores está em execução e tenta novamente."],
+  },
+  screen_local_only: {
+    de: ["Der Live-Bildschirm ist nur auf dem Computer zu sehen, auf dem das Team läuft.", "Nutze ihn auf dem Computer, auf dem das Team installiert ist."],
+    es: ["La pantalla en vivo solo se ve desde el ordenador donde funciona el equipo.", "Úsala desde el ordenador donde está instalado el equipo."],
+    fr: ["L’écran en direct ne se voit que depuis l’ordinateur sur lequel l’équipe fonctionne.", "Utilise-le depuis l’ordinateur où l’équipe est installée."],
+    hu: ["Az élő képernyő csak arról a számítógépről látható, amelyen a csapat fut.", "Azon a számítógépen használd, ahová a csapat telepítve van."],
+    pt: ["O ecrã em direto só se vê a partir do computador onde a equipa funciona.", "Usa-o no computador onde a equipa está instalada."],
   },
 };
