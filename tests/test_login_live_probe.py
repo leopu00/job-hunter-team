@@ -185,6 +185,20 @@ def test_a_profile_dir_with_things_in_it_is_never_written_to_or_emptied(host, tm
     assert [p.name for p in parent.iterdir() if p.name.startswith("jht-login-probe-")] == []  # its own folder is gone (the fake left it empty)
 
 
+def test_a_diagnosis_run_adds_its_looser_flags_to_that_run_only_and_asks_for_the_syscall_report(host, tmp_path):
+    log = tmp_path / "calls.txt"
+    engine = tmp_path / "fake-engine"
+    engine.write_text(f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> {log}\n")
+    engine.chmod(0o755)
+    probe = host.Probe([str(engine)], "image:test", None)
+    probe.run(extra=("--security-opt", "seccomp=unconfined"), mode=("--syscalls",))
+    probe.run()
+    runs = [line for line in log.read_text().splitlines() if line.startswith("run --rm --name ") and "inside.py" in line]
+    assert len(runs) == 2
+    assert "seccomp=unconfined" in runs[0] and runs[0].endswith("inside.py --syscalls") and "--no-chroot" not in runs[0]
+    assert "seccomp=unconfined" not in runs[1] and "--syscalls" not in runs[1] and "--profile /linkedin-profile" in runs[1]
+
+
 @pytest.mark.parametrize("kind", ["missing", "file", "link"])
 def test_a_profile_dir_that_is_not_a_real_folder_is_refused_before_anything_starts(host, tmp_path, kind):
     target = tmp_path / "x"

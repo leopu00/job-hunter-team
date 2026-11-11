@@ -181,6 +181,9 @@ jobs:
 
       # The browser of the manual LinkedIn sign-in, run for real on Docker against a page of its own (no account): the sandbox is on with
       # the one capability the compose file gives it, and the profile keeps no saved password, no autofill, no user name, no password.
+      - name: Extras image, what the engine lets the sign-in browser do (user namespace and chroot of its sandbox)
+        run: python3 scripts/ci/login_live_probe.py jht:extras-check --engine docker --diagnose
+
       - name: Extras image, sign-in browser sandboxed and nothing kept of the sign-in
         run: python3 scripts/ci/login_live_probe.py jht:extras-check --engine docker --controls
 

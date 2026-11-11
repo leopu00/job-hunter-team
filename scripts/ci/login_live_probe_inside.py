@@ -24,6 +24,8 @@ With --no-chroot (the container run WITHOUT SYS_CHROOT) the single check is `chr
 (or `browser_failed`; or say that this engine does not need the capability).
 
     login_live_probe_inside.py [--no-chroot] [--profile DIR]
+    login_live_probe_inside.py --syscalls      only what the kernel and the engine's filters say about the user namespace and the chroot the
+                                              sandbox of Chromium needs (the cause, when the sandbox does not start); always exits 0
 """
 
 from __future__ import annotations
@@ -439,6 +441,10 @@ def run_login(verdict: Verdict, profile: Path) -> None:
     said = hint.read_text().strip() if hint.exists() else ""
     for line in errors:
         verdict.bad("drive", line)
+    if said in ("sandbox_failed", "browser_failed"):
+        log = sorted(Path("/tmp").glob("chromium*"))
+        if log:
+            verdict.info("browser", "what the browser said: " + " | ".join(log[-1].read_text(errors="replace").strip().splitlines()[-4:])[:600])
     verdict.check(code == 0 and said == "logged_in", "hint", f"the watcher saw the cookie and the run ended by itself (rc 0, {time.monotonic() - started:.0f} s)",
                   f"the run ended rc {code} with hint '{said}'")
     received = FakeLinkedIn.posts[-1] if FakeLinkedIn.posts else {}
@@ -452,7 +458,48 @@ def run_login(verdict: Verdict, profile: Path) -> None:
     verdict.check(not foreign, "owner", "nothing in the profile is owned by root", f"owned by root: {foreign[:5]}")
 
 
+def sandbox_syscalls() -> None:
+    """The two steps the namespace sandbox of Chromium takes, one by one, in a child process each, and what filters this process is under."""
+    import ctypes
+    libc = ctypes.CDLL(None, use_errno=True)
+    clone_newuser = 0x10000000
+
+    def child(step) -> str:
+        pid = os.fork()
+        if pid == 0:
+            os._exit(step())
+        status = os.waitpid(pid, 0)[1]
+        code = os.WEXITSTATUS(status)
+        return "ok" if code == 0 else f"errno {code} ({os.strerror(code)})"
+
+    def unshare_user() -> int:
+        return 0 if libc.unshare(clone_newuser) == 0 else ctypes.get_errno()
+
+    def user_then_chroot() -> int:
+        if libc.unshare(clone_newuser) != 0:
+            return ctypes.get_errno()
+        return 0 if libc.chroot(b"/proc/self/fdinfo/") == 0 else ctypes.get_errno()
+
+    say("INFO", "syscalls", f"unshare(CLONE_NEWUSER): {child(unshare_user)}")
+    say("INFO", "syscalls", f"unshare(CLONE_NEWUSER) then chroot(): {child(user_then_chroot)}")
+    status = {}
+    for line in Path("/proc/self/status").read_text().splitlines():
+        key, _, value = line.partition(":")
+        if key in ("Seccomp", "Seccomp_filters", "NoNewPrivs", "CapEff", "CapBnd"):
+            status[key] = value.strip()
+    say("INFO", "syscalls", f"process: {status}")
+    for path in ("/proc/sys/user/max_user_namespaces", "/proc/sys/kernel/unprivileged_userns_clone",
+                 "/proc/sys/kernel/apparmor_restrict_unprivileged_userns", "/proc/self/attr/current", "/proc/sys/kernel/osrelease"):
+        try:
+            say("INFO", "syscalls", f"{path}: {Path(path).read_text().strip()[:80]}")
+        except OSError:
+            say("INFO", "syscalls", f"{path}: not readable here")
+
+
 def main(argv: list[str]) -> int:
+    if argv == ["--syscalls"]:
+        sandbox_syscalls()
+        return 0
     parser = argparse.ArgumentParser()
     parser.add_argument("--no-chroot", action="store_true")
     parser.add_argument("--profile", default="/linkedin-profile")

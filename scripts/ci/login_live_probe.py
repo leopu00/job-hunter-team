@@ -108,7 +108,7 @@ class Probe:
         folder.chmod(0o777)  # the browser's user (1001) writes here, whoever owns the host folder
         return folder
 
-    def run(self, *, without_chroot: bool = False, cover_policy: bool = False) -> tuple[int, str]:
+    def run(self, *, without_chroot: bool = False, cover_policy: bool = False, extra: tuple[str, ...] = (), mode: tuple[str, ...] = ()) -> tuple[int, str]:
         name = "jht-login-probe-" + secrets.token_hex(3)
         volume = name + "-profile"
         cleanup: list[list[str]] = []
@@ -125,15 +125,15 @@ class Probe:
                 else:
                     host_folder = self.make_profile_dir()
                     profile = str(host_folder)
-                cmd = [*self.engine, "run", "--rm", "--name", name, *hardening_flags(self.spec, without_chroot),
+                cmd = [*self.engine, "run", "--rm", "--name", name, *hardening_flags(self.spec, without_chroot), *extra,
                        "-v", f"{INSIDE}:/probe/inside.py:ro", "-v", f"{profile}:{PROFILE_MOUNT}"]
                 if cover_policy:
                     empty = Path(tmp) / "empty-policy.json"
                     empty.write_text("{}\n", encoding="utf-8")
                     empty.chmod(0o644)
                     cmd += ["-v", f"{empty}:{POLICY_PATH}:ro"]
-                cmd += [self.image, "-g", "--", "python3", "/probe/inside.py", "--profile", PROFILE_MOUNT]
-                if without_chroot:
+                cmd += [self.image, "-g", "--", "python3", "/probe/inside.py", *(mode or ("--profile", PROFILE_MOUNT))]
+                if without_chroot and not mode:
                     cmd.append("--no-chroot")
                 try:
                     result = subprocess.run(cmd, capture_output=True, text=True, timeout=TIMEOUT)
@@ -166,6 +166,9 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--connection", default="", help="Podman connection (never the default one of a Mac or Windows machine)")
     parser.add_argument("--profile-dir", default=None, help="an EXISTING folder of the host; the profile is a new folder made inside it (how the product mounts it)")
     parser.add_argument("--controls", action="store_true")
+    parser.add_argument("--diagnose", action="store_true",
+                        help="only report what the kernel and the engine's filters say about the user namespace and chroot the sandbox needs, "
+                             "in the container as the service has it and in three looser ones (the looser ones are a diagnosis, never a way to run)")
     args = parser.parse_args(argv)
     probe = Probe(engine_argv(args.engine, args.connection), args.image, args.profile_dir)
     if args.profile_dir is not None:
@@ -176,6 +179,15 @@ def main(argv: list[str]) -> int:
             return 2
     print("engine: " + engine_report(probe.engine, args.engine) + f"; image: {args.image}; profile: "
           f"{'new folder inside ' + args.profile_dir if args.profile_dir else 'volume'}")
+    if args.diagnose:
+        looser = [("as the service has it", ()), ("seccomp=unconfined", ("--security-opt", "seccomp=unconfined")),
+                  ("apparmor=unconfined", ("--security-opt", "apparmor=unconfined")),
+                  ("seccomp and apparmor unconfined", ("--security-opt", "seccomp=unconfined", "--security-opt", "apparmor=unconfined"))]
+        for label, flags in looser:
+            print(f"--- {label}")
+            _, text = probe.run(extra=flags, mode=("--syscalls",))
+            print(text, end="" if text.endswith("\n") else "\n")
+        return 0
     code, output = probe.run()
     print(output, end="" if output.endswith("\n") else "\n")
     failed = code != 0 or bool(lines(output, "FAIL")) or "RESULT [probe] OK" not in output
