@@ -16,13 +16,13 @@ PS1 = (ROOT / "scripts" / "jht-wrapper.ps1").read_text(encoding="utf-8")
 
 def test_the_bash_wrapper_forwards_help_as_help_and_the_flags_as_the_short_help():
     assert re.search(r"^  -h\|--help\|''\)\n    serve_help_without_docker --help\n", SH, re.M)
-    assert re.search(r"^  help\)\n    serve_help_without_docker help\n", SH, re.M)
+    assert re.search(r"^  help\)\n(?:    #[^\n]*\n)?(?:    if \[ \"\${2:-}\" = setup \][^\n]*\n      setup_help\n      exit 0\n    fi\n)?    serve_help_without_docker help\n", SH, re.M)
     assert "-h|--help|help|''" not in SH
 
 
 def test_the_powershell_wrapper_forwards_help_as_help_and_the_flags_as_the_short_help():
     assert re.search(r"\$_ -in @\('-h', '--help', ''\) \} \{\n    exit \(Invoke-HelpWithoutDocker '--help'\)", PS1)
-    assert re.search(r"'help' \{\n    exit \(Invoke-HelpWithoutDocker 'help'\)", PS1)
+    assert re.search(r"'help' \{\n(?:    #[^\n]*\n)?(?:    if \(\$Rest\.Count -eq 1 -and \$Rest\[0\] -ceq 'setup'\) \{\n      Write-SetupHelp\n      exit 0\n    \}\n)?    exit \(Invoke-HelpWithoutDocker 'help'\)", PS1)
     assert "'--help', 'help', ''" not in PS1
 
 

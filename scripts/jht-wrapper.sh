@@ -1779,6 +1779,9 @@ container_down() {
   COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose_stdout_quiet down 2>"$errors" || status=$?
   local shown left
   shown="$(compose_noise_filter <"$errors" | rootless_netns_noise_filter)"
+  # With Docker or Colima compose writes its progress (Container jht Stopping, Stopped, Removing...) on stderr: it is shown only if
+  # the stop failed or with --verbose; a stop that went well says «Job Hunter Team stopped.» and nothing else.
+  if [ "$CONTAINER_RUNTIME" != podman ] && [ "$status" -eq 0 ] && [ "${JHT_COMPOSE_VERBOSE:-0}" != 1 ]; then shown=""; fi
   [ -z "$shown" ] || printf '%s\n' "$shown" >&2
   rm -f "$errors"
   # Podman exits non-zero with only that error even though the containers are gone:
@@ -1788,11 +1791,11 @@ container_down() {
       "nota: il processo di rete del team era gia' chiuso"*)
         # podman-compose lists every container of the project (broker and telegram too):
         # an empty answer, and not a failed one, is «nothing left».
-        left="$(COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose ps -q 2>/dev/null)" && [ -z "$left" ] && { [ "$CONTAINER_RUNTIME" != podman ] || printf '%s\n' "$(jht_say down.done)"; return 0; }
+        left="$(COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose ps -q 2>/dev/null)" && [ -z "$left" ] && { printf '%s\n' "$(jht_say down.done)"; return 0; }
         ;;
     esac
   fi
-  [ "$status" -ne 0 ] || [ "$CONTAINER_RUNTIME" != podman ] || printf '%s\n' "$(jht_say down.done)"
+  [ "$status" -ne 0 ] || printf '%s\n' "$(jht_say down.done)"
   return "$status"
 }
 
@@ -1827,11 +1830,25 @@ compose_noise_filter() {
   grep -v -E '^[0-9a-f]{12,64}$|^(jht|host-runtime)_default$|^Error: no container with name or ID "jht-[a-z][a-z0-9-]*" found(: no such container)?$' || true
 }
 
-# `compose <argomenti>` come prima, ma con Podman l'output passa per compose_noise_filter (stdout su stdout, stderr su stderr).
-# Il codice di uscita e' quello di compose.
+# `--verbose` on `jht up`, `jht down`, `jht restart`, `jht recreate`... (or JHT_VERBOSE=1) shows what compose says, line by line, as it
+# comes. Without it the person reads the phase and the result: compose's own lines (Network, Volume, Container Creating, Created,
+# Started...) are kept out of sight when all went well, and shown, whole, when it did not.
+jht_compose_verbose_requested() {
+  JHT_COMPOSE_VERBOSE=0
+  [ "${JHT_VERBOSE:-0}" != 1 ] || JHT_COMPOSE_VERBOSE=1
+  local arg
+  for arg in "$@"; do
+    [ "$arg" != --verbose ] || JHT_COMPOSE_VERBOSE=1
+  done
+  return 0
+}
+
+# `compose <argomenti>` come prima, ma l'output passa per compose_noise_filter (stdout su stdout, stderr su stderr) con Podman; con
+# Docker o Colima, a comando riuscito, non si stampa niente (le righe di avanzamento di compose) e, a comando fallito, tutto cio' che
+# compose ha detto. Con --verbose compose parla come viene. Il codice di uscita e' quello di compose.
 compose_quiet() {
   local out err rc=0
-  if [ "$CONTAINER_RUNTIME" != podman ]; then compose "$@"; return $?; fi
+  if [ "${JHT_COMPOSE_VERBOSE:-0}" = 1 ]; then compose "$@"; return $?; fi
   out="$(mktemp "${TMPDIR:-/tmp}/jht-compose-out.XXXXXX")" || { compose "$@"; return $?; }
   err="$(mktemp "${TMPDIR:-/tmp}/jht-compose-err.XXXXXX")" || { rm -f "$out"; compose "$@"; return $?; }
   # Interrotto (Ctrl-C, chiusura del terminale): i due file temporanei non restano in $TMPDIR.
@@ -1839,8 +1856,13 @@ compose_quiet() {
   trap 'rm -f -- "$COMPOSE_QUIET_OUT" "$COMPOSE_QUIET_ERR"; exit 130' HUP INT TERM
   compose "$@" >"$out" 2>"$err" || rc=$?
   trap - HUP INT TERM
-  compose_noise_filter <"$out"
-  compose_noise_filter <"$err" >&2
+  if [ "$CONTAINER_RUNTIME" = podman ]; then
+    compose_noise_filter <"$out"
+    compose_noise_filter <"$err" >&2
+  elif [ "$rc" -ne 0 ]; then
+    cat "$out"
+    cat "$err" >&2
+  fi
   rm -f -- "$out" "$err"
   return "$rc"
 }
@@ -1848,10 +1870,14 @@ compose_quiet() {
 # Come compose_quiet, ma solo per stdout: lo stderr resta a chi chiama (container_down lo raccoglie in un file e lo filtra da se').
 compose_stdout_quiet() {
   local out rc=0
-  if [ "$CONTAINER_RUNTIME" != podman ]; then compose "$@"; return $?; fi
+  if [ "${JHT_COMPOSE_VERBOSE:-0}" = 1 ]; then compose "$@"; return $?; fi
   out="$(mktemp "${TMPDIR:-/tmp}/jht-compose-out.XXXXXX")" || { compose "$@"; return $?; }
   compose "$@" >"$out" || rc=$?
-  compose_noise_filter <"$out"
+  if [ "$CONTAINER_RUNTIME" = podman ]; then
+    compose_noise_filter <"$out"
+  elif [ "$rc" -ne 0 ]; then
+    cat "$out"
+  fi
   rm -f "$out"
   return "$rc"
 }
@@ -2466,7 +2492,7 @@ telegram_lifecycle_steps() {
       '') ;;
       start)
         ensure_broker || return $?
-        COMPOSE_PROFILES=telegram compose up -d "$TELEGRAM_SERVICE" >/dev/null || return $?
+        COMPOSE_PROFILES=telegram compose_quiet up -d "$TELEGRAM_SERVICE" >/dev/null || return $?
         telegram_lifecycle_verify start || return $?
         ;;
       stop)
@@ -3907,6 +3933,7 @@ jht — Job Hunter Team
   Comandi dell'host (funzionano da qui):
     jht up                 avvia il container del team
     jht down               lo ferma
+                           (con --verbose si vedono anche le righe del motore)
     jht restart            lo riavvia
     jht status             stato di container e team
     jht logs [-f]          log del container
@@ -6676,6 +6703,11 @@ case "$SUB" in
 
   # `jht help` is the LONG list: the short help sends the person to it, so it must not answer with the short one.
   help)
+    # `jht help setup` is `jht setup --help`: the same text, not the long list (the setup runs in the container and a help starts nothing).
+    if [ "${2:-}" = setup ] && [ "$#" -eq 2 ]; then
+      setup_help
+      exit 0
+    fi
     serve_help_without_docker help
     exit $?
     ;;
@@ -6798,6 +6830,7 @@ case "$SUB" in
 
   # ── Lifecycle: parlano direttamente al daemon Docker ───────────────────
   up)
+    jht_compose_verbose_requested "${@:2}"
     require_compose_file
     wake_container_runtime_for_up
     container_mutation_preflight || exit 1
@@ -6808,12 +6841,13 @@ case "$SUB" in
     }
     compose_quiet up -d
     container_postcheck_running || exit 1
-    [ "$CONTAINER_RUNTIME" != podman ] || printf '%s\n' "$(jht_say up.done)"
+    printf '%s\n' "$(jht_say up.done)"
     telegram_lifecycle_if_available resume || exit $?
     broker_after_up
     ;;
 
   start-container)
+    jht_compose_verbose_requested "${@:2}"
     require_compose_file
     require_docker
     container_mutation_preflight || exit 1
@@ -6824,12 +6858,13 @@ case "$SUB" in
     }
     compose_quiet up -d
     container_postcheck_running || exit 1
-    [ "$CONTAINER_RUNTIME" != podman ] || printf '%s\n' "$(jht_say up.done)"
+    printf '%s\n' "$(jht_say up.done)"
     telegram_lifecycle_if_available resume || exit $?
     broker_after_up
     ;;
 
   down|stop-container)
+    jht_compose_verbose_requested "${@:2}"
     require_compose_file
     require_docker
     container_down || exit 1
@@ -6846,20 +6881,21 @@ case "$SUB" in
     ;;
 
   recreate)
+    jht_compose_verbose_requested "${@:2}"
     require_compose_file
     require_docker
     container_up >/dev/null || {
       not_started_or_unattestable $? "ricreazione negata"
     }
     ensure_bind_owner
-    COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose down
+    COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose_quiet down
     telegram_prepare_legacy_inventory || {
       err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
       exit 1
     }
     compose_quiet up -d
     container_postcheck_running || exit 1
-    [ "$CONTAINER_RUNTIME" != podman ] || printf '%s\n' "$(jht_say up.done)"
+    printf '%s\n' "$(jht_say up.done)"
     telegram_lifecycle_if_available resume || exit $?
     broker_after_up
     ;;

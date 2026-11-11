@@ -26,9 +26,11 @@ def test_powershell_wrapper_downloads_on_the_host_and_publishes_without_clobberi
 def test_powershell_wrapper_forwards_detached_compose_flag_as_a_literal():
     source = POWERSHELL_WRAPPER.read_text(encoding="utf-8")
     assert "Invoke-Compose up -d" not in source
-    # the three whole ups, and on Podman the up of the broker (only one made before, T316) in turn before them (T85)
-    assert source.count("Invoke-Compose 'up' '-d'") == 3
-    assert source.count("Invoke-Compose '--profile' 'broker' 'up' '-d' '--no-deps' $service") == 1
+    # the three whole ups (two of them through Invoke-ComposeQuiet, which says the phase and not compose's lines), and on Podman the up
+    # of the broker (only one made before, T316) in turn before them (T85)
+    assert source.count("Invoke-Compose 'up' '-d'") == 1
+    assert source.count("Invoke-ComposeQuiet 'up' '-d'") == 2
+    assert source.count("Invoke-ComposeQuiet '--profile' 'broker' 'up' '-d' '--no-deps' $service") == 1
 
 
 def test_powershell_download_exit_code_cannot_degrade_to_zero():
