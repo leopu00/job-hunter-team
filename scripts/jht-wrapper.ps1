@@ -84,9 +84,10 @@ $script:JhtUninstallPurgeNotice = 'Con --purge vengono cancellati anche ~/.jht e
 # small file, the value one of the seven codes) and only chooses which text is printed. Italian and English are written: another
 # language reads English; where nothing says a language the sentences stay Italian, as they were. Returns 'it' or 'en'.
 function Get-JhtTextLanguage {
-  $hostEnv = if ($env:JHT_HOST_ENV_FILE) { $env:JHT_HOST_ENV_FILE } else { Join-Path $env:USERPROFILE '.jht\host.env' }
   $code = ''
   try {
+    # inside the try: a text must never fail because the folder of the choice cannot be worked out
+    $hostEnv = if ($env:JHT_HOST_ENV_FILE) { $env:JHT_HOST_ENV_FILE } else { Join-Path $env:USERPROFILE '.jht\host.env' }
     $prefs = Join-Path (Split-Path -Parent $hostEnv) 'i18n-prefs.json'
     $item = Get-Item -LiteralPath $prefs -Force -ErrorAction Stop
     if (-not $item.PSIsContainer -and -not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -and $item.Length -le 4096) {
