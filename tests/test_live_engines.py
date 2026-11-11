@@ -71,4 +71,4 @@ def test_every_live_test_picks_its_engines_through_live_engines():
             assert not re.search(r"\[engine,\s*\*args\]", text), path.name
         # Its own list of engines to probe would reach the default connection.
         assert not re.search(r"""for \w+ in \(["']docker["'], ["']podman["']\)""", text), path.name
-    assert users == ["test_broker_socket_live.py", "test_telegram_pairing_live.py"]
+    assert users == ["test_broker_socket_live.py", "test_login_live_probe.py", "test_telegram_pairing_live.py"]
