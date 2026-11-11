@@ -8,7 +8,7 @@ command is scripts/ci/login_live_probe_inside.py, which runs the real sign-in co
   1. main run     the sandbox is on (chrome://sandbox), the form is typed and sent, the cookie is seen, the browser is closed by the
                   watcher, and then Login Data, Web Data and every byte of the profile folder are read: no saved password, no autofill, no
                   user name, no password;
-  2. --controls   the same run with the managed policy of the image covered by an empty one: it must NOT be clean in the same way
+  2. --controls   the same run with the folder of managed policies of the image covered by an empty one: it must NOT be clean in the same way
                   (so the policy is what keeps the profile empty), and a run without SYS_CHROOT: the sandbox does not start.
 
 The profile folder is a volume the engine makes (default) or, with --profile-dir PARENT, a NEW folder with a random name made inside the
@@ -27,7 +27,6 @@ import os
 import secrets
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 try:
@@ -40,7 +39,7 @@ COMPOSE = ROOT / "docker-compose.yml"
 INSIDE = Path(__file__).with_name("login_live_probe_inside.py")
 SERVICE = "jht-login"
 PROFILE_MOUNT = "/linkedin-profile"
-POLICY_PATH = "/etc/chromium/policies/managed/jht-login.json"
+POLICY_DIR = "/etc/chromium/policies/managed"
 TIMEOUT = 240
 
 
@@ -74,7 +73,10 @@ def hardening_flags(spec: dict, without_chroot: bool) -> list[str]:
 
 
 def engine_argv(engine: str, connection: str) -> list[str]:
-    return [engine, "--connection", connection] if engine == "podman" and connection else [engine]
+    """Podman on a named connection, Docker on a named context (Colima: `colima`); without a name, the engine as it is found."""
+    if not connection:
+        return [engine]
+    return [engine, "--connection", connection] if engine == "podman" else [engine, "--context", connection]
 
 
 def engine_report(engine: list[str], kind: str) -> str:
@@ -86,15 +88,18 @@ def engine_report(engine: list[str], kind: str) -> str:
             return "?"
         return (done.stdout or done.stderr).strip().replace("\n", " ")[:120] or "?"
     if kind == "docker":
-        return (f"docker {ask('version', '--format', '{{.Server.Version}}')}, context {ask('context', 'show')}, "
+        context = engine[2] if len(engine) > 2 else ask("context", "show")
+        return (f"docker {ask('version', '--format', '{{.Server.Version}}')}, context {context}, "
                 f"host {ask('info', '--format', '{{.Name}} / {{.OperatingSystem}} / {{.KernelVersion}} / {{.Architecture}}')}")
     return (f"podman {ask('version', '--format', '{{.Version}}')}, connection {engine[2] if len(engine) > 2 else 'local'}, "
             f"host {ask('info', '--format', '{{.Host.Hostname}} / {{.Host.OS}} / {{.Host.Kernel}} / {{.Host.Arch}}')}")
 
 
 class Probe:
-    def __init__(self, engine: list[str], image: str, profile_parent: str | None) -> None:
+    def __init__(self, engine: list[str], image: str, profile_parent: str | None, seccomp_profile: str | None = None) -> None:
         self.engine, self.image = engine, image
+        # a profile of our own for the engine's seccomp filter (the one Docker applies by default stops the namespace sandbox of Chromium)
+        self.seccomp = ["--security-opt", f"seccomp={Path(seccomp_profile).resolve()}"] if seccomp_profile else []
         self.profile_parent = Path(profile_parent) if profile_parent else None
         self.spec = service()
 
@@ -113,46 +118,44 @@ class Probe:
         volume = name + "-profile"
         cleanup: list[list[str]] = []
         host_folder: Path | None = None
-        with tempfile.TemporaryDirectory(prefix="jht-login-probe-") as tmp:
+        try:
+            if self.profile_parent is None:
+                profile = volume
+                subprocess.run([*self.engine, "volume", "create", volume], check=True, capture_output=True, timeout=60)
+                cleanup.append([*self.engine, "volume", "rm", "-f", volume])
+                # a new volume belongs to root: the browser's user must be able to write in it
+                subprocess.run([*self.engine, "run", "--rm", "--user", "0:0", "--entrypoint", "/bin/chown", "-v", f"{volume}:/p",
+                                self.image, "1001:1001", "/p"], check=True, capture_output=True, timeout=120)
+            else:
+                host_folder = self.make_profile_dir()
+                profile = str(host_folder)
+            cmd = [*self.engine, "run", "--rm", "--name", name, *hardening_flags(self.spec, without_chroot), *self.seccomp, *extra,
+                   "-v", f"{INSIDE}:/probe/inside.py:ro", "-v", f"{profile}:{PROFILE_MOUNT}"]
+            if cover_policy:
+                # an empty folder over the folder of managed policies: no host path, so it works where the host's folders are not shared
+                # with the engine (Colima, Docker Desktop)
+                cmd += ["--tmpfs", f"{POLICY_DIR}:ro,size=4k"]
+            cmd += [self.image, "-g", "--", "python3", "/probe/inside.py", *(mode or ("--profile", PROFILE_MOUNT))]
+            if without_chroot and not mode:
+                cmd.append("--no-chroot")
             try:
-                if self.profile_parent is None:
-                    profile = volume
-                    subprocess.run([*self.engine, "volume", "create", volume], check=True, capture_output=True, timeout=60)
-                    cleanup.append([*self.engine, "volume", "rm", "-f", volume])
-                    # a new volume belongs to root: the browser's user must be able to write in it
-                    subprocess.run([*self.engine, "run", "--rm", "--user", "0:0", "--entrypoint", "/bin/chown", "-v", f"{volume}:/p",
-                                    self.image, "1001:1001", "/p"], check=True, capture_output=True, timeout=120)
-                else:
-                    host_folder = self.make_profile_dir()
-                    profile = str(host_folder)
-                cmd = [*self.engine, "run", "--rm", "--name", name, *hardening_flags(self.spec, without_chroot), *extra,
-                       "-v", f"{INSIDE}:/probe/inside.py:ro", "-v", f"{profile}:{PROFILE_MOUNT}"]
-                if cover_policy:
-                    empty = Path(tmp) / "empty-policy.json"
-                    empty.write_text("{}\n", encoding="utf-8")
-                    empty.chmod(0o644)
-                    cmd += ["-v", f"{empty}:{POLICY_PATH}:ro"]
-                cmd += [self.image, "-g", "--", "python3", "/probe/inside.py", *(mode or ("--profile", PROFILE_MOUNT))]
-                if without_chroot and not mode:
-                    cmd.append("--no-chroot")
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=TIMEOUT)
+                return result.returncode, result.stdout + result.stderr
+            except subprocess.TimeoutExpired:
+                subprocess.run([*self.engine, "rm", "-f", name], capture_output=True, timeout=60)
+                return 124, f"FAIL [timeout] the probe did not end in {TIMEOUT} s\n"
+        finally:
+            if host_folder is not None:
+                # what the browser wrote belongs to its user: the same user takes it away, from the folder this run made and no other
+                subprocess.run([*self.engine, "run", "--rm", "--user", "1001:1001", "--entrypoint", "/bin/sh", "-v",
+                                f"{host_folder}:/p", self.image, "-c", "rm -rf /p/* /p/.[!.]* 2>/dev/null; true"],
+                               capture_output=True, timeout=120)
                 try:
-                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=TIMEOUT)
-                    return result.returncode, result.stdout + result.stderr
-                except subprocess.TimeoutExpired:
-                    subprocess.run([*self.engine, "rm", "-f", name], capture_output=True, timeout=60)
-                    return 124, f"FAIL [timeout] the probe did not end in {TIMEOUT} s\n"
-            finally:
-                if host_folder is not None:
-                    # what the browser wrote belongs to its user: the same user takes it away, from the folder this run made and no other
-                    subprocess.run([*self.engine, "run", "--rm", "--user", "1001:1001", "--entrypoint", "/bin/sh", "-v",
-                                    f"{host_folder}:/p", self.image, "-c", "rm -rf /p/* /p/.[!.]* 2>/dev/null; true"],
-                                   capture_output=True, timeout=120)
-                    try:
-                        os.rmdir(host_folder)
-                    except OSError:
-                        print(f"INFO [cleanup] {host_folder} was not emptied: remove it by hand")
-                for command in cleanup:
-                    subprocess.run(command, capture_output=True, timeout=60)
+                    os.rmdir(host_folder)
+                except OSError:
+                    print(f"INFO [cleanup] {host_folder} was not emptied: remove it by hand")
+            for command in cleanup:
+                subprocess.run(command, capture_output=True, timeout=60)
 
 
 def lines(output: str, kind: str) -> list[str]:
@@ -163,14 +166,15 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("image")
     parser.add_argument("--engine", choices=("docker", "podman"), default="docker")
-    parser.add_argument("--connection", default="", help="Podman connection (never the default one of a Mac or Windows machine)")
+    parser.add_argument("--connection", default="", help="Podman connection, or Docker context (never the default machine of a Mac or Windows)")
     parser.add_argument("--profile-dir", default=None, help="an EXISTING folder of the host; the profile is a new folder made inside it (how the product mounts it)")
     parser.add_argument("--controls", action="store_true")
+    parser.add_argument("--seccomp-profile", default=None, help="run with this seccomp profile instead of the engine's default (to test a candidate)")
     parser.add_argument("--diagnose", action="store_true",
                         help="only report what the kernel and the engine's filters say about the user namespace and chroot the sandbox needs, "
                              "in the container as the service has it and in three looser ones (the looser ones are a diagnosis, never a way to run)")
     args = parser.parse_args(argv)
-    probe = Probe(engine_argv(args.engine, args.connection), args.image, args.profile_dir)
+    probe = Probe(engine_argv(args.engine, args.connection), args.image, args.profile_dir, args.seccomp_profile)
     if args.profile_dir is not None:
         try:
             probe.make_profile_dir().rmdir()  # the same refusal the run would meet, before anything starts

@@ -24,6 +24,11 @@ With --no-chroot (the container run WITHOUT SYS_CHROOT) the single check is `chr
 (or `browser_failed`; or say that this engine does not need the capability).
 
     login_live_probe_inside.py [--no-chroot] [--profile DIR]
+    login_live_probe_inside.py --scan DIR [--secret-stdin]
+                                              a profile of a REAL sign-in, read on the machine it is on (python3 only): row counts of the
+                                              saved-login and personal-data tables, the restore state, the cookie NAMES; with --secret-stdin
+                                              one line from stdin (the password, typed by the person) is searched for in every byte of the
+                                              folder. Nothing is printed but counts and names, nothing is sent, the copies it reads are removed
     login_live_probe_inside.py --syscalls      only what the kernel and the engine's filters say about the user namespace and the chroot the
                                               sandbox of Chromium needs (the cause, when the sandbox does not start); always exits 0
 """
@@ -155,7 +160,7 @@ def cookie_names(path: Path) -> list[str] | None:
     return None
 
 
-def scan_profile(profile: Path, user_name: str, password: str, verdict: Verdict) -> None:
+def scan_profile(profile: Path, user_name: str | None, password: str | None, verdict: Verdict) -> None:
     login = table_counts(profile / "Default" / "Login Data")
     if login is None:
         verdict.ok("logindata", "Default/Login Data is not there")
@@ -170,18 +175,17 @@ def scan_profile(profile: Path, user_name: str, password: str, verdict: Verdict)
         rows = personal_rows(web)
         verdict.check(not rows, "webdata", f"Default/Web Data: no row in the personal tables ({len(web)} tables; rows only in: "
                       f"{sorted(n for n, c in web.items() if c)})", f"Default/Web Data has personal rows: {rows}")
-    needles = {"password": password.encode(), "user name": user_name.encode(), "user name (utf-16)": user_name.encode("utf-16-le")}
+    if password is None and user_name is None:
+        return
+    needles = {"password": (password or "\0no-password\0").encode(), "user name": (user_name or "\0no-user\0").encode(),
+               "user name (utf-16)": (user_name or "\0no-user\0").encode("utf-16-le")}
     found = files_with(profile, needles)
-    verdict.check(not found["password"], "marker", "the password is in no file of the profile",
-                  f"the password is in: {found['password']}")
-    where = found["user name"] + found["user name (utf-16)"]
-    forms = [name for name in where if name.startswith("Default/Web Data") or "Login Data" in name]
-    verdict.check(not forms, "marker", "the user name is not in Login Data or Web Data", f"the user name is in: {forms}")
-    if where and not forms:
-        # not a saved form: the restore state of the browser keeps what was in the page (the user name, never the password)
-        verdict.info("username", f"the user name typed in the page is also in: {where}")
-    elif not where:
-        verdict.ok("username", "the user name is in no file of the profile")
+    if password is not None:
+        verdict.check(not found["password"], "marker", "the password is in no file of the profile",
+                      f"the password is in: {found['password']}")
+    if user_name is not None:
+        where = found["user name"] + found["user name (utf-16)"]
+        verdict.check(not where, "marker", "the user name is in no file of the profile", f"the user name is in: {where}")
 
 
 def control_scanner(verdict: Verdict) -> None:
@@ -458,6 +462,32 @@ def run_login(verdict: Verdict, profile: Path) -> None:
     verdict.check(not foreign, "owner", "nothing in the profile is owned by root", f"owned by root: {foreign[:5]}")
 
 
+def scan_real_profile(profile: Path, secret: str | None) -> int:
+    """A profile made by a REAL sign-in, on the machine of the person: counts and names only, never a value, nothing leaves this process.
+
+    The copies of the databases this makes (Chromium owns the files) go to a folder that is removed at the end.
+    """
+    global WORK
+    import shutil
+    import tempfile
+    WORK = Path(tempfile.mkdtemp(prefix="jht-scan-"))
+    verdict = Verdict()
+    try:
+        if not profile.is_dir() or profile.is_symlink():
+            say("FAIL", "scan", "the profile is not a folder")
+            return 2
+        scan_profile(profile, None, secret, verdict)
+        state = [relative for relative in ("Default/Sessions", "Default/Current Session", "Default/Current Tabs", "Default/Last Session",
+                                           "Default/Last Tabs") if (profile / relative).exists()]
+        verdict.check(not state, "restore", "no file the browser restores its tabs from", f"the browser's restore state is there: {state}")
+        names = cookie_names(profile)
+        verdict.info("cookies", f"cookie names in the profile: {names}")
+        say("RESULT", "scan", "FAILED" if verdict.failed else "OK")
+        return 1 if verdict.failed else 0
+    finally:
+        shutil.rmtree(WORK, ignore_errors=True)
+
+
 def sandbox_syscalls() -> None:
     """The two steps the namespace sandbox of Chromium takes, one by one, in a child process each, and what filters this process is under."""
     import ctypes
@@ -497,6 +527,9 @@ def sandbox_syscalls() -> None:
 
 
 def main(argv: list[str]) -> int:
+    if argv[:1] == ["--scan"] and len(argv) in (2, 3) and (len(argv) == 2 or argv[2] == "--secret-stdin"):
+        secret = sys.stdin.readline().rstrip("\n") if len(argv) == 3 else None
+        return scan_real_profile(Path(argv[1]).expanduser(), secret or None)
     if argv == ["--syscalls"]:
         sandbox_syscalls()
         return 0

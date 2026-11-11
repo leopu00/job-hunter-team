@@ -11,6 +11,7 @@ import importlib.util
 import os
 import sqlite3
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -119,15 +120,52 @@ def test_the_user_name_in_the_form_history_turns_the_result_red_in_either_encodi
         assert verdict.failed == 1, encoding
 
 
-def test_the_user_name_in_the_restore_state_alone_is_reported_not_failed(inside, capsys):
+def test_the_user_name_in_the_restore_state_of_the_browser_turns_the_result_red(inside):
     folder = inside.WORK / "restore"
     (folder / "Default" / "Sessions").mkdir(parents=True)
     (folder / "Default" / "Sessions" / "Session_1").write_bytes(b"x someone-0123456789 x")
     verdict = inside.Verdict()
     inside.scan_profile(folder, "someone-0123456789", "pw-0123456789abcdef", verdict)
-    assert verdict.failed == 0
+    assert verdict.failed == 1
+
+
+def test_the_scan_of_a_real_profile_prints_counts_and_names_and_never_a_value(inside, tmp_path, capsys, monkeypatch):
+    profile = tmp_path / "real-profile"
+    (profile / "Default" / "Network").mkdir(parents=True)
+    connection = sqlite3.connect(profile / "Default" / "Network" / "Cookies")
+    connection.execute("CREATE TABLE cookies (name TEXT, value TEXT)")
+    connection.execute("INSERT INTO cookies VALUES ('li_at', 'a-secret-cookie-value')")
+    connection.commit()
+    connection.close()
+    for name, table in (("Login Data", "logins"), ("Web Data", "keywords")):
+        connection = sqlite3.connect(profile / "Default" / name)
+        connection.execute(f"CREATE TABLE {table} (value TEXT)")
+        connection.commit()
+        connection.close()
+    import io
+    monkeypatch.setattr(sys, "stdin", io.StringIO("not-in-any-file\n"))
+    assert inside.main(["--scan", str(profile), "--secret-stdin"]) == 0
     out = capsys.readouterr().out
-    assert "INFO [username]" in out and "Default/Sessions/Session_1" in out
+    assert "RESULT [scan] OK" in out and "li_at" in out
+    assert "a-secret-cookie-value" not in out and "not-in-any-file" not in out
+    assert not list(Path(tempfile.gettempdir()).glob("jht-scan-*"))  # the copies are gone
+
+
+def test_the_scan_of_a_real_profile_is_red_for_a_saved_login_the_secret_and_the_restore_state(inside, tmp_path, monkeypatch, capsys):
+    profile = tmp_path / "real-profile"
+    (profile / "Default" / "Sessions").mkdir(parents=True)
+    (profile / "Default" / "Sessions" / "Session_1").write_bytes(b"x")
+    (profile / "Default" / "leak").write_bytes(b"x correct-horse-battery x")
+    connection = sqlite3.connect(profile / "Default" / "Login Data")
+    connection.execute("CREATE TABLE logins (value TEXT)")
+    connection.execute("INSERT INTO logins VALUES ('x')")
+    connection.commit()
+    connection.close()
+    import io
+    monkeypatch.setattr(sys, "stdin", io.StringIO("correct-horse-battery\n"))
+    assert inside.main(["--scan", str(profile), "--secret-stdin"]) == 1
+    out = capsys.readouterr().out
+    assert out.count("FAIL [") == 3 and "correct-horse-battery" not in out
 
 
 def test_the_browser_command_keeps_every_flag_of_the_image_and_only_swaps_the_network_ones(inside, monkeypatch):
