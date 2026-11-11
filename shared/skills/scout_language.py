@@ -25,6 +25,9 @@ Two commands, both reading `languages` from `$JHT_HOME/profile/candidate_profile
              - an ad written in a language the profile does not speak (and not English), seen in enough words;
              - a title with the job words of such a language and none of English.
            A language the profile speaks, an English ad, a short or mixed text: never dropped.
+           It also says, when the title names a level that is not the profile's, `"seniority": "above"` or `"below"`
+           (scout_seniority.py): never a reason to drop it, only to insert it AFTER the candidates that carry no such
+           code (rule SC-04: priority yes, exclusion no; the Scorer owns the seniority gap).
 
 Levels are free text in the profile (`native`, `fluent`, `C1`, `madrelingua`, `beginner`...): business level is B2 and
 above, an unknown wording gets the benefit of the doubt (it counts as spoken).
@@ -385,6 +388,21 @@ def _log(result: dict, args) -> None:
         print("scout_language: could not write the pass log (%s)" % exc.__class__.__name__, file=sys.stderr)
 
 
+def _add_seniority(result: dict, title: str, profile_path) -> None:
+    """`seniority`: `above` or `below` when the title names a level that is not the profile's. Nothing otherwise, and nothing
+    when it cannot be told: it is an order for the Scout, never a verdict, and it never stops a screen."""
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("scout_seniority_for_language", HERE / "scout_seniority.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        code = mod.compare(title, mod.profile_level(profile_path))
+    except Exception:  # noqa: BLE001
+        return
+    if code in ("above", "below"):
+        result["seniority"] = code
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="scout_language", description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -410,6 +428,8 @@ def main(argv=None) -> int:
         print(json.dumps(verdict, sort_keys=True))
         return 10 if verdict["verdict"] == "skip" else 0
     result = screen(args.title, args.snippet, spoken)
+    if result["verdict"] != "skip_language":
+        _add_seniority(result, args.title, args.profile)
     _log(result, args)
     print(json.dumps(result, sort_keys=True))
     return 10 if result["verdict"] == "skip_language" else 0
