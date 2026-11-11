@@ -86,12 +86,13 @@ jobs:
           "SERVED=$env:SERVED" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
           "TIMES=$env:TIMES" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
           New-Item -ItemType Directory -Path "$env:SERVED\scripts" -Force | Out-Null
-          foreach ($relative in 'docker-compose.yml', 'docker-compose.podman.yml', 'scripts\jht-wrapper.ps1',
-                               'scripts\windows-private-acl.ps1', 'scripts\enable-podman-windows-runtime.ps1',
-                               'scripts\configure-podman-windows-network.ps1', 'scripts\podman-machine-bridge.ps1',
-                               'scripts\wsl-interop-connect-proxy.py') {
+          foreach ($relative in 'docker-compose.yml', 'docker-compose.podman.yml') {
             Copy-Item -LiteralPath $relative -Destination (Join-Path $env:SERVED $relative)
           }
+          # The whole scripts folder, not a list of names: install.ps1 downloads each runtime script it ships from the
+          # base above, and a name added to its list (jht-integration.ps1 on 10/11, jht-tools.ps1 after it) that this step
+          # did not copy made every run since fail in 2 s with «(404) Not Found» before the install began.
+          Copy-Item -Path 'scripts\*' -Destination (Join-Path $env:SERVED 'scripts') -Recurse
           $server = Start-Process -FilePath python -ArgumentList @('-m', 'http.server', '8765', '--bind', '127.0.0.1', '--directory', $env:SERVED) -WindowStyle Hidden -PassThru
           for ($i = 0; $i -lt 30; $i++) {
             try { Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:8765/docker-compose.yml' | Out-Null; break } catch { Start-Sleep -Seconds 1 }
