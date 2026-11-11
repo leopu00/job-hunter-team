@@ -67,6 +67,7 @@ STRICT = (
 # Meant for Windows although the name does not say so (they run PowerShell with the project's shell switch, or are the
 # Windows branch of a test that skips the POSIX one): green on Windows PowerShell 5.1 and on pwsh at the scan of 11/11.
 WINDOWS_GATE_EXTRA = (
+    "tests/test_artifact_links_every_backend.py",
     "tests/test_first_start_messages_powershell.py",
     "tests/test_installer_core_tier.py",
     "tests/test_powershell_native_args_no_double_quotes.py",
@@ -79,12 +80,7 @@ WINDOWS_GATE_EXTRA = (
 )
 
 # Red on Windows today, waiting for the correction: file -> whose it is and why. Empty when all is corrected.
-PENDING: dict[str, str] = {
-    "tests/test_windows_artifact_cli_upload.py": (
-        "12 of its cases are red on 5.1 and on 7: the dispatcher runs shared/skills/artifact.py with the Python of the "
-        "Windows host and it uses os.O_DIRECTORY, which Windows has not (AttributeError); the rest of the file passes"
-    ),
-}
+PENDING: dict[str, str] = {}
 
 # Not run on Windows: they test the wrappers on Linux and macOS with pwsh and sh fakes, and use what Windows does not
 # have. file -> why. A new file that runs PowerShell must be in one of the groups above or here (the guard test).
