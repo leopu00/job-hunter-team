@@ -8,6 +8,7 @@ import importlib.util
 import os
 import sqlite3
 import stat
+import subprocess
 import sys
 import tempfile
 import time
@@ -168,9 +169,9 @@ log = os.environ["FAKE_LOG"]
 with open(log, "a") as f:
     f.write(name + " " + " ".join(sys.argv[1:]) + "\\n")
 if name == "Xvfb":
-    os.makedirs("/tmp/.X11-unix", exist_ok=True)
+    os.makedirs(os.environ["FAKE_X_DIR"], exist_ok=True)
     s = socket.socket(socket.AF_UNIX)
-    path = "/tmp/.X11-unix/X97"
+    path = os.environ["FAKE_X_DIR"] + "/X97"
     try:
         os.unlink(path)
     except OSError:
@@ -207,6 +208,9 @@ def fakes(tmp_path, monkeypatch):
     monkeypatch.setattr(ls, "SOCKET_WAIT_SECONDS", 5)
     monkeypatch.setattr(ls, "RELAY_PORT", _free_port())
     short = Path(tempfile.mkdtemp(prefix="lsx", dir="/tmp"))
+    # the display socket is the one the supervisor waits for: a folder of its own, or two tests running side by side wait for each other's
+    monkeypatch.setenv("FAKE_X_DIR", str(short / "x11"))
+    monkeypatch.setattr(ls, "X_SOCKET_DIR", str(short / "x11"))
     return type("F", (), {"log": log, "dir": short, "profile": tmp_path / "profile", "bin": bindir})
 
 
@@ -222,12 +226,14 @@ def _run(f, **kw):
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="unix sockets and programs on the PATH")
-def test_the_supervisor_starts_the_four_programs_in_order_and_ends_when_the_login_is_done(fakes, monkeypatch):
+def test_the_supervisor_starts_the_four_programs_the_display_first_and_ends_when_the_login_is_done(fakes, monkeypatch):
     make_cookies(fakes.profile / "Default" / "Network" / "Cookies", [(".linkedin.com", "li_at", int(time.time() * 1e6) + ls.CHROME_UNIX_EPOCH_US + 10**12)])
     code = _run(fakes)
     lines = fakes.log.read_text().splitlines()
     assert code == 0
-    assert [line.split()[0] for line in lines] == ["Xvfb", "openbox", "chromium", "x11vnc"]
+    names = [line.split()[0] for line in lines]
+    # the display is waited for before the others start; the order of the other three is not: each one is a process that logs when it is up
+    assert names[0] == "Xvfb" and sorted(names[1:]) == ["chromium", "openbox", "x11vnc"]
     assert (fakes.dir / "hint").read_text() == "logged_in\n"
     assert "-nolisten tcp" in lines[0]
 
@@ -245,7 +251,8 @@ def test_the_supervisor_stops_what_it_started_when_it_ends(fakes, monkeypatch):
     monkeypatch.setenv("FAKE_CHROMIUM", "crash")
     _run(fakes)
     time.sleep(0.3)
-    left = os.popen(f"pgrep -f '{fakes.bin}/' 2>/dev/null").read().split()
+    # no shell: a `sh -c "pgrep -f <path>"` would find itself by the path in its own command line
+    left = subprocess.run(["pgrep", "-f", f"{fakes.bin}/"], capture_output=True, text=True).stdout.split()
     assert left == []
 
 

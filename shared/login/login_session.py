@@ -32,6 +32,7 @@ import time
 from pathlib import Path
 
 DISPLAY = ":97"
+X_SOCKET_DIR = "/tmp/.X11-unix"  # where Xvfb makes the socket of the display (a test points it at a folder of its own)
 GEOMETRY = "1280x900x24"
 RELAY_HOST, RELAY_PORT = "127.0.0.1", 3128
 START_URL = "https://www.linkedin.com/login"
@@ -159,7 +160,7 @@ async def run(vnc_socket: str, proxy_socket: str, hint_file: str, profile: str) 
     chromium = None
     try:
         env = {**os.environ, "DISPLAY": DISPLAY, "HOME": "/tmp"}
-        x_socket = f"/tmp/.X11-unix/X{DISPLAY[1:]}"
+        x_socket = f"{X_SOCKET_DIR}/X{DISPLAY[1:]}"
         processes.append(subprocess.Popen(["Xvfb", DISPLAY, "-screen", "0", GEOMETRY, "-nolisten", "tcp"], env=env,
                                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
         if not wait_for_socket(x_socket, SOCKET_WAIT_SECONDS):

@@ -40,9 +40,9 @@ def _function(text: str, name: str) -> str:
     return match.group(0)
 
 
-# Made by the command that asks for the service (`jht screen on` makes the folder of the viewer password, as the person, and refuses a
-# link there), not by `up`: the service is off until then, and nothing of it exists before.
-ON_REQUEST_SOURCES = {".jht/live-screen"}
+# Made by the command that asks for the service (`jht screen on` makes the folder of the viewer password, `jht linkedin login` the folder of
+# the profile, as the person, and both refuse a link there), not by `up`: the service is off until then, and nothing of it exists before.
+ON_REQUEST_SOURCES = {".jht/live-screen", ".jht/secrets/linkedin-profile"}
 
 
 def _home_sources() -> list[str]:
@@ -57,7 +57,7 @@ def _ps_literal(value: str) -> str:
 
 def test_the_compose_mounts_two_folders_of_the_home():
     # If the compose gains or loses a ${HOME} mount, the test below follows it.
-    assert _home_sources() == [".jht", "Documents/Job Hunter Team", ".jht/live-screen"]
+    assert _home_sources() == [".jht", "Documents/Job Hunter Team", ".jht/live-screen", ".jht/secrets/linkedin-profile"]
 
 
 @pytest.mark.skipif(_shell() is None, reason="needs PowerShell (pwsh or powershell)")

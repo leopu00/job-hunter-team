@@ -280,7 +280,7 @@ def test_jht_tools_is_a_host_helper_loaded_after_its_digest_and_with_a_local_hel
     assert re.search(r'^RUNTIME_HELPERS="[^"]*\bjht-tools\.sh\b[^"]*"', wrapper, re.M)
     # a helper that is not declared yet is answered «not installed yet» before anything is loaded; one that is declared is loaded as it was
     assert re.search(r'^  tools\)\n    require_compose_file\n(    if \[ -z "\$\(runtime_helper_digest jht-tools\.sh\)" \]; then runtime_helper_absent_answer tools "\$\{@:2\}" && exit 0; fi\n)?    runtime_helper_load jht-tools\.sh "\$\{2:-\}" \|\| exit 1\n    tools_main "\$\{@:2\}"\n    exit \$\?\n', wrapper, re.M)
-    assert re.search(r"\|integration\|screen\|tools\|", wrapper), "its --help is the local one: no engine started by it"
+    assert re.search(r"\|integration\|screen\|linkedin\|tools\|", wrapper), "its --help is the local one: no engine started by it"
     assert TOOLS.read_text(encoding="utf-8").count("\n# JHT_RUNTIME_HELPER=1\n") == 1, "the marker the installer's download checks, on a line of its own"
     # only `add` and `remove` of the integrations fetch a helper that is missing: no command of `jht tools` ever downloads (A3)
     assert "add|remove) runtime_helpers_install" in wrapper and "add|remove|pull)" not in wrapper
