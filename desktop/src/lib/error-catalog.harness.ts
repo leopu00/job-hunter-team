@@ -44,6 +44,18 @@ export const HARNESS_ERRORS: Readonly<Record<string, ErrorCopy>> = {
     text: { it: "Lo schermo live si vede solo dal computer su cui gira la squadra.", en: "The live screen can only be seen from the computer the team runs on." },
     action: { it: "Usalo dal computer dove la squadra è installata.", en: "Use it from the computer where the team is installed." },
   },
+  provider_key_invalid: {
+    text: { it: "La chiave non ha la forma di una chiave API.", en: "That does not have the shape of an API key." },
+    action: { it: "Incolla la chiave così com’è: una sola riga, da 16 a 512 caratteri, senza spazi.", en: "Paste the key as it is: a single line of 16 to 512 characters, without spaces." },
+  },
+  provider_key_provider_invalid: {
+    text: { it: "Il provider della chiave non è uno di quelli che usano una chiave API.", en: "The provider of the key is not one that works with an API key." },
+    action: { it: "Riapri le Impostazioni e riprova.", en: "Open the Settings again and try again." },
+  },
+  provider_key_failed: {
+    text: { it: "Non sono riuscito a salvare la chiave nel team.", en: "The key could not be saved in the team." },
+    action: { it: "Controlla che la squadra sia raggiungibile e riprova.", en: "Check that the team can be reached and try again." },
+  },
 };
 
 export const HARNESS_ERROR_TRANSLATIONS: Readonly<Record<string, ErrorTranslations>> = {
@@ -116,5 +128,26 @@ export const HARNESS_ERROR_TRANSLATIONS: Readonly<Record<string, ErrorTranslatio
     fr: ["L’écran en direct ne se voit que depuis l’ordinateur sur lequel l’équipe fonctionne.", "Utilise-le depuis l’ordinateur où l’équipe est installée."],
     hu: ["Az élő képernyő csak arról a számítógépről látható, amelyen a csapat fut.", "Azon a számítógépen használd, ahová a csapat telepítve van."],
     pt: ["O ecrã em direto só se vê a partir do computador onde a equipa funciona.", "Usa-o no computador onde a equipa está instalada."],
+  },
+  provider_key_invalid: {
+    de: ["Das hat nicht die Form eines API-Schlüssels.", "Füge den Schlüssel unverändert ein: eine einzelne Zeile mit 16 bis 512 Zeichen, ohne Leerzeichen."],
+    es: ["Eso no tiene la forma de una clave de API.", "Pega la clave tal cual: una sola línea de 16 a 512 caracteres, sin espacios."],
+    fr: ["Cela n’a pas la forme d’une clé d’API.", "Colle la clé telle quelle : une seule ligne de 16 à 512 caractères, sans espaces."],
+    hu: ["Ez nem API-kulcs alakú.", "Illeszd be a kulcsot úgy, ahogy van: egyetlen sor, 16–512 karakter, szóközök nélkül."],
+    pt: ["Isso não tem a forma de uma chave de API.", "Cola a chave tal como está: uma única linha de 16 a 512 caracteres, sem espaços."],
+  },
+  provider_key_provider_invalid: {
+    de: ["Der Anbieter des Schlüssels arbeitet nicht mit einem API-Schlüssel.", "Öffne die Einstellungen erneut und versuche es noch einmal."],
+    es: ["El proveedor de la clave no es de los que funcionan con una clave de API.", "Vuelve a abrir los ajustes e inténtalo de nuevo."],
+    fr: ["Le fournisseur de la clé ne fonctionne pas avec une clé d’API.", "Rouvre les réglages et réessaie."],
+    hu: ["A kulcs szolgáltatója nem dolgozik API-kulccsal.", "Nyisd meg újra a beállításokat, és próbáld újra."],
+    pt: ["O fornecedor da chave não é dos que funcionam com uma chave de API.", "Volta a abrir as definições e tenta novamente."],
+  },
+  provider_key_failed: {
+    de: ["Der Schlüssel konnte nicht im Team gespeichert werden.", "Prüfe, ob das Team erreichbar ist, und versuche es erneut."],
+    es: ["No se pudo guardar la clave en el equipo.", "Comprueba que el equipo sea accesible y vuelve a intentarlo."],
+    fr: ["La clé n’a pas pu être enregistrée dans l’équipe.", "Vérifie que l’équipe est joignable et réessaie."],
+    hu: ["A kulcsot nem sikerült elmenteni a csapatban.", "Ellenőrizd, hogy a csapat elérhető-e, és próbáld újra."],
+    pt: ["Não foi possível guardar a chave na equipa.", "Verifica se a equipa está acessível e tenta novamente."],
   },
 };

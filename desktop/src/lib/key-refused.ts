@@ -24,6 +24,13 @@ export function isAccessRefused(state: AgentStateInfo | null | undefined): boole
   return state?.state === "bloccato" && state.reason === "accesso_scaduto";
 }
 
+/** The provider whose API key the team uses (glm or kimi on Pi), or null for a team that works with a login. */
+export function apiKeyProviderOf(choice: HarnessChoice | null): "glm" | "kimi" | null {
+  if (!choice || choice.harness !== "pi" || choice.login !== "not_needed") return null;
+  const code = KEY_REFUSED_CODE[choice.provider];
+  return code === undefined ? null : code === "agent_key_refused_glm" ? "glm" : "kimi";
+}
+
 /** The catalog code for a team on an API key, or null when the team works with a login (or the read says nothing). */
 export function keyRefusedCode(choice: HarnessChoice | null): string | null {
   if (!choice || choice.harness !== "pi" || choice.login !== "not_needed") return null;

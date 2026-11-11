@@ -37,6 +37,7 @@ mod existing_team_register_tests;
 mod existing_team_runtime;
 mod linux_render;
 mod live_screen;
+mod provider_key;
 mod screen_control;
 mod local_action_log;
 mod local_position_act;
@@ -160,6 +161,7 @@ macro_rules! registered_native_commands {
             desktop_platform::desktop_platform,
             live_screen::live_screen_session,
             live_screen::open_live_screen,
+            provider_key::provider_key_save,
             screen_control::screen_set,
             screen_control::screen_status,
             mail::mail_save_password,
@@ -257,6 +259,7 @@ pub fn run() {
         .manage(account_scope::AccountScopeState::default())
         .manage(broker_view::BrokerViewState::default())
         .manage(screen_control::ScreenControlState::default())
+        .manage(provider_key::ProviderKeyState::default())
         .manage(direct_chat::DirectChatState::default())
         .manage(state_stream::StateStreamState::default())
         .manage(onboarding::OnboardingNativeState::default())

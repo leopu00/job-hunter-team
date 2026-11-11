@@ -27,6 +27,8 @@ const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
 
 /** Literals that look like codes but never reach the person, and why. */
 const NOT_ERRORS: Record<string, string> = {
+  saved: "answer word of provider_key_save (provider_key.rs): the key is kept; the Settings card says it, never an error",
+  refused: "answer word of provider_key_save (provider_key.rs): the key is kept and the provider refused it; the Settings card says it",
   not_installed: "state word of `jht screen status --json` (screen_control.rs), shown by the Settings card as «off», never an error",
   expired_held: "closed queue outcome (direct_chat.rs QUEUE_ENDINGS), rendered by ChatMessageRow as text that may still be in the composer; never an error",
   // runtime_up.rs (the machine and the folders `jht up` needs, got ready by the app): the closed reason words of the runtime log; the

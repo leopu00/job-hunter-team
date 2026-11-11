@@ -1,0 +1,86 @@
+import type { Locale } from "@/i18n/config";
+
+/** The «API key» card of the Settings (Team), for a team on glm or kimi. 7 languages; Italian is the source and its shape is the type. {provider} is GLM (Z.ai) or Kimi (Moonshot). */
+const it = {
+  title: "Chiave API",
+  text: "Il team usa {provider} con una chiave API. Se è sbagliata, scaduta o revocata, incollane qui una nuova: la chiave va al team e resta nel suo spazio protetto, non viene scritta su questo computer né nei registri.",
+  label: "Nuova chiave API",
+  placeholder: "Incolla la chiave",
+  save: "Salva la chiave",
+  saving: "Salvo la chiave…",
+  shape: "Una chiave è una sola riga, da 16 a 512 caratteri, senza spazi.",
+  saved: "Chiave salvata. Per far partire gli agenti con la chiave nuova, riavvia la squadra.",
+  refused: "Chiave salvata, ma {provider} l’ha rifiutata: controlla di aver copiato la chiave giusta e incollane un’altra.",
+};
+
+export type ProviderKeyCardText = typeof it;
+
+export const PROVIDER_KEY_CARD_TEXT: Record<Locale, ProviderKeyCardText> = {
+  it,
+  en: {
+    title: "API key",
+    text: "The team uses {provider} with an API key. If it is wrong, expired or revoked, paste a new one here: the key goes to the team and stays in its protected space, it is not written on this computer or in the logs.",
+    label: "New API key",
+    placeholder: "Paste the key",
+    save: "Save the key",
+    saving: "Saving the key…",
+    shape: "A key is a single line of 16 to 512 characters, without spaces.",
+    saved: "Key saved. To start the agents with the new key, restart the team.",
+    refused: "Key saved, but {provider} refused it: check that you copied the right key and paste another one.",
+  },
+  de: {
+    title: "API-Schlüssel",
+    text: "Das Team nutzt {provider} mit einem API-Schlüssel. Ist er falsch, abgelaufen oder widerrufen, füge hier einen neuen ein: Der Schlüssel geht an das Team und bleibt in dessen geschütztem Bereich, er wird weder auf diesem Computer noch in Protokollen gespeichert.",
+    label: "Neuer API-Schlüssel",
+    placeholder: "Schlüssel einfügen",
+    save: "Schlüssel speichern",
+    saving: "Schlüssel wird gespeichert…",
+    shape: "Ein Schlüssel ist eine einzelne Zeile mit 16 bis 512 Zeichen, ohne Leerzeichen.",
+    saved: "Schlüssel gespeichert. Starte das Team neu, damit die Agenten mit dem neuen Schlüssel starten.",
+    refused: "Schlüssel gespeichert, aber {provider} hat ihn abgelehnt: Prüfe, ob du den richtigen Schlüssel kopiert hast, und füge einen anderen ein.",
+  },
+  es: {
+    title: "Clave de API",
+    text: "El equipo usa {provider} con una clave de API. Si es incorrecta, ha caducado o se ha revocado, pega aquí una nueva: la clave va al equipo y se queda en su espacio protegido, no se escribe en este ordenador ni en los registros.",
+    label: "Nueva clave de API",
+    placeholder: "Pega la clave",
+    save: "Guardar la clave",
+    saving: "Guardando la clave…",
+    shape: "Una clave es una sola línea de 16 a 512 caracteres, sin espacios.",
+    saved: "Clave guardada. Para que los agentes arranquen con la clave nueva, reinicia el equipo.",
+    refused: "Clave guardada, pero {provider} la ha rechazado: comprueba que copiaste la clave correcta y pega otra.",
+  },
+  fr: {
+    title: "Clé d’API",
+    text: "L’équipe utilise {provider} avec une clé d’API. Si elle est erronée, expirée ou révoquée, colle-en une nouvelle ici : la clé va à l’équipe et reste dans son espace protégé, elle n’est écrite ni sur cet ordinateur ni dans les journaux.",
+    label: "Nouvelle clé d’API",
+    placeholder: "Colle la clé",
+    save: "Enregistrer la clé",
+    saving: "Enregistrement de la clé…",
+    shape: "Une clé tient sur une seule ligne de 16 à 512 caractères, sans espaces.",
+    saved: "Clé enregistrée. Pour démarrer les agents avec la nouvelle clé, redémarre l’équipe.",
+    refused: "Clé enregistrée, mais {provider} l’a refusée : vérifie que tu as copié la bonne clé et colles-en une autre.",
+  },
+  hu: {
+    title: "API-kulcs",
+    text: "A csapat API-kulccsal használja a következőt: {provider}. Ha a kulcs hibás, lejárt vagy visszavont, illessz be ide egy újat: a kulcs a csapathoz kerül, és annak védett terében marad, nem íródik ki erre a számítógépre, sem a naplókba.",
+    label: "Új API-kulcs",
+    placeholder: "Illeszd be a kulcsot",
+    save: "Kulcs mentése",
+    saving: "A kulcs mentése…",
+    shape: "A kulcs egyetlen sor, 16–512 karakter, szóközök nélkül.",
+    saved: "A kulcs elmentve. Hogy az ügynökök az új kulccsal induljanak, indítsd újra a csapatot.",
+    refused: "A kulcs elmentve, de a(z) {provider} elutasította: ellenőrizd, hogy a jó kulcsot másoltad-e, és illessz be egy másikat.",
+  },
+  pt: {
+    title: "Chave de API",
+    text: "A equipa usa {provider} com uma chave de API. Se estiver errada, expirada ou revogada, cola aqui uma nova: a chave vai para a equipa e fica no espaço protegido dela, não é escrita neste computador nem nos registos.",
+    label: "Nova chave de API",
+    placeholder: "Cola a chave",
+    save: "Guardar a chave",
+    saving: "A guardar a chave…",
+    shape: "Uma chave é uma única linha de 16 a 512 caracteres, sem espaços.",
+    saved: "Chave guardada. Para os agentes arrancarem com a chave nova, reinicia a equipa.",
+    refused: "Chave guardada, mas {provider} recusou-a: verifica se copiaste a chave certa e cola outra.",
+  },
+};
