@@ -10,6 +10,7 @@ import { later, say, show } from '../lib/texts.js'
 import { AGENTS, isAgentSession } from './team/agents.js'
 import { LATEST_CONFIG_VERSION } from './migrate.js'
 import { PI_API_PROVIDERS, piApiProvider } from '../../../shared/runtime/provider-models.js'
+import { providerSignedIn } from '../lib/provider-signin.js'
 
 const JHT_DIR     = JHT_HOME
 const CONFIG_PATH = join(JHT_DIR, 'jht.config.json')
@@ -78,8 +79,14 @@ async function checkProvider() {
   // Le subscription usano la sessione OAuth della CLI e non hanno, per
   // definizione, una API key nel config. Segnalarle come incomplete rende il
   // doctor fuorviante proprio dopo un login riuscito dal wizard desktop.
+  // Ma il login deve esserci davvero: un setup interrotto alla schermata di login lascia una config
+  // completa e nessun accesso, e il doctor diceva «Tutto a posto» (collaudo Mac del 12/11).
   if (prov?.auth_method === 'subscription' || prov?.auth_method === 'cli') {
-    return { ok: true, msg: later('doctor.provider_subscription', { name: `${active}${prov?.model ? ` (${prov.model})` : ''}` }) }
+    const name = `${active}${prov?.model ? ` (${prov.model})` : ''}`
+    if (!(await providerSignedIn(cfg, JHT_HOME))) {
+      return { warn: true, msg: later('doctor.provider_signin_missing', { name }), hint: later('doctor.provider_signin_hint') }
+    }
+    return { ok: true, msg: later('doctor.provider_subscription', { name }) }
   }
 
   // Non lasciare che la key di un provider mascheri la configurazione

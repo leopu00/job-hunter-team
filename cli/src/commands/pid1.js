@@ -27,13 +27,13 @@
  *   3. default `local` (sicuro: comportamento storico)
  */
 
-import { readFile, access, unlink, writeFile, lstat } from 'node:fs/promises';
+import { readFile, access, unlink, writeFile } from 'node:fs/promises';
 import { existsSync, createWriteStream, mkdirSync, statSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { watch } from 'node:fs';
 import { dirname } from 'node:path';
-import { PI_LOGIN_MARKER, inspectPiLogin, loginMarkerOf, piApiKeyConfigured } from '../../../shared/runtime/agent-harness.js';
+import { providerSignedIn } from '../lib/provider-signin.js';
 
 const JHT_ENTRY = '/app/cli/bin/jht.js';
 const JHT_HOME = '/jht_home';
@@ -281,27 +281,7 @@ async function ensureInitialTeamHalt() {
  */
 async function hasProviderCredentials() {
   try {
-    const raw = await readFile(JHT_CONFIG_PATH, 'utf-8');
-    const cfg = JSON.parse(raw);
-    // Il marker del login del provider (kimi, claude/anthropic, codex/openai), o di pi se il config
-    // sceglie l'harness pi: shared/runtime/agent-harness.js. Specchio: config_ready() in
-    // agent-watchdog.sh. Un provider sconosciuto non ha marker: false, e l'auto-start non parte.
-    // glm e kimi su pi: nessun login, vale la chiave API del config.
-    if (piApiKeyConfigured(cfg)) return true;
-    const relative = loginMarkerOf(cfg);
-    const marker = relative ? `${JHT_HOME}/${relative}` : null;
-    if (!marker) return false;
-    await access(marker);
-    // Pi's file has one entry per service: it is the sign-in of THIS provider only when its own entry is there (a file with only
-    // Anthropic's, a Claude subscription billed per token from Pi, does not start the team). Only the entry names are looked at.
-    if (relative === PI_LOGIN_MARKER) {
-      // a regular file of a sane size only (as shared/skills/pi_login.py): a FIFO or a huge file must not stop the boot on a read
-      const info = await lstat(marker);
-      if (!info.isFile() || info.size <= 0 || info.size > 256 * 1024) return false;
-      const seen = inspectPiLogin(await readFile(marker, 'utf-8'), cfg.active_provider);
-      return seen.state === 'ok' || seen.state === 'no_rule';
-    }
-    return true;
+    return await providerSignedIn(JSON.parse(await readFile(JHT_CONFIG_PATH, 'utf-8')), JHT_HOME);
   } catch {
     return false;
   }

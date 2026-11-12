@@ -128,8 +128,11 @@ test('agent-control routes `provider` to this door and to nothing else', () => {
 
 test('the boot check and the onboarding snapshot only READ the credential files: nothing copies a sign-in back', () => {
   const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+  // the check of the boot (pid1) and of `jht doctor` is one function, in its own module
   const pid1 = readFileSync(join(root, 'cli/src/commands/pid1.js'), 'utf-8');
-  const check = pid1.split('async function hasProviderCredentials()')[1].split('\n}\n')[0];
+  assert.match(pid1.split('async function hasProviderCredentials()')[1].split('\n}\n')[0], /providerSignedIn\(/);
+  const module = readFileSync(join(root, 'cli/src/lib/provider-signin.js'), 'utf-8');
+  const check = module.split('export async function providerSignedIn(')[1].split('\n}\n')[0];
   assert.match(check, /access\(/);
   for (const write of ['writeFile', 'copyFile', 'rename', 'symlink', 'link(', 'cp(', 'appendFile', 'open(']) {
     assert.ok(!check.includes(write), write);

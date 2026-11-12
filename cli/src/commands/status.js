@@ -8,6 +8,7 @@ import { fetchLatestRelease, updateNotice } from '../lib/release-check.js';
 import pkg from '../../package.json' with { type: 'json' };
 import { c } from './_colors.js';
 import { hint, keyValues, marks, statusLine, title } from '../lib/ui.js';
+import { providerSignedIn } from '../lib/provider-signin.js';
 import { say } from '../lib/texts.js';
 
 const CONFIG_DIR = JHT_HOME;
@@ -42,6 +43,9 @@ async function handleStatus(options) {
   }
   const provConfig = config ? config.providers?.[config.active_provider] : null;
   const tgBots = config ? config.channels?.telegram?.bots : null;
+  // a subscription without a sign-in (a setup stopped at the login screen) must not read as ready
+  const subscription = provConfig?.auth_method === 'subscription' || provConfig?.auth_method === 'cli';
+  const signedIn = subscription ? await providerSignedIn(config, JHT_HOME) : null;
 
   // Team sessions. The container's sessions are CAPITANO / SCOUT-1 / ASSISTENTE and the old host path puts JHT-
   // in front: both are recognised, or a working team would read as "0".
@@ -52,7 +56,7 @@ async function handleStatus(options) {
     console.log(JSON.stringify({
       version: pkg.version,
       configured: Boolean(config),
-      provider: config ? { id: config.active_provider ?? null, model: provConfig?.model ?? null, auth: provConfig?.auth_method ?? null } : null,
+      provider: config ? { id: config.active_provider ?? null, model: provConfig?.model ?? null, auth: provConfig?.auth_method ?? null, signed_in: signedIn } : null,
       sessions,
     }, null, 2));
     return;
@@ -61,7 +65,9 @@ async function handleStatus(options) {
   console.log(title(say('status.title')));
   if (config) {
     facts.push([say('status.provider'), config.active_provider ? `${config.active_provider}${provConfig?.model ? ` (${provConfig.model})` : ''}` : say('status.not_set')]);
-    if (provConfig?.auth_method) facts.push([say('status.signin'), provConfig.auth_method]);
+    if (provConfig?.auth_method) {
+      facts.push([say('status.signin'), signedIn === false ? say('status.signin_missing', { method: provConfig.auth_method }) : provConfig.auth_method]);
+    }
     if (config.workspace) facts.push([say('status.workspace'), config.workspace]);
     if (tgBots) {
       const n = ['assistente', 'capitano', 'mentor'].filter((r) => tgBots?.[r]?.bot_token).length;
