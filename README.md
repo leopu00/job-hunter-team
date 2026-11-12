@@ -32,7 +32,7 @@
 
 Job hunting is a second job on top of your job: scanning boards daily, qualifying listings, tailoring every application. JHT hands that grind to a team of AI agents running around the clock — Scout finds positions, Analyst verifies them, Scorer ranks them against your profile, Writer prepares tailored documents, Critic blind-reviews everything — orchestrated by a **Captain**. You only review applications that clear the quality bar.
 
-Everything runs **in your container** — on your Mac (Apple silicon) or on your VPS, with your profile, your data and your provider account. JHT itself is **free (MIT)**; the agents run on a provider you pay for: in 0.4.0, **GLM (Z.ai) with an API key** on the Pi harness (Codex, Kimi and Claude come in a later release) — see [Install](#install). A local model can currently shadow or replace the Scorer only.
+Everything runs **in your container** — on your Mac (Apple silicon) or on your VPS, with your profile, your data and your provider account. JHT itself is **free (MIT)**; the agents run on a provider you pay for: in 0.4.0, **GLM (Z.ai) with an API key** on the Pi harness (Codex, Kimi and Claude are not in this version) — see [Install](#install). A local model can currently shadow or replace the Scorer only.
 
 I built JHT for my own job hunt — ~200 offers analyzed, ~20 tailored applications, **5 interview invites in a few weeks** ([story](docs/about/STORY.md)). Then I rebuilt it as open source. On the public stack, a Codex team ran **one month unattended**: 658 positions found, 520 scored, 307 strong matches, weekly budget self-managed at 99–100% ([results](docs/about/RESULTS.md)).
 
@@ -93,7 +93,7 @@ team.
 - **A provider for the agents**: in 0.4.0, **GLM (Z.ai)** on the Pi harness, with an **API key**
   that `jht setup` asks for (typed hidden) or takes from a file or standard input
   (`jht setup --non-interactive --provider glm --api-key-stdin`), never on the command line.
-  Codex (ChatGPT subscription), Kimi and Claude come in a later release.
+  Codex (ChatGPT subscription), Kimi and Claude are not in this version.
 - **A container engine**: on a Mac the CLI installer uses Colima by default. On Linux: rootless
   Podman 5.0 or later.
 - At least 16 GB of RAM is recommended on a Mac. The Podman machine uses 2 CPUs, 4 GiB of memory
@@ -104,14 +104,14 @@ Not sure where the team should live? Compare a
 
 **What it costs** — with the GLM API key you pay per call: measured on GLM, about 0.10 USD per
 scored position, with a daily ceiling that pauses the team. (The month-long run we measured used a
-Codex Pro subscription, about €100/month — [results](docs/about/RESULTS.md); Codex comes back in a
-later release.) Details:
+Codex Pro subscription, about €100/month — [results](docs/about/RESULTS.md); Codex is not in this
+version.) Details:
 [`docs/about/PROVIDERS.md`](docs/about/PROVIDERS.md).
 
-| Provider | Plan | Cost/mo | Status |
+| Provider | Plan | Cost | Status in 0.4.0 |
 |---|---|---|---|
-| **Codex** | Plus / Pro | ~€100 | Proven — 1-month autonomous run |
-| **GLM / Kimi** (Pi) | API key | per call | Measured on GLM in short runs |
+| **GLM** (Z.ai, on Pi) | API key | per call | Offered — measured in short runs |
+| Codex, Kimi, ChatGPT/Claude subscriptions | — | — | Not in this version |
 
 **The desktop app is not in 0.4.0.** Install the CLI.
 
