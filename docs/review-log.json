@@ -1854,6 +1854,11 @@
       "path": "docs/sessions/2026-07-28-burn-test-scout-step-cap-stall.md",
       "description": "",
       "last_review": null
+    },
+    {
+      "path": "docs/adr/0014-podman-only-runtime.md",
+      "description": "",
+      "last_review": null
     }
   ]
 }

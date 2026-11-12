@@ -1,4 +1,4 @@
-"""Non-runtime contracts for the opt-in macOS Podman preparation path.
+"""Non-runtime contracts for the macOS Podman preparation path, the only engine since 0.4.
 
 Until 08/10 one more test read the Godot setup (game/: setup_service.gd and
 section_panel.gd choosing the Podman runtime). Godot is abandoned and it went
@@ -24,14 +24,16 @@ def _source(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_macos_podman_is_opt_in_while_colima_remains_the_default():
+def test_podman_is_the_only_engine_and_the_default():
     source = _source(INSTALLER)
 
-    assert '""|auto) RUNTIME_CHOICE=""' in source
-    assert "colima|podman|docker-desktop" in source
-    assert 'podman) install_podman_macos ;;' in source
-    assert '*) install_colima_macos ;;' in source
-    assert 'RUNTIME_CHOICE" != "podman"' in source
+    assert '""|auto|podman) RUNTIME_CHOICE="podman" ;;' in source
+    assert "macos) install_podman_macos ;;" in source
+    assert "linux) check_podman_linux ;;" in source
+    for gone in ("install_colima_macos", "install_docker_desktop_macos", "install_docker_linux",
+                 "resolve_macos_docker_cli", "enable_docker_group_for_this_run", "ensure_docker_compose_macos",
+                 "colima start", "brew install colima", "get.docker.com", "usermod -aG docker"):
+        assert gone not in source, gone
     assert "Container (Podman)" in source and "preview" not in source.lower()
 
 
@@ -47,7 +49,7 @@ def test_macos_podman_setup_never_removes_or_stops_colima():
     source = _source(INSTALLER)
     block = source[
         source.index("install_podman_macos()") : source.index(
-            "install_docker_linux()"
+            "install_container_runtime()"
         )
     ]
 
@@ -72,15 +74,13 @@ def test_macos_podman_setup_never_removes_or_stops_colima():
     ):
         assert destructive not in block
 
-    assert "the Podman machine and Colima are both kept" in source
-
 
 def test_macos_podman_install_reports_the_desktop_phase_contract():
     source = _source(INSTALLER)
     helper = source[source.index("jht_phase()") : source.index("run()")]
     setup = source[
         source.index("install_podman_macos()") : source.index(
-            "install_docker_linux()"
+            "install_container_runtime()"
         )
     ]
     phases = {
@@ -137,9 +137,10 @@ def test_missing_homebrew_stops_with_the_desktop_exit_code_before_network_io(
     )
 
     assert result.returncode == 80
-    assert result.stderr.strip() == (
-        "homebrew_missing: Homebrew is required to prepare the macOS runtime."
-    )
+    message = result.stderr.strip()
+    assert message.startswith("homebrew_missing: ") and "\n" not in message
+    assert "Nothing was changed" in message
+    assert "https://brew.sh" in message and "run this installer again" in message
     assert not curl_log.exists()
     assert "Homebrew/install/HEAD/install.sh" not in source
 
@@ -157,7 +158,7 @@ def test_macos_podman_setup_reports_another_running_machine_without_stopping_it(
         assert "exit 79" in source or "return 79" in source
     installer_conflict = installer[
         installer.index("running_podman_machine()") : installer.index(
-            "install_docker_linux()"
+            "install_container_runtime()"
         )
     ]
     wrapper_conflict = wrapper[
@@ -220,20 +221,11 @@ def test_jht_scoped_shim_and_runtime_selection_are_attested():
     assert 'if [ -f "$RUNTIME_SELECTION_FILE" ]; then' in wrapper
 
 
-def test_docker_transition_keeps_private_podman_artifacts_inert_and_fails_closed():
+def test_no_docker_selection_is_published_and_private_podman_artifacts_are_never_retired():
     source = _source(INSTALLER)
-    block = source[
-        source.index("download_runtime_files()") : source.index(
-            "install_dep()"
-        )
-    ]
 
-    assert 'selection_publish="$(mktemp "$RUNTIME_DIR/.container-runtime.XXXXXX")"' in block
-    assert "printf 'docker\\n' > \"$selection_publish\"" in block
-    assert block.index('mv -f "$manifest_tmp" "$manifest_dest"') < block.index(
-        'mv -f "$selection_publish" "$RUNTIME_DIR/container-runtime"'
-    )
-    assert "private Podman artifacts kept inert" in block
+    assert "printf 'docker\\n'" not in source
+    assert "selection_publish" not in source
     assert 'rm -f -- "$shim_dest"' not in source
     assert 'rm -f -- "$machine_file"' not in source
     assert "legacy_shim" not in source
@@ -243,7 +235,6 @@ def test_docker_transition_keeps_private_podman_artifacts_inert_and_fails_closed
 def test_transition_prevalidates_selection_and_private_adapter_paths():
     source = _source(INSTALLER)
 
-    assert '[ -f "$selection_source" ] && [ ! -L "$selection_source" ]' in source
     assert "Unsafe JHT runtime selection marker" in source
     assert "Invalid JHT runtime selection marker" in source
     assert '[ ! -L "$adapter_bin" ]' in source
@@ -258,17 +249,6 @@ def test_installer_verifies_destination_before_publishing_runtime_selection():
     assert main.index("install_container_runtime") < main.index("verify_docker_works")
     assert main.index("verify_docker_works") < main.index("download_runtime_files")
     assert "retire_podman_adapter" not in source
-    assert "resolve_macos_docker_cli" in source
-
-    resolver = source[
-        source.index("resolve_macos_docker_cli()") : source.index(
-            "verify_docker_works()"
-        )
-    ]
-    assert "JHT_PODMAN_DOCKER_SHIM=1" in resolver
-    assert "[ ! -L" not in resolver
-    assert 'DOCKER_CLI="$resolved"' in resolver
-    assert 'if [ -z "$DOCKER_CLI" ]; then' in source
 
 
 def test_installer_and_wrapper_pin_the_supported_direct_podman_compose_pair():
@@ -276,7 +256,7 @@ def test_installer_and_wrapper_pin_the_supported_direct_podman_compose_pair():
     wrapper = _source(WRAPPER)
     install_block = installer[
         installer.index("install_podman_macos()") : installer.index(
-            "install_docker_linux()"
+            "install_container_runtime()"
         )
     ]
     compose_block = wrapper[

@@ -177,7 +177,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [game/README.md](../game/README.md) | Job Hunter Team — The Office — Godot 4.7 desktop application for Windows, macOS and Linux. | — | 2026-09-21 | ✅ |
 | [game/assets/gen-art/LOG.md](../game/assets/gen-art/LOG.md) | 🎨 gen-art — log dell'Art Director (host.invalid:dev1-art) — Asset generati via Codex CLI (tmux codex-dev1), giudicati contro | — | 2026-08-17 | ✅ |
 | [game/docs/ANALISI-GIOCHI.md](../game/docs/ANALISI-GIOCHI.md) | Analisi giochi di riferimento — appunti sessione con Leone (2026-07-07) — Analisi guidata, un gioco alla volta: cosa c'è / cosa non c'è / cosa ci piace / cosa non ci piace. | — | 2026-07-07 | ✅ |
-| [game/docs/ASSETS.md](../game/docs/ASSETS.md) | Pipeline asset personaggi — Sprite in-world (SVG a layer componibili) | — | 2026-07-30 | ✅ |
+| [game/docs/ASSETS.md](../game/docs/ASSETS.md) | Pipeline asset personaggi — Sprite in-world (SVG a layer componibili) | — | 2026-11-12 | ✅ |
 | [game/docs/DATA-ADAPTER.md](../game/docs/DATA-ADAPTER.md) | Data adapter — contratto fra gioco e dati del team — Il gioco non conosce Supabase né la dashboard: parla solo con l'autoload | — | 2026-07-11 | ✅ |
 | [game/docs/FIRST-RUN.md](../game/docs/FIRST-RUN.md) | First-run conversation contract — The office must be understandable before Docker or an LLM is available. | — | 2026-08-12 | ✅ |
 | [game/docs/GDD.md](../game/docs/GDD.md) | JHT: The Office — current product design — The Godot application is the only desktop client for Job Hunter Team. | — | 2026-07-29 | ✅ |
@@ -220,6 +220,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/adr/0011-tauri-desktop-shell.md](./adr/0011-tauri-desktop-shell.md) | ADR per la migrazione desktop a Tauri 2 e React, mantenendo Godot supportato durante il passaggio | 2026-08-24 | 2026-08-24 | 🟢 |
 | [docs/adr/0012-desktop-setup-matrix.md](./adr/0012-desktop-setup-matrix.md) | ADR che separa host di esecuzione e autenticazione AI e definisce il ciclo di vita sicuro delle credenziali desktop | 2026-08-24 | 2026-08-24 | 🟢 |
 | [docs/adr/0013-codex-sqlite-state-off-the-host-bind.md](./adr/0013-codex-sqlite-state-off-the-host-bind.md) | Decision to store Codex SQLite state in the dependency volume while retaining login and sessions in the home bind | — | 2026-11-06 | ✅ |
+| [docs/adr/0014-podman-only-runtime.md](./adr/0014-podman-only-runtime.md) | _(da compilare nel JSON)_ | — | — | ✅ |
 
 
 ## 🧭 docs/guides

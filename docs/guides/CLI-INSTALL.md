@@ -20,7 +20,7 @@ For onboarding inside an already-cloned repo, see [legacy `setup.sh` / `setup.ps
 | Served by | Vercel (Next.js project in `web/`) |
 | URL | `https://jobhunterteam.ai/install.sh` |
 | HTTP cache | `public, max-age=300, s-maxage=3600, stale-while-revalidate=86400` |
-| Container runtime | Podman with `--runtime podman`: the path of the app and of 0.4, on macOS and on Linux. Without the flag, macOS uses Colima (or your running Docker) and Linux sets up Docker Engine, as earlier versions did |
+| Container runtime | Podman, the only one since 0.4, on macOS and on Linux (the path of the app). Colima, Docker Desktop and Docker Engine are no longer installed nor accepted |
 | Expert mode | `--no-docker` (clone + build from source) |
 | OS support | macOS (Apple silicon in the 0.4 app) · Linux (apt/dnf/pacman), experimental. On Linux this script is the way in: there is no desktop app for Linux in this version |
 | Windows | Windows is not in this version |
@@ -75,15 +75,15 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 | Flag / env | Default | Purpose |
 |------------|---------|---------|
 | `--no-docker` | off | Skip the container, install natively (expert mode) |
-| `--with-docker` | on | Alias kept for retro-compat (Docker is already the default) |
+| `--with-docker` | on | Alias kept for retro-compat (the container path is already the default) |
 | `--dry-run` | off | Print every install/download/mutating action without executing any of them |
-| `--runtime <id>` | `colima` on macOS, Docker Engine on Linux | `podman` (macOS and Linux: the path of the app and of 0.4), or on macOS `colima` and the user's `docker-desktop` |
+| `--runtime <id>` | `podman` | `podman` (or `auto`), the only engine: `colima`, `docker`, `docker-desktop` and `orbstack` are refused with `runtime_not_supported` |
 | `--branch <name>` | `master` | Source branch for wrapper and Compose downloads |
 | `-h`, `--help` | — | Print the header banner and exit |
 | `JHT_REPO_URL` | `https://github.com/leopu00/job-hunter-team.git` | Repo cloned in native mode |
-| `JHT_BRANCH` | `production` | Stable release branch checked out in native mode + raw download base in Docker mode |
+| `JHT_BRANCH` | `production` | Stable release branch checked out in native mode + raw download base in container mode |
 | `JHT_INSTALL_DIR` | `$HOME/.jht/src` | Where the repo lands in native mode |
-| `JHT_RUNTIME_DIR` | `$HOME/.jht/runtime` | Where `docker-compose.yml` lands in Docker mode |
+| `JHT_RUNTIME_DIR` | `$HOME/.jht/runtime` | Where `docker-compose.yml` lands in container mode |
 | `JHT_BIN_DIR` | `$HOME/.local/bin` | Where the `jht` wrapper / symlink lands |
 | `JHT_IMAGE` | `ghcr.io/leopu00/jht@sha256:fa78c975c04dd5f95d6225a35c8c3bb9646f8ef14b32c8ca558d5332de0cce00` | Content-addressed container image referenced by the compose |
 | `JHT_RAW_BASE` | `https://raw.githubusercontent.com/leopu00/job-hunter-team/$JHT_BRANCH` | Base URL for the runtime file downloads |
@@ -91,7 +91,7 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 
 ### 🐳 Container path (4 steps)
 
-> Since 2026-05-06 the Docker path follows the **host/container split**
+> Since 2026-05-06 the container path follows the **host/container split**
 > design — see [`docs/internal/ops/vps.md`](../internal/ops/vps.md).
 > The wrapper does not run an ephemeral `docker run --rm` per command:
 > it dispatches to `docker compose` (lifecycle) or `docker exec` (operativity)
@@ -100,8 +100,8 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 1. **Detect system** — `uname -s` → macOS / Linux (a WSL environment is
    recognized with `grep microsoft /proc/version`, but Windows is not in this
    version); on Linux also picks `apt` / `dnf` / `pacman`.
-2. **Install container runtime** — with `--runtime podman`, the path of the app
-   and of 0.4:
+2. **Install container runtime** — Podman, the only engine since 0.4 (the
+   path of the app):
    - macOS: **Homebrew must already be installed** (it needs macOS 15 or
      later); without it the installer stops with `homebrew_missing` before
      installing anything. It then installs the Podman CLI and the Compose
@@ -115,33 +115,25 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
      `uidmap` or its equivalent, the subuid/subgid range and linger) is set up
      with `sudo -n`: sudo must work without asking for a password, or the
      installer stops with `podman_sudo_required` and says what an administrator
-     has to do. It never installs Docker on this path.
+     has to do. It never installs Docker.
 
-   A computer that already runs the team on one engine does not switch to the
-   other: an install that names the other engine is refused with
-   `runtime_change_requires_migration`, and nothing is moved or deleted. See
-   [ADR-0006](../adr/0006-user-choice-container-runtime-macos.md).
-
-   Without `--runtime podman` the older behaviour applies. *Detect-first: if a
-   Docker daemon already responds (Docker Desktop, an existing Colima,
-   OrbStack, …) it is reused and nothing is installed.*
-   - macOS: `--runtime=colima` (the default without the flag) installs Homebrew
-     if missing → `brew install colima docker` → `colima start`.
-     `--runtime=docker-desktop` uses your own Docker Desktop (`open -a Docker`;
-     never silent-installed).
-   - Linux: `apt-get install docker.io` (or dnf/pacman equivalent),
-     `systemctl enable --now docker` if available, and `usermod -aG docker
-     $USER` so subsequent runs don't need sudo. This is how a server that runs
-     the team on Docker was installed.
+   A computer that already runs the team on Docker (an install of 0.3.x on
+   Colima, Docker Desktop or Docker Engine) is refused with
+   `runtime_change_requires_migration` (exit 85) before anything changes.
+   What stays: `~/.jht` (configuration, database, profile) and
+   `~/Documents/Job Hunter Team` (CVs, outputs), folders of the computer. What
+   stays behind in Docker's volumes and has to be given again: the API key, the
+   mail password, the Telegram tokens. The way: `jht uninstall --confirm` (it
+   keeps the two folders), the installer again, then `jht setup` with the key.
+   Until then the team keeps running on Docker while its engine is on; `jht up`
+   no longer starts Colima or Docker Desktop.
    On Windows the installer creates the dedicated `jht-podman` machine with a
    disk limit of 30 GiB; it does not compact its VHDX automatically. See
    [Windows Podman disk space](WINDOWS-PODMAN-DISK.md) for the limits and the
    conditions required before any future compaction feature.
 3. **Verify the runtime** — with Podman, `podman info` on the dedicated
    connection (the `jht-podman` machine on macOS, the rootless service on
-   Linux) plus its Compose provider; otherwise `docker info`, which on Linux
-   falls back to `sudo docker info` if the user is not yet in the `docker`
-   group.
+   Linux) plus its Compose provider.
 4. **Download runtime files and run host preflight** — `curl -fsSL` of:
    - `$JHT_RAW_BASE/docker-compose.yml` → `$JHT_RUNTIME_DIR/docker-compose.yml`
    - `$JHT_RAW_BASE/scripts/jht-wrapper.sh` → `$JHT_BIN_DIR/jht` (chmod +x)
@@ -154,9 +146,9 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 
    The wrapper is a host-side dispatcher: lifecycle
    commands (`up`/`down`/`restart`/`recreate`/`upgrade`/`logs`/`status`/`shell`)
-   call `docker compose` / `docker logs` / `docker inspect`; everything
-   else is forwarded as `docker exec -it jht node /app/cli/bin/jht.js
-   <args>`. Auto-up: lifecycle of the container is transparent on
+   call `docker compose` / `docker logs` / `docker inspect` through the
+   JHT-only `docker` shim that runs Podman; everything else is forwarded as
+   `docker exec -it jht node /app/cli/bin/jht.js <args>`. Auto-up: lifecycle of the container is transparent on
    first run.
 
 ### 🛠️ Expert path — native (`--no-docker`, 6 steps)
@@ -229,51 +221,49 @@ preview what the installer will do on a new machine, or to sanity-check
 a change to `install.sh` before running it for real.
 
 ```bash
-bash scripts/install.sh --runtime podman --dry-run   # container path, Podman (0.4)
-bash scripts/install.sh --dry-run                 # container path, the older Colima / Docker default
-bash scripts/install.sh --no-docker --dry-run     # native path
+bash scripts/install.sh --runtime podman --dry-run   # container path, Podman
+bash scripts/install.sh --no-docker --dry-run        # native path
 ```
 
-Example output of the older default on macOS (abridged; exact actions depend on the host, and with `--runtime podman` step 2 prepares Podman and the `jht-podman` machine instead):
+Example output on macOS with Podman and its Compose provider already installed (abridged; exact actions depend on the host):
 
 ```text
 ╔══════════════════════════════════════════╗
 ║     Job Hunter Team — Installer          ║
 ╚══════════════════════════════════════════╝
 
-  mode:   Docker (isolated)
-  image:  ghcr.io/leopu00/jht@sha256:fa78c975c04dd5f95d6225a35c8c3bb9646f8ef14b32c8ca558d5332de0cce00
-  branch: production
-  runtime:$HOME/.jht/runtime
+  mode:    Container (Podman)
+  image:   ghcr.io/leopu00/jht@sha256:fa78c975c04dd5f95d6225a35c8c3bb9646f8ef14b32c8ca558d5332de0cce00
+  branch:  production
+  runtime: $HOME/Library/Application Support/Job Hunter Team/host-runtime
   dry-run: ON (no changes to the system)
 
 [1/4] System detection
   ✓ macOS
 
 [2/4] Container runtime
-  ▸ Installing Colima...
-  [dry-run] would execute: brew install colima
-  ✓ docker CLI already installed
-  [dry-run] would execute: colima start (se non gia' attivo)
+  ✓ podman already installed
+  ✓ podman-compose already installed
+  [dry-run] would initialize/start Podman machine: jht-podman (2 CPU, 4096 MiB RAM, 30 GiB disk)
+  [dry-run] would pull image: ghcr.io/leopu00/jht@sha256:…
 
-[3/4] Docker check
-  [dry-run] would execute: docker info
+[3/4] Container runtime check
+  [dry-run] would execute: podman --connection jht-podman info
+  [dry-run] would verify: Podman 6.1.3 + podman-compose 1.6.0
 
 [4/4] Download wrapper + docker-compose.yml
-  [dry-run] would execute: mkdir -p $HOME/.jht/runtime $HOME/.local/bin
-  [dry-run] would download: …/master/docker-compose.yml -> $HOME/.jht/runtime/docker-compose.yml
-  [dry-run] would download: …/master/scripts/jht-wrapper.sh -> $HOME/.local/bin/jht
-  [dry-run] would download: …/master/scripts/host-setup.sh -> $HOME/.jht/runtime/host-setup.sh
-  [dry-run] would execute: chmod +x $HOME/.local/bin/jht $HOME/.jht/runtime/host-setup.sh
+  [dry-run] would download: …/production/docker-compose.yml -> …/host-runtime/docker-compose.yml
+  [dry-run] would download: …/production/scripts/jht-wrapper.sh -> $HOME/.local/bin/jht
+  [dry-run] would download: …/production/scripts/host-setup.sh -> …/host-runtime/host-setup.sh
+  [dry-run] would publish an attested JHT-only docker→podman shim
 ```
 
 What `--dry-run` covers:
 
 - `brew install`, `apt-get install`, `dnf install`, `pacman -S`
 - `curl ... | bash` style one-liners (Homebrew, NodeSource)
-- `colima start`, `systemctl enable --now docker`, `service docker start`
-- `docker info` (the image pull is lazy and belongs to the later `jht setup` /
-  `jht up`, so dry-run does not contact the registry)
+- `podman machine init` / `start` and `podman info` (dry-run does not contact
+  the registry either)
 - `git clone`, `git fetch`, `git reset` (--no-docker path only)
 - `mkdir -p` on persistent paths, `chmod +x`, and all three runtime downloads
 - the final `jht setup` wizard (skipped in dry-run)
@@ -282,7 +272,7 @@ What `--dry-run` intentionally does **not** do:
 
 - It still runs read-only probes: `uname -s`, `command -v`, reading
   `/etc/os-release`, etc. Those have no side effect.
-- It does **not** verify that `apt-get`, `brew`, or `docker` would
+- It does **not** verify that `apt-get`, `brew`, or `podman` would
   succeed; it only prints the intent. Use `--dry-run` as a preview,
   not a test.
 

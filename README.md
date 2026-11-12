@@ -96,9 +96,9 @@ team.
   - **GLM (Z.ai) or Kimi (Moonshot)** on the Pi harness, with an **API key** given from a file or
     from standard input (`jht setup --provider glm --harness pi --api-key-file <file>`), never on
     the command line.
-- **A container engine**: on a Mac the CLI installer uses Colima by default; the app installs
-  Podman with Homebrew (which must already be there), so there is no Docker Desktop to install,
-  and it adopts a team the CLI already installed on Colima. On Linux: rootless Podman 5.0 or later.
+- **A container engine**: Podman, the only one since 0.4. On a Mac the installer and the app set it
+  up with Homebrew (which must already be there), so there is no Docker Desktop to install.
+  On Linux: rootless Podman 5.0 or later.
 - At least 16 GB of RAM is recommended on a Mac. The Podman machine uses 2 CPUs, 4 GiB of memory
   and a disk that grows up to 30 GiB.
 

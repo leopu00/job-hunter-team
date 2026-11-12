@@ -1,6 +1,6 @@
 # 0006 — User chooses the container runtime on macOS (Colima or Docker Desktop)
 
-**Status:** Accepted
+**Status:** Superseded by [0014](./0014-podman-only-runtime.md)
 **Date:** 2026-06-20
 **Supersedes:** [0001](./0001-colima-not-docker-desktop.md)
 
