@@ -592,6 +592,7 @@ SETUP_BODY = r"""
 function Require-ComposeFile { [IO.File]::AppendAllText($env:FAKE_LOG, "guard-compose`n") }
 function Require-Docker { [IO.File]::AppendAllText($env:FAKE_LOG, "guard-docker`n") }
 function Ensure-Up { [IO.File]::AppendAllText($env:FAKE_LOG, "guard-up`n") }
+function Clear-JhtTeamStopped { }
 $Sub = 'setup'; $Rest = @('--x', 'value with spaces')
 $ExecFlags = @('-i'); $Container = 'jht'; $NodeEntry = '/app/cli/bin/jht.js'
 $dispatch = @($ast.FindAll({ param($n)
