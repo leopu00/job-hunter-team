@@ -6486,7 +6486,7 @@ case "$SUB" in
 
   # The Godot office and its commands are gone (0.4.0): said here, on the host, before anything would start the team for them.
   game|gui)
-    err "'jht $SUB' was removed in 0.4.0 with the Godot office: open the Job Hunter Team desktop app from your applications."
+    err "'jht $SUB' was removed in 0.4.0 with the Godot office: use the jht commands (jht help)."
     exit 2
     ;;
 

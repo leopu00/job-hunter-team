@@ -190,7 +190,8 @@ def test_the_removed_godot_commands_say_so_and_start_nothing(tmp_path, args):
     res = run_wrapper(args, fake_bin, tmp_path, extra_env=write_trusted_runtime(tmp_path))
 
     assert res.returncode == 2, res.stderr
-    assert f"'jht {args[0]}' was removed in 0.4.0" in res.stderr
+    assert f"'jht {args[0]}' was removed in 0.4.0 with the Godot office: use the jht commands (jht help)." in res.stderr
+    assert "desktop app" not in res.stderr  # 0.4.0 has no desktop app to send the person to
     assert_no_docker_effect(log)
 
 
