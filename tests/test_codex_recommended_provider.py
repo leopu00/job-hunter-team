@@ -37,21 +37,20 @@ def test_the_desktop_proposes_only_codex_and_already_chosen():
 ])
 def test_the_web_guides_offer_codex_only(path):
     page = text(path)
-    assert "🔵 <strong>Codex</strong>" in page
+    # 0.4.0: both guides offer GLM first and say Codex is not in this version
+    assert "🟢 <strong>GLM</strong>" in page and "🔵 <strong>Codex</strong>" not in page
     assert "Kimi" not in page and "Claude" not in page
 
 
-@pytest.mark.parametrize("path,key", [
-    ("web/app/docs/guides/getting-started/page.i18n.ts", "codex"),
-    ("web/app/docs/guides/connect-ai-provider/page.i18n.ts", "codex"),
-])
-def test_the_web_guides_call_codex_recommended_in_every_language(path, key):
-    source = text(path)
-    values = re.findall(rf"\n    {key}:\s*\n?\s*\"([^\"]+)\"", source)
+def test_the_first_page_of_the_site_says_glm_in_0_4_0_and_codex_not_in_this_version_in_every_language():
+    source = text("web/app/docs/guides/getting-started/page.i18n.ts")
     langs = re.findall(r"\n  (\w\w): \{", source)
-    assert len(values) == 7 and sorted(langs) == sorted(RECOMMENDED)
-    for value, word in zip(values, [RECOMMENDED[lang] for lang in langs]):
-        assert word in value, value
+    assert sorted(langs) == sorted(RECOMMENDED)
+    assert len(re.findall(r'\n    subIntroA: "[^"]*0\.4\.0', source)) == 7
+    assert len(re.findall(r'\n    subIntroB: "[^"]*GLM', source)) == 7
+    assert len(re.findall(r'\n    codex: " — ', source)) == 7
+    for word in RECOMMENDED.values():
+        assert word not in source.split("subIntroA")[1], word
 
 
 @pytest.mark.parametrize("path", [
@@ -67,37 +66,49 @@ def test_the_site_texts_do_not_offer_kimi_or_claude(path):
     assert not re.search(r"kimi|claude", source, re.IGNORECASE), path
 
 
+def test_the_guide_of_the_provider_says_glm_and_codex_later_in_every_language():
+    source = text("web/app/docs/guides/connect-ai-provider/page.i18n.ts")
+    assert len(re.findall(r'\n    whichProviderP: "In 0\.4\.0|\n    whichProviderP: "Nella 0\.4\.0|\n    whichProviderP: "(En la|Dans la|In|A|Na) 0\.4\.0', source)) == 7
+    assert len(re.findall(r'\n    coming: "Codex — ', source)) == 7
+
+
 def test_the_setup_guide_and_faq_name_codex_as_the_provider():
-    assert len(re.findall(r"\n    a1: \"[^\"]*— [^\"]*Codex", text("web/app/docs/guides/faq/page.i18n.ts"))) == 7
+    # the FAQ: in 0.4.0, GLM; Codex comes later (said in every language). The setup guide is the desktop app's, which 0.4.0 does not ship
+    assert len(re.findall(r"\n    a1: \"[^\"]*— [^\"]*GLM[^\"]*Codex", text("web/app/docs/guides/faq/page.i18n.ts"))) == 7
     assert text("web/app/setup-guide/guide-content.ts").count("Codex") >= 7
 
 
-def test_the_pricing_page_shows_codex_alone_and_recommended():
+def test_the_pricing_page_shows_the_one_provider_of_0_4_0_and_says_the_others_come_later():
     page = text("web/app/pricing/page.tsx")
     providers = page[page.index("const PROVIDERS: Provider[] = ["):]
-    assert re.findall(r'name: "(\w+)"', providers) == ["Codex"]
-    codex = providers[:providers.index("\n];")]
-    assert "recommended provider" in codex and "provider consigliato" in codex
+    providers = providers[:providers.index("\n];")]
+    assert re.findall(r'name: "(\w+)"', providers) == ["GLM"]
+    assert "The one provider of 0.4.0" in providers and "L'unico provider della 0.4.0" in providers
+    assert page.count("Codex") >= 7, "every language says Codex comes in a later release"
 
 
 def test_the_guides_and_the_changelog_say_codex_only():
+    # 0.4.0 offers only Pi with a GLM key (shared/runtime/release-providers.js): the quickstart and PROVIDERS say so, and say
+    # Codex, Kimi and Claude come later, never as a choice of this release
     quickstart = text("docs/guides/QUICKSTART.md")
     table = quickstart[quickstart.index("| Provider   |"):]
-    assert "| 🔵  | **Codex**  | ChatGPT Plus / Pro subscription, ~€100/mo | ✅ **Recommended**" in table
-    assert "**Claude**" not in table[:table.index("\n\n")]
-    # the other way, an API key on the Pi harness, is set from the CLI and never called recommended
-    assert "**GLM (Z.ai) or Kimi (Moonshot)** on the Pi harness" in table and "Recommended" not in table.split("**GLM")[1].split("\n")[0]
-    assert "`jht providers use codex`" in quickstart and "providers use claude" not in quickstart
+    table = table[:table.index("\n\n")]
+    assert "| 🟢  | **GLM (Z.ai)** on the Pi harness | API key, per call | ✅ The only one offered in 0.4.0" in table
+    assert "Coming in a later release" in table.split("Codex")[1].split("\n")[0]
+    assert "providers use claude" not in quickstart
     providers = text("docs/about/PROVIDERS.md")
-    assert "| 🔵 **Codex (OpenAI)** — recommended |" in providers
-    assert "Claude Code and the Kimi subscription CLI are not offered" in providers
-    assert "A dedicated Codex (ChatGPT) subscription." in text("docs/guides/VPS-SETUP-WIZARD.md")
+    assert "**0.4.0 offers one way to power the team: Pi with a GLM (Z.ai) API key.**" in providers
+    assert "| 🔵 Codex (OpenAI) with a ChatGPT subscription or an OpenAI key | subscription or API key | Codex CLI | ⏳ coming in a later release |" in providers
+    assert "shared/runtime/release-providers.js" in providers
+    assert "A GLM (Z.ai) API key: 0.4.0 runs the team only on Pi with GLM." in text("docs/guides/VPS-SETUP-WIZARD.md")
     changelog = text("CHANGELOG.md")
     release = changelog[changelog.index("## [0.4.0]"):]
-    # Codex is the recommended way; the API-key way of 0.4 (Pi with GLM or Kimi) is there too, and is not called recommended
-    assert "**Codex** (through your ChatGPT subscription" in release[:4000]
-    assert "is the recommended one" in release[:4000] and "Claude Code is no longer offered" in release[:4000]
-    assert "**Pi with GLM (Z.ai) or Kimi (Moonshot)**" in release[:4000]
+    # 0.4.0: one way (Pi with a GLM key), the others come later and are refused by the CLI
+    assert "team runs on Pi with a GLM (Z.ai) API key.**" in release[:4000]
+    assert "One way to power the team: **Pi with GLM (Z.ai)**" in release[:4000]
+    assert "Codex (ChatGPT subscription or OpenAI key), Kimi and Claude come" in release[:4000]
+    readme = text("README.md")
+    assert "in 0.4.0, **GLM (Z.ai) with an API key** on the Pi harness" in readme and "**Codex** (recommended)" not in readme
 
 
 def test_the_protected_setup_page_starts_on_codex_and_lists_only_it():

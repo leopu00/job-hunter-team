@@ -17,7 +17,6 @@ import { existsSync } from 'node:fs';
 import {
   AI_PROVIDERS,
   PI_API_CHOICES,
-  RECOMMENDED_PROVIDER,
   readConfigFileSnapshot,
   validateApiKey,
   summarizeExistingConfig,
@@ -42,6 +41,7 @@ import { join } from 'node:path';
 import { keyStoreDir } from './key-store.js';
 import { JHT_CONFIG_PATH } from './setup-helpers.js';
 import { piApiProvider } from '../../shared/runtime/provider-models.js';
+import { RELEASE_PROVIDERS, RELEASE_HARNESS, offeredInRelease } from '../../shared/runtime/release-providers.js';
 import pc from 'picocolors';
 
 /** «[2/3] text»: the slow steps after the choices, numbered the same way as the installer's. */
@@ -65,8 +65,11 @@ const PROVIDER_LABEL_KEY = {
   kimi: 'key_kimi',
 };
 
-/** What the wizard offers: Codex with the subscription, then the providers that take an API key (they run only on Pi). */
-export const WIZARD_PROVIDERS = [...AI_PROVIDERS, ...PI_API_CHOICES];
+/**
+ * What the wizard offers: the services of this release (shared/runtime/release-providers.js), each on Pi with an API key. Codex with
+ * the subscription or a key, and the other services, are kept in the code for the next release but not offered.
+ */
+export const WIZARD_PROVIDERS = [...AI_PROVIDERS, ...PI_API_CHOICES].filter((p) => RELEASE_PROVIDERS.includes(p.value));
 
 // Eseguibile del CLI provider per OAuth login. Tutti partono con un comando
 // che, al primo run senza credenziali, mostra il device-flow URL.
@@ -207,7 +210,10 @@ async function runSetupSteps(prompter, state) {
         { value: 'reset', label: t('wizard.config_action_reset') },
       ],
     });
-    if (action === 'keep') {
+    // a config of a service this release does not offer cannot be kept: it is said, and the setup goes on as an update
+    if (action === 'keep' && !offeredInRelease(baseConfig.active_provider)) {
+      await prompter.note(tf('wizard.release.not_offered', String(baseConfig.active_provider ?? '-')), t('wizard.config_existing_title'));
+    } else if (action === 'keep') {
       // Kept values do not say there is a login: the wait for it may have run out before (30 minutes) and the setup
       // be run again. The kept provider is asked for its login the same way, and a login that is there ends it at once.
       const keptProvider = AI_PROVIDERS.find((p) => p.value === baseConfig.active_provider);
@@ -271,9 +277,10 @@ async function runSetupSteps(prompter, state) {
     providerChoice = await prompter.select({
       message: t('wizard.provider.prompt'),
       options: WIZARD_PROVIDERS.map((p) => ({ value: p.value, label: providerLabel(p) })),
-      initialValue: WIZARD_PROVIDERS.some((p) => p.value === offeredNow) ? offeredNow : RECOMMENDED_PROVIDER,
+      initialValue: WIZARD_PROVIDERS.some((p) => p.value === offeredNow) ? offeredNow : WIZARD_PROVIDERS[0].value,
     });
   }
+  await prompter.note(t('wizard.release.coming'), t('wizard.provider.prompt'));
   const selectedProvider = WIZARD_PROVIDERS.find((p) => p.value === providerChoice);
   const takesApiKey = selectedProvider.piOnly === true;
 
@@ -281,7 +288,7 @@ async function runSetupSteps(prompter, state) {
   // GLM and Kimi run only on Pi, with an API key: nothing to ask, it is said.
   let harness;
   if (takesApiKey) {
-    harness = 'pi';
+    harness = RELEASE_HARNESS;
     await prompter.note(tf('wizard.provider.harness_pi_key_note', selectedProvider.label), t('wizard.provider.harness_prompt'));
   } else {
     harness = await promptHarness(prompter, {
@@ -295,6 +302,7 @@ async function runSetupSteps(prompter, state) {
   // ne ha solo il percorso (api_key_ref). Una chiave che il provider rifiuta non lascia niente di salvato.
   let authMethod = 'subscription';
   let apiKeySecret;
+  let keyVerdict = null; // what the provider said of the key kept (askPiApiKey): read again at the end
   let codexKey = null; // the OpenAI key of a Codex setup with a key, in memory until Codex has taken it
   const subscriptionConfig = undefined;
   if (!takesApiKey && harness === 'codex') {
@@ -321,7 +329,7 @@ async function runSetupSteps(prompter, state) {
     authMethod = 'api_key';
     // known before the key is asked: a cancel at any point from here on leaves this file as it was
     Object.assign(state, rememberKeyFile(selectedProvider.value));
-    const keyPath = await askPiApiKey(prompter, { t, tf, choice: selectedProvider });
+    const keyPath = await askPiApiKey(prompter, { t, tf, choice: selectedProvider, onVerdict: (verdict) => { keyVerdict = verdict; } });
     if (!keyPath) {
       await prompter.outro(t('wizard.key.aborted'));
       return false;
@@ -426,6 +434,7 @@ async function runSetupSteps(prompter, state) {
 
   // The configuration is said to be saved here, at the end, once everything it was for has been done.
   await showSummary(prompter, { selectedProvider });
-  await prompter.outro(t('wizard.outro_done'));
+  // the key is right and the account is empty: the Assistente will not answer until it is topped up (collaudo Linux, 12/11)
+  await prompter.outro(keyVerdict?.state === 'no_credit' ? tf('wizard.outro_no_credit', keyVerdict.label) : t('wizard.outro_done'));
   return true;
 }

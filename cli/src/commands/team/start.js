@@ -16,6 +16,7 @@ import { KEY_REFUSED_EXIT_CODE } from '../providers-key-check.js';
 import { readRegularFileText } from '../../lib/secure-config-io.js';
 import { say } from '../../lib/texts.js';
 import { hint } from '../../lib/ui.js';
+import { creditNotice } from '../../lib/provider-credit.js';
 
 const CONTAINER_TEAM_HALTED_FLAG = '/jht_home/.team-halted.flag';
 const SPAWN_ERROR_TAIL_LINES = 5;
@@ -623,6 +624,10 @@ export async function startAction(agentArg, options) {
     reportUserHolds(agentArg, containerMode);
     return true;
   };
+
+  // A team on an empty balance «starts» (or is «already active») and then gets every call refused: say it first.
+  const credit = creditNotice();
+  if (credit) console.log(c.yellow(`⚠ ${credit}`));
 
   // Container mode: deleghiamo a /app/.launcher/start-agent.sh dentro
   // jht — coerente col boot del bridge Sentinella e con le dipendenze CLI

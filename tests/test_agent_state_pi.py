@@ -87,8 +87,12 @@ CASES = {
                                                                                thinkingLevel="high")],
                                       ("avviato_mai_partito", None)),
     "network": ([header("/x"), p_user(T), p_error(T + 3, "Connection error.")], ("bloccato", "rete")),
-    "limit": ([header("/x"), p_user(T), p_error(T + 3, "429 You exceeded your current quota")],
+    "limit": ([header("/x"), p_user(T), p_error(T + 3, "429 Rate limit reached for requests")],
               ("bloccato", "limite_fornitore")),
+    # Z.ai on an empty balance (made-up body in its shape): a 429 too, but it needs a top-up, not a wait
+    "credit": ([header("/x"), p_user(T), p_error(T + 3, '429 {"code":"1113","message":"Insufficient balance or no resource '
+                                                         'package. Please recharge."}')],
+               ("bloccato", "credito_esaurito")),
     "login-refused": ([header("/x"), p_user(T), p_error(T + 3, 'OpenAI API error (401): {"error":{"message":"Incorrect API key provided."}}')],
                       ("bloccato", "accesso_scaduto")),
     "no-key-inside-a-run": ([header("/x"), p_user(T), p_tool(T + 2), p_error(T + 3, "No API key found for openai.")],
@@ -137,12 +141,12 @@ def test_the_reason_of_an_error_line():
     assert block_reason("Invalid Authentication") == "accesso_scaduto"
     assert block_reason("The API Key appears to be invalid or may have expired.") == "accesso_scaduto"
     assert block_reason("token expired or incorrect") == "accesso_scaduto"
-    # a spent quota is not a login problem
-    assert block_reason('OpenAI API error (429): {"type":"insufficient_quota","code":"insufficient_quota"}') == "limite_fornitore"
+    # a spent quota is not a login problem, and no limit that frees itself either: it needs a top-up
+    assert block_reason('OpenAI API error (429): {"type":"insufficient_quota","code":"insufficient_quota"}') == "credito_esaurito"
     # the two 429 of OpenAI as Pi records them (live capture, 09/11): a spent quota stops at once, a rate limit is retried
     assert block_reason('OpenAI API error (429): {"message":"You exceeded your current quota, please check your plan '
                         'and billing details.","type":"insufficient_quota","param":null,"code":"insufficient_quota"}') \
-        == "limite_fornitore"
+        == "credito_esaurito"
     assert block_reason('Retry failed after 3 attempts: OpenAI API error (429): {"message":"Rate limit reached for '
                         'gpt-test on tokens per min (TPM): Limit 30000, Used 29500, Requested 2000.",'
                         '"type":"tokens","code":"rate_limit_exceeded"}') == "limite_fornitore"

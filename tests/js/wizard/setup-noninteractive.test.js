@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { offeredInRelease } from '../../../shared/runtime/release-providers.js';
+// Codex (and Pi with ChatGPT) is kept in the code for the next release but not offered in this one (shared/runtime/release-providers.js):
+// these cases run again as soon as it is back in that list.
+const codexOffered = offeredInRelease('openai');
 
 vi.mock('../../../cli/wizard/setup-checks.js', () => ({
   runHealthCheck: vi.fn(async () => false),
@@ -27,7 +31,7 @@ describe('runNonInteractiveSetup — Phase 1 health failure', () => {
     else process.env.JHT_LANG = originalLang;
   });
 
-  it('keeps the save-anyway warning in English', async () => {
+  it.skipIf(!codexOffered)('keeps the save-anyway warning in English', async () => {
     await runNonInteractiveSetup({
       provider: 'openai',
       authMethod: 'api_key',
@@ -44,7 +48,7 @@ describe('runNonInteractiveSetup — Phase 1 health failure', () => {
   it('refuses a provider that is no longer offered and saves nothing', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const before = process.exitCode;
-    for (const provider of ['claude', 'kimi']) {
+    for (const provider of ['claude', 'openai', ...(offeredInRelease('kimi') ? [] : ['kimi'])]) {
       process.exitCode = 0;
       await runNonInteractiveSetup({
         provider, authMethod: 'api_key', secretMode: 'plaintext', apiKey: 'sk-ant-api-key-long-enough',
@@ -52,7 +56,7 @@ describe('runNonInteractiveSetup — Phase 1 health failure', () => {
       expect(process.exitCode, provider).toBe(1);
     }
     expect(writeConfigFile).not.toHaveBeenCalled();
-    expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid provider'));
+    expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('This release offers only'));
     process.exitCode = before;
     errSpy.mockRestore();
   });

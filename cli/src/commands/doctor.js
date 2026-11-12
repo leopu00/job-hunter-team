@@ -10,7 +10,9 @@ import { later, say, show } from '../lib/texts.js'
 import { AGENTS, isAgentSession } from './team/agents.js'
 import { LATEST_CONFIG_VERSION } from './migrate.js'
 import { PI_API_PROVIDERS, piApiProvider } from '../../../shared/runtime/provider-models.js'
+import { RELEASE_PROVIDERS, offeredInRelease } from '../../../shared/runtime/release-providers.js'
 import { providerSignedIn } from '../lib/provider-signin.js'
+import { creditGone } from '../lib/provider-credit.js'
 
 const JHT_DIR     = JHT_HOME
 const CONFIG_PATH = join(JHT_DIR, 'jht.config.json')
@@ -76,6 +78,10 @@ async function checkProvider() {
   const active = cfg.active_provider
   if (!active) return { warn: true, msg: later('doctor.provider_none'), hint: later('doctor.provider_use') }
   const prov = cfg.providers?.[active]
+  // a team on a service this release does not offer keeps its config; doctor says so and what to do
+  if (!offeredInRelease(active)) {
+    return { warn: true, msg: later('doctor.provider_not_in_release', { active, offered: RELEASE_PROVIDERS.join(', ') }), hint: later('doctor.provider_not_in_release_hint', { offered: RELEASE_PROVIDERS[0] }) }
+  }
   // Le subscription usano la sessione OAuth della CLI e non hanno, per
   // definizione, una API key nel config. Segnalarle come incomplete rende il
   // doctor fuorviante proprio dopo un login riuscito dal wizard desktop.
@@ -101,7 +107,11 @@ async function checkProvider() {
         : `${active.toUpperCase()}_API_KEY`
   const key = prov?.api_key || keyOfRef(prov?.api_key_ref) || process.env[envName]
   if (!key) return { warn: true, msg: later('doctor.provider_nokey', { active }), hint: later('doctor.provider_setenv', { env: envName }) }
-  return { ok: true, msg: later('doctor.provider_line', { name: `${active}${prov?.model ? ` (${prov.model})` : ''}` }) }
+  const name = `${active}${prov?.model ? ` (${prov.model})` : ''}`
+  // A key the provider accepts on an empty balance: every call comes back 429 and the doctor used to say nothing.
+  const credit = creditGone()
+  if (credit) return { warn: true, msg: later('doctor.provider_credit_gone', { name, provider: credit.label }), hint: later('doctor.provider_credit_hint') }
+  return { ok: true, msg: later('doctor.provider_line', { name }) }
 }
 
 // Only for a team on Anthropic: with Codex, GLM or Kimi a missing Anthropic key is not a fact about this team, and
@@ -155,6 +165,14 @@ function checkDeps() {
   return results
 }
 
+// On Windows the wrapper tells the doctor, by JHT_HOST_WSL_MEMORY_ADVICE, the memory limit the setup would have set for WSL and did
+// not because other WSL distributions are registered, while %USERPROFILE%\.wslconfig still has none: the container cannot read the host.
+function checkWslMemory() {
+  const value = process.env.JHT_HOST_WSL_MEMORY_ADVICE ?? ''
+  if (!/^[1-9][0-9]?GB$/.test(value)) return null
+  return { warn: true, msg: later('doctor.wsl_memory_unlimited'), hint: later('doctor.wsl_memory_hint', { value }) }
+}
+
 function checkWorkers() {
   try {
     const sessions = execSync('tmux list-sessions -F "#{session_name}" 2>/dev/null', { encoding: 'utf-8', stdio: 'pipe' })
@@ -195,7 +213,7 @@ async function handleDoctor(options) {
   ])
 
   const sections = [
-    { title: later('doctor.sec_environment'), checks: depsCk },
+    { title: later('doctor.sec_environment'), checks: [...depsCk, checkWslMemory()] },
     { title: later('doctor.sec_config'),      checks: [configCk] },
     { title: later('doctor.sec_provider'), checks: [providerCk, apiCk] },
     { title: later('doctor.sec_database'),    checks: [dbCk] },

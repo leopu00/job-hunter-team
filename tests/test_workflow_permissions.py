@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
 READ_CONTENTS = {"contents": "read"}
 
-# This is deliberately an exact 16/16 census. A new workflow or job must make
+# This is deliberately an exact 15/15 census. A new workflow or job must make
 # its token contract explicit here before it can enter the repository.
 EXPECTED_EFFECTIVE_PERMISSIONS = {
     "ci.yml": {
@@ -73,7 +73,6 @@ EXPECTED_EFFECTIVE_PERMISSIONS = {
     # conclusion is the gate.
     "windows-config-acl.yml": {"host": READ_CONTENTS, "shells": READ_CONTENTS},
     "windows-dev-smoke.yml": {"next-dev": READ_CONTENTS},
-    "windows-installer-smoke.yml": {"nsis": READ_CONTENTS},
     # Not a required check: the user's install with the real Podman (T80).
     "windows-podman-real.yml": {"real-podman": READ_CONTENTS},
     "windows-wsl2-probe.yml": {"probe": READ_CONTENTS},
@@ -101,7 +100,7 @@ def test_all_workflows_have_only_the_minimum_explicit_permissions():
     workflow_paths = {path.name: path for path in WORKFLOW_DIR.glob("*.yml")}
 
     assert set(workflow_paths) == set(EXPECTED_EFFECTIVE_PERMISSIONS)
-    assert len(workflow_paths) == 16
+    assert len(workflow_paths) == 15
 
     for name, expected_jobs in EXPECTED_EFFECTIVE_PERMISSIONS.items():
         workflow = _load_workflow(workflow_paths[name])

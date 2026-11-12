@@ -169,24 +169,6 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/sentinella/_skills/order-formats/SKILL.md](../agents/sentinella/_skills/order-formats/SKILL.md) | Format ordini protocollo (MANTIENI/SCALA UP/RIENTRO) | — | 2026-10-09 | ✅ |
 
 
-## 🎮 game (applicazione desktop)
-
-| 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
-|---|---|---|---|---|
-| [game/PROMPT.md](../game/PROMPT.md) | PROMPT — Prototipo videogioco "JHT: The Office" (esperienza gamificata di Job Hunter Team) — Il progetto game/ è ora l'unica applicazione desktop di Job Hunter Team. | — | 2026-07-19 | ✅ |
-| [game/README.md](../game/README.md) | Job Hunter Team — The Office — Godot 4.7 desktop application for Windows, macOS and Linux. | — | 2026-09-21 | ✅ |
-| [game/assets/gen-art/LOG.md](../game/assets/gen-art/LOG.md) | 🎨 gen-art — log dell'Art Director (host.invalid:dev1-art) — Asset generati via Codex CLI (tmux codex-dev1), giudicati contro | — | 2026-08-17 | ✅ |
-| [game/docs/ANALISI-GIOCHI.md](../game/docs/ANALISI-GIOCHI.md) | Analisi giochi di riferimento — appunti sessione con Leone (2026-07-07) — Analisi guidata, un gioco alla volta: cosa c'è / cosa non c'è / cosa ci piace / cosa non ci piace. | — | 2026-07-07 | ✅ |
-| [game/docs/ASSETS.md](../game/docs/ASSETS.md) | Pipeline asset personaggi — Sprite in-world (SVG a layer componibili) | — | 2026-11-12 | ✅ |
-| [game/docs/DATA-ADAPTER.md](../game/docs/DATA-ADAPTER.md) | Data adapter — contratto fra gioco e dati del team — Il gioco non conosce Supabase né la dashboard: parla solo con l'autoload | — | 2026-07-11 | ✅ |
-| [game/docs/FIRST-RUN.md](../game/docs/FIRST-RUN.md) | First-run conversation contract — The office must be understandable before Docker or an LLM is available. | — | 2026-08-12 | ✅ |
-| [game/docs/GDD.md](../game/docs/GDD.md) | JHT: The Office — current product design — The Godot application is the only desktop client for Job Hunter Team. | — | 2026-07-29 | ✅ |
-| [game/docs/RESEARCH-DOSSIER.md](../game/docs/RESEARCH-DOSSIER.md) | Game Research Dossier — "The Box" (versione gamificata di Job Hunter Team) — Materiale di supporto per le sessioni che sviluppano game/ (branch work3-dev1). | — | 2026-07-07 | ✅ |
-| [game/docs/ROADMAP.md](../game/docs/ROADMAP.md) | Native application roadmap — The Electron-to-Godot migration, live data views, embedded console and | — | 2026-08-24 | ✅ |
-| [game/docs/SPRITES.md](../game/docs/SPRITES.md) | Sprite agenti — contratto spritesheet (v1, 2026-07-11) — Gli agenti in-world passano dagli SVG a parti (CharacterRig) a spritesheet | — | 2026-07-30 | ✅ |
-| [game/assets/icons/SOURCES.md](../game/assets/icons/SOURCES.md) | Provenienza ufficiale, condizioni d'uso e varianti Docker/Telegram immutate impiegate dalle icone della sidebar Godot | — | 2026-08-07 | ✅ |
-
-
 ## 📖 docs/about
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
@@ -206,13 +188,13 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/adr/README.md](./adr/README.md) | Indice ADR + convenzione di scrittura | — | 2026-11-06 | ✅ |
+| [docs/adr/README.md](./adr/README.md) | Indice ADR + convenzione di scrittura | — | 2026-11-12 | ✅ |
 | [docs/adr/0001-colima-not-docker-desktop.md](./adr/0001-colima-not-docker-desktop.md) | ADR-0001: Colima invece di Docker Desktop su macOS | — | 2026-06-20 | ✅ |
 | [docs/adr/0002-three-supported-agent-clis.md](./adr/0002-three-supported-agent-clis.md) | ADR-0002: 3 CLI supportate (Claude Code, Codex, Kimi) | — | 2026-10-26 | ✅ |
 | [docs/adr/0003-single-writer-team.md](./adr/0003-single-writer-team.md) | ADR-0003: single-writer pattern sul DB | — | 2026-06-13 | ✅ |
 | [docs/adr/0004-subscription-only-no-api-keys.md](./adr/0004-subscription-only-no-api-keys.md) | ADR-0004: solo subscription, no API key | — | 2026-10-26 | ✅ |
 | [docs/adr/0005-provider-risk-and-mitigation.md](./adr/0005-provider-risk-and-mitigation.md) | 0005 — Provider risk and mitigation — JHT runs on third-party LLM subscriptions (Claude Max, Codex Plus/Pro, Kimi Pro) consumed by autonomous agents in… | — | 2026-10-26 | ✅ |
-| [docs/adr/0006-user-choice-container-runtime-macos.md](./adr/0006-user-choice-container-runtime-macos.md) | 0006 — User chooses the container runtime on macOS (Colima or Docker Desktop) — ADR-0001 mandated Colima as the only container runtime on macOS, because | — | 2026-08-20 | ✅ |
+| [docs/adr/0006-user-choice-container-runtime-macos.md](./adr/0006-user-choice-container-runtime-macos.md) | 0006 — User chooses the container runtime on macOS (Colima or Docker Desktop) — ADR-0001 mandated Colima as the only container runtime on macOS, because | — | 2026-11-12 | ✅ |
 | [docs/adr/0007-provider-selection-is-configuration.md](./adr/0007-provider-selection-is-configuration.md) | Decisione architetturale: provider, modello, CLI e flag sono configurazione governata dal launcher canonico, mai istruzioni naturali; le direttive conservano l'intento di lavoro ma non possono selezionare il runtime. | — | 2026-08-14 | ✅ |
 | [docs/adr/0008-podman-evaluated-behind-a-shim.md](./adr/0008-podman-evaluated-behind-a-shim.md) | ADR proposto: valutare Podman dietro uno shim `docker` invece di riscrivere i punti di chiamata — estende 0006 e riapre le alternative scartate in 0001. | — | 2026-08-20 | ✅ |
 | [docs/adr/0009-team-exposes-one-loopback-api.md](./adr/0009-team-exposes-one-loopback-api.md) | ADR proposto: il team espone UNA API di loopback e ogni client (Godot, web, CLI, TUI) diventa sottile — riprende una decisione presa di fatto ritirando la dashboard locale, che non aveva un ADR suo. | — | 2026-08-24 | ✅ |
@@ -220,7 +202,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/adr/0011-tauri-desktop-shell.md](./adr/0011-tauri-desktop-shell.md) | ADR per la migrazione desktop a Tauri 2 e React, mantenendo Godot supportato durante il passaggio | 2026-08-24 | 2026-08-24 | 🟢 |
 | [docs/adr/0012-desktop-setup-matrix.md](./adr/0012-desktop-setup-matrix.md) | ADR che separa host di esecuzione e autenticazione AI e definisce il ciclo di vita sicuro delle credenziali desktop | 2026-08-24 | 2026-08-24 | 🟢 |
 | [docs/adr/0013-codex-sqlite-state-off-the-host-bind.md](./adr/0013-codex-sqlite-state-off-the-host-bind.md) | Decision to store Codex SQLite state in the dependency volume while retaining login and sessions in the home bind | — | 2026-11-06 | ✅ |
-| [docs/adr/0014-podman-only-runtime.md](./adr/0014-podman-only-runtime.md) | _(da compilare nel JSON)_ | — | — | ✅ |
+| [docs/adr/0014-podman-only-runtime.md](./adr/0014-podman-only-runtime.md) | _(da compilare nel JSON)_ | — | 2026-11-12 | ✅ |
 
 
 ## 🧭 docs/guides

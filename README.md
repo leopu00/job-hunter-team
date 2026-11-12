@@ -32,7 +32,7 @@
 
 Job hunting is a second job on top of your job: scanning boards daily, qualifying listings, tailoring every application. JHT hands that grind to a team of AI agents running around the clock — Scout finds positions, Analyst verifies them, Scorer ranks them against your profile, Writer prepares tailored documents, Critic blind-reviews everything — orchestrated by a **Captain**. You only review applications that clear the quality bar.
 
-Everything runs **in your container** — on your Mac (Apple silicon) or on your VPS, with your profile, your data and your provider account. JHT itself is **free (MIT)**; the agents run on a provider you pay for: a **Codex** subscription, or **GLM / Kimi with an API key** — see [Install](#install). A local model can currently shadow or replace the Scorer only.
+Everything runs **in your container** — on your Mac (Apple silicon) or on your VPS, with your profile, your data and your provider account. JHT itself is **free (MIT)**; the agents run on a provider you pay for: in 0.4.0, **GLM (Z.ai) with an API key** on the Pi harness (Codex, Kimi and Claude come in a later release) — see [Install](#install). A local model can currently shadow or replace the Scorer only.
 
 I built JHT for my own job hunt — ~200 offers analyzed, ~20 tailored applications, **5 interview invites in a few weeks** ([story](docs/about/STORY.md)). Then I rebuilt it as open source. On the public stack, a Codex team ran **one month unattended**: 658 positions found, 520 scored, 307 strong matches, weekly budget self-managed at 99–100% ([results](docs/about/RESULTS.md)).
 
@@ -90,12 +90,10 @@ team.
   The desktop app is Mac only. **Linux**: CLI only, experimental. **Windows**: preview, CLI only
   (PowerShell installer, Podman inside WSL), tested on Windows 10, not on Windows 11 — see
   [QUICKSTART](docs/guides/QUICKSTART.md).
-- **A provider for the agents**, one of:
-  - **Codex** (recommended), with a ChatGPT Plus / Pro subscription dedicated to JHT, signed in
-    from your browser: no API key;
-  - **GLM (Z.ai) or Kimi (Moonshot)** on the Pi harness, with an **API key** given from a file or
-    from standard input (`jht setup --provider glm --harness pi --api-key-file <file>`), never on
-    the command line.
+- **A provider for the agents**: in 0.4.0, **GLM (Z.ai)** on the Pi harness, with an **API key**
+  that `jht setup` asks for (typed hidden) or takes from a file or standard input
+  (`jht setup --non-interactive --provider glm --api-key-stdin`), never on the command line.
+  Codex (ChatGPT subscription), Kimi and Claude come in a later release.
 - **A container engine**: Podman, the only one since 0.4. On a Mac the installer and the app set it
   up with Homebrew (which must already be there), so there is no Docker Desktop to install.
   On Linux: rootless Podman 5.0 or later.
@@ -105,10 +103,10 @@ team.
 Not sure where the team should live? Compare a
 [local PC, dedicated Linux PC on the LAN and VPS](docs/guides/CHOOSE-WHERE-TO-RUN.md).
 
-**What it costs** — on Codex the team works inside a subscription **dedicated to the team** (a
-shared account hits its limits); the month-long run we measured used Codex Pro, about €100/month
-([results](docs/about/RESULTS.md)). With an API key you pay per call: measured on GLM, about 0.10 USD per
-scored position (not measured on Kimi), with a daily ceiling that pauses the team. Details:
+**What it costs** — with the GLM API key you pay per call: measured on GLM, about 0.10 USD per
+scored position, with a daily ceiling that pauses the team. (The month-long run we measured used a
+Codex Pro subscription, about €100/month — [results](docs/about/RESULTS.md); Codex comes back in a
+later release.) Details:
 [`docs/about/PROVIDERS.md`](docs/about/PROVIDERS.md).
 
 | Provider | Plan | Cost/mo | Status |
@@ -143,8 +141,7 @@ Full walkthrough, Windows and contributor setup: [`docs/guides/QUICKSTART.md`](d
 
 ## Interfaces
 
-**Native desktop app** ([Tauri 2 + React](desktop/), with the retired Godot
-office retained in [`game/`](game/) as migration history) · **CLI** (`jht team
+**Native desktop app** ([Tauri 2 + React](desktop/)) · **CLI** (`jht team
 start` — [reference](docs/guides/CLI-REFERENCE.md)) · **Cloud dashboard**
 (Next.js) · **Telegram**
 
@@ -164,7 +161,7 @@ Python/tmux during migration) · Next.js 16 + Supabase (cloud dashboard) · Podm
 Windows a CLI preview. What was tested, and what was not, is listed in the release notes.
 Full picture: [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md).
 
-Monorepo: [`desktop/`](desktop/) · [`game/`](game/) · [`cli/`](cli/) · [`web/`](web/) · [`shared/`](shared/) · [`agents/`](agents/) · [`api-worker/`](api-worker/) *(isolated full-team API pipeline)* · [`scripts/`](scripts/) · [`e2e/`](e2e/) · [`supabase/`](supabase/) · [`docs/`](docs/) — index in [`docs/README.md`](docs/README.md).
+Monorepo: [`desktop/`](desktop/) · [`cli/`](cli/) · [`web/`](web/) · [`shared/`](shared/) · [`agents/`](agents/) · [`api-worker/`](api-worker/) *(isolated full-team API pipeline)* · [`scripts/`](scripts/) · [`e2e/`](e2e/) · [`supabase/`](supabase/) · [`docs/`](docs/) — index in [`docs/README.md`](docs/README.md).
 
 ## Contributing
 

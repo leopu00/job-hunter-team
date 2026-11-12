@@ -93,9 +93,8 @@ describe("the Windows installer and the v0.3.9 game", () => {
   const define = (name: string) => new RegExp(`^!define ${name} "([^"]+)"$`, "m").exec(hooks)?.[1];
 
   it("recognises the game by the uninstall entry its own installer writes", () => {
-    const game = readFileSync(new URL("../../../game/installer/windows.nsi", import.meta.url), "utf8");
-    const gameKey = /^!define UNINST_KEY "([^"]+)"$/m.exec(game)?.[1];
-    expect(gameKey).toBe("Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\JobHunterTeam");
+    // The key the v0.3.9 game installer (game/installer/windows.nsi, removed from the tree) wrote: published, it never changes.
+    const gameKey = "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\JobHunterTeam";
     expect(define("JHT_GAME_UNINSTKEY")).toBe(gameKey);
     expect(preInstall).toContain('ReadRegStr $R0 HKCU "${JHT_GAME_UNINSTKEY}" "UninstallString"');
   });

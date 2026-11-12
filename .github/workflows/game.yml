@@ -1,8 +1,7 @@
 name: Desktop — Tauri 2 distribution matrix
 
-# Il nome del file resta game.yml per non spezzare link e automazioni storiche,
-# ma il gate distributivo e' Tauri 2. game/ resta nel repository come legacy e
-# non produce piu' gli artefatti pubblici.
+# Il nome del file resta game.yml per non spezzare link e automazioni storiche:
+# e' il gate distributivo della desktop Tauri 2.
 on:
   push:
     paths:

@@ -49,6 +49,10 @@ export function blockedLines(snapshot, provider = null, width = terminalWidth())
     } else if (why === 'accesso_scaduto') {
       out.push(sentence(say('observation.blocked_login', { id, provider: provider ? safe(provider.label) : say('observation.the_provider') })),
         hint(say('observation.blocked_login_fix'), 2, width));
+    } else if (why === 'credito_esaurito') {
+      // a 429 too, but no limit that frees itself: the person has to top the account up
+      out.push(sentence(say('observation.blocked_credit', { id, provider: provider ? safe(provider.label) : say('observation.the_provider') })),
+        hint(say('observation.blocked_credit_fix'), 2, width));
     } else if (LIMIT_REASONS.has(why)) {
       out.push(sentence(say('observation.blocked_limit', { id })));
     } else if (why === 'rete') {

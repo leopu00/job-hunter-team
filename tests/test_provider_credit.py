@@ -75,13 +75,16 @@ def test_an_old_answer_a_rate_limit_and_an_empty_home_are_not_a_verdict(tmp_path
     assert provider_credit.exhausted(tmp_path, NOW) is None
 
 
-def test_the_brake_halts_in_a_declared_way_only_in_the_no_quota_mode(tmp_path):
+def test_the_brake_halts_in_a_declared_way_also_before_the_no_quota_mode_is_declared(tmp_path):
+    # The bridge declares the no-quota mode at the end of its first tick: a team that found the credit already gone
+    # was never paused when the brake waited for that mode (collaudo Linux, 12/11: 16 refused calls, no pause).
     session(tmp_path, "scout-1", [error_row(stamp(-60), "moonshotai", KIMI_429)])
     spent = pi_spend_cap.spend(tmp_path, NOW)
     assert spent["credit"]["provider"] == "moonshotai"
-    verdict = pi_spend_cap.decide({}, spent, True)
-    assert verdict["action"] == "halt" and verdict["why"] == "credit" and verdict["provider"] == "moonshotai"
-    assert pi_spend_cap.decide({}, spent, False) == {"action": "none"}
+    for no_quota_mode in (True, False):
+        verdict = pi_spend_cap.decide({}, spent, no_quota_mode)
+        assert verdict["action"] == "halt" and verdict["why"] == "credit" and verdict["provider"] == "moonshotai"
+    assert pi_spend_cap.decide({}, {**spent, "credit": None}, False) == {"action": "none"}
     assert "Kimi (Moonshot)" in pi_spend_cap.captain_text(verdict, spent) and "PAUSED" in pi_spend_cap.captain_text(verdict, spent)
 
 
@@ -92,3 +95,26 @@ def test_the_user_hears_it_in_every_language_with_the_name_of_the_provider(monke
         monkeypatch.setenv("JHT_HOME", "/nonexistent")
         text = pi_spend_cap.user_text(verdict, {"cost": 0.0})
         assert "GLM (Z.ai)" in text and "%s" not in text, (lang, text)
+
+
+def test_the_state_of_the_agent_says_credit_gone_and_not_a_limit_that_frees_itself():
+    import agent_pi_log
+
+    assert agent_pi_log.block_reason(ZAI_1113) == "credito_esaurito"
+    assert agent_pi_log.block_reason(KIMI_429) == "credito_esaurito"
+    assert agent_pi_log.block_reason(OPENAI_QUOTA) == "credito_esaurito"
+    assert agent_pi_log.block_reason(RATE_LIMIT) == "limite_fornitore"
+
+
+def test_run_as_a_script_it_prints_what_it_found_with_the_name_the_person_knows(tmp_path):
+    import subprocess
+
+    script = Path(provider_credit.__file__)
+    env = {"JHT_HOME": str(tmp_path), "PATH": "/usr/bin:/bin"}
+    run = lambda *args: subprocess.run([sys.executable, str(script), *args], env=env, capture_output=True, text=True, timeout=30)
+    assert run().stdout.strip() == "null"
+    session(tmp_path, "assistente", [error_row(stamp(-2 * 3600), "zai", ZAI_1113)])
+    assert run().stdout.strip() == "null"  # older than the half hour of the brake
+    found = json.loads(run("--window", "86400").stdout)
+    assert found["provider"] == "zai" and found["label"] == "GLM (Z.ai)" and found["agent"] == "assistente"
+    assert run("--window").returncode == 2 and run("--bogus").returncode == 2

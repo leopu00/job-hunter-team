@@ -1,4 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { offeredInRelease } from '../../../shared/runtime/release-providers.js';
+// Codex (and Pi with ChatGPT) is kept in the code for the next release but not offered in this one (shared/runtime/release-providers.js):
+// these cases run again as soon as it is back in that list.
+const codexOffered = offeredInRelease('openai');
 import { LATEST_CONFIG_VERSION } from '../../../cli/src/commands/migrate.js';
 import { CODEX_MODEL } from '../../../shared/runtime/role-models.js';
 
@@ -63,7 +67,7 @@ beforeEach(() => {
   delete process.env.JHT_HOST_TYPE;
 });
 
-describe('runSetupWizard — VPS senza account cloud', () => {
+describe.skipIf(!codexOffered)('runSetupWizard — VPS senza account cloud', () => {
   it('salva il provider anche quando l’utente salta il pairing facoltativo', async () => {
     process.env.JHT_HOST_TYPE = 'vps';
     const prompter = createMockPrompter({
@@ -111,7 +115,7 @@ describe('runSetupWizard — VPS senza account cloud', () => {
 
 // --- Flow base: nuovo config, un provider per volta ---
 
-describe('runSetupWizard — intro e outro', () => {
+describe.skipIf(!codexOffered)('runSetupWizard — intro e outro', () => {
   it('chiama intro e outro del prompter', async () => {
     const prompter = createMockPrompter({
       selects: ['openai'],
@@ -125,7 +129,7 @@ describe('runSetupWizard — intro e outro', () => {
   });
 });
 
-describe('runSetupWizard — provider OpenAI (subscription)', () => {
+describe.skipIf(!codexOffered)('runSetupWizard — provider OpenAI (subscription)', () => {
   it('salva config OpenAI con auth subscription', async () => {
     const prompter = createMockPrompter({
       selects: ['openai'],
@@ -145,7 +149,7 @@ describe('runSetupWizard — provider OpenAI (subscription)', () => {
 
 // --- Config esistente ---
 
-describe('runSetupWizard — config esistente', () => {
+describe.skipIf(!codexOffered)('runSetupWizard — config esistente', () => {
   const existingConfig = {
     active_provider: 'claude',
     providers: {
@@ -217,7 +221,7 @@ describe('runSetupWizard — config esistente', () => {
   });
 });
 
-describe('runSetupWizard — provider proposto', () => {
+describe.skipIf(!codexOffered)('runSetupWizard — provider proposto', () => {
   it('dice che il provider è Codex senza chiederlo: con una sola scelta non c’è domanda, e Claude e Kimi non si possono scegliere', async () => {
     const prompter = createMockPrompter({ selects: [], confirms: [false, false] });
 

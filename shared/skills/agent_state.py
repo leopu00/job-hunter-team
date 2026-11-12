@@ -73,7 +73,7 @@ STATES = (
 REASONS = {
     "bloccato": (
         "limite_5h", "limite_settimanale", "limite_spesa_org", "limite_fornitore",
-        "rete", "errore_fornitore", "accesso_scaduto",
+        "rete", "errore_fornitore", "accesso_scaduto", "credito_esaurito",
     ),
     "sconosciuto": (
         "fonti_illeggibili", "formato_non_riconosciuto", "turno_silenzioso",

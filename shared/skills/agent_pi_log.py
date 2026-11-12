@@ -15,7 +15,7 @@ markers: a turn is read from the messages themselves.
   assistant, stopReason aborted      turn_end   (the user pressed Esc)
   assistant, stopReason error        blocked + turn_end  (Pi retries a transient error: the next
                                      message of the same turn lifts the block, see agent_state.fold)
-                                     reason: rete | limite_fornitore | accesso_scaduto (401, «No API key»
+                                     reason: rete | credito_esaurito | limite_fornitore | accesso_scaduto (401, «No API key»
                                      inside a run) | errore_fornitore
 Before a run starts Pi refuses a prompt without a key or a login ON THE SCREEN only (agent_session.prompt throws
 before the user message is written): such an agent has no event and stays «avviato_mai_partito».
@@ -30,6 +30,11 @@ as for Claude.
 """
 import re
 from pathlib import Path
+
+try:
+    from provider_credit import credit_gone
+except ModuleNotFoundError:
+    from shared.skills.provider_credit import credit_gone
 
 PI_TYPES = frozenset({
     "session", "message", "model_change", "thinking_level_change", "usage", "compaction",
@@ -76,6 +81,10 @@ def session_files(state, src, cwd: str, since: float):
 
 def block_reason(text) -> str:
     text = text if isinstance(text, str) else ""
+    # before the limit: the provider says 429 for an empty balance too (Z.ai code 1113, Kimi «insufficient balance»),
+    # and that does not free itself like a limit does: the person has to top it up
+    if credit_gone(text):
+        return "credito_esaurito"
     if _AUTH.search(text):
         return "accesso_scaduto"
     if _LIMIT.search(text):

@@ -1,7 +1,7 @@
 # TODO arte — cosa manca da disegnare
 
 **Aggiornato**: 2026-07-29 · **Destinatario**: chi genera gli asset (pipeline `gen-art`)
-**Registro storico**: [`game/assets/gen-art/LOG.md`](../../../game/assets/gen-art/LOG.md)
+**Registro storico**: `game/assets/gen-art/LOG.md` (removed with `game/`; in the git history)
 
 Due lotti, in ordine di priorità. Il primo chiude un'informazione che oggi
 manca all'utente; il secondo una promessa che il gioco fa e non mantiene.

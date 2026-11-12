@@ -1,4 +1,3 @@
-import Link from "next/link";
 import {
   DocHeader,
   Callout,
@@ -29,65 +28,27 @@ export default async function ConnectAiProviderPage() {
       <P>{t.whichProviderP}</P>
       <UL>
         <LI>
-          🔵 <strong>Codex</strong> {t.codex}
-        </LI>
-        <LI>
           🟢 <strong>GLM</strong> {t.apiKey}
         </LI>
+        <LI>⏳ {t.coming}</LI>
       </UL>
-      <Callout>
-        ⚠️ <strong>{t.dedicatedStrong}</strong> {t.dedicatedRest}{" "}
-        <Link
-          href="/pricing"
-          className="font-semibold text-[var(--color-green)] no-underline hover:opacity-80"
-        >
-          {t.pricingLink}
-        </Link>{" "}
-        {t.pricingAfter}
-      </Callout>
 
       <H2>{t.connectIt}</H2>
       <P>
         {t.connectP1} <Code>jht setup</Code>, {t.connectP2}
       </P>
-
-      <H3>{t.step1}</H3>
       <Pre>
-        {`jht providers list           # codex
-jht providers use codex      # set the active one
-jht providers update codex   # install its CLI inside the container`}
+        {`jht setup                                                   # asks for the key, typed hidden
+jht setup --non-interactive --provider glm --api-key-file <file>
+jht setup --non-interactive --provider glm --api-key-stdin < <file>`}
       </Pre>
-
-      <H3>{t.step2}</H3>
-      <P>
-        <strong>{t.step2P1Strong}</strong>
-        {t.step2P1Rest}
-      </P>
-      <Pre>
-        {`jht oauth-login    # opens the provider's device-flow login in a TTY`}
-      </Pre>
-      <P>{t.step2P2}</P>
+      <P>{t.apiKeyP1}</P>
+      <P>{t.apiKeyP2}</P>
 
       <H3>{t.step3}</H3>
       <Pre>
-        {`jht providers current   # the active provider
-jht providers check     # provider CLIs with an update available
+        {`jht providers current   # the active provider: glm
 jht doctor              # full health check — must exit 0`}
-      </Pre>
-
-      <H2>{t.apiKeyTitle}</H2>
-      <P>{t.apiKeyP1}</P>
-      <Pre>
-        {`jht setup --non-interactive --provider glm --harness pi --api-key-file <file>
-jht setup --non-interactive --provider glm --harness pi --api-key-stdin < <file>`}
-      </Pre>
-      <P>{t.apiKeyP2}</P>
-
-      <H2>{t.switching}</H2>
-      <P>{t.switchingP}</P>
-      <Pre>
-        {`jht providers use codex && jht providers update codex
-jht team stop --all && jht team start   # reload the team`}
       </Pre>
 
       <Callout>

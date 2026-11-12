@@ -808,6 +808,9 @@ try {
   if ($pipeAtStart -ceq 'absent' -and $podmanNeedsEventLog -and (Test-JhtEventLogWritable) -ceq 'denied') {
     throw (Get-JhtApiForwardingFailure -MachineName $MachineName -EventLogDenied $true -Started $false)
   }
+  # The memory of the WSL virtual machine, before it exists (a setting is read when the VM starts): never a reason to stop.
+  $wslLimitWaits = $false
+  try { $wslLimitWaits = ((Set-JhtWslConfigForMachine -RuntimeDir $RuntimeDir -MachineName $MachineName) -ceq 'vm-running') } catch { Write-Host "  WSL settings were not changed: $($_.Exception.Message)" -ForegroundColor Yellow }
   # Windows PowerShell 5.1 gives a JSON array to the pipeline as ONE object: with a
   # second machine of this user, `$machine` was the whole list. Parse with -InputObject
   # and enumerate with foreach, the same in 5.1 and in PowerShell 7.
@@ -815,6 +818,29 @@ try {
   $parsedMachines = if ($machinesJson) { ConvertFrom-Json -InputObject $machinesJson } else { $null }
   $machines = @(foreach ($listed in $parsedMachines) { $listed })
   $machine = $machines | Where-Object Name -eq $MachineName | Select-Object -First 1
+  # The limit was just written while the WSL VM runs, and ours is the only distribution (else nothing is written): the VM reads it only
+  # when it starts again. Measured: WSL ends its VM about a minute after its last distribution stopped, and the next start has the
+  # limit. So the machine is stopped, the VM is awaited (never wsl --shutdown), and the start below brings it back with the limit; only
+  # when nothing of the team runs in it (the same rule as the restart for the pipe). Otherwise, or if the VM is still there after the
+  # wait, the person is told the limit waits for the next restart.
+  $restartForLimit = $false
+  if ($wslLimitWaits) {
+    $mayStop = -not ($machine -and [bool]$machine.Running)
+    if (-not $mayStop) {
+      $teamRunning = @(& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName ps --quiet 2>$null })
+      $mayStop = ($LASTEXITCODE -eq 0 -and $teamRunning.Count -eq 0)
+    }
+    $applied = $false
+    if ($mayStop) {
+      Write-Host '  Applying the memory limit to WSL: the machine waits for WSL to restart (about a minute).' -ForegroundColor Cyan
+      if ($machine -and [bool]$machine.Running) {
+        Invoke-Checked $Podman 'machine' 'stop' $MachineName
+        $restartForLimit = $true
+      }
+      $applied = Wait-JhtWslVmStopped
+    }
+    if (-not $applied) { Write-Host $script:JhtWslLimitWaitsText -ForegroundColor Yellow }
+  }
   if (-not $machine) {
     if (-not $InitializeMachine) { throw "Podman machine '$MachineName' is absent; re-run with -InitializeMachine." }
     Write-JhtPhase podman_machine_init
@@ -824,7 +850,7 @@ try {
     Write-JhtPhase podman_machine_start
     $machineStartedHere = $true
     Invoke-Checked $Podman 'machine' 'start' '--update-connection=false' $MachineName
-  } elseif (-not [bool]$machine.Running) {
+  } elseif ($restartForLimit -or -not [bool]$machine.Running) {
     Write-JhtPhase podman_machine_start
     $machineStartedHere = $true
     Invoke-Checked $Podman 'machine' 'start' '--update-connection=false' $MachineName
@@ -907,6 +933,7 @@ if ($ExpectedImageDigest) {
   if (-not $canonicalImage) { throw 'Pulled runtime image has no canonical repository digest.' }
 }
 $env:JHT_IMAGE = $canonicalImage
+[void](Invoke-JhtMachineDropCaches -PodmanPath $Podman -MachineName $MachineName)
 
 $legacyInstallDetected = (Test-Path -LiteralPath (Join-Path $JhtHome 'jht.config.json')) -or
   (Test-Path -LiteralPath (Join-Path $JhtHome 'profile')) -or
@@ -1178,5 +1205,8 @@ $unsettledContainers = @(Get-UnsettledJhtContainers -Podman $Podman -MachineName
 if ($unsettledContainers.Count -gt 0) { throw "runtime_containers_unhealthy: $($unsettledContainers -join '; '). Run 'jht logs' to see why." }
 
 Install-JhtContainerService -PodmanPath $Podman -UnitPath $containerUnitFile
+
+# Compose has just created the team's containers from the image: the cache the first start filled goes back too.
+[void](Invoke-JhtMachineDropCaches -PodmanPath $Podman -MachineName $MachineName)
 
 Write-Host "PODMAN JHT RUNTIME ENABLED (machine=$MachineName, wrapper=$(Join-Path $BinDir 'jht.ps1'))" -ForegroundColor Green
