@@ -9,13 +9,14 @@ do not need to install both.
 
 ## ⚠️ Before you start
 
-JHT runs ~**400M tokens/month** (many agents working in parallel, around the clock). To make this affordable, **JHT runs on LLM subscriptions, not pay-per-use API keys** — see [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md) and [ADR-0004](../adr/0004-subscription-only-no-api-keys.md).
+JHT runs ~**400M tokens/month** (many agents working in parallel, around the clock). You need **one** of:
 
-You need an active subscription to **one** of:
+|     | Provider   | How you pay | Status |
+| --- | ---------- | ----------- | ------ |
+| 🔵  | **Codex**  | ChatGPT Plus / Pro subscription, ~€100/mo | ✅ **Recommended** — proven by a 1-month autonomous run (658 positions, weekly budget self-managed at 99–100%) |
+| 🟢  | **GLM (Z.ai) or Kimi (Moonshot)** on the Pi harness | API key, per call | Measured in short runs (~0.10 USD per scored position); set from the CLI with `jht setup --provider glm --harness pi --api-key-file <file>` |
 
-|     | Provider   | Plan       | Cost/mo | Status                                                                                    |
-| --- | ---------- | ---------- | ------- | ----------------------------------------------------------------------------------------- |
-| 🔵  | **Codex**  | Plus / Pro | ~€100   | ✅ **Recommended** — proven by a 1-month autonomous run (658 positions, weekly budget self-managed at 99–100%) |
+Details and the spending ceiling of an API key: [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md).
 
 > ⚠️ **The subscription must be dedicated to JHT** — not the same account you use for personal/work AI tasks. A shared account drains the same weekly quota twice and the team will hit rate limits unexpectedly.
 
@@ -363,7 +364,7 @@ Full CLI reference: [`docs/guides/CLI-INSTALL.md`](CLI-INSTALL.md).
 
 - 📘 [`README.md`](../../README.md) — project overview, story, manifesto
 - 📋 [`docs/about/STORY.md`](../about/STORY.md) — origin story (legacy team results)
-- 💳 [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md) — which subscription to pick
+- 💳 [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md) — Codex subscription or GLM/Kimi API key
 - 🦞 [`docs/guides/AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) — let your AI assistant drive JHT
 - 🎯 [`docs/about/VISION.md`](../about/VISION.md) — design philosophy, anti-goals, the Mentor
 - 🧪 [`docs/guides/BETA.md`](BETA.md) — testing, feedback and case-study evidence

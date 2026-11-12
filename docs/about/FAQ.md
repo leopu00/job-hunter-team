@@ -49,15 +49,10 @@ Docker Desktop — and an already-running Docker is reused rather than replaced
 
 Three separate things, only one of which JHT influences:
 
-1. **An AI-provider subscription**, dedicated to the team — JHT does not
-   include or resell it. Agents are launched as provider CLI sessions
-   authenticated with your own account, which is the decision recorded in
-   [ADR-0004](../adr/0004-subscription-only-no-api-keys.md). One caveat, stated
-   rather than smoothed over: the configuration schema still accepts an
-   `api_key` authentication method and the setup wizard still writes it, but
-   the launcher path starts the provider CLI. Treat pay-per-use as unsupported
-   for running the team, not as a second tested mode. Current plans and
-   measured consumption per provider: [`PROVIDERS.md`](PROVIDERS.md).
+1. **The AI provider**, which JHT does not include or resell: a Codex (ChatGPT) subscription
+   dedicated to the team, or an API key for GLM or Kimi billed per call, with a daily
+   ceiling that pauses the team. Plans, measured costs and the ceiling:
+   [`PROVIDERS.md`](PROVIDERS.md).
 2. **A host**: your own PC costs you power, a VPS costs its monthly fee. The
    trade-offs, without price quotes that go stale:
    [`CHOOSE-WHERE-TO-RUN.md`](../guides/CHOOSE-WHERE-TO-RUN.md).

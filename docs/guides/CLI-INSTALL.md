@@ -317,9 +317,9 @@ What `--dry-run` intentionally does **not** do:
 ## 📚 Related
 
 - 🚀 [`docs/guides/QUICKSTART.md`](QUICKSTART.md) — the human-friendly install guide (4 paths)
-- 💳 [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md) — supported subscriptions matrix
+- 💳 [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md) — Codex subscription or GLM/Kimi API key
 - 🦞 [`docs/guides/AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) — let your AI assistant drive `jht`
 - 📐 [`docs/internal/ops/INFRA.md`](../internal/ops/INFRA.md) — infrastructure diagram and deployment modes
 - 🧪 [`docs/guides/BETA.md`](BETA.md) — testing and feedback channels
 - 🔒 [`docs/internal/ops/MAINTAINERS.md`](../internal/ops/MAINTAINERS.md) — internal operations reference
-- 📐 [ADR-0004](../adr/0004-subscription-only-no-api-keys.md) — why subscription-only, no API keys
+- 📐 [ADR-0012](../adr/0012-desktop-setup-matrix.md) — the setup matrix (supersedes ADR-0004, subscription only)
