@@ -107,14 +107,14 @@ Not sure where the team should live? Compare a
 
 **What it costs** — on Codex the team works inside a subscription **dedicated to the team** (a
 shared account hits its limits); the month-long run we measured used Codex Pro, about €100/month
-([results](docs/about/RESULTS.md)). With an API key you pay per call: measured about 0.10 USD per
-scored position, with a daily ceiling that pauses the team. Details:
+([results](docs/about/RESULTS.md)). With an API key you pay per call: measured on GLM, about 0.10 USD per
+scored position (not measured on Kimi), with a daily ceiling that pauses the team. Details:
 [`docs/about/PROVIDERS.md`](docs/about/PROVIDERS.md).
 
 | Provider | Plan | Cost/mo | Status |
 |---|---|---|---|
 | **Codex** | Plus / Pro | ~€100 | Proven — 1-month autonomous run |
-| **GLM / Kimi** (Pi) | API key | per call | Measured in short runs |
+| **GLM / Kimi** (Pi) | API key | per call | Measured on GLM in short runs |
 
 **Desktop app (Mac):** download it from
 [GitHub Releases](https://github.com/leopu00/job-hunter-team/releases/latest)
