@@ -37,21 +37,20 @@ def test_the_desktop_proposes_only_codex_and_already_chosen():
 ])
 def test_the_web_guides_offer_codex_only(path):
     page = text(path)
-    # 0.4.0: the guide of the provider offers GLM and says Codex comes later; getting-started still shows Codex
-    assert ("🟢 <strong>GLM</strong>" in page and "{t.coming}" in page) if "connect-ai-provider" in path else "🔵 <strong>Codex</strong>" in page
+    # 0.4.0: both guides offer GLM first and say Codex is not in this version
+    assert "🟢 <strong>GLM</strong>" in page and "🔵 <strong>Codex</strong>" not in page
     assert "Kimi" not in page and "Claude" not in page
 
 
-@pytest.mark.parametrize("path,key", [
-    ("web/app/docs/guides/getting-started/page.i18n.ts", "codex"),
-])
-def test_the_web_guides_call_codex_recommended_in_every_language(path, key):
-    source = text(path)
-    values = re.findall(rf"\n    {key}:\s*\n?\s*\"([^\"]+)\"", source)
+def test_the_first_page_of_the_site_says_glm_in_0_4_0_and_codex_not_in_this_version_in_every_language():
+    source = text("web/app/docs/guides/getting-started/page.i18n.ts")
     langs = re.findall(r"\n  (\w\w): \{", source)
-    assert len(values) == 7 and sorted(langs) == sorted(RECOMMENDED)
-    for value, word in zip(values, [RECOMMENDED[lang] for lang in langs]):
-        assert word in value, value
+    assert sorted(langs) == sorted(RECOMMENDED)
+    assert len(re.findall(r'\n    subIntroA: "[^"]*0\.4\.0', source)) == 7
+    assert len(re.findall(r'\n    subIntroB: "[^"]*GLM', source)) == 7
+    assert len(re.findall(r'\n    codex: " — ', source)) == 7
+    for word in RECOMMENDED.values():
+        assert word not in source.split("subIntroA")[1], word
 
 
 @pytest.mark.parametrize("path", [

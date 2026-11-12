@@ -39,11 +39,11 @@ export default async function GettingStartedPage() {
       </P>
       <UL>
         <LI>
-          🔵 <strong>Codex</strong>
-          {t.codex}
+          🟢 <strong>GLM</strong> {t.apiKey}
         </LI>
         <LI>
-          🟢 <strong>GLM</strong> {t.apiKey}
+          ⏳ <strong>Codex</strong>
+          {t.codex}
         </LI>
       </UL>
       <Callout>
@@ -65,7 +65,7 @@ export default async function GettingStartedPage() {
       <Pre>
         {`"Set up Job Hunter Team from
 github.com/leopu00/job-hunter-team for my profile.
-I have a [Codex] subscription.
+I have a [GLM (Z.ai)] API key.
 Walk me through what you need."`}
       </Pre>
       <P>
