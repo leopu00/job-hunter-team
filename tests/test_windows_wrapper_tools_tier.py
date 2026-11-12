@@ -96,8 +96,7 @@ def _pull_job_over(lock: Path) -> bool:
     return text.isdigit() and not _process_alive(int(text))
 
 
-@pytest.fixture()
-def box(tmp_path):
+def _make_box(tmp_path):
     runtime = tmp_path / "runtime"
     runtime.mkdir()
     home = tmp_path / "jht"
@@ -148,6 +147,8 @@ def box(tmp_path):
         while True:
             data = notice()
             if data and data["state"] == state:
+                import warnings
+                warnings.warn(f"PULLJOB-MEASURE state={state} waited={time.monotonic() - started:.1f}s since={data.get('since')} updated={data.get('updated')}")
                 return data
             if _pull_job_over(lock):
                 data = notice()
@@ -160,6 +161,11 @@ def box(tmp_path):
 
     return type("Box", (), {"run": run, "tier": tier, "runtime": runtime, "home": home, "fake": fake, "notice": notice,
                             "wait_for": wait_for})
+
+
+@pytest.fixture()
+def box(tmp_path):
+    return _make_box(tmp_path)
 
 
 def _lines(done) -> list[str]:
@@ -439,3 +445,14 @@ def test_the_ids_of_the_answer_are_the_ones_of_the_helper():
     theirs = re.search(r"^\$IntegrationIds = @\((.*)\)$", _text(ROOT / "scripts" / "jht-integration.ps1"), re.M).group(1)
     ours = re.search(r"^\$IntegrationIdsAbsent = @\((.*)\)$", _text(WRAPPER), re.M).group(1)
     assert ours == theirs, "two lists, one meaning: the wrapper answers for the ids the helper knows"
+
+
+def test_diag_measure_the_failed_pull_job_ten_times(tmp_path_factory):
+    """DIAGNOSTIC ONLY (not for integration): the time of the detached pull job, ten times in a row."""
+    for i in range(10):
+        tmp = tmp_path_factory.mktemp(f"diag{i}")
+        b = _make_box(tmp)
+        b.tier()
+        (b.fake / "pull-fails").write_text("", encoding="utf-8")
+        b.run("exit (Invoke-ToolsCommand @('pull'))")
+        assert b.wait_for("failed")["reason"] == "pull_failed"
