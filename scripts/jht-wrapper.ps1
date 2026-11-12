@@ -1508,6 +1508,75 @@ function Write-JhtLifecycleDone {
   [Console]::Out.WriteLine($text)
 }
 
+# `jht down` asked by the person: while this file is there, no command but `jht up`, `jht start-container` and `jht setup` makes or
+# starts the team's container (a command forwarded to it used to start it again right after the down, with no agent in it, and the
+# installer then found the team running, exit 84). In the runtime folder, which no container mounts. A link there is not the mark.
+function Get-JhtTeamStoppedPath { return (Join-Path $RuntimeDir 'team-stopped') }
+function Test-JhtTeamStoppedByPerson {
+  try {
+    $item = Get-Item -LiteralPath (Get-JhtTeamStoppedPath) -Force -ErrorAction Stop
+    return (-not $item.PSIsContainer -and -not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint))
+  } catch { return $false }
+}
+function Set-JhtTeamStopped {
+  try {
+    $path = Get-JhtTeamStoppedPath
+    if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force -ErrorAction Stop }
+    [IO.File]::WriteAllText($path, "jht down`n", [Text.UTF8Encoding]::new($false))
+  } catch { }
+}
+function Clear-JhtTeamStopped {
+  try { $path = Get-JhtTeamStoppedPath; if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force -ErrorAction Stop } } catch { }
+}
+function Get-JhtTeamStoppedText {
+  if ((Get-JhtTextLanguage) -ceq 'en') { return "Job Hunter Team is stopped: 'jht up' starts it again." }
+  return "Job Hunter Team e' fermato: jht up per riaccenderlo."
+}
+
+# `jht doctor` with the team off: what this computer can check without starting anything (the engine, the runtime, the configuration,
+# the memory limit of WSL), and the team said off. The same shape as the CLI's doctor; with --json the same keys. 1 with a problem.
+function Invoke-JhtHostDoctor {
+  param([string]$Team = 'off', [string[]]$DoctorArgs = @())
+  $en = ((Get-JhtTextLanguage) -ceq 'en')
+  $t = { param($english, $italian) if ($en) { $english } else { $italian } }
+  $rows = [System.Collections.Generic.List[object]]::new()
+  $engine = $false; try { $engine = [bool](Test-DockerReachable) } catch { $engine = $false }
+  if ($engine) { $rows.Add(@('ok', (& $t 'container engine reachable' 'motore dei container raggiungibile'))) }
+  else { $rows.Add(@('fail', (& $t 'container engine not reachable' 'motore dei container non raggiungibile'))) }
+  $runtime = $false; try { $runtime = [bool](Test-RuntimeBundleTrusted) } catch { $runtime = $false }
+  if ($runtime) { $rows.Add(@('ok', (& $t 'JHT runtime intact' 'runtime JHT integro'))) }
+  else { $rows.Add(@('fail', (& $t "JHT runtime missing or changed: 'jht upgrade' installs it again" "runtime JHT mancante o cambiato: 'jht upgrade' lo reinstalla"))) }
+  $profileDir = if ($env:USERPROFILE) { $env:USERPROFILE } else { [Environment]::GetFolderPath('UserProfile') }
+  $configPath = Join-Path (Join-Path $profileDir '.jht') 'jht.config.json'
+  if ($profileDir -and (Test-Path -LiteralPath $configPath -PathType Leaf)) { $rows.Add(@('ok', (& $t 'configuration present' 'configurazione presente'))) }
+  else { $rows.Add(@('warn', (& $t "no configuration yet: 'jht setup'" "ancora nessuna configurazione: 'jht setup'"))) }
+  $wslAdvice = Get-JhtDoctorWslMemoryAdvice
+  if ($wslAdvice) {
+    $rows.Add(@('warn', (& $t "WSL has no memory limit (other WSL distributions are registered): in %USERPROFILE%\.wslconfig, under [wsl2], add memory=$wslAdvice" "WSL non ha un limite di memoria (sono registrate altre distribuzioni WSL): in %USERPROFILE%\.wslconfig, sotto [wsl2], aggiungi memory=$wslAdvice")))
+  }
+  if ($Team -ceq 'unattestable') {
+    $rows.Add(@('fail', (& $t "a container of the team is there but cannot be verified as ours: nothing was touched ('jht status' says more)" "c'e' un container della squadra ma non si puo' verificare che sia nostro: non ho toccato niente ('jht status' dice di piu')")))
+  } else {
+    $rows.Add(@('warn', (& $t "team off: 'jht up' starts it" "squadra spenta: 'jht up' la accende")))
+  }
+  $count = @{ ok = 0; warn = 0; fail = 0 }
+  foreach ($row in $rows) { $count[$row[0]] += 1 }
+  if ($DoctorArgs -ccontains '--json') {
+    $checks = @(foreach ($row in $rows) { [ordered]@{ section = 'host'; status = $row[0]; message = $row[1]; hint = $null } })
+    $answer = [ordered]@{ ok = ($count.fail -eq 0); teamRunning = $false; summary = [ordered]@{ ok = $count.ok; warnings = $count.warn; problems = $count.fail }; checks = $checks }
+    [Console]::Out.WriteLine(($answer | ConvertTo-Json -Depth 5))
+  } else {
+    [Console]::Out.WriteLine((& $t 'Job Hunter Team: the team is off (its container is not running). Checks made from this computer:' 'Job Hunter Team: squadra spenta (il suo container non gira). Controlli fatti da questo computer:'))
+    foreach ($row in $rows) {
+      $mark = switch ($row[0]) { 'ok' { '+' } 'warn' { '!' } default { 'x' } }
+      [Console]::Out.WriteLine("  $mark $($row[1])")
+    }
+    [Console]::Out.WriteLine((& $t "For the full checks (configuration, provider, database, agents): 'jht up', then 'jht doctor'." "Per i controlli completi (configurazione, provider, database, agenti): 'jht up', poi 'jht doctor'."))
+  }
+  if ($count.fail -gt 0) { return 1 }
+  return 0
+}
+
 # A failed `docker compose up` is the failure of the command that asked for it. What runs after it
 # (the broker's migration) calls native programs too, and $LASTEXITCODE would then say the start
 # went well: the setup went on to systemctl after "statfs ... no such file or directory" (T83).
@@ -3221,6 +3290,7 @@ function Invoke-MailCommand {
 
 function Ensure-Up {
   if (-not (Test-ContainerUp)) {
+    if (Test-JhtTeamStoppedByPerson) { Write-Err (Get-JhtTeamStoppedText); exit 1 }
     Write-Info "Container '$Container' non attivo, lo avvio..."
     if (-not (Repair-MountOwnership)) { exit 1 }
     if (-not (Initialize-TelegramLegacyInventory)) {
@@ -4604,6 +4674,7 @@ switch ($Sub) {
     Require-ComposeFile
     Start-PodmanMachineForUp
     Require-Docker
+    Clear-JhtTeamStopped
     if (-not (Repair-MountOwnership)) { exit 1 }
     if (-not (Initialize-TelegramLegacyInventory)) {
       Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'
@@ -4624,7 +4695,7 @@ switch ($Sub) {
     Require-ComposeFile
     Require-Docker
     $downCode = Invoke-ComposeQuiet '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' '--profile' 'login' 'down'
-    if ($downCode -eq 0) { Write-JhtLifecycleDone 'down' }
+    if ($downCode -eq 0) { Set-JhtTeamStopped; Write-JhtLifecycleDone 'down' }
     exit $downCode
   }
 
@@ -4843,6 +4914,7 @@ switch ($Sub) {
     if ($keyPlan.Error) { [Console]::Error.WriteLine("error: $($keyPlan.Error)"); exit 1 }
     Require-ComposeFile
     Require-Docker
+    Clear-JhtTeamStopped
     Ensure-Up
     if ($null -ne $keyPlan.Key) {
       # -i only: a pipe is not a terminal. No byte-order mark goes in front of the key (Invoke-NativeWithStdin).
@@ -4866,12 +4938,24 @@ switch ($Sub) {
   }
 
   # Tutto il resto: delegato al CLI Node nel container.
+  'doctor' {
+    # A doctor never starts the team: with the container running it is the CLI's own; with it off, the checks this computer can make.
+    Require-ComposeFile
+    if ((Test-DockerReachable) -and (Test-ContainerUp)) {
+      $hostFlags = @('-e', "JHT_HOST_TYPE=$env:JHT_HOST_TYPE")
+      $wslAdvice = Get-JhtDoctorWslMemoryAdvice
+      if ($wslAdvice) { $hostFlags += @('-e', "JHT_HOST_WSL_MEMORY_ADVICE=$wslAdvice") }
+      & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @hostFlags $Container node $NodeEntry $Sub @Rest }
+      exit $LASTEXITCODE
+    }
+    exit (Invoke-JhtHostDoctor -Team 'off' -DoctorArgs $Rest)
+  }
+
   default {
     Require-ComposeFile
     Require-Docker
     Ensure-Up
     $hostFlags = @('-e', "JHT_HOST_TYPE=$env:JHT_HOST_TYPE")
-    if ($Sub -ceq 'doctor') { $wslAdvice = Get-JhtDoctorWslMemoryAdvice; if ($wslAdvice) { $hostFlags += @('-e', "JHT_HOST_WSL_MEMORY_ADVICE=$wslAdvice") } }
     & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @hostFlags $Container node $NodeEntry $Sub @Rest }
     $code = $LASTEXITCODE
     if ($Sub -eq 'cloud' -and $Rest.Count -gt 0 -and $Rest[0] -eq 'pair' -and $code -eq 0) { if ((Ensure-Broker) -eq 0) { Initialize-BrokerWebAuthorisations } }
