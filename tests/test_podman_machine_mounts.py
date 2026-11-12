@@ -350,7 +350,8 @@ def test_the_app_tells_a_machine_with_too_little_memory_when_it_prepares_the_mac
     # the Mac setup reads the machine's files and sends the notice; the person gets the recreation button with it
     onboarding = (ROOT / "desktop" / "src-tauri" / "src" / "onboarding.rs").read_text(encoding="utf-8")
     flow = onboarding[onboarding.index("fn install_local("):]
-    check = flow.index("if crate::podman::jht_machine_memory_is_low(&home) {")
+    # only a machine the app itself keeps (Podman) is checked: an adopted engine (Colima, Docker Desktop) has no such machine
+    check = flow.index("if engine == LocalEngine::Podman && crate::podman::jht_machine_memory_is_low(&home) {")
     assert 'phase("ui_notice_podman_machine_memory_low")' in flow[check : check + 160]
     assert "return Ok(installed_wrapper)" in flow[check : check + 300]
     runtime = (ROOT / "desktop" / "src-tauri" / "src" / "windows_runtime.rs").read_text(encoding="utf-8")
