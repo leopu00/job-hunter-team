@@ -29,8 +29,7 @@ contratto del foglio (griglia, cella, tracce, piedi) è in
 > `agent_textures()` e il generatore `src/build.py` producevano
 > `assets/characters/gen/<slug>/<parte>_<direzione>.svg`; da quando ogni slug
 > del roster ha il proprio foglio `_a`, quel ramo non veniva più eseguito.
-> Codice rimosso, arte conservata in
-> [`assets/_attic/characters/`](../assets/_attic/README.md). Se cerchi come si
+> Codice e arte rimossi (restano nella storia di git). Se cerchi come si
 > disegna un agente, il posto giusto è `SPRITES.md`, non un generatore Python.
 > Restano vivi i **ritratti** in `assets/characters/gen/portraits/` (vedi sotto).
 

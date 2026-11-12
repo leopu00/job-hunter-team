@@ -301,11 +301,6 @@
       "last_review": null
     },
     {
-      "path": "docs/sessions/README.md",
-      "description": "📊 Session reports — JHT team experimentation — Indice cronologico dei report HTML interattivi prodotti durante le",
-      "last_review": null
-    },
-    {
       "path": "agents/_skills/application-flow/SKILL.md",
       "description": "Gates DB Scrittore (anti-rewriting + claim) + path $JHT_USER_DIR + housekeeping",
       "last_review": null
@@ -1086,56 +1081,6 @@
       "last_review": null
     },
     {
-      "path": "docs/launch/demo-storyboard.md",
-      "description": "Tombstone dello storyboard CLI obsoleto, ritirato e conservato in archivio",
-      "last_review": null
-    },
-    {
-      "path": "docs/sessions/2026-04-25-experimentation-overview-to-2026-05-09/README.md",
-      "description": "🧪 Sperimentazione JHT — panoramica 15 giorni (2026-04-25 → 2026-05-09) — Report HTML \"meta\" che aggrega 15 giorni di sperimentazione del team",
-      "last_review": null
-    },
-    {
-      "path": "docs/sessions/2026-05-08-codex-10h/README.md",
-      "description": "🔵 Codex monitoring — 10h snapshot (2026-05-08 mattina) — Primo report HTML interattivo prodotto dopo che il team JHT e' stato",
-      "last_review": null
-    },
-    {
-      "path": "docs/sessions/2026-05-08-codex-12h-pm/README.md",
-      "description": "🔵 Codex monitoring — 12h snapshot (2026-05-08 PM) — Report HTML 12h del pomeriggio del 8 maggio.",
-      "last_review": null
-    },
-    {
-      "path": "docs/sessions/2026-05-09-codex-12h-am/README.md",
-      "description": "🔵 Codex monitoring — 12h snapshot (2026-05-09 AM) — Report 12h del mattino del 9 maggio.",
-      "last_review": null
-    },
-    {
-      "path": "docs/sessions/2026-05-17-budget-windows/README.md",
-      "description": "💰 2026-05-17 — Budget windows Kimi: 2 finestre consecutive, entrambe in target — Sessione operativa: il team Job Hunter Team ha lavorato per 2 finestre Kimi",
-      "last_review": null
-    },
-    {
-      "path": "docs/sessions/2026-05-17-pipeline-snapshot/README.md",
-      "description": "📈 2026-05-17 — Pipeline snapshot charts (Capitano on-demand) — Seconda sessione di grafici on-demand del Capitano (post chiusura finestra",
-      "last_review": null
-    },
-    {
-      "path": "docs/sessions/2026-05-17-team-dashboard/README.md",
-      "description": "🖥️ 2026-05-17 — Team dashboard & 5-window timeline (Capitano on-demand v3) — Terza sessione di grafici on-demand del Capitano (post-reset finestra Kimi",
-      "last_review": null
-    },
-    {
-      "path": "docs/sessions/2026-05-17-vps-health/README.md",
-      "description": "🩺 2026-05-17 — Health audit VPS + container (snapshot 14:09 UTC) — Audit operativo richiesto durante la sessione test e2e Path 2.",
-      "last_review": null
-    },
-    {
-      "path": "docs/sessions/2026-05-17-vps-path2-e2e/README.md",
-      "description": "🚀 Test E2E setup VPS Path 2 (2026-05-15 → 2026-05-17) — Sessione di validazione end-to-end del Path 2 (Desktop + VPS remota Hetzner)",
-      "last_review": null
-    },
-    {
       "path": "docs/sessions/2026-05-18-capitano-zombie-night/README.md",
       "description": "🌙 Post-mortem — Capitano zombie night (17-18 maggio 2026) — Sintesi in 1 riga: il Capitano è morto nella notte (kimi CLI crashato dentro al pane tmux), e nessun automatismo l'ha…",
       "last_review": null
@@ -1143,11 +1088,6 @@
     {
       "path": "docs/sessions/2026-05-18-fix-effectiveness-review/README.md",
       "description": "📊 Review effectiveness fix — 18 maggio 2026 — Sintesi in 1 riga: i fix delle ultime 48h sono un successo netto — EMERGENZA Sentinella −96%, URG −71%, FREEZE −82%;",
-      "last_review": null
-    },
-    {
-      "path": "docs/sessions/2026-05-18-sentinella-severity-analysis/README.md",
-      "description": "🚨 Sentinella — analisi \"troppo severa?\" (post Bug 24) — Data: 2026-05-18 16:50 CEST",
       "last_review": null
     },
     {
@@ -1276,16 +1216,6 @@
       "last_review": null
     },
     {
-      "path": "assets/promo/2026-07-presentation/SCALETTA.md",
-      "description": "Diario del video 03/08 ritirato: banner demo e CTA Beta non pubblicabili",
-      "last_review": null
-    },
-    {
-      "path": "docs/CHARACTER-VARIANTS.md",
-      "description": "Cast delle varianti personaggio per reparto: profilo, desk e vista di ogni postazione, con il linguaggio visivo del sito",
-      "last_review": null
-    },
-    {
       "path": "docs/internal/assets/TODO-ART.md",
       "description": "Lotti di asset ancora da disegnare per la pipeline gen-art: PNG 1120x1520 con alpha, ogni volto derivato dalla sua ancora",
       "last_review": null
@@ -1323,21 +1253,6 @@
     {
       "path": "docs/internal/roadmap/2026-07-29-ticket-team-standby-zero-spend.md",
       "description": "Ticket `[TEAM-STANDBY-ZERO-SPEND]`: standby che ferma anche i ruoli core — origine del comando `jht standby`",
-      "last_review": null
-    },
-    {
-      "path": "docs/sessions/2026-07-27-first-run-night-observations.md",
-      "description": "Note di sessione: primo run notturno di un team nuovo su VPS, solo misure sul campo (il thrash viene dal numero di agenti, non dalla loro velocità)",
-      "last_review": null
-    },
-    {
-      "path": "docs/sessions/2026-07-28-burn-test-scout-step-cap-stall.md",
-      "description": "Note di sessione: test di spinta con `jht burn` attivo — lo Scout fermo sul cap di step e nessun componente incaricato di riprenderlo",
-      "last_review": null
-    },
-    {
-      "path": "game/assets/_attic/README.md",
-      "description": "Perche' questi asset sono archiviati invece che cancellati, e come rientrerebbero",
       "last_review": null
     },
     {
@@ -1446,11 +1361,6 @@
       "last_review": null
     },
     {
-      "path": "promo-2026-08-vertical-ad/animatic/incoming/designer/DESIGN_SPEC.md",
-      "description": "Specifica tipografica e motion del pack overlay 9:16 per l'animatic pubblicitario: safe area, palette JHT, font, CTA e uso editoriale",
-      "last_review": null
-    },
-    {
       "path": "docs/about/TUTORIAL-GAME-SCREENSHOTS.md",
       "description": "Provenance, privacy attestation, and hashes for the public game tutorial screenshots",
       "last_review": null
@@ -1464,11 +1374,6 @@
       "path": "docs/internal/2026-08-07-setup-guide-web-scaffolding.md",
       "description": "Handoff web della guida setup non pubblicata: route noindex, contratto canonico, registro schermate, test e stato traduzioni",
       "last_review": "2026-08-07"
-    },
-    {
-      "path": "docs/assets/icons/SOURCES.md",
-      "description": "Provenienza ufficiale, condizioni d'uso e integrità degli SVG Docker e Telegram impiegati nel diagramma infrastrutturale",
-      "last_review": null
     },
     {
       "path": "game/assets/icons/SOURCES.md",
@@ -1923,6 +1828,31 @@
     {
       "path": "docs/internal/ops/agent-monitor.md",
       "description": "Inventario delle istanze e monitor nel terminale: fonti dei consumi, campionamento dei processi e limiti",
+      "last_review": null
+    },
+    {
+      "path": "shared/login/seccomp/NOTICE.md",
+      "description": "",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-05-17-budget-windows/README.md",
+      "description": "",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-05-17-pipeline-snapshot/README.md",
+      "description": "",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-05-17-vps-path2-e2e/README.md",
+      "description": "",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-07-28-burn-test-scout-step-cap-stall.md",
+      "description": "",
       "last_review": null
     }
   ]
