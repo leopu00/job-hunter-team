@@ -59,6 +59,43 @@ exit (Invoke-ToolsCommand @($Rest | Select-Object -Skip 1))
 """
 
 
+# Only a guard against a pull job that hangs: the wait ends with the job (see wait_for). MEASURE pending.
+PULL_JOB_CEILING = 170
+
+
+def _process_alive(pid: int) -> bool:
+    if WINDOWS:
+        import ctypes
+        kernel = ctypes.windll.kernel32
+        handle = kernel.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return False
+        try:
+            code = ctypes.c_ulong()
+            return bool(kernel.GetExitCodeProcess(handle, ctypes.byref(code))) and code.value == 259  # STILL_ACTIVE
+        finally:
+            kernel.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _pull_job_over(lock: Path) -> bool:
+    """The detached pull job is over: it removed its lock (its last step, after the notice), or its process is gone."""
+    if not lock.exists():
+        return True
+    pid_file = lock / "pid"
+    try:
+        text = pid_file.read_text(encoding="utf-8").strip()
+    except OSError:
+        return False  # the parent writes the pid right after the start
+    return text.isdigit() and not _process_alive(int(text))
+
+
 @pytest.fixture()
 def box(tmp_path):
     runtime = tmp_path / "runtime"
@@ -103,12 +140,23 @@ def box(tmp_path):
         return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
     def wait_for(state: str):
-        for _ in range(150):
+        # The pull runs in a detached process (a whole PowerShell 5.1 on Windows, started hidden): it writes its last notice and
+        # then removes the lock, so the condition to wait for is the end of that job, not a time. The ceiling only catches a job
+        # that hangs; a job that ends without the expected notice fails at once, with what it left.
+        lock = runtime / ".tools-pull.lock"
+        started = time.monotonic()
+        while True:
             data = notice()
             if data and data["state"] == state:
                 return data
+            if _pull_job_over(lock):
+                data = notice()
+                if data and data["state"] == state:
+                    return data
+                raise AssertionError(f"the pull job ended without the notice {state}: {data}")
+            if time.monotonic() - started > PULL_JOB_CEILING:
+                raise AssertionError(f"the pull job still runs after {PULL_JOB_CEILING} s: {notice()}")
             time.sleep(0.2)
-        raise AssertionError(f"the notice never reached {state}: {notice()}")
 
     return type("Box", (), {"run": run, "tier": tier, "runtime": runtime, "home": home, "fake": fake, "notice": notice,
                             "wait_for": wait_for})
