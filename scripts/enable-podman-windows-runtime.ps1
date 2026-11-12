@@ -452,21 +452,41 @@ function Repair-LegacyBindMetadata {
   return $true
 }
 
+# Every `podman machine ssh` is, on WSL, a new `wsl.exe -u root -d <distro> sh`: a new vmbus channel whose ring the machine's kernel
+# allocates in one contiguous piece (order 7). Measured on a Windows 10 computer with the memory limit (3 GB): after a long pull and
+# the team's first start the page cache had filled the machine again, the allocation failed («page allocation failure: order:7» in
+# vmbus_alloc_ring), the session ended with 0xffffffff and the setup stopped half way, without jht.cmd (3 installs out of 3). So the
+# unit is installed and enabled right after the cache the pull filled is dropped, before the team starts; it never stops the setup
+# (a unit that is not there only means the team does not start by itself with the machine). True when it is installed.
 function Install-JhtContainerService {
   param(
     [Parameter(Mandatory)][string]$PodmanPath,
     [Parameter(Mandatory)][string]$UnitPath
   )
-  $unitWsl = ConvertTo-WslPath $UnitPath
   # Never `systemctl daemon-reload` here (configure-podman-windows-network.ps1
   # says why): a unit seen for the first time is read from disk when started,
   # and a changed unit that is already loaded takes effect at the machine's
   # next start (after a Windows restart at the latest).
-  $install = "sudo rm -f /home/user/.config/systemd/user/default.target.wants/jht-container.service /home/user/.config/systemd/user/jht-container.service && " +
-    "sudo install -m 0644 $(Quote-Sh $unitWsl) /etc/systemd/system/jht-container.service && " +
-    'sudo timeout 60 systemctl enable --no-reload jht-container.service && ' +
-    '(sudo timeout 30 systemctl is-active --quiet jht-container.service || sudo timeout 120 systemctl start jht-container.service)'
-  Invoke-Checked $PodmanPath 'machine' 'ssh' $MachineName $install
+  try {
+    $unitWsl = ConvertTo-WslPath $UnitPath
+    $install = "sudo rm -f /home/user/.config/systemd/user/default.target.wants/jht-container.service /home/user/.config/systemd/user/jht-container.service && " +
+      "sudo install -m 0644 $(Quote-Sh $unitWsl) /etc/systemd/system/jht-container.service && " +
+      'sudo timeout 60 systemctl enable --no-reload jht-container.service'
+    Invoke-Checked $PodmanPath 'machine' 'ssh' $MachineName $install
+    return $true
+  } catch {
+    Write-Host "  The team will not start by itself with the Podman machine: its start-up unit was not installed ($($_.Exception.Message.Split([char]10)[0])). Run the setup again later to add it; nothing else changes." -ForegroundColor Yellow
+    return $false
+  }
+}
+
+# Once the team runs, the unit is made active, so that a stop of the machine stops the team through it. Best effort: a session that
+# cannot be opened now (see above) changes nothing, the unit is enabled and starts with the machine.
+function Start-JhtContainerServiceIfInactive {
+  param([Parameter(Mandatory)][string]$PodmanPath)
+  try {
+    & { $ErrorActionPreference = 'Continue'; Invoke-JhtPodmanMachine -FilePath $PodmanPath -Arguments @('machine', 'ssh', $MachineName, 'sudo timeout 30 systemctl is-active --quiet jht-container.service || sudo timeout 120 systemctl start jht-container.service') 2>$null | Out-Null }
+  } catch { }
 }
 
 # Where Podman is: PATH as the system and the user have it NOW (a winget install
@@ -910,6 +930,8 @@ if ($ExpectedImageDigest -and $ExpectedImageDigest -notmatch '^sha256:[0-9a-f]{6
 if ($RuntimeImage -match '@(sha256:[0-9a-f]{64})$' -and $Matches[1] -ne $ExpectedImageDigest) {
   throw 'Runtime image reference and expected digest disagree.'
 }
+# The machine keeps memory free for its own channels before the pull fills it (Set-JhtMachineMemoryReserve says why).
+[void](Set-JhtMachineMemoryReserve -PodmanPath $Podman -MachineName $MachineName)
 Write-JhtPhase image_pull
 Invoke-PodmanPull -PodmanPath $Podman -Machine $MachineName -Image $RuntimeImage
 $repoDigestsJson = ((& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName image inspect $RuntimeImage --format '{{json .RepoDigests}}' 2>$null }) -join '')
@@ -933,7 +955,6 @@ if ($ExpectedImageDigest) {
   if (-not $canonicalImage) { throw 'Pulled runtime image has no canonical repository digest.' }
 }
 $env:JHT_IMAGE = $canonicalImage
-[void](Invoke-JhtMachineDropCaches -PodmanPath $Podman -MachineName $MachineName)
 
 $legacyInstallDetected = (Test-Path -LiteralPath (Join-Path $JhtHome 'jht.config.json')) -or
   (Test-Path -LiteralPath (Join-Path $JhtHome 'profile')) -or
@@ -1027,6 +1048,10 @@ TimeoutStopSec=45
 WantedBy=multi-user.target
 '@
 [IO.File]::WriteAllText($containerUnitFile, ($containerUnit.Trim() + "`n"), [Text.UTF8Encoding]::new($false))
+# The cache the pull filled goes back, and right after it the one session the setup still needs: the unit (Install-JhtContainerService
+# says why there and not after the team's start).
+[void](Invoke-JhtMachineDropCaches -PodmanPath $Podman -MachineName $MachineName)
+$containerUnitInstalled = Install-JhtContainerService -PodmanPath $Podman -UnitPath $containerUnitFile
 $shim = Join-Path $RuntimeShimDir 'docker.exe'
 New-DockerShim -Destination $shim -PodmanPath $Podman -MachineName $MachineName
 
@@ -1204,7 +1229,7 @@ if ($brokerThere) { $expectedContainers += 'jht-broker' }
 $unsettledContainers = @(Get-UnsettledJhtContainers -Podman $Podman -MachineName $MachineName -Names $expectedContainers)
 if ($unsettledContainers.Count -gt 0) { throw "runtime_containers_unhealthy: $($unsettledContainers -join '; '). Run 'jht logs' to see why." }
 
-Install-JhtContainerService -PodmanPath $Podman -UnitPath $containerUnitFile
+if ($containerUnitInstalled) { Start-JhtContainerServiceIfInactive -PodmanPath $Podman }
 
 # Compose has just created the team's containers from the image: the cache the first start filled goes back too.
 [void](Invoke-JhtMachineDropCaches -PodmanPath $Podman -MachineName $MachineName)

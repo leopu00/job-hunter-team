@@ -31,7 +31,8 @@ def _function() -> str:
 def test_the_setup_checks_the_containers_after_up_and_before_the_boot_service():
     up = ENABLER.index("& (Join-Path $BinDir 'jht.ps1') up")
     check = ENABLER.index("Get-UnsettledJhtContainers -Podman $Podman -MachineName $MachineName")
-    service = ENABLER.index("Install-JhtContainerService -PodmanPath")
+    # the unit is installed before the team starts (test_windows_unit_installed_before_the_team_starts.py); made active after the check
+    service = ENABLER.index("Start-JhtContainerServiceIfInactive -PodmanPath")
     assert up < check < service
     call = ENABLER[check:service]
     assert 'if ($unsettledContainers.Count -gt 0) { throw "runtime_containers_unhealthy: ' in call

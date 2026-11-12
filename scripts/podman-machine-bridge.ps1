@@ -924,10 +924,29 @@ function Set-JhtWslConfigForMachine {
 # measured: Windows counted it as the machine's memory and went to 93%; after this it went back to 63% in 20 seconds). It is clean
 # cache that WSL2 hands back to Windows once it is dropped. `sync` first, so nothing dirty is ever in it. Best effort: true when it
 # was done, false when it could not be (the machine did not answer, no sudo): a setup is never stopped for it.
+# After the drop the free memory is compacted too: what WSL needs to open a channel into the machine (every podman machine ssh, the API
+# forwarding, a new container's I/O) is one contiguous piece (order 7, 512 KB), and a machine full of scattered free pages cannot give it.
 function Invoke-JhtMachineDropCaches {
   param([Parameter(Mandatory)][string]$PodmanPath, [Parameter(Mandatory)][string]$MachineName)
   try {
-    & { $ErrorActionPreference = 'Continue'; Invoke-JhtPodmanMachine -FilePath $PodmanPath -Arguments @('machine', 'ssh', $MachineName, 'sync && echo 3 | sudo timeout 30 tee /proc/sys/vm/drop_caches >/dev/null') 2>$null | Out-Null }
+    & { $ErrorActionPreference = 'Continue'; Invoke-JhtPodmanMachine -FilePath $PodmanPath -Arguments @('machine', 'ssh', $MachineName, 'sync && echo 3 | sudo timeout 30 tee /proc/sys/vm/drop_caches >/dev/null && echo 1 | sudo timeout 60 tee /proc/sys/vm/compact_memory >/dev/null') 2>$null | Out-Null }
+    return ($LASTEXITCODE -eq 0)
+  } catch { return $false }
+}
+
+# The memory the machine's kernel keeps free, for good: with the memory limit (2 or 3 GB) a long pull filled the machine with page
+# cache, and the kernel could no longer find one contiguous piece of 512 KB for a new vmbus channel («page allocation failure: order:7»
+# in vmbus_alloc_ring, measured on a Windows 10 computer): every new session or connection into the machine failed with 0xffffffff
+# (the setup's last steps, then `jht screen on` after the pull of the tools' image). vm.min_free_kbytes = 128 MB makes the kernel give
+# cache back before free memory runs that low, and keeps it in pieces large enough. Written in /etc/sysctl.d, so it holds at every start
+# of the machine; applied at once. Done before the first pull, while the machine has its memory; best effort: never a reason to stop.
+$script:JhtMachineMinFreeKbytes = 131072
+function Set-JhtMachineMemoryReserve {
+  param([Parameter(Mandatory)][string]$PodmanPath, [Parameter(Mandatory)][string]$MachineName)
+  $value = $script:JhtMachineMinFreeKbytes
+  $command = "printf 'vm.min_free_kbytes = $value\n' | sudo timeout 30 tee /etc/sysctl.d/90-jht-memory.conf >/dev/null && sudo timeout 30 sysctl -q -w vm.min_free_kbytes=$value"
+  try {
+    & { $ErrorActionPreference = 'Continue'; Invoke-JhtPodmanMachine -FilePath $PodmanPath -Arguments @('machine', 'ssh', $MachineName, $command) 2>$null | Out-Null }
     return ($LASTEXITCODE -eq 0)
   } catch { return $false }
 }
