@@ -379,6 +379,34 @@ function Remove-JhtWslConfigKeys {
 }
 # WSLCONFIG-END
 
+# Whether the [wsl2] section of the file has a memory= of its own. A file that cannot be read counts as having one: nothing is advised
+# about a file that cannot be told. (The same function is in podman-machine-bridge.ps1; a test keeps them identical.)
+function Test-JhtWslConfigHasMemory {
+  param([Parameter(Mandatory)][string]$Path)
+  $file = Read-JhtWslConfigFile -Path $Path
+  if ($file.Reason) { return $true }
+  $lines = @($file.Lines)
+  $sections = Get-JhtWslConfigSections -Lines $lines
+  if (-not $sections.Contains('wsl2')) { return $false }
+  for ($i = $sections['wsl2'].Header + 1; $i -le $sections['wsl2'].Last; $i++) { if ($lines[$i] -match '^\s*memory\s*=') { return $true } }
+  return $false
+}
+
+# For jht doctor: the memory limit the setup did not write for WSL because other distributions are registered (its wslconfig-advice,
+# in the runtime folder), while the person's .wslconfig still has no memory= of its own. '' otherwise; never a reason to fail.
+function Get-JhtDoctorWslMemoryAdvice {
+  try {
+    $advicePath = Join-Path $RuntimeDir 'wslconfig-advice'
+    $info = Get-Item -LiteralPath $advicePath -Force -ErrorAction Stop
+    if ($info.PSIsContainer -or ($info.Attributes -band [IO.FileAttributes]::ReparsePoint) -or $info.Length -gt 64) { return '' }
+    $text = [IO.File]::ReadAllText($advicePath)
+    if ($text -cnotmatch '^memory=([1-9][0-9]?GB)\r?\n?$') { return '' }
+    $value = $Matches[1]
+    if (-not $env:USERPROFILE -or (Test-JhtWslConfigHasMemory -Path (Join-Path $env:USERPROFILE '.wslconfig'))) { return '' }
+    return $value
+  } catch { return '' }
+}
+
 # The lines the setup added to the person's .wslconfig, taken out (their record is in the runtime folder, which goes after): sentences
 # only, never JHT_PHASE or JHT_LEFT lines, and never a reason to stop the uninstall.
 function Restore-JhtWslConfigAtUninstall {
@@ -4842,7 +4870,9 @@ switch ($Sub) {
     Require-ComposeFile
     Require-Docker
     Ensure-Up
-    & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry $Sub @Rest }
+    $hostFlags = @('-e', "JHT_HOST_TYPE=$env:JHT_HOST_TYPE")
+    if ($Sub -ceq 'doctor') { $wslAdvice = Get-JhtDoctorWslMemoryAdvice; if ($wslAdvice) { $hostFlags += @('-e', "JHT_HOST_WSL_MEMORY_ADVICE=$wslAdvice") } }
+    & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @hostFlags $Container node $NodeEntry $Sub @Rest }
     $code = $LASTEXITCODE
     if ($Sub -eq 'cloud' -and $Rest.Count -gt 0 -and $Rest[0] -eq 'pair' -and $code -eq 0) { if ((Ensure-Broker) -eq 0) { Initialize-BrokerWebAuthorisations } }
     exit $code

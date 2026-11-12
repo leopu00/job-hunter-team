@@ -813,30 +813,92 @@ function Get-JhtWslDistroNameOfMachine {
   return "podman-$MachineName"
 }
 
+# The memory= value for this computer ('2GB' or '3GB'), or '' when the RAM is not known or the limit is not below the half WSL takes anyway.
+function Get-JhtWslMemoryLimitText {
+  param([long]$TotalMegabytes)
+  if ($TotalMegabytes -le 0) { return '' }
+  $limit = if ($TotalMegabytes -le $script:JhtWslSmallComputerMegabytes) { $script:JhtWslMemorySmallMegabytes } else { $script:JhtWslMemoryMegabytes }
+  if ($limit -lt ($TotalMegabytes / 2)) { return "$([int]($limit / 1024))GB" }
+  return ''
+}
+
 function Get-JhtWslConfigWanted {
   param([long]$TotalMegabytes, $DistributionNames, [string]$OwnDistribution)
   $wanted = @()
   $alone = ($null -ne $DistributionNames -and @($DistributionNames | Where-Object { $_ -cne $OwnDistribution }).Count -eq 0)
-  if ($alone -and $TotalMegabytes -gt 0) {
-    $limit = if ($TotalMegabytes -le $script:JhtWslSmallComputerMegabytes) { $script:JhtWslMemorySmallMegabytes } else { $script:JhtWslMemoryMegabytes }
-    if ($limit -lt ($TotalMegabytes / 2)) { $wanted += @{ Section = 'wsl2'; Key = 'memory'; Value = "$([int]($limit / 1024))GB" } }
-  }
+  $limit = Get-JhtWslMemoryLimitText -TotalMegabytes $TotalMegabytes
+  if ($alone -and $limit) { $wanted += @{ Section = 'wsl2'; Key = 'memory'; Value = $limit } }
   return $wanted
 }
 
+# The limit the setup does NOT write because other distributions of the person are registered (it would cap them too): the value it
+# would have written, or ''. The person is told, and jht doctor keeps telling them while their .wslconfig has no memory= of its own.
+function Get-JhtWslMemoryAdvice {
+  param([long]$TotalMegabytes, $DistributionNames, [string]$OwnDistribution)
+  if ($null -eq $DistributionNames -or -not @($DistributionNames | Where-Object { $_ -cne $OwnDistribution }).Count) { return '' }
+  return (Get-JhtWslMemoryLimitText -TotalMegabytes $TotalMegabytes)
+}
+
+# Whether the [wsl2] section of the file has a memory= of its own. A file that cannot be read counts as having one: nothing is advised
+# about a file that cannot be told. (The same function is in jht-wrapper.ps1, for jht doctor; a test keeps them identical.)
+function Test-JhtWslConfigHasMemory {
+  param([Parameter(Mandatory)][string]$Path)
+  $file = Read-JhtWslConfigFile -Path $Path
+  if ($file.Reason) { return $true }
+  $lines = @($file.Lines)
+  $sections = Get-JhtWslConfigSections -Lines $lines
+  if (-not $sections.Contains('wsl2')) { return $false }
+  for ($i = $sections['wsl2'].Header + 1; $i -le $sections['wsl2'].Last; $i++) { if ($lines[$i] -match '^\s*memory\s*=') { return $true } }
+  return $false
+}
+
+# What the setup says when the limit was written while the WSL VM runs and the VM could not be restarted for it.
+$script:JhtWslLimitWaitsText = '  WSL is already running: the memory limit applies from the next restart of Windows, or of WSL (wsl --shutdown stops all your WSL distributions, so it is not done for you).'
+
+# Waits for the WSL virtual machine to stop by itself (WSL ends it about a minute after its last distribution stopped): $true once it
+# is gone, $false after the time (120 seconds, or JHT_WSL_STOP_WAIT_SECONDS, 1 to 300, for the tests). It never stops anything.
+function Wait-JhtWslVmStopped {
+  param([string]$Seconds = $env:JHT_WSL_STOP_WAIT_SECONDS)
+  $limit = 120
+  if ($Seconds -cmatch '^[0-9]{1,3}$' -and [int]$Seconds -ge 1 -and [int]$Seconds -le 300) { $limit = [int]$Seconds }
+  $deadline = [DateTime]::UtcNow.AddSeconds($limit)
+  while (Test-JhtWslVmRunning) {
+    if ([DateTime]::UtcNow -ge $deadline) { return $false }
+    Start-Sleep -Seconds 1
+  }
+  return $true
+}
+
 # Adds what is wanted that the person does not already have, records it, and says it. Never fails a setup: the caller catches.
+# Answers 'vm-running' when it wrote a limit while the WSL virtual machine runs (the limit waits for the VM to start again; the enabler
+# restarts it when it may), '' otherwise.
 function Set-JhtWslConfigForMachine {
   param([Parameter(Mandatory)][string]$RuntimeDir, [Parameter(Mandatory)][string]$MachineName, [string]$ProfilePath = $env:USERPROFILE)
-  if (-not $ProfilePath -or -not [IO.Path]::IsPathRooted($ProfilePath)) { return }
-  $wanted = @(Get-JhtWslConfigWanted -TotalMegabytes (Get-JhtTotalMemoryMegabytes) -DistributionNames (Get-JhtWslDistributionNames) -OwnDistribution (Get-JhtWslDistroNameOfMachine $MachineName))
-  if (-not $wanted.Count) { return }
+  if (-not $ProfilePath -or -not [IO.Path]::IsPathRooted($ProfilePath)) { return '' }
+  $total = Get-JhtTotalMemoryMegabytes
+  $names = Get-JhtWslDistributionNames
+  $own = Get-JhtWslDistroNameOfMachine $MachineName
+  $wanted = @(Get-JhtWslConfigWanted -TotalMegabytes $total -DistributionNames $names -OwnDistribution $own)
   $path = [IO.Path]::Combine($ProfilePath, '.wslconfig')
+  # what jht doctor reads: in the runtime folder, which no container mounts
+  $advicePath = [IO.Path]::Combine($RuntimeDir, 'wslconfig-advice')
+  if (-not $wanted.Count) {
+    $advice = Get-JhtWslMemoryAdvice -TotalMegabytes $total -DistributionNames $names -OwnDistribution $own
+    if ($advice -and -not (Test-JhtWslConfigHasMemory -Path $path)) {
+      [IO.Directory]::CreateDirectory($RuntimeDir) | Out-Null
+      [IO.File]::WriteAllText($advicePath, "memory=$advice`n", [Text.UTF8Encoding]::new($false))
+      Write-Host '  WSL memory: no limit was set, because other WSL distributions are registered and a limit would apply to them too.' -ForegroundColor Yellow
+      Write-Host "  To set one yourself: in $path, under [wsl2], add memory=$advice (it applies after the next restart of Windows or of WSL)." -ForegroundColor Yellow
+    } elseif ([IO.File]::Exists($advicePath)) { [IO.File]::Delete($advicePath) }
+    return ''
+  }
+  if ([IO.File]::Exists($advicePath)) { [IO.File]::Delete($advicePath) }
   $answer = Add-JhtWslConfigKeys -Path $path -Entries $wanted
   if ($answer.Status -eq 'skipped') {
     Write-Host "  WSL settings: $path was left as it is ($($answer.Reason))." -ForegroundColor Yellow
-    return
+    return ''
   }
-  if ($answer.Status -ne 'added') { return }
+  if ($answer.Status -ne 'added') { return '' }
   $recordPath = [IO.Path]::Combine($RuntimeDir, 'wslconfig-added')
   $created = [bool]$answer.Created
   $added = @($answer.Added)
@@ -852,11 +914,10 @@ function Set-JhtWslConfigForMachine {
   [IO.File]::WriteAllText($recordPath, (ConvertTo-JhtWslConfigRecord -Path $path -Created $created -Added $added), [Text.UTF8Encoding]::new($false))
   Write-Host "  WSL settings added to ${path}:" -ForegroundColor Cyan
   foreach ($entry in @($answer.Added)) { Write-Host "    [$($entry.Section)] $($entry.Key)=$($entry.Value)" -ForegroundColor Cyan }
-  # The setup starts the machine right after this: with WSL off, that start reads the file and nothing needs saying.
-  if (Test-JhtWslVmRunning) {
-    Write-Host '  WSL is already running: the memory limit applies from the next restart of Windows, or of WSL (wsl --shutdown stops all your WSL distributions, so it is not done for you).' -ForegroundColor Yellow
-  }
   Write-Host '  To undo it: jht uninstall takes these lines out, or delete them by hand (each has a comment line above it).' -ForegroundColor DarkGray
+  # The setup starts the machine right after this: with WSL off, that start reads the file and nothing needs saying.
+  if (Test-JhtWslVmRunning) { return 'vm-running' }
+  return ''
 }
 
 # The pull of an image, and then the team's first minutes, fill the machine's page cache (about 5 GB were seen on a 12 GB computer,

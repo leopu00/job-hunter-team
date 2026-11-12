@@ -160,6 +160,14 @@ function checkDeps() {
   return results
 }
 
+// On Windows the wrapper tells the doctor, by JHT_HOST_WSL_MEMORY_ADVICE, the memory limit the setup would have set for WSL and did
+// not because other WSL distributions are registered, while %USERPROFILE%\.wslconfig still has none: the container cannot read the host.
+function checkWslMemory() {
+  const value = process.env.JHT_HOST_WSL_MEMORY_ADVICE ?? ''
+  if (!/^[1-9][0-9]?GB$/.test(value)) return null
+  return { warn: true, msg: later('doctor.wsl_memory_unlimited'), hint: later('doctor.wsl_memory_hint', { value }) }
+}
+
 function checkWorkers() {
   try {
     const sessions = execSync('tmux list-sessions -F "#{session_name}" 2>/dev/null', { encoding: 'utf-8', stdio: 'pipe' })
@@ -200,7 +208,7 @@ async function handleDoctor(options) {
   ])
 
   const sections = [
-    { title: later('doctor.sec_environment'), checks: depsCk },
+    { title: later('doctor.sec_environment'), checks: [...depsCk, checkWslMemory()] },
     { title: later('doctor.sec_config'),      checks: [configCk] },
     { title: later('doctor.sec_provider'), checks: [providerCk, apiCk] },
     { title: later('doctor.sec_database'),    checks: [dbCk] },
