@@ -145,6 +145,8 @@ function Get-JhtWinSshProxyReason { param([string]$MachineName) return [string]$
 function Get-JhtWindowsSessionId { if ($env:FAKE_SESSION) { return [int]$env:FAKE_SESSION }; return 1 }
 function Test-JhtEventLogWritable { if ($env:FAKE_EVENTLOG) { return $env:FAKE_EVENTLOG }; return 'writable' }
 function Get-PodmanVersion { param([string]$Path) if ($env:FAKE_PODMAN_VERSION) { return $env:FAKE_PODMAN_VERSION }; return '6.0.2' }
+# The person's .wslconfig is never the test's to touch: the block only says, in a file beside the log, that it asked.
+function Set-JhtWslConfigForMachine { param([string]$RuntimeDir, [string]$MachineName) Add-Content -LiteralPath ($env:FAKE_LOG + '.wslconfig') -Value $MachineName }
 . ([scriptblock]::Create($block.Extent.Text))
 """
 
@@ -658,6 +660,8 @@ def test_uninstall_removes_only_jht_and_preserves_the_users_default_connection(t
             "Remove-JhtPodmanMachineThroughWsl", "Remove-JhtPodmanNetworkFiles", "Remove-JhtUserDataFolder", "Remove-JhtDirectoryNoFollow",
             "Get-JhtUserMachineName", "Test-JhtMachineCreatedMark", "Resolve-JhtUninstallMachineName",
             "Invoke-JhtWindowsUninstall",
+            "Restore-JhtWslConfigAtUninstall", "Read-JhtWslConfigFile", "Write-JhtWslConfigFile", "Get-JhtWslConfigSections",
+            "Remove-JhtWslConfigKeys", "Read-JhtWslConfigRecord", "Test-JhtWslConfigRecordTarget",
         ],
         UNINSTALL_BODY,
         {
