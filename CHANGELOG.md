@@ -5,52 +5,60 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [0.4.0] — 2026-09-30
+## [0.4.0] — unreleased
 
-**The distributed desktop experience moves from Godot to Tauri 2, with
-account-backed onboarding and subscription-provider access.**
+**The desktop app moves to Tauri 2, the agent team runs in a container on your computer (or a VPS), and the
+team can run on Codex or, with an API key, on GLM or Kimi.** The release notes say which of this was tested on
+real machines and which was not.
 
-### Tauri desktop
+### Platforms
 
-- The shipped desktop shell is now the Tauri 2 application. The retained
-  Godot project and runtime are not bundled or reachable from the distributed
-  desktop entrypoints.
-- The desktop navigation, assistant composer and direct chat adapt to compact
-  windows without hiding primary actions. Native status and failures remain
-  explicit instead of being replaced with simulated data.
+- **Mac** (Apple silicon, macOS 15 or later): the Tauri 2 desktop app — Team with chat, Budget, Office, profile,
+  a pause for the whole team or one agent. The CLI installer uses Colima by default (or Podman) and installs the
+  Docker Compose plugin; the app installs Podman with Homebrew and adopts a team the CLI installed on Colima.
+  After a restart `jht up` starts the team's Colima again by itself. Intel Macs are not supported.
+- **Linux**: CLI only, experimental, on rootless Podman (or Docker).
+- **Windows**: preview, CLI only — PowerShell installer, Podman inside WSL, tested on Windows 10 and not on
+  Windows 11. There is no desktop app for Windows.
+- The retained Godot project is not bundled or reachable from the distributed app.
 
-### Access and onboarding
+### Providers
 
-- Desktop sign-in uses Google through a PKCE browser flow and restores the
-  account session before opening protected application surfaces.
-- First-run setup collects the profile and environment, then connects a
-  supported Codex subscription (ChatGPT's) through that provider's
-  login flow. Completion waits for the native snapshot and direct chat to be
-  ready instead of reporting success optimistically.
-- Codex is the only provider offered. Kimi and Claude Code are no longer among the
-  choices, on the site or in the app; teams already configured on either continue
-  to work. `jht providers update` without an id no
-  longer updates Kimi: name it (`jht providers update kimi`) to update a team that
-  still uses it.
-- The Assistant has a resumable guided introduction with tour, requirements
-  and exploration paths, followed by an editable first message for the free
-  chat. On macOS, on-device dictation can fill supported composers without
-  sending automatically.
+- Two ways to power the team. **Codex** (through your ChatGPT subscription, signed in with the provider's login
+  flow) is the recommended one. **Pi with GLM (Z.ai) or Kimi (Moonshot)** runs the agents with an **API key** you
+  give from a file or from standard input, in the first setup or later in Settings: its cost is yours, and the
+  team's spending cap stops it. Claude Code is no longer offered. `jht providers update` without an id no longer
+  updates Kimi: name it (`jht providers update kimi`).
+- A key the provider refuses, a missing key or credit that has run out are reported by `jht team start`,
+  `jht agents`, the chat and the app, with the command that fixes it.
 
-### Explicit limits
+### Install and integrations
 
-- Version 0.4.0 is subscription/provider-only. It does not expose the retired
-  API-key team mode (“Team Locale”), API spend data or the Budget API route
-  and native command.
-- On-device dictation depends on the macOS speech services and permissions;
-  unsupported platforms show that limitation rather than pretending to
-  transcribe.
-- Host and provider readiness are verified during onboarding, and missing
-  external prerequisites remain actionable failures.
+- The image is split into core, full and extras: Google, media/OCR (Chromium included), the mail broker and
+  Telegram are not in the first download; add them with `jht integration add …`.
+- `jht screen on|off|status` (the live screen of the assistant's browser) and `jht linkedin login|status`
+  (a manual LinkedIn sign-in in an isolated browser with no network) run in separate containers, started only
+  on request.
+- `jht uninstall --confirm` removes the team's containers, volumes and images; `--purge` deletes the data too.
+- The installer scripts have their SHA-256 published; the recommended command checks it before running.
 
-### Not in this release
+### Team
 
-- Windows: in progress, not supported in 0.4.
+- The Scout covers the national portals of the profile's languages first, reads Platsbanken through its public
+  API, and keeps the search inside the area of a person who does not relocate.
+- The Budget page measures the week against the active hours; the "API budget" mode of the early 0.4 builds
+  ("Team Locale") is gone.
+
+### Security
+
+- Agents run without `sudo`, with `no-new-privileges` and `cap_drop ALL`; a broker owns the mailbox and the
+  agents only ask it. Reading a job ad refuses addresses only the container can reach.
+
+### Good to know
+
+- The mail broker, Telegram, Google and Chromium are no longer in the first setup.
+- No environment variable can point the wrapper at another Podman machine or engine.
+- On-device dictation depends on the macOS speech services and permissions.
 
 ---
 
