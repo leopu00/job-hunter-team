@@ -21,7 +21,8 @@ INSTALL = ROOT / "scripts" / "install.sh"
 
 
 def keep(tmp_path: Path, marker: str | None, *args: str, os_name: str = "macos",
-         link: bool = False, files: tuple[str, ...] = ()) -> subprocess.CompletedProcess:
+         link: bool = False, files: tuple[str, ...] = (), env: dict[str, str] | None = None,
+         home_files: dict[str, str] | None = None) -> subprocess.CompletedProcess:
     runtime = tmp_path / "runtime"
     runtime.mkdir(exist_ok=True)
     for name in files:
@@ -42,9 +43,15 @@ def keep(tmp_path: Path, marker: str | None, *args: str, os_name: str = "macos",
     )
     home = tmp_path / "home"
     home.mkdir(exist_ok=True)
+    for name, text in (home_files or {}).items():
+        (home / name).parent.mkdir(parents=True, exist_ok=True)
+        if text.endswith("/"):
+            (home / name).mkdir(exist_ok=True)
+        else:
+            (home / name).write_text(text, encoding="utf-8")
     return subprocess.run(
         ["bash", "-c", script, "install.sh", *args],
-        env={"PATH": "/usr/bin:/bin", "HOME": str(home), "JHT_RUNTIME_DIR": str(runtime)},
+        env={"PATH": "/usr/bin:/bin", "HOME": str(home), "JHT_RUNTIME_DIR": str(runtime), **(env or {})},
         capture_output=True, text=True, timeout=30,
     )
 
@@ -102,6 +109,60 @@ def test_a_completed_install_without_the_marker_is_docker_and_refused(tmp_path, 
                   files=("docker-compose.yml", ".runtime-integrity"))
     refused_on_docker(result)
     assert not (tmp_path / "runtime" / "container-runtime").exists()
+
+
+@pytest.mark.parametrize("how", ["host_env", "locale"])
+def test_the_refusal_is_said_in_italian_to_an_italian_person(tmp_path, how):
+    home_files = {".jht/host.env": "JHT_HOST_TYPE=local\nJHT_LANG=it\n"} if how == "host_env" else {}
+    env = {} if how == "host_env" else {"LANG": "it_IT.UTF-8"}
+    result = keep(tmp_path, "docker", home_files=home_files, env=env)
+    assert result.returncode == 85
+    assert result.stderr.startswith("JHT_ERROR runtime_change_requires_migration\n")  # the code stays the same for the app
+    text = " ".join(result.stderr.split())
+    assert "questo computer fa girare JHT su Docker" in text and "non e' stato cambiato niente" in text
+    assert "~/.jht" in text and "~/Documents/Job Hunter Team" in text
+    assert "chiave API" in text and "password della posta" in text and "token di Telegram" in text
+    assert text.index("jht uninstall --confirm") < text.index("rilancia questo installer") < text.index("jht setup")
+
+
+def test_a_language_that_is_not_italian_gets_english(tmp_path):
+    result = keep(tmp_path, "docker", env={"LANG": "de_DE.UTF-8"})
+    assert "this computer runs JHT on Docker" in result.stderr
+
+
+def test_the_colima_jht_started_is_named_with_the_command_that_removes_it(tmp_path):
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    (runtime / "colima-started").write_text("colima\nwork\n", encoding="utf-8")
+    result = keep(tmp_path, "docker")
+    text = " ".join(result.stderr.split())
+    assert result.returncode == 85
+    assert "Colima virtual machine JHT created (profile work)" in text and "colima delete -p work" in text
+    assert "-p default" not in text
+
+
+def test_without_the_marker_the_default_profile_is_named_only_when_it_is_there_and_only_conditionally(tmp_path):
+    with_default = keep(tmp_path, "docker", home_files={".colima/default/": "/"})
+    text = " ".join(with_default.stderr.split())
+    assert "If you installed Colima only for JHT" in text and "colima delete -p default" in text
+    assert "If you use Colima for other things, leave it." in text
+    other = tmp_path / "other"
+    other.mkdir()
+    without = keep(other, "docker")
+    assert without.returncode == 85 and "colima delete" not in without.stderr
+
+
+def test_a_linux_server_on_docker_is_not_told_about_colima(tmp_path):
+    result = keep(tmp_path, None, os_name="linux", files=("docker-compose.yml", ".runtime-integrity"),
+                  home_files={".colima/default/": "/"})
+    assert result.returncode == 85 and "colima" not in result.stderr.lower().replace("(colima, docker desktop", "")
+
+
+def test_a_marker_that_is_a_link_or_names_a_strange_profile_names_nothing(tmp_path):
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    (runtime / "colima-started").write_text("colima\n-rf\n", encoding="utf-8")
+    assert "colima delete" not in keep(tmp_path, "docker").stderr
 
 
 def test_a_first_podman_install_stopped_half_way_may_run_again(tmp_path):

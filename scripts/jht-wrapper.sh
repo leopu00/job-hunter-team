@@ -6065,7 +6065,7 @@ status_human_running() {
 
 status_human_not_running() {
   status_human_title
-  printf '  %b✗%b %s\n' "$RED" "$RESET" "$(jht_say status.not_running)"
+  printf '  %b○%b %s\n' "$DIM" "$RESET" "$(jht_say status.not_running)"
   status_human_next "$(jht_say status.not_running_next)"
 }
 
@@ -7098,8 +7098,10 @@ case "$SUB" in
     # Una machine che vede tutto il Mac non risulta "attiva" nemmeno qui.
     require_confined_podman_machine
     if ! docker_reachable; then
-      if jht_machine_output; then printf "container '%s' non attivo\n" "$CONTAINER_SERVICE"; else status_human_not_running; fi
-      exit 1
+      # A team that is simply off is not an error for a person (rc 0, as right after the install); programs keep rc 1.
+      if jht_machine_output; then printf "container '%s' non attivo\n" "$CONTAINER_SERVICE"; exit 1; fi
+      status_human_not_running
+      exit 0
     fi
     why_file="$(mktemp "${TMPDIR:-/tmp}/jht-why.XXXXXX" 2>/dev/null)" || why_file=""
     JHT_ATTEST_WHY_FILE="$why_file"
@@ -7119,7 +7121,11 @@ case "$SUB" in
       # 3 = the project has no such container; anything else = a container is there and cannot be attested.
       # Saying «non attivo» for the second hid a team that was running (TEST 19g).
       if [ "$attest_status" -eq 3 ]; then
-        if jht_machine_output; then printf "container '%s' non attivo\n" "$CONTAINER_SERVICE"; else status_human_not_running; fi
+        if jht_machine_output; then printf "container '%s' non attivo\n" "$CONTAINER_SERVICE"; else
+          [ -z "$why_file" ] || rm -f -- "$why_file"
+          status_human_not_running
+          exit 0
+        fi
       else
         if docker_compose_plugin_missing; then
           err "$(jht_say compose.missing)"
