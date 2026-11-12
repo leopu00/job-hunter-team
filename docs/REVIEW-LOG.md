@@ -177,7 +177,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [game/README.md](../game/README.md) | Job Hunter Team — The Office — Godot 4.7 desktop application for Windows, macOS and Linux. | — | 2026-09-21 | ✅ |
 | [game/assets/gen-art/LOG.md](../game/assets/gen-art/LOG.md) | 🎨 gen-art — log dell'Art Director (host.invalid:dev1-art) — Asset generati via Codex CLI (tmux codex-dev1), giudicati contro | — | 2026-08-17 | ✅ |
 | [game/docs/ANALISI-GIOCHI.md](../game/docs/ANALISI-GIOCHI.md) | Analisi giochi di riferimento — appunti sessione con Leone (2026-07-07) — Analisi guidata, un gioco alla volta: cosa c'è / cosa non c'è / cosa ci piace / cosa non ci piace. | — | 2026-07-07 | ✅ |
-| [game/docs/ASSETS.md](../game/docs/ASSETS.md) | Pipeline asset personaggi — Sprite in-world (SVG a layer componibili) | — | 2026-07-30 | ✅ |
+| [game/docs/ASSETS.md](../game/docs/ASSETS.md) | Pipeline asset personaggi — Sprite in-world (SVG a layer componibili) | — | 2026-11-12 | ✅ |
 | [game/docs/DATA-ADAPTER.md](../game/docs/DATA-ADAPTER.md) | Data adapter — contratto fra gioco e dati del team — Il gioco non conosce Supabase né la dashboard: parla solo con l'autoload | — | 2026-07-11 | ✅ |
 | [game/docs/FIRST-RUN.md](../game/docs/FIRST-RUN.md) | First-run conversation contract — The office must be understandable before Docker or an LLM is available. | — | 2026-08-12 | ✅ |
 | [game/docs/GDD.md](../game/docs/GDD.md) | JHT: The Office — current product design — The Godot application is the only desktop client for Job Hunter Team. | — | 2026-07-29 | ✅ |
@@ -443,6 +443,10 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/sessions/2026-05-18-fix-effectiveness-review/README.md](./sessions/2026-05-18-fix-effectiveness-review/README.md) | 📊 Review effectiveness fix — 18 maggio 2026 — Sintesi in 1 riga: i fix delle ultime 48h sono un successo netto — EMERGENZA Sentinella −96%, URG −71%, FREEZE −82%; | — | 2026-07-25 | ✅ |
 | [docs/sessions/2026-05-18-supabase-disk-io-investigation/README.md](./sessions/2026-05-18-supabase-disk-io-investigation/README.md) | 🔥 Supabase Disk IO Budget — investigazione e piano fix — Trigger: email Supabase Team "Your project is depleting its Disk IO Budget" (project ref smittwvohsnwwwisqdrh) | — | 2026-05-23 | ✅ |
 | [docs/sessions/2026-05-18-weekly-budget-analysis/README.md](./sessions/2026-05-18-weekly-budget-analysis/README.md) | 📊 Analisi consumo weekly Kimi — 18 maggio 2026 — Sintesi in 1 riga: 1% di una finestra Kimi (5h) ≈ 0.20% del weekly budget. | — | 2026-07-25 | ✅ |
+| [docs/sessions/2026-05-17-budget-windows/README.md](./sessions/2026-05-17-budget-windows/README.md) | _(da compilare nel JSON)_ | — | 2026-11-12 | ✅ |
+| [docs/sessions/2026-05-17-pipeline-snapshot/README.md](./sessions/2026-05-17-pipeline-snapshot/README.md) | _(da compilare nel JSON)_ | — | 2026-11-12 | ✅ |
+| [docs/sessions/2026-05-17-vps-path2-e2e/README.md](./sessions/2026-05-17-vps-path2-e2e/README.md) | _(da compilare nel JSON)_ | — | 2026-11-12 | ✅ |
+| [docs/sessions/2026-07-28-burn-test-scout-step-cap-stall.md](./sessions/2026-07-28-burn-test-scout-step-cap-stall.md) | _(da compilare nel JSON)_ | — | 2026-11-12 | ✅ |
 
 
 ## 🗄️ supabase

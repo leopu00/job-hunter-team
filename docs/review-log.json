@@ -1834,6 +1834,26 @@
       "path": "shared/login/seccomp/NOTICE.md",
       "description": "",
       "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-05-17-budget-windows/README.md",
+      "description": "",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-05-17-pipeline-snapshot/README.md",
+      "description": "",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-05-17-vps-path2-e2e/README.md",
+      "description": "",
+      "last_review": null
+    },
+    {
+      "path": "docs/sessions/2026-07-28-burn-test-scout-step-cap-stall.md",
+      "description": "",
+      "last_review": null
     }
   ]
 }

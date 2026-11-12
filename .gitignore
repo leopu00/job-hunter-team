@@ -57,6 +57,9 @@ shared/data/incoming/
 !desktop/public/office/**/*.png
 # Reference visivi del gioco generati da Codex su dati mock (zero PII)
 !game/docs/reference/**/*.png
+# Session reports versionati (analisi grafici budget, throttle, ecc.)
+!docs/sessions/**/*.png
+
 # Gap report e dati analisi personali
 shared/data/gap-report.json
 
