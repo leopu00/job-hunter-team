@@ -79,9 +79,12 @@ async function checkProvider() {
   return { ok: true, msg: later('doctor.provider_line', { name: `${active}${prov?.model ? ` (${prov.model})` : ''}` }) }
 }
 
+// Only for a team on Anthropic: with Codex, GLM or Kimi a missing Anthropic key is not a fact about this team, and
+// telling it to the person only reads as something wrong (null: the check is not shown).
 async function checkApiKey() {
   const cfg = await readConfigAsync()
   const key = cfg?.providers?.anthropic?.api_key || process.env.ANTHROPIC_API_KEY
+  if (!key && cfg?.active_provider !== 'anthropic') return null
   if (!key) return { skip: true, msg: later('doctor.api_skip') }
   try {
     const res = await fetch('https://api.anthropic.com/v1/models', {
@@ -100,7 +103,8 @@ async function checkApiKey() {
 async function checkDatabase() {
   const cfg = await readConfigAsync()
   const url = cfg?.supabase?.url || process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (!url) return { skip: true, msg: later('doctor.db_skip') }
+  // the cloud database is optional: when it is not set up there is nothing to check, and no variable name to show
+  if (!url) return null
   try {
     const res = await fetch(`${url}/rest/v1/`, { signal: AbortSignal.timeout(5000) })
     if (res.status < 500) return { ok: true, msg: later('doctor.db_ok') }
@@ -142,6 +146,8 @@ function checkWorkers() {
         : { warn: true, msg: later('doctor.team_missing', { name }), hint: `jht team start ${role}` }
     })
   } catch {
+    // `tmux list-sessions` fails also when tmux is there but no session runs (no server): that is a team that is off
+    if (cmdExists('tmux')) return [{ warn: true, msg: later('doctor.team_off'), hint: 'jht team start' }]
     return [{ skip: true, msg: later('doctor.tmux_missing') }]
   }
 }
@@ -169,7 +175,7 @@ async function handleDoctor(options) {
     { title: later('doctor.sec_provider'), checks: [providerCk, apiCk] },
     { title: later('doctor.sec_database'),    checks: [dbCk] },
     { title: later('doctor.sec_team'),        checks: workersCk },
-  ]
+  ].map((sec) => ({ ...sec, checks: sec.checks.filter(Boolean) })).filter((sec) => sec.checks.length > 0)
   // the checks hold their texts to be written later: a screen writes them in the person's language, the JSON in English
   const rows = sections.flatMap((sec) => sec.checks.map((ck) => ({ section: sec.title, status: kindOf(ck), message: ck.msg, hint: ck.hint ?? null })))
   const all = rows.map((x) => ({ ...x, section: show(x.section), message: show(x.message), hint: show(x.hint) }))

@@ -4353,7 +4353,9 @@ ensure_up() {
     err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
     exit 1
   }
-  compose up -d
+  # come `jht up`: le righe di avanzamento del motore (Volume … Creating, Container … Started) restano fuori vista se va bene, e si
+  # vedono intere se fallisce (compose_quiet)
+  compose_quiet up -d
   # Attendi che il container sia in stato running e con ownership completa
   # prima di inoltrare qualunque comando nel nuovo processo.
   local tries=20
@@ -5070,8 +5072,10 @@ upgrade_result() {
     printf 'Aggiornamento completato: %s (%s) -> %s (%s). %s\n' \
       "$previous_version" "$previous_image" "$current_version" "$current_image" "$message"
   else
-    printf 'Aggiornamento non completato (%s): %s. %s\n' "$phase" "$message" \
-      "${rolled_back:+Runtime precedente ripristinato.}" >&2
+    # rolled_back e' «true» o «false» (il campo del JSON), mai vuoto: «ripristinato» solo quando un ripristino c'e' stato davvero
+    local restored=""
+    [ "$rolled_back" != true ] || restored="Runtime precedente ripristinato."
+    printf 'Aggiornamento non completato (%s): %s. %s\n' "$phase" "$message" "$restored" >&2
   fi
 }
 
