@@ -21,7 +21,6 @@ Run with: pytest tests/test_runtime_nodes_owner_windows.py -v   (needs PowerShel
 from __future__ import annotations
 
 import json
-import os
 import re
 import subprocess
 import sys
@@ -29,7 +28,7 @@ from pathlib import Path
 
 import pytest
 from windows_native_fakes import powershell_argv
-from windows_owner_fakes import STAND_INS, function_text, owners_of
+from windows_owner_fakes import STAND_INS, child_env, function_text, owners_of
 
 ROOT = Path(__file__).resolve().parent.parent
 WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
@@ -53,7 +52,7 @@ def run_case(tmp_path: Path, functions: list[str], body: str, **env: str) -> sub
         body,
     ])
     script.write_text(text, encoding="utf-8-sig")
-    return subprocess.run([*powershell_argv(), "-File", str(script)], env={**os.environ, "T_OWNERS": str(owners), **env},
+    return subprocess.run([*powershell_argv(), "-File", str(script)], env=child_env(T_OWNERS=str(owners), **env),
                           capture_output=True, text=True, timeout=120)
 
 
@@ -226,7 +225,7 @@ def test_the_real_function_gives_the_person_what_an_elevated_run_made_and_refuse
     script.write_text(REAL, encoding="utf-8-sig")
     root = tmp_path / "work"
     root.mkdir()
-    done = subprocess.run([*powershell_argv(), "-File", str(script)], env={**os.environ, "T_RULE": str(rule), "T_ROOT": str(root)},
+    done = subprocess.run([*powershell_argv(), "-File", str(script)], env=child_env(T_RULE=str(rule), T_ROOT=str(root)),
                           capture_output=True, text=True, timeout=120)
     assert last_json(done) == {"dir": True, "file": True, "dir_is_me": True, "file_is_me": True, "rule_dir": True, "rule_file": True,
                                "again": True, "link": False, "link_target_untouched": True, "missing": False}
