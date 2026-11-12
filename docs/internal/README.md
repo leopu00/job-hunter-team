@@ -263,6 +263,7 @@ Note storiche superate o consolidate altrove. Conservate per git-blame e ricerca
 
 | File | Motivo archive |
 |---|---|
+| [`_archive/BACKLOG-2026-11-12-frozen.md`](_archive/BACKLOG-2026-11-12-frozen.md) | Testo integrale del BACKLOG al 12/11/2026 (voci aperte e chiuse, con note e misure), prima della riduzione a una riga per voce aperta |
 | [`_archive/BACKLOG-2026-07-03-frozen.md`](_archive/BACKLOG-2026-07-03-frozen.md) | Snapshot integrale del BACKLOG pre-ristrutturazione (1487 righe): ogni [TAG] chiuso si risolve qui |
 | [`_archive/2026-07-03-desktop-app-status-and-vision.md`](_archive/2026-07-03-desktop-app-status-and-vision.md) | Stato + visione dell'app Electron: la visione si è realizzata nell'ufficio Godot, `desktop/` è stato rimosso il 2026-07-19 |
 | [`_archive/2026-07-03-desktop-app-state-and-roadmap.md`](_archive/2026-07-03-desktop-app-state-and-roadmap.md) | Gemello del precedente (snapshot del giorno del lancio): decisioni ancora valide, dettagli tecnici Electron superati |

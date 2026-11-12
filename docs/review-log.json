@@ -6,11 +6,6 @@
       "last_review": null
     },
     {
-      "path": "BACKLOG.md",
-      "description": "Roadmap completa con priorità e fasi 1-6, blocker pre-launch",
-      "last_review": null
-    },
-    {
       "path": "CHANGELOG.md",
       "description": "Changelog formato Keep-a-Changelog, cronologia rilasci",
       "last_review": null
@@ -1923,6 +1918,11 @@
     {
       "path": "docs/internal/ops/agent-monitor.md",
       "description": "Inventario delle istanze e monitor nel terminale: fonti dei consumi, campionamento dei processi e limiti",
+      "last_review": null
+    },
+    {
+      "path": "shared/login/seccomp/NOTICE.md",
+      "description": "",
       "last_review": null
     }
   ]

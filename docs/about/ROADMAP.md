@@ -6,7 +6,7 @@
 > This is the **strategic, forward-looking** view. It is **not** a status
 > ledger: shipped work lives in [`CHANGELOG.md`](../../CHANGELOG.md), tactical
 > tasks in [GitHub Issues](https://github.com/leopu00/job-hunter-team/issues)
-> (plus the slim [`BACKLOG.md`](../../BACKLOG.md) index), and technical debt in
+> (plus the one-line [`BACKLOG.md`](../../BACKLOG.md) index of open items), and technical debt in
 > [`docs/internal/roadmap/MINOR-TRACKER.md`](../internal/roadmap/MINOR-TRACKER.md).
 > No percentages here — verbal states only.
 
@@ -139,7 +139,7 @@ in the changelog, not on this forward-looking page.
 
 - 🎯 [`docs/about/VISION.md`](VISION.md) — design philosophy (the "why")
 - 📝 [`CHANGELOG.md`](../../CHANGELOG.md) — everything that shipped, per release
-- 📋 [`BACKLOG.md`](../../BACKLOG.md) — slim index of the open tactical work
+- 📋 [`BACKLOG.md`](../../BACKLOG.md) — one line per open item
 - 📊 [`docs/about/RESULTS.md`](RESULTS.md) — case studies (incl. the month-long autonomous run)
 - 💳 [`docs/about/PROVIDERS.md`](PROVIDERS.md) — supported subscriptions
 - 📡 [`docs/about/MONITORING.md`](MONITORING.md) — Bridge/Sentinel budget stack
