@@ -8,6 +8,9 @@ import { join, resolve } from 'node:path';
 import test from 'node:test';
 import { releaseUserHolds, startRefusal } from '../src/commands/team/start.js';
 
+// the provider of this release (shared/runtime/release-providers.js): GLM on pi, its key by reference
+const GLM = { active_provider: 'glm', harness: 'pi', providers: { glm: { name: 'glm', auth_method: 'api_key', api_key_ref: { type: 'ref', source: 'env', id: 'ZAI_API_KEY' } } } };
+
 const JHT = resolve(import.meta.dirname, '../bin/jht.js');
 const FLAG_TEXT = 'halted_by=team-state-reconciler\nat=2026-10-24T22:32:51.000Z\n';
 
@@ -49,28 +52,28 @@ test('without an active provider the start refuses and the stop stays', () => {
 });
 
 test('with a provider but no tmux, or no CLI for it, the start refuses and the stop stays', () => {
-  const noTmux = box({ config: { active_provider: 'openai' }, cli: 'codex' });
+  const noTmux = box({ config: GLM, cli: 'pi' });
   let r = start(noTmux);
   assert.notEqual(r.status, 0);
   assert.match(r.out, /tmux not found/);
   assert.equal(readFileSync(noTmux.flag, 'utf8'), FLAG_TEXT);
 
-  const noCli = box({ config: { active_provider: 'openai' }, tmux: true });
+  const noCli = box({ config: GLM, tmux: true });
   r = start(noCli);
   assert.notEqual(r.status, 0);
-  assert.match(r.out, /codex CLI of the active provider was not found/);
+  assert.match(r.out, /pi CLI of the active provider was not found/);
   assert.equal(readFileSync(noCli.flag, 'utf8'), FLAG_TEXT);
 });
 
 test('a start that can go ahead takes the stop away', () => {
-  const b = box({ config: { active_provider: 'openai' }, tmux: true, cli: 'codex' });
+  const b = box({ config: GLM, tmux: true, cli: 'pi' });
   const r = start(b);
   assert.equal(r.status, 0, r.out);
   assert.equal(existsSync(b.flag), false);
 });
 
 test('the start of one agent never takes the global stop away, with or without a provider', () => {
-  const b = box({ config: { active_provider: 'openai' }, tmux: true, cli: 'codex' });
+  const b = box({ config: GLM, tmux: true, cli: 'pi' });
   start(b, 'assistente');
   assert.equal(readFileSync(b.flag, 'utf8'), FLAG_TEXT);
 });
@@ -81,10 +84,14 @@ test('startRefusal: the provider first, then, outside the container, tmux and th
   assert.match(startRefusal(null, { containerMode: true }), /no active provider/);
   assert.match(startRefusal({ active_provider: 'x' }, { containerMode: true }), /no active provider/);
   // in the container tmux and the CLI are the container's own: not asked on the host
-  assert.equal(startRefusal({ active_provider: 'anthropic' }, { containerMode: true, hasTmux: no, hasCli: no }), null);
-  assert.match(startRefusal({ active_provider: 'anthropic' }, { containerMode: false, hasTmux: no, hasCli: yes }), /tmux not found/);
-  assert.match(startRefusal({ active_provider: 'anthropic' }, { containerMode: false, hasTmux: yes, hasCli: no }), /claude CLI/);
-  assert.equal(startRefusal({ active_provider: 'kimi' }, { containerMode: false, hasTmux: yes, hasCli: yes }), null);
+  assert.equal(startRefusal(GLM, { containerMode: true, hasTmux: no, hasCli: no }), null);
+  assert.match(startRefusal(GLM, { containerMode: false, hasTmux: no, hasCli: yes }), /tmux not found/);
+  assert.match(startRefusal(GLM, { containerMode: false, hasTmux: yes, hasCli: no }), /pi CLI/);
+  assert.equal(startRefusal(GLM, { containerMode: false, hasTmux: yes, hasCli: yes }), null);
+  // a provider this release does not offer is refused before tmux and the CLI, with the setup as the way out
+  for (const active_provider of ['anthropic', 'openai', 'kimi']) {
+    assert.match(startRefusal({ active_provider }, { containerMode: true }), /is not offered in this release .*Run: jht setup/, active_provider);
+  }
 });
 
 // ── the person's Stop on one agent goes with an explicit start ────────────────
@@ -111,7 +118,7 @@ test('a roster that cannot answer is said, not hidden, and does not stop the sta
 });
 
 function holdBox() {
-  const b = box({ config: { active_provider: 'openai' }, tmux: true, cli: 'codex' });
+  const b = box({ config: GLM, tmux: true, cli: 'pi' });
   symlinkSync(execPython(), join(b.bin, 'python3'));
   const logs = join(b.home, 'logs');
   const containment = join(logs, 'containment');

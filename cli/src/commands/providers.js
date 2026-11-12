@@ -135,11 +135,24 @@ async function handleProviders() {
   const activeProvider = config.active_provider ?? null;
   const providers = config.providers ?? {};
 
+  // First the services of this release (shared/runtime/release-providers.js): the one way the team can run now.
+  for (const id of RELEASE_PROVIDERS) {
+    const entry = providers[id];
+    const keyed = Boolean(entry?.api_key || entry?.api_key_ref);
+    const icon = keyed ? OK : entry ? WARN : ERR;
+    const activeLabel = activeProvider === id ? ` ${GREEN}· ${say('providers.active')}${RESET}` : '';
+    console.log(`  ${icon} ${PI_API_PROVIDERS[id]?.label ?? id} ${DIM}· ${say('providers.in_release')}${RESET}${activeLabel}`);
+    console.log(`    ${DIM}${say('providers.line', { id, model: entry?.model ?? '—', auth: keyed ? 'api_key' : say('providers.auth_none') })}${RESET}`);
+    if (!keyed) console.log(`    ${DIM}${say('providers.in_release_setup')}${RESET}`);
+    console.log('');
+  }
+
   for (const [id, known] of Object.entries(KNOWN_PROVIDERS)) {
     const provCfg = providers[id];
     const hasConfig = !!provCfg;
-    // Un provider archiviato compare solo se questa squadra lo usa ancora (anche con il nome vecchio).
-    if (known.archived && ![id, ...(known.aliases ?? [])].some((name) => providers[name] || activeProvider === name)) continue;
+    // A provider this release does not offer appears only to a team that still uses it, and says so; an archived one the same way.
+    const inUse = [id, ...(known.aliases ?? [])].some((name) => providers[name] || activeProvider === name);
+    if ((known.archived || !offeredInRelease(id)) && !inUse) continue;
     const hasEnv = !!process.env[known.envKey];
     const hasCred = await fileExists(join(CREDS_DIR, `${id}.enc`)) || await fileExists(join(CREDS_DIR, `${id}.json`));
     const isActive = activeProvider === id;
@@ -149,11 +162,13 @@ async function handleProviders() {
     const icon = hasConfig && (hasEnv || hasCred || provCfg?.api_key) ? OK : hasConfig ? WARN : ERR;
     const activeLabel = isActive ? ` ${GREEN}· ${say('providers.active')}${RESET}` : '';
 
-    const recommendedLabel = known.recommended ? ` ${DIM}· ${say('providers.recommended')}${RESET}` : '';
+    const recommendedLabel = !offeredInRelease(id) ? ` ${YELLOW}· ${say('providers.not_in_release')}${RESET}`
+      : known.recommended ? ` ${DIM}· ${say('providers.recommended')}${RESET}` : '';
     console.log(`  ${icon} ${known.name}${recommendedLabel}${activeLabel}`);
     console.log(`    ${DIM}${say('providers.line', { id, model, auth: authMethod })}${RESET}`);
     if (hasEnv) console.log(`    ${DIM}${say('providers.key_in', { env: known.envKey })}${RESET}`);
     if (hasCred) console.log(`    ${DIM}${say('providers.credentials')}${RESET}`);
+    if (!offeredInRelease(id)) { console.log(''); continue; }  // no CLI version to keep up for a service this release does not run
     const ver = getVersionInfo(id);
     // Con un pin di release (issue #130) "aggiornamento disponibile" non è più
     // "il registry ne ha una più nuova" — quella è una versione che questa
@@ -175,7 +190,7 @@ async function handleProviders() {
   }
 
   // Provider aggiuntivi non noti
-  const custom = Object.keys(providers).filter(k => !KNOWN_PROVIDERS[k]);
+  const custom = Object.keys(providers).filter(k => !KNOWN_PROVIDERS[k] && !RELEASE_PROVIDERS.includes(k));
   if (custom.length > 0) {
     console.log(`  ${DIM}${say('providers.other')}${RESET}`);
     for (const id of custom) {
