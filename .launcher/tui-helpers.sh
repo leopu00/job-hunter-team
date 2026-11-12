@@ -368,17 +368,37 @@ _welcome_flag_fresh() {
 #   - altrimenti                     -> tui_send_verified: se il primo testo e' ancora
 #                                       nel composer premera' solo Enter, mai un secondo incolla.
 # Ritorna 1 se dopo l'ultimo giro il flag di questo avvio non c'e'.
+# _welcome_credit_gone — 0 when the provider answered that the credit is exhausted and no call has passed since
+# (shared/skills/provider_credit.py, the same reading as jht doctor and the spending brake). Anything else, a missing tool
+# included, is «not gone»: the watchdog then behaves as before.
+_welcome_credit_gone() {
+  local tool="${JHT_PROVIDER_CREDIT_PY:-/app/shared/skills/provider_credit.py}" seen
+  [ -f "$tool" ] || return 1
+  seen="$(python3 "$tool" 2>/dev/null)" || return 1
+  [ -n "$seen" ] && [ "$seen" != "null" ]
+}
+
 tui_welcome_watchdog() {
   local sess="$1" msg="$2" flag="$3" marker="$4"
   local retries="${5:-3}" interval="${6:-90}"
-  local retry pane
+  local retry=0 pane waits=0
+  # While the credit is gone a reinjected welcome is only more calls the provider refuses (with pi's own retries, 4 each):
+  # the check does not count as a retry and nothing is typed, at most this many times (the credit reading lapses after
+  # 30 minutes without a new refusal, so the welcome is tried again within the hour, once).
+  local max_waits="${JHT_WELCOME_CREDIT_WAITS:-40}"
   echo "[$(date +%H:%M:%S)] welcome watchdog start (flag=$flag)"
-  for retry in $(seq 1 "$retries"); do
+  while [ "$retry" -lt "$retries" ]; do
     sleep "$interval"
     if _welcome_flag_fresh "$flag" "$marker"; then
-      echo "[$(date +%H:%M:%S)] flag confirmed for this boot (check $retry/$retries), exiting"
+      echo "[$(date +%H:%M:%S)] flag confirmed for this boot (check $((retry + 1))/$retries), exiting"
       return 0
     fi
+    if [ "$waits" -lt "$max_waits" ] && _welcome_credit_gone; then
+      waits=$((waits + 1))
+      echo "[$(date +%H:%M:%S)] the provider's credit is exhausted: not reinjecting (wait $waits/$max_waits, no call)"
+      continue
+    fi
+    retry=$((retry + 1))
     pane=$(tmux capture-pane -t "=$sess:" -p 2>/dev/null || true)
     if _tui_pane_busy "$pane"; then
       echo "[$(date +%H:%M:%S)] flag not confirmed yet (check $retry/$retries) but a turn is running: not reinjecting"

@@ -199,3 +199,31 @@ def test_start_agent_wires_the_boot_marker_into_the_watchdog():
     assert '[ -f "$JHT_WELCOME_FLAG" ]' not in block
     # l'agente, col flag gia' presente, deve toccarlo
     assert "Run touch ${welcome_flag}" in block
+
+
+def _credit(tmp_path, answer):
+    """A provider_credit.py that answers as the real one does: the JSON of the refusal, or null."""
+    tool = tmp_path / "provider_credit.py"
+    tool.write_text("print(%r)\n" % answer, encoding="utf-8")
+    return tool
+
+
+def test_with_the_credit_gone_the_welcome_is_not_reinjected_and_the_wait_does_not_spend_the_retries(shell, tmp_path, monkeypatch):
+    w = _Welcome(tmp_path)
+    w.boot()
+    monkeypatch.setenv("JHT_PROVIDER_CREDIT_PY", str(_credit(tmp_path, '{"provider": "zai", "agent": "assistente", "ts": 1}')))
+    monkeypatch.setenv("JHT_WELCOME_CREDIT_WAITS", "3")
+    rc, out = w.watchdog(shell, retries=1)
+    # three waits with nothing typed, then (the waits spent) the one retry of before
+    assert out.stdout.count("credit is exhausted: not reinjecting") == 3, out.stdout
+    assert w.typed() == 1, out.stdout + out.stderr
+    assert rc == 1
+
+
+def test_with_the_credit_there_the_welcome_is_reinjected_as_before(shell, tmp_path, monkeypatch):
+    w = _Welcome(tmp_path)
+    w.boot()
+    monkeypatch.setenv("JHT_PROVIDER_CREDIT_PY", str(_credit(tmp_path, "null")))
+    rc, out = w.watchdog(shell, retries=1)
+    assert "credit is exhausted" not in out.stdout
+    assert w.typed() == 1, out.stdout + out.stderr
