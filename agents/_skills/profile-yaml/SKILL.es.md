@@ -43,7 +43,7 @@ Un mensaje que contiene `[FILE ALLEGATI]`, y un mensaje que trae el CV mismo com
 2. Ejecuta `python3 /app/shared/skills/profile_review.py stage`.
 3. Solo si devuelve `ok: true`, publica la tarjeta de confirmación: `python3 /app/shared/skills/profile_review.py ask-confirm --inferred <campos>`, donde `<campos>` son los campos que el CV NO decía y has deducido tú (por ejemplo `seniority_target,target_role,location`, o una preferencia como `location_preferences`); sin `--inferred` si no has deducido nada. La tarjeta lleva el resumen y los dos botones: no repitas el resumen y no nombres ningún panel ni botón de la app. No afirmes que el perfil ya está guardado.
 4. Cuando la persona responda a la tarjeta, ejecuta `python3 /app/shared/skills/profile_review.py apply-confirmed`. Con `ok: true` el perfil está guardado: dilo en una línea y pregunta por el primer campo de `missing`. Si el plan aún no está declarado (`plan_registry.py get` dice `PLAN_MISSING`), pregúntalo ahora y solo con la tarjeta (`first_run.py ask-plan --agent assistente`, skill `onboarding-flow`), nunca con texto. Con el error `wants_correction`, pregunta qué corregir, actualiza `profile-review.yml`, ejecuta `stage` y después `ask-confirm` otra vez. Con cualquier otro error di que la confirmación no se pudo aplicar; nunca edites el perfil canónico para evitarlo.
-5. Si la persona escribe «sí, guarda» con palabras, no guardes y no la ignores: ejecuta `ask-confirm`. `open: true` → una línea, «pulsa **Confirmar y guardar** en la tarjeta de arriba, o escribe «1» si estás en el terminal». `asked: true` (la tarjeta ya no estaba, se publica una nueva) → una línea diciendo que la has puesto otra vez debajo. `confirmed: true` → ejecuta `apply-confirmed`. Error `no_review` → el perfil ya está guardado o no hay nada que confirmar: dilo. Nunca dejes a la persona sin un paso siguiente.
+5. Si la persona escribe «sí, guarda» con palabras, no guardes y no la ignores: ejecuta `ask-confirm`. `open: true` → una línea, «pulsa **Confirmar y guardar** en la tarjeta de arriba, o escribe solo «sí, guarda» (o «1») si estás en el terminal; también vale «sí, guarda y adelante»». `asked: true` (la tarjeta ya no estaba, se publica una nueva) → una línea diciendo que la has puesto otra vez debajo. `confirmed: true` → ejecuta `apply-confirmed`. Error `no_review` → el perfil ya está guardado o no hay nada que confirmar: dilo. Nunca dejes a la persona sin un paso siguiente.
 6. Si falla la preparación, comunica que no se pudo preparar la revision. No pidas recordatorios por chat ni evites la revision editando el perfil canonico.
 
 El distintivo solo lee el `candidate_profile.yml` persistido. No debe avanzar mientras haya una revision de CV pendiente.
@@ -216,6 +216,8 @@ arranque deja al usuario delante de una oficina casi parada. Este mensaje es el
 disparador de su skill `first-run-burst` (plantilla completa de inmediato en lugar
 de la subida gradual). Sin el, el primer dia el usuario ve una posicion cada diez
 minutos y concluye que la aplicacion esta rota.
+
+Si `jht-tmux-send` responde que la sesión del Capitano no existe (salida 2, «no entregado»), no es un error: el equipo arranca DESPUÉS de guardar el perfil, y el Capitano lee `first_run.py status` al despertar y abre solo la primera ronda. No lo reenvíes, no reintentes en bucle y no le digas a la persona que algo ha ido mal; sigue con la pregunta siguiente.
 
 ### Anti-alucinacion del paso 2
 
