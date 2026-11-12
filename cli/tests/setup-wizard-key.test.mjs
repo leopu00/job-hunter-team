@@ -196,3 +196,21 @@ test('doctor says a key is missing when the reference leads to nothing', () => {
   const doctor = spawnSync(process.execPath, [join(cli, 'bin/jht.js'), 'doctor', '--all'], { env, encoding: 'utf8', timeout: 60_000 });
   assert.match(doctor.stdout + doctor.stderr, /Provider glm has no API key/);
 });
+
+test('a setup cancelled over a key that was already stored puts that key back, and one cancelled at the question for the key stores nothing', () => {
+  const box = sandbox({ installFails: true });
+  mkdirSync(join(box.deps, 'keys'), { recursive: true, mode: 0o700 });
+  writeFileSync(join(box.deps, 'keys', 'glm.key'), `${OTHER}\n`, { mode: 0o600 });
+  const { events } = run(box, { select: { 'AI Provider': 'glm' }, keys: [KEY], cancelAtConfirm: true });
+  assert.equal(events.at(-1).kind, 'cancelled');
+  assert.equal(readFileSync(join(box.deps, 'keys', 'glm.key'), 'utf8'), `${OTHER}\n`, 'the key that worked is still there');
+});
+
+test('a cancel that comes before the key store is written (at the key question) leaves no key file', () => {
+  const box = sandbox();
+  const driver = readFileSync(box.driver, 'utf8').replace("password: async (p) => {", "password: async (p) => { if (answers.cancelAtPassword) throw new WizardCancelledError();");
+  writeFileSync(box.driver, driver);
+  const { events } = run(box, { select: { 'AI Provider': 'kimi' }, cancelAtPassword: true });
+  assert.equal(events.at(-1).kind, 'cancelled');
+  assert.deepEqual(keyFiles(box), []);
+});

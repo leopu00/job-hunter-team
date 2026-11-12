@@ -37,7 +37,9 @@ import { runProviderLoginStep, findProviderLogin } from './provider-login.js';
 import { promptHarness, updateIdFor, loginCmdFor } from './setup-harness.js';
 import { askPiApiKey, askCodexApiKey, runCodexApiKeyLogin } from './setup-api-key.js';
 import { WizardCancelledError } from './prompts.js';
-import { readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { lstatSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { keyStoreDir } from './key-store.js';
 import { JHT_CONFIG_PATH } from './setup-helpers.js';
 import { piApiProvider } from '../../shared/runtime/provider-models.js';
 import pc from 'picocolors';
@@ -125,12 +127,24 @@ function runProviderOauth(cmdName) {
 export async function runSetupWizard(prompter) {
   // a setup that is cancelled leaves things as they were: the config as it was (or none), and the key it just stored
   const before = readConfigBytes();
-  const state = { keyPath: null };
+  // keyPath: the file of the key this setup may write; keyBefore: what it held when the setup began (null = there was no file)
+  const state = { keyPath: null, keyBefore: null };
   try {
     return await runSetupSteps(prompter, state);
   } catch (err) {
     if (err instanceof WizardCancelledError) undoCancelledSetup(before, state);
     throw err;
+  }
+}
+
+/** The key file of a provider in the key store as it is now: `{ keyPath, keyBefore }` (keyBefore null when there is none); nothing to touch when it cannot be read. */
+export function rememberKeyFile(provider, dir = keyStoreDir()) {
+  const keyPath = join(dir, `${provider}.key`);
+  try {
+    if (!lstatSync(keyPath).isFile()) return { keyPath: null, keyBefore: null };
+    return { keyPath, keyBefore: readFileSync(keyPath) };
+  } catch (err) {
+    return err && err.code === 'ENOENT' ? { keyPath, keyBefore: null } : { keyPath: null, keyBefore: null };
   }
 }
 
@@ -145,7 +159,14 @@ export function undoCancelledSetup(before, state, { path = JHT_CONFIG_PATH } = {
     if (before === null) rmSync(path, { force: true });
     else if (now === null || !now.equals(before)) writeFileSync(path, before, { mode: 0o600 });
   } catch { /* the setup says nothing more: it was cancelled */ }
-  if (state.keyPath) { try { rmSync(state.keyPath, { force: true }); } catch { /* nothing to take away */ } }
+  if (state.keyPath) {
+    // a key the setup wrote is taken away; a key that was there before it began is put back (the same provider's file is replaced
+    // by a new setup, and a cancel must not cost the key that worked)
+    try {
+      if (state.keyBefore === null) rmSync(state.keyPath, { force: true });
+      else writeFileSync(state.keyPath, state.keyBefore, { mode: 0o600 });
+    } catch { /* nothing more to do: the setup was cancelled */ }
+  }
 }
 
 async function runSetupSteps(prompter, state) {
@@ -298,6 +319,8 @@ async function runSetupSteps(prompter, state) {
   }
   if (takesApiKey) {
     authMethod = 'api_key';
+    // known before the key is asked: a cancel at any point from here on leaves this file as it was
+    Object.assign(state, rememberKeyFile(selectedProvider.value));
     const keyPath = await askPiApiKey(prompter, { t, tf, choice: selectedProvider });
     if (!keyPath) {
       await prompter.outro(t('wizard.key.aborted'));
@@ -332,8 +355,6 @@ async function runSetupSteps(prompter, state) {
   // Tutti opzionali (l'utente puo' rispondere "no" e farli a mano dopo) ma
   // proposti di default per arrivare a "team che gira" in un solo wizard.
   // ────────────────────────────────────────────────────────────────────────
-
-  state.keyPath = apiKeySecret?.type === 'ref' && apiKeySecret.source === 'file' ? apiKeySecret.path : null;
 
   // --- Step 6: install/update CLI provider (sempre, senza chiedere) ---
   const updateProviderId = updateIdFor(harness, providerChoice, PROVIDER_UPDATE_ID);
