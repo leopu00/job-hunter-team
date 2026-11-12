@@ -42,7 +42,7 @@ _scan = census.scan
 ## traduzione procede a lotti e un gate che parte rosso verrebbe disattivato
 ## entro un giorno. Può solo SCENDERE: si abbassa a ogni lotto e arriva a 0
 ## quando il fronte è chiuso.
-AGENT_COPY_BUDGET = 1005
+AGENT_COPY_BUDGET = 907
 
 
 def test_backend_perimeter_user_visible_copy_is_english():
