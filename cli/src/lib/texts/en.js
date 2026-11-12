@@ -125,7 +125,6 @@ export default {
   'doctor.api_response': 'Anthropic API response {status}',
   'doctor.api_timeout': 'Anthropic API timeout (>5s)',
   'doctor.api_unreachable': 'Anthropic API unreachable',
-  'doctor.db_skip': 'Database — SUPABASE_URL not configured',
   'doctor.db_ok': 'Database Supabase accessible',
   'doctor.db_error': 'Supabase database error {status}',
   'doctor.db_unreachable': 'Supabase database is not reachable',
