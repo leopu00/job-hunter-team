@@ -208,17 +208,21 @@ def test_the_wait_for_the_pipe_is_a_few_seconds_and_only_digits_change_it(tmp_pa
 
 
 def test_the_wait_answers_at_once_for_anything_but_absent_and_gives_up_on_absent(tmp_path):
+    # one PowerShell for the four states: a start of Windows PowerShell 5.1 costs seconds on the gate's runner
     body = """
-function Get-JhtPodmanPipeState { param([string]$MachineName) return $env:STATE }
-$watch = [Diagnostics.Stopwatch]::StartNew()
-$state = Wait-JhtPodmanPipe -MachineName 'jht-podman' -Milliseconds 600
-[Console]::Out.WriteLine('STATE=' + $state + ' FAST=' + [string]($watch.ElapsedMilliseconds -lt 400))
+function Get-JhtPodmanPipeState { param([string]$MachineName) return $script:State }
+foreach ($script:State in 'connected', 'denied', 'unknown', 'absent') {
+  $watch = [Diagnostics.Stopwatch]::StartNew()
+  $state = Wait-JhtPodmanPipe -MachineName 'jht-podman' -Milliseconds 600
+  [Console]::Out.WriteLine('STATE=' + $state + ' MS=' + $watch.ElapsedMilliseconds)
+}
 """
-    for state, fast in (("connected", True), ("denied", True), ("unknown", True), ("absent", False)):
-        folder = tmp_path / state
-        folder.mkdir()
-        out = _pieces(folder, body, ["Wait-JhtPodmanPipe", "Get-JhtPodmanPipeWaitMilliseconds"], {"STATE": state})
-        assert f"STATE={state} FAST={fast}" in out, (state, out)
+    out = _pieces(tmp_path, body, ["Wait-JhtPodmanPipe", "Get-JhtPodmanPipeWaitMilliseconds"])
+    elapsed = {state: int(ms) for state, ms in re.findall(r"^STATE=(\w+) MS=(\d+)$", out, re.M)}
+    assert set(elapsed) == {"connected", "denied", "unknown", "absent"}, out
+    assert elapsed["absent"] >= 600, "absent is asked again until the wait is over"
+    for state in ("connected", "denied", "unknown"):
+        assert elapsed[state] < elapsed["absent"], (state, elapsed)
 
 
 FAKE_EVENTS = r"""
