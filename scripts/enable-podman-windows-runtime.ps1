@@ -808,6 +808,8 @@ try {
   if ($pipeAtStart -ceq 'absent' -and $podmanNeedsEventLog -and (Test-JhtEventLogWritable) -ceq 'denied') {
     throw (Get-JhtApiForwardingFailure -MachineName $MachineName -EventLogDenied $true -Started $false)
   }
+  # The memory of the WSL virtual machine, before it exists (a setting is read when the VM starts): never a reason to stop.
+  try { Set-JhtWslConfigForMachine -RuntimeDir $RuntimeDir -MachineName $MachineName } catch { Write-Host "  WSL settings were not changed: $($_.Exception.Message)" -ForegroundColor Yellow }
   # Windows PowerShell 5.1 gives a JSON array to the pipeline as ONE object: with a
   # second machine of this user, `$machine` was the whole list. Parse with -InputObject
   # and enumerate with foreach, the same in 5.1 and in PowerShell 7.
@@ -907,6 +909,7 @@ if ($ExpectedImageDigest) {
   if (-not $canonicalImage) { throw 'Pulled runtime image has no canonical repository digest.' }
 }
 $env:JHT_IMAGE = $canonicalImage
+[void](Invoke-JhtMachineDropCaches -PodmanPath $Podman -MachineName $MachineName)
 
 $legacyInstallDetected = (Test-Path -LiteralPath (Join-Path $JhtHome 'jht.config.json')) -or
   (Test-Path -LiteralPath (Join-Path $JhtHome 'profile')) -or
@@ -1178,5 +1181,8 @@ $unsettledContainers = @(Get-UnsettledJhtContainers -Podman $Podman -MachineName
 if ($unsettledContainers.Count -gt 0) { throw "runtime_containers_unhealthy: $($unsettledContainers -join '; '). Run 'jht logs' to see why." }
 
 Install-JhtContainerService -PodmanPath $Podman -UnitPath $containerUnitFile
+
+# Compose has just created the team's containers from the image: the cache the first start filled goes back too.
+[void](Invoke-JhtMachineDropCaches -PodmanPath $Podman -MachineName $MachineName)
 
 Write-Host "PODMAN JHT RUNTIME ENABLED (machine=$MachineName, wrapper=$(Join-Path $BinDir 'jht.ps1'))" -ForegroundColor Green
