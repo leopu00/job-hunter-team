@@ -20,8 +20,6 @@ paths = [
   # tests that mask or write made-up tokens, JWTs and secret files
   '''^tests/js/validators/redact\.test\.ts$''',
   '''^shared/logger/redact\.smoke\.ts$''',
-  '''^game/tools/redactor_selftest\.gd$''',
-  '''^game/tools/embedded_terminal_selftest\.gd$''',
   '''^agent-harness/runtime/tests/render-pdf\.test\.ts$''',
   # config schema test: placeholder api_key values
   '''^tests/js/config/schema\.test\.ts$''',

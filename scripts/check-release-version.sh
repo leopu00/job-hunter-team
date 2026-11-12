@@ -3,7 +3,7 @@
 # Job Hunter Team — Pre-release version consistency check
 #
 # Verifies that the git tag matches the root package and every Tauri 2
-# application metadata field. The retained game/ tree is not distributed.
+# application metadata field.
 #
 # Usage:
 #   scripts/check-release-version.sh [TAG]

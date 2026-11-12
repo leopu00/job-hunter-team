@@ -17,7 +17,6 @@ VALIDATOR = ROOT / "shared" / "skills" / "validate_profile.py"
 FIXTURE = ROOT / "cli" / "tests" / "fixtures" / "profile-synthetic.yml"
 COMPLETION = ROOT / "web" / "lib" / "profile-completion.ts"
 SHARED = ROOT / "shared" / "config" / "profile-minimum.json"
-GAME_STATUS = ROOT / "game" / "scripts" / "backend" / "payloads" / "profile_status.py"
 
 
 def _check(tmp_path: Path, profile: dict, *flags: str) -> dict:
@@ -147,18 +146,13 @@ def _shared() -> dict:
 
 
 def test_the_checklist_is_the_shared_list_and_the_apps_required_fields(tmp_path: Path):
-    """One list, read by the validator, the app, the game: a field added to one and not the others is red here."""
+    """One list, read by the validator and the app: a field added to one and not the other is red here."""
     shared = _shared()["required"]
     # the validator: what an empty profile lacks, in its own order
     assert _check(tmp_path, {}, "--minimum")["missing"] == shared
     # the app: the keys of PROFILE_REQUIREMENTS at level required, in their order
     source = COMPLETION.read_text(encoding="utf-8")
     assert re.findall(r'key: "([a-z_]+)",\s*level: "required"', source) == shared
-    # the game's wizard: the keys of the `required` dict of its status payload
-    payload = GAME_STATUS.read_text(encoding="utf-8")
-    block = re.search(r"required = dict\((.*?)\n\)", payload, re.S)
-    assert block is not None
-    assert re.findall(r"^\s+([a-z_]+)=", block.group(1), re.M) == shared
 
 
 @pytest.mark.parametrize("case", _shared()["cases"], ids=lambda case: case["name"])
