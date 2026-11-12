@@ -138,6 +138,19 @@ def answer_language(terminal, keys=b""):
     terminal.send(keys + b"\r")
 
 
+def choose_provider(terminal):
+    """The question after the language: Codex is where it starts (then GLM and Kimi, with a key). Enter keeps Codex."""
+    terminal.until("AI Provider")
+    terminal.until("GLM (Z.ai)")
+    terminal.send(b"\r")
+
+
+def choose_access(terminal):
+    """Codex only: the ChatGPT subscription (where it starts) or an OpenAI API key. Enter keeps the subscription."""
+    terminal.until("How does Codex sign in?")
+    terminal.send(b"\r")
+
+
 def choose_harness(terminal, keys=b""):
     """The first question after the provider: which program runs the agents. Enter keeps codex, DOWN then Enter picks pi."""
     terminal.until("Program that runs the agents")
@@ -146,7 +159,9 @@ def choose_harness(terminal, keys=b""):
 
 def begin_login(terminal):
     answer_language(terminal)
+    choose_provider(terminal)
     choose_harness(terminal)
+    choose_access(terminal)
     terminal.until("When should the team work?")
     terminal.send(b"\r")
     terminal.until("https://example.invalid/device SYNTHETIC-CODE")
@@ -226,6 +241,7 @@ def test_choosing_pi_signs_in_to_pi_here_and_not_to_codex(tmp_path):
     terminal = WizardTerminal(node, env)
     try:
         answer_language(terminal)
+        choose_provider(terminal)
         choose_harness(terminal, DOWN)
         terminal.until("Pi signs in to ChatGPT with its own login")
         terminal.until("When should the team work?")
@@ -266,7 +282,7 @@ def test_the_wizard_asks_the_language_first_and_saves_the_answer(tmp_path):
     terminal = WizardTerminal(node, env)
     try:
         answer_language(terminal, DOWN)  # Italiano
-        terminal.until("Program that runs the agents")
+        terminal.until("AI Provider")
         assert json.loads((home / "i18n-prefs.json").read_text(encoding="utf-8")) == {"locale": "it"}
     finally:
         terminal.close()

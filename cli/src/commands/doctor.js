@@ -2,12 +2,14 @@ import { readFile, access, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { execSync } from 'node:child_process'
+import { statSync } from 'node:fs'
 import { JHT_HOME } from '../jht-paths.js';
 import { c } from './_colors.js'
 import { hint, statusLine, title } from '../lib/ui.js'
 import { later, say, show } from '../lib/texts.js'
 import { AGENTS, isAgentSession } from './team/agents.js'
 import { LATEST_CONFIG_VERSION } from './migrate.js'
+import { PI_API_PROVIDERS, piApiProvider } from '../../../shared/runtime/provider-models.js'
 
 const JHT_DIR     = JHT_HOME
 const CONFIG_PATH = join(JHT_DIR, 'jht.config.json')
@@ -54,6 +56,19 @@ async function checkConfig() {
   return { ok: true, msg: later('doctor.config_ok', { v }) }
 }
 
+/**
+ * Whether a key reference of the config (what `jht setup` writes for glm and kimi: a file of the key store, or a variable) leads to a
+ * key: true or false, never the key. A reference that runs a command is not run here.
+ */
+function keyOfRef(ref) {
+  if (!ref || typeof ref !== 'object') return false
+  if (ref.source === 'env') return typeof ref.id === 'string' && Boolean(process.env[ref.id])
+  if (ref.source === 'file') {
+    try { return Boolean(typeof ref.path === 'string' && statSync(ref.path).isFile() && statSync(ref.path).size > 0) } catch { return false }
+  }
+  return false
+}
+
 async function checkProvider() {
   const cfg = await readConfigAsync()
   if (!cfg) return { skip: true, msg: later('doctor.provider_skip') }
@@ -69,12 +84,15 @@ async function checkProvider() {
 
   // Non lasciare che la key di un provider mascheri la configurazione
   // incompleta di un altro provider attivo.
+  const piApi = piApiProvider(active)
   const envName = active === 'anthropic'
     ? 'ANTHROPIC_API_KEY'
     : active === 'openai'
       ? 'OPENAI_API_KEY'
-      : `${active.toUpperCase()}_API_KEY`
-  const key = prov?.api_key || process.env[envName]
+      : piApi
+        ? PI_API_PROVIDERS[piApi].keyVariable
+        : `${active.toUpperCase()}_API_KEY`
+  const key = prov?.api_key || keyOfRef(prov?.api_key_ref) || process.env[envName]
   if (!key) return { warn: true, msg: later('doctor.provider_nokey', { active }), hint: later('doctor.provider_setenv', { env: envName }) }
   return { ok: true, msg: later('doctor.provider_line', { name: `${active}${prov?.model ? ` (${prov.model})` : ''}` }) }
 }

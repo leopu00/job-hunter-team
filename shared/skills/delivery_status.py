@@ -17,10 +17,25 @@ CATALOG = {
 }
 
 
+def _reporter():
+    """Which function asked for this line: «module.function» of the first frame outside this file. A name of the product's own code, never
+    a value: the line then says where the undelivered message came from, which the code and the fixed sentence alone do not."""
+    frame = sys._getframe(1)
+    while frame is not None and frame.f_code.co_filename == __file__:
+        frame = frame.f_back
+    if frame is None:
+        return None
+    module = os.path.splitext(os.path.basename(frame.f_code.co_filename))[0]
+    return f"{module}.{frame.f_code.co_name}"[:80]
+
+
 def report(code, *, home=None, rc=None):
     row = {"at": datetime.now(timezone.utc).isoformat(), "code": code, "message": CATALOG[code]}
     if rc is not None:
         row["rc"] = rc
+    source = _reporter()
+    if source:
+        row["from"] = source
     line = json.dumps(row, separators=(",", ":"))
     print(line, file=sys.stderr)
     path = Path(home or os.environ.get("JHT_HOME") or Path.home() / ".jht") / "logs" / "runtime.log"

@@ -4,6 +4,9 @@
  * Flusso: prerequisiti → provider AI → auth (SecretRef) → modello →
  *         Telegram → health check → salva config.
  *
+ * Provider: Codex (abbonamento ChatGPT, il consigliato) e, con la chiave API, GLM (Z.ai) e Kimi (Moonshot): questi due girano
+ * solo su Pi, la chiave si scrive nascosta e resta nel key store del container (setup-api-key.js), non c'e' un accesso da fare.
+ *
  * I path JHT sono fissi (~/.jht, ~/Documents/Job Hunter Team) e non
  * chiesti all'utente.
  *
@@ -13,6 +16,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import {
   AI_PROVIDERS,
+  PI_API_CHOICES,
   RECOMMENDED_PROVIDER,
   readConfigFileSnapshot,
   validateApiKey,
@@ -29,8 +33,15 @@ import { formatSecretForConfig } from './secret-ref.js';
 import { checkPrerequisites, runHealthCheck } from './setup-checks.js';
 import { t, tf } from './i18n.js';
 import { askLanguage } from './setup-language.js';
-import { runProviderLoginStep } from './provider-login.js';
+import { runProviderLoginStep, findProviderLogin } from './provider-login.js';
 import { promptHarness, updateIdFor, loginCmdFor } from './setup-harness.js';
+import { askPiApiKey, askCodexApiKey, runCodexApiKeyLogin } from './setup-api-key.js';
+import { WizardCancelledError } from './prompts.js';
+import { lstatSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { keyStoreDir } from './key-store.js';
+import { JHT_CONFIG_PATH } from './setup-helpers.js';
+import { piApiProvider } from '../../shared/runtime/provider-models.js';
 import pc from 'picocolors';
 
 /** «[2/3] text»: the slow steps after the choices, numbered the same way as the installer's. */
@@ -50,7 +61,12 @@ const PROVIDER_UPDATE_ID = {
 // porta la parola «consigliato» nella lingua dell'utente.
 const PROVIDER_LABEL_KEY = {
   openai: 'codex',
+  glm: 'key_glm',
+  kimi: 'key_kimi',
 };
+
+/** What the wizard offers: Codex with the subscription, then the providers that take an API key (they run only on Pi). */
+export const WIZARD_PROVIDERS = [...AI_PROVIDERS, ...PI_API_CHOICES];
 
 // Eseguibile del CLI provider per OAuth login. Tutti partono con un comando
 // che, al primo run senza credenziali, mostra il device-flow URL.
@@ -109,6 +125,51 @@ function runProviderOauth(cmdName) {
  * @param {import('./prompts.js').WizardPrompter} prompter
  */
 export async function runSetupWizard(prompter) {
+  // a setup that is cancelled leaves things as they were: the config as it was (or none), and the key it just stored
+  const before = readConfigBytes();
+  // keyPath: the file of the key this setup may write; keyBefore: what it held when the setup began (null = there was no file)
+  const state = { keyPath: null, keyBefore: null };
+  try {
+    return await runSetupSteps(prompter, state);
+  } catch (err) {
+    if (err instanceof WizardCancelledError) undoCancelledSetup(before, state);
+    throw err;
+  }
+}
+
+/** The key file of a provider in the key store as it is now: `{ keyPath, keyBefore }` (keyBefore null when there is none); nothing to touch when it cannot be read. */
+export function rememberKeyFile(provider, dir = keyStoreDir()) {
+  const keyPath = join(dir, `${provider}.key`);
+  try {
+    if (!lstatSync(keyPath).isFile()) return { keyPath: null, keyBefore: null };
+    return { keyPath, keyBefore: readFileSync(keyPath) };
+  } catch (err) {
+    return err && err.code === 'ENOENT' ? { keyPath, keyBefore: null } : { keyPath: null, keyBefore: null };
+  }
+}
+
+function readConfigBytes(path = JHT_CONFIG_PATH) {
+  try { return readFileSync(path); } catch { return null; }
+}
+
+/** The config back to what it was (removed when there was none) and the key the cancelled setup stored taken away. */
+export function undoCancelledSetup(before, state, { path = JHT_CONFIG_PATH } = {}) {
+  try {
+    const now = readConfigBytes(path);
+    if (before === null) rmSync(path, { force: true });
+    else if (now === null || !now.equals(before)) writeFileSync(path, before, { mode: 0o600 });
+  } catch { /* the setup says nothing more: it was cancelled */ }
+  if (state.keyPath) {
+    // a key the setup wrote is taken away; a key that was there before it began is put back (the same provider's file is replaced
+    // by a new setup, and a cancel must not cost the key that worked)
+    try {
+      if (state.keyBefore === null) rmSync(state.keyPath, { force: true });
+      else writeFileSync(state.keyPath, state.keyBefore, { mode: 0o600 });
+    } catch { /* nothing more to do: the setup was cancelled */ }
+  }
+}
+
+async function runSetupSteps(prompter, state) {
   await prompter.intro(t('wizard.intro_title'));
   await askLanguage(prompter);
 
@@ -200,32 +261,73 @@ export async function runSetupWizard(prompter) {
   // --- Step 2: Provider AI (l'unica scelta tecnica vera del wizard) ---
   // With one provider offered there is nothing to choose: it is said, not asked.
   const providerLabel = (p) => t(`wizard.provider.${PROVIDER_LABEL_KEY[p.value]}`);
+  // the provider of a config already there, under the name the wizard offers it (moonshot is kimi)
+  const offeredNow = piApiProvider(baseConfig.active_provider) ?? baseConfig.active_provider;
   let providerChoice;
-  if (AI_PROVIDERS.length === 1) {
-    providerChoice = AI_PROVIDERS[0].value;
-    await prompter.note(providerLabel(AI_PROVIDERS[0]), t('wizard.provider.prompt'));
+  if (WIZARD_PROVIDERS.length === 1) {
+    providerChoice = WIZARD_PROVIDERS[0].value;
+    await prompter.note(providerLabel(WIZARD_PROVIDERS[0]), t('wizard.provider.prompt'));
   } else {
     providerChoice = await prompter.select({
       message: t('wizard.provider.prompt'),
-      options: AI_PROVIDERS.map((p) => ({ value: p.value, label: providerLabel(p) })),
-      initialValue: baseConfig.active_provider || RECOMMENDED_PROVIDER,
+      options: WIZARD_PROVIDERS.map((p) => ({ value: p.value, label: providerLabel(p) })),
+      initialValue: WIZARD_PROVIDERS.some((p) => p.value === offeredNow) ? offeredNow : RECOMMENDED_PROVIDER,
     });
   }
-  const selectedProvider = AI_PROVIDERS.find((p) => p.value === providerChoice);
+  const selectedProvider = WIZARD_PROVIDERS.find((p) => p.value === providerChoice);
+  const takesApiKey = selectedProvider.piOnly === true;
 
   // --- Harness: il programma che guida gli agenti (codex | pi), subito dopo il provider ---
-  const harness = await promptHarness(prompter, {
-    t, provider: providerChoice, authMethod: 'subscription', current: baseConfig.harness,
-  });
+  // GLM and Kimi run only on Pi, with an API key: nothing to ask, it is said.
+  let harness;
+  if (takesApiKey) {
+    harness = 'pi';
+    await prompter.note(tf('wizard.provider.harness_pi_key_note', selectedProvider.label), t('wizard.provider.harness_prompt'));
+  } else {
+    harness = await promptHarness(prompter, {
+      t, provider: providerChoice, authMethod: 'subscription', current: baseConfig.harness,
+    });
+  }
 
-  // --- Auth: solo subscription, nessun input richiesto ---
-  // ADR-0004: solo subscription. L'autenticazione VERA (OAuth device flow)
-  // viene fatta dal CLI provider (claude/codex/kimi) in uno step successivo
-  // del wizard. Qui non chiediamo niente: niente email, niente token, niente
-  // browser.
-  const authMethod = 'subscription';
-  const apiKeySecret = undefined;
+  // --- Auth ---
+  // Codex: solo subscription (ADR-0004), nessun input: l'OAuth device flow lo fa il CLI provider in uno step successivo.
+  // GLM / Kimi: la chiave API, scritta nascosta, controllata dal provider e tenuta nel key store del container; il config
+  // ne ha solo il percorso (api_key_ref). Una chiave che il provider rifiuta non lascia niente di salvato.
+  let authMethod = 'subscription';
+  let apiKeySecret;
+  let codexKey = null; // the OpenAI key of a Codex setup with a key, in memory until Codex has taken it
   const subscriptionConfig = undefined;
+  if (!takesApiKey && harness === 'codex') {
+    // Codex: the ChatGPT subscription (the recommended way) or an OpenAI API key, which is billed by the token
+    const access = await prompter.select({
+      message: t('wizard.access.prompt'),
+      options: [
+        { value: 'subscription', label: t('wizard.access.subscription') },
+        { value: 'api_key', label: t('wizard.access.api_key') },
+      ],
+      initialValue: 'subscription',
+    });
+    if (access === 'api_key') {
+      codexKey = await askCodexApiKey(prompter, { t, tf });
+      if (!codexKey) {
+        await prompter.outro(t('wizard.key.aborted'));
+        return false;
+      }
+      // Codex keeps the key itself (codex login --with-api-key): the config says the CLI holds the credential, and holds no key
+      authMethod = 'cli';
+    }
+  }
+  if (takesApiKey) {
+    authMethod = 'api_key';
+    // known before the key is asked: a cancel at any point from here on leaves this file as it was
+    Object.assign(state, rememberKeyFile(selectedProvider.value));
+    const keyPath = await askPiApiKey(prompter, { t, tf, choice: selectedProvider });
+    if (!keyPath) {
+      await prompter.outro(t('wizard.key.aborted'));
+      return false;
+    }
+    apiKeySecret = formatSecretForConfig('file', keyPath);
+  }
 
   // Modello: hardcoded al primo della lista del provider scelto. Il valore
   // serve come "default globale" del config ma OGNI agente usa il suo
@@ -293,8 +395,16 @@ export async function runSetupWizard(prompter) {
   const oauthCmd = loginCmdFor(harness, providerChoice, PROVIDER_OAUTH_CMD);
   // a login that is already there ends the step; otherwise the person is told where to log in
   console.log('');
-  console.log(stepLine(2, 3, t('wizard.step.login')));
-  const loggedIn = await runProviderLoginStep({
+  console.log(stepLine(2, 3, t(takesApiKey || codexKey !== null ? 'wizard.step.key' : 'wizard.step.login')));
+  // with an API key there is no sign-in: the key the provider accepted is the whole of it
+  let loggedIn;
+  if (codexKey !== null) {
+    // the key goes to Codex on its standard input; what is there afterwards is Codex's own sign-in marker
+    const done = runCodexApiKeyLogin(codexKey);
+    codexKey = null;
+    loggedIn = !done.error && done.status === 0 ? findProviderLogin('codex', {}) : null;
+    if (!loggedIn) await prompter.note(t('wizard.key.codex_not_taken'), t('wizard.key.title'));
+  } else loggedIn = takesApiKey ? true : await runProviderLoginStep({
     cmdName: oauthCmd, label: harness === 'pi' ? 'Pi' : selectedProvider.label, isVps, prompter, t, tf,
     provider: providerChoice, model,
   });
