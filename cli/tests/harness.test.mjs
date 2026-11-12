@@ -198,8 +198,11 @@ test('jht providers harness shows, changes and refuses', () => {
   assert.equal(jht(box, ['providers', 'harness']).out.trim(), 'pi');
   assert.match(jht(box, ['providers', 'harness', 'pi']).out, /already active/);
 
-  assert.equal(jht(box, ['providers', 'harness', 'codex']).status, 0);
-  assert.equal(JSON.parse(readFileSync(cfg, 'utf8')).harness, 'codex');
+  // this release runs the agents only on pi: codex is refused and the config stays as it is
+  const codex = jht(box, ['providers', 'harness', 'codex']);
+  assert.equal(codex.status, 1);
+  assert.match(codex.out, /harness 'codex' is not offered in this release: the agents run on pi/);
+  assert.equal(JSON.parse(readFileSync(cfg, 'utf8')).harness, 'pi');
   const bad = jht(box, ['providers', 'harness', 'opencode']);
   assert.equal(bad.status, 1);
   assert.match(bad.out, /unrecognized/);

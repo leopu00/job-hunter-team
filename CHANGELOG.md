@@ -8,7 +8,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.4.0] — unreleased
 
 **The desktop app moves to Tauri 2, the agent team runs in a container on your computer (or a VPS), and the
-team can run on Codex or, with an API key, on GLM or Kimi.** The release notes say which of this was tested on
+team runs on Pi with a GLM (Z.ai) API key.** The release notes say which of this was tested on
 real machines and which was not.
 
 ### Platforms
@@ -24,10 +24,12 @@ real machines and which was not.
 
 ### Providers
 
-- Two ways to power the team. **Codex** (through your ChatGPT subscription, signed in with the provider's login
-  flow) is the recommended one. **Pi with GLM (Z.ai) or Kimi (Moonshot)** runs the agents with an **API key** you
-  give from a file or from standard input, in the first setup or later in Settings: its cost is yours, and the
-  team's spending cap stops it. Claude Code is no longer offered. `jht providers update` without an id no longer
+- One way to power the team: **Pi with GLM (Z.ai)**, with an **API key** that `jht setup` asks for (typed hidden)
+  or takes from a file or from standard input: its cost is yours, and the team's spending cap stops it. The
+  services a release offers are one list (`shared/runtime/release-providers.js`); `jht setup`,
+  `jht providers use` and `jht providers harness` refuse the others, and `jht doctor` says a team configured on
+  one of them is not supported in this release. Codex (ChatGPT subscription or OpenAI key), Kimi and Claude come
+  in a later release; their code stays. `jht providers update` without an id no longer
   updates Kimi: name it (`jht providers update kimi`).
 - A key the provider refuses, a missing key or credit that has run out are reported by `jht team start`,
   `jht agents`, the chat and the app, with the command that fixes it.
