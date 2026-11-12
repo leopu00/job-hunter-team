@@ -9,7 +9,6 @@
 
 import { Command } from 'commander';
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { containerRunning, CONTAINER_NAME, execInContainer } from '../utils/container-proxy.js';
@@ -42,54 +41,14 @@ function dockerDaemonReady() {
   return r.status === 0;
 }
 
-// Su Windows, se Docker Desktop non gira lo lanciamo e aspettiamo il daemon.
-// Su Linux/Mac se il daemon è down l'utente deve gestirlo (systemctl start docker,
-// colima, ecc.): avviare processi non nostri in background sarebbe invasivo.
+// Dalla 0.4 JHT gira solo su Podman (una macchina sul Mac e su Windows, rootless su Linux). Il motore lo accende `jht up`
+// del wrapper installato; da qui non si avvia niente (ne' Colima ne' Docker Desktop): si dice solo cosa fare.
 async function ensureDockerDaemon() {
   if (dockerDaemonReady()) return true;
-
-  if (process.platform !== 'win32') {
-    const hint = process.platform === 'darwin'
-      ? "Start it with 'colima start' or 'open -a Docker' (Docker Desktop)."
-      : "Start it (for example, 'systemctl start docker').";
-    console.error(c.red(`Docker daemon cannot be reached. ${hint}`));
-    return false;
-  }
-
-  const candidates = [
-    process.env.ProgramFiles && `${process.env.ProgramFiles}\\Docker\\Docker\\Docker Desktop.exe`,
-    'C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe',
-  ].filter(Boolean);
-  const exe = candidates.find(p => { try { return existsSync(p); } catch { return false; } });
-  if (!exe) {
-    console.error(c.red('Docker Desktop.exe was not found in the standard locations. Start it manually.'));
-    return false;
-  }
-
-  console.log(c.dim('  Docker daemon is down; starting Docker Desktop...'));
-  try {
-    spawn(exe, [], { detached: true, stdio: 'ignore', shell: false }).unref();
-  } catch (err) {
-    console.error(c.red(`  Can't launch Docker Desktop: ${err.message}`));
-    return false;
-  }
-
-  const timeoutMs = 90_000;
-  const pollMs = 2000;
-  const start = Date.now();
-  process.stdout.write(c.dim('  Waiting for the daemon'));
-  while (Date.now() - start < timeoutMs) {
-    await new Promise(r => setTimeout(r, pollMs));
-    process.stdout.write(c.dim('.'));
-    if (dockerDaemonReady()) {
-      process.stdout.write('\n');
-      const elapsed = Math.round((Date.now() - start) / 1000);
-      console.log(c.green(`  ✓ Docker Desktop ready (${elapsed}s)`));
-      return true;
-    }
-  }
-  process.stdout.write('\n');
-  console.error(c.red(`  Docker Desktop was not ready after ${timeoutMs / 1000}s. Try again manually.`));
+  const hint = process.platform === 'linux'
+    ? "JHT runs on rootless Podman: check it with 'podman info'."
+    : "JHT runs on Podman: start its machine with 'podman machine start jht-podman', or run 'jht up'.";
+  console.error(c.red(`The container engine cannot be reached. ${hint}`));
   return false;
 }
 
