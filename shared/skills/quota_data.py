@@ -19,6 +19,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -190,8 +191,19 @@ def captain_text(reason, ceiling=""):
     return text + " Tell the person once, in their language, if they have not been told."
 
 
+def shared_i18n():
+    """shared/i18n.py, the catalog of the shell, the CLI and the bridges. It lives one folder above the skills: a bridge that put only
+    shared/skills on its path (sentinel-bridge.py) did not find it, and every user notice of the no-quota mode failed on the import."""
+    shared = str(Path(__file__).resolve().parents[1])
+    if shared not in sys.path:
+        sys.path.insert(0, shared)
+    import i18n
+
+    return i18n
+
+
 def user_text(ceiling=""):
-    import i18n  # shared/i18n.py: same language as the shell, the CLI and the bridges
+    i18n = shared_i18n()
 
     return i18n.tf("quota_mode.noquota", ceiling or i18n.t("quota_mode.no_ceiling"))
 
