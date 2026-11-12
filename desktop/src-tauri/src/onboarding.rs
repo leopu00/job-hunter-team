@@ -56,7 +56,7 @@ const VPS_RUNTIME_CHANGE_REQUIRES_MIGRATION: &str = "vps_runtime_change_requires
 const INSTALL_STDOUT_KEPT: usize = 256 * 1024;
 #[cfg(target_os = "macos")]
 const BUNDLED_LOCAL_WRAPPER: &[u8] = include_bytes!("../../../scripts/jht-wrapper.sh");
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", test))]
 const LOCAL_PODMAN_INSTALL_ARGS: [&str; 6] = [
     "JHT_SKIP_ONBOARD=1",
     "/bin/bash",
@@ -1863,20 +1863,55 @@ fn podman_runtime_selected(app: &tauri::AppHandle) -> bool {
 /// A Mac installed from the command line with Colima (marker `docker`) holds
 /// its container and volumes in Colima. Installing Podman over it would start
 /// the team on empty volumes, and install.sh refuses it
-/// (runtime_change_requires_migration): the app says so before running it.
+/// (runtime_change_requires_migration): the app does not ask for it.
 #[cfg(any(target_os = "macos", test))]
 fn installed_on_another_engine(marker: Option<&str>) -> bool {
     marker.is_some_and(|value| value == "docker")
 }
 
-#[cfg(target_os = "macos")]
-fn local_podman_install_required(
+/// The engine the app runs the team on, on a Mac. A team installed from the command line with Colima or Docker Desktop
+/// (marker `docker`) keeps its container and volumes there: the app ADOPTS it, running install.sh without `--runtime`,
+/// which keeps the engine chosen (it never moves a team to another engine). Everything else is the app's own Podman.
+#[cfg(any(target_os = "macos", test))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LocalEngine {
+    Podman,
+    Existing,
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn local_engine(marker: Option<&str>) -> LocalEngine {
+    if installed_on_another_engine(marker) {
+        LocalEngine::Existing
+    } else {
+        LocalEngine::Podman
+    }
+}
+
+/// install.sh's command line before the channel's arguments: `--runtime podman` only for the app's own Podman.
+#[cfg(any(target_os = "macos", test))]
+fn local_install_base_args(engine: LocalEngine) -> Vec<&'static str> {
+    match engine {
+        LocalEngine::Podman => LOCAL_PODMAN_INSTALL_ARGS.to_vec(),
+        LocalEngine::Existing => vec!["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"],
+    }
+}
+
+/// Whether install.sh runs. Podman: unless the wrapper, the marker, the binary and the channel are all there. An engine
+/// the command line installed: always, it is idempotent and the one that starts Colima when it is off (the wrapper only
+/// says «the Docker daemon does not answer»).
+#[cfg(any(target_os = "macos", test))]
+fn local_install_required_for(
+    engine: LocalEngine,
     wrapper_present: bool,
     marker_selected: bool,
     podman_present: bool,
     channel_reusable: bool,
 ) -> bool {
-    !(wrapper_present && marker_selected && podman_present && channel_reusable)
+    match engine {
+        LocalEngine::Existing => true,
+        LocalEngine::Podman => !(wrapper_present && marker_selected && podman_present && channel_reusable),
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -2420,7 +2455,10 @@ fn install_local(
         #[cfg(target_os = "macos")]
         {
             let channel = release_channel::current().map_err(failure)?;
-            let install_required = local_podman_install_required(
+            // A team the command line installed on Colima or Docker Desktop is adopted on its own engine.
+            let engine = local_engine(local_runtime_marker(app).as_deref());
+            let install_required = local_install_required_for(
+                engine,
                 host_wrapper_path(app).is_some(),
                 podman_runtime_selected(app),
                 podman_path().is_some(),
@@ -2429,17 +2467,18 @@ fn install_local(
                     &local_runtime_dir(app)?,
                 ),
             );
-            if install_required && installed_on_another_engine(local_runtime_marker(app).as_deref())
-            {
-                trace_local_runtime("runtime", "installed_on_another_engine");
-                return Err(failure(RUNTIME_CHANGE_REQUIRES_MIGRATION));
+            if engine == LocalEngine::Existing {
+                trace_local_runtime("runtime", "adopting_existing_engine");
             }
-            if let Err(code) = local_podman_install_preflight(
-                install_required,
-                homebrew_path_in(std::env::var_os("PATH"), &HOMEBREW_PREFIXES),
-            ) {
-                trace_local_runtime("runtime", code);
-                return Err(failure(code));
+            // Homebrew is what installs Podman; an engine that is already there needs none from the app.
+            if engine == LocalEngine::Podman {
+                if let Err(code) = local_podman_install_preflight(
+                    install_required,
+                    homebrew_path_in(std::env::var_os("PATH"), &HOMEBREW_PREFIXES),
+                ) {
+                    trace_local_runtime("runtime", code);
+                    return Err(failure(code));
+                }
             }
             if install_required {
                 trace_local_runtime("runtime", "install_required");
@@ -2447,7 +2486,7 @@ fn install_local(
                     let started = Instant::now();
                     let (result, stderr) = run_program_keeping_stderr(
                         "/usr/bin/env",
-                        local_install_args(&LOCAL_PODMAN_INSTALL_ARGS, channel_args),
+                        local_install_args(&local_install_base_args(engine), channel_args),
                         Some(installer.bytes()),
                         PREPARE_TIMEOUT,
                     );
@@ -2463,11 +2502,21 @@ fn install_local(
             } else {
                 trace_local_runtime("runtime", "install_reused");
             }
-            if podman_path().is_none() {
-                return Err(failure("podman_missing"));
-            }
-            if !podman_runtime_selected(app) {
-                return Err(failure("podman_not_ready"));
+            match engine {
+                LocalEngine::Podman => {
+                    if podman_path().is_none() {
+                        return Err(failure("podman_missing"));
+                    }
+                    if !podman_runtime_selected(app) {
+                        return Err(failure("podman_not_ready"));
+                    }
+                }
+                // the installer keeps the engine: the marker still names it
+                LocalEngine::Existing => {
+                    if !installed_on_another_engine(local_runtime_marker(app).as_deref()) {
+                        return Err(failure("runtime_failed"));
+                    }
+                }
             }
             let home = app
                 .path()
@@ -2513,7 +2562,7 @@ fn install_local(
             }
             // A machine that was there before the 4 GiB size is not resized: the person is told,
             // with the same recreation as for the folders (the log has install.sh's own warning).
-            if crate::podman::jht_machine_memory_is_low(&home) {
+            if engine == LocalEngine::Podman && crate::podman::jht_machine_memory_is_low(&home) {
                 phase("ui_notice_podman_machine_memory_low");
             }
             return Ok(installed_wrapper);
@@ -2802,12 +2851,14 @@ fn run_local(
 
 /// The broker's LinkedIn login view commands (`jht linkedin ...`), on this
 /// computer through the attested wrapper, on a VPS through SSH. Used by
-/// broker_view.rs; the answer is the command's own JSON line.
+/// broker_view.rs; the answer is the command's own JSON line. `input` is what goes on the command's standard input (the token of the
+/// login window: never an argument).
 pub(crate) fn run_linkedin_command(
     app: &tauri::AppHandle,
     scope: &AccountScope,
     host: &ValidatedHost,
     operation: LocalCliOperation,
+    input: Option<&[u8]>,
     timeout: Duration,
 ) -> Result<ProcessResult, &'static str> {
     let remote = match operation {
@@ -2819,9 +2870,21 @@ pub(crate) fn run_linkedin_command(
     match host {
         ValidatedHost::Local => {
             let wrapper = wrapper_path(app).ok_or_else(|| runtime_refusal(app))?;
-            run_scoped_local(app, scope, &wrapper, operation, timeout)
+            match input {
+                None => run_scoped_local(app, scope, &wrapper, operation, timeout),
+                // The login gets its token on stdin: the same attested wrapper, the same refusals, with an input.
+                Some(input) => {
+                    crate::account_scope::validate_local_runtime(app, scope)?;
+                    refuse_broad_podman_machine(run_verified_local_wrapper(
+                        &wrapper,
+                        &operation.argv(),
+                        Some(input),
+                        timeout,
+                    ))
+                }
+            }
         }
-        ValidatedHost::Vps { .. } => run_ssh(host, remote, None, timeout, None),
+        ValidatedHost::Vps { .. } => run_ssh(host, remote, input, timeout, None),
     }
 }
 
@@ -3096,17 +3159,19 @@ fn provider_step_verdict(snapshot: &OnboardingSnapshot, reason: Option<String>) 
 /// What is already on this computer, to ask only for what is still missing (resources.rs).
 #[cfg(target_os = "macos")]
 fn local_installed_state(app: &tauri::AppHandle, home: &Path) -> crate::resources::Installed {
-    let machine = crate::podman::jht_machine_exists(home);
+    // An engine the command line installed has its virtual machine already (nothing to create, nothing to wake).
+    let existing_engine = installed_on_another_engine(local_runtime_marker(app).as_deref());
+    let machine = existing_engine || crate::podman::jht_machine_exists(home);
     // A runtime the update would replace counts as not installed: its new image is asked for again.
     let current = release_channel::current().ok().zip(local_runtime_dir(app).ok()).is_some_and(|(channel, dir)| {
         release_channel::installed_runtime_reusable(channel.as_ref(), &dir)
     });
     // Podman not found on the PATH of an app opened from the Finder says nothing about the machine: it is not
     // taken for stopped (a stopped machine asks for its memory again, a running one has it).
-    let machine_running = machine && {
+    let machine_running = machine && (existing_engine || {
         let status = crate::podman::check_podman_sync();
         status.ready || !status.installed
-    };
+    });
     crate::resources::Installed { machine, runtime: host_wrapper_path(app).is_some() && current, machine_running }
 }
 
@@ -6189,12 +6254,12 @@ fn team_update_outcome(
 
 /// The base of the installer's command line for a test install run again: the onboarding's own, for this system.
 #[cfg(target_os = "macos")]
-fn reinstall_base_args() -> Vec<&'static str> {
-    LOCAL_PODMAN_INSTALL_ARGS.to_vec()
+fn reinstall_base_args(app: &tauri::AppHandle) -> Vec<&'static str> {
+    local_install_base_args(local_engine(local_runtime_marker(app).as_deref()))
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
-fn reinstall_base_args() -> Vec<&'static str> {
+fn reinstall_base_args(_app: &tauri::AppHandle) -> Vec<&'static str> {
     vec!["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"]
 }
 
@@ -6208,13 +6273,7 @@ fn reinstall_test_install(
     scope: &AccountScope,
     wrapper: &Path,
 ) -> Result<crate::team_update::TeamUpdateOutcome, OnboardingError> {
-    #[cfg(target_os = "macos")]
-    {
-        // a Mac installed with Colima holds its volumes there: Podman over it would start the team on empty ones
-        if installed_on_another_engine(local_runtime_marker(app).as_deref()) {
-            return Err(failure(RUNTIME_CHANGE_REQUIRES_MIGRATION));
-        }
-    }
+    // a Mac installed with Colima holds its volumes there: the installer is run without `--runtime`, which keeps that engine
     crate::account_scope::validate_local_runtime(app, scope).map_err(failure)?;
     let log = RuntimeLog::new(app);
     let log = log.as_ref();
@@ -6226,7 +6285,7 @@ fn reinstall_test_install(
         let started = Instant::now();
         let (result, stderr) = run_program_keeping_stderr(
             "/usr/bin/env",
-            local_install_args(&reinstall_base_args(), channel_args),
+            local_install_args(&reinstall_base_args(app), channel_args),
             Some(installer.bytes()),
             PREPARE_TIMEOUT,
         );
@@ -6972,7 +7031,7 @@ mod tests {
     };
     #[cfg(target_os = "macos")]
     use super::{
-        local_podman_install_required, local_wrapper_command, probe_installed_wrapper_with,
+        local_install_required_for, local_wrapper_command, probe_installed_wrapper_with, LocalEngine,
         LOCAL_PODMAN_INSTALL_ARGS,
     };
     use crate::account_scope::AccountScope;
@@ -8146,6 +8205,8 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn local_installer_explicitly_selects_the_attested_podman_path() {
+        let local_podman_required =
+            |a, b, c, d| local_install_required_for(LocalEngine::Podman, a, b, c, d);
         assert_eq!(
             LOCAL_PODMAN_INSTALL_ARGS,
             [
@@ -8157,14 +8218,14 @@ mod tests {
                 "podman",
             ]
         );
-        assert!(local_podman_install_required(false, false, false, true));
-        assert!(local_podman_install_required(false, true, true, true));
-        assert!(local_podman_install_required(true, false, true, true));
-        assert!(local_podman_install_required(true, true, false, true));
-        assert!(!local_podman_install_required(true, true, true, true));
+        assert!(local_podman_required(false, false, false, true));
+        assert!(local_podman_required(false, true, true, true));
+        assert!(local_podman_required(true, false, true, true));
+        assert!(local_podman_required(true, true, false, true));
+        assert!(!local_podman_required(true, true, true, true));
         // A complete runtime of the other channel (or any runtime, in a test
         // build) is installed again, not reused.
-        assert!(local_podman_install_required(true, true, true, false));
+        assert!(local_podman_required(true, true, true, false));
     }
 
     /// Without Homebrew, install.sh would start Homebrew's own installer with
@@ -8197,23 +8258,46 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
     }
 
-    /// A Mac installed from the command line with Colima: the app refuses
-    /// before running install.sh, which would refuse too, with a code of its
-    /// own and no retry.
+    /// A Mac installed from the command line with Colima or Docker Desktop (marker `docker`): the app adopts the team on
+    /// its own engine, running install.sh WITHOUT `--runtime` (which keeps the engine and never moves a team to Podman).
     #[test]
-    fn a_mac_on_another_engine_is_not_moved_to_podman_by_the_app() {
+    fn a_mac_on_another_engine_is_adopted_by_the_app_not_moved_to_podman() {
+        use super::{local_engine, local_install_base_args, local_install_required_for, LocalEngine};
         assert!(super::installed_on_another_engine(Some("docker")));
         assert!(!super::installed_on_another_engine(Some("podman")));
         assert!(!super::installed_on_another_engine(None));
+        assert_eq!(local_engine(Some("docker")), LocalEngine::Existing);
+        assert_eq!(local_engine(Some("podman")), LocalEngine::Podman);
+        assert_eq!(local_engine(None), LocalEngine::Podman);
+        // the engine of the command line gets the installer with no `--runtime`: it is the keep-the-engine form
+        let existing = local_install_base_args(LocalEngine::Existing);
+        assert_eq!(existing, ["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"]);
+        assert!(!existing.contains(&"--runtime") && !existing.contains(&"podman"));
+        assert_eq!(local_install_base_args(LocalEngine::Podman)[4..], ["--runtime", "podman"]);
+        // it always runs on an adopted engine (it is the one that starts Colima when it is off); Podman reuses when all is there
+        assert!(local_install_required_for(LocalEngine::Existing, true, true, true, true));
+        assert!(!local_install_required_for(LocalEngine::Podman, true, true, true, true));
+        assert!(local_install_required_for(LocalEngine::Podman, true, false, true, true));
+        // the refusal code exists still, for install.sh's own exit 85, and it is not retryable
         let error = failure(super::RUNTIME_CHANGE_REQUIRES_MIGRATION);
         assert_eq!(error.code, "runtime_change_requires_migration");
         assert!(!error.retryable);
+    }
+
+    /// Neither the first install nor the reinstall of a test build refuses a team on another engine any more, and neither
+    /// passes `--runtime podman` to one.
+    #[test]
+    fn the_install_and_the_reinstall_do_not_refuse_an_adopted_engine() {
         let source = include_str!("onboarding.rs");
         let install = &source[source.find("fn install_local(").unwrap()..];
-        let guard = install
-            .find("installed_on_another_engine(local_runtime_marker(app)")
-            .expect("install_local checks the marker");
-        assert!(guard < install.find("with_downloaded_installer").unwrap());
+        let install = &install[..install.find("#[cfg(not(target_os = \"macos\"))]").unwrap()];
+        assert!(install.contains("local_engine(local_runtime_marker(app)"));
+        assert!(install.contains("local_install_base_args(engine)"));
+        assert!(!install.contains("failure(RUNTIME_CHANGE_REQUIRES_MIGRATION)"));
+        let reinstall = &source[source.find("fn reinstall_test_install(").unwrap()..];
+        let reinstall = &reinstall[..reinstall.find("with_downloaded_installer").unwrap()];
+        assert!(!reinstall.contains("RUNTIME_CHANGE_REQUIRES_MIGRATION"));
+        assert!(source.contains("local_install_args(&reinstall_base_args(app), channel_args)"));
     }
 
     #[cfg(target_os = "macos")]
@@ -8303,7 +8387,7 @@ mod tests {
 
         assert!(super::valid_host_wrapper_file(&wrapper));
         assert!(!valid_wrapper_file(&wrapper));
-        assert!(!local_podman_install_required(true, true, true, true));
+        assert!(!local_install_required_for(LocalEngine::Podman, true, true, true, true));
         assert!(super::runtime_bundle_manifest_valid(&runtime, &wrapper));
 
         fs::create_dir(runtime.join(".upgrade.lock")).unwrap();

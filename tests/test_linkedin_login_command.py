@@ -19,12 +19,14 @@ REF = f"ghcr.io/leopu00/jht@{DIGEST}"
 TOKEN = "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_AbCdE"
 PROFILE_SOURCE = Path(__file__).resolve().parents[1] / "shared" / "login" / "seccomp" / "jht-login.json"
 PROFILE_SHA256 = hashlib.sha256(PROFILE_SOURCE.read_bytes()).hexdigest()
-GOOD = ('{"ok": true, "port": 6081, "path": "/websockify", "token": "%s", "expires_at": "2026-11-11T10:00:00Z", "session": "a1b2c3d4e5f6"}' % TOKEN)
+GOOD = '{"ok": true, "port": 6081, "path": "/websockify", "expires_at": "2026-11-11T10:00:00Z", "session": "a1b2c3d4e5f6"}'
 
 
-def run(host, args: str, runtime_dir=None, **env) -> subprocess.CompletedProcess:
+
+def run(host, args: str, runtime_dir=None, stdin: str | None = TOKEN + "\n", **env) -> subprocess.CompletedProcess:
+    """The app brings the token of the window on stdin: it is what `login` is given unless a test says otherwise."""
     runtime_dir = runtime_dir or host.runtime
-    env = {"TEST_RUNTIME_DIR": str(runtime_dir), **env}
+    env = {"TEST_RUNTIME_DIR": str(runtime_dir), "FAKE_STDIN_COPY": str(host.tmp / "grant-stdin"), **env}
     script = f"""
 set -euo pipefail
 HOST_KERNEL="$(uname -s)"; HOST_UID="$(id -u)"
@@ -51,7 +53,7 @@ docker() {{
   case "$1" in
     exec)
       case "$*" in
-        *" grant") [ -z "${{FAKE_SWAP_FOR_LINK:-}}" ] || true; echo "${{FAKE_GRANT:-}}" ;;
+        *" grant") cat >> "$FAKE_STDIN_COPY"; echo "${{FAKE_GRANT:-}}" ;;
         *" status") echo "${{FAKE_VIEW_STATUS:-{{\\"ok\\": true, \\"view\\": \\"waiting\\"}}}}" ;;
       esac ;;
     inspect) [ -z "${{FAKE_EXIT_CODE:-}}" ] || echo "$FAKE_EXIT_CODE" ;;
@@ -67,7 +69,7 @@ linkedin_main {args}
 """
     home = host.tmp / "jht-home"
     return subprocess.run(["bash", "-c", script], env={**host.env, "JHT_HOME_HOST": str(home), "EXTRAS_IMAGE_DIGEST": DIGEST, **env},
-                          capture_output=True, text=True, timeout=60)
+                          input=stdin, capture_output=True, text=True, timeout=60)
 
 
 def last_line(done) -> dict:
@@ -84,8 +86,30 @@ def test_login_makes_the_profile_private_pulls_starts_the_three_containers_and_p
     log = host.log.read_text().splitlines()
     up = f"COMPOSE profiles=login image={REF} up -d jht-login-proxy jht-login-view jht-login"
     assert log.index(f"DOCKER pull {REF}") < log.index(up)
-    assert any(line.startswith("DOCKER exec id-jht-login-view python3 /app/shared/login/login_view.py grant") for line in log)
+    assert any(line == "DOCKER exec -i id-jht-login-view python3 /app/shared/login/login_view.py grant" for line in log)
+    assert (host.tmp / "grant-stdin").read_text() == TOKEN + "\n", "the view is given the token of the app, on stdin"
+    assert TOKEN not in done.stdout + done.stderr + host.log.read_text(), "the token is in no output, no argument, no log"
     assert not [line for line in log if "up -d" in line and "profiles=login" not in line], "only the login profile is started"
+
+
+@pytest.mark.parametrize("stdin", [None, "", "\n", "short\n", TOKEN + "x\n", TOKEN[:-1] + "!\n", "a b\n"])
+def test_without_a_well_formed_token_on_stdin_nothing_is_touched_and_the_reason_is_token_required(host, stdin):
+    done = run(host, "login", stdin=stdin, FAKE_GRANT=GOOD)
+    assert done.returncode == 1 and last_line(done) == {"ok": False, "reason": "token_required"}
+    log = host.log.read_text() if host.log.exists() else ""
+    assert "up -d" not in log and "pull" not in log and not (host.tmp / "jht-home").exists()
+
+
+def test_a_token_with_a_carriage_return_still_goes_on_clean(host):
+    done = run(host, "login", stdin=TOKEN + "\r\n", FAKE_GRANT=GOOD)
+    assert done.returncode == 0, done.stderr
+    assert (host.tmp / "grant-stdin").read_text() == TOKEN + "\n"
+
+
+def test_the_token_is_given_again_to_every_try_while_the_browser_is_not_ready(host):
+    done = run(host, "login", FAKE_GRANT='{"ok": false, "reason": "view_unavailable"}')
+    assert done.returncode == 1 and last_line(done) == {"ok": False, "reason": "view_unavailable"}
+    assert (host.tmp / "grant-stdin").read_text() == (TOKEN + "\n") * 40
 
 
 def test_a_release_without_an_extras_image_touches_nothing(host):
@@ -134,7 +158,7 @@ def test_a_link_or_a_file_at_any_step_down_to_the_profile_is_refused_and_never_f
 
 @pytest.mark.parametrize("line", [
     "", "not json", '{"ok": true}',
-    GOOD.replace(TOKEN, TOKEN[:-1]), GOOD.replace('6081', '6082'), GOOD.replace('/websockify', '/other'),
+    GOOD.replace('"expires_at"', '"token": "%s", "expires_at"' % TOKEN), GOOD.replace('6081', '6082'), GOOD.replace('/websockify', '/other'),
     GOOD + ", \"extra\": 1", GOOD.replace('"ok": true', '"ok":true'),
     '{"ok": false, "reason": "something_new"}', '{"ok": false, "reason": "view_busy; rm -rf x"}',
 ])

@@ -24,7 +24,7 @@ import pytest
 from windows_native_fakes import install_fake, powershell_argv
 
 from test_integration_command_windows import CASE, FAKE_PODMAN, LIBRARY, WRAPPER
-from windows_owner_fakes import STAND_INS, function_text, owners_of
+from windows_owner_fakes import STAND_INS, child_env, function_text, owners_of
 
 NODES = STAND_INS
 ANCHOR = "$IntegrationRetryWaitSeconds = 0\n"
@@ -56,7 +56,7 @@ def host(tmp_path):
 
 
 def run(host, args: list[str], **extra: str) -> subprocess.CompletedProcess:
-    env = {**os.environ, "T_RUNTIME": str(host.runtime), "T_LOG": str(host.log), "T_VOLUMES": str(host.volumes),
+    env = {**child_env(), "T_RUNTIME": str(host.runtime), "T_LOG": str(host.log), "T_VOLUMES": str(host.volumes),
            "T_RUNNING": str(host.running), "T_LIBRARY": str(LIBRARY), "T_ARGS": json.dumps(args), "T_OWNERS": str(host.owners),
            "T_JHT_HOME": str(host.tmp / "jht-home"), "PATH": f"{host.bin}{os.pathsep}{os.environ['PATH']}", **extra}
     return subprocess.run([*host.argv, "-File", str(host.script)], env=env, capture_output=True, text=True, timeout=120)
@@ -154,7 +154,7 @@ def test_the_real_check_of_the_wrapper_accepts_what_the_helper_makes_whoever_run
     rule.write_text(function_text(wrapper, "Test-ProtectedRuntimeNode") + function_text(wrapper, "Set-ProtectedRuntimeNodeOwner"), encoding="utf-8-sig")
     script = tmp_path / "real.ps1"
     script.write_text(REAL, encoding="utf-8-sig")
-    env = {**os.environ, "T_RUNTIME": str(runtime), "T_JHT_HOME": str(tmp_path / "jht-home"), "T_LIBRARY": str(LIBRARY),
+    env = {**child_env(), "T_RUNTIME": str(runtime), "T_JHT_HOME": str(tmp_path / "jht-home"), "T_LIBRARY": str(LIBRARY),
            "T_ACL": str(WRAPPER.parent / "windows-private-acl.ps1"), "T_NODE_RULE": str(rule)}
     done = subprocess.run([*powershell_argv(), "-File", str(script)], env=env, capture_output=True, text=True, timeout=120)
     assert done.returncode == 0, done.stdout + done.stderr

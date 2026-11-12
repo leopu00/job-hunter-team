@@ -11,7 +11,15 @@ nodes (Test-ProtectedRuntimeNode). On a machine where owners are not a thing (pw
 
 from __future__ import annotations
 
+import os
 import re
+
+def child_env(**extra: str) -> dict[str, str]:
+    """The environment of a PowerShell child: without the PSModulePath of the caller (the gate runs in pwsh 7, and the Windows PowerShell 5.1
+    that inherits it cannot load Get-FileHash or Get-Acl; each shell rebuilds its own when the variable is absent, whatever the case of its name)."""
+    inherited = {key: value for key, value in os.environ.items() if key.upper() != "PSMODULEPATH"}
+    return {**inherited, **extra}
+
 
 STAND_INS = r"""
 function Get-FakeOwner {

@@ -79,7 +79,11 @@ export function operatingSystem(userAgent = navigator.userAgent): string {
   const windows = /Windows NT ([0-9.]+)/.exec(userAgent);
   if (windows) return `Windows ${windows[1]}`;
   const mac = /Mac OS X ([0-9_]+)/.exec(userAgent);
-  if (mac) return `macOS ${mac[1].replace(/_/g, ".")}`;
+  if (mac) {
+    const release = mac[1].replace(/_/g, ".");
+    // WebKit keeps the number of the user agent at 10.15.7 on every newer macOS: it is not the version of this Mac.
+    return release === "10.15.7" ? `macOS (the webview reports ${release}, which it keeps on newer versions: the real one is unknown)` : `macOS ${release}`;
+  }
   const linux = /Linux/.test(userAgent);
   return linux ? "Linux (version unavailable)" : "Operating system unavailable";
 }

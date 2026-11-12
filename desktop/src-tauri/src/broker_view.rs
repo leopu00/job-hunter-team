@@ -3,11 +3,14 @@
 //! The login happens in a Chromium that runs in the broker container, on the
 //! broker's own X display; the agents never see it. The broker publishes an
 //! interactive x11vnc behind websockify on 127.0.0.1:6081 of the host, only
-//! while a session is open, and `jht linkedin login` hands the host a token
-//! valid for ONE WebSocket connection within 120 s. Here the app:
+//! while a session is open. The token that opens it, valid for ONE WebSocket
+//! connection within 120 s, is made HERE and goes IN to `jht linkedin login`
+//! on its standard input: no output of the command, no argument, no log holds
+//! it. Here the app:
 //!
-//! - asks for the session (`jht linkedin login`), on this computer through the
-//!   attested wrapper, on a VPS through SSH;
+//! - makes the token and asks for the session (`jht linkedin login`, the token
+//!   on stdin), on this computer through the attested wrapper, on a VPS
+//!   through SSH;
 //! - on a VPS forwards a random loopback port of this computer to the VPS's
 //!   127.0.0.1:6081 with the same SSH the app already uses (pinned host key,
 //!   batch mode). No port is ever opened on a public interface, here or there;
@@ -22,6 +25,8 @@
 //! The token never reaches a log, an error or the diagnostics.
 
 use crate::account_scope::{AccountScope, AccountScopeState};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use chacha20poly1305::{aead::OsRng, ChaCha20Poly1305, KeyInit};
 use crate::onboarding::{run_linkedin_command, LocalCliOperation};
 use crate::runtime_host::{ssh_base_args, validate_host, ProcessResult, ValidatedHost};
 use serde::{Deserialize, Serialize};
@@ -129,17 +134,28 @@ struct GrantLine {
     port: Option<u16>,
     #[serde(default)]
     path: Option<String>,
+    /// Not part of the contract any more: the answer of a helper that still sends one is of an older version.
     #[serde(default)]
-    token: Option<String>,
+    token: Option<serde::de::IgnoredAny>,
     #[serde(default)]
     session: Option<String>,
 }
 
-impl Drop for GrantLine {
-    fn drop(&mut self) {
-        if let Some(token) = self.token.as_mut() {
-            token.zeroize();
-        }
+/// 32 bytes from the system's generator, as 43 characters of base64url: the token of the window, made here and handed to the helper
+/// on stdin. It lives in this process only; the helper keeps it in memory for the one connection it allows.
+fn new_view_token() -> Zeroizing<String> {
+    let key = ChaCha20Poly1305::generate_key(&mut OsRng);
+    Zeroizing::new(URL_SAFE_NO_PAD.encode(key.as_slice()))
+}
+
+/// The answer of the helper holds a token: a helper from before the token went in, whose session this app cannot open.
+fn grant_carries_a_token(result: &Result<ProcessResult, &'static str>) -> bool {
+    match result {
+        Ok(output) if output.success() => json_line(&output.stdout)
+            .and_then(|line| serde_json::from_str::<GrantLine>(line).ok())
+            .map(|line| line.ok && line.token.is_some())
+            .unwrap_or(false),
+        _ => false,
     }
 }
 
@@ -194,8 +210,11 @@ fn valid_session_id(session: &str) -> bool {
 }
 
 /// `jht linkedin login`: the grant, or the broker's reason. Any field out of
-/// contract is `view_unavailable`, never a half-trusted session.
-fn parse_grant(result: Result<ProcessResult, &'static str>) -> Result<ViewGrant, &'static str> {
+/// contract is `view_unavailable`, never a half-trusted session. The token is the one this app made and sent.
+fn parse_grant(
+    result: Result<ProcessResult, &'static str>,
+    token: Zeroizing<String>,
+) -> Result<ViewGrant, &'static str> {
     let output = match &result {
         Ok(output) if output.success() => output,
         _ => return Err(command_failure(&result)),
@@ -206,7 +225,9 @@ fn parse_grant(result: Result<ProcessResult, &'static str>) -> Result<ViewGrant,
     if !line.ok {
         return Err(broker_reason(line.reason.as_deref()));
     }
-    let token = Zeroizing::new(line.token.take().unwrap_or_default());
+    if line.token.is_some() {
+        return Err("view_unavailable");
+    }
     match (line.port, line.path.as_deref(), line.session.take()) {
         (Some(port), Some(VIEW_PATH), Some(session))
             if port >= 1024 && valid_token(&token) && valid_session_id(&session) =>
@@ -431,6 +452,7 @@ fn end_view(app: &tauri::AppHandle, view: ActiveView) {
         &view.scope,
         &view.host,
         LocalCliOperation::LinkedinLoginStop,
+        None,
         STOP_TIMEOUT,
     );
     stop_tunnel(view.tunnel);
@@ -467,21 +489,28 @@ pub(crate) fn active_host(
 
 fn start_view(app: &tauri::AppHandle, scope: AccountScope) -> Result<ActiveView, &'static str> {
     let host = active_host(app, &scope)?;
-    let grant = match parse_grant(run_linkedin_command(
+    let token = new_view_token();
+    let answer = run_linkedin_command(
         app,
         &scope,
         &host,
         LocalCliOperation::LinkedinLogin,
+        Some(token.as_bytes()),
         LOGIN_TIMEOUT,
-    )) {
+    );
+    // A helper of an older version starts its session with a token of its own and prints it: it cannot be opened from here, and the
+    // containers it started are stopped like those of a command that was cut off.
+    let stale_helper = grant_carries_a_token(&answer);
+    let grant = match parse_grant(answer, token) {
         Ok(grant) => grant,
         Err(code) => {
-            if may_have_left_containers(code) {
+            if stale_helper || may_have_left_containers(code) {
                 let _ = run_linkedin_command(
                     app,
                     &scope,
                     &host,
                     LocalCliOperation::LinkedinLoginStop,
+                    None,
                     STOP_TIMEOUT,
                 );
             }
@@ -499,6 +528,7 @@ fn start_view(app: &tauri::AppHandle, scope: AccountScope) -> Result<ActiveView,
                     &scope,
                     &host,
                     LocalCliOperation::LinkedinLoginStop,
+                    None,
                     STOP_TIMEOUT,
                 );
                 return Err(code);
@@ -708,6 +738,7 @@ pub(crate) async fn broker_login_status(
             &scope,
             &host,
             LocalCliOperation::LinkedinStatus,
+            None,
             STATUS_TIMEOUT,
         ))
     })
@@ -730,10 +761,14 @@ mod tests {
         })
     }
 
-    fn grant_line(port: u16, token: &str) -> String {
+    fn grant_line(port: u16) -> String {
         format!(
-            r#"{{"ok": true, "port": {port}, "path": "/websockify", "token": "{token}", "expires_at": "2026-10-08T10:00:00Z", "session": "a1b2c3d4e5f6"}}"#
+            r#"{{"ok": true, "port": {port}, "path": "/websockify", "expires_at": "2026-10-08T10:00:00Z", "session": "a1b2c3d4e5f6"}}"#
         )
+    }
+
+    fn token() -> Zeroizing<String> {
+        Zeroizing::new(TOKEN.to_owned())
     }
 
     fn scope() -> AccountScope {
@@ -839,40 +874,77 @@ mod tests {
 
     #[test]
     fn a_grant_is_accepted_only_inside_the_contract() {
-        let grant = parse_grant(output(
-            0,
-            &format!("wrapper notice\n{}\n", grant_line(6081, TOKEN)),
-        ))
+        let grant = parse_grant(
+            output(0, &format!("wrapper notice\n{}\n", grant_line(6081))),
+            token(),
+        )
         .unwrap();
         assert_eq!(grant.port, 6081);
         assert_eq!(grant.token.as_str(), TOKEN);
         assert_eq!(grant.session, "a1b2c3d4e5f6");
 
         for bad in [
-            grant_line(80, TOKEN),
-            grant_line(6081, "short"),
-            grant_line(6081, &format!("{}=", &TOKEN[..42])),
-            grant_line(6081, &format!("{}/", &TOKEN[..42])),
-            grant_line(6081, TOKEN).replace("/websockify", "/other"),
-            grant_line(6081, TOKEN).replace("a1b2c3d4e5f6", "../../x"),
-            grant_line(6081, TOKEN).replace(r#""session": "a1b2c3d4e5f6""#, r#""session": """#),
+            grant_line(80),
+            grant_line(6081).replace("/websockify", "/other"),
+            grant_line(6081).replace("a1b2c3d4e5f6", "../../x"),
+            grant_line(6081).replace(r#""session": "a1b2c3d4e5f6""#, r#""session": """#),
             r#"{"ok": true}"#.to_owned(),
             "not json".to_owned(),
             String::new(),
         ] {
             assert_eq!(
-                parse_grant(output(0, &bad)).err(),
+                parse_grant(output(0, &bad), token()).err(),
                 Some("view_unavailable"),
                 "{bad}"
             );
         }
+        // a token that is not well formed is never sent on, whatever the helper answers
+        for bad_token in ["", "short", &format!("{}=", &TOKEN[..42]), &format!("{}/", &TOKEN[..42])] {
+            assert_eq!(
+                parse_grant(output(0, &grant_line(6081)), Zeroizing::new(bad_token.to_owned())).err(),
+                Some("view_unavailable"),
+                "{bad_token}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_token_of_the_window_is_made_here_and_is_never_the_same_twice() {
+        let first = new_view_token();
+        let second = new_view_token();
+        assert!(valid_token(&first) && valid_token(&second));
+        assert_eq!(first.len(), TOKEN_LEN);
+        assert_ne!(first.as_str(), second.as_str());
+    }
+
+    #[test]
+    fn an_answer_that_still_carries_a_token_is_a_helper_of_an_older_version() {
+        let stale = grant_line(6081).replace(
+            r#""expires_at""#,
+            &format!(r#""token": "{TOKEN}", "expires_at""#),
+        );
+        assert!(grant_carries_a_token(&output(0, &stale)));
+        assert_eq!(parse_grant(output(0, &stale), token()).err(), Some("view_unavailable"));
+        assert!(!grant_carries_a_token(&output(0, &grant_line(6081))));
+        assert!(!grant_carries_a_token(&output(
+            1,
+            r#"{"ok": false, "reason": "view_busy"}"#
+        )));
+        assert!(!grant_carries_a_token(&Err("process_timeout")));
+    }
+
+    #[test]
+    fn the_token_the_app_made_is_the_one_in_the_grant() {
+        let made = new_view_token();
+        let grant = parse_grant(output(0, &grant_line(6081)), made.clone()).unwrap();
+        assert_eq!(grant.token.as_str(), made.as_str());
     }
 
     #[test]
     fn the_brokers_reasons_come_through_and_nothing_else() {
         for reason in BROKER_REASONS {
             let line = format!(r#"{{"ok": false, "reason": "{reason}"}}"#);
-            assert_eq!(parse_grant(output(1, &line)).err(), Some(reason));
+            assert_eq!(parse_grant(output(1, &line), token()).err(), Some(reason));
             assert_eq!(parse_status(output(1, &line)).err(), Some(reason));
         }
         for line in [
@@ -882,12 +954,12 @@ mod tests {
             "Traceback (most recent call last)",
         ] {
             assert_eq!(
-                parse_grant(output(1, line)).err(),
+                parse_grant(output(1, line), token()).err(),
                 Some("view_unavailable"),
                 "{line}"
             );
         }
-        assert_eq!(parse_grant(Err("process_timeout")).err(), Some("timeout"));
+        assert_eq!(parse_grant(Err("process_timeout"), token()).err(), Some("timeout"));
         // only a command cut off by the deadline needs the stop: the others cleaned up after themselves
         assert!(may_have_left_containers("timeout"));
         for code in ["view_busy", "view_unavailable", "login_timeout", "token_expired", "chromium_sandbox_unavailable", "runtime_missing"] {
@@ -896,15 +968,15 @@ mod tests {
         // the first login pulls the tools image: the deadline is minutes
         assert!(LOGIN_TIMEOUT >= Duration::from_secs(300));
         assert_eq!(
-            parse_grant(Err("ssh_unavailable")).err(),
+            parse_grant(Err("ssh_unavailable"), token()).err(),
             Some("view_unavailable")
         );
         assert_eq!(
-            parse_grant(Err("runtime_missing")).err(),
+            parse_grant(Err("runtime_missing"), token()).err(),
             Some("runtime_missing")
         );
         assert_eq!(
-            parse_grant(Err("account_scope_changed")).err(),
+            parse_grant(Err("account_scope_changed"), token()).err(),
             Some("account_scope_changed")
         );
     }
@@ -1036,13 +1108,17 @@ mod tests {
             known_hosts: PathBuf::from(std::env::var("JHT_LIVE_BROKER_KNOWN_HOSTS").unwrap()),
         };
         let login = || {
-            parse_grant(run_ssh(
-                &host,
-                REMOTE_LINKEDIN_LOGIN,
-                None,
-                LOGIN_TIMEOUT,
-                None,
-            ))
+            let token = new_view_token();
+            parse_grant(
+                run_ssh(
+                    &host,
+                    REMOTE_LINKEDIN_LOGIN,
+                    Some(token.as_bytes()),
+                    LOGIN_TIMEOUT,
+                    None,
+                ),
+                token,
+            )
         };
         let stop = || run_ssh(&host, REMOTE_LINKEDIN_LOGIN_STOP, None, STOP_TIMEOUT, None);
 

@@ -11,7 +11,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from windows_native_fakes import install_fake, powershell_argv, WINDOWS
+from windows_native_fakes import git_bash, install_fake, powershell_argv, WINDOWS
 
 ROOT = Path(__file__).resolve().parents[1]
 PDF = b"%PDF-1.4\nsynthetic document\n%%EOF\n"
@@ -100,6 +100,9 @@ def upload_case(tmp_path):
            'UPLOAD_MOUNTS': json.dumps([{'Type': 'bind', 'Source': HOST_ROOT, 'Destination': '/jht_user'}]),
            'NO_COLOR': '1', 'JHT_LANG': 'en'}
     env.pop('JHT_ARTIFACT_HOST_CONTEXT', None)
+    if WINDOWS:
+        # The fake docker.exe and jht-desktop.exe are launchers that start their .sh with this bash: without it they have no file to start.
+        env['JHT_FAKE_BASH'] = str(git_bash())
     return root, harness, env
 
 
@@ -121,7 +124,7 @@ def test_cli_only_upload_reads_the_real_mounted_document(upload_case, name):
     assert answer['ok'] is True and answer['bytes'] == len(PDF)
     assert (destination / answer['name']).read_bytes() == PDF
     assert answer['path'] == '/jht_user/allegati/' + answer['name']
-    calls = json.loads(Path(env['UPLOAD_CALLS']).read_text())
+    calls = json.loads(Path(env['UPLOAD_CALLS']).read_text(encoding='utf-8'))
     context = next(arg for arg in calls if arg.startswith('JHT_ARTIFACT_HOST_CONTEXT='))
     assert 'Synthetic' not in context, 'context must be encoded across the native boundary'
     assert calls[-4:] == ['artifact', 'upload', HOST_ROOT + '\\' + name, '--json']
@@ -170,7 +173,7 @@ def test_an_inspect_failure_is_propagated_before_any_document_is_read(upload_cas
     done, destination = run_upload(upload_case, HOST_ROOT + r'\cv.pdf')
     assert done.returncode == 43, done.stdout + done.stderr
     assert not destination.exists()
-    assert json.loads(Path(env['UPLOAD_CALLS']).read_text())[0] == 'inspect'
+    assert json.loads(Path(env['UPLOAD_CALLS']).read_text(encoding='utf-8'))[0] == 'inspect'
 
 
 @pytest.mark.parametrize('written', [

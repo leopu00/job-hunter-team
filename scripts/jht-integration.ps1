@@ -646,7 +646,7 @@ function Invoke-IntegrationCommand {
 $LoginServices = @('jht-login-proxy', 'jht-login-view', 'jht-login')
 $LoginViewContainer = 'jht-login-view'
 $LoginBrowserContainer = 'jht-login'
-$LinkedinReasons = @('view_busy', 'view_unavailable', 'login_timeout', 'token_expired', 'chromium_sandbox_unavailable')
+$LinkedinReasons = @('view_busy', 'view_unavailable', 'login_timeout', 'token_expired', 'chromium_sandbox_unavailable', 'token_required')
 $LinkedinPollSeconds = 1
 
 function Get-LinkedinProfileDir { return (Join-Path (Join-Path $JhtHome 'secrets') 'linkedin-profile') }
@@ -686,7 +686,7 @@ function Write-LinkedinFail {
 
 function Test-LinkedinGrantLine {
   param([string]$Line)
-  return ($Line -cmatch '^\{"ok": true, "port": 6081, "path": "/websockify", "token": "[A-Za-z0-9_-]{43}", "expires_at": "[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z", "session": "[0-9a-f]{1,32}"\}\z')
+  return ($Line -cmatch '^\{"ok": true, "port": 6081, "path": "/websockify", "expires_at": "[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z", "session": "[0-9a-f]{1,32}"\}\z')
 }
 
 # The reason of a failure line of the view, from the closed list, or nothing.
@@ -710,7 +710,32 @@ function Remove-LinkedinContainers {
   return $ok
 }
 
+# The token of the window is made by whoever opens it (the desktop app) and comes on the standard input, one line of 43 characters of
+# base64url; it goes on, the same way, to the view, and no output of this command ever holds it. A terminal (nobody to pipe it) or a
+# line that is not a token is `token_required`, before anything else is touched. Returns the token, or '' when there is none.
+function Read-LinkedinToken {
+  if (-not [Console]::IsInputRedirected) { return '' }
+  $line = ''
+  try { $line = [string][Console]::In.ReadLine() } catch { return '' }
+  if ($line.Length -gt 200) { return '' }
+  $line = $line.TrimEnd("`r", "`n")
+  if ($line -cmatch '^[A-Za-z0-9_-]{43}\z') { return $line }
+  return ''
+}
+
+# Asks the view for the grant, with the token of the window on the stdin of `docker exec -i`: without a byte order mark in front of it (a token
+# with a BOM is another token: the view would answer `token_required` for good), through the wrapper's Invoke-NativeWithStdin; a wrapper from
+# before that function is plain.
+function Invoke-LinkedinGrant {
+  param([string]$Id, [string]$Token)
+  $ask = { & { $ErrorActionPreference = 'Continue'; $Token | & docker exec -i $Id python3 /app/shared/login/login_view.py grant 2>$null } }
+  if (Get-Command Invoke-NativeWithStdin -CommandType Function -ErrorAction SilentlyContinue) { return @(Invoke-NativeWithStdin $ask) }
+  return @($ask.Invoke())
+}
+
 function Invoke-LinkedinLogin {
+  $token = Read-LinkedinToken
+  if (-not $token) { [Console]::Error.WriteLine("il token della finestra arriva dall'app, sullo standard input"); Write-LinkedinFail 'token_required'; return 1 }
   $plainMessage = "il profilo di LinkedIn in ~/.jht non e' una cartella normale (un collegamento?): non lo uso"
   if (-not (Test-DockerReachable)) { [Console]::Error.WriteLine('il motore dei container non risponde'); Write-LinkedinFail 'view_unavailable'; return 1 }
   $ref = Get-IntegrationExtrasRef
@@ -735,7 +760,7 @@ function Invoke-LinkedinLogin {
     $id = Get-RunningComposeServiceId $LoginViewContainer
     $line = ''
     if ($id) {
-      $out = @(& { $ErrorActionPreference = 'Continue'; & docker exec $id python3 /app/shared/login/login_view.py grant 2>$null })
+      $out = @(Invoke-LinkedinGrant $id $token)
       if ($out.Count) { $line = [string]$out[$out.Count - 1] }
     }
     if (Test-LinkedinGrantLine $line) { [Console]::Out.WriteLine($line); return 0 }
