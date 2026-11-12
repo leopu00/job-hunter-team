@@ -32,6 +32,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [CHANGELOG.md](../CHANGELOG.md) | Changelog formato Keep-a-Changelog, cronologia rilasci | — | 2026-11-12 | ✅ |
 | [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | Contributor Covenant 2.1, contatto `support@jobhunterteam.ai` | — | 2026-07-26 | ✅ |
 | [SECURITY.md](../SECURITY.md) | Policy di disclosure, trust model corrente, copertura e stato hardening | — | 2026-09-30 | ✅ |
+| [BACKLOG.md](../BACKLOG.md) | _(da compilare nel JSON)_ | — | 2026-11-12 | ✅ |
 
 
 ## 🐙 .github
@@ -193,7 +194,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 |---|---|---|---|---|
 | [docs/about/STORY.md](./about/STORY.md) | Origin story (legacy 200 offerte/5 colloqui in 2 settimane) | — | 2026-10-26 | ✅ |
 | [docs/about/VISION.md](./about/VISION.md) | Vision long-term, Maestro 🧙‍♂️, "AI on the side of workers | — | 2026-07-01 | ✅ |
-| [docs/about/ROADMAP.md](./about/ROADMAP.md) | Roadmap pubblica: stato verificato, orizzonti e direzioni di prodotto | — | 2026-10-26 | ✅ |
+| [docs/about/ROADMAP.md](./about/ROADMAP.md) | Roadmap pubblica: stato verificato, orizzonti e direzioni di prodotto | — | 2026-11-12 | ✅ |
 | [docs/about/PROVIDERS.md](./about/PROVIDERS.md) | Matrice provider Claude/Codex/Kimi con costi e tier | — | 2026-11-12 | ✅ |
 | [docs/about/MONITORING.md](./about/MONITORING.md) | Stack monitoring V5 (Bridge + Sentinella event-driven) | — | 2026-10-26 | ✅ |
 | [docs/about/RESULTS.md](./about/RESULTS.md) | Risultati reali utenti beta (matrice persona × provider) | — | 2026-10-26 | ✅ |
@@ -252,7 +253,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/internal/README.md](./internal/README.md) | 📚 docs/internal — indice — Note di lavoro interne: design lock, spec evergreen, postmortem e investigazioni. | — | 2026-11-08 | ✅ |
+| [docs/internal/README.md](./internal/README.md) | 📚 docs/internal — indice — Note di lavoro interne: design lock, spec evergreen, postmortem e investigazioni. | — | 2026-11-12 | ✅ |
 | [docs/internal/architecture/2026-05-19-dashboard-routing-cases.md](./internal/architecture/2026-05-19-dashboard-routing-cases.md) | 🧭 Dashboard routing — casistica completa — File: web/app/(protected)/dashboard/page.tsx | — | 2026-06-13 | ✅ |
 | [docs/internal/architecture/2026-05-20-world-globe-feature.md](./internal/architecture/2026-05-20-world-globe-feature.md) | 🌍 Mappamondo interattivo dashboard — design doc — Stato: design lockato, implementazione non ancora iniziata | — | 2026-06-13 | ✅ |
 | [docs/internal/architecture/2026-05-25-work-hours-design.md](./internal/architecture/2026-05-25-work-hours-design.md) | 🗓️ Work hours UI — design + monitoring settimanale — Sessione di design 2026-05-25. | — | 2026-06-13 | ✅ |

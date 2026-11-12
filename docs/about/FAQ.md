@@ -41,9 +41,10 @@ one long-running container (`scripts/install.sh`). An expert `--no-docker`
 native mode exists in the installer, but the container is the path that gets
 tested and documented.
 
-On macOS you choose the runtime — Colima (default, headless) or your own
-Docker Desktop — and an already-running Docker is reused rather than replaced
-([ADR-0006](../adr/0006-user-choice-container-runtime-macos.md)).
+On macOS the CLI installer uses Colima by default (or Podman, or your own Docker Desktop), and an
+already-running Docker is reused rather than replaced
+([ADR-0006](../adr/0006-user-choice-container-runtime-macos.md)). The desktop app installs Podman, and
+adopts a team the CLI already installed on Colima.
 
 ## What does it cost to run, and what drives the cost?
 

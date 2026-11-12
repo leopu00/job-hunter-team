@@ -1,7 +1,7 @@
 # 🗺️ ROADMAP — Job Hunter Team
 
-> Last updated: 2026-08-24 *(Tauri 2 + React selected for the next desktop
-> shell; the shipped Godot application remains supported during migration)*
+> Last updated: 2026-11-12 *(0.4: the Tauri 2 desktop app replaces the Godot
+> office, which is retired and not distributed)*
 >
 > This is the **strategic, forward-looking** view. It is **not** a status
 > ledger: shipped work lives in [`CHANGELOG.md`](../../CHANGELOG.md), tactical
@@ -17,11 +17,10 @@
 > 🧭 Product vision & design philosophy → [`VISION.md`](VISION.md) — agents-as-characters, the Mentor, the anti-goals. This section covers *deployment & stack* only.
 
 Job Hunter Team runs **locally** in a Docker container, with multiple interfaces
-(desktop/web/CLI/TUI/Telegram). Today non-technical users use the shipped Godot
-office. The next desktop shell is Tauri 2 + React, with Godot retained as an
-optional 2.5D office after migration; technical users can also use the CLI.
-Either way, the agent team works on the user's own machine, on their own data,
-with their own LLM subscription — not a managed cloud service. **AI on the side
+(desktop/web/CLI/TUI/Telegram). Non-technical users use the Tauri 2 desktop
+app on a Mac; technical users can also use the CLI (Mac, Linux, and a Windows
+preview). Either way, the agent team works on the user's own machine, on their
+own data, with their own provider account — not a managed cloud service. **AI on the side
 of workers, not against them.**
 
 ```
@@ -44,7 +43,7 @@ of workers, not against them.**
 **Guiding principles** — the constraints every roadmap item respects:
 
 - **Local-first, privacy-first.** Credentials, CVs and the SQLite source-of-truth never leave the user's machine; the cloud mirror is opt-in and read-mostly. Its authenticated writes include user-owned chat messages, team directives, bounded position feedback/actions and the emergency stop — not generic control of the host or team runtime.
-- **Subscriptions by default, API team in rehearsal.** A parallel agent team burns pay-per-use credits in hours; subscription tokens cost ~5× less (the estimate of [ADR-0004](../adr/0004-subscription-only-no-api-keys.md), superseded by [ADR-0012](../adr/0012-desktop-setup-matrix.md)). The subscription team stays the default, supported path; the [API team](../guides/API-TEAM.md) runs on metered calls under hard spending caps, per run and per session.
+- **Two ways to pay, with a ceiling.** Codex on a subscription is the recommended way and the one proven over a month; GLM or Kimi with an API key on the Pi harness is the other, with a daily spending ceiling that pauses the team ([ADR-0012](../adr/0012-desktop-setup-matrix.md), which supersedes [ADR-0004](../adr/0004-subscription-only-no-api-keys.md)). The full-team [API team](../guides/API-TEAM.md) on metered OpenAI calls stays in rehearsal.
 - **Quality over volume.** No auto-apply spam: the Critic gate rewrites until submissions pass a rubric, and the human clicks send.
 - **Honest status.** Verbal states, measured numbers, and published case studies — nothing on this page should fail a fact-check against the code.
 
@@ -52,7 +51,7 @@ of workers, not against them.**
 
 | Component | Technology | Rationale |
 |---|---|---|
-| Native desktop app | **Tauri 2 + static React** target; **Godot 4.7** current | Shared professional UI and a thin native shell; Godot remains supported during migration and becomes an optional 2.5D office ([ADR-0011](../adr/0011-tauri-desktop-shell.md)) |
+| Native desktop app | **Tauri 2 + static React** | Shared professional UI and a thin native shell; the Godot office is retired ([ADR-0011](../adr/0011-tauri-desktop-shell.md)) |
 | Agent runtime | **Python/tmux current; Node.js/TypeScript API workers target** | Production keeps running while roles migrate behind contracts, guardrails and authorized adapters |
 | Web dashboard | **Next.js 16 on Vercel** | CI/CD pipeline live |
 | Container runtime | **Podman target; Docker retained for the shipped path during migration** | The new own-PC desktop setup provisions local Podman containers; legacy call sites move behind the runtime boundary incrementally |
@@ -68,7 +67,7 @@ of workers, not against them.**
 | Theme | State | What's open |
 |---|---|---|
 | 🔨 **Web platform** (read-mostly cloud dashboard) | **Shipped, hardening** | Live on [jobhunterteam.ai](https://jobhunterteam.ai) on real data and event-driven through Supabase Realtime. Authenticated users can send and reply to chat messages, maintain team directives, request a CV for a scored position and issue the stop-only emergency action; shell access, team start/restart and general configuration are not exposed. A new user without a team gets the `/welcome` wizard and an interactive simulation. Open work is tracked in GitHub Issues, not in the testing guide. |
-| 🖥️ **Desktop application** | **Godot published; Tauri implementation started** | The all-in-one Godot office remains supported and untouched during migration. The Tauri 2 + React shell now lives in [`desktop/`](../../desktop/) with welcome and the own-PC + Podman + OpenAI API-key setup. Electron is isolated in [`archive/electron-desktop/`](../../archive/electron-desktop/) as reference material; Godot's target role remains an optional 2.5D office. |
+| 🖥️ **Desktop application** | **Tauri 2 app shipped on Mac** | The Tauri 2 + React app in [`desktop/`](../../desktop/) is the desktop product on Apple silicon Macs: first setup, Team with chat, Budget, Office, profile and Settings. It installs Podman, or adopts a team the CLI installed on Colima. Open: an end-to-end test of that adoption, a desktop app for Linux and Windows (Windows is a CLI preview). The Godot office is retired and not distributed. |
 | ☁️ **VPS provisioning** (bring-up via SSH) | **Shipped** | The native office brings a team up on any VPS (SSH key + IP, provider install, embedded login console, Telegram setup). Multi-cloud adapters deliberately not pursued — see the scope note below. |
 | 📡 **Budget monitoring** (Bridge + Sentinel) | **Proven at month scale on Codex** | Weekly-aware pacing closed 4 straight weekly cycles at 99–100% with zero overshoot ([case study #4](RESULTS.md#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run)). Open: Kimi projection precision (±10–15% → tier stays **beta**, two multi-week teams in observation) *(Kimi archived in 0.4: no longer offered)*, €20 entry tiers not viable yet (→ mission M4). |
 | 🌍 **Internationalization** (7 languages) | **Essentially done** | EN base + it/hu/es/de/fr/pt across agent prompts, native UI and web. The current web locale contract is [`web/i18n/config.ts`](../../web/i18n/config.ts), which includes all seven. Remaining work is translator guidance, coverage cleanup and native-speaker review. |
@@ -86,7 +85,7 @@ Current sequencing:
 
 | Horizon | Focus |
 |---|---|
-| **Now** *(August 2026)* | Keep the shipped Godot path reliable while building the Tauri first-run flow for own PC + Podman + customer OpenAI API key + Node.js headless agents. The Electron tree is available only under `archive/` for selective reuse. |
+| **Now** *(November 2026)* | Release 0.4: the Mac desktop app on Tauri 2, the CLI on Mac and Linux, the Windows CLI preview, Codex and the API-key way on Pi, integrations added on request. |
 | **Next** *(1–2 months)* | Add native credential storage, Podman detection/provisioning and headless-worker lifecycle through the versioned loopback API; retain Windows signing, installer/upgrade UX and notifications as release gates. |
 | **Later** *(a quarter and beyond)* | Add own-VPS SSH setup, provider-subscription TUI/`tmux` paths and managed plug-and-play with Stripe credits · Mentor as a first-class surface (M6) · interview practice (M9) · opt-in auto-submit (M10) · fine-grained team observability (M7). |
 
@@ -101,8 +100,8 @@ prerequisites or promises of a delivery date.
   NOW                          NEXT                         LATER
   (release work)               (near term)                  (later)
   ────────────────────────     ────────────────────────     ────────────────────────
-  • Godot release safety       • first React/Tauri slice      • M7 fine-grained observability
-  • product API + Tauri spike  • M4 cheaper tiers +          • M9 interview practice
+  • 0.4 release (Tauri app)   • desktop app beyond the Mac   • M7 fine-grained observability
+  • product API               • M4 cheaper tiers +          • M9 interview practice
   • case studies                 more providers              • M10 opt-in auto-submit
                                • M3 security · M5 local ⭐
 ```
@@ -116,9 +115,8 @@ they live in [`CHANGELOG.md`](../../CHANGELOG.md) rather than this future list.
 | **M4** | 💸 Run on entry tiers (~€20/mo) + add more providers ⭐ — reproducible variance and cost tooling (built on Kimi, archived in 0.4) [exists](../internal/experiments/2026-08-03-m4-entry-tier-evidence-protocol.md), but no live export in the repo validates 88→92 or a PAYG buying claim yet; any fourth CLI remains gated by [ADR-0002 and the provider checklist](../guides/ADDING-A-PROVIDER.md). | Integrations | 🟡 medium |
 | **M5** | 🏠 Run the whole team on local models (zero cloud) ⭐ — a one-role Scorer spike exists with a machine-checked provider inventory and deterministic comparison harness. Whole-team support remains unavailable: paired quality, live URL/feedback parity, real hardware evidence and additional roles are still required. | LLM / infra | 🔴 large |
 
-> 🖥️ **Desktop app** — current Godot release safety and the staged Tauri migration
-> proceed together. The capability gates, parity rule and removal criteria are
-> in the [desktop migration plan](../internal/roadmap/2026-08-24-desktop-tauri-migration.md).
+> 🖥️ **Desktop app** — the Tauri migration is the shipped app; its history, capability gates and
+> parity rule are in the [desktop migration plan](../internal/roadmap/2026-08-24-desktop-tauri-migration.md).
 
 **On the horizon** — bigger directions we've scoped but not opened yet:
 

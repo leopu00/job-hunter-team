@@ -7,8 +7,8 @@ user-facing to the most internal.
 
 ## 🖥️ Desktop applications
 
-The supported Godot office remains in [`game/`](../game/) while the new Tauri 2
-and React shell is developed incrementally in [`desktop/`](../desktop/). The
+The desktop app is the Tauri 2 and React shell in [`desktop/`](../desktop/) (Mac, Apple
+silicon). The retired Godot office stays in [`game/`](../game/) and is not distributed. The
 migration plan is
 [`2026-08-24-desktop-tauri-migration.md`](internal/roadmap/2026-08-24-desktop-tauri-migration.md)
 and the setup matrix is
