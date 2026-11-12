@@ -630,5 +630,7 @@ def test_doctor_passes_on_only_a_value_of_the_setup_s_own_shape(tmp_path, advice
 
 def test_the_wrapper_gives_the_advice_to_doctor_only():
     text = WRAPPER.read_text(encoding="utf-8")
-    line = next(l for l in text.splitlines() if "JHT_HOST_WSL_MEMORY_ADVICE" in l and "$hostFlags" in l)
-    assert line.strip().startswith("if ($Sub -ceq 'doctor')")
+    doctor = text[text.index("\n  'doctor' {\n"):]
+    doctor = doctor[:doctor.index("\n  }\n")]
+    assert "JHT_HOST_WSL_MEMORY_ADVICE=$wslAdvice" in doctor
+    assert text.count("JHT_HOST_WSL_MEMORY_ADVICE=") == 1
