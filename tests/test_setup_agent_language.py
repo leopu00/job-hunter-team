@@ -153,7 +153,9 @@ def test_setup_italian_reaches_every_agent_even_with_a_stale_english_tmux_server
         (home / "i18n-prefs.json").write_text(json.dumps({"locale": previous}))
     (home / "host.env").write_text("JHT_LANG=en\nJHT_USER_TZ=Europe/Rome\n")
     screen = choose_language(home)
-    assert json.loads((home / "i18n-prefs.json").read_text()) == {"locale": "it"}
+    prefs = json.loads((home / "i18n-prefs.json").read_text())
+    # asked_at: the host setup asked the language now, so the wizard in the container does not ask it again
+    assert prefs["locale"] == "it" and set(prefs) <= {"locale", "asked_at"} and isinstance(prefs.get("asked_at", 0), int)
     assert "JHT_LANG=it\n" in (home / "host.env").read_text()
     assert "JHT_LANG=it\n" in (home.parent / "runtime" / "host-values").read_text()
     for session in REGULAR:
@@ -180,7 +182,8 @@ def test_a_new_explicit_setup_choice_replaces_the_old_canonical_language(tmp_pat
     home.mkdir(parents=True)
     (home / "i18n-prefs.json").write_text('{"locale":"it"}')
     choose_language(home, choice)
-    assert json.loads((home / "i18n-prefs.json").read_text()) == {"locale": expected}
+    prefs = json.loads((home / "i18n-prefs.json").read_text())
+    assert prefs["locale"] == expected and set(prefs) <= {"locale", "asked_at"} and isinstance(prefs.get("asked_at", 0), int)
     assert f"JHT_LANG={expected}\n" in (home / "host.env").read_text()
 
 
