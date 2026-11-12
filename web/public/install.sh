@@ -448,7 +448,7 @@ header() {
 TOTAL_STEPS_DOCKER=4
 # Host scripts of the runtime, besides the wrapper and host-setup.sh (same list as RUNTIME_HELPERS in jht-wrapper.sh).
 RUNTIME_HELPERS="jht-integration.sh jht-tools.sh"
-TOTAL_STEPS_NATIVE=7
+TOTAL_STEPS_NATIVE=6
 
 # ── OS Detection ──────────────────────────────────────────────────────────
 detect_os() {
@@ -1674,28 +1674,8 @@ install_node() {
   ok "node $(node -v) installed"
 }
 
-install_claude_cli() {
-  step 4 "$TOTAL_STEPS_NATIVE" "Claude CLI"
-
-  if command -v claude &>/dev/null; then
-    ok "claude CLI already installed"
-    return 0
-  fi
-
-  info "Installing Claude CLI via npm (global)..."
-  if [ "$DRY_RUN" -eq 1 ]; then
-    printf "  ${DIM}[dry-run]${RESET} would execute: npm install -g @anthropic-ai/claude-cli\n"
-    return 0
-  fi
-  if ! npm install -g @anthropic-ai/claude-cli 2>/dev/null; then
-    warn "Automatic installation failed. Install manually from https://docs.anthropic.com/claude/docs/claude-code"
-    return 0
-  fi
-  ok "claude CLI installed"
-}
-
 clone_repo() {
-  step 5 "$TOTAL_STEPS_NATIVE" "Download JHT (git clone)"
+  step 4 "$TOTAL_STEPS_NATIVE" "Download JHT (git clone)"
 
   if [ "$DRY_RUN" -eq 1 ]; then
     if [ -d "$INSTALL_DIR/.git" ]; then
@@ -1721,7 +1701,7 @@ clone_repo() {
 }
 
 build_jht() {
-  step 6 "$TOTAL_STEPS_NATIVE" "Build CLI and shared modules"
+  step 5 "$TOTAL_STEPS_NATIVE" "Build CLI and shared modules"
 
   if [ "$DRY_RUN" -eq 1 ]; then
     printf "  ${DIM}[dry-run]${RESET} would execute: (cd %s/cli && npm install)\n" "$INSTALL_DIR"
@@ -1752,7 +1732,7 @@ build_jht() {
 }
 
 link_bin_native() {
-  step 7 "$TOTAL_STEPS_NATIVE" "Install jht command (native)"
+  step 6 "$TOTAL_STEPS_NATIVE" "Install jht command (native)"
 
   local target="$INSTALL_DIR/cli/bin/jht.js"
   local link="$BIN_DIR/jht"
@@ -2442,7 +2422,7 @@ maybe_onboard() {
     # native application (decision locked 2026-05-13 #4). No interactive
     # wizard: the container will do the non-interactive pair on first run
     # via the .pairing-token file. The user will complete the provider
-    # login (Claude/Codex/Kimi) from the console embedded in the app.
+    # login (Codex, or the API key of GLM/Kimi) from the app.
     info "Pairing token present: skipping the interactive wizard."
     info "The container will complete the pairing on first boot."
     return 0
@@ -2599,7 +2579,6 @@ main_native() {
   detect_system "$TOTAL_STEPS_NATIVE"
   install_system_deps
   install_node
-  install_claude_cli
   clone_repo
   build_jht
   link_bin_native
