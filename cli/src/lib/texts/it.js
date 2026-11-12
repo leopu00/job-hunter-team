@@ -120,6 +120,8 @@ export default {
   'doctor.provider_credit_hint': 'Ricaricalo sul sito del fornitore; la squadra riprende da sola entro mezz\'ora (se era spenta: jht team start)',
   'credit.gone': 'Credito esaurito su {provider}: gli agenti non possono rispondere. Ricaricalo sul sito del fornitore; la squadra riprende da sola entro mezz\'ora.',
   'doctor.provider_nokey': 'Il provider {active} non ha una chiave API',
+  'doctor.provider_not_in_release': 'Il provider {active} non è supportato in questa versione (offerti: {offered}, su Pi con una chiave API)',
+  'doctor.provider_not_in_release_hint': 'jht setup   (scegli {offered} e incolla la sua chiave API; fino ad allora la config attuale resta)',
   'doctor.provider_setenv': 'Imposta {env}',
   'doctor.provider_line': 'Provider: {name}',
   'doctor.api_skip': 'Prova API — nessuna chiave Anthropic trovata',

@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url';
 
 // `jht setup` as a person goes through it, with a prompter that answers the default and a program that stands for
 // the rest of jht: what is asked, in which order the steps are numbered, and when the configuration is called saved.
+import { offeredInRelease } from '../../shared/runtime/release-providers.js';
+const codexSkip = offeredInRelease('openai') ? false : 'Codex and Pi with ChatGPT are not offered in this release (shared/runtime/release-providers.js)';
 const cli = fileURLToPath(new URL('..', import.meta.url));
 const entry = join(cli, 'bin/jht.js');
 
@@ -49,7 +51,7 @@ function run(box, answers = {}) {
   return { result, lines, events };
 }
 
-test('the setup asks the provider (Codex first and the default, then GLM and Kimi with a key), numbers the slow steps, and calls the configuration saved only at the end', () => {
+test('the setup asks the provider (Codex first and the default, then GLM and Kimi with a key), numbers the slow steps, and calls the configuration saved only at the end', { skip: codexSkip }, () => {
   const box = sandbox();
   const { result, lines, events } = run(box);
   assert.equal(result.status, 0, result.stderr);
@@ -75,7 +77,7 @@ test('the setup asks the provider (Codex first and the default, then GLM and Kim
   assert.match(readFileSync(join(box.home, 'jht.config.json'), 'utf8'), /"active_provider": "openai"/);
 });
 
-test('when the provider program cannot be installed the question says what each answer does, and stopping does not call anything saved', () => {
+test('when the provider program cannot be installed the question says what each answer does, and stopping does not call anything saved', { skip: codexSkip }, () => {
   const box = sandbox({ providerInstallFails: true });
   const { events } = run(box, { confirm: false });
   const ask = events.find((e) => e.kind === 'confirm' && /could not be installed/.test(e.message));
@@ -98,8 +100,8 @@ test('the wizard draws no box and no cyan: the banner is gone, the title is one 
 });
 
 function setupNonInteractive(args, box) {
-  const result = spawnSync(process.execPath, [entry, 'setup', '--non-interactive', '--provider', 'openai', '--skip-health', ...args], {
-    env: { PATH: `${dirname(process.execPath)}:/usr/bin:/bin`, HOME: box.root, JHT_HOME: box.home, LANG: 'en_US.UTF-8' },
+  const result = spawnSync(process.execPath, [entry, 'setup', '--non-interactive', '--provider', 'glm', '--skip-health', ...args], {
+    env: { PATH: `${dirname(process.execPath)}:/usr/bin:/bin`, HOME: box.root, JHT_HOME: box.home, JHT_DEPS_PREFIX: join(box.root, 'deps'), LANG: 'en_US.UTF-8' },
     encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000,
   });
   return { out: `${result.stdout}${result.stderr}`, status: result.status };
@@ -114,8 +116,10 @@ test('--api-key-file reads the key from a file, so it is not on the command line
   const ok = setupNonInteractive(['--api-key-file', keyFile], box);
   assert.equal(ok.status ?? 0, 0, ok.out);
   const config = JSON.parse(readFileSync(join(box.home, 'jht.config.json'), 'utf8'));
-  assert.equal(config.providers.openai.api_key, fake);
-  assert.equal((statSync(join(box.home, 'jht.config.json')).mode & 0o077), 0, 'the file holding a key is private');
+  // the key goes to the key store (0600), the config holds only where it is
+  assert.equal(config.providers.glm.api_key, undefined);
+  assert.equal(readFileSync(config.providers.glm.api_key_ref.path, 'utf8'), `${fake}\n`);
+  assert.equal((statSync(config.providers.glm.api_key_ref.path).mode & 0o077), 0, 'the file holding a key is private');
 
   const empty = sandbox();
   writeFileSync(join(empty.root, 'empty.txt'), '\n');
@@ -163,7 +167,7 @@ test('--api-key-file refuses a link, a device and a file too big for a key, warn
   const open = setupNonInteractive(['--api-key-file', real], box);
   assert.equal(open.status ?? 0, 0, open.out);
   assert.match(open.out, /can be read by other users/);
-  assert.match(open.out, /plaintext \(hidden\)/);
+  assert.match(open.out, /API key kept by the setup/);
   assert.equal(open.out.includes(fake.slice(0, 8)), false, 'not even the first characters of the key');
   assert.equal(open.out.includes(fake), false);
 });

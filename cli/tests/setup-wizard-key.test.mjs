@@ -8,6 +8,8 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSyn
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { offeredInRelease, RELEASE_PROVIDERS } from '../../shared/runtime/release-providers.js';
+const codexSkip = offeredInRelease('openai') ? false : 'Codex and Pi with ChatGPT are not offered in this release (shared/runtime/release-providers.js)';
 
 const cli = fileURLToPath(new URL('..', import.meta.url));
 const KEY = ['synthetic', 'key', '0123456789', 'abcdef'].join('-'); // built, so that no scanner reads it as a key
@@ -75,14 +77,20 @@ function run(box, answers = {}, verdicts = []) {
 }
 const keyFiles = (box) => (existsSync(join(box.deps, 'keys')) ? readdirSync(join(box.deps, 'keys')) : []);
 
-for (const provider of ['glm', 'kimi']) {
-  test(`${provider} in the wizard: asked with the others, the key typed hidden, kept in the key store, Pi, no sign-in, config at the latest version`, () => {
+for (const provider of ['glm', 'kimi'].filter((p) => offeredInRelease(p))) {
+  test(`${provider} in the wizard: the services of the release only, the key typed hidden, kept in the key store, Pi, no sign-in, config at the latest version`, () => {
     const box = sandbox();
     const { r, events, calls, configText, out } = run(box, { select: { 'AI Provider': provider }, keys: [KEY] });
     assert.equal(r.status, 0, r.stderr);
-    assert.deepEqual(events.find((e) => e.kind === 'select' && e.message === 'AI Provider').options, ['openai', 'glm', 'kimi']);
-    const ask = events.find((e) => e.kind === 'password');
-    assert.ok(ask && ask.rejects, 'the key is asked hidden and a short one is refused at the prompt');
+    // one service is said, not asked; more than one is a question with only them; the others are «coming», never a choice
+    const offered = RELEASE_PROVIDERS;
+    const ask = events.find((e) => e.kind === 'select' && e.message === 'AI Provider');
+    if (offered.length === 1) assert.equal(ask, undefined);
+    else assert.deepEqual(ask.options, offered);
+    assert.ok(events.some((e) => e.kind === 'note' && /coming in a later release/.test(e.message)));
+    assert.equal(events.some((e) => e.kind === 'select' && /Program that runs the agents|How does Codex sign in/.test(e.message)), false, 'no harness and no Codex question');
+    const hidden = events.find((e) => e.kind === 'password');
+    assert.ok(hidden && hidden.rejects, 'the key is asked hidden and a short one is refused at the prompt');
     const config = JSON.parse(configText);
     assert.equal(config.active_provider, provider);
     assert.equal(config.harness, 'pi');
@@ -123,7 +131,7 @@ test('a key the provider accepts says the credit is not checked there, and the s
 
 test('a key the provider refuses three times saves nothing: no config, no key file, and what to do is said', () => {
   const box = sandbox();
-  const { events, configText, out } = run(box, { select: { 'AI Provider': 'kimi' }, keys: [KEY, OTHER, KEY] }, [401, 401, 401]);
+  const { events, configText, out } = run(box, { select: { 'AI Provider': 'glm' }, keys: [KEY, OTHER, KEY] }, [401, 401, 401]);
   assert.equal(configText, null);
   assert.deepEqual(keyFiles(box), []);
   assert.equal(events.at(-1).ok, false);
@@ -139,7 +147,7 @@ test('a refused key is asked again, and the one the provider accepts is the one 
   assert.equal(readFileSync(JSON.parse(configText).providers.glm.api_key_ref.path, 'utf8'), `${OTHER}\n`);
 });
 
-test('Codex with an OpenAI key: hidden, checked, handed to codex login --with-api-key on its standard input, the config holds no key', () => {
+test('Codex with an OpenAI key: hidden, checked, handed to codex login --with-api-key on its standard input, the config holds no key', { skip: codexSkip }, () => {
   const box = sandbox();
   const { r, events, calls, configText, out } = run(box, { select: { 'How does Codex sign in?': 'api_key' }, keys: [KEY] });
   assert.equal(r.status, 0, r.stderr);
@@ -155,7 +163,7 @@ test('Codex with an OpenAI key: hidden, checked, handed to codex login --with-ap
   assert.equal(events.at(-1).ok, true);
 });
 
-test('Codex with the subscription is the default and asks for no key', () => {
+test('Codex with the subscription is the default and asks for no key', { skip: codexSkip }, () => {
   const box = sandbox();
   mkdirSync(join(box.home, '.codex'), { recursive: true });
   writeFileSync(join(box.home, '.codex/auth.json'), '{}');
@@ -165,7 +173,7 @@ test('Codex with the subscription is the default and asks for no key', () => {
   assert.equal(events.at(-1).ok, true);
 });
 
-test('Codex that does not take the key stops the setup and says so', () => {
+test('Codex that does not take the key stops the setup and says so', { skip: codexSkip }, () => {
   const box = sandbox();
   writeFileSync(join(box.bin, 'codex'), '#!/bin/sh\nexit 1\n');
   const { events, out } = run(box, { select: { 'How does Codex sign in?': 'api_key' }, keys: [KEY] });
@@ -232,7 +240,16 @@ test('a cancel that comes before the key store is written (at the key question) 
   const box = sandbox();
   const driver = readFileSync(box.driver, 'utf8').replace("password: async (p) => {", "password: async (p) => { if (answers.cancelAtPassword) throw new WizardCancelledError();");
   writeFileSync(box.driver, driver);
-  const { events } = run(box, { select: { 'AI Provider': 'kimi' }, cancelAtPassword: true });
+  const { events } = run(box, { select: { 'AI Provider': 'glm' }, cancelAtPassword: true });
   assert.equal(events.at(-1).kind, 'cancelled');
   assert.deepEqual(keyFiles(box), []);
+});
+
+test('a kept configuration of a service this release does not offer is said, and the setup goes on with the offered one', () => {
+  const before = JSON.stringify({ version: 4, active_provider: 'openai', harness: 'codex', providers: { openai: { name: 'openai', auth_method: 'subscription', model: 'm' } }, channels: {} });
+  const box = sandbox({ existingConfig: before });
+  const { events, configText } = run(box, { select: { 'Config management': 'keep' }, keys: [KEY] });
+  assert.ok(events.some((e) => e.kind === 'note' && /for openai, which this release does not offer/.test(e.message)));
+  assert.equal(JSON.parse(configText).active_provider, RELEASE_PROVIDERS[0]);
+  assert.equal(events.at(-1).ok, true);
 });

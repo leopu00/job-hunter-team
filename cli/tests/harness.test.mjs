@@ -13,6 +13,8 @@ import { checkPi } from '../src/commands/providers-harness.js';
 
 // The first setup lets the person choose the program that runs the agents (codex | pi): what is asked, what is
 // installed and waited for, what the configuration says, and how `jht providers harness` and `team start` read it.
+import { offeredInRelease } from '../../shared/runtime/release-providers.js';
+const codexSkip = offeredInRelease('openai') ? false : 'Codex and Pi with ChatGPT are not offered in this release (shared/runtime/release-providers.js)';
 const cli = fileURLToPath(new URL('..', import.meta.url));
 const entry = join(cli, 'bin/jht.js');
 
@@ -69,7 +71,7 @@ function wizard(box, answers = {}) {
   return { r, events, calls, config };
 }
 
-test('the setup asks codex or pi, with codex as the default, and writes the answer', () => {
+test('the setup asks codex or pi, with codex as the default, and writes the answer', { skip: codexSkip }, () => {
   const box = sandbox();
   mkdirSync(join(box.home, '.codex'), { recursive: true });
   writeFileSync(join(box.home, '.codex/auth.json'), '{}');
@@ -85,7 +87,7 @@ test('the setup asks codex or pi, with codex as the default, and writes the answ
   assert.equal(events.some((e) => /Plus or Pro/.test(e.message ?? '')), false, 'no word about pi for codex');
 });
 
-test('choosing pi: the note says what it needs, pi is installed, signed in by its own /login, and every agent will start on it', () => {
+test('choosing pi: the note says what it needs, pi is installed, signed in by its own /login, and every agent will start on it', { skip: codexSkip }, () => {
   const box = sandbox();
   const { r, events, calls, config } = wizard(box, { harness: 'pi' });
   assert.equal(r.status, 0, r.stderr);
@@ -109,7 +111,7 @@ test('choosing pi: the note says what it needs, pi is installed, signed in by it
   assert.equal(events.at(-1).ok, true);
 });
 
-test('a pi that exits without a login stops the setup before the team starts, and says it', () => {
+test('a pi that exits without a login stops the setup before the team starts, and says it', { skip: codexSkip }, () => {
   const box = sandbox({ piLogsIn: false });
   const { events, calls } = wizard(box, { harness: 'pi' });
   assert.equal(events.at(-1).ok, false);
@@ -117,7 +119,7 @@ test('a pi that exits without a login stops the setup before the team starts, an
   assert.equal(calls.includes('jht team start'), false);
 });
 
-test('a pi login that is already there ends the step at once, and a kept configuration asks pi, not codex, for it', () => {
+test('a pi login that is already there ends the step at once, and a kept configuration asks pi, not codex, for it', { skip: codexSkip }, () => {
   const box = sandbox({ piLogsIn: false });
   mkdirSync(join(box.home, '.pi', 'agent'), { recursive: true });
   writeFileSync(join(box.home, '.pi', 'agent', 'auth.json'), OPENAI_LOGIN);
@@ -134,7 +136,7 @@ test('a pi login that is already there ends the step at once, and a kept configu
   assert.ok(events.some((e) => e.kind === 'note' && /Pi sign-in found: OpenAI \(ChatGPT\)/.test(e.message) && /auth\.json/.test(e.message)));
 });
 
-test('a pi login with only Anthropic is not the login of the OpenAI setup: said with what it holds, the team does not start, no «done»', () => {
+test('a pi login with only Anthropic is not the login of the OpenAI setup: said with what it holds, the team does not start, no «done»', { skip: codexSkip }, () => {
   const box = sandbox({ piLogin: ANTHROPIC_LOGIN });
   const { events, calls } = wizard(box, { harness: 'pi' });
   assert.equal(events.at(-1).ok, false, 'the setup stops');
@@ -148,7 +150,7 @@ test('a pi login with only Anthropic is not the login of the OpenAI setup: said 
   assert.equal(JSON.stringify(events).includes('synthetic'), false, 'no value of the file is shown');
 });
 
-test('a file that is there with only Anthropic is said before pi opens, and pi still opens so the right sign-in can be made', () => {
+test('a file that is there with only Anthropic is said before pi opens, and pi still opens so the right sign-in can be made', { skip: codexSkip }, () => {
   const box = sandbox({ piLogsIn: false });
   mkdirSync(join(box.home, '.pi', 'agent'), { recursive: true });
   writeFileSync(join(box.home, '.pi', 'agent', 'auth.json'), ANTHROPIC_LOGIN);
@@ -165,7 +167,7 @@ function jht(box, args) {
   return { out: `${r.stdout}${r.stderr}`, status: r.status };
 }
 
-test('setup --non-interactive takes --harness, defaults to codex, and refuses an unknown one', () => {
+test('setup --non-interactive takes --harness, defaults to codex, and refuses an unknown one', { skip: codexSkip }, () => {
   const box = sandbox();
   const base = ['setup', '--non-interactive', '--provider', 'openai', '--auth-method', 'subscription', '--subscription-email', 'user@example.com', '--skip-health'];
   assert.equal(jht(box, base).status, 0);

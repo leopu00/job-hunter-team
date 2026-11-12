@@ -49,7 +49,7 @@ test('a reference that does not point anywhere does not count', () => {
 
 function setup(args, env = {}) {
   const home = mkdtempSync(join(tmpdir(), 'jht-keyref-'));
-  const done = spawnSync(process.execPath, [entry, 'setup', '--non-interactive', '--provider', 'openai', '--skip-health', ...args], {
+  const done = spawnSync(process.execPath, [entry, 'setup', '--non-interactive', '--provider', 'glm', '--skip-health', ...args], {
     encoding: 'utf8', timeout: 60_000, env: { ...process.env, JHT_HOME: home, JHT_LANG: 'en', ...env },
   });
   const path = join(home, 'jht.config.json');
@@ -63,15 +63,15 @@ test('jht setup --secret-mode file finishes and writes the path, not the key', (
   const { done, config: written, raw } = setup(['--secret-mode', 'file', '--secret-file', '/dev/shm/jht-run-key']);
   assert.equal(done.status, 0, done.stderr + done.stdout);
   assert.doesNotMatch(done.stderr, /api_key is required/);
-  assert.deepEqual(written.providers.openai.api_key_ref, { type: 'ref', source: 'file', path: '/dev/shm/jht-run-key' });
-  assert.equal(written.providers.openai.api_key, undefined);
+  assert.deepEqual(written.providers.glm.api_key_ref, { type: 'ref', source: 'file', path: '/dev/shm/jht-run-key' });
+  assert.equal(written.providers.glm.api_key, undefined);
   assert.equal(raw.includes(KEY), false);
 });
 
 test('jht setup --secret-mode env finishes and writes the name of the variable, not the key', () => {
   const { done, config: written, raw } = setup(['--secret-mode', 'env', '--secret-env', 'MY_RUN_API_KEY'], { MY_RUN_API_KEY: KEY });
   assert.equal(done.status, 0, done.stderr + done.stdout);
-  assert.deepEqual(written.providers.openai.api_key_ref, { type: 'ref', source: 'env', id: 'MY_RUN_API_KEY' });
+  assert.deepEqual(written.providers.glm.api_key_ref, { type: 'ref', source: 'env', id: 'MY_RUN_API_KEY' });
   assert.equal(raw.includes(KEY), false);
 });
 

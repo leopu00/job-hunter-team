@@ -81,16 +81,18 @@ def test_the_pricing_page_shows_codex_alone_and_recommended():
 
 
 def test_the_guides_and_the_changelog_say_codex_only():
+    # 0.4.0 offers only Pi with a GLM key (shared/runtime/release-providers.js): the quickstart and PROVIDERS say so, and say
+    # Codex, Kimi and Claude come later, never as a choice of this release
     quickstart = text("docs/guides/QUICKSTART.md")
     table = quickstart[quickstart.index("| Provider   |"):]
-    assert "| 🔵  | **Codex**  | ChatGPT Plus / Pro subscription, ~€100/mo | ✅ **Recommended**" in table
-    assert "**Claude**" not in table[:table.index("\n\n")]
-    # the other way, an API key on the Pi harness, is set from the CLI and never called recommended
-    assert "**GLM (Z.ai) or Kimi (Moonshot)** on the Pi harness" in table and "Recommended" not in table.split("**GLM")[1].split("\n")[0]
-    assert "`jht providers use codex`" in quickstart and "providers use claude" not in quickstart
+    table = table[:table.index("\n\n")]
+    assert "| 🟢  | **GLM (Z.ai)** on the Pi harness | API key, per call | ✅ The only one offered in 0.4.0" in table
+    assert "Coming in a later release" in table.split("Codex")[1].split("\n")[0]
+    assert "providers use claude" not in quickstart
     providers = text("docs/about/PROVIDERS.md")
-    assert "| 🔵 **Codex (OpenAI)** — recommended |" in providers
-    assert "Claude Code and the Kimi subscription CLI are not offered" in providers
+    assert "**0.4.0 offers one way to power the team: Pi with a GLM (Z.ai) API key.**" in providers
+    assert "| 🔵 Codex (OpenAI) with a ChatGPT subscription or an OpenAI key | subscription or API key | Codex CLI | ⏳ coming in a later release |" in providers
+    assert "shared/runtime/release-providers.js" in providers
     assert "A dedicated Codex (ChatGPT) subscription." in text("docs/guides/VPS-SETUP-WIZARD.md")
     changelog = text("CHANGELOG.md")
     release = changelog[changelog.index("## [0.4.0]"):]

@@ -9,12 +9,12 @@ do not need to install both.
 
 ## ⚠️ Before you start
 
-JHT runs many agents in parallel, around the clock. You need **one** of:
+JHT runs many agents in parallel, around the clock. In 0.4.0 you need:
 
 |     | Provider   | How you pay | Status |
 | --- | ---------- | ----------- | ------ |
-| 🔵  | **Codex**  | ChatGPT Plus / Pro subscription, ~€100/mo | ✅ **Recommended** — proven by a 1-month autonomous run (658 positions, weekly budget self-managed at 99–100%) |
-| 🟢  | **GLM (Z.ai) or Kimi (Moonshot)** on the Pi harness | API key, per call | Measured on GLM in short runs (~0.10 USD per scored position; not measured on Kimi); set from the CLI with `jht setup --provider glm --harness pi --api-key-file <file>` |
+| 🟢  | **GLM (Z.ai)** on the Pi harness | API key, per call | ✅ The only one offered in 0.4.0 — measured in short runs (~0.10 USD per scored position); `jht setup` asks for the key (typed hidden) |
+| 🔵  | Codex (ChatGPT subscription or OpenAI key), Kimi, Claude | — | ⏳ Coming in a later release |
 
 Details and the spending ceiling of an API key: [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md).
 
@@ -147,17 +147,15 @@ In an interactive terminal, the installer launches the setup wizard
 automatically. If it cannot, or if you skipped onboarding, run:
 
 ```bash
-jht setup          # starts the container, installs the provider CLI, logs in, starts the team
+jht setup          # asks for your GLM API key (typed hidden), checks it, starts the team
 jht doctor         # verify configuration and dependencies
 jht team status    # confirm the agents are running
 ```
 
-Keep the wizard open when it reaches provider login. As instructed on screen,
-open a second terminal and run `jht oauth-login`; complete the provider's
-browser flow, then exit its terminal interface. The wizard detects the saved
-credentials and runs `jht team start`. To switch provider later:
-`jht providers use codex`, followed by
-`jht providers update <id>` to install or update that CLI.
+The wizard asks for the GLM API key, checks it with Z.ai, keeps it in a private
+folder of the container (the configuration holds only where it is) and runs
+`jht team start`. There is no sign-in step. Without questions:
+`jht setup --non-interactive --provider glm --api-key-stdin < key.txt`.
 
 > 📖 Full command list — including the host wrapper (`up`/`down`/`upgrade`/`logs`/`shell`/…) vs the Node CLI split, all subcommands and flags: see [`CLI-REFERENCE.md`](CLI-REFERENCE.md).
 

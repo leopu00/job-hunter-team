@@ -7,6 +7,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import test from 'node:test';
+import { offeredInRelease } from '../../shared/runtime/release-providers.js';
+const kimiSkip = offeredInRelease('kimi') ? false : 'kimi is not offered in this release (shared/runtime/release-providers.js)';
 
 const HOME = mkdtempSync(join(tmpdir(), 'jht-key-store-'));
 const DEPS = join(HOME, 'deps');
@@ -54,7 +56,7 @@ test('the key file of the person goes to the key store: config has the path, nev
   }
 });
 
-test('the key from the standard input is kept the same way (kimi, with its own file)', async () => {
+test('the key from the standard input is kept the same way (kimi, with its own file)', { skip: kimiSkip }, async () => {
   clean();
   const { code, text } = await setup({ provider: 'moonshot', apiKeyStdin: true, stdin: piped(`${KEY}\r\n`), skipHealth: true });
   assert.equal(code, 0, text);
