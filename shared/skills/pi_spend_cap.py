@@ -106,7 +106,7 @@ def _money(value):
 
 
 def user_text(verdict, spent):
-    import i18n  # shared/i18n.py: the language of the shell, the CLI and the other bridges
+    i18n = quota_data.shared_i18n()  # shared/i18n.py, found from the skills folder too
 
     if verdict["action"] == "warn":
         return i18n.tf("pi_cap.no_ceiling", "%s USD" % _money(spent["cost"]))
@@ -199,7 +199,7 @@ def _halt(api, run, verdict, spent, day, notify_user):
 
 
 def _resume(api, run, day, notify_user):
-    import i18n
+    i18n = quota_data.shared_i18n()
 
     try:
         api._path("DAILY_HALT_FLAG").unlink()
