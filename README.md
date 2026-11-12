@@ -32,7 +32,7 @@
 
 Job hunting is a second job on top of your job: scanning boards daily, qualifying listings, tailoring every application. JHT hands that grind to a team of AI agents running around the clock — Scout finds positions, Analyst verifies them, Scorer ranks them against your profile, Writer prepares tailored documents, Critic blind-reviews everything — orchestrated by a **Captain**. You only review applications that clear the quality bar.
 
-Everything runs **in your container** — on your Mac (Apple silicon) or on your VPS, with your profile, your data and your provider account. JHT itself is **free (MIT)**; the agents run on a provider you pay for: in 0.4.0, **GLM (Z.ai) with an API key** on the Pi harness (Codex, Kimi and Claude come in a later release) — see [Install](#install). A local model can currently shadow or replace the Scorer only.
+Everything runs **in your container** — on your Mac (Apple silicon) or on your VPS, with your profile, your data and your provider account. JHT itself is **free (MIT)**; the agents run on a provider you pay for: in 0.4.0, **GLM (Z.ai) with an API key** on the Pi harness (Codex, Kimi and Claude are not in this version) — see [Install](#install). A local model can currently shadow or replace the Scorer only.
 
 I built JHT for my own job hunt — ~200 offers analyzed, ~20 tailored applications, **5 interview invites in a few weeks** ([story](docs/about/STORY.md)). Then I rebuilt it as open source. On the public stack, a Codex team ran **one month unattended**: 658 positions found, 520 scored, 307 strong matches, weekly budget self-managed at 99–100% ([results](docs/about/RESULTS.md)).
 
@@ -87,15 +87,15 @@ team.
 **Before you install:**
 
 - **Mac**: Apple silicon (M1 or later) with macOS 15 or later; Intel Macs are not supported.
-  The desktop app is Mac only. **Linux**: CLI only, experimental. **Windows**: preview, CLI only
+  **The desktop app is not in 0.4.0**: the team is driven from the `jht` CLI. **Linux**: CLI only, experimental. **Windows**: preview, CLI only
   (PowerShell installer, Podman inside WSL), tested on Windows 10, not on Windows 11 — see
   [QUICKSTART](docs/guides/QUICKSTART.md).
 - **A provider for the agents**: in 0.4.0, **GLM (Z.ai)** on the Pi harness, with an **API key**
   that `jht setup` asks for (typed hidden) or takes from a file or standard input
   (`jht setup --non-interactive --provider glm --api-key-stdin`), never on the command line.
-  Codex (ChatGPT subscription), Kimi and Claude come in a later release.
-- **A container engine**: Podman, the only one since 0.4. On a Mac the installer and the app set it
-  up with Homebrew (which must already be there), so there is no Docker Desktop to install.
+  Codex (ChatGPT subscription), Kimi and Claude are not in this version.
+- **A container engine**: Podman, the only one since 0.4. On a Mac the installer sets it up with
+  Homebrew (which must already be there), so there is no Docker Desktop to install.
   On Linux: rootless Podman 5.0 or later.
 - At least 16 GB of RAM is recommended on a Mac. The Podman machine uses 2 CPUs, 4 GiB of memory
   and a disk that grows up to 30 GiB.
@@ -105,20 +105,16 @@ Not sure where the team should live? Compare a
 
 **What it costs** — with the GLM API key you pay per call: measured on GLM, about 0.10 USD per
 scored position, with a daily ceiling that pauses the team. (The month-long run we measured used a
-Codex Pro subscription, about €100/month — [results](docs/about/RESULTS.md); Codex comes back in a
-later release.) Details:
+Codex Pro subscription, about €100/month — [results](docs/about/RESULTS.md); Codex is not in this
+version.) Details:
 [`docs/about/PROVIDERS.md`](docs/about/PROVIDERS.md).
 
-| Provider | Plan | Cost/mo | Status |
+| Provider | Plan | Cost | Status in 0.4.0 |
 |---|---|---|---|
-| **Codex** | Plus / Pro | ~€100 | Proven — 1-month autonomous run |
-| **GLM / Kimi** (Pi) | API key | per call | Measured on GLM in short runs |
+| **GLM** (Z.ai, on Pi) | API key | per call | Offered — measured in short runs |
+| Codex, Kimi, ChatGPT/Claude subscriptions | — | — | Not in this version |
 
-**Desktop app (Mac):** download it from
-[GitHub Releases](https://github.com/leopu00/job-hunter-team/releases/latest)
-(`job-hunter-team-macos-universal.dmg`: despite the name it holds only the Apple silicon build).
-It is signed and notarized. Open it and follow the first setup: team runtime, provider, candidate
-profile and working hours come before the agents start.
+**The desktop app is not in 0.4.0.** Install the CLI.
 
 **CLI** (macOS / Linux): inspect first, then run. The installer is
 [versioned in this repo](scripts/install.sh) and can preview every action:
@@ -141,9 +137,8 @@ Full walkthrough, Windows and contributor setup: [`docs/guides/QUICKSTART.md`](d
 
 ## Interfaces
 
-**Native desktop app** ([Tauri 2 + React](desktop/)) · **CLI** (`jht team
-start` — [reference](docs/guides/CLI-REFERENCE.md)) · **Cloud dashboard**
-(Next.js) · **Telegram**
+**CLI** (`jht team start` — [reference](docs/guides/CLI-REFERENCE.md)) · **Cloud dashboard**
+(Next.js) · **Telegram**. The desktop app is not in 0.4.0.
 
 ## AI agents can drive JHT
 
@@ -157,7 +152,7 @@ is no longer distributed · Node.js/TypeScript + Python
 Python/tmux during migration) · Next.js 16 + Supabase (cloud dashboard) · Podman
 · SQLite · GitHub Actions + Vercel.
 
-**Status** — 0.4: the team, the CLI and the Mac desktop app; Linux from the CLI, experimental;
+**Status** — 0.4: the team and the CLI (the desktop app is not in 0.4.0); Linux from the CLI, experimental;
 Windows a CLI preview. What was tested, and what was not, is listed in the release notes.
 Full picture: [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md).
 
