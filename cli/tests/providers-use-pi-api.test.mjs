@@ -9,6 +9,7 @@ import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { piReady } from '../src/commands/providers-harness.js';
+import { offeredInRelease } from '../../shared/runtime/release-providers.js';
 
 const entry = fileURLToPath(new URL('../bin/jht.js', import.meta.url));
 
@@ -31,7 +32,7 @@ test('use glm / kimi / moonshot with the key set up: the provider is active and 
     active_provider: 'openai', harness: 'codex',
     providers: { openai: { auth_method: 'subscription' }, glm: keyed(dir, 'glm'), kimi: keyed(dir, 'kimi') },
   }));
-  for (const [name, expected] of [['glm', 'glm'], ['kimi', 'kimi'], ['moonshot', 'kimi']]) {
+  for (const [name, expected] of [['glm', 'glm'], ['kimi', 'kimi'], ['moonshot', 'kimi']].filter(([n]) => offeredInRelease(n))) {
     const r = jht(dir, 'providers', 'use', name);
     assert.equal(r.code, 0, r.out);
     assert.equal(r.config().active_provider, expected);
@@ -40,13 +41,18 @@ test('use glm / kimi / moonshot with the key set up: the provider is active and 
   }
   const again = jht(dir, 'providers', 'use', 'glm');
   assert.match(again.out, /harness: pi → pi|already active|active provider: kimi → glm/);
-  // the way back to the default provider keeps working
-  assert.equal(jht(dir, 'providers', 'use', 'openai').code, 0);
+  // a service this release does not offer cannot be chosen, and the config is not touched
+  for (const name of ['openai', 'codex', 'claude', ...(offeredInRelease('kimi') ? [] : ['kimi', 'moonshot'])]) {
+    const refused = jht(dir, 'providers', 'use', name);
+    assert.equal(refused.code, 1, name);
+    assert.match(refused.out, new RegExp(`provider '${name}' is not offered in this release \\(offered: glm, on Pi with an API key\\)\\. Set it up with: jht setup`));
+    assert.equal(refused.config().active_provider, 'glm');
+  }
 });
 
 test('use glm / kimi without the key: the command that sets it up, never «Supported: codex»; nothing is written', () => {
   const dir = home({ active_provider: 'openai', harness: 'codex', providers: { openai: { auth_method: 'subscription' } } });
-  for (const name of ['glm', 'kimi']) {
+  for (const name of ['glm', 'kimi'].filter((n) => offeredInRelease(n))) {
     const r = jht(dir, 'providers', 'use', name);
     assert.equal(r.code, 1, r.out);
     assert.match(r.out, /runs only on the pi harness, with an API key/);
@@ -65,7 +71,7 @@ test('harness codex is refused for GLM, with the way to pi; harness pi for it sa
   writeFileSync(join(dir, 'jht.config.json'), JSON.stringify({ active_provider: 'glm', harness: 'pi', providers: { glm: keyed(dir, 'glm') } }));
   const refused = jht(dir, 'providers', 'harness', 'codex');
   assert.equal(refused.code, 1, refused.out);
-  assert.match(refused.out, /GLM \(Z\.ai\) runs only on the pi harness/);
+  assert.match(refused.out, /harness 'codex' is not offered in this release: the agents run on pi/);
   assert.equal(refused.config().harness, 'pi');
   // already on pi with its key: no «Install Pi and sign in» (it would be wrong)
   writeFileSync(join(dir, 'jht.config.json'), JSON.stringify({ active_provider: 'glm', harness: 'codex', providers: { glm: keyed(dir, 'glm') } }));

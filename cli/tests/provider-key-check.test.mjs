@@ -5,6 +5,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { offeredInRelease } from '../../shared/runtime/release-providers.js';
 
 const HOME = mkdtempSync(join(tmpdir(), 'jht-key-check-'));
 process.env.JHT_HOME = HOME;
@@ -94,7 +95,7 @@ const saved = () => existsSync(join(HOME, 'jht.config.json')) ? JSON.parse(readF
 
 test('setup with a key the provider refuses: exit 3 (like check-key), a clear sentence, nothing saved, the key nowhere', async () => {
   writeFileSync(join(HOME, 'setup.key'), `${KEY}\n`);
-  for (const provider of ['glm', 'kimi']) {
+  for (const provider of ['glm', 'kimi'].filter((p) => offeredInRelease(p))) {
     const { code, text } = await setup({ provider }, 401);
     assert.equal(code, 3, text);
     assert.match(text, /rejected the API key \(HTTP 401/);
@@ -111,10 +112,10 @@ test('setup with a key the provider accepts, or that could not be tried: saved (
   assert.match(ok.text, /the API key is accepted/);
   assert.equal(saved().active_provider, 'glm');
 
-  const offline = await setup({ provider: 'kimi' }, 'offline');
+  const offline = await setup({ provider: 'glm' }, 'offline');
   assert.equal(offline.code, 0, offline.text);
-  assert.match(offline.text, /Could not check the API key with Kimi \(Moonshot\)/);
-  assert.equal(saved().active_provider, 'kimi');
+  assert.match(offline.text, /Could not check the API key with GLM \(Z\.ai\)/);
+  assert.equal(saved().active_provider, 'glm');
 
   const skipped = await setup({ provider: 'glm', skipHealth: true }, 401);
   assert.equal(skipped.code, 0, skipped.text);

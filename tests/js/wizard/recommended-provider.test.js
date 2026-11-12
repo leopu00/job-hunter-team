@@ -32,8 +32,9 @@ describe('Codex consigliato nella CLI', () => {
   });
 
   it('usa Codex quando nessuno sceglie: jht setup, il setup non interattivo, doctor e providers', () => {
-    expect(read('cli/src/commands/setup.js')).toContain("t('wizard.cli.provider'), 'openai')");
-    expect(read('cli/wizard/setup-noninteractive.js')).toContain('opts.provider || RECOMMENDED_PROVIDER');
+    // jht setup: no Codex default any more; without --provider the setup takes the first service of the release (GLM in 0.4.0)
+    expect(read('cli/src/commands/setup.js')).toContain(".option('--provider <name>', t('wizard.cli.provider'))");
+    expect(read('cli/wizard/setup-noninteractive.js')).toContain('opts.provider || RELEASE_PROVIDERS[0]');
     expect(read('cli/src/lib/texts/en.js')).toContain('jht providers use codex');
     const providers = read('cli/src/commands/providers.js');
     const known = providers.slice(providers.indexOf('const KNOWN_PROVIDERS = {'));

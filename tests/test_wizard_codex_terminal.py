@@ -129,6 +129,15 @@ class WizardTerminal:
         os.close(self.fd)
 
 
+# Codex, and Pi with ChatGPT, are kept in the code for the next release but not offered in this one: the services of a release are
+# the one list in shared/runtime/release-providers.js. These sign-in cases run again as soon as Codex is back in it.
+_RELEASE = (ROOT / "shared/runtime/release-providers.js").read_text(encoding="utf-8")
+codex_not_offered = pytest.mark.skipif(
+    "'openai'" not in _RELEASE[_RELEASE.index("RELEASE_PROVIDERS"):_RELEASE.index("RELEASE_HARNESS")],
+    reason="Codex is not offered in this release (shared/runtime/release-providers.js)",
+)
+
+
 DOWN = b"\x1b[B"
 
 
@@ -189,6 +198,7 @@ def _wait_for_child_exit(pid, timeout=2.0):
         time.sleep(min(0.01, remaining))
 
 
+@codex_not_offered
 def test_codex_code_and_wait_are_visible_in_the_wizard_terminal(tmp_path):
     node, home, env = prepare(tmp_path)
     terminal = WizardTerminal(node, env)
@@ -204,6 +214,7 @@ def test_codex_code_and_wait_are_visible_in_the_wizard_terminal(tmp_path):
         terminal.close()
 
 
+@codex_not_offered
 def test_ctrl_c_then_setup_reuses_saved_config_and_signs_in_here(tmp_path):
     node, home, env = prepare(tmp_path)
     interrupted = WizardTerminal(node, env)
@@ -236,6 +247,7 @@ def test_ctrl_c_then_setup_reuses_saved_config_and_signs_in_here(tmp_path):
         resumed.close()
 
 
+@codex_not_offered
 def test_choosing_pi_signs_in_to_pi_here_and_not_to_codex(tmp_path):
     node, home, env = prepare(tmp_path)
     terminal = WizardTerminal(node, env)
@@ -282,7 +294,7 @@ def test_the_wizard_asks_the_language_first_and_saves_the_answer(tmp_path):
     terminal = WizardTerminal(node, env)
     try:
         answer_language(terminal, DOWN)  # Italiano
-        terminal.until("AI Provider")
+        terminal.until("Chiave API di GLM")
         assert json.loads((home / "i18n-prefs.json").read_text(encoding="utf-8")) == {"locale": "it"}
     finally:
         terminal.close()

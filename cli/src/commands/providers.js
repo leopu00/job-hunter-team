@@ -15,6 +15,7 @@ import { c, GREEN, YELLOW, DIM, RESET } from './_colors.js';
 import { Command } from 'commander';
 import { hint, marks, title } from '../lib/ui.js';
 import { say } from '../lib/texts.js';
+import { RELEASE_PROVIDERS, offeredInRelease } from '../../../shared/runtime/release-providers.js';
 
 const JHT_DIR     = JHT_HOME;
 const CONFIG_PATH = join(JHT_DIR, 'jht.config.json');
@@ -220,6 +221,12 @@ async function handleUsePiApi(piApi, config) {
 }
 
 async function handleUse(id) {
+  // only the services of this release can be chosen (shared/runtime/release-providers.js); the code of the others stays
+  if (!offeredInRelease(id)) {
+    console.error(`${ERR}  provider '${id}' is not offered in this release (offered: ${RELEASE_PROVIDERS.join(', ')}, on Pi with an API key). Set it up with: jht setup`);
+    process.exitCode = 1;
+    return;
+  }
   const piApi = piApiProvider(id);
   if (piApi) {
     let current = {};

@@ -11,6 +11,7 @@ import { writePrivateJson } from '../lib/secure-config-io.js';
 import { AGENT_HARNESSES, DEFAULT_HARNESS, PI_IMAGE_BIN, PI_LOGIN_MARKER, harnessOf, harnessProblem, piApiKeyConfigured } from '../../../shared/runtime/agent-harness.js';
 import { c, DIM, RESET } from './_colors.js';
 import { handleHarnessJson } from './providers-harness-json.js';
+import { RELEASE_HARNESS } from '../../../shared/runtime/release-providers.js';
 import { marks } from '../lib/ui.js';
 
 const CONFIG_PATH = join(JHT_HOME, 'jht.config.json');
@@ -76,6 +77,12 @@ export async function handleHarness(name) {
   const wanted = name.trim().toLowerCase();
   if (!AGENT_HARNESSES.includes(wanted)) {
     console.error(`${ERR}  harness '${name}' unrecognized. Supported: ${AGENT_HARNESSES.join(', ')}`);
+    process.exitCode = 1;
+    return;
+  }
+  // this release runs the agents only on its harness (shared/runtime/release-providers.js); the code of the others stays
+  if (wanted !== RELEASE_HARNESS) {
+    console.error(`${ERR}  harness '${wanted}' is not offered in this release: the agents run on ${RELEASE_HARNESS}. Set it up with: jht setup`);
     process.exitCode = 1;
     return;
   }

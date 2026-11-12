@@ -1,4 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { offeredInRelease } from '../../../shared/runtime/release-providers.js';
+// Codex (and Pi with ChatGPT) is kept in the code for the next release but not offered in this one (shared/runtime/release-providers.js):
+// these cases run again as soon as it is back in that list.
+const codexOffered = offeredInRelease('openai');
 
 // Gate CLI Linux 19i (A4): after the wait for the login ran out, `jht setup` → «Keep existing values» ended without
 // asking for the login that was still missing.
@@ -41,7 +45,7 @@ beforeEach(() => {
   delete process.env.JHT_HOST_TYPE;
 });
 
-describe('jht setup — «Keep existing values» and the provider login', () => {
+describe.skipIf(!codexOffered)('jht setup — «Keep existing values» and the provider login', () => {
   it('asks for the login of the kept provider, and ends as kept once it is there', async () => {
     vi.mocked(readConfigFileSnapshot).mockReturnValue({ exists: true, config: kept('openai') });
     const asked = prompter(['keep']);

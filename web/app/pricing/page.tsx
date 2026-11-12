@@ -50,17 +50,17 @@ const TIER_LABEL: Record<Lang, Record<Tier, string>> = {
 
 const PROVIDERS: Provider[] = [
   {
-    name: "Codex",
-    vendor: "OpenAI",
+    name: "GLM",
+    vendor: "Z.ai",
     tier: "high",
-    url: "https://openai.com/chatgpt/pricing",
-    it: "Il più completo: provato a fondo in ogni scenario, offre l'output migliore per qualità e quantità. È il provider consigliato: la scelta più solida se vuoi il massimo dal team.",
-    en: "The most complete: thoroughly tested in every scenario, it delivers the best output for both quality and quantity. It is the recommended provider: the most solid choice if you want the most from the team.",
-    es: "El más completo: probado a fondo en todos los escenarios, ofrece el mejor resultado en calidad y cantidad. Es el proveedor recomendado: la opción más sólida si quieres lo máximo del equipo.",
-    fr: "Le plus complet : testé à fond dans tous les scénarios, il offre le meilleur résultat en qualité et en quantité. C'est le fournisseur recommandé : le choix le plus solide si vous voulez le maximum de l'équipe.",
-    de: "Das vollständigste: gründlich in jedem Szenario getestet, liefert es den besten Output in Qualität und Menge. Es ist der empfohlene Anbieter: die solideste Wahl, wenn du das Maximum aus dem Team willst.",
-    pt: "O mais completo: testado a fundo em todos os cenários, oferece o melhor resultado em qualidade e quantidade. É o fornecedor recomendado: a escolha mais sólida se queres o máximo da equipa.",
-    hu: "A legteljesebb: minden helyzetben alaposan tesztelve, minőségben és mennyiségben a legjobb kimenetet nyújtja. Ez az ajánlott szolgáltató: a legszilárdabb választás, ha a maximumot szeretnéd a csapattól.",
+    url: "https://z.ai",
+    it: "L'unico provider della 0.4.0: gli agenti girano sull'harness Pi con la tua chiave API, a consumo. jht setup chiede la chiave, la controlla e la tiene nel container; un tetto di spesa giornaliero mette in pausa il team. Misurato: circa 0,10 USD per posizione valutata.",
+    en: "The one provider of 0.4.0: the agents run on the Pi harness with your API key, paid per call. jht setup asks for the key, checks it and keeps it in the container; a daily spending ceiling pauses the team. Measured: about 0.10 USD per scored position.",
+    es: "El único proveedor de la 0.4.0: los agentes funcionan sobre el harness Pi con tu clave de API, de pago por uso. jht setup pide la clave, la comprueba y la guarda en el contenedor; un tope de gasto diario pausa el equipo. Medido: unos 0,10 USD por posición evaluada.",
+    fr: "L'unique fournisseur de la 0.4.0 : les agents tournent sur le harness Pi avec votre clé d'API, payée à l'usage. jht setup demande la clé, la vérifie et la garde dans le conteneur ; un plafond de dépense quotidien met l'équipe en pause. Mesuré : environ 0,10 USD par poste évalué.",
+    de: "Der einzige Anbieter von 0.4.0: Die Agenten laufen auf dem Pi-Harness mit deinem API-Key, pro Aufruf bezahlt. jht setup fragt nach dem Key, prüft ihn und bewahrt ihn im Container auf; ein tägliches Ausgabenlimit pausiert das Team. Gemessen: etwa 0,10 USD pro bewerteter Stelle.",
+    pt: "O único fornecedor da 0.4.0: os agentes correm no harness Pi com a sua chave de API, paga por uso. O jht setup pede a chave, verifica-a e guarda-a no contentor; um teto de gastos diário pausa a equipa. Medido: cerca de 0,10 USD por posição avaliada.",
+    hu: "A 0.4.0 egyetlen szolgáltatója: az ügynökök a Pi harness-en futnak az API-kulcsoddal, hívásonként fizetve. A jht setup elkéri a kulcsot, ellenőrzi és a konténerben tartja; a napi költési plafon szünetelteti a csapatot. Mérve: kb. 0,10 USD értékelt pozíciónként.",
   },
 ];
 
@@ -70,14 +70,14 @@ const PAGE = {
     subtitle: "Job Hunter Team è open source. Ecco l'unica cosa che ti costa.",
     freeTitle: "La piattaforma non si paga",
     freeBody:
-      "Software open source con licenza MIT: nessun abbonamento alla piattaforma, nessun costo nascosto, nessun ricavo per noi. Lo scarichi e fai girare il team a casa tua; l'unica spesa è l'abbonamento al modello AI.",
+      "Software open source con licenza MIT: nessun abbonamento alla piattaforma, nessun costo nascosto, nessun ricavo per noi. Lo scarichi e fai girare il team a casa tua; l'unica spesa è il consumo del modello AI, pagato al provider con la tua chiave API.",
     providersTitle: "I provider AI",
     providersIntro:
-      "Scegli tu quale intelligenza far lavorare per te. Questi sono i provider che abbiamo testato: funzionano già con i piani base, ma per i risultati migliori consigliamo la fascia alta. I prezzi cambiano e non li ripetiamo qui: il riferimento sono le pagine ufficiali.",
+      "Nella 0.4.0 il team gira su GLM (Z.ai) con una chiave API, pagata a consumo; Codex non è in questa versione. I prezzi cambiano e non li ripetiamo qui: il riferimento sono le pagine ufficiali.",
     providerLink: "Prezzi ufficiali →",
-    dedicatedTitle: "Dedica l'abbonamento al team",
+    dedicatedTitle: "Dedica la chiave al team",
     dedicatedNote:
-      "Un punto importante: serve un abbonamento AI tutto per il team, separato da quello che usi ogni giorno. Il team lo consuma per intero, quindi non condividerlo con il tuo uso personale.",
+      "Un punto importante: usa una chiave API solo per il team, separata da quella che usi ogni giorno, e metti un tetto di spesa sia nel team sia presso il provider: così il conto si legge e non si mescola con il tuo uso personale.",
     ctaSetup: "Come si avvia →",
     back: "← Torna alla home",
   },
@@ -87,14 +87,14 @@ const PAGE = {
       "Job Hunter Team is open source. Here's the only thing it costs you.",
     freeTitle: "The platform is free",
     freeBody:
-      "Open source under the MIT license: no platform subscription, no hidden fees, no revenue for us. You download and run the team on your own machine; the only cost is the AI model's subscription.",
+      "Open source under the MIT license: no platform subscription, no hidden fees, no revenue for us. You download and run the team on your own machine; the only cost is the AI model's usage, paid to the provider with your API key.",
     providersTitle: "The AI providers",
     providersIntro:
-      "You choose which intelligence works for you. These are the providers we tested: they all work on their base plans, but for the best results we recommend the high tier. Prices change and we don't quote them here: the official pages are the reference.",
+      "In 0.4.0 the team runs on GLM (Z.ai) with an API key, paid per call; Codex is not in this version. Prices change and we don't quote them here: the official pages are the reference.",
     providerLink: "Official pricing →",
-    dedicatedTitle: "Dedicate the subscription to the team",
+    dedicatedTitle: "Dedicate the key to the team",
     dedicatedNote:
-      "One important point: the team needs an AI subscription of its own, separate from the one you use day to day. It consumes the whole allowance, so don't share it with your personal use.",
+      "One important point: use an API key for the team only, separate from the one you use day to day, and set a spending ceiling both in the team and with the provider: the spending stays readable and apart from your personal use.",
     ctaSetup: "How to run it →",
     back: "← Back to home",
   },
@@ -103,14 +103,14 @@ const PAGE = {
     subtitle: "Job Hunter Team es open source. Esto es lo único que te cuesta.",
     freeTitle: "La plataforma es gratuita",
     freeBody:
-      "Software open source con licencia MIT: ninguna suscripción a la plataforma, ningún coste oculto, ningún ingreso para nosotros. Lo descargas y haces funcionar el equipo en tu propia máquina; el único gasto es la suscripción al modelo de IA.",
+      "Software open source con licencia MIT: ninguna suscripción a la plataforma, ningún coste oculto, ningún ingreso para nosotros. Lo descargas y haces funcionar el equipo en tu propia máquina; el único gasto es el uso del modelo de IA, pagado al proveedor con tu clave de API.",
     providersTitle: "Los proveedores de IA",
     providersIntro:
-      "Tú eliges qué inteligencia trabaja para ti. Estos son los proveedores que hemos probado: todos funcionan con los planes base, pero para los mejores resultados recomendamos el nivel alto. Los precios cambian y no los reproducimos aquí: la referencia son las páginas oficiales.",
+      "En la 0.4.0 el equipo funciona con GLM (Z.ai) y una clave de API, de pago por uso; Codex no está en esta versión. Los precios cambian y no los reproducimos aquí: la referencia son las páginas oficiales.",
     providerLink: "Precios oficiales →",
-    dedicatedTitle: "Dedica la suscripción al equipo",
+    dedicatedTitle: "Dedica la clave al equipo",
     dedicatedNote:
-      "Un punto importante: hace falta una suscripción de IA propia para el equipo, separada de la que usas a diario. El equipo la consume por completo, así que no la compartas con tu uso personal.",
+      "Un punto importante: usa una clave de API solo para el equipo, separada de la que usas a diario, y pon un tope de gasto tanto en el equipo como en el proveedor: así la factura se lee y no se mezcla con tu uso personal.",
     ctaSetup: "Cómo se inicia →",
     back: "← Volver al inicio",
   },
@@ -120,14 +120,14 @@ const PAGE = {
       "Job Hunter Team est open source. Voici la seule chose qui vous coûte.",
     freeTitle: "La plateforme est gratuite",
     freeBody:
-      "Logiciel open source sous licence MIT : aucun abonnement à la plateforme, aucun coût caché, aucun revenu pour nous. Vous le téléchargez et faites tourner l'équipe sur votre propre machine ; la seule dépense est l'abonnement au modèle d'IA.",
+      "Logiciel open source sous licence MIT : aucun abonnement à la plateforme, aucun coût caché, aucun revenu pour nous. Vous le téléchargez et faites tourner l'équipe sur votre propre machine ; la seule dépense est l'usage du modèle d'IA, payé au fournisseur avec votre clé d'API.",
     providersTitle: "Les fournisseurs d'IA",
     providersIntro:
-      "C'est vous qui choisissez quelle intelligence travaille pour vous. Voici les fournisseurs que nous avons testés : ils fonctionnent tous avec leurs formules de base, mais pour les meilleurs résultats nous recommandons le haut de gamme. Les prix changent et nous ne les reprenons pas ici : les pages officielles font foi.",
+      "Dans la 0.4.0, l'équipe fonctionne avec GLM (Z.ai) et une clé d'API, payée à l'usage ; Codex n'est pas dans cette version. Les prix changent et nous ne les reprenons pas ici : les pages officielles font foi.",
     providerLink: "Tarifs officiels →",
-    dedicatedTitle: "Dédiez l'abonnement à l'équipe",
+    dedicatedTitle: "Dédiez la clé à l'équipe",
     dedicatedNote:
-      "Un point important : il faut un abonnement d'IA dédié à l'équipe, distinct de celui que vous utilisez au quotidien. L'équipe le consomme entièrement, alors ne le partagez pas avec votre usage personnel.",
+      "Un point important : utilisez une clé d'API réservée à l'équipe, distincte de celle de votre usage quotidien, et fixez un plafond de dépense dans l'équipe et chez le fournisseur : la facture reste lisible et séparée de votre usage personnel.",
     ctaSetup: "Comment le lancer →",
     back: "← Retour à l'accueil",
   },
@@ -137,14 +137,14 @@ const PAGE = {
       "Job Hunter Team ist Open Source. Das ist das Einzige, was es dich kostet.",
     freeTitle: "Die Plattform ist kostenlos",
     freeBody:
-      "Open-Source-Software unter MIT-Lizenz: kein Plattform-Abonnement, keine versteckten Kosten, keine Einnahmen für uns. Du lädst sie herunter und lässt das Team auf deinem eigenen Rechner laufen; die einzige Ausgabe ist das Abonnement für das KI-Modell.",
+      "Open-Source-Software unter MIT-Lizenz: kein Plattform-Abonnement, keine versteckten Kosten, keine Einnahmen für uns. Du lädst sie herunter und lässt das Team auf deinem eigenen Rechner laufen; die einzige Ausgabe ist die Nutzung des KI-Modells, mit deinem API-Key beim Anbieter bezahlt.",
     providersTitle: "Die KI-Anbieter",
     providersIntro:
-      "Du entscheidest, welche Intelligenz für dich arbeitet. Dies sind die von uns getesteten Anbieter: Sie funktionieren alle schon mit ihren Basistarifen, aber für die besten Ergebnisse empfehlen wir die Oberklasse. Preise ändern sich und wir geben sie hier nicht wieder: Maßgeblich sind die offiziellen Seiten.",
+      "In 0.4.0 läuft das Team mit GLM (Z.ai) und einem API-Key, pro Aufruf bezahlt; Codex ist nicht in dieser Version. Preise ändern sich und wir geben sie hier nicht wieder: Maßgeblich sind die offiziellen Seiten.",
     providerLink: "Offizielle Preise →",
-    dedicatedTitle: "Widme das Abonnement dem Team",
+    dedicatedTitle: "Widme den Key dem Team",
     dedicatedNote:
-      "Ein wichtiger Punkt: Das Team braucht ein eigenes KI-Abonnement, getrennt von dem, das du täglich nutzt. Das Team verbraucht es vollständig, teile es also nicht mit deiner persönlichen Nutzung.",
+      "Ein wichtiger Punkt: Nutze einen API-Key nur für das Team, getrennt von dem, den du täglich nutzt, und setze ein Ausgabenlimit im Team und beim Anbieter: So bleibt die Rechnung lesbar und getrennt von deiner persönlichen Nutzung.",
     ctaSetup: "So wird es gestartet →",
     back: "← Zurück zur Startseite",
   },
@@ -154,14 +154,14 @@ const PAGE = {
       "A Job Hunter Team nyílt forráskódú. Ez az egyetlen dolog, ami pénzbe kerül.",
     freeTitle: "A platform ingyenes",
     freeBody:
-      "Nyílt forráskódú szoftver MIT licenc alatt: nincs platform-előfizetés, nincsenek rejtett költségek, nincs bevételünk belőle. Letöltöd és a saját gépeden futtatod a csapatot; az egyetlen kiadás az AI-modell előfizetése.",
+      "Nyílt forráskódú szoftver MIT licenc alatt: nincs platform-előfizetés, nincsenek rejtett költségek, nincs bevételünk belőle. Letöltöd és a saját gépeden futtatod a csapatot; az egyetlen kiadás az AI-modell használata, amelyet az API-kulcsoddal fizetsz a szolgáltatónak.",
     providersTitle: "Az AI-szolgáltatók",
     providersIntro:
-      "Te döntöd el, melyik intelligencia dolgozzon érted. Ezek az általunk tesztelt szolgáltatók: mindegyik működik már az alapcsomaggal is, de a legjobb eredményekhez a felső kategóriát javasoljuk. Az árak változnak, és itt nem ismételjük őket: a hivatalos oldalak az irányadók.",
+      "A 0.4.0-ban a csapat GLM-mel (Z.ai) fut, API-kulccsal, hívásonként fizetve; a Codex nincs benne ebben a verzióban. Az árak változnak, és itt nem ismételjük őket: a hivatalos oldalak az irányadók.",
     providerLink: "Hivatalos árak →",
-    dedicatedTitle: "Szentelj egy előfizetést a csapatnak",
+    dedicatedTitle: "Szentelj egy kulcsot a csapatnak",
     dedicatedNote:
-      "Egy fontos pont: a csapatnak saját AI-előfizetésre van szüksége, elkülönítve attól, amit naponta használsz. A csapat teljesen felhasználja, ezért ne oszd meg a személyes használatoddal.",
+      "Egy fontos pont: használj csak a csapatnak szánt API-kulcsot, elkülönítve attól, amit naponta használsz, és állíts be költési plafont a csapatban és a szolgáltatónál is: így a számla átlátható marad, és nem keveredik a személyes használatoddal.",
     ctaSetup: "Hogyan indítható →",
     back: "← Vissza a főoldalra",
   },
@@ -171,14 +171,14 @@ const PAGE = {
       "O Job Hunter Team é open source. Aqui está a única coisa que lhe custa.",
     freeTitle: "A plataforma é gratuita",
     freeBody:
-      "Software open source com licença MIT: nenhuma subscrição da plataforma, nenhum custo oculto, nenhuma receita para nós. Transfere-o e põe o equipa a funcionar na sua própria máquina; a única despesa é a subscrição do modelo de IA.",
+      "Software open source com licença MIT: nenhuma subscrição da plataforma, nenhum custo oculto, nenhuma receita para nós. Transfere-o e põe o equipa a funcionar na sua própria máquina; a única despesa é o uso do modelo de IA, pago ao fornecedor com a sua chave de API.",
     providersTitle: "Os fornecedores de IA",
     providersIntro:
-      "É você quem escolhe que inteligência trabalha para si. Estes são os fornecedores que testámos: todos funcionam já com os planos base, mas para os melhores resultados recomendamos o nível alto. Os preços mudam e não os repetimos aqui: a referência são as páginas oficiais.",
+      "Na 0.4.0 a equipa funciona com GLM (Z.ai) e uma chave de API, paga por uso; Codex não está nesta versão. Os preços mudam e não os repetimos aqui: a referência são as páginas oficiais.",
     providerLink: "Preços oficiais →",
-    dedicatedTitle: "Dedique a subscrição à equipa",
+    dedicatedTitle: "Dedique a chave à equipa",
     dedicatedNote:
-      "Um ponto importante: a equipa precisa de uma subscrição de IA própria, separada da que usa no dia a dia. A equipa consome-a por inteiro, por isso não a partilhe com o seu uso pessoal.",
+      "Um ponto importante: use uma chave de API só para a equipa, separada da que usa no dia a dia, e defina um teto de gastos na equipa e no fornecedor: assim a fatura fica legível e separada do seu uso pessoal.",
     ctaSetup: "Como se inicia →",
     back: "← Voltar ao início",
   },
@@ -297,7 +297,7 @@ function PricingContent() {
             ))}
           </div>
 
-          {/* Avviso evidente: abbonamento dedicato al team */}
+          {/* Avviso evidente: chiave dedicata al team */}
           <div
             className="mt-8 border-l-2 border-[var(--color-green)] p-5 md:p-6 max-w-3xl mx-auto"
             style={{ background: "var(--color-panel)" }}

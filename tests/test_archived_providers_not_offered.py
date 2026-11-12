@@ -29,24 +29,16 @@ def config_of(home: Path) -> dict:
     return json.loads((home / ".jht" / "jht.config.json").read_text())
 
 
-@pytest.mark.parametrize("names", [("kimi", "moonshot", "KIMI"), ("claude", "anthropic", "Claude")])
-def test_providers_use_refuses_the_archived_ones_and_leaves_the_configuration_as_it_was(jht_home, names):
+@pytest.mark.parametrize("names", [("kimi", "moonshot", "KIMI"), ("claude", "anthropic", "Claude"), ("codex", "openai")])
+def test_providers_use_refuses_what_this_release_does_not_offer_and_leaves_the_configuration_as_it_was(jht_home, names):
+    """The services of a release are one list (shared/runtime/release-providers.js): 0.4.0 offers GLM only."""
     make_config(jht_home / ".jht", {"active_provider": "openai", "providers": {"openai": {}}})
     before = (jht_home / ".jht" / "jht.config.json").read_bytes()
     for name in names:
         code, out, err = run_jht("providers", "use", name, env={"HOME": str(jht_home)})
-        assert code != 0 or "archived" in (out + err), (name, out, err)
-        assert "archived" in (out + err), (name, out, err)
+        assert code != 0, (name, out, err)
+        assert "is not offered in this release" in (out + err) and "jht setup" in (out + err), (name, out, err)
         assert (jht_home / ".jht" / "jht.config.json").read_bytes() == before, name
-    assert config_of(jht_home)["active_provider"] == "openai"
-
-
-def test_providers_use_still_accepts_what_is_offered(jht_home):
-    make_config(jht_home / ".jht", {"active_provider": "openai", "providers": {"openai": {}}})
-    for name in ("codex", "openai"):
-        code, out, err = run_jht("providers", "use", name, env={"HOME": str(jht_home)})
-        assert code == 0, (name, out, err)
-        assert config_of(jht_home)["active_provider"] == "openai"
 
 
 def test_the_list_shows_an_archived_provider_only_to_the_team_that_still_uses_it(jht_home):

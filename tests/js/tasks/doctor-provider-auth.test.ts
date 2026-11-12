@@ -1,4 +1,8 @@
 import { describe, it, expect } from "vitest";
+import { offeredInRelease } from '../../../shared/runtime/release-providers.js';
+// Codex (and Pi with ChatGPT) is kept in the code for the next release but not offered in this one (shared/runtime/release-providers.js):
+// these cases run again as soon as it is back in that list.
+const codexOffered = offeredInRelease('openai');
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -21,7 +25,7 @@ function runDoctor(provider: Record<string, unknown>, env: Record<string, string
   return { code: r.status, out: `${r.stdout ?? ""}${r.stderr ?? ""}` };
 }
 
-describe("jht doctor — autenticazione provider", () => {
+describe.skipIf(!codexOffered)("jht doctor — autenticazione provider", () => {
   it("riconosce una subscription OAuth senza richiedere una API key", () => {
     const r = runDoctor({ auth_method: "subscription", model: "gpt-5.6-sol" }, {
       OPENAI_API_KEY: "",

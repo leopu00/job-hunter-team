@@ -5,6 +5,8 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { offeredInRelease } from '../../shared/runtime/release-providers.js';
+const kimiSkip = offeredInRelease('kimi') ? false : 'kimi is not offered in this release (shared/runtime/release-providers.js)';
 
 const HOME = mkdtempSync(join(tmpdir(), 'jht-pi-api-'));
 process.env.JHT_HOME = HOME;
@@ -31,7 +33,7 @@ test('the choices: glm and kimi with their pi variables, moonshot is kimi', () =
 });
 
 for (const [provider, model] of [['glm', 'glm-5.3'], ['kimi', 'kimi-k3.1-pro']]) {
-  test(`${provider} with pi: the key is a reference to a file, the config says the harness and the model`, async () => {
+  test(`${provider} with pi: the key is a reference to a file, the config says the harness and the model`, { skip: offeredInRelease(provider) ? false : `${provider} is not offered in this release` }, async () => {
     const { code, text } = await setup({ provider, harness: 'pi', secretMode: 'file', secretFile: '/dev/shm/jht-key' });
     assert.equal(code, 0, text);
     const saved = config();
@@ -43,7 +45,7 @@ for (const [provider, model] of [['glm', 'glm-5.3'], ['kimi', 'kimi-k3.1-pro']])
   });
 }
 
-test('the key variable of an env reference is the provider\'s, not a guess', async () => {
+test('the key variable of an env reference is the provider\'s, not a guess', { skip: kimiSkip }, async () => {
   const { code } = await setup({ provider: 'glm', harness: 'pi', secretMode: 'env' });
   assert.equal(code, 0);
   assert.equal(config().providers.glm.api_key_ref.id, 'ZAI_API_KEY');
@@ -55,25 +57,35 @@ test('the key variable of an env reference is the provider\'s, not a guess', asy
 
 test('their key is never plaintext: by reference only (a file the setup keeps, env or file); the file of the person is in setup-key-store.test.mjs', async () => {
   for (const extra of [{}, { secretMode: 'plaintext', apiKey: 'synthetic-key' }]) {
-    const { code, text } = await setup({ provider: 'kimi', harness: 'pi', ...extra });
+    const { code, text } = await setup({ provider: 'glm', harness: 'pi', ...extra });
     assert.equal(code, 1, text);
     assert.match(text, /by reference: use --api-key-file or --api-key-stdin .* or --secret-mode env or --secret-mode file/);
   }
 });
 
 test('they run only on pi, and only with an API key', async () => {
-  const codex = await setup({ provider: 'glm', secretMode: 'file', secretFile: '/dev/shm/k' });
+  const codex = await setup({ provider: 'glm', harness: 'codex', secretMode: 'file', secretFile: '/dev/shm/k' });
   assert.equal(codex.code, 1);
-  assert.match(codex.text, /only on the pi harness/);
-  const subscription = await setup({ provider: 'kimi', harness: 'pi', authMethod: 'subscription', subscriptionEmail: 'user@example.test' });
+  assert.match(codex.text, /only on pi/);
+  const subscription = await setup({ provider: 'glm', harness: 'pi', authMethod: 'subscription', subscriptionEmail: 'user@example.test' });
   assert.equal(subscription.code, 1);
   assert.match(subscription.text, /only with an API key/);
 });
 
-test('an unknown provider says what is offered', async () => {
-  const { code, text } = await setup({ provider: 'gemini', harness: 'pi' });
-  assert.equal(code, 1);
-  assert.match(text, /openai \(Codex\), glm \(Z\.ai\) or kimi \(Moonshot\)/);
+test('an unknown provider, and one this release does not offer, say what is offered', async () => {
+  for (const provider of ['gemini', 'openai', 'claude', ...(offeredInRelease('kimi') ? [] : ['kimi', 'moonshot'])]) {
+    const { code, text } = await setup({ provider });
+    assert.equal(code, 1, provider);
+    assert.match(text, /This release offers only glm with an API key, on the pi harness/, provider);
+    assert.match(text, /jht setup --non-interactive --provider glm --api-key-stdin/, provider);
+  }
+});
+
+test('without --provider and --harness the setup is GLM on pi', async () => {
+  const { code, text } = await setup({ secretMode: 'file', secretFile: '/dev/shm/jht-key' });
+  assert.equal(code, 0, text);
+  assert.equal(config().active_provider, 'glm');
+  assert.equal(config().harness, 'pi');
 });
 
 test.after(() => rmSync(HOME, { recursive: true, force: true }));

@@ -6,6 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import test from 'node:test';
+import { offeredInRelease } from '../../shared/runtime/release-providers.js';
+const kimiSkip = offeredInRelease('kimi') ? false : 'kimi is not offered in this release (shared/runtime/release-providers.js)';
 
 const HOME = mkdtempSync(join(tmpdir(), 'jht-keep-config-'));
 const DEPS = join(HOME, 'deps');
@@ -69,7 +71,7 @@ test('a model given now replaces the one chosen before; a plaintext key or a sub
   assert.ok(entry.api_key_ref);
 });
 
-test('a config that says moonshot is the team of kimi: kept, and the entry moves to the name the setup writes', async () => {
+test('a config that says moonshot is the team of kimi: kept, and the entry moves to the name the setup writes', { skip: kimiSkip }, async () => {
   put({
     version: 1,
     active_provider: 'moonshot',
@@ -89,7 +91,7 @@ test('a config that says moonshot is the team of kimi: kept, and the entry moves
   assert.equal(sameTeamConfig({ active_provider: 'kimi', harness: 'pi', providers: { kimi: {} } }, 'moonshot', 'pi'), null, 'the setup names kimi');
 });
 
-test('another provider or another harness starts a new config, as before', async () => {
+test('another provider or another harness starts a new config, as before', { skip: kimiSkip }, async () => {
   put(before());
   const other = await setup({ provider: 'kimi' });
   assert.equal(other.code, 0, other.text);

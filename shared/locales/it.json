@@ -87,6 +87,8 @@
   "wizard.telegram.intro": "Servono 3 bot Telegram (Assistente, Capitano, Mentor). Creali con @BotFather e incolla i token.",
   "wizard.provider.prompt": "Provider AI",
   "wizard.key.title": "Chiave API",
+  "wizard.release.coming": "Codex, Kimi, Claude e accesso con abbonamento: in arrivo in una prossima versione.",
+  "wizard.release.not_offered": "La configurazione salvata è per %s, che questa versione non offre: resta com'è finché non scegli un servizio qui sotto.",
   "wizard.access.prompt": "Come accede Codex?",
   "wizard.access.subscription": "Abbonamento ChatGPT — consigliato: accedi col tuo account, nessun costo a consumo",
   "wizard.access.api_key": "Chiave API OpenAI — a consumo, sul tuo account OpenAI",

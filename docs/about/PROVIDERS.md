@@ -1,15 +1,16 @@
 # 💳 Providers & Pricing
 
-Two ways to power the team in 0.4:
+**0.4.0 offers one way to power the team: Pi with a GLM (Z.ai) API key.** `jht setup` (guided and `--non-interactive`) offers only that.
 
-| Way | How you pay | Agents run on | Status |
+| Way | How you pay | Agents run on | Status in 0.4.0 |
 |---|---|---|---|
-| 🔵 **Codex (OpenAI)** — recommended | your ChatGPT **subscription** (Plus / Pro), signed in with the provider's login | Codex CLI | proven over a month of autonomous work |
-| 🟢 **Pi with GLM (Z.ai) or Kimi (Moonshot)** | an **API key**, billed per call by the provider | the Pi harness | measured in short runs; no full flow with a real key and account yet |
+| 🟢 **Pi with GLM (Z.ai)** | an **API key**, billed per call by the provider | the Pi harness | ✅ offered |
+| 🔵 Codex (OpenAI) with a ChatGPT subscription or an OpenAI key | subscription or API key | Codex CLI | ⏳ coming in a later release |
+| Kimi (Moonshot), Claude | API key / subscription | Pi / their CLI | ⏳ coming in a later release |
 
-Claude Code and the Kimi subscription CLI are not offered on the site or in the app; a team already configured on either keeps working.
+The services a release offers are one list in the code (`shared/runtime/release-providers.js`). A team already configured on a service that is not offered keeps its configuration: `jht doctor` says it is not supported in this release and what to do (`jht setup`, choose GLM and paste its key).
 
-## 🔵 Codex: subscription
+## 🔵 Codex: subscription (coming in a later release)
 
 `jht setup` (or the app) signs you in with your ChatGPT account. The team runs inside the plan's 5-hour and weekly windows:
 
@@ -20,13 +21,14 @@ Together they aim each window at **92%** without crossing 100% (which would rate
 
 The plan matters: the app asks which one you have (a card in the Assistant's chat) and sizes the team to it.
 
-## 🟢 Pi with GLM or Kimi: API key
+## 🟢 Pi with GLM: API key
 
 ```bash
-jht setup --non-interactive --provider glm --harness pi --api-key-file <file>   # or: … --api-key-stdin < <file>
+jht setup                                                      # guided: the key is typed hidden
+jht setup --non-interactive --provider glm --api-key-file <file>   # or: … --api-key-stdin < <file>
 ```
 
-`--provider kimi` for Kimi. The key is read from a file or from stdin, kept off the command line (`--api-key` works but leaves the key in your shell history), and handed to the agents only through their environment. The app's **Settings** can switch the agents' program (Codex or Pi) and give GLM/Kimi a new key.
+The harness is Pi (`--harness pi` is the default and the only one accepted in 0.4.0). Kimi (`--provider kimi`) comes in a later release. The guided setup checks the key with the provider before it keeps it. The key is read from a file or from stdin, kept off the command line (`--api-key` works but leaves the key in your shell history), and handed to the agents only through their environment. The app's **Settings** can switch the agents' program (Codex or Pi) and give GLM/Kimi a new key.
 
 Models per role (`shared/runtime/provider-models.list`): on GLM the Scout, the Analyst and the Sentinel use `glm-5.3-flash`, the other roles `glm-5.3`; on Kimi `kimi-k3.1-pro` for every role.
 

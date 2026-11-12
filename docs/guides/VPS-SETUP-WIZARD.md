@@ -23,7 +23,8 @@ with your infrastructure provider before you start.
 - A Google sign-in in the app. A new team on a VPS is paired with your
   account during the preparation; a local profile has no account to pair it
   with.
-- A dedicated Codex (ChatGPT) subscription.
+- A GLM (Z.ai) API key: 0.4.0 runs the team only on Pi with GLM. Codex and the other services come in a
+  later release.
 
 ## Guided path
 

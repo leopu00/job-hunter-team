@@ -124,6 +124,8 @@ export default {
   'doctor.provider_credit_hint': 'Top it up on the provider\'s site; the team resumes by itself within half an hour (if it was off: jht team start)',
   'credit.gone': 'The credit on {provider} is used up: the agents cannot answer. Top it up on the provider\'s site; the team resumes by itself within half an hour.',
   'doctor.provider_nokey': 'Provider {active} has no API key',
+  'doctor.provider_not_in_release': 'Provider {active} is not supported in this release (offered: {offered}, on Pi with an API key)',
+  'doctor.provider_not_in_release_hint': 'jht setup   (choose {offered} and paste its API key; your current config is kept until then)',
   'doctor.provider_setenv': 'Set {env}',
   'doctor.provider_line': 'Provider: {name}',
   'doctor.api_skip': 'API test — no Anthropic key found',

@@ -13,7 +13,6 @@ import { lstatSync, readFileSync } from 'node:fs';
 import pc from 'picocolors';
 import {
   findProviderChoice,
-  RECOMMENDED_PROVIDER,
   JHT_CONFIG_DIR,
   readConfigFileSnapshot,
   writeConfigFile,
@@ -28,6 +27,7 @@ import { summarizeRoleModels } from './setup-models.js';
 import { AGENT_HARNESSES, DEFAULT_HARNESS } from '../../shared/runtime/agent-harness.js';
 import { piApiProvider } from '../../shared/runtime/provider-models.js';
 import { harnessRefusal } from './setup-harness.js';
+import { RELEASE_PROVIDERS, RELEASE_HARNESS, offeredInRelease } from '../../shared/runtime/release-providers.js';
 import { migrateToLatest } from '../src/commands/migrate.js';
 import { KEY_REFUSED_EXIT_CODE } from '../src/commands/providers-key-check.js';
 import { API_KEY_MAX_BYTES, firstLine, isLauncherSafePath, keyShapeProblem, keyStoreDir, readKeyFromStream, storeApiKey } from './key-store.js';
@@ -88,15 +88,21 @@ export async function runNonInteractiveSetup(opts) {
   if (!applyLanguage(opts)) { process.exitCode = 1; return; }
 
   // --- Validazione flag obbligatori ---
-  const selectedProvider = findProviderChoice(opts.provider || RECOMMENDED_PROVIDER);
-  if (!selectedProvider) {
-    console.error(pc.red(`Invalid provider "${opts.provider}". Use: openai (Codex), glm (Z.ai) or kimi (Moonshot), the last two with --harness pi`));
+  const selectedProvider = findProviderChoice(opts.provider || RELEASE_PROVIDERS[0]);
+  if (!selectedProvider || !offeredInRelease(selectedProvider.value)) {
+    // the services of this release are one list (shared/runtime/release-providers.js); the others come in a later release
+    console.error(pc.red(`This release offers only ${RELEASE_PROVIDERS.join(', ')} with an API key, on the ${RELEASE_HARNESS} harness ("${opts.provider}" is not offered). Example: jht setup --non-interactive --provider ${RELEASE_PROVIDERS[0]} --api-key-stdin`));
     process.exitCode = 1;
     return;
   }
   const providerName = selectedProvider.value; // moonshot is kimi
 
-  const harness = opts.harness || DEFAULT_HARNESS;
+  const harness = opts.harness || RELEASE_HARNESS;
+  if (harness !== RELEASE_HARNESS) {
+    console.error(pc.red(`This release runs the agents only on ${RELEASE_HARNESS}: drop --harness or use --harness ${RELEASE_HARNESS}.`));
+    process.exitCode = 1;
+    return;
+  }
   if (!AGENT_HARNESSES.includes(harness)) {
     console.error(pc.red(`Invalid harness "${harness}". Use: ${AGENT_HARNESSES.join(', ')}`));
     process.exitCode = 1;
