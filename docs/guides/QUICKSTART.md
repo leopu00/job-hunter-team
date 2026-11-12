@@ -14,7 +14,7 @@ JHT runs many agents in parallel, around the clock. You need **one** of:
 |     | Provider   | How you pay | Status |
 | --- | ---------- | ----------- | ------ |
 | 🔵  | **Codex**  | ChatGPT Plus / Pro subscription, ~€100/mo | ✅ **Recommended** — proven by a 1-month autonomous run (658 positions, weekly budget self-managed at 99–100%) |
-| 🟢  | **GLM (Z.ai) or Kimi (Moonshot)** on the Pi harness | API key, per call | Measured in short runs (~0.10 USD per scored position); set from the CLI with `jht setup --provider glm --harness pi --api-key-file <file>` |
+| 🟢  | **GLM (Z.ai) or Kimi (Moonshot)** on the Pi harness | API key, per call | Measured on GLM in short runs (~0.10 USD per scored position; not measured on Kimi); set from the CLI with `jht setup --provider glm --harness pi --api-key-file <file>` |
 
 Details and the spending ceiling of an API key: [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md).
 
