@@ -24,11 +24,8 @@
  *     `web/`), nessun `WWW-Authenticate`. Non è un'API per un browser: non
  *     c'è pagina, non c'è login, e un `WWW-Authenticate` chiederebbe a un
  *     browser di aprire una finestra di password su una superficie che non ha
- *     utenti. L'elenco esatto degli header vietati, con il controllo che lo
- *     rende vero, sta in `tests/js/tasks/api-invariants-guard.test.ts`: qui
- *     nemmeno il loro NOME compare, perché la guardia cerca l'assenza del
- *     nome in tutti i file di questa cartella — un commento che li citasse
- *     spegnerebbe una prova per decorare una spiegazione.
+ *     utenti. Il controllo che lo rende vero sta in
+ *     `tests/js/tasks/api-handler-auth-host.test.ts`.
  *
  * ## Il router si COSTRUISCE da `ROUTES`
  *

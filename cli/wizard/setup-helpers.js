@@ -10,7 +10,7 @@ import { PI_API_MODELS, PI_API_PROVIDERS, piApiProvider } from '../../shared/run
 import { summarizeRoleModels } from './setup-models.js';
 import { harnessProblem } from '../../shared/runtime/agent-harness.js';
 
-// Path fissi JHT (specchio di shared/paths.ts, con override env var).
+// Path fissi JHT (specchio di shared/paths.js, con override env var).
 // cli/wizard e' ESM .js e non puo' importare shared/*.ts direttamente.
 export const JHT_CONFIG_DIR = process.env.JHT_HOME || path.join(os.homedir(), '.jht');
 export const JHT_CONFIG_PATH = path.join(JHT_CONFIG_DIR, 'jht.config.json');

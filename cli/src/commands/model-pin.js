@@ -617,5 +617,3 @@ function runRefresh({ target, notifyCaptain, dryRun, log }) {
   return finish('PROMOTED', chosen.alias);
 }
 
-// Esportati per i test / diagnostica.
-export const __internals = { readPin, readModelCatalog, rankCandidates, setDefaultModel, PIN_SPECS, deliberatePin };
