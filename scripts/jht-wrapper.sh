@@ -420,6 +420,9 @@ jht_text_en() {
     host_setup.skip_done) printf '%s' "host.env is in a folder owned by the container (uid 1001): the host preflight is already done, skipping it." ;;
     host_setup.skip_unknown) printf '%s' "host.env is in a folder owned by the container (uid 1001) and this user cannot write to it: skipping the host preflight, but host.env cannot be read or does not say the host type (local or VPS): the type stays 'unknown'." ;;
     container.starting) printf '%s' "Container '%s' is not running, starting it..." ;;
+    up.colima_starting) printf '%s' "Colima (profile %s), where the team runs, is off: starting it (about a minute)..." ;;
+    up.colima_failed) printf '%s' "Colima (profile %s) could not be started: %s. Try again with: jht up" ;;
+    up.colima_no_answer) printf '%s' "Colima (profile %s) is on, but its engine does not answer yet: run jht up again in a minute." ;;
     *) return 1 ;;
   esac
 }
@@ -496,6 +499,9 @@ jht_text_it() {
     host_setup.skip_done) printf '%s' "host.env sta in una cartella del container (uid 1001): il preflight dell'host e' gia' fatto, lo salto." ;;
     host_setup.skip_unknown) printf '%s' "host.env sta in una cartella del container (uid 1001) e questo utente non puo' scriverci: salto il preflight dell'host, ma host.env non si legge o non dice il tipo di host (locale o VPS): il tipo resta 'unknown'." ;;
     container.starting) printf '%s' "Container '%s' non attivo, lo avvio..." ;;
+    up.colima_starting) printf '%s' "Colima (profilo %s), dove gira la squadra, e' spenta: la accendo (circa un minuto)..." ;;
+    up.colima_failed) printf '%s' "Non sono riuscito ad accendere Colima (profilo %s): %s. Riprova con: jht up" ;;
+    up.colima_no_answer) printf '%s' "Colima (profilo %s) e' accesa, ma il suo motore non risponde ancora: rilancia jht up fra un minuto." ;;
     *) return 1 ;;
   esac
 }
@@ -985,7 +991,8 @@ require_docker() {
     elif [ "$PODMAN_RUNTIME_MODE" = "native" ]; then
       err "podman_rootless_unavailable: il runtime Podman rootless non risponde."
     elif [ "$(uname)" = "Darwin" ]; then
-      err "Docker daemon non risponde. Avvialo: 'colima start' oppure 'open -a Docker' (Docker Desktop)."
+      # solo `jht up` puo' accendere il motore (la Colima della squadra la riaccende da solo); qui si osserva e basta
+      err "Il motore dei container non risponde. Avvialo con: jht up (con Docker Desktop: apri Docker Desktop)."
     else
       err "Docker daemon non risponde. Avvialo (systemctl start docker / Docker Desktop)."
     fi
@@ -1065,6 +1072,14 @@ wake_container_runtime_for_up() {
     err "podman_rootless_unavailable: il runtime Podman rootless non risponde."
     exit 1
   elif [ "$(uname)" = "Darwin" ]; then
+    # Dopo un riavvio del Mac la Colima della squadra e' spenta: `jht up` la riaccende da solo (wake_jht_colima); un motore che non e'
+    # una Colima di JHT (Docker Desktop, un altro socket) non si accende mai da qui.
+    local wake_status=0
+    wake_jht_colima || wake_status=$?
+    case "$wake_status" in
+      0) return 0 ;;
+      2) exit 1 ;;
+    esac
     err "Docker daemon non risponde. Avvialo: 'colima start' oppure 'open -a Docker' (Docker Desktop)."
     exit 1
   else
@@ -1073,6 +1088,37 @@ wake_container_runtime_for_up() {
   fi
   docker info >/dev/null 2>&1 \
     || { err "Podman machine avviata ma il client JHT non risponde."; exit 1; }
+}
+
+# Il motore Docker di un Mac e' la Colima del profilo a cui parla il docker di questo computer (…/.colima/<profilo>/docker.sock, come
+# legge uninstall_colima): dopo un riavvio e' spenta e `jht up` la accende, con una riga a schermo, e poi prosegue. Solo QUEL profilo
+# (colima start -p <profilo>), e solo se esiste gia' (la sua cartella con colima.yaml): `colima start` su un profilo che non c'e' ne
+# creerebbe uno nuovo. Mai un altro profilo (la Colima di un altro, quella di un collaudo), mai Docker Desktop.
+# 0 acceso e il motore risponde · 1 non e' una Colima di JHT spenta (nessun messaggio: lo dice chi chiama) · 2 detto qui perche' no.
+wake_jht_colima() {
+  local colima_bin docker_bin endpoint rest profile sock_dir start_error
+  [ "$HOST_KERNEL" = "Darwin" ] && [ -z "${PODMAN_RUNTIME_MODE:-}" ] || return 1
+  colima_bin="$(uninstall_tool colima)" || return 1
+  docker_bin="$(uninstall_tool docker)" || return 1
+  endpoint="$(uninstall_docker_endpoint "$docker_bin")" || return 1
+  case "$endpoint" in unix:///*/.colima/*/docker.sock) ;; *) return 1 ;; esac
+  rest="${endpoint#*/.colima/}"
+  profile="${rest%%/*}"
+  [ "$rest" = "$profile/docker.sock" ] || return 1
+  case "$profile" in ''|-*|*[!A-Za-z0-9_.-]*) return 1 ;; esac
+  sock_dir="${endpoint#unix://}"
+  sock_dir="${sock_dir%/docker.sock}"
+  [ -d "$sock_dir" ] && [ ! -L "$sock_dir" ] && [ -f "$sock_dir/colima.yaml" ] || return 1
+  # gia' acceso (il motore e' lento a rispondere, non spento): non lo si riaccende
+  "$colima_bin" status -p "$profile" >/dev/null 2>&1 && return 1
+  info "$(jht_say up.colima_starting "$profile")"
+  start_error="$("$colima_bin" start -p "$profile" 2>&1 >/dev/null)" || {
+    start_error="$(printf '%s\n' "$start_error" | tr -d '\r' | sed '/^[[:space:]]*$/d' | tail -n 1 | cut -c1-200)"
+    err "$(jht_say up.colima_failed "$profile" "${start_error:-colima start}")"
+    return 2
+  }
+  docker info >/dev/null 2>&1 || { err "$(jht_say up.colima_no_answer "$profile")"; return 2; }
+  return 0
 }
 
 # `podman-machine-recreate --confirm` deve leggere lo stato del broker prima
