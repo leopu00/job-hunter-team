@@ -51,7 +51,6 @@ import { registerCoordinatorCommand } from './commands/coordinator.js';
 import { registerProfileCommand } from './commands/profile.js';
 import { registerPid1Command } from './commands/pid1.js';
 import { registerDownloadCommand } from './commands/download.js';
-import { registerGameCommand } from './commands/game.js';
 import { renderFullHelp } from './lib/help-groups.js';
 import { errorBlock } from './lib/ui.js';
 import { say } from './lib/texts.js';
@@ -145,7 +144,6 @@ export function buildProgram() {
   registerProfileCommand(program);
   registerPid1Command(program);
   registerDownloadCommand(program);
-  registerGameCommand(program);
 
   // The parser's own errors ("error: unknown command 'x'") come out in the same shape as every other error of the
   // program: what happened, the parser's suggestion if it has one, and where to look next (the help of the command

@@ -112,7 +112,7 @@ def test_wrapper_treats_shell_syntax_as_inert_data(tmp_path):
     host_env.write_text(malicious_env(marker), encoding="utf-8")
 
     result = subprocess.run(
-        ["bash", str(WRAPPER), "game", "start", "--help"],
+        ["bash", str(WRAPPER), "--help"],
         env={**os.environ, "HOME": str(home), "JHT_HOST_ENV_FILE": str(host_env)},
         capture_output=True,
         text=True,
