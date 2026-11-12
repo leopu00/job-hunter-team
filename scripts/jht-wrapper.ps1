@@ -30,6 +30,10 @@
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
 $ErrorActionPreference = 'Stop'
+# Every `docker exec` that hands a command to the container runs with 'Continue': the container's CLI writes its notes on stderr, and
+# when a caller merges the streams (`jht doctor 2>&1 | ...`, `*>&1`) Windows PowerShell 5.1 turns each stderr line into an error
+# record; under 'Stop' the first one ended jht.ps1, which a PowerShell caller runs in its own process, so it ended the caller's script
+# too. The exit code stays the container's ($LASTEXITCODE).
 # PSMODULEPATH-BEGIN
 # An app started from PowerShell 7 hands its module folders (the 7 ones first) down to the Windows PowerShell 5.1 it starts, and
 # 5.1 then cannot load Microsoft.PowerShell.Security (Get-Acl, Get-FileHash): "could not autoload the matching module". The list
@@ -1365,7 +1369,7 @@ jht - Job Hunter Team
 function Invoke-HelpWithoutDocker {
   param([Parameter(ValueFromRemainingArguments)] $HelpArgs)
   if ((Test-DockerReachable) -and (Test-ContainerUp)) {
-    & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry @HelpArgs
+    & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry @HelpArgs }
     return $LASTEXITCODE
   }
   Write-LocalHelp
@@ -2654,10 +2658,10 @@ function Remove-BrokerResetData {
 function Invoke-ResetCommand {
   param([string[]]$ResetArgs)
   Ensure-Up
-  & docker exec @ExecFlags `
+  & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags `
     -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" `
     -e 'JHT_HOST_RESET_PROTOCOL=1' `
-    $Container node $NodeEntry reset @ResetArgs
+    $Container node $NodeEntry reset @ResetArgs }
   $code = $LASTEXITCODE
   if ($code -ne $HostResetConfirmedExit) { return $code }
   return (Remove-BrokerResetData)
@@ -4310,7 +4314,7 @@ switch ($Sub) {
 
   { $_ -in @('-V', '--version', 'version') } {
     if ((Test-DockerReachable) -and (Test-ContainerUp)) {
-      & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry --version
+      & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry --version }
     } else {
       $ConfiguredVersion = if ($env:JHT_IMAGE_TAG) {
         $env:JHT_IMAGE_TAG
@@ -4347,7 +4351,7 @@ switch ($Sub) {
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       $context = @{ mounts = ($mounts -join "`n"); cwd = $PWD.Path } | ConvertTo-Json -Compress
       $context = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($context))
-      & docker exec @ExecFlags -e "JHT_ARTIFACT_HOST_CONTEXT=$context" $target node $NodeEntry $Sub @Rest
+      & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags -e "JHT_ARTIFACT_HOST_CONTEXT=$context" $target node $NodeEntry $Sub @Rest }
       exit $LASTEXITCODE
     }
     $uploadArgs = if ($Rest.Count -gt 1) { @($Rest[1..($Rest.Count - 1)]) } else { @() }
@@ -4445,7 +4449,7 @@ switch ($Sub) {
     if ($Rest.Count -ge 1 -and @('request', 'cancel') -ccontains [string]$Rest[0]) {
       exit (Invoke-ApplyHostCommand $Rest)
     }
-    & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry $Sub @Rest
+    & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry $Sub @Rest }
     exit $LASTEXITCODE
   }
 
@@ -4577,7 +4581,7 @@ switch ($Sub) {
   'shell' {
     Require-Docker
     Ensure-Up
-    & docker exec @ExecFlags $Container bash
+    & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags $Container bash }
     break
   }
 
@@ -4594,9 +4598,9 @@ switch ($Sub) {
     }
     $Provider = (& { $ErrorActionPreference = 'Continue'; & docker exec $Container node -e "try{const c=require('/jht_home/jht.config.json');process.stdout.write(String(c.active_provider||''))}catch{}" 2>$null })
     switch (($Provider | Out-String).Trim().ToLowerInvariant()) {
-      { $_ -in @('openai', 'codex') } { & docker exec @ExecFlags $Container bash -c '[ -f /app/.launcher/oauth-login-openai.sh ] && exec bash /app/.launcher/oauth-login-openai.sh; exec codex login --device-auth'; break }
-      { $_ -in @('kimi', 'moonshot') } { & docker exec @ExecFlags $Container kimi --yolo; break }
-      { $_ -in @('claude', 'anthropic') } { & docker exec @ExecFlags $Container claude --dangerously-skip-permissions; break }
+      { $_ -in @('openai', 'codex') } { & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags $Container bash -c '[ -f /app/.launcher/oauth-login-openai.sh ] && exec bash /app/.launcher/oauth-login-openai.sh; exec codex login --device-auth' }; break }
+      { $_ -in @('kimi', 'moonshot') } { & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags $Container kimi --yolo }; break }
+      { $_ -in @('claude', 'anthropic') } { & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags $Container claude --dangerously-skip-permissions }; break }
       '' { throw "nessun provider attivo: scegline uno con 'jht providers use openai'" }
       default { throw "provider attivo non riconosciuto: $Provider" }
     }
@@ -4622,7 +4626,7 @@ switch ($Sub) {
         $keyPlan.Key = $null
       }
     } else {
-      & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry 'setup' @Rest
+      & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry 'setup' @Rest }
     }
     break
   }
@@ -4638,7 +4642,7 @@ switch ($Sub) {
     Require-ComposeFile
     Require-Docker
     Ensure-Up
-    & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry $Sub @Rest
+    & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry $Sub @Rest }
     $code = $LASTEXITCODE
     if ($Sub -eq 'cloud' -and $Rest.Count -gt 0 -and $Rest[0] -eq 'pair' -and $code -eq 0) { if ((Ensure-Broker) -eq 0) { Initialize-BrokerWebAuthorisations } }
     exit $code
