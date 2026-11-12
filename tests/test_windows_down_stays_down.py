@@ -31,7 +31,7 @@ function Get-JhtDoctorWslMemoryAdvice { return [string]$env:FAKE_WSL_ADVICE }
 function Repair-MountOwnership { Add-Content -LiteralPath $env:FAKE_LOG -Value 'start'; return $false }
 """
 
-IMPORTS = ["Get-JhtTeamStoppedPath", "Test-JhtTeamStoppedByPerson", "Set-JhtTeamStopped", "Clear-JhtTeamStopped",
+IMPORTS = ["Get-JhtTeamStoppedPath", "Remove-JhtTeamStoppedEntry", "Test-JhtTeamStoppedByPerson", "Set-JhtTeamStopped", "Clear-JhtTeamStopped",
            "Get-JhtTeamStoppedText", "Invoke-JhtHostDoctor", "Ensure-Up", "Write-Err", "Write-Info"]
 
 
@@ -96,3 +96,15 @@ def test_the_wrapper_marks_on_down_clears_on_up_and_setup_and_doctor_never_ensur
     assert "Ensure-Up" not in doctor and "Invoke-JhtHostDoctor" in doctor
     ensure = text[text.index("function Ensure-Up {"):]
     assert re.search(r"Test-JhtTeamStoppedByPerson\) \{ Write-Err \(Get-JhtTeamStoppedText\); exit 1 \}", ensure[:ensure.index("\n}\n")])
+
+
+def test_a_broken_link_in_place_of_the_mark_is_replaced_never_followed(tmp_path):
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    target = tmp_path / "elsewhere" / "written-through-the-link"
+    (runtime / "team-stopped").symlink_to(target)  # points nowhere: its folder does not exist
+    result, _, _ = _ps(tmp_path, "Set-JhtTeamStopped\n[Console]::Out.WriteLine('marked=' + (Test-JhtTeamStoppedByPerson))")
+    assert not target.exists() and not (tmp_path / "elsewhere").exists()
+    assert not (runtime / "team-stopped").is_symlink()
+    assert (runtime / "team-stopped").read_text(encoding="utf-8") == "jht down\n"
+    assert "marked=True" in result.stdout

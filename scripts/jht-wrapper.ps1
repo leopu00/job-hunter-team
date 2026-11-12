@@ -1518,15 +1518,25 @@ function Test-JhtTeamStoppedByPerson {
     return (-not $item.PSIsContainer -and -not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint))
   } catch { return $false }
 }
+# Whatever stands at the mark's path goes first, a link too, even one that points nowhere (Test-Path does not see a broken link, and
+# WriteAllText would follow it): the mark is always a new plain file.
+function Remove-JhtTeamStoppedEntry {
+  $path = Get-JhtTeamStoppedPath
+  $item = $null
+  try { $item = Get-Item -LiteralPath $path -Force -ErrorAction Stop } catch { $item = $null }
+  if ($null -ne $item) {
+    if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { $item.Delete() } else { Remove-Item -LiteralPath $path -Force -ErrorAction Stop }
+  }
+  return $path
+}
 function Set-JhtTeamStopped {
   try {
-    $path = Get-JhtTeamStoppedPath
-    if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force -ErrorAction Stop }
+    $path = Remove-JhtTeamStoppedEntry
     [IO.File]::WriteAllText($path, "jht down`n", [Text.UTF8Encoding]::new($false))
   } catch { }
 }
 function Clear-JhtTeamStopped {
-  try { $path = Get-JhtTeamStoppedPath; if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force -ErrorAction Stop } } catch { }
+  try { [void](Remove-JhtTeamStoppedEntry) } catch { }
 }
 function Get-JhtTeamStoppedText {
   if ((Get-JhtTextLanguage) -ceq 'en') { return "Job Hunter Team is stopped: 'jht up' starts it again." }
