@@ -41,7 +41,7 @@ import provider_credit
 import quota_data
 
 REASON = "pi_spend_cap"
-PROVIDER_NAMES = {"moonshotai": "Kimi (Moonshot)", "zai": "GLM (Z.ai)", "openai": "OpenAI"}
+PROVIDER_NAMES = provider_credit.PROVIDER_NAMES
 
 
 def _positive(value):
@@ -84,10 +84,13 @@ def spend(home, now_ts):
 
 def decide(config, spent, no_quota_mode):
     """{"action": "none" | "halt" | "warn", ...}. Pure: a config and a measure in, a verdict out."""
+    # Before the mode: the bridge declares the no-quota mode at the END of its first tick, so a team that found the
+    # credit already gone never got past here (collaudo Linux, 12/11), and a Codex team whose pi agents answer «no
+    # credit» has quota data and would never pause either. Every call would fail: the team waits, whatever the mode.
+    if spent.get("credit"):
+        return {"action": "halt", "why": "credit", "provider": spent["credit"]["provider"], "spent": 0.0, "ceiling": 0.0}
     if not no_quota_mode:
         return {"action": "none"}  # with quota data the Sentinella paces by the windows and the daily cap
-    if spent.get("credit"):  # the provider answered that the credit is gone: every call would fail, the team waits
-        return {"action": "halt", "why": "credit", "provider": spent["credit"]["provider"], "spent": 0.0, "ceiling": 0.0}
     eur, tokens = ceilings(config)
     if eur is None and tokens is None:
         return {"action": "warn" if spent["calls"] else "none"}

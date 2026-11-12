@@ -180,6 +180,18 @@
         "pt": "em pausa pelo ritmo · {d}"
       }
     },
+    "credito_esaurito": {
+      "text": {
+        "it": "credito del fornitore esaurito: ricaricalo",
+        "en": "provider credit used up: top it up",
+        "de": "Guthaben beim Anbieter aufgebraucht: aufladen",
+        "es": "crédito del proveedor agotado: recárgalo",
+        "fr": "crédit du fournisseur épuisé : recharge-le",
+        "hu": "elfogyott a kredit a szolgáltatónál: töltsd fel",
+        "pt": "crédito do fornecedor esgotado: recarrega-o"
+      },
+      "tone": "red"
+    },
     "accesso_scaduto": {
       "text": {
         "it": "accesso scaduto: rifai il login",

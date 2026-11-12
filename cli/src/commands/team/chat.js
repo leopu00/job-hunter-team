@@ -21,6 +21,7 @@ import { execInContainer, execScriptInContainer } from '../../utils/container-pr
 import { answerTyped, describeAnswer } from '../../lib/terminal-answer.js';
 import { errorBlock } from '../../lib/ui.js';
 import { blockedNoticeFor } from '../../lib/chat-blocked-notice.js';
+import { creditNotice } from '../../lib/provider-credit.js';
 
 // Escape per passare il messaggio dentro single-quote bash:
 //   ' -> '\''   $ -> \$   ` -> \`
@@ -422,6 +423,9 @@ export function sendAction(agentArg, message) {
     return;
   }
   console.log(c.green(`✓ ${session} <- "${message.length > 60 ? message.slice(0, 57) + '...' : message}"`));
+  // delivered is not answered: on an empty balance every call of the agent comes back refused (collaudo Linux, 12/11)
+  const credit = creditNotice();
+  if (credit) console.log(c.yellow(`⚠ ${credit}`));
 }
 
 // ── chat: REPL interattivo ─────────────────────────────────────────
