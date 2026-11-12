@@ -301,6 +301,8 @@ def test_the_installer_says_what_to_do_for_exit_26():
     block = block[:block.index("    default {")]
     assert "win-sshproxy.exe" in block and "Windows desktop of this user" in block and "not from ssh" in block
     assert "Run the same install command again" not in block and "$again" in block
+    # from the desktop the install passes without a restart or `wsl --shutdown` (measured): a restart is only the last resort
+    assert block.index("$again") < block.index("restart Windows") and "Only if it stops here again from the desktop" in block
 
 
 def test_the_app_names_the_code_and_says_the_same_thing():
