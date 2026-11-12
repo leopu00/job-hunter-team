@@ -55,9 +55,10 @@ def test_the_setup_drops_the_cache_after_the_pull_and_again_before_it_says_it_is
     call = "[void](Invoke-JhtMachineDropCaches -PodmanPath $Podman -MachineName $MachineName)"
     assert source.count(call) == 2
     first = source.index(call)
-    assert source.index("Invoke-PodmanPull -PodmanPath $Podman") < first < source.index("& (Join-Path $BinDir 'jht.ps1') up")
+    # right before the unit's install, the one session the setup needs after the pull
+    assert source.index("Invoke-PodmanPull -PodmanPath $Podman") < first < source.index("$containerUnitInstalled = Install-JhtContainerService") < source.index("& (Join-Path $BinDir 'jht.ps1') up")
     second = source.index(call, first + 1)
-    assert source.index("Install-JhtContainerService -PodmanPath $Podman") < second < source.index("PODMAN JHT RUNTIME ENABLED (machine=")
+    assert source.index("Start-JhtContainerServiceIfInactive -PodmanPath $Podman") < second < source.index("PODMAN JHT RUNTIME ENABLED (machine=")
 
 
 # ── .wslconfig: only what is absent, recorded, and taken out again exactly ──
