@@ -20,6 +20,7 @@ export type Dict = {
   subEmphOne: string;
   subIntroD: string;
   codex: string;
+  apiKey: string;
   dedicateLabel: string;
   dedicateBody: string;
   pricingPage: string;
@@ -63,15 +64,17 @@ export const T: Record<Locale, Dict> = {
     fastestLabel: "The fastest path:",
     fastestBody:
       " if you already use an AI assistant (Claude Code, OpenClaw, Codex, Cursor…), just point it at this guide and the repo and ask it to set everything up. The whole CLI is built to be driven by an agent — you may not have to type a single command yourself.",
-    subTitle: "🧠 First, one subscription",
+    subTitle: "🧠 First, the AI provider",
     subIntroA: "The team runs on an ",
-    subIntroB: "LLM subscription",
+    subIntroB: "Codex subscription",
     subIntroC:
-      ", not pay-per-use API keys — it works around the clock and that would get expensive. You need an active plan with ",
+      " (recommended: a fixed monthly fee, and the team paces itself inside it) or an API key for GLM, paid per call and set from the command line. You need ",
     subEmphOne: "one",
-    subIntroD: " of three providers:",
+    subIntroD: " of the two:",
     codex:
       " (OpenAI) — recommended: proven over a one-month autonomous run, with your ChatGPT Plus or Pro subscription.",
+    apiKey:
+      "(Z.ai) — with an API key, paid per call: set a daily spending ceiling.",
     dedicateLabel: "Dedicate the subscription to the team.",
     dedicateBody:
       " Don't reuse the same account you use for personal AI — they share one weekly quota and the team will hit limits unexpectedly. More on the ",
@@ -117,15 +120,17 @@ export const T: Record<Locale, Dict> = {
     fastestLabel: "Il percorso più veloce:",
     fastestBody:
       " se usi già un assistente AI (Claude Code, OpenClaw, Codex, Cursor…), basta indirizzarlo a questa guida e al repo e chiedergli di configurare tutto. L'intera CLI è progettata per essere guidata da un agente — potresti non dover digitare nemmeno un comando.",
-    subTitle: "🧠 Prima di tutto, un abbonamento",
+    subTitle: "🧠 Prima di tutto, il provider AI",
     subIntroA: "Il team funziona con un ",
-    subIntroB: "abbonamento LLM",
+    subIntroB: "abbonamento Codex",
     subIntroC:
-      ", non con chiavi API a consumo — lavora 24 ore su 24 e ciò diventerebbe costoso. Ti serve un piano attivo con ",
+      " (consigliato: una cifra fissa al mese, dentro la quale la squadra si regola) oppure con una chiave API di GLM, a consumo, impostata dalla riga di comando. Te ne serve ",
     subEmphOne: "uno",
-    subIntroD: " dei tre provider:",
+    subIntroD: " dei due:",
     codex:
       " (OpenAI) — consigliato: provato in un mese di lavoro autonomo, con il tuo abbonamento ChatGPT Plus o Pro.",
+    apiKey:
+      "(Z.ai) — con una chiave API, a consumo: imposta un tetto di spesa giornaliero.",
     dedicateLabel: "Dedica l'abbonamento al team.",
     dedicateBody:
       " Non riutilizzare lo stesso account che usi per l'AI personale — condividono un'unica quota settimanale e il team raggiungerà i limiti in modo imprevisto. Maggiori dettagli sulla ",
@@ -172,15 +177,17 @@ export const T: Record<Locale, Dict> = {
     fastestLabel: "La vía más rápida:",
     fastestBody:
       " si ya usas un asistente de IA (Claude Code, OpenClaw, Codex, Cursor…), basta con dirigirlo a esta guía y al repo y pedirle que lo configure todo. Toda la CLI está hecha para ser controlada por un agente — puede que no tengas que escribir ni un solo comando.",
-    subTitle: "🧠 Primero, una suscripción",
+    subTitle: "🧠 Primero, el proveedor de IA",
     subIntroA: "El equipo funciona con una ",
-    subIntroB: "suscripción a un LLM",
+    subIntroB: "suscripción a Codex",
     subIntroC:
-      ", no con claves API de pago por uso — trabaja las 24 horas y eso resultaría caro. Necesitas un plan activo con ",
+      " (recomendada: una cuota fija al mes, dentro de la cual el equipo se regula) o con una clave de API de GLM, de pago por uso, configurada desde la línea de comandos. Necesitas ",
     subEmphOne: "uno",
-    subIntroD: " de tres proveedores:",
+    subIntroD: " de los dos:",
     codex:
       " (OpenAI) — recomendado: probado durante un mes de trabajo autónomo, con tu suscripción ChatGPT Plus o Pro.",
+    apiKey:
+      "(Z.ai) — con una clave de API, de pago por uso: fija un tope de gasto diario.",
     dedicateLabel: "Dedica la suscripción al equipo.",
     dedicateBody:
       " No reutilices la misma cuenta que usas para tu IA personal — comparten una única cuota semanal y el equipo alcanzará los límites de forma inesperada. Más información en la ",
@@ -227,15 +234,17 @@ export const T: Record<Locale, Dict> = {
     fastestLabel: "La voie la plus rapide :",
     fastestBody:
       " si vous utilisez déjà un assistant IA (Claude Code, OpenClaw, Codex, Cursor…), il suffit de le diriger vers ce guide et le dépôt et de lui demander de tout configurer. Toute la CLI est conçue pour être pilotée par un agent — vous n'aurez peut-être pas à taper la moindre commande.",
-    subTitle: "🧠 D'abord, un abonnement",
+    subTitle: "🧠 D'abord, le fournisseur d'IA",
     subIntroA: "L'équipe fonctionne avec un ",
-    subIntroB: "abonnement LLM",
+    subIntroB: "abonnement Codex",
     subIntroC:
-      ", pas avec des clés API à l'usage — elle travaille 24 heures sur 24 et cela coûterait cher. Vous avez besoin d'un forfait actif chez ",
+      " (recommandé : un montant fixe par mois, dans lequel l'équipe se règle) ou avec une clé d'API GLM, payée à l'usage et configurée en ligne de commande. Il vous faut ",
     subEmphOne: "l'un",
-    subIntroD: " des trois fournisseurs :",
+    subIntroD: " des deux :",
     codex:
       " (OpenAI) — recommandé : éprouvé sur un mois de travail autonome, avec votre abonnement ChatGPT Plus ou Pro.",
+    apiKey:
+      "(Z.ai) — avec une clé d'API, payée à l'usage : fixez un plafond de dépense journalier.",
     dedicateLabel: "Dédiez l'abonnement à l'équipe.",
     dedicateBody:
       " Ne réutilisez pas le même compte que pour votre IA personnelle — ils partagent un quota hebdomadaire unique et l'équipe atteindra les limites de façon imprévue. Plus d'informations sur la ",
@@ -284,15 +293,17 @@ export const T: Record<Locale, Dict> = {
     fastestLabel: "Der schnellste Weg:",
     fastestBody:
       " wenn du bereits einen KI-Assistenten verwendest (Claude Code, OpenClaw, Codex, Cursor…), verweise ihn einfach auf diese Anleitung und das Repo und bitte ihn, alles einzurichten. Die gesamte CLI ist darauf ausgelegt, von einem Agenten gesteuert zu werden — du musst vielleicht keinen einzigen Befehl selbst eintippen.",
-    subTitle: "🧠 Zuerst ein Abonnement",
+    subTitle: "🧠 Zuerst der KI-Anbieter",
     subIntroA: "Das Team läuft mit einem ",
-    subIntroB: "LLM-Abonnement",
+    subIntroB: "Codex-Abonnement",
     subIntroC:
-      ", nicht mit nutzungsbasierten API-Schlüsseln — es arbeitet rund um die Uhr, und das würde teuer werden. Du brauchst einen aktiven Plan bei ",
+      " (empfohlen: ein fester Monatsbetrag, in dem sich das Team selbst regelt) oder mit einem API-Key für GLM, nach Verbrauch bezahlt und über die Kommandozeile eingerichtet. Du brauchst ",
     subEmphOne: "einem",
-    subIntroD: " von drei Anbietern:",
+    subIntroD: " der beiden:",
     codex:
       " (OpenAI) — empfohlen: einen Monat lang im autonomen Betrieb erprobt, mit deinem ChatGPT-Plus- oder -Pro-Abo.",
+    apiKey:
+      "(Z.ai) — mit einem API-Key, nach Verbrauch bezahlt: setze ein tägliches Ausgabenlimit.",
     dedicateLabel: "Widme das Abonnement dem Team.",
     dedicateBody:
       " Verwende nicht dasselbe Konto wie für deine persönliche KI — sie teilen sich ein einziges wöchentliches Kontingent, und das Team stößt unerwartet an die Grenzen. Mehr dazu auf der ",
@@ -341,15 +352,17 @@ export const T: Record<Locale, Dict> = {
     fastestLabel: "A leggyorsabb út:",
     fastestBody:
       " ha már használsz egy MI-asszisztenst (Claude Code, OpenClaw, Codex, Cursor…), egyszerűen irányítsd rá erre az útmutatóra és a repóra, és kérd meg, hogy állítson be mindent. Az egész CLI úgy készült, hogy egy ügynök vezérelje — lehet, hogy egyetlen parancsot sem kell begépelned.",
-    subTitle: "🧠 Először egy előfizetés",
+    subTitle: "🧠 Először az AI-szolgáltató",
     subIntroA: "A csapat egy ",
-    subIntroB: "LLM-előfizetésen",
+    subIntroB: "Codex-előfizetésen",
     subIntroC:
-      " fut, nem használatalapú API-kulcsokon — a nap 24 órájában dolgozik, és az drága lenne. Aktív csomagra van szükséged az alábbi három szolgáltató ",
+      " fut (ajánlott: fix havi díj, amelyen belül a csapat szabályozza magát), vagy GLM API-kulccsal, használat szerint fizetve, parancssorból beállítva. A kettő közül ",
     subEmphOne: "egyikénél",
-    subIntroD: ":",
+    subIntroD: " kell aktív hozzáférés:",
     codex:
       " (OpenAI) — ajánlott: egy hónapnyi önálló munkán bizonyított, a ChatGPT Plus vagy Pro előfizetéseddel.",
+    apiKey:
+      "(Z.ai) — API-kulccsal, használat szerint fizetve: állíts be napi költési plafont.",
     dedicateLabel: "Szenteld az előfizetést a csapatnak.",
     dedicateBody:
       " Ne használd újra ugyanazt a fiókot, amit a személyes MI-hez használsz — egyetlen heti kvótán osztoznak, és a csapat váratlanul eléri a korlátokat. Bővebben az ",
@@ -398,15 +411,17 @@ export const T: Record<Locale, Dict> = {
     fastestLabel: "O caminho mais rápido:",
     fastestBody:
       " se já usas um assistente de IA (Claude Code, OpenClaw, Codex, Cursor…), basta apontá-lo para este guia e para o repo e pedir-lhe que configure tudo. Toda a CLI foi feita para ser conduzida por um agente — podes nem ter de escrever um único comando.",
-    subTitle: "🧠 Primeiro, uma subscrição",
+    subTitle: "🧠 Primeiro, o fornecedor de IA",
     subIntroA: "A equipa funciona com uma ",
-    subIntroB: "subscrição de LLM",
+    subIntroB: "subscrição Codex",
     subIntroC:
-      ", não com chaves de API pagas por utilização — trabalha 24 horas por dia e isso ficaria caro. Precisas de um plano ativo com ",
+      " (recomendada: um valor fixo por mês, dentro do qual a equipa se regula) ou com uma chave de API de GLM, paga por uso e configurada pela linha de comandos. Precisas de ",
     subEmphOne: "um",
-    subIntroD: " de três fornecedores:",
+    subIntroD: " dos dois:",
     codex:
       " (OpenAI) — recomendado: provado durante um mês de trabalho autónomo, com a tua subscrição ChatGPT Plus ou Pro.",
+    apiKey:
+      "(Z.ai) — com uma chave de API, paga por uso: define um teto de gasto diário.",
     dedicateLabel: "Dedica a subscrição à equipa.",
     dedicateBody:
       " Não reutilizes a mesma conta que usas para a IA pessoal — partilham uma única quota semanal e a equipa atingirá os limites de forma inesperada. Mais informações na ",
