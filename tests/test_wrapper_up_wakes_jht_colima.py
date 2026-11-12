@@ -69,6 +69,7 @@ def _wake(tmp_path: Path, bin_dir: Path, *, kernel="Darwin", podman_mode="", lan
     script = f"""set -u
 RUNTIME_DIR="{runtime}"
 RUNTIME_SELECTION_FILE="{runtime}/container-runtime"
+SYSTEM_DOCKER_SOCKET="{tmp_path}/system/docker.sock"
 HOST_KERNEL={kernel}
 PODMAN_RUNTIME_MODE="{podman_mode}"
 JHT_SAY_LANG={lang}
@@ -170,7 +171,10 @@ def test_jht_up_on_a_mac_goes_through_it_before_the_old_message():
 # `colima stop` removes Colima's docker context: the docker of the computer goes back to the system socket, and the profile can only
 # come from the runtime (giro Mac 3, 12/11): the engine the installer chose (container-runtime = docker) and its marker colima-started.
 
-SYSTEM_SOCKET = "unix:///var/run/docker.sock"
+def _system(tmp_path: Path) -> str:
+    """The system socket of the case (the wrapper's SYSTEM_DOCKER_SOCKET, set by _wake): absent unless a case makes it."""
+    (tmp_path / "system").mkdir(exist_ok=True)
+    return f"unix://{tmp_path}/system/docker.sock"
 
 
 def _runtime(tmp_path: Path, selection="docker", marker=None, marker_is_link=False) -> Path:
@@ -187,30 +191,54 @@ def _runtime(tmp_path: Path, selection="docker", marker=None, marker_is_link=Fal
     return runtime
 
 
-@pytest.mark.parametrize("marker,profile", [("colima\nwork\n", "work"), (None, "default")])
-def test_after_an_ordered_stop_the_profile_comes_from_the_runtime(tmp_path, marker, profile):
-    bin_dir, log, states = _world(tmp_path, profile=profile, profiles=(profile,), endpoint=SYSTEM_SOCKET)
-    _runtime(tmp_path, marker=marker)
+@pytest.mark.parametrize("profile", ["default", "work"])
+def test_after_an_ordered_stop_the_profile_comes_from_the_installer_marker(tmp_path, profile):
+    bin_dir, log, states = _world(tmp_path, profile=profile, profiles=(profile,), endpoint=_system(tmp_path))
+    _runtime(tmp_path, marker=f"colima\n{profile}\n")
     done = _wake(tmp_path, bin_dir)
     assert "RC=0" in done.stdout, done.stdout + done.stderr
     assert _starts(log) == [f"colima start -p {profile}"] and (states / profile).exists()
 
 
+def test_without_the_marker_no_profile_is_guessed(tmp_path):
+    # the installer reused another engine (Docker Desktop, OrbStack, a Colima it did not start) and wrote no marker; an old
+    # ~/.colima/default is there: starting it would change the team's engine
+    bin_dir, log, _ = _world(tmp_path, profiles=("default",), endpoint=_system(tmp_path))
+    _runtime(tmp_path, marker=None)
+    done = _wake(tmp_path, bin_dir)
+    assert "RC=1" in done.stdout and not _starts(log)
+
+
+@pytest.mark.parametrize("kind", ["file", "link"])
+def test_a_system_socket_that_exists_is_an_engine_that_is_there_and_nothing_is_started(tmp_path, kind):
+    # Docker Desktop off with its /var/run/docker.sock link to ~/.docker/run/docker.sock: the marker does not make it a Colima
+    endpoint = _system(tmp_path)
+    sock = tmp_path / "system" / "docker.sock"
+    if kind == "file":
+        sock.write_text("", encoding="utf-8")
+    else:
+        sock.symlink_to(tmp_path / "desktop-run" / "docker.sock")
+    bin_dir, log, _ = _world(tmp_path, endpoint=endpoint)
+    _runtime(tmp_path, marker="colima\ndefault\n")
+    done = _wake(tmp_path, bin_dir)
+    assert "RC=1" in done.stdout and not _starts(log)
+
+
 @pytest.mark.parametrize("selection", ["podman", "", None])
 def test_the_system_socket_without_the_docker_engine_in_the_runtime_starts_nothing(tmp_path, selection):
-    bin_dir, log, _ = _world(tmp_path, endpoint=SYSTEM_SOCKET)
-    _runtime(tmp_path, selection=selection)
+    bin_dir, log, _ = _world(tmp_path, endpoint=_system(tmp_path))
+    _runtime(tmp_path, selection=selection, marker="colima\ndefault\n")
     done = _wake(tmp_path, bin_dir)
     assert "RC=1" in done.stdout and not _starts(log)
 
 
 def test_a_marker_that_is_a_link_or_names_no_colima_starts_nothing(tmp_path):
-    bin_dir, log, _ = _world(tmp_path, endpoint=SYSTEM_SOCKET)
+    bin_dir, log, _ = _world(tmp_path, endpoint=_system(tmp_path))
     _runtime(tmp_path, marker="colima\ndefault\n", marker_is_link=True)
     assert "RC=1" in _wake(tmp_path, bin_dir).stdout and not _starts(log)
 
 
 def test_a_marker_whose_profile_does_not_exist_creates_nothing(tmp_path):
-    bin_dir, log, _ = _world(tmp_path, profiles=("default",), endpoint=SYSTEM_SOCKET)
+    bin_dir, log, _ = _world(tmp_path, profiles=("default",), endpoint=_system(tmp_path))
     _runtime(tmp_path, marker="colima\ngone\n")
     assert "RC=1" in _wake(tmp_path, bin_dir).stdout and not _starts(log)

@@ -97,6 +97,8 @@ RELEASE_REF="${JHT_BRANCH:-production}"
 WRAPPER_PATH="${JHT_WRAPPER_PATH:-$0}"
 WRAPPER_DIR="$(cd -P "$(dirname "$WRAPPER_PATH")" 2>/dev/null && pwd -P)"
 RUNTIME_SELECTION_FILE="$RUNTIME_DIR/container-runtime"
+# The docker socket of the system: where the docker of a Mac points once Colima has removed its context (wake_jht_colima).
+SYSTEM_DOCKER_SOCKET="/var/run/docker.sock"
 PODMAN_MACHINE_FILE="$RUNTIME_DIR/podman-machine"
 PODMAN_ADAPTER_BIN="$RUNTIME_DIR/bin"
 DOCKER_SHIM="${JHT_DOCKER_SHIM:-$PODMAN_ADAPTER_BIN/docker}"
@@ -1095,8 +1097,11 @@ wake_container_runtime_for_up() {
 # (colima start -p <profilo>), e solo se esiste gia' (la sua cartella con colima.yaml): `colima start` su un profilo che non c'e' ne
 # creerebbe uno nuovo. Mai un altro profilo (la Colima di un altro, quella di un collaudo), mai Docker Desktop.
 # Spenta con `colima stop` (ordinato), Colima toglie il suo contesto: il docker torna al socket di sistema (/var/run/docker.sock) e il
-# profilo non si legge piu' da li'. Allora lo dice il runtime: il motore scelto e' docker (container-runtime) e il profilo e' quello
-# del marcatore dell'installer (colima-started, 2a riga) o, senza marcatore, quello che l'installer usa sempre (default).
+# profilo non si legge piu' da li'. Allora lo dice SOLO il marcatore che l'installer scrive quando accende lui Colima (colima-started,
+# 2a riga), con il motore docker scelto (container-runtime). Senza marcatore niente: l'installer riusa anche un Docker Desktop, un
+# OrbStack o una Colima gia' accesa di un altro profilo senza scriverlo, e accendere una Colima indovinata cambierebbe il motore della
+# squadra (senza i suoi volumi). E niente se il socket di sistema esiste (un file o un link, come quello di Docker Desktop): quel
+# motore c'e' e non e' una Colima spenta.
 # 0 acceso e il motore risponde · 1 non e' una Colima di JHT spenta (nessun messaggio: lo dice chi chiama) · 2 detto qui perche' no.
 wake_jht_colima() {
   local colima_bin docker_bin endpoint rest profile sock_dir start_error
@@ -1112,7 +1117,8 @@ wake_jht_colima() {
       sock_dir="${endpoint#unix://}"
       sock_dir="${sock_dir%/docker.sock}"
       ;;
-    unix:///var/run/docker.sock)
+    "unix://$SYSTEM_DOCKER_SOCKET")
+      { [ -e "$SYSTEM_DOCKER_SOCKET" ] || [ -L "$SYSTEM_DOCKER_SOCKET" ]; } && return 1
       profile="$(jht_colima_profile_of_runtime)" || return 1
       sock_dir="$HOME/.colima/$profile"
       ;;
@@ -1133,18 +1139,14 @@ wake_jht_colima() {
 }
 
 # Il profilo Colima di questo runtime, quando il contesto docker non lo dice piu': solo con il motore docker scelto dall'installer
-# (container-runtime = docker, file vero), il profilo del marcatore colima-started se c'e' (file vero, 1a riga «colima»), se no default.
+# (container-runtime = docker, file vero) e solo dal marcatore colima-started (file vero, 1a riga «colima»): senza marcatore, nessuno.
 jht_colima_profile_of_runtime() {
   local marker="$RUNTIME_DIR/colima-started" profile
   [ -f "$RUNTIME_SELECTION_FILE" ] && [ ! -L "$RUNTIME_SELECTION_FILE" ] || return 1
   [ "$(head -c 64 "$RUNTIME_SELECTION_FILE" 2>/dev/null | tr -d '\r\n')" = docker ] || return 1
-  if [ -e "$marker" ] || [ -L "$marker" ]; then
-    [ -f "$marker" ] && [ ! -L "$marker" ] || return 1
-    [ "$(head -c 64 "$marker" 2>/dev/null | sed -n '1p' | tr -d '\r')" = colima ] || return 1
-    profile="$(head -c 64 "$marker" 2>/dev/null | sed -n '2p' | tr -d '\r')"
-  else
-    profile=default
-  fi
+  [ -f "$marker" ] && [ ! -L "$marker" ] || return 1
+  [ "$(head -c 64 "$marker" 2>/dev/null | sed -n '1p' | tr -d '\r')" = colima ] || return 1
+  profile="$(head -c 64 "$marker" 2>/dev/null | sed -n '2p' | tr -d '\r')"
   case "$profile" in ''|-*|*[!A-Za-z0-9_.-]*) return 1 ;; esac
   printf '%s\n' "$profile"
 }
