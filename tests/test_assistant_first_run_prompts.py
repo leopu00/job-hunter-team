@@ -51,3 +51,27 @@ def test_the_yes_the_assistant_tells_the_person_to_write_is_one_the_terminal_acc
     said = {".it": "conferma", ".de": "ja, speichern", ".es": "sí, guarda", ".fr": "oui, enregistre", ".hu": "igen, mentsd", ".pt": "sim, guarda", "": "confirm"}[lang]
     assert f"«{said}»" in step5 or f"„{said}“" in step5 or f"« {said} »" in step5 or f"„{said}”" in step5, step5[:300]
     assert aq._affirmative(said)
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_the_assistant_is_told_the_exact_commands_instead_of_looking_them_up(lang: str) -> None:
+    """A live run spent a fifth of the Assistant's cost looking up how to send the welcome ack, the shape of profile-review.yml
+    and the names --inferred takes: the prompt and the profile skill now say them."""
+    ack = next(line for line in assistant(lang).splitlines() if line.startswith("2. ") and "[WELCOME-ACK]" in line)
+    assert "/app" in ack, f"assistente{lang}.md: the ack is not said to be a line of the reply"
+    skill = profile_skill(lang).splitlines()
+    step1 = next(line for line in skill if line.startswith("1. ") and "profile-review.yml" in line)
+    step3 = next(line for line in skill if line.startswith("3. ") and "--inferred" in line)
+    assert "`candidate_profile.yml`" in step1 and "`profile-schema`" in step1 and "`--help`" in step1
+    sys_path = str(ROOT / "shared" / "skills")
+    import sys
+
+    sys.path.insert(0, sys_path)
+    import profile_review
+
+    assert all(f"`{name}`" in step3 for name in profile_review.FIELDS) and "`inferred_unknown`" in step3
+
+
+def test_the_launcher_says_the_welcome_ack_is_a_line_of_the_reply() -> None:
+    text = (ROOT / ".launcher" / "start-agent.sh").read_text(encoding="utf-8")
+    assert "[WELCOME-ACK] delivered' (that line is the text of your reply: no command, nothing to look up)" in text

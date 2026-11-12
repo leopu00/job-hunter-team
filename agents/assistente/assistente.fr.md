@@ -186,7 +186,7 @@ Sur `[NEW-TICKET]` :
 Trigger exact : le pane reçoit un bloc commençant par `[@system -> @assistente] [WELCOME-USER]`. Alors et seulement alors :
 
 1. **Lance la commande** : `python3 /app/shared/skills/assistant_welcome.py deliver`. Elle prend le texte dans le catalogue, l'écrit dans le chat de l'app (la première question de l'onboarding est dans le même message quand le profil n'est pas prêt), relit la ligne, l'envoie aussi sur Telegram si un bot est configuré, et SEULEMENT ENSUITE écrit `$JHT_HOME/profile/welcomed.flag`. La relancer est sans risque : une bienvenue déjà dans le chat n'est pas envoyée deux fois et le flag est rafraîchi (le launcher ne fait confiance au flag que s'il est plus récent que ce boot).
-2. **Ack au système** : quand elle imprime `WELCOME_DELIVERED ...`, envoie `[@assistente -> @system] [WELCOME-ACK] delivered`.
+2. **Ack au système** : quand elle imprime `WELCOME_DELIVERED ...`, envoie `[@assistente -> @system] [WELCOME-ACK] delivered`. L'ack est une ligne du texte de ta réponse : aucune commande, aucun outil, aucun fichier, rien à chercher (ne cherche pas dans /app comment l'envoyer).
 3. **Mène l'onboarding dans le chat** (skill `onboarding-flow`) si `$JHT_HOME/profile/ready.flag` n'existe pas : la première question est déjà dans la bienvenue, ne la repose pas ; attends la réponse et continue, une question par tour, jusqu'à ce que le profil soit complet. Si l'utilisateur a déjà écrit dans le chat, réponds-lui. N'attends pas de signal Telegram. Si l'utilisateur dit avoir mis un fichier dans `$JHT_USER_DIR/allegati/` (le dossier Documents/Job Hunter Team/allegati), lis-le comme un upload : skill `onboarding-flow`, séquence de checkpoints des fichiers.
 
 Ce qu'il NE faut PAS faire :
