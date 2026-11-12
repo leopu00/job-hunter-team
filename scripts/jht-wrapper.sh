@@ -59,8 +59,10 @@ HOST_KERNEL="$(uname -s)"
 HOST_UID="$(id -u)"
 
 CONTAINER_SERVICE="jht"
-# I servizi del compose: agenti e i due servizi isolati.
-COMPOSE_SERVICES="jht jht-broker jht-telegram"
+# Every service of the compose (tests/test_podman_screen_attestation.py holds it to docker-compose.yml). podman-compose's `ps`
+# lists every container of the project, and the attestation refuses the whole project when one has a service not named here:
+# with only the agents and the two isolated services, the screen of `jht screen on` made every command «non attestabile».
+COMPOSE_SERVICES="jht jht-broker jht-telegram jht-media jht-screen jht-login jht-login-proxy jht-login-view jht-playwright-populate"
 # Every profile of the project: what looks at or takes down the WHOLE project names them all (the broker and Telegram are made on request).
 COMPOSE_ALL_PROFILES="telegram,broker,media,playwright,screen,login"
 RUNTIME_MIGRATION_VOLUMES="jht-broker-state jht-secrets jht-telegram-secrets jht-telegram-state"
@@ -3214,11 +3216,18 @@ podman_expected_config_hash() {
   if [ -f "$RUNTIME_IMAGE_PIN" ] || [ -f "$RUNTIME_TIER_FILE" ]; then
     pinned_image="$(runtime_selected_image)" || return 1
   fi
+  # The tools' containers (screen, media, sign-in) are made with JHT_EXTRAS_IMAGE set to the pinned extras image, the one value
+  # the wrapper ever gives it: without it here ${JHT_EXTRAS_IMAGE:-...} resolves to the compose's default and their hash is never
+  # the one on the container. A pin that cannot be trusted gives no image: those containers are then refused, never the others.
+  local extras_digest="" extras_image=""
+  extras_digest="$(runtime_extras_digest 2>/dev/null)" || extras_digest=""
+  [[ "$extras_digest" =~ ^sha256:[0-9a-f]{64}$ ]] && extras_image="ghcr.io/leopu00/jht@$extras_digest"
   if [ "$PODMAN_RUNTIME_MODE" = "machine" ]; then
     resolved="$({
       cd "$RUNTIME_DIR" || return 1
       [ "$env_mode" != clean ] || unset $PODMAN_CALLER_ENV
       [ -z "$pinned_image" ] || export JHT_IMAGE="$pinned_image"
+      [ -z "$extras_image" ] || export JHT_EXTRAS_IMAGE="$extras_image"
       CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
       COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" PODMAN_COMPOSE_WARNING_LOGS=false \
         "$compose_bin" --verbose --dry-run --project-name jht \
@@ -3233,6 +3242,7 @@ podman_expected_config_hash() {
       unset CONTAINER_CONNECTION
       [ "$env_mode" != clean ] || unset $PODMAN_CALLER_ENV
       [ -z "$pinned_image" ] || export JHT_IMAGE="$pinned_image"
+      [ -z "$extras_image" ] || export JHT_EXTRAS_IMAGE="$extras_image"
       COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" PODMAN_COMPOSE_WARNING_LOGS=false \
         "$compose_bin" "$no_pod" --verbose --dry-run --project-name jht \
           --podman-path "$podman_bin" -f "$file" -f "$override" up -d --force-recreate "$service"
@@ -3384,6 +3394,9 @@ override=none"
     facts="$facts
 image=$(attest_cache_text_digest "$JHT_IMAGE")"
   fi
+  # the extras image the expected hash of the tools' containers is made with (podman_expected_config_hash)
+  facts="$facts
+extras=$(runtime_extras_digest 2>/dev/null || printf 'untrusted')"
   for name in $PODMAN_CALLER_ENV; do
     value="${!name:-}"
     if [ -n "$value" ]; then
