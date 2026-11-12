@@ -7,7 +7,7 @@ This document describes the current CLI installer. It is the reference for
 curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 ```
 
-The visual path is the native Godot office in [`game/`](../../game/). This document remains the reference for CLI installation and recovery.
+The visual path is the Mac desktop app in [`desktop/`](../../desktop/). This document remains the reference for CLI installation and recovery.
 For onboarding inside an already-cloned repo, see [legacy `setup.sh` / `setup.ps1`](#-legacy-onboarding-setupsh--setupps1).
 
 ---
@@ -159,30 +159,19 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
    <args>`. Auto-up: lifecycle of the container is transparent on
    first run.
 
-### 🛠️ Expert path — native (`--no-docker`, 7 steps)
+### 🛠️ Expert path — native (`--no-docker`, 6 steps)
 
 1. **Detect system** (same as Docker path).
 2. **System deps** — `git`, `tmux`, `curl` via the detected package
    manager; `brew` on macOS.
 3. **Node.js ≥ 22** — NodeSource repo on apt/dnf, `brew install
    node@22` on macOS, `pacman -S nodejs npm` on Arch.
-4. **Provider CLI** — `npm install -g @anthropic-ai/claude-cli` (legacy
-   package name, see [Current limitations](#%EF%B8%8F-current-limitations)). Failure
-   here is non-fatal (warns and continues).
-
-   > 💡 **Native mode installs only Claude today.** If you plan to use
-   > Codex instead, install the corresponding CLI manually after
-   > the script finishes:
-   > - 🟠 **Claude Code**: `npm install -g @anthropic-ai/claude-code` *(modern package)*
-   > - 🔵 **Codex**: `npm install -g @openai/codex`
-   >
-   > See [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md) for the full provider matrix.
-5. **Clone** — `git clone --depth 1 --branch $JHT_BRANCH $JHT_REPO_URL
+4. **Clone** — `git clone --depth 1 --branch $JHT_BRANCH $JHT_REPO_URL
    $JHT_INSTALL_DIR`. If already present, fetches and `git reset --hard
    origin/$JHT_BRANCH`.
-6. **Build** — `npm install` for `cli/`, then `npm install` for every
+5. **Build** — `npm install` for `cli/`, then `npm install` for every
    `shared/*/` workspace that declares dependencies.
-7. **Symlink `jht`** — `$JHT_BIN_DIR/jht` → `$JHT_INSTALL_DIR/cli/bin/jht.js`.
+6. **Symlink `jht`** — `$JHT_BIN_DIR/jht` → `$JHT_INSTALL_DIR/cli/bin/jht.js`.
 
 ### 🚀 After both paths
 
@@ -301,10 +290,6 @@ What `--dry-run` intentionally does **not** do:
 
 ## ⚠️ Current limitations
 
-- **Expert native mode installs a legacy Claude package** — `--no-docker`
-  still attempts `@anthropic-ai/claude-cli`. The normal Docker path is not
-  affected: `jht setup` installs the selected current CLI through
-  [`cli/src/commands/providers.js`](../../cli/src/commands/providers.js).
 - 📌 **Endpoint pins `master`, not a release tag** — a stable curl
   install would benefit from pinning to the latest GitHub release tag
   (rewrite to `raw.githubusercontent.com/.../<tag>/scripts/install.sh`,

@@ -9,7 +9,7 @@ do not need to install both.
 
 ## ⚠️ Before you start
 
-JHT runs ~**400M tokens/month** (many agents working in parallel, around the clock). You need **one** of:
+JHT runs many agents in parallel, around the clock. You need **one** of:
 
 |     | Provider   | How you pay | Status |
 | --- | ---------- | ----------- | ------ |

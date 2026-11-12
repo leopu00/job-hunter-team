@@ -94,8 +94,10 @@ def test_the_guides_and_the_changelog_say_codex_only():
     assert "A dedicated Codex (ChatGPT) subscription." in text("docs/guides/VPS-SETUP-WIZARD.md")
     changelog = text("CHANGELOG.md")
     release = changelog[changelog.index("## [0.4.0]"):]
-    assert "supported Codex subscription (ChatGPT's)" in release[:4000]
-    assert "Codex is the only provider offered. Kimi and Claude Code are no longer among the" in release[:4000]
+    # Codex is the recommended way; the API-key way of 0.4 (Pi with GLM or Kimi) is there too, and is not called recommended
+    assert "**Codex** (through your ChatGPT subscription" in release[:4000]
+    assert "is the recommended one" in release[:4000] and "Claude Code is no longer offered" in release[:4000]
+    assert "**Pi with GLM (Z.ai) or Kimi (Moonshot)**" in release[:4000]
 
 
 def test_the_protected_setup_page_starts_on_codex_and_lists_only_it():
