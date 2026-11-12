@@ -852,10 +852,29 @@ function Test-JhtWslConfigHasMemory {
   return $false
 }
 
+# What the setup says when the limit was written while the WSL VM runs and the VM could not be restarted for it.
+$script:JhtWslLimitWaitsText = '  WSL is already running: the memory limit applies from the next restart of Windows, or of WSL (wsl --shutdown stops all your WSL distributions, so it is not done for you).'
+
+# Waits for the WSL virtual machine to stop by itself (WSL ends it about a minute after its last distribution stopped): $true once it
+# is gone, $false after the time (120 seconds, or JHT_WSL_STOP_WAIT_SECONDS, 1 to 300, for the tests). It never stops anything.
+function Wait-JhtWslVmStopped {
+  param([string]$Seconds = $env:JHT_WSL_STOP_WAIT_SECONDS)
+  $limit = 120
+  if ($Seconds -cmatch '^[0-9]{1,3}$' -and [int]$Seconds -ge 1 -and [int]$Seconds -le 300) { $limit = [int]$Seconds }
+  $deadline = [DateTime]::UtcNow.AddSeconds($limit)
+  while (Test-JhtWslVmRunning) {
+    if ([DateTime]::UtcNow -ge $deadline) { return $false }
+    Start-Sleep -Seconds 1
+  }
+  return $true
+}
+
 # Adds what is wanted that the person does not already have, records it, and says it. Never fails a setup: the caller catches.
+# Answers 'vm-running' when it wrote a limit while the WSL virtual machine runs (the limit waits for the VM to start again; the enabler
+# restarts it when it may), '' otherwise.
 function Set-JhtWslConfigForMachine {
   param([Parameter(Mandatory)][string]$RuntimeDir, [Parameter(Mandatory)][string]$MachineName, [string]$ProfilePath = $env:USERPROFILE)
-  if (-not $ProfilePath -or -not [IO.Path]::IsPathRooted($ProfilePath)) { return }
+  if (-not $ProfilePath -or -not [IO.Path]::IsPathRooted($ProfilePath)) { return '' }
   $total = Get-JhtTotalMemoryMegabytes
   $names = Get-JhtWslDistributionNames
   $own = Get-JhtWslDistroNameOfMachine $MachineName
@@ -871,15 +890,15 @@ function Set-JhtWslConfigForMachine {
       Write-Host '  WSL memory: no limit was set, because other WSL distributions are registered and a limit would apply to them too.' -ForegroundColor Yellow
       Write-Host "  To set one yourself: in $path, under [wsl2], add memory=$advice (it applies after the next restart of Windows or of WSL)." -ForegroundColor Yellow
     } elseif ([IO.File]::Exists($advicePath)) { [IO.File]::Delete($advicePath) }
-    return
+    return ''
   }
   if ([IO.File]::Exists($advicePath)) { [IO.File]::Delete($advicePath) }
   $answer = Add-JhtWslConfigKeys -Path $path -Entries $wanted
   if ($answer.Status -eq 'skipped') {
     Write-Host "  WSL settings: $path was left as it is ($($answer.Reason))." -ForegroundColor Yellow
-    return
+    return ''
   }
-  if ($answer.Status -ne 'added') { return }
+  if ($answer.Status -ne 'added') { return '' }
   $recordPath = [IO.Path]::Combine($RuntimeDir, 'wslconfig-added')
   $created = [bool]$answer.Created
   $added = @($answer.Added)
@@ -895,11 +914,10 @@ function Set-JhtWslConfigForMachine {
   [IO.File]::WriteAllText($recordPath, (ConvertTo-JhtWslConfigRecord -Path $path -Created $created -Added $added), [Text.UTF8Encoding]::new($false))
   Write-Host "  WSL settings added to ${path}:" -ForegroundColor Cyan
   foreach ($entry in @($answer.Added)) { Write-Host "    [$($entry.Section)] $($entry.Key)=$($entry.Value)" -ForegroundColor Cyan }
-  # The setup starts the machine right after this: with WSL off, that start reads the file and nothing needs saying.
-  if (Test-JhtWslVmRunning) {
-    Write-Host '  WSL is already running: the memory limit applies from the next restart of Windows, or of WSL (wsl --shutdown stops all your WSL distributions, so it is not done for you).' -ForegroundColor Yellow
-  }
   Write-Host '  To undo it: jht uninstall takes these lines out, or delete them by hand (each has a comment line above it).' -ForegroundColor DarkGray
+  # The setup starts the machine right after this: with WSL off, that start reads the file and nothing needs saying.
+  if (Test-JhtWslVmRunning) { return 'vm-running' }
+  return ''
 }
 
 # The pull of an image, and then the team's first minutes, fill the machine's page cache (about 5 GB were seen on a 12 GB computer,

@@ -301,11 +301,11 @@ def test_the_step_adds_records_and_tells_the_person_what_it_wrote_and_how_to_und
     assert "already running" not in out and "wsl --shutdown" not in out
 
 
-def test_with_wsl_already_running_it_says_the_limit_waits_for_a_restart_and_never_stops_wsl(tmp_path):
+def test_with_wsl_already_running_the_step_answers_so_for_the_enabler_to_apply_it(tmp_path):
     out, config, _ = _step(tmp_path, wsl_on="1")
     assert "memory=3GB" in config.read_text(encoding="utf-8")
-    assert ("WSL is already running: the memory limit applies from the next restart of Windows, or of WSL "
-            "(wsl --shutdown stops all your WSL distributions, so it is not done for you).") in out
+    assert "vm-running" in out  # test_windows_wsl_limit_restart.py: what the enabler does with it
+    assert "WSL is already running" not in out
 
 
 def test_the_check_of_a_running_wsl_reads_its_vm_and_says_yes_when_it_cannot_read():
