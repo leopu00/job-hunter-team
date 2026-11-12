@@ -132,6 +132,8 @@ export default {
   'doctor.not_found': '{cmd}: non trovato',
   'doctor.install': 'Installa {cmd}',
   'doctor.not_found_optional': '{cmd}: non trovato (facoltativo)',
+  'doctor.wsl_memory_unlimited': 'WSL non ha un limite di memoria: il setup non l’ha messo perché sono registrate altre distribuzioni WSL (varrebbe anche per loro), e Windows può dare a WSL fino a metà della sua memoria',
+  'doctor.wsl_memory_hint': 'Per metterlo tu: in %USERPROFILE%\\.wslconfig, sotto [wsl2], aggiungi memory={value}; vale dal prossimo riavvio di Windows o di WSL',
   'doctor.team_off': 'La squadra è spenta',
   'doctor.team_active': '{name}: acceso',
   'doctor.team_missing': '{name}: non trovato',

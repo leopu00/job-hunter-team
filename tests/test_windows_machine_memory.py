@@ -548,3 +548,87 @@ def test_a_record_too_big_to_be_ours_is_not_read(tmp_path):
     with (tmp_path / "record").open("a", encoding="utf-8") as record:
         record.write("#" * 5000 + "\n")
     assert "REASON=no record" in _remove(tmp_path)
+
+
+# ── other WSL distributions: no limit written, but said, and kept in jht doctor ──
+
+def test_with_another_distribution_the_setup_says_why_there_is_no_limit_and_how_to_set_one(tmp_path):
+    out, config, record = _step(tmp_path, names="podman-jht-podman,Ubuntu")
+    assert not config.exists() and not record.exists()
+    assert "WSL memory: no limit was set, because other WSL distributions are registered" in out
+    assert f"To set one yourself: in {config}, under [wsl2], add memory=3GB" in out
+    assert (tmp_path / "runtime" / "wslconfig-advice").read_text(encoding="utf-8") == "memory=3GB\n"
+
+
+def test_with_another_distribution_and_a_limit_of_the_person_nothing_is_said(tmp_path):
+    profile = tmp_path / "profile"
+    profile.mkdir()
+    (profile / ".wslconfig").write_text("[wsl2]\nmemory=6GB\n", encoding="utf-8")
+    out, _, _ = _step(tmp_path, names="podman-jht-podman,Ubuntu")
+    assert "WSL memory" not in out and not (tmp_path / "runtime" / "wslconfig-advice").exists()
+
+
+def test_the_advice_goes_once_the_setup_writes_the_limit_itself(tmp_path):
+    _step(tmp_path, names="podman-jht-podman,Ubuntu")
+    assert (tmp_path / "runtime" / "wslconfig-advice").exists()
+    _step(tmp_path)  # Ubuntu was removed: ours is the only distribution now
+    assert not (tmp_path / "runtime" / "wslconfig-advice").exists()
+
+
+def test_a_small_computer_with_another_distribution_is_advised_the_smaller_limit(tmp_path):
+    out, _, _ = _step(tmp_path, names="podman-jht-podman,Ubuntu", ram="7900")
+    assert "add memory=2GB" in out
+
+
+def test_the_bridge_and_the_wrapper_read_a_limit_of_the_person_with_the_same_function():
+    def function(path):
+        text = path.read_text(encoding="utf-8")
+        start = text.index("function Test-JhtWslConfigHasMemory {")
+        return text[start:text.index("\n}\n", start)]
+    assert function(BRIDGE) == function(WRAPPER)
+
+
+DOCTOR_BODY = r"""
+$RuntimeDir = $env:RUNTIME
+$env:USERPROFILE = $env:PROFILE
+[Console]::Out.WriteLine('ADVICE=' + (Get-JhtDoctorWslMemoryAdvice))
+"""
+
+
+def _doctor_advice(tmp_path, advice: str | None, wslconfig: str | None) -> str:
+    runtime = tmp_path / "runtime"
+    runtime.mkdir(exist_ok=True)
+    profile = tmp_path / "profile"
+    profile.mkdir(exist_ok=True)
+    (tmp_path / "bin").mkdir(exist_ok=True)
+    if advice is not None:
+        (runtime / "wslconfig-advice").write_text(advice, encoding="utf-8")
+    if wslconfig is not None:
+        (profile / ".wslconfig").write_text(wslconfig, encoding="utf-8")
+    imports = ["Read-JhtWslConfigFile", "Get-JhtWslConfigSections", "Test-JhtWslConfigHasMemory", "Get-JhtDoctorWslMemoryAdvice"]
+    result, _ = _run(tmp_path, WRAPPER, imports, DOCTOR_BODY, {"RUNTIME": str(runtime), "PROFILE": str(profile)})
+    assert result.returncode == 0, result.stdout + result.stderr
+    return re.search(r"^ADVICE=(.*)$", result.stdout.replace("\r\n", "\n"), re.M).group(1)
+
+
+def test_doctor_is_told_the_limit_while_the_person_has_none(tmp_path):
+    assert _doctor_advice(tmp_path, "memory=3GB\n", None) == "3GB"
+    assert _doctor_advice(tmp_path, "memory=3GB\n", "[wsl2]\nprocessors=4\n") == "3GB"
+
+
+def test_doctor_is_told_nothing_once_the_person_set_a_limit_or_without_the_setup_s_advice(tmp_path):
+    assert _doctor_advice(tmp_path, "memory=3GB\n", "[wsl2]\nmemory=4GB\n") == ""
+    (tmp_path / "runtime" / "wslconfig-advice").unlink()
+    (tmp_path / "profile" / ".wslconfig").unlink()
+    assert _doctor_advice(tmp_path, None, None) == ""
+
+
+@pytest.mark.parametrize("advice", ["memory=3GB; rm -rf\n", "memory=300GB\n", "memory=3gb\n", "x" * 80])
+def test_doctor_passes_on_only_a_value_of_the_setup_s_own_shape(tmp_path, advice):
+    assert _doctor_advice(tmp_path, advice, None) == ""
+
+
+def test_the_wrapper_gives_the_advice_to_doctor_only():
+    text = WRAPPER.read_text(encoding="utf-8")
+    line = next(l for l in text.splitlines() if "JHT_HOST_WSL_MEMORY_ADVICE" in l and "$hostFlags" in l)
+    assert line.strip().startswith("if ($Sub -ceq 'doctor')")
