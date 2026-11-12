@@ -27,7 +27,9 @@ export async function askPiApiKey(prompter, { t, tf, choice, check = checkPiApiK
 }
 
 async function askKey(prompter, { t, tf, choice, check, keep, intro, onVerdict = () => {} }) {
-  await prompter.note(tf(intro, choice.label, choice.keyVariable), t('wizard.key.title'));
+  // the intro of glm/kimi names the provider in the command without questions (the one chosen, never a list)
+  const args = intro === 'wizard.key.intro' ? [choice.label, choice.value, choice.keyVariable] : [choice.label, choice.keyVariable];
+  await prompter.note(tf(intro, ...args), t('wizard.key.title'));
   for (let attempt = 1; attempt <= KEY_ATTEMPTS; attempt += 1) {
     const typed = await prompter.password({
       message: tf('wizard.key.prompt', choice.label),
