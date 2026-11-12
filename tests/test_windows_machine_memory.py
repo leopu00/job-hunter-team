@@ -13,7 +13,8 @@ import pytest
 
 from test_windows_podman_wsl_branches import ENABLER, _fake, _run
 
-DROP = "machine ssh jht-podman sync && echo 3 | sudo timeout 30 tee /proc/sys/vm/drop_caches >/dev/null"
+DROP = ("machine ssh jht-podman sync && echo 3 | sudo timeout 30 tee /proc/sys/vm/drop_caches >/dev/null"
+        " && echo 1 | sudo timeout 60 tee /proc/sys/vm/compact_memory >/dev/null")
 CASES = '''  "machine ssh jht-podman "*) [ -n "$FAKE_SSH_EXIT" ] && { echo 'Error: ssh failed' >&2; exit "$FAKE_SSH_EXIT"; }; exit 0 ;;'''
 BODY = """
 $done = Invoke-JhtMachineDropCaches -PodmanPath $env:FAKE_PODMAN -MachineName 'jht-podman'
@@ -633,3 +634,38 @@ def test_the_wrapper_gives_the_advice_to_doctor_only():
     text = WRAPPER.read_text(encoding="utf-8")
     line = next(l for l in text.splitlines() if "JHT_HOST_WSL_MEMORY_ADVICE" in l and "$hostFlags" in l)
     assert line.strip().startswith("if ($Sub -ceq 'doctor')")
+
+
+# ── the memory the machine's kernel keeps free (vmbus channels after a long pull) ──
+
+RESERVE = ("machine ssh jht-podman printf 'vm.min_free_kbytes = 131072\\n' | sudo timeout 30 tee /etc/sysctl.d/90-jht-memory.conf >/dev/null"
+           " && sudo timeout 30 sysctl -q -w vm.min_free_kbytes=131072")
+RESERVE_BODY = """
+$done = Set-JhtMachineMemoryReserve -PodmanPath $env:FAKE_PODMAN -MachineName 'jht-podman'
+[Console]::Out.WriteLine('DONE=' + [string]$done)
+"""
+
+
+def _reserve(tmp_path, **env):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _fake(bin_dir, "podman.exe", CASES)
+    return _run(tmp_path, ENABLER, [], RESERVE_BODY, {"FAKE_PODMAN": str(bin_dir / "podman.exe"), **env})
+
+
+def test_the_machine_keeps_memory_free_for_good_and_at_once(tmp_path):
+    result, calls = _reserve(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "DONE=True" in result.stdout
+    assert calls == [RESERVE]
+
+
+def test_a_machine_that_does_not_take_it_is_no_error(tmp_path):
+    result, _ = _reserve(tmp_path, FAKE_SSH_EXIT="125")
+    assert result.returncode == 0 and "DONE=False" in result.stdout
+
+
+def test_the_reserve_is_set_before_the_first_pull():
+    source = ENABLER.read_text(encoding="utf-8").replace("\r\n", "\n")
+    reserve = source.index("[void](Set-JhtMachineMemoryReserve -PodmanPath $Podman -MachineName $MachineName)")
+    assert source.index("configure-podman-windows-network.ps1') -MachineName") < reserve < source.index("Write-JhtPhase image_pull")

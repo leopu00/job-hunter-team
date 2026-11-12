@@ -930,6 +930,8 @@ if ($ExpectedImageDigest -and $ExpectedImageDigest -notmatch '^sha256:[0-9a-f]{6
 if ($RuntimeImage -match '@(sha256:[0-9a-f]{64})$' -and $Matches[1] -ne $ExpectedImageDigest) {
   throw 'Runtime image reference and expected digest disagree.'
 }
+# The machine keeps memory free for its own channels before the pull fills it (Set-JhtMachineMemoryReserve says why).
+[void](Set-JhtMachineMemoryReserve -PodmanPath $Podman -MachineName $MachineName)
 Write-JhtPhase image_pull
 Invoke-PodmanPull -PodmanPath $Podman -Machine $MachineName -Image $RuntimeImage
 $repoDigestsJson = ((& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName image inspect $RuntimeImage --format '{{json .RepoDigests}}' 2>$null }) -join '')
