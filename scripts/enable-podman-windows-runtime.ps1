@@ -966,6 +966,11 @@ $containerUnitFile = Join-Path $RuntimeDir 'jht-container.service'
 # these are `podman --remote` calls, where the cgroup manager is the service's. The service gets it
 # as its own flag, --cgroup-manager=cgroupfs (configure-podman-windows-network.ps1, T87). The line
 # stays so the installed unit does not change.
+# jht-rootless-podman.service is Type=simple: systemd calls it started as soon as it forks, about a second before
+# `podman system service` listens on its socket. At boot this unit ran in that second, `podman --remote start jht`
+# found no socket (exit 125) and the team stayed down after every start of the machine. ExecStartPre waits for the
+# API to answer (at most 60 seconds; TimeoutStartSec leaves the start and the Telegram step their 90). The unit is
+# installed without a daemon-reload: the changed unit is read at the machine's next start, which is when it matters.
 $containerUnit = @'
 [Unit]
 Description=Job Hunter Team container
@@ -984,10 +989,11 @@ Group=user
 Environment=HOME=/home/user
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=CONTAINERS_CGROUP_MANAGER=cgroupfs
+ExecStartPre=/bin/sh -c 'i=0; while [ "$$i" -lt 60 ]; do /usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock info >/dev/null 2>&1 && exit 0; i=$$((i + 1)); sleep 1; done; echo "the rootless Podman API did not answer in 60 seconds" >&2; exit 1'
 ExecStart=/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock start --sig-proxy=false jht
 ExecStartPost=/bin/sh -ec 'p() { /usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock "$$@"; }; probe() { rc=0; out=$$(p inspect --type container jht-telegram --format "{{.State.Running}}" 2>&1) || rc=$$?; printf "%%s\n%%s" "$$rc" "$$out"; }; op=$$(probe | p exec -i jht /usr/bin/python3 -I /app/shared/telegram_service/lifecycle.py boot); case "$$op" in start) p start --sig-proxy=false jht-telegram ;; stop) p stop --time 30 jht-telegram ;; noop) exit 0 ;; *) exit 1 ;; esac; probe | p exec -i jht /usr/bin/python3 -I /app/shared/telegram_service/lifecycle.py verify "$$op"'
 ExecStop=-/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock stop --time 30 jht jht-telegram jht-broker
-TimeoutStartSec=90
+TimeoutStartSec=150
 TimeoutStopSec=45
 
 [Install]
