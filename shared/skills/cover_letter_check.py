@@ -73,7 +73,17 @@ NOT_TECH = frozenset({"LinkedIn", "YouTube", "PhD", "McDonald", "iPhone", "Whats
 @lru_cache(maxsize=1)
 def _languages() -> dict:
     """The per-language data: what says the person lacks something, the banned openings, the banned buzzwords."""
-    return json.loads((HERE / "cover_letter_check_languages.json").read_text(encoding="utf-8"))
+    try:
+        data = json.loads((HERE / "cover_letter_check_languages.json").read_text(encoding="utf-8"))
+        for key in ("negation", "cliches"):
+            if not all(isinstance(data[key][lang], (str, list)) for lang in LANGUAGES):
+                raise ValueError(f"{key}: a language is missing")
+        if not isinstance(data["buzzwords"], list):
+            raise ValueError("buzzwords: not a list")
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        # a missing or broken data file is a check that cannot be made (exit 2), never a pass and never a crash
+        raise CannotCheck(f"cover_letter_check_languages.json: {exc}") from exc
+    return data
 
 
 @lru_cache(maxsize=None)
