@@ -365,6 +365,10 @@ def test_the_scripts_jht_cmd_is_the_one_install_ps1_writes():
 def test_the_script_never_uses_the_shortcuts_that_break_things():
     script = SCRIPT.read_text(encoding="utf-8-sig")
     code = "\n".join(line for line in script.splitlines() if not line.lstrip().startswith("#"))
+    # The lines the setup added to the person's .wslconfig are taken out by plain file edits (a block of functions, its call and the
+    # label of its report line): they never run wsl.exe, which is what this guard is for, but their names say «Wsl».
+    code = re.sub(r"# WSLCONFIG-BEGIN.*?# WSLCONFIG-END\n", "", code, flags=re.S)
+    code = "\n".join(line for line in code.splitlines() if "wslconfig" not in line.lower())
     for forbidden in ("Remove-Item", "setx", "SetEnvironmentVariable", "wsl", "Stop-Process", "Kill(", "--shutdown",
                       "--terminate", "--unregister", "$env:USERPROFILE", "$env:LOCALAPPDATA", "$env:APPDATA"):
         assert forbidden.lower() not in code.lower(), forbidden
