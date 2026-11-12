@@ -261,6 +261,18 @@ markers = {
   'codex':     f'{jht_home}/.codex/auth.json',
   'openai':    f'{jht_home}/.codex/auth.json',
 }
+# The same rule as config_ready() of agent-watchdog.sh (tests/test_doctor_watchdog_provider_ready.py keeps them together): on the
+# pi harness glm/kimi have no sign-in, their key in the config is the whole of it; openai on pi signs in to pi. Without these lines
+# a team on GLM was «not authenticated» for ever and the Dottore and the Mantenitore never ran.
+pi = data.get('harness') == 'pi' or 'pi' in [v for k, v in os.environ.items() if k.startswith('JHT_AGENT_HARNESS_')]
+if pi and provider in ('glm', 'kimi', 'moonshot'):
+  entry = (data.get('providers') or {}).get(provider) or {}
+  ref = entry.get('api_key_ref')
+  if isinstance(ref, dict) and ref.get('source') == 'file':
+    sys.exit(0 if os.path.exists(str(ref.get('path') or '')) else 1)
+  sys.exit(0 if (ref or entry.get('api_key')) else 1)
+if pi and provider in ('openai', 'codex'):
+  markers[provider] = f'{jht_home}/.pi/agent/auth.json'
 marker = markers.get(provider, '')
 sys.exit(0 if provider and marker and os.path.exists(marker) else 1)
 PYEOF
@@ -322,14 +334,14 @@ while true; do
       # non sarebbe da nessuna parte.
       log "config check hit the ${HELPER_TIMEOUT_SEC}s bound [${BOUND_STATE}] (stalled storage?) — treated as not ready, loop alive"
     elif [ $((config_log_tick % 8)) -eq 0 ]; then
-      log "provider not authenticated yet — Dottore/Mantenitore scheduling suspended"
+      log "provider not set up yet (no sign-in, or no API key in the configuration) — Dottore/Mantenitore scheduling suspended"
     fi
     config_log_tick=$((config_log_tick + 1))
     finish_tick "$POLL_SEC"
     continue
   fi
   if [ "$config_log_tick" -gt 0 ]; then
-    log "provider authenticated — enabling Dottore/Mantenitore scheduling"
+    log "provider set up — enabling Dottore/Mantenitore scheduling"
     config_log_tick=0
   fi
 
