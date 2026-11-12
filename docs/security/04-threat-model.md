@@ -12,7 +12,7 @@
 
 JHT is a **local-first, single-user job-hunting team** made of three pieces:
 
-- **The native application** (Godot, [`game/`](../../game/)) on the user's machine (Windows/macOS/Linux). It is the only control surface: it starts and stops the team, logs the user into the LLM provider through an embedded console, edits the profile and the configuration.
+- **The native application** (Tauri 2, [`desktop/`](../../desktop/)) on the user's machine (Windows/macOS/Linux). It is the only control surface: it starts and stops the team, logs the user into the LLM provider through an embedded console, edits the profile and the configuration.
 - **The runtime container** (Docker) hosting the agents in `tmux`, the SQLite database and the bridges. It **exposes no network port**: the app drives it through `docker exec` when it runs on the same machine, or over **SSH** when it runs on the user's own VPS.
 - **The cloud dashboard** (Next.js on Vercel + Supabase), optional and opt-in. It is **read-only on the data**, plus an asynchronous request lane (tickets, feedback, per-position actions). It is shared by several users, whose rows are isolated per `user_id` by Supabase RLS.
 

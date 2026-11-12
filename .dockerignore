@@ -26,20 +26,12 @@
 # La riga resta come guardia: se un giorno `desktop/` torna, torna FUORI dal
 # contesto per costruzione, e non per essersene ricordato qualcuno.
 desktop/
-# Client host-side e artefatti non-runtime: il container esegue SOLO gli
-# agenti (cli/shared/agents). Il gioco Godot (game/) gira sull'host e i suoi
-# asset stanno nell'exe/installer (embed_pck) — NON qui. Includerlo in
-# `COPY . .` gonfiava l'immagine di centinaia di MB (game/assets ~369MB,
-# game/builds fino a ~690MB) senza che il container li tocchi mai
-# (Leone 24/07).
-#
 # ⚠️ Il doppio asterisco NON e' cosmetico: senza, la riga vale SOLO alla
 # radice. Questo file era scritto per un albero solo e il repo ne ha due,
 # quindi `docs/`, `tests/` e `shared/data/*.txt` erano esclusi in cima e
 # rientravano tutti dentro il payload. Le esclusioni ora valgono in
 # profondita', e dove una cartella con lo stesso nome e' contenuto vero la si
 # rimette dentro per nome, in fondo, invece di indebolire la regola.
-**/game/
 **/docs/
 **/tests/
 **/e2e/

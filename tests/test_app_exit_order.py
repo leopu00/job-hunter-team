@@ -1,4 +1,4 @@
-"""The order the desktop app gives the Capitano when the person asks to stop the team in order is the game's, word for
+"""The order the desktop app gives the Capitano when the person asks to stop the team in order is pinned here word for
 word, and names the flag the skill creates: the Capitano executes it by reading it, so a rewording is a change of
 behaviour. (The text is Italian on purpose: the product's agents work in Italian.)"""
 
@@ -9,8 +9,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RUST = (ROOT / "desktop" / "src-tauri" / "src" / "app_exit.rs").read_text(encoding="utf-8")
-GAME = (ROOT / "game" / "scripts" / "setup" / "setup_service.gd").read_text(encoding="utf-8")
-GAME_ORDER = (ROOT / "game/scripts/setup/graceful_shutdown_request.gd").read_text(encoding="utf-8")
 SKILL = (ROOT / "agents" / "_skills" / "graceful-shutdown" / "SKILL.md").read_text(encoding="utf-8")
 
 
@@ -20,19 +18,24 @@ def rust_const(name: str) -> str:
     return match.group(1)
 
 
-def test_the_order_is_the_games_word_for_word():
-    flag = rust_const("READY_FLAG")
-    game = re.search(r'var order := (.*?)\n\tvar result', GAME_ORDER, re.S)
-    assert game is not None, "the shutdown order must be present in its delivery module"
-    literals = re.findall(r'"((?:[^"\\]|\\.)*)"', game.group(1))
-    assert len(literals) == 5, "every fragment of the protocol order must be compared"
-    expected = literals[0] + literals[1] + literals[2] + literals[3] + flag + literals[4]
-    assert rust_const("ORDER") == expected
+# The order as the Godot office gave it, whose wording the Capitano has always executed: changing it is a decision.
+PINNED_ORDER = (
+    "[@utente -> @capitano] [SHUTDOWN] L'utente sta chiudendo "
+    "l'applicazione. Usa la skill graceful-shutdown: fai annotare a "
+    "ogni agente lo stato del lavoro in corso sulla propria agenda, "
+    "poi fermali uno a uno e infine crea il flag "
+    "/jht_home/.shutdown-ready.flag"
+    " che chiude l'applicazione."
+)
 
 
-def test_the_flag_is_the_one_the_game_waits_for_and_the_skill_creates():
+def test_the_order_is_the_pinned_one_word_for_word():
+    assert rust_const("READY_FLAG") == "/jht_home/.shutdown-ready.flag"
+    assert rust_const("ORDER") == PINNED_ORDER
+
+
+def test_the_flag_is_the_one_the_skill_creates():
     flag = rust_const("READY_FLAG")
-    assert f'const SHUTDOWN_READY_FLAG := "{flag}"' in GAME
     assert f"touch {flag}" in SKILL
 
 

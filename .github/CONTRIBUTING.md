@@ -112,7 +112,6 @@ Rules:
 - [ ] `npm test` passes (in `tests/js/`)
 - [ ] `python -m pytest tests/ -q -m "not production"` passes (from repo root — same command CI runs; the `production` marker is for post-deploy smoke tests against the live site)
 - [ ] `npm --prefix desktop test`, `npm --prefix desktop run build` and `cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked` pass, if you touched `desktop/` (after `npm --prefix shared ci --ignore-scripts`: the desktop imports modules from `shared/`)
-- [ ] `game/tools/run.sh test gate` passes, if you touched `game/` (needs `godot` on `PATH`)
 - [ ] `pre-commit run --all-files` passes (security hooks: secrets, actionlint, zizmor, npm-audit-prod)
 - [ ] No sensitive files included (PDF, DB, credentials, personal data)
 - [ ] Branch rebased on `master` before opening the PR
@@ -128,8 +127,6 @@ Load-bearing invariants live in ADRs — breaking them breaks the rest of the sy
 The desktop app is the Tauri 2 shell in [`desktop/`](../desktop/): a React and Vite frontend in `desktop/src/` and the native side, in Rust, in `desktop/src-tauri/`. [`docs/guides/DESKTOP.md`](../docs/guides/DESKTOP.md) describes what the user sees; [`desktop/README.md`](../desktop/README.md) covers sign-in and the build environment.
 
 To run it from source you need Node 24, Rust and the Tauri 2 prerequisites for your system. From the repo root: `npm --prefix shared ci --ignore-scripts`, `npm --prefix desktop ci`, then `npm --prefix desktop run tauri:dev`. Before a PR, `npm --prefix desktop test` and `cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked` have to be green: they are the gates the release workflow runs.
-
-The Godot office in [`game/`](../game/) is no longer the desktop client, but its code and self-tests are still in the repo. If you touch it, `game/tools/run.sh test gate` runs its self-test tier (needs `godot` on `PATH`; the list lives in [`game/tools/test-matrix.txt`](../game/tools/test-matrix.txt)).
 
 ## Working on agents
 

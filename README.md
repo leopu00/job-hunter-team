@@ -141,8 +141,7 @@ Full walkthrough, expert mode and contributor setup: [`docs/guides/QUICKSTART.md
 
 ## Interfaces
 
-**Native desktop app** ([Tauri 2 + React](desktop/), with the retired Godot
-office retained in [`game/`](game/) as migration history) · **CLI** (`jht team
+**Native desktop app** ([Tauri 2 + React](desktop/)) · **CLI** (`jht team
 start` — [reference](docs/guides/CLI-REFERENCE.md)) · **Cloud dashboard**
 (Next.js) · **Telegram**
 
@@ -167,7 +166,7 @@ the 0.4 desktop product. The complete setup matrix is documented in
 [`2026-08-24-desktop-setup-modes.md`](docs/internal/architecture/2026-08-24-desktop-setup-modes.md).
 Full picture: [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md).
 
-Monorepo: [`desktop/`](desktop/) · [`game/`](game/) · [`cli/`](cli/) · [`web/`](web/) · [`shared/`](shared/) · [`agents/`](agents/) · [`api-worker/`](api-worker/) *(isolated full-team API pipeline)* · [`scripts/`](scripts/) · [`e2e/`](e2e/) · [`supabase/`](supabase/) · [`docs/`](docs/) — index in [`docs/README.md`](docs/README.md).
+Monorepo: [`desktop/`](desktop/) · [`cli/`](cli/) · [`web/`](web/) · [`shared/`](shared/) · [`agents/`](agents/) · [`api-worker/`](api-worker/) *(isolated full-team API pipeline)* · [`scripts/`](scripts/) · [`e2e/`](e2e/) · [`supabase/`](supabase/) · [`docs/`](docs/) — index in [`docs/README.md`](docs/README.md).
 
 ## Contributing
 

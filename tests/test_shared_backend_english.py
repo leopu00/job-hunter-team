@@ -52,9 +52,7 @@ def test_backend_perimeter_user_visible_copy_is_english():
     container's own messages: leaving them out of the gate is what let the
     English pass ship half-done.
     """
-    # `game`: the Godot front (game/, abandoned). Until 08/10 a budget that
-    # could only go down held its Italian copy; it went with Godot.
-    open_fronts = {"agents", "game"}
+    open_fronts = {"agents"}
     leaks = [leak for area, dirs in census.AREAS.items() if area not in open_fronts
              for leak in _scan(dirs)]
     assert not leaks, (
@@ -171,9 +169,10 @@ def test_agent_census_reads_english_markdown_and_extensionless_tools(
 
 
 def test_census_exclusions_accept_windows_separators():
-    assert census._excluded_relative(
-        r"game\scripts\backend\payloads\agent_history.py"
-    )
+    module = _load_census()
+    module.CENSUS_EXCLUDED = {"area/payloads": "made-up exclusion"}
+    assert module._excluded_relative(r"area\payloads\agent_history.py")
+    assert not module._excluded_relative(r"area\payloads-other\agent_history.py")
 
 
 def test_a_data_code_is_not_copy_but_prose_around_it_still_is(tmp_path):

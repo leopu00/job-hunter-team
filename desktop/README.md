@@ -2,8 +2,7 @@
 
 The desktop app of Job Hunter Team: a React and Vite frontend in `src/`
 inside a Tauri 2 host in `src-tauri/`. It is the desktop client that the
-release builds; the Godot office in [`game/`](../game/) stays in the
-repository but is not part of it.
+release builds.
 
 ## What it does
 

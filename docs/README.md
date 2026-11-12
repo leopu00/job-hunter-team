@@ -7,20 +7,13 @@ user-facing to the most internal.
 
 ## 🖥️ Desktop applications
 
-The supported Godot office remains in [`game/`](../game/) while the new Tauri 2
-and React shell is developed incrementally in [`desktop/`](../desktop/). The
-migration plan is
+The desktop application is the Tauri 2 and React shell in
+[`desktop/`](../desktop/). The Godot office it replaced (up to v0.3.9) is no
+longer in the tree. The migration plan was
 [`2026-08-24-desktop-tauri-migration.md`](internal/roadmap/2026-08-24-desktop-tauri-migration.md)
 and the setup matrix is
 [`2026-08-24-desktop-setup-modes.md`](internal/architecture/2026-08-24-desktop-setup-modes.md).
 
-Godot product docs stay colocated in [`game/docs/`](../game/docs/). Three entry
-points:
-- 🏛️ [`GDD.md`](../game/docs/GDD.md) — current product design: what the office is, the rooms, what each agent does on screen
-- 👋 [`FIRST-RUN.md`](../game/docs/FIRST-RUN.md) — first-run contract: the token-free showroom conversation, and where the provider boundary sits
-- 🔌 [`DATA-ADAPTER.md`](../game/docs/DATA-ADAPTER.md) — the contract between the game and the team's data (`TeamData` autoload, no Supabase in the scenes)
-
-Also there: `ROADMAP` · `ASSETS` · `SPRITES` · `ANALISI-GIOCHI` · `RESEARCH-DOSSIER`.
 
 ## 🎯 [`about/`](about/) — what JHT is and whether it works
 Public docs for anyone evaluating JHT, in two clusters (see the [index](about/README.md)):

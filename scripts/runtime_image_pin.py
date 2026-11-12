@@ -54,8 +54,6 @@ STRAY_PIN_RE = re.compile(r"ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64}")
 MAX_REGISTRY_BODY = 4 * 1024 * 1024
 PINNED_CONSUMERS = (
     Path("docker-compose.yml"),
-    Path("game/scripts/backend/payloads/runtime_compose.yml"),
-    Path("game/scripts/setup/setup_service.gd"),
     Path("cli/src/commands/container.js"),
     Path("scripts/install.sh"),
     Path("web/public/install.sh"),
@@ -88,12 +86,6 @@ CONSUMER_VALUE_PATTERNS: dict[Path, tuple[str, ...]] = {
     # values to keep equal.
     Path("docker-compose.yml"): (
         r"^[ \t]*image: (?:&[A-Za-z0-9_-]+[ \t]+)?\$\{JHT_IMAGE:-(?P<image>[^}\s]+)\}[ \t]*$",
-    ),
-    Path("game/scripts/backend/payloads/runtime_compose.yml"): (
-        r"^[ \t]*image: \$\{JHT_IMAGE:-(?P<image>[^}\s]+)\}[ \t]*$",
-    ),
-    Path("game/scripts/setup/setup_service.gd"): (
-        r'^const DEFAULT_RUNTIME_IMAGE := "(?P<image>[^"]+)"$',
     ),
     Path("cli/src/commands/container.js"): (
         r"^const DEFAULT_RUNTIME_IMAGE = '(?P<image>[^']+)';$",

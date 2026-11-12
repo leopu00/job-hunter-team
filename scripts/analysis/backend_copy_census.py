@@ -340,25 +340,11 @@ AREAS = {
     # shipped to agents. Localized `*.it.md`/etc. catalogues are excluded by
     # construction; the baseline `*.md` is what JHT_LANG=en installs.
     "agents": ("agents",),
-    # Fronte Godot di O-07. I cataloghi restano fuori: lì l'italiano è il
-    # catalogo strutturale (S) e le altre sei lingue gli stanno accanto —
-    # tradurlo sarebbe cancellare una lingua, non aggiungerne una.
-    # `game/tools` resta fuori a sua volta: sono strumenti di sviluppo
-    # (audit, runner dei test), non superfici che l'utente vede.
-    "game": ("game/scripts",),
 }
 
 ## File esclusi dal censimento con la ragione accanto: un'esclusione senza
 ## motivo scritto diventa un buco che nessuno sa più giustificare.
-CENSUS_EXCLUDED = {
-    "game/scripts/ui_strings.gd": "catalogo italiano strutturale (S)",
-    "game/scripts/i18n": "cataloghi delle altre 6 lingue",
-    # Template con segnaposto `%s`/`%d` a livello di sintassi: non sono
-    # Python valido e ast.parse ci si rompe. Non sono nemmeno copy — sono
-    # query che il container esegue.
-    "game/scripts/backend/payloads": "template SQL con %s, non Python valido",
-    "game/scripts/office/office_selftests.gd": "selftest, non copy utente",
-}
+CENSUS_EXCLUDED: dict[str, str] = {}
 
 
 def _is_selftest(path: Path) -> bool:

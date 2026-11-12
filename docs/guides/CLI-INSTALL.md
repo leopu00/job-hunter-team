@@ -7,7 +7,7 @@ This document describes the current CLI installer. It is the reference for
 curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 ```
 
-The visual path is the native Godot office in [`game/`](../../game/). This document remains the reference for CLI installation and recovery.
+The visual path is the desktop app in [`desktop/`](../../desktop/). This document remains the reference for CLI installation and recovery.
 For onboarding inside an already-cloned repo, see [legacy `setup.sh` / `setup.ps1`](#-legacy-onboarding-setupsh--setupps1).
 
 ---

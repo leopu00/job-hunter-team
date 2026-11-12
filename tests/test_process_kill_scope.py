@@ -26,13 +26,6 @@ THIS_FILE = "tests/test_process_kill_scope.py"
 
 # (file, testo che compare nella riga) -> perche' non e' un kill per nome.
 ALLOWED = {
-    ("game/tools/run.sh", "pkill -x godot"): (
-        "messaggio per l'utente dentro un echo: suggerisce un comando, non lo esegue"
-    ),
-    ("game/tools/run.sh", 'pgrep -f "godot --path.*job-hunter-team"'): (
-        "guarda soltanto se un Godot del progetto e' gia' aperto, per fermarsi: "
-        "non uccide niente (game/ e' legacy)"
-    ),
     ("shared/skills/boot_cost.py", "jq kill ls mkdir mv node npm pgrep pkill ps"): (
         "il vocabolario chiuso dei nomi che lo script RICONOSCE e stampa nel conto del boot: una lista di parole, "
         "non un comando; lo script non esegue niente"

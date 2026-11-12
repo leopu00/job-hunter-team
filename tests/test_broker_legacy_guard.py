@@ -476,7 +476,7 @@ def test_verification_code_has_no_mailbox_reader_and_fails_closed(home, no_open_
 # ── nothing in the agents' container reads the legacy files ─────────────
 
 # What runs in the agents' container: skills, tools, the CLI, the API harness.
-RUNTIME_TREES = ("shared", "agents", "cli/src", "cli/bin", "agent-harness/runtime/src", "game/scripts/backend/payloads")
+RUNTIME_TREES = ("shared", "agents", "cli/src", "cli/bin", "agent-harness/runtime/src")
 SOURCE_SUFFIXES = {".py", ".js", ".mjs", ".ts", ".sh", ""}
 LEGACY_NAME = re.compile(r"email_(?:monitor|transport)\.json|credentials/email_")
 # The migration reader, run by the HOST wrapper, prints only a digest envelope.
