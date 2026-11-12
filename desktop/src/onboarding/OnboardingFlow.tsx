@@ -23,6 +23,7 @@ import VpsProfileImport from "./VpsProfileImport";
 import { LOGIN_TEXT } from "../components/login-screen.i18n";
 import { fill } from "../lib/text-slots";
 import { ONBOARDING_TEXT, type OnboardingCopy } from "./onboarding.i18n";
+import { openPublicPage } from "../lib/public-pages";
 import { WINDOWS_SETUP } from "./windows-setup";
 import { savedVpsBridge, type SavedVps } from "../lib/saved-vps";
 import { SetupSupportReport } from "./SetupSupportReport";
@@ -152,6 +153,14 @@ function SetupNotices({ notices, t, locale, onRecreate, locked }: {
 function PathWithBreaks({ path }: { path: string }) {
   return <>{(path.match(/[^\\/]*[\\/]?/g)?.filter(Boolean) ?? [path]).map((part, index) => <Fragment key={index}>{index > 0 && <wbr />}{part}</Fragment>)}</>;
 }
+
+/** The installer's integrity errors: nothing to retry and nothing to correct, the app has to be updated (error-catalog: «update Job Hunter Team»). */
+const NEEDS_NEWER_APP: ReadonlySet<string> = new Set([
+  "installer_digest_missing",
+  "installer_digest_invalid",
+  "installer_digest_mismatch",
+  "installer_payload_invalid",
+]);
 
 function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onUseLocalData, onSetAsideLocalData, localOwner, onFreeDiskSpace, onLoadPlans, onDeclarePlan, runtimeLogPath, onOpenRuntimeLog, onOpenWithoutTeam }: Pick<OnboardingFlowProps, "platform" | "runtime" | "activity" | "onRetry" | "onRestart" | "onExitFailure" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose" | "onProviderRestart" | "onRecreatePodmanMachine" | "onUseLocalData" | "onSetAsideLocalData" | "localOwner" | "onFreeDiskSpace" | "onLoadPlans" | "onDeclarePlan" | "runtimeLogPath" | "onOpenRuntimeLog" | "onOpenWithoutTeam"> & { host: ExecutionHost; t: OnboardingCopy; locale: Locale }) {
   const [pending, setPending] = useState(false);
@@ -606,7 +615,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
           )}
           {freeSpaceResult && <p className="onboarding-free-space" role="status">{freeSpaceResult.text} {freeSpaceResult.action}</p>}
           {actionFailed && <p className="onboarding-error" role="alert">{t.actionFailed}</p>}
-          {failed && runtime.retryable === false && !runtime.action && runtime.code !== "container_version_incompatible" && <p className="onboarding-error">{t.fixData}</p>}
+          {failed && runtime.retryable === false && !runtime.action && runtime.code !== "container_version_incompatible" && !NEEDS_NEWER_APP.has(runtime.code ?? "") && <p className="onboarding-error">{t.fixData}</p>}
           {resumable && <p className="onboarding-hint" data-testid="onboarding-resume-note">{t.resumeNote}</p>}
           {engineAsked && <EngineChoice onBlock={setEngineBlocked} />}
           {planAsked && onLoadPlans && onDeclarePlan && <PlanChoice t={t} load={onLoadPlans} declare={onDeclarePlan} onBlock={setPlanBlocked} />}
@@ -617,6 +626,12 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
             {failed && (
               <button className="onboarding-secondary" type="button" onClick={onExitFailure} disabled={pending}>
                 {t.backToHost}
+              </button>
+            )}
+            {/* The installer that arrived is not the one this build was made for: what the sentence asks for is a newer app, and the page is one press away */}
+            {failed && NEEDS_NEWER_APP.has(runtime.code ?? "") && (
+              <button className="onboarding-primary" type="button" data-testid="onboarding-download-latest" onClick={() => void openPublicPage("download")} disabled={pending}>
+                {t.downloadLatest}<span aria-hidden="true">→</span>
               </button>
             )}
             {/* The team cannot start (a provider limit) or waits to be started: the app can open without it, the setup stays unfinished */}
