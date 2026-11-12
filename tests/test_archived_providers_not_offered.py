@@ -60,7 +60,7 @@ def test_the_list_shows_an_archived_provider_only_to_the_team_that_still_uses_it
         assert shown in out and "· active" in out, (active, out)
 
 
-def test_the_wizard_and_its_languages_offer_only_codex():
+def test_the_wizard_offers_codex_and_the_two_key_providers_and_not_kimi_or_claude_as_subscriptions():
     helpers = (ROOT / "cli/wizard/setup-helpers.js").read_text(encoding="utf-8")
     catalog = helpers[helpers.index("export const AI_PROVIDERS"):helpers.index("// --- Config IO")]
     assert "kimi" not in catalog.lower() and "claude" not in catalog.lower()
@@ -71,7 +71,10 @@ def test_the_wizard_and_its_languages_offer_only_codex():
         assert "claude" not in str(locale.get("wizard.cli.provider", "")).lower(), lang
     # the choices of the wizard are the catalog's: nothing else feeds them
     setup = (ROOT / "cli/wizard/setup.js").read_text(encoding="utf-8")
-    assert "options: AI_PROVIDERS.map(" in setup
+    # ... and what is offered besides Codex is GLM and Kimi with an API key (they run only on Pi, no subscription): the list the
+    # wizard shows is Codex's catalog followed by that one
+    assert "options: WIZARD_PROVIDERS.map(" in setup
+    assert "WIZARD_PROVIDERS = [...AI_PROVIDERS, ...PI_API_CHOICES]" in setup
 
 
 def test_what_a_team_already_on_kimi_or_claude_needs_is_still_there():

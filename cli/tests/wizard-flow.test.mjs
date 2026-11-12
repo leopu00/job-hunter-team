@@ -27,9 +27,10 @@ const prompter = {
   intro: async (title) => say('intro', { title }),
   outro: async (message) => say('outro', { message }),
   note: async (message, title) => say('note', { message, title }),
-  select: async (p) => { say('select', { message: p.message }); return p.initialValue ?? p.options[0].value; },
+  select: async (p) => { say('select', { message: p.message, options: p.options.map((o) => o.value), initial: p.initialValue }); return p.initialValue ?? p.options[0].value; },
   multiselect: async () => [],
   text: async () => '',
+  password: async (p) => { say('password', { message: p.message, hasValidate: typeof p.validate === 'function' }); return answers.keys?.shift?.() ?? ''; },
   confirm: async (p) => { say('confirm', { message: p.message, active: p.active, inactive: p.inactive }); return answers.confirm ?? p.initialValue ?? true; },
   progress: (label) => { say('progress', { label }); return { update() {}, stop: (m) => say('progress-stop', { message: m }) }; },
 };
@@ -48,14 +49,16 @@ function run(box, answers = {}) {
   return { result, lines, events };
 }
 
-test('the setup says the provider instead of asking for the only one offered, numbers the slow steps, and calls the configuration saved only at the end', () => {
+test('the setup asks the provider (Codex first and the default, then GLM and Kimi with a key), numbers the slow steps, and calls the configuration saved only at the end', () => {
   const box = sandbox();
   const { result, lines, events } = run(box);
   assert.equal(result.status, 0, result.stderr);
-  // one title, and no question with a single answer
+  // one title; the provider is asked, Codex is where the question starts, and with Codex nothing asks for a key
   assert.equal(events.filter((e) => e.kind === 'intro').length, 1);
-  assert.equal(events.some((e) => e.kind === 'select' && /provider/i.test(e.message)), false);
-  assert.ok(events.some((e) => e.kind === 'note' && e.title === 'AI Provider' && /Codex/.test(e.message)));
+  const ask = events.find((e) => e.kind === 'select' && /provider/i.test(e.message));
+  assert.deepEqual(ask.options, ['openai', 'glm', 'kimi']);
+  assert.equal(ask.initial, 'openai');
+  assert.equal(events.some((e) => e.kind === 'password'), false);
   // nothing is called saved before the steps that can still fail
   const savedAt = events.findIndex((e) => /saved/i.test(`${e.title ?? ''} ${e.message ?? ''}`) && e.kind !== 'outro');
   const stepLines = lines.map((l, i) => ({ l, i })).filter(({ l }) => /^\[\d\/3\]/.test(l));

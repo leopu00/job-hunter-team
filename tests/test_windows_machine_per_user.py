@@ -146,13 +146,13 @@ def test_the_installer_hands_the_resolved_name_to_the_enabler_and_not_a_fixed_on
 PIPE_FAKE = "function Get-JhtPodmanPipeState { param([string]$MachineName) return $env:FAKE_PIPE }\n"
 
 
-def _machine_block(tmp_path, pipe: str, machines: str):
+def _machine_block(tmp_path, pipe: str, machines: str, **extra):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     _fake(bin_dir, "podman.exe", PODMAN_CASES)
     return _run(tmp_path, ENABLER, ["Invoke-Checked", "Write-JhtPhase", "Get-JhtPodmanPipeAdvice"], PIPE_FAKE + MACHINE_BLOCK_BODY, {
         "FAKE_PODMAN": str(bin_dir / "podman.exe"), "FAKE_MACHINES": machines, "INITIALIZE": "1", "FAKE_FAIL": "",
-        "WELCOME": "Skip-WslWelcome", "FAKE_PIPE": pipe,
+        "WELCOME": "Skip-WslWelcome", "FAKE_PIPE": pipe, **extra,
     })
 
 
@@ -167,8 +167,10 @@ def test_a_pipe_held_by_another_users_program_is_said_before_anything_is_started
 
 
 @pytest.mark.parametrize("pipe", ["absent", "connected", "unknown", "busy"])
-def test_a_pipe_nobody_holds_or_that_answers_this_user_changes_nothing(tmp_path, pipe):
-    result, calls = _machine_block(tmp_path, pipe, _machines(("jht-podman", True)))
+def test_a_pipe_nobody_holds_or_that_answers_this_user_is_no_error(tmp_path, pipe):
+    # 'absent' on a running machine with nothing in it: the one restart brings the forwarding up (test_windows_podman_api_pipe_must_be_up.py
+    # has the cases where it does not)
+    result, calls = _machine_block(tmp_path, pipe, _machines(("jht-podman", True)), FAKE_PIPE_AFTER_STARTS="1")
     assert result.returncode == 0, result.stdout + result.stderr
     assert any(call.endswith("info") for call in calls)
 
