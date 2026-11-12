@@ -29,10 +29,10 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
 | [README.md](../README.md) | Entry point pubblico: prodotto, requisiti, installazione nativa e CLI, primo orientamento | — | 2026-11-12 | ✅ |
+| [BACKLOG.md](../BACKLOG.md) | Roadmap completa con priorità e fasi 1-6, blocker pre-launch | — | 2026-11-12 | ✅ |
 | [CHANGELOG.md](../CHANGELOG.md) | Changelog formato Keep-a-Changelog, cronologia rilasci | — | 2026-11-12 | ✅ |
 | [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | Contributor Covenant 2.1, contatto `support@jobhunterteam.ai` | — | 2026-07-26 | ✅ |
 | [SECURITY.md](../SECURITY.md) | Policy di disclosure, trust model corrente, copertura e stato hardening | — | 2026-09-30 | ✅ |
-| [BACKLOG.md](../BACKLOG.md) | _(da compilare nel JSON)_ | — | 2026-11-12 | ✅ |
 
 
 ## 🐙 .github
@@ -184,7 +184,6 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [game/docs/RESEARCH-DOSSIER.md](../game/docs/RESEARCH-DOSSIER.md) | Game Research Dossier — "The Box" (versione gamificata di Job Hunter Team) — Materiale di supporto per le sessioni che sviluppano game/ (branch work3-dev1). | — | 2026-07-07 | ✅ |
 | [game/docs/ROADMAP.md](../game/docs/ROADMAP.md) | Native application roadmap — The Electron-to-Godot migration, live data views, embedded console and | — | 2026-08-24 | ✅ |
 | [game/docs/SPRITES.md](../game/docs/SPRITES.md) | Sprite agenti — contratto spritesheet (v1, 2026-07-11) — Gli agenti in-world passano dagli SVG a parti (CharacterRig) a spritesheet | — | 2026-07-30 | ✅ |
-| [game/assets/_attic/README.md](../game/assets/_attic/README.md) | Perche' questi asset sono archiviati invece che cancellati, e come rientrerebbero | — | 2026-08-03 | ✅ |
 | [game/assets/icons/SOURCES.md](../game/assets/icons/SOURCES.md) | Provenienza ufficiale, condizioni d'uso e varianti Docker/Telegram immutate impiegate dalle icone della sidebar Godot | — | 2026-08-07 | ✅ |
 
 
@@ -192,11 +191,11 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/about/STORY.md](./about/STORY.md) | Origin story (legacy 200 offerte/5 colloqui in 2 settimane) | — | 2026-10-26 | ✅ |
+| [docs/about/STORY.md](./about/STORY.md) | Origin story (legacy 200 offerte/5 colloqui in 2 settimane) | — | 2026-11-12 | ✅ |
 | [docs/about/VISION.md](./about/VISION.md) | Vision long-term, Maestro 🧙‍♂️, "AI on the side of workers | — | 2026-07-01 | ✅ |
 | [docs/about/ROADMAP.md](./about/ROADMAP.md) | Roadmap pubblica: stato verificato, orizzonti e direzioni di prodotto | — | 2026-11-12 | ✅ |
 | [docs/about/PROVIDERS.md](./about/PROVIDERS.md) | Matrice provider Claude/Codex/Kimi con costi e tier | — | 2026-11-12 | ✅ |
-| [docs/about/MONITORING.md](./about/MONITORING.md) | Stack monitoring V5 (Bridge + Sentinella event-driven) | — | 2026-10-26 | ✅ |
+| [docs/about/MONITORING.md](./about/MONITORING.md) | Stack monitoring V5 (Bridge + Sentinella event-driven) | — | 2026-11-12 | ✅ |
 | [docs/about/RESULTS.md](./about/RESULTS.md) | Risultati reali utenti beta (matrice persona × provider) | — | 2026-10-26 | ✅ |
 | [docs/about/README.md](./about/README.md) | 🎯 docs/about — what JHT is, and whether it works — Public-facing documentation for anyone evaluating Job Hunter Team. | — | 2026-10-26 | ✅ |
 | [docs/about/TUTORIAL-GAME-SCREENSHOTS.md](./about/TUTORIAL-GAME-SCREENSHOTS.md) | Provenance, privacy attestation, and hashes for the public game tutorial screenshots | — | 2026-08-05 | ✅ |
@@ -231,7 +230,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/guides/BETA.md](./guides/BETA.md) | Canali pubblici per test, feedback ed evidenze riproducibili senza dati personali | — | 2026-10-26 | ✅ |
 | [docs/guides/VPS-SETUP.md](./guides/VPS-SETUP.md) | Setup CLI manuale su VPS Linux esistente, senza credenziali o infrastruttura reale negli esempi | — | 2026-10-22 | ✅ |
 | [docs/guides/CLI-INSTALL.md](./guides/CLI-INSTALL.md) | Installazione CLI: comportamento verificato di install.sh/install.ps1, file creati e limiti | — | 2026-11-12 | ✅ |
-| [docs/guides/CLI-REFERENCE.md](./guides/CLI-REFERENCE.md) | ⌨️ CLI Reference — jht — Systematic reference of every jht command. | 2026-07-30 | 2026-11-09 | ✅ |
+| [docs/guides/CLI-REFERENCE.md](./guides/CLI-REFERENCE.md) | ⌨️ CLI Reference — jht — Systematic reference of every jht command. | 2026-07-30 | 2026-11-12 | ✅ |
 | [docs/guides/EMAIL-FORWARDING.md](./guides/EMAIL-FORWARDING.md) | 📧 Email Forwarding — feed the team your job alerts — Give the team a dedicated email address and auto-forward your job-alert | — | 2026-11-02 | ✅ |
 | [docs/guides/FEEDBACK-TICKETING.md](./guides/FEEDBACK-TICKETING.md) | Runbook delle superfici correnti e dell'endpoint /api/feedback | — | 2026-08-05 | ✅ |
 | [docs/guides/QUICKSTART.md](./guides/QUICKSTART.md) | Quickstart pubblico: requisiti, app nativa, CLI, setup da agente e sorgenti | — | 2026-11-12 | ✅ |
@@ -440,23 +439,14 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/sessions/README.md](./sessions/README.md) | 📊 Session reports — JHT team experimentation — Indice cronologico dei report HTML interattivi prodotti durante le | — | 2026-07-03 | ✅ |
-| [docs/sessions/2026-04-25-experimentation-overview-to-2026-05-09/README.md](./sessions/2026-04-25-experimentation-overview-to-2026-05-09/README.md) | 🧪 Sperimentazione JHT — panoramica 15 giorni (2026-04-25 → 2026-05-09) — Report HTML "meta" che aggrega 15 giorni di sperimentazione del team | — | 2026-06-13 | ✅ |
-| [docs/sessions/2026-05-08-codex-10h/README.md](./sessions/2026-05-08-codex-10h/README.md) | 🔵 Codex monitoring — 10h snapshot (2026-05-08 mattina) — Primo report HTML interattivo prodotto dopo che il team JHT e' stato | — | 2026-06-13 | ✅ |
-| [docs/sessions/2026-05-08-codex-12h-pm/README.md](./sessions/2026-05-08-codex-12h-pm/README.md) | 🔵 Codex monitoring — 12h snapshot (2026-05-08 PM) — Report HTML 12h del pomeriggio del 8 maggio. | — | 2026-06-13 | ✅ |
-| [docs/sessions/2026-05-09-codex-12h-am/README.md](./sessions/2026-05-09-codex-12h-am/README.md) | 🔵 Codex monitoring — 12h snapshot (2026-05-09 AM) — Report 12h del mattino del 9 maggio. | — | 2026-06-13 | ✅ |
-| [docs/sessions/2026-05-17-budget-windows/README.md](./sessions/2026-05-17-budget-windows/README.md) | 💰 2026-05-17 — Budget windows Kimi: 2 finestre consecutive, entrambe in target — Sessione operativa: il team Job Hunter Team ha lavorato per 2 finestre Kimi | — | 2026-07-25 | ✅ |
-| [docs/sessions/2026-05-17-pipeline-snapshot/README.md](./sessions/2026-05-17-pipeline-snapshot/README.md) | 📈 2026-05-17 — Pipeline snapshot charts (Capitano on-demand) — Seconda sessione di grafici on-demand del Capitano (post chiusura finestra | — | 2026-07-25 | ✅ |
-| [docs/sessions/2026-05-17-team-dashboard/README.md](./sessions/2026-05-17-team-dashboard/README.md) | 🖥️ 2026-05-17 — Team dashboard & 5-window timeline (Capitano on-demand v3) — Terza sessione di grafici on-demand del Capitano (post-reset finestra Kimi | — | 2026-07-25 | ✅ |
-| [docs/sessions/2026-05-17-vps-health/README.md](./sessions/2026-05-17-vps-health/README.md) | 🩺 2026-05-17 — Health audit VPS + container (snapshot 14:09 UTC) — Audit operativo richiesto durante la sessione test e2e Path 2. | — | 2026-07-25 | ✅ |
-| [docs/sessions/2026-05-17-vps-path2-e2e/README.md](./sessions/2026-05-17-vps-path2-e2e/README.md) | 🚀 Test E2E setup VPS Path 2 (2026-05-15 → 2026-05-17) — Sessione di validazione end-to-end del Path 2 (Desktop + VPS remota Hetzner) | — | 2026-07-25 | ✅ |
 | [docs/sessions/2026-05-18-capitano-zombie-night/README.md](./sessions/2026-05-18-capitano-zombie-night/README.md) | 🌙 Post-mortem — Capitano zombie night (17-18 maggio 2026) — Sintesi in 1 riga: il Capitano è morto nella notte (kimi CLI crashato dentro al pane tmux), e nessun automatismo l'ha… | — | 2026-05-18 | ✅ |
 | [docs/sessions/2026-05-18-fix-effectiveness-review/README.md](./sessions/2026-05-18-fix-effectiveness-review/README.md) | 📊 Review effectiveness fix — 18 maggio 2026 — Sintesi in 1 riga: i fix delle ultime 48h sono un successo netto — EMERGENZA Sentinella −96%, URG −71%, FREEZE −82%; | — | 2026-07-25 | ✅ |
-| [docs/sessions/2026-05-18-sentinella-severity-analysis/README.md](./sessions/2026-05-18-sentinella-severity-analysis/README.md) | 🚨 Sentinella — analisi "troppo severa?" (post Bug 24) — Data: 2026-05-18 16:50 CEST | — | 2026-05-23 | ✅ |
 | [docs/sessions/2026-05-18-supabase-disk-io-investigation/README.md](./sessions/2026-05-18-supabase-disk-io-investigation/README.md) | 🔥 Supabase Disk IO Budget — investigazione e piano fix — Trigger: email Supabase Team "Your project is depleting its Disk IO Budget" (project ref smittwvohsnwwwisqdrh) | — | 2026-05-23 | ✅ |
 | [docs/sessions/2026-05-18-weekly-budget-analysis/README.md](./sessions/2026-05-18-weekly-budget-analysis/README.md) | 📊 Analisi consumo weekly Kimi — 18 maggio 2026 — Sintesi in 1 riga: 1% di una finestra Kimi (5h) ≈ 0.20% del weekly budget. | — | 2026-07-25 | ✅ |
-| [docs/sessions/2026-07-27-first-run-night-observations.md](./sessions/2026-07-27-first-run-night-observations.md) | Note di sessione: primo run notturno di un team nuovo su VPS, solo misure sul campo (il thrash viene dal numero di agenti, non dalla loro velocità) | — | 2026-07-28 | ✅ |
-| [docs/sessions/2026-07-28-burn-test-scout-step-cap-stall.md](./sessions/2026-07-28-burn-test-scout-step-cap-stall.md) | Note di sessione: test di spinta con `jht burn` attivo — lo Scout fermo sul cap di step e nessun componente incaricato di riprenderlo | — | 2026-07-29 | ✅ |
+| [docs/sessions/2026-05-17-budget-windows/README.md](./sessions/2026-05-17-budget-windows/README.md) | _(da compilare nel JSON)_ | — | 2026-07-25 | ✅ |
+| [docs/sessions/2026-05-17-pipeline-snapshot/README.md](./sessions/2026-05-17-pipeline-snapshot/README.md) | _(da compilare nel JSON)_ | — | 2026-07-25 | ✅ |
+| [docs/sessions/2026-05-17-vps-path2-e2e/README.md](./sessions/2026-05-17-vps-path2-e2e/README.md) | _(da compilare nel JSON)_ | — | 2026-07-25 | ✅ |
+| [docs/sessions/2026-07-28-burn-test-scout-step-cap-stall.md](./sessions/2026-07-28-burn-test-scout-step-cap-stall.md) | _(da compilare nel JSON)_ | — | 2026-07-29 | ✅ |
 
 
 ## 🗄️ supabase
@@ -472,18 +462,13 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 |---|---|---|---|---|
 | [assets/README.md](../assets/README.md) | 🖼️ assets — repo-level static assets — Shared static assets used in repo-level docs and the project landing. | — | 2026-07-19 | ✅ |
 | [cli/README.md](../cli/README.md) | ⌨️ cli — the jht command-line interface — The jht CLI is the primary control surface for Job Hunter Team. | 2026-07-30 | 2026-10-14 | ✅ |
-| [docs/README.md](./README.md) | 📚 Documentation — Job Hunter Team — Top-level index of the documentation. | — | 2026-09-29 | ✅ |
-| [docs/launch/demo-storyboard.md](./launch/demo-storyboard.md) | Tombstone dello storyboard CLI obsoleto, ritirato e conservato in archivio | — | 2026-08-04 | ✅ |
+| [docs/README.md](./README.md) | 📚 Documentation — Job Hunter Team — Top-level index of the documentation. | — | 2026-11-12 | ✅ |
 | [e2e/README.md](../e2e/README.md) | 🧪 e2e — end-to-end tests (Playwright) — Browser-driven end-to-end tests for the Job Hunter Team web dashboard. | — | 2026-10-08 | ✅ |
 | [scripts/README.md](../scripts/README.md) | 🐚 scripts — setup, install & dev tooling — Bash/PowerShell scripts for installing, developing, releasing, and simulating | — | 2026-08-14 | ✅ |
 | [scripts/case-study-extract/README.md](../scripts/case-study-extract/README.md) | Case study VPS extraction toolkit — Read-only dump of an entire JHT VPS run for offline analysis. | — | 2026-07-03 | ✅ |
 | [shared/README.md](../shared/README.md) | 🧩 shared — shared core library — Cross-cutting logic shared across the CLI, TUI, agents, and monitoring stack. | — | 2026-07-25 | ✅ |
 | [web/README.md](../web/README.md) | 🌐 web — dashboard (Next.js) — The Job Hunter Team web dashboard: positions, scoring, map/globe, team telemetry, | — | 2026-07-25 | ✅ |
-| [assets/promo/2026-07-presentation/SCALETTA.md](../assets/promo/2026-07-presentation/SCALETTA.md) | Diario del video 03/08 ritirato: banner demo e CTA Beta non pubblicabili | — | 2026-08-04 | ✅ |
-| [docs/CHARACTER-VARIANTS.md](./CHARACTER-VARIANTS.md) | Cast delle varianti personaggio per reparto: profilo, desk e vista di ogni postazione, con il linguaggio visivo del sito | — | 2026-07-25 | ✅ |
 | [tests/fixtures/e2e_linux_cv.md](../tests/fixtures/e2e_linux_cv.md) | Synthetic candidate CV consumed by the Linux onboarding E2E: no real personal data, only the profile fields the first-run checklist has to parse | — | 2026-08-04 | ✅ |
-| [promo-2026-08-vertical-ad/animatic/incoming/designer/DESIGN_SPEC.md](../promo-2026-08-vertical-ad/animatic/incoming/designer/DESIGN_SPEC.md) | Specifica tipografica e motion del pack overlay 9:16 per l'animatic pubblicitario: safe area, palette JHT, font, CTA e uso editoriale | — | 2026-08-05 | ✅ |
-| [docs/assets/icons/SOURCES.md](./assets/icons/SOURCES.md) | Provenienza ufficiale, condizioni d'uso e integrità degli SVG Docker e Telegram impiegati nel diagramma infrastrutturale | — | 2026-08-07 | ✅ |
 | [web/public/brand/README.md](../web/public/brand/README.md) | Provenienza, integrità e vincoli d'uso degli asset social ufficiali nel footer pubblico, con Instagram attivo e TikTok mantenuto non pubblicato | — | 2026-08-10 | ✅ |
 | [api-worker/README.md](../api-worker/README.md) | Prototipo API full-team isolato: ruoli, coordinamento SQLite, budget, artefatti, privacy, canary e verifica | 2026-08-24 | 2026-08-24 | 🟢 |
 | [desktop/README.md](../desktop/README.md) | Shell desktop Tauri 2 attiva: setup locale Podman, secret API effimero, limiti del run sintetico e comandi di sviluppo | 2026-08-24 | 2026-10-22 | ✅ |

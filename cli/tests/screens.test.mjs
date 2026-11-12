@@ -114,3 +114,23 @@ test('small messages read as a person would say them', () => {
   const config = jht(['config', 'get', 'nothing'], box).out;
   assert.match(config, /Error: there is no configuration yet\n  → Set it up with: jht setup/);
 });
+
+// Mac lifecycle QA run: with the team off, tmux is there but has no server, and `tmux list-sessions` fails: that is a team that is off,
+// not a missing tmux. With Codex, GLM or Kimi the doctor says nothing about an Anthropic key or a SUPABASE_URL (jargon for the person).
+test('the doctor says the team is off when tmux has no session, and shows no Anthropic or Supabase line it has no use for', () => {
+  const box = sandbox({ config: true });
+  writeFileSync(join(box.bin, 'tmux'), '#!/bin/sh\ncase "$*" in *list-sessions*) echo "no server running on /tmp/tmux-1/default" >&2; exit 1 ;; *) echo "tmux 3.5" ;; esac\n');
+  chmodSync(join(box.bin, 'tmux'), 0o755);
+  const { out } = jht(['doctor', '--all'], box);
+  assert.match(out, /The team is not running/);
+  assert.doesNotMatch(out, /tmux is not available/);
+  assert.doesNotMatch(out, /Anthropic|SUPABASE_URL/);
+  assert.doesNotMatch(out, /^\s*Database\s*$/m, 'no empty section');
+});
+
+test('without tmux at all the doctor still says it could not check the team', () => {
+  const box = sandbox({ config: true });
+  writeFileSync(join(box.bin, 'tmux'), '#!/bin/sh\nexit 127\n');
+  chmodSync(join(box.bin, 'tmux'), 0o755);
+  assert.match(jht(['doctor', '--all'], box).out, /tmux is not available here/);
+});

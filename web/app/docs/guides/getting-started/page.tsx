@@ -42,6 +42,9 @@ export default async function GettingStartedPage() {
           🔵 <strong>Codex</strong>
           {t.codex}
         </LI>
+        <LI>
+          🟢 <strong>GLM</strong> {t.apiKey}
+        </LI>
       </UL>
       <Callout>
         ⚠️ <strong>{t.dedicateLabel}</strong>

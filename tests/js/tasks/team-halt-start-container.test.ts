@@ -170,6 +170,12 @@ afterEach(() => {
     rmSync(root, { recursive: true, force: true });
 });
 
+// A start of the whole team, with every role starting, runs the fake docker once per step of every agent (about 50 ms each on
+// an idle machine). Measured on the same commit parent and on the commit that made the roles start all (FAKE_START_SUCCESS_ROLES
+// "*"), idle: 5-7 s before, 10-15 s after on the CI machines, and 16 s when the machine is busy. The ceiling of 15 s left no margin
+// for the slowest machine: 30 s is twice the slowest measure, and a real hang is still caught by it.
+const FULL_START_TIMEOUT_MS = 30_000;
+
 describe("team halt gate — CLI host verso runtime container", () => {
   it("stop crea il gate nel container e start globale lo rimuove prima dello spawn", () => {
     const sb = sandbox();
@@ -314,7 +320,7 @@ describe("team halt gate — CLI host verso runtime container", () => {
     expect(result.stdout).toContain("CAPITANO — synthetic launch failure");
     // five: the sandbox has no Telegram bot, so the bootstrap has no TG-BRIDGE (JHT-T306)
     expect(result.stdout).toContain("5 errors");
-  }, 15_000);
+  }, FULL_START_TIMEOUT_MS);
 
   it("CAPITANO già attivo attesta il bootstrap anche se lo spawn è skipped", () => {
     const sb = sandbox();
@@ -337,7 +343,7 @@ describe("team halt gate — CLI host verso runtime container", () => {
     // macchina scarica. Col default di 5s il margine era 1,5s e il test andava
     // rosso con qualunque carico: 16 run su 20 sotto 8 processi CPU-bound,
     // tutte su questo caso.
-  }, 15_000);
+  }, FULL_START_TIMEOUT_MS);
 
   it("un agente che non parte = codice di uscita 1 e frase chiara, anche col CAPITANO a posto (D3)", () => {
     const sb = sandbox();
@@ -355,7 +361,7 @@ describe("team halt gate — CLI host verso runtime container", () => {
     // un avvio andato male non si presenta come riuscito
     expect(result.stdout).not.toContain("Team on:");
     expect(result.stdout).not.toContain("See how it is going");
-  }, 15_000);
+  }, FULL_START_TIMEOUT_MS);
 
   it("start di un singolo agente che fallisce: exit 1 e la stessa frase", () => {
     const sb = sandbox();

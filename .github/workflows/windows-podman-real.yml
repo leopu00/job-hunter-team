@@ -237,18 +237,6 @@ jobs:
           $ErrorActionPreference = 'Continue'
           . "$env:GITHUB_WORKSPACE\scripts\ci\windows_podman_real_run.ps1"
           $wrapper = Join-Path $env:USERPROFILE '.local\bin\jht.ps1'
-          # The wrapper accepts the folder of the markers only if its owner is the current user (Test-ProtectedRuntimeNode).
-          # This runner's user is an elevated administrator (T103): a folder it creates belongs to BUILTIN\Administrators and
-          # `jht screen on` answers «cartella dei marcatori non sicura». The app's user is not elevated and owns what it
-          # creates, so the folder is given to the current user here, as the app's user would have it.
-          $dir = Join-Path $env:LOCALAPPDATA 'Job Hunter Team\host-runtime\integrations'
-          $me = [Security.Principal.WindowsIdentity]::GetCurrent()
-          "current user: $($me.Name) $($me.User.Value)"
-          if (Test-Path -LiteralPath $dir) { "integrations folder owner before: $((Get-Acl -LiteralPath $dir).Owner)" } else { 'integrations folder: not there yet' }
-          New-Item -ItemType Directory -Path $dir -Force | Out-Null
-          "integrations folder owner created: $((Get-Acl -LiteralPath $dir).Owner)"
-          & icacls.exe $dir /setowner $me.Name | ForEach-Object { "  icacls: $_" }
-          "integrations folder owner after: $((Get-Acl -LiteralPath $dir).Owner)"
           $code = Invoke-Timed 'jht screen on' $wrapper @('screen', 'on')
           if ($code -ne 0) { exit $code }
           $code = Invoke-Timed 'jht screen status (on)' $wrapper @('screen', 'status')

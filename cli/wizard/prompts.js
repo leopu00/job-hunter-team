@@ -54,6 +54,7 @@
  * @property {function(WizardSelectParams): Promise<*>} select
  * @property {function(WizardMultiSelectParams): Promise<*[]>} multiselect
  * @property {function(WizardTextParams): Promise<string>} text
+ * @property {function(WizardTextParams): Promise<string>} password the same as text, typed hidden (an API key)
  * @property {function(WizardConfirmParams): Promise<boolean>} confirm
  * @property {function(string): WizardProgress} progress
  */

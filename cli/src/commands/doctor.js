@@ -2,12 +2,14 @@ import { readFile, access, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { execSync } from 'node:child_process'
+import { statSync } from 'node:fs'
 import { JHT_HOME } from '../jht-paths.js';
 import { c } from './_colors.js'
 import { hint, statusLine, title } from '../lib/ui.js'
 import { later, say, show } from '../lib/texts.js'
 import { AGENTS, isAgentSession } from './team/agents.js'
 import { LATEST_CONFIG_VERSION } from './migrate.js'
+import { PI_API_PROVIDERS, piApiProvider } from '../../../shared/runtime/provider-models.js'
 
 const JHT_DIR     = JHT_HOME
 const CONFIG_PATH = join(JHT_DIR, 'jht.config.json')
@@ -54,6 +56,19 @@ async function checkConfig() {
   return { ok: true, msg: later('doctor.config_ok', { v }) }
 }
 
+/**
+ * Whether a key reference of the config (what `jht setup` writes for glm and kimi: a file of the key store, or a variable) leads to a
+ * key: true or false, never the key. A reference that runs a command is not run here.
+ */
+function keyOfRef(ref) {
+  if (!ref || typeof ref !== 'object') return false
+  if (ref.source === 'env') return typeof ref.id === 'string' && Boolean(process.env[ref.id])
+  if (ref.source === 'file') {
+    try { return Boolean(typeof ref.path === 'string' && statSync(ref.path).isFile() && statSync(ref.path).size > 0) } catch { return false }
+  }
+  return false
+}
+
 async function checkProvider() {
   const cfg = await readConfigAsync()
   if (!cfg) return { skip: true, msg: later('doctor.provider_skip') }
@@ -69,19 +84,25 @@ async function checkProvider() {
 
   // Non lasciare che la key di un provider mascheri la configurazione
   // incompleta di un altro provider attivo.
+  const piApi = piApiProvider(active)
   const envName = active === 'anthropic'
     ? 'ANTHROPIC_API_KEY'
     : active === 'openai'
       ? 'OPENAI_API_KEY'
-      : `${active.toUpperCase()}_API_KEY`
-  const key = prov?.api_key || process.env[envName]
+      : piApi
+        ? PI_API_PROVIDERS[piApi].keyVariable
+        : `${active.toUpperCase()}_API_KEY`
+  const key = prov?.api_key || keyOfRef(prov?.api_key_ref) || process.env[envName]
   if (!key) return { warn: true, msg: later('doctor.provider_nokey', { active }), hint: later('doctor.provider_setenv', { env: envName }) }
   return { ok: true, msg: later('doctor.provider_line', { name: `${active}${prov?.model ? ` (${prov.model})` : ''}` }) }
 }
 
+// Only for a team on Anthropic: with Codex, GLM or Kimi a missing Anthropic key is not a fact about this team, and
+// telling it to the person only reads as something wrong (null: the check is not shown).
 async function checkApiKey() {
   const cfg = await readConfigAsync()
   const key = cfg?.providers?.anthropic?.api_key || process.env.ANTHROPIC_API_KEY
+  if (!key && cfg?.active_provider !== 'anthropic') return null
   if (!key) return { skip: true, msg: later('doctor.api_skip') }
   try {
     const res = await fetch('https://api.anthropic.com/v1/models', {
@@ -100,7 +121,8 @@ async function checkApiKey() {
 async function checkDatabase() {
   const cfg = await readConfigAsync()
   const url = cfg?.supabase?.url || process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (!url) return { skip: true, msg: later('doctor.db_skip') }
+  // the cloud database is optional: when it is not set up there is nothing to check, and no variable name to show
+  if (!url) return null
   try {
     const res = await fetch(`${url}/rest/v1/`, { signal: AbortSignal.timeout(5000) })
     if (res.status < 500) return { ok: true, msg: later('doctor.db_ok') }
@@ -142,6 +164,8 @@ function checkWorkers() {
         : { warn: true, msg: later('doctor.team_missing', { name }), hint: `jht team start ${role}` }
     })
   } catch {
+    // `tmux list-sessions` fails also when tmux is there but no session runs (no server): that is a team that is off
+    if (cmdExists('tmux')) return [{ warn: true, msg: later('doctor.team_off'), hint: 'jht team start' }]
     return [{ skip: true, msg: later('doctor.tmux_missing') }]
   }
 }
@@ -169,7 +193,7 @@ async function handleDoctor(options) {
     { title: later('doctor.sec_provider'), checks: [providerCk, apiCk] },
     { title: later('doctor.sec_database'),    checks: [dbCk] },
     { title: later('doctor.sec_team'),        checks: workersCk },
-  ]
+  ].map((sec) => ({ ...sec, checks: sec.checks.filter(Boolean) })).filter((sec) => sec.checks.length > 0)
   // the checks hold their texts to be written later: a screen writes them in the person's language, the JSON in English
   const rows = sections.flatMap((sec) => sec.checks.map((ck) => ({ section: sec.title, status: kindOf(ck), message: ck.msg, hint: ck.hint ?? null })))
   const all = rows.map((x) => ({ ...x, section: show(x.section), message: show(x.message), hint: show(x.hint) }))

@@ -29,7 +29,7 @@ guarda.  Le due vie per restarne fuori si leggono entrambe dalla loro sorgente,
 invece di duplicarle qui:
 
   * un ``.gdignore`` nella cartella — Godot non la scandisce affatto, quindi
-    dentro non c'e' nessuna risorsa (``assets/_attic/``);
+    dentro non c'e' nessuna risorsa;
   * ``exclude_filter`` nei preset — la risorsa esiste ma non viene impacchettata
     (``assets/characters/sources/``, che serve viva a un tool di build).
 
@@ -273,7 +273,7 @@ def main(argv: list[str]) -> int:
 
     if orphans or dead:
         if check_only and orphans:
-            print("asset audit: %d orfani — archiviali sotto assets/_attic/ "
+            print("asset audit: %d orfani — toglili dal progetto "
                   "(elenco: python3 tools/asset_orphan_audit.py)" % len(orphans))
         return 1
     print("PASS: nessun asset orfano, nessuna chiave morta in GEN_ART/KIND_COLORS")

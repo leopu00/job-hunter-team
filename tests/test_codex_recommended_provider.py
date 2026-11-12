@@ -68,7 +68,7 @@ def test_the_site_texts_do_not_offer_kimi_or_claude(path):
 
 
 def test_the_setup_guide_and_faq_name_codex_as_the_provider():
-    assert len(re.findall(r"— Codex\.", text("web/app/docs/guides/faq/page.i18n.ts"))) == 7
+    assert len(re.findall(r"\n    a1: \"[^\"]*— [^\"]*Codex", text("web/app/docs/guides/faq/page.i18n.ts"))) == 7
     assert text("web/app/setup-guide/guide-content.ts").count("Codex") >= 7
 
 

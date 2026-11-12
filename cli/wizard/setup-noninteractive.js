@@ -28,6 +28,7 @@ import { summarizeRoleModels } from './setup-models.js';
 import { AGENT_HARNESSES, DEFAULT_HARNESS } from '../../shared/runtime/agent-harness.js';
 import { piApiProvider } from '../../shared/runtime/provider-models.js';
 import { harnessRefusal } from './setup-harness.js';
+import { migrateToLatest } from '../src/commands/migrate.js';
 import { KEY_REFUSED_EXIT_CODE } from '../src/commands/providers-key-check.js';
 import { API_KEY_MAX_BYTES, firstLine, isLauncherSafePath, keyShapeProblem, keyStoreDir, readKeyFromStream, storeApiKey } from './key-store.js';
 
@@ -321,7 +322,6 @@ function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, 
     const { [previous.active_provider]: _old, ...others } = previous.providers;
     config = {
       ...previous,
-      version: 1,
       active_provider: providerName,
       providers: { ...others, [providerName]: { ...kept, ...providerConfig, ...(modelGiven || !kept.model ? {} : { model: kept.model }) } },
       channels: previous.channels ?? {},
@@ -336,6 +336,9 @@ function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, 
       harness,
     };
   }
+  // a setup writes a config at the latest version, like the wizard: `jht doctor` right after it must not offer a migration
+  // (a team config of the same team keeps the version it has: migrations are idempotent and only raise it)
+  config = migrateToLatest(config);
 
   try {
     writeConfigFile(config);

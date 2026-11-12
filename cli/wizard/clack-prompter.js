@@ -11,6 +11,7 @@ import {
   isCancel,
   multiselect,
   outro,
+  password,
   select,
   spinner,
   text,
@@ -81,6 +82,18 @@ export function createClackPrompter() {
           message: pc.bold(params.message),
           initialValue: params.initialValue,
           placeholder: params.placeholder,
+          validate: validate ? (value) => validate(value ?? '') : undefined,
+        }),
+      );
+    },
+
+    // typed hidden: nothing of it is echoed (an API key)
+    password: async (params) => {
+      const validate = params.validate;
+      return guardCancel(
+        await password({
+          message: pc.bold(params.message),
+          mask: '•',
           validate: validate ? (value) => validate(value ?? '') : undefined,
         }),
       );
