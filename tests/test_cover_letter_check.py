@@ -329,3 +329,13 @@ def test_a_long_run_of_digits_or_of_characters_without_a_space_is_checked_in_no_
     start = datetime.datetime.now()
     run(letter("en") + "\n" + "1" * 200_000 + "\n" + "a" * 200_000 + "\n" + "9 " * 100_000)
     assert (datetime.datetime.now() - start).total_seconds() < 10
+
+
+def test_the_language_data_lives_in_a_data_file_for_all_seven_languages() -> None:
+    """The words of the seven languages are data, not copy in the script (the English census of the backend reads the script)."""
+    data = clc._languages()
+    assert set(data["negation"]) == set(clc.LANGUAGES) == set(data["cliches"])
+    assert all(data["cliches"][lang] for lang in clc.LANGUAGES) and data["buzzwords"]
+    source = (SKILLS / "cover_letter_check.py").read_text(encoding="utf-8")
+    for word in ("senza", "troverà", "ohne", "sans", "nincs"):
+        assert word not in source, word
