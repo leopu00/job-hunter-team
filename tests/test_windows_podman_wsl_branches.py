@@ -132,6 +132,19 @@ $InitializeMachine = ($env:INITIALIZE -eq '1')
 # The real one writes HKCU's Lxss key, which off Windows does not exist: here it
 # only says, in the same log as the podman calls, when the block asks for it.
 function Skip-WslWelcome { Add-Content -LiteralPath $env:FAKE_LOG -Value $env:WELCOME }
+# The machine's pipe, the reason Windows logged and the session are what Windows says: stand-ins. The pipe is 'connected' unless
+# FAKE_PIPE says otherwise, and from the FAKE_PIPE_AFTER_STARTS-th `machine start` on (a restart that brings the forwarding up).
+function Get-JhtPodmanPipeState {
+  param([string]$MachineName)
+  $starts = @(Get-Content -LiteralPath $env:FAKE_LOG | Where-Object { $_ -like 'machine start *' }).Count
+  if ($env:FAKE_PIPE_AFTER_STARTS -and $starts -ge [int]$env:FAKE_PIPE_AFTER_STARTS) { return 'connected' }
+  if ($env:FAKE_PIPE) { return $env:FAKE_PIPE }
+  return 'connected'
+}
+function Get-JhtWinSshProxyReason { param([string]$MachineName) return [string]$env:FAKE_REASON }
+function Get-JhtWindowsSessionId { if ($env:FAKE_SESSION) { return [int]$env:FAKE_SESSION }; return 1 }
+function Test-JhtEventLogWritable { if ($env:FAKE_EVENTLOG) { return $env:FAKE_EVENTLOG }; return 'writable' }
+function Get-PodmanVersion { param([string]$Path) if ($env:FAKE_PODMAN_VERSION) { return $env:FAKE_PODMAN_VERSION }; return '6.0.2' }
 . ([scriptblock]::Create($block.Extent.Text))
 """
 
@@ -141,6 +154,7 @@ PODMAN_CASES = """  "machine list --format json") printf '%s' "$FAKE_MACHINES"; 
   "machine init "*) [ "$FAKE_FAIL" = init ] && { echo 'Error: machine init failed' >&2; exit 125; }; case "$*" in *"--update-connection=false"*) ;; *) printf '%s' jht-podman > "$FAKE_DEFAULT" ;; esac ;;
   "machine start "*) [ "$FAKE_FAIL" = start ] && { echo 'Error: machine start failed' >&2; exit 125; }; case "$*" in *"--update-connection=false"*) ;; *) printf '%s' jht-podman > "$FAKE_DEFAULT" ;; esac ;;
   "--connection jht-podman info") [ "$FAKE_FAIL" = info ] && { echo 'Error: cannot connect to Podman' >&2; exit 125; } ;;
+  "--connection jht-podman ps --quiet") [ "$FAKE_FAIL" = ps ] && { echo 'Error: cannot list' >&2; exit 125; }; printf '%s' "$FAKE_PS" ;;
   "--connection jht-podman inspect jht "*) echo 'Error: no such object: "jht"' >&2; exit 125 ;;"""
 
 INIT = "machine init --update-connection=false --provider wsl --cpus 2 --memory 3072 --disk-size 30 jht-podman"
@@ -425,6 +439,12 @@ $ContainerRuntime = $env:RUNTIME
 $env:CONTAINER_CONNECTION = 'jht-podman'
 $env:JHT_MACHINE_WAIT_SECONDS = $env:FAKE_UP_WAIT_SECONDS
 $PodmanMachineBridgePath = if ($env:FAKE_CLASSIFY_BRIDGE) { $env:FAKE_CLASSIFY_BRIDGE } else { $bridge }
+# The pipe of the machine is what Windows says, and on Windows it is not there for a fake machine: these cases are about the start, so
+# the bridge they load answers 'connected' (the cases of the pipe are in test_windows_podman_api_pipe_must_be_up.py). A copy of the
+# bridge to load, with the two answers last so that they win over the real functions.
+$withPipe = Join-Path (Split-Path -Parent $env:FAKE_LOG) 'bridge-with-a-pipe.ps1'
+[IO.File]::WriteAllText($withPipe, ([IO.File]::ReadAllText($PodmanMachineBridgePath) + "`nfunction Get-JhtPodmanPipeState { param([string]`$MachineName) return 'connected' }`nfunction Get-JhtPodmanExeVersion { param([string]`$Path) return '6.2.0' }`n"))
+$PodmanMachineBridgePath = $withPipe
 $PSDefaultParameterValues['Update-ProcessPath:MachinePath'] = ''
 $PSDefaultParameterValues['Update-ProcessPath:UserPath'] = ''
 function Assert-TrustedRuntime { }

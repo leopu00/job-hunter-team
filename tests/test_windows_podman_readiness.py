@@ -238,6 +238,8 @@ def test_adapter_resolves_a_newly_registered_podman_from_a_stale_process_path(tm
         case_bridge.write_text(source.replace(needle, "\n", 1), encoding="utf-8")
     body = r'''
 . $env:FAKE_CASE_BRIDGE
+# the machine's pipe is not what this case is about (the cases of the pipe are in test_windows_podman_api_pipe_must_be_up.py)
+function Get-JhtPodmanPipeState { param([string]$MachineName) return 'connected' }
 $PSDefaultParameterValues['Update-ProcessPath:MachinePath'] = ''
 $PSDefaultParameterValues['Update-ProcessPath:UserPath'] = ''
 $PSDefaultParameterValues['Update-ProcessPath:' + $env:FAKE_REGISTERED_SCOPE] = $env:FAKE_REGISTERED_PATH

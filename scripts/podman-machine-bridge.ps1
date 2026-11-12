@@ -482,6 +482,118 @@ function Get-JhtPodmanPipeAdvice {
     'Then run the installer again.')
 }
 
+# `podman machine start` leaves with 0 even when its win-sshproxy.exe did not start («API forwarding for Docker API clients is not
+# available»): Podman has already waited about twenty seconds for the pipe by then. Only ASCII digits, up to 30, can change the
+# few seconds more this waits.
+function Get-JhtPodmanPipeWaitMilliseconds {
+  param([string]$Seconds = $env:JHT_PIPE_WAIT_SECONDS)
+  if ($Seconds -cmatch '^[0-9]{1,2}$' -and [int]$Seconds -le 30) { return ([int]$Seconds * 1000) }
+  return 5000
+}
+
+# The state of the machine's pipe once it has had a moment to appear: anything but 'absent' is answered at once.
+function Wait-JhtPodmanPipe {
+  param([Parameter(Mandatory)][string]$MachineName, [int]$Milliseconds = (Get-JhtPodmanPipeWaitMilliseconds))
+  $deadline = [DateTime]::UtcNow.AddMilliseconds($Milliseconds)
+  while ($true) {
+    $state = Get-JhtPodmanPipeState -MachineName $MachineName
+    if ($state -cne 'absent' -or [DateTime]::UtcNow -ge $deadline) { return $state }
+    Start-Sleep -Milliseconds 250
+  }
+}
+
+# win-sshproxy.exe writes why it stopped to the Application log (source ".NET Runtime", «[error] <machine>: ...»): Podman only says
+# «see windows event logs». The newest line of this machine since $Since, ASCII and short; '' when there is none or the log cannot
+# be read (a standard user may read it, a log that is off or a Windows without it gives nothing).
+function Get-JhtWinSshProxyReason {
+  param([Parameter(Mandatory)][string]$MachineName, [DateTime]$Since = ([DateTime]::Now.AddMinutes(-15)))
+  try {
+    $events = @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = '.NET Runtime'; StartTime = $Since } -ErrorAction Stop)
+  } catch { return '' }
+  $pattern = '\[(?:error|fatal|panic|warning)\s*\]\s+' + [regex]::Escape($MachineName) + ':\s*(.+)'
+  foreach ($logged in $events) {
+    # the line travels as the event's first insertion string; Message holds it inside Windows' own sentence
+    $text = if ($logged.Properties -and $logged.Properties.Count) { [string]$logged.Properties[0].Value } else { [string]$logged.Message }
+    if ($text -match $pattern) {
+      $reason = (([string]$Matches[1] -split '\r?\n')[0] -replace '[^\x20-\x7E]', '?').Trim()
+      if ($reason.Length -gt 300) { $reason = $reason.Substring(0, 300) }
+      if ($reason) { return $reason }
+    }
+  }
+  return ''
+}
+
+# The win-sshproxy.exe of Podman up to 6.1.3 (gvisor-tap-vsock 0.8.x) opens the Windows event log (RegisterEventSource of
+# ".NET Runtime") before anything else and leaves with 1 when that is refused: it is refused to a logon without a desktop of the person
+# (ssh, a service, a scheduled task that runs whether the user is logged on or not) and the pipe then never exists. Podman 6.1.4 and
+# newer carry a win-sshproxy that goes on without the log.
+function Test-JhtWinSshProxyNeedsEventLog {
+  param([string]$PodmanVersion)
+  $parsed = $null
+  if ($PodmanVersion -and [version]::TryParse(([string]$PodmanVersion).Trim(), [ref]$parsed)) { return ($parsed -lt [version]'6.1.4') }
+  # a version that cannot be read is the one the installer pins (6.0.2)
+  return $true
+}
+
+# The question win-sshproxy.exe asks first, without writing anything to the log: 'writable', 'denied' (access denied, error 5) or
+# 'unknown' (not Windows, or the question could not be asked).
+function Test-JhtEventLogWritable {
+  try {
+    if (-not ('JhtEventSourceProbe' -as [type])) {
+      Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class JhtEventSourceProbe {
+  [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)] static extern IntPtr RegisterEventSourceW(string server, string source);
+  [DllImport("advapi32.dll", SetLastError = true)] static extern bool DeregisterEventSource(IntPtr handle);
+  public static int Probe(string source) {
+    IntPtr handle = RegisterEventSourceW(null, source);
+    if (handle == IntPtr.Zero) { return Marshal.GetLastWin32Error(); }
+    DeregisterEventSource(handle);
+    return 0;
+  }
+}
+'@
+    }
+    $error5 = [JhtEventSourceProbe]::Probe('.NET Runtime')
+    if ($error5 -eq 0) { return 'writable' }
+    if ($error5 -eq 5) { return 'denied' }
+    return 'unknown'
+  } catch { return 'unknown' }
+}
+
+# The version `podman --version` says ('' when it does not say).
+function Get-JhtPodmanExeVersion {
+  param([string]$Path)
+  if (-not $Path) { return '' }
+  $line = @(& { $ErrorActionPreference = 'Continue'; & $Path --version 2>$null }) | Select-Object -First 1
+  if ([string]$line -match '^podman(?:\.exe)? version (\S+)$') { return [string]$Matches[1] }
+  return ''
+}
+
+# The Windows session this script runs in: 0 is where ssh logons, services and scheduled tasks run, with no desktop of the person.
+function Get-JhtWindowsSessionId {
+  try { return [int][Diagnostics.Process]::GetCurrentProcess().SessionId } catch { return -1 }
+}
+
+# The stop's words: the machine line (read by the app and the logs), the cause, and where to run the installer instead.
+function Get-JhtApiForwardingFailure {
+  param([Parameter(Mandatory)][string]$MachineName, [string]$Reason = '', [bool]$Restarted = $false, [int]$SessionId = -1, [bool]$EventLogDenied = $false, [bool]$Started = $true, [string]$What = 'installer')
+  $text = "podman_api_forwarding_unavailable: Podman's connection for Docker tools (win-sshproxy.exe) "
+  $text += if ($Started) { "did not start for the machine $MachineName" } else { "cannot start for the machine $MachineName" }
+  $text += ', so nothing can reach the containers of the team'
+  if ($Restarted) { $text += ' (the machine was restarted once and it did not start again)' }
+  $text += '. '
+  if ($EventLogDenied) {
+    $text += 'It stops at once when the Windows logon it runs in may not write to the Windows event log, as in an ssh login, a service or a scheduled task that has no desktop of the person. '
+    $text += "Run the $What from the Windows desktop of this user (Start menu, Windows PowerShell), not from ssh."
+  } else {
+    $text += if ($Reason) { "Windows says: $Reason" } else { 'Windows did not say why: Event Viewer > Windows Logs > Application, source ".NET Runtime".' }
+    if ($SessionId -eq 0) { $text += " This $What runs in Windows session 0 (an ssh login, a service or a scheduled task), which has no desktop: run it from the Windows desktop of this user, not from ssh." }
+  }
+  return $text
+}
+
 function Invoke-Checked {
   param([Parameter(Mandatory)][string]$FilePath, [Parameter(ValueFromRemainingArguments)][AllowEmptyString()][string[]]$Arguments)
   Invoke-JhtPodmanMachine -FilePath $FilePath -Arguments $Arguments
@@ -512,7 +624,9 @@ function Invoke-JhtPodmanReadiness {
   param(
     [Parameter(Mandatory)][string]$FilePath,
     [Parameter(Mandatory)][ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$')][string]$Connection,
-    [ValidateRange(1, 30000)][int]$TimeoutMilliseconds = 30000, [string]$LogPath = ''
+    [ValidateRange(1, 30000)][int]$TimeoutMilliseconds = 30000, [string]$LogPath = '',
+    # run right before the machine is started (never when it already answers): it may throw to stop the start
+    [scriptblock]$BeforeStart = $null
   )
   $watch = [Diagnostics.Stopwatch]::StartNew()
   $startCode = $null
@@ -529,6 +643,7 @@ function Invoke-JhtPodmanReadiness {
       if ($null -eq $startCode) {
         $remaining = $TimeoutMilliseconds - [int]$watch.ElapsedMilliseconds
         if ($remaining -le 0) { throw (New-JhtPodmanReadinessFailure -StartExitCode $startCode -ElapsedMilliseconds $watch.ElapsedMilliseconds -LogPath $LogPath) }
+        if ($BeforeStart) { & $BeforeStart }
         $started = Invoke-JhtPodmanProcess -FilePath $FilePath -Arguments @('machine', 'start', '--update-connection=false', $Connection) -Phase podman_machine_start -TimeoutMilliseconds $remaining -LogPath $LogPath
         $startCode = $started.ExitCode
       } else {
@@ -570,10 +685,32 @@ function Start-JhtPodmanMachineForUp {
     Write-JhtPodmanBridgeEvent -Phase podman_machine_readiness -Code podman_not_installable
     [Console]::Error.WriteLine('podman_not_installable: podman.exe is unavailable.'); exit 21
   }
+  # As in the installer: with a Podman whose win-sshproxy.exe stops at once when this logon may not write to the event log (ssh, a
+  # service, a scheduled task), no pipe there yet and a refusal, the machine is not even started.
+  # No .GetNewClosure(): a closure runs in a module of its own, which does not see the functions the wrapper dot-sourced into the
+  # scope of Start-PodmanMachineForUp; as plain script block it sees them, and $podman and $Connection, by dynamic scope.
+  $beforeStart = {
+    if ((Get-JhtPodmanPipeState -MachineName $Connection) -ceq 'absent' -and
+        (Test-JhtWinSshProxyNeedsEventLog -PodmanVersion (Get-JhtPodmanExeVersion -Path $podman.Source)) -and
+        (Test-JhtEventLogWritable) -ceq 'denied') {
+      throw (Get-JhtApiForwardingFailure -MachineName $Connection -EventLogDenied $true -Started $false -What 'jht command')
+    }
+  }
   try {
-    $null = Invoke-JhtPodmanReadiness -FilePath $podman.Source -Connection $Connection -TimeoutMilliseconds (Get-JhtPodmanReadinessBudget)
+    $ready = Invoke-JhtPodmanReadiness -FilePath $podman.Source -Connection $Connection -TimeoutMilliseconds (Get-JhtPodmanReadinessBudget) -BeforeStart $beforeStart
+    # This call started the machine, so nothing of the team runs in it: if Podman's connection for Docker tools did not come up,
+    # one stop and start, and then the same stop as the installer's (compose would only say «cannot find the file»).
+    if ($null -ne $ready.StartExitCode -and (Wait-JhtPodmanPipe -MachineName $Connection) -ceq 'absent') {
+      Invoke-JhtPodmanMachine -FilePath $podman.Source -Arguments @('machine', 'stop', $Connection)
+      if ($LASTEXITCODE -ne 0) { throw "podman_machine_unavailable: The Podman machine did not stop (machine stop: code $LASTEXITCODE)." }
+      $null = Invoke-JhtPodmanReadiness -FilePath $podman.Source -Connection $Connection -TimeoutMilliseconds (Get-JhtPodmanReadinessBudget)
+      if ((Wait-JhtPodmanPipe -MachineName $Connection) -ceq 'absent') {
+        throw (Get-JhtApiForwardingFailure -MachineName $Connection -Reason (Get-JhtWinSshProxyReason -MachineName $Connection) -Restarted $true -SessionId (Get-JhtWindowsSessionId) -What 'jht command')
+      }
+    }
   } catch {
     [Console]::Error.WriteLine($_.Exception.Message)
+    if ($_.Exception.Message -clike 'podman_api_forwarding_unavailable: *') { exit 26 }
     if ($_.Exception.Data['Code'] -in @('podman_machine_timeout', 'podman_machine_cleanup_failed')) { exit 124 }
     exit 22
   }
