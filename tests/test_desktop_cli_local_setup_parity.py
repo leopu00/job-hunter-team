@@ -213,7 +213,7 @@ def test_desktop_delegates_podman_machine_orchestration_to_host_entrypoints():
     desktop = _source(DESKTOP).split("#[cfg(test)]", 1)[0]
     podman_install = installer[
         installer.index("install_podman_macos()") : installer.index(
-            "install_docker_linux()"
+            "install_container_runtime()"
         )
     ]
 

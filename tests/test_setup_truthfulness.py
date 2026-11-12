@@ -20,7 +20,7 @@ def test_macos_installer_finds_homebrew_from_finder_path():
     installer = _src("scripts/install.sh")
     block = installer[
         installer.index("install_brew_if_missing()") :
-        installer.index("install_colima_macos()")
+        installer.index("running_podman_machine()")
     ]
     assert "/opt/homebrew/bin/brew /usr/local/bin/brew" in block
     assert 'eval "$("$brew_bin" shellenv)"' in block

@@ -12,6 +12,7 @@ import hashlib
 import os
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -56,14 +57,28 @@ def _fake_bin(tmp_path: Path, repo_digests: str, *, pull_ok: bool = True) -> Pat
         'case "$1" in\n'
         f"  pull) exit {0 if pull_ok else 1} ;;\n"
         f"  image) printf '%s' {shlex.quote(repo_digests)} ;;\n"
+        # rootless and local, as the wrapper asks a native Podman before anything
+        "  info) printf 'true false\\n' ;;\n"
+        "  --version) printf 'podman version 5.7.0\\n' ;;\n"
         "esac\n"
-        'case " $* " in\n'
-        '  *" ps -q jht "*) printf \'aaaaaaaaaaaa\\n\' ;;\n'
-        '  " inspect --type container aaaaaaaaaaaa "*) printf \'true jht\\n\' ;;\n'
-        "esac\n",
+        # no container of the team yet: `jht up` creates it with compose
+        "true\n",
         encoding="utf-8",
     )
     docker.chmod(0o755)
+    # Since 0.4 the engine is Podman (rootless on Linux): the same stand-in answers as podman, and the
+    # wrapper reaches it through the JHT shim. The real podman of the computer is never called.
+    podman = fake_bin / "podman"
+    podman.write_text(docker.read_text(encoding="utf-8"), encoding="utf-8")
+    podman.chmod(0o755)
+    compose = fake_bin / "podman-compose"
+    compose.write_text(
+        "#!/usr/bin/env bash\n"
+        'if [ "${1:-}" = --version ]; then echo "podman-compose version 1.6.0"; echo "podman version 5.7.0"; exit 0; fi\n'
+        'printf \'JHT_IMAGE=%s compose %s\\n\' "${JHT_IMAGE:-}" "$*" >> "$JHT_TEST_DOCKER_LOG"\n',
+        encoding="utf-8",
+    )
+    compose.chmod(0o755)
     return fake_bin
 
 
@@ -84,7 +99,7 @@ def _env(tmp_path: Path, fake_bin: Path) -> dict[str, str]:
 
 
 def _install(env: dict[str, str], *args: str) -> subprocess.CompletedProcess:
-    # Only the steps of the test channel on a VPS (Linux): the image check,
+    # Only the steps of the test channel on a VPS (Linux, rootless Podman): the image check,
     # then publication.
     script = (
         f"JHT_INSTALLER_SOURCE_ONLY=1 . {shlex.quote(str(INSTALLER))} {' '.join(map(shlex.quote, args))}\n"
@@ -213,6 +228,12 @@ def _run_wrapper(env: dict[str, str], wrapper: Path, *args: str) -> subprocess.C
     )
 
 
+# The installed wrapper runs on the host: on a Linux server it is rootless Podman (here the stand-in); a Mac would
+# be a Podman machine, which is not what this file stands for.
+LINUX_SERVER = pytest.mark.skipif(sys.platform != "linux", reason="the wrapper on a Linux server: rootless Podman")
+
+
+@LINUX_SERVER
 @pytest.mark.parametrize("shell_override", [None, "ghcr.io/leopu00/jht:latest"])
 def test_installed_wrapper_runs_the_pinned_image_without_environment(tmp_path, shell_override):
     env, wrapper = _installed(tmp_path)
@@ -220,16 +241,16 @@ def test_installed_wrapper_runs_the_pinned_image_without_environment(tmp_path, s
     if shell_override:
         env["JHT_IMAGE"] = shell_override
 
-    _run_wrapper(env, wrapper, "up")
+    up = _run_wrapper(env, wrapper, "up")
 
-    compose_calls = [
-        line for line in (tmp_path / "docker.log").read_text(encoding="utf-8").splitlines()
-        if " compose " in f" {line} "
-    ]
-    assert compose_calls
+    log = tmp_path / "docker.log"
+    calls = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+    compose_calls = [line for line in calls if " compose " in f" {line} "]
+    assert compose_calls, up.stdout + up.stderr + " | ".join(c.split(" ", 1)[-1] for c in calls)
     assert all(line.startswith(f"JHT_IMAGE={PINNED} ") for line in compose_calls), compose_calls
 
 
+@LINUX_SERVER
 @pytest.mark.parametrize("tamper", ["content", "removed", "symlink", "noncanonical"])
 def test_tampered_pin_stops_before_docker(tmp_path, tamper):
     env, wrapper = _installed(tmp_path)
@@ -261,6 +282,7 @@ def test_tampered_pin_stops_before_docker(tmp_path, tamper):
     assert not log.exists() or " compose " not in log.read_text(encoding="utf-8")
 
 
+@LINUX_SERVER
 def test_upgrade_refuses_a_test_channel_install(tmp_path):
     env, wrapper = _installed(tmp_path)
 

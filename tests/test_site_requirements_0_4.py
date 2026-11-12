@@ -130,7 +130,7 @@ def test_the_homebrew_requirement_is_the_one_the_app_enforces_and_the_app_runs_p
     # the app's local install on a Mac is `install.sh --runtime podman`, with Homebrew checked before anything runs
     assert re.search(r'LOCAL_PODMAN_INSTALL_ARGS: \[&str; 6\] = \[[^\]]*"--runtime",\s*"podman"', ONBOARDING)
     assert 'return Err("homebrew_missing")' in ONBOARDING
-    assert "homebrew_missing: Homebrew is required" in INSTALL and "brew install podman" in INSTALL
+    assert "homebrew_missing: JHT installs Podman with Homebrew" in INSTALL and "brew install podman" in INSTALL
     # the installer's free-space check is not run on a Mac (the disk is inside the machine): no free-space claim on the pages
     assert "case \"$OS\" in linux|wsl) ;; *) return 0 ;; esac" in INSTALL
     assert RUN.count("Homebrew") >= 7, "the local mode says Homebrew in every language"
@@ -306,12 +306,12 @@ def test_the_getting_started_one_liner_has_no_windows_block_and_names_podman():
     "docs/guides/CLI-INSTALL.md", "docs/guides/QUICKSTART.md", "web/app/docs/guides/getting-started/page.tsx",
 ])
 def test_the_mac_install_command_names_podman_so_it_does_not_land_on_colima(path):
-    # `curl | bash` with no flag picks Colima on a Mac; the app, and the figures of the pages, are Podman's
+    # Podman is the only engine since 0.4 (no flag is Podman too); the pages name it, as the app does
     source = text(path)
     commands = re.findall(r"install\.sh \| bash[^\n`\"]*", source)
     assert commands, path
     assert all("-s -- --runtime podman" in c for c in commands), (path, commands)
-    assert '--runtime) \n' not in INSTALL and "--runtime" in INSTALL and "colima|podman|docker-desktop" in INSTALL
+    assert '--runtime) \n' not in INSTALL and "--runtime" in INSTALL and '""|auto|podman) RUNTIME_CHOICE="podman" ;;' in INSTALL
 
 
 @pytest.mark.parametrize("lang", LANGS)

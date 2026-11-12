@@ -4,7 +4,7 @@ What the desktop app does for a new server (desktop/src-tauri/src/onboarding.rs,
 prepare_impl, VPS arm) is a fixed sequence of ``ssh`` calls:
 
   1. REMOTE_INSTALL   - the verified install.sh is piped on stdin and run with
-                        ``--pairing-token-env``: Docker, wrapper, compose, host.env
+                        ``--pairing-token-env --runtime podman``: rootless Podman, wrapper, compose, host.env
   2. REMOTE_JHT_UP    - ``jht up``
   3. REMOTE_SNAPSHOT  - the state probe that proves the container is running
   4. REMOTE_USE_*     - ``jht providers use <provider>``
@@ -14,8 +14,8 @@ Here the REAL commands are taken from onboarding.rs and executed through a fake
 ``ssh`` that behaves like OpenSSH under the app's options (BatchMode, strict
 host-key checking against a private known_hosts file, exit 255 when it cannot
 connect), against a sandbox that stands for the server: the real install.sh
-and host-setup.sh, with a fake docker/apt/sudo, and ``file://`` as the download
-base. What stays a stand-in: the OpenSSH client and server, the Docker daemon
+and host-setup.sh, with a fake podman/apt/sudo, and ``file://`` as the download
+base. What stays a stand-in: the OpenSSH client and server, the container engine
 and everything the container does (``jht`` after the install is a recorder).
 
 The Rust side (pin probe/confirm, the mapping of exit codes to the user's
@@ -182,6 +182,10 @@ remote=""
 [ -n "${CONTAINER_HOST+x}" ] && remote=1
 [ -n "${CONTAINER_CONNECTION+x}" ] && remote=1
 echo "podman $*${remote:+ [remote]}" >> "$FAKE_LOG"
+# What a user of the server could read about the process that called us: its
+# arguments (world-readable) and whether the pairing token is in its environment.
+echo "parent-args: $(ps -o args= -p $PPID 2>/dev/null)" >> "$FAKE_LOG"
+echo "parent-env-token: $([ -n "${JHT_PAIRING_TOKEN:-}" ] && echo present || echo absent)" >> "$FAKE_LOG"
 case "$1" in
   --version) echo "podman version ${FAKE_PODMAN_VERSION:-5.7.0}" ;;
   info) [ -n "$remote" ] && { echo "${FAKE_REMOTE_ROOTLESS:-false}"; exit 0; }
@@ -361,8 +365,20 @@ def server(tmp_path) -> Server:
     return s
 
 
-def install(server: Server, source: str, **kwargs):
-    return server.ssh(rust_const(source, "REMOTE_INSTALL"), server.installer_input(**kwargs))
+def install(server: Server, source: str, *, installer: bytes | None = None, digest: str | None = None,
+            token: str = TOKEN, **extra: str):
+    """The app's own install command: a VPS always runs on rootless Podman."""
+    if (server.fake / "docker").exists():
+        with_podman(server)
+    command = rust_const(source, "REMOTE_INSTALL") + " --runtime podman"
+    env = {
+        "XDG_RUNTIME_DIR": str(server.xdg),
+        "JHT_ETC_DIR": str(server.etc),
+        "JHT_RUN_USER_DIR": str(server.run),
+        "FAKE_STATE": str(server.state),
+        **extra,
+    }
+    return server.ssh(command, server.installer_input(installer=installer, digest=digest, token=token), **env)
 
 
 # ── the sequence ──────────────────────────────────────────────────────────
@@ -512,35 +528,8 @@ def test_a_server_that_cannot_be_reached_is_the_same_exit_255(server, source):
     assert list(server.home.iterdir()) == []
 
 
-def test_docker_missing_is_installed_and_the_install_goes_on(server, source):
-    (server.fake / "docker").unlink()
-    done = install(server, source)
-    assert done.returncode == 0, done.stdout.decode() + done.stderr.decode()
-    assert any(c.startswith("apt-get") and "docker.io" in c for c in server.calls())
-    assert (server.home / ".local/bin/jht").is_file()
-
-
-def test_docker_that_cannot_be_installed_stops_before_any_file_or_token_is_written(server, source):
-    (server.fake / "docker").unlink()
-    done = server.ssh(rust_const(source, "REMOTE_INSTALL"), server.installer_input(),
-                      FAKE_APT_INSTALLS_DOCKER="0")
-    assert done.returncode != 0
-    assert b"docker.io installation failed" in done.stderr
-    assert not (server.home / ".local").exists()
-    assert not (server.home / ".jht").exists()
-
-
-def test_a_docker_daemon_that_does_not_answer_stops_before_any_file_or_token_is_written(server, source):
-    done = server.ssh(rust_const(source, "REMOTE_INSTALL"), server.installer_input(), FAKE_DOCKER="down")
-    assert done.returncode != 0
-    assert b"Docker daemon is not responding" in done.stderr
-    assert not (server.home / ".local").exists()
-    assert not (server.home / ".jht").exists()
-
-
 def test_a_download_that_fails_stops_before_the_token_is_written(server, source, tmp_path):
-    done = server.ssh(rust_const(source, "REMOTE_INSTALL"), server.installer_input(),
-                      FAKE_RAW_BASE=(tmp_path / "nowhere").as_uri())
+    done = install(server, source, FAKE_RAW_BASE=(tmp_path / "nowhere").as_uri())
     assert done.returncode != 0
     assert b"Download failed" in done.stderr
     assert not (server.home / ".jht").exists()
@@ -548,10 +537,9 @@ def test_a_download_that_fails_stops_before_the_token_is_written(server, source,
 
 # ── a disk that cannot hold the image ─────────────────────────────────────
 
-def test_a_full_disk_is_refused_before_docker_is_installed_or_anything_is_written(server, source):
-    (server.fake / "docker").unlink()  # Docker would have to be installed: it must not be
-    done = server.ssh(rust_const(source, "REMOTE_INSTALL"), server.installer_input(),
-                      FAKE_FREE_KB=str(512 * 1024))
+def test_a_full_disk_is_refused_before_podman_is_installed_or_anything_is_written(server, source):
+    with_podman(server, bare=True)  # Podman would have to be installed: it must not be
+    done = install(server, source, FAKE_FREE_KB=str(512 * 1024))
     assert done.returncode != 0
     assert b"not enough free disk space" in done.stderr
     assert not any(c.startswith("apt-get") for c in server.calls())
@@ -560,19 +548,8 @@ def test_a_full_disk_is_refused_before_docker_is_installed_or_anything_is_writte
 
 
 def test_a_disk_with_room_goes_on(server, source):
-    done = server.ssh(rust_const(source, "REMOTE_INSTALL"), server.installer_input(),
-                      FAKE_FREE_KB=str(40 * 1024 * 1024))
+    done = install(server, source, FAKE_FREE_KB=str(40 * 1024 * 1024))
     assert done.returncode == 0, done.stderr.decode()
-
-
-def test_another_account_at_uid_1001_on_the_server_stops_before_the_token_is_written(server, source):
-    """The accounts are the fake server's: the same guard that a GitHub runner's own uid 1001 tripped."""
-    done = server.ssh(rust_const(source, "REMOTE_INSTALL"), server.installer_input(),
-                      FAKE_UID_1001="backup")
-    assert done.returncode != 0
-    assert b"uid 1001 on this computer is the account 'backup'" in done.stderr
-    assert not (server.home / ".jht/.pairing-token").exists()
-    assert not (server.home / ".jht/host.env").exists()
 
 
 # ── the token flag of the installer ───────────────────────────────────────
@@ -634,16 +611,7 @@ def with_podman(server: Server, *, bare: bool = False, compose_in_stock: bool = 
             shutil.copy(stock / name, server.fake / name)
 
 
-def install_podman(server: Server, source: str, **extra: str):
-    command = rust_const(source, "REMOTE_INSTALL") + " --runtime podman"
-    env = {
-        "XDG_RUNTIME_DIR": str(server.xdg),
-        "JHT_ETC_DIR": str(server.etc),
-        "JHT_RUN_USER_DIR": str(server.run),
-        "FAKE_STATE": str(server.state),
-        **extra,
-    }
-    return server.ssh(command, server.installer_input(), **env)
+install_podman = install
 
 
 def test_a_podman_compose_that_writes_its_second_line_late_does_not_stop_the_install(server, source):
@@ -794,12 +762,14 @@ def test_a_second_install_without_the_option_keeps_podman(server, source):
 
 
 def test_a_server_already_on_docker_asked_for_podman_stops_with_its_own_code_and_changes_nothing(server, source):
-    # A VPS installed before Podman: the team runs on Docker (here the fake one).
-    first = install(server, source)
-    assert first.returncode == 0, first.stderr.decode()
+    # A VPS installed before Podman: the team runs on Docker. The Docker path on Linux wrote no
+    # marker: the completed install (its integrity manifest) is what says Docker.
     runtime = server.home / ".local/share/job-hunter-team/host-runtime"
-    # the Docker path on Linux writes no marker: the completed install is what says Docker
-    assert not (runtime / "container-runtime").exists() and (runtime / ".runtime-integrity").is_file()
+    runtime.mkdir(parents=True)
+    (runtime / "docker-compose.yml").write_text("services: {}\n")
+    (runtime / ".runtime-integrity").write_text("docker-compose.yml=0\n")
+    (server.home / ".jht").mkdir()
+    (server.home / ".jht/.pairing-token").write_text("old-token")
     before = snapshot_tree(server.home)
     calls_before = len(server.calls())
     # The app installs again, as it does now on every VPS: --runtime podman.
@@ -810,17 +780,6 @@ def test_a_server_already_on_docker_asked_for_podman_stops_with_its_own_code_and
     # Refused before anything: the Docker team, its files and its token are as they were.
     assert snapshot_tree(server.home) == before
     assert not [c for c in server.calls()[calls_before:] if c.startswith(("apt-get", "docker", "podman", "sudo"))]
-
-
-def test_a_server_on_docker_installed_again_without_the_option_stays_on_docker(server, source):
-    assert install(server, source).returncode == 0
-    calls_before = len(server.calls())
-    again = install(server, source)
-    assert again.returncode == 0, again.stderr.decode()
-    runtime = server.home / ".local/share/job-hunter-team/host-runtime"
-    assert not (runtime / "container-runtime").exists()
-    assert "docker-shim=" not in (runtime / ".runtime-integrity").read_text()
-    assert not [c for c in server.calls()[calls_before:] if c.startswith("podman")]
 
 
 def rust_exit(source: str, name: str) -> int:

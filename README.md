@@ -94,9 +94,9 @@ team.
   that `jht setup` asks for (typed hidden) or takes from a file or standard input
   (`jht setup --non-interactive --provider glm --api-key-stdin`), never on the command line.
   Codex (ChatGPT subscription), Kimi and Claude come in a later release.
-- **A container engine**: on a Mac the CLI installer uses Colima by default; the app installs
-  Podman with Homebrew (which must already be there), so there is no Docker Desktop to install,
-  and it adopts a team the CLI already installed on Colima. On Linux: rootless Podman 5.0 or later.
+- **A container engine**: Podman, the only one since 0.4. On a Mac the installer and the app set it
+  up with Homebrew (which must already be there), so there is no Docker Desktop to install.
+  On Linux: rootless Podman 5.0 or later.
 - At least 16 GB of RAM is recommended on a Mac. The Podman machine uses 2 CPUs, 4 GiB of memory
   and a disk that grows up to 30 GiB.
 

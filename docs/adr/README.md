@@ -18,7 +18,7 @@ Short records of architecturally-significant decisions — what we chose, why, a
 | [0003](./0003-single-writer-team.md)                  | Team runs in one location at a time (VPS xor PC)                       | Accepted                                                            |
 | [0004](./0004-subscription-only-no-api-keys.md)       | Subscription-only: no pay-per-use API keys                             | Superseded by [0012](./0012-desktop-setup-matrix.md)                 |
 | [0005](./0005-provider-risk-and-mitigation.md)        | Provider risk and mitigation                                           | Accepted                                                            |
-| [0006](./0006-user-choice-container-runtime-macos.md) | User chooses the container runtime on macOS (Colima or Docker Desktop) | Accepted                                                            |
+| [0006](./0006-user-choice-container-runtime-macos.md) | User chooses the container runtime on macOS (Colima or Docker Desktop) | Superseded by [0014](./0014-podman-only-runtime.md)                  |
 | [0007](./0007-provider-selection-is-configuration.md) | Provider selection is configuration, not instruction                   | Accepted                                                            |
 | [0008](./0008-podman-evaluated-behind-a-shim.md)      | Evaluate Podman behind a `docker` shim, not by rewriting call sites    | Proposed                                                            |
 | [0009](./0009-team-exposes-one-loopback-api.md)       | The team exposes one loopback API; every client is thin                | Proposed                                                            |
@@ -26,6 +26,7 @@ Short records of architecturally-significant decisions — what we chose, why, a
 | [0011](./0011-tauri-desktop-shell.md)                 | Use Tauri 2 with React for the desktop shell                            | Accepted                                                            |
 | [0012](./0012-desktop-setup-matrix.md)                | Separate execution host from AI authentication in desktop setup        | Accepted                                                            |
 | [0013](./0013-codex-sqlite-state-off-the-host-bind.md)| Keep Codex's SQLite state on the VM's own disk, not on the host bind   | Proposed                                                           |
+| [0014](./0014-podman-only-runtime.md)                 | Podman is the only container engine of the CLI on macOS and Linux     | Accepted                                                            |
 
 ## When to add an ADR
 

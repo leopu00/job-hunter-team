@@ -133,7 +133,7 @@ does not change Defender.
 The installer:
 
 1. Detects your OS (macOS, or Linux with apt, dnf or pacman)
-2. Installs the **container runtime**. With `--runtime podman`, the path of the app: on macOS, Podman and its Compose provider through Homebrew (which must already be installed) and a dedicated rootless `jht-podman` machine with 2 CPUs, 4 GiB of memory and a disk of up to 30 GiB; on Linux, rootless Podman 5.0 or later and podman-compose for your user, with `sudo` that asks for no password for what is missing. Without the flag, on Linux, it sets up Docker Engine as earlier versions did, and on macOS it uses Colima (or your running Docker).
+2. Installs the **container runtime**, Podman, the only one since 0.4 (the same path as the app): on macOS, Podman and its Compose provider through Homebrew (which must already be installed) and a dedicated rootless `jht-podman` machine with 2 CPUs, 4 GiB of memory and a disk of up to 30 GiB; on Linux, rootless Podman 5.0 or later and podman-compose for your user, with `sudo` that asks for no password for what is missing. It never installs Docker or Colima.
 3. Downloads `docker-compose.yml`, the host wrapper and the host preflight helper.
 4. Creates `~/.jht/host.env` and registers the wrapper directory on `PATH` when needed.
 
@@ -173,12 +173,19 @@ You'll end up with two folders:
 > the host. Use it only on a dedicated machine or virtual machine.
 
 **macOS and Podman.** The app runs the installer with `--runtime podman`, and so
-do the commands above. Homebrew must already be installed: without it the
-installer stops before installing anything and says how to get it. Colima and
-Docker Desktop (`--runtime=colima`, `--runtime=docker-desktop`) are still
-accepted by the installer, but they are not the 0.4 path and the figures on this
-page are Podman's. A computer that already runs the team on one engine does not
-switch to the other: the installer refuses, and nothing is moved or deleted.
+do the commands above (Podman is also what the installer does without the flag).
+Homebrew must already be installed: without it the installer stops before
+installing anything and says how to get it (https://brew.sh, then a new
+Terminal window and the installer again). `--runtime=colima`,
+`--runtime=docker` and `--runtime=docker-desktop` are refused.
+
+**Coming from Docker (0.3.x, Colima, Docker Desktop or Docker Engine).** The
+installer sees the team on Docker, stops before changing anything and says so.
+Your data stays: `~/.jht` (configuration, database, profile) and
+`~/Documents/Job Hunter Team` (CVs, outputs) are folders of your computer. What
+stays behind in Docker's volumes has to be given again: the API key, the mail
+password, the Telegram tokens. To move: `jht uninstall --confirm` (it keeps the
+two folders), run the installer again, then `jht setup` with your API key.
 
 From a reviewed checkout of the repository, the same install is:
 

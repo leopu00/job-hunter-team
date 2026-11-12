@@ -99,8 +99,6 @@ RELEASE_REF="${JHT_BRANCH:-production}"
 WRAPPER_PATH="${JHT_WRAPPER_PATH:-$0}"
 WRAPPER_DIR="$(cd -P "$(dirname "$WRAPPER_PATH")" 2>/dev/null && pwd -P)"
 RUNTIME_SELECTION_FILE="$RUNTIME_DIR/container-runtime"
-# The docker socket of the system: where the docker of a Mac points once Colima has removed its context (wake_jht_colima).
-SYSTEM_DOCKER_SOCKET="/var/run/docker.sock"
 PODMAN_MACHINE_FILE="$RUNTIME_DIR/podman-machine"
 PODMAN_ADAPTER_BIN="$RUNTIME_DIR/bin"
 DOCKER_SHIM="${JHT_DOCKER_SHIM:-$PODMAN_ADAPTER_BIN/docker}"
@@ -382,6 +380,7 @@ jht_text_en() {
     download.saved_in) printf '%s' "Saved in: %s" ;;
     download.intel_mac) printf '%s' "The 0.4 macOS app only runs on Macs with Apple silicon (M1 and later); this is an Intel Mac, which 0.4 does not support. Nothing was downloaded." ;;
     up.done) printf '%s' "Job Hunter Team started." ;;
+    up.docker_legacy) printf '%s' "This computer runs JHT on Docker, and its engine does not answer. Since 0.4 JHT runs only on Podman. Your data stays: ~/.jht and ~/Documents/Job Hunter Team are folders of this computer. To move to Podman: jht uninstall --confirm (it keeps those two folders), run the installer again, then jht setup with your API key (the key, the mail password and the Telegram tokens stayed in Docker's volumes: give them again). To go on with Docker for now, start its engine yourself and run jht up again." ;;
     up.storage_damaged) printf '%s' "The team's image was damaged on the Podman machine's disk (the machine was stopped abruptly while it was writing it): I download it again and recreate the containers. Your data is in the volumes and in your folders, and it stays. It takes a few minutes." ;;
     up.storage_repair_failed) printf '%s' "The team's image could not be repaired on the Podman machine. 'jht uninstall --confirm' and then the installer make a new machine (your ~/.jht and Documents folders stay)." ;;
     down.done) printf '%s' "Job Hunter Team stopped." ;;
@@ -427,9 +426,6 @@ jht_text_en() {
     host_setup.skip_done) printf '%s' "host.env is in a folder owned by the container (uid 1001): the host preflight is already done, skipping it." ;;
     host_setup.skip_unknown) printf '%s' "host.env is in a folder owned by the container (uid 1001) and this user cannot write to it: skipping the host preflight, but host.env cannot be read or does not say the host type (local or VPS): the type stays 'unknown'." ;;
     container.starting) printf '%s' "Container '%s' is not running, starting it..." ;;
-    up.colima_starting) printf '%s' "Colima (profile %s), where the team runs, is off: starting it (about a minute)..." ;;
-    up.colima_failed) printf '%s' "Colima (profile %s) could not be started: %s. Try again with: jht up" ;;
-    up.colima_no_answer) printf '%s' "Colima (profile %s) is on, but its engine does not answer yet: run jht up again in a minute." ;;
     *) return 1 ;;
   esac
 }
@@ -464,6 +460,7 @@ jht_text_it() {
     download.saved_in) printf '%s' "Salvato in: %s" ;;
     download.intel_mac) printf '%s' "L'app per macOS della 0.4 gira solo su Mac con Apple silicon (M1 e successivi); questo e' un Mac Intel, non supportato nella 0.4. Non e' stato scaricato niente." ;;
     up.done) printf '%s' "Job Hunter Team avviato." ;;
+    up.docker_legacy) printf '%s' "Questo computer fa girare JHT su Docker, e il suo motore non risponde. Dalla 0.4 JHT gira solo su Podman. I tuoi dati restano: ~/.jht e ~/Documents/Job Hunter Team sono cartelle di questo computer. Per passare a Podman: jht uninstall --confirm (tiene quelle due cartelle), rilancia l'installer, poi jht setup con la tua chiave API (la chiave, la password della posta e i token di Telegram erano nei volumi di Docker: vanno ridati). Per restare su Docker per ora, accendi tu il suo motore e rilancia jht up." ;;
     up.storage_damaged) printf '%s' "L'immagine del team si e' rovinata sul disco della macchina Podman (la macchina e' stata spenta di colpo mentre la scriveva): la riscarico e ricreo i container. I tuoi dati stanno nei volumi e nelle tue cartelle, e restano. Ci vuole qualche minuto." ;;
     up.storage_repair_failed) printf '%s' "L'immagine del team non si ripara sulla macchina Podman. 'jht uninstall --confirm' e poi l'installer fanno una macchina nuova (le cartelle ~/.jht e Documenti restano)." ;;
     down.done) printf '%s' "Job Hunter Team fermato." ;;
@@ -509,9 +506,6 @@ jht_text_it() {
     host_setup.skip_done) printf '%s' "host.env sta in una cartella del container (uid 1001): il preflight dell'host e' gia' fatto, lo salto." ;;
     host_setup.skip_unknown) printf '%s' "host.env sta in una cartella del container (uid 1001) e questo utente non puo' scriverci: salto il preflight dell'host, ma host.env non si legge o non dice il tipo di host (locale o VPS): il tipo resta 'unknown'." ;;
     container.starting) printf '%s' "Container '%s' non attivo, lo avvio..." ;;
-    up.colima_starting) printf '%s' "Colima (profilo %s), dove gira la squadra, e' spenta: la accendo (circa un minuto)..." ;;
-    up.colima_failed) printf '%s' "Non sono riuscito ad accendere Colima (profilo %s): %s. Riprova con: jht up" ;;
-    up.colima_no_answer) printf '%s' "Colima (profilo %s) e' accesa, ma il suo motore non risponde ancora: rilancia jht up fra un minuto." ;;
     *) return 1 ;;
   esac
 }
@@ -1000,11 +994,9 @@ require_docker() {
       err "Podman machine JHT non attiva. Esegui 'jht up' per avviarla."
     elif [ "$PODMAN_RUNTIME_MODE" = "native" ]; then
       err "podman_rootless_unavailable: il runtime Podman rootless non risponde."
-    elif [ "$(uname)" = "Darwin" ]; then
-      # solo `jht up` puo' accendere il motore (la Colima della squadra la riaccende da solo); qui si osserva e basta
-      err "Il motore dei container non risponde. Avvialo con: jht up (con Docker Desktop: apri Docker Desktop)."
     else
-      err "Docker daemon non risponde. Avvialo (systemctl start docker / Docker Desktop)."
+      # Un'installazione di prima della 0.4, su Docker: niente si accende da qui, si dice come passare a Podman.
+      err "$(jht_say up.docker_legacy)"
     fi
     exit 1
   fi
@@ -1075,88 +1067,20 @@ wake_container_runtime_for_up() {
     else
       local start_status=$?
       [ "$start_status" -eq 79 ] && exit 79
-      err "Podman machine non avviabile; Colima non e' stato modificato."
+      err "Podman machine non avviabile."
       exit 1
     fi
   elif [ "$PODMAN_RUNTIME_MODE" = "native" ]; then
     err "podman_rootless_unavailable: il runtime Podman rootless non risponde."
     exit 1
-  elif [ "$(uname)" = "Darwin" ]; then
-    # Dopo un riavvio del Mac la Colima della squadra e' spenta: `jht up` la riaccende da solo (wake_jht_colima); un motore che non e'
-    # una Colima di JHT (Docker Desktop, un altro socket) non si accende mai da qui.
-    local wake_status=0
-    wake_jht_colima || wake_status=$?
-    case "$wake_status" in
-      0) return 0 ;;
-      2) exit 1 ;;
-    esac
-    err "Docker daemon non risponde. Avvialo: 'colima start' oppure 'open -a Docker' (Docker Desktop)."
-    exit 1
   else
-    err "Docker daemon non risponde. Avvialo (systemctl start docker / Docker Desktop)."
+    # Un'installazione di prima della 0.4, su Docker (Colima, Docker Desktop, Docker Engine): `jht up` non accende piu' quel
+    # motore. Dice cosa resta e come passare a Podman.
+    err "$(jht_say up.docker_legacy)"
     exit 1
   fi
   docker info >/dev/null 2>&1 \
     || { err "Podman machine avviata ma il client JHT non risponde."; exit 1; }
-}
-
-# Il motore Docker di un Mac e' la Colima del profilo a cui parla il docker di questo computer (…/.colima/<profilo>/docker.sock, come
-# legge uninstall_colima): dopo un riavvio e' spenta e `jht up` la accende, con una riga a schermo, e poi prosegue. Solo QUEL profilo
-# (colima start -p <profilo>), e solo se esiste gia' (la sua cartella con colima.yaml): `colima start` su un profilo che non c'e' ne
-# creerebbe uno nuovo. Mai un altro profilo (la Colima di un altro, quella di un collaudo), mai Docker Desktop.
-# Spenta con `colima stop` (ordinato), Colima toglie il suo contesto: il docker torna al socket di sistema (/var/run/docker.sock) e il
-# profilo non si legge piu' da li'. Allora lo dice SOLO il marcatore che l'installer scrive quando accende lui Colima (colima-started,
-# 2a riga), con il motore docker scelto (container-runtime). Senza marcatore niente: l'installer riusa anche un Docker Desktop, un
-# OrbStack o una Colima gia' accesa di un altro profilo senza scriverlo, e accendere una Colima indovinata cambierebbe il motore della
-# squadra (senza i suoi volumi). E niente se il socket di sistema esiste (un file o un link, come quello di Docker Desktop): quel
-# motore c'e' e non e' una Colima spenta.
-# 0 acceso e il motore risponde · 1 non e' una Colima di JHT spenta (nessun messaggio: lo dice chi chiama) · 2 detto qui perche' no.
-wake_jht_colima() {
-  local colima_bin docker_bin endpoint rest profile sock_dir start_error
-  [ "$HOST_KERNEL" = "Darwin" ] && [ -z "${PODMAN_RUNTIME_MODE:-}" ] || return 1
-  colima_bin="$(uninstall_tool colima)" || return 1
-  docker_bin="$(uninstall_tool docker)" || return 1
-  endpoint="$(uninstall_docker_endpoint "$docker_bin")" || return 1
-  case "$endpoint" in
-    unix:///*/.colima/*/docker.sock)
-      rest="${endpoint#*/.colima/}"
-      profile="${rest%%/*}"
-      [ "$rest" = "$profile/docker.sock" ] || return 1
-      sock_dir="${endpoint#unix://}"
-      sock_dir="${sock_dir%/docker.sock}"
-      ;;
-    "unix://$SYSTEM_DOCKER_SOCKET")
-      { [ -e "$SYSTEM_DOCKER_SOCKET" ] || [ -L "$SYSTEM_DOCKER_SOCKET" ]; } && return 1
-      profile="$(jht_colima_profile_of_runtime)" || return 1
-      sock_dir="$HOME/.colima/$profile"
-      ;;
-    *) return 1 ;;
-  esac
-  case "$profile" in ''|-*|*[!A-Za-z0-9_.-]*) return 1 ;; esac
-  [ -d "$sock_dir" ] && [ ! -L "$sock_dir" ] && [ -f "$sock_dir/colima.yaml" ] || return 1
-  # gia' acceso (il motore e' lento a rispondere, non spento): non lo si riaccende
-  "$colima_bin" status -p "$profile" >/dev/null 2>&1 && return 1
-  info "$(jht_say up.colima_starting "$profile")"
-  start_error="$("$colima_bin" start -p "$profile" 2>&1 >/dev/null)" || {
-    start_error="$(printf '%s\n' "$start_error" | tr -d '\r' | sed '/^[[:space:]]*$/d' | tail -n 1 | cut -c1-200)"
-    err "$(jht_say up.colima_failed "$profile" "${start_error:-colima start}")"
-    return 2
-  }
-  docker info >/dev/null 2>&1 || { err "$(jht_say up.colima_no_answer "$profile")"; return 2; }
-  return 0
-}
-
-# Il profilo Colima di questo runtime, quando il contesto docker non lo dice piu': solo con il motore docker scelto dall'installer
-# (container-runtime = docker, file vero) e solo dal marcatore colima-started (file vero, 1a riga «colima»): senza marcatore, nessuno.
-jht_colima_profile_of_runtime() {
-  local marker="$RUNTIME_DIR/colima-started" profile
-  [ -f "$RUNTIME_SELECTION_FILE" ] && [ ! -L "$RUNTIME_SELECTION_FILE" ] || return 1
-  [ "$(head -c 64 "$RUNTIME_SELECTION_FILE" 2>/dev/null | tr -d '\r\n')" = docker ] || return 1
-  [ -f "$marker" ] && [ ! -L "$marker" ] || return 1
-  [ "$(head -c 64 "$marker" 2>/dev/null | sed -n '1p' | tr -d '\r')" = colima ] || return 1
-  profile="$(head -c 64 "$marker" 2>/dev/null | sed -n '2p' | tr -d '\r')"
-  case "$profile" in ''|-*|*[!A-Za-z0-9_.-]*) return 1 ;; esac
-  printf '%s\n' "$profile"
 }
 
 # `podman-machine-recreate --confirm` deve leggere lo stato del broker prima
