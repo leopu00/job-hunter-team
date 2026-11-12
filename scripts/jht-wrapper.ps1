@@ -3030,7 +3030,7 @@ function Write-GameJsonAtomic {
   try {
     [IO.File]::WriteAllText($temp, (($Value | ConvertTo-Json -Compress) + "`n"), [Text.UTF8Encoding]::new($false))
     if (Test-Path -LiteralPath $Path) {
-      [IO.File]::Replace($temp, $Path, $null)
+      [IO.File]::Replace($temp, $Path, [NullString]::Value)
     } else {
       [IO.File]::Move($temp, $Path)
     }
@@ -3944,7 +3944,7 @@ function Replace-UpgradeFile {
   $temp = Join-Path $parent ('.' + (Split-Path -Leaf $Target) + '.upgrade.' + [guid]::NewGuid().ToString('N'))
   try {
     [IO.File]::Copy($Source, $temp, $true)
-    if (Test-Path $Target) { [IO.File]::Replace($temp, $Target, $null) } else { [IO.File]::Move($temp, $Target) }
+    if (Test-Path $Target) { [IO.File]::Replace($temp, $Target, [NullString]::Value) } else { [IO.File]::Move($temp, $Target) }
     return (Set-ProtectedRuntimeNodeOwner $Target)
   } catch {
     Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
@@ -3958,7 +3958,7 @@ function Write-UpgradeJournal {
   $temp = "$script:UpgradeJournal.tmp.$PID"
   try {
     [IO.File]::WriteAllText($temp, ($value | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
-    if (Test-Path $script:UpgradeJournal) { [IO.File]::Replace($temp, $script:UpgradeJournal, $null) } else { [IO.File]::Move($temp, $script:UpgradeJournal) }
+    if (Test-Path $script:UpgradeJournal) { [IO.File]::Replace($temp, $script:UpgradeJournal, [NullString]::Value) } else { [IO.File]::Move($temp, $script:UpgradeJournal) }
     return (Set-ProtectedRuntimeNodeOwner $script:UpgradeJournal)
   } catch {
     Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue

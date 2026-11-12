@@ -121,6 +121,15 @@ $done = Replace-UpgradeFile $source $target
 REPLACE_IS_WINDOWS = pytest.mark.skipif(sys.platform != "win32", reason="File.Replace without a backup name is a call of Windows")
 
 
+def test_every_file_replace_of_the_wrapper_passes_a_real_null_as_the_backup_name() -> None:
+    """`$null` is turned into "" by PowerShell for the string parameter of a .NET method, and File.Replace with the backup name "" throws («The path
+    is not of a legal form» in 5.1, «The path is empty» in 7): the function that put an upgrade file in place swallowed it and returned false. Read
+    from the script because a machine that is not Windows cannot make the call (the real case is above)."""
+    calls = re.findall(r"\[IO\.File\]::Replace\(([^()]*)\)", SOURCE)
+    assert len(calls) >= 3, "the wrapper replaces a file in at least three places: the scan lost them"
+    assert [c for c in calls if not c.rstrip().endswith("[NullString]::Value")] == []
+
+
 @pytest.mark.parametrize("exists", ["0", pytest.param("1", marks=REPLACE_IS_WINDOWS)])
 @pytest.mark.parametrize("elevated", ["0", "1"])
 def test_a_file_the_upgrade_puts_in_place_is_the_persons(tmp_path, elevated, exists):
