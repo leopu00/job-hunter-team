@@ -333,6 +333,23 @@ integration_extras_after_off() { # tool remove_image → appends to INTEGRATION_
   INTEGRATION_WHY="$INTEGRATION_WHY; l'immagine degli strumenti$mb resta sul disco per riaccenderlo senza riscaricarla: per liberare lo spazio, $command"
 }
 
+# Stops and removes one tool's container: what counts is what is left. podman-compose's stop/rm answered non-zero on a Mac with Podman
+# while the screen's container had stopped (`jht screen off` said «non si ferma» and the screen stayed «chiesto acceso ma spento»).
+# So after them the service is looked up again: none left is done; one left that is attested ours (running or stopped) is removed by
+# its id; one that cannot be attested is never touched.
+integration_stop_remove() { # service profile → 0 none left · 1 failed
+  local service="$1" profile="$2" id status=0
+  COMPOSE_PROFILES="$profile" compose stop "$service" >/dev/null 2>&1 || true
+  COMPOSE_PROFILES="$profile" compose rm -f "$service" >/dev/null 2>&1 || true
+  id="$(read_only_service_id "$service" any-config 2>/dev/null)" || status=$?
+  [ "$status" -ne 3 ] || return 0
+  [ "$status" -eq 0 ] && [ -n "$id" ] || return 1
+  docker rm -f "$id" >/dev/null 2>&1 || return 1
+  status=0
+  read_only_service_id "$service" any-config >/dev/null 2>&1 || status=$?
+  [ "$status" -eq 3 ]
+}
+
 integration_do_remove() { # id purge remove_image → 0 done · 1 failed
   local volume rc id ref
   INTEGRATION_WHY=""
@@ -348,18 +365,14 @@ integration_do_remove() { # id purge remove_image → 0 done · 1 failed
         || { INTEGRATION_WHY="il servizio Telegram non si ferma"; return 1; }
       ;;
     media)
-      COMPOSE_PROFILES=media compose stop "$MEDIA_SERVICE" >/dev/null 2>&1 \
-        && COMPOSE_PROFILES=media compose rm -f "$MEDIA_SERVICE" >/dev/null 2>&1 \
-        || { INTEGRATION_WHY="il container dei media non si ferma"; return 1; }
+      integration_stop_remove "$MEDIA_SERVICE" media || { INTEGRATION_WHY="il container dei media non si ferma"; return 1; }
       integration_marker_clear media ok
       ;;
     linkedin-login)
       linkedin_remove_all || { INTEGRATION_WHY="i container dell'accesso a LinkedIn non si fermano"; return 1; }
       ;;
     screen)
-      COMPOSE_PROFILES=screen compose stop "$SCREEN_SERVICE" >/dev/null 2>&1 \
-        && COMPOSE_PROFILES=screen compose rm -f "$SCREEN_SERVICE" >/dev/null 2>&1 \
-        || { INTEGRATION_WHY="il container dello schermo non si ferma"; return 1; }
+      integration_stop_remove "$SCREEN_SERVICE" screen || { INTEGRATION_WHY="il container dello schermo non si ferma"; return 1; }
       integration_marker_clear screen ok
       ;;
     mail)
