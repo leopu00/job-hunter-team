@@ -1,7 +1,7 @@
 # Adding a provider without breaking the runtime contract
 
 Job Hunter Team does not have an open-ended provider plugin API. [ADR-0002](../adr/0002-three-supported-agent-clis.md)
-closed the supported runtime set to three CLIs; since 0.4 the only offered CLI is **Codex** (one subscription, ChatGPT's). Kimi is archived and Claude Code is not offered: their code stays so that a team already on them keeps working. This guide
+closed the supported runtime set to three CLIs; since 0.4 the only offered CLI is **Codex** (one subscription, ChatGPT's). Kimi's CLI is archived and Claude Code is not offered: their code stays so that a team already on them keeps working. Next to the CLIs there is the **Pi harness**, which runs the agents on an API key (GLM and Kimi today): a provider for Pi is a row in a table, see [the last section](#a-provider-on-the-pi-harness-api-key). This guide
 is therefore both an implementation checklist and a gate: a fourth CLI starts
 with a new ADR and field evidence, not with an enum edit.
 
@@ -31,8 +31,8 @@ Before changing code, the ADR must record evidence for all of these:
 
 1. The official CLI can load the per-agent Markdown contract without a custom
    prompt injector.
-2. Authentication uses an officially supported subscription/login flow; API
-   keys remain only a power-user escape hatch under [ADR-0004](../adr/0004-subscription-only-no-api-keys.md).
+2. Authentication uses an officially supported subscription/login flow (an
+   API key goes through the Pi harness instead: last section).
 3. A multi-hour tmux session survives tool calls, context growth, restart and
    resume on Linux (the container runtime).
 4. Usage/quota data has a stable, legal source and an explicit reset boundary.
@@ -89,3 +89,13 @@ Review each changed boundary for aliases, credential location, executable,
 quota reset semantics, update command and failure behavior. Record live
 evidence separately; never commit credentials, provider session logs or user
 data.
+
+## A provider on the Pi harness (API key)
+
+The providers Pi runs with an API key are declared in one table, `shared/runtime/provider-models.list`, read by the CLI (`shared/runtime/provider-models.js`) and by the launcher (`.launcher/role-models.sh`):
+
+- `provider|<id>|<name for pi>|<variable of the key>|<label>`;
+- `model|<id>|<class>|<model id in pi>` for each class of `shared/runtime/role-models.list` (`sol`, `terra`, `luna`);
+- optionally `rolemodel|<id>|<role>|<class>` to give a role another class on that provider (a pin in `team.role_models` still wins).
+
+Also: the prices in `shared/config/model-prices.json` (the token meter and the daily ceiling `no_quota_cap` read them) and the tests that hold the table (`tests/test_pi_api_providers.py`, `tests/test_role_models_by_provider.py`). An API key reports no usage window, so the team is bounded only by that ceiling and by the one set with the provider.

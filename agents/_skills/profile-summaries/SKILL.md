@@ -14,12 +14,12 @@ Write the four files in the user's language — `python3 /app/shared/skills/text
 
 ## The 4 files (filenames are FIXED)
 
-| File             | UI title shown to the user  | What it contains                                                            | Length cap |
+| File             | UI title shown to the user (in their language) | What it contains                                             | Length cap |
 |------------------|----------------------------|-----------------------------------------------------------------------------|-----------|
-| `about.md`       | **Chi sei**                 | Persona summary: ruolo attuale/target, anni, settore, tratto distintivo     | ~400 char |
-| `preferences.md` | **Preferenze raccontate**   | Modalità di lavoro, trasferimento, retribuzione, orari, ambiente            | ~400 char |
-| `goals.md`       | **Obiettivi e dream job**   | Cosa cerca nei prossimi 1-3 anni, contesto/azienda dei sogni                | ~500 char |
-| `strengths.md`   | **Punti di forza**          | 2-4 qualità concrete con esempio breve per ciascuna                          | ~500 char |
+| `about.md`       | **About you**               | Persona summary: current/target role, years, sector, distinctive trait      | ~400 char |
+| `preferences.md` | **Preferences in your words** | Work mode, relocation, pay, hours, environment                            | ~400 char |
+| `goals.md`       | **Goals and dream job**     | What they look for in the next 1-3 years, dream context/company             | ~500 char |
+| `strengths.md`   | **Strengths**               | 2-4 concrete qualities with a short example for each                        | ~500 char |
 
 Path: `$JHT_HOME/profile/summaries/<file>.md`. Crea la dir se manca:
 ```bash
@@ -30,75 +30,75 @@ Filenames diversi (es. `about-mario.md`, `goals_v2.md`) sono **silenziosamente i
 
 ## Style constraints (binding)
 
-- **Markdown semplice**: paragrafi separati da riga vuota, `**grassetto**` per sottolineare, liste solo se aiutano la leggibilità.
-- **Nessuna tabella, nessun header `#`** — questi MD vivono in card UI già titolate.
-- **Lunghezza**: rispetta il cap. Niente muri di testo.
-- **Prima persona dell'utente**: `"sono uno sviluppatore…"`, `"preferisco lavorare da remoto…"`. Mai terza persona (`"Mario è…"`).
-- **Tono**: naturale, come se l'utente parlasse di sé a un amico esperto del settore.
-- **Mai path / nomi file / jargon** nel testo — l'utente legge "il riassunto", non "about.md".
+- **Plain Markdown**: paragraphs separated by a blank line, `**bold**` for emphasis, lists only when they help readability.
+- **No tables, no `#` headers** — these MDs live in UI cards that already have a title.
+- **Length**: respect the cap. No walls of text.
+- **The user's first person**: `"I am a developer…"`, `"I prefer to work remotely…"`. Never the third person (`"Mario is…"`).
+- **Tone**: natural, as if the user were talking about themselves to a friend who knows the field.
+- **Never paths / file names / jargon** in the text — the user reads "the summary", not "about.md".
 
 ## Update rule — rewrite in full, never append
 
-Quando arriva un'informazione che cambia il senso di un MD esistente, **riscrivi il file da capo** (`Write` tool, NOT `Edit` append). Sono snapshot del presente, non log cronologici. Un append rischia di lasciare paragrafi obsoleti accanto al nuovo.
+When a piece of information changes the meaning of an existing MD, **rewrite the file from scratch** (`Write` tool, NOT `Edit` append). They are snapshots of the present, not chronological logs. An append risks leaving obsolete paragraphs next to the new one.
 
 A salary target given by the person must also be saved in the YAML field `preferences.salary_annual_eur`, with the same amount, currency and period. The narrative alone is not the structured preference; keep both in step, without guessing or converting.
 
 ## Trigger — quando scrivere ciascun file
 
-| File              | Quando scrivilo per la prima volta / aggiornalo                                                                                                                                                       |
+| File              | When to write it the first time / update it                                                                                                                                                            |
 |-------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `about.md`        | Hai ruolo + anni + ≥1 esperienza. Riscrivilo ogni volta che cambia qualcosa di sostanziale (ruolo, seniority, settore).                                                                                |
-| `preferences.md`  | Hai discusso con l'utente almeno una di: modalità di lavoro, trasferimento, retribuzione. Aggiorna ogni volta che una di queste cambia.                                                                |
-| `goals.md`        | L'utente ha raccontato aspirazioni / contesto ideale / dream job (anche parziale). Non forzare la mano: se non emerge spontaneamente, **chiedi una sola volta** "c'è un tipo di contesto o azienda in cui ti vedresti particolarmente bene?". |
-| `strengths.md`    | Hai raccolto **2+ esperienze o progetti rilevanti**. Estrai 2-4 qualità ricorrenti dal pattern.                                                                                                       |
+| `about.md`        | You have role + years + ≥1 experience. Rewrite it whenever something substantial changes (role, seniority, sector).                                                                                    |
+| `preferences.md`  | You discussed with the user at least one of: work mode, relocation, pay. Update it whenever one of them changes.                                                                                      |
+| `goals.md`        | The user told you about aspirations / ideal context / dream job (even partly). Do not force it: if it does not come up by itself, **ask once** "is there a kind of context or company where you would see yourself particularly well?". |
+| `strengths.md`    | You collected **2+ relevant experiences or projects**. Extract 2-4 recurring qualities from the pattern.                                                                                               |
 
-> ⚠️ Quando scrivi `strengths.md`, popola SEMPRE anche l'array strutturato `candidate.strengths` nel YAML (le stesse 2-4 qualità come voci brevi) — vedi `profile-yaml`. Il MD è il racconto per lo Scrittore; l'array è ciò che la UI mostra come "Punti di forza" e che il completamento profilo controlla. Scrivere solo il MD lascia la sezione vuota.
+> ⚠️ When you write `strengths.md`, ALWAYS also fill the structured array `candidate.strengths` in the YAML (the same 2-4 qualities as short items) — see `profile-yaml`. The MD is the narrative for the Writer; the array is what the UI shows as "Strengths" and what the profile completion checks. Writing only the MD leaves that section empty.
 
 ## Boot rule — primo CV caricato
 
-Quando l'utente carica un CV, dopo aver popolato il YAML scrivi MINIMO **`about.md` + `strengths.md`** nello stesso turno. Hai abbastanza dati (ruolo, anni, esperienze, competenze, tono) per farlo subito; non rimandare. Saltare questo step significa che lo Scrittore CV a valle non avrà mai il contesto narrativo del candidato → produrrà CV sterili. Tu sei l'unico punto in cui quella narrativa viene catturata.
+When the user uploads a CV, after filling the YAML write AT LEAST **`about.md` + `strengths.md`** in the same turn. You have enough data (role, years, experiences, skills, tone) to do it at once; do not postpone it. Skipping this step means the CV Writer downstream will never have the candidate's narrative context → it will produce sterile CVs. You are the only point where that narrative is captured.
 
 `preferences.md` e `goals.md` arriveranno nei turni successivi (dopo la discussione specifica).
 
 ## Examples
 
-### `about.md` (settore tech)
+### `about.md` (tech sector)
 ```markdown
-Sono uno sviluppatore backend con 4 anni di esperienza in **Python** e
-sistemi distribuiti, ultimamente concentrato su pipeline ETL e API
-ad alto throughput. Vengo da un percorso ibrido tra **data engineering**
-e backend "classico", e mi muovo bene quando il problema sta nel mezzo:
-modellazione del dato + servizio che lo espone.
+I am a backend developer with 4 years of experience in **Python** and
+distributed systems, lately focused on ETL pipelines and high-throughput
+APIs. I come from a mixed path between **data engineering** and
+"classic" backend, and I do well when the problem sits in between:
+modelling the data + the service that exposes it.
 
-Cerco un ruolo backend o data senior in cui poter portare ownership
-end-to-end del servizio, non solo "ticket".
+I am looking for a senior backend or data role where I can own the
+service end to end, not just "tickets".
 ```
 
-### `strengths.md` (settore non-tech, esempio cucina)
+### `strengths.md` (non-tech sector, a kitchen example)
 ```markdown
-**Resistenza nei picchi.** Ho gestito brigata di 12 persone in un
-ristorante con 200 coperti la sera: ho imparato a tenere ritmo e
-qualità anche quando si fa caldo davvero.
+**Holding up at peak times.** I ran a brigade of 12 people in a
+restaurant with 200 covers in the evening: I learned to keep pace and
+quality even when it gets really hot.
 
-**Costo materia prima.** Negli ultimi 3 anni ho ridotto il food cost
-di partita salata dal 34% al 28% lavorando sul menu e sul rapporto
-con i fornitori, senza toccare la qualità.
+**Cost of ingredients.** In the last 3 years I brought the food cost
+of the savoury station from 34% to 28% by working on the menu and on
+the relationship with suppliers, without touching quality.
 
-**Team mentoring.** Ho formato 2 sous-chef che ora gestiscono
-autonomamente le loro brigate.
+**Team mentoring.** I trained 2 sous-chefs who now run their
+brigades on their own.
 ```
 
 ## Anti-patterns
 
-- ❌ Scrivere terza persona ("Mario è uno sviluppatore…") — il frontend rende il testo come voce diretta del candidato, terza persona suona alienante.
-- ❌ Append a `Edit` invece di `Write` — finisce con due intro contraddittorie nello stesso file.
-- ❌ Tabelle / header `#` / liste numerate verbose — la card UI ha già il proprio chrome.
-- ❌ Saltare `about.md` / `strengths.md` dopo upload CV "perché tanto è scritto nel YAML" — il YAML non ha tono, gli scrittori producono CV sterili.
-- ❌ Inserire path o nomi di file (`/jht_home/profile/summaries/about.md`) nel testo — l'utente non sa cosa siano.
-- ❌ Scrivere oltre il cap di lunghezza — la card UI tronca / scrolla orizzontalmente, il messaggio si perde.
+- ❌ Writing in the third person ("Mario is a developer…") — the frontend renders the text as the candidate's own voice; the third person sounds alienating.
+- ❌ Appending with `Edit` instead of `Write` — the file ends up with two contradictory intros.
+- ❌ Tables / `#` headers / verbose numbered lists — the UI card already has its own chrome.
+- ❌ Skipping `about.md` / `strengths.md` after a CV upload "because it's in the YAML anyway" — the YAML has no tone, the writers produce sterile CVs.
+- ❌ Putting paths or file names (`/jht_home/profile/summaries/about.md`) in the text — the user does not know what they are.
+- ❌ Writing past the length cap — the UI card cuts / scrolls sideways, the message is lost.
 
 ## See also
 
-- `profile-yaml` — sister skill: dato strutturato che si aggiorna in parallelo a questi MD.
-- `onboarding-flow` — quando in conversazione raccogliere i dati che alimentano questi MD.
-- `agents/scrittore/scrittore.md` — l'agente downstream che legge questi MD per scrivere CV con voce.
+- `profile-yaml` — sister skill: the structured data, updated alongside these MDs.
+- `onboarding-flow` — when in the conversation to collect the data that feeds these MDs.
+- `agents/scrittore/scrittore.md` — the downstream agent that reads these MDs to write CVs with a voice.

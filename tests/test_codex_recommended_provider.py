@@ -68,7 +68,7 @@ def test_the_site_texts_do_not_offer_kimi_or_claude(path):
 
 
 def test_the_setup_guide_and_faq_name_codex_as_the_provider():
-    assert len(re.findall(r"— Codex\.", text("web/app/docs/guides/faq/page.i18n.ts"))) == 7
+    assert len(re.findall(r"\n    a1: \"[^\"]*— [^\"]*Codex", text("web/app/docs/guides/faq/page.i18n.ts"))) == 7
     assert text("web/app/setup-guide/guide-content.ts").count("Codex") >= 7
 
 
@@ -83,12 +83,14 @@ def test_the_pricing_page_shows_codex_alone_and_recommended():
 def test_the_guides_and_the_changelog_say_codex_only():
     quickstart = text("docs/guides/QUICKSTART.md")
     table = quickstart[quickstart.index("| Provider   |"):]
-    assert "| 🔵  | **Codex**  | Plus / Pro | ~€100   | ✅ **Recommended**" in table
+    assert "| 🔵  | **Codex**  | ChatGPT Plus / Pro subscription, ~€100/mo | ✅ **Recommended**" in table
     assert "**Claude**" not in table[:table.index("\n\n")]
+    # the other way, an API key on the Pi harness, is set from the CLI and never called recommended
+    assert "**GLM (Z.ai) or Kimi (Moonshot)** on the Pi harness" in table and "Recommended" not in table.split("**GLM")[1].split("\n")[0]
     assert "`jht providers use codex`" in quickstart and "providers use claude" not in quickstart
     providers = text("docs/about/PROVIDERS.md")
-    assert "| 🎯 **Recommended**" in providers and "🔵 **Codex Plus / Pro €100**" in providers
-    assert "One subscription in 0.4: Codex." in providers
+    assert "| 🔵 **Codex (OpenAI)** — recommended |" in providers
+    assert "Claude Code and the Kimi subscription CLI are not offered" in providers
     assert "A dedicated Codex (ChatGPT) subscription." in text("docs/guides/VPS-SETUP-WIZARD.md")
     changelog = text("CHANGELOG.md")
     release = changelog[changelog.index("## [0.4.0]"):]

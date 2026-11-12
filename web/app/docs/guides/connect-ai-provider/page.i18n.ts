@@ -31,6 +31,10 @@ export type Copy = {
   switchingP: string;
   neverLeavesStrong: string;
   neverLeavesRest: string;
+  apiKey: string;
+  apiKeyTitle: string;
+  apiKeyP1: string;
+  apiKeyP2: string;
 };
 
 export const T: Record<Locale, Copy> = {
@@ -42,7 +46,7 @@ export const T: Record<Locale, Copy> = {
       "The platform is free and open source. The intelligence behind the agents comes from an LLM provider you choose and sign into. This page connects it.",
     whichProvider: "🤔 Which provider?",
     whichProviderP:
-      "Three are supported and tested. Pick one — you can switch later in a couple of commands.",
+      "Two ways: Codex with your subscription (recommended), or GLM with an API key. You can switch later in a couple of commands.",
     codex:
       "(OpenAI) — recommended: proven over a one-month autonomous run, with your ChatGPT Plus or Pro subscription.",
     dedicatedStrong: "Use a dedicated subscription.",
@@ -56,7 +60,7 @@ export const T: Record<Locale, Copy> = {
     connectP2: "you're likely done. To do it (or redo it) by hand:",
     step1: "1. Select the provider",
     step2: "2. Sign in (OAuth device flow)",
-    step2P1Strong: "subscriptions, not API keys",
+    step2P1Strong: "Codex: your subscription",
     step2P1Rest:
       ": you log into your provider account through a browser device-flow, the same way their own CLI does. The wizard launches this for you; to force a clean login:",
     step2P2:
@@ -67,6 +71,14 @@ export const T: Record<Locale, Copy> = {
     neverLeavesStrong: "What never leaves your machine:",
     neverLeavesRest:
       "provider credentials live inside your container. We never see them, and they're never pushed to the cloud or to git.",
+    apiKey:
+      "(Z.ai) — with an API key, paid per call; set from the command line, not in the setup wizard.",
+    apiKeyTitle:
+      "🔑 With an API key (GLM)",
+    apiKeyP1:
+      "The agents run on the Pi harness. Give the key from a file or from stdin, never on the command line (it would stay in your shell history):",
+    apiKeyP2:
+      "An API key has no usage window: only a daily ceiling stops the spending. Set it in the configuration as no_quota_cap (for example eur: 10) or ask the Captain; at the ceiling the team pauses and nothing is lost. Measured: about 0.10 USD per scored position on GLM.",
   },
   it: {
     title: "Collega il tuo provider AI",
@@ -75,7 +87,7 @@ export const T: Record<Locale, Copy> = {
       "La piattaforma è gratuita e open source. L'intelligenza dietro gli agenti viene da un provider LLM che scegli e a cui accedi. Questa pagina lo collega.",
     whichProvider: "🤔 Quale provider?",
     whichProviderP:
-      "Tre sono supportati e testati. Scegline uno — potrai cambiarlo più avanti con un paio di comandi.",
+      "Due modi: Codex con il tuo abbonamento (consigliato), oppure GLM con una chiave API. Potrai cambiarlo più avanti con un paio di comandi.",
     codex:
       "(OpenAI) — consigliato: provato in un mese di lavoro autonomo, con il tuo abbonamento ChatGPT Plus o Pro.",
     dedicatedStrong: "Usa un abbonamento dedicato.",
@@ -89,7 +101,7 @@ export const T: Record<Locale, Copy> = {
     connectP2: "probabilmente hai finito. Per farlo (o rifarlo) a mano:",
     step1: "1. Seleziona il provider",
     step2: "2. Accedi (OAuth device flow)",
-    step2P1Strong: "abbonamenti, non API key",
+    step2P1Strong: "Codex: il tuo abbonamento",
     step2P1Rest:
       ": accedi al tuo account del provider tramite un device-flow nel browser, come fa la loro stessa CLI. Il wizard lo avvia per te; per forzare un login pulito:",
     step2P2:
@@ -100,6 +112,14 @@ export const T: Record<Locale, Copy> = {
     neverLeavesStrong: "Cosa non lascia mai la tua macchina:",
     neverLeavesRest:
       "le credenziali del provider vivono dentro il tuo container. Noi non le vediamo mai e non vengono mai inviate al cloud o a git.",
+    apiKey:
+      "(Z.ai) — con una chiave API, a consumo; si imposta dalla riga di comando, non nel wizard.",
+    apiKeyTitle:
+      "🔑 Con una chiave API (GLM)",
+    apiKeyP1:
+      "Gli agenti girano sull'harness Pi. Dai la chiave da un file o da stdin, mai sulla riga di comando (resterebbe nella cronologia della shell):",
+    apiKeyP2:
+      "Una chiave API non ha una finestra d'uso: la spesa la ferma solo un tetto giornaliero. Impostalo nella configurazione come no_quota_cap (per esempio eur: 10) o chiedilo al Capitano; al tetto la squadra si mette in pausa e non si perde niente. Misurato: circa 0,10 USD per posizione valutata su GLM.",
   },
   es: {
     title: "Conecta tu proveedor de IA",
@@ -108,7 +128,7 @@ export const T: Record<Locale, Copy> = {
       "La plataforma es gratuita y de código abierto. La inteligencia detrás de los agentes proviene de un proveedor de LLM que eliges y en el que inicias sesión. Esta página lo conecta.",
     whichProvider: "🤔 ¿Qué proveedor?",
     whichProviderP:
-      "Tres están soportados y probados. Elige uno — puedes cambiarlo más adelante con un par de comandos.",
+      "Dos formas: Codex con tu suscripción (recomendada) o GLM con una clave de API. Puedes cambiarlo más adelante con un par de comandos.",
     codex:
       "(OpenAI) — recomendado: probado durante un mes de trabajo autónomo, con tu suscripción ChatGPT Plus o Pro.",
     dedicatedStrong: "Usa una suscripción dedicada.",
@@ -123,7 +143,7 @@ export const T: Record<Locale, Copy> = {
       "probablemente ya está hecho. Para hacerlo (o rehacerlo) a mano:",
     step1: "1. Selecciona el proveedor",
     step2: "2. Inicia sesión (OAuth device flow)",
-    step2P1Strong: "suscripciones, no claves de API",
+    step2P1Strong: "Codex: tu suscripción",
     step2P1Rest:
       ": inicias sesión en la cuenta de tu proveedor mediante un device-flow del navegador, igual que hace su propia CLI. El asistente lo lanza por ti; para forzar un inicio de sesión limpio:",
     step2P2:
@@ -134,6 +154,14 @@ export const T: Record<Locale, Copy> = {
     neverLeavesStrong: "Lo que nunca sale de tu máquina:",
     neverLeavesRest:
       "las credenciales del proveedor viven dentro de tu contenedor. Nunca las vemos y nunca se envían a la nube ni a git.",
+    apiKey:
+      "(Z.ai) — con una clave de API, de pago por uso; se configura desde la línea de comandos, no en el asistente.",
+    apiKeyTitle:
+      "🔑 Con una clave de API (GLM)",
+    apiKeyP1:
+      "Los agentes funcionan en el harness Pi. Da la clave desde un archivo o desde stdin, nunca en la línea de comandos (quedaría en el historial de la shell):",
+    apiKeyP2:
+      "Una clave de API no tiene ventana de uso: solo un tope diario detiene el gasto. Configúralo como no_quota_cap (por ejemplo eur: 10) o pídeselo al Capitán; al llegar al tope el equipo se pausa y no se pierde nada. Medido: unos 0,10 USD por posición puntuada con GLM.",
   },
   fr: {
     title: "Connectez votre fournisseur d'IA",
@@ -143,7 +171,7 @@ export const T: Record<Locale, Copy> = {
       "La plateforme est gratuite et open source. L'intelligence derrière les agents provient d'un fournisseur de LLM que vous choisissez et auquel vous vous connectez. Cette page le connecte.",
     whichProvider: "🤔 Quel fournisseur ?",
     whichProviderP:
-      "Trois sont pris en charge et testés. Choisissez-en un — vous pourrez en changer plus tard en quelques commandes.",
+      "Deux façons : Codex avec votre abonnement (recommandé), ou GLM avec une clé d'API. Vous pourrez en changer plus tard en quelques commandes.",
     codex:
       "(OpenAI) — recommandé : éprouvé sur un mois de travail autonome, avec votre abonnement ChatGPT Plus ou Pro.",
     dedicatedStrong: "Utilisez un abonnement dédié.",
@@ -158,7 +186,7 @@ export const T: Record<Locale, Copy> = {
       "c'est probablement déjà fait. Pour le faire (ou le refaire) à la main :",
     step1: "1. Sélectionnez le fournisseur",
     step2: "2. Connectez-vous (OAuth device flow)",
-    step2P1Strong: "des abonnements, pas des clés d'API",
+    step2P1Strong: "Codex : votre abonnement",
     step2P1Rest:
       " : vous vous connectez au compte de votre fournisseur via un device-flow du navigateur, exactement comme le fait leur propre CLI. L'assistant le lance pour vous ; pour forcer une connexion propre :",
     step2P2:
@@ -169,6 +197,14 @@ export const T: Record<Locale, Copy> = {
     neverLeavesStrong: "Ce qui ne quitte jamais votre machine :",
     neverLeavesRest:
       "les identifiants du fournisseur vivent à l'intérieur de votre conteneur. Nous ne les voyons jamais, et ils ne sont jamais envoyés vers le cloud ni vers git.",
+    apiKey:
+      "(Z.ai) — avec une clé d'API, payée à l'usage ; se configure en ligne de commande, pas dans l'assistant.",
+    apiKeyTitle:
+      "🔑 Avec une clé d'API (GLM)",
+    apiKeyP1:
+      "Les agents tournent sur le harness Pi. Donnez la clé depuis un fichier ou depuis stdin, jamais sur la ligne de commande (elle resterait dans l'historique du shell) :",
+    apiKeyP2:
+      "Une clé d'API n'a pas de fenêtre d'usage : seul un plafond journalier arrête la dépense. Réglez-le dans la configuration avec no_quota_cap (par exemple eur: 10) ou demandez-le au Capitaine ; au plafond l'équipe se met en pause et rien n'est perdu. Mesuré : environ 0,10 USD par poste évalué avec GLM.",
   },
   de: {
     title: "Verbinde deinen KI-Anbieter",
@@ -178,7 +214,7 @@ export const T: Record<Locale, Copy> = {
       "Die Plattform ist kostenlos und Open Source. Die Intelligenz hinter den Agenten stammt von einem LLM-Anbieter, den du auswählst und bei dem du dich anmeldest. Diese Seite verbindet ihn.",
     whichProvider: "🤔 Welcher Anbieter?",
     whichProviderP:
-      "Drei werden unterstützt und sind getestet. Wähle einen — du kannst später mit ein paar Befehlen wechseln.",
+      "Zwei Wege: Codex mit deinem Abonnement (empfohlen) oder GLM mit einem API-Key. Du kannst später mit ein paar Befehlen wechseln.",
     codex:
       "(OpenAI) — empfohlen: einen Monat lang im autonomen Betrieb erprobt, mit deinem ChatGPT-Plus- oder -Pro-Abo.",
     dedicatedStrong: "Verwende ein eigenes Abonnement.",
@@ -193,7 +229,7 @@ export const T: Record<Locale, Copy> = {
       "ausgeführt hast, bist du wahrscheinlich fertig. Um es (erneut) von Hand zu tun:",
     step1: "1. Anbieter auswählen",
     step2: "2. Anmelden (OAuth Device Flow)",
-    step2P1Strong: "Abonnements, keine API-Keys",
+    step2P1Strong: "Codex: dein Abonnement",
     step2P1Rest:
       ": Du meldest dich über einen Browser-Device-Flow bei deinem Anbieter-Konto an, genau wie es deren eigene CLI tut. Der Assistent startet das für dich; um eine saubere Anmeldung zu erzwingen:",
     step2P2:
@@ -204,6 +240,14 @@ export const T: Record<Locale, Copy> = {
     neverLeavesStrong: "Was deine Maschine niemals verlässt:",
     neverLeavesRest:
       "die Zugangsdaten des Anbieters bleiben in deinem Container. Wir sehen sie nie, und sie werden niemals in die Cloud oder nach git übertragen.",
+    apiKey:
+      "(Z.ai) — mit einem API-Key, nach Verbrauch bezahlt; wird über die Kommandozeile eingerichtet, nicht im Assistenten.",
+    apiKeyTitle:
+      "🔑 Mit einem API-Key (GLM)",
+    apiKeyP1:
+      "Die Agenten laufen auf dem Pi-Harness. Gib den Key aus einer Datei oder über stdin, nie auf der Kommandozeile (er bliebe im Shell-Verlauf):",
+    apiKeyP2:
+      "Ein API-Key hat kein Nutzungsfenster: nur ein Tageslimit stoppt die Ausgaben. Setze es in der Konfiguration als no_quota_cap (zum Beispiel eur: 10) oder bitte den Kapitän darum; am Limit pausiert das Team, nichts geht verloren. Gemessen: etwa 0,10 USD pro bewerteter Stelle mit GLM.",
   },
   hu: {
     title: "Csatlakoztasd az AI-szolgáltatódat",
@@ -213,7 +257,7 @@ export const T: Record<Locale, Copy> = {
       "A platform ingyenes és nyílt forráskódú. Az ügynökök mögötti intelligencia egy LLM-szolgáltatótól származik, amelyet te választasz ki, és amelybe bejelentkezel. Ez az oldal köti össze.",
     whichProvider: "🤔 Melyik szolgáltató?",
     whichProviderP:
-      "Három támogatott és tesztelt. Válassz egyet — később pár paranccsal válthatsz.",
+      "Két mód: Codex az előfizetéseddel (ajánlott), vagy GLM API-kulccsal. Később pár paranccsal válthatsz.",
     codex:
       "(OpenAI) — ajánlott: egy hónapnyi önálló munkán bizonyított, a ChatGPT Plus vagy Pro előfizetéseddel.",
     dedicatedStrong: "Használj dedikált előfizetést.",
@@ -228,7 +272,7 @@ export const T: Record<Locale, Copy> = {
       "parancsot, valószínűleg készen vagy. Hogy kézzel megtedd (vagy újra megtedd):",
     step1: "1. Válaszd ki a szolgáltatót",
     step2: "2. Jelentkezz be (OAuth device flow)",
-    step2P1Strong: "előfizetések, nem API-kulcsok",
+    step2P1Strong: "Codex: az előfizetésed",
     step2P1Rest:
       ": a böngészős device-flow segítségével jelentkezel be a szolgáltatói fiókodba, ugyanúgy, ahogy a saját CLI-jük teszi. A varázsló ezt elindítja helyetted; egy tiszta bejelentkezés kikényszerítéséhez:",
     step2P2:
@@ -239,6 +283,14 @@ export const T: Record<Locale, Copy> = {
     neverLeavesStrong: "Ami soha nem hagyja el a gépedet:",
     neverLeavesRest:
       "a szolgáltató hitelesítő adatai a konténereden belül élnek. Mi soha nem látjuk őket, és soha nem kerülnek fel a felhőbe vagy a git-be.",
+    apiKey:
+      "(Z.ai) — API-kulccsal, használat szerint fizetve; parancssorból állítható be, nem a varázslóban.",
+    apiKeyTitle:
+      "🔑 API-kulccsal (GLM)",
+    apiKeyP1:
+      "Az ügynökök a Pi harnessen futnak. A kulcsot fájlból vagy stdinről add meg, soha ne a parancssorban (ott maradna a shell előzményeiben):",
+    apiKeyP2:
+      "Egy API-kulcsnak nincs használati ablaka: a költést csak egy napi plafon állítja meg. Állítsd be a konfigurációban no_quota_cap néven (például eur: 10), vagy kérd a Kapitánytól; a plafonnál a csapat szünetel, semmi sem vész el. Mérve: kb. 0,10 USD egy értékelt pozícióra GLM-mel.",
   },
   pt: {
     title: "Conecte o seu provedor de IA",
@@ -247,7 +299,7 @@ export const T: Record<Locale, Copy> = {
       "A plataforma é gratuita e de código aberto. A inteligência por trás dos agentes vem de um provedor de LLM que você escolhe e no qual faz login. Esta página o conecta.",
     whichProvider: "🤔 Qual provedor?",
     whichProviderP:
-      "Três são suportados e testados. Escolha um — você pode trocar mais tarde com alguns comandos.",
+      "Duas formas: Codex com a sua assinatura (recomendada) ou GLM com uma chave de API. Você pode trocar mais tarde com alguns comandos.",
     codex:
       "(OpenAI) — recomendado: provado durante um mês de trabalho autônomo, com sua assinatura ChatGPT Plus ou Pro.",
     dedicatedStrong: "Use uma assinatura dedicada.",
@@ -262,7 +314,7 @@ export const T: Record<Locale, Copy> = {
       "provavelmente já terminou. Para fazê-lo (ou refazê-lo) manualmente:",
     step1: "1. Selecione o provedor",
     step2: "2. Faça login (OAuth device flow)",
-    step2P1Strong: "assinaturas, não chaves de API",
+    step2P1Strong: "Codex: a sua assinatura",
     step2P1Rest:
       ": você faz login na conta do seu provedor por meio de um device-flow do navegador, da mesma forma que a própria CLI deles. O assistente inicia isso para você; para forçar um login limpo:",
     step2P2:
@@ -273,5 +325,13 @@ export const T: Record<Locale, Copy> = {
     neverLeavesStrong: "O que nunca sai da sua máquina:",
     neverLeavesRest:
       "as credenciais do provedor vivem dentro do seu contêiner. Nós nunca as vemos, e elas nunca são enviadas para a nuvem ou para o git.",
+    apiKey:
+      "(Z.ai) — com uma chave de API, paga por uso; configura-se pela linha de comando, não no assistente.",
+    apiKeyTitle:
+      "🔑 Com uma chave de API (GLM)",
+    apiKeyP1:
+      "Os agentes rodam no harness Pi. Passe a chave por um arquivo ou por stdin, nunca na linha de comando (ficaria no histórico do shell):",
+    apiKeyP2:
+      "Uma chave de API não tem janela de uso: só um teto diário para o gasto. Defina-o na configuração como no_quota_cap (por exemplo eur: 10) ou peça ao Capitão; no teto a equipe pausa e nada se perde. Medido: cerca de 0,10 USD por vaga avaliada com GLM.",
   },
 };

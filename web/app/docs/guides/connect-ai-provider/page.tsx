@@ -31,6 +31,9 @@ export default async function ConnectAiProviderPage() {
         <LI>
           🔵 <strong>Codex</strong> {t.codex}
         </LI>
+        <LI>
+          🟢 <strong>GLM</strong> {t.apiKey}
+        </LI>
       </UL>
       <Callout>
         ⚠️ <strong>{t.dedicatedStrong}</strong> {t.dedicatedRest}{" "}
@@ -71,6 +74,14 @@ jht providers update codex   # install its CLI inside the container`}
 jht providers check     # provider CLIs with an update available
 jht doctor              # full health check — must exit 0`}
       </Pre>
+
+      <H2>{t.apiKeyTitle}</H2>
+      <P>{t.apiKeyP1}</P>
+      <Pre>
+        {`jht setup --non-interactive --provider glm --harness pi --api-key-file <file>
+jht setup --non-interactive --provider glm --harness pi --api-key-stdin < <file>`}
+      </Pre>
+      <P>{t.apiKeyP2}</P>
 
       <H2>{t.switching}</H2>
       <P>{t.switchingP}</P>

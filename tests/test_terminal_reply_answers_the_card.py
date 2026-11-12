@@ -20,7 +20,7 @@ import pytest
 import yaml
 
 from test_agent_questions import ROOT, aq, box, sql  # noqa: F401  (box is a fixture)
-from test_profile_confirm_card import answer as button, ask, cards, stage, tool  # noqa: F401
+from test_profile_confirm_card import answer as button, ask, cards, patch, profile_file, stage, tool  # noqa: F401
 
 CHAT = ROOT / "shared" / "skills" / "agent_chat.py"
 FIRST_RUN = ROOT / "shared" / "skills" / "first_run.py"
@@ -184,3 +184,24 @@ def test_two_open_cards_need_the_code(box):
     assert reply(box, "assistente", "2") == {"result": "chat"}       # which one? it is chat, never a guess
     assert reply(box, "assistente", f"{code} 2")["result"] == "answered"
     assert stored_answers(box)[0]["scelte"] == ["lungo"]
+
+
+def test_after_a_correction_in_words_the_1_saves_the_corrected_profile(box):
+    """«Confermo ma cambia la città in Milano» (live run S3, 12/11): the Assistente corrects the review and posts a new
+    card. The card of the review it replaced stayed open, so the «1» from the terminal met two open cards and saved
+    nothing. The card of a superseded review is closed (in the system's name, as «correct») when the new one is posted."""
+    stage(box, patch(location="Bologna"))
+    first = ask(box)
+    stage(box, patch(location="Milano"))
+    second = ask(box)
+    assert second["asked"] is True and second["question_id"] != first["question_id"]
+
+    out = reply(box, "assistente", "1")
+
+    assert out["result"] == "answered" and out["questionId"] == second["question_id"], out
+    rc, saved = tool(box, "apply-confirmed")
+    assert rc == 0 and saved["ok"] is True, saved
+    assert yaml.safe_load(profile_file(box).read_text(encoding="utf-8"))["location"] == "Milano"
+    # the old card is closed by the system, never as the person's confirm
+    old = [a for a in stored_answers(box) if a.get("id_domanda") == first["question_id"] or first["question_id"] in json.dumps(a)]
+    assert old and all(a["origine"] == "sistema" and a["scelte"] == ["correct"] for a in old), stored_answers(box)

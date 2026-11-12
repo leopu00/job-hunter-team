@@ -88,8 +88,8 @@ team.
 
 - a Mac with Apple silicon (M1 and later, macOS 15 or later: Homebrew's requirement; Intel Macs are not supported in 0.4).
   Windows and Linux have no desktop app in this version (on Linux, use the CLI below);
-- a supported subscription dedicated to JHT (the provider login happens in
-  your browser; the subscription path does not ask for an API key);
+- a Codex (ChatGPT Plus / Pro) subscription dedicated to JHT, signed in from
+  your browser; or, from the CLI, an API key for GLM (Z.ai) or Kimi (Moonshot);
 - Homebrew already installed on the Mac: the app installs Podman with it and
   manages it, so there is no Docker Desktop to install. On a Linux VPS the team
   runs in rootless Podman 5.0 or later with podman-compose;
@@ -101,11 +101,12 @@ Not sure where the container should live? Compare a
 [local PC, dedicated Linux PC on the LAN and VPS](docs/guides/CHOOSE-WHERE-TO-RUN.md)
 before installing.
 
-**What it costs** — the team burns ~400M tokens/month, so it needs a flat-rate subscription **dedicated to the team** (a shared account hits rate limits): the same usage on pay-per-use APIs would be $1,000–2,500/mo. The subscription stays the default, supported path; an [API team](docs/guides/API-TEAM.md) on metered calls, with hard spending caps, is in rehearsal. Decision: [ADR-0012](docs/adr/0012-desktop-setup-matrix.md), which supersedes [ADR-0004](docs/adr/0004-subscription-only-no-api-keys.md) (its cost estimate stays as context) · details: [`docs/about/PROVIDERS.md`](docs/about/PROVIDERS.md).
+**What it costs** — on Codex the team works inside a flat-rate subscription **dedicated to the team** (a shared account hits rate limits; the ~400M tokens/month it uses would cost $1,000–2,500/mo on pay-per-use). With an API key (GLM or Kimi, on the Pi harness) you pay per call: measured about 0.10 USD per scored position, with a daily ceiling that pauses the team. Details: [`docs/about/PROVIDERS.md`](docs/about/PROVIDERS.md).
 
 | Provider | Plan | Cost/mo | Status |
 |---|---|---|---|
 | **Codex** | Plus / Pro | ~€100 | Proven — 1-month autonomous run |
+| **GLM / Kimi** (Pi) | API key | per call | Measured in short runs |
 
 **Native office (recommended):** download the current build from
 [GitHub Releases](https://github.com/leopu00/job-hunter-team/releases/latest).

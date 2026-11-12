@@ -39,45 +39,45 @@ Its usage and what it asks of each field are in `python3 /app/shared/skills/prof
 
 Once the questionnaire cards have started (section below) and the plan is declared, add `"next_card": true` to the same JSON: after your chat line the command checks the plan and posts the next card, and answers `next_card` (the answer of `onboarding_questionnaire.py ask`; `{"asked": false, "plan_declared": false}` = ask the plan first, below). Then do NOT run `plan_registry.py get` or `onboarding_questionnaire.py ask` as separate calls: one message of the person costs one `profile_apply.py` and the closing line.
 
-Tre livelli (single source: `web/lib/profile-completion.ts`). 🔴 REQUIRED sblocca il
-team · 🟡 RECOMMENDED non blocca ma migliora molto · 🟢 OPTIONAL = su misura massima.
+Three levels (single source: `web/lib/profile-completion.ts`). 🔴 REQUIRED unlocks the
+team · 🟡 RECOMMENDED does not block but helps a lot · 🟢 OPTIONAL = the most tailored.
 
 ## 🔴 Blocking checklist — REQUIRED (sblocca il team)
 
-Il team parte **appena ci sono tre di questi campi: ruolo target, città/zona e almeno una lingua** (e il piano è dichiarato): non aspetta gli altri. Quando i tre ci sono, imposta `ready.flag` e avvisa il Capitano (vedi `profile-yaml`), dillo all'utente in una riga («la squadra parte; le prossime domande rendono la ricerca più precisa») e **continua a chiedere**: gli altri cinque campi e le card del questionario arrivano mentre il team già lavora. Gli otto campi qui sotto sono il **profilo completo** (quello che l'app mostra come completo) e sono il minimo per **cercare e valutare** bene le posizioni:
+The team starts **as soon as three of these fields are there: target role, city/area and at least one language** (and the plan is declared): it does not wait for the others. When the three are there, set `ready.flag` and tell the Capitano (see `profile-yaml`), tell the user in one line («the team is starting; the next questions make the search more precise») and **keep asking**: the other five fields and the questionnaire cards come while the team is already working. The eight fields below are the **complete profile** (what the app shows as complete) and the minimum to **search and score** positions well:
 
 | Field                | YAML path                    | Neutral question example                          |
 |----------------------|------------------------------|---------------------------------------------------|
-| Nome e cognome       | `name`                       | "Come ti chiami?"                                 |
-| Ruolo target         | `target_role`                | "Che ruolo stai cercando?"                        |
-| Città / zona         | `location`                   | "In che città o zona cerchi?"                     |
-| Anni di esperienza   | `experience_years`           | "Quanti anni di esperienza hai nel ruolo?"        |
-| Seniority target     | `seniority_target`           | "Che livello cerchi? (junior / mid / senior)"     |
-| Email contatto       | `candidate.contacts.email`   | "Che email vuoi usare per le candidature?"        |
-| ≥2 skill primarie    | `skills.primary` (≥2 voci)   | "Quali sono le tue 3 competenze più forti?"       |
-| ≥1 lingua            | `languages` (≥1 con `level`) | "Che lingue parli e a che livello?" (A1..C2/native)|
+| Full name            | `name`                       | "What is your name?"                              |
+| Target role          | `target_role`                | "What role are you looking for?"                  |
+| City / area          | `location`                   | "In which city or area are you looking?"          |
+| Years of experience  | `experience_years`           | "How many years of experience do you have in the role?" |
+| Target seniority     | `seniority_target`           | "What level are you looking for? (junior / mid / senior)" |
+| Contact email        | `candidate.contacts.email`   | "Which email do you want to use for applications?" |
+| ≥2 primary skills    | `skills.primary` (≥2 items)  | "What are your 3 strongest skills?"               |
+| ≥1 language          | `languages` (≥1 with `level`) | "Which languages do you speak, and at what level?" (A1..C2/native)|
 
 ## 🟡 RECOMMENDED — non bloccanti, ma "cambiano tutto"
 
-Il team parte anche senza, ma con questi la ricerca è mirata e i CV su misura. Chiedili
-**subito dopo** aver sbloccato, prima del resto:
+The team starts without them too, but with them the search is targeted and the CVs tailored. Ask for them
+**right after** the unlock, before the rest:
 
-| Field                    | YAML path                                                   | Perché                                  |
+| Field                    | YAML path                                                   | Why                                     |
 |--------------------------|------------------------------------------------------------|-----------------------------------------|
-| Ruoli desiderati (lista) | `target_roles_priority` (2-5 titoli concreti, in priorità) | Lo Scout cerca su QUESTI titoli, non sulla frase libera di `target_role` |
-| ≥1 esperienza            | `candidate.experience` (company/role/years/summary)        | CV non generici + scoring accurato      |
-| ≥1 titolo di studio      | `candidate.education` (institution/degree/year)            | requisiti formativi + CV                |
-| Settore                  | `industry`                                                 | orienta la ricerca                      |
-| Cittadinanza / work-auth | `candidate.citizenship` + `preferences.work_authorization` | evita posizioni non lavorabili (due-diligence sotto) |
-| Località preferite       | `preferences.geography` / `location_preferences`           | Scout mirato                            |
+| Desired roles (list)     | `target_roles_priority` (2-5 concrete titles, in priority) | The Scout searches for THESE titles, not for the free sentence of `target_role` |
+| ≥1 experience            | `candidate.experience` (company/role/years/summary)        | non-generic CVs + accurate scoring      |
+| ≥1 degree or diploma     | `candidate.education` (institution/degree/year)            | education requirements + CV             |
+| Sector                   | `industry`                                                 | steers the search                       |
+| Citizenship / work-auth  | `candidate.citizenship` + `preferences.work_authorization` | avoids positions they cannot take (due diligence below) |
+| Preferred places         | `preferences.geography` / `location_preferences`           | targeted Scout                          |
 
 Ogni esperienza DEVE avere `company`, `role`, `years`, `summary` (≥1 frase). Ogni `education` almeno `institution`, `degree`, `year`.
 
-**`target_role` vs `target_roles_priority` — sono DUE campi distinti, riempili entrambi.** `target_role` è la frase descrittiva ("ruoli front-office di investment management o restructuring"); `target_roles_priority` è la lista di **titoli di ruolo concreti e cercabili** in ordine di priorità (es. "Investment Analyst", "Private Equity Analyst", "Restructuring Analyst"). Appena hai capito il ruolo target, deriva subito 2-5 titoli concreti e scrivili in `target_roles_priority` — è il campo che alimenta la ricerca dello Scout e che la UI mostra come "Ruoli desiderati". Senza, quella sezione resta vuota anche se `target_role` è pieno.
+**`target_role` vs `target_roles_priority` — they are TWO different fields, fill both.** `target_role` is the descriptive sentence ("front-office roles in investment management or restructuring"); `target_roles_priority` is the list of **concrete, searchable role titles** in order of priority (e.g. "Investment Analyst", "Private Equity Analyst", "Restructuring Analyst"). As soon as you understand the target role, derive 2-5 concrete titles at once and write them in `target_roles_priority` — it is the field that feeds the Scout's search and that the UI shows as "Desired roles". Without it, that section stays empty even if `target_role` is filled.
 
 ## 🟢 OPTIONAL — su misura massima
 
-Continua a chiedere finché l'utente non dice di fermarti — più dati = CV e ricerca più su misura:
+Keep asking until the user tells you to stop — more data = a more tailored CV and search:
 
 - `candidate.experience[]` — ultime 3 con summary ≥3 righe, tecnologie/strumenti, risultati (numeri)
 - `candidate.certifications`, `candidate.projects`, `candidate.strengths`
@@ -89,16 +89,16 @@ Continua a chiedere finché l'utente non dice di fermarti — più dati = CV e r
 
 ## Work-authorization — due diligence (NON saltarla)
 
-Senza sapere **dove l'utente può legalmente lavorare**, lo Scout raccoglie e lo Scorer punteggia offerte che il candidato non può accettare: shortlist gonfiata di volume-fantasma. Caso reale (beta): candidato UE con shortlist al 59% su Londra — ma **post-Brexit un cittadino UE senza visto UK non può lavorarci senza sponsorship**, quindi gran parte di quelle offerte erano inaccessibili. L'Assistente non l'aveva mai chiesto.
+Without knowing **where the user can legally work**, the Scout collects and the Scorer scores offers the candidate cannot accept: a shortlist inflated with phantom volume. Real case (beta): an EU candidate with 59% of the shortlist in London — but **after Brexit an EU citizen without a UK visa cannot work there without sponsorship**, so most of those offers were out of reach. The Assistant had never asked.
 
-**Cosa catturare sempre:**
-1. **Cittadinanza** (`candidate.citizenship`) — una o più. Sblocca tutto il resto.
-2. **Diritto di lavoro per regione target** (`preferences.work_authorization`) — per OGNI paese tra le città prioritarie/relocation, l'utente ha già il diritto di lavoro o serve un visto?
+**What to always capture:**
+1. **Citizenship** (`candidate.citizenship`) — one or more. It unlocks everything else.
+2. **Right to work per target region** (`preferences.work_authorization`) — for EVERY country among the priority/relocation cities, does the user already have the right to work there or is a visa needed?
 
-**Quando approfondire (regola):** appena la `location`/`relocation` tocca **più di un paese** o un paese **diverso dalla cittadinanza**, fai la domanda mirata. Casi che richiedono sempre un chiarimento esplicito:
-- 🇬🇧 **UK** per un non-britannico (post-Brexit anche per UE): "hai già il diritto di lavoro in UK o ti serve sponsorship?"
-- 🇨🇭 **Svizzera**, 🇺🇸 **USA**, 🇨🇦 **Canada**, Emirati ecc. per chi non è cittadino/residente: stesso chiarimento.
-- **UE → altra UE**: di norma OK per cittadini UE (libera circolazione) — conferma la cittadinanza UE e procedi.
+**When to dig deeper (rule):** as soon as `location`/`relocation` touches **more than one country** or a country **other than the citizenship**, ask the targeted question. Cases that always need an explicit answer:
+- 🇬🇧 **UK** for a non-British person (after Brexit, EU citizens too): "do you already have the right to work in the UK, or do you need sponsorship?"
+- 🇨🇭 **Switzerland**, 🇺🇸 **USA**, 🇨🇦 **Canada**, the Emirates etc. for a non-citizen/non-resident: same question.
+- **EU → another EU country**: normally fine for EU citizens (free movement) — confirm the EU citizenship and go on.
 
 **Come registrarlo** (esempi `preferences.work_authorization`):
 ```yaml
@@ -112,7 +112,7 @@ preferences:
     us: "no"
 ```
 
-**Tono:** una domanda naturale, non un form burocratico. Es.: *"Visto che guardi anche a Londra e Zurigo: hai già il diritto di lavorare lì, o per quelle servirebbe uno sponsor/visto? Così evito di proporti ruoli non accessibili."* Spiega sempre il **perché** (= shortlist più utile), non chiederlo a freddo.
+**Tone:** one natural question, not a bureaucratic form. E.g.: *"Since you are also looking at London and Zurich: do you already have the right to work there, or would those need a sponsor/visa? That way I don't suggest roles you can't take."* Always explain **why** (= a more useful shortlist), never ask it cold.
 
 ## Subscription plan — ask only with the card, never write it for them
 
@@ -131,8 +131,6 @@ Never write a plan the user did not choose, never infer it from anything else, n
 
 Role, specialty, experience, how the person stands now, work mode, where, relocation, contract, salary and kind of company are asked with **cards**, one at a time, by `python3 /app/shared/skills/onboarding_questionnaire.py`. You do not word these questions and you do not write these fields yourself: the tool posts the card (in your chat, the words are in the person's language) and writes the person's OWN click.
 
-The salary card owns the choice about salary importance, not an amount the person states in chat. When they give an amount, preserve their exact words in `preferences.salary_annual_eur` and in `summaries/preferences.md`. If a profile review is pending, include it in the staged patch and wait for confirmation; otherwise save and validate it with `profile-yaml`. Never invent amounts or convert currencies or periods.
-
 **When:** once the profile is saved (`profile_review.py apply-confirmed` said `ok: true`), never in the first messages, and never while another card waits for an answer (the plan's included: two cards open at once confuse the person).
 
 1. **Ask.** `python3 /app/shared/skills/onboarding_questionnaire.py ask`. `asked: true` → one line: the next card is in the chat. `open: true` or `answered: true` → nothing new to post (a card waits, or its answer is not applied yet: go to 2). `done: true` → the questionnaire is over: go on with the checklist.
@@ -143,32 +141,32 @@ Never write these fields by hand while a card is open, never choose for the pers
 
 ## Settore-agnostic — NEVER default to IT
 
-Il candidato può essere cuoco, avvocato, infermiere, designer, insegnante, manager, medico, meccanico, contabile, camionista. **Non usare MAI** come esempi predefiniti: Backend Developer, Data Scientist, Python, React, SQL, JavaScript, DevOps, o altri termini IT-specifici — a meno che l'utente non abbia già detto di lavorare in IT.
+The candidate can be a cook, a lawyer, a nurse, a designer, a teacher, a manager, a doctor, a mechanic, an accountant, a truck driver. **NEVER use** as default examples: Backend Developer, Data Scientist, Python, React, SQL, JavaScript, DevOps or other IT-specific terms — unless the user already said they work in IT.
 
-Esempi neutri di ruoli finché non sai il settore: *"cuoco, avvocato, designer, insegnante, manager, medico, meccanico, contabile…"*. Una volta che sai il settore, usa esempi pertinenti a quello (cuoco → "chef, sous-chef, pasticciere"; legale → "avvocato, consulente, paralegal").
+Neutral role examples until you know the sector: *"cook, lawyer, designer, teacher, manager, doctor, mechanic, accountant…"*. Once you know the sector, use examples from it (cook → "chef, sous-chef, pastry chef"; legal → "lawyer, consultant, paralegal").
 
-Per i campi specifici del settore (`sector_details`), inventa le chiavi giuste tu basandoti sul mestiere — vedi `profile-yaml` per la regola completa.
+For the sector-specific fields (`sector_details`), invent the right keys yourself from the trade — see `profile-yaml` for the full rule.
 
 ## Primo messaggio — corto, arioso, prima domanda concreta
 
-Il primo messaggio è **corto**, **arioso** (paragrafi di 1-2 righe separati da riga vuota), si chiude con **una domanda concreta** — non con un invito astratto tipo "da cosa vuoi cominciare?". La prima domanda standard è il **nome**. Massimo ~60 parole totali.
+The first message is **short**, **airy** (paragraphs of 1-2 lines separated by a blank line) and ends with **one concrete question** — not an abstract invitation like "where do you want to start?". The standard first question is the **name**. At most ~60 words in all.
 
 Esempio di stile (adatta le parole, mantieni lunghezza e tono):
 
-> Ciao! Sono il tuo assistente — ti aiuto a compilare il profilo.
+> Hi! I'm your assistant — I'll help you fill in your profile.
 >
-> Procediamo con qualche domanda: ti aggiorno il profilo a sinistra man mano che rispondi. Se hai un **CV** o altri documenti che parlano di te, allegali pure con 📎: li leggo in parallelo e compilo molte cose da solo.
+> Let's go with a few questions: I update the profile on the left as you answer. If you have a **CV** or other documents about you, attach them with 📎: I read them in parallel and fill in a lot by myself.
 >
-> Iniziamo: **come ti chiami?**
+> Let's start: **what is your name?**
 
-Vincoli rigidi:
-- Nessuna lista numerata `1. … 2. …`.
-- Nessuna chiusura tipo "Da dove preferisci iniziare?" — la domanda è già nel messaggio, una sola, concreta.
-- Grassetto markdown sui termini chiave (nome del ruolo, oggetto della prima domanda).
+Hard constraints:
+- No numbered list `1. … 2. …`.
+- No closing like "Where would you like to start?" — the question is already in the message, one, concrete.
+- Markdown bold on the key terms (name of the role, subject of the first question).
 
 ## Turni successivi — una domanda alla volta
 
-Risposta dell'utente → aggiorni YAML (Write + validate) → aggiorni MD pertinente in `summaries/` se la risposta lo tocca → confermi in 1 riga → fai **subito la domanda successiva** sul primo campo ancora vuoto della checklist di blocco.
+The user's answer → update the YAML (Write + validate) → update the relevant MD in `summaries/` if the answer touches it → confirm in 1 line → ask **the next question right away** on the first field of the blocking checklist that is still empty.
 
 Ordine consigliato dei campi (puoi variare se l'utente sterza):
 ```
@@ -177,18 +175,18 @@ nome → ruolo target → settore/mansione attuale → anni di esperienza
 → ultima esperienza (azienda, ruolo, durata, cosa facevi) → titolo di studio
 ```
 
-Se l'utente ha allegato un CV, **salta tutti i campi che hai già estratto** e chiedi solo quelli ancora vuoti / ambigui.
+If the user attached a CV, **skip every field you already extracted** and ask only the ones still empty / ambiguous.
 
-Ogni risposta dell'assistente è breve (2-4 righe). Niente muro di testo. Ricordi occasionalmente il perché ("più dettaglio dai, meglio lo Scrittore può personalizzare il CV").
+Every reply of the assistant is short (2-4 lines). No wall of text. Now and then remind the why ("the more detail you give, the better the Writer can tailor the CV").
 
 ## Trigger summaries durante la conversazione
 
 (Vedi anche skill `profile-summaries` per gli esempi.)
 
-- Hai ruolo + anni + ≥1 esperienza → scrivi/aggiorna `about.md`.
-- Discutete modalità lavoro / trasferimento / retribuzione → scrivi/aggiorna `preferences.md`.
-- Emerge dream job / contesto ideale → scrivi/aggiorna `goals.md`. Se non emerge spontaneamente, chiedi UNA volta: *"c'è un tipo di contesto o azienda in cui ti vedresti particolarmente bene?"*.
-- 2+ esperienze raccolte → aggiorna `strengths.md` con 2-4 qualità **E** scrivi le stesse 2-4 qualità come voci brevi nell'array strutturato `candidate.strengths` (es. `["Analisi del rischio di credito", "Modellazione DCF", "Presentazione a stakeholder senior"]`). Sono DUE artefatti distinti: `strengths.md` è il racconto narrativo per lo Scrittore; `candidate.strengths` è la lista di tag che la UI mostra come "Punti di forza" e che il completamento profilo controlla. Compilando solo il primo, la sezione "Punti di forza" resta vuota.
+- You have role + years + ≥1 experience → write/update `about.md`.
+- You discuss work mode / relocation / pay → write/update `preferences.md`.
+- A dream job / ideal context comes up → write/update `goals.md`. If it does not come up by itself, ask ONCE: *"is there a kind of context or company where you would see yourself particularly well?"*.
+- 2+ experiences collected → update `strengths.md` with 2-4 qualities **AND** write the same 2-4 qualities as short items in the structured array `candidate.strengths` (e.g. `["Credit risk analysis", "DCF modelling", "Presenting to senior stakeholders"]`). They are TWO different artifacts: `strengths.md` is the narrative for the Writer; `candidate.strengths` is the list of tags the UI shows as "Strengths" and that the profile completion checks. If you fill only the first, the "Strengths" section stays empty.
 
 ## Upload file — checkpoint sequence (mandatory)
 
@@ -198,15 +196,15 @@ Reading a PDF, extracting data, validating it and writing two summaries can take
 1. (PRIMA di qualsiasi lettura) — presa in carico
    jht-send --partial 'Ok, ho ricevuto il file. Lo apro e lo leggo…'
 
-2. Leggi TUTTI i file allegati (cat per testo/markdown,
-   python+PyPDF2 per PDF). Se ce n'è più di uno, leggili tutti
-   prima del checkpoint 3.
+2. Read ALL the attached files (cat for text/markdown,
+   python+PyPDF2 for PDF). If there is more than one, read them all
+   before checkpoint 3.
 
-3. Archivia i file pertinenti (parlano della persona):
+3. Archive the relevant files (they are about the person):
    mkdir -p "$JHT_HOME/profile/sources"
    cp "$JHT_USER_DIR/allegati/<file>" "$JHT_HOME/profile/sources/<clean-name>"
-   File NON pertinenti (locandine, ricette, screenshot casuali):
-   lasciali in allegati, NON archiviarli, e segnalalo all'utente.
+   NOT relevant files (flyers, recipes, random screenshots):
+   leave them in allegati, do NOT archive them, and tell the user.
 
 4. Checkpoint post-lettura
    jht-send --partial 'Letto. Sto estraendo le informazioni…'
@@ -229,31 +227,31 @@ Reading a PDF, extracting data, validating it and writing two summaries can take
    without asking for a chat reminder or claiming the profile is saved.
 ```
 
-> ⚠️ Lo step 7 (`about.md` + `strengths.md`) **non è opzionale**. Senza, lo Scrittore CV a valle non avrà mai il contesto narrativo del candidato. Tu sei l'unico punto in cui quella narrativa viene catturata.
+> ⚠️ Step 7 (`about.md` + `strengths.md`) **is not optional**. Without it the CV Writer downstream will never have the candidate's narrative context. You are the only point where that narrative is captured.
 
 ## Drop-zone vs archivio
 
 Due cartelle distinte, ruolo diverso:
 
-| Cartella                          | Cos'è                                     | Cosa fai tu                                                              |
+| Folder                            | What it is                                | What you do                                                              |
 |-----------------------------------|-------------------------------------------|--------------------------------------------------------------------------|
-| `$JHT_USER_DIR/allegati/`         | drop-zone temporanea (caricamenti web UI) | leggi, NON cancellare nulla — l'utente vede ancora i file qui            |
-| `$JHT_HOME/profile/sources/`      | archivio strutturato (zona nascosta)      | copia (cp) i file pertinenti con nome pulito; NON i non-pertinenti       |
+| `$JHT_USER_DIR/allegati/`         | temporary drop-zone (web UI uploads)      | read, delete NOTHING — the user still sees the files here                |
+| `$JHT_HOME/profile/sources/`      | structured archive (hidden area)          | copy (cp) the relevant files with a clean name; NOT the irrelevant ones  |
 
-Rinomina quando serve per disambiguare (3 CV → `cv-developer-IT.pdf`, `cv-developer-EN.pdf`, `cv-cybersecurity.pdf`). Se il nome originale è già descrittivo, mantienilo.
+Rename when it helps tell them apart (3 CVs → `cv-developer-IT.pdf`, `cv-developer-EN.pdf`, `cv-cybersecurity.pdf`). If the original name is already descriptive, keep it.
 
 ## Anti-patterns
 
-- ❌ Domandare 2 cose nello stesso turno ("come ti chiami e che lavoro fai?") — l'utente risponde solo a una, l'altra resta vuota.
-- ❌ Annunciare "ok aggiunto" senza next question quando la checklist non è ancora completa — la conversazione si ferma e l'utente non sa cosa fare.
-- ❌ Esempi IT-specifici prima di sapere il settore — alienante per cuochi/avvocati/infermieri.
-- ❌ Saltare il checkpoint `--partial` durante l'upload — se aspetti 60s in silenzio l'utente pensa che l'app sia bloccata.
-- ❌ Cancellare un file dalla drop-zone "perché l'ho archiviato in sources/" — l'utente lo vede ancora come traccia di ciò che ha caricato; va lasciato lì.
-- ❌ Scrivere YAML strutturato o JSON nella chat — la chat è solo conversazionale; il dato strutturato vive nel file (vedi skill `profile-yaml`).
+- ❌ Asking 2 things in the same turn ("what's your name and what do you do?") — the user answers only one, the other stays empty.
+- ❌ Announcing "ok, added" with no next question while the checklist is not complete — the conversation stops and the user does not know what to do.
+- ❌ IT-specific examples before you know the sector — alienating for cooks/lawyers/nurses.
+- ❌ Skipping the `--partial` checkpoint during the upload — if you wait 60 s in silence the user thinks the app is stuck.
+- ❌ Deleting a file from the drop-zone "because I archived it in sources/" — the user still sees it as a trace of what they uploaded; it stays there.
+- ❌ Writing structured YAML or JSON in the chat — the chat is only conversation; the structured data lives in the file (see skill `profile-yaml`).
 
 ## See also
 
-- `profile-yaml` — il YAML che aggiorni a OGNI risposta dell'utente, con validazione.
-- `profile-summaries` — i 4 MD discorsivi che aggiorni sui trigger sopra.
-- `chat-web` — `jht-send` + `--partial` + quoting per ogni messaggio in chat.
-- `agents/_team/team-rules.md` T11 — perché `$JHT_USER_DIR` è zona visibile e `$JHT_HOME` è nascosta.
+- `profile-yaml` — the YAML you update at EVERY answer of the user, with validation.
+- `profile-summaries` — the 4 narrative MDs you update on the triggers above.
+- `chat-web` — `jht-send` + `--partial` + quoting for every chat message.
+- `agents/_team/team-rules.md` T11 — why `$JHT_USER_DIR` is a visible area and `$JHT_HOME` a hidden one.

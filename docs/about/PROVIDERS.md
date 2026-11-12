@@ -1,48 +1,49 @@
 # 💳 Providers & Pricing
 
-JHT runs on AI subscriptions **by default**, and that is the supported path. A team of agents working in parallel burns through pay-per-use credits in hours; subscriptions cost ~5x less per token — the estimate of [ADR-0004](../adr/0004-subscription-only-no-api-keys.md), which [ADR-0012](../adr/0012-desktop-setup-matrix.md) supersedes. ADR-0012 adds a headless path on metered API calls: the [API team](../guides/API-TEAM.md), in rehearsal, with hard spending caps.
+Two ways to power the team in 0.4:
 
-This page tells you which subscription to pick.
+| Way | How you pay | Agents run on | Status |
+|---|---|---|---|
+| 🔵 **Codex (OpenAI)** — recommended | your ChatGPT **subscription** (Plus / Pro), signed in with the provider's login | Codex CLI | proven over a month of autonomous work |
+| 🟢 **Pi with GLM (Z.ai) or Kimi (Moonshot)** | an **API key**, billed per call by the provider | the Pi harness | measured in short runs; no full flow with a real key and account yet |
 
-> **One subscription in 0.4: Codex.** Kimi is archived and Claude Code is not offered, on the site or in the app; a team already configured on either keeps working. What is measured below for them is kept as history.
+Claude Code and the Kimi subscription CLI are not offered on the site or in the app; a team already configured on either keeps working.
 
-## ⚡ TL;DR
+## 🔵 Codex: subscription
 
-| Profile | Pick |
-|---|---|
-| 🎯 **Recommended** — best €/result balance, proven over a full month | 🔵 **Codex Plus / Pro €100** *(proven — 1-month autonomous run)* |
+`jht setup` (or the app) signs you in with your ChatGPT account. The team runs inside the plan's 5-hour and weekly windows:
 
-## 💳 Supported subscriptions
+1. **🛡️ Sentinel** watches the usage in real time and slows the team down if it goes too fast.
+2. **🌉 Bridge** samples the usage on a fixed clock and projects when the team would hit 100% of the window.
 
-| Provider | Plan | Cost / month | ~Tokens / month | JHT verdict | Status |
-|---|---|---|---|---|---|
-| 🔵 **Codex / OpenAI** | Plus / Pro | ~€100 | varies | ✅ **Proven over a full month** — 30-day autonomous run: 658 positions found, 520 scored, weekly budget closed at 99–100% every week with zero overshoot ([Case Study #4](RESULTS.md#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run)). Pacing tuned at 92% target. | Tested, production-ready |
-| 🟠 **Claude** | Max x20 | ~€200 | ~400M | ✅ **Best in class** — usage projection oscillates within ±5% of target. Captain + Sentinel land the 92% per-window target with surgical precision. | Tested, production-ready |
-| 🟠 **Claude** | Pro | ~€20 | ~50M | ❌ Insufficient — burns out before a single agent finishes a meaningful work session. | Tested, not viable |
+Together they aim each window at **92%** without crossing 100% (which would rate-limit and freeze the team). Measured: a 30-day autonomous run on Codex Pro found 658 positions and scored 520, closing every week at 99–100% with no overshoot ([Case Study #4](RESULTS.md#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run)). Numbers in [`MONITORING.md`](MONITORING.md).
 
-> **Note**: token counts are approximate and depend on the provider's current allowance. Always check the provider's pricing page before subscribing.
+The plan matters: the app asks which one you have (a card in the Assistant's chat) and sizes the team to it.
 
-> ⚖️ **Terms of service** — JHT drives each provider through its **official CLI** (Codex CLI): the same tools your subscription licenses, running on your machine under your account. No scraping, no reverse-engineered endpoints. That said, providers' terms evolve and automation policies differ between plans — **review your provider's current ToS** before running a team around the clock, and prefer a subscription dedicated to JHT (also required for budget reasons, see below).
+## 🟢 Pi with GLM or Kimi: API key
 
-## 🎯 How JHT keeps you within the window
+```bash
+jht setup --non-interactive --provider glm --harness pi --api-key-file <file>   # or: … --api-key-stdin < <file>
+```
 
-Two components prevent runaway spending:
+`--provider kimi` for Kimi. The key is read from a file or from stdin, kept off the command line (`--api-key` works but leaves the key in your shell history), and handed to the agents only through their environment. The app's **Settings** can switch the agents' program (Codex or Pi) and give GLM/Kimi a new key.
 
-1. **🛡️ Sentinel** — monitors token usage in real time and intervenes if the team is going too fast.
-2. **🌉 Bridge** — fetches usage samples on a fixed clock and projects when the team will hit 100% of the window.
+Models per role (`shared/runtime/provider-models.list`): on GLM the Scout, the Analyst and the Sentinel use `glm-5.3-flash`, the other roles `glm-5.3`; on Kimi `kimi-k3.1-pro` for every role.
 
-The two together aim to land each window *on* its per-provider target — **92% for Claude/Codex** — without ever crossing 100% (which would trigger a rate-limit and freeze the team).
+An API key has **no usage window**: nothing paces the team but a ceiling. Set it in the configuration (or ask the Captain):
 
-For the actual numbers we measured during testing, see [`MONITORING.md`](MONITORING.md).
+```json
+"no_quota_cap": {"eur": 10, "tokens_per_hour": 500000}
+```
 
-## 🔧 What we're working on
+`eur` is what the agents spent today (as measured by Pi), `tokens_per_hour` what they processed in the last hour. At the ceiling the team pauses (nothing is lost) and resumes the next day, when the hour drops below the limit, or when you raise the ceiling. Without a ceiling the team keeps spending and tells you once a day how much. Set a limit with the provider too.
 
-- ✅ ~~Weekly window calibration~~ — **Done**. Weekly-aware pacing (`schedule+ratio+weekly`) distributes budget across working hours, not just 5h windows.
-- ✅ ~~User-defined work hours~~ — **Done**. Config + gate in pacing-bridge, UI in CLI + web + wizard.
-- ⚡ **Make the cheap tiers viable** — what keeps the €20 tiers in beta is **projection precision** and model behavior (scout rabbit-holes, thinking-mode fragility) — tuning work, not a token wall. The coordinators (Sentinel + Captain) cost ~20% of the budget — a real but secondary lever.
+Measured cost (GLM, 30 minutes, fake persona on real job ads): **2.38 USD for 24 scored positions**, about 0.10 USD per score. The Assistant's onboarding with a CV cost 0.4–0.7 USD in the test runs.
 
-## 💸 What about pay-per-use?
+## ⚖️ Terms of service
 
-In rehearsal. Since [ADR-0012](../adr/0012-desktop-setup-matrix.md) an API key selects a headless team on metered calls: the [API team](../guides/API-TEAM.md), which runs on a test VPS with a hard dollar cap per run and per session, and is held to the subscription team's behaviour with parity rounds. The subscription team remains the default, supported path: its tokens cost ~5x less, so it wins on every economic axis as long as we can monitor the window precisely.
+JHT drives each provider through its official tool (the Codex CLI with your account, Pi with your key): no scraping, no reverse-engineered endpoints. Providers' terms change and automation policies differ between plans: **read your provider's current terms** before running a team around the clock, and prefer an account or key used only by JHT, also to keep the budget readable.
 
-If you're curious about the test data behind these numbers, jump to [`MONITORING.md`](MONITORING.md).
+## 📜 History
+
+[ADR-0004](../adr/0004-subscription-only-no-api-keys.md) (subscriptions only) is superseded by [ADR-0012](../adr/0012-desktop-setup-matrix.md). Measured before 0.4 and kept as history: Claude Max x20 held each window within ±5% of target; Claude Pro (~€20) ran out before an agent finished a useful session. The headless [API team](../guides/API-TEAM.md) is a separate path, in rehearsal on a test VPS.
