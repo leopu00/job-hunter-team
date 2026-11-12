@@ -1256,12 +1256,11 @@ fi
 if ! command -v "$CLI_BIN" &>/dev/null; then
   echo "Error: command '$CLI_BIN' not found (configured provider: $PROVIDER)."
   case "$CLI_BIN" in
-    claude) echo "Install the Claude CLI: https://claude.ai/download" ;;
-    codex)  echo "Install the Codex CLI: https://github.com/openai/codex" ;;
-    kimi)   echo "Install the Kimi CLI from provider Moonshot." ;;
-    pi)     echo "Install pi: bash $JHT_PI_INSTALL (or go back to the default harness: jht providers harness codex)." ;;
+    # this release runs the team only on pi (shared/runtime/release-providers.js): the other CLIs are not installed here,
+    # and the way out is the setup, not a CLI to install
+    claude|codex|kimi) echo "Provider '$PROVIDER' is not offered in this release: the team runs on Pi with an API key. Run: jht setup" ;;
+    pi)     echo "Install pi: bash $JHT_PI_INSTALL" ;;
   esac
-  echo "Alternatively, edit ~/.jht/jht.config.json to use another provider."
   exit 1
 fi
 if [ "$CLI_BIN" = "pi" ] && { ! jht_pi_version_check || ! jht_pi_credentials_check "$JHT_CONFIG_FILE"; }; then

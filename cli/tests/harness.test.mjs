@@ -236,7 +236,7 @@ test('jht providers update pi checks the pi of the image by its own path, and in
   assert.match(r.out, /Supported: codex/);
 });
 
-test('team start follows the harness: the CLI is pi, and a provider pi cannot start on stops before the team', () => {
+test('team start follows the harness: the CLI is pi, and a provider pi cannot start on stops before the team', { skip: codexSkip }, () => {
   const openai = { active_provider: 'openai', providers: { openai: { auth_method: 'subscription' } } };
   assert.equal(providerCli({ ...openai, harness: 'pi' }), 'pi');
   assert.equal(providerCli({ ...openai, harness: 'codex' }), 'codex');

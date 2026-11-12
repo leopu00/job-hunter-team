@@ -11,6 +11,7 @@ import { startRefusal } from '../src/commands/team/start.js';
 import { AI_PROVIDERS, PI_API_CHOICES } from '../wizard/setup-helpers.js';
 import { AGENT_HARNESSES, harnessProblem, piApiKeyConfigured } from '../../shared/runtime/agent-harness.js';
 import { effectiveSettings } from '../src/lib/team-settings.js';
+import { offeredInRelease } from '../../shared/runtime/release-providers.js';
 
 // What the setup writes for a provider: the same shape as setup-noninteractive.js (a key by reference, no plaintext key).
 const configOf = (provider, harness) => ({
@@ -22,15 +23,27 @@ const configOf = (provider, harness) => ({
 });
 
 // The pairs the setup lets through: a provider that runs only on pi is refused with another harness (setup-noninteractive.js).
-const OFFERED = [...AI_PROVIDERS, ...PI_API_CHOICES].flatMap((provider) => AGENT_HARNESSES
+const PAIRS = [...AI_PROVIDERS, ...PI_API_CHOICES].flatMap((provider) => AGENT_HARNESSES
   .filter((harness) => !(provider.piOnly && harness !== 'pi') && harnessProblem(harness, provider.value, 'api_key') === null)
   .map((harness) => ({ provider, harness })));
+// what this release offers (shared/runtime/release-providers.js); the others are refused with the way out
+const OFFERED = PAIRS.filter(({ provider }) => offeredInRelease(provider.value));
+const NOT_OFFERED = PAIRS.filter(({ provider }) => !offeredInRelease(provider.value));
 
-test('the setup offers at least codex and the two providers that run only on pi, each with the harness it allows', () => {
-  const pairs = OFFERED.map(({ provider, harness }) => `${provider.value}/${harness}`);
+test('the code still knows codex and the two providers that run only on pi, each with the harness it allows', () => {
+  const pairs = PAIRS.map(({ provider, harness }) => `${provider.value}/${harness}`);
   for (const wanted of ['openai/codex', 'openai/pi', 'glm/pi', 'kimi/pi']) assert.ok(pairs.includes(wanted), `${wanted} in ${pairs}`);
   assert.ok(!pairs.includes('glm/codex'));
+  assert.ok(OFFERED.some(({ provider, harness }) => provider.value === 'glm' && harness === 'pi'));
 });
+
+for (const { provider, harness } of NOT_OFFERED) {
+  test(`team start refuses a provider this release does not offer, with the setup as the way out: ${provider.value} on ${harness}`, () => {
+    const refusal = startRefusal(configOf(provider, harness), { containerMode: false, hasTmux: () => true, hasCli: () => true });
+    assert.match(refusal, new RegExp(`provider '${provider.value}' is not offered in this release .*Run: jht setup`));
+    assert.doesNotMatch(refusal, /Install|github\.com/);
+  });
+}
 
 for (const { provider, harness } of OFFERED) {
   test(`team start accepts what the setup writes: ${provider.value} on ${harness}`, () => {
