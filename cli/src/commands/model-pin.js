@@ -616,4 +616,3 @@ function runRefresh({ target, notifyCaptain, dryRun, log }) {
   ].join(' '), 'PROMOTED', chosen.alias);
   return finish('PROMOTED', chosen.alias);
 }
-
