@@ -87,16 +87,15 @@ team.
 **Before you install:**
 
 - **Mac**: Apple silicon (M1 or later) with macOS 15 or later; Intel Macs are not supported.
-  The desktop app is Mac only. **Linux**: CLI only, experimental. **Windows**: preview, CLI only
+  **The desktop app is not in 0.4.0**: the team is driven from the `jht` CLI. **Linux**: CLI only, experimental. **Windows**: preview, CLI only
   (PowerShell installer, Podman inside WSL), tested on Windows 10, not on Windows 11 — see
   [QUICKSTART](docs/guides/QUICKSTART.md).
 - **A provider for the agents**: in 0.4.0, **GLM (Z.ai)** on the Pi harness, with an **API key**
   that `jht setup` asks for (typed hidden) or takes from a file or standard input
   (`jht setup --non-interactive --provider glm --api-key-stdin`), never on the command line.
   Codex (ChatGPT subscription), Kimi and Claude come in a later release.
-- **A container engine**: on a Mac the CLI installer uses Colima by default; the app installs
-  Podman with Homebrew (which must already be there), so there is no Docker Desktop to install,
-  and it adopts a team the CLI already installed on Colima. On Linux: rootless Podman 5.0 or later.
+- **A container engine**: on a Mac the CLI installer uses Colima by default. On Linux: rootless
+  Podman 5.0 or later.
 - At least 16 GB of RAM is recommended on a Mac. The Podman machine uses 2 CPUs, 4 GiB of memory
   and a disk that grows up to 30 GiB.
 
@@ -114,11 +113,7 @@ later release.) Details:
 | **Codex** | Plus / Pro | ~€100 | Proven — 1-month autonomous run |
 | **GLM / Kimi** (Pi) | API key | per call | Measured on GLM in short runs |
 
-**Desktop app (Mac):** download it from
-[GitHub Releases](https://github.com/leopu00/job-hunter-team/releases/latest)
-(`job-hunter-team-macos-universal.dmg`: despite the name it holds only the Apple silicon build).
-It is signed and notarized. Open it and follow the first setup: team runtime, provider, candidate
-profile and working hours come before the agents start.
+**The desktop app is not in 0.4.0.** Install the CLI.
 
 **CLI** (macOS / Linux): inspect first, then run. The installer is
 [versioned in this repo](scripts/install.sh) and can preview every action:
@@ -141,9 +136,8 @@ Full walkthrough, Windows and contributor setup: [`docs/guides/QUICKSTART.md`](d
 
 ## Interfaces
 
-**Native desktop app** ([Tauri 2 + React](desktop/)) · **CLI** (`jht team
-start` — [reference](docs/guides/CLI-REFERENCE.md)) · **Cloud dashboard**
-(Next.js) · **Telegram**
+**CLI** (`jht team start` — [reference](docs/guides/CLI-REFERENCE.md)) · **Cloud dashboard**
+(Next.js) · **Telegram**. The desktop app is not in 0.4.0.
 
 ## AI agents can drive JHT
 
@@ -157,7 +151,7 @@ is no longer distributed · Node.js/TypeScript + Python
 Python/tmux during migration) · Next.js 16 + Supabase (cloud dashboard) · Podman
 · SQLite · GitHub Actions + Vercel.
 
-**Status** — 0.4: the team, the CLI and the Mac desktop app; Linux from the CLI, experimental;
+**Status** — 0.4: the team and the CLI (the desktop app is not in 0.4.0); Linux from the CLI, experimental;
 Windows a CLI preview. What was tested, and what was not, is listed in the release notes.
 Full picture: [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md).
 
