@@ -64,14 +64,19 @@ esac
 
 
 def _wake(tmp_path: Path, bin_dir: Path, *, kernel="Darwin", podman_mode="", lang="en"):
+    runtime = tmp_path / "runtime"
+    runtime.mkdir(exist_ok=True)
     script = f"""set -u
+RUNTIME_DIR="{runtime}"
+RUNTIME_SELECTION_FILE="{runtime}/container-runtime"
 HOST_KERNEL={kernel}
 PODMAN_RUNTIME_MODE="{podman_mode}"
 JHT_SAY_LANG={lang}
 UNINSTALL_TOOL_DIRS="{bin_dir}"
 info() {{ printf 'info: %s\\n' "$*"; }}
 err() {{ printf 'err: %s\\n' "$*"; }}
-{_functions("jht_text_en", "jht_text_it", "jht_say", "uninstall_tool", "uninstall_docker_endpoint", "wake_jht_colima")}
+{_functions("jht_text_en", "jht_text_it", "jht_say", "uninstall_tool", "uninstall_docker_endpoint", "jht_colima_profile_of_runtime",
+             "wake_jht_colima")}
 wake_jht_colima
 echo "RC=$?"
 """
@@ -159,3 +164,53 @@ def test_jht_up_on_a_mac_goes_through_it_before_the_old_message():
     observe = re.search(r"^require_docker\(\) \{\n.*?^\}\n", SOURCE, re.S | re.M).group(0)
     assert "wake_jht_colima" not in observe and "colima start" not in observe
     assert "Avvialo con: jht up" in observe
+
+
+# ── an ordered `colima stop`: the context is gone, the runtime says which Colima ─────────────────────────────────────────────────
+# `colima stop` removes Colima's docker context: the docker of the computer goes back to the system socket, and the profile can only
+# come from the runtime (giro Mac 3, 12/11): the engine the installer chose (container-runtime = docker) and its marker colima-started.
+
+SYSTEM_SOCKET = "unix:///var/run/docker.sock"
+
+
+def _runtime(tmp_path: Path, selection="docker", marker=None, marker_is_link=False) -> Path:
+    runtime = tmp_path / "runtime"
+    runtime.mkdir(exist_ok=True)
+    if selection is not None:
+        (runtime / "container-runtime").write_text(f"{selection}\n", encoding="utf-8")
+    if marker is not None:
+        if marker_is_link:
+            (tmp_path / "elsewhere").write_text(marker, encoding="utf-8")
+            (runtime / "colima-started").symlink_to(tmp_path / "elsewhere")
+        else:
+            (runtime / "colima-started").write_text(marker, encoding="utf-8")
+    return runtime
+
+
+@pytest.mark.parametrize("marker,profile", [("colima\nwork\n", "work"), (None, "default")])
+def test_after_an_ordered_stop_the_profile_comes_from_the_runtime(tmp_path, marker, profile):
+    bin_dir, log, states = _world(tmp_path, profile=profile, profiles=(profile,), endpoint=SYSTEM_SOCKET)
+    _runtime(tmp_path, marker=marker)
+    done = _wake(tmp_path, bin_dir)
+    assert "RC=0" in done.stdout, done.stdout + done.stderr
+    assert _starts(log) == [f"colima start -p {profile}"] and (states / profile).exists()
+
+
+@pytest.mark.parametrize("selection", ["podman", "", None])
+def test_the_system_socket_without_the_docker_engine_in_the_runtime_starts_nothing(tmp_path, selection):
+    bin_dir, log, _ = _world(tmp_path, endpoint=SYSTEM_SOCKET)
+    _runtime(tmp_path, selection=selection)
+    done = _wake(tmp_path, bin_dir)
+    assert "RC=1" in done.stdout and not _starts(log)
+
+
+def test_a_marker_that_is_a_link_or_names_no_colima_starts_nothing(tmp_path):
+    bin_dir, log, _ = _world(tmp_path, endpoint=SYSTEM_SOCKET)
+    _runtime(tmp_path, marker="colima\ndefault\n", marker_is_link=True)
+    assert "RC=1" in _wake(tmp_path, bin_dir).stdout and not _starts(log)
+
+
+def test_a_marker_whose_profile_does_not_exist_creates_nothing(tmp_path):
+    bin_dir, log, _ = _world(tmp_path, profiles=("default",), endpoint=SYSTEM_SOCKET)
+    _runtime(tmp_path, marker="colima\ngone\n")
+    assert "RC=1" in _wake(tmp_path, bin_dir).stdout and not _starts(log)
