@@ -1106,61 +1106,6 @@
       "last_review": null
     },
     {
-      "path": "game/PROMPT.md",
-      "description": "PROMPT — Prototipo videogioco \"JHT: The Office\" (esperienza gamificata di Job Hunter Team) — Il progetto game/ è ora l'unica applicazione desktop di Job Hunter Team.",
-      "last_review": null
-    },
-    {
-      "path": "game/README.md",
-      "description": "Job Hunter Team — The Office — Godot 4.7 desktop application for Windows, macOS and Linux.",
-      "last_review": null
-    },
-    {
-      "path": "game/assets/gen-art/LOG.md",
-      "description": "🎨 gen-art — log dell'Art Director (host.invalid:dev1-art) — Asset generati via Codex CLI (tmux codex-dev1), giudicati contro",
-      "last_review": null
-    },
-    {
-      "path": "game/docs/ANALISI-GIOCHI.md",
-      "description": "Analisi giochi di riferimento — appunti sessione con Leone (2026-07-07) — Analisi guidata, un gioco alla volta: cosa c'è / cosa non c'è / cosa ci piace / cosa non ci piace.",
-      "last_review": null
-    },
-    {
-      "path": "game/docs/ASSETS.md",
-      "description": "Pipeline asset personaggi — Sprite in-world (SVG a layer componibili)",
-      "last_review": null
-    },
-    {
-      "path": "game/docs/DATA-ADAPTER.md",
-      "description": "Data adapter — contratto fra gioco e dati del team — Il gioco non conosce Supabase né la dashboard: parla solo con l'autoload",
-      "last_review": null
-    },
-    {
-      "path": "game/docs/FIRST-RUN.md",
-      "description": "First-run conversation contract — The office must be understandable before Docker or an LLM is available.",
-      "last_review": null
-    },
-    {
-      "path": "game/docs/GDD.md",
-      "description": "JHT: The Office — current product design — The Godot application is the only desktop client for Job Hunter Team.",
-      "last_review": null
-    },
-    {
-      "path": "game/docs/RESEARCH-DOSSIER.md",
-      "description": "Game Research Dossier — \"The Box\" (versione gamificata di Job Hunter Team) — Materiale di supporto per le sessioni che sviluppano game/ (branch work3-dev1).",
-      "last_review": null
-    },
-    {
-      "path": "game/docs/ROADMAP.md",
-      "description": "Native application roadmap — The Electron-to-Godot migration, live data views, embedded console and",
-      "last_review": null
-    },
-    {
-      "path": "game/docs/SPRITES.md",
-      "description": "Sprite agenti — contratto spritesheet (v1, 2026-07-11) — Gli agenti in-world passano dagli SVG a parti (CharacterRig) a spritesheet",
-      "last_review": null
-    },
-    {
       "path": "scripts/README.md",
       "description": "🐚 scripts — setup, install & dev tooling — Bash/PowerShell scripts for installing, developing, releasing, and simulating",
       "last_review": null
@@ -1374,11 +1319,6 @@
       "path": "docs/internal/2026-08-07-setup-guide-web-scaffolding.md",
       "description": "Handoff web della guida setup non pubblicata: route noindex, contratto canonico, registro schermate, test e stato traduzioni",
       "last_review": "2026-08-07"
-    },
-    {
-      "path": "game/assets/icons/SOURCES.md",
-      "description": "Provenienza ufficiale, condizioni d'uso e varianti Docker/Telegram immutate impiegate dalle icone della sidebar Godot",
-      "last_review": null
     },
     {
       "path": "docs/internal/2026-08-07-web-compliance-audit.md",

@@ -51,12 +51,8 @@ shared/data/incoming/
 !web/public/**/*.png
 !web/app/**/*.png
 !assets/banner.png
-# Arte di gioco GENERATA (niente screenshot qui: zero PII by design)
-!game/assets/**/*.png
-# La stessa arte, ricompressa per l'ufficio della desktop (scripts/office_assets/)
+# Arte GENERATA dell'ufficio della desktop (niente screenshot qui: zero PII by design)
 !desktop/public/office/**/*.png
-# Reference visivi del gioco generati da Codex su dati mock (zero PII)
-!game/docs/reference/**/*.png
 # Session reports versionati (analisi grafici budget, throttle, ecc.)
 !docs/sessions/**/*.png
 
@@ -81,8 +77,6 @@ shared/secrets/*
 # ── BUILD E DIPENDENZE ──────────────────────────────────────
 node_modules/
 *.tsbuildinfo
-
-# NB: gli export del gioco Godot (game/builds/) sono ignorati da game/.gitignore.
 
 # Download binaries (served at runtime, not committed)
 web/public/downloads/

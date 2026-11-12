@@ -143,8 +143,7 @@ Full walkthrough, Windows and contributor setup: [`docs/guides/QUICKSTART.md`](d
 
 ## Interfaces
 
-**Native desktop app** ([Tauri 2 + React](desktop/), with the retired Godot
-office retained in [`game/`](game/) as migration history) · **CLI** (`jht team
+**Native desktop app** ([Tauri 2 + React](desktop/)) · **CLI** (`jht team
 start` — [reference](docs/guides/CLI-REFERENCE.md)) · **Cloud dashboard**
 (Next.js) · **Telegram**
 
@@ -164,7 +163,7 @@ Python/tmux during migration) · Next.js 16 + Supabase (cloud dashboard) · Podm
 Windows a CLI preview. What was tested, and what was not, is listed in the release notes.
 Full picture: [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md).
 
-Monorepo: [`desktop/`](desktop/) · [`game/`](game/) · [`cli/`](cli/) · [`web/`](web/) · [`shared/`](shared/) · [`agents/`](agents/) · [`api-worker/`](api-worker/) *(isolated full-team API pipeline)* · [`scripts/`](scripts/) · [`e2e/`](e2e/) · [`supabase/`](supabase/) · [`docs/`](docs/) — index in [`docs/README.md`](docs/README.md).
+Monorepo: [`desktop/`](desktop/) · [`cli/`](cli/) · [`web/`](web/) · [`shared/`](shared/) · [`agents/`](agents/) · [`api-worker/`](api-worker/) *(isolated full-team API pipeline)* · [`scripts/`](scripts/) · [`e2e/`](e2e/) · [`supabase/`](supabase/) · [`docs/`](docs/) — index in [`docs/README.md`](docs/README.md).
 
 ## Contributing
 

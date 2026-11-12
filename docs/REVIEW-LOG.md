@@ -169,24 +169,6 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/sentinella/_skills/order-formats/SKILL.md](../agents/sentinella/_skills/order-formats/SKILL.md) | Format ordini protocollo (MANTIENI/SCALA UP/RIENTRO) | — | 2026-10-09 | ✅ |
 
 
-## 🎮 game (applicazione desktop)
-
-| 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
-|---|---|---|---|---|
-| [game/PROMPT.md](../game/PROMPT.md) | PROMPT — Prototipo videogioco "JHT: The Office" (esperienza gamificata di Job Hunter Team) — Il progetto game/ è ora l'unica applicazione desktop di Job Hunter Team. | — | 2026-07-19 | ✅ |
-| [game/README.md](../game/README.md) | Job Hunter Team — The Office — Godot 4.7 desktop application for Windows, macOS and Linux. | — | 2026-09-21 | ✅ |
-| [game/assets/gen-art/LOG.md](../game/assets/gen-art/LOG.md) | 🎨 gen-art — log dell'Art Director (host.invalid:dev1-art) — Asset generati via Codex CLI (tmux codex-dev1), giudicati contro | — | 2026-08-17 | ✅ |
-| [game/docs/ANALISI-GIOCHI.md](../game/docs/ANALISI-GIOCHI.md) | Analisi giochi di riferimento — appunti sessione con Leone (2026-07-07) — Analisi guidata, un gioco alla volta: cosa c'è / cosa non c'è / cosa ci piace / cosa non ci piace. | — | 2026-07-07 | ✅ |
-| [game/docs/ASSETS.md](../game/docs/ASSETS.md) | Pipeline asset personaggi — Sprite in-world (SVG a layer componibili) | — | 2026-07-30 | ✅ |
-| [game/docs/DATA-ADAPTER.md](../game/docs/DATA-ADAPTER.md) | Data adapter — contratto fra gioco e dati del team — Il gioco non conosce Supabase né la dashboard: parla solo con l'autoload | — | 2026-07-11 | ✅ |
-| [game/docs/FIRST-RUN.md](../game/docs/FIRST-RUN.md) | First-run conversation contract — The office must be understandable before Docker or an LLM is available. | — | 2026-08-12 | ✅ |
-| [game/docs/GDD.md](../game/docs/GDD.md) | JHT: The Office — current product design — The Godot application is the only desktop client for Job Hunter Team. | — | 2026-07-29 | ✅ |
-| [game/docs/RESEARCH-DOSSIER.md](../game/docs/RESEARCH-DOSSIER.md) | Game Research Dossier — "The Box" (versione gamificata di Job Hunter Team) — Materiale di supporto per le sessioni che sviluppano game/ (branch work3-dev1). | — | 2026-07-07 | ✅ |
-| [game/docs/ROADMAP.md](../game/docs/ROADMAP.md) | Native application roadmap — The Electron-to-Godot migration, live data views, embedded console and | — | 2026-08-24 | ✅ |
-| [game/docs/SPRITES.md](../game/docs/SPRITES.md) | Sprite agenti — contratto spritesheet (v1, 2026-07-11) — Gli agenti in-world passano dagli SVG a parti (CharacterRig) a spritesheet | — | 2026-07-30 | ✅ |
-| [game/assets/icons/SOURCES.md](../game/assets/icons/SOURCES.md) | Provenienza ufficiale, condizioni d'uso e varianti Docker/Telegram immutate impiegate dalle icone della sidebar Godot | — | 2026-08-07 | ✅ |
-
-
 ## 📖 docs/about
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |

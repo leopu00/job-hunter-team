@@ -11,7 +11,7 @@ There is **no `/feedback` page**: three surfaces post to `POST /api/feedback`:
 
 - **Signed-in web app** — the avatar menu opens **"Report a problem"**. It sends only the subject, account-free description and the current route previewed to the user; `client: "web-dashboard"`.
 - **Public web form** — `/contact`, for people who are not signed in or have not installed the app; `client: "web-contact"`.
-- **Godot office** — the `FeedbackService` autoload ([`game/scripts/support/feedback_service.gd`](../../game/scripts/support/feedback_service.gd)), behind **System → "Report a problem"** and a second diagnostics entry. It is the only surface that attaches diagnostics and it writes a local copy under `user://reports` before attempting the network. `JHT_FEEDBACK_URL` overrides the endpoint.
+- **Godot office** (up to v0.3.9, no longer in the tree) — the `FeedbackService` autoload, behind **System → "Report a problem"** and a second diagnostics entry. It is the only surface that attaches diagnostics and it writes a local copy under `user://reports` before attempting the network. `JHT_FEEDBACK_URL` overrides the endpoint.
 
 Browser-side coverage of the two web surfaces: [`e2e/tests/82-support-report.spec.ts`](../../e2e/tests/82-support-report.spec.ts).
 
