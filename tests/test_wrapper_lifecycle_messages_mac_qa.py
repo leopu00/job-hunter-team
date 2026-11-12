@@ -49,5 +49,5 @@ def test_a_real_rollback_still_says_so():
 def test_the_container_started_on_demand_goes_through_the_quiet_compose():
     body = _function("ensure_up")
     code = "\n".join(line for line in body.splitlines() if not line.lstrip().startswith("#"))
-    assert "compose_quiet up -d" in code
+    assert "compose_up_team" in code
     assert not re.search(r"^\s*compose up -d", code, re.M)

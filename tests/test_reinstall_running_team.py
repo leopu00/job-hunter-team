@@ -463,4 +463,6 @@ def test_up_and_down_print_the_state_line_for_every_runtime_in_the_wrapper_sourc
     assert not re.search(r'!= podman \] \|\| printf .%s\\n. "\$\(jht_say (up|down)\.done', text)
     for branch in ("  up)\n", "  start-container)\n", "  down|stop-container)\n", "  recreate)\n"):
         assert branch + '    jht_compose_verbose_requested "${@:2}"\n' in text, branch
-    assert len(re.findall(r"^    compose_quiet up -d$", text, re.M)) == 3
+    assert len(re.findall(r"^    compose_up_team$", text, re.M)) == 3
+    team_up = text[text.index("compose_up_team() {"):]
+    assert "compose_quiet up -d" in team_up[:team_up.index("\n}\n")]
