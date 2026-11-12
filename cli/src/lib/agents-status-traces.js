@@ -13,7 +13,7 @@
  * agent's, naming the subagent):
  *   - run_finished "completed": idle. A turn that ends with no pause and no
  *     mail ends the process; the TUI agent would wait at its prompt
- *     (docs/parity.md, runCycles 4). Only within IDLE_HORIZON_MS: a run
+ *     (agent-harness/runtime/docs/parity.md, runCycles 4). Only within IDLE_HORIZON_MS: a run
  *     that ended a day ago is an old test's agent, not one of today's team;
  *   - run_finished "stopped", run_failed: no status, the agent is gone;
  *   - a run still open but silent for TRACE_LIVE_MS: no status. A live

@@ -291,8 +291,8 @@ test('the sign-in runs the pi of the image by its own path, and the name only wh
 });
 
 test('the boot gate reads the login of Pi only when it is a regular file of a sane size, and only then looks at the entry names', () => {
-  const pid1 = readFileSync(join(cli, 'src/commands/pid1.js'), 'utf-8');
-  const check = pid1.split('async function hasProviderCredentials()')[1].split('\n}\n')[0];
+  const module = readFileSync(join(cli, 'src/lib/provider-signin.js'), 'utf-8');
+  const check = module.split('export async function providerSignedIn(')[1].split('\n}\n')[0];
   const guard = check.indexOf('lstat(marker)');
   assert.ok(guard > 0 && guard < check.indexOf('readFile(marker'), 'lstat comes before the read');
   assert.match(check, /!info\.isFile\(\) \|\| info\.size <= 0 \|\| info\.size > 256 \* 1024/);

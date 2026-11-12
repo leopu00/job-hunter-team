@@ -27,13 +27,13 @@
  *   3. default `local` (sicuro: comportamento storico)
  */
 
-import { readFile, access, unlink, writeFile, lstat } from 'node:fs/promises';
+import { readFile, access, unlink, writeFile } from 'node:fs/promises';
 import { existsSync, createWriteStream, mkdirSync, statSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { watch } from 'node:fs';
 import { dirname } from 'node:path';
-import { PI_LOGIN_MARKER, inspectPiLogin, loginMarkerOf, piApiKeyConfigured } from '../../../shared/runtime/agent-harness.js';
+import { providerSignedIn } from '../lib/provider-signin.js';
 
 const JHT_ENTRY = '/app/cli/bin/jht.js';
 const JHT_HOME = '/jht_home';
@@ -281,27 +281,7 @@ async function ensureInitialTeamHalt() {
  */
 async function hasProviderCredentials() {
   try {
-    const raw = await readFile(JHT_CONFIG_PATH, 'utf-8');
-    const cfg = JSON.parse(raw);
-    // Il marker del login del provider (kimi, claude/anthropic, codex/openai), o di pi se il config
-    // sceglie l'harness pi: shared/runtime/agent-harness.js. Specchio: config_ready() in
-    // agent-watchdog.sh. Un provider sconosciuto non ha marker: false, e l'auto-start non parte.
-    // glm e kimi su pi: nessun login, vale la chiave API del config.
-    if (piApiKeyConfigured(cfg)) return true;
-    const relative = loginMarkerOf(cfg);
-    const marker = relative ? `${JHT_HOME}/${relative}` : null;
-    if (!marker) return false;
-    await access(marker);
-    // Pi's file has one entry per service: it is the sign-in of THIS provider only when its own entry is there (a file with only
-    // Anthropic's, a Claude subscription billed per token from Pi, does not start the team). Only the entry names are looked at.
-    if (relative === PI_LOGIN_MARKER) {
-      // a regular file of a sane size only (as shared/skills/pi_login.py): a FIFO or a huge file must not stop the boot on a read
-      const info = await lstat(marker);
-      if (!info.isFile() || info.size <= 0 || info.size > 256 * 1024) return false;
-      const seen = inspectPiLogin(await readFile(marker, 'utf-8'), cfg.active_provider);
-      return seen.state === 'ok' || seen.state === 'no_rule';
-    }
-    return true;
+    return await providerSignedIn(JSON.parse(await readFile(JHT_CONFIG_PATH, 'utf-8')), JHT_HOME);
   } catch {
     return false;
   }
@@ -539,7 +519,6 @@ async function maybeRunPairing() {
  * idempotente: se la config e' al massimo, exit 0 con "Nessuna migrazione
  * necessaria". Best-effort: un fallimento qui non blocca pid1, l'utente
  * puo' rieseguire `jht migrate` manualmente dal terminal embedded.
- * Vedi docs/internal/_archive/2026-05-20-vps-bootstrap-bugs.md §Bug #3.
  */
 async function runMigrate() {
   try {
@@ -990,7 +969,7 @@ async function dispatch() {
   // check). Regressione storica: introdotto 2026-05-08 (commit d4bb2ca2)
   // e poi perso al rebuild perché esisteva solo come `tmux new-session`
   // manuale. Pattern identico ad agent-watchdog ma cadenza interna allo
-  // script (sleep 1800s). Vedi docs/internal/_archive/2026-05-17-team-strategy-bugs.md §18.
+  // script (sleep 1800s).
   let doctorWatchdogChild = null;
   let doctorWatchdogRespawnTimer = null;
   const startDoctorWatchdog = () => {
@@ -1227,7 +1206,7 @@ async function dispatch() {
   // file bridge poller: pubblica l'indice dei file e serve le richieste
   // on-demand del web (upload effimero su Supabase Storage). Crash recovery
   // debounce 5s come gli altri reader. Vedi
-  // docs/internal/file-bridge-on-demand-2026-06-07.md
+  // docs/internal/architecture/file-bridge-on-demand.md
   const startFileBridge = () => {
     if (fileBridgeChild && !fileBridgeChild.killed) return;
     pid1Log('starting file-bridge poller (index + on-demand upload)');

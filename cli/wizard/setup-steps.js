@@ -15,6 +15,7 @@ import { startSubscriptionLogin } from '../src/auth/subscription-login.js';
 import { t } from './i18n.js';
 import { migrateToLatest } from '../src/commands/migrate.js';
 import { summarizeRoleModels } from './setup-models.js';
+import { localTimeZone } from '../src/lib/local-tz.js';
 
 /**
  * Setup Telegram CONSIGLIATO ma OPZIONALE (direction shift "interaction
@@ -80,10 +81,7 @@ export async function promptWorkingHours(prompter, currentWorkingHours) {
     }
     return 'custom_later';
   }
-  function detectLocalTz() {
-    try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; }
-    catch { return 'UTC'; }
-  }
+  const detectLocalTz = () => localTimeZone();
 
   const choice = await prompter.select({
     message: t('wizard.workhours.prompt'),

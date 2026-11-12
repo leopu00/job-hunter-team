@@ -1,6 +1,6 @@
 /**
  * JHT paths — fonte unica per la CLI (plain JS ESM).
- * Specchio di shared/paths.ts e tui/src/tui-paths.ts.
+ * Specchio di shared/paths.js.
  * Override via env var JHT_HOME e JHT_USER_DIR.
  */
 import { homedir } from 'node:os';

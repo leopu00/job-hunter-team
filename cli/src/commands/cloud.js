@@ -5044,7 +5044,7 @@ export function registerCloudCommand(program) {
   // l'indice dei file del container e serve le richieste on-demand del web
   // caricando i file in un bucket Supabase di transito via signed upload URL
   // (poi purgati). Co-spawnato da pid1 accanto agli altri reader. Vedi
-  // docs/internal/file-bridge-on-demand-2026-06-07.md
+  // docs/internal/architecture/file-bridge-on-demand.md
   cloud
     .command('file-bridge-listen')
     .description('Poll the file bridge index and upload CVs/attachments to the web on demand')

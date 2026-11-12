@@ -204,7 +204,10 @@ if [ "$JHT_LANG_CHOSEN" -eq 0 ]; then
   JHT_LANG_DEFAULT="$(jht_system_language)"
 fi
 JHT_LANG="$JHT_LANG_DEFAULT"
+JHT_LANG_ASKED_AT=""
 if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
+  # the person answers here: the wizard in the container reads `asked_at` and does not ask a second time
+  JHT_LANG_ASKED_AT="$(date +%s)"
   # Picker multilingue: il prompt resta in più lingue perché ovviamente
   # prima della scelta non sappiamo cosa renderizzare.
   case "$JHT_LANG_DEFAULT" in
@@ -256,7 +259,11 @@ if [ "$(jht_read_host_env_value "$HOST_ENV_PATH" JHT_LANG)" != "$JHT_LANG" ]; th
     if [ -n "$PRESERVED_TZ" ]; then printf 'JHT_USER_TZ=%s\n' "$PRESERVED_TZ"; fi
   } | jht_write_host_env
 fi
-printf '{\n  "locale": "%s"\n}\n' "$JHT_LANG" | jht_write_host_file "$I18N_PREFS_PATH"
+if [ -n "$JHT_LANG_ASKED_AT" ]; then
+  printf '{\n  "locale": "%s",\n  "asked_at": %s\n}\n' "$JHT_LANG" "$JHT_LANG_ASKED_AT" | jht_write_host_file "$I18N_PREFS_PATH"
+else
+  printf '{\n  "locale": "%s"\n}\n' "$JHT_LANG" | jht_write_host_file "$I18N_PREFS_PATH"
+fi
 
 # ── i18n: soltanto dati, mai helper shell dal filesystem ─────────────────
 # Questo script gira sull'host. Non importa codice da directory che il

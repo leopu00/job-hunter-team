@@ -69,7 +69,7 @@ export function cliAvailable(bin) {
 /**
  * Sorgente delle sessioni tmux:
  *   - container 'jht' up → tmux dentro container (i nomi NON hanno prefisso JHT-;
- *     il web/start-agent.sh crea sessioni come CAPITANO, SCOUT-1, SENTINELLA)
+ *     il .launcher/start-agent.sh crea sessioni come CAPITANO, SCOUT-1, SENTINELLA)
  *   - altrimenti → tmux host, modalita' legacy (prefix JHT-)
  */
 export function usingContainer() {
@@ -127,11 +127,6 @@ export function resolveConfig() {
     }
   }
   return { repoRoot: null, launcherDir: null };
-}
-
-/** Cartella visibile all'utente (dove drop CV e output) */
-export function getWorkspace() {
-  return JHT_USER_DIR;
 }
 
 /** Cartella nascosta dove girano gli agenti */

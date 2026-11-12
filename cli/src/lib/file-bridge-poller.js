@@ -5,7 +5,7 @@
  * leggere il filesystem del container, quindi quando l'utente chiede di
  * aprire un CV/allegato il file sale ON-DEMAND in un bucket Supabase di
  * transito e viene purgato dopo un TTL corto. Vedi
- * docs/internal/file-bridge-on-demand-2026-06-07.md
+ * docs/internal/architecture/file-bridge-on-demand.md
  *
  * Coerente con gli altri poller (team-commands-poller.js): long-poll HTTP
  * su base_url col token jht_sync_ di cloud.json, backoff esponenziale

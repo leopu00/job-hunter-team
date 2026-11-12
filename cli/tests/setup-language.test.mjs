@@ -96,3 +96,29 @@ test('jht setup lists --language', () => {
   const out = spawnSync(process.execPath, [join(cli, 'bin/jht.js'), 'setup', '--help'], { env: { PATH: dirname(process.execPath), HOME: h, JHT_HOME: h }, encoding: 'utf8' });
   assert.match(out.stdout, /--language <code>/);
 });
+
+test('the language the host setup has just asked is not asked again by the wizard; an old or missing mark asks', async () => {
+  const asked = [];
+  const prompter = { select: async (p) => { asked.push(p); return p.initialValue; }, note: async () => {} };
+  const h = home();
+  process.env.JHT_HOME = h;
+  const now = Date.now();
+  writeFileSync(join(h, 'i18n-prefs.json'), JSON.stringify({ locale: 'it', asked_at: Math.floor(now / 1000) - 60 }));
+  assert.equal(await askLanguage(prompter, { env: {}, home: h, now }), 'it');
+  assert.equal(asked.length, 0, 'asked a minute ago by the host setup: not asked again');
+  writeFileSync(join(h, 'i18n-prefs.json'), JSON.stringify({ locale: 'it', asked_at: Math.floor(now / 1000) - 7200 }));
+  await askLanguage(prompter, { env: {}, home: h, now });
+  assert.equal(asked.length, 1, 'two hours ago: a new setup asks');
+  writeFileSync(join(h, 'i18n-prefs.json'), JSON.stringify({ locale: 'it' }));
+  await askLanguage(prompter, { env: {}, home: h, now });
+  assert.equal(asked.length, 2, 'a default written without asking: asked');
+});
+
+test('the working hours take the zone the host setup chose, not the UTC of the container', async () => {
+  const { localTimeZone } = await import(join(cli, 'src/lib/local-tz.js'));
+  assert.equal(localTimeZone({ JHT_USER_TZ: 'Europe/Rome' }), 'Europe/Rome');
+  assert.equal(localTimeZone({ JHT_USER_TZ: 'America/Sao_Paulo' }), 'America/Sao_Paulo');
+  const system = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  assert.equal(localTimeZone({ JHT_USER_TZ: 'Not/AZone' }), system, 'a value that is not a zone falls back to the system zone');
+  assert.equal(localTimeZone({}), system);
+});
