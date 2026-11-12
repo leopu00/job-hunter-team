@@ -103,7 +103,9 @@ def box(tmp_path):
         return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
     def wait_for(state: str):
-        for _ in range(150):
+        # The pull runs in a process of its own: on the gate's Windows runner, with Windows PowerShell 5.1 and the other tests of the
+        # slice starting shells of their own, it took more than 30 seconds to write its end. What this waits for is the state.
+        for _ in range(600):
             data = notice()
             if data and data["state"] == state:
                 return data

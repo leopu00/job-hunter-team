@@ -502,8 +502,8 @@ function Show-PodmanSetupProblem {
       Write-JhtProblem -What 'Podman started the machine, but its connection for Docker tools (win-sshproxy.exe) did not start.' -Todo @(
         'The line above says why. Run the installer from the Windows desktop of this user (the Start menu,',
         'Windows PowerShell), not from ssh, a service or a scheduled task: those run without a desktop.',
-        'If you already did, restart Windows first.',
-        $again)
+        $again,
+        'Only if it stops here again from the desktop: restart Windows, then run it once more.')
     }
     default {
       Write-JhtProblem -What "The Podman setup stopped (exit code $Code)." -Todo @(
