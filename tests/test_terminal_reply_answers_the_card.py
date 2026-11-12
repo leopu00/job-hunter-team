@@ -89,6 +89,30 @@ def test_a_yes_that_says_what_it_does_confirms_the_one_card_that_asks_to_save(bo
     assert stored_answers(box)[0]["scelte"] == ["confirm"]
 
 
+@pytest.mark.parametrize("text", [
+    "confermo, fai partire il team", "Confermo e avvia la squadra!", "sì, salva e vai", "conferma, procedi", "yes, save and start the team",
+    "confirm, go ahead", "ja, speichern und los", "oui, enregistre et vas-y", "sí, guarda y adelante", "igen, mentsd és indulhat", "sim, guarda e segue",
+])
+def test_a_yes_followed_by_a_go_on_confirms_the_card(box, text):
+    """The yes that says what it does, plus a phrase that only says «go on»: written as a person does, once the CV is read."""
+    stage(box)
+    posted = ask(box)
+    out = reply(box, "assistente", text)
+    assert out["result"] == "answered" and out["questionId"] == posted["question_id"], out
+    assert stored_answers(box)[0]["scelte"] == ["confirm"]
+
+
+@pytest.mark.parametrize("text", [
+    "confermo ma cambia la città", "confermo, fai partire il team ma prima correggi il ruolo", "yes, save but the city is wrong",
+    "conferma e cancella tutto", "fai partire il team", "ok, fai partire il team", "ja, speichern und lösche alles",
+])
+def test_a_yes_followed_by_anything_else_is_chat_and_the_card_stays_open(box, text):
+    stage(box)
+    ask(box)
+    assert reply(box, "assistente", text) == {"result": "chat"}
+    assert stored_answers(box) == []
+
+
 @pytest.mark.parametrize("text", ["yes", "Yes!", "ok", "okay", "y", "sì", "si", "oui", "ja", "igen", "sim", "sí"])
 def test_a_bare_yes_or_ok_is_chat_and_never_saves_the_profile(box, text):
     """«ok» written to the Assistente for something else while the card is open must not confirm it."""

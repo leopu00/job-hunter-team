@@ -1136,9 +1136,34 @@ AFFIRMATIVE_REPLIES = frozenset({
 CONFIRM_OPTION_ID = "confirm"
 
 
+# What a person adds after the yes when the profile is the last thing before the team starts: «confermo, fai partire il team».
+# A closed list too, of phrases that only say «go on»: a tail that asks for anything else («but change the city», «and
+# also…») is not in it, and the yes with that tail is chat, the card stays open.
+CONTINUATION_TAILS = frozenset({
+    "start the team", "start the team now", "go ahead", "go on", "let s go", "lets go", "proceed", "start",
+    "fai partire il team", "fai partire la squadra", "avvia il team", "avvia la squadra", "avvia il team ora",
+    "vai", "vai avanti", "procedi", "andiamo", "partiamo", "parti", "partiamo pure", "fai pure",
+    "inicia el equipo", "arranca el equipo", "adelante", "continua", "vamos", "sigue",
+    "starte das team", "team starten", "los", "weiter", "mach weiter", "leg los", "los geht s",
+    "lance l équipe", "lance l equipe", "démarre l équipe", "demarre l equipe", "vas y", "allons y", "continue", "on y va",
+    "indítsd el a csapatot", "inditsd el a csapatot", "mehet", "folytasd", "gyerünk", "gyerunk", "indulhat",
+    "inicia a equipa", "arranca a equipa", "inicia a equipe", "vai em frente", "avança", "avanca", "segue",
+})
+_CONNECTORS = frozenset({"e", "and", "y", "und", "et", "és"})
+
+
 def _affirmative(text: str) -> bool:
-    words = re.sub(r"[^\w ]+", " ", str(text or "").casefold())
-    return " ".join(words.split()) in AFFIRMATIVE_REPLIES
+    words = " ".join(re.sub(r"[^\w ]+", " ", str(text or "").casefold()).split())
+    if words in AFFIRMATIVE_REPLIES:
+        return True
+    for form in AFFIRMATIVE_REPLIES:
+        if words.startswith(form + " "):
+            tail = words[len(form) + 1:].split()
+            if tail and tail[0] in _CONNECTORS:
+                tail = tail[1:]
+            if " ".join(tail) in CONTINUATION_TAILS:
+                return True
+    return False
 
 
 def open_cards(conn: sqlite3.Connection, agent: str, *, now: datetime | None = None) -> list[dict]:

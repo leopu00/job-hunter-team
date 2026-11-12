@@ -2008,7 +2008,7 @@ _welcome_kickoff() {
       "1. Run exactly this command, with no changes: python3 /app/shared/skills/assistant_welcome.py deliver" \
       "   It posts the welcome in the app chat (with the first question of the onboarding in the same message when the profile is not ready), reads the line back, sends it on Telegram too if a bot is configured, and ONLY THEN writes ${welcome_flag}. Running it again is safe: a welcome already in the chat is not sent twice." \
       "" \
-      "2. If it prints WELCOME_DELIVERED: acknowledge the system with one line: '[@assistente -> @system] [WELCOME-ACK] delivered'. Never touch ${welcome_flag} by hand, not even to say 'skipped'." \
+      "2. If it prints WELCOME_DELIVERED: acknowledge the system with one line: '[@assistente -> @system] [WELCOME-ACK] delivered' (that line is the text of your reply: no command, nothing to look up). Never touch ${welcome_flag} by hand, not even to say 'skipped'." \
       "   If it prints WELCOME_NOT_DELIVERED or fails: do NOT create the flag, write the error to \$JHT_AGENT_DIR/welcome-error.log, acknowledge with '[@assistente -> @system] [WELCOME-ACK] failed'. The launcher asks you again, up to 3 times." \
       "" \
       "3. Then, if ${welcome_dir}/ready.flag does not exist, you lead the onboarding in the chat (skill onboarding-flow): the welcome already asked the first question, so do not ask it again; wait for the answer and go on one question per turn until the profile is complete. If the user has already written in the chat, answer them. Do not wait for any Telegram signal."
