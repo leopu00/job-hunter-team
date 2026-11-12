@@ -3,6 +3,8 @@ import { join } from 'node:path';
 import { JHT_HOME } from '../jht-paths.js';
 import { execArgvInContainer } from '../utils/container-proxy.js';
 import { writePrivateJson } from '../lib/secure-config-io.js';
+import { localTimeZone } from '../lib/local-tz.js';
+
 
 // #9 — `jht wh simulate` girava SEMPRE via `docker exec jht`, ma il wrapper
 // `jht` esegue già DENTRO il container (JHT_SHELL_VIA=docker:jht): da lì non
@@ -44,10 +46,7 @@ async function saveConfig(cfg) {
   writePrivateJson(CONFIG_FILE, cfg);
 }
 
-function detectLocalTz() {
-  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; }
-  catch { return 'UTC'; }
-}
+const detectLocalTz = () => localTimeZone();
 
 function parseDayList(spec) {
   const s = (spec || '').toLowerCase().trim();

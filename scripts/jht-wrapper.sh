@@ -4307,7 +4307,8 @@ ensure_up() {
     err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
     exit 1
   }
-  compose up -d
+  # come `jht up`: le righe di avanzamento di compose solo con --verbose o se compose fallisce
+  compose_quiet up -d
   # Attendi che il container sia in stato running e con ownership completa
   # prima di inoltrare qualunque comando nel nuovo processo.
   local tries=20
