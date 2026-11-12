@@ -482,6 +482,273 @@ function Get-JhtPodmanPipeAdvice {
     'Then run the installer again.')
 }
 
+# WSLCONFIG-BEGIN
+# %USERPROFILE%\.wslconfig is the settings file of WSL2 for ALL of the person's distributions, not ours: it is never replaced and a key
+# the person already has is never touched. A key is added only when it is absent, with a comment line before it that says who added
+# it; what was added is recorded (one record file) so that the uninstall takes out exactly those lines and nothing else. The same
+# block is in podman-machine-bridge.ps1 and jht-uninstall-windows.ps1 (a test keeps them identical).
+$script:JhtWslConfigComment = '# Job Hunter Team added the next line (its installer); "jht uninstall" removes it. Edit or delete it freely.'
+
+# The file as lines, or the reason it is not read: a link, a folder, UTF-16 (Notepad's "Unicode"), or text that is not UTF-8 (WSL reads
+# it in the system's code page, so a file with accented text in it is not ours to rewrite).
+function Read-JhtWslConfigFile {
+  param([Parameter(Mandatory)][string]$Path)
+  $info = $null
+  try { $info = Get-Item -LiteralPath $Path -Force -ErrorAction Stop } catch { $info = $null }
+  if (-not $info) { return @{ Exists = $false; Lines = @(); NewLine = "`r`n"; Bom = $false; Reason = '' } }
+  if ($info.PSIsContainer -or ($info.Attributes -band [IO.FileAttributes]::ReparsePoint)) { return @{ Exists = $true; Reason = 'it is a link or a folder' } }
+  $bytes = [IO.File]::ReadAllBytes($Path)
+  if ($bytes.Length -ge 2 -and (($bytes[0] -eq 0xFF -and $bytes[1] -eq 0xFE) -or ($bytes[0] -eq 0xFE -and $bytes[1] -eq 0xFF))) { return @{ Exists = $true; Reason = 'it is saved as UTF-16' } }
+  if ($bytes -contains 0) { return @{ Exists = $true; Reason = 'it is not plain text' } }
+  $bom = ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF)
+  try { $text = [Text.UTF8Encoding]::new($false, $true).GetString($bytes, $(if ($bom) { 3 } else { 0 }), $bytes.Length - $(if ($bom) { 3 } else { 0 })) }
+  catch { return @{ Exists = $true; Reason = 'it is not UTF-8 text' } }
+  $newLine = if ($text.Contains("`r`n")) { "`r`n" } elseif ($text.Contains("`n")) { "`n" } else { "`r`n" }
+  $lines = @()
+  if ($text.Length) {
+    $lines = @($text -split '\r?\n')
+    if ($lines[-1] -eq '') { $lines = @($lines | Select-Object -First ($lines.Count - 1)) }
+  }
+  return @{ Exists = $true; Lines = $lines; NewLine = $newLine; Bom = $bom; Reason = '' }
+}
+
+# Written to a temporary file beside it and put in its place: a program reading it never meets half a file.
+function Write-JhtWslConfigFile {
+  param([Parameter(Mandatory)][string]$Path, [string[]]$Lines, [string]$NewLine = "`r`n", [bool]$Bom = $false)
+  $body = if ($Lines.Count) { ($Lines -join $NewLine) + $NewLine } else { '' }
+  $encoded = [Text.UTF8Encoding]::new($false).GetBytes($body)
+  if ($Bom) { $encoded = [byte[]](@(0xEF, 0xBB, 0xBF) + $encoded) }
+  $temporary = $Path + '.jht-' + [Guid]::NewGuid().ToString('N').Substring(0, 8) + '.tmp'
+  try {
+    [IO.File]::WriteAllBytes($temporary, $encoded)
+    if ([IO.File]::Exists($Path)) { [IO.File]::Replace($temporary, $Path, [NullString]::Value) } else { [IO.File]::Move($temporary, $Path) }
+  } finally { if ([IO.File]::Exists($temporary)) { [IO.File]::Delete($temporary) } }
+}
+
+# The lines of each section: name (lower case) -> first and last line index; the lines before any header are not in a section.
+function Get-JhtWslConfigSections {
+  param([string[]]$Lines)
+  $found = [ordered]@{}
+  $name = $null
+  for ($i = 0; $i -lt $Lines.Count; $i++) {
+    if ($Lines[$i] -match '^\s*\[([^\]]+)\]\s*(?:[#;].*)?$') {
+      $name = $Matches[1].Trim().ToLowerInvariant()
+      if (-not $found.Contains($name)) { $found[$name] = @{ Header = $i; Last = $i } }
+      $current = $name
+    } elseif ($null -ne $name -and $found.Contains($name)) {
+      $found[$name].Last = $i
+    }
+  }
+  return $found
+}
+
+# Adds each wanted key that is absent from its section: @{ Section; Key; Value }. Answer: Status 'added' | 'unchanged' | 'skipped'
+# (with Reason), Created (the file did not exist), Added (the entries written, with SectionCreated).
+function Add-JhtWslConfigKeys {
+  param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][object[]]$Entries)
+  $file = Read-JhtWslConfigFile -Path $Path
+  if ($file.Reason) { return @{ Status = 'skipped'; Reason = $file.Reason; Created = $false; Added = @() } }
+  $lines = [System.Collections.Generic.List[string]]::new()
+  foreach ($line in @($file.Lines)) { $lines.Add([string]$line) }
+  $added = @()
+  foreach ($entry in $Entries) {
+    $section = ([string]$entry.Section).ToLowerInvariant()
+    $sections = Get-JhtWslConfigSections -Lines $lines.ToArray()
+    if ($sections.Contains($section)) {
+      $range = $sections[$section]
+      $present = $false
+      for ($i = $range.Header + 1; $i -le $range.Last; $i++) {
+        if ($lines[$i] -match ('^\s*' + [regex]::Escape([string]$entry.Key) + '\s*=')) { $present = $true; break }
+      }
+      if ($present) { continue }
+      # after the last line that is a setting (a comment or blank lines at the end of the section belong to what follows)
+      $at = $range.Header
+      for ($i = $range.Header + 1; $i -le $range.Last; $i++) { if ($lines[$i] -match '^\s*[^\s#;]') { $at = $i } }
+      $lines.Insert($at + 1, "$($entry.Key)=$($entry.Value)")
+      $lines.Insert($at + 1, $script:JhtWslConfigComment)
+      $added += @{ Section = $section; Key = [string]$entry.Key; Value = [string]$entry.Value; SectionCreated = $false }
+    } else {
+      if ($lines.Count -and $lines[$lines.Count - 1].Trim() -ne '') { $lines.Add('') }
+      $lines.Add("[$section]")
+      $lines.Add($script:JhtWslConfigComment)
+      $lines.Add("$($entry.Key)=$($entry.Value)")
+      $added += @{ Section = $section; Key = [string]$entry.Key; Value = [string]$entry.Value; SectionCreated = $true }
+    }
+  }
+  if (-not $added.Count) { return @{ Status = 'unchanged'; Reason = ''; Created = $false; Added = @() } }
+  Write-JhtWslConfigFile -Path $Path -Lines $lines.ToArray() -NewLine $file.NewLine -Bom $file.Bom
+  return @{ Status = 'added'; Reason = ''; Created = (-not $file.Exists); Added = $added }
+}
+
+# The record of what was added, one fact per line: file=<path>, created=0|1, add=<section>|<key>|<value>|<section created 0|1>.
+function ConvertTo-JhtWslConfigRecord {
+  param([Parameter(Mandatory)][string]$Path, [bool]$Created, [object[]]$Added)
+  $out = @('version=1', "file=$Path", "created=$(if ($Created) { 1 } else { 0 })")
+  foreach ($entry in $Added) { $out += "add=$($entry.Section)|$($entry.Key)|$($entry.Value)|$(if ($entry.SectionCreated) { 1 } else { 0 })" }
+  return ($out -join "`n") + "`n"
+}
+
+# Takes out exactly the lines the record names, each only if it is still there as it was written (the comment line before it too).
+# What the person changed stays. Answer: Removed, Kept (the lines left because they were changed or are gone), Path.
+# The record of what the setup added, read only from a plain small file (never through a link or a folder): '' otherwise.
+function Read-JhtWslConfigRecord {
+  param([Parameter(Mandatory)][string]$Path)
+  try {
+    $info = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    if ($info.PSIsContainer -or ($info.Attributes -band [IO.FileAttributes]::ReparsePoint) -or $info.Length -gt 4096) { return '' }
+    return [IO.File]::ReadAllText($Path)
+  } catch { return '' }
+}
+
+# The only file a record may name: .wslconfig in the profile of the person who runs the uninstall. A record that names any other
+# file is not acted on (it sits in a folder the person can write, and created=1 would delete the file it names).
+function Test-JhtWslConfigRecordTarget {
+  param([string]$Path, [Parameter(Mandatory)][string]$ProfilePath)
+  try {
+    if (-not $Path -or -not [IO.Path]::IsPathRooted($Path) -or -not [IO.Path]::IsPathRooted($ProfilePath)) { return $false }
+    $expected = [IO.Path]::GetFullPath([IO.Path]::Combine($ProfilePath, '.wslconfig'))
+    return [string]::Equals([IO.Path]::GetFullPath($Path), $expected, [StringComparison]::OrdinalIgnoreCase)
+  } catch { return $false }
+}
+
+function Remove-JhtWslConfigKeys {
+  param([Parameter(Mandatory)][AllowEmptyString()][string]$RecordText, [Parameter(Mandatory)][string]$ProfilePath)
+  $path = ''; $created = $false; $adds = @()
+  foreach ($line in ($RecordText -split '\r?\n')) {
+    if ($line -match '^file=(.+)$') { $path = $Matches[1] }
+    elseif ($line -match '^created=1$') { $created = $true }
+    elseif ($line -match '^add=([^|]+)\|([^|]+)\|([^|]*)\|([01])$') { $adds += @{ Section = $Matches[1]; Key = $Matches[2]; Value = $Matches[3]; SectionCreated = ($Matches[4] -eq '1') } }
+  }
+  if (-not $path -or -not [IO.Path]::IsPathRooted($path) -or -not $adds.Count) { return @{ Removed = 0; Kept = 0; Path = $path; Reason = 'no record' } }
+  if (-not (Test-JhtWslConfigRecordTarget -Path $path -ProfilePath $ProfilePath)) { return @{ Removed = 0; Kept = 0; Path = $path; Reason = 'no record' } }
+  $file = Read-JhtWslConfigFile -Path $path
+  if (-not $file.Exists) { return @{ Removed = 0; Kept = 0; Path = $path; Reason = '' } }
+  if ($file.Reason) { return @{ Removed = 0; Kept = $adds.Count; Path = $path; Reason = $file.Reason } }
+  $lines = [System.Collections.Generic.List[string]]::new()
+  foreach ($line in @($file.Lines)) { $lines.Add([string]$line) }
+  $removed = 0; $kept = 0
+  foreach ($entry in $adds) {
+    $sections = Get-JhtWslConfigSections -Lines $lines.ToArray()
+    $hit = -1
+    if ($sections.Contains($entry.Section)) {
+      $range = $sections[$entry.Section]
+      for ($i = $range.Header + 1; $i -le $range.Last; $i++) {
+        if ($lines[$i] -match ('^\s*' + [regex]::Escape($entry.Key) + '\s*=\s*(.*?)\s*$') -and $Matches[1] -eq $entry.Value -and $i -gt $range.Header + 0 -and $lines[$i - 1] -ceq $script:JhtWslConfigComment) { $hit = $i; break }
+      }
+    }
+    if ($hit -lt 0) { $kept++; continue }
+    $lines.RemoveRange($hit - 1, 2)
+    $removed++
+    if ($entry.SectionCreated) {
+      $sections = Get-JhtWslConfigSections -Lines $lines.ToArray()
+      if ($sections.Contains($entry.Section)) {
+        $range = $sections[$entry.Section]
+        $empty = $true
+        for ($i = $range.Header + 1; $i -le $range.Last; $i++) { if ($lines[$i].Trim() -ne '') { $empty = $false; break } }
+        if ($empty) {
+          $lines.RemoveRange($range.Header, $range.Last - $range.Header + 1)
+          if ($range.Header -gt 0 -and $lines.Count -ge $range.Header -and $lines[$range.Header - 1].Trim() -eq '') { $lines.RemoveAt($range.Header - 1) }
+        }
+      }
+    }
+  }
+  if ($removed) {
+    $onlyBlank = -not @($lines | Where-Object { $_.Trim() -ne '' }).Count
+    if ($created -and $onlyBlank) { [IO.File]::Delete($path) }
+    else { Write-JhtWslConfigFile -Path $path -Lines $lines.ToArray() -NewLine $file.NewLine -Bom $file.Bom }
+  }
+  return @{ Removed = $removed; Kept = $kept; Path = $path; Reason = '' }
+}
+# WSLCONFIG-END
+
+# What the setup asks of WSL for the memory of its machine. Measured on a 12 GB computer (Windows 10, WSL 3.0.5, no .wslconfig): WSL2
+# took 50% of the RAM (6 GB) for a machine that uses 0.5 to 0.7 GB, and the rest filled with page cache.
+# - memory=: a hard ceiling for the VM. Measured: 2GB held the VM at 2047 MB (Windows at 61%, from 93%) with the team's container up;
+#   the cache inside the ceiling is the kernel's to free. The VM is shared by EVERY distribution of the person, so the key is added
+#   only when the machine of Job Hunter Team is the only distribution registered, and only when it is below the half WSL takes anyway.
+#   2 GB up to 8 GB of RAM, 3 GB above (the 3 GB the machine was always asked for: `podman machine init --memory 3072` is not applied on WSL).
+# - autoMemoryReclaim=gradual ([experimental]) is NOT written: measured at rest, the VM stayed at 6058 MB for 15 minutes with it.
+#   The function below can add any [section] key, so a measured value (autoMemoryReclaim=dropCache has not been) is one entry.
+$script:JhtWslMemorySmallMegabytes = 2048
+$script:JhtWslMemoryMegabytes = 3072
+$script:JhtWslSmallComputerMegabytes = 8192
+
+# The distributions this Windows user has registered in WSL (their names), or $null when that cannot be read.
+function Get-JhtWslDistributionNames {
+  try {
+    $root = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss'
+    if (-not (Test-Path -LiteralPath $root)) { return ,@() }
+    return ,@(Get-ChildItem -LiteralPath $root -ErrorAction Stop | ForEach-Object { [string](Get-ItemProperty -LiteralPath $_.PSPath -Name DistributionName -ErrorAction SilentlyContinue).DistributionName } | Where-Object { $_ })
+  } catch { return $null }
+}
+
+# 0 when it cannot be read.
+function Get-JhtTotalMemoryMegabytes {
+  try { return [long]([long](Get-CimInstance -ClassName Win32_ComputerSystem -OperationTimeoutSec 10 -ErrorAction Stop).TotalPhysicalMemory / 1MB) } catch { return 0 }
+}
+
+# The distro WSL gives a Podman machine (the same rule as the wrapper's Get-JhtPodmanDistroName).
+function Get-JhtWslDistroNameOfMachine {
+  param([Parameter(Mandatory)][string]$MachineName)
+  if ($MachineName.StartsWith('podman', [StringComparison]::Ordinal)) { return $MachineName }
+  return "podman-$MachineName"
+}
+
+function Get-JhtWslConfigWanted {
+  param([long]$TotalMegabytes, $DistributionNames, [string]$OwnDistribution)
+  $wanted = @()
+  $alone = ($null -ne $DistributionNames -and @($DistributionNames | Where-Object { $_ -cne $OwnDistribution }).Count -eq 0)
+  if ($alone -and $TotalMegabytes -gt 0) {
+    $limit = if ($TotalMegabytes -le $script:JhtWslSmallComputerMegabytes) { $script:JhtWslMemorySmallMegabytes } else { $script:JhtWslMemoryMegabytes }
+    if ($limit -lt ($TotalMegabytes / 2)) { $wanted += @{ Section = 'wsl2'; Key = 'memory'; Value = "$([int]($limit / 1024))GB" } }
+  }
+  return $wanted
+}
+
+# Adds what is wanted that the person does not already have, records it, and says it. Never fails a setup: the caller catches.
+function Set-JhtWslConfigForMachine {
+  param([Parameter(Mandatory)][string]$RuntimeDir, [Parameter(Mandatory)][string]$MachineName, [string]$ProfilePath = $env:USERPROFILE)
+  if (-not $ProfilePath -or -not [IO.Path]::IsPathRooted($ProfilePath)) { return }
+  $wanted = @(Get-JhtWslConfigWanted -TotalMegabytes (Get-JhtTotalMemoryMegabytes) -DistributionNames (Get-JhtWslDistributionNames) -OwnDistribution (Get-JhtWslDistroNameOfMachine $MachineName))
+  if (-not $wanted.Count) { return }
+  $path = [IO.Path]::Combine($ProfilePath, '.wslconfig')
+  $answer = Add-JhtWslConfigKeys -Path $path -Entries $wanted
+  if ($answer.Status -eq 'skipped') {
+    Write-Host "  WSL settings: $path was left as it is ($($answer.Reason))." -ForegroundColor Yellow
+    return
+  }
+  if ($answer.Status -ne 'added') { return }
+  $recordPath = [IO.Path]::Combine($RuntimeDir, 'wslconfig-added')
+  $created = [bool]$answer.Created
+  $added = @($answer.Added)
+  if ([IO.File]::Exists($recordPath)) {
+    # an earlier setup added other lines: its record stays and grows
+    $old = Read-JhtWslConfigRecord -Path $recordPath
+    if ($old -match '(?m)^created=1\s*$') { $created = $true }
+    foreach ($line in ($old -split '\r?\n')) {
+      if ($line -match '^add=([^|]+)\|([^|]+)\|([^|]*)\|([01])$') { $added = @(@{ Section = $Matches[1]; Key = $Matches[2]; Value = $Matches[3]; SectionCreated = ($Matches[4] -eq '1') }) + $added }
+    }
+  }
+  [IO.Directory]::CreateDirectory($RuntimeDir) | Out-Null
+  [IO.File]::WriteAllText($recordPath, (ConvertTo-JhtWslConfigRecord -Path $path -Created $created -Added $added), [Text.UTF8Encoding]::new($false))
+  Write-Host "  WSL settings added to ${path}:" -ForegroundColor Cyan
+  foreach ($entry in @($answer.Added)) { Write-Host "    [$($entry.Section)] $($entry.Key)=$($entry.Value)" -ForegroundColor Cyan }
+  Write-Host '  WSL applies them the next time it starts (wsl --shutdown stops all your WSL distributions, so it is not done for you).' -ForegroundColor DarkGray
+  Write-Host '  To undo it: jht uninstall takes these lines out, or delete them by hand (each has a comment line above it).' -ForegroundColor DarkGray
+}
+
+# The pull of an image, and then the team's first minutes, fill the machine's page cache (about 5 GB were seen on a 12 GB computer,
+# measured: Windows counted it as the machine's memory and went to 93%; after this it went back to 63% in 20 seconds). It is clean
+# cache that WSL2 hands back to Windows once it is dropped. `sync` first, so nothing dirty is ever in it. Best effort: true when it
+# was done, false when it could not be (the machine did not answer, no sudo): a setup is never stopped for it.
+function Invoke-JhtMachineDropCaches {
+  param([Parameter(Mandatory)][string]$PodmanPath, [Parameter(Mandatory)][string]$MachineName)
+  try {
+    & { $ErrorActionPreference = 'Continue'; Invoke-JhtPodmanMachine -FilePath $PodmanPath -Arguments @('machine', 'ssh', $MachineName, 'sync && echo 3 | sudo timeout 30 tee /proc/sys/vm/drop_caches >/dev/null') 2>$null | Out-Null }
+    return ($LASTEXITCODE -eq 0)
+  } catch { return $false }
+}
+
 function Invoke-Checked {
   param([Parameter(Mandatory)][string]$FilePath, [Parameter(ValueFromRemainingArguments)][AllowEmptyString()][string[]]$Arguments)
   Invoke-JhtPodmanMachine -FilePath $FilePath -Arguments $Arguments
