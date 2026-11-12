@@ -39,6 +39,7 @@ import json
 import os
 import re
 import sys
+from functools import lru_cache
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -69,34 +70,28 @@ TOOLS = (
 TECH_SHAPE = re.compile(r"(?<![\w])(?:[A-Za-z]{1,12}(?:\+\+|#)|\.NET|[A-Za-z]+\.js|[A-Za-z]{2,}/[A-Za-z]{2,}|[A-Z]?[a-z]+[A-Z][A-Za-z]+)(?![\w])")
 NOT_TECH = frozenset({"LinkedIn", "YouTube", "PhD", "McDonald", "iPhone", "WhatsApp", "PayPal", "GitHub's"})
 
-# Words that say the person LACKS something (a declared gap), by language, as whole words.
-NEGATION = {
-    "en": r"not|no|never|without|lack|lacking|yet|haven't|don't|didn't|none",
-    "it": r"non|senza|mai|ancora|manc\w+|nessun\w*|purtroppo|però",
-    "es": r"no|sin|nunca|todavía|aún|ningun\w*|carezco|falta",
-    "fr": r"ne|pas|sans|jamais|aucun\w*|manque|n'ai",
-    "de": r"nicht|kein\w*|ohne|nie|fehlt|leider",
-    "pt": r"não|sem|nunca|ainda|nenhum\w*|falta",
-    "hu": r"nem|nincs|nélkül|soha|hiányzik|sajnos|még",
-}
-NEGATION_RE = {lang: re.compile(r"(?<![\w'])(?:" + words + r")(?![\w'])", re.I) for lang, words in NEGATION.items()}
+@lru_cache(maxsize=1)
+def _languages() -> dict:
+    """The per-language data: what says the person lacks something, the banned openings, the banned buzzwords."""
+    try:
+        data = json.loads((HERE / "cover_letter_check_languages.json").read_text(encoding="utf-8"))
+        for key in ("negation", "cliches"):
+            if not all(isinstance(data[key][lang], (str, list)) for lang in LANGUAGES):
+                raise ValueError(f"{key}: a language is missing")
+        if not isinstance(data["buzzwords"], list):
+            raise ValueError("buzzwords: not a list")
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        # a missing or broken data file is a check that cannot be made (exit 2), never a pass and never a crash
+        raise CannotCheck(f"cover_letter_check_languages.json: {exc}") from exc
+    return data
 
-# Openings cv-structure bans in a cover letter ("effort that ends with nothing"), lowercase, per language.
-CLICHES = {
-    "en": ("i am writing to express", "i'm writing to express", "please find attached", "i would be honoured", "i would be honored"),
-    "it": ("scrivo per esprimere", "in allegato troverà", "in allegato il mio cv", "sarebbe un onore", "sarei onorat"),
-    "es": ("escribo para expresar", "adjunto encontrará", "sería un honor"),
-    "fr": ("je vous écris pour exprimer", "veuillez trouver ci-joint", "ci-joint mon cv", "ce serait un honneur"),
-    "de": ("hiermit möchte ich", "bitte finden sie anbei", "anbei mein lebenslauf", "es wäre mir eine ehre"),
-    "pt": ("escrevo para expressar", "por favor encontre em anexo", "teria a honra"),
-    "hu": ("azért írok, hogy kifejezzem", "mellékelten", "megtiszteltetés lenne"),
-}
-# The English forms are also refused in every language: the skill's examples are in English.
-BUZZWORDS = (
-    "passionate about", "results-driven", "dynamic professional", "team player", "appassionato di", "appassionata di",
-    "orientato ai risultati", "orientata ai risultati", "apasionado por", "orientado a resultados", "passionné par",
-    "orienté résultats", "leidenschaftlich", "ergebnisorientiert", "apaixonado por",
-)
+
+@lru_cache(maxsize=None)
+def _negation(lang: str) -> re.Pattern:
+    words = _languages()["negation"][lang]
+    return re.compile(r"(?<![\w'])(?:" + words + r")(?![\w'])", re.I)
+
+
 # TODO is case-sensitive on purpose: "todo" is Portuguese and Spanish for "all".
 PLACEHOLDER = re.compile(r"<[^>\n]{1,60}>|\{\{[^}\n]{1,60}\}\}|\[[^\]\n]{2,40}\](?!\()|\bTODO\b|\bXXX+\b|(?i:lorem ipsum)")
 EMAIL_OR_URL = re.compile(r"\S{1,200}@\S{1,200}|https?://\S{1,300}|www\.\S{1,300}")
@@ -237,7 +232,7 @@ def analyze(
         hard.append({"code": "no_company", "detail": f"the letter never names {company}"})
 
     opening = body[:200].lower()
-    refused = [c for lang_code in LANGUAGES for c in CLICHES[lang_code] if c in opening]
+    refused = [c for lang_code in LANGUAGES for c in _languages()["cliches"][lang_code] if c in opening]
     if refused:
         hard.append({"code": "opening_cliche", "detail": refused[0]})
 
@@ -246,7 +241,7 @@ def analyze(
     if extra:
         hard.append({"code": "unsupported_number", "detail": ", ".join(extra)})
 
-    negation = NEGATION_RE[expected]
+    negation = _negation(expected)
     squashed = _squash(profile)
     invented: list[str] = []
     gaps: list[str] = []
@@ -264,7 +259,7 @@ def analyze(
     info["gaps_declared"] = gaps
 
     lowered = body.lower()
-    for phrase in BUZZWORDS:
+    for phrase in _languages()["buzzwords"]:
         if phrase in lowered:
             soft.append({"code": "buzzword", "detail": phrase})
     return {"ok": not hard, "hard": hard, "soft": soft, "info": info}

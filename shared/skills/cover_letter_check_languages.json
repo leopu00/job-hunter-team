@@ -1,0 +1,72 @@
+{
+  "_comment": "Language data of cover_letter_check.py, one entry per language of the product: the words that say the person lacks something (a declared gap), the openings cv-structure bans in a cover letter, and the buzzwords it bans. Kept in a data file, as text_language_words.json is, so that the script carries no user-facing copy in any language.",
+  "negation": {
+    "en": "not|no|never|without|lack|lacking|yet|haven't|don't|didn't|none",
+    "it": "non|senza|mai|ancora|manc\\w+|nessun\\w*|purtroppo|però",
+    "es": "no|sin|nunca|todavía|aún|ningun\\w*|carezco|falta",
+    "fr": "ne|pas|sans|jamais|aucun\\w*|manque|n'ai",
+    "de": "nicht|kein\\w*|ohne|nie|fehlt|leider",
+    "pt": "não|sem|nunca|ainda|nenhum\\w*|falta",
+    "hu": "nem|nincs|nélkül|soha|hiányzik|sajnos|még"
+  },
+  "cliches": {
+    "en": [
+      "i am writing to express",
+      "i'm writing to express",
+      "please find attached",
+      "i would be honoured",
+      "i would be honored"
+    ],
+    "it": [
+      "scrivo per esprimere",
+      "in allegato troverà",
+      "in allegato il mio cv",
+      "sarebbe un onore",
+      "sarei onorat"
+    ],
+    "es": [
+      "escribo para expresar",
+      "adjunto encontrará",
+      "sería un honor"
+    ],
+    "fr": [
+      "je vous écris pour exprimer",
+      "veuillez trouver ci-joint",
+      "ci-joint mon cv",
+      "ce serait un honneur"
+    ],
+    "de": [
+      "hiermit möchte ich",
+      "bitte finden sie anbei",
+      "anbei mein lebenslauf",
+      "es wäre mir eine ehre"
+    ],
+    "pt": [
+      "escrevo para expressar",
+      "por favor encontre em anexo",
+      "teria a honra"
+    ],
+    "hu": [
+      "azért írok, hogy kifejezzem",
+      "mellékelten",
+      "megtiszteltetés lenne"
+    ]
+  },
+  "buzzwords": [
+    "passionate about",
+    "results-driven",
+    "dynamic professional",
+    "team player",
+    "appassionato di",
+    "appassionata di",
+    "orientato ai risultati",
+    "orientata ai risultati",
+    "apasionado por",
+    "orientado a resultados",
+    "passionné par",
+    "orienté résultats",
+    "leidenschaftlich",
+    "ergebnisorientiert",
+    "apaixonado por"
+  ]
+}

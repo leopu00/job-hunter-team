@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -329,3 +330,44 @@ def test_a_long_run_of_digits_or_of_characters_without_a_space_is_checked_in_no_
     start = datetime.datetime.now()
     run(letter("en") + "\n" + "1" * 200_000 + "\n" + "a" * 200_000 + "\n" + "9 " * 100_000)
     assert (datetime.datetime.now() - start).total_seconds() < 10
+
+
+def test_the_language_data_lives_in_a_data_file_for_all_seven_languages() -> None:
+    """The words of the seven languages are data, not copy in the script (the English census of the backend reads the script)."""
+    data = clc._languages()
+    assert set(data["negation"]) == set(clc.LANGUAGES) == set(data["cliches"])
+    assert all(data["cliches"][lang] for lang in clc.LANGUAGES) and data["buzzwords"]
+    source = (SKILLS / "cover_letter_check.py").read_text(encoding="utf-8")
+    for word in ("senza", "troverà", "ohne", "sans", "nincs"):
+        assert word not in source, word
+
+
+@pytest.mark.parametrize("broken", ["missing", "not json", "no negation key", "a language missing"])
+def test_a_missing_or_broken_language_file_is_a_check_that_cannot_be_made(tmp_path: Path, broken: str) -> None:
+    """Exit 2 with a line on stderr, not a traceback (exit 1 is a failed check) and never 0."""
+    folder = tmp_path / "skills"
+    folder.mkdir()
+    for name in ("cover_letter_check.py", "text_language.py", "text_language_words.json"):
+        shutil.copy(SKILLS / name, folder / name)
+    data = json.loads((SKILLS / "cover_letter_check_languages.json").read_text(encoding="utf-8"))
+    target = folder / "cover_letter_check_languages.json"
+    if broken == "not json":
+        target.write_text("{not json", encoding="utf-8")
+    elif broken == "no negation key":
+        del data["negation"]
+        target.write_text(json.dumps(data), encoding="utf-8")
+    elif broken == "a language missing":
+        del data["cliches"]["de"]
+        target.write_text(json.dumps(data), encoding="utf-8")
+    profile = tmp_path / "profile"
+    profile.mkdir()
+    (profile / "candidate_profile.yml").write_text(PROFILE, encoding="utf-8")
+    letter_file = tmp_path / "letter.md"
+    letter_file.write_text(letter("en"), encoding="utf-8")
+    done = subprocess.run(
+        [sys.executable, "-I", str(folder / "cover_letter_check.py"), "--letter", str(letter_file), "--profile-dir", str(profile),
+         "--company", "Beta Corp", "--lang", "en"],
+        capture_output=True, text=True, timeout=60, check=False,
+    )
+    assert done.returncode == 2, done.stdout + done.stderr
+    assert "cannot check" in done.stderr and "Traceback" not in done.stderr
