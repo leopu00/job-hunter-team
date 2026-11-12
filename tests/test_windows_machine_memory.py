@@ -275,16 +275,17 @@ def test_autoMemoryReclaim_is_not_written_because_the_measure_did_not_show_it_he
 
 STEP_BODY = r"""
 function Get-JhtTotalMemoryMegabytes { return [long]$env:RAM }
+function Test-JhtWslVmRunning { return ($env:WSL_ON -eq '1') }
 function Get-JhtWslDistributionNames { return ,@($env:NAMES -split ',' | Where-Object { $_ }) }
 Set-JhtWslConfigForMachine -RuntimeDir $env:RUNTIME -MachineName 'jht-podman' -ProfilePath $env:PROFILE
 """
 
 
-def _step(tmp_path, names="podman-jht-podman", ram="12166"):
+def _step(tmp_path, names="podman-jht-podman", ram="12166", wsl_on="0"):
     profile = tmp_path / "profile"
     profile.mkdir(exist_ok=True)
     (tmp_path / "bin").mkdir(exist_ok=True)
-    result, _ = _run(tmp_path, ENABLER, [], STEP_BODY, {"RAM": ram, "NAMES": names, "RUNTIME": str(tmp_path / "runtime"), "PROFILE": str(profile)})
+    result, _ = _run(tmp_path, ENABLER, [], STEP_BODY, {"RAM": ram, "NAMES": names, "WSL_ON": wsl_on, "RUNTIME": str(tmp_path / "runtime"), "PROFILE": str(profile)})
     assert result.returncode == 0, result.stdout + result.stderr
     return result.stdout.replace("\r\n", "\n"), profile / ".wslconfig", tmp_path / "runtime" / "wslconfig-added"
 
@@ -293,10 +294,26 @@ def test_the_step_adds_records_and_tells_the_person_what_it_wrote_and_how_to_und
     out, config, record = _step(tmp_path)
     assert f"WSL settings added to {config}:" in out
     assert "[wsl2] memory=3GB" in out and "autoMemoryReclaim" not in out
-    assert "next time it starts" in out and "wsl --shutdown stops all your WSL distributions, so it is not done for you" in out
     assert "jht uninstall takes these lines out, or delete them by hand" in out
     assert config.is_file() and record.is_file()
     assert "created=1" in record.read_text(encoding="utf-8")
+    # WSL was off: the machine's start, right after, reads the file
+    assert "already running" not in out and "wsl --shutdown" not in out
+
+
+def test_with_wsl_already_running_it_says_the_limit_waits_for_a_restart_and_never_stops_wsl(tmp_path):
+    out, config, _ = _step(tmp_path, wsl_on="1")
+    assert "memory=3GB" in config.read_text(encoding="utf-8")
+    assert ("WSL is already running: the memory limit applies from the next restart of Windows, or of WSL "
+            "(wsl --shutdown stops all your WSL distributions, so it is not done for you).") in out
+
+
+def test_the_check_of_a_running_wsl_reads_its_vm_and_says_yes_when_it_cannot_read():
+    source = ENABLER.parent.joinpath("podman-machine-bridge.ps1").read_text(encoding="utf-8")
+    check = source[source.index("function Test-JhtWslVmRunning"):]
+    check = check[:check.index("\n}\n") + 3]
+    assert "Get-Process -Name 'vmmemWSL', 'vmmem'" in check and "catch { return $true }" in check
+    assert "wsl.exe" not in check and "--shutdown" not in check
 
 
 def test_a_computer_with_another_distribution_gets_no_file_at_all(tmp_path):

@@ -799,6 +799,13 @@ function Get-JhtTotalMemoryMegabytes {
   try { return [long]([long](Get-CimInstance -ClassName Win32_ComputerSystem -OperationTimeoutSec 10 -ErrorAction Stop).TotalPhysicalMemory / 1MB) } catch { return 0 }
 }
 
+# Whether the WSL virtual machine is up now: WSL reads .wslconfig only when its VM starts. vmmemWSL is the VM of the WSL from the Store,
+# vmmem the one of the inbox WSL of Windows 10 (a name Hyper-V machines share: then the line below is said once too often, never missing).
+# $true when it cannot be read.
+function Test-JhtWslVmRunning {
+  try { return [bool](@(Get-Process -Name 'vmmemWSL', 'vmmem' -ErrorAction SilentlyContinue).Count) } catch { return $true }
+}
+
 # The distro WSL gives a Podman machine (the same rule as the wrapper's Get-JhtPodmanDistroName).
 function Get-JhtWslDistroNameOfMachine {
   param([Parameter(Mandatory)][string]$MachineName)
@@ -845,7 +852,10 @@ function Set-JhtWslConfigForMachine {
   [IO.File]::WriteAllText($recordPath, (ConvertTo-JhtWslConfigRecord -Path $path -Created $created -Added $added), [Text.UTF8Encoding]::new($false))
   Write-Host "  WSL settings added to ${path}:" -ForegroundColor Cyan
   foreach ($entry in @($answer.Added)) { Write-Host "    [$($entry.Section)] $($entry.Key)=$($entry.Value)" -ForegroundColor Cyan }
-  Write-Host '  WSL applies them the next time it starts (wsl --shutdown stops all your WSL distributions, so it is not done for you).' -ForegroundColor DarkGray
+  # The setup starts the machine right after this: with WSL off, that start reads the file and nothing needs saying.
+  if (Test-JhtWslVmRunning) {
+    Write-Host '  WSL is already running: the memory limit applies from the next restart of Windows, or of WSL (wsl --shutdown stops all your WSL distributions, so it is not done for you).' -ForegroundColor Yellow
+  }
   Write-Host '  To undo it: jht uninstall takes these lines out, or delete them by hand (each has a comment line above it).' -ForegroundColor DarkGray
 }
 
