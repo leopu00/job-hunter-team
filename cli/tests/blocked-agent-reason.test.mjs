@@ -47,6 +47,14 @@ test('a provider that is not known still gets a sentence, not a bare «blocked»
   assert.match(text, /assistente is blocked: the provider refused the login/);
 });
 
+test('a credit that is gone (Z.ai 429 code 1113) is not «the limit is lifted»: it names the provider and the top-up', () => {
+  const text = strip(blockedLines(snapshot(row({ reason: 'credito_esaurito' })), activeProviderOf(glmOnPi)).join('\n'));
+  assert.match(text, /assistente is blocked: the credit on GLM \(Z\.ai\) is used up and needs a top-up\./);
+  assert.match(text, /Top it up on the provider's site: the team resumes by itself within half an hour \(if it was off: jht team start\)/);
+  assert.doesNotMatch(text, /limit is lifted/);
+  assert.match(strip(blockedLines(snapshot(row({ reason: 'credito_esaurito' })), null).join('\n')), /the credit on the provider is used up/);
+});
+
 test('the other reasons: limit, network, error, and a reason nobody told', () => {
   const lines = (reason) => strip(blockedLines(snapshot(row({ reason })), null).join('\n'));
   assert.match(lines('limite_5h'), /usage limit of the provider was reached/);

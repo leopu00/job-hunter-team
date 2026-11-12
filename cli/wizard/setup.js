@@ -295,6 +295,7 @@ async function runSetupSteps(prompter, state) {
   // ne ha solo il percorso (api_key_ref). Una chiave che il provider rifiuta non lascia niente di salvato.
   let authMethod = 'subscription';
   let apiKeySecret;
+  let keyVerdict = null; // what the provider said of the key kept (askPiApiKey): read again at the end
   let codexKey = null; // the OpenAI key of a Codex setup with a key, in memory until Codex has taken it
   const subscriptionConfig = undefined;
   if (!takesApiKey && harness === 'codex') {
@@ -321,7 +322,7 @@ async function runSetupSteps(prompter, state) {
     authMethod = 'api_key';
     // known before the key is asked: a cancel at any point from here on leaves this file as it was
     Object.assign(state, rememberKeyFile(selectedProvider.value));
-    const keyPath = await askPiApiKey(prompter, { t, tf, choice: selectedProvider });
+    const keyPath = await askPiApiKey(prompter, { t, tf, choice: selectedProvider, onVerdict: (verdict) => { keyVerdict = verdict; } });
     if (!keyPath) {
       await prompter.outro(t('wizard.key.aborted'));
       return false;
@@ -426,6 +427,7 @@ async function runSetupSteps(prompter, state) {
 
   // The configuration is said to be saved here, at the end, once everything it was for has been done.
   await showSummary(prompter, { selectedProvider });
-  await prompter.outro(t('wizard.outro_done'));
+  // the key is right and the account is empty: the Assistente will not answer until it is topped up (collaudo Linux, 12/11)
+  await prompter.outro(keyVerdict?.state === 'no_credit' ? tf('wizard.outro_no_credit', keyVerdict.label) : t('wizard.outro_done'));
   return true;
 }

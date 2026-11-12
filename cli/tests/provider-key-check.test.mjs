@@ -30,6 +30,18 @@ test('401 is a refusal; 200 is valid; everything else is «could not verify», n
   assert.deepEqual([slow.state, slow.reason], ['unverified', 'timeout']);
 });
 
+test('an answer that says the account has no credit is «no_credit», not a refusal and not «could not verify»', async () => {
+  const said = (status, body) => async () => ({ status, ok: false, text: async () => body });
+  const zai = '{"error":{"code":"1113","message":"Insufficient balance or no resource package. Please recharge."}}';
+  const kimi = '{"error":{"message":"Your account org-x is suspended due to insufficient balance","type":"exceeded_current_quota_error"}}';
+  assert.deepEqual(await checkPiApiKey('glm', KEY, { fetchImpl: said(429, zai) }), { state: 'no_credit', label: 'GLM (Z.ai)', httpStatus: 429 });
+  assert.equal((await checkPiApiKey('kimi', KEY, { fetchImpl: said(429, kimi) })).state, 'no_credit');
+  // a plain rate limit, a body that cannot be read, a request id that happens to hold 1113: none of them is a verdict
+  assert.equal((await checkPiApiKey('glm', KEY, { fetchImpl: said(429, '{"error":{"code":"1302","message":"Rate limit reached"}}') })).state, 'unverified');
+  assert.equal((await checkPiApiKey('glm', KEY, { fetchImpl: async () => ({ status: 429, ok: false, text: async () => { throw new Error('reset'); } }) })).state, 'unverified');
+  assert.equal((await checkPiApiKey('glm', KEY, { fetchImpl: said(500, 'upstream error, request id 1113') })).state, 'unverified');
+});
+
 test('the call is a GET with the key as a bearer, to the route of that provider (moonshot is kimi); no key, no call', async () => {
   const seen = [];
   const redirects = [];

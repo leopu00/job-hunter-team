@@ -62,7 +62,8 @@ def test_every_reason_the_module_emits_has_a_sentence_and_nothing_else_hangs_aro
     assert absent == set(module.NOT_EMITTED_REASONS)
 
 
-def test_only_a_login_that_needs_the_person_is_red():
+def test_only_what_needs_the_person_is_red():
+    # a login to redo, a credit to top up: nothing else frees them, every other reason passes by itself
     reds = {code for code, entry in CATALOG["reasons"].items() if entry.get("tone") == "red"}
-    assert reds == {"accesso_scaduto"}
+    assert reds == {"accesso_scaduto", "credito_esaurito"}
     assert not any(entry["tone"] == "red" for entry in CATALOG["states"].values())

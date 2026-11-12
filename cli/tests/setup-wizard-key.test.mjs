@@ -38,7 +38,9 @@ fi
   const driver = join(root, 'driver.mjs');
   writeFileSync(driver, `
 const verdicts = JSON.parse(process.env.FAKE_VERDICTS || '[]');
-globalThis.fetch = async () => ({ status: verdicts.shift() ?? 200, ok: (verdicts[0] ?? 200) < 400 });
+// a verdict is a status, or { status, body } for an answer whose words count (an account with no credit)
+globalThis.fetch = async () => { const v = verdicts.shift() ?? 200; const status = typeof v === 'object' ? v.status : v;
+  return { status, ok: status < 400, text: async () => (typeof v === 'object' ? v.body : '') }; };
 const { runSetupWizard } = await import(${JSON.stringify(join(cli, 'wizard/setup.js'))});
 const { WizardCancelledError } = await import(${JSON.stringify(join(cli, 'wizard/prompts.js'))});
 const say = (kind, data) => console.log('EV ' + JSON.stringify({ kind, ...data }));
@@ -98,6 +100,26 @@ for (const provider of ['glm', 'kimi']) {
     assert.equal(events.at(-1).ok, true);
   });
 }
+
+test('a key the provider accepts on an empty account (Z.ai 429 code 1113): kept, and the end of the setup says top it up, not «All set»', () => {
+  const box = sandbox();
+  const empty = { status: 429, body: '{"error":{"code":"1113","message":"Insufficient balance or no resource package. Please recharge."}}' };
+  const { events, configText, out } = run(box, { select: { 'AI Provider': 'glm' }, keys: [KEY] }, [empty]);
+  assert.equal(events.at(-1).ok, true);
+  assert.equal(readFileSync(JSON.parse(configText).providers.glm.api_key_ref.path, 'utf8'), `${KEY}\n`, 'the key is right: it is kept');
+  assert.match(out, /GLM \(Z\.ai\) accepted the API key, but the account has no credit left/);
+  const outro = events.find((e) => e.kind === 'outro').message;
+  assert.match(outro, /the credit on GLM \(Z\.ai\) is used up/);
+  assert.doesNotMatch(outro, /All set/);
+  assert.equal(out.includes(KEY), false);
+});
+
+test('a key the provider accepts says the credit is not checked there, and the setup ends «All set»', () => {
+  const box = sandbox();
+  const { events, out } = run(box, { select: { 'AI Provider': 'kimi' }, keys: [KEY] }, [200]);
+  assert.match(out, /accepted the API key\. The credit of the account is not checked here/);
+  assert.match(events.find((e) => e.kind === 'outro').message, /^All set!/);
+});
 
 test('a key the provider refuses three times saves nothing: no config, no key file, and what to do is said', () => {
   const box = sandbox();
