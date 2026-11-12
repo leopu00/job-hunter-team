@@ -59,8 +59,10 @@ exit (Invoke-ToolsCommand @($Rest | Select-Object -Skip 1))
 """
 
 
-# Only a guard against a pull job that hangs: the wait ends with the job (see wait_for). MEASURE pending.
-PULL_JOB_CEILING = 170
+# Only a guard against a pull job that hangs: the wait ends with the job (see wait_for). Measured on windows-latest under Windows
+# PowerShell 5.1 inside the gate's slices (72 jobs, 12/11/2026): most end in 0.6-0.8 s, 33 took 20-47 s (the slowest 46.8 s), and
+# the 30 s the cases used to wait failed five of them. The ceiling is about three times the slowest.
+PULL_JOB_CEILING = 150
 
 
 def _process_alive(pid: int) -> bool:
