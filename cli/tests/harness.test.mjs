@@ -44,7 +44,7 @@ const answers = JSON.parse(process.env.WIZARD_ANSWERS || '{}');
 const prompter = {
   intro: async () => {}, outro: async (message) => say('outro', { message }),
   note: async (message, title) => say('note', { message, title }),
-  select: async (p) => { say('select', { message: p.message, options: p.options.map((o) => o.value), initial: p.initialValue }); return answers.harness ?? p.initialValue ?? p.options[0].value; },
+  select: async (p) => { say('select', { message: p.message, options: p.options.map((o) => o.value), initial: p.initialValue }); return p.options.some((o) => o.value === answers.harness) ? answers.harness : (p.initialValue ?? p.options[0].value); },
   multiselect: async () => [], text: async () => '',
   confirm: async (p) => { say('confirm', { message: p.message }); return answers.confirm ?? p.initialValue ?? true; },
   progress: () => ({ update() {}, stop() {} }),
