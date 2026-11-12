@@ -677,6 +677,22 @@ def _card_is_open(conn: sqlite3.Connection, question_id: str) -> bool:
     return row is not None and _stored_answer(conn, question_id) is None
 
 
+def _close_superseded_card(question_id: Any) -> None:
+    """Close the card of a review that a newer one replaced, in the system's name («correct», never the person's
+    confirm). A correction written in words («confirm, but the city is Milan») makes a new review and a new card:
+    left open, the old card made two open cards for the Assistente, and a «1» from the terminal answered neither."""
+    import agent_questions as aq  # type: ignore
+
+    if not isinstance(question_id, str):
+        return
+    try:
+        with contextlib.closing(sqlite3.connect(_db_path(), timeout=10)) as conn:
+            if _card_is_open(conn, question_id):
+                aq.close_as_system(conn, question_id, [CORRECT_OPTION])
+    except (sqlite3.Error, aq.AnswerRejected):
+        pass  # a card that cannot be closed only leaves the old situation: the new card is posted all the same
+
+
 def ask_confirm(inferred_raw: str = "") -> dict[str, Any]:
     """Post the confirmation card for the review waiting, unless a card for it is already open.
 
@@ -706,6 +722,8 @@ def ask_confirm(inferred_raw: str = "") -> dict[str, Any]:
                         return {"asked": False, "confirmed": True, "question_id": question_id, "review_id": review["review_id"]}
         except sqlite3.Error:
             raise ProfileReviewError("database_unreadable") from None
+        if not same:
+            _close_superseded_card(state.get("question_id"))
         cards = state.get("cards", 0) if same and isinstance(state.get("cards"), int) else 0
         if cards >= MAX_CARDS_PER_REVIEW:
             raise ProfileReviewError("too_many_cards")
