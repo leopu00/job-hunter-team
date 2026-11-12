@@ -59,8 +59,10 @@ HOST_KERNEL="$(uname -s)"
 HOST_UID="$(id -u)"
 
 CONTAINER_SERVICE="jht"
-# I servizi del compose: agenti e i due servizi isolati.
-COMPOSE_SERVICES="jht jht-broker jht-telegram"
+# Every service of the compose (tests/test_podman_screen_attestation.py holds it to docker-compose.yml). podman-compose's `ps`
+# lists every container of the project, and the attestation refuses the whole project when one has a service not named here:
+# with only the agents and the two isolated services, the screen of `jht screen on` made every command «non attestabile».
+COMPOSE_SERVICES="jht jht-broker jht-telegram jht-media jht-screen jht-login jht-login-proxy jht-login-view jht-playwright-populate"
 # Every profile of the project: what looks at or takes down the WHOLE project names them all (the broker and Telegram are made on request).
 COMPOSE_ALL_PROFILES="telegram,broker,media,playwright,screen,login"
 RUNTIME_MIGRATION_VOLUMES="jht-broker-state jht-secrets jht-telegram-secrets jht-telegram-state"
@@ -380,7 +382,10 @@ jht_text_en() {
     download.saved_in) printf '%s' "Saved in: %s" ;;
     download.intel_mac) printf '%s' "The 0.4 macOS app only runs on Macs with Apple silicon (M1 and later); this is an Intel Mac, which 0.4 does not support. Nothing was downloaded." ;;
     up.done) printf '%s' "Job Hunter Team started." ;;
+    up.storage_damaged) printf '%s' "The team's image was damaged on the Podman machine's disk (the machine was stopped abruptly while it was writing it): I download it again and recreate the containers. Your data is in the volumes and in your folders, and it stays. It takes a few minutes." ;;
+    up.storage_repair_failed) printf '%s' "The team's image could not be repaired on the Podman machine. 'jht uninstall --confirm' and then the installer make a new machine (your ~/.jht and Documents folders stay)." ;;
     down.done) printf '%s' "Job Hunter Team stopped." ;;
+    down.still_running) printf '%s' "The team did not stop: a container of the project was running again after two tries (it can restart by itself in its first minute). Run 'jht down' once more; if it stays, 'jht doctor'." ;;
     uninstall.usage) printf '%s' "usage: jht uninstall --confirm [--purge]" ;;
     status.title) printf '%s' "Status" ;;
     status.container) printf '%s' "Container" ;;
@@ -459,7 +464,10 @@ jht_text_it() {
     download.saved_in) printf '%s' "Salvato in: %s" ;;
     download.intel_mac) printf '%s' "L'app per macOS della 0.4 gira solo su Mac con Apple silicon (M1 e successivi); questo e' un Mac Intel, non supportato nella 0.4. Non e' stato scaricato niente." ;;
     up.done) printf '%s' "Job Hunter Team avviato." ;;
+    up.storage_damaged) printf '%s' "L'immagine del team si e' rovinata sul disco della macchina Podman (la macchina e' stata spenta di colpo mentre la scriveva): la riscarico e ricreo i container. I tuoi dati stanno nei volumi e nelle tue cartelle, e restano. Ci vuole qualche minuto." ;;
+    up.storage_repair_failed) printf '%s' "L'immagine del team non si ripara sulla macchina Podman. 'jht uninstall --confirm' e poi l'installer fanno una macchina nuova (le cartelle ~/.jht e Documenti restano)." ;;
     down.done) printf '%s' "Job Hunter Team fermato." ;;
+    down.still_running) printf '%s' "Il team non si e' fermato: un container del progetto era di nuovo acceso dopo due tentativi (nel suo primo minuto puo' ripartire da solo). Rilancia 'jht down'; se resta, 'jht doctor'." ;;
     uninstall.usage) printf '%s' "uso: jht uninstall --confirm [--purge]" ;;
     status.title) printf '%s' "Stato" ;;
     status.container) printf '%s' "Container" ;;
@@ -1880,6 +1888,17 @@ container_down() {
         ;;
     esac
   fi
+  # A container that restarted by itself during the stop (restart: unless-stopped, in the team's first minute: measured once in
+  # three on a Mac with Podman, «cannot remove container … is running» and the team up again after «stopped»): one more pass,
+  # and a project that still has a container is said, never called stopped.
+  if [ "$status" -eq 0 ]; then
+    left="$(COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose ps -q 2>/dev/null)" || left=""
+    if [ -n "$left" ]; then
+      COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose_stdout_quiet down >/dev/null 2>&1 || true
+      left="$(COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose ps -q 2>/dev/null)" || left=""
+      [ -z "$left" ] || { err "$(jht_say down.still_running)"; return 1; }
+    fi
+  fi
   [ "$status" -ne 0 ] || printf '%s\n' "$(jht_say down.done)"
   return "$status"
 }
@@ -3214,11 +3233,18 @@ podman_expected_config_hash() {
   if [ -f "$RUNTIME_IMAGE_PIN" ] || [ -f "$RUNTIME_TIER_FILE" ]; then
     pinned_image="$(runtime_selected_image)" || return 1
   fi
+  # The tools' containers (screen, media, sign-in) are made with JHT_EXTRAS_IMAGE set to the pinned extras image, the one value
+  # the wrapper ever gives it: without it here ${JHT_EXTRAS_IMAGE:-...} resolves to the compose's default and their hash is never
+  # the one on the container. A pin that cannot be trusted gives no image: those containers are then refused, never the others.
+  local extras_digest="" extras_image=""
+  extras_digest="$(runtime_extras_digest 2>/dev/null)" || extras_digest=""
+  [[ "$extras_digest" =~ ^sha256:[0-9a-f]{64}$ ]] && extras_image="ghcr.io/leopu00/jht@$extras_digest"
   if [ "$PODMAN_RUNTIME_MODE" = "machine" ]; then
     resolved="$({
       cd "$RUNTIME_DIR" || return 1
       [ "$env_mode" != clean ] || unset $PODMAN_CALLER_ENV
       [ -z "$pinned_image" ] || export JHT_IMAGE="$pinned_image"
+      [ -z "$extras_image" ] || export JHT_EXTRAS_IMAGE="$extras_image"
       CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
       COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" PODMAN_COMPOSE_WARNING_LOGS=false \
         "$compose_bin" --verbose --dry-run --project-name jht \
@@ -3233,6 +3259,7 @@ podman_expected_config_hash() {
       unset CONTAINER_CONNECTION
       [ "$env_mode" != clean ] || unset $PODMAN_CALLER_ENV
       [ -z "$pinned_image" ] || export JHT_IMAGE="$pinned_image"
+      [ -z "$extras_image" ] || export JHT_EXTRAS_IMAGE="$extras_image"
       COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" PODMAN_COMPOSE_WARNING_LOGS=false \
         "$compose_bin" "$no_pod" --verbose --dry-run --project-name jht \
           --podman-path "$podman_bin" -f "$file" -f "$override" up -d --force-recreate "$service"
@@ -3384,6 +3411,9 @@ override=none"
     facts="$facts
 image=$(attest_cache_text_digest "$JHT_IMAGE")"
   fi
+  # the extras image the expected hash of the tools' containers is made with (podman_expected_config_hash)
+  facts="$facts
+extras=$(runtime_extras_digest 2>/dev/null || printf 'untrusted')"
   for name in $PODMAN_CALLER_ENV; do
     value="${!name:-}"
     if [ -n "$value" ]; then
@@ -4352,6 +4382,34 @@ ensure_up_for_stop() {
   ensure_up
 }
 
+# `compose up -d` of the team. On Podman, a machine stopped abruptly (a crash, a forced restart of the computer) within seconds of a
+# pull can leave the image's layers half on its disk: every start then fails with «can't stat (or find?) lower layer …/overlay/diff»,
+# and neither down + up nor a reinstall with the same image cures it (measured on a Mac, packages 18 and 19). That one answer is said in
+# a sentence, the project's containers are taken down (the data is in the volumes and the bind mounts), the image is removed and pulled
+# again by its pinned digest, and the start is tried once more. Anything else is compose's answer, as before.
+compose_up_team() {
+  local said rc=0 image
+  if [ "$CONTAINER_RUNTIME" != podman ] || [ "${JHT_COMPOSE_VERBOSE:-0}" = 1 ]; then compose_quiet up -d; return $?; fi
+  said="$(mktemp "${TMPDIR:-/tmp}/jht-up.XXXXXX")" || { compose_quiet up -d; return $?; }
+  compose_quiet up -d 2>"$said" || rc=$?
+  if [ "$rc" -eq 0 ] || ! grep -Fq "lower layer" "$said"; then
+    cat "$said" >&2
+    rm -f -- "$said"
+    return "$rc"
+  fi
+  rm -f -- "$said"
+  info "$(jht_say up.storage_damaged)"
+  image="$(runtime_selected_image)" || image=""
+  [ -n "$image" ] || image="$DEFAULT_RUNTIME_IMAGE"
+  if ! container_down >/dev/null 2>&1 \
+      || ! { docker rmi "$image" >/dev/null 2>&1 || docker rmi -f "$image" >/dev/null 2>&1; } \
+      || ! docker pull "$image" >/dev/null 2>&1; then
+    err "$(jht_say up.storage_repair_failed)"
+    return 1
+  fi
+  compose_quiet up -d || { err "$(jht_say up.storage_repair_failed)"; return 1; }
+}
+
 # A command that needs the running container, asked before it ever started: `read_only_service_id` says 3 for «no such container»
 # and 1 for «there is one and it cannot be attested». The first is a team that is not started (said as that, with the command that
 # starts it); only the second is «non attestabile». Always exits 1.
@@ -4385,7 +4443,7 @@ ensure_up() {
   }
   # come `jht up`: le righe di avanzamento del motore (Volume … Creating, Container … Started) restano fuori vista se va bene, e si
   # vedono intere se fallisce (compose_quiet)
-  compose_quiet up -d
+  compose_up_team
   # Attendi che il container sia in stato running e con ownership completa
   # prima di inoltrare qualunque comando nel nuovo processo.
   local tries=20
@@ -6931,7 +6989,7 @@ case "$SUB" in
       err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
       exit 1
     }
-    compose_quiet up -d
+    compose_up_team
     container_postcheck_running || exit 1
     printf '%s\n' "$(jht_say up.done)"
     telegram_lifecycle_if_available resume || exit $?
@@ -6948,7 +7006,7 @@ case "$SUB" in
       err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
       exit 1
     }
-    compose_quiet up -d
+    compose_up_team
     container_postcheck_running || exit 1
     printf '%s\n' "$(jht_say up.done)"
     telegram_lifecycle_if_available resume || exit $?
@@ -6985,7 +7043,7 @@ case "$SUB" in
       err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
       exit 1
     }
-    compose_quiet up -d
+    compose_up_team
     container_postcheck_running || exit 1
     printf '%s\n' "$(jht_say up.done)"
     telegram_lifecycle_if_available resume || exit $?
