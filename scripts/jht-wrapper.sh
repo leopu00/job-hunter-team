@@ -1782,6 +1782,23 @@ stale_config_hint() {
   err "config_changed_while_running: il team e' stato avviato con la configurazione di prima della reinstallazione. Fermalo con «jht down», poi avvialo con «jht up»."
 }
 
+# The tools' containers (the live screen, media, the sign-in) go first, each by the id the attestation gives (running or stopped, ours
+# by every label, any configuration): with the screen running, podman-compose's `down` could not remove what it stood on («cannot
+# remove container … as it is running», «jht_default has associated containers»), and the team's container, left half stopped,
+# came back up a few seconds later (Mac with Podman, 3 times out of 3). Nothing of another project, nothing unattested, never an error.
+container_down_tools_first() {
+  local svc id names
+  # one listing first (the container names are the service names): a tool that is not there costs no attestation
+  names="$(docker ps -a --format '{{.Names}}' 2>/dev/null)" || return 0
+  for svc in "$SCREEN_SERVICE" "$MEDIA_SERVICE" "$LOGIN_VIEW_SERVICE" "$LOGIN_PROXY_SERVICE" "$LOGIN_SERVICE" "$PLAYWRIGHT_POPULATE_SERVICE"; do
+    printf '%s\n' "$names" | grep -Fqx "$svc" || continue
+    id="$(read_only_service_id "$svc" any-config 2>/dev/null)" || continue
+    case "$id" in ''|*[!0-9a-fA-F]*) continue ;; esac
+    docker stop -t 10 "$id" >/dev/null 2>&1 || true
+    docker rm -f "$id" >/dev/null 2>&1 || true
+  done
+}
+
 # `jht down`: il container attestato, oppure quello avviato prima di una
 # reinstallazione (stesso progetto, solo la config-hash e' cambiata): fermarlo
 # e' l'unica strada per ripartire con la configurazione nuova.
@@ -1830,6 +1847,7 @@ container_down() {
       return 1
     fi
   fi
+  container_down_tools_first
   local status=0 errors
   errors="$(mktemp "${TMPDIR:-/tmp}/jht-down.XXXXXX")" || { COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose down; return $?; }
   COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose_stdout_quiet down 2>"$errors" || status=$?
