@@ -371,6 +371,17 @@ jht_text_en() {
     download.fetching) printf '%s' "Downloading %s..." ;;
     download.saved_in) printf '%s' "Saved in: %s" ;;
     download.intel_mac) printf '%s' "The 0.4 macOS app only runs on Macs with Apple silicon (M1 and later); this is an Intel Mac, which 0.4 does not support. Nothing was downloaded." ;;
+    team.stopped) printf '%s' "Job Hunter Team is stopped: 'jht up' starts it again." ;;
+    doctor.host_title) printf '%s' "Job Hunter Team: the team is off (its container is not running). Checks made from this computer:" ;;
+    doctor.host_engine_ok) printf '%s' "container engine reachable" ;;
+    doctor.host_engine_fail) printf '%s' "container engine not reachable" ;;
+    doctor.host_runtime_ok) printf '%s' "JHT runtime intact" ;;
+    doctor.host_runtime_fail) printf '%s' "JHT runtime missing or changed: 'jht upgrade' installs it again" ;;
+    doctor.host_config_ok) printf '%s' "configuration present" ;;
+    doctor.host_config_none) printf '%s' "no configuration yet: 'jht setup'" ;;
+    doctor.host_team_off) printf '%s' "team off: 'jht up' starts it" ;;
+    doctor.host_team_unattestable) printf '%s' "a container of the team is there but cannot be verified as ours: nothing was touched ('jht status' says more)" ;;
+    doctor.host_more) printf '%s' "For the full checks (configuration, provider, database, agents): 'jht up', then 'jht doctor'." ;;
     up.done) printf '%s' "Job Hunter Team started." ;;
     up.docker_legacy) printf '%s' "This computer runs JHT on Docker, and its engine does not answer. Since 0.4 JHT runs only on Podman. Your data stays: ~/.jht and ~/Documents/Job Hunter Team are folders of this computer. To move to Podman: jht uninstall --confirm (it keeps those two folders), run the installer again, then jht setup with your API key (the key, the mail password and the Telegram tokens stayed in Docker's volumes: give them again). To go on with Docker for now, start its engine yourself and run jht up again." ;;
     up.storage_damaged) printf '%s' "The team's image was damaged on the Podman machine's disk (the machine was stopped abruptly while it was writing it): I download it again and recreate the containers. Your data is in the volumes and in your folders, and it stays. It takes a few minutes." ;;
@@ -451,6 +462,17 @@ jht_text_it() {
     download.fetching) printf '%s' "Scarico %s..." ;;
     download.saved_in) printf '%s' "Salvato in: %s" ;;
     download.intel_mac) printf '%s' "L'app per macOS della 0.4 gira solo su Mac con Apple silicon (M1 e successivi); questo e' un Mac Intel, non supportato nella 0.4. Non e' stato scaricato niente." ;;
+    team.stopped) printf '%s' "Job Hunter Team e' fermato: jht up per riaccenderlo." ;;
+    doctor.host_title) printf '%s' "Job Hunter Team: squadra spenta (il suo container non gira). Controlli fatti da questo computer:" ;;
+    doctor.host_engine_ok) printf '%s' "motore dei container raggiungibile" ;;
+    doctor.host_engine_fail) printf '%s' "motore dei container non raggiungibile" ;;
+    doctor.host_runtime_ok) printf '%s' "runtime JHT integro" ;;
+    doctor.host_runtime_fail) printf '%s' "runtime JHT mancante o cambiato: 'jht upgrade' lo reinstalla" ;;
+    doctor.host_config_ok) printf '%s' "configurazione presente" ;;
+    doctor.host_config_none) printf '%s' "ancora nessuna configurazione: 'jht setup'" ;;
+    doctor.host_team_off) printf '%s' "squadra spenta: 'jht up' la accende" ;;
+    doctor.host_team_unattestable) printf '%s' "c'e' un container della squadra ma non si puo' verificare che sia nostro: non ho toccato niente ('jht status' dice di piu')" ;;
+    doctor.host_more) printf '%s' "Per i controlli completi (configurazione, provider, database, agenti): 'jht up', poi 'jht doctor'." ;;
     up.done) printf '%s' "Job Hunter Team avviato." ;;
     up.docker_legacy) printf '%s' "Questo computer fa girare JHT su Docker, e il suo motore non risponde. Dalla 0.4 JHT gira solo su Podman. I tuoi dati restano: ~/.jht e ~/Documents/Job Hunter Team sono cartelle di questo computer. Per passare a Podman: jht uninstall --confirm (tiene quelle due cartelle), rilancia l'installer, poi jht setup con la tua chiave API (la chiave, la password della posta e i token di Telegram erano nei volumi di Docker: vanno ridati). Per restare su Docker per ora, accendi tu il suo motore e rilancia jht up." ;;
     up.storage_damaged) printf '%s' "L'immagine del team si e' rovinata sul disco della macchina Podman (la macchina e' stata spenta di colpo mentre la scriveva): la riscarico e ricreo i container. I tuoi dati stanno nei volumi e nelle tue cartelle, e restano. Ci vuole qualche minuto." ;;
@@ -594,6 +616,14 @@ runtime_manifest_value() {
 # loaded with `source` only while the file still matches its line there. A runtime that has none yet (installed before them)
 # gets it from the release origin when the person runs `add` or `remove` (never from a read-only command), and at the end of
 # every upgrade.
+# `jht down` asked by the person: while this file is there, no command but `jht up`, `jht start-container` and `jht setup` makes or
+# starts the team's container (a `jht doctor` or any command forwarded to it used to start it again a second after the down, with no
+# agent in it, and the installer then found the team running, exit 84). In the runtime folder, which no container mounts.
+TEAM_STOPPED_MARKER="$RUNTIME_DIR/team-stopped"
+team_stopped_by_person() { [ -f "$TEAM_STOPPED_MARKER" ] && [ ! -L "$TEAM_STOPPED_MARKER" ]; }
+team_stopped_mark() { rm -f -- "$TEAM_STOPPED_MARKER" 2>/dev/null; (umask 077 && printf 'jht down\n' > "$TEAM_STOPPED_MARKER") 2>/dev/null || true; }
+team_stopped_clear() { rm -f -- "$TEAM_STOPPED_MARKER" 2>/dev/null || true; }
+
 RUNTIME_HELPERS="jht-integration.sh jht-tools.sh"
 RUNTIME_HELPERS_MANIFEST="$RUNTIME_DIR/.runtime-helpers"
 
@@ -4326,6 +4356,47 @@ compose_up_team() {
   compose_quiet up -d || { err "$(jht_say up.storage_repair_failed)"; return 1; }
 }
 
+# `jht doctor` with the team off: what this computer can check without starting anything (the engine, the runtime, the
+# configuration), and the team said off. Same shape as the CLI's doctor: a summary, and with --json the same keys. 1 with a problem.
+host_doctor() { # team (off | unattestable), then the doctor's own arguments
+  local team="$1" json=0 arg engine runtime config ok=0 warn=0 fail=0 rows=""
+  shift
+  for arg in "$@"; do [ "$arg" != --json ] || json=1; done
+  if docker_reachable >/dev/null 2>&1; then engine=ok; else engine=fail; fi
+  if runtime_bundle_trusted >/dev/null 2>&1; then runtime=ok; else runtime=fail; fi
+  if [ -f "$(dirname "$HOST_ENV_FILE")/jht.config.json" ]; then config=ok; else config=warn; fi
+  host_doctor_row() { # status key
+    case "$1" in ok) ok=$((ok + 1)) ;; warn) warn=$((warn + 1)) ;; fail) fail=$((fail + 1)) ;; esac
+    rows="$rows$1|$(jht_say "$2")
+"
+  }
+  host_doctor_row "$engine" "doctor.host_engine_$engine"
+  host_doctor_row "$runtime" "doctor.host_runtime_$runtime"
+  if [ "$config" = ok ]; then host_doctor_row ok doctor.host_config_ok; else host_doctor_row warn doctor.host_config_none; fi
+  if [ "$team" = unattestable ]; then host_doctor_row fail doctor.host_team_unattestable; else host_doctor_row warn doctor.host_team_off; fi
+  if [ "$json" -eq 1 ]; then
+    local checks="" first=1 status text
+    while IFS='|' read -r status text; do
+      [ -n "$status" ] || continue
+      text="$(printf '%s' "$text" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+      [ "$first" -eq 1 ] || checks="$checks,"
+      first=0
+      checks="$checks{\"section\":\"host\",\"status\":\"$status\",\"message\":\"$text\",\"hint\":null}"
+    done <<EOF_ROWS
+$rows
+EOF_ROWS
+    printf '{"ok":%s,"teamRunning":false,"summary":{"ok":%s,"warnings":%s,"problems":%s},"checks":[%s]}\n' \
+      "$([ "$fail" -eq 0 ] && echo true || echo false)" "$ok" "$warn" "$fail" "$checks"
+  else
+    printf '%s\n' "$(jht_say doctor.host_title)"
+    printf '%s' "$rows" | while IFS='|' read -r status text; do
+      case "$status" in ok) printf '  ✓ %s\n' "$text" ;; warn) printf '  ! %s\n' "$text" ;; *) printf '  ✗ %s\n' "$text" ;; esac
+    done
+    printf '%s\n' "$(jht_say doctor.host_more)"
+  fi
+  [ "$fail" -eq 0 ]
+}
+
 # A command that needs the running container, asked before it ever started: `read_only_service_id` says 3 for «no such container»
 # and 1 for «there is one and it cannot be attested». The first is a team that is not started (said as that, with the command that
 # starts it); only the second is «non attestabile». Always exits 1.
@@ -4351,6 +4422,10 @@ ensure_up() {
     stale_config_hint
     exit 1
   }
+  if team_stopped_by_person; then
+    err "$(jht_say team.stopped)"
+    exit 1
+  fi
   info "$(jht_say container.starting "$CONTAINER_SERVICE")"
   ensure_bind_owner
   telegram_prepare_legacy_inventory || {
@@ -6514,6 +6589,7 @@ case "$SUB" in
     require_compose_file
     wake_container_runtime_for_up
     container_mutation_preflight || exit 1
+    team_stopped_clear
     ensure_bind_owner
     telegram_prepare_legacy_inventory || {
       err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
@@ -6531,6 +6607,7 @@ case "$SUB" in
     require_compose_file
     require_docker
     container_mutation_preflight || exit 1
+    team_stopped_clear
     ensure_bind_owner
     telegram_prepare_legacy_inventory || {
       err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
@@ -6548,6 +6625,7 @@ case "$SUB" in
     require_compose_file
     require_docker
     container_down || exit 1
+    team_stopped_mark
     ;;
 
   restart)
@@ -6803,6 +6881,7 @@ case "$SUB" in
     convert_setup_key_args "$@" || exit 1
     require_compose_file
     require_docker
+    team_stopped_clear
     # Skip host-setup se utente ha passato --non-interactive (i flag CLI
     # del wizard sono espliciti, niente domande possibili) o env esplicita.
     if [ "${JHT_SKIP_HOST_SETUP:-0}" != "1" ] \
@@ -6903,6 +6982,23 @@ case "$SUB" in
     ;;
 
   # ── Operativita': delegata al CLI Node nel container ───────────────────
+  doctor)
+    # A doctor never starts the team: with the container running it is the CLI's own; with it off, the checks this computer can make.
+    require_compose_file
+    doctor_team=off
+    if docker_reachable >/dev/null 2>&1; then
+      doctor_up=0
+      container_up >/dev/null 2>&1 || doctor_up=$?
+      if [ "$doctor_up" -eq 0 ]; then
+        docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
+        exit $?
+      fi
+      [ "$doctor_up" -eq 3 ] || doctor_team=unattestable
+    fi
+    host_doctor "$doctor_team" "${@:2}"
+    exit $?
+    ;;
+
   *)
     require_compose_file
     require_docker

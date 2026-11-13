@@ -146,6 +146,7 @@ $ExecFlags = @('-it')
 $env:JHT_HOST_TYPE = 'local'
 function Require-ComposeFile {{}}
 function Require-Docker {{}}
+function Clear-JhtTeamStopped {{}}
 function Ensure-Up {{}}
 function docker {{
   Add-Content -LiteralPath '{recorded}' -Value ('ARGS=' + ($args -join ' '))
