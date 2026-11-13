@@ -249,7 +249,9 @@ function Write-JhtPhase {
 # by the next one). The install goes on after it.
 function Write-JhtNotice {
   param([Parameter(Mandatory)][ValidateSet('windows10_unsupported')][string]$Id)
-  [Console]::Out.WriteLine("JHT_NOTICE $Id")
+  # Like JHT_PHASE, for the app only: a person at a terminal has the sentence Write-Warn gave just before.
+  $machine = if ($env:JHT_MACHINE_OUTPUT -eq '1') { $true } elseif ($env:JHT_MACHINE_OUTPUT -eq '0') { $false } else { [Console]::IsOutputRedirected }
+  if ($machine) { [Console]::Out.WriteLine("JHT_NOTICE $Id") }
 }
 
 

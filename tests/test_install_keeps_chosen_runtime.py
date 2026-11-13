@@ -198,3 +198,11 @@ def test_the_published_copy_and_the_desktop_digest_follow_install_sh():
     assert (ROOT / "web" / "public" / "install.sh").read_bytes() == INSTALL.read_bytes()
     digest = (ROOT / "desktop" / "src-tauri" / "installer.sha256").read_text(encoding="utf-8").strip()
     assert digest == hashlib.sha256(INSTALL.read_bytes()).hexdigest()
+
+
+def test_at_a_terminal_the_refusal_says_only_the_sentence(tmp_path):
+    # the marker is the app's (JHT_MACHINE_OUTPUT=1, or a pipe): a person at a terminal reads the sentence, with the same exit
+    result = keep(tmp_path, "docker", env={"JHT_MACHINE_OUTPUT": "0"})
+    assert result.returncode == 85
+    assert "JHT_ERROR" not in result.stderr + result.stdout
+    assert "runs JHT on Docker" in " ".join(result.stderr.split())
