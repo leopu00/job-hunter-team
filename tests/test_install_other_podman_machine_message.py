@@ -15,7 +15,7 @@ INSTALLER = Path(__file__).resolve().parents[1] / "scripts" / "install.sh"
 CONFLICT = "Error: unable to start \"jht-podman\": only one VM can be active at a time"
 
 
-def _conflict(tmp_path: Path, machines: str, lang: str, error: str = CONFLICT):
+def _conflict(tmp_path: Path, machines: str, lang: str, error: str = CONFLICT, **extra: str):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
     podman = bin_dir / "podman"
@@ -25,7 +25,7 @@ def _conflict(tmp_path: Path, machines: str, lang: str, error: str = CONFLICT):
     home.mkdir(exist_ok=True)
     return subprocess.run(
         ["bash", "-c", f'. "{INSTALLER}"; if report_podman_machine_conflict "{podman}" "$CASE_ERROR"; then echo rc=0; else echo "rc=$?"; fi'],
-        env={"HOME": str(home), "PATH": "/usr/bin:/bin", "LANG": lang, "JHT_INSTALLER_SOURCE_ONLY": "1", "CASE_ERROR": error},
+        env={"HOME": str(home), "PATH": "/usr/bin:/bin", "LANG": lang, "JHT_INSTALLER_SOURCE_ONLY": "1", "CASE_ERROR": error, **extra},
         capture_output=True, text=True, timeout=20)
 
 
@@ -62,3 +62,16 @@ def test_both_places_that_meet_the_conflict_exit_79():
     text = INSTALLER.read_text(encoding="utf-8")
     assert text.count('report_podman_machine_conflict "$podman_bin" "$start_error" && exit 79') == 1
     assert text.count('report_podman_machine_conflict "$podman_bin" "$init_error" && exit 79') == 1
+
+
+def test_a_person_at_a_terminal_never_sees_the_marker_only_the_line(tmp_path: Path):
+    # giro Mac 10 (package 33): «JHT_OTHER_MACHINE <name>» came raw on the screen before the line; it is for the desktop app
+    result = _conflict(tmp_path, "personal-work true\\n", "it_IT.UTF-8", JHT_MACHINE_OUTPUT="0")
+    assert result.stdout == "rc=0\n"
+    assert "JHT_OTHER_MACHINE" not in result.stderr and "podman machine stop personal-work" in result.stderr
+
+
+def test_the_wrapper_keeps_the_marker_for_the_app_only_too():
+    text = (INSTALLER.parent / "jht-wrapper.sh").read_text(encoding="utf-8")
+    assert text.count("printf 'JHT_OTHER_MACHINE %s\\n'") == 1
+    assert "if jht_machine_output; then printf 'JHT_OTHER_MACHINE %s\\n' \"$running\"; fi" in text

@@ -1059,7 +1059,8 @@ start_jht_podman_machine() {
   if printf '%s\n' "$start_error" | grep -Fqi 'only one VM can be active at a time'; then
     running="$(running_podman_machine "$podman_bin")"
     if [ -n "$running" ]; then
-      printf 'JHT_OTHER_MACHINE %s\n' "$running"
+      # the marker is for the desktop app (machine output); a person at a terminal reads only the line below
+      if jht_machine_output; then printf 'JHT_OTHER_MACHINE %s\n' "$running"; fi
       err "podman_other_machine_running: un'altra macchina Podman, $running, e' accesa: spegnila con 'podman machine stop $running' e riprova."
     else
       err "podman_other_machine_running: un'altra macchina Podman e' accesa: trovala con 'podman machine list', spegnila con 'podman machine stop <nome>' e riprova."
