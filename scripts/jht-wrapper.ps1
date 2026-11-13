@@ -1509,6 +1509,28 @@ function Invoke-ComposeQuiet {
   return $code
 }
 
+# A compose `run` whose stdout is an answer (the Telegram lifecycle's plan, its check): the answer comes back as it is, and compose's
+# own lines on stderr (Volume, Container ...-run-... Creating, Created) stay out of sight when it went well and are shown, whole, on
+# stderr when it did not. $LASTEXITCODE is compose's. With --verbose (or JHT_VERBOSE=1) they come as they are.
+function Invoke-ComposeAnswer {
+  [CmdletBinding(PositionalBinding=$false)]
+  param([string]$InputText, [Parameter(ValueFromRemainingArguments)] $ComposeArgs)
+  $withInput = $PSBoundParameters.ContainsKey('InputText')
+  if ($script:JhtComposeVerbose) {
+    if ($withInput) { Invoke-Compose -InputText $InputText @ComposeArgs } else { Invoke-Compose -NoInput @ComposeArgs }
+    return
+  }
+  $lines = @(& {
+    $ErrorActionPreference = 'Continue'
+    if ($withInput) { Invoke-Compose -InputText $InputText @ComposeArgs 2>&1 } else { Invoke-Compose -NoInput @ComposeArgs 2>&1 }
+  })
+  $code = $LASTEXITCODE
+  $said = @($lines | Where-Object { $_ -is [Management.Automation.ErrorRecord] } | ForEach-Object { [string]$_ })
+  if ($code -ne 0) { foreach ($line in $said) { [Console]::Error.WriteLine($line) } }
+  $lines | Where-Object { $_ -isnot [Management.Automation.ErrorRecord] } | ForEach-Object { [string]$_ }
+  $global:LASTEXITCODE = $code
+}
+
 function Write-JhtLifecycleDone {
   param([Parameter(Mandatory)][ValidateSet('up', 'down')][string]$What)
   $english = ((Get-JhtTextLanguage) -ceq 'en')
@@ -2687,7 +2709,7 @@ function Invoke-TelegramPairAll {
 # The runtime owns the policy; the host only transports closed operations.
 function Get-TelegramLifecyclePlan {
   param([string]$Phase, [string]$Action, [string]$Role)
-  $steps = @(Invoke-Compose -NoInput '--profile' 'telegram' run '--rm' '--no-deps' '-T' '--entrypoint' '/usr/bin/python3' $TelegramContainer '-I' '/app/shared/telegram_service/lifecycle.py' $Phase $Action '--' $Role)
+  $steps = @(Invoke-ComposeAnswer '--profile' 'telegram' run '--rm' '--no-deps' '-T' '--entrypoint' '/usr/bin/python3' $TelegramContainer '-I' '/app/shared/telegram_service/lifecycle.py' $Phase $Action '--' $Role)
   if ($LASTEXITCODE -ne 0) { throw 'telegram_lifecycle_plan_failed' }
   return $steps
 }
@@ -2697,7 +2719,7 @@ function Confirm-TelegramLifecycle {
   $observed = @(& { $ErrorActionPreference = 'Continue'; & docker inspect --type container $TelegramContainer --format '{{.State.Running}}' 2>&1 })
   $code = $LASTEXITCODE
   $payload = [string]$code + "`n" + ($observed -join "`n")
-  Invoke-Compose -InputText $payload '--profile' 'telegram' run '--rm' '--no-deps' '-T' '--entrypoint' '/usr/bin/python3' $TelegramContainer '-I' '/app/shared/telegram_service/lifecycle.py' 'verify' $Operation | Out-Host
+  Invoke-ComposeAnswer -InputText $payload '--profile' 'telegram' run '--rm' '--no-deps' '-T' '--entrypoint' '/usr/bin/python3' $TelegramContainer '-I' '/app/shared/telegram_service/lifecycle.py' 'verify' $Operation | Out-Host
   return $LASTEXITCODE
 }
 

@@ -18,13 +18,19 @@ GOOD = '{"ok": true, "port": 6081, "path": "/websockify", "expires_at": "2026-11
 
 # the compose and the docker of the stand-ins, for this command
 COMPOSE_FAKE = r"""function Invoke-Compose {
-  param([Parameter(ValueFromRemainingArguments)] $Rest)
+  param([switch]$NoInput, [Parameter(ValueFromRemainingArguments)] $Rest)
   Add-Content -LiteralPath $env:T_LOG -Value ('COMPOSE ' + (@($Rest) -join ' '))
   if ($env:JHT_EXTRAS_IMAGE) { Add-Content -LiteralPath $env:T_LOG -Value ('EXTRAS_IMAGE ' + $env:JHT_EXTRAS_IMAGE) }
   $global:LASTEXITCODE = 0
   if ($env:T_COMPOSE_FAIL -eq '1') { $global:LASTEXITCODE = 1; return }
   $words = @($Rest)
-  if ($words -contains 'run') { if ($env:T_CHECK_WORD) { $env:T_CHECK_WORD }; return }
+  if ($words -contains 'run') {
+    if ($NoInput) { Add-Content -LiteralPath $env:T_LOG -Value 'RUN_STDIN closed' }
+    Write-Error 'Container jht-jht-login-run-0123456789ab  Creating'  # what compose says on stderr, as an engine line
+    if ($env:T_CHECK_WORD) { $env:T_CHECK_WORD }
+    if ($env:T_RUN_FAIL -eq '1') { $global:LASTEXITCODE = 1 }
+    return
+  }
   $running = @(Get-Content -LiteralPath $env:T_RUNNING)
   if ($words -contains 'up') { $running += @($words | Select-Object -Skip ([array]::IndexOf($words, '-d') + 1)) }
   if ($words -contains 'stop') { $running = @($running | Where-Object { $_ -ne $words[$words.Count - 1] }) }
@@ -252,3 +258,16 @@ def test_the_wrapper_has_the_same_linkedin_command_as_the_bash_one():
     assert "'linkedin', 'tools'" in power and "integration|screen|linkedin|tools" in shell
     assert '''{"ok": true, "view": "idle", "linkedin": "login_required"}''' in power and '''{"ok": true, "view": "idle", "linkedin": "login_required"}''' in shell
     assert "Invoke-LinkedinCommand @($Rest)" in power and "linkedin_main" in shell
+
+
+def test_the_one_shot_keeps_compose_lines_out_of_sight_and_shows_them_when_it_fails(lhost):
+    # giro Windows 35: a compose run printed its «Container jht-jht-...-run-... Creating/Created» lines raw
+    cookies(lhost)
+    done = lrun(lhost, ["status", "--json"], T_CHECK_WORD="logged_in")
+    assert last(done)["linkedin"] == "logged_in"
+    assert "-run-" not in done.stdout + done.stderr
+    assert "RUN_STDIN closed" in log(lhost)
+    (lhost.runtime / "linkedin-status.cache").unlink()
+    failed = lrun(lhost, ["status", "--json"], T_RUN_FAIL="1")
+    assert last(failed)["linkedin"] == "login_required"
+    assert "Container jht-jht-login-run-0123456789ab  Creating" in failed.stderr

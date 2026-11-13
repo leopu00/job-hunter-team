@@ -869,7 +869,7 @@ function Invoke-LinkedinStatus {
         $before = $env:JHT_EXTRAS_IMAGE
         try {
           $env:JHT_EXTRAS_IMAGE = $ref
-          $answer = @(Invoke-Compose '--profile' 'login' run '--rm' '--no-deps' '-T' '--entrypoint' 'python3' $LoginBrowserContainer '/app/shared/login/login_session.py' 'check' '/linkedin-profile')
+          $answer = @(Invoke-ComposeAnswer '--profile' 'login' run '--rm' '--no-deps' '-T' '--entrypoint' 'python3' $LoginBrowserContainer '/app/shared/login/login_session.py' 'check' '/linkedin-profile')
         } finally { if ($null -eq $before) { Remove-Item Env:\JHT_EXTRAS_IMAGE -ErrorAction SilentlyContinue } else { $env:JHT_EXTRAS_IMAGE = $before } }
         $said = if ($answer.Count) { ([string]$answer[$answer.Count - 1]).Trim() } else { '' }
         if ($said -ceq 'logged_in' -or $said -ceq 'login_required') { $word = $said; Write-LinkedinStatusCache $key $word }
