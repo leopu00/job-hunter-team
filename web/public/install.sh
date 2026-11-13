@@ -377,6 +377,9 @@ warn()  { printf "  ${YELLOW}⚠${RESET}  %s\n" "$*"; }
 info()  { printf "  ${BLUE}▸${RESET} %s\n" "$*"; }
 fail()  { printf "  ${RED}✗${RESET} %s\n" "$*" >&2; exit 1; }
 step()  { printf "\n${BOLD}[%s/%s] %s${RESET}\n" "$1" "$2" "$3"; }
+# tx "english" "italiano": the sentence in the person's language (installer_person_lang). Only English and Italian are written;
+# every other language reads English, as in the wrapper.
+tx()    { if [ "$(installer_person_lang)" = it ]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }
 
 jht_machine_output() {
   case "${JHT_MACHINE_OUTPUT:-}" in
@@ -413,13 +416,13 @@ header() {
   printf "\n"
   if [ "$USE_DOCKER" -eq 1 ]; then
     if [ "${OS:-}" = "linux" ]; then
-      printf "  ${DIM}mode:    ${RESET}${BOLD}Container (Podman rootless)${RESET}\n"
+      printf "  ${DIM}%s${RESET}${BOLD}Container (Podman rootless)${RESET}\n" "$(tx "mode:    " "modo:     ")"
     else
-      printf "  ${DIM}mode:    ${RESET}${BOLD}Container (Podman)${RESET}\n"
+      printf "  ${DIM}%s${RESET}${BOLD}Container (Podman)${RESET}\n" "$(tx "mode:    " "modo:     ")"
     fi
-    printf "  ${DIM}image:   %s${RESET}\n" "$IMAGE"
-    printf "  ${DIM}branch:  %s${RESET}\n" "$BRANCH"
-    printf "  ${DIM}runtime: %s${RESET}\n" "$RUNTIME_DIR"
+    printf "  ${DIM}%s%s${RESET}\n" "$(tx "image:   " "immagine: ")" "$IMAGE"
+    printf "  ${DIM}%s%s${RESET}\n" "$(tx "branch:  " "ramo:     ")" "$BRANCH"
+    printf "  ${DIM}%s%s${RESET}\n" "$(tx "runtime: " "runtime:  ")" "$RUNTIME_DIR"
   else
     printf "  ${DIM}mode:   ${RESET}${YELLOW}native (expert mode, --no-docker)${RESET}\n"
     printf "  ${DIM}repo:   %s${RESET}\n" "$REPO_URL"
@@ -465,16 +468,27 @@ detect_os() {
 # folders) and this installer again, then `jht setup` with the key. A line `JHT_ERROR runtime_change_requires_migration` on stderr,
 # then exit 85 (the Linux Podman codes are 88-97).
 RUNTIME_CHANGE_REQUIRES_MIGRATION_EXIT=85
-# The person's language for the few lines the installer says before the setup: the one chosen at an earlier setup (~/.jht/host.env,
-# read as data, only a known value), else the system's (LANG and friends). Italian or English; any other is English.
+# The person's language for the lines of the installer, by the rule of the CLI: the choice saved by an earlier setup or the picker
+# (~/.jht/i18n-prefs.json), then JHT_LANG as set in this terminal, then the one in ~/.jht/host.env, then the system's (the first of
+# LC_ALL, LC_MESSAGES, LANG that is set decides). Files are read as data, only a known value. Italian or English; any other is English.
 installer_person_lang() {
-  local env_file="$HOME/.jht/host.env" value="" locale
-  if [ -f "$env_file" ] && [ ! -L "$env_file" ]; then
+  local prefs="$HOME/.jht/i18n-prefs.json" env_file="$HOME/.jht/host.env" value="" locale name
+  if [ -f "$prefs" ] && [ ! -L "$prefs" ] && [ "$(wc -c < "$prefs" 2>/dev/null || echo 9999)" -le 4096 ]; then
+    value="$(tr -d '\r\n' < "$prefs" 2>/dev/null | sed -n 's/.*"locale"[[:space:]]*:[[:space:]]*"\([a-z][a-z]\)".*/\1/p' | head -n 1)"
+  fi
+  if [ -z "$value" ]; then
+    case "${JHT_LANG:-}" in en|it|hu|es|de|fr|pt) value="$JHT_LANG" ;; esac
+  fi
+  if [ -z "$value" ] && [ -f "$env_file" ] && [ ! -L "$env_file" ]; then
     value="$(grep -E '^JHT_LANG=[a-z]{2}$' "$env_file" 2>/dev/null | tail -n 1 | cut -d= -f2)"
   fi
   if [ -z "$value" ]; then
-    locale="${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}"
-    value="${locale%%[_.@-]*}"
+    for name in LC_ALL LC_MESSAGES LANG; do
+      locale="${!name:-}"
+      [ -n "$locale" ] || continue
+      value="${locale%%[_.@-]*}"
+      break
+    done
   fi
   case "$value" in it) printf 'it\n' ;; *) printf 'en\n' ;; esac
 }
@@ -547,7 +561,7 @@ sudo_maybe() {
 
 detect_system() {
   local total="$1"
-  step 1 "$total" "System detection"
+  step 1 "$total" "$(tx "System detection" "Rilevamento del sistema")"
   detect_os
   case "$OS" in
     macos) ok "macOS" ;;
@@ -706,12 +720,12 @@ provision_podman_linux() {
   command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1 \
     || podman_refuse podman_sudo_required 89 "Podman needs a setup that only an administrator can do (missing:${missing:- the subuid range or linger}), and sudo for $user is not available without a password. Ask the administrator of this server to allow $user sudo without a password, or to run, as root: apt install podman podman-compose uidmap; loginctl enable-linger $user"
   if [ -n "$missing" ]; then
-    info "Installing$missing with sudo (Podman rootless; Docker is not installed)..."
+    info "$(tx "Installing$missing with sudo (Podman rootless; Docker is not installed)..." "Installo$missing con sudo (Podman rootless; Docker non viene installato)...")"
     case "$PKG" in
       apt)
         # A server just bought runs unattended-upgrades, which holds the dpkg
         # lock for minutes: wait for it (apt-get gives up at once otherwise).
-        sudo -n apt-get -o DPkg::Lock::Timeout=180 update -qq >/dev/null 2>&1 || warn "apt-get update failed: trying the install anyway."
+        sudo -n apt-get -o DPkg::Lock::Timeout=180 update -qq >/dev/null 2>&1 || warn "$(tx "apt-get update failed: trying the install anyway." "apt-get update non e' riuscito: provo comunque a installare.")"
         podman_check_candidates "$missing"
         # --no-remove: Podman never takes the place of anything. On a computer with Docker from Docker's own repository,
         # containerd.io conflicts with runc, and `install -y` alone would have removed it to make room (Docker broken).
@@ -739,12 +753,12 @@ provision_podman_linux() {
       *) podman_refuse podman_install_failed 88 "no known package manager (apt, dnf, pacman) to install:$missing" ;;
     esac
     hash -r 2>/dev/null || true
-    ok "Installed:$missing"
+    ok "$(tx "Installed:$missing" "Installato:$missing")"
   fi
   if [ "$need_subuid$need_subgid" != "00" ]; then
     start="$(podman_free_subid_start "$etc")"
     end=$((start + 65535))
-    info "Giving $user the subordinate uid/gid range $start-$end..."
+    info "$(tx "Giving $user the subordinate uid/gid range $start-$end..." "Assegno a $user l'intervallo di uid/gid subordinati $start-$end...")"
     {
       if [ "$need_subuid" = 1 ] && [ "$need_subgid" = 1 ]; then
         sudo -n usermod --add-subuids "$start-$end" --add-subgids "$start-$end" "$user"
@@ -755,10 +769,10 @@ provision_podman_linux() {
       fi
     } || podman_refuse podman_subuid_missing 96 "usermod could not add the subordinate range ($start-$end) for $user."
     if command -v podman >/dev/null 2>&1; then podman system migrate >/dev/null 2>&1 || true; fi
-    ok "subuid/subgid range $start-$end for $user"
+    ok "$(tx "subuid/subgid range $start-$end for $user" "intervallo subuid/subgid $start-$end per $user")"
   fi
   if [ "$need_linger" = 1 ]; then
-    info "Enabling linger for $user..."
+    info "$(tx "Enabling linger for $user..." "Attivo il linger per $user...")"
     sudo -n loginctl enable-linger "$user" \
       || podman_refuse podman_linger_missing 94 "loginctl enable-linger $user failed."
     # The user manager starts a moment later: the runtime directory follows it.
@@ -766,12 +780,12 @@ provision_podman_linux() {
       [ -d "$run_user" ] && break
       sleep 1
     done
-    ok "linger enabled for $user"
+    ok "$(tx "linger enabled for $user" "linger attivo per $user")"
   fi
 }
 
 check_podman_linux() {
-  step 2 "$TOTAL_STEPS_DOCKER" "Container runtime (Podman rootless)"
+  step 2 "$TOTAL_STEPS_DOCKER" "$(tx "Container runtime (Podman rootless)" "Motore dei container (Podman rootless)")"
   [ "$OS" = "linux" ] \
     || podman_refuse podman_unsupported_host 1 "--runtime podman is for Linux and macOS; this system is $OS."
   # Podman on Linux answers for this user unless something turns its remote
@@ -811,7 +825,7 @@ check_podman_linux() {
     loginctl show-user "$user" -p Linger 2>/dev/null | grep -qx 'Linger=yes' \
       || podman_refuse podman_linger_missing 94 "the containers of $user would stop when the session ends. Ask the administrator of this server to run, as root: loginctl enable-linger $user"
   else
-    warn "loginctl not found: linger was not checked."
+    warn "$(tx "loginctl not found: linger was not checked." "loginctl non trovato: il linger non e' stato controllato.")"
   fi
   { podman_subid_range "$etc/subuid" "$user" "$uid" && podman_subid_range "$etc/subgid" "$user" "$uid"; } \
     || podman_refuse podman_subuid_missing 96 "$user has no subordinate uid/gid range in $etc/subuid and $etc/subgid. Ask the administrator of this server to run, as root: usermod --add-subuids 100000-165535 --add-subgids 100000-165535 $user"
@@ -827,7 +841,7 @@ check_podman_linux() {
     || podman_refuse podman_version_unsupported 93 "podman ${have_podman:-of unknown version} is older than $PODMAN_MIN_VERSION. Ask the administrator of this server for a newer podman."
   { [ -n "$have_compose" ] && version_at_least "$have_compose" "$PODMAN_COMPOSE_MIN_VERSION"; } \
     || podman_refuse podman_version_unsupported 93 "podman-compose ${have_compose:-of unknown version} is older than $PODMAN_COMPOSE_MIN_VERSION. Ask the administrator of this server for a newer podman-compose."
-  ok "Podman rootless $have_podman + podman-compose $have_compose for $user"
+  ok "$(tx "Podman rootless $have_podman + podman-compose $have_compose for $user" "Podman rootless $have_podman + podman-compose $have_compose per $user")"
 }
 
 # ── Docker runtime install ────────────────────────────────────────────────
@@ -904,17 +918,17 @@ install_podman_macos() {
   install_brew_if_missing
   if ! command -v podman &>/dev/null; then
     jht_phase podman_install
-    info "Installing Podman CLI..."
+    info "$(tx "Installing Podman CLI..." "Installo la CLI di Podman...")"
     run brew install podman || fail "Podman installation failed"
   else
-    ok "podman already installed"
+    ok "$(tx "podman already installed" "podman gia' installato")"
   fi
   if ! command -v podman-compose &>/dev/null; then
     jht_phase compose_install
-    info "Installing the Podman Compose provider..."
+    info "$(tx "Installing the Podman Compose provider..." "Installo il provider di Podman Compose...")"
     run brew install podman-compose || fail "podman-compose installation failed"
   else
-    ok "podman-compose already installed"
+    ok "$(tx "podman-compose already installed" "podman-compose gia' installato")"
   fi
   if [ "$DRY_RUN" -eq 1 ]; then
     jht_phase machine_create
@@ -961,11 +975,11 @@ install_podman_macos() {
       --format '{{.Resources.CPUs}} {{.Resources.Memory}} {{.Resources.DiskSize}}' \
       "$PODMAN_MACHINE_NAME" 2>/dev/null || true)"
     if [ "$machine_resources" != "$PODMAN_MACHINE_CPUS $PODMAN_MACHINE_MEMORY_MIB $PODMAN_MACHINE_DISK_GIB" ]; then
-      warn "Existing Podman machine '$PODMAN_MACHINE_NAME' has resources '${machine_resources:-unknown}'; JHT recommends $PODMAN_MACHINE_CPUS CPU, $PODMAN_MACHINE_MEMORY_MIB MiB RAM and $PODMAN_MACHINE_DISK_GIB GiB disk. The existing machine was not changed."
+      warn "$(tx "Existing Podman machine '$PODMAN_MACHINE_NAME' has resources '${machine_resources:-unknown}'; JHT recommends $PODMAN_MACHINE_CPUS CPU, $PODMAN_MACHINE_MEMORY_MIB MiB RAM and $PODMAN_MACHINE_DISK_GIB GiB disk. The existing machine was not changed." "La macchina Podman '$PODMAN_MACHINE_NAME' che c'e' gia' ha le risorse '${machine_resources:-unknown}'; JHT consiglia $PODMAN_MACHINE_CPUS CPU, $PODMAN_MACHINE_MEMORY_MIB MiB di RAM e $PODMAN_MACHINE_DISK_GIB GiB di disco. La macchina non e' stata cambiata.")"
     fi
     if ! podman --connection "$PODMAN_MACHINE_NAME" info &>/dev/null; then
       jht_phase machine_start
-      info "Starting Podman machine '$PODMAN_MACHINE_NAME'..."
+      info "$(tx "Starting Podman machine '$PODMAN_MACHINE_NAME'..." "Avvio la macchina Podman '$PODMAN_MACHINE_NAME'...")"
       local start_error start_status
       start_error="$("$podman_bin" machine start --update-connection=false "$PODMAN_MACHINE_NAME" 2>&1 >/dev/null)" \
         && start_status=0 || start_status=$?
@@ -974,12 +988,12 @@ install_podman_macos() {
         fail "Podman machine start failed; Colima was not changed."
       fi
     else
-      ok "Podman machine '$PODMAN_MACHINE_NAME' already running"
+      ok "$(tx "Podman machine '$PODMAN_MACHINE_NAME' already running" "Macchina Podman '$PODMAN_MACHINE_NAME' gia' accesa")"
     fi
   else
     jht_phase machine_create
     jht_phase machine_start
-    info "Creating rootless Podman machine '$PODMAN_MACHINE_NAME'..."
+    info "$(tx "Creating rootless Podman machine '$PODMAN_MACHINE_NAME'..." "Creo la macchina Podman rootless '$PODMAN_MACHINE_NAME'...")"
     local init_error init_status
     init_error="$("$podman_bin" machine init --now --update-connection=false \
       --cpus "$PODMAN_MACHINE_CPUS" \
@@ -1006,14 +1020,14 @@ install_podman_macos() {
   # idempotent and lets applehv reclaim unused blocks from its sparse .raw;
   # do not start or stop a machine solely for trimming.
   enable_podman_trim_timer "$podman_bin" \
-    || warn "Podman is ready, but its weekly disk trim timer could not be enabled."
-  ok "Podman ready (Colima retained)"
+    || warn "$(tx "Podman is ready, but its weekly disk trim timer could not be enabled." "Podman e' pronto, ma il suo timer settimanale che libera il disco non si e' potuto attivare.")"
+  ok "$(tx "Podman ready (Colima retained)" "Podman pronto (Colima lasciato com'era)")"
 }
 
 
 
 install_container_runtime() {
-  step 2 "$TOTAL_STEPS_DOCKER" "Container runtime"
+  step 2 "$TOTAL_STEPS_DOCKER" "$(tx "Container runtime" "Motore dei container")"
   case "$OS" in
     macos) install_podman_macos ;;
     linux) check_podman_linux ;;
@@ -1025,10 +1039,10 @@ install_container_runtime() {
 
 
 verify_docker_works() {
-  step 3 "$TOTAL_STEPS_DOCKER" "Container runtime check"
+  step 3 "$TOTAL_STEPS_DOCKER" "$(tx "Container runtime check" "Verifica del motore dei container")"
   if podman_native_mode; then
     # The check of the step before already ran podman info, rootless.
-    [ "$DRY_RUN" -eq 1 ] || ok "podman rootless reachable"
+    [ "$DRY_RUN" -eq 1 ] || ok "$(tx "podman rootless reachable" "podman rootless raggiungibile")"
     return 0
   fi
   if [ "$DRY_RUN" -eq 1 ]; then
@@ -1038,7 +1052,7 @@ verify_docker_works() {
   fi
   podman --connection "$PODMAN_MACHINE_NAME" info &>/dev/null \
     || fail "The JHT Podman machine is not responding."
-  ok "Podman machine reachable"
+  ok "$(tx "Podman machine reachable" "Macchina Podman raggiungibile")"
 }
 
 install_podman_adapter() {
@@ -1091,11 +1105,11 @@ install_podman_adapter() {
       [ -z "$PODMAN_MACHINE_CREATED_ID" ] || printf '%s\n' "$PODMAN_MACHINE_CREATED_ID" >> "$RUNTIME_DIR/podman-machine-created"
       chmod 600 "$RUNTIME_DIR/podman-machine-created"
     fi
-    ok "Private JHT docker shim: $shim_dest (not added to global PATH; Colima untouched)"
+    ok "$(tx "Private JHT docker shim: $shim_dest (not added to global PATH; Colima untouched)" "Shim docker privato di JHT: $shim_dest (non aggiunto al PATH globale; Colima non toccato)")"
   else
     # Native Linux has no machine: the wrapper refuses a machine file here.
     rm -f "$machine_file"
-    ok "Private JHT docker shim: $shim_dest (not added to global PATH; rootless Podman, no machine)"
+    ok "$(tx "Private JHT docker shim: $shim_dest (not added to global PATH; rootless Podman, no machine)" "Shim docker privato di JHT: $shim_dest (non aggiunto al PATH globale; Podman rootless, senza macchina)")"
   fi
 }
 
@@ -1116,7 +1130,7 @@ publish_runtime_tier() {
   mv -f "$TIER_STAGED" "$RUNTIME_DIR/runtime-tier" || return 1
   printf 'runtime-tier=%s\n' "$TIER_STAGED_SHA" > "$RUNTIME_DIR/.runtime-tier-integrity.tmp" && chmod 600 "$RUNTIME_DIR/.runtime-tier-integrity.tmp" \
     && mv -f "$RUNTIME_DIR/.runtime-tier-integrity.tmp" "$RUNTIME_DIR/.runtime-tier-integrity" \
-    && ok "runtime tier: core (the tools come after the welcome)"
+    && ok "$(tx "runtime tier: core (the tools come after the welcome)" "livello del runtime: core (gli strumenti arrivano dopo il benvenuto)")"
 }
 
 # runtime-extras-image: the image of the tools that come on request, pinned by the test channel (`--extras-image-digest`), in a host runtime
@@ -1139,11 +1153,11 @@ publish_runtime_extras_pin() {
   mv -f "$EXTRAS_STAGED" "$RUNTIME_DIR/runtime-extras-image" || return 1
   printf 'runtime-extras-image=%s\n' "$EXTRAS_STAGED_SHA" > "$RUNTIME_DIR/.runtime-extras-integrity.tmp" && chmod 600 "$RUNTIME_DIR/.runtime-extras-integrity.tmp" \
     && mv -f "$RUNTIME_DIR/.runtime-extras-integrity.tmp" "$RUNTIME_DIR/.runtime-extras-integrity" \
-    && ok "extras image pinned: ghcr.io/leopu00/jht@$EXTRAS_IMAGE_DIGEST_OPT (pulled when a tool is asked for)"
+    && ok "$(tx "extras image pinned: ghcr.io/leopu00/jht@$EXTRAS_IMAGE_DIGEST_OPT (pulled when a tool is asked for)" "immagine extras fissata: ghcr.io/leopu00/jht@$EXTRAS_IMAGE_DIGEST_OPT (si scarica quando serve uno strumento)")"
 }
 
 download_runtime_files() {
-  step 4 "$TOTAL_STEPS_DOCKER" "Download wrapper + docker-compose.yml"
+  step 4 "$TOTAL_STEPS_DOCKER" "$(tx "Download wrapper + docker-compose.yml" "Scarico il wrapper e docker-compose.yml")"
 
   local release_base
   if [ "$DRY_RUN" -eq 1 ] && [ "$TEST_CHANNEL" -eq 0 ]; then
@@ -1208,7 +1222,7 @@ download_runtime_files() {
   hostsetup_tmp="$(mktemp "$RUNTIME_DIR/.host-setup.XXXXXX")"
   manifest_tmp="$(mktemp "$RUNTIME_DIR/.integrity.XXXXXX")"
 
-  info "Downloading docker-compose.yml..."
+  info "$(tx "Downloading docker-compose.yml..." "Scarico docker-compose.yml...")"
   if ! curl -fsSL "$compose_url" -o "$compose_tmp"; then
     fail "Download failed: $compose_url. Check your connection and branch ($BRANCH)."
   fi
@@ -1218,7 +1232,7 @@ download_runtime_files() {
   mv -f "$compose_tmp" "$compose_dest"
   ok "compose: $compose_dest"
 
-  info "Downloading jht wrapper..."
+  info "$(tx "Downloading jht wrapper..." "Scarico il wrapper jht...")"
   if ! curl -fsSL "$wrapper_url" -o "$wrapper_tmp"; then
     fail "Download failed: $wrapper_url. Check your connection and branch ($BRANCH)."
   fi
@@ -1229,7 +1243,7 @@ download_runtime_files() {
   mv -f "$wrapper_tmp" "$wrapper_dest"
   ok "wrapper: $wrapper_dest"
 
-  info "Downloading host-setup.sh (VPS/swap preflight)..."
+  info "$(tx "Downloading host-setup.sh (VPS/swap preflight)..." "Scarico host-setup.sh (controlli preliminari VPS/swap)...")"
   if ! curl -fsSL "$hostsetup_url" -o "$hostsetup_tmp" \
       || ! bash -n "$hostsetup_tmp" \
       || ! grep -Fqx 'JHT_HOST_SETUP_PROTOCOL=1' "$hostsetup_tmp"; then
@@ -1314,7 +1328,7 @@ download_runtime_files() {
   mv -f "$manifest_tmp" "$manifest_dest"
   if [ -n "$image_pin_publish" ]; then
     mv -f "$image_pin_publish" "$image_pin"
-    ok "runtime image pinned: $(cat "$image_pin")"
+    ok "$(tx "runtime image pinned: $(cat "$image_pin")" "immagine del runtime fissata: $(cat "$image_pin")")"
   fi
   publish_runtime_extras_pin
   publish_runtime_tier
@@ -1322,7 +1336,7 @@ download_runtime_files() {
 
   case ":$PATH:" in
     *":$BIN_DIR:"*)
-      ok "$BIN_DIR already in PATH"
+      ok "$(tx "$BIN_DIR already in PATH" "$BIN_DIR e' gia' nel PATH")"
       PATH_READY=1
       ;;
     *)
@@ -1336,7 +1350,7 @@ download_runtime_files() {
         # sourced by /etc/profile at every interactive login shell.
         printf 'export PATH="$PATH:%s"\n' "$BIN_DIR" > /etc/profile.d/jht.sh
         chmod 644 /etc/profile.d/jht.sh
-        ok "PATH added to /etc/profile.d/jht.sh (system-wide)"
+        ok "$(tx "PATH added to /etc/profile.d/jht.sh (system-wide)" "PATH aggiunto a /etc/profile.d/jht.sh (per tutto il sistema)")"
         persistent_added=1
       else
         # User-level fallback: append to ~/.bashrc + ~/.zshrc if they exist
@@ -1344,7 +1358,7 @@ download_runtime_files() {
         for rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
           if [ -f "$rc" ] && ! grep -Fq -- "$BIN_DIR" "$rc" 2>/dev/null; then
             printf '\n# Added by JHT install.sh\nexport PATH="$PATH:%s"\n' "$BIN_DIR" >> "$rc"
-            ok "PATH added to $rc"
+            ok "$(tx "PATH added to $rc" "PATH aggiunto a $rc")"
             persistent_added=1
           fi
         done
@@ -1367,12 +1381,12 @@ download_runtime_files() {
           esac
           for rc in "${created_rc[@]}"; do
             printf '\n# Added by JHT install.sh\nexport PATH="$PATH:%s"\n' "$BIN_DIR" >> "$rc" \
-              && { ok "PATH added to $rc"; persistent_added=1; }
+              && { ok "$(tx "PATH added to $rc" "PATH aggiunto a $rc")"; persistent_added=1; }
           done
         fi
       fi
       if [ "$persistent_added" -eq 0 ]; then
-        warn "No shell rc file was written. Add manually:"
+        warn "$(tx "No shell rc file was written. Add manually:" "Nessun file rc della shell e' stato scritto. Aggiungi a mano:")"
         printf "\n      ${BOLD}export PATH=\"\$PATH:%s\"${RESET}\n\n" "$BIN_DIR"
       else
         PATH_NEW_SHELL=1
@@ -1985,14 +1999,14 @@ will_auto_onboard() {
 final_message() {
   printf "\n"
   printf "${GREEN}${BOLD}══════════════════════════════════════════${RESET}\n"
-  printf "${GREEN}${BOLD}  Installation complete!${RESET}\n"
+  printf "${GREEN}${BOLD}  %s${RESET}\n" "$(tx "Installation complete!" "Installazione completata!")"
   printf "${GREEN}${BOLD}══════════════════════════════════════════${RESET}\n"
   printf "\n"
   if [ "$USE_DOCKER" -eq 1 ]; then
-    printf "  ${BOLD}Container mode active (Podman).${RESET}\n"
-    printf "  ${DIM}The agents can only see:${RESET}\n"
-    printf "  ${DIM}  ~/.jht/                       → /jht_home (config, db, agents)${RESET}\n"
-    printf "  ${DIM}  ~/Documents/Job Hunter Team/  → /jht_user (CVs, attachments, output)${RESET}\n"
+    printf "  ${BOLD}%s${RESET}\n" "$(tx "Container mode active (Podman)." "Modalita' container attiva (Podman).")"
+    printf "  ${DIM}%s${RESET}\n" "$(tx "The agents can only see:" "Gli agenti vedono solo:")"
+    printf "  ${DIM}  ~/.jht/                       → /jht_home %s${RESET}\n" "$(tx "(config, db, agents)" "(configurazione, db, agenti)")"
+    printf "  ${DIM}  ~/Documents/Job Hunter Team/  → /jht_user %s${RESET}\n" "$(tx "(CVs, attachments, output)" "(CV, allegati, risultati)")"
     printf "\n"
   else
     printf "  ${YELLOW}${BOLD}⚠  Native mode (--no-docker).${RESET}\n"
@@ -2009,14 +2023,14 @@ final_message() {
   # (e.g. CI without a TTY, JHT_SKIP_ONBOARD=1). When it starts, the
   # wizard takes over right below and these lines would be noise.
   if ! will_auto_onboard; then
-    printf "  ${BOLD}Next steps:${RESET}\n"
+    printf "  ${BOLD}%s${RESET}\n" "$(tx "Next steps:" "Prossimi passi:")"
     printf "\n"
     if [ "${PATH_NEW_SHELL:-0}" -eq 1 ]; then
-      printf "      ${DIM}Open a new terminal window first (or run: . ~/.profile), so that it finds jht.${RESET}\n\n"
+      printf "      ${DIM}%s${RESET}\n\n" "$(tx "Open a new terminal window first (or run: . ~/.profile), so that it finds jht." "Prima apri una nuova finestra del terminale (o lancia: . ~/.profile), cosi' trova jht.")"
     fi
     if [ "${PATH_READY:-0}" -eq 1 ]; then
       if [ "$USE_DOCKER" -eq 1 ]; then
-        printf "      ${BOLD}jht setup${RESET}        ${DIM}# configuration wizard (also starts the container)${RESET}\n"
+        printf "      ${BOLD}jht setup${RESET}        ${DIM}# %s${RESET}\n" "$(tx "configuration wizard (also starts the container)" "configurazione guidata (accende anche il container)")"
       else
         printf "      ${BOLD}jht setup${RESET}        ${DIM}# initial configuration${RESET}\n"
         printf "      ${BOLD}jht dashboard${RESET}    ${DIM}# starts the web dashboard${RESET}\n"
@@ -2032,24 +2046,24 @@ final_message() {
     printf "\n"
   fi
 
-  printf "  ${DIM}To uninstall (keeps your data in ~/.jht and ~/Documents/Job Hunter Team):${RESET}\n"
+  printf "  ${DIM}%s${RESET}\n" "$(tx "To uninstall (keeps your data in ~/.jht and ~/Documents/Job Hunter Team):" "Per disinstallare (i tuoi dati in ~/.jht e ~/Documents/Job Hunter Team restano):")"
   if [ "$USE_DOCKER" -eq 1 ]; then
     # `jht uninstall` removes the containers, the networks and the VOLUMES of the project (broker, secrets, deps…: the
     # ten host-runtime_jht-* that `jht down && rm -rf` left behind, TEST 19i A2), then the runtime, the PATH lines and itself.
     # It is the only command printed for the engine: no `docker rmi`, no `rm -rf` and no `sudo` for the person to type.
     printf "  ${DIM}  jht uninstall --confirm${RESET}\n"
-    printf "  ${DIM}  (it also deletes the API key, the mail password and the Telegram tokens saved for the team)${RESET}\n"
+    printf "  ${DIM}  %s${RESET}\n" "$(tx "(it also deletes the API key, the mail password and the Telegram tokens saved for the team)" "(cancella anche la chiave API, la password della posta e i token di Telegram salvati per la squadra)")"
   else
     printf "  ${DIM}  rm -rf %s %s/jht${RESET}\n" "$INSTALL_DIR" "$BIN_DIR"
   fi
-  printf "  ${DIM}To also delete your data (config, db, CVs, output):${RESET}\n"
+  printf "  ${DIM}%s${RESET}\n" "$(tx "To also delete your data (config, db, CVs, output):" "Per cancellare anche i tuoi dati (configurazione, db, CV, risultati):")"
   if [ "$USE_DOCKER" -eq 1 ]; then
     # With a container engine on Linux ~/.jht belongs to the container (uid 1001, often mode 700; with rootless Podman, to a
     # sub-uid): `rm -rf` from this account fails with "Permission denied" (TEST, Linux gate). `jht uninstall --confirm --purge`
     # empties the folders the right way for the engine (a one-shot container for Docker, `podman unshare` for Podman), without
     # sudo and without changing a permission, so it is the command printed for every engine.
     printf "  ${DIM}  jht uninstall --confirm --purge${RESET}\n"
-    printf "  ${DIM}  (same as above, and it empties ~/.jht and ~/Documents/Job Hunter Team too)${RESET}\n"
+    printf "  ${DIM}  %s${RESET}\n" "$(tx "(same as above, and it empties ~/.jht and ~/Documents/Job Hunter Team too)" "(come sopra, e svuota anche ~/.jht e ~/Documents/Job Hunter Team)")"
   else
     # Native mode: nothing ran in a container, the folders are the person's own and `jht` has no uninstall.
     # (`%b`, not `%s`: DIM and RESET hold the characters backslash-0-3-3, and only `%b` or the format string turns them into the escape.)
@@ -2156,20 +2170,20 @@ align_bind_ownership() {
     # Rootless Podman maps the host user onto the container's uid (keep-id):
     # the user stays the owner, and a chown to 1001 would take it away.
     mkdir -p "$jht_user_dir" 2>/dev/null
-    ok "Ownership of $jht_home and $jht_user_dir stays with this user (rootless Podman)"
+    ok "$(tx "Ownership of $jht_home and $jht_user_dir stays with this user (rootless Podman)" "$jht_home e $jht_user_dir restano di questo utente (Podman rootless)")"
   elif [ "${OS:-}" = "macos" ]; then
     # The Mac shares the two folders with the container's VM, which shows
     # them as this user's and lets the container write: nothing needs
     # aligning. A chown to 1001 cannot work for a normal user (EPERM, on every
     # Mac) and, under sudo, would hand ~/.jht to a uid that is nobody here.
     mkdir -p "$jht_user_dir" 2>/dev/null
-    ok "Ownership of $jht_home and $jht_user_dir stays with this user (macOS)"
+    ok "$(tx "Ownership of $jht_home and $jht_user_dir stays with this user (macOS)" "$jht_home e $jht_user_dir restano di questo utente (macOS)")"
   elif command -v chown >/dev/null 2>&1; then
     mkdir -p "$jht_user_dir" 2>/dev/null
     if chown -R 1001:1001 "$jht_home" "$jht_user_dir" 2>/dev/null; then
-      ok "Ownership $jht_home and $jht_user_dir → 1001:1001 (container UID)"
+      ok "$(tx "Ownership $jht_home and $jht_user_dir → 1001:1001 (container UID)" "Proprietario di $jht_home e $jht_user_dir → 1001:1001 (UID del container)")"
     elif repair_bind_ownership_in_container "$jht_home" "$jht_user_dir"; then
-      ok "Ownership $jht_home and $jht_user_dir → 1001:1001 (container UID, set by a one-shot container: no sudo needed)"
+      ok "$(tx "Ownership $jht_home and $jht_user_dir → 1001:1001 (container UID, set by a one-shot container: no sudo needed)" "Proprietario di $jht_home e $jht_user_dir → 1001:1001 (UID del container, messo da un container usa e getta: niente sudo)")"
     elif [ "$USE_DOCKER" -ne 1 ]; then
       warn "chown to 1001 failed — nothing runs in a container here (--no-docker), so nothing needs it"
     else
@@ -2212,18 +2226,18 @@ run_host_setup() {
     info "dry-run: would run $hostsetup${PAIRING_TOKEN:+ --host-type=vps}"
     return 0
   fi
-  info "Running host-setup.sh (writes ~/.jht/host.env + swap preflight)..."
+  info "$(tx "Running host-setup.sh (writes ~/.jht/host.env + swap preflight)..." "Eseguo host-setup.sh (scrive ~/.jht/host.env e controlla lo swap)...")"
   if [ -n "$PAIRING_TOKEN" ]; then
     if "$hostsetup" --host-type=vps </dev/null; then
-      ok "host-setup completed (forced vps)"
+      ok "$(tx "host-setup completed (forced vps)" "host-setup completato (vps imposto)")"
     else
-      warn "host-setup exited with an error — continuing (a manual pair may be needed)"
+      warn "$(tx "host-setup exited with an error — continuing (a manual pair may be needed)" "host-setup e' uscito con un errore: continuo (puo' servire un abbinamento a mano)")"
     fi
   else
     if "$hostsetup" </dev/null; then
-      ok "host-setup completed (auto-detected host type)"
+      ok "$(tx "host-setup completed (auto-detected host type)" "host-setup completato (tipo di host rilevato da solo)")"
     else
-      warn "host-setup exited with an error — continuing"
+      warn "$(tx "host-setup exited with an error — continuing" "host-setup e' uscito con un errore: continuo")"
     fi
   fi
   align_bind_ownership
@@ -2243,8 +2257,8 @@ maybe_onboard() {
     # wizard: the container will do the non-interactive pair on first run
     # via the .pairing-token file. The user will complete the provider
     # login (Codex, or the API key of GLM/Kimi) from the app.
-    info "Pairing token present: skipping the interactive wizard."
-    info "The container will complete the pairing on first boot."
+    info "$(tx "Pairing token present: skipping the interactive wizard." "Token di abbinamento presente: salto il wizard interattivo.")"
+    info "$(tx "The container will complete the pairing on first boot." "Il container completera' l'abbinamento al primo avvio.")"
     return 0
   fi
 
@@ -2258,8 +2272,8 @@ maybe_onboard() {
     if tty_can_be_opened; then
       wizard_from_tty=1
     else
-      info "No interactive terminal (no /dev/tty): skipping the wizard."
-      info "Run manually: jht setup"
+      info "$(tx "No interactive terminal (no /dev/tty): skipping the wizard." "Nessun terminale interattivo (niente /dev/tty): salto il wizard.")"
+      info "$(tx "Run manually: jht setup" "Lancia a mano: jht setup")"
       return 0
     fi
   fi
@@ -2281,8 +2295,8 @@ maybe_onboard() {
     local setup_command="jht setup"
     [ "${PATH_READY:-0}" -eq 1 ] || setup_command="$BIN_DIR/jht setup"
     printf "\n"
-    warn "The setup did not finish (exit code $wizard_status): Job Hunter Team is installed, but it is not set up yet."
-    info "Next step: run  $setup_command  to finish the setup."
+    warn "$(tx "The setup did not finish (exit code $wizard_status): Job Hunter Team is installed, but it is not set up yet." "Il setup non e' finito (codice di uscita $wizard_status): Job Hunter Team e' installato, ma non ancora configurato.")"
+    info "$(tx "Next step: run  $setup_command  to finish the setup." "Prossimo passo: lancia  $setup_command  per finire il setup.")"
     return "$wizard_status"
   fi
 }
@@ -2424,7 +2438,7 @@ main() {
   save_pairing_token
   run_host_setup
   final_message
-  maybe_onboard; local wizard_result=$?; printf '\n  In this terminal, run: export PATH=%q:"$PATH"\n' "$BIN_DIR"; return "$wizard_result"
+  maybe_onboard; local wizard_result=$?; printf '\n  %s export PATH=%q:"$PATH"\n' "$(tx "In this terminal, run:" "In questo terminale, lancia:")" "$BIN_DIR"; return "$wizard_result"
 }
 
 if [ "${JHT_INSTALLER_SOURCE_ONLY:-0}" != "1" ]; then

@@ -32,7 +32,7 @@ PRELUDE = """set -euo pipefail
 err()  { printf 'error: %s\\n' "$*" >&2; }
 warn() { printf 'warn: %s\\n' "$*" >&2; }
 info() { printf 'info: %s\\n' "$*" >&2; }
-""" + _function("convert_setup_key_args") + _function("setup_exec_container")
+""" + _function("jht_text_en") + _function("jht_text_it") + _function("jht_say") + _function("convert_setup_key_args") + _function("setup_exec_container")
 
 CONVERT = PRELUDE + """
 if convert_setup_key_args "$@"; then echo "RC=0"; else echo "RC=1"; fi
@@ -145,6 +145,15 @@ def test_a_key_file_others_can_read_is_said_not_refused(bash, tmp_path):
     assert (rc, key) == ("0", KEY) and "can be read by other users" in err
     _, _, _, quiet = _convert(bash, tmp_path, "setup", "--api-key-file", str(_file(tmp_path, KEY.encode(), name="own.txt")))
     assert "other users" not in quiet
+
+
+def test_the_key_file_sentences_are_said_in_the_language_of_the_person(bash, tmp_path):
+    # the same sentences in Italian when the person's language is Italian (jht_say, as every other text of the wrapper)
+    env = {**os.environ, "JHT_SAY_LANG": "it"}
+    script = PRELUDE + 'convert_setup_key_args "$@" || true\n'
+    loose = _file(tmp_path, KEY.encode(), mode=0o644)
+    said = subprocess.run([bash, "-c", script, "wrapper", "setup", "--api-key-file", str(loose)], capture_output=True, text=True, env=env, timeout=30)
+    assert "lo possono leggere anche altri utenti: chmod 600 sul file." in said.stderr, said.stderr
 
 
 EXEC = PRELUDE + """

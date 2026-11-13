@@ -83,11 +83,15 @@ $script:JhtUninstallMachine = 'jht-podman'
 $script:JhtUninstallPurgeRemovalNotice = 'Vengono cancellati anche la password della posta e i token di Telegram salvati.'
 $script:JhtUninstallPurgeNotice = 'Con --purge vengono cancellati anche ~/.jht e Documents\Job Hunter Team: configurazione, database, CV e output. Non si torna indietro.'
 
-# The language of the sentences the wrapper prints: the one the person chose with `jht setup --language` or the picker (saved in
-# i18n-prefs.json next to host.env), then JHT_LANG. The file is in a folder the container can write: it is read as DATA (not a link, a
-# small file, the value one of the seven codes) and only chooses which text is printed. Italian and English are written: another
-# language reads English; where nothing says a language the sentences stay Italian, as they were. Returns 'it' or 'en'.
+# The language of the sentences the wrapper prints, by the rule of the CLI: the one the person chose with `jht setup --language`
+# or the picker (saved in i18n-prefs.json next to host.env), then JHT_LANG as the person set it in this terminal, then the one in
+# host.env (the installer writes the person's there), then the language of Windows, then English. The file is in a folder the
+# container can write: it is read as DATA (not a link, a small file, the value one of the seven codes) and only chooses which text
+# is printed. Italian and English are written: another language reads English. Returns 'it' or 'en'.
+$script:JhtCallerLang = [string]$env:JHT_LANG
+$script:JhtHostEnvLang = ''
 function Get-JhtTextLanguage {
+  $known = '^(en|it|hu|es|de|fr|pt)\z'
   $code = ''
   try {
     # inside the try: a text must never fail because the folder of the choice cannot be worked out
@@ -99,9 +103,15 @@ function Get-JhtTextLanguage {
       if ($match.Success) { $code = $match.Groups[1].Value }
     }
   } catch { $code = '' }
-  if (-not $code -and ([string]$env:JHT_LANG) -cmatch '^(en|it|hu|es|de|fr|pt)\z') { $code = [string]$env:JHT_LANG }
-  if ($code -and $code -cne 'it') { return 'en' }
-  return 'it'
+  # outside the wrapper's own start (a function loaded alone) nothing was saved aside: JHT_LANG is the person's
+  $caller = if ($null -ne $script:JhtCallerLang) { $script:JhtCallerLang } else { [string]$env:JHT_LANG }
+  if (-not $code -and $caller -cmatch $known) { $code = $caller }
+  if (-not $code -and $script:JhtHostEnvLang -cmatch $known) { $code = $script:JhtHostEnvLang }
+  if (-not $code) {
+    try { $code = ([string](Get-UICulture).TwoLetterISOLanguageName).ToLowerInvariant() } catch { $code = '' }
+  }
+  if ($code -ceq 'it') { return 'it' }
+  return 'en'
 }
 
 function Get-JhtUninstallText {
@@ -964,6 +974,7 @@ if (Test-Path $HostEnvFile) {
       $value = $Matches[2].Trim('"').Trim("'")
       if ($AllowedHostEnvNames -notcontains $name) { return }
       if (-not (Test-HostEnvValue -Name $name -Value $value)) { return }
+      if ($name -ceq 'JHT_LANG') { $script:JhtHostEnvLang = $value }
       Set-Item -Path "env:$name" -Value $value -ErrorAction SilentlyContinue
     }
   }

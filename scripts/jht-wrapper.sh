@@ -281,6 +281,7 @@ jht_load_host_values() {
   for key in JHT_HOST_TYPE JHT_LANG JHT_USER_TZ; do
     if value="$(jht_read_host_env_value "$source_file" "$key")"; then
       printf -v "$key" '%s' "$value"
+      [ "$key" != JHT_LANG ] || JHT_LANG_FROM_FILE=1
       if [ "$source_file" = "$HOST_VALUES_FILE" ] && [ "$key" = JHT_HOST_TYPE ]; then type_from_values=1; fi
     fi
   done
@@ -323,9 +324,20 @@ jht_ui_language() {
       if jht_host_env_value_valid JHT_LANG "$value"; then printf '%s' "$value"; return 0; fi
     fi
   fi
-  printf '%s' "${JHT_LANG:-en}"
+  # then the rule of the CLI: JHT_LANG as the person set it here, the one in host.env (the installer writes the person's), the
+  # system's (the first of LC_ALL, LC_MESSAGES, LANG that is set decides; C, POSIX or a language we do not have read en), en
+  if jht_host_env_value_valid JHT_LANG "${JHT_CALLER_LANG:-}"; then printf '%s' "$JHT_CALLER_LANG"; return 0; fi
+  if [ "${JHT_LANG_FROM_FILE:-0}" = 1 ] && jht_host_env_value_valid JHT_LANG "${JHT_LANG:-}"; then printf '%s' "$JHT_LANG"; return 0; fi
+  for line in "${LC_ALL:-}" "${LC_MESSAGES:-}" "${LANG:-}"; do
+    [ -n "$line" ] || continue
+    value="$(printf '%s' "${line%%[-_.@]*}" | tr '[:upper:]' '[:lower:]')"
+    if jht_host_env_value_valid JHT_LANG "$value"; then printf '%s' "$value"; else printf 'en'; fi
+    return 0
+  done
+  printf 'en'
 }
 
+JHT_CALLER_LANG="${JHT_LANG:-}"
 jht_load_host_values
 jht_record_host_values
 JHT_SAY_LANG="$(jht_ui_language)"
@@ -400,6 +412,13 @@ jht_text_en() {
     status.not_running) printf '%s' "The team's container is not running." ;;
     removed.office) printf '%s' "'jht %s' was removed in 0.4.0 with the Godot office: use the jht commands (jht help)." ;;
     status.no_options) printf '%s' "'jht status' takes no options (%s): run it as 'jht status'." ;;
+    keyfile.twice) printf '%s' "--api-key-file was given twice" ;;
+    keyfile.both) printf '%s' "use --api-key-file or --api-key-stdin, not both" ;;
+    keyfile.not_file) printf '%s' "the file given to --api-key-file must be a regular file, not a folder or a link: %s" ;;
+    keyfile.unreadable) printf '%s' "the file given to --api-key-file cannot be read: %s" ;;
+    keyfile.size) printf '%s' "the file given to --api-key-file is empty or too big for a key (1 to 4096 bytes): %s" ;;
+    keyfile.readable) printf '%s' "the file %s can be read by other users: chmod 600 it." ;;
+    keyfile.shape) printf '%s' "the content of the file given to --api-key-file is not one line of 16 to 512 printable characters without spaces: %s" ;;
     status.not_running_next) printf '%s' "Start it with: jht up" ;;
     uninstall.phase.machine) printf '%s' "Removing the Podman machine, or JHT's containers and volumes..." ;;
     uninstall.phase.images) printf '%s' "Removing the JHT images (the core and the full one, and the old ones)..." ;;
@@ -494,6 +513,13 @@ jht_text_it() {
     status.not_running) printf '%s' "Il container della squadra non e' acceso." ;;
     removed.office) printf '%s' "'jht %s' e' stato tolto nella 0.4.0 insieme all'ufficio Godot: usa i comandi jht (jht help)." ;;
     status.no_options) printf '%s' "'jht status' non ha opzioni (%s): si lancia come 'jht status'." ;;
+    keyfile.twice) printf '%s' "--api-key-file e' stato dato due volte" ;;
+    keyfile.both) printf '%s' "usa --api-key-file o --api-key-stdin, non tutti e due" ;;
+    keyfile.not_file) printf '%s' "il file dato a --api-key-file deve essere un file normale, non una cartella o un collegamento: %s" ;;
+    keyfile.unreadable) printf '%s' "il file dato a --api-key-file non si puo' leggere: %s" ;;
+    keyfile.size) printf '%s' "il file dato a --api-key-file e' vuoto o troppo grande per una chiave (da 1 a 4096 byte): %s" ;;
+    keyfile.readable) printf '%s' "il file %s lo possono leggere anche altri utenti: chmod 600 sul file." ;;
+    keyfile.shape) printf '%s' "il contenuto del file dato a --api-key-file non e' una riga da 16 a 512 caratteri stampabili senza spazi: %s" ;;
     status.not_running_next) printf '%s' "Accendilo con: jht up" ;;
     uninstall.phase.machine) printf '%s' "Rimuovo la macchina Podman, oppure i container e i volumi di JHT..." ;;
     uninstall.phase.images) printf '%s' "Rimuovo le immagini di JHT (il nucleo, quella piena e le vecchie)..." ;;
@@ -5742,25 +5768,25 @@ convert_setup_key_args() {
     if [ "$found" = 0 ] || { [ "${value#/}" != "$value" ] && [ ! -e "$value" ]; }; then
       out+=("$arg"); i=$((i + 1)); continue
     fi
-    if [ "$have_host" = 1 ]; then err "--api-key-file was given twice"; return 1; fi
+    if [ "$have_host" = 1 ]; then err "$(jht_say keyfile.twice)"; return 1; fi
     have_host=1; host_file="$value"
     if [ "$takes_next" = 1 ]; then i=$((i + 1)); fi
     out+=("--api-key-stdin"); i=$((i + 1))
   done
   [ "$have_host" = 1 ] || return 0
-  if [ "$has_stdin" = 1 ]; then err "use --api-key-file or --api-key-stdin, not both"; return 1; fi
+  if [ "$has_stdin" = 1 ]; then err "$(jht_say keyfile.both)"; return 1; fi
   if [ -L "$host_file" ] || { [ -e "$host_file" ] && [ ! -f "$host_file" ]; }; then
-    err "the file given to --api-key-file must be a regular file, not a folder or a link: $host_file"; return 1
+    err "$(jht_say keyfile.not_file "$host_file")"; return 1
   fi
-  if [ ! -f "$host_file" ] || [ ! -r "$host_file" ]; then err "the file given to --api-key-file cannot be read: $host_file"; return 1; fi
+  if [ ! -f "$host_file" ] || [ ! -r "$host_file" ]; then err "$(jht_say keyfile.unreadable "$host_file")"; return 1; fi
   local size
   size="$(wc -c < "$host_file" | tr -d ' ')"
   if [ "$size" -lt 1 ] || [ "$size" -gt 4096 ]; then
-    err "the file given to --api-key-file is empty or too big for a key (1 to 4096 bytes): $host_file"; return 1
+    err "$(jht_say keyfile.size "$host_file")"; return 1
   fi
   # like ssh: a key that others can read is said, not refused
   if [ -n "$(find "$host_file" -maxdepth 0 \( -perm -040 -o -perm -004 \) -print 2>/dev/null || true)" ]; then
-    warn "the file $host_file can be read by other users: chmod 600 it."
+    warn "$(jht_say keyfile.readable "$host_file")"
   fi
   local line="" shape='^[!-~]+$'
   IFS= read -r line < "$host_file" || true
@@ -5769,7 +5795,7 @@ convert_setup_key_args() {
   line="${line#"${line%%[![:space:]]*}"}"
   line="${line%"${line##*[![:space:]]}"}"
   if [ "${#line}" -lt 16 ] || [ "${#line}" -gt 512 ] || ! [[ "$line" =~ $shape ]]; then
-    err "the content of the file given to --api-key-file is not one line of 16 to 512 printable characters without spaces: $host_file"
+    err "$(jht_say keyfile.shape "$host_file")"
     return 1
   fi
   SETUP_KEY_ARGS=("${out[@]}")
