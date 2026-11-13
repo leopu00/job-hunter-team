@@ -51,6 +51,18 @@ def _linux_only(lines: list, index: int) -> bool:
     return False
 
 
+def _in_function(name: str):
+    """The call sits in the named function (the nearest function header above it)."""
+    def proof(lines: list, index: int) -> bool:
+        start = next((i for i in range(index, -1, -1) if FUNCTION.match(lines[i])), None)
+        return start is not None and lines[start].startswith(f"{name}() {{")
+    return proof
+
+
+NATIVE_UNINSTALL_WHY = ("the uninstall of rootless Podman on Linux, where there is no machine: uninstall_machine calls it only "
+                        "on Linux with Podman chosen, after unsetting CONTAINER_HOST and CONTAINER_CONNECTION")
+
+
 # The calls that name no JHT machine on purpose, each by name: what the call
 # starts with, the proof it must carry, and why. Any other call without the
 # machine is still a failure, and an exception that no call uses fails too.
@@ -72,6 +84,9 @@ NAMED_EXCEPTIONS = {
         "`podman unshare` enters the user namespace of the local Podman and has no remote form: "
         "it exists only for native Podman on Linux (the Linux branch), where there is no machine",
     ),
+    "native-uninstall-containers": ("ps -aq --filter ", _in_function("uninstall_podman_native_ids"), NATIVE_UNINSTALL_WHY),
+    "native-uninstall-network": ("network ls -q --filter ", _in_function("uninstall_podman_native_ids"), NATIVE_UNINSTALL_WHY),
+    "native-uninstall-volumes": ("volume ls -q --filter ", _in_function("uninstall_podman_native_ids"), NATIVE_UNINSTALL_WHY),
     "native-rootless-probe": (
         "info --format '{{.Host.Security.Rootless}} {{.Host.ServiceIsRemote}}'",
         _native_function,

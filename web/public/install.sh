@@ -637,7 +637,7 @@ podman_free_subid_start() {
 # Anything already there is left alone, and sudo is not even asked for then.
 provision_podman_linux() {
   local uid="$1" user="$2" etc="$3" run_user="$4" missing="" need_subuid=0 need_subgid=0 need_linger=0
-  local start end i
+  local start end i apt_err
   missing="$(podman_packages_missing)"
   podman_subid_range "$etc/subuid" "$user" "$uid" || need_subuid=1
   podman_subid_range "$etc/subgid" "$user" "$uid" || need_subgid=1
@@ -657,16 +657,26 @@ provision_podman_linux() {
         # A server just bought runs unattended-upgrades, which holds the dpkg
         # lock for minutes: wait for it (apt-get gives up at once otherwise).
         sudo -n apt-get -o DPkg::Lock::Timeout=180 update -qq >/dev/null 2>&1 || warn "apt-get update failed: trying the install anyway."
-        sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=180 install -y $missing >/dev/null \
-          || podman_refuse podman_install_failed 88 "apt-get install$missing failed."
+        # --no-remove: Podman never takes the place of anything. On a computer with Docker from Docker's own repository,
+        # containerd.io conflicts with runc, and `install -y` alone would have removed it to make room (Docker broken).
+        # apt then stops before changing anything, and the person is told what it wanted and what to run.
+        if ! apt_err="$(sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=180 install -y --no-remove $missing 2>&1 >/dev/null)"; then
+          case "$apt_err" in
+            *"remove is disabled"*|*"Packages need to be removed"*)
+              podman_refuse podman_install_failed 88 "installing$missing would REMOVE other packages of this computer (often containerd.io, Docker's): nothing was changed. To see which, run: sudo apt-get -s install$missing. Install Podman yourself in a way that keeps them (or decide to remove them), then run this installer again." ;;
+            *) podman_refuse podman_install_failed 88 "apt-get install$missing failed. To see why, run: sudo apt-get install$missing" ;;
+          esac
+        fi
         ;;
       dnf)
+        # dnf never removes a package to install one unless --allowerasing is given: it stops on the conflict.
         sudo -n dnf install -y $missing >/dev/null \
-          || podman_refuse podman_install_failed 88 "dnf install$missing failed."
+          || podman_refuse podman_install_failed 88 "dnf install$missing failed (dnf removes nothing: a conflict with an installed package stops it). To see why, run: sudo dnf install$missing"
         ;;
       pacman)
+        # --noconfirm answers the default, which is «no» to removing a conflicting package: pacman stops.
         sudo -n pacman -S --noconfirm --needed $missing >/dev/null \
-          || podman_refuse podman_install_failed 88 "pacman -S$missing failed."
+          || podman_refuse podman_install_failed 88 "pacman -S$missing failed (nothing was removed). To see why, run: sudo pacman -S$missing"
         ;;
       *) podman_refuse podman_install_failed 88 "no known package manager (apt, dnf, pacman) to install:$missing" ;;
     esac

@@ -95,7 +95,7 @@ exec env -i HOME="$FAKE_REMOTE_HOME" PATH="$FAKE_REMOTE_PATH" \
   FAKE_ROOTLESS="${FAKE_ROOTLESS:-}" FAKE_PODMAN_INFO="${FAKE_PODMAN_INFO:-}" FAKE_LINGER="${FAKE_LINGER:-}" \
   FAKE_STATE="${FAKE_STATE:-}" FAKE_SUDO_PASSWORD="${FAKE_SUDO_PASSWORD:-}" \
   FAKE_APT_INSTALLS_PODMAN="${FAKE_APT_INSTALLS_PODMAN:-}" FAKE_LINGER_STUCK="${FAKE_LINGER_STUCK:-}" \
-  FAKE_USERMOD_STUCK="${FAKE_USERMOD_STUCK:-}" JHT_RUN_USER_DIR="${JHT_RUN_USER_DIR:-}" FAKE_APT_LOCKED="${FAKE_APT_LOCKED:-}" \
+  FAKE_USERMOD_STUCK="${FAKE_USERMOD_STUCK:-}" JHT_RUN_USER_DIR="${JHT_RUN_USER_DIR:-}" FAKE_APT_LOCKED="${FAKE_APT_LOCKED:-}" FAKE_APT_WOULD_REMOVE="${FAKE_APT_WOULD_REMOVE:-}" \
   FAKE_REMOTE_ROOTLESS="${FAKE_REMOTE_ROOTLESS:-}" \
   ${CONTAINER_HOST+"CONTAINER_HOST=$CONTAINER_HOST"} ${CONTAINER_CONNECTION+"CONTAINER_CONNECTION=$CONTAINER_CONNECTION"} \
   /bin/bash -c "$cmd"
@@ -123,6 +123,13 @@ case "$*" in
   *"install -y"*)
     # Podman's packages: what is in stock/ comes out when it is installed.
     [ "${FAKE_APT_INSTALLS_PODMAN:-1}" = 1 ] || exit 100
+    # a Docker from Docker's repository: containerd.io conflicts with runc, apt would remove it; --no-remove makes it stop
+    if [ "${FAKE_APT_WOULD_REMOVE:-0}" = 1 ]; then
+      case "$*" in
+        *"--no-remove"*) echo "E: Packages need to be removed but remove is disabled." >&2; exit 100 ;;
+        *) echo "REMOVED containerd.io" >> "$FAKE_LOG" ;;
+      esac
+    fi
     # unattended-upgrades holds the dpkg lock: without a wait apt-get fails at once.
     if [ "${FAKE_APT_LOCKED:-0}" = 1 ]; then
       case "$*" in *"DPkg::Lock::Timeout="*) ;; *) echo "E: Could not get lock /var/lib/dpkg/lock-frontend" >&2; exit 100 ;; esac
@@ -657,7 +664,7 @@ def test_a_server_as_bought_gets_podman_a_range_and_linger_from_the_users_own_su
     assert done.returncode == 0, done.stderr.decode() + done.stdout.decode()
     calls = server.calls()
     assert ("sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=180 "
-            "install -y podman podman-compose uidmap") in calls
+            "install -y --no-remove podman podman-compose uidmap") in calls
     # the range starts after the one somebody else already has
     assert "sudo -n usermod --add-subuids 165536-231071 --add-subgids 165536-231071 app" in calls
     assert (server.etc / "subuid").read_text() == "app:165536:65536\n"
@@ -681,6 +688,18 @@ def test_a_package_install_that_fails_leaves_with_its_own_code(server, source):
     done = install_podman(server, source, FAKE_APT_INSTALLS_PODMAN="0")
     assert done.returncode == 88, done.stderr.decode()
     assert b"JHT_ERROR podman_install_failed\n" in done.stderr
+    assert not (server.home / ".jht").exists()
+
+
+def test_an_install_that_would_remove_a_package_of_docker_stops_and_removes_nothing(server, source):
+    with_podman(server, bare=True)
+    done = install_podman(server, source, FAKE_APT_WOULD_REMOVE="1")
+    assert done.returncode == 88, done.stderr.decode()
+    err = done.stderr.decode()
+    assert "JHT_ERROR podman_install_failed\n" in err
+    assert "would REMOVE other packages of this computer (often containerd.io, Docker's): nothing was changed" in err
+    assert "sudo apt-get -s install podman podman-compose uidmap" in err
+    assert "REMOVED containerd.io" not in server.calls()
     assert not (server.home / ".jht").exists()
 
 
