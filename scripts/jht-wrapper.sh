@@ -6316,6 +6316,55 @@ uninstall_docker_project() {
   done
 }
 
+# Linux with rootless Podman: the team is a podman-compose project of this user, and only Podman sees it (the JHT docker shim is
+# never taken for Docker by uninstall_tool). The same three kinds, chosen the same narrow way: containers by project AND service
+# label; the network and the volumes by project label AND their exact name (podman-compose 1.6 names them <project>_default and
+# <project>_<volume>, and does not label a volume with its logical name). Nothing of another project, nothing unlabelled.
+uninstall_podman_native_ids() {
+  local podman_bin="$1" kind="$2" project name ids
+  for project in $UNINSTALL_PROJECTS; do
+    case "$kind" in
+      container)
+        for name in $UNINSTALL_SERVICES; do
+          ids="$("$podman_bin" ps -aq --filter "label=com.docker.compose.project=$project" \
+            --filter "label=com.docker.compose.service=$name")" || return 1
+          uninstall_print_ids $ids || return 1
+        done
+        ;;
+      network)
+        ids="$("$podman_bin" network ls -q --filter "label=com.docker.compose.project=$project")" || return 1
+        ids="$(printf '%s\n' "$ids" | awk -v expected="${project}_default" '$0 == expected')"
+        uninstall_print_ids $ids || return 1
+        ;;
+      volume)
+        ids="$("$podman_bin" volume ls -q --filter "label=com.docker.compose.project=$project")" || return 1
+        for name in $UNINSTALL_VOLUMES; do
+          uninstall_print_ids $(printf '%s\n' "$ids" | awk -v expected="${project}_${name}" '$0 == expected') || return 1
+        done
+        ;;
+    esac
+  done
+}
+
+# The team stopped (rm -f stops a running container) and its containers, network and volumes removed, then checked gone.
+uninstall_podman_native_project() {
+  local podman_bin="$1" kind id ids
+  for kind in container network volume; do
+    ids="$(uninstall_podman_native_ids "$podman_bin" "$kind")" || return 1
+    for id in $ids; do
+      case "$kind" in
+        container) "$podman_bin" rm -f -t 30 "$id" >/dev/null 2>&1 || return 1 ;;
+        network) "$podman_bin" network rm "$id" >/dev/null 2>&1 || return 1 ;;
+        volume) "$podman_bin" volume rm "$id" >/dev/null 2>&1 || return 1 ;;
+      esac
+    done
+  done
+  for kind in container network volume; do
+    ids="$(uninstall_podman_native_ids "$podman_bin" "$kind")" || return 1
+    [ -z "$ids" ] || return 1
+  done
+}
+
 # L'endpoint a cui parla questo docker: DOCKER_HOST, altrimenti il context
 # attivo. Si cancella solo su un Docker di questo computer (socket unix o pipe
 # Windows): un context sulla VPS dell'utente farebbe sparire la' i segreti.
@@ -6446,14 +6495,22 @@ EOF
 
 # Il Docker di questo computer, se c'e' e risponde (la macchina Podman porta via le sue immagini con se'): lo stesso controllo
 # dell'endpoint di uninstall_machine, che ha gia' rifiutato un Docker che non e' qui.
-uninstall_images() {
-  local docker_bin endpoint
+uninstall_images() { # selection
+  local selection="${1:-}" docker_bin endpoint podman_bin native_removed=0
   UNINSTALL_IMAGES_REMOVED=0
+  # Linux with rootless Podman: the JHT images are in this user's Podman storage (only JHT's repositories, the same choice as Docker's).
+  if [ "$HOST_KERNEL" = "Linux" ] && [ "$selection" = "podman" ] && podman_bin="$(uninstall_tool podman)"; then
+    unset CONTAINER_HOST CONTAINER_CONNECTION
+    uninstall_docker_images "$podman_bin" || return 1
+    native_removed="$UNINSTALL_IMAGES_REMOVED"
+  fi
+  UNINSTALL_IMAGES_REMOVED="$native_removed"
   docker_bin="$(uninstall_tool docker)" || return 0
   endpoint="$(uninstall_docker_endpoint "$docker_bin")" || return 0
   case "$endpoint" in unix://*|npipe://*) ;; *) return 0 ;; esac
   "$docker_bin" info >/dev/null 2>&1 || return 0
-  uninstall_docker_images "$docker_bin"
+  uninstall_docker_images "$docker_bin" || return 1
+  UNINSTALL_IMAGES_REMOVED=$((UNINSTALL_IMAGES_REMOVED + native_removed))
 }
 
 # Il nome della macchina Podman che l'installer ha attestato in <runtime>/podman-machine, se e' un nome semplice e NON quello
@@ -6517,6 +6574,12 @@ uninstall_machine() {
     elif [ "$selection" = "podman" ]; then
       return 1
     fi
+  fi
+  # Linux con Podman rootless: il progetto e' di Podman, di questo utente (mai il Podman di root: le variabili che lo renderebbero
+  # remoto si tolgono). Senza podman non c'e' niente da togliere.
+  if [ "$HOST_KERNEL" = "Linux" ] && [ "$selection" = "podman" ] && podman_bin="$(uninstall_tool podman)"; then
+    unset CONTAINER_HOST CONTAINER_CONNECTION
+    uninstall_podman_native_project "$podman_bin" || return 1
   fi
   # Linux e Mac con Colima o Docker Desktop: il team e' un progetto Compose
   # nel Docker dell'utente. Con Podman scelto, un vecchio progetto Docker si
@@ -6675,7 +6738,7 @@ jht_uninstall() {
   fi
 
   # Le immagini DOPO i dati: con --purge il container usa-e-getta che svuota ~/.jht ha bisogno dell'immagine, gia' presente.
-  if ! uninstall_images; then
+  if ! uninstall_images "$selection"; then
     uninstall_left images
     return 24
   fi
