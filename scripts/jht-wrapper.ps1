@@ -4203,7 +4203,8 @@ switch ($Sub) {
   }
   # The Godot office and its commands are gone (0.4.0): said here, on the host, before anything would start the team for them.
   { $_ -in @('game', 'gui') } {
-    Write-Err "'jht $Sub' was removed in 0.4.0 with the Godot office: use the jht commands (jht help)."
+    if ((Get-JhtTextLanguage) -ceq 'en') { Write-Err "'jht $Sub' was removed in 0.4.0 with the Godot office: use the jht commands (jht help)." }
+    else { Write-Err "'jht $Sub' e' stato tolto nella 0.4.0 insieme all'ufficio Godot: usa i comandi jht (jht help)." }
     exit 2
   }
 
@@ -4400,6 +4401,13 @@ switch ($Sub) {
   }
 
   'status' {
+    # No options here (--json lives in the jht of the container): refused out loud, never ignored.
+    if ($Rest.Count -gt 0) {
+      $given = $Rest -join ' '
+      if ((Get-JhtTextLanguage) -ceq 'en') { Write-Err "'jht status' takes no options ($given): on the host it prints one line name=... status=..." }
+      else { Write-Err "'jht status' non ha opzioni ($given): sull'host stampa una riga name=... status=..." }
+      exit 2
+    }
     Require-Docker
     if (Test-ContainerUp) {
       & docker inspect $Container --format 'name={{.Name}} status={{.State.Status}} started={{.State.StartedAt}} image={{.Config.Image}}'
