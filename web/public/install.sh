@@ -632,6 +632,46 @@ podman_free_subid_start() {
   awk -F: 'BEGIN { top = 100000 } { end = $2 + $3; if (end > top) top = end } END { print top }' "${files[@]}"
 }
 
+# The version the package manager WOULD install (empty when it cannot tell): read before anything is installed, so that a distribution
+# whose Podman is too old is said before sudo changes the computer. Only the dotted number: an epoch («5:») and a Debian suffix
+# («+ds1-1ubuntu0.2») go.
+podman_candidate_version() { # package
+  local raw=""
+  case "$PKG" in
+    apt) raw="$(LC_ALL=C apt-cache policy "$1" 2>/dev/null | awk '$1 == "Candidate:" { print $2; exit }')" ;;
+    dnf) raw="$(LC_ALL=C dnf -q list --available "$1" 2>/dev/null | awk -v p="$1" 'index($1, p ".") == 1 { v = $2 } END { print v }')" ;;
+    pacman) raw="$(LC_ALL=C pacman -Si "$1" 2>/dev/null | awk -F': ' '$1 ~ /^Version/ { print $2; exit }')" ;;
+  esac
+  [ "$raw" != "(none)" ] || raw=""
+  raw="${raw#*:}"
+  printf '%s' "$raw" | sed -n 's/^\([0-9][0-9]*\(\.[0-9][0-9]*\)*\).*/\1/p'
+}
+
+# Podman 5 or later is what JHT runs on; the distributions that give it (13/11/2026). Said in Italian too when the person reads Italian.
+PODMAN_DISTRIBUTIONS_OK="Ubuntu 26.04 LTS, Debian 13, Fedora 43 or later"
+podman_refuse_old_candidate() { # package found wanted
+  local locale="${JHT_LANG:-${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}}"
+  case "$locale" in it|it_*|it.*) ;; *) locale="" ;; esac
+  [ -n "$locale" ] && printf "  %s\n" "Questa distribuzione installerebbe $1 $2, ma Job Hunter Team 0.4.0 vuole $1 $3 o successivo: non ho installato niente. Distribuzioni che lo danno: Ubuntu 26.04 LTS, Debian 13, Fedora 43 o successive." >&2
+  podman_refuse podman_version_unsupported 93 "this distribution would install $1 $2, and Job Hunter Team 0.4.0 needs $1 $3 or later: nothing was installed. Distributions that give it: $PODMAN_DISTRIBUTIONS_OK."
+}
+
+# Each of podman and podman-compose that is about to be installed: its candidate is the minimum or more, or nothing is installed.
+# A candidate that cannot be read changes nothing: the check after the install still holds.
+podman_check_candidates() { # missing packages
+  local candidate
+  case " $1 " in *" podman "*)
+    candidate="$(podman_candidate_version podman)"
+    [ -z "$candidate" ] || version_at_least "$candidate" "$PODMAN_MIN_VERSION" \
+      || podman_refuse_old_candidate podman "$candidate" "$PODMAN_MIN_VERSION" ;;
+  esac
+  case " $1 " in *" podman-compose "*)
+    candidate="$(podman_candidate_version podman-compose)"
+    [ -z "$candidate" ] || version_at_least "$candidate" "$PODMAN_COMPOSE_MIN_VERSION" \
+      || podman_refuse_old_candidate podman-compose "$candidate" "$PODMAN_COMPOSE_MIN_VERSION" ;;
+  esac
+}
+
 # Sets up what is missing for Podman rootless with the user's own sudo: the
 # packages, the subuid/subgid range (then `podman system migrate`) and linger.
 # Anything already there is left alone, and sudo is not even asked for then.
@@ -657,6 +697,7 @@ provision_podman_linux() {
         # A server just bought runs unattended-upgrades, which holds the dpkg
         # lock for minutes: wait for it (apt-get gives up at once otherwise).
         sudo -n apt-get -o DPkg::Lock::Timeout=180 update -qq >/dev/null 2>&1 || warn "apt-get update failed: trying the install anyway."
+        podman_check_candidates "$missing"
         # --no-remove: Podman never takes the place of anything. On a computer with Docker from Docker's own repository,
         # containerd.io conflicts with runc, and `install -y` alone would have removed it to make room (Docker broken).
         # apt then stops before changing anything, and the person is told what it wanted and what to run.
@@ -669,11 +710,13 @@ provision_podman_linux() {
         fi
         ;;
       dnf)
+        podman_check_candidates "$missing"
         # dnf never removes a package to install one unless --allowerasing is given: it stops on the conflict.
         sudo -n dnf install -y $missing >/dev/null \
           || podman_refuse podman_install_failed 88 "dnf install$missing failed (dnf removes nothing: a conflict with an installed package stops it). To see why, run: sudo dnf install$missing"
         ;;
       pacman)
+        podman_check_candidates "$missing"
         # --noconfirm answers the default, which is «no» to removing a conflicting package: pacman stops.
         sudo -n pacman -S --noconfirm --needed $missing >/dev/null \
           || podman_refuse podman_install_failed 88 "pacman -S$missing failed (nothing was removed). To see why, run: sudo pacman -S$missing"
