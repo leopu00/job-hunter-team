@@ -112,6 +112,7 @@ function Invoke-Compose {
   param([switch]$NoInput, [string]$InputText, [Parameter(ValueFromRemainingArguments)] $Args)
   if ($Args[0] -eq '--profile') { $Args = @($Args[2..($Args.Count-1)]) }
   if ($Args[0] -eq 'run') {
+    Write-Error 'Container jht-jht-telegram-run-cdf328b01572  Creating'  # what compose says on stderr, as an engine line
     $i = [Array]::IndexOf($Args, '-I')
     if ($PSBoundParameters.ContainsKey('InputText')) {
       $InputText | & $env:PYTHON '-I' $env:PLANNER @($Args[($i+2)..($Args.Count-1)])
@@ -176,7 +177,7 @@ def run_host(tmp_path, language, args, *, fail_pair=False, no_effect="", absent=
         script = BASH_TRANSPORT + '\nTELEGRAM_SERVICE=jht-telegram\n' + body + (BASH_ABSENT if absent else "") + '\ntelegram_lifecycle_command "$@"\n'
         command = ["bash", "-c", script, "test-host", *args]
     else:
-        body = powershell_functions("Get-TelegramLifecyclePlan", "Confirm-TelegramLifecycle", "Invoke-ComposeQuiet", "Invoke-TelegramLifecycleSteps", "Invoke-TelegramLifecycle")
+        body = powershell_functions("Get-TelegramLifecyclePlan", "Confirm-TelegramLifecycle", "Invoke-ComposeQuiet", "Invoke-ComposeAnswer", "Invoke-TelegramLifecycleSteps", "Invoke-TelegramLifecycle")
         script = tmp_path / "transport.ps1"
         script.write_text(PS_TRANSPORT + body + (PS_ABSENT if absent else "") + '\nexit (Invoke-TelegramLifecycle $args)\n', encoding="utf-8")
         command = ["pwsh", "-NoProfile", "-File", str(script), *args]
@@ -286,3 +287,19 @@ def test_removing_an_absent_role_does_not_describe_the_other_bot_as_unconfigured
     assert events == ["start", "bots delete assistente"]
     assert "non configurato" not in result.stdout
     assert store.read_bot("mentor") is not None
+
+
+def test_windows_keeps_the_run_containers_lines_out_of_sight_and_shows_them_when_a_step_fails(lifecycle_home):
+    # giro Windows 35: `jht telegram status`, the start from the setup and every `jht up` printed compose's
+    # «Volume …/Container jht-jht-telegram-run-… Creating/Created» lines raw
+    result, _ = run_host(lifecycle_home, "pwsh", ["status"])
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.strip() == "Telegram non attivo: Telegram non configurato."
+    assert "-run-" not in result.stdout + result.stderr
+    result, _ = run_host(lifecycle_home, "pwsh", ["resume"])
+    assert result.returncode == 0 and "-run-" not in result.stdout + result.stderr
+    configure()
+    failed, _ = run_host(lifecycle_home, "pwsh", ["resume"], absent=True)
+    assert failed.returncode != 0
+    assert "Container jht-jht-telegram-run-cdf328b01572  Creating" in failed.stderr
+    assert "telegram_lifecycle_state_unconfirmed" in failed.stderr

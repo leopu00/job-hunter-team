@@ -143,7 +143,8 @@ exit ([int]$done[$done.Count - 1])
 # from the wrapper, calling the stand-in Invoke-Compose above.
 _QUIET = re.search(r"function Invoke-ComposeQuiet \{.*?\n\}\n", WRAPPER.read_text(encoding="utf-8"), flags=re.S).group(0)
 assert "\n. $env:T_LIBRARY\n" in CASE
-CASE = CASE.replace("\n. $env:T_LIBRARY\n", "\n" + _QUIET + ". $env:T_LIBRARY\n", 1)
+_ANSWER = re.search(r"function Invoke-ComposeAnswer \{.*?\n\}\n", WRAPPER.read_text(encoding="utf-8"), flags=re.S).group(0)
+CASE = CASE.replace("\n. $env:T_LIBRARY\n", "\n" + _QUIET + _ANSWER + ". $env:T_LIBRARY\n", 1)
 
 
 @pytest.fixture
