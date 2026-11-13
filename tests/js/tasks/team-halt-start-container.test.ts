@@ -123,6 +123,7 @@ process.exit(0);
 `,
   );
   writeExecutable(path.join(bin, "codex"), "process.exit(0);");
+  writeExecutable(path.join(bin, "pi"), "process.exit(0);"); // the CLI of this release (GLM on pi): on a runner it is not installed
   return {
     nodeOptions: fakeDiskNodeOptions(root),
     root,
