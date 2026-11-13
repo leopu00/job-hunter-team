@@ -125,3 +125,11 @@ def test_windows_nothing_absent_or_unattested_is_touched(tmp_path: Path, names: 
     result, calls = _ps_tools_first(tmp_path, names, screen_id)
     assert "went on" in result.stdout, result.stderr
     assert not [c for c in calls if c.startswith(("docker stop", "docker rm"))]
+
+
+def test_the_names_podman_stop_and_rm_print_stay_out_of_sight_and_real_lines_stay():
+    # giro Mac 10 (package 33): `jht down` and `jht up` still printed «jht» / «jht» (the names podman stop and rm print)
+    lines = "jht\njht-broker\njht-jht-playwright-populate-run-1a2b\njht_default\nError: something real\njhtx extra\nStopped jht\n"
+    script = _wrapper_functions("compose_noise_filter") + "\ncompose_noise_filter"
+    kept = subprocess.run(["bash", "-c", script], input=lines, capture_output=True, text=True, timeout=30).stdout
+    assert kept == "Error: something real\njhtx extra\nStopped jht\n"

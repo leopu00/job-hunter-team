@@ -1924,7 +1924,9 @@ rootless_netns_noise_filter() {
 compose_noise_filter() {
   # Podman 6 also says it the other way round, with single quotes: «Error: no container with ID or name 'jht-media' found: no such
   # container», one line per absent service of the project on every `jht down` (8 to 11 lines before «stopped»).
-  grep -v -E "^[0-9a-f]{12,64}\$|^(jht|host-runtime)_default\$|^Error: no container with (name or ID|ID or name) [\"']jht-[a-z][a-z0-9-]*[\"'] found(: no such container)?\$" || true
+  # `podman stop` and `podman rm` print the name of each container they stopped or removed («jht», «jht-broker»): the result is the
+  # line «stopped» / «started».
+  grep -v -E "^[0-9a-f]{12,64}\$|^jht(-[a-z0-9][a-z0-9-]*)?\$|^(jht|host-runtime)_default\$|^Error: no container with (name or ID|ID or name) [\"']jht-[a-z][a-z0-9-]*[\"'] found(: no such container)?\$" || true
 }
 
 # `--verbose` on `jht up`, `jht down`, `jht restart`, `jht recreate`... (or JHT_VERBOSE=1) shows what compose says, line by line, as it
