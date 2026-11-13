@@ -465,6 +465,30 @@ detect_os() {
 # folders) and this installer again, then `jht setup` with the key. A line `JHT_ERROR runtime_change_requires_migration` on stderr,
 # then exit 85 (the Linux Podman codes are 88-97).
 RUNTIME_CHANGE_REQUIRES_MIGRATION_EXIT=85
+# The person's language for the few lines the installer says before the setup: the one chosen at an earlier setup (~/.jht/host.env,
+# read as data, only a known value), else the system's (LANG and friends). Italian or English; any other is English.
+installer_person_lang() {
+  local env_file="$HOME/.jht/host.env" value="" locale
+  if [ -f "$env_file" ] && [ ! -L "$env_file" ]; then
+    value="$(grep -E '^JHT_LANG=[a-z]{2}$' "$env_file" 2>/dev/null | tail -n 1 | cut -d= -f2)"
+  fi
+  if [ -z "$value" ]; then
+    locale="${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}"
+    value="${locale%%[_.@-]*}"
+  fi
+  case "$value" in it) printf 'it\n' ;; *) printf 'en\n' ;; esac
+}
+
+# The Colima profile the JHT installer started, from its marker in the runtime (a real file: 1st line «colima», 2nd the profile).
+jht_started_colima_profile() {
+  local marker="$RUNTIME_DIR/colima-started" profile
+  [ -f "$marker" ] && [ ! -L "$marker" ] || return 1
+  [ "$(head -c 64 "$marker" 2>/dev/null | sed -n '1p' | tr -d '\r')" = colima ] || return 1
+  profile="$(head -c 64 "$marker" 2>/dev/null | sed -n '2p' | tr -d '\r')"
+  case "$profile" in ''|-*|*[!A-Za-z0-9_.-]*) return 1 ;; esac
+  printf '%s\n' "$profile"
+}
+
 keep_chosen_runtime() {
   [ -n "${OS:-}" ] || detect_os
   [ "$OS" = "macos" ] || [ "$OS" = "linux" ] || return 0
@@ -481,8 +505,30 @@ keep_chosen_runtime() {
     return 0
   fi
   [ "$current" = "podman" ] && return 0
+  local lang profile colima_line=""
+  lang="$(installer_person_lang)"
+  # The Colima virtual machine stays on the disk, stopped, after the move (up to 100 GiB). Name only the profile JHT made: the one of
+  # the marker of the installer that started it (1st line «colima», 2nd the profile); an install older than the marker started the
+  # «default» profile, which is named only if it is there, and only for a person who installed Colima for JHT alone.
+  if profile="$(jht_started_colima_profile)"; then
+    if [ "$lang" = it ]; then
+      colima_line=" Dopo la disinstallazione la macchina virtuale Colima che aveva creato JHT (profilo $profile) resta spenta sul disco: se non la usi per altro, toglila con «colima delete -p $profile» per liberare lo spazio."
+    else
+      colima_line=" After the uninstall the Colima virtual machine JHT created (profile $profile) stays on the disk, stopped: if you use it for nothing else, remove it with «colima delete -p $profile» to free the space."
+    fi
+  elif [ "$OS" = macos ] && [ -d "$HOME/.colima/default" ] && [ ! -L "$HOME/.colima/default" ]; then
+    if [ "$lang" = it ]; then
+      colima_line=" Se Colima l'avevi installata solo per JHT, dopo la disinstallazione la sua macchina virtuale (profilo default, quello che accendeva l'installer di JHT) resta spenta sul disco: toglila con «colima delete -p default» per liberare lo spazio. Se usi Colima per altro, lasciala."
+    else
+      colima_line=" If you installed Colima only for JHT, after the uninstall its virtual machine (profile default, the one the JHT installer started) stays on the disk, stopped: remove it with «colima delete -p default» to free the space. If you use Colima for other things, leave it."
+    fi
+  fi
   printf 'JHT_ERROR %s\n' runtime_change_requires_migration >&2
-  printf "  ${RED}✗${RESET} %s\n" "runtime_change_requires_migration: this computer runs JHT on Docker (Colima, Docker Desktop or Docker Engine). Since 0.4 JHT runs only on Podman, and nothing was changed. Your data stays: ~/.jht (configuration, database, profile) and ~/Documents/Job Hunter Team (CVs, outputs) are folders of this computer. What stays behind in Docker's volumes and has to be given again: the API key kept by the setup, the mail password, the Telegram tokens. To move to Podman: run «jht uninstall --confirm» (it keeps those two folders), run this installer again, then «jht setup» with your API key." >&2
+  if [ "$lang" = it ]; then
+    printf "  ${RED}✗${RESET} %s\n" "runtime_change_requires_migration: questo computer fa girare JHT su Docker (Colima, Docker Desktop o Docker Engine). Dalla 0.4 JHT gira solo su Podman, e non e' stato cambiato niente. I tuoi dati restano: ~/.jht (configurazione, database, profilo) e ~/Documents/Job Hunter Team (CV, risultati) sono cartelle di questo computer. Resta invece nei volumi di Docker, e va ridato: la chiave API salvata dal setup, la password della posta, i token di Telegram. Per passare a Podman: «jht uninstall --confirm» (tiene quelle due cartelle), rilancia questo installer, poi «jht setup» con la tua chiave API.$colima_line" >&2
+  else
+    printf "  ${RED}✗${RESET} %s\n" "runtime_change_requires_migration: this computer runs JHT on Docker (Colima, Docker Desktop or Docker Engine). Since 0.4 JHT runs only on Podman, and nothing was changed. Your data stays: ~/.jht (configuration, database, profile) and ~/Documents/Job Hunter Team (CVs, outputs) are folders of this computer. What stays behind in Docker's volumes and has to be given again: the API key kept by the setup, the mail password, the Telegram tokens. To move to Podman: run «jht uninstall --confirm» (it keeps those two folders), run this installer again, then «jht setup» with your API key.$colima_line" >&2
+  fi
   exit "$RUNTIME_CHANGE_REQUIRES_MIGRATION_EXIT"
 }
 

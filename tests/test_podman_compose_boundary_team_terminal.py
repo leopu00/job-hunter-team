@@ -60,7 +60,9 @@ def test_status_of_a_team_that_is_not_there_says_what_to_do_at_a_terminal(tmp_pa
     env["JHT_FIXTURE_CONTAINER_CASE"] = "zero"                 # the project lists no container
     code, out = _run_in_terminal(wrapper, env, "status")
     plain = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", out)
-    assert code == 1 and "The team's container is not running." in plain and "→ Start it with: jht up" in plain
+    # a team that is off is a state for a person, not an error: rc 0 and no ✗ (right after the install it is so)
+    assert code == 0 and "The team's container is not running." in plain and "→ Start it with: jht up" in plain
+    assert "✗" not in plain
     assert "non attivo" not in plain
     piped = _run(wrapper, env, "status")
     assert piped.returncode != 0 and "non attivo" in piped.stdout  # the app and the scripts keep the line they read

@@ -734,6 +734,21 @@ def test_status_says_a_stopped_container_is_not_running_and_does_not_call_it_una
     assert "non attivo" in result.stdout + result.stderr and "non attestabile" not in result.stdout + result.stderr
 
 
+
+def test_status_for_a_person_says_a_team_that_is_off_without_calling_it_an_error(tmp_path: Path):
+    # Right after the install the container is not there yet: for a person that is a state, not a failure (rc 0, no ✗).
+    wrapper, env, _ = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    env["JHT_TEST_EXITED_STATE"] = str(tmp_path / "container-never-started")
+    env["JHT_MACHINE_OUTPUT"] = "0"
+    env["JHT_LANG"] = "it"
+
+    result = subprocess.run([str(wrapper), "status"], env=env, text=True, capture_output=True, timeout=20, check=False)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "non e' acceso" in result.stdout and "jht up" in result.stdout
+    assert "✗" not in result.stdout + result.stderr and "non attestabile" not in result.stdout + result.stderr
+
 def _stale_stopped(tmp_path: Path):
     wrapper, env, log = _runtime(tmp_path)
     env["JHT_TEST_RUNTIME_READY"] = "1"
