@@ -1926,14 +1926,18 @@ function Get-RunningComposeServiceId {
 # The tools' containers (the live screen, media, the sign-in) are stopped and removed first, each by the id the attestation gives (a
 # running container of this project and that service): with the screen running podman-compose's `down` could not remove what it
 # stood on, and the team's container came back up seconds later (measured on a Mac; the same podman-compose runs here). Nothing
-# unattested is touched, and it is never an error.
+# unattested is touched, and it is never an error. Then the team's own services, the same way but only stopped (telegram, the team,
+# the broker last): the same raw lines came once without the screen, on a down ~35 s after the first up, and a container stopped by
+# `stop` is one its restart policy (unless-stopped) never brings back; compose down then removes them.
 function Stop-JhtToolContainersFirst {
   $names = @(& { $ErrorActionPreference = 'Continue'; & docker ps --format '{{.Names}}' 2>$null } | ForEach-Object { "$($_)".Trim() })
-  foreach ($service in @('jht-screen', 'jht-media', 'jht-login-view', 'jht-login-proxy', 'jht-login', 'jht-playwright-populate')) {
+  foreach ($service in @('jht-screen', 'jht-media', 'jht-login-view', 'jht-login-proxy', 'jht-login', 'jht-playwright-populate', 'jht-telegram', 'jht', 'jht-broker')) {
     if ($names -cnotcontains $service) { continue }
     $id = Get-RunningComposeServiceId $service
     if (-not $id -or $id -notmatch '^[0-9a-fA-F]{12,64}$') { continue }
-    & { $ErrorActionPreference = 'Continue'; & docker stop -t 10 $id *> $null; & docker rm -f $id *> $null }
+    & { $ErrorActionPreference = 'Continue'; & docker stop -t 10 $id *> $null }
+    if ($service -in @('jht-telegram', 'jht', 'jht-broker')) { continue }   # the team's: compose down removes them
+    & { $ErrorActionPreference = 'Continue'; & docker rm -f $id *> $null }
   }
 }
 
