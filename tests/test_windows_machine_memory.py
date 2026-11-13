@@ -428,7 +428,7 @@ Restore-JhtWslConfigAtUninstall -RuntimePath $env:RUNTIME -ProfilePath $env:PROF
 WRAPPER_IMPORTS = [*BLOCK_FUNCTIONS, "Restore-JhtWslConfigAtUninstall", "Get-JhtUninstallText", "Get-JhtTextLanguage", "Format-JhtUninstallReason"]
 
 
-def _wrapper_uninstall(tmp_path, runtime, language=""):
+def _wrapper_uninstall(tmp_path, runtime, language="it"):  # a person who reads Italian; with nothing chosen the language is the system's
     env = {"RUNTIME": str(runtime), "JHT_HOST_ENV_FILE": str(tmp_path / "host.env"), "PROFILEDIR": str(tmp_path)}
     if language:
         env["JHT_LANG"] = language

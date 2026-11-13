@@ -16,6 +16,13 @@ SOURCE = WRAPPER.read_text(encoding="utf-8")
 POWERSHELL = shutil.which("powershell") or shutil.which("pwsh")
 
 
+@pytest.fixture(autouse=True)
+def _a_person_who_reads_italian(monkeypatch):
+    # The sentences below are the Italian ones: the person set JHT_LANG=it. With nothing chosen the wrapper takes the
+    # language of Windows (English on the runners), the rule of the CLI.
+    monkeypatch.setenv("JHT_LANG", "it")
+
+
 def _uninstall_source() -> str:
     start = SOURCE.index("function Write-JhtUninstallPhase")
     end = SOURCE.index("$Container   =", start)
