@@ -104,5 +104,8 @@ def test_with_a_docker_engine_too_only_jht_s_labelled_projects_go_there(tmp_path
     result = box.run("uninstall", "--confirm")
     assert result.returncode == 0, result.stdout + result.stderr
     calls = box.log.read_text(encoding="utf-8").splitlines()
-    docker_mutations = [c for c in calls if c.startswith("docker ") and any(w in c.split()[1:3] for w in ("rm", "-f"))]
+    def removes(call: str) -> bool:
+        words = call.split()
+        return words[0] == "docker" and (words[1] == "rm" or (words[1] in ("image", "network", "volume") and words[2] == "rm"))
+    docker_mutations = [c for c in calls if removes(c)]
     assert all("ghcr.io/leopu00/jht" in c or c.split()[-1].startswith("jht") for c in docker_mutations), docker_mutations
