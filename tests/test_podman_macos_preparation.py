@@ -153,7 +153,7 @@ def test_macos_podman_setup_reports_another_running_machine_without_stopping_it(
         assert "only one VM can be active at a time" in source
         assert "podman_other_machine_running" in source
         assert "podman machine list" in source
-        assert "podman machine stop $running" in source
+        assert "podman machine stop $running" in source or "podman machine stop ${running:-<nome>}" in source
         assert "JHT_OTHER_MACHINE %s" in source
         assert "exit 79" in source or "return 79" in source
     installer_conflict = installer[
@@ -172,9 +172,8 @@ def test_macos_podman_setup_reports_another_running_machine_without_stopping_it(
     active_wrapper = "\n".join(
         line for line in wrapper_conflict.splitlines() if not line.lstrip().startswith("#")
     )
-    assert ' machine stop ' not in active_installer.replace(
-        "'podman machine stop $running'", ""
-    ).replace("'podman machine stop <nome>'", "")
+    # the installer only quotes the command in its advice ('podman machine stop <the machine>'), it never runs it
+    assert ' machine stop ' not in re.sub(r"'podman machine stop [^']*'", "", active_installer)
     assert ' machine stop ' not in active_wrapper.replace(
         "'podman machine stop $running'", ""
     ).replace("'podman machine stop <nome>'", "")

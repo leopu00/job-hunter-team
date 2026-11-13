@@ -876,11 +876,15 @@ report_podman_machine_conflict() {
   local podman_bin="$1" command_error="$2" running
   printf '%s\n' "$command_error" | grep -Fqi 'only one VM can be active at a time' || return 1
   running="$(running_podman_machine "$podman_bin")"
-  if [ -n "$running" ]; then
-    printf 'JHT_OTHER_MACHINE %s\n' "$running"
-    err "podman_other_machine_running: un'altra macchina Podman, $running, e' accesa: spegnila con 'podman machine stop $running' e riprova."
+  [ -n "$running" ] && printf 'JHT_OTHER_MACHINE %s\n' "$running"
+  # The line in the person's language (the installer has no err(): it once stopped here with «err: command not found»). It only
+  # says the command: the installer never stops a machine of the person.
+  local which_it="un'altra macchina Podman e' accesa (trovala con 'podman machine list')" which_en="another Podman machine is running (find it with 'podman machine list')"
+  [ -n "$running" ] && which_it="un'altra macchina Podman, $running, e' accesa" which_en="another Podman machine, $running, is running"
+  if [ "$(installer_person_lang)" = it ]; then
+    printf "  ${RED}✗${RESET} %s\n" "podman_other_machine_running: $which_it, e sul Mac ne puo' girare una sola alla volta. Spegnila con 'podman machine stop ${running:-<nome>}' (o dall'app con cui la usi) e rilancia l'installer: Job Hunter Team non la spegne mai al posto tuo, e dopo potrai riaccenderla." >&2
   else
-    err "podman_other_machine_running: un'altra macchina Podman e' accesa: trovala con 'podman machine list', spegnila con 'podman machine stop <nome>' e riprova."
+    printf "  ${RED}✗${RESET} %s\n" "podman_other_machine_running: $which_en, and a Mac runs only one at a time. Stop it with 'podman machine stop ${running:-<name>}' (or from the app you use it with) and run the installer again: Job Hunter Team never stops it for you, and you can start it again afterwards." >&2
   fi
   return 0
 }
