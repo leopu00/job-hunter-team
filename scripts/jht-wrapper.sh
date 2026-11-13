@@ -398,6 +398,8 @@ jht_text_en() {
     status.next_running) printf '%s' "Who is working: jht agents" ;;
     status.next_other) printf '%s' "Start the team with: jht up" ;;
     status.not_running) printf '%s' "The team's container is not running." ;;
+    removed.office) printf '%s' "'jht %s' was removed in 0.4.0 with the Godot office: use the jht commands (jht help)." ;;
+    status.no_options) printf '%s' "'jht status' takes no options (%s): on the host it prints one line for people, and one line name=... status=... when the output goes to a program." ;;
     status.not_running_next) printf '%s' "Start it with: jht up" ;;
     uninstall.phase.machine) printf '%s' "Removing the Podman machine, or JHT's containers and volumes..." ;;
     uninstall.phase.images) printf '%s' "Removing the JHT images (the core and the full one, and the old ones)..." ;;
@@ -490,6 +492,8 @@ jht_text_it() {
     status.next_running) printf '%s' "Chi sta lavorando: jht agents" ;;
     status.next_other) printf '%s' "Accendi la squadra con: jht up" ;;
     status.not_running) printf '%s' "Il container della squadra non e' acceso." ;;
+    removed.office) printf '%s' "'jht %s' e' stato tolto nella 0.4.0 insieme all'ufficio Godot: usa i comandi jht (jht help)." ;;
+    status.no_options) printf '%s' "'jht status' non ha opzioni (%s): sull'host stampa una riga per le persone, e una riga name=... status=... quando l'uscita va a un programma." ;;
     status.not_running_next) printf '%s' "Accendilo con: jht up" ;;
     uninstall.phase.machine) printf '%s' "Rimuovo la macchina Podman, oppure i container e i volumi di JHT..." ;;
     uninstall.phase.images) printf '%s' "Rimuovo le immagini di JHT (il nucleo, quella piena e le vecchie)..." ;;
@@ -6610,7 +6614,7 @@ case "$SUB" in
 
   # The Godot office and its commands are gone (0.4.0): said here, on the host, before anything would start the team for them.
   game|gui)
-    err "'jht $SUB' was removed in 0.4.0 with the Godot office: use the jht commands (jht help)."
+    err "$(jht_say removed.office "$SUB")"
     exit 2
     ;;
 
@@ -6898,6 +6902,8 @@ case "$SUB" in
     ;;
 
   status)
+    # No options here (--json lives in the jht of the container): refused out loud, never ignored.
+    if [ "$#" -gt 1 ]; then shift; err "$(jht_say status.no_options "$*")"; exit 2; fi
     # Probe pura: `status` non deve avviare la machine Podman, Docker Desktop
     # o il container. Solo l'arm esplicito `up` puo' accendere la machine.
     # Una machine che vede tutto il Mac non risulta "attiva" nemmeno qui.

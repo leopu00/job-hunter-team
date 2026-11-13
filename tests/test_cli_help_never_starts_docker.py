@@ -195,6 +195,37 @@ def test_the_removed_godot_commands_say_so_and_start_nothing(tmp_path, args):
     assert_no_docker_effect(log)
 
 
+
+def test_the_removed_godot_commands_speak_the_language_of_the_person(tmp_path):
+    # the other wrapper messages follow the language chosen at setup: this one too
+    fake_bin, log = make_docker_spy(tmp_path, reachable=True, container_running=False)
+    res = run_wrapper(["gui", "open"], fake_bin, tmp_path, extra_env={**write_trusted_runtime(tmp_path), "JHT_LANG": "it"})
+
+    assert res.returncode == 2, res.stderr
+    assert "'jht gui' e' stato tolto nella 0.4.0 insieme all'ufficio Godot: usa i comandi jht (jht help)." in res.stderr
+    assert "was removed" not in res.stderr
+    assert_no_docker_effect(log)
+
+
+@pytest.mark.parametrize("lang,said", [("en", "'jht status' takes no options (--json)"), ("it", "'jht status' non ha opzioni (--json)")])
+def test_status_refuses_an_option_out_loud_instead_of_ignoring_it(tmp_path, lang, said):
+    # `jht status --json` on the host printed the line for people as if the flag were not there
+    fake_bin, log = make_docker_spy(tmp_path, reachable=True, container_running=True)
+    res = run_wrapper(["status", "--json"], fake_bin, tmp_path, extra_env={**write_trusted_runtime(tmp_path), "JHT_LANG": lang})
+
+    assert res.returncode == 2, res.stderr
+    assert said in res.stderr
+    assert res.stdout == ""
+    assert_no_docker_effect(log)
+
+
+def test_the_windows_wrapper_says_the_same_two_things():
+    powershell = POWERSHELL_WRAPPER.read_text(encoding="utf-8")
+    status = powershell[powershell.index("\n  'status' {"):]
+    assert status.index("if ($Rest.Count -gt 0)") < status.index("Require-Docker")
+    assert "'jht status' non ha opzioni ($given)" in status and "'jht status' takes no options ($given)" in status
+    assert "e' stato tolto nella 0.4.0 insieme all'ufficio Godot" in powershell
+
 def test_version_prints_without_docker_effects(tmp_path):
     fake_bin, log = make_docker_spy(
         tmp_path, reachable=False, container_running=False
