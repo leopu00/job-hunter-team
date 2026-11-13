@@ -159,7 +159,7 @@ def test_the_status_command_of_both_wrappers_calls_the_read_only_line_and_not_th
     ps = _source("jht-wrapper.ps1")
     status_sh = re.search(r"status_human_running .*?\n(.*?)\n    else", sh, re.S).group(1)
     assert "telegram_status_line" in status_sh and "telegram_lifecycle" not in status_sh
-    status_ps = re.search(r"^  'status' \{\n    Require-Docker.*?\n  \}\n", ps, re.S | re.M).group(0)
+    status_ps = re.search(r"^  'status' \{\n.*?\n    Require-Docker.*?\n  \}\n", ps, re.S | re.M).group(0)
     assert "Write-TelegramStatusLine" in status_ps and "Invoke-AvailableTelegramLifecycle" not in status_ps
 
 
