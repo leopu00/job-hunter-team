@@ -3332,9 +3332,9 @@ function Ensure-Up {
       Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'
       exit 1
     }
+    # compose's own lines out of sight when it works, whole when it does not (as on `jht up`): the setup starts the team through here
     Stop-OnFailedComposeUp (Invoke-PodmanServicesUpInTurn)
-    Invoke-Compose 'up' '-d'
-    Stop-OnFailedComposeUp $LASTEXITCODE
+    Stop-OnFailedComposeUp (Invoke-ComposeQuiet 'up' '-d')
     # Attendi che il container sia in stato running.
     $tries = 20
     while (-not (Test-ContainerUp)) {

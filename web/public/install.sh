@@ -890,7 +890,8 @@ report_podman_machine_conflict() {
   local podman_bin="$1" command_error="$2" running
   printf '%s\n' "$command_error" | grep -Fqi 'only one VM can be active at a time' || return 1
   running="$(running_podman_machine "$podman_bin")"
-  [ -n "$running" ] && printf 'JHT_OTHER_MACHINE %s\n' "$running"
+  # the marker is for the desktop app (machine output); a person at a terminal reads only the line below
+  if [ -n "$running" ] && jht_machine_output; then printf 'JHT_OTHER_MACHINE %s\n' "$running"; fi
   # The line in the person's language (the installer has no err(): it once stopped here with «err: command not found»). It only
   # says the command: the installer never stops a machine of the person.
   local which_it="un'altra macchina Podman e' accesa (trovala con 'podman machine list')" which_en="another Podman machine is running (find it with 'podman machine list')"

@@ -75,6 +75,12 @@ function Invoke-Compose {
   $global:LASTEXITCODE = 0
   if ($env:T_COMPOSE_FAIL -eq '1') { $global:LASTEXITCODE = 1; return }
   $words = @($Rest); $service = $words[$words.Count - 1]
+  # compose's own progress lines, on the REAL stderr of a native program as docker compose writes them; T_PROGRESS is the exit code
+  if ($env:T_PROGRESS -and (($words -contains 'up') -or ($words -contains 'run'))) {
+    if ($env:OS -eq 'Windows_NT') { & cmd /c "echo Container $service Creating 1>&2" } else { & sh -c "echo 'Container $service Creating' >&2" }
+    $global:LASTEXITCODE = [int]$env:T_PROGRESS
+    if ($global:LASTEXITCODE -ne 0) { return }
+  }
   # what Podman does for a service that is not there: a line on the REAL stderr of a native program, and exit 0
   if ($env:T_NOISY_STDERR -eq '1' -and (($words -contains 'rm') -or ($words -contains 'stop'))) {
     if ($env:OS -eq 'Windows_NT') { & cmd /c 'echo No stopped containers 1>&2' } else { & sh -c 'echo No stopped containers >&2' }
@@ -131,6 +137,13 @@ $argv = @(ConvertFrom-Json -InputObject $env:T_ARGS | ForEach-Object { $_ })
 $done = @(Invoke-IntegrationCommand ([string[]]$argv))
 exit ([int]$done[$done.Count - 1])
 """
+
+
+# The library runs compose through the wrapper's Invoke-ComposeQuiet (its lines out of sight unless the step fails): the real one, read
+# from the wrapper, calling the stand-in Invoke-Compose above.
+_QUIET = re.search(r"function Invoke-ComposeQuiet \{.*?\n\}\n", WRAPPER.read_text(encoding="utf-8"), flags=re.S).group(0)
+assert "\n. $env:T_LIBRARY\n" in CASE
+CASE = CASE.replace("\n. $env:T_LIBRARY\n", "\n" + _QUIET + ". $env:T_LIBRARY\n", 1)
 
 
 @pytest.fixture
@@ -545,3 +558,18 @@ def test_without_a_podman_machine_a_failed_up_is_not_repeated_and_nothing_is_wri
     done = run(host, ["add", "screen", "--json"], T_EXTRAS=DIGEST, T_UP_FAILS="1", T_UP_COUNTER=str(host.tmp / "ups"), T_RT_LOG=str(rt_log))
     assert done.returncode == 1
     assert log(host).count("up -d jht-screen") == 1 and not rt_log.exists() and "PODMAN" not in log(host)
+
+
+@pytest.mark.parametrize("tool", ["screen", "media", "telegram"])
+def test_compose_progress_lines_stay_out_of_sight_when_the_tool_starts(host, tool):
+    # `jht screen on` on Windows printed «Container jht-screen Creating/Created/Starting/Started» (giro Windows on package 33)
+    done = run(host, ["add", tool], T_EXTRAS=DIGEST, T_PROGRESS="0")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "Container " not in done.stdout + done.stderr
+    assert f"COMPOSE --profile {tool} up -d jht-{tool}" in log(host)
+
+
+def test_compose_progress_lines_are_shown_whole_when_the_start_fails(host):
+    done = run(host, ["add", "screen", "--json"], T_EXTRAS=DIGEST, T_PROGRESS="1")
+    assert done.returncode == 1
+    assert "Container jht-playwright-populate Creating" in done.stderr

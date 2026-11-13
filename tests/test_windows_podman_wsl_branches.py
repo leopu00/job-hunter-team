@@ -967,14 +967,11 @@ def test_a_failed_compose_up_stops_jht_with_its_code_and_nothing_after_it_runs(t
 
 def test_every_compose_up_of_the_wrapper_is_followed_by_its_exit_code_check():
     lines = WRAPPER.read_text(encoding="utf-8").splitlines()
-    # Ensure-Up keeps the compose lines (it starts the team for another command); `jht up` and `jht recreate` say the phase only
-    # (Invoke-ComposeQuiet) and check the code compose gave
-    ups = [i for i, line in enumerate(lines) if line.strip() == "Invoke-Compose 'up' '-d'"]
-    assert len(ups) == 1
-    for i in ups:
-        assert lines[i + 1].strip() == "Stop-OnFailedComposeUp $LASTEXITCODE", lines[i + 1]
+    # `jht up`, `jht recreate` and Ensure-Up (the setup starts the team through it) say the phase only (Invoke-ComposeQuiet: compose's
+    # lines out of sight unless it fails) and check the code compose gave
+    assert not [line for line in lines if line.strip() == "Invoke-Compose 'up' '-d'"]
     quiet = [i for i, line in enumerate(lines) if line.strip() == "Stop-OnFailedComposeUp (Invoke-ComposeQuiet 'up' '-d')"]
-    assert len(quiet) == 2
+    assert len(quiet) == 3
 
 
 # ---------------------------------------------------------------------------
