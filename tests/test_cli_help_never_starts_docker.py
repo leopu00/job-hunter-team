@@ -224,6 +224,10 @@ def test_the_windows_wrapper_says_the_same_two_things():
     status = powershell[powershell.index("\n  'status' {"):]
     assert status.index("if ($Rest.Count -gt 0)") < status.index("Require-Docker")
     assert "'jht status' non ha opzioni ($given)" in status and "'jht status' takes no options ($given)" in status
+    # the same sentence on both sides, word for word
+    bash = BASH_WRAPPER.read_text(encoding="utf-8")
+    for sentence in ("'jht status' takes no options (%s): run it as 'jht status'.", "'jht status' non ha opzioni (%s): si lancia come 'jht status'."):
+        assert sentence in bash and sentence.replace("%s", "$given") in status
     assert "e' stato tolto nella 0.4.0 insieme all'ufficio Godot" in powershell
 
 def test_version_prints_without_docker_effects(tmp_path):

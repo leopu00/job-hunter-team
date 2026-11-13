@@ -4419,8 +4419,8 @@ switch ($Sub) {
     # No options here (--json lives in the jht of the container): refused out loud, never ignored.
     if ($Rest.Count -gt 0) {
       $given = $Rest -join ' '
-      if ((Get-JhtTextLanguage) -ceq 'en') { Write-Err "'jht status' takes no options ($given): on the host it prints one line name=... status=..." }
-      else { Write-Err "'jht status' non ha opzioni ($given): sull'host stampa una riga name=... status=..." }
+      if ((Get-JhtTextLanguage) -ceq 'en') { Write-Err "'jht status' takes no options ($given): run it as 'jht status'." }
+      else { Write-Err "'jht status' non ha opzioni ($given): si lancia come 'jht status'." }
       exit 2
     }
     Require-Docker

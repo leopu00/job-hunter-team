@@ -399,7 +399,7 @@ jht_text_en() {
     status.next_other) printf '%s' "Start the team with: jht up" ;;
     status.not_running) printf '%s' "The team's container is not running." ;;
     removed.office) printf '%s' "'jht %s' was removed in 0.4.0 with the Godot office: use the jht commands (jht help)." ;;
-    status.no_options) printf '%s' "'jht status' takes no options (%s): on the host it prints one line for people, and one line name=... status=... when the output goes to a program." ;;
+    status.no_options) printf '%s' "'jht status' takes no options (%s): run it as 'jht status'." ;;
     status.not_running_next) printf '%s' "Start it with: jht up" ;;
     uninstall.phase.machine) printf '%s' "Removing the Podman machine, or JHT's containers and volumes..." ;;
     uninstall.phase.images) printf '%s' "Removing the JHT images (the core and the full one, and the old ones)..." ;;
@@ -493,7 +493,7 @@ jht_text_it() {
     status.next_other) printf '%s' "Accendi la squadra con: jht up" ;;
     status.not_running) printf '%s' "Il container della squadra non e' acceso." ;;
     removed.office) printf '%s' "'jht %s' e' stato tolto nella 0.4.0 insieme all'ufficio Godot: usa i comandi jht (jht help)." ;;
-    status.no_options) printf '%s' "'jht status' non ha opzioni (%s): sull'host stampa una riga per le persone, e una riga name=... status=... quando l'uscita va a un programma." ;;
+    status.no_options) printf '%s' "'jht status' non ha opzioni (%s): si lancia come 'jht status'." ;;
     status.not_running_next) printf '%s' "Accendilo con: jht up" ;;
     uninstall.phase.machine) printf '%s' "Rimuovo la macchina Podman, oppure i container e i volumi di JHT..." ;;
     uninstall.phase.images) printf '%s' "Rimuovo le immagini di JHT (il nucleo, quella piena e le vecchie)..." ;;
