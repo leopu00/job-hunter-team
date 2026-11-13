@@ -96,6 +96,7 @@ exec env -i HOME="$FAKE_REMOTE_HOME" PATH="$FAKE_REMOTE_PATH" \
   FAKE_STATE="${FAKE_STATE:-}" FAKE_SUDO_PASSWORD="${FAKE_SUDO_PASSWORD:-}" \
   FAKE_APT_INSTALLS_PODMAN="${FAKE_APT_INSTALLS_PODMAN:-}" FAKE_LINGER_STUCK="${FAKE_LINGER_STUCK:-}" \
   FAKE_USERMOD_STUCK="${FAKE_USERMOD_STUCK:-}" JHT_RUN_USER_DIR="${JHT_RUN_USER_DIR:-}" FAKE_APT_LOCKED="${FAKE_APT_LOCKED:-}" FAKE_APT_WOULD_REMOVE="${FAKE_APT_WOULD_REMOVE:-}" \
+  FAKE_PODMAN_CANDIDATE="${FAKE_PODMAN_CANDIDATE:-}" FAKE_COMPOSE_CANDIDATE="${FAKE_COMPOSE_CANDIDATE:-}" LANG="${LANG:-}" \
   FAKE_REMOTE_ROOTLESS="${FAKE_REMOTE_ROOTLESS:-}" \
   ${CONTAINER_HOST+"CONTAINER_HOST=$CONTAINER_HOST"} ${CONTAINER_CONNECTION+"CONTAINER_CONNECTION=$CONTAINER_CONNECTION"} \
   /bin/bash -c "$cmd"
@@ -147,6 +148,18 @@ exit 0
 
 # sudo never runs a privileged command in the sandbox: a test must not touch
 # /swapfile, /etc or the CI runner, whoever it runs as.
+# What apt would install: the candidate of each package (a Debian version, with its epoch and suffix as apt prints them).
+FAKE_APT_CACHE = r"""#!/bin/bash
+echo "apt-cache $*" >> "$FAKE_LOG"
+[ "$1" = policy ] || exit 0
+case "$2" in
+  podman) c="${FAKE_PODMAN_CANDIDATE:-5.4.2+ds1-2+b2}" ;;
+  podman-compose) c="${FAKE_COMPOSE_CANDIDATE:-1.3.0-1}" ;;
+  *) c="(none)" ;;
+esac
+printf '%s:\n  Installed: (none)\n  Candidate: %s\n' "$2" "$c"
+"""
+
 FAKE_SUDO = r"""#!/bin/bash
 echo "sudo $*" >> "$FAKE_LOG"
 if [ "${FAKE_SUDO_PASSWORD:-0}" = 1 ]; then
@@ -296,6 +309,7 @@ class Server:
         _write(self.fake / "docker.real", FAKE_DOCKER)
         _write(self.fake / "docker", FAKE_DOCKER)
         _write(self.fake / "apt-get", FAKE_APT)
+        _write(self.fake / "apt-cache", FAKE_APT_CACHE)
         _write(self.fake / "sudo", FAKE_SUDO)
         _write(self.fake / "uname", FAKE_UNAME)
         _write(self.fake / "df", FAKE_DF)
@@ -701,6 +715,39 @@ def test_an_install_that_would_remove_a_package_of_docker_stops_and_removes_noth
     assert "sudo apt-get -s install podman podman-compose uidmap" in err
     assert "REMOVED containerd.io" not in server.calls()
     assert not (server.home / ".jht").exists()
+
+
+@pytest.mark.parametrize(("podman", "compose", "named", "found"), [
+    ("4.9.3+ds1-1ubuntu0.2", "1.0.6-1", "podman", "4.9.3"),          # Ubuntu 24.04 LTS
+    ("4.3.1+ds1-8+deb12u1+b3", "1.0.3-3", "podman", "4.3.1"),        # Debian 12
+    ("5:5.7.0+ds2-3build1", "1.0.6-1", "podman-compose", "1.0.6"),   # a new podman with an old compose
+])
+def test_a_distribution_whose_podman_is_too_old_is_refused_before_anything_is_installed(server, source, podman, compose, named, found):
+    with_podman(server, bare=True)
+    done = install_podman(server, source, FAKE_PODMAN_CANDIDATE=podman, FAKE_COMPOSE_CANDIDATE=compose, LANG="it_IT.UTF-8")
+    err = done.stderr.decode()
+    assert done.returncode == 93, err
+    assert "JHT_ERROR podman_version_unsupported\n" in err
+    assert f"this distribution would install {named} {found}" in err and "nothing was installed" in err
+    assert "Ubuntu 26.04 LTS, Debian 13, Fedora 43 or later" in err
+    assert f"Questa distribuzione installerebbe {named} {found}" in err and "non ho installato niente" in err
+    calls = server.calls()
+    assert not [c for c in calls if " install -y" in c], calls
+    assert not [c for c in calls if "usermod" in c or "enable-linger" in c]
+    assert not (server.home / ".jht").exists()
+
+
+def test_the_italian_line_is_only_for_who_reads_italian(server, source):
+    with_podman(server, bare=True)
+    done = install_podman(server, source, FAKE_PODMAN_CANDIDATE="4.9.3+ds1-1ubuntu0.2", LANG="en_US.UTF-8")
+    assert done.returncode == 93 and "Questa distribuzione" not in done.stderr.decode()
+
+
+def test_a_distribution_with_podman_5_installs_as_before(server, source):
+    with_podman(server, bare=True)
+    done = install_podman(server, source, FAKE_PODMAN_CANDIDATE="5.4.2+ds1-2+b2", FAKE_COMPOSE_CANDIDATE="1.3.0-1")
+    assert done.returncode == 0, done.stderr.decode()
+    assert "apt-cache policy podman" in server.calls()
 
 
 def test_a_podman_compose_the_system_does_not_have_is_named_after_the_install(server, source):
