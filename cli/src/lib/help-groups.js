@@ -30,7 +30,7 @@ export const HELP_GROUPS = [
   ['Your data', ['export', 'import', 'backup', 'report']],
   ['Maintenance', [
     'upgrade', 'migrate', 'reset', 'cache', 'tools', 'health', 'config', 'secrets', 'keyring', 'cloud',
-    'container', 'sentinella', 'download', 'game', 'gui',
+    'container', 'sentinella', 'download',
   ]],
 ];
 

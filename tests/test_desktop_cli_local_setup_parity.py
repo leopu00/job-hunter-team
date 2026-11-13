@@ -331,7 +331,7 @@ def test_status_and_gui_probes_cannot_start_a_stopped_runtime():
     _assert_podman_wake_reachability(wrapper)
 
 
-@pytest.mark.parametrize("target", ["status", "gui", "probe"])
+@pytest.mark.parametrize("target", ["status", "game|gui", "probe"])
 def test_podman_wake_gate_still_rejects_read_only_paths(target: str):
     wrapper = _source(WRAPPER)
     lifecycle = "# ── Lifecycle: parlano direttamente al daemon Docker"
@@ -341,8 +341,9 @@ def test_podman_wake_gate_still_rejects_read_only_paths(target: str):
     if target == "status":
         _, start, _ = _case_arm(wrapper, "status", lifecycle)
         insert_at = wrapper.index("\n", start) + 1
-    elif target == "gui":
-        _, start, _ = _case_arm(wrapper, "gui", dispatcher)
+    elif target == "game|gui":
+        # the removed commands' arm: it only says they are gone, and must never wake the machine either
+        _, start, _ = _case_arm(wrapper, "game|gui", dispatcher)
         insert_at = wrapper.index("\n", start) + 1
     else:
         _, end = _shell_function_spans(wrapper)["docker_reachable"]

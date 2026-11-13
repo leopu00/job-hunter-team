@@ -180,15 +180,18 @@ def test_every_dispatched_subcommand_help_is_offline(tmp_path, command):
 
 
 @pytest.mark.parametrize(
-    "args", [["game", "--help"], ["game", "start", "--help"], ["gui", "--help"]]
+    "args", [["game", "start"], ["game", "--help"], ["game", "start", "--help"], ["gui", "open"], ["gui", "--help"]]
 )
-def test_desktop_subcommand_help_remains_host_only(tmp_path, args):
+def test_the_removed_godot_commands_say_so_and_start_nothing(tmp_path, args):
+    # `jht game` and `jht gui open` went with the Godot office in 0.4.0: said on the host, never forwarded to a container
     fake_bin, log = make_docker_spy(
-        tmp_path, reachable=False, container_running=False
+        tmp_path, reachable=True, container_running=False
     )
-    res = run_wrapper(args, fake_bin, tmp_path)
+    res = run_wrapper(args, fake_bin, tmp_path, extra_env=write_trusted_runtime(tmp_path))
 
-    assert res.returncode == 0, res.stderr
+    assert res.returncode == 2, res.stderr
+    assert f"'jht {args[0]}' was removed in 0.4.0 with the Godot office: use the jht commands (jht help)." in res.stderr
+    assert "desktop app" not in res.stderr  # 0.4.0 has no desktop app to send the person to
     assert_no_docker_effect(log)
 
 
