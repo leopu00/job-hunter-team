@@ -418,6 +418,10 @@ jht_text_en() {
     keyfile.unreadable) printf '%s' "the file given to --api-key-file cannot be read: %s" ;;
     keyfile.size) printf '%s' "the file given to --api-key-file is empty or too big for a key (1 to 4096 bytes): %s" ;;
     keyfile.readable) printf '%s' "the file %s can be read by other users: chmod 600 it." ;;
+    config.changed_stopped) printf '%s' "config_changed_stopped: the team's containers, stopped, are from the earlier version: recreating them with the new configuration (the volumes with the data stay)." ;;
+    config.changed_start) printf '%s' "config_changed_while_running: the team was started with the configuration from before the reinstall. Stop it with «jht down», then start it with «jht up»." ;;
+    config.changed_down) printf '%s' "config_changed_while_running: the team was started with the configuration from before the reinstall; stopping it." ;;
+    config.changed_other) printf '%s' "config_changed_while_running: the team runs with a configuration other than the expected one; it is used only to stop it." ;;
     keyfile.shape) printf '%s' "the content of the file given to --api-key-file is not one line of 16 to 512 printable characters without spaces: %s" ;;
     status.not_running_next) printf '%s' "Start it with: jht up" ;;
     uninstall.phase.machine) printf '%s' "Removing the Podman machine, or JHT's containers and volumes..." ;;
@@ -519,6 +523,10 @@ jht_text_it() {
     keyfile.unreadable) printf '%s' "il file dato a --api-key-file non si puo' leggere: %s" ;;
     keyfile.size) printf '%s' "il file dato a --api-key-file e' vuoto o troppo grande per una chiave (da 1 a 4096 byte): %s" ;;
     keyfile.readable) printf '%s' "il file %s lo possono leggere anche altri utenti: chmod 600 sul file." ;;
+    config.changed_stopped) printf '%s' "config_changed_stopped: i container del team, fermi, sono della versione di prima: li ricreo con la configurazione nuova (i volumi con i dati restano)." ;;
+    config.changed_start) printf '%s' "config_changed_while_running: il team e' stato avviato con la configurazione di prima della reinstallazione. Fermalo con «jht down», poi avvialo con «jht up»." ;;
+    config.changed_down) printf '%s' "config_changed_while_running: il team era stato avviato con la configurazione di prima della reinstallazione; lo fermo." ;;
+    config.changed_other) printf '%s' "config_changed_while_running: il team gira con una configurazione diversa da quella attesa; la uso solo per fermarlo." ;;
     keyfile.shape) printf '%s' "il contenuto del file dato a --api-key-file non e' una riga da 16 a 512 caratteri stampabili senza spazi: %s" ;;
     status.not_running_next) printf '%s' "Accendilo con: jht up" ;;
     uninstall.phase.machine) printf '%s' "Rimuovo la macchina Podman, oppure i container e i volumi di JHT..." ;;
@@ -1796,7 +1804,7 @@ container_mutation_preflight() {
   if [ "$status" -eq 1 ] && [ "$CONTAINER_RUNTIME" = podman ] \
       && read_only_service_id "$CONTAINER_SERVICE" stopped-stale-config >/dev/null 2>&1 \
       && ! project_has_running_container; then
-    warn "config_changed_stopped: i container del team, fermi, sono della versione di prima: li ricreo con la configurazione nuova (i volumi con i dati restano)."
+    warn "$(jht_say config.changed_stopped)"
     COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose down || { err "Non riesco a rimuovere i container fermi della versione di prima: «jht down», poi «jht up»."; return 1; }
     return 0
   fi
@@ -1810,7 +1818,7 @@ container_mutation_preflight() {
 stale_config_hint() {
   [ "$CONTAINER_RUNTIME" = podman ] || return 0
   read_only_service_id "$CONTAINER_SERVICE" any-config >/dev/null 2>&1 || return 0
-  err "config_changed_while_running: il team e' stato avviato con la configurazione di prima della reinstallazione. Fermalo con «jht down», poi avvialo con «jht up»."
+  err "$(jht_say config.changed_start)"
 }
 
 # The tools' containers (the live screen, media, the sign-in) go first, each by the id the attestation gives (running or stopped, ours
@@ -1843,7 +1851,7 @@ container_down() {
   container_up >/dev/null || up_status=$?
   if [ "$up_status" -ne 0 ]; then
     if [ "$CONTAINER_RUNTIME" = podman ] && read_only_service_id "$CONTAINER_SERVICE" any-config >/dev/null; then
-      warn "config_changed_while_running: il team era stato avviato con la configurazione di prima della reinstallazione; lo fermo."
+      warn "$(jht_say config.changed_down)"
     elif [ "$up_status" -eq 3 ]; then
       # No `jht` container. That is nothing to stop only when the WHOLE project is empty: status 3 also means that only the
       # agent service is missing, while the broker (the mail password) or Telegram still run, and a `jht down && rm -rf <runtime>`
@@ -4395,7 +4403,7 @@ ensure_up_for_stop() {
   if [ "$status" -ne 3 ] && [ "$CONTAINER_RUNTIME" = podman ] \
       && found="$(read_only_service_id "$CONTAINER_SERVICE" any-config 2>/dev/null)"; then
     ATTESTED_CONTAINER_ID="$found"
-    warn "config_changed_while_running: il team gira con una configurazione diversa da quella attesa; la uso solo per fermarlo."
+    warn "$(jht_say config.changed_other)"
     return 0
   fi
   ensure_up

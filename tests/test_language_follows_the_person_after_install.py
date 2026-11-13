@@ -7,6 +7,7 @@ JHT_LANG as the person set it, then host.env, then the system's language, then E
 """
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -118,3 +119,23 @@ def test_windows_writes_the_language_of_the_person_in_host_env_and_reads_it_by_t
     text = wrapper[wrapper.index("function Get-JhtTextLanguage"):wrapper.index("function Get-JhtUninstallText")]
     order = [text.index(p) for p in ("i18n-prefs.json", "$caller -cmatch", "$script:JhtHostEnvLang -cmatch", "Get-UICulture", "return 'en'")]
     assert order == sorted(order)
+
+
+def test_the_config_changed_warnings_follow_the_language_of_the_person():
+    source = WRAPPER_SH.read_text(encoding="utf-8")
+    for key in ("config.changed_stopped", "config.changed_start", "config.changed_down", "config.changed_other"):
+        assert source.count(f"    {key}) printf '%s'") == 2, key  # English and Italian
+        assert f'"$(jht_say {key})"' in source, key
+    # no sentence of this family is left written in one language only
+    assert not re.search(r'(warn|err) "config_changed_(while_running|stopped):', source)
+
+
+@pytest.mark.parametrize("lang,said,not_said", [("it", "Preparazione dell'host", "Setup host (preflight)"), ("en", "Setup host (preflight)", "Preparazione dell'host")])
+def test_the_host_setup_says_its_lines_in_the_language_decided(tmp_path, lang, said, not_said):
+    script = ROOT / "scripts" / "host-setup.sh"
+    env = _clean_env(tmp_path, PATH="/usr/bin:/bin", JHT_LANG=lang)
+    result = subprocess.run(["bash", str(script), "--non-interactive", "--host-type=local"], capture_output=True, text=True, env=env, timeout=60, stdin=subprocess.DEVNULL)
+    out = result.stdout + result.stderr
+    assert said in out and not_said not in out, out
+    if lang == "it":
+        assert "computer locale" in out and "Fuso orario" in out and "Timezone:" not in out, out

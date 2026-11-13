@@ -60,9 +60,9 @@ def choose_language(home, choice=2):
     try:
         _until(master, screen, "Choice / Scelta / Választás / Elección / Auswahl / Choix / Escolha")
         os.write(master, f"{choice}\n".encode())
-        _until(master, screen, "Where are you running JHT?")
+        _until(master, screen, "Dove fai girare JHT?" if str(choice) == "2" else "Where are you running JHT?")  # in the language just chosen (Italian or English)
         os.write(master, b"1\n")
-        _until(master, screen, "Timezone [")
+        _until(master, screen, "Fuso orario [" if str(choice) == "2" else "Timezone [")
         os.write(master, b"\n")
         deadline = time.monotonic() + 10
         while proc.poll() is None and time.monotonic() < deadline:

@@ -756,6 +756,7 @@ def _stale_stopped(tmp_path: Path):
     env["JHT_TEST_DOWN_DONE"] = str(tmp_path / "down-done")
     # the containers of the version before: stopped, ours, made by a compose whose hash was another one
     env["JHT_TEST_CONTAINER_HASH"] = "b" * 64
+    env["JHT_LANG"] = "it"  # the sentences read below are the Italian ones
     # `ps` lists it, its Running is false: the plain inspect answers from this file
     Path(env["JHT_TEST_CONTAINER_STOPPED"]).write_text("", encoding="utf-8")
     return wrapper, env, log

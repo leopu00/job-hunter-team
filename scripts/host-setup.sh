@@ -269,7 +269,35 @@ fi
 # Questo script gira sull'host. Non importa codice da directory che il
 # container puo' scrivere; i fallback inglesi inline restano l'autorita'
 # sicura finche' i cataloghi non sono distribuiti nel bundle host attestato.
+# Italian is written here, inline (data, not a file the container can write); every other language reads the English text.
+# JHT_LANG is the language decided above (the saved choice, the picker, JHT_LANG, host.env, the system's).
+ts_it() {
+  case "$1" in
+    error.invalid_input) printf '%s' "Scelta non valida" ;;
+    host_setup.choice_prompt) printf '%s' "Scelta" ;;
+    host_setup.detected) printf '%s' "Rilevato:" ;;
+    host_setup.host.local) printf '%s' "computer locale" ;;
+    host_setup.host.vps) printf '%s' "server remoto / VPS" ;;
+    host_setup.option.local.title) printf '%s' "PC locale" ;;
+    host_setup.option.local.line1) printf '%s' "La squadra intera gira su questo PC: tienilo acceso, con il motore dei container attivo, mentre la squadra lavora." ;;
+    host_setup.option.local.line2) printf '%s' "Il percorso guidato piu' corto; non servono VPS ne' account cloud." ;;
+    host_setup.option.vps.title) printf '%s' "VPS / server remoto" ;;
+    host_setup.option.vps.line1) printf '%s' "La squadra gira su un server Linux remoto via SSH e puo' continuare a PC spento." ;;
+    host_setup.option.vps.line2) printf '%s' "Il server e il suo accesso SSH li fornisci e li gestisci tu." ;;
+    host_setup.section_header) printf '%s' "Preparazione dell'host" ;;
+    host_setup.swap_not_needed) printf '%s' "nessuna configurazione dello swap necessaria" ;;
+    host_setup.timezone_explain) printf '%s' "Il Capitano lo usa per convertire gli orari nei messaggi Telegram e nei grafici." ;;
+    host_setup.timezone_header) printf '%s' "Fuso orario" ;;
+    host_setup.timezone_invalid) printf '%s' "Fuso orario non valido, uso UTC." ;;
+    host_setup.timezone_label) printf '%s' "Fuso orario" ;;
+    host_setup.timezone_prompt) printf '%s' "Dove ti trovi (fuso orario IANA, per esempio Europe/Rome, America/New_York, Asia/Shanghai)?" ;;
+    host_setup.timezone_vps_utc) printf '%s' "Il fuso orario non e' stato rilevato: la squadra usera' UTC. Imposta il tuo con jht wh --tz Europe/Rome (o nella dashboard), altrimenti gli orari di Telegram e di lavoro saranno in UTC." ;;
+    host_setup.where_running) printf '%s' "Dove fai girare JHT?" ;;
+    *) return 1 ;;
+  esac
+}
 ts() {
+  if [ "${JHT_LANG:-}" = it ] && ts_it "$1"; then return 0; fi
   printf '%s' "$2"
 }
 
@@ -385,7 +413,7 @@ if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
   printf "\n${CYAN}━━━ %s ━━━${RESET}\n\n" "$(ts host_setup.timezone_header 'User timezone')"
   printf "%s\n" "$(ts host_setup.timezone_prompt 'Where are you (IANA timezone, e.g. Europe/Rome, America/New_York, Asia/Shanghai)?')"
   printf "%s\n\n" "$(ts host_setup.timezone_explain 'The Captain uses it to convert times in Telegram messages and charts.')"
-  printf "Timezone [%s]: " "$JHT_USER_TZ_DEFAULT"
+  printf "%s [%s]: " "$(ts host_setup.timezone_label 'Timezone')" "$JHT_USER_TZ_DEFAULT"
   read -r TZ_CHOICE
   if [ -n "$TZ_CHOICE" ]; then
     # Validate: python3 -c "from zoneinfo import ZoneInfo; ZoneInfo('XXX')"
@@ -396,7 +424,7 @@ if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
     fi
   fi
 fi
-ok "Timezone: $JHT_USER_TZ"
+ok "$(ts host_setup.timezone_label 'Timezone'): $JHT_USER_TZ"
 
 # #13 — su VPS / non-interattivo il prompt sopra è saltato, quindi resta
 # l'UTC del SERVER (non la timezone dell'utente, che sta altrove nel mondo).

@@ -248,7 +248,7 @@ def test_down_stops_a_team_started_before_the_reinstall_and_says_so(wrapper):
     done = wrapper.run("container_down; echo rc=$?")
     assert "rc=0" in done.stdout, done.stderr
     assert wrapper.downs() == ["down"]
-    assert "config_changed_while_running" in done.stderr
+    assert "<config.changed_down>" in done.stderr  # the sentence, in the person's language (jht_say)
 
 
 def test_down_of_a_team_with_the_current_configuration_says_nothing_more(wrapper):
@@ -268,7 +268,10 @@ def test_down_still_refuses_a_container_that_is_not_ours(wrapper, label):
 def test_up_still_refuses_it_and_says_down_then_up(wrapper):
     done = wrapper.run("container_mutation_preflight; echo rc=$?")
     assert "rc=1" in done.stdout and wrapper.downs() == []
-    assert "config_changed_while_running" in done.stderr and "jht down" in done.stderr and "jht up" in done.stderr
+    assert "<config.changed_start>" in done.stderr  # the sentence, in the person's language (jht_say)
+    texts = (ROOT / "scripts" / "jht-wrapper.sh").read_text(encoding="utf-8")
+    for line in (l for l in texts.splitlines() if l.startswith("    config.changed_start) ")):
+        assert "config_changed_while_running" in line and "jht down" in line and "jht up" in line
 
 
 NETNS = ("Error: removing container " + "6" * 64 + " network: 1 error occurred:\\n"
