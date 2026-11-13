@@ -384,6 +384,7 @@ jht_text_en() {
     doctor.host_more) printf '%s' "For the full checks (configuration, provider, database, agents): 'jht up', then 'jht doctor'." ;;
     up.done) printf '%s' "Job Hunter Team started." ;;
     up.docker_legacy) printf '%s' "This computer runs JHT on Docker, and its engine does not answer. Since 0.4 JHT runs only on Podman. Your data stays: ~/.jht and ~/Documents/Job Hunter Team are folders of this computer. To move to Podman: jht uninstall --confirm (it keeps those two folders), run the installer again, then jht setup with your API key (the key, the mail password and the Telegram tokens stayed in Docker's volumes: give them again). To go on with Docker for now, start its engine yourself and run jht up again." ;;
+    up.engine_lost) printf '%s' "The Podman machine stopped while the team was starting (%s). Nothing of yours was lost: your data is in the volumes and in your folders. Run jht up again: it starts the machine and the team." ;;
     up.storage_damaged) printf '%s' "The team's image was damaged on the Podman machine's disk (the machine was stopped abruptly while it was writing it): I download it again and recreate the containers. Your data is in the volumes and in your folders, and it stays. It takes a few minutes." ;;
     up.storage_repair_failed) printf '%s' "The team's image could not be repaired on the Podman machine. 'jht uninstall --confirm' and then the installer make a new machine (your ~/.jht and Documents folders stay)." ;;
     down.done) printf '%s' "Job Hunter Team stopped." ;;
@@ -475,6 +476,7 @@ jht_text_it() {
     doctor.host_more) printf '%s' "Per i controlli completi (configurazione, provider, database, agenti): 'jht up', poi 'jht doctor'." ;;
     up.done) printf '%s' "Job Hunter Team avviato." ;;
     up.docker_legacy) printf '%s' "Questo computer fa girare JHT su Docker, e il suo motore non risponde. Dalla 0.4 JHT gira solo su Podman. I tuoi dati restano: ~/.jht e ~/Documents/Job Hunter Team sono cartelle di questo computer. Per passare a Podman: jht uninstall --confirm (tiene quelle due cartelle), rilancia l'installer, poi jht setup con la tua chiave API (la chiave, la password della posta e i token di Telegram erano nei volumi di Docker: vanno ridati). Per restare su Docker per ora, accendi tu il suo motore e rilancia jht up." ;;
+    up.engine_lost) printf '%s' "La macchina Podman si e' fermata mentre la squadra partiva (%s). Non hai perso niente: i tuoi dati sono nei volumi e nelle tue cartelle. Rilancia jht up: riaccende la macchina e la squadra." ;;
     up.storage_damaged) printf '%s' "L'immagine del team si e' rovinata sul disco della macchina Podman (la macchina e' stata spenta di colpo mentre la scriveva): la riscarico e ricreo i container. I tuoi dati stanno nei volumi e nelle tue cartelle, e restano. Ci vuole qualche minuto." ;;
     up.storage_repair_failed) printf '%s' "L'immagine del team non si ripara sulla macchina Podman. 'jht uninstall --confirm' e poi l'installer fanno una macchina nuova (le cartelle ~/.jht e Documenti restano)." ;;
     down.done) printf '%s' "Job Hunter Team fermato." ;;
@@ -4338,6 +4340,16 @@ compose_up_team() {
   if [ "$CONTAINER_RUNTIME" != podman ] || [ "${JHT_COMPOSE_VERBOSE:-0}" = 1 ]; then compose_quiet up -d; return $?; fi
   said="$(mktemp "${TMPDIR:-/tmp}/jht-up.XXXXXX")" || { compose_quiet up -d; return $?; }
   compose_quiet up -d 2>"$said" || rc=$?
+  # podman-compose is a Python program: when the engine goes away under it (the machine stopped or killed) it dies with a raw
+  # traceback. The person reads one line, with its last line (the error) and the command that starts again, not the stack.
+  if [ "$rc" -ne 0 ] && grep -Fq "Traceback (most recent call last):" "$said"; then
+    local cause
+    cause="$(grep -E '^[A-Za-z_.]*(Error|Exception)[A-Za-z_]*(:|$)' "$said" | tail -n 1 | tr -d '\r' | cut -c1-160)"
+    [ -n "$cause" ] || cause="podman-compose"
+    err "$(jht_say up.engine_lost "$cause")"
+    rm -f -- "$said"
+    return "$rc"
+  fi
   if [ "$rc" -eq 0 ] || ! grep -Fq "lower layer" "$said"; then
     cat "$said" >&2
     rm -f -- "$said"
@@ -4763,6 +4775,16 @@ upgrade_result() {
     printf '{"ok":%s,"changed":%s,"phase":"%s","previous":{"version":"%s","image":"%s"},"current":{"version":"%s","image":"%s"},"restartRequired":%s,"message":"%s","rolledBack":%s%s}\n' \
       "$ok" "$changed" "$phase" "$previous_version" "$previous_image" \
       "$current_version" "$current_image" "$restart_required" "$message" "$rolled_back" "$prune_field"
+  elif [ "$ok" = "true" ] && [ "$phase" = check ]; then
+    # Un controllo non aggiorna niente: non si dice «Aggiornamento completato».
+    if [ "$previous_version" = unknown ]; then
+      printf 'Controllo: %s.\n' "$message"
+    elif [ "$changed" = true ]; then
+      printf 'Controllo: c'"'"'e'"'"' un aggiornamento, %s (%s) -> %s. %s. Per applicarlo: jht upgrade\n' \
+        "$previous_version" "$previous_image" "$current_image" "$message"
+    else
+      printf 'Controllo: nessun aggiornamento, %s (%s) e'"'"' gia'"'"' l'"'"'ultima. %s.\n' "$previous_version" "$previous_image" "$message"
+    fi
   elif [ "$ok" = "true" ]; then
     printf 'Aggiornamento completato: %s (%s) -> %s (%s). %s\n' \
       "$previous_version" "$previous_image" "$current_version" "$current_image" "$message"
@@ -5437,7 +5459,12 @@ handle_runtime_upgrade() {
   fi
   # Un'installazione del canale di test e' fissata a un commit: l'upgrade
   # scaricherebbe il compose di produzione e mescolerebbe i due canali.
+  # Con --check e' una risposta, non un errore: niente da controllare qui, nessuna modifica, rc 0.
   if [ -f "$RUNTIME_IMAGE_PIN" ]; then
+    if [ "$check_only" = "1" ]; then
+      upgrade_result true false check unknown none unknown none false "Installazione del canale di test: jht upgrade non la aggiorna, si aggiorna reinstallando dalla build di test; nessuna modifica al runtime" false
+      return 0
+    fi
     upgrade_result false false preflight unknown none unknown none false "Installazione del canale di test: si aggiorna reinstallando dalla build di test" false
     return 1
   fi

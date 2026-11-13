@@ -35,7 +35,7 @@ NEW_HASH = "b" * 64
 
 
 def install(tmp_path: Path, ps: str, *, os_name: str = "linux", choice: str = "podman", ps_fails: bool = False,
-            installed_before: bool = False) -> subprocess.CompletedProcess:
+            installed_before: bool = False, env: dict | None = None) -> subprocess.CompletedProcess:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
     runtime = tmp_path / "runtime"
@@ -62,7 +62,7 @@ def install(tmp_path: Path, ps: str, *, os_name: str = "linux", choice: str = "p
     home.mkdir(exist_ok=True)
     return subprocess.run(
         ["bash", "-c", script],
-        env={"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(home), "JHT_RUNTIME_DIR": str(runtime)},
+        env={"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(home), "JHT_RUNTIME_DIR": str(runtime), **(env or {})},
         capture_output=True, text=True, timeout=30,
     )
 
@@ -111,6 +111,24 @@ def test_the_check_runs_before_the_image_pull_and_any_file_is_published():
     assert body.index("refuse_running_team") > body.index("verify_docker_works")
     assert body.index("refuse_running_team") < body.index("verify_test_image") < body.index("download_runtime_files")
 
+
+
+def test_the_refusal_is_said_in_italian_to_an_italian_person(tmp_path):
+    done = install(tmp_path, "jht\\n", env={"LANG": "it_IT.UTF-8"})
+    assert done.returncode == 84
+    assert done.stderr.splitlines()[0] == "JHT_ERROR team_running"  # the code stays the same for the app
+    text = " ".join(done.stderr.split())
+    assert "Job Hunter Team e' acceso su questo computer (jht)" in text and "Non e' stato cambiato niente" in text
+    assert text.index("jht setup") < text.index("jht down") < text.index("jht up")
+
+
+def test_on_the_mac_the_check_runs_before_the_image_is_downloaded():
+    # The Podman preparation of the Mac downloads the image (about a minute): a running team is refused before it.
+    text = INSTALL.read_text(encoding="utf-8")
+    mac = re.search(r"^install_podman_macos\(\) \{\n(.*?)^\}", text, re.S | re.M).group(1)
+    live = mac[mac.index("    return 0\n  fi\n"):]  # after the dry-run branch
+    assert live.index("refuse_running_team") < live.index('pull "$IMAGE"')
+    assert live.index("info &>/dev/null") < live.index("refuse_running_team")  # asked once the machine answers
 
 # ── the wrapper: a team started before the re-install can still be stopped ──
 

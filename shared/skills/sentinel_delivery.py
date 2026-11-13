@@ -98,9 +98,14 @@ def _state(api):
 
 
 def notice(api, state, key, session, text):
+    # A session that is not there (the team not started yet, or stopped) is nobody to deliver to, not a message lost: no attempt
+    # is spent and no message_not_delivered line is written (it came every five minutes before the start). The notice goes out
+    # at the first tick that finds the session.
+    if not api.session_exists(session):
+        return False
 
     def send():
-        return checked(lambda: api.session_exists(session) and api.jht_tmux_send(session, text))
+        return checked(lambda: api.jht_tmux_send(session, text))
 
     return attempt(state.setdefault("delivery_attempts", {}), key, send, api.time.time())
 

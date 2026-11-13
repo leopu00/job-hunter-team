@@ -98,3 +98,34 @@ def test_docker_or_colima_never_repairs(tmp_path: Path):
     result, calls = _up(tmp_path, runtime="docker")
     assert "rc=125" in result.stdout
     assert calls == ["compose up -d"]
+
+
+# The Podman machine killed while `jht up` runs (giro Mac 7: 3 s and 7 s after the start, during `podman ps` / `volume create`):
+# podman-compose dies with a raw Python traceback. The person reads one line instead: what happened, its last error line, and
+# the command that starts again. Nothing is repaired or removed for it.
+TRACEBACK = """Traceback (most recent call last):
+  File "/opt/homebrew/bin/podman-compose", line 8, in <module>
+    sys.exit(main())
+  File "/opt/homebrew/lib/python3.13/site-packages/podman_compose.py", line 4100, in main
+    asyncio.run(async_main())
+subprocess.CalledProcessError: Command '['podman', 'volume', 'create', 'jht_home']' returned non-zero exit status 125."""
+
+
+def test_a_machine_that_died_under_compose_is_one_line_and_not_the_stack(tmp_path: Path):
+    result, calls = _up(tmp_path, first_err=TRACEBACK, first_rc=1)
+    assert "rc=1" in result.stdout
+    assert "Traceback" not in result.stdout + result.stderr and 'File "' not in result.stdout + result.stderr
+    assert "error: up.engine_lost" in result.stderr
+    assert calls == ["compose up -d"]  # no repair, no second start
+
+
+def test_the_line_names_the_error_and_the_command_that_starts_again(tmp_path: Path):
+    from test_podman_compose_exact_version_boundary import _wrapper_functions as functions
+    script = f"""
+set -u
+JHT_SAY_LANG=it
+{functions("jht_text_en", "jht_text_it", "jht_say")}
+jht_say up.engine_lost "subprocess.CalledProcessError: Command x"
+"""
+    said = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30).stdout
+    assert "La macchina Podman si e' fermata" in said and "CalledProcessError" in said and "Rilancia jht up" in said

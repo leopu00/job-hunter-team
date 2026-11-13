@@ -919,6 +919,8 @@ install_podman_macos() {
   fi
   "$podman_bin" --connection "$PODMAN_MACHINE_NAME" info &>/dev/null \
     || fail "Podman machine '$PODMAN_MACHINE_NAME' is not reachable."
+  # A team that is running refuses the reinstall: say so before the download of the image (minutes), not after it.
+  refuse_running_team
   jht_phase image_pull
   "$podman_bin" --connection "$PODMAN_MACHINE_NAME" pull "$IMAGE" >/dev/null \
     || fail "JHT image download failed: $IMAGE"
@@ -2283,6 +2285,10 @@ refuse_running_team() {
   done
   [ -z "$running" ] && return 0
   printf 'JHT_ERROR %s\n' team_running >&2
+  if [ "$(installer_person_lang)" = it ]; then
+    printf "  ${RED}✗${RESET} %s\n" "team_running: Job Hunter Team e' acceso su questo computer ($running). Se il setup si era interrotto, riprendilo con «jht setup» in questo terminale; non serve spegnere niente. Per reinstallare invece: spegnilo con «jht down», rilancia l'installer, poi riaccendilo con «jht up». Non e' stato cambiato niente: il tuo profilo e i tuoi documenti in ~/.jht e ~/Documents/Job Hunter Team restano dove sono." >&2
+    exit "$TEAM_RUNNING_EXIT"
+  fi
   printf "  ${RED}✗${RESET} %s\n" "team_running: Job Hunter Team is running on this computer ($running). If setup was interrupted, resume it with «jht setup» in this terminal; no down is needed. To reinstall instead, stop it with «jht down», run the installer again, then start it with «jht up». Nothing was changed: your profile and documents in ~/.jht and ~/Documents/Job Hunter Team stay where they are." >&2
   exit "$TEAM_RUNNING_EXIT"
 }
