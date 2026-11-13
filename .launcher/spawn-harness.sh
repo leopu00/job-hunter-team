@@ -100,7 +100,7 @@ value = cfg.get("harness") if isinstance(cfg, dict) else None
 if value is None:
     raise SystemExit(0)
 if not isinstance(value, str) or value not in known:
-    print(f"Error: harness {value!r} in '{path}' is not a known agent harness ({', '.join(known)}); fix it with: jht providers harness codex", file=sys.stderr)
+    print(f"Error: harness {value!r} in '{path}' is not a known agent harness ({', '.join(known)}); fix it with: jht providers harness pi", file=sys.stderr)
     raise SystemExit(2)
 print(value)
 PYEOF

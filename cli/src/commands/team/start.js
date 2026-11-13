@@ -11,6 +11,7 @@ import {
 import { execArgvInContainer, execInContainer, execScriptInContainer } from '../../utils/container-proxy.js';
 import { diskLowRefusal } from '../../lib/disk-guard.js';
 import { harnessOf, harnessProblem } from '../../../../shared/runtime/agent-harness.js';
+import { RELEASE_PROVIDERS, offeredInRelease } from '../../../../shared/runtime/release-providers.js';
 import { PI_API_PROVIDERS, piApiProvider } from '../../../../shared/runtime/provider-models.js';
 import { KEY_REFUSED_EXIT_CODE } from '../providers-key-check.js';
 import { readRegularFileText } from '../../lib/secure-config-io.js';
@@ -575,18 +576,24 @@ function launchInContainer({ role, instance, mode, env, notATmuxSession, session
 // Null quando si puo' partire, altrimenti la frase del rifiuto. Il gate dello stop si
 // toglie solo dopo di questo: uno start che non puo' partire non annulla lo stop.
 export function startRefusal(config, { containerMode, hasTmux = tmuxAvailable, hasCli = cliAvailable } = {}) {
+  // a provider this release does not offer (shared/runtime/release-providers.js): the way out is the setup, never the
+  // install of a CLI the release does not support
+  const active = config?.active_provider;
+  if (active && !offeredInRelease(active) && (providerCli(config) || piApiProvider(active))) {
+    return `provider '${active}' is not offered in this release (offered: ${RELEASE_PROVIDERS.join(', ')}, on Pi with an API key). Run: jht setup`;
+  }
   const cliBin = providerCli(config);
   if (!cliBin) {
     // A provider the setup offers that runs only on pi (glm): chosen, but not on the harness it needs. Not «no provider».
     const piOnly = piApiProvider(config?.active_provider);
     if (piOnly) return `${PI_API_PROVIDERS[piOnly].label} runs only on the pi harness, with an API key. Run: jht providers harness pi`;
-    return 'no active provider. Run: jht providers use openai';
+    return 'no active provider. Run: jht setup';
   }
   const harnessIssue = harnessProblem(harnessOf(config), config.active_provider, config.providers?.[config.active_provider]?.auth_method);
   if (harnessIssue) {
     // a provider that runs only on pi is brought to pi, not sent back to the default harness it cannot use
     const needsPi = harnessOf(config) === 'codex' && piApiProvider(config.active_provider);
-    return needsPi ? `${harnessIssue}. Switch to it: jht providers harness pi` : `${harnessIssue}. Go back to the default: jht providers harness codex`;
+    return needsPi ? `${harnessIssue}. Switch to it: jht providers harness pi` : `${harnessIssue}. Run: jht setup`;
   }
   if (containerMode) return null;
   if (!hasTmux()) return 'tmux not found. Install it with: brew install tmux';

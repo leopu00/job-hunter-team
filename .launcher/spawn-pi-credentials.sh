@@ -106,7 +106,6 @@ Error: the pi harness has no credentials, so pi would start and fail at its firs
   Fix:     sign in to pi: jht setup (keep the configuration, then sign in to pi when it asks);
            or give a key: jht setup with the API key, or JHT_API_KEY_FILE=<file on tmpfs>.
            See what is configured with: jht providers list.
-  Or go back to the default harness: jht providers harness codex.
 EOF
   return 1
 }

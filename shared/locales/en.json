@@ -123,7 +123,7 @@
   "wizard.access.api_key": "OpenAI API key — billed by the token on your OpenAI account",
   "wizard.key.intro_codex": "Paste your %s API key at the next question. It is typed hidden and checked with OpenAI; then it is handed to Codex's own login (codex login --with-api-key), which keeps it where it keeps every sign-in. The configuration holds no key.\nThe variable it replaces is %s.",
   "wizard.key.codex_not_taken": "Codex did not take the key (codex login --with-api-key). Check the key, then run: jht setup",
-  "wizard.key.intro": "Paste the %s API key at the next question. It is typed hidden, checked with the provider and kept in a private folder of the container; the configuration holds only where it is, never the key.\nYou can also set it up without questions: jht setup --non-interactive --provider glm|kimi --harness pi --api-key-stdin (the key arrives on the standard input). Its variable is %s.",
+  "wizard.key.intro": "Paste the %s API key at the next question. It is typed hidden, checked with the provider and kept in a private folder of the container; the configuration holds only where it is, never the key.\nYou can also set it up without questions: jht setup --non-interactive --provider %s --api-key-stdin (the key arrives on the standard input). Its variable is %s.",
   "wizard.key.prompt": "%s API key",
   "wizard.key.empty": "Paste the key (one line).",
   "wizard.key.shape": "The API key must be one line of 16 to 512 printable characters, without spaces.",

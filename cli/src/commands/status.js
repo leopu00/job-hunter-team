@@ -10,6 +10,7 @@ import { c } from './_colors.js';
 import { hint, keyValues, marks, statusLine, title } from '../lib/ui.js';
 import { providerSignedIn } from '../lib/provider-signin.js';
 import { say } from '../lib/texts.js';
+import { offeredInRelease } from '../../../shared/runtime/release-providers.js';
 
 const CONFIG_DIR = JHT_HOME;
 const CONFIG_FILE = join(CONFIG_DIR, 'jht.config.json');
@@ -65,6 +66,8 @@ async function handleStatus(options) {
   console.log(title(say('status.title')));
   if (config) {
     facts.push([say('status.provider'), config.active_provider ? `${config.active_provider}${provConfig?.model ? ` (${provConfig.model})` : ''}` : say('status.not_set')]);
+    // a team on a service this release does not offer (shared/runtime/release-providers.js): said here too, with the way out
+    if (config.active_provider && !offeredInRelease(config.active_provider)) facts.push([say('status.provider'), say('status.not_in_release')]);
     if (provConfig?.auth_method) {
       facts.push([say('status.signin'), signedIn === false ? say('status.signin_missing', { method: provConfig.auth_method }) : provConfig.auth_method]);
     }
