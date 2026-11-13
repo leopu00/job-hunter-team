@@ -31,8 +31,8 @@ function sandbox() {
   mkdirSync(bin, { recursive: true });
   mkdirSync(home, { recursive: true });
   mkdirSync(state, { recursive: true });
-  // a host start needs the CLI of the provider the team chose: there is no default one
-  writeFileSync(path.join(home, "jht.config.json"), '{"active_provider":"openai"}', "utf-8");
+  // a host start needs the CLI of the provider the team chose: there is no default one; this release offers GLM on pi
+  writeFileSync(path.join(home, "jht.config.json"), '{"active_provider":"glm","harness":"pi","providers":{"glm":{"name":"glm","auth_method":"api_key","api_key_ref":{"type":"ref","source":"env","id":"ZAI_API_KEY"}}}}', "utf-8");
   writeExecutable(
     path.join(bin, "docker"),
     String.raw`

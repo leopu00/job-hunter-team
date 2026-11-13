@@ -246,7 +246,7 @@ test('team start follows the harness: the CLI is pi, and a provider pi cannot st
   assert.equal(startRefusal({ ...openai, harness: 'pi' }, { containerMode: true }), null);
   assert.match(startRefusal({ ...openai, harness: 'pi' }, { containerMode: false, hasTmux: () => true, hasCli: (b) => b !== 'pi' }), /the pi CLI of the active provider was not found/);
   const claude = { active_provider: 'claude', providers: { claude: { auth_method: 'subscription' } }, harness: 'pi' };
-  assert.match(startRefusal(claude, { containerMode: true }), /Claude subscription.*jht providers harness codex/);
+  assert.match(startRefusal(claude, { containerMode: true }), /Claude subscription.*run jht setup|Claude subscription.*Run: jht setup/);
   assert.match(startRefusal({ ...openai, harness: 'opencode' }, { containerMode: true }), /harness must be one of: codex, pi/);
 });
 

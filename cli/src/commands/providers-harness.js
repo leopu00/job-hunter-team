@@ -67,7 +67,7 @@ export async function handleHarness(name) {
   if (!name) {
     const current = harnessOf(config);
     if (current === null) {
-      console.error(`${ERR}  harness '${config.harness}' is not one of: ${AGENT_HARNESSES.join(', ')}. Fix it with: jht providers harness codex`);
+      console.error(`${ERR}  harness '${config.harness}' is not one of: ${AGENT_HARNESSES.join(', ')}. Fix it with: jht providers harness pi`);
       process.exitCode = 1;
       return;
     }

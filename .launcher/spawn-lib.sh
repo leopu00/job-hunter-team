@@ -437,14 +437,14 @@ jht_pi_provider_check() {
       ;;
     anthropic|claude)
       if [ "${2:-}" != "api_key" ]; then
-        echo "Error: the pi harness is refused with a Claude subscription: Anthropic bills a subscription used from pi as extra usage, per token. Go back to the default harness: jht providers harness codex." >&2
+        echo "Error: the pi harness is refused with a Claude subscription: Anthropic bills a subscription used from pi as extra usage, per token. This release runs the team on pi with a GLM API key: run jht setup." >&2
       else
-        echo "Error: the pi harness supports only active_provider=openai, glm or kimi (configured: '${1}'). Go back to the default harness: jht providers harness codex." >&2
+        echo "Error: the pi harness supports only active_provider=openai, glm or kimi (configured: '${1}'). This release runs the team on pi with a GLM API key: run jht setup." >&2
       fi
       return 1
       ;;
     *)
-      echo "Error: the pi harness supports only active_provider=openai, glm or kimi (configured: '${1:-}'). Go back to the default harness: jht providers harness codex." >&2
+      echo "Error: the pi harness supports only active_provider=openai, glm or kimi (configured: '${1:-}'). This release runs the team on pi with a GLM API key: run jht setup." >&2
       return 1
       ;;
   esac

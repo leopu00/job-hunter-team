@@ -89,7 +89,7 @@ def test_a_harness_the_launcher_does_not_know_stops_the_start(tmp_path: Path, va
     assert result.returncode == 2
     assert result.stdout == ""
     assert "not a known agent harness" in result.stderr
-    assert "jht providers harness codex" in result.stderr
+    assert "jht providers harness pi" in result.stderr
 
 
 def test_a_missing_config_has_no_harness(tmp_path: Path) -> None:

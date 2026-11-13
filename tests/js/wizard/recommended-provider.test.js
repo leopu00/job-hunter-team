@@ -35,11 +35,11 @@ describe('Codex consigliato nella CLI', () => {
     // jht setup: no Codex default any more; without --provider the setup takes the first service of the release (GLM in 0.4.0)
     expect(read('cli/src/commands/setup.js')).toContain(".option('--provider <name>', t('wizard.cli.provider'))");
     expect(read('cli/wizard/setup-noninteractive.js')).toContain('opts.provider || RELEASE_PROVIDERS[0]');
-    expect(read('cli/src/lib/texts/en.js')).toContain('jht providers use codex');
+    expect(read('cli/src/lib/texts/en.js')).not.toContain('jht providers use codex');
     const providers = read('cli/src/commands/providers.js');
     const known = providers.slice(providers.indexOf('const KNOWN_PROVIDERS = {'));
     expect(known.indexOf('openai:')).toBeLessThan(known.indexOf('anthropic:'));
     expect(providers).toContain("const UPDATE_TARGETS = ['codex'];");
-    expect(read('cli/src/lib/texts/en.js')).toContain('Choose one with: jht providers use codex');
+    expect(read('cli/src/lib/texts/en.js')).toContain('No provider is active. Set one up with: jht setup');
   });
 });

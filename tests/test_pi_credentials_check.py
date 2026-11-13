@@ -66,8 +66,9 @@ def test_nothing_at_all_is_refused_and_says_what_is_missing_and_how_to_fix(tmp_p
     assert result.returncode == 1
     assert result.stdout == ""
     for words in ("no credentials", "No API key found", "JHT_API_KEY_FILE", f"{home}/.pi/agent/auth.json",
-                  "jht setup", "jht providers list", "jht providers harness codex"):
+                  "jht setup", "jht providers list"):
         assert words in result.stderr, words
+    assert "jht providers harness codex" not in result.stderr, "this release has no other harness to go back to"
 
 
 def test_a_missing_config_and_no_login_is_refused(tmp_path: Path) -> None:
