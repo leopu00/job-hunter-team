@@ -267,10 +267,11 @@ function Write-IntegrationEngineLog {
 # One compose step of a tool (the copy of the browser, the `up`), tried again after a failure when the engine is a Podman machine: the
 # steps are idempotent (the copy ends with a marker, the `up` leaves a container that is there and unchanged as it is). Returns the exit code
 # of the last try. The state of the engine is written once, at the first failure, while it is still what made it fail.
+# Compose's own lines (Container … Creating, Created, Starting, Started: on stderr, which `| Out-Null` let through) stay out of sight when
+# the step works and are shown, whole, when it does not (Invoke-ComposeQuiet of the wrapper, as on `jht up` and `jht down`).
 function Invoke-IntegrationEngineStep {
   param([string]$Tool, [string[]]$ComposeArguments)
-  Invoke-Compose @ComposeArguments | Out-Null
-  $code = $LASTEXITCODE
+  $code = Invoke-ComposeQuiet @ComposeArguments
   if ($code -eq 0 -or $ContainerRuntime -ne 'podman') { return [int]$code }
   Write-IntegrationEngineLog -Tool $Tool -Code 'failed' -ExitCode $code -Lines (Get-IntegrationEngineState)
   $wait = $IntegrationRetryWaitSeconds
@@ -278,8 +279,7 @@ function Invoke-IntegrationEngineStep {
   while ($code -ne 0 -and $tries -lt $IntegrationEngineTries) {
     Start-Sleep -Seconds $wait
     $wait = $wait * 3
-    Invoke-Compose @ComposeArguments | Out-Null
-    $code = $LASTEXITCODE
+    $code = Invoke-ComposeQuiet @ComposeArguments
     $tries++
   }
   Write-IntegrationEngineLog -Tool $Tool -Code 'retried' -ExitCode $code -Lines @("tries=$tries")
@@ -376,8 +376,7 @@ function Invoke-IntegrationAddStep {
       if (-not (Write-IntegrationMarker 'google' 'ok' 'ok')) { $script:IntegrationWhy = 'marcatore non scritto'; return 1 }
     }
     'telegram' {
-      Invoke-Compose '--profile' 'telegram' up '-d' $TelegramContainer | Out-Null
-      if ($LASTEXITCODE -ne 0) { $script:IntegrationWhy = 'il servizio Telegram non parte'; return 1 }
+      if ((Invoke-ComposeQuiet '--profile' 'telegram' 'up' '-d' $TelegramContainer) -ne 0) { $script:IntegrationWhy = 'il servizio Telegram non parte'; return 1 }
       if ((Confirm-TelegramLifecycle 'start') -ne 0) { $script:IntegrationWhy = 'il servizio Telegram non risulta acceso'; return 1 }
     }
     'media' {
@@ -752,8 +751,7 @@ function Invoke-LinkedinLogin {
   $before = $env:JHT_EXTRAS_IMAGE
   try {
     $env:JHT_EXTRAS_IMAGE = $ref
-    Invoke-Compose '--profile' 'login' up '-d' @LoginServices | Out-Null
-    $code = $LASTEXITCODE
+    $code = Invoke-ComposeQuiet '--profile' 'login' 'up' '-d' @LoginServices
   } finally { if ($null -eq $before) { Remove-Item Env:\JHT_EXTRAS_IMAGE -ErrorAction SilentlyContinue } else { $env:JHT_EXTRAS_IMAGE = $before } }
   if ($code -ne 0) { $null = Remove-LinkedinContainers; Write-LinkedinFail 'view_unavailable'; return 1 }
   for ($tries = 1; $tries -le 40; $tries++) {
