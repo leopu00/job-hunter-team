@@ -587,6 +587,21 @@ podman_refuse() {
   exit "$2"
 }
 
+# On the Mac the JHT machine runs Podman of the 6.1 series from 6.1.3 (Homebrew moves the patch: 6.1.4 on 13/11), never 6.2 or later,
+# with podman-compose 1.6.0 exactly: the pair the labels and the attestation were measured with. The wrapper has the same rule.
+PODMAN_MAC_SERIES="6.1"
+PODMAN_MAC_MIN_PATCH=3
+PODMAN_COMPOSE_MAC_VERSION="1.6.0"
+podman_mac_version_supported() {
+  local version="$1" major minor patch rest
+  case "$version" in ''|*[!0-9.]*) return 1 ;; esac
+  IFS=. read -r major minor patch rest <<EOF
+$version
+EOF
+  [ -z "$rest" ] && [ -n "$patch" ] || return 1
+  [ "$major.$minor" = "$PODMAN_MAC_SERIES" ] && [ "$((10#$patch))" -ge "$PODMAN_MAC_MIN_PATCH" ]
+}
+
 # version_at_least HAVE WANT: both are dotted numbers.
 version_at_least() {
   local -a have want
@@ -780,7 +795,11 @@ install_brew_if_missing() {
   if command -v brew &>/dev/null; then return 0; fi
   # Podman and its Compose provider (podman-compose) come from Homebrew: the official Podman package has no podman-compose. Stop
   # here, before anything is written, and say what to do.
-  printf '%s\n' 'homebrew_missing: JHT installs Podman with Homebrew, which is not on this Mac. Nothing was changed. Install Homebrew from https://brew.sh (one command in Terminal; it asks for your Mac password), open a new Terminal window and run this installer again.' >&2
+  if [ "$(installer_person_lang)" = it ]; then
+    printf '%s\n' "homebrew_missing: JHT installa Podman con Homebrew, che su questo Mac non c'e'. Non e' stato cambiato niente. Installa Homebrew da https://brew.sh (un comando nel Terminale; chiede la password del Mac), apri una nuova finestra del Terminale e rilancia questo installer." >&2
+  else
+    printf '%s\n' 'homebrew_missing: JHT installs Podman with Homebrew, which is not on this Mac. Nothing was changed. Install Homebrew from https://brew.sh (one command in Terminal; it asks for your Mac password), open a new Terminal window and run this installer again.' >&2
+  fi
   exit 80
 }
 
@@ -853,18 +872,20 @@ install_podman_macos() {
   case "$PODMAN_MACHINE_NAME" in
     ''|*[!A-Za-z0-9_.-]*) fail "Invalid JHT Podman machine name: $PODMAN_MACHINE_NAME" ;;
   esac
-  local podman_bin compose_bin compose_version
+  local podman_bin compose_bin compose_version podman_version
   podman_bin="$(command -v podman)" \
     || fail "Podman CLI disappeared after installation."
   compose_bin="$(command -v podman-compose)" \
     || fail "Podman Compose provider disappeared after installation."
-  [ "$("$podman_bin" --version 2>/dev/null)" = 'podman version 6.1.3' ] \
-    || fail "JHT requires Podman 6.1.3 for this runtime release."
+  podman_version="$("$podman_bin" --version 2>/dev/null)" || podman_version=""
+  podman_version="${podman_version#podman version }"
+  podman_mac_version_supported "$podman_version" \
+    || fail "podman_version_unsupported: JHT on a Mac needs Podman $PODMAN_MAC_SERIES.$PODMAN_MAC_MIN_PATCH or a later $PODMAN_MAC_SERIES.x (not 6.2 or later); this Mac has ${podman_version:-a podman that does not say its version}. If Homebrew moved Podman past the $PODMAN_MAC_SERIES series, get the JHT installer of today again (it says which series it supports); nothing of JHT was installed."
   compose_version="$(CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
     "$compose_bin" --version 2>/dev/null)" \
     || fail "Podman Compose provider version probe failed."
-  printf '%s\n' "$compose_version" | grep -Fqx 'podman-compose version 1.6.0' \
-    || fail "JHT requires podman-compose 1.6.0 for this runtime release."
+  printf '%s\n' "$compose_version" | grep -Fqx "podman-compose version $PODMAN_COMPOSE_MAC_VERSION" \
+    || fail "podman_compose_version_unsupported: JHT on a Mac needs podman-compose $PODMAN_COMPOSE_MAC_VERSION; this Mac has $(printf '%s\n' "$compose_version" | sed -n 's/^podman-compose version //p' | head -n 1). Run «brew upgrade podman-compose» (or «brew install podman-compose»), then this installer again."
   # The only Mac folders the JHT machine may see are the two the compose
   # file binds. Without --volume, `podman machine init` on macOS mounts
   # /Users (every user's home), /private, /var/folders and
@@ -955,7 +976,7 @@ verify_docker_works() {
   fi
   if [ "$DRY_RUN" -eq 1 ]; then
     printf "  ${DIM}[dry-run]${RESET} would execute: podman --connection %s info\n" "$PODMAN_MACHINE_NAME"
-    printf "  ${DIM}[dry-run]${RESET} would verify: Podman 6.1.3 + podman-compose 1.6.0\n"
+    printf "  ${DIM}[dry-run]${RESET} would verify: Podman %s.x (from %s.%s) + podman-compose %s\n" "$PODMAN_MAC_SERIES" "$PODMAN_MAC_SERIES" "$PODMAN_MAC_MIN_PATCH" "$PODMAN_COMPOSE_MAC_VERSION"
     return 0
   fi
   podman --connection "$PODMAN_MACHINE_NAME" info &>/dev/null \

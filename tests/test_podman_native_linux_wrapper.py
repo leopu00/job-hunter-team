@@ -25,7 +25,7 @@ WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
 
 FUNCTIONS = (
     "version_leading_numbers", "version_at_least", "podman_version_number", "podman_compose_version_number",
-    "podman_compose_pair_supported", "podman_native_override_path", "podman_native_override_ensure",
+    "podman_mac_version_supported", "podman_compose_pair_supported", "podman_native_override_path", "podman_native_override_ensure",
     "compose_project_name", "podman_binary", "podman_compose_binary", "podman_native_rootless", "compose_file", "compose_file_run", "attest_cache_clear", "attest_cache_path", "attest_cache_folder_ok",
     "podman_native_no_pod_arg", "podman_expected_config_hash", "runtime_image_pin_value", "runtime_selected_image",
 )
@@ -40,6 +40,9 @@ def _source() -> str:
         parts.append(match.group(0))
     constants = re.findall(r'^PODMAN_(?:COMPOSE_)?NATIVE_MIN_VERSION="[0-9.]+"$', text, re.M)
     assert len(constants) == 2
+    mac = re.findall(r'^PODMAN_(?:MAC_SERIES|MAC_MIN_PATCH|COMPOSE_MAC_VERSION)=.*$', text, re.M)
+    assert len(mac) == 3
+    constants += mac
     cap = re.search(r"^PODMAN_NATIVE_UP_TIMEOUT=300\ncase .*?^esac\n", text, re.S | re.M)
     assert cap
     constants.append(cap.group(0))
@@ -118,8 +121,14 @@ def test_native_linux_accepts_the_minimum_and_anything_above(box, podman, compos
     assert done.stdout.strip() == expected, done.stderr
 
 
-@pytest.mark.parametrize(("podman", "compose", "expected"), [("6.1.3", "1.6.0", "yes"), ("5.7.0", "1.5.0", "no"), ("6.1.4", "1.6.0", "no"), ("6.1.3", "1.6.1", "no")])
-def test_macos_machine_keeps_the_exact_versions(box, podman, compose, expected):
+# The Mac: the 6.1 series from 6.1.3 (Homebrew moved to 6.1.4 on 13/11), never 6.2 or later; podman-compose 1.6.0 exactly.
+@pytest.mark.parametrize(("podman", "compose", "expected"), [
+    ("6.1.3", "1.6.0", "yes"), ("6.1.4", "1.6.0", "yes"), ("6.1.12", "1.6.0", "yes"),
+    ("6.1.2", "1.6.0", "no"), ("6.2.0", "1.6.0", "no"), ("7.1.3", "1.6.0", "no"), ("5.7.0", "1.5.0", "no"),
+    ("6.1", "1.6.0", "no"), ("6.1.4-dev", "1.6.0", "no"),
+    ("6.1.3", "1.6.1", "no"), ("6.1.4", "1.5.0", "no"),
+])
+def test_macos_machine_takes_the_6_1_series_from_6_1_3_and_compose_1_6_0(box, podman, compose, expected):
     done = box.run("machine", SUPPORTED, podman, compose)
     assert done.stdout.strip() == expected, done.stderr
 
