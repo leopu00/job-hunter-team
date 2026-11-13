@@ -23,6 +23,7 @@ def _tools_first(tmp_path: Path, *, listed: str, attested: str, attest_rc: int =
 set -u
 SCREEN_SERVICE=jht-screen MEDIA_SERVICE=jht-media LOGIN_VIEW_SERVICE=jht-login-view LOGIN_PROXY_SERVICE=jht-login-proxy
 LOGIN_SERVICE=jht-login PLAYWRIGHT_POPULATE_SERVICE=jht-playwright-populate
+TELEGRAM_SERVICE=jht-telegram CONTAINER_SERVICE=jht BROKER_SERVICE=jht-broker
 docker() {{
   echo "docker $*" >> "{log}"
   [ "$1" = ps ] && printf '%s\\n' {listed}
@@ -30,7 +31,7 @@ docker() {{
 }}
 read_only_service_id() {{
   echo "attest $*" >> "{log}"
-  [ "$1" = jht-screen ] || return 3
+  case "$1" in jht-screen) ;; jht) echo 111111111111; return 0 ;; jht-broker) echo 222222222222; return 0 ;; jht-telegram) echo 333333333333; return 0 ;; *) return 3 ;; esac
   [ {attest_rc} -eq 0 ] || return {attest_rc}
   printf '%s\\n' "{attested}"
 }}
@@ -45,12 +46,24 @@ def test_a_running_screen_is_stopped_and_removed_by_its_attested_id_first(tmp_pa
     result, calls = _tools_first(tmp_path, listed="jht jht-screen", attested=SCREEN_ID)
     assert "rc=0" in result.stdout
     assert calls == ["docker ps -a --format {{.Names}}", "attest jht-screen any-config",
-                     f"docker stop -t 10 {SCREEN_ID}", f"docker rm -f {SCREEN_ID}"]
+                     f"docker stop -t 10 {SCREEN_ID}", f"docker rm -f {SCREEN_ID}",
+                     "attest jht any-config", "docker stop -t 10 111111111111"]
 
 
-def test_no_tool_container_means_no_attestation_and_nothing_stopped(tmp_path: Path):
-    _, calls = _tools_first(tmp_path, listed="jht jht-broker", attested=SCREEN_ID)
+def test_no_container_of_ours_means_no_attestation_and_nothing_stopped(tmp_path: Path):
+    _, calls = _tools_first(tmp_path, listed="other-project jht-old", attested=SCREEN_ID)
     assert calls == ["docker ps -a --format {{.Names}}"]
+
+
+def test_the_team_services_are_stopped_after_the_tools_and_left_to_compose_to_remove(tmp_path: Path):
+    # the same raw lines came once without the screen (a down ~35 s after the first up): every service of ours is stopped by its
+    # attested id, the tools first, the broker last; only the tools are removed here
+    result, calls = _tools_first(tmp_path, listed="jht-broker jht jht-telegram jht-screen", attested=SCREEN_ID)
+    assert "rc=0" in result.stdout
+    assert [c for c in calls if c.startswith("docker stop")] == [
+        f"docker stop -t 10 {SCREEN_ID}", "docker stop -t 10 333333333333", "docker stop -t 10 111111111111",
+        "docker stop -t 10 222222222222"]
+    assert [c for c in calls if c.startswith("docker rm")] == [f"docker rm -f {SCREEN_ID}"]
 
 
 @pytest.mark.parametrize("rc", [1, 3])
@@ -80,7 +93,7 @@ def test_down_runs_it_before_the_project_is_taken_down():
 
 PS_STAND_INS = r"""
 function docker { Add-Content -LiteralPath $env:FAKE_LOG -Value ('docker ' + ($args -join ' ')); if ($args[0] -eq 'ps') { $env:FAKE_NAMES -split ' ' }; $global:LASTEXITCODE = 0 }
-function Get-RunningComposeServiceId { param([string]$Service) Add-Content -LiteralPath $env:FAKE_LOG -Value ('attest ' + $Service); if ($Service -eq 'jht-screen') { return $env:FAKE_ID }; return $null }
+function Get-RunningComposeServiceId { param([string]$Service) Add-Content -LiteralPath $env:FAKE_LOG -Value ('attest ' + $Service); switch ($Service) { 'jht-screen' { return $env:FAKE_ID } 'jht' { return '111111111111' } 'jht-broker' { return '222222222222' } default { return $null } } }
 Stop-JhtToolContainersFirst
 [Console]::Out.WriteLine('went on')
 """
@@ -96,10 +109,18 @@ def _ps_tools_first(tmp_path: Path, names: str, screen_id: str):
 def test_windows_a_running_screen_is_stopped_and_removed_by_its_attested_id_first(tmp_path: Path):
     result, calls = _ps_tools_first(tmp_path, "jht jht-screen", SCREEN_ID)
     assert "went on" in result.stdout, result.stderr
-    assert calls == ["docker ps --format {{.Names}}", "attest jht-screen", f"docker stop -t 10 {SCREEN_ID}", f"docker rm -f {SCREEN_ID}"]
+    assert calls == ["docker ps --format {{.Names}}", "attest jht-screen", f"docker stop -t 10 {SCREEN_ID}", f"docker rm -f {SCREEN_ID}",
+                     "attest jht", "docker stop -t 10 111111111111"]
 
 
-@pytest.mark.parametrize("names,screen_id", [("jht jht-broker", SCREEN_ID), ("jht-screen", ""), ("jht-screen", "jht-screen; whoami")])
+def test_windows_the_team_services_are_stopped_last_and_never_removed_here(tmp_path: Path):
+    result, calls = _ps_tools_first(tmp_path, "jht-broker jht", "")
+    assert "went on" in result.stdout, result.stderr
+    assert [c for c in calls if c.startswith("docker ")] == ["docker ps --format {{.Names}}", "docker stop -t 10 111111111111",
+                                                               "docker stop -t 10 222222222222"]
+
+
+@pytest.mark.parametrize("names,screen_id", [("other-project jht-old", SCREEN_ID), ("jht-screen", ""), ("jht-screen", "jht-screen; whoami")])
 def test_windows_nothing_absent_or_unattested_is_touched(tmp_path: Path, names: str, screen_id: str):
     result, calls = _ps_tools_first(tmp_path, names, screen_id)
     assert "went on" in result.stdout, result.stderr

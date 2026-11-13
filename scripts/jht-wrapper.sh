@@ -1789,16 +1789,21 @@ stale_config_hint() {
 # The tools' containers (the live screen, media, the sign-in) go first, each by the id the attestation gives (running or stopped, ours
 # by every label, any configuration): with the screen running, podman-compose's `down` could not remove what it stood on («cannot
 # remove container … as it is running», «jht_default has associated containers»), and the team's container, left half stopped,
-# came back up a few seconds later (Mac with Podman, 3 times out of 3). Nothing of another project, nothing unattested, never an error.
+# came back up a few seconds later (Mac with Podman, 3 times out of 3). Then the team's own services, the same way (telegram, the
+# team, the broker last): the same raw lines came once without the screen, on a down ~35 s after the first up, and a container
+# stopped by `stop` is one its restart policy (unless-stopped) never brings back. compose down then only removes what is stopped.
+# Nothing of another project, nothing unattested, never an error.
 container_down_tools_first() {
   local svc id names
   # one listing first (the container names are the service names): a tool that is not there costs no attestation
   names="$(docker ps -a --format '{{.Names}}' 2>/dev/null)" || return 0
-  for svc in "$SCREEN_SERVICE" "$MEDIA_SERVICE" "$LOGIN_VIEW_SERVICE" "$LOGIN_PROXY_SERVICE" "$LOGIN_SERVICE" "$PLAYWRIGHT_POPULATE_SERVICE"; do
+  for svc in "$SCREEN_SERVICE" "$MEDIA_SERVICE" "$LOGIN_VIEW_SERVICE" "$LOGIN_PROXY_SERVICE" "$LOGIN_SERVICE" "$PLAYWRIGHT_POPULATE_SERVICE" \
+             "$TELEGRAM_SERVICE" "$CONTAINER_SERVICE" "$BROKER_SERVICE"; do
     printf '%s\n' "$names" | grep -Fqx "$svc" || continue
     id="$(read_only_service_id "$svc" any-config 2>/dev/null)" || continue
     case "$id" in ''|*[!0-9a-fA-F]*) continue ;; esac
     docker stop -t 10 "$id" >/dev/null 2>&1 || true
+    case "$svc" in "$TELEGRAM_SERVICE"|"$CONTAINER_SERVICE"|"$BROKER_SERVICE") continue ;; esac   # the team's: compose down removes them
     docker rm -f "$id" >/dev/null 2>&1 || true
   done
 }
