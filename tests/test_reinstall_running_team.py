@@ -233,6 +233,7 @@ compose_file() {{
   esac
 }}
 compose() {{ compose_file "$COMPOSE_FILE" "$@"; }}
+container_down_tools_first() {{ :; }}
 """
         return subprocess.run(["bash", "-c", stubs + _functions() + "\n" + body], capture_output=True, text=True,
                               env={**os.environ, "LC_ALL": "C"}, timeout=30)

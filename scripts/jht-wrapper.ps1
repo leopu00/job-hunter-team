@@ -1923,6 +1923,20 @@ function Get-RunningComposeServiceId {
   return $found
 }
 
+# The tools' containers (the live screen, media, the sign-in) are stopped and removed first, each by the id the attestation gives (a
+# running container of this project and that service): with the screen running podman-compose's `down` could not remove what it
+# stood on, and the team's container came back up seconds later (measured on a Mac; the same podman-compose runs here). Nothing
+# unattested is touched, and it is never an error.
+function Stop-JhtToolContainersFirst {
+  $names = @(& { $ErrorActionPreference = 'Continue'; & docker ps --format '{{.Names}}' 2>$null } | ForEach-Object { "$($_)".Trim() })
+  foreach ($service in @('jht-screen', 'jht-media', 'jht-login-view', 'jht-login-proxy', 'jht-login', 'jht-playwright-populate')) {
+    if ($names -cnotcontains $service) { continue }
+    $id = Get-RunningComposeServiceId $service
+    if (-not $id -or $id -notmatch '^[0-9a-fA-F]{12,64}$') { continue }
+    & { $ErrorActionPreference = 'Continue'; & docker stop -t 10 $id *> $null; & docker rm -f $id *> $null }
+  }
+}
+
 function Write-InactiveOnboardingSnapshot {
   param([ValidateSet(0, 1)][int]$RuntimeInstalled)
   foreach ($line in @(
@@ -4231,6 +4245,7 @@ switch ($Sub) {
   { $_ -in @('down', 'stop-container') } {
     Require-ComposeFile
     Require-Docker
+    Stop-JhtToolContainersFirst
     $downCode = Invoke-ComposeQuiet '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' '--profile' 'login' 'down'
     if ($downCode -eq 0) { Set-JhtTeamStopped; Write-JhtLifecycleDone 'down' }
     exit $downCode

@@ -27,6 +27,7 @@ info() {{ echo "info: $*"; }}
 err() {{ echo "error: $*" >&2; }}
 jht_say() {{ printf '%s' "$1"; }}
 container_up() {{ return 0; }}
+container_down_tools_first() {{ :; }}
 compose_noise_filter() {{ cat; }}
 rootless_netns_noise_filter() {{ cat; }}
 compose_stdout_quiet() {{ echo "down $*" >> "{log}"; }}
