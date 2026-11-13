@@ -1339,6 +1339,21 @@ podman_compose_version_number() {
   printf '%s\n' "$out" | sed -n 's/^podman-compose version \([^ ]*\)$/\1/p' | head -n 1
 }
 
+# On the Mac the machine runs Podman of the 6.1 series from 6.1.3 (Homebrew moves the patch: 6.1.4 on 13/11), never 6.2 or later,
+# with podman-compose 1.6.0 exactly: the pair the labels and the attestation were measured with. Linux keeps its minimums.
+PODMAN_MAC_SERIES="6.1"
+PODMAN_MAC_MIN_PATCH=3
+PODMAN_COMPOSE_MAC_VERSION="1.6.0"
+podman_mac_version_supported() {
+  local version="$1" major minor patch rest
+  case "$version" in ''|*[!0-9.]*) return 1 ;; esac
+  IFS=. read -r major minor patch rest <<EOF
+$version
+EOF
+  [ -z "$rest" ] && [ -n "$patch" ] || return 1
+  [ "$major.$minor" = "$PODMAN_MAC_SERIES" ] && [ "$((10#$patch))" -ge "$PODMAN_MAC_MIN_PATCH" ]
+}
+
 podman_compose_pair_supported() {
   local podman_bin="$1" compose_bin="$2" podman_version compose_version
   podman_ensure_on_path
@@ -1349,11 +1364,11 @@ podman_compose_pair_supported() {
     version_at_least "$compose_version" "$PODMAN_COMPOSE_NATIVE_MIN_VERSION"
     return
   fi
-  podman_version="$("$podman_bin" --version 2>/dev/null)" || return 1
-  [ "$podman_version" = 'podman version 6.1.3' ] || return 1
+  podman_version="$(podman_version_number "$podman_bin")" || return 1
+  podman_mac_version_supported "$podman_version" || return 1
   compose_version="$(CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
     "$compose_bin" --version 2>/dev/null)" || return 1
-  printf '%s\n' "$compose_version" | grep -Fqx 'podman-compose version 1.6.0'
+  printf '%s\n' "$compose_version" | grep -Fqx "podman-compose version $PODMAN_COMPOSE_MAC_VERSION"
 }
 
 # Linux nativo + Podman rootless: senza mappa degli uid, l'uid 1001 del
@@ -1635,7 +1650,7 @@ compose_file_run() {
       if [ "$PODMAN_RUNTIME_MODE" = "native" ]; then
         err "Versione non supportata: servono podman >= $PODMAN_NATIVE_MIN_VERSION (trovato: $(podman_version_number "$podman_bin" || echo '?')) e podman-compose >= $PODMAN_COMPOSE_NATIVE_MIN_VERSION (trovato: $(podman_compose_version_number "$compose_bin" || echo '?'))."
       else
-        err "Versione Podman Compose non supportata dal runtime JHT."
+        err "Versione non supportata: sul Mac servono podman $PODMAN_MAC_SERIES.$PODMAN_MAC_MIN_PATCH o un $PODMAN_MAC_SERIES.x successivo (non 6.2 o oltre; trovato: $(podman_version_number "$podman_bin" || echo '?')) e podman-compose $PODMAN_COMPOSE_MAC_VERSION (trovato: $(podman_compose_version_number "$compose_bin" || echo '?')). Se hai aggiornato Homebrew oltre la serie $PODMAN_MAC_SERIES, aggiorna JHT (curl -fsSL https://jobhunterteam.ai/install.sh | bash)."
       fi
       return 1
     fi

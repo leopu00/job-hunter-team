@@ -105,7 +105,7 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
    - macOS: **Homebrew must already be installed** (it needs macOS 15 or
      later); without it the installer stops with `homebrew_missing` before
      installing anything. It then installs the Podman CLI and the Compose
-     provider with Homebrew, creates/starts the dedicated rootless
+     provider with Homebrew (Podman of the 6.1 series from 6.1.3, never 6.2 or later; podman-compose 1.6.0), creates/starts the dedicated rootless
      `jht-podman` machine (2 CPUs, 4 GiB of memory, a disk of up to 30 GiB; a
      Mac with at least 16 GB of RAM is recommended) and publishes an attested JHT-only `docker` shim in
      `$JHT_RUNTIME_DIR/bin` rather than the user's global `PATH`. It never
@@ -249,7 +249,7 @@ Example output on macOS with Podman and its Compose provider already installed (
 
 [3/4] Container runtime check
   [dry-run] would execute: podman --connection jht-podman info
-  [dry-run] would verify: Podman 6.1.3 + podman-compose 1.6.0
+  [dry-run] would verify: Podman 6.1.x (from 6.1.3) + podman-compose 1.6.0
 
 [4/4] Download wrapper + docker-compose.yml
   [dry-run] would download: …/production/docker-compose.yml -> …/host-runtime/docker-compose.yml
