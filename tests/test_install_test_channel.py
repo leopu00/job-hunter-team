@@ -292,6 +292,26 @@ def test_upgrade_refuses_a_test_channel_install(tmp_path):
     assert "canale di test" in result.stdout + result.stderr
 
 
+
+@LINUX_SERVER
+@pytest.mark.parametrize("as_json", [True, False])
+def test_upgrade_check_on_a_test_channel_install_is_an_answer_not_a_failure(tmp_path, as_json):
+    # A check changes nothing: it answers that this install is updated by reinstalling, with rc 0, and never says
+    # «non completato» nor «ripristinato» (nothing was done, nothing was restored).
+    env, wrapper = _installed(tmp_path)
+
+    result = _run_wrapper(env, wrapper, "upgrade", "--check", *(["--json"] if as_json else []))
+
+    out = result.stdout + result.stderr
+    assert result.returncode == 0, out
+    assert "canale di test" in out and "reinstallando" in out
+    assert "non completato" not in out and "ripristinato" not in out and "Aggiornamento completato" not in out
+    if as_json:
+        import json
+        answer = json.loads(result.stdout)
+        assert answer["ok"] is True and answer["changed"] is False and answer["phase"] == "check"
+        assert answer["rolledBack"] is False
+
 def test_production_install_drops_an_earlier_pin(tmp_path):
     env, _ = _installed(tmp_path)
     runtime = Path(env["JHT_RUNTIME_DIR"])

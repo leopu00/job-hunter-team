@@ -5082,6 +5082,16 @@ upgrade_result() {
     printf '{"ok":%s,"changed":%s,"phase":"%s","previous":{"version":"%s","image":"%s"},"current":{"version":"%s","image":"%s"},"restartRequired":%s,"message":"%s","rolledBack":%s%s}\n' \
       "$ok" "$changed" "$phase" "$previous_version" "$previous_image" \
       "$current_version" "$current_image" "$restart_required" "$message" "$rolled_back" "$prune_field"
+  elif [ "$ok" = "true" ] && [ "$phase" = check ]; then
+    # Un controllo non aggiorna niente: non si dice «Aggiornamento completato».
+    if [ "$previous_version" = unknown ]; then
+      printf 'Controllo: %s.\n' "$message"
+    elif [ "$changed" = true ]; then
+      printf 'Controllo: c'"'"'e'"'"' un aggiornamento, %s (%s) -> %s. %s. Per applicarlo: jht upgrade\n' \
+        "$previous_version" "$previous_image" "$current_image" "$message"
+    else
+      printf 'Controllo: nessun aggiornamento, %s (%s) e'"'"' gia'"'"' l'"'"'ultima. %s.\n' "$previous_version" "$previous_image" "$message"
+    fi
   elif [ "$ok" = "true" ]; then
     printf 'Aggiornamento completato: %s (%s) -> %s (%s). %s\n' \
       "$previous_version" "$previous_image" "$current_version" "$current_image" "$message"
@@ -5756,7 +5766,12 @@ handle_runtime_upgrade() {
   fi
   # Un'installazione del canale di test e' fissata a un commit: l'upgrade
   # scaricherebbe il compose di produzione e mescolerebbe i due canali.
+  # Con --check e' una risposta, non un errore: niente da controllare qui, nessuna modifica, rc 0.
   if [ -f "$RUNTIME_IMAGE_PIN" ]; then
+    if [ "$check_only" = "1" ]; then
+      upgrade_result true false check unknown none unknown none false "Installazione del canale di test: jht upgrade non la aggiorna, si aggiorna reinstallando dalla build di test; nessuna modifica al runtime" false
+      return 0
+    fi
     upgrade_result false false preflight unknown none unknown none false "Installazione del canale di test: si aggiorna reinstallando dalla build di test" false
     return 1
   fi
