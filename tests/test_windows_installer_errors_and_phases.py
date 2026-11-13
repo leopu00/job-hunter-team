@@ -131,6 +131,11 @@ $ErrorActionPreference = 'Stop'
 $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($env:JHT_UNDER_TEST, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw "parse: $($errors[0])" }
+# the sentences are said in the person's language: T and Get-JhtTextLanguage come with any function, when the script has them
+foreach ($name in @('Get-JhtTextLanguage', 'T')) {
+  $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name }, $true)
+  if ($fn) { . ([scriptblock]::Create($fn.Extent.Text)) }
+}
 foreach ($name in ($env:JHT_IMPORT -split ',')) {
   if (-not $name) { continue }
   $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name }, $true)
@@ -204,7 +209,7 @@ def test_phase_time_line_only_when_asked_and_after_the_phase_line(tmp_path, scri
 
 def test_a_problem_says_what_went_wrong_and_what_to_do_now(tmp_path):
     body = "Write-JhtProblem -What 'It broke.' -Todo @('Do this first.', 'Then run it again.')\n"
-    result = _run(tmp_path, INSTALLER, ["Write-JhtProblem"], body)
+    result = _run(tmp_path, INSTALLER, ["Write-JhtProblem"], body, {"JHT_LANG": "en"})
     assert result.returncode == 0, result.stderr
     out = result.stdout
     assert "x It broke." in out
@@ -212,7 +217,7 @@ def test_a_problem_says_what_went_wrong_and_what_to_do_now(tmp_path):
 
 
 def test_a_problem_without_a_next_step_does_not_invent_one(tmp_path):
-    result = _run(tmp_path, INSTALLER, ["Write-JhtProblem"], "Write-JhtProblem -What 'Only the cause.'\n")
+    result = _run(tmp_path, INSTALLER, ["Write-JhtProblem"], "Write-JhtProblem -What 'Only the cause.'\n", {"JHT_LANG": "en"})
     assert result.returncode == 0, result.stderr
     assert "x Only the cause." in result.stdout and "What to do now:" not in result.stdout
 

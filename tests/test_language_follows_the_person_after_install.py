@@ -111,8 +111,10 @@ def test_windows_writes_the_language_of_the_person_in_host_env_and_reads_it_by_t
     installer = INSTALL_PS1.read_text(encoding="utf-8")
     assert "JHT_LANG=en\n" not in installer.replace("\r\n", "\n")
     assert "JHT_LANG=$lang" in installer
-    person = installer[installer.index("function Get-JhtPersonLanguage"):installer.index("function Write-HostEnv")]
-    order = [person.index(p) for p in ("i18n-prefs.json", "$env:JHT_LANG", "Get-UICulture", "return 'en'")]
+    person = installer[installer.index("function Get-JhtTextLanguage"):installer.index("function Get-Windows10SupportWarning")]
+    order = [person.index(p) for p in ("i18n-prefs.json", "$env:JHT_LANG", "CurrentUICulture", "return 'en'")]
+    # host.env gets the same language as the sentences of the installer
+    assert "return (Get-JhtTextLanguage)" in installer[installer.index("function Get-JhtPersonLanguage"):installer.index("function Write-HostEnv")]
     assert order == sorted(order)
     wrapper = WRAPPER_PS1.read_text(encoding="utf-8")
     assert wrapper.index("$script:JhtCallerLang = [string]$env:JHT_LANG") < wrapper.index("Get-Content $HostEnvFile")
@@ -139,3 +141,15 @@ def test_the_host_setup_says_its_lines_in_the_language_decided(tmp_path, lang, s
     assert said in out and not_said not in out, out
     if lang == "it":
         assert "computer locale" in out and "Fuso orario" in out and "Timezone:" not in out, out
+
+
+def test_the_windows_installer_says_its_normal_path_in_the_language_of_the_person():
+    installer = INSTALL_PS1.read_text(encoding="utf-8")
+    for italian in ("Rilevamento del sistema", "Installazione completata!", "Prossimi passi:", "Per disinstallare", "Avvio la configurazione guidata..."):
+        assert italian in installer, italian
+    # the steps and the end are said through T, never as bare English any more
+    for english in ('Write-Step 1 $TotalSteps "System detection"', 'Write-Host "  Next steps:"', '"|  Installation complete!                  |"'):
+        assert english not in installer, english
+    # PowerShell 5.1 reads a BOM-less script in the legacy console encoding: the sentences stay ASCII
+    code = [line for line in installer.splitlines() if not line.lstrip().startswith("#")]
+    assert all(line.isascii() for line in code)

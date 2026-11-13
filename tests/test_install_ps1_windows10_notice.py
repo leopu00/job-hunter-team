@@ -233,30 +233,39 @@ def test_the_terminal_warning_uses_the_language_asked(tmp_path, language, expect
 ITALIAN_WINDOWS = "try { [Globalization.CultureInfo]::CurrentUICulture = [Globalization.CultureInfo]::GetCultureInfo('it-IT') } catch { }\n"
 
 
+ITALIAN = "Podman non supporta piu' Windows 10: puo' funzionare, ma non lo garantiamo. Il sistema supportato e' Windows 11."
+
+
 @pytest.mark.parametrize(
     ("jht_lang", "expected"),
     [
-        (None, WARNING),  # nothing chosen: English, like the rest of the output, even on an Italian Windows
-        ("", WARNING),
+        (None, "windows"),  # nothing chosen: the language of Windows, Italian here
+        ("", "windows"),
         ("en", WARNING),
-        ("it_IT.UTF-8", "Podman non supporta piu' Windows 10: puo' funzionare, ma non lo garantiamo. Il sistema supportato e' Windows 11."),
+        ("it_IT.UTF-8", ITALIAN),
         ("DE", "Podman unterstuetzt Windows 10 nicht mehr: Es kann funktionieren, aber wir garantieren es nicht. Unterstuetzt wird Windows 11."),
-        ("zz", WARNING),
+        ("zz", "windows"),  # a language we do not have: the next in the rule, the one of Windows
     ],
 )
-def test_the_terminal_warning_follows_the_language_of_the_product_not_the_one_of_windows(tmp_path, jht_lang, expected):
+def test_the_terminal_warning_follows_jht_lang_then_the_language_of_windows(tmp_path, jht_lang, expected):
     extra = {} if jht_lang is None else {"JHT_LANG": jht_lang}
     result = _run(
         tmp_path,
         ["Get-JhtTextLanguage", "Get-Windows10SupportWarning"],
-        ITALIAN_WINDOWS + "[Console]::Out.WriteLine((Get-Windows10SupportWarning))\n",
+        ITALIAN_WINDOWS
+        + "[Console]::Out.WriteLine([Globalization.CultureInfo]::CurrentUICulture.TwoLetterISOLanguageName)\n"
+        + "[Console]::Out.WriteLine((Get-Windows10SupportWarning))\n",
         extra,
     )
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == expected
+    culture, said = result.stdout.strip().splitlines()
+    if expected == "windows":
+        # a runtime without culture data stays invariant and reads English: the test then only proves less
+        expected = ITALIAN if culture == "it" else WARNING
+    assert said.strip() == expected
 
 
-def test_the_default_language_of_the_warning_does_not_read_the_culture_of_windows():
+def test_the_warning_takes_its_language_only_through_the_rule_of_the_installer():
     warning = _function_text("Get-Windows10SupportWarning")
     assert "CurrentUICulture" not in warning
     assert "Get-JhtTextLanguage" in warning
