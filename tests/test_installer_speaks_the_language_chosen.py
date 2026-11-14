@@ -125,3 +125,25 @@ def test_a_choice_saved_by_the_setup_wins_over_the_system(tmp_path, lang):
                           capture_output=True, text=True, timeout=30,
                           env={"PATH": "/usr/bin:/bin", "HOME": str(home), "LANG": "en_US.UTF-8"})
     assert done.stdout == catalog(lang)["installer.next_steps"]
+
+
+# The lines a person meets when something is wrong (a marker, a downloaded file that does not keep the runtime's boundary, a Podman
+# that disappeared…) are said in the person's language too. In English stay, by choice: the internal phase name, the native mode
+# (--no-docker), the publication of a candidate runtime (the release), the image of the test channel.
+ENGLISH_BY_CHOICE = {"jht_phase", "install_system_deps", "install_node", "clone_repo", "build_jht", "link_bin_native",
+                     "publish_runtime_candidate_bundle", "verify_test_image"}
+
+
+def test_every_failure_a_person_meets_is_said_in_the_language_chosen():
+    function = None
+    written_by_hand = {}
+    for number, line in enumerate(TEXTS._without_block(SOURCE).split("\n"), 1):
+        match = re.match(r"^([a-z_]+)\(\) \{", line)
+        if match:
+            function = match.group(1)
+        if re.search(r'\bfail "[A-Za-z]', line) and "$(ts" not in line:
+            written_by_hand.setdefault(function, []).append(number)
+    assert set(written_by_hand) <= ENGLISH_BY_CHOICE, {f: n for f, n in written_by_hand.items() if f not in ENGLISH_BY_CHOICE}
+    for key in ("installer.check.compose_boundary", "installer.check.wrapper_protocol", "installer.check.marker_unsafe",
+                "installer.check.shim_unsafe", "installer.check.branch_unresolved"):
+        assert key in TEXTS.calls(), key

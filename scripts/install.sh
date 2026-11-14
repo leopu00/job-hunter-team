@@ -402,6 +402,23 @@ ts_table() {
     en:installer.apt_get_update_failed) printf '%s' 'apt-get update failed: trying the install anyway.' ;;
     en:installer.branch) printf '%s' 'branch:  ' ;;
     en:installer.cannot_list_containers) printf '%s' 'Cannot list the running containers with %s: nothing was installed.' ;;
+    en:installer.check.adapter_bad_ancestor) printf '%s' 'Podman adapter bin has a non-canonical ancestor: %s' ;;
+    en:installer.check.adapter_is_link) printf '%s' 'Podman adapter bin path is a symlink: %s' ;;
+    en:installer.check.adapter_not_dir) printf '%s' 'Podman adapter bin path is not a directory: %s' ;;
+    en:installer.check.branch_unresolved) printf '%s' 'Cannot resolve branch '\''%s'\'' to an immutable release commit.' ;;
+    en:installer.check.compose_boundary) printf '%s' 'Downloaded compose does not enforce the protected runtime boundary.' ;;
+    en:installer.check.compose_gone) printf '%s' 'Podman Compose provider disappeared after installation.' ;;
+    en:installer.check.compose_version_unreadable) printf '%s' 'Podman Compose provider version probe failed.' ;;
+    en:installer.check.digests_not_written) printf '%s' 'the digests of the host scripts were not written' ;;
+    en:installer.check.machine_name_invalid) printf '%s' 'Invalid JHT Podman machine name: %s' ;;
+    en:installer.check.marker_invalid) printf '%s' 'Invalid JHT runtime selection marker' ;;
+    en:installer.check.marker_unsafe) printf '%s' 'Unsafe JHT runtime selection marker: %s' ;;
+    en:installer.check.os_unsupported) printf '%s' 'Unsupported operating system: %s' ;;
+    en:installer.check.podman_gone) printf '%s' 'Podman CLI disappeared after installation.' ;;
+    en:installer.check.podman_not_on_path) printf '%s' 'podman disappeared from PATH' ;;
+    en:installer.check.podman_path_unsafe) printf '%s' 'Unsafe Podman executable path: %s' ;;
+    en:installer.check.shim_unsafe) printf '%s' 'Refusing to overwrite an unsafe or non-JHT executable: %s' ;;
+    en:installer.check.wrapper_protocol) printf '%s' 'Downloaded wrapper does not implement the protected runtime protocol.' ;;
     en:installer.chown_not_needed) printf '%s' 'chown to 1001 failed — nothing runs in a container here (--no-docker), so nothing needs it' ;;
     en:installer.config_db_agents) printf '%s' '(config, db, agents)' ;;
     en:installer.configuration_wizard_also_starts) printf '%s' 'configuration wizard (also starts the container)' ;;
@@ -538,6 +555,23 @@ ts_table() {
     it:installer.apt_get_update_failed) printf '%s' 'apt-get update non e'\'' riuscito: provo comunque a installare.' ;;
     it:installer.branch) printf '%s' 'ramo:     ' ;;
     it:installer.cannot_list_containers) printf '%s' 'Non riesco a elencare i container accesi con %s: non e'\'' stato installato niente.' ;;
+    it:installer.check.adapter_bad_ancestor) printf '%s' 'La cartella dell'\''adattatore di Podman ha sopra di se'\'' un collegamento o un percorso non canonico: %s' ;;
+    it:installer.check.adapter_is_link) printf '%s' 'La cartella dell'\''adattatore di Podman e'\'' un collegamento: %s' ;;
+    it:installer.check.adapter_not_dir) printf '%s' 'La cartella dell'\''adattatore di Podman non e'\'' una cartella: %s' ;;
+    it:installer.check.branch_unresolved) printf '%s' 'Non riesco a ricondurre il ramo '\''%s'\'' a un commit di rilascio immutabile.' ;;
+    it:installer.check.compose_boundary) printf '%s' 'Il docker-compose.yml scaricato non applica il confine protetto del runtime.' ;;
+    it:installer.check.compose_gone) printf '%s' 'Il provider di Podman Compose e'\'' sparito dopo l'\''installazione.' ;;
+    it:installer.check.compose_version_unreadable) printf '%s' 'Non riesco a leggere la versione del provider di Podman Compose.' ;;
+    it:installer.check.digests_not_written) printf '%s' 'le impronte degli script dell'\''host non sono state scritte' ;;
+    it:installer.check.machine_name_invalid) printf '%s' 'Nome della macchina Podman di JHT non valido: %s' ;;
+    it:installer.check.marker_invalid) printf '%s' 'Il marcatore del motore scelto per JHT non e'\'' valido' ;;
+    it:installer.check.marker_unsafe) printf '%s' 'Il marcatore del motore scelto per JHT non e'\'' sicuro: %s' ;;
+    it:installer.check.os_unsupported) printf '%s' 'Sistema operativo non supportato: %s' ;;
+    it:installer.check.podman_gone) printf '%s' 'La CLI di Podman e'\'' sparita dopo l'\''installazione.' ;;
+    it:installer.check.podman_not_on_path) printf '%s' 'podman e'\'' sparito dal PATH' ;;
+    it:installer.check.podman_path_unsafe) printf '%s' 'Il percorso dell'\''eseguibile di Podman non e'\'' sicuro: %s' ;;
+    it:installer.check.shim_unsafe) printf '%s' 'Non sovrascrivo un eseguibile non sicuro o non di JHT: %s' ;;
+    it:installer.check.wrapper_protocol) printf '%s' 'Il wrapper scaricato non implementa il protocollo protetto del runtime.' ;;
     it:installer.chown_not_needed) printf '%s' 'chown a 1001 non riuscito: qui non gira niente in un container (--no-docker), quindi non serve' ;;
     it:installer.config_db_agents) printf '%s' '(configurazione, db, agenti)' ;;
     it:installer.configuration_wizard_also_starts) printf '%s' 'configurazione guidata (accende anche il container)' ;;
@@ -674,6 +708,23 @@ ts_table() {
     hu:installer.apt_get_update_failed) printf '%s' 'az apt-get update nem sikerült: azért megpróbálom a telepítést.' ;;
     hu:installer.branch) printf '%s' 'ág:      ' ;;
     hu:installer.cannot_list_containers) printf '%s' 'Nem tudom kilistázni a futó konténereket ezzel: %s. Semmi sem lett telepítve.' ;;
+    hu:installer.check.adapter_bad_ancestor) printf '%s' 'A Podman adapter bin mappája fölött nem kanonikus útvonal van: %s' ;;
+    hu:installer.check.adapter_is_link) printf '%s' 'A Podman adapter bin mappája szimbolikus link: %s' ;;
+    hu:installer.check.adapter_not_dir) printf '%s' 'A Podman adapter bin útvonala nem mappa: %s' ;;
+    hu:installer.check.branch_unresolved) printf '%s' 'A(z) '\''%s'\'' ág nem vezethető vissza egy megváltoztathatatlan kiadási commitra.' ;;
+    hu:installer.check.compose_boundary) printf '%s' 'A letöltött docker-compose.yml nem érvényesíti a runtime védett határát.' ;;
+    hu:installer.check.compose_gone) printf '%s' 'A Podman Compose szolgáltató eltűnt a telepítés után.' ;;
+    hu:installer.check.compose_version_unreadable) printf '%s' 'Nem sikerült kiolvasni a Podman Compose szolgáltató verzióját.' ;;
+    hu:installer.check.digests_not_written) printf '%s' 'a gazdagép szkriptjeinek lenyomatai nem íródtak ki' ;;
+    hu:installer.check.machine_name_invalid) printf '%s' 'Érvénytelen a JHT Podman gépének neve: %s' ;;
+    hu:installer.check.marker_invalid) printf '%s' 'A JHT runtime kiválasztását jelző fájl érvénytelen' ;;
+    hu:installer.check.marker_unsafe) printf '%s' 'A JHT runtime kiválasztását jelző fájl nem biztonságos: %s' ;;
+    hu:installer.check.os_unsupported) printf '%s' 'Nem támogatott operációs rendszer: %s' ;;
+    hu:installer.check.podman_gone) printf '%s' 'A Podman CLI eltűnt a telepítés után.' ;;
+    hu:installer.check.podman_not_on_path) printf '%s' 'a podman eltűnt a PATH-ból' ;;
+    hu:installer.check.podman_path_unsafe) printf '%s' 'A Podman futtatható fájljának útvonala nem biztonságos: %s' ;;
+    hu:installer.check.shim_unsafe) printf '%s' 'Nem írom felül a nem biztonságos vagy nem a JHT-hoz tartozó futtatható fájlt: %s' ;;
+    hu:installer.check.wrapper_protocol) printf '%s' 'A letöltött wrapper nem valósítja meg a runtime védett protokollját.' ;;
     hu:installer.chown_not_needed) printf '%s' 'a chown 1001-re nem sikerült — itt semmi sem fut konténerben (--no-docker), így nincs rá szükség' ;;
     hu:installer.config_db_agents) printf '%s' '(beállítás, adatbázis, ügynökök)' ;;
     hu:installer.configuration_wizard_also_starts) printf '%s' 'beállító varázsló (a konténert is elindítja)' ;;
@@ -810,6 +861,23 @@ ts_table() {
     es:installer.apt_get_update_failed) printf '%s' 'apt-get update ha fallado: intento instalar de todos modos.' ;;
     es:installer.branch) printf '%s' 'rama:    ' ;;
     es:installer.cannot_list_containers) printf '%s' 'No puedo listar los contenedores en marcha con %s: no se ha instalado nada.' ;;
+    es:installer.check.adapter_bad_ancestor) printf '%s' 'La carpeta bin del adaptador de Podman tiene por encima una ruta no canónica: %s' ;;
+    es:installer.check.adapter_is_link) printf '%s' 'La carpeta bin del adaptador de Podman es un enlace simbólico: %s' ;;
+    es:installer.check.adapter_not_dir) printf '%s' 'La ruta bin del adaptador de Podman no es una carpeta: %s' ;;
+    es:installer.check.branch_unresolved) printf '%s' 'No puedo resolver la rama '\''%s'\'' a un commit de versión inmutable.' ;;
+    es:installer.check.compose_boundary) printf '%s' 'El docker-compose.yml descargado no aplica el límite protegido del runtime.' ;;
+    es:installer.check.compose_gone) printf '%s' 'El proveedor de Podman Compose ha desaparecido después de la instalación.' ;;
+    es:installer.check.compose_version_unreadable) printf '%s' 'No puedo leer la versión del proveedor de Podman Compose.' ;;
+    es:installer.check.digests_not_written) printf '%s' 'no se han escrito las huellas de los scripts del host' ;;
+    es:installer.check.machine_name_invalid) printf '%s' 'Nombre de la máquina Podman de JHT no válido: %s' ;;
+    es:installer.check.marker_invalid) printf '%s' 'El marcador del runtime elegido para JHT no es válido' ;;
+    es:installer.check.marker_unsafe) printf '%s' 'El marcador del runtime elegido para JHT no es seguro: %s' ;;
+    es:installer.check.os_unsupported) printf '%s' 'Sistema operativo no compatible: %s' ;;
+    es:installer.check.podman_gone) printf '%s' 'La CLI de Podman ha desaparecido después de la instalación.' ;;
+    es:installer.check.podman_not_on_path) printf '%s' 'podman ha desaparecido del PATH' ;;
+    es:installer.check.podman_path_unsafe) printf '%s' 'La ruta del ejecutable de Podman no es segura: %s' ;;
+    es:installer.check.shim_unsafe) printf '%s' 'No sobrescribo un ejecutable no seguro o que no es de JHT: %s' ;;
+    es:installer.check.wrapper_protocol) printf '%s' 'El wrapper descargado no implementa el protocolo protegido del runtime.' ;;
     es:installer.chown_not_needed) printf '%s' 'chown a 1001 ha fallado: aquí no se ejecuta nada en un contenedor (--no-docker), así que no hace falta' ;;
     es:installer.config_db_agents) printf '%s' '(configuración, db, agentes)' ;;
     es:installer.configuration_wizard_also_starts) printf '%s' 'configuración guiada (también arranca el contenedor)' ;;
@@ -946,6 +1014,23 @@ ts_table() {
     de:installer.apt_get_update_failed) printf '%s' 'apt-get update fehlgeschlagen: Ich versuche die Installation trotzdem.' ;;
     de:installer.branch) printf '%s' 'Branch:  ' ;;
     de:installer.cannot_list_containers) printf '%s' 'Die laufenden Container lassen sich mit %s nicht auflisten: Nichts wurde installiert.' ;;
+    de:installer.check.adapter_bad_ancestor) printf '%s' 'Über dem bin-Ordner des Podman-Adapters liegt ein nicht kanonischer Pfad: %s' ;;
+    de:installer.check.adapter_is_link) printf '%s' 'Der bin-Ordner des Podman-Adapters ist ein symbolischer Link: %s' ;;
+    de:installer.check.adapter_not_dir) printf '%s' 'Der bin-Pfad des Podman-Adapters ist kein Ordner: %s' ;;
+    de:installer.check.branch_unresolved) printf '%s' 'Der Branch '\''%s'\'' lässt sich keinem unveränderlichen Release-Commit zuordnen.' ;;
+    de:installer.check.compose_boundary) printf '%s' 'Die heruntergeladene docker-compose.yml setzt die geschützte Grenze der Runtime nicht durch.' ;;
+    de:installer.check.compose_gone) printf '%s' 'Der Podman-Compose-Provider ist nach der Installation verschwunden.' ;;
+    de:installer.check.compose_version_unreadable) printf '%s' 'Die Version des Podman-Compose-Providers lässt sich nicht lesen.' ;;
+    de:installer.check.digests_not_written) printf '%s' 'die Prüfsummen der Host-Skripte wurden nicht geschrieben' ;;
+    de:installer.check.machine_name_invalid) printf '%s' 'Ungültiger Name der Podman-Maschine von JHT: %s' ;;
+    de:installer.check.marker_invalid) printf '%s' 'Ungültige Markierung der Runtime-Auswahl von JHT' ;;
+    de:installer.check.marker_unsafe) printf '%s' 'Unsichere Markierung der Runtime-Auswahl von JHT: %s' ;;
+    de:installer.check.os_unsupported) printf '%s' 'Nicht unterstütztes Betriebssystem: %s' ;;
+    de:installer.check.podman_gone) printf '%s' 'Die Podman-CLI ist nach der Installation verschwunden.' ;;
+    de:installer.check.podman_not_on_path) printf '%s' 'podman ist aus dem PATH verschwunden' ;;
+    de:installer.check.podman_path_unsafe) printf '%s' 'Unsicherer Pfad der ausführbaren Podman-Datei: %s' ;;
+    de:installer.check.shim_unsafe) printf '%s' 'Ich überschreibe keine unsichere oder nicht zu JHT gehörende ausführbare Datei: %s' ;;
+    de:installer.check.wrapper_protocol) printf '%s' 'Der heruntergeladene Wrapper implementiert das geschützte Protokoll der Runtime nicht.' ;;
     de:installer.chown_not_needed) printf '%s' 'chown auf 1001 fehlgeschlagen — hier läuft nichts in einem Container (--no-docker), also braucht es niemand' ;;
     de:installer.config_db_agents) printf '%s' '(Konfiguration, Datenbank, Agenten)' ;;
     de:installer.configuration_wizard_also_starts) printf '%s' 'Einrichtungsassistent (startet auch den Container)' ;;
@@ -1082,6 +1167,23 @@ ts_table() {
     fr:installer.apt_get_update_failed) printf '%s' 'échec de apt-get update : j'\''essaie quand même d'\''installer.' ;;
     fr:installer.branch) printf '%s' 'branche : ' ;;
     fr:installer.cannot_list_containers) printf '%s' 'Impossible de lister les conteneurs actifs avec %s : rien n'\''a été installé.' ;;
+    fr:installer.check.adapter_bad_ancestor) printf '%s' 'Le dossier bin de l'\''adaptateur Podman a au-dessus de lui un chemin non canonique : %s' ;;
+    fr:installer.check.adapter_is_link) printf '%s' 'Le dossier bin de l'\''adaptateur Podman est un lien symbolique : %s' ;;
+    fr:installer.check.adapter_not_dir) printf '%s' 'Le chemin bin de l'\''adaptateur Podman n'\''est pas un dossier : %s' ;;
+    fr:installer.check.branch_unresolved) printf '%s' 'Impossible de ramener la branche '\''%s'\'' à un commit de version immuable.' ;;
+    fr:installer.check.compose_boundary) printf '%s' 'Le docker-compose.yml téléchargé n'\''applique pas la frontière protégée du runtime.' ;;
+    fr:installer.check.compose_gone) printf '%s' 'Le provider Podman Compose a disparu après l'\''installation.' ;;
+    fr:installer.check.compose_version_unreadable) printf '%s' 'Impossible de lire la version du provider Podman Compose.' ;;
+    fr:installer.check.digests_not_written) printf '%s' 'les empreintes des scripts de l'\''hôte n'\''ont pas été écrites' ;;
+    fr:installer.check.machine_name_invalid) printf '%s' 'Nom de la machine Podman de JHT non valide : %s' ;;
+    fr:installer.check.marker_invalid) printf '%s' 'Le marqueur du runtime choisi pour JHT n'\''est pas valide' ;;
+    fr:installer.check.marker_unsafe) printf '%s' 'Le marqueur du runtime choisi pour JHT n'\''est pas sûr : %s' ;;
+    fr:installer.check.os_unsupported) printf '%s' 'Système d'\''exploitation non pris en charge : %s' ;;
+    fr:installer.check.podman_gone) printf '%s' 'La CLI de Podman a disparu après l'\''installation.' ;;
+    fr:installer.check.podman_not_on_path) printf '%s' 'podman a disparu du PATH' ;;
+    fr:installer.check.podman_path_unsafe) printf '%s' 'Le chemin de l'\''exécutable Podman n'\''est pas sûr : %s' ;;
+    fr:installer.check.shim_unsafe) printf '%s' 'Je n'\''écrase pas un exécutable non sûr ou qui n'\''est pas de JHT : %s' ;;
+    fr:installer.check.wrapper_protocol) printf '%s' 'Le wrapper téléchargé n'\''implémente pas le protocole protégé du runtime.' ;;
     fr:installer.chown_not_needed) printf '%s' 'échec du chown vers 1001 — ici rien ne tourne dans un conteneur (--no-docker), donc ce n'\''est pas nécessaire' ;;
     fr:installer.config_db_agents) printf '%s' '(configuration, db, agents)' ;;
     fr:installer.configuration_wizard_also_starts) printf '%s' 'assistant de configuration (démarre aussi le conteneur)' ;;
@@ -1218,6 +1320,23 @@ ts_table() {
     pt:installer.apt_get_update_failed) printf '%s' 'apt-get update falhou: vou tentar instalar na mesma.' ;;
     pt:installer.branch) printf '%s' 'ramo:    ' ;;
     pt:installer.cannot_list_containers) printf '%s' 'Não é possível listar os contentores a correr com %s: não foi instalado nada.' ;;
+    pt:installer.check.adapter_bad_ancestor) printf '%s' 'A pasta bin do adaptador do Podman tem acima de si um caminho não canónico: %s' ;;
+    pt:installer.check.adapter_is_link) printf '%s' 'A pasta bin do adaptador do Podman é uma ligação simbólica: %s' ;;
+    pt:installer.check.adapter_not_dir) printf '%s' 'O caminho bin do adaptador do Podman não é uma pasta: %s' ;;
+    pt:installer.check.branch_unresolved) printf '%s' 'Não consigo associar o ramo '\''%s'\'' a um commit de versão imutável.' ;;
+    pt:installer.check.compose_boundary) printf '%s' 'O docker-compose.yml descarregado não aplica a fronteira protegida do runtime.' ;;
+    pt:installer.check.compose_gone) printf '%s' 'O fornecedor do Podman Compose desapareceu depois da instalação.' ;;
+    pt:installer.check.compose_version_unreadable) printf '%s' 'Não consigo ler a versão do fornecedor do Podman Compose.' ;;
+    pt:installer.check.digests_not_written) printf '%s' 'as impressões digitais dos scripts do anfitrião não foram escritas' ;;
+    pt:installer.check.machine_name_invalid) printf '%s' 'Nome da máquina Podman do JHT inválido: %s' ;;
+    pt:installer.check.marker_invalid) printf '%s' 'O marcador do runtime escolhido para o JHT não é válido' ;;
+    pt:installer.check.marker_unsafe) printf '%s' 'O marcador do runtime escolhido para o JHT não é seguro: %s' ;;
+    pt:installer.check.os_unsupported) printf '%s' 'Sistema operativo não suportado: %s' ;;
+    pt:installer.check.podman_gone) printf '%s' 'A CLI do Podman desapareceu depois da instalação.' ;;
+    pt:installer.check.podman_not_on_path) printf '%s' 'o podman desapareceu do PATH' ;;
+    pt:installer.check.podman_path_unsafe) printf '%s' 'O caminho do executável do Podman não é seguro: %s' ;;
+    pt:installer.check.shim_unsafe) printf '%s' 'Não substituo um executável inseguro ou que não é do JHT: %s' ;;
+    pt:installer.check.wrapper_protocol) printf '%s' 'O wrapper descarregado não implementa o protocolo protegido do runtime.' ;;
     pt:installer.chown_not_needed) printf '%s' 'chown para 1001 falhou — aqui nada corre num contentor (--no-docker), por isso não é preciso' ;;
     pt:installer.config_db_agents) printf '%s' '(configuração, db, agentes)' ;;
     pt:installer.configuration_wizard_also_starts) printf '%s' 'configuração guiada (também inicia o contentor)' ;;
@@ -1444,7 +1563,7 @@ detect_os() {
         OS="linux"
       fi
       ;;
-    *) fail "Unsupported operating system: $uname_s" ;;
+    *) fail "$(tsf installer.check.os_unsupported 'Unsupported operating system: %s' "$uname_s")" ;;
   esac
 }
 
@@ -1507,9 +1626,9 @@ keep_chosen_runtime() {
   local marker="$RUNTIME_DIR/container-runtime" current
   if [ -e "$marker" ] || [ -L "$marker" ]; then
     [ -f "$marker" ] && [ ! -L "$marker" ] \
-      || fail "Unsafe JHT runtime selection marker: $marker"
+      || fail "$(tsf installer.check.marker_unsafe 'Unsafe JHT runtime selection marker: %s' "$marker")"
     current="$(tr -d '\r\n' < "$marker")"
-    case "$current" in docker|podman) ;; *) fail "Invalid JHT runtime selection marker" ;; esac
+    case "$current" in docker|podman) ;; *) fail "$(ts installer.check.marker_invalid 'Invalid JHT runtime selection marker')" ;; esac
   elif [ -e "$RUNTIME_DIR/.runtime-integrity" ] || [ -L "$RUNTIME_DIR/.runtime-integrity" ]; then
     # A completed install without the marker: the Docker path of Linux never wrote it, nor did a Mac before the marker.
     current="docker"
@@ -1930,20 +2049,20 @@ install_podman_macos() {
     return 0
   fi
   case "$PODMAN_MACHINE_NAME" in
-    ''|*[!A-Za-z0-9_.-]*) fail "Invalid JHT Podman machine name: $PODMAN_MACHINE_NAME" ;;
+    ''|*[!A-Za-z0-9_.-]*) fail "$(tsf installer.check.machine_name_invalid 'Invalid JHT Podman machine name: %s' "$PODMAN_MACHINE_NAME")" ;;
   esac
   local podman_bin compose_bin compose_version podman_version
   podman_bin="$(command -v podman)" \
-    || fail "Podman CLI disappeared after installation."
+    || fail "$(ts installer.check.podman_gone 'Podman CLI disappeared after installation.')"
   compose_bin="$(command -v podman-compose)" \
-    || fail "Podman Compose provider disappeared after installation."
+    || fail "$(ts installer.check.compose_gone 'Podman Compose provider disappeared after installation.')"
   podman_version="$("$podman_bin" --version 2>/dev/null)" || podman_version=""
   podman_version="${podman_version#podman version }"
   podman_mac_version_supported "$podman_version" \
     || fail "podman_version_unsupported: $(tsf installer.mac.podman_version_unsupported 'JHT on a Mac needs Podman %s.%s or a later %s.x (not 6.2 or later); this Mac has %s. If Homebrew moved Podman past the %s series, get the JHT installer of today again (it says which series it supports); nothing of JHT was installed.' "$PODMAN_MAC_SERIES" "$PODMAN_MAC_MIN_PATCH" "$PODMAN_MAC_SERIES" "${podman_version:-$(ts installer.mac.podman_no_version 'a podman that does not say its version')}" "$PODMAN_MAC_SERIES")"
   compose_version="$(CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
     "$compose_bin" --version 2>/dev/null)" \
-    || fail "Podman Compose provider version probe failed."
+    || fail "$(ts installer.check.compose_version_unreadable 'Podman Compose provider version probe failed.')"
   printf '%s\n' "$compose_version" | grep -Fqx "podman-compose version $PODMAN_COMPOSE_MAC_VERSION" \
     || fail "podman_compose_version_unsupported: $(tsf installer.mac.compose_version_unsupported 'JHT on a Mac needs podman-compose %s; this Mac has %s. Run «brew upgrade podman-compose» (or «brew install podman-compose»), then this installer again.' "$PODMAN_COMPOSE_MAC_VERSION" "$(printf '%s\n' "$compose_version" | sed -n 's/^podman-compose version //p' | head -n 1)")"
   # The only Mac folders the JHT machine may see are the two the compose
@@ -2047,26 +2166,26 @@ verify_docker_works() {
 install_podman_adapter() {
   podman_machine_mode || podman_native_mode || return 0
   local podman_bin adapter_bin shim_dest shim_tmp selection_file machine_file
-  podman_bin="$(command -v podman)" || fail "podman disappeared from PATH"
-  case "$podman_bin" in *"'"*|*$'\n'*) fail "Unsafe Podman executable path: $podman_bin" ;; esac
+  podman_bin="$(command -v podman)" || fail "$(ts installer.check.podman_not_on_path 'podman disappeared from PATH')"
+  case "$podman_bin" in *"'"*|*$'\n'*) fail "$(tsf installer.check.podman_path_unsafe 'Unsafe Podman executable path: %s' "$podman_bin")" ;; esac
   if podman_machine_mode; then
     case "$PODMAN_MACHINE_NAME" in
-      ''|*[!A-Za-z0-9_.-]*) fail "Invalid JHT Podman machine name: $PODMAN_MACHINE_NAME" ;;
+      ''|*[!A-Za-z0-9_.-]*) fail "$(tsf installer.check.machine_name_invalid 'Invalid JHT Podman machine name: %s' "$PODMAN_MACHINE_NAME")" ;;
     esac
   fi
   adapter_bin="$RUNTIME_DIR/bin"
-  [ ! -L "$adapter_bin" ] || fail "Podman adapter bin path is a symlink: $adapter_bin"
+  [ ! -L "$adapter_bin" ] || fail "$(tsf installer.check.adapter_is_link 'Podman adapter bin path is a symlink: %s' "$adapter_bin")"
   [ ! -e "$adapter_bin" ] || [ -d "$adapter_bin" ] \
-    || fail "Podman adapter bin path is not a directory: $adapter_bin"
+    || fail "$(tsf installer.check.adapter_not_dir 'Podman adapter bin path is not a directory: %s' "$adapter_bin")"
   mkdir -p "$adapter_bin"
   chmod 700 "$adapter_bin"
   [ "$(cd -P "$adapter_bin" && pwd -P)" = "$adapter_bin" ] \
-    || fail "Podman adapter bin has a non-canonical ancestor: $adapter_bin"
+    || fail "$(tsf installer.check.adapter_bad_ancestor 'Podman adapter bin has a non-canonical ancestor: %s' "$adapter_bin")"
   shim_dest="$adapter_bin/docker"
   if [ -e "$shim_dest" ] || [ -L "$shim_dest" ]; then
     [ -f "$shim_dest" ] && [ ! -L "$shim_dest" ] \
       && grep -Fqx '# JHT_PODMAN_DOCKER_SHIM=1' "$shim_dest" 2>/dev/null \
-      || fail "Refusing to overwrite an unsafe or non-JHT executable: $shim_dest"
+      || fail "$(tsf installer.check.shim_unsafe 'Refusing to overwrite an unsafe or non-JHT executable: %s' "$shim_dest")"
   fi
   shim_tmp="$(mktemp "$adapter_bin/.docker-podman.XXXXXX")"
   {
@@ -2153,7 +2272,7 @@ download_runtime_files() {
     release_base="${RAW_BASE_OVERRIDE:-https://raw.githubusercontent.com/leopu00/job-hunter-team/$BRANCH}"
   else
     release_base="$(attested_raw_base)" \
-      || fail "Cannot resolve branch '$BRANCH' to an immutable release commit."
+      || fail "$(tsf installer.check.branch_unresolved 'Cannot resolve branch '\''%s'\'' to an immutable release commit.' "$BRANCH")"
   fi
   local helper
   local compose_url="$release_base/docker-compose.yml"
@@ -2216,7 +2335,7 @@ download_runtime_files() {
     fail "$(tsf installer.download_failed 'Download failed: %s. Check your connection and branch (%s).' "$compose_url" "$BRANCH")"
   fi
   grep -Eq '^[[:space:]]*-[[:space:]]*jht-runtime-mask:/jht_home/runtime([[:space:]]|$)' "$compose_tmp" \
-    || fail "Downloaded compose does not enforce the protected runtime boundary."
+    || fail "$(ts installer.check.compose_boundary 'Downloaded compose does not enforce the protected runtime boundary.')"
   chmod 600 "$compose_tmp"
   mv -f "$compose_tmp" "$compose_dest"
   ok "$(tsf installer.done_compose 'compose: %s' "$compose_dest")"
@@ -2227,7 +2346,7 @@ download_runtime_files() {
   fi
   bash -n "$wrapper_tmp" \
     && grep -Fqx 'JHT_HOST_RUNTIME_PROTOCOL=1' "$wrapper_tmp" \
-    || fail "Downloaded wrapper does not implement the protected runtime protocol."
+    || fail "$(ts installer.check.wrapper_protocol 'Downloaded wrapper does not implement the protected runtime protocol.')"
   chmod 700 "$wrapper_tmp"
   mv -f "$wrapper_tmp" "$wrapper_dest"
   ok "$(tsf installer.done_wrapper 'wrapper: %s' "$wrapper_dest")"
@@ -2255,7 +2374,7 @@ download_runtime_files() {
   done
   # Their digests are in a manifest of their own: the desktop app checks the main one key by key.
   printf '%s' "$helper_lines" > "$RUNTIME_DIR/.runtime-helpers.tmp" && chmod 600 "$RUNTIME_DIR/.runtime-helpers.tmp" \
-    && mv -f "$RUNTIME_DIR/.runtime-helpers.tmp" "$RUNTIME_DIR/.runtime-helpers" || fail "the digests of the host scripts were not written"
+    && mv -f "$RUNTIME_DIR/.runtime-helpers.tmp" "$RUNTIME_DIR/.runtime-helpers" || fail "$(ts installer.check.digests_not_written 'the digests of the host scripts were not written')"
   local selection_source="$RUNTIME_DIR/container-runtime"
   install_podman_adapter
   # The test channel's image, canonical (by digest), for every later `jht up`:

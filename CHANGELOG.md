@@ -45,7 +45,8 @@ this was tested on real machines and which was not.
 - The installer scripts have their SHA-256 published; on Windows the recommended command checks it before running.
 - The installer for Mac and Linux speaks the 7 languages of JHT (en, it, hu, es, de, fr, pt): the system's language
   on a first install, the one chosen at the setup on a reinstall. `jht integration` and `jht linkedin login` say their
-  lines in the language chosen too; the JSON they print (`--json`) has the same words in every language.
+  lines in the language chosen too; in the JSON they print (`--json`) the state words and codes stay the same in every
+  language, and only the sentence for the person (`reason`) is in that language.
 
 ### Team
 
