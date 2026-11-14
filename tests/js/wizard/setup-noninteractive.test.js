@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { offeredInRelease } from '../../../shared/runtime/release-providers.js';
+import { offeredInRelease, offeredWay } from '../../../shared/runtime/release-providers.js';
 // Codex (and Pi with ChatGPT) is kept in the code for the next release but not offered in this one (shared/runtime/release-providers.js):
 // these cases run again as soon as it is back in that list.
-const codexOffered = offeredInRelease('openai');
+const codexOffered = offeredWay('openai', 'codex');
 
 vi.mock('../../../cli/wizard/setup-checks.js', () => ({
   runHealthCheck: vi.fn(async () => false),

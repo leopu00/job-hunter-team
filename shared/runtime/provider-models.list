@@ -18,6 +18,10 @@ rolemodel|glm|sentinella|luna
 rolemodel|kimi|scout|luna
 rolemodel|kimi|analista|luna
 rolemodel|kimi|sentinella|luna
+# OpenAI (pi with a key, and Codex) takes its models from role-models.list; the same three light roles on luna.
+rolemodel|openai|scout|luna
+rolemodel|openai|analista|luna
+rolemodel|openai|sentinella|luna
 # Kimi: K3.1 Pro for every class, luna too: the account lists only kimi-k3, kimi-k3.1-pro and kimi-k3.1-pro-highspeed (no K2 model).
 model|kimi|sol|kimi-k3.1-pro
 model|kimi|terra|kimi-k3.1-pro

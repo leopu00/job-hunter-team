@@ -111,6 +111,7 @@
   "wizard.provider.codex": "Codex (OpenAI) — consigliato, con il tuo abbonamento ChatGPT",
   "wizard.provider.key_glm": "GLM (Z.ai) — con la tua chiave API, gira in Pi",
   "wizard.provider.key_kimi": "Kimi (Moonshot) — con la tua chiave API, gira in Pi",
+  "wizard.provider.key_openai": "OpenAI — con la tua chiave API, gira in Pi",
   "wizard.provider.harness_pi_key_note": "%s gira in Pi, con una chiave API (non c'è un accesso con abbonamento). Ogni agente del team gira nell'interfaccia a terminale di Pi.",
   "wizard.provider.install_cli": "Installo il CLI di %s...",
   "wizard.provider.install_failed_continue": "Il programma del provider non si è installato. Vuoi continuare comunque il setup?\n  Sì: vai avanti, poi lo installi con: jht providers update codex\n  No: mi fermo qui; le tue scelte restano e riparti con jht setup",

@@ -11,7 +11,7 @@ import { startRefusal } from '../src/commands/team/start.js';
 import { AI_PROVIDERS, PI_API_CHOICES } from '../wizard/setup-helpers.js';
 import { AGENT_HARNESSES, harnessProblem, piApiKeyConfigured } from '../../shared/runtime/agent-harness.js';
 import { effectiveSettings } from '../src/lib/team-settings.js';
-import { offeredInRelease } from '../../shared/runtime/release-providers.js';
+import { offeredWay } from '../../shared/runtime/release-providers.js';
 
 // What the setup writes for a provider: the same shape as setup-noninteractive.js (a key by reference, no plaintext key).
 const configOf = (provider, harness) => ({
@@ -27,8 +27,9 @@ const PAIRS = [...AI_PROVIDERS, ...PI_API_CHOICES].flatMap((provider) => AGENT_H
   .filter((harness) => !(provider.piOnly && harness !== 'pi') && harnessProblem(harness, provider.value, 'api_key') === null)
   .map((harness) => ({ provider, harness })));
 // what this release offers (shared/runtime/release-providers.js); the others are refused with the way out
-const OFFERED = PAIRS.filter(({ provider }) => offeredInRelease(provider.value));
-const NOT_OFFERED = PAIRS.filter(({ provider }) => !offeredInRelease(provider.value));
+// a pair is offered when the release offers that provider on that harness with a key (openai on pi, not on codex)
+const OFFERED = PAIRS.filter(({ provider, harness }) => offeredWay(provider.value, harness, 'api_key'));
+const NOT_OFFERED = PAIRS.filter(({ provider, harness }) => !offeredWay(provider.value, harness, 'api_key'));
 
 test('the code still knows codex and the two providers that run only on pi, each with the harness it allows', () => {
   const pairs = PAIRS.map(({ provider, harness }) => `${provider.value}/${harness}`);

@@ -6,17 +6,24 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { RELEASE_PROVIDERS, RELEASE_HARNESS, offeredInRelease } from '../../shared/runtime/release-providers.js';
+import { RELEASE_OFFERS, RELEASE_PROVIDERS, RELEASE_HARNESS, configOffered, offeredInRelease, offeredWay } from '../../shared/runtime/release-providers.js';
 import { WIZARD_PROVIDERS } from '../wizard/setup.js';
 
 const cli = fileURLToPath(new URL('..', import.meta.url));
 
-test('this release offers GLM and Kimi, on Pi; the wizard offers exactly the list', () => {
-  assert.deepEqual([...RELEASE_PROVIDERS], ['glm', 'kimi']);
+test('this release offers GLM, Kimi and OpenAI, on Pi with a key; the wizard offers exactly the list', () => {
+  assert.deepEqual([...RELEASE_PROVIDERS], ['glm', 'kimi', 'openai']);
+  assert.deepEqual(RELEASE_OFFERS.map((o) => [o.provider, o.harness, o.auth]), [['glm', 'pi', 'api_key'], ['kimi', 'pi', 'api_key'], ['openai', 'pi', 'api_key']]);
   assert.equal(RELEASE_HARNESS, 'pi');
   assert.deepEqual(WIZARD_PROVIDERS.map((p) => p.value), [...RELEASE_PROVIDERS]);
-  for (const name of ['openai', 'codex', 'claude', 'anthropic', '', null, 'gemini']) assert.equal(offeredInRelease(name), false, String(name));
-  for (const name of [' GLM ', 'kimi', 'Moonshot']) assert.equal(offeredInRelease(name), true, name);
+  for (const name of ['codex', 'claude', 'anthropic', '', null, 'gemini']) assert.equal(offeredInRelease(name), false, String(name));
+  for (const name of [' GLM ', 'kimi', 'Moonshot', 'openai']) assert.equal(offeredInRelease(name), true, name);
+  // OpenAI with a key on pi, not Codex: a team on the ChatGPT subscription is not a way of this release
+  assert.equal(offeredWay('openai', 'pi', 'api_key'), true);
+  assert.equal(offeredWay('openai', 'codex'), false);
+  assert.equal(configOffered({ active_provider: 'openai', harness: 'codex', providers: { openai: { auth_method: 'subscription' } } }), false);
+  assert.equal(configOffered({ active_provider: 'openai', harness: 'pi', providers: { openai: { auth_method: 'api_key' } } }), true);
+  assert.equal(configOffered({ active_provider: 'moonshot', harness: 'pi', providers: { moonshot: { auth_method: 'api_key' } } }), true);
 });
 
 test('jht doctor calls a team on a service this release does not offer not supported, says what to do, and does not touch it', () => {
@@ -28,7 +35,7 @@ test('jht doctor calls a team on a service this release does not offer not suppo
   const env = { PATH: `${dirname(process.execPath)}:/usr/bin:/bin`, HOME: root, JHT_HOME: home, LANG: 'en_US.UTF-8', NO_COLOR: '1', JHT_LANG: 'en' };
   const done = spawnSync(process.execPath, [join(cli, 'bin/jht.js'), 'doctor', '--all'], { env, encoding: 'utf8', timeout: 60_000 });
   const said = (done.stdout + done.stderr).replace(/\s+/g, ' ');
-  assert.match(said, /Provider openai is not supported in this release \(offered: glm, kimi, on Pi with an API key\)/, said);
+  assert.match(said, /Provider openai is not supported in this release \(offered: glm, kimi, openai, on Pi with an API key\)/, said);
   assert.match(said, /jht setup \(choose glm and paste its API key/, said);
 });
 

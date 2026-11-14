@@ -73,7 +73,7 @@ test('they run only on pi, and only with an API key', async () => {
 });
 
 test('an unknown provider, and one this release does not offer, say what is offered', async () => {
-  for (const provider of ['gemini', 'openai', 'claude', ...(offeredInRelease('kimi') ? [] : ['kimi', 'moonshot'])]) {
+  for (const provider of ['gemini', 'openai', 'claude', 'kimi', 'moonshot'].filter((name) => !offeredInRelease(name))) {
     const { code, text } = await setup({ provider });
     assert.equal(code, 1, provider);
     assert.match(text, new RegExp(`This release offers only ${RELEASE_PROVIDERS.join(', ')} with an API key, on the pi harness`), provider);
@@ -89,3 +89,28 @@ test('without --provider and --harness the setup is GLM on pi', async () => {
 });
 
 test.after(() => rmSync(HOME, { recursive: true, force: true }));
+
+// OpenAI with an API key, on pi (0.4.0): not pi-only (Codex is its other harness), the key by reference as for glm and kimi.
+test('openai on pi with a key: pi is the default harness, the key by reference in OPENAI_API_KEY, the Codex model table', async () => {
+  const { code, text } = await setup({ provider: 'openai', secretMode: 'env' });
+  assert.equal(code, 0, text);
+  const saved = config();
+  assert.equal(saved.active_provider, 'openai');
+  assert.equal(saved.harness, 'pi');
+  assert.equal(saved.providers.openai.auth_method, 'api_key');
+  assert.deepEqual(saved.providers.openai.api_key_ref, { type: 'ref', source: 'env', id: 'OPENAI_API_KEY' });
+  assert.equal(saved.providers.openai.model, 'gpt-5.6-sol');
+  // never plaintext, as for the providers that run only on pi
+  const plain = await setup({ provider: 'openai', secretMode: 'plaintext', apiKey: ['sk', 'synthetic', 'x'].join('-').padEnd(24, '0') });
+  assert.equal(plain.code, 1, plain.text);
+  assert.match(plain.text, /OpenAI takes its key by reference/);
+});
+
+test('openai: Codex and the ChatGPT subscription are not ways of this release, and are refused with the way that is', async () => {
+  const codex = await setup({ provider: 'openai', harness: 'codex', secretMode: 'env' });
+  assert.equal(codex.code, 1, codex.text);
+  assert.match(codex.text, /This release runs OpenAI only on pi: drop --harness or use --harness pi/);
+  const subscription = await setup({ provider: 'openai', harness: 'pi', authMethod: 'subscription', subscriptionEmail: 'user@example.test' });
+  assert.equal(subscription.code, 1, subscription.text);
+  assert.match(subscription.text, /only with an API key/);
+});

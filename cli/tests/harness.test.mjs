@@ -13,8 +13,8 @@ import { checkPi } from '../src/commands/providers-harness.js';
 
 // The first setup lets the person choose the program that runs the agents (codex | pi): what is asked, what is
 // installed and waited for, what the configuration says, and how `jht providers harness` and `team start` read it.
-import { offeredInRelease } from '../../shared/runtime/release-providers.js';
-const codexSkip = offeredInRelease('openai') ? false : 'Codex and Pi with ChatGPT are not offered in this release (shared/runtime/release-providers.js)';
+import { offeredInRelease, offeredWay } from '../../shared/runtime/release-providers.js';
+const codexSkip = offeredWay('openai', 'codex') ? false : 'Codex and Pi with ChatGPT are not offered in this release (shared/runtime/release-providers.js)';
 const cli = fileURLToPath(new URL('..', import.meta.url));
 const entry = join(cli, 'bin/jht.js');
 
@@ -201,7 +201,7 @@ test('jht providers harness shows, changes and refuses', () => {
   // this release runs the agents only on pi: codex is refused and the config stays as it is
   const codex = jht(box, ['providers', 'harness', 'codex']);
   assert.equal(codex.status, 1);
-  assert.match(codex.out, /harness 'codex' is not offered in this release: the agents run on pi/);
+  assert.match(codex.out, /harness 'codex' is not offered in this release for (openai|glm): the agents run on pi/);
   assert.equal(JSON.parse(readFileSync(cfg, 'utf8')).harness, 'pi');
   const bad = jht(box, ['providers', 'harness', 'opencode']);
   assert.equal(bad.status, 1);

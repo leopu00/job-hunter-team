@@ -38,7 +38,8 @@ def launch(tmp_path, provider, role="scout", **kw):
     ("glm", "assistente", "zai", "glm-5.3"),      # terra
     ("kimi", "scout", "moonshotai", "kimi-k3.1-pro"),
     ("moonshot", "scout", "moonshotai", "kimi-k3.1-pro"),
-    ("openai", "scout", "openai", "gpt-5.6-terra"),   # unchanged
+    ("openai", "scout", "openai", "gpt-5.6-luna"),    # a light role: luna, as on GLM
+    ("openai", "scorer", "openai", "gpt-5.6-terra"),  # the Scorer keeps its class
 ])
 def test_pi_gets_the_provider_pi_knows_and_the_model_of_the_class(tmp_path, provider, role, pi_provider, model):
     done = launch(tmp_path, provider, role=role)
@@ -67,7 +68,7 @@ def test_the_table_of_light_roles_names_only_roles_and_classes_that_exist():
              if line.startswith("role|")}
     classes = {line.split("|")[1] for line in (ROOT / "shared" / "runtime" / "role-models.list").read_text(encoding="utf-8").splitlines()
                if line.startswith("model|")}
-    assert rows and {r[1] for r in rows} <= {"glm", "kimi"}  # the providers of the table (OpenAI uses the Codex table)
+    assert rows and {r[1] for r in rows} <= {"glm", "kimi", "openai"}  # OpenAI: only the rows of its light roles (its models are the Codex table)
     assert all(r[2] in roles and r[3] in classes for r in rows), rows
 
 

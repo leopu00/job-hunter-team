@@ -184,7 +184,9 @@ test('effective: with Codex the class in the config decides, and the model name 
   assert.deepEqual(Object.keys(effective), LISTS.roles);
   assert.deepEqual(effective.scout, { model: 'luna', modelName: 'gpt-5.6-luna', effort: 'low', from: 'config' });
   assert.deepEqual(effective.capitano, { model: 'sol', modelName: 'gpt-5.6-sol', effort: 'medium', from: 'config' });
-  assert.deepEqual(effective.analista, { model: 'terra', modelName: 'gpt-5.6-terra', effort: 'high', from: 'default' });
+  // a light role takes luna on OpenAI, as on GLM (provider-models.list); the Scorer keeps its own class
+  assert.deepEqual(effective.analista, { model: 'luna', modelName: 'gpt-5.6-luna', effort: 'high', from: 'default' });
+  assert.deepEqual(effective.scorer, { model: 'terra', modelName: 'gpt-5.6-terra', effort: 'high', from: 'default' });
 });
 
 test('effective: "codex" and "openai" are the same provider, "claude" and "anthropic" too', () => {
@@ -234,9 +236,11 @@ test('effective: the defaults are the ones the launcher uses (get_agent_info and
   };
   const { effective } = out('codex');
   for (const role of LISTS.roles) {
-    const script = `${fn('get_agent_info')}\n${fn('resolve_codex_model')}\n` +
+    // as start-agent.sh does it: the class of a `rolemodel` row of OpenAI first (the light roles), else the role's own
+    const script = `${fn('get_agent_info')}\n${fn('resolve_codex_model')}\n${fn('jht_provider_role_class')}\n` +
       `IFS='|' read -r _p effort alias <<< "$(get_agent_info ${role})"\n` +
-      'printf "%s|%s\\n" "$(resolve_codex_model "$alias")" "$effort"';
+      `cls="$(jht_provider_role_class openai ${role})"\n` +
+      'printf "%s|%s\\n" "$(resolve_codex_model "${cls:-$alias}")" "$effort"';
     const run = spawnSync('bash', ['-c', script], { encoding: 'utf-8' });
     assert.equal(run.status, 0, run.stderr);
     const [modelName, effort] = run.stdout.trim().split('|');

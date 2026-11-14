@@ -81,3 +81,18 @@ jht_provider_model() {
   echo "Error: no $provider model for the class '$class'." >&2
   return 1
 }
+
+# jht_provider_role_class <provider> <role> — the class a `rolemodel` row of provider-models.list gives this role on this provider,
+# or nothing. OpenAI (pi with a key, and Codex) has its models in role-models.list, not here: only the rows for its light roles.
+jht_provider_role_class() {
+  local provider role kind name wanted class
+  provider="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')"
+  role="$(printf '%s' "${2:-}" | tr '[:upper:]' '[:lower:]')"
+  [ "$provider" = codex ] && provider=openai
+  while IFS='|' read -r kind name wanted class; do
+    [ "$kind" = rolemodel ] && [ "$name" = "$provider" ] && [ "$wanted" = "$role" ] || continue
+    printf '%s\n' "$class"
+    return 0
+  done < "$JHT_PROVIDER_MODELS_FILE"
+  return 0
+}

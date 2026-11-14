@@ -54,7 +54,11 @@ test('the call is a GET with the key as a bearer, to the route of that provider 
   assert.deepEqual(redirects, ['error', 'error']);
   const none = await checkPiApiKey('glm', '  ', { fetchImpl: () => assert.fail('no call without a key') });
   assert.equal(none.state, 'unverified');
-  assert.equal((await checkPiApiKey('openai', KEY, { fetchImpl: () => assert.fail('not this provider') })).state, 'not_applicable');
+  // OpenAI runs on pi with a key too: its own route; a provider pi does not run with a key is not this check's
+  const openai = [];
+  await checkPiApiKey('openai', KEY, { fetchImpl: async (url, init) => { openai.push([url, init.method, init.headers.Authorization]); return { status: 200, ok: true }; } });
+  assert.deepEqual(openai, [['https://api.openai.com/v1/models', 'GET', `Bearer ${KEY}`]]);
+  assert.equal((await checkPiApiKey('gemini', KEY, { fetchImpl: () => assert.fail('not this provider') })).state, 'not_applicable');
 });
 
 test('the key is never in the verdict or in the sentence of the refusal', async () => {

@@ -22,3 +22,12 @@ export function piApiProvider(name) {
   const canonical = PI_API_ALIASES[key] ?? key;
   return PI_API_PROVIDERS[canonical] ? canonical : null;
 }
+
+/**
+ * `{ glm: { scout: 'luna', ... }, openai: { ... } }`: the class a `rolemodel` row gives a role on a provider instead of its own
+ * (the launcher's jht_provider_role_class / jht_provider_model). A pin in the config (team.role_models.<role>.model) still wins.
+ */
+export const PROVIDER_ROLE_CLASS = Object.freeze(rows.filter(([kind]) => kind === 'rolemodel').reduce((out, [, provider, role, modelClass]) => {
+  out[provider] = Object.freeze({ ...(out[provider] ?? {}), [role]: modelClass });
+  return out;
+}, {}));

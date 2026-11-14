@@ -11,7 +11,7 @@ import { writePrivateJson } from '../lib/secure-config-io.js';
 import { AGENT_HARNESSES, DEFAULT_HARNESS, PI_IMAGE_BIN, PI_LOGIN_MARKER, harnessOf, harnessProblem, piApiKeyConfigured } from '../../../shared/runtime/agent-harness.js';
 import { c, DIM, RESET } from './_colors.js';
 import { handleHarnessJson } from './providers-harness-json.js';
-import { RELEASE_HARNESS } from '../../../shared/runtime/release-providers.js';
+import { offeredWay, releaseOffersOf } from '../../../shared/runtime/release-providers.js';
 import { marks } from '../lib/ui.js';
 
 const CONFIG_PATH = join(JHT_HOME, 'jht.config.json');
@@ -80,12 +80,6 @@ export async function handleHarness(name) {
     process.exitCode = 1;
     return;
   }
-  // this release runs the agents only on its harness (shared/runtime/release-providers.js); the code of the others stays
-  if (wanted !== RELEASE_HARNESS) {
-    console.error(`${ERR}  harness '${wanted}' is not offered in this release: the agents run on ${RELEASE_HARNESS}. Set it up with: jht setup`);
-    process.exitCode = 1;
-    return;
-  }
   if (!config.active_provider) {
     console.error(`${ERR}  no active provider yet. Run: jht setup`);
     process.exitCode = 1;
@@ -94,6 +88,13 @@ export async function handleHarness(name) {
   const issue = harnessProblem(wanted, config.active_provider, config.providers?.[config.active_provider]?.auth_method);
   if (issue) {
     console.error(`${ERR}  ${issue}`);
+    process.exitCode = 1;
+    return;
+  }
+  // only a harness this release offers for the active provider (shared/runtime/release-providers.js); the code of the others stays
+  if (!offeredWay(config.active_provider, wanted)) {
+    const offered = [...new Set(releaseOffersOf(config.active_provider).map((offer) => offer.harness))];
+    console.error(`${ERR}  harness '${wanted}' is not offered in this release for ${config.active_provider}${offered.length ? `: the agents run on ${offered.join(' or ')}` : ''}. Set it up with: jht setup`);
     process.exitCode = 1;
     return;
   }
