@@ -616,8 +616,34 @@ else
   RED='' YELLOW='' DIM='' BOLD='' RESET=''
 fi
 
-err()  { printf "${RED}error:${RESET} %s\n" "$*" >&2; }
-warn() { printf "${YELLOW}warn:${RESET}  %s\n" "$*" >&2; }
+# The code in front of a sentence («podman_rootless_unavailable: …», «config_changed_stopped: …») is for the desktop app, which keeps
+# the line as the cause; a person at a terminal reads the sentence alone. Sentences are often built inside $( ), where stdout is the
+# substitution's pipe: whether a person reads is the answer stdout gave when the wrapper started (JHT_STDOUT_AT_START);
+# JHT_MACHINE_OUTPUT still decides first (1 = the app, 0 = a person). The exit codes do not change.
+jht_code_for_app() {
+  case "${JHT_MACHINE_OUTPUT:-}" in
+    1) return 0 ;;
+    0) return 1 ;;
+  esac
+  [ "${JHT_STDOUT_AT_START:-pipe}" != terminal ]
+}
+if [ -t 1 ]; then JHT_STDOUT_AT_START=terminal; else JHT_STDOUT_AT_START=pipe; fi
+# err and warn take the leading «code: » away when a person reads the line, by the rule of jht_code_for_app, written out here so that
+# they stand alone. A code is lower case, digits and _ with at least one _ (so «uso: jht …» and «reset: …» stay as they are).
+err()  {
+  local text="$*" head="${*%%: *}"
+  if [ "$head" != "$text" ] && [[ "$head" == *_* && "$head" != *[!a-z0-9_]* ]]; then
+    case "${JHT_MACHINE_OUTPUT:-}" in 1) ;; 0) text="${text#*: }" ;; *) [ "${JHT_STDOUT_AT_START:-pipe}" != terminal ] || text="${text#*: }" ;; esac
+  fi
+  printf "${RED}error:${RESET} %s\n" "$text" >&2
+}
+warn() {
+  local text="$*" head="${*%%: *}"
+  if [ "$head" != "$text" ] && [[ "$head" == *_* && "$head" != *[!a-z0-9_]* ]]; then
+    case "${JHT_MACHINE_OUTPUT:-}" in 1) ;; 0) text="${text#*: }" ;; *) [ "${JHT_STDOUT_AT_START:-pipe}" != terminal ] || text="${text#*: }" ;; esac
+  fi
+  printf "${YELLOW}warn:${RESET}  %s\n" "$text" >&2
+}
 info() { printf "${DIM}%s${RESET}\n" "$*" >&2; }
 
 runtime_sha256() {
@@ -5886,18 +5912,6 @@ uninstall_usage() {
   info "$(jht_say uninstall.usage_stays)"
 }
 
-# The code in front of a sentence («podman_other_machine_running: …», «config_changed_stopped: …») is for the desktop app, which keeps
-# the line as the cause; a person at a terminal reads the sentence alone (jht_machine_output decides, below).
-# Both are asked inside $( ), where stdout is the substitution's pipe: whether a person reads is the answer stdout gave when the
-# wrapper started (JHT_STDOUT_AT_START); JHT_MACHINE_OUTPUT still decides first.
-jht_code_for_app() {
-  case "${JHT_MACHINE_OUTPUT:-}" in
-    1) return 0 ;;
-    0) return 1 ;;
-  esac
-  [ "${JHT_STDOUT_AT_START:-pipe}" != terminal ]
-}
-if [ -t 1 ]; then JHT_STDOUT_AT_START=terminal; else JHT_STDOUT_AT_START=pipe; fi
 jht_code_prefix() {
   if jht_code_for_app; then printf '%s: ' "$1"; fi
 }

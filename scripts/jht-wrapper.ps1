@@ -984,8 +984,23 @@ if (-not $env:JHT_LANG)      { $env:JHT_LANG = 'en' }
 if (-not $env:JHT_USER_TZ)   { $env:JHT_USER_TZ = 'UTC' }
 
 # Colori (PowerShell gestisce ANSI nativo dal terminale moderno).
-function Write-Err  { param([string]$Msg) Write-Host "error: $Msg" -ForegroundColor Red }
-function Write-Warn { param([string]$Msg) Write-Host "warn:  $Msg" -ForegroundColor Yellow }
+# The code in front of a sentence ("compose_up_failed: ...") is for the desktop app, which reads this through a pipe and keeps the
+# line as the cause; a person at a console reads the sentence alone. Same rule as the markers (Test-JhtUninstallMachineOutput):
+# JHT_MACHINE_OUTPUT=1 the app, =0 a person, unset: the app only when stdout is redirected. The exit codes do not change.
+# A code is lower case, digits and _ with at least one _ (so "uso: jht ..." stays as it is).
+# Written out in each, so that they stand alone.
+function Write-Err {
+  param([string]$Msg)
+  $app = if ($env:JHT_MACHINE_OUTPUT -ceq '1') { $true } elseif ($env:JHT_MACHINE_OUTPUT -ceq '0') { $false } else { [Console]::IsOutputRedirected }
+  if (-not $app -and $Msg -cmatch '^[a-z0-9]*_[a-z0-9_]*: ') { $Msg = $Msg.Substring($Msg.IndexOf(': ') + 2) }
+  Write-Host "error: $Msg" -ForegroundColor Red
+}
+function Write-Warn {
+  param([string]$Msg)
+  $app = if ($env:JHT_MACHINE_OUTPUT -ceq '1') { $true } elseif ($env:JHT_MACHINE_OUTPUT -ceq '0') { $false } else { [Console]::IsOutputRedirected }
+  if (-not $app -and $Msg -cmatch '^[a-z0-9]*_[a-z0-9_]*: ') { $Msg = $Msg.Substring($Msg.IndexOf(': ') + 2) }
+  Write-Host "warn:  $Msg" -ForegroundColor Yellow
+}
 function Write-Info { param([string]$Msg) Write-Host $Msg -ForegroundColor DarkGray }
 
 # T220: declared host bridge to move into the T214 Rust sidecar. No data logic.
@@ -2209,8 +2224,20 @@ function Invoke-BrokerNetwork {
     return $false
   }
   $shell = (Get-Process -Id $PID).Path
-  & $shell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $RuntimeDir 'configure-podman-windows-network.ps1') `
-    -MachineName $env:CONTAINER_CONNECTION -BridgeScript $PodmanMachineBridgePath -WithBroker | Write-EnsureLine -Quiet:$Quiet
+  # The child's output comes through a pipe here: it is told who reads it (the app with -Quiet or a redirected stdout, else a person)
+  # and in which language, as install.ps1 tells the enabler.
+  $oldMachineOutput = $env:JHT_MACHINE_OUTPUT; $oldTextLang = $env:JHT_TEXT_LANG
+  if ($Quiet) { $env:JHT_MACHINE_OUTPUT = '1' } elseif ($env:JHT_MACHINE_OUTPUT -notin @('0', '1')) { $env:JHT_MACHINE_OUTPUT = if ([Console]::IsOutputRedirected) { '1' } else { '0' } }
+  $callerLang = if (Get-Command Get-JhtTextLanguage -CommandType Function -ErrorAction SilentlyContinue) { [string](Get-JhtTextLanguage) } else { [string]$env:JHT_LANG }
+  $env:JHT_TEXT_LANG = if ($callerLang -ceq 'it') { 'it' } else { 'en' }
+  try {
+    & $shell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $RuntimeDir 'configure-podman-windows-network.ps1') `
+      -MachineName $env:CONTAINER_CONNECTION -BridgeScript $PodmanMachineBridgePath -WithBroker | Write-EnsureLine -Quiet:$Quiet
+  } finally {
+    $networkCode = $LASTEXITCODE
+    $env:JHT_MACHINE_OUTPUT = $oldMachineOutput; $env:JHT_TEXT_LANG = $oldTextLang
+    $global:LASTEXITCODE = $networkCode
+  }
   if ($LASTEXITCODE -ne 0) { Write-Err "broker_network_unavailable: il proxy della posta non e' pronto (codice $LASTEXITCODE)."; return $false }
   return $true
 }

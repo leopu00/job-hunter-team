@@ -213,7 +213,7 @@ public sealed class JhtLiveWait : IDisposable {
     private void Tick(object state) {
         lock (gate) {
             if (stopped) return;
-            string line = "  ... still " + label + " (" + Format(watch.Elapsed) + (detail.Length > 0 ? ", " + detail : "") + ")";
+            string line = "  ... " + label + " (" + Format(watch.Elapsed) + (detail.Length > 0 ? ", " + detail : "") + ")";
             try { Console.Out.WriteLine(line); } catch (Exception) { }
         }
     }
@@ -375,13 +375,28 @@ function Get-JhtPodmanTextLines {
   return @([regex]::Split($Text, '\r?\n') | ForEach-Object { ([string]$_).TrimEnd() } | Where-Object { $_ -and -not (Test-JhtPodmanNoiseLine $_) })
 }
 
+# The language of the lines a person reads here: the one the installer decided (JHT_TEXT_LANG, from i18n-prefs.json, JHT_LANG and
+# Windows), else the caller's own rule when it has one, else JHT_LANG, else the language of Windows. Italian or English.
+function Test-JhtBridgeItalian {
+  $lang = [string]$env:JHT_TEXT_LANG
+  if (-not $lang -and (Get-Command Get-JhtTextLanguage -CommandType Function -ErrorAction SilentlyContinue)) { $lang = [string](Get-JhtTextLanguage) }
+  if (-not $lang) { $lang = ([string]$env:JHT_LANG) -replace '[-_.@].*$', '' }
+  if (-not $lang) { try { $lang = [string][Globalization.CultureInfo]::CurrentUICulture.TwoLetterISOLanguageName } catch { } }
+  return ($lang.ToLowerInvariant() -ceq 'it')
+}
+function Get-JhtBridgeText {
+  param([string]$En, [string]$It)
+  if (Test-JhtBridgeItalian) { return $It }
+  return $En
+}
+
 # What a person is told before each long machine command, and what the wait line says it is doing.
 function Get-JhtPodmanMachineAnnouncement {
   param([string]$Verb)
   switch ($Verb) {
-    'init' { return @{ Said = 'Creating the Linux machine for Podman: it downloads its system image (several hundred MB) and sets it up. This takes several minutes.'; Doing = 'creating the Linux machine' } }
-    'start' { return @{ Said = 'Starting the Linux machine (about a minute).'; Doing = 'starting the Linux machine' } }
-    'stop' { return @{ Said = 'Stopping the Linux machine.'; Doing = 'stopping the Linux machine' } }
+    'init' { return @{ Said = (Get-JhtBridgeText 'Creating the Linux machine for Podman: it downloads its system image (several hundred MB) and sets it up. This takes several minutes.' "Creo la macchina Linux per Podman: scarica la sua immagine di sistema (alcune centinaia di MB) e la prepara. Ci vogliono alcuni minuti."); Doing = (Get-JhtBridgeText 'still creating the Linux machine' 'ancora in corso: creazione della macchina Linux') } }
+    'start' { return @{ Said = (Get-JhtBridgeText 'Starting the Linux machine (about a minute).' "Avvio la macchina Linux (circa un minuto)."); Doing = (Get-JhtBridgeText 'still starting the Linux machine' 'ancora in corso: avvio della macchina Linux') } }
+    'stop' { return @{ Said = (Get-JhtBridgeText 'Stopping the Linux machine.' 'Fermo la macchina Linux.'); Doing = (Get-JhtBridgeText 'still stopping the Linux machine' 'ancora in corso: arresto della macchina Linux') } }
     default { return $null }
   }
 }

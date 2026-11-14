@@ -617,6 +617,25 @@ def test_a_podman_of_another_version(tmp_path, before, after, expected_exit, exp
         assert calls.read_text().startswith("install --exact --source winget --version 6.0.2 --silent")
 
 
+# The warning is a marker for the app: a person at a terminal (JHT_MACHINE_OUTPUT=0, or a console) does not get it.
+@needs_powershell
+@pytest.mark.parametrize(("machine", "shown"), [("1", True), ("0", False)])
+def test_the_newer_podman_warning_is_only_for_the_app(tmp_path, machine, shown):
+    fake_podman = tmp_path / "Programs" / "Podman" / "podman.exe"
+    fake_podman.parent.mkdir(parents=True)
+    install_fake(fake_podman.parent, "podman.exe", "#!/bin/sh\necho 'podman version 6.1.4'\n")
+    _install_block_is_isolated()
+    done = _ps(
+        tmp_path,
+        "$ErrorActionPreference = 'Stop'\n"
+        f"$LocalAppData = '{tmp_path}'\n$PodmanCliVersion = '6.0.2'\n$InstallDependencies = $true\n"
+        "function Write-JhtPhase { }\nfunction winget { $global:LASTEXITCODE = 0 }\n"
+        + _enabler_install_block() + "\nexit 0\n",
+        extra={"JHT_MACHINE_OUTPUT": machine},
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert ("JHT_WARNING podman_version_newer" in done.stdout) == shown, done.stdout
+
 def _run_block(tmp_path, winget_body, extra=""):
     _install_block_is_isolated()
     return _ps(
