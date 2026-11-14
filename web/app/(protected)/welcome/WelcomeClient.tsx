@@ -22,6 +22,7 @@ import {
 } from "@/app/components/demo/personas";
 import { T } from "./WelcomeClient.i18n";
 import type { Strings } from "./WelcomeClient.i18n";
+import { CliFirstNote } from "@/app/components/CliFirstNote";
 
 type StatusChoice = "browsing" | "none" | "downloaded" | "running";
 
@@ -125,6 +126,7 @@ export default function WelcomeClient({
 
   return (
     <Shell>
+      <CliFirstNote lang={locale} className="mb-6" />
       {/* Header comune */}
       <h1 className="text-xl font-bold uppercase tracking-[0.18em] mb-2 text-[var(--color-white)]">
         {t.title}

@@ -1,5 +1,7 @@
 # 🖥️ Desktop app — user guide
 
+> 0.4.0 is installed from the command line; the desktop app comes in a later release: see the [CLI quickstart](QUICKSTART.md).
+
 The desktop app is the **control panel** of your Job Hunter Team: the same
 pages as the website, plus pages of its own, and the **office**, where you
 watch the team at work. It reads the cloud with **your own session** (you see

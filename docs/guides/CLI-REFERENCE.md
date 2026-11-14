@@ -1,5 +1,7 @@
 # ⌨️ CLI Reference — `jht`
 
+> 0.4.0 is installed from the command line; the desktop app comes in a later release: see the [CLI quickstart](QUICKSTART.md).
+
 Systematic reference of every `jht` command. For onboarding flows see
 [`QUICKSTART.md`](QUICKSTART.md) (Local) and [`VPS-SETUP.md`](VPS-SETUP.md)
 (VPS). AI agents driving setup should follow
