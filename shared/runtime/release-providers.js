@@ -3,7 +3,7 @@
  * with an API key, and `jht doctor` calls any other active provider not supported in this release. Bringing a service back (kimi)
  * is one line here and its test (cli/tests/release-providers.test.mjs); the code that serves the others stays for the next release.
  */
-export const RELEASE_PROVIDERS = Object.freeze(['glm']);
+export const RELEASE_PROVIDERS = Object.freeze(['glm', 'kimi']);
 
 /** The program that runs the agents in this release. */
 export const RELEASE_HARNESS = 'pi';

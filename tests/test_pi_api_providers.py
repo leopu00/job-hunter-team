@@ -67,7 +67,7 @@ def test_the_table_of_light_roles_names_only_roles_and_classes_that_exist():
              if line.startswith("role|")}
     classes = {line.split("|")[1] for line in (ROOT / "shared" / "runtime" / "role-models.list").read_text(encoding="utf-8").splitlines()
                if line.startswith("model|")}
-    assert rows and {r[1] for r in rows} <= {"glm"}  # Kimi's light model is retiring: it keeps the classes of the roles
+    assert rows and {r[1] for r in rows} <= {"glm", "kimi"}  # the providers of the table (OpenAI uses the Codex table)
     assert all(r[2] in roles and r[3] in classes for r in rows), rows
 
 

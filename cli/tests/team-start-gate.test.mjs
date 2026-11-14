@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
 import { releaseUserHolds, startRefusal } from '../src/commands/team/start.js';
+import { offeredInRelease } from '../../shared/runtime/release-providers.js';
 
 // the provider of this release (shared/runtime/release-providers.js): GLM on pi, its key by reference
 const GLM = { active_provider: 'glm', harness: 'pi', providers: { glm: { name: 'glm', auth_method: 'api_key', api_key_ref: { type: 'ref', source: 'env', id: 'ZAI_API_KEY' } } } };
@@ -89,7 +90,7 @@ test('startRefusal: the provider first, then, outside the container, tmux and th
   assert.match(startRefusal(GLM, { containerMode: false, hasTmux: yes, hasCli: no }), /pi CLI/);
   assert.equal(startRefusal(GLM, { containerMode: false, hasTmux: yes, hasCli: yes }), null);
   // a provider this release does not offer is refused before tmux and the CLI, with the setup as the way out
-  for (const active_provider of ['anthropic', 'openai', 'kimi']) {
+  for (const active_provider of ['anthropic', 'openai', 'kimi'].filter((name) => !offeredInRelease(name))) {
     assert.match(startRefusal({ active_provider }, { containerMode: true }), /is not offered in this release .*Run: jht setup/, active_provider);
   }
 });
