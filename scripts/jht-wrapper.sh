@@ -1846,7 +1846,7 @@ No se descarga ni se enciende nada hasta que lo pidas con `login`.' ;;
                            se quedan ~/.jht, Documentos, Podman y Docker
     jht uninstall --confirm --purge
                            como arriba, y borra también ~/.jht y
-                           ~/Documents/Job Hunter Team (aunque sean del
+                           ~/Documents/Job Hunter Team (aunque pertenezcan al
                            contenedor, sin sudo y sin cambiar permisos)
 
   Todos los demás comandos (positions, stats, team, providers, cron,
@@ -1982,7 +1982,7 @@ Ejemplos:
     line.input_interrotto.token_non_letto) printf '%s' 'token no leído.' ;;
     line.integration.install_hint) printf '%s' 'para instalarlas: '\''jht upgrade'\'' (o un '\''jht integration add <id>'\'')' ;;
     line.interattivo_il_token_viene_chiesto) printf '%s' 'Interactivo: el token se pide sin eco y luego el bot nuevo recibe un código de un solo uso desde tu Telegram. Automatizaciones: {"bot_token": ...} como JSON por stdin; no guardes el token en ~/.jht y borra enseguida cualquier archivo usado fuera de ahí.' ;;
-    line.jht_home_host_o_jht) printf '%s' 'JHT_HOME_HOST o JHT_USER_DIR_HOST apuntan a otro sitio: no borro carpetas que no sean las fijas de JHT.' ;;
+    line.jht_home_host_o_jht) printf '%s' 'JHT_HOME_HOST o JHT_USER_DIR_HOST apuntan a otro sitio: no borro carpetas distintas de las fijas de JHT.' ;;
     line.jht_telegram_pair_all_interattivo) printf '%s' 'jht telegram pair --all es interactivo: para las automatizaciones vincula un rol cada vez.' ;;
     line.job_hunter_team_non_ancora) printf '%s' 'Job Hunter Team aún no está arrancado: ejecuta '\''jht up'\'' (la primera vez, '\''jht setup'\'').' ;;
     line.job_hunter_team_non_installato) printf '%s' 'Job Hunter Team no está instalado del todo: en la carpeta del runtime falta el archivo de integridad (¿una instalación interrumpida?). Vuelve a ejecutar el instalador.' ;;

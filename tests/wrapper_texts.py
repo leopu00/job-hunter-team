@@ -48,4 +48,3 @@ if __name__ == "__main__":
         TEXTS.write()
     else:
         sys.stdout.write(TEXTS.block())
-
