@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 
 from scripts import runtime_image_pin as pin_tool
+from runtime_pin_tree import schema1_tree
 from tests.test_runtime_image_pin import NEW_DIGEST, NEW_REVISION, _tree_copy
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,12 +30,18 @@ TEST_IMAGE = "ghcr.io/leopu00/jht@sha256:" + "ab" * 32
 bash_only = pytest.mark.skipif(sys.platform == "win32", reason="the bash installer is not run on Windows")
 
 
-def source(tmp_path: Path, body: str, env: dict | None = None, *args: str) -> subprocess.CompletedProcess:
+@pytest.fixture(scope="session")
+def schema1_installers(tmp_path_factory) -> Path:
+    """The installers of a release at schema 1 (the constant of the core digest empty), whatever schema the repository is at."""
+    return schema1_tree(tmp_path_factory.mktemp("schema1"))
+
+
+def source(tmp_path: Path, body: str, env: dict | None = None, *args: str, installer: Path = INSTALL) -> subprocess.CompletedProcess:
     runtime = tmp_path / "runtime"
     runtime.mkdir(exist_ok=True)
     home = tmp_path / "home"
     home.mkdir(exist_ok=True)
-    script = f'JHT_INSTALLER_SOURCE_ONLY=1 . "{INSTALL}" "$@"\n{body}\n'
+    script = f'JHT_INSTALLER_SOURCE_ONLY=1 . "{installer}" "$@"\n{body}\n'
     return subprocess.run(
         ["bash", "-c", script, "install.sh", *args],
         env={"PATH": "/usr/bin:/bin", "HOME": str(home), "JHT_RUNTIME_DIR": str(runtime), **(env or {})},
@@ -51,10 +58,20 @@ SHOW = 'printf "image=%s tier=[%s]\\n" "$IMAGE" "$RUNTIME_TIER"'
     ({"JHT_CORE_IMAGE_DIGEST": CORE}, f"ghcr.io/leopu00/jht@{CORE}", "core"),
     ({"JHT_CORE_IMAGE_DIGEST": CORE, "JHT_IMAGE": TEST_IMAGE}, TEST_IMAGE, ""),
 ], ids=["no-core-digest", "core-digest", "an-image-named-by-the-person"])
-def test_the_install_image_and_tier(tmp_path, env, image, tier):
-    done = source(tmp_path, SHOW, env)
+def test_the_install_image_and_tier(tmp_path, schema1_installers, env, image, tier):
+    done = source(tmp_path, SHOW, env, installer=schema1_installers / "scripts" / "install.sh")
     assert done.returncode == 0, done.stderr
     assert f"image={image} tier=[{tier}]" in done.stdout
+
+
+@bash_only
+def test_the_installer_of_the_repository_installs_what_its_pin_names(tmp_path):
+    """With no environment the installer pulls the core image when the pin has a core digest, and the full one when it has none."""
+    core = json.loads((ROOT / pin_tool.MANIFEST_PATH).read_text(encoding="utf-8")).get("core_digest")
+    done = source(tmp_path, SHOW)
+    assert done.returncode == 0, done.stderr
+    expected = f"image=ghcr.io/leopu00/jht@{core} tier=[core]" if core else f"image={FULL} tier=[]"
+    assert expected in done.stdout
 
 
 @bash_only
@@ -97,11 +114,12 @@ def test_the_core_tier_is_staged_hashed_and_published(tmp_path):
 
 
 @bash_only
-def test_a_full_install_drops_a_tier_left_by_a_core_one(tmp_path):
+def test_a_full_install_drops_a_tier_left_by_a_core_one(tmp_path, schema1_installers):
     (tmp_path / "runtime").mkdir()
     (tmp_path / "runtime" / "runtime-tier").write_text("core\n", encoding="utf-8")
     (tmp_path / "runtime" / ".runtime-tier-integrity").write_text("runtime-tier=x\n", encoding="utf-8")
-    done = source(tmp_path, 'ok() { :; }; stage_runtime_tier; publish_runtime_tier; printf "sha=[%s]\\n" "$TIER_STAGED_SHA"')
+    done = source(tmp_path, 'ok() { :; }; stage_runtime_tier; publish_runtime_tier; printf "sha=[%s]\\n" "$TIER_STAGED_SHA"',
+                  installer=schema1_installers / "scripts" / "install.sh")
     assert done.returncode == 0, done.stderr
     assert not (tmp_path / "runtime" / "runtime-tier").exists() and not (tmp_path / "runtime" / ".runtime-tier-integrity").exists()
     assert "sha=[]" in done.stdout
@@ -132,9 +150,9 @@ def test_the_pin_tool_moves_the_constant_in_the_four_copies_and_refuses_a_stale_
     assert refused.value.code in {"consumer_core_drift", "installer_digest_drift"}
 
 
-def test_the_repository_copies_carry_the_empty_constant_while_the_pin_has_no_core_digest():
-    assert json.loads((ROOT / pin_tool.MANIFEST_PATH).read_text(encoding="utf-8")).get("core_digest") is None
-    assert pin_tool.verify_tree(ROOT).core_digest is None
+def test_the_repository_copies_carry_the_core_digest_their_pin_has_whatever_the_schema():
+    manifest = json.loads((ROOT / pin_tool.MANIFEST_PATH).read_text(encoding="utf-8"))
+    assert pin_tool.verify_tree(ROOT).core_digest == manifest.get("core_digest")
 
 
 @pytest.mark.skipif(not shutil.which("pwsh") and not shutil.which("powershell"), reason="no PowerShell")
@@ -142,9 +160,9 @@ def test_the_repository_copies_carry_the_empty_constant_while_the_pin_has_no_cor
     ({}, FULL, ""),
     ({"JHT_CORE_IMAGE_DIGEST": CORE}, f"ghcr.io/leopu00/jht@{CORE}", "core"),
     ({"JHT_CORE_IMAGE_DIGEST": CORE, "JHT_IMAGE": TEST_IMAGE}, TEST_IMAGE, ""),
-])
-def test_the_powershell_installer_chooses_the_same_image_and_tier(tmp_path, env, image, tier):
-    text = INSTALL_PS1.read_text(encoding="utf-8").replace("\r\n", "\n")
+], ids=["no-core-digest", "core-digest", "an-image-named-by-the-person"])
+def test_the_powershell_installer_chooses_the_same_image_and_tier(tmp_path, schema1_installers, env, image, tier):
+    text = (schema1_installers / "scripts" / "install.ps1").read_text(encoding="utf-8").replace("\r\n", "\n")
     block = re.search(r"^\$Image = if.*?\n(\$CoreImageDigest.*?)^\$RuntimeImage = ", text, re.S | re.M).group(1)
     first = re.search(r"^\$Image = if.*$", text, re.M).group(0)
     script = tmp_path / "choose.ps1"
