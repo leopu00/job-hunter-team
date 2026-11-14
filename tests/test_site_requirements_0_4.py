@@ -130,7 +130,8 @@ def test_the_homebrew_requirement_is_the_one_the_app_enforces_and_the_app_runs_p
     # the app's local install on a Mac is `install.sh --runtime podman`, with Homebrew checked before anything runs
     assert re.search(r'LOCAL_PODMAN_INSTALL_ARGS: \[&str; 6\] = \[[^\]]*"--runtime",\s*"podman"', ONBOARDING)
     assert 'return Err("homebrew_missing")' in ONBOARDING
-    assert "homebrew_missing: JHT installs Podman with Homebrew" in INSTALL and "brew install podman" in INSTALL
+    assert "printf 'homebrew_missing: %s\\n' \"$(ts installer.mac.homebrew_missing 'JHT installs Podman with Homebrew" in INSTALL
+    assert "brew install podman" in INSTALL
     # the installer's free-space check is not run on a Mac (the disk is inside the machine): no free-space claim on the pages
     assert "case \"$OS\" in linux|wsl) ;; *) return 0 ;; esac" in INSTALL
     assert RUN.count("Homebrew") >= 7, "the local mode says Homebrew in every language"

@@ -125,9 +125,15 @@ def test_the_refusal_is_said_in_italian_to_an_italian_person(tmp_path, how):
     assert text.index("jht uninstall --confirm") < text.index("rilancia questo installer") < text.index("jht setup")
 
 
-def test_a_language_that_is_not_italian_gets_english(tmp_path):
-    result = keep(tmp_path, "docker", env={"LANG": "de_DE.UTF-8"})
+def test_a_language_jht_does_not_speak_gets_english(tmp_path):
+    result = keep(tmp_path, "docker", env={"LANG": "ja_JP.UTF-8"})
     assert "this computer runs JHT on Docker" in result.stderr
+
+
+def test_one_of_the_7_languages_gets_its_own(tmp_path):
+    result = keep(tmp_path, "docker", env={"LANG": "de_DE.UTF-8"})
+    assert result.returncode == 85 and result.stderr.startswith("JHT_ERROR runtime_change_requires_migration\n")
+    assert "this computer runs JHT on Docker" not in result.stderr and "jht uninstall --confirm" in result.stderr
 
 
 def test_the_colima_jht_started_is_named_with_the_command_that_removes_it(tmp_path):

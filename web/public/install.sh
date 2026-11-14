@@ -260,6 +260,7 @@ done
 case "$RUNTIME_CHOICE" in
   ""|auto|podman) RUNTIME_CHOICE="podman" ;;
   colima|docker|docker-desktop|orbstack)
+    # Read with the arguments, before the functions that say a sentence in the person's language: English, like «Unrecognized argument».
     printf "runtime_not_supported: --runtime %s: since 0.4 JHT runs only on Podman (a machine on macOS, rootless on Linux). Run the installer without --runtime.\n" "$RUNTIME_CHOICE" >&2
     exit 2
     ;;
@@ -377,9 +378,979 @@ warn()  { printf "  ${YELLOW}⚠${RESET}  %s\n" "$*"; }
 info()  { printf "  ${BLUE}▸${RESET} %s\n" "$*"; }
 fail()  { printf "  ${RED}✗${RESET} %s\n" "$*" >&2; exit 1; }
 step()  { printf "\n${BOLD}[%s/%s] %s${RESET}\n" "$1" "$2" "$3"; }
-# tx "english" "italiano": the sentence in the person's language (installer_person_lang). Only English and Italian are written;
-# every other language reads English, as in the wrapper.
-tx()    { if [ "$(installer_person_lang)" = it ]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }
+# ts <key> '<English>': the sentence in the person's language (installer_person_lang), in the 7 languages of shared/locales. The
+# installer runs before anything of JHT is on the computer (often `curl … | bash`), so the texts are written inside it, in the block
+# below, made from the catalogs by `python3 tests/installer_texts.py --write`; a test fails when the two differ. A key a language
+# lacks says the English of the call. tsf <key> '<English with %s/%d>' values...: the same, with the values put in (in the same
+# order in every language).
+ts()    { ts_table "$(installer_person_lang)" "$1" || printf '%s' "$2"; }
+tsf() {
+  local format
+  format="$(ts "$1" "$2")"
+  shift 2
+  # shellcheck disable=SC2059
+  printf -- "$format" "$@"
+}
+
+# >>> texts in the 7 languages, made from shared/locales by `python3 tests/installer_texts.py --write`: do not edit by hand
+ts_table() {
+  case "$1:$2" in
+    en:installer.agents_can_only_see) printf '%s' 'The agents can only see:' ;;
+    en:installer.already_path) printf '%s' '%s already in PATH' ;;
+    en:installer.also_delete_your_data) printf '%s' 'To also delete your data (config, db, CVs, output):' ;;
+    en:installer.also_deletes_api_key) printf '%s' '(it also deletes the API key, the mail password and the Telegram tokens saved for the team)' ;;
+    en:installer.apt_get_update_failed) printf '%s' 'apt-get update failed: trying the install anyway.' ;;
+    en:installer.branch) printf '%s' 'branch:  ' ;;
+    en:installer.cannot_list_containers) printf '%s' 'Cannot list the running containers with %s: nothing was installed.' ;;
+    en:installer.chown_not_needed) printf '%s' 'chown to 1001 failed — nothing runs in a container here (--no-docker), so nothing needs it' ;;
+    en:installer.config_db_agents) printf '%s' '(config, db, agents)' ;;
+    en:installer.configuration_wizard_also_starts) printf '%s' 'configuration wizard (also starts the container)' ;;
+    en:installer.container_mode_active_podman) printf '%s' 'Container mode active (Podman).' ;;
+    en:installer.container_runtime) printf '%s' 'Container runtime' ;;
+    en:installer.container_runtime_check) printf '%s' 'Container runtime check' ;;
+    en:installer.container_runtime_podman_rootless) printf '%s' 'Container runtime (Podman rootless)' ;;
+    en:installer.container_will_complete_pairing) printf '%s' 'The container will complete the pairing on first boot.' ;;
+    en:installer.creating_rootless_podman_machine) printf '%s' 'Creating rootless Podman machine '\''%s'\''...' ;;
+    en:installer.cvs_attachments_output) printf '%s' '(CVs, attachments, output)' ;;
+    en:installer.disk_low_dry_run) printf '%s' 'Only %s GiB free on %s; a real install needs at least %s GiB.' ;;
+    en:installer.disk_not_enough) printf '%s' 'not enough free disk space: %s GiB free on %s, the Job Hunter Team image and its data need at least %s GiB. Free some space (on a server that already runs Docker, '\''docker image prune -af'\'' removes unused images) and run the installer again. Nothing was changed.' ;;
+    en:installer.done_compose) printf '%s' 'compose: %s' ;;
+    en:installer.done_host_setup) printf '%s' 'host-setup: %s' ;;
+    en:installer.done_wrapper) printf '%s' 'wrapper: %s' ;;
+    en:installer.download_failed) printf '%s' 'Download failed: %s. Check your connection and branch (%s).' ;;
+    en:installer.download_wrapper_docker_compose) printf '%s' 'Download wrapper + docker-compose.yml' ;;
+    en:installer.downloading_docker_compose_yml) printf '%s' 'Downloading docker-compose.yml...' ;;
+    en:installer.downloading_host_setup_sh) printf '%s' 'Downloading host-setup.sh (VPS/swap preflight)...' ;;
+    en:installer.downloading_jht_wrapper) printf '%s' 'Downloading jht wrapper...' ;;
+    en:installer.enabling_linger) printf '%s' 'Enabling linger for %s...' ;;
+    en:installer.existing_podman_machine_has) printf '%s' 'Existing Podman machine '\''%s'\'' has resources '\''%s'\''; JHT recommends %s CPU, %s MiB RAM and %s GiB disk. The existing machine was not changed.' ;;
+    en:installer.extras_image_pinned_ghcr) printf '%s' 'extras image pinned: ghcr.io/leopu00/jht@%s (pulled when a tool is asked for)' ;;
+    en:installer.giving_subordinate_uid_gid) printf '%s' 'Giving %s the subordinate uid/gid range %s-%s...' ;;
+    en:installer.helper_download_failed) printf '%s' '%s download or validation failed: %s/scripts/%s' ;;
+    en:installer.host_file_tmp_failed) printf '%s' 'cannot create a temporary file in %s: not writing %s' ;;
+    en:installer.host_setup_completed_auto) printf '%s' 'host-setup completed (auto-detected host type)' ;;
+    en:installer.host_setup_completed_forced) printf '%s' 'host-setup completed (forced vps)' ;;
+    en:installer.host_setup_download_failed) printf '%s' 'host-setup.sh download or validation failed: %s' ;;
+    en:installer.host_setup_exited_error) printf '%s' 'host-setup exited with an error — continuing (a manual pair may be needed)' ;;
+    en:installer.host_setup_exited_error_2) printf '%s' 'host-setup exited with an error — continuing' ;;
+    en:installer.host_setup_missing) printf '%s' 'host-setup.sh not available at %s — skipping preflight' ;;
+    en:installer.image) printf '%s' 'image:   ' ;;
+    en:installer.image_download_failed) printf '%s' 'JHT image download failed: %s' ;;
+    en:installer.installation_complete) printf '%s' 'Installation complete!' ;;
+    en:installer.installed) printf '%s' 'Installed:%s' ;;
+    en:installer.installing_podman_cli) printf '%s' 'Installing Podman CLI...' ;;
+    en:installer.installing_podman_compose_provider) printf '%s' 'Installing the Podman Compose provider...' ;;
+    en:installer.installing_sudo_podman_rootless) printf '%s' 'Installing%s with sudo (Podman rootless; Docker is not installed)...' ;;
+    en:installer.linger_enabled) printf '%s' 'linger enabled for %s' ;;
+    en:installer.loginctl_not_found_linger) printf '%s' 'loginctl not found: linger was not checked.' ;;
+    en:installer.mac.cannot_create_folder) printf '%s' 'Cannot create %s for the Podman machine.' ;;
+    en:installer.mac.compose_install_failed) printf '%s' 'podman-compose installation failed' ;;
+    en:installer.mac.compose_version_unsupported) printf '%s' 'JHT on a Mac needs podman-compose %s; this Mac has %s. Run «brew upgrade podman-compose» (or «brew install podman-compose»), then this installer again.' ;;
+    en:installer.mac.homebrew_missing) printf '%s' 'JHT installs Podman with Homebrew, which is not on this Mac. Nothing was changed. Install Homebrew from https://brew.sh (one command in Terminal; it asks for your Mac password), open a new Terminal window and run this installer again.' ;;
+    en:installer.mac.machine_init_failed) printf '%s' 'Podman machine initialization failed; Colima was not changed.' ;;
+    en:installer.mac.machine_name_placeholder) printf '%s' '<name>' ;;
+    en:installer.mac.machine_not_responding) printf '%s' 'The JHT Podman machine is not responding.' ;;
+    en:installer.mac.machine_start_failed) printf '%s' 'Podman machine start failed; Colima was not changed.' ;;
+    en:installer.mac.machine_unreachable) printf '%s' 'Podman machine '\''%s'\'' is not reachable.' ;;
+    en:installer.mac.other_machine_any) printf '%s' 'another Podman machine is running (find it with '\''podman machine list'\'')' ;;
+    en:installer.mac.other_machine_named) printf '%s' 'another Podman machine, %s, is running' ;;
+    en:installer.mac.other_machine_running) printf '%s' '%s, and a Mac runs only one at a time. Stop it with '\''podman machine stop %s'\'' (or from the app you use it with) and run the installer again: Job Hunter Team never stops it for you, and you can start it again afterwards.' ;;
+    en:installer.mac.podman_install_failed) printf '%s' 'Podman installation failed' ;;
+    en:installer.mac.podman_no_version) printf '%s' 'a podman that does not say its version' ;;
+    en:installer.mac.podman_version_unsupported) printf '%s' 'JHT on a Mac needs Podman %s.%s or a later %s.x (not 6.2 or later); this Mac has %s. If Homebrew moved Podman past the %s series, get the JHT installer of today again (it says which series it supports); nothing of JHT was installed.' ;;
+    en:installer.migration.colima_default) printf '%s' 'If you installed Colima only for JHT, after the uninstall its virtual machine (profile default, the one the JHT installer started) stays on the disk, stopped: remove it with «colima delete -p default» to free the space. If you use Colima for other things, leave it.' ;;
+    en:installer.migration.colima_started) printf '%s' 'After the uninstall the Colima virtual machine JHT created (profile %s) stays on the disk, stopped: if you use it for nothing else, remove it with «colima delete -p %s» to free the space.' ;;
+    en:installer.migration.refused) printf '%s' 'this computer runs JHT on Docker (Colima, Docker Desktop or Docker Engine). Since 0.4 JHT runs only on Podman, and nothing was changed. Your data stays: ~/.jht (configuration, database, profile) and ~/Documents/Job Hunter Team (CVs, outputs) are folders of this computer. What stays behind in Docker'\''s volumes and has to be given again: the API key kept by the setup, the mail password, the Telegram tokens. To move to Podman: %s, run this installer again, then «jht setup» with your API key.%s' ;;
+    en:installer.migration.uninstall) printf '%s' 'run «jht uninstall --confirm» (it keeps those two folders)' ;;
+    en:installer.migration.uninstall_old_jht) printf '%s' 'your jht command is from a version that cannot uninstall itself, so use the one of this version: «f="$(mktemp)" && curl -fsSL '\''%s'\'' -o "$f" && bash "$f" uninstall --confirm; rm -f "$f"» (it removes the JHT on Docker and the old jht command, and keeps those two folders)' ;;
+    en:installer.min_free_invalid) printf '%s' 'Invalid JHT_MIN_FREE_GIB: %s' ;;
+    en:installer.mode) printf '%s' 'mode:    ' ;;
+    en:installer.mount_repair_failed) printf '%s' '%s and %s cannot be made writable for the Job Hunter Team container (it runs as uid 1001) and nothing was started. Either let Docker run for this account (add it to the '\''docker'\'' group, then log in again), or run once: sudo chown -R 1001:1001 "%s" "%s" — then run this installer again.' ;;
+    en:installer.next_step_run_finish) printf '%s' 'Next step: run  %s  to finish the setup.' ;;
+    en:installer.next_steps) printf '%s' 'Next steps:' ;;
+    en:installer.no_interactive_terminal_no) printf '%s' 'No interactive terminal (no /dev/tty): skipping the wizard.' ;;
+    en:installer.no_shell_rc_file) printf '%s' 'No shell rc file was written. Add manually:' ;;
+    en:installer.open_new_terminal_window) printf '%s' 'Open a new terminal window first (or run: . ~/.profile), so that it finds jht.' ;;
+    en:installer.ownership_1001_1001_container) printf '%s' 'Ownership %s and %s → 1001:1001 (container UID)' ;;
+    en:installer.ownership_1001_1001_container_2) printf '%s' 'Ownership %s and %s → 1001:1001 (container UID, set by a one-shot container: no sudo needed)' ;;
+    en:installer.ownership_stays_user_macos) printf '%s' 'Ownership of %s and %s stays with this user (macOS)' ;;
+    en:installer.ownership_stays_user_rootless) printf '%s' 'Ownership of %s and %s stays with this user (rootless Podman)' ;;
+    en:installer.pairing_token_present_skipping) printf '%s' 'Pairing token present: skipping the interactive wizard.' ;;
+    en:installer.pairing_token_saved) printf '%s' 'Pairing token saved to %s (mode 0600)' ;;
+    en:installer.path_added) printf '%s' 'PATH added to %s' ;;
+    en:installer.path_added_etc_profile) printf '%s' 'PATH added to /etc/profile.d/jht.sh (system-wide)' ;;
+    en:installer.podman.answers_rootful) printf '%s' 'podman answers as rootful for %s (Rootless=%s): JHT needs Podman rootless.' ;;
+    en:installer.podman.apt_failed) printf '%s' 'apt-get install%s failed. To see why, run: sudo apt-get install%s' ;;
+    en:installer.podman.apt_would_remove) printf '%s' 'installing%s would REMOVE other packages of this computer (often containerd.io, Docker'\''s): nothing was changed. To see which, run: sudo apt-get -s install%s. Install Podman yourself in a way that keeps them (or decide to remove them), then run this installer again.' ;;
+    en:installer.podman.compose_missing) printf '%s' 'podman-compose is not available from this system'\''s packages. Ask the administrator of this server to install it, as root: apt install podman-compose' ;;
+    en:installer.podman.compose_too_old) printf '%s' 'podman-compose %s is older than %s. Ask the administrator of this server for a newer podman-compose.' ;;
+    en:installer.podman.distribution_too_old) printf '%s' 'this distribution would install %s %s, and Job Hunter Team 0.4.0 needs %s %s or later: nothing was installed. Distributions that give it: Ubuntu 26.04 LTS, Debian 13, Fedora 43 or later.' ;;
+    en:installer.podman.dnf_failed) printf '%s' 'dnf install%s failed (dnf removes nothing: a conflict with an installed package stops it). To see why, run: sudo dnf install%s' ;;
+    en:installer.podman.info_fails) printf '%s' ''\''podman info'\'' fails for %s, so the rootless storage or runtime is not ready. Run it by hand to see why.' ;;
+    en:installer.podman.linger_failed) printf '%s' 'loginctl enable-linger %s failed.' ;;
+    en:installer.podman.linger_missing) printf '%s' 'the containers of %s would stop when the session ends. Ask the administrator of this server to run, as root: loginctl enable-linger %s' ;;
+    en:installer.podman.missing_default) printf '%s' 'the subuid range or linger' ;;
+    en:installer.podman.no_package_manager) printf '%s' 'no known package manager (apt, dnf, pacman) to install:%s' ;;
+    en:installer.podman.pacman_failed) printf '%s' 'pacman -S%s failed (nothing was removed). To see why, run: sudo pacman -S%s' ;;
+    en:installer.podman.root_refused) printf '%s' 'JHT runs on Podman rootless, as a user that is not root. Sign in as that user and run the install again.' ;;
+    en:installer.podman.runtime_dir_missing) printf '%s' 'there is no runtime directory for this user (%s): the session has no user manager. Sign in again, or ask the administrator to run, as root: loginctl enable-linger %s' ;;
+    en:installer.podman.still_missing) printf '%s' 'podman is still not there after the install. Ask the administrator of this server to run, as root: apt install podman' ;;
+    en:installer.podman.subuid_missing) printf '%s' '%s has no subordinate uid/gid range in %s/subuid and %s/subgid. Ask the administrator of this server to run, as root: usermod --add-subuids 100000-165535 --add-subgids 100000-165535 %s' ;;
+    en:installer.podman.sudo_required) printf '%s' 'Podman needs a setup that only an administrator can do (missing:%s), and sudo for %s is not available without a password. Ask the administrator of this server to allow %s sudo without a password, or to run, as root: apt install podman podman-compose uidmap; loginctl enable-linger %s' ;;
+    en:installer.podman.too_old) printf '%s' 'podman %s is older than %s. Ask the administrator of this server for a newer podman.' ;;
+    en:installer.podman.unknown_version) printf '%s' 'of unknown version' ;;
+    en:installer.podman.unsupported_host) printf '%s' '--runtime podman is for Linux and macOS; this system is %s.' ;;
+    en:installer.podman.usermod_failed) printf '%s' 'usermod could not add the subordinate range (%s-%s) for %s.' ;;
+    en:installer.podman_already_installed) printf '%s' 'podman already installed' ;;
+    en:installer.podman_compose_already_installed) printf '%s' 'podman-compose already installed' ;;
+    en:installer.podman_machine_already_running) printf '%s' 'Podman machine '\''%s'\'' already running' ;;
+    en:installer.podman_machine_reachable) printf '%s' 'Podman machine reachable' ;;
+    en:installer.podman_ready_but_weekly) printf '%s' 'Podman is ready, but its weekly disk trim timer could not be enabled.' ;;
+    en:installer.podman_ready_colima_retained) printf '%s' 'Podman ready (Colima retained)' ;;
+    en:installer.podman_rootless_podman_compose) printf '%s' 'Podman rootless %s + podman-compose %s for %s' ;;
+    en:installer.podman_rootless_reachable) printf '%s' 'podman rootless reachable' ;;
+    en:installer.private_jht_docker_shim) printf '%s' 'Private JHT docker shim: %s (not added to global PATH; Colima untouched)' ;;
+    en:installer.private_jht_docker_shim_2) printf '%s' 'Private JHT docker shim: %s (not added to global PATH; rootless Podman, no machine)' ;;
+    en:installer.run_manually_jht_setup) printf '%s' 'Run manually: jht setup' ;;
+    en:installer.running_host_setup_sh) printf '%s' 'Running host-setup.sh (writes ~/.jht/host.env + swap preflight)...' ;;
+    en:installer.runtime) printf '%s' 'runtime: ' ;;
+    en:installer.runtime_dir_bad_ancestor) printf '%s' 'Host runtime has a symlinked or non-canonical ancestor: %s' ;;
+    en:installer.runtime_dir_in_mount) printf '%s' 'Host runtime must be outside container-writable bind mounts: %s' ;;
+    en:installer.runtime_dir_is_link) printf '%s' 'Host runtime path is a symlink: %s' ;;
+    en:installer.runtime_image_pinned) printf '%s' 'runtime image pinned: %s' ;;
+    en:installer.runtime_tier_core_tools) printf '%s' 'runtime tier: core (the tools come after the welcome)' ;;
+    en:installer.same_as_above_empties) printf '%s' '(same as above, and it empties ~/.jht and ~/Documents/Job Hunter Team too)' ;;
+    en:installer.setup_did_not_finish) printf '%s' 'The setup did not finish (exit code %s): Job Hunter Team is installed, but it is not set up yet.' ;;
+    en:installer.starting_podman_machine) printf '%s' 'Starting Podman machine '\''%s'\''...' ;;
+    en:installer.subuid_subgid_range) printf '%s' 'subuid/subgid range %s-%s for %s' ;;
+    en:installer.system_detection) printf '%s' 'System detection' ;;
+    en:installer.team_running) printf '%s' 'Job Hunter Team is running on this computer (%s). If setup was interrupted, resume it with «jht setup» in this terminal; no down is needed. To reinstall instead, stop it with «jht down», run the installer again, then start it with «jht up». Nothing was changed: your profile and documents in ~/.jht and ~/Documents/Job Hunter Team stay where they are.' ;;
+    en:installer.terminal_run) printf '%s' 'In this terminal, run:' ;;
+    en:installer.uid_1001_taken) printf '%s' 'uid 1001 on this computer is the account '\''%s'\''. The Job Hunter Team container runs as uid 1001, so that account would own ~/.jht (your data and the portal credentials). Nothing was changed. Run JHT from the account '\''%s'\'', or give '\''%s'\'' another uid, then try again.' ;;
+    en:installer.uninstall_keeps_your_data) printf '%s' 'To uninstall (keeps your data in ~/.jht and ~/Documents/Job Hunter Team):' ;;
+    en:installer.wrapper_dir_bad_ancestor) printf '%s' 'Host wrapper directory has a symlinked or non-canonical ancestor: %s' ;;
+    en:installer.wrapper_dir_in_mount) printf '%s' 'Host wrapper must be outside container-writable bind mounts: %s' ;;
+    en:installer.wsl_not_supported) printf '%s' 'on Windows, install JHT from PowerShell with install.ps1 (see docs/guides/QUICKSTART.md), not from inside WSL. Nothing was changed.' ;;
+    it:installer.agents_can_only_see) printf '%s' 'Gli agenti vedono solo:' ;;
+    it:installer.already_path) printf '%s' '%s e'\'' gia'\'' nel PATH' ;;
+    it:installer.also_delete_your_data) printf '%s' 'Per cancellare anche i tuoi dati (configurazione, db, CV, risultati):' ;;
+    it:installer.also_deletes_api_key) printf '%s' '(cancella anche la chiave API, la password della posta e i token di Telegram salvati per la squadra)' ;;
+    it:installer.apt_get_update_failed) printf '%s' 'apt-get update non e'\'' riuscito: provo comunque a installare.' ;;
+    it:installer.branch) printf '%s' 'ramo:     ' ;;
+    it:installer.cannot_list_containers) printf '%s' 'Non riesco a elencare i container accesi con %s: non e'\'' stato installato niente.' ;;
+    it:installer.chown_not_needed) printf '%s' 'chown a 1001 non riuscito: qui non gira niente in un container (--no-docker), quindi non serve' ;;
+    it:installer.config_db_agents) printf '%s' '(configurazione, db, agenti)' ;;
+    it:installer.configuration_wizard_also_starts) printf '%s' 'configurazione guidata (accende anche il container)' ;;
+    it:installer.container_mode_active_podman) printf '%s' 'Modalita'\'' container attiva (Podman).' ;;
+    it:installer.container_runtime) printf '%s' 'Motore dei container' ;;
+    it:installer.container_runtime_check) printf '%s' 'Verifica del motore dei container' ;;
+    it:installer.container_runtime_podman_rootless) printf '%s' 'Motore dei container (Podman rootless)' ;;
+    it:installer.container_will_complete_pairing) printf '%s' 'Il container completera'\'' l'\''abbinamento al primo avvio.' ;;
+    it:installer.creating_rootless_podman_machine) printf '%s' 'Creo la macchina Podman rootless '\''%s'\''...' ;;
+    it:installer.cvs_attachments_output) printf '%s' '(CV, allegati, risultati)' ;;
+    it:installer.disk_low_dry_run) printf '%s' 'Solo %s GiB liberi su %s; un'\''installazione vera ne vuole almeno %s GiB.' ;;
+    it:installer.disk_not_enough) printf '%s' 'spazio libero su disco insufficiente: %s GiB liberi su %s, l'\''immagine di Job Hunter Team e i suoi dati vogliono almeno %s GiB. Libera un po'\'' di spazio (su un server che usa gia'\'' Docker, '\''docker image prune -af'\'' toglie le immagini non usate) e rilancia l'\''installer. Non e'\'' stato cambiato niente.' ;;
+    it:installer.done_compose) printf '%s' 'compose: %s' ;;
+    it:installer.done_host_setup) printf '%s' 'host-setup: %s' ;;
+    it:installer.done_wrapper) printf '%s' 'wrapper: %s' ;;
+    it:installer.download_failed) printf '%s' 'Download non riuscito: %s. Controlla la connessione e il ramo (%s).' ;;
+    it:installer.download_wrapper_docker_compose) printf '%s' 'Scarico il wrapper e docker-compose.yml' ;;
+    it:installer.downloading_docker_compose_yml) printf '%s' 'Scarico docker-compose.yml...' ;;
+    it:installer.downloading_host_setup_sh) printf '%s' 'Scarico host-setup.sh (controlli preliminari VPS/swap)...' ;;
+    it:installer.downloading_jht_wrapper) printf '%s' 'Scarico il wrapper jht...' ;;
+    it:installer.enabling_linger) printf '%s' 'Attivo il linger per %s...' ;;
+    it:installer.existing_podman_machine_has) printf '%s' 'La macchina Podman '\''%s'\'' che c'\''e'\'' gia'\'' ha le risorse '\''%s'\''; JHT consiglia %s CPU, %s MiB di RAM e %s GiB di disco. La macchina non e'\'' stata cambiata.' ;;
+    it:installer.extras_image_pinned_ghcr) printf '%s' 'immagine extras fissata: ghcr.io/leopu00/jht@%s (si scarica quando serve uno strumento)' ;;
+    it:installer.giving_subordinate_uid_gid) printf '%s' 'Assegno a %s l'\''intervallo di uid/gid subordinati %s-%s...' ;;
+    it:installer.helper_download_failed) printf '%s' 'download o verifica di %s non riusciti: %s/scripts/%s' ;;
+    it:installer.host_file_tmp_failed) printf '%s' 'non riesco a creare un file temporaneo in %s: non scrivo %s' ;;
+    it:installer.host_setup_completed_auto) printf '%s' 'host-setup completato (tipo di host rilevato da solo)' ;;
+    it:installer.host_setup_completed_forced) printf '%s' 'host-setup completato (vps imposto)' ;;
+    it:installer.host_setup_download_failed) printf '%s' 'download o verifica di host-setup.sh non riusciti: %s' ;;
+    it:installer.host_setup_exited_error) printf '%s' 'host-setup e'\'' uscito con un errore: continuo (puo'\'' servire un abbinamento a mano)' ;;
+    it:installer.host_setup_exited_error_2) printf '%s' 'host-setup e'\'' uscito con un errore: continuo' ;;
+    it:installer.host_setup_missing) printf '%s' 'host-setup.sh non c'\''e'\'' in %s: salto i controlli preliminari' ;;
+    it:installer.image) printf '%s' 'immagine: ' ;;
+    it:installer.image_download_failed) printf '%s' 'Il download dell'\''immagine di JHT non e'\'' riuscito: %s' ;;
+    it:installer.installation_complete) printf '%s' 'Installazione completata!' ;;
+    it:installer.installed) printf '%s' 'Installato:%s' ;;
+    it:installer.installing_podman_cli) printf '%s' 'Installo la CLI di Podman...' ;;
+    it:installer.installing_podman_compose_provider) printf '%s' 'Installo il provider di Podman Compose...' ;;
+    it:installer.installing_sudo_podman_rootless) printf '%s' 'Installo%s con sudo (Podman rootless; Docker non viene installato)...' ;;
+    it:installer.linger_enabled) printf '%s' 'linger attivo per %s' ;;
+    it:installer.loginctl_not_found_linger) printf '%s' 'loginctl non trovato: il linger non e'\'' stato controllato.' ;;
+    it:installer.mac.cannot_create_folder) printf '%s' 'Non riesco a creare %s per la macchina Podman.' ;;
+    it:installer.mac.compose_install_failed) printf '%s' 'l'\''installazione di podman-compose non e'\'' riuscita' ;;
+    it:installer.mac.compose_version_unsupported) printf '%s' 'JHT su un Mac vuole podman-compose %s; questo Mac ha %s. Lancia «brew upgrade podman-compose» (o «brew install podman-compose»), poi di nuovo questo installer.' ;;
+    it:installer.mac.homebrew_missing) printf '%s' 'JHT installa Podman con Homebrew, che su questo Mac non c'\''e'\''. Non e'\'' stato cambiato niente. Installa Homebrew da https://brew.sh (un comando nel Terminale; chiede la password del Mac), apri una nuova finestra del Terminale e rilancia questo installer.' ;;
+    it:installer.mac.machine_init_failed) printf '%s' 'La creazione della macchina Podman non e'\'' riuscita; Colima non e'\'' stato cambiato.' ;;
+    it:installer.mac.machine_name_placeholder) printf '%s' '<nome>' ;;
+    it:installer.mac.machine_not_responding) printf '%s' 'La macchina Podman di JHT non risponde.' ;;
+    it:installer.mac.machine_start_failed) printf '%s' 'L'\''avvio della macchina Podman non e'\'' riuscito; Colima non e'\'' stato cambiato.' ;;
+    it:installer.mac.machine_unreachable) printf '%s' 'La macchina Podman '\''%s'\'' non e'\'' raggiungibile.' ;;
+    it:installer.mac.other_machine_any) printf '%s' 'un'\''altra macchina Podman e'\'' accesa (trovala con '\''podman machine list'\'')' ;;
+    it:installer.mac.other_machine_named) printf '%s' 'un'\''altra macchina Podman, %s, e'\'' accesa' ;;
+    it:installer.mac.other_machine_running) printf '%s' '%s, e sul Mac ne puo'\'' girare una sola alla volta. Spegnila con '\''podman machine stop %s'\'' (o dall'\''app con cui la usi) e rilancia l'\''installer: Job Hunter Team non la spegne mai al posto tuo, e dopo potrai riaccenderla.' ;;
+    it:installer.mac.podman_install_failed) printf '%s' 'L'\''installazione di Podman non e'\'' riuscita' ;;
+    it:installer.mac.podman_no_version) printf '%s' 'un podman che non dice la sua versione' ;;
+    it:installer.mac.podman_version_unsupported) printf '%s' 'JHT su un Mac vuole Podman %s.%s o un %s.x successivo (non 6.2 o successivi); questo Mac ha %s. Se Homebrew ha portato Podman oltre la serie %s, riscarica l'\''installer di JHT di oggi (dice quale serie supporta); non e'\'' stato installato niente di JHT.' ;;
+    it:installer.migration.colima_default) printf '%s' 'Se Colima l'\''avevi installata solo per JHT, dopo la disinstallazione la sua macchina virtuale (profilo default, quello che accendeva l'\''installer di JHT) resta spenta sul disco: toglila con «colima delete -p default» per liberare lo spazio. Se usi Colima per altro, lasciala.' ;;
+    it:installer.migration.colima_started) printf '%s' 'Dopo la disinstallazione la macchina virtuale Colima che aveva creato JHT (profilo %s) resta spenta sul disco: se non la usi per altro, toglila con «colima delete -p %s» per liberare lo spazio.' ;;
+    it:installer.migration.refused) printf '%s' 'questo computer fa girare JHT su Docker (Colima, Docker Desktop o Docker Engine). Dalla 0.4 JHT gira solo su Podman, e non e'\'' stato cambiato niente. I tuoi dati restano: ~/.jht (configurazione, database, profilo) e ~/Documents/Job Hunter Team (CV, risultati) sono cartelle di questo computer. Resta invece nei volumi di Docker, e va ridato: la chiave API salvata dal setup, la password della posta, i token di Telegram. Per passare a Podman: %s, rilancia questo installer, poi «jht setup» con la tua chiave API.%s' ;;
+    it:installer.migration.uninstall) printf '%s' '«jht uninstall --confirm» (tiene quelle due cartelle)' ;;
+    it:installer.migration.uninstall_old_jht) printf '%s' 'il tuo comando jht e'\'' di una versione che non sa disinstallarsi, quindi usa quello di questa versione: «f="$(mktemp)" && curl -fsSL '\''%s'\'' -o "$f" && bash "$f" uninstall --confirm; rm -f "$f"» (toglie il JHT su Docker e il vecchio comando jht, tiene quelle due cartelle)' ;;
+    it:installer.min_free_invalid) printf '%s' 'JHT_MIN_FREE_GIB non valido: %s' ;;
+    it:installer.mode) printf '%s' 'modo:     ' ;;
+    it:installer.mount_repair_failed) printf '%s' '%s e %s non si possono rendere scrivibili per il container di Job Hunter Team (gira come uid 1001) e non e'\'' stato avviato niente. O lascia che Docker giri per questo account (aggiungilo al gruppo '\''docker'\'', poi rientra), o lancia una volta: sudo chown -R 1001:1001 "%s" "%s", poi rilancia questo installer.' ;;
+    it:installer.next_step_run_finish) printf '%s' 'Prossimo passo: lancia  %s  per finire il setup.' ;;
+    it:installer.next_steps) printf '%s' 'Prossimi passi:' ;;
+    it:installer.no_interactive_terminal_no) printf '%s' 'Nessun terminale interattivo (niente /dev/tty): salto il wizard.' ;;
+    it:installer.no_shell_rc_file) printf '%s' 'Nessun file rc della shell e'\'' stato scritto. Aggiungi a mano:' ;;
+    it:installer.open_new_terminal_window) printf '%s' 'Prima apri una nuova finestra del terminale (o lancia: . ~/.profile), cosi'\'' trova jht.' ;;
+    it:installer.ownership_1001_1001_container) printf '%s' 'Proprietario di %s e %s → 1001:1001 (UID del container)' ;;
+    it:installer.ownership_1001_1001_container_2) printf '%s' 'Proprietario di %s e %s → 1001:1001 (UID del container, messo da un container usa e getta: niente sudo)' ;;
+    it:installer.ownership_stays_user_macos) printf '%s' '%s e %s restano di questo utente (macOS)' ;;
+    it:installer.ownership_stays_user_rootless) printf '%s' '%s e %s restano di questo utente (Podman rootless)' ;;
+    it:installer.pairing_token_present_skipping) printf '%s' 'Token di abbinamento presente: salto il wizard interattivo.' ;;
+    it:installer.pairing_token_saved) printf '%s' 'Token di abbinamento salvato in %s (permessi 0600)' ;;
+    it:installer.path_added) printf '%s' 'PATH aggiunto a %s' ;;
+    it:installer.path_added_etc_profile) printf '%s' 'PATH aggiunto a /etc/profile.d/jht.sh (per tutto il sistema)' ;;
+    it:installer.podman.answers_rootful) printf '%s' 'podman risponde come rootful per %s (Rootless=%s): JHT vuole Podman rootless.' ;;
+    it:installer.podman.apt_failed) printf '%s' 'apt-get install%s non e'\'' riuscito. Per vedere perche'\'', lancia: sudo apt-get install%s' ;;
+    it:installer.podman.apt_would_remove) printf '%s' 'installare%s TOGLIEREBBE altri pacchetti di questo computer (spesso containerd.io, di Docker): non e'\'' stato cambiato niente. Per vedere quali, lancia: sudo apt-get -s install%s. Installa tu Podman in un modo che li tenga (o decidi di toglierli), poi rilancia questo installer.' ;;
+    it:installer.podman.compose_missing) printf '%s' 'podman-compose non e'\'' disponibile fra i pacchetti di questo sistema. Chiedi all'\''amministratore di questo server di installarlo, come root: apt install podman-compose' ;;
+    it:installer.podman.compose_too_old) printf '%s' 'podman-compose %s e'\'' piu'\'' vecchio di %s. Chiedi all'\''amministratore di questo server un podman-compose piu'\'' recente.' ;;
+    it:installer.podman.distribution_too_old) printf '%s' 'questa distribuzione installerebbe %s %s, ma Job Hunter Team 0.4.0 vuole %s %s o successivo: non ho installato niente. Distribuzioni che lo danno: Ubuntu 26.04 LTS, Debian 13, Fedora 43 o successive.' ;;
+    it:installer.podman.dnf_failed) printf '%s' 'dnf install%s non e'\'' riuscito (dnf non toglie niente: lo ferma un conflitto con un pacchetto installato). Per vedere perche'\'', lancia: sudo dnf install%s' ;;
+    it:installer.podman.info_fails) printf '%s' ''\''podman info'\'' non riesce per %s, quindi lo spazio o il runtime rootless non sono pronti. Lancialo a mano per vedere perche'\''.' ;;
+    it:installer.podman.linger_failed) printf '%s' 'loginctl enable-linger %s non e'\'' riuscito.' ;;
+    it:installer.podman.linger_missing) printf '%s' 'i container di %s si fermerebbero alla fine della sessione. Chiedi all'\''amministratore di questo server di lanciare, come root: loginctl enable-linger %s' ;;
+    it:installer.podman.missing_default) printf '%s' 'l'\''intervallo subuid o il linger' ;;
+    it:installer.podman.no_package_manager) printf '%s' 'nessun gestore di pacchetti conosciuto (apt, dnf, pacman) per installare:%s' ;;
+    it:installer.podman.pacman_failed) printf '%s' 'pacman -S%s non e'\'' riuscito (non e'\'' stato tolto niente). Per vedere perche'\'', lancia: sudo pacman -S%s' ;;
+    it:installer.podman.root_refused) printf '%s' 'JHT gira su Podman rootless, come un utente che non e'\'' root. Entra con quell'\''utente e rilancia l'\''installazione.' ;;
+    it:installer.podman.runtime_dir_missing) printf '%s' 'per questo utente non c'\''e'\'' la cartella di runtime (%s): la sessione non ha un gestore dell'\''utente. Rientra, o chiedi all'\''amministratore di lanciare, come root: loginctl enable-linger %s' ;;
+    it:installer.podman.still_missing) printf '%s' 'podman non c'\''e'\'' ancora dopo l'\''installazione. Chiedi all'\''amministratore di questo server di lanciare, come root: apt install podman' ;;
+    it:installer.podman.subuid_missing) printf '%s' '%s non ha un intervallo di uid/gid subordinati in %s/subuid e %s/subgid. Chiedi all'\''amministratore di questo server di lanciare, come root: usermod --add-subuids 100000-165535 --add-subgids 100000-165535 %s' ;;
+    it:installer.podman.sudo_required) printf '%s' 'Podman ha bisogno di una preparazione che solo un amministratore puo'\'' fare (manca:%s), e sudo per %s non e'\'' disponibile senza password. Chiedi all'\''amministratore di questo server di dare a %s sudo senza password, o di lanciare, come root: apt install podman podman-compose uidmap; loginctl enable-linger %s' ;;
+    it:installer.podman.too_old) printf '%s' 'podman %s e'\'' piu'\'' vecchio di %s. Chiedi all'\''amministratore di questo server un podman piu'\'' recente.' ;;
+    it:installer.podman.unknown_version) printf '%s' 'di versione sconosciuta' ;;
+    it:installer.podman.unsupported_host) printf '%s' '--runtime podman e'\'' per Linux e macOS; questo sistema e'\'' %s.' ;;
+    it:installer.podman.usermod_failed) printf '%s' 'usermod non ha potuto aggiungere l'\''intervallo subordinato (%s-%s) per %s.' ;;
+    it:installer.podman_already_installed) printf '%s' 'podman gia'\'' installato' ;;
+    it:installer.podman_compose_already_installed) printf '%s' 'podman-compose gia'\'' installato' ;;
+    it:installer.podman_machine_already_running) printf '%s' 'Macchina Podman '\''%s'\'' gia'\'' accesa' ;;
+    it:installer.podman_machine_reachable) printf '%s' 'Macchina Podman raggiungibile' ;;
+    it:installer.podman_ready_but_weekly) printf '%s' 'Podman e'\'' pronto, ma il suo timer settimanale che libera il disco non si e'\'' potuto attivare.' ;;
+    it:installer.podman_ready_colima_retained) printf '%s' 'Podman pronto (Colima lasciato com'\''era)' ;;
+    it:installer.podman_rootless_podman_compose) printf '%s' 'Podman rootless %s + podman-compose %s per %s' ;;
+    it:installer.podman_rootless_reachable) printf '%s' 'podman rootless raggiungibile' ;;
+    it:installer.private_jht_docker_shim) printf '%s' 'Shim docker privato di JHT: %s (non aggiunto al PATH globale; Colima non toccato)' ;;
+    it:installer.private_jht_docker_shim_2) printf '%s' 'Shim docker privato di JHT: %s (non aggiunto al PATH globale; Podman rootless, senza macchina)' ;;
+    it:installer.run_manually_jht_setup) printf '%s' 'Lancia a mano: jht setup' ;;
+    it:installer.running_host_setup_sh) printf '%s' 'Eseguo host-setup.sh (scrive ~/.jht/host.env e controlla lo swap)...' ;;
+    it:installer.runtime) printf '%s' 'runtime:  ' ;;
+    it:installer.runtime_dir_bad_ancestor) printf '%s' 'La cartella del runtime sull'\''host ha sopra di se'\'' un collegamento o un percorso non canonico: %s' ;;
+    it:installer.runtime_dir_in_mount) printf '%s' 'La cartella del runtime sull'\''host deve stare fuori dalle cartelle che il container puo'\'' scrivere: %s' ;;
+    it:installer.runtime_dir_is_link) printf '%s' 'La cartella del runtime sull'\''host e'\'' un collegamento: %s' ;;
+    it:installer.runtime_image_pinned) printf '%s' 'immagine del runtime fissata: %s' ;;
+    it:installer.runtime_tier_core_tools) printf '%s' 'livello del runtime: core (gli strumenti arrivano dopo il benvenuto)' ;;
+    it:installer.same_as_above_empties) printf '%s' '(come sopra, e svuota anche ~/.jht e ~/Documents/Job Hunter Team)' ;;
+    it:installer.setup_did_not_finish) printf '%s' 'Il setup non e'\'' finito (codice di uscita %s): Job Hunter Team e'\'' installato, ma non ancora configurato.' ;;
+    it:installer.starting_podman_machine) printf '%s' 'Avvio la macchina Podman '\''%s'\''...' ;;
+    it:installer.subuid_subgid_range) printf '%s' 'intervallo subuid/subgid %s-%s per %s' ;;
+    it:installer.system_detection) printf '%s' 'Rilevamento del sistema' ;;
+    it:installer.team_running) printf '%s' 'Job Hunter Team e'\'' acceso su questo computer (%s). Se il setup si era interrotto, riprendilo con «jht setup» in questo terminale; non serve spegnere niente. Per reinstallare invece: spegnilo con «jht down», rilancia l'\''installer, poi riaccendilo con «jht up». Non e'\'' stato cambiato niente: il tuo profilo e i tuoi documenti in ~/.jht e ~/Documents/Job Hunter Team restano dove sono.' ;;
+    it:installer.terminal_run) printf '%s' 'In questo terminale, lancia:' ;;
+    it:installer.uid_1001_taken) printf '%s' 'l'\''uid 1001 su questo computer e'\'' l'\''account '\''%s'\''. Il container di Job Hunter Team gira come uid 1001, quindi quell'\''account sarebbe il proprietario di ~/.jht (i tuoi dati e le credenziali dei portali). Non e'\'' stato cambiato niente. Lancia JHT dall'\''account '\''%s'\'', o dai a '\''%s'\'' un altro uid, poi riprova.' ;;
+    it:installer.uninstall_keeps_your_data) printf '%s' 'Per disinstallare (i tuoi dati in ~/.jht e ~/Documents/Job Hunter Team restano):' ;;
+    it:installer.wrapper_dir_bad_ancestor) printf '%s' 'La cartella del wrapper sull'\''host ha sopra di se'\'' un collegamento o un percorso non canonico: %s' ;;
+    it:installer.wrapper_dir_in_mount) printf '%s' 'La cartella del wrapper sull'\''host deve stare fuori dalle cartelle che il container puo'\'' scrivere: %s' ;;
+    it:installer.wsl_not_supported) printf '%s' 'su Windows, installa JHT da PowerShell con install.ps1 (vedi docs/guides/QUICKSTART.md), non da dentro WSL. Non e'\'' stato cambiato niente.' ;;
+    hu:installer.agents_can_only_see) printf '%s' 'Az ügynökök csak ezt látják:' ;;
+    hu:installer.already_path) printf '%s' 'a(z) %s már benne van a PATH-ban' ;;
+    hu:installer.also_delete_your_data) printf '%s' 'Ha az adataidat is törölni akarod (beállítás, adatbázis, önéletrajzok, eredmények):' ;;
+    hu:installer.also_deletes_api_key) printf '%s' '(törli a csapathoz mentett API-kulcsot, a levelezés jelszavát és a Telegram-tokeneket is)' ;;
+    hu:installer.apt_get_update_failed) printf '%s' 'az apt-get update nem sikerült: azért megpróbálom a telepítést.' ;;
+    hu:installer.branch) printf '%s' 'ág:      ' ;;
+    hu:installer.cannot_list_containers) printf '%s' 'Nem tudom kilistázni a futó konténereket ezzel: %s. Semmi sem lett telepítve.' ;;
+    hu:installer.chown_not_needed) printf '%s' 'a chown 1001-re nem sikerült — itt semmi sem fut konténerben (--no-docker), így nincs rá szükség' ;;
+    hu:installer.config_db_agents) printf '%s' '(beállítás, adatbázis, ügynökök)' ;;
+    hu:installer.configuration_wizard_also_starts) printf '%s' 'beállító varázsló (a konténert is elindítja)' ;;
+    hu:installer.container_mode_active_podman) printf '%s' 'Konténeres mód bekapcsolva (Podman).' ;;
+    hu:installer.container_runtime) printf '%s' 'Konténermotor' ;;
+    hu:installer.container_runtime_check) printf '%s' 'A konténermotor ellenőrzése' ;;
+    hu:installer.container_runtime_podman_rootless) printf '%s' 'Konténermotor (Podman rootless)' ;;
+    hu:installer.container_will_complete_pairing) printf '%s' 'A konténer az első indításkor befejezi a párosítást.' ;;
+    hu:installer.creating_rootless_podman_machine) printf '%s' 'Létrehozom a(z) '\''%s'\'' rootless Podman-gépet...' ;;
+    hu:installer.cvs_attachments_output) printf '%s' '(önéletrajzok, mellékletek, eredmények)' ;;
+    hu:installer.disk_low_dry_run) printf '%s' 'Csak %s GiB szabad hely van itt: %s; egy valódi telepítéshez legalább %s GiB kell.' ;;
+    hu:installer.disk_not_enough) printf '%s' 'nincs elég szabad hely a lemezen: %s GiB szabad itt: %s, a Job Hunter Team képének és adatainak legalább %s GiB kell. Szabadíts fel helyet (egy olyan szerveren, ahol már fut a Docker, a '\''docker image prune -af'\'' eltávolítja a nem használt képeket), és futtasd újra a telepítőt. Semmi sem változott.' ;;
+    hu:installer.done_compose) printf '%s' 'compose: %s' ;;
+    hu:installer.done_host_setup) printf '%s' 'host-setup: %s' ;;
+    hu:installer.done_wrapper) printf '%s' 'wrapper: %s' ;;
+    hu:installer.download_failed) printf '%s' 'A letöltés nem sikerült: %s. Ellenőrizd a kapcsolatot és az ágat (%s).' ;;
+    hu:installer.download_wrapper_docker_compose) printf '%s' 'A wrapper és a docker-compose.yml letöltése' ;;
+    hu:installer.downloading_docker_compose_yml) printf '%s' 'A docker-compose.yml letöltése...' ;;
+    hu:installer.downloading_host_setup_sh) printf '%s' 'A host-setup.sh letöltése (VPS/swap előzetes ellenőrzés)...' ;;
+    hu:installer.downloading_jht_wrapper) printf '%s' 'A jht wrapper letöltése...' ;;
+    hu:installer.enabling_linger) printf '%s' 'A linger bekapcsolása ehhez: %s...' ;;
+    hu:installer.existing_podman_machine_has) printf '%s' 'A meglévő '\''%s'\'' Podman-gép erőforrásai: '\''%s'\''; a JHT %s CPU-t, %s MiB RAM-ot és %s GiB lemezt javasol. A meglévő gép nem változott.' ;;
+    hu:installer.extras_image_pinned_ghcr) printf '%s' 'rögzített kiegészítő kép: ghcr.io/leopu00/jht@%s (akkor töltődik le, amikor egy eszközt kérnek)' ;;
+    hu:installer.giving_subordinate_uid_gid) printf '%s' 'Alárendelt uid/gid tartományt adok ennek: %s, %s-%s...' ;;
+    hu:installer.helper_download_failed) printf '%s' 'a(z) %s letöltése vagy ellenőrzése nem sikerült: %s/scripts/%s' ;;
+    hu:installer.host_file_tmp_failed) printf '%s' 'nem tudok ideiglenes fájlt létrehozni itt: %s; a(z) %s nem lesz megírva' ;;
+    hu:installer.host_setup_completed_auto) printf '%s' 'a host-setup kész (a gazdagép típusa automatikusan felismerve)' ;;
+    hu:installer.host_setup_completed_forced) printf '%s' 'a host-setup kész (kényszerítve: vps)' ;;
+    hu:installer.host_setup_download_failed) printf '%s' 'a host-setup.sh letöltése vagy ellenőrzése nem sikerült: %s' ;;
+    hu:installer.host_setup_exited_error) printf '%s' 'a host-setup hibával állt le — folytatom (lehet, hogy kézi párosítás kell)' ;;
+    hu:installer.host_setup_exited_error_2) printf '%s' 'a host-setup hibával állt le — folytatom' ;;
+    hu:installer.host_setup_missing) printf '%s' 'a host-setup.sh nem érhető el itt: %s — kihagyom az előzetes ellenőrzést' ;;
+    hu:installer.image) printf '%s' 'kép:     ' ;;
+    hu:installer.image_download_failed) printf '%s' 'a JHT képének letöltése nem sikerült: %s' ;;
+    hu:installer.installation_complete) printf '%s' 'A telepítés kész!' ;;
+    hu:installer.installed) printf '%s' 'Telepítve:%s' ;;
+    hu:installer.installing_podman_cli) printf '%s' 'A Podman CLI telepítése...' ;;
+    hu:installer.installing_podman_compose_provider) printf '%s' 'A Podman Compose szolgáltató telepítése...' ;;
+    hu:installer.installing_sudo_podman_rootless) printf '%s' 'Telepítés:%s sudóval (Podman rootless; a Docker nem települ)...' ;;
+    hu:installer.linger_enabled) printf '%s' 'a linger bekapcsolva ehhez: %s' ;;
+    hu:installer.loginctl_not_found_linger) printf '%s' 'a loginctl nem található: a linger nem lett ellenőrizve.' ;;
+    hu:installer.mac.cannot_create_folder) printf '%s' 'Nem tudom létrehozni a(z) %s mappát a Podman-géphez.' ;;
+    hu:installer.mac.compose_install_failed) printf '%s' 'a podman-compose telepítése nem sikerült' ;;
+    hu:installer.mac.compose_version_unsupported) printf '%s' 'A JHT-nak Macen a podman-compose %s kell; ezen a Macen ez van: %s. Futtasd: «brew upgrade podman-compose» (vagy «brew install podman-compose»), majd újra ezt a telepítőt.' ;;
+    hu:installer.mac.homebrew_missing) printf '%s' 'A JHT a Podmant Homebrew-val telepíti, ami nincs ezen a Macen. Semmi sem változott. Telepítsd a Homebrew-t innen: https://brew.sh (egy parancs a Terminálban; kéri a Maced jelszavát), nyiss egy új Terminál-ablakot, és futtasd újra ezt a telepítőt.' ;;
+    hu:installer.mac.machine_init_failed) printf '%s' 'A Podman-gép inicializálása nem sikerült; a Colima nem változott.' ;;
+    hu:installer.mac.machine_name_placeholder) printf '%s' '<név>' ;;
+    hu:installer.mac.machine_not_responding) printf '%s' 'A JHT Podman-gépe nem válaszol.' ;;
+    hu:installer.mac.machine_start_failed) printf '%s' 'A Podman-gép indítása nem sikerült; a Colima nem változott.' ;;
+    hu:installer.mac.machine_unreachable) printf '%s' 'A(z) '\''%s'\'' Podman-gép nem érhető el.' ;;
+    hu:installer.mac.other_machine_any) printf '%s' 'egy másik Podman-gép fut (a '\''podman machine list'\'' paranccsal megtalálod)' ;;
+    hu:installer.mac.other_machine_named) printf '%s' 'egy másik Podman-gép fut: %s' ;;
+    hu:installer.mac.other_machine_running) printf '%s' '%s, és egy Macen egyszerre csak egy futhat. Állítsd le a '\''podman machine stop %s'\'' paranccsal (vagy abból az alkalmazásból, amellyel használod), és futtasd újra a telepítőt: a Job Hunter Team sosem állítja le helyetted, és utána újra elindíthatod.' ;;
+    hu:installer.mac.podman_install_failed) printf '%s' 'A Podman telepítése nem sikerült' ;;
+    hu:installer.mac.podman_no_version) printf '%s' 'egy podman, amely nem mondja meg a verzióját' ;;
+    hu:installer.mac.podman_version_unsupported) printf '%s' 'A JHT-nak Macen Podman %s.%s vagy egy későbbi %s.x kell (nem 6.2 vagy újabb); ezen a Macen ez van: %s. Ha a Homebrew a Podmant a(z) %s sorozaton túlra frissítette, töltsd le újra a mai JHT-telepítőt (megmondja, melyik sorozatot támogatja); a JHT-ból semmi sem lett telepítve.' ;;
+    hu:installer.migration.colima_default) printf '%s' 'Ha a Colimát csak a JHT miatt telepítetted, az eltávolítás után a virtuális gépe (a default profil, amelyet a JHT telepítője indított el) leállítva a lemezen marad: távolítsd el a «colima delete -p default» paranccsal, hogy felszabadítsd a helyet. Ha a Colimát másra is használod, hagyd meg.' ;;
+    hu:installer.migration.colima_started) printf '%s' 'Az eltávolítás után a JHT által létrehozott Colima virtuális gép (%s profil) leállítva a lemezen marad: ha semmi másra nem használod, távolítsd el a «colima delete -p %s» paranccsal, hogy felszabadítsd a helyet.' ;;
+    hu:installer.migration.refused) printf '%s' 'ez a gép Dockeren futtatja a JHT-t (Colima, Docker Desktop vagy Docker Engine). A 0.4 óta a JHT csak Podmanen fut, és semmi sem változott. Az adataid megmaradnak: a ~/.jht (beállítás, adatbázis, profil) és a ~/Documents/Job Hunter Team (önéletrajzok, eredmények) ennek a gépnek a mappái. Ami a Docker köteteiben marad, és újra meg kell adni: a beállítás által tárolt API-kulcs, a levelezés jelszava, a Telegram-tokenek. Átállás a Podmanre: %s, futtasd újra ezt a telepítőt, majd a «jht setup» parancsot az API-kulcsoddal.%s' ;;
+    hu:installer.migration.uninstall) printf '%s' 'futtasd: «jht uninstall --confirm» (megtartja azt a két mappát)' ;;
+    hu:installer.migration.uninstall_old_jht) printf '%s' 'a jht parancsod egy olyan verzióból való, amely nem tudja eltávolítani önmagát, ezért ennek a verziónak a parancsát használd: «f="$(mktemp)" && curl -fsSL '\''%s'\'' -o "$f" && bash "$f" uninstall --confirm; rm -f "$f"» (eltávolítja a Dockeren futó JHT-t és a régi jht parancsot, és megtartja azt a két mappát)' ;;
+    hu:installer.min_free_invalid) printf '%s' 'Érvénytelen JHT_MIN_FREE_GIB: %s' ;;
+    hu:installer.mode) printf '%s' 'mód:     ' ;;
+    hu:installer.mount_repair_failed) printf '%s' 'A(z) %s és a(z) %s nem tehető írhatóvá a Job Hunter Team konténere számára (uid 1001-ként fut), és semmi sem indult el. Vagy engedd, hogy ez a fiók futtassa a Dockert (add hozzá a '\''docker'\'' csoporthoz, majd jelentkezz be újra), vagy futtasd egyszer: sudo chown -R 1001:1001 "%s" "%s" — majd futtasd újra ezt a telepítőt.' ;;
+    hu:installer.next_step_run_finish) printf '%s' 'Következő lépés: futtasd a  %s  parancsot a beállítás befejezéséhez.' ;;
+    hu:installer.next_steps) printf '%s' 'Következő lépések:' ;;
+    hu:installer.no_interactive_terminal_no) printf '%s' 'Nincs interaktív terminál (nincs /dev/tty): kihagyom a varázslót.' ;;
+    hu:installer.no_shell_rc_file) printf '%s' 'Nem lett shell rc fájl írva. Add hozzá kézzel:' ;;
+    hu:installer.open_new_terminal_window) printf '%s' 'Előbb nyiss egy új terminálablakot (vagy futtasd: . ~/.profile), hogy megtalálja a jht-t.' ;;
+    hu:installer.ownership_1001_1001_container) printf '%s' 'A(z) %s és a(z) %s tulajdonosa → 1001:1001 (a konténer UID-ja)' ;;
+    hu:installer.ownership_1001_1001_container_2) printf '%s' 'A(z) %s és a(z) %s tulajdonosa → 1001:1001 (a konténer UID-ja, egy egyszeri konténer állította be: nem kell sudo)' ;;
+    hu:installer.ownership_stays_user_macos) printf '%s' 'A(z) %s és a(z) %s tulajdonosa ez a felhasználó marad (macOS)' ;;
+    hu:installer.ownership_stays_user_rootless) printf '%s' 'A(z) %s és a(z) %s tulajdonosa ez a felhasználó marad (rootless Podman)' ;;
+    hu:installer.pairing_token_present_skipping) printf '%s' 'Van párosítási token: kihagyom az interaktív varázslót.' ;;
+    hu:installer.pairing_token_saved) printf '%s' 'A párosítási token elmentve ide: %s (mód 0600)' ;;
+    hu:installer.path_added) printf '%s' 'A PATH hozzáadva ehhez: %s' ;;
+    hu:installer.path_added_etc_profile) printf '%s' 'A PATH hozzáadva a /etc/profile.d/jht.sh fájlhoz (az egész rendszerre)' ;;
+    hu:installer.podman.answers_rootful) printf '%s' 'a podman rootfulként válaszol ennek: %s (Rootless=%s): a JHT-nak Podman rootless kell.' ;;
+    hu:installer.podman.apt_failed) printf '%s' 'az apt-get install%s nem sikerült. Hogy lásd, miért, futtasd: sudo apt-get install%s' ;;
+    hu:installer.podman.apt_would_remove) printf '%s' 'a(z)%s telepítése ELTÁVOLÍTANA más csomagokat erről a gépről (gyakran a containerd.io-t, a Dockerét): semmi sem változott. Hogy lásd, melyeket, futtasd: sudo apt-get -s install%s. Telepítsd a Podmant magad úgy, hogy azok megmaradjanak (vagy döntsd el, hogy eltávolítod őket), majd futtasd újra ezt a telepítőt.' ;;
+    hu:installer.podman.compose_missing) printf '%s' 'a podman-compose nem érhető el a rendszer csomagjai között. Kérd meg a szerver rendszergazdáját, hogy telepítse rootként: apt install podman-compose' ;;
+    hu:installer.podman.compose_too_old) printf '%s' 'a podman-compose %s régebbi, mint %s. Kérj újabb podman-compose-t a szerver rendszergazdájától.' ;;
+    hu:installer.podman.distribution_too_old) printf '%s' 'ez a disztribúció ezt telepítené: %s %s, a Job Hunter Team 0.4.0-nak pedig %s %s vagy újabb kell: semmi sem lett telepítve. Disztribúciók, amelyek ezt adják: Ubuntu 26.04 LTS, Debian 13, Fedora 43 vagy újabb.' ;;
+    hu:installer.podman.dnf_failed) printf '%s' 'a dnf install%s nem sikerült (a dnf semmit sem távolít el: egy telepített csomaggal való ütközés megállítja). Hogy lásd, miért, futtasd: sudo dnf install%s' ;;
+    hu:installer.podman.info_fails) printf '%s' 'a '\''podman info'\'' hibát ad ennek: %s, tehát a rootless tárhely vagy futtatókörnyezet nincs kész. Futtasd kézzel, hogy lásd, miért.' ;;
+    hu:installer.podman.linger_failed) printf '%s' 'a loginctl enable-linger %s nem sikerült.' ;;
+    hu:installer.podman.linger_missing) printf '%s' 'a(z) %s konténerei leállnának a munkamenet végén. Kérd meg a szerver rendszergazdáját, hogy futtassa rootként: loginctl enable-linger %s' ;;
+    hu:installer.podman.missing_default) printf '%s' 'a subuid tartomány vagy a linger' ;;
+    hu:installer.podman.no_package_manager) printf '%s' 'nincs ismert csomagkezelő (apt, dnf, pacman) a telepítéshez:%s' ;;
+    hu:installer.podman.pacman_failed) printf '%s' 'a pacman -S%s nem sikerült (semmi sem lett eltávolítva). Hogy lásd, miért, futtasd: sudo pacman -S%s' ;;
+    hu:installer.podman.root_refused) printf '%s' 'A JHT Podman rootless módban fut, egy nem root felhasználóként. Jelentkezz be azzal a felhasználóval, és futtasd újra a telepítést.' ;;
+    hu:installer.podman.runtime_dir_missing) printf '%s' 'ennek a felhasználónak nincs runtime könyvtára (%s): a munkamenetnek nincs felhasználói kezelője. Jelentkezz be újra, vagy kérd meg a rendszergazdát, hogy futtassa rootként: loginctl enable-linger %s' ;;
+    hu:installer.podman.still_missing) printf '%s' 'a podman a telepítés után sincs meg. Kérd meg a szerver rendszergazdáját, hogy futtassa rootként: apt install podman' ;;
+    hu:installer.podman.subuid_missing) printf '%s' 'a(z) %s felhasználónak nincs alárendelt uid/gid tartománya itt: %s/subuid és %s/subgid. Kérd meg a szerver rendszergazdáját, hogy futtassa rootként: usermod --add-subuids 100000-165535 --add-subgids 100000-165535 %s' ;;
+    hu:installer.podman.sudo_required) printf '%s' 'A Podmanhez olyan beállítás kell, amelyet csak rendszergazda végezhet el (hiányzik:%s), és a(z) %s felhasználónak nincs jelszó nélküli sudója. Kérd meg a szerver rendszergazdáját, hogy engedjen a(z) %s felhasználónak jelszó nélküli sudót, vagy futtassa rootként: apt install podman podman-compose uidmap; loginctl enable-linger %s' ;;
+    hu:installer.podman.too_old) printf '%s' 'a podman %s régebbi, mint %s. Kérj újabb podmant a szerver rendszergazdájától.' ;;
+    hu:installer.podman.unknown_version) printf '%s' 'ismeretlen verziójú' ;;
+    hu:installer.podman.unsupported_host) printf '%s' 'a --runtime podman Linuxra és macOS-re való; ez a rendszer: %s.' ;;
+    hu:installer.podman.usermod_failed) printf '%s' 'a usermod nem tudta hozzáadni az alárendelt tartományt (%s-%s) ehhez: %s.' ;;
+    hu:installer.podman_already_installed) printf '%s' 'a podman már telepítve van' ;;
+    hu:installer.podman_compose_already_installed) printf '%s' 'a podman-compose már telepítve van' ;;
+    hu:installer.podman_machine_already_running) printf '%s' 'A(z) '\''%s'\'' Podman-gép már fut' ;;
+    hu:installer.podman_machine_reachable) printf '%s' 'A Podman-gép elérhető' ;;
+    hu:installer.podman_ready_but_weekly) printf '%s' 'A Podman kész, de a heti lemeztrim időzítőjét nem sikerült bekapcsolni.' ;;
+    hu:installer.podman_ready_colima_retained) printf '%s' 'A Podman kész (a Colima megmaradt)' ;;
+    hu:installer.podman_rootless_podman_compose) printf '%s' 'Podman rootless %s + podman-compose %s ehhez: %s' ;;
+    hu:installer.podman_rootless_reachable) printf '%s' 'a podman rootless elérhető' ;;
+    hu:installer.private_jht_docker_shim) printf '%s' 'Privát JHT docker shim: %s (nincs hozzáadva a globális PATH-hoz; a Colima érintetlen)' ;;
+    hu:installer.private_jht_docker_shim_2) printf '%s' 'Privát JHT docker shim: %s (nincs hozzáadva a globális PATH-hoz; rootless Podman, gép nélkül)' ;;
+    hu:installer.run_manually_jht_setup) printf '%s' 'Futtasd kézzel: jht setup' ;;
+    hu:installer.running_host_setup_sh) printf '%s' 'A host-setup.sh futtatása (megírja a ~/.jht/host.env fájlt + swap előzetes ellenőrzés)...' ;;
+    hu:installer.runtime) printf '%s' 'runtime: ' ;;
+    hu:installer.runtime_dir_bad_ancestor) printf '%s' 'A gazdagép futtatókörnyezetének egyik szülőmappája link vagy nem kanonikus: %s' ;;
+    hu:installer.runtime_dir_in_mount) printf '%s' 'A gazdagép futtatókörnyezetének a konténer által írható bind mountokon kívül kell lennie: %s' ;;
+    hu:installer.runtime_dir_is_link) printf '%s' 'A gazdagép futtatókörnyezetének útvonala link: %s' ;;
+    hu:installer.runtime_image_pinned) printf '%s' 'rögzített futtatókép: %s' ;;
+    hu:installer.runtime_tier_core_tools) printf '%s' 'futtatási szint: core (az eszközök az üdvözlés után jönnek)' ;;
+    hu:installer.same_as_above_empties) printf '%s' '(mint fent, és kiüríti a ~/.jht és a ~/Documents/Job Hunter Team mappát is)' ;;
+    hu:installer.setup_did_not_finish) printf '%s' 'A beállítás nem fejeződött be (kilépési kód: %s): a Job Hunter Team telepítve van, de még nincs beállítva.' ;;
+    hu:installer.starting_podman_machine) printf '%s' 'A(z) '\''%s'\'' Podman-gép indítása...' ;;
+    hu:installer.subuid_subgid_range) printf '%s' 'subuid/subgid tartomány %s-%s ehhez: %s' ;;
+    hu:installer.system_detection) printf '%s' 'A rendszer felismerése' ;;
+    hu:installer.team_running) printf '%s' 'A Job Hunter Team fut ezen a gépen (%s). Ha a beállítás megszakadt, folytasd a «jht setup» paranccsal ebben a terminálban; nem kell leállítani. Ha inkább újratelepítenéd: állítsd le a «jht down» paranccsal, futtasd újra a telepítőt, majd indítsd el a «jht up» paranccsal. Semmi sem változott: a profilod és a dokumentumaid a ~/.jht és a ~/Documents/Job Hunter Team mappában maradnak.' ;;
+    hu:installer.terminal_run) printf '%s' 'Ebben a terminálban futtasd:' ;;
+    hu:installer.uid_1001_taken) printf '%s' 'Ezen a gépen az uid 1001 a(z) '\''%s'\'' fiók. A Job Hunter Team konténere uid 1001-ként fut, így az a fiók lenne a ~/.jht tulajdonosa (az adataid és a portálok hitelesítő adatai). Semmi sem változott. Futtasd a JHT-t a(z) '\''%s'\'' fiókból, vagy adj a(z) '\''%s'\'' fióknak másik uid-t, majd próbáld újra.' ;;
+    hu:installer.uninstall_keeps_your_data) printf '%s' 'Eltávolítás (az adataid megmaradnak a ~/.jht és a ~/Documents/Job Hunter Team mappában):' ;;
+    hu:installer.wrapper_dir_bad_ancestor) printf '%s' 'A gazdagép wrapper-mappájának egyik szülőmappája link vagy nem kanonikus: %s' ;;
+    hu:installer.wrapper_dir_in_mount) printf '%s' 'A gazdagép wrapperének a konténer által írható bind mountokon kívül kell lennie: %s' ;;
+    hu:installer.wsl_not_supported) printf '%s' 'Windowson a JHT-t PowerShellből telepítsd az install.ps1-gyel (lásd docs/guides/QUICKSTART.md), ne a WSL-en belülről. Semmi sem változott.' ;;
+    es:installer.agents_can_only_see) printf '%s' 'Los agentes solo ven:' ;;
+    es:installer.already_path) printf '%s' '%s ya está en el PATH' ;;
+    es:installer.also_delete_your_data) printf '%s' 'Para borrar también tus datos (configuración, db, CV, resultados):' ;;
+    es:installer.also_deletes_api_key) printf '%s' '(también borra la clave API, la contraseña del correo y los tokens de Telegram guardados para el equipo)' ;;
+    es:installer.apt_get_update_failed) printf '%s' 'apt-get update ha fallado: intento instalar de todos modos.' ;;
+    es:installer.branch) printf '%s' 'rama:    ' ;;
+    es:installer.cannot_list_containers) printf '%s' 'No puedo listar los contenedores en marcha con %s: no se ha instalado nada.' ;;
+    es:installer.chown_not_needed) printf '%s' 'chown a 1001 ha fallado: aquí no se ejecuta nada en un contenedor (--no-docker), así que no hace falta' ;;
+    es:installer.config_db_agents) printf '%s' '(configuración, db, agentes)' ;;
+    es:installer.configuration_wizard_also_starts) printf '%s' 'configuración guiada (también arranca el contenedor)' ;;
+    es:installer.container_mode_active_podman) printf '%s' 'Modo contenedor activo (Podman).' ;;
+    es:installer.container_runtime) printf '%s' 'Motor de contenedores' ;;
+    es:installer.container_runtime_check) printf '%s' 'Comprobación del motor de contenedores' ;;
+    es:installer.container_runtime_podman_rootless) printf '%s' 'Motor de contenedores (Podman rootless)' ;;
+    es:installer.container_will_complete_pairing) printf '%s' 'El contenedor completará el emparejamiento en el primer arranque.' ;;
+    es:installer.creating_rootless_podman_machine) printf '%s' 'Creando la máquina Podman rootless '\''%s'\''...' ;;
+    es:installer.cvs_attachments_output) printf '%s' '(CV, adjuntos, resultados)' ;;
+    es:installer.disk_low_dry_run) printf '%s' 'Solo hay %s GiB libres en %s; una instalación de verdad necesita al menos %s GiB.' ;;
+    es:installer.disk_not_enough) printf '%s' 'no hay espacio libre suficiente en el disco: %s GiB libres en %s, la imagen de Job Hunter Team y sus datos necesitan al menos %s GiB. Libera algo de espacio (en un servidor que ya usa Docker, '\''docker image prune -af'\'' quita las imágenes que no se usan) y vuelve a ejecutar el instalador. No se ha cambiado nada.' ;;
+    es:installer.done_compose) printf '%s' 'compose: %s' ;;
+    es:installer.done_host_setup) printf '%s' 'host-setup: %s' ;;
+    es:installer.done_wrapper) printf '%s' 'wrapper: %s' ;;
+    es:installer.download_failed) printf '%s' 'La descarga ha fallado: %s. Comprueba la conexión y la rama (%s).' ;;
+    es:installer.download_wrapper_docker_compose) printf '%s' 'Descarga del wrapper y docker-compose.yml' ;;
+    es:installer.downloading_docker_compose_yml) printf '%s' 'Descargando docker-compose.yml...' ;;
+    es:installer.downloading_host_setup_sh) printf '%s' 'Descargando host-setup.sh (comprobaciones previas de VPS/swap)...' ;;
+    es:installer.downloading_jht_wrapper) printf '%s' 'Descargando el wrapper jht...' ;;
+    es:installer.enabling_linger) printf '%s' 'Activando el linger para %s...' ;;
+    es:installer.existing_podman_machine_has) printf '%s' 'La máquina Podman '\''%s'\'' que ya existe tiene los recursos '\''%s'\''; JHT recomienda %s CPU, %s MiB de RAM y %s GiB de disco. No se ha cambiado la máquina.' ;;
+    es:installer.extras_image_pinned_ghcr) printf '%s' 'imagen extras fijada: ghcr.io/leopu00/jht@%s (se descarga cuando se pide una herramienta)' ;;
+    es:installer.giving_subordinate_uid_gid) printf '%s' 'Asignando a %s el rango de uid/gid subordinados %s-%s...' ;;
+    es:installer.helper_download_failed) printf '%s' 'la descarga o la verificación de %s ha fallado: %s/scripts/%s' ;;
+    es:installer.host_file_tmp_failed) printf '%s' 'no puedo crear un archivo temporal en %s: no escribo %s' ;;
+    es:installer.host_setup_completed_auto) printf '%s' 'host-setup completado (tipo de host detectado solo)' ;;
+    es:installer.host_setup_completed_forced) printf '%s' 'host-setup completado (vps forzado)' ;;
+    es:installer.host_setup_download_failed) printf '%s' 'la descarga o la verificación de host-setup.sh ha fallado: %s' ;;
+    es:installer.host_setup_exited_error) printf '%s' 'host-setup ha terminado con un error: sigo (puede hacer falta un emparejamiento a mano)' ;;
+    es:installer.host_setup_exited_error_2) printf '%s' 'host-setup ha terminado con un error: sigo' ;;
+    es:installer.host_setup_missing) printf '%s' 'host-setup.sh no está disponible en %s: me salto las comprobaciones previas' ;;
+    es:installer.image) printf '%s' 'imagen:  ' ;;
+    es:installer.image_download_failed) printf '%s' 'La descarga de la imagen de JHT ha fallado: %s' ;;
+    es:installer.installation_complete) printf '%s' '¡Instalación completada!' ;;
+    es:installer.installed) printf '%s' 'Instalado:%s' ;;
+    es:installer.installing_podman_cli) printf '%s' 'Instalando la CLI de Podman...' ;;
+    es:installer.installing_podman_compose_provider) printf '%s' 'Instalando el proveedor de Podman Compose...' ;;
+    es:installer.installing_sudo_podman_rootless) printf '%s' 'Instalando%s con sudo (Podman rootless; Docker no se instala)...' ;;
+    es:installer.linger_enabled) printf '%s' 'linger activado para %s' ;;
+    es:installer.loginctl_not_found_linger) printf '%s' 'loginctl no encontrado: no se ha comprobado el linger.' ;;
+    es:installer.mac.cannot_create_folder) printf '%s' 'No puedo crear %s para la máquina Podman.' ;;
+    es:installer.mac.compose_install_failed) printf '%s' 'la instalación de podman-compose ha fallado' ;;
+    es:installer.mac.compose_version_unsupported) printf '%s' 'JHT en un Mac necesita podman-compose %s; este Mac tiene %s. Ejecuta «brew upgrade podman-compose» (o «brew install podman-compose») y luego otra vez este instalador.' ;;
+    es:installer.mac.homebrew_missing) printf '%s' 'JHT instala Podman con Homebrew, que no está en este Mac. No se ha cambiado nada. Instala Homebrew desde https://brew.sh (un comando en Terminal; te pide la contraseña del Mac), abre una nueva ventana de Terminal y vuelve a ejecutar este instalador.' ;;
+    es:installer.mac.machine_init_failed) printf '%s' 'La creación de la máquina Podman ha fallado; no se ha cambiado Colima.' ;;
+    es:installer.mac.machine_name_placeholder) printf '%s' '<nombre>' ;;
+    es:installer.mac.machine_not_responding) printf '%s' 'La máquina Podman de JHT no responde.' ;;
+    es:installer.mac.machine_start_failed) printf '%s' 'El arranque de la máquina Podman ha fallado; no se ha cambiado Colima.' ;;
+    es:installer.mac.machine_unreachable) printf '%s' 'La máquina Podman '\''%s'\'' no es accesible.' ;;
+    es:installer.mac.other_machine_any) printf '%s' 'hay otra máquina Podman en marcha (búscala con '\''podman machine list'\'')' ;;
+    es:installer.mac.other_machine_named) printf '%s' 'hay otra máquina Podman, %s, en marcha' ;;
+    es:installer.mac.other_machine_running) printf '%s' '%s, y un Mac solo ejecuta una a la vez. Detenla con '\''podman machine stop %s'\'' (o desde la app con la que la usas) y vuelve a ejecutar el instalador: Job Hunter Team nunca la detiene por ti, y luego puedes volver a arrancarla.' ;;
+    es:installer.mac.podman_install_failed) printf '%s' 'La instalación de Podman ha fallado' ;;
+    es:installer.mac.podman_no_version) printf '%s' 'un podman que no dice su versión' ;;
+    es:installer.mac.podman_version_unsupported) printf '%s' 'JHT en un Mac necesita Podman %s.%s o un %s.x posterior (no 6.2 ni posteriores); este Mac tiene %s. Si Homebrew ha llevado Podman más allá de la serie %s, vuelve a descargar el instalador de JHT de hoy (dice qué serie admite); no se ha instalado nada de JHT.' ;;
+    es:installer.migration.colima_default) printf '%s' 'Si instalaste Colima solo para JHT, tras la desinstalación su máquina virtual (perfil default, la que arrancaba el instalador de JHT) se queda en el disco, detenida: elimínala con «colima delete -p default» para liberar el espacio. Si usas Colima para otras cosas, déjala.' ;;
+    es:installer.migration.colima_started) printf '%s' 'Tras la desinstalación, la máquina virtual de Colima que creó JHT (perfil %s) se queda en el disco, detenida: si no la usas para nada más, elimínala con «colima delete -p %s» para liberar el espacio.' ;;
+    es:installer.migration.refused) printf '%s' 'este ordenador ejecuta JHT en Docker (Colima, Docker Desktop o Docker Engine). Desde la 0.4, JHT solo funciona con Podman, y no se ha cambiado nada. Tus datos se quedan: ~/.jht (configuración, base de datos, perfil) y ~/Documents/Job Hunter Team (CV, resultados) son carpetas de este ordenador. Lo que se queda en los volúmenes de Docker y tendrás que dar otra vez: la clave API guardada por la configuración, la contraseña del correo, los tokens de Telegram. Para pasar a Podman: %s, vuelve a ejecutar este instalador y luego «jht setup» con tu clave API.%s' ;;
+    es:installer.migration.uninstall) printf '%s' 'ejecuta «jht uninstall --confirm» (conserva esas dos carpetas)' ;;
+    es:installer.migration.uninstall_old_jht) printf '%s' 'tu comando jht es de una versión que no sabe desinstalarse, así que usa el de esta versión: «f="$(mktemp)" && curl -fsSL '\''%s'\'' -o "$f" && bash "$f" uninstall --confirm; rm -f "$f"» (quita el JHT en Docker y el comando jht antiguo, y conserva esas dos carpetas)' ;;
+    es:installer.min_free_invalid) printf '%s' 'JHT_MIN_FREE_GIB no válido: %s' ;;
+    es:installer.mode) printf '%s' 'modo:    ' ;;
+    es:installer.mount_repair_failed) printf '%s' '%s y %s no se pueden hacer escribibles para el contenedor de Job Hunter Team (se ejecuta como uid 1001) y no se ha arrancado nada. O deja que Docker funcione para esta cuenta (añádela al grupo '\''docker'\'' y vuelve a iniciar sesión), o ejecuta una vez: sudo chown -R 1001:1001 "%s" "%s" y luego vuelve a ejecutar este instalador.' ;;
+    es:installer.next_step_run_finish) printf '%s' 'Siguiente paso: ejecuta  %s  para terminar la configuración.' ;;
+    es:installer.next_steps) printf '%s' 'Siguientes pasos:' ;;
+    es:installer.no_interactive_terminal_no) printf '%s' 'No hay terminal interactivo (no hay /dev/tty): me salto el asistente.' ;;
+    es:installer.no_shell_rc_file) printf '%s' 'No se ha escrito ningún archivo rc de la shell. Añade a mano:' ;;
+    es:installer.open_new_terminal_window) printf '%s' 'Primero abre una nueva ventana del terminal (o ejecuta: . ~/.profile), para que encuentre jht.' ;;
+    es:installer.ownership_1001_1001_container) printf '%s' 'Propietario de %s y %s → 1001:1001 (UID del contenedor)' ;;
+    es:installer.ownership_1001_1001_container_2) printf '%s' 'Propietario de %s y %s → 1001:1001 (UID del contenedor, puesto por un contenedor de un solo uso: sin sudo)' ;;
+    es:installer.ownership_stays_user_macos) printf '%s' '%s y %s siguen siendo de este usuario (macOS)' ;;
+    es:installer.ownership_stays_user_rootless) printf '%s' '%s y %s siguen siendo de este usuario (Podman rootless)' ;;
+    es:installer.pairing_token_present_skipping) printf '%s' 'Hay un token de emparejamiento: me salto el asistente interactivo.' ;;
+    es:installer.pairing_token_saved) printf '%s' 'Token de emparejamiento guardado en %s (permisos 0600)' ;;
+    es:installer.path_added) printf '%s' 'PATH añadido a %s' ;;
+    es:installer.path_added_etc_profile) printf '%s' 'PATH añadido a /etc/profile.d/jht.sh (para todo el sistema)' ;;
+    es:installer.podman.answers_rootful) printf '%s' 'podman responde como rootful para %s (Rootless=%s): JHT necesita Podman rootless.' ;;
+    es:installer.podman.apt_failed) printf '%s' 'apt-get install%s ha fallado. Para ver por qué, ejecuta: sudo apt-get install%s' ;;
+    es:installer.podman.apt_would_remove) printf '%s' 'instalar%s QUITARÍA otros paquetes de este ordenador (a menudo containerd.io, el de Docker): no se ha cambiado nada. Para ver cuáles, ejecuta: sudo apt-get -s install%s. Instala tú Podman de forma que se queden (o decide quitarlos) y luego vuelve a ejecutar este instalador.' ;;
+    es:installer.podman.compose_missing) printf '%s' 'podman-compose no está disponible en los paquetes de este sistema. Pide al administrador de este servidor que lo instale, como root: apt install podman-compose' ;;
+    es:installer.podman.compose_too_old) printf '%s' 'podman-compose %s es más antiguo que %s. Pide al administrador de este servidor un podman-compose más reciente.' ;;
+    es:installer.podman.distribution_too_old) printf '%s' 'esta distribución instalaría %s %s, y Job Hunter Team 0.4.0 necesita %s %s o posterior: no se ha instalado nada. Distribuciones que lo traen: Ubuntu 26.04 LTS, Debian 13, Fedora 43 o posteriores.' ;;
+    es:installer.podman.dnf_failed) printf '%s' 'dnf install%s ha fallado (dnf no quita nada: lo detiene un conflicto con un paquete instalado). Para ver por qué, ejecuta: sudo dnf install%s' ;;
+    es:installer.podman.info_fails) printf '%s' ''\''podman info'\'' falla para %s, así que el almacenamiento o el runtime rootless no están listos. Ejecútalo a mano para ver por qué.' ;;
+    es:installer.podman.linger_failed) printf '%s' 'loginctl enable-linger %s ha fallado.' ;;
+    es:installer.podman.linger_missing) printf '%s' 'los contenedores de %s se detendrían al terminar la sesión. Pide al administrador de este servidor que ejecute, como root: loginctl enable-linger %s' ;;
+    es:installer.podman.missing_default) printf '%s' 'el rango subuid o el linger' ;;
+    es:installer.podman.no_package_manager) printf '%s' 'ningún gestor de paquetes conocido (apt, dnf, pacman) para instalar:%s' ;;
+    es:installer.podman.pacman_failed) printf '%s' 'pacman -S%s ha fallado (no se ha quitado nada). Para ver por qué, ejecuta: sudo pacman -S%s' ;;
+    es:installer.podman.root_refused) printf '%s' 'JHT funciona con Podman rootless, como un usuario que no es root. Entra con ese usuario y vuelve a ejecutar la instalación.' ;;
+    es:installer.podman.runtime_dir_missing) printf '%s' 'no hay carpeta de runtime para este usuario (%s): la sesión no tiene un gestor de usuario. Vuelve a iniciar sesión, o pide al administrador que ejecute, como root: loginctl enable-linger %s' ;;
+    es:installer.podman.still_missing) printf '%s' 'podman sigue sin estar después de la instalación. Pide al administrador de este servidor que ejecute, como root: apt install podman' ;;
+    es:installer.podman.subuid_missing) printf '%s' '%s no tiene un rango de uid/gid subordinados en %s/subuid y %s/subgid. Pide al administrador de este servidor que ejecute, como root: usermod --add-subuids 100000-165535 --add-subgids 100000-165535 %s' ;;
+    es:installer.podman.sudo_required) printf '%s' 'Podman necesita una preparación que solo puede hacer un administrador (falta:%s), y sudo para %s no está disponible sin contraseña. Pide al administrador de este servidor que dé a %s sudo sin contraseña, o que ejecute, como root: apt install podman podman-compose uidmap; loginctl enable-linger %s' ;;
+    es:installer.podman.too_old) printf '%s' 'podman %s es más antiguo que %s. Pide al administrador de este servidor un podman más reciente.' ;;
+    es:installer.podman.unknown_version) printf '%s' 'de versión desconocida' ;;
+    es:installer.podman.unsupported_host) printf '%s' '--runtime podman es para Linux y macOS; este sistema es %s.' ;;
+    es:installer.podman.usermod_failed) printf '%s' 'usermod no ha podido añadir el rango subordinado (%s-%s) para %s.' ;;
+    es:installer.podman_already_installed) printf '%s' 'podman ya instalado' ;;
+    es:installer.podman_compose_already_installed) printf '%s' 'podman-compose ya instalado' ;;
+    es:installer.podman_machine_already_running) printf '%s' 'La máquina Podman '\''%s'\'' ya está en marcha' ;;
+    es:installer.podman_machine_reachable) printf '%s' 'Máquina Podman accesible' ;;
+    es:installer.podman_ready_but_weekly) printf '%s' 'Podman está listo, pero no se ha podido activar su temporizador semanal que libera el disco.' ;;
+    es:installer.podman_ready_colima_retained) printf '%s' 'Podman listo (Colima se queda como estaba)' ;;
+    es:installer.podman_rootless_podman_compose) printf '%s' 'Podman rootless %s + podman-compose %s para %s' ;;
+    es:installer.podman_rootless_reachable) printf '%s' 'podman rootless accesible' ;;
+    es:installer.private_jht_docker_shim) printf '%s' 'Shim docker privado de JHT: %s (no añadido al PATH global; Colima sin tocar)' ;;
+    es:installer.private_jht_docker_shim_2) printf '%s' 'Shim docker privado de JHT: %s (no añadido al PATH global; Podman rootless, sin máquina)' ;;
+    es:installer.run_manually_jht_setup) printf '%s' 'Ejecuta a mano: jht setup' ;;
+    es:installer.running_host_setup_sh) printf '%s' 'Ejecutando host-setup.sh (escribe ~/.jht/host.env y comprueba el swap)...' ;;
+    es:installer.runtime) printf '%s' 'runtime: ' ;;
+    es:installer.runtime_dir_bad_ancestor) printf '%s' 'La carpeta del runtime en el host tiene por encima un enlace simbólico o una ruta no canónica: %s' ;;
+    es:installer.runtime_dir_in_mount) printf '%s' 'La carpeta del runtime en el host tiene que estar fuera de las carpetas en las que el contenedor puede escribir: %s' ;;
+    es:installer.runtime_dir_is_link) printf '%s' 'La carpeta del runtime en el host es un enlace simbólico: %s' ;;
+    es:installer.runtime_image_pinned) printf '%s' 'imagen del runtime fijada: %s' ;;
+    es:installer.runtime_tier_core_tools) printf '%s' 'nivel del runtime: core (las herramientas llegan después de la bienvenida)' ;;
+    es:installer.same_as_above_empties) printf '%s' '(igual que arriba, y además vacía ~/.jht y ~/Documents/Job Hunter Team)' ;;
+    es:installer.setup_did_not_finish) printf '%s' 'La configuración no ha terminado (código de salida %s): Job Hunter Team está instalado, pero todavía no está configurado.' ;;
+    es:installer.starting_podman_machine) printf '%s' 'Arrancando la máquina Podman '\''%s'\''...' ;;
+    es:installer.subuid_subgid_range) printf '%s' 'rango subuid/subgid %s-%s para %s' ;;
+    es:installer.system_detection) printf '%s' 'Detección del sistema' ;;
+    es:installer.team_running) printf '%s' 'Job Hunter Team está en marcha en este ordenador (%s). Si la configuración se interrumpió, retómala con «jht setup» en este terminal; no hace falta apagar nada. Para reinstalar, en cambio: detenlo con «jht down», vuelve a ejecutar el instalador y luego arráncalo con «jht up». No se ha cambiado nada: tu perfil y tus documentos en ~/.jht y ~/Documents/Job Hunter Team se quedan donde están.' ;;
+    es:installer.terminal_run) printf '%s' 'En este terminal, ejecuta:' ;;
+    es:installer.uid_1001_taken) printf '%s' 'el uid 1001 en este ordenador es la cuenta '\''%s'\''. El contenedor de Job Hunter Team se ejecuta como uid 1001, así que esa cuenta sería la propietaria de ~/.jht (tus datos y las credenciales de los portales). No se ha cambiado nada. Ejecuta JHT desde la cuenta '\''%s'\'', o da a '\''%s'\'' otro uid, y vuelve a intentarlo.' ;;
+    es:installer.uninstall_keeps_your_data) printf '%s' 'Para desinstalar (tus datos en ~/.jht y ~/Documents/Job Hunter Team se quedan):' ;;
+    es:installer.wrapper_dir_bad_ancestor) printf '%s' 'La carpeta del wrapper en el host tiene por encima un enlace simbólico o una ruta no canónica: %s' ;;
+    es:installer.wrapper_dir_in_mount) printf '%s' 'La carpeta del wrapper en el host tiene que estar fuera de las carpetas en las que el contenedor puede escribir: %s' ;;
+    es:installer.wsl_not_supported) printf '%s' 'en Windows, instala JHT desde PowerShell con install.ps1 (mira docs/guides/QUICKSTART.md), no desde dentro de WSL. No se ha cambiado nada.' ;;
+    de:installer.agents_can_only_see) printf '%s' 'Die Agenten sehen nur:' ;;
+    de:installer.already_path) printf '%s' '%s ist schon im PATH' ;;
+    de:installer.also_delete_your_data) printf '%s' 'Um auch deine Daten zu löschen (Konfiguration, Datenbank, Lebensläufe, Ergebnisse):' ;;
+    de:installer.also_deletes_api_key) printf '%s' '(es löscht auch den API-Schlüssel, das Mail-Passwort und die Telegram-Tokens, die für das Team gespeichert sind)' ;;
+    de:installer.apt_get_update_failed) printf '%s' 'apt-get update fehlgeschlagen: Ich versuche die Installation trotzdem.' ;;
+    de:installer.branch) printf '%s' 'Branch:  ' ;;
+    de:installer.cannot_list_containers) printf '%s' 'Die laufenden Container lassen sich mit %s nicht auflisten: Nichts wurde installiert.' ;;
+    de:installer.chown_not_needed) printf '%s' 'chown auf 1001 fehlgeschlagen — hier läuft nichts in einem Container (--no-docker), also braucht es niemand' ;;
+    de:installer.config_db_agents) printf '%s' '(Konfiguration, Datenbank, Agenten)' ;;
+    de:installer.configuration_wizard_also_starts) printf '%s' 'Einrichtungsassistent (startet auch den Container)' ;;
+    de:installer.container_mode_active_podman) printf '%s' 'Container-Modus aktiv (Podman).' ;;
+    de:installer.container_runtime) printf '%s' 'Container-Engine' ;;
+    de:installer.container_runtime_check) printf '%s' 'Prüfung der Container-Engine' ;;
+    de:installer.container_runtime_podman_rootless) printf '%s' 'Container-Engine (Podman rootless)' ;;
+    de:installer.container_will_complete_pairing) printf '%s' 'Der Container schließt die Kopplung beim ersten Start ab.' ;;
+    de:installer.creating_rootless_podman_machine) printf '%s' 'Erstelle die rootless Podman-Maschine '\''%s'\''...' ;;
+    de:installer.cvs_attachments_output) printf '%s' '(Lebensläufe, Anhänge, Ergebnisse)' ;;
+    de:installer.disk_low_dry_run) printf '%s' 'Nur %s GiB frei auf %s; eine echte Installation braucht mindestens %s GiB.' ;;
+    de:installer.disk_not_enough) printf '%s' 'nicht genug freier Speicherplatz: %s GiB frei auf %s, das Image von Job Hunter Team und seine Daten brauchen mindestens %s GiB. Schaffe Platz (auf einem Server, auf dem schon Docker läuft, entfernt '\''docker image prune -af'\'' ungenutzte Images) und führe den Installer erneut aus. Nichts wurde geändert.' ;;
+    de:installer.done_compose) printf '%s' 'Compose: %s' ;;
+    de:installer.done_host_setup) printf '%s' 'host-setup: %s' ;;
+    de:installer.done_wrapper) printf '%s' 'Wrapper: %s' ;;
+    de:installer.download_failed) printf '%s' 'Download fehlgeschlagen: %s. Prüfe deine Verbindung und den Branch (%s).' ;;
+    de:installer.download_wrapper_docker_compose) printf '%s' 'Wrapper + docker-compose.yml herunterladen' ;;
+    de:installer.downloading_docker_compose_yml) printf '%s' 'Lade docker-compose.yml herunter...' ;;
+    de:installer.downloading_host_setup_sh) printf '%s' 'Lade host-setup.sh herunter (VPS-/Swap-Vorprüfung)...' ;;
+    de:installer.downloading_jht_wrapper) printf '%s' 'Lade den jht-Wrapper herunter...' ;;
+    de:installer.enabling_linger) printf '%s' 'Aktiviere linger für %s...' ;;
+    de:installer.existing_podman_machine_has) printf '%s' 'Die vorhandene Podman-Maschine '\''%s'\'' hat die Ressourcen '\''%s'\''; JHT empfiehlt %s CPU, %s MiB RAM und %s GiB Festplatte. Die vorhandene Maschine wurde nicht geändert.' ;;
+    de:installer.extras_image_pinned_ghcr) printf '%s' 'Extras-Image festgelegt: ghcr.io/leopu00/jht@%s (wird geladen, wenn ein Werkzeug angefordert wird)' ;;
+    de:installer.giving_subordinate_uid_gid) printf '%s' 'Gebe %s den untergeordneten uid/gid-Bereich %s-%s...' ;;
+    de:installer.helper_download_failed) printf '%s' 'Download oder Prüfung von %s fehlgeschlagen: %s/scripts/%s' ;;
+    de:installer.host_file_tmp_failed) printf '%s' 'kann in %s keine temporäre Datei anlegen: %s wird nicht geschrieben' ;;
+    de:installer.host_setup_completed_auto) printf '%s' 'host-setup abgeschlossen (Host-Typ automatisch erkannt)' ;;
+    de:installer.host_setup_completed_forced) printf '%s' 'host-setup abgeschlossen (vps erzwungen)' ;;
+    de:installer.host_setup_download_failed) printf '%s' 'Download oder Prüfung von host-setup.sh fehlgeschlagen: %s' ;;
+    de:installer.host_setup_exited_error) printf '%s' 'host-setup mit Fehler beendet — es geht weiter (eventuell ist eine manuelle Kopplung nötig)' ;;
+    de:installer.host_setup_exited_error_2) printf '%s' 'host-setup mit Fehler beendet — es geht weiter' ;;
+    de:installer.host_setup_missing) printf '%s' 'host-setup.sh ist unter %s nicht verfügbar — Vorprüfung übersprungen' ;;
+    de:installer.image) printf '%s' 'Image:   ' ;;
+    de:installer.image_download_failed) printf '%s' 'Download des JHT-Images fehlgeschlagen: %s' ;;
+    de:installer.installation_complete) printf '%s' 'Installation abgeschlossen!' ;;
+    de:installer.installed) printf '%s' 'Installiert:%s' ;;
+    de:installer.installing_podman_cli) printf '%s' 'Installiere die Podman-CLI...' ;;
+    de:installer.installing_podman_compose_provider) printf '%s' 'Installiere den Podman-Compose-Provider...' ;;
+    de:installer.installing_sudo_podman_rootless) printf '%s' 'Installiere%s mit sudo (Podman rootless; Docker wird nicht installiert)...' ;;
+    de:installer.linger_enabled) printf '%s' 'linger für %s aktiviert' ;;
+    de:installer.loginctl_not_found_linger) printf '%s' 'loginctl nicht gefunden: linger wurde nicht geprüft.' ;;
+    de:installer.mac.cannot_create_folder) printf '%s' 'Kann %s für die Podman-Maschine nicht anlegen.' ;;
+    de:installer.mac.compose_install_failed) printf '%s' 'Installation von podman-compose fehlgeschlagen' ;;
+    de:installer.mac.compose_version_unsupported) printf '%s' 'JHT auf dem Mac braucht podman-compose %s; dieser Mac hat %s. Führe «brew upgrade podman-compose» (oder «brew install podman-compose») aus, dann noch einmal diesen Installer.' ;;
+    de:installer.mac.homebrew_missing) printf '%s' 'JHT installiert Podman mit Homebrew, das auf diesem Mac nicht da ist. Nichts wurde geändert. Installiere Homebrew von https://brew.sh (ein Befehl im Terminal; er fragt nach deinem Mac-Passwort), öffne ein neues Terminalfenster und führe diesen Installer erneut aus.' ;;
+    de:installer.mac.machine_init_failed) printf '%s' 'Initialisierung der Podman-Maschine fehlgeschlagen; Colima wurde nicht geändert.' ;;
+    de:installer.mac.machine_name_placeholder) printf '%s' '<Name>' ;;
+    de:installer.mac.machine_not_responding) printf '%s' 'Die JHT-Podman-Maschine antwortet nicht.' ;;
+    de:installer.mac.machine_start_failed) printf '%s' 'Start der Podman-Maschine fehlgeschlagen; Colima wurde nicht geändert.' ;;
+    de:installer.mac.machine_unreachable) printf '%s' 'Die Podman-Maschine '\''%s'\'' ist nicht erreichbar.' ;;
+    de:installer.mac.other_machine_any) printf '%s' 'eine andere Podman-Maschine läuft (finde sie mit '\''podman machine list'\'')' ;;
+    de:installer.mac.other_machine_named) printf '%s' 'eine andere Podman-Maschine, %s, läuft' ;;
+    de:installer.mac.other_machine_running) printf '%s' '%s, und ein Mac lässt nur eine gleichzeitig laufen. Stoppe sie mit '\''podman machine stop %s'\'' (oder aus der App, mit der du sie nutzt) und führe den Installer erneut aus: Job Hunter Team stoppt sie nie für dich, und du kannst sie danach wieder starten.' ;;
+    de:installer.mac.podman_install_failed) printf '%s' 'Installation von Podman fehlgeschlagen' ;;
+    de:installer.mac.podman_no_version) printf '%s' 'ein podman, das seine Version nicht nennt' ;;
+    de:installer.mac.podman_version_unsupported) printf '%s' 'JHT auf dem Mac braucht Podman %s.%s oder ein neueres %s.x (nicht 6.2 oder neuer); dieser Mac hat %s. Wenn Homebrew Podman über die Reihe %s hinaus aktualisiert hat, hol dir den JHT-Installer von heute neu (er sagt, welche Reihe er unterstützt); von JHT wurde nichts installiert.' ;;
+    de:installer.migration.colima_default) printf '%s' 'Wenn du Colima nur für JHT installiert hast, bleibt nach der Deinstallation seine virtuelle Maschine (Profil default, die der JHT-Installer gestartet hat) gestoppt auf der Festplatte: Entferne sie mit «colima delete -p default», um den Platz freizugeben. Wenn du Colima für andere Dinge nutzt, lass es.' ;;
+    de:installer.migration.colima_started) printf '%s' 'Nach der Deinstallation bleibt die virtuelle Maschine von Colima, die JHT erstellt hat (Profil %s), gestoppt auf der Festplatte: Wenn du sie für nichts anderes nutzt, entferne sie mit «colima delete -p %s», um den Platz freizugeben.' ;;
+    de:installer.migration.refused) printf '%s' 'dieser Computer führt JHT auf Docker aus (Colima, Docker Desktop oder Docker Engine). Seit 0.4 läuft JHT nur auf Podman, und nichts wurde geändert. Deine Daten bleiben: ~/.jht (Konfiguration, Datenbank, Profil) und ~/Documents/Job Hunter Team (Lebensläufe, Ergebnisse) sind Ordner dieses Computers. Was in den Volumes von Docker zurückbleibt und neu angegeben werden muss: der vom Setup gespeicherte API-Schlüssel, das Mail-Passwort, die Telegram-Tokens. Um zu Podman zu wechseln: %s, führe diesen Installer erneut aus, dann «jht setup» mit deinem API-Schlüssel.%s' ;;
+    de:installer.migration.uninstall) printf '%s' 'führe «jht uninstall --confirm» aus (es behält diese beiden Ordner)' ;;
+    de:installer.migration.uninstall_old_jht) printf '%s' 'dein jht-Befehl stammt aus einer Version, die sich nicht selbst deinstallieren kann, also nimm den dieser Version: «f="$(mktemp)" && curl -fsSL '\''%s'\'' -o "$f" && bash "$f" uninstall --confirm; rm -f "$f"» (er entfernt das JHT auf Docker und den alten jht-Befehl und behält diese beiden Ordner)' ;;
+    de:installer.min_free_invalid) printf '%s' 'Ungültiges JHT_MIN_FREE_GIB: %s' ;;
+    de:installer.mode) printf '%s' 'Modus:   ' ;;
+    de:installer.mount_repair_failed) printf '%s' '%s und %s lassen sich für den Container von Job Hunter Team (er läuft als uid 1001) nicht beschreibbar machen, und nichts wurde gestartet. Lass entweder Docker für dieses Konto laufen (füge es zur Gruppe '\''docker'\'' hinzu und melde dich neu an), oder führe einmal aus: sudo chown -R 1001:1001 "%s" "%s" — dann führe diesen Installer erneut aus.' ;;
+    de:installer.next_step_run_finish) printf '%s' 'Nächster Schritt: Führe  %s  aus, um die Einrichtung abzuschließen.' ;;
+    de:installer.next_steps) printf '%s' 'Nächste Schritte:' ;;
+    de:installer.no_interactive_terminal_no) printf '%s' 'Kein interaktives Terminal (kein /dev/tty): Assistent übersprungen.' ;;
+    de:installer.no_shell_rc_file) printf '%s' 'Es wurde keine rc-Datei der Shell geschrieben. Füge von Hand hinzu:' ;;
+    de:installer.open_new_terminal_window) printf '%s' 'Öffne zuerst ein neues Terminalfenster (oder führe aus: . ~/.profile), damit es jht findet.' ;;
+    de:installer.ownership_1001_1001_container) printf '%s' 'Eigentümer von %s und %s → 1001:1001 (UID des Containers)' ;;
+    de:installer.ownership_1001_1001_container_2) printf '%s' 'Eigentümer von %s und %s → 1001:1001 (UID des Containers, gesetzt von einem einmaligen Container: kein sudo nötig)' ;;
+    de:installer.ownership_stays_user_macos) printf '%s' '%s und %s bleiben im Besitz dieses Benutzers (macOS)' ;;
+    de:installer.ownership_stays_user_rootless) printf '%s' '%s und %s bleiben im Besitz dieses Benutzers (rootless Podman)' ;;
+    de:installer.pairing_token_present_skipping) printf '%s' 'Kopplungstoken vorhanden: Der interaktive Assistent wird übersprungen.' ;;
+    de:installer.pairing_token_saved) printf '%s' 'Kopplungstoken gespeichert in %s (Modus 0600)' ;;
+    de:installer.path_added) printf '%s' 'PATH zu %s hinzugefügt' ;;
+    de:installer.path_added_etc_profile) printf '%s' 'PATH zu /etc/profile.d/jht.sh hinzugefügt (systemweit)' ;;
+    de:installer.podman.answers_rootful) printf '%s' 'podman antwortet für %s als rootful (Rootless=%s): JHT braucht Podman rootless.' ;;
+    de:installer.podman.apt_failed) printf '%s' 'apt-get install%s fehlgeschlagen. Um zu sehen, warum, führe aus: sudo apt-get install%s' ;;
+    de:installer.podman.apt_would_remove) printf '%s' 'die Installation von%s würde ANDERE Pakete dieses Computers ENTFERNEN (oft containerd.io, das von Docker): Nichts wurde geändert. Um zu sehen, welche, führe aus: sudo apt-get -s install%s. Installiere Podman selbst so, dass sie bleiben (oder entscheide dich, sie zu entfernen), dann führe diesen Installer erneut aus.' ;;
+    de:installer.podman.compose_missing) printf '%s' 'podman-compose ist in den Paketen dieses Systems nicht verfügbar. Bitte den Administrator dieses Servers, es als root zu installieren: apt install podman-compose' ;;
+    de:installer.podman.compose_too_old) printf '%s' 'podman-compose %s ist älter als %s. Bitte den Administrator dieses Servers um ein neueres podman-compose.' ;;
+    de:installer.podman.distribution_too_old) printf '%s' 'diese Distribution würde %s %s installieren, und Job Hunter Team 0.4.0 braucht %s %s oder neuer: Nichts wurde installiert. Distributionen, die es liefern: Ubuntu 26.04 LTS, Debian 13, Fedora 43 oder neuer.' ;;
+    de:installer.podman.dnf_failed) printf '%s' 'dnf install%s fehlgeschlagen (dnf entfernt nichts: Ein Konflikt mit einem installierten Paket hält es auf). Um zu sehen, warum, führe aus: sudo dnf install%s' ;;
+    de:installer.podman.info_fails) printf '%s' ''\''podman info'\'' schlägt für %s fehl, also ist der rootless Speicher oder die Runtime nicht bereit. Führe es von Hand aus, um zu sehen, warum.' ;;
+    de:installer.podman.linger_failed) printf '%s' 'loginctl enable-linger %s fehlgeschlagen.' ;;
+    de:installer.podman.linger_missing) printf '%s' 'die Container von %s würden stoppen, wenn die Sitzung endet. Bitte den Administrator dieses Servers, als root auszuführen: loginctl enable-linger %s' ;;
+    de:installer.podman.missing_default) printf '%s' 'der subuid-Bereich oder linger' ;;
+    de:installer.podman.no_package_manager) printf '%s' 'kein bekannter Paketmanager (apt, dnf, pacman), um zu installieren:%s' ;;
+    de:installer.podman.pacman_failed) printf '%s' 'pacman -S%s fehlgeschlagen (nichts wurde entfernt). Um zu sehen, warum, führe aus: sudo pacman -S%s' ;;
+    de:installer.podman.root_refused) printf '%s' 'JHT läuft auf Podman rootless, als ein Benutzer, der nicht root ist. Melde dich als dieser Benutzer an und führe die Installation erneut aus.' ;;
+    de:installer.podman.runtime_dir_missing) printf '%s' 'es gibt kein Runtime-Verzeichnis für diesen Benutzer (%s): Die Sitzung hat keinen Benutzer-Manager. Melde dich neu an, oder bitte den Administrator, als root auszuführen: loginctl enable-linger %s' ;;
+    de:installer.podman.still_missing) printf '%s' 'podman ist nach der Installation immer noch nicht da. Bitte den Administrator dieses Servers, als root auszuführen: apt install podman' ;;
+    de:installer.podman.subuid_missing) printf '%s' '%s hat keinen untergeordneten uid/gid-Bereich in %s/subuid und %s/subgid. Bitte den Administrator dieses Servers, als root auszuführen: usermod --add-subuids 100000-165535 --add-subgids 100000-165535 %s' ;;
+    de:installer.podman.sudo_required) printf '%s' 'Podman braucht eine Einrichtung, die nur ein Administrator machen kann (fehlt:%s), und sudo ist für %s nicht ohne Passwort verfügbar. Bitte den Administrator dieses Servers, %s sudo ohne Passwort zu erlauben, oder als root auszuführen: apt install podman podman-compose uidmap; loginctl enable-linger %s' ;;
+    de:installer.podman.too_old) printf '%s' 'podman %s ist älter als %s. Bitte den Administrator dieses Servers um ein neueres podman.' ;;
+    de:installer.podman.unknown_version) printf '%s' 'unbekannter Version' ;;
+    de:installer.podman.unsupported_host) printf '%s' '--runtime podman ist für Linux und macOS; dieses System ist %s.' ;;
+    de:installer.podman.usermod_failed) printf '%s' 'usermod konnte den untergeordneten Bereich (%s-%s) für %s nicht hinzufügen.' ;;
+    de:installer.podman_already_installed) printf '%s' 'podman ist schon installiert' ;;
+    de:installer.podman_compose_already_installed) printf '%s' 'podman-compose ist schon installiert' ;;
+    de:installer.podman_machine_already_running) printf '%s' 'Podman-Maschine '\''%s'\'' läuft schon' ;;
+    de:installer.podman_machine_reachable) printf '%s' 'Podman-Maschine erreichbar' ;;
+    de:installer.podman_ready_but_weekly) printf '%s' 'Podman ist bereit, aber sein wöchentlicher Timer zum Trimmen der Festplatte ließ sich nicht aktivieren.' ;;
+    de:installer.podman_ready_colima_retained) printf '%s' 'Podman bereit (Colima bleibt erhalten)' ;;
+    de:installer.podman_rootless_podman_compose) printf '%s' 'Podman rootless %s + podman-compose %s für %s' ;;
+    de:installer.podman_rootless_reachable) printf '%s' 'podman rootless erreichbar' ;;
+    de:installer.private_jht_docker_shim) printf '%s' 'Privater JHT-Docker-Shim: %s (nicht zum globalen PATH hinzugefügt; Colima unangetastet)' ;;
+    de:installer.private_jht_docker_shim_2) printf '%s' 'Privater JHT-Docker-Shim: %s (nicht zum globalen PATH hinzugefügt; rootless Podman, keine Maschine)' ;;
+    de:installer.run_manually_jht_setup) printf '%s' 'Führe von Hand aus: jht setup' ;;
+    de:installer.running_host_setup_sh) printf '%s' 'Führe host-setup.sh aus (schreibt ~/.jht/host.env + Swap-Vorprüfung)...' ;;
+    de:installer.runtime) printf '%s' 'Runtime: ' ;;
+    de:installer.runtime_dir_bad_ancestor) printf '%s' 'Die Host-Runtime hat einen übergeordneten Ordner, der ein symbolischer Link oder nicht kanonisch ist: %s' ;;
+    de:installer.runtime_dir_in_mount) printf '%s' 'Die Host-Runtime muss außerhalb der Bind-Mounts liegen, in die der Container schreiben kann: %s' ;;
+    de:installer.runtime_dir_is_link) printf '%s' 'Der Pfad der Host-Runtime ist ein symbolischer Link: %s' ;;
+    de:installer.runtime_image_pinned) printf '%s' 'Runtime-Image festgelegt: %s' ;;
+    de:installer.runtime_tier_core_tools) printf '%s' 'Runtime-Stufe: core (die Werkzeuge kommen nach der Begrüßung)' ;;
+    de:installer.same_as_above_empties) printf '%s' '(wie oben, und es leert auch ~/.jht und ~/Documents/Job Hunter Team)' ;;
+    de:installer.setup_did_not_finish) printf '%s' 'Die Einrichtung wurde nicht abgeschlossen (Exit-Code %s): Job Hunter Team ist installiert, aber noch nicht eingerichtet.' ;;
+    de:installer.starting_podman_machine) printf '%s' 'Starte die Podman-Maschine '\''%s'\''...' ;;
+    de:installer.subuid_subgid_range) printf '%s' 'subuid/subgid-Bereich %s-%s für %s' ;;
+    de:installer.system_detection) printf '%s' 'Systemerkennung' ;;
+    de:installer.team_running) printf '%s' 'Job Hunter Team läuft auf diesem Computer (%s). Wenn die Einrichtung unterbrochen wurde, setze sie mit «jht setup» in diesem Terminal fort; ein down ist nicht nötig. Um stattdessen neu zu installieren, stoppe es mit «jht down», führe den Installer erneut aus und starte es dann mit «jht up». Nichts wurde geändert: Dein Profil und deine Dokumente in ~/.jht und ~/Documents/Job Hunter Team bleiben, wo sie sind.' ;;
+    de:installer.terminal_run) printf '%s' 'Führe in diesem Terminal aus:' ;;
+    de:installer.uid_1001_taken) printf '%s' 'uid 1001 ist auf diesem Computer das Konto '\''%s'\''. Der Container von Job Hunter Team läuft als uid 1001, also würde dieses Konto ~/.jht besitzen (deine Daten und die Zugangsdaten der Portale). Nichts wurde geändert. Starte JHT vom Konto '\''%s'\'' aus, oder gib '\''%s'\'' eine andere uid, dann versuch es erneut.' ;;
+    de:installer.uninstall_keeps_your_data) printf '%s' 'Zum Deinstallieren (deine Daten in ~/.jht und ~/Documents/Job Hunter Team bleiben):' ;;
+    de:installer.wrapper_dir_bad_ancestor) printf '%s' 'Der Wrapper-Ordner auf dem Host hat einen übergeordneten Ordner, der ein symbolischer Link oder nicht kanonisch ist: %s' ;;
+    de:installer.wrapper_dir_in_mount) printf '%s' 'Der Wrapper auf dem Host muss außerhalb der Bind-Mounts liegen, in die der Container schreiben kann: %s' ;;
+    de:installer.wsl_not_supported) printf '%s' 'unter Windows installierst du JHT aus der PowerShell mit install.ps1 (siehe docs/guides/QUICKSTART.md), nicht aus WSL heraus. Nichts wurde geändert.' ;;
+    fr:installer.agents_can_only_see) printf '%s' 'Les agents ne voient que :' ;;
+    fr:installer.already_path) printf '%s' '%s est déjà dans le PATH' ;;
+    fr:installer.also_delete_your_data) printf '%s' 'Pour effacer aussi tes données (configuration, db, CV, résultats) :' ;;
+    fr:installer.also_deletes_api_key) printf '%s' '(ça efface aussi la clé API, le mot de passe mail et les tokens Telegram enregistrés pour l'\''équipe)' ;;
+    fr:installer.apt_get_update_failed) printf '%s' 'échec de apt-get update : j'\''essaie quand même d'\''installer.' ;;
+    fr:installer.branch) printf '%s' 'branche : ' ;;
+    fr:installer.cannot_list_containers) printf '%s' 'Impossible de lister les conteneurs actifs avec %s : rien n'\''a été installé.' ;;
+    fr:installer.chown_not_needed) printf '%s' 'échec du chown vers 1001 — ici rien ne tourne dans un conteneur (--no-docker), donc ce n'\''est pas nécessaire' ;;
+    fr:installer.config_db_agents) printf '%s' '(configuration, db, agents)' ;;
+    fr:installer.configuration_wizard_also_starts) printf '%s' 'assistant de configuration (démarre aussi le conteneur)' ;;
+    fr:installer.container_mode_active_podman) printf '%s' 'Mode conteneur actif (Podman).' ;;
+    fr:installer.container_runtime) printf '%s' 'Moteur de conteneurs' ;;
+    fr:installer.container_runtime_check) printf '%s' 'Vérification du moteur de conteneurs' ;;
+    fr:installer.container_runtime_podman_rootless) printf '%s' 'Moteur de conteneurs (Podman rootless)' ;;
+    fr:installer.container_will_complete_pairing) printf '%s' 'Le conteneur terminera l'\''appairage à son premier démarrage.' ;;
+    fr:installer.creating_rootless_podman_machine) printf '%s' 'Création de la machine Podman rootless '\''%s'\''...' ;;
+    fr:installer.cvs_attachments_output) printf '%s' '(CV, pièces jointes, résultats)' ;;
+    fr:installer.disk_low_dry_run) printf '%s' 'Seulement %s GiB libres sur %s ; une vraie installation demande au moins %s GiB.' ;;
+    fr:installer.disk_not_enough) printf '%s' 'pas assez d'\''espace libre sur le disque : %s GiB libres sur %s, l'\''image de Job Hunter Team et ses données demandent au moins %s GiB. Libère de l'\''espace (sur un serveur qui utilise déjà Docker, '\''docker image prune -af'\'' supprime les images inutilisées) et relance l'\''installeur. Rien n'\''a été modifié.' ;;
+    fr:installer.done_compose) printf '%s' 'compose : %s' ;;
+    fr:installer.done_host_setup) printf '%s' 'host-setup : %s' ;;
+    fr:installer.done_wrapper) printf '%s' 'wrapper : %s' ;;
+    fr:installer.download_failed) printf '%s' 'Échec du téléchargement : %s. Vérifie ta connexion et la branche (%s).' ;;
+    fr:installer.download_wrapper_docker_compose) printf '%s' 'Téléchargement du wrapper et de docker-compose.yml' ;;
+    fr:installer.downloading_docker_compose_yml) printf '%s' 'Téléchargement de docker-compose.yml...' ;;
+    fr:installer.downloading_host_setup_sh) printf '%s' 'Téléchargement de host-setup.sh (vérifications préalables VPS/swap)...' ;;
+    fr:installer.downloading_jht_wrapper) printf '%s' 'Téléchargement du wrapper jht...' ;;
+    fr:installer.enabling_linger) printf '%s' 'Activation du linger pour %s...' ;;
+    fr:installer.existing_podman_machine_has) printf '%s' 'La machine Podman '\''%s'\'' déjà présente a les ressources '\''%s'\'' ; JHT recommande %s CPU, %s MiB de RAM et %s GiB de disque. La machine existante n'\''a pas été modifiée.' ;;
+    fr:installer.extras_image_pinned_ghcr) printf '%s' 'image extras fixée : ghcr.io/leopu00/jht@%s (téléchargée quand un outil est demandé)' ;;
+    fr:installer.giving_subordinate_uid_gid) printf '%s' 'J'\''attribue à %s la plage d'\''uid/gid subordonnés %s-%s...' ;;
+    fr:installer.helper_download_failed) printf '%s' 'échec du téléchargement ou de la vérification de %s : %s/scripts/%s' ;;
+    fr:installer.host_file_tmp_failed) printf '%s' 'impossible de créer un fichier temporaire dans %s : je n'\''écris pas %s' ;;
+    fr:installer.host_setup_completed_auto) printf '%s' 'host-setup terminé (type d'\''hôte détecté automatiquement)' ;;
+    fr:installer.host_setup_completed_forced) printf '%s' 'host-setup terminé (vps imposé)' ;;
+    fr:installer.host_setup_download_failed) printf '%s' 'échec du téléchargement ou de la vérification de host-setup.sh : %s' ;;
+    fr:installer.host_setup_exited_error) printf '%s' 'host-setup s'\''est terminé avec une erreur — je continue (un appairage manuel peut être nécessaire)' ;;
+    fr:installer.host_setup_exited_error_2) printf '%s' 'host-setup s'\''est terminé avec une erreur — je continue' ;;
+    fr:installer.host_setup_missing) printf '%s' 'host-setup.sh n'\''est pas disponible dans %s — je saute les vérifications préalables' ;;
+    fr:installer.image) printf '%s' 'image :   ' ;;
+    fr:installer.image_download_failed) printf '%s' 'Échec du téléchargement de l'\''image JHT : %s' ;;
+    fr:installer.installation_complete) printf '%s' 'Installation terminée !' ;;
+    fr:installer.installed) printf '%s' 'Installé :%s' ;;
+    fr:installer.installing_podman_cli) printf '%s' 'Installation de la CLI de Podman...' ;;
+    fr:installer.installing_podman_compose_provider) printf '%s' 'Installation du provider Podman Compose...' ;;
+    fr:installer.installing_sudo_podman_rootless) printf '%s' 'J'\''installe%s avec sudo (Podman rootless ; Docker n'\''est pas installé)...' ;;
+    fr:installer.linger_enabled) printf '%s' 'linger activé pour %s' ;;
+    fr:installer.loginctl_not_found_linger) printf '%s' 'loginctl introuvable : le linger n'\''a pas été vérifié.' ;;
+    fr:installer.mac.cannot_create_folder) printf '%s' 'Impossible de créer %s pour la machine Podman.' ;;
+    fr:installer.mac.compose_install_failed) printf '%s' 'échec de l'\''installation de podman-compose' ;;
+    fr:installer.mac.compose_version_unsupported) printf '%s' 'JHT sur Mac a besoin de podman-compose %s ; ce Mac a %s. Lance «brew upgrade podman-compose» (ou «brew install podman-compose»), puis relance cet installeur.' ;;
+    fr:installer.mac.homebrew_missing) printf '%s' 'JHT installe Podman avec Homebrew, qui n'\''est pas sur ce Mac. Rien n'\''a été modifié. Installe Homebrew depuis https://brew.sh (une commande dans le Terminal ; il demande le mot de passe de ton Mac), ouvre une nouvelle fenêtre du Terminal et relance cet installeur.' ;;
+    fr:installer.mac.machine_init_failed) printf '%s' 'Échec de la création de la machine Podman ; Colima n'\''a pas été modifié.' ;;
+    fr:installer.mac.machine_name_placeholder) printf '%s' '<nom>' ;;
+    fr:installer.mac.machine_not_responding) printf '%s' 'La machine Podman de JHT ne répond pas.' ;;
+    fr:installer.mac.machine_start_failed) printf '%s' 'Échec du démarrage de la machine Podman ; Colima n'\''a pas été modifié.' ;;
+    fr:installer.mac.machine_unreachable) printf '%s' 'La machine Podman '\''%s'\'' est injoignable.' ;;
+    fr:installer.mac.other_machine_any) printf '%s' 'une autre machine Podman est démarrée (trouve-la avec '\''podman machine list'\'')' ;;
+    fr:installer.mac.other_machine_named) printf '%s' 'une autre machine Podman, %s, est démarrée' ;;
+    fr:installer.mac.other_machine_running) printf '%s' '%s, et un Mac n'\''en fait tourner qu'\''une à la fois. Arrête-la avec '\''podman machine stop %s'\'' (ou depuis l'\''app avec laquelle tu l'\''utilises) et relance l'\''installeur : Job Hunter Team ne l'\''arrête jamais à ta place, et tu pourras la redémarrer ensuite.' ;;
+    fr:installer.mac.podman_install_failed) printf '%s' 'Échec de l'\''installation de Podman' ;;
+    fr:installer.mac.podman_no_version) printf '%s' 'un podman qui ne donne pas sa version' ;;
+    fr:installer.mac.podman_version_unsupported) printf '%s' 'JHT sur Mac a besoin de Podman %s.%s ou d'\''un %s.x plus récent (pas 6.2 ou plus) ; ce Mac a %s. Si Homebrew a fait passer Podman au-delà de la série %s, retélécharge l'\''installeur JHT d'\''aujourd'\''hui (il dit quelle série il prend en charge) ; rien de JHT n'\''a été installé.' ;;
+    fr:installer.migration.colima_default) printf '%s' 'Si tu as installé Colima seulement pour JHT, après la désinstallation sa machine virtuelle (profil default, celle que l'\''installeur JHT démarrait) reste sur le disque, arrêtée : supprime-la avec «colima delete -p default» pour libérer l'\''espace. Si tu utilises Colima pour autre chose, laisse-la.' ;;
+    fr:installer.migration.colima_started) printf '%s' 'Après la désinstallation, la machine virtuelle Colima créée par JHT (profil %s) reste sur le disque, arrêtée : si tu ne t'\''en sers pour rien d'\''autre, supprime-la avec «colima delete -p %s» pour libérer l'\''espace.' ;;
+    fr:installer.migration.refused) printf '%s' 'cet ordinateur fait tourner JHT sur Docker (Colima, Docker Desktop ou Docker Engine). Depuis la 0.4, JHT tourne uniquement sur Podman, et rien n'\''a été modifié. Tes données restent : ~/.jht (configuration, base de données, profil) et ~/Documents/Job Hunter Team (CV, résultats) sont des dossiers de cet ordinateur. Ce qui reste dans les volumes de Docker et doit être redonné : la clé API gardée par la configuration, le mot de passe mail, les tokens Telegram. Pour passer à Podman : %s, relance cet installeur, puis «jht setup» avec ta clé API.%s' ;;
+    fr:installer.migration.uninstall) printf '%s' 'lance «jht uninstall --confirm» (il garde ces deux dossiers)' ;;
+    fr:installer.migration.uninstall_old_jht) printf '%s' 'ta commande jht vient d'\''une version qui ne sait pas se désinstaller, alors utilise celle de cette version : «f="$(mktemp)" && curl -fsSL '\''%s'\'' -o "$f" && bash "$f" uninstall --confirm; rm -f "$f"» (elle supprime le JHT sur Docker et l'\''ancienne commande jht, et garde ces deux dossiers)' ;;
+    fr:installer.min_free_invalid) printf '%s' 'JHT_MIN_FREE_GIB non valide : %s' ;;
+    fr:installer.mode) printf '%s' 'mode :    ' ;;
+    fr:installer.mount_repair_failed) printf '%s' '%s et %s ne peuvent pas être rendus accessibles en écriture pour le conteneur de Job Hunter Team (il tourne en uid 1001) et rien n'\''a été démarré. Soit tu laisses Docker tourner pour ce compte (ajoute-le au groupe '\''docker'\'', puis reconnecte-toi), soit tu lances une fois : sudo chown -R 1001:1001 "%s" "%s" — puis relance cet installeur.' ;;
+    fr:installer.next_step_run_finish) printf '%s' 'Étape suivante : lance  %s  pour terminer la configuration.' ;;
+    fr:installer.next_steps) printf '%s' 'Étapes suivantes :' ;;
+    fr:installer.no_interactive_terminal_no) printf '%s' 'Pas de terminal interactif (pas de /dev/tty) : je saute l'\''assistant.' ;;
+    fr:installer.no_shell_rc_file) printf '%s' 'Aucun fichier rc du shell n'\''a été écrit. Ajoute à la main :' ;;
+    fr:installer.open_new_terminal_window) printf '%s' 'Ouvre d'\''abord une nouvelle fenêtre de terminal (ou lance : . ~/.profile), pour qu'\''il trouve jht.' ;;
+    fr:installer.ownership_1001_1001_container) printf '%s' 'Propriétaire de %s et %s → 1001:1001 (UID du conteneur)' ;;
+    fr:installer.ownership_1001_1001_container_2) printf '%s' 'Propriétaire de %s et %s → 1001:1001 (UID du conteneur, réglé par un conteneur jetable : pas besoin de sudo)' ;;
+    fr:installer.ownership_stays_user_macos) printf '%s' '%s et %s restent à cet utilisateur (macOS)' ;;
+    fr:installer.ownership_stays_user_rootless) printf '%s' '%s et %s restent à cet utilisateur (Podman rootless)' ;;
+    fr:installer.pairing_token_present_skipping) printf '%s' 'Token d'\''appairage présent : je saute l'\''assistant interactif.' ;;
+    fr:installer.pairing_token_saved) printf '%s' 'Token d'\''appairage enregistré dans %s (permissions 0600)' ;;
+    fr:installer.path_added) printf '%s' 'PATH ajouté à %s' ;;
+    fr:installer.path_added_etc_profile) printf '%s' 'PATH ajouté à /etc/profile.d/jht.sh (pour tout le système)' ;;
+    fr:installer.podman.answers_rootful) printf '%s' 'podman répond en rootful pour %s (Rootless=%s) : JHT a besoin de Podman rootless.' ;;
+    fr:installer.podman.apt_failed) printf '%s' 'échec de apt-get install%s. Pour voir pourquoi, lance : sudo apt-get install%s' ;;
+    fr:installer.podman.apt_would_remove) printf '%s' 'installer%s SUPPRIMERAIT d'\''autres paquets de cet ordinateur (souvent containerd.io, celui de Docker) : rien n'\''a été modifié. Pour voir lesquels, lance : sudo apt-get -s install%s. Installe Podman toi-même d'\''une façon qui les garde (ou décide de les supprimer), puis relance cet installeur.' ;;
+    fr:installer.podman.compose_missing) printf '%s' 'podman-compose n'\''est pas disponible dans les paquets de ce système. Demande à l'\''administrateur de ce serveur de l'\''installer, en root : apt install podman-compose' ;;
+    fr:installer.podman.compose_too_old) printf '%s' 'podman-compose %s est plus ancien que %s. Demande à l'\''administrateur de ce serveur un podman-compose plus récent.' ;;
+    fr:installer.podman.distribution_too_old) printf '%s' 'cette distribution installerait %s %s, et Job Hunter Team 0.4.0 a besoin de %s %s ou plus récent : rien n'\''a été installé. Distributions qui le fournissent : Ubuntu 26.04 LTS, Debian 13, Fedora 43 ou plus récentes.' ;;
+    fr:installer.podman.dnf_failed) printf '%s' 'échec de dnf install%s (dnf ne supprime rien : un conflit avec un paquet installé l'\''arrête). Pour voir pourquoi, lance : sudo dnf install%s' ;;
+    fr:installer.podman.info_fails) printf '%s' ''\''podman info'\'' échoue pour %s, donc le stockage ou le runtime rootless n'\''est pas prêt. Lance-le à la main pour voir pourquoi.' ;;
+    fr:installer.podman.linger_failed) printf '%s' 'échec de loginctl enable-linger %s.' ;;
+    fr:installer.podman.linger_missing) printf '%s' 'les conteneurs de %s s'\''arrêteraient à la fin de la session. Demande à l'\''administrateur de ce serveur de lancer, en root : loginctl enable-linger %s' ;;
+    fr:installer.podman.missing_default) printf '%s' 'la plage subuid ou le linger' ;;
+    fr:installer.podman.no_package_manager) printf '%s' 'aucun gestionnaire de paquets connu (apt, dnf, pacman) pour installer :%s' ;;
+    fr:installer.podman.pacman_failed) printf '%s' 'échec de pacman -S%s (rien n'\''a été supprimé). Pour voir pourquoi, lance : sudo pacman -S%s' ;;
+    fr:installer.podman.root_refused) printf '%s' 'JHT tourne sur Podman rootless, avec un utilisateur qui n'\''est pas root. Connecte-toi avec cet utilisateur et relance l'\''installation.' ;;
+    fr:installer.podman.runtime_dir_missing) printf '%s' 'il n'\''y a pas de dossier de runtime pour cet utilisateur (%s) : la session n'\''a pas de gestionnaire utilisateur. Reconnecte-toi, ou demande à l'\''administrateur de lancer, en root : loginctl enable-linger %s' ;;
+    fr:installer.podman.still_missing) printf '%s' 'podman n'\''est toujours pas là après l'\''installation. Demande à l'\''administrateur de ce serveur de lancer, en root : apt install podman' ;;
+    fr:installer.podman.subuid_missing) printf '%s' '%s n'\''a pas de plage d'\''uid/gid subordonnés dans %s/subuid et %s/subgid. Demande à l'\''administrateur de ce serveur de lancer, en root : usermod --add-subuids 100000-165535 --add-subgids 100000-165535 %s' ;;
+    fr:installer.podman.sudo_required) printf '%s' 'Podman a besoin d'\''une préparation que seul un administrateur peut faire (manque :%s), et sudo pour %s n'\''est pas disponible sans mot de passe. Demande à l'\''administrateur de ce serveur de donner à %s sudo sans mot de passe, ou de lancer, en root : apt install podman podman-compose uidmap; loginctl enable-linger %s' ;;
+    fr:installer.podman.too_old) printf '%s' 'podman %s est plus ancien que %s. Demande à l'\''administrateur de ce serveur un podman plus récent.' ;;
+    fr:installer.podman.unknown_version) printf '%s' 'de version inconnue' ;;
+    fr:installer.podman.unsupported_host) printf '%s' '--runtime podman est pour Linux et macOS ; ce système est %s.' ;;
+    fr:installer.podman.usermod_failed) printf '%s' 'usermod n'\''a pas pu ajouter la plage subordonnée (%s-%s) pour %s.' ;;
+    fr:installer.podman_already_installed) printf '%s' 'podman déjà installé' ;;
+    fr:installer.podman_compose_already_installed) printf '%s' 'podman-compose déjà installé' ;;
+    fr:installer.podman_machine_already_running) printf '%s' 'Machine Podman '\''%s'\'' déjà démarrée' ;;
+    fr:installer.podman_machine_reachable) printf '%s' 'Machine Podman joignable' ;;
+    fr:installer.podman_ready_but_weekly) printf '%s' 'Podman est prêt, mais son minuteur hebdomadaire qui libère le disque n'\''a pas pu être activé.' ;;
+    fr:installer.podman_ready_colima_retained) printf '%s' 'Podman prêt (Colima laissé tel quel)' ;;
+    fr:installer.podman_rootless_podman_compose) printf '%s' 'Podman rootless %s + podman-compose %s pour %s' ;;
+    fr:installer.podman_rootless_reachable) printf '%s' 'podman rootless joignable' ;;
+    fr:installer.private_jht_docker_shim) printf '%s' 'Shim docker privé de JHT : %s (pas ajouté au PATH global ; Colima pas touché)' ;;
+    fr:installer.private_jht_docker_shim_2) printf '%s' 'Shim docker privé de JHT : %s (pas ajouté au PATH global ; Podman rootless, sans machine)' ;;
+    fr:installer.run_manually_jht_setup) printf '%s' 'Lance à la main : jht setup' ;;
+    fr:installer.running_host_setup_sh) printf '%s' 'Exécution de host-setup.sh (écrit ~/.jht/host.env et vérifie le swap)...' ;;
+    fr:installer.runtime) printf '%s' 'runtime : ' ;;
+    fr:installer.runtime_dir_bad_ancestor) printf '%s' 'Le dossier du runtime sur l'\''hôte a au-dessus de lui un lien symbolique ou un chemin non canonique : %s' ;;
+    fr:installer.runtime_dir_in_mount) printf '%s' 'Le dossier du runtime sur l'\''hôte doit être en dehors des dossiers que le conteneur peut écrire : %s' ;;
+    fr:installer.runtime_dir_is_link) printf '%s' 'Le dossier du runtime sur l'\''hôte est un lien symbolique : %s' ;;
+    fr:installer.runtime_image_pinned) printf '%s' 'image du runtime fixée : %s' ;;
+    fr:installer.runtime_tier_core_tools) printf '%s' 'niveau du runtime : core (les outils arrivent après l'\''accueil)' ;;
+    fr:installer.same_as_above_empties) printf '%s' '(comme ci-dessus, et ça vide aussi ~/.jht et ~/Documents/Job Hunter Team)' ;;
+    fr:installer.setup_did_not_finish) printf '%s' 'La configuration ne s'\''est pas terminée (code de sortie %s) : Job Hunter Team est installé, mais pas encore configuré.' ;;
+    fr:installer.starting_podman_machine) printf '%s' 'Démarrage de la machine Podman '\''%s'\''...' ;;
+    fr:installer.subuid_subgid_range) printf '%s' 'plage subuid/subgid %s-%s pour %s' ;;
+    fr:installer.system_detection) printf '%s' 'Détection du système' ;;
+    fr:installer.team_running) printf '%s' 'Job Hunter Team tourne sur cet ordinateur (%s). Si la configuration a été interrompue, reprends-la avec «jht setup» dans ce terminal ; pas besoin d'\''arrêter quoi que ce soit. Pour réinstaller plutôt : arrête-le avec «jht down», relance l'\''installeur, puis démarre-le avec «jht up». Rien n'\''a été modifié : ton profil et tes documents dans ~/.jht et ~/Documents/Job Hunter Team restent où ils sont.' ;;
+    fr:installer.terminal_run) printf '%s' 'Dans ce terminal, lance :' ;;
+    fr:installer.uid_1001_taken) printf '%s' 'l'\''uid 1001 sur cet ordinateur est le compte '\''%s'\''. Le conteneur de Job Hunter Team tourne en uid 1001, donc ce compte serait propriétaire de ~/.jht (tes données et les identifiants des portails). Rien n'\''a été modifié. Lance JHT depuis le compte '\''%s'\'', ou donne à '\''%s'\'' un autre uid, puis réessaie.' ;;
+    fr:installer.uninstall_keeps_your_data) printf '%s' 'Pour désinstaller (tes données dans ~/.jht et ~/Documents/Job Hunter Team restent) :' ;;
+    fr:installer.wrapper_dir_bad_ancestor) printf '%s' 'Le dossier du wrapper sur l'\''hôte a au-dessus de lui un lien symbolique ou un chemin non canonique : %s' ;;
+    fr:installer.wrapper_dir_in_mount) printf '%s' 'Le wrapper sur l'\''hôte doit être en dehors des dossiers que le conteneur peut écrire : %s' ;;
+    fr:installer.wsl_not_supported) printf '%s' 'sur Windows, installe JHT depuis PowerShell avec install.ps1 (voir docs/guides/QUICKSTART.md), pas depuis WSL. Rien n'\''a été modifié.' ;;
+    pt:installer.agents_can_only_see) printf '%s' 'Os agentes só veem:' ;;
+    pt:installer.already_path) printf '%s' '%s já está no PATH' ;;
+    pt:installer.also_delete_your_data) printf '%s' 'Para apagar também os teus dados (configuração, db, CV, resultados):' ;;
+    pt:installer.also_deletes_api_key) printf '%s' '(apaga também a chave API, a palavra-passe do correio e os tokens do Telegram guardados para a equipa)' ;;
+    pt:installer.apt_get_update_failed) printf '%s' 'apt-get update falhou: vou tentar instalar na mesma.' ;;
+    pt:installer.branch) printf '%s' 'ramo:    ' ;;
+    pt:installer.cannot_list_containers) printf '%s' 'Não é possível listar os contentores a correr com %s: não foi instalado nada.' ;;
+    pt:installer.chown_not_needed) printf '%s' 'chown para 1001 falhou — aqui nada corre num contentor (--no-docker), por isso não é preciso' ;;
+    pt:installer.config_db_agents) printf '%s' '(configuração, db, agentes)' ;;
+    pt:installer.configuration_wizard_also_starts) printf '%s' 'configuração guiada (também inicia o contentor)' ;;
+    pt:installer.container_mode_active_podman) printf '%s' 'Modo contentor ativo (Podman).' ;;
+    pt:installer.container_runtime) printf '%s' 'Motor de contentores' ;;
+    pt:installer.container_runtime_check) printf '%s' 'Verificação do motor de contentores' ;;
+    pt:installer.container_runtime_podman_rootless) printf '%s' 'Motor de contentores (Podman rootless)' ;;
+    pt:installer.container_will_complete_pairing) printf '%s' 'O contentor vai concluir o emparelhamento no primeiro arranque.' ;;
+    pt:installer.creating_rootless_podman_machine) printf '%s' 'A criar a máquina Podman rootless '\''%s'\''...' ;;
+    pt:installer.cvs_attachments_output) printf '%s' '(CV, anexos, resultados)' ;;
+    pt:installer.disk_low_dry_run) printf '%s' 'Só %s GiB livres em %s; uma instalação real precisa de pelo menos %s GiB.' ;;
+    pt:installer.disk_not_enough) printf '%s' 'espaço livre em disco insuficiente: %s GiB livres em %s, a imagem do Job Hunter Team e os seus dados precisam de pelo menos %s GiB. Liberta algum espaço (num servidor que já usa o Docker, '\''docker image prune -af'\'' remove as imagens não usadas) e corre o instalador de novo. Não foi alterado nada.' ;;
+    pt:installer.done_compose) printf '%s' 'compose: %s' ;;
+    pt:installer.done_host_setup) printf '%s' 'host-setup: %s' ;;
+    pt:installer.done_wrapper) printf '%s' 'wrapper: %s' ;;
+    pt:installer.download_failed) printf '%s' 'A transferência falhou: %s. Verifica a ligação e o ramo (%s).' ;;
+    pt:installer.download_wrapper_docker_compose) printf '%s' 'Transferir o wrapper + docker-compose.yml' ;;
+    pt:installer.downloading_docker_compose_yml) printf '%s' 'A transferir docker-compose.yml...' ;;
+    pt:installer.downloading_host_setup_sh) printf '%s' 'A transferir host-setup.sh (verificação prévia de VPS/swap)...' ;;
+    pt:installer.downloading_jht_wrapper) printf '%s' 'A transferir o wrapper jht...' ;;
+    pt:installer.enabling_linger) printf '%s' 'A ativar o linger para %s...' ;;
+    pt:installer.existing_podman_machine_has) printf '%s' 'A máquina Podman '\''%s'\'' que já existe tem os recursos '\''%s'\''; o JHT recomenda %s CPU, %s MiB de RAM e %s GiB de disco. A máquina existente não foi alterada.' ;;
+    pt:installer.extras_image_pinned_ghcr) printf '%s' 'imagem extras fixada: ghcr.io/leopu00/jht@%s (é transferida quando é pedida uma ferramenta)' ;;
+    pt:installer.giving_subordinate_uid_gid) printf '%s' 'A dar a %s o intervalo de uid/gid subordinados %s-%s...' ;;
+    pt:installer.helper_download_failed) printf '%s' 'a transferência ou a verificação de %s falhou: %s/scripts/%s' ;;
+    pt:installer.host_file_tmp_failed) printf '%s' 'não é possível criar um ficheiro temporário em %s: não vou escrever %s' ;;
+    pt:installer.host_setup_completed_auto) printf '%s' 'host-setup concluído (tipo de anfitrião detetado automaticamente)' ;;
+    pt:installer.host_setup_completed_forced) printf '%s' 'host-setup concluído (vps forçado)' ;;
+    pt:installer.host_setup_download_failed) printf '%s' 'a transferência ou a verificação de host-setup.sh falhou: %s' ;;
+    pt:installer.host_setup_exited_error) printf '%s' 'host-setup terminou com um erro — vou continuar (pode ser preciso um emparelhamento manual)' ;;
+    pt:installer.host_setup_exited_error_2) printf '%s' 'host-setup terminou com um erro — vou continuar' ;;
+    pt:installer.host_setup_missing) printf '%s' 'host-setup.sh não está disponível em %s — vou saltar a verificação prévia' ;;
+    pt:installer.image) printf '%s' 'imagem:  ' ;;
+    pt:installer.image_download_failed) printf '%s' 'A transferência da imagem do JHT falhou: %s' ;;
+    pt:installer.installation_complete) printf '%s' 'Instalação concluída!' ;;
+    pt:installer.installed) printf '%s' 'Instalado:%s' ;;
+    pt:installer.installing_podman_cli) printf '%s' 'A instalar a CLI do Podman...' ;;
+    pt:installer.installing_podman_compose_provider) printf '%s' 'A instalar o fornecedor do Podman Compose...' ;;
+    pt:installer.installing_sudo_podman_rootless) printf '%s' 'A instalar%s com sudo (Podman rootless; o Docker não é instalado)...' ;;
+    pt:installer.linger_enabled) printf '%s' 'linger ativo para %s' ;;
+    pt:installer.loginctl_not_found_linger) printf '%s' 'loginctl não encontrado: o linger não foi verificado.' ;;
+    pt:installer.mac.cannot_create_folder) printf '%s' 'Não é possível criar %s para a máquina Podman.' ;;
+    pt:installer.mac.compose_install_failed) printf '%s' 'a instalação do podman-compose falhou' ;;
+    pt:installer.mac.compose_version_unsupported) printf '%s' 'O JHT num Mac precisa do podman-compose %s; este Mac tem %s. Corre «brew upgrade podman-compose» (ou «brew install podman-compose») e depois este instalador de novo.' ;;
+    pt:installer.mac.homebrew_missing) printf '%s' 'O JHT instala o Podman com o Homebrew, que não está neste Mac. Não foi alterado nada. Instala o Homebrew a partir de https://brew.sh (um comando no Terminal; pede a palavra-passe do Mac), abre uma nova janela do Terminal e corre este instalador de novo.' ;;
+    pt:installer.mac.machine_init_failed) printf '%s' 'A criação da máquina Podman falhou; o Colima não foi alterado.' ;;
+    pt:installer.mac.machine_name_placeholder) printf '%s' '<nome>' ;;
+    pt:installer.mac.machine_not_responding) printf '%s' 'A máquina Podman do JHT não responde.' ;;
+    pt:installer.mac.machine_start_failed) printf '%s' 'O arranque da máquina Podman falhou; o Colima não foi alterado.' ;;
+    pt:installer.mac.machine_unreachable) printf '%s' 'A máquina Podman '\''%s'\'' não está acessível.' ;;
+    pt:installer.mac.other_machine_any) printf '%s' 'outra máquina Podman está ligada (encontra-a com '\''podman machine list'\'')' ;;
+    pt:installer.mac.other_machine_named) printf '%s' 'outra máquina Podman, %s, está ligada' ;;
+    pt:installer.mac.other_machine_running) printf '%s' '%s, e um Mac só corre uma de cada vez. Desliga-a com '\''podman machine stop %s'\'' (ou a partir da app com que a usas) e corre o instalador de novo: o Job Hunter Team nunca a desliga por ti, e depois podes voltar a ligá-la.' ;;
+    pt:installer.mac.podman_install_failed) printf '%s' 'A instalação do Podman falhou' ;;
+    pt:installer.mac.podman_no_version) printf '%s' 'um podman que não diz a sua versão' ;;
+    pt:installer.mac.podman_version_unsupported) printf '%s' 'O JHT num Mac precisa do Podman %s.%s ou de um %s.x posterior (não do 6.2 ou posterior); este Mac tem %s. Se o Homebrew levou o Podman para além da série %s, transfere de novo o instalador do JHT de hoje (diz que série suporta); não foi instalado nada do JHT.' ;;
+    pt:installer.migration.colima_default) printf '%s' 'Se instalaste o Colima só para o JHT, depois da desinstalação a sua máquina virtual (perfil default, a que o instalador do JHT iniciou) fica no disco, parada: remove-a com «colima delete -p default» para libertar o espaço. Se usas o Colima para outras coisas, deixa-a.' ;;
+    pt:installer.migration.colima_started) printf '%s' 'Depois da desinstalação, a máquina virtual Colima que o JHT criou (perfil %s) fica no disco, parada: se não a usas para mais nada, remove-a com «colima delete -p %s» para libertar o espaço.' ;;
+    pt:installer.migration.refused) printf '%s' 'este computador corre o JHT no Docker (Colima, Docker Desktop ou Docker Engine). Desde a 0.4 o JHT só corre no Podman, e não foi alterado nada. Os teus dados ficam: ~/.jht (configuração, base de dados, perfil) e ~/Documents/Job Hunter Team (CV, resultados) são pastas deste computador. O que fica para trás nos volumes do Docker e tem de ser dado de novo: a chave API guardada pela configuração, a palavra-passe do correio, os tokens do Telegram. Para passar para o Podman: %s, corre este instalador de novo e depois «jht setup» com a tua chave API.%s' ;;
+    pt:installer.migration.uninstall) printf '%s' 'corre «jht uninstall --confirm» (mantém essas duas pastas)' ;;
+    pt:installer.migration.uninstall_old_jht) printf '%s' 'o teu comando jht é de uma versão que não se consegue desinstalar a si própria, por isso usa o desta versão: «f="$(mktemp)" && curl -fsSL '\''%s'\'' -o "$f" && bash "$f" uninstall --confirm; rm -f "$f"» (remove o JHT no Docker e o comando jht antigo, e mantém essas duas pastas)' ;;
+    pt:installer.min_free_invalid) printf '%s' 'JHT_MIN_FREE_GIB inválido: %s' ;;
+    pt:installer.mode) printf '%s' 'modo:    ' ;;
+    pt:installer.mount_repair_failed) printf '%s' 'Não é possível tornar %s e %s graváveis para o contentor do Job Hunter Team (corre como uid 1001) e não foi iniciado nada. Deixa o Docker correr para esta conta (adiciona-a ao grupo '\''docker'\'' e depois volta a iniciar sessão), ou corre uma vez: sudo chown -R 1001:1001 "%s" "%s" — e depois corre este instalador de novo.' ;;
+    pt:installer.next_step_run_finish) printf '%s' 'Próximo passo: corre  %s  para concluir a configuração.' ;;
+    pt:installer.next_steps) printf '%s' 'Próximos passos:' ;;
+    pt:installer.no_interactive_terminal_no) printf '%s' 'Sem terminal interativo (sem /dev/tty): vou saltar o assistente.' ;;
+    pt:installer.no_shell_rc_file) printf '%s' 'Não foi escrito nenhum ficheiro rc da shell. Acrescenta à mão:' ;;
+    pt:installer.open_new_terminal_window) printf '%s' 'Abre primeiro uma nova janela do terminal (ou corre: . ~/.profile), para que encontre o jht.' ;;
+    pt:installer.ownership_1001_1001_container) printf '%s' 'Proprietário de %s e %s → 1001:1001 (UID do contentor)' ;;
+    pt:installer.ownership_1001_1001_container_2) printf '%s' 'Proprietário de %s e %s → 1001:1001 (UID do contentor, definido por um contentor descartável: sem sudo)' ;;
+    pt:installer.ownership_stays_user_macos) printf '%s' '%s e %s continuam a pertencer a este utilizador (macOS)' ;;
+    pt:installer.ownership_stays_user_rootless) printf '%s' '%s e %s continuam a pertencer a este utilizador (Podman rootless)' ;;
+    pt:installer.pairing_token_present_skipping) printf '%s' 'Token de emparelhamento presente: vou saltar o assistente interativo.' ;;
+    pt:installer.pairing_token_saved) printf '%s' 'Token de emparelhamento guardado em %s (permissões 0600)' ;;
+    pt:installer.path_added) printf '%s' 'PATH acrescentado a %s' ;;
+    pt:installer.path_added_etc_profile) printf '%s' 'PATH acrescentado a /etc/profile.d/jht.sh (para todo o sistema)' ;;
+    pt:installer.podman.answers_rootful) printf '%s' 'o podman responde como rootful para %s (Rootless=%s): o JHT precisa do Podman rootless.' ;;
+    pt:installer.podman.apt_failed) printf '%s' 'apt-get install%s falhou. Para ver porquê, corre: sudo apt-get install%s' ;;
+    pt:installer.podman.apt_would_remove) printf '%s' 'instalar%s REMOVERIA outros pacotes deste computador (muitas vezes containerd.io, do Docker): não foi alterado nada. Para ver quais, corre: sudo apt-get -s install%s. Instala tu o Podman de uma forma que os mantenha (ou decide removê-los) e depois corre este instalador de novo.' ;;
+    pt:installer.podman.compose_missing) printf '%s' 'o podman-compose não está disponível nos pacotes deste sistema. Pede ao administrador deste servidor que o instale, como root: apt install podman-compose' ;;
+    pt:installer.podman.compose_too_old) printf '%s' 'o podman-compose %s é mais antigo do que %s. Pede ao administrador deste servidor um podman-compose mais recente.' ;;
+    pt:installer.podman.distribution_too_old) printf '%s' 'esta distribuição instalaria %s %s, e o Job Hunter Team 0.4.0 precisa de %s %s ou posterior: não foi instalado nada. Distribuições que o têm: Ubuntu 26.04 LTS, Debian 13, Fedora 43 ou posteriores.' ;;
+    pt:installer.podman.dnf_failed) printf '%s' 'dnf install%s falhou (o dnf não remove nada: um conflito com um pacote instalado trava-o). Para ver porquê, corre: sudo dnf install%s' ;;
+    pt:installer.podman.info_fails) printf '%s' ''\''podman info'\'' falha para %s, por isso o armazenamento ou o runtime rootless não estão prontos. Corre-o à mão para ver porquê.' ;;
+    pt:installer.podman.linger_failed) printf '%s' 'loginctl enable-linger %s falhou.' ;;
+    pt:installer.podman.linger_missing) printf '%s' 'os contentores de %s parariam quando a sessão terminasse. Pede ao administrador deste servidor que corra, como root: loginctl enable-linger %s' ;;
+    pt:installer.podman.missing_default) printf '%s' 'o intervalo subuid ou o linger' ;;
+    pt:installer.podman.no_package_manager) printf '%s' 'nenhum gestor de pacotes conhecido (apt, dnf, pacman) para instalar:%s' ;;
+    pt:installer.podman.pacman_failed) printf '%s' 'pacman -S%s falhou (não foi removido nada). Para ver porquê, corre: sudo pacman -S%s' ;;
+    pt:installer.podman.root_refused) printf '%s' 'O JHT corre no Podman rootless, como um utilizador que não é root. Inicia sessão com esse utilizador e corre a instalação de novo.' ;;
+    pt:installer.podman.runtime_dir_missing) printf '%s' 'não há pasta de runtime para este utilizador (%s): a sessão não tem gestor de utilizador. Inicia sessão de novo, ou pede ao administrador que corra, como root: loginctl enable-linger %s' ;;
+    pt:installer.podman.still_missing) printf '%s' 'o podman continua a não estar lá depois da instalação. Pede ao administrador deste servidor que corra, como root: apt install podman' ;;
+    pt:installer.podman.subuid_missing) printf '%s' '%s não tem um intervalo de uid/gid subordinados em %s/subuid e %s/subgid. Pede ao administrador deste servidor que corra, como root: usermod --add-subuids 100000-165535 --add-subgids 100000-165535 %s' ;;
+    pt:installer.podman.sudo_required) printf '%s' 'O Podman precisa de uma preparação que só um administrador pode fazer (em falta:%s), e o sudo para %s não está disponível sem palavra-passe. Pede ao administrador deste servidor que dê a %s sudo sem palavra-passe, ou que corra, como root: apt install podman podman-compose uidmap; loginctl enable-linger %s' ;;
+    pt:installer.podman.too_old) printf '%s' 'o podman %s é mais antigo do que %s. Pede ao administrador deste servidor um podman mais recente.' ;;
+    pt:installer.podman.unknown_version) printf '%s' 'de versão desconhecida' ;;
+    pt:installer.podman.unsupported_host) printf '%s' '--runtime podman é para Linux e macOS; este sistema é %s.' ;;
+    pt:installer.podman.usermod_failed) printf '%s' 'o usermod não conseguiu acrescentar o intervalo subordinado (%s-%s) para %s.' ;;
+    pt:installer.podman_already_installed) printf '%s' 'podman já instalado' ;;
+    pt:installer.podman_compose_already_installed) printf '%s' 'podman-compose já instalado' ;;
+    pt:installer.podman_machine_already_running) printf '%s' 'Máquina Podman '\''%s'\'' já a correr' ;;
+    pt:installer.podman_machine_reachable) printf '%s' 'Máquina Podman acessível' ;;
+    pt:installer.podman_ready_but_weekly) printf '%s' 'O Podman está pronto, mas não foi possível ativar o seu temporizador semanal que liberta espaço no disco.' ;;
+    pt:installer.podman_ready_colima_retained) printf '%s' 'Podman pronto (Colima mantido como estava)' ;;
+    pt:installer.podman_rootless_podman_compose) printf '%s' 'Podman rootless %s + podman-compose %s para %s' ;;
+    pt:installer.podman_rootless_reachable) printf '%s' 'podman rootless acessível' ;;
+    pt:installer.private_jht_docker_shim) printf '%s' 'Shim docker privado do JHT: %s (não acrescentado ao PATH global; Colima intocado)' ;;
+    pt:installer.private_jht_docker_shim_2) printf '%s' 'Shim docker privado do JHT: %s (não acrescentado ao PATH global; Podman rootless, sem máquina)' ;;
+    pt:installer.run_manually_jht_setup) printf '%s' 'Corre à mão: jht setup' ;;
+    pt:installer.running_host_setup_sh) printf '%s' 'A executar host-setup.sh (escreve ~/.jht/host.env + verificação prévia do swap)...' ;;
+    pt:installer.runtime) printf '%s' 'runtime: ' ;;
+    pt:installer.runtime_dir_bad_ancestor) printf '%s' 'A pasta do runtime no anfitrião tem acima de si uma ligação simbólica ou um caminho não canónico: %s' ;;
+    pt:installer.runtime_dir_in_mount) printf '%s' 'A pasta do runtime no anfitrião tem de ficar fora das pastas em que o contentor pode escrever: %s' ;;
+    pt:installer.runtime_dir_is_link) printf '%s' 'A pasta do runtime no anfitrião é uma ligação simbólica: %s' ;;
+    pt:installer.runtime_image_pinned) printf '%s' 'imagem do runtime fixada: %s' ;;
+    pt:installer.runtime_tier_core_tools) printf '%s' 'nível do runtime: core (as ferramentas vêm depois das boas-vindas)' ;;
+    pt:installer.same_as_above_empties) printf '%s' '(o mesmo que acima, e esvazia também ~/.jht e ~/Documents/Job Hunter Team)' ;;
+    pt:installer.setup_did_not_finish) printf '%s' 'A configuração não terminou (código de saída %s): o Job Hunter Team está instalado, mas ainda não está configurado.' ;;
+    pt:installer.starting_podman_machine) printf '%s' 'A iniciar a máquina Podman '\''%s'\''...' ;;
+    pt:installer.subuid_subgid_range) printf '%s' 'intervalo subuid/subgid %s-%s para %s' ;;
+    pt:installer.system_detection) printf '%s' 'Deteção do sistema' ;;
+    pt:installer.team_running) printf '%s' 'O Job Hunter Team está a correr neste computador (%s). Se a configuração foi interrompida, retoma-a com «jht setup» neste terminal; não é preciso desligar nada. Para reinstalar em vez disso, para-o com «jht down», corre o instalador de novo e depois inicia-o com «jht up». Não foi alterado nada: o teu perfil e os teus documentos em ~/.jht e ~/Documents/Job Hunter Team ficam onde estão.' ;;
+    pt:installer.terminal_run) printf '%s' 'Neste terminal, corre:' ;;
+    pt:installer.uid_1001_taken) printf '%s' 'o uid 1001 neste computador é a conta '\''%s'\''. O contentor do Job Hunter Team corre como uid 1001, por isso essa conta seria a proprietária de ~/.jht (os teus dados e as credenciais dos portais). Não foi alterado nada. Corre o JHT a partir da conta '\''%s'\'', ou dá a '\''%s'\'' outro uid, e depois tenta de novo.' ;;
+    pt:installer.uninstall_keeps_your_data) printf '%s' 'Para desinstalar (os teus dados em ~/.jht e ~/Documents/Job Hunter Team ficam):' ;;
+    pt:installer.wrapper_dir_bad_ancestor) printf '%s' 'A pasta do wrapper no anfitrião tem acima de si uma ligação simbólica ou um caminho não canónico: %s' ;;
+    pt:installer.wrapper_dir_in_mount) printf '%s' 'A pasta do wrapper no anfitrião tem de ficar fora das pastas em que o contentor pode escrever: %s' ;;
+    pt:installer.wsl_not_supported) printf '%s' 'no Windows, instala o JHT a partir do PowerShell com install.ps1 (vê docs/guides/QUICKSTART.md), não a partir do WSL. Não foi alterado nada.' ;;
+    *) return 1 ;;
+  esac
+}
+# <<< texts in the 7 languages
 
 jht_machine_output() {
   case "${JHT_MACHINE_OUTPUT:-}" in
@@ -435,13 +1406,13 @@ header() {
   printf "\n"
   if [ "$USE_DOCKER" -eq 1 ]; then
     if [ "${OS:-}" = "linux" ]; then
-      printf "  ${DIM}%s${RESET}${BOLD}Container (Podman rootless)${RESET}\n" "$(tx "mode:    " "modo:     ")"
+      printf "  ${DIM}%s${RESET}${BOLD}Container (Podman rootless)${RESET}\n" "$(ts installer.mode 'mode:    ')"
     else
-      printf "  ${DIM}%s${RESET}${BOLD}Container (Podman)${RESET}\n" "$(tx "mode:    " "modo:     ")"
+      printf "  ${DIM}%s${RESET}${BOLD}Container (Podman)${RESET}\n" "$(ts installer.mode 'mode:    ')"
     fi
-    printf "  ${DIM}%s%s${RESET}\n" "$(tx "image:   " "immagine: ")" "$IMAGE"
-    printf "  ${DIM}%s%s${RESET}\n" "$(tx "branch:  " "ramo:     ")" "$BRANCH"
-    printf "  ${DIM}%s%s${RESET}\n" "$(tx "runtime: " "runtime:  ")" "$RUNTIME_DIR"
+    printf "  ${DIM}%s%s${RESET}\n" "$(ts installer.image 'image:   ')" "$IMAGE"
+    printf "  ${DIM}%s%s${RESET}\n" "$(ts installer.branch 'branch:  ')" "$BRANCH"
+    printf "  ${DIM}%s%s${RESET}\n" "$(ts installer.runtime 'runtime: ')" "$RUNTIME_DIR"
   else
     printf "  ${DIM}mode:   ${RESET}${YELLOW}native (expert mode, --no-docker)${RESET}\n"
     printf "  ${DIM}repo:   %s${RESET}\n" "$REPO_URL"
@@ -489,7 +1460,8 @@ detect_os() {
 RUNTIME_CHANGE_REQUIRES_MIGRATION_EXIT=85
 # The person's language for the lines of the installer, by the rule of the CLI: the choice saved by an earlier setup or the picker
 # (~/.jht/i18n-prefs.json), then JHT_LANG as set in this terminal, then the one in ~/.jht/host.env, then the system's (the first of
-# LC_ALL, LC_MESSAGES, LANG that is set decides). Files are read as data, only a known value. Italian or English; any other is English.
+# LC_ALL, LC_MESSAGES, LANG that is set decides). Files are read as data, only a known value: one of the 7 languages of JHT (en it
+# hu es de fr pt); any other is English.
 installer_person_lang() {
   local prefs="$HOME/.jht/i18n-prefs.json" env_file="$HOME/.jht/host.env" value="" locale name
   if [ -f "$prefs" ] && [ ! -L "$prefs" ] && [ "$(wc -c < "$prefs" 2>/dev/null || echo 9999)" -le 4096 ]; then
@@ -509,7 +1481,7 @@ installer_person_lang() {
       break
     done
   fi
-  case "$value" in it) printf 'it\n' ;; *) printf 'en\n' ;; esac
+  case "$value" in en|it|hu|es|de|fr|pt) printf '%s\n' "$value" ;; *) printf 'en\n' ;; esac
 }
 
 # The Colima profile the JHT installer started, from its marker in the runtime (a real file: 1st line «colima», 2nd the profile).
@@ -545,46 +1517,31 @@ keep_chosen_runtime() {
     return 0
   fi
   [ "$current" = "podman" ] && return 0
-  local lang profile colima_line="" uninstall_it uninstall_en wrapper_url
-  lang="$(installer_person_lang)"
+  local profile colima_line="" uninstall wrapper_url
   # The jht of an install older than 09/10 (0.3.9 and before) has no `uninstall`: on it the command reaches the CLI inside the
   # container, which does not know it, and nothing is removed. Then the first step is the uninstall of this release's wrapper, from
   # the place the installer downloads it from (the commit of the test channel, or the release branch), saved in a new private file
   # (mktemp: never a fixed name in the shared /tmp, which another user could create first), run once and deleted. No network here:
   # the refusal stays before any I/O.
-  uninstall_it="«jht uninstall --confirm» (tiene quelle due cartelle)"
-  uninstall_en="run «jht uninstall --confirm» (it keeps those two folders)"
+  uninstall="$(ts installer.migration.uninstall 'run «jht uninstall --confirm» (it keeps those two folders)')"
   if installed_jht_lacks_uninstall; then
     local ref="$BRANCH"
     [ "$TEST_CHANNEL" -eq 1 ] && ref="$SOURCE_SHA"
     # Pasted by the person into a shell: only the characters of a branch or a commit, else the release branch.
     case "$ref" in ''|-*|*[!A-Za-z0-9._/-]*|*..*) ref="production" ;; esac
     wrapper_url="https://raw.githubusercontent.com/leopu00/job-hunter-team/$ref/scripts/jht-wrapper.sh"
-    uninstall_it="il tuo comando jht e' di una versione che non sa disinstallarsi, quindi usa quello di questa versione: «f=\"\$(mktemp)\" && curl -fsSL '$wrapper_url' -o \"\$f\" && bash \"\$f\" uninstall --confirm; rm -f \"\$f\"» (toglie il JHT su Docker e il vecchio comando jht, tiene quelle due cartelle)"
-    uninstall_en="your jht command is from a version that cannot uninstall itself, so use the one of this version: «f=\"\$(mktemp)\" && curl -fsSL '$wrapper_url' -o \"\$f\" && bash \"\$f\" uninstall --confirm; rm -f \"\$f\"» (it removes the JHT on Docker and the old jht command, and keeps those two folders)"
+    uninstall="$(tsf installer.migration.uninstall_old_jht 'your jht command is from a version that cannot uninstall itself, so use the one of this version: «f="$(mktemp)" && curl -fsSL '\''%s'\'' -o "$f" && bash "$f" uninstall --confirm; rm -f "$f"» (it removes the JHT on Docker and the old jht command, and keeps those two folders)' "$wrapper_url")"
   fi
   # The Colima virtual machine stays on the disk, stopped, after the move (up to 100 GiB). Name only the profile JHT made: the one of
   # the marker of the installer that started it (1st line «colima», 2nd the profile); an install older than the marker started the
   # «default» profile, which is named only if it is there, and only for a person who installed Colima for JHT alone.
   if profile="$(jht_started_colima_profile)"; then
-    if [ "$lang" = it ]; then
-      colima_line=" Dopo la disinstallazione la macchina virtuale Colima che aveva creato JHT (profilo $profile) resta spenta sul disco: se non la usi per altro, toglila con «colima delete -p $profile» per liberare lo spazio."
-    else
-      colima_line=" After the uninstall the Colima virtual machine JHT created (profile $profile) stays on the disk, stopped: if you use it for nothing else, remove it with «colima delete -p $profile» to free the space."
-    fi
+    colima_line=" $(tsf installer.migration.colima_started 'After the uninstall the Colima virtual machine JHT created (profile %s) stays on the disk, stopped: if you use it for nothing else, remove it with «colima delete -p %s» to free the space.' "$profile" "$profile")"
   elif [ "$OS" = macos ] && [ -d "$HOME/.colima/default" ] && [ ! -L "$HOME/.colima/default" ]; then
-    if [ "$lang" = it ]; then
-      colima_line=" Se Colima l'avevi installata solo per JHT, dopo la disinstallazione la sua macchina virtuale (profilo default, quello che accendeva l'installer di JHT) resta spenta sul disco: toglila con «colima delete -p default» per liberare lo spazio. Se usi Colima per altro, lasciala."
-    else
-      colima_line=" If you installed Colima only for JHT, after the uninstall its virtual machine (profile default, the one the JHT installer started) stays on the disk, stopped: remove it with «colima delete -p default» to free the space. If you use Colima for other things, leave it."
-    fi
+    colima_line=" $(ts installer.migration.colima_default 'If you installed Colima only for JHT, after the uninstall its virtual machine (profile default, the one the JHT installer started) stays on the disk, stopped: remove it with «colima delete -p default» to free the space. If you use Colima for other things, leave it.')"
   fi
   jht_error_marker runtime_change_requires_migration
-  if [ "$lang" = it ]; then
-    printf "  ${RED}✗${RESET} %s%s\n" "$(jht_code_prefix runtime_change_requires_migration)" "questo computer fa girare JHT su Docker (Colima, Docker Desktop o Docker Engine). Dalla 0.4 JHT gira solo su Podman, e non e' stato cambiato niente. I tuoi dati restano: ~/.jht (configurazione, database, profilo) e ~/Documents/Job Hunter Team (CV, risultati) sono cartelle di questo computer. Resta invece nei volumi di Docker, e va ridato: la chiave API salvata dal setup, la password della posta, i token di Telegram. Per passare a Podman: $uninstall_it, rilancia questo installer, poi «jht setup» con la tua chiave API.$colima_line" >&2
-  else
-    printf "  ${RED}✗${RESET} %s%s\n" "$(jht_code_prefix runtime_change_requires_migration)" "this computer runs JHT on Docker (Colima, Docker Desktop or Docker Engine). Since 0.4 JHT runs only on Podman, and nothing was changed. Your data stays: ~/.jht (configuration, database, profile) and ~/Documents/Job Hunter Team (CVs, outputs) are folders of this computer. What stays behind in Docker's volumes and has to be given again: the API key kept by the setup, the mail password, the Telegram tokens. To move to Podman: $uninstall_en, run this installer again, then «jht setup» with your API key.$colima_line" >&2
-  fi
+  printf "  ${RED}✗${RESET} %s%s\n" "$(jht_code_prefix runtime_change_requires_migration)" "$(tsf installer.migration.refused 'this computer runs JHT on Docker (Colima, Docker Desktop or Docker Engine). Since 0.4 JHT runs only on Podman, and nothing was changed. Your data stays: ~/.jht (configuration, database, profile) and ~/Documents/Job Hunter Team (CVs, outputs) are folders of this computer. What stays behind in Docker'\''s volumes and has to be given again: the API key kept by the setup, the mail password, the Telegram tokens. To move to Podman: %s, run this installer again, then «jht setup» with your API key.%s' "$uninstall" "$colima_line")" >&2
   exit "$RUNTIME_CHANGE_REQUIRES_MIGRATION_EXIT"
 }
 
@@ -603,7 +1560,7 @@ sudo_maybe() {
 
 detect_system() {
   local total="$1"
-  step 1 "$total" "$(tx "System detection" "Rilevamento del sistema")"
+  step 1 "$total" "$(ts installer.system_detection 'System detection')"
   detect_os
   case "$OS" in
     macos) ok "macOS" ;;
@@ -718,13 +1675,9 @@ podman_candidate_version() { # package
   printf '%s' "$raw" | sed -n 's/^\([0-9][0-9]*\(\.[0-9][0-9]*\)*\).*/\1/p'
 }
 
-# Podman 5 or later is what JHT runs on; the distributions that give it (13/11/2026). Said in Italian too when the person reads Italian.
-PODMAN_DISTRIBUTIONS_OK="Ubuntu 26.04 LTS, Debian 13, Fedora 43 or later"
+# Podman 5 or later is what JHT runs on; the distributions that give it (13/11/2026), named in the sentence, in the person's language.
 podman_refuse_old_candidate() { # package found wanted
-  local locale="${JHT_LANG:-${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}}"
-  case "$locale" in it|it_*|it.*) ;; *) locale="" ;; esac
-  [ -n "$locale" ] && printf "  %s\n" "Questa distribuzione installerebbe $1 $2, ma Job Hunter Team 0.4.0 vuole $1 $3 o successivo: non ho installato niente. Distribuzioni che lo danno: Ubuntu 26.04 LTS, Debian 13, Fedora 43 o successive." >&2
-  podman_refuse podman_version_unsupported 93 "this distribution would install $1 $2, and Job Hunter Team 0.4.0 needs $1 $3 or later: nothing was installed. Distributions that give it: $PODMAN_DISTRIBUTIONS_OK."
+  podman_refuse podman_version_unsupported 93 "$(tsf installer.podman.distribution_too_old 'this distribution would install %s %s, and Job Hunter Team 0.4.0 needs %s %s or later: nothing was installed. Distributions that give it: Ubuntu 26.04 LTS, Debian 13, Fedora 43 or later.' "$1" "$2" "$1" "$3")"
 }
 
 # Each of podman and podman-compose that is about to be installed: its candidate is the minimum or more, or nothing is installed.
@@ -760,14 +1713,14 @@ provision_podman_linux() {
     return 0
   fi
   command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1 \
-    || podman_refuse podman_sudo_required 89 "Podman needs a setup that only an administrator can do (missing:${missing:- the subuid range or linger}), and sudo for $user is not available without a password. Ask the administrator of this server to allow $user sudo without a password, or to run, as root: apt install podman podman-compose uidmap; loginctl enable-linger $user"
+    || podman_refuse podman_sudo_required 89 "$(tsf installer.podman.sudo_required 'Podman needs a setup that only an administrator can do (missing:%s), and sudo for %s is not available without a password. Ask the administrator of this server to allow %s sudo without a password, or to run, as root: apt install podman podman-compose uidmap; loginctl enable-linger %s' "${missing:- $(ts installer.podman.missing_default 'the subuid range or linger')}" "$user" "$user" "$user")"
   if [ -n "$missing" ]; then
-    info "$(tx "Installing$missing with sudo (Podman rootless; Docker is not installed)..." "Installo$missing con sudo (Podman rootless; Docker non viene installato)...")"
+    info "$(tsf installer.installing_sudo_podman_rootless 'Installing%s with sudo (Podman rootless; Docker is not installed)...' "$missing")"
     case "$PKG" in
       apt)
         # A server just bought runs unattended-upgrades, which holds the dpkg
         # lock for minutes: wait for it (apt-get gives up at once otherwise).
-        sudo -n apt-get -o DPkg::Lock::Timeout=180 update -qq >/dev/null 2>&1 || warn "$(tx "apt-get update failed: trying the install anyway." "apt-get update non e' riuscito: provo comunque a installare.")"
+        sudo -n apt-get -o DPkg::Lock::Timeout=180 update -qq >/dev/null 2>&1 || warn "$(ts installer.apt_get_update_failed 'apt-get update failed: trying the install anyway.')"
         podman_check_candidates "$missing"
         # --no-remove: Podman never takes the place of anything. On a computer with Docker from Docker's own repository,
         # containerd.io conflicts with runc, and `install -y` alone would have removed it to make room (Docker broken).
@@ -775,8 +1728,8 @@ provision_podman_linux() {
         if ! apt_err="$(sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=180 install -y --no-remove $missing 2>&1 >/dev/null)"; then
           case "$apt_err" in
             *"remove is disabled"*|*"Packages need to be removed"*)
-              podman_refuse podman_install_failed 88 "installing$missing would REMOVE other packages of this computer (often containerd.io, Docker's): nothing was changed. To see which, run: sudo apt-get -s install$missing. Install Podman yourself in a way that keeps them (or decide to remove them), then run this installer again." ;;
-            *) podman_refuse podman_install_failed 88 "apt-get install$missing failed. To see why, run: sudo apt-get install$missing" ;;
+              podman_refuse podman_install_failed 88 "$(tsf installer.podman.apt_would_remove 'installing%s would REMOVE other packages of this computer (often containerd.io, Docker'\''s): nothing was changed. To see which, run: sudo apt-get -s install%s. Install Podman yourself in a way that keeps them (or decide to remove them), then run this installer again.' "$missing" "$missing")" ;;
+            *) podman_refuse podman_install_failed 88 "$(tsf installer.podman.apt_failed 'apt-get install%s failed. To see why, run: sudo apt-get install%s' "$missing" "$missing")" ;;
           esac
         fi
         ;;
@@ -784,23 +1737,23 @@ provision_podman_linux() {
         podman_check_candidates "$missing"
         # dnf never removes a package to install one unless --allowerasing is given: it stops on the conflict.
         sudo -n dnf install -y $missing >/dev/null \
-          || podman_refuse podman_install_failed 88 "dnf install$missing failed (dnf removes nothing: a conflict with an installed package stops it). To see why, run: sudo dnf install$missing"
+          || podman_refuse podman_install_failed 88 "$(tsf installer.podman.dnf_failed 'dnf install%s failed (dnf removes nothing: a conflict with an installed package stops it). To see why, run: sudo dnf install%s' "$missing" "$missing")"
         ;;
       pacman)
         podman_check_candidates "$missing"
         # --noconfirm answers the default, which is «no» to removing a conflicting package: pacman stops.
         sudo -n pacman -S --noconfirm --needed $missing >/dev/null \
-          || podman_refuse podman_install_failed 88 "pacman -S$missing failed (nothing was removed). To see why, run: sudo pacman -S$missing"
+          || podman_refuse podman_install_failed 88 "$(tsf installer.podman.pacman_failed 'pacman -S%s failed (nothing was removed). To see why, run: sudo pacman -S%s' "$missing" "$missing")"
         ;;
-      *) podman_refuse podman_install_failed 88 "no known package manager (apt, dnf, pacman) to install:$missing" ;;
+      *) podman_refuse podman_install_failed 88 "$(tsf installer.podman.no_package_manager 'no known package manager (apt, dnf, pacman) to install:%s' "$missing")" ;;
     esac
     hash -r 2>/dev/null || true
-    ok "$(tx "Installed:$missing" "Installato:$missing")"
+    ok "$(tsf installer.installed 'Installed:%s' "$missing")"
   fi
   if [ "$need_subuid$need_subgid" != "00" ]; then
     start="$(podman_free_subid_start "$etc")"
     end=$((start + 65535))
-    info "$(tx "Giving $user the subordinate uid/gid range $start-$end..." "Assegno a $user l'intervallo di uid/gid subordinati $start-$end...")"
+    info "$(tsf installer.giving_subordinate_uid_gid 'Giving %s the subordinate uid/gid range %s-%s...' "$user" "$start" "$end")"
     {
       if [ "$need_subuid" = 1 ] && [ "$need_subgid" = 1 ]; then
         sudo -n usermod --add-subuids "$start-$end" --add-subgids "$start-$end" "$user"
@@ -809,27 +1762,27 @@ provision_podman_linux() {
       else
         sudo -n usermod --add-subgids "$start-$end" "$user"
       fi
-    } || podman_refuse podman_subuid_missing 96 "usermod could not add the subordinate range ($start-$end) for $user."
+    } || podman_refuse podman_subuid_missing 96 "$(tsf installer.podman.usermod_failed 'usermod could not add the subordinate range (%s-%s) for %s.' "$start" "$end" "$user")"
     if command -v podman >/dev/null 2>&1; then podman system migrate >/dev/null 2>&1 || true; fi
-    ok "$(tx "subuid/subgid range $start-$end for $user" "intervallo subuid/subgid $start-$end per $user")"
+    ok "$(tsf installer.subuid_subgid_range 'subuid/subgid range %s-%s for %s' "$start" "$end" "$user")"
   fi
   if [ "$need_linger" = 1 ]; then
-    info "$(tx "Enabling linger for $user..." "Attivo il linger per $user...")"
+    info "$(tsf installer.enabling_linger 'Enabling linger for %s...' "$user")"
     sudo -n loginctl enable-linger "$user" \
-      || podman_refuse podman_linger_missing 94 "loginctl enable-linger $user failed."
+      || podman_refuse podman_linger_missing 94 "$(tsf installer.podman.linger_failed 'loginctl enable-linger %s failed.' "$user")"
     # The user manager starts a moment later: the runtime directory follows it.
     for i in 1 2 3 4 5 6 7 8 9 10; do
       [ -d "$run_user" ] && break
       sleep 1
     done
-    ok "$(tx "linger enabled for $user" "linger attivo per $user")"
+    ok "$(tsf installer.linger_enabled 'linger enabled for %s' "$user")"
   fi
 }
 
 check_podman_linux() {
-  step 2 "$TOTAL_STEPS_DOCKER" "$(tx "Container runtime (Podman rootless)" "Motore dei container (Podman rootless)")"
+  step 2 "$TOTAL_STEPS_DOCKER" "$(ts installer.container_runtime_podman_rootless 'Container runtime (Podman rootless)')"
   [ "$OS" = "linux" ] \
-    || podman_refuse podman_unsupported_host 1 "--runtime podman is for Linux and macOS; this system is $OS."
+    || podman_refuse podman_unsupported_host 1 "$(tsf installer.podman.unsupported_host '--runtime podman is for Linux and macOS; this system is %s.' "$OS")"
   # Podman on Linux answers for this user unless something turns its remote
   # mode on: CONTAINER_HOST or CONTAINER_CONNECTION do, a default system
   # connection alone does not. The wrapper unsets both too, so every check
@@ -845,12 +1798,12 @@ check_podman_linux() {
   uid="$(id -u)"; user="$(id -un)"; etc="${JHT_ETC_DIR:-/etc}"
   run_user="${JHT_RUN_USER_DIR:-/run/user}/$uid"
   [ "$uid" -ne 0 ] \
-    || podman_refuse podman_rootful_refused 91 "JHT runs on Podman rootless, as a user that is not root. Sign in as that user and run the install again."
+    || podman_refuse podman_rootful_refused 91 "$(ts installer.podman.root_refused 'JHT runs on Podman rootless, as a user that is not root. Sign in as that user and run the install again.')"
   provision_podman_linux "$uid" "$user" "$etc" "$run_user"
   command -v podman >/dev/null 2>&1 \
-    || podman_refuse podman_missing 90 "podman is still not there after the install. Ask the administrator of this server to run, as root: apt install podman"
+    || podman_refuse podman_missing 90 "$(ts installer.podman.still_missing 'podman is still not there after the install. Ask the administrator of this server to run, as root: apt install podman')"
   command -v podman-compose >/dev/null 2>&1 \
-    || podman_refuse podman_compose_missing 92 "podman-compose is not available from this system's packages. Ask the administrator of this server to install it, as root: apt install podman-compose"
+    || podman_refuse podman_compose_missing 92 "$(ts installer.podman.compose_missing 'podman-compose is not available from this system'\''s packages. Ask the administrator of this server to install it, as root: apt install podman-compose')"
   # A session without a user manager has no XDG_RUNTIME_DIR: the directory
   # linger has just started is the one Podman wants.
   xdg="${XDG_RUNTIME_DIR:-}"
@@ -862,28 +1815,28 @@ check_podman_linux() {
     fi
   fi
   { [ -d "$xdg" ] && [ -w "$xdg" ]; } \
-    || podman_refuse podman_runtime_dir_missing 95 "there is no runtime directory for this user ($xdg): the session has no user manager. Sign in again, or ask the administrator to run, as root: loginctl enable-linger $user"
+    || podman_refuse podman_runtime_dir_missing 95 "$(tsf installer.podman.runtime_dir_missing 'there is no runtime directory for this user (%s): the session has no user manager. Sign in again, or ask the administrator to run, as root: loginctl enable-linger %s' "$xdg" "$user")"
   if command -v loginctl >/dev/null 2>&1; then
     loginctl show-user "$user" -p Linger 2>/dev/null | grep -qx 'Linger=yes' \
-      || podman_refuse podman_linger_missing 94 "the containers of $user would stop when the session ends. Ask the administrator of this server to run, as root: loginctl enable-linger $user"
+      || podman_refuse podman_linger_missing 94 "$(tsf installer.podman.linger_missing 'the containers of %s would stop when the session ends. Ask the administrator of this server to run, as root: loginctl enable-linger %s' "$user" "$user")"
   else
-    warn "$(tx "loginctl not found: linger was not checked." "loginctl non trovato: il linger non e' stato controllato.")"
+    warn "$(ts installer.loginctl_not_found_linger 'loginctl not found: linger was not checked.')"
   fi
   { podman_subid_range "$etc/subuid" "$user" "$uid" && podman_subid_range "$etc/subgid" "$user" "$uid"; } \
-    || podman_refuse podman_subuid_missing 96 "$user has no subordinate uid/gid range in $etc/subuid and $etc/subgid. Ask the administrator of this server to run, as root: usermod --add-subuids 100000-165535 --add-subgids 100000-165535 $user"
+    || podman_refuse podman_subuid_missing 96 "$(tsf installer.podman.subuid_missing '%s has no subordinate uid/gid range in %s/subuid and %s/subgid. Ask the administrator of this server to run, as root: usermod --add-subuids 100000-165535 --add-subgids 100000-165535 %s' "$user" "$etc" "$etc" "$user")"
   rootless="$(podman info --format '{{.Host.Security.Rootless}}' 2>/dev/null)" \
-    || podman_refuse podman_rootless_unavailable 97 "'podman info' fails for $user, so the rootless storage or runtime is not ready. Run it by hand to see why."
+    || podman_refuse podman_rootless_unavailable 97 "$(tsf installer.podman.info_fails ''\''podman info'\'' fails for %s, so the rootless storage or runtime is not ready. Run it by hand to see why.' "$user")"
   [ "$rootless" = "true" ] \
-    || podman_refuse podman_rootful_refused 91 "podman answers as rootful for $user (Rootless=$rootless): JHT needs Podman rootless."
+    || podman_refuse podman_rootful_refused 91 "$(tsf installer.podman.answers_rootful 'podman answers as rootful for %s (Rootless=%s): JHT needs Podman rootless.' "$user" "$rootless")"
   have_podman="$(podman --version 2>/dev/null | awk '{ print $NF }' | sed 's/[^0-9.].*$//')"
   # awk reads every line: exiting at the first would close the pipe while podman-compose still
   # writes its "podman version" line, and under pipefail that SIGPIPE (141) stops the install.
   have_compose="$(podman-compose --version 2>/dev/null | awk '/^podman-compose version/ && v == "" { v = $3 } END { print v }' | sed 's/[^0-9.].*$//')"
   { [ -n "$have_podman" ] && version_at_least "$have_podman" "$PODMAN_MIN_VERSION"; } \
-    || podman_refuse podman_version_unsupported 93 "podman ${have_podman:-of unknown version} is older than $PODMAN_MIN_VERSION. Ask the administrator of this server for a newer podman."
+    || podman_refuse podman_version_unsupported 93 "$(tsf installer.podman.too_old 'podman %s is older than %s. Ask the administrator of this server for a newer podman.' "${have_podman:-$(ts installer.podman.unknown_version 'of unknown version')}" "$PODMAN_MIN_VERSION")"
   { [ -n "$have_compose" ] && version_at_least "$have_compose" "$PODMAN_COMPOSE_MIN_VERSION"; } \
-    || podman_refuse podman_version_unsupported 93 "podman-compose ${have_compose:-of unknown version} is older than $PODMAN_COMPOSE_MIN_VERSION. Ask the administrator of this server for a newer podman-compose."
-  ok "$(tx "Podman rootless $have_podman + podman-compose $have_compose for $user" "Podman rootless $have_podman + podman-compose $have_compose per $user")"
+    || podman_refuse podman_version_unsupported 93 "$(tsf installer.podman.compose_too_old 'podman-compose %s is older than %s. Ask the administrator of this server for a newer podman-compose.' "${have_compose:-$(ts installer.podman.unknown_version 'of unknown version')}" "$PODMAN_COMPOSE_MIN_VERSION")"
+  ok "$(tsf installer.podman_rootless_podman_compose 'Podman rootless %s + podman-compose %s for %s' "$have_podman" "$have_compose" "$user")"
 }
 
 # ── Docker runtime install ────────────────────────────────────────────────
@@ -904,11 +1857,7 @@ install_brew_if_missing() {
   if command -v brew &>/dev/null; then return 0; fi
   # Podman and its Compose provider (podman-compose) come from Homebrew: the official Podman package has no podman-compose. Stop
   # here, before anything is written, and say what to do.
-  if [ "$(installer_person_lang)" = it ]; then
-    printf '%s\n' "homebrew_missing: JHT installa Podman con Homebrew, che su questo Mac non c'e'. Non e' stato cambiato niente. Installa Homebrew da https://brew.sh (un comando nel Terminale; chiede la password del Mac), apri una nuova finestra del Terminale e rilancia questo installer." >&2
-  else
-    printf '%s\n' 'homebrew_missing: JHT installs Podman with Homebrew, which is not on this Mac. Nothing was changed. Install Homebrew from https://brew.sh (one command in Terminal; it asks for your Mac password), open a new Terminal window and run this installer again.' >&2
-  fi
+  printf 'homebrew_missing: %s\n' "$(ts installer.mac.homebrew_missing 'JHT installs Podman with Homebrew, which is not on this Mac. Nothing was changed. Install Homebrew from https://brew.sh (one command in Terminal; it asks for your Mac password), open a new Terminal window and run this installer again.')" >&2
   exit 80
 }
 
@@ -936,13 +1885,10 @@ report_podman_machine_conflict() {
   if [ -n "$running" ] && jht_machine_output; then printf 'JHT_OTHER_MACHINE %s\n' "$running"; fi
   # The line in the person's language (the installer has no err(): it once stopped here with «err: command not found»). It only
   # says the command: the installer never stops a machine of the person.
-  local which_it="un'altra macchina Podman e' accesa (trovala con 'podman machine list')" which_en="another Podman machine is running (find it with 'podman machine list')"
-  [ -n "$running" ] && which_it="un'altra macchina Podman, $running, e' accesa" which_en="another Podman machine, $running, is running"
-  if [ "$(installer_person_lang)" = it ]; then
-    printf "  ${RED}✗${RESET} %s%s\n" "$(jht_code_prefix podman_other_machine_running)" "$which_it, e sul Mac ne puo' girare una sola alla volta. Spegnila con 'podman machine stop ${running:-<nome>}' (o dall'app con cui la usi) e rilancia l'installer: Job Hunter Team non la spegne mai al posto tuo, e dopo potrai riaccenderla." >&2
-  else
-    printf "  ${RED}✗${RESET} %s%s\n" "$(jht_code_prefix podman_other_machine_running)" "$which_en, and a Mac runs only one at a time. Stop it with 'podman machine stop ${running:-<name>}' (or from the app you use it with) and run the installer again: Job Hunter Team never stops it for you, and you can start it again afterwards." >&2
-  fi
+  local which
+  which="$(ts installer.mac.other_machine_any 'another Podman machine is running (find it with '\''podman machine list'\'')')"
+  [ -n "$running" ] && which="$(tsf installer.mac.other_machine_named 'another Podman machine, %s, is running' "$running")"
+  printf "  ${RED}✗${RESET} %s%s\n" "$(jht_code_prefix podman_other_machine_running)" "$(tsf installer.mac.other_machine_running '%s, and a Mac runs only one at a time. Stop it with '\''podman machine stop %s'\'' (or from the app you use it with) and run the installer again: Job Hunter Team never stops it for you, and you can start it again afterwards.' "$which" "${running:-$(ts installer.mac.machine_name_placeholder '<name>')}")" >&2
   return 0
 }
 
@@ -961,17 +1907,17 @@ install_podman_macos() {
   install_brew_if_missing
   if ! command -v podman &>/dev/null; then
     jht_phase podman_install
-    info "$(tx "Installing Podman CLI..." "Installo la CLI di Podman...")"
-    run brew install podman || fail "Podman installation failed"
+    info "$(ts installer.installing_podman_cli 'Installing Podman CLI...')"
+    run brew install podman || fail "$(ts installer.mac.podman_install_failed 'Podman installation failed')"
   else
-    ok "$(tx "podman already installed" "podman gia' installato")"
+    ok "$(ts installer.podman_already_installed 'podman already installed')"
   fi
   if ! command -v podman-compose &>/dev/null; then
     jht_phase compose_install
-    info "$(tx "Installing the Podman Compose provider..." "Installo il provider di Podman Compose...")"
-    run brew install podman-compose || fail "podman-compose installation failed"
+    info "$(ts installer.installing_podman_compose_provider 'Installing the Podman Compose provider...')"
+    run brew install podman-compose || fail "$(ts installer.mac.compose_install_failed 'podman-compose installation failed')"
   else
-    ok "$(tx "podman-compose already installed" "podman-compose gia' installato")"
+    ok "$(ts installer.podman_compose_already_installed 'podman-compose already installed')"
   fi
   if [ "$DRY_RUN" -eq 1 ]; then
     jht_phase machine_create
@@ -994,12 +1940,12 @@ install_podman_macos() {
   podman_version="$("$podman_bin" --version 2>/dev/null)" || podman_version=""
   podman_version="${podman_version#podman version }"
   podman_mac_version_supported "$podman_version" \
-    || fail "podman_version_unsupported: JHT on a Mac needs Podman $PODMAN_MAC_SERIES.$PODMAN_MAC_MIN_PATCH or a later $PODMAN_MAC_SERIES.x (not 6.2 or later); this Mac has ${podman_version:-a podman that does not say its version}. If Homebrew moved Podman past the $PODMAN_MAC_SERIES series, get the JHT installer of today again (it says which series it supports); nothing of JHT was installed."
+    || fail "podman_version_unsupported: $(tsf installer.mac.podman_version_unsupported 'JHT on a Mac needs Podman %s.%s or a later %s.x (not 6.2 or later); this Mac has %s. If Homebrew moved Podman past the %s series, get the JHT installer of today again (it says which series it supports); nothing of JHT was installed.' "$PODMAN_MAC_SERIES" "$PODMAN_MAC_MIN_PATCH" "$PODMAN_MAC_SERIES" "${podman_version:-$(ts installer.mac.podman_no_version 'a podman that does not say its version')}" "$PODMAN_MAC_SERIES")"
   compose_version="$(CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
     "$compose_bin" --version 2>/dev/null)" \
     || fail "Podman Compose provider version probe failed."
   printf '%s\n' "$compose_version" | grep -Fqx "podman-compose version $PODMAN_COMPOSE_MAC_VERSION" \
-    || fail "podman_compose_version_unsupported: JHT on a Mac needs podman-compose $PODMAN_COMPOSE_MAC_VERSION; this Mac has $(printf '%s\n' "$compose_version" | sed -n 's/^podman-compose version //p' | head -n 1). Run «brew upgrade podman-compose» (or «brew install podman-compose»), then this installer again."
+    || fail "podman_compose_version_unsupported: $(tsf installer.mac.compose_version_unsupported 'JHT on a Mac needs podman-compose %s; this Mac has %s. Run «brew upgrade podman-compose» (or «brew install podman-compose»), then this installer again.' "$PODMAN_COMPOSE_MAC_VERSION" "$(printf '%s\n' "$compose_version" | sed -n 's/^podman-compose version //p' | head -n 1)")"
   # The only Mac folders the JHT machine may see are the two the compose
   # file binds. Without --volume, `podman machine init` on macOS mounts
   # /Users (every user's home), /private, /var/folders and
@@ -1009,34 +1955,34 @@ install_podman_macos() {
   local jht_home_dir="$HOME/.jht" jht_docs_dir="$HOME/Documents/Job Hunter Team"
   if [ ! -d "$jht_home_dir" ]; then
     mkdir -p "$jht_home_dir" && chmod 700 "$jht_home_dir" \
-      || fail "Cannot create $jht_home_dir for the Podman machine."
+      || fail "$(tsf installer.mac.cannot_create_folder 'Cannot create %s for the Podman machine.' "$jht_home_dir")"
   fi
-  mkdir -p "$jht_docs_dir" || fail "Cannot create $jht_docs_dir for the Podman machine."
+  mkdir -p "$jht_docs_dir" || fail "$(tsf installer.mac.cannot_create_folder 'Cannot create %s for the Podman machine.' "$jht_docs_dir")"
   if podman machine inspect "$PODMAN_MACHINE_NAME" &>/dev/null; then
     local machine_resources
     machine_resources="$("$podman_bin" machine inspect \
       --format '{{.Resources.CPUs}} {{.Resources.Memory}} {{.Resources.DiskSize}}' \
       "$PODMAN_MACHINE_NAME" 2>/dev/null || true)"
     if [ "$machine_resources" != "$PODMAN_MACHINE_CPUS $PODMAN_MACHINE_MEMORY_MIB $PODMAN_MACHINE_DISK_GIB" ]; then
-      warn "$(tx "Existing Podman machine '$PODMAN_MACHINE_NAME' has resources '${machine_resources:-unknown}'; JHT recommends $PODMAN_MACHINE_CPUS CPU, $PODMAN_MACHINE_MEMORY_MIB MiB RAM and $PODMAN_MACHINE_DISK_GIB GiB disk. The existing machine was not changed." "La macchina Podman '$PODMAN_MACHINE_NAME' che c'e' gia' ha le risorse '${machine_resources:-unknown}'; JHT consiglia $PODMAN_MACHINE_CPUS CPU, $PODMAN_MACHINE_MEMORY_MIB MiB di RAM e $PODMAN_MACHINE_DISK_GIB GiB di disco. La macchina non e' stata cambiata.")"
+      warn "$(tsf installer.existing_podman_machine_has 'Existing Podman machine '\''%s'\'' has resources '\''%s'\''; JHT recommends %s CPU, %s MiB RAM and %s GiB disk. The existing machine was not changed.' "$PODMAN_MACHINE_NAME" "${machine_resources:-unknown}" "$PODMAN_MACHINE_CPUS" "$PODMAN_MACHINE_MEMORY_MIB" "$PODMAN_MACHINE_DISK_GIB")"
     fi
     if ! podman --connection "$PODMAN_MACHINE_NAME" info &>/dev/null; then
       jht_phase machine_start
-      info "$(tx "Starting Podman machine '$PODMAN_MACHINE_NAME'..." "Avvio la macchina Podman '$PODMAN_MACHINE_NAME'...")"
+      info "$(tsf installer.starting_podman_machine 'Starting Podman machine '\''%s'\''...' "$PODMAN_MACHINE_NAME")"
       local start_error start_status
       start_error="$("$podman_bin" machine start --update-connection=false "$PODMAN_MACHINE_NAME" 2>&1 >/dev/null)" \
         && start_status=0 || start_status=$?
       if [ "$start_status" -ne 0 ]; then
         report_podman_machine_conflict "$podman_bin" "$start_error" && exit 79
-        fail "Podman machine start failed; Colima was not changed."
+        fail "$(ts installer.mac.machine_start_failed 'Podman machine start failed; Colima was not changed.')"
       fi
     else
-      ok "$(tx "Podman machine '$PODMAN_MACHINE_NAME' already running" "Macchina Podman '$PODMAN_MACHINE_NAME' gia' accesa")"
+      ok "$(tsf installer.podman_machine_already_running 'Podman machine '\''%s'\'' already running' "$PODMAN_MACHINE_NAME")"
     fi
   else
     jht_phase machine_create
     jht_phase machine_start
-    info "$(tx "Creating rootless Podman machine '$PODMAN_MACHINE_NAME'..." "Creo la macchina Podman rootless '$PODMAN_MACHINE_NAME'...")"
+    info "$(tsf installer.creating_rootless_podman_machine 'Creating rootless Podman machine '\''%s'\''...' "$PODMAN_MACHINE_NAME")"
     local init_error init_status
     init_error="$("$podman_bin" machine init --now --update-connection=false \
       --cpus "$PODMAN_MACHINE_CPUS" \
@@ -1047,45 +1993,45 @@ install_podman_macos() {
       "$PODMAN_MACHINE_NAME" 2>&1 >/dev/null)" && init_status=0 || init_status=$?
     if [ "$init_status" -ne 0 ]; then
       report_podman_machine_conflict "$podman_bin" "$init_error" && exit 79
-      fail "Podman machine initialization failed; Colima was not changed."
+      fail "$(ts installer.mac.machine_init_failed 'Podman machine initialization failed; Colima was not changed.')"
     fi
     PODMAN_MACHINE_CREATED=1
     PODMAN_MACHINE_CREATED_ID="$("$podman_bin" machine inspect --format '{{.Created}}' "$PODMAN_MACHINE_NAME" 2>/dev/null | head -n 1 || true)"
   fi
   "$podman_bin" --connection "$PODMAN_MACHINE_NAME" info &>/dev/null \
-    || fail "Podman machine '$PODMAN_MACHINE_NAME' is not reachable."
+    || fail "$(tsf installer.mac.machine_unreachable 'Podman machine '\''%s'\'' is not reachable.' "$PODMAN_MACHINE_NAME")"
   # A team that is running refuses the reinstall: say so before the download of the image (minutes), not after it.
   refuse_running_team
   jht_phase image_pull
   "$podman_bin" --connection "$PODMAN_MACHINE_NAME" pull "$IMAGE" >/dev/null \
-    || fail "JHT image download failed: $IMAGE"
+    || fail "$(tsf installer.image_download_failed 'JHT image download failed: %s' "$IMAGE")"
   # Fedora CoreOS ships this weekly timer. Enabling the stock unit is
   # idempotent and lets applehv reclaim unused blocks from its sparse .raw;
   # do not start or stop a machine solely for trimming.
   enable_podman_trim_timer "$podman_bin" \
-    || warn "$(tx "Podman is ready, but its weekly disk trim timer could not be enabled." "Podman e' pronto, ma il suo timer settimanale che libera il disco non si e' potuto attivare.")"
-  ok "$(tx "Podman ready (Colima retained)" "Podman pronto (Colima lasciato com'era)")"
+    || warn "$(ts installer.podman_ready_but_weekly 'Podman is ready, but its weekly disk trim timer could not be enabled.')"
+  ok "$(ts installer.podman_ready_colima_retained 'Podman ready (Colima retained)')"
 }
 
 
 
 install_container_runtime() {
-  step 2 "$TOTAL_STEPS_DOCKER" "$(tx "Container runtime" "Motore dei container")"
+  step 2 "$TOTAL_STEPS_DOCKER" "$(ts installer.container_runtime 'Container runtime')"
   case "$OS" in
     macos) install_podman_macos ;;
     linux) check_podman_linux ;;
     # Windows runs JHT with install.ps1 (Podman in WSL, set up from Windows); inside a WSL distribution there is nothing to set up.
-    wsl) fail "wsl_not_supported: on Windows, install JHT from PowerShell with install.ps1 (see docs/guides/QUICKSTART.md), not from inside WSL. Nothing was changed." ;;
+    wsl) fail "wsl_not_supported: $(ts installer.wsl_not_supported 'on Windows, install JHT from PowerShell with install.ps1 (see docs/guides/QUICKSTART.md), not from inside WSL. Nothing was changed.')" ;;
   esac
 }
 
 
 
 verify_docker_works() {
-  step 3 "$TOTAL_STEPS_DOCKER" "$(tx "Container runtime check" "Verifica del motore dei container")"
+  step 3 "$TOTAL_STEPS_DOCKER" "$(ts installer.container_runtime_check 'Container runtime check')"
   if podman_native_mode; then
     # The check of the step before already ran podman info, rootless.
-    [ "$DRY_RUN" -eq 1 ] || ok "$(tx "podman rootless reachable" "podman rootless raggiungibile")"
+    [ "$DRY_RUN" -eq 1 ] || ok "$(ts installer.podman_rootless_reachable 'podman rootless reachable')"
     return 0
   fi
   if [ "$DRY_RUN" -eq 1 ]; then
@@ -1094,8 +2040,8 @@ verify_docker_works() {
     return 0
   fi
   podman --connection "$PODMAN_MACHINE_NAME" info &>/dev/null \
-    || fail "The JHT Podman machine is not responding."
-  ok "$(tx "Podman machine reachable" "Macchina Podman raggiungibile")"
+    || fail "$(ts installer.mac.machine_not_responding 'The JHT Podman machine is not responding.')"
+  ok "$(ts installer.podman_machine_reachable 'Podman machine reachable')"
 }
 
 install_podman_adapter() {
@@ -1148,11 +2094,11 @@ install_podman_adapter() {
       [ -z "$PODMAN_MACHINE_CREATED_ID" ] || printf '%s\n' "$PODMAN_MACHINE_CREATED_ID" >> "$RUNTIME_DIR/podman-machine-created"
       chmod 600 "$RUNTIME_DIR/podman-machine-created"
     fi
-    ok "$(tx "Private JHT docker shim: $shim_dest (not added to global PATH; Colima untouched)" "Shim docker privato di JHT: $shim_dest (non aggiunto al PATH globale; Colima non toccato)")"
+    ok "$(tsf installer.private_jht_docker_shim 'Private JHT docker shim: %s (not added to global PATH; Colima untouched)' "$shim_dest")"
   else
     # Native Linux has no machine: the wrapper refuses a machine file here.
     rm -f "$machine_file"
-    ok "$(tx "Private JHT docker shim: $shim_dest (not added to global PATH; rootless Podman, no machine)" "Shim docker privato di JHT: $shim_dest (non aggiunto al PATH globale; Podman rootless, senza macchina)")"
+    ok "$(tsf installer.private_jht_docker_shim_2 'Private JHT docker shim: %s (not added to global PATH; rootless Podman, no machine)' "$shim_dest")"
   fi
 }
 
@@ -1173,7 +2119,7 @@ publish_runtime_tier() {
   mv -f "$TIER_STAGED" "$RUNTIME_DIR/runtime-tier" || return 1
   printf 'runtime-tier=%s\n' "$TIER_STAGED_SHA" > "$RUNTIME_DIR/.runtime-tier-integrity.tmp" && chmod 600 "$RUNTIME_DIR/.runtime-tier-integrity.tmp" \
     && mv -f "$RUNTIME_DIR/.runtime-tier-integrity.tmp" "$RUNTIME_DIR/.runtime-tier-integrity" \
-    && ok "$(tx "runtime tier: core (the tools come after the welcome)" "livello del runtime: core (gli strumenti arrivano dopo il benvenuto)")"
+    && ok "$(ts installer.runtime_tier_core_tools 'runtime tier: core (the tools come after the welcome)')"
 }
 
 # runtime-extras-image: the image of the tools that come on request, pinned by the test channel (`--extras-image-digest`), in a host runtime
@@ -1196,11 +2142,11 @@ publish_runtime_extras_pin() {
   mv -f "$EXTRAS_STAGED" "$RUNTIME_DIR/runtime-extras-image" || return 1
   printf 'runtime-extras-image=%s\n' "$EXTRAS_STAGED_SHA" > "$RUNTIME_DIR/.runtime-extras-integrity.tmp" && chmod 600 "$RUNTIME_DIR/.runtime-extras-integrity.tmp" \
     && mv -f "$RUNTIME_DIR/.runtime-extras-integrity.tmp" "$RUNTIME_DIR/.runtime-extras-integrity" \
-    && ok "$(tx "extras image pinned: ghcr.io/leopu00/jht@$EXTRAS_IMAGE_DIGEST_OPT (pulled when a tool is asked for)" "immagine extras fissata: ghcr.io/leopu00/jht@$EXTRAS_IMAGE_DIGEST_OPT (si scarica quando serve uno strumento)")"
+    && ok "$(tsf installer.extras_image_pinned_ghcr 'extras image pinned: ghcr.io/leopu00/jht@%s (pulled when a tool is asked for)' "$EXTRAS_IMAGE_DIGEST_OPT")"
 }
 
 download_runtime_files() {
-  step 4 "$TOTAL_STEPS_DOCKER" "$(tx "Download wrapper + docker-compose.yml" "Scarico il wrapper e docker-compose.yml")"
+  step 4 "$TOTAL_STEPS_DOCKER" "$(ts installer.download_wrapper_docker_compose 'Download wrapper + docker-compose.yml')"
 
   local release_base
   if [ "$DRY_RUN" -eq 1 ] && [ "$TEST_CHANNEL" -eq 0 ]; then
@@ -1236,16 +2182,16 @@ download_runtime_files() {
   fi
 
   if [ -L "$RUNTIME_DIR" ]; then
-    fail "Host runtime path is a symlink: $RUNTIME_DIR"
+    fail "$(tsf installer.runtime_dir_is_link 'Host runtime path is a symlink: %s' "$RUNTIME_DIR")"
   fi
   case "$RUNTIME_DIR/" in
     "$HOME/.jht/"*|"$HOME/Documents/Job Hunter Team/"*)
-      fail "Host runtime must be outside container-writable bind mounts: $RUNTIME_DIR"
+      fail "$(tsf installer.runtime_dir_in_mount 'Host runtime must be outside container-writable bind mounts: %s' "$RUNTIME_DIR")"
       ;;
   esac
   case "$BIN_DIR/" in
     "$HOME/.jht/"*|"$HOME/Documents/Job Hunter Team/"*)
-      fail "Host wrapper must be outside container-writable bind mounts: $BIN_DIR"
+      fail "$(tsf installer.wrapper_dir_in_mount 'Host wrapper must be outside container-writable bind mounts: %s' "$BIN_DIR")"
       ;;
   esac
   umask 077
@@ -1255,9 +2201,9 @@ download_runtime_files() {
   runtime_real="$(cd -P "$RUNTIME_DIR" && pwd -P)"
   bin_real="$(cd -P "$BIN_DIR" && pwd -P)"
   [ "$runtime_real" = "${RUNTIME_DIR%/}" ] \
-    || fail "Host runtime has a symlinked or non-canonical ancestor: $RUNTIME_DIR"
+    || fail "$(tsf installer.runtime_dir_bad_ancestor 'Host runtime has a symlinked or non-canonical ancestor: %s' "$RUNTIME_DIR")"
   [ "$bin_real" = "${BIN_DIR%/}" ] \
-    || fail "Host wrapper directory has a symlinked or non-canonical ancestor: $BIN_DIR"
+    || fail "$(tsf installer.wrapper_dir_bad_ancestor 'Host wrapper directory has a symlinked or non-canonical ancestor: %s' "$BIN_DIR")"
 
   local compose_tmp wrapper_tmp hostsetup_tmp manifest_tmp
   compose_tmp="$(mktemp "$RUNTIME_DIR/.compose.XXXXXX")"
@@ -1265,32 +2211,32 @@ download_runtime_files() {
   hostsetup_tmp="$(mktemp "$RUNTIME_DIR/.host-setup.XXXXXX")"
   manifest_tmp="$(mktemp "$RUNTIME_DIR/.integrity.XXXXXX")"
 
-  info "$(tx "Downloading docker-compose.yml..." "Scarico docker-compose.yml...")"
+  info "$(ts installer.downloading_docker_compose_yml 'Downloading docker-compose.yml...')"
   if ! curl -fsSL "$compose_url" -o "$compose_tmp"; then
-    fail "Download failed: $compose_url. Check your connection and branch ($BRANCH)."
+    fail "$(tsf installer.download_failed 'Download failed: %s. Check your connection and branch (%s).' "$compose_url" "$BRANCH")"
   fi
   grep -Eq '^[[:space:]]*-[[:space:]]*jht-runtime-mask:/jht_home/runtime([[:space:]]|$)' "$compose_tmp" \
     || fail "Downloaded compose does not enforce the protected runtime boundary."
   chmod 600 "$compose_tmp"
   mv -f "$compose_tmp" "$compose_dest"
-  ok "compose: $compose_dest"
+  ok "$(tsf installer.done_compose 'compose: %s' "$compose_dest")"
 
-  info "$(tx "Downloading jht wrapper..." "Scarico il wrapper jht...")"
+  info "$(ts installer.downloading_jht_wrapper 'Downloading jht wrapper...')"
   if ! curl -fsSL "$wrapper_url" -o "$wrapper_tmp"; then
-    fail "Download failed: $wrapper_url. Check your connection and branch ($BRANCH)."
+    fail "$(tsf installer.download_failed 'Download failed: %s. Check your connection and branch (%s).' "$wrapper_url" "$BRANCH")"
   fi
   bash -n "$wrapper_tmp" \
     && grep -Fqx 'JHT_HOST_RUNTIME_PROTOCOL=1' "$wrapper_tmp" \
     || fail "Downloaded wrapper does not implement the protected runtime protocol."
   chmod 700 "$wrapper_tmp"
   mv -f "$wrapper_tmp" "$wrapper_dest"
-  ok "wrapper: $wrapper_dest"
+  ok "$(tsf installer.done_wrapper 'wrapper: %s' "$wrapper_dest")"
 
-  info "$(tx "Downloading host-setup.sh (VPS/swap preflight)..." "Scarico host-setup.sh (controlli preliminari VPS/swap)...")"
+  info "$(ts installer.downloading_host_setup_sh 'Downloading host-setup.sh (VPS/swap preflight)...')"
   if ! curl -fsSL "$hostsetup_url" -o "$hostsetup_tmp" \
       || ! bash -n "$hostsetup_tmp" \
       || ! grep -Fqx 'JHT_HOST_SETUP_PROTOCOL=1' "$hostsetup_tmp"; then
-    fail "host-setup.sh download or validation failed: $hostsetup_url"
+    fail "$(tsf installer.host_setup_download_failed 'host-setup.sh download or validation failed: %s' "$hostsetup_url")"
   fi
   chmod 700 "$hostsetup_tmp"
   mv -f "$hostsetup_tmp" "$hostsetup_dest"
@@ -1301,7 +2247,7 @@ download_runtime_files() {
     if ! curl -fsSL "$release_base/scripts/$helper" -o "$helper_tmp" || ! bash -n "$helper_tmp" \
         || ! grep -Fqx '# JHT_RUNTIME_HELPER=1' "$helper_tmp"; then
       rm -f "$helper_tmp"
-      fail "$helper download or validation failed: $release_base/scripts/$helper"
+      fail "$(tsf installer.helper_download_failed '%s download or validation failed: %s/scripts/%s' "$helper" "$release_base" "$helper")"
     fi
     chmod 700 "$helper_tmp"
     mv -f "$helper_tmp" "$RUNTIME_DIR/$helper"
@@ -1371,15 +2317,15 @@ download_runtime_files() {
   mv -f "$manifest_tmp" "$manifest_dest"
   if [ -n "$image_pin_publish" ]; then
     mv -f "$image_pin_publish" "$image_pin"
-    ok "$(tx "runtime image pinned: $(cat "$image_pin")" "immagine del runtime fissata: $(cat "$image_pin")")"
+    ok "$(tsf installer.runtime_image_pinned 'runtime image pinned: %s' "$(cat "$image_pin")")"
   fi
   publish_runtime_extras_pin
   publish_runtime_tier
-  ok "host-setup: $hostsetup_dest"
+  ok "$(tsf installer.done_host_setup 'host-setup: %s' "$hostsetup_dest")"
 
   case ":$PATH:" in
     *":$BIN_DIR:"*)
-      ok "$(tx "$BIN_DIR already in PATH" "$BIN_DIR e' gia' nel PATH")"
+      ok "$(tsf installer.already_path '%s already in PATH' "$BIN_DIR")"
       PATH_READY=1
       ;;
     *)
@@ -1393,7 +2339,7 @@ download_runtime_files() {
         # sourced by /etc/profile at every interactive login shell.
         printf 'export PATH="$PATH:%s"\n' "$BIN_DIR" > /etc/profile.d/jht.sh
         chmod 644 /etc/profile.d/jht.sh
-        ok "$(tx "PATH added to /etc/profile.d/jht.sh (system-wide)" "PATH aggiunto a /etc/profile.d/jht.sh (per tutto il sistema)")"
+        ok "$(ts installer.path_added_etc_profile 'PATH added to /etc/profile.d/jht.sh (system-wide)')"
         persistent_added=1
       else
         # User-level fallback: append to ~/.bashrc + ~/.zshrc if they exist
@@ -1401,7 +2347,7 @@ download_runtime_files() {
         for rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
           if [ -f "$rc" ] && ! grep -Fq -- "$BIN_DIR" "$rc" 2>/dev/null; then
             printf '\n# Added by JHT install.sh\nexport PATH="$PATH:%s"\n' "$BIN_DIR" >> "$rc"
-            ok "$(tx "PATH added to $rc" "PATH aggiunto a $rc")"
+            ok "$(tsf installer.path_added 'PATH added to %s' "$rc")"
             persistent_added=1
           fi
         done
@@ -1424,12 +2370,12 @@ download_runtime_files() {
           esac
           for rc in "${created_rc[@]}"; do
             printf '\n# Added by JHT install.sh\nexport PATH="$PATH:%s"\n' "$BIN_DIR" >> "$rc" \
-              && { ok "$(tx "PATH added to $rc" "PATH aggiunto a $rc")"; persistent_added=1; }
+              && { ok "$(tsf installer.path_added 'PATH added to %s' "$rc")"; persistent_added=1; }
           done
         fi
       fi
       if [ "$persistent_added" -eq 0 ]; then
-        warn "$(tx "No shell rc file was written. Add manually:" "Nessun file rc della shell e' stato scritto. Aggiungi a mano:")"
+        warn "$(ts installer.no_shell_rc_file 'No shell rc file was written. Add manually:')"
         printf "\n      ${BOLD}export PATH=\"\$PATH:%s\"${RESET}\n\n" "$BIN_DIR"
       else
         PATH_NEW_SHELL=1
@@ -2042,14 +2988,14 @@ will_auto_onboard() {
 final_message() {
   printf "\n"
   printf "${GREEN}${BOLD}══════════════════════════════════════════${RESET}\n"
-  printf "${GREEN}${BOLD}  %s${RESET}\n" "$(tx "Installation complete!" "Installazione completata!")"
+  printf "${GREEN}${BOLD}  %s${RESET}\n" "$(ts installer.installation_complete 'Installation complete!')"
   printf "${GREEN}${BOLD}══════════════════════════════════════════${RESET}\n"
   printf "\n"
   if [ "$USE_DOCKER" -eq 1 ]; then
-    printf "  ${BOLD}%s${RESET}\n" "$(tx "Container mode active (Podman)." "Modalita' container attiva (Podman).")"
-    printf "  ${DIM}%s${RESET}\n" "$(tx "The agents can only see:" "Gli agenti vedono solo:")"
-    printf "  ${DIM}  ~/.jht/                       → /jht_home %s${RESET}\n" "$(tx "(config, db, agents)" "(configurazione, db, agenti)")"
-    printf "  ${DIM}  ~/Documents/Job Hunter Team/  → /jht_user %s${RESET}\n" "$(tx "(CVs, attachments, output)" "(CV, allegati, risultati)")"
+    printf "  ${BOLD}%s${RESET}\n" "$(ts installer.container_mode_active_podman 'Container mode active (Podman).')"
+    printf "  ${DIM}%s${RESET}\n" "$(ts installer.agents_can_only_see 'The agents can only see:')"
+    printf "  ${DIM}  ~/.jht/                       → /jht_home %s${RESET}\n" "$(ts installer.config_db_agents '(config, db, agents)')"
+    printf "  ${DIM}  ~/Documents/Job Hunter Team/  → /jht_user %s${RESET}\n" "$(ts installer.cvs_attachments_output '(CVs, attachments, output)')"
     printf "\n"
   else
     printf "  ${YELLOW}${BOLD}⚠  Native mode (--no-docker).${RESET}\n"
@@ -2066,14 +3012,14 @@ final_message() {
   # (e.g. CI without a TTY, JHT_SKIP_ONBOARD=1). When it starts, the
   # wizard takes over right below and these lines would be noise.
   if ! will_auto_onboard; then
-    printf "  ${BOLD}%s${RESET}\n" "$(tx "Next steps:" "Prossimi passi:")"
+    printf "  ${BOLD}%s${RESET}\n" "$(ts installer.next_steps 'Next steps:')"
     printf "\n"
     if [ "${PATH_NEW_SHELL:-0}" -eq 1 ]; then
-      printf "      ${DIM}%s${RESET}\n\n" "$(tx "Open a new terminal window first (or run: . ~/.profile), so that it finds jht." "Prima apri una nuova finestra del terminale (o lancia: . ~/.profile), cosi' trova jht.")"
+      printf "      ${DIM}%s${RESET}\n\n" "$(ts installer.open_new_terminal_window 'Open a new terminal window first (or run: . ~/.profile), so that it finds jht.')"
     fi
     if [ "${PATH_READY:-0}" -eq 1 ]; then
       if [ "$USE_DOCKER" -eq 1 ]; then
-        printf "      ${BOLD}jht setup${RESET}        ${DIM}# %s${RESET}\n" "$(tx "configuration wizard (also starts the container)" "configurazione guidata (accende anche il container)")"
+        printf "      ${BOLD}jht setup${RESET}        ${DIM}# %s${RESET}\n" "$(ts installer.configuration_wizard_also_starts 'configuration wizard (also starts the container)')"
       else
         printf "      ${BOLD}jht setup${RESET}        ${DIM}# initial configuration${RESET}\n"
         printf "      ${BOLD}jht dashboard${RESET}    ${DIM}# starts the web dashboard${RESET}\n"
@@ -2089,24 +3035,24 @@ final_message() {
     printf "\n"
   fi
 
-  printf "  ${DIM}%s${RESET}\n" "$(tx "To uninstall (keeps your data in ~/.jht and ~/Documents/Job Hunter Team):" "Per disinstallare (i tuoi dati in ~/.jht e ~/Documents/Job Hunter Team restano):")"
+  printf "  ${DIM}%s${RESET}\n" "$(ts installer.uninstall_keeps_your_data 'To uninstall (keeps your data in ~/.jht and ~/Documents/Job Hunter Team):')"
   if [ "$USE_DOCKER" -eq 1 ]; then
     # `jht uninstall` removes the containers, the networks and the VOLUMES of the project (broker, secrets, deps…: the
     # ten host-runtime_jht-* that `jht down && rm -rf` left behind, TEST 19i A2), then the runtime, the PATH lines and itself.
     # It is the only command printed for the engine: no `docker rmi`, no `rm -rf` and no `sudo` for the person to type.
     printf "  ${DIM}  jht uninstall --confirm${RESET}\n"
-    printf "  ${DIM}  %s${RESET}\n" "$(tx "(it also deletes the API key, the mail password and the Telegram tokens saved for the team)" "(cancella anche la chiave API, la password della posta e i token di Telegram salvati per la squadra)")"
+    printf "  ${DIM}  %s${RESET}\n" "$(ts installer.also_deletes_api_key '(it also deletes the API key, the mail password and the Telegram tokens saved for the team)')"
   else
     printf "  ${DIM}  rm -rf %s %s/jht${RESET}\n" "$INSTALL_DIR" "$BIN_DIR"
   fi
-  printf "  ${DIM}%s${RESET}\n" "$(tx "To also delete your data (config, db, CVs, output):" "Per cancellare anche i tuoi dati (configurazione, db, CV, risultati):")"
+  printf "  ${DIM}%s${RESET}\n" "$(ts installer.also_delete_your_data 'To also delete your data (config, db, CVs, output):')"
   if [ "$USE_DOCKER" -eq 1 ]; then
     # With a container engine on Linux ~/.jht belongs to the container (uid 1001, often mode 700; with rootless Podman, to a
     # sub-uid): `rm -rf` from this account fails with "Permission denied" (TEST, Linux gate). `jht uninstall --confirm --purge`
     # empties the folders the right way for the engine (a one-shot container for Docker, `podman unshare` for Podman), without
     # sudo and without changing a permission, so it is the command printed for every engine.
     printf "  ${DIM}  jht uninstall --confirm --purge${RESET}\n"
-    printf "  ${DIM}  %s${RESET}\n" "$(tx "(same as above, and it empties ~/.jht and ~/Documents/Job Hunter Team too)" "(come sopra, e svuota anche ~/.jht e ~/Documents/Job Hunter Team)")"
+    printf "  ${DIM}  %s${RESET}\n" "$(ts installer.same_as_above_empties '(same as above, and it empties ~/.jht and ~/Documents/Job Hunter Team too)')"
   else
     # Native mode: nothing ran in a container, the folders are the person's own and `jht` has no uninstall.
     # (`%b`, not `%s`: DIM and RESET hold the characters backslash-0-3-3, and only `%b` or the format string turns them into the escape.)
@@ -2129,7 +3075,7 @@ write_file_in_home() {
     warn "$target is a directory: not writing it"
     return 1
   fi
-  tmp="$(mktemp "$dir/.jht-host-file.XXXXXX")" || { warn "cannot create a temporary file in $dir: not writing $target"; return 1; }
+  tmp="$(mktemp "$dir/.jht-host-file.XXXXXX")" || { warn "$(tsf installer.host_file_tmp_failed 'cannot create a temporary file in %s: not writing %s' "$dir" "$target")"; return 1; }
   if ! cat > "$tmp" || ! chmod "$mode" "$tmp"; then rm -f "$tmp"; return 1; fi
   if [ -n "$owner" ]; then chown "$owner" "$tmp" 2>/dev/null || true; fi
   if [ -e "$target" ] || [ -L "$target" ]; then
@@ -2168,7 +3114,7 @@ save_pairing_token() {
   # run_host_setup() (right after this) does `chown -R 1001:1001 ~/.jht`, and we align this file here so the order of
   # the two steps stops mattering. `jht cloud pair` deletes it after consumption (cli/src/commands/cloud.js
   # handlePair). (Nor on the Mac: see align_bind_ownership.)
-  ok "Pairing token saved to $token_file (mode 0600)"
+  ok "$(tsf installer.pairing_token_saved 'Pairing token saved to %s (mode 0600)' "$token_file")"
 }
 
 # The container runs as uid 1001 (`jht`), and ~/.jht plus the documents
@@ -2197,7 +3143,7 @@ refuse_foreign_bind_uid() {
   # the same check there (ensure_bind_owner). Docker and the Mac's machine keep it.
   podman_native_mode && return 0
   name="$(bind_uid_conflict 1001)" || return 0
-  fail "uid 1001 on this computer is the account '$name'. The Job Hunter Team container runs as uid 1001, so that account would own ~/.jht (your data and the portal credentials). Nothing was changed. Run JHT from the account '$name', or give '$name' another uid, then try again."
+  fail "$(tsf installer.uid_1001_taken 'uid 1001 on this computer is the account '\''%s'\''. The Job Hunter Team container runs as uid 1001, so that account would own ~/.jht (your data and the portal credentials). Nothing was changed. Run JHT from the account '\''%s'\'', or give '\''%s'\'' another uid, then try again.' "$name" "$name" "$name")"
 }
 
 # Align the ownership of ~/.jht and ~/Documents/Job Hunter Team with the
@@ -2213,26 +3159,26 @@ align_bind_ownership() {
     # Rootless Podman maps the host user onto the container's uid (keep-id):
     # the user stays the owner, and a chown to 1001 would take it away.
     mkdir -p "$jht_user_dir" 2>/dev/null
-    ok "$(tx "Ownership of $jht_home and $jht_user_dir stays with this user (rootless Podman)" "$jht_home e $jht_user_dir restano di questo utente (Podman rootless)")"
+    ok "$(tsf installer.ownership_stays_user_rootless 'Ownership of %s and %s stays with this user (rootless Podman)' "$jht_home" "$jht_user_dir")"
   elif [ "${OS:-}" = "macos" ]; then
     # The Mac shares the two folders with the container's VM, which shows
     # them as this user's and lets the container write: nothing needs
     # aligning. A chown to 1001 cannot work for a normal user (EPERM, on every
     # Mac) and, under sudo, would hand ~/.jht to a uid that is nobody here.
     mkdir -p "$jht_user_dir" 2>/dev/null
-    ok "$(tx "Ownership of $jht_home and $jht_user_dir stays with this user (macOS)" "$jht_home e $jht_user_dir restano di questo utente (macOS)")"
+    ok "$(tsf installer.ownership_stays_user_macos 'Ownership of %s and %s stays with this user (macOS)' "$jht_home" "$jht_user_dir")"
   elif command -v chown >/dev/null 2>&1; then
     mkdir -p "$jht_user_dir" 2>/dev/null
     if chown -R 1001:1001 "$jht_home" "$jht_user_dir" 2>/dev/null; then
-      ok "$(tx "Ownership $jht_home and $jht_user_dir → 1001:1001 (container UID)" "Proprietario di $jht_home e $jht_user_dir → 1001:1001 (UID del container)")"
+      ok "$(tsf installer.ownership_1001_1001_container 'Ownership %s and %s → 1001:1001 (container UID)' "$jht_home" "$jht_user_dir")"
     elif repair_bind_ownership_in_container "$jht_home" "$jht_user_dir"; then
-      ok "$(tx "Ownership $jht_home and $jht_user_dir → 1001:1001 (container UID, set by a one-shot container: no sudo needed)" "Proprietario di $jht_home e $jht_user_dir → 1001:1001 (UID del container, messo da un container usa e getta: niente sudo)")"
+      ok "$(tsf installer.ownership_1001_1001_container_2 'Ownership %s and %s → 1001:1001 (container UID, set by a one-shot container: no sudo needed)' "$jht_home" "$jht_user_dir")"
     elif [ "$USE_DOCKER" -ne 1 ]; then
-      warn "chown to 1001 failed — nothing runs in a container here (--no-docker), so nothing needs it"
+      warn "$(ts installer.chown_not_needed 'chown to 1001 failed — nothing runs in a container here (--no-docker), so nothing needs it')"
     else
       # A normal user cannot chown to 1001 (EPERM) and without the repair above the container would start and die
       # on «mount_not_writable» in a restart loop (Gate CLI, 29/10): stop here, saying what to do.
-      fail "mount_repair_failed: $jht_home and $jht_user_dir cannot be made writable for the Job Hunter Team container (it runs as uid 1001) and nothing was started. Either let Docker run for this account (add it to the 'docker' group, then log in again), or run once: sudo chown -R 1001:1001 \"$jht_home\" \"$jht_user_dir\" — then run this installer again."
+      fail "mount_repair_failed: $(tsf installer.mount_repair_failed '%s and %s cannot be made writable for the Job Hunter Team container (it runs as uid 1001) and nothing was started. Either let Docker run for this account (add it to the '\''docker'\'' group, then log in again), or run once: sudo chown -R 1001:1001 "%s" "%s" — then run this installer again.' "$jht_home" "$jht_user_dir" "$jht_home" "$jht_user_dir")"
     fi
   fi
 }
@@ -2262,25 +3208,25 @@ run_host_setup() {
   #     (regression fixed 2026-07-09: this path used to `return 0` early → host.env never written).
   local hostsetup="$RUNTIME_DIR/host-setup.sh"
   if [ ! -x "$hostsetup" ]; then
-    warn "host-setup.sh not available at $hostsetup — skipping preflight"
+    warn "$(tsf installer.host_setup_missing 'host-setup.sh not available at %s — skipping preflight' "$hostsetup")"
     return 0
   fi
   if [ "$DRY_RUN" -eq 1 ]; then
     info "dry-run: would run $hostsetup${PAIRING_TOKEN:+ --host-type=vps}"
     return 0
   fi
-  info "$(tx "Running host-setup.sh (writes ~/.jht/host.env + swap preflight)..." "Eseguo host-setup.sh (scrive ~/.jht/host.env e controlla lo swap)...")"
+  info "$(ts installer.running_host_setup_sh 'Running host-setup.sh (writes ~/.jht/host.env + swap preflight)...')"
   if [ -n "$PAIRING_TOKEN" ]; then
     if "$hostsetup" --host-type=vps </dev/null; then
-      ok "$(tx "host-setup completed (forced vps)" "host-setup completato (vps imposto)")"
+      ok "$(ts installer.host_setup_completed_forced 'host-setup completed (forced vps)')"
     else
-      warn "$(tx "host-setup exited with an error — continuing (a manual pair may be needed)" "host-setup e' uscito con un errore: continuo (puo' servire un abbinamento a mano)")"
+      warn "$(ts installer.host_setup_exited_error 'host-setup exited with an error — continuing (a manual pair may be needed)')"
     fi
   else
     if "$hostsetup" </dev/null; then
-      ok "$(tx "host-setup completed (auto-detected host type)" "host-setup completato (tipo di host rilevato da solo)")"
+      ok "$(ts installer.host_setup_completed_auto 'host-setup completed (auto-detected host type)')"
     else
-      warn "$(tx "host-setup exited with an error — continuing" "host-setup e' uscito con un errore: continuo")"
+      warn "$(ts installer.host_setup_exited_error_2 'host-setup exited with an error — continuing')"
     fi
   fi
   align_bind_ownership
@@ -2300,8 +3246,8 @@ maybe_onboard() {
     # wizard: the container will do the non-interactive pair on first run
     # via the .pairing-token file. The user will complete the provider
     # login (Codex, or the API key of GLM/Kimi) from the app.
-    info "$(tx "Pairing token present: skipping the interactive wizard." "Token di abbinamento presente: salto il wizard interattivo.")"
-    info "$(tx "The container will complete the pairing on first boot." "Il container completera' l'abbinamento al primo avvio.")"
+    info "$(ts installer.pairing_token_present_skipping 'Pairing token present: skipping the interactive wizard.')"
+    info "$(ts installer.container_will_complete_pairing 'The container will complete the pairing on first boot.')"
     return 0
   fi
 
@@ -2315,8 +3261,8 @@ maybe_onboard() {
     if tty_can_be_opened; then
       wizard_from_tty=1
     else
-      info "$(tx "No interactive terminal (no /dev/tty): skipping the wizard." "Nessun terminale interattivo (niente /dev/tty): salto il wizard.")"
-      info "$(tx "Run manually: jht setup" "Lancia a mano: jht setup")"
+      info "$(ts installer.no_interactive_terminal_no 'No interactive terminal (no /dev/tty): skipping the wizard.')"
+      info "$(ts installer.run_manually_jht_setup 'Run manually: jht setup')"
       return 0
     fi
   fi
@@ -2338,8 +3284,8 @@ maybe_onboard() {
     local setup_command="jht setup"
     [ "${PATH_READY:-0}" -eq 1 ] || setup_command="$BIN_DIR/jht setup"
     printf "\n"
-    warn "$(tx "The setup did not finish (exit code $wizard_status): Job Hunter Team is installed, but it is not set up yet." "Il setup non e' finito (codice di uscita $wizard_status): Job Hunter Team e' installato, ma non ancora configurato.")"
-    info "$(tx "Next step: run  $setup_command  to finish the setup." "Prossimo passo: lancia  $setup_command  per finire il setup.")"
+    warn "$(tsf installer.setup_did_not_finish 'The setup did not finish (exit code %s): Job Hunter Team is installed, but it is not set up yet.' "$wizard_status")"
+    info "$(tsf installer.next_step_run_finish 'Next step: run  %s  to finish the setup.' "$setup_command")"
     return "$wizard_status"
   fi
 }
@@ -2357,7 +3303,7 @@ free_kib() {
 
 check_free_disk() {
   case "$OS" in linux|wsl) ;; *) return 0 ;; esac
-  case "$MIN_FREE_GIB" in ''|*[!0-9]*) fail "Invalid JHT_MIN_FREE_GIB: $MIN_FREE_GIB" ;; esac
+  case "$MIN_FREE_GIB" in ''|*[!0-9]*) fail "$(tsf installer.min_free_invalid 'Invalid JHT_MIN_FREE_GIB: %s' "$MIN_FREE_GIB")" ;; esac
   # Where the image lands (Docker's data root, else its parent) and where the
   # team's data lands. A separate Docker volume is judged on its own.
   local path free_kib_value docker_root=/var/lib
@@ -2368,10 +3314,10 @@ check_free_disk() {
     case "$free_kib_value" in ''|*[!0-9]*) continue ;; esac
     if [ "$free_kib_value" -lt $((MIN_FREE_GIB * 1024 * 1024)) ]; then
       if [ "$DRY_RUN" -eq 1 ]; then
-        warn "Only $((free_kib_value / 1024 / 1024)) GiB free on $path; a real install needs at least $MIN_FREE_GIB GiB."
+        warn "$(tsf installer.disk_low_dry_run 'Only %s GiB free on %s; a real install needs at least %s GiB.' "$((free_kib_value / 1024 / 1024))" "$path" "$MIN_FREE_GIB")"
         return 0
       fi
-      fail "not enough free disk space: $((free_kib_value / 1024 / 1024)) GiB free on $path, the Job Hunter Team image and its data need at least $MIN_FREE_GIB GiB. Free some space (on a server that already runs Docker, 'docker image prune -af' removes unused images) and run the installer again. Nothing was changed."
+      fail "$(tsf installer.disk_not_enough 'not enough free disk space: %s GiB free on %s, the Job Hunter Team image and its data need at least %s GiB. Free some space (on a server that already runs Docker, '\''docker image prune -af'\'' removes unused images) and run the installer again. Nothing was changed.' "$((free_kib_value / 1024 / 1024))" "$path" "$MIN_FREE_GIB")"
     fi
   done
 }
@@ -2413,18 +3359,14 @@ refuse_running_team() {
   if ! names="$("${RUNTIME_ENGINE[@]}" ps --format '{{.Names}}' 2>/dev/null)"; then
     # Nothing of JHT published here before: no team of ours can be running.
     [ -e "$RUNTIME_DIR/.runtime-integrity" ] || [ -L "$RUNTIME_DIR/.runtime-integrity" ] || return 0
-    fail "Cannot list the running containers with ${RUNTIME_ENGINE[*]}: nothing was installed."
+    fail "$(tsf installer.cannot_list_containers 'Cannot list the running containers with %s: nothing was installed.' "${RUNTIME_ENGINE[*]}")"
   fi
   for name in $TEAM_CONTAINERS; do
     printf '%s\n' "$names" | grep -Fqx "$name" && running="${running:+$running, }$name"
   done
   [ -z "$running" ] && return 0
   jht_error_marker team_running
-  if [ "$(installer_person_lang)" = it ]; then
-    printf "  ${RED}✗${RESET} %s%s\n" "$(jht_code_prefix team_running)" "Job Hunter Team e' acceso su questo computer ($running). Se il setup si era interrotto, riprendilo con «jht setup» in questo terminale; non serve spegnere niente. Per reinstallare invece: spegnilo con «jht down», rilancia l'installer, poi riaccendilo con «jht up». Non e' stato cambiato niente: il tuo profilo e i tuoi documenti in ~/.jht e ~/Documents/Job Hunter Team restano dove sono." >&2
-    exit "$TEAM_RUNNING_EXIT"
-  fi
-  printf "  ${RED}✗${RESET} %s%s\n" "$(jht_code_prefix team_running)" "Job Hunter Team is running on this computer ($running). If setup was interrupted, resume it with «jht setup» in this terminal; no down is needed. To reinstall instead, stop it with «jht down», run the installer again, then start it with «jht up». Nothing was changed: your profile and documents in ~/.jht and ~/Documents/Job Hunter Team stay where they are." >&2
+  printf "  ${RED}✗${RESET} %s%s\n" "$(jht_code_prefix team_running)" "$(tsf installer.team_running 'Job Hunter Team is running on this computer (%s). If setup was interrupted, resume it with «jht setup» in this terminal; no down is needed. To reinstall instead, stop it with «jht down», run the installer again, then start it with «jht up». Nothing was changed: your profile and documents in ~/.jht and ~/Documents/Job Hunter Team stay where they are.' "$running")" >&2
   exit "$TEAM_RUNNING_EXIT"
 }
 
@@ -2481,7 +3423,7 @@ main() {
   save_pairing_token
   run_host_setup
   final_message
-  maybe_onboard; local wizard_result=$?; printf '\n  %s export PATH=%q:"$PATH"\n' "$(tx "In this terminal, run:" "In questo terminale, lancia:")" "$BIN_DIR"; return "$wizard_result"
+  maybe_onboard; local wizard_result=$?; printf '\n  %s export PATH=%q:"$PATH"\n' "$(ts installer.terminal_run 'In this terminal, run:')" "$BIN_DIR"; return "$wizard_result"
 }
 
 if [ "${JHT_INSTALLER_SOURCE_ONLY:-0}" != "1" ]; then

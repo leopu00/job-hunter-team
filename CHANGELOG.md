@@ -43,6 +43,9 @@ this was tested on real machines and which was not.
   on request.
 - `jht uninstall --confirm` removes the team's containers, volumes and images; `--purge` deletes the data too.
 - The installer scripts have their SHA-256 published; on Windows the recommended command checks it before running.
+- The installer for Mac and Linux speaks the 7 languages of JHT (en, it, hu, es, de, fr, pt): the system's language
+  on a first install, the one chosen at the setup on a reinstall. `jht integration` and `jht linkedin login` say their
+  lines in the language chosen too; the JSON they print (`--json`) has the same words in every language.
 
 ### Team
 
