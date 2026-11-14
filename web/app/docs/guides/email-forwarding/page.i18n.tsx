@@ -15,16 +15,16 @@ import type { Locale } from "@/i18n/config";
 export const CODE_CLS =
   "px-1.5 py-0.5 rounded bg-[var(--color-border)] text-[var(--color-white)] text-[11px] font-mono";
 
-// L'app desktop della 0.4 è solo per Mac con Apple silicon: i passaggi della
-// guida che la citano valgono lì (Windows non c'è in questa versione, per Linux non c'è l'app desktop).
+// L'app desktop non è nella 0.4.0: i passaggi della guida che la citano valgono per
+// le versioni che ce l'hanno. Windows è un'anteprima della CLI, come dice il README.
 export const DESKTOP_NOTE: Record<string, string> = {
-  it: "Nota: l'app desktop citata in questa guida è per i Mac con Apple silicon. Windows non è in questa versione e per Linux non c'è l'app desktop.",
-  en: "Note: the desktop app mentioned in this guide is for Macs with Apple silicon. Windows is not in this version and Linux has no desktop app.",
-  es: "Nota: la app de escritorio mencionada en esta guía es para Mac con Apple silicon. Windows no está en esta versión y para Linux no hay app de escritorio.",
-  fr: "Remarque : l'application de bureau mentionnée dans ce guide est pour les Mac Apple silicon. Windows n'est pas dans cette version et il n'y a pas d'application de bureau pour Linux.",
-  de: "Hinweis: Die in dieser Anleitung erwähnte Desktop-App ist für Macs mit Apple silicon. Windows ist in dieser Version nicht enthalten und für Linux gibt es keine Desktop-App.",
-  hu: "Megjegyzés: az útmutatóban említett asztali app Apple silicon Macekhez készült. A Windows nincs benne ebben a verzióban, Linuxra pedig nincs asztali app.",
-  pt: "Nota: a app de ambiente de trabalho mencionada neste guia é para Macs com Apple silicon. O Windows não está nesta versão e não há app de ambiente de trabalho para Linux.",
+  it: "Nota: l'app desktop citata in questa guida non è nella 0.4.0, dove il team si guida dalla CLI jht. Windows è un'anteprima nella 0.4.0, solo CLI: provato su Windows 10, non su Windows 11.",
+  en: "Note: the desktop app mentioned in this guide is not in 0.4.0, where the team is driven from the jht CLI. Windows is a preview in 0.4.0, CLI only: tested on Windows 10, not on Windows 11.",
+  es: "Nota: la app de escritorio mencionada en esta guía no está en la 0.4.0, donde el equipo se maneja desde la CLI jht. Windows es una vista previa en la 0.4.0, solo CLI: probado en Windows 10, no en Windows 11.",
+  fr: "Remarque : l'application de bureau mentionnée dans ce guide n'est pas dans la 0.4.0, où l'équipe se pilote depuis la CLI jht. Windows est un aperçu dans la 0.4.0, CLI uniquement : testé sur Windows 10, pas sur Windows 11.",
+  de: "Hinweis: Die in dieser Anleitung erwähnte Desktop-App ist nicht in 0.4.0, wo das Team über die jht-CLI gesteuert wird. Windows ist in 0.4.0 eine Vorschau, nur CLI: getestet auf Windows 10, nicht auf Windows 11.",
+  hu: "Megjegyzés: az útmutatóban említett asztali alkalmazás nincs a 0.4.0-ban, ahol a csapatot a jht CLI-ből irányítod. A Windows a 0.4.0-ban előzetes változat, csak CLI: Windows 10-en kipróbálva, Windows 11-en nem.",
+  pt: "Nota: a app de ambiente de trabalho mencionada neste guia não está na 0.4.0, onde a equipa é conduzida pela CLI jht. O Windows é uma pré-visualização na 0.4.0, só CLI: testado no Windows 10, não no Windows 11.",
 };
 
 export type Strings = {

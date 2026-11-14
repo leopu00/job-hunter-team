@@ -1,8 +1,8 @@
-"""Windows is not part of the 0.4.0 download: the page says "not in this version" and links nothing.
+"""The 0.4.0 download page starts from the CLI and links no app: the desktop app is not in 0.4.0.
 
-The Tauri NSIS installer is not built or attached by the release (D13); the
-download page keeps Windows as a card that is not a link, and the funnel has no
-slug for it. When Windows comes back, this file is what has to change first.
+The Tauri NSIS installer is not built or attached by the release (D13) and the funnel has no slug for it. The page has
+no platform cards any more: it gives the one-liner and the assistant prompt, and says Windows as the README does, a
+preview of the CLI. When the app comes back, this file is what has to change first.
 """
 
 from pathlib import Path
@@ -20,13 +20,11 @@ def test_download_page_links_no_windows_installer() -> None:
     assert "win-setup" not in client and "win-setup" not in funnel
     assert "win-portable" not in funnel
     assert "windows-x64-setup" not in funnel and ".exe" not in funnel
-    # Windows stays in the list of cards, as "not in this version", and is not an anchor
-    assert '{ id: "windows", label: "Windows" }' in client
-    assert "data-windows-not-in-version" in client
-    assert 't("dl_windows_not_in_version")' in client
-    assert 'mac: "mac"' in client and 'linux: "linux"' not in client
-    assert 'windows: "' not in client.split("const DOWNLOAD_SLUG", 1)[1].split("};", 1)[0]
-    # no desktop app for Linux in this version: no card, no slug, no experimental badge
+    # no app in 0.4.0: no card, no slug, no link to a file; the page opens on the CLI
+    assert "DOWNLOAD_SLUG" not in client and "downloadHref" not in client and "PLATFORMS" not in client
+    assert 'id: "desktop"' not in client and 'useState<InstallMode>("terminal")' in client
+    # Windows is said as in the README: a preview of the CLI
+    assert "data-windows-cli-preview" in client and 't("dl_windows_cli_preview")' in client
     assert '{ id: "linux"' not in client and "data-linux" not in client and "dl_linux" not in client
     assert "linux" not in funnel.split("DOWNLOAD_TARGETS", 1)[1].split("} as const", 1)[0].lower()
 

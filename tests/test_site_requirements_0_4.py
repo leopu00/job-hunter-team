@@ -278,7 +278,8 @@ def test_the_windows_card_says_not_in_this_version_in_it_en_hu():
     block = re.search(r"dl_windows_not_in_version: \{\n((?:    [a-z]{2}: .*\n){3})", LANDING)
     assert block, "it, en and hu"
     assert 'en: "Not in this version"' in block.group(1) and "dl_windows_coming_soon" not in LANDING
-    assert 't("dl_windows_not_in_version")' in DOWNLOAD and "data-windows-not-in-version" in DOWNLOAD
+    # the page itself has no Windows card any more (no app in 0.4.0): it says the CLI preview
+    assert 't("dl_windows_cli_preview")' in DOWNLOAD and "data-windows-cli-preview" in DOWNLOAD
 
 
 @pytest.mark.parametrize("lang", LANGS)

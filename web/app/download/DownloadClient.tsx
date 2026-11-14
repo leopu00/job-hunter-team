@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CopyButton } from "../components/CopyButton";
 import {
@@ -12,11 +11,7 @@ import {
 import LandingNav from "../components/landing/LandingNav";
 import { LandingFooter } from "../components/landing/LandingCTA";
 import ScrollToTop from "../components/landing/ScrollToTop";
-import {
-  downloadHref,
-  type DownloadAttribution,
-  type DownloadSlug,
-} from "@/lib/download-funnel";
+import { type DownloadAttribution } from "@/lib/download-funnel";
 
 function BackLink() {
   const { t } = useLandingI18n();
@@ -36,39 +31,16 @@ function BackLink() {
   );
 }
 
-// 2026-07-29: l'app desktop diventa scaricabile, marcata BETA. Il CTA passa
-// dallo slug locale `/go/*`: il server risolve la release GitHub da
-// un'allowlist statica e misura solo bucket anonimi aggregati.
-// macOS è firmato Developer ID e notarizzato (dalla 0.3.1), quindi si apre con
-// un doppio clic. Windows e Linux non hanno l'app desktop in questa versione:
-// niente card per Linux (la strada è il terminale, install.sh), Windows
-// compare come «non in questa versione» senza link.
-type InstallMode = "terminal" | "desktop" | "prompt";
-
-// Windows has no slug: it is not part of 0.4.0 and the page shows it as "not in this version".
-const DOWNLOAD_SLUG: Partial<Record<PlatformId, DownloadSlug>> = {
-  mac: "mac",
-};
+// 0.4.0: l'app desktop non è nella versione. La pagina parte dalla CLI (il
+// comando unico) e offre il prompt per un assistente; nessuna scheda né link a
+// un DMG. Windows è un'anteprima della CLI, come dice il README.
+type InstallMode = "terminal" | "prompt";
 
 type DlKey = Parameters<ReturnType<typeof useLandingI18n>["t"]>[0];
 const MODES: { id: InstallMode; labelKey: DlKey }[] = [
-  { id: "desktop", labelKey: "dl_mode_desktop_title" },
   { id: "terminal", labelKey: "dl_mode_terminal_title" },
   { id: "prompt", labelKey: "dl_mode_prompt_title" },
 ];
-
-type PlatformId = "mac" | "windows";
-
-const PLATFORMS: { id: PlatformId; label: string }[] = [
-  { id: "mac", label: "macOS" },
-  { id: "windows", label: "Windows" },
-];
-
-function PlatformIcon({ id }: { id: PlatformId }) {
-  if (id === "mac") return <AppleIcon />;
-  if (id === "windows") return <WindowsIcon />;
-  return null;
-}
 
 const CLI_SETUP_CMD = `curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman`;
 
@@ -284,13 +256,9 @@ const REQ_OS: Record<Lang, ReqOs> = {
   },
 };
 
-function DownloadContent({
-  attribution,
-}: {
-  attribution: DownloadAttribution;
-}) {
+function DownloadContent() {
   const { t, lang } = useLandingI18n();
-  const [installMode, setInstallMode] = useState<InstallMode>("desktop");
+  const [installMode, setInstallMode] = useState<InstallMode>("terminal");
 
   const terminalCommand = CLI_SETUP_CMD;
   const ro = REQ_OS[(REQ_OS[lang as Lang] ? lang : "en") as Lang];
@@ -321,7 +289,7 @@ function DownloadContent({
           </div>
 
           <div className="mb-8">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {MODES.map((m) => {
                 const active = installMode === m.id;
                 return (
@@ -376,8 +344,15 @@ function DownloadContent({
                 </pre>
               </div>
               <p className="text-[10px] text-[var(--color-dim)] mt-3 text-center">
-                macOS · Linux · WSL
+                macOS · Linux
               </p>
+              <p
+                data-windows-cli-preview
+                className="text-[11px] text-[var(--color-muted)] leading-relaxed mt-3 text-center"
+              >
+                {t("dl_windows_cli_preview")}
+              </p>
+
             </div>
           )}
 
@@ -415,99 +390,6 @@ function DownloadContent({
             </div>
           )}
 
-          {installMode === "desktop" && (
-            <div className="mb-8">
-              <p className="text-[12px] text-[var(--color-muted)] leading-relaxed mb-4">
-                {t("dl_desktop_beta_desc")}
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {PLATFORMS.map((os) => {
-                  const slug = DOWNLOAD_SLUG[os.id];
-                  const card = (
-                    <>
-                      <div
-                        className="w-10 h-10 flex items-center justify-center"
-                        style={{
-                          background: "var(--color-card)",
-                          border: "1px solid var(--color-border)",
-                        }}
-                      >
-                        <PlatformIcon id={os.id} />
-                      </div>
-                      <div className="text-[12px] font-bold text-[var(--color-white)]">
-                        {os.label}
-                      </div>
-                      {slug ? (
-                        <span className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-green)] border border-[var(--color-green)] px-2 py-0.5">
-                          {t("dl_desktop_beta_badge")}
-                        </span>
-                      ) : (
-                        <span
-                          data-windows-not-in-version
-                          className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] border border-[var(--color-border)] px-2 py-0.5"
-                        >
-                          {t("dl_windows_not_in_version")}
-                        </span>
-                      )}
-                      {/* La build Mac della 0.4 e' solo Apple silicon: va detto
-                          prima del clic, non scoperto all'apertura. */}
-                      {os.id === "mac" && (
-                        <span
-                          data-mac-apple-silicon-only
-                          className="text-[10px] leading-snug text-[var(--color-muted)]"
-                        >
-                          {t("dl_mac_apple_silicon_only")}
-                        </span>
-                      )}
-                    </>
-                  );
-                  // Windows: nessun link, nessun hover, non e' un pulsante.
-                  return slug ? (
-                    <a
-                      key={os.id}
-                      href={downloadHref(slug, attribution)}
-                      className="border px-4 py-4 flex flex-col items-center gap-3 text-center transition-colors hover:border-[var(--color-green)]"
-                      style={{
-                        borderColor: "var(--color-border)",
-                        background: "var(--color-panel)",
-                      }}
-                    >
-                      {card}
-                    </a>
-                  ) : (
-                    <div
-                      key={os.id}
-                      aria-disabled="true"
-                      className="border px-4 py-4 flex flex-col items-center gap-3 text-center opacity-60"
-                      style={{
-                        borderColor: "var(--color-border)",
-                        background: "var(--color-panel)",
-                      }}
-                    >
-                      {card}
-                    </div>
-                  );
-                })}
-              </div>
-              {/* Linux non ha l'app desktop in questa versione: la nota lo dice
-                  e manda al terminale, senza una card che non porta a un file. */}
-              <p className="text-[11px] text-[var(--color-muted)] leading-relaxed mt-4">
-                {t("dl_desktop_unsigned_note")}
-              </p>
-              <div className="mt-4 border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3 text-center">
-                <span className="text-[12px] text-[var(--color-muted)]">
-                  {t("dl_help_text")}{" "}
-                </span>
-                <Link
-                  href="/setup-guide"
-                  className="text-[12px] font-semibold text-[var(--color-green)] no-underline"
-                >
-                  {t("dl_help_link")} →
-                </Link>
-              </div>
-            </div>
-          )}
-
           {/* Requisiti minimi (spostati da /run) */}
           <section className="mt-4 mb-8">
             <h2 className="text-lg md:text-xl font-bold text-[var(--color-white)] tracking-tight mb-5">
@@ -541,46 +423,11 @@ function DownloadContent({
   );
 }
 
-export default function DownloadClient({
-  attribution,
-}: {
-  attribution: DownloadAttribution;
-}) {
+// The attribution of the visit stays in the page's props for the download route; 0.4.0 has no file to download here.
+export default function DownloadClient(_props: { attribution: DownloadAttribution }) {
   return (
     <LandingI18nProvider>
-      <DownloadContent attribution={attribution} />
+      <DownloadContent />
     </LandingI18nProvider>
-  );
-}
-
-/* ── OS Icons (SVG inline) ── */
-
-function AppleIcon() {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      aria-hidden="true"
-      style={{ color: "var(--color-muted)" }}
-    >
-      <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
-    </svg>
-  );
-}
-
-function WindowsIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      aria-hidden="true"
-      style={{ color: "var(--color-muted)" }}
-    >
-      <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" />
-    </svg>
   );
 }

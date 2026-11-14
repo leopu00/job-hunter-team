@@ -1,12 +1,12 @@
 # Choose where to run Job Hunter Team
 
 Job Hunter Team (JHT) has one containerized team and more than one place to
-run it. The desktop application stays on the computer you use, and the
-container can run on that same computer or on a Linux host reached over SSH.
-The desktop app runs the local container in Podman on macOS (installed with
-Homebrew), and on Linux the team runs in rootless Podman, started by the CLI
-installer. Windows is not in this version (there is no Windows installer to
-download), and there is no desktop app for Linux in this version.
+run it. **The desktop app is not in 0.4.0**: the team is driven from the `jht`
+CLI. On macOS the CLI installer runs the container in Podman (installed with
+Homebrew); on Linux the team runs in rootless Podman, experimental. Windows is a preview in 0.4.0, CLI only: tested on Windows 10, not on Windows 11.
+Where this guide speaks of the desktop app (the VPS pairing, the remote control
+from the desktop), it describes what the app does in the releases that have it,
+not 0.4.0.
 
 This guide compares three deployment paths. It does not compare the native
 application with the command-line interface (CLI): those are two ways to
@@ -16,7 +16,7 @@ host.
 ## Decision tree
 
 1. **Do you want the shortest path to a first working team?** Run it on your
-   **local PC** (a Mac with Apple silicon: the app installs Podman with
+   **local PC** (a Mac with Apple silicon: the installer sets up Podman with
    Homebrew, which must already be installed).
 2. **Do you already have a spare computer that can stay on, and will you use
    it mainly from the same trusted local network?** A **dedicated Linux PC on
@@ -38,7 +38,7 @@ choosing.
 
 | | Local PC | Dedicated PC on the LAN | VPS |
 |---|---|---|---|
-| **Current product path** | Supported on macOS with Apple silicon (Podman); Linux (Podman) is built but not tested yet; Windows is not in this version | Existing SSH transport; advanced topology, not separately validated as a guided path | Supported remote runtime on every desktop platform |
+| **Current product path** | Supported on macOS with Apple silicon (Podman), from the CLI; Linux (Podman) is built but not tested yet; Windows is a preview in 0.4.0, CLI only: tested on Windows 10, not on Windows 11 | Existing SSH transport; advanced topology, not separately validated as a guided path | Supported remote runtime on every desktop platform |
 | **Where the team runs** | Your everyday computer | A Linux computer you own or control | A Linux virtual server from an infrastructure provider |
 | **How the desktop reaches it** | The `jht` command of the local runtime | SSH over your network | SSH over the internet |
 | **Must your everyday PC stay on?** | Yes | No; only while you use the desktop | No; only while you use the desktop |
@@ -88,11 +88,11 @@ awake while the agents work.
 
 ### What you need
 
-- A desktop release for your system: macOS on Apple silicon (M1 and later; Intel
-  Macs are not supported in 0.4). Windows and Linux have no desktop app in this
-  version (on Linux, use the CLI installer).
-- On macOS, **Homebrew already installed** (it needs macOS 15 or later): the app
-  installs Podman with it and manages it, and Docker Desktop is not needed. On
+- The CLI installer for your system: macOS on Apple silicon (M1 and later; Intel
+  Macs are not supported in 0.4), Linux (experimental). Windows is a preview in 0.4.0, CLI only: tested on Windows 10, not on Windows 11.
+  The desktop app is not in 0.4.0.
+- On macOS, **Homebrew already installed** (it needs macOS 15 or later): the
+  installer sets up Podman with it, and Docker Desktop is not needed. On
   Linux, rootless Podman 5.0 or later with podman-compose, which the CLI
   installer sets up.
 - A Mac with at least **16 GB of RAM** is recommended. The container machine the
