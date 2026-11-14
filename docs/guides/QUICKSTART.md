@@ -185,7 +185,10 @@ Your data stays: `~/.jht` (configuration, database, profile) and
 `~/Documents/Job Hunter Team` (CVs, outputs) are folders of your computer. What
 stays behind in Docker's volumes has to be given again: the API key, the mail
 password, the Telegram tokens. To move: `jht uninstall --confirm` (it keeps the
-two folders), run the installer again, then `jht setup` with your API key. The
+two folders), run the installer again, then `jht setup` with your API key. On a
+0.3.x install the old `jht` command has no `uninstall`: the message then gives,
+as the first step, the uninstall of this version's command (downloaded once,
+run, then deleted). The
 message is in Italian or English (the language of your earlier setup, or of
 the system). The Colima virtual machine stays on the disk, stopped, after the
 uninstall: if JHT created it and you use it for nothing else, the message names

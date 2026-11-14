@@ -522,6 +522,13 @@ jht_started_colima_profile() {
   printf '%s\n' "$profile"
 }
 
+# The jht this install put on the computer has no `uninstall` (installs older than 09/10): its file is there and does not have it.
+installed_jht_lacks_uninstall() {
+  local jht="$BIN_DIR/jht"
+  [ -f "$jht" ] && [ ! -L "$jht" ] || return 1
+  ! grep -Fq 'jht_uninstall()' "$jht" 2>/dev/null
+}
+
 keep_chosen_runtime() {
   [ -n "${OS:-}" ] || detect_os
   [ "$OS" = "macos" ] || [ "$OS" = "linux" ] || return 0
@@ -538,8 +545,23 @@ keep_chosen_runtime() {
     return 0
   fi
   [ "$current" = "podman" ] && return 0
-  local lang profile colima_line=""
+  local lang profile colima_line="" uninstall_it uninstall_en wrapper_url
   lang="$(installer_person_lang)"
+  # The jht of an install older than 09/10 (0.3.9 and before) has no `uninstall`: on it the command reaches the CLI inside the
+  # container, which does not know it, and nothing is removed. Then the first step is the uninstall of this release's wrapper, from
+  # the place the installer downloads it from (the commit of the test channel, or the release branch), saved and run once. No network
+  # here: the refusal stays before any I/O.
+  uninstall_it="«jht uninstall --confirm» (tiene quelle due cartelle)"
+  uninstall_en="run «jht uninstall --confirm» (it keeps those two folders)"
+  if installed_jht_lacks_uninstall; then
+    if [ "$TEST_CHANNEL" -eq 1 ]; then
+      wrapper_url="https://raw.githubusercontent.com/leopu00/job-hunter-team/$SOURCE_SHA/scripts/jht-wrapper.sh"
+    else
+      wrapper_url="https://raw.githubusercontent.com/leopu00/job-hunter-team/$BRANCH/scripts/jht-wrapper.sh"
+    fi
+    uninstall_it="il tuo comando jht e' di una versione che non sa disinstallarsi, quindi usa quello di questa versione: «curl -fsSL $wrapper_url -o /tmp/jht-uninstall && bash /tmp/jht-uninstall uninstall --confirm && rm -f /tmp/jht-uninstall» (toglie il JHT su Docker e il vecchio comando jht, tiene quelle due cartelle)"
+    uninstall_en="your jht command is from a version that cannot uninstall itself, so use the one of this version: «curl -fsSL $wrapper_url -o /tmp/jht-uninstall && bash /tmp/jht-uninstall uninstall --confirm && rm -f /tmp/jht-uninstall» (it removes the JHT on Docker and the old jht command, and keeps those two folders)"
+  fi
   # The Colima virtual machine stays on the disk, stopped, after the move (up to 100 GiB). Name only the profile JHT made: the one of
   # the marker of the installer that started it (1st line «colima», 2nd the profile); an install older than the marker started the
   # «default» profile, which is named only if it is there, and only for a person who installed Colima for JHT alone.
@@ -558,9 +580,9 @@ keep_chosen_runtime() {
   fi
   jht_error_marker runtime_change_requires_migration
   if [ "$lang" = it ]; then
-    printf "  ${RED}✗${RESET} %s%s\n" "$(jht_code_prefix runtime_change_requires_migration)" "questo computer fa girare JHT su Docker (Colima, Docker Desktop o Docker Engine). Dalla 0.4 JHT gira solo su Podman, e non e' stato cambiato niente. I tuoi dati restano: ~/.jht (configurazione, database, profilo) e ~/Documents/Job Hunter Team (CV, risultati) sono cartelle di questo computer. Resta invece nei volumi di Docker, e va ridato: la chiave API salvata dal setup, la password della posta, i token di Telegram. Per passare a Podman: «jht uninstall --confirm» (tiene quelle due cartelle), rilancia questo installer, poi «jht setup» con la tua chiave API.$colima_line" >&2
+    printf "  ${RED}✗${RESET} %s%s\n" "$(jht_code_prefix runtime_change_requires_migration)" "questo computer fa girare JHT su Docker (Colima, Docker Desktop o Docker Engine). Dalla 0.4 JHT gira solo su Podman, e non e' stato cambiato niente. I tuoi dati restano: ~/.jht (configurazione, database, profilo) e ~/Documents/Job Hunter Team (CV, risultati) sono cartelle di questo computer. Resta invece nei volumi di Docker, e va ridato: la chiave API salvata dal setup, la password della posta, i token di Telegram. Per passare a Podman: $uninstall_it, rilancia questo installer, poi «jht setup» con la tua chiave API.$colima_line" >&2
   else
-    printf "  ${RED}✗${RESET} %s%s\n" "$(jht_code_prefix runtime_change_requires_migration)" "this computer runs JHT on Docker (Colima, Docker Desktop or Docker Engine). Since 0.4 JHT runs only on Podman, and nothing was changed. Your data stays: ~/.jht (configuration, database, profile) and ~/Documents/Job Hunter Team (CVs, outputs) are folders of this computer. What stays behind in Docker's volumes and has to be given again: the API key kept by the setup, the mail password, the Telegram tokens. To move to Podman: run «jht uninstall --confirm» (it keeps those two folders), run this installer again, then «jht setup» with your API key.$colima_line" >&2
+    printf "  ${RED}✗${RESET} %s%s\n" "$(jht_code_prefix runtime_change_requires_migration)" "this computer runs JHT on Docker (Colima, Docker Desktop or Docker Engine). Since 0.4 JHT runs only on Podman, and nothing was changed. Your data stays: ~/.jht (configuration, database, profile) and ~/Documents/Job Hunter Team (CVs, outputs) are folders of this computer. What stays behind in Docker's volumes and has to be given again: the API key kept by the setup, the mail password, the Telegram tokens. To move to Podman: $uninstall_en, run this installer again, then «jht setup» with your API key.$colima_line" >&2
   fi
   exit "$RUNTIME_CHANGE_REQUIRES_MIGRATION_EXIT"
 }
