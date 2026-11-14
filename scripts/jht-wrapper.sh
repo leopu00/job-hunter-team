@@ -2631,7 +2631,9 @@ telegram_lifecycle_steps() {
         telegram_lifecycle_verify start || return $?
         ;;
       stop)
-        COMPOSE_PROFILES=telegram compose stop "$TELEGRAM_SERVICE" >/dev/null || return $?
+        # After a down the container is not there: podman-compose's «Error: no container with name or ID "jht-telegram" found»
+        # is not an error (the noise filter of compose_quiet takes it away); any other line of a failed stop is shown.
+        COMPOSE_PROFILES=telegram compose_quiet stop "$TELEGRAM_SERVICE" >/dev/null || return $?
         telegram_lifecycle_verify stop || return $?
         ;;
       pair) telegram_pair "$role" || return $? ;;
