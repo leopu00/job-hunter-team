@@ -8,9 +8,9 @@ describe("the greeting", () => {
   });
 
   it("says the first name in the person's language and says nothing while the name is not known", () => {
-    expect(greetingText("Leone", 9, "it")).toBe("Buongiorno, Leone");
-    expect(greetingText("Leone", 15, "en")).toBe("Good afternoon, Leone");
-    expect(greetingText("Leone", 21, "pt")).toBe("Boa noite, Leone");
+    expect(greetingText("Ada", 9, "it")).toBe("Buongiorno, Ada");
+    expect(greetingText("Ada", 15, "en")).toBe("Good afternoon, Ada");
+    expect(greetingText("Ada", 21, "pt")).toBe("Boa noite, Ada");
     expect(greetingText(null, 9, "it")).toBeNull();
   });
 
@@ -21,7 +21,7 @@ describe("the greeting", () => {
   });
 
   it("the name is the first word of the profile's, as letters only", () => {
-    expect(firstName("Leone Emanuele Puglisi")).toBe("Leone");
+    expect(firstName("Ada Maria Rossi")).toBe("Ada");
     expect(firstName("  Anne-Marie  Dupont")).toBe("Anne-Marie");
     expect(firstName("Zoë")).toBe("Zoë");
     expect(firstName("O’Brien")).toBe("O’Brien");

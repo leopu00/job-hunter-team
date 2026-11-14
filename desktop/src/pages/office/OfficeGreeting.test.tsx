@@ -28,9 +28,9 @@ afterEach(cleanup);
 
 describe("OfficeGreeting", () => {
   it("greets by the first name the profile holds, by the hour", async () => {
-    read.reading.mockResolvedValue(fields({ ok: true, preview: "Leone Puglisi" }));
+    read.reading.mockResolvedValue(fields({ ok: true, preview: "Ada Rossi" }));
     render(<OfficeGreeting now={at(9)} />);
-    expect((await screen.findByTestId("office-greeting")).textContent).toBe("Buongiorno, Leone");
+    expect((await screen.findByTestId("office-greeting")).textContent).toBe("Buongiorno, Ada");
   });
 
   it("says nothing while the profile has no name yet", async () => {
@@ -55,10 +55,10 @@ describe("OfficeGreeting", () => {
   });
 
   it("greets by the display name of the local profile and reads nothing for it", async () => {
-    read.local.mockReturnValue({ profileId: "p", displayName: "Leone Puglisi" });
+    read.local.mockReturnValue({ profileId: "p", displayName: "Ada Rossi" });
     read.reading.mockResolvedValue(fields({ ok: true, preview: "Altro Nome" }));
     render(<OfficeGreeting now={at(15)} />);
-    expect((await screen.findByTestId("office-greeting")).textContent).toBe("Buon pomeriggio, Leone");
+    expect((await screen.findByTestId("office-greeting")).textContent).toBe("Buon pomeriggio, Ada");
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(read.reading).not.toHaveBeenCalled();
     expect(screen.getByTestId("office-greeting").textContent).not.toContain("Altro");
