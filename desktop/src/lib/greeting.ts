@@ -31,7 +31,7 @@ export function firstName(full: string | null | undefined): string | null {
   return letters;
 }
 
-/** «Buongiorno, Leone»; null while the name is not known. */
+/** «Buongiorno, Ada»; null while the name is not known. */
 export function greetingText(name: string | null, hour: number, locale: Locale): string | null {
   return name ? fill(GREETING[locale][partOfDay(hour)], { name }) : null;
 }
