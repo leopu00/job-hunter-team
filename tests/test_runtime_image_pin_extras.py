@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from scripts import runtime_image_pin as pin_tool
+from runtime_pin_tree import schema1_manifest_data
 from tests.test_runtime_image_pin import MANIFEST, NEW_DIGEST, NEW_REVISION, _tree_copy
 from tests.test_runtime_image_pin_core import CORE, _manifest
 
@@ -16,11 +17,17 @@ CORE_CONSTANT = r'^CORE_IMAGE_DIGEST="(?P<core_digest>(?:sha256:[0-9a-f]{64})?)"
 EXTRAS_CONSTANT = r'^EXTRAS_IMAGE_DIGEST="(?P<extras_digest>(?:sha256:[0-9a-f]{64})?)"$'
 
 
-def test_the_repository_manifest_has_no_extras_digest_and_the_wrappers_carry_the_empty_constant() -> None:
+def test_the_wrappers_carry_the_extras_digest_their_manifest_has_whatever_the_schema() -> None:
     pin = pin_tool.load_manifest(MANIFEST)
-    assert pin.extras_digest is None and pin.extras_image_ref is None
-    assert 'EXTRAS_IMAGE_DIGEST=""' in (MANIFEST.parent.parent / "scripts" / "jht-wrapper.sh").read_text(encoding="utf-8")
-    assert "$ExtrasImageDigest = ''" in (MANIFEST.parent.parent / "scripts" / "jht-wrapper.ps1").read_text(encoding="utf-8")
+    root = MANIFEST.parent.parent
+    sh = (root / "scripts" / "jht-wrapper.sh").read_text(encoding="utf-8")
+    ps = (root / "scripts" / "jht-wrapper.ps1").read_text(encoding="utf-8")
+    if pin.extras_digest is None:
+        assert pin.extras_image_ref is None
+        assert 'EXTRAS_IMAGE_DIGEST=""' in sh and "$ExtrasImageDigest = ''" in ps
+    else:
+        assert pin.extras_image_ref == f"{pin.repository}@{pin.extras_digest}"
+        assert f'EXTRAS_IMAGE_DIGEST="{pin.extras_digest}"' in sh and f"$ExtrasImageDigest = '{pin.extras_digest}'" in ps
     assert all(any("extras_digest" in p for p in patterns) for path, patterns in pin_tool.CORE_CONSUMER_PATTERNS.items() if "wrapper" in str(path))
 
 
@@ -40,7 +47,7 @@ def test_a_schema_3_manifest_carries_three_digests(tmp_path: Path) -> None:
         ({"schema_version": 3, "core_digest": CORE, "extras_digest": "sha256:xyz"}, "extras_digest_invalid"),
         ({"schema_version": 3, "core_digest": CORE, "extras_digest": 7}, "extras_digest_invalid"),
         ({"schema_version": 3, "core_digest": CORE, "extras_digest": CORE}, "extras_digest_invalid"),  # same as the core
-        ({"schema_version": 3, "core_digest": CORE, "extras_digest": json.loads(MANIFEST.read_text())["digest"]}, "extras_digest_invalid"),
+        ({"schema_version": 3, "core_digest": CORE, "extras_digest": schema1_manifest_data()["digest"]}, "extras_digest_invalid"),
     ],
     ids=["extras-under-schema-2", "schema-3-without-extras", "extras-without-core", "malformed", "not-a-string", "same-as-core", "same-as-full"],
 )
@@ -112,7 +119,7 @@ def test_show_prints_the_extras_fields(capsys: pytest.CaptureFixture, tmp_path: 
     manifest = _manifest(tmp_path, schema_version=3, core_digest=CORE, extras_digest=EXTRAS)
     assert pin_tool.main(["--manifest", str(manifest), "show", "--field", "extras_image_ref"]) == 0
     assert capsys.readouterr().out.strip() == f"ghcr.io/leopu00/jht@{EXTRAS}"
-    assert pin_tool.main(["--manifest", str(MANIFEST), "show", "--field", "extras_digest"]) == 0
+    assert pin_tool.main(["--manifest", str(_manifest(tmp_path)), "show", "--field", "extras_digest"]) == 0  # schema 1: nothing to print
     assert capsys.readouterr().out.strip() == ""
 
 
@@ -150,7 +157,7 @@ def test_only_the_known_extras_tags_are_read_from_the_registry(tag, monkeypatch)
 
 def test_verify_tag_compares_the_extras_tag_with_the_extras_digest(tmp_path: Path, monkeypatch, capsys) -> None:
     manifest = _manifest(tmp_path, schema_version=3, core_digest=CORE, extras_digest=EXTRAS)
-    tags = {"0.4.0": json.loads(MANIFEST.read_text())["digest"], "0.4.0-core": CORE, "0.4.0-extras": EXTRAS}
+    tags = {"0.4.0": schema1_manifest_data()["digest"], "0.4.0-core": CORE, "0.4.0-extras": EXTRAS}
     version = pin_tool.load_manifest(manifest).release_version
     tags = {tag.replace("0.4.0", version): digest for tag, digest in tags.items()}
     monkeypatch.setattr(pin_tool, "registry_tag_digest", lambda pin, tag: tags.get(tag))
