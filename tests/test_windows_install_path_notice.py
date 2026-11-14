@@ -39,6 +39,7 @@ def require_the_requested_engine(monkeypatch):
 
 def _final(tmp_path, **env):
     (tmp_path / "bin").mkdir()
+    env = {"JHT_LANG": "en", **env}  # the sentences read below are the English ones
     result, _ = _run(tmp_path, INSTALLER, ["Show-Final", "Test-WillAutoOnboard", "Write-JhtNewWindowNotice"], FINAL_BODY, env)
     return result, result.stdout.replace("\r\n", "\n")
 

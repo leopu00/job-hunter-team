@@ -210,7 +210,7 @@ function Write-JhtProblem {
   Write-Host "  x $What" -ForegroundColor Red
   if ($Todo.Count -gt 0) {
     Write-Host ""
-    Write-Host "  What to do now:" -ForegroundColor Yellow
+    Write-Host "  $(T 'What to do now:' 'Cosa fare adesso:')" -ForegroundColor Yellow
     foreach ($line in $Todo) { Write-Host "    $line" -ForegroundColor Yellow }
   }
   Write-Host ""
@@ -270,14 +270,14 @@ function Show-Header {
   Write-Host "|     Job Hunter Team - Installer (Win)    |" -ForegroundColor White
   Write-Host "+------------------------------------------+" -ForegroundColor White
   Write-Host ""
-  Write-Host "  mode:    Podman machine (WSL)" -ForegroundColor DarkGray
-  Write-Host "  image:   $RuntimeImage" -ForegroundColor DarkGray
+  Write-Host "  $(T 'mode:    Podman machine (WSL)' 'modo:     macchina Podman (WSL)')" -ForegroundColor DarkGray
+  Write-Host "  $(T 'image:  ' 'immagine:') $RuntimeImage" -ForegroundColor DarkGray
   # A test-channel install is one commit, not a branch: the banner says the commit that was asked for (the Linux installer
   # does the same). Plain syntax only: this runs in Windows PowerShell 5.1.
   if ($SourceSha) {
     Write-Host "  commit:  $SourceSha" -ForegroundColor DarkGray
   } else {
-    Write-Host "  branch:  $Branch" -ForegroundColor DarkGray
+    Write-Host "  $(T 'branch: ' 'ramo:    ') $Branch" -ForegroundColor DarkGray
   }
   Write-Host "  runtime: $RuntimeDir" -ForegroundColor DarkGray
   Write-Host "  bin:     $BinDir" -ForegroundColor DarkGray
@@ -288,7 +288,7 @@ function Show-Header {
 
 # ── Step 1: System detection ──────────────────────────────────────────────
 function Test-System {
-  Write-Step 1 $TotalSteps "System detection"
+  Write-Step 1 $TotalSteps (T 'System detection' 'Rilevamento del sistema')
   $os = [System.Environment]::OSVersion
   if ($os.Platform -ne 'Win32NT') {
     Write-Fail "install.ps1 only supports Windows. On Linux/macOS use install.sh."
@@ -320,13 +320,33 @@ function Test-JhtWindows10Client {
   param([int]$ProductType, [int]$Build)
   return ($ProductType -eq 1 -and $Build -ge 10240 -and $Build -lt 22000)
 }
-# The language of the sentences of this script is the one of the product: JHT_LANG, as the CLI and the wrapper
-# read it, and English when none is chosen (what the rest of the output and the host.env written at the end say).
-# The language of Windows is not asked: one sentence in Italian inside an English output reads as a mistake.
+# The language of the person, by the rule of the CLI and of the wrapper: the choice saved by the setup or the picker
+# (i18n-prefs.json, read as data: not a link, a small file, one of the seven codes), then JHT_LANG as set in this terminal,
+# then the language of Windows, then English. The sentences of this script are written in English and Italian (T); the
+# Windows 10 notice in all seven. It is also the language written in host.env (Get-JhtPersonLanguage).
 function Get-JhtTextLanguage {
-  $code = ([string]$env:JHT_LANG).ToLowerInvariant() -replace '[-_.@].*$', ''
-  if (@('en', 'it', 'de', 'fr', 'es', 'hu', 'pt') -contains $code) { return $code }
+  $known = @('en', 'it', 'de', 'fr', 'es', 'hu', 'pt')
+  try {
+    $prefs = Join-Path $JhtHome 'i18n-prefs.json'
+    $item = Get-Item -LiteralPath $prefs -Force -ErrorAction Stop
+    if (-not $item.PSIsContainer -and -not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -and $item.Length -le 4096) {
+      $match = [regex]::Match(([IO.File]::ReadAllText($prefs) -replace '[\r\n]', ''), '"locale"\s*:\s*"(en|it|hu|es|de|fr|pt)"')
+      if ($match.Success) { return $match.Groups[1].Value }
+    }
+  } catch { }
+  $asked = ([string]$env:JHT_LANG).ToLowerInvariant() -replace '[-_.@].*$', ''
+  if ($known -contains $asked) { return $asked }
+  try {
+    $windows = ([string][Globalization.CultureInfo]::CurrentUICulture.TwoLetterISOLanguageName).ToLowerInvariant()
+    if ($known -contains $windows) { return $windows }
+  } catch { }
   return 'en'
+}
+# T "english" "italiano": the sentence in the person's language; every language other than Italian reads English.
+function T {
+  param([string]$En, [string]$It)
+  if ((Get-JhtTextLanguage) -ceq 'it') { return $It }
+  return $En
 }
 function Get-Windows10SupportWarning {
   # install.ps1 deliberately stays ASCII: Windows PowerShell 5.1 reads a
@@ -354,7 +374,7 @@ function Show-WindowsSupportNotice {
 
 # ── Step 2: WSL check ─────────────────────────────────────────────────────
 function Test-WindowsSubsystem {
-  Write-Step 2 $TotalSteps "Windows Subsystem for Linux check"
+  Write-Step 2 $TotalSteps (T 'Windows Subsystem for Linux check' 'Controllo del Sottosistema Windows per Linux')
   Write-JhtPhase wsl_check
   if ($DryRun) { Write-Dry 'wsl.exe --status'; return }
   $wsl = Get-Command wsl.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -362,7 +382,7 @@ function Test-WindowsSubsystem {
   # under 'Stop', Windows PowerShell 5.1 would turn a line of wsl's stderr into an error, not exit 20 (T82)
   $null = & { $ErrorActionPreference = 'Continue'; & $wsl.Source --status 2>&1 }
   if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine('wsl_not_ready: WSL is not usable'); exit 20 }
-  Write-Ok 'WSL is ready'
+  Write-Ok (T 'WSL is ready' "WSL e' pronto")
 }
 
 # ── Step 3: Download runtime files ────────────────────────────────────────
@@ -428,7 +448,7 @@ function Invoke-PodmanRuntimeEnabler {
   param([Parameter(Mandatory)][string]$ScriptPath)
   $powerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
   $machineName = Resolve-JhtPodmanMachineName -RuntimePath $RuntimeDir -ExistingMachines (Get-JhtExistingMachineNames)
-  Write-Info "Podman machine of this Windows user: $machineName"
+  Write-Info "$(T 'Podman machine of this Windows user:' 'Macchina Podman di questo utente Windows:') $machineName"
   $enablerArgs = @(
     '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
     '-File', $ScriptPath, '-MachineName', $machineName, '-InitializeMachine',
@@ -523,7 +543,7 @@ function Test-JhtDownloadedRuntimeScripts {
 }
 
 function Get-RuntimeFiles {
-  Write-Step 3 $TotalSteps "Downloading and enabling the Podman runtime"
+  Write-Step 3 $TotalSteps (T 'Downloading and enabling the Podman runtime' 'Scarico e attivo il runtime Podman')
   Write-JhtPhase runtime_download
 
   if ($TestChannel) {
@@ -718,16 +738,16 @@ function Add-NewRegistryPathToSession {
 # the install added it) is not in that window's PATH, and only a new window, or this line, brings it in.
 # No restart of the computer is needed.
 function Write-JhtNewWindowNotice {
-  Write-Host "  jht and podman are on your PATH from now on, but THIS PowerShell window was open before the" -ForegroundColor Yellow
-  Write-Host "  install and may not know them yet (""not recognized as the name of a cmdlet"")." -ForegroundColor Yellow
-  Write-Host "  Open a NEW PowerShell window to use jht and podman. No restart of the computer is needed." -ForegroundColor Yellow
-  Write-Host "  To use them in this window right away, paste:" -ForegroundColor DarkGray
+  Write-Host "  $(T 'jht and podman are on your PATH from now on, but THIS PowerShell window was open before the' "da adesso jht e podman sono nel PATH, ma QUESTA finestra di PowerShell era aperta prima dell'")" -ForegroundColor Yellow
+  Write-Host "  $(T 'install and may not know them yet ("not recognized as the name of a cmdlet").' 'installazione e potrebbe non conoscerli ancora ("non riconosciuto come nome di cmdlet").')" -ForegroundColor Yellow
+  Write-Host "  $(T 'Open a NEW PowerShell window to use jht and podman. No restart of the computer is needed.' 'Apri una NUOVA finestra di PowerShell per usare jht e podman. Non serve riavviare il computer.')" -ForegroundColor Yellow
+  Write-Host "  $(T 'To use them in this window right away, paste:' 'Per usarli subito in questa finestra, incolla:')" -ForegroundColor DarkGray
   Write-Host "    `$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')" -ForegroundColor White
   Write-Host ""
 }
 
 function Add-ToUserPath {
-  Write-Step 4 $TotalSteps "Registering the user PATH"
+  Write-Step 4 $TotalSteps (T 'Registering the user PATH' "Registro il PATH dell'utente")
 
   if ($DryRun) {
     Write-Dry "[Environment]::SetEnvironmentVariable('Path', '...;$BinDir', 'User')"
@@ -740,10 +760,10 @@ function Add-ToUserPath {
   if (-not $userPath) { $userPath = '' }
   $newPath = Get-OrderedUserPath -UserPath $userPath -ShimBin $ShimBin -BinDir $BinDir
   if ($newPath -ceq $userPath) {
-    Write-Ok "$BinDir already in the user PATH"
+    Write-Ok "$BinDir $(T 'already in the user PATH' "e' gia' nel PATH dell'utente")"
   } else {
     [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
-    Write-Ok "User PATH updated (effective from the next terminal)"
+    Write-Ok (T 'User PATH updated (effective from the next terminal)' "PATH dell'utente aggiornato (vale dal prossimo terminale)")
   }
 
   # The current session too, so the installer's next commands (e.g. the wizard) find `jht.cmd`.
@@ -786,30 +806,14 @@ function Write-HostFile {
   }
 }
 
-# The language written in host.env, which the wrapper and the team read when the person has chosen none yet: the same rule
-# as the CLI. The choice saved by the setup or the picker (i18n-prefs.json), then JHT_LANG, then the language of Windows,
-# then English. A fixed en here made a Windows in Italian answer in English until `jht setup --language it`.
+# The language written in host.env, which the wrapper and the team read when the person has chosen none yet: the person's,
+# by the rule of Get-JhtTextLanguage. A fixed en here made a Windows in Italian answer in English until `jht setup --language it`.
 function Get-JhtPersonLanguage {
-  $known = @('en', 'it', 'de', 'fr', 'es', 'hu', 'pt')
-  try {
-    $prefs = Join-Path $JhtHome 'i18n-prefs.json'
-    $item = Get-Item -LiteralPath $prefs -Force -ErrorAction Stop
-    if (-not $item.PSIsContainer -and -not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -and $item.Length -le 4096) {
-      $match = [regex]::Match(([IO.File]::ReadAllText($prefs) -replace '[\r\n]', ''), '"locale"\s*:\s*"(en|it|hu|es|de|fr|pt)"')
-      if ($match.Success) { return $match.Groups[1].Value }
-    }
-  } catch { }
-  $asked = ([string]$env:JHT_LANG).ToLowerInvariant() -replace '[-_.@].*$', ''
-  if ($known -contains $asked) { return $asked }
-  try {
-    $windows = ([string](Get-UICulture).TwoLetterISOLanguageName).ToLowerInvariant()
-    if ($known -contains $windows) { return $windows }
-  } catch { }
-  return 'en'
+  return (Get-JhtTextLanguage)
 }
 
 function Write-HostEnv {
-  Write-Step 5 $TotalSteps "Writing host.env"
+  Write-Step 5 $TotalSteps (T 'Writing host.env' 'Scrivo host.env')
 
   $hostEnvFile = Join-Path $JhtHome 'host.env'
   $hostType = if ($PairingToken) { 'vps' } else { 'local' }
@@ -847,7 +851,7 @@ JHT_USER_TZ=$tz
     Write-Dry "Set-Content $hostEnvFile (JHT_HOST_TYPE=$hostType, JHT_LANG=$lang, JHT_USER_TZ=$tz)"
   } else {
     Write-HostFile -Path $hostEnvFile -Content $content
-    Write-Ok "host.env written: $hostEnvFile (mode=$hostType, lang=$lang, tz=$tz)"
+    Write-Ok "$(T 'host.env written:' 'host.env scritto:') $hostEnvFile (mode=$hostType, lang=$lang, tz=$tz)"
   }
 
   # Pairing token: saved to $JhtHome\.pairing-token with restrictive perms
@@ -877,7 +881,7 @@ JHT_USER_TZ=$tz
       }
       Write-HostFile -Path $tokenFile -Content $PairingToken -Encoding ASCII -NoNewline -Prepare $restrictAcl
 
-      Write-Ok "Pairing token saved: $tokenFile"
+      Write-Ok "$(T 'Pairing token saved:' 'Token di abbinamento salvato:') $tokenFile"
     }
   }
 }
@@ -886,22 +890,22 @@ JHT_USER_TZ=$tz
 function Show-Final {
   Write-Host ""
   Write-Host "+------------------------------------------+" -ForegroundColor Green
-  Write-Host "|  Installation complete!                  |" -ForegroundColor Green
+  Write-Host (T '|  Installation complete!                  |' '|  Installazione completata!               |') -ForegroundColor Green
   Write-Host "+------------------------------------------+" -ForegroundColor Green
   Write-Host ""
-  Write-Host "  Container mode active." -ForegroundColor White
-  Write-Host "  The agents only see:" -ForegroundColor DarkGray
-  Write-Host "    $JhtHome                          -> /jht_home (config, db, agents)" -ForegroundColor DarkGray
-  Write-Host "    $env:USERPROFILE\Documents\Job Hunter Team -> /jht_user (CVs, attachments, output)" -ForegroundColor DarkGray
+  Write-Host "  $(T 'Container mode active.' "Modalita' container attiva.")" -ForegroundColor White
+  Write-Host "  $(T 'The agents only see:' 'Gli agenti vedono solo:')" -ForegroundColor DarkGray
+  Write-Host "    $JhtHome                          -> /jht_home $(T '(config, db, agents)' '(configurazione, db, agenti)')" -ForegroundColor DarkGray
+  Write-Host "    $env:USERPROFILE\Documents\Job Hunter Team -> /jht_user $(T '(CVs, attachments, output)' '(CV, allegati, risultati)')" -ForegroundColor DarkGray
   Write-Host ""
 
   # Not for the desktop app, which reads this output through a pipe, nor for a dry run (nothing was installed).
   if (-not $DryRun -and $env:JHT_MACHINE_OUTPUT -ne '1') { Write-JhtNewWindowNotice }
   if (-not (Test-WillAutoOnboard)) {
-    Write-Host "  Next steps:" -ForegroundColor White
+    Write-Host "  $(T 'Next steps:' 'Prossimi passi:')" -ForegroundColor White
     Write-Host ""
     if ($script:PathReady) {
-      Write-Host "      jht setup        # setup wizard (also starts the container)" -ForegroundColor White
+      Write-Host "      jht setup        # $(T 'setup wizard (also starts the container)' 'configurazione guidata (accende anche il container)')" -ForegroundColor White
     } else {
       Write-Host "      $BinDir\jht.cmd setup" -ForegroundColor White
     }
@@ -909,9 +913,9 @@ function Show-Final {
   }
 
   # `jht uninstall` stops the team and takes away the machine (with its images), the runtime and the `jht` command; the data stays.
-  Write-Host "  To uninstall (keeps the data in ~/.jht and ~/Documents/Job Hunter Team):" -ForegroundColor DarkGray
+  Write-Host "  $(T 'To uninstall (keeps the data in ~/.jht and ~/Documents/Job Hunter Team):' 'Per disinstallare (i dati in ~/.jht e ~/Documents/Job Hunter Team restano):')" -ForegroundColor DarkGray
   Write-Host "    jht uninstall --confirm" -ForegroundColor DarkGray
-  Write-Host "  To delete the data as well (config, db, CVs, output):" -ForegroundColor DarkGray
+  Write-Host "  $(T 'To delete the data as well (config, db, CVs, output):' 'Per cancellare anche i dati (configurazione, db, CV, risultati):')" -ForegroundColor DarkGray
   Write-Host "    jht uninstall --confirm --purge" -ForegroundColor DarkGray
   Write-Host ""
 }
@@ -931,17 +935,17 @@ function Test-WillAutoOnboard {
 function Invoke-Onboard {
   if (-not (Test-WillAutoOnboard)) {
     if ($PairingToken) {
-      Write-Info "Pairing token present: skipping the interactive wizard. The container will complete the pairing on first boot."
+      Write-Info (T 'Pairing token present: skipping the interactive wizard. The container will complete the pairing on first boot.' "Token di abbinamento presente: salto il wizard interattivo. Il container completera' l'abbinamento al primo avvio.")
     }
     return
   }
   Write-Host ""
-  Write-Info "Launching the setup wizard..."
+  Write-Info (T 'Launching the setup wizard...' 'Avvio la configurazione guidata...')
   # Use the CMD shim, which handles the ExecutionPolicy. PathReady guarantees
   # that `jht.cmd` is reachable in this session.
   & "$BinDir\jht.cmd" setup
   if ($LASTEXITCODE -ne 0) {
-    Write-Warn "The wizard exited with an error. Re-run it with: jht setup"
+    Write-Warn (T 'The wizard exited with an error. Re-run it with: jht setup' "La configurazione guidata e' uscita con un errore. Rilanciala con: jht setup")
   }
 }
 

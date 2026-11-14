@@ -62,6 +62,11 @@ $bridge = Join-Path (Split-Path -LiteralPath $env:JHT_UNDER_TEST) 'podman-machin
 $source = (Get-Content -LiteralPath $env:JHT_UNDER_TEST -Raw -Encoding UTF8) + "`n" + (Get-Content -LiteralPath $bridge -Raw -Encoding UTF8)
 $ast = [System.Management.Automation.Language.Parser]::ParseInput($source, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw "parse: $($errors[0])" }
+# the sentences are said in the person's language: T and Get-JhtTextLanguage come with any function, when the script has them
+foreach ($name in @('Get-JhtTextLanguage', 'T')) {
+  $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name }, $true)
+  if ($fn) { . ([scriptblock]::Create($fn.Extent.Text)) }
+}
 foreach ($name in ($env:JHT_IMPORT -split ',')) {
   if (-not $name) { continue }
   $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name }, $true)

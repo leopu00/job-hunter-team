@@ -29,6 +29,8 @@ def _banner(shell: str, tmp_path: Path, source_sha: str) -> str:
         "$Branch = 'production'\n"
         f"$SourceSha = '{source_sha}'\n"
         "$RuntimeDir = 'C:\\runtime'; $BinDir = 'C:\\bin'; $DryRun = $false; $PairingToken = ''\n"
+        + _function(source, "Get-JhtTextLanguage")
+        + _function(source, "T")
         + _function(source, "Show-Header")
         + "\nShow-Header\n"
     )

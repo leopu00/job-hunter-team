@@ -175,7 +175,7 @@ try {
   # What Get-RuntimeFiles calls before it writes anything and when the Podman setup ends: the installer's own functions,
   # taken from the real file. The preflight asks for winget when no Podman is installed; this runner has neither, and
   # the enabler is replaced below by a fixture, so a stand-in winget lets it pass: what winget does is not on trial here.
-  foreach ($installerFunctionName in @('Write-JhtProblem', 'Remove-JhtCreatedEmptyDirs', 'Show-PodmanSetupProblem', 'Test-JhtDownloadedRuntimeScripts')) {
+  foreach ($installerFunctionName in @('Get-JhtTextLanguage', 'T', 'Write-JhtProblem', 'Remove-JhtCreatedEmptyDirs', 'Show-PodmanSetupProblem', 'Test-JhtDownloadedRuntimeScripts')) {
     $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $installerFunctionName }, $true)
     if (-not $fn) { throw "standalone $installerFunctionName function missing" }
     . ([scriptblock]::Create($fn.Extent.Text))
