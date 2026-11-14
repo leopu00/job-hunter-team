@@ -5,7 +5,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [0.4.0] — unreleased
+## [0.4.0] — 2026-11-15
 
 **The agent team runs in a Podman container on your computer (or a VPS), driven from the `jht` CLI, and the
 team runs on Pi with a GLM (Z.ai) API key.** The desktop app is not in 0.4.0. The release notes say which of
