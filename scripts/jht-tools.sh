@@ -11,6 +11,12 @@
 #   jht tools switch          the full image takes the place of the core one, with an `up`; exit 0 and nothing printed until
 #                             the profile is ready (profile/ready.flag) and the full image is here
 #
+# tools_kick is what the wrapper calls on `jht up` and `jht setup` of a core install: it keeps the tools moving on a computer
+# with the CLI only, as the round of the desktop app does (desktop/src-tauri/src/tools_tier.rs). It starts one detached job, at
+# most, that pulls the full image when it is not here yet, waits for profile/ready.flag and then makes the switch itself; a
+# switch the engine refuses (the configuration changed while the team ran) is retried with a `down` first, and a switch that still
+# fails is written down for `jht up` and `jht status` to say, with the commands to give.
+#
 # The state comes from the engine and from the host files of the runtime, never from a file the container can write. The file
 # $JHT_HOME/state/tools.json is a NOTICE for the container (the Capitano reads it): nothing here reads it back.
 # JHT_RUNTIME_HELPER=1
@@ -18,6 +24,7 @@
 TOOLS_STATE_DIR="${JHT_HOME_HOST:-$HOME/.jht}/state"
 TOOLS_LOCK="$RUNTIME_DIR/.tools-pull.lock"
 TOOLS_FAILED_FILE="$RUNTIME_DIR/.tools-pull-failed"
+TOOLS_SWITCH_FAILED_FILE="$RUNTIME_DIR/.tools-switch-failed"
 
 tools_now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
@@ -75,33 +82,95 @@ EOF
   printf '{"ok":true,"state":"%s","tier":"%s","reason":"%s"}\n' "$state" "$tier" "$reason"
 }
 
-# The pull itself, in the background: its end is on disk (the image, or the failed marker), and in the notice.
+# The pull itself, in the background: its end is on disk (the image, or the failed marker), and in the notice. With `auto` (the
+# job tools_kick starts) it goes on: it waits for the profile and makes the switch, holding the lock, so a second `jht up` finds
+# the job there and starts no other.
 tools_pull_job() {
-  local since="$1"
+  local since="$1" auto="${2:-}"
   trap '' HUP
-  if docker pull "$DEFAULT_RUNTIME_IMAGE" >/dev/null 2>&1 && tools_full_here; then
+  if tools_full_here || { docker pull "$DEFAULT_RUNTIME_IMAGE" >/dev/null 2>&1 && tools_full_here; }; then
     rm -f "$TOOLS_FAILED_FILE"; tools_notice ready core "" "$since"
+    [ "$auto" = auto ] && tools_wait_and_switch
   else
     printf 'pull_failed\n' > "$TOOLS_FAILED_FILE"; tools_notice failed core pull_failed "$since"
   fi
   rm -rf "$TOOLS_LOCK"
 }
 
-tools_pull() {
-  local since
-  [ -f "$RUNTIME_TIER_FILE" ] || return 0
-  tools_engine_up || { err "tools: il motore dei container non risponde"; return 1; }
+# One job at a time, detached. $1 = `auto` for the job of tools_kick (it pulls if needed, then switches by itself).
+tools_start_job() {
+  local auto="${1:-}" since
   since="$(tools_now)"
-  if tools_full_here; then rm -f "$TOOLS_FAILED_FILE"; tools_notice ready core "" "$since"; return 0; fi
-  tools_pulling && return 0
   rm -rf "$TOOLS_LOCK"
   mkdir "$TOOLS_LOCK" 2>/dev/null || return 0  # another call won the race: it is the one pulling
   rm -f "$TOOLS_FAILED_FILE"
-  printf 'JHT_PHASE tools_pull\n'
-  tools_notice pulling core "" "$since"
-  tools_pull_job "$since" </dev/null >/dev/null 2>&1 &
+  tools_full_here || { [ -n "$auto" ] || printf 'JHT_PHASE tools_pull\n'; tools_notice pulling core "" "$since"; }
+  tools_pull_job "$since" "$auto" </dev/null >/dev/null 2>&1 &
   printf '%s\n' "$!" > "$TOOLS_LOCK/pid"
   disown "$!" 2>/dev/null || true
+}
+
+tools_pull() {
+  [ -f "$RUNTIME_TIER_FILE" ] || return 0
+  tools_engine_up || { err "tools: il motore dei container non risponde"; return 1; }
+  if tools_full_here; then rm -f "$TOOLS_FAILED_FILE"; tools_notice ready core "" "$(tools_now)"; return 0; fi
+  tools_pulling && return 0
+  tools_start_job
+}
+
+# `jht up` / `jht setup` of a core install: the job that pulls and switches, unless one is already there. Prints nothing (the
+# wrapper says what it means for the person, from tools_person_state); never fails the command it rides on.
+tools_kick() {
+  # on the full image (the tier file gone) an `up` that got here went well: a switch that had failed is over
+  [ -f "$RUNTIME_TIER_FILE" ] || { rm -f "$TOOLS_SWITCH_FAILED_FILE"; return 0; }
+  tools_engine_up || return 0
+  tools_pulling && return 0
+  tools_start_job auto
+  return 0
+}
+
+# The job waits for the profile (the onboarding has closed), then a little more, so the switch does not cut the last answers of
+# the onboarding short; the tier file gone means someone made the switch by hand (`jht tools switch`).
+tools_wait_and_switch() {
+  local flag="${JHT_HOME_HOST:-$HOME/.jht}/profile/ready.flag" step="${JHT_TOOLS_WAIT_STEP:-15}" left="${JHT_TOOLS_WAIT_MAX:-86400}"
+  while [ "$left" -gt 0 ]; do
+    [ -f "$RUNTIME_TIER_FILE" ] || return 0
+    if [ -f "$flag" ] && [ ! -L "$flag" ]; then
+      sleep "${JHT_TOOLS_SWITCH_GRACE:-30}"
+      tools_switch_auto
+      return 0
+    fi
+    sleep "$step"
+    left=$((left - step))
+  done
+}
+
+# The switch of the job. `up` first, as `jht tools switch` does; when the engine refuses it (a team started with another
+# configuration: jht config set, the team settings applied from the site or the app), `down` and `up` again, which is what a person
+# would do. Still refused: the marker says so, and `jht up` / `jht status` tell the person to run `jht down` and `jht up`.
+tools_switch_auto() {
+  rm -f "$RUNTIME_TIER_FILE" && rm -f "$RUNTIME_TIER_INTEGRITY" || return 0
+  rm -f "$TOOLS_SWITCH_FAILED_FILE"
+  unset JHT_IMAGE
+  if "$WRAPPER_PATH" up </dev/null >/dev/null 2>&1 \
+      || { "$WRAPPER_PATH" down </dev/null >/dev/null 2>&1; "$WRAPPER_PATH" up </dev/null >/dev/null 2>&1; }; then
+    tools_notice ready full "" "$(tools_now)"
+  else
+    printf 'switch_failed\n' > "$TOOLS_SWITCH_FAILED_FILE"
+    tools_notice failed full switch_failed "$(tools_now)"
+  fi
+}
+
+# What the wrapper tells the person, one word: arriving (pulling or waiting), failed (the pull), switch_failed, or nothing.
+tools_person_state() {
+  if [ -s "$TOOLS_SWITCH_FAILED_FILE" ] && [ ! -f "$RUNTIME_TIER_FILE" ]; then printf 'switch_failed\n'; return 0; fi
+  [ -f "$RUNTIME_TIER_FILE" ] || return 0
+  tools_engine_up || return 0
+  if tools_full_here; then printf 'waiting\n'
+  elif tools_pulling; then printf 'arriving\n'
+  elif [ -s "$TOOLS_FAILED_FILE" ]; then printf 'failed\n'
+  else printf 'arriving\n'
+  fi
 }
 
 # The switch: the tier file goes (and the manifest stops attesting it), then an `up` on the image of the compose, the full one.
