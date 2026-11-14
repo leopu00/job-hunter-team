@@ -154,7 +154,15 @@ integration_state() {
     rc=0
     integration_volume_present "$volume" || rc=$?
     case "$rc" in
-      0) printf 'ready|creato, container spento\n'; return 0 ;;
+      0)
+        # The volume says it was added; the container is not there (after a down it is removed). Telegram is started again by a
+        # pairing, or by jht up once a bot is paired.
+        if [ "$id" = telegram ]; then
+          printf 'ready|aggiunto, servizio spento: jht telegram pair assistente (con un bot gia'"'"' abbinato lo riaccende jht up)\n'
+        else
+          printf 'ready|aggiunto, container spento\n'
+        fi
+        return 0 ;;
       2) printf 'error|il motore dei container non risponde\n'; return 0 ;;
     esac
   fi

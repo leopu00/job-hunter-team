@@ -8,6 +8,7 @@ import {
 import LandingNav from "../components/landing/LandingNav";
 import { LandingFooter } from "../components/landing/LandingCTA";
 import ScrollToTop from "../components/landing/ScrollToTop";
+import { CliFirstNote } from "@/app/components/CliFirstNote";
 
 type Lang = "it" | "en" | "es" | "fr" | "de" | "pt" | "hu";
 
@@ -354,6 +355,7 @@ function SetupContent() {
     <>
       <LandingNav />
       <main className="px-5 sm:px-6 pt-28 pb-16 max-w-5xl mx-auto">
+        <CliFirstNote lang={L} className="mb-10" />
         <div className="text-center mb-14">
           <h1 className="text-2xl md:text-4xl font-bold text-[var(--color-white)] tracking-tight mb-3">
             {p.title}

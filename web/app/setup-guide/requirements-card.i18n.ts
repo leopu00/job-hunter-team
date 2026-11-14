@@ -66,11 +66,11 @@ export const REQUIREMENTS_CARD_VALUES: Record<string, GuideText> = {
 
 /** What this version supports, said plainly under the card: no measurement is claimed for a system. */
 export const REQUIREMENTS_CARD_SYSTEMS: GuideText = {
-  en: "Supported in this version: Macs with Apple silicon. Windows is not supported in 0.4. There is no desktop app for Linux in this version: use the CLI installer.",
-  it: "Supportati in questa versione: Mac con Apple silicon. Windows non è supportato nella 0.4. Per Linux in questa versione non c'è l'app desktop: usa l'installer da terminale.",
-  es: "Compatibles en esta versión: Mac con Apple silicon. Windows no es compatible en la 0.4. Para Linux no hay app de escritorio en esta versión: usa el instalador de terminal.",
-  fr: "Pris en charge dans cette version : les Mac Apple silicon. Windows n’est pas pris en charge dans la 0.4. Pour Linux, il n’y a pas d’application de bureau dans cette version : utilisez l’installateur en terminal.",
-  de: "In dieser Version unterstützt: Macs mit Apple Silicon. Windows wird in 0.4 nicht unterstützt. Für Linux gibt es in dieser Version keine Desktop-App: nutze den Installer im Terminal.",
-  pt: "Suportados nesta versão: Macs com Apple silicon. O Windows não é suportado na 0.4. Para Linux não há app de ambiente de trabalho nesta versão: usa o instalador de terminal.",
-  hu: "Ebben a verzióban támogatott: az Apple silicon Macek. A Windows a 0.4-ben nem támogatott. Linuxra ebben a verzióban nincs asztali app: használd a terminálos telepítőt.",
+  en: "Supported in this version, from the CLI: Macs with Apple silicon; Linux, experimental. Windows is a preview in 0.4.0, CLI only: tested on Windows 10, not on Windows 11. The desktop app is not in 0.4.0.",
+  it: "Supportati in questa versione, dalla CLI: Mac con Apple silicon; Linux, sperimentale. Windows è un'anteprima nella 0.4.0, solo CLI: provato su Windows 10, non su Windows 11. L'app desktop non è nella 0.4.0.",
+  es: "Compatibles en esta versión, desde la CLI: Mac con Apple silicon; Linux, experimental. Windows es una vista previa en la 0.4.0, solo CLI: probado en Windows 10, no en Windows 11. La app de escritorio no está en la 0.4.0.",
+  fr: "Pris en charge dans cette version, depuis la CLI : les Mac Apple silicon ; Linux, expérimental. Windows est un aperçu dans la 0.4.0, CLI uniquement : testé sur Windows 10, pas sur Windows 11. L’application de bureau n’est pas dans la 0.4.0.",
+  de: "In dieser Version unterstützt, über die CLI: Macs mit Apple Silicon; Linux, experimentell. Windows ist in 0.4.0 eine Vorschau, nur CLI: getestet auf Windows 10, nicht auf Windows 11. Die Desktop-App ist nicht in 0.4.0.",
+  pt: "Suportados nesta versão, a partir da CLI: Macs com Apple silicon; Linux, experimental. O Windows é uma pré-visualização na 0.4.0, só CLI: testado no Windows 10, não no Windows 11. A app de ambiente de trabalho não está na 0.4.0.",
+  hu: "Ebben a verzióban támogatott, a CLI-ből: az Apple silicon Macek; Linux, kísérleti. A Windows a 0.4.0-ban előzetes változat, csak CLI: Windows 10-en kipróbálva, Windows 11-en nem. Az asztali alkalmazás nincs a 0.4.0-ban.",
 };

@@ -1,5 +1,7 @@
 # VPS setup from the desktop app
 
+> 0.4.0 is installed from the command line; the desktop app comes in a later release: see the [CLI quickstart](QUICKSTART.md).
+
 This is the guided, non-terminal path for running Job Hunter Team on an
 always-on Linux VPS from the desktop app. The terminal-first path is in
 [`VPS-SETUP.md`](VPS-SETUP.md).

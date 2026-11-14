@@ -158,13 +158,13 @@ describe("B8 download funnel", () => {
     expect(resolveDownloadTarget("mac", withInstaller)).toBe(DOWNLOAD_TARGETS.mac);
   });
 
-  it("D13 the page shows Windows as not in this version without a link, and has no Linux card", () => {
+  it("D13 the 0.4.0 page links no file: no platform card, Windows said as the CLI preview, no Linux card", () => {
     expect(DOWNLOAD_PAGE).not.toContain("win-setup");
-    expect(DOWNLOAD_PAGE).toContain("data-windows-not-in-version");
-    expect(DOWNLOAD_PAGE).toContain('t("dl_windows_not_in_version")');
+    // the desktop app is not in 0.4.0: no card and no link of the download funnel on the page
+    expect(DOWNLOAD_PAGE).not.toMatch(/downloadHref|DOWNLOAD_SLUG|data-windows-not-in-version/);
+    expect(DOWNLOAD_PAGE).toContain("data-windows-cli-preview");
+    expect(DOWNLOAD_PAGE).toContain('t("dl_windows_cli_preview")');
     expect(DOWNLOAD_PAGE).not.toMatch(/data-linux|dl_linux|LinuxIcon|id: "linux"|linux: "linux"/);
-    // the Windows card is not an anchor
-    expect(DOWNLOAD_PAGE).toMatch(/slug \? \(\s*<a[\s\S]*?\) : \(\s*<div[\s\S]*?aria-disabled="true"/);
   });
 
   it("D13 says it in all seven languages", () => {
@@ -499,8 +499,8 @@ describe("B8 download funnel", () => {
         `/go/${slug}?utm_source=reddit&utm_medium=paid&utm_campaign=lancio-2026-08`,
       );
     }
-    expect(DOWNLOAD_PAGE).toContain('mac: "mac"');
-    expect(DOWNLOAD_PAGE).toContain("href={downloadHref(slug, attribution)}");
+    // 0.4.0 has no app: the page links no file at all, the route keeps its links for the release that has one
+    expect(DOWNLOAD_PAGE).not.toContain("downloadHref(");
     expect(DOWNLOAD_PAGE).not.toContain("releases/latest/download");
 
     expect(

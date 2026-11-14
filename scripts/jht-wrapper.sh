@@ -147,9 +147,9 @@ if [ "$CONTAINER_RUNTIME" = "podman" ]; then
     export PODMAN_COMPOSE_PROVIDER="$(command -v podman-compose)"
   fi
 fi
-DEFAULT_RUNTIME_IMAGE="ghcr.io/leopu00/jht@sha256:fa78c975c04dd5f95d6225a35c8c3bb9646f8ef14b32c8ca558d5332de0cce00"
-CORE_IMAGE_DIGEST=""
-EXTRAS_IMAGE_DIGEST=""
+DEFAULT_RUNTIME_IMAGE="ghcr.io/leopu00/jht@sha256:8db1633af3c6e7d606b058225023988f86687d86c8eab3cbe2c47c57ff8190e7"
+CORE_IMAGE_DIGEST="sha256:b962a32665e6ed8c81b378a453d596417cf03333cded7087f2ea50587126b24b"
+EXTRAS_IMAGE_DIGEST="sha256:f4e90cb05a03b01ce7158b0928dcf7d1d5915f4e3492c0f5ea0f440ddd7ff50a"
 RUNTIME_TIER_FILE="$RUNTIME_DIR/runtime-tier"
 RUNTIME_TIER_INTEGRITY="$RUNTIME_DIR/.runtime-tier-integrity"
 DEFAULT_RUNTIME_VERSION="0.4.0"
@@ -2635,7 +2635,9 @@ telegram_lifecycle_steps() {
         telegram_lifecycle_verify start || return $?
         ;;
       stop)
-        COMPOSE_PROFILES=telegram compose stop "$TELEGRAM_SERVICE" >/dev/null || return $?
+        # After a down the container is not there: podman-compose's «Error: no container with name or ID "jht-telegram" found»
+        # is not an error (the noise filter of compose_quiet takes it away); any other line of a failed stop is shown.
+        COMPOSE_PROFILES=telegram compose_quiet stop "$TELEGRAM_SERVICE" >/dev/null || return $?
         telegram_lifecycle_verify stop || return $?
         ;;
       pair) telegram_pair "$role" || return $? ;;

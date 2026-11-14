@@ -158,9 +158,9 @@ const translations = {
 
   // Download page
   dl_desc: {
-    it: "Scarica l'app desktop per configurare e seguire il tuo team. La CLI resta disponibile per chi preferisce il terminale.",
-    en: "Download the desktop app to set up and follow your team. The CLI remains available if you prefer the terminal.",
-    hu: "Töltsd le az asztali appot a csapat beállításához és követéséhez. Ha a terminált kedveled, a CLI továbbra is elérhető.",
+    it: "Installa la CLI per configurare e seguire il tuo team: nella 0.4.0 il team si guida dal terminale, l'app desktop non è nella versione.",
+    en: "Install the CLI to set up and follow your team: in 0.4.0 the team is driven from the terminal, the desktop app is not in this version.",
+    hu: "Telepítsd a CLI-t a csapat beállításához és követéséhez: a 0.4.0-ban a csapatot a terminálból irányítod, az asztali alkalmazás nincs ebben a verzióban.",
   },
   dl_back: { it: "← Indietro", en: "← Back", hu: "← Vissza" },
   dl_title_1: {
@@ -231,10 +231,15 @@ const translations = {
     en: "Not in this version",
     hu: "Nem ebben a verzióban",
   },
+  dl_windows_cli_preview: {
+    it: "Windows: anteprima nella 0.4.0, solo CLI (installer PowerShell, Podman in WSL), provato su Windows 10, non su Windows 11. I passi sono nel Quickstart del repository.",
+    en: "Windows: a preview in 0.4.0, CLI only (PowerShell installer, Podman inside WSL), tested on Windows 10, not on Windows 11. The steps are in the Quickstart of the repository.",
+    hu: "Windows: előzetes változat a 0.4.0-ban, csak CLI (PowerShell-telepítő, Podman WSL-ben), Windows 10-en kipróbálva, Windows 11-en nem. A lépések a repository Quickstart leírásában vannak.",
+  },
   dl_help_text: {
-    it: "Hai scaricato l'app?",
-    en: "Downloaded the app?",
-    hu: "Letöltötted az appot?",
+    it: "Hai installato la CLI?",
+    en: "Installed the CLI?",
+    hu: "Telepítetted a CLI-t?",
   },
   dl_help_link: {
     it: "Segui la configurazione passo passo",

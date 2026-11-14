@@ -55,7 +55,7 @@ bash install.sh --dry-run
 bash install.sh
 ```
 
-On native Windows PowerShell (Windows is not supported in 0.4: these steps are untested and may not work.):
+On native Windows PowerShell (Windows is a preview in 0.4.0, CLI only: tested on Windows 10, not on Windows 11.):
 
 ```powershell
 $f = Join-Path $env:TEMP ("jht-install-{0}.ps1" -f [guid]::NewGuid().ToString('N'))

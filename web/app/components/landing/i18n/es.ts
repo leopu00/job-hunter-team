@@ -54,7 +54,7 @@ export const es: Record<string, string> = {
 
   // Download page
   dl_desc:
-    "Descarga la app de escritorio para configurar y seguir tu equipo. La CLI sigue disponible si prefieres la terminal.",
+    "Instala la CLI para configurar y seguir tu equipo: en la 0.4.0 el equipo se maneja desde la terminal, la app de escritorio no está en esta versión.",
   dl_back: "← Atrás",
   dl_title_1: "Configura tu equipo",
   dl_title_2: "en tu PC",
@@ -76,7 +76,9 @@ export const es: Record<string, string> = {
   dl_mac_apple_silicon_only:
     "Solo Mac con Apple silicon (M1 y posteriores). Los Mac con procesador Intel no son compatibles con la 0.4.",
   dl_windows_not_in_version: "No en esta versión",
-  dl_help_text: "¿Has descargado la app?",
+  dl_windows_cli_preview:
+    "Windows: vista previa en la 0.4.0, solo CLI (instalador de PowerShell, Podman dentro de WSL), probado en Windows 10, no en Windows 11. Los pasos están en el Quickstart del repositorio.",
+  dl_help_text: "¿Has instalado la CLI?",
   dl_help_link: "Sigue la configuración paso a paso",
 
   // Login page (LandingClient)

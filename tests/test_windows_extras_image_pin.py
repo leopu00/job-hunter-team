@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -123,5 +124,6 @@ def test_the_enabler_writes_the_file_first_the_integrity_second_and_drops_them_w
 def test_the_wrapper_checks_the_pin_with_the_rest_of_the_runtime_and_the_integration_helper_reads_the_digest():
     text = WRAPPER.read_text(encoding="utf-8")
     assert "if (-not (Test-RuntimeExtrasPin -PinPresent $pinPresent)) { return $false }" in text
-    assert "$ExtrasImageDigest = ''" in text  # the constant of the release stays what the release script rewrites
+    # the constant of the release stays what the release script rewrites: one line, empty or the digest of the extras image
+    assert len(re.findall(r"^\$ExtrasImageDigest = '(?:sha256:[0-9a-f]{64})?'\r?$", text, re.M)) == 1
     assert "Get-IntegrationExtrasRef" in INTEGRATION.read_text(encoding="utf-8")

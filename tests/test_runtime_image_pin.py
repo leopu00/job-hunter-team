@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from scripts import runtime_image_pin
+from runtime_pin_tree import schema1_pin, schema1_tree
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -226,7 +227,7 @@ def test_publish_requires_the_exact_serialized_release_claim(
 def test_publish_creates_an_absent_tag_from_the_digest_then_reads_it_back(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    pin = _pin()
+    pin = schema1_pin()
     observed = iter((None, pin.digest))
     commands: list[list[str]] = []
     monkeypatch.setattr(runtime_image_pin, "verify_source_labels", lambda _pin: None)
@@ -289,17 +290,10 @@ NEW_REVISION = "c" * 40
 
 
 def _tree_copy(tmp_path: Path) -> Path:
-    """The files the pin contract names, copied at the same paths: a tree to update without touching the repo."""
-    tree = tmp_path / "tree"
-    for relative in (
-        *runtime_image_pin.PINNED_CONSUMERS,
-        *(digest for _, digest in runtime_image_pin.INSTALLER_DIGESTS),
-        runtime_image_pin.MANIFEST_PATH,
-        Path("package.json"),
-    ):
-        (tree / relative).parent.mkdir(parents=True, exist_ok=True)
-        (tree / relative).write_bytes((ROOT / relative).read_bytes())
-    return tree
+    """The files the pin contract names, copied at the same paths and at schema 1: a tree to update without touching the repo.
+
+    Schema 1 whatever the repository is at, so that these tests are about the update and not about the schema of the day."""
+    return schema1_tree(tmp_path)
 
 
 def test_the_contract_names_the_enabler_and_the_selftest_too() -> None:
@@ -313,7 +307,7 @@ def test_the_contract_names_the_enabler_and_the_selftest_too() -> None:
 
 def test_update_moves_the_manifest_and_every_consumer(tmp_path: Path) -> None:
     tree = _tree_copy(tmp_path)
-    old = _pin()
+    old = schema1_pin()
     before = {p: (tree / p).read_bytes() for p in runtime_image_pin.PINNED_CONSUMERS}
 
     done = runtime_image_pin.update_tree(tree, NEW_DIGEST, NEW_REVISION)
@@ -331,7 +325,7 @@ def test_update_moves_the_manifest_and_every_consumer(tmp_path: Path) -> None:
 
 def test_update_keeps_the_crlf_of_a_windows_checkout(tmp_path: Path) -> None:
     tree = _tree_copy(tmp_path)
-    old = _pin()
+    old = schema1_pin()
     target = tree / "scripts/enable-podman-windows-runtime.ps1"
     target.write_bytes(target.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
     runtime_image_pin.update_tree(tree, NEW_DIGEST, NEW_REVISION)
@@ -410,7 +404,7 @@ def test_a_pin_left_behind_after_the_update_is_red(tmp_path: Path) -> None:
     tree = _tree_copy(tmp_path)
     runtime_image_pin.update_tree(tree, NEW_DIGEST, NEW_REVISION)
     stale = tree / "scripts/enable-podman-windows-runtime.ps1"
-    stale.write_bytes(stale.read_bytes().replace(NEW_DIGEST.encode(), _pin().digest.encode()))
+    stale.write_bytes(stale.read_bytes().replace(NEW_DIGEST.encode(), schema1_pin().digest.encode()))
     with pytest.raises(runtime_image_pin.RuntimeImagePinError) as raised:
         runtime_image_pin.verify_tree(tree)
     assert raised.value.code == "consumer_digest_drift"
@@ -468,7 +462,7 @@ def test_update_refuses_what_the_manifest_would_refuse(
     with pytest.raises(runtime_image_pin.RuntimeImagePinError) as raised:
         runtime_image_pin.update_tree(tree, digest, revision, version)
     assert raised.value.code == code
-    assert runtime_image_pin.verify_tree(tree) == _pin()
+    assert runtime_image_pin.verify_tree(tree) == schema1_pin()
 
 
 def test_from_registry_takes_the_digest_of_master_and_the_commit_of_its_label(

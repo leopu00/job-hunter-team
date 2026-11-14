@@ -10,6 +10,10 @@ the public videos are not yet published.
 
 ### App desktop (`#game`)
 
+> **L'app desktop non è nella 0.4.0.** Questo tutorial descrive l'app delle
+> versioni che ce l'hanno; nella 0.4.0 il team si installa e si guida dalla CLI
+> `jht`: vedi il [Quickstart](QUICKSTART.md).
+
 Questo tutorial segue l'app desktop: prepara il team, mostra come il lavoro
 attraversa il team e come controllare un risultato prima di decidere cosa fare.
 
@@ -28,7 +32,7 @@ mentre lavora.
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
    è già selezionato: clicca una volta macOS (Windows è indicato «Non in questa versione»; per Linux non c'è l'app desktop in questa versione) per avviare il
    download della release corrente per quella piattaforma.
-2. **Apri il download per il tuo sistema.** Windows non fa parte della 0.4.0: non c'è un installer in questa release.
+2. **Apri il download per il tuo sistema.** Windows non ha l'app desktop: nella 0.4.0 è un'anteprima della CLI, provata su Windows 10, non su Windows 11.
    Su macOS apri `job-hunter-team-macos-universal.dmg` e trascina l'app in
    Applicazioni; è firmata con un Developer ID Apple e notarizzata da Apple. Solo Mac con Apple silicon (M1 e successivi). I Mac Intel non sono supportati nella 0.4. Il nome del file dice «universal», ma nella 0.4 contiene solo la build per Apple silicon.
    Per Linux in questa versione non c'è l'app desktop: usa l'installer da terminale (`install.sh`).
@@ -208,7 +212,7 @@ trabaja.
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
    ya está seleccionado: haz clic una vez en macOS (Windows aparece como «No en esta versión»; para Linux no hay app de escritorio en esta versión) para iniciar
    la descarga de la versión actual para esa plataforma.
-2. **Abre la descarga para tu sistema.** Windows no forma parte de la 0.4.0: esta versión no incluye instalador. En macOS abre `job-hunter-team-macos-universal.dmg` y arrastra la
+2. **Abre la descarga para tu sistema.** Windows no tiene app de escritorio: en la 0.4.0 es una vista previa de la CLI, probada en Windows 10, no en Windows 11. En macOS abre `job-hunter-team-macos-universal.dmg` y arrastra la
    aplicación a Aplicaciones; está firmada con un Developer ID de Apple y
    notarizada por Apple. Solo Mac con Apple silicon (M1 y posteriores). Los Mac con procesador Intel no son compatibles con la 0.4. El nombre del archivo dice «universal», pero en la 0.4 contiene solo la versión para Apple silicon.
    Para Linux no hay app de escritorio en esta versión: usa el instalador de terminal (`install.sh`).
@@ -395,7 +399,7 @@ ordinateur. Gardez l'application ouverte pendant qu'elle travaille.
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
    est déjà sélectionné : cliquez une fois sur macOS (Windows est indiqué « Pas dans cette version » ; pour Linux, il n'y a pas d'application de bureau dans cette version) pour
    lancer le téléchargement de la version actuelle pour cette plateforme.
-2. **Ouvrez le téléchargement pour votre système.** Windows ne fait pas partie de la 0.4.0 : cette version ne contient pas d'installeur. Sous macOS, ouvrez `job-hunter-team-macos-universal.dmg`
+2. **Ouvrez le téléchargement pour votre système.** Windows n'a pas d'application de bureau : dans la 0.4.0 c'est un aperçu de la CLI, testé sur Windows 10, pas sur Windows 11. Sous macOS, ouvrez `job-hunter-team-macos-universal.dmg`
    et faites glisser l'application dans Applications ; elle est signée avec un
    Developer ID Apple et notarisée par Apple. Uniquement les Mac avec Apple silicon (M1 et suivants). Les Mac Intel ne sont pas pris en charge dans la 0.4. Le nom du fichier dit « universal », mais dans la 0.4 il ne contient que la version pour Apple silicon.
    Pour Linux, il n'y a pas d'application de bureau dans cette version : utilisez l'installeur en terminal (`install.sh`).
@@ -589,7 +593,7 @@ geöffnet, während sie arbeitet.
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
    ist bereits ausgewählt: Klicke einmal auf macOS (Windows steht als „Nicht in dieser Version“ da; für Linux gibt es in dieser Version keine Desktop-App), um den
    Download der aktuellen Version für diese Plattform zu starten.
-2. **Öffne den Download für dein System.** Windows ist nicht Teil von 0.4.0: Dieses Release enthält keinen Installer. Öffne unter macOS `job-hunter-team-macos-universal.dmg` und ziehe
+2. **Öffne den Download für dein System.** Windows hat keine Desktop-App: In 0.4.0 ist es eine Vorschau der CLI, getestet auf Windows 10, nicht auf Windows 11. Öffne unter macOS `job-hunter-team-macos-universal.dmg` und ziehe
    die App in den Ordner Programme; sie ist mit einer Apple Developer ID
    signiert und von Apple notarisiert. Nur Macs mit Apple Silicon (M1 und neuer). Intel-Macs werden in 0.4 nicht unterstützt. Der Dateiname sagt „universal“, enthält in 0.4 aber nur die Version für Apple Silicon.
    Für Linux gibt es in dieser Version keine Desktop-App: nutze den Installer im Terminal (`install.sh`).
@@ -783,7 +787,7 @@ trabalha.
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
    já está selecionado: clica uma vez em macOS (o Windows aparece como «Não nesta versão»; para Linux não há app de ambiente de trabalho nesta versão) para iniciar
    a transferência da versão atual para essa plataforma.
-2. **Abre o download para o teu sistema.** O Windows não faz parte da 0.4.0: esta versão não inclui instalador. No macOS abre `job-hunter-team-macos-universal.dmg` e arrasta a
+2. **Abre o download para o teu sistema.** O Windows não tem app de ambiente de trabalho: na 0.4.0 é uma pré-visualização da CLI, testada no Windows 10, não no Windows 11. No macOS abre `job-hunter-team-macos-universal.dmg` e arrasta a
    aplicação para Aplicações; está assinada com um Developer ID da Apple e
    notarizada pela Apple. Apenas Macs com Apple silicon (M1 e posteriores). Os Macs com processador Intel não são suportados na 0.4. O nome do ficheiro diz «universal», mas na 0.4 contém apenas a versão para Apple silicon.
    Para Linux não há app de ambiente de trabalho nesta versão: usa o instalador de terminal (`install.sh`).
@@ -969,7 +973,7 @@ számítógépedtől függ. Hagyd nyitva az alkalmazást, amíg dolgozik.
 1. **Töltsd le a natív asztali alkalmazást.** Nyisd meg a
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download) oldalt. A
    **Desktop** már ki van jelölve: kattints egyszer a macOS lehetőségre (a Windows „Nem ebben a verzióban” jelzéssel szerepel; Linuxra ebben a verzióban nincs asztali app) az adott platform aktuális kiadásának letöltéséhez.
-2. **Nyisd meg a rendszeredhez való letöltést.** A Windows nem része a 0.4.0-nak: ebben a kiadásban nincs telepítő. macOS-en nyisd meg a `job-hunter-team-macos-universal.dmg`
+2. **Nyisd meg a rendszeredhez való letöltést.** A Windowshoz nincs asztali alkalmazás: a 0.4.0-ban a CLI előzetes változata, Windows 10-en kipróbálva, Windows 11-en nem. macOS-en nyisd meg a `job-hunter-team-macos-universal.dmg`
    fájlt, és húzd az alkalmazást az Alkalmazások mappába; Apple Developer
    ID-val van aláírva, és az Apple hitelesítette. Csak Apple silicon-os Mac-ekhez (M1 és újabb). Az Intel-es Mac-ek a 0.4-ben nem támogatottak. A fájlnév „universal”, de a 0.4-ben csak az Apple silicon-os verziót tartalmazza.
    Linuxra ebben a verzióban nincs asztali app: használd a terminálos telepítőt (`install.sh`).
