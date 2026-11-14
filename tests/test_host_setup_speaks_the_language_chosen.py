@@ -122,9 +122,12 @@ SCREEN = (
 @pytest.mark.parametrize("lang", LANGUAGES)
 def test_the_preflight_screen_is_in_the_language_chosen(tmp_path, lang):
     out = _run_in_a_terminal(tmp_path, lang)
-    catalog = catalog(lang)
+    # what comes before the choice is in all the languages at once; from the line that says the choice on, only in that one
+    assert "Language / Lingua" in out, out
+    out = out.split("Language / Lingua", 1)[1]
+    said = catalog(lang)
     english = catalog("en")
     for key in SCREEN:
-        assert catalog[key] in out, (lang, key, out)
-        if lang != "en" and english[key] != catalog[key]:
+        assert said[key] in out, (lang, key, out)
+        if lang != "en" and english[key] != said[key]:
             assert english[key] not in out, (lang, key, out)
