@@ -21,6 +21,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from wrapper_texts import say_functions
+
 ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
 DIGEST = "ab" * 32
@@ -94,6 +96,7 @@ def script(command: str) -> str:
         'read_only_service_id() { [ "$1" = jht-broker ] && echo broker-id; }\n'
         "compose_unreadable() { return 1; }\ncompose_lacks_service() { return 1; }\n"
         + functions("broker_admin", "apply_skill", "apply_host_command")
+        + "\n" + say_functions("it")
         + "\n" + command + "\n"
     )
 

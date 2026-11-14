@@ -192,7 +192,7 @@ COMPOSE_FILE="{compose_file}"
 err()  {{ echo "error: $*" >&2; }}
 warn() {{ echo "warn: $*" >&2; }}
 info() {{ echo "info: $*" >&2; }}
-jht_say() {{ echo "<$1>"; }}
+jht_say() {{ local key="$1"; shift; echo "<$key>${{*:+ $*}}"; }}
 runtime_bundle_trusted() {{ return 0; }}
 docker_reachable() {{ return 0; }}
 compose_project_name() {{ echo jht; }}
@@ -262,7 +262,7 @@ def test_down_still_refuses_a_container_that_is_not_ours(wrapper, label):
     kwargs = {"working_dir": "/elsewhere"} if label == "working_dir" else {"running_hash": "not-a-hash"}
     done = wrapper.run("container_down; echo rc=$?", **kwargs)
     assert "rc=1" in done.stdout and wrapper.downs() == []
-    assert "arresto negato" in done.stderr
+    assert "<line.unattestable.stop>" in done.stderr
 
 
 def test_up_still_refuses_it_and_says_down_then_up(wrapper):
@@ -318,13 +318,13 @@ def test_any_other_down_error_passes_as_it_is_with_its_exit(wrapper):
 def test_down_with_no_container_exits_zero_and_says_there_is_nothing_to_stop(wrapper, kind):
     done = wrapper.run("container_down; echo rc=$?", no_container=True, runtime_kind=kind)
     assert "rc=0" in done.stdout, done.stderr
-    assert "niente da fermare" in done.stderr
-    assert wrapper.downs() == [] and "arresto negato" not in done.stderr
+    assert "<line.niente_da_fermare_nessun_container>" in done.stderr
+    assert wrapper.downs() == [] and "<line.unattestable.stop>" not in done.stderr
 
 
 def test_down_that_cannot_ask_the_provider_is_still_a_refusal_not_a_nothing_to_stop(wrapper):
     done = wrapper.run("container_down; echo rc=$?", ps_fails=True)
-    assert "rc=1" in done.stdout and "arresto negato" in done.stderr and "niente da fermare" not in done.stderr
+    assert "rc=1" in done.stdout and "<line.unattestable.stop>" in done.stderr and "<line.niente_da_fermare_nessun_container>" not in done.stderr
 
 
 def test_a_chain_that_starts_with_down_goes_on_when_there_is_no_container(wrapper):
@@ -344,13 +344,13 @@ def test_down_with_the_agent_gone_but_the_broker_running_still_runs_compose_down
     done = wrapper.run("container_down; echo rc=$?", only_broker=True, runtime_kind=kind)
     assert "rc=0" in done.stdout, done.stderr
     assert wrapper.downs() == ["down"]
-    assert "niente da fermare" not in done.stderr and "altri servizi del progetto girano" in done.stderr
+    assert "<line.niente_da_fermare_nessun_container>" not in done.stderr and "<line.il_container_s_non_c>" in done.stderr
 
 
 def test_down_refuses_when_it_cannot_ask_for_the_whole_project(wrapper):
     done = wrapper.run("container_down; echo rc=$?", no_container=True, second_ps_fails=True)
     assert "rc=1" in done.stdout and wrapper.downs() == []
-    assert "arresto negato" in done.stderr and "niente da fermare" not in done.stderr
+    assert "<line.unattestable.stop>" in done.stderr and "<line.niente_da_fermare_nessun_container>" not in done.stderr
 
 
 def test_the_uninstall_chain_stops_when_down_refuses_so_the_compose_file_stays(wrapper):
@@ -374,15 +374,15 @@ def test_down_does_not_touch_a_service_left_that_does_not_attest(wrapper, kind):
     assert "rc=1" in done.stdout and wrapper.downs() == []
     # podman names the service that does not attest; docker's `ps -q <service>` lists nothing for a service the compose
     # does not have, so what is left there is said as containers that are neither the team nor its attested services
-    assert ("non e' attestabile" in done.stderr and "jht-broker" in done.stderr) if kind == "podman" \
-        else "non sono ne' il team ne' i suoi servizi attestati" in done.stderr
-    assert "li fermo" not in done.stderr
+    assert "<line.il_servizio_s_del_progetto> jht-broker" in done.stderr if kind == "podman" \
+        else "<line.il_progetto_ha_container_che>" in done.stderr
+    assert "<line.il_container_s_non_c>" not in done.stderr
 
 
 def test_down_refuses_a_container_of_a_service_the_compose_does_not_have(wrapper):
     done = wrapper.run("container_down; echo rc=$?", only_broker=True, runtime_kind="podman", broker_service="mailer")
     assert "rc=1" in done.stdout and wrapper.downs() == []
-    assert "li fermo" not in done.stderr
+    assert "<line.il_container_s_non_c>" not in done.stderr
 
 
 def test_the_uninstall_chain_stops_when_a_service_left_does_not_attest(wrapper):

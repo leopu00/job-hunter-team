@@ -13,6 +13,8 @@ import subprocess
 import pytest
 from pathlib import Path
 
+from wrapper_texts import LANGUAGES, catalog
+
 
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLER = ROOT / "scripts" / "install.sh"
@@ -152,10 +154,18 @@ def test_macos_podman_setup_reports_another_running_machine_without_stopping_it(
     for source in (installer, wrapper):
         assert "only one VM can be active at a time" in source
         assert "podman_other_machine_running" in source
-        assert "podman machine list" in source
-        assert "podman machine stop $running" in source or "podman machine stop ${running:-<nome>}" in source
         assert "JHT_OTHER_MACHINE %s" in source
         assert "exit 79" in source or "return 79" in source
+    assert "podman machine list" in installer
+    assert "podman machine stop ${running:-<nome>}" in installer
+    # the wrapper's sentences are in shared/locales: the machine found is named twice, the second time in the command
+    assert 'jht_say line.podman_other_machine_running.named "$running" "$running"' in wrapper
+    assert "jht_say line.podman_other_machine_running.unnamed" in wrapper
+    for lang in LANGUAGES:
+        texts = catalog(lang)
+        assert "'podman machine stop %s'" in texts["wrapper.line.podman_other_machine_running.named"], lang
+        unnamed = texts["wrapper.line.podman_other_machine_running.unnamed"]
+        assert "'podman machine list'" in unnamed and "'podman machine stop <" in unnamed, lang
     installer_conflict = installer[
         installer.index("running_podman_machine()") : installer.index(
             "install_container_runtime()"
@@ -451,7 +461,10 @@ def test_a_podman_out_of_the_series_is_refused_with_the_version_found_and_what_t
     assert "podman_version_unsupported: JHT on a Mac needs Podman $PODMAN_MAC_SERIES.$PODMAN_MAC_MIN_PATCH or a later" in source
     assert "this Mac has ${podman_version:-" in source and "nothing of JHT was installed" in source
     wrapper = _source(WRAPPER)
-    assert "sul Mac servono podman $PODMAN_MAC_SERIES.$PODMAN_MAC_MIN_PATCH" in wrapper and "(trovato: $(podman_version_number" in wrapper
+    assert ('jht_say line.versione_non_supportata_sul_mac "$PODMAN_MAC_SERIES" "$PODMAN_MAC_MIN_PATCH" "$PODMAN_MAC_SERIES" '
+            '"$(podman_version_number "$podman_bin"') in wrapper
+    assert "sul Mac servono podman %s.%s o un %s.x successivo (non 6.2 o oltre; trovato: %s)" in catalog("it")["wrapper.line.versione_non_supportata_sul_mac"]
+    assert "on the Mac podman %s.%s or a later %s.x is needed (not 6.2 or later; found: %s)" in catalog("en")["wrapper.line.versione_non_supportata_sul_mac"]
 
 
 @pytest.mark.parametrize("lang,words", [("it_IT.UTF-8", "su questo Mac non c'e'"), ("en_US.UTF-8", "which is not on this Mac")])

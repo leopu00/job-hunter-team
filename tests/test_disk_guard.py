@@ -32,6 +32,8 @@ from pathlib import Path
 
 import pytest
 
+from wrapper_texts import say_functions  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[1]
 VITALS = ROOT / "shared" / "skills" / "host_vitals.py"
 LAUNCHER = ROOT / ".launcher" / "start-agent.sh"
@@ -769,7 +771,8 @@ def run_wrapper_functions(tmp_path, snippet, pct_by_path, env_extra=None, defaul
     script = (
         wrapper_disk_constants()
         + "\n".join(wrapper_function(n) for n in DISK_FUNCTIONS)
-        + "\n" + snippet
+        + "\n" + say_functions("it")  # the sentences are jht_say <key>; these tests read the Italian
+        + snippet
     )
     env = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}", "HOME": str(tmp_path / "h"),
            **(env_extra or {})}
@@ -883,6 +886,7 @@ def run_upgrade(tmp_path, pct, args="--json", engine_pct=50):
         + "UPGRADE_JSON=0\nUPGRADE_STAGE=\nUPGRADE_LOCK=\nUPGRADE_JOURNAL=\nUPGRADE_ROLLBACK_DIR=\nUPGRADE_PRUNE_JSON=\n"
         + UPGRADE_STUBS
         + "\n".join(wrapper_function(n) for n in DISK_FUNCTIONS + ("upgrade_safe_field", "upgrade_result", "handle_runtime_upgrade"))
+        + "\n" + say_functions("it")
         + f'\nset +e\nhandle_runtime_upgrade {args}\necho "rc=$?"\n'
     )
     env = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}", "HOME": str(home),

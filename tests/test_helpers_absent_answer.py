@@ -76,7 +76,8 @@ def test_integration_status_of_one_id_and_of_all(host, flag):
 ])
 def test_everything_else_keeps_the_old_path_and_its_error(host, args):
     done = host.run(*args)
-    assert done.returncode == 1 and "non ancora installato" in done.stderr and "jht upgrade" in done.stderr, (done.stdout, done.stderr)
+    # English: the language of a person who chose nothing
+    assert done.returncode == 1 and "is not installed yet" in done.stderr and "jht upgrade" in done.stderr, (done.stdout, done.stderr)
     assert done.stdout == ""
 
 

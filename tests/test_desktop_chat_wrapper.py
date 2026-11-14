@@ -655,7 +655,7 @@ def test_desktop_chat_fails_closed_when_private_podman_is_not_ready(tmp_path: Pa
     )
 
     assert result.returncode != 0
-    assert "runtime o container JHT non disponibile" in result.stderr
+    assert "JHT runtime or container not available" in result.stderr  # English: the language of a person who chose nothing
     calls = log.read_text(encoding="utf-8")
     assert calls.strip() == "docker info"
     assert "machine" not in calls and "compose" not in calls and "inspect" not in calls
@@ -992,7 +992,7 @@ def test_podman_machine_marker_must_be_present_and_valid_before_any_runtime_io(
     )
 
     assert result.returncode != 0
-    assert "runtime host non attendibile" in result.stderr
+    assert "the host runtime cannot be trusted" in result.stderr  # English: the language of a person who chose nothing
     assert not log.exists()
 
 
