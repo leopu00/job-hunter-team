@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CopyButton } from "../components/CopyButton";
 import {
@@ -352,7 +353,6 @@ function DownloadContent() {
               >
                 {t("dl_windows_cli_preview")}
               </p>
-
             </div>
           )}
 
@@ -390,6 +390,20 @@ function DownloadContent() {
             </div>
           )}
 
+          {/* Dopo l'installazione il passo successivo e' la guida alla configurazione: il rimando stava solo nella sezione dell'app desktop,
+              che la 0.4.0 non ha piu', e con essa e' sparito dalla pagina. Vale per il terminale e per il prompt. */}
+          <div className="mb-8 border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3 text-center">
+            <span className="text-[12px] text-[var(--color-muted)]">
+              {t("dl_help_text")}{" "}
+            </span>
+            <Link
+              href="/setup-guide"
+              className="text-[12px] font-semibold text-[var(--color-green)] no-underline"
+            >
+              {t("dl_help_link")} →
+            </Link>
+          </div>
+
           {/* Requisiti minimi (spostati da /run) */}
           <section className="mt-4 mb-8">
             <h2 className="text-lg md:text-xl font-bold text-[var(--color-white)] tracking-tight mb-5">
@@ -424,7 +438,9 @@ function DownloadContent() {
 }
 
 // The attribution of the visit stays in the page's props for the download route; 0.4.0 has no file to download here.
-export default function DownloadClient(_props: { attribution: DownloadAttribution }) {
+export default function DownloadClient(_props: {
+  attribution: DownloadAttribution;
+}) {
   return (
     <LandingI18nProvider>
       <DownloadContent />
