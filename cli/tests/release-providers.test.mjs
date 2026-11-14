@@ -11,12 +11,12 @@ import { WIZARD_PROVIDERS } from '../wizard/setup.js';
 
 const cli = fileURLToPath(new URL('..', import.meta.url));
 
-test('this release offers GLM only, on Pi; the wizard offers exactly the list', () => {
-  assert.deepEqual([...RELEASE_PROVIDERS], ['glm']);
+test('this release offers GLM and Kimi, on Pi; the wizard offers exactly the list', () => {
+  assert.deepEqual([...RELEASE_PROVIDERS], ['glm', 'kimi']);
   assert.equal(RELEASE_HARNESS, 'pi');
   assert.deepEqual(WIZARD_PROVIDERS.map((p) => p.value), [...RELEASE_PROVIDERS]);
-  for (const name of ['openai', 'codex', 'claude', 'anthropic', 'kimi', 'moonshot', '', null, 'gemini']) assert.equal(offeredInRelease(name), false, String(name));
-  assert.equal(offeredInRelease(' GLM '), true);
+  for (const name of ['openai', 'codex', 'claude', 'anthropic', '', null, 'gemini']) assert.equal(offeredInRelease(name), false, String(name));
+  for (const name of [' GLM ', 'kimi', 'Moonshot']) assert.equal(offeredInRelease(name), true, name);
 });
 
 test('jht doctor calls a team on a service this release does not offer not supported, says what to do, and does not touch it', () => {
@@ -28,7 +28,7 @@ test('jht doctor calls a team on a service this release does not offer not suppo
   const env = { PATH: `${dirname(process.execPath)}:/usr/bin:/bin`, HOME: root, JHT_HOME: home, LANG: 'en_US.UTF-8', NO_COLOR: '1', JHT_LANG: 'en' };
   const done = spawnSync(process.execPath, [join(cli, 'bin/jht.js'), 'doctor', '--all'], { env, encoding: 'utf8', timeout: 60_000 });
   const said = (done.stdout + done.stderr).replace(/\s+/g, ' ');
-  assert.match(said, /Provider openai is not supported in this release \(offered: glm, on Pi with an API key\)/, said);
+  assert.match(said, /Provider openai is not supported in this release \(offered: glm, kimi, on Pi with an API key\)/, said);
   assert.match(said, /jht setup \(choose glm and paste its API key/, said);
 });
 

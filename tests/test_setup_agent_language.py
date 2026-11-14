@@ -40,6 +40,17 @@ def _until(fd, screen, text):
     assert text.encode() in screen, screen.decode("utf-8", "replace")
 
 
+def _catalog(lang):
+    """The flat texts of shared/locales/<lang>.json (the host preflight says them)."""
+    def flat(tree, prefix=""):
+        for key, value in tree.items():
+            if isinstance(value, dict):
+                yield from flat(value, f"{prefix}{key}.")
+            else:
+                yield f"{prefix}{key}", value
+    return dict(flat(json.loads((ROOT / "shared" / "locales" / f"{lang}.json").read_text(encoding="utf-8"))))
+
+
 def choose_language(home, choice=2):
     import fcntl
     import pty
@@ -60,9 +71,10 @@ def choose_language(home, choice=2):
     try:
         _until(master, screen, "Choice / Scelta / Választás / Elección / Auswahl / Choix / Escolha")
         os.write(master, f"{choice}\n".encode())
-        _until(master, screen, "Dove fai girare JHT?" if str(choice) == "2" else "Where are you running JHT?")  # in the language just chosen (Italian or English)
+        said = _catalog(("en", "it", "hu", "es", "de", "fr", "pt")[int(choice) - 1])
+        _until(master, screen, said["host_setup.where_running"])  # in the language just chosen
         os.write(master, b"1\n")
-        _until(master, screen, "Fuso orario [" if str(choice) == "2" else "Timezone [")
+        _until(master, screen, said["host_setup.timezone_label"] + " [")
         os.write(master, b"\n")
         deadline = time.monotonic() + 10
         while proc.poll() is None and time.monotonic() < deadline:
