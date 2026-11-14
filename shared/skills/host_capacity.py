@@ -33,9 +33,10 @@ from pathlib import Path
 
 GIB = 1024 ** 3
 # pi: sampled on four runs of a full team on GLM (5 Scout / 3 Analista / 2 Scorer plus the fixed agents, 13-14 sessions,
-# 8 cores / 15.2 GiB): the largest pi process was 0.22-0.25 GiB resident, and the whole team added at most 1.8 GiB to the
-# 0.9 GiB the machine used before it started (0.13 GiB per session on average). 0.22 sits between the average and the
-# largest session, so a team where every session grows to the largest one still fits once the swap is counted.
+# 8 cores / 15.2 GiB): the largest pi process was 0.18 GiB resident (median about 0.165), and the whole team added at most
+# 1.8 GiB to the 0.9 GiB the machine used before it started: about 0.14 GiB per session, everything included. The figure
+# here is higher, 0.22, because the headless browser a Scout opens now and then is the largest process on the machine
+# (0.22-0.25 GiB) and a session has to make room for it.
 RAM_GIB_PER_AGENT = {"codex": 0.22, "claude": 0.6, "kimi": 0.6, "pi": 0.22}
 MEASURED = frozenset({"codex", "pi"})
 UNKNOWN_HARNESS_GIB = 0.6
@@ -43,7 +44,9 @@ UNKNOWN_HARNESS_GIB = 0.6
 # the person who works on it. A server without a screen: the system and the runtime only, measured at 0.9 GiB before the
 # team started on the four runs above.
 RAM_RESERVED_GIB = {"local": 2.0, "vps": 1.0}
-SWAP_WEIGHT = 0.5              # a GiB of swap counts as half a GiB of RAM
+# A GiB of swap counts as half a GiB of RAM. A choice, not a measure: the runs above did not sample the swap. Sessions
+# that wait on the network most of the time are what can live partly in swap without slowing the team.
+SWAP_WEIGHT = 0.5
 FIXED_AGENTS = 5               # Capitano, Sentinella, Assistente, Mentor, Dottore are already running
 # Workers per core. codex: set from one measured run. pi: the same four runs peaked at a load of 2.6 on 8 cores with the
 # full team: a pi session waits on the model's answer most of the time, so 5 per core still leaves the cores half idle.
