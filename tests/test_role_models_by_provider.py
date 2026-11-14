@@ -39,7 +39,10 @@ LIGHT_ROLES_OF_GLM = {"scout", "analista", "sentinella"}
 CLASS_OF = {"capitano": "sol", "scout": "terra", "analista": "terra", "scorer": "terra", "scrittore": "sol", "critico": "sol",
             "sentinella": "terra", "assistente": "terra", "mentor": "sol", "closer": "terra"}
 CODEX_MODEL = {"sol": "gpt-5.6-sol", "terra": "gpt-5.6-terra", "luna": "gpt-5.6-luna"}
-KIMI_MODEL = {"sol": "kimi-k3.1-pro", "terra": "kimi-k3.1-pro", "luna": "kimi-k2.7-code"}
+# the Kimi account lists only kimi-k3, kimi-k3.1-pro and kimi-k3.1-pro-highspeed: K3.1 Pro for every class
+KIMI_MODEL = {"sol": "kimi-k3.1-pro", "terra": "kimi-k3.1-pro", "luna": "kimi-k3.1-pro"}
+# the providers whose table gives the three light roles the light class (the same rule as GLM)
+LIGHT_ROLE_PROVIDERS = {"glm", "kimi"}
 GLM_STRONG, GLM_FLASH = "glm-5.3", "glm-5.3-flash"
 
 
@@ -67,9 +70,9 @@ def test_the_class_of_each_role_is_the_one_written_down_here():
     assert rows == CLASS_OF, "a role changed class: say so in this table, with the reason"
 
 
-def test_only_glm_has_rows_for_a_role_and_only_for_the_three_light_roles():
+def test_the_rows_for_a_role_are_the_three_light_roles_of_the_same_providers():
     rows = [line.split("|") for line in PROVIDER_LIST.read_text(encoding="utf-8").splitlines() if line.startswith("rolemodel|")]
-    assert {(row[1], row[2]) for row in rows} == {("glm", role) for role in LIGHT_ROLES_OF_GLM}, rows
+    assert {(row[1], row[2]) for row in rows} == {(p, role) for p in LIGHT_ROLE_PROVIDERS for role in LIGHT_ROLES_OF_GLM}, rows
     assert all(row[3] == "luna" for row in rows), "the light class"
 
 
@@ -102,11 +105,12 @@ def test_the_pin_of_one_role_does_not_move_the_others(tmp_path):
     assert pi_model(tmp_path, "glm", "scorer") == GLM_STRONG
 
 
-# ── Kimi, OpenAI, Claude: unchanged ──────────────────────────────────────────────────────────────────────────────
+# ── Kimi: the light roles on luna like GLM (luna is K3.1 Pro too); OpenAI, Claude: unchanged ─────────────────────
 
 @pytest.mark.parametrize("role", ROLES)
-def test_kimi_is_unchanged_for_every_role(tmp_path, role):
-    assert pi_model(tmp_path, "kimi", role) == KIMI_MODEL[CLASS_OF[role]]
+def test_kimi_gives_every_role_its_class_and_the_light_roles_luna(tmp_path, role):
+    expected = "luna" if role in LIGHT_ROLES_OF_GLM else CLASS_OF[role]
+    assert pi_model(tmp_path, "kimi", role) == KIMI_MODEL[expected]
 
 
 @pytest.mark.parametrize("role", ["scout", "analista", "sentinella", "scorer"])
@@ -129,9 +133,9 @@ def test_claude_aliases_are_unchanged_for_every_role(role):
 
 
 @pytest.mark.parametrize("provider", ["kimi", "moonshot"])
-def test_the_light_roles_rule_is_for_glm_alone(provider):
-    """jht_provider_model with a role asks the table for a row of THAT provider: no row, the class of the role.
-    (OpenAI and Claude never go through it: their tables are pinned by the two tests above.)"""
+def test_the_light_roles_rule_of_kimi_is_its_own_rows(provider):
+    """jht_provider_model with a role asks the table for a row of THAT provider (moonshot is kimi)."""
     name = bash_value(f'jht_pi_api_provider "{provider}"')
     for role in ROLES:
-        assert bash_value(f'jht_provider_model "{name}" "{CLASS_OF[role]}" "{role}"') == KIMI_MODEL[CLASS_OF[role]]
+        expected = "luna" if role in LIGHT_ROLES_OF_GLM else CLASS_OF[role]
+        assert bash_value(f'jht_provider_model "{name}" "{CLASS_OF[role]}" "{role}"') == KIMI_MODEL[expected]
