@@ -809,6 +809,11 @@ if ($InstallDependencies) {
   $machineWarning = if ($env:JHT_MACHINE_OUTPUT -eq '1') { $true } elseif ($env:JHT_MACHINE_OUTPUT -eq '0') { $false } else { [Console]::IsOutputRedirected }
   if ($fit -eq 'newer' -and $machineWarning) {
     [Console]::Out.WriteLine("JHT_WARNING podman_version_newer: Podman $installedVersion is installed on this computer; JHT installs $PodmanCliVersion and uses this one as it is.")
+  } elseif ($fit -eq 'newer') {
+    $newerEn = "Podman $installedVersion is installed on this computer: Job Hunter Team installs $PodmanCliVersion, and uses this newer one as it is."
+    $newerIt = "Su questo computer c'e' Podman ${installedVersion}: Job Hunter Team installa $PodmanCliVersion e usa questo, piu' nuovo, cosi' com'e'."
+    $newerLine = if (Get-Command Get-JhtBridgeText -ErrorAction SilentlyContinue) { Get-JhtBridgeText $newerEn $newerIt } else { $newerEn }
+    Write-Host "  ! $newerLine" -ForegroundColor Yellow
   }
 }
 $Podman = Find-Podman

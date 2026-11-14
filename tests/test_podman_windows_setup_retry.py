@@ -617,7 +617,7 @@ def test_a_podman_of_another_version(tmp_path, before, after, expected_exit, exp
         assert calls.read_text().startswith("install --exact --source winget --version 6.0.2 --silent")
 
 
-# The warning is a marker for the app: a person at a terminal (JHT_MACHINE_OUTPUT=0, or a console) does not get it.
+# The warning marker is for the app: a person at a terminal (JHT_MACHINE_OUTPUT=0, or a console) gets a sentence instead.
 @needs_powershell
 @pytest.mark.parametrize(("machine", "shown"), [("1", True), ("0", False)])
 def test_the_newer_podman_warning_is_only_for_the_app(tmp_path, machine, shown):
@@ -635,6 +635,8 @@ def test_the_newer_podman_warning_is_only_for_the_app(tmp_path, machine, shown):
     )
     assert done.returncode == 0, done.stdout + done.stderr
     assert ("JHT_WARNING podman_version_newer" in done.stdout) == shown, done.stdout
+    # A person still reads it, in a sentence of their own.
+    assert ("Podman 6.1.4 is installed on this computer: Job Hunter Team installs 6.0.2" in done.stdout) != shown, done.stdout
 
 def _run_block(tmp_path, winget_body, extra=""):
     _install_block_is_isolated()
