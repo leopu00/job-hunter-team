@@ -127,7 +127,7 @@ def test_the_config_changed_warnings_follow_the_language_of_the_person():
     source = WRAPPER_SH.read_text(encoding="utf-8")
     for key in ("config.changed_stopped", "config.changed_start", "config.changed_down", "config.changed_other"):
         assert source.count(f"    {key}) printf '%s'") == 2, key  # English and Italian
-        assert f'"$(jht_say {key})"' in source, key
+        assert f'"$(jht_say_sentence {key})"' in source, key  # the code in front is the app's (jht_code_for_app)
     # no sentence of this family is left written in one language only
     assert not re.search(r'(warn|err) "config_changed_(while_running|stopped):', source)
 

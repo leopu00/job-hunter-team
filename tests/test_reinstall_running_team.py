@@ -135,7 +135,7 @@ def test_on_the_mac_the_check_runs_before_the_image_is_downloaded():
 FUNCTIONS = (
     "read_only_service_id", "read_only_service_id_attest", "attest_cache_lookup", "attest_cache_store", "attest_cache_key",
     "attest_cache_parse", "attest_cache_clear", "attest_cache_path", "attest_cache_folder_ok", "attest_cache_text_digest",
-    "attest_cache_binary_identity", "attest_inspect_format", "attest_cache_ttl", "read_only_container_id", "container_up", "container_mutation_preflight", "stale_config_hint", "err_unattestable", "docker_compose_plugin_missing",
+    "attest_cache_binary_identity", "attest_inspect_format", "attest_cache_ttl", "read_only_container_id", "container_up", "container_mutation_preflight", "jht_say_sentence", "jht_code_for_app", "stale_config_hint", "err_unattestable", "docker_compose_plugin_missing",
     "container_down", "rootless_netns_noise_filter", "compose_noise_filter", "jht_compose_verbose_requested", "compose_stdout_quiet", "compose_quiet",
 )
 
@@ -495,10 +495,11 @@ def test_at_a_terminal_only_the_sentence_is_said(tmp_path, lang):
     # giro Mac 11: the marker came out raw before the sentence; it is the app's (JHT_MACHINE_OUTPUT=1, or a pipe), as JHT_PHASE
     done = install(tmp_path, "jht\\n", env={"LANG": lang, "JHT_MACHINE_OUTPUT": "0"})
     assert done.returncode == 84
-    assert "JHT_ERROR" not in done.stderr + done.stdout
+    assert "JHT_ERROR" not in done.stderr + done.stdout and "team_running" not in done.stderr  # giro Mac 12: no code in front either
     assert "jht down" in done.stderr and "jht up" in done.stderr
     asked = install(tmp_path, "jht\\n", env={"LANG": lang, "JHT_MACHINE_OUTPUT": "1"})
     assert asked.returncode == 84 and asked.stderr.splitlines()[0] == "JHT_ERROR team_running"
+    assert "team_running: " in asked.stderr.splitlines()[1]
 
 
 @pytest.mark.parametrize("machine_output,marker", [("0", False), ("1", True), (None, True)])
@@ -510,7 +511,7 @@ def test_every_refusal_of_podman_keeps_its_exit_and_its_marker_only_for_the_app(
     done = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True, timeout=30)
     assert done.returncode == 89
     assert ("JHT_ERROR podman_sudo_required\n" in done.stderr) is marker
-    assert "podman_sudo_required: the sentence" in done.stderr
+    assert ("podman_sudo_required: the sentence" in done.stderr) is marker and "the sentence" in done.stderr
 
 
 def test_no_marker_is_printed_raw_anywhere_in_the_installer():

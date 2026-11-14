@@ -75,3 +75,11 @@ def test_the_wrapper_keeps_the_marker_for_the_app_only_too():
     text = (INSTALLER.parent / "jht-wrapper.sh").read_text(encoding="utf-8")
     assert text.count("printf 'JHT_OTHER_MACHINE %s\\n'") == 1
     assert "if jht_machine_output; then printf 'JHT_OTHER_MACHINE %s\\n' \"$running\"; fi" in text
+
+
+@pytest.mark.parametrize("machine_output,code", [("0", False), ("1", True)])
+def test_the_code_in_front_of_the_line_is_for_the_app_only(tmp_path: Path, machine_output: str, code: bool):
+    # giro Mac 12: «✗ podman_other_machine_running: un'altra macchina…» at a terminal; the sentence alone is for the person
+    result = _conflict(tmp_path, "personal-work true\\n", "it_IT.UTF-8", JHT_MACHINE_OUTPUT=machine_output)
+    assert ("podman_other_machine_running" in result.stderr) is code
+    assert "un'altra macchina Podman, personal-work, e' accesa" in result.stderr

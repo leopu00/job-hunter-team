@@ -189,6 +189,13 @@ case "$*" in
       printf '%s\n' "${JHT_TEST_PS_IDS-aaaaaaaaaaaa}"
     fi ;;
   *" down")
+    if [ -n "${JHT_TEST_DOWN_NOISE:-}" ]; then
+      # what podman-compose 1.6.0 said on this down (giro Mac 12): the services never created, the bare names, the id, the network
+      printf '%s\n' 'Error: no container with name or ID "jht-broker" found: no such container' \
+        "Error: no container with ID or name 'jht-media' found: no such container" >&2
+      printf '%s\n' jht jht "$(printf '%064d' 0 | tr 0 c)" jht_default
+      [ "$JHT_TEST_DOWN_NOISE" != real ] || printf '%s\n' 'Error: something real' >&2
+    fi
     [ -z "${JHT_TEST_DOWN_DONE:-}" ] || : > "$JHT_TEST_DOWN_DONE" ;;
   *" up -d")
     [ -z "${JHT_TEST_EXITED_STATE:-}" ] || : > "$JHT_TEST_EXITED_STATE"
@@ -775,6 +782,30 @@ def test_up_recreates_the_stopped_containers_of_the_version_before_and_keeps_the
     assert down < up
     # containers and network only: no option of `down` can remove the volumes
     assert not any(" down " in line + " " and ("-v" in line.split() or "--volumes" in line.split()) for line in calls)
+
+
+@pytest.mark.parametrize("lang,said", [("it", "i container del team, fermi, sono della versione di prima"),
+                                       ("en", "the team's containers, stopped, are from the earlier version")])
+def test_up_after_an_update_says_only_the_sentences_at_a_terminal(tmp_path: Path, lang: str, said: str):
+    # giro Mac 12 (package 38): the first `jht up` after an update with the containers stopped printed 20 raw lines of podman before
+    # «avviato»; and the code in front of the warning is the app's
+    wrapper, env, _ = _stale_stopped(tmp_path)
+    env.update({"JHT_LANG": lang, "JHT_MACHINE_OUTPUT": "0", "JHT_TEST_DOWN_NOISE": "1"})
+    result = subprocess.run([str(wrapper), "up"], env=env, text=True, capture_output=True, timeout=20, check=False)
+    assert result.returncode == 0, result.stderr
+    said_all = result.stdout + result.stderr
+    assert said in said_all and "config_changed_stopped" not in said_all
+    assert "no container with" not in said_all and "jht_default" not in said_all and "c" * 64 not in said_all
+    assert not [line for line in said_all.splitlines() if line.strip() == "jht"]
+
+
+def test_up_after_an_update_keeps_a_real_line_of_the_down_and_the_code_for_the_app(tmp_path: Path):
+    wrapper, env, _ = _stale_stopped(tmp_path)
+    env.update({"JHT_MACHINE_OUTPUT": "1", "JHT_TEST_DOWN_NOISE": "real"})
+    result = subprocess.run([str(wrapper), "up"], env=env, text=True, capture_output=True, timeout=20, check=False)
+    assert result.returncode == 0, result.stderr
+    assert "config_changed_stopped: i container del team" in result.stderr
+    assert "Error: something real" in result.stderr and "no container with" not in result.stderr
 
 
 def test_up_does_not_recreate_when_another_container_of_the_project_runs(tmp_path: Path):
