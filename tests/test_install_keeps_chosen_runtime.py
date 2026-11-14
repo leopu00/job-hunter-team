@@ -233,7 +233,10 @@ def test_an_old_jht_without_uninstall_gets_the_uninstall_of_this_release(tmp_pat
     text = " ".join(result.stderr.split())
     assert result.returncode == 85 and words in text
     url = "https://raw.githubusercontent.com/leopu00/job-hunter-team/production/scripts/jht-wrapper.sh"
-    assert f"curl -fsSL {url} -o /tmp/jht-uninstall && bash /tmp/jht-uninstall uninstall --confirm && rm -f /tmp/jht-uninstall" in text
+    # a new private file (never a fixed name in the shared /tmp), the URL between single quotes
+    expected = 'f="$(mktemp)" && curl -fsSL ' + f"'{url}'" + ' -o "$f" && bash "$f" uninstall --confirm; rm -f "$f"'
+    assert expected in text
+    assert "/tmp/" not in text
     assert "«jht uninstall --confirm»" not in text
     # the order of the steps stays: the uninstall, the installer again, then the setup
     assert text.index("uninstall --confirm") < text.index("jht setup")
@@ -261,6 +264,38 @@ def test_the_test_channel_names_its_own_commit(tmp_path):
     result = keep(tmp_path, "docker", *args, env=_with_jht(tmp_path, OLD_WRAPPER))
     assert result.returncode == 85
     assert f"https://raw.githubusercontent.com/leopu00/job-hunter-team/{sha}/scripts/jht-wrapper.sh" in result.stderr
+
+
+@pytest.mark.parametrize("branch", ["x';touch pwned;'", "-o", "a b", "../../etc", "a$(id)"])
+def test_a_branch_that_could_break_the_pasted_command_falls_back_to_the_release_branch(tmp_path, branch):
+    env = {**_with_jht(tmp_path, OLD_WRAPPER), "JHT_BRANCH": branch}
+    result = keep(tmp_path, "docker", env=env)
+    assert result.returncode == 85
+    assert "'https://raw.githubusercontent.com/leopu00/job-hunter-team/production/scripts/jht-wrapper.sh'" in result.stderr
+    assert f"job-hunter-team/{branch}/" not in result.stderr
+
+
+def test_the_pasted_command_runs_as_printed_and_cleans_its_file(tmp_path):
+    # The text a person copies is a valid shell line: run it with curl and bash made up, and see the file go away.
+    result = keep(tmp_path, "docker", env=_with_jht(tmp_path, OLD_WRAPPER))
+    line = next(part.split("»")[0] for part in result.stderr.split("«") if "mktemp" in part)
+    fake = tmp_path / "fake"
+    fake.mkdir()
+    # the made-up curl writes, to the -o file, a script that records how it was run
+    curl = (
+        "#!/bin/bash\n"
+        'while [ $# -gt 0 ]; do\n'
+        '  if [ "$1" = -o ]; then printf \'echo ran "$@" > "%s/ran"\\n\' "$OUT" > "$2"; fi\n'
+        "  shift\n"
+        "done\n"
+    )
+    (fake / "curl").write_text(curl, encoding="utf-8")
+    (fake / "curl").chmod(0o755)
+    ran = subprocess.run(["bash", "-c", line], env={"PATH": f"{fake}:/usr/bin:/bin", "OUT": str(tmp_path), "TMPDIR": str(tmp_path)},
+                         capture_output=True, text=True, timeout=30)
+    assert ran.returncode == 0, ran.stderr
+    assert (tmp_path / "ran").read_text().strip() == "ran uninstall --confirm"
+    assert not [p for p in tmp_path.iterdir() if p.name.startswith("tmp.")]  # the mktemp file is gone
 
 
 def test_the_wrapper_of_this_release_is_the_one_that_has_uninstall():

@@ -549,18 +549,19 @@ keep_chosen_runtime() {
   lang="$(installer_person_lang)"
   # The jht of an install older than 09/10 (0.3.9 and before) has no `uninstall`: on it the command reaches the CLI inside the
   # container, which does not know it, and nothing is removed. Then the first step is the uninstall of this release's wrapper, from
-  # the place the installer downloads it from (the commit of the test channel, or the release branch), saved and run once. No network
-  # here: the refusal stays before any I/O.
+  # the place the installer downloads it from (the commit of the test channel, or the release branch), saved in a new private file
+  # (mktemp: never a fixed name in the shared /tmp, which another user could create first), run once and deleted. No network here:
+  # the refusal stays before any I/O.
   uninstall_it="«jht uninstall --confirm» (tiene quelle due cartelle)"
   uninstall_en="run «jht uninstall --confirm» (it keeps those two folders)"
   if installed_jht_lacks_uninstall; then
-    if [ "$TEST_CHANNEL" -eq 1 ]; then
-      wrapper_url="https://raw.githubusercontent.com/leopu00/job-hunter-team/$SOURCE_SHA/scripts/jht-wrapper.sh"
-    else
-      wrapper_url="https://raw.githubusercontent.com/leopu00/job-hunter-team/$BRANCH/scripts/jht-wrapper.sh"
-    fi
-    uninstall_it="il tuo comando jht e' di una versione che non sa disinstallarsi, quindi usa quello di questa versione: «curl -fsSL $wrapper_url -o /tmp/jht-uninstall && bash /tmp/jht-uninstall uninstall --confirm && rm -f /tmp/jht-uninstall» (toglie il JHT su Docker e il vecchio comando jht, tiene quelle due cartelle)"
-    uninstall_en="your jht command is from a version that cannot uninstall itself, so use the one of this version: «curl -fsSL $wrapper_url -o /tmp/jht-uninstall && bash /tmp/jht-uninstall uninstall --confirm && rm -f /tmp/jht-uninstall» (it removes the JHT on Docker and the old jht command, and keeps those two folders)"
+    local ref="$BRANCH"
+    [ "$TEST_CHANNEL" -eq 1 ] && ref="$SOURCE_SHA"
+    # Pasted by the person into a shell: only the characters of a branch or a commit, else the release branch.
+    case "$ref" in ''|-*|*[!A-Za-z0-9._/-]*|*..*) ref="production" ;; esac
+    wrapper_url="https://raw.githubusercontent.com/leopu00/job-hunter-team/$ref/scripts/jht-wrapper.sh"
+    uninstall_it="il tuo comando jht e' di una versione che non sa disinstallarsi, quindi usa quello di questa versione: «f=\"\$(mktemp)\" && curl -fsSL '$wrapper_url' -o \"\$f\" && bash \"\$f\" uninstall --confirm; rm -f \"\$f\"» (toglie il JHT su Docker e il vecchio comando jht, tiene quelle due cartelle)"
+    uninstall_en="your jht command is from a version that cannot uninstall itself, so use the one of this version: «f=\"\$(mktemp)\" && curl -fsSL '$wrapper_url' -o \"\$f\" && bash \"\$f\" uninstall --confirm; rm -f \"\$f\"» (it removes the JHT on Docker and the old jht command, and keeps those two folders)"
   fi
   # The Colima virtual machine stays on the disk, stopped, after the move (up to 100 GiB). Name only the profile JHT made: the one of
   # the marker of the installer that started it (1st line «colima», 2nd the profile); an install older than the marker started the
