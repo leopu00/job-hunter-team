@@ -129,6 +129,9 @@ function docker {
   }
   if ($args[0] -eq 'exec' -and $env:T_EXEC_FAIL -eq '1') { $global:LASTEXITCODE = 1; 'No matching distribution found for gspread' }
 }
+# the language the wrapper decided (its Get-JhtTextLanguage): these tests read the Italian sentences, T_LANG another of the 7
+# (tests/test_integration_ps1_speaks_the_language_chosen.py)
+function Get-JhtTextLanguage { if ($env:T_LANG) { return $env:T_LANG } return 'it' }
 . $env:T_LIBRARY
 $IntegrationRetryWaitSeconds = 0
 if ($env:T_SLOW) { $IntegrationSlowSeconds = [int]$env:T_SLOW }
