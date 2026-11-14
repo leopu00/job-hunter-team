@@ -18,10 +18,9 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import host_setup_texts as texts  # noqa: E402
+from host_setup_texts import HOST_SETUP, LANGUAGES, TEXTS, catalog, shell_quote  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-LANGUAGES = texts.LANGUAGES
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 PLACEHOLDER = re.compile(r"%[sd]")
 # a call of ts/tsf with its English and its values: what it says comes from the table
@@ -29,26 +28,16 @@ TS_CALL = re.compile(r"\$\(tsf? [a-z_.0-9]+ '(?:[^'\\]|'\\'')*'[^)]*\)")
 
 
 def test_the_block_in_the_script_is_the_one_made_from_the_catalogs():
-    assert texts.written_block() == texts.block(), "run: python3 tests/host_setup_texts.py --write"
+    assert TEXTS.written_block() == TEXTS.block(), "run: python3 tests/host_setup_texts.py --write"
 
 
 @pytest.mark.parametrize("lang", LANGUAGES)
 def test_every_sentence_of_the_script_is_in_the_catalog_of_each_language(lang):
-    calls = texts.script_calls()
-    catalog = texts.catalog(lang)
-    missing = sorted(key for key in calls if key not in catalog)
-    assert not missing, (lang, missing)
-    for key, english in calls.items():
-        # bash printf cannot reorder: the same %s/%d in the same order, and no other %
-        assert PLACEHOLDER.findall(catalog[key]) == PLACEHOLDER.findall(english), (lang, key, catalog[key])
-        assert catalog[key].count("%") == len(PLACEHOLDER.findall(english)), (lang, key, catalog[key])
-        assert "\n" not in catalog[key] and "\x1b" not in catalog[key], (lang, key)
-        if lang == "en":
-            assert catalog[key] == english, (key, catalog[key], english)
+    assert TEXTS.problems(lang) == []
 
 
 def test_no_sentence_after_the_picker_is_written_in_one_language_only():
-    source = texts.HOST_SETUP.read_text(encoding="utf-8")
+    source = HOST_SETUP.read_text(encoding="utf-8")
     after = source[source.index('ok "Language / Lingua'):]
     after = after.split("\n", 1)[1]
     for number, line in enumerate(after.splitlines(), 1):
@@ -60,19 +49,19 @@ def test_no_sentence_after_the_picker_is_written_in_one_language_only():
 
 
 def _functions() -> str:
-    source = texts.HOST_SETUP.read_text(encoding="utf-8")
-    start = source.index(texts.BEGIN)
+    source = HOST_SETUP.read_text(encoding="utf-8")
+    start = source.index(TEXTS.begin)
     end = source.index("\n}\n", source.index("tsf() {")) + 3
     return source[start:end]
 
 
 @pytest.mark.parametrize("lang", LANGUAGES)
 def test_the_sentences_with_values_put_them_in_every_language(lang, tmp_path):
-    calls = {key: english for key, english in texts.script_calls().items() if PLACEHOLDER.search(english)}
+    calls = {key: english for key, english in TEXTS.calls().items() if PLACEHOLDER.search(english)}
     lines = [_functions(), f"JHT_LANG={lang}"]
     for key, english in calls.items():
         args = " ".join("ZZVALUE" if p == "%s" else "4242" for p in PLACEHOLDER.findall(english))
-        lines.append(f"printf '%s\\n' \"$(tsf {key} {texts._quote(english)} {args})\"")
+        lines.append(f"printf '%s\\n' \"$(tsf {key} {shell_quote(english)} {args})\"")
     result = subprocess.run(["bash", "-c", "\n".join(lines)], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0 and not result.stderr, result.stderr
     said = result.stdout.splitlines()
@@ -87,7 +76,7 @@ def _run_in_a_terminal(home: Path, lang: str) -> str:
     env.update({"HOME": str(home), "PATH": "/usr/bin:/bin", "LANG": "C", "TERM": "dumb"})
     pid, fd = pty.fork()
     if pid == 0:  # the child: the script at a terminal, as a person runs it
-        os.execve("/bin/bash", ["bash", str(texts.HOST_SETUP)], env)
+        os.execve("/bin/bash", ["bash", str(HOST_SETUP)], env)
     out = b""
     # the picker: the number of the language, as the person types it; «Where are you running JHT?»: 1, the local PC (no swap
     # is ever touched); the timezone: its default
@@ -133,8 +122,8 @@ SCREEN = (
 @pytest.mark.parametrize("lang", LANGUAGES)
 def test_the_preflight_screen_is_in_the_language_chosen(tmp_path, lang):
     out = _run_in_a_terminal(tmp_path, lang)
-    catalog = texts.catalog(lang)
-    english = texts.catalog("en")
+    catalog = catalog(lang)
+    english = catalog("en")
     for key in SCREEN:
         assert catalog[key] in out, (lang, key, out)
         if lang != "en" and english[key] != catalog[key]:
