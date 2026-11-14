@@ -458,7 +458,8 @@ export function ApplyRequestButton({
   const t = makeT(T, locale);
   const router = useRouter();
   // The cloud asks in two steps; so does the desktop on the team of this computer (its host answers the preview).
-  const twoStep = twoStepProp || Boolean(useReadOnlyActions().applyTwoStep);
+  const readOnlyActions = useReadOnlyActions();
+  const twoStep = twoStepProp || Boolean(readOnlyActions.applyTwoStep);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
