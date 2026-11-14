@@ -939,9 +939,9 @@ $BrokerMadeMarker = Join-Path $RuntimeDir '.broker-made'
 $NodeEntry   = if ($env:JHT_NODE_ENTRY)     { $env:JHT_NODE_ENTRY }     else { '/app/cli/bin/jht.js' }
 $RawBaseOverride = if ($env:JHT_RAW_BASE) { $env:JHT_RAW_BASE.TrimEnd('/') } else { '' }
 $ReleaseRef = if ($env:JHT_BRANCH) { $env:JHT_BRANCH } else { 'production' }
-$DefaultRuntimeImage = 'ghcr.io/leopu00/jht@sha256:fa78c975c04dd5f95d6225a35c8c3bb9646f8ef14b32c8ca558d5332de0cce00'
-$CoreImageDigest = ''
-$ExtrasImageDigest = ''
+$DefaultRuntimeImage = 'ghcr.io/leopu00/jht@sha256:8db1633af3c6e7d606b058225023988f86687d86c8eab3cbe2c47c57ff8190e7'
+$CoreImageDigest = 'sha256:b962a32665e6ed8c81b378a453d596417cf03333cded7087f2ea50587126b24b'
+$ExtrasImageDigest = 'sha256:f4e90cb05a03b01ce7158b0928dcf7d1d5915f4e3492c0f5ea0f440ddd7ff50a'
 $DefaultRuntimeVersion = '0.4.0'
 $WindowsInstanceGuardSha256 = 'bb90ae8f9f1f0cff7d41ceedc3eec380f18b78d7b4f4b07921606afda8b8054b'
 $JhtHome = if ($env:JHT_HOME_HOST) { $env:JHT_HOME_HOST } else { Join-Path $env:USERPROFILE '.jht' }
@@ -1532,9 +1532,10 @@ function Invoke-ComposeAnswer {
 }
 
 function Write-JhtLifecycleDone {
-  param([Parameter(Mandatory)][ValidateSet('up', 'down')][string]$What)
+  param([Parameter(Mandatory)][ValidateSet('up', 'down', 'restart')][string]$What)
   $english = ((Get-JhtTextLanguage) -ceq 'en')
   $text = if ($What -ceq 'up') { if ($english) { 'Job Hunter Team started.' } else { 'Job Hunter Team avviato.' } }
+          elseif ($What -ceq 'restart') { if ($english) { 'Job Hunter Team restarted.' } else { 'Job Hunter Team riavviato.' } }
           else { if ($english) { 'Job Hunter Team stopped.' } else { 'Job Hunter Team fermato.' } }
   [Console]::Out.WriteLine($text)
 }
@@ -2747,8 +2748,9 @@ function Invoke-TelegramLifecycleSteps {
         if ((Confirm-TelegramLifecycle 'start') -ne 0) { return 1 }
       }
       'stop' {
-        Invoke-Compose '--profile' 'telegram' stop $TelegramContainer | Out-Host
-        if ($LASTEXITCODE -ne 0) { return $LASTEXITCODE }
+        # compose's own lines (Container jht-telegram Stopping, Stopped) stay out of sight; a stop that fails shows them, whole, on stderr
+        $stopCode = Invoke-ComposeQuiet '--profile' 'telegram' 'stop' $TelegramContainer
+        if ($stopCode -ne 0) { return $stopCode }
         if ((Confirm-TelegramLifecycle 'stop') -ne 0) { return 1 }
       }
       'pair' { $code = Invoke-TelegramPair $Role; if ($code -ne 0) { return $code } }
@@ -4302,7 +4304,10 @@ switch ($Sub) {
   'restart' {
     Require-ComposeFile
     Require-Docker
-    Invoke-Compose restart $Container
+    # compose's lines (Container jht Restarting, Started) out of sight when it works, whole on stderr when it does not
+    $restartCode = Invoke-ComposeQuiet 'restart' $Container
+    if ($restartCode -ne 0) { exit $restartCode }
+    Write-JhtLifecycleDone 'restart'
     break
   }
 

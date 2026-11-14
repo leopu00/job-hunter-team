@@ -207,3 +207,98 @@ def test_at_a_terminal_the_refusal_says_only_the_sentence(tmp_path):
     assert "JHT_ERROR" not in result.stderr + result.stdout
     assert "runs JHT on Docker" in " ".join(result.stderr.split())
     assert "runtime_change_requires_migration" not in result.stderr
+
+
+# ── a jht older than its own uninstall (0.3.9 and before) ─────────────────
+# The wrapper of 0.3.9 has no `uninstall`: «jht uninstall --confirm» reached the CLI in the container («unknown command»), removed
+# nothing, and the installer refused again (measured on a Mac with 0.3.9 on Colima, 14/11). The refusal then gives, as step 1, the
+# uninstall of this release's wrapper, from where the installer downloads it.
+
+OLD_WRAPPER = "#!/usr/bin/env bash\n# the wrapper of 0.3.9: lifecycle and forwarding, no uninstall\ncase \"$1\" in up) ;; *) ;; esac\n"
+NEW_WRAPPER = "#!/usr/bin/env bash\njht_uninstall() {\n  :\n}\n"
+
+
+def _with_jht(tmp_path: Path, text: str) -> dict[str, str]:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    (bin_dir / "jht").write_text(text, encoding="utf-8")
+    return {"JHT_BIN_DIR": str(bin_dir)}
+
+
+@pytest.mark.parametrize("lang,words", [("en_US.UTF-8", "your jht command is from a version that cannot uninstall itself"),
+                                         ("it_IT.UTF-8", "il tuo comando jht e' di una versione che non sa disinstallarsi")])
+def test_an_old_jht_without_uninstall_gets_the_uninstall_of_this_release(tmp_path, lang, words):
+    env = {**_with_jht(tmp_path, OLD_WRAPPER), "LANG": lang}
+    result = keep(tmp_path, None, files=("docker-compose.yml", ".runtime-integrity"), env=env)
+    text = " ".join(result.stderr.split())
+    assert result.returncode == 85 and words in text
+    url = "https://raw.githubusercontent.com/leopu00/job-hunter-team/production/scripts/jht-wrapper.sh"
+    # a new private file (never a fixed name in the shared /tmp), the URL between single quotes
+    expected = 'f="$(mktemp)" && curl -fsSL ' + f"'{url}'" + ' -o "$f" && bash "$f" uninstall --confirm; rm -f "$f"'
+    assert expected in text
+    assert "/tmp/" not in text
+    assert "«jht uninstall --confirm»" not in text
+    # the order of the steps stays: the uninstall, the installer again, then the setup
+    assert text.index("uninstall --confirm") < text.index("jht setup")
+
+
+def test_a_jht_that_has_uninstall_keeps_the_short_step(tmp_path):
+    result = keep(tmp_path, "docker", env=_with_jht(tmp_path, NEW_WRAPPER))
+    text = " ".join(result.stderr.split())
+    assert result.returncode == 85 and "«jht uninstall --confirm»" in text and "curl" not in text
+
+
+def test_no_jht_or_a_link_in_place_of_it_keeps_the_short_step(tmp_path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    assert "curl" not in keep(tmp_path, "docker", env={"JHT_BIN_DIR": str(bin_dir)}).stderr
+    (tmp_path / "elsewhere").write_text(OLD_WRAPPER, encoding="utf-8")
+    (bin_dir / "jht").symlink_to(tmp_path / "elsewhere")
+    assert "curl" not in keep(tmp_path, "docker", env={"JHT_BIN_DIR": str(bin_dir)}).stderr
+
+
+def test_the_test_channel_names_its_own_commit(tmp_path):
+    sha = "a" * 40
+    digest = "sha256:" + "b" * 64
+    args = ("--source-sha", sha, "--image", "ghcr.io/leopu00/jht:master-arthur", "--expected-image-digest", digest)
+    result = keep(tmp_path, "docker", *args, env=_with_jht(tmp_path, OLD_WRAPPER))
+    assert result.returncode == 85
+    assert f"https://raw.githubusercontent.com/leopu00/job-hunter-team/{sha}/scripts/jht-wrapper.sh" in result.stderr
+
+
+@pytest.mark.parametrize("branch", ["x';touch pwned;'", "-o", "a b", "../../etc", "a$(id)"])
+def test_a_branch_that_could_break_the_pasted_command_falls_back_to_the_release_branch(tmp_path, branch):
+    env = {**_with_jht(tmp_path, OLD_WRAPPER), "JHT_BRANCH": branch}
+    result = keep(tmp_path, "docker", env=env)
+    assert result.returncode == 85
+    assert "'https://raw.githubusercontent.com/leopu00/job-hunter-team/production/scripts/jht-wrapper.sh'" in result.stderr
+    assert f"job-hunter-team/{branch}/" not in result.stderr
+
+
+def test_the_pasted_command_runs_as_printed_and_cleans_its_file(tmp_path):
+    # The text a person copies is a valid shell line: run it with curl and bash made up, and see the file go away.
+    result = keep(tmp_path, "docker", env=_with_jht(tmp_path, OLD_WRAPPER))
+    line = next(part.split("»")[0] for part in result.stderr.split("«") if "mktemp" in part)
+    fake = tmp_path / "fake"
+    fake.mkdir()
+    # the made-up curl writes, to the -o file, a script that records how it was run
+    curl = (
+        "#!/bin/bash\n"
+        'while [ $# -gt 0 ]; do\n'
+        '  if [ "$1" = -o ]; then printf \'echo ran "$@" > "%s/ran"\\n\' "$OUT" > "$2"; fi\n'
+        "  shift\n"
+        "done\n"
+    )
+    (fake / "curl").write_text(curl, encoding="utf-8")
+    (fake / "curl").chmod(0o755)
+    ran = subprocess.run(["bash", "-c", line], env={"PATH": f"{fake}:/usr/bin:/bin", "OUT": str(tmp_path), "TMPDIR": str(tmp_path)},
+                         capture_output=True, text=True, timeout=30)
+    assert ran.returncode == 0, ran.stderr
+    assert (tmp_path / "ran").read_text().strip() == "ran uninstall --confirm"
+    assert not [p for p in tmp_path.iterdir() if p.name.startswith("tmp.")]  # the mktemp file is gone
+
+
+def test_the_wrapper_of_this_release_is_the_one_that_has_uninstall():
+    # what the step downloads must be able to do it: the check reads the same function name
+    assert "jht_uninstall()" in (ROOT / "scripts" / "jht-wrapper.sh").read_text(encoding="utf-8")
+    assert "grep -Fq 'jht_uninstall()'" in INSTALL.read_text(encoding="utf-8")

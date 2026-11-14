@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from scripts import runtime_image_pin as pin_tool
+from runtime_pin_tree import schema1_manifest_data, schema1_pin
 from tests.test_runtime_image_pin import MANIFEST, NEW_DIGEST, NEW_REVISION, _tree_copy
 
 CORE = "sha256:" + "cd" * 32
@@ -16,7 +17,7 @@ CORE_DIGEST_LINE = r'^CORE_IMAGE_DIGEST="\$\{JHT_CORE_IMAGE_DIGEST:-(?P<core_dig
 
 
 def _manifest(tmp_path: Path, **changes) -> Path:
-    data = json.loads(MANIFEST.read_text())
+    data = schema1_manifest_data()
     data.update(changes)
     data = {key: value for key, value in data.items() if value is not None}
     path = tmp_path / "manifest.json"
@@ -24,10 +25,20 @@ def _manifest(tmp_path: Path, **changes) -> Path:
     return path
 
 
-def test_the_repository_manifest_is_still_schema_1_with_no_core_digest() -> None:
+def test_the_pin_of_the_repository_reads_the_core_digest_its_manifest_has_whatever_the_schema() -> None:
     pin = pin_tool.load_manifest(MANIFEST)
+    data = json.loads(MANIFEST.read_text())
+    if data["schema_version"] == 1:
+        assert pin.core_digest is None and pin.core_image_ref is None
+    else:
+        assert pin.core_digest == data["core_digest"] and pin.core_image_ref == f"{pin.repository}@{data['core_digest']}"
+        assert pin.core_digest != pin.digest
+
+
+def test_the_manifest_of_a_release_at_schema_1_has_no_core_digest(tmp_path: Path) -> None:
+    pin = pin_tool.load_manifest(_manifest(tmp_path))
     assert pin.core_digest is None and pin.core_image_ref is None
-    assert json.loads(MANIFEST.read_text())["schema_version"] == 1
+    assert json.loads((tmp_path / "manifest.json").read_text())["schema_version"] == 1
 
 
 def test_a_schema_2_manifest_carries_the_core_digest(tmp_path: Path) -> None:
@@ -42,7 +53,7 @@ def test_a_schema_2_manifest_carries_the_core_digest(tmp_path: Path) -> None:
         ({"schema_version": 1, "core_digest": CORE}, "manifest_schema"),  # a core digest under schema 1
         ({"schema_version": 2}, "manifest_schema"),  # schema 2 without one
         ({"schema_version": 2, "core_digest": "sha256:xyz"}, "core_digest_invalid"),
-        ({"schema_version": 2, "core_digest": json.loads(MANIFEST.read_text())["digest"]}, "core_digest_invalid"),  # two images, one digest
+        ({"schema_version": 2, "core_digest": schema1_manifest_data()["digest"]}, "core_digest_invalid"),  # two images, one digest
         ({"schema_version": 2, "core_digest": 7}, "core_digest_invalid"),
     ],
     ids=["core-under-schema-1", "schema-2-without-core", "malformed", "same-as-full", "not-a-string"],
@@ -53,8 +64,8 @@ def test_the_manifest_refuses_the_two_digest_shapes_that_do_not_agree(tmp_path: 
     assert refused.value.code == code
 
 
-def test_show_prints_the_core_fields_and_nothing_for_schema_1(capsys: pytest.CaptureFixture) -> None:
-    assert pin_tool.main(["--manifest", str(MANIFEST), "show", "--field", "core_digest"]) == 0
+def test_show_prints_the_core_fields_and_nothing_for_schema_1(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    assert pin_tool.main(["--manifest", str(_manifest(tmp_path)), "show", "--field", "core_digest"]) == 0
     assert capsys.readouterr().out.strip() == ""
 
 
@@ -169,9 +180,7 @@ def test_an_update_without_a_core_digest_does_not_drop_the_one_the_manifest_has(
 
 
 def _pin_with_core():
-    from tests.test_runtime_image_pin import _pin
-
-    full = _pin()
+    full = schema1_pin()
     return pin_tool.RuntimeImagePin(full.release_version, full.repository, full.digest, full.source_revision, CORE)
 
 
@@ -189,9 +198,7 @@ def test_verify_source_looks_at_both_images_and_each_must_carry_the_pinned_commi
 
 
 def test_verify_source_without_a_core_digest_asks_only_for_the_full_image(monkeypatch) -> None:
-    from tests.test_runtime_image_pin import _pin
-
-    pin = _pin()
+    pin = schema1_pin()
     asked: list[str] = []
     monkeypatch.setattr(pin_tool, "_platform_revisions", lambda _pin, digest=None: asked.append(digest) or iter([pin.source_revision]))
     pin_tool.verify_source_labels(pin)

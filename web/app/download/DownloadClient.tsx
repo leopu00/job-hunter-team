@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CopyButton } from "../components/CopyButton";
 import {
@@ -12,11 +11,7 @@ import {
 import LandingNav from "../components/landing/LandingNav";
 import { LandingFooter } from "../components/landing/LandingCTA";
 import ScrollToTop from "../components/landing/ScrollToTop";
-import {
-  downloadHref,
-  type DownloadAttribution,
-  type DownloadSlug,
-} from "@/lib/download-funnel";
+import { type DownloadAttribution } from "@/lib/download-funnel";
 
 function BackLink() {
   const { t } = useLandingI18n();
@@ -36,39 +31,16 @@ function BackLink() {
   );
 }
 
-// 2026-07-29: l'app desktop diventa scaricabile, marcata BETA. Il CTA passa
-// dallo slug locale `/go/*`: il server risolve la release GitHub da
-// un'allowlist statica e misura solo bucket anonimi aggregati.
-// macOS è firmato Developer ID e notarizzato (dalla 0.3.1), quindi si apre con
-// un doppio clic. Windows e Linux non hanno l'app desktop in questa versione:
-// niente card per Linux (la strada è il terminale, install.sh), Windows
-// compare come «non in questa versione» senza link.
-type InstallMode = "terminal" | "desktop" | "prompt";
-
-// Windows has no slug: it is not part of 0.4.0 and the page shows it as "not in this version".
-const DOWNLOAD_SLUG: Partial<Record<PlatformId, DownloadSlug>> = {
-  mac: "mac",
-};
+// 0.4.0: l'app desktop non è nella versione. La pagina parte dalla CLI (il
+// comando unico) e offre il prompt per un assistente; nessuna scheda né link a
+// un DMG. Windows è un'anteprima della CLI, come dice il README.
+type InstallMode = "terminal" | "prompt";
 
 type DlKey = Parameters<ReturnType<typeof useLandingI18n>["t"]>[0];
 const MODES: { id: InstallMode; labelKey: DlKey }[] = [
-  { id: "desktop", labelKey: "dl_mode_desktop_title" },
   { id: "terminal", labelKey: "dl_mode_terminal_title" },
   { id: "prompt", labelKey: "dl_mode_prompt_title" },
 ];
-
-type PlatformId = "mac" | "windows";
-
-const PLATFORMS: { id: PlatformId; label: string }[] = [
-  { id: "mac", label: "macOS" },
-  { id: "windows", label: "Windows" },
-];
-
-function PlatformIcon({ id }: { id: PlatformId }) {
-  if (id === "mac") return <AppleIcon />;
-  if (id === "windows") return <WindowsIcon />;
-  return null;
-}
 
 const CLI_SETUP_CMD = `curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman`;
 
@@ -77,9 +49,9 @@ const CLI_SETUP_CMD = `curl -fsSL https://jobhunterteam.ai/install.sh | bash -s 
 // dell'operatore il 2026-08-10.
 // ⚠️ NON è il testo di allora: da luglio sono cambiati la pagina, il flusso e
 // i comandi. Un prompt che manda l'assistente a fare cose che non esistono più
-// è peggio del metodo assente, quindi qui si nominano le due strade che
-// esistono davvero oggi — l'app desktop della pagina Download e il one-liner
-// qui sopra — e si rimanda alla guida per il resto.
+// è peggio del metodo assente, quindi qui si nomina la strada che esiste
+// davvero nella 0.4.0 — il one-liner qui sopra (l'app desktop non è nella
+// 0.4.0) — e si rimanda alla guida per il resto.
 // Nessuna cifra né nome di piano commerciale: vale anche qui la regola O-12.
 //
 // TRADOTTO in tutte e 7 le lingue (2026-08-10): il prompt lo legge un
@@ -97,11 +69,9 @@ Guida all'installazione: https://jobhunterteam.ai/setup-guide
 
 Leggi prima il repository e la guida, poi guidami nell'installazione e nell'avvio su questo computer, occupandoti tu dei passaggi tecnici.
 
-Ci sono due strade supportate, che portano alla stessa squadra: scegli con me quella che mi conviene.
-1. L'app desktop, scaricabile da https://jobhunterteam.ai/download
-2. Il comando unico: curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
+C'è una strada sola, la CLI jht (l'app desktop non è nella 0.4.0): curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Due cose che dovrai verificare con me strada facendo: che su Mac Homebrew sia già installato (l'app lo usa per installare Podman, il motore dei container) e quale abbonamento AI dedicare alla squadra — le serve il suo, separato da quello che uso ogni giorno, perché lo consuma per intero. Chiedimi tutto il resto invece di tirare a indovinare.`,
+Due cose da verificare con me lungo la strada: che sul Mac Homebrew sia già installato (l'installer lo usa per installare Podman, il motore dei container) e la chiave API GLM (Z.ai) che userà la squadra — meglio una chiave solo sua, separata da quelle che uso ogni giorno, con un tetto di spesa. Chiedimi tutto il resto invece di indovinare.`,
   en: `I'd like to start using Job Hunter Team, an open-source team of AI agents that searches for jobs on my behalf. It runs on my own machine, in a container.
 
 Repository: https://github.com/leopu00/job-hunter-team
@@ -110,11 +80,9 @@ Setup guide: https://jobhunterteam.ai/setup-guide
 
 Read the repository and the setup guide first, then walk me through installing and starting it on this computer, handling the technical steps yourself.
 
-There are two supported ways in, and they lead to the same team — pick with me whichever suits me better:
-1. The desktop app, downloaded from https://jobhunterteam.ai/download
-2. The one-liner: curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
+There is one way in, the jht CLI (the desktop app is not in 0.4.0): curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Two things you will need to check with me along the way: that on a Mac Homebrew is already installed (the app uses it to install Podman, the container engine), and which AI provider subscription I want the team to use — it needs one of its own, separate from the one I use day to day, because the team consumes the whole allowance. Ask me whatever else you need instead of guessing.`,
+Two things you will need to check with me along the way: that on a Mac Homebrew is already installed (the installer uses it to install Podman, the container engine), and the GLM (Z.ai) API key the team will use — better a key of its own, separate from the ones I use day to day, with a spending ceiling. Ask me whatever else you need instead of guessing.`,
   es: `Quiero empezar a usar Job Hunter Team, un equipo open source de agentes de IA que busca trabajo por mí. Funciona en mi propio ordenador, dentro de un contenedor.
 
 Repositorio: https://github.com/leopu00/job-hunter-team
@@ -123,11 +91,9 @@ Guía de instalación: https://jobhunterteam.ai/setup-guide
 
 Lee primero el repositorio y la guía, y después acompáñame en la instalación y el arranque en este ordenador, ocupándote tú de los pasos técnicos.
 
-Hay dos caminos soportados, y llevan al mismo equipo: elige conmigo el que más me convenga.
-1. La app de escritorio, descargable desde https://jobhunterteam.ai/download
-2. El comando único: curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
+Hay un solo camino, la CLI jht (la app de escritorio no está en la 0.4.0): curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Dos cosas que tendrás que comprobar conmigo por el camino: que en Mac Homebrew esté ya instalado (la aplicación lo usa para instalar Podman, el motor de contenedores) y qué suscripción de IA dedicar al equipo — necesita una propia, separada de la que uso a diario, porque la consume por completo. Pregúntame todo lo demás en lugar de suponerlo.`,
+Dos cosas que tendrás que comprobar conmigo por el camino: que en Mac Homebrew esté ya instalado (el instalador lo usa para instalar Podman, el motor de contenedores) y la clave API de GLM (Z.ai) que usará el equipo — mejor una clave solo suya, separada de las que uso a diario, con un límite de gasto. Pregúntame todo lo demás en lugar de suponerlo.`,
   fr: `J'aimerais commencer à utiliser Job Hunter Team, une équipe open source d'agents IA qui cherche du travail pour moi. Elle tourne sur mon ordinateur, dans un conteneur.
 
 Dépôt : https://github.com/leopu00/job-hunter-team
@@ -136,11 +102,9 @@ Guide d'installation : https://jobhunterteam.ai/setup-guide
 
 Lis d'abord le dépôt et le guide, puis accompagne-moi pour l'installer et le démarrer sur cet ordinateur, en te chargeant toi-même des étapes techniques.
 
-Il y a deux voies prises en charge, et elles mènent à la même équipe : choisis avec moi celle qui me convient.
-1. L'application de bureau, à télécharger sur https://jobhunterteam.ai/download
-2. La commande unique : curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
+Il n'y a qu'une voie, la CLI jht (l'application de bureau n'est pas dans la 0.4.0) : curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Deux choses à vérifier avec moi en chemin : que sur Mac Homebrew soit déjà installé (l'application s'en sert pour installer Podman, le moteur de conteneurs) et quel abonnement IA dédier à l'équipe — il lui en faut un à elle, distinct de celui que j'utilise au quotidien, car elle le consomme entièrement. Demande-moi tout le reste au lieu de deviner.`,
+Deux choses à vérifier avec moi en chemin : que sur Mac Homebrew soit déjà installé (l'installateur s'en sert pour installer Podman, le moteur de conteneurs) et la clé API GLM (Z.ai) qu'utilisera l'équipe — mieux vaut une clé à elle, distincte de celles que j'utilise au quotidien, avec un plafond de dépenses. Demande-moi tout le reste au lieu de deviner.`,
   de: `Ich möchte anfangen, Job Hunter Team zu nutzen — ein Open-Source-Team aus KI-Agenten, das für mich nach Stellen sucht. Es läuft auf meinem eigenen Rechner, in einem Container.
 
 Repository: https://github.com/leopu00/job-hunter-team
@@ -149,11 +113,9 @@ Einrichtungsanleitung: https://jobhunterteam.ai/setup-guide
 
 Lies zuerst das Repository und die Anleitung, und führe mich dann durch Installation und Start auf diesem Rechner, wobei du die technischen Schritte selbst übernimmst.
 
-Es gibt zwei unterstützte Wege, die zum selben Team führen — wähle mit mir den passenden:
-1. Die Desktop-App, herunterzuladen unter https://jobhunterteam.ai/download
-2. Der Einzeiler: curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
+Es gibt einen Weg, die jht-CLI (die Desktop-App ist nicht in 0.4.0): curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Zwei Dinge, die du unterwegs mit mir klären musst: dass auf einem Mac Homebrew bereits installiert ist (die App nutzt es, um Podman, die Container-Engine, zu installieren) und welches KI-Abo das Team bekommt — es braucht ein eigenes, getrennt von dem, das ich täglich nutze, weil es das Kontingent vollständig verbraucht. Frag mich alles Weitere, statt zu raten.`,
+Zwei Dinge, die du unterwegs mit mir klären musst: dass auf einem Mac Homebrew bereits installiert ist (der Installer nutzt es, um Podman, die Container-Engine, zu installieren) und welchen GLM-(Z.ai)-API-Schlüssel das Team nutzt — am besten einen eigenen, getrennt von denen, die ich täglich nutze, mit einer Ausgabengrenze. Frag mich alles Weitere, statt zu raten.`,
   pt: `Gostaria de começar a usar o Job Hunter Team, uma equipa open source de agentes de IA que procura emprego por mim. Corre no meu próprio computador, dentro de um contentor.
 
 Repositório: https://github.com/leopu00/job-hunter-team
@@ -162,11 +124,9 @@ Guia de instalação: https://jobhunterteam.ai/setup-guide
 
 Lê primeiro o repositório e o guia, e depois acompanha-me na instalação e no arranque neste computador, tratando tu dos passos técnicos.
 
-Há dois caminhos suportados, e levam à mesma equipa: escolhe comigo o que me convém.
-1. A app de ambiente de trabalho, transferível em https://jobhunterteam.ai/download
-2. O comando único: curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
+Há um só caminho, a CLI jht (a app de ambiente de trabalho não está na 0.4.0): curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Duas coisas que terás de verificar comigo pelo caminho: que no Mac o Homebrew esteja já instalado (a aplicação usa-o para instalar o Podman, o motor de contentores) e qual a subscrição de IA a dedicar à equipa — precisa de uma própria, separada da que uso no dia a dia, porque a consome por inteiro. Pergunta-me tudo o resto em vez de adivinhar.`,
+Duas coisas que terás de verificar comigo pelo caminho: que no Mac o Homebrew esteja já instalado (o instalador usa-o para instalar o Podman, o motor de contentores) e a chave API GLM (Z.ai) que a equipa vai usar — melhor uma chave só dela, separada das que uso no dia a dia, com um teto de despesa. Pergunta-me tudo o resto em vez de adivinhar.`,
   hu: `Szeretném elkezdeni használni a Job Hunter Teamet, egy nyílt forráskódú AI-ügynökcsapatot, amely helyettem keres állást. A saját gépemen fut, konténerben.
 
 Repository: https://github.com/leopu00/job-hunter-team
@@ -175,11 +135,9 @@ Telepítési útmutató: https://jobhunterteam.ai/setup-guide
 
 Először olvasd el a repositoryt és az útmutatót, majd vezess végig a telepítésen és az indításon ezen a gépen, a technikai lépéseket te intézve.
 
-Két támogatott út van, és ugyanahhoz a csapathoz vezetnek — válaszd ki velem, melyik illik hozzám jobban:
-1. Az asztali alkalmazás, letölthető innen: https://jobhunterteam.ai/download
-2. Az egysoros parancs: curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
+Egyetlen út van, a jht CLI (az asztali alkalmazás nincs a 0.4.0-ban): curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Két dolgot kell majd velem tisztáznod útközben: hogy Macen a Homebrew már telepítve van-e (az alkalmazás ezzel telepíti a Podmant, a konténermotort), és melyik AI-előfizetést szánom a csapatnak — sajátra van szüksége, elkülönítve attól, amit naponta használok, mert teljesen felhasználja. Minden mást kérdezz meg tőlem, ahelyett hogy találgatnál.`,
+Két dolgot kell majd velem tisztáznod útközben: hogy Macen a Homebrew már telepítve van-e (a telepítő ezzel telepíti a Podmant, a konténermotort), és melyik GLM (Z.ai) API-kulcsot használja a csapat — jobb egy saját kulcs, elkülönítve azoktól, amelyeket naponta használok, költségkerettel. Minden mást kérdezz meg tőlem, ahelyett hogy találgatnál.`,
 };
 
 type ReqOs = {
@@ -298,13 +256,9 @@ const REQ_OS: Record<Lang, ReqOs> = {
   },
 };
 
-function DownloadContent({
-  attribution,
-}: {
-  attribution: DownloadAttribution;
-}) {
+function DownloadContent() {
   const { t, lang } = useLandingI18n();
-  const [installMode, setInstallMode] = useState<InstallMode>("desktop");
+  const [installMode, setInstallMode] = useState<InstallMode>("terminal");
 
   const terminalCommand = CLI_SETUP_CMD;
   const ro = REQ_OS[(REQ_OS[lang as Lang] ? lang : "en") as Lang];
@@ -335,7 +289,7 @@ function DownloadContent({
           </div>
 
           <div className="mb-8">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {MODES.map((m) => {
                 const active = installMode === m.id;
                 return (
@@ -390,8 +344,15 @@ function DownloadContent({
                 </pre>
               </div>
               <p className="text-[10px] text-[var(--color-dim)] mt-3 text-center">
-                macOS · Linux · WSL
+                macOS · Linux
               </p>
+              <p
+                data-windows-cli-preview
+                className="text-[11px] text-[var(--color-muted)] leading-relaxed mt-3 text-center"
+              >
+                {t("dl_windows_cli_preview")}
+              </p>
+
             </div>
           )}
 
@@ -429,99 +390,6 @@ function DownloadContent({
             </div>
           )}
 
-          {installMode === "desktop" && (
-            <div className="mb-8">
-              <p className="text-[12px] text-[var(--color-muted)] leading-relaxed mb-4">
-                {t("dl_desktop_beta_desc")}
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {PLATFORMS.map((os) => {
-                  const slug = DOWNLOAD_SLUG[os.id];
-                  const card = (
-                    <>
-                      <div
-                        className="w-10 h-10 flex items-center justify-center"
-                        style={{
-                          background: "var(--color-card)",
-                          border: "1px solid var(--color-border)",
-                        }}
-                      >
-                        <PlatformIcon id={os.id} />
-                      </div>
-                      <div className="text-[12px] font-bold text-[var(--color-white)]">
-                        {os.label}
-                      </div>
-                      {slug ? (
-                        <span className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-green)] border border-[var(--color-green)] px-2 py-0.5">
-                          {t("dl_desktop_beta_badge")}
-                        </span>
-                      ) : (
-                        <span
-                          data-windows-not-in-version
-                          className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] border border-[var(--color-border)] px-2 py-0.5"
-                        >
-                          {t("dl_windows_not_in_version")}
-                        </span>
-                      )}
-                      {/* La build Mac della 0.4 e' solo Apple silicon: va detto
-                          prima del clic, non scoperto all'apertura. */}
-                      {os.id === "mac" && (
-                        <span
-                          data-mac-apple-silicon-only
-                          className="text-[10px] leading-snug text-[var(--color-muted)]"
-                        >
-                          {t("dl_mac_apple_silicon_only")}
-                        </span>
-                      )}
-                    </>
-                  );
-                  // Windows: nessun link, nessun hover, non e' un pulsante.
-                  return slug ? (
-                    <a
-                      key={os.id}
-                      href={downloadHref(slug, attribution)}
-                      className="border px-4 py-4 flex flex-col items-center gap-3 text-center transition-colors hover:border-[var(--color-green)]"
-                      style={{
-                        borderColor: "var(--color-border)",
-                        background: "var(--color-panel)",
-                      }}
-                    >
-                      {card}
-                    </a>
-                  ) : (
-                    <div
-                      key={os.id}
-                      aria-disabled="true"
-                      className="border px-4 py-4 flex flex-col items-center gap-3 text-center opacity-60"
-                      style={{
-                        borderColor: "var(--color-border)",
-                        background: "var(--color-panel)",
-                      }}
-                    >
-                      {card}
-                    </div>
-                  );
-                })}
-              </div>
-              {/* Linux non ha l'app desktop in questa versione: la nota lo dice
-                  e manda al terminale, senza una card che non porta a un file. */}
-              <p className="text-[11px] text-[var(--color-muted)] leading-relaxed mt-4">
-                {t("dl_desktop_unsigned_note")}
-              </p>
-              <div className="mt-4 border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3 text-center">
-                <span className="text-[12px] text-[var(--color-muted)]">
-                  {t("dl_help_text")}{" "}
-                </span>
-                <Link
-                  href="/setup-guide"
-                  className="text-[12px] font-semibold text-[var(--color-green)] no-underline"
-                >
-                  {t("dl_help_link")} →
-                </Link>
-              </div>
-            </div>
-          )}
-
           {/* Requisiti minimi (spostati da /run) */}
           <section className="mt-4 mb-8">
             <h2 className="text-lg md:text-xl font-bold text-[var(--color-white)] tracking-tight mb-5">
@@ -555,46 +423,11 @@ function DownloadContent({
   );
 }
 
-export default function DownloadClient({
-  attribution,
-}: {
-  attribution: DownloadAttribution;
-}) {
+// The attribution of the visit stays in the page's props for the download route; 0.4.0 has no file to download here.
+export default function DownloadClient(_props: { attribution: DownloadAttribution }) {
   return (
     <LandingI18nProvider>
-      <DownloadContent attribution={attribution} />
+      <DownloadContent />
     </LandingI18nProvider>
-  );
-}
-
-/* ── OS Icons (SVG inline) ── */
-
-function AppleIcon() {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      aria-hidden="true"
-      style={{ color: "var(--color-muted)" }}
-    >
-      <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
-    </svg>
-  );
-}
-
-function WindowsIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      aria-hidden="true"
-      style={{ color: "var(--color-muted)" }}
-    >
-      <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801" />
-    </svg>
   );
 }

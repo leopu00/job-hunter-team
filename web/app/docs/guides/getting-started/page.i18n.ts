@@ -81,17 +81,17 @@ export const T: Record<Locale, Dict> = {
     path1AfterA: "It will read the docs, install the CLI, run ",
     path1AfterB:
       ", fix what's missing and start the team. This is a primary design goal, not a hack.",
-    path2Title: "🖥️ Path 2 — Desktop app (macOS, Apple silicon)",
+    path2Title: "🖥️ Path 2 — Desktop app: not in 0.4.0",
     path2A:
-      "A graphical app for Macs with Apple silicon: with Homebrew already installed, it sets up Podman and starts the team with one click, no terminal needed. Download it from ",
+      "There is no desktop app in 0.4.0: the team is driven from the jht CLI, installed with the one-liner below. On a Mac, Homebrew must already be installed: the installer uses it to set up Podman. Linux: CLI only, experimental. The requirements are on ",
     downloadPage: "the install page",
-    path2B: ". Windows is not supported in 0.4 and Linux has no desktop app.",
+    path2B: ". Windows is a preview in 0.4.0, CLI only: tested on Windows 10, not on Windows 11 (its PowerShell installer is in the Quickstart of the repository).",
     path3Title: "📦 Path 3 — One-liner installer",
     path3Mac: "macOS / Linux:",
     path3WizardIntro: "Then bring the team up and run the wizard:",
     requirementA: "On a Mac the one requirement is ",
     requirementB:
-      " — it must already be installed, and the installer then sets up the container runtime for you. Windows is not supported in 0.4 and Linux has no desktop app. No Node, Python or tmux on your machine: everything lives inside the container.",
+      " — it must already be installed, and the installer then sets up the container runtime for you. Linux: CLI only, experimental. Windows is a preview in 0.4.0, CLI only: tested on Windows 10, not on Windows 11. No Node, Python or tmux on your machine: everything lives inside the container.",
     firstRunTitle: "🎬 Your first run",
     firstRunIntro: "Whichever path you took:",
     fr1A: "Set up your profile.",
@@ -133,17 +133,17 @@ export const T: Record<Locale, Dict> = {
     path1AfterA: "Leggerà la documentazione, installerà la CLI, eseguirà ",
     path1AfterB:
       ", sistemerà ciò che manca e avvierà il team. Questo è un obiettivo di progettazione primario, non un trucco.",
-    path2Title: "🖥️ Percorso 2 — App desktop (macOS, Apple silicon)",
+    path2Title: "🖥️ Percorso 2 — App desktop: non nella 0.4.0",
     path2A:
-      "Un'app grafica per i Mac con Apple silicon: con Homebrew già installato, prepara Podman e avvia il team con un clic, senza terminale. La scarichi dalla ",
+      "Nella 0.4.0 non c'è l'app desktop: il team si guida dalla CLI jht, installata con il comando unico qui sotto. Su un Mac Homebrew deve essere già installato: l'installer lo usa per configurare Podman. Linux: solo CLI, sperimentale. I requisiti sono nella ",
     downloadPage: "pagina di installazione",
-    path2B: ". Windows non è supportato nella 0.4 e per Linux non c'è l'app desktop.",
+    path2B: ". Windows è un'anteprima nella 0.4.0, solo CLI: provato su Windows 10, non su Windows 11 (il suo installer PowerShell è nel Quickstart del repository).",
     path3Title: "📦 Percorso 3 — Installer one-liner",
     path3Mac: "macOS / Linux:",
     path3WizardIntro: "Poi avvia il team ed esegui la procedura guidata:",
     requirementA: "Su Mac l'unico requisito è ",
     requirementB:
-      " — deve essere già installato, poi l'installer configura il runtime dei container per te. Windows non è supportato nella 0.4 e per Linux non c'è l'app desktop. Niente Node, Python o tmux sulla tua macchina: tutto vive dentro il container.",
+      " — deve essere già installato, poi l'installer configura il runtime dei container per te. Linux: solo CLI, sperimentale. Windows è un'anteprima nella 0.4.0, solo CLI: provato su Windows 10, non su Windows 11. Niente Node, Python o tmux sulla tua macchina: tutto vive dentro il container.",
     firstRunTitle: "🎬 La tua prima esecuzione",
     firstRunIntro: "Qualunque percorso tu abbia scelto:",
     fr1A: "Configura il tuo profilo.",
@@ -186,17 +186,17 @@ export const T: Record<Locale, Dict> = {
     path1AfterA: "Leerá la documentación, instalará la CLI, ejecutará ",
     path1AfterB:
       ", arreglará lo que falte e iniciará el equipo. Este es un objetivo de diseño primordial, no un truco.",
-    path2Title: "🖥️ Vía 2 — App de escritorio (macOS, Apple silicon)",
+    path2Title: "🖥️ Vía 2 — App de escritorio: no está en la 0.4.0",
     path2A:
-      "Una app gráfica para Mac con Apple silicon: con Homebrew ya instalado, prepara Podman e inicia el equipo con un clic, sin terminal. Descárgala desde ",
+      "En la 0.4.0 no hay app de escritorio: el equipo se maneja desde la CLI jht, que se instala con el comando único de abajo. En un Mac, Homebrew debe estar ya instalado: el instalador lo usa para configurar Podman. Linux: solo CLI, experimental. Los requisitos están en ",
     downloadPage: "la página de instalación",
-    path2B: ". Windows no es compatible con la 0.4 y para Linux no hay app de escritorio.",
+    path2B: ". Windows es una vista previa en la 0.4.0, solo CLI: probado en Windows 10, no en Windows 11 (su instalador de PowerShell está en el Quickstart del repositorio).",
     path3Title: "📦 Vía 3 — Instalador en una línea",
     path3Mac: "macOS / Linux:",
     path3WizardIntro: "Luego levanta el equipo y ejecuta el asistente:",
     requirementA: "En Mac el único requisito es ",
     requirementB:
-      " — debe estar ya instalado, y después el instalador configura el runtime de contenedores por ti. Windows no es compatible en la 0.4 y para Linux no hay app de escritorio. Sin Node, Python ni tmux en tu máquina: todo vive dentro del contenedor.",
+      " — debe estar ya instalado, y después el instalador configura el runtime de contenedores por ti. Linux: solo CLI, experimental. Windows es una vista previa en la 0.4.0, solo CLI: probado en Windows 10, no en Windows 11. Sin Node, Python ni tmux en tu máquina: todo vive dentro del contenedor.",
     firstRunTitle: "🎬 Tu primera ejecución",
     firstRunIntro: "Sea cual sea la vía que hayas elegido:",
     fr1A: "Configura tu perfil.",
@@ -240,18 +240,18 @@ export const T: Record<Locale, Dict> = {
     path1AfterA: "Il lira la documentation, installera la CLI, exécutera ",
     path1AfterB:
       ", corrigera ce qui manque et démarrera l'équipe. C'est un objectif de conception primordial, pas une bidouille.",
-    path2Title: "🖥️ Voie 2 — Application de bureau (macOS, Apple silicon)",
+    path2Title: "🖥️ Voie 2 — Application de bureau : pas dans la 0.4.0",
     path2A:
-      "Une application graphique pour les Mac Apple silicon : avec Homebrew déjà installé, elle prépare Podman et démarre l'équipe en un clic, sans terminal. Téléchargez-la depuis ",
+      "La 0.4.0 n'a pas d'application de bureau : l'équipe se pilote depuis la CLI jht, installée avec la commande unique ci-dessous. Sur un Mac, Homebrew doit déjà être installé : l'installateur s'en sert pour configurer Podman. Linux : CLI uniquement, expérimental. Les prérequis sont sur ",
     downloadPage: "la page d'installation",
     path2B:
-      ". Windows n'est pas pris en charge dans la 0.4 et il n'y a pas d'application de bureau pour Linux.",
+      ". Windows est un aperçu dans la 0.4.0, CLI uniquement : testé sur Windows 10, pas sur Windows 11 (son installateur PowerShell est dans le Quickstart du dépôt).",
     path3Title: "📦 Voie 3 — Installateur en une ligne",
     path3Mac: "macOS / Linux :",
     path3WizardIntro: "Puis démarrez l'équipe et lancez l'assistant :",
     requirementA: "Sur Mac, la seule exigence est ",
     requirementB:
-      " — il doit déjà être installé, puis l'installateur configure l'environnement de conteneurs pour vous. Windows n'est pas pris en charge dans la 0.4 et il n'y a pas d'application de bureau pour Linux. Pas de Node, Python ni tmux sur votre machine : tout vit à l'intérieur du conteneur.",
+      " — il doit déjà être installé, puis l'installateur configure l'environnement de conteneurs pour vous. Linux : CLI uniquement, expérimental. Windows est un aperçu dans la 0.4.0, CLI uniquement : testé sur Windows 10, pas sur Windows 11. Pas de Node, Python ni tmux sur votre machine : tout vit dans le conteneur.",
     firstRunTitle: "🎬 Votre première exécution",
     firstRunIntro: "Quelle que soit la voie choisie :",
     fr1A: "Configurez votre profil.",
@@ -295,18 +295,18 @@ export const T: Record<Locale, Dict> = {
     path1AfterA: "Er liest die Dokumentation, installiert die CLI, führt ",
     path1AfterB:
       " aus, behebt, was fehlt, und startet das Team. Das ist ein primäres Designziel, kein Trick.",
-    path2Title: "🖥️ Weg 2 — Desktop-App (macOS, Apple silicon)",
+    path2Title: "🖥️ Weg 2 — Desktop-App: nicht in 0.4.0",
     path2A:
-      "Eine grafische App für Macs mit Apple silicon: Ist Homebrew bereits installiert, richtet sie Podman ein und startet das Team mit einem Klick, ganz ohne Terminal. Lade sie von ",
+      "In 0.4.0 gibt es keine Desktop-App: Das Team wird über die jht-CLI gesteuert, die du mit dem Einzeiler unten installierst. Auf einem Mac muss Homebrew bereits installiert sein: Der Installer richtet damit Podman ein. Linux: nur CLI, experimentell. Die Voraussetzungen stehen auf ",
     downloadPage: "der Installationsseite",
     path2B:
-      " herunter. Windows wird in 0.4 nicht unterstützt und für Linux gibt es keine Desktop-App.",
+      ". Windows ist in 0.4.0 eine Vorschau, nur CLI: getestet auf Windows 10, nicht auf Windows 11 (der PowerShell-Installer steht im Quickstart des Repositorys).",
     path3Title: "📦 Weg 3 — Einzeiler-Installer",
     path3Mac: "macOS / Linux:",
     path3WizardIntro: "Dann starte das Team und führe den Assistenten aus:",
     requirementA: "Auf einem Mac ist die einzige Voraussetzung ",
     requirementB:
-      " — es muss bereits installiert sein, danach richtet der Installer die Container-Laufzeit für dich ein. Windows wird in 0.4 nicht unterstützt, und für Linux gibt es keine Desktop-App. Kein Node, Python oder tmux auf deinem Rechner: alles lebt im Container.",
+      " — es muss bereits installiert sein, danach richtet der Installer die Container-Laufzeit für dich ein. Linux: nur CLI, experimentell. Windows ist in 0.4.0 eine Vorschau, nur CLI: getestet auf Windows 10, nicht auf Windows 11. Kein Node, Python oder tmux auf deinem Rechner: alles lebt im Container.",
     firstRunTitle: "🎬 Dein erster Lauf",
     firstRunIntro: "Welchen Weg du auch gewählt hast:",
     fr1A: "Richte dein Profil ein.",
@@ -350,18 +350,18 @@ export const T: Record<Locale, Dict> = {
     path1AfterA: "Elolvassa a dokumentációt, telepíti a CLI-t, lefuttatja a ",
     path1AfterB:
       " parancsot, kijavítja, ami hiányzik, és elindítja a csapatot. Ez elsődleges tervezési cél, nem trükk.",
-    path2Title: "🖥️ 2. út — Asztali alkalmazás (macOS, Apple silicon)",
+    path2Title: "🖥️ 2. út — Asztali alkalmazás: nincs a 0.4.0-ban",
     path2A:
-      "Grafikus alkalmazás Apple silicon Macekre: ha a Homebrew már telepítve van, beállítja a Podmant, és egy kattintással elindítja a csapatot, terminál nélkül. A ",
+      "A 0.4.0-ban nincs asztali alkalmazás: a csapatot a jht CLI-ből irányítod, amelyet a lenti egysoros paranccsal telepítesz. Macen a Homebrew-nak már telepítve kell lennie: a telepítő ezzel állítja be a Podmant. Linux: csak CLI, kísérleti. A követelményeket a ",
     downloadPage: "telepítési oldalról",
     path2B:
-      " töltheted le. A Windows a 0.4-ben nem támogatott, Linuxra pedig nincs asztali app.",
+      " nézheted meg. A Windows a 0.4.0-ban előzetes változat, csak CLI: Windows 10-en kipróbálva, Windows 11-en nem (a PowerShell-telepítője a repository Quickstart leírásában van).",
     path3Title: "📦 3. út — Egysoros telepítő",
     path3Mac: "macOS / Linux:",
     path3WizardIntro: "Aztán indítsd el a csapatot, és futtasd a varázslót:",
     requirementA: "Macen az egyetlen követelmény a ",
     requirementB:
-      " — már telepítve kell lennie, utána a telepítő beállítja helyetted a konténer-futtatókörnyezetet. A Windows a 0.4-ben nem támogatott, Linuxra pedig nincs asztali app. Nincs Node, Python vagy tmux a gépeden: minden a konténeren belül él.",
+      " — már telepítve kell lennie, utána a telepítő beállítja helyetted a konténer-futtatókörnyezetet. Linux: csak CLI, kísérleti. A Windows a 0.4.0-ban előzetes változat, csak CLI: Windows 10-en kipróbálva, Windows 11-en nem. Nincs Node, Python vagy tmux a gépeden: minden a konténeren belül él.",
     firstRunTitle: "🎬 Az első futtatásod",
     firstRunIntro: "Bármelyik utat is választottad:",
     fr1A: "Állítsd be a profilodat.",
@@ -404,17 +404,17 @@ export const T: Record<Locale, Dict> = {
     path1AfterA: "Ele lerá a documentação, instalará a CLI, executará ",
     path1AfterB:
       ", corrigirá o que falta e iniciará a equipa. Este é um objetivo de design primordial, não um truque.",
-    path2Title: "🖥️ Via 2 — App de ambiente de trabalho (macOS, Apple silicon)",
+    path2Title: "🖥️ Via 2 — App de ambiente de trabalho: não está na 0.4.0",
     path2A:
-      "Uma app gráfica para Macs com Apple silicon: com o Homebrew já instalado, prepara o Podman e arranca a equipa com um clique, sem terminal. Descarrega-a na ",
+      "Na 0.4.0 não há app de ambiente de trabalho: a equipa é conduzida pela CLI jht, instalada com o comando único abaixo. Num Mac, o Homebrew tem de estar já instalado: o instalador usa-o para configurar o Podman. Linux: só CLI, experimental. Os requisitos estão na ",
     downloadPage: "página de instalação",
-    path2B: ". O Windows não é suportado na 0.4 e não há app de ambiente de trabalho para Linux.",
+    path2B: ". O Windows é uma pré-visualização na 0.4.0, só CLI: testado no Windows 10, não no Windows 11 (o seu instalador PowerShell está no Quickstart do repositório).",
     path3Title: "📦 Caminho 3 — Instalador numa só linha",
     path3Mac: "macOS / Linux:",
     path3WizardIntro: "Depois levanta a equipa e executa o assistente:",
     requirementA: "No Mac, o único requisito é o ",
     requirementB:
-      " — tem de estar já instalado, e depois o instalador configura o runtime de contentores por ti. O Windows não é suportado na 0.4 e não há app de ambiente de trabalho para Linux. Sem Node, Python ou tmux na tua máquina: tudo vive dentro do contentor.",
+      " — tem de estar já instalado, e depois o instalador configura o runtime de contentores por ti. Linux: só CLI, experimental. O Windows é uma pré-visualização na 0.4.0, só CLI: testado no Windows 10, não no Windows 11. Sem Node, Python ou tmux na tua máquina: tudo vive dentro do contentor.",
     firstRunTitle: "🎬 A tua primeira execução",
     firstRunIntro: "Seja qual for o caminho que escolheste:",
     fr1A: "Configura o teu perfil.",

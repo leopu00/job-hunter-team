@@ -53,7 +53,7 @@ export const de: Record<string, string> = {
 
   // Download page
   dl_desc:
-    "Lade die Desktop-App herunter, um dein Team einzurichten und zu verfolgen. Die CLI bleibt verfügbar, wenn du das Terminal bevorzugst.",
+    "Installiere die CLI, um dein Team einzurichten und zu verfolgen: In 0.4.0 wird das Team über das Terminal gesteuert, die Desktop-App ist nicht in dieser Version.",
   dl_back: "← Zurück",
   dl_title_1: "Richte dein Team ein",
   dl_title_2: "auf deinem PC",
@@ -77,7 +77,9 @@ export const de: Record<string, string> = {
   dl_mac_apple_silicon_only:
     "Nur Macs mit Apple Silicon (M1 und neuer). Intel-Macs werden in 0.4 nicht unterstützt.",
   dl_windows_not_in_version: "Nicht in dieser Version",
-  dl_help_text: "Hast du die App heruntergeladen?",
+  dl_windows_cli_preview:
+    "Windows: Vorschau in 0.4.0, nur CLI (PowerShell-Installer, Podman in WSL), getestet auf Windows 10, nicht auf Windows 11. Die Schritte stehen im Quickstart des Repositorys.",
+  dl_help_text: "Hast du die CLI installiert?",
   dl_help_link: "Folge der Einrichtung Schritt für Schritt",
 
   // Login page (LandingClient)
