@@ -2414,13 +2414,13 @@ verify_test_image() {
     printf "  ${DIM}[dry-run]${RESET} would pull %s with %s and require %s\n" "$IMAGE" "${engine[*]}" "$wanted"
     return 0
   fi
-  info "Pulling the test image $IMAGE..."
+  info "$(tx "Pulling the test image $IMAGE..." "Scarico l'immagine di prova $IMAGE...")"
   "${engine[@]}" pull "$IMAGE" >/dev/null || fail "Cannot pull the test image $IMAGE."
   digests="$("${engine[@]}" image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$IMAGE" 2>/dev/null)" \
     || fail "Cannot inspect the test image $IMAGE."
   printf '%s\n' "$digests" | grep -Fqx "$wanted" \
     || fail "The test image $IMAGE is not $EXPECTED_IMAGE_DIGEST: nothing was installed."
-  ok "test image: $wanted"
+  ok "$(tx "test image: $wanted" "immagine di prova: $wanted")"
 }
 
 main_docker() {

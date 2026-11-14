@@ -985,7 +985,7 @@ if (-not $env:JHT_USER_TZ)   { $env:JHT_USER_TZ = 'UTC' }
 
 # Colori (PowerShell gestisce ANSI nativo dal terminale moderno).
 function Write-Err  { param([string]$Msg) Write-Host "error: $Msg" -ForegroundColor Red }
-function Write-Warn { param([string]$Msg) Write-Host "warn:  $Msg" -ForegroundColor Yellow }
+function Write-Warn { param([string]$Msg) Write-Host "warn: $Msg" -ForegroundColor Yellow }
 function Write-Info { param([string]$Msg) Write-Host $Msg -ForegroundColor DarkGray }
 
 # T220: declared host bridge to move into the T214 Rust sidecar. No data logic.

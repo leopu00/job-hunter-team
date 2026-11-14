@@ -270,7 +270,7 @@ jht_a_mac_is_never_a_vps() {
   if [ "$HOST_KERNEL" != "Darwin" ] || [ "$JHT_HOST_TYPE" != "vps" ]; then return 0; fi
   JHT_HOST_TYPE="local"
   if [ ! -e "$HOST_VALUES_FILE" ] && [ ! -L "$HOST_VALUES_FILE" ]; then
-    printf 'warn:  %s\n' "su un Mac il tipo di host non puo' essere «vps»: JHT_HOST_TYPE letto da host.env o dall'ambiente e' stato registrato come «local»" >&2
+    printf 'warn: %s\n' "su un Mac il tipo di host non puo' essere «vps»: JHT_HOST_TYPE letto da host.env o dall'ambiente e' stato registrato come «local»" >&2
   fi
   jht_host_values_log "host.env o ambiente dicevano JHT_HOST_TYPE=vps su macOS: usato local"
 }
@@ -621,7 +621,7 @@ else
 fi
 
 err()  { printf "${RED}error:${RESET} %s\n" "$*" >&2; }
-warn() { printf "${YELLOW}warn:${RESET}  %s\n" "$*" >&2; }
+warn() { printf "${YELLOW}warn:${RESET} %s\n" "$*" >&2; }
 info() { printf "${DIM}%s${RESET}\n" "$*" >&2; }
 
 runtime_sha256() {
