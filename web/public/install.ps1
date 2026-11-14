@@ -1050,7 +1050,8 @@ function Assert-NoLegacyDockerTeam {
     (T 'Your data stays: ~/.jht (configuration, database, profile) and Documents\Job Hunter Team (CVs, outputs) are folders of this computer, and the new team uses them.' "I tuoi dati restano: ~/.jht (configurazione, database, profilo) e Documenti\Job Hunter Team (CV, risultati) sono cartelle di questo computer, e il nuovo team le usa.")
   )
   if ($volumes.Count -gt 0) {
-    $todo += (T 'In Docker Desktop the volumes of the old team stay (provider tools that the new team installs again). If you do not need them:' "In Docker Desktop restano i volumi del team vecchio (strumenti dei provider, che il nuovo team reinstalla). Se non ti servono:")
+    # The 0.3.x installer took the compose of the branch at the time of the install: by then it can have the volumes of the secrets too.
+    $todo += (T 'In Docker Desktop the volumes of the old team stay: provider tools and, by the version, the API key kept by the setup, the mail password and the Telegram tokens. The new team does not read them: give those again with jht setup. If you do not need them any more:' "In Docker Desktop restano i volumi del team vecchio: strumenti dei provider e, secondo la versione, la chiave API salvata dal setup, la password della posta e i token di Telegram. Il nuovo team non li legge: quelli vanno ridati con jht setup. Se non ti servono piu':")
     $todo += "  docker volume rm $($volumes -join ' ')"
   }
   if ($images.Count -gt 0) {

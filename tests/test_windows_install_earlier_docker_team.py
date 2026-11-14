@@ -108,7 +108,8 @@ def test_an_old_team_on_docker_stops_the_installer_with_the_commands_and_what_st
     assert ("gira ancora" in out) == (state == "running") and ("fermo; ripartirebbe con Docker Desktop" in out) == (state != "running"), out
     assert "ci sarebbero due team sugli stessi dati. Non e' stato cambiato niente." in out
     for line in ("docker stop jht", "docker rm jht", "docker volume rm host-runtime_jht-deps host-runtime_jht-runtime-mask",
-                 f"docker image rm {IMAGE}", "Poi rilancia questo installer.", "I tuoi dati restano: ~/.jht"):
+                 f"docker image rm {IMAGE}", "Poi rilancia questo installer.", "I tuoi dati restano: ~/.jht",
+                 "la chiave API salvata dal setup, la password della posta e i token di Telegram", "vanno ridati con jht setup"):
         assert line in out, line
     # the installer only asks: it never stops or removes anything
     calls = log.read_text(encoding="utf-8").splitlines()
