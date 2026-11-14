@@ -1532,9 +1532,10 @@ function Invoke-ComposeAnswer {
 }
 
 function Write-JhtLifecycleDone {
-  param([Parameter(Mandatory)][ValidateSet('up', 'down')][string]$What)
+  param([Parameter(Mandatory)][ValidateSet('up', 'down', 'restart')][string]$What)
   $english = ((Get-JhtTextLanguage) -ceq 'en')
   $text = if ($What -ceq 'up') { if ($english) { 'Job Hunter Team started.' } else { 'Job Hunter Team avviato.' } }
+          elseif ($What -ceq 'restart') { if ($english) { 'Job Hunter Team restarted.' } else { 'Job Hunter Team riavviato.' } }
           else { if ($english) { 'Job Hunter Team stopped.' } else { 'Job Hunter Team fermato.' } }
   [Console]::Out.WriteLine($text)
 }
@@ -2737,8 +2738,9 @@ function Invoke-TelegramLifecycleSteps {
         if ((Confirm-TelegramLifecycle 'start') -ne 0) { return 1 }
       }
       'stop' {
-        Invoke-Compose '--profile' 'telegram' stop $TelegramContainer | Out-Host
-        if ($LASTEXITCODE -ne 0) { return $LASTEXITCODE }
+        # compose's own lines (Container jht-telegram Stopping, Stopped) stay out of sight; a stop that fails shows them, whole, on stderr
+        $stopCode = Invoke-ComposeQuiet '--profile' 'telegram' 'stop' $TelegramContainer
+        if ($stopCode -ne 0) { return $stopCode }
         if ((Confirm-TelegramLifecycle 'stop') -ne 0) { return 1 }
       }
       'pair' { $code = Invoke-TelegramPair $Role; if ($code -ne 0) { return $code } }
@@ -4292,7 +4294,10 @@ switch ($Sub) {
   'restart' {
     Require-ComposeFile
     Require-Docker
-    Invoke-Compose restart $Container
+    # compose's lines (Container jht Restarting, Started) out of sight when it works, whole on stderr when it does not
+    $restartCode = Invoke-ComposeQuiet 'restart' $Container
+    if ($restartCode -ne 0) { exit $restartCode }
+    Write-JhtLifecycleDone 'restart'
     break
   }
 
