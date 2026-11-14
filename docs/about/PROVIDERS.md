@@ -5,12 +5,12 @@
 | Way | How you pay | Agents run on | Status in 0.4.0 |
 |---|---|---|---|
 | 🟢 **Pi with GLM (Z.ai)** | an **API key**, billed per call by the provider | the Pi harness | ✅ offered |
-| 🔵 Codex (OpenAI) with a ChatGPT subscription or an OpenAI key | subscription or API key | Codex CLI | ⏳ coming in a later release |
-| Kimi (Moonshot), Claude | API key / subscription | Pi / their CLI | ⏳ coming in a later release |
+| 🔵 Codex (OpenAI) with a ChatGPT subscription or an OpenAI key | subscription or API key | Codex CLI | ⏳ not in 0.4.0 |
+| Kimi (Moonshot), Claude | API key / subscription | Pi / their CLI | ⏳ not in 0.4.0 |
 
 The services a release offers are one list in the code (`shared/runtime/release-providers.js`). A team already configured on a service that is not offered keeps its configuration: `jht doctor` says it is not supported in this release and what to do (`jht setup`, choose GLM and paste its key).
 
-## 🔵 Codex: subscription (coming in a later release)
+## 🔵 Codex: subscription (not in 0.4.0)
 
 `jht setup` (or the app) signs you in with your ChatGPT account. The team runs inside the plan's 5-hour and weekly windows:
 
@@ -28,7 +28,7 @@ jht setup                                                      # guided: the key
 jht setup --non-interactive --provider glm --api-key-file <file>   # or: … --api-key-stdin < <file>
 ```
 
-The harness is Pi (`--harness pi` is the default and the only one accepted in 0.4.0). Kimi (`--provider kimi`) comes in a later release. The guided setup checks the key with the provider before it keeps it. The key is read from a file or from stdin, kept off the command line (`--api-key` works but leaves the key in your shell history), and handed to the agents only through their environment. The app's **Settings** can switch the agents' program (Codex or Pi) and give GLM/Kimi a new key.
+The harness is Pi (`--harness pi` is the default and the only one accepted in 0.4.0). Kimi (`--provider kimi`) is not in 0.4.0. The guided setup checks the key with the provider before it keeps it. The key is read from a file or from stdin, kept off the command line (`--api-key` works but leaves the key in your shell history), and handed to the agents only through their environment. To give GLM a new key, run `jht setup` again with it: the team's other settings stay.
 
 Models per role (`shared/runtime/provider-models.list`): on GLM the Scout, the Analyst and the Sentinel use `glm-5.3-flash`, the other roles `glm-5.3`; on Kimi `kimi-k3.1-pro` for every role.
 

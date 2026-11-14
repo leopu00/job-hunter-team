@@ -84,29 +84,29 @@ def test_the_pricing_page_shows_the_one_provider_of_0_4_0_and_says_the_others_co
     providers = providers[:providers.index("\n];")]
     assert re.findall(r'name: "(\w+)"', providers) == ["GLM"]
     assert "The one provider of 0.4.0" in providers and "L'unico provider della 0.4.0" in providers
-    assert page.count("Codex") >= 7, "every language says Codex comes in a later release"
+    assert page.count("Codex") >= 7, "every language says Codex is not in 0.4.0"
 
 
 def test_the_guides_and_the_changelog_say_codex_only():
     # 0.4.0 offers only Pi with a GLM key (shared/runtime/release-providers.js): the quickstart and PROVIDERS say so, and say
-    # Codex, Kimi and Claude come later, never as a choice of this release
+    # Codex, Kimi and Claude are not in 0.4.0, never a choice of this release
     quickstart = text("docs/guides/QUICKSTART.md")
     table = quickstart[quickstart.index("| Provider   |"):]
     table = table[:table.index("\n\n")]
     assert "| 🟢  | **GLM (Z.ai)** on the Pi harness | API key, per call | ✅ The only one offered in 0.4.0" in table
-    assert "Coming in a later release" in table.split("Codex")[1].split("\n")[0]
+    assert "Not in 0.4.0" in table.split("Codex")[1].split("\n")[0]
     assert "providers use claude" not in quickstart
     providers = text("docs/about/PROVIDERS.md")
     assert "**0.4.0 offers one way to power the team: Pi with a GLM (Z.ai) API key.**" in providers
-    assert "| 🔵 Codex (OpenAI) with a ChatGPT subscription or an OpenAI key | subscription or API key | Codex CLI | ⏳ coming in a later release |" in providers
+    assert "| 🔵 Codex (OpenAI) with a ChatGPT subscription or an OpenAI key | subscription or API key | Codex CLI | ⏳ not in 0.4.0 |" in providers
     assert "shared/runtime/release-providers.js" in providers
     assert "A GLM (Z.ai) API key: 0.4.0 runs the team only on Pi with GLM." in text("docs/guides/VPS-SETUP-WIZARD.md")
     changelog = text("CHANGELOG.md")
     release = changelog[changelog.index("## [0.4.0]"):]
-    # 0.4.0: one way (Pi with a GLM key), the others come later and are refused by the CLI
+    # 0.4.0: one way (Pi with a GLM key), the others are not in 0.4.0 and are refused by the CLI
     assert "team runs on Pi with a GLM (Z.ai) API key.**" in release[:4000]
     assert "One way to power the team: **Pi with GLM (Z.ai)**" in release[:4000]
-    assert "Codex (ChatGPT subscription or OpenAI key), Kimi and Claude come" in release[:4000]
+    assert "Codex (ChatGPT subscription or OpenAI key), Kimi and Claude are\n  not in 0.4.0" in release[:4000]
     readme = text("README.md")
     assert "in 0.4.0, **GLM (Z.ai) with an API key** on the Pi harness" in readme and "**Codex** (recommended)" not in readme
 

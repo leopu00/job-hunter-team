@@ -13,7 +13,7 @@ JHT runs many agents in parallel, around the clock. In 0.4.0 you need:
 |     | Provider   | How you pay | Status |
 | --- | ---------- | ----------- | ------ |
 | 🟢  | **GLM (Z.ai)** on the Pi harness | API key, per call | ✅ The only one offered in 0.4.0 — measured in short runs (~0.10 USD per scored position); `jht setup` asks for the key (typed hidden) |
-| 🔵  | Codex (ChatGPT subscription or OpenAI key), Kimi, Claude | — | ⏳ Coming in a later release |
+| 🔵  | Codex (ChatGPT subscription or OpenAI key), Kimi, Claude | — | ⏳ Not in 0.4.0 |
 
 Details and the spending ceiling of an API key: [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md).
 
