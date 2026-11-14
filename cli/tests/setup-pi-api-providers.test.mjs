@@ -5,7 +5,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { offeredInRelease } from '../../shared/runtime/release-providers.js';
+import { RELEASE_PROVIDERS, offeredInRelease } from '../../shared/runtime/release-providers.js';
 const kimiSkip = offeredInRelease('kimi') ? false : 'kimi is not offered in this release (shared/runtime/release-providers.js)';
 
 const HOME = mkdtempSync(join(tmpdir(), 'jht-pi-api-'));
@@ -76,7 +76,7 @@ test('an unknown provider, and one this release does not offer, say what is offe
   for (const provider of ['gemini', 'openai', 'claude', ...(offeredInRelease('kimi') ? [] : ['kimi', 'moonshot'])]) {
     const { code, text } = await setup({ provider });
     assert.equal(code, 1, provider);
-    assert.match(text, /This release offers only glm with an API key, on the pi harness/, provider);
+    assert.match(text, new RegExp(`This release offers only ${RELEASE_PROVIDERS.join(', ')} with an API key, on the pi harness`), provider);
     assert.match(text, /jht setup --non-interactive --provider glm --api-key-stdin/, provider);
   }
 });
