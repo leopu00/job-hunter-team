@@ -45,18 +45,24 @@ Assert-NoLegacyDockerTeam
 exit 0
 """
 
-FUNCTIONS = ["Get-JhtLegacyDockerCli", "Invoke-JhtLegacyDocker", "Get-JhtLegacyDockerTeam", "Assert-NoLegacyDockerTeam",
+FUNCTIONS = ["Get-JhtLegacyDockerCli", "Invoke-JhtLegacyDocker", "Test-JhtDockerOwnEngine", "Get-JhtLegacyDockerTeam", "Assert-NoLegacyDockerTeam",
              "Test-JhtMachineOutput", "Write-JhtProblem", "Remove-JhtCreatedEmptyDirs", "T", "Get-JhtTextLanguage"]
 
 
-def _fake_docker(directory: Path, log: Path, *, ps: str = "", ps_code: int = 0, hang: bool = False) -> None:
+DOCKER_DESKTOP = "Docker Desktop 4.50.0 (209931)|Engine;containerd;runc;docker-init;"
+PODMAN = "linux/amd64/fedora-42|Podman Engine;Conmon;OCI Runtime (crun);"
+
+
+def _fake_docker(directory: Path, log: Path, *, ps: str = "", ps_code: int = 0, hang: bool = False, server: str = DOCKER_DESKTOP) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "ps.txt").write_text(ps, encoding="utf-8")
+    (directory / "server.txt").write_text(server + "\n", encoding="utf-8")
     script = (
         "#!/bin/sh\n"
         f"printf '%s\\n' \"$*\" >> '{log.as_posix()}'\n"
         + ("sleep 30\n" if hang else "")
         + 'case "$1" in\n'
+        f"  version) cat '{(directory / 'server.txt').as_posix()}' ;;\n"
         f"  ps) [ {ps_code} = 0 ] || {{ echo 'Cannot connect to the Docker daemon' >&2; exit {ps_code}; }}; cat '{(directory / 'ps.txt').as_posix()}' ;;\n"
         "  volume) printf 'host-runtime_jht-deps\\nhost-runtime_jht-runtime-mask\\n' ;;\n"
         "  *) exit 9 ;;\n"
@@ -113,8 +119,8 @@ def test_an_old_team_on_docker_stops_the_installer_with_the_commands_and_what_st
         assert line in out, line
     # the installer only asks: it never stops or removes anything
     calls = log.read_text(encoding="utf-8").splitlines()
-    assert [c.split()[0] for c in calls] == ["ps", "volume"], calls
-    assert calls[1].startswith("volume ls --filter label=com.docker.compose.project=host-runtime"), calls
+    assert [c.split()[0] for c in calls] == ["version", "ps", "volume"], calls
+    assert calls[2].startswith("volume ls --filter label=com.docker.compose.project=host-runtime"), calls
 
 
 def test_in_english_and_for_the_app(tmp_path):
@@ -129,7 +135,7 @@ def test_in_english_and_for_the_app(tmp_path):
 
 
 @pytest.mark.parametrize("case", ["no docker", "docker does not answer", "docker hangs", "container of another folder",
-                                  "another name", "no compose labels"])
+                                  "another name", "no compose labels", "podman answers the docker api", "engine not told"])
 def test_otherwise_the_installation_goes_on(tmp_path, case):
     fake = tmp_path / "fake"
     other = str(tmp_path / "elsewhere" / "host-runtime")
@@ -144,6 +150,11 @@ def test_otherwise_the_installation_goes_on(tmp_path, case):
     elif case == "another name":
         runtime = tmp_path / "user" / "AppData" / "Local" / "Job Hunter Team" / "host-runtime"
         _fake_docker(fake, tmp_path / "log", ps=_line("myjht", "running", str(runtime)) + _line("jhtx y", "running", str(runtime)))
+    elif case == "podman answers the docker api":
+        # Podman on the docker_engine pipe: the team it sees is this JHT 0.4's own, in the same runtime folder
+        _fake_docker(fake, tmp_path / "log", ps=_ours(tmp_path, "running"), server=PODMAN)
+    elif case == "engine not told":
+        _fake_docker(fake, tmp_path / "log", ps=_ours(tmp_path, "running"), server="")
     else:
         _fake_docker(fake, tmp_path / "log", ps=f"jht|running|{IMAGE}|maintainer=someone\n")
     done, _ = _run(tmp_path, docker_dir=fake)

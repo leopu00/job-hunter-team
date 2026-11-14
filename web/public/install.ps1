@@ -1020,9 +1020,20 @@ function Get-JhtLegacyDockerTeam {
   })
 }
 
+# Whether the engine docker talks to is Docker's own (Docker Desktop, Docker Engine). On Windows Podman answers the Docker API on the
+# docker_engine pipe when Docker Desktop is not running: a docker.exe then sees the team of this JHT 0.4, in the same runtime folder.
+# Docker only when the server says Docker and nothing of Podman; an engine that cannot be told is not Docker (nothing changes).
+function Test-JhtDockerOwnEngine {
+  param([Parameter(Mandatory)][string]$Docker)
+  $server = Invoke-JhtLegacyDocker -Docker $Docker -Arguments @('version', '--format', '{{.Server.Platform.Name}}|{{range .Server.Components}}{{.Name}};{{end}}')
+  if (-not $server) { return $false }
+  return ($server -match 'Docker' -and $server -notmatch 'Podman')
+}
+
 function Assert-NoLegacyDockerTeam {
   $docker = Get-JhtLegacyDockerCli
   if (-not $docker) { return }
+  if (-not (Test-JhtDockerOwnEngine -Docker $docker)) { return }
   $team = @(Get-JhtLegacyDockerTeam -Docker $docker)
   if ($team.Count -eq 0) { return }
   $names = @($team | ForEach-Object { $_.Name })
