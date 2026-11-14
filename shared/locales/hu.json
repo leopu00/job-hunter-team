@@ -581,5 +581,8 @@
   "integration.linkedin.token_stdin": "az ablak tokenje az alkalmazástól érkezik, a szabványos bemeneten",
   "integration.linkedin.profile_not_plain": "a LinkedIn-profil a ~/.jht mappában nem sima mappa (hivatkozás?): nem használom",
   "integration.linkedin.seccomp": "a bejelentkezési böngésző seccomp-profilja hiányzik, vagy nem egyezik a hitelesítettel: nem indulok",
-  "integration.linkedin.usage": "használat: jht linkedin login [--stop] | status --json"
+  "integration.linkedin.usage": "használat: jht linkedin login [--stop] | status --json",
+  "integration.engine_log_written": "a Podman motor állapota ide íródott: %s",
+  "integration.tools.tier_not_removed": "a futtatókörnyezet szintje nem lett eltávolítva",
+  "integration.tools.usage": "használat: jht tools status --json | pull | switch"
 }
