@@ -60,6 +60,21 @@ export const PI_API_CHOICES = Object.entries(PI_API_PROVIDERS).map(([value, { la
 }));
 
 /** The choice of a provider typed on the command line (moonshot is kimi), among the two lists. */
+/**
+ * OpenAI with an API key, on pi: not pi-only (OpenAI also runs on Codex with the ChatGPT subscription), the models of the Codex
+ * table (shared/runtime/role-models.list), the key in OPENAI_API_KEY. What the setup offers for «openai» when the release offers it
+ * on pi with a key (shared/runtime/release-providers.js).
+ */
+export const OPENAI_PI_CHOICE = Object.freeze({
+  value: 'openai',
+  label: 'OpenAI',
+  keyVariable: 'OPENAI_API_KEY',
+  keyPrefix: 'sk-',
+  keyPlaceholder: 'sk-proj-...',
+  keyOnPi: true,
+  models: AI_PROVIDERS[0].models,
+});
+
 export function findProviderChoice(name) {
   const piApi = piApiProvider(name);
   return piApi ? PI_API_CHOICES.find((p) => p.value === piApi) : AI_PROVIDERS.find((p) => p.value === name);

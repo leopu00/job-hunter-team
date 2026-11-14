@@ -14,11 +14,20 @@ export const PI_API_MODELS = Object.freeze(Object.fromEntries(Object.keys(PI_API
   Object.freeze(Object.fromEntries(rows.filter(([kind, provider]) => kind === 'model' && provider === name)
     .map(([, , modelClass, model]) => [modelClass, model])))])));
 
-/** The names the config and the people use for these providers (moonshot is Moonshot's own name for kimi). */
-export const PI_API_ALIASES = Object.freeze({ moonshot: 'kimi' });
+/** The names the config and the people use for these providers (moonshot is Moonshot's own name for kimi, anthropic Claude's maker). */
+export const PI_API_ALIASES = Object.freeze({ moonshot: 'kimi', anthropic: 'claude' });
 
 export function piApiProvider(name) {
   const key = typeof name === 'string' ? name.trim().toLowerCase() : '';
   const canonical = PI_API_ALIASES[key] ?? key;
   return PI_API_PROVIDERS[canonical] ? canonical : null;
 }
+
+/**
+ * `{ glm: { scout: 'luna', ... }, openai: { ... } }`: the class a `rolemodel` row gives a role on a provider instead of its own
+ * (the launcher's jht_provider_role_class / jht_provider_model). A pin in the config (team.role_models.<role>.model) still wins.
+ */
+export const PROVIDER_ROLE_CLASS = Object.freeze(rows.filter(([kind]) => kind === 'rolemodel').reduce((out, [, provider, role, modelClass]) => {
+  out[provider] = Object.freeze({ ...(out[provider] ?? {}), [role]: modelClass });
+  return out;
+}, {}));

@@ -10,7 +10,7 @@ import { later, say, show } from '../lib/texts.js'
 import { AGENTS, isAgentSession } from './team/agents.js'
 import { LATEST_CONFIG_VERSION } from './migrate.js'
 import { PI_API_PROVIDERS, piApiProvider } from '../../../shared/runtime/provider-models.js'
-import { RELEASE_PROVIDERS, offeredInRelease } from '../../../shared/runtime/release-providers.js'
+import { RELEASE_PROVIDERS, configOffered } from '../../../shared/runtime/release-providers.js'
 import { providerSignedIn } from '../lib/provider-signin.js'
 import { creditGone } from '../lib/provider-credit.js'
 
@@ -79,7 +79,7 @@ async function checkProvider() {
   if (!active) return { warn: true, msg: later('doctor.provider_none'), hint: later('doctor.provider_use') }
   const prov = cfg.providers?.[active]
   // a team on a service this release does not offer keeps its config; doctor says so and what to do
-  if (!offeredInRelease(active)) {
+  if (!configOffered(cfg)) {
     return { warn: true, msg: later('doctor.provider_not_in_release', { active, offered: RELEASE_PROVIDERS.join(', ') }), hint: later('doctor.provider_not_in_release_hint', { offered: RELEASE_PROVIDERS[0] }) }
   }
   // Le subscription usano la sessione OAuth della CLI e non hanno, per

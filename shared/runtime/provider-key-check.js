@@ -1,5 +1,5 @@
 /**
- * provider-key-check — is the API key of a pi-only provider (glm of Z.ai, kimi of Moonshot) accepted?
+ * provider-key-check — is the API key of a provider that runs on pi (glm of Z.ai, kimi of Moonshot, OpenAI, Claude of Anthropic) accepted?
  *
  * One light call, a GET of the list of models: it spends no tokens, so it costs nothing. Only an answer that says
  * the key is wrong (401) is a verdict against it; one that says the account has no credit is «no_credit» (the key is
@@ -14,7 +14,18 @@ import { PI_API_PROVIDERS, piApiProvider } from './provider-models.js';
 export const KEY_CHECK_URLS = Object.freeze({
   glm: 'https://api.z.ai/api/paas/v4/models',
   kimi: 'https://api.moonshot.ai/v1/models',
+  openai: 'https://api.openai.com/v1/models',
+  claude: 'https://api.anthropic.com/v1/models',
 });
+
+/** How each provider takes the key: a bearer, except Anthropic (its own header, and the version of its API). */
+function keyHeaders(provider, key) {
+  if (provider === 'claude') return { 'x-api-key': key, 'anthropic-version': '2023-06-01' };
+  return { Authorization: `Bearer ${key}` };
+}
+
+/** The providers that run on pi with a key but are not pi-only (OpenAI also runs on Codex): their name for the person. */
+const OTHER_LABELS = Object.freeze({ openai: 'OpenAI' });
 
 const DEFAULT_TIMEOUT_MS = 8000;
 
@@ -38,16 +49,17 @@ async function bodyStart(res) {
  * @returns {Promise<{ state: 'valid'|'rejected'|'no_credit'|'unverified'|'not_applicable', label?: string, httpStatus?: number, reason?: string }>}
  */
 export async function checkPiApiKey(providerName, key, { fetchImpl = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
-  const provider = piApiProvider(providerName);
+  const plain = typeof providerName === 'string' ? providerName.trim().toLowerCase() : '';
+  const provider = piApiProvider(plain) ?? (OTHER_LABELS[plain] ? plain : null);
   if (!provider || !KEY_CHECK_URLS[provider]) return { state: 'not_applicable' };
-  const label = PI_API_PROVIDERS[provider].label;
+  const label = PI_API_PROVIDERS[provider]?.label ?? OTHER_LABELS[provider];
   const cleanKey = typeof key === 'string' ? key.trim() : '';
   if (!cleanKey) return { state: 'unverified', label, reason: 'no key to try' };
   if (typeof fetchImpl !== 'function') return { state: 'unverified', label, reason: 'no network client' };
   try {
     const res = await fetchImpl(KEY_CHECK_URLS[provider], {
       method: 'GET',
-      headers: { Authorization: `Bearer ${cleanKey}` },
+      headers: keyHeaders(provider, cleanKey),
       // the key goes to the fixed route and nowhere else: a redirect is an error, never followed
       redirect: 'error',
       signal: AbortSignal.timeout(timeoutMs),

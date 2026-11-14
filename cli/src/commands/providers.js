@@ -15,7 +15,14 @@ import { c, GREEN, YELLOW, DIM, RESET } from './_colors.js';
 import { Command } from 'commander';
 import { hint, marks, title } from '../lib/ui.js';
 import { say } from '../lib/texts.js';
-import { RELEASE_PROVIDERS, offeredInRelease } from '../../../shared/runtime/release-providers.js';
+import { RELEASE_PROVIDERS, offeredInRelease, offeredWay } from '../../../shared/runtime/release-providers.js';
+
+// OpenAI is offered with a key on pi (not as Codex): its name here, where the pi-only providers have theirs in the table
+const RELEASE_LABELS = Object.freeze({ openai: 'OpenAI' });
+// the list keeps a 60-column terminal: «Claude (Anthropic)» is too long a name for the line that says it is offered
+const LIST_LABELS = Object.freeze({ claude: 'Claude' });
+/** The CLI of a known provider is a way of this release (only Codex can be: openai on the codex harness). */
+const cliOffered = (id) => offeredWay(id, 'codex');
 
 const JHT_DIR     = JHT_HOME;
 const CONFIG_PATH = join(JHT_DIR, 'jht.config.json');
@@ -141,7 +148,7 @@ async function handleProviders() {
     const keyed = Boolean(entry?.api_key || entry?.api_key_ref);
     const icon = keyed ? OK : entry ? WARN : ERR;
     const activeLabel = activeProvider === id ? ` ${GREEN}· ${say('providers.active')}${RESET}` : '';
-    console.log(`  ${icon} ${PI_API_PROVIDERS[id]?.label ?? id} ${DIM}· ${say('providers.in_release')}${RESET}${activeLabel}`);
+    console.log(`  ${icon} ${LIST_LABELS[id] ?? PI_API_PROVIDERS[id]?.label ?? RELEASE_LABELS[id] ?? id} ${DIM}· ${say('providers.in_release')}${RESET}${activeLabel}`);
     console.log(`    ${DIM}${say('providers.line', { id, model: entry?.model ?? '—', auth: keyed ? 'api_key' : say('providers.auth_none') })}${RESET}`);
     if (!keyed) console.log(`    ${DIM}${say('providers.in_release_setup')}${RESET}`);
     console.log('');
@@ -152,7 +159,7 @@ async function handleProviders() {
     const hasConfig = !!provCfg;
     // A provider this release does not offer appears only to a team that still uses it, and says so; an archived one the same way.
     const inUse = [id, ...(known.aliases ?? [])].some((name) => providers[name] || activeProvider === name);
-    if ((known.archived || !offeredInRelease(id)) && !inUse) continue;
+    if ((known.archived || !cliOffered(id)) && !inUse) continue;
     const hasEnv = !!process.env[known.envKey];
     const hasCred = await fileExists(join(CREDS_DIR, `${id}.enc`)) || await fileExists(join(CREDS_DIR, `${id}.json`));
     const isActive = activeProvider === id;
@@ -162,13 +169,13 @@ async function handleProviders() {
     const icon = hasConfig && (hasEnv || hasCred || provCfg?.api_key) ? OK : hasConfig ? WARN : ERR;
     const activeLabel = isActive ? ` ${GREEN}· ${say('providers.active')}${RESET}` : '';
 
-    const recommendedLabel = !offeredInRelease(id) ? ` ${YELLOW}· ${say('providers.not_in_release')}${RESET}`
+    const recommendedLabel = !cliOffered(id) ? ` ${YELLOW}· ${say('providers.not_in_release')}${RESET}`
       : known.recommended ? ` ${DIM}· ${say('providers.recommended')}${RESET}` : '';
     console.log(`  ${icon} ${known.name}${recommendedLabel}${activeLabel}`);
     console.log(`    ${DIM}${say('providers.line', { id, model, auth: authMethod })}${RESET}`);
     if (hasEnv) console.log(`    ${DIM}${say('providers.key_in', { env: known.envKey })}${RESET}`);
     if (hasCred) console.log(`    ${DIM}${say('providers.credentials')}${RESET}`);
-    if (!offeredInRelease(id)) { console.log(''); continue; }  // no CLI version to keep up for a service this release does not run
+    if (!cliOffered(id)) { console.log(''); continue; }  // no CLI version to keep up for a service this release does not run
     const ver = getVersionInfo(id);
     // Con un pin di release (issue #130) "aggiornamento disponibile" non è più
     // "il registry ne ha una più nuova" — quella è una versione che questa
@@ -212,12 +219,12 @@ async function handleProviders() {
 // one that is already set up that way (and puts the harness on pi, the only one that runs it); without the key it says the
 // command that sets it up instead of an «archived» or «unrecognized» that the setup of the same provider contradicts.
 async function handleUsePiApi(piApi, config) {
-  const label = PI_API_PROVIDERS[piApi].label;
+  const label = PI_API_PROVIDERS[piApi]?.label ?? RELEASE_LABELS[piApi] ?? piApi;
   const entry = config.providers?.[piApi];
   if (!entry || entry.auth_method !== 'api_key') {
     // Kimi's own CLI is archived (it is not offered as a provider any more): said first, then the way that does work
     const archived = isArchived(piApi) ? `provider '${piApi}' is archived and can no longer be chosen as a CLI. ` : '';
-    console.error(`${ERR}  ${archived}${label} runs only on the pi harness, with an API key. Set it up with: jht setup --provider ${piApi} --harness pi --auth-method api_key --secret-mode file --secret-file <file with the key>`);
+    console.error(`${ERR}  ${archived}${label} runs ${piApiProvider(piApi) ? "only " : ""}on the pi harness, with an API key. Set it up with: jht setup --provider ${piApi} --harness pi --auth-method api_key --secret-mode file --secret-file <file with the key>`);
     process.exitCode = 1;
     return;
   }
@@ -242,7 +249,9 @@ async function handleUse(id) {
     process.exitCode = 1;
     return;
   }
-  const piApi = piApiProvider(id);
+  // OpenAI offered only with a key on pi: `use openai` is the same switch as for glm and kimi (harness to pi)
+  const keyOnPi = String(id ?? '').trim().toLowerCase() === 'openai' && !cliOffered('openai') && offeredWay('openai', 'pi', 'api_key') ? 'openai' : null;
+  const piApi = piApiProvider(id) ?? keyOnPi;
   if (piApi) {
     let current = {};
     if (await fileExists(CONFIG_PATH)) {

@@ -39,11 +39,12 @@ resolve_codex_model() {
 # The providers that run only on pi with an API key (glm, kimi): shared/runtime/provider-models.list, the same table the CLI reads.
 JHT_PROVIDER_MODELS_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../shared/runtime" && pwd)/provider-models.list"
 
-# jht_pi_api_provider <name> — glm | kimi for the names that mean them (moonshot is kimi), else rc 1.
+# jht_pi_api_provider <name> — glm | kimi | claude for the names that mean them (moonshot is kimi, anthropic claude), else rc 1.
 jht_pi_api_provider() {
   case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
     glm) printf 'glm\n' ;;
     kimi|moonshot) printf 'kimi\n' ;;
+    claude|anthropic) printf 'claude\n' ;;
     *) return 1 ;;
   esac
 }
@@ -80,4 +81,19 @@ jht_provider_model() {
   done < "$JHT_PROVIDER_MODELS_FILE"
   echo "Error: no $provider model for the class '$class'." >&2
   return 1
+}
+
+# jht_provider_role_class <provider> <role> — the class a `rolemodel` row of provider-models.list gives this role on this provider,
+# or nothing. OpenAI (pi with a key, and Codex) has its models in role-models.list, not here: only the rows for its light roles.
+jht_provider_role_class() {
+  local provider role kind name wanted class
+  provider="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')"
+  role="$(printf '%s' "${2:-}" | tr '[:upper:]' '[:lower:]')"
+  [ "$provider" = codex ] && provider=openai
+  while IFS='|' read -r kind name wanted class; do
+    [ "$kind" = rolemodel ] && [ "$name" = "$provider" ] && [ "$wanted" = "$role" ] || continue
+    printf '%s\n' "$class"
+    return 0
+  done < "$JHT_PROVIDER_MODELS_FILE"
+  return 0
 }
