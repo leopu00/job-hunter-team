@@ -91,8 +91,9 @@ function Invoke-PodmanPull {
   $layers = New-Object System.Collections.Generic.HashSet[string]
   $wait = $null
   if ($human) {
-    Write-Host '  > Downloading the Job Hunter Team runtime image: this can take several minutes.' -ForegroundColor Cyan
-    $wait = Start-JhtLiveWait -Label 'downloading the runtime image'
+    Write-Host "  > $(Get-JhtBridgeText 'Downloading the Job Hunter Team runtime image: this can take several minutes.' "Scarico l'immagine del runtime di Job Hunter Team: puo' volerci qualche minuto.")" -ForegroundColor Cyan
+    $wait = Start-JhtLiveWait -Label (Get-JhtBridgeText 'still downloading the runtime image' "ancora in corso: download dell'immagine del runtime")
+    $layersWord = Get-JhtBridgeText 'layers started' 'livelli avviati'
   }
   try {
     & { $ErrorActionPreference = 'Continue'
@@ -101,7 +102,7 @@ function Invoke-PodmanPull {
         if ($line) {
           if (-not $human) { [Console]::Out.WriteLine("JHT_PULL $line") }
           # a redrawn bar repeats its layer: each one counts once
-          if ($wait -and $line -match '^Copying blob (\S+)') { [void]$layers.Add($Matches[1]); $wait.Detail = "$($layers.Count) layers started" }
+          if ($wait -and $line -match '^Copying blob (\S+)') { [void]$layers.Add($Matches[1]); $wait.Detail = "$($layers.Count) $layersWord" }
           return
         }
         $other = ConvertTo-JhtPullLine ([string]$_) -AnyLine
@@ -804,7 +805,9 @@ if ($InstallDependencies) {
     Write-PodmanMismatch $installedVersion
     exit 24
   }
-  if ($fit -eq 'newer') {
+  # A marker for the app (it says the warning in its own words); at a terminal it is not a line for a person, like JHT_PHASE.
+  $machineWarning = if ($env:JHT_MACHINE_OUTPUT -eq '1') { $true } elseif ($env:JHT_MACHINE_OUTPUT -eq '0') { $false } else { [Console]::IsOutputRedirected }
+  if ($fit -eq 'newer' -and $machineWarning) {
     [Console]::Out.WriteLine("JHT_WARNING podman_version_newer: Podman $installedVersion is installed on this computer; JHT installs $PodmanCliVersion and uses this one as it is.")
   }
 }
@@ -1234,4 +1237,5 @@ if ($containerUnitInstalled) { Start-JhtContainerServiceIfInactive -PodmanPath $
 # Compose has just created the team's containers from the image: the cache the first start filled goes back too.
 [void](Invoke-JhtMachineDropCaches -PodmanPath $Podman -MachineName $MachineName)
 
-Write-Host "PODMAN JHT RUNTIME ENABLED (machine=$MachineName, wrapper=$(Join-Path $BinDir 'jht.ps1'))" -ForegroundColor Green
+# A line for the app and the logs; a person has the installer's own result after it.
+if (-not (Test-JhtHumanOutput)) { Write-Host "PODMAN JHT RUNTIME ENABLED (machine=$MachineName, wrapper=$(Join-Path $BinDir 'jht.ps1'))" -ForegroundColor Green }

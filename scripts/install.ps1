@@ -465,6 +465,7 @@ function Invoke-PodmanRuntimeEnabler {
   $oldRuntimeDir = $env:JHT_RUNTIME_DIR
   $oldBinDir = $env:JHT_BIN_DIR
   $oldMachineOutput = $env:JHT_MACHINE_OUTPUT
+  $oldTextLang = $env:JHT_TEXT_LANG
   try {
     $env:JHT_RUNTIME_DIR = $RuntimeDir
     $env:JHT_BIN_DIR = $BinDir
@@ -472,12 +473,15 @@ function Invoke-PodmanRuntimeEnabler {
     # its own whether a person or the app is reading: it is told.
     $machineOutput = if ($env:JHT_MACHINE_OUTPUT -eq '1') { $true } elseif ($env:JHT_MACHINE_OUTPUT -eq '0') { $false } else { [Console]::IsOutputRedirected }
     $env:JHT_MACHINE_OUTPUT = if ($machineOutput) { '1' } else { '0' }
+    # and the language its lines are said in: the one of this script (Get-JhtTextLanguage), so the enabler does not decide another
+    $env:JHT_TEXT_LANG = if ((Get-JhtTextLanguage) -ceq 'it') { 'it' } else { 'en' }
     & $powerShell @enablerArgs
     $code = $LASTEXITCODE
   } finally {
     $env:JHT_RUNTIME_DIR = $oldRuntimeDir
     $env:JHT_BIN_DIR = $oldBinDir
     $env:JHT_MACHINE_OUTPUT = $oldMachineOutput
+    $env:JHT_TEXT_LANG = $oldTextLang
   }
   # The caller leaves with it once the staging folder is gone and the empty
   # folders of this run are removed.

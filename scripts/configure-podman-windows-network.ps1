@@ -332,7 +332,8 @@ $machineOutput = @(Invoke-MachineShell ("set -e; units_changed=0; proxy_changed=
   "if [ `$units_changed = 1 ]; then echo JHT_MACHINE_RESTART; exit 0; fi; " +
   "if [ `$proxy_changed = 1 ]; then sudo timeout 90 systemctl restart $egressServices; fi; " +
   "sudo timeout 90 systemctl start $runtimeServices"))
-$machineOutput | ForEach-Object { Write-Host $_ }
+# The machine's answers (JHT_MACHINE_RESTART, JHT_PROXY_CHECK ...) are read below; on screen they are for the app and the logs, not a person.
+if (-not (Test-JhtHumanOutput)) { $machineOutput | ForEach-Object { Write-Host $_ } }
 if (@($machineOutput | Where-Object { ([string]$_).Trim() -eq 'JHT_MACHINE_RESTART' }).Count -gt 0) {
   Invoke-Checked $Podman 'machine' 'stop' $MachineName
   Invoke-Checked $Podman 'machine' 'start' '--update-connection=false' $MachineName
@@ -438,7 +439,7 @@ try {
 } finally {
   $ErrorActionPreference = $previousPreference
 }
-$checkOutput | ForEach-Object { Write-Host $_ }
+if (-not (Test-JhtHumanOutput)) { $checkOutput | ForEach-Object { Write-Host $_ } }
 if ($checkCode -ne 0) {
   $unready = $null
   $wrong = @()
@@ -465,5 +466,5 @@ if ($hostInfo -notmatch '(^|\s)cgroups=cgroupfs(\s|$)') {
   throw "podman_cgroup_manager: the JHT Podman service does not run under cgroupfs ($hostInfo); its containers would not start."
 }
 
-Write-Host "PODMAN WINDOWS NETWORK READY ($MachineName via agent=$Port broker=$(if ($WithBroker) { $BrokerPort } else { 'none' }) telegram=$TelegramPort)" -ForegroundColor Green
+if (-not (Test-JhtHumanOutput)) { Write-Host "PODMAN WINDOWS NETWORK READY ($MachineName via agent=$Port broker=$(if ($WithBroker) { $BrokerPort } else { 'none' }) telegram=$TelegramPort)" -ForegroundColor Green }
 exit 0

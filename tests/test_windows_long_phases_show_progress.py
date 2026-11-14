@@ -70,7 +70,7 @@ def require_the_requested_engine(monkeypatch):
     monkeypatch.setenv("JHT_REQUIRE_WINDOWS_SHELLS", "1")
 
 
-def _case(tmp_path, body: str, *, machine_output: str, exit_code: int = 0):
+def _case(tmp_path, body: str, *, machine_output: str, exit_code: int = 0, lang: str = "en"):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(parents=True)
     _fake(bin_dir, "podman.exe", PODMAN_CASES)
@@ -78,7 +78,7 @@ def _case(tmp_path, body: str, *, machine_output: str, exit_code: int = 0):
         tmp_path, ENABLER, ["Invoke-Checked", "Write-JhtPhase", "Invoke-PodmanPull", "ConvertTo-JhtPullLine"], body,
         {
             "FAKE_PODMAN": str(bin_dir / "podman.exe"), "FAKE_EXIT": str(exit_code), "FAKE_IMAGE": IMAGE,
-            "JHT_MACHINE_OUTPUT": machine_output, "JHT_LIVE_WAIT_SECONDS": "1",
+            "JHT_MACHINE_OUTPUT": machine_output, "JHT_LIVE_WAIT_SECONDS": "1", "JHT_TEXT_LANG": lang,
             "USERPROFILE": r"C:\Users\someone-private", "USERNAME": "someone-private",
         },
     )
@@ -229,3 +229,19 @@ def test_a_command_in_the_machine_that_fails_keeps_its_stderr_as_an_error_a_call
     hidden_call = SSH_CALL.replace("'systemctl --user enable jht'))", "'systemctl --user enable jht') 2>$null)")
     hidden, _ = _case(tmp_path / "hidden", hidden_call, machine_output="0", exit_code=3)
     assert "ssh command failed" not in hidden.stderr, hidden.stdout + hidden.stderr
+
+
+# The installer in Italian says these lines in Italian too (install.ps1 passes its language in JHT_TEXT_LANG).
+def test_an_italian_installer_says_the_machine_and_the_download_in_italian(tmp_path):
+    start, _ = _case(tmp_path / "start", START_CALL, machine_output="0", lang="it")
+    out = _words(start)
+    assert start.returncode == 0, out + start.stderr
+    assert "  > Avvio la macchina Linux (circa un minuto)." in out, out
+    assert re.search(r"^  \.\.\. ancora in corso: avvio della macchina Linux \(\d+:\d\d\)\s*$", out, flags=re.MULTILINE), out
+    assert "Starting the Linux machine" not in out and "still " not in out, out
+    pull, _ = _case(tmp_path / "pull", PULL_CALL, machine_output="0", lang="it")
+    out = _words(pull)
+    assert pull.returncode == 0, out + pull.stderr
+    assert "  > Scarico l'immagine del runtime di Job Hunter Team: puo' volerci qualche minuto." in out, out
+    assert re.search(r"ancora in corso: download dell'immagine del runtime \(\d+:\d\d, 2 livelli avviati\)", out), out
+    assert "still " not in out and "layers started" not in out, out
