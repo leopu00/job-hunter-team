@@ -1386,9 +1386,10 @@ fi
 #   - Claude Code legge CLAUDE.md
 #   - Codex + Kimi leggono AGENTS.md (standard OpenAI / Moonshot)
 # Il contenuto è identico, cambia solo il nome del file.
-case "$PROVIDER" in
-  anthropic|claude) IDENTITY_FILE="CLAUDE.md" ;;
-  *)                   IDENTITY_FILE="AGENTS.md" ;;
+# Dal programma, non dal provider: Claude su pi (con una chiave API) legge AGENTS.md come ogni agente pi.
+case "$CLI_BIN" in
+  claude) IDENTITY_FILE="CLAUDE.md" ;;
+  *)      IDENTITY_FILE="AGENTS.md" ;;
 esac
 IDENTITY_DEST="$AGENT_DIR/$IDENTITY_FILE"
 

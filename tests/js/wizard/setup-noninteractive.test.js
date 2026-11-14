@@ -48,7 +48,7 @@ describe('runNonInteractiveSetup — Phase 1 health failure', () => {
   it('refuses a provider that is no longer offered and saves nothing', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const before = process.exitCode;
-    for (const provider of ['claude', 'openai', ...(offeredInRelease('kimi') ? [] : ['kimi'])]) {
+    for (const provider of ['gemini', 'claude', 'openai', 'kimi'].filter((name) => !offeredInRelease(name))) {
       process.exitCode = 0;
       await runNonInteractiveSetup({
         provider, authMethod: 'api_key', secretMode: 'plaintext', apiKey: 'sk-ant-api-key-long-enough',

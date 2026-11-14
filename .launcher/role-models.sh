@@ -39,11 +39,12 @@ resolve_codex_model() {
 # The providers that run only on pi with an API key (glm, kimi): shared/runtime/provider-models.list, the same table the CLI reads.
 JHT_PROVIDER_MODELS_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../shared/runtime" && pwd)/provider-models.list"
 
-# jht_pi_api_provider <name> — glm | kimi for the names that mean them (moonshot is kimi), else rc 1.
+# jht_pi_api_provider <name> — glm | kimi | claude for the names that mean them (moonshot is kimi, anthropic claude), else rc 1.
 jht_pi_api_provider() {
   case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
     glm) printf 'glm\n' ;;
     kimi|moonshot) printf 'kimi\n' ;;
+    claude|anthropic) printf 'claude\n' ;;
     *) return 1 ;;
   esac
 }

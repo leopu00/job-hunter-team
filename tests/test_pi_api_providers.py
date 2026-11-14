@@ -40,6 +40,9 @@ def launch(tmp_path, provider, role="scout", **kw):
     ("moonshot", "scout", "moonshotai", "kimi-k3.1-pro"),
     ("openai", "scout", "openai", "gpt-5.6-luna"),    # a light role: luna, as on GLM
     ("openai", "scorer", "openai", "gpt-5.6-terra"),  # the Scorer keeps its class
+    ("claude", "scout", "anthropic", "claude-haiku-5-5"),      # a light role on luna
+    ("anthropic", "scorer", "anthropic", "claude-sonnet-5-5"),  # terra; anthropic is claude
+    ("claude", "capitano", "anthropic", "claude-opus-5-5"),     # sol
 ])
 def test_pi_gets_the_provider_pi_knows_and_the_model_of_the_class(tmp_path, provider, role, pi_provider, model):
     done = launch(tmp_path, provider, role=role)
@@ -68,7 +71,7 @@ def test_the_table_of_light_roles_names_only_roles_and_classes_that_exist():
              if line.startswith("role|")}
     classes = {line.split("|")[1] for line in (ROOT / "shared" / "runtime" / "role-models.list").read_text(encoding="utf-8").splitlines()
                if line.startswith("model|")}
-    assert rows and {r[1] for r in rows} <= {"glm", "kimi", "openai"}  # OpenAI: only the rows of its light roles (its models are the Codex table)
+    assert rows and {r[1] for r in rows} <= {"glm", "kimi", "openai", "claude"}  # OpenAI: only the rows of its light roles (its models are the Codex table)
     assert all(r[2] in roles and r[3] in classes for r in rows), rows
 
 
@@ -114,8 +117,11 @@ def test_the_variable_names_of_the_tool_and_of_the_table_are_the_same():
     ("moonshotai", "kimi-k3.1-pro", 1_000_000, 1_000_000, 1_000_000, "12.2"),
     ("moonshotai", "kimi-k2.7-code", 1_000_000, 1_000_000, 1_000_000, "5.14"),
     ("glm", "glm-4.7", 1_000_000, 0, 1_000_000, "2.8"),
+    ("anthropic", "claude-sonnet-5-5", 1_000_000, 1_000_000, 1_000_000, "12.1"),  # 2 + 0.1 + 10
+    ("anthropic", "claude-opus-5-5", 1_000_000, 0, 1_000_000, "24"),
+    ("anthropic", "claude-haiku-5-5", 200_000, 0, 1_000, "0.1025"),            # over 100,000 input tokens: 5x
 ])
-def test_the_price_list_prices_the_models_of_glm_and_kimi(provider, model, fresh, cached, out, usd):
+def test_the_price_list_prices_the_models_of_glm_kimi_and_claude(provider, model, fresh, cached, out, usd):
     cost = model_pricing.cost_usd(model, fresh, cached, out, provider=provider)
     assert cost is not None and abs(float(cost) - float(usd)) < 1e-9
 

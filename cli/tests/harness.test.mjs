@@ -241,7 +241,7 @@ test('team start follows the harness: the CLI is pi, and a provider pi cannot st
   assert.equal(providerCli({ ...openai, harness: 'pi' }), 'pi');
   assert.equal(providerCli({ ...openai, harness: 'codex' }), 'codex');
   assert.equal(providerCli(openai), 'codex');
-  assert.equal(providerCli({ active_provider: 'claude', harness: 'pi' }), 'claude');
+  assert.equal(providerCli({ active_provider: 'claude', harness: 'pi' }), 'pi'); // Claude runs on pi with a key (0.4.0)
 
   assert.equal(startRefusal({ ...openai, harness: 'pi' }, { containerMode: true }), null);
   assert.match(startRefusal({ ...openai, harness: 'pi' }, { containerMode: false, hasTmux: () => true, hasCli: (b) => b !== 'pi' }), /the pi CLI of the active provider was not found/);
@@ -257,7 +257,7 @@ test('the login the boot and the watchdog wait for is the one of the program tha
   assert.equal(loginMarkerOf({ ...openai, harness: 'pi' }), '.pi/agent/auth.json');
   assert.equal(loginMarkerOf({ active_provider: 'Codex', harness: 'pi' }), '.pi/agent/auth.json');
   assert.equal(loginMarkerOf({ active_provider: 'kimi' }), '.kimi/credentials/kimi-code.json');
-  assert.equal(loginMarkerOf({ active_provider: 'claude', harness: 'pi' }), '.claude/.credentials.json', 'pi never starts there; the launcher says why');
+  assert.equal(loginMarkerOf({ active_provider: 'claude', harness: 'pi' }), '.pi/agent/auth.json', 'Claude runs on pi with a key: pi is the program'); 
   assert.equal(loginMarkerOf({ active_provider: 'unknown', harness: 'pi' }), null);
   assert.equal(loginMarkerOf(null), null);
 });
@@ -276,12 +276,13 @@ test('the harness of a config: absent is codex, an unknown value is not a harnes
   assert.match(harnessProblem('codex', 'glm', 'api_key'), /GLM \(Z\.ai\) runs only on the pi harness/);
   assert.equal(harnessProblem('codex', 'openai', 'subscription'), null);
   assert.match(harnessProblem('pi', 'claude', 'subscription'), /Claude subscription.*per token/);
-  assert.match(harnessProblem('pi', 'claude', 'api_key'), /only active_provider=openai/);
+  assert.equal(harnessProblem('pi', 'claude', 'api_key'), null); // Claude on pi with a key (0.4.0)
+  assert.equal(harnessProblem('pi', 'anthropic', 'api_key'), null);
   assert.match(harnessProblem('pi', 'kimi', 'subscription'), /only with an API key/);
   assert.match(harnessProblem('pi', 'glm', 'subscription'), /only with an API key/);
   assert.equal(harnessProblem('pi', 'glm', 'api_key'), null);
   assert.equal(harnessProblem('pi', 'moonshot', 'api_key'), null);
-  assert.match(harnessProblem('pi', 'gemini', 'api_key'), /only active_provider=openai, glm or kimi/);
+  assert.match(harnessProblem('pi', 'gemini', 'api_key'), /only active_provider=openai, glm, kimi or claude/);
   assert.match(harnessProblem('x', 'openai'), /one of: codex, pi/);
 });
 

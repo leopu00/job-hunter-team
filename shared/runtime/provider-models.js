@@ -14,8 +14,8 @@ export const PI_API_MODELS = Object.freeze(Object.fromEntries(Object.keys(PI_API
   Object.freeze(Object.fromEntries(rows.filter(([kind, provider]) => kind === 'model' && provider === name)
     .map(([, , modelClass, model]) => [modelClass, model])))])));
 
-/** The names the config and the people use for these providers (moonshot is Moonshot's own name for kimi). */
-export const PI_API_ALIASES = Object.freeze({ moonshot: 'kimi' });
+/** The names the config and the people use for these providers (moonshot is Moonshot's own name for kimi, anthropic Claude's maker). */
+export const PI_API_ALIASES = Object.freeze({ moonshot: 'kimi', anthropic: 'claude' });
 
 export function piApiProvider(name) {
   const key = typeof name === 'string' ? name.trim().toLowerCase() : '';

@@ -42,7 +42,7 @@ CODEX_MODEL = {"sol": "gpt-5.6-sol", "terra": "gpt-5.6-terra", "luna": "gpt-5.6-
 # the Kimi account lists only kimi-k3, kimi-k3.1-pro and kimi-k3.1-pro-highspeed: K3.1 Pro for every class
 KIMI_MODEL = {"sol": "kimi-k3.1-pro", "terra": "kimi-k3.1-pro", "luna": "kimi-k3.1-pro"}
 # the providers whose table gives the three light roles the light class (the same rule as GLM)
-LIGHT_ROLE_PROVIDERS = {"glm", "kimi", "openai"}
+LIGHT_ROLE_PROVIDERS = {"glm", "kimi", "openai", "claude"}
 GLM_STRONG, GLM_FLASH = "glm-5.3", "glm-5.3-flash"
 
 
@@ -159,3 +159,19 @@ def test_the_light_class_of_a_role_on_openai_is_its_row_and_codex_is_openai():
         for role in ROLES:
             expected = "luna" if role in LIGHT_ROLES_OF_GLM else ""
             assert bash_value(f'jht_provider_role_class "{provider}" "{role}"') == expected, (provider, role)
+
+
+# ── Claude (Anthropic) on pi with a key: Opus, Sonnet, Haiku by class, the three light roles on luna ─────────────
+
+CLAUDE_MODEL = {"sol": "claude-opus-5-5", "terra": "claude-sonnet-5-5", "luna": "claude-haiku-5-5"}
+
+
+@pytest.mark.parametrize("provider", ["claude", "anthropic"])
+@pytest.mark.parametrize("role", ROLES)
+def test_claude_on_pi_gives_each_role_its_class_and_the_light_roles_haiku(tmp_path, provider, role):
+    expected = "luna" if role in LIGHT_ROLES_OF_GLM else CLASS_OF[role]
+    assert pi_model(tmp_path, provider, role) == CLAUDE_MODEL[expected]
+
+
+def test_a_pin_beats_the_light_role_of_claude(tmp_path):
+    assert pi_model(tmp_path, "claude", "scout", "sol") == CLAUDE_MODEL["sol"]

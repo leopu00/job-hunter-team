@@ -8,6 +8,7 @@ export const RELEASE_OFFERS = Object.freeze([
   Object.freeze({ provider: 'glm', harness: 'pi', auth: 'api_key' }),
   Object.freeze({ provider: 'kimi', harness: 'pi', auth: 'api_key' }),
   Object.freeze({ provider: 'openai', harness: 'pi', auth: 'api_key' }),
+  Object.freeze({ provider: 'claude', harness: 'pi', auth: 'api_key' }),
 ]);
 
 /** The providers of the offers, in their order (the first is the default of the setup). */
@@ -16,13 +17,13 @@ export const RELEASE_PROVIDERS = Object.freeze([...new Set(RELEASE_OFFERS.map((o
 /** The program that runs the agents when nothing else is said. */
 export const RELEASE_HARNESS = 'pi';
 
-const ALIASES = Object.freeze({ moonshot: 'kimi' });
+const ALIASES = Object.freeze({ moonshot: 'kimi', anthropic: 'claude' });
 const canonical = (name, aliases = ALIASES) => {
   const plain = typeof name === 'string' ? name.trim().toLowerCase() : '';
   return aliases[plain] ?? plain;
 };
 
-/** True when this release offers `provider` in some way (moonshot is kimi; anything else, including a name it does not know, is not). */
+/** True when this release offers `provider` in some way (moonshot is kimi, anthropic claude; anything else, including a name it does not know, is not). */
 export function offeredInRelease(provider, aliases = ALIASES) {
   return RELEASE_PROVIDERS.includes(canonical(provider, aliases));
 }

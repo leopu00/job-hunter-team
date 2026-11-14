@@ -1,5 +1,5 @@
 /**
- * provider-key-check — is the API key of a provider that runs on pi (glm of Z.ai, kimi of Moonshot, OpenAI) accepted?
+ * provider-key-check — is the API key of a provider that runs on pi (glm of Z.ai, kimi of Moonshot, OpenAI, Claude of Anthropic) accepted?
  *
  * One light call, a GET of the list of models: it spends no tokens, so it costs nothing. Only an answer that says
  * the key is wrong (401) is a verdict against it; one that says the account has no credit is «no_credit» (the key is
@@ -15,7 +15,14 @@ export const KEY_CHECK_URLS = Object.freeze({
   glm: 'https://api.z.ai/api/paas/v4/models',
   kimi: 'https://api.moonshot.ai/v1/models',
   openai: 'https://api.openai.com/v1/models',
+  claude: 'https://api.anthropic.com/v1/models',
 });
+
+/** How each provider takes the key: a bearer, except Anthropic (its own header, and the version of its API). */
+function keyHeaders(provider, key) {
+  if (provider === 'claude') return { 'x-api-key': key, 'anthropic-version': '2023-06-01' };
+  return { Authorization: `Bearer ${key}` };
+}
 
 /** The providers that run on pi with a key but are not pi-only (OpenAI also runs on Codex): their name for the person. */
 const OTHER_LABELS = Object.freeze({ openai: 'OpenAI' });
@@ -52,7 +59,7 @@ export async function checkPiApiKey(providerName, key, { fetchImpl = globalThis.
   try {
     const res = await fetchImpl(KEY_CHECK_URLS[provider], {
       method: 'GET',
-      headers: { Authorization: `Bearer ${cleanKey}` },
+      headers: keyHeaders(provider, cleanKey),
       // the key goes to the fixed route and nowhere else: a redirect is an error, never followed
       redirect: 'error',
       signal: AbortSignal.timeout(timeoutMs),

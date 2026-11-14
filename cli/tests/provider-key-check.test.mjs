@@ -59,6 +59,11 @@ test('the call is a GET with the key as a bearer, to the route of that provider 
   await checkPiApiKey('openai', KEY, { fetchImpl: async (url, init) => { openai.push([url, init.method, init.headers.Authorization]); return { status: 200, ok: true }; } });
   assert.deepEqual(openai, [['https://api.openai.com/v1/models', 'GET', `Bearer ${KEY}`]]);
   assert.equal((await checkPiApiKey('gemini', KEY, { fetchImpl: () => assert.fail('not this provider') })).state, 'not_applicable');
+  // Claude (anthropic is claude): Anthropic's own header and its API version, never a bearer
+  const claude = [];
+  const verdict = await checkPiApiKey('anthropic', KEY, { fetchImpl: async (url, init) => { claude.push([url, init.headers]); return { status: 200, ok: true }; } });
+  assert.deepEqual(claude, [['https://api.anthropic.com/v1/models', { 'x-api-key': KEY, 'anthropic-version': '2023-06-01' }]]);
+  assert.deepEqual([verdict.state, verdict.label], ['valid', 'Claude (Anthropic)']);
 });
 
 test('the key is never in the verdict or in the sentence of the refusal', async () => {

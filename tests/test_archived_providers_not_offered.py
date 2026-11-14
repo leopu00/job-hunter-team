@@ -34,7 +34,7 @@ import re  # noqa: E402
 
 _OFFERS = (ROOT / "shared/runtime/release-providers.js").read_text(encoding="utf-8").split("RELEASE_OFFERS = Object.freeze(")[1].split("]);")[0]
 OFFERED = " ".join("'%s'" % name for name in re.findall(r"provider: '([a-z]+)'", _OFFERS))
-_CANONICAL = {"moonshot": "kimi"}
+_CANONICAL = {"moonshot": "kimi", "anthropic": "claude"}
 
 
 @pytest.mark.parametrize("names", [kept for kept in (tuple(n for n in names if "'%s'" % _CANONICAL.get(n.lower(), n.lower()) not in OFFERED)
@@ -54,8 +54,9 @@ def test_providers_use_refuses_what_this_release_does_not_offer_and_leaves_the_c
 def test_the_list_shows_an_archived_provider_only_to_the_team_that_still_uses_it(jht_home):
     make_config(jht_home / ".jht", {"active_provider": "openai", "providers": {"openai": {}}})
     code, out, err = run_jht("providers", "list", env={"HOME": str(jht_home)})
-    assert "Claude" not in out, out
-    assert ("Kimi" in out) == ("'kimi'" in OFFERED), out  # an offered service is listed to everybody
+    # an offered service is listed to everybody (Claude on pi with a key), an archived CLI only to the team on it
+    assert ("Claude" in out) == ("'claude'" in OFFERED), out
+    assert ("Kimi" in out) == ("'kimi'" in OFFERED), out
     # a team that is on one of them keeps seeing it, so it can be read and updated
     for active, config, shown in (("kimi", {"kimi": {"model": "k2"}}, "Kimi"), ("claude", {"claude": {"model": "c"}}, "Claude")):
         make_config(jht_home / ".jht", {"active_provider": active, "providers": config})
@@ -71,7 +72,7 @@ def test_the_wizard_offers_codex_and_the_two_key_providers_and_not_kimi_or_claud
         locale = json.loads((ROOT / f"shared/locales/{lang}.json").read_text(encoding="utf-8"))
         assert "wizard.provider.kimi" not in locale and "wizard.provider.claude" not in locale, lang
         assert ("kimi" in str(locale.get("wizard.cli.provider", "")).lower()) <= ("'kimi'" in OFFERED), lang
-        assert "claude" not in str(locale.get("wizard.cli.provider", "")).lower(), lang
+        assert ("claude" in str(locale.get("wizard.cli.provider", "")).lower()) <= ("'claude'" in OFFERED), lang
     # the choices of the wizard are the catalog's: nothing else feeds them
     setup = (ROOT / "cli/wizard/setup.js").read_text(encoding="utf-8")
     # ... and what is offered besides Codex is GLM and Kimi with an API key (they run only on Pi, no subscription): the list the

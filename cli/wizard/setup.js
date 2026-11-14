@@ -64,6 +64,7 @@ const PROVIDER_LABEL_KEY = {
   openai: offeredWay('openai', 'codex') ? 'codex' : 'key_openai',
   glm: 'key_glm',
   kimi: 'key_kimi',
+  claude: 'key_claude',
 };
 
 /**

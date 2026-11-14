@@ -19,6 +19,8 @@ import { RELEASE_PROVIDERS, offeredInRelease, offeredWay } from '../../../shared
 
 // OpenAI is offered with a key on pi (not as Codex): its name here, where the pi-only providers have theirs in the table
 const RELEASE_LABELS = Object.freeze({ openai: 'OpenAI' });
+// the list keeps a 60-column terminal: «Claude (Anthropic)» is too long a name for the line that says it is offered
+const LIST_LABELS = Object.freeze({ claude: 'Claude' });
 /** The CLI of a known provider is a way of this release (only Codex can be: openai on the codex harness). */
 const cliOffered = (id) => offeredWay(id, 'codex');
 
@@ -146,7 +148,7 @@ async function handleProviders() {
     const keyed = Boolean(entry?.api_key || entry?.api_key_ref);
     const icon = keyed ? OK : entry ? WARN : ERR;
     const activeLabel = activeProvider === id ? ` ${GREEN}· ${say('providers.active')}${RESET}` : '';
-    console.log(`  ${icon} ${PI_API_PROVIDERS[id]?.label ?? RELEASE_LABELS[id] ?? id} ${DIM}· ${say('providers.in_release')}${RESET}${activeLabel}`);
+    console.log(`  ${icon} ${LIST_LABELS[id] ?? PI_API_PROVIDERS[id]?.label ?? RELEASE_LABELS[id] ?? id} ${DIM}· ${say('providers.in_release')}${RESET}${activeLabel}`);
     console.log(`    ${DIM}${say('providers.line', { id, model: entry?.model ?? '—', auth: keyed ? 'api_key' : say('providers.auth_none') })}${RESET}`);
     if (!keyed) console.log(`    ${DIM}${say('providers.in_release_setup')}${RESET}`);
     console.log('');

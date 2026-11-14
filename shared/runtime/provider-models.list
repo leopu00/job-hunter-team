@@ -4,6 +4,7 @@
 # provider|name for pi (--provider)|variable of the key|label
 provider|glm|zai|ZAI_API_KEY|GLM (Z.ai)
 provider|kimi|moonshotai|MOONSHOT_API_KEY|Kimi (Moonshot)
+provider|claude|anthropic|ANTHROPIC_API_KEY|Claude (Anthropic)
 # model|provider|class|model id in pi
 # GLM: 5.3 where the work is hard, 5.3-Flash (ten times cheaper) for the light roles.
 model|glm|sol|glm-5.3
@@ -18,6 +19,9 @@ rolemodel|glm|sentinella|luna
 rolemodel|kimi|scout|luna
 rolemodel|kimi|analista|luna
 rolemodel|kimi|sentinella|luna
+rolemodel|claude|scout|luna
+rolemodel|claude|analista|luna
+rolemodel|claude|sentinella|luna
 # OpenAI (pi with a key, and Codex) takes its models from role-models.list; the same three light roles on luna.
 rolemodel|openai|scout|luna
 rolemodel|openai|analista|luna
@@ -26,3 +30,8 @@ rolemodel|openai|sentinella|luna
 model|kimi|sol|kimi-k3.1-pro
 model|kimi|terra|kimi-k3.1-pro
 model|kimi|luna|kimi-k3.1-pro
+# Claude (Anthropic) on pi, only with an API key (a Claude subscription used from pi is billed as extra usage): Opus where the
+# work is hard, Sonnet in the middle, Haiku for the light roles.
+model|claude|sol|claude-opus-5-5
+model|claude|terra|claude-sonnet-5-5
+model|claude|luna|claude-haiku-5-5
