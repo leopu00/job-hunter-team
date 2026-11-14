@@ -49,7 +49,10 @@ RAM_RESERVED_GIB = {"local": 2.0, "vps": 1.0}
 SWAP_WEIGHT = 0.5
 FIXED_AGENTS = 5               # Capitano, Sentinella, Assistente, Mentor, Dottore are already running
 # Workers per core. codex: set from one measured run. pi: the same four runs peaked at a load of 2.6 on 8 cores with the
-# full team: a pi session waits on the model's answer most of the time, so 5 per core still leaves the cores half idle.
+# full team: a pi session waits on the model's answer most of the time. On 2 cores the 10 workers this gives were measured
+# too (a 4 GB VPS, 2 vCPU, full image, 5/3/2, 13 sessions): the CPU is saturated (load 13-15, CPU pressure ~95%) but the team
+# works (47 positions and 26 scores in ~42 minutes), and the RAM holds (at least 1.3 GB available, 12 MB of swap used, no
+# OOM, the largest pi process 188 MB). Saturated but holding is what was asked of a 4 GB server.
 WORKERS_PER_CORE = {"pi": 5.0}
 DEFAULT_WORKERS_PER_CORE = 2.0
 LOAD_BRAKE_PER_CORE = 8.0      # very high load per core: the cap is halved
