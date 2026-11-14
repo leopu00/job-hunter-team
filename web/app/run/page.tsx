@@ -35,37 +35,37 @@ const MODES: Mode[] = [
     },
     it: {
       title: "Sul tuo PC",
-      body: "Il modo più immediato per provarlo. Avvii e fermi la squadra con un clic dall'app desktop, e ogni dato resta sul tuo computer — nessun cloud, se non lo vuoi.",
+      body: "Il modo più immediato per provarlo. Avvii e fermi la squadra con un clic dall'app desktop, e i tuoi dati restano sul tuo computer, senza il cloud di JHT se non lo vuoi; i testi che gli agenti elaborano vanno al fornitore del modello (Z.ai per GLM).",
       req: "Un Mac con Apple silicon e Homebrew: l’app installa Podman e prepara da sola il runtime dei container.",
     },
     en: {
       title: "On your PC",
-      body: "The most immediate way to try it. Start and stop the team with one click from the desktop app, and every piece of data stays on your computer — no cloud, unless you want it.",
+      body: "The most immediate way to try it. Start and stop the team with one click from the desktop app, and your data stays on your computer, without JHT's cloud unless you want it; the texts the agents work on go to the model's provider (Z.ai for GLM).",
       req: "A Mac with Apple silicon and Homebrew: the app installs Podman and sets up the container runtime by itself.",
     },
     es: {
       title: "En tu PC",
-      body: "La forma más inmediata de probarlo. Inicias y detienes el equipo con un clic desde la app de escritorio, y cada dato permanece en tu ordenador — sin nube, si no la quieres.",
+      body: "La forma más inmediata de probarlo. Inicias y detienes el equipo con un clic desde la app de escritorio, y tus datos se quedan en tu ordenador, sin la nube de JHT si no la quieres; los textos que procesan los agentes van al proveedor del modelo (Z.ai para GLM).",
       req: "Un Mac con Apple silicon y Homebrew: la aplicación instala Podman y prepara sola el entorno de contenedores.",
     },
     fr: {
       title: "Sur votre PC",
-      body: "La façon la plus immédiate de l'essayer. Vous démarrez et arrêtez l'équipe d'un clic depuis l'app de bureau, et chaque donnée reste sur votre ordinateur — aucun cloud, sauf si vous le voulez.",
+      body: "La façon la plus immédiate de l'essayer. Vous démarrez et arrêtez l'équipe d'un clic depuis l'app de bureau, et vos données restent sur votre ordinateur, sans le cloud de JHT sauf si vous le voulez ; les textes que traitent les agents vont au fournisseur du modèle (Z.ai pour GLM).",
       req: "Un Mac Apple silicon avec Homebrew : l’application installe Podman et prépare elle-même l’environnement de conteneurs.",
     },
     de: {
       title: "Auf deinem PC",
-      body: "Der unmittelbarste Weg, es auszuprobieren. Du startest und stoppst das Team mit einem Klick aus der Desktop-App, und alle Daten bleiben auf deinem Computer — keine Cloud, sofern du sie nicht willst.",
+      body: "Der unmittelbarste Weg, es auszuprobieren. Du startest und stoppst das Team mit einem Klick aus der Desktop-App, und deine Daten bleiben auf deinem Computer, ohne die Cloud von JHT, sofern du sie nicht willst; die Texte, die die Agenten verarbeiten, gehen an den Anbieter des Modells (Z.ai für GLM).",
       req: "Ein Mac mit Apple Silicon und Homebrew: Die App installiert Podman und richtet die Container-Laufzeit selbst ein.",
     },
     pt: {
       title: "No teu PC",
-      body: "A forma mais imediata de o experimentar. Inicias e paras a equipa com um clique a partir da app de ambiente de trabalho, e cada dado permanece no teu computador — sem nuvem, se não a quiseres.",
+      body: "A forma mais imediata de o experimentar. Inicias e paras a equipa com um clique a partir da app de ambiente de trabalho, e os teus dados ficam no teu computador, sem a nuvem do JHT se não a quiseres; os textos que os agentes processam vão para o fornecedor do modelo (Z.ai para GLM).",
       req: "Um Mac com Apple silicon e Homebrew: a aplicação instala o Podman e prepara sozinha o ambiente de contentores.",
     },
     hu: {
       title: "A saját géped",
-      body: "A legközvetlenebb módja a kipróbálásnak. Egy kattintással indítod és állítod le a csapatot az asztali appból, és minden adat a számítógépeden marad — felhő nélkül, ha nem akarod.",
+      body: "A legközvetlenebb módja a kipróbálásnak. Egy kattintással indítod és állítod le a csapatot az asztali appból, és az adataid a számítógépeden maradnak, a JHT felhője nélkül, ha nem akarod; az ügynökök által feldolgozott szövegek a modell szolgáltatójához kerülnek (GLM esetén a Z.ai-hoz).",
       req: "Apple silicon Mac Homebrew-val: az alkalmazás telepíti a Podmant, és magától előkészíti a konténer-futtatókörnyezetet.",
     },
   },
@@ -188,7 +188,7 @@ const PAGE = {
     ctrlBrowserBody:
       "Con il login apri la dashboard da qualsiasi browser, anche dal telefono, e segui la squadra ovunque ti trovi.",
     ctrlWeb:
-      "Il login resta sempre facoltativo: se preferisci, i tuoi dati restano solo sul tuo computer, senza alcun cloud.",
+      "Il login resta sempre facoltativo: se preferisci, i tuoi dati restano solo sul tuo computer, senza il cloud di JHT (i testi che gli agenti elaborano vanno comunque al fornitore del modello).",
     ctaDownload: "Installa →",
     back: "← Torna alla home",
   },
@@ -212,7 +212,7 @@ const PAGE = {
     ctrlBrowserBody:
       "With login, open the dashboard from any browser, even your phone, and follow the team wherever you are.",
     ctrlWeb:
-      "Login always stays optional: if you prefer, your data stays only on your computer, with no cloud at all.",
+      "Login always stays optional: if you prefer, your data stays only on your computer, without JHT's cloud (the texts the agents work on still go to the model's provider).",
     ctaDownload: "Install →",
     back: "← Back to home",
   },
@@ -236,7 +236,7 @@ const PAGE = {
     ctrlBrowserBody:
       "Con el inicio de sesión abres la dashboard desde cualquier navegador, incluso desde el móvil, y sigues al equipo estés donde estés.",
     ctrlWeb:
-      "El inicio de sesión siempre es opcional: si lo prefieres, tus datos se quedan solo en tu ordenador, sin ninguna nube.",
+      "El inicio de sesión siempre es opcional: si lo prefieres, tus datos se quedan solo en tu ordenador, sin la nube de JHT (los textos que procesan los agentes van igualmente al proveedor del modelo).",
     ctaDownload: "Instalar →",
     back: "← Volver al inicio",
   },
@@ -260,7 +260,7 @@ const PAGE = {
     ctrlBrowserBody:
       "Avec la connexion, ouvrez la dashboard depuis n'importe quel navigateur, même votre téléphone, et suivez l'équipe où que vous soyez.",
     ctrlWeb:
-      "La connexion reste toujours facultative : si vous préférez, vos données restent uniquement sur votre ordinateur, sans aucun cloud.",
+      "La connexion reste toujours facultative : si vous préférez, vos données restent uniquement sur votre ordinateur, sans le cloud de JHT (les textes que traitent les agents vont quand même au fournisseur du modèle).",
     ctaDownload: "Installer →",
     back: "← Retour à l'accueil",
   },
@@ -284,7 +284,7 @@ const PAGE = {
     ctrlBrowserBody:
       "Mit Anmeldung öffnest du die Dashboard von jedem Browser aus, sogar vom Handy, und verfolgst das Team, wo immer du bist.",
     ctrlWeb:
-      "Die Anmeldung bleibt immer optional: Wenn du möchtest, bleiben deine Daten nur auf deinem Computer, ganz ohne Cloud.",
+      "Die Anmeldung bleibt immer optional: Wenn du möchtest, bleiben deine Daten nur auf deinem Computer, ohne die Cloud von JHT (die Texte, die die Agenten verarbeiten, gehen trotzdem an den Anbieter des Modells).",
     ctaDownload: "Installieren →",
     back: "← Zurück zur Startseite",
   },
@@ -308,7 +308,7 @@ const PAGE = {
     ctrlBrowserBody:
       "Bejelentkezéssel bármelyik böngészőből megnyitod a dashboardot, akár a telefonodról is, és bárhol követheted a csapatot.",
     ctrlWeb:
-      "A bejelentkezés mindig opcionális marad: ha úgy szeretnéd, az adataid csak a saját gépeden maradnak, felhő nélkül.",
+      "A bejelentkezés mindig opcionális marad: ha úgy szeretnéd, az adataid csak a saját gépeden maradnak, a JHT felhője nélkül (az ügynökök által feldolgozott szövegek ekkor is a modell szolgáltatójához kerülnek).",
     ctaDownload: "Telepítés →",
     back: "← Vissza a főoldalra",
   },
@@ -332,7 +332,7 @@ const PAGE = {
     ctrlBrowserBody:
       "Com o início de sessão abres a dashboard a partir de qualquer navegador, até do telemóvel, e acompanhas a equipa onde quer que estejas.",
     ctrlWeb:
-      "O início de sessão é sempre opcional: se preferires, os teus dados ficam só no teu computador, sem qualquer nuvem.",
+      "O início de sessão é sempre opcional: se preferires, os teus dados ficam só no teu computador, sem a nuvem do JHT (os textos que os agentes processam vão na mesma para o fornecedor do modelo).",
     ctaDownload: "Instalar →",
     back: "← Voltar ao início",
   },

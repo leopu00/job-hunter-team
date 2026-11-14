@@ -1,6 +1,6 @@
 # ☁️ Manual VPS setup
 
-> 0.4.0 is installed from the command line; the desktop app comes in a later release: see the [CLI quickstart](QUICKSTART.md).
+> 0.4.0 is installed from the command line; the desktop app is not in 0.4.0: see the [CLI quickstart](QUICKSTART.md).
 
 This is the current terminal-first path for an existing Linux VPS. For the
 guided path, use the desktop app and

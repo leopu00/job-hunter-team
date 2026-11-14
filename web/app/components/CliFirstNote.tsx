@@ -6,13 +6,13 @@ import type { Locale } from "@/i18n/config";
 export const QUICKSTART_CLI_URL = "https://github.com/leopu00/job-hunter-team/blob/master/docs/guides/QUICKSTART.md";
 
 export const CLI_FIRST_NOTE: Record<Locale, { text: string; link: string }> = {
-  en: { text: "0.4.0 is installed from the command line; the desktop app comes in a later release.", link: "CLI quickstart" },
-  it: { text: "La 0.4.0 si installa dalla riga di comando; l'app desktop arriva in una versione successiva.", link: "Quickstart della CLI" },
-  es: { text: "La 0.4.0 se instala desde la línea de comandos; la app de escritorio llega en una versión posterior.", link: "Quickstart de la CLI" },
-  fr: { text: "La 0.4.0 s'installe en ligne de commande ; l'application de bureau arrive dans une version ultérieure.", link: "Quickstart de la CLI" },
-  de: { text: "0.4.0 wird über die Kommandozeile installiert; die Desktop-App kommt in einer späteren Version.", link: "Quickstart der CLI" },
-  pt: { text: "A 0.4.0 instala-se pela linha de comandos; a app de ambiente de trabalho chega numa versão posterior.", link: "Quickstart da CLI" },
-  hu: { text: "A 0.4.0 parancssorból telepíthető; az asztali alkalmazás egy későbbi verzióban érkezik.", link: "A CLI Quickstart leírása" },
+  en: { text: "0.4.0 is installed from the command line; the desktop app is not in 0.4.0.", link: "CLI quickstart" },
+  it: { text: "La 0.4.0 si installa dalla riga di comando; l'app desktop non è nella 0.4.0.", link: "Quickstart della CLI" },
+  es: { text: "La 0.4.0 se instala desde la línea de comandos; la app de escritorio no está en la 0.4.0.", link: "Quickstart de la CLI" },
+  fr: { text: "La 0.4.0 s'installe en ligne de commande ; l'application de bureau n'est pas dans la 0.4.0.", link: "Quickstart de la CLI" },
+  de: { text: "0.4.0 wird über die Kommandozeile installiert; die Desktop-App ist nicht in 0.4.0.", link: "Quickstart der CLI" },
+  pt: { text: "A 0.4.0 instala-se pela linha de comandos; a app de ambiente de trabalho não está na 0.4.0.", link: "Quickstart da CLI" },
+  hu: { text: "A 0.4.0 parancssorból telepíthető; az asztali alkalmazás nincs a 0.4.0-ban.", link: "A CLI Quickstart leírása" },
 };
 
 export function CliFirstNote({ lang, className = "" }: { lang: string; className?: string }) {

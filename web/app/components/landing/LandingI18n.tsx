@@ -103,9 +103,9 @@ const translations = {
 
   // Footer
   footer_brand_desc: {
-    it: "Una squadra di agenti AI autonomi che cercano lavoro per te. Open source, locale, privato.",
-    en: "A team of autonomous AI agents that job-hunts for you. Open source, local, private.",
-    hu: "Autonóm AI-ügynökök csapata, amely állást keres helyetted. Nyílt forráskódú, helyi, privát.",
+    it: "Una squadra di agenti AI autonomi che cercano lavoro per te. Open source. I tuoi dati restano sul tuo computer; i testi che gli agenti elaborano vanno al fornitore del modello (Z.ai per GLM).",
+    en: "A team of autonomous AI agents that job-hunts for you. Open source. Your data stays on your computer; the texts the agents work on go to the model's provider (Z.ai for GLM).",
+    hu: "Autonóm AI-ügynökök csapata, amely állást keres helyetted. Nyílt forráskódú. Az adataid a gépeden maradnak; az ügynökök által feldolgozott szövegek a modell szolgáltatójához kerülnek (GLM esetén a Z.ai-hoz).",
   },
   footer_product: { it: "Prodotto", en: "Product", hu: "Termék" },
   footer_stats: { it: "Progetto", en: "Project", hu: "Projekt" },

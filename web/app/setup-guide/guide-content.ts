@@ -715,13 +715,13 @@ export const GUIDE_CHAPTERS: GuideChapter[] = [
       hu: "Nézd meg a helyi csapatodat a weben",
     },
     summary: {
-      en: "Optionally sync positions, profile, and commands with your private dashboard. The team can remain fully local.",
-      it: "Puoi sincronizzare facoltativamente posizioni, profilo e comandi con la tua dashboard privata. Il team può restare completamente locale.",
-      es: "Opcionalmente, sincroniza posiciones, perfil y comandos con tu panel privado. El equipo puede permanecer completamente local.",
-      fr: "Vous pouvez synchroniser les postes, le profil et les commandes avec votre tableau de bord privé. L’équipe peut rester entièrement locale.",
-      de: "Synchronisiere optional Positionen, Profil und Befehle mit deinem privaten Dashboard. Das Team kann vollständig lokal bleiben.",
-      pt: "Opcionalmente, sincroniza posições, perfil e comandos com o teu painel privado. A equipa pode permanecer totalmente local.",
-      hu: "Igény szerint szinkronizáld a pozíciókat, a profilt és a parancsokat a privát irányítópultoddal. A csapat teljesen helyi maradhat.",
+      en: "Optionally sync positions, profile, and commands with your private dashboard. Without it, your data stays on your computer; the texts the agents work on go to the model's provider (Z.ai for GLM) in any case.",
+      it: "Puoi sincronizzare facoltativamente posizioni, profilo e comandi con la tua dashboard privata. Senza, i tuoi dati restano sul tuo computer; i testi che gli agenti elaborano vanno comunque al fornitore del modello (Z.ai per GLM).",
+      es: "Opcionalmente, sincroniza posiciones, perfil y comandos con tu panel privado. Sin ella, tus datos se quedan en tu ordenador; los textos que procesan los agentes van en cualquier caso al proveedor del modelo (Z.ai para GLM).",
+      fr: "Vous pouvez synchroniser les postes, le profil et les commandes avec votre tableau de bord privé. Sans elle, vos données restent sur votre ordinateur ; les textes que traitent les agents vont dans tous les cas au fournisseur du modèle (Z.ai pour GLM).",
+      de: "Synchronisiere optional Positionen, Profil und Befehle mit deinem privaten Dashboard. Ohne sie bleiben deine Daten auf deinem Computer; die Texte, die die Agenten verarbeiten, gehen in jedem Fall an den Anbieter des Modells (Z.ai für GLM).",
+      pt: "Opcionalmente, sincroniza posições, perfil e comandos com o teu painel privado. Sem ela, os teus dados ficam no teu computador; os textos que os agentes processam vão em qualquer caso para o fornecedor do modelo (Z.ai para GLM).",
+      hu: "Igény szerint szinkronizáld a pozíciókat, a profilt és a parancsokat a privát irányítópultoddal. Nélküle az adataid a gépeden maradnak; az ügynökök által feldolgozott szövegek mindenképp a modell szolgáltatójához kerülnek (GLM esetén a Z.ai-hoz).",
     },
     phases: [
       {

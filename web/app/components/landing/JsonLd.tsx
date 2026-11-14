@@ -16,7 +16,7 @@ export default async function JsonLd() {
       priceCurrency: "USD",
     },
     description:
-      "Un team di agenti AI che automatizza la ricerca di lavoro: scansione offerte, analisi, scoring e candidature personalizzate. Open source, locale, privato.",
+      "Un team di agenti AI che automatizza la ricerca di lavoro: scansione offerte, analisi, scoring e candidature personalizzate. Open source. I tuoi dati restano sul tuo computer; i testi che gli agenti elaborano vanno al fornitore del modello (Z.ai per GLM).",
     url: SITE_URL,
     license: "https://opensource.org/licenses/MIT",
     isAccessibleForFree: true,

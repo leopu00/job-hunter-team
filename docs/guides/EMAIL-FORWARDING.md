@@ -1,6 +1,6 @@
 # 📧 Email Forwarding — feed the team your job alerts
 
-> 0.4.0 is installed from the command line; the desktop app comes in a later release: see the [CLI quickstart](QUICKSTART.md).
+> 0.4.0 is installed from the command line; the desktop app is not in 0.4.0: see the [CLI quickstart](QUICKSTART.md).
 
 Give the team a **dedicated email address** and auto-forward your job-alert
 notifications to it. The Captain and the Scouts read that inbox at the start of
