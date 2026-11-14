@@ -6,6 +6,10 @@ an optional alternative, not a requirement.
 
 ## Desktop app
 
+> **The desktop app is not in 0.4.0.** This tutorial describes the app of the
+> releases that have it; in 0.4.0 the team is installed and driven from the
+> `jht` CLI: see the [Quickstart](QUICKSTART.md).
+
 This tutorial follows the desktop app: it sets up the team, shows how work
 moves through it, and how to inspect a result before you decide what to do.
 
@@ -24,7 +28,7 @@ Keep the app open while it works.
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
    is already selected: click macOS once (Windows is shown as “Not in this version”, and there is no desktop app for Linux in this version) to start the
    current release download for that platform.
-2. **Open the download for your system.** Windows is not part of 0.4.0: there is no Windows installer in this release.
+2. **Open the download for your system.** Windows has no desktop app: in 0.4.0 it is a preview of the CLI, tested on Windows 10, not on Windows 11.
    On macOS, open `job-hunter-team-macos-universal.dmg` and drag the app into
    Applications; it is signed with an Apple Developer ID and notarized by
    Apple. Only Macs with Apple silicon (M1 and later). Intel Macs are not supported in 0.4.

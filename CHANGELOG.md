@@ -42,7 +42,7 @@ this was tested on real machines and which was not.
   (a manual LinkedIn sign-in in an isolated browser with no network) run in separate containers, started only
   on request.
 - `jht uninstall --confirm` removes the team's containers, volumes and images; `--purge` deletes the data too.
-- The installer scripts have their SHA-256 published; the recommended command checks it before running.
+- The installer scripts have their SHA-256 published; on Windows the recommended command checks it before running.
 
 ### Team
 

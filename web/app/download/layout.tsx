@@ -11,49 +11,49 @@ const META: Record<
   it: {
     title: "Installa",
     description:
-      "Scarica l'app desktop di Job Hunter Team oppure installalo dal terminale con la CLI. Il tuo team di agenti AI gira sul tuo computer — open source, locale, privato.",
+      "Installa Job Hunter Team dal terminale con la CLI (l'app desktop non è nella 0.4.0). Il tuo team di agenti AI gira sul tuo computer — open source, locale, privato.",
     jsonLdDescription:
       "Un team di agenti AI che automatizza la ricerca di lavoro. Open source, locale, privato.",
   },
   en: {
     title: "Install",
     description:
-      "Download the Job Hunter Team desktop app, or install it from the terminal with the CLI. Your AI agent team runs on your own computer — open source, local, private.",
+      "Install Job Hunter Team from the terminal with the CLI (the desktop app is not in 0.4.0). Your AI agent team runs on your own computer — open source, local, private.",
     jsonLdDescription:
       "A team of AI agents that automates the job search. Open source, local, private.",
   },
   es: {
     title: "Instalar",
     description:
-      "Descarga la app de escritorio de Job Hunter Team o instálalo desde la terminal con la CLI. Tu equipo de agentes de IA se ejecuta en tu propio ordenador — open source, local, privado.",
+      "Instala Job Hunter Team desde la terminal con la CLI (la app de escritorio no está en la 0.4.0). Tu equipo de agentes de IA se ejecuta en tu propio ordenador — open source, local, privado.",
     jsonLdDescription:
       "Un equipo de agentes de IA que automatiza la búsqueda de empleo. Open source, local, privado.",
   },
   fr: {
     title: "Installer",
     description:
-      "Téléchargez l'app de bureau Job Hunter Team ou installez-la depuis le terminal avec la CLI. Votre équipe d'agents IA s'exécute sur votre propre ordinateur — open source, locale, privée.",
+      "Installez Job Hunter Team depuis le terminal avec la CLI (l'app de bureau n'est pas dans la 0.4.0). Votre équipe d'agents IA s'exécute sur votre propre ordinateur — open source, locale, privée.",
     jsonLdDescription:
       "Une équipe d'agents IA qui automatise la recherche d'emploi. Open source, locale, privée.",
   },
   de: {
     title: "Installieren",
     description:
-      "Lade die Job Hunter Team Desktop-App herunter oder installiere sie über das Terminal mit der CLI. Dein KI-Agententeam läuft auf deinem eigenen Computer — Open Source, lokal, privat.",
+      "Installiere Job Hunter Team über das Terminal mit der CLI (die Desktop-App ist nicht in 0.4.0). Dein KI-Agententeam läuft auf deinem eigenen Computer — Open Source, lokal, privat.",
     jsonLdDescription:
       "Ein Team von KI-Agenten, das die Jobsuche automatisiert. Open source, lokal, privat.",
   },
   hu: {
     title: "Telepítés",
     description:
-      "Töltsd le a Job Hunter Team asztali appját, vagy telepítsd terminálból a CLI-val. Az MI-ügynökökből álló csapatod a saját számítógépeden fut — open source, helyi, privát.",
+      "Telepítsd a Job Hunter Teamet terminálból a CLI-val (az asztali app nincs a 0.4.0-ban). Az MI-ügynökökből álló csapatod a saját számítógépeden fut — open source, helyi, privát.",
     jsonLdDescription:
       "MI-ügynökökből álló csapat, amely automatizálja az álláskeresést. Open source, helyi, privát.",
   },
   pt: {
     title: "Instalar",
     description:
-      "Descarrega a app de ambiente de trabalho Job Hunter Team ou instala-a a partir do terminal com a CLI. A tua equipa de agentes de IA corre no teu próprio computador — open source, local, privada.",
+      "Instala o Job Hunter Team a partir do terminal com a CLI (a app de ambiente de trabalho não está na 0.4.0). A tua equipa de agentes de IA corre no teu próprio computador — open source, local, privada.",
     jsonLdDescription:
       "Uma equipa de agentes de IA que automatiza a procura de emprego. Open source, local, privada.",
   },

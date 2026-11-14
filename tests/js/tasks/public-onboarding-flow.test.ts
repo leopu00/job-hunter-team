@@ -55,16 +55,17 @@ describe("percorso pubblico di onboarding", () => {
     );
   });
 
-  it("apre Downloads sul Desktop e non presenta più l'app come in arrivo", () => {
+  it("apre Downloads sulla CLI (l'app non è nella 0.4.0) e non presenta l'app come in arrivo", () => {
     const modes = downloadSource.slice(
       downloadSource.indexOf("const MODES"),
-      downloadSource.indexOf("type PlatformId"),
+      downloadSource.indexOf("const CLI_SETUP_CMD"),
     );
 
-    expect(modes.indexOf('id: "desktop"')).toBeLessThan(
-      modes.indexOf('id: "terminal"'),
+    expect(modes).not.toContain('id: "desktop"');
+    expect(modes.indexOf('id: "terminal"')).toBeLessThan(
+      modes.indexOf('id: "prompt"'),
     );
-    expect(downloadSource).toContain('useState<InstallMode>("desktop")');
+    expect(downloadSource).toContain('useState<InstallMode>("terminal")');
     expect(downloadSource).toContain("data-install-mode={m.id}");
     expect(runSource).not.toContain("soon: true");
     expect(runSource).not.toContain('soon: "In arrivo"');

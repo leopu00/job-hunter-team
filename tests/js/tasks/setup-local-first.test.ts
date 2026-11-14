@@ -280,11 +280,12 @@ describe("route pubbliche — il locale non e' una demo e il cloud non e' un hos
   // non ha Windows: la guida «dove farlo girare» lo dice e non descrive più WSL.
   // QUICKSTART e TUTORIALS hanno ancora la frase della catena Windows, da riscrivere
   // a parte; qui restano controllati come prima.
-  it("la release 0.4 dice che Windows non c'e' in questa versione e nessuna guida torna a chiedere Docker Desktop", () => {
+  it("la release 0.4 dice Windows come il README (anteprima della CLI) e nessuna guida torna a chiedere Docker Desktop", () => {
     for (const guide of nativeOfficeGuides) {
       expect(guide).not.toMatch(/Windows users must complete\s+Docker Desktop/i);
     }
-    expect(chooseWhere).toContain("Windows is not in this version");
+    expect(chooseWhere).toContain("Windows is a preview in 0.4.0, CLI only: tested on Windows 10, not on Windows 11.");
+    expect(chooseWhere).not.toContain("Windows is not in this version");
     expect(chooseWhere).not.toMatch(/WSL/);
     expect(chooseWhere).not.toContain("use a Linux VPS instead");
     for (const guide of nativeOfficeGuides.slice(1)) {

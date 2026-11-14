@@ -23,6 +23,7 @@ import {
   useLandingI18n,
 } from "../components/landing/LandingI18n";
 import LandingNav from "../components/landing/LandingNav";
+import { CliFirstNote } from "@/app/components/CliFirstNote";
 
 function GuideContent() {
   const { lang } = useLandingI18n();
@@ -63,6 +64,7 @@ function GuideContent() {
         className="mx-auto max-w-6xl px-6 pt-24 pb-20 sm:pt-28"
       >
         <header className="max-w-3xl">
+          <CliFirstNote lang={lang} className="mb-6" />
           <h1 className="hyphens-auto break-words text-[28px] font-extrabold leading-tight tracking-tight text-[var(--color-white)] sm:text-4xl">
             {GUIDE_UI.page_title[lang]}
           </h1>
