@@ -115,6 +115,191 @@ jht_read_host_env_value() {
   printf '%s' "$result"
 }
 
+# ── i18n: soltanto dati, mai helper shell dal filesystem ─────────────────
+# This script runs on the host, where shared/locales is not there, and it imports no code and reads no text from a folder the
+# container can write. Its texts in the 7 languages are written here, as data: the block below is made from shared/locales
+# (python3 tests/host_setup_texts.py --write), and a test fails when the two differ. JHT_LANG is the language decided below
+# (the saved choice, the picker, JHT_LANG, host.env, the system's); a key with no text in it says the English of the call.
+# >>> texts in the 7 languages, made from shared/locales by `python3 tests/host_setup_texts.py --write`: do not edit by hand
+ts_table() {
+  case "$1:$2" in
+    en:host_setup.detected) printf '%s' 'Detected:' ;;
+    en:host_setup.host.local) printf '%s' 'local computer' ;;
+    en:host_setup.host.vps) printf '%s' 'remote server / VPS' ;;
+    en:host_setup.option.local.line1) printf '%s' 'The full team runs on this PC; keep it awake with Docker running while the team works.' ;;
+    en:host_setup.option.local.line2) printf '%s' 'Shortest guided path; no VPS or cloud account required.' ;;
+    en:host_setup.option.local.title) printf '%s' 'Local PC' ;;
+    en:host_setup.option.vps.line1) printf '%s' 'The team runs on a remote Linux server over SSH and can continue when this PC is off.' ;;
+    en:host_setup.option.vps.line2) printf '%s' 'You provide and administer the server and its SSH access.' ;;
+    en:host_setup.option.vps.title) printf '%s' 'VPS / remote server' ;;
+    en:host_setup.ram_sufficient) printf '%s' 'RAM sufficient (%d GB) — swap not needed, skip' ;;
+    en:host_setup.section_header) printf '%s' 'Host setup (preflight)' ;;
+    en:host_setup.swap_active) printf '%s' 'Swap active: %d MB (persists across reboot via /etc/fstab)' ;;
+    en:host_setup.swap_already_configured) printf '%s' 'swap already configured (%d MB) — skip' ;;
+    en:host_setup.swap_configure) printf '%s' 'Configure %d GB of swap in %s?' ;;
+    en:host_setup.swap_low_ram) printf '%s' 'With %d GB of RAM the team may OOM under load.' ;;
+    en:host_setup.swap_not_configured_warn) printf '%s' 'swap not configured — team may crash under load' ;;
+    en:host_setup.swap_not_needed) printf '%s' 'no swap configuration needed' ;;
+    en:host_setup.swap_root_required) printf '%s' 'Root privileges needed to configure swap' ;;
+    en:host_setup.timezone_explain) printf '%s' 'The Captain uses it to convert times in Telegram messages and charts.' ;;
+    en:host_setup.timezone_header) printf '%s' 'User timezone' ;;
+    en:host_setup.timezone_invalid) printf '%s' 'Invalid timezone, falling back to UTC.' ;;
+    en:host_setup.timezone_prompt) printf '%s' 'Where are you (IANA timezone, e.g. Europe/Rome, America/New_York, Asia/Shanghai)?' ;;
+    en:host_setup.where_running) printf '%s' 'Where are you running JHT?' ;;
+    it:host_setup.detected) printf '%s' 'Rilevato:' ;;
+    it:host_setup.host.local) printf '%s' 'computer locale' ;;
+    it:host_setup.host.vps) printf '%s' 'server remoto / VPS' ;;
+    it:host_setup.option.local.line1) printf '%s' 'Il team completo lavora su questo PC; tienilo acceso con Docker attivo mentre il team lavora.' ;;
+    it:host_setup.option.local.line2) printf '%s' 'Percorso guidato più breve; non servono una VPS o un account cloud.' ;;
+    it:host_setup.option.local.title) printf '%s' 'PC locale' ;;
+    it:host_setup.option.vps.line1) printf '%s' 'Il team lavora su un server Linux remoto via SSH e può continuare quando questo PC è spento.' ;;
+    it:host_setup.option.vps.line2) printf '%s' 'Fornisci e amministri tu il server e il relativo accesso SSH.' ;;
+    it:host_setup.option.vps.title) printf '%s' 'VPS / server remoto' ;;
+    it:host_setup.ram_sufficient) printf '%s' 'RAM sufficiente (%d GB) — swap non necessaria, skip' ;;
+    it:host_setup.section_header) printf '%s' 'Setup host (preflight)' ;;
+    it:host_setup.swap_active) printf '%s' 'Swap attiva: %d MB (persiste a reboot via /etc/fstab)' ;;
+    it:host_setup.swap_already_configured) printf '%s' 'swap gia'\'' configurato (%d MB) — skip' ;;
+    it:host_setup.swap_configure) printf '%s' 'Configuro %d GB di swap in %s?' ;;
+    it:host_setup.swap_low_ram) printf '%s' 'Con %d GB di RAM il team puo'\'' andare in OOM sotto carico.' ;;
+    it:host_setup.swap_not_configured_warn) printf '%s' 'swap non configurata — il team potrebbe crashare sotto carico' ;;
+    it:host_setup.swap_not_needed) printf '%s' 'nessuna configurazione swap richiesta' ;;
+    it:host_setup.swap_root_required) printf '%s' 'Servono privilegi root per configurare la swap' ;;
+    it:host_setup.timezone_explain) printf '%s' 'Il Capitano la usa per convertire gli orari nei messaggi Telegram e nei grafici.' ;;
+    it:host_setup.timezone_header) printf '%s' 'Timezone utente' ;;
+    it:host_setup.timezone_invalid) printf '%s' 'Timezone non valida, fallback a UTC.' ;;
+    it:host_setup.timezone_prompt) printf '%s' 'Dove ti trovi (timezone IANA, es. Europe/Rome, America/New_York, Asia/Shanghai)?' ;;
+    it:host_setup.where_running) printf '%s' 'Dove stai eseguendo JHT?' ;;
+    hu:host_setup.detected) printf '%s' 'Észlelt:' ;;
+    hu:host_setup.host.local) printf '%s' 'helyi számítógép' ;;
+    hu:host_setup.host.vps) printf '%s' 'távoli szerver / VPS' ;;
+    hu:host_setup.option.local.line1) printf '%s' 'A teljes csapat ezen a PC-n fut; munka közben tartsd ébren, futó Dockerrel.' ;;
+    hu:host_setup.option.local.line2) printf '%s' 'A legrövidebb vezetett út; nem kell VPS vagy felhőfiók.' ;;
+    hu:host_setup.option.local.title) printf '%s' 'Helyi PC' ;;
+    hu:host_setup.option.vps.line1) printf '%s' 'A csapat egy távoli Linux-szerveren fut SSH-n át, és a PC kikapcsolása után is folytathatja.' ;;
+    hu:host_setup.option.vps.line2) printf '%s' 'A szervert és az SSH-hozzáférést te biztosítod és kezeled.' ;;
+    hu:host_setup.option.vps.title) printf '%s' 'VPS / távoli szerver' ;;
+    hu:host_setup.ram_sufficient) printf '%s' 'elegendő RAM (%d GB) — swap nem szükséges, kihagyás' ;;
+    hu:host_setup.section_header) printf '%s' 'Host telepítés (előellenőrzés)' ;;
+    hu:host_setup.swap_active) printf '%s' 'Swap aktív: %d MB (újraindítás után is megmarad a /etc/fstab miatt)' ;;
+    hu:host_setup.swap_already_configured) printf '%s' 'swap már beállítva (%d MB) — kihagyás' ;;
+    hu:host_setup.swap_configure) printf '%s' 'Beállítok %d GB swap-et ide: %s?' ;;
+    hu:host_setup.swap_low_ram) printf '%s' '%d GB RAM mellett a csapat OOM-ba mehet terhelés alatt.' ;;
+    hu:host_setup.swap_not_configured_warn) printf '%s' 'swap nincs beállítva — a csapat összeomolhat terhelés alatt' ;;
+    hu:host_setup.swap_not_needed) printf '%s' 'nincs szükség swap beállításra' ;;
+    hu:host_setup.swap_root_required) printf '%s' 'Root jogosultság szükséges a swap beállításához' ;;
+    hu:host_setup.timezone_explain) printf '%s' 'A Kapitány ezt használja az időpontok átváltására Telegram üzenetekben és grafikonokon.' ;;
+    hu:host_setup.timezone_header) printf '%s' 'Felhasználói időzóna' ;;
+    hu:host_setup.timezone_invalid) printf '%s' 'Érvénytelen időzóna, visszaesés UTC-re.' ;;
+    hu:host_setup.timezone_prompt) printf '%s' 'Hol vagy (IANA időzóna, pl. Europe/Budapest, America/New_York, Asia/Shanghai)?' ;;
+    hu:host_setup.where_running) printf '%s' 'Hol futtatod a JHT-t?' ;;
+    es:host_setup.detected) printf '%s' 'Detectado:' ;;
+    es:host_setup.host.local) printf '%s' 'ordenador local' ;;
+    es:host_setup.host.vps) printf '%s' 'servidor remoto / VPS' ;;
+    es:host_setup.option.local.line1) printf '%s' 'El equipo completo trabaja en este PC; mantenlo activo con Docker en marcha mientras trabaja.' ;;
+    es:host_setup.option.local.line2) printf '%s' 'La ruta guiada más corta; no requiere VPS ni cuenta cloud.' ;;
+    es:host_setup.option.local.title) printf '%s' 'PC local' ;;
+    es:host_setup.option.vps.line1) printf '%s' 'El equipo trabaja en un servidor Linux remoto por SSH y puede continuar con este PC apagado.' ;;
+    es:host_setup.option.vps.line2) printf '%s' 'Tú proporcionas y administras el servidor y su acceso SSH.' ;;
+    es:host_setup.option.vps.title) printf '%s' 'VPS / servidor remoto' ;;
+    es:host_setup.ram_sufficient) printf '%s' 'RAM suficiente (%d GB) — swap no necesario, saltar' ;;
+    es:host_setup.section_header) printf '%s' 'Configuración del host (preflight)' ;;
+    es:host_setup.swap_active) printf '%s' 'Swap activo: %d MB (persiste tras reinicio vía /etc/fstab)' ;;
+    es:host_setup.swap_already_configured) printf '%s' 'swap ya configurado (%d MB) — saltar' ;;
+    es:host_setup.swap_configure) printf '%s' '¿Configurar %d GB de swap en %s?' ;;
+    es:host_setup.swap_low_ram) printf '%s' 'Con %d GB de RAM el equipo puede quedarse sin memoria bajo carga.' ;;
+    es:host_setup.swap_not_configured_warn) printf '%s' 'swap no configurado — el equipo puede caerse bajo carga' ;;
+    es:host_setup.swap_not_needed) printf '%s' 'no hace falta configurar swap' ;;
+    es:host_setup.swap_root_required) printf '%s' 'Se necesitan privilegios de root para configurar el swap' ;;
+    es:host_setup.timezone_explain) printf '%s' 'El Capitán la usa para convertir las horas en los mensajes de Telegram y en los gráficos.' ;;
+    es:host_setup.timezone_header) printf '%s' 'Zona horaria del usuario' ;;
+    es:host_setup.timezone_invalid) printf '%s' 'Zona horaria no válida, se usará UTC.' ;;
+    es:host_setup.timezone_prompt) printf '%s' '¿Dónde estás (zona horaria IANA, p. ej. Europe/Madrid, America/Mexico_City, Asia/Shanghai)?' ;;
+    es:host_setup.where_running) printf '%s' '¿Dónde estás ejecutando JHT?' ;;
+    de:host_setup.detected) printf '%s' 'Erkannt:' ;;
+    de:host_setup.host.local) printf '%s' 'lokaler Computer' ;;
+    de:host_setup.host.vps) printf '%s' 'Remote-Server / VPS' ;;
+    de:host_setup.option.local.line1) printf '%s' 'Das vollständige Team läuft auf diesem PC; halte ihn wach und Docker aktiv, solange es arbeitet.' ;;
+    de:host_setup.option.local.line2) printf '%s' 'Der kürzeste geführte Weg; weder VPS noch Cloud-Konto sind nötig.' ;;
+    de:host_setup.option.local.title) printf '%s' 'Lokaler PC' ;;
+    de:host_setup.option.vps.line1) printf '%s' 'Das Team läuft per SSH auf einem entfernten Linux-Server und kann bei ausgeschaltetem PC weiterarbeiten.' ;;
+    de:host_setup.option.vps.line2) printf '%s' 'Du stellst den Server und den SSH-Zugang bereit und verwaltest sie.' ;;
+    de:host_setup.option.vps.title) printf '%s' 'VPS / Remote-Server' ;;
+    de:host_setup.ram_sufficient) printf '%s' 'RAM ausreichend (%d GB) — Swap nicht nötig, überspringen' ;;
+    de:host_setup.section_header) printf '%s' 'Host-Setup (Preflight)' ;;
+    de:host_setup.swap_active) printf '%s' 'Swap aktiv: %d MB (bleibt nach Neustart via /etc/fstab erhalten)' ;;
+    de:host_setup.swap_already_configured) printf '%s' 'Swap bereits konfiguriert (%d MB) — überspringen' ;;
+    de:host_setup.swap_configure) printf '%s' '%d GB Swap in %s konfigurieren?' ;;
+    de:host_setup.swap_low_ram) printf '%s' 'Mit %d GB RAM könnte dem Team unter Last der Speicher ausgehen.' ;;
+    de:host_setup.swap_not_configured_warn) printf '%s' 'Swap nicht konfiguriert — das Team könnte unter Last abstürzen' ;;
+    de:host_setup.swap_not_needed) printf '%s' 'keine Swap-Konfiguration nötig' ;;
+    de:host_setup.swap_root_required) printf '%s' 'Root-Rechte werden benötigt, um Swap zu konfigurieren' ;;
+    de:host_setup.timezone_explain) printf '%s' 'Der Kapitän verwendet sie, um die Zeiten in Telegram-Nachrichten und Diagrammen umzurechnen.' ;;
+    de:host_setup.timezone_header) printf '%s' 'Zeitzone des Nutzers' ;;
+    de:host_setup.timezone_invalid) printf '%s' 'Ungültige Zeitzone, es wird UTC verwendet.' ;;
+    de:host_setup.timezone_prompt) printf '%s' 'Wo bist du (IANA-Zeitzone, z. B. Europe/Berlin, America/New_York, Asia/Shanghai)?' ;;
+    de:host_setup.where_running) printf '%s' 'Wo führst du JHT aus?' ;;
+    fr:host_setup.detected) printf '%s' 'Détecté :' ;;
+    fr:host_setup.host.local) printf '%s' 'ordinateur local' ;;
+    fr:host_setup.host.vps) printf '%s' 'serveur distant / VPS' ;;
+    fr:host_setup.option.local.line1) printf '%s' 'L'\''équipe complète travaille sur ce PC ; garde-le éveillé avec Docker actif pendant son travail.' ;;
+    fr:host_setup.option.local.line2) printf '%s' 'Le parcours guidé le plus court ; aucune VPS ni compte cloud requis.' ;;
+    fr:host_setup.option.local.title) printf '%s' 'PC local' ;;
+    fr:host_setup.option.vps.line1) printf '%s' 'L'\''équipe travaille sur un serveur Linux distant via SSH et peut continuer quand ce PC est éteint.' ;;
+    fr:host_setup.option.vps.line2) printf '%s' 'Tu fournis et administres le serveur et son accès SSH.' ;;
+    fr:host_setup.option.vps.title) printf '%s' 'VPS / serveur distant' ;;
+    fr:host_setup.ram_sufficient) printf '%s' 'RAM suffisante (%d Go) — swap non nécessaire, ignorer' ;;
+    fr:host_setup.section_header) printf '%s' 'Configuration du hôte (préflight)' ;;
+    fr:host_setup.swap_active) printf '%s' 'Swap actif : %d Mo (persiste après redémarrage via /etc/fstab)' ;;
+    fr:host_setup.swap_already_configured) printf '%s' 'swap déjà configuré (%d Mo) — ignorer' ;;
+    fr:host_setup.swap_configure) printf '%s' 'Configurer %d Go de swap dans %s ?' ;;
+    fr:host_setup.swap_low_ram) printf '%s' 'Avec %d Go de RAM l'\''équipe peut tomber en OOM sous charge.' ;;
+    fr:host_setup.swap_not_configured_warn) printf '%s' 'swap non configuré — l'\''équipe pourrait planter sous charge' ;;
+    fr:host_setup.swap_not_needed) printf '%s' 'aucune configuration swap requise' ;;
+    fr:host_setup.swap_root_required) printf '%s' 'Privilèges root nécessaires pour configurer le swap' ;;
+    fr:host_setup.timezone_explain) printf '%s' 'Le Capitaine l'\''utilise pour convertir les heures dans les messages Telegram et les graphiques.' ;;
+    fr:host_setup.timezone_header) printf '%s' 'Fuseau horaire utilisateur' ;;
+    fr:host_setup.timezone_invalid) printf '%s' 'Fuseau invalide, repli sur UTC.' ;;
+    fr:host_setup.timezone_prompt) printf '%s' 'Où es-tu (fuseau IANA, par ex. Europe/Paris, America/New_York, Asia/Shanghai) ?' ;;
+    fr:host_setup.where_running) printf '%s' 'Où exécutes-tu JHT ?' ;;
+    pt:host_setup.detected) printf '%s' 'Detectado:' ;;
+    pt:host_setup.host.local) printf '%s' 'computador local' ;;
+    pt:host_setup.host.vps) printf '%s' 'servidor remoto / VPS' ;;
+    pt:host_setup.option.local.line1) printf '%s' 'A equipa completa trabalha neste PC; mantém-no ativo com o Docker em execução enquanto ela trabalha.' ;;
+    pt:host_setup.option.local.line2) printf '%s' 'O percurso guiado mais curto; não requer VPS nem conta cloud.' ;;
+    pt:host_setup.option.local.title) printf '%s' 'PC local' ;;
+    pt:host_setup.option.vps.line1) printf '%s' 'A equipa trabalha num servidor Linux remoto por SSH e pode continuar com este PC desligado.' ;;
+    pt:host_setup.option.vps.line2) printf '%s' 'Tu forneces e administras o servidor e o respetivo acesso SSH.' ;;
+    pt:host_setup.option.vps.title) printf '%s' 'VPS / servidor remoto' ;;
+    pt:host_setup.ram_sufficient) printf '%s' 'RAM suficiente (%d GB) — swap desnecessário, pular' ;;
+    pt:host_setup.section_header) printf '%s' 'Configuração do host (preflight)' ;;
+    pt:host_setup.swap_active) printf '%s' 'Swap ativo: %d MB (persiste após reboot via /etc/fstab)' ;;
+    pt:host_setup.swap_already_configured) printf '%s' 'swap já configurado (%d MB) — pular' ;;
+    pt:host_setup.swap_configure) printf '%s' 'Configurar %d GB de swap em %s?' ;;
+    pt:host_setup.swap_low_ram) printf '%s' 'Com %d GB de RAM a equipa pode dar OOM sob carga.' ;;
+    pt:host_setup.swap_not_configured_warn) printf '%s' 'swap não configurado — a equipa pode travar sob carga' ;;
+    pt:host_setup.swap_not_needed) printf '%s' 'nenhuma configuração de swap necessária' ;;
+    pt:host_setup.swap_root_required) printf '%s' 'Privilégios de root necessários para configurar swap' ;;
+    pt:host_setup.timezone_explain) printf '%s' 'O Capitão usa para converter horários nas mensagens do Telegram e nos gráficos.' ;;
+    pt:host_setup.timezone_header) printf '%s' 'Fuso horário do utilizador' ;;
+    pt:host_setup.timezone_invalid) printf '%s' 'Fuso inválido, fallback para UTC.' ;;
+    pt:host_setup.timezone_prompt) printf '%s' 'Onde estás (fuso IANA, ex. Europe/Lisbon, America/Sao_Paulo, Asia/Shanghai)?' ;;
+    pt:host_setup.where_running) printf '%s' 'Onde estás a executar o JHT?' ;;
+    *) return 1 ;;
+  esac
+}
+# <<< texts in the 7 languages
+ts() {
+  ts_table "${JHT_LANG:-en}" "$1" || printf '%s' "$2"
+}
+# tsf <key> '<English with %s/%d>' args...: the same, with the values put in (in the same order in every language).
+tsf() {
+  local format
+  format="$(ts "$1" "$2")"
+  shift 2
+  # shellcheck disable=SC2059
+  printf -- "$format" "$@"
+}
+
 # Tutto quello che host-setup.sh scrive in ~/.jht (host.env, i18n-prefs.json) passa da qui. Si scrive in un file temporaneo FUORI dalla cartella montata nel container (la home non lo e'), poi si mette al
 # suo posto. Dentro ~/.jht un agente potrebbe cambiare il temporaneo con un link appena compare, e `cat >` o `chmod` per percorso
 # lo seguirebbero (un file della home troncato, una chiave resa leggibile). Un link messo al posto di host.env (che dentro il
@@ -126,10 +311,10 @@ jht_write_host_file() {
   local target="$1" dir tmp
   dir="$(dirname "$JHT_HOME_HOST")"
   if [ -d "$target" ] && [ ! -L "$target" ]; then
-    warn "$target is a directory: not writing it"
+    warn "$(tsf host_setup.write_is_directory '%s is a directory: not writing it' "$target")"
     return 1
   fi
-  tmp="$(mktemp "$dir/.jht-host-file.XXXXXX")" || { warn "cannot create a temporary file in $dir: not writing $target"; return 1; }
+  tmp="$(mktemp "$dir/.jht-host-file.XXXXXX")" || { warn "$(tsf host_setup.write_no_temp 'cannot create a temporary file in %s: not writing %s' "$dir" "$target")"; return 1; }
   # Il container lo legge con un altro utente: i permessi di sempre (umask), non quelli riservati di mktemp.
   if ! cat > "$tmp" || ! chmod 644 "$tmp"; then rm -f "$tmp"; return 1; fi
   # Already as it should be: nothing to write. A second run finds ~/.jht in the hands of the container's user (the first run
@@ -137,7 +322,7 @@ jht_write_host_file() {
   if [ -f "$target" ] && [ ! -L "$target" ] && cmp -s "$tmp" "$target"; then rm -f "$tmp"; return 0; fi
   if [ ! -w "$(dirname "$target")" ]; then
     rm -f "$tmp"
-    warn "$target keeps its old content: its folder belongs to the container's user and this user cannot replace the file."
+    warn "$(tsf host_setup.write_kept_old '%s keeps its old content: its folder belongs to the container'\''s user and this user cannot replace the file.' "$target")"
     return 0  # a warning, not a stop: the rest of the preflight (the swap of a VPS) must still run
   fi
   if [ -e "$target" ] || [ -L "$target" ]; then
@@ -149,7 +334,7 @@ jht_write_host_file() {
     : # una cartella senza hard link (raro): la rinomina, con l'entrata ancora vuota
   else
     rm -f "$tmp"
-    warn "$target changed while it was being written: not writing it"
+    warn "$(tsf host_setup.write_changed '%s changed while it was being written: not writing it' "$target")"
     return 1
   fi
 }
@@ -265,42 +450,6 @@ else
   printf '{\n  "locale": "%s"\n}\n' "$JHT_LANG" | jht_write_host_file "$I18N_PREFS_PATH"
 fi
 
-# ── i18n: soltanto dati, mai helper shell dal filesystem ─────────────────
-# Questo script gira sull'host. Non importa codice da directory che il
-# container puo' scrivere; i fallback inglesi inline restano l'autorita'
-# sicura finche' i cataloghi non sono distribuiti nel bundle host attestato.
-# Italian is written here, inline (data, not a file the container can write); every other language reads the English text.
-# JHT_LANG is the language decided above (the saved choice, the picker, JHT_LANG, host.env, the system's).
-ts_it() {
-  case "$1" in
-    error.invalid_input) printf '%s' "Scelta non valida" ;;
-    host_setup.choice_prompt) printf '%s' "Scelta" ;;
-    host_setup.detected) printf '%s' "Rilevato:" ;;
-    host_setup.host.local) printf '%s' "computer locale" ;;
-    host_setup.host.vps) printf '%s' "server remoto / VPS" ;;
-    host_setup.option.local.title) printf '%s' "PC locale" ;;
-    host_setup.option.local.line1) printf '%s' "La squadra intera gira su questo PC: tienilo acceso, con il motore dei container attivo, mentre la squadra lavora." ;;
-    host_setup.option.local.line2) printf '%s' "Il percorso guidato piu' corto; non servono VPS ne' account cloud." ;;
-    host_setup.option.vps.title) printf '%s' "VPS / server remoto" ;;
-    host_setup.option.vps.line1) printf '%s' "La squadra gira su un server Linux remoto via SSH e puo' continuare a PC spento." ;;
-    host_setup.option.vps.line2) printf '%s' "Il server e il suo accesso SSH li fornisci e li gestisci tu." ;;
-    host_setup.section_header) printf '%s' "Preparazione dell'host" ;;
-    host_setup.swap_not_needed) printf '%s' "nessuna configurazione dello swap necessaria" ;;
-    host_setup.timezone_explain) printf '%s' "Il Capitano lo usa per convertire gli orari nei messaggi Telegram e nei grafici." ;;
-    host_setup.timezone_header) printf '%s' "Fuso orario" ;;
-    host_setup.timezone_invalid) printf '%s' "Fuso orario non valido, uso UTC." ;;
-    host_setup.timezone_label) printf '%s' "Fuso orario" ;;
-    host_setup.timezone_prompt) printf '%s' "Dove ti trovi (fuso orario IANA, per esempio Europe/Rome, America/New_York, Asia/Shanghai)?" ;;
-    host_setup.timezone_vps_utc) printf '%s' "Il fuso orario non e' stato rilevato: la squadra usera' UTC. Imposta il tuo con jht wh --tz Europe/Rome (o nella dashboard), altrimenti gli orari di Telegram e di lavoro saranno in UTC." ;;
-    host_setup.where_running) printf '%s' "Dove fai girare JHT?" ;;
-    *) return 1 ;;
-  esac
-}
-ts() {
-  if [ "${JHT_LANG:-}" = it ] && ts_it "$1"; then return 0; fi
-  printf '%s' "$2"
-}
-
 # ── Detect VPS ───────────────────────────────────────────────────────────
 # Heuristica: linux + (root OR no display) + (no battery OR cloud-init present)
 # Niente euristica e' al 100%: chiediamo sempre conferma all'utente.
@@ -358,18 +507,18 @@ if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
   fi
   printf "\n%s\n\n" "$(ts host_setup.where_running 'Where are you running JHT?')"
   printf "  1) ${BOLD}%s${RESET}\n" "$(ts host_setup.option.local.title 'Local PC')"
-  printf "     ${DIM}%s${RESET}\n" "$(ts host_setup.option.local.line1 'The full team runs on this PC; keep it awake with Docker running while the team works.')"
+  printf "     ${DIM}%s${RESET}\n" "$(ts host_setup.option.local.line1 'The full team runs on this PC; keep it awake with the container engine running while the team works.')"
   printf "     ${DIM}%s${RESET}\n\n" "$(ts host_setup.option.local.line2 'Shortest guided path; no VPS or cloud account required.')"
   printf "  2) ${BOLD}%s${RESET}\n" "$(ts host_setup.option.vps.title 'VPS / remote server')"
   printf "     ${DIM}%s${RESET}\n" "$(ts host_setup.option.vps.line1 'The team runs on a remote Linux server over SSH and can continue when this PC is off.')"
   printf "     ${DIM}%s${RESET}\n\n" "$(ts host_setup.option.vps.line2 'You provide and administer the server and its SSH access.')"
-  printf "%s [%d]: " "$(ts host_setup.choice_prompt 'Choice')" "$DEFAULT_NUM"
+  printf "%s [%d]: " "$(ts host_setup.choice 'Choice')" "$DEFAULT_NUM"
   read -r CHOICE
   case "$CHOICE" in
     1) HOST_TYPE="local" ;;
     2) HOST_TYPE="vps" ;;
     "") HOST_TYPE="$DETECTED" ;;
-    *) warn "$(ts error.invalid_input 'Invalid choice') — using default ($DETECTED)"; HOST_TYPE="$DETECTED" ;;
+    *) warn "$(ts host_setup.invalid_choice 'Invalid choice') — using default ($DETECTED)"; HOST_TYPE="$DETECTED" ;;
   esac
 fi
 
@@ -467,7 +616,7 @@ if [ -d "$HOST_VALUES_DIR" ] && [ ! -L "$HOST_VALUES_DIR" ] && [ -O "$HOST_VALUE
       printf 'JHT_USER_TZ=%s\n' "$JHT_USER_TZ"
     } > "$HOST_VALUES_TMP"
   ) 2>/dev/null && chmod 600 "$HOST_VALUES_TMP" 2>/dev/null && mv -f -- "$HOST_VALUES_TMP" "$HOST_VALUES_DIR/host-values" 2>/dev/null \
-    || { rm -f -- "$HOST_VALUES_TMP" 2>/dev/null; warn "host-values non scritto in $HOST_VALUES_DIR — il wrapper lo creera' da host.env"; }
+    || { rm -f -- "$HOST_VALUES_TMP" 2>/dev/null; warn "$(tsf host_setup.host_values_not_written 'host-values not written in %s — the wrapper will create it from host.env' "$HOST_VALUES_DIR")"; }
 fi
 
 if [ "$HOST_TYPE" = "local" ]; then
@@ -483,19 +632,19 @@ RAM_GB=$(( (RAM_KB + 524288) / 1048576 ))   # round to GB
 SWAP_KB=$(awk '/^SwapTotal:/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)
 SWAP_MB=$(( SWAP_KB / 1024 ))
 
-info "RAM: ${RAM_GB} GB  |  Swap active: ${SWAP_MB} MB"
+info "$(tsf host_setup.ram_info 'RAM: %d GB  |  Swap active: %d MB' "$RAM_GB" "$SWAP_MB")"
 
 # Swap policy:
 # - se gia' >= 1024 MB: ok, skip
 # - se RAM >= 8 GB: skip (non serve)
 # - altrimenti: chiedi
 if [ "$SWAP_MB" -ge 1024 ]; then
-  ok "Swap already configured (${SWAP_MB} MB) — skip"
+  ok "$(tsf host_setup.swap_already_configured 'Swap already configured (%d MB) — skip' "$SWAP_MB")"
   exit 0
 fi
 
 if [ "$RAM_GB" -ge 8 ]; then
-  ok "RAM sufficient (${RAM_GB} GB) — swap not needed, skip"
+  ok "$(tsf host_setup.ram_sufficient 'RAM sufficient (%d GB) — swap not needed, skip' "$RAM_GB")"
   exit 0
 fi
 
@@ -504,8 +653,8 @@ SWAP_SIZE_GB=2
 SWAP_FILE=/swapfile
 
 # Versione sintetica: 1 riga di motivo (era 4 — l'utente accetta sempre).
-printf "\n${DIM}With %d GB of RAM the team may OOM under load.${RESET}\n" "$RAM_GB"
-printf "Configure %d GB of swap in %s? [Y/n]: " "$SWAP_SIZE_GB" "$SWAP_FILE"
+printf "\n${DIM}%s${RESET}\n" "$(tsf host_setup.swap_low_ram 'With %d GB of RAM the team may OOM under load.' "$RAM_GB")"
+printf "%s [Y/n]: " "$(tsf host_setup.swap_configure 'Configure %d GB of swap in %s?' "$SWAP_SIZE_GB" "$SWAP_FILE")"
 
 DO_SWAP=1
 if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
@@ -515,29 +664,29 @@ if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
     *)         DO_SWAP=1 ;;
   esac
 else
-  printf "${DIM}(non-interactive stdin; applying default Y)${RESET}\n"
+  printf "${DIM}%s${RESET}\n" "$(ts host_setup.swap_noninteractive '(non-interactive stdin; applying default Y)')"
 fi
 
 if [ "$DO_SWAP" = "0" ]; then
-  warn "Swap not configured — the team may crash under load"
+  warn "$(ts host_setup.swap_not_configured_warn 'Swap not configured — the team may crash under load')"
   exit 0
 fi
 
 # ── Configura swap (richiede root) ───────────────────────────────────────
 if [ "$(id -u)" -ne 0 ]; then
-  warn "Root privileges are required to configure swap"
+  warn "$(ts host_setup.swap_root_required 'Root privileges are required to configure swap')"
   if command -v sudo >/dev/null 2>&1; then
-    info "Trying sudo..."
+    info "$(ts host_setup.swap_trying_sudo 'Trying sudo...')"
     SUDO=sudo
   else
-    warn "sudo is unavailable — skipping swap. Configure it manually later."
+    warn "$(ts host_setup.swap_sudo_unavailable 'sudo is unavailable — skipping swap. Configure it manually later.')"
     exit 0
   fi
 else
   SUDO=""
 fi
 
-info "Creating $SWAP_FILE with ${SWAP_SIZE_GB} GB..."
+info "$(tsf host_setup.swap_creating 'Creating %s with %d GB...' "$SWAP_FILE" "$SWAP_SIZE_GB")"
 $SUDO fallocate -l "${SWAP_SIZE_GB}G" "$SWAP_FILE" 2>/dev/null \
   || $SUDO dd if=/dev/zero of="$SWAP_FILE" bs=1M count=$((SWAP_SIZE_GB * 1024)) status=none
 $SUDO chmod 600 "$SWAP_FILE"
@@ -550,6 +699,6 @@ if ! grep -q "^${SWAP_FILE} " /etc/fstab 2>/dev/null; then
 fi
 
 NEW_SWAP_MB=$(awk '/^SwapTotal:/ {print int($2/1024)}' /proc/meminfo)
-ok "Swap active: ${NEW_SWAP_MB} MB (persists across reboot via /etc/fstab)"
+ok "$(tsf host_setup.swap_active 'Swap active: %d MB (persists across reboot via /etc/fstab)' "$NEW_SWAP_MB")"
 
 exit 0
