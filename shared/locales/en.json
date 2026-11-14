@@ -116,7 +116,7 @@
   "wizard.provider.install_failed_yes": "Yes, continue",
   "wizard.provider.install_failed_no": "No, stop here",
   "wizard.key.title": "API key",
-  "wizard.release.coming": "Codex, Kimi, Claude and sign-in with a subscription: coming in a later release.",
+  "wizard.release.coming": "Codex, Kimi, Claude and sign-in with a subscription: not in this version.",
   "wizard.release.not_offered": "The saved configuration is for %s, which this release does not offer: it stays as it is until you choose a service below.",
   "wizard.access.prompt": "How does Codex sign in?",
   "wizard.access.subscription": "ChatGPT subscription — recommended: you sign in with your account, no per-token charge",

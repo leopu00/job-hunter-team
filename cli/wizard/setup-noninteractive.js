@@ -90,7 +90,7 @@ export async function runNonInteractiveSetup(opts) {
   // --- Validazione flag obbligatori ---
   const selectedProvider = findProviderChoice(opts.provider || RELEASE_PROVIDERS[0]);
   if (!selectedProvider || !offeredInRelease(selectedProvider.value)) {
-    // the services of this release are one list (shared/runtime/release-providers.js); the others come in a later release
+    // the services of this release are one list (shared/runtime/release-providers.js); the others are not in this version
     console.error(pc.red(`This release offers only ${RELEASE_PROVIDERS.join(', ')} with an API key, on the ${RELEASE_HARNESS} harness ("${opts.provider}" is not offered). Example: jht setup --non-interactive --provider ${RELEASE_PROVIDERS[0]} --api-key-stdin`));
     process.exitCode = 1;
     return;

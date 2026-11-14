@@ -87,7 +87,7 @@ for (const provider of ['glm', 'kimi'].filter((p) => offeredInRelease(p))) {
     const ask = events.find((e) => e.kind === 'select' && e.message === 'AI Provider');
     if (offered.length === 1) assert.equal(ask, undefined);
     else assert.deepEqual(ask.options, offered);
-    assert.ok(events.some((e) => e.kind === 'note' && /coming in a later release/.test(e.message)));
+    assert.ok(events.some((e) => e.kind === 'note' && /not in this version/.test(e.message)));
     assert.equal(events.some((e) => e.kind === 'select' && /Program that runs the agents|How does Codex sign in/.test(e.message)), false, 'no harness and no Codex question');
     const hidden = events.find((e) => e.kind === 'password');
     assert.ok(hidden && hidden.rejects, 'the key is asked hidden and a short one is refused at the prompt');
