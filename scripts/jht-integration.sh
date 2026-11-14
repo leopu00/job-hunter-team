@@ -428,7 +428,7 @@ integration_text_table() {
     pt:integration.add.broker_not_on) printf '%s' 'o broker do correio não está ligado' ;;
     pt:integration.add.broker_start) printf '%s' 'o broker do correio não arranca' ;;
     pt:integration.add.closer_browser) printf '%s' 'o browser do closer não se copia para o volume' ;;
-    pt:integration.add.extras_pull) printf '%s' 'a transferência da imagem de ferramentas falhou' ;;
+    pt:integration.add.extras_pull) printf '%s' 'o descarregamento da imagem de ferramentas falhou' ;;
     pt:integration.add.google_failed) printf '%s' 'a instalação das bibliotecas falhou' ;;
     pt:integration.add.linkedin) printf '%s' 'não se adiciona: liga-se com jht linkedin login' ;;
     pt:integration.add.marker) printf '%s' 'marcador não escrito' ;;
@@ -446,8 +446,8 @@ integration_text_table() {
     pt:integration.image.in_use) printf '%s' 'a imagem de ferramentas%s não é removida: %s ainda a usa' ;;
     pt:integration.image.removed) printf '%s' 'imagem de ferramentas removida%s' ;;
     pt:integration.image.size) printf '%s' 'até %d MB' ;;
-    pt:integration.image.stays) printf '%s' 'a imagem de ferramentas%s fica no disco para voltar a ligá-lo sem a transferir de novo: para libertar o espaço, %s' ;;
-    pt:integration.label.downloading) printf '%s' 'a transferir' ;;
+    pt:integration.image.stays) printf '%s' 'a imagem de ferramentas%s fica no disco para voltar a ligá-lo sem a descarregar de novo: para libertar o espaço, %s' ;;
+    pt:integration.label.downloading) printf '%s' 'a descarregar' ;;
     pt:integration.label.error) printf '%s' 'erro' ;;
     pt:integration.label.not_installed) printf '%s' 'não instalada' ;;
     pt:integration.label.ready) printf '%s' 'adicionada' ;;
