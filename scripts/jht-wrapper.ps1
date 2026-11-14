@@ -114,6 +114,41 @@ function Get-JhtTextLanguage {
   return 'en'
 }
 
+# The tools of a core install (P4), as in jht-wrapper.sh (tools_tell_person). The installer leaves the core image; the full one,
+# with the Scouts' tools, comes after, pulled in the background, and the team moves onto it once the onboarding has closed. The
+# desktop app kept that moving; with the CLI only it is `jht up` and `jht setup` that start it (Invoke-ToolsKick in jht-tools.ps1:
+# one detached job, idempotent) and `jht up`, `jht setup` and `jht status` that say where it stands. A helper that is missing or
+# not trusted says nothing here, and never fails the command it rides on.
+function Get-JhtToolsText {
+  param([Parameter(Mandatory)][string]$Key)
+  $texts = @{
+    'arriving'      = @("Gli strumenti degli Scout stanno arrivando: l'immagine piena si scarica in background (circa 3 GB). La ricerca delle posizioni parte da sola quando sono arrivati; non devi fare niente.", "The Scouts' tools are on their way: the full image is downloading in the background (about 3 GB). The search for positions starts by itself once they are here; there is nothing to do.")
+    'waiting'       = @("Gli strumenti degli Scout sono arrivati: la squadra ci passa da sola quando l'onboarding e' chiuso.", "The Scouts' tools are here: the team moves onto them by itself once the onboarding is closed.")
+    'failed'        = @("Il download degli strumenti degli Scout non e' riuscito: la squadra non puo' ancora cercare posizioni. Esegui jht tools pull per riprovare (anche jht up riprova).", "The download of the Scouts' tools failed, so the team cannot search for positions yet. Run jht tools pull to try again (jht up tries again too).")
+    'switch_failed' = @("Gli strumenti degli Scout sono arrivati, ma la squadra non si e' potuta riavviare con loro: esegui jht down, poi jht up.", "The Scouts' tools are here, but the team could not be restarted on them: run jht down, then jht up.")
+  }
+  $pair = $texts[$Key]
+  if ((Get-JhtTextLanguage) -ceq 'it') { return $pair[0] }
+  return $pair[1]
+}
+
+function Write-JhtToolsNotice {
+  param([switch]$Kick)
+  try {
+    if (-not ((Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf) -or (Test-Path -LiteralPath (Join-Path $RuntimeDir '.tools-switch-failed') -PathType Leaf))) { return }
+    if (-not (Test-RuntimeHelperDeclared 'jht-tools.ps1')) { return }
+    Assert-TrustedRuntime
+    . (Join-Path $RuntimeDir 'jht-tools.ps1')
+    if ($Kick) { $null = Invoke-ToolsKick }
+    switch (Get-ToolsPersonState) {
+      'arriving'      { Write-Info (Get-JhtToolsText 'arriving') }
+      'waiting'       { Write-Info (Get-JhtToolsText 'waiting') }
+      'failed'        { Write-Warn (Get-JhtToolsText 'failed') }
+      'switch_failed' { Write-Warn (Get-JhtToolsText 'switch_failed') }
+    }
+  } catch { }
+}
+
 function Get-JhtUninstallText {
   param([Parameter(Mandatory)][string]$Key, [string[]]$Values = @())
   $english = ((Get-JhtTextLanguage) -ceq 'en')
@@ -4277,6 +4312,7 @@ switch ($Sub) {
     $telegramCode = Invoke-AvailableTelegramLifecycle 'resume'
     if ($telegramCode -ne 0) { exit $telegramCode }
     Resume-Broker
+    Write-JhtToolsNotice -Kick
     # The up went well (a failed one has already stopped jht with its code): 0, not the code of
     # whichever native ran last. The setup reads it (enable-podman-windows-runtime.ps1, T89).
     exit 0
@@ -4471,6 +4507,7 @@ switch ($Sub) {
       if (-not [Console]::IsOutputRedirected) {
         $telegramCode = Write-TelegramStatusLine
         if ($telegramCode -ne 0) { exit $telegramCode }
+        Write-JhtToolsNotice
       }
     } else {
       Write-Host "container '$Container' non attivo"
@@ -4518,6 +4555,7 @@ switch ($Sub) {
     Require-Docker
     Clear-JhtTeamStopped
     Ensure-Up
+    Write-JhtToolsNotice -Kick
     if ($null -ne $keyPlan.Key) {
       # -i only: a pipe is not a terminal. No byte-order mark goes in front of the key (Invoke-NativeWithStdin).
       try {

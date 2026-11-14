@@ -775,6 +775,10 @@ Examples:
     status.state) printf '%s' '%s since %s' ;;
     status.title) printf '%s' 'Status' ;;
     team.stopped) printf '%s' 'Job Hunter Team is stopped: '\''jht up'\'' starts it again.' ;;
+    tools.arriving) printf '%s' 'The Scouts'\'' tools are on their way: the full image is downloading in the background (about 3 GB). The search for positions starts by itself once they are here; there is nothing to do.' ;;
+    tools.failed) printf '%s' 'The download of the Scouts'\'' tools failed, so the team cannot search for positions yet. Run jht tools pull to try again (jht up tries again too).' ;;
+    tools.switch_failed) printf '%s' 'The Scouts'\'' tools are here, but the team could not be restarted on them: run jht down, then jht up.' ;;
+    tools.waiting) printf '%s' 'The Scouts'\'' tools are here: the team moves onto them by itself once the onboarding is closed.' ;;
     uninstall.bad_home) printf '%s' 'HOME is not valid: removal refused.' ;;
     uninstall.colima_busy) printf '%s' 'Colima is still running: the JHT installer started it, but other containers are running in it, so it is left on. To stop it: colima stop.' ;;
     uninstall.colima_running) printf '%s' 'Colima is still running: the JHT installer did not start it (it was already on, or it is not the standard one), so it is left on, and it may be yours. To stop it: colima stop.' ;;
@@ -1230,6 +1234,10 @@ Esempi:
     status.state) printf '%s' '%s dal %s' ;;
     status.title) printf '%s' 'Stato' ;;
     team.stopped) printf '%s' 'Job Hunter Team e'\'' fermato: jht up per riaccenderlo.' ;;
+    tools.arriving) printf '%s' 'Gli strumenti degli Scout stanno arrivando: l'\''immagine piena si scarica in background (circa 3 GB). La ricerca delle posizioni parte da sola quando sono arrivati; non devi fare niente.' ;;
+    tools.failed) printf '%s' 'Il download degli strumenti degli Scout non e'\'' riuscito: la squadra non puo'\'' ancora cercare posizioni. Esegui jht tools pull per riprovare (anche jht up riprova).' ;;
+    tools.switch_failed) printf '%s' 'Gli strumenti degli Scout sono arrivati, ma la squadra non si e'\'' potuta riavviare con loro: esegui jht down, poi jht up.' ;;
+    tools.waiting) printf '%s' 'Gli strumenti degli Scout sono arrivati: la squadra ci passa da sola quando l'\''onboarding e'\'' chiuso.' ;;
     uninstall.bad_home) printf '%s' 'HOME non valida: rimozione negata.' ;;
     uninstall.colima_busy) printf '%s' 'Colima resta accesa: l'\''ha accesa l'\''installer di JHT, ma dentro girano altri container, quindi la lascio. Per fermarla: colima stop.' ;;
     uninstall.colima_running) printf '%s' 'Colima resta accesa: non l'\''ha accesa l'\''installer di JHT (era gia'\'' accesa, oppure non e'\'' quella standard), quindi la lascio, e potrebbe essere tua. Per fermarla: colima stop.' ;;
@@ -1686,6 +1694,10 @@ Példák:
     status.state) printf '%s' '%s, ekkor óta: %s' ;;
     status.title) printf '%s' 'Állapot' ;;
     team.stopped) printf '%s' 'A Job Hunter Team le van állítva: a '\''jht up'\'' újraindítja.' ;;
+    tools.arriving) printf '%s' 'A felderítők (Scout) eszközei úton vannak: a teljes kép a háttérben töltődik le (kb. 3 GB). Az állások keresése magától elindul, amint megérkeztek; nincs teendőd.' ;;
+    tools.failed) printf '%s' 'A felderítők (Scout) eszközeinek letöltése nem sikerült, így a csapat még nem tud állásokat keresni. Futtasd a jht tools pull parancsot az újrapróbáláshoz (a jht up is újrapróbálja).' ;;
+    tools.switch_failed) printf '%s' 'A felderítők (Scout) eszközei megérkeztek, de a csapatot nem sikerült velük újraindítani: futtasd a jht down, majd a jht up parancsot.' ;;
+    tools.waiting) printf '%s' 'A felderítők (Scout) eszközei megérkeztek: a csapat magától átvált rájuk, amint a bevezetés lezárult.' ;;
     uninstall.bad_home) printf '%s' 'A HOME érvénytelen: az eltávolítás megtagadva.' ;;
     uninstall.colima_busy) printf '%s' 'A Colima még fut: a JHT telepítője indította el, de más konténerek is futnak benne, ezért bekapcsolva hagyom. Leállítás: colima stop.' ;;
     uninstall.colima_running) printf '%s' 'A Colima még fut: nem a JHT telepítője indította el (már futott, vagy nem a szabványos), ezért bekapcsolva hagyom, és lehet, hogy a tiéd. Leállítás: colima stop.' ;;
@@ -2146,6 +2158,10 @@ Ejemplos:
     status.state) printf '%s' '%s desde %s' ;;
     status.title) printf '%s' 'Estado' ;;
     team.stopped) printf '%s' 'Job Hunter Team está detenido: '\''jht up'\'' lo vuelve a arrancar.' ;;
+    tools.arriving) printf '%s' 'Las herramientas de los Scout están en camino: la imagen completa se descarga en segundo plano (unos 3 GB). La búsqueda de puestos empieza sola cuando lleguen; no tienes que hacer nada.' ;;
+    tools.failed) printf '%s' 'La descarga de las herramientas de los Scout ha fallado, así que el equipo aún no puede buscar puestos. Ejecuta jht tools pull para reintentarlo (jht up también lo reintenta).' ;;
+    tools.switch_failed) printf '%s' 'Las herramientas de los Scout ya están aquí, pero el equipo no se ha podido reiniciar con ellas: ejecuta jht down y luego jht up.' ;;
+    tools.waiting) printf '%s' 'Las herramientas de los Scout ya están aquí: el equipo pasa a ellas solo cuando el onboarding esté cerrado.' ;;
     uninstall.bad_home) printf '%s' 'HOME no es válida: eliminación rechazada.' ;;
     uninstall.colima_busy) printf '%s' 'Colima sigue en marcha: la arrancó el instalador de JHT, pero dentro hay otros contenedores en marcha, así que la dejo encendida. Para detenerla: colima stop.' ;;
     uninstall.colima_running) printf '%s' 'Colima sigue en marcha: no la arrancó el instalador de JHT (ya estaba encendida o no es la estándar), así que la dejo encendida, y puede que sea tuya. Para detenerla: colima stop.' ;;
@@ -2601,6 +2617,10 @@ Beispiele:
     status.state) printf '%s' '%s seit %s' ;;
     status.title) printf '%s' 'Status' ;;
     team.stopped) printf '%s' 'Job Hunter Team ist gestoppt: '\''jht up'\'' startet es wieder.' ;;
+    tools.arriving) printf '%s' 'Die Werkzeuge der Scouts sind unterwegs: Das vollständige Image wird im Hintergrund heruntergeladen (etwa 3 GB). Die Stellensuche startet von selbst, sobald sie da sind; du musst nichts tun.' ;;
+    tools.failed) printf '%s' 'Der Download der Werkzeuge der Scouts ist fehlgeschlagen, daher kann das Team noch keine Stellen suchen. Führe jht tools pull aus, um es erneut zu versuchen (jht up versucht es auch).' ;;
+    tools.switch_failed) printf '%s' 'Die Werkzeuge der Scouts sind da, aber das Team konnte damit nicht neu gestartet werden: Führe jht down und dann jht up aus.' ;;
+    tools.waiting) printf '%s' 'Die Werkzeuge der Scouts sind da: Das Team wechselt von selbst darauf, sobald das Onboarding abgeschlossen ist.' ;;
     uninstall.bad_home) printf '%s' 'HOME ist ungültig: Entfernen verweigert.' ;;
     uninstall.colima_busy) printf '%s' 'Colima läuft noch: Der JHT-Installer hat es gestartet, aber darin laufen andere Container, also bleibt es an. Zum Stoppen: colima stop.' ;;
     uninstall.colima_running) printf '%s' 'Colima läuft noch: Der JHT-Installer hat es nicht gestartet (es lief schon oder ist nicht das Standard-Colima), also bleibt es an, und es könnte deins sein. Zum Stoppen: colima stop.' ;;
@@ -3056,6 +3076,10 @@ Exemples :
     status.state) printf '%s' '%s depuis %s' ;;
     status.title) printf '%s' 'État' ;;
     team.stopped) printf '%s' 'Job Hunter Team est arrêté : '\''jht up'\'' le redémarre.' ;;
+    tools.arriving) printf '%s' 'Les outils des Scout arrivent : l'\''image complète se télécharge en arrière-plan (environ 3 Go). La recherche d'\''offres démarre toute seule dès qu'\''ils sont là ; tu n'\''as rien à faire.' ;;
+    tools.failed) printf '%s' 'Le téléchargement des outils des Scout a échoué : l'\''équipe ne peut pas encore chercher d'\''offres. Lance jht tools pull pour réessayer (jht up réessaie aussi).' ;;
+    tools.switch_failed) printf '%s' 'Les outils des Scout sont là, mais l'\''équipe n'\''a pas pu redémarrer avec eux : lance jht down, puis jht up.' ;;
+    tools.waiting) printf '%s' 'Les outils des Scout sont là : l'\''équipe passe dessus toute seule dès que l'\''onboarding est terminé.' ;;
     uninstall.bad_home) printf '%s' 'HOME n'\''est pas valide : suppression refusée.' ;;
     uninstall.colima_busy) printf '%s' 'Colima tourne encore : l'\''installeur JHT l'\''a démarré, mais d'\''autres conteneurs y tournent, donc il reste allumé. Pour l'\''arrêter : colima stop.' ;;
     uninstall.colima_running) printf '%s' 'Colima tourne encore : l'\''installeur JHT ne l'\''a pas démarré (il était déjà allumé, ou ce n'\''est pas celui par défaut), donc il reste allumé, et il est peut-être à toi. Pour l'\''arrêter : colima stop.' ;;
@@ -3511,6 +3535,10 @@ Exemplos:
     status.state) printf '%s' '%s desde %s' ;;
     status.title) printf '%s' 'Estado' ;;
     team.stopped) printf '%s' 'O Job Hunter Team está parado: '\''jht up'\'' volta a ligá-lo.' ;;
+    tools.arriving) printf '%s' 'As ferramentas dos Scout estão a caminho: a imagem completa está a ser descarregada em segundo plano (cerca de 3 GB). A procura de vagas começa sozinha quando chegarem; não tens de fazer nada.' ;;
+    tools.failed) printf '%s' 'O descarregamento das ferramentas dos Scout falhou, por isso a equipa ainda não pode procurar vagas. Corre jht tools pull para tentar de novo (jht up também tenta de novo).' ;;
+    tools.switch_failed) printf '%s' 'As ferramentas dos Scout já chegaram, mas não foi possível reiniciar a equipa com elas: corre jht down e depois jht up.' ;;
+    tools.waiting) printf '%s' 'As ferramentas dos Scout já chegaram: a equipa passa para elas sozinha quando o onboarding estiver concluído.' ;;
     uninstall.bad_home) printf '%s' 'HOME não é válida: remoção recusada.' ;;
     uninstall.colima_busy) printf '%s' 'O Colima continua a correr: foi o instalador do JHT que o ligou, mas há outros contentores a correr nele, por isso fica ligado. Para o parar: colima stop.' ;;
     uninstall.colima_running) printf '%s' 'O Colima continua a correr: não foi o instalador do JHT que o ligou (já estava ligado, ou não é o padrão), por isso fica ligado, e pode ser teu. Para o parar: colima stop.' ;;
@@ -3738,6 +3766,27 @@ runtime_helper_load() {
   . "$RUNTIME_DIR/$helper" || return 1
   extras_digest="$(runtime_extras_digest)" || { err "$(jht_say line.pin_dell_immagine_degli_strumenti)"; return 1; }
   EXTRAS_IMAGE_DIGEST="$extras_digest"
+}
+
+# The tools of a core install (P4). The installer leaves the core image; the full one, with the Scouts' tools, comes after, pulled
+# in the background, and the team moves onto it once the onboarding has closed. The desktop app kept that moving; with the CLI only
+# it is `jht up` and `jht setup` that start it (tools_kick in jht-tools.sh: one detached job, idempotent) and `jht up`, `jht setup`
+# and `jht status` that say where it stands, in the person's language. A helper that is missing or not trusted says nothing here: the
+# command it rides on is never failed by it.
+tools_tell_person() {
+  local kick="${1:-}"
+  [ -f "$RUNTIME_TIER_FILE" ] || [ -f "$RUNTIME_DIR/.tools-switch-failed" ] || return 0
+  [ -n "$(runtime_helper_digest jht-tools.sh 2>/dev/null)" ] || return 0
+  (
+    runtime_helper_load jht-tools.sh >/dev/null 2>&1 || exit 0
+    [ "$kick" = kick ] && tools_kick
+    case "$(tools_person_state)" in
+      arriving) info "$(jht_say tools.arriving)" ;;
+      waiting) info "$(jht_say tools.waiting)" ;;
+      failed) warn "$(jht_say tools.failed)" ;;
+      switch_failed) warn "$(jht_say tools.switch_failed)" ;;
+    esac
+  ) || true
 }
 
 runtime_write_manifest() {
@@ -9662,6 +9711,7 @@ case "$SUB" in
     printf '%s\n' "$(jht_say up.done)"
     telegram_lifecycle_if_available resume || exit $?
     broker_after_up
+    tools_tell_person kick
     ;;
 
   start-container)
@@ -9860,6 +9910,7 @@ case "$SUB" in
       else
         status_human_running "$(docker inspect "$container_id" --format '{{.State.Status}}|{{.State.StartedAt}}|{{.Config.Image}}')"
         telegram_status_line || exit $?
+        tools_tell_person
       fi
     else
       attest_status=$?
@@ -9966,6 +10017,7 @@ case "$SUB" in
     jht_load_host_values
     jht_record_host_values
     ensure_up
+    tools_tell_person kick
     rc=0
     setup_exec_container "$@" || rc=$?
     if [ "${1:-}" = cloud ] && [ "${2:-}" = pair ] && [ "$rc" -eq 0 ]; then ensure_broker && broker_configure_web_authorisations; fi
