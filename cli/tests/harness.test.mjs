@@ -257,7 +257,7 @@ test('the login the boot and the watchdog wait for is the one of the program tha
   assert.equal(loginMarkerOf({ ...openai, harness: 'pi' }), '.pi/agent/auth.json');
   assert.equal(loginMarkerOf({ active_provider: 'Codex', harness: 'pi' }), '.pi/agent/auth.json');
   assert.equal(loginMarkerOf({ active_provider: 'kimi' }), '.kimi/credentials/kimi-code.json');
-  assert.equal(loginMarkerOf({ active_provider: 'claude', harness: 'pi' }), '.pi/agent/auth.json', 'Claude runs on pi with a key: pi is the program'); 
+  assert.equal(loginMarkerOf({ active_provider: 'claude', harness: 'pi' }), '.pi/agent/auth.json', 'Claude runs on pi with a key: pi is the program');
   assert.equal(loginMarkerOf({ active_provider: 'unknown', harness: 'pi' }), null);
   assert.equal(loginMarkerOf(null), null);
 });
