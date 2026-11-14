@@ -270,8 +270,11 @@ def test_up_still_refuses_it_and_says_down_then_up(wrapper):
     assert "rc=1" in done.stdout and wrapper.downs() == []
     assert "<config.changed_start>" in done.stderr  # the sentence, in the person's language (jht_say)
     texts = (ROOT / "scripts" / "jht-wrapper.sh").read_text(encoding="utf-8")
-    for line in (l for l in texts.splitlines() if l.startswith("    config.changed_start) ")):
-        assert "config_changed_while_running" in line and "jht down" in line and "jht up" in line
+    lines = [l for l in texts.splitlines() if l.startswith("    config.changed_start) ")]
+    assert len(lines) == 7
+    for line in lines:
+        # the cause a person is most likely to have met (the configuration changed while the team ran), not only a reinstall, and the way out
+        assert "config_changed_while_running" in line and "jht config set" in line and "jht down" in line and "jht up" in line
 
 
 NETNS = ("Error: removing container " + "6" * 64 + " network: 1 error occurred:\\n"

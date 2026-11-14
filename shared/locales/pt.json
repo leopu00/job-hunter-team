@@ -5,9 +5,9 @@
     "purpose": "Portuguese translations of shell/CLI/Telegram strings."
   },
   "wrapper.compose.missing": "falta o docker compose: o motor responde, mas o comando «docker compose» não existe (o JHT precisa do plugin Compose v2). Num Mac: brew install docker-compose e depois mkdir -p ~/.docker/cli-plugins && ln -sfn \"$(brew --prefix)/opt/docker-compose/bin/docker-compose\" ~/.docker/cli-plugins/docker-compose. No Linux: instala o pacote docker-compose-v2 (apt) ou docker-compose-plugin (dnf). Depois corre o comando de novo.",
-  "wrapper.config.changed_down": "config_changed_while_running: a equipa foi iniciada com a configuração de antes da reinstalação; vou pará-la.",
+  "wrapper.config.changed_down": "config_changed_while_running: a equipa foi iniciada com uma configuração diferente da atual (mudou enquanto o JHT corria, ou houve uma reinstalação); vou pará-la.",
   "wrapper.config.changed_other": "config_changed_while_running: a equipa corre com uma configuração diferente da esperada; só a uso para a parar.",
-  "wrapper.config.changed_start": "config_changed_while_running: a equipa foi iniciada com a configuração de antes da reinstalação. Para-a com «jht down» e depois inicia-a com «jht up».",
+  "wrapper.config.changed_start": "config_changed_while_running: a configuração mudou enquanto o JHT estava a correr (jht config set, definições alteradas pelo site ou pela app, ou uma reinstalação); por isso a equipa em execução não pode ser verificada. Para-a com «jht down» e depois inicia-a com «jht up».",
   "wrapper.config.changed_stopped": "config_changed_stopped: os contentores da equipa, parados, são da versão anterior: vou recriá-los com a configuração nova (os volumes com os dados ficam).",
   "wrapper.container.starting": "O contentor '%s' não está a correr, vou iniciá-lo...",
   "wrapper.doctor.host_config_none": "ainda sem configuração: 'jht setup'",

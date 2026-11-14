@@ -358,9 +358,9 @@ export JHT_USER_TZ
 jht_text_en() {
   case "$1" in
     compose.missing) printf '%s' 'docker compose is missing: the engine answers, but the «docker compose» command does not exist (JHT needs the Compose v2 plugin). On a Mac: brew install docker-compose, then mkdir -p ~/.docker/cli-plugins && ln -sfn "$(brew --prefix)/opt/docker-compose/bin/docker-compose" ~/.docker/cli-plugins/docker-compose. On Linux: install the docker-compose-v2 package (apt) or docker-compose-plugin (dnf). Then run the command again.' ;;
-    config.changed_down) printf '%s' 'config_changed_while_running: the team was started with the configuration from before the reinstall; stopping it.' ;;
+    config.changed_down) printf '%s' 'config_changed_while_running: the team was started with a configuration other than the current one (changed while JHT was running, or a reinstall); stopping it.' ;;
     config.changed_other) printf '%s' 'config_changed_while_running: the team runs with a configuration other than the expected one; it is used only to stop it.' ;;
-    config.changed_start) printf '%s' 'config_changed_while_running: the team was started with the configuration from before the reinstall. Stop it with «jht down», then start it with «jht up».' ;;
+    config.changed_start) printf '%s' 'config_changed_while_running: the configuration changed while JHT was running (jht config set, settings changed from the site or the app, or a reinstall), so the running team cannot be verified. Stop it with «jht down», then start it with «jht up».' ;;
     config.changed_stopped) printf '%s' 'config_changed_stopped: the team'\''s containers, stopped, are from the earlier version: recreating them with the new configuration (the volumes with the data stay).' ;;
     container.starting) printf '%s' 'Container '\''%s'\'' is not running, starting it...' ;;
     doctor.host_config_none) printf '%s' 'no configuration yet: '\''jht setup'\''' ;;
@@ -837,9 +837,9 @@ Examples:
 jht_text_it() {
   case "$1" in
     compose.missing) printf '%s' 'manca docker compose: il motore risponde, ma il comando «docker compose» non esiste (a JHT serve il plugin Compose v2). Su Mac: brew install docker-compose, poi mkdir -p ~/.docker/cli-plugins && ln -sfn "$(brew --prefix)/opt/docker-compose/bin/docker-compose" ~/.docker/cli-plugins/docker-compose. Su Linux: installa il pacchetto docker-compose-v2 (apt) o docker-compose-plugin (dnf). Poi rilancia il comando.' ;;
-    config.changed_down) printf '%s' 'config_changed_while_running: il team era stato avviato con la configurazione di prima della reinstallazione; lo fermo.' ;;
+    config.changed_down) printf '%s' 'config_changed_while_running: il team era stato avviato con una configurazione diversa da quella attuale (cambiata mentre JHT era acceso, o una reinstallazione); lo fermo.' ;;
     config.changed_other) printf '%s' 'config_changed_while_running: il team gira con una configurazione diversa da quella attesa; la uso solo per fermarlo.' ;;
-    config.changed_start) printf '%s' 'config_changed_while_running: il team e'\'' stato avviato con la configurazione di prima della reinstallazione. Fermalo con «jht down», poi avvialo con «jht up».' ;;
+    config.changed_start) printf '%s' 'config_changed_while_running: la configurazione e'\'' cambiata mentre JHT era acceso (jht config set, impostazioni cambiate dal sito o dall'\''app, o una reinstallazione): il team in corso non si puo'\'' verificare. Fermalo con «jht down», poi avvialo con «jht up».' ;;
     config.changed_stopped) printf '%s' 'config_changed_stopped: i container del team, fermi, sono della versione di prima: li ricreo con la configurazione nuova (i volumi con i dati restano).' ;;
     container.starting) printf '%s' 'Container '\''%s'\'' non attivo, lo avvio...' ;;
     doctor.host_config_none) printf '%s' 'ancora nessuna configurazione: '\''jht setup'\''' ;;
@@ -1316,9 +1316,9 @@ Esempi:
 jht_text_hu() {
   case "$1" in
     compose.missing) printf '%s' 'hiányzik a docker compose: a motor válaszol, de a „docker compose” parancs nem létezik (a JHT-nak a Compose v2 bővítmény kell). Macen: brew install docker-compose, majd mkdir -p ~/.docker/cli-plugins && ln -sfn "$(brew --prefix)/opt/docker-compose/bin/docker-compose" ~/.docker/cli-plugins/docker-compose. Linuxon: telepítsd a docker-compose-v2 csomagot (apt) vagy a docker-compose-plugin csomagot (dnf). Utána futtasd újra a parancsot.' ;;
-    config.changed_down) printf '%s' 'config_changed_while_running: a csapat az újratelepítés előtti beállításokkal indult; leállítom.' ;;
+    config.changed_down) printf '%s' 'config_changed_while_running: a csapat a jelenlegitől eltérő beállításokkal indult (futás közben megváltozott, vagy újratelepítés történt); leállítom.' ;;
     config.changed_other) printf '%s' 'config_changed_while_running: a csapat a vártól eltérő beállításokkal fut; ezeket csak a leállításához használom.' ;;
-    config.changed_start) printf '%s' 'config_changed_while_running: a csapat az újratelepítés előtti beállításokkal indult. Állítsd le a „jht down” paranccsal, majd indítsd el a „jht up” paranccsal.' ;;
+    config.changed_start) printf '%s' 'config_changed_while_running: a beállítás megváltozott, amíg a JHT futott (jht config set, a webhelyről vagy az appból módosított beállítások, vagy újratelepítés), ezért a futó csapat nem ellenőrizhető. Állítsd le a „jht down” paranccsal, majd indítsd el a „jht up” paranccsal.' ;;
     config.changed_stopped) printf '%s' 'config_changed_stopped: a csapat leállított konténerei a korábbi verzióból valók: újra létrehozom őket az új beállításokkal (az adatokat tartalmazó kötetek megmaradnak).' ;;
     container.starting) printf '%s' 'A(z) '\''%s'\'' konténer nem fut, elindítom...' ;;
     doctor.host_config_none) printf '%s' 'még nincs beállítás: '\''jht setup'\''' ;;
@@ -1796,9 +1796,9 @@ Példák:
 jht_text_es() {
   case "$1" in
     compose.missing) printf '%s' 'falta docker compose: el motor responde, pero el comando «docker compose» no existe (JHT necesita el plugin Compose v2). En un Mac: brew install docker-compose y luego mkdir -p ~/.docker/cli-plugins && ln -sfn "$(brew --prefix)/opt/docker-compose/bin/docker-compose" ~/.docker/cli-plugins/docker-compose. En Linux: instala el paquete docker-compose-v2 (apt) o docker-compose-plugin (dnf). Luego vuelve a ejecutar el comando.' ;;
-    config.changed_down) printf '%s' 'config_changed_while_running: el equipo se arrancó con la configuración de antes de la reinstalación; lo detengo.' ;;
+    config.changed_down) printf '%s' 'config_changed_while_running: el equipo se arrancó con una configuración distinta de la actual (cambió mientras JHT estaba en marcha, o hubo una reinstalación); lo detengo.' ;;
     config.changed_other) printf '%s' 'config_changed_while_running: el equipo funciona con una configuración distinta de la esperada; solo la uso para detenerlo.' ;;
-    config.changed_start) printf '%s' 'config_changed_while_running: el equipo se arrancó con la configuración de antes de la reinstalación. Detenlo con «jht down» y luego arráncalo con «jht up».' ;;
+    config.changed_start) printf '%s' 'config_changed_while_running: la configuración cambió mientras JHT estaba en marcha (jht config set, ajustes cambiados desde el sitio o la app, o una reinstalación), así que el equipo en marcha no se puede verificar. Detenlo con «jht down» y luego arráncalo con «jht up».' ;;
     config.changed_stopped) printf '%s' 'config_changed_stopped: los contenedores del equipo, detenidos, son de la versión anterior: los vuelvo a crear con la configuración nueva (los volúmenes con los datos se quedan).' ;;
     container.starting) printf '%s' 'El contenedor '\''%s'\'' no está en marcha, lo arranco...' ;;
     doctor.host_config_none) printf '%s' 'todavía no hay configuración: '\''jht setup'\''' ;;
@@ -2280,9 +2280,9 @@ Ejemplos:
 jht_text_de() {
   case "$1" in
     compose.missing) printf '%s' 'docker compose fehlt: Die Engine antwortet, aber der Befehl «docker compose» existiert nicht (JHT braucht das Compose-v2-Plugin). Auf dem Mac: brew install docker-compose, dann mkdir -p ~/.docker/cli-plugins && ln -sfn "$(brew --prefix)/opt/docker-compose/bin/docker-compose" ~/.docker/cli-plugins/docker-compose. Unter Linux: Installiere das Paket docker-compose-v2 (apt) oder docker-compose-plugin (dnf). Führe dann den Befehl erneut aus.' ;;
-    config.changed_down) printf '%s' 'config_changed_while_running: Das Team wurde mit der Konfiguration von vor der Neuinstallation gestartet; es wird gestoppt.' ;;
+    config.changed_down) printf '%s' 'config_changed_while_running: Das Team wurde mit einer anderen als der aktuellen Konfiguration gestartet (sie hat sich während des Laufs geändert, oder es gab eine Neuinstallation); es wird gestoppt.' ;;
     config.changed_other) printf '%s' 'config_changed_while_running: Das Team läuft mit einer anderen als der erwarteten Konfiguration; sie wird nur zum Stoppen verwendet.' ;;
-    config.changed_start) printf '%s' 'config_changed_while_running: Das Team wurde mit der Konfiguration von vor der Neuinstallation gestartet. Stoppe es mit «jht down» und starte es dann mit «jht up».' ;;
+    config.changed_start) printf '%s' 'config_changed_while_running: Die Konfiguration hat sich geändert, während JHT lief (jht config set, über die Website oder die App geänderte Einstellungen oder eine Neuinstallation); das laufende Team lässt sich daher nicht verifizieren. Stoppe es mit «jht down» und starte es dann mit «jht up».' ;;
     config.changed_stopped) printf '%s' 'config_changed_stopped: Die gestoppten Container des Teams stammen aus der früheren Version: Sie werden mit der neuen Konfiguration neu erstellt (die Volumes mit den Daten bleiben).' ;;
     container.starting) printf '%s' 'Container '\''%s'\'' läuft nicht, starte ihn...' ;;
     doctor.host_config_none) printf '%s' 'noch keine Konfiguration: '\''jht setup'\''' ;;
@@ -2759,9 +2759,9 @@ Beispiele:
 jht_text_fr() {
   case "$1" in
     compose.missing) printf '%s' 'docker compose est absent : le moteur répond, mais la commande « docker compose » n'\''existe pas (JHT a besoin du plugin Compose v2). Sur Mac : brew install docker-compose, puis mkdir -p ~/.docker/cli-plugins && ln -sfn "$(brew --prefix)/opt/docker-compose/bin/docker-compose" ~/.docker/cli-plugins/docker-compose. Sur Linux : installe le paquet docker-compose-v2 (apt) ou docker-compose-plugin (dnf). Puis relance la commande.' ;;
-    config.changed_down) printf '%s' 'config_changed_while_running : l'\''équipe a été démarrée avec la configuration d'\''avant la réinstallation ; je l'\''arrête.' ;;
+    config.changed_down) printf '%s' 'config_changed_while_running : l'\''équipe a été démarrée avec une configuration autre que l'\''actuelle (changée pendant que JHT tournait, ou réinstallation) ; je l'\''arrête.' ;;
     config.changed_other) printf '%s' 'config_changed_while_running : l'\''équipe tourne avec une configuration différente de celle attendue ; elle ne sert qu'\''à l'\''arrêter.' ;;
-    config.changed_start) printf '%s' 'config_changed_while_running : l'\''équipe a été démarrée avec la configuration d'\''avant la réinstallation. Arrête-la avec « jht down », puis démarre-la avec « jht up ».' ;;
+    config.changed_start) printf '%s' 'config_changed_while_running : la configuration a changé pendant que JHT tournait (jht config set, réglages modifiés depuis le site ou l'\''appli, ou une réinstallation) ; l'\''équipe en cours ne peut donc pas être vérifiée. Arrête-la avec « jht down », puis démarre-la avec « jht up ».' ;;
     config.changed_stopped) printf '%s' 'config_changed_stopped : les conteneurs de l'\''équipe, arrêtés, sont de la version précédente : je les recrée avec la nouvelle configuration (les volumes avec les données restent).' ;;
     container.starting) printf '%s' 'Le conteneur '\''%s'\'' n'\''est pas actif, je le démarre...' ;;
     doctor.host_config_none) printf '%s' 'pas encore de configuration : '\''jht setup'\''' ;;
@@ -3238,9 +3238,9 @@ Exemples :
 jht_text_pt() {
   case "$1" in
     compose.missing) printf '%s' 'falta o docker compose: o motor responde, mas o comando «docker compose» não existe (o JHT precisa do plugin Compose v2). Num Mac: brew install docker-compose e depois mkdir -p ~/.docker/cli-plugins && ln -sfn "$(brew --prefix)/opt/docker-compose/bin/docker-compose" ~/.docker/cli-plugins/docker-compose. No Linux: instala o pacote docker-compose-v2 (apt) ou docker-compose-plugin (dnf). Depois corre o comando de novo.' ;;
-    config.changed_down) printf '%s' 'config_changed_while_running: a equipa foi iniciada com a configuração de antes da reinstalação; vou pará-la.' ;;
+    config.changed_down) printf '%s' 'config_changed_while_running: a equipa foi iniciada com uma configuração diferente da atual (mudou enquanto o JHT corria, ou houve uma reinstalação); vou pará-la.' ;;
     config.changed_other) printf '%s' 'config_changed_while_running: a equipa corre com uma configuração diferente da esperada; só a uso para a parar.' ;;
-    config.changed_start) printf '%s' 'config_changed_while_running: a equipa foi iniciada com a configuração de antes da reinstalação. Para-a com «jht down» e depois inicia-a com «jht up».' ;;
+    config.changed_start) printf '%s' 'config_changed_while_running: a configuração mudou enquanto o JHT estava a correr (jht config set, definições alteradas pelo site ou pela app, ou uma reinstalação); por isso a equipa em execução não pode ser verificada. Para-a com «jht down» e depois inicia-a com «jht up».' ;;
     config.changed_stopped) printf '%s' 'config_changed_stopped: os contentores da equipa, parados, são da versão anterior: vou recriá-los com a configuração nova (os volumes com os dados ficam).' ;;
     container.starting) printf '%s' 'O contentor '\''%s'\'' não está a correr, vou iniciá-lo...' ;;
     doctor.host_config_none) printf '%s' 'ainda sem configuração: '\''jht setup'\''' ;;
