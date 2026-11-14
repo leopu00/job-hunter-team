@@ -395,6 +395,19 @@ jht_error_marker() {
   if jht_machine_output; then printf 'JHT_ERROR %s\n' "$1" >&2; fi
 }
 
+# The code in front of a refusal's sentence («team_running: …») is for the app too, which keeps the line as the cause: a person at
+# a terminal reads the sentence alone.
+# Asked inside $( ): stdout there is the substitution's pipe, so whether a person reads is the answer stdout gave when the installer
+# started (JHT_STDOUT_AT_START, set below the functions); JHT_MACHINE_OUTPUT still decides first.
+jht_code_prefix() {
+  case "${JHT_MACHINE_OUTPUT:-}" in
+    1) printf '%s: ' "$1"; return 0 ;;
+    0) return 0 ;;
+  esac
+  [ "${JHT_STDOUT_AT_START:-pipe}" = terminal ] || printf '%s: ' "$1"
+}
+if [ -t 1 ]; then JHT_STDOUT_AT_START=terminal; else JHT_STDOUT_AT_START=pipe; fi
+
 jht_phase() {
   case "$1" in
     homebrew_check|podman_install|compose_install|machine_create|image_pull|machine_start) ;;
@@ -545,9 +558,9 @@ keep_chosen_runtime() {
   fi
   jht_error_marker runtime_change_requires_migration
   if [ "$lang" = it ]; then
-    printf "  ${RED}✗${RESET} %s\n" "runtime_change_requires_migration: questo computer fa girare JHT su Docker (Colima, Docker Desktop o Docker Engine). Dalla 0.4 JHT gira solo su Podman, e non e' stato cambiato niente. I tuoi dati restano: ~/.jht (configurazione, database, profilo) e ~/Documents/Job Hunter Team (CV, risultati) sono cartelle di questo computer. Resta invece nei volumi di Docker, e va ridato: la chiave API salvata dal setup, la password della posta, i token di Telegram. Per passare a Podman: «jht uninstall --confirm» (tiene quelle due cartelle), rilancia questo installer, poi «jht setup» con la tua chiave API.$colima_line" >&2
+    printf "  ${RED}✗${RESET} %s%s\n" "$(jht_code_prefix runtime_change_requires_migration)" "questo computer fa girare JHT su Docker (Colima, Docker Desktop o Docker Engine). Dalla 0.4 JHT gira solo su Podman, e non e' stato cambiato niente. I tuoi dati restano: ~/.jht (configurazione, database, profilo) e ~/Documents/Job Hunter Team (CV, risultati) sono cartelle di questo computer. Resta invece nei volumi di Docker, e va ridato: la chiave API salvata dal setup, la password della posta, i token di Telegram. Per passare a Podman: «jht uninstall --confirm» (tiene quelle due cartelle), rilancia questo installer, poi «jht setup» con la tua chiave API.$colima_line" >&2
   else
-    printf "  ${RED}✗${RESET} %s\n" "runtime_change_requires_migration: this computer runs JHT on Docker (Colima, Docker Desktop or Docker Engine). Since 0.4 JHT runs only on Podman, and nothing was changed. Your data stays: ~/.jht (configuration, database, profile) and ~/Documents/Job Hunter Team (CVs, outputs) are folders of this computer. What stays behind in Docker's volumes and has to be given again: the API key kept by the setup, the mail password, the Telegram tokens. To move to Podman: run «jht uninstall --confirm» (it keeps those two folders), run this installer again, then «jht setup» with your API key.$colima_line" >&2
+    printf "  ${RED}✗${RESET} %s%s\n" "$(jht_code_prefix runtime_change_requires_migration)" "this computer runs JHT on Docker (Colima, Docker Desktop or Docker Engine). Since 0.4 JHT runs only on Podman, and nothing was changed. Your data stays: ~/.jht (configuration, database, profile) and ~/Documents/Job Hunter Team (CVs, outputs) are folders of this computer. What stays behind in Docker's volumes and has to be given again: the API key kept by the setup, the mail password, the Telegram tokens. To move to Podman: run «jht uninstall --confirm» (it keeps those two folders), run this installer again, then «jht setup» with your API key.$colima_line" >&2
   fi
   exit "$RUNTIME_CHANGE_REQUIRES_MIGRATION_EXIT"
 }
@@ -603,7 +616,7 @@ podman_native_mode()  { [ "${OS:-}" = "linux" ] && [ "$RUNTIME_CHOICE" = "podman
 
 podman_refuse() {
   jht_error_marker "$1"
-  printf "  ${RED}✗${RESET} %s: %s\n" "$1" "$3" >&2
+  printf "  ${RED}✗${RESET} %s%s\n" "$(jht_code_prefix "$1")" "$3" >&2
   exit "$2"
 }
 
@@ -903,9 +916,9 @@ report_podman_machine_conflict() {
   local which_it="un'altra macchina Podman e' accesa (trovala con 'podman machine list')" which_en="another Podman machine is running (find it with 'podman machine list')"
   [ -n "$running" ] && which_it="un'altra macchina Podman, $running, e' accesa" which_en="another Podman machine, $running, is running"
   if [ "$(installer_person_lang)" = it ]; then
-    printf "  ${RED}✗${RESET} %s\n" "podman_other_machine_running: $which_it, e sul Mac ne puo' girare una sola alla volta. Spegnila con 'podman machine stop ${running:-<nome>}' (o dall'app con cui la usi) e rilancia l'installer: Job Hunter Team non la spegne mai al posto tuo, e dopo potrai riaccenderla." >&2
+    printf "  ${RED}✗${RESET} %s%s\n" "$(jht_code_prefix podman_other_machine_running)" "$which_it, e sul Mac ne puo' girare una sola alla volta. Spegnila con 'podman machine stop ${running:-<nome>}' (o dall'app con cui la usi) e rilancia l'installer: Job Hunter Team non la spegne mai al posto tuo, e dopo potrai riaccenderla." >&2
   else
-    printf "  ${RED}✗${RESET} %s\n" "podman_other_machine_running: $which_en, and a Mac runs only one at a time. Stop it with 'podman machine stop ${running:-<name>}' (or from the app you use it with) and run the installer again: Job Hunter Team never stops it for you, and you can start it again afterwards." >&2
+    printf "  ${RED}✗${RESET} %s%s\n" "$(jht_code_prefix podman_other_machine_running)" "$which_en, and a Mac runs only one at a time. Stop it with 'podman machine stop ${running:-<name>}' (or from the app you use it with) and run the installer again: Job Hunter Team never stops it for you, and you can start it again afterwards." >&2
   fi
   return 0
 }
@@ -2385,10 +2398,10 @@ refuse_running_team() {
   [ -z "$running" ] && return 0
   jht_error_marker team_running
   if [ "$(installer_person_lang)" = it ]; then
-    printf "  ${RED}✗${RESET} %s\n" "team_running: Job Hunter Team e' acceso su questo computer ($running). Se il setup si era interrotto, riprendilo con «jht setup» in questo terminale; non serve spegnere niente. Per reinstallare invece: spegnilo con «jht down», rilancia l'installer, poi riaccendilo con «jht up». Non e' stato cambiato niente: il tuo profilo e i tuoi documenti in ~/.jht e ~/Documents/Job Hunter Team restano dove sono." >&2
+    printf "  ${RED}✗${RESET} %s%s\n" "$(jht_code_prefix team_running)" "Job Hunter Team e' acceso su questo computer ($running). Se il setup si era interrotto, riprendilo con «jht setup» in questo terminale; non serve spegnere niente. Per reinstallare invece: spegnilo con «jht down», rilancia l'installer, poi riaccendilo con «jht up». Non e' stato cambiato niente: il tuo profilo e i tuoi documenti in ~/.jht e ~/Documents/Job Hunter Team restano dove sono." >&2
     exit "$TEAM_RUNNING_EXIT"
   fi
-  printf "  ${RED}✗${RESET} %s\n" "team_running: Job Hunter Team is running on this computer ($running). If setup was interrupted, resume it with «jht setup» in this terminal; no down is needed. To reinstall instead, stop it with «jht down», run the installer again, then start it with «jht up». Nothing was changed: your profile and documents in ~/.jht and ~/Documents/Job Hunter Team stay where they are." >&2
+  printf "  ${RED}✗${RESET} %s%s\n" "$(jht_code_prefix team_running)" "Job Hunter Team is running on this computer ($running). If setup was interrupted, resume it with «jht setup» in this terminal; no down is needed. To reinstall instead, stop it with «jht down», run the installer again, then start it with «jht up». Nothing was changed: your profile and documents in ~/.jht and ~/Documents/Job Hunter Team stay where they are." >&2
   exit "$TEAM_RUNNING_EXIT"
 }
 

@@ -1095,9 +1095,9 @@ start_jht_podman_machine() {
     if [ -n "$running" ]; then
       # the marker is for the desktop app (machine output); a person at a terminal reads only the line below
       if jht_machine_output; then printf 'JHT_OTHER_MACHINE %s\n' "$running"; fi
-      err "podman_other_machine_running: un'altra macchina Podman, $running, e' accesa: spegnila con 'podman machine stop $running' e riprova."
+      err "$(jht_code_prefix podman_other_machine_running)un'altra macchina Podman, $running, e' accesa: spegnila con 'podman machine stop $running' e riprova."
     else
-      err "podman_other_machine_running: un'altra macchina Podman e' accesa: trovala con 'podman machine list', spegnila con 'podman machine stop <nome>' e riprova."
+      err "$(jht_code_prefix podman_other_machine_running)un'altra macchina Podman e' accesa: trovala con 'podman machine list', spegnila con 'podman machine stop <nome>' e riprova."
     fi
     return 79
   fi
@@ -1804,8 +1804,10 @@ container_mutation_preflight() {
   if [ "$status" -eq 1 ] && [ "$CONTAINER_RUNTIME" = podman ] \
       && read_only_service_id "$CONTAINER_SERVICE" stopped-stale-config >/dev/null 2>&1 \
       && ! project_has_running_container; then
-    warn "$(jht_say config.changed_stopped)"
-    COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose down || { err "Non riesco a rimuovere i container fermi della versione di prima: «jht down», poi «jht up»."; return 1; }
+    warn "$(jht_say_sentence config.changed_stopped)"
+    # compose_quiet, as on `jht down`: podman-compose's own lines («Error: no container with name or ID "jht-broker" found» for every
+    # service never created, the bare names, the id, jht_default) stay out of sight; any other line is shown
+    COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" compose_quiet down || { err "Non riesco a rimuovere i container fermi della versione di prima: «jht down», poi «jht up»."; return 1; }
     return 0
   fi
   err_unattestable "Container JHT esistente non attestabile; operazione interrotta."
@@ -1818,7 +1820,7 @@ container_mutation_preflight() {
 stale_config_hint() {
   [ "$CONTAINER_RUNTIME" = podman ] || return 0
   read_only_service_id "$CONTAINER_SERVICE" any-config >/dev/null 2>&1 || return 0
-  err "$(jht_say config.changed_start)"
+  err "$(jht_say_sentence config.changed_start)"
 }
 
 # The tools' containers (the live screen, media, the sign-in) go first, each by the id the attestation gives (running or stopped, ours
@@ -1851,7 +1853,7 @@ container_down() {
   container_up >/dev/null || up_status=$?
   if [ "$up_status" -ne 0 ]; then
     if [ "$CONTAINER_RUNTIME" = podman ] && read_only_service_id "$CONTAINER_SERVICE" any-config >/dev/null; then
-      warn "$(jht_say config.changed_down)"
+      warn "$(jht_say_sentence config.changed_down)"
     elif [ "$up_status" -eq 3 ]; then
       # No `jht` container. That is nothing to stop only when the WHOLE project is empty: status 3 also means that only the
       # agent service is missing, while the broker (the mail password) or Telegram still run, and a `jht down && rm -rf <runtime>`
@@ -4403,7 +4405,7 @@ ensure_up_for_stop() {
   if [ "$status" -ne 3 ] && [ "$CONTAINER_RUNTIME" = podman ] \
       && found="$(read_only_service_id "$CONTAINER_SERVICE" any-config 2>/dev/null)"; then
     ATTESTED_CONTAINER_ID="$found"
-    warn "$(jht_say config.changed_other)"
+    warn "$(jht_say_sentence config.changed_other)"
     return 0
   fi
   ensure_up
@@ -5882,6 +5884,30 @@ uninstall_usage() {
   info "$(jht_say uninstall.loss)"
   info "$(jht_say uninstall.purge_loss)"
   info "$(jht_say uninstall.usage_stays)"
+}
+
+# The code in front of a sentence («podman_other_machine_running: …», «config_changed_stopped: …») is for the desktop app, which keeps
+# the line as the cause; a person at a terminal reads the sentence alone (jht_machine_output decides, below).
+# Both are asked inside $( ), where stdout is the substitution's pipe: whether a person reads is the answer stdout gave when the
+# wrapper started (JHT_STDOUT_AT_START); JHT_MACHINE_OUTPUT still decides first.
+jht_code_for_app() {
+  case "${JHT_MACHINE_OUTPUT:-}" in
+    1) return 0 ;;
+    0) return 1 ;;
+  esac
+  [ "${JHT_STDOUT_AT_START:-pipe}" != terminal ]
+}
+if [ -t 1 ]; then JHT_STDOUT_AT_START=terminal; else JHT_STDOUT_AT_START=pipe; fi
+jht_code_prefix() {
+  if jht_code_for_app; then printf '%s: ' "$1"; fi
+}
+jht_say_sentence() {
+  local text
+  text="$(jht_say "$@")"
+  if ! jht_code_for_app; then
+    case "$text" in [a-z]*_*:\ *) text="${text#*: }" ;; esac
+  fi
+  printf '%s' "$text"
 }
 
 # JHT_PHASE / JHT_LEFT are for the desktop app, which reads this through a pipe. At a terminal the person gets a

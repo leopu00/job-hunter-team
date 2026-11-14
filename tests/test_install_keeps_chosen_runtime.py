@@ -206,3 +206,4 @@ def test_at_a_terminal_the_refusal_says_only_the_sentence(tmp_path):
     assert result.returncode == 85
     assert "JHT_ERROR" not in result.stderr + result.stdout
     assert "runs JHT on Docker" in " ".join(result.stderr.split())
+    assert "runtime_change_requires_migration" not in result.stderr
