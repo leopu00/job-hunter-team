@@ -949,6 +949,127 @@ function Invoke-Onboard {
   }
 }
 
+# -- A team of an earlier JHT on Docker Desktop -------------------------------
+# Up to 0.3.9 JHT on Windows ran on Docker Desktop: the container "jht" of the Compose project of this runtime folder
+# (docker compose -f <runtime>\docker-compose.yml --project-directory <runtime>), with restart: unless-stopped. Since 0.4 the team
+# runs in the Podman machine, and one installed next to a 0.3.9 container would be a second team on the same ~/.jht and Documents.
+# So when Docker answers and holds a container of ours (named jht or jht-..., with the working_dir label of this runtime folder),
+# the installer stops before it changes anything, says how to stop and remove the old team and what stays, and leaves with 85
+# (runtime_change_requires_migration, as install.sh on the Mac). It never stops or removes anything itself. No Docker, or a Docker
+# that does not answer within its time: nothing changes. JHT's own docker.exe (the shim in the runtime or bin folder) is not Docker.
+$RuntimeChangeRequiresMigrationExit = 85
+$LegacyDockerTimeoutSeconds = 20
+
+function Get-JhtLegacyDockerCli {
+  $own = @(@($RuntimeDir, $BinDir) | Where-Object { $_ } | ForEach-Object { [IO.Path]::GetFullPath($_).TrimEnd('\', '/') })
+  $candidates = @()
+  if ($env:ProgramFiles) { $candidates += (Join-Path $env:ProgramFiles 'Docker\Docker\resources\bin\docker.exe') }
+  $candidates += @(Get-Command docker -CommandType Application -ErrorAction SilentlyContinue | ForEach-Object { $_.Source })
+  foreach ($path in $candidates) {
+    if (-not $path -or -not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
+    $full = [IO.Path]::GetFullPath($path)
+    $dir = [IO.Path]::GetDirectoryName($full).TrimEnd('\', '/')
+    $inside = @($own | Where-Object { $dir -ieq $_ -or $dir.StartsWith($_ + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) })
+    if ($inside.Count -gt 0) { continue }
+    return $full
+  }
+  return $null
+}
+
+# docker with a time limit (Docker Desktop that is starting can keep a call waiting): its stdout, or $null when it did not answer, did
+# not end in time or left with a code other than 0. The arguments carry no quote and no path.
+function Invoke-JhtLegacyDocker {
+  param([Parameter(Mandatory)][string]$Docker, [Parameter(Mandatory)][string[]]$Arguments, [int]$Seconds = $LegacyDockerTimeoutSeconds)
+  $info = New-Object System.Diagnostics.ProcessStartInfo
+  $info.FileName = $Docker
+  $info.Arguments = (@($Arguments | ForEach-Object { '"' + $_ + '"' }) -join ' ')
+  $info.UseShellExecute = $false
+  $info.RedirectStandardOutput = $true
+  $info.RedirectStandardError = $true
+  $info.CreateNoWindow = $true
+  try { $process = [Diagnostics.Process]::Start($info) } catch { return $null }
+  $stdout = $process.StandardOutput.ReadToEndAsync()
+  $null = $process.StandardError.ReadToEndAsync()
+  if (-not $process.WaitForExit($Seconds * 1000)) {
+    try { $process.Kill() } catch { }
+    return $null
+  }
+  $process.WaitForExit()
+  if ($process.ExitCode -ne 0) { return $null }
+  return [string]$stdout.Result
+}
+
+# The containers of an earlier JHT in Docker: name, state, image and Compose project, only those with the working_dir of this runtime.
+function Get-JhtLegacyDockerTeam {
+  param([Parameter(Mandatory)][string]$Docker)
+  $listed = Invoke-JhtLegacyDocker -Docker $Docker -Arguments @('ps', '--all', '--no-trunc', '--filter', 'name=^jht', '--format', '{{.Names}}|{{.State}}|{{.Image}}|{{.Labels}}')
+  if ($null -eq $listed) { return @() }
+  $runtime = [IO.Path]::GetFullPath($RuntimeDir).TrimEnd('\', '/')
+  return @(foreach ($line in ($listed -split '\r?\n')) {
+    $parts = $line.Split([char[]]@('|'), 4)
+    if ($parts.Count -lt 4 -or $parts[0] -cnotmatch '^jht(-[A-Za-z0-9_.-]+)?$') { continue }
+    $dir = $null; $project = $null
+    foreach ($label in $parts[3].Split(',')) {
+      if ($label.StartsWith('com.docker.compose.project.working_dir=')) { $dir = $label.Substring('com.docker.compose.project.working_dir='.Length) }
+      elseif ($label.StartsWith('com.docker.compose.project=')) { $project = $label.Substring('com.docker.compose.project='.Length) }
+    }
+    if (-not $dir -or -not $project -or $project -cnotmatch '^[a-z0-9][a-z0-9_-]*$') { continue }
+    try { $full = [IO.Path]::GetFullPath($dir).TrimEnd('\', '/') } catch { continue }
+    if ($full -ine $runtime) { continue }
+    [pscustomobject]@{ Name = $parts[0]; Running = ($parts[1] -ceq 'running'); Image = $parts[2]; Project = $project }
+  })
+}
+
+function Assert-NoLegacyDockerTeam {
+  $docker = Get-JhtLegacyDockerCli
+  if (-not $docker) { return }
+  $team = @(Get-JhtLegacyDockerTeam -Docker $docker)
+  if ($team.Count -eq 0) { return }
+  $names = @($team | ForEach-Object { $_.Name })
+  $projects = @($team | ForEach-Object { $_.Project } | Sort-Object -Unique)
+  $volumes = @(foreach ($project in $projects) {
+    $found = Invoke-JhtLegacyDocker -Docker $docker -Arguments @('volume', 'ls', '--filter', "label=com.docker.compose.project=$project", '--format', '{{.Name}}')
+    if ($found) { @($found -split '\r?\n' | ForEach-Object { $_.Trim() } | Where-Object { $_ -cmatch '^[A-Za-z0-9][A-Za-z0-9_.-]*$' }) }
+  })
+  $images = @($team | ForEach-Object { $_.Image } | Where-Object { $_ -and $_ -cmatch '^[A-Za-z0-9][A-Za-z0-9_./:@-]*$' } | Sort-Object -Unique)
+  $running = @($team | Where-Object { $_.Running }).Count -gt 0
+  $what = if ($running) {
+    T "an earlier Job Hunter Team is still running on Docker Desktop (container $($names -join ', ')). Since 0.4 the team runs in a Podman machine: installed next to it, two teams would work on the same data. Nothing was changed." "su Docker Desktop gira ancora una versione precedente di Job Hunter Team (container $($names -join ', ')). Dalla 0.4 il team gira in una macchina Podman: installata accanto, ci sarebbero due team sugli stessi dati. Non e' stato cambiato niente."
+  } else {
+    T "an earlier Job Hunter Team is still installed on Docker Desktop (container $($names -join ', '), stopped; it starts again with Docker Desktop). Since 0.4 the team runs in a Podman machine: installed next to it, two teams would work on the same data. Nothing was changed." "su Docker Desktop c'e' ancora una versione precedente di Job Hunter Team (container $($names -join ', '), fermo; ripartirebbe con Docker Desktop). Dalla 0.4 il team gira in una macchina Podman: installata accanto, ci sarebbero due team sugli stessi dati. Non e' stato cambiato niente."
+  }
+  if (Test-JhtMachineOutput) {
+    [Console]::Error.WriteLine("runtime_change_requires_migration: an earlier JHT container on Docker Desktop ($($names -join ', ')); stop and remove it, then run the installer again.")
+    Remove-JhtCreatedEmptyDirs
+    exit $RuntimeChangeRequiresMigrationExit
+  }
+  $todo = @(
+    (T 'Stop and remove the old team (Docker Desktop on), in PowerShell:' 'Ferma e togli il team vecchio (con Docker Desktop acceso), in PowerShell:'),
+    "  docker stop $($names -join ' ')",
+    "  docker rm $($names -join ' ')",
+    (T 'Your data stays: ~/.jht (configuration, database, profile) and Documents\Job Hunter Team (CVs, outputs) are folders of this computer, and the new team uses them.' "I tuoi dati restano: ~/.jht (configurazione, database, profilo) e Documenti\Job Hunter Team (CV, risultati) sono cartelle di questo computer, e il nuovo team le usa.")
+  )
+  if ($volumes.Count -gt 0) {
+    # The 0.3.x installer took the compose of the branch at the time of the install: by then it can have the volumes of the secrets too.
+    $todo += (T 'In Docker Desktop the volumes of the old team stay: provider tools and, by the version, the API key kept by the setup, the mail password and the Telegram tokens. The new team does not read them: give those again with jht setup. If you do not need them any more:' "In Docker Desktop restano i volumi del team vecchio: strumenti dei provider e, secondo la versione, la chiave API salvata dal setup, la password della posta e i token di Telegram. Il nuovo team non li legge: quelli vanno ridati con jht setup. Se non ti servono piu':")
+    $todo += "  docker volume rm $($volumes -join ' ')"
+  }
+  if ($images.Count -gt 0) {
+    $todo += (T 'And its image, to free the disk:' "E la sua immagine, per liberare il disco:")
+    $todo += "  docker image rm $($images -join ' ')"
+  }
+  $todo += (T 'Then run this installer again.' 'Poi rilancia questo installer.')
+  Write-JhtProblem -What $what -Todo $todo
+  Remove-JhtCreatedEmptyDirs
+  exit $RuntimeChangeRequiresMigrationExit
+}
+
+function Test-JhtMachineOutput {
+  if ($env:JHT_MACHINE_OUTPUT -eq '1') { return $true }
+  if ($env:JHT_MACHINE_OUTPUT -eq '0') { return $false }
+  return [Console]::IsOutputRedirected
+}
+
 # ── Main ──────────────────────────────────────────────────────────────────
 if ($WindowsSupportNoticeOnly) {
   Show-WindowsSupportNotice
@@ -956,6 +1077,7 @@ if ($WindowsSupportNoticeOnly) {
 }
 Show-Header
 Test-System
+Assert-NoLegacyDockerTeam
 Test-WindowsSubsystem
 Get-RuntimeFiles
 Add-ToUserPath
