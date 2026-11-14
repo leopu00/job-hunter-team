@@ -184,8 +184,8 @@ function Set-JhtNodeOwner {
   if ($actualSid.Value -ne $ownerSid.Value) { throw "Owner is not the current user: $Path" }
 }
 $TestChannelImage = $Image
-$Image = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { 'ghcr.io/leopu00/jht@sha256:8db1633af3c6e7d606b058225023988f86687d86c8eab3cbe2c47c57ff8190e7' }
-$CoreImageDigest = if ($env:JHT_CORE_IMAGE_DIGEST) { $env:JHT_CORE_IMAGE_DIGEST } else { 'sha256:b962a32665e6ed8c81b378a453d596417cf03333cded7087f2ea50587126b24b' }
+$Image = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { 'ghcr.io/leopu00/jht@sha256:b48f45f4d3d6313768a3fb7ff56d0b9db4470440f1e2110e335f4290f4d9eb1c' }
+$CoreImageDigest = if ($env:JHT_CORE_IMAGE_DIGEST) { $env:JHT_CORE_IMAGE_DIGEST } else { 'sha256:a870e5551aff6aac5d8de57be3f5dcd2d48e59c81c6d1d25466cf83b9b74ee24' }
 # It becomes an image name, a file and a hash: only the exact shape of a digest goes through, whatever the environment says.
 if ($CoreImageDigest -and $CoreImageDigest -cnotmatch '^sha256:[0-9a-f]{64}\z') { throw 'JHT_CORE_IMAGE_DIGEST is not a sha256 digest' }
 $RuntimeTier = if ($CoreImageDigest -and -not $env:JHT_IMAGE -and -not $TestChannel) { 'core' } else { '' }  # core: the tools come later
@@ -1020,9 +1020,20 @@ function Get-JhtLegacyDockerTeam {
   })
 }
 
+# Whether the engine docker talks to is Docker's own (Docker Desktop, Docker Engine). On Windows Podman answers the Docker API on the
+# docker_engine pipe when Docker Desktop is not running: a docker.exe then sees the team of this JHT 0.4, in the same runtime folder.
+# Docker only when the server says Docker and nothing of Podman; an engine that cannot be told is not Docker (nothing changes).
+function Test-JhtDockerOwnEngine {
+  param([Parameter(Mandatory)][string]$Docker)
+  $server = Invoke-JhtLegacyDocker -Docker $Docker -Arguments @('version', '--format', '{{.Server.Platform.Name}}|{{range .Server.Components}}{{.Name}};{{end}}')
+  if (-not $server) { return $false }
+  return ($server -match 'Docker' -and $server -notmatch 'Podman')
+}
+
 function Assert-NoLegacyDockerTeam {
   $docker = Get-JhtLegacyDockerCli
   if (-not $docker) { return }
+  if (-not (Test-JhtDockerOwnEngine -Docker $docker)) { return }
   $team = @(Get-JhtLegacyDockerTeam -Docker $docker)
   if ($team.Count -eq 0) { return }
   $names = @($team | ForEach-Object { $_.Name })

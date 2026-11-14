@@ -1,6 +1,6 @@
 # ❓ FAQ — is this project for me?
 
-> 0.4.0 is installed from the command line; the desktop app comes in a later release: see the [CLI quickstart](../guides/QUICKSTART.md).
+> 0.4.0 is installed from the command line; the desktop app is not in 0.4.0: see the [CLI quickstart](../guides/QUICKSTART.md).
 
 Six questions worth answering before you install anything. Each answer states
 what the code does today; where a detail lives in one canonical place, this

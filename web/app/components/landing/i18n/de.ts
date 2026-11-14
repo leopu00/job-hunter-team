@@ -36,7 +36,7 @@ export const de: Record<string, string> = {
 
   // Footer
   footer_brand_desc:
-    "Ein autonomes KI-Agententeam, das für dich auf Jobsuche geht. Open Source, lokal, privat.",
+    "Ein autonomes KI-Agententeam, das für dich auf Jobsuche geht. Open Source. Deine Daten bleiben auf deinem Computer; die Texte, die die Agenten verarbeiten, gehen an den Anbieter des Modells (Z.ai für GLM).",
   footer_product: "Produkt",
   footer_stats: "Projekt",
   footer_resources: "Ressourcen",

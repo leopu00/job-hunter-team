@@ -1,6 +1,6 @@
 # 📚 Documentation — Job Hunter Team
 
-> 0.4.0 is installed from the command line; the desktop app comes in a later release: see the [CLI quickstart](guides/QUICKSTART.md).
+> 0.4.0 is installed from the command line; the desktop app is not in 0.4.0: see the [CLI quickstart](guides/QUICKSTART.md).
 
 Top-level index of the documentation. Folders are ordered from the most
 user-facing to the most internal.

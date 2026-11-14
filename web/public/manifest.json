@@ -1,7 +1,7 @@
 {
   "name": "Job Hunter Team",
   "short_name": "JHT",
-  "description": "Un team di agenti AI che cercano lavoro per te. Open source, locale, privato.",
+  "description": "Un team di agenti AI che cercano lavoro per te. Open source. I tuoi dati restano sul tuo computer; i testi che gli agenti elaborano vanno al fornitore del modello (Z.ai per GLM).",
   "id": "/",
   "start_url": "/dashboard",
   "scope": "/",

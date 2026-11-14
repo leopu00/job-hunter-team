@@ -83,7 +83,7 @@ export const metadata: Metadata = {
     template: "%s | Job Hunter Team",
   },
   description:
-    "A team of AI agents that find jobs for you. Open source, local, private.",
+    "A team of AI agents that find jobs for you. Open source. Your data stays on your computer; the texts the agents work on go to the model's provider (Z.ai for GLM).",
   keywords: [
     "job hunting",
     "AI agents",
@@ -105,13 +105,13 @@ export const metadata: Metadata = {
     siteName: "Job Hunter Team",
     title: "Job Hunter Team",
     description:
-      "A team of AI agents that find jobs for you. Open source, local, private.",
+      "A team of AI agents that find jobs for you. Open source. Your data stays on your computer; the texts the agents work on go to the model's provider (Z.ai for GLM).",
   },
   twitter: {
     card: "summary_large_image",
     title: "Job Hunter Team",
     description:
-      "A team of AI agents that find jobs for you. Open source, local, private.",
+      "A team of AI agents that find jobs for you. Open source. Your data stays on your computer; the texts the agents work on go to the model's provider (Z.ai for GLM).",
   },
   alternates: {
     canonical: "/",

@@ -85,7 +85,7 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 | `JHT_INSTALL_DIR` | `$HOME/.jht/src` | Where the repo lands in native mode |
 | `JHT_RUNTIME_DIR` | `$HOME/.jht/runtime` | Where `docker-compose.yml` lands in container mode |
 | `JHT_BIN_DIR` | `$HOME/.local/bin` | Where the `jht` wrapper / symlink lands |
-| `JHT_IMAGE` | `ghcr.io/leopu00/jht@sha256:8db1633af3c6e7d606b058225023988f86687d86c8eab3cbe2c47c57ff8190e7` | Content-addressed container image referenced by the compose |
+| `JHT_IMAGE` | `ghcr.io/leopu00/jht@sha256:b48f45f4d3d6313768a3fb7ff56d0b9db4470440f1e2110e335f4290f4d9eb1c` | Content-addressed container image referenced by the compose |
 | `JHT_RAW_BASE` | `https://raw.githubusercontent.com/leopu00/job-hunter-team/$JHT_BRANCH` | Base URL for the runtime file downloads |
 | `JHT_SKIP_ONBOARD` | `0` | Skip the post-install `jht setup` wizard |
 
@@ -232,7 +232,7 @@ Example output on macOS with Podman and its Compose provider already installed (
 ╚══════════════════════════════════════════╝
 
   mode:    Container (Podman)
-  image:   ghcr.io/leopu00/jht@sha256:8db1633af3c6e7d606b058225023988f86687d86c8eab3cbe2c47c57ff8190e7
+  image:   ghcr.io/leopu00/jht@sha256:b48f45f4d3d6313768a3fb7ff56d0b9db4470440f1e2110e335f4290f4d9eb1c
   branch:  production
   runtime: $HOME/Library/Application Support/Job Hunter Team/host-runtime
   dry-run: ON (no changes to the system)
