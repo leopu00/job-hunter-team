@@ -48,7 +48,7 @@ def test_a_really_small_machine_gets_a_low_cap_and_says_why():
 
 def test_a_machine_that_cannot_hold_the_fixed_agents_plus_a_pipeline_gets_one_worker_as_before():
     # 4 GiB with an estimated 0.6 GiB per agent: (4 - 2) / 0.6 = 3 agents, the 5 fixed ones alone do not fit.
-    for harness in ("claude", "kimi", "pi"):
+    for harness in ("claude", "kimi"):
         got = hc.capacity(machine(4.0, 4), harness)
         assert got["cap"] == 1, harness
     assert hc.capacity(machine(6.0, 4), "claude")["cap"] == 1     # the same 6 GiB: the flat constant gave 1 too
@@ -114,7 +114,8 @@ def test_the_harness_of_the_config_sizes_the_team_with_no_variable_at_all():
     assert hc.harness_of("openai", {}, {}) == hc.harness_of("openai", {}, None) == "codex"
     assert hc.harness_of("openai", {}, {"harness": "other"}) == "codex"
     assert hc.harness_of("openai", {}, "not a dict") == "codex"
-    assert hc.harness_of("claude", {}, pi) == "claude", "claude is heavier than pi: the cap keeps holding it"
+    # every role on pi: no claude or kimi CLI runs, the sessions are pi sessions
+    assert hc.harness_of("claude", {}, pi) == "pi" and hc.harness_of("kimi", {}, pi) == "pi"
     assert hc.harness_of("zzz", {}, pi) == "pi"
 
 
@@ -125,7 +126,7 @@ def test_the_variable_still_puts_a_role_on_pi_when_the_config_says_codex():
 
 
 def test_the_team_is_sized_as_pi_from_the_config_the_cap_reads(tmp_path, monkeypatch):
-    """The wiring: plan_registry reads jht.config.json and hands it to harness_of (0.3 GiB per agent, not 0.22)."""
+    """The wiring: plan_registry reads jht.config.json and hands it to harness_of, and pi gets its own cores factor."""
     for name in [n for n in __import__("os").environ if n.startswith("JHT_AGENT_HARNESS_")]:
         monkeypatch.delenv(name)
     monkeypatch.setenv("JHT_HOME", str(tmp_path))
@@ -137,7 +138,7 @@ def test_the_team_is_sized_as_pi_from_the_config_the_cap_reads(tmp_path, monkeyp
         monkeypatch.setattr(plan_registry, "_HOST_CAPACITY_MODULE", hc)
         seen[harness] = plan_registry._host_capacity()
         assert seen[harness]["ram_per_agent_gib"] == hc.RAM_GIB_PER_AGENT[expected], harness
-    assert seen["pi"]["cap"] <= seen["codex"]["cap"]
+    assert seen["pi"]["cpu_cap"] > seen["codex"]["cpu_cap"]
 
 
 def test_the_harness_of_the_process_is_read_when_no_environment_is_given(monkeypatch):
@@ -147,11 +148,63 @@ def test_the_harness_of_the_process_is_read_when_no_environment_is_given(monkeyp
     assert hc.harness_of("openai") == "pi"
 
 
-def test_pi_has_its_own_ram_and_it_says_it_is_an_estimate():
+def test_pi_has_its_own_measured_ram():
     got = hc.capacity(machine(9.0, 16), "pi")
-    assert got["ram_per_agent_gib"] == hc.RAM_GIB_PER_AGENT["pi"] and got["ram_per_agent_measured"] is False
-    assert "estimated, not measured" in got["message"]
-    assert hc.capacity(machine(9.0, 16), "codex")["cap"] > got["cap"] > hc.capacity(machine(9.0, 16), "claude")["cap"]
+    assert got["ram_per_agent_gib"] == hc.RAM_GIB_PER_AGENT["pi"] and got["ram_per_agent_measured"] is True
+    assert "(measured)" in got["message"]
+    assert got["cap"] > hc.capacity(machine(9.0, 16), "claude")["cap"]
+
+
+def test_glm_runs_on_pi():
+    assert hc.harness_of("glm", {}) == "pi" and hc.harness_of("Z.AI", {}) == "pi"
+
+
+# --- a server without a screen, and the swap ----------------------------------------------------------------------
+
+def vps(total, cores, swap=None, avail=None):
+    got = machine(total, cores, avail=avail)
+    got.update({"swap_total_gib": swap, "host_type": "vps"})
+    return got
+
+
+GLM_KEY_PLAN = {"provider": "glm", "id": "api-key", "label": "API key", "tier": 15}   # 5 Scout / 3 Analista / 2 Scorer
+
+
+def test_the_full_team_runs_on_a_4_gb_vps_with_the_swap_of_the_installer():
+    # cx23: 2 vCPU, 3.7 GiB seen, the 2 GiB of swap host-setup.sh makes
+    got = hc.capacity(vps(3.7, 2, swap=2.0), "pi")
+    assert got["cap"] >= 10, got
+    roster = plan_registry.burst_roster(GLM_KEY_PLAN, host_cap=got["cap"])
+    assert roster["roster"] == {"scout": 5, "analista": 3, "scorer": 2} and not roster["capped_by_host"]
+    assert "2.0 GiB swap" in got["message"] and "no screen" in got["message"]
+
+
+def test_a_4_gb_vps_without_swap_or_a_2_gb_one_gets_a_smaller_team_and_says_so():
+    no_swap = hc.capacity(vps(3.7, 2), "pi")
+    assert 3 <= no_swap["cap"] < 10 and no_swap["limit"] == "ram" and "the RAM is the limit" in no_swap["message"]
+    roster = plan_registry.burst_roster(GLM_KEY_PLAN, host_cap=no_swap["cap"])
+    assert roster["capped_by_host"] and roster["total_workers"] == no_swap["cap"]
+    two = hc.capacity(vps(1.9, 2), "pi")
+    assert two["cap"] == 1 and "too small" in two["message"] and "carries 1 worker:" in two["message"]
+    two_swap = hc.capacity(vps(1.9, 2, swap=2.0), "pi")
+    assert 1 < two_swap["cap"] < 10
+
+
+def test_the_same_4_gb_with_a_screen_keeps_room_for_the_person():
+    assert hc.capacity(machine(3.7, 2), "pi")["cap"] < hc.capacity(vps(3.7, 2), "pi")["cap"]
+
+
+def test_the_swap_counts_at_a_weight_not_as_ram():
+    with_swap = hc.capacity(vps(3.7, 64, swap=2.0), "pi")["ram_cap"]
+    as_ram = hc.capacity(vps(5.7, 64), "pi")["ram_cap"]
+    without = hc.capacity(vps(3.7, 64), "pi")["ram_cap"]
+    assert without < with_swap < as_ram
+
+
+def test_a_16_gb_machine_still_carries_the_full_team():
+    for probe in (machine(15.2, 8), vps(15.2, 8), vps(15.2, 8, swap=2.0)):
+        cap = hc.capacity(probe, "pi")["cap"]
+        assert plan_registry.burst_roster(GLM_KEY_PLAN, host_cap=cap)["roster"] == {"scout": 5, "analista": 3, "scorer": 2}
 
 
 def test_the_probe_reads_meminfo_and_the_container_limits(tmp_path):
@@ -161,10 +214,14 @@ def test_the_probe_reads_meminfo_and_the_container_limits(tmp_path):
     (proc / "meminfo").write_text("MemTotal:       16777216 kB\nMemAvailable:    8388608 kB\n")
     got = hc.read_probe(proc, cg)
     assert got["ram_total_gib"] == pytest.approx(16.0) and got["ram_avail_gib"] == pytest.approx(8.0)
+    assert got["swap_total_gib"] is None
+    (proc / "meminfo").write_text("MemTotal:       16777216 kB\nMemAvailable:    8388608 kB\nSwapTotal:       2097152 kB\n")
+    assert hc.read_probe(proc, cg)["swap_total_gib"] == pytest.approx(2.0)
     (cg / "memory.max").write_text(str(4 * 1024 ** 3) + "\n")
     (cg / "cpu.max").write_text("200000 100000\n")
     got = hc.read_probe(proc, cg)
     assert got["ram_total_gib"] == pytest.approx(4.0) and got["ram_avail_gib"] <= 4.0 and got["cores"] == 2.0
+    assert got["swap_total_gib"] is None, "a container with its own memory limit does not count the machine's swap"
     (cg / "memory.max").write_text("max\n")
     (cg / "cpu.max").write_text("max 100000\n")
     got = hc.read_probe(proc, cg)
@@ -226,3 +283,15 @@ def test_the_capacity_module_is_loaded_once():
 def test_a_small_host_drops_the_third_analista_before_any_scout(cap, expected):
     plan = {"provider": "glm", "id": "api-key", "label": "API key", "tier": 15}  # the plan an API key makes (plan_registry)
     assert plan_registry.burst_roster(plan, host_cap=cap)["roster"] == expected
+
+
+def test_the_probe_reads_the_host_type_the_preflight_wrote(tmp_path, monkeypatch):
+    proc = tmp_path / "proc"
+    proc.mkdir()
+    (proc / "meminfo").write_text("MemTotal:       4000000 kB\nMemAvailable:    3000000 kB\n")
+    for value, expected in (("vps", "vps"), (" VPS ", "vps"), ("local", "local"), ("", "local"), (None, "local")):
+        if value is None:
+            monkeypatch.delenv("JHT_HOST_TYPE", raising=False)
+        else:
+            monkeypatch.setenv("JHT_HOST_TYPE", value)
+        assert hc.read_probe(proc, tmp_path / "no-cgroup")["host_type"] == expected, value
