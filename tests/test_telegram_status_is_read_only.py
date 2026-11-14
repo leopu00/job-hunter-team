@@ -51,7 +51,7 @@ compose() { echo "COMPOSE $*" >> "$LOG"; }
 read_only_service_id() { [ -n "${RUNNING:-}" ] && { echo id-telegram; return 0; }; return 3; }
 telegram_admin() { echo "admin $*" >> "$LOG"; docker exec id-telegram jht-telegram-admin "$@"; }
 TELEGRAM_SERVICE=jht-telegram
-''' + functions("compose_project_name", "telegram_state_volume_absent", "telegram_bots_configured", "telegram_status_line") + '''
+''' + functions("jht_text_en", "jht_text_it", "jht_say", "compose_project_name", "telegram_state_volume_absent", "telegram_bots_configured", "telegram_status_line") + '''
 telegram_status_line
 '''
 
@@ -68,7 +68,7 @@ function Invoke-TelegramAdmin {
   & docker exec id-telegram jht-telegram-admin @AdminArgs | Out-Host
   return 0
 }
-''' + powershell_functions("Get-ComposeProjectName", "Test-TelegramStateVolumeAbsent", "Get-TelegramBotsConfigured", "Write-TelegramStatusLine") + '''
+''' + powershell_functions("Get-JhtTextLanguage", "Get-JhtTelegramStatusText", "Get-ComposeProjectName", "Test-TelegramStateVolumeAbsent", "Get-TelegramBotsConfigured", "Write-TelegramStatusLine") + '''
 exit (Write-TelegramStatusLine)
 '''
 
@@ -77,9 +77,10 @@ OTHERS_ONLY = "jht_jht-deps\njht_jht-secrets\n"
 NO_BOT = '{"ok": true, "bots": {"assistente": "absent", "capitano": "absent", "mentor": "absent"}, "cutover": false}'
 ONE_BOT = '{"ok": true, "bots": {"assistente": "present", "capitano": "absent", "mentor": "absent"}, "cutover": false}'
 NOT_CONFIGURED = "Telegram non attivo: Telegram non configurato."
+NOT_CONFIGURED_EN = "Telegram not active: Telegram is not configured."
 
 
-def run(tmp_path, language, volumes, running=False, bots=None):
+def run(tmp_path, language, volumes, running=False, bots=None, person="it"):
     shell = os.environ.get("JHT_TEST_SHELL") or "pwsh"
     if language == "bash" and sys.platform == "win32":
         pytest.skip("the bash wrapper is not run on Windows")
@@ -97,7 +98,9 @@ def run(tmp_path, language, volumes, running=False, bots=None):
         engine.chmod(0o700)
     log = tmp_path / "calls.log"
     log.touch()
-    env = {k: v for k, v in os.environ.items() if k not in ("BOTS", "RUNNING")}
+    env = {k: v for k, v in os.environ.items() if k not in ("BOTS", "RUNNING", "JHT_SAY_LANG", "JHT_HOST_ENV_FILE")}
+    # the language of the person: these lines are said in it (no saved choice in the temporary home)
+    env.update({"JHT_LANG": person, "JHT_HOST_ENV_FILE": str(tmp_path / "no-home" / "host.env")})
     env.update({"PATH": str(binaries) + os.pathsep + os.environ["PATH"], "LOG": str(log), "VOLUMES": volumes})
     if running:
         env["RUNNING"] = "1"
@@ -183,3 +186,12 @@ def test_integration_help_runs_and_prints_the_usage():
     script = "set -u\n" + functions("integration_help") + "\nintegration_help\n"
     result = subprocess.run(["bash", "-c", script], text=True, capture_output=True, timeout=30)
     assert result.returncode == 0 and result.stdout.startswith("Uso: jht integration <comando>")
+
+
+@pytest.mark.parametrize("language", ["bash", "pwsh"])
+def test_an_english_session_reads_the_telegram_line_in_english(tmp_path, language):
+    result, _calls = run(tmp_path, language, "", person="en")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.strip() == NOT_CONFIGURED_EN
+    off, _calls = run(tmp_path / "off", language, CONFIGURED, running=False, person="en") if (tmp_path / "off").mkdir() is None else (None, None)
+    assert "its state cannot be checked now" in off.stdout and "non verificabile" not in off.stdout

@@ -593,5 +593,16 @@
   "pi_cap.halt_tokens": "⛔ The team is paused: the agents on pi used %s tokens in the last hour and reached the ceiling you declared (%s per hour). Nothing is lost. Work resumes when the hourly count falls below it, or as soon as you raise the ceiling in the configuration.",
   "pi_cap.halt_credit": "⛔ The team is paused: %s says the credit of your account is gone. Nothing is lost. Top up the account with the provider: work resumes by itself when a call goes through again.",
   "pi_cap.resume": "▶️ The spending ceiling you declared allows work again: the team can resume.",
-  "pi_cap.no_ceiling": "ℹ️ The agents on pi have spent %s today and no spending ceiling is declared. This access reports no usage limits, so nothing else stops the spending. To set a ceiling, tell the Captain or write no_quota_cap in the configuration (for example eur: 10)."
+  "pi_cap.no_ceiling": "ℹ️ The agents on pi have spent %s today and no spending ceiling is declared. This access reports no usage limits, so nothing else stops the spending. To set a ceiling, tell the Captain or write no_quota_cap in the configuration (for example eur: 10).",
+  "setup_ni.title": "JHT Setup — Non-interactive mode",
+  "setup_ni.language": "Language: %s (%s)",
+  "setup_ni.language_from_system": "Language: %s (%s), from the system",
+  "setup_ni.key_accepted": "%s: the API key is accepted.",
+  "setup_ni.key_not_checked": "Could not check the API key with %s (%s): the first call of an agent will tell.",
+  "setup_ni.saved": "Config saved!",
+  "setup_ni.provider": "Provider:   %s",
+  "setup_ni.harness": "Harness:    %s",
+  "setup_ni.auth": "Auth:       %s",
+  "setup_ni.auth_kept": "API key kept by the setup (not in the config)",
+  "setup_ni.home": "JHT home:   %s"
 }

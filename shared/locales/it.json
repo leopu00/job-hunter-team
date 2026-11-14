@@ -544,5 +544,16 @@
   "pi_cap.halt_tokens": "⛔ Il team è in pausa: gli agenti su pi hanno usato %s token nell'ultima ora e hanno raggiunto il tetto che hai dichiarato (%s all'ora). Non si perde niente. Il lavoro riprende quando il conteggio orario scende sotto il tetto, o appena lo alzi nella configurazione.",
   "pi_cap.halt_credit": "⛔ Il team è in pausa: %s dice che il credito del tuo conto è finito. Non si perde niente. Ricarica il conto presso il fornitore: il lavoro riprende da solo quando una chiamata torna a passare.",
   "pi_cap.resume": "▶️ Il tetto di spesa che hai dichiarato permette di nuovo di lavorare: il team può ripartire.",
-  "pi_cap.no_ceiling": "ℹ️ Gli agenti su pi hanno speso oggi %s e non c'è nessun tetto di spesa dichiarato. Questo accesso non comunica limiti di utilizzo, quindi nient'altro ferma la spesa. Per fissarne uno, dillo al Capitano o scrivi no_quota_cap nella configurazione (per esempio eur: 10)."
+  "pi_cap.no_ceiling": "ℹ️ Gli agenti su pi hanno speso oggi %s e non c'è nessun tetto di spesa dichiarato. Questo accesso non comunica limiti di utilizzo, quindi nient'altro ferma la spesa. Per fissarne uno, dillo al Capitano o scrivi no_quota_cap nella configurazione (per esempio eur: 10).",
+  "setup_ni.title": "Setup di JHT — modalità non interattiva",
+  "setup_ni.language": "Lingua: %s (%s)",
+  "setup_ni.language_from_system": "Lingua: %s (%s), quella del sistema",
+  "setup_ni.key_accepted": "%s: la chiave API è accettata.",
+  "setup_ni.key_not_checked": "Non è stato possibile controllare la chiave API con %s (%s): lo dirà la prima chiamata di un agente.",
+  "setup_ni.saved": "Configurazione salvata!",
+  "setup_ni.provider": "Servizio:   %s",
+  "setup_ni.harness": "Harness:    %s",
+  "setup_ni.auth": "Accesso:    %s",
+  "setup_ni.auth_kept": "chiave API tenuta dal setup (non nella configurazione)",
+  "setup_ni.home": "Cartella di JHT: %s"
 }

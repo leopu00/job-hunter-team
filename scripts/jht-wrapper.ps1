@@ -1569,6 +1569,16 @@ function Set-JhtTeamStopped {
 function Clear-JhtTeamStopped {
   try { [void](Remove-JhtTeamStoppedEntry) } catch { }
 }
+function Get-JhtTelegramStatusText {
+  param([Parameter(Mandatory)][ValidateSet('not_configured', 'unverifiable')][string]$Key)
+  $italian = ((Get-JhtTextLanguage) -ceq 'it')
+  if ($Key -eq 'not_configured') {
+    if ($italian) { return 'Telegram non attivo: Telegram non configurato.' }
+    return 'Telegram not active: Telegram is not configured.'
+  }
+  if ($italian) { return 'Telegram: stato non verificabile adesso (servizio spento o non raggiungibile). Dettagli: jht telegram status' }
+  return 'Telegram: its state cannot be checked now (service off or not reachable). Details: jht telegram status'
+}
 function Get-JhtTeamStoppedText {
   if ((Get-JhtTextLanguage) -ceq 'en') { return "Job Hunter Team is stopped: 'jht up' starts it again." }
   return "Job Hunter Team e' fermato: jht up per riaccenderlo."
@@ -2745,7 +2755,7 @@ function Invoke-TelegramLifecycleSteps {
       'remove' { $code = Invoke-TelegramAdmin -AdminArgs @('bots', 'delete', $Role); if ($code -ne 0) { return $code } }
       'chat-id' { $code = Invoke-TelegramAdmin -AdminArgs @('bots', 'chat-id', $Role); if ($code -ne 0) { return $code } }
       'status' { $code = Invoke-TelegramAdmin -AdminArgs @('bots', 'status'); if ($code -ne 0) { return $code } }
-      'not-configured' { Write-Host 'Telegram non attivo: Telegram non configurato.' }
+      'not-configured' { Write-Host (Get-JhtTelegramStatusText 'not_configured') }
       default { throw 'telegram_lifecycle_plan_invalid' }
     }
   }
@@ -2787,13 +2797,13 @@ function Get-TelegramBotsConfigured {
 # no run container, only questions to the engine. «Never configured» (no state volume) and «no bot» are said in one line.
 function Write-TelegramStatusLine {
   if ((Get-Content -LiteralPath $ComposeFile -Raw) -notmatch '(?m)^  jht-telegram:') { return 0 }
-  if (Test-TelegramStateVolumeAbsent) { Write-Host 'Telegram non attivo: Telegram non configurato.'; return 0 }
+  if (Test-TelegramStateVolumeAbsent) { Write-Host (Get-JhtTelegramStatusText 'not_configured'); return 0 }
   $configured = Get-TelegramBotsConfigured
   if ($null -eq $configured) {
-    Write-Host 'Telegram: stato non verificabile adesso (servizio spento o non raggiungibile). Dettagli: jht telegram status'
+    Write-Host (Get-JhtTelegramStatusText 'unverifiable')
     return 0
   }
-  if (-not $configured) { Write-Host 'Telegram non attivo: Telegram non configurato.'; return 0 }
+  if (-not $configured) { Write-Host (Get-JhtTelegramStatusText 'not_configured'); return 0 }
   return (Invoke-TelegramAdmin -AdminArgs @('bots', 'status'))
 }
 

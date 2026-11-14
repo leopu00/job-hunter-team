@@ -171,13 +171,16 @@ def run_host(tmp_path, language, args, *, fail_pair=False, no_effect="", absent=
     )
     env = {**os.environ, "PYTHON": sys.executable, "PLANNER": str(PLANNER),
            "MUTATE": str(mutate), "EVENTS": str(events), "FAIL_PAIR": str(int(fail_pair)),
-           "ENGINE_STATE": str(engine_state), "NO_EFFECT": no_effect}
+           "ENGINE_STATE": str(engine_state), "NO_EFFECT": no_effect,
+           # a person who reads Italian, with no saved choice: the lines of the lifecycle are said in Italian
+           "JHT_LANG": "it", "JHT_HOST_ENV_FILE": str(tmp_path / "no-home" / "host.env")}
+    env.pop("JHT_SAY_LANG", None)
     if language == "bash":
-        body = functions("telegram_lifecycle_plan", "telegram_lifecycle_verify", "telegram_lifecycle_steps", "telegram_lifecycle_command")
+        body = functions("jht_text_en", "jht_text_it", "jht_say", "telegram_lifecycle_plan", "telegram_lifecycle_verify", "telegram_lifecycle_steps", "telegram_lifecycle_command")
         script = BASH_TRANSPORT + '\nTELEGRAM_SERVICE=jht-telegram\n' + body + (BASH_ABSENT if absent else "") + '\ntelegram_lifecycle_command "$@"\n'
         command = ["bash", "-c", script, "test-host", *args]
     else:
-        body = powershell_functions("Get-TelegramLifecyclePlan", "Confirm-TelegramLifecycle", "Invoke-ComposeQuiet", "Invoke-ComposeAnswer", "Invoke-TelegramLifecycleSteps", "Invoke-TelegramLifecycle")
+        body = powershell_functions("Get-JhtTextLanguage", "Get-JhtTelegramStatusText", "Get-TelegramLifecyclePlan", "Confirm-TelegramLifecycle", "Invoke-ComposeQuiet", "Invoke-ComposeAnswer", "Invoke-TelegramLifecycleSteps", "Invoke-TelegramLifecycle")
         script = tmp_path / "transport.ps1"
         script.write_text(PS_TRANSPORT + body + (PS_ABSENT if absent else "") + '\nexit (Invoke-TelegramLifecycle $args)\n', encoding="utf-8")
         command = ["pwsh", "-NoProfile", "-File", str(script), *args]
