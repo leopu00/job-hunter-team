@@ -488,3 +488,32 @@ def test_up_and_down_print_the_state_line_for_every_runtime_in_the_wrapper_sourc
     assert len(re.findall(r"^    compose_up_team$", text, re.M)) == 3
     team_up = text[text.index("compose_up_team() {"):]
     assert "compose_quiet up -d" in team_up[:team_up.index("\n}\n")]
+
+
+@pytest.mark.parametrize("lang", ["it_IT.UTF-8", "en_US.UTF-8"])
+def test_at_a_terminal_only_the_sentence_is_said(tmp_path, lang):
+    # giro Mac 11: the marker came out raw before the sentence; it is the app's (JHT_MACHINE_OUTPUT=1, or a pipe), as JHT_PHASE
+    done = install(tmp_path, "jht\\n", env={"LANG": lang, "JHT_MACHINE_OUTPUT": "0"})
+    assert done.returncode == 84
+    assert "JHT_ERROR" not in done.stderr + done.stdout
+    assert "jht down" in done.stderr and "jht up" in done.stderr
+    asked = install(tmp_path, "jht\\n", env={"LANG": lang, "JHT_MACHINE_OUTPUT": "1"})
+    assert asked.returncode == 84 and asked.stderr.splitlines()[0] == "JHT_ERROR team_running"
+
+
+@pytest.mark.parametrize("machine_output,marker", [("0", False), ("1", True), (None, True)])
+def test_every_refusal_of_podman_keeps_its_exit_and_its_marker_only_for_the_app(tmp_path, machine_output, marker):
+    script = f'JHT_INSTALLER_SOURCE_ONLY=1 . "{INSTALL}"\npodman_refuse podman_sudo_required 89 "the sentence"\n'
+    env = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path)}
+    if machine_output is not None:
+        env["JHT_MACHINE_OUTPUT"] = machine_output  # unset: a pipe, as here, is the app
+    done = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True, timeout=30)
+    assert done.returncode == 89
+    assert ("JHT_ERROR podman_sudo_required\n" in done.stderr) is marker
+    assert "podman_sudo_required: the sentence" in done.stderr
+
+
+def test_no_marker_is_printed_raw_anywhere_in_the_installer():
+    text = INSTALL.read_text(encoding="utf-8")
+    raw = [line for line in text.splitlines() if re.search(r"printf\s+'JHT_ERROR", line)]
+    assert raw == ["  if jht_machine_output; then printf 'JHT_ERROR %s\\n' \"$1\" >&2; fi"]

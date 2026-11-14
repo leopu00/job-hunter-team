@@ -287,3 +287,17 @@ def test_the_two_installers_and_the_compiled_digest_are_the_same_file():
     assert DIGEST.read_text(encoding="utf-8").strip() == hashlib.sha256(source).hexdigest(), (
         "the desktop runs install.ps1 only with the digest compiled from installer-windows.sha256"
     )
+
+
+@pytest.mark.parametrize("machine_output,marker", [("0", False), ("1", True)])
+def test_at_a_terminal_only_the_warning_is_said(tmp_path, machine_output, marker):
+    # the marker is the app's, as JHT_PHASE: a person at a terminal has the sentence of Write-Warn
+    body = (
+        "function Get-JhtWindowsEdition { return @{ ProductType = 1; Build = 19045 } }\n"
+        f"function Get-Windows10SupportWarning {{ return '{WARNING}' }}\n"
+        "Show-WindowsSupportNotice\n[Console]::Out.WriteLine('SETUP_GOES_ON')\n"
+    )
+    result = _run(tmp_path, NOTICE_FUNCTIONS, body, {"JHT_MACHINE_OUTPUT": machine_output})
+    assert result.returncode == 0, result.stderr
+    assert (NOTICE in result.stdout.splitlines()) is marker
+    assert WARNING in result.stdout and "SETUP_GOES_ON" in result.stdout

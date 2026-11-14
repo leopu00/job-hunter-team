@@ -389,6 +389,12 @@ jht_machine_output() {
   [ ! -t 1 ]
 }
 
+# `JHT_ERROR <code>` on stderr, before the exit of its own: a marker for the desktop app (which reads the installer through a pipe
+# and asks for it with JHT_MACHINE_OUTPUT=1), like JHT_PHASE. A person at a terminal reads only the sentence under it.
+jht_error_marker() {
+  if jht_machine_output; then printf 'JHT_ERROR %s\n' "$1" >&2; fi
+}
+
 jht_phase() {
   case "$1" in
     homebrew_check|podman_install|compose_install|machine_create|image_pull|machine_start) ;;
@@ -537,7 +543,7 @@ keep_chosen_runtime() {
       colima_line=" If you installed Colima only for JHT, after the uninstall its virtual machine (profile default, the one the JHT installer started) stays on the disk, stopped: remove it with «colima delete -p default» to free the space. If you use Colima for other things, leave it."
     fi
   fi
-  printf 'JHT_ERROR %s\n' runtime_change_requires_migration >&2
+  jht_error_marker runtime_change_requires_migration
   if [ "$lang" = it ]; then
     printf "  ${RED}✗${RESET} %s\n" "runtime_change_requires_migration: questo computer fa girare JHT su Docker (Colima, Docker Desktop o Docker Engine). Dalla 0.4 JHT gira solo su Podman, e non e' stato cambiato niente. I tuoi dati restano: ~/.jht (configurazione, database, profilo) e ~/Documents/Job Hunter Team (CV, risultati) sono cartelle di questo computer. Resta invece nei volumi di Docker, e va ridato: la chiave API salvata dal setup, la password della posta, i token di Telegram. Per passare a Podman: «jht uninstall --confirm» (tiene quelle due cartelle), rilancia questo installer, poi «jht setup» con la tua chiave API.$colima_line" >&2
   else
@@ -581,7 +587,7 @@ detect_system() {
 # the subordinate uid/gid range, linger. Only that user's sudo is used, with
 # -n so that it never waits for a password. What it cannot do leaves with a
 # code of its own, so the app can tell the administrator what to do: a line
-# `JHT_ERROR <code>` on stderr, then the exit code of the table below.
+# `JHT_ERROR <code>` on stderr (for the app only, see jht_error_marker), then the exit code of the table below.
 #   88 podman_install_failed      89 podman_sudo_required
 #   90 podman_missing             91 podman_rootful_refused
 #   92 podman_compose_missing     93 podman_version_unsupported
@@ -596,7 +602,7 @@ podman_machine_mode() { [ "${OS:-}" = "macos" ] && [ "$RUNTIME_CHOICE" = "podman
 podman_native_mode()  { [ "${OS:-}" = "linux" ] && [ "$RUNTIME_CHOICE" = "podman" ]; }
 
 podman_refuse() {
-  printf 'JHT_ERROR %s\n' "$1" >&2
+  jht_error_marker "$1"
   printf "  ${RED}✗${RESET} %s: %s\n" "$1" "$3" >&2
   exit "$2"
 }
@@ -2358,7 +2364,7 @@ set_runtime_engine() {
 # `recreate` refuse it. So the installer stops before changing anything while
 # the team's containers run, and says how to go on. It never stops the agents
 # by itself. Its own exit, like 85, so the app can say what it means: a line
-# `JHT_ERROR team_running` on stderr, then exit 84.
+# `JHT_ERROR team_running` on stderr (for the app only), then exit 84.
 TEAM_RUNNING_EXIT=84
 TEAM_CONTAINERS="jht jht-broker jht-telegram"
 refuse_running_team() {
@@ -2377,7 +2383,7 @@ refuse_running_team() {
     printf '%s\n' "$names" | grep -Fqx "$name" && running="${running:+$running, }$name"
   done
   [ -z "$running" ] && return 0
-  printf 'JHT_ERROR %s\n' team_running >&2
+  jht_error_marker team_running
   if [ "$(installer_person_lang)" = it ]; then
     printf "  ${RED}✗${RESET} %s\n" "team_running: Job Hunter Team e' acceso su questo computer ($running). Se il setup si era interrotto, riprendilo con «jht setup» in questo terminale; non serve spegnere niente. Per reinstallare invece: spegnilo con «jht down», rilancia l'installer, poi riaccendilo con «jht up». Non e' stato cambiato niente: il tuo profilo e i tuoi documenti in ~/.jht e ~/Documents/Job Hunter Team restano dove sono." >&2
     exit "$TEAM_RUNNING_EXIT"
