@@ -78,7 +78,10 @@ def _installer(tmp_path: Path, script: str, **extra) -> str:
         (None, "JHT_LANG=it\n", {"LANG": "en_US.UTF-8"}, "it"),
         (None, "JHT_LANG=en\n", {"JHT_LANG": "it"}, "it"),
         ("en", "JHT_LANG=it\n", {"JHT_LANG": "it", "LANG": "it_IT.UTF-8"}, "en"),
-        (None, None, {"LANG": "de_DE.UTF-8"}, "en"),
+        (None, None, {"LANG": "de_DE.UTF-8"}, "de"),
+        (None, None, {"LANG": "hu_HU.UTF-8"}, "hu"),
+        (None, None, {"LANG": "ja_JP.UTF-8"}, "en"),
+        (None, None, {"LANG": "C.UTF-8"}, "en"),
     ],
 )
 def test_the_installer_takes_the_language_by_the_rule_of_the_cli(tmp_path, prefs, host_env, extra, expected):
@@ -91,7 +94,7 @@ def test_the_installer_takes_the_language_by_the_rule_of_the_cli(tmp_path, prefs
 
 
 def test_an_installation_on_an_italian_system_says_its_lines_in_italian(tmp_path):
-    script = 'USE_DOCKER=1; OS=macos; header; step 2 4 "$(tx "Container runtime" "Motore dei container")"; PATH_READY=1; JHT_SKIP_ONBOARD=1; final_message'
+    script = 'USE_DOCKER=1; OS=macos; header; step 2 4 "$(ts installer.container_runtime Container)"; PATH_READY=1; JHT_SKIP_ONBOARD=1; final_message'
     italian = _installer(tmp_path, script, LANG="it_IT.UTF-8")
     for line in ("Motore dei container", "Installazione completata!", "Modalita' container attiva (Podman).", "Prossimi passi:", "Per disinstallare"):
         assert line in italian, line
