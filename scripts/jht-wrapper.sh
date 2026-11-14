@@ -412,6 +412,8 @@ jht_text_en() {
     status.not_running) printf '%s' "The team's container is not running." ;;
     removed.office) printf '%s' "'jht %s' was removed in 0.4.0 with the Godot office: use the jht commands (jht help)." ;;
     status.no_options) printf '%s' "'jht status' takes no options (%s): run it as 'jht status'." ;;
+    telegram.not_configured) printf '%s' 'Telegram not active: Telegram is not configured.' ;;
+    telegram.unverifiable) printf '%s' 'Telegram: its state cannot be checked now (service off or not reachable). Details: jht telegram status' ;;
     keyfile.twice) printf '%s' "--api-key-file was given twice" ;;
     keyfile.both) printf '%s' "use --api-key-file or --api-key-stdin, not both" ;;
     keyfile.not_file) printf '%s' "the file given to --api-key-file must be a regular file, not a folder or a link: %s" ;;
@@ -517,6 +519,8 @@ jht_text_it() {
     status.not_running) printf '%s' "Il container della squadra non e' acceso." ;;
     removed.office) printf '%s' "'jht %s' e' stato tolto nella 0.4.0 insieme all'ufficio Godot: usa i comandi jht (jht help)." ;;
     status.no_options) printf '%s' "'jht status' non ha opzioni (%s): si lancia come 'jht status'." ;;
+    telegram.not_configured) printf '%s' 'Telegram non attivo: Telegram non configurato.' ;;
+    telegram.unverifiable) printf '%s' 'Telegram: stato non verificabile adesso (servizio spento o non raggiungibile). Dettagli: jht telegram status' ;;
     keyfile.twice) printf '%s' "--api-key-file e' stato dato due volte" ;;
     keyfile.both) printf '%s' "usa --api-key-file o --api-key-stdin, non tutti e due" ;;
     keyfile.not_file) printf '%s' "il file dato a --api-key-file deve essere un file normale, non una cartella o un collegamento: %s" ;;
@@ -2638,7 +2642,7 @@ telegram_lifecycle_steps() {
       remove) telegram_admin bots delete "$role" || return $? ;;
       chat-id) telegram_admin bots chat-id "$role" || return $? ;;
       status) telegram_admin bots status || return $? ;;
-      not-configured) printf '%s\n' 'Telegram non attivo: Telegram non configurato.' ;;
+      not-configured) printf '%s\n' "$(jht_say telegram.not_configured)" ;;
       *) err 'telegram_lifecycle_plan_invalid'; return 1 ;;
     esac
   done 3<<< "$steps"
@@ -2679,12 +2683,12 @@ telegram_bots_configured() {
 telegram_status_line() {
   compose_lacks_service "$TELEGRAM_SERVICE" && return 0
   local rc=0
-  if telegram_state_volume_absent; then printf '%s\n' 'Telegram non attivo: Telegram non configurato.'; return 0; fi
+  if telegram_state_volume_absent; then printf '%s\n' "$(jht_say telegram.not_configured)"; return 0; fi
   telegram_bots_configured || rc=$?
   case "$rc" in
     0) telegram_admin bots status ;;
-    1) printf '%s\n' 'Telegram non attivo: Telegram non configurato.' ;;
-    *) printf '%s\n' 'Telegram: stato non verificabile adesso (servizio spento o non raggiungibile). Dettagli: jht telegram status' ;;
+    1) printf '%s\n' "$(jht_say telegram.not_configured)" ;;
+    *) printf '%s\n' "$(jht_say telegram.unverifiable)" ;;
   esac
 }
 

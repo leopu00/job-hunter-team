@@ -22,7 +22,7 @@ import {
 import { formatSecretForConfig, resolveSecret, describeSecret } from './secret-ref.js';
 import { runHealthCheck } from './setup-checks.js';
 import { checkPiApiKey, rejectedKeyMessage } from '../../shared/runtime/provider-key-check.js';
-import { t, LANGUAGES, hasLanguageChoice, systemLanguage, saveLanguage } from './i18n.js';
+import { t, tf, LANGUAGES, hasLanguageChoice, systemLanguage, saveLanguage } from './i18n.js';
 import { summarizeRoleModels } from './setup-models.js';
 import { AGENT_HARNESSES, DEFAULT_HARNESS } from '../../shared/runtime/agent-harness.js';
 import { piApiProvider } from '../../shared/runtime/provider-models.js';
@@ -65,14 +65,14 @@ export function applyLanguage(opts, { env = process.env, log = console.log, erro
       return false;
     }
     saveLanguage(code);
-    log(pc.dim(`  Language: ${LANGUAGES.find((l) => l.value === code).label} (${code})`));
+    log(pc.dim(`  ${tf('setup_ni.language', LANGUAGES.find((l) => l.value === code).label, code)}`));
     return true;
   }
   if (!hasLanguageChoice()) {
     const code = systemLanguage(env);
     if (code) {
       saveLanguage(code);
-      log(pc.dim(`  Language: ${LANGUAGES.find((l) => l.value === code).label} (${code}), from the system`));
+      log(pc.dim(`  ${tf('setup_ni.language_from_system', LANGUAGES.find((l) => l.value === code).label, code)}`));
     }
   }
   return true;
@@ -83,7 +83,7 @@ export function applyLanguage(opts, { env = process.env, log = console.log, erro
  * @param {object} opts — flag CLI da Commander
  */
 export async function runNonInteractiveSetup(opts) {
-  console.log(pc.bold('\n  JHT Setup — Non-interactive mode\n'));
+  console.log(pc.bold(`\n  ${t('setup_ni.title')}\n`));
 
   if (!applyLanguage(opts)) { process.exitCode = 1; return; }
 
@@ -221,8 +221,8 @@ export async function runNonInteractiveSetup(opts) {
       process.exitCode = KEY_REFUSED_EXIT_CODE;
       return;
     }
-    if (verdict.state === 'valid') console.log(pc.dim(`  ${verdict.label}: the API key is accepted.`));
-    else console.log(pc.yellow(`  Could not check the API key with ${verdict.label} (${verdict.reason}): the first call of an agent will tell.`));
+    if (verdict.state === 'valid') console.log(pc.dim(`  ${tf('setup_ni.key_accepted', verdict.label)}`));
+    else console.log(pc.yellow(`  ${tf('setup_ni.key_not_checked', verdict.label, verdict.reason)}`));
   } else if (!opts.skipHealth && authMethod === 'api_key') {
     const prompter = silentPrompter();
     const ok = await runHealthCheck(prompter, selectedProvider, apiKeySecret);
@@ -355,16 +355,16 @@ function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, 
   }
 
   // --- Riepilogo ---
-  console.log(pc.green('\n  Config saved!\n'));
-  console.log(`  Provider:   ${selectedProvider.label}`);
-  if (harness === 'pi') console.log('  Harness:    Pi');
+  console.log(pc.green(`\n  ${t('setup_ni.saved')}\n`));
+  console.log(`  ${tf('setup_ni.provider', selectedProvider.label)}`);
+  if (harness === 'pi') console.log(`  ${tf('setup_ni.harness', 'Pi')}`);
   if (authMethod === 'api_key') {
-    console.log(`  Auth:       ${keptByTheSetup ? 'API key kept by the setup (not in the config)' : describeSecret(apiKeySecret)}`);
+    console.log(`  ${tf('setup_ni.auth', keptByTheSetup ? t('setup_ni.auth_kept') : describeSecret(apiKeySecret))}`);
   } else {
     console.log(`  Auth:       subscription (${subscriptionConfig.email}${subscriptionConfig.session_token ? ' · token preset' : ''})`);
   }
   console.log(summarizeRoleModels(config));
-  console.log(`  JHT home:   ${JHT_CONFIG_DIR}`);
+  console.log(`  ${tf('setup_ni.home', JHT_CONFIG_DIR)}`);
   console.log('');
   if (authMethod === 'subscription') {
     const updateId = harness === 'pi' ? 'pi' : providerName === 'openai' ? 'codex' : providerName; // claude/kimi mantengono il nome
