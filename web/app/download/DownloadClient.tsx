@@ -77,9 +77,9 @@ const CLI_SETUP_CMD = `curl -fsSL https://jobhunterteam.ai/install.sh | bash -s 
 // dell'operatore il 2026-08-10.
 // ⚠️ NON è il testo di allora: da luglio sono cambiati la pagina, il flusso e
 // i comandi. Un prompt che manda l'assistente a fare cose che non esistono più
-// è peggio del metodo assente, quindi qui si nominano le due strade che
-// esistono davvero oggi — l'app desktop della pagina Download e il one-liner
-// qui sopra — e si rimanda alla guida per il resto.
+// è peggio del metodo assente, quindi qui si nomina la strada che esiste
+// davvero nella 0.4.0 — il one-liner qui sopra (l'app desktop non è nella
+// 0.4.0) — e si rimanda alla guida per il resto.
 // Nessuna cifra né nome di piano commerciale: vale anche qui la regola O-12.
 //
 // TRADOTTO in tutte e 7 le lingue (2026-08-10): il prompt lo legge un
@@ -97,11 +97,9 @@ Guida all'installazione: https://jobhunterteam.ai/setup-guide
 
 Leggi prima il repository e la guida, poi guidami nell'installazione e nell'avvio su questo computer, occupandoti tu dei passaggi tecnici.
 
-Ci sono due strade supportate, che portano alla stessa squadra: scegli con me quella che mi conviene.
-1. L'app desktop, scaricabile da https://jobhunterteam.ai/download
-2. Il comando unico: curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
+C'è una strada sola, la CLI jht (l'app desktop non è nella 0.4.0): curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Due cose che dovrai verificare con me strada facendo: che su Mac Homebrew sia già installato (l'app lo usa per installare Podman, il motore dei container) e quale abbonamento AI dedicare alla squadra — le serve il suo, separato da quello che uso ogni giorno, perché lo consuma per intero. Chiedimi tutto il resto invece di tirare a indovinare.`,
+Due cose da verificare con me lungo la strada: che sul Mac Homebrew sia già installato (l'installer lo usa per installare Podman, il motore dei container) e la chiave API GLM (Z.ai) che userà la squadra — meglio una chiave solo sua, separata da quelle che uso ogni giorno, con un tetto di spesa. Chiedimi tutto il resto invece di indovinare.`,
   en: `I'd like to start using Job Hunter Team, an open-source team of AI agents that searches for jobs on my behalf. It runs on my own machine, in a container.
 
 Repository: https://github.com/leopu00/job-hunter-team
@@ -110,11 +108,9 @@ Setup guide: https://jobhunterteam.ai/setup-guide
 
 Read the repository and the setup guide first, then walk me through installing and starting it on this computer, handling the technical steps yourself.
 
-There are two supported ways in, and they lead to the same team — pick with me whichever suits me better:
-1. The desktop app, downloaded from https://jobhunterteam.ai/download
-2. The one-liner: curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
+There is one way in, the jht CLI (the desktop app is not in 0.4.0): curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Two things you will need to check with me along the way: that on a Mac Homebrew is already installed (the app uses it to install Podman, the container engine), and which AI provider subscription I want the team to use — it needs one of its own, separate from the one I use day to day, because the team consumes the whole allowance. Ask me whatever else you need instead of guessing.`,
+Two things you will need to check with me along the way: that on a Mac Homebrew is already installed (the installer uses it to install Podman, the container engine), and the GLM (Z.ai) API key the team will use — better a key of its own, separate from the ones I use day to day, with a spending ceiling. Ask me whatever else you need instead of guessing.`,
   es: `Quiero empezar a usar Job Hunter Team, un equipo open source de agentes de IA que busca trabajo por mí. Funciona en mi propio ordenador, dentro de un contenedor.
 
 Repositorio: https://github.com/leopu00/job-hunter-team
@@ -123,11 +119,9 @@ Guía de instalación: https://jobhunterteam.ai/setup-guide
 
 Lee primero el repositorio y la guía, y después acompáñame en la instalación y el arranque en este ordenador, ocupándote tú de los pasos técnicos.
 
-Hay dos caminos soportados, y llevan al mismo equipo: elige conmigo el que más me convenga.
-1. La app de escritorio, descargable desde https://jobhunterteam.ai/download
-2. El comando único: curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
+Hay un solo camino, la CLI jht (la app de escritorio no está en la 0.4.0): curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Dos cosas que tendrás que comprobar conmigo por el camino: que en Mac Homebrew esté ya instalado (la aplicación lo usa para instalar Podman, el motor de contenedores) y qué suscripción de IA dedicar al equipo — necesita una propia, separada de la que uso a diario, porque la consume por completo. Pregúntame todo lo demás en lugar de suponerlo.`,
+Dos cosas que tendrás que comprobar conmigo por el camino: que en Mac Homebrew esté ya instalado (el instalador lo usa para instalar Podman, el motor de contenedores) y la clave API de GLM (Z.ai) que usará el equipo — mejor una clave solo suya, separada de las que uso a diario, con un límite de gasto. Pregúntame todo lo demás en lugar de suponerlo.`,
   fr: `J'aimerais commencer à utiliser Job Hunter Team, une équipe open source d'agents IA qui cherche du travail pour moi. Elle tourne sur mon ordinateur, dans un conteneur.
 
 Dépôt : https://github.com/leopu00/job-hunter-team
@@ -136,11 +130,9 @@ Guide d'installation : https://jobhunterteam.ai/setup-guide
 
 Lis d'abord le dépôt et le guide, puis accompagne-moi pour l'installer et le démarrer sur cet ordinateur, en te chargeant toi-même des étapes techniques.
 
-Il y a deux voies prises en charge, et elles mènent à la même équipe : choisis avec moi celle qui me convient.
-1. L'application de bureau, à télécharger sur https://jobhunterteam.ai/download
-2. La commande unique : curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
+Il n'y a qu'une voie, la CLI jht (l'application de bureau n'est pas dans la 0.4.0) : curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Deux choses à vérifier avec moi en chemin : que sur Mac Homebrew soit déjà installé (l'application s'en sert pour installer Podman, le moteur de conteneurs) et quel abonnement IA dédier à l'équipe — il lui en faut un à elle, distinct de celui que j'utilise au quotidien, car elle le consomme entièrement. Demande-moi tout le reste au lieu de deviner.`,
+Deux choses à vérifier avec moi en chemin : que sur Mac Homebrew soit déjà installé (l'installateur s'en sert pour installer Podman, le moteur de conteneurs) et la clé API GLM (Z.ai) qu'utilisera l'équipe — mieux vaut une clé à elle, distincte de celles que j'utilise au quotidien, avec un plafond de dépenses. Demande-moi tout le reste au lieu de deviner.`,
   de: `Ich möchte anfangen, Job Hunter Team zu nutzen — ein Open-Source-Team aus KI-Agenten, das für mich nach Stellen sucht. Es läuft auf meinem eigenen Rechner, in einem Container.
 
 Repository: https://github.com/leopu00/job-hunter-team
@@ -149,11 +141,9 @@ Einrichtungsanleitung: https://jobhunterteam.ai/setup-guide
 
 Lies zuerst das Repository und die Anleitung, und führe mich dann durch Installation und Start auf diesem Rechner, wobei du die technischen Schritte selbst übernimmst.
 
-Es gibt zwei unterstützte Wege, die zum selben Team führen — wähle mit mir den passenden:
-1. Die Desktop-App, herunterzuladen unter https://jobhunterteam.ai/download
-2. Der Einzeiler: curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
+Es gibt einen Weg, die jht-CLI (die Desktop-App ist nicht in 0.4.0): curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Zwei Dinge, die du unterwegs mit mir klären musst: dass auf einem Mac Homebrew bereits installiert ist (die App nutzt es, um Podman, die Container-Engine, zu installieren) und welches KI-Abo das Team bekommt — es braucht ein eigenes, getrennt von dem, das ich täglich nutze, weil es das Kontingent vollständig verbraucht. Frag mich alles Weitere, statt zu raten.`,
+Zwei Dinge, die du unterwegs mit mir klären musst: dass auf einem Mac Homebrew bereits installiert ist (der Installer nutzt es, um Podman, die Container-Engine, zu installieren) und welchen GLM-(Z.ai)-API-Schlüssel das Team nutzt — am besten einen eigenen, getrennt von denen, die ich täglich nutze, mit einer Ausgabengrenze. Frag mich alles Weitere, statt zu raten.`,
   pt: `Gostaria de começar a usar o Job Hunter Team, uma equipa open source de agentes de IA que procura emprego por mim. Corre no meu próprio computador, dentro de um contentor.
 
 Repositório: https://github.com/leopu00/job-hunter-team
@@ -162,11 +152,9 @@ Guia de instalação: https://jobhunterteam.ai/setup-guide
 
 Lê primeiro o repositório e o guia, e depois acompanha-me na instalação e no arranque neste computador, tratando tu dos passos técnicos.
 
-Há dois caminhos suportados, e levam à mesma equipa: escolhe comigo o que me convém.
-1. A app de ambiente de trabalho, transferível em https://jobhunterteam.ai/download
-2. O comando único: curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
+Há um só caminho, a CLI jht (a app de ambiente de trabalho não está na 0.4.0): curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Duas coisas que terás de verificar comigo pelo caminho: que no Mac o Homebrew esteja já instalado (a aplicação usa-o para instalar o Podman, o motor de contentores) e qual a subscrição de IA a dedicar à equipa — precisa de uma própria, separada da que uso no dia a dia, porque a consome por inteiro. Pergunta-me tudo o resto em vez de adivinhar.`,
+Duas coisas que terás de verificar comigo pelo caminho: que no Mac o Homebrew esteja já instalado (o instalador usa-o para instalar o Podman, o motor de contentores) e a chave API GLM (Z.ai) que a equipa vai usar — melhor uma chave só dela, separada das que uso no dia a dia, com um teto de despesa. Pergunta-me tudo o resto em vez de adivinhar.`,
   hu: `Szeretném elkezdeni használni a Job Hunter Teamet, egy nyílt forráskódú AI-ügynökcsapatot, amely helyettem keres állást. A saját gépemen fut, konténerben.
 
 Repository: https://github.com/leopu00/job-hunter-team
@@ -175,11 +163,9 @@ Telepítési útmutató: https://jobhunterteam.ai/setup-guide
 
 Először olvasd el a repositoryt és az útmutatót, majd vezess végig a telepítésen és az indításon ezen a gépen, a technikai lépéseket te intézve.
 
-Két támogatott út van, és ugyanahhoz a csapathoz vezetnek — válaszd ki velem, melyik illik hozzám jobban:
-1. Az asztali alkalmazás, letölthető innen: https://jobhunterteam.ai/download
-2. Az egysoros parancs: curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
+Egyetlen út van, a jht CLI (az asztali alkalmazás nincs a 0.4.0-ban): curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Két dolgot kell majd velem tisztáznod útközben: hogy Macen a Homebrew már telepítve van-e (az alkalmazás ezzel telepíti a Podmant, a konténermotort), és melyik AI-előfizetést szánom a csapatnak — sajátra van szüksége, elkülönítve attól, amit naponta használok, mert teljesen felhasználja. Minden mást kérdezz meg tőlem, ahelyett hogy találgatnál.`,
+Két dolgot kell majd velem tisztáznod útközben: hogy Macen a Homebrew már telepítve van-e (a telepítő ezzel telepíti a Podmant, a konténermotort), és melyik GLM (Z.ai) API-kulcsot használja a csapat — jobb egy saját kulcs, elkülönítve azoktól, amelyeket naponta használok, költségkerettel. Minden mást kérdezz meg tőlem, ahelyett hogy találgatnál.`,
 };
 
 type ReqOs = {

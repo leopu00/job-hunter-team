@@ -282,11 +282,12 @@ def test_the_windows_card_says_not_in_this_version_in_it_en_hu():
 
 
 @pytest.mark.parametrize("lang", LANGS)
-def test_the_getting_started_desktop_path_is_the_mac_app_with_a_link_to_the_download(lang):
+def test_the_getting_started_desktop_path_says_the_app_is_not_in_0_4_0_with_a_link_to_the_download(lang):
     start = re.search(rf"\n  {lang}: \{{", STARTED_I18N)
     block = STARTED_I18N[start.end():STARTED_I18N.find("\n  },\n", start.end())]
     title = re.search(r'path2Title: "([^"]*)"', block).group(1)
-    assert "Apple silicon" in title and "macOS" in title
+    # the desktop app is not in 0.4.0: the path says so and sends to the CLI
+    assert "0.4.0" in title and "Apple silicon" not in title
     body = re.search(r'path2A:\s*"([^"]*)"', block).group(1) + re.search(r'path2B:\s*"([^"]*)"', block).group(1)
     assert "Homebrew" in body and "Podman" in body and "Windows" in body and "Linux" in body
     assert "path2Soon" not in block and "path3WinIntro" not in block

@@ -7,7 +7,7 @@ This document describes the current CLI installer. It is the reference for
 curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 ```
 
-The visual path is the Mac desktop app in [`desktop/`](../../desktop/). This document remains the reference for CLI installation and recovery.
+The desktop app is not in 0.4.0: the CLI is the way in on every system. This document is the reference for CLI installation and recovery.
 For onboarding inside an already-cloned repo, see [legacy `setup.sh` / `setup.ps1`](#-legacy-onboarding-setupsh--setupps1).
 
 ---
@@ -20,10 +20,10 @@ For onboarding inside an already-cloned repo, see [legacy `setup.sh` / `setup.ps
 | Served by | Vercel (Next.js project in `web/`) |
 | URL | `https://jobhunterteam.ai/install.sh` |
 | HTTP cache | `public, max-age=300, s-maxage=3600, stale-while-revalidate=86400` |
-| Container runtime | Podman, the only one since 0.4, on macOS and on Linux (the path of the app). Colima, Docker Desktop and Docker Engine are no longer installed nor accepted |
+| Container runtime | Podman, the only one since 0.4, on macOS and on Linux. Colima, Docker Desktop and Docker Engine are no longer installed nor accepted |
 | Expert mode | `--no-docker` (clone + build from source) |
-| OS support | macOS (Apple silicon in the 0.4 app) · Linux (apt/dnf/pacman), experimental. On Linux this script is the way in: there is no desktop app for Linux in this version |
-| Windows | Windows is not in this version |
+| OS support | macOS (Apple silicon, macOS 15 or later) · Linux (apt/dnf/pacman), experimental |
+| Windows | Windows is a preview in 0.4.0, CLI only: tested on Windows 10, not on Windows 11. Windows has its own PowerShell installer: see Path 2 of the [Quickstart](QUICKSTART.md) |
 
 ---
 
@@ -98,10 +98,9 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 > against a long-running `jht` container.
 
 1. **Detect system** — `uname -s` → macOS / Linux (a WSL environment is
-   recognized with `grep microsoft /proc/version`, but Windows is not in this
-   version); on Linux also picks `apt` / `dnf` / `pacman`.
-2. **Install container runtime** — Podman, the only engine since 0.4 (the
-   path of the app):
+   recognized with `grep microsoft /proc/version`, but Windows has its own
+   PowerShell installer); on Linux also picks `apt` / `dnf` / `pacman`.
+2. **Install container runtime** — Podman, the only engine since 0.4:
    - macOS: **Homebrew must already be installed** (it needs macOS 15 or
      later); without it the installer stops with `homebrew_missing` before
      installing anything. It then installs the Podman CLI and the Compose
@@ -285,7 +284,7 @@ What `--dry-run` intentionally does **not** do:
   (rewrite to `raw.githubusercontent.com/.../<tag>/scripts/install.sh`,
   or generate `web/public/install.sh` from the latest release at build
   time).
-- **Windows is not in this version** — there is no Windows installer in this release.
+- **Windows** — Windows is a preview in 0.4.0, CLI only: tested on Windows 10, not on Windows 11. It installs with its own PowerShell installer (Path 2 of the [Quickstart](QUICKSTART.md)), not with this script.
 
 ---
 

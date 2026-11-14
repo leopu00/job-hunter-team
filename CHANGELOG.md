@@ -7,20 +7,20 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.4.0] — unreleased
 
-**The desktop app moves to Tauri 2, the agent team runs in a container on your computer (or a VPS), and the
-team runs on Pi with a GLM (Z.ai) API key.** The release notes say which of this was tested on
-real machines and which was not.
+**The agent team runs in a Podman container on your computer (or a VPS), driven from the `jht` CLI, and the
+team runs on Pi with a GLM (Z.ai) API key.** The desktop app is not in 0.4.0. The release notes say which of
+this was tested on real machines and which was not.
 
 ### Platforms
 
-- **Mac** (Apple silicon, macOS 15 or later): the Tauri 2 desktop app — Team with chat, Budget, Office, profile,
-  a pause for the whole team or one agent. The CLI installer uses Colima by default (or Podman) and installs the
-  Docker Compose plugin; the app installs Podman with Homebrew and adopts a team the CLI installed on Colima.
-  After a restart `jht up` starts the team's Colima again by itself. Intel Macs are not supported.
-- **Linux**: CLI only, experimental, on rootless Podman (or Docker).
+- **One engine: Podman**, on every platform. Colima and Docker are no longer supported: on a computer that
+  runs JHT on Docker the installer changes nothing and says how to move to Podman.
+- **Mac** (Apple silicon, macOS 15 or later): CLI. The installer sets up Podman and its machine; Podman 6.1 from
+  6.1.3 on. Intel Macs are not supported.
+- **Linux**: CLI only, experimental, on rootless Podman 5.0 or later.
 - **Windows**: preview, CLI only — PowerShell installer, Podman inside WSL, tested on Windows 10 and not on
-  Windows 11. There is no desktop app for Windows.
-- The retained Godot project is not bundled or reachable from the distributed app.
+  Windows 11.
+- **The desktop app is not in 0.4.0**; `jht game` and `jht gui` say they were removed.
 
 ### Providers
 
@@ -32,7 +32,7 @@ real machines and which was not.
   in a later release; their code stays. `jht providers update` without an id no longer
   updates Kimi: name it (`jht providers update kimi`).
 - A key the provider refuses, a missing key or credit that has run out are reported by `jht team start`,
-  `jht agents`, the chat and the app, with the command that fixes it.
+  `jht agents` and the chat, with the command that fixes it.
 
 ### Install and integrations
 
@@ -48,8 +48,6 @@ real machines and which was not.
 
 - The Scout covers the national portals of the profile's languages first, reads Platsbanken through its public
   API, and keeps the search inside the area of a person who does not relocate.
-- The Budget page measures the week against the active hours; the "API budget" mode of the early 0.4 builds
-  ("Team Locale") is gone.
 
 ### Security
 
@@ -60,7 +58,6 @@ real machines and which was not.
 
 - The mail broker, Telegram, Google and Chromium are no longer in the first setup.
 - No environment variable can point the wrapper at another Podman machine or engine.
-- On-device dictation depends on the macOS speech services and permissions.
 
 ---
 

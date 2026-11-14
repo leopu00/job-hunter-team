@@ -2,8 +2,7 @@
 
 Choose the supported path for your operating system and complete its checks in
 order.
-The desktop app and the CLI are two clients of the same containerized team; you
-do not need to install both.
+In 0.4.0 the team is driven from the `jht` CLI: **the desktop app is not in 0.4.0.**
 
 ---
 
@@ -18,20 +17,20 @@ JHT runs many agents in parallel, around the clock. In 0.4.0 you need:
 
 Details and the spending ceiling of an API key: [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md).
 
-> ⚠️ **The subscription must be dedicated to JHT** — not the same account you use for personal/work AI tasks. A shared account drains the same weekly quota twice and the team will hit rate limits unexpectedly.
+> ⚠️ **The API key should be dedicated to JHT** — not the same account you use for personal/work AI tasks: the team runs around the clock, and its spending is easier to follow on an account of its own.
 
-The desktop app is for Macs with Apple silicon (M1 and later; Intel Macs are not
-supported in 0.4), and **Homebrew must already be installed** on the Mac, which
-needs macOS 15 or later. A Mac with at least **16 GB of RAM** is recommended.
-The container machine the app creates uses 2 CPUs and 4 GiB of memory, and a
-disk that grows up to 30 GiB. No minimum of free disk space has been measured;
-leave room for the team's image and persistent data. There is no desktop app for
-Linux in this version (use the CLI installer, Path 2). Windows is not in this version.
+On a Mac you need Apple silicon (M1 and later; Intel Macs are not supported in
+0.4) and macOS 15 or later, and **Homebrew must already be installed**: the
+installer uses it to install Podman. A Mac with at least **16 GB of RAM** is
+recommended. The Podman machine the installer creates uses 2 CPUs and 4 GiB of
+memory, and a disk that grows up to 30 GiB. No minimum of free disk space has
+been measured; leave room for the team's image and persistent data. Linux: CLI
+only, experimental, on rootless Podman 5.0 or later.
+Windows is a preview in 0.4.0, CLI only: tested on Windows 10, not on Windows 11.
 
 Before installing, use [Choose where to run Job Hunter Team](CHOOSE-WHERE-TO-RUN.md)
 to compare a local PC, dedicated Linux PC on the LAN and VPS. The team itself
-runs in a container; the desktop app prepares that runtime during its first
-setup.
+runs in a container; the installer prepares that runtime.
 
 ---
 
@@ -41,7 +40,7 @@ Pick the path that fits how you work:
 
 |     | Path                                                      | Best for                                                |
 | --- | --------------------------------------------------------- | ------------------------------------------------------- |
-| 🖥️  | [Native app](#%EF%B8%8F-path-1-native-app)                | The guided setup and the team's control panel           |
+| 🖥️  | [Native app](#%EF%B8%8F-path-1-native-app)                | Not in 0.4.0                                            |
 | 📦  | [CLI installer](#-path-2-cli-installer)                   | Terminal, automation, remote administration             |
 | 🦞  | [AI agent drives JHT](#-path-3-let-your-ai-agent-do-it)   | You already use Claude Code / OpenClaw / Codex / Cursor |
 | 🛠️  | [From source](#%EF%B8%8F-path-4-from-source-contributors) | Contributors                                            |
@@ -50,49 +49,15 @@ Pick the path that fits how you work:
 
 ## 🖥️ Path 1 — Native app
 
-The desktop application is the team's control panel. It guides the first setup
-(environment, provider and sign-in), then shows the office, the agents, the
-positions, the messages and your profile.
-
-Download the current release from
-[GitHub Releases](https://github.com/leopu00/job-hunter-team/releases/latest):
-
-| System      | Release asset                           | First launch |
-| ----------- | --------------------------------------- | ------------ |
-| Windows x64 | not in this version | Windows is not part of 0.4.0: there is no Windows installer in this release. |
-| macOS       | `job-hunter-team-macos-universal.dmg`   | Open the disk image and drag the app into Applications. It is signed with an Apple Developer ID and notarized by Apple. Only Macs with Apple silicon (M1 and later). Intel Macs are not supported in 0.4. The file name says “universal”, but in 0.4 it holds only the Apple silicon build. |
-| Linux x64   | not in this version | There is no desktop app for Linux in this version: use the CLI installer (`install.sh`, Path 2). |
-
-On first launch, choose **Continue with Google** or **Use locally**; setting up
-a new team on a VPS needs the Google sign-in. The setup then has four steps:
-**Welcome**, **Environment** (this computer or a VPS server), **Provider**
-(Codex, through your ChatGPT subscription) and **Confirm**. Select
-**Prepare the team** and keep the app open: it prepares the runtime and the
-container, installs the provider's tool, asks you to sign in to the provider,
-starts the agents and opens the chat with the Assistant. How long it takes
-depends on your connection and your computer.
-
-- **Windows:** not in this version.
-- **macOS:** the app installs Podman with Homebrew, which must already be
-  installed; without it, the app says so before installing anything. It creates
-  a Podman machine with 2 CPUs, 4 GiB of memory and a disk of up to 30 GiB.
-- **Linux:** there is no desktop app for Linux in this version: use the CLI
-  installer (Path 2), which sets up rootless Podman (5.0 or later) with
-  podman-compose.
-
-If a step fails, the screen gives its cause with **Retry the preparation** and
-**Show the log file**. If the app closes halfway, the next launch offers
-**Resume the setup** or **Start over**.
-
-> The desktop app is the interaction cockpit. The web dashboard reflects synced
-> data; the CLI remains available for automation and recovery.
+**The desktop app is not in 0.4.0**: there is no app to download in this
+release. Use the CLI installer (Path 2) on macOS, Linux or Windows.
 
 ---
 
 ## 📦 Path 2 — CLI installer
 
 Use this path for terminal-first setup, automation or remote administration.
-It installs the runtime and `jht` command, not the desktop app.
+It installs the runtime and the `jht` command.
 
 **Recommended: download, inspect, and preview before running (macOS / Linux):**
 
@@ -109,7 +74,7 @@ The shorter form, after you have reviewed it, is:
 curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 ```
 
-**Windows (PowerShell; WSL must be enabled):** Windows is not supported in 0.4: these steps are untested and may not work.
+**Windows (PowerShell; WSL must be enabled):** Windows is a preview in 0.4.0, CLI only: tested on Windows 10, not on Windows 11.
 
 Requirements on Windows: WSL enabled, and **winget** (the Windows Package Manager, which comes with "App Installer"): the installer gets Podman through it. Windows 11 has it; on Windows 10 install "App Installer" from the Microsoft Store (<https://apps.microsoft.com/detail/9nblggh4nns1>, or the official link <https://aka.ms/getwinget>). Without winget, and without a Podman already installed, the installer stops at once, before it writes anything, and says so: install App Installer, open a new PowerShell window and run the same command again.
 
@@ -133,7 +98,7 @@ does not change Defender.
 The installer:
 
 1. Detects your OS (macOS, or Linux with apt, dnf or pacman)
-2. Installs the **container runtime**, Podman, the only one since 0.4 (the same path as the app): on macOS, Podman and its Compose provider through Homebrew (which must already be installed) and a dedicated rootless `jht-podman` machine with 2 CPUs, 4 GiB of memory and a disk of up to 30 GiB; on Linux, rootless Podman 5.0 or later and podman-compose for your user, with `sudo` that asks for no password for what is missing. It never installs Docker or Colima.
+2. Installs the **container runtime**, Podman, the only one since 0.4: on macOS, Podman and its Compose provider through Homebrew (which must already be installed) and a dedicated rootless `jht-podman` machine with 2 CPUs, 4 GiB of memory and a disk of up to 30 GiB; on Linux, rootless Podman 5.0 or later and podman-compose for your user, with `sudo` that asks for no password for what is missing. It never installs Docker or Colima.
 3. Downloads `docker-compose.yml`, the host wrapper and the host preflight helper.
 4. Creates `~/.jht/host.env` and registers the wrapper directory on `PATH` when needed.
 
@@ -172,8 +137,8 @@ You'll end up with two folders:
 > container boundary and requires Node 22+, tmux, git and the provider CLI on
 > the host. Use it only on a dedicated machine or virtual machine.
 
-**macOS and Podman.** The app runs the installer with `--runtime podman`, and so
-do the commands above (Podman is also what the installer does without the flag).
+**macOS and Podman.** The commands above run the installer with `--runtime podman`
+(Podman is also what the installer does without the flag).
 Homebrew must already be installed: without it the installer stops before
 installing anything and says how to get it (https://brew.sh, then a new
 Terminal window and the installer again). `--runtime=colima`,
@@ -204,8 +169,8 @@ bash scripts/install.sh --runtime=podman
 If you already use a personal AI assistant (Claude Code, OpenClaw, Codex,
 Cursor), tell it:
 
-> _"Set up Job Hunter Team for me. I have a [Codex Plus or Pro]
-> subscription. Walk me through what you need."_
+> _"Set up Job Hunter Team for me. I have a GLM (Z.ai) API key for it.
+> Walk me through what you need."_
 
 The `jht` CLI is designed for this use. Follow
 [`AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) for the exact runbook and
@@ -266,28 +231,14 @@ See [`CLI-REFERENCE.md`](CLI-REFERENCE.md) for the full CLI reference.
 
 ---
 
-## 🚀 First run in the desktop app
+## 🚀 First run
 
-If you chose the native app:
-
-1. **Finish the guided setup.** Follow the steps in
-   [Path 1](#%EF%B8%8F-path-1-native-app) until the app says the team is ready.
-   For a VPS, the app first shows the server's SSH fingerprint: confirm it only
-   if it matches the one your VPS provider shows.
-2. **Talk to the Assistant.** The app opens its chat when the team is ready.
-   The Assistant learns your goals and preferences by talking with you.
-3. **Follow the team.** The office and the agents panel show who is working and
-   on what; positions arrive as the agents find and assess them.
-4. **Review the output.** On a team that runs on this computer, CVs and the
-   other documents land in `~/Documents/Job Hunter Team/`. You decide what to
-   send.
-
-See the [native VPS setup guide](VPS-SETUP-WIZARD.md) for the VPS path.
-
-If you chose the CLI, `jht setup` is the first-run flow: it selects the
-provider, installs its official CLI, waits for subscription login, and starts
-the team. Run `jht doctor` before considering setup complete. The cloud account,
-Telegram and VPS paths are optional and documented separately.
+`jht setup` is the first-run flow: it takes the GLM (Z.ai) API key (typed
+hidden, or from a file or the standard input), checks it with the provider and
+starts the team. Run `jht doctor` before considering setup complete. The cloud
+account, Telegram and VPS paths are optional and documented separately. On a
+team that runs on this computer, CVs and the other documents land in
+`~/Documents/Job Hunter Team/`. You decide what to send.
 
 ---
 
