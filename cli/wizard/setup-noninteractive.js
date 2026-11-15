@@ -13,6 +13,7 @@ import { lstatSync, readFileSync } from 'node:fs';
 import pc from 'picocolors';
 import {
   findProviderChoice,
+  OPENAI_PI_CHOICE,
   JHT_CONFIG_DIR,
   readConfigFileSnapshot,
   writeConfigFile,
@@ -27,7 +28,7 @@ import { summarizeRoleModels } from './setup-models.js';
 import { AGENT_HARNESSES, DEFAULT_HARNESS } from '../../shared/runtime/agent-harness.js';
 import { piApiProvider } from '../../shared/runtime/provider-models.js';
 import { harnessRefusal } from './setup-harness.js';
-import { RELEASE_PROVIDERS, RELEASE_HARNESS, offeredInRelease } from '../../shared/runtime/release-providers.js';
+import { RELEASE_PROVIDERS, RELEASE_HARNESS, offeredInRelease, offeredWay, releaseOffersOf } from '../../shared/runtime/release-providers.js';
 import { migrateToLatest } from '../src/commands/migrate.js';
 import { KEY_REFUSED_EXIT_CODE } from '../src/commands/providers-key-check.js';
 import { API_KEY_MAX_BYTES, firstLine, isLauncherSafePath, keyShapeProblem, keyStoreDir, readKeyFromStream, storeApiKey } from './key-store.js';
@@ -88,7 +89,7 @@ export async function runNonInteractiveSetup(opts) {
   if (!applyLanguage(opts)) { process.exitCode = 1; return; }
 
   // --- Validazione flag obbligatori ---
-  const selectedProvider = findProviderChoice(opts.provider || RELEASE_PROVIDERS[0]);
+  let selectedProvider = findProviderChoice(opts.provider || RELEASE_PROVIDERS[0]);
   if (!selectedProvider || !offeredInRelease(selectedProvider.value)) {
     // the services of this release are one list (shared/runtime/release-providers.js); the others come in a later release
     console.error(pc.red(`This release offers only ${RELEASE_PROVIDERS.join(', ')} with an API key, on the ${RELEASE_HARNESS} harness ("${opts.provider}" is not offered). Example: jht setup --non-interactive --provider ${RELEASE_PROVIDERS[0]} --api-key-stdin`));
@@ -97,9 +98,13 @@ export async function runNonInteractiveSetup(opts) {
   }
   const providerName = selectedProvider.value; // moonshot is kimi
 
-  const harness = opts.harness || RELEASE_HARNESS;
-  if (harness !== RELEASE_HARNESS) {
-    console.error(pc.red(`This release runs the agents only on ${RELEASE_HARNESS}: drop --harness or use --harness ${RELEASE_HARNESS}.`));
+  // the harness of the first way this release offers the provider, unless one is given; one it does not offer is refused
+  const offers = releaseOffersOf(providerName);
+  const harness = opts.harness || offers[0]?.harness || RELEASE_HARNESS;
+  if (!offeredWay(providerName, harness)) {
+    const harnesses = [...new Set(offers.map((offer) => offer.harness))];
+    const name = providerName === 'openai' ? OPENAI_PI_CHOICE.label : selectedProvider.label;
+    console.error(pc.red(`This release runs ${name} only on ${harnesses.join(' or ')}: drop --harness or use --harness ${harnesses[0]}.`));
     process.exitCode = 1;
     return;
   }
@@ -108,13 +113,23 @@ export async function runNonInteractiveSetup(opts) {
     process.exitCode = 1;
     return;
   }
+  if (providerName === 'openai' && harness === 'pi') selectedProvider = OPENAI_PI_CHOICE; // OpenAI with a key, run by pi
   if (selectedProvider.piOnly && harness !== 'pi') {
     console.error(pc.red(`${selectedProvider.label} runs only on the pi harness: add --harness pi.`));
     process.exitCode = 1;
     return;
   }
 
-  const authMethod = opts.authMethod || 'api_key';
+  const authMethod = opts.authMethod || offers.find((offer) => offer.harness === harness)?.auth || 'api_key';
+  if (!offeredWay(providerName, harness, authMethod)) {
+    const words = { api_key: 'an API key', subscription: 'a subscription', cli: 'the sign-in of its CLI' };
+    const auths = offers.filter((offer) => offer.harness === harness).map((offer) => offer.auth);
+    console.error(pc.red(`This release runs ${selectedProvider.label} on ${harness} only with ${auths.map((a) => words[a] ?? a).join(' or ')} (--auth-method ${auths.join(' or ')}).`));
+    process.exitCode = 1;
+    return;
+  }
+  // a key that pi uses (glm, kimi, OpenAI on pi) goes by reference into the key store, never in the config as text
+  const keyOnPi = selectedProvider.piOnly || (harness === 'pi' && authMethod === 'api_key');
   const secretMode = opts.secretMode || 'plaintext';
   const model = opts.model || selectedProvider.models[0].value;
 
@@ -143,7 +158,7 @@ export async function runNonInteractiveSetup(opts) {
         return;
       }
       apiKeySecret = formatSecretForConfig('file', opts.secretFile);
-    } else if (selectedProvider.piOnly && !opts.apiKeyFile && !opts.apiKeyStdin) {
+    } else if (keyOnPi && !opts.apiKeyFile && !opts.apiKeyStdin) {
       // Kimi and GLM put a plaintext key in the config and, for Kimi, in the command of the pane: only a reference
       console.error(pc.red(`${selectedProvider.label} takes its key by reference: use --api-key-file or --api-key-stdin (the setup keeps the key for you), or --secret-mode env or --secret-mode file.`));
       process.exitCode = 1;
@@ -172,7 +187,7 @@ export async function runNonInteractiveSetup(opts) {
       key = key.trim();
       const err = validateApiKey(selectedProvider, key);
       if (err) { console.error(pc.red(err)); process.exitCode = 1; return; }
-      if (selectedProvider.piOnly) {
+      if (keyOnPi) {
         // Kept in the container's key store AFTER the provider has accepted it (below): a refused key leaves nothing.
         const shape = keyShapeProblem(key);
         if (shape) { console.error(pc.red(shape)); process.exitCode = 1; return; }
@@ -210,7 +225,7 @@ export async function runNonInteractiveSetup(opts) {
   if (harnessIssue) { console.error(pc.red(`${harnessIssue}.`)); process.exitCode = 1; return; }
 
   // --- Health check ---
-  if (selectedProvider.piOnly && !opts.skipHealth && authMethod === 'api_key') {
+  if (keyOnPi && !opts.skipHealth) {
     // glm/kimi: a light call (the list of models, no tokens) says whether the provider accepts the key. Only a refusal
     // (401) stops the setup, and nothing is saved: a key it refused would only fail inside the Pi session of the agents.
     const verdict = await checkPiApiKey(providerName, pendingKey ?? resolveSecret(apiKeySecret));

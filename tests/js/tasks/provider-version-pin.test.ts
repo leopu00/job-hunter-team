@@ -23,7 +23,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, chmodSync, readdirSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { offeredInRelease } from "../../../shared/runtime/release-providers.js";
+import { offeredInRelease, offeredWay } from "../../../shared/runtime/release-providers.js";
 
 const REPO = path.resolve(__dirname, "../../..");
 const JHT_BIN = path.join(REPO, "cli", "bin", "jht.js");
@@ -36,7 +36,7 @@ const PINS = JSON.parse(readFileSync(MANIFEST, "utf-8")).pins as Record<
 const posixOnly = process.platform === "win32" ? describe.skip : describe;
 // `jht providers` shows a CLI version only for a provider this release runs (shared/runtime/release-providers.js); Codex and
 // Claude are listed without one while they are not offered, so the list's version cases wait for them to be back.
-const listedWithVersion = offeredInRelease("openai") ? posixOnly : describe.skip;
+const listedWithVersion = offeredWay("openai", "codex") ? posixOnly : describe.skip;
 const SEMVER = /^\d+\.\d+\.\d+(?:[-+.][0-9A-Za-z.-]+)?$/;
 
 function writeExec(file: string, body: string) {

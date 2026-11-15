@@ -68,7 +68,10 @@ def host(tmp_path):
     for name in ("log", "volumes", "running"):
         (tmp_path / name).write_text("")
     env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "FAKE_LOG": str(tmp_path / "log"),
-           "FAKE_VOLUMES": str(tmp_path / "volumes"), "FAKE_RUNNING": str(tmp_path / "running")}
+           "FAKE_VOLUMES": str(tmp_path / "volumes"), "FAKE_RUNNING": str(tmp_path / "running"),
+           # the sentences are said in the language the wrapper decided: these tests read the Italian ones (the 7 languages:
+           # tests/test_integration_speaks_the_language_chosen.py)
+           "JHT_SAY_LANG": "it"}
 
     class H:
         pass

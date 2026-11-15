@@ -22,6 +22,7 @@
 import { readFileSync } from 'node:fs';
 import { FUTURE_SKEW_MS } from './team-command-guard.js';
 import { ROLES, MODEL_CLASSES, ROLE_DEFAULT_CLASS, ROLE_DEFAULT_EFFORT, DEFAULT_EFFORT, CODEX_MODEL, CLAUDE_ALIAS } from '../../../shared/runtime/role-models.js';
+import { PROVIDER_ROLE_CLASS } from '../../../shared/runtime/provider-models.js';
 export { ROLES, MODEL_CLASSES, ROLE_DEFAULT_CLASS, DEFAULT_EFFORT };
 
 export const SETTINGS_KEYS = ['working_hours', 'role_models'];
@@ -110,7 +111,8 @@ export function effectiveSettings(config, roleModels) {
   const effective = {};
   for (const role of ROLES) {
     const set = roleModels[role] ?? {};
-    const model = classApplies && set.model ? set.model : ROLE_DEFAULT_CLASS[role];
+    // on OpenAI (Codex or pi with a key) the light roles take the class provider-models.list gives them, unless pinned
+    const model = classApplies && set.model ? set.model : (classApplies && PROVIDER_ROLE_CLASS.openai?.[role]) || ROLE_DEFAULT_CLASS[role];
     effective[role] = {
       model,
       modelName: classApplies ? CODEX_MODEL[model] : CLAUDE_ALIAS[model],

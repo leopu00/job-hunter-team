@@ -728,9 +728,10 @@ def test_a_distribution_whose_podman_is_too_old_is_refused_before_anything_is_in
     err = done.stderr.decode()
     assert done.returncode == 93, err
     assert "JHT_ERROR podman_version_unsupported\n" in err
-    assert f"this distribution would install {named} {found}" in err and "nothing was installed" in err
-    assert "Ubuntu 26.04 LTS, Debian 13, Fedora 43 or later" in err
-    assert f"Questa distribuzione installerebbe {named} {found}" in err and "non ho installato niente" in err
+    # one line, in the language of the person (the 7 languages: tests/test_installer_speaks_the_language_chosen.py)
+    assert f"questa distribuzione installerebbe {named} {found}" in err and "non ho installato niente" in err
+    assert "Ubuntu 26.04 LTS, Debian 13, Fedora 43 o successive" in err
+    assert "this distribution would install" not in err
     calls = server.calls()
     assert not [c for c in calls if " install -y" in c], calls
     assert not [c for c in calls if "usermod" in c or "enable-linger" in c]
@@ -740,7 +741,10 @@ def test_a_distribution_whose_podman_is_too_old_is_refused_before_anything_is_in
 def test_the_italian_line_is_only_for_who_reads_italian(server, source):
     with_podman(server, bare=True)
     done = install_podman(server, source, FAKE_PODMAN_CANDIDATE="4.9.3+ds1-1ubuntu0.2", LANG="en_US.UTF-8")
-    assert done.returncode == 93 and "Questa distribuzione" not in done.stderr.decode()
+    err = done.stderr.decode()
+    assert done.returncode == 93 and "questa distribuzione" not in err.lower()
+    assert "this distribution would install podman 4.9.3" in err and "nothing was installed" in err
+    assert "Ubuntu 26.04 LTS, Debian 13, Fedora 43 or later" in err
 
 
 def test_a_distribution_with_podman_5_installs_as_before(server, source):

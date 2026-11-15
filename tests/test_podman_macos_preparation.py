@@ -157,7 +157,8 @@ def test_macos_podman_setup_reports_another_running_machine_without_stopping_it(
         assert "JHT_OTHER_MACHINE %s" in source
         assert "exit 79" in source or "return 79" in source
     assert "podman machine list" in installer
-    assert "podman machine stop ${running:-<nome>}" in installer
+    assert ("podman machine stop ${running:-<nome>}" in installer
+            or "podman machine stop %s" in installer)  # the installer says its sentences from the catalogs (ts/tsf)
     # the wrapper's sentences are in shared/locales: the machine found is named twice, the second time in the command
     assert 'jht_say line.podman_other_machine_running.named "$running" "$running"' in wrapper
     assert "jht_say line.podman_other_machine_running.unnamed" in wrapper
@@ -438,7 +439,7 @@ def test_a_marker_of_an_earlier_run_is_kept_when_the_machine_is_found_again(tmp_
 def test_the_created_flag_is_set_only_after_machine_init_succeeds():
     block = _source(INSTALLER)
     init = block.index('"$podman_bin" machine init --now --update-connection=false')
-    failed = block.index('fail "Podman machine initialization failed; Colima was not changed."', init)
+    failed = block.index('fail "$(ts installer.mac.machine_init_failed \'Podman machine initialization failed; Colima was not changed.\')"', init)
     flag = block.index("PODMAN_MACHINE_CREATED=1", failed)
     assert flag > failed and flag - failed < 160
     assert block.count("PODMAN_MACHINE_CREATED=1") == 1
@@ -458,8 +459,10 @@ def test_the_installer_takes_the_6_1_series_from_6_1_3_on_a_mac(version: str, ok
 
 def test_a_podman_out_of_the_series_is_refused_with_the_version_found_and_what_to_do():
     source = _source(INSTALLER)
-    assert "podman_version_unsupported: JHT on a Mac needs Podman $PODMAN_MAC_SERIES.$PODMAN_MAC_MIN_PATCH or a later" in source
-    assert "this Mac has ${podman_version:-" in source and "nothing of JHT was installed" in source
+    assert ("podman_version_unsupported: $(tsf installer.mac.podman_version_unsupported 'JHT on a Mac needs Podman %s.%s or a later"
+            " %s.x (not 6.2 or later); this Mac has %s.") in source
+    assert '"$PODMAN_MAC_SERIES" "$PODMAN_MAC_MIN_PATCH" "$PODMAN_MAC_SERIES" "${podman_version:-$(ts installer.mac.podman_no_version' in source
+    assert "nothing of JHT was installed" in source
     wrapper = _source(WRAPPER)
     assert ('jht_say line.versione_non_supportata_sul_mac "$PODMAN_MAC_SERIES" "$PODMAN_MAC_MIN_PATCH" "$PODMAN_MAC_SERIES" '
             '"$(podman_version_number "$podman_bin"') in wrapper
