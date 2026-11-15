@@ -197,4 +197,3 @@ def test_a_search_typed_at_the_prompt_of_the_number_starts_on_a_line_of_its_own(
     # the next thing said is the proposal, not a prompt left without its answer
     assert not re.search(r"\]: *Proposed", out), out
     assert re.search(r"a new search: Budapest\r?\nProposed: Europe/Budapest", out), out
-
