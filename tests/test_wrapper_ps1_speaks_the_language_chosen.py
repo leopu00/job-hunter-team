@@ -26,6 +26,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import wrapper_ps_texts as texts  # noqa: E402
+from wrapper_ps_texts import UTF8_OUTPUT  # noqa: E402
 from ps_strings import tokens  # noqa: E402
 from script_texts import LANGUAGES, catalog  # noqa: E402
 
@@ -188,8 +189,14 @@ def _wrapper_env(tmp_path: Path, **extra: str) -> dict:
     return base
 
 
+def _quoted(text: str) -> str:
+    return "'" + text.replace("'", "''") + "'"
+
+
 def _wrapper(shell: str, tmp_path: Path, *args: str, **extra: str) -> subprocess.CompletedProcess:
-    return subprocess.run(_argv(shell, "-File", str(WRAPPER), *args), capture_output=True, text=True, timeout=180,
+    # Windows PowerShell 5.1 writes to a pipe in the OEM code page: the console of the run is set to UTF-8, which is what is read here
+    command = UTF8_OUTPUT.strip() + "; & " + _quoted(str(WRAPPER)) + "".join(" " + _quoted(arg) for arg in args) + "; exit $LASTEXITCODE"
+    return subprocess.run(_argv(shell, "-Command", command), capture_output=True, text=True, encoding="utf-8", timeout=180,
                           env=_wrapper_env(tmp_path, **extra), stdin=subprocess.DEVNULL)
 
 

@@ -9,6 +9,8 @@ import subprocess
 
 import pytest
 
+from wrapper_ps_texts import UTF8_OUTPUT
+
 
 ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
@@ -175,7 +177,7 @@ def _run_harness(
         state.write_text("present\n", encoding="utf-8")
     fakes = _scheduled_task_fakes(state, log or tmp_path / "tasks.log", unregister_fails, list_fails)
     harness = tmp_path / "uninstall-harness.ps1"
-    harness.write_text(prefix + "\n" + fakes + "\n" + body, encoding="utf-8")
+    harness.write_text(prefix + "\n" + UTF8_OUTPUT + fakes + "\n" + body, encoding="utf-8")
     return subprocess.run(
         [
             POWERSHELL,
@@ -188,6 +190,7 @@ def _run_harness(
             str(harness),
         ],
         text=True,
+        encoding="utf-8",
         capture_output=True,
         timeout=30,
         check=False,
@@ -491,7 +494,7 @@ def test_a_startup_task_that_cannot_be_removed_is_reported_and_the_rest_is_remov
     result = _run_task_uninstall(box, tmp_path, task_present=True, unregister_fails=True)
     assert "CODE=0" in result.stdout, result.stdout + result.stderr
     # the one that failed is said, with the reason and the command by hand ...
-    assert "Non tolta l'attivita' di avvio al logon 'Job Hunter Team - Start runtime [S-1-" in result.stderr
+    assert "Non tolta l'attività di avvio al logon 'Job Hunter Team - Start runtime [S-1-" in result.stderr
     assert "Accesso negato (finto)" in result.stderr and "schtasks /Delete /TN" in result.stderr
     assert (tmp_path / "startup-task-present").exists()
     # ... and the machine, the runtime and the commands are gone anyway; the user's data stays
@@ -523,7 +526,7 @@ def test_when_the_task_list_cannot_be_read_it_is_reported_and_the_rest_is_remove
     box = _box(tmp_path)
     result = _run_task_uninstall(box, tmp_path, task_present=True, list_fails=True)
     assert "CODE=0" in result.stdout, result.stdout + result.stderr
-    assert "Non tolta l'attivita' di avvio al logon" in result.stderr and "Accesso negato (elenco finto)" in result.stderr
+    assert "Non tolta l'attività di avvio al logon" in result.stderr and "Accesso negato (elenco finto)" in result.stderr
     assert not box.state.exists() and not box.runtime.exists()
 
 
@@ -609,7 +612,7 @@ def test_purge_never_follows_a_link_and_leaves_the_command_to_retry(tmp_path: Pa
     assert "JHT_LEFT data" not in result.stdout and "JHT_PHASE uninstall_runtime" not in result.stdout
     assert "Non cancellati i dati di JHT" in result.stderr
     assert box.runtime.exists() and (box.bin / "jht.ps1").exists(), "the command stays so it can be run again"
-    assert "e' un collegamento" in result.stderr
+    assert "è un collegamento" in result.stderr
 
 
 @windows_only

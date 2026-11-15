@@ -14,11 +14,12 @@ $ErrorActionPreference = 'Stop'
 $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($env:FAKE_SOURCE, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw 'source parse failed' }
-foreach ($name in @('Open-JhtMonitorWindow', 'Write-Err')) {
+foreach ($name in @('Get-JhtTextTable', 'Get-JhtText', 'Format-JhtText', 'Open-JhtMonitorWindow', 'Write-Err')) {
   $functions = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name }, $true))
   if ($functions.Count -ne 1) { throw "missing or ambiguous executable $name" }
   . ([scriptblock]::Create($functions[0].Extent.Text))
 }
+function Get-JhtTextLanguage { return $env:JHT_LANG }  # what the wrapper says, it says by key, in the language of the case's environment
 [string[]]$request = @($env:FAKE_WINDOW_ARGS | ConvertFrom-Json)
 $result = Open-JhtMonitorWindow -CommandPath $env:FAKE_ENTRY -WindowArgs $request
 [Console]::Out.WriteLine("RETURNED:$result")

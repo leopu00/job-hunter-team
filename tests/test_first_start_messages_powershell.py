@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from wrapper_ps_texts import say_functions  # noqa: E402
+from wrapper_ps_texts import UTF8_OUTPUT, say_functions  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -55,8 +55,8 @@ try { Assert-TrustedRuntime; 'NO-THROW' } catch { $_.Exception.Message }
 
 def _with_env(tmp_path, body, **env):
     script = tmp_path / "host.ps1"
-    script.write_text(body, encoding="utf-8")
-    return subprocess.run([_pwsh(), "-NoProfile", "-File", str(script)], text=True, capture_output=True, timeout=60,
+    script.write_text(UTF8_OUTPUT + body, encoding="utf-8")
+    return subprocess.run([_pwsh(), "-NoProfile", "-File", str(script)], text=True, encoding="utf-8", capture_output=True, timeout=60,
                           env={**os.environ, **env})
 
 

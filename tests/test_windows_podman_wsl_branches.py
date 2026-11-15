@@ -50,6 +50,7 @@ WINDOWS_RUNTIME_RS = ROOT / "desktop" / "src-tauri" / "src" / "windows_runtime.r
 
 
 from windows_native_fakes import ENGINE_CHECK, WINDOWS, assert_engine, install_fake, launcher, powershell_argv, windows_env
+from wrapper_ps_texts import UTF8_OUTPUT
 
 
 # Dot-sources functions (and, for the enabler, its machine block) from the real
@@ -101,7 +102,7 @@ def _run(tmp_path: Path, script: Path, imports: list[str], body: str, env: dict[
         env = {"JHT_LANG": "it", **env}
     prelude = tmp_path / "prelude.ps1"
     # The engine check first: every case says which PowerShell ran it.
-    prelude.write_text(ENGINE_CHECK + PRELUDE, encoding="utf-8")
+    prelude.write_text(UTF8_OUTPUT + ENGINE_CHECK + PRELUDE, encoding="utf-8")
     log = tmp_path / "calls.log"
     log.touch()
     engine = tmp_path / "engine.txt"
@@ -121,7 +122,7 @@ def _run(tmp_path: Path, script: Path, imports: list[str], body: str, env: dict[
     }
     result = subprocess.run(
         [*powershell_argv(), "-File", str(prelude)],
-        env=run_env, capture_output=True, text=True, timeout=120,
+        env=run_env, capture_output=True, text=True, encoding="utf-8", timeout=120,
     )
     assert_engine(engine, result.stderr)
     calls = [line for line in log.read_text(encoding="utf-8").splitlines() if line]

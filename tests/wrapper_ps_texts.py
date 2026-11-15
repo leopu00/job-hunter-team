@@ -29,6 +29,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from script_texts import LANGUAGES, PLACEHOLDER, ROOT, catalog  # noqa: E402,F401
 
 WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
+# First line of a script a test runs, whose output the test reads as UTF-8: Windows PowerShell 5.1 writes to a pipe in the OEM code page, and the
+# texts have accents now. A person at a console is not concerned (the console shows them whole); what reads a pipe is.
+UTF8_OUTPUT = "try { [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false) } catch { }\n"
 PREFIX = "wrapper."
 BEGIN = "# >>> texts in the 7 languages, made from shared/locales by `python3 tests/wrapper_ps_texts.py --write`: do not edit by hand"
 END = "# <<< texts in the 7 languages"

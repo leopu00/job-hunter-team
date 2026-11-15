@@ -3363,7 +3363,7 @@ function Invoke-JhtHostDoctor {
   if ($DoctorArgs -ccontains '--json') {
     $checks = @(foreach ($row in $rows) { [ordered]@{ section = 'host'; status = $row[0]; message = $row[1]; hint = $null } })
     $answer = [ordered]@{ ok = ($count.fail -eq 0); teamRunning = $false; summary = [ordered]@{ ok = $count.ok; warnings = $count.warn; problems = $count.fail }; checks = $checks }
-    [Console]::Out.WriteLine(($answer | ConvertTo-Json -Depth 5))
+    [Console]::Out.WriteLine((ConvertTo-JhtAsciiJson ($answer | ConvertTo-Json -Depth 5)))
   } else {
     [Console]::Out.WriteLine((Get-JhtText 'doctor.host_title'))
     foreach ($row in $rows) {
@@ -5233,6 +5233,13 @@ function ConvertTo-UpgradeField {
   return ([regex]::Replace([string]$Value, '[^A-Za-z0-9._,:+@/\-]', '')).Substring(0, [Math]::Min(220, ([regex]::Replace([string]$Value, '[^A-Za-z0-9._,:+@/\-]', '')).Length))
 }
 
+# Un JSON per chi legge l'output di jht (l'app): ASCII puro, ogni accento come \uXXXX. Un testo nella lingua della persona ha accenti, e
+# Windows PowerShell 5.1 scrive su una pipe nella codepage OEM, non in UTF-8: l'app leggerebbe caratteri sbagliati. Con \u l'JSON resta lo stesso.
+function ConvertTo-JhtAsciiJson {
+  param([string]$Json)
+  return [regex]::Replace($Json, '[^\x00-\x7F]', { param($m) '\u{0:x4}' -f [int][char]$m.Value })
+}
+
 function Write-UpgradeResult {
   param(
     [bool]$Ok, [bool]$Changed, [string]$Phase,
@@ -5249,7 +5256,7 @@ function Write-UpgradeResult {
   # imagePrune c'e' solo dopo un upgrade riuscito che ha provato a pulire.
   if ($script:UpgradePrune) { $result['imagePrune'] = $script:UpgradePrune }
   if ($script:UpgradeJson) {
-    [Console]::Out.WriteLine(($result | ConvertTo-Json -Compress -Depth 4))
+    [Console]::Out.WriteLine((ConvertTo-JhtAsciiJson ($result | ConvertTo-Json -Compress -Depth 4)))
   } elseif ($Ok) {
     Write-Host (Format-JhtText 'line.upgrade.done' $PreviousVersion $PreviousImage $CurrentVersion $CurrentImage $Message) -ForegroundColor Green
   } else {
