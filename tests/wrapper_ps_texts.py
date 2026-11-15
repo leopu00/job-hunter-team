@@ -27,6 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from script_texts import LANGUAGES, PLACEHOLDER, ROOT, catalog  # noqa: E402,F401
+import timezone_data  # noqa: E402
 
 WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
 # First line of a script a test runs, whose output the test reads as UTF-8: Windows PowerShell 5.1 writes to a pipe in the OEM code page, and the
@@ -132,13 +133,25 @@ def ascii_escaped(text: str) -> str:
     return "".join(out)
 
 
+def _folded_names(line: str) -> str:
+    """The names of a country, a city or an alias in a line, as keys (no accents, lower case): the picker only looks in them and never shows
+    them, and the wrapper does not have to work the keys out at every start of the picker (a loop over the letters is slow in PowerShell)."""
+    letter, *fields = line.split("|")
+    if letter not in ("C", "A", "N", "X"):
+        return line
+    head, names = fields[:1], fields[1:]
+    if letter == "N":  # the zone first, then a name per language: an empty one stays out
+        folded = [timezone_data.key(name) for name in names if name]
+    else:
+        folded = [timezone_data.key(name) for name in names]
+    return "|".join([letter, *head, *dict.fromkeys(name for name in folded if name)])
+
+
 def timezone_block(text: str | None = None) -> str:
     """Get-JhtTimezoneLines: the lines of shared/data/timezones.txt, in a here-string of ASCII (the picker decodes the \\uXXXX)."""
-    import timezone_data
-
     text = source() if text is None else text
     nl = newline(text)
-    body = [ascii_escaped(line) for line in timezone_data.lines()]
+    body = [ascii_escaped(_folded_names(line)) for line in timezone_data.lines()]
     return nl.join([TZ_BEGIN, "function Get-JhtTimezoneLines {", "  return @'", *body, "'@", "}", TZ_END]) + nl
 
 

@@ -182,7 +182,7 @@ function Get-JhtTextTable {
     'en:host_setup.tz.bad_number' { return 'Choose a number between 1 and %d.' }
     'en:host_setup.tz.how' { return 'Type a country, a city or a timezone (for example Italy, Rome, Europe/Rome).' }
     'en:host_setup.tz.how_default' { return 'Press Enter to keep %s, or type a country, a city or a timezone to look for another one.' }
-    'en:host_setup.tz.none' { return ('No timezone found for ' + [char]0x00AB + '%s' + [char]0x00BB + ': try a country, a city or a timezone like Europe/Rome.') }
+    'en:host_setup.tz.none' { return ('No timezone found for ' + [char]0x00AB + '%s' + [char]0x00BB + ': type the country (for example Italy) or a big city nearby.') }
     'en:host_setup.tz.not_detected' { return 'Your timezone was not detected.' }
     'en:host_setup.tz.pick' { return 'Number (1-%d), or a new search:' }
     'en:host_setup.tz.proposed' { return 'Proposed: %s (now %s).' }
@@ -443,7 +443,7 @@ function Get-JhtTextTable {
     'it:host_setup.tz.bad_number' { return 'Scegli un numero fra 1 e %d.' }
     'it:host_setup.tz.how' { return ('Scrivi un paese, una citt' + [char]0x00E0 + ' o un fuso orario (per esempio Italia, Roma, Europe/Rome).') }
     'it:host_setup.tz.how_default' { return ('Premi Invio per tenere %s, oppure scrivi un paese, una citt' + [char]0x00E0 + ' o un fuso orario per cercarne un altro.') }
-    'it:host_setup.tz.none' { return ('Nessun fuso orario trovato per ' + [char]0x00AB + '%s' + [char]0x00BB + ': prova con un paese, una citt' + [char]0x00E0 + ' o un fuso come Europe/Rome.') }
+    'it:host_setup.tz.none' { return ('Nessun fuso orario per ' + [char]0x00AB + '%s' + [char]0x00BB + ': scrivi il paese (per esempio Italia) o una grande citt' + [char]0x00E0 + ' vicina.') }
     'it:host_setup.tz.not_detected' { return ('Il tuo fuso orario non ' + [char]0x00E8 + ' stato rilevato.') }
     'it:host_setup.tz.pick' { return 'Numero (1-%d), oppure una nuova ricerca:' }
     'it:host_setup.tz.proposed' { return 'Proposto: %s (ora %s).' }
@@ -704,7 +704,7 @@ function Get-JhtTextTable {
     'hu:host_setup.tz.bad_number' { return ('V' + [char]0x00E1 + 'lassz egy sz' + [char]0x00E1 + 'mot 1 ' + [char]0x00E9 + 's %d k' + [char]0x00F6 + 'z' + [char]0x00F6 + 'tt.') }
     'hu:host_setup.tz.how' { return ('' + [char]0x00CD + 'rj be egy orsz' + [char]0x00E1 + 'got, egy v' + [char]0x00E1 + 'rost vagy egy id' + [char]0x0151 + 'z' + [char]0x00F3 + 'n' + [char]0x00E1 + 't (p' + [char]0x00E9 + 'ld' + [char]0x00E1 + 'ul Magyarorsz' + [char]0x00E1 + 'g, Budapest, Europe/Budapest).') }
     'hu:host_setup.tz.how_default' { return ('Nyomj Entert, ha megtartod ezt: %s, vagy ' + [char]0x00ED + 'rj be egy orsz' + [char]0x00E1 + 'got, egy v' + [char]0x00E1 + 'rost vagy egy id' + [char]0x0151 + 'z' + [char]0x00F3 + 'n' + [char]0x00E1 + 't, hogy m' + [char]0x00E1 + 'sikat keress.') }
-    'hu:host_setup.tz.none' { return ('Nem tal' + [char]0x00E1 + 'lhat' + [char]0x00F3 + ' id' + [char]0x0151 + 'z' + [char]0x00F3 + 'na ehhez: ' + [char]0x00AB + '%s' + [char]0x00BB + '. Pr' + [char]0x00F3 + 'b' + [char]0x00E1 + 'lj meg egy orsz' + [char]0x00E1 + 'got, egy v' + [char]0x00E1 + 'rost vagy egy id' + [char]0x0151 + 'z' + [char]0x00F3 + 'n' + [char]0x00E1 + 't, p' + [char]0x00E9 + 'ld' + [char]0x00E1 + 'ul Europe/Budapest.') }
+    'hu:host_setup.tz.none' { return ('Nincs id' + [char]0x0151 + 'z' + [char]0x00F3 + 'na ehhez: ' + [char]0x00AB + '%s' + [char]0x00BB + '. ' + [char]0x00CD + 'rd be az orsz' + [char]0x00E1 + 'got (p' + [char]0x00E9 + 'ld' + [char]0x00E1 + 'ul Magyarorsz' + [char]0x00E1 + 'g) vagy egy k' + [char]0x00F6 + 'zeli nagyv' + [char]0x00E1 + 'rost.') }
     'hu:host_setup.tz.not_detected' { return ('Az id' + [char]0x0151 + 'z' + [char]0x00F3 + 'n' + [char]0x00E1 + 'dat nem siker' + [char]0x00FC + 'lt felismerni.') }
     'hu:host_setup.tz.pick' { return ('Sz' + [char]0x00E1 + 'm (1-%d), vagy ' + [char]0x00FA + 'j keres' + [char]0x00E9 + 's:') }
     'hu:host_setup.tz.proposed' { return 'Javasolt: %s (most %s).' }
@@ -965,7 +965,7 @@ function Get-JhtTextTable {
     'es:host_setup.tz.bad_number' { return ('Elige un n' + [char]0x00FA + 'mero entre 1 y %d.') }
     'es:host_setup.tz.how' { return ('Escribe un pa' + [char]0x00ED + 's, una ciudad o una zona horaria (por ejemplo Espa' + [char]0x00F1 + 'a, Madrid, Europe/Madrid).') }
     'es:host_setup.tz.how_default' { return ('Pulsa Intro para mantener %s, o escribe un pa' + [char]0x00ED + 's, una ciudad o una zona horaria para buscar otra.') }
-    'es:host_setup.tz.none' { return ('No se ha encontrado ninguna zona horaria para ' + [char]0x00AB + '%s' + [char]0x00BB + ': prueba con un pa' + [char]0x00ED + 's, una ciudad o una zona como Europe/Madrid.') }
+    'es:host_setup.tz.none' { return ('No hay ninguna zona horaria para ' + [char]0x00AB + '%s' + [char]0x00BB + ': escribe el pa' + [char]0x00ED + 's (por ejemplo Espa' + [char]0x00F1 + 'a) o una ciudad grande cercana.') }
     'es:host_setup.tz.not_detected' { return 'No se ha detectado tu zona horaria.' }
     'es:host_setup.tz.pick' { return ('N' + [char]0x00FA + 'mero (1-%d), o una nueva b' + [char]0x00FA + 'squeda:') }
     'es:host_setup.tz.proposed' { return 'Propuesta: %s (ahora %s).' }
@@ -1226,7 +1226,7 @@ function Get-JhtTextTable {
     'de:host_setup.tz.bad_number' { return ('W' + [char]0x00E4 + 'hle eine Zahl zwischen 1 und %d.') }
     'de:host_setup.tz.how' { return 'Gib ein Land, eine Stadt oder eine Zeitzone ein (zum Beispiel Deutschland, Berlin, Europe/Berlin).' }
     'de:host_setup.tz.how_default' { return ('Dr' + [char]0x00FC + 'cke Enter, um %s zu behalten, oder gib ein Land, eine Stadt oder eine Zeitzone ein, um eine andere zu suchen.') }
-    'de:host_setup.tz.none' { return ('Keine Zeitzone f' + [char]0x00FC + 'r ' + [char]0x00AB + '%s' + [char]0x00BB + ' gefunden: Versuche es mit einem Land, einer Stadt oder einer Zeitzone wie Europe/Berlin.') }
+    'de:host_setup.tz.none' { return ('Keine Zeitzone f' + [char]0x00FC + 'r ' + [char]0x00AB + '%s' + [char]0x00BB + ': Gib das Land ein (zum Beispiel Deutschland) oder eine gro' + [char]0x00DF + 'e Stadt in der N' + [char]0x00E4 + 'he.') }
     'de:host_setup.tz.not_detected' { return 'Deine Zeitzone wurde nicht erkannt.' }
     'de:host_setup.tz.pick' { return 'Nummer (1-%d) oder eine neue Suche:' }
     'de:host_setup.tz.proposed' { return 'Vorgeschlagen: %s (jetzt %s).' }
@@ -1487,7 +1487,7 @@ function Get-JhtTextTable {
     'fr:host_setup.tz.bad_number' { return 'Choisis un nombre entre 1 et %d.' }
     'fr:host_setup.tz.how' { return 'Tape un pays, une ville ou un fuseau horaire (par exemple France, Paris, Europe/Paris).' }
     'fr:host_setup.tz.how_default' { return ('Appuie sur Entr' + [char]0x00E9 + 'e pour garder %s, ou tape un pays, une ville ou un fuseau horaire pour en chercher un autre.') }
-    'fr:host_setup.tz.none' { return ('Aucun fuseau horaire trouv' + [char]0x00E9 + ' pour ' + [char]0x00AB + ' %s ' + [char]0x00BB + ' : essaie un pays, une ville ou un fuseau comme Europe/Paris.') }
+    'fr:host_setup.tz.none' { return ('Aucun fuseau horaire pour ' + [char]0x00AB + ' %s ' + [char]0x00BB + ' : tape le pays (par exemple France) ou une grande ville proche.') }
     'fr:host_setup.tz.not_detected' { return ('Ton fuseau horaire n''a pas ' + [char]0x00E9 + 't' + [char]0x00E9 + ' d' + [char]0x00E9 + 'tect' + [char]0x00E9 + '.') }
     'fr:host_setup.tz.pick' { return ('Num' + [char]0x00E9 + 'ro (1-%d), ou une nouvelle recherche :') }
     'fr:host_setup.tz.proposed' { return ('Propos' + [char]0x00E9 + ' : %s (il est %s).') }
@@ -1748,7 +1748,7 @@ function Get-JhtTextTable {
     'pt:host_setup.tz.bad_number' { return ('Escolhe um n' + [char]0x00FA + 'mero entre 1 e %d.') }
     'pt:host_setup.tz.how' { return ('Escreve um pa' + [char]0x00ED + 's, uma cidade ou um fuso hor' + [char]0x00E1 + 'rio (por exemplo Portugal, Lisboa, Europe/Lisbon).') }
     'pt:host_setup.tz.how_default' { return ('Prime Enter para manter %s, ou escreve um pa' + [char]0x00ED + 's, uma cidade ou um fuso hor' + [char]0x00E1 + 'rio para procurar outro.') }
-    'pt:host_setup.tz.none' { return ('Nenhum fuso hor' + [char]0x00E1 + 'rio encontrado para ' + [char]0x00AB + '%s' + [char]0x00BB + ': experimenta um pa' + [char]0x00ED + 's, uma cidade ou um fuso como Europe/Lisbon.') }
+    'pt:host_setup.tz.none' { return ('Nenhum fuso hor' + [char]0x00E1 + 'rio para ' + [char]0x00AB + '%s' + [char]0x00BB + ': escreve o pa' + [char]0x00ED + 's (por exemplo Portugal) ou uma cidade grande perto.') }
     'pt:host_setup.tz.not_detected' { return ('O teu fuso hor' + [char]0x00E1 + 'rio n' + [char]0x00E3 + 'o foi detetado.') }
     'pt:host_setup.tz.pick' { return ('N' + [char]0x00FA + 'mero (1-%d), ou uma nova pesquisa:') }
     'pt:host_setup.tz.proposed' { return 'Proposto: %s (agora %s).' }
@@ -2877,11 +2877,28 @@ if (-not $env:JHT_USER_TZ)   { $env:JHT_USER_TZ = 'UTC' }
 # city or a timezone, in the 7 languages. Its texts are the keys host_setup.tz.* of the catalogs (the same the .sh says). It never falls back
 # to UTC in silence: UTC is chosen by writing it. The data (countries, cities, zones, Windows ids) are the lines of Get-JhtTimezoneLines.
 $script:JhtTzIndex = $null
+$script:JhtTzFold = $null
 
 function ConvertFrom-JhtTzEscape {
   param([string]$Text)
   if ($Text.IndexOf('\') -lt 0) { return $Text }
   return [regex]::Replace($Text, '\\u([0-9a-fA-F]{4})', { param($m) [string][char][Convert]::ToInt32($m.Groups[1].Value, 16) })
+}
+
+# The letters with an accent and the letter they are without it, from the F line of the data: String.Normalize is not counted on (a PowerShell
+# with the invariant globalization leaves the accents), so the same table is used on Windows, Linux and macOS.
+function Get-JhtTzFold {
+  if ($script:JhtTzFold) { return $script:JhtTzFold }
+  $fold = @{}
+  foreach ($raw in [regex]::Split((Get-JhtTimezoneLines), '\r?\n')) {
+    if ($raw.StartsWith('F|')) {
+      $parts = (ConvertFrom-JhtTzEscape $raw).Split('|')
+      for ($i = 0; $i -lt $parts[1].Length -and $i -lt $parts[2].Length; $i++) { $fold[$parts[1][$i]] = [string]$parts[2][$i] }
+      break
+    }
+  }
+  $script:JhtTzFold = $fold
+  return $fold
 }
 
 # What two spellings of a name share: lower case, no accents, _ - . , ' as a space, one space between words (tests/timezone_data.py key()).
@@ -2895,11 +2912,17 @@ function ConvertTo-JhtTzKey {
   }
   $t = $t.Replace([string][char]0x00DF, 'ss').Replace([string][char]0x00F8, 'o').Replace([string][char]0x00D8, 'O').Replace([string][char]0x0142, 'l').Replace([string][char]0x0141, 'L')
   $t = $t.Replace([string][char]0x0111, 'd').Replace([string][char]0x00E6, 'ae').Replace([string][char]0x00C6, 'AE')
-  $plain = New-Object System.Text.StringBuilder
-  foreach ($c in $t.Normalize([Text.NormalizationForm]::FormD).ToCharArray()) {
-    if ([Globalization.CharUnicodeInfo]::GetUnicodeCategory($c) -ne [Globalization.UnicodeCategory]::NonSpacingMark) { [void]$plain.Append($c) }
-  }
-  $t = $plain.ToString()
+  [void](Get-JhtTzFold)
+  # only the characters that are not ASCII go through the table (a loop over every character of every name is slow in PowerShell)
+  $t = [regex]::Replace($t, '[^\x00-\x7F]+', {
+    param($m)
+    $out = New-Object System.Text.StringBuilder
+    foreach ($c in $m.Value.ToCharArray()) {
+      if ($script:JhtTzFold.ContainsKey($c)) { [void]$out.Append($script:JhtTzFold[$c]) }
+      elseif ([Globalization.CharUnicodeInfo]::GetUnicodeCategory($c) -ne [Globalization.UnicodeCategory]::NonSpacingMark) { [void]$out.Append($c) }
+    }
+    $out.ToString()
+  })
   foreach ($mark in @('_', '-', '.', ',', "'", [string][char]0x2019)) { $t = $t.Replace($mark, ' ') }
   return ((($t.ToLowerInvariant()) -split '\s+' | Where-Object { $_ }) -join ' ')
 }
@@ -3151,264 +3174,264 @@ function Resolve-JhtUserTimezone {
 # >>> timezone data, made from shared/data/timezones.txt by `python3 tests/wrapper_ps_texts.py --write`: do not edit by hand
 function Get-JhtTimezoneLines {
   return @'
-C|AD|Andorra|Andorra|Andorra|Andorra|Andorra|Andorre|Andorra
-C|AE|United Arab Emirates|Emirati Arabi Uniti|Egyes\u00fclt Arab Em\u00edrs\u00e9gek|Emiratos \u00c1rabes Unidos|Vereinigte Arabische Emirate|\u00c9mirats arabes unis|Emirados \u00c1rabes Unidos
-C|AF|Afghanistan|Afghanistan|Afganiszt\u00e1n|Afganist\u00e1n|Afghanistan|Afghanistan|Afeganist\u00e3o
-C|AG|Antigua & Barbuda|Antigua e Barbuda|Antigua \u00e9s Barbuda|Antigua y Barbuda|Antigua und Barbuda|Antigua-et-Barbuda|Ant\u00edgua e Barbuda
-C|AI|Anguilla|Anguilla|Anguilla|Anguila|Anguilla|Anguilla|Anguila
-C|AL|Albania|Albania|Alb\u00e1nia|Albania|Albanien|Albanie|Alb\u00e2nia
-C|AM|Armenia|Armenia|\u00d6rm\u00e9nyorsz\u00e1g|Armenia|Armenien|Arm\u00e9nie|Arm\u00eania
-C|AO|Angola|Angola|Angola|Angola|Angola|Angola|Angola
-C|AQ|Antarctica|Antartide|Antarktisz|Ant\u00e1rtida|Antarktis|Antarctique|Ant\u00e1rtida
-C|AR|Argentina|Argentina|Argent\u00edna|Argentina|Argentinien|Argentine|Argentina
-C|AS|American Samoa|Samoa Americane|Amerikai Szamoa|Samoa Americana|Amerikanisch-Samoa|Samoa am\u00e9ricaines|Samoa Americana
-C|AT|Austria|Austria|Ausztria|Austria|\u00d6sterreich|Autriche|\u00c1ustria
-C|AU|Australia|Australia|Ausztr\u00e1lia|Australia|Australien|Australie|Austr\u00e1lia
-C|AW|Aruba|Aruba|Aruba|Aruba|Aruba|Aruba|Aruba
-C|AX|\u00c5land Islands|Isole \u00c5land|\u00c5land-szigetek|Islas Aland|\u00c5landinseln|\u00celes \u00c5land|Ilhas Aland
-C|AZ|Azerbaijan|Azerbaigian|Azerbajdzs\u00e1n|Azerbaiy\u00e1n|Aserbaidschan|Azerba\u00efdjan|Azerbaij\u00e3o
-C|BA|Bosnia & Herzegovina|Bosnia ed Erzegovina|Bosznia-Hercegovina|Bosnia y Herzegovina|Bosnien und Herzegowina|Bosnie-Herz\u00e9govine|B\u00f3snia e Herzegovina
-C|BB|Barbados|Barbados|Barbados|Barbados|Barbados|Barbade|Barbados
-C|BD|Bangladesh|Bangladesh|Banglades|Banglad\u00e9s|Bangladesch|Bangladesh|Bangladesh
-C|BE|Belgium|Belgio|Belgium|B\u00e9lgica|Belgien|Belgique|B\u00e9lgica
-C|BF|Burkina Faso|Burkina Faso|Burkina Faso|Burkina Faso|Burkina Faso|Burkina Faso|Burquina Faso
-C|BG|Bulgaria|Bulgaria|Bulg\u00e1ria|Bulgaria|Bulgarien|Bulgarie|Bulg\u00e1ria
-C|BH|Bahrain|Bahrein|Bahrein|Bar\u00e9in|Bahrain|Bahre\u00efn|Barein
-C|BI|Burundi|Burundi|Burundi|Burundi|Burundi|Burundi|Burundi
-C|BJ|Benin|Benin|Benin|Ben\u00edn|Benin|B\u00e9nin|Benin
-C|BL|St. Barth\u00e9lemy|Saint-Barth\u00e9lemy|Saint-Barth\u00e9lemy|San Bartolom\u00e9|St. Barth\u00e9lemy|Saint-Barth\u00e9lemy|S\u00e3o Bartolomeu
-C|BM|Bermuda|Bermuda|Bermuda|Bermudas|Bermuda|Bermudes|Bermudas
-C|BN|Brunei|Brunei|Brunei|Brun\u00e9i|Brunei Darussalam|Brunei|Brunei
-C|BO|Bolivia|Bolivia|Bol\u00edvia|Bolivia|Bolivien|Bolivie|Bol\u00edvia
-C|BQ|Caribbean Netherlands|Caraibi Olandesi|Holland Karib-t\u00e9rs\u00e9g|Caribe neerland\u00e9s|Karibische Niederlande|Pays-Bas carib\u00e9ens|Pa\u00edses Baixos Caribenhos
-C|BR|Brazil|Brasile|Braz\u00edlia|Brasil|Brasilien|Br\u00e9sil|Brasil
-C|BS|Bahamas|Bahamas|Bahama-szigetek|Bahamas|Bahamas|Bahamas|Bahamas
-C|BT|Bhutan|Bhutan|Bhut\u00e1n|But\u00e1n|Bhutan|Bhoutan|But\u00e3o
-C|BW|Botswana|Botswana|Botswana|Botsuana|Botsuana|Botswana|Botsuana
-C|BY|Belarus|Bielorussia|Belarusz|Bielorrusia|Belarus|Bi\u00e9lorussie|Bielorr\u00fassia
-C|BZ|Belize|Belize|Belize|Belice|Belize|Belize|Belize
-C|CA|Canada|Canada|Kanada|Canad\u00e1|Kanada|Canada|Canad\u00e1
-C|CC|Cocos (Keeling) Islands|Isole Cocos (Keeling)|K\u00f3kusz (Keeling)-szigetek|Islas Cocos|Kokosinseln|\u00celes Cocos|Ilhas Cocos (Keeling)
-C|CD|Congo - Kinshasa|Congo - Kinshasa|Kong\u00f3 \u2013 Kinshasa|Rep\u00fablica Democr\u00e1tica del Congo|Kongo-Kinshasa|Congo-Kinshasa|Congo - Kinshasa
-C|CF|Central African Republic|Repubblica Centrafricana|K\u00f6z\u00e9p-afrikai K\u00f6zt\u00e1rsas\u00e1g|Rep\u00fablica Centroafricana|Zentralafrikanische Republik|R\u00e9publique centrafricaine|Rep\u00fablica Centro-Africana
-C|CG|Congo - Brazzaville|Congo-Brazzaville|Kong\u00f3 \u2013 Brazzaville|Congo|Kongo-Brazzaville|Congo-Brazzaville|Rep\u00fablica do Congo
-C|CH|Switzerland|Svizzera|Sv\u00e1jc|Suiza|Schweiz|Suisse|Su\u00ed\u00e7a
-C|CI|C\u00f4te d\u2019Ivoire|Costa d\u2019Avorio|Elef\u00e1ntcsontpart|C\u00f4te d\u2019Ivoire|C\u00f4te d\u2019Ivoire|C\u00f4te d\u2019Ivoire|Costa do Marfim
-C|CK|Cook Islands|Isole Cook|Cook-szigetek|Islas Cook|Cookinseln|\u00celes Cook|Ilhas Cook
-C|CL|Chile|Cile|Chile|Chile|Chile|Chili|Chile
-C|CM|Cameroon|Camerun|Kamerun|Camer\u00fan|Kamerun|Cameroun|Camar\u00f5es
-C|CN|China|Cina|K\u00edna|China|China|Chine|China
-C|CO|Colombia|Colombia|Kolumbia|Colombia|Kolumbien|Colombie|Col\u00f4mbia
-C|CR|Costa Rica|Costa Rica|Costa Rica|Costa Rica|Costa Rica|Costa Rica|Costa Rica
-C|CU|Cuba|Cuba|Kuba|Cuba|Kuba|Cuba|Cuba
-C|CV|Cape Verde|Capo Verde|Z\u00f6ld-foki K\u00f6zt\u00e1rsas\u00e1g|Cabo Verde|Cabo Verde|Cap-Vert|Cabo Verde
-C|CW|Cura\u00e7ao|Cura\u00e7ao|Cura\u00e7ao|Curazao|Cura\u00e7ao|Cura\u00e7ao|Cura\u00e7ao
-C|CX|Christmas Island|Isola Christmas|Kar\u00e1csony-sziget|Isla de Navidad|Weihnachtsinsel|\u00cele Christmas|Ilha Christmas
-C|CY|Cyprus|Cipro|Ciprus|Chipre|Zypern|Chypre|Chipre
-C|CZ|Czechia|Cechia|Csehorsz\u00e1g|Chequia|Tschechien|Tch\u00e9quie|Tch\u00e9quia
-C|DE|Germany|Germania|N\u00e9metorsz\u00e1g|Alemania|Deutschland|Allemagne|Alemanha
-C|DJ|Djibouti|Gibuti|Dzsibuti|Yibuti|Dschibuti|Djibouti|Djibuti
-C|DK|Denmark|Danimarca|D\u00e1nia|Dinamarca|D\u00e4nemark|Danemark|Dinamarca
-C|DM|Dominica|Dominica|Dominika|Dominica|Dominica|Dominique|Dominica
-C|DO|Dominican Republic|Repubblica Dominicana|Dominikai K\u00f6zt\u00e1rsas\u00e1g|Rep\u00fablica Dominicana|Dominikanische Republik|R\u00e9publique dominicaine|Rep\u00fablica Dominicana
-C|DZ|Algeria|Algeria|Alg\u00e9ria|Argelia|Algerien|Alg\u00e9rie|Arg\u00e9lia
-C|EC|Ecuador|Ecuador|Ecuador|Ecuador|Ecuador|\u00c9quateur|Equador
-C|EE|Estonia|Estonia|\u00c9sztorsz\u00e1g|Estonia|Estland|Estonie|Est\u00f4nia
-C|EG|Egypt|Egitto|Egyiptom|Egipto|\u00c4gypten|\u00c9gypte|Egito
-C|EH|Western Sahara|Sahara Occidentale|Nyugat-Szahara|S\u00e1hara Occidental|Westsahara|Sahara occidental|Saara Ocidental
-C|ER|Eritrea|Eritrea|Eritrea|Eritrea|Eritrea|\u00c9rythr\u00e9e|Eritreia
-C|ES|Spain|Spagna|Spanyolorsz\u00e1g|Espa\u00f1a|Spanien|Espagne|Espanha
-C|ET|Ethiopia|Etiopia|Eti\u00f3pia|Etiop\u00eda|\u00c4thiopien|\u00c9thiopie|Eti\u00f3pia
-C|FI|Finland|Finlandia|Finnorsz\u00e1g|Finlandia|Finnland|Finlande|Finl\u00e2ndia
-C|FJ|Fiji|Figi|Fidzsi|Fiyi|Fidschi|Fidji|Fiji
-C|FK|Falkland Islands|Isole Falkland|Falkland-szigetek|Islas Malvinas|Falklandinseln|\u00celes Malouines|Ilhas Malvinas
-C|FM|Micronesia|Micronesia|Mikron\u00e9zia|Micronesia|Mikronesien|Micron\u00e9sie|Micron\u00e9sia
-C|FO|Faroe Islands|Isole F\u00e6r \u00d8er|Fer\u00f6er szigetek|Islas Feroe|F\u00e4r\u00f6er|\u00celes F\u00e9ro\u00e9|Ilhas Faro\u00e9
-C|FR|France|Francia|Franciaorsz\u00e1g|Francia|Frankreich|France|Fran\u00e7a
-C|GA|Gabon|Gabon|Gabon|Gab\u00f3n|Gabun|Gabon|Gab\u00e3o
-C|GB|United Kingdom|Regno Unito|Egyes\u00fclt Kir\u00e1lys\u00e1g|Reino Unido|Vereinigtes K\u00f6nigreich|Royaume-Uni|Reino Unido
-C|GD|Grenada|Grenada|Grenada|Granada|Grenada|Grenade|Granada
-C|GE|Georgia|Georgia|Gr\u00fazia|Georgia|Georgien|G\u00e9orgie|Ge\u00f3rgia
-C|GF|French Guiana|Guyana Francese|Francia Guyana|Guayana Francesa|Franz\u00f6sisch-Guayana|Guyane fran\u00e7aise|Guiana Francesa
-C|GG|Guernsey|Guernsey|Guernsey|Guernesey|Guernsey|Guernesey|Guernsey
-C|GH|Ghana|Ghana|Gh\u00e1na|Ghana|Ghana|Ghana|Gana
-C|GI|Gibraltar|Gibilterra|Gibralt\u00e1r|Gibraltar|Gibraltar|Gibraltar|Gibraltar
-C|GL|Greenland|Groenlandia|Gr\u00f6nland|Groenlandia|Gr\u00f6nland|Groenland|Groenl\u00e2ndia
-C|GM|Gambia|Gambia|Gambia|Gambia|Gambia|Gambie|G\u00e2mbia
-C|GN|Guinea|Guinea|Guinea|Guinea|Guinea|Guin\u00e9e|Guin\u00e9
-C|GP|Guadeloupe|Guadalupa|Guadeloupe|Guadalupe|Guadeloupe|Guadeloupe|Guadalupe
-C|GQ|Equatorial Guinea|Guinea Equatoriale|Egyenl\u00edt\u0151i-Guinea|Guinea Ecuatorial|\u00c4quatorialguinea|Guin\u00e9e \u00e9quatoriale|Guin\u00e9 Equatorial
-C|GR|Greece|Grecia|G\u00f6r\u00f6gorsz\u00e1g|Grecia|Griechenland|Gr\u00e8ce|Gr\u00e9cia
-C|GS|South Georgia & South Sandwich Islands|Georgia del Sud e Sandwich Australi|D\u00e9li-Georgia \u00e9s D\u00e9li-Sandwich-szigetek|Islas Georgia del Sur y Sandwich del Sur|S\u00fcdgeorgien und die S\u00fcdlichen Sandwichinseln|G\u00e9orgie du Sud-et-les \u00celes Sandwich du Sud|Ilhas Ge\u00f3rgia do Sul e Sandwich do Sul
-C|GT|Guatemala|Guatemala|Guatemala|Guatemala|Guatemala|Guatemala|Guatemala
-C|GU|Guam|Guam|Guam|Guam|Guam|Guam|Guam
-C|GW|Guinea-Bissau|Guinea-Bissau|Bissau-Guinea|Guinea-Bis\u00e1u|Guinea-Bissau|Guin\u00e9e-Bissau|Guin\u00e9-Bissau
-C|GY|Guyana|Guyana|Guyana|Guyana|Guyana|Guyana|Guiana
-C|HK|Hong Kong SAR China|RAS di Hong Kong|Hongkong KKT|RAE de Hong Kong (China)|Sonderverwaltungsregion Hongkong|R.A.S. chinoise de Hong Kong|Hong Kong, RAE da China
-C|HN|Honduras|Honduras|Honduras|Honduras|Honduras|Honduras|Honduras
-C|HR|Croatia|Croazia|Horv\u00e1torsz\u00e1g|Croacia|Kroatien|Croatie|Cro\u00e1cia
-C|HT|Haiti|Haiti|Haiti|Hait\u00ed|Haiti|Ha\u00efti|Haiti
-C|HU|Hungary|Ungheria|Magyarorsz\u00e1g|Hungr\u00eda|Ungarn|Hongrie|Hungria
-C|ID|Indonesia|Indonesia|Indon\u00e9zia|Indonesia|Indonesien|Indon\u00e9sie|Indon\u00e9sia
-C|IE|Ireland|Irlanda|\u00cdrorsz\u00e1g|Irlanda|Irland|Irlande|Irlanda
-C|IL|Israel|Israele|Izrael|Israel|Israel|Isra\u00ebl|Israel
-C|IM|Isle of Man|Isola di Man|Man-sziget|Isla de Man|Isle of Man|\u00cele de Man|Ilha de Man
-C|IN|India|India|India|India|Indien|Inde|\u00cdndia
-C|IO|British Indian Ocean Territory|Territorio Britannico dell\u2019Oceano Indiano|Brit Indiai-\u00f3ce\u00e1ni Ter\u00fclet|Territorio Brit\u00e1nico del Oc\u00e9ano \u00cdndico|Britisches Territorium im Indischen Ozean|Territoire britannique de l\u2019oc\u00e9an Indien|Territ\u00f3rio Brit\u00e2nico do Oceano \u00cdndico
-C|IQ|Iraq|Iraq|Irak|Irak|Irak|Irak|Iraque
-C|IR|Iran|Iran|Ir\u00e1n|Ir\u00e1n|Iran|Iran|Ir\u00e3
-C|IS|Iceland|Islanda|Izland|Islandia|Island|Islande|Isl\u00e2ndia
-C|IT|Italy|Italia|Olaszorsz\u00e1g|Italia|Italien|Italie|It\u00e1lia
-C|JE|Jersey|Jersey|Jersey|Jersey|Jersey|Jersey|Jersey
-C|JM|Jamaica|Giamaica|Jamaica|Jamaica|Jamaika|Jama\u00efque|Jamaica
-C|JO|Jordan|Giordania|Jord\u00e1nia|Jordania|Jordanien|Jordanie|Jord\u00e2nia
-C|JP|Japan|Giappone|Jap\u00e1n|Jap\u00f3n|Japan|Japon|Jap\u00e3o
-C|KE|Kenya|Kenya|Kenya|Kenia|Kenia|Kenya|Qu\u00eania
-C|KG|Kyrgyzstan|Kirghizistan|Kirgiziszt\u00e1n|Kirguist\u00e1n|Kirgisistan|Kirghizstan|Quirguist\u00e3o
-C|KH|Cambodia|Cambogia|Kambodzsa|Camboya|Kambodscha|Cambodge|Camboja
-C|KI|Kiribati|Kiribati|Kiribati|Kiribati|Kiribati|Kiribati|Quiribati
-C|KM|Comoros|Comore|Comore-szigetek|Comoras|Komoren|Comores|Comores
-C|KN|St. Kitts & Nevis|Saint Kitts e Nevis|Saint Kitts \u00e9s Nevis|San Crist\u00f3bal y Nieves|St. Kitts und Nevis|Saint-Christophe-et-Ni\u00e9v\u00e8s|S\u00e3o Crist\u00f3v\u00e3o e N\u00e9vis
-C|KP|North Korea|Corea del Nord|\u00c9szak-Korea|Corea del Norte|Nordkorea|Cor\u00e9e du Nord|Coreia do Norte
-C|KR|South Korea|Corea del Sud|D\u00e9l-Korea|Corea del Sur|S\u00fcdkorea|Cor\u00e9e du Sud|Coreia do Sul
-C|KW|Kuwait|Kuwait|Kuvait|Kuwait|Kuwait|Kowe\u00eft|Kuwait
-C|KY|Cayman Islands|Isole Cayman|Kajm\u00e1n-szigetek|Islas Caim\u00e1n|Kaimaninseln|\u00celes Ca\u00efmans|Ilhas Cayman
-C|KZ|Kazakhstan|Kazakistan|Kazahszt\u00e1n|Kazajist\u00e1n|Kasachstan|Kazakhstan|Cazaquist\u00e3o
-C|LA|Laos|Laos|Laosz|Laos|Laos|Laos|Laos
-C|LB|Lebanon|Libano|Libanon|L\u00edbano|Libanon|Liban|L\u00edbano
-C|LC|St. Lucia|Saint Lucia|Saint Lucia|Santa Luc\u00eda|St. Lucia|Sainte-Lucie|Santa L\u00facia
-C|LI|Liechtenstein|Liechtenstein|Liechtenstein|Liechtenstein|Liechtenstein|Liechtenstein|Liechtenstein
-C|LK|Sri Lanka|Sri Lanka|Sr\u00ed Lanka|Sri Lanka|Sri Lanka|Sri Lanka|Sri Lanka
-C|LR|Liberia|Liberia|Lib\u00e9ria|Liberia|Liberia|Liberia|Lib\u00e9ria
-C|LS|Lesotho|Lesotho|Lesotho|Lesoto|Lesotho|Lesotho|Lesoto
-C|LT|Lithuania|Lituania|Litv\u00e1nia|Lituania|Litauen|Lituanie|Litu\u00e2nia
-C|LU|Luxembourg|Lussemburgo|Luxemburg|Luxemburgo|Luxemburg|Luxembourg|Luxemburgo
-C|LV|Latvia|Lettonia|Lettorsz\u00e1g|Letonia|Lettland|Lettonie|Let\u00f4nia
-C|LY|Libya|Libia|L\u00edbia|Libia|Libyen|Libye|L\u00edbia
-C|MA|Morocco|Marocco|Marokk\u00f3|Marruecos|Marokko|Maroc|Marrocos
-C|MC|Monaco|Monaco|Monaco|M\u00f3naco|Monaco|Monaco|M\u00f4naco
-C|MD|Moldova|Moldavia|Moldova|Moldavia|Republik Moldau|Moldavie|Mold\u00e1via
-C|ME|Montenegro|Montenegro|Montenegr\u00f3|Montenegro|Montenegro|Mont\u00e9n\u00e9gro|Montenegro
-C|MF|St. Martin|Saint Martin|Saint Martin|San Mart\u00edn|St. Martin|Saint-Martin|S\u00e3o Martinho
-C|MG|Madagascar|Madagascar|Madagaszk\u00e1r|Madagascar|Madagaskar|Madagascar|Madagascar
-C|MH|Marshall Islands|Isole Marshall|Marshall-szigetek|Islas Marshall|Marshallinseln|\u00celes Marshall|Ilhas Marshall
-C|MK|North Macedonia|Macedonia del Nord|\u00c9szak-Maced\u00f3nia|Macedonia del Norte|Nordmazedonien|Mac\u00e9doine du Nord|Maced\u00f4nia do Norte
-C|ML|Mali|Mali|Mali|Mali|Mali|Mali|Mali
-C|MM|Myanmar (Burma)|Myanmar (Birmania)|Mianmar|Myanmar (Birmania)|Myanmar|Myanmar (Birmanie)|Mianmar (Birm\u00e2nia)
-C|MN|Mongolia|Mongolia|Mong\u00f3lia|Mongolia|Mongolei|Mongolie|Mong\u00f3lia
-C|MO|Macao SAR China|RAS di Macao|Maka\u00f3 KKT|RAE de Macao (China)|Sonderverwaltungsregion Macau|R.A.S. chinoise de Macao|Macau, RAE da China
-C|MP|Northern Mariana Islands|Isole Marianne Settentrionali|\u00c9szaki Mariana-szigetek|Islas Marianas del Norte|N\u00f6rdliche Marianen|\u00celes Mariannes du Nord|Ilhas Marianas do Norte
-C|MQ|Martinique|Martinica|Martinique|Martinica|Martinique|Martinique|Martinica
-C|MR|Mauritania|Mauritania|Maurit\u00e1nia|Mauritania|Mauretanien|Mauritanie|Maurit\u00e2nia
-C|MS|Montserrat|Montserrat|Montserrat|Montserrat|Montserrat|Montserrat|Montserrat
-C|MT|Malta|Malta|M\u00e1lta|Malta|Malta|Malte|Malta
-C|MU|Mauritius|Mauritius|Mauritius|Mauricio|Mauritius|Maurice|Maur\u00edcio
-C|MV|Maldives|Maldive|Mald\u00edv-szigetek|Maldivas|Malediven|Maldives|Maldivas
-C|MW|Malawi|Malawi|Malawi|Malaui|Malawi|Malawi|Malaui
-C|MX|Mexico|Messico|Mexik\u00f3|M\u00e9xico|Mexiko|Mexique|M\u00e9xico
-C|MY|Malaysia|Malaysia|Malajzia|Malasia|Malaysia|Malaisie|Mal\u00e1sia
-C|MZ|Mozambique|Mozambico|Mozambik|Mozambique|Mosambik|Mozambique|Mo\u00e7ambique
-C|NA|Namibia|Namibia|Nam\u00edbia|Namibia|Namibia|Namibie|Nam\u00edbia
-C|NC|New Caledonia|Nuova Caledonia|\u00daj-Kaled\u00f3nia|Nueva Caledonia|Neukaledonien|Nouvelle-Cal\u00e9donie|Nova Caled\u00f4nia
-C|NE|Niger|Niger|Niger|N\u00edger|Niger|Niger|N\u00edger
-C|NF|Norfolk Island|Isola Norfolk|Norfolk-sziget|Isla Norfolk|Norfolkinsel|\u00cele Norfolk|Ilha Norfolk
-C|NG|Nigeria|Nigeria|Nig\u00e9ria|Nigeria|Nigeria|Nigeria|Nig\u00e9ria
-C|NI|Nicaragua|Nicaragua|Nicaragua|Nicaragua|Nicaragua|Nicaragua|Nicar\u00e1gua
-C|NL|Netherlands|Paesi Bassi|Hollandia|Pa\u00edses Bajos|Niederlande|Pays-Bas|Pa\u00edses Baixos
-C|NO|Norway|Norvegia|Norv\u00e9gia|Noruega|Norwegen|Norv\u00e8ge|Noruega
-C|NP|Nepal|Nepal|Nep\u00e1l|Nepal|Nepal|N\u00e9pal|Nepal
-C|NR|Nauru|Nauru|Nauru|Nauru|Nauru|Nauru|Nauru
-C|NU|Niue|Niue|Niue|Niue|Niue|Niue|Niue
-C|NZ|New Zealand|Nuova Zelanda|\u00daj-Z\u00e9land|Nueva Zelanda|Neuseeland|Nouvelle-Z\u00e9lande|Nova Zel\u00e2ndia
-C|OM|Oman|Oman|Om\u00e1n|Om\u00e1n|Oman|Oman|Om\u00e3
-C|PA|Panama|Panama|Panama|Panam\u00e1|Panama|Panama|Panam\u00e1
-C|PE|Peru|Per\u00f9|Peru|Per\u00fa|Peru|P\u00e9rou|Peru
-C|PF|French Polynesia|Polinesia Francese|Francia Polin\u00e9zia|Polinesia Francesa|Franz\u00f6sisch-Polynesien|Polyn\u00e9sie fran\u00e7aise|Polin\u00e9sia Francesa
-C|PG|Papua New Guinea|Papua Nuova Guinea|P\u00e1pua \u00daj-Guinea|Pap\u00faa Nueva Guinea|Papua-Neuguinea|Papouasie-Nouvelle-Guin\u00e9e|Papua-Nova Guin\u00e9
-C|PH|Philippines|Filippine|F\u00fcl\u00f6p-szigetek|Filipinas|Philippinen|Philippines|Filipinas
-C|PK|Pakistan|Pakistan|Pakiszt\u00e1n|Pakist\u00e1n|Pakistan|Pakistan|Paquist\u00e3o
-C|PL|Poland|Polonia|Lengyelorsz\u00e1g|Polonia|Polen|Pologne|Pol\u00f4nia
-C|PM|St. Pierre & Miquelon|Saint-Pierre e Miquelon|Saint-Pierre \u00e9s Miquelon|San Pedro y Miquel\u00f3n|St. Pierre und Miquelon|Saint-Pierre-et-Miquelon|S\u00e3o Pedro e Miquel\u00e3o
-C|PN|Pitcairn Islands|Isole Pitcairn|Pitcairn-szigetek|Islas Pitcairn|Pitcairninseln|\u00celes Pitcairn|Ilhas Pitcairn
-C|PR|Puerto Rico|Portorico|Puerto Rico|Puerto Rico|Puerto Rico|Porto Rico|Porto Rico
-C|PS|Palestinian Territories|Territori Palestinesi|Palesztin Auton\u00f3mia|Territorios Palestinos|Pal\u00e4stinensische Autonomiegebiete|Territoires palestiniens|Territ\u00f3rios palestinos
-C|PT|Portugal|Portogallo|Portug\u00e1lia|Portugal|Portugal|Portugal|Portugal
-C|PW|Palau|Palau|Palau|Palaos|Palau|Palaos|Palau
-C|PY|Paraguay|Paraguay|Paraguay|Paraguay|Paraguay|Paraguay|Paraguai
-C|QA|Qatar|Qatar|Katar|Catar|Katar|Qatar|Catar
-C|RE|R\u00e9union|Riunione|R\u00e9union|Reuni\u00f3n|R\u00e9union|La R\u00e9union|Reuni\u00e3o
-C|RO|Romania|Romania|Rom\u00e1nia|Ruman\u00eda|Rum\u00e4nien|Roumanie|Rom\u00eania
-C|RS|Serbia|Serbia|Szerbia|Serbia|Serbien|Serbie|S\u00e9rvia
-C|RU|Russia|Russia|Oroszorsz\u00e1g|Rusia|Russland|Russie|R\u00fassia
-C|RW|Rwanda|Ruanda|Ruanda|Ruanda|Ruanda|Rwanda|Ruanda
-C|SA|Saudi Arabia|Arabia Saudita|Sza\u00fad-Ar\u00e1bia|Arabia Saud\u00ed|Saudi-Arabien|Arabie saoudite|Ar\u00e1bia Saudita
-C|SB|Solomon Islands|Isole Salomone|Salamon-szigetek|Islas Salom\u00f3n|Salomonen|\u00celes Salomon|Ilhas Salom\u00e3o
-C|SC|Seychelles|Seychelles|Seychelle-szigetek|Seychelles|Seychellen|Seychelles|Seicheles
-C|SD|Sudan|Sudan|Szud\u00e1n|Sud\u00e1n|Sudan|Soudan|Sud\u00e3o
-C|SE|Sweden|Svezia|Sv\u00e9dorsz\u00e1g|Suecia|Schweden|Su\u00e8de|Su\u00e9cia
-C|SG|Singapore|Singapore|Szingap\u00far|Singapur|Singapur|Singapour|Singapura
-C|SH|St. Helena|Sant\u2019Elena|Szent Ilona|Santa Elena|St. Helena|Sainte-H\u00e9l\u00e8ne|Santa Helena
-C|SI|Slovenia|Slovenia|Szlov\u00e9nia|Eslovenia|Slowenien|Slov\u00e9nie|Eslov\u00eania
-C|SJ|Svalbard & Jan Mayen|Svalbard e Jan Mayen|Svalbard \u00e9s Jan Mayen|Svalbard y Jan Mayen|Spitzbergen und Jan Mayen|Svalbard et Jan Mayen|Svalbard e Jan Mayen
-C|SK|Slovakia|Slovacchia|Szlov\u00e1kia|Eslovaquia|Slowakei|Slovaquie|Eslov\u00e1quia
-C|SL|Sierra Leone|Sierra Leone|Sierra Leone|Sierra Leona|Sierra Leone|Sierra Leone|Serra Leoa
-C|SM|San Marino|San Marino|San Marino|San Marino|San Marino|Saint-Marin|San Marino
-C|SN|Senegal|Senegal|Szeneg\u00e1l|Senegal|Senegal|S\u00e9n\u00e9gal|Senegal
-C|SO|Somalia|Somalia|Szom\u00e1lia|Somalia|Somalia|Somalie|Som\u00e1lia
-C|SR|Suriname|Suriname|Suriname|Surinam|Suriname|Suriname|Suriname
-C|SS|South Sudan|Sud Sudan|D\u00e9l-Szud\u00e1n|Sud\u00e1n del Sur|S\u00fcdsudan|Soudan du Sud|Sud\u00e3o do Sul
-C|ST|S\u00e3o Tom\u00e9 & Pr\u00edncipe|S\u00e3o Tom\u00e9 e Pr\u00edncipe|S\u00e3o Tom\u00e9 \u00e9s Pr\u00edncipe|Santo Tom\u00e9 y Pr\u00edncipe|S\u00e3o Tom\u00e9 und Pr\u00edncipe|Sao Tom\u00e9-et-Principe|S\u00e3o Tom\u00e9 e Pr\u00edncipe
-C|SV|El Salvador|El Salvador|Salvador|El Salvador|El Salvador|Salvador|El Salvador
-C|SX|Sint Maarten|Sint Maarten|Sint Maarten|Sint Maarten|Sint Maarten|Saint-Martin (partie n\u00e9erlandaise)|Sint Maarten
-C|SY|Syria|Siria|Sz\u00edria|Siria|Syrien|Syrie|S\u00edria
-C|SZ|Eswatini|Eswatini|Szv\u00e1zif\u00f6ld|Esuatini|Eswatini|Eswatini|Essuat\u00edni
-C|TC|Turks & Caicos Islands|Isole Turks e Caicos|Turks- \u00e9s Caicos-szigetek|Islas Turcas y Caicos|Turks- und Caicosinseln|\u00celes Turques-et-Ca\u00efques|Ilhas Turcas e Caicos
-C|TD|Chad|Ciad|Cs\u00e1d|Chad|Tschad|Tchad|Chade
-C|TF|French Southern Territories|Terre Australi Francesi|Francia D\u00e9li Ter\u00fcletek|Territorios Australes Franceses|Franz\u00f6sische S\u00fcd- und Antarktisgebiete|Terres australes fran\u00e7aises|Territ\u00f3rios Franceses do Sul
-C|TG|Togo|Togo|Togo|Togo|Togo|Togo|Togo
-C|TH|Thailand|Thailandia|Thaif\u00f6ld|Tailandia|Thailand|Tha\u00eflande|Tail\u00e2ndia
-C|TJ|Tajikistan|Tagikistan|T\u00e1dzsikiszt\u00e1n|Tayikist\u00e1n|Tadschikistan|Tadjikistan|Tadjiquist\u00e3o
-C|TK|Tokelau|Tokelau|Tokelau|Tokelau|Tokelau|Tokelau|Tokelau
-C|TL|Timor-Leste|Timor Est|Kelet-Timor|Timor-Leste|Timor-Leste|Timor oriental|Timor-Leste
-C|TM|Turkmenistan|Turkmenistan|T\u00fcrkmeniszt\u00e1n|Turkmenist\u00e1n|Turkmenistan|Turkm\u00e9nistan|Turcomenist\u00e3o
-C|TN|Tunisia|Tunisia|Tun\u00e9zia|T\u00fanez|Tunesien|Tunisie|Tun\u00edsia
-C|TO|Tonga|Tonga|Tonga|Tonga|Tonga|Tonga|Tonga
-C|TR|T\u00fcrkiye|Turchia|T\u00f6r\u00f6korsz\u00e1g|Turqu\u00eda|T\u00fcrkei|Turquie|Turquia
-C|TT|Trinidad & Tobago|Trinidad e Tobago|Trinidad \u00e9s Tobago|Trinidad y Tobago|Trinidad und Tobago|Trinit\u00e9-et-Tobago|Trinidad e Tobago
-C|TV|Tuvalu|Tuvalu|Tuvalu|Tuvalu|Tuvalu|Tuvalu|Tuvalu
-C|TW|Taiwan|Taiwan|Tajvan|Taiw\u00e1n|Taiwan|Ta\u00efwan|Taiwan
-C|TZ|Tanzania|Tanzania|Tanz\u00e1nia|Tanzania|Tansania|Tanzanie|Tanz\u00e2nia
-C|UA|Ukraine|Ucraina|Ukrajna|Ucrania|Ukraine|Ukraine|Ucr\u00e2nia
-C|UG|Uganda|Uganda|Uganda|Uganda|Uganda|Ouganda|Uganda
-C|UM|U.S. Outlying Islands|Isole Minori Esterne degli Stati Uniti|Az USA lakatlan k\u00fclbirtokai|Islas menores alejadas de EE. UU.|Amerikanische \u00dcberseeinseln|\u00celes mineures \u00e9loign\u00e9es des \u00c9tats-Unis|Ilhas Menores Distantes dos EUA
-C|US|United States|Stati Uniti|Egyes\u00fclt \u00c1llamok|Estados Unidos|Vereinigte Staaten|\u00c9tats-Unis|Estados Unidos
-C|UY|Uruguay|Uruguay|Uruguay|Uruguay|Uruguay|Uruguay|Uruguai
-C|UZ|Uzbekistan|Uzbekistan|\u00dczbegiszt\u00e1n|Uzbekist\u00e1n|Usbekistan|Ouzb\u00e9kistan|Uzbequist\u00e3o
-C|VA|Vatican City|Citt\u00e0 del Vaticano|Vatik\u00e1n|Ciudad del Vaticano|Vatikanstadt|\u00c9tat de la Cit\u00e9 du Vatican|Cidade do Vaticano
-C|VC|St. Vincent & Grenadines|Saint Vincent e Grenadine|Saint Vincent \u00e9s a Grenadine-szigetek|San Vicente y las Granadinas|St. Vincent und die Grenadinen|Saint-Vincent-et-les Grenadines|S\u00e3o Vicente e Granadinas
-C|VE|Venezuela|Venezuela|Venezuela|Venezuela|Venezuela|Venezuela|Venezuela
-C|VG|British Virgin Islands|Isole Vergini Britanniche|Brit Virgin-szigetek|Islas V\u00edrgenes Brit\u00e1nicas|Britische Jungferninseln|\u00celes Vierges britanniques|Ilhas Virgens Brit\u00e2nicas
-C|VI|U.S. Virgin Islands|Isole Vergini Americane|Amerikai Virgin-szigetek|Islas V\u00edrgenes de EE. UU.|Amerikanische Jungferninseln|\u00celes Vierges des \u00c9tats-Unis|Ilhas Virgens Americanas
-C|VN|Vietnam|Vietnam|Vietn\u00e1m|Vietnam|Vietnam|Vi\u00eat Nam|Vietn\u00e3
-C|VU|Vanuatu|Vanuatu|Vanuatu|Vanuatu|Vanuatu|Vanuatu|Vanuatu
-C|WF|Wallis & Futuna|Wallis e Futuna|Wallis \u00e9s Futuna|Wallis y Futuna|Wallis und Futuna|Wallis-et-Futuna|Wallis e Futuna
-C|WS|Samoa|Samoa|Szamoa|Samoa|Samoa|Samoa|Samoa
-C|YE|Yemen|Yemen|Jemen|Yemen|Jemen|Y\u00e9men|I\u00eamen
-C|YT|Mayotte|Mayotte|Mayotte|Mayotte|Mayotte|Mayotte|Mayotte
-C|ZA|South Africa|Sudafrica|D\u00e9l-afrikai K\u00f6zt\u00e1rsas\u00e1g|Sud\u00e1frica|S\u00fcdafrika|Afrique du Sud|\u00c1frica do Sul
-C|ZM|Zambia|Zambia|Zambia|Zambia|Sambia|Zambie|Z\u00e2mbia
-C|ZW|Zimbabwe|Zimbabwe|Zimbabwe|Zimbabue|Simbabwe|Zimbabwe|Zimb\u00e1bue
-A|AE|UAE|Emirati|Emirates
-A|CI|Ivory Coast|Costa d'Avorio|Cote d'Ivoire|Elefantenkuste
-A|CZ|Czech Republic|Czechia|Repubblica Ceca|Tschechische Republik|Republique tcheque
-A|GB|UK|U.K.|Great Britain|Britain|England|Scotland|Wales|Inghilterra|Scozia|Angleterre|Inglaterra|Anglia
-A|KR|Korea|South Korea|Corea del Sud
-A|MM|Burma
-A|NL|Holland|Olanda|Holanda|Hollande|Hollandia
-A|RU|Russian Federation|Russland
-A|TR|Turkey|Turkiye|Turchia
-A|US|USA|U.S.A.|United States of America|America|Stati Uniti d'America|Etats-Unis|EEUU|Estados Unidos de America
-A|VA|Vatican|Vaticano
+C|AD|andorra|andorre
+C|AE|united arab emirates|emirati arabi uniti|egyesult arab emirsegek|emiratos arabes unidos|vereinigte arabische emirate|emirats arabes unis|emirados arabes unidos
+C|AF|afghanistan|afganisztan|afganistan|afeganistao
+C|AG|antigua & barbuda|antigua e barbuda|antigua es barbuda|antigua y barbuda|antigua und barbuda|antigua et barbuda
+C|AI|anguilla|anguila
+C|AL|albania|albanien|albanie
+C|AM|armenia|ormenyorszag|armenien|armenie
+C|AO|angola
+C|AQ|antarctica|antartide|antarktisz|antartida|antarktis|antarctique
+C|AR|argentina|argentinien|argentine
+C|AS|american samoa|samoa americane|amerikai szamoa|samoa americana|amerikanisch samoa|samoa americaines
+C|AT|austria|ausztria|osterreich|autriche
+C|AU|australia|ausztralia|australien|australie
+C|AW|aruba
+C|AX|aland islands|isole aland|aland szigetek|islas aland|alandinseln|iles aland|ilhas aland
+C|AZ|azerbaijan|azerbaigian|azerbajdzsan|azerbaiyan|aserbaidschan|azerbaidjan|azerbaijao
+C|BA|bosnia & herzegovina|bosnia ed erzegovina|bosznia hercegovina|bosnia y herzegovina|bosnien und herzegowina|bosnie herzegovine|bosnia e herzegovina
+C|BB|barbados|barbade
+C|BD|bangladesh|banglades|bangladesch
+C|BE|belgium|belgio|belgica|belgien|belgique
+C|BF|burkina faso|burquina faso
+C|BG|bulgaria|bulgarien|bulgarie
+C|BH|bahrain|bahrein|barein
+C|BI|burundi
+C|BJ|benin
+C|BL|st barthelemy|saint barthelemy|san bartolome|sao bartolomeu
+C|BM|bermuda|bermudas|bermudes
+C|BN|brunei|brunei darussalam
+C|BO|bolivia|bolivien|bolivie
+C|BQ|caribbean netherlands|caraibi olandesi|holland karib terseg|caribe neerlandes|karibische niederlande|pays bas caribeens|paises baixos caribenhos
+C|BR|brazil|brasile|brazilia|brasil|brasilien|bresil
+C|BS|bahamas|bahama szigetek
+C|BT|bhutan|butan|bhoutan|butao
+C|BW|botswana|botsuana
+C|BY|belarus|bielorussia|belarusz|bielorrusia|bielorussie|bielorrussia
+C|BZ|belize|belice
+C|CA|canada|kanada
+C|CC|cocos (keeling) islands|isole cocos (keeling)|kokusz (keeling) szigetek|islas cocos|kokosinseln|iles cocos|ilhas cocos (keeling)
+C|CD|congo kinshasa|kongo \u2013 kinshasa|republica democratica del congo|kongo kinshasa
+C|CF|central african republic|repubblica centrafricana|kozep afrikai koztarsasag|republica centroafricana|zentralafrikanische republik|republique centrafricaine|republica centro africana
+C|CG|congo brazzaville|kongo \u2013 brazzaville|congo|kongo brazzaville|republica do congo
+C|CH|switzerland|svizzera|svajc|suiza|schweiz|suisse|suica
+C|CI|cote d ivoire|costa d avorio|elefantcsontpart|costa do marfim
+C|CK|cook islands|isole cook|cook szigetek|islas cook|cookinseln|iles cook|ilhas cook
+C|CL|chile|cile|chili
+C|CM|cameroon|camerun|kamerun|cameroun|camaroes
+C|CN|china|cina|kina|chine
+C|CO|colombia|kolumbia|kolumbien|colombie
+C|CR|costa rica
+C|CU|cuba|kuba
+C|CV|cape verde|capo verde|zold foki koztarsasag|cabo verde|cap vert
+C|CW|curacao|curazao
+C|CX|christmas island|isola christmas|karacsony sziget|isla de navidad|weihnachtsinsel|ile christmas|ilha christmas
+C|CY|cyprus|cipro|ciprus|chipre|zypern|chypre
+C|CZ|czechia|cechia|csehorszag|chequia|tschechien|tchequie|tchequia
+C|DE|germany|germania|nemetorszag|alemania|deutschland|allemagne|alemanha
+C|DJ|djibouti|gibuti|dzsibuti|yibuti|dschibuti|djibuti
+C|DK|denmark|danimarca|dania|dinamarca|danemark
+C|DM|dominica|dominika|dominique
+C|DO|dominican republic|repubblica dominicana|dominikai koztarsasag|republica dominicana|dominikanische republik|republique dominicaine
+C|DZ|algeria|argelia|algerien|algerie
+C|EC|ecuador|equateur|equador
+C|EE|estonia|esztorszag|estland|estonie
+C|EG|egypt|egitto|egyiptom|egipto|agypten|egypte|egito
+C|EH|western sahara|sahara occidentale|nyugat szahara|sahara occidental|westsahara|saara ocidental
+C|ER|eritrea|erythree|eritreia
+C|ES|spain|spagna|spanyolorszag|espana|spanien|espagne|espanha
+C|ET|ethiopia|etiopia|athiopien|ethiopie
+C|FI|finland|finlandia|finnorszag|finnland|finlande
+C|FJ|fiji|figi|fidzsi|fiyi|fidschi|fidji
+C|FK|falkland islands|isole falkland|falkland szigetek|islas malvinas|falklandinseln|iles malouines|ilhas malvinas
+C|FM|micronesia|mikronezia|mikronesien|micronesie
+C|FO|faroe islands|isole faer oer|feroer szigetek|islas feroe|faroer|iles feroe|ilhas faroe
+C|FR|france|francia|franciaorszag|frankreich|franca
+C|GA|gabon|gabun|gabao
+C|GB|united kingdom|regno unito|egyesult kiralysag|reino unido|vereinigtes konigreich|royaume uni
+C|GD|grenada|granada|grenade
+C|GE|georgia|gruzia|georgien|georgie
+C|GF|french guiana|guyana francese|francia guyana|guayana francesa|franzosisch guayana|guyane francaise|guiana francesa
+C|GG|guernsey|guernesey
+C|GH|ghana|gana
+C|GI|gibraltar|gibilterra
+C|GL|greenland|groenlandia|gronland|groenland
+C|GM|gambia|gambie
+C|GN|guinea|guinee|guine
+C|GP|guadeloupe|guadalupa|guadalupe
+C|GQ|equatorial guinea|guinea equatoriale|egyenlitoi guinea|guinea ecuatorial|aquatorialguinea|guinee equatoriale|guine equatorial
+C|GR|greece|grecia|gorogorszag|griechenland|grece
+C|GS|south georgia & south sandwich islands|georgia del sud e sandwich australi|deli georgia es deli sandwich szigetek|islas georgia del sur y sandwich del sur|sudgeorgien und die sudlichen sandwichinseln|georgie du sud et les iles sandwich du sud|ilhas georgia do sul e sandwich do sul
+C|GT|guatemala
+C|GU|guam
+C|GW|guinea bissau|bissau guinea|guinea bisau|guinee bissau|guine bissau
+C|GY|guyana|guiana
+C|HK|hong kong sar china|ras di hong kong|hongkong kkt|rae de hong kong (china)|sonderverwaltungsregion hongkong|r a s chinoise de hong kong|hong kong rae da china
+C|HN|honduras
+C|HR|croatia|croazia|horvatorszag|croacia|kroatien|croatie
+C|HT|haiti
+C|HU|hungary|ungheria|magyarorszag|hungria|ungarn|hongrie
+C|ID|indonesia|indonezia|indonesien|indonesie
+C|IE|ireland|irlanda|irorszag|irland|irlande
+C|IL|israel|israele|izrael
+C|IM|isle of man|isola di man|man sziget|isla de man|ile de man|ilha de man
+C|IN|india|indien|inde
+C|IO|british indian ocean territory|territorio britannico dell oceano indiano|brit indiai oceani terulet|territorio britanico del oceano indico|britisches territorium im indischen ozean|territoire britannique de l ocean indien|territorio britanico do oceano indico
+C|IQ|iraq|irak|iraque
+C|IR|iran|ira
+C|IS|iceland|islanda|izland|islandia|island|islande
+C|IT|italy|italia|olaszorszag|italien|italie
+C|JE|jersey
+C|JM|jamaica|giamaica|jamaika|jamaique
+C|JO|jordan|giordania|jordania|jordanien|jordanie
+C|JP|japan|giappone|japon|japao
+C|KE|kenya|kenia|quenia
+C|KG|kyrgyzstan|kirghizistan|kirgizisztan|kirguistan|kirgisistan|kirghizstan|quirguistao
+C|KH|cambodia|cambogia|kambodzsa|camboya|kambodscha|cambodge|camboja
+C|KI|kiribati|quiribati
+C|KM|comoros|comore|comore szigetek|comoras|komoren|comores
+C|KN|st kitts & nevis|saint kitts e nevis|saint kitts es nevis|san cristobal y nieves|st kitts und nevis|saint christophe et nieves|sao cristovao e nevis
+C|KP|north korea|corea del nord|eszak korea|corea del norte|nordkorea|coree du nord|coreia do norte
+C|KR|south korea|corea del sud|del korea|corea del sur|sudkorea|coree du sud|coreia do sul
+C|KW|kuwait|kuvait|koweit
+C|KY|cayman islands|isole cayman|kajman szigetek|islas caiman|kaimaninseln|iles caimans|ilhas cayman
+C|KZ|kazakhstan|kazakistan|kazahsztan|kazajistan|kasachstan|cazaquistao
+C|LA|laos|laosz
+C|LB|lebanon|libano|libanon|liban
+C|LC|st lucia|saint lucia|santa lucia|sainte lucie
+C|LI|liechtenstein
+C|LK|sri lanka
+C|LR|liberia
+C|LS|lesotho|lesoto
+C|LT|lithuania|lituania|litvania|litauen|lituanie
+C|LU|luxembourg|lussemburgo|luxemburg|luxemburgo
+C|LV|latvia|lettonia|lettorszag|letonia|lettland|lettonie
+C|LY|libya|libia|libyen|libye
+C|MA|morocco|marocco|marokko|marruecos|maroc|marrocos
+C|MC|monaco
+C|MD|moldova|moldavia|republik moldau|moldavie
+C|ME|montenegro
+C|MF|st martin|saint martin|san martin|sao martinho
+C|MG|madagascar|madagaszkar|madagaskar
+C|MH|marshall islands|isole marshall|marshall szigetek|islas marshall|marshallinseln|iles marshall|ilhas marshall
+C|MK|north macedonia|macedonia del nord|eszak macedonia|macedonia del norte|nordmazedonien|macedoine du nord|macedonia do norte
+C|ML|mali
+C|MM|myanmar (burma)|myanmar (birmania)|mianmar|myanmar|myanmar (birmanie)|mianmar (birmania)
+C|MN|mongolia|mongolei|mongolie
+C|MO|macao sar china|ras di macao|makao kkt|rae de macao (china)|sonderverwaltungsregion macau|r a s chinoise de macao|macau rae da china
+C|MP|northern mariana islands|isole marianne settentrionali|eszaki mariana szigetek|islas marianas del norte|nordliche marianen|iles mariannes du nord|ilhas marianas do norte
+C|MQ|martinique|martinica
+C|MR|mauritania|mauretanien|mauritanie
+C|MS|montserrat
+C|MT|malta|malte
+C|MU|mauritius|mauricio|maurice
+C|MV|maldives|maldive|maldiv szigetek|maldivas|malediven
+C|MW|malawi|malaui
+C|MX|mexico|messico|mexiko|mexique
+C|MY|malaysia|malajzia|malasia|malaisie
+C|MZ|mozambique|mozambico|mozambik|mosambik|mocambique
+C|NA|namibia|namibie
+C|NC|new caledonia|nuova caledonia|uj kaledonia|nueva caledonia|neukaledonien|nouvelle caledonie|nova caledonia
+C|NE|niger
+C|NF|norfolk island|isola norfolk|norfolk sziget|isla norfolk|norfolkinsel|ile norfolk|ilha norfolk
+C|NG|nigeria
+C|NI|nicaragua
+C|NL|netherlands|paesi bassi|hollandia|paises bajos|niederlande|pays bas|paises baixos
+C|NO|norway|norvegia|noruega|norwegen|norvege
+C|NP|nepal
+C|NR|nauru
+C|NU|niue
+C|NZ|new zealand|nuova zelanda|uj zeland|nueva zelanda|neuseeland|nouvelle zelande|nova zelandia
+C|OM|oman|oma
+C|PA|panama
+C|PE|peru|perou
+C|PF|french polynesia|polinesia francese|francia polinezia|polinesia francesa|franzosisch polynesien|polynesie francaise
+C|PG|papua new guinea|papua nuova guinea|papua uj guinea|papua nueva guinea|papua neuguinea|papouasie nouvelle guinee|papua nova guine
+C|PH|philippines|filippine|fulop szigetek|filipinas|philippinen
+C|PK|pakistan|pakisztan|paquistao
+C|PL|poland|polonia|lengyelorszag|polen|pologne
+C|PM|st pierre & miquelon|saint pierre e miquelon|saint pierre es miquelon|san pedro y miquelon|st pierre und miquelon|saint pierre et miquelon|sao pedro e miquelao
+C|PN|pitcairn islands|isole pitcairn|pitcairn szigetek|islas pitcairn|pitcairninseln|iles pitcairn|ilhas pitcairn
+C|PR|puerto rico|portorico|porto rico
+C|PS|palestinian territories|territori palestinesi|palesztin autonomia|territorios palestinos|palastinensische autonomiegebiete|territoires palestiniens
+C|PT|portugal|portogallo|portugalia
+C|PW|palau|palaos
+C|PY|paraguay|paraguai
+C|QA|qatar|katar|catar
+C|RE|reunion|riunione|la reunion|reuniao
+C|RO|romania|rumania|rumanien|roumanie|romenia
+C|RS|serbia|szerbia|serbien|serbie|servia
+C|RU|russia|oroszorszag|rusia|russland|russie
+C|RW|rwanda|ruanda
+C|SA|saudi arabia|arabia saudita|szaud arabia|arabia saudi|saudi arabien|arabie saoudite
+C|SB|solomon islands|isole salomone|salamon szigetek|islas salomon|salomonen|iles salomon|ilhas salomao
+C|SC|seychelles|seychelle szigetek|seychellen|seicheles
+C|SD|sudan|szudan|soudan|sudao
+C|SE|sweden|svezia|svedorszag|suecia|schweden|suede
+C|SG|singapore|szingapur|singapur|singapour|singapura
+C|SH|st helena|sant elena|szent ilona|santa elena|sainte helene|santa helena
+C|SI|slovenia|szlovenia|eslovenia|slowenien|slovenie
+C|SJ|svalbard & jan mayen|svalbard e jan mayen|svalbard es jan mayen|svalbard y jan mayen|spitzbergen und jan mayen|svalbard et jan mayen
+C|SK|slovakia|slovacchia|szlovakia|eslovaquia|slowakei|slovaquie
+C|SL|sierra leone|sierra leona|serra leoa
+C|SM|san marino|saint marin
+C|SN|senegal|szenegal
+C|SO|somalia|szomalia|somalie
+C|SR|suriname|surinam
+C|SS|south sudan|sud sudan|del szudan|sudan del sur|sudsudan|soudan du sud|sudao do sul
+C|ST|sao tome & principe|sao tome e principe|sao tome es principe|santo tome y principe|sao tome und principe|sao tome et principe
+C|SV|el salvador|salvador
+C|SX|sint maarten|saint martin (partie neerlandaise)
+C|SY|syria|siria|sziria|syrien|syrie
+C|SZ|eswatini|szvazifold|esuatini|essuatini
+C|TC|turks & caicos islands|isole turks e caicos|turks es caicos szigetek|islas turcas y caicos|turks und caicosinseln|iles turques et caiques|ilhas turcas e caicos
+C|TD|chad|ciad|csad|tschad|tchad|chade
+C|TF|french southern territories|terre australi francesi|francia deli teruletek|territorios australes franceses|franzosische sud und antarktisgebiete|terres australes francaises|territorios franceses do sul
+C|TG|togo
+C|TH|thailand|thailandia|thaifold|tailandia|thailande
+C|TJ|tajikistan|tagikistan|tadzsikisztan|tayikistan|tadschikistan|tadjikistan|tadjiquistao
+C|TK|tokelau
+C|TL|timor leste|timor est|kelet timor|timor oriental
+C|TM|turkmenistan|turkmenisztan|turcomenistao
+C|TN|tunisia|tunezia|tunez|tunesien|tunisie
+C|TO|tonga
+C|TR|turkiye|turchia|torokorszag|turquia|turkei|turquie
+C|TT|trinidad & tobago|trinidad e tobago|trinidad es tobago|trinidad y tobago|trinidad und tobago|trinite et tobago
+C|TV|tuvalu
+C|TW|taiwan|tajvan
+C|TZ|tanzania|tansania|tanzanie
+C|UA|ukraine|ucraina|ukrajna|ucrania
+C|UG|uganda|ouganda
+C|UM|u s outlying islands|isole minori esterne degli stati uniti|az usa lakatlan kulbirtokai|islas menores alejadas de ee uu|amerikanische uberseeinseln|iles mineures eloignees des etats unis|ilhas menores distantes dos eua
+C|US|united states|stati uniti|egyesult allamok|estados unidos|vereinigte staaten|etats unis
+C|UY|uruguay|uruguai
+C|UZ|uzbekistan|uzbegisztan|usbekistan|ouzbekistan|uzbequistao
+C|VA|vatican city|citta del vaticano|vatikan|ciudad del vaticano|vatikanstadt|etat de la cite du vatican|cidade do vaticano
+C|VC|st vincent & grenadines|saint vincent e grenadine|saint vincent es a grenadine szigetek|san vicente y las granadinas|st vincent und die grenadinen|saint vincent et les grenadines|sao vicente e granadinas
+C|VE|venezuela
+C|VG|british virgin islands|isole vergini britanniche|brit virgin szigetek|islas virgenes britanicas|britische jungferninseln|iles vierges britanniques|ilhas virgens britanicas
+C|VI|u s virgin islands|isole vergini americane|amerikai virgin szigetek|islas virgenes de ee uu|amerikanische jungferninseln|iles vierges des etats unis|ilhas virgens americanas
+C|VN|vietnam|viet nam|vietna
+C|VU|vanuatu
+C|WF|wallis & futuna|wallis e futuna|wallis es futuna|wallis y futuna|wallis und futuna|wallis et futuna
+C|WS|samoa|szamoa
+C|YE|yemen|jemen|iemen
+C|YT|mayotte
+C|ZA|south africa|sudafrica|del afrikai koztarsasag|sudafrika|afrique du sud|africa do sul
+C|ZM|zambia|sambia|zambie
+C|ZW|zimbabwe|zimbabue|simbabwe
+A|AE|uae|emirati|emirates
+A|CI|ivory coast|costa d avorio|cote d ivoire|elefantenkuste
+A|CZ|czech republic|czechia|repubblica ceca|tschechische republik|republique tcheque
+A|GB|uk|u k|great britain|britain|england|scotland|wales|inghilterra|scozia|angleterre|inglaterra|anglia
+A|KR|korea|south korea|corea del sud
+A|MM|burma
+A|NL|holland|olanda|holanda|hollande|hollandia
+A|RU|russian federation|russland
+A|TR|turkey|turkiye|turchia
+A|US|usa|u s a|united states of america|america|stati uniti d america|etats unis|eeuu|estados unidos de america
+A|VA|vatican|vaticano
 Z|AD|Europe/Andorra
 Z|AE|Asia/Dubai
 Z|AF|Asia/Kabul
@@ -3827,264 +3850,264 @@ Z|YT|Indian/Mayotte
 Z|ZA|Africa/Johannesburg
 Z|ZM|Africa/Lusaka
 Z|ZW|Africa/Harare
-N|Europe/Andorra|||||Andorre|
-N|Asia/Dubai||Dubaj||||
-N|Asia/Kabul|||||Kaboul|Cabul
-N|America/Anguilla|||Anguila|||Anguila
-N|Europe/Tirane|Tirana|Tirana|Tirana|Tirana|Tirana|Tirana
-N|Asia/Yerevan||Jerev\u00e1n|Erev\u00e1n|Eriwan|Erevan|
-N|Antarctica/DumontDUrville|Dumont-d\u2019Urville|Dumont-d\u2019Urville|Dumont-d\u2019Urville|Dumont-d\u2019Urville|Dumont-d\u2019Urville|Dumont-d\u2019Urville
-N|Antarctica/Syowa|||||Showa|
-N|Antarctica/Vostok||Vosztok||Wostok||
-N|America/Argentina/Tucuman||||||Tucum\u00e3
-N|Europe/Vienna||B\u00e9cs|Viena|Wien|Vienne|Viena
-N|Australia/Sydney|||S\u00eddney|||
-N|Australia/Adelaide|||Adelaida|||
-N|Asia/Baku|||||Bakou|
-N|Europe/Sarajevo||Szarajev\u00f3||||
-N|America/Barbados|||||La Barbade|
-N|Asia/Dhaka|Dacca|Dakka|Daca|||Dacca
-N|Europe/Brussels|Bruxelles|Br\u00fcsszel|Bruselas|Br\u00fcssel|Bruxelles|Bruxelas
-N|Africa/Ouagadougou|||Uagadug\u00fa|||
-N|Europe/Sofia||Sz\u00f3fia||||
-N|Asia/Bahrain|Bahrein|Bahrein|Bar\u00e9in||Bahre\u00efn|Bahrein
-N|Africa/Porto-Novo|||Portonovo|||
-N|America/St_Barthelemy|Saint-Barth\u00e9lemy|Saint-Barth\u00e9lemy|San Bartolom\u00e9|Saint-Barth\u00e9lemy|Saint-Barth\u00e9lemy|S\u00e3o Bartolomeu
-N|Atlantic/Bermuda|||Bermudas||Bermudes|Bermudas
-N|Asia/Brunei||||Brunei Darussalam||
-N|America/Noronha|Fernando de Noronha|Fernando de Noronha|Fernando de Noronha|Fernando de Noronha|Fernando de Noronha|Fernando de Noronha
-N|America/Belem|||Bel\u00e9n|||
-N|America/Sao_Paulo|San Paolo|||||
-N|America/Manaus|||Manaos||Manaos|
-N|Asia/Thimphu||Timpu|Timbu|||
-N|Europe/Minsk||Minszk||||
-N|America/Belize|||Belice|||
-N|America/St_Johns|||San Juan de Terranova||Saint-Jean de Terre-Neuve|
-N|Indian/Cocos||K\u00f3kusz-sziget||||
-N|Europe/Zurich|Zurigo|||||Zurique
-N|Africa/Abidjan|||Abiy\u00e1n|||
-N|America/Santiago|||Santiago de Chile|||
-N|Pacific/Easter|Pasqua|H\u00fasv\u00e9t-szigetek|Isla de Pascua|Osterinsel|\u00cele de P\u00e2ques|Ilha de P\u00e1scoa
-N|Africa/Douala|||Duala|||
-N|Asia/Shanghai||Sanghaj||||Xangai
-N|Asia/Urumqi||\u00dcr\u00fcmcsi||||
-N|America/Havana|L\u2019Avana|Havanna|La Habana|Havanna|La Havane|
-N|Atlantic/Cape_Verde|Capo Verde|Z\u00f6ld-foki szigetek|Cabo Verde|Cabo Verde|Cap-Vert|Cabo Verde
-N|America/Curacao|||Curazao|||
-N|Indian/Christmas||Kar\u00e1csony-sziget|Navidad|Weihnachtsinsel||
-N|Asia/Nicosia||||Nikosia|Nicosie|
-N|Asia/Famagusta|Famagosta||||Famagouste|
-N|Europe/Prague|Praga|Pr\u00e1ga|Praga|Prag||Praga
-N|Europe/Berlin|Berlino|||||Berlim
-N|Africa/Djibouti|Gibuti|Dzsibuti|Yibuti|Dschibuti||Djibuti
-N|Europe/Copenhagen|Copenaghen|Koppenh\u00e1ga|Copenhague|Kopenhagen|Copenhague|Copenhague
-N|America/Dominica||Dominika|||Dominique|
-N|America/Santo_Domingo|||||Saint-Domingue|
-N|Africa/Algiers|Algeri|Alg\u00edr|Argel|Algier|Alger|Argel
-N|America/Guayaquil||||||Guaiaquil
-N|Pacific/Galapagos||Galapagos-szigetek||||
-N|Europe/Tallinn||Tallin|Tallin|||
-N|Africa/Cairo|Il Cairo|Kair\u00f3|El Cairo|Kairo|Le Caire|
-N|Africa/El_Aaiun|El Ayun|El-Aj\u00fan|||La\u00e2youne|
-N|Europe/Madrid||||||Madri
-N|Atlantic/Canary|Canarie|Kan\u00e1ri-szigetek|Canarias|Kanaren|\u00celes Canaries|Can\u00e1rias
-N|Africa/Addis_Ababa|Addis Abeba|Addisz-Abeba|Ad\u00eds Abeba|Addis Abeba|Addis-Abeba|Adis Abeba
-N|Europe/Helsinki||||||Helsinque
-N|Pacific/Fiji|Figi|Fidzsi|Fiyi|Fidschi|Fidji|
-N|Pacific/Kosrae||Kosrae-szigetek||||
-N|Europe/Paris|Parigi|P\u00e1rizs||||
-N|Europe/London|Londra||Londres||Londres|Londres
-N|America/Grenada|||Granada||Grenade|Granada
-N|Asia/Tbilisi||Tbiliszi|Tiflis|Tiflis|Tbilissi|
-N|America/Cayenne|Caienna||Cayena|||Caiena
-N|Europe/Guernsey|||Guernesey||Guernesey|
-N|Africa/Accra|||Acra|||Acra
-N|Europe/Gibraltar|Gibilterra|||||
-N|America/Scoresbysund|Ittoqqortoormiit|Ittoqqortoormiit|Ittoqqortoormiit|Ittoqqortoormiit|Ittoqqortoormiit|Ittoqqortoormiit
-N|Africa/Conakry|||Conakri|||Conacri
-N|America/Guadeloupe|Guadalupa||Guadalupe|||Guadalupe
-N|Europe/Athens|Atene|Ath\u00e9n|Atenas|Athen|Ath\u00e8nes|Atenas
-N|Atlantic/South_Georgia|Georgia del Sud|D\u00e9li-Georgia|Georgia del Sur|S\u00fcdgeorgien|G\u00e9orgie du Sud|Ge\u00f3rgia do Sul
-N|Africa/Bissau|||Bis\u00e1u|||
-N|America/Guyana||||||Guiana
-N|Asia/Hong_Kong||Hongkong||Hongkong||
-N|Europe/Zagreb|Zagabria|Z\u00e1gr\u00e1b||||
-N|America/Port-au-Prince|||Puerto Pr\u00edncipe|||Porto Pr\u00edncipe
-N|Europe/Budapest||||||Budapeste
-N|Asia/Jakarta|Giacarta||Yakarta|||Jacarta
-N|Asia/Makassar||Makasar|Makasar||Macassar|
-N|Europe/Dublin|Dublino|||||
-N|Asia/Jerusalem|Gerusalemme|Jeruzs\u00e1lem|Jerusal\u00e9n|||
-N|Europe/Isle_of_Man|Isola di Man|Man-sziget|Isla de Man||\u00cele de Man|Ilha de Man
-N|Asia/Baghdad||Bagdad|Bagdad|Bagdad|Bagdad|Bagd\u00e1
-N|Asia/Tehran|Teheran|Teher\u00e1n|Teher\u00e1n|Teheran|T\u00e9h\u00e9ran|Teer\u00e3
-N|Atlantic/Reykjavik|||Reikiavik|Reyk\u00adja\u00adv\u00edk||
-N|Europe/Rome|Roma|R\u00f3ma|Roma|Rom||Roma
-N|America/Jamaica|Giamaica|||Jamaika|Jama\u00efque|
-N|Asia/Amman||||||Am\u00e3
-N|Asia/Tokyo||Toki\u00f3|Tokio|Tokio||T\u00f3quio
-N|Asia/Bishkek||Biskek||Bischkek|Bichkek|
-N|Pacific/Tarawa||||||Taraua
-N|Pacific/Kanton|Canton||||Canton|
-N|Pacific/Kiritimati||Kiritimati-sziget||||
-N|Indian/Comoro|Comore|Komor\u00f3|Comoras|Komoren|Comores|Comores
-N|America/St_Kitts|||San Crist\u00f3bal||Saint-Christophe|S\u00e3o Crist\u00f3v\u00e3o
-N|Asia/Pyongyang||Phenjan||Pj\u00f6ngjang||
-N|Asia/Seoul|Seul|Sz\u00f6ul|Se\u00fal|||Seul
-N|Asia/Kuwait||Kuvait|||Kowe\u00eft|
-N|America/Cayman||Kajm\u00e1n-szigetek|Caim\u00e1n|Kaimaninseln|Ca\u00efmans|
-N|Asia/Almaty||Alma-Ata|||Alma Ata|
-N|Asia/Qyzylorda||Kizilorda|Kyzylorda|Qysylorda|Kzyl Orda|
-N|Asia/Qostanay||Kosztanaj|Kostan\u00e1i|Qostanai|Kostana\u00ef|
-N|Asia/Aqtobe||Akt\u00f6be|Aktobe|Aktobe|Aktioubinsk|Aktobe
-N|Asia/Aqtau||Aktau|Aktau||Aktaou|Aktau
-N|Asia/Atyrau||Atirau|||Atyraou|
-N|Asia/Oral|||||Ouralsk|
-N|Asia/Vientiane||Vienti\u00e1n|Vienti\u00e1n|||
-N|Asia/Beirut||Bejr\u00fat|||Beyrouth|Beirute
-N|America/St_Lucia|Santa Lucia||Santa Luc\u00eda||Sainte-Lucie|Santa L\u00facia
-N|Europe/Vilnius|||Vilna|||
-N|Europe/Luxembourg|Lussemburgo|Luxemburg|Luxemburgo|Luxemburg||Luxemburgo
-N|Africa/Tripoli||||Tripolis|Tripoli (Libye)|
-N|Pacific/Majuro||Majuro-z\u00e1tony||||
-N|Pacific/Kwajalein||Kwajalein-z\u00e1tony||||
-N|Europe/Skopje||Szkopje|Skopie|||
-N|Asia/Ulaanbaatar|Ulan Bator|Ul\u00e1nb\u00e1tor|Ul\u00e1n Bator||Oulan-Bator|Ulan Bator
-N|Asia/Hovd||||Chowd||
-N|Asia/Macau|Macao|Maka\u00f3|Macao||Macao|
-N|America/Martinique|Martinica||Martinica|||Martinica
-N|Africa/Nouakchott|||Nuakchot|||
-N|Europe/Malta|||||Malte|
-N|Indian/Mauritius|||Mauricio||Maurice|Maur\u00edcio
-N|Indian/Maldives|Maldive|Mald\u00edv-szigetek|Maldivas|Malediven||Maldivas
-N|America/Mexico_City|Citt\u00e0 del Messico|Mexik\u00f3v\u00e1ros|Ciudad de M\u00e9xico|Mexiko-Stadt|Mexico|Cidade do M\u00e9xico
-N|America/Bahia_Banderas|Bah\u00eda de Banderas||Bah\u00eda de Banderas||Bahia de Banderas|Bahia de Banderas
-N|Asia/Kuching||Kucseng||||
-N|Pacific/Noumea|||Numea|||
-N|Europe/Amsterdam||Amszterdam||||Amsterd\u00e3
-N|Pacific/Chatham||Chatham-szigetek||||Chatnam
-N|Asia/Muscat|Mascate|Maszkat|Mascate|Maskat|Mascate|Mascate
-N|Pacific/Tahiti||||||Taiti
-N|Pacific/Marquesas|Marchesi|Marquesas-szigetek|||Marquises|
-N|Pacific/Gambier||Gambier-szigetek||||
-N|Asia/Manila|||||Manille|
-N|Asia/Karachi||Karacsi||Karatschi||
-N|Europe/Warsaw|Varsavia|Vars\u00f3|Varsovia|Warschau|Varsovie|Vars\u00f3via
-N|Pacific/Pitcairn||Pitcairn-szigetek||||
-N|America/Puerto_Rico|Portorico||||Porto Rico|Porto Rico
-N|Europe/Lisbon|Lisbona|Lisszabon|Lisboa|Lissabon|Lisbonne|Lisboa
-N|Atlantic/Madeira|||||Mad\u00e8re|
-N|Atlantic/Azores|Azzorre|Azori-szigetek||Azoren|A\u00e7ores|A\u00e7ores
-N|Pacific/Palau|||Palaos||Palaos|
-N|America/Asuncion||||||Assun\u00e7\u00e3o
-N|Asia/Qatar||Katar|Catar|Katar||Catar
-N|Indian/Reunion|La Riunione||||La R\u00e9union|Reuni\u00e3o
-N|Europe/Bucharest|Bucarest|Bukarest|Bucarest|Bukarest|Bucarest|Bucareste
-N|Europe/Belgrade|Belgrado|Belgr\u00e1d|Belgrado|Belgrad||Belgrado
-N|Europe/Kaliningrad||Kalinyingr\u00e1d|Kaliningrado|||Kaliningrado
-N|Europe/Moscow|Mosca|Moszkva|Mosc\u00fa|Moskau|Moscou|Moscou
-N|Europe/Simferopol|Sinferopoli|Szimferopol||||
-N|Europe/Kirov||||Kirow||
-N|Europe/Volgograd|||Volgogrado|Wolgograd||Volgogrado
-N|Europe/Astrakhan||Asztrah\u00e1n|Astrac\u00e1n|Astrachan||Astrac\u00e3
-N|Europe/Saratov||Szaratov||Saratow||
-N|Europe/Ulyanovsk||Uljanovszk|Uli\u00e1novsk|Uljanowsk|Oulianovsk|Ulianovsk
-N|Europe/Samara||Szamara||||
-N|Asia/Yekaterinburg|Ekaterinburg|Jekatyerinburg|Ekaterimburgo|Jekaterinburg|Ekaterinbourg|Ecaterimburgo
-N|Asia/Omsk||Omszk||||
-N|Asia/Novosibirsk||Novoszibirszk||Nowosibirsk|Novossibirsk|
-N|Asia/Tomsk||Tomszk||||
-N|Asia/Novokuznetsk|Novokuzneck|Novokuznyeck||Nowokuznetsk||
-N|Asia/Krasnoyarsk|Krasnojarsk|Krasznojarszk||Krasnojarsk|Krasno\u00efarsk|
-N|Asia/Irkutsk||Irkutszk|||Irkoutsk|
-N|Asia/Chita|\u010cita|Csita||Tschita|Tchita|
-N|Asia/Yakutsk|Jakutsk|Jakutszk||Jakutsk|Iakoutsk|
-N|Asia/Khandyga|Chandyga|Handiga|Khandiga|Chandyga||
-N|Asia/Vladivostok||Vlagyivosztok||Wladiwostok||
-N|Asia/Ust-Nera||Uszty-Nyera||||
-N|Asia/Sakhalin|Sachalin|Szahalin|Sajal\u00edn|Sachalin|Sakhaline|Sacalina
-N|Asia/Srednekolymsk||Szrednekolimszk|Srednekolimsk|||
-N|Asia/Kamchatka||Kamcsatka||Kamtschatka|Kamtchatka|
-N|Asia/Anadyr||Anadir||||
-N|Asia/Riyadh|Riyad|Rij\u00e1d|Riad|Riad|Riyad|Riade
-N|Africa/Khartoum|Khartum|Kart\u00fam|Jartum|Khartum||Cartum
-N|Europe/Stockholm|Stoccolma||Estocolmo|||Estocolmo
-N|Asia/Singapore||Szingap\u00far|Singapur|Singapur|Singapour|Singapura
-N|Atlantic/St_Helena|Sant\u2019Elena|Szent Ilona|Santa Elena||Sainte-H\u00e9l\u00e8ne|Santa Helena
-N|Europe/Ljubljana|Lubiana||Liubliana|||Liubliana
-N|Europe/Bratislava||Pozsony||||
-N|Europe/San_Marino|||||Saint-Marin|
-N|Africa/Mogadishu|Mogadiscio||Mogadiscio|Mogadischu|Mogadiscio|Mogad\u00edscio
-N|Africa/Juba|Giuba|||||
-N|Africa/Sao_Tome|||Santo Tom\u00e9|||
-N|America/El_Salvador||Salvador||||
-N|America/Lower_Princes|Lower Prince\u2019s Quarter|Lower Prince\u2019s Quarter|Lower Prince\u2019s Quarter|Lower Prince\u2019s Quarter|Lower Prince\u2019s Quarter|Lower Prince\u2019s Quarter
-N|Asia/Damascus|Damasco|Damaszkusz|Damasco|Damaskus|Damas|Damasco
-N|America/Grand_Turk|||Gran Turca|||
-N|Africa/Ndjamena|N\u2019Djamena||Yamena|N\u2019Djamena|N\u2019Djamena|N\u2019Djamena
-N|Asia/Dushanbe||Dusanbe|Dusamb\u00e9|Duschanbe|Douchanb\u00e9|Duchambe
-N|Asia/Ashgabat||Asgabat|Asjabad|A\u015fgabat|Achgabat|Asgabate
-N|Africa/Tunis|Tunisi|Tunisz|T\u00fanez|||
-N|Europe/Istanbul||Isztanbul|Estambul|||Istambul
-N|America/Port_of_Spain|||Puerto Espa\u00f1a||Port-d\u2019Espagne|
-N|Asia/Taipei||Tajpej||Taipeh||
-N|Africa/Dar_es_Salaam|||Dar es-Salam|Daressalam||
-N|Pacific/Midway||Midway-szigetek||||
-N|Pacific/Wake||Wake-sziget||||
-N|America/New_York|||Nueva York|||Nova York
-N|America/Kentucky/Monticello|Monticello, Kentucky|Monticello, Kentucky|Monticello, Kentucky|Monticello, Kentucky|Monticello [Kentucky]|Monticello, Kentucky
-N|America/Indiana/Vincennes|Vincennes, Indiana|Vincennes, Indiana|Vincennes, Indiana|Vincennes, Indiana|Vincennes [Indiana]|Vincennes, Indiana
-N|America/Indiana/Winamac|Winamac, Indiana|Winamac, Indiana|Winamac, Indiana|Winamac, Indiana|Winamac [Indiana]|Winamac, Indiana
-N|America/Indiana/Marengo|Marengo, Indiana|Marengo, Indiana|Marengo, Indiana|Marengo, Indiana|Marengo [Indiana]|Marengo, Indiana
-N|America/Indiana/Petersburg|Petersburg, Indiana|Petersburg, Indiana|Petersburg, Indiana|Petersburg, Indiana|Petersburg [Indiana]|Petersburg, Indiana
-N|America/Indiana/Vevay|Vevay, Indiana|Vevay, Indiana|Vevay, Indiana|Vevay, Indiana|Vevay [Indiana]|Vevay, Indiana
-N|America/Indiana/Tell_City|Tell City, Indiana|Tell City, Indiana|Tell City, Indiana|Tell City, Indiana|Tell City [Indiana]|Tell City, Indiana
-N|America/Indiana/Knox|Knox, Indiana|Knox, Indiana|Knox, Indiana|Knox, Indiana|Knox [Indiana]|Knox, Indiana
-N|America/North_Dakota/Center|Center, Dakota del nord|Center, \u00c9szak-Dakota|Center, Dakota del Norte|Center, North Dakota|Center (Dakota du Nord)|Center, Dakota do Norte
-N|America/North_Dakota/New_Salem|New Salem, Dakota del nord|New Salem, \u00c9szak-Dakota|New Salem, Dakota del Norte|New Salem, North Dakota|New Salem (Dakota du Nord)|New Salen, Dakota do Norte
-N|America/North_Dakota/Beulah|Beulah, Dakota del nord|Beulah, \u00c9szak-Dakota|Beulah, Dakota del Norte|Beulah, North Dakota|Beulah (Dakota du Nord)|Beulah, Dakota do Norte
-N|America/Montevideo||||||Montevid\u00e9u
-N|Asia/Samarkand|Samarcanda|Szamarkand|Samarcanda||Samarcande|Samarcanda
-N|Asia/Tashkent||Taskent|Taskent|Taschkent|Tachkent|
-N|Europe/Vatican|Citt\u00e0 del Vaticano|Vatik\u00e1n|El Vaticano|Vatikan|Le Vatican|Vaticano
-N|America/St_Vincent|Saint Vincent||San Vicente||Saint-Vincent|S\u00e3o Vicente
-N|America/St_Thomas|Saint Thomas||||Saint-Thomas|Saint Thomas
-N|Africa/Johannesburg|||Johannesburgo|||Joanesburgo
-X|Europe/Rome|Milano|Milan|Mailand|Napoli|Naples|Neapel|Torino|Turin|Firenze|Florence|Venezia|Venice|Bologna|Genova|Palermo|Bari|Catania
-X|Europe/Berlin|Munchen|Munich|Monaco di Baviera|Muenchen|Hamburg|Amburgo|Frankfurt|Francoforte|Koln|Cologne|Colonia|Koeln|Stuttgart|Dusseldorf|Leipzig|Dresden|Dresda|Nurnberg|Norimberga
-X|Europe/Paris|Lyon|Lione|Marseille|Marsiglia|Nice|Nizza|Toulouse|Bordeaux|Strasbourg|Strasburgo|Lille|Nantes
-X|Europe/Madrid|Barcelona|Barcellona|Valencia|Sevilla|Siviglia|Bilbao|Malaga|Zaragoza|Saragozza
-X|Europe/Lisbon|Porto|Oporto|Faro|Coimbra
-X|Europe/Budapest|Debrecen|Szeged|Pecs|Gyor|Miskolc
-X|Europe/London|Manchester|Birmingham|Liverpool|Edinburgh|Edimburgo|Glasgow|Leeds|Bristol|Cardiff|Londra|Londres|Londen
-X|Europe/Zurich|Geneva|Ginevra|Geneve|Genf|Basel|Basilea|Bern|Berna|Lausanne|Losanna
-X|Europe/Amsterdam|Rotterdam|Den Haag|The Hague|L'Aia|Utrecht|Eindhoven
-X|Europe/Warsaw|Krakow|Cracovia|Gdansk|Danzica|Wroclaw|Breslavia|Poznan|Lodz
-X|Europe/Brussels|Antwerp|Anversa|Anvers|Gent|Ghent|Bruges|Liege
-X|Europe/Athens|Thessaloniki|Salonicco|Salonique|Patras
-X|Europe/Prague|Brno|Ostrava|Praha
-X|Europe/Vienna|Salzburg|Graz|Linz|Innsbruck
-X|Europe/Moscow|Saint Petersburg|San Pietroburgo|St Petersburg|Sankt Petersburg|Kazan
-X|America/New_York|Boston|Washington|Washington DC|Philadelphia|Miami|Atlanta|NYC|Orlando|Pittsburgh|Charlotte
-X|America/Chicago|Houston|Dallas|Austin|San Antonio|Minneapolis|New Orleans|Nashville
-X|America/Denver|Salt Lake City|Albuquerque|Boulder
-X|America/Los_Angeles|San Francisco|San Diego|Seattle|Las Vegas|Portland|San Jose|Sacramento|LA
-X|America/Toronto|Montreal|Ottawa|Quebec|Hamilton
-X|America/Sao_Paulo|Rio de Janeiro|Rio|Brasilia|Belo Horizonte|Salvador|Curitiba|Porto Alegre|Recife|Fortaleza
-X|America/Argentina/Buenos_Aires|Buenos Aires|Rosario|Mendoza
-X|America/Mexico_City|Guadalajara|Monterrey|Puebla|Ciudad de Mexico|Citta del Messico
-X|Asia/Kolkata|Mumbai|Bombay|Delhi|New Delhi|Bangalore|Bengaluru|Chennai|Madras|Hyderabad|Calcutta|Pune
-X|Asia/Shanghai|Beijing|Peking|Pechino|Pekin|Guangzhou|Canton|Shenzhen|Chengdu|Wuhan|Pek\u00edn
-X|Asia/Tokyo|Osaka|Kyoto|Nagoya|Yokohama|Sapporo|Fukuoka
-X|Asia/Seoul|Busan|Incheon|Daegu
-X|Asia/Dubai|Abu Dhabi|Sharjah
-X|Asia/Jerusalem|Tel Aviv|Haifa|Gerusalemme|Jerusalen|Jerusalem
-X|Australia/Sydney|Canberra|Newcastle|Wollongong
-X|Australia/Melbourne|Geelong
-X|Pacific/Auckland|Wellington|Christchurch|Nuova Zelanda
-X|Africa/Johannesburg|Pretoria|Durban|Soweto
-X|America/St_Johns|Newfoundland|Terranova|Terre-Neuve|Neufundland
-X|Africa/Cairo|Il Cairo|Alexandria|Alessandria d'Egitto|Giza
+N|Europe/Andorra|andorre
+N|Asia/Dubai|dubaj
+N|Asia/Kabul|kaboul|cabul
+N|America/Anguilla|anguila
+N|Europe/Tirane|tirana
+N|Asia/Yerevan|jerevan|erevan|eriwan
+N|Antarctica/DumontDUrville|dumont d urville
+N|Antarctica/Syowa|showa
+N|Antarctica/Vostok|vosztok|wostok
+N|America/Argentina/Tucuman|tucuma
+N|Europe/Vienna|becs|viena|wien|vienne
+N|Australia/Sydney|sidney
+N|Australia/Adelaide|adelaida
+N|Asia/Baku|bakou
+N|Europe/Sarajevo|szarajevo
+N|America/Barbados|la barbade
+N|Asia/Dhaka|dacca|dakka|daca
+N|Europe/Brussels|bruxelles|brusszel|bruselas|brussel|bruxelas
+N|Africa/Ouagadougou|uagadugu
+N|Europe/Sofia|szofia
+N|Asia/Bahrain|bahrein|barein
+N|Africa/Porto-Novo|portonovo
+N|America/St_Barthelemy|saint barthelemy|san bartolome|sao bartolomeu
+N|Atlantic/Bermuda|bermudas|bermudes
+N|Asia/Brunei|brunei darussalam
+N|America/Noronha|fernando de noronha
+N|America/Belem|belen
+N|America/Sao_Paulo|san paolo
+N|America/Manaus|manaos
+N|Asia/Thimphu|timpu|timbu
+N|Europe/Minsk|minszk
+N|America/Belize|belice
+N|America/St_Johns|san juan de terranova|saint jean de terre neuve
+N|Indian/Cocos|kokusz sziget
+N|Europe/Zurich|zurigo|zurique
+N|Africa/Abidjan|abiyan
+N|America/Santiago|santiago de chile
+N|Pacific/Easter|pasqua|husvet szigetek|isla de pascua|osterinsel|ile de paques|ilha de pascoa
+N|Africa/Douala|duala
+N|Asia/Shanghai|sanghaj|xangai
+N|Asia/Urumqi|urumcsi
+N|America/Havana|l avana|havanna|la habana|la havane
+N|Atlantic/Cape_Verde|capo verde|zold foki szigetek|cabo verde|cap vert
+N|America/Curacao|curazao
+N|Indian/Christmas|karacsony sziget|navidad|weihnachtsinsel
+N|Asia/Nicosia|nikosia|nicosie
+N|Asia/Famagusta|famagosta|famagouste
+N|Europe/Prague|praga|prag
+N|Europe/Berlin|berlino|berlim
+N|Africa/Djibouti|gibuti|dzsibuti|yibuti|dschibuti|djibuti
+N|Europe/Copenhagen|copenaghen|koppenhaga|copenhague|kopenhagen
+N|America/Dominica|dominika|dominique
+N|America/Santo_Domingo|saint domingue
+N|Africa/Algiers|algeri|algir|argel|algier|alger
+N|America/Guayaquil|guaiaquil
+N|Pacific/Galapagos|galapagos szigetek
+N|Europe/Tallinn|tallin
+N|Africa/Cairo|il cairo|kairo|el cairo|le caire
+N|Africa/El_Aaiun|el ayun|el ajun|laayoune
+N|Europe/Madrid|madri
+N|Atlantic/Canary|canarie|kanari szigetek|canarias|kanaren|iles canaries
+N|Africa/Addis_Ababa|addis abeba|addisz abeba|adis abeba
+N|Europe/Helsinki|helsinque
+N|Pacific/Fiji|figi|fidzsi|fiyi|fidschi|fidji
+N|Pacific/Kosrae|kosrae szigetek
+N|Europe/Paris|parigi|parizs
+N|Europe/London|londra|londres
+N|America/Grenada|granada|grenade
+N|Asia/Tbilisi|tbiliszi|tiflis|tbilissi
+N|America/Cayenne|caienna|cayena|caiena
+N|Europe/Guernsey|guernesey
+N|Africa/Accra|acra
+N|Europe/Gibraltar|gibilterra
+N|America/Scoresbysund|ittoqqortoormiit
+N|Africa/Conakry|conakri|conacri
+N|America/Guadeloupe|guadalupa|guadalupe
+N|Europe/Athens|atene|athen|atenas|athenes
+N|Atlantic/South_Georgia|georgia del sud|deli georgia|georgia del sur|sudgeorgien|georgie du sud|georgia do sul
+N|Africa/Bissau|bisau
+N|America/Guyana|guiana
+N|Asia/Hong_Kong|hongkong
+N|Europe/Zagreb|zagabria|zagrab
+N|America/Port-au-Prince|puerto principe|porto principe
+N|Europe/Budapest|budapeste
+N|Asia/Jakarta|giacarta|yakarta|jacarta
+N|Asia/Makassar|makasar|macassar
+N|Europe/Dublin|dublino
+N|Asia/Jerusalem|gerusalemme|jeruzsalem|jerusalen
+N|Europe/Isle_of_Man|isola di man|man sziget|isla de man|ile de man|ilha de man
+N|Asia/Baghdad|bagdad|bagda
+N|Asia/Tehran|teheran|teera
+N|Atlantic/Reykjavik|reikiavik|reyk\u00adja\u00advik
+N|Europe/Rome|roma|rom
+N|America/Jamaica|giamaica|jamaika|jamaique
+N|Asia/Amman|ama
+N|Asia/Tokyo|tokio|toquio
+N|Asia/Bishkek|biskek|bischkek|bichkek
+N|Pacific/Tarawa|taraua
+N|Pacific/Kanton|canton
+N|Pacific/Kiritimati|kiritimati sziget
+N|Indian/Comoro|comore|komoro|comoras|komoren|comores
+N|America/St_Kitts|san cristobal|saint christophe|sao cristovao
+N|Asia/Pyongyang|phenjan|pjongjang
+N|Asia/Seoul|seul|szoul
+N|Asia/Kuwait|kuvait|koweit
+N|America/Cayman|kajman szigetek|caiman|kaimaninseln|caimans
+N|Asia/Almaty|alma ata
+N|Asia/Qyzylorda|kizilorda|kyzylorda|qysylorda|kzyl orda
+N|Asia/Qostanay|kosztanaj|kostanai|qostanai
+N|Asia/Aqtobe|aktobe|aktioubinsk
+N|Asia/Aqtau|aktau|aktaou
+N|Asia/Atyrau|atirau|atyraou
+N|Asia/Oral|ouralsk
+N|Asia/Vientiane|vientian
+N|Asia/Beirut|bejrut|beyrouth|beirute
+N|America/St_Lucia|santa lucia|sainte lucie
+N|Europe/Vilnius|vilna
+N|Europe/Luxembourg|lussemburgo|luxemburg|luxemburgo
+N|Africa/Tripoli|tripolis|tripoli (libye)
+N|Pacific/Majuro|majuro zatony
+N|Pacific/Kwajalein|kwajalein zatony
+N|Europe/Skopje|szkopje|skopie
+N|Asia/Ulaanbaatar|ulan bator|ulanbator|oulan bator
+N|Asia/Hovd|chowd
+N|Asia/Macau|macao|makao
+N|America/Martinique|martinica
+N|Africa/Nouakchott|nuakchot
+N|Europe/Malta|malte
+N|Indian/Mauritius|mauricio|maurice
+N|Indian/Maldives|maldive|maldiv szigetek|maldivas|malediven
+N|America/Mexico_City|citta del messico|mexikovaros|ciudad de mexico|mexiko stadt|mexico|cidade do mexico
+N|America/Bahia_Banderas|bahia de banderas
+N|Asia/Kuching|kucseng
+N|Pacific/Noumea|numea
+N|Europe/Amsterdam|amszterdam|amsterda
+N|Pacific/Chatham|chatham szigetek|chatnam
+N|Asia/Muscat|mascate|maszkat|maskat
+N|Pacific/Tahiti|taiti
+N|Pacific/Marquesas|marchesi|marquesas szigetek|marquises
+N|Pacific/Gambier|gambier szigetek
+N|Asia/Manila|manille
+N|Asia/Karachi|karacsi|karatschi
+N|Europe/Warsaw|varsavia|varso|varsovia|warschau|varsovie
+N|Pacific/Pitcairn|pitcairn szigetek
+N|America/Puerto_Rico|portorico|porto rico
+N|Europe/Lisbon|lisbona|lisszabon|lisboa|lissabon|lisbonne
+N|Atlantic/Madeira|madere
+N|Atlantic/Azores|azzorre|azori szigetek|azoren|acores
+N|Pacific/Palau|palaos
+N|America/Asuncion|assuncao
+N|Asia/Qatar|katar|catar
+N|Indian/Reunion|la riunione|la reunion|reuniao
+N|Europe/Bucharest|bucarest|bukarest|bucareste
+N|Europe/Belgrade|belgrado|belgrad
+N|Europe/Kaliningrad|kalinyingrad|kaliningrado
+N|Europe/Moscow|mosca|moszkva|moscu|moskau|moscou
+N|Europe/Simferopol|sinferopoli|szimferopol
+N|Europe/Kirov|kirow
+N|Europe/Volgograd|volgogrado|wolgograd
+N|Europe/Astrakhan|asztrahan|astracan|astrachan|astraca
+N|Europe/Saratov|szaratov|saratow
+N|Europe/Ulyanovsk|uljanovszk|ulianovsk|uljanowsk|oulianovsk
+N|Europe/Samara|szamara
+N|Asia/Yekaterinburg|ekaterinburg|jekatyerinburg|ekaterimburgo|jekaterinburg|ekaterinbourg|ecaterimburgo
+N|Asia/Omsk|omszk
+N|Asia/Novosibirsk|novoszibirszk|nowosibirsk|novossibirsk
+N|Asia/Tomsk|tomszk
+N|Asia/Novokuznetsk|novokuzneck|novokuznyeck|nowokuznetsk
+N|Asia/Krasnoyarsk|krasnojarsk|krasznojarszk|krasnoiarsk
+N|Asia/Irkutsk|irkutszk|irkoutsk
+N|Asia/Chita|cita|csita|tschita|tchita
+N|Asia/Yakutsk|jakutsk|jakutszk|iakoutsk
+N|Asia/Khandyga|chandyga|handiga|khandiga
+N|Asia/Vladivostok|vlagyivosztok|wladiwostok
+N|Asia/Ust-Nera|uszty nyera
+N|Asia/Sakhalin|sachalin|szahalin|sajalin|sakhaline|sacalina
+N|Asia/Srednekolymsk|szrednekolimszk|srednekolimsk
+N|Asia/Kamchatka|kamcsatka|kamtschatka|kamtchatka
+N|Asia/Anadyr|anadir
+N|Asia/Riyadh|riyad|rijad|riad|riade
+N|Africa/Khartoum|khartum|kartum|jartum|cartum
+N|Europe/Stockholm|stoccolma|estocolmo
+N|Asia/Singapore|szingapur|singapur|singapour|singapura
+N|Atlantic/St_Helena|sant elena|szent ilona|santa elena|sainte helene|santa helena
+N|Europe/Ljubljana|lubiana|liubliana
+N|Europe/Bratislava|pozsony
+N|Europe/San_Marino|saint marin
+N|Africa/Mogadishu|mogadiscio|mogadischu
+N|Africa/Juba|giuba
+N|Africa/Sao_Tome|santo tome
+N|America/El_Salvador|salvador
+N|America/Lower_Princes|lower prince s quarter
+N|Asia/Damascus|damasco|damaszkusz|damaskus|damas
+N|America/Grand_Turk|gran turca
+N|Africa/Ndjamena|n djamena|yamena
+N|Asia/Dushanbe|dusanbe|dusambe|duschanbe|douchanbe|duchambe
+N|Asia/Ashgabat|asgabat|asjabad|achgabat|asgabate
+N|Africa/Tunis|tunisi|tunisz|tunez
+N|Europe/Istanbul|isztanbul|estambul|istambul
+N|America/Port_of_Spain|puerto espana|port d espagne
+N|Asia/Taipei|tajpej|taipeh
+N|Africa/Dar_es_Salaam|dar es salam|daressalam
+N|Pacific/Midway|midway szigetek
+N|Pacific/Wake|wake sziget
+N|America/New_York|nueva york|nova york
+N|America/Kentucky/Monticello|monticello kentucky|monticello [kentucky]
+N|America/Indiana/Vincennes|vincennes indiana|vincennes [indiana]
+N|America/Indiana/Winamac|winamac indiana|winamac [indiana]
+N|America/Indiana/Marengo|marengo indiana|marengo [indiana]
+N|America/Indiana/Petersburg|petersburg indiana|petersburg [indiana]
+N|America/Indiana/Vevay|vevay indiana|vevay [indiana]
+N|America/Indiana/Tell_City|tell city indiana|tell city [indiana]
+N|America/Indiana/Knox|knox indiana|knox [indiana]
+N|America/North_Dakota/Center|center dakota del nord|center eszak dakota|center dakota del norte|center north dakota|center (dakota du nord)|center dakota do norte
+N|America/North_Dakota/New_Salem|new salem dakota del nord|new salem eszak dakota|new salem dakota del norte|new salem north dakota|new salem (dakota du nord)|new salen dakota do norte
+N|America/North_Dakota/Beulah|beulah dakota del nord|beulah eszak dakota|beulah dakota del norte|beulah north dakota|beulah (dakota du nord)|beulah dakota do norte
+N|America/Montevideo|montevideu
+N|Asia/Samarkand|samarcanda|szamarkand|samarcande
+N|Asia/Tashkent|taskent|taschkent|tachkent
+N|Europe/Vatican|citta del vaticano|vatikan|el vaticano|le vatican|vaticano
+N|America/St_Vincent|saint vincent|san vicente|sao vicente
+N|America/St_Thomas|saint thomas
+N|Africa/Johannesburg|johannesburgo|joanesburgo
+X|Europe/Rome|milano|milan|mailand|napoli|naples|neapel|torino|turin|firenze|florence|venezia|venice|bologna|genova|palermo|bari|catania
+X|Europe/Berlin|munchen|munich|monaco di baviera|muenchen|hamburg|amburgo|frankfurt|francoforte|koln|cologne|colonia|koeln|stuttgart|dusseldorf|leipzig|dresden|dresda|nurnberg|norimberga
+X|Europe/Paris|lyon|lione|marseille|marsiglia|nice|nizza|toulouse|bordeaux|strasbourg|strasburgo|lille|nantes
+X|Europe/Madrid|barcelona|barcellona|valencia|sevilla|siviglia|bilbao|malaga|zaragoza|saragozza
+X|Europe/Lisbon|porto|oporto|faro|coimbra
+X|Europe/Budapest|debrecen|szeged|pecs|gyor|miskolc
+X|Europe/London|manchester|birmingham|liverpool|edinburgh|edimburgo|glasgow|leeds|bristol|cardiff|londra|londres|londen
+X|Europe/Zurich|geneva|ginevra|geneve|genf|basel|basilea|bern|berna|lausanne|losanna
+X|Europe/Amsterdam|rotterdam|den haag|the hague|l aia|utrecht|eindhoven
+X|Europe/Warsaw|krakow|cracovia|gdansk|danzica|wroclaw|breslavia|poznan|lodz
+X|Europe/Brussels|antwerp|anversa|anvers|gent|ghent|bruges|liege
+X|Europe/Athens|thessaloniki|salonicco|salonique|patras
+X|Europe/Prague|brno|ostrava|praha
+X|Europe/Vienna|salzburg|graz|linz|innsbruck
+X|Europe/Moscow|saint petersburg|san pietroburgo|st petersburg|sankt petersburg|kazan
+X|America/New_York|boston|washington|washington dc|philadelphia|miami|atlanta|nyc|orlando|pittsburgh|charlotte
+X|America/Chicago|houston|dallas|austin|san antonio|minneapolis|new orleans|nashville
+X|America/Denver|salt lake city|albuquerque|boulder
+X|America/Los_Angeles|san francisco|san diego|seattle|las vegas|portland|san jose|sacramento|la
+X|America/Toronto|montreal|ottawa|quebec|hamilton
+X|America/Sao_Paulo|rio de janeiro|rio|brasilia|belo horizonte|salvador|curitiba|porto alegre|recife|fortaleza
+X|America/Argentina/Buenos_Aires|buenos aires|rosario|mendoza
+X|America/Mexico_City|guadalajara|monterrey|puebla|ciudad de mexico|citta del messico
+X|Asia/Kolkata|mumbai|bombay|delhi|new delhi|bangalore|bengaluru|chennai|madras|hyderabad|calcutta|pune
+X|Asia/Shanghai|beijing|peking|pechino|pekin|guangzhou|canton|shenzhen|chengdu|wuhan
+X|Asia/Tokyo|osaka|kyoto|nagoya|yokohama|sapporo|fukuoka
+X|Asia/Seoul|busan|incheon|daegu
+X|Asia/Dubai|abu dhabi|sharjah
+X|Asia/Jerusalem|tel aviv|haifa|gerusalemme|jerusalen|jerusalem
+X|Australia/Sydney|canberra|newcastle|wollongong
+X|Australia/Melbourne|geelong
+X|Pacific/Auckland|wellington|christchurch|nuova zelanda
+X|Africa/Johannesburg|pretoria|durban|soweto
+X|America/St_Johns|newfoundland|terranova|terre neuve|neufundland
+X|Africa/Cairo|il cairo|alexandria|alessandria d egitto|giza
 W|Africa/Abidjan|Greenwich Standard Time
 W|Africa/Accra|Greenwich Standard Time
 W|Africa/Addis_Ababa|E. Africa Standard Time
@@ -4639,6 +4662,7 @@ P|West Bank Standard Time|Asia/Hebron
 P|West Pacific Standard Time|Pacific/Port_Moresby
 P|Yakutsk Standard Time|Asia/Yakutsk
 P|Yukon Standard Time|America/Whitehorse
+F|\u00c0\u00c1\u00c2\u00c3\u00c4\u00c5\u00c7\u00c8\u00c9\u00ca\u00cb\u00cc\u00cd\u00ce\u00cf\u00d1\u00d2\u00d3\u00d4\u00d5\u00d6\u00d9\u00da\u00db\u00dc\u00dd\u00e0\u00e1\u00e2\u00e3\u00e4\u00e5\u00e7\u00e8\u00e9\u00ea\u00eb\u00ec\u00ed\u00ee\u00ef\u00f1\u00f2\u00f3\u00f4\u00f5\u00f6\u00f9\u00fa\u00fb\u00fc\u00fd\u00ff\u0100\u0101\u0102\u0103\u0104\u0105\u0106\u0107\u0108\u0109\u010a\u010b\u010c\u010d\u010e\u010f\u0112\u0113\u0114\u0115\u0116\u0117\u0118\u0119\u011a\u011b\u011c\u011d\u011e\u011f\u0120\u0121\u0122\u0123\u0124\u0125\u0128\u0129\u012a\u012b\u012c\u012d\u012e\u012f\u0130\u0134\u0135\u0136\u0137\u0139\u013a\u013b\u013c\u013d\u013e\u0143\u0144\u0145\u0146\u0147\u0148\u014c\u014d\u014e\u014f\u0150\u0151\u0154\u0155\u0156\u0157\u0158\u0159\u015a\u015b\u015c\u015d\u015e\u015f\u0160\u0161\u0162\u0163\u0164\u0165\u0168\u0169\u016a\u016b\u016c\u016d\u016e\u016f\u0170\u0171\u0172\u0173\u0174\u0175\u0176\u0177\u0178\u0179\u017a\u017b\u017c\u017d\u017e\u01a0\u01a1\u01af\u01b0\u01cd\u01ce\u01cf\u01d0\u01d1\u01d2\u01d3\u01d4\u01d5\u01d6\u01d7\u01d8\u01d9\u01da\u01db\u01dc\u01de\u01df\u01e0\u01e1\u01e6\u01e7\u01e8\u01e9\u01ea\u01eb\u01ec\u01ed\u01f0\u01f4\u01f5\u01f8\u01f9\u01fa\u01fb\u0200\u0201\u0202\u0203\u0204\u0205\u0206\u0207\u0208\u0209\u020a\u020b\u020c\u020d\u020e\u020f\u0210\u0211\u0212\u0213\u0214\u0215\u0216\u0217\u0218\u0219\u021a\u021b\u021e\u021f\u0226\u0227\u0228\u0229\u022a\u022b\u022c\u022d\u022e\u022f\u0230\u0231\u0232\u0233\u1e00\u1e01\u1e02\u1e03\u1e04\u1e05\u1e06\u1e07\u1e08\u1e09\u1e0a\u1e0b\u1e0c\u1e0d\u1e0e\u1e0f\u1e10\u1e11\u1e12\u1e13\u1e14\u1e15\u1e16\u1e17\u1e18\u1e19\u1e1a\u1e1b\u1e1c\u1e1d\u1e1e\u1e1f\u1e20\u1e21\u1e22\u1e23\u1e24\u1e25\u1e26\u1e27\u1e28\u1e29\u1e2a\u1e2b\u1e2c\u1e2d\u1e2e\u1e2f\u1e30\u1e31\u1e32\u1e33\u1e34\u1e35\u1e36\u1e37\u1e38\u1e39\u1e3a\u1e3b\u1e3c\u1e3d\u1e3e\u1e3f\u1e40\u1e41\u1e42\u1e43\u1e44\u1e45\u1e46\u1e47\u1e48\u1e49\u1e4a\u1e4b\u1e4c\u1e4d\u1e4e\u1e4f\u1e50\u1e51\u1e52\u1e53\u1e54\u1e55\u1e56\u1e57\u1e58\u1e59\u1e5a\u1e5b\u1e5c\u1e5d\u1e5e\u1e5f\u1e60\u1e61\u1e62\u1e63\u1e64\u1e65\u1e66\u1e67\u1e68\u1e69\u1e6a\u1e6b\u1e6c\u1e6d\u1e6e\u1e6f\u1e70\u1e71\u1e72\u1e73\u1e74\u1e75\u1e76\u1e77\u1e78\u1e79\u1e7a\u1e7b\u1e7c\u1e7d\u1e7e\u1e7f\u1e80\u1e81\u1e82\u1e83\u1e84\u1e85\u1e86\u1e87\u1e88\u1e89\u1e8a\u1e8b\u1e8c\u1e8d\u1e8e\u1e8f\u1e90\u1e91\u1e92\u1e93\u1e94\u1e95\u1e96\u1e97\u1e98\u1e99\u1ea0\u1ea1\u1ea2\u1ea3\u1ea4\u1ea5\u1ea6\u1ea7\u1ea8\u1ea9\u1eaa\u1eab\u1eac\u1ead\u1eae\u1eaf\u1eb0\u1eb1\u1eb2\u1eb3\u1eb4\u1eb5\u1eb6\u1eb7\u1eb8\u1eb9\u1eba\u1ebb\u1ebc\u1ebd\u1ebe\u1ebf\u1ec0\u1ec1\u1ec2\u1ec3\u1ec4\u1ec5\u1ec6\u1ec7\u1ec8\u1ec9\u1eca\u1ecb\u1ecc\u1ecd\u1ece\u1ecf\u1ed0\u1ed1\u1ed2\u1ed3\u1ed4\u1ed5\u1ed6\u1ed7\u1ed8\u1ed9\u1eda\u1edb\u1edc\u1edd\u1ede\u1edf\u1ee0\u1ee1\u1ee2\u1ee3\u1ee4\u1ee5\u1ee6\u1ee7\u1ee8\u1ee9\u1eea\u1eeb\u1eec\u1eed\u1eee\u1eef\u1ef0\u1ef1\u1ef2\u1ef3\u1ef4\u1ef5\u1ef6\u1ef7\u1ef8\u1ef9|AAAAAACEEEEIIIINOOOOOUUUUYaaaaaaceeeeiiiinooooouuuuyyAaAaAaCcCcCcCcDdEeEeEeEeEeGgGgGgGgHhIiIiIiIiIJjKkLlLlLlNnNnNnOoOoOoRrRrRrSsSsSsSsTtTtUuUuUuUuUuUuWwYyYZzZzZzOoUuAaIiOoUuUuUuUuUuAaAaGgKkOoOojGgNnAaAaAaEeEeIiIiOoOoRrRrUuUuSsTtHhAaEeOoOoOoOoYyAaBbBbBbCcDdDdDdDdDdEeEeEeEeEeFfGgHhHhHhHhHhIiIiKkKkKkLlLlLlLlMmMmMmNnNnNnNnOoOoOoOoPpPpRrRrRrRrSsSsSsSsSsTtTtTtTtUuUuUuUuUuVvVvWwWwWwWwWwXxXxYyZzZzZzhtwyAaAaAaAaAaAaAaAaAaAaAaAaEeEeEeEeEeEeEeEeIiIiOoOoOoOoOoOoOoOoOoOoOoOoUuUuUuUuUuUuUuYyYyYyYy
 '@
 }
 # <<< timezone data
