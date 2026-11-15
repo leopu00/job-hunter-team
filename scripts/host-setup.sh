@@ -256,7 +256,7 @@ ts_table() {
     hu:host_setup.tz.chosen) printf '%s' 'Időzóna: %s' ;;
     hu:host_setup.tz.how) printf '%s' 'Írj be egy országot, egy várost vagy egy időzónát (például Magyarország, Budapest, Europe/Budapest).' ;;
     hu:host_setup.tz.how_default) printf '%s' 'Nyomj Entert, ha megtartod ezt: %s, vagy írj be egy országot, egy várost vagy egy időzónát, hogy másikat keress.' ;;
-    hu:host_setup.tz.none) printf '%s' 'Nem található időzóna ehhez: «%s». Próbálj meg egy országot, egy várost vagy egy időzónát, például Europe/Budapest.' ;;
+    hu:host_setup.tz.none) printf '%s' 'Nincs időzóna ehhez: «%s». Írd be az országot (például Magyarország) vagy egy közeli nagyvárost.' ;;
     hu:host_setup.tz.not_detected) printf '%s' 'Az időzónádat nem sikerült felismerni.' ;;
     hu:host_setup.tz.pick) printf '%s' 'Szám (1-%d), vagy új keresés:' ;;
     hu:host_setup.tz.proposed) printf '%s' 'Javasolt: %s (most %s).' ;;
@@ -304,7 +304,7 @@ ts_table() {
     es:host_setup.tz.chosen) printf '%s' 'Zona horaria: %s' ;;
     es:host_setup.tz.how) printf '%s' 'Escribe un país, una ciudad o una zona horaria (por ejemplo España, Madrid, Europe/Madrid).' ;;
     es:host_setup.tz.how_default) printf '%s' 'Pulsa Intro para mantener %s, o escribe un país, una ciudad o una zona horaria para buscar otra.' ;;
-    es:host_setup.tz.none) printf '%s' 'No se ha encontrado ninguna zona horaria para «%s»: prueba con un país, una ciudad o una zona como Europe/Madrid.' ;;
+    es:host_setup.tz.none) printf '%s' 'No hay ninguna zona horaria para «%s»: escribe el país (por ejemplo España) o una ciudad grande cercana.' ;;
     es:host_setup.tz.not_detected) printf '%s' 'No se ha detectado tu zona horaria.' ;;
     es:host_setup.tz.pick) printf '%s' 'Número (1-%d), o una nueva búsqueda:' ;;
     es:host_setup.tz.proposed) printf '%s' 'Propuesta: %s (ahora %s).' ;;
@@ -352,7 +352,7 @@ ts_table() {
     de:host_setup.tz.chosen) printf '%s' 'Zeitzone: %s' ;;
     de:host_setup.tz.how) printf '%s' 'Gib ein Land, eine Stadt oder eine Zeitzone ein (zum Beispiel Deutschland, Berlin, Europe/Berlin).' ;;
     de:host_setup.tz.how_default) printf '%s' 'Drücke Enter, um %s zu behalten, oder gib ein Land, eine Stadt oder eine Zeitzone ein, um eine andere zu suchen.' ;;
-    de:host_setup.tz.none) printf '%s' 'Keine Zeitzone für «%s» gefunden: Versuche es mit einem Land, einer Stadt oder einer Zeitzone wie Europe/Berlin.' ;;
+    de:host_setup.tz.none) printf '%s' 'Keine Zeitzone für «%s»: Gib das Land ein (zum Beispiel Deutschland) oder eine große Stadt in der Nähe.' ;;
     de:host_setup.tz.not_detected) printf '%s' 'Deine Zeitzone wurde nicht erkannt.' ;;
     de:host_setup.tz.pick) printf '%s' 'Nummer (1-%d) oder eine neue Suche:' ;;
     de:host_setup.tz.proposed) printf '%s' 'Vorgeschlagen: %s (jetzt %s).' ;;
@@ -400,7 +400,7 @@ ts_table() {
     fr:host_setup.tz.chosen) printf '%s' 'Fuseau horaire : %s' ;;
     fr:host_setup.tz.how) printf '%s' 'Tape un pays, une ville ou un fuseau horaire (par exemple France, Paris, Europe/Paris).' ;;
     fr:host_setup.tz.how_default) printf '%s' 'Appuie sur Entrée pour garder %s, ou tape un pays, une ville ou un fuseau horaire pour en chercher un autre.' ;;
-    fr:host_setup.tz.none) printf '%s' 'Aucun fuseau horaire trouvé pour « %s » : essaie un pays, une ville ou un fuseau comme Europe/Paris.' ;;
+    fr:host_setup.tz.none) printf '%s' 'Aucun fuseau horaire pour « %s » : tape le pays (par exemple France) ou une grande ville proche.' ;;
     fr:host_setup.tz.not_detected) printf '%s' 'Ton fuseau horaire n'\''a pas été détecté.' ;;
     fr:host_setup.tz.pick) printf '%s' 'Numéro (1-%d), ou une nouvelle recherche :' ;;
     fr:host_setup.tz.proposed) printf '%s' 'Proposé : %s (il est %s).' ;;
@@ -448,7 +448,7 @@ ts_table() {
     pt:host_setup.tz.chosen) printf '%s' 'Fuso horário: %s' ;;
     pt:host_setup.tz.how) printf '%s' 'Escreve um país, uma cidade ou um fuso horário (por exemplo Portugal, Lisboa, Europe/Lisbon).' ;;
     pt:host_setup.tz.how_default) printf '%s' 'Prime Enter para manter %s, ou escreve um país, uma cidade ou um fuso horário para procurar outro.' ;;
-    pt:host_setup.tz.none) printf '%s' 'Nenhum fuso horário encontrado para «%s»: experimenta um país, uma cidade ou um fuso como Europe/Lisbon.' ;;
+    pt:host_setup.tz.none) printf '%s' 'Nenhum fuso horário para «%s»: escreve o país (por exemplo Portugal) ou uma cidade grande perto.' ;;
     pt:host_setup.tz.not_detected) printf '%s' 'O teu fuso horário não foi detetado.' ;;
     pt:host_setup.tz.pick) printf '%s' 'Número (1-%d), ou uma nova pesquisa:' ;;
     pt:host_setup.tz.proposed) printf '%s' 'Proposto: %s (agora %s).' ;;
