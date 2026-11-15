@@ -25,6 +25,9 @@ TOOLS_STATE_DIR="${JHT_HOME_HOST:-$HOME/.jht}/state"
 TOOLS_LOCK="$RUNTIME_DIR/.tools-pull.lock"
 TOOLS_FAILED_FILE="$RUNTIME_DIR/.tools-pull-failed"
 TOOLS_SWITCH_FAILED_FILE="$RUNTIME_DIR/.tools-switch-failed"
+# The switch under way (down of the core team, up on the full one): the pid of the job. `jht team chat` reads it when its REPL ends,
+# to tell the person why (the REPL runs in the container, and the down ends it).
+TOOLS_SWITCHING_FILE="$RUNTIME_DIR/.tools-switching"
 
 tools_now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
@@ -145,13 +148,27 @@ tools_wait_and_switch() {
   done
 }
 
-# Another `jht` command of this computer is running (setup, up, down, an upgrade...): the switch waits for it, never in the middle of
-# it. The job is a child of the wrapper that started it, with the same command line: its own process is left out, and so are its
-# own children (the subshell of a command substitution is a fork with the same command line, and pgrep only leaves itself out).
+# Another `jht` command of this computer that changes the runtime is running (setup, up, down, an upgrade...): the switch waits for
+# it, never in the middle of it. Only those: a command that reads or talks (`jht team chat` of the onboarding, logs, status, doctor,
+# help...) does not hold the switch back, or the REPL the person keeps open after the onboarding kept the full team away for the
+# whole half hour. The list is of what counts, not of what does not: a new command does not hold the switch until it is named here.
+tools_command_changes_runtime() {
+  case "${1:-}" in
+    setup|up|start-container|down|stop-container|restart|recreate|upgrade|uninstall|reset|migrate-runtime|podman-machine-recreate) return 0 ;;
+    config) [ "${2:-}" = set ] ;;
+    providers) [ "${2:-}" = use ] || [ "${2:-}" = harness ] ;;
+    integration) [ "${2:-}" = add ] || [ "${2:-}" = remove ] ;;
+    tools) [ "${2:-}" = pull ] || [ "${2:-}" = switch ] ;;
+    *) return 1 ;;
+  esac
+}
+
+# The job is a child of the wrapper that started it, with the same command line: its own process is left out, and so are its own
+# children (the subshell of a command substitution is a fork with the same command line, and pgrep only leaves itself out).
 tools_other_wrapper_running() {
   # bash 3.2 (the system bash of macOS) has no BASHPID, and $$ in a subshell is still the wrapper's: the parent of a new sh is
   # this process (exec, so no subshell of the command substitution comes in between)
-  local me="${BASHPID:-$(exec sh -c 'echo "$PPID"')}" pids pid parent
+  local me="${BASHPID:-$(exec sh -c 'echo "$PPID"')}" pids pid parent line command sub
   pids="$(pgrep -f -- "$WRAPPER_PATH" 2>/dev/null)" || return 1
   for pid in $pids; do
     [ "$pid" = "$me" ] && continue
@@ -159,7 +176,13 @@ tools_other_wrapper_running() {
     parent="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')"
     [ -n "$parent" ] || continue          # gone already
     [ "$parent" = "$me" ] && continue     # a child of this job (the subshell of the command substitution above)
-    return 0
+    line="$(ps -o args= -p "$pid" 2>/dev/null)" || continue
+    case "$line" in *"$WRAPPER_PATH"*) ;; *) continue ;; esac
+    # the words after the wrapper's path: the command and its first argument
+    read -r command sub _ <<EOF
+${line#*"$WRAPPER_PATH"}
+EOF
+    tools_command_changes_runtime "$command" "$sub" && return 0
   done
   return 1
 }
@@ -182,9 +205,10 @@ tools_switch_auto() {
   rm -f "$TOOLS_SWITCH_FAILED_FILE"
   unset JHT_IMAGE
   if [ "$stopped" -eq 0 ]; then
+    printf '%s\n' "${BASHPID:-$(exec sh -c 'echo "$PPID"')}" > "$TOOLS_SWITCHING_FILE"
     "$WRAPPER_PATH" down </dev/null >/dev/null 2>&1 || true
   fi
-  rm -f "$RUNTIME_TIER_FILE" && rm -f "$RUNTIME_TIER_INTEGRITY" || return 0
+  rm -f "$RUNTIME_TIER_FILE" && rm -f "$RUNTIME_TIER_INTEGRITY" || { rm -f "$TOOLS_SWITCHING_FILE"; return 0; }
   if [ "$stopped" -eq 1 ]; then
     tools_notice ready full "" "$(tools_now)"
   elif "$WRAPPER_PATH" up </dev/null >/dev/null 2>&1; then
@@ -193,6 +217,7 @@ tools_switch_auto() {
     printf 'switch_failed\n' > "$TOOLS_SWITCH_FAILED_FILE"
     tools_notice failed full switch_failed "$(tools_now)"
   fi
+  rm -f "$TOOLS_SWITCHING_FILE"
 }
 
 # What the wrapper tells the person, one word: arriving (pulling or waiting), failed (the pull), switch_failed, or nothing.

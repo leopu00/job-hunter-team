@@ -65,6 +65,9 @@ function Get-ToolsTextTable {
 }
 # <<< texts in the 7 languages
 $ToolsSwitchFailedFile = Join-Path $RuntimeDir '.tools-switch-failed'
+# The switch under way (down of the core team, up on the full one): the pid of the job. `jht team chat` reads it when its REPL ends,
+# to tell the person why (the REPL runs in the container, and the down ends it).
+$ToolsSwitchingFile = Join-Path $RuntimeDir '.tools-switching'
 
 function Get-ToolsNow { return [DateTime]::UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'") }
 
@@ -236,8 +239,32 @@ function Invoke-ToolsWrapperStep {
   return [int](Start-Process @run).ExitCode
 }
 
-# Another `jht` command of this computer is running (setup, up, down, an upgrade...): the switch waits for it, never in the middle of
-# it. The job is a process of its own with the wrapper on its command line: its own process is left out.
+# Another `jht` command of this computer that changes the runtime is running (setup, up, down, an upgrade...): the switch waits for
+# it, never in the middle of it. Only those: a command that reads or talks (`jht team chat` of the onboarding, logs, status, doctor,
+# help...) does not hold the switch back, or the REPL the person keeps open after the onboarding kept the full team away for the
+# whole half hour. The list is of what counts, not of what does not: a new command does not hold the switch until it is named here.
+function Test-ToolsCommandChangesRuntime {
+  param([string]$Command, [string]$Sub)
+  switch -CaseSensitive ($Command) {
+    { $_ -cin @('setup', 'up', 'start-container', 'down', 'stop-container', 'restart', 'recreate', 'upgrade', 'uninstall', 'reset', 'migrate-runtime', 'podman-machine-recreate') } { return $true }
+    'config' { return ($Sub -ceq 'set') }
+    'providers' { return ($Sub -ceq 'use' -or $Sub -ceq 'harness') }
+    'integration' { return ($Sub -ceq 'add' -or $Sub -ceq 'remove') }
+    'tools' { return ($Sub -ceq 'pull' -or $Sub -ceq 'switch') }
+  }
+  return $false
+}
+
+# The words after the wrapper's path on a command line: the command and its first argument (a closing quote of the path dropped).
+function Get-ToolsWrapperWords {
+  param([string]$Line, [string]$Wrapper)
+  $at = $Line.IndexOf($Wrapper, [StringComparison]::OrdinalIgnoreCase)
+  if ($at -lt 0) { return @() }
+  $rest = $Line.Substring($at + $Wrapper.Length).TrimStart([char]34, [char]39)
+  return @($rest.Split([char[]]@([char]32, [char]9), [StringSplitOptions]::RemoveEmptyEntries) | ForEach-Object { $_.Trim([char]34, [char]39) })
+}
+
+# The job is a process of its own with the wrapper on its command line: its own process is left out.
 function Test-ToolsOtherWrapperRunning {
   try {
     $wrapper = [IO.Path]::GetFullPath($WrapperPath)
@@ -246,7 +273,13 @@ function Test-ToolsOtherWrapperRunning {
     } else {
       $lines = @(Get-Process -ErrorAction Stop | Where-Object { $_.Id -ne $PID -and $_.CommandLine } | ForEach-Object { $_.CommandLine })
     }
-    foreach ($line in $lines) { if ($line.Contains($wrapper)) { return $true } }
+    foreach ($line in $lines) {
+      $words = @(Get-ToolsWrapperWords $line $wrapper)
+      if ($words.Count -eq 0) { continue }
+      $sub = ''
+      if ($words.Count -gt 1) { $sub = $words[1] }
+      if (Test-ToolsCommandChangesRuntime $words[0] $sub) { return $true }
+    }
   } catch { }
   return $false
 }
@@ -268,15 +301,22 @@ function Invoke-ToolsSwitchAuto {
   if (Get-Command Test-JhtTeamStoppedByPerson -ErrorAction SilentlyContinue) { $stopped = [bool](Test-JhtTeamStoppedByPerson) }
   Remove-Item -LiteralPath $ToolsSwitchFailedFile -Force -ErrorAction SilentlyContinue
   Remove-Item Env:\JHT_IMAGE -ErrorAction SilentlyContinue
-  if (-not $stopped) { $null = Invoke-ToolsWrapperStep 'down' }
+  if (-not $stopped) {
+    [IO.File]::WriteAllText($ToolsSwitchingFile, "$PID`n", [Text.UTF8Encoding]::new($false))
+    $null = Invoke-ToolsWrapperStep 'down'
+  }
   try {
-    Remove-Item -LiteralPath $RuntimeTierFile -Force
-    Remove-Item -LiteralPath $RuntimeTierIntegrity -Force -ErrorAction SilentlyContinue
-  } catch { return }
-  if ($stopped -or ((Invoke-ToolsWrapperStep 'up') -eq 0)) { Write-ToolsNotice 'ready' 'full' '' (Get-ToolsNow) }
-  else {
-    [IO.File]::WriteAllText($ToolsSwitchFailedFile, "switch_failed`n", [Text.UTF8Encoding]::new($false))
-    Write-ToolsNotice 'failed' 'full' 'switch_failed' (Get-ToolsNow)
+    try {
+      Remove-Item -LiteralPath $RuntimeTierFile -Force
+      Remove-Item -LiteralPath $RuntimeTierIntegrity -Force -ErrorAction SilentlyContinue
+    } catch { return }
+    if ($stopped -or ((Invoke-ToolsWrapperStep 'up') -eq 0)) { Write-ToolsNotice 'ready' 'full' '' (Get-ToolsNow) }
+    else {
+      [IO.File]::WriteAllText($ToolsSwitchFailedFile, "switch_failed`n", [Text.UTF8Encoding]::new($false))
+      Write-ToolsNotice 'failed' 'full' 'switch_failed' (Get-ToolsNow)
+    }
+  } finally {
+    Remove-Item -LiteralPath $ToolsSwitchingFile -Force -ErrorAction SilentlyContinue
   }
 }
 

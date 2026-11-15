@@ -4,7 +4,8 @@
     "set": "fields of the profile set to a value (L1 fields of the schema)",
     "add": "values added to a list field of the profile",
     "preference": "an item {heading: onb.<step>.object, text: the chosen label} in the recommended block of key `preferences` (kind key_points)",
-    "ask": "fields the chat still has to ask: nothing is written for them"
+    "ask": "fields the chat still has to ask: nothing is written for them",
+    "preference_field": "a field of the `preferences` mapping of the profile (work_mode, relocation) set to a value, so that the tools that read the profile (the Scout's plan) see it: the item of the block is for the person to read, this is for the program"
   },
   "version": 1,
   "steps": [
@@ -425,13 +426,16 @@
     {
       "id": "mode",
       "key": "onb.mode",
-      "note": "No field of the canonical profile holds this: it is written as an item of the recommended «preferences» block.",
+      "note": "The item of the recommended «preferences» block is what the person reads; preferences.work_mode is what the Scout's plan reads.",
       "options": [
         {
           "id": "remote",
           "effect": {
             "preference": {
               "block": "preferences"
+            },
+            "preference_field": {
+              "work_mode": "remote"
             }
           }
         },
@@ -440,6 +444,9 @@
           "effect": {
             "preference": {
               "block": "preferences"
+            },
+            "preference_field": {
+              "work_mode": "remote-first"
             }
           }
         },
@@ -448,6 +455,9 @@
           "effect": {
             "preference": {
               "block": "preferences"
+            },
+            "preference_field": {
+              "work_mode": "hybrid"
             }
           }
         },
@@ -456,6 +466,9 @@
           "effect": {
             "preference": {
               "block": "preferences"
+            },
+            "preference_field": {
+              "work_mode": "on-site"
             }
           }
         },
@@ -464,6 +477,9 @@
           "effect": {
             "preference": {
               "block": "preferences"
+            },
+            "preference_field": {
+              "work_mode": "flexible"
             }
           }
         }
@@ -535,13 +551,16 @@
     {
       "id": "relocation",
       "key": "onb.relocation",
-      "note": "No field of the canonical profile holds this: it is written as an item of the recommended «preferences» block.",
+      "note": "The item of the recommended «preferences» block is what the person reads; preferences.relocation (true or false) is what the Scout's plan reads. «Only within my country» and «It depends» write no field: relocation unset is never assumed to be a yes.",
       "options": [
         {
           "id": "never",
           "effect": {
             "preference": {
               "block": "preferences"
+            },
+            "preference_field": {
+              "relocation": false
             }
           }
         },
@@ -558,6 +577,9 @@
           "effect": {
             "preference": {
               "block": "preferences"
+            },
+            "preference_field": {
+              "relocation": true
             }
           }
         },
@@ -566,6 +588,9 @@
           "effect": {
             "preference": {
               "block": "preferences"
+            },
+            "preference_field": {
+              "relocation": true
             }
           }
         },
@@ -574,6 +599,9 @@
           "effect": {
             "preference": {
               "block": "preferences"
+            },
+            "preference_field": {
+              "relocation": true
             }
           }
         },

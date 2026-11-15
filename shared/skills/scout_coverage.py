@@ -151,9 +151,14 @@ def build_plan(spoken: dict, mode: str = "", data: dict | None = None, rights=fr
     data = data or table()
     strong = sorted(_lang.business_languages(spoken), key=lambda code: (-spoken[code], code))
     groups = [code for code in strong if code != "en"]
-    if "en" in strong:
+    onsite = any(word in mode for word in REMOTE_BLOCKERS)
+    # A person who works on site, will not move and whose home country is not known (a city or a region named without its country:
+    # `home` is empty then, and nothing is left out for being abroad) has no use for the English-speaking countries' boards when English
+    # is not her main language: they are other countries' ads, onsite there.
+    abroad_english = onsite and not relocation and not home and strong and strong[0] != "en"
+    if "en" in strong and not abroad_english:
         groups.append("en")
-    remote = bool(strong) and not any(word in mode for word in REMOTE_BLOCKERS)
+    remote = bool(strong) and not onsite
     if remote:
         groups.append("remote")
     entries, unmapped, skipped, abroad = [], [], set(), set()
@@ -499,15 +504,19 @@ def default_since(now: float) -> float:
 
 
 def load_plan(profile_path=None) -> dict:
-    home, relocation = (), True
+    home, relocation, mode = (), True, work_mode(profile_path)
     try:
         import scout_area
+        import scout_search_scope as scope_mod
+        scope = scope_mod.read_scope(scout_area._profile_path(profile_path))
+        relocation = scout_area.relocation_allowed(scope.relocation)    # said or not said, whether or not the home country is known
+        mode = mode or str(scope.work_mode or "").strip().lower()
         area = scout_area.read_area(profile_path)
         if area:
             home, relocation = tuple(area["home"]), area["relocation"]
     except Exception:  # noqa: BLE001 — no area, nothing is left out for being abroad
         pass
-    return build_plan(_lang.read_languages(profile_path), work_mode(profile_path), rights=work_rights(profile_path), home=home, relocation=relocation)
+    return build_plan(_lang.read_languages(profile_path), mode, rights=work_rights(profile_path), home=home, relocation=relocation)
 
 
 def rows_since(since_ts: float) -> list:

@@ -43,6 +43,7 @@ MAX_CARDS_PER_STEP = 5
 CLOSED_FIELDS = {
     "set": {"target_role_category_id", "target_specialty", "experience_years", "seniority_target", "target_role"},
     "add": {"location_preferences"},
+    "preference_field": {"work_mode", "relocation"},   # fields of the profile's `preferences` mapping
 }
 PREFERENCES_KEY = "preferences"
 PREFERENCES_TITLE_KEY = "onb.preferences.title"
@@ -380,6 +381,15 @@ def write_effect(profile: dict[str, Any], step: dict[str, Any], option: dict[str
         heading = t(f"{step['key']}.object")
         item = {"heading": heading, "text": t(f"{step['key']}.opt.{option['id']}")}
         content[:] = [c for c in content if not (isinstance(c, dict) and c.get("heading") == heading)] + [item]
+    for field, value in (effect.get("preference_field") or {}).items():
+        if field not in CLOSED_FIELDS["preference_field"]:
+            raise QuestionnaireError("field_not_allowed")
+        preferences = profile.get("preferences")
+        if preferences is None:
+            preferences = profile["preferences"] = {}
+        if not isinstance(preferences, dict):
+            raise QuestionnaireError("profile_preferences_invalid")
+        preferences[field] = value
     to_ask.extend(f for f in (effect.get("ask") or []) if isinstance(f, str))
     return to_ask
 

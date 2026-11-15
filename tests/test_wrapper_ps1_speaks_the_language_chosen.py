@@ -64,7 +64,7 @@ def test_every_text_of_the_wrapper_is_in_the_catalog_of_each_language(lang):
 
 def test_the_wrapper_names_a_key_the_catalog_has():
     english = catalog("en")
-    assert [key for key in texts.keys() if texts.PREFIX + key not in english] == []
+    assert [key for key in texts.keys() if texts.catalog_name(key) not in english] == []
 
 
 def test_the_code_of_the_wrapper_is_ascii_the_accents_are_in_the_block_as_characters():
@@ -101,7 +101,7 @@ def test_no_sentence_for_the_person_is_written_in_italian_by_hand():
         if kind not in ("s", "d", "hs", "hd") or not ITALIAN.search(body):
             continue
         # a key of the catalog, a state or a reason that a machine reads (the app reads `non-installata` and the JSON of an absent helper)
-        if re.fullmatch(r"[a-z][a-z0-9_]*(?:[.-][a-z0-9_]+)+", body) or '"state":"not_installed"' in body:
+        if re.fullmatch(r"[a-z][a-z0-9_]*(?:[.-][a-z0-9_]+)+|--[a-z][a-z0-9-]*", body) or '"state":"not_installed"' in body:
             continue
         # code is not a sentence: a pattern, a command run in the container, a path
         if re.search(r"^\s*(?:const |import |if \[|IFS=|[\w/.-]+\.sh)|\\\\|\(\?m\)|\^\[", body) or body.count("\n") > 3 and not body.startswith(("jht", "Uso")):
@@ -128,8 +128,9 @@ def _run(shell: str, script: str, env: dict | None = None) -> subprocess.Complet
     assert script.isascii()
     with tempfile.TemporaryDirectory() as folder:
         path = Path(folder) / "probe.ps1"
-        path.write_bytes(script.encode("ascii"))
-        return subprocess.run(_argv(shell, "-File", str(path)), capture_output=True, text=True, timeout=180, env=env, stdin=subprocess.DEVNULL)
+        path.write_bytes((UTF8_OUTPUT + script).encode("ascii"))
+        # what is read is UTF-8 (the texts have accents): the console of the run is set to it, the output is decoded as it
+        return subprocess.run(_argv(shell, "-File", str(path)), capture_output=True, text=True, encoding="utf-8", timeout=180, env=env, stdin=subprocess.DEVNULL)
 
 
 def _functions() -> str:
@@ -154,7 +155,7 @@ foreach ($lang in @('en','it','hu','es','de','fr','pt')) {
     for line in done.stdout.splitlines():
         lang, key, encoded = line.split(" ", 2)
         said[(lang, key)] = base64.b64decode(encoded).decode("utf-8")
-    wanted = {(lang, key): catalog(lang)[texts.PREFIX + key] for lang in LANGUAGES for key in texts.keys()}
+    wanted = {(lang, key): catalog(lang)[texts.catalog_name(key)] for lang in LANGUAGES for key in texts.keys()}
     assert said.keys() == wanted.keys()
     wrong = [pair for pair in wanted if said[pair] != wanted[pair]]
     assert wrong == [], wrong[:5]
@@ -164,10 +165,10 @@ foreach ($lang in @('en','it','hu','es','de','fr','pt')) {
 @pytest.mark.parametrize("lang", LANGUAGES)
 def test_the_texts_with_values_put_them_in_every_language(shell, lang):
     english = catalog("en")
-    keys = [key for key in texts.keys() if PLACEHOLDER.search(english[texts.PREFIX + key])]
+    keys = [key for key in texts.keys() if PLACEHOLDER.search(english[texts.catalog_name(key)])]
     lines = [_functions()]
     for key in keys:
-        values = " ".join("'ZZVALUE'" if p == "%s" else "4242" for p in PLACEHOLDER.findall(english[texts.PREFIX + key]))
+        values = " ".join("'ZZVALUE'" if p == "%s" else "4242" for p in PLACEHOLDER.findall(english[texts.catalog_name(key)]))
         lines.append(f"[Console]::Out.WriteLine((Format-JhtText '{key}' {values}))")
     env = {**os.environ, "JHT_LANG": lang, "JHT_HOST_ENV_FILE": str(Path("/nonexistent") / "host.env")}
     done = _run(shell, "\n".join(lines).replace("Get-JhtTextTable (Get-JhtTextLanguage) $Key", f"Get-JhtTextTable '{lang}' $Key"), env)
@@ -175,7 +176,7 @@ def test_the_texts_with_values_put_them_in_every_language(shell, lang):
     said = done.stdout.splitlines()
     assert len(said) == len(keys)
     for line, key in zip(said, keys):
-        reference = english[texts.PREFIX + key]
+        reference = english[texts.catalog_name(key)]
         assert line.count("ZZVALUE") == reference.count("%s") and line.count("4242") == reference.count("%d"), (key, line)
 
 

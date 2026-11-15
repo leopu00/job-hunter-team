@@ -62,12 +62,16 @@ def test_a_choice_writes_only_fields_that_exist_in_the_canonical_profile():
     for step in DATA["steps"]:
         for option in step["options"]:
             effect = option["effect"]
-            assert set(effect) <= {"set", "add", "preference", "ask"}, (step["id"], option["id"])
+            assert set(effect) <= {"set", "add", "preference", "preference_field", "ask"}, (step["id"], option["id"])
             assert effect, (step["id"], option["id"])
             for field in (*effect.get("set", {}), *effect.get("add", {}), *effect.get("ask", [])):
                 assert field in fields, (step["id"], option["id"], field)
             if "preference" in effect:
                 assert effect["preference"] == {"block": "preferences"}
+            # the fields of `preferences` the program reads (the Scout's plan): the validator of the profile allows exactly these
+            for field, value in effect.get("preference_field", {}).items():
+                assert field in {"work_mode", "relocation"}, (step["id"], option["id"], field)
+                assert isinstance(value, bool if field == "relocation" else str), (step["id"], option["id"], field)
             if "free_text" in option:
                 assert option["free_text"]["field"] in fields
     for category in ("software", "data", "product", "design", "business", "security", "other"):
