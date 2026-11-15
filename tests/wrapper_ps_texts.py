@@ -33,11 +33,17 @@ WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
 # texts have accents now. A person at a console is not concerned (the console shows them whole); what reads a pipe is.
 UTF8_OUTPUT = "try { [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false) } catch { }\n"
 PREFIX = "wrapper."
+SHARED_PREFIXES = ("host_setup.",)  # keys of another prefix the wrapper says as they are: the timezone picker of the .sh and the .ps1 speak the same texts
 BEGIN = "# >>> texts in the 7 languages, made from shared/locales by `python3 tests/wrapper_ps_texts.py --write`: do not edit by hand"
 END = "# <<< texts in the 7 languages"
 CALL = re.compile(r"(?<![\w-])(?:Get-JhtText|Format-JhtText) '([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)'")
 NAMED = re.compile(r"(?m)^\s*# texts said through a variable: (.+)$")
 POSITIONAL = re.compile(r"\{\d+\}|<machine>")
+
+
+def catalog_name(key: str) -> str:
+    """The key of the catalog for a key as the wrapper writes it: `wrapper.` is put before it, unless it is one of the shared prefixes."""
+    return key if key.startswith(SHARED_PREFIXES) else PREFIX + key
 
 
 def ps_quote(text: str) -> str:
@@ -99,7 +105,7 @@ def block(text: str | None = None) -> str:
     lines = [BEGIN, "function Get-JhtTextTable {", "  param([string]$Lang, [string]$Key)", '  switch -CaseSensitive ("$Lang`:$Key") {']
     for lang in LANGUAGES:
         texts = catalog(lang)
-        lines += [f"    '{lang}:{key}' {{ return {ps_text(texts[PREFIX + key])} }}" for key in used if PREFIX + key in texts]
+        lines += [f"    '{lang}:{key}' {{ return {ps_text(texts[catalog_name(key)])} }}" for key in used if catalog_name(key) in texts]
     lines += ["  }", "  return $null", "}", END]
     return nl.join(lines) + nl
 
@@ -110,9 +116,44 @@ def written_block(text: str | None = None) -> str:
     return text[start : text.index("\n", end) + 1]
 
 
+TZ_BEGIN = "# >>> timezone data, made from shared/data/timezones.txt by `python3 tests/wrapper_ps_texts.py --write`: do not edit by hand"
+TZ_END = "# <<< timezone data"
+
+
+def ascii_escaped(text: str) -> str:
+    """The text with every character that is not printable ASCII written as \\uXXXX (a UTF-16 unit each); the wrapper reads it back."""
+    out = []
+    for char in text:
+        if " " <= char <= "~" and char != "\\":
+            out.append(char)
+        else:
+            for unit in char.encode("utf-16-le", "surrogatepass").hex(" ", 2).split():
+                out.append("\\u" + unit[2:] + unit[:2])
+    return "".join(out)
+
+
+def timezone_block(text: str | None = None) -> str:
+    """Get-JhtTimezoneLines: the lines of shared/data/timezones.txt, in a here-string of ASCII (the picker decodes the \\uXXXX)."""
+    import timezone_data
+
+    text = source() if text is None else text
+    nl = newline(text)
+    body = [ascii_escaped(line) for line in timezone_data.lines()]
+    return nl.join([TZ_BEGIN, "function Get-JhtTimezoneLines {", "  return @'", *body, "'@", "}", TZ_END]) + nl
+
+
+def written_timezone_block(text: str | None = None) -> str:
+    text = source() if text is None else text
+    start, end = text.index(TZ_BEGIN), text.index(TZ_END)
+    return text[start : text.index("\n", end) + 1]
+
+
 def write() -> None:
     text = source()
-    WRAPPER.write_bytes(text.replace(written_block(text), block(text)).encode("utf-8"))
+    text = text.replace(written_block(text), block(text))
+    if TZ_BEGIN in text:
+        text = text.replace(written_timezone_block(text), timezone_block(text))
+    WRAPPER.write_bytes(text.encode("utf-8"))
 
 
 def say_functions(lang: str = "it", text: str | None = None) -> str:
@@ -135,7 +176,7 @@ def problems(lang: str, text: str | None = None) -> list[str]:
     texts, english = catalog(lang), catalog("en")
     out = []
     for key in keys(text):
-        name = PREFIX + key
+        name = catalog_name(key)
         if name not in texts:
             out.append(f"{lang}: {name} is missing")
             continue

@@ -82,6 +82,7 @@ WINDOWS_GATE_EXTRA = (
     "tests/test_tools_ps1_speaks_the_language_chosen.py",
     "tests/test_wrapper_desktop_apply.py",
     "tests/test_wrapper_ps1_speaks_the_language_chosen.py",
+    "tests/test_wrapper_ps1_timezone_choice.py",
 )
 
 # Red on Windows today, waiting for the correction: file -> whose it is and why. Empty when all is corrected.
