@@ -450,7 +450,10 @@ def test_the_chat_of_the_onboarding_does_not_hold_the_switch(box):
     (["tools", "status", "--json"], False), (["tools", "pull-job"], False), (["team", "start"], False), (["SETUP"], False),
 ])
 def test_only_a_command_that_changes_the_runtime_holds_the_switch(tmp_path, words, holds):
-    wrapper = tmp_path / "jht-wrapper.sh"
+    # a long path, as on a runner: ps cuts a command line at the width of a terminal unless told not to (-ww)
+    deep = tmp_path / ("a-long-folder-name-" * 6)
+    deep.mkdir()
+    wrapper = deep / "jht-wrapper.sh"
     wrapper.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     body = (f'RUNTIME_DIR="{tmp_path}"; JHT_HOME_HOST="{tmp_path}"; WRAPPER_PATH="{wrapper}"\n'
             f'source "{TOOLS}"\nif tools_other_wrapper_running; then echo OTHER; else echo NONE; fi\n')

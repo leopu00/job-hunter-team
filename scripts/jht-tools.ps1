@@ -267,14 +267,16 @@ function Get-ToolsWrapperWords {
 # The job is a process of its own with the wrapper on its command line: its own process is left out.
 function Test-ToolsOtherWrapperRunning {
   try {
-    $wrapper = [IO.Path]::GetFullPath($WrapperPath)
+    # the path as the wrapper was given it and as GetFullPath says it (Windows PowerShell 5.1 turns an 8.3 short name into the long one)
+    $wrappers = @($WrapperPath, [IO.Path]::GetFullPath($WrapperPath)) | Select-Object -Unique
     if ($PSVersionTable.PSEdition -eq 'Desktop' -or $IsWindows) {
       $lines = @(Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine } | ForEach-Object { $_.CommandLine })
     } else {
       $lines = @(Get-Process -ErrorAction Stop | Where-Object { $_.Id -ne $PID -and $_.CommandLine } | ForEach-Object { $_.CommandLine })
     }
     foreach ($line in $lines) {
-      $words = @(Get-ToolsWrapperWords $line $wrapper)
+      $words = @()
+      foreach ($wrapper in $wrappers) { if ($words.Count -eq 0) { $words = @(Get-ToolsWrapperWords $line $wrapper) } }
       if ($words.Count -eq 0) { continue }
       $sub = ''
       if ($words.Count -gt 1) { $sub = $words[1] }
