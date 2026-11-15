@@ -50,7 +50,7 @@ def test_integration_list_in_words_has_one_line_per_integration(host):
     done = host.run("integration", "list")
     assert done.returncode == 0, done.stderr
     lines = done.stdout.splitlines()
-    assert [line.split()[0] for line in lines] == IDS and all("non installato" in line for line in lines)
+    assert [line.split()[0] for line in lines] == IDS and all("not installed" in line for line in lines)  # English: the language of a person who chose nothing
 
 
 @pytest.mark.parametrize("flag", [True, False])
@@ -61,7 +61,7 @@ def test_integration_status_of_one_id_and_of_all(host, flag):
     if flag:
         assert json.loads(one.stdout) == {"id": "mail", "state": "not_installed", "reason": "non ancora installato"}
     else:
-        assert one.stdout.split()[0] == "mail" and "non installato" in one.stdout
+        assert one.stdout.split()[0] == "mail" and "not installed" in one.stdout
     everyone = host.run("integration", "status", "--json")
     assert [row["id"] for row in json.loads(everyone.stdout)["integrations"]] == IDS
 
@@ -76,7 +76,8 @@ def test_integration_status_of_one_id_and_of_all(host, flag):
 ])
 def test_everything_else_keeps_the_old_path_and_its_error(host, args):
     done = host.run(*args)
-    assert done.returncode == 1 and "non ancora installato" in done.stderr and "jht upgrade" in done.stderr, (done.stdout, done.stderr)
+    # English: the language of a person who chose nothing
+    assert done.returncode == 1 and "is not installed yet" in done.stderr and "jht upgrade" in done.stderr, (done.stdout, done.stderr)
     assert done.stdout == ""
 
 

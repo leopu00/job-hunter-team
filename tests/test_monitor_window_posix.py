@@ -8,19 +8,20 @@ from pathlib import Path
 import pytest
 
 from monitor_window_fakes import SH, calls, environment, executable, read_until, release, terminal
+from wrapper_texts import say_functions
 
 
 def helper(root):
     # Harness acquisition: anchored nonempty bodies, then Bash executes them.
     source = SH.read_text()
     bodies = []
-    for name in ("jht_text_en", "jht_text_it", "jht_say", "jht_monitor_window"):
+    for name in ("jht_monitor_window",):
         matches = re.findall(r"(?ms)^" + name + r"\(\) \{\n.*?^\}\n", source)
         assert len(matches) == 1, name
         bodies.append(matches[0])
     return executable(root / "bridge.sh", "#!/bin/bash\nset -eu\n"
                       "err() { printf '%s\\n' \"$*\" >&2; }\n"
-                      "HOST_KERNEL=\"$FAKE_KERNEL\"\n" + "\n".join(bodies)
+                      "HOST_KERNEL=\"$FAKE_KERNEL\"\n" + say_functions() + "\n".join(bodies)
                       + '\njht_monitor_window "$FAKE_ENTRY" "$@"\n')
 
 

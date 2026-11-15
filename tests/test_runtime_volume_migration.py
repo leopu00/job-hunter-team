@@ -12,6 +12,7 @@ import sys
 import pytest
 
 from test_desktop_chat_wrapper import _runtime
+from wrapper_texts import catalog
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -176,6 +177,11 @@ def _run(wrapper: Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]
 SECRETS_LEFT_NOTICE = (
     "contengono ancora le password della posta, gli accessi ai portali e i token di Telegram"
 )
+# What the POSIX wrapper says (jht_say, English when no language is chosen), in both its sentences of shared/locales/en.json:
+# the migration just verified and the one already verified.
+POSIX_SECRETS_LEFT_NOTICE = "still hold the mail passwords, the portal logins and the Telegram tokens"
+assert all(POSIX_SECRETS_LEFT_NOTICE in catalog("en")[key] for key in (
+    "wrapper.line.migrazione_docker_podman_verificata_i", "wrapper.line.migrazione_docker_podman_gia_verificata"))
 
 
 @posix_wrapper_only
@@ -192,14 +198,14 @@ def test_posix_migration_streams_verifies_marks_and_is_idempotent(tmp_path: Path
     assert "target=podman:jht" in marker_text
     assert all(f"{logical}=1 " in marker_text for logical in VOLUMES)
     # The kept Docker volumes still hold the broker and Telegram secrets.
-    assert SECRETS_LEFT_NOTICE in first.stdout + first.stderr
+    assert POSIX_SECRETS_LEFT_NOTICE in first.stdout + first.stderr
     calls_before = log.read_text(encoding="utf-8")
     assert "--entrypoint /bin/tar" in calls_before
     assert "not-in-log" not in calls_before
 
     second = _run(wrapper, env)
     assert second.returncode == 0, second.stderr
-    assert SECRETS_LEFT_NOTICE in second.stdout + second.stderr
+    assert POSIX_SECRETS_LEFT_NOTICE in second.stdout + second.stderr
     calls_after = log.read_text(encoding="utf-8")
     assert calls_after.count("--entrypoint /bin/tar") == calls_before.count(
         "--entrypoint /bin/tar"

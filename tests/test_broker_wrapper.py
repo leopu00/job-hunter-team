@@ -19,6 +19,8 @@ from pathlib import Path
 
 import pytest
 
+from wrapper_texts import say_functions
+
 ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
 POWERSHELL_WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
@@ -97,6 +99,7 @@ def run(host, body: str, stdin: str = "") -> subprocess.CompletedProcess:
         "ensure_broker() { return 0; }\n"  # making the broker is tests/test_broker_on_request.py
         + wrapper_functions("compose_lacks_service", "compose_unreadable", "broker_admin", "telegram_admin", "telegram_admin_input",
                           "broker_migrate_legacy", "broker_migrate_legacy_once", "mail_setup")
+        + "\n" + say_functions("it")
         + "\n" + body
     )
     return subprocess.run(["bash", "-c", script], env=host.env, input=stdin, capture_output=True, text=True, timeout=30)

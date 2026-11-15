@@ -18,6 +18,8 @@ from pathlib import Path
 
 import pytest
 
+from wrapper_texts import say_functions
+
 ROOT = Path(__file__).resolve().parents[1]
 INSTALL = ROOT / "scripts" / "install.sh"
 WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
@@ -156,6 +158,7 @@ def wrapper_functions() -> str:
         assert match, fn
         out.append(match.group(0))
     out.append(re.search(r"^MOUNT_REPAIR_DISPATCH=.*$", text, re.M).group(0))
+    out.append(say_functions())  # the sentences are jht_say <key>
     return "\n".join(out)
 
 

@@ -148,6 +148,8 @@ function Require-ComposeFile {{}}
 function Require-Docker {{}}
 function Clear-JhtTeamStopped {{}}
 function Ensure-Up {{}}
+# the tools of a core install (jht-tools.ps1): not what this case is about
+function Write-JhtToolsNotice {{ param([switch]$Kick) }}
 function docker {{
   Add-Content -LiteralPath '{recorded}' -Value ('ARGS=' + ($args -join ' '))
   Add-Content -LiteralPath '{recorded}' -Value ('STDIN=' + (@($input) -join ''))

@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from wrapper_texts import say_functions
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SHELL_WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
@@ -99,6 +101,7 @@ docker() {{
 }}
 
 {shell_functions('reset_compose_project_name', 'remove_broker_reset_data', 'reset_command')}
+{say_functions("it")}
 reset_command --scope creds --non-interactive --confirm-reset
 code=$?
 printf 'rc=%s\n' "$code"
