@@ -446,3 +446,41 @@ def test_jht_up_setup_and_status_keep_the_tools_moving_and_say_where_they_stand(
     for key in ("tools.arriving", "tools.waiting", "tools.failed", "tools.switch_failed"):
         assert f"jht_say {key}" in body, key
     assert "|| true" in body   # the command it rides on is never failed by it
+
+
+# ── jht tools --help: its own usage, served before anything starts ───────────────────────────────────────────────────────────
+
+def test_tools_help_is_its_own_usage_served_before_the_container_or_the_helper():
+    sh = WRAPPER.read_text(encoding="utf-8")
+    ps = (ROOT / "scripts" / "jht-wrapper.ps1").read_text(encoding="utf-8")
+    body = re.search(r"^tools_help\(\) \{\n.*?^\}\n", sh, re.S | re.M).group(0)
+    assert "jht_say help.tools" in body
+    gate = sh[sh.index('      -h|--help)\n'):]
+    gate = gate[:gate.index("serve_help_without_docker")]
+    assert re.search(r'if \[ "\$SUB" = tools \]; then\n\s+tools_help\n\s+exit 0', gate), "the help gate answers jht tools --help"
+    assert sh.index('if [ "$SUB" = tools ]; then\n          tools_help') < sh.index("\n  tools)\n"), "before the tools arm"
+    ps_gate = ps[ps.index("$HelpRequested = "):ps.index("exit (Invoke-HelpWithoutDocker $Sub @Rest)")]
+    assert re.search(r"if \(\$Sub -ceq 'tools'\) \{\n\s+Write-ToolsHelp\n\s+exit 0", ps_gate)
+    import sys as _sys
+    _sys.path.insert(0, str(ROOT / "tests"))
+    from wrapper_texts import catalog
+    for lang in ("en", "it"):
+        text = catalog(lang)["wrapper.help.tools"]
+        for needed in ("jht tools", "status --json", "pull", "switch"):
+            assert needed in text, (lang, needed)
+        assert text in ps, f"the .ps1 says the {lang} text of the catalogue"
+    for lang in ("hu", "es", "de", "fr", "pt"):
+        text = catalog(lang)["wrapper.help.tools"]
+        assert "jht tools" in text and "status --json" in text and "%" not in text
+
+
+def test_tools_help_runs_and_touches_nothing(tmp_path):
+    import sys as _sys
+    _sys.path.insert(0, str(ROOT / "tests"))
+    from wrapper_texts import say_functions
+    text = WRAPPER.read_text(encoding="utf-8")
+    body = re.search(r"^tools_help\(\) \{\n.*?^\}\n", text, re.S | re.M).group(0)
+    script = "set -u\ndocker() { echo DOCKER >&2; return 1; }\n" + say_functions("en") + body + "\ntools_help\n"
+    result = subprocess.run(["bash", "-c", script], text=True, capture_output=True, timeout=30)
+    assert result.returncode == 0 and result.stdout.startswith("Usage: jht tools <command>"), result.stderr
+    assert "DOCKER" not in result.stderr

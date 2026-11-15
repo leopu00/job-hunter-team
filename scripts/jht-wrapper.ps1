@@ -1748,6 +1748,31 @@ function Invoke-HelpWithoutDocker {
   return 0
 }
 
+# `jht tools --help`: its subcommands, as in jht-wrapper.sh (tools_help): a help never starts the container nor loads the helper.
+function Write-ToolsHelp {
+  if ((Get-JhtTextLanguage) -ceq 'it') {
+    [Console]::Out.WriteLine(@'
+Uso: jht tools <comando>
+
+  status --json   se gli strumenti degli Scout (l'immagine piena) sono arrivati, in arrivo o falliti
+  pull            li scarica in background (jht up e jht setup lo avviano da soli)
+  switch          ci porta la squadra quando l'onboarding e' chiuso (il download lo fa da solo)
+
+Questo aiuto non avvia niente e non scarica niente.
+'@)
+  } else {
+    [Console]::Out.WriteLine(@'
+Usage: jht tools <command>
+
+  status --json   whether the Scouts' tools (the full image) are here, on their way or failed
+  pull            downloads them in the background (jht up and jht setup start it by themselves)
+  switch          moves the team onto them once the onboarding is closed (the download does it by itself)
+
+This help starts nothing and downloads nothing.
+'@)
+  }
+}
+
 # `jht integration --help`: its usage line, not the generic help of the host. Fixed text: the command lives in a helper that
 # is fetched only when it is needed, and a help never fetches anything.
 function Write-IntegrationHelp {
@@ -4212,6 +4237,10 @@ if ($HelpRequested -and $Sub -notin @('game', 'gui', 'agent-control', 'desktop-a
   }
   if ($Sub -ceq 'linkedin' -and $Rest.Count -eq 1) {
     Write-LinkedinHelp
+    exit 0
+  }
+  if ($Sub -ceq 'tools') {
+    Write-ToolsHelp
     exit 0
   }
   if ($Sub -ceq 'setup') {

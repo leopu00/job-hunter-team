@@ -515,6 +515,13 @@ Examples:
     jht setup --non-interactive --provider openai --harness pi --api-key-stdin
   the Codex subscription (then sign in to ChatGPT):
     jht setup --non-interactive --provider openai --harness codex --auth-method subscription' ;;
+    help.tools) printf '%s' 'Usage: jht tools <command>
+
+  status --json   whether the Scouts'\'' tools (the full image) are here, on their way or failed
+  pull            downloads them in the background (jht up and jht setup start it by themselves)
+  switch          moves the team onto them once the onboarding is closed (the download does it by itself)
+
+This help starts nothing and downloads nothing.' ;;
     host_setup.skip_done) printf '%s' 'host.env is in a folder owned by the container (uid 1001): the host preflight is already done, skipping it.' ;;
     host_setup.skip_unknown) printf '%s' 'host.env is in a folder owned by the container (uid 1001) and this user cannot write to it: skipping the host preflight, but host.env cannot be read or does not say the host type (local or VPS): the type stays '\''unknown'\''.' ;;
     keyfile.both) printf '%s' 'use --api-key-file or --api-key-stdin, not both' ;;
@@ -998,6 +1005,13 @@ Esempi:
     jht setup --non-interactive --provider openai --harness pi --api-key-stdin
   l'\''abbonamento Codex (poi il login a ChatGPT):
     jht setup --non-interactive --provider openai --harness codex --auth-method subscription' ;;
+    help.tools) printf '%s' 'Uso: jht tools <comando>
+
+  status --json   se gli strumenti degli Scout (l'\''immagine piena) sono arrivati, in arrivo o falliti
+  pull            li scarica in background (jht up e jht setup lo avviano da soli)
+  switch          ci porta la squadra quando l'\''onboarding e'\'' chiuso (il download lo fa da solo)
+
+Questo aiuto non avvia niente e non scarica niente.' ;;
     host_setup.skip_done) printf '%s' 'host.env sta in una cartella del container (uid 1001): il preflight dell'\''host e'\'' gia'\'' fatto, lo salto.' ;;
     host_setup.skip_unknown) printf '%s' 'host.env sta in una cartella del container (uid 1001) e questo utente non puo'\'' scriverci: salto il preflight dell'\''host, ma host.env non si legge o non dice il tipo di host (locale o VPS): il tipo resta '\''unknown'\''.' ;;
     keyfile.both) printf '%s' 'usa --api-key-file o --api-key-stdin, non tutti e due' ;;
@@ -1482,6 +1496,13 @@ Példák:
     jht setup --non-interactive --provider openai --harness pi --api-key-stdin
   a Codex-előfizetés (utána bejelentkezés a ChatGPT-be):
     jht setup --non-interactive --provider openai --harness codex --auth-method subscription' ;;
+    help.tools) printf '%s' 'Használat: jht tools <parancs>
+
+  status --json   megvannak-e a felderítők (Scout) eszközei (a teljes kép), úton vannak-e, vagy sikertelen volt a letöltés
+  pull            letölti őket a háttérben (a jht up és a jht setup magától elindítja)
+  switch          átviszi rájuk a csapatot, amint a bevezetés lezárult (a letöltés magától megteszi)
+
+Ez a súgó semmit nem indít el és semmit nem tölt le.' ;;
     host_setup.skip_done) printf '%s' 'A host.env egy konténer tulajdonában lévő mappában van (uid 1001): a gép előzetes ellenőrzése már megtörtént, kihagyom.' ;;
     host_setup.skip_unknown) printf '%s' 'A host.env egy konténer tulajdonában lévő mappában van (uid 1001), és ez a felhasználó nem írhat bele: kihagyom a gép előzetes ellenőrzését, de a host.env nem olvasható, vagy nem mondja meg a gép típusát (helyi vagy VPS): a típus '\''unknown'\'' marad.' ;;
     keyfile.both) printf '%s' 'a --api-key-file vagy a --api-key-stdin kapcsolót használd, ne mindkettőt' ;;
@@ -1970,6 +1991,13 @@ Ejemplos:
     jht setup --non-interactive --provider openai --harness pi --api-key-stdin
   la suscripción a Codex (después el inicio de sesión en ChatGPT):
     jht setup --non-interactive --provider openai --harness codex --auth-method subscription' ;;
+    help.tools) printf '%s' 'Uso: jht tools <comando>
+
+  status --json   si las herramientas de los Scout (la imagen completa) ya están, están en camino o han fallado
+  pull            las descarga en segundo plano (jht up y jht setup lo inician solos)
+  switch          pasa el equipo a ellas cuando el onboarding está cerrado (la descarga lo hace sola)
+
+Esta ayuda no arranca nada ni descarga nada.' ;;
     host_setup.skip_done) printf '%s' 'host.env está en una carpeta del contenedor (uid 1001): la comprobación previa del host ya está hecha, me la salto.' ;;
     host_setup.skip_unknown) printf '%s' 'host.env está en una carpeta del contenedor (uid 1001) y este usuario no puede escribir en ella: me salto la comprobación previa del host, pero host.env no se puede leer o no indica el tipo de host (local o VPS): el tipo se queda en '\''unknown'\''.' ;;
     keyfile.both) printf '%s' 'usa --api-key-file o --api-key-stdin, no los dos' ;;
@@ -2453,6 +2481,13 @@ Beispiele:
     jht setup --non-interactive --provider openai --harness pi --api-key-stdin
   das Codex-Abo (danach die Anmeldung bei ChatGPT):
     jht setup --non-interactive --provider openai --harness codex --auth-method subscription' ;;
+    help.tools) printf '%s' 'Verwendung: jht tools <Befehl>
+
+  status --json   ob die Werkzeuge der Scouts (das vollständige Image) da, unterwegs oder fehlgeschlagen sind
+  pull            lädt sie im Hintergrund herunter (jht up und jht setup starten das von selbst)
+  switch          bringt das Team darauf, sobald das Onboarding abgeschlossen ist (der Download macht das von selbst)
+
+Diese Hilfe startet nichts und lädt nichts herunter.' ;;
     host_setup.skip_done) printf '%s' 'host.env liegt in einem Ordner, der dem Container gehört (uid 1001): Der Host-Preflight ist schon erledigt, wird übersprungen.' ;;
     host_setup.skip_unknown) printf '%s' 'host.env liegt in einem Ordner, der dem Container gehört (uid 1001), und dieser Benutzer kann dort nicht schreiben: Der Host-Preflight wird übersprungen, aber host.env lässt sich nicht lesen oder nennt den Host-Typ nicht (local oder VPS): Der Typ bleibt '\''unknown'\''.' ;;
     keyfile.both) printf '%s' 'Nutze --api-key-file oder --api-key-stdin, nicht beides' ;;
@@ -2936,6 +2971,13 @@ Exemples :
     jht setup --non-interactive --provider openai --harness pi --api-key-stdin
   l'\''abonnement Codex (puis la connexion à ChatGPT) :
     jht setup --non-interactive --provider openai --harness codex --auth-method subscription' ;;
+    help.tools) printf '%s' 'Utilisation : jht tools <commande>
+
+  status --json   si les outils des Scout (l'\''image complète) sont là, en route ou en échec
+  pull            les télécharge en arrière-plan (jht up et jht setup le lancent tout seuls)
+  switch          fait passer l'\''équipe dessus une fois l'\''onboarding terminé (le téléchargement le fait tout seul)
+
+Cette aide ne démarre rien et ne télécharge rien.' ;;
     host_setup.skip_done) printf '%s' 'host.env est dans un dossier qui appartient au conteneur (uid 1001) : le preflight de l'\''hôte est déjà fait, je le saute.' ;;
     host_setup.skip_unknown) printf '%s' 'host.env est dans un dossier qui appartient au conteneur (uid 1001) et cet utilisateur ne peut pas y écrire : je saute le preflight de l'\''hôte, mais host.env est illisible ou n'\''indique pas le type d'\''hôte (local ou VPS) : le type reste '\''unknown'\''.' ;;
     keyfile.both) printf '%s' 'utilise --api-key-file ou --api-key-stdin, pas les deux' ;;
@@ -3419,6 +3461,13 @@ Exemplos:
     jht setup --non-interactive --provider openai --harness pi --api-key-stdin
   a subscrição Codex (depois o início de sessão no ChatGPT):
     jht setup --non-interactive --provider openai --harness codex --auth-method subscription' ;;
+    help.tools) printf '%s' 'Uso: jht tools <comando>
+
+  status --json   se as ferramentas dos Scout (a imagem completa) já chegaram, estão a caminho ou falharam
+  pull            descarrega-as em segundo plano (jht up e jht setup iniciam-no sozinhos)
+  switch          passa a equipa para elas quando o onboarding estiver concluído (o descarregamento fá-lo sozinho)
+
+Esta ajuda não inicia nada nem descarrega nada.' ;;
     host_setup.skip_done) printf '%s' 'host.env está numa pasta do contentor (uid 1001): a verificação prévia do anfitrião já está feita, vou saltá-la.' ;;
     host_setup.skip_unknown) printf '%s' 'host.env está numa pasta do contentor (uid 1001) e este utilizador não pode escrever nela: vou saltar a verificação prévia do anfitrião, mas host.env não pode ser lido ou não diz o tipo de anfitrião (local ou VPS): o tipo fica '\''unknown'\''.' ;;
     keyfile.both) printf '%s' 'usa --api-key-file ou --api-key-stdin, não os dois' ;;
@@ -7299,6 +7348,12 @@ linkedin_help() {
   printf '%s\n' "$(jht_say help.linkedin)"
 }
 
+# `jht tools --help`: i suoi sottocomandi, a testo fisso come quelli di `jht integration`: un aiuto non avvia il container e non
+# carica l'helper (che scaricherebbe o leggerebbe il motore).
+tools_help() {
+  printf '%s\n' "$(jht_say help.tools)"
+}
+
 # Richiesta di sola informazione: se il container e' gia' in piedi si serve
 # l'aiuto vero, altrimenti quello locale. In nessun caso si avvia qualcosa.
 serve_help_without_docker() {
@@ -9709,6 +9764,10 @@ if [ "$#" -gt 1 ] && [ "$SUB" != "game" ] && [ "$SUB" != "gui" ] && [ "$SUB" != 
         fi
         if [ "$SUB" = linkedin ] && [ "$#" -eq 2 ]; then
           linkedin_help
+          exit 0
+        fi
+        if [ "$SUB" = tools ]; then
+          tools_help
           exit 0
         fi
         if [ "$SUB" = setup ]; then
