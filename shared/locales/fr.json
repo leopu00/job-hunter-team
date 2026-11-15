@@ -374,6 +374,7 @@
   "wrapper.tools.waiting": "Les outils des Scout sont là : l'équipe passe dessus toute seule dès que l'onboarding est terminé.",
   "wrapper.tools.failed": "Le téléchargement des outils des Scout a échoué : l'équipe ne peut pas encore chercher d'offres. Lance jht tools pull pour réessayer (jht up réessaie aussi).",
   "wrapper.tools.switch_failed": "Les outils des Scout sont là, mais l'équipe n'a pas pu redémarrer avec eux : lance jht down, puis jht up.",
+  "wrapper.tools.chat_switched": "L'équipe passe aux outils complets des Scout, donc ce chat s'est fermé. Rouvre-le dans quelques minutes avec jht team chat.",
   "wrapper.ps.startup_task_still_registered": "la tâche est toujours enregistrée",
   "wrapper.ps.link_or_not_folder": "lien ou pas un dossier",
   "wrapper.ps.wsl_exe_not_found": "wsl.exe introuvable",

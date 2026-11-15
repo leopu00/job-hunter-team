@@ -410,8 +410,8 @@ def test_the_switch_waits_for_another_jht_command_to_end(box):
     (box.fake / "full-present").write_text("", encoding="utf-8")
     (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
     wrapper = box.fake / "jht-wrapper.sh"
-    # a `jht setup` of the person, still running: a process with the wrapper on its command line
-    other = subprocess.Popen(["sh", "-c", "sleep 4; :", str(wrapper)])   # «; :» keeps the shell (and its arguments) alive
+    # a `jht setup` of the person, still running: a process with the wrapper and the command on its command line
+    other = subprocess.Popen(["sh", "-c", "sleep 4; :", str(wrapper), "setup"])   # «; :» keeps the shell (and its arguments) alive
     try:
         assert box.run("tools_kick", **KICK_ENV).returncode == 0
         time.sleep(2)
@@ -419,6 +419,115 @@ def test_the_switch_waits_for_another_jht_command_to_end(box):
     finally:
         other.wait(timeout=10)
     _wait_until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"no switch after the other command: {_calls(box)}")
+
+
+def test_the_chat_of_the_onboarding_does_not_hold_the_switch(box):
+    """Giro Linux: `jht team chat assistente`, the REPL of the onboarding the person keeps open, held the switch for its whole half
+    hour, and no Scout or Analyst came for 30 minutes after the onboarding. It reads and talks: the switch does not wait for it."""
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
+    wrapper = box.fake / "jht-wrapper.sh"
+    chat = subprocess.Popen(["sh", "-c", "sleep 20; :", str(wrapper), "team", "chat", "assistente"])
+    try:
+        assert box.run("tools_kick", **KICK_ENV).returncode == 0
+        _wait_until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"the chat held the switch: {_calls(box)}")
+    finally:
+        chat.kill()
+        chat.wait(timeout=10)
+
+
+@pytest.mark.parametrize("words,holds", [
+    (["setup"], True), (["up"], True), (["down"], True), (["restart"], True), (["upgrade"], True), (["uninstall"], True),
+    (["reset"], True), (["start-container"], True), (["stop-container"], True), (["recreate"], True),
+    (["migrate-runtime", "podman"], True), (["podman-machine-recreate"], True),
+    (["config", "set", "x"], True), (["providers", "use", "glm"], True), (["providers", "harness", "pi"], True),
+    (["integration", "add", "telegram"], True), (["integration", "remove", "telegram"], True),
+    (["tools", "pull"], True), (["tools", "switch"], True),
+    (["team", "chat", "assistente"], False), (["logs"], False), (["agents"], False), (["status"], False), (["doctor"], False),
+    (["help"], False), (["--help"], False), ([], False), (["config", "get", "x"], False), (["providers", "list"], False),
+    (["providers", "plan"], False), (["integration", "status"], False), (["integration", "list"], False),
+    (["tools", "status", "--json"], False), (["tools", "pull-job"], False), (["team", "start"], False), (["SETUP"], False),
+])
+def test_only_a_command_that_changes_the_runtime_holds_the_switch(tmp_path, words, holds):
+    wrapper = tmp_path / "jht-wrapper.sh"
+    wrapper.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    body = (f'RUNTIME_DIR="{tmp_path}"; JHT_HOME_HOST="{tmp_path}"; WRAPPER_PATH="{wrapper}"\n'
+            f'source "{TOOLS}"\nif tools_other_wrapper_running; then echo OTHER; else echo NONE; fi\n')
+    other = subprocess.Popen(["sh", "-c", "sleep 6; :", str(wrapper), *words])
+    try:
+        time.sleep(0.5)
+        seen = subprocess.run(["bash", "-c", body], capture_output=True, text=True, timeout=30)
+        assert seen.stdout.strip() == ("OTHER" if holds else "NONE"), (words, seen.stdout + seen.stderr)
+    finally:
+        other.kill()
+        other.wait(timeout=10)
+
+
+def test_the_switch_says_it_is_under_way_while_it_stops_and_starts_the_team(box):
+    """The REPL of `jht team chat` runs in the container: the down of the switch ends it. While the job stops the core team and
+    starts the full one, .tools-switching holds its pid, for the wrapper to say why the chat ended; after, it is gone."""
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
+    (box.fake / "jht-wrapper.sh").write_text(
+        '#!/bin/sh\npid="$(cat "$RUNTIME/.tools-switching" 2>/dev/null)"\n'
+        'if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then s=switching; else s=quiet; fi\n'
+        'echo "$1 $s" >> "$FAKE/wrapper-calls"\nexit 0\n', encoding="utf-8")
+    assert box.run("tools_kick", RUNTIME=str(box.runtime), **KICK_ENV).returncode == 0
+    path = box.fake / "wrapper-calls"
+    _wait_until(lambda: path.exists() and path.read_text(encoding="utf-8").splitlines() == ["down switching", "up switching"],
+                f"the switch did not say it was under way: {path.read_text(encoding='utf-8') if path.exists() else ''}")
+    box.wait_for_pull_end()
+    assert not tier.exists() and not (box.runtime / ".tools-switching").exists()
+
+
+def _chat_end_function() -> str:
+    text = WRAPPER.read_text(encoding="utf-8")
+    match = re.search(r"^team_chat_ended_by_switch\(\) \{\n.*?^\}\n", text, re.S | re.M)
+    assert match, "team_chat_ended_by_switch"
+    return match.group(0)
+
+
+def test_the_chat_says_why_it_ended_only_while_a_switch_runs(tmp_path):
+    marker = tmp_path / ".tools-switching"
+    body = f'set -euo pipefail\nRUNTIME_DIR="{tmp_path}"\n{_chat_end_function()}\nif team_chat_ended_by_switch; then echo SWITCH; else echo NO; fi\n'
+
+    def said():
+        return subprocess.run(["bash", "-c", body], capture_output=True, text=True, timeout=30).stdout.strip()
+
+    assert said() == "NO"                                                   # no switch
+    job = subprocess.Popen(["sleep", "20"])
+    try:
+        marker.write_text(f"{job.pid}\n", encoding="utf-8")
+        assert said() == "SWITCH"                                           # the job of the switch is running
+        marker.write_text("not a pid\n", encoding="utf-8")
+        assert said() == "NO"
+        marker.unlink()
+        marker.symlink_to(tmp_path / "elsewhere")
+        (tmp_path / "elsewhere").write_text(f"{job.pid}\n", encoding="utf-8")
+        assert said() == "NO"                                               # a link is not believed
+    finally:
+        job.kill()
+        job.wait(timeout=10)
+    marker.unlink()
+    marker.write_text(f"{job.pid}\n", encoding="utf-8")
+    assert said() == "NO"                                                   # an old file of a job that is gone
+
+
+def test_jht_team_chat_ends_clean_with_a_line_when_the_switch_ended_it():
+    text = WRAPPER.read_text(encoding="utf-8")
+    arm = text[text.index("\n  team)\n"):]
+    arm = arm[:arm.index("\n    ;;\n")]
+    assert '"$NODE_ENTRY" "$@" || team_rc=$?' in arm                       # set -e does not end the wrapper on the REPL's exit
+    assert re.search(r'if \[ "\$\{2:-\}" = chat \] && team_chat_ended_by_switch; then\n\s+info "\$\(jht_say tools\.chat_switched\)"\n\s+exit 0\n', arm)
+    assert arm.rstrip().endswith('exit "$team_rc"')                       # any other end: the REPL's own code, as before
+    import sys as _sys
+    _sys.path.insert(0, str(ROOT / "tests"))
+    from wrapper_texts import catalog
+    for lang in ("en", "it", "hu", "es", "de", "fr", "pt"):
+        line = catalog(lang)["wrapper.tools.chat_switched"]
+        assert "jht team chat" in line and "%" not in line, lang
 
 
 def test_a_switch_that_still_fails_is_said_until_an_up_goes_well(box):
@@ -530,7 +639,7 @@ def test_the_job_does_not_take_its_own_subshells_for_another_command(tmp_path):
     no_bashpid = subprocess.run(["bash", "-c", "unset BASHPID\n" + body, str(wrapper)], capture_output=True, text=True, timeout=30)
     assert no_bashpid.stdout.strip() == "NONE", no_bashpid.stdout + no_bashpid.stderr
     # and a real other command is still seen
-    other = subprocess.Popen(["sh", "-c", "sleep 4; :", str(wrapper)])
+    other = subprocess.Popen(["sh", "-c", "sleep 4; :", str(wrapper), "up"])
     try:
         time.sleep(0.5)
         seen = subprocess.run(["bash", "-c", body, str(wrapper)], capture_output=True, text=True, timeout=30)

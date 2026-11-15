@@ -12,6 +12,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -57,6 +58,13 @@ $WrapperPath = $env:T_STUB
 # the wrapper's own: a `jht down` of the person
 function Test-JhtTeamStoppedByPerson { return (Test-Path -LiteralPath (Join-Path $env:FAKE 'team-stopped')) }
 function Write-Err { param([string]$Msg) [Console]::Error.WriteLine("error: $Msg") }
+# the switch under way while it stops and starts the team: .tools-switching holds the pid of a living job
+$switching = Join-Path $RuntimeDir '.tools-switching'
+if ($Rest[0] -in @('down', 'up')) {
+  $said = 'quiet'
+  if (Test-Path -LiteralPath $switching) { $pidText = ([IO.File]::ReadAllText($switching)).Trim(); if ($pidText -match '^[0-9]+$' -and (Get-Process -Id ([int]$pidText) -ErrorAction SilentlyContinue)) { $said = 'switching' } }
+  Add-Content -LiteralPath (Join-Path $env:FAKE 'switching-calls') -Value ($Rest[0] + ' ' + $said)
+}
 if ($Rest[0] -eq 'down') { Add-Content -LiteralPath (Join-Path $env:FAKE 'tier-calls') -Value ("down " + $(if (Test-Path -LiteralPath $RuntimeTierFile) { 'core' } else { 'full' })); Add-Content -LiteralPath (Join-Path $env:FAKE 'wrapper-calls') -Value 'down'; New-Item -ItemType File -Force -Path (Join-Path $env:FAKE 'downed') | Out-Null; exit 0 }
 if ($Rest[0] -eq 'up') {
   $tier = if (Test-Path -LiteralPath $RuntimeTierFile) { 'core' } else { 'full' }
@@ -460,6 +468,109 @@ def test_the_switch_stops_the_core_team_before_the_tier_goes_and_starts_it_on_th
            f"not down on core, then up on full: {path.read_text(encoding='utf-8') if path.exists() else ''}")
     _until(lambda: (box.notice() or {}).get("tier") == "full", f"no notice of the full image: {box.notice()}")
     assert not tier.exists() and box.notice()["state"] == "ready"
+
+
+def test_the_switch_says_it_is_under_way_while_it_stops_and_starts_the_team(box):
+    """The REPL of `jht team chat` runs in the container: the down of the switch ends it. While the job stops the core team and
+    starts the full one, .tools-switching holds its pid, for the wrapper to say why the chat ended; after, it is gone."""
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
+    assert box.run("exit (Invoke-ToolsKick)", **KICK_ENV).returncode == 0
+    path = box.fake / "switching-calls"
+    _until(lambda: path.exists() and path.read_text(encoding="utf-8").splitlines() == ["down switching", "up switching"],
+           f"the switch did not say it was under way: {path.read_text(encoding='utf-8') if path.exists() else ''}")
+    _until(lambda: (box.notice() or {}).get("tier") == "full", f"no notice of the full image: {box.notice()}")
+    assert not tier.exists() and not (box.runtime / ".tools-switching").exists()
+
+
+def _sleeper(stub, *words):
+    """A process with the wrapper and a command on its command line, as a `jht <command>` of the person (in a comment: it sleeps)."""
+    return subprocess.Popen([*powershell_argv(), "-Command", f"Start-Sleep -Seconds 25 # {stub} {' '.join(words)}"])
+
+
+@pytest.mark.skipif(sys.platform == "darwin", reason="PowerShell on macOS reads no command line of a process (Get-Process)")
+def test_the_chat_of_the_onboarding_does_not_hold_the_switch_and_an_up_does(box, tmp_path):
+    """Giro Linux: `jht team chat assistente`, the REPL of the onboarding the person keeps open, held the switch for its whole half
+    hour. It reads and talks: the switch does not wait for it. A command that changes the runtime still holds it."""
+    stub = tmp_path / "stub.ps1"
+    words = ("if (Test-ToolsOtherWrapperRunning) { [Console]::Out.WriteLine('OTHER') } "
+             "else { [Console]::Out.WriteLine('NONE') }")
+    chat = _sleeper(stub, "team", "chat", "assistente")
+    try:
+        time.sleep(3)
+        assert box.run(words).stdout.strip() == "NONE"
+        up = _sleeper(stub, "up")
+        try:
+            time.sleep(3)
+            assert box.run(words).stdout.strip() == "OTHER"
+        finally:
+            up.kill()
+            up.wait(timeout=20)
+    finally:
+        chat.kill()
+        chat.wait(timeout=20)
+
+
+@pytest.mark.parametrize("line,holds", [
+    ('"C:\\x\\pwsh.exe" -NoProfile -File "{w}" setup', True),
+    ("pwsh -File {w} up", True), ("pwsh -File {w} down", True), ("pwsh -File {w} upgrade --json", True),
+    ("pwsh -File {w} uninstall", True), ("pwsh -File {w} reset", True), ("pwsh -File {w} restart", True),
+    ("pwsh -File {w} config set x", True), ("pwsh -File {w} providers use glm", True), ("pwsh -File {w} providers harness pi", True),
+    ("pwsh -File {w} integration add telegram", True), ("pwsh -File {w} integration remove telegram", True),
+    ("pwsh -File {w} tools pull", True), ("pwsh -File {w} tools switch", True),
+    ('pwsh -File "{w}" team chat assistente', False), ("pwsh -File {w} logs", False), ("pwsh -File {w} status", False),
+    ("pwsh -File {w} doctor", False), ("pwsh -File {w} help", False), ("pwsh -File {w}", False),
+    ("pwsh -File {w} config get x", False), ("pwsh -File {w} providers list", False), ("pwsh -File {w} integration status", False),
+    ("pwsh -File {w} tools pull-job 2026 auto", False), ("pwsh -File {w} tools status --json", False), ("pwsh -File {w} SETUP", False),
+    ("pwsh -File C:\\other\\script.ps1 up", False),
+])
+def test_only_a_command_that_changes_the_runtime_holds_the_switch(box, line, holds):
+    wrapper = "C:\\Users\\a b\\jht\\jht-wrapper.ps1"
+    case = line.replace("{w}", wrapper).replace("'", "''")
+    body = (f"$w = @(Get-ToolsWrapperWords '{case}' '{wrapper}'); $sub = ''; if ($w.Count -gt 1) {{ $sub = $w[1] }}\n"
+            "if ($w.Count -gt 0 -and (Test-ToolsCommandChangesRuntime $w[0] $sub)) { [Console]::Out.WriteLine('HOLDS') } "
+            "else { [Console]::Out.WriteLine('FREE') }")
+    done = box.run(body)
+    assert done.stdout.strip() == ("HOLDS" if holds else "FREE"), (line, done.stdout + done.stderr)
+
+
+def _chat_end_function() -> str:
+    text = WRAPPER.read_text(encoding="utf-8")
+    match = re.search(r"^function Test-JhtTeamChatEndedBySwitch \{\n.*?^\}\n", text, re.S | re.M)
+    assert match, "Test-JhtTeamChatEndedBySwitch"
+    return match.group(0)
+
+
+def test_the_chat_says_why_it_ended_only_while_a_switch_runs(box, tmp_path):
+    marker = box.runtime / ".tools-switching"
+    body = (_chat_end_function() + "\nif (Test-JhtTeamChatEndedBySwitch) { [Console]::Out.WriteLine('SWITCH') } "
+            "else { [Console]::Out.WriteLine('NO') }")
+
+    def said():
+        return box.run(body).stdout.strip()
+
+    assert said() == "NO"
+    job = subprocess.Popen([*powershell_argv(), "-Command", "Start-Sleep -Seconds 60"])
+    try:
+        marker.write_text(f"{job.pid}\n", encoding="utf-8")
+        assert said() == "SWITCH"
+        marker.write_text("not a pid\n", encoding="utf-8")
+        assert said() == "NO"
+    finally:
+        job.kill()
+        job.wait(timeout=20)
+    marker.write_text(f"{job.pid}\n", encoding="utf-8")
+    assert said() == "NO"                                                   # an old file of a job that is gone
+
+
+def test_jht_team_chat_ends_clean_with_a_line_when_the_switch_ended_it():
+    text = WRAPPER.read_text(encoding="utf-8")
+    arm = text[text.index("\n  default {\n    Require-ComposeFile"):]
+    arm = arm[:arm.index("\n    break\n")]
+    assert re.search(r"\$code = \$LASTEXITCODE\n(?:\s*#.*\n)?\s+if \(\$Sub -ceq 'team' -and \$Rest\.Count -gt 0 -and \$Rest\[0\] -ceq 'chat' "
+                     r"-and \(Test-JhtTeamChatEndedBySwitch\)\) \{\n\s+Write-Info \(Get-JhtText 'tools\.chat_switched'\)\n\s+exit 0\n", arm)
+    assert "exit $code" in arm
 
 
 def test_a_team_the_person_stopped_stays_stopped_only_the_tier_goes(box):
