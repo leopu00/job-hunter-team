@@ -534,13 +534,13 @@ def test_with_quota_data_the_budget_is_not_this_ones_business_either(tmp_path):
 
 
 @pytest.mark.parametrize("config, tier", [
-    (budget(5, NOON, NOON + 1800), 1),                    # a trial: 5 $ counts as 5 a day
-    (budget(10, NOON, NOON + 3 * 24 * HOUR), 1),          # 3.33 a day
-    (budget(30, NOON, NOON + 24 * HOUR), 15),
-    (budget(30, NOON, NOON + 3 * 24 * HOUR), 5),          # 10 a day
-    ({"no_quota_cap": {"eur": 12}}, 5),                    # an older config
-    (dict(budget(30, NOON, NOON + 24 * HOUR), no_quota_cap={"eur": 5}), 15),  # the setup's budget wins
+    (budget(5, NOON, NOON + 1800), 15),                   # every budget of the setup: the full roster, the brake paces it
+    (budget(10, NOON, NOON + 3 * 24 * HOUR), 15),
+    ({"no_quota_cap": {"eur": 12}}, 5),                    # an older config: a tier per step of the ceiling
+    ({"no_quota_cap": {"eur": 30}}, 15),
+    ({}, 1),                                               # no limit: the smallest
+    (dict(budget(5, NOON, NOON + 1800), no_quota_cap={"eur": 5}), 15),  # the setup's budget wins
 ])
-def test_the_first_roster_is_sized_by_the_budget_per_day(config, tier):
+def test_the_first_roster_of_an_api_key_follows_the_budget(config, tier):
     config = dict(config, providers={"zai": {"auth_method": "api_key"}})
     assert plan_registry.api_key_plan(config, "zai")["tier"] == tier

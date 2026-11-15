@@ -617,7 +617,7 @@
   "wizard.budget.night": "🌙 Eine Nacht: 5 $ bis morgen früh um 8",
   "wizard.budget.days": "📅 Ein paar Tage: du wählst Budget, Tage und Stunden",
   "wizard.budget.none": "♾️ Kein Limit (nicht empfohlen)",
-  "wizard.budget.none_warning": "Ohne Limit gibt das Team so lange Geld aus, wie Guthaben auf deinem Konto ist. Setze auch auf der Website des Anbieters ein Ausgabenlimit.",
+  "wizard.budget.none_warning": "Ohne Limit gibt das Team so lange Geld aus, wie Guthaben auf deinem Konto ist. Setze auch auf der Website des Anbieters ein Ausgabenlimit. Außerdem startet es mit dem kleinsten Team, einem Agenten pro Rolle: Mit einem Budget startet es mit dem ganzen Team.",
   "wizard.budget.amount_prompt": "Wie viele Dollar insgesamt?",
   "wizard.budget.amount_invalid": "Gib einen Betrag in Dollar über null ein, zum Beispiel 10 oder 7,5.",
   "wizard.budget.amount_confirm": "%s ist viel für das Team: Ist das der Betrag, den du willst?",
