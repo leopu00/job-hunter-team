@@ -1099,18 +1099,20 @@ function Write-IntegrationUsage {
 # The sentences have the letters of their language (é, ő, ç…): what is written to stdout and stderr goes out as UTF-8 while the command
 # runs (the JSON the app reads, a person at a terminal, a pipe), and the console gets back its own encoding after it (it belongs to
 # the window, and would stay changed after the command). Windows PowerShell 5.1 writes in the legacy code page otherwise.
-function Invoke-IntegrationUtf8 {
-  param([scriptblock]$Command)
-  $previous = $null
-  try { $previous = [Console]::OutputEncoding; [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false) } catch { $previous = $null }
-  try { return (& $Command) } finally {
-    if ($null -ne $previous) { try { [Console]::OutputEncoding = $previous } catch { $null = $_ } }
-  }
+# Returns the encoding to give back ($null when the console's could not be read or set).
+function Set-IntegrationUtf8Output {
+  try { $previous = [Console]::OutputEncoding; [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); return $previous } catch { return $null }
+}
+
+function Restore-IntegrationOutput {
+  param($Previous)
+  if ($null -ne $Previous) { try { [Console]::OutputEncoding = $Previous } catch { $null = $_ } }
 }
 
 function Invoke-IntegrationCommand {
   param([string[]]$IntegrationArgs)
-  return (Invoke-IntegrationUtf8 { Invoke-IntegrationCommandSaid $IntegrationArgs })
+  $previous = Set-IntegrationUtf8Output
+  try { return (Invoke-IntegrationCommandSaid $IntegrationArgs) } finally { Restore-IntegrationOutput $previous }
 }
 
 function Invoke-IntegrationCommandSaid {
@@ -1402,7 +1404,8 @@ function Invoke-LinkedinStatus {
 
 function Invoke-LinkedinCommand {
   param([string[]]$LinkedinArgs)
-  return (Invoke-IntegrationUtf8 { Invoke-LinkedinCommandSaid $LinkedinArgs })
+  $previous = Set-IntegrationUtf8Output
+  try { return (Invoke-LinkedinCommandSaid $LinkedinArgs) } finally { Restore-IntegrationOutput $previous }
 }
 
 function Invoke-LinkedinCommandSaid {
