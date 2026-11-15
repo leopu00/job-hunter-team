@@ -6,7 +6,7 @@
  * team.working_hours as team.budget = { usd, starts_at, ends_at, timezone, set_by } (ISO instants in UTC); the brake of the pi
  * harness (shared/skills/pi_spend_cap.py) counts what pi spends from starts_at and pauses the team, in a declared way, when
  * the budget or the period is over, or when it goes faster than the budget spread over the working minutes of the period.
- * Dollars: pi measures the cost in dollars and the four providers bill in dollars.
+ * Dollars: pi measures the cost in dollars and the four providers charge in dollars.
  */
 import { localTimeZone } from '../src/lib/local-tz.js';
 
