@@ -375,6 +375,8 @@
   "wrapper.tools.failed": "The download of the Scouts' tools failed, so the team cannot search for positions yet. Run jht tools pull to try again (jht up tries again too).",
   "wrapper.tools.switch_failed": "The Scouts' tools are here, but the team could not be restarted on them: run jht down, then jht up.",
   "wrapper.tools.chat_switched": "The team is moving onto the Scouts' full tools, so this chat has closed. Open it again in a couple of minutes with jht team chat.",
+  "wrapper.tools.chat_reconnecting": "The team is moving onto the Scouts' full tools, so the chat stops for a moment: it comes back by itself once the team is running again (a couple of minutes).",
+  "wrapper.tools.chat_resumed": "The team has moved onto the full tools: let's pick up again.",
   "wrapper.tools.switch_wait": "The team is moving onto the Scouts' full tools: waiting for it to start again (a couple of minutes at most).",
   "wrapper.ps.startup_task_still_registered": "the task is still registered",
   "wrapper.ps.link_or_not_folder": "a link or not a folder",

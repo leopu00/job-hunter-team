@@ -807,6 +807,8 @@ This help starts nothing and downloads nothing.' ;;
     status.title) printf '%s' 'Status' ;;
     team.stopped) printf '%s' 'Job Hunter Team is stopped: '\''jht up'\'' starts it again.' ;;
     tools.arriving) printf '%s' 'The Scouts'\'' tools are on their way: the full image is downloading in the background (about 3 GB). The search for positions starts by itself once they are here; there is nothing to do.' ;;
+    tools.chat_reconnecting) printf '%s' 'The team is moving onto the Scouts'\'' full tools, so the chat stops for a moment: it comes back by itself once the team is running again (a couple of minutes).' ;;
+    tools.chat_resumed) printf '%s' 'The team has moved onto the full tools: let'\''s pick up again.' ;;
     tools.chat_switched) printf '%s' 'The team is moving onto the Scouts'\'' full tools, so this chat has closed. Open it again in a couple of minutes with jht team chat.' ;;
     tools.failed) printf '%s' 'The download of the Scouts'\'' tools failed, so the team cannot search for positions yet. Run jht tools pull to try again (jht up tries again too).' ;;
     tools.switch_failed) printf '%s' 'The Scouts'\'' tools are here, but the team could not be restarted on them: run jht down, then jht up.' ;;
@@ -1299,6 +1301,8 @@ Questo aiuto non avvia niente e non scarica niente.' ;;
     status.title) printf '%s' 'Stato' ;;
     team.stopped) printf '%s' 'Job Hunter Team e'\'' fermato: jht up per riaccenderlo.' ;;
     tools.arriving) printf '%s' 'Gli strumenti degli Scout stanno arrivando: l'\''immagine piena si scarica in background (circa 3 GB). La ricerca delle posizioni parte da sola quando sono arrivati; non devi fare niente.' ;;
+    tools.chat_reconnecting) printf '%s' 'La squadra passa agli strumenti completi degli Scout, quindi la chat si ferma un momento: riprende da sola appena la squadra e'\'' ripartita (un paio di minuti).' ;;
+    tools.chat_resumed) printf '%s' 'La squadra e'\'' passata agli strumenti completi: riprendiamo.' ;;
     tools.chat_switched) printf '%s' 'La squadra passa agli strumenti completi degli Scout, quindi questa chat si e'\'' chiusa. Riaprila fra un paio di minuti con jht team chat.' ;;
     tools.failed) printf '%s' 'Il download degli strumenti degli Scout non e'\'' riuscito: la squadra non puo'\'' ancora cercare posizioni. Esegui jht tools pull per riprovare (anche jht up riprova).' ;;
     tools.switch_failed) printf '%s' 'Gli strumenti degli Scout sono arrivati, ma la squadra non si e'\'' potuta riavviare con loro: esegui jht down, poi jht up.' ;;
@@ -1792,6 +1796,8 @@ Ez a súgó semmit nem indít el és semmit nem tölt le.' ;;
     status.title) printf '%s' 'Állapot' ;;
     team.stopped) printf '%s' 'A Job Hunter Team le van állítva: a '\''jht up'\'' újraindítja.' ;;
     tools.arriving) printf '%s' 'A felderítők (Scout) eszközei úton vannak: a teljes kép a háttérben töltődik le (kb. 3 GB). Az állások keresése magától elindul, amint megérkeztek; nincs teendőd.' ;;
+    tools.chat_reconnecting) printf '%s' 'A csapat átáll a felderítők (Scout) teljes eszközeire, ezért a csevegés egy pillanatra megáll: magától folytatódik, amint a csapat újra fut (pár perc).' ;;
+    tools.chat_resumed) printf '%s' 'A csapat átállt a teljes eszközökre: folytassuk.' ;;
     tools.chat_switched) printf '%s' 'A csapat átáll a felderítők (Scout) teljes eszközeire, ezért ez a csevegés bezárult. Pár perc múlva nyisd meg újra a jht team chat paranccsal.' ;;
     tools.failed) printf '%s' 'A felderítők (Scout) eszközeinek letöltése nem sikerült, így a csapat még nem tud állásokat keresni. Futtasd a jht tools pull parancsot az újrapróbáláshoz (a jht up is újrapróbálja).' ;;
     tools.switch_failed) printf '%s' 'A felderítők (Scout) eszközei megérkeztek, de a csapatot nem sikerült velük újraindítani: futtasd a jht down, majd a jht up parancsot.' ;;
@@ -2289,6 +2295,8 @@ Esta ayuda no arranca nada ni descarga nada.' ;;
     status.title) printf '%s' 'Estado' ;;
     team.stopped) printf '%s' 'Job Hunter Team está detenido: '\''jht up'\'' lo vuelve a arrancar.' ;;
     tools.arriving) printf '%s' 'Las herramientas de los Scout están en camino: la imagen completa se descarga en segundo plano (unos 3 GB). La búsqueda de puestos empieza sola cuando lleguen; no tienes que hacer nada.' ;;
+    tools.chat_reconnecting) printf '%s' 'El equipo pasa a las herramientas completas de los Scout, así que el chat se detiene un momento: vuelve solo en cuanto el equipo esté en marcha de nuevo (un par de minutos).' ;;
+    tools.chat_resumed) printf '%s' 'El equipo ya usa las herramientas completas: sigamos.' ;;
     tools.chat_switched) printf '%s' 'El equipo pasa a las herramientas completas de los Scout, así que este chat se ha cerrado. Vuelve a abrirlo en un par de minutos con jht team chat.' ;;
     tools.failed) printf '%s' 'La descarga de las herramientas de los Scout ha fallado, así que el equipo aún no puede buscar puestos. Ejecuta jht tools pull para reintentarlo (jht up también lo reintenta).' ;;
     tools.switch_failed) printf '%s' 'Las herramientas de los Scout ya están aquí, pero el equipo no se ha podido reiniciar con ellas: ejecuta jht down y luego jht up.' ;;
@@ -2781,6 +2789,8 @@ Diese Hilfe startet nichts und lädt nichts herunter.' ;;
     status.title) printf '%s' 'Status' ;;
     team.stopped) printf '%s' 'Job Hunter Team ist gestoppt: '\''jht up'\'' startet es wieder.' ;;
     tools.arriving) printf '%s' 'Die Werkzeuge der Scouts sind unterwegs: Das vollständige Image wird im Hintergrund heruntergeladen (etwa 3 GB). Die Stellensuche startet von selbst, sobald sie da sind; du musst nichts tun.' ;;
+    tools.chat_reconnecting) printf '%s' 'Das Team wechselt auf die vollständigen Werkzeuge der Scouts, deshalb hält der Chat kurz an: Er kommt von selbst zurück, sobald das Team wieder läuft (ein paar Minuten).' ;;
+    tools.chat_resumed) printf '%s' 'Das Team nutzt jetzt die vollständigen Werkzeuge: Machen wir weiter.' ;;
     tools.chat_switched) printf '%s' 'Das Team wechselt auf die vollständigen Werkzeuge der Scouts, deshalb wurde dieser Chat geschlossen. Öffne ihn in ein paar Minuten wieder mit jht team chat.' ;;
     tools.failed) printf '%s' 'Der Download der Werkzeuge der Scouts ist fehlgeschlagen, daher kann das Team noch keine Stellen suchen. Führe jht tools pull aus, um es erneut zu versuchen (jht up versucht es auch).' ;;
     tools.switch_failed) printf '%s' 'Die Werkzeuge der Scouts sind da, aber das Team konnte damit nicht neu gestartet werden: Führe jht down und dann jht up aus.' ;;
@@ -3273,6 +3283,8 @@ Cette aide ne démarre rien et ne télécharge rien.' ;;
     status.title) printf '%s' 'État' ;;
     team.stopped) printf '%s' 'Job Hunter Team est arrêté : '\''jht up'\'' le redémarre.' ;;
     tools.arriving) printf '%s' 'Les outils des Scout arrivent : l'\''image complète se télécharge en arrière-plan (environ 3 Go). La recherche d'\''offres démarre toute seule dès qu'\''ils sont là ; tu n'\''as rien à faire.' ;;
+    tools.chat_reconnecting) printf '%s' 'L'\''équipe passe aux outils complets des Scout, donc le chat s'\''arrête un instant : il revient tout seul dès que l'\''équipe tourne à nouveau (quelques minutes).' ;;
+    tools.chat_resumed) printf '%s' 'L'\''équipe est passée aux outils complets : reprenons.' ;;
     tools.chat_switched) printf '%s' 'L'\''équipe passe aux outils complets des Scout, donc ce chat s'\''est fermé. Rouvre-le dans quelques minutes avec jht team chat.' ;;
     tools.failed) printf '%s' 'Le téléchargement des outils des Scout a échoué : l'\''équipe ne peut pas encore chercher d'\''offres. Lance jht tools pull pour réessayer (jht up réessaie aussi).' ;;
     tools.switch_failed) printf '%s' 'Les outils des Scout sont là, mais l'\''équipe n'\''a pas pu redémarrer avec eux : lance jht down, puis jht up.' ;;
@@ -3765,6 +3777,8 @@ Esta ajuda não inicia nada nem descarrega nada.' ;;
     status.title) printf '%s' 'Estado' ;;
     team.stopped) printf '%s' 'O Job Hunter Team está parado: '\''jht up'\'' volta a ligá-lo.' ;;
     tools.arriving) printf '%s' 'As ferramentas dos Scout estão a caminho: a imagem completa está a ser descarregada em segundo plano (cerca de 3 GB). A procura de vagas começa sozinha quando chegarem; não tens de fazer nada.' ;;
+    tools.chat_reconnecting) printf '%s' 'A equipa passa para as ferramentas completas dos Scout, por isso o chat para por um momento: volta sozinho assim que a equipa estiver a funcionar outra vez (alguns minutos).' ;;
+    tools.chat_resumed) printf '%s' 'A equipa passou para as ferramentas completas: vamos continuar.' ;;
     tools.chat_switched) printf '%s' 'A equipa passa para as ferramentas completas dos Scout, por isso este chat fechou-se. Volta a abri-lo dentro de alguns minutos com jht team chat.' ;;
     tools.failed) printf '%s' 'O descarregamento das ferramentas dos Scout falhou, por isso a equipa ainda não pode procurar vagas. Corre jht tools pull para tentar de novo (jht up também tenta de novo).' ;;
     tools.switch_failed) printf '%s' 'As ferramentas dos Scout já chegaram, mas não foi possível reiniciar a equipa com elas: corre jht down e depois jht up.' ;;
@@ -4037,8 +4051,50 @@ wait_for_tools_switch() {
   local left="${JHT_TOOLS_SWITCH_WAIT_MAX:-300}"
   case "$left" in ''|*[!0-9]*) left=300 ;; esac
   team_chat_ended_by_switch || return 0
-  info "$(jht_say tools.switch_wait)"
+  [ "${1:-}" = quiet ] || info "$(jht_say tools.switch_wait)"
   while team_chat_ended_by_switch && [ "$left" -gt 0 ]; do sleep 2; left=$((left - 2)); done
+}
+
+# The agent a `jht team chat <agent>` talks to is there again (its tmux session in the container): after the switch the container
+# starts the agents the person talks to by itself. <agent> as the CLI takes it: assistente, capitano, scout:1 / scout-1. An agent
+# the name does not say is waited for as any session at all. A tetto: JHT_TOOLS_CHAT_RECONNECT_MAX seconds, 180 by default.
+team_chat_agent_back() {
+  local name left="${JHT_TOOLS_CHAT_RECONNECT_MAX:-180}"
+  case "$left" in ''|*[!0-9]*) left=180 ;; esac
+  name="$(printf '%s' "${1:-}" | tr '[:lower:]:' '[:upper:]-')"
+  case "$name" in ''|*[!A-Z0-9-]*) name="" ;; esac
+  while :; do
+    if [ -n "$name" ]; then
+      docker exec "$ATTESTED_CONTAINER_ID" tmux has-session -t "=$name" >/dev/null 2>&1 && return 0
+    else
+      docker exec "$ATTESTED_CONTAINER_ID" tmux list-sessions >/dev/null 2>&1 && return 0
+    fi
+    [ "$left" -gt 0 ] || return 1
+    sleep 2
+    left=$((left - 2))
+  done
+}
+
+# `jht team chat` whose REPL the switch ended: it comes back by itself, on the same agent, once the team runs on the full image
+# (at most three switches in a row; one is what happens). If the agent is not back in time, the person is told to open it again.
+team_chat_through_switch() {
+  local rc rounds=0
+  while [ "$rounds" -lt 3 ]; do
+    info "$(jht_say tools.chat_reconnecting)"
+    wait_for_tools_switch quiet
+    ensure_up
+    if ! team_chat_agent_back "${3:-}"; then
+      info "$(jht_say tools.chat_switched)"
+      return 0
+    fi
+    info "$(jht_say tools.chat_resumed)"
+    rc=0
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@" || rc=$?
+    team_chat_ended_by_switch || return "$rc"
+    rounds=$((rounds + 1))
+  done
+  info "$(jht_say tools.chat_switched)"
+  return 0
 }
 
 runtime_write_manifest() {
@@ -10360,10 +10416,10 @@ case "$SUB" in
     if [ "${2:-}" = stop ]; then ensure_up_for_stop; else ensure_up; fi
     team_rc=0
     docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@" || team_rc=$?
-    # the REPL ended because the team is moving onto the full image: say so, and end clean
+    # the REPL ended because the team is moving onto the full image: it comes back by itself once the team runs again
     if [ "${2:-}" = chat ] && team_chat_ended_by_switch; then
-      info "$(jht_say tools.chat_switched)"
-      exit 0
+      team_chat_through_switch "$@"
+      exit $?
     fi
     exit "$team_rc"
     ;;

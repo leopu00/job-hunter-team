@@ -375,6 +375,8 @@
   "wrapper.tools.failed": "Il download degli strumenti degli Scout non e' riuscito: la squadra non puo' ancora cercare posizioni. Esegui jht tools pull per riprovare (anche jht up riprova).",
   "wrapper.tools.switch_failed": "Gli strumenti degli Scout sono arrivati, ma la squadra non si e' potuta riavviare con loro: esegui jht down, poi jht up.",
   "wrapper.tools.chat_switched": "La squadra passa agli strumenti completi degli Scout, quindi questa chat si e' chiusa. Riaprila fra un paio di minuti con jht team chat.",
+  "wrapper.tools.chat_reconnecting": "La squadra passa agli strumenti completi degli Scout, quindi la chat si ferma un momento: riprende da sola appena la squadra e' ripartita (un paio di minuti).",
+  "wrapper.tools.chat_resumed": "La squadra e' passata agli strumenti completi: riprendiamo.",
   "wrapper.tools.switch_wait": "La squadra sta passando agli strumenti completi degli Scout: aspetto che riparta (al massimo un paio di minuti).",
   "wrapper.ps.startup_task_still_registered": "l'attività risulta ancora registrata",
   "wrapper.ps.link_or_not_folder": "collegamento o non cartella",

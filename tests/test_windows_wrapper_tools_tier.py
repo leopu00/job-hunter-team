@@ -587,13 +587,26 @@ def test_a_command_that_starts_the_team_waits_for_the_switch_to_end(box):
         job.wait(timeout=20)
 
 
-def test_jht_team_chat_ends_clean_with_a_line_when_the_switch_ended_it():
+def test_jht_team_chat_comes_back_by_itself_when_the_switch_ended_it():
     text = WRAPPER.read_text(encoding="utf-8")
     arm = text[text.index("\n  default {\n    Require-ComposeFile"):]
     arm = arm[:arm.index("\n    break\n")]
     assert re.search(r"\$code = \$LASTEXITCODE\n(?:\s*#.*\n)?\s+if \(\$Sub -ceq 'team' -and \$Rest\.Count -gt 0 -and \$Rest\[0\] -ceq 'chat' "
-                     r"-and \(Test-JhtTeamChatEndedBySwitch\)\) \{\n\s+Write-Info \(Get-JhtText 'tools\.chat_switched'\)\n\s+exit 0\n", arm)
+                     r"-and \(Test-JhtTeamChatEndedBySwitch\)\) \{\n\s+Invoke-JhtTeamChatThroughSwitch \$Rest\n\s+exit \$script:JhtTeamChatCode\n", arm)
     assert "exit $code" in arm
+    body = text[text.index("function Invoke-JhtTeamChatThroughSwitch {"):]
+    body = body[:body.index("\n}\n")]
+    for needed in ("Wait-JhtToolsSwitch -Quiet", "Ensure-Up", "Test-JhtTeamChatAgentBack $agent", "'tools.chat_reconnecting'",
+                   "'tools.chat_resumed'", "'tools.chat_switched'", "node $NodeEntry 'team' @ChatArgs"):
+        assert needed in body, needed
+
+
+def test_the_chat_waits_for_the_agent_of_its_own_name(box):
+    text = WRAPPER.read_text(encoding="utf-8")
+    fn = re.search(r"^function Test-JhtTeamChatAgentBack \{\n.*?^\}\n", text, re.S | re.M).group(0)
+    body = (fn + "\n$Container = 'jht'\n$r = Test-JhtTeamChatAgentBack 'scout:2'\n[Console]::Out.WriteLine([string]$r)\n")
+    done = box.run(body, JHT_TOOLS_CHAT_RECONNECT_MAX="0")
+    assert done.stdout.strip() == "True", done.stdout + done.stderr   # the fake docker says yes to everything
 
 
 def test_a_team_the_person_stopped_stays_stopped_only_the_tier_goes(box):
