@@ -103,6 +103,7 @@
   "wizard.provider.key_glm": "GLM (Z.ai) — con tu clave API, funciona en Pi",
   "wizard.provider.key_kimi": "Kimi (Moonshot) — con tu clave API, funciona en Pi",
   "wizard.provider.key_openai": "OpenAI — con tu clave API, funciona en Pi",
+  "wizard.provider.key_claude": "Claude (Anthropic) — con tu clave API, funciona en Pi",
   "wizard.provider.install_cli": "Instalando la CLI de %s...",
   "wizard.provider.install_failed_continue": "Instalación de la CLI fallida. ¿Guardar la configuración igualmente y gestionarlo a mano?",
   "wizard.oauth.notify_title": "Inicio de sesión %s (en otra terminal)",

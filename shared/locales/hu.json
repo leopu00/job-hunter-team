@@ -104,6 +104,7 @@
   "wizard.provider.key_glm": "GLM (Z.ai) — a saját API-kulcsoddal, Pi-ben fut",
   "wizard.provider.key_kimi": "Kimi (Moonshot) — a saját API-kulcsoddal, Pi-ben fut",
   "wizard.provider.key_openai": "OpenAI — a saját API-kulcsoddal, Pi-ben fut",
+  "wizard.provider.key_claude": "Claude (Anthropic) — a saját API-kulcsoddal, Pi-ben fut",
   "wizard.provider.install_cli": "%s CLI telepítése...",
   "wizard.provider.install_failed_continue": "CLI telepítés sikertelen. Mégis mentsem a konfigurációt, és kezeled kézzel?",
   "wizard.oauth.notify_title": "%s bejelentkezés (másik terminálban)",
