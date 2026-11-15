@@ -128,8 +128,9 @@ def _run(shell: str, script: str, env: dict | None = None) -> subprocess.Complet
     assert script.isascii()
     with tempfile.TemporaryDirectory() as folder:
         path = Path(folder) / "probe.ps1"
-        path.write_bytes(script.encode("ascii"))
-        return subprocess.run(_argv(shell, "-File", str(path)), capture_output=True, text=True, timeout=180, env=env, stdin=subprocess.DEVNULL)
+        path.write_bytes((UTF8_OUTPUT + script).encode("ascii"))
+        # what is read is UTF-8 (the texts have accents): the console of the run is set to it, the output is decoded as it
+        return subprocess.run(_argv(shell, "-File", str(path)), capture_output=True, text=True, encoding="utf-8", timeout=180, env=env, stdin=subprocess.DEVNULL)
 
 
 def _functions() -> str:

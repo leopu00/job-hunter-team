@@ -156,6 +156,8 @@ function Clear-JhtTeamStopped {{}}
 function Ensure-Up {{}}
 # the tools of a core install (jht-tools.ps1): not what this case is about
 function Write-JhtToolsNotice {{ param([switch]$Kick) }}
+# the timezone question of a setup on a terminal (its own tests): not what this case is about
+function Resolve-JhtUserTimezone {{ param([string[]]$SetupArgs) }}
 function docker {{
   Add-Content -LiteralPath '{recorded}' -Value ('ARGS=' + ($args -join ' '))
   Add-Content -LiteralPath '{recorded}' -Value ('STDIN=' + (@($input) -join ''))
