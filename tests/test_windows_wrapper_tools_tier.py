@@ -52,6 +52,8 @@ param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest)
 $RuntimeDir = $env:T_RUNTIME; $JhtHome = $env:T_HOME; $DefaultRuntimeImage = $env:T_FULL
 $RuntimeTierFile = Join-Path $RuntimeDir 'runtime-tier'
 $RuntimeTierIntegrity = Join-Path $RuntimeDir '.runtime-tier-integrity'
+# the wrapper has it: the detached job of `tools_kick` runs `up` and `down` through it
+$WrapperPath = $env:T_STUB
 function Write-Err { param([string]$Msg) [Console]::Error.WriteLine("error: $Msg") }
 if ($Rest[0] -eq 'down') { Add-Content -LiteralPath (Join-Path $env:FAKE 'wrapper-calls') -Value 'down'; New-Item -ItemType File -Force -Path (Join-Path $env:FAKE 'downed') | Out-Null; exit 0 }
 if ($Rest[0] -eq 'up') {
