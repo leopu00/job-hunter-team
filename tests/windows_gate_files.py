@@ -71,6 +71,7 @@ WINDOWS_GATE_EXTRA = (
     "tests/test_first_start_messages_powershell.py",
     "tests/test_installer_core_tier.py",
     "tests/test_installer_ps1_speaks_the_language_chosen.py",
+    "tests/test_integration_ps1_speaks_the_language_chosen.py",
     "tests/test_powershell_native_args_no_double_quotes.py",
     "tests/test_powershell_native_stderr_under_stop.py",
     "tests/test_ps_script_texts.py",
