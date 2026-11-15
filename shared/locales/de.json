@@ -553,7 +553,7 @@
   "host_setup.tz.bad_number": "Wähle eine Zahl zwischen 1 und %d.",
   "host_setup.tz.how": "Gib ein Land, eine Stadt oder eine Zeitzone ein (zum Beispiel Deutschland, Berlin, Europe/Berlin).",
   "host_setup.tz.how_default": "Drücke Enter, um %s zu behalten, oder gib ein Land, eine Stadt oder eine Zeitzone ein, um eine andere zu suchen.",
-  "host_setup.tz.none": "Keine Zeitzone für «%s» gefunden: Versuche es mit einem Land, einer Stadt oder einer Zeitzone wie Europe/Berlin.",
+  "host_setup.tz.none": "Keine Zeitzone für «%s»: Gib das Land ein (zum Beispiel Deutschland) oder eine große Stadt in der Nähe.",
   "host_setup.tz.not_detected": "Deine Zeitzone wurde nicht erkannt.",
   "host_setup.tz.pick": "Nummer (1-%d) oder eine neue Suche:",
   "host_setup.tz.proposed": "Vorgeschlagen: %s (jetzt %s).",

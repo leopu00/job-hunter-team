@@ -554,7 +554,7 @@
   "host_setup.tz.bad_number": "Válassz egy számot 1 és %d között.",
   "host_setup.tz.how": "Írj be egy országot, egy várost vagy egy időzónát (például Magyarország, Budapest, Europe/Budapest).",
   "host_setup.tz.how_default": "Nyomj Entert, ha megtartod ezt: %s, vagy írj be egy országot, egy várost vagy egy időzónát, hogy másikat keress.",
-  "host_setup.tz.none": "Nem található időzóna ehhez: «%s». Próbálj meg egy országot, egy várost vagy egy időzónát, például Europe/Budapest.",
+  "host_setup.tz.none": "Nincs időzóna ehhez: «%s». Írd be az országot (például Magyarország) vagy egy közeli nagyvárost.",
   "host_setup.tz.not_detected": "Az időzónádat nem sikerült felismerni.",
   "host_setup.tz.pick": "Szám (1-%d), vagy új keresés:",
   "host_setup.tz.proposed": "Javasolt: %s (most %s).",
