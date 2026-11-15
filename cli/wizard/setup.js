@@ -30,6 +30,7 @@ import {
   showSummary,
 } from './setup-steps.js';
 import { formatSecretForConfig } from './secret-ref.js';
+import { promptBudget, budgetSummary } from './setup-budget.js';
 import { checkPrerequisites, runHealthCheck } from './setup-checks.js';
 import { t, tf } from './i18n.js';
 import { askLanguage } from './setup-language.js';
@@ -351,19 +352,19 @@ async function runSetupSteps(prompter, state) {
   const model = baseConfig.providers?.[providerChoice]?.model
     || selectedProvider.models[0].value;
 
-  // --- Working hours: orari di lavoro del team (distribuzione weekly) ---
-  // Step non-bloccante: skip = 24/7 (default storico). Lo facciamo PRIMA
-  // di salvare il config così atterra in jht.config.json al primo write,
-  // e il bridge li raccoglie immediatamente al boot del team.
-  const workingHours = await promptWorkingHours(
-    prompter,
-    baseConfig.team?.working_hours,
-  );
+  // --- Budget, period and working hours (JHT-T322): how much the team may spend, until when, and when it works ---
+  // Asked BEFORE the config is saved, so it lands in jht.config.json at the first write and the brake of pi reads it at
+  // the first tick. «No limit» asks the working hours as before.
+  const { kind: budgetKind, budget, workingHours } = await promptBudget(prompter, {
+    t, tf,
+    askHours: () => promptWorkingHours(prompter, baseConfig.team?.working_hours),
+  });
+  await prompter.note(budgetSummary(t, tf, { budget, workingHours, kind: budgetKind }), t('wizard.budget.title'));
 
   // --- Salva e riepilogo ---
   await assembleAndSaveConfig(prompter, {
     providerChoice, authMethod, apiKey: apiKeySecret, subscriptionConfig, model,
-    baseProviders: baseConfig.providers || {}, workingHours, harness,
+    baseProviders: baseConfig.providers || {}, workingHours, budget, harness,
   });
 
   // ────────────────────────────────────────────────────────────────────────

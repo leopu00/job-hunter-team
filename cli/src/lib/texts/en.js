@@ -222,4 +222,8 @@ export default {
   'team.done': 'Team on: {n} started in {s} s',
   'team.next_agents': 'See how it is going with: jht agents',
   'help.group_other': 'Other',
+  'budget.paused_budget': 'The team is paused: it spent ${spent} of its budget of ${budget}. To go on, set a new budget with: jht setup',
+  'budget.paused_period': 'The team is paused: the period of its budget ended at {end} (${spent} of ${budget} spent). To go on, set a new budget with: jht setup',
+  'budget.paused_pace': 'The team is paused to spread its budget over the period (${spent} spent, ${ceiling} allowed so far): it resumes by itself at {at}.',
+  'budget.paused_pace_late': 'The team is paused to spread its budget over the period (${spent} spent, ${ceiling} allowed so far) and does not resume before the period ends at {end}. To go on, set a new budget with: jht setup',
 };

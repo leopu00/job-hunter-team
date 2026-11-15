@@ -147,9 +147,9 @@ if [ "$CONTAINER_RUNTIME" = "podman" ]; then
     export PODMAN_COMPOSE_PROVIDER="$(command -v podman-compose)"
   fi
 fi
-DEFAULT_RUNTIME_IMAGE="ghcr.io/leopu00/jht@sha256:c7708d6ea45d8a69085c95a3ef22ac82322d488714696858e85930df195e5ea6"
-CORE_IMAGE_DIGEST="sha256:3af57f9d78d9fd4eb737a44bb373a4dcd82128c4e3f5ccb189c1e91f938e4089"
-EXTRAS_IMAGE_DIGEST="sha256:322f7fb8339e193e07a039d970c68323f0ea6718c8057378efdaef995cb614e6"
+DEFAULT_RUNTIME_IMAGE="ghcr.io/leopu00/jht@sha256:9759e1f79c7e053fb28778db22c38f2ab22d184c034d2e44ef35f09f2dd87d9c"
+CORE_IMAGE_DIGEST="sha256:38acd22286840846ba15b67946d5fe9fe760312e651f6e25c48b060fa446dad4"
+EXTRAS_IMAGE_DIGEST="sha256:9d3278d2ce8a9270bcd496aa33809111278c4aa2b924b01bbd885a081c9fb47e"
 RUNTIME_TIER_FILE="$RUNTIME_DIR/runtime-tier"
 RUNTIME_TIER_INTEGRITY="$RUNTIME_DIR/.runtime-tier-integrity"
 DEFAULT_RUNTIME_VERSION="0.4.0"
@@ -502,6 +502,11 @@ you give everything with the options.
   --secret-file <path>         with --secret-mode file: the file that contains it
   --model <model>              the model to use
   --language <code>            the language (for example it or en)
+  --budget-usd <dollars>       the most the team may spend, in dollars (with one of --budget-minutes, --budget-days, --budget-until)
+  --budget-minutes <n>         the budget lasts this many minutes from now
+  --budget-days <n>            the budget lasts this many days from now
+  --budget-until <hour>        the budget lasts until this hour of the day, 0-23 (the next one)
+  --no-budget                  no spending limit (the team stops only at the credit of the provider)
   --skip-health                skips the final check
   --reset                      starts again from a clean configuration
 
@@ -802,8 +807,10 @@ This help starts nothing and downloads nothing.' ;;
     status.title) printf '%s' 'Status' ;;
     team.stopped) printf '%s' 'Job Hunter Team is stopped: '\''jht up'\'' starts it again.' ;;
     tools.arriving) printf '%s' 'The Scouts'\'' tools are on their way: the full image is downloading in the background (about 3 GB). The search for positions starts by itself once they are here; there is nothing to do.' ;;
+    tools.chat_switched) printf '%s' 'The team is moving onto the Scouts'\'' full tools, so this chat has closed. Open it again in a couple of minutes with jht team chat.' ;;
     tools.failed) printf '%s' 'The download of the Scouts'\'' tools failed, so the team cannot search for positions yet. Run jht tools pull to try again (jht up tries again too).' ;;
     tools.switch_failed) printf '%s' 'The Scouts'\'' tools are here, but the team could not be restarted on them: run jht down, then jht up.' ;;
+    tools.switch_wait) printf '%s' 'The team is moving onto the Scouts'\'' full tools: waiting for it to start again (a couple of minutes at most).' ;;
     tools.waiting) printf '%s' 'The Scouts'\'' tools are here: the team moves onto them by itself once the onboarding is closed.' ;;
     uninstall.bad_home) printf '%s' 'HOME is not valid: removal refused.' ;;
     uninstall.colima_busy) printf '%s' 'Colima is still running: the JHT installer started it, but other containers are running in it, so it is left on. To stop it: colima stop.' ;;
@@ -987,6 +994,11 @@ tutto si da'\'' con le opzioni.
   --secret-file <percorso>     con --secret-mode file: il file che la contiene
   --model <modello>            il modello da usare
   --language <codice>          la lingua (per esempio it o en)
+  --budget-usd <dollari>       quanto può spendere il team, in dollari (con una fra --budget-minutes, --budget-days, --budget-until)
+  --budget-minutes <n>         il budget dura questi minuti da ora
+  --budget-days <n>            il budget dura questi giorni da ora
+  --budget-until <ora>         il budget dura fino a questa ora del giorno, 0-23 (la prossima)
+  --no-budget                  nessun limite di spesa (il team si ferma solo al credito del provider)
   --skip-health                salta il controllo finale
   --reset                      riparte da una configurazione pulita
 
@@ -1287,8 +1299,10 @@ Questo aiuto non avvia niente e non scarica niente.' ;;
     status.title) printf '%s' 'Stato' ;;
     team.stopped) printf '%s' 'Job Hunter Team e'\'' fermato: jht up per riaccenderlo.' ;;
     tools.arriving) printf '%s' 'Gli strumenti degli Scout stanno arrivando: l'\''immagine piena si scarica in background (circa 3 GB). La ricerca delle posizioni parte da sola quando sono arrivati; non devi fare niente.' ;;
+    tools.chat_switched) printf '%s' 'La squadra passa agli strumenti completi degli Scout, quindi questa chat si e'\'' chiusa. Riaprila fra un paio di minuti con jht team chat.' ;;
     tools.failed) printf '%s' 'Il download degli strumenti degli Scout non e'\'' riuscito: la squadra non puo'\'' ancora cercare posizioni. Esegui jht tools pull per riprovare (anche jht up riprova).' ;;
     tools.switch_failed) printf '%s' 'Gli strumenti degli Scout sono arrivati, ma la squadra non si e'\'' potuta riavviare con loro: esegui jht down, poi jht up.' ;;
+    tools.switch_wait) printf '%s' 'La squadra sta passando agli strumenti completi degli Scout: aspetto che riparta (al massimo un paio di minuti).' ;;
     tools.waiting) printf '%s' 'Gli strumenti degli Scout sono arrivati: la squadra ci passa da sola quando l'\''onboarding e'\'' chiuso.' ;;
     uninstall.bad_home) printf '%s' 'HOME non valida: rimozione negata.' ;;
     uninstall.colima_busy) printf '%s' 'Colima resta accesa: l'\''ha accesa l'\''installer di JHT, ma dentro girano altri container, quindi la lascio. Per fermarla: colima stop.' ;;
@@ -1473,6 +1487,11 @@ mindent kapcsolókkal adsz meg.
   --secret-file <path>         --secret-mode file esetén: a kulcsot tartalmazó fájl
   --model <model>              a használandó modell
   --language <code>            a nyelv (például it vagy en)
+  --budget-usd <dollár>        mennyit költhet a csapat, dollárban (a --budget-minutes, --budget-days, --budget-until egyikével)
+  --budget-minutes <n>         a keret ennyi percig tart mostantól
+  --budget-days <n>            a keret ennyi napig tart mostantól
+  --budget-until <óra>         a keret a nap eddig az óráig tart, 0-23 (a következő)
+  --no-budget                  nincs költési korlát (a csapat csak a szolgáltató egyenlegénél áll meg)
   --skip-health                kihagyja a végső ellenőrzést
   --reset                      tiszta beállításból indul újra
 
@@ -1773,8 +1792,10 @@ Ez a súgó semmit nem indít el és semmit nem tölt le.' ;;
     status.title) printf '%s' 'Állapot' ;;
     team.stopped) printf '%s' 'A Job Hunter Team le van állítva: a '\''jht up'\'' újraindítja.' ;;
     tools.arriving) printf '%s' 'A felderítők (Scout) eszközei úton vannak: a teljes kép a háttérben töltődik le (kb. 3 GB). Az állások keresése magától elindul, amint megérkeztek; nincs teendőd.' ;;
+    tools.chat_switched) printf '%s' 'A csapat átáll a felderítők (Scout) teljes eszközeire, ezért ez a csevegés bezárult. Pár perc múlva nyisd meg újra a jht team chat paranccsal.' ;;
     tools.failed) printf '%s' 'A felderítők (Scout) eszközeinek letöltése nem sikerült, így a csapat még nem tud állásokat keresni. Futtasd a jht tools pull parancsot az újrapróbáláshoz (a jht up is újrapróbálja).' ;;
     tools.switch_failed) printf '%s' 'A felderítők (Scout) eszközei megérkeztek, de a csapatot nem sikerült velük újraindítani: futtasd a jht down, majd a jht up parancsot.' ;;
+    tools.switch_wait) printf '%s' 'A csapat átáll a felderítők (Scout) teljes eszközeire: megvárom, amíg újraindul (legfeljebb pár perc).' ;;
     tools.waiting) printf '%s' 'A felderítők (Scout) eszközei megérkeztek: a csapat magától átvált rájuk, amint a bevezetés lezárult.' ;;
     uninstall.bad_home) printf '%s' 'A HOME érvénytelen: az eltávolítás megtagadva.' ;;
     uninstall.colima_busy) printf '%s' 'A Colima még fut: a JHT telepítője indította el, de más konténerek is futnak benne, ezért bekapcsolva hagyom. Leállítás: colima stop.' ;;
@@ -1963,6 +1984,11 @@ todo se da con las opciones.
   --secret-file <path>         con --secret-mode file: el archivo que la contiene
   --model <model>              el modelo que usar
   --language <code>            el idioma (por ejemplo es o en)
+  --budget-usd <dólares>       cuánto puede gastar el equipo, en dólares (con una de --budget-minutes, --budget-days, --budget-until)
+  --budget-minutes <n>         el presupuesto dura estos minutos desde ahora
+  --budget-days <n>            el presupuesto dura estos días desde ahora
+  --budget-until <hora>        el presupuesto dura hasta esta hora del día, 0-23 (la siguiente)
+  --no-budget                  sin límite de gasto (el equipo se detiene solo con el crédito del proveedor)
   --skip-health                se salta la comprobación final
   --reset                      vuelve a empezar desde una configuración limpia
 
@@ -2263,8 +2289,10 @@ Esta ayuda no arranca nada ni descarga nada.' ;;
     status.title) printf '%s' 'Estado' ;;
     team.stopped) printf '%s' 'Job Hunter Team está detenido: '\''jht up'\'' lo vuelve a arrancar.' ;;
     tools.arriving) printf '%s' 'Las herramientas de los Scout están en camino: la imagen completa se descarga en segundo plano (unos 3 GB). La búsqueda de puestos empieza sola cuando lleguen; no tienes que hacer nada.' ;;
+    tools.chat_switched) printf '%s' 'El equipo pasa a las herramientas completas de los Scout, así que este chat se ha cerrado. Vuelve a abrirlo en un par de minutos con jht team chat.' ;;
     tools.failed) printf '%s' 'La descarga de las herramientas de los Scout ha fallado, así que el equipo aún no puede buscar puestos. Ejecuta jht tools pull para reintentarlo (jht up también lo reintenta).' ;;
     tools.switch_failed) printf '%s' 'Las herramientas de los Scout ya están aquí, pero el equipo no se ha podido reiniciar con ellas: ejecuta jht down y luego jht up.' ;;
+    tools.switch_wait) printf '%s' 'El equipo está pasando a las herramientas completas de los Scout: espero a que vuelva a arrancar (un par de minutos como mucho).' ;;
     tools.waiting) printf '%s' 'Las herramientas de los Scout ya están aquí: el equipo pasa a ellas solo cuando el onboarding esté cerrado.' ;;
     uninstall.bad_home) printf '%s' 'HOME no es válida: eliminación rechazada.' ;;
     uninstall.colima_busy) printf '%s' 'Colima sigue en marcha: la arrancó el instalador de JHT, pero dentro hay otros contenedores en marcha, así que la dejo encendida. Para detenerla: colima stop.' ;;
@@ -2448,6 +2476,11 @@ Alles wird über die Optionen angegeben.
   --secret-file <path>         mit --secret-mode file: die Datei, die ihn enthält
   --model <model>              das zu verwendende Modell
   --language <code>            die Sprache (zum Beispiel it oder en)
+  --budget-usd <dollar>        wie viel das Team ausgeben darf, in Dollar (mit einer von --budget-minutes, --budget-days, --budget-until)
+  --budget-minutes <n>         das Budget gilt so viele Minuten ab jetzt
+  --budget-days <n>            das Budget gilt so viele Tage ab jetzt
+  --budget-until <stunde>      das Budget gilt bis zu dieser Uhrzeit, 0-23 (der nächsten)
+  --no-budget                  kein Ausgabenlimit (das Team hält nur beim Guthaben des Anbieters an)
   --skip-health                überspringt die abschließende Prüfung
   --reset                      beginnt mit einer sauberen Konfiguration neu
 
@@ -2748,8 +2781,10 @@ Diese Hilfe startet nichts und lädt nichts herunter.' ;;
     status.title) printf '%s' 'Status' ;;
     team.stopped) printf '%s' 'Job Hunter Team ist gestoppt: '\''jht up'\'' startet es wieder.' ;;
     tools.arriving) printf '%s' 'Die Werkzeuge der Scouts sind unterwegs: Das vollständige Image wird im Hintergrund heruntergeladen (etwa 3 GB). Die Stellensuche startet von selbst, sobald sie da sind; du musst nichts tun.' ;;
+    tools.chat_switched) printf '%s' 'Das Team wechselt auf die vollständigen Werkzeuge der Scouts, deshalb wurde dieser Chat geschlossen. Öffne ihn in ein paar Minuten wieder mit jht team chat.' ;;
     tools.failed) printf '%s' 'Der Download der Werkzeuge der Scouts ist fehlgeschlagen, daher kann das Team noch keine Stellen suchen. Führe jht tools pull aus, um es erneut zu versuchen (jht up versucht es auch).' ;;
     tools.switch_failed) printf '%s' 'Die Werkzeuge der Scouts sind da, aber das Team konnte damit nicht neu gestartet werden: Führe jht down und dann jht up aus.' ;;
+    tools.switch_wait) printf '%s' 'Das Team wechselt gerade auf die vollständigen Werkzeuge der Scouts: Ich warte, bis es wieder läuft (höchstens ein paar Minuten).' ;;
     tools.waiting) printf '%s' 'Die Werkzeuge der Scouts sind da: Das Team wechselt von selbst darauf, sobald das Onboarding abgeschlossen ist.' ;;
     uninstall.bad_home) printf '%s' 'HOME ist ungültig: Entfernen verweigert.' ;;
     uninstall.colima_busy) printf '%s' 'Colima läuft noch: Der JHT-Installer hat es gestartet, aber darin laufen andere Container, also bleibt es an. Zum Stoppen: colima stop.' ;;
@@ -2933,6 +2968,11 @@ tout se donne avec les options.
   --secret-file <path>         avec --secret-mode file : le fichier qui la contient
   --model <model>              le modèle à utiliser
   --language <code>            la langue (par exemple it ou en)
+  --budget-usd <dollars>       combien l'\''équipe peut dépenser, en dollars (avec l'\''une de --budget-minutes, --budget-days, --budget-until)
+  --budget-minutes <n>         le budget dure ce nombre de minutes à partir de maintenant
+  --budget-days <n>            le budget dure ce nombre de jours à partir de maintenant
+  --budget-until <heure>       le budget dure jusqu'\''à cette heure de la journée, 0-23 (la prochaine)
+  --no-budget                  aucune limite de dépenses (l'\''équipe ne s'\''arrête qu'\''au crédit du fournisseur)
   --skip-health                saute la vérification finale
   --reset                      repart d'\''une configuration propre
 
@@ -3233,8 +3273,10 @@ Cette aide ne démarre rien et ne télécharge rien.' ;;
     status.title) printf '%s' 'État' ;;
     team.stopped) printf '%s' 'Job Hunter Team est arrêté : '\''jht up'\'' le redémarre.' ;;
     tools.arriving) printf '%s' 'Les outils des Scout arrivent : l'\''image complète se télécharge en arrière-plan (environ 3 Go). La recherche d'\''offres démarre toute seule dès qu'\''ils sont là ; tu n'\''as rien à faire.' ;;
+    tools.chat_switched) printf '%s' 'L'\''équipe passe aux outils complets des Scout, donc ce chat s'\''est fermé. Rouvre-le dans quelques minutes avec jht team chat.' ;;
     tools.failed) printf '%s' 'Le téléchargement des outils des Scout a échoué : l'\''équipe ne peut pas encore chercher d'\''offres. Lance jht tools pull pour réessayer (jht up réessaie aussi).' ;;
     tools.switch_failed) printf '%s' 'Les outils des Scout sont là, mais l'\''équipe n'\''a pas pu redémarrer avec eux : lance jht down, puis jht up.' ;;
+    tools.switch_wait) printf '%s' 'L'\''équipe passe aux outils complets des Scout : j'\''attends qu'\''elle redémarre (quelques minutes au plus).' ;;
     tools.waiting) printf '%s' 'Les outils des Scout sont là : l'\''équipe passe dessus toute seule dès que l'\''onboarding est terminé.' ;;
     uninstall.bad_home) printf '%s' 'HOME n'\''est pas valide : suppression refusée.' ;;
     uninstall.colima_busy) printf '%s' 'Colima tourne encore : l'\''installeur JHT l'\''a démarré, mais d'\''autres conteneurs y tournent, donc il reste allumé. Pour l'\''arrêter : colima stop.' ;;
@@ -3418,6 +3460,11 @@ tudo se dá com as opções.
   --secret-file <path>         com --secret-mode file: o ficheiro que a contém
   --model <model>              o modelo a usar
   --language <code>            a língua (por exemplo pt ou en)
+  --budget-usd <dólares>       quanto a equipa pode gastar, em dólares (com uma de --budget-minutes, --budget-days, --budget-until)
+  --budget-minutes <n>         o orçamento dura este número de minutos a partir de agora
+  --budget-days <n>            o orçamento dura este número de dias a partir de agora
+  --budget-until <hora>        o orçamento dura até esta hora do dia, 0-23 (a próxima)
+  --no-budget                  sem limite de gasto (a equipa só para no crédito do fornecedor)
   --skip-health                salta a verificação final
   --reset                      recomeça de uma configuração limpa
 
@@ -3718,8 +3765,10 @@ Esta ajuda não inicia nada nem descarrega nada.' ;;
     status.title) printf '%s' 'Estado' ;;
     team.stopped) printf '%s' 'O Job Hunter Team está parado: '\''jht up'\'' volta a ligá-lo.' ;;
     tools.arriving) printf '%s' 'As ferramentas dos Scout estão a caminho: a imagem completa está a ser descarregada em segundo plano (cerca de 3 GB). A procura de vagas começa sozinha quando chegarem; não tens de fazer nada.' ;;
+    tools.chat_switched) printf '%s' 'A equipa passa para as ferramentas completas dos Scout, por isso este chat fechou-se. Volta a abri-lo dentro de alguns minutos com jht team chat.' ;;
     tools.failed) printf '%s' 'O descarregamento das ferramentas dos Scout falhou, por isso a equipa ainda não pode procurar vagas. Corre jht tools pull para tentar de novo (jht up também tenta de novo).' ;;
     tools.switch_failed) printf '%s' 'As ferramentas dos Scout já chegaram, mas não foi possível reiniciar a equipa com elas: corre jht down e depois jht up.' ;;
+    tools.switch_wait) printf '%s' 'A equipa está a passar para as ferramentas completas dos Scout: espero que volte a arrancar (no máximo alguns minutos).' ;;
     tools.waiting) printf '%s' 'As ferramentas dos Scout já chegaram: a equipa passa para elas sozinha quando o onboarding estiver concluído.' ;;
     uninstall.bad_home) printf '%s' 'HOME não é válida: remoção recusada.' ;;
     uninstall.colima_busy) printf '%s' 'O Colima continua a correr: foi o instalador do JHT que o ligou, mas há outros contentores a correr nele, por isso fica ligado. Para o parar: colima stop.' ;;
@@ -3969,6 +4018,27 @@ tools_tell_person() {
       switch_failed) warn "$(jht_say tools.switch_failed)" ;;
     esac
   ) || true
+}
+
+# `jht team chat` whose REPL the switch of the tools ended: the down of the core team stops the container the REPL runs in, and the
+# REPL ends with nothing said. The job of the switch writes its pid in .tools-switching while it stops the core team and starts the
+# full one; a file whose process is gone is an old one and says nothing.
+team_chat_ended_by_switch() {
+  local pid
+  [ -f "$RUNTIME_DIR/.tools-switching" ] && [ ! -L "$RUNTIME_DIR/.tools-switching" ] || return 1
+  pid="$(head -c 20 "$RUNTIME_DIR/.tools-switching" 2>/dev/null | tr -cd '0-9')"
+  [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+}
+
+# A command that starts the team (ensure_up) while the switch of the tools is between its down and its up: it waits for the switch
+# to end instead of starting a second `compose up` next to the job's (two creates at once lose the keep-id map on Podman <= 6.0.2,
+# and an up before the tier goes starts the core image again). A tetto: JHT_TOOLS_SWITCH_WAIT_MAX seconds, 300 by default.
+wait_for_tools_switch() {
+  local left="${JHT_TOOLS_SWITCH_WAIT_MAX:-300}"
+  case "$left" in ''|*[!0-9]*) left=300 ;; esac
+  team_chat_ended_by_switch || return 0
+  info "$(jht_say tools.switch_wait)"
+  while team_chat_ended_by_switch && [ "$left" -gt 0 ]; do sleep 2; left=$((left - 2)); done
 }
 
 runtime_write_manifest() {
@@ -7614,6 +7684,7 @@ not_started_or_unattestable() { # $1 = the status of the check, $2 = what is den
 
 ensure_up() {
   local status=0
+  wait_for_tools_switch
   if container_up; then
     return 0
   else
@@ -10287,7 +10358,14 @@ case "$SUB" in
     require_compose_file
     require_docker
     if [ "${2:-}" = stop ]; then ensure_up_for_stop; else ensure_up; fi
-    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
+    team_rc=0
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@" || team_rc=$?
+    # the REPL ended because the team is moving onto the full image: say so, and end clean
+    if [ "${2:-}" = chat ] && team_chat_ended_by_switch; then
+      info "$(jht_say tools.chat_switched)"
+      exit 0
+    fi
+    exit "$team_rc"
     ;;
 
   # ── Operativita': delegata al CLI Node nel container ───────────────────

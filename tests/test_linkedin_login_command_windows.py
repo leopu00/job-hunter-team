@@ -67,8 +67,9 @@ def lrun(host, args: list[str], stdin: str | None = TOKEN + "\n", **extra: str) 
            "T_STDIN": str(host.tmp / "grant-stdin"), "T_ARGS": json.dumps(args), "T_JHT_HOME": str(host.tmp / "jht-home"), "T_EXTRAS": DIGEST, **extra}
     # "no token on stdin" is a closed stdin, not the one of the session this test runs in: a child that inherits an open pipe (a CI runner, an
     # ssh session) waits on it for a line, as any program reading a pipe does, and the case never ends
+    # the library writes its sentences as UTF-8 (what the app reads); Python on Windows would read them in the code page of the system
     given = {"stdin": subprocess.DEVNULL} if stdin is None else {"input": stdin}
-    return subprocess.run([*host.argv, "-File", str(host.script)], env=env, capture_output=True, text=True, timeout=120, **given)
+    return subprocess.run([*host.argv, "-File", str(host.script)], env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120, **given)
 
 
 def last(done) -> dict:

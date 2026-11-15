@@ -175,7 +175,7 @@ try {
   # What Get-RuntimeFiles calls before it writes anything and when the Podman setup ends: the installer's own functions,
   # taken from the real file. The preflight asks for winget when no Podman is installed; this runner has neither, and
   # the enabler is replaced below by a fixture, so a stand-in winget lets it pass: what winget does is not on trial here.
-  foreach ($installerFunctionName in @('Get-JhtTextLanguage', 'T', 'Write-JhtProblem', 'Remove-JhtCreatedEmptyDirs', 'Show-PodmanSetupProblem', 'Test-JhtDownloadedRuntimeScripts')) {
+  foreach ($installerFunctionName in @('Get-JhtTextLanguage', 'Ts', 'Tsf', 'Get-InstallerTextTable', 'Write-JhtProblem', 'Remove-JhtCreatedEmptyDirs', 'Show-PodmanSetupProblem', 'Test-JhtDownloadedRuntimeScripts')) {
     $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $installerFunctionName }, $true)
     if (-not $fn) { throw "standalone $installerFunctionName function missing" }
     . ([scriptblock]::Create($fn.Extent.Text))
@@ -252,8 +252,8 @@ try {
   $RawBaseOverride = 'https://clean-start.invalid/revision'
   $Branch = 'clean-start-fixture'
   $TestChannel = $false
-  $RuntimeImage = 'ghcr.io/leopu00/jht@sha256:c7708d6ea45d8a69085c95a3ef22ac82322d488714696858e85930df195e5ea6'
-  $RuntimeImageDigest = 'sha256:c7708d6ea45d8a69085c95a3ef22ac82322d488714696858e85930df195e5ea6'
+  $RuntimeImage = 'ghcr.io/leopu00/jht@sha256:9759e1f79c7e053fb28778db22c38f2ab22d184c034d2e44ef35f09f2dd87d9c'
+  $RuntimeImageDigest = 'sha256:9759e1f79c7e053fb28778db22c38f2ab22d184c034d2e44ef35f09f2dd87d9c'
   $DryRun = $false
   $env:USERPROFILE = $cleanProfile
   $env:JHT_USER_DIR_HOST = $cleanUserData

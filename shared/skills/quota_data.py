@@ -166,10 +166,21 @@ def classify_failure(api, provider, fail_reason):
 
 
 def _declared_ceiling(config):
+    parts = []
+    try:
+        import team_budget  # the skills folder is on the path wherever this module is
+
+        budget = team_budget.read(config)
+    except Exception:  # noqa: BLE001 - an unreadable budget is no budget here
+        budget = None
+    if budget:
+        parts.append("a budget of %g USD from %s to %s (pi_spend_cap pauses the team at it, at its pace over the "
+                     "working hours, and at the end of the period)" % (
+                         budget["usd"], time.strftime("%Y-%m-%d %H:%M %z", time.localtime(budget["starts"])),
+                         time.strftime("%Y-%m-%d %H:%M %z", time.localtime(budget["ends"]))))
     cap = config.get("no_quota_cap") if isinstance(config, dict) else None
     if not isinstance(cap, dict):
-        return ""
-    parts = []
+        return "; ".join(parts)
     if isinstance(cap.get("eur"), (int, float)) and not isinstance(cap.get("eur"), bool) and cap["eur"] > 0:
         parts.append("%g EUR" % cap["eur"])
     tph = cap.get("tokens_per_hour")

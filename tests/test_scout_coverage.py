@@ -543,3 +543,44 @@ def test_jobspresso_stays_open_with_its_robots_rule_written_in_the_hint():
     by = {(e["slug"], e["country"]): e for g in cov.table()["groups"].values() for e in g}
     entry = by[("jobspresso", "remote")]
     assert entry["access"] == "search" and "query string" in entry["hint"] and "right to work" in entry["hint"]
+
+
+# ── a person on site who will not move: no remote boards, no English boards of other countries ────────────────────────
+
+ON_SITE_NOT_MOVING = ("languages:\n  - language: Italian\n    level: native\n  - language: English\n    level: B2\n"
+         "location: Turin (Piedmont)\nlocation_preferences:\n  - Turin\n  - Piedmont\n")
+
+
+def _lane_sources(count=1):
+    return cov.lanes(cov.load_plan(), count)[0]["sources"]
+
+
+def test_a_person_on_site_who_will_not_move_gets_only_her_own_countrys_boards_even_when_the_country_is_not_named(profile):
+    # a city and a region named without their country («Turin», «Piedmont»): the home is not known and nothing is left out for being
+    # abroad (the 13 sources of a first run were remote boards and the English ones of Ireland, Malta and Sweden)
+    profile.write_text(ON_SITE_NOT_MOVING + "preferences:\n  work_mode: on-site\n  relocation: false\n", encoding="utf-8")
+    plan = cov.load_plan()
+    assert plan["remote"] is False
+    assert {e["country"] for e in plan["entries"]} == {"it"}
+    assert _lane_sources() == ["linkedin"]
+
+
+def test_the_same_profile_without_the_mode_and_the_relocation_keeps_every_board_as_before(profile):
+    profile.write_text(ON_SITE_NOT_MOVING, encoding="utf-8")
+    plan = cov.load_plan()
+    assert plan["remote"] is True
+    assert {"remotive", "weworkremotely", "thehub"} <= set(_lane_sources())
+
+
+@pytest.mark.parametrize("preferences", ["  work_mode: on-site\n  relocation: true\n", "  work_mode: hybrid\n  relocation: false\n",
+                                         "  work_mode: remote\n  relocation: false\n"])
+def test_the_english_boards_stay_when_the_person_may_move_or_does_not_work_on_site(profile, preferences):
+    profile.write_text(ON_SITE_NOT_MOVING + "preferences:\n" + preferences, encoding="utf-8")
+    assert "thehub" in _lane_sources()
+
+
+def test_an_english_speaking_person_on_site_keeps_the_english_speaking_countries_boards(profile):
+    # English is her main language: those boards may be her own country's
+    profile.write_text("languages:\n  - language: English\n    level: native\npreferences:\n  work_mode: on-site\n  relocation: false\n",
+                       encoding="utf-8")
+    assert {"linkedin", "thehub"} <= set(_lane_sources())

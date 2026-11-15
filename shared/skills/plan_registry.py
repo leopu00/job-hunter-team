@@ -371,15 +371,40 @@ def active_plan() -> Optional[dict]:
 
 # ── No plan to ask for (JHT-T308) ───────────────────────────────────────
 # The card with the subscription plans must not hold the first burst. With an API key there is no subscription plan at
-# all: the roster comes from the spending ceiling the person set (`no_quota_cap.eur`, EUR per day), a tier per step and
-# the smallest roster when no ceiling is declared. With a subscription the person did not name («I do not know», no
+# all. With the budget of the setup (`team.budget`: a trial, a night, a few days) the burst opens on the full roster of tier 15,
+# cut to what the machine carries (host_capacity.py): the spending brake (pi_spend_cap.py) spreads the budget over the
+# period and pauses the team at its pace, so the roster need not be small to keep the spending inside it. With only the
+# older `no_quota_cap.eur` the roster is a tier per step of the ceiling per day, and the smallest one when nothing is
+# declared («no limit»: then nothing but the provider stops the spending). With a subscription the person did not name («I do not know», no
 # answer) the burst opens on the provider's lowest plan, which is DECLARED: the plan carries `assumed`, the burst's
 # answer says so and the Capitano's diary gets the line. The card stays open: nothing here waits for it.
 # Known limit: a plan the person declares AFTER the burst opened does not resize that burst (the roster is fixed at its start).
 _API_KEY_TIER_BY_EUR = ((30, 15), (10, 5))  # (ceiling EUR/day at least, roster tier); below, or no ceiling: tier 1
 
 
+_API_KEY_TIER_WITH_BUDGET = 15  # 5 Scout, 3 Analisti, 2 Scorer (the roster measured for 20 scored in 30 min), cut by the machine's cap
+
+
+def _setup_budget(cfg: dict) -> Optional[dict]:
+    """The budget of the setup as team_budget.py reads it, or None (none declared, or not readable)."""
+    here = str(Path(__file__).resolve().parent)
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    try:
+        import team_budget
+
+        return team_budget.read(cfg)
+    except Exception:  # noqa: BLE001 - an unreadable budget: the older ceiling, or none
+        return None
+
+
 def spend_ceiling_eur(cfg: dict) -> Optional[float]:
+    """The spending allowed per day: the budget of the setup spread over its period (a period shorter than a day counts
+    as one day), else the `no_quota_cap.eur` of an older config. Dollars both (pi prices in dollars; `eur` is compared
+    one to one)."""
+    budget = _setup_budget(cfg)
+    if budget is not None:
+        return budget["usd"] / max(1.0, (budget["ends"] - budget["starts"]) / 86400.0)
     cap = cfg.get("no_quota_cap")
     eur = cap.get("eur") if isinstance(cap, dict) else None
     ok = isinstance(eur, (int, float)) and not isinstance(eur, bool) and eur > 0 and eur == eur and eur != float("inf")
@@ -387,19 +412,31 @@ def spend_ceiling_eur(cfg: dict) -> Optional[float]:
 
 
 def api_key_plan(cfg: dict, prov: str) -> Optional[dict]:
-    """The plan of a provider used with an API key (`auth_method: api_key`): sized by the spending ceiling. None for any
-    other access."""
+    """The plan of a provider used with an API key (`auth_method: api_key`): the largest roster with a budget of the
+    setup, sized by the older ceiling otherwise. None for any other access."""
     entry = (cfg.get("providers") or {}).get(prov)
     if not isinstance(entry, dict) or entry.get("auth_method") != "api_key":
         return None
+    plan = {"provider": prov, "id": "api-key", "weekly_capped": False, "window_5h": False}
+    budget = _setup_budget(cfg)
+    if budget is not None:
+        return dict(plan, tier=_API_KEY_TIER_WITH_BUDGET, label=(
+            "API key, budget %g USD from %s to %s (the spending brake keeps the team to it)" % (
+                budget["usd"], _stamp(budget["starts"]), _stamp(budget["ends"]))))
     eur = spend_ceiling_eur(cfg)
     tier = next((t for floor, t in _API_KEY_TIER_BY_EUR if eur is not None and eur >= floor), 1)
-    plan = {"provider": prov, "id": "api-key", "tier": tier, "weekly_capped": False, "window_5h": False,
-            "label": "API key, ceiling %g EUR per day" % eur if eur is not None else "API key, no ceiling declared"}
+    plan.update(tier=tier, label="API key, ceiling %g USD per day" % eur if eur is not None else "API key, no budget declared")
     if eur is None:
-        plan["assumed"] = ("API key with no spending ceiling declared: the burst opens on the smallest roster (1 Scout, "
-                           "1 Analista, 1 Scorer). Set the ceiling in the configuration (no_quota_cap.eur) for a larger one.")
+        plan["assumed"] = ("API key with no budget declared («no limit» in the setup): the burst opens on the smallest "
+                           "roster (1 Scout, 1 Analista, 1 Scorer), since nothing but the provider stops the spending. "
+                           "The person gets the full team by choosing a budget with jht setup.")
     return plan
+
+
+def _stamp(moment: float) -> str:
+    import time as _time
+
+    return _time.strftime("%Y-%m-%d %H:%M %z", _time.localtime(moment))
 
 
 def default_plan(prov: str) -> Optional[dict]:
