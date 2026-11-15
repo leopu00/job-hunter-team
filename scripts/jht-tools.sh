@@ -146,11 +146,18 @@ tools_wait_and_switch() {
 }
 
 # Another `jht` command of this computer is running (setup, up, down, an upgrade...): the switch waits for it, never in the middle of
-# it. The job is a child of the wrapper that started it, with the same command line: its own process is left out.
+# it. The job is a child of the wrapper that started it, with the same command line: its own process is left out, and so are its
+# own children (the subshell of a command substitution is a fork with the same command line, and pgrep only leaves itself out).
 tools_other_wrapper_running() {
-  local pid
-  for pid in $(pgrep -f -- "$WRAPPER_PATH" 2>/dev/null); do
-    [ "$pid" = "$BASHPID" ] || [ "$pid" = "$$" ] || return 0
+  local me="$BASHPID" pids pid parent
+  pids="$(pgrep -f -- "$WRAPPER_PATH" 2>/dev/null)" || return 1
+  for pid in $pids; do
+    [ "$pid" = "$me" ] && continue
+    [ "$pid" = "$$" ] && continue
+    parent="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')"
+    [ -n "$parent" ] || continue          # gone already
+    [ "$parent" = "$me" ] && continue     # a child of this job (the subshell of the command substitution above)
+    return 0
   done
   return 1
 }
