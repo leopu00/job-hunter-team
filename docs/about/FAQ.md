@@ -53,8 +53,8 @@ installed; a computer that ran JHT on one of them is told what to do
 Three separate things, only one of which JHT influences:
 
 1. **The AI provider**, which JHT does not include or resell: in 0.4.0, an API key for GLM,
-   Kimi, OpenAI or Claude billed per call, with a daily ceiling that pauses the team (the ChatGPT
-   subscription is not in this version). Plans, measured costs and the ceiling:
+   Kimi, OpenAI or Claude billed per call; set a daily ceiling and the team pauses there, without one nothing stops
+   the spending (the ChatGPT subscription is not in this version). Plans, measured costs and the ceiling:
    [`PROVIDERS.md`](PROVIDERS.md).
 2. **A host**: your own PC costs you power, a VPS costs its monthly fee. The
    trade-offs, without price quotes that go stale:

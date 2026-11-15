@@ -33,7 +33,7 @@ Going from "works for one person" to "works for anyone" is a different project e
 - 🤖 **A team of specialized agents** — an always-on core (Captain, Sentinel, Assistant, Mentor), a dynamic worker pool the Captain scales 1..N (Scout, Analyst, Scorer, Writer, Critic), and scheduled one-shot agents (Dottore for agent-health, Mantenitore for infra-health) — each with its own prompt, skills, and on-demand tools
 - 🛡️ **A Bridge + Sentinel monitoring layer** that calibrates token usage to within 5–15% of the subscription window, so the team doesn't burn through your quota
 - 🌐 **A native office, web dashboard, Telegram channel and CLI** — pick the interface that fits how you work
-- 💳 **Pay for the agents with an API key** — GLM, Kimi, OpenAI or Claude, per call, with a daily ceiling — see [`docs/about/PROVIDERS.md`](PROVIDERS.md)
+- 💳 **Pay for the agents with an API key** — GLM, Kimi, OpenAI or Claude, per call; set a daily ceiling and the team pauses there, without one nothing stops the spending — see [`docs/about/PROVIDERS.md`](PROVIDERS.md)
 - 🐳 **Containerized agents** so your local machine stays clean and the same setup works on a VPS
 
 ## 🎯 What I want next

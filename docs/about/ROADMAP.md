@@ -43,7 +43,7 @@ of workers, not against them.**
 **Guiding principles** — the constraints every roadmap item respects:
 
 - **Local-first, privacy-first.** Credentials, CVs and the SQLite source-of-truth never leave the user's machine; the cloud mirror is opt-in and read-mostly. Its authenticated writes include user-owned chat messages, team directives, bounded position feedback/actions and the emergency stop — not generic control of the host or team runtime.
-- **Two ways to pay, with a ceiling.** In 0.4.0 the way is an API key (GLM, Kimi, OpenAI or Claude) on the Pi harness, with a daily spending ceiling that pauses the team; the Codex subscription, the one proven over a month, is not in 0.4.0 ([ADR-0012](../adr/0012-desktop-setup-matrix.md), which supersedes [ADR-0004](../adr/0004-subscription-only-no-api-keys.md)). The full-team [API team](../guides/API-TEAM.md) on metered OpenAI calls stays in rehearsal.
+- **Two ways to pay, with a ceiling.** In 0.4.0 the way is an API key (GLM, Kimi, OpenAI or Claude) on the Pi harness, with a daily spending ceiling you set (the team pauses there; without one nothing stops the spending); the Codex subscription, the one proven over a month, is not in 0.4.0 ([ADR-0012](../adr/0012-desktop-setup-matrix.md), which supersedes [ADR-0004](../adr/0004-subscription-only-no-api-keys.md)). The full-team [API team](../guides/API-TEAM.md) on metered OpenAI calls stays in rehearsal.
 - **Quality over volume.** No auto-apply spam: the Critic gate rewrites until submissions pass a rubric, and the human clicks send.
 - **Honest status.** Verbal states, measured numbers, and published case studies — nothing on this page should fail a fact-check against the code.
 
