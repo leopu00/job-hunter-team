@@ -61,7 +61,7 @@ def container(tmp_path):
     try:
         yield name
     finally:
-        _docker("rm", "-f", name, check=False)
+        _docker("rm", "-f", "-v", name, check=False)   # with its anonymous volumes
 
 
 def _running(name: str) -> bool:
