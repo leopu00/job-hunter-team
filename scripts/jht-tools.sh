@@ -13,9 +13,9 @@
 #
 # tools_kick is what the wrapper calls on `jht up` and `jht setup` of a core install: it keeps the tools moving on a computer
 # with the CLI only, as the round of the desktop app does (desktop/src-tauri/src/tools_tier.rs). It starts one detached job, at
-# most, that pulls the full image when it is not here yet, waits for profile/ready.flag and then makes the switch itself; a
-# switch the engine refuses (the configuration changed while the team ran) is retried with a `down` first, and a switch that still
-# fails is written down for `jht up` and `jht status` to say, with the commands to give.
+# most, that pulls the full image when it is not here yet, waits for profile/ready.flag and then makes the switch itself, once no
+# other `jht` command runs: `down` of the core team, the tier goes, `up` on the full image (a team the person stopped stays
+# stopped); a switch that fails is written down for `jht up` and `jht status` to say, with the commands to give.
 #
 # The state comes from the engine and from the host files of the runtime, never from a file the container can write. The file
 # $JHT_HOME/state/tools.json is a NOTICE for the container (the Capitano reads it): nothing here reads it back.
@@ -145,15 +145,40 @@ tools_wait_and_switch() {
   done
 }
 
-# The switch of the job. `up` first, as `jht tools switch` does; when the engine refuses it (a team started with another
-# configuration: jht config set, the team settings applied from the site or the app), `down` and `up` again, which is what a person
-# would do. Still refused: the marker says so, and `jht up` / `jht status` tell the person to run `jht down` and `jht up`.
+# Another `jht` command of this computer is running (setup, up, down, an upgrade...): the switch waits for it, never in the middle of
+# it. The job is a child of the wrapper that started it, with the same command line: its own process is left out.
+tools_other_wrapper_running() {
+  local pid
+  for pid in $(pgrep -f -- "$WRAPPER_PATH" 2>/dev/null); do
+    [ "$pid" = "$BASHPID" ] || [ "$pid" = "$$" ] || return 0
+  done
+  return 1
+}
+
+tools_wait_quiet() {
+  local left="${JHT_TOOLS_QUIET_MAX:-1800}"
+  while tools_other_wrapper_running && [ "$left" -gt 0 ]; do sleep 2; left=$((left - 2)); done
+}
+
+# The switch of the job, when no other command runs. A team the person stopped (`jht down`) stays stopped: only the tier goes, and
+# the next `jht up` starts on the full image. A team that runs is stopped FIRST, while the tier file still makes it the attested
+# core container, then the tier goes and `up` starts it on the full one: never a window in which the running container is the
+# core one and the wrapper already expects the full one (the commands of the person in that window refused it as not ours).
+# Refused still: the marker says so, and `jht up` / `jht status` tell the person to run `jht down` and `jht up`.
 tools_switch_auto() {
-  rm -f "$RUNTIME_TIER_FILE" && rm -f "$RUNTIME_TIER_INTEGRITY" || return 0
+  local stopped=0
+  tools_wait_quiet
+  [ -f "$RUNTIME_TIER_FILE" ] || return 0
+  if declare -F team_stopped_by_person >/dev/null 2>&1 && team_stopped_by_person; then stopped=1; fi
   rm -f "$TOOLS_SWITCH_FAILED_FILE"
   unset JHT_IMAGE
-  if "$WRAPPER_PATH" up </dev/null >/dev/null 2>&1 \
-      || { "$WRAPPER_PATH" down </dev/null >/dev/null 2>&1; "$WRAPPER_PATH" up </dev/null >/dev/null 2>&1; }; then
+  if [ "$stopped" -eq 0 ]; then
+    "$WRAPPER_PATH" down </dev/null >/dev/null 2>&1 || true
+  fi
+  rm -f "$RUNTIME_TIER_FILE" && rm -f "$RUNTIME_TIER_INTEGRITY" || return 0
+  if [ "$stopped" -eq 1 ]; then
+    tools_notice ready full "" "$(tools_now)"
+  elif "$WRAPPER_PATH" up </dev/null >/dev/null 2>&1; then
     tools_notice ready full "" "$(tools_now)"
   else
     printf 'switch_failed\n' > "$TOOLS_SWITCH_FAILED_FILE"
