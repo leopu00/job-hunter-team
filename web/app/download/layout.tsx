@@ -11,51 +11,51 @@ const META: Record<
   it: {
     title: "Installa",
     description:
-      "Installa Job Hunter Team dal terminale con la CLI (l'app desktop non è nella 0.4.0). Il tuo team di agenti AI gira sul tuo computer. Open source. I tuoi dati restano sul tuo computer; i testi che gli agenti elaborano vanno al fornitore del modello (Z.ai per GLM).",
+      "Installa Job Hunter Team dal terminale con la CLI (l'app desktop non è nella 0.4.0). Il tuo team di agenti AI gira sul tuo computer. Open source. I tuoi dati restano sul tuo computer; i testi che gli agenti elaborano vanno al fornitore del modello (Z.ai per GLM, Moonshot per Kimi, OpenAI per OpenAI, Anthropic per Claude).",
     jsonLdDescription:
-      "Un team di agenti AI che automatizza la ricerca di lavoro. Open source. I tuoi dati restano sul tuo computer; i testi che gli agenti elaborano vanno al fornitore del modello (Z.ai per GLM).",
+      "Un team di agenti AI che automatizza la ricerca di lavoro. Open source. I tuoi dati restano sul tuo computer; i testi che gli agenti elaborano vanno al fornitore del modello (Z.ai per GLM, Moonshot per Kimi, OpenAI per OpenAI, Anthropic per Claude).",
   },
   en: {
     title: "Install",
     description:
-      "Install Job Hunter Team from the terminal with the CLI (the desktop app is not in 0.4.0). Your AI agent team runs on your own computer. Open source. Your data stays on your computer; the texts the agents work on go to the model's provider (Z.ai for GLM).",
+      "Install Job Hunter Team from the terminal with the CLI (the desktop app is not in 0.4.0). Your AI agent team runs on your own computer. Open source. Your data stays on your computer; the texts the agents work on go to the model's provider (Z.ai for GLM, Moonshot for Kimi, OpenAI for OpenAI, Anthropic for Claude).",
     jsonLdDescription:
-      "A team of AI agents that automates the job search. Open source. Your data stays on your computer; the texts the agents work on go to the model's provider (Z.ai for GLM).",
+      "A team of AI agents that automates the job search. Open source. Your data stays on your computer; the texts the agents work on go to the model's provider (Z.ai for GLM, Moonshot for Kimi, OpenAI for OpenAI, Anthropic for Claude).",
   },
   es: {
     title: "Instalar",
     description:
-      "Instala Job Hunter Team desde la terminal con la CLI (la app de escritorio no está en la 0.4.0). Tu equipo de agentes de IA se ejecuta en tu propio ordenador. Open source. Tus datos se quedan en tu ordenador; los textos que procesan los agentes van al proveedor del modelo (Z.ai para GLM).",
+      "Instala Job Hunter Team desde la terminal con la CLI (la app de escritorio no está en la 0.4.0). Tu equipo de agentes de IA se ejecuta en tu propio ordenador. Open source. Tus datos se quedan en tu ordenador; los textos que procesan los agentes van al proveedor del modelo (Z.ai para GLM, Moonshot para Kimi, OpenAI para OpenAI, Anthropic para Claude).",
     jsonLdDescription:
-      "Un equipo de agentes de IA que automatiza la búsqueda de empleo. Open source. Tus datos se quedan en tu ordenador; los textos que procesan los agentes van al proveedor del modelo (Z.ai para GLM).",
+      "Un equipo de agentes de IA que automatiza la búsqueda de empleo. Open source. Tus datos se quedan en tu ordenador; los textos que procesan los agentes van al proveedor del modelo (Z.ai para GLM, Moonshot para Kimi, OpenAI para OpenAI, Anthropic para Claude).",
   },
   fr: {
     title: "Installer",
     description:
-      "Installez Job Hunter Team depuis le terminal avec la CLI (l'app de bureau n'est pas dans la 0.4.0). Votre équipe d'agents IA s'exécute sur votre propre ordinateur. Open source. Vos données restent sur votre ordinateur ; les textes que traitent les agents vont au fournisseur du modèle (Z.ai pour GLM).",
+      "Installez Job Hunter Team depuis le terminal avec la CLI (l'app de bureau n'est pas dans la 0.4.0). Votre équipe d'agents IA s'exécute sur votre propre ordinateur. Open source. Vos données restent sur votre ordinateur ; les textes que traitent les agents vont au fournisseur du modèle (Z.ai pour GLM, Moonshot pour Kimi, OpenAI pour OpenAI, Anthropic pour Claude).",
     jsonLdDescription:
-      "Une équipe d'agents IA qui automatise la recherche d'emploi. Open source. Vos données restent sur votre ordinateur ; les textes que traitent les agents vont au fournisseur du modèle (Z.ai pour GLM).",
+      "Une équipe d'agents IA qui automatise la recherche d'emploi. Open source. Vos données restent sur votre ordinateur ; les textes que traitent les agents vont au fournisseur du modèle (Z.ai pour GLM, Moonshot pour Kimi, OpenAI pour OpenAI, Anthropic pour Claude).",
   },
   de: {
     title: "Installieren",
     description:
-      "Installiere Job Hunter Team über das Terminal mit der CLI (die Desktop-App ist nicht in 0.4.0). Dein KI-Agententeam läuft auf deinem eigenen Computer. Open Source. Deine Daten bleiben auf deinem Computer; die Texte, die die Agenten verarbeiten, gehen an den Anbieter des Modells (Z.ai für GLM).",
+      "Installiere Job Hunter Team über das Terminal mit der CLI (die Desktop-App ist nicht in 0.4.0). Dein KI-Agententeam läuft auf deinem eigenen Computer. Open Source. Deine Daten bleiben auf deinem Computer; die Texte, die die Agenten verarbeiten, gehen an den Anbieter des Modells (Z.ai für GLM, Moonshot für Kimi, OpenAI für OpenAI, Anthropic für Claude).",
     jsonLdDescription:
-      "Ein Team von KI-Agenten, das die Jobsuche automatisiert. Open Source. Deine Daten bleiben auf deinem Computer; die Texte, die die Agenten verarbeiten, gehen an den Anbieter des Modells (Z.ai für GLM).",
+      "Ein Team von KI-Agenten, das die Jobsuche automatisiert. Open Source. Deine Daten bleiben auf deinem Computer; die Texte, die die Agenten verarbeiten, gehen an den Anbieter des Modells (Z.ai für GLM, Moonshot für Kimi, OpenAI für OpenAI, Anthropic für Claude).",
   },
   hu: {
     title: "Telepítés",
     description:
-      "Telepítsd a Job Hunter Teamet terminálból a CLI-val (az asztali app nincs a 0.4.0-ban). Az MI-ügynökökből álló csapatod a saját számítógépeden fut. Nyílt forráskódú. Az adataid a gépeden maradnak; az ügynökök által feldolgozott szövegek a modell szolgáltatójához kerülnek (GLM esetén a Z.ai-hoz).",
+      "Telepítsd a Job Hunter Teamet terminálból a CLI-val (az asztali app nincs a 0.4.0-ban). Az MI-ügynökökből álló csapatod a saját számítógépeden fut. Nyílt forráskódú. Az adataid a gépeden maradnak; az ügynökök által feldolgozott szövegek a modell szolgáltatójához kerülnek (GLM esetén a Z.ai-hoz, Kimi esetén a Moonshothoz, OpenAI esetén az OpenAI-hoz, Claude esetén az Anthropichoz).",
     jsonLdDescription:
-      "MI-ügynökökből álló csapat, amely automatizálja az álláskeresést. Nyílt forráskódú. Az adataid a gépeden maradnak; az ügynökök által feldolgozott szövegek a modell szolgáltatójához kerülnek (GLM esetén a Z.ai-hoz).",
+      "MI-ügynökökből álló csapat, amely automatizálja az álláskeresést. Nyílt forráskódú. Az adataid a gépeden maradnak; az ügynökök által feldolgozott szövegek a modell szolgáltatójához kerülnek (GLM esetén a Z.ai-hoz, Kimi esetén a Moonshothoz, OpenAI esetén az OpenAI-hoz, Claude esetén az Anthropichoz).",
   },
   pt: {
     title: "Instalar",
     description:
-      "Instala o Job Hunter Team a partir do terminal com a CLI (a app de ambiente de trabalho não está na 0.4.0). A tua equipa de agentes de IA corre no teu próprio computador. Open source. Os teus dados ficam no teu computador; os textos que os agentes processam vão para o fornecedor do modelo (Z.ai para GLM).",
+      "Instala o Job Hunter Team a partir do terminal com a CLI (a app de ambiente de trabalho não está na 0.4.0). A tua equipa de agentes de IA corre no teu próprio computador. Open source. Os teus dados ficam no teu computador; os textos que os agentes processam vão para o fornecedor do modelo (Z.ai para GLM, Moonshot para Kimi, OpenAI para OpenAI, Anthropic para Claude).",
     jsonLdDescription:
-      "Uma equipa de agentes de IA que automatiza a procura de emprego. Open source. Os teus dados ficam no teu computador; os textos que os agentes processam vão para o fornecedor do modelo (Z.ai para GLM).",
+      "Uma equipa de agentes de IA que automatiza a procura de emprego. Open source. Os teus dados ficam no teu computador; os textos que os agentes processam vão para o fornecedor do modelo (Z.ai para GLM, Moonshot para Kimi, OpenAI para OpenAI, Anthropic para Claude).",
   },
 };
 

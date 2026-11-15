@@ -87,7 +87,7 @@ via wipe + re-pair, not concurrent runs.
 
 The supported public onboarding path is the interactive wizard followed, for
 Codex, by `jht oauth-login` in a second terminal; GLM and Kimi take an API key
-with `jht setup --non-interactive --provider glm|kimi --harness pi --api-key-file <file>`
+with `jht setup --non-interactive --provider glm|kimi|openai|claude --harness pi --api-key-file <file>`
 (or `--api-key-stdin`). The CLI still
 exposes legacy non-interactive and secret-bearing setup flags for controlled
 development environments; they are not a public install path and must never
@@ -532,8 +532,8 @@ jht setup
 # Reload after editing jht.config.json
 jht team stop --all && jht team start
 
-# Switch provider
-jht providers use codex && jht providers update codex
+# Switch provider (glm, kimi, openai or claude in 0.4.0)
+jht providers use kimi
 jht team stop --all && jht team start
 
 # Daily check

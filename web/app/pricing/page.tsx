@@ -16,7 +16,7 @@ type Tier = "base" | "high";
 type Provider = {
   name: string;
   vendor: string;
-  tier: Tier;
+  tier?: Tier;
   url: string;
 } & Record<Lang, string>;
 
@@ -54,13 +54,49 @@ const PROVIDERS: Provider[] = [
     vendor: "Z.ai",
     tier: "high",
     url: "https://z.ai",
-    it: "L'unico provider della 0.4.0: gli agenti girano sull'harness Pi con la tua chiave API, a consumo. jht setup chiede la chiave, la controlla e la tiene nel container; un tetto di spesa giornaliero mette in pausa il team. Misurato: circa 0,10 USD per posizione valutata.",
-    en: "The one provider of 0.4.0: the agents run on the Pi harness with your API key, paid per call. jht setup asks for the key, checks it and keeps it in the container; a daily spending ceiling pauses the team. Measured: about 0.10 USD per scored position.",
-    es: "El único proveedor de la 0.4.0: los agentes funcionan sobre el harness Pi con tu clave de API, de pago por uso. jht setup pide la clave, la comprueba y la guarda en el contenedor; un tope de gasto diario pausa el equipo. Medido: unos 0,10 USD por posición evaluada.",
-    fr: "L'unique fournisseur de la 0.4.0 : les agents tournent sur le harness Pi avec votre clé d'API, payée à l'usage. jht setup demande la clé, la vérifie et la garde dans le conteneur ; un plafond de dépense quotidien met l'équipe en pause. Mesuré : environ 0,10 USD par poste évalué.",
-    de: "Der einzige Anbieter von 0.4.0: Die Agenten laufen auf dem Pi-Harness mit deinem API-Key, pro Aufruf bezahlt. jht setup fragt nach dem Key, prüft ihn und bewahrt ihn im Container auf; ein tägliches Ausgabenlimit pausiert das Team. Gemessen: etwa 0,10 USD pro bewerteter Stelle.",
-    pt: "O único fornecedor da 0.4.0: os agentes correm no harness Pi com a sua chave de API, paga por uso. O jht setup pede a chave, verifica-a e guarda-a no contentor; um teto de gastos diário pausa a equipa. Medido: cerca de 0,10 USD por posição avaliada.",
-    hu: "A 0.4.0 egyetlen szolgáltatója: az ügynökök a Pi harness-en futnak az API-kulcsoddal, hívásonként fizetve. A jht setup elkéri a kulcsot, ellenőrzi és a konténerben tartja; a napi költési plafon szünetelteti a csapatot. Mérve: kb. 0,10 USD értékelt pozíciónként.",
+    it: "Uno dei quattro provider della 0.4.0: gli agenti girano sull'harness Pi con la tua chiave API, a consumo. jht setup chiede la chiave, la controlla e la tiene nel container; un tetto di spesa giornaliero mette in pausa il team. Misurato: circa 0,10 USD per posizione valutata.",
+    en: "One of the four providers of 0.4.0: the agents run on the Pi harness with your API key, paid per call. jht setup asks for the key, checks it and keeps it in the container; a daily spending ceiling pauses the team. Measured: about 0.10 USD per scored position.",
+    es: "Uno de los cuatro proveedores de la 0.4.0: los agentes funcionan sobre el harness Pi con tu clave de API, de pago por uso. jht setup pide la clave, la comprueba y la guarda en el contenedor; un tope de gasto diario pausa el equipo. Medido: unos 0,10 USD por posición evaluada.",
+    fr: "L'un des quatre fournisseurs de la 0.4.0 : les agents tournent sur le harness Pi avec votre clé d'API, payée à l'usage. jht setup demande la clé, la vérifie et la garde dans le conteneur ; un plafond de dépense quotidien met l'équipe en pause. Mesuré : environ 0,10 USD par poste évalué.",
+    de: "Einer der vier Anbieter von 0.4.0: Die Agenten laufen auf dem Pi-Harness mit deinem API-Key, pro Aufruf bezahlt. jht setup fragt nach dem Key, prüft ihn und bewahrt ihn im Container auf; ein tägliches Ausgabenlimit pausiert das Team. Gemessen: etwa 0,10 USD pro bewerteter Stelle.",
+    pt: "Um dos quatro fornecedores da 0.4.0: os agentes correm no harness Pi com a sua chave de API, paga por uso. O jht setup pede a chave, verifica-a e guarda-a no contentor; um teto de gastos diário pausa a equipa. Medido: cerca de 0,10 USD por posição avaliada.",
+    hu: "A 0.4.0 négy szolgáltatójának egyike: az ügynökök a Pi harness-en futnak az API-kulcsoddal, hívásonként fizetve. A jht setup elkéri a kulcsot, ellenőrzi és a konténerben tartja; a napi költési plafon szünetelteti a csapatot. Mérve: kb. 0,10 USD értékelt pozíciónként.",
+  },
+  {
+    name: "Kimi",
+    vendor: "Moonshot",
+    url: "https://platform.kimi.ai/docs/pricing/chat",
+    it: "Gli agenti girano sull'harness Pi con la tua chiave API, a consumo. jht setup chiede la chiave, la controlla e la tiene nel container; un tetto di spesa giornaliero mette in pausa il team.",
+    en: "The agents run on the Pi harness with your API key, paid per call. jht setup asks for the key, checks it and keeps it in the container; a daily spending ceiling pauses the team.",
+    es: "Los agentes funcionan sobre el harness Pi con tu clave de API, de pago por uso. jht setup pide la clave, la comprueba y la guarda en el contenedor; un tope de gasto diario pausa el equipo.",
+    fr: "Les agents tournent sur le harness Pi avec votre clé d'API, payée à l'usage. jht setup demande la clé, la vérifie et la garde dans le conteneur ; un plafond de dépense quotidien met l'équipe en pause.",
+    de: "Die Agenten laufen auf dem Pi-Harness mit deinem API-Key, pro Aufruf bezahlt. jht setup fragt nach dem Key, prüft ihn und bewahrt ihn im Container auf; ein tägliches Ausgabenlimit pausiert das Team.",
+    pt: "Os agentes correm no harness Pi com a sua chave de API, paga por uso. O jht setup pede a chave, verifica-a e guarda-a no contentor; um teto de gastos diário pausa a equipa.",
+    hu: "Az ügynökök a Pi harness-en futnak az API-kulcsoddal, hívásonként fizetve. A jht setup elkéri a kulcsot, ellenőrzi és a konténerben tartja; a napi költési plafon szünetelteti a csapatot.",
+  },
+  {
+    name: "OpenAI",
+    vendor: "OpenAI",
+    url: "https://developers.openai.com/api/docs/pricing",
+    it: "Gli agenti girano sull'harness Pi con la tua chiave API, a consumo. jht setup chiede la chiave, la controlla e la tiene nel container; un tetto di spesa giornaliero mette in pausa il team.",
+    en: "The agents run on the Pi harness with your API key, paid per call. jht setup asks for the key, checks it and keeps it in the container; a daily spending ceiling pauses the team.",
+    es: "Los agentes funcionan sobre el harness Pi con tu clave de API, de pago por uso. jht setup pide la clave, la comprueba y la guarda en el contenedor; un tope de gasto diario pausa el equipo.",
+    fr: "Les agents tournent sur le harness Pi avec votre clé d'API, payée à l'usage. jht setup demande la clé, la vérifie et la garde dans le conteneur ; un plafond de dépense quotidien met l'équipe en pause.",
+    de: "Die Agenten laufen auf dem Pi-Harness mit deinem API-Key, pro Aufruf bezahlt. jht setup fragt nach dem Key, prüft ihn und bewahrt ihn im Container auf; ein tägliches Ausgabenlimit pausiert das Team.",
+    pt: "Os agentes correm no harness Pi com a sua chave de API, paga por uso. O jht setup pede a chave, verifica-a e guarda-a no contentor; um teto de gastos diário pausa a equipa.",
+    hu: "Az ügynökök a Pi harness-en futnak az API-kulcsoddal, hívásonként fizetve. A jht setup elkéri a kulcsot, ellenőrzi és a konténerben tartja; a napi költési plafon szünetelteti a csapatot.",
+  },
+  {
+    name: "Claude",
+    vendor: "Anthropic",
+    url: "https://platform.claude.com/docs/en/about-claude/pricing",
+    it: "Gli agenti girano sull'harness Pi con la tua chiave API, a consumo. jht setup chiede la chiave, la controlla e la tiene nel container; un tetto di spesa giornaliero mette in pausa il team.",
+    en: "The agents run on the Pi harness with your API key, paid per call. jht setup asks for the key, checks it and keeps it in the container; a daily spending ceiling pauses the team.",
+    es: "Los agentes funcionan sobre el harness Pi con tu clave de API, de pago por uso. jht setup pide la clave, la comprueba y la guarda en el contenedor; un tope de gasto diario pausa el equipo.",
+    fr: "Les agents tournent sur le harness Pi avec votre clé d'API, payée à l'usage. jht setup demande la clé, la vérifie et la garde dans le conteneur ; un plafond de dépense quotidien met l'équipe en pause.",
+    de: "Die Agenten laufen auf dem Pi-Harness mit deinem API-Key, pro Aufruf bezahlt. jht setup fragt nach dem Key, prüft ihn und bewahrt ihn im Container auf; ein tägliches Ausgabenlimit pausiert das Team.",
+    pt: "Os agentes correm no harness Pi com a sua chave de API, paga por uso. O jht setup pede a chave, verifica-a e guarda-a no contentor; um teto de gastos diário pausa a equipa.",
+    hu: "Az ügynökök a Pi harness-en futnak az API-kulcsoddal, hívásonként fizetve. A jht setup elkéri a kulcsot, ellenőrzi és a konténerben tartja; a napi költési plafon szünetelteti a csapatot.",
   },
 ];
 
@@ -73,7 +109,7 @@ const PAGE = {
       "Software open source con licenza MIT: nessun abbonamento alla piattaforma, nessun costo nascosto, nessun ricavo per noi. Lo scarichi e fai girare il team a casa tua; l'unica spesa è il consumo del modello AI, pagato al provider con la tua chiave API.",
     providersTitle: "I provider AI",
     providersIntro:
-      "Nella 0.4.0 il team gira su GLM (Z.ai) con una chiave API, pagata a consumo; Codex non è in questa versione. I prezzi cambiano e non li ripetiamo qui: il riferimento sono le pagine ufficiali.",
+      "Nella 0.4.0 il team gira con una chiave API di GLM (Z.ai), Kimi (Moonshot), OpenAI o Claude (Anthropic), pagata a consumo; Codex non è in questa versione. I prezzi cambiano e non li ripetiamo qui: il riferimento sono le pagine ufficiali.",
     providerLink: "Prezzi ufficiali →",
     dedicatedTitle: "Dedica la chiave al team",
     dedicatedNote:
@@ -90,7 +126,7 @@ const PAGE = {
       "Open source under the MIT license: no platform subscription, no hidden fees, no revenue for us. You download and run the team on your own machine; the only cost is the AI model's usage, paid to the provider with your API key.",
     providersTitle: "The AI providers",
     providersIntro:
-      "In 0.4.0 the team runs on GLM (Z.ai) with an API key, paid per call; Codex is not in this version. Prices change and we don't quote them here: the official pages are the reference.",
+      "In 0.4.0 the team runs on an API key from GLM (Z.ai), Kimi (Moonshot), OpenAI or Claude (Anthropic), paid per call; Codex is not in this version. Prices change and we don't quote them here: the official pages are the reference.",
     providerLink: "Official pricing →",
     dedicatedTitle: "Dedicate the key to the team",
     dedicatedNote:
@@ -106,7 +142,7 @@ const PAGE = {
       "Software open source con licencia MIT: ninguna suscripción a la plataforma, ningún coste oculto, ningún ingreso para nosotros. Lo descargas y haces funcionar el equipo en tu propia máquina; el único gasto es el uso del modelo de IA, pagado al proveedor con tu clave de API.",
     providersTitle: "Los proveedores de IA",
     providersIntro:
-      "En la 0.4.0 el equipo funciona con GLM (Z.ai) y una clave de API, de pago por uso; Codex no está en esta versión. Los precios cambian y no los reproducimos aquí: la referencia son las páginas oficiales.",
+      "En la 0.4.0 el equipo funciona con una clave de API de GLM (Z.ai), Kimi (Moonshot), OpenAI o Claude (Anthropic), de pago por uso; Codex no está en esta versión. Los precios cambian y no los reproducimos aquí: la referencia son las páginas oficiales.",
     providerLink: "Precios oficiales →",
     dedicatedTitle: "Dedica la clave al equipo",
     dedicatedNote:
@@ -123,7 +159,7 @@ const PAGE = {
       "Logiciel open source sous licence MIT : aucun abonnement à la plateforme, aucun coût caché, aucun revenu pour nous. Vous le téléchargez et faites tourner l'équipe sur votre propre machine ; la seule dépense est l'usage du modèle d'IA, payé au fournisseur avec votre clé d'API.",
     providersTitle: "Les fournisseurs d'IA",
     providersIntro:
-      "Dans la 0.4.0, l'équipe fonctionne avec GLM (Z.ai) et une clé d'API, payée à l'usage ; Codex n'est pas dans cette version. Les prix changent et nous ne les reprenons pas ici : les pages officielles font foi.",
+      "Dans la 0.4.0, l'équipe fonctionne avec une clé d'API de GLM (Z.ai), Kimi (Moonshot), OpenAI ou Claude (Anthropic), payée à l'usage ; Codex n'est pas dans cette version. Les prix changent et nous ne les reprenons pas ici : les pages officielles font foi.",
     providerLink: "Tarifs officiels →",
     dedicatedTitle: "Dédiez la clé à l'équipe",
     dedicatedNote:
@@ -140,7 +176,7 @@ const PAGE = {
       "Open-Source-Software unter MIT-Lizenz: kein Plattform-Abonnement, keine versteckten Kosten, keine Einnahmen für uns. Du lädst sie herunter und lässt das Team auf deinem eigenen Rechner laufen; die einzige Ausgabe ist die Nutzung des KI-Modells, mit deinem API-Key beim Anbieter bezahlt.",
     providersTitle: "Die KI-Anbieter",
     providersIntro:
-      "In 0.4.0 läuft das Team mit GLM (Z.ai) und einem API-Key, pro Aufruf bezahlt; Codex ist nicht in dieser Version. Preise ändern sich und wir geben sie hier nicht wieder: Maßgeblich sind die offiziellen Seiten.",
+      "In 0.4.0 läuft das Team mit einem API-Key von GLM (Z.ai), Kimi (Moonshot), OpenAI oder Claude (Anthropic), pro Aufruf bezahlt; Codex ist nicht in dieser Version. Preise ändern sich und wir geben sie hier nicht wieder: Maßgeblich sind die offiziellen Seiten.",
     providerLink: "Offizielle Preise →",
     dedicatedTitle: "Widme den Key dem Team",
     dedicatedNote:
@@ -157,7 +193,7 @@ const PAGE = {
       "Nyílt forráskódú szoftver MIT licenc alatt: nincs platform-előfizetés, nincsenek rejtett költségek, nincs bevételünk belőle. Letöltöd és a saját gépeden futtatod a csapatot; az egyetlen kiadás az AI-modell használata, amelyet az API-kulcsoddal fizetsz a szolgáltatónak.",
     providersTitle: "Az AI-szolgáltatók",
     providersIntro:
-      "A 0.4.0-ban a csapat GLM-mel (Z.ai) fut, API-kulccsal, hívásonként fizetve; a Codex nincs benne ebben a verzióban. Az árak változnak, és itt nem ismételjük őket: a hivatalos oldalak az irányadók.",
+      "A 0.4.0-ban a csapat API-kulccsal fut, hívásonként fizetve: GLM (Z.ai), Kimi (Moonshot), OpenAI vagy Claude (Anthropic); a Codex nincs benne ebben a verzióban. Az árak változnak, és itt nem ismételjük őket: a hivatalos oldalak az irányadók.",
     providerLink: "Hivatalos árak →",
     dedicatedTitle: "Szentelj egy kulcsot a csapatnak",
     dedicatedNote:
@@ -174,7 +210,7 @@ const PAGE = {
       "Software open source com licença MIT: nenhuma subscrição da plataforma, nenhum custo oculto, nenhuma receita para nós. Transfere-o e põe o equipa a funcionar na sua própria máquina; a única despesa é o uso do modelo de IA, pago ao fornecedor com a sua chave de API.",
     providersTitle: "Os fornecedores de IA",
     providersIntro:
-      "Na 0.4.0 a equipa funciona com GLM (Z.ai) e uma chave de API, paga por uso; Codex não está nesta versão. Os preços mudam e não os repetimos aqui: a referência são as páginas oficiais.",
+      "Na 0.4.0 a equipa funciona com uma chave de API de GLM (Z.ai), Kimi (Moonshot), OpenAI ou Claude (Anthropic), paga por uso; Codex não está nesta versão. Os preços mudam e não os repetimos aqui: a referência são as páginas oficiais.",
     providerLink: "Preços oficiais →",
     dedicatedTitle: "Dedique a chave à equipa",
     dedicatedNote:
@@ -264,7 +300,7 @@ function PricingContent() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {PROVIDERS.map((prov) => (
               <div
                 key={prov.name}
@@ -277,11 +313,13 @@ function PricingContent() {
                 <h3 className="text-[16px] font-bold text-[var(--color-white)] mb-1">
                   {prov.name}
                 </h3>
-                <div className="mb-4">
-                  <span className="text-[11px] font-semibold tracking-[0.12em] uppercase text-[var(--color-green)]">
-                    {TIER_LABEL[L][prov.tier]}
-                  </span>
-                </div>
+                {prov.tier ? (
+                  <div className="mb-4">
+                    <span className="text-[11px] font-semibold tracking-[0.12em] uppercase text-[var(--color-green)]">
+                      {TIER_LABEL[L][prov.tier]}
+                    </span>
+                  </div>
+                ) : null}
                 <p className="text-[12px] text-[var(--color-bright)] leading-relaxed flex-1 mb-4">
                   {prov[L]}
                 </p>

@@ -8,7 +8,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.4.0] — 2026-11-15
 
 **The agent team runs in a Podman container on your computer (or a VPS), driven from the `jht` CLI, and the
-team runs on Pi with a GLM (Z.ai) API key.** The desktop app is not in 0.4.0. The release notes say which of
+team runs on Pi with an API key, from GLM (Z.ai), Kimi (Moonshot), OpenAI or Claude (Anthropic).** The desktop app is not in 0.4.0. The release notes say which of
 this was tested on real machines and which was not.
 
 ### Platforms
@@ -24,11 +24,11 @@ this was tested on real machines and which was not.
 
 ### Providers
 
-- One way to power the team: **Pi with GLM (Z.ai)**, with an **API key** that `jht setup` asks for (typed hidden)
+- Four ways to power the team: **Pi with GLM (Z.ai)**, **Pi with Kimi (Moonshot)**, **Pi with OpenAI** or **Pi with Claude (Anthropic)**, each with an **API key** that `jht setup` asks for (typed hidden)
   or takes from a file or from standard input: its cost is yours, and the team's spending cap stops it. The
   services a release offers are one list (`shared/runtime/release-providers.js`); `jht setup`,
   `jht providers use` and `jht providers harness` refuse the others, and `jht doctor` says a team configured on
-  one of them is not supported in this release. Codex (ChatGPT subscription or OpenAI key), Kimi and Claude are
+  one of them is not supported in this release. The Codex CLI and the ChatGPT subscription are
   not in 0.4.0; their code stays. `jht providers update` without an id no longer
   updates Kimi: name it (`jht providers update kimi`).
 - A key the provider refuses, a missing key or credit that has run out are reported by `jht team start`,

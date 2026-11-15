@@ -72,7 +72,7 @@ Leggi prima il repository e la guida, poi guidami nell'installazione e nell'avvi
 
 C'è una strada sola, la CLI jht (l'app desktop non è nella 0.4.0): curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Due cose da verificare con me lungo la strada: che sul Mac Homebrew sia già installato (l'installer lo usa per installare Podman, il motore dei container) e la chiave API GLM (Z.ai) che userà la squadra — meglio una chiave solo sua, separata da quelle che uso ogni giorno, con un tetto di spesa. Chiedimi tutto il resto invece di indovinare.`,
+Due cose da verificare con me lungo la strada: che sul Mac Homebrew sia già installato (l'installer lo usa per installare Podman, il motore dei container) e la chiave API (GLM, Kimi, OpenAI o Claude) che userà la squadra — meglio una chiave solo sua, separata da quelle che uso ogni giorno, con un tetto di spesa. Chiedimi tutto il resto invece di indovinare.`,
   en: `I'd like to start using Job Hunter Team, an open-source team of AI agents that searches for jobs on my behalf. It runs on my own machine, in a container.
 
 Repository: https://github.com/leopu00/job-hunter-team
@@ -83,7 +83,7 @@ Read the repository and the setup guide first, then walk me through installing a
 
 There is one way in, the jht CLI (the desktop app is not in 0.4.0): curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Two things you will need to check with me along the way: that on a Mac Homebrew is already installed (the installer uses it to install Podman, the container engine), and the GLM (Z.ai) API key the team will use — better a key of its own, separate from the ones I use day to day, with a spending ceiling. Ask me whatever else you need instead of guessing.`,
+Two things you will need to check with me along the way: that on a Mac Homebrew is already installed (the installer uses it to install Podman, the container engine), and the API key the team will use (GLM, Kimi, OpenAI or Claude) — better a key of its own, separate from the ones I use day to day, with a spending ceiling. Ask me whatever else you need instead of guessing.`,
   es: `Quiero empezar a usar Job Hunter Team, un equipo open source de agentes de IA que busca trabajo por mí. Funciona en mi propio ordenador, dentro de un contenedor.
 
 Repositorio: https://github.com/leopu00/job-hunter-team
@@ -94,7 +94,7 @@ Lee primero el repositorio y la guía, y después acompáñame en la instalació
 
 Hay un solo camino, la CLI jht (la app de escritorio no está en la 0.4.0): curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Dos cosas que tendrás que comprobar conmigo por el camino: que en Mac Homebrew esté ya instalado (el instalador lo usa para instalar Podman, el motor de contenedores) y la clave API de GLM (Z.ai) que usará el equipo — mejor una clave solo suya, separada de las que uso a diario, con un límite de gasto. Pregúntame todo lo demás en lugar de suponerlo.`,
+Dos cosas que tendrás que comprobar conmigo por el camino: que en Mac Homebrew esté ya instalado (el instalador lo usa para instalar Podman, el motor de contenedores) y la clave API (GLM, Kimi, OpenAI o Claude) que usará el equipo — mejor una clave solo suya, separada de las que uso a diario, con un límite de gasto. Pregúntame todo lo demás en lugar de suponerlo.`,
   fr: `J'aimerais commencer à utiliser Job Hunter Team, une équipe open source d'agents IA qui cherche du travail pour moi. Elle tourne sur mon ordinateur, dans un conteneur.
 
 Dépôt : https://github.com/leopu00/job-hunter-team
@@ -105,7 +105,7 @@ Lis d'abord le dépôt et le guide, puis accompagne-moi pour l'installer et le d
 
 Il n'y a qu'une voie, la CLI jht (l'application de bureau n'est pas dans la 0.4.0) : curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Deux choses à vérifier avec moi en chemin : que sur Mac Homebrew soit déjà installé (l'installateur s'en sert pour installer Podman, le moteur de conteneurs) et la clé API GLM (Z.ai) qu'utilisera l'équipe — mieux vaut une clé à elle, distincte de celles que j'utilise au quotidien, avec un plafond de dépenses. Demande-moi tout le reste au lieu de deviner.`,
+Deux choses à vérifier avec moi en chemin : que sur Mac Homebrew soit déjà installé (l'installateur s'en sert pour installer Podman, le moteur de conteneurs) et la clé API (GLM, Kimi, OpenAI ou Claude) qu'utilisera l'équipe — mieux vaut une clé à elle, distincte de celles que j'utilise au quotidien, avec un plafond de dépenses. Demande-moi tout le reste au lieu de deviner.`,
   de: `Ich möchte anfangen, Job Hunter Team zu nutzen — ein Open-Source-Team aus KI-Agenten, das für mich nach Stellen sucht. Es läuft auf meinem eigenen Rechner, in einem Container.
 
 Repository: https://github.com/leopu00/job-hunter-team
@@ -116,7 +116,7 @@ Lies zuerst das Repository und die Anleitung, und führe mich dann durch Install
 
 Es gibt einen Weg, die jht-CLI (die Desktop-App ist nicht in 0.4.0): curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Zwei Dinge, die du unterwegs mit mir klären musst: dass auf einem Mac Homebrew bereits installiert ist (der Installer nutzt es, um Podman, die Container-Engine, zu installieren) und welchen GLM-(Z.ai)-API-Schlüssel das Team nutzt — am besten einen eigenen, getrennt von denen, die ich täglich nutze, mit einer Ausgabengrenze. Frag mich alles Weitere, statt zu raten.`,
+Zwei Dinge, die du unterwegs mit mir klären musst: dass auf einem Mac Homebrew bereits installiert ist (der Installer nutzt es, um Podman, die Container-Engine, zu installieren) und welchen API-Schlüssel (GLM, Kimi, OpenAI oder Claude) das Team nutzt — am besten einen eigenen, getrennt von denen, die ich täglich nutze, mit einer Ausgabengrenze. Frag mich alles Weitere, statt zu raten.`,
   pt: `Gostaria de começar a usar o Job Hunter Team, uma equipa open source de agentes de IA que procura emprego por mim. Corre no meu próprio computador, dentro de um contentor.
 
 Repositório: https://github.com/leopu00/job-hunter-team
@@ -127,7 +127,7 @@ Lê primeiro o repositório e o guia, e depois acompanha-me na instalação e no
 
 Há um só caminho, a CLI jht (a app de ambiente de trabalho não está na 0.4.0): curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Duas coisas que terás de verificar comigo pelo caminho: que no Mac o Homebrew esteja já instalado (o instalador usa-o para instalar o Podman, o motor de contentores) e a chave API GLM (Z.ai) que a equipa vai usar — melhor uma chave só dela, separada das que uso no dia a dia, com um teto de despesa. Pergunta-me tudo o resto em vez de adivinhar.`,
+Duas coisas que terás de verificar comigo pelo caminho: que no Mac o Homebrew esteja já instalado (o instalador usa-o para instalar o Podman, o motor de contentores) e a chave API (GLM, Kimi, OpenAI ou Claude) que a equipa vai usar — melhor uma chave só dela, separada das que uso no dia a dia, com um teto de despesa. Pergunta-me tudo o resto em vez de adivinhar.`,
   hu: `Szeretném elkezdeni használni a Job Hunter Teamet, egy nyílt forráskódú AI-ügynökcsapatot, amely helyettem keres állást. A saját gépemen fut, konténerben.
 
 Repository: https://github.com/leopu00/job-hunter-team
@@ -138,7 +138,7 @@ Először olvasd el a repositoryt és az útmutatót, majd vezess végig a telep
 
 Egyetlen út van, a jht CLI (az asztali alkalmazás nincs a 0.4.0-ban): curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Két dolgot kell majd velem tisztáznod útközben: hogy Macen a Homebrew már telepítve van-e (a telepítő ezzel telepíti a Podmant, a konténermotort), és melyik GLM (Z.ai) API-kulcsot használja a csapat — jobb egy saját kulcs, elkülönítve azoktól, amelyeket naponta használok, költségkerettel. Minden mást kérdezz meg tőlem, ahelyett hogy találgatnál.`,
+Két dolgot kell majd velem tisztáznod útközben: hogy Macen a Homebrew már telepítve van-e (a telepítő ezzel telepíti a Podmant, a konténermotort), és melyik API-kulcsot (GLM, Kimi, OpenAI vagy Claude) használja a csapat — jobb egy saját kulcs, elkülönítve azoktól, amelyeket naponta használok, költségkerettel. Minden mást kérdezz meg tőlem, ahelyett hogy találgatnál.`,
 };
 
 type ReqOs = {
