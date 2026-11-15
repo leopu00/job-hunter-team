@@ -93,7 +93,7 @@ def test_status_shows_the_first_line_the_provider_printed_when_it_cannot_list_th
     result = _run(wrapper, env, "status")
     assert result.returncode != 0
     assert UNATTESTABLE in result.stdout and "non attivo" not in result.stdout
-    assert "Il provider ha detto: ERROR:podman_compose:failed to check if podman is installed: 'podman'" in result.stdout
+    assert "The provider said: ERROR:podman_compose:failed to check if podman is installed: 'podman'" in result.stdout
     assert "second line" not in result.stdout
 
 
@@ -102,8 +102,8 @@ def test_status_cuts_a_long_provider_line_and_drops_control_characters(tmp_path:
     wrapper, env, _, _ = _runtime(tmp_path)
     env["JHT_FIXTURE_PS_FAILS"] = "x" * 500 + "\x1b[31mred\x07"
     result = _run(wrapper, env, "status")
-    said = next(line for line in result.stdout.splitlines() if "Il provider ha detto:" in line)
-    assert len(said.split("Il provider ha detto: ", 1)[1]) <= 200
+    said = next(line for line in result.stdout.splitlines() if "The provider said:" in line)
+    assert len(said.split("The provider said: ", 1)[1]) <= 200
     assert "\x1b" not in result.stdout and "\x07" not in result.stdout
 
 
@@ -112,7 +112,7 @@ def test_status_of_a_provider_that_says_nothing_gives_its_exit_code(tmp_path: Pa
     wrapper, env, _, _ = _runtime(tmp_path)
     env["JHT_FIXTURE_PS_FAILS"] = " "
     result = _run(wrapper, env, "status")
-    assert "Il provider ha detto: provider exit code 1, nothing said" in result.stdout
+    assert "The provider said: provider exit code 1, nothing said" in result.stdout
 
 
 

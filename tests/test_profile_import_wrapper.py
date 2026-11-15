@@ -70,7 +70,7 @@ def test_a_file_of_exactly_the_limit_goes_and_one_byte_more_does_not(tmp_path: P
 
 def test_a_missing_file_or_a_link_never_reaches_the_container(tmp_path: Path):
     done, calls, _ = _run(tmp_path, "profile", "import", str(tmp_path / "missing.yml"))
-    assert done.returncode == 1 and "file regolare" in done.stderr
+    assert done.returncode == 1 and "regular file" in done.stderr
     assert _imports(calls) == []
 
     other = _sub(tmp_path, "link")
@@ -138,7 +138,7 @@ def test_validate_has_the_same_limits_as_import(tmp_path: Path):
 
     missing = _sub(tmp_path, "missing")
     done, calls, _ = _run(missing, "profile", "validate", str(missing / "nope.yml"))
-    assert done.returncode == 1 and "file regolare" in done.stderr
+    assert done.returncode == 1 and "regular file" in done.stderr
     assert _validates(calls) == []
 
     other = _sub(tmp_path, "link")
