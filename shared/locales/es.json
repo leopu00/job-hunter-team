@@ -1062,7 +1062,7 @@
   "onb.role.opt.design": "Diseño / UX / investigación de usuarios",
   "onb.role.opt.business": "Ventas / marketing / operaciones",
   "onb.role.opt.security": "Ciberseguridad / infraestructura",
-  "onb.role.opt.other": "Otro ámbito o varios puestos",
+  "onb.role.opt.other": "Otro (hostelería, sanidad, construcción, educación, oficios…) o varios puestos",
   "onb.specialty_sw.object": "Tu especialidad",
   "onb.specialty_sw.text": "Dentro de ese ámbito, ¿qué dirección te encaja más?",
   "onb.specialty_sw.opt.backend": "Backend / API / sistemas distribuidos",

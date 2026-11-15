@@ -1063,7 +1063,7 @@
   "onb.role.opt.design": "Design / UX / felhasználókutatás",
   "onb.role.opt.business": "Értékesítés / marketing / működés",
   "onb.role.opt.security": "Kiberbiztonság / infrastruktúra",
-  "onb.role.opt.other": "Más terület vagy több szerep",
+  "onb.role.opt.other": "Más (vendéglátás, egészségügy, építőipar, oktatás, szakmák…) vagy több szerep",
   "onb.specialty_sw.object": "A szakterületed",
   "onb.specialty_sw.text": "Ezen a területen belül melyik irány illik hozzád a legjobban?",
   "onb.specialty_sw.opt.backend": "Backend / API / elosztott rendszerek",

@@ -1141,7 +1141,7 @@
   "onb.role.opt.design": "Design / UX / user research",
   "onb.role.opt.business": "Sales / marketing / operations",
   "onb.role.opt.security": "Cybersecurity / infrastructure",
-  "onb.role.opt.other": "Another field or multiple roles",
+  "onb.role.opt.other": "Another field (hospitality, health, construction, education, trades…) or multiple roles",
   "onb.specialty_sw.object": "Your specialty",
   "onb.specialty_sw.text": "Within that area, which direction suits you best?",
   "onb.specialty_sw.opt.backend": "Backend / APIs / distributed systems",

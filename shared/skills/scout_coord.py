@@ -370,16 +370,21 @@ def planned_scouts(live=None):
     return max(1, len(live or ()))
 
 
-def lane_sources(scout):
-    """The sources of `scout`'s lane (its active `auto` assignment), or [] when it has none."""
+def lane_assigned(scout):
+    """The sources of `scout`'s lane (its active `auto` assignment): a list, EMPTY when its lane has no source, or None when it has no lane."""
     db = get_db()
     try:
         row = db.execute("SELECT fonti, note FROM scout_coordination WHERE scout=? AND superseded_at IS NULL", (scout,)).fetchone()
     finally:
         db.close()
     if not row or not LANE_NOTE.match(row["note"] or ""):
-        return []
+        return None
     return [f for f in (row["fonti"] or "").split(",") if f]
+
+
+def lane_sources(scout):
+    """The sources of `scout`'s lane (its active `auto` assignment), or [] when it has none."""
+    return lane_assigned(scout) or []
 
 
 def _get_db_waiting():
@@ -446,6 +451,9 @@ def cmd_auto(scout):
     chosen = lanes[lane]
     answer = {"scout": scout, "lane": lane, "of": len(lanes), "areas": chosen["areas"], "sources": chosen["sources"],
               "negotiate": False, "do": "search now: no message to the other Scouts, no reset; `next` below is your first search"}
+    if not chosen["sources"]:
+        answer["free_search"] = True
+        answer["do"] = "your lane has no portal (the plan has fewer than Scouts): search now by your own trade and place, as `next` below says; no message, no reset"
     try:
         now = time.time()
         rows = cov.rows_since(cov.default_since(now))
