@@ -307,11 +307,11 @@ test('the budget in the wizard: the trial of $5 for 30 minutes is the answer alr
   assert.equal(budget.usd, 5);
   assert.equal(budget.set_by, 'setup');
   assert.equal(budget.timezone, Intl.DateTimeFormat().resolvedOptions().timeZone, 'the zone of the person goes with the budget');
-  const minutes = (Date.parse(budget.ends_at) - Date.parse(budget.starts_at)) / 60_000;
-  assert.equal(minutes, 30);
-  assert.ok(Date.parse(budget.starts_at) >= t0 - 1000 && Date.parse(budget.starts_at) <= Date.now());
+  assert.equal(budget.duration_minutes, 30);
+  assert.equal(budget.starts_at, undefined, 'the 30 minutes start when the team starts working, not at the setup');
+  assert.ok(Date.parse(budget.saved_at) >= t0 - 1000 && Date.parse(budget.saved_at) <= Date.now());
   assert.equal(hours, undefined, 'no working hours = 24/7 for the trial');
-  assert.ok(events.some((e) => e.kind === 'note' && e.message === 'The team can spend $5 in 30 minutes, then it stops by itself.'));
+  assert.ok(events.some((e) => e.kind === 'note' && e.message === 'The team can spend $5 in all; the 30 minutes start when the team starts working, then it stops by itself.'));
   assert.equal(events.at(-1).ok, true);
 });
 
@@ -324,10 +324,10 @@ test('the budget in the wizard: «a few days» asks the amount, the days and the
   });
   const { budget, working_hours: hours } = JSON.parse(configText).team;
   assert.equal(budget.usd, 10);
-  assert.equal((Date.parse(budget.ends_at) - Date.parse(budget.starts_at)) / 3_600_000, 72);
+  assert.equal(budget.duration_minutes, 72 * 60);
   assert.deepEqual(hours.windows, [{ days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'], start: '08:00', end: '18:00' }]);
   assert.ok(hours.timezone);
-  assert.ok(events.some((e) => e.kind === 'note' && e.message === `The team can spend $10 in 3 days, 10 hours a day (8:00-18:00 ${hours.timezone}), then it stops by itself.`));
+  assert.ok(events.some((e) => e.kind === 'note' && e.message === `The team can spend $10 in all, for 3 days from when it starts working, 10 hours a day (8:00-18:00 ${hours.timezone}), then it stops by itself.`));
 });
 
 test('the budget in the wizard: «no limit» warns, saves no budget and asks the working hours as before', () => {
