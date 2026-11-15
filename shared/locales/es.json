@@ -375,6 +375,7 @@
   "wrapper.tools.failed": "La descarga de las herramientas de los Scout ha fallado, así que el equipo aún no puede buscar puestos. Ejecuta jht tools pull para reintentarlo (jht up también lo reintenta).",
   "wrapper.tools.switch_failed": "Las herramientas de los Scout ya están aquí, pero el equipo no se ha podido reiniciar con ellas: ejecuta jht down y luego jht up.",
   "wrapper.tools.chat_switched": "El equipo pasa a las herramientas completas de los Scout, así que este chat se ha cerrado. Vuelve a abrirlo en un par de minutos con jht team chat.",
+  "wrapper.tools.switch_wait": "El equipo está pasando a las herramientas completas de los Scout: espero a que vuelva a arrancar (un par de minutos como mucho).",
   "wrapper.ps.startup_task_still_registered": "la tarea sigue registrada",
   "wrapper.ps.link_or_not_folder": "enlace o no es una carpeta",
   "wrapper.ps.wsl_exe_not_found": "no se encuentra wsl.exe",

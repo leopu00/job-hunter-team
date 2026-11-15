@@ -376,6 +376,7 @@
   "wrapper.tools.failed": "A felderítők (Scout) eszközeinek letöltése nem sikerült, így a csapat még nem tud állásokat keresni. Futtasd a jht tools pull parancsot az újrapróbáláshoz (a jht up is újrapróbálja).",
   "wrapper.tools.switch_failed": "A felderítők (Scout) eszközei megérkeztek, de a csapatot nem sikerült velük újraindítani: futtasd a jht down, majd a jht up parancsot.",
   "wrapper.tools.chat_switched": "A csapat átáll a felderítők (Scout) teljes eszközeire, ezért ez a csevegés bezárult. Pár perc múlva nyisd meg újra a jht team chat paranccsal.",
+  "wrapper.tools.switch_wait": "A csapat átáll a felderítők (Scout) teljes eszközeire: megvárom, amíg újraindul (legfeljebb pár perc).",
   "wrapper.ps.startup_task_still_registered": "a feladat még mindig regisztrálva van",
   "wrapper.ps.link_or_not_folder": "link vagy nem mappa",
   "wrapper.ps.wsl_exe_not_found": "a wsl.exe nem található",

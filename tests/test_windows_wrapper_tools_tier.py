@@ -564,6 +564,29 @@ def test_the_chat_says_why_it_ended_only_while_a_switch_runs(box, tmp_path):
     assert said() == "NO"                                                   # an old file of a job that is gone
 
 
+def test_a_command_that_starts_the_team_waits_for_the_switch_to_end(box):
+    text = WRAPPER.read_text(encoding="utf-8")
+    ensure = text[text.index("function Ensure-Up {\n"):]
+    assert ensure.split("\n")[1].strip() == "Wait-JhtToolsSwitch", "first, before Test-ContainerUp and compose up"
+    wait = re.search(r"^function Wait-JhtToolsSwitch \{\n.*?^\}\n", text, re.S | re.M).group(0)
+    marker = box.runtime / ".tools-switching"
+    body = ("function Write-Info { param([string]$Msg) [Console]::Error.WriteLine($Msg) }\n"
+            "function Get-JhtText { param([string]$Key) return $Key }\n"
+            + _chat_end_function() + wait + "\n$t = [Diagnostics.Stopwatch]::StartNew(); Wait-JhtToolsSwitch\n"
+            "[Console]::Out.WriteLine('STARTS-NOW ' + [int]$t.Elapsed.TotalSeconds)")
+    done = box.run(body)
+    assert done.stdout.split()[0] == "STARTS-NOW" and "tools.switch_wait" not in done.stderr
+    job = subprocess.Popen([*powershell_argv(), "-Command", "Start-Sleep -Seconds 60"])
+    try:
+        marker.write_text(f"{job.pid}\n", encoding="utf-8")
+        capped = box.run(body, JHT_TOOLS_SWITCH_WAIT_MAX="4")
+        assert capped.stdout.split()[0] == "STARTS-NOW" and int(capped.stdout.split()[1]) >= 3, capped.stdout
+        assert "tools.switch_wait" in capped.stderr
+    finally:
+        job.kill()
+        job.wait(timeout=20)
+
+
 def test_jht_team_chat_ends_clean_with_a_line_when_the_switch_ended_it():
     text = WRAPPER.read_text(encoding="utf-8")
     arm = text[text.index("\n  default {\n    Require-ComposeFile"):]

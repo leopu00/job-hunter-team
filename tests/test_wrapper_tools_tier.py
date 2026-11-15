@@ -515,6 +515,40 @@ def test_the_chat_says_why_it_ended_only_while_a_switch_runs(tmp_path):
     assert said() == "NO"                                                   # an old file of a job that is gone
 
 
+def test_a_command_that_starts_the_team_waits_for_the_switch_to_end(tmp_path):
+    """The chat closed by the switch, the person opens it again at once: ensure_up must not start a second `compose up` next to the
+    job's (two creates at once lose the keep-id map on Podman <= 6.0.2; an up before the tier goes starts the core image)."""
+    text = WRAPPER.read_text(encoding="utf-8")
+    ensure = text[text.index("\nensure_up() {\n"):]
+    assert ensure.split("\n")[3].strip() == "wait_for_tools_switch", "first, before container_up and compose_up_team"
+    wait = re.search(r"^wait_for_tools_switch\(\) \{\n.*?^\}\n", text, re.S | re.M).group(0)
+    marker = tmp_path / ".tools-switching"
+    import sys as _sys
+    _sys.path.insert(0, str(ROOT / "tests"))
+    from wrapper_texts import say_functions
+    body = ("set -euo pipefail\n" + say_functions("en") + 'info() { printf "%s\\n" "$*" >&2; }\n'
+            f'RUNTIME_DIR="{tmp_path}"\n{_chat_end_function()}{wait}\nwait_for_tools_switch\necho STARTS-NOW\n')
+    assert subprocess.run(["bash", "-c", body], capture_output=True, text=True, timeout=30).stderr == ""   # no switch: no wait
+    job = subprocess.Popen(["sleep", "30"])
+    try:
+        marker.write_text(f"{job.pid}\n", encoding="utf-8")
+        started = time.time()
+        waiting = subprocess.Popen(["bash", "-c", body], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        time.sleep(3)
+        assert waiting.poll() is None, "it did not wait for the switch"
+        marker.unlink()                                                     # the job ends its switch
+        out, err = waiting.communicate(timeout=30)
+        assert out.strip() == "STARTS-NOW" and time.time() - started >= 3
+        assert "waiting for it to start again" in err
+        marker.write_text(f"{job.pid}\n", encoding="utf-8")                 # a switch that never ends: the tetto
+        capped = subprocess.run(["bash", "-c", body], capture_output=True, text=True, timeout=30,
+                                env={**os.environ, "JHT_TOOLS_SWITCH_WAIT_MAX": "2"})
+        assert capped.stdout.strip() == "STARTS-NOW"
+    finally:
+        job.kill()
+        job.wait(timeout=10)
+
+
 def test_jht_team_chat_ends_clean_with_a_line_when_the_switch_ended_it():
     text = WRAPPER.read_text(encoding="utf-8")
     arm = text[text.index("\n  team)\n"):]

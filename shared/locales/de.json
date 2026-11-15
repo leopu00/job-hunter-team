@@ -375,6 +375,7 @@
   "wrapper.tools.failed": "Der Download der Werkzeuge der Scouts ist fehlgeschlagen, daher kann das Team noch keine Stellen suchen. Führe jht tools pull aus, um es erneut zu versuchen (jht up versucht es auch).",
   "wrapper.tools.switch_failed": "Die Werkzeuge der Scouts sind da, aber das Team konnte damit nicht neu gestartet werden: Führe jht down und dann jht up aus.",
   "wrapper.tools.chat_switched": "Das Team wechselt auf die vollständigen Werkzeuge der Scouts, deshalb wurde dieser Chat geschlossen. Öffne ihn in ein paar Minuten wieder mit jht team chat.",
+  "wrapper.tools.switch_wait": "Das Team wechselt gerade auf die vollständigen Werkzeuge der Scouts: Ich warte, bis es wieder läuft (höchstens ein paar Minuten).",
   "wrapper.ps.startup_task_still_registered": "die Aufgabe ist weiterhin registriert",
   "wrapper.ps.link_or_not_folder": "Verknüpfung oder kein Ordner",
   "wrapper.ps.wsl_exe_not_found": "wsl.exe nicht gefunden",
