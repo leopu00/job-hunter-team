@@ -1123,5 +1123,8 @@
   "integration.linkedin.token_stdin": "el token de la ventana llega de la app, por la entrada estándar",
   "integration.linkedin.profile_not_plain": "el perfil de LinkedIn en ~/.jht no es una carpeta normal (¿un enlace?): no lo uso",
   "integration.linkedin.seccomp": "el perfil seccomp del navegador de inicio de sesión falta o no coincide con el atestado: no arranco",
-  "integration.linkedin.usage": "uso: jht linkedin login [--stop] | status --json"
+  "integration.linkedin.usage": "uso: jht linkedin login [--stop] | status --json",
+  "integration.engine_log_written": "estado del motor de Podman escrito en %s",
+  "integration.tools.tier_not_removed": "el nivel del runtime no se ha quitado",
+  "integration.tools.usage": "uso: jht tools status --json | pull | switch"
 }
