@@ -27,9 +27,10 @@ ZONES = [
     ("US", "America/New_York"), ("US", "America/Chicago"), ("US", "America/Denver"), ("US", "America/Los_Angeles"),
     ("US", "America/Phoenix"), ("US", "America/Anchorage"), ("US", "Pacific/Honolulu"), ("US", "America/Detroit"),
     ("US", "America/Boise"), ("US", "America/Juneau"), ("RO", "Europe/Bucharest"),
+    ("PT", "Atlantic/Madeira"), ("PT", "Atlantic/Azores"), ("AS", "Pacific/Pago_Pago"),
 ]
 COUNTRIES = [("IT", "Italy"), ("DE", "Germany"), ("ES", "Spain"), ("HU", "Hungary"), ("PT", "Portugal"),
-             ("US", "United States"), ("RO", "Romania")]
+             ("US", "United States"), ("RO", "Romania"), ("AS", "American Samoa")]
 
 
 @pytest.fixture
@@ -43,6 +44,8 @@ def zoneinfo(tmp_path):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"TZif2" + b"\0" * 40)
     (folder / "NotAZone").write_bytes(b"something else")
+    # an old name kept as a link (the «backward» file): a real TZif, but never a result
+    (folder / "Portugal").write_bytes(b"TZif2" + b"\0" * 40)
     return folder
 
 
@@ -165,3 +168,33 @@ def test_the_choice_speaks_the_language_chosen(tmp_path, zoneinfo, lang):
         assert said[key] in after, (lang, key, out)
     assert said["host_setup.tz.none"].replace("%s", "xyzzy") in after, (lang, out)
     assert said["host_setup.tz.how_default"].replace("%s", "Europe/Rome") in after, (lang, out)
+
+
+def test_a_part_of_a_name_is_never_proposed_alone_america_is_too_many(tmp_path, zoneinfo):
+    code, out, saved, left = _run(tmp_path, zoneinfo, ["America", ""])
+    assert code == 0 and not left, out
+    assert "timezones match «America»" in out and "Proposed: Pacific/Pago_Pago" not in out, out
+    assert _tz(saved) == "Europe/Rome"
+
+
+def test_a_single_zone_found_by_a_part_of_its_name_is_a_list_of_one_to_pick(tmp_path, zoneinfo):
+    code, out, saved, left = _run(tmp_path, zoneinfo, ["Samo", "1"])
+    assert code == 0 and not left, out
+    assert "1) Pacific/Pago_Pago" in out and "Proposed: Pacific/Pago_Pago" not in out, out
+    assert _tz(saved) == "Pacific/Pago_Pago"
+
+
+def test_portugal_is_the_country_with_its_three_zones_not_the_old_link(tmp_path, zoneinfo):
+    code, out, saved, left = _run(tmp_path, zoneinfo, ["Portugal", "2"])
+    assert code == 0 and not left, out
+    assert "1) Europe/Lisbon" in out and "2) Atlantic/Madeira" in out and "3) Atlantic/Azores" in out, out
+    assert "Proposed: Portugal" not in out and _tz(saved) == "Atlantic/Madeira"
+
+
+def test_a_search_typed_at_the_prompt_of_the_number_starts_on_a_line_of_its_own(tmp_path, zoneinfo):
+    code, out, saved, left = _run(tmp_path, zoneinfo, ["Germany", "Budapest", ""])
+    assert code == 0 and not left, out
+    # the next thing said is the proposal, not a prompt left without its answer
+    assert not re.search(r"\]: *Proposed", out), out
+    assert re.search(r"a new search: Budapest\r?\nProposed: Europe/Budapest", out), out
+
