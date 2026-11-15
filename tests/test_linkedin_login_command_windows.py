@@ -65,7 +65,10 @@ def lrun(host, args: list[str], stdin: str | None = TOKEN + "\n", **extra: str) 
            "T_RUNNING": str(host.running), "T_LIBRARY": str(Path(host.script).parent.parent.parent / "scripts" / "jht-integration.ps1")
            if False else str(__import__("test_integration_command_windows").LIBRARY),
            "T_STDIN": str(host.tmp / "grant-stdin"), "T_ARGS": json.dumps(args), "T_JHT_HOME": str(host.tmp / "jht-home"), "T_EXTRAS": DIGEST, **extra}
-    return subprocess.run([*host.argv, "-File", str(host.script)], env=env, input=stdin, capture_output=True, text=True, timeout=120)
+    # "no token on stdin" is a closed stdin, not the one of the session this test runs in: a child that inherits an open pipe (a CI runner, an
+    # ssh session) waits on it for a line, as any program reading a pipe does, and the case never ends
+    given = {"stdin": subprocess.DEVNULL} if stdin is None else {"input": stdin}
+    return subprocess.run([*host.argv, "-File", str(host.script)], env=env, capture_output=True, text=True, timeout=120, **given)
 
 
 def last(done) -> dict:
