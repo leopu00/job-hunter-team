@@ -63,6 +63,16 @@ this was tested on real machines and which was not.
 - The mail broker, Telegram, Google and Chromium are no longer in the first setup.
 - No environment variable can point the wrapper at another Podman machine or engine.
 
+### Known limits
+
+- **What 0.4.0 runs**: only the Pi harness, with an API key from GLM, Kimi, OpenAI or Claude. The Codex CLI and
+  the ChatGPT subscription are not in this release, and neither is Claude Code as a harness; the desktop app is not
+  in it either.
+- **The Scouts' tools arrive after the install.** The first download is the core image. At the end of the
+  onboarding a background job downloads the Scouts' tools (the full image) and moves the team there. If the move
+  fails even after a `jht down` and `jht up`, the team stays stopped until the person runs `jht down` and then
+  `jht up` again; `jht status` says so.
+
 ---
 
 ## [0.3.9] — 2026-08-13
