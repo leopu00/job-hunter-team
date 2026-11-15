@@ -364,13 +364,13 @@ def flag_record(bridge):
 
 
 def test_a_trial_of_5_dollars_for_30_minutes_stops_just_before_the_5_dollars(tmp_path):
-    config = budget(5, NOON - 600, NOON + 1200)
-    pi_calls(tmp_path, [(NOON - 300, 4.89, 100)])
+    config = budget(5, NOON - 900, NOON + 1200)
+    pi_calls(tmp_path, [(NOON - 600, 4.89, 100)])  # older than the pace window: the margin alone
     bridge = Bridge(tmp_path, config)
     state: dict = {}
     bridge.tick(state=state)
     assert bridge.esc == 0, "4.89 is under 5 - max(2 %, 0.10)"
-    pi_calls(tmp_path, [(NOON - 300, 4.89, 100), (NOON - 60, 0.01, 100)])
+    pi_calls(tmp_path, [(NOON - 600, 4.89, 100), (NOON - 540, 0.01, 100)])
     bridge.tick(state=state)
     assert bridge.esc == 1
     record = flag_record(bridge)
@@ -381,11 +381,11 @@ def test_a_trial_of_5_dollars_for_30_minutes_stops_just_before_the_5_dollars(tmp
 
 
 def test_the_margin_is_two_percent_of_a_larger_budget(tmp_path):
-    pi_calls(tmp_path, [(NOON - 300, 9.79, 100)])
+    pi_calls(tmp_path, [(NOON - 400, 9.79, 100)])
     bridge = Bridge(tmp_path, budget(10, NOON - 600, NOON + 600))
     bridge.tick()
     assert bridge.esc == 0
-    pi_calls(tmp_path, [(NOON - 300, 9.80, 100)])
+    pi_calls(tmp_path, [(NOON - 400, 9.80, 100)])
     bridge.tick()
     assert bridge.esc == 1 and flag_record(bridge)["why"] == "budget"
 
@@ -587,10 +587,10 @@ def test_the_trial_starts_at_the_first_call_of_a_worker_and_ends_30_minutes_late
                       "ends_at": "2026-11-09T12:20:00+00:00"}
     b = team_budget.read(config, tmp_path)
     assert (b["starts"], b["ends"], b["counts_from"]) == (NOON - 600, NOON + 1200, NOON - 2 * HOUR)
-    bridge.clock["now"] = NOON + 1199
+    bridge.clock["now"] = NOON + 1140  # the end (12:20) is a look away: not yet
     bridge.tick(state=state)
     assert bridge.esc == 0
-    bridge.clock["now"] = NOON + 1200
+    bridge.clock["now"] = NOON + 1141  # the end falls before the next look: now
     bridge.tick(state=state)
     assert bridge.esc == 1
     flag = flag_record(bridge)
@@ -679,3 +679,63 @@ def test_the_first_roster_of_a_budget_of_a_duration_is_the_full_one(tmp_path):
     {"usd": 5, "duration_minutes": 30, "saved_at": "2026-11-09T11:00:00"}])
 def test_a_budget_of_a_duration_that_is_not_readable_is_no_budget(raw):
     assert team_budget.read({"team": {"budget": raw}}) is None
+
+
+# --- the brake looks every minute and stops BEFORE the budget at the pace of the team (giro Windows 15/11) ------------
+
+def claude_minutes(home: Path, start: float, minutes: int, per_minute=0.5):
+    """A team on Claude: about 0.5 $ a minute, one call every 20 seconds."""
+    pi_calls(home, [(start + 20 * i, per_minute / 3, 100) for i in range(minutes * 3)], name="claude.jsonl")
+
+
+def test_a_team_on_claude_stops_within_the_budget_looking_every_minute(tmp_path):
+    """5 $ for 30 minutes at 0.5 $ a minute: looking every minute, at most one minute of spending more than when it looks,
+    and the look stops when the next minute would pass 5 $ - margin. The spending at the pause stays within 5.00 $."""
+    start = NOON - 3600
+    bridge = Bridge(tmp_path, budget(5, start, start + 1800))
+    state: dict = {}
+    for minute in range(1, 30):
+        bridge.clock["now"] = start + 60 * minute
+        claude_minutes(tmp_path, start, minute)  # what the team has spent by then
+        bridge.tick(state=state)
+        if bridge.esc:
+            break
+    record = flag_record(bridge)
+    assert record["why"] == "budget" and record["spent"] <= 5.0 - 0.10
+    # the calls already in flight at the pause: one more minute at most, still within the 5 $
+    assert record["spent"] + 0.5 <= 5.0
+
+
+def test_without_the_pace_the_brake_would_be_a_look_late(tmp_path):
+    """4.70 $ spent, 0.5 $ in the last 5 minutes (0.1 $ a minute): 4.70 + 0.10 is under 4.90, no pause; at 2.5 $ in the last
+    5 minutes (Claude) 4.70 + 0.50 is over it, and the team stops now."""
+    slow, fast = tmp_path / "slow", tmp_path / "fast"
+    for home, recent in ((slow, 0.5), (fast, 2.5)):
+        pi_calls(home, [(NOON - 1500, 4.70 - recent, 100), (NOON - 120, recent, 100)])
+    Bridge(slow, budget(5, NOON - 1800, NOON + 1800)).tick()
+    fast_bridge = Bridge(fast, budget(5, NOON - 1800, NOON + 1800))
+    fast_bridge.tick()
+    assert not (slow / "logs" / "daily-halt.flag").exists() and fast_bridge.esc == 1
+
+
+def test_the_sentinella_sleeps_between_ticks_looking_at_the_spending_every_minute(tmp_path):
+    pi_calls(tmp_path, [(NOON - 600, 1.0, 100)])
+    bridge = Bridge(tmp_path, budget(5, NOON - 1800, NOON + 150))  # the end falls inside the next sleep
+    sleeps = []
+
+    def sleep(seconds):
+        sleeps.append(seconds)
+        bridge.clock["now"] += seconds
+
+    bridge.api.time.sleep = sleep
+    bridge.api.datetime = datetime
+    run = SimpleNamespace(state={"no_quota_declared": dict(NO_QUOTA)}, now_h="12:00:00", _bi_on=False, sleep_sec=300)
+    import quota_data
+    original = quota_data._notify_user
+    quota_data._notify_user = lambda text, reason: bridge.users.append((text, reason))
+    try:
+        loop._sleep_watching_the_spending(bridge.api, run)
+    finally:
+        quota_data._notify_user = original
+    assert sleeps == [60, 60, 60, 60, 60], "the 5 minutes in steps of one, the brake after each but the last"
+    assert bridge.esc == 1 and flag_record(bridge)["why"] == "period", "stopped inside the sleep, not at the next tick"

@@ -51,6 +51,10 @@ import quota_data
 import team_budget
 
 REASON = "pi_spend_cap"
+# How often the brake looks at the spending: between two ticks of the Sentinella too (sentinel_loop._sleep_watching_the_spending).
+CHECK_EVERY_SEC = 60
+# The spending of the last minutes, as a pace: what the team will have spent by the next look is that pace times CHECK_EVERY_SEC.
+RATE_WINDOW_SEC = 300
 PROVIDER_NAMES = provider_credit.PROVIDER_NAMES
 
 
@@ -86,7 +90,8 @@ def spend(home, now_ts, budget_start=None):
     moment of the first call of a worker since `budget_start` (None without one)."""
     start, hour = day_start(now_ts), now_ts - 3600
     out = {"cost": 0.0, "hour_tokens": 0, "calls": 0, "credit": provider_credit.exhausted(home, now_ts),
-           "budget_cost": None if budget_start is None else 0.0, "first_worker": None}
+           "budget_cost": None if budget_start is None else 0.0, "first_worker": None,
+           "recent_cost": 0.0}
     since = min(start, hour) if budget_start is None else min(start, hour, budget_start)
     for event in pi_sessions.usage_events(home, since):
         if event["ts"] >= start:
@@ -96,6 +101,8 @@ def spend(home, now_ts, budget_start=None):
             out["hour_tokens"] += event["input"] + event["cache_write"] + event["output"]
         if budget_start is not None and event["ts"] >= budget_start:
             out["budget_cost"] += event["cost"]
+            if event["ts"] >= now_ts - RATE_WINDOW_SEC:
+                out["recent_cost"] += event["cost"]
             if out["first_worker"] is None and _is_worker(event.get("agent")):
                 out["first_worker"] = event["ts"]  # the events come oldest first
     for event in pi_sessions.search_events(home, since):  # the fee of a search call, which pi does not price
@@ -103,6 +110,8 @@ def spend(home, now_ts, budget_start=None):
             out["cost"] += event["cost"]
         if budget_start is not None and event["ts"] >= budget_start:
             out["budget_cost"] += event["cost"]
+            if event["ts"] >= now_ts - RATE_WINDOW_SEC:
+                out["recent_cost"] += event["cost"]
     out["cost"] = round(out["cost"], 6)
     if budget_start is not None:
         out["budget_cost"] = round(out["budget_cost"], 6)
@@ -112,13 +121,16 @@ def spend(home, now_ts, budget_start=None):
 def _budget_verdict(config, budget, spent, now):
     """The pause the budget asks for, or None."""
     used = spent.get("budget_cost") or 0.0
+    # What the team will have spent by the next look, at the pace of the last minutes: the brake stops BEFORE the budget, not
+    # one look after it (with Claude ~0.5 $ a minute, a look a minute late is half a dollar over).
+    ahead = (spent.get("recent_cost") or 0.0) / RATE_WINDOW_SEC * CHECK_EVERY_SEC
     common = {"action": "halt", "spent": used, "usd": budget["usd"], "ends": budget["ends"], "starts": budget["starts"],
               "counts_from": budget["counts_from"]}
-    if used >= budget["usd"] - team_budget.margin(budget["usd"]):
+    if used + ahead >= budget["usd"] - team_budget.margin(budget["usd"]):
         return dict(common, why="budget", ceiling=budget["usd"], resumes=None)
     if budget["starts"] is None:
         return None  # a budget of a duration that has not started: no period and no pace yet, only the dollars
-    if now >= budget["ends"]:
+    if now + CHECK_EVERY_SEC > budget["ends"]:  # the end falls before the next look: now, not a look late
         return dict(common, why="period", ceiling=budget["usd"], resumes=None)
     allowance = team_budget.allowed(config, budget, now)
     if used >= allowance:

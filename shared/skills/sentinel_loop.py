@@ -342,7 +342,22 @@ def _publish(api, run):
         api._write_state_file(
             run.state, run.last_tick_iso, run.next_tick_iso, run.next_tick_min, last_provider=run.provider
         )
-    api.time.sleep(run.sleep_sec)
+    _sleep_watching_the_spending(api, run)
+
+
+def _sleep_watching_the_spending(api, run):
+    """The wait until the next tick, cut in steps of pi_spend_cap.CHECK_EVERY_SEC, the brake looking at the spending after each.
+    A tick every 5 minutes is the pace of the quota windows, not of the money: a team on Claude spends ~0.5 $ a minute, and a
+    budget of 5 $ or the end of a trial of 30 minutes fell between two ticks (giro Windows 15/11: 5.28 $, 2.5 minutes late).
+    The brake only reads local files; between the ticks it is the only thing that runs."""
+    left = float(run.sleep_sec)
+    while left > 0:
+        step = min(float(pi_spend_cap.CHECK_EVERY_SEC), left)
+        api.time.sleep(step)
+        left -= step
+        if left > 0:
+            run.now_h = api.datetime.now().strftime("%H:%M:%S")
+            pi_spend_cap.step(api, run)
 
 
 def _start(api):
