@@ -37,8 +37,10 @@ foreach ($name in 'Get-JhtTextTable', 'Get-JhtText', 'Format-JhtText', 'Write-En
   Invoke-Expression $fn.Extent.Text
 }
 function Get-JhtTextLanguage { return 'it' }
-function Write-Err { param([string]$Msg) Add-Content -LiteralPath $env:T_LOG -Value "ERR $Msg" }
-function Write-Warn { param([string]$Msg) Add-Content -LiteralPath $env:T_LOG -Value "WARN $Msg" }
+# the sentences have accents: written in UTF-8 without a mark (Add-Content writes the ANSI code page in Windows PowerShell 5.1), read as UTF-8
+function Write-HarnessLog { param([string]$Line) [IO.File]::AppendAllText($env:T_LOG, $Line + [Environment]::NewLine, [Text.UTF8Encoding]::new($false)) }
+function Write-Err { param([string]$Msg) Write-HarnessLog "ERR $Msg" }
+function Write-Warn { param([string]$Msg) Write-HarnessLog "WARN $Msg" }
 function Write-Info { param([string]$Msg) }
 function Start-Sleep { param($Seconds) }
 $RuntimeDir = $env:T_RUNTIME
