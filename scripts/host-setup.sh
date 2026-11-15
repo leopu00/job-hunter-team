@@ -1035,7 +1035,125 @@ angola|AO
 mozambico|MZ
 mocambique|MZ
 capo verde|CV
-cabo verde|CV'
+cabo verde|CV
+acoren|Atlantic/Azores
+acores|Atlantic/Azores
+azori szigetek|Atlantic/Azores
+azzorre|Atlantic/Azores
+barcelone|Europe/Madrid
+berlim|Europe/Berlin
+berlino|Europe/Berlin
+bilbao|Europe/Madrid
+bordeaux|Europe/Paris
+braga|Europe/Lisbon
+brasilia|America/Sao_Paulo
+brusszel|Europe/Brussels
+bucareste|Europe/Bucharest
+bucarest|Europe/Bucharest
+budapesta|Europe/Budapest
+budapeste|Europe/Budapest
+bukarest|Europe/Bucharest
+burdeos|Europe/Paris
+canarias|Atlantic/Canary
+canaries|Atlantic/Canary
+canarie|Atlantic/Canary
+chequia|CZ
+chili|CL
+coimbra|Europe/Lisbon
+colombie|CO
+copenaghen|Europe/Copenhagen
+copenhaga|Europe/Copenhagen
+copenhague|Europe/Copenhagen
+csehorszag|CZ
+czech republic|CZ
+dania|DK
+dresda|Europe/Berlin
+dresden|Europe/Berlin
+dusseldorf|Europe/Berlin
+emirati arabi uniti|AE
+eslovaquia|SK
+eslovenia|SI
+estambul|Europe/Istanbul
+estocolmo|Europe/Stockholm
+estrasburgo|Europe/Paris
+faro|Europe/Lisbon
+finnorszag|FI
+francfort del meno|Europe/Berlin
+francfort sur le main|Europe/Berlin
+francforte|Europe/Berlin
+francfort|Europe/Berlin
+funchal|Atlantic/Madeira
+gorogorszag|GR
+gran canaria|Atlantic/Canary
+gyor|Europe/Budapest
+hambourg|Europe/Berlin
+hamburgo|Europe/Berlin
+horvatorszag|HR
+islas canarias|Atlantic/Canary
+istambul|Europe/Istanbul
+isztambul|Europe/Istanbul
+kanaren|Atlantic/Canary
+kiew|Europe/Kyiv
+kijev|Europe/Kyiv
+kopenhagen|Europe/Copenhagen
+koppenhaga|Europe/Copenhagen
+las palmas|Atlantic/Canary
+leipzig|Europe/Berlin
+lille|Europe/Paris
+lipsia|Europe/Berlin
+lisszabon|Europe/Lisbon
+lussemburgo|LU
+luxemburgo|LU
+luxemburg|LU
+madri|Europe/Madrid
+malaga|Europe/Madrid
+marselha|Europe/Paris
+marsella|Europe/Paris
+miskolc|Europe/Budapest
+monaco de baviera|Europe/Berlin
+munique|Europe/Berlin
+nantes|Europe/Paris
+nice|Europe/Paris
+niza|Europe/Paris
+nizza|Europe/Paris
+oporto|Europe/Lisbon
+paises baixos|NL
+parizs|Europe/Paris
+pecs|Europe/Budapest
+perou|PE
+republica checa|CZ
+romenia|RO
+rumania|RO
+saragozza|Europe/Madrid
+serbia|RS
+serbien|RS
+serbie|RS
+servia|RS
+sevilha|Europe/Madrid
+seville|Europe/Madrid
+slovacchia|SK
+slovaquie|SK
+slovenie|SI
+slowakei|SK
+slowenien|SI
+stoccarda|Europe/Berlin
+stoccolma|Europe/Stockholm
+strasbourg|Europe/Paris
+strasburgo|Europe/Paris
+stuttgart|Europe/Berlin
+szerbia|RS
+szlovakia|SK
+szlovenia|SI
+tchequie|CZ
+tenerife|Atlantic/Canary
+torokorszag|TR
+toulouse|Europe/Paris
+ukrajna|UA
+united arab emirates|AE
+valence|Europe/Madrid
+varso|Europe/Warsaw
+zaragoza|Europe/Madrid
+kiev|Europe/Kyiv'
 
 # The zones that match what the person typed, one per line, without repeats. First a zone written as it is, then a name of the
 # table above, then a country code: each of these alone is the answer. Otherwise the countries whose English name (iso3166.tab)
