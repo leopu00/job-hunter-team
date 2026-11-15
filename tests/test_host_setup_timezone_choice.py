@@ -214,4 +214,3 @@ def test_the_search_writes_no_file_in_a_shared_temporary_folder(tmp_path, zonein
     assert list(shared.iterdir()) == []
     source = HOST_SETUP.read_text(encoding="utf-8")
     assert "jht-tz-names" not in source and not re.search(r'>\s*"\$\{TMPDIR', source)
-
