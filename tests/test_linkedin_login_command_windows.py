@@ -246,7 +246,8 @@ def test_a_cookie_file_that_is_a_link_is_not_a_cookie_file(lhost, tmp_path):
 @pytest.mark.parametrize("args", [[], ["login", "now"], ["status"], ["logout"], ["login", "--stop", "now"]])
 def test_anything_else_is_the_usage_with_code_2_and_the_engine_is_not_asked(lhost, args):
     done = lrun(lhost, args)
-    assert done.returncode == 2 and "uso: jht linkedin" in done.stderr
+    # the usage is an error line: on stdout as the wrapper's Write-Err says it (Write-Host) when it is redirected, or on the stand-in's stderr
+    assert done.returncode == 2 and "uso: jht linkedin" in done.stdout + done.stderr
     assert log(lhost) == ""
 
 
