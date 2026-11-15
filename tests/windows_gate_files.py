@@ -72,10 +72,12 @@ WINDOWS_GATE_EXTRA = (
     "tests/test_installer_core_tier.py",
     "tests/test_powershell_native_args_no_double_quotes.py",
     "tests/test_powershell_native_stderr_under_stop.py",
+    "tests/test_ps_script_texts.py",
     "tests/test_runtime_volume_migration.py",
     "tests/test_setup_help_names_the_key_options.py",
     "tests/test_telegram_never_configured.py",
     "tests/test_telegram_status_is_read_only.py",
+    "tests/test_tools_ps1_speaks_the_language_chosen.py",
     "tests/test_wrapper_desktop_apply.py",
 )
 
