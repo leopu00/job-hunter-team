@@ -47,6 +47,11 @@ export function registerSetupCommand(program) {
     .option('--model <model>', t('wizard.cli.model'))
     .option('--language <code>', t('wizard.cli.language'))
     .option('--skip-health', t('wizard.cli.skip_health'))
+    .option('--budget-usd <dollars>', t('wizard.cli.budget_usd'))
+    .option('--budget-minutes <n>', t('wizard.cli.budget_minutes'))
+    .option('--budget-days <n>', t('wizard.cli.budget_days'))
+    .option('--budget-until <hour>', t('wizard.cli.budget_until'))
+    .option('--no-budget', t('wizard.cli.no_budget'))
     .option('--reset', t('wizard.cli.reset'))
     .action(handleSetup);
 }

@@ -8,6 +8,7 @@
  *   jht setup --non-interactive --provider claude --api-key sk-ant-... --model claude-sonnet-4-6
  *   jht setup --non-interactive --provider claude --secret-mode env --secret-env ANTHROPIC_API_KEY
  *   jht setup --non-interactive --provider glm --harness pi --api-key-file key.txt   (or --api-key-stdin)
+ *   jht setup --non-interactive ... --budget-usd 10 --budget-days 3   (or --budget-minutes 30, --budget-until 8, --no-budget)
  */
 import { lstatSync, readFileSync } from 'node:fs';
 import pc from 'picocolors';
@@ -23,7 +24,8 @@ import {
 import { formatSecretForConfig, resolveSecret, describeSecret } from './secret-ref.js';
 import { runHealthCheck } from './setup-checks.js';
 import { checkPiApiKey, rejectedKeyMessage } from '../../shared/runtime/provider-key-check.js';
-import { t, LANGUAGES, hasLanguageChoice, systemLanguage, saveLanguage } from './i18n.js';
+import { budgetFromOptions, budgetSummary } from './setup-budget.js';
+import { t, tf, LANGUAGES, hasLanguageChoice, systemLanguage, saveLanguage } from './i18n.js';
 import { summarizeRoleModels } from './setup-models.js';
 import { AGENT_HARNESSES, DEFAULT_HARNESS } from '../../shared/runtime/agent-harness.js';
 import { piApiProvider } from '../../shared/runtime/provider-models.js';
@@ -87,6 +89,10 @@ export async function runNonInteractiveSetup(opts) {
   console.log(pc.bold('\n  JHT Setup — Non-interactive mode\n'));
 
   if (!applyLanguage(opts)) { process.exitCode = 1; return; }
+
+  // the budget is checked first: a wrong value stops the setup before a key is asked or kept (JHT-T322)
+  const budgetChoice = budgetFromOptions(opts, { now: opts.now ?? new Date() });
+  if (budgetChoice.error) { console.error(pc.red(budgetChoice.error)); process.exitCode = 1; return; }
 
   // --- Validazione flag obbligatori ---
   let selectedProvider = findProviderChoice(opts.provider || RELEASE_PROVIDERS[0]);
@@ -257,7 +263,7 @@ export async function runNonInteractiveSetup(opts) {
     }
   }
 
-  saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, model, modelGiven: Boolean(opts.model), apiKeySecret, subscriptionConfig, harness, keptByTheSetup });
+  saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, model, modelGiven: Boolean(opts.model), apiKeySecret, subscriptionConfig, harness, keptByTheSetup, budgetChoice });
 }
 
 /** The key from the standard input, or null (and the reason said, exit code 1) when none came or it is too big for a key. */
@@ -323,7 +329,7 @@ export function sameTeamConfig(previous, providerName, harness) {
   return entry && typeof entry === 'object' && !Array.isArray(entry) ? previous : null;
 }
 
-function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, model, modelGiven = true, apiKeySecret, subscriptionConfig, harness, keptByTheSetup = false }) {
+function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, model, modelGiven = true, apiKeySecret, subscriptionConfig, harness, keptByTheSetup = false, budgetChoice = {} }) {
   // --- Assembla e salva config ---
   const providerConfig = { name: providerName, auth_method: authMethod, model };
   if (apiKeySecret) {
@@ -361,6 +367,13 @@ function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, 
   // (a team config of the same team keeps the version it has: migrations are idempotent and only raise it)
   config = migrateToLatest(config);
 
+  // team.budget: a new one starts now; --no-budget removes it; no budget option keeps what the config has (JHT-T322)
+  if ('budget' in budgetChoice) {
+    const { budget: _old, ...team } = config.team ?? {};
+    config = { ...config, team: budgetChoice.budget ? { ...team, budget: budgetChoice.budget } : team };
+    if (!budgetChoice.budget && Object.keys(config.team).length === 0) delete config.team;
+  }
+
   try {
     writeConfigFile(config);
   } catch (err) {
@@ -379,6 +392,7 @@ function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, 
     console.log(`  Auth:       subscription (${subscriptionConfig.email}${subscriptionConfig.session_token ? ' · token preset' : ''})`);
   }
   console.log(summarizeRoleModels(config));
+  if ('budget' in budgetChoice) console.log(`  Budget:     ${budgetSummary(t, tf, { budget: budgetChoice.budget, workingHours: config.team?.working_hours, kind: budgetChoice.kind })}`);
   console.log(`  JHT home:   ${JHT_CONFIG_DIR}`);
   console.log('');
   if (authMethod === 'subscription') {
