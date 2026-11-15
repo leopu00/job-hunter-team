@@ -25,6 +25,8 @@ on:
       - 'tests/test_artifact_links_every_backend.py'
       - 'tests/test_first_start_messages_powershell.py'
       - 'tests/test_installer_core_tier.py'
+      - 'tests/test_installer_ps1_speaks_the_language_chosen.py'
+      - 'tests/test_ps_script_texts.py'
       - 'tests/test_runtime_volume_migration.py'
       - 'tests/test_setup_help_names_the_key_options.py'
       - 'tests/test_telegram_never_configured.py'
