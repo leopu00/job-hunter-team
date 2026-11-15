@@ -422,7 +422,7 @@ def test_the_ids_of_the_answer_are_the_ones_of_the_helper():
 
 # ── Invoke-ToolsKick: the CLI keeps the tools moving, as the desktop app's round did ──────────────────────────────────────────
 
-KICK_ENV = {"JHT_TOOLS_WAIT_STEP": "1", "JHT_TOOLS_SWITCH_GRACE": "0", "JHT_TOOLS_WAIT_MAX": "120", "JHT_TOOLS_QUIET_MAX": "20"}
+KICK_ENV = {"JHT_TOOLS_WAIT_STEP": "1", "JHT_TOOLS_SWITCH_GRACE": "0", "JHT_TOOLS_WAIT_MAX": "120", "JHT_TOOLS_QUIET_MAX": "20", "JHT_TOOLS_ONBOARDING_MAX": "0"}
 
 
 def _until(check, what, rounds=600):
@@ -607,6 +607,40 @@ def test_the_chat_waits_for_the_agent_of_its_own_name(box):
     body = (fn + "\n$Container = 'jht'\n$r = Test-JhtTeamChatAgentBack 'scout:2'\n[Console]::Out.WriteLine([string]$r)\n")
     done = box.run(body, JHT_TOOLS_CHAT_RECONNECT_MAX="0")
     assert done.stdout.strip() == "True", done.stdout + done.stderr   # the fake docker says yes to everything
+
+
+def _assistant_session(box, age: float):
+    folder = box.home / ".pi" / "agent" / "sessions" / "--jht_home-agents-assistente--"
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / "2026-11-15T21-00-00_abc.jsonl"
+    path.write_text('{"type":"session"}\n', encoding="utf-8")
+    stamp = time.time() - age
+    os.utime(path, (stamp, stamp))
+    return path
+
+
+def test_the_switch_waits_while_the_assistant_is_still_talking_then_goes_when_it_is_quiet(box):
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    session = _assistant_session(box, 0)
+    (box.home / "profile" / "ready.flag").write_text("2026-11-15T21:10:19Z\n", encoding="utf-8")
+    env = {**KICK_ENV, "JHT_TOOLS_ONBOARDING_MAX": "600", "JHT_TOOLS_ASSISTANT_QUIET": "6"}
+    assert box.run("exit (Invoke-ToolsKick)", **env).returncode == 0
+    for _ in range(8):                                                      # the Assistente is still talking
+        os.utime(session, None)
+        time.sleep(1)
+    assert tier.exists() and _calls(box) == [], "the switch did not wait for the Assistente"
+    _until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"no switch once the Assistente was quiet: {_calls(box)}")
+
+
+def test_with_no_session_to_read_the_tetto_after_ready_flag_decides(box):
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    (box.home / "profile" / "ready.flag").write_text("2026-11-15T21:10:19Z\n", encoding="utf-8")
+    assert box.run("exit (Invoke-ToolsKick)", **{**KICK_ENV, "JHT_TOOLS_ONBOARDING_MAX": "8"}).returncode == 0
+    time.sleep(3)
+    assert tier.exists() and _calls(box) == [], "the switch did not wait for the tetto"
+    _until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"no switch at the tetto: {_calls(box)}")
 
 
 def test_a_team_the_person_stopped_stays_stopped_only_the_tier_goes(box):
