@@ -502,6 +502,11 @@ you give everything with the options.
   --secret-file <path>         with --secret-mode file: the file that contains it
   --model <model>              the model to use
   --language <code>            the language (for example it or en)
+  --budget-usd <dollars>       the most the team may spend, in dollars (with one of --budget-minutes, --budget-days, --budget-until)
+  --budget-minutes <n>         the budget lasts this many minutes from now
+  --budget-days <n>            the budget lasts this many days from now
+  --budget-until <hour>        the budget lasts until this hour of the day, 0-23 (the next one)
+  --no-budget                  no spending limit (the team stops only at the credit of the provider)
   --skip-health                skips the final check
   --reset                      starts again from a clean configuration
 
@@ -989,6 +994,11 @@ tutto si da'\'' con le opzioni.
   --secret-file <percorso>     con --secret-mode file: il file che la contiene
   --model <modello>            il modello da usare
   --language <codice>          la lingua (per esempio it o en)
+  --budget-usd <dollari>       quanto può spendere il team, in dollari (con una fra --budget-minutes, --budget-days, --budget-until)
+  --budget-minutes <n>         il budget dura questi minuti da ora
+  --budget-days <n>            il budget dura questi giorni da ora
+  --budget-until <ora>         il budget dura fino a questa ora del giorno, 0-23 (la prossima)
+  --no-budget                  nessun limite di spesa (il team si ferma solo al credito del provider)
   --skip-health                salta il controllo finale
   --reset                      riparte da una configurazione pulita
 
@@ -1477,6 +1487,11 @@ mindent kapcsolókkal adsz meg.
   --secret-file <path>         --secret-mode file esetén: a kulcsot tartalmazó fájl
   --model <model>              a használandó modell
   --language <code>            a nyelv (például it vagy en)
+  --budget-usd <dollár>        mennyit költhet a csapat, dollárban (a --budget-minutes, --budget-days, --budget-until egyikével)
+  --budget-minutes <n>         a keret ennyi percig tart mostantól
+  --budget-days <n>            a keret ennyi napig tart mostantól
+  --budget-until <óra>         a keret a nap eddig az óráig tart, 0-23 (a következő)
+  --no-budget                  nincs költési korlát (a csapat csak a szolgáltató egyenlegénél áll meg)
   --skip-health                kihagyja a végső ellenőrzést
   --reset                      tiszta beállításból indul újra
 
@@ -1969,6 +1984,11 @@ todo se da con las opciones.
   --secret-file <path>         con --secret-mode file: el archivo que la contiene
   --model <model>              el modelo que usar
   --language <code>            el idioma (por ejemplo es o en)
+  --budget-usd <dólares>       cuánto puede gastar el equipo, en dólares (con una de --budget-minutes, --budget-days, --budget-until)
+  --budget-minutes <n>         el presupuesto dura estos minutos desde ahora
+  --budget-days <n>            el presupuesto dura estos días desde ahora
+  --budget-until <hora>        el presupuesto dura hasta esta hora del día, 0-23 (la siguiente)
+  --no-budget                  sin límite de gasto (el equipo se detiene solo con el crédito del proveedor)
   --skip-health                se salta la comprobación final
   --reset                      vuelve a empezar desde una configuración limpia
 
@@ -2456,6 +2476,11 @@ Alles wird über die Optionen angegeben.
   --secret-file <path>         mit --secret-mode file: die Datei, die ihn enthält
   --model <model>              das zu verwendende Modell
   --language <code>            die Sprache (zum Beispiel it oder en)
+  --budget-usd <dollar>        wie viel das Team ausgeben darf, in Dollar (mit einer von --budget-minutes, --budget-days, --budget-until)
+  --budget-minutes <n>         das Budget gilt so viele Minuten ab jetzt
+  --budget-days <n>            das Budget gilt so viele Tage ab jetzt
+  --budget-until <stunde>      das Budget gilt bis zu dieser Uhrzeit, 0-23 (der nächsten)
+  --no-budget                  kein Ausgabenlimit (das Team hält nur beim Guthaben des Anbieters an)
   --skip-health                überspringt die abschließende Prüfung
   --reset                      beginnt mit einer sauberen Konfiguration neu
 
@@ -2943,6 +2968,11 @@ tout se donne avec les options.
   --secret-file <path>         avec --secret-mode file : le fichier qui la contient
   --model <model>              le modèle à utiliser
   --language <code>            la langue (par exemple it ou en)
+  --budget-usd <dollars>       combien l'\''équipe peut dépenser, en dollars (avec l'\''une de --budget-minutes, --budget-days, --budget-until)
+  --budget-minutes <n>         le budget dure ce nombre de minutes à partir de maintenant
+  --budget-days <n>            le budget dure ce nombre de jours à partir de maintenant
+  --budget-until <heure>       le budget dure jusqu'\''à cette heure de la journée, 0-23 (la prochaine)
+  --no-budget                  aucune limite de dépenses (l'\''équipe ne s'\''arrête qu'\''au crédit du fournisseur)
   --skip-health                saute la vérification finale
   --reset                      repart d'\''une configuration propre
 
@@ -3430,6 +3460,11 @@ tudo se dá com as opções.
   --secret-file <path>         com --secret-mode file: o ficheiro que a contém
   --model <model>              o modelo a usar
   --language <code>            a língua (por exemplo pt ou en)
+  --budget-usd <dólares>       quanto a equipa pode gastar, em dólares (com uma de --budget-minutes, --budget-days, --budget-until)
+  --budget-minutes <n>         o orçamento dura este número de minutos a partir de agora
+  --budget-days <n>            o orçamento dura este número de dias a partir de agora
+  --budget-until <hora>        o orçamento dura até esta hora do dia, 0-23 (a próxima)
+  --no-budget                  sem limite de gasto (a equipa só para no crédito do fornecedor)
   --skip-health                salta a verificação final
   --reset                      recomeça de uma configuração limpa
 
