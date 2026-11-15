@@ -170,6 +170,29 @@ def test_names_in_the_7_languages_and_in_iana_find_their_zone(shell, tmp_path, t
 
 
 @pytest.mark.parametrize("shell", SHELLS)
+def test_a_single_zone_from_a_name_that_only_starts_like_the_search_is_listed_not_proposed(shell, tmp_path):
+    # Pago -> Pago Pago, one zone that is not named exactly: the person picks it by its number, it is not the proposal Enter takes
+    result = _run(shell, tmp_path, "Pago\n\n1\n")
+    text = "\n".join(_lines(result))
+    assert "  1) Pacific/Pago_Pago  (HH:MM)\n" in text and "Number (1-1), or a new search: " in text
+    assert "Proposed: Pacific/Pago_Pago" not in text
+    assert result.env == "Pacific/Pago_Pago"
+    # nothing picked: the input ends, nothing is taken
+    ended = _run(shell, tmp_path / "ended", "Pago\n")
+    assert ended.env == "UTC" and ended.file == HOST_ENV
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_america_is_the_name_of_a_country_with_many_zones_and_portugal_gives_its_three_zones(shell, tmp_path):
+    result = _run(shell, tmp_path, "America\n")
+    assert re.search(r"\d\d timezones match \u00abAmerica\u00bb", "\n".join(_lines(result))) and result.env == "UTC"
+    result = _run(shell, tmp_path / "pt", "Portugal\n3\n")
+    text = "\n".join(_lines(result))
+    assert "  1) Europe/Lisbon  (HH:MM)\n  2) Atlantic/Madeira  (HH:MM)\n  3) Atlantic/Azores  (HH:MM)\n" in text
+    assert result.env == "Atlantic/Azores"
+
+
+@pytest.mark.parametrize("shell", SHELLS)
 def test_utc_is_chosen_only_by_writing_it_and_an_ended_input_without_a_choice_changes_nothing(shell, tmp_path):
     result = _run(shell, tmp_path, "")
     assert result.env == "UTC" and result.file == HOST_ENV, "the input ended: host.env stays as it was"
@@ -237,6 +260,7 @@ def test_the_file_of_the_data_is_whole():
     assert len(zones) > 400 and len(countries) > 240
     assert all(len(fields) == 8 for fields in table["C"]), "a country: code and its name in the 7 languages"
     assert {code for code, _zone in table["Z"]} <= countries
+    assert all("/" in zone for zone in zones), "every zone has an area and a place: no historic link such as Portugal or Japan"
     assert all(zone in zones for zone, _names in ((f[0], f[1:]) for f in table["X"])), "an alias names a zone that exists"
     assert all(zone in zones or zone == "UTC" for _ident, zone in table["P"]), "a Windows id takes a zone that exists"
     assert dict(table["P"])["W. Europe Standard Time"] == "Europe/Berlin" and dict(table["P"])["India Standard Time"] == "Asia/Kolkata"

@@ -2917,17 +2917,19 @@ function Get-JhtTzIndex {
   return $index
 }
 
-# The zones that fit what was written: the ones named exactly, else the ones with a word that starts with it (3 letters or more).
+# The zones that fit what was written: the ones named exactly, else the ones with a word that starts with it (3 letters or more). Exact says
+# which: a single zone from a name that only starts like what was written (American -> American Samoa) is never proposed as the answer.
 function Find-JhtTimezone {
   param([string]$Query)
   $q = ConvertTo-JhtTzKey $Query
-  if ($q.Length -lt 2) { return @() }
+  if ($q.Length -lt 2) { return [pscustomobject]@{ Zones = @(); Exact = $false } }
   $index = Get-JhtTzIndex
   $found = New-Object 'System.Collections.Generic.List[string]'
   $seen = @{}
   foreach ($entry in $index.Names) {
     if ($entry.Key -ceq $q) { foreach ($zone in $entry.Zones) { if (-not $seen.ContainsKey($zone)) { $seen[$zone] = $true; $found.Add($zone) } } }
   }
+  $exact = ($found.Count -gt 0)
   if ($found.Count -eq 0 -and $q.Length -ge 3) {
     foreach ($entry in $index.Names) {
       if ($entry.Key.StartsWith($q, [StringComparison]::Ordinal) -or $entry.Key.Contains(' ' + $q)) {
@@ -2935,7 +2937,7 @@ function Find-JhtTimezone {
       }
     }
   }
-  return $found.ToArray()
+  return [pscustomobject]@{ Zones = $found.ToArray(); Exact = $exact }
 }
 
 # The time now in a zone, "22:10", or '' where this computer cannot tell it (PowerShell 5.1 takes the Windows id of the zone).
@@ -3072,10 +3074,11 @@ function Resolve-JhtUserTimezone {
       Write-Host (Get-JhtText 'host_setup.tz.how')
       continue
     }
-    $hits = @(Find-JhtTimezone $typed)
+    $found = Find-JhtTimezone $typed
+    $hits = @($found.Zones)
     if ($hits.Count -eq 0) { Write-Host (Format-JhtText 'host_setup.tz.none' $typed); continue }
     if ($hits.Count -gt 9) { Write-Host (Format-JhtText 'host_setup.tz.too_many' $hits.Count $typed); continue }
-    if ($hits.Count -eq 1) {
+    if ($hits.Count -eq 1 -and $found.Exact) {
       if ($hits[0] -ieq $typed) { $chosen = $hits[0]; break }
       $default = $hits[0]
       Write-Host (Format-JhtText 'host_setup.tz.proposed' $hits[0] (Get-JhtTzNow $hits[0]))
