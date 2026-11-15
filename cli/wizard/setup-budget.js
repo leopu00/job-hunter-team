@@ -170,9 +170,10 @@ export function budgetFromOptions(opts, { now = new Date(), timeZone = localTime
   if (usd === null) return { error: '--budget-usd must be a positive amount of dollars, for example 10 or 7.5.' };
   const given = ['budgetMinutes', 'budgetDays', 'budgetUntil'].filter((k) => opts[k] !== undefined);
   if (given.length !== 1) return { error: 'Give the period with one of --budget-minutes <n>, --budget-days <n> or --budget-until <hour 0-23>.' };
-  const n = Number(opts[given[0]]);
+  // --budget-until takes the hour as 8, 08 or 08:00 (a whole hour: the night ends on the hour)
+  const n = Number(given[0] === 'budgetUntil' ? String(opts.budgetUntil).trim().replace(/^(\d{1,2}):00$/, '$1') : opts[given[0]]);
   if (given[0] === 'budgetUntil') {
-    if (!Number.isInteger(n) || n < 0 || n > 23) return { error: '--budget-until is an hour of the day, 0 to 23.' };
+    if (!Number.isInteger(n) || n < 0 || n > 23) return { error: '--budget-until is a whole hour of the day, 0 to 23 (8 or 08:00).' };
     return { kind: 'until', budget: budgetOf(usd, nextLocalHour(now, n, timeZone), now) };
   }
   if (!Number.isFinite(n) || n <= 0) return { error: `--${given[0] === 'budgetDays' ? 'budget-days' : 'budget-minutes'} must be a positive number.` };

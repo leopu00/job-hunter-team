@@ -85,3 +85,11 @@ test('every text of the step is in English and in Italian', () => {
   assert.ok(keys.length >= 20);
   for (const k of keys) assert.equal(typeof it[k], 'string', k);
 });
+
+test('--budget-until takes a whole hour as 8, 08 or 08:00, and refuses 08:30', async () => {
+  const { budgetFromOptions } = await import('../wizard/setup-budget.js');
+  for (const hour of ['8', '08', '08:00']) {
+    assert.equal(budgetFromOptions({ budgetUsd: '5', budgetUntil: hour }, { now: NOW, timeZone: 'Europe/Rome' }).budget.ends_at, '2026-11-16T07:00:00.000Z', hour);
+  }
+  assert.ok(budgetFromOptions({ budgetUsd: '5', budgetUntil: '08:30' }, { now: NOW, timeZone: 'Europe/Rome' }).error);
+});
