@@ -30,17 +30,25 @@ const NAMES = [
 
 const rowsFor = (families: string[], each = 5) =>
   families.flatMap((family, i) =>
-    Array.from({ length: each + families.length - i }, () => ({ role_family: family, score: 70, critic: null })),
+    Array.from({ length: each + families.length - i }, () => ({
+      role_family: family,
+      score: 70,
+      critic: null,
+    })),
   );
 
-const donutFor = (families: string[]) => groupRoleFamilies(aggregateRoleFamilies(rowsFor(families)));
+const donutFor = (families: string[]) =>
+  groupRoleFamilies(aggregateRoleFamilies(rowsFor(families)));
 
 describe("the colours of the position types", () => {
   it("are the theme's variables (--cat-N, written from the theme's main colour), never a fixed hex or hsl value", () => {
-    const cat = /^var\(--cat-\d{1,2}, (var\(--color-[a-z-]+\)|color-mix\(in srgb, var\(--color-[a-z-]+\) \d+%, var\(--color-[a-z-]+\)\))\)$/;
+    const cat =
+      /^var\(--cat-\d{1,2}, (var\(--color-[a-z-]+\)|color-mix\(in srgb, var\(--color-[a-z-]+\) \d+%, var\(--color-[a-z-]+\)\))\)$/;
     for (const entry of FAMILY_PALETTE) expect(entry).toMatch(cat);
-    for (const name of NAMES) expect(FAMILY_PALETTE).toContain(colorForFamily(name));
-    for (const slice of donutFor(NAMES)) expect(slice.color).toMatch(/^var\(--/);
+    for (const name of NAMES)
+      expect(FAMILY_PALETTE).toContain(colorForFamily(name));
+    for (const slice of donutFor(NAMES))
+      expect(slice.color).toMatch(/^var\(--/);
   });
 
   it("have at least eight different entries before any repeats", () => {
@@ -49,8 +57,13 @@ describe("the colours of the position types", () => {
   });
 
   it("keep Analytics Engineering and Data Engineering apart (both were the same pink)", () => {
-    const slices = donutFor(["Analytics Engineering", "Data Engineering", "Frontend Engineering"]);
-    const color = (family: string) => slices.find((s) => s.family === family)?.color;
+    const slices = donutFor([
+      "Analytics Engineering",
+      "Data Engineering",
+      "Frontend Engineering",
+    ]);
+    const color = (family: string) =>
+      slices.find((s) => s.family === family)?.color;
     expect(color("Analytics Engineering")).toBeDefined();
     expect(color("Analytics Engineering")).not.toBe(color("Data Engineering"));
   });
@@ -59,10 +72,16 @@ describe("the colours of the position types", () => {
     // Every size of set, from a few types to more than the donut can show, in a few different mixes.
     for (let size = 1; size <= NAMES.length; size++) {
       for (let shift = 0; shift < NAMES.length; shift++) {
-        const families = Array.from({ length: size }, (_, i) => NAMES[(i + shift) % NAMES.length]);
+        const families = Array.from(
+          { length: size },
+          (_, i) => NAMES[(i + shift) % NAMES.length],
+        );
         const slices = donutFor(Array.from(new Set(families)));
         const colors = slices.map((s) => s.color);
-        expect(new Set(colors).size, `${slices.map((s) => s.family).join(" | ")}`).toBe(colors.length);
+        expect(
+          new Set(colors).size,
+          `${slices.map((s) => s.family).join(" | ")}`,
+        ).toBe(colors.length);
       }
     }
   });
@@ -71,7 +90,11 @@ describe("the colours of the position types", () => {
     // «Da categorizzare» big enough to be a slice of its own, the long tail of small types behind it.
     const rows = [
       ...rowsFor(NAMES),
-      ...Array.from({ length: 400 }, () => ({ role_family: UNCATEGORIZED_LABEL, score: null, critic: null })),
+      ...Array.from({ length: 400 }, () => ({
+        role_family: UNCATEGORIZED_LABEL,
+        score: null,
+        critic: null,
+      })),
     ];
     const slices = groupRoleFamilies(aggregateRoleFamilies(rows));
     expect(slices.some((s) => s.family === OTHER_GROUP_LABEL)).toBe(true);
@@ -81,11 +104,15 @@ describe("the colours of the position types", () => {
   });
 
   it("give the whole list of types its own colours too (the map's donut shows them all)", () => {
-    const first = aggregateRoleFamilies(rowsFor(NAMES.slice(0, FAMILY_PALETTE.length))).map((d) => d.color);
+    const first = aggregateRoleFamilies(
+      rowsFor(NAMES.slice(0, FAMILY_PALETTE.length)),
+    ).map((d) => d.color);
     expect(new Set(first).size).toBe(first.length);
     // Past the palette it repeats, in order: no colour is used a third time before all are used twice.
     const all = assignFamilyColors(NAMES);
-    const uses = FAMILY_PALETTE.map((c) => Array.from(all.values()).filter((v) => v === c).length);
+    const uses = FAMILY_PALETTE.map(
+      (c) => Array.from(all.values()).filter((v) => v === c).length,
+    );
     expect(Math.max(...uses) - Math.min(...uses)).toBeLessThanOrEqual(1);
   });
 

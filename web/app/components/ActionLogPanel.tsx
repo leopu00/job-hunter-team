@@ -33,7 +33,10 @@ export default function ActionLogPanel({
   const site = WEB_ACTION_LOG_TEXT[locale] ?? WEB_ACTION_LOG_TEXT.en;
   const t =
     variant === "app"
-      ? { ...site, ...(WEB_ACTION_LOG_APP_TEXT[locale] ?? WEB_ACTION_LOG_APP_TEXT.en) }
+      ? {
+          ...site,
+          ...(WEB_ACTION_LOG_APP_TEXT[locale] ?? WEB_ACTION_LOG_APP_TEXT.en),
+        }
       : site;
   const [read, setRead] = useState<WebActionLogRead | null>(null);
   const turn = useRef(0);

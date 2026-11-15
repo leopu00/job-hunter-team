@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { UNCATEGORIZED_LABEL, assignFamilyColors } from "@/lib/position-classifier";
+import {
+  UNCATEGORIZED_LABEL,
+  assignFamilyColors,
+} from "@/lib/position-classifier";
 import { useLocale } from "@/lib/use-locale";
 import RangeHistogram, { buildBins, type Range } from "./RangeHistogram";
 import { IconChevron, IconFilters } from "./icons";
@@ -313,7 +316,11 @@ export default function PositionsFilterSidebar({
       byFamily.set(f, (byFamily.get(f) ?? 0) + 1);
     }
     const total = pool.length;
-    const colors = assignFamilyColors(Array.from(byFamily.entries()).sort((a, b) => b[1] - a[1]).map(([family]) => family));
+    const colors = assignFamilyColors(
+      Array.from(byFamily.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([family]) => family),
+    );
     return {
       total,
       rows: Array.from(byFamily.entries())

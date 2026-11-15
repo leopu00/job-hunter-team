@@ -448,7 +448,11 @@ export default function DirectivesPanel({
                   {d.body}
                 </p>
                 <div className="shrink-0 text-right text-[10px] text-[var(--color-dim)]">
-                  <div>{(parseStamp(d.created_at) ?? new Date(d.created_at)).toLocaleString(locale)}</div>
+                  <div>
+                    {(
+                      parseStamp(d.created_at) ?? new Date(d.created_at)
+                    ).toLocaleString(locale)}
+                  </div>
                   <div>
                     {d.status} · {d.created_by}
                   </div>

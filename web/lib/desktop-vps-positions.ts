@@ -69,6 +69,8 @@ export async function readDesktopVpsTeamActivity(
  * Every event of the team, newest first, with the position it touched (the Activity log page): read where the team's
  * database is (the desktop of a profile with no cloud account). The web has no such reader: its log page reads the cloud.
  */
-export async function readDesktopVpsTeamActivityLog(): Promise<DesktopVpsRead<RecentActivityEvent[]>> {
+export async function readDesktopVpsTeamActivityLog(): Promise<
+  DesktopVpsRead<RecentActivityEvent[]>
+> {
   return notDesktop();
 }
