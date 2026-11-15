@@ -319,7 +319,9 @@ function relativeTime(value: string | null, locale: Locale): string | null {
  * `showHeartbeat` false leaves out the line of the last device heartbeat: the desktop of a profile with no cloud
  * account reads the team on its own computer, which has no device syncing to the cloud to hear from.
  */
-export default function MobileTeamStatus({ showHeartbeat = true }: { showHeartbeat?: boolean } = {}) {
+export default function MobileTeamStatus({
+  showHeartbeat = true,
+}: { showHeartbeat?: boolean } = {}) {
   const locale = useLocale();
   const t = T[locale] ?? EN;
   const [state, setState] = useState<TeamState | null>(null);

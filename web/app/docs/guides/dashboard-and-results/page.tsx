@@ -92,14 +92,16 @@ jht stats                 # found / scored / applied counts`,
     loginP1:
       "Signing up lets you reach your data from any device — but it's not required. You can keep ",
     loginP2Strong: "everything on your own computer",
-    loginP2Rest: ", without JHT's cloud (the texts the agents work on still go to the model's provider):",
+    loginP2Rest:
+      ", without JHT's cloud (the texts the agents work on still go to the model's provider):",
     withSignupStrong: "With sign-up",
     withSignupRest1: " — local data mirrors to the cloud; open ",
     withSignupRest2:
       " from any browser, share with a mentor. Your CVs stay local; only metadata syncs.",
     withoutStrong: "Without",
     withoutRest1: " — your data stays on your computer, in the desktop app ",
-    withoutRest2: "; the texts the agents work on go to the model's provider (Z.ai for GLM).",
+    withoutRest2:
+      "; the texts the agents work on go to the model's provider (Z.ai for GLM).",
     readOnlyStrong: "read-only",
     readOnlyRest1: "🌐 On the public site the dashboard is ",
     readOnlyRest2:
@@ -151,14 +153,16 @@ jht stats                 # conteggi trovate / valutate / candidate`,
     loginP1:
       "Registrarti ti permette di raggiungere i tuoi dati da qualsiasi dispositivo — ma non è obbligatorio. Puoi tenere ",
     loginP2Strong: "tutto sul tuo computer",
-    loginP2Rest: ", senza il cloud di JHT (i testi che gli agenti elaborano vanno comunque al fornitore del modello):",
+    loginP2Rest:
+      ", senza il cloud di JHT (i testi che gli agenti elaborano vanno comunque al fornitore del modello):",
     withSignupStrong: "Con la registrazione",
     withSignupRest1: " — i dati locali si rispecchiano nel cloud; apri ",
     withSignupRest2:
       " da qualsiasi browser, condividi con un mentore. I tuoi CV restano in locale; si sincronizzano solo i metadati.",
     withoutStrong: "Senza",
     withoutRest1: " — i tuoi dati restano sul tuo computer, nell’app desktop ",
-    withoutRest2: "; i testi che gli agenti elaborano vanno al fornitore del modello (Z.ai per GLM).",
+    withoutRest2:
+      "; i testi che gli agenti elaborano vanno al fornitore del modello (Z.ai per GLM).",
     readOnlyStrong: "in sola lettura",
     readOnlyRest1: "🌐 Sul sito pubblico la dashboard è ",
     readOnlyRest2:
@@ -210,14 +214,17 @@ jht stats                 # recuentos de encontradas / puntuadas / aplicadas`,
     loginP1:
       "Registrarte te permite acceder a tus datos desde cualquier dispositivo — pero no es obligatorio. Puedes mantener ",
     loginP2Strong: "todo en tu propio ordenador",
-    loginP2Rest: ", sin la nube de JHT (los textos que procesan los agentes van igualmente al proveedor del modelo):",
+    loginP2Rest:
+      ", sin la nube de JHT (los textos que procesan los agentes van igualmente al proveedor del modelo):",
     withSignupStrong: "Con registro",
     withSignupRest1: " — los datos locales se reflejan en la nube; abre ",
     withSignupRest2:
       " desde cualquier navegador, comparte con un mentor. Tus CV permanecen en local; solo se sincronizan los metadatos.",
     withoutStrong: "Sin registro",
-    withoutRest1: " — tus datos se quedan en tu ordenador, en la app de escritorio ",
-    withoutRest2: "; los textos que procesan los agentes van al proveedor del modelo (Z.ai para GLM).",
+    withoutRest1:
+      " — tus datos se quedan en tu ordenador, en la app de escritorio ",
+    withoutRest2:
+      "; los textos que procesan los agentes van al proveedor del modelo (Z.ai para GLM).",
     readOnlyStrong: "de solo lectura",
     readOnlyRest1: "🌐 En el sitio público el panel es ",
     readOnlyRest2:
@@ -269,15 +276,18 @@ jht stats                 # nombres trouvés / notés / postulés`,
     loginP1:
       "S'inscrire vous permet d'accéder à vos données depuis n'importe quel appareil — mais ce n'est pas obligatoire. Vous pouvez tout garder ",
     loginP2Strong: "sur votre propre ordinateur",
-    loginP2Rest: ", sans le cloud de JHT (les textes que traitent les agents vont quand même au fournisseur du modèle) :",
+    loginP2Rest:
+      ", sans le cloud de JHT (les textes que traitent les agents vont quand même au fournisseur du modèle) :",
     withSignupStrong: "Avec inscription",
     withSignupRest1:
       " — les données locales se reflètent dans le cloud ; ouvrez ",
     withSignupRest2:
       " depuis n'importe quel navigateur, partagez avec un mentor. Vos CV restent en local ; seules les métadonnées se synchronisent.",
     withoutStrong: "Sans inscription",
-    withoutRest1: " — vos données restent sur votre ordinateur, dans l’app de bureau ",
-    withoutRest2: " ; les textes que traitent les agents vont au fournisseur du modèle (Z.ai pour GLM).",
+    withoutRest1:
+      " — vos données restent sur votre ordinateur, dans l’app de bureau ",
+    withoutRest2:
+      " ; les textes que traitent les agents vont au fournisseur du modèle (Z.ai pour GLM).",
     readOnlyStrong: "en lecture seule",
     readOnlyRest1: "🌐 Sur le site public, le tableau de bord est ",
     readOnlyRest2:
@@ -329,14 +339,17 @@ jht stats                 # Zähler gefunden / bewertet / beworben`,
     loginP1:
       "Mit einer Registrierung erreichst du deine Daten von jedem Gerät — aber sie ist nicht erforderlich. Du kannst ",
     loginP2Strong: "alles auf deinem eigenen Computer",
-    loginP2Rest: " behalten, ohne die Cloud von JHT (die Texte, die die Agenten verarbeiten, gehen trotzdem an den Anbieter des Modells):",
+    loginP2Rest:
+      " behalten, ohne die Cloud von JHT (die Texte, die die Agenten verarbeiten, gehen trotzdem an den Anbieter des Modells):",
     withSignupStrong: "Mit Registrierung",
     withSignupRest1: " — lokale Daten spiegeln in die Cloud; öffne ",
     withSignupRest2:
       " in jedem Browser, teile mit einem Mentor. Deine Lebensläufe bleiben lokal; nur Metadaten werden synchronisiert.",
     withoutStrong: "Ohne",
-    withoutRest1: " — deine Daten bleiben auf deinem Computer, in der Desktop-App ",
-    withoutRest2: "; die Texte, die die Agenten verarbeiten, gehen an den Anbieter des Modells (Z.ai für GLM).",
+    withoutRest1:
+      " — deine Daten bleiben auf deinem Computer, in der Desktop-App ",
+    withoutRest2:
+      "; die Texte, die die Agenten verarbeiten, gehen an den Anbieter des Modells (Z.ai für GLM).",
     readOnlyStrong: "schreibgeschützt",
     readOnlyRest1:
       "🌐 Auf der öffentlichen Seite ist das Dashboard zur Sicherheit ",
@@ -388,14 +401,17 @@ jht stats                 # talált / pontozott / jelentkezett darabszámok`,
     loginP1:
       "A regisztrációval bármely eszközről eléred az adataidat — de nem kötelező. Mindent megtarthatsz ",
     loginP2Strong: "a saját számítógépeden",
-    loginP2Rest: ", a JHT felhője nélkül (az ügynökök által feldolgozott szövegek ekkor is a modell szolgáltatójához kerülnek):",
+    loginP2Rest:
+      ", a JHT felhője nélkül (az ügynökök által feldolgozott szövegek ekkor is a modell szolgáltatójához kerülnek):",
     withSignupStrong: "Regisztrációval",
     withSignupRest1: " — a helyi adatok tükröződnek a felhőbe; nyisd meg a ",
     withSignupRest2:
       " címet bármely böngészőből, oszd meg egy mentorral. Az önéletrajzaid helyben maradnak; csak a metaadatok szinkronizálódnak.",
     withoutStrong: "Regisztráció nélkül",
-    withoutRest1: " — az adataid a gépeden maradnak, az asztali alkalmazásban: ",
-    withoutRest2: "; az ügynökök által feldolgozott szövegek a modell szolgáltatójához kerülnek (GLM esetén a Z.ai-hoz).",
+    withoutRest1:
+      " — az adataid a gépeden maradnak, az asztali alkalmazásban: ",
+    withoutRest2:
+      "; az ügynökök által feldolgozott szövegek a modell szolgáltatójához kerülnek (GLM esetén a Z.ai-hoz).",
     readOnlyStrong: "csak olvasható",
     readOnlyRest1: "🌐 A nyilvános oldalon az irányítópult biztonsági okból ",
     readOnlyRest2:
@@ -447,14 +463,17 @@ jht stats                 # contagens encontradas / pontuadas / candidatadas`,
     loginP1:
       "Registares-te permite-te aceder aos teus dados a partir de qualquer dispositivo — mas não é obrigatório. Podes manter ",
     loginP2Strong: "tudo no teu próprio computador",
-    loginP2Rest: ", sem a nuvem do JHT (os textos que os agentes processam vão na mesma para o fornecedor do modelo):",
+    loginP2Rest:
+      ", sem a nuvem do JHT (os textos que os agentes processam vão na mesma para o fornecedor do modelo):",
     withSignupStrong: "Com registo",
     withSignupRest1: " — os dados locais espelham-se na nuvem; abre ",
     withSignupRest2:
       " a partir de qualquer navegador, partilha com um mentor. Os teus CV ficam em local; só os metadados sincronizam.",
     withoutStrong: "Sem registo",
-    withoutRest1: " — os teus dados ficam no teu computador, na app de desktop ",
-    withoutRest2: "; os textos que os agentes processam vão para o fornecedor do modelo (Z.ai para GLM).",
+    withoutRest1:
+      " — os teus dados ficam no teu computador, na app de desktop ",
+    withoutRest2:
+      "; os textos que os agentes processam vão para o fornecedor do modelo (Z.ai para GLM).",
     readOnlyStrong: "apenas de leitura",
     readOnlyRest1: "🌐 No site público o painel é ",
     readOnlyRest2:

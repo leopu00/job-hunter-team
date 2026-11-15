@@ -1898,7 +1898,8 @@ export async function getTeamActivity(opts?: {
   const { from, to } = resolveActivityRange(opts, new Date());
   // The desktop of a profile with no cloud account: counted in the team's own database (inert on the web).
   const desktop = await readDesktopVpsTeamActivity(from, to);
-  if (desktop.source === "vps") return buildTeamActivityFromCounts(desktop.data, from, to);
+  if (desktop.source === "vps")
+    return buildTeamActivityFromCounts(desktop.data, from, to);
   if (desktop.source === "unavailable") return buildTeamActivity([], from, to);
   const w = await ws();
   if (w) {

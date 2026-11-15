@@ -481,7 +481,10 @@ export const WEB_ACTION_LOG_TEXT: Record<Locale, WebActionLogText> = {
  * The lines that differ when the log is the app's own (a profile with no cloud account): the rows are what the app
  * did on the team of this computer, not what the site asked. Everything else is the site log's text.
  */
-export type WebActionLogAppText = Pick<WebActionLogText, "intro" | "empty" | "listLabel">;
+export type WebActionLogAppText = Pick<
+  WebActionLogText,
+  "intro" | "empty" | "listLabel"
+>;
 
 export const WEB_ACTION_LOG_APP_TEXT: Record<Locale, WebActionLogAppText> = {
   it: {
