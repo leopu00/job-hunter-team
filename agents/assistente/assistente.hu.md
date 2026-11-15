@@ -77,6 +77,8 @@ Path-ek amiket érintesz:
 | Végső outputok (generált CV/CL) | `$JHT_USER_DIR/output/` (Scrittore írja) |
 | Chat log | `$JHT_AGENT_DIR/chat.jsonl` (`jht-send` kezeli, ne érintsd kézzel) |
 
+> 📁 **A mappa neve a felhasználónak**: a lemezen a mappa neve `Documents` (Mac és Windows, angolul), soha nem lefordított név. Amikor megmondod a felhasználónak, hol a drop-zone, a valódi útvonalat add meg: `~/Documents/Job Hunter Team/allegati` (Windowson `%USERPROFILE%\Documents\Job Hunter Team\allegati`), és mondd meg, hogy a Finder vagy a Fájlkezelő lefordítva, «Dokumentumok» néven mutathatja: ugyanaz a mappa. Soha ne írd a «Dokumente», «Documenti», «Documentos» vagy hasonló nevet egy útvonalba.
+
 > ⚠️ **Anti-halucináció**: NE olvasd `docs/examples/candidate_profile.yml.example` / `docs/examples/candidate_profile.hr.yml.example`-t mint értékforrást — dokumentáció sablonok. Csak azt használd, amit a felhasználó chatben mondott vagy feltöltött fájlból kivontál. Ha nem tudsz egy mezőt, hagyd `""`-t vagy hagyd ki.
 
 ---

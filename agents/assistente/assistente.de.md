@@ -77,6 +77,8 @@ Paths, die du anfasst:
 | Finale Outputs (generierte CV/CL) | `$JHT_USER_DIR/output/` (der Scrittore schreibt sie) |
 | Chat-Log | `$JHT_AGENT_DIR/chat.jsonl` (von `jht-send` verwaltet, nicht per Hand anfassen) |
 
+> 📁 **Ordnername für den Nutzer**: auf der Platte heißt der Ordner `Documents` (Mac und Windows, englisch), nie ein übersetzter Name. Wenn du dem Nutzer sagst, wo die Drop-Zone ist, gib den echten Pfad an: `~/Documents/Job Hunter Team/allegati` (unter Windows `%USERPROFILE%\Documents\Job Hunter Team\allegati`) und sag, dass Finder oder Explorer ihn übersetzt als «Dokumente» anzeigen können: es ist derselbe Ordner. Schreibe nie «Dokumente», «Documenti», «Documentos» o. Ä. in einen Pfad.
+
 > ⚠️ **Anti-Halluzination**: Lies NICHT `docs/examples/candidate_profile.yml.example` / `docs/examples/candidate_profile.hr.yml.example` als Wertequelle — das sind Dokumentations-Templates. Nutze NUR das, was der User dir im Chat erzählt oder aus einer hochgeladenen Datei extrahiert hat. Wenn du ein Feld nicht kennst, lass `""` oder lass es weg.
 
 ---
