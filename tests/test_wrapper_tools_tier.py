@@ -526,6 +526,9 @@ def test_the_job_does_not_take_its_own_subshells_for_another_command(tmp_path):
     # $0 = the wrapper's path: the shell and all its forks carry it on their command line, as the real job does
     done = subprocess.run(["bash", "-c", body, str(wrapper)], capture_output=True, text=True, timeout=30)
     assert done.stdout.strip() == "NONE", done.stdout + done.stderr
+    # the same with no BASHPID, as in bash 3.2, the system bash of macOS
+    no_bashpid = subprocess.run(["bash", "-c", "unset BASHPID\n" + body, str(wrapper)], capture_output=True, text=True, timeout=30)
+    assert no_bashpid.stdout.strip() == "NONE", no_bashpid.stdout + no_bashpid.stderr
     # and a real other command is still seen
     other = subprocess.Popen(["sh", "-c", "sleep 4; :", str(wrapper)])
     try:

@@ -149,7 +149,9 @@ tools_wait_and_switch() {
 # it. The job is a child of the wrapper that started it, with the same command line: its own process is left out, and so are its
 # own children (the subshell of a command substitution is a fork with the same command line, and pgrep only leaves itself out).
 tools_other_wrapper_running() {
-  local me="$BASHPID" pids pid parent
+  # bash 3.2 (the system bash of macOS) has no BASHPID, and $$ in a subshell is still the wrapper's: the parent of a new sh is
+  # this process (exec, so no subshell of the command substitution comes in between)
+  local me="${BASHPID:-$(exec sh -c 'echo "$PPID"')}" pids pid parent
   pids="$(pgrep -f -- "$WRAPPER_PATH" 2>/dev/null)" || return 1
   for pid in $pids; do
     [ "$pid" = "$me" ] && continue
