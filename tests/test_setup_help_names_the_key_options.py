@@ -27,6 +27,8 @@ SETUP_JS = (ROOT / "cli" / "src" / "commands" / "setup.js").read_text(encoding="
 KEY_OPTIONS = ("--api-key-file <path>", "--api-key-stdin")
 
 
+KEPT_NOT_OFFERED = {"--auth-method", "--subscription-email", "--subscription-token"}
+
 def _options_of_the_command() -> list[str]:
     return re.findall(r"\.option\('(--[a-z-]+)", SETUP_JS)
 
@@ -61,7 +63,10 @@ def test_the_help_of_the_other_commands_is_still_the_generic_one(tmp_path):
 @pytest.mark.parametrize("lang", LANGUAGES)
 def test_the_help_names_every_option_of_the_command_and_no_other(lang):
     named = set(re.findall(r"^  (--[a-z-]+)", _sh_text(lang), re.M))
-    assert named == set(_options_of_the_command())
+    # the Codex subscription is not offered in 0.4.0 (only Pi): its options still work for a setup made with 0.3.9,
+    # the help does not name them
+    assert named == set(_options_of_the_command()) - KEPT_NOT_OFFERED
+    assert not re.search(r"codex|subscription", _sh_text(lang), re.I)
 
 
 def test_both_wrappers_answer_setup_help_before_the_generic_one_and_with_the_same_text():
