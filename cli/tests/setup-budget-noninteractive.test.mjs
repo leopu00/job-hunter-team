@@ -56,7 +56,7 @@ test('$5 for 30 minutes: team.budget from now to now + 30 min', async () => {
   const { code, text } = await setup({ budgetUsd: '5', budgetMinutes: '30' });
   assert.equal(code, 0, text);
   assert.deepEqual(read().team.budget, {
-    usd: 5, starts_at: NOW.toISOString(), ends_at: new Date(NOW.getTime() + 30 * MINUTE).toISOString(), set_by: 'setup',
+    usd: 5, starts_at: NOW.toISOString(), ends_at: new Date(NOW.getTime() + 30 * MINUTE).toISOString(), timezone: 'Europe/Rome', set_by: 'setup',
   });
   assert.match(text, /Budget: /);
 });

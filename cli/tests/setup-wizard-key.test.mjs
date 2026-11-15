@@ -306,6 +306,7 @@ test('the budget in the wizard: the trial of $5 for 30 minutes is the answer alr
   const { budget, working_hours: hours } = JSON.parse(configText).team;
   assert.equal(budget.usd, 5);
   assert.equal(budget.set_by, 'setup');
+  assert.equal(budget.timezone, Intl.DateTimeFormat().resolvedOptions().timeZone, 'the zone of the person goes with the budget');
   const minutes = (Date.parse(budget.ends_at) - Date.parse(budget.starts_at)) / 60_000;
   assert.equal(minutes, 30);
   assert.ok(Date.parse(budget.starts_at) >= t0 - 1000 && Date.parse(budget.starts_at) <= Date.now());

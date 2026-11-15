@@ -30,14 +30,14 @@ test('the trial is the answer already chosen: $5 for 30 minutes from now, 24/7',
   const p = prompter({});
   const r = await promptBudget(p, { t, tf, now: NOW, timeZone: 'Europe/Rome' });
   assert.equal(p.asked[0][2], 'trial');
-  assert.deepEqual(r, { kind: 'trial', workingHours: null, budget: { usd: 5, starts_at: '2026-11-15T21:30:00.000Z', ends_at: '2026-11-15T22:00:00.000Z', set_by: 'setup' } });
+  assert.deepEqual(r, { kind: 'trial', workingHours: null, budget: { usd: 5, starts_at: '2026-11-15T21:30:00.000Z', ends_at: '2026-11-15T22:00:00.000Z', timezone: 'Europe/Rome', set_by: 'setup' } });
   assert.equal(budgetSummary(t, tf, r), 'The team can spend $5 in 30 minutes, then it stops by itself.');
 });
 
 test('one night ends at 8 tomorrow in the zone of the person, not in the zone of the computer', async () => {
   const r = await promptBudget(prompter({ 'How much should the team work?': 'night' }), { t, tf, now: NOW, timeZone: 'Europe/Rome' });
   assert.equal(r.budget.ends_at, '2026-11-16T07:00:00.000Z');
-  assert.equal(budgetSummary(t, tf, { ...r, workingHours: { timezone: 'Europe/Rome', windows: [] } }), 'The team can spend $5 until 8:00 (Europe/Rome), then it stops by itself.');
+  assert.equal(budgetSummary(t, tf, r), 'The team can spend $5 until 8:00 (Europe/Rome), then it stops by itself.');
   const ny = await promptBudget(prompter({ 'How much should the team work?': 'night' }), { t, tf, now: NOW, timeZone: 'America/New_York' });
   assert.equal(ny.budget.ends_at, '2026-11-16T13:00:00.000Z', '16:30 in New York: 8 tomorrow is 15.5 hours away');
   // before 8 in the morning the night ends at 8 of the same day

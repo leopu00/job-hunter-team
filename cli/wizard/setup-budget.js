@@ -3,7 +3,7 @@
  *
  * One question with ready answers for a person who has never set a budget («a trial: $5 for 30 minutes», «one night»,
  * «a few days», «no limit»), and three short ones only for «a few days». What it returns is saved next to
- * team.working_hours as team.budget = { usd, starts_at, ends_at, set_by } (ISO instants in UTC); the brake of the pi
+ * team.working_hours as team.budget = { usd, starts_at, ends_at, timezone, set_by } (ISO instants in UTC); the brake of the pi
  * harness (shared/skills/pi_spend_cap.py) counts what pi spends from starts_at and pauses the team, in a declared way, when
  * the budget or the period is over, or when it goes faster than the budget spread over the working minutes of the period.
  * Dollars: pi measures the cost in dollars and the four providers bill in dollars.
@@ -57,9 +57,10 @@ export function parseUsd(text) {
   return value > 0 ? value : null;
 }
 
-/** team.budget for an amount and a period that starts now. */
-export function budgetOf(usd, endsAt, now) {
-  return { usd, starts_at: now.toISOString(), ends_at: endsAt.toISOString(), set_by: 'setup' };
+/** team.budget for an amount and a period that starts now; the zone of the person goes with it (the brake says «resumes at
+ * HH:MM» in it, also for a trial or a night, which have no working hours). */
+export function budgetOf(usd, endsAt, now, timeZone = localTimeZone()) {
+  return { usd, starts_at: now.toISOString(), ends_at: endsAt.toISOString(), timezone: timeZone, set_by: 'setup' };
 }
 
 function windowsOf(hours, timeZone) {
@@ -83,7 +84,7 @@ function workedHoursPerDay(window) {
 export function budgetSummary(t, tf, { budget, workingHours, kind }) {
   if (!budget) return t('wizard.budget.summary_none');
   const money = tf('wizard.budget.money', String(budget.usd));
-  const zone = workingHours?.timezone || localTimeZone();
+  const zone = budget.timezone || workingHours?.timezone || localTimeZone();
   const minutes = Math.round((Date.parse(budget.ends_at) - Date.parse(budget.starts_at)) / MINUTE);
   if (kind === 'night' || kind === 'until') {
     const at = new Intl.DateTimeFormat('en-GB', { timeZone: zone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(budget.ends_at));
@@ -117,11 +118,11 @@ export async function promptBudget(prompter, { t, tf, now = new Date(), timeZone
   });
   if (choice === 'trial') {
     const p = BUDGET_PRESETS.trial;
-    return { kind: 'trial', budget: budgetOf(p.usd, new Date(now.getTime() + p.minutes * MINUTE), now), workingHours: null };
+    return { kind: 'trial', budget: budgetOf(p.usd, new Date(now.getTime() + p.minutes * MINUTE), now, timeZone), workingHours: null };
   }
   if (choice === 'night') {
     const p = BUDGET_PRESETS.night;
-    return { kind: 'night', budget: budgetOf(p.usd, nextLocalHour(now, p.untilHour, timeZone), now), workingHours: null };
+    return { kind: 'night', budget: budgetOf(p.usd, nextLocalHour(now, p.untilHour, timeZone), now, timeZone), workingHours: null };
   }
   if (choice === 'none') {
     await prompter.note(t('wizard.budget.none_warning'), t('wizard.budget.title'));
@@ -152,7 +153,7 @@ export async function promptBudget(prompter, { t, tf, now = new Date(), timeZone
   });
   return {
     kind: 'days',
-    budget: budgetOf(usd, new Date(now.getTime() + Number(days) * 24 * 60 * MINUTE), now),
+    budget: budgetOf(usd, new Date(now.getTime() + Number(days) * 24 * 60 * MINUTE), now, timeZone),
     workingHours: windowsOf(HOURS_PRESETS[hoursChoice] ?? null, timeZone),
   };
 }
@@ -174,9 +175,9 @@ export function budgetFromOptions(opts, { now = new Date(), timeZone = localTime
   const n = Number(given[0] === 'budgetUntil' ? String(opts.budgetUntil).trim().replace(/^(\d{1,2}):00$/, '$1') : opts[given[0]]);
   if (given[0] === 'budgetUntil') {
     if (!Number.isInteger(n) || n < 0 || n > 23) return { error: '--budget-until is a whole hour of the day, 0 to 23 (8 or 08:00).' };
-    return { kind: 'until', budget: budgetOf(usd, nextLocalHour(now, n, timeZone), now) };
+    return { kind: 'until', budget: budgetOf(usd, nextLocalHour(now, n, timeZone), now, timeZone) };
   }
   if (!Number.isFinite(n) || n <= 0) return { error: `--${given[0] === 'budgetDays' ? 'budget-days' : 'budget-minutes'} must be a positive number.` };
   const minutes = given[0] === 'budgetDays' ? n * 24 * 60 : n;
-  return { kind: given[0] === 'budgetDays' ? 'days' : 'trial', budget: budgetOf(usd, new Date(now.getTime() + minutes * MINUTE), now) };
+  return { kind: given[0] === 'budgetDays' ? 'days' : 'trial', budget: budgetOf(usd, new Date(now.getTime() + minutes * MINUTE), now, timeZone) };
 }
