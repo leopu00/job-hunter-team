@@ -70,7 +70,9 @@ linkedin_main {args}
 """
     home = host.tmp / "jht-home"
     return subprocess.run(["bash", "-c", script], env={**host.env, "JHT_HOME_HOST": str(home), "EXTRAS_IMAGE_DIGEST": DIGEST, **env},
-                          input=stdin, capture_output=True, text=True, timeout=60)
+                          capture_output=True, text=True, timeout=60,
+                          # "no token on stdin" is a closed stdin, not the one of the session the test runs in
+                          **({"stdin": subprocess.DEVNULL} if stdin is None else {"input": stdin}))
 
 
 def last_line(done) -> dict:
