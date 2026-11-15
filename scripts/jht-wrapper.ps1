@@ -1802,8 +1802,7 @@ tutto si da' con le opzioni.
 
   --non-interactive            nessuna domanda
   --provider <nome>            glm (Z.ai, predefinito), kimi (Moonshot), openai o claude (Anthropic)
-  --harness <nome>             pi (predefinito; l'unico per glm, kimi e claude) o codex (solo con openai)
-  --auth-method <metodo>       api_key (predefinito) o subscription
+  --harness <nome>             pi (predefinito)
   --api-key-file <percorso>    file che contiene la chiave API (una riga, leggibile solo da te).
                                Un file del tuo computer lo legge jht e lo passa al setup: con glm e kimi
                                il setup tiene la chiave per conto suo, mai nella configurazione
@@ -1812,8 +1811,6 @@ tutto si da' con le opzioni.
   --secret-mode <modo>         come si salva la chiave: plaintext (predefinito), env o file
   --secret-env <nome>          con --secret-mode env: la variabile d'ambiente che la contiene
   --secret-file <percorso>     con --secret-mode file: il file che la contiene
-  --subscription-email <email> con --auth-method subscription: l'email dell'account
-  --subscription-token <token> con --auth-method subscription: il token
   --model <modello>            il modello da usare
   --language <codice>          la lingua (per esempio it o en)
   --skip-health                salta il controllo finale
@@ -1824,8 +1821,6 @@ Esempi:
     jht setup --non-interactive --provider glm --harness pi --api-key-file chiave.txt
   OpenAI con una chiave API, su Pi (per Claude: --provider claude):
     jht setup --non-interactive --provider openai --harness pi --api-key-stdin
-  l'abbonamento Codex (poi il login a ChatGPT):
-    jht setup --non-interactive --provider openai --harness codex --auth-method subscription
 '@)
 }
 
