@@ -547,8 +547,8 @@ def test_jobspresso_stays_open_with_its_robots_rule_written_in_the_hint():
 
 # ── a person on site who will not move: no remote boards, no English boards of other countries ────────────────────────
 
-ELENA = ("languages:\n  - language: Italian\n    level: native\n  - language: English\n    level: B2\n  - language: German\n    level: A2\n"
-         "location: Florence (Tuscany)\nlocation_preferences:\n  - Florence\n  - Tuscany\n")
+ON_SITE_NOT_MOVING = ("languages:\n  - language: Italian\n    level: native\n  - language: English\n    level: B2\n"
+         "location: Turin (Piedmont)\nlocation_preferences:\n  - Turin\n  - Piedmont\n")
 
 
 def _lane_sources(count=1):
@@ -556,9 +556,9 @@ def _lane_sources(count=1):
 
 
 def test_a_person_on_site_who_will_not_move_gets_only_her_own_countrys_boards_even_when_the_country_is_not_named(profile):
-    # «Florence», «Tuscany» name no country: the home is not known and nothing is left out for being abroad (the 13 sources of the first
-    # run of a restorer in Tuscany were remote boards and the English ones of Ireland, Malta, Sweden)
-    profile.write_text(ELENA + "preferences:\n  work_mode: on-site\n  relocation: false\n", encoding="utf-8")
+    # a city and a region named without their country («Turin», «Piedmont»): the home is not known and nothing is left out for being
+    # abroad (the 13 sources of a first run were remote boards and the English ones of Ireland, Malta and Sweden)
+    profile.write_text(ON_SITE_NOT_MOVING + "preferences:\n  work_mode: on-site\n  relocation: false\n", encoding="utf-8")
     plan = cov.load_plan()
     assert plan["remote"] is False
     assert {e["country"] for e in plan["entries"]} == {"it"}
@@ -566,7 +566,7 @@ def test_a_person_on_site_who_will_not_move_gets_only_her_own_countrys_boards_ev
 
 
 def test_the_same_profile_without_the_mode_and_the_relocation_keeps_every_board_as_before(profile):
-    profile.write_text(ELENA, encoding="utf-8")
+    profile.write_text(ON_SITE_NOT_MOVING, encoding="utf-8")
     plan = cov.load_plan()
     assert plan["remote"] is True
     assert {"remotive", "weworkremotely", "thehub"} <= set(_lane_sources())
@@ -575,7 +575,7 @@ def test_the_same_profile_without_the_mode_and_the_relocation_keeps_every_board_
 @pytest.mark.parametrize("preferences", ["  work_mode: on-site\n  relocation: true\n", "  work_mode: hybrid\n  relocation: false\n",
                                          "  work_mode: remote\n  relocation: false\n"])
 def test_the_english_boards_stay_when_the_person_may_move_or_does_not_work_on_site(profile, preferences):
-    profile.write_text(ELENA + "preferences:\n" + preferences, encoding="utf-8")
+    profile.write_text(ON_SITE_NOT_MOVING + "preferences:\n" + preferences, encoding="utf-8")
     assert "thehub" in _lane_sources()
 
 
