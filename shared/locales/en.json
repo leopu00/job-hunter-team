@@ -504,6 +504,7 @@
   "wizard.key.title": "API key",
   "wizard.release.coming": "Codex and sign-in with a subscription: coming in a later release.",
   "wizard.release.not_offered": "The saved configuration is for %s, which this release does not offer: it stays as it is until you choose a service below.",
+  "wizard.release.codex_legacy": "The ChatGPT subscription (Codex) is no longer offered to new users from 0.4.0: your team keeps working; to move to GLM, Kimi, OpenAI or Claude with an API key: jht setup",
   "wizard.access.prompt": "How does Codex sign in?",
   "wizard.access.subscription": "ChatGPT subscription — recommended: you sign in with your account, no per-token charge",
   "wizard.access.api_key": "OpenAI API key — billed by the token on your OpenAI account",

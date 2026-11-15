@@ -473,6 +473,7 @@
   "wizard.key.title": "Chiave API",
   "wizard.release.coming": "Codex e accesso con abbonamento: in arrivo in una prossima versione.",
   "wizard.release.not_offered": "La configurazione salvata è per %s, che questa versione non offre: resta com'è finché non scegli un servizio qui sotto.",
+  "wizard.release.codex_legacy": "L'abbonamento ChatGPT (Codex) non è più offerto ai nuovi utenti dalla 0.4.0: la tua squadra continua a funzionare; per passare a GLM, Kimi, OpenAI o Claude con una chiave API: jht setup",
   "wizard.access.prompt": "Come accede Codex?",
   "wizard.access.subscription": "Abbonamento ChatGPT — consigliato: accedi col tuo account, nessun costo a consumo",
   "wizard.access.api_key": "Chiave API OpenAI — a consumo, sul tuo account OpenAI",

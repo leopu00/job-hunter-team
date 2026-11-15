@@ -15,7 +15,7 @@ import { c, GREEN, YELLOW, DIM, RESET } from './_colors.js';
 import { Command } from 'commander';
 import { hint, marks, title } from '../lib/ui.js';
 import { say } from '../lib/texts.js';
-import { RELEASE_PROVIDERS, offeredInRelease, offeredWay } from '../../../shared/runtime/release-providers.js';
+import { RELEASE_PROVIDERS, codexLegacy, configOffered, offeredInRelease, offeredWay, offersSentence } from '../../../shared/runtime/release-providers.js';
 
 // OpenAI is offered with a key on pi (not as Codex): its name here, where the pi-only providers have theirs in the table
 const RELEASE_LABELS = Object.freeze({ openai: 'OpenAI' });
@@ -147,7 +147,8 @@ async function handleProviders() {
     const entry = providers[id];
     const keyed = Boolean(entry?.api_key || entry?.api_key_ref);
     const icon = keyed ? OK : entry ? WARN : ERR;
-    const activeLabel = activeProvider === id ? ` ${GREEN}· ${say('providers.active')}${RESET}` : '';
+    // «active» here only for the team that runs this way (a team on Codex is listed below, on its CLI)
+    const activeLabel = activeProvider === id && !codexLegacy(config) ? ` ${GREEN}· ${say('providers.active')}${RESET}` : '';
     console.log(`  ${icon} ${LIST_LABELS[id] ?? PI_API_PROVIDERS[id]?.label ?? RELEASE_LABELS[id] ?? id} ${DIM}· ${say('providers.in_release')}${RESET}${activeLabel}`);
     console.log(`    ${DIM}${say('providers.line', { id, model: entry?.model ?? '—', auth: keyed ? 'api_key' : say('providers.auth_none') })}${RESET}`);
     if (!keyed) console.log(`    ${DIM}${say('providers.in_release_setup')}${RESET}`);
@@ -169,13 +170,15 @@ async function handleProviders() {
     const icon = hasConfig && (hasEnv || hasCred || provCfg?.api_key) ? OK : hasConfig ? WARN : ERR;
     const activeLabel = isActive ? ` ${GREEN}· ${say('providers.active')}${RESET}` : '';
 
-    const recommendedLabel = !cliOffered(id) ? ` ${YELLOW}· ${say('providers.not_in_release')}${RESET}`
+    const legacy = isActive && codexLegacy(config);
+    const recommendedLabel = legacy ? ` ${YELLOW}· ${say('providers.codex_legacy')}${RESET}`
+      : !cliOffered(id) ? ` ${YELLOW}· ${say('providers.not_in_release')}${RESET}`
       : known.recommended ? ` ${DIM}· ${say('providers.recommended')}${RESET}` : '';
     console.log(`  ${icon} ${known.name}${recommendedLabel}${activeLabel}`);
     console.log(`    ${DIM}${say('providers.line', { id, model, auth: authMethod })}${RESET}`);
     if (hasEnv) console.log(`    ${DIM}${say('providers.key_in', { env: known.envKey })}${RESET}`);
     if (hasCred) console.log(`    ${DIM}${say('providers.credentials')}${RESET}`);
-    if (!cliOffered(id)) { console.log(''); continue; }  // no CLI version to keep up for a service this release does not run
+    if (!cliOffered(id) && !legacy) { console.log(''); continue; }  // no CLI version to keep up for a service this release does not run
     const ver = getVersionInfo(id);
     // Con un pin di release (issue #130) "aggiornamento disponibile" non è più
     // "il registry ne ha una più nuova" — quella è una versione che questa
@@ -245,7 +248,7 @@ async function handleUsePiApi(piApi, config) {
 async function handleUse(id) {
   // only the services of this release can be chosen (shared/runtime/release-providers.js); the code of the others stays
   if (!offeredInRelease(id)) {
-    console.error(`${ERR}  provider '${id}' is not offered in this release (offered: ${RELEASE_PROVIDERS.join(', ')}, on Pi with an API key). Set it up with: jht setup`);
+    console.error(`${ERR}  provider '${id}' is not offered in this release (offered: ${offersSentence()}). Set it up with: jht setup`);
     process.exitCode = 1;
     return;
   }

@@ -9,7 +9,7 @@ import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { piReady } from '../src/commands/providers-harness.js';
-import { RELEASE_PROVIDERS, offeredInRelease } from '../../shared/runtime/release-providers.js';
+import { RELEASE_PROVIDERS, offeredInRelease, offersSentence } from '../../shared/runtime/release-providers.js';
 
 const entry = fileURLToPath(new URL('../bin/jht.js', import.meta.url));
 
@@ -50,7 +50,7 @@ test('use glm / kimi / moonshot with the key set up: the provider is active and 
   for (const name of ['openai', 'codex', 'claude', 'kimi', 'moonshot'].filter((n) => !offeredInRelease(n))) {
     const refused = jht(dir, 'providers', 'use', name);
     assert.equal(refused.code, 1, name);
-    assert.match(refused.out, new RegExp(`provider '${name}' is not offered in this release \\(offered: ${RELEASE_PROVIDERS.join(', ')}, on Pi with an API key\\)\\. Set it up with: jht setup`));
+    assert.match(refused.out, new RegExp(`provider '${name}' is not offered in this release \\(offered: ${offersSentence()}\\)\\. Set it up with: jht setup`));
     assert.equal(refused.config().active_provider, 'glm');
   }
 });
