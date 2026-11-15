@@ -40,6 +40,12 @@ def _cases(home: Path):
         "glm on pi, key file gone": ({"active_provider": "glm", "harness": "pi", "providers": {"glm": {"auth_method": "api_key", "api_key_ref": {"type": "ref", "source": "file", "path": str(home / "nope.key")}}}}, False),
         "glm on pi, env reference": ({"active_provider": "glm", "harness": "pi", "providers": {"glm": {"auth_method": "api_key", "api_key_ref": {"type": "ref", "source": "env", "id": "ZAI_API_KEY"}}}}, True),
         "glm on pi, no key": ({"active_provider": "glm", "harness": "pi", "providers": {"glm": {"auth_method": "api_key"}}}, False),
+        # claude and openai on pi with an API key: the key is the whole of it, no subscription sign-in (giro Windows 15/11: after
+        # the switch onto the full image the team on Claude was never respawned)
+        "claude on pi, key file there": ({"active_provider": "claude", "harness": "pi", "providers": {"claude": {"auth_method": "api_key", "api_key_ref": {"type": "ref", "source": "file", "path": str(key)}}}}, True),
+        "claude on pi, key file gone": ({"active_provider": "claude", "harness": "pi", "providers": {"claude": {"auth_method": "api_key", "api_key_ref": {"type": "ref", "source": "file", "path": str(home / "nope.key")}}}}, False),
+        "openai on pi, key file there": ({"active_provider": "openai", "harness": "pi", "providers": {"openai": {"auth_method": "api_key", "api_key_ref": {"type": "ref", "source": "file", "path": str(key)}}}}, True),
+        "claude on pi, no key": ({"active_provider": "claude", "harness": "pi", "providers": {"claude": {"auth_method": "api_key"}}}, False),
         "codex signed in": ({"active_provider": "openai", "providers": {"openai": {}}}, True),
         "openai on pi without pi's login": ({"active_provider": "openai", "harness": "pi", "providers": {"openai": {}}}, False),
         "no provider": ({"providers": {}}, False),
@@ -47,6 +53,8 @@ def _cases(home: Path):
 
 
 @pytest.mark.parametrize("name", ["glm on pi, key file there", "glm on pi, key file gone", "glm on pi, env reference", "glm on pi, no key",
+                                  "claude on pi, key file there", "claude on pi, key file gone", "openai on pi, key file there",
+                                  "claude on pi, no key",
                                   "codex signed in", "openai on pi without pi's login", "no provider"])
 def test_the_doctor_watchdog_and_the_agent_watchdog_agree(tmp_path, name):
     config, expected = _cases(tmp_path)[name]

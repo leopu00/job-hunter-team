@@ -265,8 +265,10 @@ markers = {
 # pi harness glm/kimi have no sign-in, their key in the config is the whole of it; openai on pi signs in to pi. Without these lines
 # a team on GLM was «not authenticated» for ever and the Dottore and the Mantenitore never ran.
 pi = data.get('harness') == 'pi' or 'pi' in [v for k, v in os.environ.items() if k.startswith('JHT_AGENT_HARNESS_')]
-if pi and provider in ('glm', 'kimi', 'moonshot'):
-  entry = (data.get('providers') or {}).get(provider) or {}
+entry = (data.get('providers') or {}).get(provider) or {}
+# claude/anthropic and openai on pi with an API key: the key is the whole of it, as for glm/kimi (config_ready of agent-watchdog.sh)
+api_key_access = entry.get('auth_method') == 'api_key' or bool(entry.get('api_key_ref')) or bool(entry.get('api_key'))
+if pi and (provider in ('glm', 'kimi', 'moonshot') or (provider in ('claude', 'anthropic', 'openai') and api_key_access)):
   ref = entry.get('api_key_ref')
   if isinstance(ref, dict) and ref.get('source') == 'file':
     sys.exit(0 if os.path.exists(str(ref.get('path') or '')) else 1)
