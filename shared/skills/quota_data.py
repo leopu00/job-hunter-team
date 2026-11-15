@@ -174,10 +174,11 @@ def _declared_ceiling(config):
     except Exception:  # noqa: BLE001 - an unreadable budget is no budget here
         budget = None
     if budget:
-        parts.append("a budget of %g USD from %s to %s (pi_spend_cap pauses the team at it, at its pace over the "
-                     "working hours, and at the end of the period)" % (
-                         budget["usd"], time.strftime("%Y-%m-%d %H:%M %z", time.localtime(budget["starts"])),
-                         time.strftime("%Y-%m-%d %H:%M %z", time.localtime(budget["ends"]))))
+        when = (lambda moment: time.strftime("%Y-%m-%d %H:%M %z", time.localtime(moment)))
+        period = ("from %s to %s" % (when(budget["starts"]), when(budget["ends"])) if budget["starts"] is not None else
+                  "over %g minutes that start at the first work of a Scout, an Analista or a Scorer" % (budget["duration"] / 60))
+        parts.append("a budget of %g USD %s (pi_spend_cap pauses the team at it, at its pace over the working hours, and "
+                     "at the end of the period)" % (budget["usd"], period))
     cap = config.get("no_quota_cap") if isinstance(config, dict) else None
     if not isinstance(cap, dict):
         return "; ".join(parts)

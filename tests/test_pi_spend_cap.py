@@ -544,3 +544,138 @@ def test_with_quota_data_the_budget_is_not_this_ones_business_either(tmp_path):
 def test_the_first_roster_of_an_api_key_follows_the_budget(config, tier):
     config = dict(config, providers={"zai": {"auth_method": "api_key"}})
     assert plan_registry.api_key_plan(config, "zai")["tier"] == tier
+
+
+# --- a budget of a DURATION starts when the team starts working, not when the setup saved it (JHT-T322 P2) ----------
+
+def duration_budget(usd, minutes, saved, hours=None, **extra):
+    team = {"budget": dict({"usd": usd, "duration_minutes": minutes, "saved_at": iso(saved), "timezone": "UTC",
+                            "set_by": "setup"}, **extra)}
+    if hours is not None:
+        team["working_hours"] = hours
+    return {"team": team}
+
+
+def start_file(home: Path) -> Path:
+    return home / "state" / "budget-start.json"
+
+
+def onboarding_then_scout(home: Path, onboarding, scout):
+    """The Captain and the Assistente talk during the onboarding; the first Scout works later."""
+    pi_calls(home, onboarding, name="c.jsonl", agent="capitano")
+    if scout:
+        pi_calls(home, scout, name="s.jsonl", agent="scout-1")
+
+
+def test_a_trial_does_not_run_out_during_the_onboarding(tmp_path):
+    """Saved two hours ago, nothing but the onboarding since: the 30 minutes have not started, no pause."""
+    onboarding_then_scout(tmp_path, [(NOON - HOUR, 0.5, 100)], [])
+    bridge = Bridge(tmp_path, duration_budget(5, 30, NOON - 2 * HOUR))
+    bridge.tick()
+    assert bridge.esc == 0 and bridge.sent == [] and not start_file(tmp_path).exists()
+
+
+def test_the_trial_starts_at_the_first_call_of_a_worker_and_ends_30_minutes_later(tmp_path):
+    onboarding_then_scout(tmp_path, [(NOON - HOUR, 0.5, 100)], [(NOON - 600, 0.2, 100)])
+    config = duration_budget(5, 30, NOON - 2 * HOUR)
+    bridge = Bridge(tmp_path, config)
+    state: dict = {}
+    bridge.tick(state=state)
+    assert bridge.esc == 0
+    record = json.loads(start_file(tmp_path).read_text(encoding="utf-8"))
+    assert record == {"saved_at": iso(NOON - 2 * HOUR), "starts_at": "2026-11-09T11:50:00+00:00",
+                      "ends_at": "2026-11-09T12:20:00+00:00"}
+    b = team_budget.read(config, tmp_path)
+    assert (b["starts"], b["ends"], b["counts_from"]) == (NOON - 600, NOON + 1200, NOON - 2 * HOUR)
+    bridge.clock["now"] = NOON + 1199
+    bridge.tick(state=state)
+    assert bridge.esc == 0
+    bridge.clock["now"] = NOON + 1200
+    bridge.tick(state=state)
+    assert bridge.esc == 1
+    flag = flag_record(bridge)
+    assert flag["why"] == "period" and flag["starts_at"] == "2026-11-09T11:50:00+00:00"
+    assert flag["ends_at"] == "2026-11-09T12:20:00+00:00" and flag["spent"] == 0.7, "the onboarding's 0.50 counts too"
+
+
+def test_the_dollars_of_the_onboarding_count_and_stop_the_team_before_the_start(tmp_path):
+    onboarding_then_scout(tmp_path, [(NOON - HOUR, 4.9, 100)], [])
+    bridge = Bridge(tmp_path, duration_budget(5, 30, NOON - 2 * HOUR))
+    bridge.tick()
+    flag = flag_record(bridge)
+    assert bridge.esc == 1 and flag["why"] == "budget" and flag["starts_at"] is None and flag["ends_at"] is None
+    assert not start_file(tmp_path).exists()
+
+
+def test_the_spending_before_the_setup_never_counts(tmp_path):
+    onboarding_then_scout(tmp_path, [(NOON - 3 * HOUR, 30.0, 100), (NOON - HOUR, 0.5, 100)], [])
+    bridge = Bridge(tmp_path, duration_budget(5, 30, NOON - 2 * HOUR))
+    bridge.tick()
+    assert bridge.esc == 0
+
+
+def test_a_new_setup_starts_again_and_the_old_start_is_not_read(tmp_path):
+    onboarding_then_scout(tmp_path, [], [(NOON - 600, 0.2, 100)])
+    bridge = Bridge(tmp_path, duration_budget(5, 30, NOON - HOUR))
+    state: dict = {}
+    bridge.tick(state=state)
+    assert start_file(tmp_path).exists()
+    bridge.config = duration_budget(5, 30, NOON - 300)  # saved again after that Scout's call
+    assert team_budget.read(bridge.config, tmp_path)["starts"] is None
+    bridge.clock["now"] = NOON + 2 * HOUR
+    bridge.tick(state=state)
+    assert bridge.esc == 0, "no worker has worked since the new setup: its 30 minutes have not started"
+
+
+@pytest.mark.parametrize("bad", ["{broken", json.dumps(["x"]), json.dumps({"saved_at": "other"}),
+                                 json.dumps({"saved_at": None, "starts_at": "2026-11-09T11:00:00Z"})])
+def test_a_start_file_that_is_not_ours_is_not_a_start(tmp_path, bad):
+    config = duration_budget(5, 30, NOON - HOUR)
+    start_file(tmp_path).parent.mkdir(parents=True)
+    start_file(tmp_path).write_text(bad, encoding="utf-8")
+    assert team_budget.read(config, tmp_path)["starts"] is None
+
+
+def test_a_link_in_place_of_the_start_file_is_neither_read_nor_followed(tmp_path):
+    outside = tmp_path / "outside.json"
+    outside.write_text(json.dumps({"saved_at": iso(NOON - HOUR), "starts_at": "2026-11-01T00:00:00Z",
+                                   "ends_at": "2026-11-01T00:30:00Z"}), encoding="utf-8")
+    home = tmp_path / "home"
+    (home / "state").mkdir(parents=True)
+    start_file(home).symlink_to(outside)
+    config = duration_budget(5, 30, NOON - HOUR)
+    assert team_budget.read(config, home)["starts"] is None
+    onboarding_then_scout(home, [], [(NOON - 600, 0.2, 100)])
+    Bridge(home, config).tick()
+    assert not start_file(home).is_symlink() and json.loads(start_file(home).read_text())["starts_at"].startswith("2026-11-09")
+    assert json.loads(outside.read_text())["starts_at"] == "2026-11-01T00:00:00Z", "the target was not written"
+
+
+def test_a_few_days_start_at_the_first_work_and_go_at_their_pace_over_the_hours(tmp_path):
+    """10 $ for 3 days of 08:00-18:00 (Rome), saved on Sunday night, first Scout on Monday 13:00 Rome: the same 30
+    worked hours as a budget with dates from that moment."""
+    config = duration_budget(10, 3 * 1440, NOON - 15 * HOUR, ROME_8_18, timezone="Europe/Rome")
+    onboarding_then_scout(tmp_path, [], [(NOON, 0.1, 100), (NOON + 3 * HOUR, 2.4, 100)])
+    bridge = Bridge(tmp_path, config)
+    bridge.clock["now"] = NOON + 4 * HOUR
+    bridge.tick()
+    record = flag_record(bridge)
+    assert record["why"] == "pace" and record["resumes_at"] == "2026-11-10T09:30:00+01:00"
+    assert record["starts_at"] == "2026-11-09T13:00:00+01:00"
+
+
+def test_the_first_roster_of_a_budget_of_a_duration_is_the_full_one(tmp_path):
+    config = dict(duration_budget(5, 30, NOON), providers={"zai": {"auth_method": "api_key"}})
+    plan = plan_registry.api_key_plan(config, "zai")
+    assert plan["tier"] == 15 and "first work of the team" in plan["label"] and "assumed" not in plan
+    assert team_budget.per_day(config) == 5.0
+    assert team_budget.per_day(duration_budget(30, 3 * 1440, NOON)) == 10.0
+
+
+@pytest.mark.parametrize("raw", [
+    {"usd": 5, "duration_minutes": 0, "saved_at": "2026-11-09T11:00:00Z"},
+    {"usd": 5, "duration_minutes": "30", "saved_at": "2026-11-09T11:00:00Z"},
+    {"usd": 5, "duration_minutes": 30},
+    {"usd": 5, "duration_minutes": 30, "saved_at": "2026-11-09T11:00:00"}])
+def test_a_budget_of_a_duration_that_is_not_readable_is_no_budget(raw):
+    assert team_budget.read({"team": {"budget": raw}}) is None
