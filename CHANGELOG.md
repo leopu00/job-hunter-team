@@ -28,8 +28,9 @@ this was tested on real machines and which was not.
   or takes from a file or from standard input: its cost is yours, and the team's spending cap stops it. The
   services a release offers are one list (`shared/runtime/release-providers.js`); `jht setup`,
   `jht providers use` and `jht providers harness` refuse the others, and `jht doctor` says a team configured on
-  one of them is not supported in this release. The Codex CLI and the ChatGPT subscription are
-  not in 0.4.0; their code stays. `jht providers update` without an id no longer
+  one of them is not supported in this release. The ChatGPT subscription (Codex) is not offered to new users in
+  0.4.0, but **a team you set up with 0.3.9 on it keeps working**, with one warning (in `jht team start`, `jht doctor`,
+  `jht status` and `jht providers`) that says how to move to an API key; its code stays. `jht providers update` without an id no longer
   updates Kimi: name it (`jht providers update kimi`).
 - A key the provider refuses, a missing key or credit that has run out are reported by `jht team start`,
   `jht agents` and the chat, with the command that fixes it.

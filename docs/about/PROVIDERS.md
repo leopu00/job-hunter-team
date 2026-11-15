@@ -10,7 +10,7 @@
 | 🟢 **Pi with Claude (Anthropic)** | an **API key**, billed per call by the provider | the Pi harness | ✅ offered |
 | 🔵 Codex (OpenAI) with a ChatGPT subscription | subscription | Codex CLI | ⏳ not in 0.4.0 |
 
-The services a release offers are one list in the code (`shared/runtime/release-providers.js`). A team already configured on a service that is not offered keeps its configuration: `jht doctor` says it is not supported in this release and what to do (`jht setup`, choose GLM and paste its key).
+The services a release offers are one list in the code (`shared/runtime/release-providers.js`). A team set up with 0.3.9 on the ChatGPT subscription (Codex) keeps working in 0.4.0, with one warning that says the subscription is no longer offered to new users and how to move to an API key (`jht setup`, choose GLM, Kimi, OpenAI or Claude and paste its key). A team configured on any other service that is not offered keeps its configuration: `jht doctor` says it is not supported in this release and what to do.
 
 ## 🔵 Codex: subscription (not in 0.4.0)
 
