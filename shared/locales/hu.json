@@ -618,7 +618,7 @@
   "wizard.budget.night": "🌙 Egy éjszaka: 5 $ holnap reggel 8-ig",
   "wizard.budget.days": "📅 Néhány nap: te választod a keretet, a napokat és az órákat",
   "wizard.budget.none": "♾️ Nincs korlát (nem ajánlott)",
-  "wizard.budget.none_warning": "Korlát nélkül a csapat addig költ, amíg van egyenleg a számládon. A szolgáltató oldalán is állíts be költési korlátot.",
+  "wizard.budget.none_warning": "Korlát nélkül a csapat addig költ, amíg van egyenleg a számládon. A szolgáltató oldalán is állíts be költési korlátot. Ráadásul a legkisebb csapattal indul, szerepenként egy ügynökkel: költségkerettel a teljes csapattal indul.",
   "wizard.budget.amount_prompt": "Hány dollár összesen?",
   "wizard.budget.amount_invalid": "Írj be egy nullánál nagyobb összeget dollárban, például 10 vagy 7,5.",
   "wizard.budget.amount_confirm": "%s sok a csapatnak: biztosan ennyit szeretnél?",

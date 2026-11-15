@@ -617,7 +617,7 @@
   "wizard.budget.night": "🌙 Uma noite: 5 $ até amanhã às 8",
   "wizard.budget.days": "📅 Alguns dias: escolhes tu o orçamento, os dias e as horas",
   "wizard.budget.none": "♾️ Sem limite (não recomendado)",
-  "wizard.budget.none_warning": "Sem limite a equipa gasta enquanto houver crédito na tua conta. Define também um limite de gastos no site do fornecedor.",
+  "wizard.budget.none_warning": "Sem limite a equipa gasta enquanto houver crédito na tua conta. Define também um limite de gastos no site do fornecedor. Além disso começa com a equipa mais pequena, um agente por função: com um orçamento começa com a equipa completa.",
   "wizard.budget.amount_prompt": "Quantos dólares no total?",
   "wizard.budget.amount_invalid": "Escreve um montante em dólares maior que zero, por exemplo 10 ou 7,5.",
   "wizard.budget.amount_confirm": "%s é muito para a equipa: é o montante que queres?",

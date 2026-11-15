@@ -644,7 +644,7 @@
   "wizard.budget.night": "🌙 Una notte: 5 $ fino a domattina alle 8",
   "wizard.budget.days": "📅 Qualche giorno: scegli tu budget, giorni e ore",
   "wizard.budget.none": "♾️ Nessun limite (sconsigliato)",
-  "wizard.budget.none_warning": "Senza limite la squadra spende finché c'è credito sul tuo conto. Metti un limite di spesa anche sul sito del fornitore.",
+  "wizard.budget.none_warning": "Senza limite la squadra spende finché c'è credito sul tuo conto. Metti un limite di spesa anche sul sito del fornitore. E parte con la squadra più piccola, un agente per ruolo: con un budget parte con la squadra intera.",
   "wizard.budget.amount_prompt": "Quanti dollari in tutto?",
   "wizard.budget.amount_invalid": "Scrivi un importo in dollari maggiore di zero, per esempio 10 o 7,5.",
   "wizard.budget.amount_confirm": "%s sono tanti per la squadra: è l'importo che vuoi?",
