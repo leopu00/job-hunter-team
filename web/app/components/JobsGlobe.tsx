@@ -32,7 +32,12 @@ import {
 } from "@/lib/basemap-labels";
 import { attachTouchAxisLock } from "@/lib/globe-touch-axis-lock";
 import { ensureMaplibreWorkerUrl } from "@/lib/maplibre-worker";
-import { darkenRgb, SCORE_INK_KEEP_LIGHT, scoreToRgb, scoreSpectrumCss } from "@/lib/score-color";
+import {
+  darkenRgb,
+  SCORE_INK_KEEP_LIGHT,
+  scoreToRgb,
+  scoreSpectrumCss,
+} from "@/lib/score-color";
 import { canonicalCountry, canonicalCityKey } from "@/lib/city-gazetteer";
 import { makeT } from "@/lib/i18n-dict";
 import GlobeLoadingStatus from "./GlobeLoadingStatus";
@@ -186,7 +191,9 @@ function createGroupBeamsImageData(
   mode: "dark" | "light" = "dark",
 ): { data: ImageData; w: number; h: number } | null {
   const scoreRgb = (score: number | null) =>
-    mode === "light" ? darkenRgb(scoreToRgb(score), SCORE_INK_KEEP_LIGHT) : scoreToRgb(score);
+    mode === "light"
+      ? darkenRgb(scoreToRgb(score), SCORE_INK_KEEP_LIGHT)
+      : scoreToRgb(score);
   const total = Math.max(1, scores.length);
   // Sort desc e cap ai top N_CAP — visualizziamo la testa della
   // distribuzione, non l'intero spettro.
@@ -295,7 +302,9 @@ function createGroupBeamsImageData(
     // la salienza parte alta e la punta non sfuma fino a sparire. L'ordine fra
     // score bassi e alti resta, nell'altezza e nell'opacità.
     const light = mode === "light";
-    const sal = light ? 0.72 + 0.28 * Math.pow(norm, 1.7) : 0.22 + 0.78 * Math.pow(norm, 1.7);
+    const sal = light
+      ? 0.72 + 0.28 * Math.pow(norm, 1.7)
+      : 0.22 + 0.78 * Math.pow(norm, 1.7);
     const keep = light ? 0.85 + 0.15 * norm : 0.4 + 0.6 * Math.pow(norm, 1.3);
     const gray = (r0 + g0 + b0) / 3;
     const r = Math.round(gray + (r0 - gray) * keep);
@@ -701,7 +710,9 @@ function calmBasemapNames(map: MaplibreMap, mode: "dark" | "light") {
 // scheda. Così il globo segue il tema, anche un template o un tema personale
 // (Foresta = terra e mare verdi), sempre a tinta unita. Lo Scuro, la base,
 // resta quello di sempre; sul web (nessun data-jht-theme) non cambia niente.
-function desktopPaletteTint(): Array<[string, Parameters<MaplibreMap["setPaintProperty"]>[1], string]> {
+function desktopPaletteTint(): Array<
+  [string, Parameters<MaplibreMap["setPaintProperty"]>[1], string]
+> {
   if (typeof document === "undefined") return [];
   const palette = document.documentElement.dataset.jhtTheme;
   if (!palette || palette === "dark") return [];
@@ -710,7 +721,10 @@ function desktopPaletteTint(): Array<[string, Parameters<MaplibreMap["setPaintPr
   const land = token("--color-panel");
   const water = token("--color-row");
   const building = token("--color-card");
-  if (![land, water, building].every((colour) => /^#[0-9a-f]{6}$/i.test(colour))) return [];
+  if (
+    ![land, water, building].every((colour) => /^#[0-9a-f]{6}$/i.test(colour))
+  )
+    return [];
   return [
     ["background", "background-color", land],
     ["water", "fill-color", water],
@@ -778,8 +792,16 @@ function tintMap(map: MaplibreMap, mode: "dark" | "light") {
 // su una terra chiara si legge solo grazie all'alone, e pesa come una macchia).
 function pinLabelInk(mode: "dark" | "light") {
   return mode === "light"
-    ? { text: "#111111", halo: "rgba(255,255,255,0.95)", leader: "rgba(0,0,0,0.55)" }
-    : { text: "#ffffff", halo: "rgba(0,0,0,0.95)", leader: "rgba(255,255,255,0.6)" };
+    ? {
+        text: "#111111",
+        halo: "rgba(255,255,255,0.95)",
+        leader: "rgba(0,0,0,0.55)",
+      }
+    : {
+        text: "#ffffff",
+        halo: "rgba(0,0,0,0.95)",
+        leader: "rgba(255,255,255,0.6)",
+      };
 }
 
 // Riapplica gli inchiostri delle etichette ai layer già presenti: se il cambio di style li conserva, restano quelli del
@@ -1461,7 +1483,10 @@ export default function JobsGlobe({
           type: "line",
           source: LEADER_SOURCE_ID,
           filter: ["==", ["geometry-type"], "LineString"],
-          paint: { "line-color": pinLabelInk(themeRef.current).leader, "line-width": 1 },
+          paint: {
+            "line-color": pinLabelInk(themeRef.current).leader,
+            "line-width": 1,
+          },
         });
         map.addLayer({
           id: LAYER_LEADER_TEXT_ID,
@@ -1839,7 +1864,10 @@ export default function JobsGlobe({
       const map = mapRef.current;
       if (map && layersReadyRef.current) tintMap(map, themeRef.current);
     });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-jht-theme", "style"] });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-jht-theme", "style"],
+    });
     return () => observer.disconnect();
   }, []);
 

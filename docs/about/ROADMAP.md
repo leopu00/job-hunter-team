@@ -43,7 +43,7 @@ of workers, not against them.**
 **Guiding principles** — the constraints every roadmap item respects:
 
 - **Local-first, privacy-first.** Credentials, CVs and the SQLite source-of-truth never leave the user's machine; the cloud mirror is opt-in and read-mostly. Its authenticated writes include user-owned chat messages, team directives, bounded position feedback/actions and the emergency stop — not generic control of the host or team runtime.
-- **Two ways to pay, with a ceiling.** Codex on a subscription is the recommended way and the one proven over a month; GLM or Kimi with an API key on the Pi harness is the other, with a daily spending ceiling that pauses the team ([ADR-0012](../adr/0012-desktop-setup-matrix.md), which supersedes [ADR-0004](../adr/0004-subscription-only-no-api-keys.md)). The full-team [API team](../guides/API-TEAM.md) on metered OpenAI calls stays in rehearsal.
+- **Two ways to pay, with a ceiling.** In 0.4.0 the way is an API key (GLM, Kimi, OpenAI or Claude) on the Pi harness, with a daily spending ceiling you set (the team pauses there; without one nothing stops the spending); the Codex subscription, the one proven over a month, is not in 0.4.0 ([ADR-0012](../adr/0012-desktop-setup-matrix.md), which supersedes [ADR-0004](../adr/0004-subscription-only-no-api-keys.md)). The full-team [API team](../guides/API-TEAM.md) on metered OpenAI calls stays in rehearsal.
 - **Quality over volume.** No auto-apply spam: the Critic gate rewrites until submissions pass a rubric, and the human clicks send.
 - **Honest status.** Verbal states, measured numbers, and published case studies — nothing on this page should fail a fact-check against the code.
 
@@ -85,7 +85,7 @@ Current sequencing:
 
 | Horizon | Focus |
 |---|---|
-| **Now** *(November 2026)* | Release 0.4: the Mac desktop app on Tauri 2, the CLI on Mac and Linux, the Windows CLI preview, Codex and the API-key way on Pi, integrations added on request. |
+| **Now** *(November 2026)* | Release 0.4: the Mac desktop app on Tauri 2, the CLI on Mac and Linux, the Windows CLI preview, the API-key way on Pi (GLM, Kimi, OpenAI, Claude), integrations added on request. |
 | **Next** *(1–2 months)* | Add native credential storage, Podman detection/provisioning and headless-worker lifecycle through the versioned loopback API; retain Windows signing, installer/upgrade UX and notifications as release gates. |
 | **Later** *(a quarter and beyond)* | Add own-VPS SSH setup, provider-subscription TUI/`tmux` paths and managed plug-and-play with Stripe credits · Mentor as a first-class surface (M6) · interview practice (M9) · opt-in auto-submit (M10) · fine-grained team observability (M7). |
 

@@ -37,7 +37,7 @@ export const es: Record<string, string> = {
 
   // Footer
   footer_brand_desc:
-    "Un equipo de agentes IA autónomos que busca empleo por ti. Open source. Tus datos se quedan en tu ordenador; los textos que procesan los agentes van al proveedor del modelo (Z.ai para GLM).",
+    "Un equipo de agentes IA autónomos que busca empleo por ti. Open source. Tus datos se quedan en tu ordenador; los textos que procesan los agentes van al proveedor del modelo (Z.ai para GLM, Moonshot para Kimi, OpenAI para OpenAI, Anthropic para Claude).",
   footer_product: "Producto",
   footer_stats: "Proyecto",
   footer_resources: "Recursos",

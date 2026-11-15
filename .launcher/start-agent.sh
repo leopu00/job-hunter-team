@@ -1258,13 +1258,21 @@ then
   AUTH_METHOD="local-endpoint"
 fi
 
+# A team on the ChatGPT subscription (Codex) from before 0.4.0: it starts, with the one warning (release-providers.js,
+# CODEX_LEGACY_WARNING; the CLI says the same in team start, doctor, status and the setup).
+JHT_CODEX_LEGACY_WARNING="The ChatGPT subscription (Codex) is no longer offered to new users from 0.4.0: your team keeps working; to move to GLM, Kimi, OpenAI or Claude with an API key: jht setup"
+if [ "$CLI_BIN" = "codex" ]; then
+  echo "Warning: $JHT_CODEX_LEGACY_WARNING" >&2
+fi
+
 # Verifica prerequisiti della CLI scelta
 if ! command -v "$CLI_BIN" &>/dev/null; then
   echo "Error: command '$CLI_BIN' not found (configured provider: $PROVIDER)."
   case "$CLI_BIN" in
-    # this release runs the team only on pi (shared/runtime/release-providers.js): the other CLIs are not installed here,
-    # and the way out is the setup, not a CLI to install
-    claude|codex|kimi) echo "Provider '$PROVIDER' is not offered in this release: the team runs on Pi with an API key. Run: jht setup" ;;
+    # A team on the ChatGPT subscription (Codex) from before 0.4.0 keeps working: its CLI is installed again by the update.
+    # The other CLIs are not offered in this release (shared/runtime/release-providers.js): the way out is the setup.
+    codex)  echo "The Codex CLI is not installed: jht providers update codex. $JHT_CODEX_LEGACY_WARNING" ;;
+    claude|kimi) echo "Provider '$PROVIDER' is not offered in this release: the team runs on Pi with an API key. Run: jht setup" ;;
     pi)     echo "Install pi: bash $JHT_PI_INSTALL" ;;
   esac
   exit 1

@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { RELEASE_OFFERS, RELEASE_PROVIDERS, RELEASE_HARNESS, configOffered, offeredInRelease, offeredWay } from '../../shared/runtime/release-providers.js';
+import { RELEASE_OFFERS, RELEASE_PROVIDERS, RELEASE_HARNESS, codexLegacy, configOffered, notOfferedReason, offeredInRelease, offeredWay, offersSentence } from '../../shared/runtime/release-providers.js';
 import { WIZARD_PROVIDERS } from '../wizard/setup.js';
 
 const cli = fileURLToPath(new URL('..', import.meta.url));
@@ -28,17 +28,39 @@ test('this release offers GLM, Kimi, OpenAI and Claude, on Pi with a key; the wi
   assert.equal(configOffered({ active_provider: 'moonshot', harness: 'pi', providers: { moonshot: { auth_method: 'api_key' } } }), true);
 });
 
-test('jht doctor calls a team on a service this release does not offer not supported, says what to do, and does not touch it', () => {
+// What doctor, status and providers say for a config, in a home of its own (no team, no network)
+function said(config, args) {
   const root = mkdtempSync(join(tmpdir(), 'jht-release-'));
   const home = join(root, '.jht');
-  mkdirSync(home, { recursive: true });
-  const config = JSON.stringify({ version: 4, active_provider: 'openai', harness: 'codex', providers: { openai: { name: 'openai', auth_method: 'subscription', model: 'm' } }, channels: {} });
-  writeFileSync(join(home, 'jht.config.json'), config);
-  const env = { PATH: `${dirname(process.execPath)}:/usr/bin:/bin`, HOME: root, JHT_HOME: home, LANG: 'en_US.UTF-8', NO_COLOR: '1', JHT_LANG: 'en' };
-  const done = spawnSync(process.execPath, [join(cli, 'bin/jht.js'), 'doctor', '--all'], { env, encoding: 'utf8', timeout: 60_000 });
-  const said = (done.stdout + done.stderr).replace(/\s+/g, ' ');
-  assert.match(said, /Provider openai is not supported in this release \(offered: glm, kimi, openai, claude, on Pi with an API key\)/, said);
-  assert.match(said, /jht setup \(choose glm and paste its API key/, said);
+  mkdirSync(join(home, '.codex'), { recursive: true });
+  writeFileSync(join(home, '.codex/auth.json'), '{}');
+  writeFileSync(join(home, 'jht.config.json'), JSON.stringify({ version: 4, channels: {}, ...config }));
+  const env = { PATH: `${dirname(process.execPath)}:/usr/bin:/bin`, HOME: root, JHT_HOME: home, LANG: 'en_US.UTF-8', NO_COLOR: '1', JHT_LANG: 'en', COLUMNS: '200' };
+  const done = spawnSync(process.execPath, [join(cli, 'bin/jht.js'), ...args], { env, encoding: 'utf8', timeout: 60_000 });
+  return { text: (done.stdout + done.stderr).replace(/\s+/g, ' '), config: readFileSync(join(home, 'jht.config.json'), 'utf8') };
+}
+const CODEX_039 = { active_provider: 'openai', harness: 'codex', providers: { openai: { name: 'openai', auth_method: 'subscription', model: 'gpt-5.6-sol' } } };
+const WARNING = /The ChatGPT subscription \(Codex\) is no longer offered to new users from 0\.4\.0: your team keeps working; to move to GLM, Kimi, OpenAI or Claude with an API key: jht setup/;
+
+test('a team on the ChatGPT subscription (Codex) from 0.3.9: doctor, status and providers accept it with the one warning, and touch nothing', () => {
+  assert.equal(notOfferedReason(CODEX_039), 'codex_subscription');
+  assert.equal(codexLegacy(CODEX_039), true);
+  assert.equal(codexLegacy({ active_provider: 'openai', providers: { openai: { auth_method: 'subscription' } } }), true, 'no harness in the config: codex, as in 0.3.9');
+  assert.equal(codexLegacy({ active_provider: 'openai', harness: 'pi', providers: { openai: { auth_method: 'api_key' } } }), false);
+  for (const args of [['doctor', '--all'], ['status'], ['providers']]) {
+    const { text, config } = said(CODEX_039, args);
+    if (args[0] === 'providers') assert.match(text, /OpenAI \(Codex\) · no longer offered to new users from 0\.4\.0, it keeps working/, text);
+    else assert.match(text, WARNING, `${args.join(' ')}: ${text}`);
+    assert.doesNotMatch(text, /is not supported in this release|not offered in this release \(it runs/, args.join(' '));
+    assert.equal(JSON.parse(config).harness, 'codex', 'the config is not touched');
+  }
+});
+
+test('jht doctor calls a team on a service this release does not offer not supported, with what is offered, and does not touch it', () => {
+  const { text } = said({ active_provider: 'kimi', harness: 'codex', providers: { kimi: { name: 'kimi', auth_method: 'subscription', model: 'm' } } }, ['doctor', '--all']);
+  assert.match(text, /Provider kimi is not supported in this release \(offered: glm, kimi, openai, claude on Pi with an API key\)/, text);
+  assert.match(text, /jht setup \(choose glm and paste its API key/, text);
+  assert.equal(offersSentence(), 'glm, kimi, openai, claude on Pi with an API key');
 });
 
 test('jht providers lists the services of the release first, and a provider it does not offer only to the team on it, saying so', () => {
@@ -53,8 +75,9 @@ test('jht providers lists the services of the release first, and a provider it d
   writeFileSync(join(home, 'jht.config.json'), JSON.stringify({ version: 4, active_provider: 'openai', harness: 'codex', providers: { openai: { auth_method: 'subscription' } }, channels: {} }));
   const onCodex = list();
   assert.ok(onCodex.indexOf('GLM (Z.ai)') < onCodex.indexOf('OpenAI (Codex)'), onCodex);
-  assert.match(onCodex, /OpenAI \(Codex\) · not offered in this release: jht setup/);
-  assert.doesNotMatch(onCodex, /recommended|jht providers update/);
+  // a team on Codex from 0.3.9 keeps it, with the warning, and keeps its CLI up to the version of the release
+  assert.match(onCodex, /OpenAI \(Codex\) · no longer offered to new users from 0\.4\.0, it keeps working/);
+  assert.doesNotMatch(onCodex, /recommended/);
 });
 
 test('the guided setup names the chosen provider in its command without questions, and team start never sends to a CLI to install', () => {

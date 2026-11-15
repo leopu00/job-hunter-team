@@ -63,13 +63,18 @@ export function CvDownloadButton({
   useEffect(() => {
     if (!previewKind || !labels.preview) return;
     const detail: { probe: boolean; supported?: boolean } = { probe: true };
-    window.dispatchEvent(new CustomEvent(PREVIEW_DOCUMENT_EVENT, { detail, cancelable: true }));
+    window.dispatchEvent(
+      new CustomEvent(PREVIEW_DOCUMENT_EVENT, { detail, cancelable: true }),
+    );
     setCanPreview(detail.supported === true);
   }, [previewKind, labels.preview]);
 
   const preview = useCallback(() => {
     window.dispatchEvent(
-      new CustomEvent(PREVIEW_DOCUMENT_EVENT, { detail: { name: fileName, textName, kind: previewKind }, cancelable: true }),
+      new CustomEvent(PREVIEW_DOCUMENT_EVENT, {
+        detail: { name: fileName, textName, kind: previewKind },
+        cancelable: true,
+      }),
     );
   }, [fileName, textName, previewKind]);
 

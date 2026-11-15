@@ -42,6 +42,15 @@ export default async function GettingStartedPage() {
           🟢 <strong>GLM</strong> {t.apiKey}
         </LI>
         <LI>
+          🟢 <strong>Kimi</strong> {t.apiKeyKimi}
+        </LI>
+        <LI>
+          🟢 <strong>OpenAI</strong> {t.apiKeyOpenai}
+        </LI>
+        <LI>
+          🟢 <strong>Claude</strong> {t.apiKeyClaude}
+        </LI>
+        <LI>
           ⏳ <strong>Codex</strong>
           {t.codex}
         </LI>
@@ -65,7 +74,7 @@ export default async function GettingStartedPage() {
       <Pre>
         {`"Set up Job Hunter Team from
 github.com/leopu00/job-hunter-team for my profile.
-I have a [GLM (Z.ai)] API key.
+I have an API key for [GLM, Kimi, OpenAI or Claude].
 Walk me through what you need."`}
       </Pre>
       <P>

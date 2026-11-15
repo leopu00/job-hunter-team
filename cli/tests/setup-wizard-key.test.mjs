@@ -276,11 +276,22 @@ test('a cancel that comes before the key store is written (at the key question) 
   assert.deepEqual(keyFiles(box), []);
 });
 
-test('a kept configuration of a service this release does not offer is said, and the setup goes on with the offered one', () => {
+test('a kept configuration of the ChatGPT subscription (Codex) from 0.3.9 is kept as it is, with the one warning', () => {
   const before = JSON.stringify({ version: 4, active_provider: 'openai', harness: 'codex', providers: { openai: { name: 'openai', auth_method: 'subscription', model: 'm' } }, channels: {} });
   const box = sandbox({ existingConfig: before });
+  mkdirSync(join(box.home, '.codex'), { recursive: true });
+  writeFileSync(join(box.home, '.codex/auth.json'), '{}');
+  const { events, configText } = run(box, { select: { 'Config management': 'keep' } });
+  assert.ok(events.some((e) => e.kind === 'note' && /no longer offered to new users from 0\.4\.0: your team keeps working/.test(e.message)));
+  assert.equal(configText, before, 'nothing is rewritten');
+  assert.equal(events.at(-1).ok, true);
+});
+
+test('a kept configuration of a service this release does not offer is said, and the setup goes on with the offered one', () => {
+  const before = JSON.stringify({ version: 4, active_provider: 'kimi', harness: 'codex', providers: { kimi: { name: 'kimi', auth_method: 'subscription', model: 'm' } }, channels: {} });
+  const box = sandbox({ existingConfig: before });
   const { events, configText } = run(box, { select: { 'Config management': 'keep' }, keys: [KEY] });
-  assert.ok(events.some((e) => e.kind === 'note' && /for openai, which this release does not offer/.test(e.message)));
+  assert.ok(events.some((e) => e.kind === 'note' && /for kimi, which this release does not offer/.test(e.message)));
   assert.equal(JSON.parse(configText).active_provider, RELEASE_PROVIDERS[0]);
   assert.equal(events.at(-1).ok, true);
 });

@@ -974,9 +974,9 @@ $BrokerMadeMarker = Join-Path $RuntimeDir '.broker-made'
 $NodeEntry   = if ($env:JHT_NODE_ENTRY)     { $env:JHT_NODE_ENTRY }     else { '/app/cli/bin/jht.js' }
 $RawBaseOverride = if ($env:JHT_RAW_BASE) { $env:JHT_RAW_BASE.TrimEnd('/') } else { '' }
 $ReleaseRef = if ($env:JHT_BRANCH) { $env:JHT_BRANCH } else { 'production' }
-$DefaultRuntimeImage = 'ghcr.io/leopu00/jht@sha256:b48f45f4d3d6313768a3fb7ff56d0b9db4470440f1e2110e335f4290f4d9eb1c'
-$CoreImageDigest = 'sha256:a870e5551aff6aac5d8de57be3f5dcd2d48e59c81c6d1d25466cf83b9b74ee24'
-$ExtrasImageDigest = 'sha256:87f19223c06b9f0ff18bd11adb56616234e0d668b2a6d9f3c653e644ebfc193a'
+$DefaultRuntimeImage = 'ghcr.io/leopu00/jht@sha256:c7708d6ea45d8a69085c95a3ef22ac82322d488714696858e85930df195e5ea6'
+$CoreImageDigest = 'sha256:3af57f9d78d9fd4eb737a44bb373a4dcd82128c4e3f5ccb189c1e91f938e4089'
+$ExtrasImageDigest = 'sha256:322f7fb8339e193e07a039d970c68323f0ea6718c8057378efdaef995cb614e6'
 $DefaultRuntimeVersion = '0.4.0'
 $WindowsInstanceGuardSha256 = 'bb90ae8f9f1f0cff7d41ceedc3eec380f18b78d7b4f4b07921606afda8b8054b'
 $JhtHome = if ($env:JHT_HOME_HOST) { $env:JHT_HOME_HOST } else { Join-Path $env:USERPROFILE '.jht' }
@@ -1802,8 +1802,7 @@ tutto si da' con le opzioni.
 
   --non-interactive            nessuna domanda
   --provider <nome>            glm (Z.ai, predefinito), kimi (Moonshot), openai o claude (Anthropic)
-  --harness <nome>             pi (predefinito; l'unico per glm, kimi e claude) o codex (solo con openai)
-  --auth-method <metodo>       api_key (predefinito) o subscription
+  --harness <nome>             pi (predefinito)
   --api-key-file <percorso>    file che contiene la chiave API (una riga, leggibile solo da te).
                                Un file del tuo computer lo legge jht e lo passa al setup: con glm e kimi
                                il setup tiene la chiave per conto suo, mai nella configurazione
@@ -1812,8 +1811,6 @@ tutto si da' con le opzioni.
   --secret-mode <modo>         come si salva la chiave: plaintext (predefinito), env o file
   --secret-env <nome>          con --secret-mode env: la variabile d'ambiente che la contiene
   --secret-file <percorso>     con --secret-mode file: il file che la contiene
-  --subscription-email <email> con --auth-method subscription: l'email dell'account
-  --subscription-token <token> con --auth-method subscription: il token
   --model <modello>            il modello da usare
   --language <codice>          la lingua (per esempio it o en)
   --skip-health                salta il controllo finale
@@ -1824,8 +1821,6 @@ Esempi:
     jht setup --non-interactive --provider glm --harness pi --api-key-file chiave.txt
   OpenAI con una chiave API, su Pi (per Claude: --provider claude):
     jht setup --non-interactive --provider openai --harness pi --api-key-stdin
-  l'abbonamento Codex (poi il login a ChatGPT):
-    jht setup --non-interactive --provider openai --harness codex --auth-method subscription
 '@)
 }
 

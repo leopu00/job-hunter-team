@@ -12,8 +12,11 @@ JHT runs many agents in parallel, around the clock. In 0.4.0 you need:
 
 |     | Provider   | How you pay | Status |
 | --- | ---------- | ----------- | ------ |
-| 🟢  | **GLM (Z.ai)** on the Pi harness | API key, per call | ✅ The only one offered in 0.4.0 — measured in short runs (~0.10 USD per scored position); `jht setup` asks for the key (typed hidden) |
-| 🔵  | Codex (ChatGPT subscription or OpenAI key), Kimi, Claude | — | ⏳ Not in 0.4.0 |
+| 🟢  | **GLM (Z.ai)** on the Pi harness | API key, per call | ✅ Offered in 0.4.0 — measured in short runs (~0.10 USD per scored position); `jht setup` asks for the key (typed hidden) |
+| 🟢  | **Kimi (Moonshot)** on the Pi harness | API key, per call | ✅ Offered in 0.4.0; `jht setup` asks for the key (typed hidden) |
+| 🟢  | **OpenAI** on the Pi harness | API key, per call | ✅ Offered in 0.4.0; `jht setup` asks for the key (typed hidden) |
+| 🟢  | **Claude (Anthropic)** on the Pi harness | API key, per call | ✅ Offered in 0.4.0; `jht setup` asks for the key (typed hidden) |
+| 🔵  | Codex with a ChatGPT subscription | — | ⏳ Not in 0.4.0 for new users; a team set up on it with 0.3.9 keeps working, with a warning |
 
 Details and the spending ceiling of an API key: [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md).
 
@@ -117,7 +120,7 @@ jht doctor         # verify configuration and dependencies
 jht team status    # confirm the agents are running
 ```
 
-The wizard asks for the GLM API key, checks it with Z.ai, keeps it in a private
+The wizard asks which provider (GLM, Kimi, OpenAI or Claude) and for its API key, checks it with the provider, keeps it in a private
 folder of the container (the configuration holds only where it is) and runs
 `jht team start`. There is no sign-in step. Without questions:
 `jht setup --non-interactive --provider glm --api-key-stdin < key.txt`.
@@ -172,7 +175,7 @@ bash scripts/install.sh --runtime=podman
 If you already use a personal AI assistant (Claude Code, OpenClaw, Codex,
 Cursor), tell it:
 
-> _"Set up Job Hunter Team for me. I have a GLM (Z.ai) API key for it.
+> _"Set up Job Hunter Team for me. I have an API key for it (GLM, Kimi, OpenAI or Claude).
 > Walk me through what you need."_
 
 The `jht` CLI is designed for this use. Follow
@@ -236,7 +239,7 @@ See [`CLI-REFERENCE.md`](CLI-REFERENCE.md) for the full CLI reference.
 
 ## 🚀 First run
 
-`jht setup` is the first-run flow: it takes the GLM (Z.ai) API key (typed
+`jht setup` is the first-run flow: it takes the API key of GLM (Z.ai), Kimi (Moonshot), OpenAI or Claude (Anthropic) (typed
 hidden, or from a file or the standard input), checks it with the provider and
 starts the team. Run `jht doctor` before considering setup complete. The cloud
 account, Telegram and VPS paths are optional and documented separately. On a
@@ -305,7 +308,7 @@ jht positions dashboard
 
 # Provider management
 jht providers list
-jht providers use codex     # set the active provider
+jht providers use kimi      # set the active provider (glm, kimi, openai or claude in 0.4.0)
 jht providers update        # update CLI versions
 ```
 
@@ -327,7 +330,7 @@ Full CLI reference: [`docs/guides/CLI-INSTALL.md`](CLI-INSTALL.md).
 
 - 📘 [`README.md`](../../README.md) — project overview, story, manifesto
 - 📋 [`docs/about/STORY.md`](../about/STORY.md) — origin story (legacy team results)
-- 💳 [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md) — Codex subscription or GLM/Kimi API key
+- 💳 [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md) — GLM, Kimi, OpenAI or Claude API key; the ChatGPT subscription is not in 0.4.0
 - 🦞 [`docs/guides/AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) — let your AI assistant drive JHT
 - 🎯 [`docs/about/VISION.md`](../about/VISION.md) — design philosophy, anti-goals, the Mentor
 - 🧪 [`docs/guides/BETA.md`](BETA.md) — testing, feedback and case-study evidence

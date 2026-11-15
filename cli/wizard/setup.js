@@ -42,7 +42,7 @@ import { join } from 'node:path';
 import { keyStoreDir } from './key-store.js';
 import { JHT_CONFIG_PATH } from './setup-helpers.js';
 import { piApiProvider } from '../../shared/runtime/provider-models.js';
-import { RELEASE_PROVIDERS, RELEASE_HARNESS, configOffered, offeredWay } from '../../shared/runtime/release-providers.js';
+import { RELEASE_PROVIDERS, RELEASE_HARNESS, codexLegacy, configOffered, offeredWay } from '../../shared/runtime/release-providers.js';
 import pc from 'picocolors';
 
 /** «[2/3] text»: the slow steps after the choices, numbered the same way as the installer's. */
@@ -215,7 +215,11 @@ async function runSetupSteps(prompter, state) {
       ],
     });
     // a config of a service this release does not offer cannot be kept: it is said, and the setup goes on as an update
-    if (action === 'keep' && !configOffered(baseConfig)) {
+    // a team on the ChatGPT subscription (Codex) from before 0.4.0 is kept as it is, with the one warning
+    if (action === 'keep' && codexLegacy(baseConfig)) {
+      await prompter.note(t('wizard.release.codex_legacy'), t('wizard.config_existing_title'));
+    }
+    if (action === 'keep' && !configOffered(baseConfig) && !codexLegacy(baseConfig)) {
       await prompter.note(tf('wizard.release.not_offered', String(baseConfig.active_provider ?? '-')), t('wizard.config_existing_title'));
     } else if (action === 'keep') {
       // Kept values do not say there is a login: the wait for it may have run out before (30 minutes) and the setup

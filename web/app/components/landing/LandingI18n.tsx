@@ -103,9 +103,9 @@ const translations = {
 
   // Footer
   footer_brand_desc: {
-    it: "Una squadra di agenti AI autonomi che cercano lavoro per te. Open source. I tuoi dati restano sul tuo computer; i testi che gli agenti elaborano vanno al fornitore del modello (Z.ai per GLM).",
-    en: "A team of autonomous AI agents that job-hunts for you. Open source. Your data stays on your computer; the texts the agents work on go to the model's provider (Z.ai for GLM).",
-    hu: "Autonóm AI-ügynökök csapata, amely állást keres helyetted. Nyílt forráskódú. Az adataid a gépeden maradnak; az ügynökök által feldolgozott szövegek a modell szolgáltatójához kerülnek (GLM esetén a Z.ai-hoz).",
+    it: "Una squadra di agenti AI autonomi che cercano lavoro per te. Open source. I tuoi dati restano sul tuo computer; i testi che gli agenti elaborano vanno al fornitore del modello (Z.ai per GLM, Moonshot per Kimi, OpenAI per OpenAI, Anthropic per Claude).",
+    en: "A team of autonomous AI agents that job-hunts for you. Open source. Your data stays on your computer; the texts the agents work on go to the model's provider (Z.ai for GLM, Moonshot for Kimi, OpenAI for OpenAI, Anthropic for Claude).",
+    hu: "Autonóm AI-ügynökök csapata, amely állást keres helyetted. Nyílt forráskódú. Az adataid a gépeden maradnak; az ügynökök által feldolgozott szövegek a modell szolgáltatójához kerülnek (GLM esetén a Z.ai-hoz, Kimi esetén a Moonshothoz, OpenAI esetén az OpenAI-hoz, Claude esetén az Anthropichoz).",
   },
   footer_product: { it: "Prodotto", en: "Product", hu: "Termék" },
   footer_stats: { it: "Progetto", en: "Project", hu: "Projekt" },

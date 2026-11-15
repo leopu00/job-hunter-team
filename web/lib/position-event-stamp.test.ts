@@ -13,8 +13,12 @@ describe("formatPositionEventStamp", () => {
 
   it("legge un timbro senza fuso come UTC e lo scrive nell'ora locale della persona", () => {
     // SQLite scrive «YYYY-MM-DD HH:MM:SS» in UTC: la stessa riga, con o senza «Z», dice la stessa ora
-    expect(formatPositionEventStamp("2026-08-12 10:34:00", "it")).toBe(formatPositionEventStamp("2026-08-12T10:34:00Z", "it"));
-    expect(formatPositionEventStamp("2026-08-12T10:34:00", "en")).toBe(formatPositionEventStamp("2026-08-12T10:34:00Z", "en"));
+    expect(formatPositionEventStamp("2026-08-12 10:34:00", "it")).toBe(
+      formatPositionEventStamp("2026-08-12T10:34:00Z", "it"),
+    );
+    expect(formatPositionEventStamp("2026-08-12T10:34:00", "en")).toBe(
+      formatPositionEventStamp("2026-08-12T10:34:00Z", "en"),
+    );
   });
 
   it("non inventa un timbro per valori assenti o invalidi", () => {

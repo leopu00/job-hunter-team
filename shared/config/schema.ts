@@ -18,9 +18,21 @@ export const SubscriptionSchema = z.object({
 // Riferimento a una chiave API (SecretRef): la chiave non è nel config, ma in un file, in una variabile d'ambiente
 // del container o in un comando. Il launcher risolve file ed env a ogni lancio (.launcher/spawn-keyfile.sh).
 export const ApiKeyRefSchema = z.union([
-  z.object({ type: z.literal("ref"), source: z.literal("env"), id: z.string().min(1) }),
-  z.object({ type: z.literal("ref"), source: z.literal("file"), path: z.string().min(1) }),
-  z.object({ type: z.literal("ref"), source: z.literal("exec"), command: z.string().min(1) }),
+  z.object({
+    type: z.literal("ref"),
+    source: z.literal("env"),
+    id: z.string().min(1),
+  }),
+  z.object({
+    type: z.literal("ref"),
+    source: z.literal("file"),
+    path: z.string().min(1),
+  }),
+  z.object({
+    type: z.literal("ref"),
+    source: z.literal("exec"),
+    command: z.string().min(1),
+  }),
 ]);
 
 export const AIProviderSchema = z
@@ -38,7 +50,8 @@ export const AIProviderSchema = z
       return true;
     },
     {
-      message: "api_key obbligatoria quando auth_method = 'api_key' (o un api_key_ref)",
+      message:
+        "api_key obbligatoria quando auth_method = 'api_key' (o un api_key_ref)",
       path: ["api_key"],
     },
   );
@@ -259,11 +272,16 @@ export const JHTConfigSchema = z
       path: ["active_provider"],
     },
   )
-  .refine((cfg) => cfg.harness !== "pi" || ["openai", "kimi", "glm"].includes(cfg.active_provider), {
-    message:
-      "L'harness pi parte solo con active_provider openai, kimi o glm (con Claude e' a token)",
-    path: ["harness"],
-  });
+  .refine(
+    (cfg) =>
+      cfg.harness !== "pi" ||
+      ["openai", "kimi", "glm"].includes(cfg.active_provider),
+    {
+      message:
+        "L'harness pi parte solo con active_provider openai, kimi o glm (con Claude e' a token)",
+      path: ["harness"],
+    },
+  );
 
 // --- Tipi derivati dallo schema ---
 

@@ -147,9 +147,9 @@ if [ "$CONTAINER_RUNTIME" = "podman" ]; then
     export PODMAN_COMPOSE_PROVIDER="$(command -v podman-compose)"
   fi
 fi
-DEFAULT_RUNTIME_IMAGE="ghcr.io/leopu00/jht@sha256:b48f45f4d3d6313768a3fb7ff56d0b9db4470440f1e2110e335f4290f4d9eb1c"
-CORE_IMAGE_DIGEST="sha256:a870e5551aff6aac5d8de57be3f5dcd2d48e59c81c6d1d25466cf83b9b74ee24"
-EXTRAS_IMAGE_DIGEST="sha256:87f19223c06b9f0ff18bd11adb56616234e0d668b2a6d9f3c653e644ebfc193a"
+DEFAULT_RUNTIME_IMAGE="ghcr.io/leopu00/jht@sha256:c7708d6ea45d8a69085c95a3ef22ac82322d488714696858e85930df195e5ea6"
+CORE_IMAGE_DIGEST="sha256:3af57f9d78d9fd4eb737a44bb373a4dcd82128c4e3f5ccb189c1e91f938e4089"
+EXTRAS_IMAGE_DIGEST="sha256:322f7fb8339e193e07a039d970c68323f0ea6718c8057378efdaef995cb614e6"
 RUNTIME_TIER_FILE="$RUNTIME_DIR/runtime-tier"
 RUNTIME_TIER_INTEGRITY="$RUNTIME_DIR/.runtime-tier-integrity"
 DEFAULT_RUNTIME_VERSION="0.4.0"
@@ -358,9 +358,9 @@ export JHT_USER_TZ
 jht_text_en() {
   case "$1" in
     compose.missing) printf '%s' 'docker compose is missing: the engine answers, but the «docker compose» command does not exist (JHT needs the Compose v2 plugin). On a Mac: brew install docker-compose, then mkdir -p ~/.docker/cli-plugins && ln -sfn "$(brew --prefix)/opt/docker-compose/bin/docker-compose" ~/.docker/cli-plugins/docker-compose. On Linux: install the docker-compose-v2 package (apt) or docker-compose-plugin (dnf). Then run the command again.' ;;
-    config.changed_down) printf '%s' 'config_changed_while_running: the team was started with the configuration from before the reinstall; stopping it.' ;;
+    config.changed_down) printf '%s' 'config_changed_while_running: the team was started with a configuration other than the current one (changed while JHT was running, or a reinstall); stopping it.' ;;
     config.changed_other) printf '%s' 'config_changed_while_running: the team runs with a configuration other than the expected one; it is used only to stop it.' ;;
-    config.changed_start) printf '%s' 'config_changed_while_running: the team was started with the configuration from before the reinstall. Stop it with «jht down», then start it with «jht up».' ;;
+    config.changed_start) printf '%s' 'config_changed_while_running: the configuration changed while JHT was running (jht config set, settings changed from the site or the app, or a reinstall), so the running team cannot be verified. Stop it with «jht down», then start it with «jht up».' ;;
     config.changed_stopped) printf '%s' 'config_changed_stopped: the team'\''s containers, stopped, are from the earlier version: recreating them with the new configuration (the volumes with the data stay).' ;;
     container.starting) printf '%s' 'Container '\''%s'\'' is not running, starting it...' ;;
     doctor.host_config_none) printf '%s' 'no configuration yet: '\''jht setup'\''' ;;
@@ -491,8 +491,7 @@ you give everything with the options.
 
   --non-interactive            no questions
   --provider <name>            glm (Z.ai, default), kimi (Moonshot), openai or claude (Anthropic)
-  --harness <name>             pi (default; the only one for glm, kimi and claude) or codex (only with openai)
-  --auth-method <method>       api_key (default) or subscription
+  --harness <name>             pi (default)
   --api-key-file <path>        file that contains the API key (one line, readable only by you).
                                jht reads a file of your computer and passes it to setup: with glm and kimi
                                setup keeps the key on its own, never in the configuration
@@ -501,8 +500,6 @@ you give everything with the options.
   --secret-mode <mode>         how the key is saved: plaintext (default), env or file
   --secret-env <name>          with --secret-mode env: the environment variable that contains it
   --secret-file <path>         with --secret-mode file: the file that contains it
-  --subscription-email <email> with --auth-method subscription: the account'\''s email
-  --subscription-token <token> with --auth-method subscription: the token
   --model <model>              the model to use
   --language <code>            the language (for example it or en)
   --skip-health                skips the final check
@@ -512,9 +509,7 @@ Examples:
   with a GLM key in a file:
     jht setup --non-interactive --provider glm --harness pi --api-key-file key.txt
   OpenAI with an API key, on Pi (for Claude: --provider claude):
-    jht setup --non-interactive --provider openai --harness pi --api-key-stdin
-  the Codex subscription (then sign in to ChatGPT):
-    jht setup --non-interactive --provider openai --harness codex --auth-method subscription' ;;
+    jht setup --non-interactive --provider openai --harness pi --api-key-stdin' ;;
     help.tools) printf '%s' 'Usage: jht tools <command>
 
   status --json   whether the Scouts'\'' tools (the full image) are here, on their way or failed
@@ -848,9 +843,9 @@ This help starts nothing and downloads nothing.' ;;
 jht_text_it() {
   case "$1" in
     compose.missing) printf '%s' 'manca docker compose: il motore risponde, ma il comando «docker compose» non esiste (a JHT serve il plugin Compose v2). Su Mac: brew install docker-compose, poi mkdir -p ~/.docker/cli-plugins && ln -sfn "$(brew --prefix)/opt/docker-compose/bin/docker-compose" ~/.docker/cli-plugins/docker-compose. Su Linux: installa il pacchetto docker-compose-v2 (apt) o docker-compose-plugin (dnf). Poi rilancia il comando.' ;;
-    config.changed_down) printf '%s' 'config_changed_while_running: il team era stato avviato con la configurazione di prima della reinstallazione; lo fermo.' ;;
+    config.changed_down) printf '%s' 'config_changed_while_running: il team era stato avviato con una configurazione diversa da quella attuale (cambiata mentre JHT era acceso, o una reinstallazione); lo fermo.' ;;
     config.changed_other) printf '%s' 'config_changed_while_running: il team gira con una configurazione diversa da quella attesa; la uso solo per fermarlo.' ;;
-    config.changed_start) printf '%s' 'config_changed_while_running: il team e'\'' stato avviato con la configurazione di prima della reinstallazione. Fermalo con «jht down», poi avvialo con «jht up».' ;;
+    config.changed_start) printf '%s' 'config_changed_while_running: la configurazione e'\'' cambiata mentre JHT era acceso (jht config set, impostazioni cambiate dal sito o dall'\''app, o una reinstallazione): il team in corso non si puo'\'' verificare. Fermalo con «jht down», poi avvialo con «jht up».' ;;
     config.changed_stopped) printf '%s' 'config_changed_stopped: i container del team, fermi, sono della versione di prima: li ricreo con la configurazione nuova (i volumi con i dati restano).' ;;
     container.starting) printf '%s' 'Container '\''%s'\'' non attivo, lo avvio...' ;;
     doctor.host_config_none) printf '%s' 'ancora nessuna configurazione: '\''jht setup'\''' ;;
@@ -981,8 +976,7 @@ tutto si da'\'' con le opzioni.
 
   --non-interactive            nessuna domanda
   --provider <nome>            glm (Z.ai, predefinito), kimi (Moonshot), openai o claude (Anthropic)
-  --harness <nome>             pi (predefinito; l'\''unico per glm, kimi e claude) o codex (solo con openai)
-  --auth-method <metodo>       api_key (predefinito) o subscription
+  --harness <nome>             pi (predefinito)
   --api-key-file <percorso>    file che contiene la chiave API (una riga, leggibile solo da te).
                                Un file del tuo computer lo legge jht e lo passa al setup: con glm e kimi
                                il setup tiene la chiave per conto suo, mai nella configurazione
@@ -991,8 +985,6 @@ tutto si da'\'' con le opzioni.
   --secret-mode <modo>         come si salva la chiave: plaintext (predefinito), env o file
   --secret-env <nome>          con --secret-mode env: la variabile d'\''ambiente che la contiene
   --secret-file <percorso>     con --secret-mode file: il file che la contiene
-  --subscription-email <email> con --auth-method subscription: l'\''email dell'\''account
-  --subscription-token <token> con --auth-method subscription: il token
   --model <modello>            il modello da usare
   --language <codice>          la lingua (per esempio it o en)
   --skip-health                salta il controllo finale
@@ -1002,9 +994,7 @@ Esempi:
   con una chiave GLM in un file:
     jht setup --non-interactive --provider glm --harness pi --api-key-file chiave.txt
   OpenAI con una chiave API, su Pi (per Claude: --provider claude):
-    jht setup --non-interactive --provider openai --harness pi --api-key-stdin
-  l'\''abbonamento Codex (poi il login a ChatGPT):
-    jht setup --non-interactive --provider openai --harness codex --auth-method subscription' ;;
+    jht setup --non-interactive --provider openai --harness pi --api-key-stdin' ;;
     help.tools) printf '%s' 'Uso: jht tools <comando>
 
   status --json   se gli strumenti degli Scout (l'\''immagine piena) sono arrivati, in arrivo o falliti
@@ -1338,9 +1328,9 @@ Questo aiuto non avvia niente e non scarica niente.' ;;
 jht_text_hu() {
   case "$1" in
     compose.missing) printf '%s' 'hiányzik a docker compose: a motor válaszol, de a „docker compose” parancs nem létezik (a JHT-nak a Compose v2 bővítmény kell). Macen: brew install docker-compose, majd mkdir -p ~/.docker/cli-plugins && ln -sfn "$(brew --prefix)/opt/docker-compose/bin/docker-compose" ~/.docker/cli-plugins/docker-compose. Linuxon: telepítsd a docker-compose-v2 csomagot (apt) vagy a docker-compose-plugin csomagot (dnf). Utána futtasd újra a parancsot.' ;;
-    config.changed_down) printf '%s' 'config_changed_while_running: a csapat az újratelepítés előtti beállításokkal indult; leállítom.' ;;
+    config.changed_down) printf '%s' 'config_changed_while_running: a csapat a jelenlegitől eltérő beállításokkal indult (futás közben megváltozott, vagy újratelepítés történt); leállítom.' ;;
     config.changed_other) printf '%s' 'config_changed_while_running: a csapat a vártól eltérő beállításokkal fut; ezeket csak a leállításához használom.' ;;
-    config.changed_start) printf '%s' 'config_changed_while_running: a csapat az újratelepítés előtti beállításokkal indult. Állítsd le a „jht down” paranccsal, majd indítsd el a „jht up” paranccsal.' ;;
+    config.changed_start) printf '%s' 'config_changed_while_running: a beállítás megváltozott, amíg a JHT futott (jht config set, a webhelyről vagy az appból módosított beállítások, vagy újratelepítés), ezért a futó csapat nem ellenőrizhető. Állítsd le a „jht down” paranccsal, majd indítsd el a „jht up” paranccsal.' ;;
     config.changed_stopped) printf '%s' 'config_changed_stopped: a csapat leállított konténerei a korábbi verzióból valók: újra létrehozom őket az új beállításokkal (az adatokat tartalmazó kötetek megmaradnak).' ;;
     container.starting) printf '%s' 'A(z) '\''%s'\'' konténer nem fut, elindítom...' ;;
     doctor.host_config_none) printf '%s' 'még nincs beállítás: '\''jht setup'\''' ;;
@@ -1472,8 +1462,7 @@ mindent kapcsolókkal adsz meg.
 
   --non-interactive            nincs kérdés
   --provider <name>            glm (Z.ai, alapértelmezett), kimi (Moonshot), openai vagy claude (Anthropic)
-  --harness <name>             pi (alapértelmezett; az egyetlen a glm, a kimi és a claude számára) vagy codex (csak az openai-jal)
-  --auth-method <method>       api_key (alapértelmezett) vagy subscription
+  --harness <name>             pi (alapértelmezett)
   --api-key-file <path>        az API-kulcsot tartalmazó fájl (egy sor, csak te olvashatod).
                                A gépeden lévő fájlt a jht olvassa be és adja át a beállításnak: glm és kimi
                                esetén a beállítás magánál tartja a kulcsot, sosem a konfigurációban
@@ -1482,8 +1471,6 @@ mindent kapcsolókkal adsz meg.
   --secret-mode <mode>         hogyan mentődik a kulcs: plaintext (alapértelmezett), env vagy file
   --secret-env <name>          --secret-mode env esetén: a kulcsot tartalmazó környezeti változó
   --secret-file <path>         --secret-mode file esetén: a kulcsot tartalmazó fájl
-  --subscription-email <email> --auth-method subscription esetén: a fiók e-mail-címe
-  --subscription-token <token> --auth-method subscription esetén: a token
   --model <model>              a használandó modell
   --language <code>            a nyelv (például it vagy en)
   --skip-health                kihagyja a végső ellenőrzést
@@ -1493,9 +1480,7 @@ Példák:
   egy fájlban lévő GLM-kulccsal:
     jht setup --non-interactive --provider glm --harness pi --api-key-file kulcs.txt
   OpenAI API-kulccsal, Pi-n (Claude-hoz: --provider claude):
-    jht setup --non-interactive --provider openai --harness pi --api-key-stdin
-  a Codex-előfizetés (utána bejelentkezés a ChatGPT-be):
-    jht setup --non-interactive --provider openai --harness codex --auth-method subscription' ;;
+    jht setup --non-interactive --provider openai --harness pi --api-key-stdin' ;;
     help.tools) printf '%s' 'Használat: jht tools <parancs>
 
   status --json   megvannak-e a felderítők (Scout) eszközei (a teljes kép), úton vannak-e, vagy sikertelen volt a letöltés
@@ -1829,9 +1814,9 @@ Ez a súgó semmit nem indít el és semmit nem tölt le.' ;;
 jht_text_es() {
   case "$1" in
     compose.missing) printf '%s' 'falta docker compose: el motor responde, pero el comando «docker compose» no existe (JHT necesita el plugin Compose v2). En un Mac: brew install docker-compose y luego mkdir -p ~/.docker/cli-plugins && ln -sfn "$(brew --prefix)/opt/docker-compose/bin/docker-compose" ~/.docker/cli-plugins/docker-compose. En Linux: instala el paquete docker-compose-v2 (apt) o docker-compose-plugin (dnf). Luego vuelve a ejecutar el comando.' ;;
-    config.changed_down) printf '%s' 'config_changed_while_running: el equipo se arrancó con la configuración de antes de la reinstalación; lo detengo.' ;;
+    config.changed_down) printf '%s' 'config_changed_while_running: el equipo se arrancó con una configuración distinta de la actual (cambió mientras JHT estaba en marcha, o hubo una reinstalación); lo detengo.' ;;
     config.changed_other) printf '%s' 'config_changed_while_running: el equipo funciona con una configuración distinta de la esperada; solo la uso para detenerlo.' ;;
-    config.changed_start) printf '%s' 'config_changed_while_running: el equipo se arrancó con la configuración de antes de la reinstalación. Detenlo con «jht down» y luego arráncalo con «jht up».' ;;
+    config.changed_start) printf '%s' 'config_changed_while_running: la configuración cambió mientras JHT estaba en marcha (jht config set, ajustes cambiados desde el sitio o la app, o una reinstalación), así que el equipo en marcha no se puede verificar. Detenlo con «jht down» y luego arráncalo con «jht up».' ;;
     config.changed_stopped) printf '%s' 'config_changed_stopped: los contenedores del equipo, detenidos, son de la versión anterior: los vuelvo a crear con la configuración nueva (los volúmenes con los datos se quedan).' ;;
     container.starting) printf '%s' 'El contenedor '\''%s'\'' no está en marcha, lo arranco...' ;;
     doctor.host_config_none) printf '%s' 'todavía no hay configuración: '\''jht setup'\''' ;;
@@ -1966,8 +1951,7 @@ todo se da con las opciones.
 
   --non-interactive            ninguna pregunta
   --provider <name>            glm (Z.ai, predeterminado), kimi (Moonshot), openai o claude (Anthropic)
-  --harness <name>             pi (predeterminado; el único para glm, kimi y claude) o codex (solo con openai)
-  --auth-method <method>       api_key (predeterminado) o subscription
+  --harness <name>             pi (predeterminado)
   --api-key-file <path>        archivo que contiene la clave API (una línea, que solo puedas leer tú).
                                Un archivo de tu ordenador lo lee jht y se lo pasa al setup: con glm y kimi
                                el setup guarda la clave por su cuenta, nunca en la configuración
@@ -1977,8 +1961,6 @@ todo se da con las opciones.
   --secret-mode <mode>         cómo se guarda la clave: plaintext (predeterminado), env o file
   --secret-env <name>          con --secret-mode env: la variable de entorno que la contiene
   --secret-file <path>         con --secret-mode file: el archivo que la contiene
-  --subscription-email <email> con --auth-method subscription: el email de la cuenta
-  --subscription-token <token> con --auth-method subscription: el token
   --model <model>              el modelo que usar
   --language <code>            el idioma (por ejemplo es o en)
   --skip-health                se salta la comprobación final
@@ -1988,9 +1970,7 @@ Ejemplos:
   con una clave GLM en un archivo:
     jht setup --non-interactive --provider glm --harness pi --api-key-file clave.txt
   OpenAI con una clave API, en Pi (para Claude: --provider claude):
-    jht setup --non-interactive --provider openai --harness pi --api-key-stdin
-  la suscripción a Codex (después el inicio de sesión en ChatGPT):
-    jht setup --non-interactive --provider openai --harness codex --auth-method subscription' ;;
+    jht setup --non-interactive --provider openai --harness pi --api-key-stdin' ;;
     help.tools) printf '%s' 'Uso: jht tools <comando>
 
   status --json   si las herramientas de los Scout (la imagen completa) ya están, están en camino o han fallado
@@ -2324,9 +2304,9 @@ Esta ayuda no arranca nada ni descarga nada.' ;;
 jht_text_de() {
   case "$1" in
     compose.missing) printf '%s' 'docker compose fehlt: Die Engine antwortet, aber der Befehl «docker compose» existiert nicht (JHT braucht das Compose-v2-Plugin). Auf dem Mac: brew install docker-compose, dann mkdir -p ~/.docker/cli-plugins && ln -sfn "$(brew --prefix)/opt/docker-compose/bin/docker-compose" ~/.docker/cli-plugins/docker-compose. Unter Linux: Installiere das Paket docker-compose-v2 (apt) oder docker-compose-plugin (dnf). Führe dann den Befehl erneut aus.' ;;
-    config.changed_down) printf '%s' 'config_changed_while_running: Das Team wurde mit der Konfiguration von vor der Neuinstallation gestartet; es wird gestoppt.' ;;
+    config.changed_down) printf '%s' 'config_changed_while_running: Das Team wurde mit einer anderen als der aktuellen Konfiguration gestartet (sie hat sich während des Laufs geändert, oder es gab eine Neuinstallation); es wird gestoppt.' ;;
     config.changed_other) printf '%s' 'config_changed_while_running: Das Team läuft mit einer anderen als der erwarteten Konfiguration; sie wird nur zum Stoppen verwendet.' ;;
-    config.changed_start) printf '%s' 'config_changed_while_running: Das Team wurde mit der Konfiguration von vor der Neuinstallation gestartet. Stoppe es mit «jht down» und starte es dann mit «jht up».' ;;
+    config.changed_start) printf '%s' 'config_changed_while_running: Die Konfiguration hat sich geändert, während JHT lief (jht config set, über die Website oder die App geänderte Einstellungen oder eine Neuinstallation); das laufende Team lässt sich daher nicht verifizieren. Stoppe es mit «jht down» und starte es dann mit «jht up».' ;;
     config.changed_stopped) printf '%s' 'config_changed_stopped: Die gestoppten Container des Teams stammen aus der früheren Version: Sie werden mit der neuen Konfiguration neu erstellt (die Volumes mit den Daten bleiben).' ;;
     container.starting) printf '%s' 'Container '\''%s'\'' läuft nicht, starte ihn...' ;;
     doctor.host_config_none) printf '%s' 'noch keine Konfiguration: '\''jht setup'\''' ;;
@@ -2457,8 +2437,7 @@ Alles wird über die Optionen angegeben.
 
   --non-interactive            keine Fragen
   --provider <name>            glm (Z.ai, Standard), kimi (Moonshot), openai oder claude (Anthropic)
-  --harness <name>             pi (Standard; das einzige für glm, kimi und claude) oder codex (nur mit openai)
-  --auth-method <method>       api_key (Standard) oder subscription
+  --harness <name>             pi (Standard)
   --api-key-file <path>        Datei mit dem API-Schlüssel (eine Zeile, nur für dich lesbar).
                                jht liest die Datei auf deinem Computer und gibt sie ans Setup weiter; bei glm
                                und kimi behält das Setup den Schlüssel für sich, nie in der Konfiguration
@@ -2467,8 +2446,6 @@ Alles wird über die Optionen angegeben.
   --secret-mode <mode>         wie der Schlüssel gespeichert wird: plaintext (Standard), env oder file
   --secret-env <name>          mit --secret-mode env: die Umgebungsvariable, die ihn enthält
   --secret-file <path>         mit --secret-mode file: die Datei, die ihn enthält
-  --subscription-email <email> mit --auth-method subscription: die E-Mail des Kontos
-  --subscription-token <token> mit --auth-method subscription: der Token
   --model <model>              das zu verwendende Modell
   --language <code>            die Sprache (zum Beispiel it oder en)
   --skip-health                überspringt die abschließende Prüfung
@@ -2478,9 +2455,7 @@ Beispiele:
   mit einem GLM-Schlüssel in einer Datei:
     jht setup --non-interactive --provider glm --harness pi --api-key-file schluessel.txt
   OpenAI mit einem API-Schlüssel, auf Pi (für Claude: --provider claude):
-    jht setup --non-interactive --provider openai --harness pi --api-key-stdin
-  das Codex-Abo (danach die Anmeldung bei ChatGPT):
-    jht setup --non-interactive --provider openai --harness codex --auth-method subscription' ;;
+    jht setup --non-interactive --provider openai --harness pi --api-key-stdin' ;;
     help.tools) printf '%s' 'Verwendung: jht tools <Befehl>
 
   status --json   ob die Werkzeuge der Scouts (das vollständige Image) da, unterwegs oder fehlgeschlagen sind
@@ -2814,9 +2789,9 @@ Diese Hilfe startet nichts und lädt nichts herunter.' ;;
 jht_text_fr() {
   case "$1" in
     compose.missing) printf '%s' 'docker compose est absent : le moteur répond, mais la commande « docker compose » n'\''existe pas (JHT a besoin du plugin Compose v2). Sur Mac : brew install docker-compose, puis mkdir -p ~/.docker/cli-plugins && ln -sfn "$(brew --prefix)/opt/docker-compose/bin/docker-compose" ~/.docker/cli-plugins/docker-compose. Sur Linux : installe le paquet docker-compose-v2 (apt) ou docker-compose-plugin (dnf). Puis relance la commande.' ;;
-    config.changed_down) printf '%s' 'config_changed_while_running : l'\''équipe a été démarrée avec la configuration d'\''avant la réinstallation ; je l'\''arrête.' ;;
+    config.changed_down) printf '%s' 'config_changed_while_running : l'\''équipe a été démarrée avec une configuration autre que l'\''actuelle (changée pendant que JHT tournait, ou réinstallation) ; je l'\''arrête.' ;;
     config.changed_other) printf '%s' 'config_changed_while_running : l'\''équipe tourne avec une configuration différente de celle attendue ; elle ne sert qu'\''à l'\''arrêter.' ;;
-    config.changed_start) printf '%s' 'config_changed_while_running : l'\''équipe a été démarrée avec la configuration d'\''avant la réinstallation. Arrête-la avec « jht down », puis démarre-la avec « jht up ».' ;;
+    config.changed_start) printf '%s' 'config_changed_while_running : la configuration a changé pendant que JHT tournait (jht config set, réglages modifiés depuis le site ou l'\''appli, ou une réinstallation) ; l'\''équipe en cours ne peut donc pas être vérifiée. Arrête-la avec « jht down », puis démarre-la avec « jht up ».' ;;
     config.changed_stopped) printf '%s' 'config_changed_stopped : les conteneurs de l'\''équipe, arrêtés, sont de la version précédente : je les recrée avec la nouvelle configuration (les volumes avec les données restent).' ;;
     container.starting) printf '%s' 'Le conteneur '\''%s'\'' n'\''est pas actif, je le démarre...' ;;
     doctor.host_config_none) printf '%s' 'pas encore de configuration : '\''jht setup'\''' ;;
@@ -2947,8 +2922,7 @@ tout se donne avec les options.
 
   --non-interactive            aucune question
   --provider <name>            glm (Z.ai, par défaut), kimi (Moonshot), openai ou claude (Anthropic)
-  --harness <name>             pi (par défaut ; le seul pour glm, kimi et claude) ou codex (seulement avec openai)
-  --auth-method <method>       api_key (par défaut) ou subscription
+  --harness <name>             pi (par défaut)
   --api-key-file <path>        fichier qui contient la clé API (une ligne, lisible seulement par toi).
                                jht lit ce fichier sur ton ordinateur et le passe au setup :
                                avec glm et kimi, le setup garde la clé à part, jamais dans la configuration
@@ -2957,8 +2931,6 @@ tout se donne avec les options.
   --secret-mode <mode>         comment la clé est enregistrée : plaintext (par défaut), env ou file
   --secret-env <name>          avec --secret-mode env : la variable d'\''environnement qui la contient
   --secret-file <path>         avec --secret-mode file : le fichier qui la contient
-  --subscription-email <email> avec --auth-method subscription : l'\''email du compte
-  --subscription-token <token> avec --auth-method subscription : le token
   --model <model>              le modèle à utiliser
   --language <code>            la langue (par exemple it ou en)
   --skip-health                saute la vérification finale
@@ -2968,9 +2940,7 @@ Exemples :
   avec une clé GLM dans un fichier :
     jht setup --non-interactive --provider glm --harness pi --api-key-file cle.txt
   OpenAI avec une clé API, sur Pi (pour Claude : --provider claude) :
-    jht setup --non-interactive --provider openai --harness pi --api-key-stdin
-  l'\''abonnement Codex (puis la connexion à ChatGPT) :
-    jht setup --non-interactive --provider openai --harness codex --auth-method subscription' ;;
+    jht setup --non-interactive --provider openai --harness pi --api-key-stdin' ;;
     help.tools) printf '%s' 'Utilisation : jht tools <commande>
 
   status --json   si les outils des Scout (l'\''image complète) sont là, en route ou en échec
@@ -3304,9 +3274,9 @@ Cette aide ne démarre rien et ne télécharge rien.' ;;
 jht_text_pt() {
   case "$1" in
     compose.missing) printf '%s' 'falta o docker compose: o motor responde, mas o comando «docker compose» não existe (o JHT precisa do plugin Compose v2). Num Mac: brew install docker-compose e depois mkdir -p ~/.docker/cli-plugins && ln -sfn "$(brew --prefix)/opt/docker-compose/bin/docker-compose" ~/.docker/cli-plugins/docker-compose. No Linux: instala o pacote docker-compose-v2 (apt) ou docker-compose-plugin (dnf). Depois corre o comando de novo.' ;;
-    config.changed_down) printf '%s' 'config_changed_while_running: a equipa foi iniciada com a configuração de antes da reinstalação; vou pará-la.' ;;
+    config.changed_down) printf '%s' 'config_changed_while_running: a equipa foi iniciada com uma configuração diferente da atual (mudou enquanto o JHT corria, ou houve uma reinstalação); vou pará-la.' ;;
     config.changed_other) printf '%s' 'config_changed_while_running: a equipa corre com uma configuração diferente da esperada; só a uso para a parar.' ;;
-    config.changed_start) printf '%s' 'config_changed_while_running: a equipa foi iniciada com a configuração de antes da reinstalação. Para-a com «jht down» e depois inicia-a com «jht up».' ;;
+    config.changed_start) printf '%s' 'config_changed_while_running: a configuração mudou enquanto o JHT estava a correr (jht config set, definições alteradas pelo site ou pela app, ou uma reinstalação); por isso a equipa em execução não pode ser verificada. Para-a com «jht down» e depois inicia-a com «jht up».' ;;
     config.changed_stopped) printf '%s' 'config_changed_stopped: os contentores da equipa, parados, são da versão anterior: vou recriá-los com a configuração nova (os volumes com os dados ficam).' ;;
     container.starting) printf '%s' 'O contentor '\''%s'\'' não está a correr, vou iniciá-lo...' ;;
     doctor.host_config_none) printf '%s' 'ainda sem configuração: '\''jht setup'\''' ;;
@@ -3437,8 +3407,7 @@ tudo se dá com as opções.
 
   --non-interactive            nenhuma pergunta
   --provider <name>            glm (Z.ai, predefinido), kimi (Moonshot), openai ou claude (Anthropic)
-  --harness <name>             pi (predefinido; o único para glm, kimi e claude) ou codex (só com openai)
-  --auth-method <method>       api_key (predefinido) ou subscription
+  --harness <name>             pi (predefinido)
   --api-key-file <path>        ficheiro que contém a chave API (uma linha, legível só por ti).
                                O jht lê um ficheiro do teu computador e passa-o ao setup: com glm e kimi
                                o setup guarda a chave por conta própria, nunca na configuração
@@ -3447,8 +3416,6 @@ tudo se dá com as opções.
   --secret-mode <mode>         como se guarda a chave: plaintext (predefinido), env ou file
   --secret-env <name>          com --secret-mode env: a variável de ambiente que a contém
   --secret-file <path>         com --secret-mode file: o ficheiro que a contém
-  --subscription-email <email> com --auth-method subscription: o email da conta
-  --subscription-token <token> com --auth-method subscription: o token
   --model <model>              o modelo a usar
   --language <code>            a língua (por exemplo pt ou en)
   --skip-health                salta a verificação final
@@ -3458,9 +3425,7 @@ Exemplos:
   com uma chave GLM num ficheiro:
     jht setup --non-interactive --provider glm --harness pi --api-key-file chave.txt
   OpenAI com uma chave API, no Pi (para Claude: --provider claude):
-    jht setup --non-interactive --provider openai --harness pi --api-key-stdin
-  a subscrição Codex (depois o início de sessão no ChatGPT):
-    jht setup --non-interactive --provider openai --harness codex --auth-method subscription' ;;
+    jht setup --non-interactive --provider openai --harness pi --api-key-stdin' ;;
     help.tools) printf '%s' 'Uso: jht tools <comando>
 
   status --json   se as ferramentas dos Scout (a imagem completa) já chegaram, estão a caminho ou falharam
