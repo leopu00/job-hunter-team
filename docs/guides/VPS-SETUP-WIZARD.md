@@ -25,8 +25,8 @@ with your infrastructure provider before you start.
 - A Google sign-in in the app. A new team on a VPS is paired with your
   account during the preparation; a local profile has no account to pair it
   with.
-- A GLM (Z.ai) API key: 0.4.0 runs the team only on Pi with GLM. Codex and the other services are not
-  in 0.4.0.
+- An API key for GLM (Z.ai), Kimi (Moonshot), OpenAI or Claude (Anthropic): 0.4.0 runs the team only on Pi with one of them. The
+  ChatGPT subscription and the other services are not in 0.4.0.
 
 ## Guided path
 

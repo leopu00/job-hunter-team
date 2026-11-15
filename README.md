@@ -32,7 +32,7 @@
 
 Job hunting is a second job on top of your job: scanning boards daily, qualifying listings, tailoring every application. JHT hands that grind to a team of AI agents running around the clock — Scout finds positions, Analyst verifies them, Scorer ranks them against your profile, Writer prepares tailored documents, Critic blind-reviews everything — orchestrated by a **Captain**. You only review applications that clear the quality bar.
 
-Everything runs **in your container** — on your Mac (Apple silicon) or on your VPS, with your profile, your data and your provider account. JHT itself is **free (MIT)**; the agents run on a provider you pay for: in 0.4.0, **GLM (Z.ai) with an API key** on the Pi harness (Codex, Kimi and Claude are not in this version) — see [Install](#install). A local model can currently shadow or replace the Scorer only.
+Everything runs **in your container** — on your Mac (Apple silicon) or on your VPS, with your profile, your data and your provider account. JHT itself is **free (MIT)**; the agents run on a provider you pay for: in 0.4.0, **GLM (Z.ai), Kimi (Moonshot), OpenAI or Claude (Anthropic) with an API key** on the Pi harness (the ChatGPT subscription is not in this version) — see [Install](#install). A local model can currently shadow or replace the Scorer only.
 
 I built JHT for my own job hunt — ~200 offers analyzed, ~20 tailored applications, **5 interview invites in a few weeks** ([story](docs/about/STORY.md)). Then I rebuilt it as open source. On the public stack, a Codex team ran **one month unattended**: 658 positions found, 520 scored, 307 strong matches, weekly budget self-managed at 99–100% ([results](docs/about/RESULTS.md)).
 
@@ -76,7 +76,7 @@ Live dashboards with real, anonymized field data: [jobhunterteam.ai/case-studies
                                                                      👨‍⚖️ Critic (3 blind rounds)
 ```
 
-Each agent is an autonomous AI session on the supported CLI (Codex); a shared SQLite database keeps state in sync. Monitoring details: [`docs/about/MONITORING.md`](docs/about/MONITORING.md).
+Each agent is an autonomous AI session on the Pi harness, with the API key of the provider you chose; a shared SQLite database keeps state in sync. Monitoring details: [`docs/about/MONITORING.md`](docs/about/MONITORING.md).
 
 ## Install
 
@@ -90,10 +90,10 @@ team.
   **The desktop app is not in 0.4.0**: the team is driven from the `jht` CLI. **Linux**: CLI only, experimental. **Windows**: preview, CLI only
   (PowerShell installer, Podman inside WSL), tested on Windows 10, not on Windows 11 — see
   [QUICKSTART](docs/guides/QUICKSTART.md).
-- **A provider for the agents**: in 0.4.0, **GLM (Z.ai)** on the Pi harness, with an **API key**
+- **A provider for the agents**: in 0.4.0, **GLM (Z.ai)**, **Kimi (Moonshot)**, **OpenAI** or **Claude (Anthropic)** on the Pi harness, with an **API key**
   that `jht setup` asks for (typed hidden) or takes from a file or standard input
   (`jht setup --non-interactive --provider glm --api-key-stdin`), never on the command line.
-  Codex (ChatGPT subscription), Kimi and Claude are not in this version.
+  The ChatGPT subscription is not in this version.
 - **A container engine**: Podman, the only one since 0.4. On a Mac the installer sets it up with
   Homebrew (which must already be there), so there is no Docker Desktop to install.
   On Linux: rootless Podman 5.0 or later.
@@ -103,7 +103,7 @@ team.
 Not sure where the team should live? Compare a
 [local PC, dedicated Linux PC on the LAN and VPS](docs/guides/CHOOSE-WHERE-TO-RUN.md).
 
-**What it costs** — with the GLM API key you pay per call: measured on GLM, about 0.10 USD per
+**What it costs** — with an API key (GLM, Kimi, OpenAI or Claude) you pay per call: measured on GLM only, about 0.10 USD per
 scored position, with a daily ceiling that pauses the team. (The month-long run we measured used a
 Codex Pro subscription, about €100/month — [results](docs/about/RESULTS.md); Codex is not in this
 version.) Details:
@@ -112,7 +112,10 @@ version.) Details:
 | Provider | Plan | Cost | Status in 0.4.0 |
 |---|---|---|---|
 | **GLM** (Z.ai, on Pi) | API key | per call | Offered — measured in short runs |
-| Codex, Kimi, ChatGPT/Claude subscriptions | — | — | Not in this version |
+| **Kimi** (Moonshot, on Pi) | API key | per call | Offered |
+| **OpenAI** (on Pi) | API key | per call | Offered |
+| **Claude** (Anthropic, on Pi) | API key | per call | Offered |
+| ChatGPT and Claude subscriptions | — | — | Not in this version |
 
 **The desktop app is not in 0.4.0.** Install the CLI.
 

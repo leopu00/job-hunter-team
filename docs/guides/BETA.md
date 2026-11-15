@@ -33,8 +33,8 @@ Security vulnerabilities follow the private process in
 - The CLI, native office, web dashboard and Telegram share the same
   container-backed team.
 
-Since 0.4 one provider is offered: Codex. Kimi is archived and Claude Code is
-not offered; teams already configured on them keep working. The provider-specific
+0.4.0 offers four providers, each with an API key on the Pi harness: GLM, Kimi,
+OpenAI and Claude. The Codex subscription is not in 0.4.0; teams already configured on it keep working. The provider-specific
 limitations are documented in
 [`PROVIDERS.md`](../about/PROVIDERS.md) and
 [`MONITORING.md`](../about/MONITORING.md).

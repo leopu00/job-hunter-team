@@ -101,7 +101,7 @@ jht stats                 # found / scored / applied counts`,
     withoutStrong: "Without",
     withoutRest1: " — your data stays on your computer, in the desktop app ",
     withoutRest2:
-      "; the texts the agents work on go to the model's provider (Z.ai for GLM).",
+      "; the texts the agents work on go to the model's provider (Z.ai for GLM, Moonshot for Kimi, OpenAI for OpenAI, Anthropic for Claude).",
     readOnlyStrong: "read-only",
     readOnlyRest1: "🌐 On the public site the dashboard is ",
     readOnlyRest2:
@@ -162,7 +162,7 @@ jht stats                 # conteggi trovate / valutate / candidate`,
     withoutStrong: "Senza",
     withoutRest1: " — i tuoi dati restano sul tuo computer, nell’app desktop ",
     withoutRest2:
-      "; i testi che gli agenti elaborano vanno al fornitore del modello (Z.ai per GLM).",
+      "; i testi che gli agenti elaborano vanno al fornitore del modello (Z.ai per GLM, Moonshot per Kimi, OpenAI per OpenAI, Anthropic per Claude).",
     readOnlyStrong: "in sola lettura",
     readOnlyRest1: "🌐 Sul sito pubblico la dashboard è ",
     readOnlyRest2:
@@ -224,7 +224,7 @@ jht stats                 # recuentos de encontradas / puntuadas / aplicadas`,
     withoutRest1:
       " — tus datos se quedan en tu ordenador, en la app de escritorio ",
     withoutRest2:
-      "; los textos que procesan los agentes van al proveedor del modelo (Z.ai para GLM).",
+      "; los textos que procesan los agentes van al proveedor del modelo (Z.ai para GLM, Moonshot para Kimi, OpenAI para OpenAI, Anthropic para Claude).",
     readOnlyStrong: "de solo lectura",
     readOnlyRest1: "🌐 En el sitio público el panel es ",
     readOnlyRest2:
@@ -287,7 +287,7 @@ jht stats                 # nombres trouvés / notés / postulés`,
     withoutRest1:
       " — vos données restent sur votre ordinateur, dans l’app de bureau ",
     withoutRest2:
-      " ; les textes que traitent les agents vont au fournisseur du modèle (Z.ai pour GLM).",
+      " ; les textes que traitent les agents vont au fournisseur du modèle (Z.ai pour GLM, Moonshot pour Kimi, OpenAI pour OpenAI, Anthropic pour Claude).",
     readOnlyStrong: "en lecture seule",
     readOnlyRest1: "🌐 Sur le site public, le tableau de bord est ",
     readOnlyRest2:
@@ -349,7 +349,7 @@ jht stats                 # Zähler gefunden / bewertet / beworben`,
     withoutRest1:
       " — deine Daten bleiben auf deinem Computer, in der Desktop-App ",
     withoutRest2:
-      "; die Texte, die die Agenten verarbeiten, gehen an den Anbieter des Modells (Z.ai für GLM).",
+      "; die Texte, die die Agenten verarbeiten, gehen an den Anbieter des Modells (Z.ai für GLM, Moonshot für Kimi, OpenAI für OpenAI, Anthropic für Claude).",
     readOnlyStrong: "schreibgeschützt",
     readOnlyRest1:
       "🌐 Auf der öffentlichen Seite ist das Dashboard zur Sicherheit ",
@@ -411,7 +411,7 @@ jht stats                 # talált / pontozott / jelentkezett darabszámok`,
     withoutRest1:
       " — az adataid a gépeden maradnak, az asztali alkalmazásban: ",
     withoutRest2:
-      "; az ügynökök által feldolgozott szövegek a modell szolgáltatójához kerülnek (GLM esetén a Z.ai-hoz).",
+      "; az ügynökök által feldolgozott szövegek a modell szolgáltatójához kerülnek (GLM esetén a Z.ai-hoz, Kimi esetén a Moonshothoz, OpenAI esetén az OpenAI-hoz, Claude esetén az Anthropichoz).",
     readOnlyStrong: "csak olvasható",
     readOnlyRest1: "🌐 A nyilvános oldalon az irányítópult biztonsági okból ",
     readOnlyRest2:
@@ -473,7 +473,7 @@ jht stats                 # contagens encontradas / pontuadas / candidatadas`,
     withoutRest1:
       " — os teus dados ficam no teu computador, na app de desktop ",
     withoutRest2:
-      "; os textos que os agentes processam vão para o fornecedor do modelo (Z.ai para GLM).",
+      "; os textos que os agentes processam vão para o fornecedor do modelo (Z.ai para GLM, Moonshot para Kimi, OpenAI para OpenAI, Anthropic para Claude).",
     readOnlyStrong: "apenas de leitura",
     readOnlyRest1: "🌐 No site público o painel é ",
     readOnlyRest2:

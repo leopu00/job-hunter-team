@@ -30,6 +30,15 @@ export default async function ConnectAiProviderPage() {
         <LI>
           🟢 <strong>GLM</strong> {t.apiKey}
         </LI>
+        <LI>
+          🟢 <strong>Kimi</strong> {t.apiKeyKimi}
+        </LI>
+        <LI>
+          🟢 <strong>OpenAI</strong> {t.apiKeyOpenai}
+        </LI>
+        <LI>
+          🟢 <strong>Claude</strong> {t.apiKeyClaude}
+        </LI>
         <LI>⏳ {t.coming}</LI>
       </UL>
 
@@ -39,15 +48,15 @@ export default async function ConnectAiProviderPage() {
       </P>
       <Pre>
         {`jht setup                                                   # asks for the key, typed hidden
-jht setup --non-interactive --provider glm --api-key-file <file>
-jht setup --non-interactive --provider glm --api-key-stdin < <file>`}
+jht setup --non-interactive --provider <glm|kimi|openai|claude> --api-key-file <file>
+jht setup --non-interactive --provider <glm|kimi|openai|claude> --api-key-stdin < <file>`}
       </Pre>
       <P>{t.apiKeyP1}</P>
       <P>{t.apiKeyP2}</P>
 
       <H3>{t.step3}</H3>
       <Pre>
-        {`jht providers current   # the active provider: glm
+        {`jht providers current   # the active provider (glm, kimi, openai or claude)
 jht doctor              # full health check — must exit 0`}
       </Pre>
 
