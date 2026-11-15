@@ -108,7 +108,7 @@ export async function promptWorkingHours(prompter, currentWorkingHours) {
 
 export async function assembleAndSaveConfig(prompter, params) {
   const { providerChoice, authMethod, apiKey, subscriptionConfig, model,
-          baseProviders, workingHours, harness } = params;
+          baseProviders, workingHours, budget, harness } = params;
 
   const providerConfig = { name: providerChoice, auth_method: authMethod };
   if (authMethod === 'api_key' && apiKey) {
@@ -142,6 +142,11 @@ export async function assembleAndSaveConfig(prompter, params) {
   if (workingHours) {
     config.team = config.team || {};
     config.team.working_hours = workingHours;
+  }
+  // The budget of the period (JHT-T322): absent = no limit chosen; the brake of pi (pi_spend_cap.py) reads it at every tick.
+  if (budget) {
+    config.team = config.team || {};
+    config.team.budget = budget;
   }
 
   // Written without a word: «saved» is said at the end of the setup, not before the steps that can still fail.

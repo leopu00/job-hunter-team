@@ -54,7 +54,7 @@ const prompter = {
   select: async (p) => { say('select', { message: p.message, options: p.options.map((o) => o.value) });
     const wanted = answers.select?.[p.message];
     return p.options.some((o) => o.value === wanted) ? wanted : (p.initialValue ?? p.options[0].value); },
-  multiselect: async () => [], text: async () => '',
+  multiselect: async () => [], text: async (p) => { say('text', { message: p.message }); return answers.text?.[p.message] ?? ''; },
   password: async (p) => { say('password', { message: p.message, rejects: p.validate?.('short') ?? null }); return keys.shift() ?? ''; },
   confirm: async (p) => { if (answers.cancelAtConfirm) throw new WizardCancelledError(); return answers.confirm ?? p.initialValue ?? true; },
   progress: () => ({ update() {}, stop() {} }),
@@ -294,4 +294,46 @@ test('a kept configuration of a service this release does not offer is said, and
   assert.ok(events.some((e) => e.kind === 'note' && /for kimi, which this release does not offer/.test(e.message)));
   assert.equal(JSON.parse(configText).active_provider, RELEASE_PROVIDERS[0]);
   assert.equal(events.at(-1).ok, true);
+});
+
+test('the budget in the wizard: the trial of $5 for 30 minutes is the answer already chosen, saved as team.budget, 24/7, and said in one line', () => {
+  const box = sandbox();
+  const t0 = Date.now();
+  const { events, configText } = run(box, { select: { 'AI Provider': 'glm' }, keys: [KEY] });
+  const ask = events.find((e) => e.kind === 'select' && e.message === 'How much should the team work?');
+  assert.deepEqual(ask.options, ['trial', 'night', 'days', 'none']);
+  assert.equal(events.some((e) => e.kind === 'select' && e.message === 'When should the team work?'), false, 'the old hours question is not asked');
+  const { budget, working_hours: hours } = JSON.parse(configText).team;
+  assert.equal(budget.usd, 5);
+  assert.equal(budget.set_by, 'setup');
+  const minutes = (Date.parse(budget.ends_at) - Date.parse(budget.starts_at)) / 60_000;
+  assert.equal(minutes, 30);
+  assert.ok(Date.parse(budget.starts_at) >= t0 - 1000 && Date.parse(budget.starts_at) <= Date.now());
+  assert.equal(hours, undefined, 'no working hours = 24/7 for the trial');
+  assert.ok(events.some((e) => e.kind === 'note' && e.message === 'The team can spend $5 in 30 minutes, then it stops by itself.'));
+  assert.equal(events.at(-1).ok, true);
+});
+
+test('the budget in the wizard: «a few days» asks the amount, the days and the hours, and saves the period with the hours in the zone of the person', () => {
+  const box = sandbox();
+  const { events, configText } = run(box, {
+    select: { 'AI Provider': 'glm', 'How much should the team work?': 'days', 'For how many days?': 3, 'When does it work?': 'ten_from_8' },
+    text: { 'How many dollars in total?': '10' },
+    keys: [KEY],
+  });
+  const { budget, working_hours: hours } = JSON.parse(configText).team;
+  assert.equal(budget.usd, 10);
+  assert.equal((Date.parse(budget.ends_at) - Date.parse(budget.starts_at)) / 3_600_000, 72);
+  assert.deepEqual(hours.windows, [{ days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'], start: '08:00', end: '18:00' }]);
+  assert.ok(hours.timezone);
+  assert.ok(events.some((e) => e.kind === 'note' && e.message === `The team can spend $10 in 3 days, 10 hours a day (8:00-18:00 ${hours.timezone}), then it stops by itself.`));
+});
+
+test('the budget in the wizard: «no limit» warns, saves no budget and asks the working hours as before', () => {
+  const box = sandbox();
+  const { events, configText } = run(box, { select: { 'AI Provider': 'glm', 'How much should the team work?': 'none', 'When should the team work?': 'office' }, keys: [KEY] });
+  assert.ok(events.some((e) => e.kind === 'note' && /spends as long as there is credit on your account/.test(e.message)));
+  const team = JSON.parse(configText).team;
+  assert.equal(team.budget, undefined);
+  assert.deepEqual(team.working_hours.windows[0].days, ['mon', 'tue', 'wed', 'thu', 'fri']);
 });
