@@ -17,6 +17,7 @@ One line, one fact, fields separated by `|`; the languages are always in the ord
     X|Europe/Rome|Milano|Napoli  names of big cities that are not an IANA name, and the zone they are in
     W|Europe/Rome|W. Europe Standard Time      the Windows id of a zone (to tell the time of it on Windows)
     P|W. Europe Standard Time|Europe/Berlin    the zone a Windows id is taken for when the computer is on it
+    F|<letters with an accent>|<the same without>   the table that takes the accents off (see fold_table)
 """
 
 from __future__ import annotations
@@ -88,7 +89,9 @@ CITY_ALIASES = {
 def key(text: str) -> str:
     """What two spellings of a name share: lower case, no accents, `_ - . , '` as a space, spaces joined by one."""
     text = text.replace("ß", "ss").replace("ø", "o").replace("Ø", "O").replace("ł", "l").replace("Ł", "L").replace("đ", "d").replace("æ", "ae").replace("Æ", "AE")
-    plain = "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
+    chars, bases = fold_table()
+    plain = text.translate(str.maketrans(chars, bases))
+    plain = "".join(c for c in unicodedata.normalize("NFD", plain) if unicodedata.category(c) != "Mn")
     for mark in "_-.,'’":
         plain = plain.replace(mark, " ")
     return " ".join(plain.lower().split())
@@ -105,6 +108,19 @@ def table() -> dict[str, list[list[str]]]:
         letter, *fields = line.split("|")
         out.setdefault(letter, []).append(fields)
     return out
+
+
+def fold_table() -> tuple[str, str]:
+    """The letters with an accent that the Latin alphabets use and the letter they are without it: what the NFD of Unicode takes off. A wrapper
+    on Linux or Windows cannot count on String.Normalize (a PowerShell with the invariant globalization leaves the accents), so the table travels."""
+    chars, bases = [], []
+    for code in [*range(0xC0, 0x250), *range(0x1E00, 0x1F00)]:
+        char = chr(code)
+        decomposed = unicodedata.normalize("NFD", char)
+        if len(decomposed) > 1 and decomposed[0].isascii() and decomposed[0].isalpha() and all(unicodedata.category(c) == "Mn" for c in decomposed[1:]):
+            chars.append(char)
+            bases.append(decomposed[0])
+    return "".join(chars), "".join(bases)
 
 
 def english_city(zone: str) -> str:
@@ -160,6 +176,7 @@ def refresh() -> None:
             zone = next((z for z, i in windows_of.items() if i == ident), zone)
         if zone in zone_names:
             out.append(f"P|{ident}|{zone}")
+    out.append("|".join(["F", *fold_table()]))
     DATA.parent.mkdir(parents=True, exist_ok=True)
     DATA.write_text("\n".join(out) + "\n", encoding="utf-8")
 

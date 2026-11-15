@@ -26,7 +26,7 @@ from wrapper_ps_texts import UTF8_OUTPUT, say_functions  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
 SHELLS = ("powershell", "pwsh")
-FUNCTIONS = ("Test-HostEnvValue", "Get-JhtTimezoneLines", "ConvertFrom-JhtTzEscape", "ConvertTo-JhtTzKey", "Add-JhtTzName", "Get-JhtTzIndex",
+FUNCTIONS = ("Test-HostEnvValue", "Get-JhtTimezoneLines", "ConvertFrom-JhtTzEscape", "Get-JhtTzFold", "ConvertTo-JhtTzKey", "Add-JhtTzName", "Get-JhtTzIndex",
              "Find-JhtTimezone", "Get-JhtTzNow", "Get-JhtDetectedTimezone", "Get-JhtHostEnvTimezone", "Set-JhtHostEnvTimezone",
              "Read-JhtTzLine", "Format-JhtTzZone", "Resolve-JhtUserTimezone")
 ROME, PARIS = "Romance Standard Time", "W. Europe Standard Time"  # the Windows ids of Paris (Europe/Paris) and Berlin (Europe/Berlin)
@@ -270,8 +270,8 @@ def test_the_file_of_the_data_is_whole():
 @pytest.mark.parametrize("shell", SHELLS)
 def test_the_keys_of_the_picker_in_powershell_are_the_keys_of_the_data_in_python(shell, tmp_path):
     samples = ["Italia", "M\u00fcnchen", "Magyarorsz\u00e1g", "Espa\u00f1a", "Stra\u00dfe", "S\u00e3o Paulo", "St. Lucia", "Cote d'Ivoire", "Z\u00fcrich", "  New   York ",
-               "\u0141\u00f3d\u017a", "Kyiv", "\u00c5land", "Sao_Paulo", "America/Argentina/Buenos_Aires", "Cura\u00e7ao", "N\u00fcrnberg", "\u00d8resund"]
-    lines = [_function("ConvertTo-JhtTzKey")]
+               "\u0141\u00f3d\u017a", "Krak\u00f3w", "M\u00e1laga", "Z\u00fcrich", "\u0158\u00edm", "Troms\u00f8", "Kyiv", "\u00c5land", "Sao_Paulo", "America/Argentina/Buenos_Aires", "Cura\u00e7ao", "N\u00fcrnberg", "\u00d8resund"]
+    lines = [_function(name) for name in ("Get-JhtTimezoneLines", "ConvertFrom-JhtTzEscape", "Get-JhtTzFold", "ConvertTo-JhtTzKey")]
     lines += ["[Console]::Out.WriteLine('KEY=' + (ConvertTo-JhtTzKey '%s'))" % sample.replace("'", "''") for sample in samples]
     script = tmp_path / "keys.ps1"
     script.write_text("\n".join(lines), encoding="utf-8-sig")  # with a mark: Windows PowerShell 5.1 reads the accents as they are
