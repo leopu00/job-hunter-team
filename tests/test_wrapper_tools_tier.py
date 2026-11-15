@@ -485,6 +485,8 @@ def test_tools_help_is_its_own_usage_served_before_the_container_or_the_helper()
     gate = gate[:gate.index("serve_help_without_docker")]
     assert re.search(r'if \[ "\$SUB" = tools \]; then\n\s+tools_help\n\s+exit 0', gate), "the help gate answers jht tools --help"
     assert sh.index('if [ "$SUB" = tools ]; then\n          tools_help') < sh.index("\n  tools)\n"), "before the tools arm"
+    # the .ps1 says the catalogue's text by its key (in every language: tests/test_wrapper_ps1_speaks_the_language_chosen.py)
+    assert re.search(r"function Write-ToolsHelp \{\n  \[Console\]::Out\.WriteLine\(\(Get-JhtText 'help\.tools'\)\)\n\}", ps)
     ps_gate = ps[ps.index("$HelpRequested = "):ps.index("exit (Invoke-HelpWithoutDocker $Sub @Rest)")]
     assert re.search(r"if \(\$Sub -ceq 'tools'\) \{\n\s+Write-ToolsHelp\n\s+exit 0", ps_gate)
     import sys as _sys
@@ -494,7 +496,6 @@ def test_tools_help_is_its_own_usage_served_before_the_container_or_the_helper()
         text = catalog(lang)["wrapper.help.tools"]
         for needed in ("jht tools", "status --json", "pull", "switch"):
             assert needed in text, (lang, needed)
-        assert text in ps, f"the .ps1 says the {lang} text of the catalogue"
     for lang in ("hu", "es", "de", "fr", "pt"):
         text = catalog(lang)["wrapper.help.tools"]
         assert "jht tools" in text and "status --json" in text and "%" not in text

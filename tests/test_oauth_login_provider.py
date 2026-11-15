@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -11,7 +12,7 @@ from test_desktop_chat_wrapper import _runtime
 
 ROOT = Path(__file__).resolve().parents[1]
 POWERSHELL_WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
-NO_PROVIDER = "nessun provider attivo"  # the .ps1 still says it by hand, in Italian
+NO_PROVIDER = "nessun provider attivo"  # the .ps1 says it by the catalog key, in the 7 languages
 # English: the language of a person who chose nothing
 NO_PROVIDER_EN = "no active provider"
 
@@ -73,8 +74,16 @@ def test_the_powershell_wrapper_has_the_same_cases():
     # claude only by name: the empty provider is not among its patterns
     assert "{ $_ -in @('claude', 'anthropic') }" in block
     assert re.search(r"\{ \$_ -in @\([^)]*''", block) is None
-    empty = re.search(r"^\s*'' \{ throw \"([^\"]+)\" \}", block, re.M)
-    assert empty is not None and NO_PROVIDER in empty.group(1) and "jht providers use openai" in empty.group(1)
+    empty = re.search(r"^\s*'' \{ throw \(Get-JhtText '([a-z_.]+)'\) \}", block, re.M)
+    assert empty is not None
+    # the sentence is a text of the catalog, in every language; the default provider of 0.4.0 is the one it names
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from script_texts import LANGUAGES, catalog
+
+    for lang in LANGUAGES:
+        sentence = catalog(lang)["wrapper." + empty.group(1)]
+        assert "jht providers use glm" in sentence, lang
+    assert NO_PROVIDER in catalog("it")["wrapper." + empty.group(1)]
     assert block.index("'' { throw") < block.index("default {")
 
 

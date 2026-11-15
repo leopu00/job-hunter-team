@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pytest
 
+from wrapper_ps_texts import say_functions as ps_say_functions
 from wrapper_texts import catalog, say_functions
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,7 +32,7 @@ def functions(*names: str) -> str:
 
 
 def powershell_functions(*names: str) -> str:
-    return "\n".join(re.search(rf"^function {n} \{{\n.*?^\}}\n", _source("jht-wrapper.ps1"), re.S | re.M).group(0) for n in names)
+    return ps_say_functions("it") + "\n" + "\n".join(re.search(rf"^function {n} \{{\n.*?^\}}\n", _source("jht-wrapper.ps1"), re.S | re.M).group(0) for n in names)
 
 
 # The engine: records every call; answers `volume ls` from VOLUMES and `exec ... bots status` from BOTS (a JSON line).
@@ -170,15 +171,14 @@ def test_integration_help_is_its_own_usage_and_both_wrappers_serve_it_before_the
     ps = _source("jht-wrapper.ps1")
     body = re.search(r"^integration_help\(\) \{\n.*?^\}\n", sh, re.S | re.M).group(0)
     assert "jht_say help.integration" in body
-    # the .sh text is in shared/locales; the .ps1 still has the Italian one written by hand
+    # the text is in shared/locales, for both wrappers
     text = catalog("it")["wrapper.help.integration"]
     for needed in ("jht integration <comando>", "list [--json]", "status [ID]", "add ID", "remove ID", "--purge"):
         assert needed in text, needed
     assert re.search(r'if \[ "\$SUB" = integration \] && \[ "\$#" -eq 2 \]; then\n\s+integration_help', sh)
     assert re.search(r"-ceq 'integration' -and \$Rest.Count -eq 1\) \{\n\s+Write-IntegrationHelp", ps)
-    # the same text in the two wrappers
-    ps_text = re.search(r"Write-IntegrationHelp \{.*?@'\n(.*?)\n'@", ps, re.S).group(1)
-    assert ps_text == text
+    # the same text in the two wrappers: the .ps1 says the catalog's, by its key
+    assert re.search(r"function Write-IntegrationHelp \{\n\s+\[Console\]::Out.WriteLine\(\(Get-JhtText 'help.integration'\)\)\n\}", ps)
 
 
 def test_integration_help_runs_and_prints_the_usage():

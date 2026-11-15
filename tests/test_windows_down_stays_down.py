@@ -31,8 +31,8 @@ function Get-JhtDoctorWslMemoryAdvice { return [string]$env:FAKE_WSL_ADVICE }
 function Repair-MountOwnership { Add-Content -LiteralPath $env:FAKE_LOG -Value 'start'; return $false }
 """
 
-IMPORTS = ["Get-JhtTeamStoppedPath", "Remove-JhtTeamStoppedEntry", "Test-JhtTeamStoppedByPerson", "Set-JhtTeamStopped", "Clear-JhtTeamStopped",
-           "Get-JhtTeamStoppedText", "Invoke-JhtHostDoctor", "Ensure-Up", "Write-Err", "Write-Info"]
+IMPORTS = ["Get-JhtTextTable", "Get-JhtText", "Format-JhtText", "Get-JhtTeamStoppedPath", "Remove-JhtTeamStoppedEntry", "Test-JhtTeamStoppedByPerson", "Set-JhtTeamStopped", "Clear-JhtTeamStopped",
+           "Get-JhtTeamStoppedText", "ConvertTo-JhtAsciiJson", "Invoke-JhtHostDoctor", "Ensure-Up", "Write-Err", "Write-Info"]
 
 
 def _ps(tmp_path, body: str, **env: str):

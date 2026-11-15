@@ -425,7 +425,8 @@ WRAPPER_BODY = r"""
 Restore-JhtWslConfigAtUninstall -RuntimePath $env:RUNTIME -ProfilePath $env:PROFILEDIR
 [Console]::Out.WriteLine('AFTER')
 """
-WRAPPER_IMPORTS = [*BLOCK_FUNCTIONS, "Restore-JhtWslConfigAtUninstall", "Get-JhtUninstallText", "Get-JhtTextLanguage", "Format-JhtUninstallReason"]
+WRAPPER_IMPORTS = [*BLOCK_FUNCTIONS, "Restore-JhtWslConfigAtUninstall", "Get-JhtUninstallText", "Get-JhtTextLanguage", "Get-JhtTextTable", "Get-JhtText",
+                   "Format-JhtText", "Format-JhtUninstallReason"]
 
 
 def _wrapper_uninstall(tmp_path, runtime, language="it"):  # a person who reads Italian; with nothing chosen the language is the system's
@@ -445,11 +446,25 @@ def test_jht_uninstall_gives_the_wslconfig_back_as_it_was_and_says_so(tmp_path):
     assert f"Tolte da {_config(tmp_path)} le righe aggiunte dall'installer (memoria di WSL)." in out and out.strip().endswith("AFTER")
 
 
-def test_jht_uninstall_says_it_in_english_when_the_person_chose_another_language(tmp_path):
+def test_jht_uninstall_says_it_in_english_when_the_person_chose_a_language_the_product_does_not_have(tmp_path):
     runtime = _setup_then_runtime(tmp_path, None)
-    out = _wrapper_uninstall(tmp_path, runtime, language="de")
+    out = _wrapper_uninstall(tmp_path, runtime, language="xx")
     assert not _config(tmp_path).exists()
     assert f"Removed from {_config(tmp_path)} the lines the installer added (WSL memory)." in out
+
+
+def test_jht_uninstall_says_it_in_the_language_the_person_chose_in_all_seven(tmp_path):
+    import sys as _sys
+
+    _sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from script_texts import LANGUAGES, catalog
+
+    for language in LANGUAGES:
+        case = tmp_path / language
+        case.mkdir()
+        runtime = _setup_then_runtime(case, None)
+        out = _wrapper_uninstall(case, runtime, language=language)
+        assert catalog(language)["wrapper.ps.uninstall.wslconfig.done"].replace("{0}", str(_config(case))) in out, language
 
 
 def test_jht_uninstall_leaves_what_the_person_changed_and_says_so(tmp_path):

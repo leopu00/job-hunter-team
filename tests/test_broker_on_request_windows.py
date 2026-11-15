@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 from windows_native_fakes import WINDOWS, powershell_argv, windows_env
+from wrapper_ps_texts import UTF8_OUTPUT
 
 ROOT = Path(__file__).resolve().parent.parent
 WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
@@ -30,13 +31,16 @@ $ErrorActionPreference = 'Stop'
 $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($env:JHT_UNDER_TEST, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw "parse: $($errors[0])" }
-foreach ($name in 'Write-EnsureLine', 'Invoke-BrokerNetwork', 'Get-ComposeLabel', 'Get-BrokerContainerState', 'Ensure-Broker', 'Resume-Broker', 'Invoke-ComposeQuiet') {
+foreach ($name in 'Get-JhtTextTable', 'Get-JhtText', 'Format-JhtText', 'Write-EnsureLine', 'Invoke-BrokerNetwork', 'Get-ComposeLabel', 'Get-BrokerContainerState', 'Ensure-Broker', 'Resume-Broker', 'Invoke-ComposeQuiet') {
   $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name }, $true)
   if (-not $fn) { throw "$name missing" }
   Invoke-Expression $fn.Extent.Text
 }
-function Write-Err { param([string]$Msg) Add-Content -LiteralPath $env:T_LOG -Value "ERR $Msg" }
-function Write-Warn { param([string]$Msg) Add-Content -LiteralPath $env:T_LOG -Value "WARN $Msg" }
+function Get-JhtTextLanguage { return 'it' }
+# the sentences have accents: written in UTF-8 without a mark (Add-Content writes the ANSI code page in Windows PowerShell 5.1), read as UTF-8
+function Write-HarnessLog { param([string]$Line) [IO.File]::AppendAllText($env:T_LOG, $Line + [Environment]::NewLine, [Text.UTF8Encoding]::new($false)) }
+function Write-Err { param([string]$Msg) Write-HarnessLog "ERR $Msg" }
+function Write-Warn { param([string]$Msg) Write-HarnessLog "WARN $Msg" }
 function Write-Info { param([string]$Msg) }
 function Start-Sleep { param($Seconds) }
 $RuntimeDir = $env:T_RUNTIME
@@ -100,7 +104,7 @@ def _run(tmp_path: Path, body: str, *, state="absent", kind="podman", declared=T
     log = tmp_path / "log.txt"
     log.write_text("", encoding="utf-8")
     harness = tmp_path / "harness.ps1"
-    harness.write_text(HARNESS, encoding="utf-8")
+    harness.write_text(UTF8_OUTPUT + HARNESS, encoding="utf-8")
     env = {
         **(windows_env(tmp_path) if WINDOWS else os.environ),
         "JHT_UNDER_TEST": str(WRAPPER), "T_RUNTIME": str(runtime), "T_STATE": str(state_file), "T_LOG": str(log), "T_BODY": body,
@@ -108,7 +112,7 @@ def _run(tmp_path: Path, body: str, *, state="absent", kind="podman", declared=T
         "T_EXISTS": str(count) if count is not None else ("1" if exists else "0"), "T_FOREIGN": "1" if foreign else "0", "T_INSTALL_FAILS": "1" if install_fails else "0", "T_NEVER_READY": "1" if never_ready else "0",
         "T_ADMIN_RC": admin_rc, "T_UNTRUSTED": "1" if untrusted else "0",
     }
-    done = subprocess.run([*powershell_argv(), "-File", str(harness)], env=env, capture_output=True, text=True, timeout=180)
+    done = subprocess.run([*powershell_argv(), "-File", str(harness)], env=env, capture_output=True, text=True, encoding="utf-8", timeout=180)
     assert done.returncode == 0, done.stdout + done.stderr
     lines = [line.strip() for line in done.stdout.splitlines() if line.strip()]
     values = dict(line.split("=", 1) for line in lines if line.startswith(("RESULT=", "MARKER=")))

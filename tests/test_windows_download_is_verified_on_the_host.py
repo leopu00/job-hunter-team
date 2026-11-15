@@ -15,8 +15,10 @@ from pathlib import Path
 
 import pytest
 from test_windows_host_env_is_not_written_through_a_link import SHELLS, _run, windows_only
+from wrapper_ps_texts import say_functions
 
 ROOT = Path(__file__).resolve().parents[1]
+TEXTS = say_functions("en")  # the texts the functions say, in English: what is asserted below is read in English
 WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
 ASSET = "job-hunter-team-macos-universal.dmg"
 BYTES = b"the installer the release published"
@@ -75,7 +77,7 @@ def _download(shell: str, tmp_path: Path, site, *args: str, extra: str = ""):
     home = tmp_path / "profile"
     home.mkdir(exist_ok=True)
     quoted = ", ".join("'" + a.replace("'", "''") + "'" for a in args)
-    script = ("function Write-Err { param([string]$Msg) Write-Host \"error: $Msg\" }\n" + _functions() + extra
+    script = ("function Write-Err { param([string]$Msg) Write-Host \"error: $Msg\" }\n" + TEXTS + _functions() + extra
               + f"\nInvoke-HostDownload -DownloadArgs @({quoted})\nWrite-Host \"RC=$script:HostDownloadExitCode\"\n")
     done = _run(shell, script, tmp_path, USERPROFILE=str(home), JHT_RELEASE_BASE_URL=site.url,
                 JHT_HOME_HOST=str(home / ".jht"), JHT_USER_DIR_HOST="", TEMP=str(tmp_path / "temp"), TMP=str(tmp_path / "temp"))
@@ -111,7 +113,7 @@ def test_a_wrong_hash_saves_nothing_and_leaves_nothing(shell: str, tmp_path: Pat
     (site.root / "SHA256SUMS").write_text(f"{'0' * 64}  {ASSET}\n", encoding="utf-8")
     out = tmp_path / "out" / "client.dmg"
     done, _ = _download(shell, tmp_path, site, "--os", "macos", "--version", "0.4.0", "--output", str(out))
-    assert "RC=1" in done.stdout and "SHA-256 non valido" in done.stdout
+    assert "RC=1" in done.stdout and "invalid SHA-256" in done.stdout
     assert not out.exists() and list(out.parent.iterdir()) == [] and list((tmp_path / "temp").iterdir()) == []
 
 
@@ -123,7 +125,7 @@ def test_a_destination_in_a_shared_folder_is_refused_even_through_a_junction(she
     shared.mkdir(parents=True)
     plain = shared / "client.dmg"
     done, _ = _download(shell, tmp_path, site, "--os", "macos", "--version", "0.4.0", "--output", str(plain))
-    assert "RC=1" in done.stdout and "condivisa con il team" in done.stdout and not plain.exists()
+    assert "RC=1" in done.stdout and "shared with the team" in done.stdout and not plain.exists()
 
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
@@ -131,7 +133,7 @@ def test_a_destination_in_a_shared_folder_is_refused_even_through_a_junction(she
     made = _run(shell, f"New-Item -ItemType Junction -Path '{link}' -Target '{shared}' | Out-Null", tmp_path)
     assert made.returncode == 0, made.stdout + made.stderr
     done, _ = _download(shell, tmp_path, site, "--os", "macos", "--version", "0.4.0", "--output", str(link / "client.dmg"))
-    assert "RC=1" in done.stdout and "condivisa con il team" in done.stdout
+    assert "RC=1" in done.stdout and "shared with the team" in done.stdout
     assert list(shared.iterdir()) == []
 
 
@@ -147,7 +149,7 @@ def test_an_existing_different_file_is_kept_and_a_wrong_ask_answers_2(shell: str
     done, _ = _download(shell, tmp_path, site, "--os", "macos")
     assert "RC=2" in done.stdout
     done, _ = _download(shell, tmp_path, site, "--os", "windows", "--version", "0.4.0")
-    assert "RC=1" in done.stdout and "Windows non fa parte" in done.stdout
+    assert "RC=1" in done.stdout and "Windows is not part of 0.4.0" in done.stdout
 
 
 @windows_only
@@ -158,7 +160,7 @@ def test_linux_is_said_to_have_no_desktop_app_in_this_version(shell: str, extra:
     (tmp_path / "temp").mkdir()
     done, home = _download(shell, tmp_path, site, "--os", "linux", "--version", version, *extra)
     assert "RC=1" in done.stdout, done.stdout + done.stderr
-    assert "non c'e' l'app desktop per Linux: usa install.sh. Non e' stato scaricato niente." in done.stdout
+    assert "there is no desktop app for Linux: use install.sh. Nothing was downloaded." in done.stdout
     assert not (home / "Downloads").exists()
 
 
@@ -172,8 +174,8 @@ def test_a_release_before_0_4_is_said_to_have_no_macos_app(shell: str, os_name: 
     (old / "SHA256SUMS").write_text(f"{'a' * 64}  job-hunter-team-linux-x64.tar.gz\n", encoding="utf-8")
     done, home = _download(shell, tmp_path, site, "--os", os_name, "--version", "0.3.9")
     assert "RC=1" in done.stdout, done.stdout + done.stderr
-    assert "non ha l'app per macOS: usa la 0.4.0 o successive" in done.stdout
-    assert "non trovato" not in done.stdout
+    assert "has no app for macOS: use 0.4.0 or later" in done.stdout
+    assert "not found" not in done.stdout
     assert not (home / "Downloads").exists()
 
 
@@ -186,4 +188,4 @@ def test_the_usage_offers_windows_and_macos_only(shell: str, tmp_path: Path, sit
     assert "usage: jht download --os windows|macos --version X.Y.Z [--output FILE]" in done.stdout
     assert "linux" not in done.stdout.lower().replace("--os and --version are required", "") and "--deb" not in done.stdout
     other, _ = _download(shell, tmp_path, site, "--os", "plan9", "--version", "0.4.0")
-    assert "RC=2" in other.stdout and "Usa windows o macos." in other.stdout and "linux" not in other.stdout.lower()
+    assert "RC=2" in other.stdout and "Use windows or macos." in other.stdout and "linux" not in other.stdout.lower()

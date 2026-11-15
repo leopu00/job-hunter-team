@@ -12,11 +12,16 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from wrapper_ps_texts import say_functions  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[1]
+TEXTS = say_functions("en")  # the texts the functions say, in English: the errors of this file are read in English
 WRAPPER = (ROOT / "scripts" / "jht-wrapper.ps1").read_text(encoding="utf-8").replace("\r\n", "\n")
 KEY = "-".join(["synthetic", "glm", "key", "ab" * 8])
 
@@ -46,7 +51,7 @@ def _run(tmp_path: Path, body: str, **env: str) -> subprocess.CompletedProcess:
 
 def _convert(tmp_path: Path, args: list[str]) -> list[str]:
     quoted = ", ".join("'%s'" % a.replace("'", "''") for a in args)
-    body = "$ErrorActionPreference = 'Stop'\n" + _function("Convert-SetupKeyFileArgs") + f"""
+    body = "$ErrorActionPreference = 'Stop'\n" + TEXTS + _function("Convert-SetupKeyFileArgs") + f"""
 $plan = Convert-SetupKeyFileArgs @({quoted})
 'ERROR=' + $plan.Error
 'KEY=' + $(if ($null -eq $plan.Key) {{ '' }} else {{ 'present' }})
@@ -137,6 +142,7 @@ def test_the_setup_branch_pipes_the_key_to_docker_and_never_puts_it_in_an_argume
     path = _key_file(tmp_path, (KEY + "\n").encode())
     recorded = tmp_path / "recorded.txt"
     body = f"""$ErrorActionPreference = 'Stop'
+{TEXTS}
 {_function("Convert-SetupKeyFileArgs")}
 {_function("Invoke-NativeWithStdin")}
 $Rest = [string[]]@('--non-interactive', '--provider', 'glm', '--harness', 'pi', '--api-key-file', '{path}')
@@ -177,6 +183,7 @@ switch ($Sub) {{
 
 def test_the_setup_branch_stops_with_the_reason_before_touching_docker_when_the_file_is_wrong(tmp_path):
     body = f"""$ErrorActionPreference = 'Stop'
+{TEXTS}
 {_function("Convert-SetupKeyFileArgs")}
 {_function("Invoke-NativeWithStdin")}
 $Rest = [string[]]@('--api-key-file', 'nope.txt')
