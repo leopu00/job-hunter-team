@@ -491,8 +491,7 @@ you give everything with the options.
 
   --non-interactive            no questions
   --provider <name>            glm (Z.ai, default), kimi (Moonshot), openai or claude (Anthropic)
-  --harness <name>             pi (default; the only one for glm, kimi and claude) or codex (only with openai)
-  --auth-method <method>       api_key (default) or subscription
+  --harness <name>             pi (default)
   --api-key-file <path>        file that contains the API key (one line, readable only by you).
                                jht reads a file of your computer and passes it to setup: with glm and kimi
                                setup keeps the key on its own, never in the configuration
@@ -501,8 +500,6 @@ you give everything with the options.
   --secret-mode <mode>         how the key is saved: plaintext (default), env or file
   --secret-env <name>          with --secret-mode env: the environment variable that contains it
   --secret-file <path>         with --secret-mode file: the file that contains it
-  --subscription-email <email> with --auth-method subscription: the account'\''s email
-  --subscription-token <token> with --auth-method subscription: the token
   --model <model>              the model to use
   --language <code>            the language (for example it or en)
   --skip-health                skips the final check
@@ -512,9 +509,14 @@ Examples:
   with a GLM key in a file:
     jht setup --non-interactive --provider glm --harness pi --api-key-file key.txt
   OpenAI with an API key, on Pi (for Claude: --provider claude):
-    jht setup --non-interactive --provider openai --harness pi --api-key-stdin
-  the Codex subscription (then sign in to ChatGPT):
-    jht setup --non-interactive --provider openai --harness codex --auth-method subscription' ;;
+    jht setup --non-interactive --provider openai --harness pi --api-key-stdin' ;;
+    help.tools) printf '%s' 'Usage: jht tools <command>
+
+  status --json   whether the Scouts'\'' tools (the full image) are here, on their way or failed
+  pull            downloads them in the background (jht up and jht setup start it by themselves)
+  switch          moves the team onto them once the onboarding is closed (the download does it by itself)
+
+This help starts nothing and downloads nothing.' ;;
     host_setup.skip_done) printf '%s' 'host.env is in a folder owned by the container (uid 1001): the host preflight is already done, skipping it.' ;;
     host_setup.skip_unknown) printf '%s' 'host.env is in a folder owned by the container (uid 1001) and this user cannot write to it: skipping the host preflight, but host.env cannot be read or does not say the host type (local or VPS): the type stays '\''unknown'\''.' ;;
     keyfile.both) printf '%s' 'use --api-key-file or --api-key-stdin, not both' ;;
@@ -799,6 +801,10 @@ Examples:
     status.state) printf '%s' '%s since %s' ;;
     status.title) printf '%s' 'Status' ;;
     team.stopped) printf '%s' 'Job Hunter Team is stopped: '\''jht up'\'' starts it again.' ;;
+    tools.arriving) printf '%s' 'The Scouts'\'' tools are on their way: the full image is downloading in the background (about 3 GB). The search for positions starts by itself once they are here; there is nothing to do.' ;;
+    tools.failed) printf '%s' 'The download of the Scouts'\'' tools failed, so the team cannot search for positions yet. Run jht tools pull to try again (jht up tries again too).' ;;
+    tools.switch_failed) printf '%s' 'The Scouts'\'' tools are here, but the team could not be restarted on them: run jht down, then jht up.' ;;
+    tools.waiting) printf '%s' 'The Scouts'\'' tools are here: the team moves onto them by itself once the onboarding is closed.' ;;
     uninstall.bad_home) printf '%s' 'HOME is not valid: removal refused.' ;;
     uninstall.colima_busy) printf '%s' 'Colima is still running: the JHT installer started it, but other containers are running in it, so it is left on. To stop it: colima stop.' ;;
     uninstall.colima_running) printf '%s' 'Colima is still running: the JHT installer did not start it (it was already on, or it is not the standard one), so it is left on, and it may be yours. To stop it: colima stop.' ;;
@@ -970,8 +976,7 @@ tutto si da'\'' con le opzioni.
 
   --non-interactive            nessuna domanda
   --provider <nome>            glm (Z.ai, predefinito), kimi (Moonshot), openai o claude (Anthropic)
-  --harness <nome>             pi (predefinito; l'\''unico per glm, kimi e claude) o codex (solo con openai)
-  --auth-method <metodo>       api_key (predefinito) o subscription
+  --harness <nome>             pi (predefinito)
   --api-key-file <percorso>    file che contiene la chiave API (una riga, leggibile solo da te).
                                Un file del tuo computer lo legge jht e lo passa al setup: con glm e kimi
                                il setup tiene la chiave per conto suo, mai nella configurazione
@@ -980,8 +985,6 @@ tutto si da'\'' con le opzioni.
   --secret-mode <modo>         come si salva la chiave: plaintext (predefinito), env o file
   --secret-env <nome>          con --secret-mode env: la variabile d'\''ambiente che la contiene
   --secret-file <percorso>     con --secret-mode file: il file che la contiene
-  --subscription-email <email> con --auth-method subscription: l'\''email dell'\''account
-  --subscription-token <token> con --auth-method subscription: il token
   --model <modello>            il modello da usare
   --language <codice>          la lingua (per esempio it o en)
   --skip-health                salta il controllo finale
@@ -991,9 +994,14 @@ Esempi:
   con una chiave GLM in un file:
     jht setup --non-interactive --provider glm --harness pi --api-key-file chiave.txt
   OpenAI con una chiave API, su Pi (per Claude: --provider claude):
-    jht setup --non-interactive --provider openai --harness pi --api-key-stdin
-  l'\''abbonamento Codex (poi il login a ChatGPT):
-    jht setup --non-interactive --provider openai --harness codex --auth-method subscription' ;;
+    jht setup --non-interactive --provider openai --harness pi --api-key-stdin' ;;
+    help.tools) printf '%s' 'Uso: jht tools <comando>
+
+  status --json   se gli strumenti degli Scout (l'\''immagine piena) sono arrivati, in arrivo o falliti
+  pull            li scarica in background (jht up e jht setup lo avviano da soli)
+  switch          ci porta la squadra quando l'\''onboarding e'\'' chiuso (il download lo fa da solo)
+
+Questo aiuto non avvia niente e non scarica niente.' ;;
     host_setup.skip_done) printf '%s' 'host.env sta in una cartella del container (uid 1001): il preflight dell'\''host e'\'' gia'\'' fatto, lo salto.' ;;
     host_setup.skip_unknown) printf '%s' 'host.env sta in una cartella del container (uid 1001) e questo utente non puo'\'' scriverci: salto il preflight dell'\''host, ma host.env non si legge o non dice il tipo di host (locale o VPS): il tipo resta '\''unknown'\''.' ;;
     keyfile.both) printf '%s' 'usa --api-key-file o --api-key-stdin, non tutti e due' ;;
@@ -1278,6 +1286,10 @@ Esempi:
     status.state) printf '%s' '%s dal %s' ;;
     status.title) printf '%s' 'Stato' ;;
     team.stopped) printf '%s' 'Job Hunter Team e'\'' fermato: jht up per riaccenderlo.' ;;
+    tools.arriving) printf '%s' 'Gli strumenti degli Scout stanno arrivando: l'\''immagine piena si scarica in background (circa 3 GB). La ricerca delle posizioni parte da sola quando sono arrivati; non devi fare niente.' ;;
+    tools.failed) printf '%s' 'Il download degli strumenti degli Scout non e'\'' riuscito: la squadra non puo'\'' ancora cercare posizioni. Esegui jht tools pull per riprovare (anche jht up riprova).' ;;
+    tools.switch_failed) printf '%s' 'Gli strumenti degli Scout sono arrivati, ma la squadra non si e'\'' potuta riavviare con loro: esegui jht down, poi jht up.' ;;
+    tools.waiting) printf '%s' 'Gli strumenti degli Scout sono arrivati: la squadra ci passa da sola quando l'\''onboarding e'\'' chiuso.' ;;
     uninstall.bad_home) printf '%s' 'HOME non valida: rimozione negata.' ;;
     uninstall.colima_busy) printf '%s' 'Colima resta accesa: l'\''ha accesa l'\''installer di JHT, ma dentro girano altri container, quindi la lascio. Per fermarla: colima stop.' ;;
     uninstall.colima_running) printf '%s' 'Colima resta accesa: non l'\''ha accesa l'\''installer di JHT (era gia'\'' accesa, oppure non e'\'' quella standard), quindi la lascio, e potrebbe essere tua. Per fermarla: colima stop.' ;;
@@ -1450,8 +1462,7 @@ mindent kapcsolókkal adsz meg.
 
   --non-interactive            nincs kérdés
   --provider <name>            glm (Z.ai, alapértelmezett), kimi (Moonshot), openai vagy claude (Anthropic)
-  --harness <name>             pi (alapértelmezett; az egyetlen a glm, a kimi és a claude számára) vagy codex (csak az openai-jal)
-  --auth-method <method>       api_key (alapértelmezett) vagy subscription
+  --harness <name>             pi (alapértelmezett)
   --api-key-file <path>        az API-kulcsot tartalmazó fájl (egy sor, csak te olvashatod).
                                A gépeden lévő fájlt a jht olvassa be és adja át a beállításnak: glm és kimi
                                esetén a beállítás magánál tartja a kulcsot, sosem a konfigurációban
@@ -1460,8 +1471,6 @@ mindent kapcsolókkal adsz meg.
   --secret-mode <mode>         hogyan mentődik a kulcs: plaintext (alapértelmezett), env vagy file
   --secret-env <name>          --secret-mode env esetén: a kulcsot tartalmazó környezeti változó
   --secret-file <path>         --secret-mode file esetén: a kulcsot tartalmazó fájl
-  --subscription-email <email> --auth-method subscription esetén: a fiók e-mail-címe
-  --subscription-token <token> --auth-method subscription esetén: a token
   --model <model>              a használandó modell
   --language <code>            a nyelv (például it vagy en)
   --skip-health                kihagyja a végső ellenőrzést
@@ -1471,9 +1480,14 @@ Példák:
   egy fájlban lévő GLM-kulccsal:
     jht setup --non-interactive --provider glm --harness pi --api-key-file kulcs.txt
   OpenAI API-kulccsal, Pi-n (Claude-hoz: --provider claude):
-    jht setup --non-interactive --provider openai --harness pi --api-key-stdin
-  a Codex-előfizetés (utána bejelentkezés a ChatGPT-be):
-    jht setup --non-interactive --provider openai --harness codex --auth-method subscription' ;;
+    jht setup --non-interactive --provider openai --harness pi --api-key-stdin' ;;
+    help.tools) printf '%s' 'Használat: jht tools <parancs>
+
+  status --json   megvannak-e a felderítők (Scout) eszközei (a teljes kép), úton vannak-e, vagy sikertelen volt a letöltés
+  pull            letölti őket a háttérben (a jht up és a jht setup magától elindítja)
+  switch          átviszi rájuk a csapatot, amint a bevezetés lezárult (a letöltés magától megteszi)
+
+Ez a súgó semmit nem indít el és semmit nem tölt le.' ;;
     host_setup.skip_done) printf '%s' 'A host.env egy konténer tulajdonában lévő mappában van (uid 1001): a gép előzetes ellenőrzése már megtörtént, kihagyom.' ;;
     host_setup.skip_unknown) printf '%s' 'A host.env egy konténer tulajdonában lévő mappában van (uid 1001), és ez a felhasználó nem írhat bele: kihagyom a gép előzetes ellenőrzését, de a host.env nem olvasható, vagy nem mondja meg a gép típusát (helyi vagy VPS): a típus '\''unknown'\'' marad.' ;;
     keyfile.both) printf '%s' 'a --api-key-file vagy a --api-key-stdin kapcsolót használd, ne mindkettőt' ;;
@@ -1758,6 +1772,10 @@ Példák:
     status.state) printf '%s' '%s, ekkor óta: %s' ;;
     status.title) printf '%s' 'Állapot' ;;
     team.stopped) printf '%s' 'A Job Hunter Team le van állítva: a '\''jht up'\'' újraindítja.' ;;
+    tools.arriving) printf '%s' 'A felderítők (Scout) eszközei úton vannak: a teljes kép a háttérben töltődik le (kb. 3 GB). Az állások keresése magától elindul, amint megérkeztek; nincs teendőd.' ;;
+    tools.failed) printf '%s' 'A felderítők (Scout) eszközeinek letöltése nem sikerült, így a csapat még nem tud állásokat keresni. Futtasd a jht tools pull parancsot az újrapróbáláshoz (a jht up is újrapróbálja).' ;;
+    tools.switch_failed) printf '%s' 'A felderítők (Scout) eszközei megérkeztek, de a csapatot nem sikerült velük újraindítani: futtasd a jht down, majd a jht up parancsot.' ;;
+    tools.waiting) printf '%s' 'A felderítők (Scout) eszközei megérkeztek: a csapat magától átvált rájuk, amint a bevezetés lezárult.' ;;
     uninstall.bad_home) printf '%s' 'A HOME érvénytelen: az eltávolítás megtagadva.' ;;
     uninstall.colima_busy) printf '%s' 'A Colima még fut: a JHT telepítője indította el, de más konténerek is futnak benne, ezért bekapcsolva hagyom. Leállítás: colima stop.' ;;
     uninstall.colima_running) printf '%s' 'A Colima még fut: nem a JHT telepítője indította el (már futott, vagy nem a szabványos), ezért bekapcsolva hagyom, és lehet, hogy a tiéd. Leállítás: colima stop.' ;;
@@ -1933,8 +1951,7 @@ todo se da con las opciones.
 
   --non-interactive            ninguna pregunta
   --provider <name>            glm (Z.ai, predeterminado), kimi (Moonshot), openai o claude (Anthropic)
-  --harness <name>             pi (predeterminado; el único para glm, kimi y claude) o codex (solo con openai)
-  --auth-method <method>       api_key (predeterminado) o subscription
+  --harness <name>             pi (predeterminado)
   --api-key-file <path>        archivo que contiene la clave API (una línea, que solo puedas leer tú).
                                Un archivo de tu ordenador lo lee jht y se lo pasa al setup: con glm y kimi
                                el setup guarda la clave por su cuenta, nunca en la configuración
@@ -1944,8 +1961,6 @@ todo se da con las opciones.
   --secret-mode <mode>         cómo se guarda la clave: plaintext (predeterminado), env o file
   --secret-env <name>          con --secret-mode env: la variable de entorno que la contiene
   --secret-file <path>         con --secret-mode file: el archivo que la contiene
-  --subscription-email <email> con --auth-method subscription: el email de la cuenta
-  --subscription-token <token> con --auth-method subscription: el token
   --model <model>              el modelo que usar
   --language <code>            el idioma (por ejemplo es o en)
   --skip-health                se salta la comprobación final
@@ -1955,9 +1970,14 @@ Ejemplos:
   con una clave GLM en un archivo:
     jht setup --non-interactive --provider glm --harness pi --api-key-file clave.txt
   OpenAI con una clave API, en Pi (para Claude: --provider claude):
-    jht setup --non-interactive --provider openai --harness pi --api-key-stdin
-  la suscripción a Codex (después el inicio de sesión en ChatGPT):
-    jht setup --non-interactive --provider openai --harness codex --auth-method subscription' ;;
+    jht setup --non-interactive --provider openai --harness pi --api-key-stdin' ;;
+    help.tools) printf '%s' 'Uso: jht tools <comando>
+
+  status --json   si las herramientas de los Scout (la imagen completa) ya están, están en camino o han fallado
+  pull            las descarga en segundo plano (jht up y jht setup lo inician solos)
+  switch          pasa el equipo a ellas cuando el onboarding está cerrado (la descarga lo hace sola)
+
+Esta ayuda no arranca nada ni descarga nada.' ;;
     host_setup.skip_done) printf '%s' 'host.env está en una carpeta del contenedor (uid 1001): la comprobación previa del host ya está hecha, me la salto.' ;;
     host_setup.skip_unknown) printf '%s' 'host.env está en una carpeta del contenedor (uid 1001) y este usuario no puede escribir en ella: me salto la comprobación previa del host, pero host.env no se puede leer o no indica el tipo de host (local o VPS): el tipo se queda en '\''unknown'\''.' ;;
     keyfile.both) printf '%s' 'usa --api-key-file o --api-key-stdin, no los dos' ;;
@@ -2242,6 +2262,10 @@ Ejemplos:
     status.state) printf '%s' '%s desde %s' ;;
     status.title) printf '%s' 'Estado' ;;
     team.stopped) printf '%s' 'Job Hunter Team está detenido: '\''jht up'\'' lo vuelve a arrancar.' ;;
+    tools.arriving) printf '%s' 'Las herramientas de los Scout están en camino: la imagen completa se descarga en segundo plano (unos 3 GB). La búsqueda de puestos empieza sola cuando lleguen; no tienes que hacer nada.' ;;
+    tools.failed) printf '%s' 'La descarga de las herramientas de los Scout ha fallado, así que el equipo aún no puede buscar puestos. Ejecuta jht tools pull para reintentarlo (jht up también lo reintenta).' ;;
+    tools.switch_failed) printf '%s' 'Las herramientas de los Scout ya están aquí, pero el equipo no se ha podido reiniciar con ellas: ejecuta jht down y luego jht up.' ;;
+    tools.waiting) printf '%s' 'Las herramientas de los Scout ya están aquí: el equipo pasa a ellas solo cuando el onboarding esté cerrado.' ;;
     uninstall.bad_home) printf '%s' 'HOME no es válida: eliminación rechazada.' ;;
     uninstall.colima_busy) printf '%s' 'Colima sigue en marcha: la arrancó el instalador de JHT, pero dentro hay otros contenedores en marcha, así que la dejo encendida. Para detenerla: colima stop.' ;;
     uninstall.colima_running) printf '%s' 'Colima sigue en marcha: no la arrancó el instalador de JHT (ya estaba encendida o no es la estándar), así que la dejo encendida, y puede que sea tuya. Para detenerla: colima stop.' ;;
@@ -2413,8 +2437,7 @@ Alles wird über die Optionen angegeben.
 
   --non-interactive            keine Fragen
   --provider <name>            glm (Z.ai, Standard), kimi (Moonshot), openai oder claude (Anthropic)
-  --harness <name>             pi (Standard; das einzige für glm, kimi und claude) oder codex (nur mit openai)
-  --auth-method <method>       api_key (Standard) oder subscription
+  --harness <name>             pi (Standard)
   --api-key-file <path>        Datei mit dem API-Schlüssel (eine Zeile, nur für dich lesbar).
                                jht liest die Datei auf deinem Computer und gibt sie ans Setup weiter; bei glm
                                und kimi behält das Setup den Schlüssel für sich, nie in der Konfiguration
@@ -2423,8 +2446,6 @@ Alles wird über die Optionen angegeben.
   --secret-mode <mode>         wie der Schlüssel gespeichert wird: plaintext (Standard), env oder file
   --secret-env <name>          mit --secret-mode env: die Umgebungsvariable, die ihn enthält
   --secret-file <path>         mit --secret-mode file: die Datei, die ihn enthält
-  --subscription-email <email> mit --auth-method subscription: die E-Mail des Kontos
-  --subscription-token <token> mit --auth-method subscription: der Token
   --model <model>              das zu verwendende Modell
   --language <code>            die Sprache (zum Beispiel it oder en)
   --skip-health                überspringt die abschließende Prüfung
@@ -2434,9 +2455,14 @@ Beispiele:
   mit einem GLM-Schlüssel in einer Datei:
     jht setup --non-interactive --provider glm --harness pi --api-key-file schluessel.txt
   OpenAI mit einem API-Schlüssel, auf Pi (für Claude: --provider claude):
-    jht setup --non-interactive --provider openai --harness pi --api-key-stdin
-  das Codex-Abo (danach die Anmeldung bei ChatGPT):
-    jht setup --non-interactive --provider openai --harness codex --auth-method subscription' ;;
+    jht setup --non-interactive --provider openai --harness pi --api-key-stdin' ;;
+    help.tools) printf '%s' 'Verwendung: jht tools <Befehl>
+
+  status --json   ob die Werkzeuge der Scouts (das vollständige Image) da, unterwegs oder fehlgeschlagen sind
+  pull            lädt sie im Hintergrund herunter (jht up und jht setup starten das von selbst)
+  switch          bringt das Team darauf, sobald das Onboarding abgeschlossen ist (der Download macht das von selbst)
+
+Diese Hilfe startet nichts und lädt nichts herunter.' ;;
     host_setup.skip_done) printf '%s' 'host.env liegt in einem Ordner, der dem Container gehört (uid 1001): Der Host-Preflight ist schon erledigt, wird übersprungen.' ;;
     host_setup.skip_unknown) printf '%s' 'host.env liegt in einem Ordner, der dem Container gehört (uid 1001), und dieser Benutzer kann dort nicht schreiben: Der Host-Preflight wird übersprungen, aber host.env lässt sich nicht lesen oder nennt den Host-Typ nicht (local oder VPS): Der Typ bleibt '\''unknown'\''.' ;;
     keyfile.both) printf '%s' 'Nutze --api-key-file oder --api-key-stdin, nicht beides' ;;
@@ -2721,6 +2747,10 @@ Beispiele:
     status.state) printf '%s' '%s seit %s' ;;
     status.title) printf '%s' 'Status' ;;
     team.stopped) printf '%s' 'Job Hunter Team ist gestoppt: '\''jht up'\'' startet es wieder.' ;;
+    tools.arriving) printf '%s' 'Die Werkzeuge der Scouts sind unterwegs: Das vollständige Image wird im Hintergrund heruntergeladen (etwa 3 GB). Die Stellensuche startet von selbst, sobald sie da sind; du musst nichts tun.' ;;
+    tools.failed) printf '%s' 'Der Download der Werkzeuge der Scouts ist fehlgeschlagen, daher kann das Team noch keine Stellen suchen. Führe jht tools pull aus, um es erneut zu versuchen (jht up versucht es auch).' ;;
+    tools.switch_failed) printf '%s' 'Die Werkzeuge der Scouts sind da, aber das Team konnte damit nicht neu gestartet werden: Führe jht down und dann jht up aus.' ;;
+    tools.waiting) printf '%s' 'Die Werkzeuge der Scouts sind da: Das Team wechselt von selbst darauf, sobald das Onboarding abgeschlossen ist.' ;;
     uninstall.bad_home) printf '%s' 'HOME ist ungültig: Entfernen verweigert.' ;;
     uninstall.colima_busy) printf '%s' 'Colima läuft noch: Der JHT-Installer hat es gestartet, aber darin laufen andere Container, also bleibt es an. Zum Stoppen: colima stop.' ;;
     uninstall.colima_running) printf '%s' 'Colima läuft noch: Der JHT-Installer hat es nicht gestartet (es lief schon oder ist nicht das Standard-Colima), also bleibt es an, und es könnte deins sein. Zum Stoppen: colima stop.' ;;
@@ -2892,8 +2922,7 @@ tout se donne avec les options.
 
   --non-interactive            aucune question
   --provider <name>            glm (Z.ai, par défaut), kimi (Moonshot), openai ou claude (Anthropic)
-  --harness <name>             pi (par défaut ; le seul pour glm, kimi et claude) ou codex (seulement avec openai)
-  --auth-method <method>       api_key (par défaut) ou subscription
+  --harness <name>             pi (par défaut)
   --api-key-file <path>        fichier qui contient la clé API (une ligne, lisible seulement par toi).
                                jht lit ce fichier sur ton ordinateur et le passe au setup :
                                avec glm et kimi, le setup garde la clé à part, jamais dans la configuration
@@ -2902,8 +2931,6 @@ tout se donne avec les options.
   --secret-mode <mode>         comment la clé est enregistrée : plaintext (par défaut), env ou file
   --secret-env <name>          avec --secret-mode env : la variable d'\''environnement qui la contient
   --secret-file <path>         avec --secret-mode file : le fichier qui la contient
-  --subscription-email <email> avec --auth-method subscription : l'\''email du compte
-  --subscription-token <token> avec --auth-method subscription : le token
   --model <model>              le modèle à utiliser
   --language <code>            la langue (par exemple it ou en)
   --skip-health                saute la vérification finale
@@ -2913,9 +2940,14 @@ Exemples :
   avec une clé GLM dans un fichier :
     jht setup --non-interactive --provider glm --harness pi --api-key-file cle.txt
   OpenAI avec une clé API, sur Pi (pour Claude : --provider claude) :
-    jht setup --non-interactive --provider openai --harness pi --api-key-stdin
-  l'\''abonnement Codex (puis la connexion à ChatGPT) :
-    jht setup --non-interactive --provider openai --harness codex --auth-method subscription' ;;
+    jht setup --non-interactive --provider openai --harness pi --api-key-stdin' ;;
+    help.tools) printf '%s' 'Utilisation : jht tools <commande>
+
+  status --json   si les outils des Scout (l'\''image complète) sont là, en route ou en échec
+  pull            les télécharge en arrière-plan (jht up et jht setup le lancent tout seuls)
+  switch          fait passer l'\''équipe dessus une fois l'\''onboarding terminé (le téléchargement le fait tout seul)
+
+Cette aide ne démarre rien et ne télécharge rien.' ;;
     host_setup.skip_done) printf '%s' 'host.env est dans un dossier qui appartient au conteneur (uid 1001) : le preflight de l'\''hôte est déjà fait, je le saute.' ;;
     host_setup.skip_unknown) printf '%s' 'host.env est dans un dossier qui appartient au conteneur (uid 1001) et cet utilisateur ne peut pas y écrire : je saute le preflight de l'\''hôte, mais host.env est illisible ou n'\''indique pas le type d'\''hôte (local ou VPS) : le type reste '\''unknown'\''.' ;;
     keyfile.both) printf '%s' 'utilise --api-key-file ou --api-key-stdin, pas les deux' ;;
@@ -3200,6 +3232,10 @@ Exemples :
     status.state) printf '%s' '%s depuis %s' ;;
     status.title) printf '%s' 'État' ;;
     team.stopped) printf '%s' 'Job Hunter Team est arrêté : '\''jht up'\'' le redémarre.' ;;
+    tools.arriving) printf '%s' 'Les outils des Scout arrivent : l'\''image complète se télécharge en arrière-plan (environ 3 Go). La recherche d'\''offres démarre toute seule dès qu'\''ils sont là ; tu n'\''as rien à faire.' ;;
+    tools.failed) printf '%s' 'Le téléchargement des outils des Scout a échoué : l'\''équipe ne peut pas encore chercher d'\''offres. Lance jht tools pull pour réessayer (jht up réessaie aussi).' ;;
+    tools.switch_failed) printf '%s' 'Les outils des Scout sont là, mais l'\''équipe n'\''a pas pu redémarrer avec eux : lance jht down, puis jht up.' ;;
+    tools.waiting) printf '%s' 'Les outils des Scout sont là : l'\''équipe passe dessus toute seule dès que l'\''onboarding est terminé.' ;;
     uninstall.bad_home) printf '%s' 'HOME n'\''est pas valide : suppression refusée.' ;;
     uninstall.colima_busy) printf '%s' 'Colima tourne encore : l'\''installeur JHT l'\''a démarré, mais d'\''autres conteneurs y tournent, donc il reste allumé. Pour l'\''arrêter : colima stop.' ;;
     uninstall.colima_running) printf '%s' 'Colima tourne encore : l'\''installeur JHT ne l'\''a pas démarré (il était déjà allumé, ou ce n'\''est pas celui par défaut), donc il reste allumé, et il est peut-être à toi. Pour l'\''arrêter : colima stop.' ;;
@@ -3371,8 +3407,7 @@ tudo se dá com as opções.
 
   --non-interactive            nenhuma pergunta
   --provider <name>            glm (Z.ai, predefinido), kimi (Moonshot), openai ou claude (Anthropic)
-  --harness <name>             pi (predefinido; o único para glm, kimi e claude) ou codex (só com openai)
-  --auth-method <method>       api_key (predefinido) ou subscription
+  --harness <name>             pi (predefinido)
   --api-key-file <path>        ficheiro que contém a chave API (uma linha, legível só por ti).
                                O jht lê um ficheiro do teu computador e passa-o ao setup: com glm e kimi
                                o setup guarda a chave por conta própria, nunca na configuração
@@ -3381,8 +3416,6 @@ tudo se dá com as opções.
   --secret-mode <mode>         como se guarda a chave: plaintext (predefinido), env ou file
   --secret-env <name>          com --secret-mode env: a variável de ambiente que a contém
   --secret-file <path>         com --secret-mode file: o ficheiro que a contém
-  --subscription-email <email> com --auth-method subscription: o email da conta
-  --subscription-token <token> com --auth-method subscription: o token
   --model <model>              o modelo a usar
   --language <code>            a língua (por exemplo pt ou en)
   --skip-health                salta a verificação final
@@ -3392,9 +3425,14 @@ Exemplos:
   com uma chave GLM num ficheiro:
     jht setup --non-interactive --provider glm --harness pi --api-key-file chave.txt
   OpenAI com uma chave API, no Pi (para Claude: --provider claude):
-    jht setup --non-interactive --provider openai --harness pi --api-key-stdin
-  a subscrição Codex (depois o início de sessão no ChatGPT):
-    jht setup --non-interactive --provider openai --harness codex --auth-method subscription' ;;
+    jht setup --non-interactive --provider openai --harness pi --api-key-stdin' ;;
+    help.tools) printf '%s' 'Uso: jht tools <comando>
+
+  status --json   se as ferramentas dos Scout (a imagem completa) já chegaram, estão a caminho ou falharam
+  pull            descarrega-as em segundo plano (jht up e jht setup iniciam-no sozinhos)
+  switch          passa a equipa para elas quando o onboarding estiver concluído (o descarregamento fá-lo sozinho)
+
+Esta ajuda não inicia nada nem descarrega nada.' ;;
     host_setup.skip_done) printf '%s' 'host.env está numa pasta do contentor (uid 1001): a verificação prévia do anfitrião já está feita, vou saltá-la.' ;;
     host_setup.skip_unknown) printf '%s' 'host.env está numa pasta do contentor (uid 1001) e este utilizador não pode escrever nela: vou saltar a verificação prévia do anfitrião, mas host.env não pode ser lido ou não diz o tipo de anfitrião (local ou VPS): o tipo fica '\''unknown'\''.' ;;
     keyfile.both) printf '%s' 'usa --api-key-file ou --api-key-stdin, não os dois' ;;
@@ -3679,6 +3717,10 @@ Exemplos:
     status.state) printf '%s' '%s desde %s' ;;
     status.title) printf '%s' 'Estado' ;;
     team.stopped) printf '%s' 'O Job Hunter Team está parado: '\''jht up'\'' volta a ligá-lo.' ;;
+    tools.arriving) printf '%s' 'As ferramentas dos Scout estão a caminho: a imagem completa está a ser descarregada em segundo plano (cerca de 3 GB). A procura de vagas começa sozinha quando chegarem; não tens de fazer nada.' ;;
+    tools.failed) printf '%s' 'O descarregamento das ferramentas dos Scout falhou, por isso a equipa ainda não pode procurar vagas. Corre jht tools pull para tentar de novo (jht up também tenta de novo).' ;;
+    tools.switch_failed) printf '%s' 'As ferramentas dos Scout já chegaram, mas não foi possível reiniciar a equipa com elas: corre jht down e depois jht up.' ;;
+    tools.waiting) printf '%s' 'As ferramentas dos Scout já chegaram: a equipa passa para elas sozinha quando o onboarding estiver concluído.' ;;
     uninstall.bad_home) printf '%s' 'HOME não é válida: remoção recusada.' ;;
     uninstall.colima_busy) printf '%s' 'O Colima continua a correr: foi o instalador do JHT que o ligou, mas há outros contentores a correr nele, por isso fica ligado. Para o parar: colima stop.' ;;
     uninstall.colima_running) printf '%s' 'O Colima continua a correr: não foi o instalador do JHT que o ligou (já estava ligado, ou não é o padrão), por isso fica ligado, e pode ser teu. Para o parar: colima stop.' ;;
@@ -3906,6 +3948,27 @@ runtime_helper_load() {
   . "$RUNTIME_DIR/$helper" || return 1
   extras_digest="$(runtime_extras_digest)" || { err "$(jht_say line.pin_dell_immagine_degli_strumenti)"; return 1; }
   EXTRAS_IMAGE_DIGEST="$extras_digest"
+}
+
+# The tools of a core install (P4). The installer leaves the core image; the full one, with the Scouts' tools, comes after, pulled
+# in the background, and the team moves onto it once the onboarding has closed. The desktop app kept that moving; with the CLI only
+# it is `jht up` and `jht setup` that start it (tools_kick in jht-tools.sh: one detached job, idempotent) and `jht up`, `jht setup`
+# and `jht status` that say where it stands, in the person's language. A helper that is missing or not trusted says nothing here: the
+# command it rides on is never failed by it.
+tools_tell_person() {
+  local kick="${1:-}"
+  [ -f "$RUNTIME_TIER_FILE" ] || [ -f "$RUNTIME_DIR/.tools-switch-failed" ] || return 0
+  [ -n "$(runtime_helper_digest jht-tools.sh 2>/dev/null)" ] || return 0
+  (
+    runtime_helper_load jht-tools.sh >/dev/null 2>&1 || exit 0
+    [ "$kick" = kick ] && tools_kick
+    case "$(tools_person_state)" in
+      arriving) info "$(jht_say tools.arriving)" ;;
+      waiting) info "$(jht_say tools.waiting)" ;;
+      failed) warn "$(jht_say tools.failed)" ;;
+      switch_failed) warn "$(jht_say tools.switch_failed)" ;;
+    esac
+  ) || true
 }
 
 runtime_write_manifest() {
@@ -7250,6 +7313,12 @@ linkedin_help() {
   printf '%s\n' "$(jht_say help.linkedin)"
 }
 
+# `jht tools --help`: i suoi sottocomandi, a testo fisso come quelli di `jht integration`: un aiuto non avvia il container e non
+# carica l'helper (che scaricherebbe o leggerebbe il motore).
+tools_help() {
+  printf '%s\n' "$(jht_say help.tools)"
+}
+
 # Richiesta di sola informazione: se il container e' gia' in piedi si serve
 # l'aiuto vero, altrimenti quello locale. In nessun caso si avvia qualcosa.
 serve_help_without_docker() {
@@ -9662,6 +9731,10 @@ if [ "$#" -gt 1 ] && [ "$SUB" != "game" ] && [ "$SUB" != "gui" ] && [ "$SUB" != 
           linkedin_help
           exit 0
         fi
+        if [ "$SUB" = tools ]; then
+          tools_help
+          exit 0
+        fi
         if [ "$SUB" = setup ]; then
           setup_help
           exit 0
@@ -9831,6 +9904,7 @@ case "$SUB" in
     printf '%s\n' "$(jht_say up.done)"
     telegram_lifecycle_if_available resume || exit $?
     broker_after_up
+    tools_tell_person kick
     ;;
 
   start-container)
@@ -10029,6 +10103,7 @@ case "$SUB" in
       else
         status_human_running "$(docker inspect "$container_id" --format '{{.State.Status}}|{{.State.StartedAt}}|{{.Config.Image}}')"
         telegram_status_line || exit $?
+        tools_tell_person
       fi
     else
       attest_status=$?
@@ -10135,6 +10210,7 @@ case "$SUB" in
     jht_load_host_values
     jht_record_host_values
     ensure_up
+    tools_tell_person kick
     rc=0
     setup_exec_container "$@" || rc=$?
     if [ "${1:-}" = cloud ] && [ "${2:-}" = pair ] && [ "$rc" -eq 0 ]; then ensure_broker && broker_configure_web_authorisations; fi

@@ -52,8 +52,17 @@ param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest)
 $RuntimeDir = $env:T_RUNTIME; $JhtHome = $env:T_HOME; $DefaultRuntimeImage = $env:T_FULL
 $RuntimeTierFile = Join-Path $RuntimeDir 'runtime-tier'
 $RuntimeTierIntegrity = Join-Path $RuntimeDir '.runtime-tier-integrity'
+# the wrapper has it: the detached job of `tools_kick` runs `up` and `down` through it
+$WrapperPath = $env:T_STUB
 function Write-Err { param([string]$Msg) [Console]::Error.WriteLine("error: $Msg") }
-if ($Rest[0] -eq 'up') { Add-Content -LiteralPath (Join-Path $env:FAKE 'wrapper-calls') -Value ("up image=" + $env:JHT_IMAGE); exit 0 }
+if ($Rest[0] -eq 'down') { Add-Content -LiteralPath (Join-Path $env:FAKE 'wrapper-calls') -Value 'down'; New-Item -ItemType File -Force -Path (Join-Path $env:FAKE 'downed') | Out-Null; exit 0 }
+if ($Rest[0] -eq 'up') {
+  Add-Content -LiteralPath (Join-Path $env:FAKE 'wrapper-calls') -Value ("up image=" + $env:JHT_IMAGE)
+  # up-refused: the engine refuses the up until a down (a team started with another configuration); up-fails: always
+  if (Test-Path -LiteralPath (Join-Path $env:FAKE 'up-fails')) { exit 1 }
+  if ((Test-Path -LiteralPath (Join-Path $env:FAKE 'up-refused')) -and -not (Test-Path -LiteralPath (Join-Path $env:FAKE 'downed'))) { exit 1 }
+  exit 0
+}
 . $env:T_TOOLS
 exit (Invoke-ToolsCommand @($Rest | Select-Object -Skip 1))
 """
@@ -327,7 +336,7 @@ def test_a_real_state_folder_is_written_as_before(box):
 def test_the_detached_pull_asks_for_a_hidden_window_only_where_the_parameter_exists():
     """PowerShell 7 on Linux (the runner of the gate, the machine of the big suite) refuses `Start-Process -WindowStyle`."""
     text = _text(TOOLS)
-    start = text.split("function Start-ToolsPull")[1].split("function ")[0]
+    start = text.split("function Start-ToolsJob")[1].split("function ")[0]   # the one that starts the detached job
     assert "Start-Process -FilePath $shell -WindowStyle" not in start, "the parameter must not be on the command line itself"
     assert "if ($PSVersionTable.PSEdition -eq 'Desktop' -or $IsWindows) { $start.WindowStyle = 'Hidden' }" in start
     assert start.index("$start.WindowStyle") < start.index("Start-Process @start")
@@ -393,3 +402,88 @@ def test_the_ids_of_the_answer_are_the_ones_of_the_helper():
     theirs = re.search(r"^\$IntegrationIds = @\((.*)\)$", _text(ROOT / "scripts" / "jht-integration.ps1"), re.M).group(1)
     ours = re.search(r"^\$IntegrationIdsAbsent = @\((.*)\)$", _text(WRAPPER), re.M).group(1)
     assert ours == theirs, "two lists, one meaning: the wrapper answers for the ids the helper knows"
+
+
+# ── Invoke-ToolsKick: the CLI keeps the tools moving, as the desktop app's round did ──────────────────────────────────────────
+
+KICK_ENV = {"JHT_TOOLS_WAIT_STEP": "1", "JHT_TOOLS_SWITCH_GRACE": "0", "JHT_TOOLS_WAIT_MAX": "120"}
+
+
+def _until(check, what, rounds=600):
+    for _ in range(rounds):
+        if check():
+            return
+        time.sleep(0.2)
+    raise AssertionError(what)
+
+
+def _calls(box):
+    path = box.fake / "wrapper-calls"
+    return [line.split(" ")[0] for line in path.read_text(encoding="utf-8").splitlines() if line.strip()] if path.exists() else []
+
+
+def person(box):
+    return box.run("[Console]::Out.WriteLine((Get-ToolsPersonState))", **KICK_ENV).stdout.strip()
+
+
+def test_kick_pulls_once_then_switches_when_the_profile_is_ready(box):
+    tier = box.tier()
+    (box.fake / "pull-hold").write_text("", encoding="utf-8")
+    done = box.run("exit (Invoke-ToolsKick)", **KICK_ENV)
+    assert done.returncode == 0 and _lines(done) == [], done.stdout + done.stderr
+    assert person(box) == "arriving"
+    assert box.run("exit (Invoke-ToolsKick)", **KICK_ENV).returncode == 0          # a second `jht up`: no second job
+    (box.fake / "pull-hold").unlink()
+    box.wait_for("ready")
+    assert person(box) == "waiting" and tier.exists() and _calls(box) == []
+    (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
+    _until(lambda: not tier.exists() and _calls(box) == ["up"], f"the job never made the switch: {_calls(box)}")
+    _until(lambda: (box.notice() or {}).get("tier") == "full", f"no notice of the full image: {box.notice()}")
+    assert (box.fake / "pulls").read_text(encoding="utf-8").splitlines() == [f"pull {FULL}"]
+
+
+def test_a_switch_the_engine_refuses_is_made_again_with_a_down_first(box):
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    (box.fake / "up-refused").write_text("", encoding="utf-8")
+    (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
+    assert box.run("exit (Invoke-ToolsKick)", **KICK_ENV).returncode == 0
+    _until(lambda: _calls(box) == ["up", "down", "up"], f"not up, down, up: {_calls(box)}")
+    _until(lambda: (box.notice() or {}).get("tier") == "full", f"no notice of the full image: {box.notice()}")
+    assert not tier.exists() and box.notice()["state"] == "ready"
+
+
+def test_a_switch_that_still_fails_is_said_until_an_up_goes_well(box):
+    box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    (box.fake / "up-fails").write_text("", encoding="utf-8")
+    (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
+    assert box.run("exit (Invoke-ToolsKick)", **KICK_ENV).returncode == 0
+    box.wait_for("failed")
+    assert box.notice()["reason"] == "switch_failed"
+    _until(lambda: person(box) == "switch_failed", "the failed switch is not said")
+    assert box.run("exit (Invoke-ToolsKick)", **KICK_ENV).returncode == 0          # the up of the person went well
+    assert person(box) == ""
+
+
+def test_a_failed_pull_is_said_and_the_next_kick_tries_again(box):
+    box.tier()
+    (box.fake / "pull-fails").write_text("", encoding="utf-8")
+    assert box.run("exit (Invoke-ToolsKick)", **KICK_ENV).returncode == 0
+    box.wait_for("failed")
+    _until(lambda: person(box) == "failed", "the failed pull is not said")
+    (box.fake / "pull-fails").unlink()
+    assert box.run("exit (Invoke-ToolsKick)", **KICK_ENV).returncode == 0
+    box.wait_for("ready")
+
+
+def test_jht_up_setup_and_status_keep_the_tools_moving_and_say_where_they_stand():
+    text = WRAPPER.read_text(encoding="utf-8")
+    up = text[text.index("{ $_ -in @('up', 'start-container') } {"):text.index("{ $_ -in @('down', 'stop-container') } {")]
+    setup = text[text.index("\n  'setup' {"):text.index("\n  'download' {")]
+    status = text[text.index("\n  'status' {"):text.index("\n  'shell' {")]
+    assert "Write-JhtToolsNotice -Kick" in up and "Write-JhtToolsNotice -Kick" in setup
+    assert "Write-JhtToolsNotice" in status and "-Kick" not in status
+    body = text[text.index("function Write-JhtToolsNotice {"):]
+    body = body[:body.index("\n}\n")]
+    assert "catch { }" in body and "Invoke-ToolsKick" in body and "Get-ToolsPersonState" in body

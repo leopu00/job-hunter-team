@@ -10,12 +10,19 @@
 #   jht tools switch          the full image takes the place of the core one, with an `up`; exit 0 and nothing printed until
 #                             the profile is ready (profile\ready.flag) and the full image is here
 #
+# Invoke-ToolsKick is what the wrapper calls on `jht up` and `jht setup` of a core install: it keeps the tools moving on a computer
+# with the CLI only, as the round of the desktop app does (desktop/src-tauri/src/tools_tier.rs). It starts one detached job, at
+# most, that pulls the full image when it is not here yet, waits for profile\ready.flag and then makes the switch itself; a switch
+# the engine refuses (the configuration changed while the team ran) is retried with a `down` first, and a switch that still fails
+# is written down for `jht up` and `jht status` to say, with the commands to give.
+#
 # The state comes from the engine and from the host files of the runtime, never from a file the container can write. The file
 # state\tools.json is a NOTICE for the container (the Capitano reads it): nothing here reads it back.
 
 $ToolsStateDir = Join-Path $JhtHome 'state'
 $ToolsLock = Join-Path $RuntimeDir '.tools-pull.lock'
 $ToolsFailedFile = Join-Path $RuntimeDir '.tools-pull-failed'
+$ToolsSwitchFailedFile = Join-Path $RuntimeDir '.tools-switch-failed'
 
 function Get-ToolsNow { return [DateTime]::UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'") }
 
@@ -82,12 +89,19 @@ function Write-ToolsStatusJson {
 }
 
 # The pull itself, in a detached process (`jht tools pull-job`): its end is on disk (the image, or the failed marker), and in the notice.
+# With `auto` (the job Invoke-ToolsKick starts) it goes on: it waits for the profile and makes the switch, holding the lock, so a
+# second `jht up` finds the job there and starts no other.
 function Invoke-ToolsPullJob {
-  param([string]$Since)
-  & { $ErrorActionPreference = 'Continue'; & docker pull $DefaultRuntimeImage *> $null }
-  if ($LASTEXITCODE -eq 0 -and (Test-ToolsFullHere)) {
+  param([string]$Since, [string]$Auto = '')
+  $here = Test-ToolsFullHere
+  if (-not $here) {
+    & { $ErrorActionPreference = 'Continue'; & docker pull $DefaultRuntimeImage *> $null }
+    $here = ($LASTEXITCODE -eq 0 -and (Test-ToolsFullHere))
+  }
+  if ($here) {
     Remove-Item -LiteralPath $ToolsFailedFile -Force -ErrorAction SilentlyContinue
     Write-ToolsNotice 'ready' 'core' '' $Since
+    if ($Auto -eq 'auto') { Wait-ToolsProfileAndSwitch }
   } else {
     [IO.File]::WriteAllText($ToolsFailedFile, "pull_failed`n", [Text.UTF8Encoding]::new($false))
     Write-ToolsNotice 'failed' 'core' 'pull_failed' $Since
@@ -96,28 +110,122 @@ function Invoke-ToolsPullJob {
   return 0
 }
 
-function Start-ToolsPull {
-  if (-not (Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf)) { return 0 }
-  if (-not (Test-ToolsEngineUp)) { Write-Err 'tools: il motore dei container non risponde'; return 1 }
+# One job at a time, detached. $Auto = 'auto' for the job of Invoke-ToolsKick (it pulls if needed, then switches by itself).
+function Start-ToolsJob {
+  param([string]$Auto = '')
   $since = Get-ToolsNow
-  if (Test-ToolsFullHere) {
-    Remove-Item -LiteralPath $ToolsFailedFile -Force -ErrorAction SilentlyContinue
-    Write-ToolsNotice 'ready' 'core' '' $since
-    return 0
-  }
-  if (Test-ToolsPulling) { return 0 }
   Remove-Item -LiteralPath $ToolsLock -Recurse -Force -ErrorAction SilentlyContinue
   try { New-Item -ItemType Directory -Path $ToolsLock -ErrorAction Stop | Out-Null } catch { return 0 }  # another call won the race
   Remove-Item -LiteralPath $ToolsFailedFile -Force -ErrorAction SilentlyContinue
-  [Console]::Out.WriteLine('JHT_PHASE tools_pull')
-  Write-ToolsNotice 'pulling' 'core' '' $since
+  if (-not (Test-ToolsFullHere)) {
+    if (-not $Auto) { [Console]::Out.WriteLine('JHT_PHASE tools_pull') }
+    Write-ToolsNotice 'pulling' 'core' '' $since
+  }
   $shell = (Get-Process -Id $PID).Path
-  $start = @{ FilePath = $shell; PassThru = $true; ArgumentList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $WrapperPath, 'tools', 'pull-job', $since) }
+  $jobArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $WrapperPath, 'tools', 'pull-job', $since)
+  if ($Auto) { $jobArgs += 'auto' }
+  $start = @{ FilePath = $shell; PassThru = $true; ArgumentList = $jobArgs }
   # -WindowStyle exists only on Windows: PowerShell 7 on Linux (a runner, a test) refuses the parameter.
   if ($PSVersionTable.PSEdition -eq 'Desktop' -or $IsWindows) { $start.WindowStyle = 'Hidden' }
   $process = Start-Process @start
   [IO.File]::WriteAllText((Join-Path $ToolsLock 'pid'), "$($process.Id)`n", [Text.UTF8Encoding]::new($false))
   return 0
+}
+
+function Start-ToolsPull {
+  if (-not (Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf)) { return 0 }
+  if (-not (Test-ToolsEngineUp)) { Write-Err 'tools: il motore dei container non risponde'; return 1 }
+  if (Test-ToolsFullHere) {
+    Remove-Item -LiteralPath $ToolsFailedFile -Force -ErrorAction SilentlyContinue
+    Write-ToolsNotice 'ready' 'core' '' (Get-ToolsNow)
+    return 0
+  }
+  if (Test-ToolsPulling) { return 0 }
+  return (Start-ToolsJob)
+}
+
+# `jht up` / `jht setup` of a core install: the job that pulls and switches, unless one is already there. Prints nothing (the
+# wrapper says what it means for the person, from Get-ToolsPersonState); never fails the command it rides on.
+function Invoke-ToolsKick {
+  try {
+    # on the full image (the tier file gone) an `up` that got here went well: a switch that had failed is over
+    if (-not (Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf)) {
+      Remove-Item -LiteralPath $ToolsSwitchFailedFile -Force -ErrorAction SilentlyContinue
+      return 0
+    }
+    if (-not (Test-ToolsEngineUp)) { return 0 }
+    if (Test-ToolsPulling) { return 0 }
+    $null = Start-ToolsJob 'auto'
+  } catch { }
+  return 0
+}
+
+function Get-ToolsWaitSeconds {
+  param([string]$Name, [int]$Default)
+  $value = [Environment]::GetEnvironmentVariable($Name)
+  if ($value -match '^[0-9]{1,6}$') { return [int]$value }
+  return $Default
+}
+
+# The job waits for the profile (the onboarding has closed), then a little more, so the switch does not cut the last answers of the
+# onboarding short; the tier file gone means someone made the switch by hand (`jht tools switch`).
+function Wait-ToolsProfileAndSwitch {
+  $flag = Join-Path $JhtHome 'profile\ready.flag'
+  $step = Get-ToolsWaitSeconds 'JHT_TOOLS_WAIT_STEP' 15
+  $left = Get-ToolsWaitSeconds 'JHT_TOOLS_WAIT_MAX' 86400
+  while ($left -gt 0) {
+    if (-not (Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf)) { return }
+    $item = Get-Item -LiteralPath $flag -Force -ErrorAction SilentlyContinue
+    if ($item -and -not $item.PSIsContainer -and (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0)) {
+      Start-Sleep -Seconds (Get-ToolsWaitSeconds 'JHT_TOOLS_SWITCH_GRACE' 30)
+      Invoke-ToolsSwitchAuto
+      return
+    }
+    Start-Sleep -Seconds ([Math]::Max(1, $step))
+    $left -= [Math]::Max(1, $step)
+  }
+}
+
+function Invoke-ToolsWrapperStep {
+  param([string]$Step)
+  $shell = (Get-Process -Id $PID).Path
+  $run = @{ FilePath = $shell; Wait = $true; PassThru = $true; ArgumentList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $WrapperPath, $Step) }
+  if ($PSVersionTable.PSEdition -eq 'Desktop' -or $IsWindows) { $run.WindowStyle = 'Hidden' } else { $run.NoNewWindow = $true }
+  return [int](Start-Process @run).ExitCode
+}
+
+# The switch of the job. `up` first, as `jht tools switch` does; when the engine refuses it (a team started with another
+# configuration: jht config set, the team settings applied from the site or the app), `down` and `up` again, which is what a person
+# would do. Still refused: the marker says so, and `jht up` / `jht status` tell the person to run `jht down` and `jht up`.
+function Invoke-ToolsSwitchAuto {
+  try {
+    Remove-Item -LiteralPath $RuntimeTierFile -Force
+    Remove-Item -LiteralPath $RuntimeTierIntegrity -Force -ErrorAction SilentlyContinue
+  } catch { return }
+  Remove-Item -LiteralPath $ToolsSwitchFailedFile -Force -ErrorAction SilentlyContinue
+  Remove-Item Env:\JHT_IMAGE -ErrorAction SilentlyContinue
+  $ok = ((Invoke-ToolsWrapperStep 'up') -eq 0)
+  if (-not $ok) {
+    $null = Invoke-ToolsWrapperStep 'down'
+    $ok = ((Invoke-ToolsWrapperStep 'up') -eq 0)
+  }
+  if ($ok) { Write-ToolsNotice 'ready' 'full' '' (Get-ToolsNow) }
+  else {
+    [IO.File]::WriteAllText($ToolsSwitchFailedFile, "switch_failed`n", [Text.UTF8Encoding]::new($false))
+    Write-ToolsNotice 'failed' 'full' 'switch_failed' (Get-ToolsNow)
+  }
+}
+
+# What the wrapper tells the person, one word: arriving (pulling or waiting), failed (the pull), switch_failed, or ''.
+function Get-ToolsPersonState {
+  $tierHere = Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf
+  if ((-not $tierHere) -and (Test-Path -LiteralPath $ToolsSwitchFailedFile -PathType Leaf)) { return 'switch_failed' }
+  if (-not $tierHere) { return '' }
+  if (-not (Test-ToolsEngineUp)) { return '' }
+  if (Test-ToolsFullHere) { return 'waiting' }
+  if (Test-ToolsPulling) { return 'arriving' }
+  if (Test-Path -LiteralPath $ToolsFailedFile -PathType Leaf) { return 'failed' }
+  return 'arriving'
 }
 
 # The switch: the tier file goes (and the manifest stops attesting it), then an `up` on the image of the compose, the full one.
@@ -148,6 +256,7 @@ function Invoke-ToolsCommand {
   if ($sub -eq 'pull' -and $a.Count -eq 1) { return (Start-ToolsPull) }
   if ($sub -eq 'switch' -and $a.Count -eq 1) { return (Invoke-ToolsSwitch) }
   if ($sub -eq 'pull-job' -and $a.Count -eq 2) { return (Invoke-ToolsPullJob $a[1]) }
+  if ($sub -eq 'pull-job' -and $a.Count -eq 3 -and $a[2] -eq 'auto') { return (Invoke-ToolsPullJob $a[1] 'auto') }
   Write-Err 'uso: jht tools status --json | pull | switch'
   return 2
 }
