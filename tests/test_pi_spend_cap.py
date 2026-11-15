@@ -334,3 +334,213 @@ def test_a_missing_or_broken_burst_state_does_not_stop_the_alert(tmp_path):
     bridge = Bridge(tmp_path, {"no_quota_cap": EUR})
     bridge.tick()
     assert bridge.esc == 1 and sorted(s for s, _ in bridge.sent) == ["CAPITANO", "SENTINELLA"]
+
+
+# --- the budget of the setup: dollars over a period, spread over the working hours (JHT-T322) ------------------------
+
+import plan_registry  # noqa: E402
+import team_budget  # noqa: E402
+
+HOUR = 3600
+
+
+def iso(ts: float) -> str:
+    return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")  # as the setup writes it
+
+
+def budget(usd, starts, ends, hours=None, **extra):
+    team = {"budget": dict({"usd": usd, "starts_at": iso(starts), "ends_at": iso(ends), "set_by": "setup"}, **extra)}
+    if hours is not None:
+        team["working_hours"] = hours
+    return {"team": team}
+
+
+ROME_8_18 = {"timezone": "Europe/Rome", "windows": [{"days": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
+                                                     "start": "08:00", "end": "18:00"}]}
+
+
+def flag_record(bridge):
+    return json.loads(bridge.flag.read_text(encoding="utf-8"))["pi_spend_cap"]
+
+
+def test_a_trial_of_5_dollars_for_30_minutes_stops_just_before_the_5_dollars(tmp_path):
+    config = budget(5, NOON - 600, NOON + 1200)
+    pi_calls(tmp_path, [(NOON - 300, 4.89, 100)])
+    bridge = Bridge(tmp_path, config)
+    state: dict = {}
+    bridge.tick(state=state)
+    assert bridge.esc == 0, "4.89 is under 5 - max(2 %, 0.10)"
+    pi_calls(tmp_path, [(NOON - 300, 4.89, 100), (NOON - 60, 0.01, 100)])
+    bridge.tick(state=state)
+    assert bridge.esc == 1
+    record = flag_record(bridge)
+    assert record["why"] == "budget" and record["spent"] == 4.9 and record["ceiling"] == 5.0 and record["budget_usd"] == 5.0
+    assert record["resumes_at"] is None and record["ends_at"] == "2026-11-09T12:20:00+00:00"
+    assert all("BUDGET SPENT" in t and "does NOT lift by itself" in t and "jht setup" in t for t in bridge.texts())
+    assert "4.9 USD" in bridge.users[0][0] and "5 USD" in bridge.users[0][0] and "jht setup" in bridge.users[0][0]
+
+
+def test_the_margin_is_two_percent_of_a_larger_budget(tmp_path):
+    pi_calls(tmp_path, [(NOON - 300, 9.79, 100)])
+    bridge = Bridge(tmp_path, budget(10, NOON - 600, NOON + 600))
+    bridge.tick()
+    assert bridge.esc == 0
+    pi_calls(tmp_path, [(NOON - 300, 9.80, 100)])
+    bridge.tick()
+    assert bridge.esc == 1 and flag_record(bridge)["why"] == "budget"
+
+
+def test_the_budget_counts_from_its_start_not_from_midnight(tmp_path):
+    pi_calls(tmp_path, [(NOON - 2 * HOUR, 30.0, 100), (NOON - 300, 1.0, 100)])  # the 30 are before the setup
+    bridge = Bridge(tmp_path, budget(5, NOON - HOUR, NOON + 1200))
+    bridge.tick()
+    assert bridge.esc == 0 and bridge.sent == [], "a budget declared: no «no ceiling» warning either"
+
+
+def test_a_spent_budget_does_not_lift_by_itself_and_a_new_setup_lifts_it(tmp_path):
+    pi_calls(tmp_path, [(NOON - 300, 5.0, 100)])
+    bridge = Bridge(tmp_path, budget(5, NOON - 600, NOON + 1200))
+    state: dict = {}
+    bridge.tick(state=state)
+    for _ in range(3):
+        bridge.clock["now"] += 300
+        bridge.tick(state=state)
+    assert bridge.flag.exists() and bridge.esc == 1 and len(bridge.users) == 1
+    bridge.config = budget(5, bridge.clock["now"], bridge.clock["now"] + 1800)  # a new setup: a new start
+    bridge.sent.clear()
+    bridge.tick(state=state)
+    assert not bridge.flag.exists()
+    assert any("budget the person declared allows work again" in t for t in bridge.texts())
+    assert "▶️" in bridge.users[-1][0] and "budget" in bridge.users[-1][0]
+
+
+def test_the_period_over_pauses_the_team_and_does_not_lift_by_itself(tmp_path):
+    pi_calls(tmp_path, [(NOON - 300, 1.0, 100)])
+    bridge = Bridge(tmp_path, budget(5, NOON - 1800, NOON))
+    state: dict = {}
+    bridge.tick(state=state)
+    assert bridge.esc == 1
+    record = flag_record(bridge)
+    assert record["why"] == "period" and record["ends_at"] == "2026-11-09T12:00:00+00:00" and record["resumes_at"] is None
+    assert all("BUDGET PERIOD OVER" in t and "12:00" in t for t in bridge.texts())
+    assert "12:00" in bridge.users[0][0]
+    bridge.clock["now"] += 6 * HOUR
+    bridge.tick(state=state)
+    assert bridge.flag.exists() and bridge.esc == 1
+
+
+def test_one_night_of_5_dollars_goes_at_its_pace_and_says_when_it_resumes(tmp_path):
+    """24/7 from 12:00 to 22:00: 0.50 $ an hour, one hour ahead. At 13:00 it may have spent 1.00; with 1.20 spent the
+    pace catches up at 13:24."""
+    config = budget(5, NOON, NOON + 10 * HOUR)
+    pi_calls(tmp_path, [(NOON + 1800, 1.2, 100)])
+    bridge = Bridge(tmp_path, config)
+    bridge.clock["now"] = NOON + HOUR
+    state: dict = {}
+    bridge.tick(state=state)
+    assert bridge.esc == 1
+    record = flag_record(bridge)
+    assert record["why"] == "pace" and record["ceiling"] == 1.0 and record["resumes_at"] == "2026-11-09T13:24:00+00:00"
+    assert all("BUDGET PACE" in t and "lifts by itself at 13:24" in t for t in bridge.texts())
+    assert "13:24" in bridge.users[0][0] and "⏸️" in bridge.users[0][0]
+    bridge.clock["now"] = NOON + HOUR + 23 * 60
+    bridge.tick(state=state)
+    assert bridge.flag.exists(), "13:23: not yet"
+    bridge.clock["now"] = NOON + HOUR + 25 * 60
+    bridge.tick(state=state)
+    assert not bridge.flag.exists() and bridge.esc == 1
+
+
+def test_the_pace_follows_the_working_hours_over_three_days(tmp_path):
+    """10 $ from Monday 13:00 to Thursday 13:00 (Rome), 08:00-18:00: 5 + 10 + 10 + 5 = 30 worked hours, 1/3 $ each."""
+    config = budget(10, NOON, NOON + 3 * 24 * HOUR, ROME_8_18)
+    blocks = team_budget.worked_intervals(config, NOON, NOON + 3 * 24 * HOUR)
+    assert sum(hi - lo for lo, hi in blocks) == 30 * HOUR and len(blocks) == 4
+    b = team_budget.read(config)
+    assert round(team_budget.allowed(config, b, NOON + 4 * HOUR), 4) == round(10 * 5 / 30, 4)
+    assert round(team_budget.allowed(config, b, NOON + 10 * HOUR), 4) == 2.0, "the evening off adds nothing"
+    pi_calls(tmp_path, [(NOON + 3 * HOUR, 2.5, 100)])
+    bridge = Bridge(tmp_path, config)
+    bridge.clock["now"] = NOON + 4 * HOUR  # Monday 17:00 in Rome
+    bridge.tick()
+    record = flag_record(bridge)
+    # 2.5 $ is 7.5 worked hours, less the hour ahead: 5 on Monday, 1.5 on Tuesday from 08:00
+    assert record["why"] == "pace" and record["resumes_at"] == "2026-11-10T09:30:00+01:00"
+    assert "2026-11-10 09:30" in bridge.users[0][0], "another day: the date in front"
+
+
+def test_the_budget_zone_is_the_one_the_person_lives_in(tmp_path):
+    config = budget(5, NOON, NOON + 10 * HOUR, timezone="Europe/Budapest")
+    pi_calls(tmp_path, [(NOON + 1800, 1.2, 100)])
+    bridge = Bridge(tmp_path, config)
+    bridge.clock["now"] = NOON + HOUR
+    bridge.tick()
+    assert flag_record(bridge)["resumes_at"] == "2026-11-09T14:24:00+01:00" and "14:24" in bridge.users[0][0]
+
+
+def test_raising_the_budget_lifts_a_pause_of_the_pace(tmp_path):
+    pi_calls(tmp_path, [(NOON + 1800, 1.2, 100)])
+    bridge = Bridge(tmp_path, budget(5, NOON, NOON + 10 * HOUR))
+    bridge.clock["now"] = NOON + HOUR
+    state: dict = {}
+    bridge.tick(state=state)
+    assert bridge.flag.exists()
+    bridge.config = budget(50, NOON, NOON + 10 * HOUR)  # changed in the settings: same start
+    bridge.tick(state=state)
+    assert not bridge.flag.exists()
+
+
+def test_a_pause_of_the_pace_that_turns_into_a_spent_budget_says_so_without_a_second_esc(tmp_path):
+    pi_calls(tmp_path, [(NOON + 1800, 4.0, 100)])
+    bridge = Bridge(tmp_path, budget(5, NOON, NOON + 4 * HOUR))
+    bridge.clock["now"] = NOON + HOUR
+    state: dict = {}
+    bridge.tick(state=state)
+    assert flag_record(bridge)["why"] == "pace"
+    pi_calls(tmp_path, [(NOON + 1800, 4.0, 100), (NOON + HOUR, 0.95, 100)])  # a call that was in flight is paid
+    bridge.clock["now"] += 300
+    bridge.tick(state=state)
+    assert flag_record(bridge)["why"] == "budget" and bridge.esc == 1
+    assert len(bridge.users) == 2 and any("BUDGET SPENT" in t for t in bridge.texts())
+
+
+@pytest.mark.parametrize("raw", [
+    {"usd": 0, "starts_at": "2026-11-09T11:00:00Z", "ends_at": "2026-11-09T13:00:00Z"},
+    {"usd": True, "starts_at": "2026-11-09T11:00:00Z", "ends_at": "2026-11-09T13:00:00Z"},
+    {"usd": "5", "starts_at": "2026-11-09T11:00:00Z", "ends_at": "2026-11-09T13:00:00Z"},
+    {"usd": 5, "starts_at": "2026-11-09T11:00:00", "ends_at": "2026-11-09T13:00:00"},
+    {"usd": 5, "starts_at": "2026-11-09T13:00:00Z", "ends_at": "2026-11-09T11:00:00Z"},
+    {"usd": 5, "starts_at": "yesterday", "ends_at": "2026-11-09T13:00:00Z"},
+    "five dollars"])
+def test_a_budget_that_is_not_readable_is_no_budget(tmp_path, raw):
+    pi_calls(tmp_path, [(NOON - 600, 99.0, 100)])
+    bridge = Bridge(tmp_path, {"team": {"budget": raw}})
+    bridge.tick()
+    assert bridge.esc == 0 and "no spending ceiling is declared" in bridge.texts()[0]
+
+
+def test_an_older_config_with_no_quota_cap_eur_works_as_before(tmp_path):
+    pi_calls(tmp_path, [(NOON - 600, 10.0, 100)])
+    bridge = Bridge(tmp_path, {"no_quota_cap": EUR})
+    bridge.tick()
+    assert flag_record(bridge) == {"why": "eur", "spent": 10.0, "ceiling": 10.0}
+
+
+def test_with_quota_data_the_budget_is_not_this_ones_business_either(tmp_path):
+    pi_calls(tmp_path, [(NOON - 300, 5.0, 100)])
+    bridge = Bridge(tmp_path, budget(5, NOON - 600, NOON + 1200))
+    bridge.tick(no_quota=False)
+    assert bridge.esc == 0 and bridge.sent == []
+
+
+@pytest.mark.parametrize("config, tier", [
+    (budget(5, NOON, NOON + 1800), 1),                    # a trial: 5 $ counts as 5 a day
+    (budget(10, NOON, NOON + 3 * 24 * HOUR), 1),          # 3.33 a day
+    (budget(30, NOON, NOON + 24 * HOUR), 15),
+    (budget(30, NOON, NOON + 3 * 24 * HOUR), 5),          # 10 a day
+    ({"no_quota_cap": {"eur": 12}}, 5),                    # an older config
+    (dict(budget(30, NOON, NOON + 24 * HOUR), no_quota_cap={"eur": 5}), 15),  # the setup's budget wins
+])
+def test_the_first_roster_is_sized_by_the_budget_per_day(config, tier):
+    config = dict(config, providers={"zai": {"auth_method": "api_key"}})
+    assert plan_registry.api_key_plan(config, "zai")["tier"] == tier
