@@ -6,9 +6,9 @@
     "translation_quality": "AI-translated 2026-05-18, pending native speaker review."
   },
   "wrapper.compose.missing": "hiányzik a docker compose: a motor válaszol, de a „docker compose” parancs nem létezik (a JHT-nak a Compose v2 bővítmény kell). Macen: brew install docker-compose, majd mkdir -p ~/.docker/cli-plugins && ln -sfn \"$(brew --prefix)/opt/docker-compose/bin/docker-compose\" ~/.docker/cli-plugins/docker-compose. Linuxon: telepítsd a docker-compose-v2 csomagot (apt) vagy a docker-compose-plugin csomagot (dnf). Utána futtasd újra a parancsot.",
-  "wrapper.config.changed_down": "config_changed_while_running: a csapat az újratelepítés előtti beállításokkal indult; leállítom.",
+  "wrapper.config.changed_down": "config_changed_while_running: a csapat a jelenlegitől eltérő beállításokkal indult (futás közben megváltozott, vagy újratelepítés történt); leállítom.",
   "wrapper.config.changed_other": "config_changed_while_running: a csapat a vártól eltérő beállításokkal fut; ezeket csak a leállításához használom.",
-  "wrapper.config.changed_start": "config_changed_while_running: a csapat az újratelepítés előtti beállításokkal indult. Állítsd le a „jht down” paranccsal, majd indítsd el a „jht up” paranccsal.",
+  "wrapper.config.changed_start": "config_changed_while_running: a beállítás megváltozott, amíg a JHT futott (jht config set, a webhelyről vagy az appból módosított beállítások, vagy újratelepítés), ezért a futó csapat nem ellenőrizhető. Állítsd le a „jht down” paranccsal, majd indítsd el a „jht up” paranccsal.",
   "wrapper.config.changed_stopped": "config_changed_stopped: a csapat leállított konténerei a korábbi verzióból valók: újra létrehozom őket az új beállításokkal (az adatokat tartalmazó kötetek megmaradnak).",
   "wrapper.container.starting": "A(z) '%s' konténer nem fut, elindítom...",
   "wrapper.doctor.host_config_none": "még nincs beállítás: 'jht setup'",

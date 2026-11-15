@@ -5,9 +5,9 @@
     "purpose": "Shell/CLI/Telegram user-facing strings. Web UI uses web/messages/{lang}.json (different schema)."
   },
   "wrapper.compose.missing": "docker compose is missing: the engine answers, but the «docker compose» command does not exist (JHT needs the Compose v2 plugin). On a Mac: brew install docker-compose, then mkdir -p ~/.docker/cli-plugins && ln -sfn \"$(brew --prefix)/opt/docker-compose/bin/docker-compose\" ~/.docker/cli-plugins/docker-compose. On Linux: install the docker-compose-v2 package (apt) or docker-compose-plugin (dnf). Then run the command again.",
-  "wrapper.config.changed_down": "config_changed_while_running: the team was started with the configuration from before the reinstall; stopping it.",
+  "wrapper.config.changed_down": "config_changed_while_running: the team was started with a configuration other than the current one (changed while JHT was running, or a reinstall); stopping it.",
   "wrapper.config.changed_other": "config_changed_while_running: the team runs with a configuration other than the expected one; it is used only to stop it.",
-  "wrapper.config.changed_start": "config_changed_while_running: the team was started with the configuration from before the reinstall. Stop it with «jht down», then start it with «jht up».",
+  "wrapper.config.changed_start": "config_changed_while_running: the configuration changed while JHT was running (jht config set, settings changed from the site or the app, or a reinstall), so the running team cannot be verified. Stop it with «jht down», then start it with «jht up».",
   "wrapper.config.changed_stopped": "config_changed_stopped: the team's containers, stopped, are from the earlier version: recreating them with the new configuration (the volumes with the data stay).",
   "wrapper.container.starting": "Container '%s' is not running, starting it...",
   "wrapper.doctor.host_config_none": "no configuration yet: 'jht setup'",

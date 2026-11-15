@@ -5,9 +5,9 @@
     "purpose": "German translations of shell/CLI/Telegram strings."
   },
   "wrapper.compose.missing": "docker compose fehlt: Die Engine antwortet, aber der Befehl «docker compose» existiert nicht (JHT braucht das Compose-v2-Plugin). Auf dem Mac: brew install docker-compose, dann mkdir -p ~/.docker/cli-plugins && ln -sfn \"$(brew --prefix)/opt/docker-compose/bin/docker-compose\" ~/.docker/cli-plugins/docker-compose. Unter Linux: Installiere das Paket docker-compose-v2 (apt) oder docker-compose-plugin (dnf). Führe dann den Befehl erneut aus.",
-  "wrapper.config.changed_down": "config_changed_while_running: Das Team wurde mit der Konfiguration von vor der Neuinstallation gestartet; es wird gestoppt.",
+  "wrapper.config.changed_down": "config_changed_while_running: Das Team wurde mit einer anderen als der aktuellen Konfiguration gestartet (sie hat sich während des Laufs geändert, oder es gab eine Neuinstallation); es wird gestoppt.",
   "wrapper.config.changed_other": "config_changed_while_running: Das Team läuft mit einer anderen als der erwarteten Konfiguration; sie wird nur zum Stoppen verwendet.",
-  "wrapper.config.changed_start": "config_changed_while_running: Das Team wurde mit der Konfiguration von vor der Neuinstallation gestartet. Stoppe es mit «jht down» und starte es dann mit «jht up».",
+  "wrapper.config.changed_start": "config_changed_while_running: Die Konfiguration hat sich geändert, während JHT lief (jht config set, über die Website oder die App geänderte Einstellungen oder eine Neuinstallation); das laufende Team lässt sich daher nicht verifizieren. Stoppe es mit «jht down» und starte es dann mit «jht up».",
   "wrapper.config.changed_stopped": "config_changed_stopped: Die gestoppten Container des Teams stammen aus der früheren Version: Sie werden mit der neuen Konfiguration neu erstellt (die Volumes mit den Daten bleiben).",
   "wrapper.container.starting": "Container '%s' läuft nicht, starte ihn...",
   "wrapper.doctor.host_config_none": "noch keine Konfiguration: 'jht setup'",
