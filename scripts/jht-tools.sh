@@ -176,7 +176,7 @@ tools_other_wrapper_running() {
     parent="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')"
     [ -n "$parent" ] || continue          # gone already
     [ "$parent" = "$me" ] && continue     # a child of this job (the subshell of the command substitution above)
-    line="$(ps -o args= -p "$pid" 2>/dev/null)" || continue
+    line="$(ps -ww -o args= -p "$pid" 2>/dev/null)" || continue   # -ww: whole, never cut at the width of a terminal
     case "$line" in *"$WRAPPER_PATH"*) ;; *) continue ;; esac
     # the words after the wrapper's path: the command and its first argument
     read -r command sub _ <<EOF
