@@ -127,6 +127,8 @@ ts_table() {
     en:host_setup.detected) printf '%s' 'Detected:' ;;
     en:host_setup.host.local) printf '%s' 'local computer' ;;
     en:host_setup.host.vps) printf '%s' 'remote server / VPS' ;;
+    en:host_setup.host_line) printf '%s' 'Host: %s' ;;
+    en:host_setup.host_line_no_swap) printf '%s' 'Host: %s — %s' ;;
     en:host_setup.host_values_not_written) printf '%s' 'host-values not written in %s — the wrapper will create it from host.env' ;;
     en:host_setup.invalid_choice) printf '%s' 'Invalid choice' ;;
     en:host_setup.option.local.line1) printf '%s' 'The full team runs on this PC; keep it awake with the container engine running while the team works.' ;;
@@ -151,9 +153,11 @@ ts_table() {
     en:host_setup.swap_trying_sudo) printf '%s' 'Trying sudo...' ;;
     en:host_setup.timezone_explain) printf '%s' 'The Captain uses it to convert times in Telegram messages and charts.' ;;
     en:host_setup.timezone_header) printf '%s' 'User timezone' ;;
-    en:host_setup.timezone_label) printf '%s' 'Timezone' ;;
     en:host_setup.timezone_vps_utc) printf '%s' 'Timezone was not detected: the team will use UTC. Set yours with jht wh --tz Europe/Rome (or in the dashboard), otherwise Telegram times and working hours will be in UTC.' ;;
+    en:host_setup.tz.ask) printf '%s' 'Timezone:' ;;
+    en:host_setup.tz.ask_default) printf '%s' 'Timezone [%s]:' ;;
     en:host_setup.tz.bad_number) printf '%s' 'Choose a number between 1 and %d.' ;;
+    en:host_setup.tz.chosen) printf '%s' 'Timezone: %s' ;;
     en:host_setup.tz.how) printf '%s' 'Type a country, a city or a timezone (for example Italy, Rome, Europe/Rome).' ;;
     en:host_setup.tz.how_default) printf '%s' 'Press Enter to keep %s, or type a country, a city or a timezone to look for another one.' ;;
     en:host_setup.tz.none) printf '%s' 'No timezone found for «%s»: try a country, a city or a timezone like Europe/Rome.' ;;
@@ -171,6 +175,8 @@ ts_table() {
     it:host_setup.detected) printf '%s' 'Rilevato:' ;;
     it:host_setup.host.local) printf '%s' 'computer locale' ;;
     it:host_setup.host.vps) printf '%s' 'server remoto / VPS' ;;
+    it:host_setup.host_line) printf '%s' 'Host: %s' ;;
+    it:host_setup.host_line_no_swap) printf '%s' 'Host: %s — %s' ;;
     it:host_setup.host_values_not_written) printf '%s' 'host-values non scritto in %s — il wrapper lo creera'\'' da host.env' ;;
     it:host_setup.invalid_choice) printf '%s' 'Scelta non valida' ;;
     it:host_setup.option.local.line1) printf '%s' 'La squadra intera gira su questo PC: tienilo acceso, con il motore dei container attivo, mentre la squadra lavora.' ;;
@@ -195,9 +201,11 @@ ts_table() {
     it:host_setup.swap_trying_sudo) printf '%s' 'Provo con sudo...' ;;
     it:host_setup.timezone_explain) printf '%s' 'Il Capitano lo usa per convertire gli orari nei messaggi Telegram e nei grafici.' ;;
     it:host_setup.timezone_header) printf '%s' 'Fuso orario' ;;
-    it:host_setup.timezone_label) printf '%s' 'Fuso orario' ;;
     it:host_setup.timezone_vps_utc) printf '%s' 'Il fuso orario non e'\'' stato rilevato: la squadra usera'\'' UTC. Imposta il tuo con jht wh --tz Europe/Rome (o nella dashboard), altrimenti gli orari di Telegram e di lavoro saranno in UTC.' ;;
+    it:host_setup.tz.ask) printf '%s' 'Fuso orario:' ;;
+    it:host_setup.tz.ask_default) printf '%s' 'Fuso orario [%s]:' ;;
     it:host_setup.tz.bad_number) printf '%s' 'Scegli un numero fra 1 e %d.' ;;
+    it:host_setup.tz.chosen) printf '%s' 'Fuso orario: %s' ;;
     it:host_setup.tz.how) printf '%s' 'Scrivi un paese, una città o un fuso orario (per esempio Italia, Roma, Europe/Rome).' ;;
     it:host_setup.tz.how_default) printf '%s' 'Premi Invio per tenere %s, oppure scrivi un paese, una città o un fuso orario per cercarne un altro.' ;;
     it:host_setup.tz.none) printf '%s' 'Nessun fuso orario trovato per «%s»: prova con un paese, una città o un fuso come Europe/Rome.' ;;
@@ -215,6 +223,8 @@ ts_table() {
     hu:host_setup.detected) printf '%s' 'Észlelt:' ;;
     hu:host_setup.host.local) printf '%s' 'helyi számítógép' ;;
     hu:host_setup.host.vps) printf '%s' 'távoli szerver / VPS' ;;
+    hu:host_setup.host_line) printf '%s' 'Gép: %s' ;;
+    hu:host_setup.host_line_no_swap) printf '%s' 'Gép: %s — %s' ;;
     hu:host_setup.host_values_not_written) printf '%s' 'a host-values nem íródott ide: %s — a wrapper létrehozza a host.env-ből' ;;
     hu:host_setup.invalid_choice) printf '%s' 'Érvénytelen választás' ;;
     hu:host_setup.option.local.line1) printf '%s' 'A teljes csapat ezen a PC-n fut: tartsd bekapcsolva, futó konténermotorral, amíg a csapat dolgozik.' ;;
@@ -239,9 +249,11 @@ ts_table() {
     hu:host_setup.swap_trying_sudo) printf '%s' 'Megpróbálom sudo-val...' ;;
     hu:host_setup.timezone_explain) printf '%s' 'A Kapitány ezt használja az időpontok átváltására Telegram üzenetekben és grafikonokon.' ;;
     hu:host_setup.timezone_header) printf '%s' 'Időzóna' ;;
-    hu:host_setup.timezone_label) printf '%s' 'Időzóna' ;;
     hu:host_setup.timezone_vps_utc) printf '%s' 'Az időzónát nem sikerült felismerni: a csapat UTC-t fog használni. Állítsd be a sajátodat a jht wh --tz Europe/Budapest paranccsal (vagy a vezérlőpulton), különben a Telegram és a munkaidő időpontjai UTC-ben lesznek.' ;;
+    hu:host_setup.tz.ask) printf '%s' 'Időzóna:' ;;
+    hu:host_setup.tz.ask_default) printf '%s' 'Időzóna [%s]:' ;;
     hu:host_setup.tz.bad_number) printf '%s' 'Válassz egy számot 1 és %d között.' ;;
+    hu:host_setup.tz.chosen) printf '%s' 'Időzóna: %s' ;;
     hu:host_setup.tz.how) printf '%s' 'Írj be egy országot, egy várost vagy egy időzónát (például Magyarország, Budapest, Europe/Budapest).' ;;
     hu:host_setup.tz.how_default) printf '%s' 'Nyomj Entert, ha megtartod ezt: %s, vagy írj be egy országot, egy várost vagy egy időzónát, hogy másikat keress.' ;;
     hu:host_setup.tz.none) printf '%s' 'Nem található időzóna ehhez: «%s». Próbálj meg egy országot, egy várost vagy egy időzónát, például Europe/Budapest.' ;;
@@ -259,6 +271,8 @@ ts_table() {
     es:host_setup.detected) printf '%s' 'Detectado:' ;;
     es:host_setup.host.local) printf '%s' 'ordenador local' ;;
     es:host_setup.host.vps) printf '%s' 'servidor remoto / VPS' ;;
+    es:host_setup.host_line) printf '%s' 'Máquina: %s' ;;
+    es:host_setup.host_line_no_swap) printf '%s' 'Máquina: %s — %s' ;;
     es:host_setup.host_values_not_written) printf '%s' 'host-values no se ha escrito en %s — el wrapper lo creará a partir de host.env' ;;
     es:host_setup.invalid_choice) printf '%s' 'Elección no válida' ;;
     es:host_setup.option.local.line1) printf '%s' 'El equipo completo trabaja en este PC: mantenlo encendido, con el motor de contenedores en marcha, mientras el equipo trabaja.' ;;
@@ -283,9 +297,11 @@ ts_table() {
     es:host_setup.swap_trying_sudo) printf '%s' 'Pruebo con sudo...' ;;
     es:host_setup.timezone_explain) printf '%s' 'El Capitán la usa para convertir las horas en los mensajes de Telegram y en los gráficos.' ;;
     es:host_setup.timezone_header) printf '%s' 'Zona horaria' ;;
-    es:host_setup.timezone_label) printf '%s' 'Zona horaria' ;;
     es:host_setup.timezone_vps_utc) printf '%s' 'No se ha detectado la zona horaria: el equipo usará UTC. Configura la tuya con jht wh --tz Europe/Madrid (o en el panel); si no, las horas de Telegram y del horario de trabajo estarán en UTC.' ;;
+    es:host_setup.tz.ask) printf '%s' 'Zona horaria:' ;;
+    es:host_setup.tz.ask_default) printf '%s' 'Zona horaria [%s]:' ;;
     es:host_setup.tz.bad_number) printf '%s' 'Elige un número entre 1 y %d.' ;;
+    es:host_setup.tz.chosen) printf '%s' 'Zona horaria: %s' ;;
     es:host_setup.tz.how) printf '%s' 'Escribe un país, una ciudad o una zona horaria (por ejemplo España, Madrid, Europe/Madrid).' ;;
     es:host_setup.tz.how_default) printf '%s' 'Pulsa Intro para mantener %s, o escribe un país, una ciudad o una zona horaria para buscar otra.' ;;
     es:host_setup.tz.none) printf '%s' 'No se ha encontrado ninguna zona horaria para «%s»: prueba con un país, una ciudad o una zona como Europe/Madrid.' ;;
@@ -303,6 +319,8 @@ ts_table() {
     de:host_setup.detected) printf '%s' 'Erkannt:' ;;
     de:host_setup.host.local) printf '%s' 'lokaler Computer' ;;
     de:host_setup.host.vps) printf '%s' 'Remote-Server / VPS' ;;
+    de:host_setup.host_line) printf '%s' 'Rechner: %s' ;;
+    de:host_setup.host_line_no_swap) printf '%s' 'Rechner: %s — %s' ;;
     de:host_setup.host_values_not_written) printf '%s' 'host-values nicht in %s geschrieben — der Wrapper erstellt es aus host.env' ;;
     de:host_setup.invalid_choice) printf '%s' 'Ungültige Auswahl' ;;
     de:host_setup.option.local.line1) printf '%s' 'Das ganze Team läuft auf diesem PC: Lass ihn eingeschaltet und die Container-Engine laufen, solange das Team arbeitet.' ;;
@@ -327,9 +345,11 @@ ts_table() {
     de:host_setup.swap_trying_sudo) printf '%s' 'Versuche es mit sudo...' ;;
     de:host_setup.timezone_explain) printf '%s' 'Der Kapitän verwendet sie, um die Zeiten in Telegram-Nachrichten und Diagrammen umzurechnen.' ;;
     de:host_setup.timezone_header) printf '%s' 'Zeitzone' ;;
-    de:host_setup.timezone_label) printf '%s' 'Zeitzone' ;;
     de:host_setup.timezone_vps_utc) printf '%s' 'Die Zeitzone wurde nicht erkannt: Das Team verwendet UTC. Stelle deine mit jht wh --tz Europe/Berlin ein (oder im Dashboard), sonst stehen die Telegram-Zeiten und die Arbeitszeiten in UTC.' ;;
+    de:host_setup.tz.ask) printf '%s' 'Zeitzone:' ;;
+    de:host_setup.tz.ask_default) printf '%s' 'Zeitzone [%s]:' ;;
     de:host_setup.tz.bad_number) printf '%s' 'Wähle eine Zahl zwischen 1 und %d.' ;;
+    de:host_setup.tz.chosen) printf '%s' 'Zeitzone: %s' ;;
     de:host_setup.tz.how) printf '%s' 'Gib ein Land, eine Stadt oder eine Zeitzone ein (zum Beispiel Deutschland, Berlin, Europe/Berlin).' ;;
     de:host_setup.tz.how_default) printf '%s' 'Drücke Enter, um %s zu behalten, oder gib ein Land, eine Stadt oder eine Zeitzone ein, um eine andere zu suchen.' ;;
     de:host_setup.tz.none) printf '%s' 'Keine Zeitzone für «%s» gefunden: Versuche es mit einem Land, einer Stadt oder einer Zeitzone wie Europe/Berlin.' ;;
@@ -347,6 +367,8 @@ ts_table() {
     fr:host_setup.detected) printf '%s' 'Détecté :' ;;
     fr:host_setup.host.local) printf '%s' 'ordinateur local' ;;
     fr:host_setup.host.vps) printf '%s' 'serveur distant / VPS' ;;
+    fr:host_setup.host_line) printf '%s' 'Machine : %s' ;;
+    fr:host_setup.host_line_no_swap) printf '%s' 'Machine : %s — %s' ;;
     fr:host_setup.host_values_not_written) printf '%s' 'host-values non écrit dans %s — le wrapper le créera à partir de host.env' ;;
     fr:host_setup.invalid_choice) printf '%s' 'Choix non valide' ;;
     fr:host_setup.option.local.line1) printf '%s' 'Toute l'\''équipe tourne sur ce PC : garde-le allumé, avec le moteur de conteneurs actif, pendant que l'\''équipe travaille.' ;;
@@ -371,9 +393,11 @@ ts_table() {
     fr:host_setup.swap_trying_sudo) printf '%s' 'J'\''essaie avec sudo...' ;;
     fr:host_setup.timezone_explain) printf '%s' 'Le Capitaine l'\''utilise pour convertir les heures dans les messages Telegram et les graphiques.' ;;
     fr:host_setup.timezone_header) printf '%s' 'Fuseau horaire' ;;
-    fr:host_setup.timezone_label) printf '%s' 'Fuseau horaire' ;;
     fr:host_setup.timezone_vps_utc) printf '%s' 'Le fuseau horaire n'\''a pas été détecté : l'\''équipe utilisera UTC. Règle le tien avec jht wh --tz Europe/Paris (ou dans le tableau de bord), sinon les heures de Telegram et les horaires de travail seront en UTC.' ;;
+    fr:host_setup.tz.ask) printf '%s' 'Fuseau horaire :' ;;
+    fr:host_setup.tz.ask_default) printf '%s' 'Fuseau horaire [%s] :' ;;
     fr:host_setup.tz.bad_number) printf '%s' 'Choisis un nombre entre 1 et %d.' ;;
+    fr:host_setup.tz.chosen) printf '%s' 'Fuseau horaire : %s' ;;
     fr:host_setup.tz.how) printf '%s' 'Tape un pays, une ville ou un fuseau horaire (par exemple France, Paris, Europe/Paris).' ;;
     fr:host_setup.tz.how_default) printf '%s' 'Appuie sur Entrée pour garder %s, ou tape un pays, une ville ou un fuseau horaire pour en chercher un autre.' ;;
     fr:host_setup.tz.none) printf '%s' 'Aucun fuseau horaire trouvé pour « %s » : essaie un pays, une ville ou un fuseau comme Europe/Paris.' ;;
@@ -391,6 +415,8 @@ ts_table() {
     pt:host_setup.detected) printf '%s' 'Detectado:' ;;
     pt:host_setup.host.local) printf '%s' 'computador local' ;;
     pt:host_setup.host.vps) printf '%s' 'servidor remoto / VPS' ;;
+    pt:host_setup.host_line) printf '%s' 'Máquina: %s' ;;
+    pt:host_setup.host_line_no_swap) printf '%s' 'Máquina: %s — %s' ;;
     pt:host_setup.host_values_not_written) printf '%s' 'host-values não escrito em %s — o wrapper vai criá-lo a partir de host.env' ;;
     pt:host_setup.invalid_choice) printf '%s' 'Escolha inválida' ;;
     pt:host_setup.option.local.line1) printf '%s' 'A equipa inteira trabalha neste PC: mantém-no ligado, com o motor de contentores ativo, enquanto a equipa trabalha.' ;;
@@ -415,9 +441,11 @@ ts_table() {
     pt:host_setup.swap_trying_sudo) printf '%s' 'Tento com sudo...' ;;
     pt:host_setup.timezone_explain) printf '%s' 'O Capitão usa para converter horários nas mensagens do Telegram e nos gráficos.' ;;
     pt:host_setup.timezone_header) printf '%s' 'Fuso horário' ;;
-    pt:host_setup.timezone_label) printf '%s' 'Fuso horário' ;;
     pt:host_setup.timezone_vps_utc) printf '%s' 'O fuso horário não foi detetado: a equipa vai usar UTC. Define o teu com jht wh --tz Europe/Lisbon (ou no painel); caso contrário, as horas do Telegram e o horário de trabalho ficam em UTC.' ;;
+    pt:host_setup.tz.ask) printf '%s' 'Fuso horário:' ;;
+    pt:host_setup.tz.ask_default) printf '%s' 'Fuso horário [%s]:' ;;
     pt:host_setup.tz.bad_number) printf '%s' 'Escolhe um número entre 1 e %d.' ;;
+    pt:host_setup.tz.chosen) printf '%s' 'Fuso horário: %s' ;;
     pt:host_setup.tz.how) printf '%s' 'Escreve um país, uma cidade ou um fuso horário (por exemplo Portugal, Lisboa, Europe/Lisbon).' ;;
     pt:host_setup.tz.how_default) printf '%s' 'Prime Enter para manter %s, ou escreve um país, uma cidade ou um fuso horário para procurar outro.' ;;
     pt:host_setup.tz.none) printf '%s' 'Nenhum fuso horário encontrado para «%s»: experimenta um país, uma cidade ou um fuso como Europe/Lisbon.' ;;
@@ -1155,39 +1183,60 @@ varso|Europe/Warsaw
 zaragoza|Europe/Madrid
 kiev|Europe/Kyiv'
 
-# The zones that match what the person typed, one per line, without repeats. First a zone written as it is, then a name of the
-# table above, then a country code: each of these alone is the answer. Otherwise the countries whose English name (iso3166.tab)
-# and the cities (the last part of a zone's name) that contain what was typed.
+# The zones that match what the person typed, one per line, without repeats, each with «=» in front when the match is exact and
+# «~» when it is a part of a name. Exact: a zone written as it is (with its «/»), a name of the table above, a country code, the
+# whole English name of a country (iso3166.tab), the whole name of a city (the last part of a zone). Exact matches, when there are
+# any, are the answer alone. Otherwise the countries and the zones whose name (the whole one, «America/New_York» too) contains it.
 jht_tz_search() {
-  local query dir code tab zones
+  local query dir code tab zones exact
   query="$(jht_tz_fold "$1")"
   [ -n "$query" ] || return 0
   dir="$(jht_zoneinfo_dir)" || return 0
   tab="$dir/zone.tab"
-  if jht_tz_valid "$1" && [ "$1" != UTC ]; then printf '%s\n' "$1"; return 0; fi
+  case "$1" in */*) if jht_tz_valid "$1"; then printf '=%s\n' "$1"; return 0; fi ;; esac
   code="$(printf '%s\n' "$JHT_TZ_ALIASES" | awk -F '|' -v q="$query" '$1 == q { print $2; exit }')"
   if [ -z "$code" ] && [ "${#query}" -eq 2 ]; then code="$(printf '%s' "$query" | tr 'a-z' 'A-Z')"; fi
   case "$code" in
     '') ;;
     ??) zones="$(awk -F '\t' -v cc="$code" '$1 !~ /^#/ && $1 == cc { print $3 }' "$tab")"
-        [ -z "$zones" ] || { printf '%s\n' "$zones" | jht_tz_only_valid; return 0; } ;;
-    *) jht_tz_valid "$code" && { printf '%s\n' "$code"; return 0; } ;;
+        [ -z "$zones" ] || { printf '%s\n' "$zones" | jht_tz_only_valid | sed 's/^/=/'; return 0; } ;;
+    *) jht_tz_valid "$code" && { printf '=%s\n' "$code"; return 0; } ;;
   esac
+  zones="$(awk -F '\t' '$1 !~ /^#/ && NF >= 3 { print $3 }' "$tab")"
+  # every line: the code or the zone, its folded name, its folded last part (empty for a country)
   {
     if [ -f "$dir/iso3166.tab" ]; then
-      grep -v '^#' "$dir/iso3166.tab" | paste - <(grep -v '^#' "$dir/iso3166.tab" | cut -f 2 | jht_tz_fold_lines) \
-        | awk -F '\t' -v q="$query" 'index($3, q) { print $1 }' | while read -r code; do
-          awk -F '\t' -v cc="$code" '$1 !~ /^#/ && $1 == cc { print $3 }' "$tab"
-        done
+      grep -v '^#' "$dir/iso3166.tab" | cut -f 1 | paste - <(grep -v '^#' "$dir/iso3166.tab" | cut -f 2 | jht_tz_fold_lines) \
+        | awk -F '\t' '{ print "C\t" $1 "\t" $2 "\t" }'
     fi
-    zones="$(awk -F '\t' '$1 !~ /^#/ && NF >= 3 { print $3 }' "$tab")"
-    printf '%s\n' "$zones" | paste - <(printf '%s\n' "$zones" | sed 's|.*/||' | jht_tz_fold_lines) \
-      | awk -F '\t' -v q="$query" 'index($2, q) { print $1 }'
-  } | jht_tz_only_valid
+    printf '%s\n' "$zones" | paste - <(printf '%s\n' "$zones" | tr '/' ' ' | jht_tz_fold_lines) <(printf '%s\n' "$zones" | sed 's|.*/||' | jht_tz_fold_lines) \
+      | awk -F '\t' '{ print "Z\t" $1 "\t" $2 "\t" $3 }'
+  } > "${TMPDIR:-/tmp}/jht-tz-names.$$"
+  exact="$(awk -F '\t' -v q="$query" '($1 == "C" && $3 == q) || ($1 == "Z" && $4 == q) { print $1 "\t" $2 }' "${TMPDIR:-/tmp}/jht-tz-names.$$")"
+  if [ -n "$exact" ]; then
+    printf '%s\n' "$exact" | jht_tz_expand "$tab" | jht_tz_only_valid | sed 's/^/=/'
+  else
+    awk -F '\t' -v q="$query" 'index($3, q) { print $1 "\t" $2 }' "${TMPDIR:-/tmp}/jht-tz-names.$$" \
+      | jht_tz_expand "$tab" | jht_tz_only_valid | sed 's/^/~/'
+  fi
+  rm -f -- "${TMPDIR:-/tmp}/jht-tz-names.$$"
+}
+# «C<tab>code» becomes the zones of that country, «Z<tab>zone» the zone.
+jht_tz_expand() {
+  local kind name
+  while IFS="$(printf '\t')" read -r kind name; do
+    case "$kind" in
+      C) awk -F '\t' -v cc="$name" '$1 !~ /^#/ && $1 == cc { print $3 }' "$1" ;;
+      Z) printf '%s\n' "$name" ;;
+    esac
+  done
 }
 jht_tz_only_valid() {
   local zone
-  awk 'NF && !seen[$0]++' | while read -r zone; do jht_tz_valid "$zone" && printf '%s\n' "$zone"; done
+  # a result is a zone with its «/» (never a link of the old names like «Portugal» or «GB»)
+  awk 'NF && !seen[$0]++' | while read -r zone; do
+    case "$zone" in */*) jht_tz_valid "$zone" && printf '%s\n' "$zone" ;; esac
+  done
 }
 
 JHT_USER_TZ_SAVED=""
@@ -1217,35 +1266,41 @@ if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
     printf "%s\n" "$(ts host_setup.tz.not_detected 'Your timezone was not detected.')"
   fi
   TZ_PICKED=""
+  TZ_PENDING=""
   while [ -z "$TZ_PICKED" ]; do
-    if [ -n "$JHT_USER_TZ_DEFAULT" ]; then
-      printf "%s\n" "$(tsf host_setup.tz.how_default 'Press Enter to keep %s, or type a country, a city or a timezone to look for another one.' "$JHT_USER_TZ_DEFAULT")"
-      printf "%s [%s]: " "$(ts host_setup.timezone_label 'Timezone')" "$JHT_USER_TZ_DEFAULT"
-    else
-      printf "%s\n" "$(ts host_setup.tz.how 'Type a country, a city or a timezone (for example Italy, Rome, Europe/Rome).')"
-      printf "%s: " "$(ts host_setup.timezone_label 'Timezone')"
-    fi
-    if [ -n "${TZ_PENDING:-}" ]; then
+    if [ -n "$TZ_PENDING" ]; then
+      # a search typed at the prompt of the number: it starts again with that
       TZ_CHOICE="$TZ_PENDING"; TZ_PENDING=""
-    elif ! read -r TZ_CHOICE; then
-      # no more input: what was proposed, or UTC said out loud below
-      TZ_PICKED="${JHT_USER_TZ_DEFAULT:-UTC}"
-      printf '\n'
-      break
+    else
+      if [ -n "$JHT_USER_TZ_DEFAULT" ]; then
+        printf "%s\n" "$(tsf host_setup.tz.how_default 'Press Enter to keep %s, or type a country, a city or a timezone to look for another one.' "$JHT_USER_TZ_DEFAULT")"
+        printf "%s " "$(tsf host_setup.tz.ask_default 'Timezone [%s]:' "$JHT_USER_TZ_DEFAULT")"
+      else
+        printf "%s\n" "$(ts host_setup.tz.how 'Type a country, a city or a timezone (for example Italy, Rome, Europe/Rome).')"
+        printf "%s " "$(ts host_setup.tz.ask 'Timezone:')"
+      fi
+      if ! read -r TZ_CHOICE; then
+        # no more input: what was proposed, or UTC said out loud below
+        TZ_PICKED="${JHT_USER_TZ_DEFAULT:-UTC}"
+        printf '\n'
+        break
+      fi
     fi
     if [ -z "$TZ_CHOICE" ]; then
       [ -z "$JHT_USER_TZ_DEFAULT" ] || TZ_PICKED="$JHT_USER_TZ_DEFAULT"
       continue
     fi
     case "$TZ_CHOICE" in UTC|utc|Etc/UTC) TZ_PICKED=UTC; break ;; esac
-    TZ_FOUND="$(jht_tz_search "$TZ_CHOICE")"
+    TZ_RESULTS="$(jht_tz_search "$TZ_CHOICE")"
+    TZ_FOUND="$(printf '%s\n' "$TZ_RESULTS" | sed -n 's/^[=~]//p')"
     TZ_COUNT="$(printf '%s' "$TZ_FOUND" | grep -c . || true)"
+    TZ_EXACT="$(printf '%s\n' "$TZ_RESULTS" | grep -c '^=' || true)"
     if [ "$TZ_COUNT" -eq 0 ]; then
       warn "$(tsf host_setup.tz.none 'No timezone found for «%s»: try a country, a city or a timezone like Europe/Rome.' "$TZ_CHOICE")"
       continue
     fi
-    if [ "$TZ_COUNT" -eq 1 ]; then
-      # one zone: it becomes the proposal, and Enter takes it
+    if [ "$TZ_COUNT" -eq 1 ] && [ "$TZ_EXACT" -eq 1 ]; then
+      # one zone that is exactly what was typed: it becomes the proposal, and Enter takes it
       JHT_USER_TZ_DEFAULT="$TZ_FOUND"
       printf "%s\n" "$(tsf host_setup.tz.proposed 'Proposed: %s (now %s).' "$TZ_FOUND" "$(jht_tz_now "$TZ_FOUND")")"
       continue
@@ -1254,6 +1309,7 @@ if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
       warn "$(tsf host_setup.tz.too_many '%d timezones match «%s»: type something more precise (a city, for example).' "$TZ_COUNT" "$TZ_CHOICE")"
       continue
     fi
+    # a list, also of one zone found by a part of its name: the person picks it by its number
     printf "\n"
     TZ_N=0
     while read -r TZ_ZONE; do
@@ -1273,12 +1329,12 @@ EOF_TZ_FOUND
         warn "$(tsf host_setup.tz.bad_number 'Choose a number between 1 and %d.' "$TZ_COUNT")"
         ;;
       '') : ;;
-      *) TZ_PENDING="$TZ_NUMBER" ;;  # a new search, with what was just typed
+      *) TZ_PENDING="$TZ_NUMBER" ;;
     esac
   done
   JHT_USER_TZ="$TZ_PICKED"
 fi
-ok "$(ts host_setup.timezone_label 'Timezone'): $JHT_USER_TZ"
+ok "$(tsf host_setup.tz.chosen 'Timezone: %s' "$JHT_USER_TZ")"
 
 # #13 — senza una persona al terminale (o su un server che dice UTC) resta UTC: si dice come mettere il proprio fuso.
 if [ "$JHT_USER_TZ" = "UTC" ] && { [ ! -t 0 ] || [ "$NON_INTERACTIVE" -eq 1 ] || [ "$HOST_TYPE" = vps ]; }; then
@@ -1321,11 +1377,11 @@ if [ -d "$HOST_VALUES_DIR" ] && [ ! -L "$HOST_VALUES_DIR" ] && [ -O "$HOST_VALUE
 fi
 
 if [ "$HOST_TYPE" = "local" ]; then
-  ok "Host: $(ts host_setup.host.local 'local computer') — $(ts host_setup.swap_not_needed 'no swap configuration needed')"
+  ok "$(tsf host_setup.host_line_no_swap 'Host: %s — %s' "$(ts host_setup.host.local 'local computer')" "$(ts host_setup.swap_not_needed 'no swap configuration needed')")"
   exit 0
 fi
 
-ok "Host: $(ts host_setup.host.vps 'remote server / VPS')"
+ok "$(tsf host_setup.host_line 'Host: %s' "$(ts host_setup.host.vps 'remote server / VPS')")"
 
 # ── Check RAM e swap esistente ───────────────────────────────────────────
 RAM_KB=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)
