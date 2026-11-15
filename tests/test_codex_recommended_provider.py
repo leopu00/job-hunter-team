@@ -45,9 +45,9 @@ def test_the_first_page_of_the_site_says_glm_in_0_4_0_and_codex_not_in_this_vers
     source = text("web/app/docs/guides/getting-started/page.i18n.ts")
     langs = re.findall(r"\n  (\w\w): \{", source)
     assert sorted(langs) == sorted(RECOMMENDED)
-    assert len(re.findall(r'\n    subIntroA: "[^"]*0\.4\.0', source)) == 7
+    assert len(re.findall(r'\n    subIntroA:\s*"[^"]*0\.4\.0', source)) == 7
     for name in ("GLM", "Kimi", "OpenAI", "Claude"):
-        assert len(re.findall(r'\n    subIntroB: "[^"]*%s' % name, source)) == 7, name
+        assert len(re.findall(r'\n    subIntroB:\s*"[^"]*%s' % name, source)) == 7, name
     assert len(re.findall(r'\n    codex: " — ', source)) == 7
     for word in RECOMMENDED.values():
         assert word not in source.split("subIntroA")[1], word
@@ -78,7 +78,7 @@ def test_the_site_texts_that_list_the_providers_name_the_four_of_0_4_0_and_not_a
 
 def test_the_guide_of_the_provider_says_glm_and_codex_later_in_every_language():
     source = text("web/app/docs/guides/connect-ai-provider/page.i18n.ts")
-    assert len(re.findall(r'\n    whichProviderP: "In 0\.4\.0|\n    whichProviderP: "Nella 0\.4\.0|\n    whichProviderP: "(En la|Dans la|In|A|Na) 0\.4\.0', source)) == 7
+    assert len(re.findall(r'\n    whichProviderP:\s*"(En la|Dans la|Nella|In|A|Na) 0\.4\.0', source)) == 7
     assert len(re.findall(r'\n    coming: "Codex — ', source)) == 7
 
 

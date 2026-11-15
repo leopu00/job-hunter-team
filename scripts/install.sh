@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ╔══════════════════════════════════════════════════════════════════════════╗
-# ║  Job Hunter Team — Installer (Docker-by-default)                         ║
+# ║  Job Hunter Team — Installer (Podman by default)                         ║
 # ╠══════════════════════════════════════════════════════════════════════════╣
 # ║                                                                          ║
 # ║  Usage:                                                                  ║
@@ -10,13 +10,13 @@
 # ║    curl -fsSL https://jobhunterteam.ai/install.sh \                      ║
 # ║      | bash -s -- --no-docker                                            ║
 # ║                                                                          ║
-# ║  Default (Docker mode): installs nothing on the host except Docker.      ║
+# ║  Default (container mode): installs nothing on the host except Podman.   ║
 # ║  Downloads:                                                              ║
 # ║    - host runtime outside $HOME/.jht (compose + preflight)               ║
 # ║    - $HOME/.local/bin/jht         (the bash wrapper)                     ║
 # ║  The Node CLI, Python, tmux and the agents ALL run inside the long-      ║
 # ║  running container managed by compose. No Node/Python/tmux on the host.  ║
-# ║  No Docker socket inside the container.                                  ║
+# ║  No engine socket inside the container.                                  ║
 # ║                                                                          ║
 # ║  Only two host folders are exposed to the container: ~/.jht and          ║
 # ║  ~/Documents/Job Hunter Team. The rest of the filesystem is invisible.   ║

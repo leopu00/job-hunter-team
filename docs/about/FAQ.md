@@ -35,18 +35,18 @@ generic fetch tool. This is not a robots.txt-compliant crawler in the general
 case, and if that distinction matters to you, read those rules before
 installing.
 
-## Do I need Docker?
+## Do I need a container engine?
 
-For the supported setup, yes. The default install puts nothing on your host
-except Docker itself: the Node CLI, Python, tmux and every agent run inside
+For the supported setup, yes: Podman, the only engine (no Docker, no Colima).
+The default install puts nothing on your host except Podman itself: the Node CLI, Python, tmux and every agent run inside
 one long-running container (`scripts/install.sh`). An expert `--no-docker`
 native mode exists in the installer, but the container is the path that gets
 tested and documented.
 
-On macOS the CLI installer uses Colima by default (or Podman, or your own Docker Desktop), and an
-already-running Docker is reused rather than replaced
-([ADR-0006](../adr/0006-user-choice-container-runtime-macos.md)). The desktop app installs Podman, and
-adopts a team the CLI already installed on Colima.
+Podman is the only engine since 0.4: on macOS the installer sets up a Podman machine (Podman from
+Homebrew), on Linux rootless Podman for your user. Colima, Docker Desktop and Docker Engine are not
+installed; a computer that ran JHT on one of them is told what to do
+([ADR-0006](../adr/0006-user-choice-container-runtime-macos.md) is the history of that choice).
 
 ## What does it cost to run, and what drives the cost?
 
