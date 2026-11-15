@@ -16,7 +16,7 @@ JHT runs many agents in parallel, around the clock. In 0.4.0 you need:
 | 🟢  | **Kimi (Moonshot)** on the Pi harness | API key, per call | ✅ Offered in 0.4.0; `jht setup` asks for the key (typed hidden) |
 | 🟢  | **OpenAI** on the Pi harness | API key, per call | ✅ Offered in 0.4.0; `jht setup` asks for the key (typed hidden) |
 | 🟢  | **Claude (Anthropic)** on the Pi harness | API key, per call | ✅ Offered in 0.4.0; `jht setup` asks for the key (typed hidden) |
-| 🔵  | Codex with a ChatGPT subscription | — | ⏳ Not in 0.4.0 |
+| 🔵  | Codex with a ChatGPT subscription | — | ⏳ Not in 0.4.0 for new users; a team set up on it with 0.3.9 keeps working, with a warning |
 
 Details and the spending ceiling of an API key: [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md).
 
