@@ -16,6 +16,7 @@ import json
 import re
 
 from test_broker_wrapper import POWERSHELL_WRAPPER, SECRET, host, run  # noqa: F401  (host is a fixture)
+from wrapper_texts import say_functions
 
 
 def _argv_lines(host):
@@ -57,7 +58,7 @@ def test_a_password_without_a_final_newline_is_read_too(host):
 
 
 def test_the_interactive_setup_still_asks(host):
-    result = run(host, "mail_setup --user me@example.com --dedicated", stdin=SECRET + "\n")
+    result = run(host, say_functions("it") + "\nmail_setup --user me@example.com --dedicated", stdin=SECRET + "\n")
     assert "Password per app" in result.stderr
 
 

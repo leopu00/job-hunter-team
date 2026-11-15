@@ -39,7 +39,7 @@ def test_reading_the_plan_does_not_start_a_stopped_container(tmp_path: Path):
     done, calls = _run(tmp_path, "providers", "plan", stopped=True)
 
     assert done.returncode == 1, done.stderr
-    assert "non attivo" in done.stdout + done.stderr
+    assert "is not running" in done.stdout + done.stderr
     assert _starts_something(calls) == []
 
 
@@ -47,7 +47,7 @@ def test_reading_the_plan_wakes_no_engine_and_no_machine(tmp_path: Path):
     done, calls = _run(tmp_path, "providers", "plan", engine_ready=False)
 
     assert done.returncode == 1, done.stderr
-    assert "non attivo" in done.stdout + done.stderr
+    assert "is not running" in done.stdout + done.stderr
     assert _starts_something(calls) == []
 
 

@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 
@@ -238,7 +239,8 @@ def test_a_machine_that_sees_the_whole_mac_is_refused_before_anything_runs(tmp_p
     result = _run(wrapper, env, *argv)
 
     assert result.returncode == 78, result.stderr
-    assert "vede piu' cartelle del Mac" in result.stderr
+    # English: the language of a person who chose nothing
+    assert "sees more Mac folders than JHT needs" in result.stderr
     assert "jht podman-machine-recreate --confirm" in result.stderr
     calls = _calls(log)
     assert not any("machine start" in line for line in calls)
@@ -283,7 +285,7 @@ def test_an_unverifiable_machine_is_refused_too(tmp_path: Path, config_text):
     result = _run(wrapper, env, "up")
 
     assert result.returncode == 1, result.stderr
-    assert "Non riesco a verificare quali cartelle" in result.stderr
+    assert "Cannot check which Mac folders" in result.stderr
     assert not any("machine start" in line for line in _calls(log))
 
 
@@ -311,7 +313,7 @@ def test_an_empty_mount_list_is_confined(tmp_path: Path):
     result = _run(wrapper, env, "status")
 
     assert result.returncode != 78, result.stderr
-    assert "cartelle del Mac" not in result.stderr
+    assert "Mac folders" not in result.stderr
 
 
 def test_recreate_without_confirmation_touches_nothing(tmp_path: Path):
@@ -321,9 +323,9 @@ def test_recreate_without_confirmation_touches_nothing(tmp_path: Path):
 
     assert result.returncode == 2
     assert "jht podman-machine-recreate --confirm" in result.stderr
-    assert "La configurazione e lo stato della posta restano" in result.stderr
-    assert "reinserire la password della posta" in result.stderr
-    assert "rifare il login LinkedIn" in result.stderr
+    assert "The configuration and the mail state stay" in result.stderr
+    assert "enter the mail password again" in result.stderr
+    assert "log in to LinkedIn again" in result.stderr
     assert not any(line.startswith("podman machine") for line in _calls(log))
     assert config.is_file()
 
@@ -400,11 +402,11 @@ def test_recreate_rebuilds_the_machine_with_only_the_two_folders_and_keeps_the_d
     assert Path(env["JHT_TEST_BROKER_STATE"]).read_bytes() == state_before
     assert Path(env["JHT_TEST_BROKER_SECRETS"]).read_bytes() == b""
     assert not list(Path(env["JHT_RUNTIME_DIR"]).glob(".broker-state-recreate.*"))
-    assert "Lo stato del broker e' stato conservato" in result.stderr
-    assert "reinserisci la password della posta" in result.stderr
+    assert "The broker state was kept" in result.stderr
+    assert "Start the team with 'jht up', enter the mail password again" in result.stderr
     # the provider CLIs live in the machine and go with it: the message says they come back by themselves, and how to see it
-    assert "si reinstallano da sole al primo 'jht up' (circa un minuto, serve la rete" in result.stderr and "jht providers versions" in result.stderr
-    assert "rifai il login LinkedIn" in result.stderr
+    assert "reinstall by themselves at the first 'jht up' (about a minute, it needs the network" in result.stderr and "jht providers versions" in result.stderr
+    assert "log in to LinkedIn again" in result.stderr
     assert _run(wrapper, env, "status").returncode != 78
 
 
@@ -436,7 +438,8 @@ def test_recreate_of_a_broker_without_state_ends_with_0_and_imports_nothing(tmp_
     calls = _calls(log)
     assert "podman machine rm -f jht-podman" in calls
     assert not any("jht_jht-broker-state:/jht_broker_state" in line for line in calls)
-    assert not any("tar" in line for line in result.stderr.splitlines())
+    # a word on its own: the English lines have «Start»
+    assert not any(re.search(r"\btar\b", line) for line in result.stderr.splitlines())
 
 
 def test_recreate_refuses_a_changed_state_archive_before_import_and_cleans_it(tmp_path: Path):
@@ -473,7 +476,7 @@ exec /usr/bin/shasum -a 256 "$1"
         "jht_jht-broker-state:/jht_broker_state" in line and ":ro" not in line
         for line in calls
     )
-    assert "non ha superato la verifica/importazione" in result.stderr
+    assert "did not pass the check/import" in result.stderr
     assert not list(Path(env["JHT_RUNTIME_DIR"]).glob(".broker-state-recreate.*"))
 
 

@@ -48,6 +48,8 @@ from pathlib import Path
 
 import pytest
 
+from wrapper_texts import LANGUAGES, catalog
+
 ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
 
@@ -363,7 +365,10 @@ def test_the_command_is_in_the_local_help_and_the_upgrade_still_refuses_below_th
     refusal = upgrade[upgrade.index("if disk_low; then"):]
     refusal = refusal[: refusal.index("\n  fi\n")]
     assert "upgrade_prune_old_images" not in refusal and "clean_images" not in refusal
-    assert "jht clean-images" in refusal    # the refusal sentence tells the user the way out
+    # the refusal sentence tells the person the way out, in every language
+    key = re.search(r"jht_say (line\.disk_low\.[a-z0-9_.]+)", refusal).group(1)
+    for lang in LANGUAGES:
+        assert "jht clean-images" in catalog(lang)["wrapper." + key], lang
 
 
 # ── Doubt means keeping everything ───────────────────────────────────────────

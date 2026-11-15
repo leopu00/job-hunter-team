@@ -330,3 +330,157 @@ def test_a_real_state_folder_and_a_plain_old_tools_json_are_written_as_before(bo
     (box.home / "state" / "tools.json").write_text("{}\n", encoding="utf-8")
     box.run('tools_notice ready core "" "2026-11-10T00:00:00Z"')
     assert json.loads((box.home / "state" / "tools.json").read_text(encoding="utf-8"))["state"] == "ready"
+
+
+# ── tools_kick: the CLI keeps the tools moving, as the desktop app's round did ───────────────────────────────────────────────
+
+KICK_ENV = {"JHT_TOOLS_WAIT_STEP": "1", "JHT_TOOLS_SWITCH_GRACE": "0", "JHT_TOOLS_WAIT_MAX": "60"}
+
+
+def _wait_until(check, what):
+    for _ in range(150):
+        if check():
+            return
+        time.sleep(0.1)
+    raise AssertionError(what)
+
+
+def _calls(box):
+    path = box.fake / "wrapper-calls"
+    return [line for line in path.read_text(encoding="utf-8").splitlines() if not line.startswith("image=")] if path.exists() else []
+
+
+def test_kick_on_a_core_install_pulls_once_then_switches_when_the_profile_is_ready(box):
+    tier = box.tier()
+    (box.fake / "pull-hold").write_text("", encoding="utf-8")
+    done = box.run("tools_kick", **KICK_ENV)
+    assert done.returncode == 0 and done.stdout == "", done.stderr   # the wrapper says it in the person's words, not the library
+    assert box.run("tools_person_state", **KICK_ENV).stdout == "arriving\n"
+    again = box.run("tools_kick", **KICK_ENV)                        # a second `jht up` while it pulls: no second job, no second pull
+    assert again.returncode == 0 and again.stdout == ""
+    (box.fake / "pull-hold").unlink()
+    box.wait_for("ready")
+    assert box.run("tools_person_state", **KICK_ENV).stdout == "waiting\n"
+    assert tier.exists() and _calls(box) == []                        # no switch before the onboarding has closed
+    (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
+    _wait_until(lambda: not tier.exists() and _calls(box) == ["up"], f"the job never made the switch: {_calls(box)}")
+    box.wait_for_pull_end()
+    assert (box.fake / "pulls").read_text(encoding="utf-8").splitlines() == [f"pull {FULL}"]
+    assert box.notice()["tier"] == "full" and box.notice()["state"] == "ready"
+    assert box.run("tools_person_state", **KICK_ENV).stdout == ""
+
+
+def test_kick_with_the_full_image_already_here_only_waits_and_switches(box):
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
+    assert box.run("tools_kick", **KICK_ENV).returncode == 0
+    _wait_until(lambda: not tier.exists() and _calls(box) == ["up"], f"no switch: {_calls(box)}")
+    assert not (box.fake / "pulls").exists()
+
+
+def test_a_switch_the_engine_refuses_is_made_again_with_a_down_first(box):
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
+    # the first `up` refuses (config_changed_while_running: the team was started with another configuration), as on clone-2
+    (box.fake / "jht-wrapper.sh").write_text(
+        '#!/bin/sh\necho "$@" >> "$FAKE/wrapper-calls"\n'
+        'if [ "$1" = up ] && [ ! -e "$FAKE/downed" ]; then exit 1; fi\n[ "$1" = down ] && touch "$FAKE/downed"\nexit 0\n',
+        encoding="utf-8")
+    assert box.run("tools_kick", **KICK_ENV).returncode == 0
+    _wait_until(lambda: _calls(box) == ["up", "down", "up"], f"not up, down, up: {_calls(box)}")
+    box.wait_for_pull_end()
+    assert not tier.exists() and box.notice()["state"] == "ready" and box.notice()["tier"] == "full"
+    assert box.run("tools_person_state", **KICK_ENV).stdout == ""
+
+
+def test_a_switch_that_still_fails_is_said_until_an_up_goes_well(box):
+    box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
+    (box.fake / "jht-wrapper.sh").write_text('#!/bin/sh\necho "$@" >> "$FAKE/wrapper-calls"\n[ "$1" = up ] && exit 1\nexit 0\n',
+                                             encoding="utf-8")
+    assert box.run("tools_kick", **KICK_ENV).returncode == 0
+    box.wait_for("failed")
+    box.wait_for_pull_end()
+    assert box.notice()["reason"] == "switch_failed"
+    assert box.run("tools_person_state", **KICK_ENV).stdout == "switch_failed\n"
+    # the person runs `jht down` and `jht up`: the up that goes well reaches tools_kick, and the marker is gone
+    assert box.run("tools_kick", **KICK_ENV).returncode == 0
+    assert box.run("tools_person_state", **KICK_ENV).stdout == ""
+
+
+def test_a_failed_pull_is_said_and_the_next_kick_tries_again(box):
+    box.tier()
+    (box.fake / "pull-fails").write_text("", encoding="utf-8")
+    assert box.run("tools_kick", **KICK_ENV).returncode == 0
+    box.wait_for("failed")
+    box.wait_for_pull_end()
+    assert box.run("tools_person_state", **KICK_ENV).stdout == "failed\n"
+    (box.fake / "pull-fails").unlink()
+    assert box.run("tools_kick", **KICK_ENV).returncode == 0
+    box.wait_for("ready")
+    assert len((box.fake / "pulls").read_text(encoding="utf-8").splitlines()) == 2
+
+
+def test_kick_does_nothing_without_a_tier_or_with_the_engine_down(box):
+    assert box.run("tools_kick", **KICK_ENV).returncode == 0 and not (box.runtime / ".tools-pull.lock").exists()
+    box.tier()
+    (box.fake / "engine-down").write_text("", encoding="utf-8")
+    done = box.run("tools_kick", **KICK_ENV)
+    assert done.returncode == 0 and done.stdout == "" and done.stderr == ""
+    assert not (box.runtime / ".tools-pull.lock").exists()
+
+
+def test_jht_up_setup_and_status_keep_the_tools_moving_and_say_where_they_stand():
+    text = WRAPPER.read_text(encoding="utf-8")
+    up = text[text.index("\n  up)\n"):text.index("\n  start-container)\n")]
+    setup = text[text.index("\n  setup)\n"):text.index("\n  download)\n")]
+    status = text[text.index("\n  status)\n"):]
+    status = status[:status.index("\n    ;;\n")]
+    assert "tools_tell_person kick" in up and "tools_tell_person kick" in setup
+    assert "tools_tell_person" in status and "tools_tell_person kick" not in status   # status is a probe: it starts nothing
+    body = text[text.index("\ntools_tell_person() {"):]
+    body = body[:body.index("\n}\n")]
+    for key in ("tools.arriving", "tools.waiting", "tools.failed", "tools.switch_failed"):
+        assert f"jht_say {key}" in body, key
+    assert "|| true" in body   # the command it rides on is never failed by it
+
+
+# ── jht tools --help: its own usage, served before anything starts ───────────────────────────────────────────────────────────
+
+def test_tools_help_is_its_own_usage_served_before_the_container_or_the_helper():
+    sh = WRAPPER.read_text(encoding="utf-8")
+    ps = (ROOT / "scripts" / "jht-wrapper.ps1").read_text(encoding="utf-8")
+    body = re.search(r"^tools_help\(\) \{\n.*?^\}\n", sh, re.S | re.M).group(0)
+    assert "jht_say help.tools" in body
+    gate = sh[sh.index('      -h|--help)\n'):]
+    gate = gate[:gate.index("serve_help_without_docker")]
+    assert re.search(r'if \[ "\$SUB" = tools \]; then\n\s+tools_help\n\s+exit 0', gate), "the help gate answers jht tools --help"
+    assert sh.index('if [ "$SUB" = tools ]; then\n          tools_help') < sh.index("\n  tools)\n"), "before the tools arm"
+    ps_gate = ps[ps.index("$HelpRequested = "):ps.index("exit (Invoke-HelpWithoutDocker $Sub @Rest)")]
+    assert re.search(r"if \(\$Sub -ceq 'tools'\) \{\n\s+Write-ToolsHelp\n\s+exit 0", ps_gate)
+    import sys as _sys
+    _sys.path.insert(0, str(ROOT / "tests"))
+    from wrapper_texts import catalog
+    for lang in ("en", "it"):
+        text = catalog(lang)["wrapper.help.tools"]
+        for needed in ("jht tools", "status --json", "pull", "switch"):
+            assert needed in text, (lang, needed)
+        assert text in ps, f"the .ps1 says the {lang} text of the catalogue"
+    for lang in ("hu", "es", "de", "fr", "pt"):
+        text = catalog(lang)["wrapper.help.tools"]
+        assert "jht tools" in text and "status --json" in text and "%" not in text
+
+
+def test_tools_help_runs_and_touches_nothing(tmp_path):
+    import sys as _sys
+    _sys.path.insert(0, str(ROOT / "tests"))
+    from wrapper_texts import say_functions
+    text = WRAPPER.read_text(encoding="utf-8")
+    body = re.search(r"^tools_help\(\) \{\n.*?^\}\n", text, re.S | re.M).group(0)
+    script = "set -u\ndocker() { echo DOCKER >&2; return 1; }\n" + say_functions("en") + body + "\ntools_help\n"
+    result = subprocess.run(["bash", "-c", script], text=True, capture_output=True, timeout=30)
+    assert result.returncode == 0 and result.stdout.startswith("Usage: jht tools <command>"), result.stderr
+    assert "DOCKER" not in result.stderr

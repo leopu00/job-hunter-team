@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from test_integration_command import LIBRARY, host, wrapper_functions  # noqa: F401
+from wrapper_texts import say_functions
 
 DIGEST = "sha256:" + "e" * 64
 REF = f"ghcr.io/leopu00/jht@{DIGEST}"
@@ -454,6 +455,7 @@ err() {{ echo "error: $*" >&2; }}
 RUNTIME_DIR="{host.runtime}"; CONTAINER_RUNTIME={runtime}; COMPOSE_EXTRA_FILE="{extra}"
 compose_project_name() {{ echo jht; }}
 docker() {{ printf 'DOCKER %s\\n' "$*"; }}
+{say_functions()}
 {wrapper_functions("compose_file_run")}
 compose_file_run "{host.compose}" up -d jht-login
 """

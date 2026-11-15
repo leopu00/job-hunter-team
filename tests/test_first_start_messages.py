@@ -20,7 +20,7 @@ from test_host_env_security import WRAPPER, wrapper_runtime_env, write_trusted_r
 
 pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="the bash wrapper and its POSIX folders; the PowerShell wrapper has its own tests")
 
-NOT_STARTED = "Job Hunter Team non è ancora avviato"
+NOT_STARTED = "Job Hunter Team is not started yet"  # English: the language of a person who chose nothing
 
 
 def profile(tmp_path, docker_body='exit 0'):
@@ -54,7 +54,7 @@ def test_a_container_that_was_never_started_is_said_as_that_with_the_command_tha
     text = done.stdout + done.stderr
     assert done.returncode == 1, text
     assert NOT_STARTED in text and "jht up" in text and "jht setup" in text, text
-    assert "non attestabile" not in text, text
+    assert "cannot be verified" not in text, text
 
 
 @pytest.mark.parametrize("command", [["logs"], ["restart"], ["recreate"]])
@@ -64,15 +64,15 @@ def test_a_container_that_cannot_be_attested_is_still_said_as_that(tmp_path, com
     text = done.stdout + done.stderr
     assert done.returncode == 1, text
     assert NOT_STARTED not in text, text
-    assert "non attestabile" in text, text
+    assert "cannot be verified" in text, text
 
 
 def test_an_install_without_its_integrity_manifest_says_the_install_is_not_finished(tmp_path):
     done, calls = run(tmp_path, "up", before=lambda runtime: (runtime / ".runtime-integrity").unlink())
     text = done.stdout + done.stderr
     assert done.returncode != 0 and calls == [], (text, calls)
-    assert "non è installato del tutto" in text and "installer" in text, text
-    assert "non attendibile" not in text, text
+    assert "is not fully installed" in text and "installer" in text, text
+    assert "cannot be trusted" not in text, text
 
 
 def test_a_runtime_file_somebody_changed_is_still_untrusted(tmp_path):
@@ -83,4 +83,4 @@ def test_a_runtime_file_somebody_changed_is_still_untrusted(tmp_path):
     done, calls = run(tmp_path, "up", before=tamper)
     text = done.stdout + done.stderr
     assert done.returncode != 0 and calls == [], (text, calls)
-    assert "non attendibile" in text and "non è installato del tutto" not in text, text
+    assert "cannot be trusted" in text and "is not fully installed" not in text, text

@@ -114,6 +114,41 @@ function Get-JhtTextLanguage {
   return 'en'
 }
 
+# The tools of a core install (P4), as in jht-wrapper.sh (tools_tell_person). The installer leaves the core image; the full one,
+# with the Scouts' tools, comes after, pulled in the background, and the team moves onto it once the onboarding has closed. The
+# desktop app kept that moving; with the CLI only it is `jht up` and `jht setup` that start it (Invoke-ToolsKick in jht-tools.ps1:
+# one detached job, idempotent) and `jht up`, `jht setup` and `jht status` that say where it stands. A helper that is missing or
+# not trusted says nothing here, and never fails the command it rides on.
+function Get-JhtToolsText {
+  param([Parameter(Mandatory)][string]$Key)
+  $texts = @{
+    'arriving'      = @("Gli strumenti degli Scout stanno arrivando: l'immagine piena si scarica in background (circa 3 GB). La ricerca delle posizioni parte da sola quando sono arrivati; non devi fare niente.", "The Scouts' tools are on their way: the full image is downloading in the background (about 3 GB). The search for positions starts by itself once they are here; there is nothing to do.")
+    'waiting'       = @("Gli strumenti degli Scout sono arrivati: la squadra ci passa da sola quando l'onboarding e' chiuso.", "The Scouts' tools are here: the team moves onto them by itself once the onboarding is closed.")
+    'failed'        = @("Il download degli strumenti degli Scout non e' riuscito: la squadra non puo' ancora cercare posizioni. Esegui jht tools pull per riprovare (anche jht up riprova).", "The download of the Scouts' tools failed, so the team cannot search for positions yet. Run jht tools pull to try again (jht up tries again too).")
+    'switch_failed' = @("Gli strumenti degli Scout sono arrivati, ma la squadra non si e' potuta riavviare con loro: esegui jht down, poi jht up.", "The Scouts' tools are here, but the team could not be restarted on them: run jht down, then jht up.")
+  }
+  $pair = $texts[$Key]
+  if ((Get-JhtTextLanguage) -ceq 'it') { return $pair[0] }
+  return $pair[1]
+}
+
+function Write-JhtToolsNotice {
+  param([switch]$Kick)
+  try {
+    if (-not ((Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf) -or (Test-Path -LiteralPath (Join-Path $RuntimeDir '.tools-switch-failed') -PathType Leaf))) { return }
+    if (-not (Test-RuntimeHelperDeclared 'jht-tools.ps1')) { return }
+    Assert-TrustedRuntime
+    . (Join-Path $RuntimeDir 'jht-tools.ps1')
+    if ($Kick) { $null = Invoke-ToolsKick }
+    switch (Get-ToolsPersonState) {
+      'arriving'      { Write-Info (Get-JhtToolsText 'arriving') }
+      'waiting'       { Write-Info (Get-JhtToolsText 'waiting') }
+      'failed'        { Write-Warn (Get-JhtToolsText 'failed') }
+      'switch_failed' { Write-Warn (Get-JhtToolsText 'switch_failed') }
+    }
+  } catch { }
+}
+
 function Get-JhtUninstallText {
   param([Parameter(Mandatory)][string]$Key, [string[]]$Values = @())
   $english = ((Get-JhtTextLanguage) -ceq 'en')
@@ -1713,6 +1748,31 @@ function Invoke-HelpWithoutDocker {
   return 0
 }
 
+# `jht tools --help`: its subcommands, as in jht-wrapper.sh (tools_help): a help never starts the container nor loads the helper.
+function Write-ToolsHelp {
+  if ((Get-JhtTextLanguage) -ceq 'it') {
+    [Console]::Out.WriteLine(@'
+Uso: jht tools <comando>
+
+  status --json   se gli strumenti degli Scout (l'immagine piena) sono arrivati, in arrivo o falliti
+  pull            li scarica in background (jht up e jht setup lo avviano da soli)
+  switch          ci porta la squadra quando l'onboarding e' chiuso (il download lo fa da solo)
+
+Questo aiuto non avvia niente e non scarica niente.
+'@)
+  } else {
+    [Console]::Out.WriteLine(@'
+Usage: jht tools <command>
+
+  status --json   whether the Scouts' tools (the full image) are here, on their way or failed
+  pull            downloads them in the background (jht up and jht setup start it by themselves)
+  switch          moves the team onto them once the onboarding is closed (the download does it by itself)
+
+This help starts nothing and downloads nothing.
+'@)
+  }
+}
+
 # `jht integration --help`: its usage line, not the generic help of the host. Fixed text: the command lives in a helper that
 # is fetched only when it is needed, and a help never fetches anything.
 function Write-IntegrationHelp {
@@ -1741,9 +1801,8 @@ Senza opzioni parte l'installazione guidata. Con --non-interactive non chiede ni
 tutto si da' con le opzioni.
 
   --non-interactive            nessuna domanda
-  --provider <nome>            openai (predefinito), glm (Z.ai) o kimi (Moonshot)
-  --harness <nome>             codex (predefinito) o pi; glm e kimi vanno solo con pi
-  --auth-method <metodo>       api_key (predefinito) o subscription
+  --provider <nome>            glm (Z.ai, predefinito), kimi (Moonshot), openai o claude (Anthropic)
+  --harness <nome>             pi (predefinito)
   --api-key-file <percorso>    file che contiene la chiave API (una riga, leggibile solo da te).
                                Un file del tuo computer lo legge jht e lo passa al setup: con glm e kimi
                                il setup tiene la chiave per conto suo, mai nella configurazione
@@ -1752,15 +1811,16 @@ tutto si da' con le opzioni.
   --secret-mode <modo>         come si salva la chiave: plaintext (predefinito), env o file
   --secret-env <nome>          con --secret-mode env: la variabile d'ambiente che la contiene
   --secret-file <percorso>     con --secret-mode file: il file che la contiene
-  --subscription-email <email> con --auth-method subscription: l'email dell'account
-  --subscription-token <token> con --auth-method subscription: il token
   --model <modello>            il modello da usare
   --language <codice>          la lingua (per esempio it o en)
   --skip-health                salta il controllo finale
   --reset                      riparte da una configurazione pulita
 
-Esempio, con una chiave GLM in un file:
-  jht setup --non-interactive --provider glm --harness pi --api-key-file chiave.txt
+Esempi:
+  con una chiave GLM in un file:
+    jht setup --non-interactive --provider glm --harness pi --api-key-file chiave.txt
+  OpenAI con una chiave API, su Pi (per Claude: --provider claude):
+    jht setup --non-interactive --provider openai --harness pi --api-key-stdin
 '@)
 }
 
@@ -4174,6 +4234,10 @@ if ($HelpRequested -and $Sub -notin @('game', 'gui', 'agent-control', 'desktop-a
     Write-LinkedinHelp
     exit 0
   }
+  if ($Sub -ceq 'tools') {
+    Write-ToolsHelp
+    exit 0
+  }
   if ($Sub -ceq 'setup') {
     Write-SetupHelp
     exit 0
@@ -4277,6 +4341,7 @@ switch ($Sub) {
     $telegramCode = Invoke-AvailableTelegramLifecycle 'resume'
     if ($telegramCode -ne 0) { exit $telegramCode }
     Resume-Broker
+    Write-JhtToolsNotice -Kick
     # The up went well (a failed one has already stopped jht with its code): 0, not the code of
     # whichever native ran last. The setup reads it (enable-podman-windows-runtime.ps1, T89).
     exit 0
@@ -4471,6 +4536,7 @@ switch ($Sub) {
       if (-not [Console]::IsOutputRedirected) {
         $telegramCode = Write-TelegramStatusLine
         if ($telegramCode -ne 0) { exit $telegramCode }
+        Write-JhtToolsNotice
       }
     } else {
       Write-Host "container '$Container' non attivo"
@@ -4518,6 +4584,7 @@ switch ($Sub) {
     Require-Docker
     Clear-JhtTeamStopped
     Ensure-Up
+    Write-JhtToolsNotice -Kick
     if ($null -ne $keyPlan.Key) {
       # -i only: a pipe is not a terminal. No byte-order mark goes in front of the key (Invoke-NativeWithStdin).
       try {

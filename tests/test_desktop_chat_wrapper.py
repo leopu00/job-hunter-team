@@ -655,7 +655,7 @@ def test_desktop_chat_fails_closed_when_private_podman_is_not_ready(tmp_path: Pa
     )
 
     assert result.returncode != 0
-    assert "runtime o container JHT non disponibile" in result.stderr
+    assert "JHT runtime or container not available" in result.stderr  # English: the language of a person who chose nothing
     calls = log.read_text(encoding="utf-8")
     assert calls.strip() == "docker info"
     assert "machine" not in calls and "compose" not in calls and "inspect" not in calls
@@ -725,7 +725,7 @@ def test_up_goes_on_when_the_container_of_an_earlier_up_is_there_but_stopped(tmp
     result = subprocess.run([str(wrapper), "up"], env=env, text=True, capture_output=True, timeout=20, check=False)
 
     assert result.returncode == 0, result.stderr
-    assert "non attestabile" not in result.stderr
+    assert "cannot be verified" not in result.stderr
     calls = log.read_text(encoding="utf-8").splitlines()
     assert len([line for line in calls if line.startswith("podman-compose ") and line.endswith(" up -d")]) == 1
 
@@ -738,7 +738,7 @@ def test_status_says_a_stopped_container_is_not_running_and_does_not_call_it_una
     result = subprocess.run([str(wrapper), "status"], env=env, text=True, capture_output=True, timeout=20, check=False)
 
     assert result.returncode == 1
-    assert "non attivo" in result.stdout + result.stderr and "non attestabile" not in result.stdout + result.stderr
+    assert "non attivo" in result.stdout + result.stderr and "cannot be verified" not in result.stdout + result.stderr
 
 
 
@@ -754,7 +754,7 @@ def test_status_for_a_person_says_a_team_that_is_off_without_calling_it_an_error
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "non e' acceso" in result.stdout and "jht up" in result.stdout
-    assert "✗" not in result.stdout + result.stderr and "non attestabile" not in result.stdout + result.stderr
+    assert "✗" not in result.stdout + result.stderr and "cannot be verified" not in result.stdout + result.stderr
 
 def _stale_stopped(tmp_path: Path):
     wrapper, env, log = _runtime(tmp_path)
@@ -828,7 +828,7 @@ def test_up_does_not_touch_a_running_container_of_the_version_before(tmp_path: P
     result = subprocess.run([str(wrapper), "up"], env=env, text=True, capture_output=True, timeout=20, check=False)
 
     assert result.returncode == 1
-    assert "non attestabile" in result.stderr and "jht down" in result.stderr
+    assert "cannot be verified" in result.stderr and "jht down" in result.stderr
     calls = log.read_text(encoding="utf-8").splitlines()
     assert not any(line.startswith("podman-compose ") and (line.endswith(" down") or line.endswith(" up -d")) for line in calls)
 
@@ -856,7 +856,7 @@ def test_a_stopped_container_that_is_not_ours_still_stops_up(tmp_path: Path):
     result = subprocess.run([str(wrapper), "up"], env=env, text=True, capture_output=True, timeout=20, check=False)
 
     assert result.returncode == 1
-    assert "non attestabile" in result.stderr
+    assert "cannot be verified" in result.stderr
     calls = log.read_text(encoding="utf-8").splitlines()
     assert not any(line.startswith("podman-compose ") and line.endswith(" up -d") for line in calls)
 
@@ -992,7 +992,7 @@ def test_podman_machine_marker_must_be_present_and_valid_before_any_runtime_io(
     )
 
     assert result.returncode != 0
-    assert "runtime host non attendibile" in result.stderr
+    assert "the host runtime cannot be trusted" in result.stderr  # English: the language of a person who chose nothing
     assert not log.exists()
 
 

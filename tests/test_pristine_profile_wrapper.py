@@ -93,17 +93,23 @@ def test_a_command_that_needs_the_container_says_which_command_starts_it_or_that
     assert done.returncode == 1 and ("non attestabile" in text or "non attivo" in text or "jht up" in text), text
 
 
-@pytest.mark.parametrize("command", [["status"], ["providers", "plan"]])
-def test_the_status_and_the_plan_of_a_team_never_started_say_the_container_is_not_active(tmp_path, command):
+# English: the language of a person who chose nothing. «non attivo» of the status is its fixed line
+# («container 'jht' non attivo»), the same in every language.
+@pytest.mark.parametrize(("command", "words"), [(["status"], "non attivo"), (["providers", "plan"], "is not running")])
+def test_the_status_and_the_plan_of_a_team_never_started_say_the_container_is_not_active(tmp_path, command, words):
     done, _, _ = run_wrapper(tmp_path, *command)
-    assert "non attivo" in (done.stdout + done.stderr), done.stdout + done.stderr
+    assert words in (done.stdout + done.stderr), done.stdout + done.stderr
 
 
-@pytest.mark.parametrize(("command", "code"), [(["integration", "list"], 0), (["screen", "status"], 0), (["tools", "status"], 1)])
-def test_the_helpers_not_installed_yet_are_named_with_the_command_that_installs_them(tmp_path, command, code):
+@pytest.mark.parametrize(("command", "code", "words"), [
+    (["integration", "list"], 0, "not installed yet"),
+    (["screen", "status"], 0, "not installed yet"),
+    (["tools", "status"], 1, "is not installed yet"),
+])
+def test_the_helpers_not_installed_yet_are_named_with_the_command_that_installs_them(tmp_path, command, code, words):
     done, calls, _ = run_wrapper(tmp_path, *command)
     text = done.stdout + done.stderr
-    assert done.returncode == code and "jht upgrade" in text and "non ancora installato" in text, text
+    assert done.returncode == code and "jht upgrade" in text and words in text, text
     assert calls == [], "the helper is looked for before the engine is asked anything"
 
 
@@ -125,5 +131,5 @@ def test_screen_without_a_known_word_says_its_usage_and_asks_the_engine_nothing(
 
 def test_screen_help_is_the_fixed_text_and_starts_nothing(tmp_path):
     done, calls, _ = run_wrapper(tmp_path, "screen", "--help")
-    assert done.returncode == 0 and "jht screen" in done.stdout and "sola visione" in done.stdout, done.stdout
+    assert done.returncode == 0 and "jht screen" in done.stdout and "view-only" in done.stdout, done.stdout
     assert calls == []

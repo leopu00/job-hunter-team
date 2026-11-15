@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from wrapper_texts import say_functions
+
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = (ROOT / "scripts" / "jht-wrapper.sh").read_text(encoding="utf-8")
 
@@ -36,7 +38,6 @@ def _run(tmp_path: Path, function: str, *, kernel: str, lang: str = "en") -> sub
 HOST_KERNEL={kernel}
 PODMAN_RUNTIME_MODE=""
 CONTAINER_RUNTIME=docker
-JHT_SAY_LANG={lang}
 err_runtime=""
 info() {{ printf 'info: %s\\n' "$*"; }}
 err() {{ printf 'err: %s\\n' "$*"; }}
@@ -44,7 +45,8 @@ uname() {{ echo {kernel}; }}
 require_confined_podman_machine() {{ :; }}
 require_rootless_podman_native() {{ :; }}
 docker_compose_plugin_missing() {{ return 1; }}
-{_functions("jht_text_en", "jht_text_it", "jht_say", function)}
+{say_functions(lang)}
+{_functions(function)}
 {function}
 echo "RC=$?"
 """

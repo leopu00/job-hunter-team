@@ -20,6 +20,8 @@ from pathlib import Path
 
 import pytest
 
+from wrapper_texts import say_functions
+
 ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
 
@@ -84,7 +86,7 @@ def box(tmp_path):
             f"set -u\nJHT_PODMAN_UP_TIMEOUT_S={up_cap}\n"
             f'PATH="{bin_dir}:/usr/bin:/bin"\nRUNTIME_DIR="{runtime}"\nRUNTIME_IMAGE_PIN="{runtime}/runtime-image"\nRUNTIME_TIER_FILE="{runtime}/runtime-tier"\n'
             f"PODMAN_RUNTIME_MODE={mode}\nPODMAN_MACHINE_NAME=jht-podman\n"
-            "CONTAINER_RUNTIME=podman\nHOST_UID=1000\nPODMAN_NATIVE_REMOTE=0\nerr() { echo \"error: $*\" >&2; }\n" + _source() + "\n" + body
+            "CONTAINER_RUNTIME=podman\nHOST_UID=1000\nPODMAN_NATIVE_REMOTE=0\nerr() { echo \"error: $*\" >&2; }\n" + say_functions() + _source() + "\n" + body
         )
         return subprocess.run(["bash", "-c", script], capture_output=True, text=True, env={**os.environ, "LC_ALL": "C"},
                               timeout=timeout)

@@ -17,21 +17,25 @@ from pathlib import Path
 import pytest
 
 from test_cli_help_never_starts_docker import assert_no_docker_effect, make_docker_spy, run_wrapper
+from wrapper_texts import LANGUAGES, catalog
 
 ROOT = Path(__file__).resolve().parents[1]
 SH = (ROOT / "scripts" / "jht-wrapper.sh").read_text(encoding="utf-8").replace("\r\n", "\n")
 PS = (ROOT / "scripts" / "jht-wrapper.ps1").read_text(encoding="utf-8").replace("\r\n", "\n")
 SETUP_JS = (ROOT / "cli" / "src" / "commands" / "setup.js").read_text(encoding="utf-8")
 
-KEY_OPTIONS = ("--api-key-file <percorso>", "--api-key-stdin")
+KEY_OPTIONS = ("--api-key-file <path>", "--api-key-stdin")
 
+
+KEPT_NOT_OFFERED = {"--auth-method", "--subscription-email", "--subscription-token"}
 
 def _options_of_the_command() -> list[str]:
     return re.findall(r"\.option\('(--[a-z-]+)", SETUP_JS)
 
 
-def _sh_text() -> str:
-    return re.search(r"<<'JHTSETUPHELP'\n(.*?)\nJHTSETUPHELP\n", SH, re.S).group(1)
+def _sh_text(lang: str = "it") -> str:
+    """The help of `jht setup` in the wrapper's catalog (shared/locales/<lang>.json, key wrapper.help.setup)."""
+    return catalog(lang)["wrapper.help.setup"]
 
 
 @pytest.mark.skipif(os.name == "nt", reason="the bash wrapper is not run on Windows")
@@ -41,10 +45,11 @@ def test_the_help_the_person_reads_names_the_key_options_and_starts_nothing(tmp_
     fake_bin, log = make_docker_spy(tmp_path, reachable=True, container_running=container_running)
     done = run_wrapper(args, fake_bin, tmp_path)
     assert done.returncode == 0, done.stderr
-    assert done.stdout.startswith("Uso: jht setup"), done.stdout
+    assert done.stdout.startswith("Usage: jht setup"), done.stdout
+    assert done.stdout == _sh_text("en") + "\n", done.stdout
     for option in KEY_OPTIONS:
         assert option in done.stdout, option
-    assert "chiave.txt" in done.stdout
+    assert "key.txt" in done.stdout
     assert_no_docker_effect(log)
 
 
@@ -55,12 +60,17 @@ def test_the_help_of_the_other_commands_is_still_the_generic_one(tmp_path):
     assert done.returncode == 0 and "jht up" in done.stdout and "--api-key-file" not in done.stdout
 
 
-def test_the_help_names_every_option_of_the_command_and_no_other():
-    named = set(re.findall(r"^  (--[a-z-]+)", _sh_text(), re.M))
-    assert named == set(_options_of_the_command())
+@pytest.mark.parametrize("lang", LANGUAGES)
+def test_the_help_names_every_option_of_the_command_and_no_other(lang):
+    named = set(re.findall(r"^  (--[a-z-]+)", _sh_text(lang), re.M))
+    # the Codex subscription is not offered in 0.4.0 (only Pi): its options still work for a setup made with 0.3.9,
+    # the help does not name them
+    assert named == set(_options_of_the_command()) - KEPT_NOT_OFFERED
+    assert not re.search(r"codex|subscription", _sh_text(lang), re.I)
 
 
 def test_both_wrappers_answer_setup_help_before_the_generic_one_and_with_the_same_text():
+    assert re.search(r"^setup_help\(\) \{\n  printf '%s\\n' \"\$\(jht_say help\.setup\)\"\n\}\n", SH, re.M)
     assert re.search(r'if \[ "\$SUB" = setup \]; then\n\s+setup_help\n\s+exit 0\n\s+fi\n\s+if host_command_uses_local_help', SH)
     assert re.search(r"if \(\$Sub -ceq 'setup'\) \{\n\s+Write-SetupHelp\n\s+exit 0\n\s+\}\n\s+if \(Test-HostCommandUsesLocalHelp", PS)
     ps_text = re.search(r"function Write-SetupHelp \{\n.*?@'\n(.*?)\n'@\)", PS, re.S).group(1)

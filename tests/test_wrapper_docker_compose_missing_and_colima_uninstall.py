@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from test_cli_help_never_starts_docker import write_trusted_runtime
+from wrapper_texts import LANGUAGES, TEXTS, catalog
 
 ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
@@ -236,9 +237,17 @@ def test_the_stop_comes_after_the_images_and_before_the_runtime_folder_with_its_
     assert body.index("uninstall_images") < body.index("uninstall_colima ") < body.index("uninstall_phase uninstall_runtime")
 
 
-def test_the_texts_exist_in_english_and_italian():
-    for key in ("compose.missing", "uninstall.colima_stopping", "uninstall.colima_busy", "uninstall.colima_stop_failed", "uninstall.colima_running"):
-        assert SOURCE.count(f"    {key}) printf") == 2, key
+def _texts_exist_in_every_language(keys):
+    said = TEXTS.calls(SOURCE)
+    for key in keys:
+        assert key in said, key  # the wrapper says it through jht_say
+        for lang in LANGUAGES:
+            assert catalog(lang).get(f"wrapper.{key}", "").strip(), (lang, key)
+
+
+def test_the_texts_exist_in_every_language():
+    _texts_exist_in_every_language(
+        ("compose.missing", "uninstall.colima_stopping", "uninstall.colima_busy", "uninstall.colima_stop_failed", "uninstall.colima_running"))
 
 
 # ── 3. the uninstall and the link to the Compose plugin ───────────────────
@@ -341,6 +350,5 @@ def test_the_link_goes_after_colima_and_before_the_runtime_folder_with_its_marke
     assert body.index("uninstall_colima ") < body.index("uninstall_compose_plugin_link") < body.index("uninstall_phase uninstall_runtime")
 
 
-def test_the_link_texts_exist_in_english_and_italian():
-    for key in ("uninstall.compose_link_removed", "uninstall.compose_link_left"):
-        assert SOURCE.count(f"    {key}) printf") == 2, key
+def test_the_link_texts_exist_in_every_language():
+    _texts_exist_in_every_language(("uninstall.compose_link_removed", "uninstall.compose_link_left"))
