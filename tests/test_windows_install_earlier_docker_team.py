@@ -46,7 +46,7 @@ exit 0
 """
 
 FUNCTIONS = ["Get-JhtLegacyDockerCli", "Invoke-JhtLegacyDocker", "Test-JhtDockerOwnEngine", "Get-JhtLegacyDockerTeam", "Assert-NoLegacyDockerTeam",
-             "Test-JhtMachineOutput", "Write-JhtProblem", "Remove-JhtCreatedEmptyDirs", "T", "Get-JhtTextLanguage"]
+             "Test-JhtMachineOutput", "Write-JhtProblem", "Remove-JhtCreatedEmptyDirs", "Ts", "Tsf", "Get-InstallerTextTable", "Get-JhtTextLanguage"]
 
 
 DOCKER_DESKTOP = "Docker Desktop 4.50.0 (209931)|Engine;containerd;runc;docker-init;"

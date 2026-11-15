@@ -131,8 +131,9 @@ $ErrorActionPreference = 'Stop'
 $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($env:JHT_UNDER_TEST, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw "parse: $($errors[0])" }
-# the sentences are said in the person's language: T and Get-JhtTextLanguage come with any function, when the script has them
-foreach ($name in @('Get-JhtTextLanguage', 'T')) {
+# the sentences are said in the person's language: Ts/Tsf, their table and Get-JhtTextLanguage come with any function, when the
+# script has them
+foreach ($name in @('Get-JhtTextLanguage', 'T', 'Ts', 'Tsf', 'Get-InstallerTextTable')) {
   $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name }, $true)
   if ($fn) { . ([scriptblock]::Create($fn.Extent.Text)) }
 }
