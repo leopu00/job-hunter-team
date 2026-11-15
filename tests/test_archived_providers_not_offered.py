@@ -32,8 +32,9 @@ def config_of(home: Path) -> dict:
 # Kimi is back in 0.4.0 on Pi with a key (shared/runtime/release-providers.js): it is refused only while it is not offered
 import re  # noqa: E402
 
+# the source is formatted with either quote
 _OFFERS = (ROOT / "shared/runtime/release-providers.js").read_text(encoding="utf-8").split("RELEASE_OFFERS = Object.freeze(")[1].split("]);")[0]
-OFFERED = " ".join("'%s'" % name for name in re.findall(r"provider: '([a-z]+)'", _OFFERS))
+OFFERED = " ".join("'%s'" % name for name in re.findall(r"provider: ['\"]([a-z]+)['\"]", _OFFERS))
 _CANONICAL = {"moonshot": "kimi", "anthropic": "claude"}
 
 

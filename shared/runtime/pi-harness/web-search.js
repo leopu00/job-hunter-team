@@ -27,10 +27,15 @@ const COUNT = "jht-web-search";
 function logLine(entry) {
   try {
     const home = process.env.JHT_HOME;
-    const dir = home ? path.join(home, "logs") : process.env.PI_CODING_AGENT_DIR;
+    const dir = home
+      ? path.join(home, "logs")
+      : process.env.PI_CODING_AGENT_DIR;
     if (!dir) return;
     fs.mkdirSync(dir, { recursive: true });
-    fs.appendFileSync(path.join(dir, "pi-web-search.log"), JSON.stringify({ at: new Date().toISOString(), ...entry }) + "\n");
+    fs.appendFileSync(
+      path.join(dir, "pi-web-search.log"),
+      JSON.stringify({ at: new Date().toISOString(), ...entry }) + "\n",
+    );
   } catch (_error) {
     /* a log that cannot be written is not a reason to touch the request */
   }
@@ -48,13 +53,20 @@ module.exports = function webSearch(pi) {
   function announce(enabled, model, reason) {
     if (announced) return;
     announced = true;
-    const status = { enabled, ...describe(model), ...(reason ? { reason } : {}) };
+    const status = {
+      enabled,
+      ...describe(model),
+      ...(reason ? { reason } : {}),
+    };
     try {
       pi.appendEntry(STATUS, status);
     } catch (_error) {
       /* the log below still says it */
     }
-    logLine({ event: enabled ? "web_search_on" : "web_search_unavailable", ...status });
+    logLine({
+      event: enabled ? "web_search_on" : "web_search_unavailable",
+      ...status,
+    });
   }
 
   pi.on("before_provider_request", (event, ctx) => {
@@ -62,13 +74,23 @@ module.exports = function webSearch(pi) {
       const model = ctx && ctx.model;
       const { provider, api } = describe(model);
       const payload = event && event.payload;
-      if (provider !== SUPPORTED.provider || api !== SUPPORTED.api || !payload || typeof payload !== "object") {
-        announce(false, model, "the hosted web_search tool exists only on the Responses API of OpenAI");
+      if (
+        provider !== SUPPORTED.provider ||
+        api !== SUPPORTED.api ||
+        !payload ||
+        typeof payload !== "object"
+      ) {
+        announce(
+          false,
+          model,
+          "the hosted web_search tool exists only on the Responses API of OpenAI",
+        );
         return undefined;
       }
       announce(true, model);
       const tools = Array.isArray(payload.tools) ? payload.tools : [];
-      if (tools.some((tool) => tool && tool.type === SEARCH_TOOL.type)) return undefined;
+      if (tools.some((tool) => tool && tool.type === SEARCH_TOOL.type))
+        return undefined;
       return { ...payload, tools: [...tools, { ...SEARCH_TOOL }] };
     } catch (_error) {
       return undefined; // never break the request of the agent
@@ -77,7 +99,12 @@ module.exports = function webSearch(pi) {
 
   pi.on("provider_stream_event", (event) => {
     const data = event && event.data;
-    if (data && data.type === "response.output_item.done" && data.item && data.item.type === "web_search_call") {
+    if (
+      data &&
+      data.type === "response.output_item.done" &&
+      data.item &&
+      data.item.type === "web_search_call"
+    ) {
       searches += 1;
     }
   });

@@ -68,8 +68,9 @@ def test_the_site_texts_do_not_offer_kimi_or_claude(path):
 
 def test_the_guide_of_the_provider_says_glm_and_codex_later_in_every_language():
     source = text("web/app/docs/guides/connect-ai-provider/page.i18n.ts")
-    assert len(re.findall(r'\n    whichProviderP: "In 0\.4\.0|\n    whichProviderP: "Nella 0\.4\.0|\n    whichProviderP: "(En la|Dans la|In|A|Na) 0\.4\.0', source)) == 7
-    assert len(re.findall(r'\n    coming: "Codex — ', source)) == 7
+    # the formatter may put the string on the line after the key: whitespace between the two is not part of the claim
+    assert len(re.findall(r'\n    whichProviderP:\s*"(?:In|Nella|En la|Dans la|A|Na) 0\.4\.0', source)) == 7
+    assert len(re.findall(r'\n    coming:\s*"Codex — ', source)) == 7
 
 
 def test_the_setup_guide_and_faq_name_codex_as_the_provider():

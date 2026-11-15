@@ -5,21 +5,23 @@
  * (cli/tests/release-providers.test.mjs); the code that serves the others stays for the next release.
  */
 export const RELEASE_OFFERS = Object.freeze([
-  Object.freeze({ provider: 'glm', harness: 'pi', auth: 'api_key' }),
-  Object.freeze({ provider: 'kimi', harness: 'pi', auth: 'api_key' }),
-  Object.freeze({ provider: 'openai', harness: 'pi', auth: 'api_key' }),
-  Object.freeze({ provider: 'claude', harness: 'pi', auth: 'api_key' }),
+  Object.freeze({ provider: "glm", harness: "pi", auth: "api_key" }),
+  Object.freeze({ provider: "kimi", harness: "pi", auth: "api_key" }),
+  Object.freeze({ provider: "openai", harness: "pi", auth: "api_key" }),
+  Object.freeze({ provider: "claude", harness: "pi", auth: "api_key" }),
 ]);
 
 /** The providers of the offers, in their order (the first is the default of the setup). */
-export const RELEASE_PROVIDERS = Object.freeze([...new Set(RELEASE_OFFERS.map((offer) => offer.provider))]);
+export const RELEASE_PROVIDERS = Object.freeze([
+  ...new Set(RELEASE_OFFERS.map((offer) => offer.provider)),
+]);
 
 /** The program that runs the agents when nothing else is said. */
-export const RELEASE_HARNESS = 'pi';
+export const RELEASE_HARNESS = "pi";
 
-const ALIASES = Object.freeze({ moonshot: 'kimi', anthropic: 'claude' });
+const ALIASES = Object.freeze({ moonshot: "kimi", anthropic: "claude" });
 const canonical = (name, aliases = ALIASES) => {
-  const plain = typeof name === 'string' ? name.trim().toLowerCase() : '';
+  const plain = typeof name === "string" ? name.trim().toLowerCase() : "";
   return aliases[plain] ?? plain;
 };
 
@@ -36,7 +38,10 @@ export function releaseOffersOf(provider) {
 
 /** True when this release offers `provider` on `harness` with `auth`; a harness or an auth left out is not looked at. */
 export function offeredWay(provider, harness, auth) {
-  return releaseOffersOf(provider).some((offer) => (!harness || offer.harness === harness) && (!auth || offer.auth === auth));
+  return releaseOffersOf(provider).some(
+    (offer) =>
+      (!harness || offer.harness === harness) && (!auth || offer.auth === auth),
+  );
 }
 
 /**
@@ -48,7 +53,11 @@ export function configOffered(config) {
   if (!offeredInRelease(provider)) return false;
   const name = canonical(provider);
   const entry = config?.providers?.[provider] ?? config?.providers?.[name];
-  return offeredWay(name, typeof config?.harness === 'string' ? config.harness : 'codex', entry?.auth_method);
+  return offeredWay(
+    name,
+    typeof config?.harness === "string" ? config.harness : "codex",
+    entry?.auth_method,
+  );
 }
 
 /**

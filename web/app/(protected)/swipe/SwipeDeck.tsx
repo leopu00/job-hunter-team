@@ -589,7 +589,9 @@ export default function SwipeDeck({
         if (!settled) fail();
       }, SUMMARY_WAIT_MS);
       fetch(`/api/positions/${c.legacy_id}/summary`)
-        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+        .then((r) =>
+          r.ok ? r.json() : Promise.reject(new Error(String(r.status))),
+        )
         .then((b: { summary?: string | null }) => {
           settled = true;
           clearTimeout(timer);

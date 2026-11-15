@@ -55,38 +55,62 @@ const RECIPE_LIGHT: Recipe = [
   [150, 2, 1],
   [150, 4, 0.85],
 ];
-const LIGHTNESS = { dark: [0.6, 0.68, 0.76, 0.84, 0.92], light: [0.2, 0.36, 0.43, 0.51, 0.57] } as const;
-const CHROMA = { dark: { min: 0.09, max: 0.2 }, light: { min: 0.13, max: 0.24 } } as const;
+const LIGHTNESS = {
+  dark: [0.6, 0.68, 0.76, 0.84, 0.92],
+  light: [0.2, 0.36, 0.43, 0.51, 0.57],
+} as const;
+const CHROMA = {
+  dark: { min: 0.09, max: 0.2 },
+  light: { min: 0.13, max: 0.24 },
+} as const;
 
 /** `#rgb` or `#rrggbb` (what every token of the themes is); anything else is not a colour this can use. */
 export function parseHex(value: string | null | undefined): Rgb | null {
   const text = (value ?? "").trim();
-  const full = /^#([0-9a-f]{6})$/i.exec(text)?.[1] ?? (/^#([0-9a-f]{3})$/i.test(text) ? text.slice(1).replace(/./g, (c) => c + c) : null);
+  const full =
+    /^#([0-9a-f]{6})$/i.exec(text)?.[1] ??
+    (/^#([0-9a-f]{3})$/i.test(text)
+      ? text.slice(1).replace(/./g, (c) => c + c)
+      : null);
   if (!full) return null;
   return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16) / 255) as Rgb;
 }
 
-const toLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
-const fromLinear = (c: number) => (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
+const toLinear = (c: number) =>
+  c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+const fromLinear = (c: number) =>
+  c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
 
 export function toOklab([r, g, b]: Rgb): [number, number, number] {
   const [R, G, B] = [toLinear(r), toLinear(g), toLinear(b)];
   const l = Math.cbrt(0.4122214708 * R + 0.5363325363 * G + 0.0514459929 * B);
   const m = Math.cbrt(0.2119034982 * R + 0.6806995451 * G + 0.1073969566 * B);
   const s = Math.cbrt(0.0883024619 * R + 0.2817188376 * G + 0.6299787005 * B);
-  return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s, 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s];
+  return [
+    0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+  ];
 }
 
 function fromOklab([L, a, b]: [number, number, number]): Rgb {
   const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
   const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
   const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
-  return [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s, -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s];
+  return [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
+  ];
 }
 
 export function toOklch(rgb: Rgb): [number, number, number] {
   const [L, a, b] = toOklab(rgb);
-  return [L, Math.hypot(a, b), ((Math.atan2(b, a) * 180) / Math.PI + 360) % 360];
+  return [
+    L,
+    Math.hypot(a, b),
+    ((Math.atan2(b, a) * 180) / Math.PI + 360) % 360,
+  ];
 }
 
 /** A colour of the given lightness, chroma and hue; the chroma is lowered until it fits in sRGB. */
@@ -94,15 +118,31 @@ function fromOklch(L: number, C: number, H: number): Rgb {
   let chroma = C;
   for (let i = 0; i < 40; i++) {
     const rad = (H * Math.PI) / 180;
-    const linear = fromOklab([L, chroma * Math.cos(rad), chroma * Math.sin(rad)]);
-    if (linear.every((v) => v >= -1e-4 && v <= 1 + 1e-4)) return linear.map((v) => fromLinear(Math.min(1, Math.max(0, v)))) as Rgb;
+    const linear = fromOklab([
+      L,
+      chroma * Math.cos(rad),
+      chroma * Math.sin(rad),
+    ]);
+    if (linear.every((v) => v >= -1e-4 && v <= 1 + 1e-4))
+      return linear.map((v) => fromLinear(Math.min(1, Math.max(0, v)))) as Rgb;
     chroma *= 0.93;
   }
-  return fromOklab([L, 0, 0]).map((v) => fromLinear(Math.min(1, Math.max(0, v)))) as Rgb;
+  return fromOklab([L, 0, 0]).map((v) =>
+    fromLinear(Math.min(1, Math.max(0, v))),
+  ) as Rgb;
 }
 
 export function toHex(rgb: Rgb): string {
-  return "#" + rgb.map((v) => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, "0")).join("");
+  return (
+    "#" +
+    rgb
+      .map((v) =>
+        Math.round(Math.min(1, Math.max(0, v)) * 255)
+          .toString(16)
+          .padStart(2, "0"),
+      )
+      .join("")
+  );
 }
 
 /** How different two colours look: the distance in OKLab, times 100. Under ~4 they are one colour to the eye. */
@@ -116,7 +156,10 @@ export function colorDistance(a: Rgb, b: Rgb): number {
  * The 14 colours of the categories for a theme whose main colour is `accent` on a card of colour `card`, as `#rrggbb`;
  * null when either is not a colour this can read (the charts then keep their fallback colours).
  */
-export function categoryPalette(accent: string | null | undefined, card: string | null | undefined): string[] | null {
+export function categoryPalette(
+  accent: string | null | undefined,
+  card: string | null | undefined,
+): string[] | null {
   const main = parseHex(accent);
   const back = parseHex(card);
   if (!main || !back) return null;
@@ -128,6 +171,14 @@ export function categoryPalette(accent: string | null | undefined, card: string 
   const start = Math.max(chroma, min);
   return [
     toHex(main),
-    ...recipe.map(([shift, step, scale]) => toHex(fromOklch(band[step], Math.min(max, scale * start), (hue + shift + 360) % 360))),
+    ...recipe.map(([shift, step, scale]) =>
+      toHex(
+        fromOklch(
+          band[step],
+          Math.min(max, scale * start),
+          (hue + shift + 360) % 360,
+        ),
+      ),
+    ),
   ];
 }

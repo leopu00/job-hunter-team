@@ -46,19 +46,42 @@ describe("the saved salary preference", () => {
   });
 
   it("keeps the preference structure closed", () => {
-    expect(validateCandidateProfile({
-      ...profile,
-      preferences: { salary_annual_eur: "40-50k EUR/year", private_unknown: "forbidden" },
-    }).ok).toBe(false);
-    expect(validateCandidateProfile({ ...profile, preferences: { relocation: 2 } }).ok).toBe(false);
-    expect(validateCandidateProfile({ ...profile, preferences: { relocation: true } }).ok).toBe(true);
+    expect(
+      validateCandidateProfile({
+        ...profile,
+        preferences: {
+          salary_annual_eur: "40-50k EUR/year",
+          private_unknown: "forbidden",
+        },
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateCandidateProfile({ ...profile, preferences: { relocation: 2 } })
+        .ok,
+    ).toBe(false);
+    expect(
+      validateCandidateProfile({
+        ...profile,
+        preferences: { relocation: true },
+      }).ok,
+    ).toBe(true);
   });
 
   it.each(["é".repeat(4096), "🙂".repeat(2048)])(
     "allows exactly 8192 UTF-8 bytes",
     (value) => {
-      expect(validateCandidateProfile({ ...profile, preferences: { salary_annual_eur: value } }).ok).toBe(true);
-      expect(validateCandidateProfile({ ...profile, preferences: { salary_annual_eur: value + "x" } }).ok).toBe(false);
+      expect(
+        validateCandidateProfile({
+          ...profile,
+          preferences: { salary_annual_eur: value },
+        }).ok,
+      ).toBe(true);
+      expect(
+        validateCandidateProfile({
+          ...profile,
+          preferences: { salary_annual_eur: value + "x" },
+        }).ok,
+      ).toBe(false);
     },
   );
 });

@@ -25,7 +25,8 @@ const FALLBACK: readonly string[] = [
 
 /** The colour of category number `index` (0..13; past the last one it starts again). */
 export function categoryColor(index: number): string {
-  const slot = ((Math.trunc(index) % PALETTE_SIZE) + PALETTE_SIZE) % PALETTE_SIZE;
+  const slot =
+    ((Math.trunc(index) % PALETTE_SIZE) + PALETTE_SIZE) % PALETTE_SIZE;
   return `var(--cat-${slot}, ${FALLBACK[slot]})`;
 }
 
@@ -49,9 +50,14 @@ export const ROLE_SLOT: Readonly<Record<string, number>> = {
 const STYLE_ID = "jht-category-palette";
 
 /** Reads the theme's main colour and card from the page and writes the variables; null (and no variables) if they are not there. */
-export function applyCategoryPalette(root: HTMLElement = document.documentElement): string[] | null {
+export function applyCategoryPalette(
+  root: HTMLElement = document.documentElement,
+): string[] | null {
   const style = getComputedStyle(root);
-  const palette = categoryPalette(style.getPropertyValue("--color-green"), style.getPropertyValue("--color-card"));
+  const palette = categoryPalette(
+    style.getPropertyValue("--color-green"),
+    style.getPropertyValue("--color-card"),
+  );
   let element = document.getElementById(STYLE_ID) as HTMLStyleElement | null;
   if (!palette) {
     element?.remove();
@@ -87,7 +93,10 @@ export function ensureCategoryPalette(): void {
     }, 0);
   };
   applyCategoryPalette();
-  new MutationObserver(schedule).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-jht-theme", "style", "class"] });
+  new MutationObserver(schedule).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-theme", "data-jht-theme", "style", "class"],
+  });
   if (typeof window !== "undefined") {
     window.addEventListener("load", schedule);
     setTimeout(schedule, 400); // a stylesheet that arrives after the first read

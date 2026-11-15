@@ -141,7 +141,9 @@ export function confirmAuthorisation(
     legacyId,
     {
       method: "POST",
-      body: JSON.stringify(destination ? { confirmId, destination } : { confirmId }),
+      body: JSON.stringify(
+        destination ? { confirmId, destination } : { confirmId },
+      ),
     },
     "queued",
     fetchImpl,
@@ -172,9 +174,14 @@ export function refusalText(t: Translate, error: string | null): string | null {
   if (error === "position_changed" || error === "confirmation_required")
     return t("refused_position_changed");
   // The consent to apply on this computer is not given or is off: it is turned on in the settings.
-  if (error === "consent_absent" || error === "consent_disabled") return t("refused_consent");
+  if (error === "consent_absent" || error === "consent_disabled")
+    return t("refused_consent");
   // Any other consent/config code is a setting that is not valid or not readable, not one that is off.
-  if (error?.startsWith("consent_") || error?.startsWith("config_") || error === "rule_unavailable")
+  if (
+    error?.startsWith("consent_") ||
+    error?.startsWith("config_") ||
+    error === "rule_unavailable"
+  )
     return t("refused_settings");
   if (error === "destination_invalid") return t("refused_destination");
   if (
@@ -211,7 +218,11 @@ export function ApplyRequestView({
   error?: string | null;
   confirming?: boolean;
   /** Il testo che il server ha composto per questa conferma (il ruolo e l'azienda) e fin quando vale. */
-  confirmation?: { summary: string; expiresText: string | null; destination?: string | null } | null;
+  confirmation?: {
+    summary: string;
+    expiresText: string | null;
+    destination?: string | null;
+  } | null;
   /** Autorizzata dal sito, ma il tetto di oggi è pieno: parte domani. Non è partita e non è un errore. */
   queuedTomorrow?: boolean;
   /** La porta ha chiesto un accesso recente: il pulsante per rifarlo, e se è in corso. */
@@ -447,7 +458,8 @@ export function ApplyRequestButton({
   const t = makeT(T, locale);
   const router = useRouter();
   // The cloud asks in two steps; so does the desktop on the team of this computer (its host answers the preview).
-  const twoStep = twoStepProp || Boolean(useReadOnlyActions().applyTwoStep);
+  const readOnlyActions = useReadOnlyActions();
+  const twoStep = twoStepProp || Boolean(readOnlyActions.applyTwoStep);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -510,7 +522,12 @@ export function ApplyRequestButton({
     setError(null);
     setSending(true);
     try {
-      const outcome = await confirmAuthorisation(legacyId, id, fetch, destination ?? null);
+      const outcome = await confirmAuthorisation(
+        legacyId,
+        id,
+        fetch,
+        destination ?? null,
+      );
       if (!outcome.ok) return fail("authorise", outcome);
       startTransition(() => router.refresh());
     } finally {
@@ -639,7 +656,11 @@ export function ApplyRequestButton({
       confirming={twoStep ? pending !== null : confirming}
       confirmation={
         twoStep && pending
-          ? { summary: pending.summary, expiresText, destination: pending.destination }
+          ? {
+              summary: pending.summary,
+              expiresText,
+              destination: pending.destination,
+            }
           : null
       }
       onAuthorise={

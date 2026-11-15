@@ -46,7 +46,9 @@ describe("dmhm", () => {
     const stamp = "2026-11-02 15:41:00";
     const d = new Date("2026-11-02T15:41:00Z");
     const p = (n: number) => String(n).padStart(2, "0");
-    expect(dmhm(stamp)).toBe(`${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`);
+    expect(dmhm(stamp)).toBe(
+      `${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`,
+    );
   });
 });
 
