@@ -152,7 +152,7 @@ tools_other_wrapper_running() {
   # bash 3.2 (the system bash of macOS) has no BASHPID, and $$ in a subshell is still the wrapper's: the parent of a new sh is
   # this process (exec, so no subshell of the command substitution comes in between)
   local me="${BASHPID:-$(exec sh -c 'echo "$PPID"')}" pids pid parent
-  pids="$(pgrep -f -- "$WRAPPER_PATH" 2>/dev/null)" || return 1
+  pids="$(pgrep -f "$WRAPPER_PATH" 2>/dev/null)" || return 1  # the path of the wrapper (its $0), never a bare name
   for pid in $pids; do
     [ "$pid" = "$me" ] && continue
     [ "$pid" = "$$" ] && continue
