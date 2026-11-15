@@ -36,7 +36,8 @@ ALLOWED = {
 }
 
 KILL_BY_NAME = re.compile(r"""(?:^|[\s;&|(`'"\[,])(pkill|killall)(?=[\s'",\]]|$)""")
-PGREP_F = re.compile(r"""\bpgrep\s+(?:-\w+\s+)*-f\s+(?P<pattern>"[^"]*"|'[^']*'|\S+)""")
+# `--` ends the options of pgrep: the pattern is what comes after it
+PGREP_F = re.compile(r"""\bpgrep\s+(?:-\w+\s+)*-f\s+(?:--\s+)?(?P<pattern>"[^"]*"|'[^']*'|\S+)""")
 MARKER = re.compile(r"""\bjht_kill_by_marker\s+(?P<marker>\S+)""")
 
 
