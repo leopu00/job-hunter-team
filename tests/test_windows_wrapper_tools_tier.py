@@ -208,7 +208,8 @@ def test_switch_drops_the_tier_and_its_integrity_and_ups_the_full_image(box):
 
 def test_an_unknown_subcommand_is_a_usage_error(box):
     done = box.run("exit (Invoke-ToolsCommand @('unknown'))")
-    assert done.returncode == 2 and "uso:" in done.stderr
+    # said in the language the wrapper decided (integration.tools.usage, 7 languages): the command is the same in every one
+    assert done.returncode == 2 and "jht tools status --json | pull | switch" in done.stderr
 
 
 # ── the wrapper: which image, and whether the tier file can be believed ──────────────────────────────────────────────────────

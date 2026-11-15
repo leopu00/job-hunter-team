@@ -22,6 +22,48 @@
 $ToolsStateDir = Join-Path $JhtHome 'state'
 $ToolsLock = Join-Path $RuntimeDir '.tools-pull.lock'
 $ToolsFailedFile = Join-Path $RuntimeDir '.tools-pull-failed'
+
+# What the person reads is in the language the wrapper decided (Get-JhtTextLanguage), in the 7 languages of shared/locales: the block
+# below is made from the catalogs (python3 tests/tools_ps1_texts.py --write). Own names: this file is dot-sourced into the wrapper,
+# alone or next to jht-integration.ps1. A key a language lacks says the English of the call.
+function Get-ToolsText {
+  param([string]$Key, [string]$English)
+  $lang = 'en'
+  if (Get-Command Get-JhtTextLanguage -CommandType Function -ErrorAction SilentlyContinue) { $lang = [string](Get-JhtTextLanguage) }
+  $text = Get-ToolsTextTable $lang $Key
+  if ($null -eq $text) { return $English }
+  return $text
+}
+
+# >>> texts in the 7 languages, made from shared/locales by `python3 tests/tools_ps1_texts.py --write`: do not edit by hand
+function Get-ToolsTextTable {
+  param([string]$Lang, [string]$Key)
+  switch -CaseSensitive ("$Lang`:$Key") {
+    'en:integration.state.engine_silent' { return 'the container engine does not answer' }
+    'en:integration.tools.tier_not_removed' { return 'the runtime tier was not removed' }
+    'en:integration.tools.usage' { return 'usage: jht tools status --json | pull | switch' }
+    'it:integration.state.engine_silent' { return 'il motore dei container non risponde' }
+    'it:integration.tools.tier_not_removed' { return 'livello del runtime non tolto' }
+    'it:integration.tools.usage' { return 'uso: jht tools status --json | pull | switch' }
+    'hu:integration.state.engine_silent' { return ('a kont' + [char]0x00E9 + 'nermotor nem v' + [char]0x00E1 + 'laszol') }
+    'hu:integration.tools.tier_not_removed' { return ('a futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezet szintje nem lett elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tva') }
+    'hu:integration.tools.usage' { return ('haszn' + [char]0x00E1 + 'lat: jht tools status --json | pull | switch') }
+    'es:integration.state.engine_silent' { return 'el motor de contenedores no responde' }
+    'es:integration.tools.tier_not_removed' { return 'el nivel del runtime no se ha quitado' }
+    'es:integration.tools.usage' { return 'uso: jht tools status --json | pull | switch' }
+    'de:integration.state.engine_silent' { return 'die Container-Engine antwortet nicht' }
+    'de:integration.tools.tier_not_removed' { return 'die Stufe der Runtime wurde nicht entfernt' }
+    'de:integration.tools.usage' { return 'Verwendung: jht tools status --json | pull | switch' }
+    'fr:integration.state.engine_silent' { return ('le moteur de conteneurs ne r' + [char]0x00E9 + 'pond pas') }
+    'fr:integration.tools.tier_not_removed' { return ('le niveau du runtime n''a pas ' + [char]0x00E9 + 't' + [char]0x00E9 + ' supprim' + [char]0x00E9) }
+    'fr:integration.tools.usage' { return 'usage : jht tools status --json | pull | switch' }
+    'pt:integration.state.engine_silent' { return ('o motor de contentores n' + [char]0x00E3 + 'o responde') }
+    'pt:integration.tools.tier_not_removed' { return ('o n' + [char]0x00ED + 'vel do runtime n' + [char]0x00E3 + 'o foi removido') }
+    'pt:integration.tools.usage' { return 'uso: jht tools status --json | pull | switch' }
+  }
+  return $null
+}
+# <<< texts in the 7 languages
 $ToolsSwitchFailedFile = Join-Path $RuntimeDir '.tools-switch-failed'
 
 function Get-ToolsNow { return [DateTime]::UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'") }
@@ -134,7 +176,7 @@ function Start-ToolsJob {
 
 function Start-ToolsPull {
   if (-not (Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf)) { return 0 }
-  if (-not (Test-ToolsEngineUp)) { Write-Err 'tools: il motore dei container non risponde'; return 1 }
+  if (-not (Test-ToolsEngineUp)) { Write-Err ('tools: ' + (Get-ToolsText 'integration.state.engine_silent' 'the container engine does not answer')); return 1 }
   if (Test-ToolsFullHere) {
     Remove-Item -LiteralPath $ToolsFailedFile -Force -ErrorAction SilentlyContinue
     Write-ToolsNotice 'ready' 'core' '' (Get-ToolsNow)
@@ -260,7 +302,7 @@ function Invoke-ToolsSwitch {
     # The file first, its integrity second: a crash between them leaves an integrity without a file, which reads as the whole image.
     Remove-Item -LiteralPath $RuntimeTierFile -Force
     Remove-Item -LiteralPath $RuntimeTierIntegrity -Force -ErrorAction SilentlyContinue
-  } catch { Write-Err 'tools: livello del runtime non tolto'; return 1 }
+  } catch { Write-Err ('tools: ' + (Get-ToolsText 'integration.tools.tier_not_removed' 'the runtime tier was not removed')); return 1 }
   Remove-Item Env:\JHT_IMAGE -ErrorAction SilentlyContinue
   $shell = (Get-Process -Id $PID).Path
   $up = Start-Process -FilePath $shell -NoNewWindow -Wait -PassThru -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $WrapperPath, 'up')
@@ -279,6 +321,6 @@ function Invoke-ToolsCommand {
   if ($sub -eq 'switch' -and $a.Count -eq 1) { return (Invoke-ToolsSwitch) }
   if ($sub -eq 'pull-job' -and $a.Count -eq 2) { return (Invoke-ToolsPullJob $a[1]) }
   if ($sub -eq 'pull-job' -and $a.Count -eq 3 -and $a[2] -eq 'auto') { return (Invoke-ToolsPullJob $a[1] 'auto') }
-  Write-Err 'uso: jht tools status --json | pull | switch'
+  Write-Err (Get-ToolsText 'integration.tools.usage' 'usage: jht tools status --json | pull | switch')
   return 2
 }
