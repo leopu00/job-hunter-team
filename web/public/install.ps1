@@ -210,7 +210,7 @@ function Write-JhtProblem {
   Write-Host "  x $What" -ForegroundColor Red
   if ($Todo.Count -gt 0) {
     Write-Host ""
-    Write-Host "  $(T 'What to do now:' 'Cosa fare adesso:')" -ForegroundColor Yellow
+    Write-Host "  $(Ts 'installer.windows.what_do_now' 'What to do now:')" -ForegroundColor Yellow
     foreach ($line in $Todo) { Write-Host "    $line" -ForegroundColor Yellow }
   }
   Write-Host ""
@@ -270,32 +270,32 @@ function Show-Header {
   Write-Host "|     Job Hunter Team - Installer (Win)    |" -ForegroundColor White
   Write-Host "+------------------------------------------+" -ForegroundColor White
   Write-Host ""
-  Write-Host "  $(T 'mode:    Podman machine (WSL)' 'modo:     macchina Podman (WSL)')" -ForegroundColor DarkGray
-  Write-Host "  $(T 'image:  ' 'immagine:') $RuntimeImage" -ForegroundColor DarkGray
+  Write-Host "  $(Ts 'installer.windows.mode_podman_machine_wsl' 'mode:    Podman machine (WSL)')" -ForegroundColor DarkGray
+  Write-Host "  $(Ts 'installer.windows.image' 'image:  ') $RuntimeImage" -ForegroundColor DarkGray
   # A test-channel install is one commit, not a branch: the banner says the commit that was asked for (the Linux installer
   # does the same). Plain syntax only: this runs in Windows PowerShell 5.1.
   if ($SourceSha) {
     Write-Host "  commit:  $SourceSha" -ForegroundColor DarkGray
   } else {
-    Write-Host "  $(T 'branch: ' 'ramo:    ') $Branch" -ForegroundColor DarkGray
+    Write-Host "  $(Ts 'installer.windows.branch' 'branch: ') $Branch" -ForegroundColor DarkGray
   }
   Write-Host "  runtime: $RuntimeDir" -ForegroundColor DarkGray
   Write-Host "  bin:     $BinDir" -ForegroundColor DarkGray
   if ($DryRun)       { Write-Host "  dry-run: ON (no changes to the system)" -ForegroundColor Yellow }
-  if ($PairingToken) { Write-Host "  pairing: token present (skips the wizard)" -ForegroundColor Yellow }
+  if ($PairingToken) { Write-Host "  $(Ts 'installer.windows.header_pairing' 'pairing: token present (skips the wizard)')" -ForegroundColor Yellow }
   Write-Host ""
 }
 
 # ── Step 1: System detection ──────────────────────────────────────────────
 function Test-System {
-  Write-Step 1 $TotalSteps (T 'System detection' 'Rilevamento del sistema')
+  Write-Step 1 $TotalSteps (Ts 'installer.windows.system_detection' 'System detection')
   $os = [System.Environment]::OSVersion
   if ($os.Platform -ne 'Win32NT') {
-    Write-Fail "install.ps1 only supports Windows. On Linux/macOS use install.sh."
+    Write-Fail (Ts 'installer.windows.only_windows' 'install.ps1 only supports Windows. On Linux/macOS use install.sh.')
   }
   $psVersion = $PSVersionTable.PSVersion
   if ($psVersion.Major -lt 5) {
-    Write-Fail "PowerShell 5.1+ required (current version: $psVersion). Install PowerShell 7: https://aka.ms/PowerShell"
+    Write-Fail (Tsf 'installer.windows.powershell_too_old' 'PowerShell 5.1+ required (current version: %s). Install PowerShell 7: https://aka.ms/PowerShell' $psVersion)
   }
   Write-Ok "Windows $($os.Version) / PowerShell $psVersion"
   Show-WindowsSupportNotice
@@ -322,8 +322,9 @@ function Test-JhtWindows10Client {
 }
 # The language of the person, by the rule of the CLI and of the wrapper: the choice saved by the setup or the picker
 # (i18n-prefs.json, read as data: not a link, a small file, one of the seven codes), then JHT_LANG as set in this terminal,
-# then the language of Windows, then English. The sentences of this script are written in English and Italian (T); the
-# Windows 10 notice in all seven. It is also the language written in host.env (Get-JhtPersonLanguage).
+# then the language of Windows, then English. The sentences of this script are said in that language, in all seven (Ts/Tsf,
+# from the block below); the Windows 10 notice has its own seven. It is also the language written in host.env
+# (Get-JhtPersonLanguage).
 function Get-JhtTextLanguage {
   $known = @('en', 'it', 'de', 'fr', 'es', 'hu', 'pt')
   try {
@@ -342,12 +343,539 @@ function Get-JhtTextLanguage {
   } catch { }
   return 'en'
 }
-# T "english" "italiano": the sentence in the person's language; every language other than Italian reads English.
-function T {
-  param([string]$En, [string]$It)
-  if ((Get-JhtTextLanguage) -ceq 'it') { return $It }
-  return $En
+# Ts '<key>' '<English>': the sentence in the person's language, in the 7 languages of shared/locales. The installer runs before
+# anything of JHT is on the computer, so the texts are written inside it, in the block below, made from the catalogs by
+# `python3 tests/installer_ps1_texts.py --write` (a test fails when the two differ), in ASCII ([char]0x.... for every other
+# letter): Windows PowerShell 5.1 reads this file in the legacy console encoding. A key a language lacks says the English of the call.
+function Ts {
+  param([string]$Key, [string]$English)
+  $text = Get-InstallerTextTable (Get-JhtTextLanguage) $Key
+  if ($null -eq $text) { return $English }
+  return $text
 }
+# Tsf '<key>' '<English with %s/%d>' values...: the same, with the values put in for %s/%d in order (never -f: the catalog is the
+# one of the bash installer too, and a { in a text breaks nothing).
+function Tsf {
+  param([string]$Key, [string]$English, [Parameter(ValueFromRemainingArguments = $true)][object[]]$Values)
+  $text = Ts $Key $English
+  $out = New-Object System.Text.StringBuilder
+  $at = 0
+  $next = 0
+  foreach ($match in [regex]::Matches($text, '%[sd]')) {
+    [void]$out.Append($text.Substring($at, $match.Index - $at))
+    if ($null -ne $Values -and $next -lt $Values.Count) { [void]$out.Append([string]$Values[$next]) }
+    $next++
+    $at = $match.Index + $match.Length
+  }
+  [void]$out.Append($text.Substring($at))
+  return $out.ToString()
+}
+
+# >>> texts in the 7 languages, made from shared/locales by `python3 tests/installer_ps1_texts.py --write`: do not edit by hand
+function Get-InstallerTextTable {
+  param([string]$Lang, [string]$Key)
+  switch -CaseSensitive ("$Lang`:$Key") {
+    'en:installer.check.compose_boundary' { return 'Downloaded compose does not enforce the protected runtime boundary.' }
+    'en:installer.windows.acl_failed' { return 'JHT_HOME ACL verification failed after repair: %s' }
+    'en:installer.windows.agents_only_see' { return 'The agents only see:' }
+    'en:installer.windows.already_user_path' { return 'already in the user PATH' }
+    'en:installer.windows.branch' { return 'branch: ' }
+    'en:installer.windows.branch_unresolved' { return 'Cannot resolve branch ''%s'' to an immutable release commit.' }
+    'en:installer.windows.check_connection_branch' { return 'Check your connection and branch (%s).' }
+    'en:installer.windows.config_db_agents' { return '(config, db, agents)' }
+    'en:installer.windows.container_mode_active' { return 'Container mode active.' }
+    'en:installer.windows.cvs_attachments_output' { return '(CVs, attachments, output)' }
+    'en:installer.windows.delete_data_as_well' { return 'To delete the data as well (config, db, CVs, output):' }
+    'en:installer.windows.docker_desktop_volumes_old' { return 'In Docker Desktop the volumes of the old team stay: provider tools and, by the version, the API key kept by the setup, the mail password and the Telegram tokens. The new team does not read them: give those again with jht setup. If you do not need them any more:' }
+    'en:installer.windows.download_failed' { return 'Download failed: %s' }
+    'en:installer.windows.downloading_enabling_podman_runtime' { return 'Downloading and enabling the Podman runtime' }
+    'en:installer.windows.earlier_job_hunter_team' { return 'an earlier Job Hunter Team is still running on Docker Desktop (container %s). Since 0.4 the team runs in a Podman machine: installed next to it, two teams would work on the same data. Nothing was changed.' }
+    'en:installer.windows.earlier_job_hunter_team_2' { return 'an earlier Job Hunter Team is still installed on Docker Desktop (container %s, stopped; it starts again with Docker Desktop). Since 0.4 the team runs in a Podman machine: installed next to it, two teams would work on the same data. Nothing was changed.' }
+    'en:installer.windows.header_pairing' { return 'pairing: token present (skips the wizard)' }
+    'en:installer.windows.host_env_written' { return 'host.env written:' }
+    'en:installer.windows.image' { return 'image:  ' }
+    'en:installer.windows.image_free_disk' { return 'And its image, to free the disk:' }
+    'en:installer.windows.install_may_not_know' { return 'install and may not know them yet ("not recognized as the name of a cmdlet").' }
+    'en:installer.windows.installation_complete' { return '|  Installation complete!                  |' }
+    'en:installer.windows.jht_podman_are_your' { return 'jht and podman are on your PATH from now on, but THIS PowerShell window was open before the' }
+    'en:installer.windows.launching_setup_wizard' { return 'Launching the setup wizard...' }
+    'en:installer.windows.mode_podman_machine_wsl' { return 'mode:    Podman machine (WSL)' }
+    'en:installer.windows.next_steps' { return 'Next steps:' }
+    'en:installer.windows.only_windows' { return 'install.ps1 only supports Windows. On Linux/macOS use install.sh.' }
+    'en:installer.windows.open_new_powershell_window' { return 'Open a NEW PowerShell window to use jht and podman. No restart of the computer is needed.' }
+    'en:installer.windows.override_lacks_keep_id' { return 'Downloaded Podman override lacks keep-id.' }
+    'en:installer.windows.pairing_token_present_skipping' { return 'Pairing token present: skipping the interactive wizard. The container will complete the pairing on first boot.' }
+    'en:installer.windows.pairing_token_saved' { return 'Pairing token saved:' }
+    'en:installer.windows.podman.check_wsl' { return 'The line above says why. Check that WSL works: run "wsl --status" in PowerShell.' }
+    'en:installer.windows.podman.from_desktop' { return 'The line above says why. Run the installer from the Windows desktop of this user (the Start menu, Windows PowerShell), not from ssh, a service or a scheduled task: those run without a desktop.' }
+    'en:installer.windows.podman.install_failed' { return 'Podman could not be installed.' }
+    'en:installer.windows.podman.install_failed_todo' { return 'The line above says why. Podman comes from winget, or from its official release when winget cannot be used: check that this computer can reach github.com, and that winget works if you have it (for a broken one, install or repair "App Installer": https://aka.ms/getwinget).' }
+    'en:installer.windows.podman.machine_failed' { return 'The Podman machine of Job Hunter Team could not be created or started.' }
+    'en:installer.windows.podman.network_not_ready' { return 'The Podman machine started but its network is not ready.' }
+    'en:installer.windows.podman.network_todo' { return 'The line above says why. Wait a minute and run the same install command again; if it stops here again, restart Windows first.' }
+    'en:installer.windows.podman.other_user' { return 'Podman is installed for another Windows user of this computer.' }
+    'en:installer.windows.podman.other_user_todo' { return 'Run the installer as that Windows user, or remove Podman for the computer (Settings > Apps) and run the install command again.' }
+    'en:installer.windows.podman.other_version' { return 'Another Podman version is installed on this computer.' }
+    'en:installer.windows.podman.restart_pending' { return 'If a restart of Windows is pending, restart it.' }
+    'en:installer.windows.podman.restart_then_again' { return 'Only if it stops here again from the desktop: restart Windows, then run it once more.' }
+    'en:installer.windows.podman.run_again' { return 'Then run the same install command again: it starts over from the beginning.' }
+    'en:installer.windows.podman.runs_on_6' { return 'Job Hunter Team runs on Podman 6 and does not change another Podman.' }
+    'en:installer.windows.podman.sshproxy' { return 'Podman started the machine, but its connection for Docker tools (win-sshproxy.exe) did not start.' }
+    'en:installer.windows.podman.stopped' { return 'The Podman setup stopped (exit code %s).' }
+    'en:installer.windows.podman.stopped_todo' { return 'The line above says why. Run the same install command again; if it stops at the same place, keep that line and ask for help.' }
+    'en:installer.windows.podman.update_or_remove' { return 'Update it to version 6, or remove it (Settings > Apps), whichever you prefer.' }
+    'en:installer.windows.podman_machine_windows_user' { return 'Podman machine of this Windows user:' }
+    'en:installer.windows.powershell_too_old' { return 'PowerShell 5.1+ required (current version: %s). Install PowerShell 7: https://aka.ms/PowerShell' }
+    'en:installer.windows.registering_user_path' { return 'Registering the user PATH' }
+    'en:installer.windows.reparse_ancestor' { return 'Protected host path has a reparse-point ancestor: %s' }
+    'en:installer.windows.runtime_artifact_missing' { return 'Podman runtime artifact missing: %s' }
+    'en:installer.windows.runtime_overlaps' { return 'Protected host runtime path overlaps a container-writable tree: %s' }
+    'en:installer.windows.setup_wizard_also_starts' { return 'setup wizard (also starts the container)' }
+    'en:installer.windows.stop_remove_old_team' { return 'Stop and remove the old team (Docker Desktop on), in PowerShell:' }
+    'en:installer.windows.system_detection' { return 'System detection' }
+    'en:installer.windows.then_run_installer_again' { return 'Then run this installer again.' }
+    'en:installer.windows.token_acl_failed' { return 'ACL restriction failed (file still readable by Users): %s' }
+    'en:installer.windows.uninstall_keeps_data_jht' { return 'To uninstall (keeps the data in ~/.jht and ~/Documents/Job Hunter Team):' }
+    'en:installer.windows.use_them_window_right' { return 'To use them in this window right away, paste:' }
+    'en:installer.windows.user_path_updated_effective' { return 'User PATH updated (effective from the next terminal)' }
+    'en:installer.windows.what_do_now' { return 'What to do now:' }
+    'en:installer.windows.windows_subsystem_linux_check' { return 'Windows Subsystem for Linux check' }
+    'en:installer.windows.wizard_exited_error_re' { return 'The wizard exited with an error. Re-run it with: jht setup' }
+    'en:installer.windows.wrapper_lacks_protocol' { return 'Downloaded wrapper lacks the protected runtime protocol.' }
+    'en:installer.windows.wrapper_overlaps' { return 'Protected host wrapper path overlaps a container-writable tree: %s' }
+    'en:installer.windows.writing_host_env' { return 'Writing host.env' }
+    'en:installer.windows.wsl_ready' { return 'WSL is ready' }
+    'en:installer.windows.your_data_stays_jht' { return 'Your data stays: ~/.jht (configuration, database, profile) and Documents\Job Hunter Team (CVs, outputs) are folders of this computer, and the new team uses them.' }
+    'it:installer.check.compose_boundary' { return 'Il docker-compose.yml scaricato non applica il confine protetto del runtime.' }
+    'it:installer.windows.acl_failed' { return 'La verifica dei permessi (ACL) di JHT_HOME non e'' riuscita dopo la riparazione: %s' }
+    'it:installer.windows.agents_only_see' { return 'Gli agenti vedono solo:' }
+    'it:installer.windows.already_user_path' { return 'e'' gia'' nel PATH dell''utente' }
+    'it:installer.windows.branch' { return 'ramo:    ' }
+    'it:installer.windows.branch_unresolved' { return 'Non riesco a ricondurre il ramo ''%s'' a un commit di rilascio immutabile.' }
+    'it:installer.windows.check_connection_branch' { return 'Controlla la connessione e il ramo (%s).' }
+    'it:installer.windows.config_db_agents' { return '(configurazione, db, agenti)' }
+    'it:installer.windows.container_mode_active' { return 'Modalita'' container attiva.' }
+    'it:installer.windows.cvs_attachments_output' { return '(CV, allegati, risultati)' }
+    'it:installer.windows.delete_data_as_well' { return 'Per cancellare anche i dati (configurazione, db, CV, risultati):' }
+    'it:installer.windows.docker_desktop_volumes_old' { return 'In Docker Desktop restano i volumi del team vecchio: strumenti dei provider e, secondo la versione, la chiave API salvata dal setup, la password della posta e i token di Telegram. Il nuovo team non li legge: quelli vanno ridati con jht setup. Se non ti servono piu'':' }
+    'it:installer.windows.download_failed' { return 'Download non riuscito: %s' }
+    'it:installer.windows.downloading_enabling_podman_runtime' { return 'Scarico e attivo il runtime Podman' }
+    'it:installer.windows.earlier_job_hunter_team' { return 'su Docker Desktop gira ancora una versione precedente di Job Hunter Team (container %s). Dalla 0.4 il team gira in una macchina Podman: installata accanto, ci sarebbero due team sugli stessi dati. Non e'' stato cambiato niente.' }
+    'it:installer.windows.earlier_job_hunter_team_2' { return 'su Docker Desktop c''e'' ancora una versione precedente di Job Hunter Team (container %s, fermo; ripartirebbe con Docker Desktop). Dalla 0.4 il team gira in una macchina Podman: installata accanto, ci sarebbero due team sugli stessi dati. Non e'' stato cambiato niente.' }
+    'it:installer.windows.header_pairing' { return 'abbinamento: token presente (salta la configurazione guidata)' }
+    'it:installer.windows.host_env_written' { return 'host.env scritto:' }
+    'it:installer.windows.image' { return 'immagine:' }
+    'it:installer.windows.image_free_disk' { return 'E la sua immagine, per liberare il disco:' }
+    'it:installer.windows.install_may_not_know' { return 'installazione e potrebbe non conoscerli ancora ("non riconosciuto come nome di cmdlet").' }
+    'it:installer.windows.installation_complete' { return '|  Installazione completata!               |' }
+    'it:installer.windows.jht_podman_are_your' { return 'da adesso jht e podman sono nel PATH, ma QUESTA finestra di PowerShell era aperta prima dell''' }
+    'it:installer.windows.launching_setup_wizard' { return 'Avvio la configurazione guidata...' }
+    'it:installer.windows.mode_podman_machine_wsl' { return 'modo:     macchina Podman (WSL)' }
+    'it:installer.windows.next_steps' { return 'Prossimi passi:' }
+    'it:installer.windows.only_windows' { return 'install.ps1 funziona solo su Windows. Su Linux/macOS usa install.sh.' }
+    'it:installer.windows.open_new_powershell_window' { return 'Apri una NUOVA finestra di PowerShell per usare jht e podman. Non serve riavviare il computer.' }
+    'it:installer.windows.override_lacks_keep_id' { return 'Il file di Podman scaricato (docker-compose.podman.yml) non ha keep-id.' }
+    'it:installer.windows.pairing_token_present_skipping' { return 'Token di abbinamento presente: salto il wizard interattivo. Il container completera'' l''abbinamento al primo avvio.' }
+    'it:installer.windows.pairing_token_saved' { return 'Token di abbinamento salvato:' }
+    'it:installer.windows.podman.check_wsl' { return 'La riga sopra dice perche''. Controlla che WSL funzioni: lancia "wsl --status" in PowerShell.' }
+    'it:installer.windows.podman.from_desktop' { return 'La riga sopra dice perche''. Lancia l''installer dal desktop di Windows di questo utente (il menu Start, Windows PowerShell), non da ssh, da un servizio o da un''attivita'' pianificata: quelli girano senza desktop.' }
+    'it:installer.windows.podman.install_failed' { return 'Podman non si e'' potuto installare.' }
+    'it:installer.windows.podman.install_failed_todo' { return 'La riga sopra dice perche''. Podman arriva da winget, o dalla sua release ufficiale quando winget non si puo'' usare: controlla che questo computer raggiunga github.com, e che winget funzioni se ce l''hai (se e'' rotto, installa o ripara "App Installer": https://aka.ms/getwinget).' }
+    'it:installer.windows.podman.machine_failed' { return 'La macchina Podman di Job Hunter Team non si e'' potuta creare o avviare.' }
+    'it:installer.windows.podman.network_not_ready' { return 'La macchina Podman e'' partita ma la sua rete non e'' pronta.' }
+    'it:installer.windows.podman.network_todo' { return 'La riga sopra dice perche''. Aspetta un minuto e rilancia lo stesso comando di installazione; se si ferma di nuovo qui, prima riavvia Windows.' }
+    'it:installer.windows.podman.other_user' { return 'Podman e'' installato per un altro utente Windows di questo computer.' }
+    'it:installer.windows.podman.other_user_todo' { return 'Lancia l''installer come quell''utente Windows, o togli Podman per il computer (Impostazioni > App) e rilancia il comando di installazione.' }
+    'it:installer.windows.podman.other_version' { return 'Su questo computer e'' installata un''altra versione di Podman.' }
+    'it:installer.windows.podman.restart_pending' { return 'Se Windows aspetta un riavvio, riavvialo.' }
+    'it:installer.windows.podman.restart_then_again' { return 'Solo se si ferma di nuovo qui dal desktop: riavvia Windows, poi lancialo ancora una volta.' }
+    'it:installer.windows.podman.run_again' { return 'Poi rilancia lo stesso comando di installazione: riparte dall''inizio.' }
+    'it:installer.windows.podman.runs_on_6' { return 'Job Hunter Team gira su Podman 6 e non cambia un altro Podman.' }
+    'it:installer.windows.podman.sshproxy' { return 'Podman ha avviato la macchina, ma il suo collegamento per gli strumenti Docker (win-sshproxy.exe) non e'' partito.' }
+    'it:installer.windows.podman.stopped' { return 'La preparazione di Podman si e'' fermata (codice di uscita %s).' }
+    'it:installer.windows.podman.stopped_todo' { return 'La riga sopra dice perche''. Rilancia lo stesso comando di installazione; se si ferma nello stesso punto, tieni quella riga e chiedi aiuto.' }
+    'it:installer.windows.podman.update_or_remove' { return 'Aggiornalo alla versione 6, o toglilo (Impostazioni > App), come preferisci.' }
+    'it:installer.windows.podman_machine_windows_user' { return 'Macchina Podman di questo utente Windows:' }
+    'it:installer.windows.powershell_too_old' { return 'Serve PowerShell 5.1 o successivo (versione attuale: %s). Installa PowerShell 7: https://aka.ms/PowerShell' }
+    'it:installer.windows.registering_user_path' { return 'Registro il PATH dell''utente' }
+    'it:installer.windows.reparse_ancestor' { return 'Un percorso protetto dell''host ha sopra di se'' un reparse point (un collegamento): %s' }
+    'it:installer.windows.runtime_artifact_missing' { return 'Manca un file del runtime Podman: %s' }
+    'it:installer.windows.runtime_overlaps' { return 'La cartella protetta del runtime sull''host si sovrappone a una cartella che il container puo'' scrivere: %s' }
+    'it:installer.windows.setup_wizard_also_starts' { return 'configurazione guidata (accende anche il container)' }
+    'it:installer.windows.stop_remove_old_team' { return 'Ferma e togli il team vecchio (con Docker Desktop acceso), in PowerShell:' }
+    'it:installer.windows.system_detection' { return 'Rilevamento del sistema' }
+    'it:installer.windows.then_run_installer_again' { return 'Poi rilancia questo installer.' }
+    'it:installer.windows.token_acl_failed' { return 'La restrizione dei permessi (ACL) non e'' riuscita (il file e'' ancora leggibile dal gruppo Users): %s' }
+    'it:installer.windows.uninstall_keeps_data_jht' { return 'Per disinstallare (i dati in ~/.jht e ~/Documents/Job Hunter Team restano):' }
+    'it:installer.windows.use_them_window_right' { return 'Per usarli subito in questa finestra, incolla:' }
+    'it:installer.windows.user_path_updated_effective' { return 'PATH dell''utente aggiornato (vale dal prossimo terminale)' }
+    'it:installer.windows.what_do_now' { return 'Cosa fare adesso:' }
+    'it:installer.windows.windows_subsystem_linux_check' { return 'Controllo del Sottosistema Windows per Linux' }
+    'it:installer.windows.wizard_exited_error_re' { return 'La configurazione guidata e'' uscita con un errore. Rilanciala con: jht setup' }
+    'it:installer.windows.wrapper_lacks_protocol' { return 'Il wrapper scaricato non ha il protocollo protetto del runtime.' }
+    'it:installer.windows.wrapper_overlaps' { return 'La cartella protetta del wrapper sull''host si sovrappone a una cartella che il container puo'' scrivere: %s' }
+    'it:installer.windows.writing_host_env' { return 'Scrivo host.env' }
+    'it:installer.windows.wsl_ready' { return 'WSL e'' pronto' }
+    'it:installer.windows.your_data_stays_jht' { return 'I tuoi dati restano: ~/.jht (configurazione, database, profilo) e Documenti\Job Hunter Team (CV, risultati) sono cartelle di questo computer, e il nuovo team le usa.' }
+    'hu:installer.check.compose_boundary' { return ('A let' + [char]0x00F6 + 'lt' + [char]0x00F6 + 'tt docker-compose.yml nem ' + [char]0x00E9 + 'rv' + [char]0x00E9 + 'nyes' + [char]0x00ED + 'ti a runtime v' + [char]0x00E9 + 'dett hat' + [char]0x00E1 + 'r' + [char]0x00E1 + 't.') }
+    'hu:installer.windows.acl_failed' { return ('A JHT_HOME ACL-ellen' + [char]0x0151 + 'rz' + [char]0x00E9 + 'se a jav' + [char]0x00ED + 't' + [char]0x00E1 + 's ut' + [char]0x00E1 + 'n sem siker' + [char]0x00FC + 'lt: %s') }
+    'hu:installer.windows.agents_only_see' { return ('Az ' + [char]0x00FC + 'gyn' + [char]0x00F6 + 'k' + [char]0x00F6 + 'k csak ezt l' + [char]0x00E1 + 'tj' + [char]0x00E1 + 'k:') }
+    'hu:installer.windows.already_user_path' { return ('m' + [char]0x00E1 + 'r benne van a felhaszn' + [char]0x00E1 + 'l' + [char]0x00F3 + 'i PATH-ban') }
+    'hu:installer.windows.branch' { return ('' + [char]0x00E1 + 'g:  ') }
+    'hu:installer.windows.branch_unresolved' { return ('A(z) ''%s'' ' + [char]0x00E1 + 'g nem vezethet' + [char]0x0151 + ' vissza egy megv' + [char]0x00E1 + 'ltoztathatatlan kiad' + [char]0x00E1 + 'si commitra.') }
+    'hu:installer.windows.check_connection_branch' { return ('Ellen' + [char]0x0151 + 'rizd a kapcsolatot ' + [char]0x00E9 + 's az ' + [char]0x00E1 + 'gat (%s).') }
+    'hu:installer.windows.config_db_agents' { return ('(be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 's, adatb' + [char]0x00E1 + 'zis, ' + [char]0x00FC + 'gyn' + [char]0x00F6 + 'k' + [char]0x00F6 + 'k)') }
+    'hu:installer.windows.container_mode_active' { return ('Kont' + [char]0x00E9 + 'neres m' + [char]0x00F3 + 'd bekapcsolva.') }
+    'hu:installer.windows.cvs_attachments_output' { return ('(' + [char]0x00F6 + 'n' + [char]0x00E9 + 'letrajzok, mell' + [char]0x00E9 + 'kletek, eredm' + [char]0x00E9 + 'nyek)') }
+    'hu:installer.windows.delete_data_as_well' { return ('Ha az adatokat is t' + [char]0x00F6 + 'r' + [char]0x00F6 + 'lni akarod (be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 's, adatb' + [char]0x00E1 + 'zis, ' + [char]0x00F6 + 'n' + [char]0x00E9 + 'letrajzok, eredm' + [char]0x00E9 + 'nyek):') }
+    'hu:installer.windows.docker_desktop_volumes_old' { return ('A Docker Desktopban megmaradnak a r' + [char]0x00E9 + 'gi csapat k' + [char]0x00F6 + 'tetei: a szolg' + [char]0x00E1 + 'ltat' + [char]0x00F3 + 'k eszk' + [char]0x00F6 + 'zei ' + [char]0x00E9 + 's, verzi' + [char]0x00F3 + 't' + [char]0x00F3 + 'l f' + [char]0x00FC + 'gg' + [char]0x0151 + 'en, a be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 's ' + [char]0x00E1 + 'ltal mentett API-kulcs, a levelez' + [char]0x00E9 + 's jelszava ' + [char]0x00E9 + 's a Telegram-tokenek. Az ' + [char]0x00FA + 'j csapat ezeket nem olvassa: add meg ' + [char]0x0151 + 'ket ' + [char]0x00FA + 'jra a jht setup paranccsal. Ha m' + [char]0x00E1 + 'r nincs r' + [char]0x00E1 + 'juk sz' + [char]0x00FC + 'ks' + [char]0x00E9 + 'ged:') }
+    'hu:installer.windows.download_failed' { return ('A let' + [char]0x00F6 + 'lt' + [char]0x00E9 + 's nem siker' + [char]0x00FC + 'lt: %s') }
+    'hu:installer.windows.downloading_enabling_podman_runtime' { return ('A Podman futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezet let' + [char]0x00F6 + 'lt' + [char]0x00E9 + 'se ' + [char]0x00E9 + 's bekapcsol' + [char]0x00E1 + 'sa') }
+    'hu:installer.windows.earlier_job_hunter_team' { return ('a Docker Desktopon m' + [char]0x00E9 + 'g fut a Job Hunter Team egy kor' + [char]0x00E1 + 'bbi verzi' + [char]0x00F3 + 'ja (kont' + [char]0x00E9 + 'ner: %s). A 0.4 ' + [char]0x00F3 + 'ta a csapat egy Podman-g' + [char]0x00E9 + 'pen fut: ha mell' + [char]0x00E9 + ' telep' + [char]0x00ED + 'ten' + [char]0x00E9 + 'd, k' + [char]0x00E9 + 't csapat dolgozna ugyanazokon az adatokon. Semmi sem v' + [char]0x00E1 + 'ltozott.') }
+    'hu:installer.windows.earlier_job_hunter_team_2' { return ('a Docker Desktopon m' + [char]0x00E9 + 'g telep' + [char]0x00ED + 'tve van a Job Hunter Team egy kor' + [char]0x00E1 + 'bbi verzi' + [char]0x00F3 + 'ja (kont' + [char]0x00E9 + 'ner: %s, le' + [char]0x00E1 + 'll' + [char]0x00ED + 'tva; a Docker Desktoppal ' + [char]0x00FA + 'jraindul). A 0.4 ' + [char]0x00F3 + 'ta a csapat egy Podman-g' + [char]0x00E9 + 'pen fut: ha mell' + [char]0x00E9 + ' telep' + [char]0x00ED + 'ten' + [char]0x00E9 + 'd, k' + [char]0x00E9 + 't csapat dolgozna ugyanazokon az adatokon. Semmi sem v' + [char]0x00E1 + 'ltozott.') }
+    'hu:installer.windows.header_pairing' { return ('p' + [char]0x00E1 + 'ros' + [char]0x00ED + 't' + [char]0x00E1 + 's: van token (kihagyja a var' + [char]0x00E1 + 'zsl' + [char]0x00F3 + 't)') }
+    'hu:installer.windows.host_env_written' { return ('A host.env meg' + [char]0x00ED + 'rva:') }
+    'hu:installer.windows.image' { return ('k' + [char]0x00E9 + 'p: ') }
+    'hu:installer.windows.image_free_disk' { return ('' + [char]0x00C9 + 's a k' + [char]0x00E9 + 'p' + [char]0x00E9 + 't is, hogy helyet szabad' + [char]0x00ED + 'ts fel a lemezen:') }
+    'hu:installer.windows.install_may_not_know' { return ('telep' + [char]0x00ED + 't' + [char]0x00E9 + 's el' + [char]0x0151 + 'tt ny' + [char]0x00ED + 'lt meg, ' + [char]0x00E9 + 's lehet, hogy m' + [char]0x00E9 + 'g nem ismeri ' + [char]0x0151 + 'ket ("not recognized as the name of a cmdlet").') }
+    'hu:installer.windows.installation_complete' { return '|  A telepites kesz!                       |' }
+    'hu:installer.windows.jht_podman_are_your' { return ('a jht ' + [char]0x00E9 + 's a podman mostant' + [char]0x00F3 + 'l benne van a PATH-ban, de EZ a PowerShell-ablak m' + [char]0x00E9 + 'g a') }
+    'hu:installer.windows.launching_setup_wizard' { return ('A be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00F3 + ' var' + [char]0x00E1 + 'zsl' + [char]0x00F3 + ' ind' + [char]0x00ED + 't' + [char]0x00E1 + 'sa...') }
+    'hu:installer.windows.mode_podman_machine_wsl' { return ('m' + [char]0x00F3 + 'd:  Podman-g' + [char]0x00E9 + 'p (WSL)') }
+    'hu:installer.windows.next_steps' { return ('K' + [char]0x00F6 + 'vetkez' + [char]0x0151 + ' l' + [char]0x00E9 + 'p' + [char]0x00E9 + 'sek:') }
+    'hu:installer.windows.only_windows' { return ('Az install.ps1 csak Windowson m' + [char]0x0171 + 'k' + [char]0x00F6 + 'dik. Linuxon/macOS-en haszn' + [char]0x00E1 + 'ld az install.sh-t.') }
+    'hu:installer.windows.open_new_powershell_window' { return ('Nyiss egy ' + [char]0x00DA + 'J PowerShell-ablakot a jht ' + [char]0x00E9 + 's a podman haszn' + [char]0x00E1 + 'lat' + [char]0x00E1 + 'hoz. A sz' + [char]0x00E1 + 'm' + [char]0x00ED + 't' + [char]0x00F3 + 'g' + [char]0x00E9 + 'pet nem kell ' + [char]0x00FA + 'jraind' + [char]0x00ED + 'tani.') }
+    'hu:installer.windows.override_lacks_keep_id' { return ('A let' + [char]0x00F6 + 'lt' + [char]0x00F6 + 'tt Podman-fel' + [char]0x00FC + 'l' + [char]0x00ED + 'r' + [char]0x00F3 + 'f' + [char]0x00E1 + 'jlb' + [char]0x00F3 + 'l hi' + [char]0x00E1 + 'nyzik a keep-id.') }
+    'hu:installer.windows.pairing_token_present_skipping' { return ('Van p' + [char]0x00E1 + 'ros' + [char]0x00ED + 't' + [char]0x00E1 + 'si token: kihagyom az interakt' + [char]0x00ED + 'v var' + [char]0x00E1 + 'zsl' + [char]0x00F3 + 't. A kont' + [char]0x00E9 + 'ner az els' + [char]0x0151 + ' ind' + [char]0x00ED + 't' + [char]0x00E1 + 'skor befejezi a p' + [char]0x00E1 + 'ros' + [char]0x00ED + 't' + [char]0x00E1 + 'st.') }
+    'hu:installer.windows.pairing_token_saved' { return ('A p' + [char]0x00E1 + 'ros' + [char]0x00ED + 't' + [char]0x00E1 + 'si token elmentve:') }
+    'hu:installer.windows.podman.check_wsl' { return ('A fenti sor megmondja, mi' + [char]0x00E9 + 'rt. Ellen' + [char]0x0151 + 'rizd, hogy m' + [char]0x0171 + 'k' + [char]0x00F6 + 'dik-e a WSL: futtasd a "wsl --status" parancsot PowerShellben.') }
+    'hu:installer.windows.podman.from_desktop' { return ('A fenti sor megmondja, mi' + [char]0x00E9 + 'rt. A telep' + [char]0x00ED + 't' + [char]0x0151 + 't ennek a felhaszn' + [char]0x00E1 + 'l' + [char]0x00F3 + 'nak a Windows-asztal' + [char]0x00E1 + 'r' + [char]0x00F3 + 'l futtasd (Start men' + [char]0x00FC + ', Windows PowerShell), ne ssh-b' + [char]0x00F3 + 'l, szolg' + [char]0x00E1 + 'ltat' + [char]0x00E1 + 'sb' + [char]0x00F3 + 'l vagy ' + [char]0x00FC + 'temezett feladatb' + [char]0x00F3 + 'l: azok asztal n' + [char]0x00E9 + 'lk' + [char]0x00FC + 'l futnak.') }
+    'hu:installer.windows.podman.install_failed' { return ('A Podmant nem siker' + [char]0x00FC + 'lt telep' + [char]0x00ED + 'teni.') }
+    'hu:installer.windows.podman.install_failed_todo' { return ('A fenti sor megmondja, mi' + [char]0x00E9 + 'rt. A Podman a wingetb' + [char]0x0151 + 'l j' + [char]0x00F6 + 'n, vagy a hivatalos kiad' + [char]0x00E1 + 's' + [char]0x00E1 + 'b' + [char]0x00F3 + 'l, ha a winget nem haszn' + [char]0x00E1 + 'lhat' + [char]0x00F3 + ': ellen' + [char]0x0151 + 'rizd, hogy ez a sz' + [char]0x00E1 + 'm' + [char]0x00ED + 't' + [char]0x00F3 + 'g' + [char]0x00E9 + 'p el' + [char]0x00E9 + 'ri-e a github.com-ot, ' + [char]0x00E9 + 's hogy a winget m' + [char]0x0171 + 'k' + [char]0x00F6 + 'dik-e, ha van (ha hib' + [char]0x00E1 + 's, telep' + [char]0x00ED + 'tsd vagy jav' + [char]0x00ED + 'tsd az "App Installer"-t: https://aka.ms/getwinget).') }
+    'hu:installer.windows.podman.machine_failed' { return ('A Job Hunter Team Podman-g' + [char]0x00E9 + 'p' + [char]0x00E9 + 't nem siker' + [char]0x00FC + 'lt l' + [char]0x00E9 + 'trehozni vagy elind' + [char]0x00ED + 'tani.') }
+    'hu:installer.windows.podman.network_not_ready' { return ('A Podman-g' + [char]0x00E9 + 'p elindult, de a h' + [char]0x00E1 + 'l' + [char]0x00F3 + 'zata nincs k' + [char]0x00E9 + 'sz.') }
+    'hu:installer.windows.podman.network_todo' { return ('A fenti sor megmondja, mi' + [char]0x00E9 + 'rt. V' + [char]0x00E1 + 'rj egy percet, ' + [char]0x00E9 + 's futtasd ' + [char]0x00FA + 'jra ugyanazt a telep' + [char]0x00ED + 't' + [char]0x00E9 + 'si parancsot; ha megint itt ' + [char]0x00E1 + 'll meg, el' + [char]0x0151 + 'bb ind' + [char]0x00ED + 'tsd ' + [char]0x00FA + 'jra a Windowst.') }
+    'hu:installer.windows.podman.other_user' { return ('A Podman ennek a sz' + [char]0x00E1 + 'm' + [char]0x00ED + 't' + [char]0x00F3 + 'g' + [char]0x00E9 + 'pnek egy m' + [char]0x00E1 + 'sik Windows-felhaszn' + [char]0x00E1 + 'l' + [char]0x00F3 + 'j' + [char]0x00E1 + 'hoz van telep' + [char]0x00ED + 'tve.') }
+    'hu:installer.windows.podman.other_user_todo' { return ('Futtasd a telep' + [char]0x00ED + 't' + [char]0x0151 + 't azzal a Windows-felhaszn' + [char]0x00E1 + 'l' + [char]0x00F3 + 'val, vagy t' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tsd el a Podmant a sz' + [char]0x00E1 + 'm' + [char]0x00ED + 't' + [char]0x00F3 + 'g' + [char]0x00E9 + 'pr' + [char]0x0151 + 'l (G' + [char]0x00E9 + 'ph' + [char]0x00E1 + 'z > Alkalmaz' + [char]0x00E1 + 'sok), ' + [char]0x00E9 + 's futtasd ' + [char]0x00FA + 'jra a telep' + [char]0x00ED + 't' + [char]0x00E9 + 'si parancsot.') }
+    'hu:installer.windows.podman.other_version' { return ('Ezen a sz' + [char]0x00E1 + 'm' + [char]0x00ED + 't' + [char]0x00F3 + 'g' + [char]0x00E9 + 'pen a Podman egy m' + [char]0x00E1 + 'sik verzi' + [char]0x00F3 + 'ja van telep' + [char]0x00ED + 'tve.') }
+    'hu:installer.windows.podman.restart_pending' { return ('Ha a Windows ' + [char]0x00FA + 'jraind' + [char]0x00ED + 't' + [char]0x00E1 + 'sra v' + [char]0x00E1 + 'r, ind' + [char]0x00ED + 'tsd ' + [char]0x00FA + 'jra.') }
+    'hu:installer.windows.podman.restart_then_again' { return ('Csak ha az asztalr' + [char]0x00F3 + 'l is megint itt ' + [char]0x00E1 + 'll meg: ind' + [char]0x00ED + 'tsd ' + [char]0x00FA + 'jra a Windowst, majd futtasd m' + [char]0x00E9 + 'g egyszer.') }
+    'hu:installer.windows.podman.run_again' { return ('Ut' + [char]0x00E1 + 'na futtasd ' + [char]0x00FA + 'jra ugyanazt a telep' + [char]0x00ED + 't' + [char]0x00E9 + 'si parancsot: el' + [char]0x00F6 + 'lr' + [char]0x0151 + 'l kezdi.') }
+    'hu:installer.windows.podman.runs_on_6' { return ('A Job Hunter Team Podman 6-on fut, ' + [char]0x00E9 + 's nem m' + [char]0x00F3 + 'dos' + [char]0x00ED + 't egy m' + [char]0x00E1 + 'sik Podmant.') }
+    'hu:installer.windows.podman.sshproxy' { return ('A Podman elind' + [char]0x00ED + 'totta a g' + [char]0x00E9 + 'pet, de a Docker-eszk' + [char]0x00F6 + 'z' + [char]0x00F6 + 'kh' + [char]0x00F6 + 'z val' + [char]0x00F3 + ' kapcsolata (win-sshproxy.exe) nem indult el.') }
+    'hu:installer.windows.podman.stopped' { return ('A Podman el' + [char]0x0151 + 'k' + [char]0x00E9 + 'sz' + [char]0x00ED + 't' + [char]0x00E9 + 'se le' + [char]0x00E1 + 'llt (kil' + [char]0x00E9 + 'p' + [char]0x00E9 + 'si k' + [char]0x00F3 + 'd: %s).') }
+    'hu:installer.windows.podman.stopped_todo' { return ('A fenti sor megmondja, mi' + [char]0x00E9 + 'rt. Futtasd ' + [char]0x00FA + 'jra ugyanazt a telep' + [char]0x00ED + 't' + [char]0x00E9 + 'si parancsot; ha ugyanott ' + [char]0x00E1 + 'll meg, ' + [char]0x0151 + 'rizd meg azt a sort, ' + [char]0x00E9 + 's k' + [char]0x00E9 + 'rj seg' + [char]0x00ED + 'ts' + [char]0x00E9 + 'get.') }
+    'hu:installer.windows.podman.update_or_remove' { return ('Friss' + [char]0x00ED + 'tsd a 6-os verzi' + [char]0x00F3 + 'ra, vagy t' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tsd el (G' + [char]0x00E9 + 'ph' + [char]0x00E1 + 'z > Alkalmaz' + [char]0x00E1 + 'sok), ahogy jobban tetszik.') }
+    'hu:installer.windows.podman_machine_windows_user' { return ('Ennek a Windows-felhaszn' + [char]0x00E1 + 'l' + [char]0x00F3 + 'nak a Podman-g' + [char]0x00E9 + 'pe:') }
+    'hu:installer.windows.powershell_too_old' { return ('PowerShell 5.1 vagy ' + [char]0x00FA + 'jabb kell (a jelenlegi verzi' + [char]0x00F3 + ': %s). Telep' + [char]0x00ED + 'tsd a PowerShell 7-et: https://aka.ms/PowerShell') }
+    'hu:installer.windows.registering_user_path' { return ('A felhaszn' + [char]0x00E1 + 'l' + [char]0x00F3 + 'i PATH be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 'sa') }
+    'hu:installer.windows.reparse_ancestor' { return ('A gazdag' + [char]0x00E9 + 'p egyik v' + [char]0x00E9 + 'dett ' + [char]0x00FA + 'tvonala f' + [char]0x00F6 + 'l' + [char]0x00F6 + 'tt reparse point (link) van: %s') }
+    'hu:installer.windows.runtime_artifact_missing' { return ('Hi' + [char]0x00E1 + 'nyzik egy f' + [char]0x00E1 + 'jl a Podman futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezetb' + [char]0x0151 + 'l: %s') }
+    'hu:installer.windows.runtime_overlaps' { return ('A gazdag' + [char]0x00E9 + 'p v' + [char]0x00E9 + 'dett futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezet-' + [char]0x00FA + 'tvonala ' + [char]0x00E1 + 'tfed' + [char]0x00E9 + 'sben van egy, a kont' + [char]0x00E9 + 'ner ' + [char]0x00E1 + 'ltal ' + [char]0x00ED + 'rhat' + [char]0x00F3 + ' mapp' + [char]0x00E1 + 'val: %s') }
+    'hu:installer.windows.setup_wizard_also_starts' { return ('be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00F3 + ' var' + [char]0x00E1 + 'zsl' + [char]0x00F3 + ' (a kont' + [char]0x00E9 + 'nert is elind' + [char]0x00ED + 'tja)') }
+    'hu:installer.windows.stop_remove_old_team' { return ('' + [char]0x00C1 + 'll' + [char]0x00ED + 'tsd le ' + [char]0x00E9 + 's t' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tsd el a r' + [char]0x00E9 + 'gi csapatot (bekapcsolt Docker Desktoppal), PowerShellben:') }
+    'hu:installer.windows.system_detection' { return ('A rendszer felismer' + [char]0x00E9 + 'se') }
+    'hu:installer.windows.then_run_installer_again' { return ('Ut' + [char]0x00E1 + 'na futtasd ' + [char]0x00FA + 'jra ezt a telep' + [char]0x00ED + 't' + [char]0x0151 + 't.') }
+    'hu:installer.windows.token_acl_failed' { return ('Az ACL-korl' + [char]0x00E1 + 'toz' + [char]0x00E1 + 's nem siker' + [char]0x00FC + 'lt (a f' + [char]0x00E1 + 'jlt a Users csoport m' + [char]0x00E9 + 'g olvashatja): %s') }
+    'hu:installer.windows.uninstall_keeps_data_jht' { return ('Elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 't' + [char]0x00E1 + 's (az adatok megmaradnak a ~/.jht ' + [char]0x00E9 + 's a ~/Documents/Job Hunter Team mapp' + [char]0x00E1 + 'ban):') }
+    'hu:installer.windows.use_them_window_right' { return ('Ha r' + [char]0x00F6 + 'gt' + [char]0x00F6 + 'n ebben az ablakban haszn' + [char]0x00E1 + 'ln' + [char]0x00E1 + 'd ' + [char]0x0151 + 'ket, illeszd be:') }
+    'hu:installer.windows.user_path_updated_effective' { return ('A felhaszn' + [char]0x00E1 + 'l' + [char]0x00F3 + 'i PATH friss' + [char]0x00ED + 'tve (a k' + [char]0x00F6 + 'vetkez' + [char]0x0151 + ' termin' + [char]0x00E1 + 'lt' + [char]0x00F3 + 'l ' + [char]0x00E9 + 'rv' + [char]0x00E9 + 'nyes)') }
+    'hu:installer.windows.what_do_now' { return ('Mit tegy' + [char]0x00E9 + 'l most:') }
+    'hu:installer.windows.windows_subsystem_linux_check' { return ('A Linuxos Windows-alrendszer (WSL) ellen' + [char]0x0151 + 'rz' + [char]0x00E9 + 'se') }
+    'hu:installer.windows.wizard_exited_error_re' { return ('A var' + [char]0x00E1 + 'zsl' + [char]0x00F3 + ' hib' + [char]0x00E1 + 'val ' + [char]0x00E1 + 'llt le. Futtasd ' + [char]0x00FA + 'jra ' + [char]0x00ED + 'gy: jht setup') }
+    'hu:installer.windows.wrapper_lacks_protocol' { return ('A let' + [char]0x00F6 + 'lt' + [char]0x00F6 + 'tt wrapperb' + [char]0x0151 + 'l hi' + [char]0x00E1 + 'nyzik a futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezet v' + [char]0x00E9 + 'dett protokollja.') }
+    'hu:installer.windows.wrapper_overlaps' { return ('A gazdag' + [char]0x00E9 + 'p v' + [char]0x00E9 + 'dett wrapper-' + [char]0x00FA + 'tvonala ' + [char]0x00E1 + 'tfed' + [char]0x00E9 + 'sben van egy, a kont' + [char]0x00E9 + 'ner ' + [char]0x00E1 + 'ltal ' + [char]0x00ED + 'rhat' + [char]0x00F3 + ' mapp' + [char]0x00E1 + 'val: %s') }
+    'hu:installer.windows.writing_host_env' { return ('A host.env meg' + [char]0x00ED + 'r' + [char]0x00E1 + 'sa') }
+    'hu:installer.windows.wsl_ready' { return ('A WSL k' + [char]0x00E9 + 'sz') }
+    'hu:installer.windows.your_data_stays_jht' { return ('Az adataid megmaradnak: a ~/.jht (be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 's, adatb' + [char]0x00E1 + 'zis, profil) ' + [char]0x00E9 + 's a Dokumentumok\Job Hunter Team (' + [char]0x00F6 + 'n' + [char]0x00E9 + 'letrajzok, eredm' + [char]0x00E9 + 'nyek) ennek a sz' + [char]0x00E1 + 'm' + [char]0x00ED + 't' + [char]0x00F3 + 'g' + [char]0x00E9 + 'pnek a mapp' + [char]0x00E1 + 'i, ' + [char]0x00E9 + 's az ' + [char]0x00FA + 'j csapat ezeket haszn' + [char]0x00E1 + 'lja.') }
+    'es:installer.check.compose_boundary' { return ('El docker-compose.yml descargado no aplica el l' + [char]0x00ED + 'mite protegido del runtime.') }
+    'es:installer.windows.acl_failed' { return ('La verificaci' + [char]0x00F3 + 'n de la ACL de JHT_HOME ha fallado despu' + [char]0x00E9 + 's de repararla: %s') }
+    'es:installer.windows.agents_only_see' { return 'Los agentes solo ven:' }
+    'es:installer.windows.already_user_path' { return ('ya est' + [char]0x00E1 + ' en el PATH del usuario') }
+    'es:installer.windows.branch' { return 'rama:   ' }
+    'es:installer.windows.branch_unresolved' { return ('No puedo resolver la rama ''%s'' en un commit de versi' + [char]0x00F3 + 'n inmutable.') }
+    'es:installer.windows.check_connection_branch' { return ('Comprueba la conexi' + [char]0x00F3 + 'n y la rama (%s).') }
+    'es:installer.windows.config_db_agents' { return ('(configuraci' + [char]0x00F3 + 'n, db, agentes)') }
+    'es:installer.windows.container_mode_active' { return 'Modo contenedor activo.' }
+    'es:installer.windows.cvs_attachments_output' { return '(CV, adjuntos, resultados)' }
+    'es:installer.windows.delete_data_as_well' { return ('Para borrar tambi' + [char]0x00E9 + 'n los datos (configuraci' + [char]0x00F3 + 'n, db, CV, resultados):') }
+    'es:installer.windows.docker_desktop_volumes_old' { return ('En Docker Desktop se quedan los vol' + [char]0x00FA + 'menes del equipo antiguo: las herramientas de los proveedores y, seg' + [char]0x00FA + 'n la versi' + [char]0x00F3 + 'n, la clave API guardada por la configuraci' + [char]0x00F3 + 'n, la contrase' + [char]0x00F1 + 'a del correo y los tokens de Telegram. El equipo nuevo no los lee: vuelve a darlos con jht setup. Si ya no los necesitas:') }
+    'es:installer.windows.download_failed' { return 'La descarga ha fallado: %s' }
+    'es:installer.windows.downloading_enabling_podman_runtime' { return 'Descargando y activando el motor Podman' }
+    'es:installer.windows.earlier_job_hunter_team' { return ('todav' + [char]0x00ED + 'a hay un Job Hunter Team anterior en marcha en Docker Desktop (contenedor %s). Desde la 0.4 el equipo funciona en una m' + [char]0x00E1 + 'quina Podman: si lo instalas al lado, dos equipos trabajar' + [char]0x00ED + 'an con los mismos datos. No se ha cambiado nada.') }
+    'es:installer.windows.earlier_job_hunter_team_2' { return ('todav' + [char]0x00ED + 'a hay un Job Hunter Team anterior instalado en Docker Desktop (contenedor %s, parado; vuelve a arrancar con Docker Desktop). Desde la 0.4 el equipo funciona en una m' + [char]0x00E1 + 'quina Podman: si lo instalas al lado, dos equipos trabajar' + [char]0x00ED + 'an con los mismos datos. No se ha cambiado nada.') }
+    'es:installer.windows.header_pairing' { return ('emparejamiento: hay token (se salta la configuraci' + [char]0x00F3 + 'n guiada)') }
+    'es:installer.windows.host_env_written' { return 'host.env escrito:' }
+    'es:installer.windows.image' { return 'imagen: ' }
+    'es:installer.windows.image_free_disk' { return 'Y su imagen, para liberar disco:' }
+    'es:installer.windows.install_may_not_know' { return ('instalaci' + [char]0x00F3 + 'n y puede que a' + [char]0x00FA + 'n no los conozca ("no se reconoce como nombre de un cmdlet").') }
+    'es:installer.windows.installation_complete' { return '|  Instalacion completada!                 |' }
+    'es:installer.windows.jht_podman_are_your' { return ('desde ahora jht y podman est' + [char]0x00E1 + 'n en tu PATH, pero ESTA ventana de PowerShell ya estaba abierta antes de la') }
+    'es:installer.windows.launching_setup_wizard' { return ('Iniciando la configuraci' + [char]0x00F3 + 'n guiada...') }
+    'es:installer.windows.mode_podman_machine_wsl' { return ('modo:    m' + [char]0x00E1 + 'quina Podman (WSL)') }
+    'es:installer.windows.next_steps' { return ('Pr' + [char]0x00F3 + 'ximos pasos:') }
+    'es:installer.windows.only_windows' { return 'install.ps1 solo funciona en Windows. En Linux/macOS usa install.sh.' }
+    'es:installer.windows.open_new_powershell_window' { return 'Abre una NUEVA ventana de PowerShell para usar jht y podman. No hace falta reiniciar el ordenador.' }
+    'es:installer.windows.override_lacks_keep_id' { return 'Al override de Podman descargado le falta keep-id.' }
+    'es:installer.windows.pairing_token_present_skipping' { return ('Hay un token de emparejamiento: me salto la configuraci' + [char]0x00F3 + 'n guiada. El contenedor completar' + [char]0x00E1 + ' el emparejamiento en el primer arranque.') }
+    'es:installer.windows.pairing_token_saved' { return 'Token de emparejamiento guardado:' }
+    'es:installer.windows.podman.check_wsl' { return ('La l' + [char]0x00ED + 'nea de arriba dice por qu' + [char]0x00E9 + '. Comprueba que WSL funciona: ejecuta "wsl --status" en PowerShell.') }
+    'es:installer.windows.podman.from_desktop' { return ('La l' + [char]0x00ED + 'nea de arriba dice por qu' + [char]0x00E9 + '. Ejecuta el instalador desde el escritorio de Windows de este usuario (el men' + [char]0x00FA + ' Inicio, Windows PowerShell), no desde ssh, un servicio o una tarea programada: esos funcionan sin escritorio.') }
+    'es:installer.windows.podman.install_failed' { return 'No se ha podido instalar Podman.' }
+    'es:installer.windows.podman.install_failed_todo' { return ('La l' + [char]0x00ED + 'nea de arriba dice por qu' + [char]0x00E9 + '. Podman se descarga con winget, o de su versi' + [char]0x00F3 + 'n oficial cuando no se puede usar winget: comprueba que este ordenador llega a github.com, y que winget funciona si lo tienes (si est' + [char]0x00E1 + ' roto, instala o repara "App Installer": https://aka.ms/getwinget).') }
+    'es:installer.windows.podman.machine_failed' { return ('No se ha podido crear o arrancar la m' + [char]0x00E1 + 'quina Podman de Job Hunter Team.') }
+    'es:installer.windows.podman.network_not_ready' { return ('La m' + [char]0x00E1 + 'quina Podman ha arrancado, pero su red no est' + [char]0x00E1 + ' lista.') }
+    'es:installer.windows.podman.network_todo' { return ('La l' + [char]0x00ED + 'nea de arriba dice por qu' + [char]0x00E9 + '. Espera un minuto y vuelve a ejecutar el mismo comando de instalaci' + [char]0x00F3 + 'n; si se para otra vez aqu' + [char]0x00ED + ', reinicia antes Windows.') }
+    'es:installer.windows.podman.other_user' { return ('Podman est' + [char]0x00E1 + ' instalado para otro usuario de Windows de este ordenador.') }
+    'es:installer.windows.podman.other_user_todo' { return ('Ejecuta el instalador como ese usuario de Windows, o quita Podman del ordenador (Configuraci' + [char]0x00F3 + 'n > Aplicaciones) y vuelve a ejecutar el comando de instalaci' + [char]0x00F3 + 'n.') }
+    'es:installer.windows.podman.other_version' { return ('En este ordenador hay instalada otra versi' + [char]0x00F3 + 'n de Podman.') }
+    'es:installer.windows.podman.restart_pending' { return ('Si Windows tiene un reinicio pendiente, rein' + [char]0x00ED + 'cialo.') }
+    'es:installer.windows.podman.restart_then_again' { return ('Solo si se para otra vez aqu' + [char]0x00ED + ' desde el escritorio: reinicia Windows y vuelve a ejecutarlo una vez m' + [char]0x00E1 + 's.') }
+    'es:installer.windows.podman.run_again' { return ('Luego vuelve a ejecutar el mismo comando de instalaci' + [char]0x00F3 + 'n: empieza otra vez desde el principio.') }
+    'es:installer.windows.podman.runs_on_6' { return 'Job Hunter Team funciona con Podman 6 y no cambia otro Podman.' }
+    'es:installer.windows.podman.sshproxy' { return ('Podman ha arrancado la m' + [char]0x00E1 + 'quina, pero su conexi' + [char]0x00F3 + 'n para las herramientas de Docker (win-sshproxy.exe) no ha arrancado.') }
+    'es:installer.windows.podman.stopped' { return ('La configuraci' + [char]0x00F3 + 'n de Podman se ha parado (c' + [char]0x00F3 + 'digo de salida %s).') }
+    'es:installer.windows.podman.stopped_todo' { return ('La l' + [char]0x00ED + 'nea de arriba dice por qu' + [char]0x00E9 + '. Vuelve a ejecutar el mismo comando de instalaci' + [char]0x00F3 + 'n; si se para en el mismo punto, guarda esa l' + [char]0x00ED + 'nea y pide ayuda.') }
+    'es:installer.windows.podman.update_or_remove' { return ('Actual' + [char]0x00ED + 'zalo a la versi' + [char]0x00F3 + 'n 6 o qu' + [char]0x00ED + 'talo (Configuraci' + [char]0x00F3 + 'n > Aplicaciones), como prefieras.') }
+    'es:installer.windows.podman_machine_windows_user' { return ('M' + [char]0x00E1 + 'quina Podman de este usuario de Windows:') }
+    'es:installer.windows.powershell_too_old' { return ('Hace falta PowerShell 5.1+ (versi' + [char]0x00F3 + 'n actual: %s). Instala PowerShell 7: https://aka.ms/PowerShell') }
+    'es:installer.windows.registering_user_path' { return 'Registrando el PATH del usuario' }
+    'es:installer.windows.reparse_ancestor' { return ('La ruta protegida del host tiene un antecesor que es un punto de rean' + [char]0x00E1 + 'lisis: %s') }
+    'es:installer.windows.runtime_artifact_missing' { return 'Falta un artefacto del motor Podman: %s' }
+    'es:installer.windows.runtime_overlaps' { return ('La ruta protegida del motor en el host se solapa con un ' + [char]0x00E1 + 'rbol en el que el contenedor puede escribir: %s') }
+    'es:installer.windows.setup_wizard_also_starts' { return ('configuraci' + [char]0x00F3 + 'n guiada (tambi' + [char]0x00E9 + 'n arranca el contenedor)') }
+    'es:installer.windows.stop_remove_old_team' { return 'Para y quita el equipo antiguo (con Docker Desktop encendido), en PowerShell:' }
+    'es:installer.windows.system_detection' { return ('Detecci' + [char]0x00F3 + 'n del sistema') }
+    'es:installer.windows.then_run_installer_again' { return 'Luego vuelve a ejecutar este instalador.' }
+    'es:installer.windows.token_acl_failed' { return ('La restricci' + [char]0x00F3 + 'n de la ACL ha fallado (el grupo Users a' + [char]0x00FA + 'n puede leer el archivo): %s') }
+    'es:installer.windows.uninstall_keeps_data_jht' { return 'Para desinstalar (conserva los datos en ~/.jht y ~/Documents/Job Hunter Team):' }
+    'es:installer.windows.use_them_window_right' { return 'Para usarlos ya en esta ventana, pega:' }
+    'es:installer.windows.user_path_updated_effective' { return ('PATH del usuario actualizado (vale desde la pr' + [char]0x00F3 + 'xima terminal)') }
+    'es:installer.windows.what_do_now' { return ('Qu' + [char]0x00E9 + ' hacer ahora:') }
+    'es:installer.windows.windows_subsystem_linux_check' { return ('Comprobaci' + [char]0x00F3 + 'n del Subsistema de Windows para Linux') }
+    'es:installer.windows.wizard_exited_error_re' { return ('La configuraci' + [char]0x00F3 + 'n guiada ha terminado con un error. Vuelve a ejecutarla con: jht setup') }
+    'es:installer.windows.wrapper_lacks_protocol' { return 'Al wrapper descargado le falta el protocolo protegido del motor.' }
+    'es:installer.windows.wrapper_overlaps' { return ('La ruta protegida del wrapper en el host se solapa con un ' + [char]0x00E1 + 'rbol en el que el contenedor puede escribir: %s') }
+    'es:installer.windows.writing_host_env' { return 'Escribiendo host.env' }
+    'es:installer.windows.wsl_ready' { return ('WSL est' + [char]0x00E1 + ' listo') }
+    'es:installer.windows.your_data_stays_jht' { return ('Tus datos se quedan: ~/.jht (configuraci' + [char]0x00F3 + 'n, base de datos, perfil) y Documents\Job Hunter Team (CV, resultados) son carpetas de este ordenador, y el equipo nuevo las usa.') }
+    'de:installer.check.compose_boundary' { return ('Die heruntergeladene docker-compose.yml setzt die gesch' + [char]0x00FC + 'tzte Grenze der Runtime nicht durch.') }
+    'de:installer.windows.acl_failed' { return ('Pr' + [char]0x00FC + 'fung der ACL von JHT_HOME nach der Reparatur fehlgeschlagen: %s') }
+    'de:installer.windows.agents_only_see' { return 'Die Agenten sehen nur:' }
+    'de:installer.windows.already_user_path' { return 'schon im Benutzer-PATH' }
+    'de:installer.windows.branch' { return 'Branch: ' }
+    'de:installer.windows.branch_unresolved' { return ('Branch ''%s'' l' + [char]0x00E4 + 'sst sich keinem unver' + [char]0x00E4 + 'nderlichen Release-Commit zuordnen.') }
+    'de:installer.windows.check_connection_branch' { return ('Pr' + [char]0x00FC + 'fe deine Verbindung und den Branch (%s).') }
+    'de:installer.windows.config_db_agents' { return '(Konfiguration, Datenbank, Agenten)' }
+    'de:installer.windows.container_mode_active' { return 'Container-Modus aktiv.' }
+    'de:installer.windows.cvs_attachments_output' { return ('(Lebensl' + [char]0x00E4 + 'ufe, Anh' + [char]0x00E4 + 'nge, Ergebnisse)') }
+    'de:installer.windows.delete_data_as_well' { return ('Um auch die Daten zu l' + [char]0x00F6 + 'schen (Konfiguration, Datenbank, Lebensl' + [char]0x00E4 + 'ufe, Ergebnisse):') }
+    'de:installer.windows.docker_desktop_volumes_old' { return ('In Docker Desktop bleiben die Volumes des alten Teams: Werkzeuge der Anbieter und, je nach Version, der vom Setup gespeicherte API-Schl' + [char]0x00FC + 'ssel, das Mail-Passwort und die Telegram-Tokens. Das neue Team liest sie nicht: Gib sie mit jht setup noch einmal ein. Wenn du sie nicht mehr brauchst:') }
+    'de:installer.windows.download_failed' { return 'Download fehlgeschlagen: %s' }
+    'de:installer.windows.downloading_enabling_podman_runtime' { return 'Lade die Podman-Laufzeit herunter und aktiviere sie' }
+    'de:installer.windows.earlier_job_hunter_team' { return ('ein fr' + [char]0x00FC + 'heres Job Hunter Team l' + [char]0x00E4 + 'uft noch auf Docker Desktop (Container %s). Seit 0.4 l' + [char]0x00E4 + 'uft das Team in einer Podman-Maschine: Daneben installiert, w' + [char]0x00FC + 'rden zwei Teams mit denselben Daten arbeiten. Nichts wurde ge' + [char]0x00E4 + 'ndert.') }
+    'de:installer.windows.earlier_job_hunter_team_2' { return ('ein fr' + [char]0x00FC + 'heres Job Hunter Team ist noch auf Docker Desktop installiert (Container %s, gestoppt; er startet mit Docker Desktop wieder). Seit 0.4 l' + [char]0x00E4 + 'uft das Team in einer Podman-Maschine: Daneben installiert, w' + [char]0x00FC + 'rden zwei Teams mit denselben Daten arbeiten. Nichts wurde ge' + [char]0x00E4 + 'ndert.') }
+    'de:installer.windows.header_pairing' { return ('Kopplung: Token vorhanden (' + [char]0x00FC + 'berspringt den Assistenten)') }
+    'de:installer.windows.host_env_written' { return 'host.env geschrieben:' }
+    'de:installer.windows.image' { return 'Image:  ' }
+    'de:installer.windows.image_free_disk' { return 'Und sein Image, um Speicherplatz freizugeben:' }
+    'de:installer.windows.install_may_not_know' { return 'Installation offen und kennt sie vielleicht noch nicht ("wird nicht als Name eines Cmdlet erkannt").' }
+    'de:installer.windows.installation_complete' { return '|  Installation abgeschlossen!             |' }
+    'de:installer.windows.jht_podman_are_your' { return 'jht und podman sind ab jetzt in deinem PATH, aber DIESES PowerShell-Fenster war schon vor der' }
+    'de:installer.windows.launching_setup_wizard' { return 'Starte den Einrichtungsassistenten...' }
+    'de:installer.windows.mode_podman_machine_wsl' { return 'Modus:   Podman-Maschine (WSL)' }
+    'de:installer.windows.next_steps' { return ('N' + [char]0x00E4 + 'chste Schritte:') }
+    'de:installer.windows.only_windows' { return ('install.ps1 unterst' + [char]0x00FC + 'tzt nur Windows. Unter Linux/macOS nutze install.sh.') }
+    'de:installer.windows.open_new_powershell_window' { return ('' + [char]0x00D6 + 'ffne ein NEUES PowerShell-Fenster, um jht und podman zu nutzen. Ein Neustart des Computers ist nicht n' + [char]0x00F6 + 'tig.') }
+    'de:installer.windows.override_lacks_keep_id' { return 'Dem heruntergeladenen Podman-Override fehlt keep-id.' }
+    'de:installer.windows.pairing_token_present_skipping' { return ('Kopplungstoken vorhanden: Der interaktive Assistent wird ' + [char]0x00FC + 'bersprungen. Der Container schlie' + [char]0x00DF + 't die Kopplung beim ersten Start ab.') }
+    'de:installer.windows.pairing_token_saved' { return 'Kopplungstoken gespeichert:' }
+    'de:installer.windows.podman.check_wsl' { return ('Die Zeile oben sagt, warum. Pr' + [char]0x00FC + 'fe, ob WSL funktioniert: F' + [char]0x00FC + 'hre "wsl --status" in PowerShell aus.') }
+    'de:installer.windows.podman.from_desktop' { return ('Die Zeile oben sagt, warum. F' + [char]0x00FC + 'hre den Installer vom Windows-Desktop dieses Benutzers aus (Startmen' + [char]0x00FC + ', Windows PowerShell), nicht ' + [char]0x00FC + 'ber ssh, einen Dienst oder eine geplante Aufgabe: Die laufen ohne Desktop.') }
+    'de:installer.windows.podman.install_failed' { return 'Podman konnte nicht installiert werden.' }
+    'de:installer.windows.podman.install_failed_todo' { return ('Die Zeile oben sagt, warum. Podman kommt von winget oder, wenn winget nicht nutzbar ist, aus seinem offiziellen Release: Pr' + [char]0x00FC + 'fe, ob dieser Computer github.com erreicht und ob winget funktioniert, falls du es hast (wenn es kaputt ist, installiere oder repariere "App Installer": https://aka.ms/getwinget).') }
+    'de:installer.windows.podman.machine_failed' { return 'Die Podman-Maschine von Job Hunter Team konnte nicht erstellt oder gestartet werden.' }
+    'de:installer.windows.podman.network_not_ready' { return 'Die Podman-Maschine ist gestartet, aber ihr Netzwerk ist nicht bereit.' }
+    'de:installer.windows.podman.network_todo' { return ('Die Zeile oben sagt, warum. Warte eine Minute und f' + [char]0x00FC + 'hre denselben Installationsbefehl erneut aus; wenn er hier wieder stoppt, starte zuerst Windows neu.') }
+    'de:installer.windows.podman.other_user' { return ('Podman ist f' + [char]0x00FC + 'r einen anderen Windows-Benutzer dieses Computers installiert.') }
+    'de:installer.windows.podman.other_user_todo' { return ('F' + [char]0x00FC + 'hre den Installer als dieser Windows-Benutzer aus, oder entferne Podman f' + [char]0x00FC + 'r den Computer (Einstellungen > Apps) und f' + [char]0x00FC + 'hre den Installationsbefehl erneut aus.') }
+    'de:installer.windows.podman.other_version' { return 'Auf diesem Computer ist eine andere Podman-Version installiert.' }
+    'de:installer.windows.podman.restart_pending' { return 'Wenn ein Neustart von Windows aussteht, starte es neu.' }
+    'de:installer.windows.podman.restart_then_again' { return ('Nur wenn er auch vom Desktop aus hier wieder stoppt: Starte Windows neu und f' + [char]0x00FC + 'hre ihn dann noch einmal aus.') }
+    'de:installer.windows.podman.run_again' { return ('Dann f' + [char]0x00FC + 'hre denselben Installationsbefehl erneut aus: Er beginnt wieder von vorn.') }
+    'de:installer.windows.podman.runs_on_6' { return ('Job Hunter Team l' + [char]0x00E4 + 'uft auf Podman 6 und ' + [char]0x00E4 + 'ndert kein anderes Podman.') }
+    'de:installer.windows.podman.sshproxy' { return ('Podman hat die Maschine gestartet, aber ihre Verbindung f' + [char]0x00FC + 'r Docker-Werkzeuge (win-sshproxy.exe) ist nicht gestartet.') }
+    'de:installer.windows.podman.stopped' { return 'Die Podman-Einrichtung wurde abgebrochen (Exit-Code %s).' }
+    'de:installer.windows.podman.stopped_todo' { return ('Die Zeile oben sagt, warum. F' + [char]0x00FC + 'hre denselben Installationsbefehl erneut aus; wenn er an derselben Stelle stoppt, behalte diese Zeile und bitte um Hilfe.') }
+    'de:installer.windows.podman.update_or_remove' { return 'Aktualisiere es auf Version 6 oder entferne es (Einstellungen > Apps), wie du willst.' }
+    'de:installer.windows.podman_machine_windows_user' { return 'Podman-Maschine dieses Windows-Benutzers:' }
+    'de:installer.windows.powershell_too_old' { return 'PowerShell 5.1+ erforderlich (aktuelle Version: %s). Installiere PowerShell 7: https://aka.ms/PowerShell' }
+    'de:installer.windows.registering_user_path' { return 'Trage den Benutzer-PATH ein' }
+    'de:installer.windows.reparse_ancestor' { return ('Gesch' + [char]0x00FC + 'tzter Host-Pfad hat einen Analysepunkt (Reparse Point) als Vorfahren: %s') }
+    'de:installer.windows.runtime_artifact_missing' { return 'Podman-Laufzeitartefakt fehlt: %s' }
+    'de:installer.windows.runtime_overlaps' { return ('Gesch' + [char]0x00FC + 'tzter Laufzeitpfad des Hosts ' + [char]0x00FC + 'berschneidet sich mit einem vom Container beschreibbaren Baum: %s') }
+    'de:installer.windows.setup_wizard_also_starts' { return 'Einrichtungsassistent (startet auch den Container)' }
+    'de:installer.windows.stop_remove_old_team' { return 'Stoppe und entferne das alte Team (Docker Desktop an), in PowerShell:' }
+    'de:installer.windows.system_detection' { return 'Systemerkennung' }
+    'de:installer.windows.then_run_installer_again' { return ('Dann f' + [char]0x00FC + 'hre diesen Installer erneut aus.') }
+    'de:installer.windows.token_acl_failed' { return ('Einschr' + [char]0x00E4 + 'nkung der ACL fehlgeschlagen (Datei ist f' + [char]0x00FC + 'r Users noch lesbar): %s') }
+    'de:installer.windows.uninstall_keeps_data_jht' { return 'Zum Deinstallieren (die Daten in ~/.jht und ~/Documents/Job Hunter Team bleiben erhalten):' }
+    'de:installer.windows.use_them_window_right' { return ('Um sie sofort in diesem Fenster zu nutzen, f' + [char]0x00FC + 'ge ein:') }
+    'de:installer.windows.user_path_updated_effective' { return ('Benutzer-PATH aktualisiert (gilt ab dem n' + [char]0x00E4 + 'chsten Terminal)') }
+    'de:installer.windows.what_do_now' { return 'Was du jetzt tun kannst:' }
+    'de:installer.windows.windows_subsystem_linux_check' { return ('Pr' + [char]0x00FC + 'fung des Windows-Subsystems f' + [char]0x00FC + 'r Linux') }
+    'de:installer.windows.wizard_exited_error_re' { return 'Der Assistent wurde mit einem Fehler beendet. Starte ihn erneut mit: jht setup' }
+    'de:installer.windows.wrapper_lacks_protocol' { return ('Dem heruntergeladenen Wrapper fehlt das gesch' + [char]0x00FC + 'tzte Laufzeitprotokoll.') }
+    'de:installer.windows.wrapper_overlaps' { return ('Gesch' + [char]0x00FC + 'tzter Wrapper-Pfad des Hosts ' + [char]0x00FC + 'berschneidet sich mit einem vom Container beschreibbaren Baum: %s') }
+    'de:installer.windows.writing_host_env' { return 'Schreibe host.env' }
+    'de:installer.windows.wsl_ready' { return 'WSL ist bereit' }
+    'de:installer.windows.your_data_stays_jht' { return ('Deine Daten bleiben: ~/.jht (Konfiguration, Datenbank, Profil) und Documents\Job Hunter Team (Lebensl' + [char]0x00E4 + 'ufe, Ergebnisse) sind Ordner dieses Computers, und das neue Team nutzt sie.') }
+    'fr:installer.check.compose_boundary' { return ('Le docker-compose.yml t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charg' + [char]0x00E9 + ' n''applique pas la fronti' + [char]0x00E8 + 're prot' + [char]0x00E9 + 'g' + [char]0x00E9 + 'e du runtime.') }
+    'fr:installer.windows.acl_failed' { return ('' + [char]0x00C9 + 'chec de la v' + [char]0x00E9 + 'rification des ACL de JHT_HOME apr' + [char]0x00E8 + 's r' + [char]0x00E9 + 'paration : %s') }
+    'fr:installer.windows.agents_only_see' { return 'Les agents ne voient que :' }
+    'fr:installer.windows.already_user_path' { return ('d' + [char]0x00E9 + 'j' + [char]0x00E0 + ' dans le PATH utilisateur') }
+    'fr:installer.windows.branch' { return 'branche : ' }
+    'fr:installer.windows.branch_unresolved' { return ('Impossible de r' + [char]0x00E9 + 'soudre la branche ''%s'' en un commit de release immuable.') }
+    'fr:installer.windows.check_connection_branch' { return ('V' + [char]0x00E9 + 'rifie ta connexion et la branche (%s).') }
+    'fr:installer.windows.config_db_agents' { return '(configuration, db, agents)' }
+    'fr:installer.windows.container_mode_active' { return 'Mode conteneur actif.' }
+    'fr:installer.windows.cvs_attachments_output' { return ('(CV, pi' + [char]0x00E8 + 'ces jointes, r' + [char]0x00E9 + 'sultats)') }
+    'fr:installer.windows.delete_data_as_well' { return ('Pour effacer aussi tes donn' + [char]0x00E9 + 'es (configuration, db, CV, r' + [char]0x00E9 + 'sultats) :') }
+    'fr:installer.windows.docker_desktop_volumes_old' { return ('Dans Docker Desktop, les volumes de l''ancienne ' + [char]0x00E9 + 'quipe restent : les outils des providers et, selon la version, la cl' + [char]0x00E9 + ' API gard' + [char]0x00E9 + 'e par la configuration, le mot de passe mail et les tokens Telegram. La nouvelle ' + [char]0x00E9 + 'quipe ne les lit pas : redonne-les avec jht setup. Si tu n''en as plus besoin :') }
+    'fr:installer.windows.download_failed' { return ('' + [char]0x00C9 + 'chec du t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'chargement : %s') }
+    'fr:installer.windows.downloading_enabling_podman_runtime' { return ('T' + [char]0x00E9 + 'l' + [char]0x00E9 + 'chargement et activation du runtime Podman') }
+    'fr:installer.windows.earlier_job_hunter_team' { return ('un ancien Job Hunter Team tourne encore sur Docker Desktop (conteneur %s). Depuis la 0.4, l''' + [char]0x00E9 + 'quipe tourne dans une machine Podman : install' + [char]0x00E9 + 'es c' + [char]0x00F4 + 'te ' + [char]0x00E0 + ' c' + [char]0x00F4 + 'te, deux ' + [char]0x00E9 + 'quipes travailleraient sur les m' + [char]0x00EA + 'mes donn' + [char]0x00E9 + 'es. Rien n''a ' + [char]0x00E9 + 't' + [char]0x00E9 + ' modifi' + [char]0x00E9 + '.') }
+    'fr:installer.windows.earlier_job_hunter_team_2' { return ('un ancien Job Hunter Team est encore install' + [char]0x00E9 + ' sur Docker Desktop (conteneur %s, arr' + [char]0x00EA + 't' + [char]0x00E9 + ' ; il red' + [char]0x00E9 + 'marre avec Docker Desktop). Depuis la 0.4, l''' + [char]0x00E9 + 'quipe tourne dans une machine Podman : install' + [char]0x00E9 + 'es c' + [char]0x00F4 + 'te ' + [char]0x00E0 + ' c' + [char]0x00F4 + 'te, deux ' + [char]0x00E9 + 'quipes travailleraient sur les m' + [char]0x00EA + 'mes donn' + [char]0x00E9 + 'es. Rien n''a ' + [char]0x00E9 + 't' + [char]0x00E9 + ' modifi' + [char]0x00E9 + '.') }
+    'fr:installer.windows.header_pairing' { return ('appairage : token pr' + [char]0x00E9 + 'sent (saute l''assistant)') }
+    'fr:installer.windows.host_env_written' { return ('host.env ' + [char]0x00E9 + 'crit :') }
+    'fr:installer.windows.image' { return 'image :   ' }
+    'fr:installer.windows.image_free_disk' { return ('Et son image, pour lib' + [char]0x00E9 + 'rer le disque :') }
+    'fr:installer.windows.install_may_not_know' { return ('l''installation et ne les conna' + [char]0x00EE + 't peut-' + [char]0x00EA + 'tre pas encore ("n''est pas reconnu comme nom d''applet de commande").') }
+    'fr:installer.windows.installation_complete' { return '|  Installation terminee !                 |' }
+    'fr:installer.windows.jht_podman_are_your' { return ('jht et podman sont dans ton PATH d' + [char]0x00E8 + 's maintenant, mais CETTE fen' + [char]0x00EA + 'tre PowerShell ' + [char]0x00E9 + 'tait ouverte avant') }
+    'fr:installer.windows.launching_setup_wizard' { return 'Lancement de l''assistant de configuration...' }
+    'fr:installer.windows.mode_podman_machine_wsl' { return 'mode :    machine Podman (WSL)' }
+    'fr:installer.windows.next_steps' { return ('' + [char]0x00C9 + 'tapes suivantes :') }
+    'fr:installer.windows.only_windows' { return 'install.ps1 ne prend en charge que Windows. Sur Linux/macOS, utilise install.sh.' }
+    'fr:installer.windows.open_new_powershell_window' { return ('Ouvre une NOUVELLE fen' + [char]0x00EA + 'tre PowerShell pour utiliser jht et podman. Pas besoin de red' + [char]0x00E9 + 'marrer l''ordinateur.') }
+    'fr:installer.windows.override_lacks_keep_id' { return ('L''override Podman t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charg' + [char]0x00E9 + ' n''a pas keep-id.') }
+    'fr:installer.windows.pairing_token_present_skipping' { return ('Token d''appairage pr' + [char]0x00E9 + 'sent : je saute l''assistant interactif. Le conteneur terminera l''appairage ' + [char]0x00E0 + ' son premier d' + [char]0x00E9 + 'marrage.') }
+    'fr:installer.windows.pairing_token_saved' { return ('Token d''appairage enregistr' + [char]0x00E9 + ' :') }
+    'fr:installer.windows.podman.check_wsl' { return ('La ligne ci-dessus dit pourquoi. V' + [char]0x00E9 + 'rifie que WSL fonctionne : lance "wsl --status" dans PowerShell.') }
+    'fr:installer.windows.podman.from_desktop' { return ('La ligne ci-dessus dit pourquoi. Lance l''installeur depuis le bureau Windows de cet utilisateur (le menu D' + [char]0x00E9 + 'marrer, Windows PowerShell), pas depuis ssh, un service ou une t' + [char]0x00E2 + 'che planifi' + [char]0x00E9 + 'e : ceux-l' + [char]0x00E0 + ' tournent sans bureau.') }
+    'fr:installer.windows.podman.install_failed' { return 'Impossible d''installer Podman.' }
+    'fr:installer.windows.podman.install_failed_todo' { return ('La ligne ci-dessus dit pourquoi. Podman vient de winget, ou de sa release officielle quand winget n''est pas utilisable : v' + [char]0x00E9 + 'rifie que cet ordinateur peut joindre github.com, et que winget fonctionne si tu l''as (s''il est cass' + [char]0x00E9 + ', installe ou r' + [char]0x00E9 + 'pare "App Installer" : https://aka.ms/getwinget).') }
+    'fr:installer.windows.podman.machine_failed' { return ('Impossible de cr' + [char]0x00E9 + 'er ou de d' + [char]0x00E9 + 'marrer la machine Podman de Job Hunter Team.') }
+    'fr:installer.windows.podman.network_not_ready' { return ('La machine Podman a d' + [char]0x00E9 + 'marr' + [char]0x00E9 + ', mais son r' + [char]0x00E9 + 'seau n''est pas pr' + [char]0x00EA + 't.') }
+    'fr:installer.windows.podman.network_todo' { return ('La ligne ci-dessus dit pourquoi. Attends une minute et relance la m' + [char]0x00EA + 'me commande d''installation ; si elle s''arr' + [char]0x00EA + 'te encore ici, red' + [char]0x00E9 + 'marre d''abord Windows.') }
+    'fr:installer.windows.podman.other_user' { return ('Podman est install' + [char]0x00E9 + ' pour un autre utilisateur Windows de cet ordinateur.') }
+    'fr:installer.windows.podman.other_user_todo' { return ('Lance l''installeur avec cet utilisateur Windows, ou supprime Podman pour tout l''ordinateur (Param' + [char]0x00E8 + 'tres > Applications) et relance la commande d''installation.') }
+    'fr:installer.windows.podman.other_version' { return ('Une autre version de Podman est install' + [char]0x00E9 + 'e sur cet ordinateur.') }
+    'fr:installer.windows.podman.restart_pending' { return ('Si un red' + [char]0x00E9 + 'marrage de Windows est en attente, red' + [char]0x00E9 + 'marre.') }
+    'fr:installer.windows.podman.restart_then_again' { return ('Seulement s''il s''arr' + [char]0x00EA + 'te encore ici depuis le bureau : red' + [char]0x00E9 + 'marre Windows, puis relance-le une fois de plus.') }
+    'fr:installer.windows.podman.run_again' { return ('Puis relance la m' + [char]0x00EA + 'me commande d''installation : elle repart du d' + [char]0x00E9 + 'but.') }
+    'fr:installer.windows.podman.runs_on_6' { return 'Job Hunter Team tourne sur Podman 6 et ne modifie pas un autre Podman.' }
+    'fr:installer.windows.podman.sshproxy' { return ('Podman a d' + [char]0x00E9 + 'marr' + [char]0x00E9 + ' la machine, mais sa connexion pour les outils Docker (win-sshproxy.exe) n''a pas d' + [char]0x00E9 + 'marr' + [char]0x00E9 + '.') }
+    'fr:installer.windows.podman.stopped' { return ('La configuration de Podman s''est arr' + [char]0x00EA + 't' + [char]0x00E9 + 'e (code de sortie %s).') }
+    'fr:installer.windows.podman.stopped_todo' { return ('La ligne ci-dessus dit pourquoi. Relance la m' + [char]0x00EA + 'me commande d''installation ; si elle s''arr' + [char]0x00EA + 'te au m' + [char]0x00EA + 'me endroit, garde cette ligne et demande de l''aide.') }
+    'fr:installer.windows.podman.update_or_remove' { return ('Mets-le ' + [char]0x00E0 + ' jour vers la version 6, ou supprime-le (Param' + [char]0x00E8 + 'tres > Applications), comme tu pr' + [char]0x00E9 + 'f' + [char]0x00E8 + 'res.') }
+    'fr:installer.windows.podman_machine_windows_user' { return 'Machine Podman de cet utilisateur Windows :' }
+    'fr:installer.windows.powershell_too_old' { return 'PowerShell 5.1+ requis (version actuelle : %s). Installe PowerShell 7 : https://aka.ms/PowerShell' }
+    'fr:installer.windows.registering_user_path' { return 'Enregistrement du PATH utilisateur' }
+    'fr:installer.windows.reparse_ancestor' { return ('Le chemin prot' + [char]0x00E9 + 'g' + [char]0x00E9 + ' sur l''h' + [char]0x00F4 + 'te a au-dessus de lui un point d''analyse (reparse point) : %s') }
+    'fr:installer.windows.runtime_artifact_missing' { return 'Artefact du runtime Podman manquant : %s' }
+    'fr:installer.windows.runtime_overlaps' { return ('Le chemin prot' + [char]0x00E9 + 'g' + [char]0x00E9 + ' du runtime sur l''h' + [char]0x00F4 + 'te chevauche un dossier que le conteneur peut ' + [char]0x00E9 + 'crire : %s') }
+    'fr:installer.windows.setup_wizard_also_starts' { return ('assistant de configuration (d' + [char]0x00E9 + 'marre aussi le conteneur)') }
+    'fr:installer.windows.stop_remove_old_team' { return ('Arr' + [char]0x00EA + 'te et supprime l''ancienne ' + [char]0x00E9 + 'quipe (Docker Desktop allum' + [char]0x00E9 + '), dans PowerShell :') }
+    'fr:installer.windows.system_detection' { return ('D' + [char]0x00E9 + 'tection du syst' + [char]0x00E8 + 'me') }
+    'fr:installer.windows.then_run_installer_again' { return 'Puis relance cet installeur.' }
+    'fr:installer.windows.token_acl_failed' { return ('' + [char]0x00C9 + 'chec de la restriction des ACL (fichier encore lisible par Users) : %s') }
+    'fr:installer.windows.uninstall_keeps_data_jht' { return ('Pour d' + [char]0x00E9 + 'sinstaller (tes donn' + [char]0x00E9 + 'es dans ~/.jht et ~/Documents/Job Hunter Team restent) :') }
+    'fr:installer.windows.use_them_window_right' { return ('Pour les utiliser tout de suite dans cette fen' + [char]0x00EA + 'tre, colle :') }
+    'fr:installer.windows.user_path_updated_effective' { return ('PATH utilisateur mis ' + [char]0x00E0 + ' jour (actif ' + [char]0x00E0 + ' partir du prochain terminal)') }
+    'fr:installer.windows.what_do_now' { return 'Que faire maintenant :' }
+    'fr:installer.windows.windows_subsystem_linux_check' { return ('V' + [char]0x00E9 + 'rification du Sous-syst' + [char]0x00E8 + 'me Windows pour Linux') }
+    'fr:installer.windows.wizard_exited_error_re' { return ('L''assistant s''est termin' + [char]0x00E9 + ' avec une erreur. Relance-le avec : jht setup') }
+    'fr:installer.windows.wrapper_lacks_protocol' { return ('Le wrapper t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charg' + [char]0x00E9 + ' n''a pas le protocole prot' + [char]0x00E9 + 'g' + [char]0x00E9 + ' du runtime.') }
+    'fr:installer.windows.wrapper_overlaps' { return ('Le chemin prot' + [char]0x00E9 + 'g' + [char]0x00E9 + ' du wrapper sur l''h' + [char]0x00F4 + 'te chevauche un dossier que le conteneur peut ' + [char]0x00E9 + 'crire : %s') }
+    'fr:installer.windows.writing_host_env' { return ('' + [char]0x00C9 + 'criture de host.env') }
+    'fr:installer.windows.wsl_ready' { return ('WSL est pr' + [char]0x00EA + 't') }
+    'fr:installer.windows.your_data_stays_jht' { return ('Tes donn' + [char]0x00E9 + 'es restent : ~/.jht (configuration, base de donn' + [char]0x00E9 + 'es, profil) et Documents\Job Hunter Team (CV, r' + [char]0x00E9 + 'sultats) sont des dossiers de cet ordinateur, et la nouvelle ' + [char]0x00E9 + 'quipe les utilise.') }
+    'pt:installer.check.compose_boundary' { return ('O docker-compose.yml descarregado n' + [char]0x00E3 + 'o aplica a fronteira protegida do runtime.') }
+    'pt:installer.windows.acl_failed' { return ('A verifica' + [char]0x00E7 + [char]0x00E3 + 'o das permiss' + [char]0x00F5 + 'es (ACL) de JHT_HOME falhou depois da repara' + [char]0x00E7 + [char]0x00E3 + 'o: %s') }
+    'pt:installer.windows.agents_only_see' { return ('Os agentes s' + [char]0x00F3 + ' veem:') }
+    'pt:installer.windows.already_user_path' { return ('j' + [char]0x00E1 + ' est' + [char]0x00E1 + ' no PATH do utilizador') }
+    'pt:installer.windows.branch' { return 'ramo:   ' }
+    'pt:installer.windows.branch_unresolved' { return ('N' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' poss' + [char]0x00ED + 'vel associar o ramo ''%s'' a um commit de vers' + [char]0x00E3 + 'o imut' + [char]0x00E1 + 'vel.') }
+    'pt:installer.windows.check_connection_branch' { return ('Verifica a liga' + [char]0x00E7 + [char]0x00E3 + 'o e o ramo (%s).') }
+    'pt:installer.windows.config_db_agents' { return ('(configura' + [char]0x00E7 + [char]0x00E3 + 'o, db, agentes)') }
+    'pt:installer.windows.container_mode_active' { return 'Modo contentor ativo.' }
+    'pt:installer.windows.cvs_attachments_output' { return '(CV, anexos, resultados)' }
+    'pt:installer.windows.delete_data_as_well' { return ('Para apagar tamb' + [char]0x00E9 + 'm os dados (configura' + [char]0x00E7 + [char]0x00E3 + 'o, db, CV, resultados):') }
+    'pt:installer.windows.docker_desktop_volumes_old' { return ('No Docker Desktop ficam os volumes da equipa antiga: ferramentas dos fornecedores e, conforme a vers' + [char]0x00E3 + 'o, a chave API guardada pela configura' + [char]0x00E7 + [char]0x00E3 + 'o, a palavra-passe do correio e os tokens do Telegram. A nova equipa n' + [char]0x00E3 + 'o os l' + [char]0x00EA + ': volta a d' + [char]0x00E1 + '-los com jht setup. Se j' + [char]0x00E1 + ' n' + [char]0x00E3 + 'o precisas deles:') }
+    'pt:installer.windows.download_failed' { return 'O descarregamento falhou: %s' }
+    'pt:installer.windows.downloading_enabling_podman_runtime' { return 'A descarregar e a ativar o runtime Podman' }
+    'pt:installer.windows.earlier_job_hunter_team' { return ('uma vers' + [char]0x00E3 + 'o anterior do Job Hunter Team ainda est' + [char]0x00E1 + ' a correr no Docker Desktop (contentor %s). Desde a 0.4 a equipa corre numa m' + [char]0x00E1 + 'quina Podman: instalada ao lado, haveria duas equipas a trabalhar sobre os mesmos dados. N' + [char]0x00E3 + 'o foi alterado nada.') }
+    'pt:installer.windows.earlier_job_hunter_team_2' { return ('uma vers' + [char]0x00E3 + 'o anterior do Job Hunter Team ainda est' + [char]0x00E1 + ' instalada no Docker Desktop (contentor %s, parado; volta a arrancar com o Docker Desktop). Desde a 0.4 a equipa corre numa m' + [char]0x00E1 + 'quina Podman: instalada ao lado, haveria duas equipas a trabalhar sobre os mesmos dados. N' + [char]0x00E3 + 'o foi alterado nada.') }
+    'pt:installer.windows.header_pairing' { return 'emparelhamento: token presente (salta o assistente)' }
+    'pt:installer.windows.host_env_written' { return 'host.env escrito:' }
+    'pt:installer.windows.image' { return 'imagem: ' }
+    'pt:installer.windows.image_free_disk' { return 'E a sua imagem, para libertar o disco:' }
+    'pt:installer.windows.install_may_not_know' { return ('instala' + [char]0x00E7 + [char]0x00E3 + 'o e pode ainda n' + [char]0x00E3 + 'o os conhecer ("not recognized as the name of a cmdlet").') }
+    'pt:installer.windows.installation_complete' { return '|  Instalacao concluida!                   |' }
+    'pt:installer.windows.jht_podman_are_your' { return ('A partir de agora o jht e o podman est' + [char]0x00E3 + 'o no teu PATH, mas ESTA janela do PowerShell j' + [char]0x00E1 + ' estava aberta antes da') }
+    'pt:installer.windows.launching_setup_wizard' { return ('A iniciar a configura' + [char]0x00E7 + [char]0x00E3 + 'o guiada...') }
+    'pt:installer.windows.mode_podman_machine_wsl' { return ('modo:    m' + [char]0x00E1 + 'quina Podman (WSL)') }
+    'pt:installer.windows.next_steps' { return ('Pr' + [char]0x00F3 + 'ximos passos:') }
+    'pt:installer.windows.only_windows' { return ('O install.ps1 s' + [char]0x00F3 + ' funciona no Windows. No Linux/macOS usa o install.sh.') }
+    'pt:installer.windows.open_new_powershell_window' { return ('Abre uma NOVA janela do PowerShell para usar o jht e o podman. N' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' preciso reiniciar o computador.') }
+    'pt:installer.windows.override_lacks_keep_id' { return ('O ficheiro do Podman descarregado (docker-compose.podman.yml) n' + [char]0x00E3 + 'o tem keep-id.') }
+    'pt:installer.windows.pairing_token_present_skipping' { return 'Token de emparelhamento presente: vou saltar o assistente interativo. O contentor vai concluir o emparelhamento no primeiro arranque.' }
+    'pt:installer.windows.pairing_token_saved' { return 'Token de emparelhamento guardado:' }
+    'pt:installer.windows.podman.check_wsl' { return ('A linha acima diz porqu' + [char]0x00EA + '. Verifica que o WSL funciona: corre "wsl --status" no PowerShell.') }
+    'pt:installer.windows.podman.from_desktop' { return ('A linha acima diz porqu' + [char]0x00EA + '. Corre o instalador a partir do ambiente de trabalho do Windows deste utilizador (o menu Iniciar, Windows PowerShell), n' + [char]0x00E3 + 'o a partir do ssh, de um servi' + [char]0x00E7 + 'o ou de uma tarefa agendada: esses correm sem ambiente de trabalho.') }
+    'pt:installer.windows.podman.install_failed' { return ('N' + [char]0x00E3 + 'o foi poss' + [char]0x00ED + 'vel instalar o Podman.') }
+    'pt:installer.windows.podman.install_failed_todo' { return ('A linha acima diz porqu' + [char]0x00EA + '. O Podman vem do winget, ou da sua vers' + [char]0x00E3 + 'o oficial quando n' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' poss' + [char]0x00ED + 'vel usar o winget: verifica que este computador consegue chegar a github.com, e que o winget funciona se o tiveres (se estiver avariado, instala ou repara o "App Installer": https://aka.ms/getwinget).') }
+    'pt:installer.windows.podman.machine_failed' { return ('N' + [char]0x00E3 + 'o foi poss' + [char]0x00ED + 'vel criar ou iniciar a m' + [char]0x00E1 + 'quina Podman do Job Hunter Team.') }
+    'pt:installer.windows.podman.network_not_ready' { return ('A m' + [char]0x00E1 + 'quina Podman arrancou, mas a sua rede n' + [char]0x00E3 + 'o est' + [char]0x00E1 + ' pronta.') }
+    'pt:installer.windows.podman.network_todo' { return ('A linha acima diz porqu' + [char]0x00EA + '. Espera um minuto e corre o mesmo comando de instala' + [char]0x00E7 + [char]0x00E3 + 'o de novo; se parar aqui outra vez, reinicia primeiro o Windows.') }
+    'pt:installer.windows.podman.other_user' { return ('O Podman est' + [char]0x00E1 + ' instalado para outro utilizador do Windows deste computador.') }
+    'pt:installer.windows.podman.other_user_todo' { return ('Corre o instalador como esse utilizador do Windows, ou remove o Podman do computador (Defini' + [char]0x00E7 + [char]0x00F5 + 'es > Aplica' + [char]0x00E7 + [char]0x00F5 + 'es) e corre o comando de instala' + [char]0x00E7 + [char]0x00E3 + 'o de novo.') }
+    'pt:installer.windows.podman.other_version' { return ('Est' + [char]0x00E1 + ' instalada outra vers' + [char]0x00E3 + 'o do Podman neste computador.') }
+    'pt:installer.windows.podman.restart_pending' { return ('Se o Windows estiver ' + [char]0x00E0 + ' espera de um rein' + [char]0x00ED + 'cio, reinicia-o.') }
+    'pt:installer.windows.podman.restart_then_again' { return ('S' + [char]0x00F3 + ' se parar aqui outra vez a partir do ambiente de trabalho: reinicia o Windows e depois corre-o mais uma vez.') }
+    'pt:installer.windows.podman.run_again' { return ('Depois corre o mesmo comando de instala' + [char]0x00E7 + [char]0x00E3 + 'o de novo: recome' + [char]0x00E7 + 'a do in' + [char]0x00ED + 'cio.') }
+    'pt:installer.windows.podman.runs_on_6' { return ('O Job Hunter Team corre no Podman 6 e n' + [char]0x00E3 + 'o altera outro Podman.') }
+    'pt:installer.windows.podman.sshproxy' { return ('O Podman iniciou a m' + [char]0x00E1 + 'quina, mas a sua liga' + [char]0x00E7 + [char]0x00E3 + 'o para as ferramentas Docker (win-sshproxy.exe) n' + [char]0x00E3 + 'o arrancou.') }
+    'pt:installer.windows.podman.stopped' { return ('A prepara' + [char]0x00E7 + [char]0x00E3 + 'o do Podman parou (c' + [char]0x00F3 + 'digo de sa' + [char]0x00ED + 'da %s).') }
+    'pt:installer.windows.podman.stopped_todo' { return ('A linha acima diz porqu' + [char]0x00EA + '. Corre o mesmo comando de instala' + [char]0x00E7 + [char]0x00E3 + 'o de novo; se parar no mesmo s' + [char]0x00ED + 'tio, guarda essa linha e pede ajuda.') }
+    'pt:installer.windows.podman.update_or_remove' { return ('Atualiza-o para a vers' + [char]0x00E3 + 'o 6, ou remove-o (Defini' + [char]0x00E7 + [char]0x00F5 + 'es > Aplica' + [char]0x00E7 + [char]0x00F5 + 'es), como preferires.') }
+    'pt:installer.windows.podman_machine_windows_user' { return ('M' + [char]0x00E1 + 'quina Podman deste utilizador do Windows:') }
+    'pt:installer.windows.powershell_too_old' { return ('' + [char]0x00C9 + ' preciso o PowerShell 5.1 ou posterior (vers' + [char]0x00E3 + 'o atual: %s). Instala o PowerShell 7: https://aka.ms/PowerShell') }
+    'pt:installer.windows.registering_user_path' { return 'A registar o PATH do utilizador' }
+    'pt:installer.windows.reparse_ancestor' { return ('Um caminho protegido do anfitri' + [char]0x00E3 + 'o tem acima de si um reparse point (uma liga' + [char]0x00E7 + [char]0x00E3 + 'o): %s') }
+    'pt:installer.windows.runtime_artifact_missing' { return 'Falta um ficheiro do runtime Podman: %s' }
+    'pt:installer.windows.runtime_overlaps' { return ('O caminho protegido do runtime no anfitri' + [char]0x00E3 + 'o sobrep' + [char]0x00F5 + 'e-se a uma ' + [char]0x00E1 + 'rvore que o contentor pode escrever: %s') }
+    'pt:installer.windows.setup_wizard_also_starts' { return ('configura' + [char]0x00E7 + [char]0x00E3 + 'o guiada (tamb' + [char]0x00E9 + 'm inicia o contentor)') }
+    'pt:installer.windows.stop_remove_old_team' { return 'Para e remove a equipa antiga (com o Docker Desktop ligado), no PowerShell:' }
+    'pt:installer.windows.system_detection' { return ('Dete' + [char]0x00E7 + [char]0x00E3 + 'o do sistema') }
+    'pt:installer.windows.then_run_installer_again' { return 'Depois corre este instalador de novo.' }
+    'pt:installer.windows.token_acl_failed' { return ('A restri' + [char]0x00E7 + [char]0x00E3 + 'o das permiss' + [char]0x00F5 + 'es (ACL) falhou (o ficheiro ainda pode ser lido pelo grupo Users): %s') }
+    'pt:installer.windows.uninstall_keeps_data_jht' { return 'Para desinstalar (os dados em ~/.jht e ~/Documents/Job Hunter Team ficam):' }
+    'pt:installer.windows.use_them_window_right' { return ('Para os usares j' + [char]0x00E1 + ' nesta janela, cola:') }
+    'pt:installer.windows.user_path_updated_effective' { return ('PATH do utilizador atualizado (vale a partir do pr' + [char]0x00F3 + 'ximo terminal)') }
+    'pt:installer.windows.what_do_now' { return 'O que fazer agora:' }
+    'pt:installer.windows.windows_subsystem_linux_check' { return ('Verifica' + [char]0x00E7 + [char]0x00E3 + 'o do Subsistema Windows para Linux') }
+    'pt:installer.windows.wizard_exited_error_re' { return ('A configura' + [char]0x00E7 + [char]0x00E3 + 'o guiada terminou com um erro. Corre-a de novo com: jht setup') }
+    'pt:installer.windows.wrapper_lacks_protocol' { return ('O wrapper descarregado n' + [char]0x00E3 + 'o tem o protocolo protegido do runtime.') }
+    'pt:installer.windows.wrapper_overlaps' { return ('O caminho protegido do wrapper no anfitri' + [char]0x00E3 + 'o sobrep' + [char]0x00F5 + 'e-se a uma ' + [char]0x00E1 + 'rvore que o contentor pode escrever: %s') }
+    'pt:installer.windows.writing_host_env' { return 'A escrever host.env' }
+    'pt:installer.windows.wsl_ready' { return ('O WSL est' + [char]0x00E1 + ' pronto') }
+    'pt:installer.windows.your_data_stays_jht' { return ('Os teus dados ficam: ~/.jht (configura' + [char]0x00E7 + [char]0x00E3 + 'o, base de dados, perfil) e Documents\Job Hunter Team (CV, resultados) s' + [char]0x00E3 + 'o pastas deste computador, e a nova equipa usa-as.') }
+  }
+  return $null
+}
+# <<< texts in the 7 languages
 function Get-Windows10SupportWarning {
   # install.ps1 deliberately stays ASCII: Windows PowerShell 5.1 reads a
   # BOM-less script in the legacy console encoding. The desktop has the full
@@ -374,7 +902,7 @@ function Show-WindowsSupportNotice {
 
 # ── Step 2: WSL check ─────────────────────────────────────────────────────
 function Test-WindowsSubsystem {
-  Write-Step 2 $TotalSteps (T 'Windows Subsystem for Linux check' 'Controllo del Sottosistema Windows per Linux')
+  Write-Step 2 $TotalSteps (Ts 'installer.windows.windows_subsystem_linux_check' 'Windows Subsystem for Linux check')
   Write-JhtPhase wsl_check
   if ($DryRun) { Write-Dry 'wsl.exe --status'; return }
   $wsl = Get-Command wsl.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -382,7 +910,7 @@ function Test-WindowsSubsystem {
   # under 'Stop', Windows PowerShell 5.1 would turn a line of wsl's stderr into an error, not exit 20 (T82)
   $null = & { $ErrorActionPreference = 'Continue'; & $wsl.Source --status 2>&1 }
   if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine('wsl_not_ready: WSL is not usable'); exit 20 }
-  Write-Ok (T 'WSL is ready' "WSL e' pronto")
+  Write-Ok (Ts 'installer.windows.wsl_ready' 'WSL is ready')
 }
 
 # ── Step 3: Download runtime files ────────────────────────────────────────
@@ -399,7 +927,7 @@ function Get-File {
     # (deprecated in PS7). Force avoids the overwrite prompt.
     Invoke-WebRequest -UseBasicParsing -Uri $Url -OutFile $Dest -ErrorAction Stop
   } catch {
-    Write-Fail "Download failed: $Url`n  $($_.Exception.Message)`n  Check your connection and branch ($Branch)."
+    Write-Fail ((Tsf 'installer.windows.download_failed' 'Download failed: %s' $Url) + "`n  $($_.Exception.Message)`n  " + (Tsf 'installer.windows.check_connection_branch' 'Check your connection and branch (%s).' $Branch))
   }
 }
 
@@ -448,7 +976,7 @@ function Invoke-PodmanRuntimeEnabler {
   param([Parameter(Mandatory)][string]$ScriptPath)
   $powerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
   $machineName = Resolve-JhtPodmanMachineName -RuntimePath $RuntimeDir -ExistingMachines (Get-JhtExistingMachineNames)
-  Write-Info "$(T 'Podman machine of this Windows user:' 'Macchina Podman di questo utente Windows:') $machineName"
+  Write-Info "$(Ts 'installer.windows.podman_machine_windows_user' 'Podman machine of this Windows user:') $machineName"
   $enablerArgs = @(
     '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
     '-File', $ScriptPath, '-MachineName', $machineName, '-InitializeMachine',
@@ -489,48 +1017,42 @@ function Invoke-PodmanRuntimeEnabler {
 # itself is the line the enabler wrote on stderr just above.
 function Show-PodmanSetupProblem {
   param([int]$Code)
-  $again = 'Then run the same install command again: it starts over from the beginning.'
+  $again = (Ts 'installer.windows.podman.run_again' 'Then run the same install command again: it starts over from the beginning.')
   switch ($Code) {
     21 {
-      Write-JhtProblem -What 'Podman could not be installed.' -Todo @(
-        'The line above says why. Podman comes from winget, or from its official release when winget',
-        'cannot be used: check that this computer can reach github.com, and that winget works if you have it',
-        '(for a broken one, install or repair "App Installer": https://aka.ms/getwinget).',
+      Write-JhtProblem -What (Ts 'installer.windows.podman.install_failed' 'Podman could not be installed.') -Todo @(
+        (Ts 'installer.windows.podman.install_failed_todo' 'The line above says why. Podman comes from winget, or from its official release when winget cannot be used: check that this computer can reach github.com, and that winget works if you have it (for a broken one, install or repair "App Installer": https://aka.ms/getwinget).'),
         $again)
     }
     22 {
-      Write-JhtProblem -What 'The Podman machine of Job Hunter Team could not be created or started.' -Todo @(
-        'The line above says why. Check that WSL works: run "wsl --status" in PowerShell.',
-        'If a restart of Windows is pending, restart it.',
+      Write-JhtProblem -What (Ts 'installer.windows.podman.machine_failed' 'The Podman machine of Job Hunter Team could not be created or started.') -Todo @(
+        (Ts 'installer.windows.podman.check_wsl' 'The line above says why. Check that WSL works: run "wsl --status" in PowerShell.'),
+        (Ts 'installer.windows.podman.restart_pending' 'If a restart of Windows is pending, restart it.'),
         $again)
     }
     23 {
-      Write-JhtProblem -What 'The Podman machine started but its network is not ready.' -Todo @(
-        'The line above says why. Wait a minute and run the same install command again;',
-        'if it stops here again, restart Windows first.')
+      Write-JhtProblem -What (Ts 'installer.windows.podman.network_not_ready' 'The Podman machine started but its network is not ready.') -Todo @(
+        (Ts 'installer.windows.podman.network_todo' 'The line above says why. Wait a minute and run the same install command again; if it stops here again, restart Windows first.'))
     }
     24 {
-      Write-JhtProblem -What 'Another Podman version is installed on this computer.' -Todo @(
-        'Job Hunter Team runs on Podman 6 and does not change another Podman.',
-        'Update it to version 6, or remove it (Settings > Apps), whichever you prefer.',
+      Write-JhtProblem -What (Ts 'installer.windows.podman.other_version' 'Another Podman version is installed on this computer.') -Todo @(
+        (Ts 'installer.windows.podman.runs_on_6' 'Job Hunter Team runs on Podman 6 and does not change another Podman.'),
+        (Ts 'installer.windows.podman.update_or_remove' 'Update it to version 6, or remove it (Settings > Apps), whichever you prefer.'),
         $again)
     }
     25 {
-      Write-JhtProblem -What 'Podman is installed for another Windows user of this computer.' -Todo @(
-        'Run the installer as that Windows user, or remove Podman for the computer',
-        '(Settings > Apps) and run the install command again.')
+      Write-JhtProblem -What (Ts 'installer.windows.podman.other_user' 'Podman is installed for another Windows user of this computer.') -Todo @(
+        (Ts 'installer.windows.podman.other_user_todo' 'Run the installer as that Windows user, or remove Podman for the computer (Settings > Apps) and run the install command again.'))
     }
     26 {
-      Write-JhtProblem -What 'Podman started the machine, but its connection for Docker tools (win-sshproxy.exe) did not start.' -Todo @(
-        'The line above says why. Run the installer from the Windows desktop of this user (the Start menu,',
-        'Windows PowerShell), not from ssh, a service or a scheduled task: those run without a desktop.',
+      Write-JhtProblem -What (Ts 'installer.windows.podman.sshproxy' 'Podman started the machine, but its connection for Docker tools (win-sshproxy.exe) did not start.') -Todo @(
+        (Ts 'installer.windows.podman.from_desktop' 'The line above says why. Run the installer from the Windows desktop of this user (the Start menu, Windows PowerShell), not from ssh, a service or a scheduled task: those run without a desktop.'),
         $again,
-        'Only if it stops here again from the desktop: restart Windows, then run it once more.')
+        (Ts 'installer.windows.podman.restart_then_again' 'Only if it stops here again from the desktop: restart Windows, then run it once more.'))
     }
     default {
-      Write-JhtProblem -What "The Podman setup stopped (exit code $Code)." -Todo @(
-        'The line above says why. Run the same install command again;',
-        'if it stops at the same place, keep that line and ask for help.')
+      Write-JhtProblem -What (Tsf 'installer.windows.podman.stopped' 'The Podman setup stopped (exit code %s).' $Code) -Todo @(
+        (Ts 'installer.windows.podman.stopped_todo' 'The line above says why. Run the same install command again; if it stops at the same place, keep that line and ask for help.'))
     }
   }
 }
@@ -543,7 +1065,7 @@ function Test-JhtDownloadedRuntimeScripts {
 }
 
 function Get-RuntimeFiles {
-  Write-Step 3 $TotalSteps (T 'Downloading and enabling the Podman runtime' 'Scarico e attivo il runtime Podman')
+  Write-Step 3 $TotalSteps (Ts 'installer.windows.downloading_enabling_podman_runtime' 'Downloading and enabling the Podman runtime')
   Write-JhtPhase runtime_download
 
   if ($TestChannel) {
@@ -558,7 +1080,7 @@ function Get-RuntimeFiles {
       $sha = [string]$metadata.sha
       if ($sha -notmatch '^[0-9a-fA-F]{40}$') { throw 'invalid release commit' }
       $releaseBase = "https://raw.githubusercontent.com/leopu00/job-hunter-team/$sha"
-    } catch { Write-Fail "Cannot resolve branch '$Branch' to an immutable release commit." }
+    } catch { Write-Fail (Tsf 'installer.windows.branch_unresolved' 'Cannot resolve branch ''%s'' to an immutable release commit.' $Branch) }
   }
 
   if ($DryRun) {
@@ -579,11 +1101,11 @@ function Get-RuntimeFiles {
   $binFull = [IO.Path]::GetFullPath($BinDir).TrimEnd('\', '/')
   if ($runtimeFull.Equals($legacyFull, [StringComparison]::OrdinalIgnoreCase) -or $runtimeFull.StartsWith($legacyFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
       $runtimeFull.Equals($userDataFull, [StringComparison]::OrdinalIgnoreCase) -or $runtimeFull.StartsWith($userDataFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
-    Write-Fail "Protected host runtime path overlaps a container-writable tree: $runtimeFull"
+    Write-Fail (Tsf 'installer.windows.runtime_overlaps' 'Protected host runtime path overlaps a container-writable tree: %s' $runtimeFull)
   }
   if ($binFull.Equals($legacyFull, [StringComparison]::OrdinalIgnoreCase) -or $binFull.StartsWith($legacyFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
       $binFull.Equals($userDataFull, [StringComparison]::OrdinalIgnoreCase) -or $binFull.StartsWith($userDataFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
-    Write-Fail "Protected host wrapper path overlaps a container-writable tree: $binFull"
+    Write-Fail (Tsf 'installer.windows.wrapper_overlaps' 'Protected host wrapper path overlaps a container-writable tree: %s' $binFull)
   }
 
   # Podman comes from winget, or from its official release for this Windows user when winget is not usable (missing, an empty
@@ -600,7 +1122,7 @@ function Get-RuntimeFiles {
   foreach ($protectedPath in @($RuntimeDir, $BinDir)) {
     $current = Get-Item -LiteralPath $protectedPath -Force -ErrorAction Stop
     while ($current) {
-      if (($current.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { Write-Fail "Protected host path has a reparse-point ancestor: $protectedPath" }
+      if (($current.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { Write-Fail (Tsf 'installer.windows.reparse_ancestor' 'Protected host path has a reparse-point ancestor: %s' $protectedPath) }
       $parent = $current.Parent
       if (-not $parent -or $parent.FullName -eq $current.FullName) { break }
       $current = $parent
@@ -632,9 +1154,9 @@ function Get-RuntimeFiles {
     }
     foreach ($relative in $downloads.Keys) { Get-File -Url "$releaseBase/$relative" -Dest $downloads[$relative] }
     Test-JhtDownloadedRuntimeScripts -ScriptsPath $stageScripts
-    if (-not (Select-String -LiteralPath (Join-Path $stage 'docker-compose.yml') -Pattern '^\s*-\s*jht-runtime-mask:/jht_home/runtime(?:\s|$)' -Quiet)) { Write-Fail 'Downloaded compose does not enforce the protected runtime boundary.' }
-    if (-not (Select-String -LiteralPath (Join-Path $stage 'docker-compose.podman.yml') -SimpleMatch 'keep-id:uid=1001,gid=1001' -Quiet)) { Write-Fail 'Downloaded Podman override lacks keep-id.' }
-    if (-not (Select-String -LiteralPath (Join-Path $stageScripts 'jht-wrapper.ps1') -SimpleMatch '$JHT_HOST_RUNTIME_PROTOCOL = 1' -Quiet)) { Write-Fail 'Downloaded wrapper lacks the protected runtime protocol.' }
+    if (-not (Select-String -LiteralPath (Join-Path $stage 'docker-compose.yml') -Pattern '^\s*-\s*jht-runtime-mask:/jht_home/runtime(?:\s|$)' -Quiet)) { Write-Fail (Ts 'installer.check.compose_boundary' 'Downloaded compose does not enforce the protected runtime boundary.') }
+    if (-not (Select-String -LiteralPath (Join-Path $stage 'docker-compose.podman.yml') -SimpleMatch 'keep-id:uid=1001,gid=1001' -Quiet)) { Write-Fail (Ts 'installer.windows.override_lacks_keep_id' 'Downloaded Podman override lacks keep-id.') }
+    if (-not (Select-String -LiteralPath (Join-Path $stageScripts 'jht-wrapper.ps1') -SimpleMatch '$JHT_HOST_RUNTIME_PROTOCOL = 1' -Quiet)) { Write-Fail (Ts 'installer.windows.wrapper_lacks_protocol' 'Downloaded wrapper lacks the protected runtime protocol.') }
     Invoke-PodmanRuntimeEnabler -ScriptPath (Join-Path $stageScripts 'enable-podman-windows-runtime.ps1')
   } finally {
     Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
@@ -670,11 +1192,11 @@ function Get-RuntimeFiles {
   $runtimeTierDest = Join-Path $RuntimeDir 'runtime-tier'
   if (Test-Path -LiteralPath $runtimeTierDest -PathType Leaf) { $publishedNodes += $runtimeTierDest, (Join-Path $RuntimeDir '.runtime-tier-integrity') }
   foreach ($published in $publishedNodes) {
-    if (-not (Test-Path -LiteralPath $published -PathType Leaf)) { Write-Fail "Podman runtime artifact missing: $published" }
+    if (-not (Test-Path -LiteralPath $published -PathType Leaf)) { Write-Fail (Tsf 'installer.windows.runtime_artifact_missing' 'Podman runtime artifact missing: %s' $published) }
     Set-JhtNodeOwner -Path $published
   }
   . $helperDest
-  if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) { Write-Fail "JHT_HOME ACL verification failed after repair: $JhtHome" }
+  if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) { Write-Fail (Tsf 'installer.windows.acl_failed' 'JHT_HOME ACL verification failed after repair: %s' $JhtHome) }
 
   # One line each: `(goto) 2>nul` leaves the batch context first, then the rest of the line (already read whole: %~dp0 and %* are
   # expanded) runs jht. cmd reopens a batch file after every command it runs from it, also before `goto :eof` or `exit /b`, and `jht
@@ -738,16 +1260,16 @@ function Add-NewRegistryPathToSession {
 # the install added it) is not in that window's PATH, and only a new window, or this line, brings it in.
 # No restart of the computer is needed.
 function Write-JhtNewWindowNotice {
-  Write-Host "  $(T 'jht and podman are on your PATH from now on, but THIS PowerShell window was open before the' "da adesso jht e podman sono nel PATH, ma QUESTA finestra di PowerShell era aperta prima dell'")" -ForegroundColor Yellow
-  Write-Host "  $(T 'install and may not know them yet ("not recognized as the name of a cmdlet").' 'installazione e potrebbe non conoscerli ancora ("non riconosciuto come nome di cmdlet").')" -ForegroundColor Yellow
-  Write-Host "  $(T 'Open a NEW PowerShell window to use jht and podman. No restart of the computer is needed.' 'Apri una NUOVA finestra di PowerShell per usare jht e podman. Non serve riavviare il computer.')" -ForegroundColor Yellow
-  Write-Host "  $(T 'To use them in this window right away, paste:' 'Per usarli subito in questa finestra, incolla:')" -ForegroundColor DarkGray
+  Write-Host "  $(Ts 'installer.windows.jht_podman_are_your' 'jht and podman are on your PATH from now on, but THIS PowerShell window was open before the')" -ForegroundColor Yellow
+  Write-Host "  $(Ts 'installer.windows.install_may_not_know' 'install and may not know them yet ("not recognized as the name of a cmdlet").')" -ForegroundColor Yellow
+  Write-Host "  $(Ts 'installer.windows.open_new_powershell_window' 'Open a NEW PowerShell window to use jht and podman. No restart of the computer is needed.')" -ForegroundColor Yellow
+  Write-Host "  $(Ts 'installer.windows.use_them_window_right' 'To use them in this window right away, paste:')" -ForegroundColor DarkGray
   Write-Host "    `$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')" -ForegroundColor White
   Write-Host ""
 }
 
 function Add-ToUserPath {
-  Write-Step 4 $TotalSteps (T 'Registering the user PATH' "Registro il PATH dell'utente")
+  Write-Step 4 $TotalSteps (Ts 'installer.windows.registering_user_path' 'Registering the user PATH')
 
   if ($DryRun) {
     Write-Dry "[Environment]::SetEnvironmentVariable('Path', '...;$BinDir', 'User')"
@@ -760,10 +1282,10 @@ function Add-ToUserPath {
   if (-not $userPath) { $userPath = '' }
   $newPath = Get-OrderedUserPath -UserPath $userPath -ShimBin $ShimBin -BinDir $BinDir
   if ($newPath -ceq $userPath) {
-    Write-Ok "$BinDir $(T 'already in the user PATH' "e' gia' nel PATH dell'utente")"
+    Write-Ok "$BinDir $(Ts 'installer.windows.already_user_path' 'already in the user PATH')"
   } else {
     [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
-    Write-Ok (T 'User PATH updated (effective from the next terminal)' "PATH dell'utente aggiornato (vale dal prossimo terminale)")
+    Write-Ok (Ts 'installer.windows.user_path_updated_effective' 'User PATH updated (effective from the next terminal)')
   }
 
   # The current session too, so the installer's next commands (e.g. the wizard) find `jht.cmd`.
@@ -813,7 +1335,7 @@ function Get-JhtPersonLanguage {
 }
 
 function Write-HostEnv {
-  Write-Step 5 $TotalSteps (T 'Writing host.env' 'Scrivo host.env')
+  Write-Step 5 $TotalSteps (Ts 'installer.windows.writing_host_env' 'Writing host.env')
 
   $hostEnvFile = Join-Path $JhtHome 'host.env'
   $hostType = if ($PairingToken) { 'vps' } else { 'local' }
@@ -851,7 +1373,7 @@ JHT_USER_TZ=$tz
     Write-Dry "Set-Content $hostEnvFile (JHT_HOST_TYPE=$hostType, JHT_LANG=$lang, JHT_USER_TZ=$tz)"
   } else {
     Write-HostFile -Path $hostEnvFile -Content $content
-    Write-Ok "$(T 'host.env written:' 'host.env scritto:') $hostEnvFile (mode=$hostType, lang=$lang, tz=$tz)"
+    Write-Ok "$(Ts 'installer.windows.host_env_written' 'host.env written:') $hostEnvFile (mode=$hostType, lang=$lang, tz=$tz)"
   }
 
   # Pairing token: saved to $JhtHome\.pairing-token with restrictive perms
@@ -876,12 +1398,12 @@ JHT_USER_TZ=$tz
           $acl.SetAccessRule($rule)
           Set-JhtAccessControl -Path $file -Acl $acl
         } catch {
-          Write-Warn "ACL restriction failed (file still readable by Users): $($_.Exception.Message)"
+          Write-Warn (Tsf 'installer.windows.token_acl_failed' 'ACL restriction failed (file still readable by Users): %s' $_.Exception.Message)
         }
       }
       Write-HostFile -Path $tokenFile -Content $PairingToken -Encoding ASCII -NoNewline -Prepare $restrictAcl
 
-      Write-Ok "$(T 'Pairing token saved:' 'Token di abbinamento salvato:') $tokenFile"
+      Write-Ok "$(Ts 'installer.windows.pairing_token_saved' 'Pairing token saved:') $tokenFile"
     }
   }
 }
@@ -890,22 +1412,22 @@ JHT_USER_TZ=$tz
 function Show-Final {
   Write-Host ""
   Write-Host "+------------------------------------------+" -ForegroundColor Green
-  Write-Host (T '|  Installation complete!                  |' '|  Installazione completata!               |') -ForegroundColor Green
+  Write-Host (Ts 'installer.windows.installation_complete' '|  Installation complete!                  |') -ForegroundColor Green
   Write-Host "+------------------------------------------+" -ForegroundColor Green
   Write-Host ""
-  Write-Host "  $(T 'Container mode active.' "Modalita' container attiva.")" -ForegroundColor White
-  Write-Host "  $(T 'The agents only see:' 'Gli agenti vedono solo:')" -ForegroundColor DarkGray
-  Write-Host "    $JhtHome                          -> /jht_home $(T '(config, db, agents)' '(configurazione, db, agenti)')" -ForegroundColor DarkGray
-  Write-Host "    $env:USERPROFILE\Documents\Job Hunter Team -> /jht_user $(T '(CVs, attachments, output)' '(CV, allegati, risultati)')" -ForegroundColor DarkGray
+  Write-Host "  $(Ts 'installer.windows.container_mode_active' 'Container mode active.')" -ForegroundColor White
+  Write-Host "  $(Ts 'installer.windows.agents_only_see' 'The agents only see:')" -ForegroundColor DarkGray
+  Write-Host "    $JhtHome                          -> /jht_home $(Ts 'installer.windows.config_db_agents' '(config, db, agents)')" -ForegroundColor DarkGray
+  Write-Host "    $env:USERPROFILE\Documents\Job Hunter Team -> /jht_user $(Ts 'installer.windows.cvs_attachments_output' '(CVs, attachments, output)')" -ForegroundColor DarkGray
   Write-Host ""
 
   # Not for the desktop app, which reads this output through a pipe, nor for a dry run (nothing was installed).
   if (-not $DryRun -and $env:JHT_MACHINE_OUTPUT -ne '1') { Write-JhtNewWindowNotice }
   if (-not (Test-WillAutoOnboard)) {
-    Write-Host "  $(T 'Next steps:' 'Prossimi passi:')" -ForegroundColor White
+    Write-Host "  $(Ts 'installer.windows.next_steps' 'Next steps:')" -ForegroundColor White
     Write-Host ""
     if ($script:PathReady) {
-      Write-Host "      jht setup        # $(T 'setup wizard (also starts the container)' 'configurazione guidata (accende anche il container)')" -ForegroundColor White
+      Write-Host "      jht setup        # $(Ts 'installer.windows.setup_wizard_also_starts' 'setup wizard (also starts the container)')" -ForegroundColor White
     } else {
       Write-Host "      $BinDir\jht.cmd setup" -ForegroundColor White
     }
@@ -913,9 +1435,9 @@ function Show-Final {
   }
 
   # `jht uninstall` stops the team and takes away the machine (with its images), the runtime and the `jht` command; the data stays.
-  Write-Host "  $(T 'To uninstall (keeps the data in ~/.jht and ~/Documents/Job Hunter Team):' 'Per disinstallare (i dati in ~/.jht e ~/Documents/Job Hunter Team restano):')" -ForegroundColor DarkGray
+  Write-Host "  $(Ts 'installer.windows.uninstall_keeps_data_jht' 'To uninstall (keeps the data in ~/.jht and ~/Documents/Job Hunter Team):')" -ForegroundColor DarkGray
   Write-Host "    jht uninstall --confirm" -ForegroundColor DarkGray
-  Write-Host "  $(T 'To delete the data as well (config, db, CVs, output):' 'Per cancellare anche i dati (configurazione, db, CV, risultati):')" -ForegroundColor DarkGray
+  Write-Host "  $(Ts 'installer.windows.delete_data_as_well' 'To delete the data as well (config, db, CVs, output):')" -ForegroundColor DarkGray
   Write-Host "    jht uninstall --confirm --purge" -ForegroundColor DarkGray
   Write-Host ""
 }
@@ -935,17 +1457,17 @@ function Test-WillAutoOnboard {
 function Invoke-Onboard {
   if (-not (Test-WillAutoOnboard)) {
     if ($PairingToken) {
-      Write-Info (T 'Pairing token present: skipping the interactive wizard. The container will complete the pairing on first boot.' "Token di abbinamento presente: salto il wizard interattivo. Il container completera' l'abbinamento al primo avvio.")
+      Write-Info (Ts 'installer.windows.pairing_token_present_skipping' 'Pairing token present: skipping the interactive wizard. The container will complete the pairing on first boot.')
     }
     return
   }
   Write-Host ""
-  Write-Info (T 'Launching the setup wizard...' 'Avvio la configurazione guidata...')
+  Write-Info (Ts 'installer.windows.launching_setup_wizard' 'Launching the setup wizard...')
   # Use the CMD shim, which handles the ExecutionPolicy. PathReady guarantees
   # that `jht.cmd` is reachable in this session.
   & "$BinDir\jht.cmd" setup
   if ($LASTEXITCODE -ne 0) {
-    Write-Warn (T 'The wizard exited with an error. Re-run it with: jht setup' "La configurazione guidata e' uscita con un errore. Rilanciala con: jht setup")
+    Write-Warn (Ts 'installer.windows.wizard_exited_error_re' 'The wizard exited with an error. Re-run it with: jht setup')
   }
 }
 
@@ -1045,9 +1567,9 @@ function Assert-NoLegacyDockerTeam {
   $images = @($team | ForEach-Object { $_.Image } | Where-Object { $_ -and $_ -cmatch '^[A-Za-z0-9][A-Za-z0-9_./:@-]*$' } | Sort-Object -Unique)
   $running = @($team | Where-Object { $_.Running }).Count -gt 0
   $what = if ($running) {
-    T "an earlier Job Hunter Team is still running on Docker Desktop (container $($names -join ', ')). Since 0.4 the team runs in a Podman machine: installed next to it, two teams would work on the same data. Nothing was changed." "su Docker Desktop gira ancora una versione precedente di Job Hunter Team (container $($names -join ', ')). Dalla 0.4 il team gira in una macchina Podman: installata accanto, ci sarebbero due team sugli stessi dati. Non e' stato cambiato niente."
+    Tsf 'installer.windows.earlier_job_hunter_team' 'an earlier Job Hunter Team is still running on Docker Desktop (container %s). Since 0.4 the team runs in a Podman machine: installed next to it, two teams would work on the same data. Nothing was changed.' ($names -join ', ')
   } else {
-    T "an earlier Job Hunter Team is still installed on Docker Desktop (container $($names -join ', '), stopped; it starts again with Docker Desktop). Since 0.4 the team runs in a Podman machine: installed next to it, two teams would work on the same data. Nothing was changed." "su Docker Desktop c'e' ancora una versione precedente di Job Hunter Team (container $($names -join ', '), fermo; ripartirebbe con Docker Desktop). Dalla 0.4 il team gira in una macchina Podman: installata accanto, ci sarebbero due team sugli stessi dati. Non e' stato cambiato niente."
+    Tsf 'installer.windows.earlier_job_hunter_team_2' 'an earlier Job Hunter Team is still installed on Docker Desktop (container %s, stopped; it starts again with Docker Desktop). Since 0.4 the team runs in a Podman machine: installed next to it, two teams would work on the same data. Nothing was changed.' ($names -join ', ')
   }
   if (Test-JhtMachineOutput) {
     [Console]::Error.WriteLine("runtime_change_requires_migration: an earlier JHT container on Docker Desktop ($($names -join ', ')); stop and remove it, then run the installer again.")
@@ -1055,21 +1577,21 @@ function Assert-NoLegacyDockerTeam {
     exit $RuntimeChangeRequiresMigrationExit
   }
   $todo = @(
-    (T 'Stop and remove the old team (Docker Desktop on), in PowerShell:' 'Ferma e togli il team vecchio (con Docker Desktop acceso), in PowerShell:'),
+    (Ts 'installer.windows.stop_remove_old_team' 'Stop and remove the old team (Docker Desktop on), in PowerShell:'),
     "  docker stop $($names -join ' ')",
     "  docker rm $($names -join ' ')",
-    (T 'Your data stays: ~/.jht (configuration, database, profile) and Documents\Job Hunter Team (CVs, outputs) are folders of this computer, and the new team uses them.' "I tuoi dati restano: ~/.jht (configurazione, database, profilo) e Documenti\Job Hunter Team (CV, risultati) sono cartelle di questo computer, e il nuovo team le usa.")
+    (Ts 'installer.windows.your_data_stays_jht' 'Your data stays: ~/.jht (configuration, database, profile) and Documents\Job Hunter Team (CVs, outputs) are folders of this computer, and the new team uses them.')
   )
   if ($volumes.Count -gt 0) {
     # The 0.3.x installer took the compose of the branch at the time of the install: by then it can have the volumes of the secrets too.
-    $todo += (T 'In Docker Desktop the volumes of the old team stay: provider tools and, by the version, the API key kept by the setup, the mail password and the Telegram tokens. The new team does not read them: give those again with jht setup. If you do not need them any more:' "In Docker Desktop restano i volumi del team vecchio: strumenti dei provider e, secondo la versione, la chiave API salvata dal setup, la password della posta e i token di Telegram. Il nuovo team non li legge: quelli vanno ridati con jht setup. Se non ti servono piu':")
+    $todo += (Ts 'installer.windows.docker_desktop_volumes_old' 'In Docker Desktop the volumes of the old team stay: provider tools and, by the version, the API key kept by the setup, the mail password and the Telegram tokens. The new team does not read them: give those again with jht setup. If you do not need them any more:')
     $todo += "  docker volume rm $($volumes -join ' ')"
   }
   if ($images.Count -gt 0) {
-    $todo += (T 'And its image, to free the disk:' "E la sua immagine, per liberare il disco:")
+    $todo += (Ts 'installer.windows.image_free_disk' 'And its image, to free the disk:')
     $todo += "  docker image rm $($images -join ' ')"
   }
-  $todo += (T 'Then run this installer again.' 'Poi rilancia questo installer.')
+  $todo += (Ts 'installer.windows.then_run_installer_again' 'Then run this installer again.')
   Write-JhtProblem -What $what -Todo $todo
   Remove-JhtCreatedEmptyDirs
   exit $RuntimeChangeRequiresMigrationExit
