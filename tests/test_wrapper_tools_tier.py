@@ -334,7 +334,7 @@ def test_a_real_state_folder_and_a_plain_old_tools_json_are_written_as_before(bo
 
 # ── tools_kick: the CLI keeps the tools moving, as the desktop app's round did ───────────────────────────────────────────────
 
-KICK_ENV = {"JHT_TOOLS_WAIT_STEP": "1", "JHT_TOOLS_SWITCH_GRACE": "0", "JHT_TOOLS_WAIT_MAX": "60"}
+KICK_ENV = {"JHT_TOOLS_WAIT_STEP": "1", "JHT_TOOLS_SWITCH_GRACE": "0", "JHT_TOOLS_WAIT_MAX": "60", "JHT_TOOLS_QUIET_MAX": "20"}
 
 
 def _wait_until(check, what):
@@ -363,7 +363,7 @@ def test_kick_on_a_core_install_pulls_once_then_switches_when_the_profile_is_rea
     assert box.run("tools_person_state", **KICK_ENV).stdout == "waiting\n"
     assert tier.exists() and _calls(box) == []                        # no switch before the onboarding has closed
     (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
-    _wait_until(lambda: not tier.exists() and _calls(box) == ["up"], f"the job never made the switch: {_calls(box)}")
+    _wait_until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"the job never made the switch: {_calls(box)}")
     box.wait_for_pull_end()
     assert (box.fake / "pulls").read_text(encoding="utf-8").splitlines() == [f"pull {FULL}"]
     assert box.notice()["tier"] == "full" and box.notice()["state"] == "ready"
@@ -375,24 +375,50 @@ def test_kick_with_the_full_image_already_here_only_waits_and_switches(box):
     (box.fake / "full-present").write_text("", encoding="utf-8")
     (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
     assert box.run("tools_kick", **KICK_ENV).returncode == 0
-    _wait_until(lambda: not tier.exists() and _calls(box) == ["up"], f"no switch: {_calls(box)}")
+    _wait_until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"no switch: {_calls(box)}")
     assert not (box.fake / "pulls").exists()
 
 
-def test_a_switch_the_engine_refuses_is_made_again_with_a_down_first(box):
+def test_the_switch_stops_the_core_team_before_the_tier_goes_and_starts_it_on_the_full_image(box):
+    # the order matters: `down` while the tier file still makes the running container the attested core one, then the tier, then
+    # `up` (on a Mac, a `jht up` of the person in between refused the core container as not ours, giro 19)
     tier = box.tier()
     (box.fake / "full-present").write_text("", encoding="utf-8")
     (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
-    # the first `up` refuses (config_changed_while_running: the team was started with another configuration), as on clone-2
     (box.fake / "jht-wrapper.sh").write_text(
-        '#!/bin/sh\necho "$@" >> "$FAKE/wrapper-calls"\n'
-        'if [ "$1" = up ] && [ ! -e "$FAKE/downed" ]; then exit 1; fi\n[ "$1" = down ] && touch "$FAKE/downed"\nexit 0\n',
-        encoding="utf-8")
-    assert box.run("tools_kick", **KICK_ENV).returncode == 0
-    _wait_until(lambda: _calls(box) == ["up", "down", "up"], f"not up, down, up: {_calls(box)}")
+        '#!/bin/sh\nif [ -e "$TIER" ]; then t=core; else t=full; fi\necho "$1 $t" >> "$FAKE/wrapper-calls"\nexit 0\n', encoding="utf-8")
+    assert box.run("tools_kick", TIER=str(tier), **KICK_ENV).returncode == 0
+    path = box.fake / "wrapper-calls"
+    _wait_until(lambda: path.exists() and path.read_text(encoding="utf-8").splitlines() == ["down core", "up full"],
+                f"not down on core, then up on full: {path.read_text(encoding='utf-8') if path.exists() else ''}")
     box.wait_for_pull_end()
-    assert not tier.exists() and box.notice()["state"] == "ready" and box.notice()["tier"] == "full"
-    assert box.run("tools_person_state", **KICK_ENV).stdout == ""
+    assert box.notice()["state"] == "ready" and box.notice()["tier"] == "full"
+
+
+def test_a_team_the_person_stopped_stays_stopped_only_the_tier_goes(box):
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
+    assert box.run("team_stopped_by_person() { return 0; }; tools_kick", **KICK_ENV).returncode == 0
+    _wait_until(lambda: not tier.exists(), "the tier never went")
+    box.wait_for_pull_end()
+    assert _calls(box) == [] and box.notice()["tier"] == "full"
+
+
+def test_the_switch_waits_for_another_jht_command_to_end(box):
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
+    wrapper = box.fake / "jht-wrapper.sh"
+    # a `jht setup` of the person, still running: a process with the wrapper on its command line
+    other = subprocess.Popen(["sh", "-c", "sleep 4; :", str(wrapper)])   # «; :» keeps the shell (and its arguments) alive
+    try:
+        assert box.run("tools_kick", **KICK_ENV).returncode == 0
+        time.sleep(2)
+        assert tier.exists() and _calls(box) == [], "the switch did not wait"
+    finally:
+        other.wait(timeout=10)
+    _wait_until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"no switch after the other command: {_calls(box)}")
 
 
 def test_a_switch_that_still_fails_is_said_until_an_up_goes_well(box):

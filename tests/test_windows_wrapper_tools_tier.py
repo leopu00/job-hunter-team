@@ -54,10 +54,14 @@ $RuntimeTierFile = Join-Path $RuntimeDir 'runtime-tier'
 $RuntimeTierIntegrity = Join-Path $RuntimeDir '.runtime-tier-integrity'
 # the wrapper has it: the detached job of `tools_kick` runs `up` and `down` through it
 $WrapperPath = $env:T_STUB
+# the wrapper's own: a `jht down` of the person
+function Test-JhtTeamStoppedByPerson { return (Test-Path -LiteralPath (Join-Path $env:FAKE 'team-stopped')) }
 function Write-Err { param([string]$Msg) [Console]::Error.WriteLine("error: $Msg") }
-if ($Rest[0] -eq 'down') { Add-Content -LiteralPath (Join-Path $env:FAKE 'wrapper-calls') -Value 'down'; New-Item -ItemType File -Force -Path (Join-Path $env:FAKE 'downed') | Out-Null; exit 0 }
+if ($Rest[0] -eq 'down') { Add-Content -LiteralPath (Join-Path $env:FAKE 'tier-calls') -Value ("down " + $(if (Test-Path -LiteralPath $RuntimeTierFile) { 'core' } else { 'full' })); Add-Content -LiteralPath (Join-Path $env:FAKE 'wrapper-calls') -Value 'down'; New-Item -ItemType File -Force -Path (Join-Path $env:FAKE 'downed') | Out-Null; exit 0 }
 if ($Rest[0] -eq 'up') {
+  $tier = if (Test-Path -LiteralPath $RuntimeTierFile) { 'core' } else { 'full' }
   Add-Content -LiteralPath (Join-Path $env:FAKE 'wrapper-calls') -Value ("up image=" + $env:JHT_IMAGE)
+  Add-Content -LiteralPath (Join-Path $env:FAKE 'tier-calls') -Value ("up " + $tier)
   # up-refused: the engine refuses the up until a down (a team started with another configuration); up-fails: always
   if (Test-Path -LiteralPath (Join-Path $env:FAKE 'up-fails')) { exit 1 }
   if ((Test-Path -LiteralPath (Join-Path $env:FAKE 'up-refused')) -and -not (Test-Path -LiteralPath (Join-Path $env:FAKE 'downed'))) { exit 1 }
@@ -406,7 +410,7 @@ def test_the_ids_of_the_answer_are_the_ones_of_the_helper():
 
 # ── Invoke-ToolsKick: the CLI keeps the tools moving, as the desktop app's round did ──────────────────────────────────────────
 
-KICK_ENV = {"JHT_TOOLS_WAIT_STEP": "1", "JHT_TOOLS_SWITCH_GRACE": "0", "JHT_TOOLS_WAIT_MAX": "120"}
+KICK_ENV = {"JHT_TOOLS_WAIT_STEP": "1", "JHT_TOOLS_SWITCH_GRACE": "0", "JHT_TOOLS_WAIT_MAX": "120", "JHT_TOOLS_QUIET_MAX": "20"}
 
 
 def _until(check, what, rounds=600):
@@ -437,20 +441,31 @@ def test_kick_pulls_once_then_switches_when_the_profile_is_ready(box):
     box.wait_for("ready")
     assert person(box) == "waiting" and tier.exists() and _calls(box) == []
     (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
-    _until(lambda: not tier.exists() and _calls(box) == ["up"], f"the job never made the switch: {_calls(box)}")
+    _until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"the job never made the switch: {_calls(box)}")
     _until(lambda: (box.notice() or {}).get("tier") == "full", f"no notice of the full image: {box.notice()}")
     assert (box.fake / "pulls").read_text(encoding="utf-8").splitlines() == [f"pull {FULL}"]
 
 
-def test_a_switch_the_engine_refuses_is_made_again_with_a_down_first(box):
+def test_the_switch_stops_the_core_team_before_the_tier_goes_and_starts_it_on_the_full_image(box):
     tier = box.tier()
     (box.fake / "full-present").write_text("", encoding="utf-8")
-    (box.fake / "up-refused").write_text("", encoding="utf-8")
     (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
     assert box.run("exit (Invoke-ToolsKick)", **KICK_ENV).returncode == 0
-    _until(lambda: _calls(box) == ["up", "down", "up"], f"not up, down, up: {_calls(box)}")
+    path = box.fake / "tier-calls"
+    _until(lambda: path.exists() and path.read_text(encoding="utf-8").split() == ["down", "core", "up", "full"],
+           f"not down on core, then up on full: {path.read_text(encoding='utf-8') if path.exists() else ''}")
     _until(lambda: (box.notice() or {}).get("tier") == "full", f"no notice of the full image: {box.notice()}")
     assert not tier.exists() and box.notice()["state"] == "ready"
+
+
+def test_a_team_the_person_stopped_stays_stopped_only_the_tier_goes(box):
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    (box.fake / "team-stopped").write_text("", encoding="utf-8")
+    (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
+    assert box.run("exit (Invoke-ToolsKick)", **KICK_ENV).returncode == 0
+    _until(lambda: (box.notice() or {}).get("tier") == "full", f"no notice of the full image: {box.notice()}")
+    assert not tier.exists() and _calls(box) == []
 
 
 def test_a_switch_that_still_fails_is_said_until_an_up_goes_well(box):

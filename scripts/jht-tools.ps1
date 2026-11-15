@@ -12,9 +12,9 @@
 #
 # Invoke-ToolsKick is what the wrapper calls on `jht up` and `jht setup` of a core install: it keeps the tools moving on a computer
 # with the CLI only, as the round of the desktop app does (desktop/src-tauri/src/tools_tier.rs). It starts one detached job, at
-# most, that pulls the full image when it is not here yet, waits for profile\ready.flag and then makes the switch itself; a switch
-# the engine refuses (the configuration changed while the team ran) is retried with a `down` first, and a switch that still fails
-# is written down for `jht up` and `jht status` to say, with the commands to give.
+# most, that pulls the full image when it is not here yet, waits for profile\ready.flag and then makes the switch itself, once no
+# other `jht` command runs: `down` of the core team, the tier goes, `up` on the full image (a team the person stopped stays
+# stopped); a switch that fails is written down for `jht up` and `jht status` to say, with the commands to give.
 #
 # The state comes from the engine and from the host files of the runtime, never from a file the container can write. The file
 # state\tools.json is a NOTICE for the container (the Capitano reads it): nothing here reads it back.
@@ -194,22 +194,44 @@ function Invoke-ToolsWrapperStep {
   return [int](Start-Process @run).ExitCode
 }
 
-# The switch of the job. `up` first, as `jht tools switch` does; when the engine refuses it (a team started with another
-# configuration: jht config set, the team settings applied from the site or the app), `down` and `up` again, which is what a person
-# would do. Still refused: the marker says so, and `jht up` / `jht status` tell the person to run `jht down` and `jht up`.
+# Another `jht` command of this computer is running (setup, up, down, an upgrade...): the switch waits for it, never in the middle of
+# it. The job is a process of its own with the wrapper on its command line: its own process is left out.
+function Test-ToolsOtherWrapperRunning {
+  try {
+    $wrapper = [IO.Path]::GetFullPath($WrapperPath)
+    if ($PSVersionTable.PSEdition -eq 'Desktop' -or $IsWindows) {
+      $lines = @(Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine } | ForEach-Object { $_.CommandLine })
+    } else {
+      $lines = @(Get-Process -ErrorAction Stop | Where-Object { $_.Id -ne $PID -and $_.CommandLine } | ForEach-Object { $_.CommandLine })
+    }
+    foreach ($line in $lines) { if ($line.Contains($wrapper)) { return $true } }
+  } catch { }
+  return $false
+}
+
+function Wait-ToolsQuiet {
+  $left = Get-ToolsWaitSeconds 'JHT_TOOLS_QUIET_MAX' 1800
+  while ((Test-ToolsOtherWrapperRunning) -and $left -gt 0) { Start-Sleep -Seconds 2; $left -= 2 }
+}
+
+# The switch of the job, when no other command runs. A team the person stopped (`jht down`) stays stopped: only the tier goes, and
+# the next `jht up` starts on the full image. A team that runs is stopped FIRST, while the tier file still makes it the attested
+# core container, then the tier goes and `up` starts it on the full one: never a window in which the running container is the core
+# one and the wrapper already expects the full one. Refused still: the marker says so, and `jht up` / `jht status` tell the person
+# to run `jht down` and `jht up`.
 function Invoke-ToolsSwitchAuto {
+  Wait-ToolsQuiet
+  if (-not (Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf)) { return }
+  $stopped = $false
+  if (Get-Command Test-JhtTeamStoppedByPerson -ErrorAction SilentlyContinue) { $stopped = [bool](Test-JhtTeamStoppedByPerson) }
+  Remove-Item -LiteralPath $ToolsSwitchFailedFile -Force -ErrorAction SilentlyContinue
+  Remove-Item Env:\JHT_IMAGE -ErrorAction SilentlyContinue
+  if (-not $stopped) { $null = Invoke-ToolsWrapperStep 'down' }
   try {
     Remove-Item -LiteralPath $RuntimeTierFile -Force
     Remove-Item -LiteralPath $RuntimeTierIntegrity -Force -ErrorAction SilentlyContinue
   } catch { return }
-  Remove-Item -LiteralPath $ToolsSwitchFailedFile -Force -ErrorAction SilentlyContinue
-  Remove-Item Env:\JHT_IMAGE -ErrorAction SilentlyContinue
-  $ok = ((Invoke-ToolsWrapperStep 'up') -eq 0)
-  if (-not $ok) {
-    $null = Invoke-ToolsWrapperStep 'down'
-    $ok = ((Invoke-ToolsWrapperStep 'up') -eq 0)
-  }
-  if ($ok) { Write-ToolsNotice 'ready' 'full' '' (Get-ToolsNow) }
+  if ($stopped -or ((Invoke-ToolsWrapperStep 'up') -eq 0)) { Write-ToolsNotice 'ready' 'full' '' (Get-ToolsNow) }
   else {
     [IO.File]::WriteAllText($ToolsSwitchFailedFile, "switch_failed`n", [Text.UTF8Encoding]::new($false))
     Write-ToolsNotice 'failed' 'full' 'switch_failed' (Get-ToolsNow)
