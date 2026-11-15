@@ -553,7 +553,7 @@
   "host_setup.tz.bad_number": "Choose a number between 1 and %d.",
   "host_setup.tz.how": "Type a country, a city or a timezone (for example Italy, Rome, Europe/Rome).",
   "host_setup.tz.how_default": "Press Enter to keep %s, or type a country, a city or a timezone to look for another one.",
-  "host_setup.tz.none": "No timezone found for «%s»: try a country, a city or a timezone like Europe/Rome.",
+  "host_setup.tz.none": "No timezone found for «%s»: type the country (for example Italy) or a big city nearby.",
   "host_setup.tz.not_detected": "Your timezone was not detected.",
   "host_setup.tz.pick": "Number (1-%d), or a new search:",
   "host_setup.tz.proposed": "Proposed: %s (now %s).",

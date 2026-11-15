@@ -160,7 +160,7 @@ ts_table() {
     en:host_setup.tz.chosen) printf '%s' 'Timezone: %s' ;;
     en:host_setup.tz.how) printf '%s' 'Type a country, a city or a timezone (for example Italy, Rome, Europe/Rome).' ;;
     en:host_setup.tz.how_default) printf '%s' 'Press Enter to keep %s, or type a country, a city or a timezone to look for another one.' ;;
-    en:host_setup.tz.none) printf '%s' 'No timezone found for «%s»: try a country, a city or a timezone like Europe/Rome.' ;;
+    en:host_setup.tz.none) printf '%s' 'No timezone found for «%s»: type the country (for example Italy) or a big city nearby.' ;;
     en:host_setup.tz.not_detected) printf '%s' 'Your timezone was not detected.' ;;
     en:host_setup.tz.pick) printf '%s' 'Number (1-%d), or a new search:' ;;
     en:host_setup.tz.proposed) printf '%s' 'Proposed: %s (now %s).' ;;
@@ -208,7 +208,7 @@ ts_table() {
     it:host_setup.tz.chosen) printf '%s' 'Fuso orario: %s' ;;
     it:host_setup.tz.how) printf '%s' 'Scrivi un paese, una città o un fuso orario (per esempio Italia, Roma, Europe/Rome).' ;;
     it:host_setup.tz.how_default) printf '%s' 'Premi Invio per tenere %s, oppure scrivi un paese, una città o un fuso orario per cercarne un altro.' ;;
-    it:host_setup.tz.none) printf '%s' 'Nessun fuso orario trovato per «%s»: prova con un paese, una città o un fuso come Europe/Rome.' ;;
+    it:host_setup.tz.none) printf '%s' 'Nessun fuso orario per «%s»: scrivi il paese (per esempio Italia) o una grande città vicina.' ;;
     it:host_setup.tz.not_detected) printf '%s' 'Il tuo fuso orario non è stato rilevato.' ;;
     it:host_setup.tz.pick) printf '%s' 'Numero (1-%d), oppure una nuova ricerca:' ;;
     it:host_setup.tz.proposed) printf '%s' 'Proposto: %s (ora %s).' ;;
@@ -1297,7 +1297,7 @@ if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
     TZ_COUNT="$(printf '%s' "$TZ_FOUND" | grep -c . || true)"
     TZ_EXACT="$(printf '%s\n' "$TZ_RESULTS" | grep -c '^=' || true)"
     if [ "$TZ_COUNT" -eq 0 ]; then
-      warn "$(tsf host_setup.tz.none 'No timezone found for «%s»: try a country, a city or a timezone like Europe/Rome.' "$TZ_CHOICE")"
+      warn "$(tsf host_setup.tz.none 'No timezone found for «%s»: type the country (for example Italy) or a big city nearby.' "$TZ_CHOICE")"
       continue
     fi
     if [ "$TZ_COUNT" -eq 1 ] && [ "$TZ_EXACT" -eq 1 ]; then

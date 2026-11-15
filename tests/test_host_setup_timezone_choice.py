@@ -214,3 +214,10 @@ def test_the_search_writes_no_file_in_a_shared_temporary_folder(tmp_path, zonein
     assert list(shared.iterdir()) == []
     source = HOST_SETUP.read_text(encoding="utf-8")
     assert "jht-tz-names" not in source and not re.search(r'>\s*"\$\{TMPDIR', source)
+
+
+def test_a_small_town_not_found_says_to_type_the_country_or_a_big_city_nearby(tmp_path, zoneinfo):
+    code, out, saved, left = _run(tmp_path, zoneinfo, ["Brescia", "Italia", ""])
+    assert code == 0 and not left, out
+    assert "No timezone found for «Brescia»: type the country (for example Italy) or a big city nearby." in out, out
+    assert _tz(saved) == "Europe/Rome"

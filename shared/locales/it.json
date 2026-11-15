@@ -553,7 +553,7 @@
   "host_setup.tz.bad_number": "Scegli un numero fra 1 e %d.",
   "host_setup.tz.how": "Scrivi un paese, una città o un fuso orario (per esempio Italia, Roma, Europe/Rome).",
   "host_setup.tz.how_default": "Premi Invio per tenere %s, oppure scrivi un paese, una città o un fuso orario per cercarne un altro.",
-  "host_setup.tz.none": "Nessun fuso orario trovato per «%s»: prova con un paese, una città o un fuso come Europe/Rome.",
+  "host_setup.tz.none": "Nessun fuso orario per «%s»: scrivi il paese (per esempio Italia) o una grande città vicina.",
   "host_setup.tz.not_detected": "Il tuo fuso orario non è stato rilevato.",
   "host_setup.tz.pick": "Numero (1-%d), oppure una nuova ricerca:",
   "host_setup.tz.proposed": "Proposto: %s (ora %s).",
