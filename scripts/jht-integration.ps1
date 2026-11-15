@@ -511,7 +511,7 @@ function Get-IntegrationTextTable {
 }
 # <<< texts in the 7 languages
 
-# The error marker holds a sentence of ours, in the language of the run (with its letters: é, ő, ç…), or a command's line that
+# The error marker holds a sentence of ours, in the language of the run (with its letters beyond ASCII), or a command's line that
 # Get-IntegrationForeign already made ASCII: only the control characters go, and at most 600 characters are read back.
 function Get-IntegrationMarkerText {
   param([string]$Text)
@@ -1096,7 +1096,7 @@ function Write-IntegrationUsage {
   return 2
 }
 
-# The sentences have the letters of their language (é, ő, ç…): what is written to stdout and stderr goes out as UTF-8 while the command
+# The sentences have the letters of their language (letters beyond ASCII): what is written to stdout and stderr goes out as UTF-8 while the command
 # runs (the JSON the app reads, a person at a terminal, a pipe), and the console gets back its own encoding after it (it belongs to
 # the window, and would stay changed after the command). Windows PowerShell 5.1 writes in the legacy code page otherwise.
 # Returns the encoding to give back ($null when the console's could not be read or set).
