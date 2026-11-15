@@ -276,7 +276,8 @@ def test_without_an_entry_for_the_role_the_command_is_unchanged(
 ) -> None:
     command = _command(_spawn_command(tmp_path, "scout", role_models))
 
-    assert "--model gpt-5.6-terra" in command
+    # the Scout is a light role: luna on OpenAI, as on GLM (provider-models.list), when nothing is chosen for it
+    assert "--model gpt-5.6-luna" in command
     assert "-c model_reasoning_effort=high" in command
 
 
@@ -381,7 +382,7 @@ def test_a_role_with_a_chosen_model_restarts_on_the_same_model(
     assert "-c model_reasoning_effort=low" in first
     assert again == first
     # gli altri ruoli non seguono la scelta dello scout
-    other = _command(_spawn_command(tmp_path, "analista", chosen, spawn_src=spawn_src))
+    other = _command(_spawn_command(tmp_path, "scorer", chosen, spawn_src=spawn_src))
     assert "--model gpt-5.6-terra" in other and "model_reasoning_effort=high" in other
 
 
@@ -396,5 +397,5 @@ def test_the_next_spawn_reads_the_config_as_it_is_then(tmp_path: Path) -> None:
 
     assert "--model gpt-5.6-luna" in before
     assert "--model gpt-5.6-sol" in after and "model_reasoning_effort=medium" in after
-    # {} rimette il ruolo sul suo predefinito: la mappa ruoli, terra e high
-    assert "--model gpt-5.6-terra" in cleared and "model_reasoning_effort=high" in cleared
+    # {} rimette il ruolo sul suo predefinito: per lo scout luna (ruolo leggero, provider-models.list) e high
+    assert "--model gpt-5.6-luna" in cleared and "model_reasoning_effort=high" in cleared

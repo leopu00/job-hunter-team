@@ -65,5 +65,6 @@ def test_the_stop_goes_through_the_quiet_compose():
 
 def test_integration_list_says_a_telegram_without_container_is_added_and_off():
     assert "creato, container spento" not in INTEGRATION
-    assert "aggiunto, servizio spento: jht telegram pair assistente" in INTEGRATION
-    assert "'ready|aggiunto, container spento" in INTEGRATION
+    # the sentences are keys of the catalogs (the Italian is in shared/locales/it.json)
+    assert "printf 'ready|%s\\n' \"$(itx integration.state.telegram_off 'added, service off: jht telegram pair assistente" in INTEGRATION
+    assert "printf 'ready|%s\\n' \"$(itx integration.state.added_off 'added, container off')\"" in INTEGRATION

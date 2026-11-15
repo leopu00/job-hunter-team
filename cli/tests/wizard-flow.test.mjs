@@ -8,8 +8,8 @@ import { fileURLToPath } from 'node:url';
 
 // `jht setup` as a person goes through it, with a prompter that answers the default and a program that stands for
 // the rest of jht: what is asked, in which order the steps are numbered, and when the configuration is called saved.
-import { offeredInRelease } from '../../shared/runtime/release-providers.js';
-const codexSkip = offeredInRelease('openai') ? false : 'Codex and Pi with ChatGPT are not offered in this release (shared/runtime/release-providers.js)';
+import { offeredInRelease, offeredWay } from '../../shared/runtime/release-providers.js';
+const codexSkip = offeredWay('openai', 'codex') ? false : 'Codex and Pi with ChatGPT are not offered in this release (shared/runtime/release-providers.js)';
 const cli = fileURLToPath(new URL('..', import.meta.url));
 const entry = join(cli, 'bin/jht.js');
 

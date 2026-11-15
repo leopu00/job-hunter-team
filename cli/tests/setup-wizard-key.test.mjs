@@ -8,8 +8,8 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSyn
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { offeredInRelease, RELEASE_PROVIDERS } from '../../shared/runtime/release-providers.js';
-const codexSkip = offeredInRelease('openai') ? false : 'Codex and Pi with ChatGPT are not offered in this release (shared/runtime/release-providers.js)';
+import { offeredInRelease, offeredWay, RELEASE_PROVIDERS } from '../../shared/runtime/release-providers.js';
+const codexSkip = offeredWay('openai', 'codex') ? false : 'Codex and Pi with ChatGPT are not offered in this release (shared/runtime/release-providers.js)';
 
 const cli = fileURLToPath(new URL('..', import.meta.url));
 const KEY = ['synthetic', 'key', '0123456789', 'abcdef'].join('-'); // built, so that no scanner reads it as a key
@@ -108,6 +108,37 @@ for (const provider of ['glm', 'kimi'].filter((p) => offeredInRelease(p))) {
     assert.equal(events.at(-1).ok, true);
   });
 }
+
+test('OpenAI in the wizard: offered with a key on Pi, the key checked with OpenAI and kept in the key store, no Codex sign-in', () => {
+  const box = sandbox();
+  const { r, events, calls, configText, out } = run(box, { select: { 'AI Provider': 'openai' }, keys: [`sk-${KEY}`] });
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(events.find((e) => e.kind === 'select' && e.message === 'AI Provider').options, ['glm', 'kimi', 'openai', 'claude']);
+  const config = JSON.parse(configText);
+  assert.equal(config.active_provider, 'openai');
+  assert.equal(config.harness, 'pi');
+  assert.equal(config.providers.openai.auth_method, 'api_key');
+  assert.equal(config.providers.openai.api_key_ref.path, join(box.deps, 'keys', 'openai.key'));
+  assert.match(out, /OpenAI accepted the API key/);
+  assert.equal(configText.includes(KEY) || out.includes(KEY), false);
+  assert.equal(calls.some((c) => /^codex /.test(c)), false, 'no Codex sign-in');
+  assert.ok(calls.includes('jht providers update pi'));
+  assert.equal(events.at(-1).ok, true);
+});
+
+test('Claude in the wizard: offered with a key on Pi, kept in the key store, Opus for the setup\'s model, no Claude Code sign-in', () => {
+  const box = sandbox();
+  const { r, events, calls, configText, out } = run(box, { select: { 'AI Provider': 'claude' }, keys: [KEY] });
+  assert.equal(r.status, 0, r.stderr);
+  const config = JSON.parse(configText);
+  assert.deepEqual([config.active_provider, config.harness, config.providers.claude.auth_method], ['claude', 'pi', 'api_key']);
+  assert.equal(config.providers.claude.model, 'claude-opus-5-5');
+  assert.equal(config.providers.claude.api_key_ref.path, join(box.deps, 'keys', 'claude.key'));
+  assert.match(out, /Claude \(Anthropic\) accepted the API key/);
+  assert.equal(calls.some((c) => /^claude /.test(c)), false, 'no Claude Code sign-in');
+  assert.equal(configText.includes(KEY) || out.includes(KEY), false);
+  assert.equal(events.at(-1).ok, true);
+});
 
 test('a key the provider accepts on an empty account (Z.ai 429 code 1113): kept, and the end of the setup says top it up, not «All set»', () => {
   const box = sandbox();

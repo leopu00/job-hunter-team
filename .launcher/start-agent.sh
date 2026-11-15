@@ -1120,7 +1120,10 @@ case "$PROVIDER" in
     ;;
   openai|codex)
     CLI_BIN="codex"
-    if ! codex_model="$(resolve_codex_model "${role_model:-$model_override}")"; then
+    # without a pin, a light role (scout, analista, sentinella) takes the class provider-models.list gives it, as on GLM
+    openai_table_class=""
+    [ -n "$role_model" ] || openai_table_class="$(jht_provider_role_class openai "$ROLE")"
+    if ! codex_model="$(resolve_codex_model "${role_model:-${openai_table_class:-$model_override}}")"; then
       exit 1
     fi
     # --yolo è alias di --dangerously-bypass-approvals-and-sandbox:
@@ -1218,8 +1221,11 @@ if [ "$AGENT_HARNESS" = "pi" ]; then
     pi_table_role=""
     [ -n "$role_model" ] || pi_table_role="$ROLE"
     pi_model="$(jht_provider_model "$pi_api" "${role_model:-$model_override}" "$pi_table_role")" || exit 1
-  elif ! pi_model="$(resolve_codex_model "${role_model:-$model_override}")"; then
-    exit 1
+  else
+    # openai: the Codex table; without a pin a light role takes the class provider-models.list gives it, as on GLM
+    pi_role_class=""
+    [ -n "$role_model" ] || pi_role_class="$(jht_provider_role_class "$PROVIDER" "$ROLE")"
+    pi_model="$(resolve_codex_model "${role_model:-${pi_role_class:-$model_override}}")" || exit 1
   fi
   CLI_BIN="pi"
   CLI_ARGS=""
@@ -1380,9 +1386,10 @@ fi
 #   - Claude Code legge CLAUDE.md
 #   - Codex + Kimi leggono AGENTS.md (standard OpenAI / Moonshot)
 # Il contenuto è identico, cambia solo il nome del file.
-case "$PROVIDER" in
-  anthropic|claude) IDENTITY_FILE="CLAUDE.md" ;;
-  *)                   IDENTITY_FILE="AGENTS.md" ;;
+# Dal programma, non dal provider: Claude su pi (con una chiave API) legge AGENTS.md come ogni agente pi.
+case "$CLI_BIN" in
+  claude) IDENTITY_FILE="CLAUDE.md" ;;
+  *)      IDENTITY_FILE="AGENTS.md" ;;
 esac
 IDENTITY_DEST="$AGENT_DIR/$IDENTITY_FILE"
 
