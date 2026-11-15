@@ -371,7 +371,7 @@ def active_plan() -> Optional[dict]:
 
 # ── No plan to ask for (JHT-T308) ───────────────────────────────────────
 # The card with the subscription plans must not hold the first burst. With an API key there is no subscription plan at
-# all: the roster comes from the spending ceiling the person set (`no_quota_cap.eur`, EUR per day), a tier per step and
+# all: the roster comes from the spending ceiling the person set (the setup's `team.budget` per day, or the older `no_quota_cap.eur`), a tier per step and
 # the smallest roster when no ceiling is declared. With a subscription the person did not name («I do not know», no
 # answer) the burst opens on the provider's lowest plan, which is DECLARED: the plan carries `assumed`, the burst's
 # answer says so and the Capitano's diary gets the line. The card stays open: nothing here waits for it.
@@ -380,6 +380,19 @@ _API_KEY_TIER_BY_EUR = ((30, 15), (10, 5))  # (ceiling EUR/day at least, roster 
 
 
 def spend_ceiling_eur(cfg: dict) -> Optional[float]:
+    """The spending allowed per day: the budget of the setup spread over its period (team_budget.per_day), else the
+    `no_quota_cap.eur` of an older config. Dollars both (pi prices in dollars; `eur` is compared one to one)."""
+    here = str(Path(__file__).resolve().parent)
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    try:
+        import team_budget
+
+        per_day = team_budget.per_day(cfg)
+    except Exception:  # noqa: BLE001 - an unreadable budget: the older ceiling, or none
+        per_day = None
+    if per_day is not None:
+        return float(per_day)
     cap = cfg.get("no_quota_cap")
     eur = cap.get("eur") if isinstance(cap, dict) else None
     ok = isinstance(eur, (int, float)) and not isinstance(eur, bool) and eur > 0 and eur == eur and eur != float("inf")
@@ -395,7 +408,7 @@ def api_key_plan(cfg: dict, prov: str) -> Optional[dict]:
     eur = spend_ceiling_eur(cfg)
     tier = next((t for floor, t in _API_KEY_TIER_BY_EUR if eur is not None and eur >= floor), 1)
     plan = {"provider": prov, "id": "api-key", "tier": tier, "weekly_capped": False, "window_5h": False,
-            "label": "API key, ceiling %g EUR per day" % eur if eur is not None else "API key, no ceiling declared"}
+            "label": "API key, ceiling %g USD per day" % eur if eur is not None else "API key, no ceiling declared"}
     if eur is None:
         plan["assumed"] = ("API key with no spending ceiling declared: the burst opens on the smallest roster (1 Scout, "
                            "1 Analista, 1 Scorer). Set the ceiling in the configuration (no_quota_cap.eur) for a larger one.")

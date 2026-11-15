@@ -22,6 +22,15 @@ Sentinella, with the ceiling the config declares:
                        less than an hour later for `tokens_per_hour`) or when a burn-intent is in force. Not a FATAL.
   no ceiling declared  the person is told once a day how much pi spent and that nothing stops it.
 
+The budget of the setup (team_budget.py: `team.budget`, dollars over a period, spread over the working hours) is read
+before `no_quota_cap` and counts from its own start, not from midnight. Three pauses come from it:
+
+  budget     spent >= usd - max(2 %, 0.10 $). The brake looks every ~5 minutes and a call in flight is still paid, so it
+             stops a little before. It does not lift by itself: a new budget (jht setup) lifts it.
+  period     the period is over. It does not lift by itself either.
+  pace       spent above the share of the budget of the worked time gone by (one working hour ahead): it lifts by itself
+             when the worked time catches up, and the person is told when.
+
 It runs only in the NO-QUOTA mode (the ceiling is called `no_quota_cap` for that reason): with quota data the windows and
 the daily cap pace the team, and they would lift this pause as if it were theirs.
 
@@ -39,6 +48,7 @@ from datetime import datetime
 import pi_sessions
 import provider_credit
 import quota_data
+import team_budget
 
 REASON = "pi_spend_cap"
 PROVIDER_NAMES = provider_credit.PROVIDER_NAMES
@@ -63,27 +73,48 @@ def day_start(now_ts):
     return datetime.fromtimestamp(now_ts).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
 
 
-def spend(home, now_ts):
+def spend(home, now_ts, budget_start=None):
     """What pi spent: `cost` today (dollars: pi's estimate plus the fee of the web searches), `hour_tokens` in the last hour,
-    `calls` today."""
+    `calls` today, and `budget_cost` since `budget_start` when a budget is declared (else None)."""
     start, hour = day_start(now_ts), now_ts - 3600
-    out = {"cost": 0.0, "hour_tokens": 0, "calls": 0, "credit": provider_credit.exhausted(home, now_ts)}
-    since = min(start, hour)
+    out = {"cost": 0.0, "hour_tokens": 0, "calls": 0, "credit": provider_credit.exhausted(home, now_ts),
+           "budget_cost": None if budget_start is None else 0.0}
+    since = min(start, hour) if budget_start is None else min(start, hour, budget_start)
     for event in pi_sessions.usage_events(home, since):
         if event["ts"] >= start:
             out["cost"] += event["cost"]
             out["calls"] += 1
         if event["ts"] >= hour:
             out["hour_tokens"] += event["input"] + event["cache_write"] + event["output"]
+        if budget_start is not None and event["ts"] >= budget_start:
+            out["budget_cost"] += event["cost"]
     for event in pi_sessions.search_events(home, since):  # the fee of a search call, which pi does not price
         if event["ts"] >= start:
             out["cost"] += event["cost"]
+        if budget_start is not None and event["ts"] >= budget_start:
+            out["budget_cost"] += event["cost"]
     out["cost"] = round(out["cost"], 6)
+    if budget_start is not None:
+        out["budget_cost"] = round(out["budget_cost"], 6)
     return out
 
 
-def decide(config, spent, no_quota_mode):
-    """{"action": "none" | "halt" | "warn", ...}. Pure: a config and a measure in, a verdict out."""
+def _budget_verdict(config, budget, spent, now):
+    """The pause the budget asks for, or None."""
+    used = spent.get("budget_cost") or 0.0
+    common = {"action": "halt", "spent": used, "usd": budget["usd"], "ends": budget["ends"]}
+    if used >= budget["usd"] - team_budget.margin(budget["usd"]):
+        return dict(common, why="budget", ceiling=budget["usd"], resumes=None)
+    if now >= budget["ends"]:
+        return dict(common, why="period", ceiling=budget["usd"], resumes=None)
+    allowance = team_budget.allowed(config, budget, now)
+    if used >= allowance:
+        return dict(common, why="pace", ceiling=round(allowance, 6), resumes=team_budget.resumes_at(config, budget, used) or budget["ends"])
+    return None
+
+
+def decide(config, spent, no_quota_mode, now=None):
+    """{"action": "none" | "halt" | "warn", ...}. Pure: a config, a measure and a moment in, a verdict out."""
     # Before the mode: the bridge declares the no-quota mode at the END of its first tick, so a team that found the
     # credit already gone never got past here (collaudo Linux, 12/11), and a Codex team whose pi agents answer «no
     # credit» has quota data and would never pause either. Every call would fail: the team waits, whatever the mode.
@@ -91,9 +122,14 @@ def decide(config, spent, no_quota_mode):
         return {"action": "halt", "why": "credit", "provider": spent["credit"]["provider"], "spent": 0.0, "ceiling": 0.0}
     if not no_quota_mode:
         return {"action": "none"}  # with quota data the Sentinella paces by the windows and the daily cap
+    budget = team_budget.read(config)
+    if budget is not None and now is not None:
+        verdict = _budget_verdict(config, budget, spent, now)
+        if verdict:
+            return verdict
     eur, tokens = ceilings(config)
     if eur is None and tokens is None:
-        return {"action": "warn" if spent["calls"] else "none"}
+        return {"action": "none" if budget is not None else ("warn" if spent["calls"] else "none")}
     if eur is not None and spent["cost"] >= eur:
         return {"action": "halt", "why": "eur", "spent": spent["cost"], "ceiling": eur}
     if tokens is not None and spent["hour_tokens"] >= tokens:
@@ -105,13 +141,28 @@ def _money(value):
     return ("%.2f" % value).rstrip("0").rstrip(".") if value < 100 else "%d" % value
 
 
-def user_text(verdict, spent):
+def clock(moment, config, today=None):
+    """HH:MM in the person's zone; with the date in front when it is not today."""
+    local = datetime.fromtimestamp(moment, team_budget.timezone_of(config))
+    day = datetime.fromtimestamp(today, team_budget.timezone_of(config)).date() if today is not None else local.date()
+    return local.strftime("%H:%M") if local.date() == day else local.strftime("%Y-%m-%d %H:%M")
+
+
+def user_text(verdict, spent, config=None, now=None):
     i18n = quota_data.shared_i18n()  # shared/i18n.py, found from the skills folder too
 
     if verdict["action"] == "warn":
         return i18n.tf("pi_cap.no_ceiling", "%s USD" % _money(spent["cost"]))
     if verdict["why"] == "credit":
         return i18n.tf("pi_cap.halt_credit", PROVIDER_NAMES.get(verdict["provider"], verdict["provider"] or "the provider"))
+    if verdict["why"] == "budget":
+        return i18n.tf("pi_cap.halt_budget", "%s USD" % _money(verdict["spent"]), "%s USD" % _money(verdict["usd"]))
+    if verdict["why"] == "period":
+        return i18n.tf("pi_cap.halt_period", clock(verdict["ends"], config, now), "%s USD" % _money(verdict["spent"]),
+                       "%s USD" % _money(verdict["usd"]))
+    if verdict["why"] == "pace":
+        return i18n.tf("pi_cap.halt_pace", "%s USD" % _money(verdict["spent"]), "%s USD" % _money(verdict["usd"]),
+                       clock(verdict["resumes"], config, now))
     if verdict["why"] == "eur":
         return i18n.tf("pi_cap.halt_eur", "%s USD" % _money(verdict["spent"]), "%s EUR" % _money(verdict["ceiling"]))
     return i18n.tf("pi_cap.halt_tokens", "%d" % verdict["spent"], "%d" % verdict["ceiling"])
@@ -136,7 +187,25 @@ def first_burst_progress(home):
         return None
 
 
-def captain_text(verdict, spent, burst=None):
+def _budget_captain_text(verdict, config, now):
+    if verdict["why"] == "budget":
+        head, what, lift = ("BUDGET SPENT", "%s USD spent of the %s USD the person declared for the period"
+                            % (_money(verdict["spent"]), _money(verdict["usd"])),
+                            "It does NOT lift by itself: it lifts when the person sets a new budget (jht setup).")
+    elif verdict["why"] == "period":
+        head, what, lift = ("BUDGET PERIOD OVER", "the period the person declared ended at %s (%s USD spent of %s USD)"
+                            % (clock(verdict["ends"], config, now), _money(verdict["spent"]), _money(verdict["usd"])),
+                            "It does NOT lift by itself: it lifts when the person sets a new period (jht setup).")
+    else:
+        head = "BUDGET PACE"
+        what = ("%s USD spent of %s USD, ahead of the pace (the share of the budget of the worked time gone by, one working "
+                "hour ahead, allows %s USD by now)" % (_money(verdict["spent"]), _money(verdict["usd"]),
+                                                        _money(verdict["ceiling"])))
+        lift = "It lifts by itself at %s, when the worked time catches up." % clock(verdict["resumes"], config, now)
+    return head, what, lift
+
+
+def captain_text(verdict, spent, burst=None, config=None, now=None):
     if verdict["action"] == "warn":
         return ("[BRIDGE INFO] pi spent %s USD today (its own estimate) and no spending ceiling is declared "
                 "(no_quota_cap in the configuration): this access has no quota data, so nothing else stops the "
@@ -146,23 +215,34 @@ def captain_text(verdict, spent, burst=None):
                 "The team is PAUSED: ESC to every session, no forced kill. This is a declared pause, not an outage and not "
                 "FATAL. It lifts by itself when a call goes through again (the person tops up the account with the provider). "
                 "Tell the person once, in their language." % PROVIDER_NAMES.get(verdict["provider"], verdict["provider"]))
-    what = ("%s USD today against a ceiling of %s EUR" % (_money(verdict["spent"]), _money(verdict["ceiling"]))
-            if verdict["why"] == "eur" else
-            "%d tokens in the last hour against a ceiling of %d per hour" % (verdict["spent"], verdict["ceiling"]))
-    return ("[BRIDGE ALERT] SPENDING CEILING REACHED (pi harness): %s. The team is PAUSED: ESC to every session, no "
-            "forced kill. This is a declared pause, not an outage and not FATAL. It lifts by itself when the spending "
-            "is back under the ceiling, or if the person raises it. Tell the person once, in their language.%s" % (what, (
+    if verdict["why"] in ("budget", "period", "pace"):
+        head, what, lift = _budget_captain_text(verdict, config, now)
+        raise_it = "a new budget (jht setup)"
+    else:
+        head = "SPENDING CEILING REACHED"
+        what = ("%s USD today against a ceiling of %s EUR" % (_money(verdict["spent"]), _money(verdict["ceiling"]))
+                if verdict["why"] == "eur" else
+                "%d tokens in the last hour against a ceiling of %d per hour" % (verdict["spent"], verdict["ceiling"]))
+        lift = "It lifts by itself when the spending is back under the ceiling, or if the person raises it."
+        raise_it = "raising the ceiling (no_quota_cap in the configuration)"
+    return ("[BRIDGE ALERT] %s (pi harness): %s. The team is PAUSED: ESC to every session, no forced kill. This is a "
+            "declared pause, not an outage and not FATAL. %s Tell the person once, in their language.%s" % (head, what, lift, (
                 " The FIRST BURST is open and stops on this ceiling at %d of %d scored positions: say so in the chat, in "
-                "their language: how many scored positions they have, and that raising the ceiling (no_quota_cap in the "
-                "configuration) lets the burst go on to %d." % (burst[0], burst[1], burst[1])) if burst else ""))
+                "their language: how many scored positions they have, and that %s lets the burst go on to %d."
+                % (burst[0], burst[1], raise_it, burst[1])) if burst else ""))
 
 
-def _flag_reason(api):
+def _flag(api):
     try:
         payload = json.loads(api._path("DAILY_HALT_FLAG").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
-    return payload.get("reason") if isinstance(payload, dict) else None
+    return payload if isinstance(payload, dict) else None
+
+
+def _flag_reason(api):
+    payload = _flag(api)
+    return payload.get("reason") if payload else None
 
 
 def _tell(api, run, key, text, user, notify_user):
@@ -182,15 +262,42 @@ def _tell(api, run, key, text, user, notify_user):
             print("[bridge V6] WARN pi spend cap user notice: %s" % error)
 
 
-def _halt(api, run, verdict, spent, day, notify_user):
+def _iso(moment, config):
+    if moment is None:
+        return None
+    zone = team_budget.timezone_of(config)
+    local = datetime.fromtimestamp(moment, zone) if zone is not None else datetime.fromtimestamp(moment).astimezone()
+    return local.isoformat(timespec="seconds")
+
+
+def _record(verdict, config):
+    """What the flag says of the pause, for `jht team status`, `jht team start` and `jht doctor`."""
+    record = {"why": verdict["why"], "spent": verdict["spent"], "ceiling": verdict["ceiling"]}
+    if verdict["why"] in ("budget", "period", "pace"):
+        record.update(budget_usd=verdict["usd"], ends_at=_iso(verdict["ends"], config),
+                      resumes_at=_iso(verdict["resumes"], config))
+    return record
+
+
+def _halt_key(verdict, day):
+    if verdict["why"] in ("budget", "period"):
+        return "halt:%s:%d" % (verdict["why"], int(verdict["ends"]))
+    if verdict["why"] == "pace":
+        return "halt:pace:%d" % int(verdict["resumes"] // 60)
+    return "halt:%s:%s" % (day, verdict["why"])
+
+
+def _halt(api, run, verdict, spent, day, notify_user, config=None, now=None, escape=True):
     burst = first_burst_progress(api._path("JHT_HOME"))
-    _tell(api, run, "halt:%s:%s" % (day, verdict["why"]), captain_text(verdict, spent, burst), user_text(verdict, spent),
-          notify_user)
-    api._activate_daily_halt(100.0 * verdict["spent"] / verdict["ceiling"] if verdict["ceiling"] else 100.0, 100.0, 100.0)
+    _tell(api, run, _halt_key(verdict, day), captain_text(verdict, spent, burst, config, now),
+          user_text(verdict, spent, config, now), notify_user)
+    if escape:
+        api._activate_daily_halt(100.0 * verdict["spent"] / verdict["ceiling"] if verdict["ceiling"] else 100.0, 100.0,
+                                 100.0)
     try:
         payload = json.loads(api._path("DAILY_HALT_FLAG").read_text(encoding="utf-8"))
         payload["reason"] = REASON
-        payload["pi_spend_cap"] = {"why": verdict["why"], "spent": verdict["spent"], "ceiling": verdict["ceiling"]}
+        payload["pi_spend_cap"] = _record(verdict, config)
         api._write_daily_halt_payload(payload)
     except (OSError, ValueError):
         pass
@@ -201,12 +308,18 @@ def _halt(api, run, verdict, spent, day, notify_user):
 def _resume(api, run, day, notify_user):
     i18n = quota_data.shared_i18n()
 
+    was = ((_flag(api) or {}).get("pi_spend_cap") or {}).get("why")
     try:
         api._path("DAILY_HALT_FLAG").unlink()
     except OSError:
         return
-    text = "[BRIDGE INFO] The pi spending ceiling allows work again: the team can resume; ticks are restarting."
-    _tell(api, run, "resume:%s:%d" % (day, int(api.time.time())), text, i18n.t("pi_cap.resume"), notify_user)
+    if was in ("budget", "period", "pace"):
+        text = "[BRIDGE INFO] The budget the person declared allows work again: the team can resume; ticks are restarting."
+        user = i18n.t("pi_cap.resume_budget")
+    else:
+        text = "[BRIDGE INFO] The pi spending ceiling allows work again: the team can resume; ticks are restarting."
+        user = i18n.t("pi_cap.resume")
+    _tell(api, run, "resume:%s:%d" % (day, int(api.time.time())), text, user, notify_user)
     print("[bridge V6] %s PI-SPEND-CEILING cleared: spending back under the ceiling" % run.now_h)
 
 
@@ -215,16 +328,24 @@ def step(api, run, notify_user=None):
     try:
         notify_user = notify_user or quota_data._notify_user  # resolved at call time, so a test can replace it
         now = api.time.time()
-        spent = spend(api._path("JHT_HOME"), now)
-        verdict = decide(api._read_config_json(), spent, bool(run.state.get("no_quota_declared")))
+        home = api._path("JHT_HOME")
+        config = api._read_config_json()
+        budget = team_budget.read(config)
+        spent = spend(home, now, budget["starts"] if budget else None)
+        verdict = decide(config, spent, bool(run.state.get("no_quota_declared")), now)
         day = datetime.fromtimestamp(now).strftime("%Y-%m-%d")
-        mine = _flag_reason(api) == REASON
+        flag = _flag(api)
+        mine = bool(flag) and flag.get("reason") == REASON
         if verdict["action"] == "halt":
             if run._bi_on:
                 print("[bridge V6] %s BURN-INTENT: pi spending ceiling reached, the team stays active (user override)"
                       % run.now_h)
             elif not api._daily_halt_active():
-                _halt(api, run, verdict, spent, day, notify_user)
+                _halt(api, run, verdict, spent, day, notify_user, config, now)
+            elif mine and (flag.get("pi_spend_cap") or {}).get("why") != verdict["why"]:
+                # Already paused by this brake for another reason (the pace, and now the budget or the period is over):
+                # the person and the Captain are told the new one, the flag says it; no second ESC.
+                _halt(api, run, verdict, spent, day, notify_user, config, now, escape=False)
         elif mine:
             _resume(api, run, day, notify_user)
         if verdict["action"] == "warn":
