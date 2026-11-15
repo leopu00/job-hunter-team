@@ -808,7 +808,9 @@ This help starts nothing and downloads nothing.' ;;
     team.stopped) printf '%s' 'Job Hunter Team is stopped: '\''jht up'\'' starts it again.' ;;
     tools.arriving) printf '%s' 'The Scouts'\'' tools are on their way: the full image is downloading in the background (about 3 GB). The search for positions starts by itself once they are here; there is nothing to do.' ;;
     tools.chat_switched) printf '%s' 'The team is moving onto the Scouts'\'' full tools, so this chat has closed. Open it again in a couple of minutes with jht team chat.' ;;
+    tools.engine_down) printf '%s' 'The state of the Scouts'\'' tools cannot be read: the container engine does not answer. Start it with jht up.' ;;
     tools.failed) printf '%s' 'The download of the Scouts'\'' tools failed, so the team cannot search for positions yet. Run jht tools pull to try again (jht up tries again too).' ;;
+    tools.ready) printf '%s' 'The Scouts'\'' tools are here: the team searches with the full image.' ;;
     tools.switch_failed) printf '%s' 'The Scouts'\'' tools are here, but the team could not be restarted on them: run jht down, then jht up.' ;;
     tools.switch_wait) printf '%s' 'The team is moving onto the Scouts'\'' full tools: waiting for it to start again (a couple of minutes at most).' ;;
     tools.waiting) printf '%s' 'The Scouts'\'' tools are here: the team moves onto them by itself once the onboarding is closed.' ;;
@@ -1300,7 +1302,9 @@ Questo aiuto non avvia niente e non scarica niente.' ;;
     team.stopped) printf '%s' 'Job Hunter Team e'\'' fermato: jht up per riaccenderlo.' ;;
     tools.arriving) printf '%s' 'Gli strumenti degli Scout stanno arrivando: l'\''immagine piena si scarica in background (circa 3 GB). La ricerca delle posizioni parte da sola quando sono arrivati; non devi fare niente.' ;;
     tools.chat_switched) printf '%s' 'La squadra passa agli strumenti completi degli Scout, quindi questa chat si e'\'' chiusa. Riaprila fra un paio di minuti con jht team chat.' ;;
+    tools.engine_down) printf '%s' 'Lo stato degli strumenti degli Scout non si legge: il motore dei container non risponde. Avvialo con jht up.' ;;
     tools.failed) printf '%s' 'Il download degli strumenti degli Scout non e'\'' riuscito: la squadra non puo'\'' ancora cercare posizioni. Esegui jht tools pull per riprovare (anche jht up riprova).' ;;
+    tools.ready) printf '%s' 'Gli strumenti degli Scout sono arrivati: la squadra cerca con l'\''immagine piena.' ;;
     tools.switch_failed) printf '%s' 'Gli strumenti degli Scout sono arrivati, ma la squadra non si e'\'' potuta riavviare con loro: esegui jht down, poi jht up.' ;;
     tools.switch_wait) printf '%s' 'La squadra sta passando agli strumenti completi degli Scout: aspetto che riparta (al massimo un paio di minuti).' ;;
     tools.waiting) printf '%s' 'Gli strumenti degli Scout sono arrivati: la squadra ci passa da sola quando l'\''onboarding e'\'' chiuso.' ;;
@@ -1793,7 +1797,9 @@ Ez a súgó semmit nem indít el és semmit nem tölt le.' ;;
     team.stopped) printf '%s' 'A Job Hunter Team le van állítva: a '\''jht up'\'' újraindítja.' ;;
     tools.arriving) printf '%s' 'A felderítők (Scout) eszközei úton vannak: a teljes kép a háttérben töltődik le (kb. 3 GB). Az állások keresése magától elindul, amint megérkeztek; nincs teendőd.' ;;
     tools.chat_switched) printf '%s' 'A csapat átáll a felderítők (Scout) teljes eszközeire, ezért ez a csevegés bezárult. Pár perc múlva nyisd meg újra a jht team chat paranccsal.' ;;
+    tools.engine_down) printf '%s' 'A felderítők (Scout) eszközeinek állapota nem olvasható: a konténermotor nem válaszol. Indítsd el a jht up paranccsal.' ;;
     tools.failed) printf '%s' 'A felderítők (Scout) eszközeinek letöltése nem sikerült, így a csapat még nem tud állásokat keresni. Futtasd a jht tools pull parancsot az újrapróbáláshoz (a jht up is újrapróbálja).' ;;
+    tools.ready) printf '%s' 'A felderítők (Scout) eszközei megérkeztek: a csapat a teljes képpel keres.' ;;
     tools.switch_failed) printf '%s' 'A felderítők (Scout) eszközei megérkeztek, de a csapatot nem sikerült velük újraindítani: futtasd a jht down, majd a jht up parancsot.' ;;
     tools.switch_wait) printf '%s' 'A csapat átáll a felderítők (Scout) teljes eszközeire: megvárom, amíg újraindul (legfeljebb pár perc).' ;;
     tools.waiting) printf '%s' 'A felderítők (Scout) eszközei megérkeztek: a csapat magától átvált rájuk, amint a bevezetés lezárult.' ;;
@@ -2290,7 +2296,9 @@ Esta ayuda no arranca nada ni descarga nada.' ;;
     team.stopped) printf '%s' 'Job Hunter Team está detenido: '\''jht up'\'' lo vuelve a arrancar.' ;;
     tools.arriving) printf '%s' 'Las herramientas de los Scout están en camino: la imagen completa se descarga en segundo plano (unos 3 GB). La búsqueda de puestos empieza sola cuando lleguen; no tienes que hacer nada.' ;;
     tools.chat_switched) printf '%s' 'El equipo pasa a las herramientas completas de los Scout, así que este chat se ha cerrado. Vuelve a abrirlo en un par de minutos con jht team chat.' ;;
+    tools.engine_down) printf '%s' 'No se puede leer el estado de las herramientas de los Scout: el motor de contenedores no responde. Arráncalo con jht up.' ;;
     tools.failed) printf '%s' 'La descarga de las herramientas de los Scout ha fallado, así que el equipo aún no puede buscar puestos. Ejecuta jht tools pull para reintentarlo (jht up también lo reintenta).' ;;
+    tools.ready) printf '%s' 'Las herramientas de los Scout ya están aquí: el equipo busca con la imagen completa.' ;;
     tools.switch_failed) printf '%s' 'Las herramientas de los Scout ya están aquí, pero el equipo no se ha podido reiniciar con ellas: ejecuta jht down y luego jht up.' ;;
     tools.switch_wait) printf '%s' 'El equipo está pasando a las herramientas completas de los Scout: espero a que vuelva a arrancar (un par de minutos como mucho).' ;;
     tools.waiting) printf '%s' 'Las herramientas de los Scout ya están aquí: el equipo pasa a ellas solo cuando el onboarding esté cerrado.' ;;
@@ -2782,7 +2790,9 @@ Diese Hilfe startet nichts und lädt nichts herunter.' ;;
     team.stopped) printf '%s' 'Job Hunter Team ist gestoppt: '\''jht up'\'' startet es wieder.' ;;
     tools.arriving) printf '%s' 'Die Werkzeuge der Scouts sind unterwegs: Das vollständige Image wird im Hintergrund heruntergeladen (etwa 3 GB). Die Stellensuche startet von selbst, sobald sie da sind; du musst nichts tun.' ;;
     tools.chat_switched) printf '%s' 'Das Team wechselt auf die vollständigen Werkzeuge der Scouts, deshalb wurde dieser Chat geschlossen. Öffne ihn in ein paar Minuten wieder mit jht team chat.' ;;
+    tools.engine_down) printf '%s' 'Der Stand der Werkzeuge der Scouts lässt sich nicht lesen: Die Container-Engine antwortet nicht. Starte sie mit jht up.' ;;
     tools.failed) printf '%s' 'Der Download der Werkzeuge der Scouts ist fehlgeschlagen, daher kann das Team noch keine Stellen suchen. Führe jht tools pull aus, um es erneut zu versuchen (jht up versucht es auch).' ;;
+    tools.ready) printf '%s' 'Die Werkzeuge der Scouts sind da: Das Team sucht mit dem vollständigen Image.' ;;
     tools.switch_failed) printf '%s' 'Die Werkzeuge der Scouts sind da, aber das Team konnte damit nicht neu gestartet werden: Führe jht down und dann jht up aus.' ;;
     tools.switch_wait) printf '%s' 'Das Team wechselt gerade auf die vollständigen Werkzeuge der Scouts: Ich warte, bis es wieder läuft (höchstens ein paar Minuten).' ;;
     tools.waiting) printf '%s' 'Die Werkzeuge der Scouts sind da: Das Team wechselt von selbst darauf, sobald das Onboarding abgeschlossen ist.' ;;
@@ -3274,7 +3284,9 @@ Cette aide ne démarre rien et ne télécharge rien.' ;;
     team.stopped) printf '%s' 'Job Hunter Team est arrêté : '\''jht up'\'' le redémarre.' ;;
     tools.arriving) printf '%s' 'Les outils des Scout arrivent : l'\''image complète se télécharge en arrière-plan (environ 3 Go). La recherche d'\''offres démarre toute seule dès qu'\''ils sont là ; tu n'\''as rien à faire.' ;;
     tools.chat_switched) printf '%s' 'L'\''équipe passe aux outils complets des Scout, donc ce chat s'\''est fermé. Rouvre-le dans quelques minutes avec jht team chat.' ;;
+    tools.engine_down) printf '%s' 'L'\''état des outils des Scout ne peut pas être lu : le moteur de conteneurs ne répond pas. Démarre-le avec jht up.' ;;
     tools.failed) printf '%s' 'Le téléchargement des outils des Scout a échoué : l'\''équipe ne peut pas encore chercher d'\''offres. Lance jht tools pull pour réessayer (jht up réessaie aussi).' ;;
+    tools.ready) printf '%s' 'Les outils des Scout sont là : l'\''équipe cherche avec l'\''image complète.' ;;
     tools.switch_failed) printf '%s' 'Les outils des Scout sont là, mais l'\''équipe n'\''a pas pu redémarrer avec eux : lance jht down, puis jht up.' ;;
     tools.switch_wait) printf '%s' 'L'\''équipe passe aux outils complets des Scout : j'\''attends qu'\''elle redémarre (quelques minutes au plus).' ;;
     tools.waiting) printf '%s' 'Les outils des Scout sont là : l'\''équipe passe dessus toute seule dès que l'\''onboarding est terminé.' ;;
@@ -3766,7 +3778,9 @@ Esta ajuda não inicia nada nem descarrega nada.' ;;
     team.stopped) printf '%s' 'O Job Hunter Team está parado: '\''jht up'\'' volta a ligá-lo.' ;;
     tools.arriving) printf '%s' 'As ferramentas dos Scout estão a caminho: a imagem completa está a ser descarregada em segundo plano (cerca de 3 GB). A procura de vagas começa sozinha quando chegarem; não tens de fazer nada.' ;;
     tools.chat_switched) printf '%s' 'A equipa passa para as ferramentas completas dos Scout, por isso este chat fechou-se. Volta a abri-lo dentro de alguns minutos com jht team chat.' ;;
+    tools.engine_down) printf '%s' 'Não é possível ler o estado das ferramentas dos Scout: o motor de contentores não responde. Inicia-o com jht up.' ;;
     tools.failed) printf '%s' 'O descarregamento das ferramentas dos Scout falhou, por isso a equipa ainda não pode procurar vagas. Corre jht tools pull para tentar de novo (jht up também tenta de novo).' ;;
+    tools.ready) printf '%s' 'As ferramentas dos Scout já chegaram: a equipa procura com a imagem completa.' ;;
     tools.switch_failed) printf '%s' 'As ferramentas dos Scout já chegaram, mas não foi possível reiniciar a equipa com elas: corre jht down e depois jht up.' ;;
     tools.switch_wait) printf '%s' 'A equipa está a passar para as ferramentas completas dos Scout: espero que volte a arrancar (no máximo alguns minutos).' ;;
     tools.waiting) printf '%s' 'As ferramentas dos Scout já chegaram: a equipa passa para elas sozinha quando o onboarding estiver concluído.' ;;
@@ -4018,6 +4032,18 @@ tools_tell_person() {
       switch_failed) warn "$(jht_say tools.switch_failed)" ;;
     esac
   ) || true
+}
+
+# `jht tools status`: one line for the person, the same words `jht up` says (`--json` is for programs). With no tier file the
+# tools are here; with one and nothing to say, the engine did not answer.
+tools_say_status() {
+  case "$(tools_person_state)" in
+    arriving) printf '%s\n' "$(jht_say tools.arriving)" ;;
+    waiting) printf '%s\n' "$(jht_say tools.waiting)" ;;
+    failed) printf '%s\n' "$(jht_say tools.failed)" ;;
+    switch_failed) printf '%s\n' "$(jht_say tools.switch_failed)" ;;
+    *) if [ -f "$RUNTIME_TIER_FILE" ]; then printf '%s\n' "$(jht_say tools.engine_down)"; else printf '%s\n' "$(jht_say tools.ready)"; fi ;;
+  esac
 }
 
 # `jht team chat` whose REPL the switch of the tools ended: the down of the core team stops the container the REPL runs in, and the

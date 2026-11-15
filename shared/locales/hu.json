@@ -373,6 +373,8 @@
   "wrapper.line.integration.not_installed_yet": "még nincs telepítve",
   "wrapper.tools.arriving": "A felderítők (Scout) eszközei úton vannak: a teljes kép a háttérben töltődik le (kb. 3 GB). Az állások keresése magától elindul, amint megérkeztek; nincs teendőd.",
   "wrapper.tools.waiting": "A felderítők (Scout) eszközei megérkeztek: a csapat magától átvált rájuk, amint a bevezetés lezárult.",
+  "wrapper.tools.ready": "A felderítők (Scout) eszközei megérkeztek: a csapat a teljes képpel keres.",
+  "wrapper.tools.engine_down": "A felderítők (Scout) eszközeinek állapota nem olvasható: a konténermotor nem válaszol. Indítsd el a jht up paranccsal.",
   "wrapper.tools.failed": "A felderítők (Scout) eszközeinek letöltése nem sikerült, így a csapat még nem tud állásokat keresni. Futtasd a jht tools pull parancsot az újrapróbáláshoz (a jht up is újrapróbálja).",
   "wrapper.tools.switch_failed": "A felderítők (Scout) eszközei megérkeztek, de a csapatot nem sikerült velük újraindítani: futtasd a jht down, majd a jht up parancsot.",
   "wrapper.tools.chat_switched": "A csapat átáll a felderítők (Scout) teljes eszközeire, ezért ez a csevegés bezárult. Pár perc múlva nyisd meg újra a jht team chat paranccsal.",

@@ -372,6 +372,8 @@
   "wrapper.line.integration.not_installed_yet": "non ancora installato",
   "wrapper.tools.arriving": "Gli strumenti degli Scout stanno arrivando: l'immagine piena si scarica in background (circa 3 GB). La ricerca delle posizioni parte da sola quando sono arrivati; non devi fare niente.",
   "wrapper.tools.waiting": "Gli strumenti degli Scout sono arrivati: la squadra ci passa da sola quando l'onboarding e' chiuso.",
+  "wrapper.tools.ready": "Gli strumenti degli Scout sono arrivati: la squadra cerca con l'immagine piena.",
+  "wrapper.tools.engine_down": "Lo stato degli strumenti degli Scout non si legge: il motore dei container non risponde. Avvialo con jht up.",
   "wrapper.tools.failed": "Il download degli strumenti degli Scout non e' riuscito: la squadra non puo' ancora cercare posizioni. Esegui jht tools pull per riprovare (anche jht up riprova).",
   "wrapper.tools.switch_failed": "Gli strumenti degli Scout sono arrivati, ma la squadra non si e' potuta riavviare con loro: esegui jht down, poi jht up.",
   "wrapper.tools.chat_switched": "La squadra passa agli strumenti completi degli Scout, quindi questa chat si e' chiusa. Riaprila fra un paio di minuti con jht team chat.",
