@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from test_cli_help_never_starts_docker import make_docker_spy, write_trusted_runtime
+from wrapper_texts import LANGUAGES, TEXTS, catalog
 
 ROOT = Path(__file__).resolve().parents[1]
 INSTALL_SH = ROOT / "scripts" / "install.sh"
@@ -107,7 +108,10 @@ def test_an_installation_on_an_italian_system_says_its_lines_in_italian(tmp_path
 def test_the_key_file_warning_follows_the_language_too():
     source = WRAPPER_SH.read_text(encoding="utf-8")
     assert 'warn "$(jht_say keyfile.readable "$host_file")"' in source
-    assert "keyfile.readable) printf '%s' \"il file %s lo possono leggere anche altri utenti: chmod 600 sul file.\" ;;" in source
+    # the texts of the .sh are in the catalogs (shared/locales), the block in the wrapper is made from them
+    assert catalog("it")["wrapper.keyfile.readable"] == "il file %s lo possono leggere anche altri utenti: chmod 600 sul file."
+    assert all(catalog(lang).get("wrapper.keyfile.readable") for lang in LANGUAGES)
+    assert "keyfile.readable" in TEXTS.calls(source)
 
 
 def test_windows_writes_the_language_of_the_person_in_host_env_and_reads_it_by_the_same_rule():
@@ -129,7 +133,9 @@ def test_windows_writes_the_language_of_the_person_in_host_env_and_reads_it_by_t
 def test_the_config_changed_warnings_follow_the_language_of_the_person():
     source = WRAPPER_SH.read_text(encoding="utf-8")
     for key in ("config.changed_stopped", "config.changed_start", "config.changed_down", "config.changed_other"):
-        assert source.count(f"    {key}) printf '%s'") == 2, key  # English and Italian
+        texts = [catalog(lang).get(f"wrapper.{key}") for lang in LANGUAGES]
+        assert all(texts) and texts[LANGUAGES.index("en")] != texts[LANGUAGES.index("it")], key  # every language, not English only
+        assert source.count(f"    {key}) printf '%s'") == len(LANGUAGES), key  # one line in each function of the block
         assert f'"$(jht_say_sentence {key})"' in source, key  # the code in front is the app's (jht_code_for_app)
     # no sentence of this family is left written in one language only
     assert not re.search(r'(warn|err) "config_changed_(while_running|stopped):', source)

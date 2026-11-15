@@ -16,7 +16,7 @@ def test_team_stop_works_for_a_container_that_only_its_hash_does_not_attest(tmp_
     negato»: the person could not stop the team. Every other label still attests it, as for `jht down`."""
     result, created = _team(tmp_path, "stop", "--all", key="sk-test-terminal", made_with="sk-another")
     assert result.returncode == 0, (result.stdout, result.stderr)
-    assert "avvio automatico negato" not in result.stderr and "config_changed_while_running" in result.stderr
+    assert "automatic start refused" not in result.stderr and "config_changed_while_running" in result.stderr
     assert not created.exists()
 
 
@@ -31,7 +31,7 @@ def test_team_stop_still_refuses_a_container_that_is_not_ours_by_any_other_label
 
 def test_other_team_commands_still_need_the_exact_attestation(tmp_path: Path):
     result, created = _team(tmp_path, "status", key="sk-test-terminal", made_with="sk-another")
-    assert result.returncode != 0 and "avvio automatico negato" in result.stderr
+    assert result.returncode != 0 and "automatic start refused" in result.stderr
     assert not created.exists()
 
 

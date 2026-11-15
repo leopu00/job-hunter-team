@@ -12,6 +12,8 @@ import re
 import subprocess
 from pathlib import Path
 
+from wrapper_texts import say_functions
+
 ROOT = Path(__file__).resolve().parent.parent
 WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
 
@@ -28,6 +30,7 @@ def functions(*names: str) -> str:
 
 def check(home: Path, **env: str) -> subprocess.CompletedProcess:
     script = ('err() { echo "error: $*" >&2; }\n'
+              + say_functions()
               + functions("host_data_dir_same", "host_data_dirs_supported")
               + "\nhost_data_dirs_supported && echo ok\n")
     return subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30,

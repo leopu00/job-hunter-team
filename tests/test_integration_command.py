@@ -21,6 +21,8 @@ from pathlib import Path
 
 import pytest
 
+from wrapper_texts import say_functions
+
 ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
 INSTALLER = ROOT / "scripts" / "install.sh"
@@ -292,6 +294,7 @@ set -euo pipefail
 HOST_KERNEL="$(uname -s)"; HOST_UID="$(id -u)"
 RUNTIME_DIR="{runtime}"; RUNTIME_HELPERS="jht-integration.sh"; RUNTIME_HELPERS_MANIFEST="{runtime}/.runtime-helpers"
 err() {{ echo "error: $*" >&2; }}
+{say_functions()}
 {wrapper_functions(*HELPER_FUNCTIONS, "runtime_helper_load")}
 {body}
 """

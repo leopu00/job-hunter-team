@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from wrapper_texts import say_functions
+
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = (ROOT / "scripts" / "jht-wrapper.sh").read_text(encoding="utf-8")
 
@@ -29,6 +31,7 @@ def _upgrade_result(rolled_back: str) -> subprocess.CompletedProcess:
     script = f"""set -u
 UPGRADE_JSON=0
 UPGRADE_PRUNE_JSON=""
+{say_functions("it")}
 {_function("upgrade_safe_field")}
 {_function("upgrade_result")}
 upgrade_result false false preflight 0.4.0 img 0.4.0 img false "si aggiorna reinstallando dalla build di test" {rolled_back}

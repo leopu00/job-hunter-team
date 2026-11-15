@@ -43,6 +43,8 @@ def shell_quote(text: str) -> str:
 
 
 class ScriptTexts:
+    """The block of a script whose calls carry their English: ts <key> '<English>'."""
+
     def __init__(self, script: Path, *, function: str = "ts_table", calls: tuple[str, ...] = ("ts", "tsf"), tool: str = "") -> None:
         self.script = script
         self.function = function
@@ -103,4 +105,56 @@ class ScriptTexts:
                 out.append(f"{lang}: {key} has a new line or an escape")
             if lang == "en" and text != english:
                 out.append(f"en: {key} is {text!r} in the catalog and {english!r} in the script")
+        return out
+
+
+class KeyedScriptTexts(ScriptTexts):
+    """The block of a script whose calls name a key only (the wrapper: jht_say <key> values...).
+
+    The block is one function per language, ``<function>_<lang>() { case "$1" in <key>) printf '%s' '<text>' ;; }``, so
+    the existing ``jht_text_en``/``jht_text_it`` keep their names. The script says ``<key>``; the catalogs hold
+    ``<prefix><key>``. A key the catalogs lack has no English in the script: problems() names it.
+    """
+
+    def __init__(self, script: Path, *, function: str, calls: tuple[str, ...], prefix: str, tool: str = "") -> None:
+        super().__init__(script, function=function, calls=calls, tool=tool)
+        names = "|".join(re.escape(name) for name in calls)
+        self.call = re.compile(rf"(?<![\w-])(?:{names}) ([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)\b")
+        self.prefix = prefix
+
+    def calls(self, source: str | None = None) -> dict[str, str]:
+        body = self._without_block(self.source() if source is None else source)
+        english = catalog("en")
+        keys = set(self.call.findall(body))
+        # a key said through a variable is named in a comment: «# texts said through a variable: key1 key2»
+        for named in re.findall(r"(?m)^\s*# texts said through a variable: (.+)$", body):
+            keys.update(named.split())
+        return {key: english.get(self.prefix + key, "") for key in sorted(keys)}
+
+    def block(self) -> str:
+        keys = sorted(self.calls())
+        lines = [self.begin]
+        for lang in LANGUAGES:
+            texts = catalog(lang)
+            lines += [f"{self.function}_{lang}() {{", '  case "$1" in']
+            lines += [f"    {key}) printf '%s' {shell_quote(texts[self.prefix + key])} ;;" for key in keys if self.prefix + key in texts]
+            lines += ["    *) return 1 ;;", "  esac", "}"]
+        lines += [self.end]
+        return "\n".join(lines) + "\n"
+
+    def problems(self, lang: str) -> list[str]:
+        texts, english = catalog(lang), catalog("en")
+        out = []
+        for key in self.calls():
+            name = self.prefix + key
+            if name not in texts:
+                out.append(f"{lang}: {name} is missing")
+                continue
+            reference = english.get(name, "")
+            text = texts[name]
+            if PLACEHOLDER.findall(text) != PLACEHOLDER.findall(reference) or text.count("%") != reference.count("%"):
+                out.append(f"{lang}: {name} has other placeholders than the English {reference!r}: {text!r}")
+            # only a help text is more than one line
+            if ("\n" in text and ".help." not in f".{key}") or "\x1b" in text:
+                out.append(f"{lang}: {name} has a new line or an escape")
         return out

@@ -21,6 +21,8 @@ from pathlib import Path
 
 import pytest
 
+from wrapper_texts import say_functions
+
 ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
 COMPOSE = ROOT / "docker-compose.yml"
@@ -69,6 +71,7 @@ def run(host, body: str, state: str = "absent", **env_extra):
         f'broker_migrate_legacy_once() {{ echo MIGRATE >> "{host.log}"; }}\n'
         f'broker_configure_web_authorisations() {{ echo CONFIGURE >> "{host.log}"; }}\n'
         + "\n".join(_function(n) for n in ("compose_lacks_service", "compose_unreadable", "ensure_broker", "broker_after_up", "broker_admin"))
+        + "\n" + say_functions("it")
         + "\n" + body
     )
     return subprocess.run(["bash", "-c", script], env={**os.environ, **env_extra}, text=True, capture_output=True, timeout=30, check=False)

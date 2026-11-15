@@ -11,7 +11,9 @@ from test_desktop_chat_wrapper import _runtime
 
 ROOT = Path(__file__).resolve().parents[1]
 POWERSHELL_WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
-NO_PROVIDER = "nessun provider attivo"
+NO_PROVIDER = "nessun provider attivo"  # the .ps1 still says it by hand, in Italian
+# English: the language of a person who chose nothing
+NO_PROVIDER_EN = "no active provider"
 
 
 def _login(tmp_path: Path, provider: str | None) -> tuple[subprocess.CompletedProcess, list[str]]:
@@ -51,7 +53,7 @@ def test_no_provider_opens_no_login_and_says_which_command_chooses_one(tmp_path:
     # the read answers nothing for a config that is not there yet or has no active_provider
     done, calls = _login(tmp_path, "")
     assert done.returncode == 1, (done.returncode, done.stderr)
-    assert NO_PROVIDER in done.stderr and "jht providers use openai" in done.stderr
+    assert NO_PROVIDER_EN in done.stderr and "jht providers use glm" in done.stderr  # glm: the default of 0.4.0
     assert _logins(calls) == [], "no CLI is started when no provider is chosen"
     assert "command not found" not in done.stderr
 
@@ -59,7 +61,7 @@ def test_no_provider_opens_no_login_and_says_which_command_chooses_one(tmp_path:
 def test_an_unknown_provider_is_refused_by_the_wrapper_not_by_the_shell(tmp_path: Path):
     done, calls = _login(tmp_path, "somebody-else")
     assert done.returncode == 1, (done.returncode, done.stderr)
-    assert "provider attivo non riconosciuto: somebody-else" in done.stderr
+    assert "active provider not recognized: somebody-else" in done.stderr
     assert "command not found" not in done.stderr
     assert _logins(calls) == []
 

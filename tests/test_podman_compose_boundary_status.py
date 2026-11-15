@@ -11,6 +11,10 @@ from test_podman_compose_exact_version_boundary import (
     _status,
 )
 
+# English: the language of a person who chose nothing (the line of a container not there, «non attivo», is the fixed
+# machine-readable line and stays as it is)
+UNATTESTABLE = "cannot be verified"
+
 
 def test_a_key_exported_in_the_terminal_does_not_make_the_running_team_inactive(tmp_path: Path):
     result, created = _status(tmp_path, key="sk-test-terminal", label_made_with=None)   # made clean, asked with a key
@@ -35,8 +39,8 @@ def test_a_container_made_with_the_same_key_is_still_ours_for_that_terminal(tmp_
 def test_a_container_made_with_another_key_is_not_a_free_pass(tmp_path: Path):
     result, _ = _status(tmp_path, key="sk-test-terminal", label_made_with="sk-another")
     assert result.returncode != 0
-    # a container that is there and cannot be attested is not «non attivo»: it says so and names the variable (not its value)
-    assert "non attestabile" in result.stdout and "non attivo" not in result.stdout
+    # a container that is there and cannot be attested is not «non attivo»: it says it cannot be verified and names the variable (not its value)
+    assert UNATTESTABLE in result.stdout and "non attivo" not in result.stdout
     assert "OPENAI_API_KEY" in result.stdout and "unset" in result.stdout and "sk-test-terminal" not in result.stdout
 
 
@@ -47,7 +51,7 @@ def test_a_wrong_hash_is_refused_with_a_key_exported_too(tmp_path: Path):
     env["OPENAI_API_KEY"] = "sk-test-terminal"
     env["JHT_FIXTURE_CONTAINER_CASE"] = "wrong-config-hash"
     result = _run(wrapper, env, "status")
-    assert result.returncode != 0 and "non attestabile" in result.stdout and "OPENAI_API_KEY" in result.stdout
+    assert result.returncode != 0 and UNATTESTABLE in result.stdout and "OPENAI_API_KEY" in result.stdout
 
 
 
@@ -68,7 +72,7 @@ def test_status_with_no_container_at_all_still_says_not_active(tmp_path: Path):
     wrapper, env, _, _ = _runtime(tmp_path)
     env["JHT_FIXTURE_CONTAINER_CASE"] = "zero"                 # the project lists no container
     result = _run(wrapper, env, "status")
-    assert result.returncode != 0 and "non attivo" in result.stdout and "non attestabile" not in result.stdout
+    assert result.returncode != 0 and "non attivo" in result.stdout and UNATTESTABLE not in result.stdout
 
 
 
@@ -78,8 +82,8 @@ def test_status_of_an_unattestable_container_without_a_caller_variable_names_non
         env.pop(name, None)
     env["JHT_FIXTURE_CONTAINER_CASE"] = "wrong-config-hash"
     result = _run(wrapper, env, "status")
-    assert result.returncode != 0 and "non attestabile" in result.stdout
-    assert "sono impostate" not in result.stdout and "non attivo" not in result.stdout
+    assert result.returncode != 0 and UNATTESTABLE in result.stdout
+    assert "these are set" not in result.stdout and "non attivo" not in result.stdout
 
 
 
@@ -88,8 +92,8 @@ def test_status_shows_the_first_line_the_provider_printed_when_it_cannot_list_th
     env["JHT_FIXTURE_PS_FAILS"] = "\n  ERROR:podman_compose:failed to check if podman is installed: 'podman'\nsecond line\n"
     result = _run(wrapper, env, "status")
     assert result.returncode != 0
-    assert "non attestabile" in result.stdout and "non attivo" not in result.stdout
-    assert "Il provider ha detto: ERROR:podman_compose:failed to check if podman is installed: 'podman'" in result.stdout
+    assert UNATTESTABLE in result.stdout and "non attivo" not in result.stdout
+    assert "The provider said: ERROR:podman_compose:failed to check if podman is installed: 'podman'" in result.stdout
     assert "second line" not in result.stdout
 
 
@@ -98,8 +102,8 @@ def test_status_cuts_a_long_provider_line_and_drops_control_characters(tmp_path:
     wrapper, env, _, _ = _runtime(tmp_path)
     env["JHT_FIXTURE_PS_FAILS"] = "x" * 500 + "\x1b[31mred\x07"
     result = _run(wrapper, env, "status")
-    said = next(line for line in result.stdout.splitlines() if "Il provider ha detto:" in line)
-    assert len(said.split("Il provider ha detto: ", 1)[1]) <= 200
+    said = next(line for line in result.stdout.splitlines() if "The provider said:" in line)
+    assert len(said.split("The provider said: ", 1)[1]) <= 200
     assert "\x1b" not in result.stdout and "\x07" not in result.stdout
 
 
@@ -108,7 +112,7 @@ def test_status_of_a_provider_that_says_nothing_gives_its_exit_code(tmp_path: Pa
     wrapper, env, _, _ = _runtime(tmp_path)
     env["JHT_FIXTURE_PS_FAILS"] = " "
     result = _run(wrapper, env, "status")
-    assert "Il provider ha detto: provider exit code 1, nothing said" in result.stdout
+    assert "The provider said: provider exit code 1, nothing said" in result.stdout
 
 
 

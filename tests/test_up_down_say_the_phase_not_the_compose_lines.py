@@ -33,7 +33,7 @@ def test_help_setup_is_the_help_of_setup_and_starts_nothing(tmp_path, container_
     asked = run_wrapper(["help", "setup"], fake_bin, tmp_path)
     same = run_wrapper(["setup", "--help"], fake_bin, tmp_path)
     assert asked.returncode == 0 and same.returncode == 0, asked.stderr
-    assert asked.stdout == same.stdout and "--api-key-file <percorso>" in asked.stdout and "--api-key-stdin" in asked.stdout
+    assert asked.stdout == same.stdout and "--api-key-file <path>" in asked.stdout and "--api-key-stdin" in asked.stdout
     assert_no_docker_effect(log)
 
 

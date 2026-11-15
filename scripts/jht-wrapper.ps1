@@ -1741,8 +1741,8 @@ Senza opzioni parte l'installazione guidata. Con --non-interactive non chiede ni
 tutto si da' con le opzioni.
 
   --non-interactive            nessuna domanda
-  --provider <nome>            openai (predefinito), glm (Z.ai) o kimi (Moonshot)
-  --harness <nome>             codex (predefinito) o pi; glm e kimi vanno solo con pi
+  --provider <nome>            glm (Z.ai, predefinito), kimi (Moonshot), openai o claude (Anthropic)
+  --harness <nome>             pi (predefinito; l'unico per glm, kimi e claude) o codex (solo con openai)
   --auth-method <metodo>       api_key (predefinito) o subscription
   --api-key-file <percorso>    file che contiene la chiave API (una riga, leggibile solo da te).
                                Un file del tuo computer lo legge jht e lo passa al setup: con glm e kimi
@@ -1759,8 +1759,13 @@ tutto si da' con le opzioni.
   --skip-health                salta il controllo finale
   --reset                      riparte da una configurazione pulita
 
-Esempio, con una chiave GLM in un file:
-  jht setup --non-interactive --provider glm --harness pi --api-key-file chiave.txt
+Esempi:
+  con una chiave GLM in un file:
+    jht setup --non-interactive --provider glm --harness pi --api-key-file chiave.txt
+  OpenAI con una chiave API, su Pi (per Claude: --provider claude):
+    jht setup --non-interactive --provider openai --harness pi --api-key-stdin
+  l'abbonamento Codex (poi il login a ChatGPT):
+    jht setup --non-interactive --provider openai --harness codex --auth-method subscription
 '@)
 }
 

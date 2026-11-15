@@ -24,6 +24,8 @@ import subprocess
 
 import pytest
 
+from wrapper_texts import catalog
+
 
 ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
@@ -956,14 +958,19 @@ ITALIAN_MARKS = ("e' ", "uso:", "Vengono", "restano", "Restano", "rimoss", "Non 
 
 
 @pytest.mark.parametrize("lang", ["en", "hu", "de", ""])
-def test_an_installation_that_is_not_italian_gets_english_from_uninstall(tmp_path: Path, lang: str) -> None:
+def test_an_installation_that_is_not_italian_gets_its_own_language_from_uninstall(tmp_path: Path, lang: str) -> None:
+    """Not Italian: the texts of its own catalog (hu, de), English when none is chosen; never the Italian ones."""
     box = Box(tmp_path, "Darwin")
     box.select("podman")
     box.machines("jht-podman*")
     result = box.run("uninstall", "--yes", JHT_LANG=lang)
+    texts = catalog(lang or "en")
     assert result.returncode == 2
-    assert "usage: jht uninstall --confirm [--purge]" in result.stderr
-    assert "mail password and Telegram tokens" in result.stderr
+    assert texts["wrapper.uninstall.usage"] in result.stderr, result.stderr
+    assert texts["wrapper.uninstall.loss"] in result.stderr, result.stderr
+    if lang in ("", "en"):
+        assert "usage: jht uninstall --confirm [--purge]" in result.stderr
+        assert "mail password and Telegram tokens" in result.stderr
     assert not [mark for mark in ITALIAN_MARKS if mark in result.stderr], result.stderr
 
 

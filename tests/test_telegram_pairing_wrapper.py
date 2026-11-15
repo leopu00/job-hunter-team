@@ -16,6 +16,8 @@ from pathlib import Path
 
 import pytest
 
+from wrapper_texts import say_functions
+
 
 ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
@@ -133,6 +135,7 @@ def pair_script(command: str = "telegram_pair assistente", home: str = "/host-ho
         'compose() { printf "COMPOSE %s\\n" "$*" >> "$FAKE_LOG"; }\n'
         'TELEGRAM_SERVICE=jht-telegram\nCONTAINER_SERVICE=jht\n'
         f'CONTAINER_RUNTIME=docker\nHOME={home}\n'
+        + say_functions("it")
         + "\n".join(line for line in WRAPPER.read_text(encoding="utf-8").splitlines()
                     if line.startswith(("TELEGRAM_NEW_TOKEN_NOTE=", "TELEGRAM_PAIR_AGENTS_STOPPED=")))
         + "\n"
