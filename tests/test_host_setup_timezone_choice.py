@@ -49,7 +49,7 @@ def zoneinfo(tmp_path):
     return folder
 
 
-def _run(tmp_path, zoneinfo, answers, *, lang="en", detected="Europe/Rome", saved=None, host="1"):
+def _run(tmp_path, zoneinfo, answers, *, lang="en", detected="Europe/Rome", saved=None, host="1", extra=None):
     pty = pytest.importorskip("pty")
     home = tmp_path / "home"
     (home / ".jht").mkdir(parents=True, exist_ok=True)
@@ -61,6 +61,7 @@ def _run(tmp_path, zoneinfo, answers, *, lang="en", detected="Europe/Rome", save
     env = {k: v for k, v in os.environ.items() if k not in {"LANG", "LC_ALL", "LC_MESSAGES", "JHT_LANG", "JHT_USER_TZ", "DISPLAY", "WAYLAND_DISPLAY"}}
     env.update({"HOME": str(home), "PATH": "/usr/bin:/bin", "LANG": "C", "TERM": "dumb", "JHT_LANG": lang,
                 "JHT_ZONEINFO_DIR": str(zoneinfo), "JHT_LOCALTIME": str(localtime), "JHT_RUNTIME_DIR": str(tmp_path / "runtime")})
+    env.update(extra or {})
     (tmp_path / "runtime").mkdir(exist_ok=True)
     pid, fd = pty.fork()
     if pid == 0:
@@ -197,3 +198,20 @@ def test_a_search_typed_at_the_prompt_of_the_number_starts_on_a_line_of_its_own(
     # the next thing said is the proposal, not a prompt left without its answer
     assert not re.search(r"\]: *Proposed", out), out
     assert re.search(r"a new search: Budapest\r?\nProposed: Europe/Budapest", out), out
+
+
+def test_the_search_writes_no_file_in_a_shared_temporary_folder(tmp_path, zoneinfo):
+    """A name like /tmp/jht-tz-names.<pid> could be made first by another user, as a link to a file of the person."""
+    shared = tmp_path / "shared-tmp"
+    shared.mkdir()
+    shared.chmod(0o555)  # nobody writes here: a search that needs a file there finds nothing
+    try:
+        code, out, saved, left = _run(tmp_path, zoneinfo, ["Lisbon", ""], extra={"TMPDIR": str(shared)})
+    finally:
+        shared.chmod(0o755)
+    assert code == 0 and not left, out
+    assert "Proposed: Europe/Lisbon" in out and _tz(saved) == "Europe/Lisbon", out
+    assert list(shared.iterdir()) == []
+    source = HOST_SETUP.read_text(encoding="utf-8")
+    assert "jht-tz-names" not in source and not re.search(r'>\s*"\$\{TMPDIR', source)
+

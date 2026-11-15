@@ -1203,23 +1203,24 @@ jht_tz_search() {
     *) jht_tz_valid "$code" && { printf '=%s\n' "$code"; return 0; } ;;
   esac
   zones="$(awk -F '\t' '$1 !~ /^#/ && NF >= 3 { print $3 }' "$tab")"
-  # every line: the code or the zone, its folded name, its folded last part (empty for a country)
-  {
+  # every line: the code or the zone, its folded name, its folded last part (empty for a country). Kept in a variable: no file
+  # (a name in a shared /tmp could be made first by another user, as a link to a file of the person).
+  local names
+  names="$({
     if [ -f "$dir/iso3166.tab" ]; then
       grep -v '^#' "$dir/iso3166.tab" | cut -f 1 | paste - <(grep -v '^#' "$dir/iso3166.tab" | cut -f 2 | jht_tz_fold_lines) \
         | awk -F '\t' '{ print "C\t" $1 "\t" $2 "\t" }'
     fi
     printf '%s\n' "$zones" | paste - <(printf '%s\n' "$zones" | tr '/' ' ' | jht_tz_fold_lines) <(printf '%s\n' "$zones" | sed 's|.*/||' | jht_tz_fold_lines) \
       | awk -F '\t' '{ print "Z\t" $1 "\t" $2 "\t" $3 }'
-  } > "${TMPDIR:-/tmp}/jht-tz-names.$$"
-  exact="$(awk -F '\t' -v q="$query" '($1 == "C" && $3 == q) || ($1 == "Z" && $4 == q) { print $1 "\t" $2 }' "${TMPDIR:-/tmp}/jht-tz-names.$$")"
+  })"
+  exact="$(printf '%s\n' "$names" | awk -F '\t' -v q="$query" '($1 == "C" && $3 == q) || ($1 == "Z" && $4 == q) { print $1 "\t" $2 }')"
   if [ -n "$exact" ]; then
     printf '%s\n' "$exact" | jht_tz_expand "$tab" | jht_tz_only_valid | sed 's/^/=/'
   else
-    awk -F '\t' -v q="$query" 'index($3, q) { print $1 "\t" $2 }' "${TMPDIR:-/tmp}/jht-tz-names.$$" \
+    printf '%s\n' "$names" | awk -F '\t' -v q="$query" 'index($3, q) { print $1 "\t" $2 }' \
       | jht_tz_expand "$tab" | jht_tz_only_valid | sed 's/^/~/'
   fi
-  rm -f -- "${TMPDIR:-/tmp}/jht-tz-names.$$"
 }
 # «C<tab>code» becomes the zones of that country, «Z<tab>zone» the zone.
 jht_tz_expand() {
