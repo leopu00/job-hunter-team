@@ -101,12 +101,16 @@ def test_a_missing_config_has_no_harness(tmp_path: Path) -> None:
 
 
 def _role_table() -> dict[str, tuple[str, str]]:
-    """role -> (Codex model id, effort) from the table the launcher and the wizard share."""
+    """role -> (Codex model id, effort) from the tables the launcher and the wizard share."""
     rows = [line.split("|") for line in
             (ROOT / "shared" / "runtime" / "role-models.list").read_text(encoding="utf-8").splitlines()
             if line and not line.startswith("#")]
     models = {r[1]: r[2] for r in rows if r[0] == "model"}
-    return {r[1]: (models[r[2]], r[3]) for r in rows if r[0] == "role"}
+    # OpenAI gives its light roles (scout, analista, sentinella) the class of provider-models.list, as GLM does
+    light = {r[2]: r[3] for r in (line.split("|") for line in
+             (ROOT / "shared" / "runtime" / "provider-models.list").read_text(encoding="utf-8").splitlines())
+             if r[0] == "rolemodel" and r[1] == "openai"}
+    return {r[1]: (models[light.get(r[1], r[2])], r[3]) for r in rows if r[0] == "role"}
 
 
 @pytest.mark.parametrize("role", ROLES)

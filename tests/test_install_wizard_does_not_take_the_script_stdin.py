@@ -55,9 +55,12 @@ def run_piped_installer(
     lines = [
         "DRY_RUN=0; PAIRING_TOKEN=''; BIN_DIR='%s'; PATH_READY=%d" % (fake_bin, path_ready),
         'info() { echo "info: $*" >> \'%s\'; }; warn() { echo "warn: $*" >> \'%s\'; }' % (out, out),
-        # the sentences are said in the person's language (tx, by installer_person_lang): the real ones
+        # the sentences are said in the person's language (ts/tsf from the block of the 7 languages, by installer_person_lang):
+        # the real ones
         function_source(source, "installer_person_lang"),
-        next(line for line in source.splitlines() if line.startswith("tx() ")),
+        next(line for line in source.splitlines() if line.startswith("ts() ")),
+        function_source(source, "tsf"),
+        function_source(source, "ts_table"),
         function_source(source, "tty_can_be_opened"),
         function_source(source, "maybe_onboard"),
     ]

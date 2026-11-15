@@ -17,6 +17,7 @@ import { existsSync } from 'node:fs';
 import {
   AI_PROVIDERS,
   PI_API_CHOICES,
+  OPENAI_PI_CHOICE,
   readConfigFileSnapshot,
   validateApiKey,
   summarizeExistingConfig,
@@ -41,7 +42,7 @@ import { join } from 'node:path';
 import { keyStoreDir } from './key-store.js';
 import { JHT_CONFIG_PATH } from './setup-helpers.js';
 import { piApiProvider } from '../../shared/runtime/provider-models.js';
-import { RELEASE_PROVIDERS, RELEASE_HARNESS, offeredInRelease } from '../../shared/runtime/release-providers.js';
+import { RELEASE_PROVIDERS, RELEASE_HARNESS, configOffered, offeredWay } from '../../shared/runtime/release-providers.js';
 import pc from 'picocolors';
 
 /** «[2/3] text»: the slow steps after the choices, numbered the same way as the installer's. */
@@ -60,16 +61,19 @@ const PROVIDER_UPDATE_ID = {
 // Etichetta mostrata nel wizard (shared/locales, wizard.provider.*): Codex
 // porta la parola «consigliato» nella lingua dell'utente.
 const PROVIDER_LABEL_KEY = {
-  openai: 'codex',
+  openai: offeredWay('openai', 'codex') ? 'codex' : 'key_openai',
   glm: 'key_glm',
   kimi: 'key_kimi',
+  claude: 'key_claude',
 };
 
 /**
  * What the wizard offers: the services of this release (shared/runtime/release-providers.js), each on Pi with an API key. Codex with
  * the subscription or a key, and the other services, are kept in the code for the next release but not offered.
  */
-export const WIZARD_PROVIDERS = [...AI_PROVIDERS, ...PI_API_CHOICES].filter((p) => RELEASE_PROVIDERS.includes(p.value));
+export const WIZARD_PROVIDERS = RELEASE_PROVIDERS.map((name) => (name === 'openai' && !offeredWay('openai', 'codex')
+  ? OPENAI_PI_CHOICE // OpenAI only with a key, on pi: no Codex here
+  : [...AI_PROVIDERS, ...PI_API_CHOICES].find((p) => p.value === name))).filter(Boolean);
 
 // Eseguibile del CLI provider per OAuth login. Tutti partono con un comando
 // che, al primo run senza credenziali, mostra il device-flow URL.
@@ -211,7 +215,7 @@ async function runSetupSteps(prompter, state) {
       ],
     });
     // a config of a service this release does not offer cannot be kept: it is said, and the setup goes on as an update
-    if (action === 'keep' && !offeredInRelease(baseConfig.active_provider)) {
+    if (action === 'keep' && !configOffered(baseConfig)) {
       await prompter.note(tf('wizard.release.not_offered', String(baseConfig.active_provider ?? '-')), t('wizard.config_existing_title'));
     } else if (action === 'keep') {
       // Kept values do not say there is a login: the wait for it may have run out before (30 minutes) and the setup
@@ -268,7 +272,7 @@ async function runSetupSteps(prompter, state) {
   // With one provider offered there is nothing to choose: it is said, not asked.
   const providerLabel = (p) => t(`wizard.provider.${PROVIDER_LABEL_KEY[p.value]}`);
   // the provider of a config already there, under the name the wizard offers it (moonshot is kimi)
-  const offeredNow = piApiProvider(baseConfig.active_provider) ?? baseConfig.active_provider;
+  const offeredNow = configOffered(baseConfig) ? (piApiProvider(baseConfig.active_provider) ?? baseConfig.active_provider) : undefined;
   let providerChoice;
   if (WIZARD_PROVIDERS.length === 1) {
     providerChoice = WIZARD_PROVIDERS[0].value;
@@ -282,7 +286,7 @@ async function runSetupSteps(prompter, state) {
   }
   await prompter.note(t('wizard.release.coming'), t('wizard.provider.prompt'));
   const selectedProvider = WIZARD_PROVIDERS.find((p) => p.value === providerChoice);
-  const takesApiKey = selectedProvider.piOnly === true;
+  const takesApiKey = selectedProvider.piOnly === true || selectedProvider.keyOnPi === true;
 
   // --- Harness: il programma che guida gli agenti (codex | pi), subito dopo il provider ---
   // GLM and Kimi run only on Pi, with an API key: nothing to ask, it is said.

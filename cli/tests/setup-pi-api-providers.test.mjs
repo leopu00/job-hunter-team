@@ -26,13 +26,14 @@ async function setup(opts) {
 const config = () => JSON.parse(readFileSync(join(HOME, 'jht.config.json'), 'utf8'));
 
 test('the choices: glm and kimi with their pi variables, moonshot is kimi', () => {
-  assert.deepEqual(PI_API_CHOICES.map((p) => [p.value, p.keyVariable]), [['glm', 'ZAI_API_KEY'], ['kimi', 'MOONSHOT_API_KEY']]);
+  assert.deepEqual(PI_API_CHOICES.map((p) => [p.value, p.keyVariable]), [['glm', 'ZAI_API_KEY'], ['kimi', 'MOONSHOT_API_KEY'], ['claude', 'ANTHROPIC_API_KEY']]);
+  assert.equal(findProviderChoice('anthropic').value, 'claude');
   assert.equal(findProviderChoice('moonshot').value, 'kimi');
   assert.equal(findProviderChoice('openai').value, 'openai');
   assert.equal(findProviderChoice('gemini'), undefined);
 });
 
-for (const [provider, model] of [['glm', 'glm-5.3'], ['kimi', 'kimi-k3.1-pro']]) {
+for (const [provider, model] of [['glm', 'glm-5.3'], ['kimi', 'kimi-k3.1-pro'], ['claude', 'claude-opus-5-5']]) {
   test(`${provider} with pi: the key is a reference to a file, the config says the harness and the model`, { skip: offeredInRelease(provider) ? false : `${provider} is not offered in this release` }, async () => {
     const { code, text } = await setup({ provider, harness: 'pi', secretMode: 'file', secretFile: '/dev/shm/jht-key' });
     assert.equal(code, 0, text);
@@ -73,7 +74,7 @@ test('they run only on pi, and only with an API key', async () => {
 });
 
 test('an unknown provider, and one this release does not offer, say what is offered', async () => {
-  for (const provider of ['gemini', 'openai', 'claude', ...(offeredInRelease('kimi') ? [] : ['kimi', 'moonshot'])]) {
+  for (const provider of ['gemini', 'openai', 'claude', 'kimi', 'moonshot'].filter((name) => !offeredInRelease(name))) {
     const { code, text } = await setup({ provider });
     assert.equal(code, 1, provider);
     assert.match(text, new RegExp(`This release offers only ${RELEASE_PROVIDERS.join(', ')} with an API key, on the pi harness`), provider);
@@ -89,3 +90,41 @@ test('without --provider and --harness the setup is GLM on pi', async () => {
 });
 
 test.after(() => rmSync(HOME, { recursive: true, force: true }));
+
+// OpenAI with an API key, on pi (0.4.0): not pi-only (Codex is its other harness), the key by reference as for glm and kimi.
+test('openai on pi with a key: pi is the default harness, the key by reference in OPENAI_API_KEY, the Codex model table', async () => {
+  const { code, text } = await setup({ provider: 'openai', secretMode: 'env' });
+  assert.equal(code, 0, text);
+  const saved = config();
+  assert.equal(saved.active_provider, 'openai');
+  assert.equal(saved.harness, 'pi');
+  assert.equal(saved.providers.openai.auth_method, 'api_key');
+  assert.deepEqual(saved.providers.openai.api_key_ref, { type: 'ref', source: 'env', id: 'OPENAI_API_KEY' });
+  assert.equal(saved.providers.openai.model, 'gpt-5.6-sol');
+  // never plaintext, as for the providers that run only on pi
+  const plain = await setup({ provider: 'openai', secretMode: 'plaintext', apiKey: ['sk', 'synthetic', 'x'].join('-').padEnd(24, '0') });
+  assert.equal(plain.code, 1, plain.text);
+  assert.match(plain.text, /OpenAI takes its key by reference/);
+});
+
+test('openai: Codex and the ChatGPT subscription are not ways of this release, and are refused with the way that is', async () => {
+  const codex = await setup({ provider: 'openai', harness: 'codex', secretMode: 'env' });
+  assert.equal(codex.code, 1, codex.text);
+  assert.match(codex.text, /This release runs OpenAI only on pi: drop --harness or use --harness pi/);
+  const subscription = await setup({ provider: 'openai', harness: 'pi', authMethod: 'subscription', subscriptionEmail: 'user@example.test' });
+  assert.equal(subscription.code, 1, subscription.text);
+  assert.match(subscription.text, /only with an API key/);
+});
+
+test('claude on pi: anthropic is claude, the key by reference in ANTHROPIC_API_KEY, never with a subscription or on codex', async () => {
+  const { code, text } = await setup({ provider: 'anthropic', secretMode: 'env' });
+  assert.equal(code, 0, text);
+  assert.equal(config().active_provider, 'claude');
+  assert.equal(config().harness, 'pi');
+  assert.equal(config().providers.claude.api_key_ref.id, 'ANTHROPIC_API_KEY');
+  const subscription = await setup({ provider: 'claude', harness: 'pi', authMethod: 'subscription', subscriptionEmail: 'user@example.test' });
+  assert.equal(subscription.code, 1, subscription.text);
+  const codex = await setup({ provider: 'claude', harness: 'codex', secretMode: 'env' });
+  assert.equal(codex.code, 1, codex.text);
+  assert.match(codex.text, /only on pi/);
+});

@@ -42,7 +42,12 @@ test('use glm / kimi / moonshot with the key set up: the provider is active and 
   const again = jht(dir, 'providers', 'use', 'glm');
   assert.match(again.out, /harness: pi → pi|already active|active provider: kimi → glm/);
   // a service this release does not offer cannot be chosen, and the config is not touched
-  for (const name of ['openai', 'codex', 'claude', ...(offeredInRelease('kimi') ? [] : ['kimi', 'moonshot'])]) {
+  // OpenAI with a key on pi: without its key, the command that sets it up (and nothing is written)
+  const openai = jht(dir, 'providers', 'use', 'openai');
+  assert.equal(openai.code, 1, openai.out);
+  assert.match(openai.out, /OpenAI runs on the pi harness, with an API key\. Set it up with: jht setup --provider openai --harness pi/);
+  assert.equal(openai.config().active_provider, 'glm');
+  for (const name of ['openai', 'codex', 'claude', 'kimi', 'moonshot'].filter((n) => !offeredInRelease(n))) {
     const refused = jht(dir, 'providers', 'use', name);
     assert.equal(refused.code, 1, name);
     assert.match(refused.out, new RegExp(`provider '${name}' is not offered in this release \\(offered: ${RELEASE_PROVIDERS.join(', ')}, on Pi with an API key\\)\\. Set it up with: jht setup`));
@@ -71,7 +76,7 @@ test('harness codex is refused for GLM, with the way to pi; harness pi for it sa
   writeFileSync(join(dir, 'jht.config.json'), JSON.stringify({ active_provider: 'glm', harness: 'pi', providers: { glm: keyed(dir, 'glm') } }));
   const refused = jht(dir, 'providers', 'harness', 'codex');
   assert.equal(refused.code, 1, refused.out);
-  assert.match(refused.out, /harness 'codex' is not offered in this release: the agents run on pi/);
+  assert.match(refused.out, /GLM \(Z\.ai\) runs only on the pi harness, with an API key/);
   assert.equal(refused.config().harness, 'pi');
   // already on pi with its key: no «Install Pi and sign in» (it would be wrong)
   writeFileSync(join(dir, 'jht.config.json'), JSON.stringify({ active_provider: 'glm', harness: 'codex', providers: { glm: keyed(dir, 'glm') } }));

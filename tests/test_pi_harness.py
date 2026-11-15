@@ -207,9 +207,9 @@ def test_the_pi_command_is_readable_by_tmux_and_carries_the_scout(tmp_path: Path
     assert _after(argv, "--skill") == f"{agent_dir}/.agents/skills"
     assert _after(argv, "--tools") == "read,bash,edit,write,grep,find,ls"
     assert {"--no-mcp", "-ne"} <= set(argv)
-    # The scout's class and effort, as on Codex.
+    # The scout is a light role: luna on OpenAI as on GLM (provider-models.list), and the effort of the role.
     assert _after(argv, "--provider") == "openai"
-    assert _after(argv, "--model") == "gpt-5.6-terra"
+    assert _after(argv, "--model") == "gpt-5.6-luna"
     assert _after(argv, "--thinking") == "high"
     assert env == {
         "PI_CODING_AGENT_DIR": str(tmp_path / "home" / ".pi" / "agent"),

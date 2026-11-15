@@ -11,7 +11,7 @@ import {
 import { execArgvInContainer, execInContainer, execScriptInContainer } from '../../utils/container-proxy.js';
 import { diskLowRefusal } from '../../lib/disk-guard.js';
 import { harnessOf, harnessProblem } from '../../../../shared/runtime/agent-harness.js';
-import { RELEASE_PROVIDERS, offeredInRelease } from '../../../../shared/runtime/release-providers.js';
+import { RELEASE_PROVIDERS, configOffered, offeredInRelease } from '../../../../shared/runtime/release-providers.js';
 import { PI_API_PROVIDERS, piApiProvider } from '../../../../shared/runtime/provider-models.js';
 import { KEY_REFUSED_EXIT_CODE } from '../providers-key-check.js';
 import { readRegularFileText } from '../../lib/secure-config-io.js';
@@ -579,7 +579,8 @@ export function startRefusal(config, { containerMode, hasTmux = tmuxAvailable, h
   // a provider this release does not offer (shared/runtime/release-providers.js): the way out is the setup, never the
   // install of a CLI the release does not support
   const active = config?.active_provider;
-  if (active && !offeredInRelease(active) && (providerCli(config) || piApiProvider(active))) {
+  // a provider of the release on the wrong harness (glm on codex) is said below with its own reason
+  if (active && (!offeredInRelease(active) || (!configOffered(config) && !piApiProvider(active))) && (providerCli(config) || piApiProvider(active))) {
     return `provider '${active}' is not offered in this release (offered: ${RELEASE_PROVIDERS.join(', ')}, on Pi with an API key). Run: jht setup`;
   }
   const cliBin = providerCli(config);

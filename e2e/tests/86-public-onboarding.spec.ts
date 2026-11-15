@@ -15,7 +15,7 @@ test("la nav inglese usa Download e porta a /download", async ({ page }) => {
   await expect(page).toHaveURL(/\/download$/);
 });
 
-test("la home accompagna da Come si avvia al download Desktop-first", async ({
+test("la home accompagna da Come si avvia al download, che parte dal terminale", async ({
   page,
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -30,13 +30,13 @@ test("la home accompagna da Come si avvia al download Desktop-first", async ({
   await install.click();
   await expect(page).toHaveURL(/\/download$/);
 
-  // Tre strade per installare: app desktop, CLI e il prompt da consegnare a
-  // un assistente AI (quest'ultimo rimesso il 2026-08-10 su richiesta
-  // dell'operatore, dopo essere stato ritirato a luglio).
+  // Due strade per installare nella 0.4.0: la CLI dal terminale (aperta di
+  // default) e il prompt da consegnare a un assistente AI. L'app desktop non
+  // c'e' in questa versione: niente terza strada.
   const modes = page.locator("[data-install-mode]");
-  await expect(modes).toHaveCount(3);
-  await expect(modes.nth(0)).toHaveAttribute("data-install-mode", "desktop");
+  await expect(modes).toHaveCount(2);
+  await expect(modes.nth(0)).toHaveAttribute("data-install-mode", "terminal");
   await expect(modes.nth(0)).toHaveAttribute("data-active", "true");
-  await expect(modes.nth(1)).toHaveAttribute("data-install-mode", "terminal");
-  await expect(modes.nth(2)).toHaveAttribute("data-install-mode", "prompt");
+  await expect(modes.nth(1)).toHaveAttribute("data-install-mode", "prompt");
+  await expect(page.locator('[data-install-mode="desktop"]')).toHaveCount(0);
 });

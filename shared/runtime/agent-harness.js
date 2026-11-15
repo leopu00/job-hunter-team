@@ -68,8 +68,11 @@ export function harnessProblem(harness, provider, authMethod) {
   if (!AGENT_HARNESSES.includes(harness)) {
     return `harness must be one of: ${AGENT_HARNESSES.join(', ')}`;
   }
+  if (harness === 'pi' && (provider === 'claude' || provider === 'anthropic') && authMethod !== 'api_key') {
+    return 'the pi harness is refused with a Claude subscription: Anthropic bills a subscription used from pi as extra usage, per token';
+  }
   if (harness === 'pi' && (provider in PI_API_PROVIDERS || provider in PI_API_ALIASES)) {
-    // Z.ai and Moonshot charge by the token and pi has no subscription login for them: the API key only
+    // Z.ai, Moonshot and Anthropic charge by the token and pi has no subscription login for them: the API key only
     return authMethod === 'api_key' ? null : `the pi harness runs on ${provider} only with an API key (auth_method api_key)`;
   }
   // GLM has no CLI of its own (Z.ai has none): on codex there is nothing to run it. Kimi still has its legacy CLI, which a
@@ -81,7 +84,7 @@ export function harnessProblem(harness, provider, authMethod) {
   if ((provider === 'claude' || provider === 'anthropic') && authMethod !== 'api_key') {
     return 'the pi harness is refused with a Claude subscription: Anthropic bills a subscription used from pi as extra usage, per token';
   }
-  return `the pi harness supports only active_provider=openai, glm or kimi for now (configured: '${provider ?? ''}')`;
+  return `the pi harness supports only active_provider=openai, glm, kimi or claude for now (configured: '${provider ?? ''}')`;
 }
 
 /**
