@@ -1096,7 +1096,24 @@ function Write-IntegrationUsage {
   return 2
 }
 
+# The sentences have the letters of their language (é, ő, ç…): what is written to stdout and stderr goes out as UTF-8 while the command
+# runs (the JSON the app reads, a person at a terminal, a pipe), and the console gets back its own encoding after it (it belongs to
+# the window, and would stay changed after the command). Windows PowerShell 5.1 writes in the legacy code page otherwise.
+function Invoke-IntegrationUtf8 {
+  param([scriptblock]$Command)
+  $previous = $null
+  try { $previous = [Console]::OutputEncoding; [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false) } catch { $previous = $null }
+  try { return (& $Command) } finally {
+    if ($null -ne $previous) { try { [Console]::OutputEncoding = $previous } catch { $null = $_ } }
+  }
+}
+
 function Invoke-IntegrationCommand {
+  param([string[]]$IntegrationArgs)
+  return (Invoke-IntegrationUtf8 { Invoke-IntegrationCommandSaid $IntegrationArgs })
+}
+
+function Invoke-IntegrationCommandSaid {
   param([string[]]$IntegrationArgs)
   $action = if ($IntegrationArgs.Count -gt 0) { [string]$IntegrationArgs[0] } else { '' }
   if (@('list', 'status', 'add', 'remove') -cnotcontains $action) { return (Write-IntegrationUsage) }
@@ -1384,6 +1401,11 @@ function Invoke-LinkedinStatus {
 }
 
 function Invoke-LinkedinCommand {
+  param([string[]]$LinkedinArgs)
+  return (Invoke-IntegrationUtf8 { Invoke-LinkedinCommandSaid $LinkedinArgs })
+}
+
+function Invoke-LinkedinCommandSaid {
   param([string[]]$LinkedinArgs)
   $joined = (@($LinkedinArgs) -join ' ')
   if ($joined -ceq 'login') { Require-Docker; return (Invoke-LinkedinLogin) }
