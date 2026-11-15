@@ -667,7 +667,7 @@ function Get-IntegrationState {
 # ---- Output ----
 function Write-IntegrationJson {
   param($Value)
-  [Console]::Out.WriteLine((ConvertTo-Json -InputObject $Value -Compress -Depth 5))
+  Write-IntegrationStream $false (ConvertTo-Json -InputObject $Value -Compress -Depth 5)
 }
 
 function Get-IntegrationRow {
@@ -680,7 +680,7 @@ function Write-IntegrationStatus {
   param([string]$Id, [bool]$Json)
   $row = Get-IntegrationRow $Id
   if ($Json) { Write-IntegrationJson $row; return }
-  [Console]::Out.WriteLine(('{0,-15} {1,-16} {2}' -f $Id, (Get-IntegrationLabel $row.state), $row.reason))
+  Write-IntegrationStream $false ('{0,-15} {1,-16} {2}' -f $Id, (Get-IntegrationLabel $row.state), $row.reason)
 }
 
 function Write-IntegrationList {
@@ -781,7 +781,7 @@ function Invoke-IntegrationEngineStep {
     $tries++
   }
   Write-IntegrationEngineLog -Tool $Tool -Code 'retried' -ExitCode $code -Lines @("tries=$tries")
-  if ($code -ne 0) { [Console]::Error.WriteLine((Format-IntegrationText 'integration.engine_log_written' 'state of the Podman engine written to %s' (Get-IntegrationRuntimeLogPath))) }
+  if ($code -ne 0) { Write-IntegrationStream $true (Format-IntegrationText 'integration.engine_log_written' 'state of the Podman engine written to %s' (Get-IntegrationRuntimeLogPath)) }
   return [int]$code
 }
 
@@ -822,9 +822,9 @@ function Write-IntegrationResult {
   if ($Json) {
     Write-IntegrationJson ([ordered]@{ id = $Id; ok = ($Code -eq 0); state = $name; reason = $text })
   } elseif ($Code -eq 0) {
-    Write-Info "${Id}: $(Get-IntegrationLabel $name) ($text)"
+    Write-IntegrationInfo "${Id}: $(Get-IntegrationLabel $name) ($text)"
   } else {
-    Write-Err "${Id}: $text"
+    Write-IntegrationErr "${Id}: $text"
   }
   return $Code
 }
@@ -1091,14 +1091,46 @@ function Invoke-IntegrationChange {
 
 # ---- Entry point ----
 function Write-IntegrationUsage {
-  Write-Err (Get-IntegrationText 'integration.usage' 'usage: jht integration list [--json] | status [<id>] [--json] | add <id> [--json] | remove <id> [--purge --yes] [--remove-image] [--json]')
-  Write-Err ('id: ' + ($IntegrationIds -join ' '))
+  Write-IntegrationErr (Get-IntegrationText 'integration.usage' 'usage: jht integration list [--json] | status [<id>] [--json] | add <id> [--json] | remove <id> [--purge --yes] [--remove-image] [--json]')
+  Write-IntegrationErr ('id: ' + ($IntegrationIds -join ' '))
   return 2
 }
 
 # The sentences have the letters of their language (letters beyond ASCII): what is written to stdout and stderr goes out as UTF-8 while the command
 # runs (the JSON the app reads, a person at a terminal, a pipe), and the console gets back its own encoding after it (it belongs to
 # the window, and would stay changed after the command). Windows PowerShell 5.1 writes in the legacy code page otherwise.
+# A line of ours (it has the letters of its language) to stdout or stderr. Redirected (the JSON the app reads, a pipe, a file), the
+# line goes out as UTF-8 bytes: Windows PowerShell 5.1 keeps the writer of the legacy code page it opened at its start even after
+# the console's encoding changes (measured on windows-2022: the Spanish 'not added yet' came out broken). At a terminal the console writes it,
+# with the UTF-8 output set for the command (Set-IntegrationUtf8Output).
+function Write-IntegrationStream {
+  param([bool]$ToError, [string]$Text)
+  $redirected = $false
+  try { $redirected = if ($ToError) { [Console]::IsErrorRedirected } else { [Console]::IsOutputRedirected } } catch { $redirected = $false }
+  if ($redirected) {
+    if ($ToError) { [Console]::Error.Flush() } else { [Console]::Out.Flush() }
+    $bytes = [Text.UTF8Encoding]::new($false).GetBytes($Text + "`n")
+    $stream = if ($ToError) { [Console]::OpenStandardError() } else { [Console]::OpenStandardOutput() }
+    $stream.Write($bytes, 0, $bytes.Length)
+    $stream.Flush()
+    return
+  }
+  if ($ToError) { [Console]::Error.WriteLine($Text) } else { [Console]::Out.WriteLine($Text) }
+}
+
+# The wrapper's Write-Err and Write-Info for the sentences of this file: the same words in front and the same stream (stdout), as
+# UTF-8 when it is redirected; at a terminal the wrapper's own, with its colour.
+function Write-IntegrationErr {
+  param([string]$Msg)
+  if ([Console]::IsOutputRedirected) { Write-IntegrationStream $false "error: $Msg"; return }
+  Write-Err $Msg
+}
+function Write-IntegrationInfo {
+  param([string]$Msg)
+  if ([Console]::IsOutputRedirected) { Write-IntegrationStream $false $Msg; return }
+  Write-Info $Msg
+}
+
 # Returns the encoding to give back ($null when the console's could not be read or set).
 function Set-IntegrationUtf8Output {
   try { $previous = [Console]::OutputEncoding; [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); return $previous } catch { return $null }
@@ -1136,11 +1168,11 @@ function Invoke-IntegrationCommandSaid {
   if ($action -ceq 'list' -and $id) { return (Write-IntegrationUsage) }
   if ($action -cne 'list' -and $action -cne 'status' -and -not $id) { return (Write-IntegrationUsage) }
   if ($id -and ($IntegrationIds -cnotcontains $id)) {
-    Write-Err (Format-IntegrationText 'integration.unknown' 'unknown integration. allowed ids: %s' ($IntegrationIds -join ' '))
+    Write-IntegrationErr (Format-IntegrationText 'integration.unknown' 'unknown integration. allowed ids: %s' ($IntegrationIds -join ' '))
     return 2
   }
-  if ($removeImage -and $id -cne 'screen' -and $id -cne 'media') { Write-Err (Get-IntegrationText 'integration.remove_image_only' '--remove-image is for screen and media: they are the two made with the tools image'); return 2 }
-  if ($purge -and -not $yes) { Write-Err (Get-IntegrationText 'integration.purge_needs_yes' '--purge deletes the data of the integration: --yes is needed too'); return 2 }
+  if ($removeImage -and $id -cne 'screen' -and $id -cne 'media') { Write-IntegrationErr (Get-IntegrationText 'integration.remove_image_only' '--remove-image is for screen and media: they are the two made with the tools image'); return 2 }
+  if ($purge -and -not $yes) { Write-IntegrationErr (Get-IntegrationText 'integration.purge_needs_yes' '--purge deletes the data of the integration: --yes is needed too'); return 2 }
   if ($yes -and -not $purge) { return (Write-IntegrationUsage) }
   switch -CaseSensitive ($action) {
     'list' { Write-IntegrationList $json; return 0 }
@@ -1251,19 +1283,19 @@ function Invoke-LinkedinGrant {
 
 function Invoke-LinkedinLogin {
   $token = Read-LinkedinToken
-  if (-not $token) { [Console]::Error.WriteLine((Get-IntegrationText 'integration.linkedin.token_stdin' 'the window token comes from the app, on the standard input')); Write-LinkedinFail 'token_required'; return 1 }
+  if (-not $token) { Write-IntegrationStream $true (Get-IntegrationText 'integration.linkedin.token_stdin' 'the window token comes from the app, on the standard input'); Write-LinkedinFail 'token_required'; return 1 }
   $plainMessage = (Get-IntegrationText 'integration.linkedin.profile_not_plain' 'the LinkedIn profile in ~/.jht is not a plain folder (a link?): I do not use it')
-  if (-not (Test-DockerReachable)) { [Console]::Error.WriteLine((Get-IntegrationText 'integration.state.engine_silent' 'the container engine does not answer')); Write-LinkedinFail 'view_unavailable'; return 1 }
+  if (-not (Test-DockerReachable)) { Write-IntegrationStream $true (Get-IntegrationText 'integration.state.engine_silent' 'the container engine does not answer'); Write-LinkedinFail 'view_unavailable'; return 1 }
   $ref = Get-IntegrationExtrasRef
-  if (-not $ref) { [Console]::Error.WriteLine((Get-IntegrationText 'integration.state.not_yet' 'not available yet')); Write-LinkedinFail 'view_unavailable'; return 1 }
+  if (-not $ref) { Write-IntegrationStream $true (Get-IntegrationText 'integration.state.not_yet' 'not available yet'); Write-LinkedinFail 'view_unavailable'; return 1 }
   if (Test-LinkedinAnyRunning) { Write-LinkedinFail 'view_busy'; return 1 }
   $null = Remove-LinkedinContainers   # what an ended session left, stopped
-  if (-not (New-LinkedinProfile)) { [Console]::Error.WriteLine($plainMessage); Write-LinkedinFail 'view_unavailable'; return 1 }
+  if (-not (New-LinkedinProfile)) { Write-IntegrationStream $true $plainMessage; Write-LinkedinFail 'view_unavailable'; return 1 }
   & { $ErrorActionPreference = 'Continue'; & docker pull $ref *> $null }
-  if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine((Get-IntegrationText 'integration.add.extras_pull' 'downloading the tools image did not work')); Write-LinkedinFail 'view_unavailable'; return 1 }
+  if ($LASTEXITCODE -ne 0) { Write-IntegrationStream $true (Get-IntegrationText 'integration.add.extras_pull' 'downloading the tools image did not work'); Write-LinkedinFail 'view_unavailable'; return 1 }
   # Checked again right before the up (the pull took time): what is left is the instant between this test and the mount of the engine.
   if (-not ((Test-LinkedinProfileOk) -and (Test-Path -LiteralPath (Get-LinkedinProfileDir) -PathType Container))) {
-    [Console]::Error.WriteLine($plainMessage); Write-LinkedinFail 'view_unavailable'; return 1
+    Write-IntegrationStream $true $plainMessage; Write-LinkedinFail 'view_unavailable'; return 1
   }
   $before = $env:JHT_EXTRAS_IMAGE
   try {
@@ -1414,6 +1446,6 @@ function Invoke-LinkedinCommandSaid {
   if ($joined -ceq 'login') { Require-Docker; return (Invoke-LinkedinLogin) }
   if ($joined -ceq 'login --stop') { Require-Docker; return (Invoke-LinkedinStop) }
   if ($joined -ceq 'status --json') { return (Invoke-LinkedinStatus) }
-  Write-Err (Get-IntegrationText 'integration.linkedin.usage' 'usage: jht linkedin login [--stop] | status --json')
+  Write-IntegrationErr (Get-IntegrationText 'integration.linkedin.usage' 'usage: jht linkedin login [--stop] | status --json')
   return 2
 }
