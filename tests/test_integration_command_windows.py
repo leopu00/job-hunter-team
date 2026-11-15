@@ -182,7 +182,8 @@ def run(host, args: list[str], **extra: str) -> subprocess.CompletedProcess:
     env = {**os.environ, **fake_bash, "T_RUNTIME": str(host.runtime), "T_LOG": str(host.log), "T_VOLUMES": str(host.volumes),
            "T_RUNNING": str(host.running), "T_LIBRARY": str(LIBRARY), "T_ARGS": json.dumps(args),
            "T_JHT_HOME": str(host.tmp / "jht-home"), "PATH": f"{host.bin}{os.pathsep}{os.environ['PATH']}", **extra}
-    return subprocess.run([*host.argv, "-File", str(host.script)], env=env, capture_output=True, text=True, timeout=120)
+    # the library writes its sentences as UTF-8 (what the app reads); Python on Windows would read them in the code page of the system
+    return subprocess.run([*host.argv, "-File", str(host.script)], env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
 
 
 def rows(result) -> dict:
