@@ -49,7 +49,7 @@ Measured cost (GLM, 30 minutes, fake persona on real job ads): **2.38 USD for 24
 
 ## ⚖️ Terms of service
 
-JHT drives each provider through its official tool (the Codex CLI with your account, Pi with your key): no scraping, no reverse-engineered endpoints. Providers' terms change and automation policies differ between plans: **read your provider's current terms** before running a team around the clock, and prefer an account or key used only by JHT, also to keep the budget readable.
+JHT drives each provider through its official tool (Pi with your key): no scraping, no reverse-engineered endpoints. Providers' terms change and automation policies differ between plans: **read your provider's current terms** before running a team around the clock, and prefer an account or key used only by JHT, also to keep the budget readable.
 
 ## 📜 History
 

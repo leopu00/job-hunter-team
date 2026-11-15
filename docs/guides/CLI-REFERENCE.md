@@ -85,9 +85,8 @@ via wipe + re-pair, not concurrent runs.
 | `jht doctor`                     | Node  | Surfaces Docker, Node, auth, DB checks. **Must** exit 0 before declaring setup done.    |
 | `jht health`                     | Node  | Granular service health (Supabase pairing, provider creds, bridge).                     |
 
-The supported public onboarding path is the interactive wizard followed, for
-Codex, by `jht oauth-login` in a second terminal; GLM and Kimi take an API key
-with `jht setup --non-interactive --provider glm|kimi|openai|claude --harness pi --api-key-file <file>`
+The supported public onboarding path is the interactive wizard, or an API key
+(GLM, Kimi, OpenAI or Claude, on the Pi harness) with `jht setup --non-interactive --provider glm|kimi|openai|claude --harness pi --api-key-file <file>`
 (or `--api-key-stdin`). The CLI still
 exposes legacy non-interactive and secret-bearing setup flags for controlled
 development environments; they are not a public install path and must never

@@ -69,17 +69,24 @@ export const T: Record<Locale, Dict> = {
       " if you already use an AI assistant (Claude Code, OpenClaw, Codex, Cursor…), just point it at this guide and the repo and ask it to set everything up. The whole CLI is built to be driven by an agent — you may not have to type a single command yourself.",
     subTitle: "🧠 First, the AI provider",
     subIntroA: "In 0.4.0 the team runs on a ",
-    subIntroB: "GLM (Z.ai), Kimi (Moonshot), OpenAI or Claude (Anthropic) API key",
-    subIntroC: " on the Pi harness, paid per call; jht setup asks for it (typed hidden). Use ",
+    subIntroB:
+      "GLM (Z.ai), Kimi (Moonshot), OpenAI or Claude (Anthropic) API key",
+    subIntroC:
+      " on the Pi harness, paid per call; jht setup asks for it (typed hidden). Use ",
     subEmphOne: "one",
     subIntroD: " key, for the team only:",
     codex: " — not in this version.",
-    apiKey: "(Z.ai) — with an API key, paid per call: set a daily spending ceiling.",
-    apiKeyKimi: "(Moonshot) — with an API key, paid per call: set a daily spending ceiling.",
-    apiKeyOpenai: "— with an API key, paid per call: set a daily spending ceiling.",
-    apiKeyClaude: "(Anthropic) — with an API key, paid per call: set a daily spending ceiling.",
+    apiKey:
+      "(Z.ai) — with an API key, paid per call: set a daily spending ceiling.",
+    apiKeyKimi:
+      "(Moonshot) — with an API key, paid per call: set a daily spending ceiling.",
+    apiKeyOpenai:
+      "— with an API key, paid per call: set a daily spending ceiling.",
+    apiKeyClaude:
+      "(Anthropic) — with an API key, paid per call: set a daily spending ceiling.",
     dedicateLabel: "Dedicate the key to the team.",
-    dedicateBody: " Don't reuse a key you use elsewhere, and set a spending ceiling both in the team and with the provider. More on the ",
+    dedicateBody:
+      " Don't reuse a key you use elsewhere, and set a spending ceiling both in the team and with the provider. More on the ",
     pricingPage: "pricing page",
     pickTitle: "🛤️ Then, pick how you install",
     path1Title: "🦞 Path 1 — Let your AI assistant do it",
@@ -91,7 +98,8 @@ export const T: Record<Locale, Dict> = {
     path2A:
       "There is no desktop app in 0.4.0: the team is driven from the jht CLI, installed with the one-liner below. On a Mac, Homebrew must already be installed: the installer uses it to set up Podman. Linux: CLI only, experimental. The requirements are on ",
     downloadPage: "the install page",
-    path2B: ". Windows is a preview in 0.4.0, CLI only: tested on Windows 10, not on Windows 11 (its PowerShell installer is in the Quickstart of the repository).",
+    path2B:
+      ". Windows is a preview in 0.4.0, CLI only: tested on Windows 10, not on Windows 11 (its PowerShell installer is in the Quickstart of the repository).",
     path3Title: "📦 Path 3 — One-liner installer",
     path3Mac: "macOS / Linux:",
     path3WizardIntro: "Then bring the team up and run the wizard:",
@@ -124,17 +132,24 @@ export const T: Record<Locale, Dict> = {
       " se usi già un assistente AI (Claude Code, OpenClaw, Codex, Cursor…), basta indirizzarlo a questa guida e al repo e chiedergli di configurare tutto. L'intera CLI è progettata per essere guidata da un agente — potresti non dover digitare nemmeno un comando.",
     subTitle: "🧠 Prima di tutto, il provider AI",
     subIntroA: "Nella 0.4.0 il team funziona con una ",
-    subIntroB: "chiave API di GLM (Z.ai), Kimi (Moonshot), OpenAI o Claude (Anthropic)",
-    subIntroC: " sull'harness Pi, a consumo; jht setup la chiede (scritta nascosta). Usa ",
+    subIntroB:
+      "chiave API di GLM (Z.ai), Kimi (Moonshot), OpenAI o Claude (Anthropic)",
+    subIntroC:
+      " sull'harness Pi, a consumo; jht setup la chiede (scritta nascosta). Usa ",
     subEmphOne: "una",
     subIntroD: " chiave solo per il team:",
     codex: " — non in questa versione.",
-    apiKey: "(Z.ai) — con una chiave API, a consumo: imposta un tetto di spesa giornaliero.",
-    apiKeyKimi: "(Moonshot) — con una chiave API, a consumo: imposta un tetto di spesa giornaliero.",
-    apiKeyOpenai: "— con una chiave API, a consumo: imposta un tetto di spesa giornaliero.",
-    apiKeyClaude: "(Anthropic) — con una chiave API, a consumo: imposta un tetto di spesa giornaliero.",
+    apiKey:
+      "(Z.ai) — con una chiave API, a consumo: imposta un tetto di spesa giornaliero.",
+    apiKeyKimi:
+      "(Moonshot) — con una chiave API, a consumo: imposta un tetto di spesa giornaliero.",
+    apiKeyOpenai:
+      "— con una chiave API, a consumo: imposta un tetto di spesa giornaliero.",
+    apiKeyClaude:
+      "(Anthropic) — con una chiave API, a consumo: imposta un tetto di spesa giornaliero.",
     dedicateLabel: "Dedica la chiave al team.",
-    dedicateBody: " Non riusare una chiave che usi altrove, e metti un tetto di spesa sia nel team sia presso il provider. Di più nella ",
+    dedicateBody:
+      " Non riusare una chiave che usi altrove, e metti un tetto di spesa sia nel team sia presso il provider. Di più nella ",
     pricingPage: "pagina dei prezzi",
     pickTitle: "🛤️ Poi, scegli come installare",
     path1Title: "🦞 Percorso 1 — Lascia fare al tuo assistente AI",
@@ -146,7 +161,8 @@ export const T: Record<Locale, Dict> = {
     path2A:
       "Nella 0.4.0 non c'è l'app desktop: il team si guida dalla CLI jht, installata con il comando unico qui sotto. Su un Mac Homebrew deve essere già installato: l'installer lo usa per configurare Podman. Linux: solo CLI, sperimentale. I requisiti sono nella ",
     downloadPage: "pagina di installazione",
-    path2B: ". Windows è un'anteprima nella 0.4.0, solo CLI: provato su Windows 10, non su Windows 11 (il suo installer PowerShell è nel Quickstart del repository).",
+    path2B:
+      ". Windows è un'anteprima nella 0.4.0, solo CLI: provato su Windows 10, non su Windows 11 (il suo installer PowerShell è nel Quickstart del repository).",
     path3Title: "📦 Percorso 3 — Installer one-liner",
     path3Mac: "macOS / Linux:",
     path3WizardIntro: "Poi avvia il team ed esegui la procedura guidata:",
@@ -180,17 +196,24 @@ export const T: Record<Locale, Dict> = {
       " si ya usas un asistente de IA (Claude Code, OpenClaw, Codex, Cursor…), basta con dirigirlo a esta guía y al repo y pedirle que lo configure todo. Toda la CLI está hecha para ser controlada por un agente — puede que no tengas que escribir ni un solo comando.",
     subTitle: "🧠 Primero, el proveedor de IA",
     subIntroA: "En la 0.4.0 el equipo funciona con una ",
-    subIntroB: "clave de API de GLM (Z.ai), Kimi (Moonshot), OpenAI o Claude (Anthropic)",
-    subIntroC: " sobre el harness Pi, de pago por uso; jht setup la pide (escrita oculta). Usa ",
+    subIntroB:
+      "clave de API de GLM (Z.ai), Kimi (Moonshot), OpenAI o Claude (Anthropic)",
+    subIntroC:
+      " sobre el harness Pi, de pago por uso; jht setup la pide (escrita oculta). Usa ",
     subEmphOne: "una",
     subIntroD: " clave solo para el equipo:",
     codex: " — no está en esta versión.",
-    apiKey: "(Z.ai) — con una clave de API, de pago por uso: fija un tope de gasto diario.",
-    apiKeyKimi: "(Moonshot) — con una clave de API, de pago por uso: fija un tope de gasto diario.",
-    apiKeyOpenai: "— con una clave de API, de pago por uso: fija un tope de gasto diario.",
-    apiKeyClaude: "(Anthropic) — con una clave de API, de pago por uso: fija un tope de gasto diario.",
+    apiKey:
+      "(Z.ai) — con una clave de API, de pago por uso: fija un tope de gasto diario.",
+    apiKeyKimi:
+      "(Moonshot) — con una clave de API, de pago por uso: fija un tope de gasto diario.",
+    apiKeyOpenai:
+      "— con una clave de API, de pago por uso: fija un tope de gasto diario.",
+    apiKeyClaude:
+      "(Anthropic) — con una clave de API, de pago por uso: fija un tope de gasto diario.",
     dedicateLabel: "Dedica la clave al equipo.",
-    dedicateBody: " No reutilices una clave que uses en otro sitio, y pon un tope de gasto tanto en el equipo como en el proveedor. Más en la ",
+    dedicateBody:
+      " No reutilices una clave que uses en otro sitio, y pon un tope de gasto tanto en el equipo como en el proveedor. Más en la ",
     pricingPage: "página de precios",
     pickTitle: "🛤️ Después, elige cómo instalar",
     path1Title: "🦞 Vía 1 — Deja que lo haga tu asistente de IA",
@@ -202,7 +225,8 @@ export const T: Record<Locale, Dict> = {
     path2A:
       "En la 0.4.0 no hay app de escritorio: el equipo se maneja desde la CLI jht, que se instala con el comando único de abajo. En un Mac, Homebrew debe estar ya instalado: el instalador lo usa para configurar Podman. Linux: solo CLI, experimental. Los requisitos están en ",
     downloadPage: "la página de instalación",
-    path2B: ". Windows es una vista previa en la 0.4.0, solo CLI: probado en Windows 10, no en Windows 11 (su instalador de PowerShell está en el Quickstart del repositorio).",
+    path2B:
+      ". Windows es una vista previa en la 0.4.0, solo CLI: probado en Windows 10, no en Windows 11 (su instalador de PowerShell está en el Quickstart del repositorio).",
     path3Title: "📦 Vía 3 — Instalador en una línea",
     path3Mac: "macOS / Linux:",
     path3WizardIntro: "Luego levanta el equipo y ejecuta el asistente:",
@@ -236,17 +260,24 @@ export const T: Record<Locale, Dict> = {
       " si vous utilisez déjà un assistant IA (Claude Code, OpenClaw, Codex, Cursor…), il suffit de le diriger vers ce guide et le dépôt et de lui demander de tout configurer. Toute la CLI est conçue pour être pilotée par un agent — vous n'aurez peut-être pas à taper la moindre commande.",
     subTitle: "🧠 D'abord, le fournisseur d'IA",
     subIntroA: "Dans la 0.4.0, l'équipe fonctionne avec une ",
-    subIntroB: "clé d'API de GLM (Z.ai), Kimi (Moonshot), OpenAI ou Claude (Anthropic)",
-    subIntroC: " sur le harness Pi, payée à l'usage ; jht setup la demande (saisie masquée). Utilisez ",
+    subIntroB:
+      "clé d'API de GLM (Z.ai), Kimi (Moonshot), OpenAI ou Claude (Anthropic)",
+    subIntroC:
+      " sur le harness Pi, payée à l'usage ; jht setup la demande (saisie masquée). Utilisez ",
     subEmphOne: "une",
     subIntroD: " clé réservée à l'équipe :",
     codex: " — pas dans cette version.",
-    apiKey: "(Z.ai) — avec une clé d'API, payée à l'usage : fixez un plafond de dépense journalier.",
-    apiKeyKimi: "(Moonshot) — avec une clé d'API, payée à l'usage : fixez un plafond de dépense journalier.",
-    apiKeyOpenai: "— avec une clé d'API, payée à l'usage : fixez un plafond de dépense journalier.",
-    apiKeyClaude: "(Anthropic) — avec une clé d'API, payée à l'usage : fixez un plafond de dépense journalier.",
+    apiKey:
+      "(Z.ai) — avec une clé d'API, payée à l'usage : fixez un plafond de dépense journalier.",
+    apiKeyKimi:
+      "(Moonshot) — avec une clé d'API, payée à l'usage : fixez un plafond de dépense journalier.",
+    apiKeyOpenai:
+      "— avec une clé d'API, payée à l'usage : fixez un plafond de dépense journalier.",
+    apiKeyClaude:
+      "(Anthropic) — avec une clé d'API, payée à l'usage : fixez un plafond de dépense journalier.",
     dedicateLabel: "Dédiez la clé à l'équipe.",
-    dedicateBody: " Ne réutilisez pas une clé utilisée ailleurs, et fixez un plafond de dépense dans l'équipe et chez le fournisseur. Plus de détails sur la ",
+    dedicateBody:
+      " Ne réutilisez pas une clé utilisée ailleurs, et fixez un plafond de dépense dans l'équipe et chez le fournisseur. Plus de détails sur la ",
     pricingPage: "page des tarifs",
     pickTitle: "🛤️ Ensuite, choisissez comment installer",
     path1Title: "🦞 Voie 1 — Laissez faire votre assistant IA",
@@ -294,17 +325,24 @@ export const T: Record<Locale, Dict> = {
       " wenn du bereits einen KI-Assistenten verwendest (Claude Code, OpenClaw, Codex, Cursor…), verweise ihn einfach auf diese Anleitung und das Repo und bitte ihn, alles einzurichten. Die gesamte CLI ist darauf ausgelegt, von einem Agenten gesteuert zu werden — du musst vielleicht keinen einzigen Befehl selbst eintippen.",
     subTitle: "🧠 Zuerst der KI-Anbieter",
     subIntroA: "In 0.4.0 läuft das Team mit einem ",
-    subIntroB: "API-Key von GLM (Z.ai), Kimi (Moonshot), OpenAI oder Claude (Anthropic)",
-    subIntroC: " auf dem Pi-Harness, pro Aufruf bezahlt; jht setup fragt danach (verdeckt eingegeben). Nutze ",
+    subIntroB:
+      "API-Key von GLM (Z.ai), Kimi (Moonshot), OpenAI oder Claude (Anthropic)",
+    subIntroC:
+      " auf dem Pi-Harness, pro Aufruf bezahlt; jht setup fragt danach (verdeckt eingegeben). Nutze ",
     subEmphOne: "einen",
     subIntroD: " Key nur für das Team:",
     codex: " — nicht in dieser Version.",
-    apiKey: "(Z.ai) — mit einem API-Key, nach Verbrauch bezahlt: setze ein tägliches Ausgabenlimit.",
-    apiKeyKimi: "(Moonshot) — mit einem API-Key, nach Verbrauch bezahlt: setze ein tägliches Ausgabenlimit.",
-    apiKeyOpenai: "— mit einem API-Key, nach Verbrauch bezahlt: setze ein tägliches Ausgabenlimit.",
-    apiKeyClaude: "(Anthropic) — mit einem API-Key, nach Verbrauch bezahlt: setze ein tägliches Ausgabenlimit.",
+    apiKey:
+      "(Z.ai) — mit einem API-Key, nach Verbrauch bezahlt: setze ein tägliches Ausgabenlimit.",
+    apiKeyKimi:
+      "(Moonshot) — mit einem API-Key, nach Verbrauch bezahlt: setze ein tägliches Ausgabenlimit.",
+    apiKeyOpenai:
+      "— mit einem API-Key, nach Verbrauch bezahlt: setze ein tägliches Ausgabenlimit.",
+    apiKeyClaude:
+      "(Anthropic) — mit einem API-Key, nach Verbrauch bezahlt: setze ein tägliches Ausgabenlimit.",
     dedicateLabel: "Widme den Key dem Team.",
-    dedicateBody: " Nutze keinen Key, den du anderswo verwendest, und setze ein Ausgabenlimit im Team und beim Anbieter. Mehr auf der ",
+    dedicateBody:
+      " Nutze keinen Key, den du anderswo verwendest, und setze ein Ausgabenlimit im Team und beim Anbieter. Mehr auf der ",
     pricingPage: "Preisseite",
     pickTitle: "🛤️ Dann wähle, wie du installierst",
     path1Title: "🦞 Weg 1 — Lass es deinen KI-Assistenten erledigen",
@@ -352,17 +390,24 @@ export const T: Record<Locale, Dict> = {
       " ha már használsz egy MI-asszisztenst (Claude Code, OpenClaw, Codex, Cursor…), egyszerűen irányítsd rá erre az útmutatóra és a repóra, és kérd meg, hogy állítson be mindent. Az egész CLI úgy készült, hogy egy ügynök vezérelje — lehet, hogy egyetlen parancsot sem kell begépelned.",
     subTitle: "🧠 Először az AI-szolgáltató",
     subIntroA: "A 0.4.0-ban a csapat egy ",
-    subIntroB: "GLM (Z.ai), Kimi (Moonshot), OpenAI vagy Claude (Anthropic) API-kulccsal",
-    subIntroC: " fut a Pi harness-en, hívásonként fizetve; a jht setup elkéri (rejtett beírással). Használj ",
+    subIntroB:
+      "GLM (Z.ai), Kimi (Moonshot), OpenAI vagy Claude (Anthropic) API-kulccsal",
+    subIntroC:
+      " fut a Pi harness-en, hívásonként fizetve; a jht setup elkéri (rejtett beírással). Használj ",
     subEmphOne: "egy",
     subIntroD: " csak a csapatnak szánt kulcsot:",
     codex: " — nincs benne ebben a verzióban.",
-    apiKey: "(Z.ai) — API-kulccsal, használat szerint fizetve: állíts be napi költési plafont.",
-    apiKeyKimi: "(Moonshot) — API-kulccsal, használat szerint fizetve: állíts be napi költési plafont.",
-    apiKeyOpenai: "— API-kulccsal, használat szerint fizetve: állíts be napi költési plafont.",
-    apiKeyClaude: "(Anthropic) — API-kulccsal, használat szerint fizetve: állíts be napi költési plafont.",
+    apiKey:
+      "(Z.ai) — API-kulccsal, használat szerint fizetve: állíts be napi költési plafont.",
+    apiKeyKimi:
+      "(Moonshot) — API-kulccsal, használat szerint fizetve: állíts be napi költési plafont.",
+    apiKeyOpenai:
+      "— API-kulccsal, használat szerint fizetve: állíts be napi költési plafont.",
+    apiKeyClaude:
+      "(Anthropic) — API-kulccsal, használat szerint fizetve: állíts be napi költési plafont.",
     dedicateLabel: "Szentelj egy kulcsot a csapatnak.",
-    dedicateBody: " Ne használj olyan kulcsot, amelyet máshol is használsz, és állíts be költési plafont a csapatban és a szolgáltatónál is. Bővebben az ",
+    dedicateBody:
+      " Ne használj olyan kulcsot, amelyet máshol is használsz, és állíts be költési plafont a csapatban és a szolgáltatónál is. Bővebben az ",
     pricingPage: "árazási oldalon",
     pickTitle: "🛤️ Aztán válaszd ki, hogyan telepítesz",
     path1Title: "🦞 1. út — Bízd az MI-asszisztensedre",
@@ -410,17 +455,24 @@ export const T: Record<Locale, Dict> = {
       " se já usas um assistente de IA (Claude Code, OpenClaw, Codex, Cursor…), basta apontá-lo para este guia e para o repo e pedir-lhe que configure tudo. Toda a CLI foi feita para ser conduzida por um agente — podes nem ter de escrever um único comando.",
     subTitle: "🧠 Primeiro, o fornecedor de IA",
     subIntroA: "Na 0.4.0 a equipa funciona com uma ",
-    subIntroB: "chave de API de GLM (Z.ai), Kimi (Moonshot), OpenAI ou Claude (Anthropic)",
-    subIntroC: " no harness Pi, paga por uso; o jht setup pede-a (escrita oculta). Usa ",
+    subIntroB:
+      "chave de API de GLM (Z.ai), Kimi (Moonshot), OpenAI ou Claude (Anthropic)",
+    subIntroC:
+      " no harness Pi, paga por uso; o jht setup pede-a (escrita oculta). Usa ",
     subEmphOne: "uma",
     subIntroD: " chave só para a equipa:",
     codex: " — não está nesta versão.",
-    apiKey: "(Z.ai) — com uma chave de API, paga por uso: define um teto de gasto diário.",
-    apiKeyKimi: "(Moonshot) — com uma chave de API, paga por uso: define um teto de gasto diário.",
-    apiKeyOpenai: "— com uma chave de API, paga por uso: define um teto de gasto diário.",
-    apiKeyClaude: "(Anthropic) — com uma chave de API, paga por uso: define um teto de gasto diário.",
+    apiKey:
+      "(Z.ai) — com uma chave de API, paga por uso: define um teto de gasto diário.",
+    apiKeyKimi:
+      "(Moonshot) — com uma chave de API, paga por uso: define um teto de gasto diário.",
+    apiKeyOpenai:
+      "— com uma chave de API, paga por uso: define um teto de gasto diário.",
+    apiKeyClaude:
+      "(Anthropic) — com uma chave de API, paga por uso: define um teto de gasto diário.",
     dedicateLabel: "Dedica a chave à equipa.",
-    dedicateBody: " Não reutilizes uma chave que uses noutro lado, e define um teto de gastos na equipa e no fornecedor. Mais na ",
+    dedicateBody:
+      " Não reutilizes uma chave que uses noutro lado, e define um teto de gastos na equipa e no fornecedor. Mais na ",
     pricingPage: "página de preços",
     pickTitle: "🛤️ Depois, escolhe como instalar",
     path1Title: "🦞 Caminho 1 — Deixa o teu assistente de IA fazê-lo",
@@ -432,7 +484,8 @@ export const T: Record<Locale, Dict> = {
     path2A:
       "Na 0.4.0 não há app de ambiente de trabalho: a equipa é conduzida pela CLI jht, instalada com o comando único abaixo. Num Mac, o Homebrew tem de estar já instalado: o instalador usa-o para configurar o Podman. Linux: só CLI, experimental. Os requisitos estão na ",
     downloadPage: "página de instalação",
-    path2B: ". O Windows é uma pré-visualização na 0.4.0, só CLI: testado no Windows 10, não no Windows 11 (o seu instalador PowerShell está no Quickstart do repositório).",
+    path2B:
+      ". O Windows é uma pré-visualização na 0.4.0, só CLI: testado no Windows 10, não no Windows 11 (o seu instalador PowerShell está no Quickstart do repositório).",
     path3Title: "📦 Caminho 3 — Instalador numa só linha",
     path3Mac: "macOS / Linux:",
     path3WizardIntro: "Depois levanta a equipa e executa o assistente:",

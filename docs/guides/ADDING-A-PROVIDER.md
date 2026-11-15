@@ -1,7 +1,7 @@
 # Adding a provider without breaking the runtime contract
 
 Job Hunter Team does not have an open-ended provider plugin API. [ADR-0002](../adr/0002-three-supported-agent-clis.md)
-closed the supported runtime set to three CLIs; since 0.4 the only offered CLI is **Codex** (one subscription, ChatGPT's). Kimi's CLI is archived and Claude Code is not offered: their code stays so that a team already on them keeps working. Next to the CLIs there is the **Pi harness**, which runs the agents on an API key (GLM and Kimi today): a provider for Pi is a row in a table, see [the last section](#a-provider-on-the-pi-harness-api-key). This guide
+closed the supported runtime set to three CLIs; since 0.4 no agent CLI is offered (the Codex subscription is not in 0.4.0; Kimi's CLI is archived and Claude Code is not offered): their code stays so that a team already on them keeps working. Next to the CLIs there is the **Pi harness**, which runs the agents on an API key (GLM, Kimi, OpenAI and Claude today): a provider for Pi is a row in a table, see [the last section](#a-provider-on-the-pi-harness-api-key). This guide
 is therefore both an implementation checklist and a gate: a fourth CLI starts
 with a new ADR and field evidence, not with an enum edit.
 

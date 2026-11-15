@@ -76,7 +76,7 @@ Live dashboards with real, anonymized field data: [jobhunterteam.ai/case-studies
                                                                      👨‍⚖️ Critic (3 blind rounds)
 ```
 
-Each agent is an autonomous AI session on the supported CLI (Codex); a shared SQLite database keeps state in sync. Monitoring details: [`docs/about/MONITORING.md`](docs/about/MONITORING.md).
+Each agent is an autonomous AI session on the Pi harness, with the API key of the provider you chose; a shared SQLite database keeps state in sync. Monitoring details: [`docs/about/MONITORING.md`](docs/about/MONITORING.md).
 
 ## Install
 
@@ -103,7 +103,7 @@ team.
 Not sure where the team should live? Compare a
 [local PC, dedicated Linux PC on the LAN and VPS](docs/guides/CHOOSE-WHERE-TO-RUN.md).
 
-**What it costs** — with the GLM API key you pay per call: measured on GLM, about 0.10 USD per
+**What it costs** — with an API key (GLM, Kimi, OpenAI or Claude) you pay per call: measured on GLM only, about 0.10 USD per
 scored position, with a daily ceiling that pauses the team. (The month-long run we measured used a
 Codex Pro subscription, about €100/month — [results](docs/about/RESULTS.md); Codex is not in this
 version.) Details:
