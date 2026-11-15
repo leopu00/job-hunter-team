@@ -255,4 +255,8 @@ export default {
   'team.done': 'Squadra accesa: {n} agenti in {s} s',
   'team.next_agents': 'Guarda come va con: jht agents',
   'help.group_other': 'Altro',
+  'budget.paused_budget': 'La squadra è in pausa: ha speso {spent} $ del suo budget di {budget} $. Per andare avanti metti un nuovo budget con: jht setup',
+  'budget.paused_period': 'La squadra è in pausa: il periodo del suo budget è finito alle {end} (spesi {spent} $ di {budget} $). Per andare avanti metti un nuovo budget con: jht setup',
+  'budget.paused_pace': 'La squadra è in pausa per distribuire il budget sul periodo (spesi {spent} $, consentiti finora {ceiling} $): riprende da sola alle {at}.',
+  'budget.paused_pace_late': 'La squadra è in pausa per distribuire il budget sul periodo (spesi {spent} $, consentiti finora {ceiling} $) e non riprende prima della fine del periodo, alle {end}. Per andare avanti metti un nuovo budget con: jht setup',
 };

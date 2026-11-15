@@ -15,9 +15,10 @@ import { codexLegacy, configOffered, offeredInRelease, offersSentence } from '..
 import { PI_API_PROVIDERS, piApiProvider } from '../../../../shared/runtime/provider-models.js';
 import { KEY_REFUSED_EXIT_CODE } from '../providers-key-check.js';
 import { readRegularFileText } from '../../lib/secure-config-io.js';
-import { say } from '../../lib/texts.js';
+import { say, show } from '../../lib/texts.js';
 import { hint } from '../../lib/ui.js';
 import { creditNotice } from '../../lib/provider-credit.js';
+import { budgetPauseText } from '../../lib/budget-pause.js';
 
 const CONTAINER_TEAM_HALTED_FLAG = '/jht_home/.team-halted.flag';
 const SPAWN_ERROR_TAIL_LINES = 5;
@@ -640,6 +641,9 @@ export async function startAction(agentArg, options) {
   // A team on an empty balance «starts» (or is «already active») and then gets every call refused: say it first.
   const credit = creditNotice();
   if (credit) console.log(c.yellow(`⚠ ${credit}`));
+  // a team paused on its budget starts its sessions and stays paused: the start does not lift the pause of the brake (JHT-T322)
+  const budgetPaused = budgetPauseText();
+  if (budgetPaused) console.log(c.yellow(`⚠ ${show(budgetPaused)}`));
 
   // Container mode: deleghiamo a /app/.launcher/start-agent.sh dentro
   // jht — coerente col boot del bridge Sentinella e con le dipendenze CLI

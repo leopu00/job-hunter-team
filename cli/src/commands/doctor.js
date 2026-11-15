@@ -13,6 +13,7 @@ import { PI_API_PROVIDERS, piApiProvider } from '../../../shared/runtime/provide
 import { RELEASE_PROVIDERS, codexLegacy, configOffered, offersSentence } from '../../../shared/runtime/release-providers.js'
 import { providerSignedIn } from '../lib/provider-signin.js'
 import { creditGone } from '../lib/provider-credit.js'
+import { budgetPauseText } from '../lib/budget-pause.js'
 
 const JHT_DIR     = JHT_HOME
 const CONFIG_PATH = join(JHT_DIR, 'jht.config.json')
@@ -203,6 +204,11 @@ function checkWorkers() {
   }
 }
 
+function budgetPauseCheck() {
+  const text = budgetPauseText()
+  return text ? { warn: true, msg: text } : null
+}
+
 // ── Output ────────────────────────────────────────────────────────────────
 
 const kindOf = (ck) => (ck.ok ? 'ok' : ck.warn ? 'warn' : ck.skip ? 'info' : 'fail')
@@ -225,7 +231,8 @@ async function handleDoctor(options) {
     { title: later('doctor.sec_config'),      checks: [configCk] },
     { title: later('doctor.sec_provider'), checks: [providerCk, apiCk] },
     { title: later('doctor.sec_database'),    checks: [dbCk] },
-    { title: later('doctor.sec_team'),        checks: workersCk },
+    // a team paused by the brake of pi on its budget (JHT-T322): the pause and the way on, never lifted from here
+    { title: later('doctor.sec_team'),        checks: [budgetPauseCheck(), ...workersCk] },
   ].map((sec) => ({ ...sec, checks: sec.checks.filter(Boolean) })).filter((sec) => sec.checks.length > 0)
   // the checks hold their texts to be written later: a screen writes them in the person's language, the JSON in English
   const rows = sections.flatMap((sec) => sec.checks.map((ck) => ({ section: sec.title, status: kindOf(ck), message: ck.msg, hint: ck.hint ?? null })))

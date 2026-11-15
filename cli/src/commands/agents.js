@@ -1,5 +1,6 @@
 import { errorBlock } from '../lib/ui.js';
-import { say } from '../lib/texts.js';
+import { say, show } from '../lib/texts.js';
+import { budgetPauseText } from '../lib/budget-pause.js';
 import { readObservation } from '../lib/agent-observation.js';
 import { errorText, renderObservation } from '../lib/agent-observation-view.js';
 import { appendDiagnostic } from '../lib/runtime-diagnostic.js';
@@ -9,7 +10,12 @@ export function handleAgents(options = {}, read = readObservation) {
   try {
     const snapshot = read();
     if (options.json) console.log(JSON.stringify(snapshot, null, 2));
-    else process.stdout.write(renderObservation(snapshot, { usage: Boolean(options.usage), provider: readActiveProvider() }));
+    else {
+      process.stdout.write(renderObservation(snapshot, { usage: Boolean(options.usage), provider: readActiveProvider() }));
+      // the pause of the brake of pi on the budget (JHT-T322): read again at every status, the reason can change
+      const paused = budgetPauseText();
+      if (paused) console.log(`⚠ ${show(paused)}`);
+    }
     if (options.verbose && !options.json) {
       console.log(say('agents.sessions_in_tmux'));
       for (const row of snapshot.agents.filter((r) => r.running)) console.log(`  ${row.session}`);
