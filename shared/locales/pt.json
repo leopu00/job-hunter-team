@@ -553,7 +553,7 @@
   "host_setup.tz.bad_number": "Escolhe um número entre 1 e %d.",
   "host_setup.tz.how": "Escreve um país, uma cidade ou um fuso horário (por exemplo Portugal, Lisboa, Europe/Lisbon).",
   "host_setup.tz.how_default": "Prime Enter para manter %s, ou escreve um país, uma cidade ou um fuso horário para procurar outro.",
-  "host_setup.tz.none": "Nenhum fuso horário encontrado para «%s»: experimenta um país, uma cidade ou um fuso como Europe/Lisbon.",
+  "host_setup.tz.none": "Nenhum fuso horário para «%s»: escreve o país (por exemplo Portugal) ou uma cidade grande perto.",
   "host_setup.tz.not_detected": "O teu fuso horário não foi detetado.",
   "host_setup.tz.pick": "Número (1-%d), ou uma nova pesquisa:",
   "host_setup.tz.proposed": "Proposto: %s (agora %s).",

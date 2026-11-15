@@ -553,7 +553,7 @@
   "host_setup.tz.bad_number": "Elige un número entre 1 y %d.",
   "host_setup.tz.how": "Escribe un país, una ciudad o una zona horaria (por ejemplo España, Madrid, Europe/Madrid).",
   "host_setup.tz.how_default": "Pulsa Intro para mantener %s, o escribe un país, una ciudad o una zona horaria para buscar otra.",
-  "host_setup.tz.none": "No se ha encontrado ninguna zona horaria para «%s»: prueba con un país, una ciudad o una zona como Europe/Madrid.",
+  "host_setup.tz.none": "No hay ninguna zona horaria para «%s»: escribe el país (por ejemplo España) o una ciudad grande cercana.",
   "host_setup.tz.not_detected": "No se ha detectado tu zona horaria.",
   "host_setup.tz.pick": "Número (1-%d), o una nueva búsqueda:",
   "host_setup.tz.proposed": "Propuesta: %s (ahora %s).",
