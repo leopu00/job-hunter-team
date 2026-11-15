@@ -1,0 +1,1489 @@
+# made by `python3 tests/timezone_data.py --refresh`: see the module for the lines; do not edit by hand
+C|AD|Andorra|Andorra|Andorra|Andorra|Andorra|Andorre|Andorra
+C|AE|United Arab Emirates|Emirati Arabi Uniti|Egyesült Arab Emírségek|Emiratos Árabes Unidos|Vereinigte Arabische Emirate|Émirats arabes unis|Emirados Árabes Unidos
+C|AF|Afghanistan|Afghanistan|Afganisztán|Afganistán|Afghanistan|Afghanistan|Afeganistão
+C|AG|Antigua & Barbuda|Antigua e Barbuda|Antigua és Barbuda|Antigua y Barbuda|Antigua und Barbuda|Antigua-et-Barbuda|Antígua e Barbuda
+C|AI|Anguilla|Anguilla|Anguilla|Anguila|Anguilla|Anguilla|Anguila
+C|AL|Albania|Albania|Albánia|Albania|Albanien|Albanie|Albânia
+C|AM|Armenia|Armenia|Örményország|Armenia|Armenien|Arménie|Armênia
+C|AO|Angola|Angola|Angola|Angola|Angola|Angola|Angola
+C|AQ|Antarctica|Antartide|Antarktisz|Antártida|Antarktis|Antarctique|Antártida
+C|AR|Argentina|Argentina|Argentína|Argentina|Argentinien|Argentine|Argentina
+C|AS|American Samoa|Samoa Americane|Amerikai Szamoa|Samoa Americana|Amerikanisch-Samoa|Samoa américaines|Samoa Americana
+C|AT|Austria|Austria|Ausztria|Austria|Österreich|Autriche|Áustria
+C|AU|Australia|Australia|Ausztrália|Australia|Australien|Australie|Austrália
+C|AW|Aruba|Aruba|Aruba|Aruba|Aruba|Aruba|Aruba
+C|AX|Åland Islands|Isole Åland|Åland-szigetek|Islas Aland|Ålandinseln|Îles Åland|Ilhas Aland
+C|AZ|Azerbaijan|Azerbaigian|Azerbajdzsán|Azerbaiyán|Aserbaidschan|Azerbaïdjan|Azerbaijão
+C|BA|Bosnia & Herzegovina|Bosnia ed Erzegovina|Bosznia-Hercegovina|Bosnia y Herzegovina|Bosnien und Herzegowina|Bosnie-Herzégovine|Bósnia e Herzegovina
+C|BB|Barbados|Barbados|Barbados|Barbados|Barbados|Barbade|Barbados
+C|BD|Bangladesh|Bangladesh|Banglades|Bangladés|Bangladesch|Bangladesh|Bangladesh
+C|BE|Belgium|Belgio|Belgium|Bélgica|Belgien|Belgique|Bélgica
+C|BF|Burkina Faso|Burkina Faso|Burkina Faso|Burkina Faso|Burkina Faso|Burkina Faso|Burquina Faso
+C|BG|Bulgaria|Bulgaria|Bulgária|Bulgaria|Bulgarien|Bulgarie|Bulgária
+C|BH|Bahrain|Bahrein|Bahrein|Baréin|Bahrain|Bahreïn|Barein
+C|BI|Burundi|Burundi|Burundi|Burundi|Burundi|Burundi|Burundi
+C|BJ|Benin|Benin|Benin|Benín|Benin|Bénin|Benin
+C|BL|St. Barthélemy|Saint-Barthélemy|Saint-Barthélemy|San Bartolomé|St. Barthélemy|Saint-Barthélemy|São Bartolomeu
+C|BM|Bermuda|Bermuda|Bermuda|Bermudas|Bermuda|Bermudes|Bermudas
+C|BN|Brunei|Brunei|Brunei|Brunéi|Brunei Darussalam|Brunei|Brunei
+C|BO|Bolivia|Bolivia|Bolívia|Bolivia|Bolivien|Bolivie|Bolívia
+C|BQ|Caribbean Netherlands|Caraibi Olandesi|Holland Karib-térség|Caribe neerlandés|Karibische Niederlande|Pays-Bas caribéens|Países Baixos Caribenhos
+C|BR|Brazil|Brasile|Brazília|Brasil|Brasilien|Brésil|Brasil
+C|BS|Bahamas|Bahamas|Bahama-szigetek|Bahamas|Bahamas|Bahamas|Bahamas
+C|BT|Bhutan|Bhutan|Bhután|Bután|Bhutan|Bhoutan|Butão
+C|BW|Botswana|Botswana|Botswana|Botsuana|Botsuana|Botswana|Botsuana
+C|BY|Belarus|Bielorussia|Belarusz|Bielorrusia|Belarus|Biélorussie|Bielorrússia
+C|BZ|Belize|Belize|Belize|Belice|Belize|Belize|Belize
+C|CA|Canada|Canada|Kanada|Canadá|Kanada|Canada|Canadá
+C|CC|Cocos (Keeling) Islands|Isole Cocos (Keeling)|Kókusz (Keeling)-szigetek|Islas Cocos|Kokosinseln|Îles Cocos|Ilhas Cocos (Keeling)
+C|CD|Congo - Kinshasa|Congo - Kinshasa|Kongó – Kinshasa|República Democrática del Congo|Kongo-Kinshasa|Congo-Kinshasa|Congo - Kinshasa
+C|CF|Central African Republic|Repubblica Centrafricana|Közép-afrikai Köztársaság|República Centroafricana|Zentralafrikanische Republik|République centrafricaine|República Centro-Africana
+C|CG|Congo - Brazzaville|Congo-Brazzaville|Kongó – Brazzaville|Congo|Kongo-Brazzaville|Congo-Brazzaville|República do Congo
+C|CH|Switzerland|Svizzera|Svájc|Suiza|Schweiz|Suisse|Suíça
+C|CI|Côte d’Ivoire|Costa d’Avorio|Elefántcsontpart|Côte d’Ivoire|Côte d’Ivoire|Côte d’Ivoire|Costa do Marfim
+C|CK|Cook Islands|Isole Cook|Cook-szigetek|Islas Cook|Cookinseln|Îles Cook|Ilhas Cook
+C|CL|Chile|Cile|Chile|Chile|Chile|Chili|Chile
+C|CM|Cameroon|Camerun|Kamerun|Camerún|Kamerun|Cameroun|Camarões
+C|CN|China|Cina|Kína|China|China|Chine|China
+C|CO|Colombia|Colombia|Kolumbia|Colombia|Kolumbien|Colombie|Colômbia
+C|CR|Costa Rica|Costa Rica|Costa Rica|Costa Rica|Costa Rica|Costa Rica|Costa Rica
+C|CU|Cuba|Cuba|Kuba|Cuba|Kuba|Cuba|Cuba
+C|CV|Cape Verde|Capo Verde|Zöld-foki Köztársaság|Cabo Verde|Cabo Verde|Cap-Vert|Cabo Verde
+C|CW|Curaçao|Curaçao|Curaçao|Curazao|Curaçao|Curaçao|Curaçao
+C|CX|Christmas Island|Isola Christmas|Karácsony-sziget|Isla de Navidad|Weihnachtsinsel|Île Christmas|Ilha Christmas
+C|CY|Cyprus|Cipro|Ciprus|Chipre|Zypern|Chypre|Chipre
+C|CZ|Czechia|Cechia|Csehország|Chequia|Tschechien|Tchéquie|Tchéquia
+C|DE|Germany|Germania|Németország|Alemania|Deutschland|Allemagne|Alemanha
+C|DJ|Djibouti|Gibuti|Dzsibuti|Yibuti|Dschibuti|Djibouti|Djibuti
+C|DK|Denmark|Danimarca|Dánia|Dinamarca|Dänemark|Danemark|Dinamarca
+C|DM|Dominica|Dominica|Dominika|Dominica|Dominica|Dominique|Dominica
+C|DO|Dominican Republic|Repubblica Dominicana|Dominikai Köztársaság|República Dominicana|Dominikanische Republik|République dominicaine|República Dominicana
+C|DZ|Algeria|Algeria|Algéria|Argelia|Algerien|Algérie|Argélia
+C|EC|Ecuador|Ecuador|Ecuador|Ecuador|Ecuador|Équateur|Equador
+C|EE|Estonia|Estonia|Észtország|Estonia|Estland|Estonie|Estônia
+C|EG|Egypt|Egitto|Egyiptom|Egipto|Ägypten|Égypte|Egito
+C|EH|Western Sahara|Sahara Occidentale|Nyugat-Szahara|Sáhara Occidental|Westsahara|Sahara occidental|Saara Ocidental
+C|ER|Eritrea|Eritrea|Eritrea|Eritrea|Eritrea|Érythrée|Eritreia
+C|ES|Spain|Spagna|Spanyolország|España|Spanien|Espagne|Espanha
+C|ET|Ethiopia|Etiopia|Etiópia|Etiopía|Äthiopien|Éthiopie|Etiópia
+C|FI|Finland|Finlandia|Finnország|Finlandia|Finnland|Finlande|Finlândia
+C|FJ|Fiji|Figi|Fidzsi|Fiyi|Fidschi|Fidji|Fiji
+C|FK|Falkland Islands|Isole Falkland|Falkland-szigetek|Islas Malvinas|Falklandinseln|Îles Malouines|Ilhas Malvinas
+C|FM|Micronesia|Micronesia|Mikronézia|Micronesia|Mikronesien|Micronésie|Micronésia
+C|FO|Faroe Islands|Isole Fær Øer|Feröer szigetek|Islas Feroe|Färöer|Îles Féroé|Ilhas Faroé
+C|FR|France|Francia|Franciaország|Francia|Frankreich|France|França
+C|GA|Gabon|Gabon|Gabon|Gabón|Gabun|Gabon|Gabão
+C|GB|United Kingdom|Regno Unito|Egyesült Királyság|Reino Unido|Vereinigtes Königreich|Royaume-Uni|Reino Unido
+C|GD|Grenada|Grenada|Grenada|Granada|Grenada|Grenade|Granada
+C|GE|Georgia|Georgia|Grúzia|Georgia|Georgien|Géorgie|Geórgia
+C|GF|French Guiana|Guyana Francese|Francia Guyana|Guayana Francesa|Französisch-Guayana|Guyane française|Guiana Francesa
+C|GG|Guernsey|Guernsey|Guernsey|Guernesey|Guernsey|Guernesey|Guernsey
+C|GH|Ghana|Ghana|Ghána|Ghana|Ghana|Ghana|Gana
+C|GI|Gibraltar|Gibilterra|Gibraltár|Gibraltar|Gibraltar|Gibraltar|Gibraltar
+C|GL|Greenland|Groenlandia|Grönland|Groenlandia|Grönland|Groenland|Groenlândia
+C|GM|Gambia|Gambia|Gambia|Gambia|Gambia|Gambie|Gâmbia
+C|GN|Guinea|Guinea|Guinea|Guinea|Guinea|Guinée|Guiné
+C|GP|Guadeloupe|Guadalupa|Guadeloupe|Guadalupe|Guadeloupe|Guadeloupe|Guadalupe
+C|GQ|Equatorial Guinea|Guinea Equatoriale|Egyenlítői-Guinea|Guinea Ecuatorial|Äquatorialguinea|Guinée équatoriale|Guiné Equatorial
+C|GR|Greece|Grecia|Görögország|Grecia|Griechenland|Grèce|Grécia
+C|GS|South Georgia & South Sandwich Islands|Georgia del Sud e Sandwich Australi|Déli-Georgia és Déli-Sandwich-szigetek|Islas Georgia del Sur y Sandwich del Sur|Südgeorgien und die Südlichen Sandwichinseln|Géorgie du Sud-et-les Îles Sandwich du Sud|Ilhas Geórgia do Sul e Sandwich do Sul
+C|GT|Guatemala|Guatemala|Guatemala|Guatemala|Guatemala|Guatemala|Guatemala
+C|GU|Guam|Guam|Guam|Guam|Guam|Guam|Guam
+C|GW|Guinea-Bissau|Guinea-Bissau|Bissau-Guinea|Guinea-Bisáu|Guinea-Bissau|Guinée-Bissau|Guiné-Bissau
+C|GY|Guyana|Guyana|Guyana|Guyana|Guyana|Guyana|Guiana
+C|HK|Hong Kong SAR China|RAS di Hong Kong|Hongkong KKT|RAE de Hong Kong (China)|Sonderverwaltungsregion Hongkong|R.A.S. chinoise de Hong Kong|Hong Kong, RAE da China
+C|HN|Honduras|Honduras|Honduras|Honduras|Honduras|Honduras|Honduras
+C|HR|Croatia|Croazia|Horvátország|Croacia|Kroatien|Croatie|Croácia
+C|HT|Haiti|Haiti|Haiti|Haití|Haiti|Haïti|Haiti
+C|HU|Hungary|Ungheria|Magyarország|Hungría|Ungarn|Hongrie|Hungria
+C|ID|Indonesia|Indonesia|Indonézia|Indonesia|Indonesien|Indonésie|Indonésia
+C|IE|Ireland|Irlanda|Írország|Irlanda|Irland|Irlande|Irlanda
+C|IL|Israel|Israele|Izrael|Israel|Israel|Israël|Israel
+C|IM|Isle of Man|Isola di Man|Man-sziget|Isla de Man|Isle of Man|Île de Man|Ilha de Man
+C|IN|India|India|India|India|Indien|Inde|Índia
+C|IO|British Indian Ocean Territory|Territorio Britannico dell’Oceano Indiano|Brit Indiai-óceáni Terület|Territorio Británico del Océano Índico|Britisches Territorium im Indischen Ozean|Territoire britannique de l’océan Indien|Território Britânico do Oceano Índico
+C|IQ|Iraq|Iraq|Irak|Irak|Irak|Irak|Iraque
+C|IR|Iran|Iran|Irán|Irán|Iran|Iran|Irã
+C|IS|Iceland|Islanda|Izland|Islandia|Island|Islande|Islândia
+C|IT|Italy|Italia|Olaszország|Italia|Italien|Italie|Itália
+C|JE|Jersey|Jersey|Jersey|Jersey|Jersey|Jersey|Jersey
+C|JM|Jamaica|Giamaica|Jamaica|Jamaica|Jamaika|Jamaïque|Jamaica
+C|JO|Jordan|Giordania|Jordánia|Jordania|Jordanien|Jordanie|Jordânia
+C|JP|Japan|Giappone|Japán|Japón|Japan|Japon|Japão
+C|KE|Kenya|Kenya|Kenya|Kenia|Kenia|Kenya|Quênia
+C|KG|Kyrgyzstan|Kirghizistan|Kirgizisztán|Kirguistán|Kirgisistan|Kirghizstan|Quirguistão
+C|KH|Cambodia|Cambogia|Kambodzsa|Camboya|Kambodscha|Cambodge|Camboja
+C|KI|Kiribati|Kiribati|Kiribati|Kiribati|Kiribati|Kiribati|Quiribati
+C|KM|Comoros|Comore|Comore-szigetek|Comoras|Komoren|Comores|Comores
+C|KN|St. Kitts & Nevis|Saint Kitts e Nevis|Saint Kitts és Nevis|San Cristóbal y Nieves|St. Kitts und Nevis|Saint-Christophe-et-Niévès|São Cristóvão e Névis
+C|KP|North Korea|Corea del Nord|Észak-Korea|Corea del Norte|Nordkorea|Corée du Nord|Coreia do Norte
+C|KR|South Korea|Corea del Sud|Dél-Korea|Corea del Sur|Südkorea|Corée du Sud|Coreia do Sul
+C|KW|Kuwait|Kuwait|Kuvait|Kuwait|Kuwait|Koweït|Kuwait
+C|KY|Cayman Islands|Isole Cayman|Kajmán-szigetek|Islas Caimán|Kaimaninseln|Îles Caïmans|Ilhas Cayman
+C|KZ|Kazakhstan|Kazakistan|Kazahsztán|Kazajistán|Kasachstan|Kazakhstan|Cazaquistão
+C|LA|Laos|Laos|Laosz|Laos|Laos|Laos|Laos
+C|LB|Lebanon|Libano|Libanon|Líbano|Libanon|Liban|Líbano
+C|LC|St. Lucia|Saint Lucia|Saint Lucia|Santa Lucía|St. Lucia|Sainte-Lucie|Santa Lúcia
+C|LI|Liechtenstein|Liechtenstein|Liechtenstein|Liechtenstein|Liechtenstein|Liechtenstein|Liechtenstein
+C|LK|Sri Lanka|Sri Lanka|Srí Lanka|Sri Lanka|Sri Lanka|Sri Lanka|Sri Lanka
+C|LR|Liberia|Liberia|Libéria|Liberia|Liberia|Liberia|Libéria
+C|LS|Lesotho|Lesotho|Lesotho|Lesoto|Lesotho|Lesotho|Lesoto
+C|LT|Lithuania|Lituania|Litvánia|Lituania|Litauen|Lituanie|Lituânia
+C|LU|Luxembourg|Lussemburgo|Luxemburg|Luxemburgo|Luxemburg|Luxembourg|Luxemburgo
+C|LV|Latvia|Lettonia|Lettország|Letonia|Lettland|Lettonie|Letônia
+C|LY|Libya|Libia|Líbia|Libia|Libyen|Libye|Líbia
+C|MA|Morocco|Marocco|Marokkó|Marruecos|Marokko|Maroc|Marrocos
+C|MC|Monaco|Monaco|Monaco|Mónaco|Monaco|Monaco|Mônaco
+C|MD|Moldova|Moldavia|Moldova|Moldavia|Republik Moldau|Moldavie|Moldávia
+C|ME|Montenegro|Montenegro|Montenegró|Montenegro|Montenegro|Monténégro|Montenegro
+C|MF|St. Martin|Saint Martin|Saint Martin|San Martín|St. Martin|Saint-Martin|São Martinho
+C|MG|Madagascar|Madagascar|Madagaszkár|Madagascar|Madagaskar|Madagascar|Madagascar
+C|MH|Marshall Islands|Isole Marshall|Marshall-szigetek|Islas Marshall|Marshallinseln|Îles Marshall|Ilhas Marshall
+C|MK|North Macedonia|Macedonia del Nord|Észak-Macedónia|Macedonia del Norte|Nordmazedonien|Macédoine du Nord|Macedônia do Norte
+C|ML|Mali|Mali|Mali|Mali|Mali|Mali|Mali
+C|MM|Myanmar (Burma)|Myanmar (Birmania)|Mianmar|Myanmar (Birmania)|Myanmar|Myanmar (Birmanie)|Mianmar (Birmânia)
+C|MN|Mongolia|Mongolia|Mongólia|Mongolia|Mongolei|Mongolie|Mongólia
+C|MO|Macao SAR China|RAS di Macao|Makaó KKT|RAE de Macao (China)|Sonderverwaltungsregion Macau|R.A.S. chinoise de Macao|Macau, RAE da China
+C|MP|Northern Mariana Islands|Isole Marianne Settentrionali|Északi Mariana-szigetek|Islas Marianas del Norte|Nördliche Marianen|Îles Mariannes du Nord|Ilhas Marianas do Norte
+C|MQ|Martinique|Martinica|Martinique|Martinica|Martinique|Martinique|Martinica
+C|MR|Mauritania|Mauritania|Mauritánia|Mauritania|Mauretanien|Mauritanie|Mauritânia
+C|MS|Montserrat|Montserrat|Montserrat|Montserrat|Montserrat|Montserrat|Montserrat
+C|MT|Malta|Malta|Málta|Malta|Malta|Malte|Malta
+C|MU|Mauritius|Mauritius|Mauritius|Mauricio|Mauritius|Maurice|Maurício
+C|MV|Maldives|Maldive|Maldív-szigetek|Maldivas|Malediven|Maldives|Maldivas
+C|MW|Malawi|Malawi|Malawi|Malaui|Malawi|Malawi|Malaui
+C|MX|Mexico|Messico|Mexikó|México|Mexiko|Mexique|México
+C|MY|Malaysia|Malaysia|Malajzia|Malasia|Malaysia|Malaisie|Malásia
+C|MZ|Mozambique|Mozambico|Mozambik|Mozambique|Mosambik|Mozambique|Moçambique
+C|NA|Namibia|Namibia|Namíbia|Namibia|Namibia|Namibie|Namíbia
+C|NC|New Caledonia|Nuova Caledonia|Új-Kaledónia|Nueva Caledonia|Neukaledonien|Nouvelle-Calédonie|Nova Caledônia
+C|NE|Niger|Niger|Niger|Níger|Niger|Niger|Níger
+C|NF|Norfolk Island|Isola Norfolk|Norfolk-sziget|Isla Norfolk|Norfolkinsel|Île Norfolk|Ilha Norfolk
+C|NG|Nigeria|Nigeria|Nigéria|Nigeria|Nigeria|Nigeria|Nigéria
+C|NI|Nicaragua|Nicaragua|Nicaragua|Nicaragua|Nicaragua|Nicaragua|Nicarágua
+C|NL|Netherlands|Paesi Bassi|Hollandia|Países Bajos|Niederlande|Pays-Bas|Países Baixos
+C|NO|Norway|Norvegia|Norvégia|Noruega|Norwegen|Norvège|Noruega
+C|NP|Nepal|Nepal|Nepál|Nepal|Nepal|Népal|Nepal
+C|NR|Nauru|Nauru|Nauru|Nauru|Nauru|Nauru|Nauru
+C|NU|Niue|Niue|Niue|Niue|Niue|Niue|Niue
+C|NZ|New Zealand|Nuova Zelanda|Új-Zéland|Nueva Zelanda|Neuseeland|Nouvelle-Zélande|Nova Zelândia
+C|OM|Oman|Oman|Omán|Omán|Oman|Oman|Omã
+C|PA|Panama|Panama|Panama|Panamá|Panama|Panama|Panamá
+C|PE|Peru|Perù|Peru|Perú|Peru|Pérou|Peru
+C|PF|French Polynesia|Polinesia Francese|Francia Polinézia|Polinesia Francesa|Französisch-Polynesien|Polynésie française|Polinésia Francesa
+C|PG|Papua New Guinea|Papua Nuova Guinea|Pápua Új-Guinea|Papúa Nueva Guinea|Papua-Neuguinea|Papouasie-Nouvelle-Guinée|Papua-Nova Guiné
+C|PH|Philippines|Filippine|Fülöp-szigetek|Filipinas|Philippinen|Philippines|Filipinas
+C|PK|Pakistan|Pakistan|Pakisztán|Pakistán|Pakistan|Pakistan|Paquistão
+C|PL|Poland|Polonia|Lengyelország|Polonia|Polen|Pologne|Polônia
+C|PM|St. Pierre & Miquelon|Saint-Pierre e Miquelon|Saint-Pierre és Miquelon|San Pedro y Miquelón|St. Pierre und Miquelon|Saint-Pierre-et-Miquelon|São Pedro e Miquelão
+C|PN|Pitcairn Islands|Isole Pitcairn|Pitcairn-szigetek|Islas Pitcairn|Pitcairninseln|Îles Pitcairn|Ilhas Pitcairn
+C|PR|Puerto Rico|Portorico|Puerto Rico|Puerto Rico|Puerto Rico|Porto Rico|Porto Rico
+C|PS|Palestinian Territories|Territori Palestinesi|Palesztin Autonómia|Territorios Palestinos|Palästinensische Autonomiegebiete|Territoires palestiniens|Territórios palestinos
+C|PT|Portugal|Portogallo|Portugália|Portugal|Portugal|Portugal|Portugal
+C|PW|Palau|Palau|Palau|Palaos|Palau|Palaos|Palau
+C|PY|Paraguay|Paraguay|Paraguay|Paraguay|Paraguay|Paraguay|Paraguai
+C|QA|Qatar|Qatar|Katar|Catar|Katar|Qatar|Catar
+C|RE|Réunion|Riunione|Réunion|Reunión|Réunion|La Réunion|Reunião
+C|RO|Romania|Romania|Románia|Rumanía|Rumänien|Roumanie|Romênia
+C|RS|Serbia|Serbia|Szerbia|Serbia|Serbien|Serbie|Sérvia
+C|RU|Russia|Russia|Oroszország|Rusia|Russland|Russie|Rússia
+C|RW|Rwanda|Ruanda|Ruanda|Ruanda|Ruanda|Rwanda|Ruanda
+C|SA|Saudi Arabia|Arabia Saudita|Szaúd-Arábia|Arabia Saudí|Saudi-Arabien|Arabie saoudite|Arábia Saudita
+C|SB|Solomon Islands|Isole Salomone|Salamon-szigetek|Islas Salomón|Salomonen|Îles Salomon|Ilhas Salomão
+C|SC|Seychelles|Seychelles|Seychelle-szigetek|Seychelles|Seychellen|Seychelles|Seicheles
+C|SD|Sudan|Sudan|Szudán|Sudán|Sudan|Soudan|Sudão
+C|SE|Sweden|Svezia|Svédország|Suecia|Schweden|Suède|Suécia
+C|SG|Singapore|Singapore|Szingapúr|Singapur|Singapur|Singapour|Singapura
+C|SH|St. Helena|Sant’Elena|Szent Ilona|Santa Elena|St. Helena|Sainte-Hélène|Santa Helena
+C|SI|Slovenia|Slovenia|Szlovénia|Eslovenia|Slowenien|Slovénie|Eslovênia
+C|SJ|Svalbard & Jan Mayen|Svalbard e Jan Mayen|Svalbard és Jan Mayen|Svalbard y Jan Mayen|Spitzbergen und Jan Mayen|Svalbard et Jan Mayen|Svalbard e Jan Mayen
+C|SK|Slovakia|Slovacchia|Szlovákia|Eslovaquia|Slowakei|Slovaquie|Eslováquia
+C|SL|Sierra Leone|Sierra Leone|Sierra Leone|Sierra Leona|Sierra Leone|Sierra Leone|Serra Leoa
+C|SM|San Marino|San Marino|San Marino|San Marino|San Marino|Saint-Marin|San Marino
+C|SN|Senegal|Senegal|Szenegál|Senegal|Senegal|Sénégal|Senegal
+C|SO|Somalia|Somalia|Szomália|Somalia|Somalia|Somalie|Somália
+C|SR|Suriname|Suriname|Suriname|Surinam|Suriname|Suriname|Suriname
+C|SS|South Sudan|Sud Sudan|Dél-Szudán|Sudán del Sur|Südsudan|Soudan du Sud|Sudão do Sul
+C|ST|São Tomé & Príncipe|São Tomé e Príncipe|São Tomé és Príncipe|Santo Tomé y Príncipe|São Tomé und Príncipe|Sao Tomé-et-Principe|São Tomé e Príncipe
+C|SV|El Salvador|El Salvador|Salvador|El Salvador|El Salvador|Salvador|El Salvador
+C|SX|Sint Maarten|Sint Maarten|Sint Maarten|Sint Maarten|Sint Maarten|Saint-Martin (partie néerlandaise)|Sint Maarten
+C|SY|Syria|Siria|Szíria|Siria|Syrien|Syrie|Síria
+C|SZ|Eswatini|Eswatini|Szváziföld|Esuatini|Eswatini|Eswatini|Essuatíni
+C|TC|Turks & Caicos Islands|Isole Turks e Caicos|Turks- és Caicos-szigetek|Islas Turcas y Caicos|Turks- und Caicosinseln|Îles Turques-et-Caïques|Ilhas Turcas e Caicos
+C|TD|Chad|Ciad|Csád|Chad|Tschad|Tchad|Chade
+C|TF|French Southern Territories|Terre Australi Francesi|Francia Déli Területek|Territorios Australes Franceses|Französische Süd- und Antarktisgebiete|Terres australes françaises|Territórios Franceses do Sul
+C|TG|Togo|Togo|Togo|Togo|Togo|Togo|Togo
+C|TH|Thailand|Thailandia|Thaiföld|Tailandia|Thailand|Thaïlande|Tailândia
+C|TJ|Tajikistan|Tagikistan|Tádzsikisztán|Tayikistán|Tadschikistan|Tadjikistan|Tadjiquistão
+C|TK|Tokelau|Tokelau|Tokelau|Tokelau|Tokelau|Tokelau|Tokelau
+C|TL|Timor-Leste|Timor Est|Kelet-Timor|Timor-Leste|Timor-Leste|Timor oriental|Timor-Leste
+C|TM|Turkmenistan|Turkmenistan|Türkmenisztán|Turkmenistán|Turkmenistan|Turkménistan|Turcomenistão
+C|TN|Tunisia|Tunisia|Tunézia|Túnez|Tunesien|Tunisie|Tunísia
+C|TO|Tonga|Tonga|Tonga|Tonga|Tonga|Tonga|Tonga
+C|TR|Türkiye|Turchia|Törökország|Turquía|Türkei|Turquie|Turquia
+C|TT|Trinidad & Tobago|Trinidad e Tobago|Trinidad és Tobago|Trinidad y Tobago|Trinidad und Tobago|Trinité-et-Tobago|Trinidad e Tobago
+C|TV|Tuvalu|Tuvalu|Tuvalu|Tuvalu|Tuvalu|Tuvalu|Tuvalu
+C|TW|Taiwan|Taiwan|Tajvan|Taiwán|Taiwan|Taïwan|Taiwan
+C|TZ|Tanzania|Tanzania|Tanzánia|Tanzania|Tansania|Tanzanie|Tanzânia
+C|UA|Ukraine|Ucraina|Ukrajna|Ucrania|Ukraine|Ukraine|Ucrânia
+C|UG|Uganda|Uganda|Uganda|Uganda|Uganda|Ouganda|Uganda
+C|UM|U.S. Outlying Islands|Isole Minori Esterne degli Stati Uniti|Az USA lakatlan külbirtokai|Islas menores alejadas de EE. UU.|Amerikanische Überseeinseln|Îles mineures éloignées des États-Unis|Ilhas Menores Distantes dos EUA
+C|US|United States|Stati Uniti|Egyesült Államok|Estados Unidos|Vereinigte Staaten|États-Unis|Estados Unidos
+C|UY|Uruguay|Uruguay|Uruguay|Uruguay|Uruguay|Uruguay|Uruguai
+C|UZ|Uzbekistan|Uzbekistan|Üzbegisztán|Uzbekistán|Usbekistan|Ouzbékistan|Uzbequistão
+C|VA|Vatican City|Città del Vaticano|Vatikán|Ciudad del Vaticano|Vatikanstadt|État de la Cité du Vatican|Cidade do Vaticano
+C|VC|St. Vincent & Grenadines|Saint Vincent e Grenadine|Saint Vincent és a Grenadine-szigetek|San Vicente y las Granadinas|St. Vincent und die Grenadinen|Saint-Vincent-et-les Grenadines|São Vicente e Granadinas
+C|VE|Venezuela|Venezuela|Venezuela|Venezuela|Venezuela|Venezuela|Venezuela
+C|VG|British Virgin Islands|Isole Vergini Britanniche|Brit Virgin-szigetek|Islas Vírgenes Británicas|Britische Jungferninseln|Îles Vierges britanniques|Ilhas Virgens Britânicas
+C|VI|U.S. Virgin Islands|Isole Vergini Americane|Amerikai Virgin-szigetek|Islas Vírgenes de EE. UU.|Amerikanische Jungferninseln|Îles Vierges des États-Unis|Ilhas Virgens Americanas
+C|VN|Vietnam|Vietnam|Vietnám|Vietnam|Vietnam|Viêt Nam|Vietnã
+C|VU|Vanuatu|Vanuatu|Vanuatu|Vanuatu|Vanuatu|Vanuatu|Vanuatu
+C|WF|Wallis & Futuna|Wallis e Futuna|Wallis és Futuna|Wallis y Futuna|Wallis und Futuna|Wallis-et-Futuna|Wallis e Futuna
+C|WS|Samoa|Samoa|Szamoa|Samoa|Samoa|Samoa|Samoa
+C|YE|Yemen|Yemen|Jemen|Yemen|Jemen|Yémen|Iêmen
+C|YT|Mayotte|Mayotte|Mayotte|Mayotte|Mayotte|Mayotte|Mayotte
+C|ZA|South Africa|Sudafrica|Dél-afrikai Köztársaság|Sudáfrica|Südafrika|Afrique du Sud|África do Sul
+C|ZM|Zambia|Zambia|Zambia|Zambia|Sambia|Zambie|Zâmbia
+C|ZW|Zimbabwe|Zimbabwe|Zimbabwe|Zimbabue|Simbabwe|Zimbabwe|Zimbábue
+A|AE|UAE|Emirati|Emirates
+A|CI|Ivory Coast|Costa d'Avorio|Cote d'Ivoire|Elefantenkuste
+A|CZ|Czech Republic|Czechia|Repubblica Ceca|Tschechische Republik|Republique tcheque
+A|GB|UK|U.K.|Great Britain|Britain|England|Scotland|Wales|Inghilterra|Scozia|Angleterre|Inglaterra|Anglia
+A|KR|Korea|South Korea|Corea del Sud
+A|MM|Burma
+A|NL|Holland|Olanda|Holanda|Hollande|Hollandia
+A|RU|Russian Federation|Russland
+A|TR|Turkey|Turkiye|Turchia
+A|US|USA|U.S.A.|United States of America|America|Stati Uniti d'America|Etats-Unis|EEUU|Estados Unidos de America
+A|VA|Vatican|Vaticano
+Z|AD|Europe/Andorra
+Z|AE|Asia/Dubai
+Z|AF|Asia/Kabul
+Z|AG|America/Antigua
+Z|AI|America/Anguilla
+Z|AL|Europe/Tirane
+Z|AM|Asia/Yerevan
+Z|AO|Africa/Luanda
+Z|AQ|Antarctica/McMurdo
+Z|AQ|Antarctica/Casey
+Z|AQ|Antarctica/Davis
+Z|AQ|Antarctica/DumontDUrville
+Z|AQ|Antarctica/Mawson
+Z|AQ|Antarctica/Palmer
+Z|AQ|Antarctica/Rothera
+Z|AQ|Antarctica/Syowa
+Z|AQ|Antarctica/Troll
+Z|AQ|Antarctica/Vostok
+Z|AR|America/Argentina/Buenos_Aires
+Z|AR|America/Argentina/Cordoba
+Z|AR|America/Argentina/Salta
+Z|AR|America/Argentina/Jujuy
+Z|AR|America/Argentina/Tucuman
+Z|AR|America/Argentina/Catamarca
+Z|AR|America/Argentina/La_Rioja
+Z|AR|America/Argentina/San_Juan
+Z|AR|America/Argentina/Mendoza
+Z|AR|America/Argentina/San_Luis
+Z|AR|America/Argentina/Rio_Gallegos
+Z|AR|America/Argentina/Ushuaia
+Z|AS|Pacific/Pago_Pago
+Z|AT|Europe/Vienna
+Z|AU|Australia/Lord_Howe
+Z|AU|Antarctica/Macquarie
+Z|AU|Australia/Hobart
+Z|AU|Australia/Melbourne
+Z|AU|Australia/Sydney
+Z|AU|Australia/Broken_Hill
+Z|AU|Australia/Brisbane
+Z|AU|Australia/Lindeman
+Z|AU|Australia/Adelaide
+Z|AU|Australia/Darwin
+Z|AU|Australia/Perth
+Z|AU|Australia/Eucla
+Z|AW|America/Aruba
+Z|AX|Europe/Mariehamn
+Z|AZ|Asia/Baku
+Z|BA|Europe/Sarajevo
+Z|BB|America/Barbados
+Z|BD|Asia/Dhaka
+Z|BE|Europe/Brussels
+Z|BF|Africa/Ouagadougou
+Z|BG|Europe/Sofia
+Z|BH|Asia/Bahrain
+Z|BI|Africa/Bujumbura
+Z|BJ|Africa/Porto-Novo
+Z|BL|America/St_Barthelemy
+Z|BM|Atlantic/Bermuda
+Z|BN|Asia/Brunei
+Z|BO|America/La_Paz
+Z|BQ|America/Kralendijk
+Z|BR|America/Noronha
+Z|BR|America/Belem
+Z|BR|America/Fortaleza
+Z|BR|America/Recife
+Z|BR|America/Araguaina
+Z|BR|America/Maceio
+Z|BR|America/Bahia
+Z|BR|America/Sao_Paulo
+Z|BR|America/Campo_Grande
+Z|BR|America/Cuiaba
+Z|BR|America/Santarem
+Z|BR|America/Porto_Velho
+Z|BR|America/Boa_Vista
+Z|BR|America/Manaus
+Z|BR|America/Eirunepe
+Z|BR|America/Rio_Branco
+Z|BS|America/Nassau
+Z|BT|Asia/Thimphu
+Z|BW|Africa/Gaborone
+Z|BY|Europe/Minsk
+Z|BZ|America/Belize
+Z|CA|America/St_Johns
+Z|CA|America/Halifax
+Z|CA|America/Glace_Bay
+Z|CA|America/Moncton
+Z|CA|America/Goose_Bay
+Z|CA|America/Blanc-Sablon
+Z|CA|America/Toronto
+Z|CA|America/Iqaluit
+Z|CA|America/Atikokan
+Z|CA|America/Winnipeg
+Z|CA|America/Resolute
+Z|CA|America/Rankin_Inlet
+Z|CA|America/Regina
+Z|CA|America/Swift_Current
+Z|CA|America/Edmonton
+Z|CA|America/Cambridge_Bay
+Z|CA|America/Inuvik
+Z|CA|America/Vancouver
+Z|CA|America/Creston
+Z|CA|America/Dawson_Creek
+Z|CA|America/Fort_Nelson
+Z|CA|America/Whitehorse
+Z|CA|America/Dawson
+Z|CC|Indian/Cocos
+Z|CD|Africa/Kinshasa
+Z|CD|Africa/Lubumbashi
+Z|CF|Africa/Bangui
+Z|CG|Africa/Brazzaville
+Z|CH|Europe/Zurich
+Z|CI|Africa/Abidjan
+Z|CK|Pacific/Rarotonga
+Z|CL|America/Santiago
+Z|CL|America/Coyhaique
+Z|CL|America/Punta_Arenas
+Z|CL|Pacific/Easter
+Z|CM|Africa/Douala
+Z|CN|Asia/Shanghai
+Z|CN|Asia/Urumqi
+Z|CO|America/Bogota
+Z|CR|America/Costa_Rica
+Z|CU|America/Havana
+Z|CV|Atlantic/Cape_Verde
+Z|CW|America/Curacao
+Z|CX|Indian/Christmas
+Z|CY|Asia/Nicosia
+Z|CY|Asia/Famagusta
+Z|CZ|Europe/Prague
+Z|DE|Europe/Berlin
+Z|DE|Europe/Busingen
+Z|DJ|Africa/Djibouti
+Z|DK|Europe/Copenhagen
+Z|DM|America/Dominica
+Z|DO|America/Santo_Domingo
+Z|DZ|Africa/Algiers
+Z|EC|America/Guayaquil
+Z|EC|Pacific/Galapagos
+Z|EE|Europe/Tallinn
+Z|EG|Africa/Cairo
+Z|EH|Africa/El_Aaiun
+Z|ER|Africa/Asmara
+Z|ES|Europe/Madrid
+Z|ES|Africa/Ceuta
+Z|ES|Atlantic/Canary
+Z|ET|Africa/Addis_Ababa
+Z|FI|Europe/Helsinki
+Z|FJ|Pacific/Fiji
+Z|FK|Atlantic/Stanley
+Z|FM|Pacific/Chuuk
+Z|FM|Pacific/Pohnpei
+Z|FM|Pacific/Kosrae
+Z|FO|Atlantic/Faroe
+Z|FR|Europe/Paris
+Z|GA|Africa/Libreville
+Z|GB|Europe/London
+Z|GD|America/Grenada
+Z|GE|Asia/Tbilisi
+Z|GF|America/Cayenne
+Z|GG|Europe/Guernsey
+Z|GH|Africa/Accra
+Z|GI|Europe/Gibraltar
+Z|GL|America/Nuuk
+Z|GL|America/Danmarkshavn
+Z|GL|America/Scoresbysund
+Z|GL|America/Thule
+Z|GM|Africa/Banjul
+Z|GN|Africa/Conakry
+Z|GP|America/Guadeloupe
+Z|GQ|Africa/Malabo
+Z|GR|Europe/Athens
+Z|GS|Atlantic/South_Georgia
+Z|GT|America/Guatemala
+Z|GU|Pacific/Guam
+Z|GW|Africa/Bissau
+Z|GY|America/Guyana
+Z|HK|Asia/Hong_Kong
+Z|HN|America/Tegucigalpa
+Z|HR|Europe/Zagreb
+Z|HT|America/Port-au-Prince
+Z|HU|Europe/Budapest
+Z|ID|Asia/Jakarta
+Z|ID|Asia/Pontianak
+Z|ID|Asia/Makassar
+Z|ID|Asia/Jayapura
+Z|IE|Europe/Dublin
+Z|IL|Asia/Jerusalem
+Z|IM|Europe/Isle_of_Man
+Z|IN|Asia/Kolkata
+Z|IO|Indian/Chagos
+Z|IQ|Asia/Baghdad
+Z|IR|Asia/Tehran
+Z|IS|Atlantic/Reykjavik
+Z|IT|Europe/Rome
+Z|JE|Europe/Jersey
+Z|JM|America/Jamaica
+Z|JO|Asia/Amman
+Z|JP|Asia/Tokyo
+Z|KE|Africa/Nairobi
+Z|KG|Asia/Bishkek
+Z|KH|Asia/Phnom_Penh
+Z|KI|Pacific/Tarawa
+Z|KI|Pacific/Kanton
+Z|KI|Pacific/Kiritimati
+Z|KM|Indian/Comoro
+Z|KN|America/St_Kitts
+Z|KP|Asia/Pyongyang
+Z|KR|Asia/Seoul
+Z|KW|Asia/Kuwait
+Z|KY|America/Cayman
+Z|KZ|Asia/Almaty
+Z|KZ|Asia/Qyzylorda
+Z|KZ|Asia/Qostanay
+Z|KZ|Asia/Aqtobe
+Z|KZ|Asia/Aqtau
+Z|KZ|Asia/Atyrau
+Z|KZ|Asia/Oral
+Z|LA|Asia/Vientiane
+Z|LB|Asia/Beirut
+Z|LC|America/St_Lucia
+Z|LI|Europe/Vaduz
+Z|LK|Asia/Colombo
+Z|LR|Africa/Monrovia
+Z|LS|Africa/Maseru
+Z|LT|Europe/Vilnius
+Z|LU|Europe/Luxembourg
+Z|LV|Europe/Riga
+Z|LY|Africa/Tripoli
+Z|MA|Africa/Casablanca
+Z|MC|Europe/Monaco
+Z|MD|Europe/Chisinau
+Z|ME|Europe/Podgorica
+Z|MF|America/Marigot
+Z|MG|Indian/Antananarivo
+Z|MH|Pacific/Majuro
+Z|MH|Pacific/Kwajalein
+Z|MK|Europe/Skopje
+Z|ML|Africa/Bamako
+Z|MM|Asia/Yangon
+Z|MN|Asia/Ulaanbaatar
+Z|MN|Asia/Hovd
+Z|MO|Asia/Macau
+Z|MP|Pacific/Saipan
+Z|MQ|America/Martinique
+Z|MR|Africa/Nouakchott
+Z|MS|America/Montserrat
+Z|MT|Europe/Malta
+Z|MU|Indian/Mauritius
+Z|MV|Indian/Maldives
+Z|MW|Africa/Blantyre
+Z|MX|America/Mexico_City
+Z|MX|America/Cancun
+Z|MX|America/Merida
+Z|MX|America/Monterrey
+Z|MX|America/Matamoros
+Z|MX|America/Chihuahua
+Z|MX|America/Ciudad_Juarez
+Z|MX|America/Ojinaga
+Z|MX|America/Mazatlan
+Z|MX|America/Bahia_Banderas
+Z|MX|America/Hermosillo
+Z|MX|America/Tijuana
+Z|MY|Asia/Kuala_Lumpur
+Z|MY|Asia/Kuching
+Z|MZ|Africa/Maputo
+Z|NA|Africa/Windhoek
+Z|NC|Pacific/Noumea
+Z|NE|Africa/Niamey
+Z|NF|Pacific/Norfolk
+Z|NG|Africa/Lagos
+Z|NI|America/Managua
+Z|NL|Europe/Amsterdam
+Z|NO|Europe/Oslo
+Z|NP|Asia/Kathmandu
+Z|NR|Pacific/Nauru
+Z|NU|Pacific/Niue
+Z|NZ|Pacific/Auckland
+Z|NZ|Pacific/Chatham
+Z|OM|Asia/Muscat
+Z|PA|America/Panama
+Z|PE|America/Lima
+Z|PF|Pacific/Tahiti
+Z|PF|Pacific/Marquesas
+Z|PF|Pacific/Gambier
+Z|PG|Pacific/Port_Moresby
+Z|PG|Pacific/Bougainville
+Z|PH|Asia/Manila
+Z|PK|Asia/Karachi
+Z|PL|Europe/Warsaw
+Z|PM|America/Miquelon
+Z|PN|Pacific/Pitcairn
+Z|PR|America/Puerto_Rico
+Z|PS|Asia/Gaza
+Z|PS|Asia/Hebron
+Z|PT|Europe/Lisbon
+Z|PT|Atlantic/Madeira
+Z|PT|Atlantic/Azores
+Z|PW|Pacific/Palau
+Z|PY|America/Asuncion
+Z|QA|Asia/Qatar
+Z|RE|Indian/Reunion
+Z|RO|Europe/Bucharest
+Z|RS|Europe/Belgrade
+Z|RU|Europe/Kaliningrad
+Z|RU|Europe/Moscow
+Z|UA|Europe/Simferopol
+Z|RU|Europe/Kirov
+Z|RU|Europe/Volgograd
+Z|RU|Europe/Astrakhan
+Z|RU|Europe/Saratov
+Z|RU|Europe/Ulyanovsk
+Z|RU|Europe/Samara
+Z|RU|Asia/Yekaterinburg
+Z|RU|Asia/Omsk
+Z|RU|Asia/Novosibirsk
+Z|RU|Asia/Barnaul
+Z|RU|Asia/Tomsk
+Z|RU|Asia/Novokuznetsk
+Z|RU|Asia/Krasnoyarsk
+Z|RU|Asia/Irkutsk
+Z|RU|Asia/Chita
+Z|RU|Asia/Yakutsk
+Z|RU|Asia/Khandyga
+Z|RU|Asia/Vladivostok
+Z|RU|Asia/Ust-Nera
+Z|RU|Asia/Magadan
+Z|RU|Asia/Sakhalin
+Z|RU|Asia/Srednekolymsk
+Z|RU|Asia/Kamchatka
+Z|RU|Asia/Anadyr
+Z|RW|Africa/Kigali
+Z|SA|Asia/Riyadh
+Z|SB|Pacific/Guadalcanal
+Z|SC|Indian/Mahe
+Z|SD|Africa/Khartoum
+Z|SE|Europe/Stockholm
+Z|SG|Asia/Singapore
+Z|SH|Atlantic/St_Helena
+Z|SI|Europe/Ljubljana
+Z|SJ|Arctic/Longyearbyen
+Z|SK|Europe/Bratislava
+Z|SL|Africa/Freetown
+Z|SM|Europe/San_Marino
+Z|SN|Africa/Dakar
+Z|SO|Africa/Mogadishu
+Z|SR|America/Paramaribo
+Z|SS|Africa/Juba
+Z|ST|Africa/Sao_Tome
+Z|SV|America/El_Salvador
+Z|SX|America/Lower_Princes
+Z|SY|Asia/Damascus
+Z|SZ|Africa/Mbabane
+Z|TC|America/Grand_Turk
+Z|TD|Africa/Ndjamena
+Z|TF|Indian/Kerguelen
+Z|TG|Africa/Lome
+Z|TH|Asia/Bangkok
+Z|TJ|Asia/Dushanbe
+Z|TK|Pacific/Fakaofo
+Z|TL|Asia/Dili
+Z|TM|Asia/Ashgabat
+Z|TN|Africa/Tunis
+Z|TO|Pacific/Tongatapu
+Z|TR|Europe/Istanbul
+Z|TT|America/Port_of_Spain
+Z|TV|Pacific/Funafuti
+Z|TW|Asia/Taipei
+Z|TZ|Africa/Dar_es_Salaam
+Z|UA|Europe/Kyiv
+Z|UG|Africa/Kampala
+Z|UM|Pacific/Midway
+Z|UM|Pacific/Wake
+Z|US|America/New_York
+Z|US|America/Detroit
+Z|US|America/Kentucky/Louisville
+Z|US|America/Kentucky/Monticello
+Z|US|America/Indiana/Indianapolis
+Z|US|America/Indiana/Vincennes
+Z|US|America/Indiana/Winamac
+Z|US|America/Indiana/Marengo
+Z|US|America/Indiana/Petersburg
+Z|US|America/Indiana/Vevay
+Z|US|America/Chicago
+Z|US|America/Indiana/Tell_City
+Z|US|America/Indiana/Knox
+Z|US|America/Menominee
+Z|US|America/North_Dakota/Center
+Z|US|America/North_Dakota/New_Salem
+Z|US|America/North_Dakota/Beulah
+Z|US|America/Denver
+Z|US|America/Boise
+Z|US|America/Phoenix
+Z|US|America/Los_Angeles
+Z|US|America/Anchorage
+Z|US|America/Juneau
+Z|US|America/Sitka
+Z|US|America/Metlakatla
+Z|US|America/Yakutat
+Z|US|America/Nome
+Z|US|America/Adak
+Z|US|Pacific/Honolulu
+Z|UY|America/Montevideo
+Z|UZ|Asia/Samarkand
+Z|UZ|Asia/Tashkent
+Z|VA|Europe/Vatican
+Z|VC|America/St_Vincent
+Z|VE|America/Caracas
+Z|VG|America/Tortola
+Z|VI|America/St_Thomas
+Z|VN|Asia/Ho_Chi_Minh
+Z|VU|Pacific/Efate
+Z|WF|Pacific/Wallis
+Z|WS|Pacific/Apia
+Z|YE|Asia/Aden
+Z|YT|Indian/Mayotte
+Z|ZA|Africa/Johannesburg
+Z|ZM|Africa/Lusaka
+Z|ZW|Africa/Harare
+N|Europe/Andorra|||||Andorre|
+N|Asia/Dubai||Dubaj||||
+N|Asia/Kabul|||||Kaboul|Cabul
+N|America/Anguilla|||Anguila|||Anguila
+N|Europe/Tirane|Tirana|Tirana|Tirana|Tirana|Tirana|Tirana
+N|Asia/Yerevan||Jereván|Ereván|Eriwan|Erevan|
+N|Antarctica/DumontDUrville|Dumont-d’Urville|Dumont-d’Urville|Dumont-d’Urville|Dumont-d’Urville|Dumont-d’Urville|Dumont-d’Urville
+N|Antarctica/Syowa|||||Showa|
+N|Antarctica/Vostok||Vosztok||Wostok||
+N|America/Argentina/Tucuman||||||Tucumã
+N|Europe/Vienna||Bécs|Viena|Wien|Vienne|Viena
+N|Australia/Sydney|||Sídney|||
+N|Australia/Adelaide|||Adelaida|||
+N|Asia/Baku|||||Bakou|
+N|Europe/Sarajevo||Szarajevó||||
+N|America/Barbados|||||La Barbade|
+N|Asia/Dhaka|Dacca|Dakka|Daca|||Dacca
+N|Europe/Brussels|Bruxelles|Brüsszel|Bruselas|Brüssel|Bruxelles|Bruxelas
+N|Africa/Ouagadougou|||Uagadugú|||
+N|Europe/Sofia||Szófia||||
+N|Asia/Bahrain|Bahrein|Bahrein|Baréin||Bahreïn|Bahrein
+N|Africa/Porto-Novo|||Portonovo|||
+N|America/St_Barthelemy|Saint-Barthélemy|Saint-Barthélemy|San Bartolomé|Saint-Barthélemy|Saint-Barthélemy|São Bartolomeu
+N|Atlantic/Bermuda|||Bermudas||Bermudes|Bermudas
+N|Asia/Brunei||||Brunei Darussalam||
+N|America/Noronha|Fernando de Noronha|Fernando de Noronha|Fernando de Noronha|Fernando de Noronha|Fernando de Noronha|Fernando de Noronha
+N|America/Belem|||Belén|||
+N|America/Sao_Paulo|San Paolo|||||
+N|America/Manaus|||Manaos||Manaos|
+N|Asia/Thimphu||Timpu|Timbu|||
+N|Europe/Minsk||Minszk||||
+N|America/Belize|||Belice|||
+N|America/St_Johns|||San Juan de Terranova||Saint-Jean de Terre-Neuve|
+N|Indian/Cocos||Kókusz-sziget||||
+N|Europe/Zurich|Zurigo|||||Zurique
+N|Africa/Abidjan|||Abiyán|||
+N|America/Santiago|||Santiago de Chile|||
+N|Pacific/Easter|Pasqua|Húsvét-szigetek|Isla de Pascua|Osterinsel|Île de Pâques|Ilha de Páscoa
+N|Africa/Douala|||Duala|||
+N|Asia/Shanghai||Sanghaj||||Xangai
+N|Asia/Urumqi||Ürümcsi||||
+N|America/Havana|L’Avana|Havanna|La Habana|Havanna|La Havane|
+N|Atlantic/Cape_Verde|Capo Verde|Zöld-foki szigetek|Cabo Verde|Cabo Verde|Cap-Vert|Cabo Verde
+N|America/Curacao|||Curazao|||
+N|Indian/Christmas||Karácsony-sziget|Navidad|Weihnachtsinsel||
+N|Asia/Nicosia||||Nikosia|Nicosie|
+N|Asia/Famagusta|Famagosta||||Famagouste|
+N|Europe/Prague|Praga|Prága|Praga|Prag||Praga
+N|Europe/Berlin|Berlino|||||Berlim
+N|Africa/Djibouti|Gibuti|Dzsibuti|Yibuti|Dschibuti||Djibuti
+N|Europe/Copenhagen|Copenaghen|Koppenhága|Copenhague|Kopenhagen|Copenhague|Copenhague
+N|America/Dominica||Dominika|||Dominique|
+N|America/Santo_Domingo|||||Saint-Domingue|
+N|Africa/Algiers|Algeri|Algír|Argel|Algier|Alger|Argel
+N|America/Guayaquil||||||Guaiaquil
+N|Pacific/Galapagos||Galapagos-szigetek||||
+N|Europe/Tallinn||Tallin|Tallin|||
+N|Africa/Cairo|Il Cairo|Kairó|El Cairo|Kairo|Le Caire|
+N|Africa/El_Aaiun|El Ayun|El-Ajún|||Laâyoune|
+N|Europe/Madrid||||||Madri
+N|Atlantic/Canary|Canarie|Kanári-szigetek|Canarias|Kanaren|Îles Canaries|Canárias
+N|Africa/Addis_Ababa|Addis Abeba|Addisz-Abeba|Adís Abeba|Addis Abeba|Addis-Abeba|Adis Abeba
+N|Europe/Helsinki||||||Helsinque
+N|Pacific/Fiji|Figi|Fidzsi|Fiyi|Fidschi|Fidji|
+N|Pacific/Kosrae||Kosrae-szigetek||||
+N|Europe/Paris|Parigi|Párizs||||
+N|Europe/London|Londra||Londres||Londres|Londres
+N|America/Grenada|||Granada||Grenade|Granada
+N|Asia/Tbilisi||Tbiliszi|Tiflis|Tiflis|Tbilissi|
+N|America/Cayenne|Caienna||Cayena|||Caiena
+N|Europe/Guernsey|||Guernesey||Guernesey|
+N|Africa/Accra|||Acra|||Acra
+N|Europe/Gibraltar|Gibilterra|||||
+N|America/Scoresbysund|Ittoqqortoormiit|Ittoqqortoormiit|Ittoqqortoormiit|Ittoqqortoormiit|Ittoqqortoormiit|Ittoqqortoormiit
+N|Africa/Conakry|||Conakri|||Conacri
+N|America/Guadeloupe|Guadalupa||Guadalupe|||Guadalupe
+N|Europe/Athens|Atene|Athén|Atenas|Athen|Athènes|Atenas
+N|Atlantic/South_Georgia|Georgia del Sud|Déli-Georgia|Georgia del Sur|Südgeorgien|Géorgie du Sud|Geórgia do Sul
+N|Africa/Bissau|||Bisáu|||
+N|America/Guyana||||||Guiana
+N|Asia/Hong_Kong||Hongkong||Hongkong||
+N|Europe/Zagreb|Zagabria|Zágráb||||
+N|America/Port-au-Prince|||Puerto Príncipe|||Porto Príncipe
+N|Europe/Budapest||||||Budapeste
+N|Asia/Jakarta|Giacarta||Yakarta|||Jacarta
+N|Asia/Makassar||Makasar|Makasar||Macassar|
+N|Europe/Dublin|Dublino|||||
+N|Asia/Jerusalem|Gerusalemme|Jeruzsálem|Jerusalén|||
+N|Europe/Isle_of_Man|Isola di Man|Man-sziget|Isla de Man||Île de Man|Ilha de Man
+N|Asia/Baghdad||Bagdad|Bagdad|Bagdad|Bagdad|Bagdá
+N|Asia/Tehran|Teheran|Teherán|Teherán|Teheran|Téhéran|Teerã
+N|Atlantic/Reykjavik|||Reikiavik|Reyk­ja­vík||
+N|Europe/Rome|Roma|Róma|Roma|Rom||Roma
+N|America/Jamaica|Giamaica|||Jamaika|Jamaïque|
+N|Asia/Amman||||||Amã
+N|Asia/Tokyo||Tokió|Tokio|Tokio||Tóquio
+N|Asia/Bishkek||Biskek||Bischkek|Bichkek|
+N|Pacific/Tarawa||||||Taraua
+N|Pacific/Kanton|Canton||||Canton|
+N|Pacific/Kiritimati||Kiritimati-sziget||||
+N|Indian/Comoro|Comore|Komoró|Comoras|Komoren|Comores|Comores
+N|America/St_Kitts|||San Cristóbal||Saint-Christophe|São Cristóvão
+N|Asia/Pyongyang||Phenjan||Pjöngjang||
+N|Asia/Seoul|Seul|Szöul|Seúl|||Seul
+N|Asia/Kuwait||Kuvait|||Koweït|
+N|America/Cayman||Kajmán-szigetek|Caimán|Kaimaninseln|Caïmans|
+N|Asia/Almaty||Alma-Ata|||Alma Ata|
+N|Asia/Qyzylorda||Kizilorda|Kyzylorda|Qysylorda|Kzyl Orda|
+N|Asia/Qostanay||Kosztanaj|Kostanái|Qostanai|Kostanaï|
+N|Asia/Aqtobe||Aktöbe|Aktobe|Aktobe|Aktioubinsk|Aktobe
+N|Asia/Aqtau||Aktau|Aktau||Aktaou|Aktau
+N|Asia/Atyrau||Atirau|||Atyraou|
+N|Asia/Oral|||||Ouralsk|
+N|Asia/Vientiane||Vientián|Vientián|||
+N|Asia/Beirut||Bejrút|||Beyrouth|Beirute
+N|America/St_Lucia|Santa Lucia||Santa Lucía||Sainte-Lucie|Santa Lúcia
+N|Europe/Vilnius|||Vilna|||
+N|Europe/Luxembourg|Lussemburgo|Luxemburg|Luxemburgo|Luxemburg||Luxemburgo
+N|Africa/Tripoli||||Tripolis|Tripoli (Libye)|
+N|Pacific/Majuro||Majuro-zátony||||
+N|Pacific/Kwajalein||Kwajalein-zátony||||
+N|Europe/Skopje||Szkopje|Skopie|||
+N|Asia/Ulaanbaatar|Ulan Bator|Ulánbátor|Ulán Bator||Oulan-Bator|Ulan Bator
+N|Asia/Hovd||||Chowd||
+N|Asia/Macau|Macao|Makaó|Macao||Macao|
+N|America/Martinique|Martinica||Martinica|||Martinica
+N|Africa/Nouakchott|||Nuakchot|||
+N|Europe/Malta|||||Malte|
+N|Indian/Mauritius|||Mauricio||Maurice|Maurício
+N|Indian/Maldives|Maldive|Maldív-szigetek|Maldivas|Malediven||Maldivas
+N|America/Mexico_City|Città del Messico|Mexikóváros|Ciudad de México|Mexiko-Stadt|Mexico|Cidade do México
+N|America/Bahia_Banderas|Bahía de Banderas||Bahía de Banderas||Bahia de Banderas|Bahia de Banderas
+N|Asia/Kuching||Kucseng||||
+N|Pacific/Noumea|||Numea|||
+N|Europe/Amsterdam||Amszterdam||||Amsterdã
+N|Pacific/Chatham||Chatham-szigetek||||Chatnam
+N|Asia/Muscat|Mascate|Maszkat|Mascate|Maskat|Mascate|Mascate
+N|Pacific/Tahiti||||||Taiti
+N|Pacific/Marquesas|Marchesi|Marquesas-szigetek|||Marquises|
+N|Pacific/Gambier||Gambier-szigetek||||
+N|Asia/Manila|||||Manille|
+N|Asia/Karachi||Karacsi||Karatschi||
+N|Europe/Warsaw|Varsavia|Varsó|Varsovia|Warschau|Varsovie|Varsóvia
+N|Pacific/Pitcairn||Pitcairn-szigetek||||
+N|America/Puerto_Rico|Portorico||||Porto Rico|Porto Rico
+N|Europe/Lisbon|Lisbona|Lisszabon|Lisboa|Lissabon|Lisbonne|Lisboa
+N|Atlantic/Madeira|||||Madère|
+N|Atlantic/Azores|Azzorre|Azori-szigetek||Azoren|Açores|Açores
+N|Pacific/Palau|||Palaos||Palaos|
+N|America/Asuncion||||||Assunção
+N|Asia/Qatar||Katar|Catar|Katar||Catar
+N|Indian/Reunion|La Riunione||||La Réunion|Reunião
+N|Europe/Bucharest|Bucarest|Bukarest|Bucarest|Bukarest|Bucarest|Bucareste
+N|Europe/Belgrade|Belgrado|Belgrád|Belgrado|Belgrad||Belgrado
+N|Europe/Kaliningrad||Kalinyingrád|Kaliningrado|||Kaliningrado
+N|Europe/Moscow|Mosca|Moszkva|Moscú|Moskau|Moscou|Moscou
+N|Europe/Simferopol|Sinferopoli|Szimferopol||||
+N|Europe/Kirov||||Kirow||
+N|Europe/Volgograd|||Volgogrado|Wolgograd||Volgogrado
+N|Europe/Astrakhan||Asztrahán|Astracán|Astrachan||Astracã
+N|Europe/Saratov||Szaratov||Saratow||
+N|Europe/Ulyanovsk||Uljanovszk|Uliánovsk|Uljanowsk|Oulianovsk|Ulianovsk
+N|Europe/Samara||Szamara||||
+N|Asia/Yekaterinburg|Ekaterinburg|Jekatyerinburg|Ekaterimburgo|Jekaterinburg|Ekaterinbourg|Ecaterimburgo
+N|Asia/Omsk||Omszk||||
+N|Asia/Novosibirsk||Novoszibirszk||Nowosibirsk|Novossibirsk|
+N|Asia/Tomsk||Tomszk||||
+N|Asia/Novokuznetsk|Novokuzneck|Novokuznyeck||Nowokuznetsk||
+N|Asia/Krasnoyarsk|Krasnojarsk|Krasznojarszk||Krasnojarsk|Krasnoïarsk|
+N|Asia/Irkutsk||Irkutszk|||Irkoutsk|
+N|Asia/Chita|Čita|Csita||Tschita|Tchita|
+N|Asia/Yakutsk|Jakutsk|Jakutszk||Jakutsk|Iakoutsk|
+N|Asia/Khandyga|Chandyga|Handiga|Khandiga|Chandyga||
+N|Asia/Vladivostok||Vlagyivosztok||Wladiwostok||
+N|Asia/Ust-Nera||Uszty-Nyera||||
+N|Asia/Sakhalin|Sachalin|Szahalin|Sajalín|Sachalin|Sakhaline|Sacalina
+N|Asia/Srednekolymsk||Szrednekolimszk|Srednekolimsk|||
+N|Asia/Kamchatka||Kamcsatka||Kamtschatka|Kamtchatka|
+N|Asia/Anadyr||Anadir||||
+N|Asia/Riyadh|Riyad|Rijád|Riad|Riad|Riyad|Riade
+N|Africa/Khartoum|Khartum|Kartúm|Jartum|Khartum||Cartum
+N|Europe/Stockholm|Stoccolma||Estocolmo|||Estocolmo
+N|Asia/Singapore||Szingapúr|Singapur|Singapur|Singapour|Singapura
+N|Atlantic/St_Helena|Sant’Elena|Szent Ilona|Santa Elena||Sainte-Hélène|Santa Helena
+N|Europe/Ljubljana|Lubiana||Liubliana|||Liubliana
+N|Europe/Bratislava||Pozsony||||
+N|Europe/San_Marino|||||Saint-Marin|
+N|Africa/Mogadishu|Mogadiscio||Mogadiscio|Mogadischu|Mogadiscio|Mogadíscio
+N|Africa/Juba|Giuba|||||
+N|Africa/Sao_Tome|||Santo Tomé|||
+N|America/El_Salvador||Salvador||||
+N|America/Lower_Princes|Lower Prince’s Quarter|Lower Prince’s Quarter|Lower Prince’s Quarter|Lower Prince’s Quarter|Lower Prince’s Quarter|Lower Prince’s Quarter
+N|Asia/Damascus|Damasco|Damaszkusz|Damasco|Damaskus|Damas|Damasco
+N|America/Grand_Turk|||Gran Turca|||
+N|Africa/Ndjamena|N’Djamena||Yamena|N’Djamena|N’Djamena|N’Djamena
+N|Asia/Dushanbe||Dusanbe|Dusambé|Duschanbe|Douchanbé|Duchambe
+N|Asia/Ashgabat||Asgabat|Asjabad|Aşgabat|Achgabat|Asgabate
+N|Africa/Tunis|Tunisi|Tunisz|Túnez|||
+N|Europe/Istanbul||Isztanbul|Estambul|||Istambul
+N|America/Port_of_Spain|||Puerto España||Port-d’Espagne|
+N|Asia/Taipei||Tajpej||Taipeh||
+N|Africa/Dar_es_Salaam|||Dar es-Salam|Daressalam||
+N|Pacific/Midway||Midway-szigetek||||
+N|Pacific/Wake||Wake-sziget||||
+N|America/New_York|||Nueva York|||Nova York
+N|America/Kentucky/Monticello|Monticello, Kentucky|Monticello, Kentucky|Monticello, Kentucky|Monticello, Kentucky|Monticello [Kentucky]|Monticello, Kentucky
+N|America/Indiana/Vincennes|Vincennes, Indiana|Vincennes, Indiana|Vincennes, Indiana|Vincennes, Indiana|Vincennes [Indiana]|Vincennes, Indiana
+N|America/Indiana/Winamac|Winamac, Indiana|Winamac, Indiana|Winamac, Indiana|Winamac, Indiana|Winamac [Indiana]|Winamac, Indiana
+N|America/Indiana/Marengo|Marengo, Indiana|Marengo, Indiana|Marengo, Indiana|Marengo, Indiana|Marengo [Indiana]|Marengo, Indiana
+N|America/Indiana/Petersburg|Petersburg, Indiana|Petersburg, Indiana|Petersburg, Indiana|Petersburg, Indiana|Petersburg [Indiana]|Petersburg, Indiana
+N|America/Indiana/Vevay|Vevay, Indiana|Vevay, Indiana|Vevay, Indiana|Vevay, Indiana|Vevay [Indiana]|Vevay, Indiana
+N|America/Indiana/Tell_City|Tell City, Indiana|Tell City, Indiana|Tell City, Indiana|Tell City, Indiana|Tell City [Indiana]|Tell City, Indiana
+N|America/Indiana/Knox|Knox, Indiana|Knox, Indiana|Knox, Indiana|Knox, Indiana|Knox [Indiana]|Knox, Indiana
+N|America/North_Dakota/Center|Center, Dakota del nord|Center, Észak-Dakota|Center, Dakota del Norte|Center, North Dakota|Center (Dakota du Nord)|Center, Dakota do Norte
+N|America/North_Dakota/New_Salem|New Salem, Dakota del nord|New Salem, Észak-Dakota|New Salem, Dakota del Norte|New Salem, North Dakota|New Salem (Dakota du Nord)|New Salen, Dakota do Norte
+N|America/North_Dakota/Beulah|Beulah, Dakota del nord|Beulah, Észak-Dakota|Beulah, Dakota del Norte|Beulah, North Dakota|Beulah (Dakota du Nord)|Beulah, Dakota do Norte
+N|America/Montevideo||||||Montevidéu
+N|Asia/Samarkand|Samarcanda|Szamarkand|Samarcanda||Samarcande|Samarcanda
+N|Asia/Tashkent||Taskent|Taskent|Taschkent|Tachkent|
+N|Europe/Vatican|Città del Vaticano|Vatikán|El Vaticano|Vatikan|Le Vatican|Vaticano
+N|America/St_Vincent|Saint Vincent||San Vicente||Saint-Vincent|São Vicente
+N|America/St_Thomas|Saint Thomas||||Saint-Thomas|Saint Thomas
+N|Africa/Johannesburg|||Johannesburgo|||Joanesburgo
+X|Europe/Rome|Milano|Milan|Mailand|Napoli|Naples|Neapel|Torino|Turin|Firenze|Florence|Venezia|Venice|Bologna|Genova|Palermo|Bari|Catania
+X|Europe/Berlin|Munchen|Munich|Monaco di Baviera|Muenchen|Hamburg|Amburgo|Frankfurt|Francoforte|Koln|Cologne|Colonia|Koeln|Stuttgart|Dusseldorf|Leipzig|Dresden|Dresda|Nurnberg|Norimberga
+X|Europe/Paris|Lyon|Lione|Marseille|Marsiglia|Nice|Nizza|Toulouse|Bordeaux|Strasbourg|Strasburgo|Lille|Nantes
+X|Europe/Madrid|Barcelona|Barcellona|Valencia|Sevilla|Siviglia|Bilbao|Malaga|Zaragoza|Saragozza
+X|Europe/Lisbon|Porto|Oporto|Faro|Coimbra
+X|Europe/Budapest|Debrecen|Szeged|Pecs|Gyor|Miskolc
+X|Europe/London|Manchester|Birmingham|Liverpool|Edinburgh|Edimburgo|Glasgow|Leeds|Bristol|Cardiff|Londra|Londres|Londen
+X|Europe/Zurich|Geneva|Ginevra|Geneve|Genf|Basel|Basilea|Bern|Berna|Lausanne|Losanna
+X|Europe/Amsterdam|Rotterdam|Den Haag|The Hague|L'Aia|Utrecht|Eindhoven
+X|Europe/Warsaw|Krakow|Cracovia|Gdansk|Danzica|Wroclaw|Breslavia|Poznan|Lodz
+X|Europe/Brussels|Antwerp|Anversa|Anvers|Gent|Ghent|Bruges|Liege
+X|Europe/Athens|Thessaloniki|Salonicco|Salonique|Patras
+X|Europe/Prague|Brno|Ostrava|Praha
+X|Europe/Vienna|Salzburg|Graz|Linz|Innsbruck
+X|Europe/Moscow|Saint Petersburg|San Pietroburgo|St Petersburg|Sankt Petersburg|Kazan
+X|America/New_York|Boston|Washington|Washington DC|Philadelphia|Miami|Atlanta|NYC|Orlando|Pittsburgh|Charlotte
+X|America/Chicago|Houston|Dallas|Austin|San Antonio|Minneapolis|New Orleans|Nashville
+X|America/Denver|Salt Lake City|Albuquerque|Boulder
+X|America/Los_Angeles|San Francisco|San Diego|Seattle|Las Vegas|Portland|San Jose|Sacramento|LA
+X|America/Toronto|Montreal|Ottawa|Quebec|Hamilton
+X|America/Sao_Paulo|Rio de Janeiro|Rio|Brasilia|Belo Horizonte|Salvador|Curitiba|Porto Alegre|Recife|Fortaleza
+X|America/Argentina/Buenos_Aires|Buenos Aires|Rosario|Mendoza
+X|America/Mexico_City|Guadalajara|Monterrey|Puebla|Ciudad de Mexico|Citta del Messico
+X|Asia/Kolkata|Mumbai|Bombay|Delhi|New Delhi|Bangalore|Bengaluru|Chennai|Madras|Hyderabad|Calcutta|Pune
+X|Asia/Shanghai|Beijing|Peking|Pechino|Pekin|Guangzhou|Canton|Shenzhen|Chengdu|Wuhan|Pekín
+X|Asia/Tokyo|Osaka|Kyoto|Nagoya|Yokohama|Sapporo|Fukuoka
+X|Asia/Seoul|Busan|Incheon|Daegu
+X|Asia/Dubai|Abu Dhabi|Sharjah
+X|Asia/Jerusalem|Tel Aviv|Haifa|Gerusalemme|Jerusalen|Jerusalem
+X|Australia/Sydney|Canberra|Newcastle|Wollongong
+X|Australia/Melbourne|Geelong
+X|Pacific/Auckland|Wellington|Christchurch|Nuova Zelanda
+X|Africa/Johannesburg|Pretoria|Durban|Soweto
+X|America/St_Johns|Newfoundland|Terranova|Terre-Neuve|Neufundland
+X|Africa/Cairo|Il Cairo|Alexandria|Alessandria d'Egitto|Giza
+W|Africa/Abidjan|Greenwich Standard Time
+W|Africa/Accra|Greenwich Standard Time
+W|Africa/Addis_Ababa|E. Africa Standard Time
+W|Africa/Algiers|W. Central Africa Standard Time
+W|Africa/Asmara|E. Africa Standard Time
+W|Africa/Bamako|Greenwich Standard Time
+W|Africa/Bangui|W. Central Africa Standard Time
+W|Africa/Banjul|Greenwich Standard Time
+W|Africa/Bissau|Greenwich Standard Time
+W|Africa/Blantyre|South Africa Standard Time
+W|Africa/Brazzaville|W. Central Africa Standard Time
+W|Africa/Bujumbura|South Africa Standard Time
+W|Africa/Cairo|Egypt Standard Time
+W|Africa/Casablanca|Morocco Standard Time
+W|Africa/Ceuta|Romance Standard Time
+W|Africa/Conakry|Greenwich Standard Time
+W|Africa/Dakar|Greenwich Standard Time
+W|Africa/Dar_es_Salaam|E. Africa Standard Time
+W|Africa/Djibouti|E. Africa Standard Time
+W|Africa/Douala|W. Central Africa Standard Time
+W|Africa/El_Aaiun|Morocco Standard Time
+W|Africa/Freetown|Greenwich Standard Time
+W|Africa/Gaborone|South Africa Standard Time
+W|Africa/Harare|South Africa Standard Time
+W|Africa/Johannesburg|South Africa Standard Time
+W|Africa/Juba|South Sudan Standard Time
+W|Africa/Kampala|E. Africa Standard Time
+W|Africa/Khartoum|Sudan Standard Time
+W|Africa/Kigali|South Africa Standard Time
+W|Africa/Kinshasa|W. Central Africa Standard Time
+W|Africa/Lagos|W. Central Africa Standard Time
+W|Africa/Libreville|W. Central Africa Standard Time
+W|Africa/Lome|Greenwich Standard Time
+W|Africa/Luanda|W. Central Africa Standard Time
+W|Africa/Lubumbashi|South Africa Standard Time
+W|Africa/Lusaka|South Africa Standard Time
+W|Africa/Malabo|W. Central Africa Standard Time
+W|Africa/Maputo|South Africa Standard Time
+W|Africa/Maseru|South Africa Standard Time
+W|Africa/Mbabane|South Africa Standard Time
+W|Africa/Mogadishu|E. Africa Standard Time
+W|Africa/Monrovia|Greenwich Standard Time
+W|Africa/Nairobi|E. Africa Standard Time
+W|Africa/Ndjamena|W. Central Africa Standard Time
+W|Africa/Niamey|W. Central Africa Standard Time
+W|Africa/Nouakchott|Greenwich Standard Time
+W|Africa/Ouagadougou|Greenwich Standard Time
+W|Africa/Porto-Novo|W. Central Africa Standard Time
+W|Africa/Sao_Tome|Sao Tome Standard Time
+W|Africa/Tripoli|Libya Standard Time
+W|Africa/Tunis|W. Central Africa Standard Time
+W|Africa/Windhoek|Namibia Standard Time
+W|America/Adak|Aleutian Standard Time
+W|America/Anchorage|Alaskan Standard Time
+W|America/Anguilla|SA Western Standard Time
+W|America/Antigua|SA Western Standard Time
+W|America/Araguaina|Tocantins Standard Time
+W|America/Argentina/Buenos_Aires|Argentina Standard Time
+W|America/Argentina/Catamarca|Argentina Standard Time
+W|America/Argentina/Cordoba|Argentina Standard Time
+W|America/Argentina/Jujuy|Argentina Standard Time
+W|America/Argentina/La_Rioja|Argentina Standard Time
+W|America/Argentina/Mendoza|Argentina Standard Time
+W|America/Argentina/Rio_Gallegos|Argentina Standard Time
+W|America/Argentina/Salta|Argentina Standard Time
+W|America/Argentina/San_Juan|Argentina Standard Time
+W|America/Argentina/San_Luis|Argentina Standard Time
+W|America/Argentina/Tucuman|Argentina Standard Time
+W|America/Argentina/Ushuaia|Argentina Standard Time
+W|America/Aruba|SA Western Standard Time
+W|America/Asuncion|Paraguay Standard Time
+W|America/Atikokan|SA Pacific Standard Time
+W|America/Bahia|Bahia Standard Time
+W|America/Bahia_Banderas|Central Standard Time (Mexico)
+W|America/Barbados|SA Western Standard Time
+W|America/Belem|SA Eastern Standard Time
+W|America/Belize|Central America Standard Time
+W|America/Blanc-Sablon|SA Western Standard Time
+W|America/Boa_Vista|SA Western Standard Time
+W|America/Bogota|SA Pacific Standard Time
+W|America/Boise|Mountain Standard Time
+W|America/Cambridge_Bay|Mountain Standard Time
+W|America/Campo_Grande|Central Brazilian Standard Time
+W|America/Cancun|Eastern Standard Time (Mexico)
+W|America/Caracas|Venezuela Standard Time
+W|America/Cayenne|SA Eastern Standard Time
+W|America/Cayman|SA Pacific Standard Time
+W|America/Chicago|Central Standard Time
+W|America/Chihuahua|Central Standard Time (Mexico)
+W|America/Ciudad_Juarez|Mountain Standard Time
+W|America/Costa_Rica|Central America Standard Time
+W|America/Creston|US Mountain Standard Time
+W|America/Cuiaba|Central Brazilian Standard Time
+W|America/Curacao|SA Western Standard Time
+W|America/Danmarkshavn|Greenwich Standard Time
+W|America/Dawson|Yukon Standard Time
+W|America/Dawson_Creek|US Mountain Standard Time
+W|America/Denver|Mountain Standard Time
+W|America/Detroit|Eastern Standard Time
+W|America/Dominica|SA Western Standard Time
+W|America/Edmonton|Mountain Standard Time
+W|America/Eirunepe|SA Pacific Standard Time
+W|America/El_Salvador|Central America Standard Time
+W|America/Fort_Nelson|US Mountain Standard Time
+W|America/Fortaleza|SA Eastern Standard Time
+W|America/Glace_Bay|Atlantic Standard Time
+W|America/Goose_Bay|Atlantic Standard Time
+W|America/Grand_Turk|Turks And Caicos Standard Time
+W|America/Grenada|SA Western Standard Time
+W|America/Guadeloupe|SA Western Standard Time
+W|America/Guatemala|Central America Standard Time
+W|America/Guayaquil|SA Pacific Standard Time
+W|America/Guyana|SA Western Standard Time
+W|America/Halifax|Atlantic Standard Time
+W|America/Havana|Cuba Standard Time
+W|America/Hermosillo|US Mountain Standard Time
+W|America/Indiana/Indianapolis|US Eastern Standard Time
+W|America/Indiana/Knox|Central Standard Time
+W|America/Indiana/Marengo|US Eastern Standard Time
+W|America/Indiana/Petersburg|Eastern Standard Time
+W|America/Indiana/Tell_City|Central Standard Time
+W|America/Indiana/Vevay|US Eastern Standard Time
+W|America/Indiana/Vincennes|Eastern Standard Time
+W|America/Indiana/Winamac|Eastern Standard Time
+W|America/Inuvik|Mountain Standard Time
+W|America/Iqaluit|Eastern Standard Time
+W|America/Jamaica|SA Pacific Standard Time
+W|America/Juneau|Alaskan Standard Time
+W|America/Kentucky/Louisville|Eastern Standard Time
+W|America/Kentucky/Monticello|Eastern Standard Time
+W|America/Kralendijk|SA Western Standard Time
+W|America/La_Paz|SA Western Standard Time
+W|America/Lima|SA Pacific Standard Time
+W|America/Los_Angeles|Pacific Standard Time
+W|America/Lower_Princes|SA Western Standard Time
+W|America/Maceio|SA Eastern Standard Time
+W|America/Managua|Central America Standard Time
+W|America/Manaus|SA Western Standard Time
+W|America/Marigot|SA Western Standard Time
+W|America/Martinique|SA Western Standard Time
+W|America/Matamoros|Central Standard Time
+W|America/Mazatlan|Mountain Standard Time (Mexico)
+W|America/Menominee|Central Standard Time
+W|America/Merida|Central Standard Time (Mexico)
+W|America/Metlakatla|Alaskan Standard Time
+W|America/Mexico_City|Central Standard Time (Mexico)
+W|America/Miquelon|Saint Pierre Standard Time
+W|America/Moncton|Atlantic Standard Time
+W|America/Monterrey|Central Standard Time (Mexico)
+W|America/Montevideo|Montevideo Standard Time
+W|America/Montserrat|SA Western Standard Time
+W|America/Nassau|Eastern Standard Time
+W|America/New_York|Eastern Standard Time
+W|America/Nome|Alaskan Standard Time
+W|America/Noronha|UTC-02
+W|America/North_Dakota/Beulah|Central Standard Time
+W|America/North_Dakota/Center|Central Standard Time
+W|America/North_Dakota/New_Salem|Central Standard Time
+W|America/Nuuk|Greenland Standard Time
+W|America/Ojinaga|Central Standard Time
+W|America/Panama|SA Pacific Standard Time
+W|America/Paramaribo|SA Eastern Standard Time
+W|America/Phoenix|US Mountain Standard Time
+W|America/Port-au-Prince|Haiti Standard Time
+W|America/Port_of_Spain|SA Western Standard Time
+W|America/Porto_Velho|SA Western Standard Time
+W|America/Puerto_Rico|SA Western Standard Time
+W|America/Punta_Arenas|Magallanes Standard Time
+W|America/Rankin_Inlet|Central Standard Time
+W|America/Recife|SA Eastern Standard Time
+W|America/Regina|Canada Central Standard Time
+W|America/Resolute|Central Standard Time
+W|America/Rio_Branco|SA Pacific Standard Time
+W|America/Santarem|SA Eastern Standard Time
+W|America/Santiago|Pacific SA Standard Time
+W|America/Santo_Domingo|SA Western Standard Time
+W|America/Sao_Paulo|E. South America Standard Time
+W|America/Scoresbysund|Azores Standard Time
+W|America/Sitka|Alaskan Standard Time
+W|America/St_Barthelemy|SA Western Standard Time
+W|America/St_Johns|Newfoundland Standard Time
+W|America/St_Kitts|SA Western Standard Time
+W|America/St_Lucia|SA Western Standard Time
+W|America/St_Thomas|SA Western Standard Time
+W|America/St_Vincent|SA Western Standard Time
+W|America/Swift_Current|Canada Central Standard Time
+W|America/Tegucigalpa|Central America Standard Time
+W|America/Thule|Atlantic Standard Time
+W|America/Tijuana|Pacific Standard Time (Mexico)
+W|America/Toronto|Eastern Standard Time
+W|America/Tortola|SA Western Standard Time
+W|America/Vancouver|Pacific Standard Time
+W|America/Whitehorse|Yukon Standard Time
+W|America/Winnipeg|Central Standard Time
+W|America/Yakutat|Alaskan Standard Time
+W|Antarctica/Casey|Central Pacific Standard Time
+W|Antarctica/Davis|SE Asia Standard Time
+W|Antarctica/DumontDUrville|West Pacific Standard Time
+W|Antarctica/Macquarie|Tasmania Standard Time
+W|Antarctica/Mawson|West Asia Standard Time
+W|Antarctica/McMurdo|New Zealand Standard Time
+W|Antarctica/Palmer|SA Eastern Standard Time
+W|Antarctica/Rothera|SA Eastern Standard Time
+W|Antarctica/Syowa|E. Africa Standard Time
+W|Antarctica/Vostok|Central Asia Standard Time
+W|Arctic/Longyearbyen|W. Europe Standard Time
+W|Asia/Aden|Arab Standard Time
+W|Asia/Almaty|Central Asia Standard Time
+W|Asia/Amman|Jordan Standard Time
+W|Asia/Anadyr|Russia Time Zone 11
+W|Asia/Aqtau|West Asia Standard Time
+W|Asia/Aqtobe|West Asia Standard Time
+W|Asia/Ashgabat|West Asia Standard Time
+W|Asia/Atyrau|West Asia Standard Time
+W|Asia/Baghdad|Arabic Standard Time
+W|Asia/Bahrain|Arab Standard Time
+W|Asia/Baku|Azerbaijan Standard Time
+W|Asia/Bangkok|SE Asia Standard Time
+W|Asia/Barnaul|Altai Standard Time
+W|Asia/Beirut|Middle East Standard Time
+W|Asia/Bishkek|Central Asia Standard Time
+W|Asia/Brunei|Singapore Standard Time
+W|Asia/Chita|Transbaikal Standard Time
+W|Asia/Colombo|Sri Lanka Standard Time
+W|Asia/Damascus|Syria Standard Time
+W|Asia/Dhaka|Bangladesh Standard Time
+W|Asia/Dili|Tokyo Standard Time
+W|Asia/Dubai|Arabian Standard Time
+W|Asia/Dushanbe|West Asia Standard Time
+W|Asia/Famagusta|GTB Standard Time
+W|Asia/Gaza|West Bank Standard Time
+W|Asia/Hebron|West Bank Standard Time
+W|Asia/Ho_Chi_Minh|SE Asia Standard Time
+W|Asia/Hong_Kong|China Standard Time
+W|Asia/Hovd|W. Mongolia Standard Time
+W|Asia/Irkutsk|North Asia East Standard Time
+W|Asia/Jakarta|SE Asia Standard Time
+W|Asia/Jayapura|Tokyo Standard Time
+W|Asia/Jerusalem|Israel Standard Time
+W|Asia/Kabul|Afghanistan Standard Time
+W|Asia/Kamchatka|Russia Time Zone 11
+W|Asia/Karachi|Pakistan Standard Time
+W|Asia/Kathmandu|Nepal Standard Time
+W|Asia/Khandyga|Yakutsk Standard Time
+W|Asia/Kolkata|India Standard Time
+W|Asia/Krasnoyarsk|North Asia Standard Time
+W|Asia/Kuala_Lumpur|Singapore Standard Time
+W|Asia/Kuching|Singapore Standard Time
+W|Asia/Kuwait|Arab Standard Time
+W|Asia/Macau|China Standard Time
+W|Asia/Magadan|Magadan Standard Time
+W|Asia/Makassar|Singapore Standard Time
+W|Asia/Manila|Singapore Standard Time
+W|Asia/Muscat|Arabian Standard Time
+W|Asia/Nicosia|GTB Standard Time
+W|Asia/Novokuznetsk|North Asia Standard Time
+W|Asia/Novosibirsk|N. Central Asia Standard Time
+W|Asia/Omsk|Omsk Standard Time
+W|Asia/Oral|West Asia Standard Time
+W|Asia/Phnom_Penh|SE Asia Standard Time
+W|Asia/Pontianak|SE Asia Standard Time
+W|Asia/Pyongyang|North Korea Standard Time
+W|Asia/Qatar|Arab Standard Time
+W|Asia/Qostanay|Central Asia Standard Time
+W|Asia/Qyzylorda|Qyzylorda Standard Time
+W|Asia/Riyadh|Arab Standard Time
+W|Asia/Sakhalin|Sakhalin Standard Time
+W|Asia/Samarkand|West Asia Standard Time
+W|Asia/Seoul|Korea Standard Time
+W|Asia/Shanghai|China Standard Time
+W|Asia/Singapore|Singapore Standard Time
+W|Asia/Srednekolymsk|Russia Time Zone 10
+W|Asia/Taipei|Taipei Standard Time
+W|Asia/Tashkent|West Asia Standard Time
+W|Asia/Tbilisi|Georgian Standard Time
+W|Asia/Tehran|Iran Standard Time
+W|Asia/Thimphu|Bangladesh Standard Time
+W|Asia/Tokyo|Tokyo Standard Time
+W|Asia/Tomsk|Tomsk Standard Time
+W|Asia/Ulaanbaatar|Ulaanbaatar Standard Time
+W|Asia/Urumqi|Central Asia Standard Time
+W|Asia/Ust-Nera|Vladivostok Standard Time
+W|Asia/Vientiane|SE Asia Standard Time
+W|Asia/Vladivostok|Vladivostok Standard Time
+W|Asia/Yakutsk|Yakutsk Standard Time
+W|Asia/Yangon|Myanmar Standard Time
+W|Asia/Yekaterinburg|Ekaterinburg Standard Time
+W|Asia/Yerevan|Caucasus Standard Time
+W|Atlantic/Azores|Azores Standard Time
+W|Atlantic/Bermuda|Atlantic Standard Time
+W|Atlantic/Canary|GMT Standard Time
+W|Atlantic/Cape_Verde|Cape Verde Standard Time
+W|Atlantic/Faroe|GMT Standard Time
+W|Atlantic/Madeira|GMT Standard Time
+W|Atlantic/Reykjavik|Greenwich Standard Time
+W|Atlantic/South_Georgia|UTC-02
+W|Atlantic/St_Helena|Greenwich Standard Time
+W|Atlantic/Stanley|SA Eastern Standard Time
+W|Australia/Adelaide|Cen. Australia Standard Time
+W|Australia/Brisbane|E. Australia Standard Time
+W|Australia/Broken_Hill|Cen. Australia Standard Time
+W|Australia/Darwin|AUS Central Standard Time
+W|Australia/Eucla|Aus Central W. Standard Time
+W|Australia/Hobart|Tasmania Standard Time
+W|Australia/Lindeman|E. Australia Standard Time
+W|Australia/Lord_Howe|Lord Howe Standard Time
+W|Australia/Melbourne|AUS Eastern Standard Time
+W|Australia/Perth|W. Australia Standard Time
+W|Australia/Sydney|AUS Eastern Standard Time
+W|Europe/Amsterdam|W. Europe Standard Time
+W|Europe/Andorra|W. Europe Standard Time
+W|Europe/Astrakhan|Astrakhan Standard Time
+W|Europe/Athens|GTB Standard Time
+W|Europe/Belgrade|Central Europe Standard Time
+W|Europe/Berlin|W. Europe Standard Time
+W|Europe/Bratislava|Central Europe Standard Time
+W|Europe/Brussels|Romance Standard Time
+W|Europe/Bucharest|GTB Standard Time
+W|Europe/Budapest|Central Europe Standard Time
+W|Europe/Busingen|W. Europe Standard Time
+W|Europe/Chisinau|E. Europe Standard Time
+W|Europe/Copenhagen|Romance Standard Time
+W|Europe/Dublin|GMT Standard Time
+W|Europe/Gibraltar|W. Europe Standard Time
+W|Europe/Guernsey|GMT Standard Time
+W|Europe/Helsinki|FLE Standard Time
+W|Europe/Isle_of_Man|GMT Standard Time
+W|Europe/Istanbul|Turkey Standard Time
+W|Europe/Jersey|GMT Standard Time
+W|Europe/Kaliningrad|Kaliningrad Standard Time
+W|Europe/Kirov|Russian Standard Time
+W|Europe/Kyiv|FLE Standard Time
+W|Europe/Lisbon|GMT Standard Time
+W|Europe/Ljubljana|Central Europe Standard Time
+W|Europe/London|GMT Standard Time
+W|Europe/Luxembourg|W. Europe Standard Time
+W|Europe/Madrid|Romance Standard Time
+W|Europe/Malta|W. Europe Standard Time
+W|Europe/Mariehamn|FLE Standard Time
+W|Europe/Minsk|Belarus Standard Time
+W|Europe/Monaco|W. Europe Standard Time
+W|Europe/Moscow|Russian Standard Time
+W|Europe/Oslo|W. Europe Standard Time
+W|Europe/Paris|Romance Standard Time
+W|Europe/Podgorica|Central Europe Standard Time
+W|Europe/Prague|Central Europe Standard Time
+W|Europe/Riga|FLE Standard Time
+W|Europe/Rome|W. Europe Standard Time
+W|Europe/Samara|Russia Time Zone 3
+W|Europe/San_Marino|W. Europe Standard Time
+W|Europe/Sarajevo|Central European Standard Time
+W|Europe/Saratov|Saratov Standard Time
+W|Europe/Simferopol|Russian Standard Time
+W|Europe/Skopje|Central European Standard Time
+W|Europe/Sofia|FLE Standard Time
+W|Europe/Stockholm|W. Europe Standard Time
+W|Europe/Tallinn|FLE Standard Time
+W|Europe/Tirane|Central Europe Standard Time
+W|Europe/Ulyanovsk|Astrakhan Standard Time
+W|Europe/Vaduz|W. Europe Standard Time
+W|Europe/Vatican|W. Europe Standard Time
+W|Europe/Vienna|W. Europe Standard Time
+W|Europe/Vilnius|FLE Standard Time
+W|Europe/Volgograd|Volgograd Standard Time
+W|Europe/Warsaw|Central European Standard Time
+W|Europe/Zagreb|Central European Standard Time
+W|Europe/Zurich|W. Europe Standard Time
+W|Indian/Antananarivo|E. Africa Standard Time
+W|Indian/Chagos|Central Asia Standard Time
+W|Indian/Christmas|SE Asia Standard Time
+W|Indian/Cocos|Myanmar Standard Time
+W|Indian/Comoro|E. Africa Standard Time
+W|Indian/Kerguelen|West Asia Standard Time
+W|Indian/Mahe|Mauritius Standard Time
+W|Indian/Maldives|West Asia Standard Time
+W|Indian/Mauritius|Mauritius Standard Time
+W|Indian/Mayotte|E. Africa Standard Time
+W|Indian/Reunion|Mauritius Standard Time
+W|Pacific/Apia|Samoa Standard Time
+W|Pacific/Auckland|New Zealand Standard Time
+W|Pacific/Bougainville|Bougainville Standard Time
+W|Pacific/Chatham|Chatham Islands Standard Time
+W|Pacific/Chuuk|West Pacific Standard Time
+W|Pacific/Easter|Easter Island Standard Time
+W|Pacific/Efate|Central Pacific Standard Time
+W|Pacific/Fakaofo|UTC+13
+W|Pacific/Fiji|Fiji Standard Time
+W|Pacific/Funafuti|UTC+12
+W|Pacific/Galapagos|Central America Standard Time
+W|Pacific/Gambier|UTC-09
+W|Pacific/Guadalcanal|Central Pacific Standard Time
+W|Pacific/Guam|West Pacific Standard Time
+W|Pacific/Honolulu|Hawaiian Standard Time
+W|Pacific/Kanton|UTC+13
+W|Pacific/Kiritimati|Line Islands Standard Time
+W|Pacific/Kosrae|Central Pacific Standard Time
+W|Pacific/Kwajalein|UTC+12
+W|Pacific/Majuro|UTC+12
+W|Pacific/Marquesas|Marquesas Standard Time
+W|Pacific/Midway|UTC-11
+W|Pacific/Nauru|UTC+12
+W|Pacific/Niue|UTC-11
+W|Pacific/Norfolk|Norfolk Standard Time
+W|Pacific/Noumea|Central Pacific Standard Time
+W|Pacific/Pago_Pago|UTC-11
+W|Pacific/Palau|Tokyo Standard Time
+W|Pacific/Pitcairn|UTC-08
+W|Pacific/Pohnpei|Central Pacific Standard Time
+W|Pacific/Port_Moresby|West Pacific Standard Time
+W|Pacific/Rarotonga|Hawaiian Standard Time
+W|Pacific/Saipan|West Pacific Standard Time
+W|Pacific/Tahiti|Hawaiian Standard Time
+W|Pacific/Tarawa|UTC+12
+W|Pacific/Tongatapu|Tonga Standard Time
+W|Pacific/Wake|UTC+12
+W|Pacific/Wallis|UTC+12
+P|AUS Central Standard Time|Australia/Darwin
+P|AUS Eastern Standard Time|Australia/Sydney
+P|Afghanistan Standard Time|Asia/Kabul
+P|Alaskan Standard Time|America/Anchorage
+P|Aleutian Standard Time|America/Adak
+P|Altai Standard Time|Asia/Barnaul
+P|Arab Standard Time|Asia/Riyadh
+P|Arabian Standard Time|Asia/Dubai
+P|Arabic Standard Time|Asia/Baghdad
+P|Argentina Standard Time|America/Argentina/Buenos_Aires
+P|Astrakhan Standard Time|Europe/Astrakhan
+P|Atlantic Standard Time|America/Halifax
+P|Aus Central W. Standard Time|Australia/Eucla
+P|Azerbaijan Standard Time|Asia/Baku
+P|Azores Standard Time|Atlantic/Azores
+P|Bahia Standard Time|America/Bahia
+P|Bangladesh Standard Time|Asia/Dhaka
+P|Belarus Standard Time|Europe/Minsk
+P|Bougainville Standard Time|Pacific/Bougainville
+P|Canada Central Standard Time|America/Regina
+P|Cape Verde Standard Time|Atlantic/Cape_Verde
+P|Caucasus Standard Time|Asia/Yerevan
+P|Cen. Australia Standard Time|Australia/Adelaide
+P|Central America Standard Time|America/Guatemala
+P|Central Asia Standard Time|Asia/Almaty
+P|Central Brazilian Standard Time|America/Cuiaba
+P|Central Europe Standard Time|Europe/Budapest
+P|Central European Standard Time|Europe/Warsaw
+P|Central Pacific Standard Time|Pacific/Guadalcanal
+P|Central Standard Time|America/Chicago
+P|Central Standard Time (Mexico)|America/Mexico_City
+P|Chatham Islands Standard Time|Pacific/Chatham
+P|China Standard Time|Asia/Shanghai
+P|Cuba Standard Time|America/Havana
+P|E. Africa Standard Time|Africa/Nairobi
+P|E. Australia Standard Time|Australia/Brisbane
+P|E. Europe Standard Time|Europe/Chisinau
+P|E. South America Standard Time|America/Sao_Paulo
+P|Easter Island Standard Time|Pacific/Easter
+P|Eastern Standard Time|America/New_York
+P|Eastern Standard Time (Mexico)|America/Cancun
+P|Egypt Standard Time|Africa/Cairo
+P|Ekaterinburg Standard Time|Asia/Yekaterinburg
+P|FLE Standard Time|Europe/Helsinki
+P|Fiji Standard Time|Pacific/Fiji
+P|GMT Standard Time|Europe/London
+P|GTB Standard Time|Europe/Bucharest
+P|Georgian Standard Time|Asia/Tbilisi
+P|Greenland Standard Time|America/Nuuk
+P|Greenwich Standard Time|Atlantic/Reykjavik
+P|Haiti Standard Time|America/Port-au-Prince
+P|Hawaiian Standard Time|Pacific/Honolulu
+P|India Standard Time|Asia/Kolkata
+P|Iran Standard Time|Asia/Tehran
+P|Israel Standard Time|Asia/Jerusalem
+P|Jordan Standard Time|Asia/Amman
+P|Kaliningrad Standard Time|Europe/Kaliningrad
+P|Korea Standard Time|Asia/Seoul
+P|Libya Standard Time|Africa/Tripoli
+P|Line Islands Standard Time|Pacific/Kiritimati
+P|Lord Howe Standard Time|Australia/Lord_Howe
+P|Magadan Standard Time|Asia/Magadan
+P|Magallanes Standard Time|America/Punta_Arenas
+P|Marquesas Standard Time|Pacific/Marquesas
+P|Mauritius Standard Time|Indian/Mauritius
+P|Middle East Standard Time|Asia/Beirut
+P|Montevideo Standard Time|America/Montevideo
+P|Morocco Standard Time|Africa/Casablanca
+P|Mountain Standard Time|America/Denver
+P|Mountain Standard Time (Mexico)|America/Mazatlan
+P|Myanmar Standard Time|Asia/Yangon
+P|N. Central Asia Standard Time|Asia/Novosibirsk
+P|Namibia Standard Time|Africa/Windhoek
+P|Nepal Standard Time|Asia/Kathmandu
+P|New Zealand Standard Time|Pacific/Auckland
+P|Newfoundland Standard Time|America/St_Johns
+P|Norfolk Standard Time|Pacific/Norfolk
+P|North Asia East Standard Time|Asia/Irkutsk
+P|North Asia Standard Time|Asia/Krasnoyarsk
+P|North Korea Standard Time|Asia/Pyongyang
+P|Omsk Standard Time|Asia/Omsk
+P|Pacific SA Standard Time|America/Santiago
+P|Pacific Standard Time|America/Los_Angeles
+P|Pacific Standard Time (Mexico)|America/Tijuana
+P|Pakistan Standard Time|Asia/Karachi
+P|Paraguay Standard Time|America/Asuncion
+P|Qyzylorda Standard Time|Asia/Qyzylorda
+P|Romance Standard Time|Europe/Paris
+P|Russia Time Zone 10|Asia/Srednekolymsk
+P|Russia Time Zone 11|Asia/Kamchatka
+P|Russia Time Zone 3|Europe/Samara
+P|Russian Standard Time|Europe/Moscow
+P|SA Eastern Standard Time|America/Cayenne
+P|SA Pacific Standard Time|America/Bogota
+P|SA Western Standard Time|America/La_Paz
+P|SE Asia Standard Time|Asia/Bangkok
+P|Saint Pierre Standard Time|America/Miquelon
+P|Sakhalin Standard Time|Asia/Sakhalin
+P|Samoa Standard Time|Pacific/Apia
+P|Sao Tome Standard Time|Africa/Sao_Tome
+P|Saratov Standard Time|Europe/Saratov
+P|Singapore Standard Time|Asia/Singapore
+P|South Africa Standard Time|Africa/Johannesburg
+P|South Sudan Standard Time|Africa/Juba
+P|Sri Lanka Standard Time|Asia/Colombo
+P|Sudan Standard Time|Africa/Khartoum
+P|Syria Standard Time|Asia/Damascus
+P|Taipei Standard Time|Asia/Taipei
+P|Tasmania Standard Time|Australia/Hobart
+P|Tocantins Standard Time|America/Araguaina
+P|Tokyo Standard Time|Asia/Tokyo
+P|Tomsk Standard Time|Asia/Tomsk
+P|Tonga Standard Time|Pacific/Tongatapu
+P|Transbaikal Standard Time|Asia/Chita
+P|Turkey Standard Time|Europe/Istanbul
+P|Turks And Caicos Standard Time|America/Grand_Turk
+P|US Eastern Standard Time|America/Indiana/Indianapolis
+P|US Mountain Standard Time|America/Phoenix
+P|UTC|UTC
+P|UTC+12|Pacific/Funafuti
+P|UTC+13|Pacific/Fakaofo
+P|UTC-02|America/Noronha
+P|UTC-08|Pacific/Pitcairn
+P|UTC-09|Pacific/Gambier
+P|UTC-11|Pacific/Midway
+P|Ulaanbaatar Standard Time|Asia/Ulaanbaatar
+P|Venezuela Standard Time|America/Caracas
+P|Vladivostok Standard Time|Asia/Vladivostok
+P|Volgograd Standard Time|Europe/Volgograd
+P|W. Australia Standard Time|Australia/Perth
+P|W. Central Africa Standard Time|Africa/Lagos
+P|W. Europe Standard Time|Europe/Berlin
+P|W. Mongolia Standard Time|Asia/Hovd
+P|West Asia Standard Time|Asia/Tashkent
+P|West Bank Standard Time|Asia/Hebron
+P|West Pacific Standard Time|Pacific/Port_Moresby
+P|Yakutsk Standard Time|Asia/Yakutsk
+P|Yukon Standard Time|America/Whitehorse

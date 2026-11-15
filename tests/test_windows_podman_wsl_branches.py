@@ -610,6 +610,8 @@ function Ensure-Up { [IO.File]::AppendAllText($env:FAKE_LOG, "guard-up`n") }
 function Clear-JhtTeamStopped { }
 # the tools of a core install (jht-tools.ps1): not what this case is about
 function Write-JhtToolsNotice { param([switch]$Kick) }
+# the timezone question of a setup on a terminal (its own tests): not what this case is about
+function Resolve-JhtUserTimezone { param([string[]]$SetupArgs) }
 $Sub = 'setup'; $Rest = @('--x', 'value with spaces')
 $ExecFlags = @('-i'); $Container = 'jht'; $NodeEntry = '/app/cli/bin/jht.js'
 $dispatch = @($ast.FindAll({ param($n)

@@ -175,6 +175,19 @@ function Get-JhtTextTable {
     'en:help.screen' { return (('Usage: jht screen <command>', '', '  on [--json]       turns on the closer''s live screen: a separate container, with the stream only on 127.0.0.1', '  off [--remove-image] [--json]', '                    turns it off and removes the container; the tools image stays on disk, to turn it on again', '                    without downloading it again: --remove-image removes it and frees the space', '  status [--json]   says whether it is on', '', 'Nothing is downloaded or turned on until you ask for it with `on`. The stream is view-only.') -join [char]10) }
     'en:help.setup' { return (('Usage: jht setup [options]', '', 'Without options the guided installation starts. With --non-interactive it asks nothing:', 'you give everything with the options.', '', '  --non-interactive            no questions', '  --provider <name>            glm (Z.ai, default), kimi (Moonshot), openai or claude (Anthropic)', '  --harness <name>             pi (default)', '  --api-key-file <path>        file that contains the API key (one line, readable only by you).', '                               jht reads a file of your computer and passes it to setup: with glm and kimi', '                               setup keeps the key on its own, never in the configuration', '  --api-key-stdin              reads the API key from standard input (one line): never on the command line', '  --api-key <key>              the key written here, in clear text (not allowed for glm and kimi)', '  --secret-mode <mode>         how the key is saved: plaintext (default), env or file', '  --secret-env <name>          with --secret-mode env: the environment variable that contains it', '  --secret-file <path>         with --secret-mode file: the file that contains it', '  --model <model>              the model to use', '  --language <code>            the language (for example it or en)', '  --skip-health                skips the final check', '  --reset                      starts again from a clean configuration', '', 'Examples:', '  with a GLM key in a file:', '    jht setup --non-interactive --provider glm --harness pi --api-key-file key.txt', '  OpenAI with an API key, on Pi (for Claude: --provider claude):', '    jht setup --non-interactive --provider openai --harness pi --api-key-stdin') -join [char]10) }
     'en:help.tools' { return (('Usage: jht tools <command>', '', '  status --json   whether the Scouts'' tools (the full image) are here, on their way or failed', '  pull            downloads them in the background (jht up and jht setup start it by themselves)', '  switch          moves the team onto them once the onboarding is closed (the download does it by itself)', '', 'This help starts nothing and downloads nothing.') -join [char]10) }
+    'en:host_setup.timezone_explain' { return 'The Captain uses it to convert times in Telegram messages and charts.' }
+    'en:host_setup.timezone_header' { return 'User timezone' }
+    'en:host_setup.timezone_label' { return 'Timezone' }
+    'en:host_setup.timezone_vps_utc' { return 'Timezone was not detected: the team will use UTC. Set yours with jht wh --tz Europe/Rome (or in the dashboard), otherwise Telegram times and working hours will be in UTC.' }
+    'en:host_setup.tz.bad_number' { return 'Choose a number between 1 and %d.' }
+    'en:host_setup.tz.how' { return 'Type a country, a city or a timezone (for example Italy, Rome, Europe/Rome).' }
+    'en:host_setup.tz.how_default' { return 'Press Enter to keep %s, or type a country, a city or a timezone to look for another one.' }
+    'en:host_setup.tz.none' { return ('No timezone found for ' + [char]0x00AB + '%s' + [char]0x00BB + ': try a country, a city or a timezone like Europe/Rome.') }
+    'en:host_setup.tz.not_detected' { return 'Your timezone was not detected.' }
+    'en:host_setup.tz.pick' { return 'Number (1-%d), or a new search:' }
+    'en:host_setup.tz.proposed' { return 'Proposed: %s (now %s).' }
+    'en:host_setup.tz.saved_and_detected' { return ('Saved: %s (now %s) ' + [char]0x00B7 + ' Detected now: %s (now %s)') }
+    'en:host_setup.tz.too_many' { return ('%d timezones match ' + [char]0x00AB + '%s' + [char]0x00BB + ': type something more precise (a city, for example).') }
     'en:keyfile.both' { return 'use --api-key-file or --api-key-stdin, not both' }
     'en:keyfile.not_file' { return 'the file given to --api-key-file must be a regular file, not a folder or a link: %s' }
     'en:keyfile.shape' { return 'the content of the file given to --api-key-file is not one line of 16 to 512 printable characters without spaces: %s' }
@@ -421,6 +434,19 @@ function Get-JhtTextTable {
     'it:help.screen' { return (('Uso: jht screen <comando>', '', '  on [--json]       accende lo schermo dal vivo del closer: un container a parte, con lo stream solo su 127.0.0.1', '  off [--remove-image] [--json]', '                    lo spegne e toglie il container; l''immagine degli strumenti resta sul disco, per riaccenderlo', '                    senza riscaricarla: --remove-image la toglie e libera lo spazio', '  status [--json]   dice se e'' acceso', '', 'Niente si scarica o si accende finche'' non lo chiedi con `on`. Lo stream e'' in sola visione.') -join [char]10) }
     'it:help.setup' { return (('Uso: jht setup [opzioni]', '', 'Senza opzioni parte l''installazione guidata. Con --non-interactive non chiede niente:', 'tutto si da'' con le opzioni.', '', '  --non-interactive            nessuna domanda', '  --provider <nome>            glm (Z.ai, predefinito), kimi (Moonshot), openai o claude (Anthropic)', '  --harness <nome>             pi (predefinito)', '  --api-key-file <percorso>    file che contiene la chiave API (una riga, leggibile solo da te).', '                               Un file del tuo computer lo legge jht e lo passa al setup: con glm e kimi', '                               il setup tiene la chiave per conto suo, mai nella configurazione', '  --api-key-stdin              legge la chiave API dallo standard input (una riga): mai sulla riga di comando', '  --api-key <chiave>           la chiave scritta qui, in chiaro (non ammessa per glm e kimi)', '  --secret-mode <modo>         come si salva la chiave: plaintext (predefinito), env o file', '  --secret-env <nome>          con --secret-mode env: la variabile d''ambiente che la contiene', '  --secret-file <percorso>     con --secret-mode file: il file che la contiene', '  --model <modello>            il modello da usare', '  --language <codice>          la lingua (per esempio it o en)', '  --skip-health                salta il controllo finale', '  --reset                      riparte da una configurazione pulita', '', 'Esempi:', '  con una chiave GLM in un file:', '    jht setup --non-interactive --provider glm --harness pi --api-key-file chiave.txt', '  OpenAI con una chiave API, su Pi (per Claude: --provider claude):', '    jht setup --non-interactive --provider openai --harness pi --api-key-stdin') -join [char]10) }
     'it:help.tools' { return (('Uso: jht tools <comando>', '', '  status --json   se gli strumenti degli Scout (l''immagine piena) sono arrivati, in arrivo o falliti', '  pull            li scarica in background (jht up e jht setup lo avviano da soli)', '  switch          ci porta la squadra quando l''onboarding e'' chiuso (il download lo fa da solo)', '', 'Questo aiuto non avvia niente e non scarica niente.') -join [char]10) }
+    'it:host_setup.timezone_explain' { return 'Il Capitano lo usa per convertire gli orari nei messaggi Telegram e nei grafici.' }
+    'it:host_setup.timezone_header' { return 'Fuso orario' }
+    'it:host_setup.timezone_label' { return 'Fuso orario' }
+    'it:host_setup.timezone_vps_utc' { return 'Il fuso orario non e'' stato rilevato: la squadra usera'' UTC. Imposta il tuo con jht wh --tz Europe/Rome (o nella dashboard), altrimenti gli orari di Telegram e di lavoro saranno in UTC.' }
+    'it:host_setup.tz.bad_number' { return 'Scegli un numero fra 1 e %d.' }
+    'it:host_setup.tz.how' { return ('Scrivi un paese, una citt' + [char]0x00E0 + ' o un fuso orario (per esempio Italia, Roma, Europe/Rome).') }
+    'it:host_setup.tz.how_default' { return ('Premi Invio per tenere %s, oppure scrivi un paese, una citt' + [char]0x00E0 + ' o un fuso orario per cercarne un altro.') }
+    'it:host_setup.tz.none' { return ('Nessun fuso orario trovato per ' + [char]0x00AB + '%s' + [char]0x00BB + ': prova con un paese, una citt' + [char]0x00E0 + ' o un fuso come Europe/Rome.') }
+    'it:host_setup.tz.not_detected' { return ('Il tuo fuso orario non ' + [char]0x00E8 + ' stato rilevato.') }
+    'it:host_setup.tz.pick' { return 'Numero (1-%d), oppure una nuova ricerca:' }
+    'it:host_setup.tz.proposed' { return 'Proposto: %s (ora %s).' }
+    'it:host_setup.tz.saved_and_detected' { return ('Salvato: %s (ora %s) ' + [char]0x00B7 + ' Rilevato ora: %s (ora %s)') }
+    'it:host_setup.tz.too_many' { return ('%d fusi orari corrispondono a ' + [char]0x00AB + '%s' + [char]0x00BB + ': scrivi qualcosa di pi' + [char]0x00F9 + ' preciso (una citt' + [char]0x00E0 + ', per esempio).') }
     'it:keyfile.both' { return 'usa --api-key-file o --api-key-stdin, non tutti e due' }
     'it:keyfile.not_file' { return 'il file dato a --api-key-file deve essere un file normale, non una cartella o un collegamento: %s' }
     'it:keyfile.shape' { return 'il contenuto del file dato a --api-key-file non e'' una riga da 16 a 512 caratteri stampabili senza spazi: %s' }
@@ -667,6 +693,19 @@ function Get-JhtTextTable {
     'hu:help.screen' { return ((('Haszn' + [char]0x00E1 + 'lat: jht screen <parancs>'), '', ('  on [--json]       bekapcsolja a closer ' + [char]0x00E9 + 'l' + [char]0x0151 + ' k' + [char]0x00E9 + 'perny' + [char]0x0151 + 'j' + [char]0x00E9 + 't: k' + [char]0x00FC + 'l' + [char]0x00F6 + 'n kont' + [char]0x00E9 + 'ner, a stream csak a 127.0.0.1-en'), '  off [--remove-image] [--json]', ('                    kikapcsolja ' + [char]0x00E9 + 's elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tja a kont' + [char]0x00E9 + 'nert; az eszk' + [char]0x00F6 + 'z' + [char]0x00F6 + 'k k' + [char]0x00E9 + 'pe a lemezen marad, hogy ' + [char]0x00FA + 'jralet' + [char]0x00F6 + 'lt' + [char]0x00E9 + 's'), ('                    n' + [char]0x00E9 + 'lk' + [char]0x00FC + 'l kapcsolhasd vissza: a --remove-image elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tja, ' + [char]0x00E9 + 's felszabad' + [char]0x00ED + 'tja a helyet'), '  status [--json]   megmondja, be van-e kapcsolva', '', ('Semmi sem t' + [char]0x00F6 + 'lt' + [char]0x0151 + 'dik le ' + [char]0x00E9 + 's nem kapcsol be, am' + [char]0x00ED + 'g az `on` paranccsal nem k' + [char]0x00E9 + 'red. A stream csak megtekinthet' + [char]0x0151 + '.')) -join [char]10) }
     'hu:help.setup' { return ((('Haszn' + [char]0x00E1 + 'lat: jht setup [kapcsol' + [char]0x00F3 + 'k]'), '', ('Kapcsol' + [char]0x00F3 + 'k n' + [char]0x00E9 + 'lk' + [char]0x00FC + 'l az ir' + [char]0x00E1 + 'ny' + [char]0x00ED + 'tott telep' + [char]0x00ED + 't' + [char]0x00E9 + 's indul. A --non-interactive kapcsol' + [char]0x00F3 + 'val semmit sem k' + [char]0x00E9 + 'rdez:'), ('mindent kapcsol' + [char]0x00F3 + 'kkal adsz meg.'), '', ('  --non-interactive            nincs k' + [char]0x00E9 + 'rd' + [char]0x00E9 + 's'), ('  --provider <name>            glm (Z.ai, alap' + [char]0x00E9 + 'rtelmezett), kimi (Moonshot), openai vagy claude (Anthropic)'), ('  --harness <name>             pi (alap' + [char]0x00E9 + 'rtelmezett)'), ('  --api-key-file <path>        az API-kulcsot tartalmaz' + [char]0x00F3 + ' f' + [char]0x00E1 + 'jl (egy sor, csak te olvashatod).'), ('                               A g' + [char]0x00E9 + 'peden l' + [char]0x00E9 + 'v' + [char]0x0151 + ' f' + [char]0x00E1 + 'jlt a jht olvassa be ' + [char]0x00E9 + 's adja ' + [char]0x00E1 + 't a be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 'snak: glm ' + [char]0x00E9 + 's kimi'), ('                               eset' + [char]0x00E9 + 'n a be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 's mag' + [char]0x00E1 + 'n' + [char]0x00E1 + 'l tartja a kulcsot, sosem a konfigur' + [char]0x00E1 + 'ci' + [char]0x00F3 + 'ban'), ('  --api-key-stdin              a standard bemenetr' + [char]0x0151 + 'l olvassa az API-kulcsot (egy sor): sosem a parancssorban'), ('  --api-key <key>              az itt be' + [char]0x00ED + 'rt kulcs, ny' + [char]0x00ED + 'lt sz' + [char]0x00F6 + 'vegk' + [char]0x00E9 + 'nt (glm ' + [char]0x00E9 + 's kimi eset' + [char]0x00E9 + 'n nem enged' + [char]0x00E9 + 'lyezett)'), ('  --secret-mode <mode>         hogyan ment' + [char]0x0151 + 'dik a kulcs: plaintext (alap' + [char]0x00E9 + 'rtelmezett), env vagy file'), ('  --secret-env <name>          --secret-mode env eset' + [char]0x00E9 + 'n: a kulcsot tartalmaz' + [char]0x00F3 + ' k' + [char]0x00F6 + 'rnyezeti v' + [char]0x00E1 + 'ltoz' + [char]0x00F3), ('  --secret-file <path>         --secret-mode file eset' + [char]0x00E9 + 'n: a kulcsot tartalmaz' + [char]0x00F3 + ' f' + [char]0x00E1 + 'jl'), ('  --model <model>              a haszn' + [char]0x00E1 + 'land' + [char]0x00F3 + ' modell'), ('  --language <code>            a nyelv (p' + [char]0x00E9 + 'ld' + [char]0x00E1 + 'ul it vagy en)'), ('  --skip-health                kihagyja a v' + [char]0x00E9 + 'gs' + [char]0x0151 + ' ellen' + [char]0x0151 + 'rz' + [char]0x00E9 + 'st'), ('  --reset                      tiszta be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 'sb' + [char]0x00F3 + 'l indul ' + [char]0x00FA + 'jra'), '', ('P' + [char]0x00E9 + 'ld' + [char]0x00E1 + 'k:'), ('  egy f' + [char]0x00E1 + 'jlban l' + [char]0x00E9 + 'v' + [char]0x0151 + ' GLM-kulccsal:'), '    jht setup --non-interactive --provider glm --harness pi --api-key-file kulcs.txt', '  OpenAI API-kulccsal, Pi-n (Claude-hoz: --provider claude):', '    jht setup --non-interactive --provider openai --harness pi --api-key-stdin') -join [char]10) }
     'hu:help.tools' { return ((('Haszn' + [char]0x00E1 + 'lat: jht tools <parancs>'), '', ('  status --json   megvannak-e a felder' + [char]0x00ED + 't' + [char]0x0151 + 'k (Scout) eszk' + [char]0x00F6 + 'zei (a teljes k' + [char]0x00E9 + 'p), ' + [char]0x00FA + 'ton vannak-e, vagy sikertelen volt a let' + [char]0x00F6 + 'lt' + [char]0x00E9 + 's'), ('  pull            let' + [char]0x00F6 + 'lti ' + [char]0x0151 + 'ket a h' + [char]0x00E1 + 'tt' + [char]0x00E9 + 'rben (a jht up ' + [char]0x00E9 + 's a jht setup mag' + [char]0x00E1 + 't' + [char]0x00F3 + 'l elind' + [char]0x00ED + 'tja)'), ('  switch          ' + [char]0x00E1 + 'tviszi r' + [char]0x00E1 + 'juk a csapatot, amint a bevezet' + [char]0x00E9 + 's lez' + [char]0x00E1 + 'rult (a let' + [char]0x00F6 + 'lt' + [char]0x00E9 + 's mag' + [char]0x00E1 + 't' + [char]0x00F3 + 'l megteszi)'), '', ('Ez a s' + [char]0x00FA + 'g' + [char]0x00F3 + ' semmit nem ind' + [char]0x00ED + 't el ' + [char]0x00E9 + 's semmit nem t' + [char]0x00F6 + 'lt le.')) -join [char]10) }
+    'hu:host_setup.timezone_explain' { return ('A Kapit' + [char]0x00E1 + 'ny ezt haszn' + [char]0x00E1 + 'lja az id' + [char]0x0151 + 'pontok ' + [char]0x00E1 + 'tv' + [char]0x00E1 + 'lt' + [char]0x00E1 + 's' + [char]0x00E1 + 'ra Telegram ' + [char]0x00FC + 'zenetekben ' + [char]0x00E9 + 's grafikonokon.') }
+    'hu:host_setup.timezone_header' { return ('Id' + [char]0x0151 + 'z' + [char]0x00F3 + 'na') }
+    'hu:host_setup.timezone_label' { return ('Id' + [char]0x0151 + 'z' + [char]0x00F3 + 'na') }
+    'hu:host_setup.timezone_vps_utc' { return ('Az id' + [char]0x0151 + 'z' + [char]0x00F3 + 'n' + [char]0x00E1 + 't nem siker' + [char]0x00FC + 'lt felismerni: a csapat UTC-t fog haszn' + [char]0x00E1 + 'lni. ' + [char]0x00C1 + 'll' + [char]0x00ED + 'tsd be a saj' + [char]0x00E1 + 'todat a jht wh --tz Europe/Budapest paranccsal (vagy a vez' + [char]0x00E9 + 'rl' + [char]0x0151 + 'pulton), k' + [char]0x00FC + 'l' + [char]0x00F6 + 'nben a Telegram ' + [char]0x00E9 + 's a munkaid' + [char]0x0151 + ' id' + [char]0x0151 + 'pontjai UTC-ben lesznek.') }
+    'hu:host_setup.tz.bad_number' { return ('V' + [char]0x00E1 + 'lassz egy sz' + [char]0x00E1 + 'mot 1 ' + [char]0x00E9 + 's %d k' + [char]0x00F6 + 'z' + [char]0x00F6 + 'tt.') }
+    'hu:host_setup.tz.how' { return ('' + [char]0x00CD + 'rj be egy orsz' + [char]0x00E1 + 'got, egy v' + [char]0x00E1 + 'rost vagy egy id' + [char]0x0151 + 'z' + [char]0x00F3 + 'n' + [char]0x00E1 + 't (p' + [char]0x00E9 + 'ld' + [char]0x00E1 + 'ul Magyarorsz' + [char]0x00E1 + 'g, Budapest, Europe/Budapest).') }
+    'hu:host_setup.tz.how_default' { return ('Nyomj Entert, ha megtartod ezt: %s, vagy ' + [char]0x00ED + 'rj be egy orsz' + [char]0x00E1 + 'got, egy v' + [char]0x00E1 + 'rost vagy egy id' + [char]0x0151 + 'z' + [char]0x00F3 + 'n' + [char]0x00E1 + 't, hogy m' + [char]0x00E1 + 'sikat keress.') }
+    'hu:host_setup.tz.none' { return ('Nem tal' + [char]0x00E1 + 'lhat' + [char]0x00F3 + ' id' + [char]0x0151 + 'z' + [char]0x00F3 + 'na ehhez: ' + [char]0x00AB + '%s' + [char]0x00BB + '. Pr' + [char]0x00F3 + 'b' + [char]0x00E1 + 'lj meg egy orsz' + [char]0x00E1 + 'got, egy v' + [char]0x00E1 + 'rost vagy egy id' + [char]0x0151 + 'z' + [char]0x00F3 + 'n' + [char]0x00E1 + 't, p' + [char]0x00E9 + 'ld' + [char]0x00E1 + 'ul Europe/Budapest.') }
+    'hu:host_setup.tz.not_detected' { return ('Az id' + [char]0x0151 + 'z' + [char]0x00F3 + 'n' + [char]0x00E1 + 'dat nem siker' + [char]0x00FC + 'lt felismerni.') }
+    'hu:host_setup.tz.pick' { return ('Sz' + [char]0x00E1 + 'm (1-%d), vagy ' + [char]0x00FA + 'j keres' + [char]0x00E9 + 's:') }
+    'hu:host_setup.tz.proposed' { return 'Javasolt: %s (most %s).' }
+    'hu:host_setup.tz.saved_and_detected' { return ('Mentve: %s (most %s) ' + [char]0x00B7 + ' Most felismerve: %s (most %s)') }
+    'hu:host_setup.tz.too_many' { return ('%d id' + [char]0x0151 + 'z' + [char]0x00F3 + 'na illik erre: ' + [char]0x00AB + '%s' + [char]0x00BB + '. ' + [char]0x00CD + 'rj be valami pontosabbat (p' + [char]0x00E9 + 'ld' + [char]0x00E1 + 'ul egy v' + [char]0x00E1 + 'rost).') }
     'hu:keyfile.both' { return ('a --api-key-file vagy a --api-key-stdin kapcsol' + [char]0x00F3 + 't haszn' + [char]0x00E1 + 'ld, ne mindkett' + [char]0x0151 + 't') }
     'hu:keyfile.not_file' { return ('a --api-key-file kapcsol' + [char]0x00F3 + 'nak megadott f' + [char]0x00E1 + 'jlnak k' + [char]0x00F6 + 'z' + [char]0x00F6 + 'ns' + [char]0x00E9 + 'ges f' + [char]0x00E1 + 'jlnak kell lennie, nem mapp' + [char]0x00E1 + 'nak vagy linknek: %s') }
     'hu:keyfile.shape' { return ('a --api-key-file kapcsol' + [char]0x00F3 + 'nak megadott f' + [char]0x00E1 + 'jl tartalma nem egyetlen, 16' + [char]0x2013 + '512 nyomtathat' + [char]0x00F3 + ' karakterb' + [char]0x0151 + 'l ' + [char]0x00E1 + 'll' + [char]0x00F3 + ', sz' + [char]0x00F3 + 'k' + [char]0x00F6 + 'z n' + [char]0x00E9 + 'lk' + [char]0x00FC + 'li sor: %s') }
@@ -913,6 +952,19 @@ function Get-JhtTextTable {
     'es:help.screen' { return (('Uso: jht screen <command>', '', '  on [--json]       enciende la pantalla en directo del closer: un contenedor aparte,', '                    con el stream solo en 127.0.0.1', '  off [--remove-image] [--json]', '                    la apaga y quita el contenedor; la imagen de las herramientas se queda en el disco,', '                    para volver a encenderla sin descargarla otra vez: --remove-image la quita y libera', '                    el espacio', ('  status [--json]   dice si est' + [char]0x00E1 + ' encendida'), '', 'No se descarga ni se enciende nada hasta que lo pidas con `on`. El stream es solo para ver.') -join [char]10) }
     'es:help.setup' { return (('Uso: jht setup [options]', '', ('Sin opciones arranca la instalaci' + [char]0x00F3 + 'n guiada. Con --non-interactive no pregunta nada:'), 'todo se da con las opciones.', '', '  --non-interactive            ninguna pregunta', '  --provider <name>            glm (Z.ai, predeterminado), kimi (Moonshot), openai o claude (Anthropic)', '  --harness <name>             pi (predeterminado)', ('  --api-key-file <path>        archivo que contiene la clave API (una l' + [char]0x00ED + 'nea, que solo puedas leer t' + [char]0x00FA + ').'), '                               Un archivo de tu ordenador lo lee jht y se lo pasa al setup: con glm y kimi', ('                               el setup guarda la clave por su cuenta, nunca en la configuraci' + [char]0x00F3 + 'n'), ('  --api-key-stdin              lee la clave API de la entrada est' + [char]0x00E1 + 'ndar (una l' + [char]0x00ED + 'nea):'), ('                               nunca en la l' + [char]0x00ED + 'nea de comandos'), ('  --api-key <key>              la clave escrita aqu' + [char]0x00ED + ', en claro (no admitida para glm y kimi)'), ('  --secret-mode <mode>         c' + [char]0x00F3 + 'mo se guarda la clave: plaintext (predeterminado), env o file'), '  --secret-env <name>          con --secret-mode env: la variable de entorno que la contiene', '  --secret-file <path>         con --secret-mode file: el archivo que la contiene', '  --model <model>              el modelo que usar', '  --language <code>            el idioma (por ejemplo es o en)', ('  --skip-health                se salta la comprobaci' + [char]0x00F3 + 'n final'), ('  --reset                      vuelve a empezar desde una configuraci' + [char]0x00F3 + 'n limpia'), '', 'Ejemplos:', '  con una clave GLM en un archivo:', '    jht setup --non-interactive --provider glm --harness pi --api-key-file clave.txt', '  OpenAI con una clave API, en Pi (para Claude: --provider claude):', '    jht setup --non-interactive --provider openai --harness pi --api-key-stdin') -join [char]10) }
     'es:help.tools' { return (('Uso: jht tools <comando>', '', ('  status --json   si las herramientas de los Scout (la imagen completa) ya est' + [char]0x00E1 + 'n, est' + [char]0x00E1 + 'n en camino o han fallado'), '  pull            las descarga en segundo plano (jht up y jht setup lo inician solos)', ('  switch          pasa el equipo a ellas cuando el onboarding est' + [char]0x00E1 + ' cerrado (la descarga lo hace sola)'), '', 'Esta ayuda no arranca nada ni descarga nada.') -join [char]10) }
+    'es:host_setup.timezone_explain' { return ('El Capit' + [char]0x00E1 + 'n la usa para convertir las horas en los mensajes de Telegram y en los gr' + [char]0x00E1 + 'ficos.') }
+    'es:host_setup.timezone_header' { return 'Zona horaria' }
+    'es:host_setup.timezone_label' { return 'Zona horaria' }
+    'es:host_setup.timezone_vps_utc' { return ('No se ha detectado la zona horaria: el equipo usar' + [char]0x00E1 + ' UTC. Configura la tuya con jht wh --tz Europe/Madrid (o en el panel); si no, las horas de Telegram y del horario de trabajo estar' + [char]0x00E1 + 'n en UTC.') }
+    'es:host_setup.tz.bad_number' { return ('Elige un n' + [char]0x00FA + 'mero entre 1 y %d.') }
+    'es:host_setup.tz.how' { return ('Escribe un pa' + [char]0x00ED + 's, una ciudad o una zona horaria (por ejemplo Espa' + [char]0x00F1 + 'a, Madrid, Europe/Madrid).') }
+    'es:host_setup.tz.how_default' { return ('Pulsa Intro para mantener %s, o escribe un pa' + [char]0x00ED + 's, una ciudad o una zona horaria para buscar otra.') }
+    'es:host_setup.tz.none' { return ('No se ha encontrado ninguna zona horaria para ' + [char]0x00AB + '%s' + [char]0x00BB + ': prueba con un pa' + [char]0x00ED + 's, una ciudad o una zona como Europe/Madrid.') }
+    'es:host_setup.tz.not_detected' { return 'No se ha detectado tu zona horaria.' }
+    'es:host_setup.tz.pick' { return ('N' + [char]0x00FA + 'mero (1-%d), o una nueva b' + [char]0x00FA + 'squeda:') }
+    'es:host_setup.tz.proposed' { return 'Propuesta: %s (ahora %s).' }
+    'es:host_setup.tz.saved_and_detected' { return ('Guardada: %s (ahora %s) ' + [char]0x00B7 + ' Detectada ahora: %s (ahora %s)') }
+    'es:host_setup.tz.too_many' { return ('%d zonas horarias coinciden con ' + [char]0x00AB + '%s' + [char]0x00BB + ': escribe algo m' + [char]0x00E1 + 's preciso (una ciudad, por ejemplo).') }
     'es:keyfile.both' { return 'usa --api-key-file o --api-key-stdin, no los dos' }
     'es:keyfile.not_file' { return 'el archivo dado a --api-key-file tiene que ser un archivo normal, no una carpeta ni un enlace: %s' }
     'es:keyfile.shape' { return ('el contenido del archivo dado a --api-key-file no es una l' + [char]0x00ED + 'nea de 16 a 512 caracteres imprimibles sin espacios: %s') }
@@ -1159,6 +1211,19 @@ function Get-JhtTextTable {
     'de:help.screen' { return (('Verwendung: jht screen <command>', '', '  on [--json]       startet den Live-Bildschirm des Closers: ein eigener Container, mit dem Stream nur auf 127.0.0.1', '  off [--remove-image] [--json]', '                    stoppt ihn und entfernt den Container; das Tool-Image bleibt auf der Festplatte, damit du ihn', '                    ohne neuen Download wieder starten kannst: --remove-image entfernt es und gibt den Platz frei', ('  status [--json]   sagt, ob er l' + [char]0x00E4 + 'uft'), '', 'Nichts wird heruntergeladen oder gestartet, bevor du es mit `on` verlangst. Der Stream ist nur zum Ansehen.') -join [char]10) }
     'de:help.setup' { return (('Verwendung: jht setup [options]', '', ('Ohne Optionen startet die gef' + [char]0x00FC + 'hrte Installation. Mit --non-interactive wird nichts gefragt:'), ('Alles wird ' + [char]0x00FC + 'ber die Optionen angegeben.'), '', '  --non-interactive            keine Fragen', '  --provider <name>            glm (Z.ai, Standard), kimi (Moonshot), openai oder claude (Anthropic)', '  --harness <name>             pi (Standard)', ('  --api-key-file <path>        Datei mit dem API-Schl' + [char]0x00FC + 'ssel (eine Zeile, nur f' + [char]0x00FC + 'r dich lesbar).'), '                               jht liest die Datei auf deinem Computer und gibt sie ans Setup weiter; bei glm', ('                               und kimi beh' + [char]0x00E4 + 'lt das Setup den Schl' + [char]0x00FC + 'ssel f' + [char]0x00FC + 'r sich, nie in der Konfiguration'), ('  --api-key-stdin              liest den API-Schl' + [char]0x00FC + 'ssel von stdin (eine Zeile): nie auf der Befehlszeile'), ('  --api-key <key>              der Schl' + [char]0x00FC + 'ssel direkt hier, im Klartext (nicht erlaubt f' + [char]0x00FC + 'r glm und kimi)'), ('  --secret-mode <mode>         wie der Schl' + [char]0x00FC + 'ssel gespeichert wird: plaintext (Standard), env oder file'), ('  --secret-env <name>          mit --secret-mode env: die Umgebungsvariable, die ihn enth' + [char]0x00E4 + 'lt'), ('  --secret-file <path>         mit --secret-mode file: die Datei, die ihn enth' + [char]0x00E4 + 'lt'), '  --model <model>              das zu verwendende Modell', '  --language <code>            die Sprache (zum Beispiel it oder en)', ('  --skip-health                ' + [char]0x00FC + 'berspringt die abschlie' + [char]0x00DF + 'ende Pr' + [char]0x00FC + 'fung'), '  --reset                      beginnt mit einer sauberen Konfiguration neu', '', 'Beispiele:', ('  mit einem GLM-Schl' + [char]0x00FC + 'ssel in einer Datei:'), '    jht setup --non-interactive --provider glm --harness pi --api-key-file schluessel.txt', ('  OpenAI mit einem API-Schl' + [char]0x00FC + 'ssel, auf Pi (f' + [char]0x00FC + 'r Claude: --provider claude):'), '    jht setup --non-interactive --provider openai --harness pi --api-key-stdin') -join [char]10) }
     'de:help.tools' { return (('Verwendung: jht tools <Befehl>', '', ('  status --json   ob die Werkzeuge der Scouts (das vollst' + [char]0x00E4 + 'ndige Image) da, unterwegs oder fehlgeschlagen sind'), ('  pull            l' + [char]0x00E4 + 'dt sie im Hintergrund herunter (jht up und jht setup starten das von selbst)'), '  switch          bringt das Team darauf, sobald das Onboarding abgeschlossen ist (der Download macht das von selbst)', '', ('Diese Hilfe startet nichts und l' + [char]0x00E4 + 'dt nichts herunter.')) -join [char]10) }
+    'de:host_setup.timezone_explain' { return ('Der Kapit' + [char]0x00E4 + 'n verwendet sie, um die Zeiten in Telegram-Nachrichten und Diagrammen umzurechnen.') }
+    'de:host_setup.timezone_header' { return 'Zeitzone' }
+    'de:host_setup.timezone_label' { return 'Zeitzone' }
+    'de:host_setup.timezone_vps_utc' { return 'Die Zeitzone wurde nicht erkannt: Das Team verwendet UTC. Stelle deine mit jht wh --tz Europe/Berlin ein (oder im Dashboard), sonst stehen die Telegram-Zeiten und die Arbeitszeiten in UTC.' }
+    'de:host_setup.tz.bad_number' { return ('W' + [char]0x00E4 + 'hle eine Zahl zwischen 1 und %d.') }
+    'de:host_setup.tz.how' { return 'Gib ein Land, eine Stadt oder eine Zeitzone ein (zum Beispiel Deutschland, Berlin, Europe/Berlin).' }
+    'de:host_setup.tz.how_default' { return ('Dr' + [char]0x00FC + 'cke Enter, um %s zu behalten, oder gib ein Land, eine Stadt oder eine Zeitzone ein, um eine andere zu suchen.') }
+    'de:host_setup.tz.none' { return ('Keine Zeitzone f' + [char]0x00FC + 'r ' + [char]0x00AB + '%s' + [char]0x00BB + ' gefunden: Versuche es mit einem Land, einer Stadt oder einer Zeitzone wie Europe/Berlin.') }
+    'de:host_setup.tz.not_detected' { return 'Deine Zeitzone wurde nicht erkannt.' }
+    'de:host_setup.tz.pick' { return 'Nummer (1-%d) oder eine neue Suche:' }
+    'de:host_setup.tz.proposed' { return 'Vorgeschlagen: %s (jetzt %s).' }
+    'de:host_setup.tz.saved_and_detected' { return ('Gespeichert: %s (jetzt %s) ' + [char]0x00B7 + ' Jetzt erkannt: %s (jetzt %s)') }
+    'de:host_setup.tz.too_many' { return ('%d Zeitzonen passen zu ' + [char]0x00AB + '%s' + [char]0x00BB + ': Gib etwas Genaueres ein (zum Beispiel eine Stadt).') }
     'de:keyfile.both' { return 'Nutze --api-key-file oder --api-key-stdin, nicht beides' }
     'de:keyfile.not_file' { return ('Die an --api-key-file ' + [char]0x00FC + 'bergebene Datei muss eine normale Datei sein, kein Ordner und kein Link: %s') }
     'de:keyfile.shape' { return ('Der Inhalt der an --api-key-file ' + [char]0x00FC + 'bergebenen Datei ist keine einzelne Zeile mit 16 bis 512 druckbaren Zeichen ohne Leerzeichen: %s') }
@@ -1405,6 +1470,19 @@ function Get-JhtTextTable {
     'fr:help.screen' { return (('Usage : jht screen <commande>', '', ('  on [--json]       allume l''' + [char]0x00E9 + 'cran en direct du closer : un conteneur ' + [char]0x00E0 + ' part, avec le stream seulement sur 127.0.0.1'), '  off [--remove-image] [--json]', ('                    l''' + [char]0x00E9 + 'teint et retire le conteneur ; l''image des outils reste sur le disque, pour le rallumer'), ('                    sans la ret' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charger : --remove-image la retire et lib' + [char]0x00E8 + 're l''espace'), ('  status [--json]   dit s''il est allum' + [char]0x00E9), '', ('Rien ne se t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charge ni ne s''allume tant que tu ne le demandes pas avec `on`. Le stream se regarde seulement.')) -join [char]10) }
     'fr:help.setup' { return (('Usage : jht setup [options]', '', ('Sans options, l''installation guid' + [char]0x00E9 + 'e d' + [char]0x00E9 + 'marre. Avec --non-interactive, rien n''est demand' + [char]0x00E9 + ' :'), 'tout se donne avec les options.', '', '  --non-interactive            aucune question', ('  --provider <name>            glm (Z.ai, par d' + [char]0x00E9 + 'faut), kimi (Moonshot), openai ou claude (Anthropic)'), ('  --harness <name>             pi (par d' + [char]0x00E9 + 'faut)'), ('  --api-key-file <path>        fichier qui contient la cl' + [char]0x00E9 + ' API (une ligne, lisible seulement par toi).'), '                               jht lit ce fichier sur ton ordinateur et le passe au setup :', ('                               avec glm et kimi, le setup garde la cl' + [char]0x00E9 + ' ' + [char]0x00E0 + ' part, jamais dans la configuration'), ('  --api-key-stdin              lit la cl' + [char]0x00E9 + ' API sur l''entr' + [char]0x00E9 + 'e standard (une ligne) : jamais sur la ligne de commande'), ('  --api-key <key>              la cl' + [char]0x00E9 + ' ' + [char]0x00E9 + 'crite ici, en clair (refus' + [char]0x00E9 + 'e pour glm et kimi)'), ('  --secret-mode <mode>         comment la cl' + [char]0x00E9 + ' est enregistr' + [char]0x00E9 + 'e : plaintext (par d' + [char]0x00E9 + 'faut), env ou file'), '  --secret-env <name>          avec --secret-mode env : la variable d''environnement qui la contient', '  --secret-file <path>         avec --secret-mode file : le fichier qui la contient', ('  --model <model>              le mod' + [char]0x00E8 + 'le ' + [char]0x00E0 + ' utiliser'), '  --language <code>            la langue (par exemple it ou en)', ('  --skip-health                saute la v' + [char]0x00E9 + 'rification finale'), '  --reset                      repart d''une configuration propre', '', 'Exemples :', ('  avec une cl' + [char]0x00E9 + ' GLM dans un fichier :'), '    jht setup --non-interactive --provider glm --harness pi --api-key-file cle.txt', ('  OpenAI avec une cl' + [char]0x00E9 + ' API, sur Pi (pour Claude : --provider claude) :'), '    jht setup --non-interactive --provider openai --harness pi --api-key-stdin') -join [char]10) }
     'fr:help.tools' { return (('Utilisation : jht tools <commande>', '', ('  status --json   si les outils des Scout (l''image compl' + [char]0x00E8 + 'te) sont l' + [char]0x00E0 + ', en route ou en ' + [char]0x00E9 + 'chec'), ('  pull            les t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charge en arri' + [char]0x00E8 + 're-plan (jht up et jht setup le lancent tout seuls)'), ('  switch          fait passer l''' + [char]0x00E9 + 'quipe dessus une fois l''onboarding termin' + [char]0x00E9 + ' (le t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'chargement le fait tout seul)'), '', ('Cette aide ne d' + [char]0x00E9 + 'marre rien et ne t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charge rien.')) -join [char]10) }
+    'fr:host_setup.timezone_explain' { return 'Le Capitaine l''utilise pour convertir les heures dans les messages Telegram et les graphiques.' }
+    'fr:host_setup.timezone_header' { return 'Fuseau horaire' }
+    'fr:host_setup.timezone_label' { return 'Fuseau horaire' }
+    'fr:host_setup.timezone_vps_utc' { return ('Le fuseau horaire n''a pas ' + [char]0x00E9 + 't' + [char]0x00E9 + ' d' + [char]0x00E9 + 'tect' + [char]0x00E9 + ' : l''' + [char]0x00E9 + 'quipe utilisera UTC. R' + [char]0x00E8 + 'gle le tien avec jht wh --tz Europe/Paris (ou dans le tableau de bord), sinon les heures de Telegram et les horaires de travail seront en UTC.') }
+    'fr:host_setup.tz.bad_number' { return 'Choisis un nombre entre 1 et %d.' }
+    'fr:host_setup.tz.how' { return 'Tape un pays, une ville ou un fuseau horaire (par exemple France, Paris, Europe/Paris).' }
+    'fr:host_setup.tz.how_default' { return ('Appuie sur Entr' + [char]0x00E9 + 'e pour garder %s, ou tape un pays, une ville ou un fuseau horaire pour en chercher un autre.') }
+    'fr:host_setup.tz.none' { return ('Aucun fuseau horaire trouv' + [char]0x00E9 + ' pour ' + [char]0x00AB + ' %s ' + [char]0x00BB + ' : essaie un pays, une ville ou un fuseau comme Europe/Paris.') }
+    'fr:host_setup.tz.not_detected' { return ('Ton fuseau horaire n''a pas ' + [char]0x00E9 + 't' + [char]0x00E9 + ' d' + [char]0x00E9 + 'tect' + [char]0x00E9 + '.') }
+    'fr:host_setup.tz.pick' { return ('Num' + [char]0x00E9 + 'ro (1-%d), ou une nouvelle recherche :') }
+    'fr:host_setup.tz.proposed' { return ('Propos' + [char]0x00E9 + ' : %s (il est %s).') }
+    'fr:host_setup.tz.saved_and_detected' { return ('Enregistr' + [char]0x00E9 + ' : %s (il est %s) ' + [char]0x00B7 + ' D' + [char]0x00E9 + 'tect' + [char]0x00E9 + ' maintenant : %s (il est %s)') }
+    'fr:host_setup.tz.too_many' { return ('%d fuseaux horaires correspondent ' + [char]0x00E0 + ' ' + [char]0x00AB + ' %s ' + [char]0x00BB + ' : tape quelque chose de plus pr' + [char]0x00E9 + 'cis (une ville, par exemple).') }
     'fr:keyfile.both' { return 'utilise --api-key-file ou --api-key-stdin, pas les deux' }
     'fr:keyfile.not_file' { return ('le fichier pass' + [char]0x00E9 + ' ' + [char]0x00E0 + ' --api-key-file doit ' + [char]0x00EA + 'tre un fichier normal, pas un dossier ni un lien : %s') }
     'fr:keyfile.shape' { return ('le contenu du fichier pass' + [char]0x00E9 + ' ' + [char]0x00E0 + ' --api-key-file n''est pas une ligne de 16 ' + [char]0x00E0 + ' 512 caract' + [char]0x00E8 + 'res imprimables sans espaces : %s') }
@@ -1651,6 +1729,19 @@ function Get-JhtTextTable {
     'pt:help.screen' { return (('Uso: jht screen <command>', '', ('  on [--json]       liga o ecr' + [char]0x00E3 + ' ao vivo do closer: um contentor ' + [char]0x00E0 + ' parte, com o stream s' + [char]0x00F3 + ' em 127.0.0.1'), '  off [--remove-image] [--json]', '                    desliga-o e remove o contentor; a imagem das ferramentas fica no disco, para o voltares', ('                    a ligar sem a descarregar de novo: --remove-image remove-a e liberta o espa' + [char]0x00E7 + 'o'), ('  status [--json]   diz se est' + [char]0x00E1 + ' ligado'), '', ('Nada ' + [char]0x00E9 + ' descarregado nem ligado at' + [char]0x00E9 + ' o pedires com `on`. O stream ' + [char]0x00E9 + ' s' + [char]0x00F3 + ' de visualiza' + [char]0x00E7 + [char]0x00E3 + 'o.')) -join [char]10) }
     'pt:help.setup' { return ((('Uso: jht setup [op' + [char]0x00E7 + [char]0x00F5 + 'es]'), '', ('Sem op' + [char]0x00E7 + [char]0x00F5 + 'es arranca a instala' + [char]0x00E7 + [char]0x00E3 + 'o guiada. Com --non-interactive n' + [char]0x00E3 + 'o pergunta nada:'), ('tudo se d' + [char]0x00E1 + ' com as op' + [char]0x00E7 + [char]0x00F5 + 'es.'), '', '  --non-interactive            nenhuma pergunta', '  --provider <name>            glm (Z.ai, predefinido), kimi (Moonshot), openai ou claude (Anthropic)', '  --harness <name>             pi (predefinido)', ('  --api-key-file <path>        ficheiro que cont' + [char]0x00E9 + 'm a chave API (uma linha, leg' + [char]0x00ED + 'vel s' + [char]0x00F3 + ' por ti).'), ('                               O jht l' + [char]0x00EA + ' um ficheiro do teu computador e passa-o ao setup: com glm e kimi'), ('                               o setup guarda a chave por conta pr' + [char]0x00F3 + 'pria, nunca na configura' + [char]0x00E7 + [char]0x00E3 + 'o'), ('  --api-key-stdin              l' + [char]0x00EA + ' a chave API da entrada padr' + [char]0x00E3 + 'o (uma linha): nunca na linha de comandos'), ('  --api-key <key>              a chave escrita aqui, em claro (n' + [char]0x00E3 + 'o admitida para glm e kimi)'), '  --secret-mode <mode>         como se guarda a chave: plaintext (predefinido), env ou file', ('  --secret-env <name>          com --secret-mode env: a vari' + [char]0x00E1 + 'vel de ambiente que a cont' + [char]0x00E9 + 'm'), ('  --secret-file <path>         com --secret-mode file: o ficheiro que a cont' + [char]0x00E9 + 'm'), '  --model <model>              o modelo a usar', ('  --language <code>            a l' + [char]0x00ED + 'ngua (por exemplo pt ou en)'), ('  --skip-health                salta a verifica' + [char]0x00E7 + [char]0x00E3 + 'o final'), ('  --reset                      recome' + [char]0x00E7 + 'a de uma configura' + [char]0x00E7 + [char]0x00E3 + 'o limpa'), '', 'Exemplos:', '  com uma chave GLM num ficheiro:', '    jht setup --non-interactive --provider glm --harness pi --api-key-file chave.txt', '  OpenAI com uma chave API, no Pi (para Claude: --provider claude):', '    jht setup --non-interactive --provider openai --harness pi --api-key-stdin') -join [char]10) }
     'pt:help.tools' { return (('Uso: jht tools <comando>', '', ('  status --json   se as ferramentas dos Scout (a imagem completa) j' + [char]0x00E1 + ' chegaram, est' + [char]0x00E3 + 'o a caminho ou falharam'), '  pull            descarrega-as em segundo plano (jht up e jht setup iniciam-no sozinhos)', ('  switch          passa a equipa para elas quando o onboarding estiver conclu' + [char]0x00ED + 'do (o descarregamento f' + [char]0x00E1 + '-lo sozinho)'), '', ('Esta ajuda n' + [char]0x00E3 + 'o inicia nada nem descarrega nada.')) -join [char]10) }
+    'pt:host_setup.timezone_explain' { return ('O Capit' + [char]0x00E3 + 'o usa para converter hor' + [char]0x00E1 + 'rios nas mensagens do Telegram e nos gr' + [char]0x00E1 + 'ficos.') }
+    'pt:host_setup.timezone_header' { return ('Fuso hor' + [char]0x00E1 + 'rio') }
+    'pt:host_setup.timezone_label' { return ('Fuso hor' + [char]0x00E1 + 'rio') }
+    'pt:host_setup.timezone_vps_utc' { return ('O fuso hor' + [char]0x00E1 + 'rio n' + [char]0x00E3 + 'o foi detetado: a equipa vai usar UTC. Define o teu com jht wh --tz Europe/Lisbon (ou no painel); caso contr' + [char]0x00E1 + 'rio, as horas do Telegram e o hor' + [char]0x00E1 + 'rio de trabalho ficam em UTC.') }
+    'pt:host_setup.tz.bad_number' { return ('Escolhe um n' + [char]0x00FA + 'mero entre 1 e %d.') }
+    'pt:host_setup.tz.how' { return ('Escreve um pa' + [char]0x00ED + 's, uma cidade ou um fuso hor' + [char]0x00E1 + 'rio (por exemplo Portugal, Lisboa, Europe/Lisbon).') }
+    'pt:host_setup.tz.how_default' { return ('Prime Enter para manter %s, ou escreve um pa' + [char]0x00ED + 's, uma cidade ou um fuso hor' + [char]0x00E1 + 'rio para procurar outro.') }
+    'pt:host_setup.tz.none' { return ('Nenhum fuso hor' + [char]0x00E1 + 'rio encontrado para ' + [char]0x00AB + '%s' + [char]0x00BB + ': experimenta um pa' + [char]0x00ED + 's, uma cidade ou um fuso como Europe/Lisbon.') }
+    'pt:host_setup.tz.not_detected' { return ('O teu fuso hor' + [char]0x00E1 + 'rio n' + [char]0x00E3 + 'o foi detetado.') }
+    'pt:host_setup.tz.pick' { return ('N' + [char]0x00FA + 'mero (1-%d), ou uma nova pesquisa:') }
+    'pt:host_setup.tz.proposed' { return 'Proposto: %s (agora %s).' }
+    'pt:host_setup.tz.saved_and_detected' { return ('Guardado: %s (agora %s) ' + [char]0x00B7 + ' Detetado agora: %s (agora %s)') }
+    'pt:host_setup.tz.too_many' { return ('%d fusos hor' + [char]0x00E1 + 'rios correspondem a ' + [char]0x00AB + '%s' + [char]0x00BB + ': escreve algo mais preciso (uma cidade, por exemplo).') }
     'pt:keyfile.both' { return ('usa --api-key-file ou --api-key-stdin, n' + [char]0x00E3 + 'o os dois') }
     'pt:keyfile.not_file' { return ('o ficheiro dado a --api-key-file tem de ser um ficheiro normal, n' + [char]0x00E3 + 'o uma pasta nem uma liga' + [char]0x00E7 + [char]0x00E3 + 'o: %s') }
     'pt:keyfile.shape' { return ('o conte' + [char]0x00FA + 'do do ficheiro dado a --api-key-file n' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' uma linha de 16 a 512 caracteres imprim' + [char]0x00ED + 'veis sem espa' + [char]0x00E7 + 'os: %s') }
@@ -2743,6 +2834,1776 @@ if (Test-Path $HostEnvFile) {
 if (-not $env:JHT_HOST_TYPE) { $env:JHT_HOST_TYPE = 'unknown' }
 if (-not $env:JHT_LANG)      { $env:JHT_LANG = 'en' }
 if (-not $env:JHT_USER_TZ)   { $env:JHT_USER_TZ = 'UTC' }
+
+# The timezone of the person, chosen in `jht setup`: detected from Windows (the CLDR table of the Windows ids), or looked for by a country, a
+# city or a timezone, in the 7 languages. Its texts are the keys host_setup.tz.* of the catalogs (the same the .sh says). It never falls back
+# to UTC in silence: UTC is chosen by writing it. The data (countries, cities, zones, Windows ids) are the lines of Get-JhtTimezoneLines.
+$script:JhtTzIndex = $null
+
+function ConvertFrom-JhtTzEscape {
+  param([string]$Text)
+  if ($Text.IndexOf('\') -lt 0) { return $Text }
+  return [regex]::Replace($Text, '\\u([0-9a-fA-F]{4})', { param($m) [string][char][Convert]::ToInt32($m.Groups[1].Value, 16) })
+}
+
+# What two spellings of a name share: lower case, no accents, _ - . , ' as a space, one space between words (tests/timezone_data.py key()).
+function ConvertTo-JhtTzKey {
+  param([string]$Text)
+  $t = $Text
+  if ($t -cmatch '^[\x20-\x7E]*\z') {
+    # plain ASCII: nothing to take the accents from
+    foreach ($mark in @('_', '-', '.', ',', "'")) { $t = $t.Replace($mark, ' ') }
+    return ((($t.ToLowerInvariant()) -split '\s+' | Where-Object { $_ }) -join ' ')
+  }
+  $t = $t.Replace([string][char]0x00DF, 'ss').Replace([string][char]0x00F8, 'o').Replace([string][char]0x00D8, 'O').Replace([string][char]0x0142, 'l').Replace([string][char]0x0141, 'L')
+  $t = $t.Replace([string][char]0x0111, 'd').Replace([string][char]0x00E6, 'ae').Replace([string][char]0x00C6, 'AE')
+  $plain = New-Object System.Text.StringBuilder
+  foreach ($c in $t.Normalize([Text.NormalizationForm]::FormD).ToCharArray()) {
+    if ([Globalization.CharUnicodeInfo]::GetUnicodeCategory($c) -ne [Globalization.UnicodeCategory]::NonSpacingMark) { [void]$plain.Append($c) }
+  }
+  $t = $plain.ToString()
+  foreach ($mark in @('_', '-', '.', ',', "'", [string][char]0x2019)) { $t = $t.Replace($mark, ' ') }
+  return ((($t.ToLowerInvariant()) -split '\s+' | Where-Object { $_ }) -join ' ')
+}
+
+function Add-JhtTzName {
+  param($Index, [string]$Name, [string[]]$Zones)
+  $key = ConvertTo-JhtTzKey $Name
+  if ($key -and $Zones.Count -gt 0) { [void]$Index.Names.Add([pscustomobject]@{ Key = $key; Zones = $Zones }) }
+}
+
+function Get-JhtTzIndex {
+  if ($script:JhtTzIndex) { return $script:JhtTzIndex }
+  $index = @{
+    Names = New-Object 'System.Collections.Generic.List[object]'
+    Zones = New-Object 'System.Collections.Generic.HashSet[string]'
+    ZonesOf = @{}
+    WinOf = @{}
+    Primary = @{}
+  }
+  $lines = New-Object 'System.Collections.Generic.List[string[]]'
+  foreach ($raw in [regex]::Split((Get-JhtTimezoneLines), '\r?\n')) {
+    if ($raw -and -not $raw.StartsWith('#')) { $lines.Add(([string[]](ConvertFrom-JhtTzEscape $raw).Split('|'))) }
+  }
+  foreach ($f in $lines) {
+    switch -CaseSensitive ($f[0]) {
+      'Z' {
+        if (-not $index.ZonesOf.ContainsKey($f[1])) { $index.ZonesOf[$f[1]] = New-Object 'System.Collections.Generic.List[string]' }
+        $index.ZonesOf[$f[1]].Add($f[2]); [void]$index.Zones.Add($f[2])
+      }
+      'W' { $index.WinOf[$f[1]] = $f[2] }
+      'P' { $index.Primary[$f[1]] = $f[2] }
+    }
+  }
+  [void]$index.Zones.Add('UTC')
+  foreach ($f in $lines) {
+    switch -CaseSensitive ($f[0]) {
+      'C' {
+        $zones = [string[]]@($index.ZonesOf[$f[1]])
+        Add-JhtTzName $index $f[1] $zones
+        foreach ($name in $f[2..($f.Count - 1)]) { Add-JhtTzName $index $name $zones }
+      }
+      'A' { foreach ($name in $f[2..($f.Count - 1)]) { Add-JhtTzName $index $name ([string[]]@($index.ZonesOf[$f[1]])) } }
+      'N' { foreach ($name in $f[2..($f.Count - 1)]) { if ($name) { Add-JhtTzName $index $name ([string[]]@($f[1])) } } }
+      'X' { foreach ($name in $f[2..($f.Count - 1)]) { Add-JhtTzName $index $name ([string[]]@($f[1])) } }
+    }
+  }
+  foreach ($zone in $index.Zones) {
+    Add-JhtTzName $index $zone ([string[]]@($zone))
+    Add-JhtTzName $index ($zone.Substring($zone.LastIndexOf('/') + 1)) ([string[]]@($zone))
+  }
+  Add-JhtTzName $index 'Etc/UTC' ([string[]]@('UTC'))
+  $script:JhtTzIndex = $index
+  return $index
+}
+
+# The zones that fit what was written: the ones named exactly, else the ones with a word that starts with it (3 letters or more). Exact says
+# which: a single zone from a name that only starts like what was written (American -> American Samoa) is never proposed as the answer.
+function Find-JhtTimezone {
+  param([string]$Query)
+  $q = ConvertTo-JhtTzKey $Query
+  if ($q.Length -lt 2) { return [pscustomobject]@{ Zones = @(); Exact = $false } }
+  $index = Get-JhtTzIndex
+  $found = New-Object 'System.Collections.Generic.List[string]'
+  $seen = @{}
+  foreach ($entry in $index.Names) {
+    if ($entry.Key -ceq $q) { foreach ($zone in $entry.Zones) { if (-not $seen.ContainsKey($zone)) { $seen[$zone] = $true; $found.Add($zone) } } }
+  }
+  $exact = ($found.Count -gt 0)
+  if ($found.Count -eq 0 -and $q.Length -ge 3) {
+    foreach ($entry in $index.Names) {
+      if ($entry.Key.StartsWith($q, [StringComparison]::Ordinal) -or $entry.Key.Contains(' ' + $q)) {
+        foreach ($zone in $entry.Zones) { if (-not $seen.ContainsKey($zone)) { $seen[$zone] = $true; $found.Add($zone) } }
+      }
+    }
+  }
+  return [pscustomobject]@{ Zones = $found.ToArray(); Exact = $exact }
+}
+
+# The time now in a zone, "22:10", or '' where this computer cannot tell it (PowerShell 5.1 takes the Windows id of the zone).
+function Get-JhtTzNow {
+  param([string]$Zone)
+  $index = Get-JhtTzIndex
+  $ids = @($Zone)
+  if ($index.WinOf.ContainsKey($Zone)) { $ids += $index.WinOf[$Zone] }
+  foreach ($id in $ids) {
+    try {
+      $tz = [TimeZoneInfo]::FindSystemTimeZoneById($id)
+      return [TimeZoneInfo]::ConvertTimeFromUtc([DateTime]::UtcNow, $tz).ToString('HH:mm', [Globalization.CultureInfo]::InvariantCulture)
+    } catch { }
+  }
+  return ''
+}
+
+# The IANA name of the zone of this computer, or $null. JHT_TZ_LOCAL_ID names the id to take for the computer's (a test seam: it only changes what the
+# person is shown).
+function Get-JhtDetectedTimezone {
+  $id = $env:JHT_TZ_LOCAL_ID
+  if (-not $id) { try { $id = [TimeZoneInfo]::Local.Id } catch { $id = '' } }
+  if (-not $id) { return $null }
+  $index = Get-JhtTzIndex
+  if ($index.Primary.ContainsKey($id)) { return $index.Primary[$id] }
+  if ($id -ceq 'Etc/UTC') { return 'UTC' }
+  if ($index.Zones.Contains($id)) { return $id }
+  return $null
+}
+
+# The zone the person chose before (in host.env), or $null.
+function Get-JhtHostEnvTimezone {
+  if (-not (Test-Path -LiteralPath $HostEnvFile)) { return $null }
+  $value = $null
+  foreach ($line in (Get-Content -LiteralPath $HostEnvFile)) {
+    if ($line -match '^\s*JHT_USER_TZ=(.*)$') {
+      $candidate = $Matches[1].Trim().Trim('"').Trim("'")
+      if (Test-HostEnvValue -Name 'JHT_USER_TZ' -Value $candidate) { $value = $candidate }
+    }
+  }
+  return $value
+}
+
+# Writes JHT_USER_TZ in host.env, keeping the other lines. As install.ps1 writes it: the temporary lives outside the mounted folder (an agent
+# could swap it for a link there), and a host.env that is a link or a folder is not followed. Returns $false where it did not write.
+function Set-JhtHostEnvTimezone {
+  param([string]$Zone)
+  if (-not (Test-HostEnvValue -Name 'JHT_USER_TZ' -Value $Zone)) { return $false }
+  if (-not (Test-Path -LiteralPath $HostEnvFile)) { return $false }
+  $tmp = $null
+  try {
+    $attributes = [IO.File]::GetAttributes($HostEnvFile)
+    if (($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or ($attributes -band [IO.FileAttributes]::Directory) -ne 0) { return $false }
+    $out = New-Object 'System.Collections.Generic.List[string]'
+    $done = $false
+    foreach ($line in [IO.File]::ReadAllLines($HostEnvFile)) {
+      if ($line -match '^\s*JHT_USER_TZ=') {
+        if (-not $done) { $out.Add("JHT_USER_TZ=$Zone"); $done = $true }
+      } else { $out.Add($line) }
+    }
+    if (-not $done) { $out.Add("JHT_USER_TZ=$Zone") }
+    $dir = Split-Path -Parent (Split-Path -Parent $HostEnvFile)
+    $tmp = Join-Path $dir ('.jht-host-file.{0}.tmp' -f [guid]::NewGuid().ToString('N'))
+    [IO.File]::WriteAllText($tmp, (($out -join [Environment]::NewLine) + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
+    Move-Item -LiteralPath $tmp -Destination $HostEnvFile -Force
+    return $true
+  } catch {
+    return $false
+  } finally {
+    if ($tmp -and (Test-Path -LiteralPath $tmp)) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+  }
+}
+
+function Read-JhtTzLine {
+  param([string]$Prompt)
+  [Console]::Out.Write($Prompt)
+  return [Console]::In.ReadLine()
+}
+
+function Format-JhtTzZone {
+  param([string]$Zone)
+  $now = Get-JhtTzNow $Zone
+  if ($now) { return "$Zone  ($now)" }
+  return $Zone
+}
+
+# jht setup, on a terminal: asks the timezone unless the person has one that is the computer's, writes it in host.env and puts it in this run's
+# environment, so the team is started with it. Not asked with --non-interactive, or with the input redirected (JHT_TZ_PROMPT_STDIN=1 reads it, for tests).
+function Resolve-JhtUserTimezone {
+  param([string[]]$SetupArgs)
+  if ($SetupArgs -ccontains '--non-interactive') { return }
+  if ([Console]::IsInputRedirected -and $env:JHT_TZ_PROMPT_STDIN -cne '1') { return }
+  $saved = Get-JhtHostEnvTimezone
+  $detected = Get-JhtDetectedTimezone
+  $default = $null
+  $status = $null
+  if ($saved -and $detected -and $saved -ceq $detected) { return }
+  if ($saved -and $detected) {
+    if ($saved -ceq 'UTC') {
+      # the UTC the installer writes where it could not tell: the zone of the computer is proposed instead
+      $default = $detected
+      $status = Format-JhtText 'host_setup.tz.proposed' $detected (Get-JhtTzNow $detected)
+    } else {
+      $default = $saved
+      $status = Format-JhtText 'host_setup.tz.saved_and_detected' $saved (Get-JhtTzNow $saved) $detected (Get-JhtTzNow $detected)
+    }
+  } elseif ($saved) {
+    if ($saved -cne 'UTC') { return }
+    $status = Get-JhtText 'host_setup.tz.not_detected'
+  } elseif ($detected) {
+    $default = $detected
+    $status = Format-JhtText 'host_setup.tz.proposed' $detected (Get-JhtTzNow $detected)
+  } else {
+    $status = Get-JhtText 'host_setup.tz.not_detected'
+  }
+  Write-Host ''
+  Write-Host (Get-JhtText 'host_setup.timezone_header')
+  Write-Host (Get-JhtText 'host_setup.timezone_explain')
+  Write-Host $status
+  if ($default) { Write-Host (Format-JhtText 'host_setup.tz.how_default' $default) } else { Write-Host (Get-JhtText 'host_setup.tz.how') }
+  $label = Get-JhtText 'host_setup.timezone_label'
+  $chosen = $null
+  $pending = $null
+  $ended = $false
+  while (-not $chosen -and -not $ended) {
+    if ($null -ne $pending) { $typed = $pending; $pending = $null }
+    else {
+      $typed = Read-JhtTzLine $(if ($default) { "$label [$default]: " } else { "${label}: " })
+      if ($null -eq $typed) { $ended = $true; break }
+    }
+    $typed = $typed.Trim()
+    if (-not $typed) {
+      if ($default) { $chosen = $default; break }
+      Write-Host (Get-JhtText 'host_setup.tz.how')
+      continue
+    }
+    $found = Find-JhtTimezone $typed
+    $hits = @($found.Zones)
+    if ($hits.Count -eq 0) { Write-Host (Format-JhtText 'host_setup.tz.none' $typed); continue }
+    if ($hits.Count -gt 9) { Write-Host (Format-JhtText 'host_setup.tz.too_many' $hits.Count $typed); continue }
+    if ($hits.Count -eq 1 -and $found.Exact) {
+      if ($hits[0] -ieq $typed) { $chosen = $hits[0]; break }
+      $default = $hits[0]
+      Write-Host (Format-JhtText 'host_setup.tz.proposed' $hits[0] (Get-JhtTzNow $hits[0]))
+      continue
+    }
+    for ($i = 0; $i -lt $hits.Count; $i++) { Write-Host ('  {0}) {1}' -f ($i + 1), (Format-JhtTzZone $hits[$i])) }
+    while ($true) {
+      $pick = Read-JhtTzLine ((Format-JhtText 'host_setup.tz.pick' $hits.Count) + ' ')
+      if ($null -eq $pick) { $ended = $true; break }
+      $pick = $pick.Trim()
+      if (-not $pick) { continue }
+      if ($pick -cmatch '^[0-9]{1,6}\z') {
+        $number = [int]$pick
+        if ($number -ge 1 -and $number -le $hits.Count) { $chosen = $hits[$number - 1]; break }
+        Write-Host (Format-JhtText 'host_setup.tz.bad_number' $hits.Count)
+        continue
+      }
+      $pending = $pick
+      break
+    }
+  }
+  if (-not $chosen -and $ended -and $default) { $chosen = $default }
+  if (-not $chosen) {
+    Write-Warn (Get-JhtText 'host_setup.timezone_vps_utc')
+    return
+  }
+  if ($chosen -cne $saved) { [void](Set-JhtHostEnvTimezone $chosen) }
+  $env:JHT_USER_TZ = $chosen
+  Write-Host "${label}: $chosen"
+}
+
+# >>> timezone data, made from shared/data/timezones.txt by `python3 tests/wrapper_ps_texts.py --write`: do not edit by hand
+function Get-JhtTimezoneLines {
+  return @'
+C|AD|Andorra|Andorra|Andorra|Andorra|Andorra|Andorre|Andorra
+C|AE|United Arab Emirates|Emirati Arabi Uniti|Egyes\u00fclt Arab Em\u00edrs\u00e9gek|Emiratos \u00c1rabes Unidos|Vereinigte Arabische Emirate|\u00c9mirats arabes unis|Emirados \u00c1rabes Unidos
+C|AF|Afghanistan|Afghanistan|Afganiszt\u00e1n|Afganist\u00e1n|Afghanistan|Afghanistan|Afeganist\u00e3o
+C|AG|Antigua & Barbuda|Antigua e Barbuda|Antigua \u00e9s Barbuda|Antigua y Barbuda|Antigua und Barbuda|Antigua-et-Barbuda|Ant\u00edgua e Barbuda
+C|AI|Anguilla|Anguilla|Anguilla|Anguila|Anguilla|Anguilla|Anguila
+C|AL|Albania|Albania|Alb\u00e1nia|Albania|Albanien|Albanie|Alb\u00e2nia
+C|AM|Armenia|Armenia|\u00d6rm\u00e9nyorsz\u00e1g|Armenia|Armenien|Arm\u00e9nie|Arm\u00eania
+C|AO|Angola|Angola|Angola|Angola|Angola|Angola|Angola
+C|AQ|Antarctica|Antartide|Antarktisz|Ant\u00e1rtida|Antarktis|Antarctique|Ant\u00e1rtida
+C|AR|Argentina|Argentina|Argent\u00edna|Argentina|Argentinien|Argentine|Argentina
+C|AS|American Samoa|Samoa Americane|Amerikai Szamoa|Samoa Americana|Amerikanisch-Samoa|Samoa am\u00e9ricaines|Samoa Americana
+C|AT|Austria|Austria|Ausztria|Austria|\u00d6sterreich|Autriche|\u00c1ustria
+C|AU|Australia|Australia|Ausztr\u00e1lia|Australia|Australien|Australie|Austr\u00e1lia
+C|AW|Aruba|Aruba|Aruba|Aruba|Aruba|Aruba|Aruba
+C|AX|\u00c5land Islands|Isole \u00c5land|\u00c5land-szigetek|Islas Aland|\u00c5landinseln|\u00celes \u00c5land|Ilhas Aland
+C|AZ|Azerbaijan|Azerbaigian|Azerbajdzs\u00e1n|Azerbaiy\u00e1n|Aserbaidschan|Azerba\u00efdjan|Azerbaij\u00e3o
+C|BA|Bosnia & Herzegovina|Bosnia ed Erzegovina|Bosznia-Hercegovina|Bosnia y Herzegovina|Bosnien und Herzegowina|Bosnie-Herz\u00e9govine|B\u00f3snia e Herzegovina
+C|BB|Barbados|Barbados|Barbados|Barbados|Barbados|Barbade|Barbados
+C|BD|Bangladesh|Bangladesh|Banglades|Banglad\u00e9s|Bangladesch|Bangladesh|Bangladesh
+C|BE|Belgium|Belgio|Belgium|B\u00e9lgica|Belgien|Belgique|B\u00e9lgica
+C|BF|Burkina Faso|Burkina Faso|Burkina Faso|Burkina Faso|Burkina Faso|Burkina Faso|Burquina Faso
+C|BG|Bulgaria|Bulgaria|Bulg\u00e1ria|Bulgaria|Bulgarien|Bulgarie|Bulg\u00e1ria
+C|BH|Bahrain|Bahrein|Bahrein|Bar\u00e9in|Bahrain|Bahre\u00efn|Barein
+C|BI|Burundi|Burundi|Burundi|Burundi|Burundi|Burundi|Burundi
+C|BJ|Benin|Benin|Benin|Ben\u00edn|Benin|B\u00e9nin|Benin
+C|BL|St. Barth\u00e9lemy|Saint-Barth\u00e9lemy|Saint-Barth\u00e9lemy|San Bartolom\u00e9|St. Barth\u00e9lemy|Saint-Barth\u00e9lemy|S\u00e3o Bartolomeu
+C|BM|Bermuda|Bermuda|Bermuda|Bermudas|Bermuda|Bermudes|Bermudas
+C|BN|Brunei|Brunei|Brunei|Brun\u00e9i|Brunei Darussalam|Brunei|Brunei
+C|BO|Bolivia|Bolivia|Bol\u00edvia|Bolivia|Bolivien|Bolivie|Bol\u00edvia
+C|BQ|Caribbean Netherlands|Caraibi Olandesi|Holland Karib-t\u00e9rs\u00e9g|Caribe neerland\u00e9s|Karibische Niederlande|Pays-Bas carib\u00e9ens|Pa\u00edses Baixos Caribenhos
+C|BR|Brazil|Brasile|Braz\u00edlia|Brasil|Brasilien|Br\u00e9sil|Brasil
+C|BS|Bahamas|Bahamas|Bahama-szigetek|Bahamas|Bahamas|Bahamas|Bahamas
+C|BT|Bhutan|Bhutan|Bhut\u00e1n|But\u00e1n|Bhutan|Bhoutan|But\u00e3o
+C|BW|Botswana|Botswana|Botswana|Botsuana|Botsuana|Botswana|Botsuana
+C|BY|Belarus|Bielorussia|Belarusz|Bielorrusia|Belarus|Bi\u00e9lorussie|Bielorr\u00fassia
+C|BZ|Belize|Belize|Belize|Belice|Belize|Belize|Belize
+C|CA|Canada|Canada|Kanada|Canad\u00e1|Kanada|Canada|Canad\u00e1
+C|CC|Cocos (Keeling) Islands|Isole Cocos (Keeling)|K\u00f3kusz (Keeling)-szigetek|Islas Cocos|Kokosinseln|\u00celes Cocos|Ilhas Cocos (Keeling)
+C|CD|Congo - Kinshasa|Congo - Kinshasa|Kong\u00f3 \u2013 Kinshasa|Rep\u00fablica Democr\u00e1tica del Congo|Kongo-Kinshasa|Congo-Kinshasa|Congo - Kinshasa
+C|CF|Central African Republic|Repubblica Centrafricana|K\u00f6z\u00e9p-afrikai K\u00f6zt\u00e1rsas\u00e1g|Rep\u00fablica Centroafricana|Zentralafrikanische Republik|R\u00e9publique centrafricaine|Rep\u00fablica Centro-Africana
+C|CG|Congo - Brazzaville|Congo-Brazzaville|Kong\u00f3 \u2013 Brazzaville|Congo|Kongo-Brazzaville|Congo-Brazzaville|Rep\u00fablica do Congo
+C|CH|Switzerland|Svizzera|Sv\u00e1jc|Suiza|Schweiz|Suisse|Su\u00ed\u00e7a
+C|CI|C\u00f4te d\u2019Ivoire|Costa d\u2019Avorio|Elef\u00e1ntcsontpart|C\u00f4te d\u2019Ivoire|C\u00f4te d\u2019Ivoire|C\u00f4te d\u2019Ivoire|Costa do Marfim
+C|CK|Cook Islands|Isole Cook|Cook-szigetek|Islas Cook|Cookinseln|\u00celes Cook|Ilhas Cook
+C|CL|Chile|Cile|Chile|Chile|Chile|Chili|Chile
+C|CM|Cameroon|Camerun|Kamerun|Camer\u00fan|Kamerun|Cameroun|Camar\u00f5es
+C|CN|China|Cina|K\u00edna|China|China|Chine|China
+C|CO|Colombia|Colombia|Kolumbia|Colombia|Kolumbien|Colombie|Col\u00f4mbia
+C|CR|Costa Rica|Costa Rica|Costa Rica|Costa Rica|Costa Rica|Costa Rica|Costa Rica
+C|CU|Cuba|Cuba|Kuba|Cuba|Kuba|Cuba|Cuba
+C|CV|Cape Verde|Capo Verde|Z\u00f6ld-foki K\u00f6zt\u00e1rsas\u00e1g|Cabo Verde|Cabo Verde|Cap-Vert|Cabo Verde
+C|CW|Cura\u00e7ao|Cura\u00e7ao|Cura\u00e7ao|Curazao|Cura\u00e7ao|Cura\u00e7ao|Cura\u00e7ao
+C|CX|Christmas Island|Isola Christmas|Kar\u00e1csony-sziget|Isla de Navidad|Weihnachtsinsel|\u00cele Christmas|Ilha Christmas
+C|CY|Cyprus|Cipro|Ciprus|Chipre|Zypern|Chypre|Chipre
+C|CZ|Czechia|Cechia|Csehorsz\u00e1g|Chequia|Tschechien|Tch\u00e9quie|Tch\u00e9quia
+C|DE|Germany|Germania|N\u00e9metorsz\u00e1g|Alemania|Deutschland|Allemagne|Alemanha
+C|DJ|Djibouti|Gibuti|Dzsibuti|Yibuti|Dschibuti|Djibouti|Djibuti
+C|DK|Denmark|Danimarca|D\u00e1nia|Dinamarca|D\u00e4nemark|Danemark|Dinamarca
+C|DM|Dominica|Dominica|Dominika|Dominica|Dominica|Dominique|Dominica
+C|DO|Dominican Republic|Repubblica Dominicana|Dominikai K\u00f6zt\u00e1rsas\u00e1g|Rep\u00fablica Dominicana|Dominikanische Republik|R\u00e9publique dominicaine|Rep\u00fablica Dominicana
+C|DZ|Algeria|Algeria|Alg\u00e9ria|Argelia|Algerien|Alg\u00e9rie|Arg\u00e9lia
+C|EC|Ecuador|Ecuador|Ecuador|Ecuador|Ecuador|\u00c9quateur|Equador
+C|EE|Estonia|Estonia|\u00c9sztorsz\u00e1g|Estonia|Estland|Estonie|Est\u00f4nia
+C|EG|Egypt|Egitto|Egyiptom|Egipto|\u00c4gypten|\u00c9gypte|Egito
+C|EH|Western Sahara|Sahara Occidentale|Nyugat-Szahara|S\u00e1hara Occidental|Westsahara|Sahara occidental|Saara Ocidental
+C|ER|Eritrea|Eritrea|Eritrea|Eritrea|Eritrea|\u00c9rythr\u00e9e|Eritreia
+C|ES|Spain|Spagna|Spanyolorsz\u00e1g|Espa\u00f1a|Spanien|Espagne|Espanha
+C|ET|Ethiopia|Etiopia|Eti\u00f3pia|Etiop\u00eda|\u00c4thiopien|\u00c9thiopie|Eti\u00f3pia
+C|FI|Finland|Finlandia|Finnorsz\u00e1g|Finlandia|Finnland|Finlande|Finl\u00e2ndia
+C|FJ|Fiji|Figi|Fidzsi|Fiyi|Fidschi|Fidji|Fiji
+C|FK|Falkland Islands|Isole Falkland|Falkland-szigetek|Islas Malvinas|Falklandinseln|\u00celes Malouines|Ilhas Malvinas
+C|FM|Micronesia|Micronesia|Mikron\u00e9zia|Micronesia|Mikronesien|Micron\u00e9sie|Micron\u00e9sia
+C|FO|Faroe Islands|Isole F\u00e6r \u00d8er|Fer\u00f6er szigetek|Islas Feroe|F\u00e4r\u00f6er|\u00celes F\u00e9ro\u00e9|Ilhas Faro\u00e9
+C|FR|France|Francia|Franciaorsz\u00e1g|Francia|Frankreich|France|Fran\u00e7a
+C|GA|Gabon|Gabon|Gabon|Gab\u00f3n|Gabun|Gabon|Gab\u00e3o
+C|GB|United Kingdom|Regno Unito|Egyes\u00fclt Kir\u00e1lys\u00e1g|Reino Unido|Vereinigtes K\u00f6nigreich|Royaume-Uni|Reino Unido
+C|GD|Grenada|Grenada|Grenada|Granada|Grenada|Grenade|Granada
+C|GE|Georgia|Georgia|Gr\u00fazia|Georgia|Georgien|G\u00e9orgie|Ge\u00f3rgia
+C|GF|French Guiana|Guyana Francese|Francia Guyana|Guayana Francesa|Franz\u00f6sisch-Guayana|Guyane fran\u00e7aise|Guiana Francesa
+C|GG|Guernsey|Guernsey|Guernsey|Guernesey|Guernsey|Guernesey|Guernsey
+C|GH|Ghana|Ghana|Gh\u00e1na|Ghana|Ghana|Ghana|Gana
+C|GI|Gibraltar|Gibilterra|Gibralt\u00e1r|Gibraltar|Gibraltar|Gibraltar|Gibraltar
+C|GL|Greenland|Groenlandia|Gr\u00f6nland|Groenlandia|Gr\u00f6nland|Groenland|Groenl\u00e2ndia
+C|GM|Gambia|Gambia|Gambia|Gambia|Gambia|Gambie|G\u00e2mbia
+C|GN|Guinea|Guinea|Guinea|Guinea|Guinea|Guin\u00e9e|Guin\u00e9
+C|GP|Guadeloupe|Guadalupa|Guadeloupe|Guadalupe|Guadeloupe|Guadeloupe|Guadalupe
+C|GQ|Equatorial Guinea|Guinea Equatoriale|Egyenl\u00edt\u0151i-Guinea|Guinea Ecuatorial|\u00c4quatorialguinea|Guin\u00e9e \u00e9quatoriale|Guin\u00e9 Equatorial
+C|GR|Greece|Grecia|G\u00f6r\u00f6gorsz\u00e1g|Grecia|Griechenland|Gr\u00e8ce|Gr\u00e9cia
+C|GS|South Georgia & South Sandwich Islands|Georgia del Sud e Sandwich Australi|D\u00e9li-Georgia \u00e9s D\u00e9li-Sandwich-szigetek|Islas Georgia del Sur y Sandwich del Sur|S\u00fcdgeorgien und die S\u00fcdlichen Sandwichinseln|G\u00e9orgie du Sud-et-les \u00celes Sandwich du Sud|Ilhas Ge\u00f3rgia do Sul e Sandwich do Sul
+C|GT|Guatemala|Guatemala|Guatemala|Guatemala|Guatemala|Guatemala|Guatemala
+C|GU|Guam|Guam|Guam|Guam|Guam|Guam|Guam
+C|GW|Guinea-Bissau|Guinea-Bissau|Bissau-Guinea|Guinea-Bis\u00e1u|Guinea-Bissau|Guin\u00e9e-Bissau|Guin\u00e9-Bissau
+C|GY|Guyana|Guyana|Guyana|Guyana|Guyana|Guyana|Guiana
+C|HK|Hong Kong SAR China|RAS di Hong Kong|Hongkong KKT|RAE de Hong Kong (China)|Sonderverwaltungsregion Hongkong|R.A.S. chinoise de Hong Kong|Hong Kong, RAE da China
+C|HN|Honduras|Honduras|Honduras|Honduras|Honduras|Honduras|Honduras
+C|HR|Croatia|Croazia|Horv\u00e1torsz\u00e1g|Croacia|Kroatien|Croatie|Cro\u00e1cia
+C|HT|Haiti|Haiti|Haiti|Hait\u00ed|Haiti|Ha\u00efti|Haiti
+C|HU|Hungary|Ungheria|Magyarorsz\u00e1g|Hungr\u00eda|Ungarn|Hongrie|Hungria
+C|ID|Indonesia|Indonesia|Indon\u00e9zia|Indonesia|Indonesien|Indon\u00e9sie|Indon\u00e9sia
+C|IE|Ireland|Irlanda|\u00cdrorsz\u00e1g|Irlanda|Irland|Irlande|Irlanda
+C|IL|Israel|Israele|Izrael|Israel|Israel|Isra\u00ebl|Israel
+C|IM|Isle of Man|Isola di Man|Man-sziget|Isla de Man|Isle of Man|\u00cele de Man|Ilha de Man
+C|IN|India|India|India|India|Indien|Inde|\u00cdndia
+C|IO|British Indian Ocean Territory|Territorio Britannico dell\u2019Oceano Indiano|Brit Indiai-\u00f3ce\u00e1ni Ter\u00fclet|Territorio Brit\u00e1nico del Oc\u00e9ano \u00cdndico|Britisches Territorium im Indischen Ozean|Territoire britannique de l\u2019oc\u00e9an Indien|Territ\u00f3rio Brit\u00e2nico do Oceano \u00cdndico
+C|IQ|Iraq|Iraq|Irak|Irak|Irak|Irak|Iraque
+C|IR|Iran|Iran|Ir\u00e1n|Ir\u00e1n|Iran|Iran|Ir\u00e3
+C|IS|Iceland|Islanda|Izland|Islandia|Island|Islande|Isl\u00e2ndia
+C|IT|Italy|Italia|Olaszorsz\u00e1g|Italia|Italien|Italie|It\u00e1lia
+C|JE|Jersey|Jersey|Jersey|Jersey|Jersey|Jersey|Jersey
+C|JM|Jamaica|Giamaica|Jamaica|Jamaica|Jamaika|Jama\u00efque|Jamaica
+C|JO|Jordan|Giordania|Jord\u00e1nia|Jordania|Jordanien|Jordanie|Jord\u00e2nia
+C|JP|Japan|Giappone|Jap\u00e1n|Jap\u00f3n|Japan|Japon|Jap\u00e3o
+C|KE|Kenya|Kenya|Kenya|Kenia|Kenia|Kenya|Qu\u00eania
+C|KG|Kyrgyzstan|Kirghizistan|Kirgiziszt\u00e1n|Kirguist\u00e1n|Kirgisistan|Kirghizstan|Quirguist\u00e3o
+C|KH|Cambodia|Cambogia|Kambodzsa|Camboya|Kambodscha|Cambodge|Camboja
+C|KI|Kiribati|Kiribati|Kiribati|Kiribati|Kiribati|Kiribati|Quiribati
+C|KM|Comoros|Comore|Comore-szigetek|Comoras|Komoren|Comores|Comores
+C|KN|St. Kitts & Nevis|Saint Kitts e Nevis|Saint Kitts \u00e9s Nevis|San Crist\u00f3bal y Nieves|St. Kitts und Nevis|Saint-Christophe-et-Ni\u00e9v\u00e8s|S\u00e3o Crist\u00f3v\u00e3o e N\u00e9vis
+C|KP|North Korea|Corea del Nord|\u00c9szak-Korea|Corea del Norte|Nordkorea|Cor\u00e9e du Nord|Coreia do Norte
+C|KR|South Korea|Corea del Sud|D\u00e9l-Korea|Corea del Sur|S\u00fcdkorea|Cor\u00e9e du Sud|Coreia do Sul
+C|KW|Kuwait|Kuwait|Kuvait|Kuwait|Kuwait|Kowe\u00eft|Kuwait
+C|KY|Cayman Islands|Isole Cayman|Kajm\u00e1n-szigetek|Islas Caim\u00e1n|Kaimaninseln|\u00celes Ca\u00efmans|Ilhas Cayman
+C|KZ|Kazakhstan|Kazakistan|Kazahszt\u00e1n|Kazajist\u00e1n|Kasachstan|Kazakhstan|Cazaquist\u00e3o
+C|LA|Laos|Laos|Laosz|Laos|Laos|Laos|Laos
+C|LB|Lebanon|Libano|Libanon|L\u00edbano|Libanon|Liban|L\u00edbano
+C|LC|St. Lucia|Saint Lucia|Saint Lucia|Santa Luc\u00eda|St. Lucia|Sainte-Lucie|Santa L\u00facia
+C|LI|Liechtenstein|Liechtenstein|Liechtenstein|Liechtenstein|Liechtenstein|Liechtenstein|Liechtenstein
+C|LK|Sri Lanka|Sri Lanka|Sr\u00ed Lanka|Sri Lanka|Sri Lanka|Sri Lanka|Sri Lanka
+C|LR|Liberia|Liberia|Lib\u00e9ria|Liberia|Liberia|Liberia|Lib\u00e9ria
+C|LS|Lesotho|Lesotho|Lesotho|Lesoto|Lesotho|Lesotho|Lesoto
+C|LT|Lithuania|Lituania|Litv\u00e1nia|Lituania|Litauen|Lituanie|Litu\u00e2nia
+C|LU|Luxembourg|Lussemburgo|Luxemburg|Luxemburgo|Luxemburg|Luxembourg|Luxemburgo
+C|LV|Latvia|Lettonia|Lettorsz\u00e1g|Letonia|Lettland|Lettonie|Let\u00f4nia
+C|LY|Libya|Libia|L\u00edbia|Libia|Libyen|Libye|L\u00edbia
+C|MA|Morocco|Marocco|Marokk\u00f3|Marruecos|Marokko|Maroc|Marrocos
+C|MC|Monaco|Monaco|Monaco|M\u00f3naco|Monaco|Monaco|M\u00f4naco
+C|MD|Moldova|Moldavia|Moldova|Moldavia|Republik Moldau|Moldavie|Mold\u00e1via
+C|ME|Montenegro|Montenegro|Montenegr\u00f3|Montenegro|Montenegro|Mont\u00e9n\u00e9gro|Montenegro
+C|MF|St. Martin|Saint Martin|Saint Martin|San Mart\u00edn|St. Martin|Saint-Martin|S\u00e3o Martinho
+C|MG|Madagascar|Madagascar|Madagaszk\u00e1r|Madagascar|Madagaskar|Madagascar|Madagascar
+C|MH|Marshall Islands|Isole Marshall|Marshall-szigetek|Islas Marshall|Marshallinseln|\u00celes Marshall|Ilhas Marshall
+C|MK|North Macedonia|Macedonia del Nord|\u00c9szak-Maced\u00f3nia|Macedonia del Norte|Nordmazedonien|Mac\u00e9doine du Nord|Maced\u00f4nia do Norte
+C|ML|Mali|Mali|Mali|Mali|Mali|Mali|Mali
+C|MM|Myanmar (Burma)|Myanmar (Birmania)|Mianmar|Myanmar (Birmania)|Myanmar|Myanmar (Birmanie)|Mianmar (Birm\u00e2nia)
+C|MN|Mongolia|Mongolia|Mong\u00f3lia|Mongolia|Mongolei|Mongolie|Mong\u00f3lia
+C|MO|Macao SAR China|RAS di Macao|Maka\u00f3 KKT|RAE de Macao (China)|Sonderverwaltungsregion Macau|R.A.S. chinoise de Macao|Macau, RAE da China
+C|MP|Northern Mariana Islands|Isole Marianne Settentrionali|\u00c9szaki Mariana-szigetek|Islas Marianas del Norte|N\u00f6rdliche Marianen|\u00celes Mariannes du Nord|Ilhas Marianas do Norte
+C|MQ|Martinique|Martinica|Martinique|Martinica|Martinique|Martinique|Martinica
+C|MR|Mauritania|Mauritania|Maurit\u00e1nia|Mauritania|Mauretanien|Mauritanie|Maurit\u00e2nia
+C|MS|Montserrat|Montserrat|Montserrat|Montserrat|Montserrat|Montserrat|Montserrat
+C|MT|Malta|Malta|M\u00e1lta|Malta|Malta|Malte|Malta
+C|MU|Mauritius|Mauritius|Mauritius|Mauricio|Mauritius|Maurice|Maur\u00edcio
+C|MV|Maldives|Maldive|Mald\u00edv-szigetek|Maldivas|Malediven|Maldives|Maldivas
+C|MW|Malawi|Malawi|Malawi|Malaui|Malawi|Malawi|Malaui
+C|MX|Mexico|Messico|Mexik\u00f3|M\u00e9xico|Mexiko|Mexique|M\u00e9xico
+C|MY|Malaysia|Malaysia|Malajzia|Malasia|Malaysia|Malaisie|Mal\u00e1sia
+C|MZ|Mozambique|Mozambico|Mozambik|Mozambique|Mosambik|Mozambique|Mo\u00e7ambique
+C|NA|Namibia|Namibia|Nam\u00edbia|Namibia|Namibia|Namibie|Nam\u00edbia
+C|NC|New Caledonia|Nuova Caledonia|\u00daj-Kaled\u00f3nia|Nueva Caledonia|Neukaledonien|Nouvelle-Cal\u00e9donie|Nova Caled\u00f4nia
+C|NE|Niger|Niger|Niger|N\u00edger|Niger|Niger|N\u00edger
+C|NF|Norfolk Island|Isola Norfolk|Norfolk-sziget|Isla Norfolk|Norfolkinsel|\u00cele Norfolk|Ilha Norfolk
+C|NG|Nigeria|Nigeria|Nig\u00e9ria|Nigeria|Nigeria|Nigeria|Nig\u00e9ria
+C|NI|Nicaragua|Nicaragua|Nicaragua|Nicaragua|Nicaragua|Nicaragua|Nicar\u00e1gua
+C|NL|Netherlands|Paesi Bassi|Hollandia|Pa\u00edses Bajos|Niederlande|Pays-Bas|Pa\u00edses Baixos
+C|NO|Norway|Norvegia|Norv\u00e9gia|Noruega|Norwegen|Norv\u00e8ge|Noruega
+C|NP|Nepal|Nepal|Nep\u00e1l|Nepal|Nepal|N\u00e9pal|Nepal
+C|NR|Nauru|Nauru|Nauru|Nauru|Nauru|Nauru|Nauru
+C|NU|Niue|Niue|Niue|Niue|Niue|Niue|Niue
+C|NZ|New Zealand|Nuova Zelanda|\u00daj-Z\u00e9land|Nueva Zelanda|Neuseeland|Nouvelle-Z\u00e9lande|Nova Zel\u00e2ndia
+C|OM|Oman|Oman|Om\u00e1n|Om\u00e1n|Oman|Oman|Om\u00e3
+C|PA|Panama|Panama|Panama|Panam\u00e1|Panama|Panama|Panam\u00e1
+C|PE|Peru|Per\u00f9|Peru|Per\u00fa|Peru|P\u00e9rou|Peru
+C|PF|French Polynesia|Polinesia Francese|Francia Polin\u00e9zia|Polinesia Francesa|Franz\u00f6sisch-Polynesien|Polyn\u00e9sie fran\u00e7aise|Polin\u00e9sia Francesa
+C|PG|Papua New Guinea|Papua Nuova Guinea|P\u00e1pua \u00daj-Guinea|Pap\u00faa Nueva Guinea|Papua-Neuguinea|Papouasie-Nouvelle-Guin\u00e9e|Papua-Nova Guin\u00e9
+C|PH|Philippines|Filippine|F\u00fcl\u00f6p-szigetek|Filipinas|Philippinen|Philippines|Filipinas
+C|PK|Pakistan|Pakistan|Pakiszt\u00e1n|Pakist\u00e1n|Pakistan|Pakistan|Paquist\u00e3o
+C|PL|Poland|Polonia|Lengyelorsz\u00e1g|Polonia|Polen|Pologne|Pol\u00f4nia
+C|PM|St. Pierre & Miquelon|Saint-Pierre e Miquelon|Saint-Pierre \u00e9s Miquelon|San Pedro y Miquel\u00f3n|St. Pierre und Miquelon|Saint-Pierre-et-Miquelon|S\u00e3o Pedro e Miquel\u00e3o
+C|PN|Pitcairn Islands|Isole Pitcairn|Pitcairn-szigetek|Islas Pitcairn|Pitcairninseln|\u00celes Pitcairn|Ilhas Pitcairn
+C|PR|Puerto Rico|Portorico|Puerto Rico|Puerto Rico|Puerto Rico|Porto Rico|Porto Rico
+C|PS|Palestinian Territories|Territori Palestinesi|Palesztin Auton\u00f3mia|Territorios Palestinos|Pal\u00e4stinensische Autonomiegebiete|Territoires palestiniens|Territ\u00f3rios palestinos
+C|PT|Portugal|Portogallo|Portug\u00e1lia|Portugal|Portugal|Portugal|Portugal
+C|PW|Palau|Palau|Palau|Palaos|Palau|Palaos|Palau
+C|PY|Paraguay|Paraguay|Paraguay|Paraguay|Paraguay|Paraguay|Paraguai
+C|QA|Qatar|Qatar|Katar|Catar|Katar|Qatar|Catar
+C|RE|R\u00e9union|Riunione|R\u00e9union|Reuni\u00f3n|R\u00e9union|La R\u00e9union|Reuni\u00e3o
+C|RO|Romania|Romania|Rom\u00e1nia|Ruman\u00eda|Rum\u00e4nien|Roumanie|Rom\u00eania
+C|RS|Serbia|Serbia|Szerbia|Serbia|Serbien|Serbie|S\u00e9rvia
+C|RU|Russia|Russia|Oroszorsz\u00e1g|Rusia|Russland|Russie|R\u00fassia
+C|RW|Rwanda|Ruanda|Ruanda|Ruanda|Ruanda|Rwanda|Ruanda
+C|SA|Saudi Arabia|Arabia Saudita|Sza\u00fad-Ar\u00e1bia|Arabia Saud\u00ed|Saudi-Arabien|Arabie saoudite|Ar\u00e1bia Saudita
+C|SB|Solomon Islands|Isole Salomone|Salamon-szigetek|Islas Salom\u00f3n|Salomonen|\u00celes Salomon|Ilhas Salom\u00e3o
+C|SC|Seychelles|Seychelles|Seychelle-szigetek|Seychelles|Seychellen|Seychelles|Seicheles
+C|SD|Sudan|Sudan|Szud\u00e1n|Sud\u00e1n|Sudan|Soudan|Sud\u00e3o
+C|SE|Sweden|Svezia|Sv\u00e9dorsz\u00e1g|Suecia|Schweden|Su\u00e8de|Su\u00e9cia
+C|SG|Singapore|Singapore|Szingap\u00far|Singapur|Singapur|Singapour|Singapura
+C|SH|St. Helena|Sant\u2019Elena|Szent Ilona|Santa Elena|St. Helena|Sainte-H\u00e9l\u00e8ne|Santa Helena
+C|SI|Slovenia|Slovenia|Szlov\u00e9nia|Eslovenia|Slowenien|Slov\u00e9nie|Eslov\u00eania
+C|SJ|Svalbard & Jan Mayen|Svalbard e Jan Mayen|Svalbard \u00e9s Jan Mayen|Svalbard y Jan Mayen|Spitzbergen und Jan Mayen|Svalbard et Jan Mayen|Svalbard e Jan Mayen
+C|SK|Slovakia|Slovacchia|Szlov\u00e1kia|Eslovaquia|Slowakei|Slovaquie|Eslov\u00e1quia
+C|SL|Sierra Leone|Sierra Leone|Sierra Leone|Sierra Leona|Sierra Leone|Sierra Leone|Serra Leoa
+C|SM|San Marino|San Marino|San Marino|San Marino|San Marino|Saint-Marin|San Marino
+C|SN|Senegal|Senegal|Szeneg\u00e1l|Senegal|Senegal|S\u00e9n\u00e9gal|Senegal
+C|SO|Somalia|Somalia|Szom\u00e1lia|Somalia|Somalia|Somalie|Som\u00e1lia
+C|SR|Suriname|Suriname|Suriname|Surinam|Suriname|Suriname|Suriname
+C|SS|South Sudan|Sud Sudan|D\u00e9l-Szud\u00e1n|Sud\u00e1n del Sur|S\u00fcdsudan|Soudan du Sud|Sud\u00e3o do Sul
+C|ST|S\u00e3o Tom\u00e9 & Pr\u00edncipe|S\u00e3o Tom\u00e9 e Pr\u00edncipe|S\u00e3o Tom\u00e9 \u00e9s Pr\u00edncipe|Santo Tom\u00e9 y Pr\u00edncipe|S\u00e3o Tom\u00e9 und Pr\u00edncipe|Sao Tom\u00e9-et-Principe|S\u00e3o Tom\u00e9 e Pr\u00edncipe
+C|SV|El Salvador|El Salvador|Salvador|El Salvador|El Salvador|Salvador|El Salvador
+C|SX|Sint Maarten|Sint Maarten|Sint Maarten|Sint Maarten|Sint Maarten|Saint-Martin (partie n\u00e9erlandaise)|Sint Maarten
+C|SY|Syria|Siria|Sz\u00edria|Siria|Syrien|Syrie|S\u00edria
+C|SZ|Eswatini|Eswatini|Szv\u00e1zif\u00f6ld|Esuatini|Eswatini|Eswatini|Essuat\u00edni
+C|TC|Turks & Caicos Islands|Isole Turks e Caicos|Turks- \u00e9s Caicos-szigetek|Islas Turcas y Caicos|Turks- und Caicosinseln|\u00celes Turques-et-Ca\u00efques|Ilhas Turcas e Caicos
+C|TD|Chad|Ciad|Cs\u00e1d|Chad|Tschad|Tchad|Chade
+C|TF|French Southern Territories|Terre Australi Francesi|Francia D\u00e9li Ter\u00fcletek|Territorios Australes Franceses|Franz\u00f6sische S\u00fcd- und Antarktisgebiete|Terres australes fran\u00e7aises|Territ\u00f3rios Franceses do Sul
+C|TG|Togo|Togo|Togo|Togo|Togo|Togo|Togo
+C|TH|Thailand|Thailandia|Thaif\u00f6ld|Tailandia|Thailand|Tha\u00eflande|Tail\u00e2ndia
+C|TJ|Tajikistan|Tagikistan|T\u00e1dzsikiszt\u00e1n|Tayikist\u00e1n|Tadschikistan|Tadjikistan|Tadjiquist\u00e3o
+C|TK|Tokelau|Tokelau|Tokelau|Tokelau|Tokelau|Tokelau|Tokelau
+C|TL|Timor-Leste|Timor Est|Kelet-Timor|Timor-Leste|Timor-Leste|Timor oriental|Timor-Leste
+C|TM|Turkmenistan|Turkmenistan|T\u00fcrkmeniszt\u00e1n|Turkmenist\u00e1n|Turkmenistan|Turkm\u00e9nistan|Turcomenist\u00e3o
+C|TN|Tunisia|Tunisia|Tun\u00e9zia|T\u00fanez|Tunesien|Tunisie|Tun\u00edsia
+C|TO|Tonga|Tonga|Tonga|Tonga|Tonga|Tonga|Tonga
+C|TR|T\u00fcrkiye|Turchia|T\u00f6r\u00f6korsz\u00e1g|Turqu\u00eda|T\u00fcrkei|Turquie|Turquia
+C|TT|Trinidad & Tobago|Trinidad e Tobago|Trinidad \u00e9s Tobago|Trinidad y Tobago|Trinidad und Tobago|Trinit\u00e9-et-Tobago|Trinidad e Tobago
+C|TV|Tuvalu|Tuvalu|Tuvalu|Tuvalu|Tuvalu|Tuvalu|Tuvalu
+C|TW|Taiwan|Taiwan|Tajvan|Taiw\u00e1n|Taiwan|Ta\u00efwan|Taiwan
+C|TZ|Tanzania|Tanzania|Tanz\u00e1nia|Tanzania|Tansania|Tanzanie|Tanz\u00e2nia
+C|UA|Ukraine|Ucraina|Ukrajna|Ucrania|Ukraine|Ukraine|Ucr\u00e2nia
+C|UG|Uganda|Uganda|Uganda|Uganda|Uganda|Ouganda|Uganda
+C|UM|U.S. Outlying Islands|Isole Minori Esterne degli Stati Uniti|Az USA lakatlan k\u00fclbirtokai|Islas menores alejadas de EE. UU.|Amerikanische \u00dcberseeinseln|\u00celes mineures \u00e9loign\u00e9es des \u00c9tats-Unis|Ilhas Menores Distantes dos EUA
+C|US|United States|Stati Uniti|Egyes\u00fclt \u00c1llamok|Estados Unidos|Vereinigte Staaten|\u00c9tats-Unis|Estados Unidos
+C|UY|Uruguay|Uruguay|Uruguay|Uruguay|Uruguay|Uruguay|Uruguai
+C|UZ|Uzbekistan|Uzbekistan|\u00dczbegiszt\u00e1n|Uzbekist\u00e1n|Usbekistan|Ouzb\u00e9kistan|Uzbequist\u00e3o
+C|VA|Vatican City|Citt\u00e0 del Vaticano|Vatik\u00e1n|Ciudad del Vaticano|Vatikanstadt|\u00c9tat de la Cit\u00e9 du Vatican|Cidade do Vaticano
+C|VC|St. Vincent & Grenadines|Saint Vincent e Grenadine|Saint Vincent \u00e9s a Grenadine-szigetek|San Vicente y las Granadinas|St. Vincent und die Grenadinen|Saint-Vincent-et-les Grenadines|S\u00e3o Vicente e Granadinas
+C|VE|Venezuela|Venezuela|Venezuela|Venezuela|Venezuela|Venezuela|Venezuela
+C|VG|British Virgin Islands|Isole Vergini Britanniche|Brit Virgin-szigetek|Islas V\u00edrgenes Brit\u00e1nicas|Britische Jungferninseln|\u00celes Vierges britanniques|Ilhas Virgens Brit\u00e2nicas
+C|VI|U.S. Virgin Islands|Isole Vergini Americane|Amerikai Virgin-szigetek|Islas V\u00edrgenes de EE. UU.|Amerikanische Jungferninseln|\u00celes Vierges des \u00c9tats-Unis|Ilhas Virgens Americanas
+C|VN|Vietnam|Vietnam|Vietn\u00e1m|Vietnam|Vietnam|Vi\u00eat Nam|Vietn\u00e3
+C|VU|Vanuatu|Vanuatu|Vanuatu|Vanuatu|Vanuatu|Vanuatu|Vanuatu
+C|WF|Wallis & Futuna|Wallis e Futuna|Wallis \u00e9s Futuna|Wallis y Futuna|Wallis und Futuna|Wallis-et-Futuna|Wallis e Futuna
+C|WS|Samoa|Samoa|Szamoa|Samoa|Samoa|Samoa|Samoa
+C|YE|Yemen|Yemen|Jemen|Yemen|Jemen|Y\u00e9men|I\u00eamen
+C|YT|Mayotte|Mayotte|Mayotte|Mayotte|Mayotte|Mayotte|Mayotte
+C|ZA|South Africa|Sudafrica|D\u00e9l-afrikai K\u00f6zt\u00e1rsas\u00e1g|Sud\u00e1frica|S\u00fcdafrika|Afrique du Sud|\u00c1frica do Sul
+C|ZM|Zambia|Zambia|Zambia|Zambia|Sambia|Zambie|Z\u00e2mbia
+C|ZW|Zimbabwe|Zimbabwe|Zimbabwe|Zimbabue|Simbabwe|Zimbabwe|Zimb\u00e1bue
+A|AE|UAE|Emirati|Emirates
+A|CI|Ivory Coast|Costa d'Avorio|Cote d'Ivoire|Elefantenkuste
+A|CZ|Czech Republic|Czechia|Repubblica Ceca|Tschechische Republik|Republique tcheque
+A|GB|UK|U.K.|Great Britain|Britain|England|Scotland|Wales|Inghilterra|Scozia|Angleterre|Inglaterra|Anglia
+A|KR|Korea|South Korea|Corea del Sud
+A|MM|Burma
+A|NL|Holland|Olanda|Holanda|Hollande|Hollandia
+A|RU|Russian Federation|Russland
+A|TR|Turkey|Turkiye|Turchia
+A|US|USA|U.S.A.|United States of America|America|Stati Uniti d'America|Etats-Unis|EEUU|Estados Unidos de America
+A|VA|Vatican|Vaticano
+Z|AD|Europe/Andorra
+Z|AE|Asia/Dubai
+Z|AF|Asia/Kabul
+Z|AG|America/Antigua
+Z|AI|America/Anguilla
+Z|AL|Europe/Tirane
+Z|AM|Asia/Yerevan
+Z|AO|Africa/Luanda
+Z|AQ|Antarctica/McMurdo
+Z|AQ|Antarctica/Casey
+Z|AQ|Antarctica/Davis
+Z|AQ|Antarctica/DumontDUrville
+Z|AQ|Antarctica/Mawson
+Z|AQ|Antarctica/Palmer
+Z|AQ|Antarctica/Rothera
+Z|AQ|Antarctica/Syowa
+Z|AQ|Antarctica/Troll
+Z|AQ|Antarctica/Vostok
+Z|AR|America/Argentina/Buenos_Aires
+Z|AR|America/Argentina/Cordoba
+Z|AR|America/Argentina/Salta
+Z|AR|America/Argentina/Jujuy
+Z|AR|America/Argentina/Tucuman
+Z|AR|America/Argentina/Catamarca
+Z|AR|America/Argentina/La_Rioja
+Z|AR|America/Argentina/San_Juan
+Z|AR|America/Argentina/Mendoza
+Z|AR|America/Argentina/San_Luis
+Z|AR|America/Argentina/Rio_Gallegos
+Z|AR|America/Argentina/Ushuaia
+Z|AS|Pacific/Pago_Pago
+Z|AT|Europe/Vienna
+Z|AU|Australia/Lord_Howe
+Z|AU|Antarctica/Macquarie
+Z|AU|Australia/Hobart
+Z|AU|Australia/Melbourne
+Z|AU|Australia/Sydney
+Z|AU|Australia/Broken_Hill
+Z|AU|Australia/Brisbane
+Z|AU|Australia/Lindeman
+Z|AU|Australia/Adelaide
+Z|AU|Australia/Darwin
+Z|AU|Australia/Perth
+Z|AU|Australia/Eucla
+Z|AW|America/Aruba
+Z|AX|Europe/Mariehamn
+Z|AZ|Asia/Baku
+Z|BA|Europe/Sarajevo
+Z|BB|America/Barbados
+Z|BD|Asia/Dhaka
+Z|BE|Europe/Brussels
+Z|BF|Africa/Ouagadougou
+Z|BG|Europe/Sofia
+Z|BH|Asia/Bahrain
+Z|BI|Africa/Bujumbura
+Z|BJ|Africa/Porto-Novo
+Z|BL|America/St_Barthelemy
+Z|BM|Atlantic/Bermuda
+Z|BN|Asia/Brunei
+Z|BO|America/La_Paz
+Z|BQ|America/Kralendijk
+Z|BR|America/Noronha
+Z|BR|America/Belem
+Z|BR|America/Fortaleza
+Z|BR|America/Recife
+Z|BR|America/Araguaina
+Z|BR|America/Maceio
+Z|BR|America/Bahia
+Z|BR|America/Sao_Paulo
+Z|BR|America/Campo_Grande
+Z|BR|America/Cuiaba
+Z|BR|America/Santarem
+Z|BR|America/Porto_Velho
+Z|BR|America/Boa_Vista
+Z|BR|America/Manaus
+Z|BR|America/Eirunepe
+Z|BR|America/Rio_Branco
+Z|BS|America/Nassau
+Z|BT|Asia/Thimphu
+Z|BW|Africa/Gaborone
+Z|BY|Europe/Minsk
+Z|BZ|America/Belize
+Z|CA|America/St_Johns
+Z|CA|America/Halifax
+Z|CA|America/Glace_Bay
+Z|CA|America/Moncton
+Z|CA|America/Goose_Bay
+Z|CA|America/Blanc-Sablon
+Z|CA|America/Toronto
+Z|CA|America/Iqaluit
+Z|CA|America/Atikokan
+Z|CA|America/Winnipeg
+Z|CA|America/Resolute
+Z|CA|America/Rankin_Inlet
+Z|CA|America/Regina
+Z|CA|America/Swift_Current
+Z|CA|America/Edmonton
+Z|CA|America/Cambridge_Bay
+Z|CA|America/Inuvik
+Z|CA|America/Vancouver
+Z|CA|America/Creston
+Z|CA|America/Dawson_Creek
+Z|CA|America/Fort_Nelson
+Z|CA|America/Whitehorse
+Z|CA|America/Dawson
+Z|CC|Indian/Cocos
+Z|CD|Africa/Kinshasa
+Z|CD|Africa/Lubumbashi
+Z|CF|Africa/Bangui
+Z|CG|Africa/Brazzaville
+Z|CH|Europe/Zurich
+Z|CI|Africa/Abidjan
+Z|CK|Pacific/Rarotonga
+Z|CL|America/Santiago
+Z|CL|America/Coyhaique
+Z|CL|America/Punta_Arenas
+Z|CL|Pacific/Easter
+Z|CM|Africa/Douala
+Z|CN|Asia/Shanghai
+Z|CN|Asia/Urumqi
+Z|CO|America/Bogota
+Z|CR|America/Costa_Rica
+Z|CU|America/Havana
+Z|CV|Atlantic/Cape_Verde
+Z|CW|America/Curacao
+Z|CX|Indian/Christmas
+Z|CY|Asia/Nicosia
+Z|CY|Asia/Famagusta
+Z|CZ|Europe/Prague
+Z|DE|Europe/Berlin
+Z|DE|Europe/Busingen
+Z|DJ|Africa/Djibouti
+Z|DK|Europe/Copenhagen
+Z|DM|America/Dominica
+Z|DO|America/Santo_Domingo
+Z|DZ|Africa/Algiers
+Z|EC|America/Guayaquil
+Z|EC|Pacific/Galapagos
+Z|EE|Europe/Tallinn
+Z|EG|Africa/Cairo
+Z|EH|Africa/El_Aaiun
+Z|ER|Africa/Asmara
+Z|ES|Europe/Madrid
+Z|ES|Africa/Ceuta
+Z|ES|Atlantic/Canary
+Z|ET|Africa/Addis_Ababa
+Z|FI|Europe/Helsinki
+Z|FJ|Pacific/Fiji
+Z|FK|Atlantic/Stanley
+Z|FM|Pacific/Chuuk
+Z|FM|Pacific/Pohnpei
+Z|FM|Pacific/Kosrae
+Z|FO|Atlantic/Faroe
+Z|FR|Europe/Paris
+Z|GA|Africa/Libreville
+Z|GB|Europe/London
+Z|GD|America/Grenada
+Z|GE|Asia/Tbilisi
+Z|GF|America/Cayenne
+Z|GG|Europe/Guernsey
+Z|GH|Africa/Accra
+Z|GI|Europe/Gibraltar
+Z|GL|America/Nuuk
+Z|GL|America/Danmarkshavn
+Z|GL|America/Scoresbysund
+Z|GL|America/Thule
+Z|GM|Africa/Banjul
+Z|GN|Africa/Conakry
+Z|GP|America/Guadeloupe
+Z|GQ|Africa/Malabo
+Z|GR|Europe/Athens
+Z|GS|Atlantic/South_Georgia
+Z|GT|America/Guatemala
+Z|GU|Pacific/Guam
+Z|GW|Africa/Bissau
+Z|GY|America/Guyana
+Z|HK|Asia/Hong_Kong
+Z|HN|America/Tegucigalpa
+Z|HR|Europe/Zagreb
+Z|HT|America/Port-au-Prince
+Z|HU|Europe/Budapest
+Z|ID|Asia/Jakarta
+Z|ID|Asia/Pontianak
+Z|ID|Asia/Makassar
+Z|ID|Asia/Jayapura
+Z|IE|Europe/Dublin
+Z|IL|Asia/Jerusalem
+Z|IM|Europe/Isle_of_Man
+Z|IN|Asia/Kolkata
+Z|IO|Indian/Chagos
+Z|IQ|Asia/Baghdad
+Z|IR|Asia/Tehran
+Z|IS|Atlantic/Reykjavik
+Z|IT|Europe/Rome
+Z|JE|Europe/Jersey
+Z|JM|America/Jamaica
+Z|JO|Asia/Amman
+Z|JP|Asia/Tokyo
+Z|KE|Africa/Nairobi
+Z|KG|Asia/Bishkek
+Z|KH|Asia/Phnom_Penh
+Z|KI|Pacific/Tarawa
+Z|KI|Pacific/Kanton
+Z|KI|Pacific/Kiritimati
+Z|KM|Indian/Comoro
+Z|KN|America/St_Kitts
+Z|KP|Asia/Pyongyang
+Z|KR|Asia/Seoul
+Z|KW|Asia/Kuwait
+Z|KY|America/Cayman
+Z|KZ|Asia/Almaty
+Z|KZ|Asia/Qyzylorda
+Z|KZ|Asia/Qostanay
+Z|KZ|Asia/Aqtobe
+Z|KZ|Asia/Aqtau
+Z|KZ|Asia/Atyrau
+Z|KZ|Asia/Oral
+Z|LA|Asia/Vientiane
+Z|LB|Asia/Beirut
+Z|LC|America/St_Lucia
+Z|LI|Europe/Vaduz
+Z|LK|Asia/Colombo
+Z|LR|Africa/Monrovia
+Z|LS|Africa/Maseru
+Z|LT|Europe/Vilnius
+Z|LU|Europe/Luxembourg
+Z|LV|Europe/Riga
+Z|LY|Africa/Tripoli
+Z|MA|Africa/Casablanca
+Z|MC|Europe/Monaco
+Z|MD|Europe/Chisinau
+Z|ME|Europe/Podgorica
+Z|MF|America/Marigot
+Z|MG|Indian/Antananarivo
+Z|MH|Pacific/Majuro
+Z|MH|Pacific/Kwajalein
+Z|MK|Europe/Skopje
+Z|ML|Africa/Bamako
+Z|MM|Asia/Yangon
+Z|MN|Asia/Ulaanbaatar
+Z|MN|Asia/Hovd
+Z|MO|Asia/Macau
+Z|MP|Pacific/Saipan
+Z|MQ|America/Martinique
+Z|MR|Africa/Nouakchott
+Z|MS|America/Montserrat
+Z|MT|Europe/Malta
+Z|MU|Indian/Mauritius
+Z|MV|Indian/Maldives
+Z|MW|Africa/Blantyre
+Z|MX|America/Mexico_City
+Z|MX|America/Cancun
+Z|MX|America/Merida
+Z|MX|America/Monterrey
+Z|MX|America/Matamoros
+Z|MX|America/Chihuahua
+Z|MX|America/Ciudad_Juarez
+Z|MX|America/Ojinaga
+Z|MX|America/Mazatlan
+Z|MX|America/Bahia_Banderas
+Z|MX|America/Hermosillo
+Z|MX|America/Tijuana
+Z|MY|Asia/Kuala_Lumpur
+Z|MY|Asia/Kuching
+Z|MZ|Africa/Maputo
+Z|NA|Africa/Windhoek
+Z|NC|Pacific/Noumea
+Z|NE|Africa/Niamey
+Z|NF|Pacific/Norfolk
+Z|NG|Africa/Lagos
+Z|NI|America/Managua
+Z|NL|Europe/Amsterdam
+Z|NO|Europe/Oslo
+Z|NP|Asia/Kathmandu
+Z|NR|Pacific/Nauru
+Z|NU|Pacific/Niue
+Z|NZ|Pacific/Auckland
+Z|NZ|Pacific/Chatham
+Z|OM|Asia/Muscat
+Z|PA|America/Panama
+Z|PE|America/Lima
+Z|PF|Pacific/Tahiti
+Z|PF|Pacific/Marquesas
+Z|PF|Pacific/Gambier
+Z|PG|Pacific/Port_Moresby
+Z|PG|Pacific/Bougainville
+Z|PH|Asia/Manila
+Z|PK|Asia/Karachi
+Z|PL|Europe/Warsaw
+Z|PM|America/Miquelon
+Z|PN|Pacific/Pitcairn
+Z|PR|America/Puerto_Rico
+Z|PS|Asia/Gaza
+Z|PS|Asia/Hebron
+Z|PT|Europe/Lisbon
+Z|PT|Atlantic/Madeira
+Z|PT|Atlantic/Azores
+Z|PW|Pacific/Palau
+Z|PY|America/Asuncion
+Z|QA|Asia/Qatar
+Z|RE|Indian/Reunion
+Z|RO|Europe/Bucharest
+Z|RS|Europe/Belgrade
+Z|RU|Europe/Kaliningrad
+Z|RU|Europe/Moscow
+Z|UA|Europe/Simferopol
+Z|RU|Europe/Kirov
+Z|RU|Europe/Volgograd
+Z|RU|Europe/Astrakhan
+Z|RU|Europe/Saratov
+Z|RU|Europe/Ulyanovsk
+Z|RU|Europe/Samara
+Z|RU|Asia/Yekaterinburg
+Z|RU|Asia/Omsk
+Z|RU|Asia/Novosibirsk
+Z|RU|Asia/Barnaul
+Z|RU|Asia/Tomsk
+Z|RU|Asia/Novokuznetsk
+Z|RU|Asia/Krasnoyarsk
+Z|RU|Asia/Irkutsk
+Z|RU|Asia/Chita
+Z|RU|Asia/Yakutsk
+Z|RU|Asia/Khandyga
+Z|RU|Asia/Vladivostok
+Z|RU|Asia/Ust-Nera
+Z|RU|Asia/Magadan
+Z|RU|Asia/Sakhalin
+Z|RU|Asia/Srednekolymsk
+Z|RU|Asia/Kamchatka
+Z|RU|Asia/Anadyr
+Z|RW|Africa/Kigali
+Z|SA|Asia/Riyadh
+Z|SB|Pacific/Guadalcanal
+Z|SC|Indian/Mahe
+Z|SD|Africa/Khartoum
+Z|SE|Europe/Stockholm
+Z|SG|Asia/Singapore
+Z|SH|Atlantic/St_Helena
+Z|SI|Europe/Ljubljana
+Z|SJ|Arctic/Longyearbyen
+Z|SK|Europe/Bratislava
+Z|SL|Africa/Freetown
+Z|SM|Europe/San_Marino
+Z|SN|Africa/Dakar
+Z|SO|Africa/Mogadishu
+Z|SR|America/Paramaribo
+Z|SS|Africa/Juba
+Z|ST|Africa/Sao_Tome
+Z|SV|America/El_Salvador
+Z|SX|America/Lower_Princes
+Z|SY|Asia/Damascus
+Z|SZ|Africa/Mbabane
+Z|TC|America/Grand_Turk
+Z|TD|Africa/Ndjamena
+Z|TF|Indian/Kerguelen
+Z|TG|Africa/Lome
+Z|TH|Asia/Bangkok
+Z|TJ|Asia/Dushanbe
+Z|TK|Pacific/Fakaofo
+Z|TL|Asia/Dili
+Z|TM|Asia/Ashgabat
+Z|TN|Africa/Tunis
+Z|TO|Pacific/Tongatapu
+Z|TR|Europe/Istanbul
+Z|TT|America/Port_of_Spain
+Z|TV|Pacific/Funafuti
+Z|TW|Asia/Taipei
+Z|TZ|Africa/Dar_es_Salaam
+Z|UA|Europe/Kyiv
+Z|UG|Africa/Kampala
+Z|UM|Pacific/Midway
+Z|UM|Pacific/Wake
+Z|US|America/New_York
+Z|US|America/Detroit
+Z|US|America/Kentucky/Louisville
+Z|US|America/Kentucky/Monticello
+Z|US|America/Indiana/Indianapolis
+Z|US|America/Indiana/Vincennes
+Z|US|America/Indiana/Winamac
+Z|US|America/Indiana/Marengo
+Z|US|America/Indiana/Petersburg
+Z|US|America/Indiana/Vevay
+Z|US|America/Chicago
+Z|US|America/Indiana/Tell_City
+Z|US|America/Indiana/Knox
+Z|US|America/Menominee
+Z|US|America/North_Dakota/Center
+Z|US|America/North_Dakota/New_Salem
+Z|US|America/North_Dakota/Beulah
+Z|US|America/Denver
+Z|US|America/Boise
+Z|US|America/Phoenix
+Z|US|America/Los_Angeles
+Z|US|America/Anchorage
+Z|US|America/Juneau
+Z|US|America/Sitka
+Z|US|America/Metlakatla
+Z|US|America/Yakutat
+Z|US|America/Nome
+Z|US|America/Adak
+Z|US|Pacific/Honolulu
+Z|UY|America/Montevideo
+Z|UZ|Asia/Samarkand
+Z|UZ|Asia/Tashkent
+Z|VA|Europe/Vatican
+Z|VC|America/St_Vincent
+Z|VE|America/Caracas
+Z|VG|America/Tortola
+Z|VI|America/St_Thomas
+Z|VN|Asia/Ho_Chi_Minh
+Z|VU|Pacific/Efate
+Z|WF|Pacific/Wallis
+Z|WS|Pacific/Apia
+Z|YE|Asia/Aden
+Z|YT|Indian/Mayotte
+Z|ZA|Africa/Johannesburg
+Z|ZM|Africa/Lusaka
+Z|ZW|Africa/Harare
+N|Europe/Andorra|||||Andorre|
+N|Asia/Dubai||Dubaj||||
+N|Asia/Kabul|||||Kaboul|Cabul
+N|America/Anguilla|||Anguila|||Anguila
+N|Europe/Tirane|Tirana|Tirana|Tirana|Tirana|Tirana|Tirana
+N|Asia/Yerevan||Jerev\u00e1n|Erev\u00e1n|Eriwan|Erevan|
+N|Antarctica/DumontDUrville|Dumont-d\u2019Urville|Dumont-d\u2019Urville|Dumont-d\u2019Urville|Dumont-d\u2019Urville|Dumont-d\u2019Urville|Dumont-d\u2019Urville
+N|Antarctica/Syowa|||||Showa|
+N|Antarctica/Vostok||Vosztok||Wostok||
+N|America/Argentina/Tucuman||||||Tucum\u00e3
+N|Europe/Vienna||B\u00e9cs|Viena|Wien|Vienne|Viena
+N|Australia/Sydney|||S\u00eddney|||
+N|Australia/Adelaide|||Adelaida|||
+N|Asia/Baku|||||Bakou|
+N|Europe/Sarajevo||Szarajev\u00f3||||
+N|America/Barbados|||||La Barbade|
+N|Asia/Dhaka|Dacca|Dakka|Daca|||Dacca
+N|Europe/Brussels|Bruxelles|Br\u00fcsszel|Bruselas|Br\u00fcssel|Bruxelles|Bruxelas
+N|Africa/Ouagadougou|||Uagadug\u00fa|||
+N|Europe/Sofia||Sz\u00f3fia||||
+N|Asia/Bahrain|Bahrein|Bahrein|Bar\u00e9in||Bahre\u00efn|Bahrein
+N|Africa/Porto-Novo|||Portonovo|||
+N|America/St_Barthelemy|Saint-Barth\u00e9lemy|Saint-Barth\u00e9lemy|San Bartolom\u00e9|Saint-Barth\u00e9lemy|Saint-Barth\u00e9lemy|S\u00e3o Bartolomeu
+N|Atlantic/Bermuda|||Bermudas||Bermudes|Bermudas
+N|Asia/Brunei||||Brunei Darussalam||
+N|America/Noronha|Fernando de Noronha|Fernando de Noronha|Fernando de Noronha|Fernando de Noronha|Fernando de Noronha|Fernando de Noronha
+N|America/Belem|||Bel\u00e9n|||
+N|America/Sao_Paulo|San Paolo|||||
+N|America/Manaus|||Manaos||Manaos|
+N|Asia/Thimphu||Timpu|Timbu|||
+N|Europe/Minsk||Minszk||||
+N|America/Belize|||Belice|||
+N|America/St_Johns|||San Juan de Terranova||Saint-Jean de Terre-Neuve|
+N|Indian/Cocos||K\u00f3kusz-sziget||||
+N|Europe/Zurich|Zurigo|||||Zurique
+N|Africa/Abidjan|||Abiy\u00e1n|||
+N|America/Santiago|||Santiago de Chile|||
+N|Pacific/Easter|Pasqua|H\u00fasv\u00e9t-szigetek|Isla de Pascua|Osterinsel|\u00cele de P\u00e2ques|Ilha de P\u00e1scoa
+N|Africa/Douala|||Duala|||
+N|Asia/Shanghai||Sanghaj||||Xangai
+N|Asia/Urumqi||\u00dcr\u00fcmcsi||||
+N|America/Havana|L\u2019Avana|Havanna|La Habana|Havanna|La Havane|
+N|Atlantic/Cape_Verde|Capo Verde|Z\u00f6ld-foki szigetek|Cabo Verde|Cabo Verde|Cap-Vert|Cabo Verde
+N|America/Curacao|||Curazao|||
+N|Indian/Christmas||Kar\u00e1csony-sziget|Navidad|Weihnachtsinsel||
+N|Asia/Nicosia||||Nikosia|Nicosie|
+N|Asia/Famagusta|Famagosta||||Famagouste|
+N|Europe/Prague|Praga|Pr\u00e1ga|Praga|Prag||Praga
+N|Europe/Berlin|Berlino|||||Berlim
+N|Africa/Djibouti|Gibuti|Dzsibuti|Yibuti|Dschibuti||Djibuti
+N|Europe/Copenhagen|Copenaghen|Koppenh\u00e1ga|Copenhague|Kopenhagen|Copenhague|Copenhague
+N|America/Dominica||Dominika|||Dominique|
+N|America/Santo_Domingo|||||Saint-Domingue|
+N|Africa/Algiers|Algeri|Alg\u00edr|Argel|Algier|Alger|Argel
+N|America/Guayaquil||||||Guaiaquil
+N|Pacific/Galapagos||Galapagos-szigetek||||
+N|Europe/Tallinn||Tallin|Tallin|||
+N|Africa/Cairo|Il Cairo|Kair\u00f3|El Cairo|Kairo|Le Caire|
+N|Africa/El_Aaiun|El Ayun|El-Aj\u00fan|||La\u00e2youne|
+N|Europe/Madrid||||||Madri
+N|Atlantic/Canary|Canarie|Kan\u00e1ri-szigetek|Canarias|Kanaren|\u00celes Canaries|Can\u00e1rias
+N|Africa/Addis_Ababa|Addis Abeba|Addisz-Abeba|Ad\u00eds Abeba|Addis Abeba|Addis-Abeba|Adis Abeba
+N|Europe/Helsinki||||||Helsinque
+N|Pacific/Fiji|Figi|Fidzsi|Fiyi|Fidschi|Fidji|
+N|Pacific/Kosrae||Kosrae-szigetek||||
+N|Europe/Paris|Parigi|P\u00e1rizs||||
+N|Europe/London|Londra||Londres||Londres|Londres
+N|America/Grenada|||Granada||Grenade|Granada
+N|Asia/Tbilisi||Tbiliszi|Tiflis|Tiflis|Tbilissi|
+N|America/Cayenne|Caienna||Cayena|||Caiena
+N|Europe/Guernsey|||Guernesey||Guernesey|
+N|Africa/Accra|||Acra|||Acra
+N|Europe/Gibraltar|Gibilterra|||||
+N|America/Scoresbysund|Ittoqqortoormiit|Ittoqqortoormiit|Ittoqqortoormiit|Ittoqqortoormiit|Ittoqqortoormiit|Ittoqqortoormiit
+N|Africa/Conakry|||Conakri|||Conacri
+N|America/Guadeloupe|Guadalupa||Guadalupe|||Guadalupe
+N|Europe/Athens|Atene|Ath\u00e9n|Atenas|Athen|Ath\u00e8nes|Atenas
+N|Atlantic/South_Georgia|Georgia del Sud|D\u00e9li-Georgia|Georgia del Sur|S\u00fcdgeorgien|G\u00e9orgie du Sud|Ge\u00f3rgia do Sul
+N|Africa/Bissau|||Bis\u00e1u|||
+N|America/Guyana||||||Guiana
+N|Asia/Hong_Kong||Hongkong||Hongkong||
+N|Europe/Zagreb|Zagabria|Z\u00e1gr\u00e1b||||
+N|America/Port-au-Prince|||Puerto Pr\u00edncipe|||Porto Pr\u00edncipe
+N|Europe/Budapest||||||Budapeste
+N|Asia/Jakarta|Giacarta||Yakarta|||Jacarta
+N|Asia/Makassar||Makasar|Makasar||Macassar|
+N|Europe/Dublin|Dublino|||||
+N|Asia/Jerusalem|Gerusalemme|Jeruzs\u00e1lem|Jerusal\u00e9n|||
+N|Europe/Isle_of_Man|Isola di Man|Man-sziget|Isla de Man||\u00cele de Man|Ilha de Man
+N|Asia/Baghdad||Bagdad|Bagdad|Bagdad|Bagdad|Bagd\u00e1
+N|Asia/Tehran|Teheran|Teher\u00e1n|Teher\u00e1n|Teheran|T\u00e9h\u00e9ran|Teer\u00e3
+N|Atlantic/Reykjavik|||Reikiavik|Reyk\u00adja\u00adv\u00edk||
+N|Europe/Rome|Roma|R\u00f3ma|Roma|Rom||Roma
+N|America/Jamaica|Giamaica|||Jamaika|Jama\u00efque|
+N|Asia/Amman||||||Am\u00e3
+N|Asia/Tokyo||Toki\u00f3|Tokio|Tokio||T\u00f3quio
+N|Asia/Bishkek||Biskek||Bischkek|Bichkek|
+N|Pacific/Tarawa||||||Taraua
+N|Pacific/Kanton|Canton||||Canton|
+N|Pacific/Kiritimati||Kiritimati-sziget||||
+N|Indian/Comoro|Comore|Komor\u00f3|Comoras|Komoren|Comores|Comores
+N|America/St_Kitts|||San Crist\u00f3bal||Saint-Christophe|S\u00e3o Crist\u00f3v\u00e3o
+N|Asia/Pyongyang||Phenjan||Pj\u00f6ngjang||
+N|Asia/Seoul|Seul|Sz\u00f6ul|Se\u00fal|||Seul
+N|Asia/Kuwait||Kuvait|||Kowe\u00eft|
+N|America/Cayman||Kajm\u00e1n-szigetek|Caim\u00e1n|Kaimaninseln|Ca\u00efmans|
+N|Asia/Almaty||Alma-Ata|||Alma Ata|
+N|Asia/Qyzylorda||Kizilorda|Kyzylorda|Qysylorda|Kzyl Orda|
+N|Asia/Qostanay||Kosztanaj|Kostan\u00e1i|Qostanai|Kostana\u00ef|
+N|Asia/Aqtobe||Akt\u00f6be|Aktobe|Aktobe|Aktioubinsk|Aktobe
+N|Asia/Aqtau||Aktau|Aktau||Aktaou|Aktau
+N|Asia/Atyrau||Atirau|||Atyraou|
+N|Asia/Oral|||||Ouralsk|
+N|Asia/Vientiane||Vienti\u00e1n|Vienti\u00e1n|||
+N|Asia/Beirut||Bejr\u00fat|||Beyrouth|Beirute
+N|America/St_Lucia|Santa Lucia||Santa Luc\u00eda||Sainte-Lucie|Santa L\u00facia
+N|Europe/Vilnius|||Vilna|||
+N|Europe/Luxembourg|Lussemburgo|Luxemburg|Luxemburgo|Luxemburg||Luxemburgo
+N|Africa/Tripoli||||Tripolis|Tripoli (Libye)|
+N|Pacific/Majuro||Majuro-z\u00e1tony||||
+N|Pacific/Kwajalein||Kwajalein-z\u00e1tony||||
+N|Europe/Skopje||Szkopje|Skopie|||
+N|Asia/Ulaanbaatar|Ulan Bator|Ul\u00e1nb\u00e1tor|Ul\u00e1n Bator||Oulan-Bator|Ulan Bator
+N|Asia/Hovd||||Chowd||
+N|Asia/Macau|Macao|Maka\u00f3|Macao||Macao|
+N|America/Martinique|Martinica||Martinica|||Martinica
+N|Africa/Nouakchott|||Nuakchot|||
+N|Europe/Malta|||||Malte|
+N|Indian/Mauritius|||Mauricio||Maurice|Maur\u00edcio
+N|Indian/Maldives|Maldive|Mald\u00edv-szigetek|Maldivas|Malediven||Maldivas
+N|America/Mexico_City|Citt\u00e0 del Messico|Mexik\u00f3v\u00e1ros|Ciudad de M\u00e9xico|Mexiko-Stadt|Mexico|Cidade do M\u00e9xico
+N|America/Bahia_Banderas|Bah\u00eda de Banderas||Bah\u00eda de Banderas||Bahia de Banderas|Bahia de Banderas
+N|Asia/Kuching||Kucseng||||
+N|Pacific/Noumea|||Numea|||
+N|Europe/Amsterdam||Amszterdam||||Amsterd\u00e3
+N|Pacific/Chatham||Chatham-szigetek||||Chatnam
+N|Asia/Muscat|Mascate|Maszkat|Mascate|Maskat|Mascate|Mascate
+N|Pacific/Tahiti||||||Taiti
+N|Pacific/Marquesas|Marchesi|Marquesas-szigetek|||Marquises|
+N|Pacific/Gambier||Gambier-szigetek||||
+N|Asia/Manila|||||Manille|
+N|Asia/Karachi||Karacsi||Karatschi||
+N|Europe/Warsaw|Varsavia|Vars\u00f3|Varsovia|Warschau|Varsovie|Vars\u00f3via
+N|Pacific/Pitcairn||Pitcairn-szigetek||||
+N|America/Puerto_Rico|Portorico||||Porto Rico|Porto Rico
+N|Europe/Lisbon|Lisbona|Lisszabon|Lisboa|Lissabon|Lisbonne|Lisboa
+N|Atlantic/Madeira|||||Mad\u00e8re|
+N|Atlantic/Azores|Azzorre|Azori-szigetek||Azoren|A\u00e7ores|A\u00e7ores
+N|Pacific/Palau|||Palaos||Palaos|
+N|America/Asuncion||||||Assun\u00e7\u00e3o
+N|Asia/Qatar||Katar|Catar|Katar||Catar
+N|Indian/Reunion|La Riunione||||La R\u00e9union|Reuni\u00e3o
+N|Europe/Bucharest|Bucarest|Bukarest|Bucarest|Bukarest|Bucarest|Bucareste
+N|Europe/Belgrade|Belgrado|Belgr\u00e1d|Belgrado|Belgrad||Belgrado
+N|Europe/Kaliningrad||Kalinyingr\u00e1d|Kaliningrado|||Kaliningrado
+N|Europe/Moscow|Mosca|Moszkva|Mosc\u00fa|Moskau|Moscou|Moscou
+N|Europe/Simferopol|Sinferopoli|Szimferopol||||
+N|Europe/Kirov||||Kirow||
+N|Europe/Volgograd|||Volgogrado|Wolgograd||Volgogrado
+N|Europe/Astrakhan||Asztrah\u00e1n|Astrac\u00e1n|Astrachan||Astrac\u00e3
+N|Europe/Saratov||Szaratov||Saratow||
+N|Europe/Ulyanovsk||Uljanovszk|Uli\u00e1novsk|Uljanowsk|Oulianovsk|Ulianovsk
+N|Europe/Samara||Szamara||||
+N|Asia/Yekaterinburg|Ekaterinburg|Jekatyerinburg|Ekaterimburgo|Jekaterinburg|Ekaterinbourg|Ecaterimburgo
+N|Asia/Omsk||Omszk||||
+N|Asia/Novosibirsk||Novoszibirszk||Nowosibirsk|Novossibirsk|
+N|Asia/Tomsk||Tomszk||||
+N|Asia/Novokuznetsk|Novokuzneck|Novokuznyeck||Nowokuznetsk||
+N|Asia/Krasnoyarsk|Krasnojarsk|Krasznojarszk||Krasnojarsk|Krasno\u00efarsk|
+N|Asia/Irkutsk||Irkutszk|||Irkoutsk|
+N|Asia/Chita|\u010cita|Csita||Tschita|Tchita|
+N|Asia/Yakutsk|Jakutsk|Jakutszk||Jakutsk|Iakoutsk|
+N|Asia/Khandyga|Chandyga|Handiga|Khandiga|Chandyga||
+N|Asia/Vladivostok||Vlagyivosztok||Wladiwostok||
+N|Asia/Ust-Nera||Uszty-Nyera||||
+N|Asia/Sakhalin|Sachalin|Szahalin|Sajal\u00edn|Sachalin|Sakhaline|Sacalina
+N|Asia/Srednekolymsk||Szrednekolimszk|Srednekolimsk|||
+N|Asia/Kamchatka||Kamcsatka||Kamtschatka|Kamtchatka|
+N|Asia/Anadyr||Anadir||||
+N|Asia/Riyadh|Riyad|Rij\u00e1d|Riad|Riad|Riyad|Riade
+N|Africa/Khartoum|Khartum|Kart\u00fam|Jartum|Khartum||Cartum
+N|Europe/Stockholm|Stoccolma||Estocolmo|||Estocolmo
+N|Asia/Singapore||Szingap\u00far|Singapur|Singapur|Singapour|Singapura
+N|Atlantic/St_Helena|Sant\u2019Elena|Szent Ilona|Santa Elena||Sainte-H\u00e9l\u00e8ne|Santa Helena
+N|Europe/Ljubljana|Lubiana||Liubliana|||Liubliana
+N|Europe/Bratislava||Pozsony||||
+N|Europe/San_Marino|||||Saint-Marin|
+N|Africa/Mogadishu|Mogadiscio||Mogadiscio|Mogadischu|Mogadiscio|Mogad\u00edscio
+N|Africa/Juba|Giuba|||||
+N|Africa/Sao_Tome|||Santo Tom\u00e9|||
+N|America/El_Salvador||Salvador||||
+N|America/Lower_Princes|Lower Prince\u2019s Quarter|Lower Prince\u2019s Quarter|Lower Prince\u2019s Quarter|Lower Prince\u2019s Quarter|Lower Prince\u2019s Quarter|Lower Prince\u2019s Quarter
+N|Asia/Damascus|Damasco|Damaszkusz|Damasco|Damaskus|Damas|Damasco
+N|America/Grand_Turk|||Gran Turca|||
+N|Africa/Ndjamena|N\u2019Djamena||Yamena|N\u2019Djamena|N\u2019Djamena|N\u2019Djamena
+N|Asia/Dushanbe||Dusanbe|Dusamb\u00e9|Duschanbe|Douchanb\u00e9|Duchambe
+N|Asia/Ashgabat||Asgabat|Asjabad|A\u015fgabat|Achgabat|Asgabate
+N|Africa/Tunis|Tunisi|Tunisz|T\u00fanez|||
+N|Europe/Istanbul||Isztanbul|Estambul|||Istambul
+N|America/Port_of_Spain|||Puerto Espa\u00f1a||Port-d\u2019Espagne|
+N|Asia/Taipei||Tajpej||Taipeh||
+N|Africa/Dar_es_Salaam|||Dar es-Salam|Daressalam||
+N|Pacific/Midway||Midway-szigetek||||
+N|Pacific/Wake||Wake-sziget||||
+N|America/New_York|||Nueva York|||Nova York
+N|America/Kentucky/Monticello|Monticello, Kentucky|Monticello, Kentucky|Monticello, Kentucky|Monticello, Kentucky|Monticello [Kentucky]|Monticello, Kentucky
+N|America/Indiana/Vincennes|Vincennes, Indiana|Vincennes, Indiana|Vincennes, Indiana|Vincennes, Indiana|Vincennes [Indiana]|Vincennes, Indiana
+N|America/Indiana/Winamac|Winamac, Indiana|Winamac, Indiana|Winamac, Indiana|Winamac, Indiana|Winamac [Indiana]|Winamac, Indiana
+N|America/Indiana/Marengo|Marengo, Indiana|Marengo, Indiana|Marengo, Indiana|Marengo, Indiana|Marengo [Indiana]|Marengo, Indiana
+N|America/Indiana/Petersburg|Petersburg, Indiana|Petersburg, Indiana|Petersburg, Indiana|Petersburg, Indiana|Petersburg [Indiana]|Petersburg, Indiana
+N|America/Indiana/Vevay|Vevay, Indiana|Vevay, Indiana|Vevay, Indiana|Vevay, Indiana|Vevay [Indiana]|Vevay, Indiana
+N|America/Indiana/Tell_City|Tell City, Indiana|Tell City, Indiana|Tell City, Indiana|Tell City, Indiana|Tell City [Indiana]|Tell City, Indiana
+N|America/Indiana/Knox|Knox, Indiana|Knox, Indiana|Knox, Indiana|Knox, Indiana|Knox [Indiana]|Knox, Indiana
+N|America/North_Dakota/Center|Center, Dakota del nord|Center, \u00c9szak-Dakota|Center, Dakota del Norte|Center, North Dakota|Center (Dakota du Nord)|Center, Dakota do Norte
+N|America/North_Dakota/New_Salem|New Salem, Dakota del nord|New Salem, \u00c9szak-Dakota|New Salem, Dakota del Norte|New Salem, North Dakota|New Salem (Dakota du Nord)|New Salen, Dakota do Norte
+N|America/North_Dakota/Beulah|Beulah, Dakota del nord|Beulah, \u00c9szak-Dakota|Beulah, Dakota del Norte|Beulah, North Dakota|Beulah (Dakota du Nord)|Beulah, Dakota do Norte
+N|America/Montevideo||||||Montevid\u00e9u
+N|Asia/Samarkand|Samarcanda|Szamarkand|Samarcanda||Samarcande|Samarcanda
+N|Asia/Tashkent||Taskent|Taskent|Taschkent|Tachkent|
+N|Europe/Vatican|Citt\u00e0 del Vaticano|Vatik\u00e1n|El Vaticano|Vatikan|Le Vatican|Vaticano
+N|America/St_Vincent|Saint Vincent||San Vicente||Saint-Vincent|S\u00e3o Vicente
+N|America/St_Thomas|Saint Thomas||||Saint-Thomas|Saint Thomas
+N|Africa/Johannesburg|||Johannesburgo|||Joanesburgo
+X|Europe/Rome|Milano|Milan|Mailand|Napoli|Naples|Neapel|Torino|Turin|Firenze|Florence|Venezia|Venice|Bologna|Genova|Palermo|Bari|Catania
+X|Europe/Berlin|Munchen|Munich|Monaco di Baviera|Muenchen|Hamburg|Amburgo|Frankfurt|Francoforte|Koln|Cologne|Colonia|Koeln|Stuttgart|Dusseldorf|Leipzig|Dresden|Dresda|Nurnberg|Norimberga
+X|Europe/Paris|Lyon|Lione|Marseille|Marsiglia|Nice|Nizza|Toulouse|Bordeaux|Strasbourg|Strasburgo|Lille|Nantes
+X|Europe/Madrid|Barcelona|Barcellona|Valencia|Sevilla|Siviglia|Bilbao|Malaga|Zaragoza|Saragozza
+X|Europe/Lisbon|Porto|Oporto|Faro|Coimbra
+X|Europe/Budapest|Debrecen|Szeged|Pecs|Gyor|Miskolc
+X|Europe/London|Manchester|Birmingham|Liverpool|Edinburgh|Edimburgo|Glasgow|Leeds|Bristol|Cardiff|Londra|Londres|Londen
+X|Europe/Zurich|Geneva|Ginevra|Geneve|Genf|Basel|Basilea|Bern|Berna|Lausanne|Losanna
+X|Europe/Amsterdam|Rotterdam|Den Haag|The Hague|L'Aia|Utrecht|Eindhoven
+X|Europe/Warsaw|Krakow|Cracovia|Gdansk|Danzica|Wroclaw|Breslavia|Poznan|Lodz
+X|Europe/Brussels|Antwerp|Anversa|Anvers|Gent|Ghent|Bruges|Liege
+X|Europe/Athens|Thessaloniki|Salonicco|Salonique|Patras
+X|Europe/Prague|Brno|Ostrava|Praha
+X|Europe/Vienna|Salzburg|Graz|Linz|Innsbruck
+X|Europe/Moscow|Saint Petersburg|San Pietroburgo|St Petersburg|Sankt Petersburg|Kazan
+X|America/New_York|Boston|Washington|Washington DC|Philadelphia|Miami|Atlanta|NYC|Orlando|Pittsburgh|Charlotte
+X|America/Chicago|Houston|Dallas|Austin|San Antonio|Minneapolis|New Orleans|Nashville
+X|America/Denver|Salt Lake City|Albuquerque|Boulder
+X|America/Los_Angeles|San Francisco|San Diego|Seattle|Las Vegas|Portland|San Jose|Sacramento|LA
+X|America/Toronto|Montreal|Ottawa|Quebec|Hamilton
+X|America/Sao_Paulo|Rio de Janeiro|Rio|Brasilia|Belo Horizonte|Salvador|Curitiba|Porto Alegre|Recife|Fortaleza
+X|America/Argentina/Buenos_Aires|Buenos Aires|Rosario|Mendoza
+X|America/Mexico_City|Guadalajara|Monterrey|Puebla|Ciudad de Mexico|Citta del Messico
+X|Asia/Kolkata|Mumbai|Bombay|Delhi|New Delhi|Bangalore|Bengaluru|Chennai|Madras|Hyderabad|Calcutta|Pune
+X|Asia/Shanghai|Beijing|Peking|Pechino|Pekin|Guangzhou|Canton|Shenzhen|Chengdu|Wuhan|Pek\u00edn
+X|Asia/Tokyo|Osaka|Kyoto|Nagoya|Yokohama|Sapporo|Fukuoka
+X|Asia/Seoul|Busan|Incheon|Daegu
+X|Asia/Dubai|Abu Dhabi|Sharjah
+X|Asia/Jerusalem|Tel Aviv|Haifa|Gerusalemme|Jerusalen|Jerusalem
+X|Australia/Sydney|Canberra|Newcastle|Wollongong
+X|Australia/Melbourne|Geelong
+X|Pacific/Auckland|Wellington|Christchurch|Nuova Zelanda
+X|Africa/Johannesburg|Pretoria|Durban|Soweto
+X|America/St_Johns|Newfoundland|Terranova|Terre-Neuve|Neufundland
+X|Africa/Cairo|Il Cairo|Alexandria|Alessandria d'Egitto|Giza
+W|Africa/Abidjan|Greenwich Standard Time
+W|Africa/Accra|Greenwich Standard Time
+W|Africa/Addis_Ababa|E. Africa Standard Time
+W|Africa/Algiers|W. Central Africa Standard Time
+W|Africa/Asmara|E. Africa Standard Time
+W|Africa/Bamako|Greenwich Standard Time
+W|Africa/Bangui|W. Central Africa Standard Time
+W|Africa/Banjul|Greenwich Standard Time
+W|Africa/Bissau|Greenwich Standard Time
+W|Africa/Blantyre|South Africa Standard Time
+W|Africa/Brazzaville|W. Central Africa Standard Time
+W|Africa/Bujumbura|South Africa Standard Time
+W|Africa/Cairo|Egypt Standard Time
+W|Africa/Casablanca|Morocco Standard Time
+W|Africa/Ceuta|Romance Standard Time
+W|Africa/Conakry|Greenwich Standard Time
+W|Africa/Dakar|Greenwich Standard Time
+W|Africa/Dar_es_Salaam|E. Africa Standard Time
+W|Africa/Djibouti|E. Africa Standard Time
+W|Africa/Douala|W. Central Africa Standard Time
+W|Africa/El_Aaiun|Morocco Standard Time
+W|Africa/Freetown|Greenwich Standard Time
+W|Africa/Gaborone|South Africa Standard Time
+W|Africa/Harare|South Africa Standard Time
+W|Africa/Johannesburg|South Africa Standard Time
+W|Africa/Juba|South Sudan Standard Time
+W|Africa/Kampala|E. Africa Standard Time
+W|Africa/Khartoum|Sudan Standard Time
+W|Africa/Kigali|South Africa Standard Time
+W|Africa/Kinshasa|W. Central Africa Standard Time
+W|Africa/Lagos|W. Central Africa Standard Time
+W|Africa/Libreville|W. Central Africa Standard Time
+W|Africa/Lome|Greenwich Standard Time
+W|Africa/Luanda|W. Central Africa Standard Time
+W|Africa/Lubumbashi|South Africa Standard Time
+W|Africa/Lusaka|South Africa Standard Time
+W|Africa/Malabo|W. Central Africa Standard Time
+W|Africa/Maputo|South Africa Standard Time
+W|Africa/Maseru|South Africa Standard Time
+W|Africa/Mbabane|South Africa Standard Time
+W|Africa/Mogadishu|E. Africa Standard Time
+W|Africa/Monrovia|Greenwich Standard Time
+W|Africa/Nairobi|E. Africa Standard Time
+W|Africa/Ndjamena|W. Central Africa Standard Time
+W|Africa/Niamey|W. Central Africa Standard Time
+W|Africa/Nouakchott|Greenwich Standard Time
+W|Africa/Ouagadougou|Greenwich Standard Time
+W|Africa/Porto-Novo|W. Central Africa Standard Time
+W|Africa/Sao_Tome|Sao Tome Standard Time
+W|Africa/Tripoli|Libya Standard Time
+W|Africa/Tunis|W. Central Africa Standard Time
+W|Africa/Windhoek|Namibia Standard Time
+W|America/Adak|Aleutian Standard Time
+W|America/Anchorage|Alaskan Standard Time
+W|America/Anguilla|SA Western Standard Time
+W|America/Antigua|SA Western Standard Time
+W|America/Araguaina|Tocantins Standard Time
+W|America/Argentina/Buenos_Aires|Argentina Standard Time
+W|America/Argentina/Catamarca|Argentina Standard Time
+W|America/Argentina/Cordoba|Argentina Standard Time
+W|America/Argentina/Jujuy|Argentina Standard Time
+W|America/Argentina/La_Rioja|Argentina Standard Time
+W|America/Argentina/Mendoza|Argentina Standard Time
+W|America/Argentina/Rio_Gallegos|Argentina Standard Time
+W|America/Argentina/Salta|Argentina Standard Time
+W|America/Argentina/San_Juan|Argentina Standard Time
+W|America/Argentina/San_Luis|Argentina Standard Time
+W|America/Argentina/Tucuman|Argentina Standard Time
+W|America/Argentina/Ushuaia|Argentina Standard Time
+W|America/Aruba|SA Western Standard Time
+W|America/Asuncion|Paraguay Standard Time
+W|America/Atikokan|SA Pacific Standard Time
+W|America/Bahia|Bahia Standard Time
+W|America/Bahia_Banderas|Central Standard Time (Mexico)
+W|America/Barbados|SA Western Standard Time
+W|America/Belem|SA Eastern Standard Time
+W|America/Belize|Central America Standard Time
+W|America/Blanc-Sablon|SA Western Standard Time
+W|America/Boa_Vista|SA Western Standard Time
+W|America/Bogota|SA Pacific Standard Time
+W|America/Boise|Mountain Standard Time
+W|America/Cambridge_Bay|Mountain Standard Time
+W|America/Campo_Grande|Central Brazilian Standard Time
+W|America/Cancun|Eastern Standard Time (Mexico)
+W|America/Caracas|Venezuela Standard Time
+W|America/Cayenne|SA Eastern Standard Time
+W|America/Cayman|SA Pacific Standard Time
+W|America/Chicago|Central Standard Time
+W|America/Chihuahua|Central Standard Time (Mexico)
+W|America/Ciudad_Juarez|Mountain Standard Time
+W|America/Costa_Rica|Central America Standard Time
+W|America/Creston|US Mountain Standard Time
+W|America/Cuiaba|Central Brazilian Standard Time
+W|America/Curacao|SA Western Standard Time
+W|America/Danmarkshavn|Greenwich Standard Time
+W|America/Dawson|Yukon Standard Time
+W|America/Dawson_Creek|US Mountain Standard Time
+W|America/Denver|Mountain Standard Time
+W|America/Detroit|Eastern Standard Time
+W|America/Dominica|SA Western Standard Time
+W|America/Edmonton|Mountain Standard Time
+W|America/Eirunepe|SA Pacific Standard Time
+W|America/El_Salvador|Central America Standard Time
+W|America/Fort_Nelson|US Mountain Standard Time
+W|America/Fortaleza|SA Eastern Standard Time
+W|America/Glace_Bay|Atlantic Standard Time
+W|America/Goose_Bay|Atlantic Standard Time
+W|America/Grand_Turk|Turks And Caicos Standard Time
+W|America/Grenada|SA Western Standard Time
+W|America/Guadeloupe|SA Western Standard Time
+W|America/Guatemala|Central America Standard Time
+W|America/Guayaquil|SA Pacific Standard Time
+W|America/Guyana|SA Western Standard Time
+W|America/Halifax|Atlantic Standard Time
+W|America/Havana|Cuba Standard Time
+W|America/Hermosillo|US Mountain Standard Time
+W|America/Indiana/Indianapolis|US Eastern Standard Time
+W|America/Indiana/Knox|Central Standard Time
+W|America/Indiana/Marengo|US Eastern Standard Time
+W|America/Indiana/Petersburg|Eastern Standard Time
+W|America/Indiana/Tell_City|Central Standard Time
+W|America/Indiana/Vevay|US Eastern Standard Time
+W|America/Indiana/Vincennes|Eastern Standard Time
+W|America/Indiana/Winamac|Eastern Standard Time
+W|America/Inuvik|Mountain Standard Time
+W|America/Iqaluit|Eastern Standard Time
+W|America/Jamaica|SA Pacific Standard Time
+W|America/Juneau|Alaskan Standard Time
+W|America/Kentucky/Louisville|Eastern Standard Time
+W|America/Kentucky/Monticello|Eastern Standard Time
+W|America/Kralendijk|SA Western Standard Time
+W|America/La_Paz|SA Western Standard Time
+W|America/Lima|SA Pacific Standard Time
+W|America/Los_Angeles|Pacific Standard Time
+W|America/Lower_Princes|SA Western Standard Time
+W|America/Maceio|SA Eastern Standard Time
+W|America/Managua|Central America Standard Time
+W|America/Manaus|SA Western Standard Time
+W|America/Marigot|SA Western Standard Time
+W|America/Martinique|SA Western Standard Time
+W|America/Matamoros|Central Standard Time
+W|America/Mazatlan|Mountain Standard Time (Mexico)
+W|America/Menominee|Central Standard Time
+W|America/Merida|Central Standard Time (Mexico)
+W|America/Metlakatla|Alaskan Standard Time
+W|America/Mexico_City|Central Standard Time (Mexico)
+W|America/Miquelon|Saint Pierre Standard Time
+W|America/Moncton|Atlantic Standard Time
+W|America/Monterrey|Central Standard Time (Mexico)
+W|America/Montevideo|Montevideo Standard Time
+W|America/Montserrat|SA Western Standard Time
+W|America/Nassau|Eastern Standard Time
+W|America/New_York|Eastern Standard Time
+W|America/Nome|Alaskan Standard Time
+W|America/Noronha|UTC-02
+W|America/North_Dakota/Beulah|Central Standard Time
+W|America/North_Dakota/Center|Central Standard Time
+W|America/North_Dakota/New_Salem|Central Standard Time
+W|America/Nuuk|Greenland Standard Time
+W|America/Ojinaga|Central Standard Time
+W|America/Panama|SA Pacific Standard Time
+W|America/Paramaribo|SA Eastern Standard Time
+W|America/Phoenix|US Mountain Standard Time
+W|America/Port-au-Prince|Haiti Standard Time
+W|America/Port_of_Spain|SA Western Standard Time
+W|America/Porto_Velho|SA Western Standard Time
+W|America/Puerto_Rico|SA Western Standard Time
+W|America/Punta_Arenas|Magallanes Standard Time
+W|America/Rankin_Inlet|Central Standard Time
+W|America/Recife|SA Eastern Standard Time
+W|America/Regina|Canada Central Standard Time
+W|America/Resolute|Central Standard Time
+W|America/Rio_Branco|SA Pacific Standard Time
+W|America/Santarem|SA Eastern Standard Time
+W|America/Santiago|Pacific SA Standard Time
+W|America/Santo_Domingo|SA Western Standard Time
+W|America/Sao_Paulo|E. South America Standard Time
+W|America/Scoresbysund|Azores Standard Time
+W|America/Sitka|Alaskan Standard Time
+W|America/St_Barthelemy|SA Western Standard Time
+W|America/St_Johns|Newfoundland Standard Time
+W|America/St_Kitts|SA Western Standard Time
+W|America/St_Lucia|SA Western Standard Time
+W|America/St_Thomas|SA Western Standard Time
+W|America/St_Vincent|SA Western Standard Time
+W|America/Swift_Current|Canada Central Standard Time
+W|America/Tegucigalpa|Central America Standard Time
+W|America/Thule|Atlantic Standard Time
+W|America/Tijuana|Pacific Standard Time (Mexico)
+W|America/Toronto|Eastern Standard Time
+W|America/Tortola|SA Western Standard Time
+W|America/Vancouver|Pacific Standard Time
+W|America/Whitehorse|Yukon Standard Time
+W|America/Winnipeg|Central Standard Time
+W|America/Yakutat|Alaskan Standard Time
+W|Antarctica/Casey|Central Pacific Standard Time
+W|Antarctica/Davis|SE Asia Standard Time
+W|Antarctica/DumontDUrville|West Pacific Standard Time
+W|Antarctica/Macquarie|Tasmania Standard Time
+W|Antarctica/Mawson|West Asia Standard Time
+W|Antarctica/McMurdo|New Zealand Standard Time
+W|Antarctica/Palmer|SA Eastern Standard Time
+W|Antarctica/Rothera|SA Eastern Standard Time
+W|Antarctica/Syowa|E. Africa Standard Time
+W|Antarctica/Vostok|Central Asia Standard Time
+W|Arctic/Longyearbyen|W. Europe Standard Time
+W|Asia/Aden|Arab Standard Time
+W|Asia/Almaty|Central Asia Standard Time
+W|Asia/Amman|Jordan Standard Time
+W|Asia/Anadyr|Russia Time Zone 11
+W|Asia/Aqtau|West Asia Standard Time
+W|Asia/Aqtobe|West Asia Standard Time
+W|Asia/Ashgabat|West Asia Standard Time
+W|Asia/Atyrau|West Asia Standard Time
+W|Asia/Baghdad|Arabic Standard Time
+W|Asia/Bahrain|Arab Standard Time
+W|Asia/Baku|Azerbaijan Standard Time
+W|Asia/Bangkok|SE Asia Standard Time
+W|Asia/Barnaul|Altai Standard Time
+W|Asia/Beirut|Middle East Standard Time
+W|Asia/Bishkek|Central Asia Standard Time
+W|Asia/Brunei|Singapore Standard Time
+W|Asia/Chita|Transbaikal Standard Time
+W|Asia/Colombo|Sri Lanka Standard Time
+W|Asia/Damascus|Syria Standard Time
+W|Asia/Dhaka|Bangladesh Standard Time
+W|Asia/Dili|Tokyo Standard Time
+W|Asia/Dubai|Arabian Standard Time
+W|Asia/Dushanbe|West Asia Standard Time
+W|Asia/Famagusta|GTB Standard Time
+W|Asia/Gaza|West Bank Standard Time
+W|Asia/Hebron|West Bank Standard Time
+W|Asia/Ho_Chi_Minh|SE Asia Standard Time
+W|Asia/Hong_Kong|China Standard Time
+W|Asia/Hovd|W. Mongolia Standard Time
+W|Asia/Irkutsk|North Asia East Standard Time
+W|Asia/Jakarta|SE Asia Standard Time
+W|Asia/Jayapura|Tokyo Standard Time
+W|Asia/Jerusalem|Israel Standard Time
+W|Asia/Kabul|Afghanistan Standard Time
+W|Asia/Kamchatka|Russia Time Zone 11
+W|Asia/Karachi|Pakistan Standard Time
+W|Asia/Kathmandu|Nepal Standard Time
+W|Asia/Khandyga|Yakutsk Standard Time
+W|Asia/Kolkata|India Standard Time
+W|Asia/Krasnoyarsk|North Asia Standard Time
+W|Asia/Kuala_Lumpur|Singapore Standard Time
+W|Asia/Kuching|Singapore Standard Time
+W|Asia/Kuwait|Arab Standard Time
+W|Asia/Macau|China Standard Time
+W|Asia/Magadan|Magadan Standard Time
+W|Asia/Makassar|Singapore Standard Time
+W|Asia/Manila|Singapore Standard Time
+W|Asia/Muscat|Arabian Standard Time
+W|Asia/Nicosia|GTB Standard Time
+W|Asia/Novokuznetsk|North Asia Standard Time
+W|Asia/Novosibirsk|N. Central Asia Standard Time
+W|Asia/Omsk|Omsk Standard Time
+W|Asia/Oral|West Asia Standard Time
+W|Asia/Phnom_Penh|SE Asia Standard Time
+W|Asia/Pontianak|SE Asia Standard Time
+W|Asia/Pyongyang|North Korea Standard Time
+W|Asia/Qatar|Arab Standard Time
+W|Asia/Qostanay|Central Asia Standard Time
+W|Asia/Qyzylorda|Qyzylorda Standard Time
+W|Asia/Riyadh|Arab Standard Time
+W|Asia/Sakhalin|Sakhalin Standard Time
+W|Asia/Samarkand|West Asia Standard Time
+W|Asia/Seoul|Korea Standard Time
+W|Asia/Shanghai|China Standard Time
+W|Asia/Singapore|Singapore Standard Time
+W|Asia/Srednekolymsk|Russia Time Zone 10
+W|Asia/Taipei|Taipei Standard Time
+W|Asia/Tashkent|West Asia Standard Time
+W|Asia/Tbilisi|Georgian Standard Time
+W|Asia/Tehran|Iran Standard Time
+W|Asia/Thimphu|Bangladesh Standard Time
+W|Asia/Tokyo|Tokyo Standard Time
+W|Asia/Tomsk|Tomsk Standard Time
+W|Asia/Ulaanbaatar|Ulaanbaatar Standard Time
+W|Asia/Urumqi|Central Asia Standard Time
+W|Asia/Ust-Nera|Vladivostok Standard Time
+W|Asia/Vientiane|SE Asia Standard Time
+W|Asia/Vladivostok|Vladivostok Standard Time
+W|Asia/Yakutsk|Yakutsk Standard Time
+W|Asia/Yangon|Myanmar Standard Time
+W|Asia/Yekaterinburg|Ekaterinburg Standard Time
+W|Asia/Yerevan|Caucasus Standard Time
+W|Atlantic/Azores|Azores Standard Time
+W|Atlantic/Bermuda|Atlantic Standard Time
+W|Atlantic/Canary|GMT Standard Time
+W|Atlantic/Cape_Verde|Cape Verde Standard Time
+W|Atlantic/Faroe|GMT Standard Time
+W|Atlantic/Madeira|GMT Standard Time
+W|Atlantic/Reykjavik|Greenwich Standard Time
+W|Atlantic/South_Georgia|UTC-02
+W|Atlantic/St_Helena|Greenwich Standard Time
+W|Atlantic/Stanley|SA Eastern Standard Time
+W|Australia/Adelaide|Cen. Australia Standard Time
+W|Australia/Brisbane|E. Australia Standard Time
+W|Australia/Broken_Hill|Cen. Australia Standard Time
+W|Australia/Darwin|AUS Central Standard Time
+W|Australia/Eucla|Aus Central W. Standard Time
+W|Australia/Hobart|Tasmania Standard Time
+W|Australia/Lindeman|E. Australia Standard Time
+W|Australia/Lord_Howe|Lord Howe Standard Time
+W|Australia/Melbourne|AUS Eastern Standard Time
+W|Australia/Perth|W. Australia Standard Time
+W|Australia/Sydney|AUS Eastern Standard Time
+W|Europe/Amsterdam|W. Europe Standard Time
+W|Europe/Andorra|W. Europe Standard Time
+W|Europe/Astrakhan|Astrakhan Standard Time
+W|Europe/Athens|GTB Standard Time
+W|Europe/Belgrade|Central Europe Standard Time
+W|Europe/Berlin|W. Europe Standard Time
+W|Europe/Bratislava|Central Europe Standard Time
+W|Europe/Brussels|Romance Standard Time
+W|Europe/Bucharest|GTB Standard Time
+W|Europe/Budapest|Central Europe Standard Time
+W|Europe/Busingen|W. Europe Standard Time
+W|Europe/Chisinau|E. Europe Standard Time
+W|Europe/Copenhagen|Romance Standard Time
+W|Europe/Dublin|GMT Standard Time
+W|Europe/Gibraltar|W. Europe Standard Time
+W|Europe/Guernsey|GMT Standard Time
+W|Europe/Helsinki|FLE Standard Time
+W|Europe/Isle_of_Man|GMT Standard Time
+W|Europe/Istanbul|Turkey Standard Time
+W|Europe/Jersey|GMT Standard Time
+W|Europe/Kaliningrad|Kaliningrad Standard Time
+W|Europe/Kirov|Russian Standard Time
+W|Europe/Kyiv|FLE Standard Time
+W|Europe/Lisbon|GMT Standard Time
+W|Europe/Ljubljana|Central Europe Standard Time
+W|Europe/London|GMT Standard Time
+W|Europe/Luxembourg|W. Europe Standard Time
+W|Europe/Madrid|Romance Standard Time
+W|Europe/Malta|W. Europe Standard Time
+W|Europe/Mariehamn|FLE Standard Time
+W|Europe/Minsk|Belarus Standard Time
+W|Europe/Monaco|W. Europe Standard Time
+W|Europe/Moscow|Russian Standard Time
+W|Europe/Oslo|W. Europe Standard Time
+W|Europe/Paris|Romance Standard Time
+W|Europe/Podgorica|Central Europe Standard Time
+W|Europe/Prague|Central Europe Standard Time
+W|Europe/Riga|FLE Standard Time
+W|Europe/Rome|W. Europe Standard Time
+W|Europe/Samara|Russia Time Zone 3
+W|Europe/San_Marino|W. Europe Standard Time
+W|Europe/Sarajevo|Central European Standard Time
+W|Europe/Saratov|Saratov Standard Time
+W|Europe/Simferopol|Russian Standard Time
+W|Europe/Skopje|Central European Standard Time
+W|Europe/Sofia|FLE Standard Time
+W|Europe/Stockholm|W. Europe Standard Time
+W|Europe/Tallinn|FLE Standard Time
+W|Europe/Tirane|Central Europe Standard Time
+W|Europe/Ulyanovsk|Astrakhan Standard Time
+W|Europe/Vaduz|W. Europe Standard Time
+W|Europe/Vatican|W. Europe Standard Time
+W|Europe/Vienna|W. Europe Standard Time
+W|Europe/Vilnius|FLE Standard Time
+W|Europe/Volgograd|Volgograd Standard Time
+W|Europe/Warsaw|Central European Standard Time
+W|Europe/Zagreb|Central European Standard Time
+W|Europe/Zurich|W. Europe Standard Time
+W|Indian/Antananarivo|E. Africa Standard Time
+W|Indian/Chagos|Central Asia Standard Time
+W|Indian/Christmas|SE Asia Standard Time
+W|Indian/Cocos|Myanmar Standard Time
+W|Indian/Comoro|E. Africa Standard Time
+W|Indian/Kerguelen|West Asia Standard Time
+W|Indian/Mahe|Mauritius Standard Time
+W|Indian/Maldives|West Asia Standard Time
+W|Indian/Mauritius|Mauritius Standard Time
+W|Indian/Mayotte|E. Africa Standard Time
+W|Indian/Reunion|Mauritius Standard Time
+W|Pacific/Apia|Samoa Standard Time
+W|Pacific/Auckland|New Zealand Standard Time
+W|Pacific/Bougainville|Bougainville Standard Time
+W|Pacific/Chatham|Chatham Islands Standard Time
+W|Pacific/Chuuk|West Pacific Standard Time
+W|Pacific/Easter|Easter Island Standard Time
+W|Pacific/Efate|Central Pacific Standard Time
+W|Pacific/Fakaofo|UTC+13
+W|Pacific/Fiji|Fiji Standard Time
+W|Pacific/Funafuti|UTC+12
+W|Pacific/Galapagos|Central America Standard Time
+W|Pacific/Gambier|UTC-09
+W|Pacific/Guadalcanal|Central Pacific Standard Time
+W|Pacific/Guam|West Pacific Standard Time
+W|Pacific/Honolulu|Hawaiian Standard Time
+W|Pacific/Kanton|UTC+13
+W|Pacific/Kiritimati|Line Islands Standard Time
+W|Pacific/Kosrae|Central Pacific Standard Time
+W|Pacific/Kwajalein|UTC+12
+W|Pacific/Majuro|UTC+12
+W|Pacific/Marquesas|Marquesas Standard Time
+W|Pacific/Midway|UTC-11
+W|Pacific/Nauru|UTC+12
+W|Pacific/Niue|UTC-11
+W|Pacific/Norfolk|Norfolk Standard Time
+W|Pacific/Noumea|Central Pacific Standard Time
+W|Pacific/Pago_Pago|UTC-11
+W|Pacific/Palau|Tokyo Standard Time
+W|Pacific/Pitcairn|UTC-08
+W|Pacific/Pohnpei|Central Pacific Standard Time
+W|Pacific/Port_Moresby|West Pacific Standard Time
+W|Pacific/Rarotonga|Hawaiian Standard Time
+W|Pacific/Saipan|West Pacific Standard Time
+W|Pacific/Tahiti|Hawaiian Standard Time
+W|Pacific/Tarawa|UTC+12
+W|Pacific/Tongatapu|Tonga Standard Time
+W|Pacific/Wake|UTC+12
+W|Pacific/Wallis|UTC+12
+P|AUS Central Standard Time|Australia/Darwin
+P|AUS Eastern Standard Time|Australia/Sydney
+P|Afghanistan Standard Time|Asia/Kabul
+P|Alaskan Standard Time|America/Anchorage
+P|Aleutian Standard Time|America/Adak
+P|Altai Standard Time|Asia/Barnaul
+P|Arab Standard Time|Asia/Riyadh
+P|Arabian Standard Time|Asia/Dubai
+P|Arabic Standard Time|Asia/Baghdad
+P|Argentina Standard Time|America/Argentina/Buenos_Aires
+P|Astrakhan Standard Time|Europe/Astrakhan
+P|Atlantic Standard Time|America/Halifax
+P|Aus Central W. Standard Time|Australia/Eucla
+P|Azerbaijan Standard Time|Asia/Baku
+P|Azores Standard Time|Atlantic/Azores
+P|Bahia Standard Time|America/Bahia
+P|Bangladesh Standard Time|Asia/Dhaka
+P|Belarus Standard Time|Europe/Minsk
+P|Bougainville Standard Time|Pacific/Bougainville
+P|Canada Central Standard Time|America/Regina
+P|Cape Verde Standard Time|Atlantic/Cape_Verde
+P|Caucasus Standard Time|Asia/Yerevan
+P|Cen. Australia Standard Time|Australia/Adelaide
+P|Central America Standard Time|America/Guatemala
+P|Central Asia Standard Time|Asia/Almaty
+P|Central Brazilian Standard Time|America/Cuiaba
+P|Central Europe Standard Time|Europe/Budapest
+P|Central European Standard Time|Europe/Warsaw
+P|Central Pacific Standard Time|Pacific/Guadalcanal
+P|Central Standard Time|America/Chicago
+P|Central Standard Time (Mexico)|America/Mexico_City
+P|Chatham Islands Standard Time|Pacific/Chatham
+P|China Standard Time|Asia/Shanghai
+P|Cuba Standard Time|America/Havana
+P|E. Africa Standard Time|Africa/Nairobi
+P|E. Australia Standard Time|Australia/Brisbane
+P|E. Europe Standard Time|Europe/Chisinau
+P|E. South America Standard Time|America/Sao_Paulo
+P|Easter Island Standard Time|Pacific/Easter
+P|Eastern Standard Time|America/New_York
+P|Eastern Standard Time (Mexico)|America/Cancun
+P|Egypt Standard Time|Africa/Cairo
+P|Ekaterinburg Standard Time|Asia/Yekaterinburg
+P|FLE Standard Time|Europe/Helsinki
+P|Fiji Standard Time|Pacific/Fiji
+P|GMT Standard Time|Europe/London
+P|GTB Standard Time|Europe/Bucharest
+P|Georgian Standard Time|Asia/Tbilisi
+P|Greenland Standard Time|America/Nuuk
+P|Greenwich Standard Time|Atlantic/Reykjavik
+P|Haiti Standard Time|America/Port-au-Prince
+P|Hawaiian Standard Time|Pacific/Honolulu
+P|India Standard Time|Asia/Kolkata
+P|Iran Standard Time|Asia/Tehran
+P|Israel Standard Time|Asia/Jerusalem
+P|Jordan Standard Time|Asia/Amman
+P|Kaliningrad Standard Time|Europe/Kaliningrad
+P|Korea Standard Time|Asia/Seoul
+P|Libya Standard Time|Africa/Tripoli
+P|Line Islands Standard Time|Pacific/Kiritimati
+P|Lord Howe Standard Time|Australia/Lord_Howe
+P|Magadan Standard Time|Asia/Magadan
+P|Magallanes Standard Time|America/Punta_Arenas
+P|Marquesas Standard Time|Pacific/Marquesas
+P|Mauritius Standard Time|Indian/Mauritius
+P|Middle East Standard Time|Asia/Beirut
+P|Montevideo Standard Time|America/Montevideo
+P|Morocco Standard Time|Africa/Casablanca
+P|Mountain Standard Time|America/Denver
+P|Mountain Standard Time (Mexico)|America/Mazatlan
+P|Myanmar Standard Time|Asia/Yangon
+P|N. Central Asia Standard Time|Asia/Novosibirsk
+P|Namibia Standard Time|Africa/Windhoek
+P|Nepal Standard Time|Asia/Kathmandu
+P|New Zealand Standard Time|Pacific/Auckland
+P|Newfoundland Standard Time|America/St_Johns
+P|Norfolk Standard Time|Pacific/Norfolk
+P|North Asia East Standard Time|Asia/Irkutsk
+P|North Asia Standard Time|Asia/Krasnoyarsk
+P|North Korea Standard Time|Asia/Pyongyang
+P|Omsk Standard Time|Asia/Omsk
+P|Pacific SA Standard Time|America/Santiago
+P|Pacific Standard Time|America/Los_Angeles
+P|Pacific Standard Time (Mexico)|America/Tijuana
+P|Pakistan Standard Time|Asia/Karachi
+P|Paraguay Standard Time|America/Asuncion
+P|Qyzylorda Standard Time|Asia/Qyzylorda
+P|Romance Standard Time|Europe/Paris
+P|Russia Time Zone 10|Asia/Srednekolymsk
+P|Russia Time Zone 11|Asia/Kamchatka
+P|Russia Time Zone 3|Europe/Samara
+P|Russian Standard Time|Europe/Moscow
+P|SA Eastern Standard Time|America/Cayenne
+P|SA Pacific Standard Time|America/Bogota
+P|SA Western Standard Time|America/La_Paz
+P|SE Asia Standard Time|Asia/Bangkok
+P|Saint Pierre Standard Time|America/Miquelon
+P|Sakhalin Standard Time|Asia/Sakhalin
+P|Samoa Standard Time|Pacific/Apia
+P|Sao Tome Standard Time|Africa/Sao_Tome
+P|Saratov Standard Time|Europe/Saratov
+P|Singapore Standard Time|Asia/Singapore
+P|South Africa Standard Time|Africa/Johannesburg
+P|South Sudan Standard Time|Africa/Juba
+P|Sri Lanka Standard Time|Asia/Colombo
+P|Sudan Standard Time|Africa/Khartoum
+P|Syria Standard Time|Asia/Damascus
+P|Taipei Standard Time|Asia/Taipei
+P|Tasmania Standard Time|Australia/Hobart
+P|Tocantins Standard Time|America/Araguaina
+P|Tokyo Standard Time|Asia/Tokyo
+P|Tomsk Standard Time|Asia/Tomsk
+P|Tonga Standard Time|Pacific/Tongatapu
+P|Transbaikal Standard Time|Asia/Chita
+P|Turkey Standard Time|Europe/Istanbul
+P|Turks And Caicos Standard Time|America/Grand_Turk
+P|US Eastern Standard Time|America/Indiana/Indianapolis
+P|US Mountain Standard Time|America/Phoenix
+P|UTC|UTC
+P|UTC+12|Pacific/Funafuti
+P|UTC+13|Pacific/Fakaofo
+P|UTC-02|America/Noronha
+P|UTC-08|Pacific/Pitcairn
+P|UTC-09|Pacific/Gambier
+P|UTC-11|Pacific/Midway
+P|Ulaanbaatar Standard Time|Asia/Ulaanbaatar
+P|Venezuela Standard Time|America/Caracas
+P|Vladivostok Standard Time|Asia/Vladivostok
+P|Volgograd Standard Time|Europe/Volgograd
+P|W. Australia Standard Time|Australia/Perth
+P|W. Central Africa Standard Time|Africa/Lagos
+P|W. Europe Standard Time|Europe/Berlin
+P|W. Mongolia Standard Time|Asia/Hovd
+P|West Asia Standard Time|Asia/Tashkent
+P|West Bank Standard Time|Asia/Hebron
+P|West Pacific Standard Time|Pacific/Port_Moresby
+P|Yakutsk Standard Time|Asia/Yakutsk
+P|Yukon Standard Time|America/Whitehorse
+'@
+}
+# <<< timezone data
 
 # Colori (PowerShell gestisce ANSI nativo dal terminale moderno).
 function Write-Err  { param([string]$Msg) Write-Host "error: $Msg" -ForegroundColor Red }
@@ -6189,6 +8050,7 @@ switch ($Sub) {
     # --api-key-file of a file on this computer: the key goes to the setup on its standard input (Convert-SetupKeyFileArgs).
     $keyPlan = Convert-SetupKeyFileArgs $Rest
     if ($keyPlan.Error) { [Console]::Error.WriteLine("error: $($keyPlan.Error)"); exit 1 }
+    Resolve-JhtUserTimezone $Rest
     Require-ComposeFile
     Require-Docker
     Clear-JhtTeamStopped
