@@ -8,24 +8,25 @@
  * a 403 that may be the region or the plan) is «could not verify», and a start must never be refused for that.
  * The key is never printed, not even in the reason.
  */
-import { PI_API_PROVIDERS, piApiProvider } from './provider-models.js';
+import { PI_API_PROVIDERS, piApiProvider } from "./provider-models.js";
 
 /** The route of each provider that answers with the key and nothing else (the OpenAI-compatible list of models). */
 export const KEY_CHECK_URLS = Object.freeze({
-  glm: 'https://api.z.ai/api/paas/v4/models',
-  kimi: 'https://api.moonshot.ai/v1/models',
-  openai: 'https://api.openai.com/v1/models',
-  claude: 'https://api.anthropic.com/v1/models',
+  glm: "https://api.z.ai/api/paas/v4/models",
+  kimi: "https://api.moonshot.ai/v1/models",
+  openai: "https://api.openai.com/v1/models",
+  claude: "https://api.anthropic.com/v1/models",
 });
 
 /** How each provider takes the key: a bearer, except Anthropic (its own header, and the version of its API). */
 function keyHeaders(provider, key) {
-  if (provider === 'claude') return { 'x-api-key': key, 'anthropic-version': '2023-06-01' };
+  if (provider === "claude")
+    return { "x-api-key": key, "anthropic-version": "2023-06-01" };
   return { Authorization: `Bearer ${key}` };
 }
 
 /** The providers that run on pi with a key but are not pi-only (OpenAI also runs on Codex): their name for the person. */
-const OTHER_LABELS = Object.freeze({ openai: 'OpenAI' });
+const OTHER_LABELS = Object.freeze({ openai: "OpenAI" });
 
 const DEFAULT_TIMEOUT_MS = 8000;
 
@@ -34,12 +35,17 @@ const DEFAULT_TIMEOUT_MS = 8000;
  * with business code 1113, Kimi «suspended due to insufficient balance», OpenAI insufficient_quota. The key is right,
  * the account is empty: a different thing to tell the person than a refused key or a check that could not be made.
  */
-const NO_CREDIT = /["']?code["']?\s*[:=]\s*["']?1113\b|insufficient balance|insufficient_quota|exceeded your current quota/i;
+const NO_CREDIT =
+  /["']?code["']?\s*[:=]\s*["']?1113\b|insufficient balance|insufficient_quota|exceeded your current quota/i;
 /** Read no more of an error body than this: the words are at the start, and the answer is not ours to keep. */
 const BODY_LIMIT = 4096;
 
 async function bodyStart(res) {
-  try { return String(await res.text()).slice(0, BODY_LIMIT); } catch { return ''; }
+  try {
+    return String(await res.text()).slice(0, BODY_LIMIT);
+  } catch {
+    return "";
+  }
 }
 
 /**
@@ -48,29 +54,46 @@ async function bodyStart(res) {
  * @param {{ fetchImpl?: typeof fetch, timeoutMs?: number }} [options]
  * @returns {Promise<{ state: 'valid'|'rejected'|'no_credit'|'unverified'|'not_applicable', label?: string, httpStatus?: number, reason?: string }>}
  */
-export async function checkPiApiKey(providerName, key, { fetchImpl = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
-  const plain = typeof providerName === 'string' ? providerName.trim().toLowerCase() : '';
+export async function checkPiApiKey(
+  providerName,
+  key,
+  { fetchImpl = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS } = {},
+) {
+  const plain =
+    typeof providerName === "string" ? providerName.trim().toLowerCase() : "";
   const provider = piApiProvider(plain) ?? (OTHER_LABELS[plain] ? plain : null);
-  if (!provider || !KEY_CHECK_URLS[provider]) return { state: 'not_applicable' };
+  if (!provider || !KEY_CHECK_URLS[provider])
+    return { state: "not_applicable" };
   const label = PI_API_PROVIDERS[provider]?.label ?? OTHER_LABELS[provider];
-  const cleanKey = typeof key === 'string' ? key.trim() : '';
-  if (!cleanKey) return { state: 'unverified', label, reason: 'no key to try' };
-  if (typeof fetchImpl !== 'function') return { state: 'unverified', label, reason: 'no network client' };
+  const cleanKey = typeof key === "string" ? key.trim() : "";
+  if (!cleanKey) return { state: "unverified", label, reason: "no key to try" };
+  if (typeof fetchImpl !== "function")
+    return { state: "unverified", label, reason: "no network client" };
   try {
     const res = await fetchImpl(KEY_CHECK_URLS[provider], {
-      method: 'GET',
+      method: "GET",
       headers: keyHeaders(provider, cleanKey),
       // the key goes to the fixed route and nowhere else: a redirect is an error, never followed
-      redirect: 'error',
+      redirect: "error",
       signal: AbortSignal.timeout(timeoutMs),
     });
-    if (res.status === 401) return { state: 'rejected', label, httpStatus: 401 };
-    if (res.ok) return { state: 'valid', label, httpStatus: res.status };
-    if (NO_CREDIT.test(await bodyStart(res))) return { state: 'no_credit', label, httpStatus: res.status };
-    return { state: 'unverified', label, httpStatus: res.status, reason: `HTTP ${res.status}` };
+    if (res.status === 401)
+      return { state: "rejected", label, httpStatus: 401 };
+    if (res.ok) return { state: "valid", label, httpStatus: res.status };
+    if (NO_CREDIT.test(await bodyStart(res)))
+      return { state: "no_credit", label, httpStatus: res.status };
+    return {
+      state: "unverified",
+      label,
+      httpStatus: res.status,
+      reason: `HTTP ${res.status}`,
+    };
   } catch (err) {
-    const name = err?.name === 'TimeoutError' || err?.name === 'AbortError' ? 'timeout' : String(err?.cause?.code ?? err?.code ?? 'connection error');
-    return { state: 'unverified', label, reason: name };
+    const name =
+      err?.name === "TimeoutError" || err?.name === "AbortError"
+        ? "timeout"
+        : String(err?.cause?.code ?? err?.code ?? "connection error");
+    return { state: "unverified", label, reason: name };
   }
 }
 

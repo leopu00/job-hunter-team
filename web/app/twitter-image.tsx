@@ -100,7 +100,8 @@ export default function TwitterImage() {
           textAlign: "center",
         }}
       >
-        7 agenti AI specializzati · Dati sul tuo computer, testi al fornitore del modello · Open source
+        7 agenti AI specializzati · Dati sul tuo computer, testi al fornitore
+        del modello · Open source
       </p>
 
       <div

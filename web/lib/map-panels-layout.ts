@@ -100,5 +100,7 @@ export const MAP_PANELS_CSS = panelsCss(RAIL_QUERY);
 
 /** Le regole del rail per il limite in vigore (vedi setMapRailMaxWidth). */
 export function mapPanelsCss(): string {
-  return railMaxWidth === RAIL_MAX_WIDTH ? MAP_PANELS_CSS : panelsCss(railQuery());
+  return railMaxWidth === RAIL_MAX_WIDTH
+    ? MAP_PANELS_CSS
+    : panelsCss(railQuery());
 }

@@ -59,7 +59,10 @@ export function timeAgo(iso: string | null, locale: string = "it"): string {
   const then = parseStamp(iso)?.getTime();
   if (then === undefined) return "—";
   const diff = Date.now() - then;
-  const formatter = new Intl.RelativeTimeFormat(intlTag(locale), { numeric: "auto", style: "short" });
+  const formatter = new Intl.RelativeTimeFormat(intlTag(locale), {
+    numeric: "auto",
+    style: "short",
+  });
   const min = Math.floor(Math.max(diff, 0) / 60000);
   if (min < 1) return formatter.format(0, "second");
   if (min < 60) return formatter.format(-min, "minute");

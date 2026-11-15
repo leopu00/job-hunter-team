@@ -17,7 +17,8 @@ export function parseStamp(value: string | null | undefined): Date | null {
   if (!value) return null;
   const text = value.trim();
   if (!text) return null;
-  const zoned = /[zZ]$|[+-]\d\d(:?\d\d)?$/.test(text) && /\d{2}:\d{2}/.test(text);
+  const zoned =
+    /[zZ]$|[+-]\d\d(:?\d\d)?$/.test(text) && /\d{2}:\d{2}/.test(text);
   const naive = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(text) && !zoned;
   const date = new Date(naive ? `${text.replace(" ", "T")}Z` : text);
   return Number.isNaN(date.getTime()) ? null : date;
