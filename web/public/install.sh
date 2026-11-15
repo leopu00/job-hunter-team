@@ -2017,6 +2017,20 @@ enable_podman_trim_timer() {
     sudo systemctl enable --now fstrim.timer >/dev/null 2>&1
 }
 
+# The Podman machine (vfkit and gvproxy, started by `podman machine start`/`init --now`) must not live and die with the terminal
+# the person ran this from: closing that window sends SIGHUP to what it started, and the machine with the team stopped. The
+# command runs in a session of its own, with no terminal and SIGHUP ignored (perl's setsid on macOS, which has no setsid
+# command; setsid -w where there is one; nohup otherwise). `podman machine stop` (jht down) still stops it as before.
+jht_detached_from_terminal() {
+  if command -v perl >/dev/null 2>&1; then
+    perl -MPOSIX -e '$SIG{HUP} = "IGNORE"; POSIX::setsid(); exec { $ARGV[0] } @ARGV or exit 127' "$@" </dev/null
+  elif command -v setsid >/dev/null 2>&1; then
+    setsid -w "$@" </dev/null
+  else
+    nohup "$@" </dev/null
+  fi
+}
+
 install_podman_macos() {
   # Percorso non distruttivo: non ferma e non rimuove un Colima che c'e' gia'. La macchina e la
   # connessione hanno un nome JHT dedicato; lo shim pubblicato piu' avanti usa
@@ -2089,7 +2103,7 @@ install_podman_macos() {
       jht_phase machine_start
       info "$(tsf installer.starting_podman_machine 'Starting Podman machine '\''%s'\''...' "$PODMAN_MACHINE_NAME")"
       local start_error start_status
-      start_error="$("$podman_bin" machine start --update-connection=false "$PODMAN_MACHINE_NAME" 2>&1 >/dev/null)" \
+      start_error="$(jht_detached_from_terminal "$podman_bin" machine start --update-connection=false "$PODMAN_MACHINE_NAME" 2>&1 >/dev/null)" \
         && start_status=0 || start_status=$?
       if [ "$start_status" -ne 0 ]; then
         report_podman_machine_conflict "$podman_bin" "$start_error" && exit 79
@@ -2103,7 +2117,7 @@ install_podman_macos() {
     jht_phase machine_start
     info "$(tsf installer.creating_rootless_podman_machine 'Creating rootless Podman machine '\''%s'\''...' "$PODMAN_MACHINE_NAME")"
     local init_error init_status
-    init_error="$("$podman_bin" machine init --now --update-connection=false \
+    init_error="$(jht_detached_from_terminal "$podman_bin" machine init --now --update-connection=false \
       --cpus "$PODMAN_MACHINE_CPUS" \
       --memory "$PODMAN_MACHINE_MEMORY_MIB" \
       --disk-size "$PODMAN_MACHINE_DISK_GIB" \
