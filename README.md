@@ -93,7 +93,7 @@ team.
 - **A provider for the agents**: in 0.4.0, **GLM (Z.ai)**, **Kimi (Moonshot)**, **OpenAI** or **Claude (Anthropic)** on the Pi harness, with an **API key**
   that `jht setup` asks for (typed hidden) or takes from a file or standard input
   (`jht setup --non-interactive --provider glm --api-key-stdin`), never on the command line.
-  The ChatGPT subscription is not in this version.
+  The ChatGPT subscription (Codex) is no longer offered to new users from 0.4.0: a team set up on it with 0.3.9 keeps working, with a warning that says how to move to an API key (`jht setup`).
 - **A container engine**: Podman, the only one since 0.4. On a Mac the installer sets it up with
   Homebrew (which must already be there), so there is no Docker Desktop to install.
   On Linux: rootless Podman 5.0 or later.
