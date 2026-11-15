@@ -133,7 +133,7 @@ def test_nothing_detected_asks_and_a_city_is_found_proposed_and_confirmed_with_e
     result = _run(shell, tmp_path, "xyz\nRoma\n\n")
     lines = _lines(result)
     assert "Your timezone was not detected." in lines
-    assert "No timezone found for \u00abxyz\u00bb: try a country, a city or a timezone like Europe/Rome." in "\n".join(lines)
+    assert _say("en", "host_setup.tz.none", "xyz") in "\n".join(lines)
     assert "Proposed: Europe/Rome (now HH:MM)." in "\n".join(lines)
     assert result.env == "Europe/Rome" and result.file.endswith("JHT_USER_TZ=Europe/Rome\n")
     assert "UTC" not in result.out.split("AFTER")[0].replace("timezone", ""), "UTC is never said as a fallback"
