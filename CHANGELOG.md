@@ -25,7 +25,7 @@ this was tested on real machines and which was not.
 ### Providers
 
 - Four ways to power the team: **Pi with GLM (Z.ai)**, **Pi with Kimi (Moonshot)**, **Pi with OpenAI** or **Pi with Claude (Anthropic)**, each with an **API key** that `jht setup` asks for (typed hidden)
-  or takes from a file or from standard input: its cost is yours, and the team's spending cap stops it. The
+  or takes from a file or from standard input: its cost is yours: set a spending ceiling (`no_quota_cap`, see PROVIDERS) and the team pauses there; without one nothing stops the spending. The
   services a release offers are one list (`shared/runtime/release-providers.js`); `jht setup`,
   `jht providers use` and `jht providers harness` refuse the others, and `jht doctor` says a team configured on
   one of them is not supported in this release. The ChatGPT subscription (Codex) is not offered to new users in
