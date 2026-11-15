@@ -326,7 +326,7 @@ $ErrorActionPreference = 'Stop'
 $tokens = $null; $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile($Wrapper, [ref]$tokens, [ref]$errors)
 if ($errors.Count -ne 0) { throw ($errors | Out-String) }
-foreach ($name in @('Write-Err', 'Write-Info', 'Write-RuntimeMigrationLeft',
+foreach ($name in @('Get-JhtTextTable', 'Get-JhtText', 'Format-JhtText', 'Write-Err', 'Write-Info', 'Write-RuntimeMigrationLeft',
                     'Get-RuntimeMigrationPodmanArgs', 'Start-RuntimeMigrationProcess',
                     'Copy-RuntimeMigrationVolume', 'Invoke-RuntimeMigrationPodman')) {
   $fn = $ast.Find({
@@ -336,6 +336,7 @@ foreach ($name in @('Write-Err', 'Write-Info', 'Write-RuntimeMigrationLeft',
   if (-not $fn) { throw "missing function $name" }
   Invoke-Expression $fn.Extent.Text
 }
+function Get-JhtTextLanguage { return 'it' }
 $RuntimeMigrationVolumes = @('jht-broker-state', 'jht-secrets', 'jht-telegram-secrets', 'jht-telegram-state')
 function Get-RuntimeMigrationVolumeId {
   param($EngineName, $DockerPath, $PodmanPath, $Machine, $Project, $Logical)

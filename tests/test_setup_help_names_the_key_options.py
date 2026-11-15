@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from test_cli_help_never_starts_docker import assert_no_docker_effect, make_docker_spy, run_wrapper
+from wrapper_ps_texts import say_functions as ps_say_functions
 from wrapper_texts import LANGUAGES, catalog
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -73,8 +74,8 @@ def test_both_wrappers_answer_setup_help_before_the_generic_one_and_with_the_sam
     assert re.search(r"^setup_help\(\) \{\n  printf '%s\\n' \"\$\(jht_say help\.setup\)\"\n\}\n", SH, re.M)
     assert re.search(r'if \[ "\$SUB" = setup \]; then\n\s+setup_help\n\s+exit 0\n\s+fi\n\s+if host_command_uses_local_help', SH)
     assert re.search(r"if \(\$Sub -ceq 'setup'\) \{\n\s+Write-SetupHelp\n\s+exit 0\n\s+\}\n\s+if \(Test-HostCommandUsesLocalHelp", PS)
-    ps_text = re.search(r"function Write-SetupHelp \{\n.*?@'\n(.*?)\n'@\)", PS, re.S).group(1)
-    assert ps_text == _sh_text()
+    # the .ps1 says the catalog's text by its key, as the .sh does (in every language: tests/test_wrapper_ps1_speaks_the_language_chosen.py)
+    assert re.search(r"function Write-SetupHelp \{\n  \[Console\]::Out\.WriteLine\(\(Get-JhtText 'help\.setup'\)\)\n\}", PS)
 
 
 def test_the_windows_help_prints_the_same_lines_when_pwsh_runs_it(tmp_path):
@@ -83,7 +84,7 @@ def test_the_windows_help_prints_the_same_lines_when_pwsh_runs_it(tmp_path):
         pytest.skip(f"{shell} not installed")
     function = re.search(r"^function Write-SetupHelp \{\n.*?^\}\n", PS, re.S | re.M).group(0)
     script = tmp_path / "help.ps1"
-    script.write_text(function + "\nWrite-SetupHelp\n", encoding="utf-8")
+    script.write_text(ps_say_functions("it") + "\n" + function + "\nWrite-SetupHelp\n", encoding="ascii")
     done = subprocess.run([shell, "-NoProfile", "-File", str(script)], text=True, capture_output=True, timeout=60)
     assert done.returncode == 0, done.stderr
     assert done.stdout.replace("\r\n", "\n").rstrip("\n") == _sh_text()

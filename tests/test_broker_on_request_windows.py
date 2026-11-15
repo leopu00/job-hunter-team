@@ -30,11 +30,12 @@ $ErrorActionPreference = 'Stop'
 $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($env:JHT_UNDER_TEST, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw "parse: $($errors[0])" }
-foreach ($name in 'Write-EnsureLine', 'Invoke-BrokerNetwork', 'Get-ComposeLabel', 'Get-BrokerContainerState', 'Ensure-Broker', 'Resume-Broker', 'Invoke-ComposeQuiet') {
+foreach ($name in 'Get-JhtTextTable', 'Get-JhtText', 'Format-JhtText', 'Write-EnsureLine', 'Invoke-BrokerNetwork', 'Get-ComposeLabel', 'Get-BrokerContainerState', 'Ensure-Broker', 'Resume-Broker', 'Invoke-ComposeQuiet') {
   $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name }, $true)
   if (-not $fn) { throw "$name missing" }
   Invoke-Expression $fn.Extent.Text
 }
+function Get-JhtTextLanguage { return 'it' }
 function Write-Err { param([string]$Msg) Add-Content -LiteralPath $env:T_LOG -Value "ERR $Msg" }
 function Write-Warn { param([string]$Msg) Add-Content -LiteralPath $env:T_LOG -Value "WARN $Msg" }
 function Write-Info { param([string]$Msg) }

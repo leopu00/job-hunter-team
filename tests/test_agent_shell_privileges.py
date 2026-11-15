@@ -294,8 +294,15 @@ def test_every_up_of_the_windows_wrapper_repairs_first():
 
 def test_a_failed_repair_stops_the_start_with_code_sentence_and_action():
     text = PS1.read_text(encoding="utf-8")
-    assert 'Write-Err "mount_repair_failed:' in text
-    assert "Cosa fare:" in text
+    # code, sentence, action: the sentence and the action are texts of the catalog, in every language
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from script_texts import LANGUAGES, catalog
+
+    assert "Write-Err (Format-JhtText 'ps.mount_repair_failed_folders_not_writable' $homeMount $userMount)" in text
+    assert "Write-Info (Get-JhtText 'ps.docker_desktop_file_sharing_hint')" in text
+    for lang in LANGUAGES:
+        assert catalog(lang)["wrapper.ps.mount_repair_failed_folders_not_writable"].startswith("mount_repair_failed:"), lang
+    assert "Cosa fare:" in catalog("it")["wrapper.ps.docker_desktop_file_sharing_hint"]
     assert text.count("if (-not (Repair-MountOwnership)) { exit 1 }") == 3
 
 

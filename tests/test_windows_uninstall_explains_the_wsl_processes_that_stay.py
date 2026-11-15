@@ -15,8 +15,13 @@ PS = (ROOT / "scripts" / "jht-wrapper.ps1").read_text(encoding="utf-8").replace(
 
 
 def _texts() -> list[str]:
-    line = re.search(r"^    'done\.wsl'\s+= @\((.*)\)$", PS, re.M).group(1)
-    return re.findall(r"'((?:[^']|'')*)'", line)
+    """The note in Italian and in English: a text of the catalog (the wrapper says it by key, in the 7 languages)."""
+    import sys
+
+    sys.path.insert(0, str(ROOT / "tests"))
+    from script_texts import catalog
+
+    return [catalog(lang)["wrapper.ps.uninstall.done.wsl"] for lang in ("it", "en")]
 
 
 def test_the_note_is_in_italian_and_in_english_and_names_the_three_processes_and_the_manual_command():
@@ -26,6 +31,11 @@ def test_the_note_is_in_italian_and_in_english_and_names_the_three_processes_and
             assert name in text
         assert "wsl --shutdown" in text
     assert "non li ha installati Job Hunter Team" in italian and "did not install them" in english
+    from script_texts import LANGUAGES, catalog
+
+    for lang in LANGUAGES:
+        text = catalog(lang)["wrapper.ps.uninstall.done.wsl"]
+        assert all(name in text for name in ("vmmem", "wslservice", "wslrelay", "wsl --shutdown")), lang
 
 
 def test_the_uninstall_prints_the_note_after_the_done_line_and_never_ends_a_wsl_process():

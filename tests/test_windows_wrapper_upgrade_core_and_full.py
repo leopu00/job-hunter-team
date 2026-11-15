@@ -51,11 +51,12 @@ function Write-UpgradeNote { param([string]$Message) Write-Output "NOTE: $Messag
 $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($env:T_WRAPPER_SRC, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw "parse: $($errors[0])" }
-foreach ($name in @('Get-PlainImageId', 'Get-UpgradeCandidateConstant', 'Initialize-UpgradeTierPlan', 'Invoke-UpgradeFullPull', 'Get-UpgradeTierKeepIds')) {
+foreach ($name in @('Get-JhtTextTable', 'Get-JhtText', 'Format-JhtText', 'Get-PlainImageId', 'Get-UpgradeCandidateConstant', 'Initialize-UpgradeTierPlan', 'Invoke-UpgradeFullPull', 'Get-UpgradeTierKeepIds')) {
   $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name }, $true)
   if (-not $fn) { throw "missing $name" }
   Invoke-Expression $fn.Extent.Text
 }
+function Get-JhtTextLanguage { return 'it' }
 $script:UpgradeCoreRef = ''; $script:UpgradeFullRef = ''; $script:UpgradeFullKeep = ''
 """
 
@@ -180,7 +181,8 @@ def test_the_plan_is_read_before_the_pull_and_the_core_image_is_the_one_of_the_w
     plan = body.index("Initialize-UpgradeTierPlan $newWrapper")
     assert body.index("$env:JHT_IMAGE = $script:UpgradeCoreRef") > plan
     assert body.index("$env:JHT_IMAGE = $script:UpgradeCoreRef") < body.index("Invoke-UpgradeCompose $newCompose 'pull' $Container")
-    assert body.index("Il rilascio non porta un nucleo valido") < body.index("Invoke-UpgradeCompose $newCompose 'pull' $Container")
+    # the refusal of a release with no valid core is a text of the catalog (the wrapper says it by key)
+    assert body.index("(Get-JhtText 'ps.upgrade_release_core_invalid')") < body.index("Invoke-UpgradeCompose $newCompose 'pull' $Container")
 
 
 def test_the_full_image_is_pulled_after_the_commit_and_before_the_pruning_never_on_a_check():

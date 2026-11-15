@@ -68,7 +68,6 @@ $JHT_DESKTOP_APPLY_PROTOCOL = 1
 # `jht integration list|status|add|remove --json` (the integrations added after the setup). The app asks for this line before it calls them.
 $JHT_INTEGRATION_PROTOCOL = 1
 $JHT_UNINSTALL_PROTOCOL = 1
-$JhtUninstallRemovalNotice = 'Vengono cancellati anche la password della posta e i token di Telegram salvati; ~/.jht e Documenti restano, e con loro la sessione LinkedIn salvata (secrets/linkedin-profile e .cache/linkedin): si toglie con jht reset --scope creds.'
 
 # `uninstall` deve funzionare anche quando il runtime e' gia' parzialmente
 # rimosso, quindi viene gestito prima di caricare manifest, helper ACL o shim.
@@ -79,15 +78,12 @@ $JhtUninstallRemovalNotice = 'Vengono cancellati anche la password della posta e
 $script:JhtUninstallReason = ''
 # The machine this uninstall removes: jht-podman, or the one the runtime attests (Resolve-JhtUninstallMachineName).
 $script:JhtUninstallMachine = 'jht-podman'
-# With --purge the first notice must not say that ~/.jht and Documents stay: only the secrets are named, the purge notice says the rest.
-$script:JhtUninstallPurgeRemovalNotice = 'Vengono cancellati anche la password della posta e i token di Telegram salvati.'
-$script:JhtUninstallPurgeNotice = 'Con --purge vengono cancellati anche ~/.jht e Documents\Job Hunter Team: configurazione, database, CV e output. Non si torna indietro.'
 
 # The language of the sentences the wrapper prints, by the rule of the CLI: the one the person chose with `jht setup --language`
 # or the picker (saved in i18n-prefs.json next to host.env), then JHT_LANG as the person set it in this terminal, then the one in
 # host.env (the installer writes the person's there), then the language of Windows, then English. The file is in a folder the
 # container can write: it is read as DATA (not a link, a small file, the value one of the seven codes) and only chooses which text
-# is printed. Italian and English are written: another language reads English. Returns 'it' or 'en'.
+# is printed. The seven languages of the product are written (en it hu es de fr pt): another one, or none, reads English. Returns one of the seven codes.
 $script:JhtCallerLang = [string]$env:JHT_LANG
 $script:JhtHostEnvLang = ''
 function Get-JhtTextLanguage {
@@ -110,9 +106,1767 @@ function Get-JhtTextLanguage {
   if (-not $code) {
     try { $code = ([string](Get-UICulture).TwoLetterISOLanguageName).ToLowerInvariant() } catch { $code = '' }
   }
-  if ($code -ceq 'it') { return 'it' }
+  if ($code -cmatch $known) { return $code }
   return 'en'
 }
+
+# The sentences the wrapper says to a person, in the language the person chose (Get-JhtTextLanguage): `(Get-JhtText '<key>')`, or
+# `(Format-JhtText '<key>' value...)` when the text has %s/%d (the values go in IN ORDER). The key is the catalog's (shared/locales,
+# keys wrapper.*) without the prefix. The texts are a block made from the catalogs by tests/wrapper_ps_texts.py, written here because
+# the wrapper runs on the host, where the catalogs are not, and reads no file the container can write. A language the block lacks
+# reads English; a key it lacks says the key.
+function Get-JhtText {
+  param([Parameter(Mandatory)][string]$Key)
+  $text = Get-JhtTextTable (Get-JhtTextLanguage) $Key
+  if ($null -eq $text) { $text = Get-JhtTextTable 'en' $Key }
+  if ($null -eq $text) { return $Key }
+  return $text
+}
+function Format-JhtText {
+  param([Parameter(Mandatory)][string]$Key, [Parameter(ValueFromRemainingArguments = $true)][object[]]$Values)
+  $text = Get-JhtText $Key
+  $out = New-Object System.Text.StringBuilder
+  $position = 0
+  $index = 0
+  foreach ($match in [regex]::Matches($text, '%[sd]')) {
+    [void]$out.Append($text.Substring($position, $match.Index - $position))
+    if ($index -lt @($Values).Count) { [void]$out.Append([string]@($Values)[$index]) }
+    $index++
+    $position = $match.Index + 2
+  }
+  [void]$out.Append($text.Substring($position))
+  return $out.ToString()
+}
+# >>> texts in the 7 languages, made from shared/locales by `python3 tests/wrapper_ps_texts.py --write`: do not edit by hand
+function Get-JhtTextTable {
+  param([string]$Lang, [string]$Key)
+  switch -CaseSensitive ("$Lang`:$Key") {
+    'en:container.starting' { return 'Container ''%s'' is not running, starting it...' }
+    'en:doctor.host_config_none' { return 'no configuration yet: ''jht setup''' }
+    'en:doctor.host_config_ok' { return 'configuration present' }
+    'en:doctor.host_engine_fail' { return 'container engine not reachable' }
+    'en:doctor.host_engine_ok' { return 'container engine reachable' }
+    'en:doctor.host_more' { return 'For the full checks (configuration, provider, database, agents): ''jht up'', then ''jht doctor''.' }
+    'en:doctor.host_runtime_fail' { return 'JHT runtime missing or changed: ''jht upgrade'' installs it again' }
+    'en:doctor.host_runtime_ok' { return 'JHT runtime intact' }
+    'en:doctor.host_team_off' { return 'team off: ''jht up'' starts it' }
+    'en:doctor.host_team_unattestable' { return 'a container of the team is there but cannot be verified as ours: nothing was touched (''jht status'' says more)' }
+    'en:doctor.host_title' { return 'Job Hunter Team: the team is off (its container is not running). Checks made from this computer:' }
+    'en:down.done' { return 'Job Hunter Team stopped.' }
+    'en:download.bad_version' { return 'invalid version: %s. Example: 0.3.5.' }
+    'en:download.deb_only_linux' { return '--deb is only for Linux.' }
+    'en:download.dest_is_link' { return 'the destination is a link: %s' }
+    'en:download.dest_not_file' { return 'the destination exists and is not a file: %s' }
+    'en:download.fetching' { return 'Downloading %s...' }
+    'en:download.hash_invalid' { return 'invalid SHA-256 for %s: expected %s, got %s.' }
+    'en:download.intel_mac' { return 'The 0.4 macOS app only runs on Macs with Apple silicon (M1 and later); this is an Intel Mac, which 0.4 does not support. Nothing was downloaded.' }
+    'en:download.linux_no_app' { return 'In this version there is no desktop app for Linux: use install.sh. Nothing was downloaded.' }
+    'en:download.mismatch_existing' { return 'the file %s exists but its SHA-256 does not match: it was not overwritten.' }
+    'en:download.mkdir_failed' { return 'cannot create the destination folder: %s' }
+    'en:download.present_verified' { return 'File already present and verified: %s' }
+    'en:download.release_no_app' { return 'This release (v%s) has no app for macOS: use 0.4.0 or later. Nothing was downloaded.' }
+    'en:download.saved_in' { return 'Saved in: %s' }
+    'en:download.sha_verified' { return 'SHA-256 verified: %s' }
+    'en:download.sum_missing' { return 'no SHA-256 declared for %s.' }
+    'en:download.unsupported_os' { return 'unsupported system: %s. Use windows or macos.' }
+    'en:download.windows_missing' { return 'Windows is not part of 0.4.0: the release has no installer for Windows. Nothing was downloaded.' }
+    'en:help.integration' { return (('Usage: jht integration <command>', '', '  list [--json]                   the integrations and their status', '  status [ID] [--json]            the status of one, or of all', '  add ID [--json]                 adds an integration', '  remove ID [--purge --yes] [--remove-image] [--json]', '                                  removes it; --purge also deletes its data (needs --yes);', '                                  --remove-image (screen and media only) also removes the tools image', '', 'The allowed IDs are the ones `jht integration list` shows. Nothing is downloaded or turned on', 'until you ask for it with `add`.') -join [char]10) }
+    'en:help.linkedin' { return (('Usage: jht linkedin <command>', '', '  login [--stop]    the manual sign-in to LinkedIn (with Google): a browser in a separate container, with no network,', '                    whose window you see and use from the app; --stop closes everything', '  status --json     says whether the sign-in is in progress and whether the LinkedIn session is saved', '', 'Nothing is downloaded or turned on until you ask for it with `login`.') -join [char]10) }
+    'en:help.screen' { return (('Usage: jht screen <command>', '', '  on [--json]       turns on the closer''s live screen: a separate container, with the stream only on 127.0.0.1', '  off [--remove-image] [--json]', '                    turns it off and removes the container; the tools image stays on disk, to turn it on again', '                    without downloading it again: --remove-image removes it and frees the space', '  status [--json]   says whether it is on', '', 'Nothing is downloaded or turned on until you ask for it with `on`. The stream is view-only.') -join [char]10) }
+    'en:help.setup' { return (('Usage: jht setup [options]', '', 'Without options the guided installation starts. With --non-interactive it asks nothing:', 'you give everything with the options.', '', '  --non-interactive            no questions', '  --provider <name>            glm (Z.ai, default), kimi (Moonshot), openai or claude (Anthropic)', '  --harness <name>             pi (default)', '  --api-key-file <path>        file that contains the API key (one line, readable only by you).', '                               jht reads a file of your computer and passes it to setup: with glm and kimi', '                               setup keeps the key on its own, never in the configuration', '  --api-key-stdin              reads the API key from standard input (one line): never on the command line', '  --api-key <key>              the key written here, in clear text (not allowed for glm and kimi)', '  --secret-mode <mode>         how the key is saved: plaintext (default), env or file', '  --secret-env <name>          with --secret-mode env: the environment variable that contains it', '  --secret-file <path>         with --secret-mode file: the file that contains it', '  --model <model>              the model to use', '  --language <code>            the language (for example it or en)', '  --skip-health                skips the final check', '  --reset                      starts again from a clean configuration', '', 'Examples:', '  with a GLM key in a file:', '    jht setup --non-interactive --provider glm --harness pi --api-key-file key.txt', '  OpenAI with an API key, on Pi (for Claude: --provider claude):', '    jht setup --non-interactive --provider openai --harness pi --api-key-stdin') -join [char]10) }
+    'en:help.tools' { return (('Usage: jht tools <command>', '', '  status --json   whether the Scouts'' tools (the full image) are here, on their way or failed', '  pull            downloads them in the background (jht up and jht setup start it by themselves)', '  switch          moves the team onto them once the onboarding is closed (the download does it by itself)', '', 'This help starts nothing and downloads nothing.') -join [char]10) }
+    'en:keyfile.both' { return 'use --api-key-file or --api-key-stdin, not both' }
+    'en:keyfile.not_file' { return 'the file given to --api-key-file must be a regular file, not a folder or a link: %s' }
+    'en:keyfile.shape' { return 'the content of the file given to --api-key-file is not one line of 16 to 512 printable characters without spaces: %s' }
+    'en:keyfile.size' { return 'the file given to --api-key-file is empty or too big for a key (1 to 4096 bytes): %s' }
+    'en:keyfile.twice' { return '--api-key-file was given twice' }
+    'en:keyfile.unreadable' { return 'the file given to --api-key-file cannot be read: %s' }
+    'en:line.abbinamento_annullato_nessuna_modifica' { return 'Pairing cancelled: nothing changed.' }
+    'en:line.abbinamento_di_s_non_riuscito' { return 'Pairing of %s failed: all the legacy copies stay. Run jht telegram pair --all again: the roles already paired do not ask for another token.' }
+    'en:line.abbinamento_rifiutato_genera_un_token' { return 'Pairing refused: generate a new token in BotFather (/revoke) and try again.' }
+    'en:line.agent_restart_failed.inventario_conservato_ma_il_team' { return 'inventory kept, but the team did not restart. What to do: jht up' }
+    'en:line.annullato_niente_autorizzato' { return 'Cancelled: nothing authorized.' }
+    'en:line.anteprima_non_valida_niente_autorizzato' { return 'Invalid preview: nothing authorized.' }
+    'en:line.apply.authorize' { return 'Do you authorize this application?' }
+    'en:line.apply_relink_account_cloud_account' { return 'apply relink-account: cloud account not available. Run jht cloud pair first.' }
+    'en:line.autorizzata_s_verso_s_il' { return 'Authorized #%s, to %s: the CLOSER will pick it up on its next round.' }
+    'en:line.bot_abbinato_e_copia_legacy' { return 'Bot paired and legacy copy removed. Other legacy tokens, or a token in the container environment, are still there: remove them and finish the rotation before the cutover.' }
+    'en:line.bot_token_invalid.controlla_il_token_generato_da' { return 'check the token BotFather generated.' }
+    'en:line.broker_restart_failed.il_servizio_della_posta_non_4' { return 'the mail service did not restart. What to do: jht mail status' }
+    'en:line.broker_start_failed.il_servizio_della_posta_non_2' { return 'the mail service did not start.' }
+    'en:line.broker_start_failed.il_servizio_della_posta_non_3' { return 'the mail service does not answer after 30 seconds.' }
+    'en:line.broker_unavailable.il_broker_dei_segreti_esiste' { return 'the secrets broker exists but cannot be verified as ours: not touching it.' }
+    'en:line.broker_unavailable.il_runtime_installato_pi_vecchio_2' { return 'the installed runtime is older and has no secrets broker.' }
+    'en:line.broker_unavailable.il_servizio_della_posta_non' { return 'the mail service is not there yet: it is created the first time it is needed.' }
+    'en:line.cancellato_marcatore_migrazione_broker_s' { return 'Deleted: broker migration marker %s' }
+    'en:line.cancellato_volume_broker_s_s' { return 'Deleted: broker volume %s (%s)' }
+    'en:line.container_s_non_e_partito' { return 'Container ''%s'' did not start within 10s. Check ''jht logs''.' }
+    'en:line.cosa_fare_jht_mail_setup' { return 'What to do: jht mail setup' }
+    'en:line.cosa_fare_jht_up_3' { return 'What to do: jht up' }
+    'en:line.cosa_fare_jht_upgrade_4' { return 'What to do: jht upgrade' }
+    'en:line.cosa_fare_riprova_il_comando_2' { return 'What to do: try the command again' }
+    'en:line.fino_ad_allora_la_posta' { return 'Until then mail is read and sent with today''s password; the warning stays in jht mail status.' }
+    'en:line.genera_una_nuova_password_per' { return 'generate a new app password from your provider and save it with: jht mail setup' }
+    'en:line.i_segreti_e_lo_stato' { return 'The secrets and the broker state were deleted: log in to the portals again and set up mail again.' }
+    'en:line.il_broker_non_ha_registrato' { return 'The broker did not record the authorization: withdrawn, nothing will be sent.' }
+    'en:line.integration.install_hint' { return 'to install them: ''jht upgrade'' (or a ''jht integration add <id>'')' }
+    'en:line.interattivo_il_token_viene_chiesto' { return 'Interactive: the token is asked without echo, then the new bot gets a one-time code from your Telegram. Automations: {"bot_token": ...} as JSON on stdin; do not save the token in ~/.jht, and delete right away any file used outside it.' }
+    'en:line.jht_telegram_pair_all_interattivo' { return 'jht telegram pair --all is interactive: for automations, pair one role at a time.' }
+    'en:line.job_hunter_team_non_installato' { return 'Job Hunter Team is not fully installed: the integrity file is missing from the runtime folder (an interrupted install?). Run the installer again.' }
+    'en:line.la_casella_di_posta_ora' { return 'The mailbox is now in the secrets broker. Its password could be read by the agents:' }
+    'en:line.legacy_cleanup_failed.i_token_nuovi_sono_al' { return 'the new tokens are safe, but the legacy copy of %s is still in ~/.jht; cutover refused.' }
+    'en:line.legacy_inventory_failed.il_team_resta_fermo_perch_4' { return 'the team stays stopped because the host Telegram inventory was not kept.' }
+    'en:line.legacy_inventory_failed.le_impronte_non_sono_state' { return 'the fingerprints were not kept by the isolated service.' }
+    'en:line.legacy_inventory_failed.migrazione_telegram_interrotta' { return 'Telegram migration stopped.' }
+    'en:line.legacy_inventory_failed.non_posso_provare_che_jht' { return 'cannot prove that ~/.jht has no Telegram tokens.' }
+    'en:line.legacy_inventory_failed.non_riesco_a_fermare_gli' { return 'cannot stop the agents before the host inventory.' }
+    'en:line.legacy_inventory_failed.non_riesco_a_leggere_i' { return 'cannot read the legacy tokens in ~/.jht.' }
+    'en:line.legacy_inventory_failed.ruoli_legacy_non_riconosciuti' { return 'legacy roles not recognized.' }
+    'en:line.legacy_remove_failed.s_nel_broker_ma_la' { return '%s is in the broker but the copy in ~/.jht/credentials is still there.' }
+    'en:line.legacy_secret_reappeared.jht_credentials_s_json_ricomparso' { return '~/.jht/credentials/%s.json came back after the migration; removed without importing it.' }
+    'en:line.mail.address_prompt' { return 'Mailbox address:' }
+    'en:line.mail.app_password_prompt' { return 'App password (it is not shown):' }
+    'en:line.mail.dedicated_prompt' { return 'Is it a mailbox DEDICATED to forwarded job alerts?' }
+    'en:line.mail_setup_opzione_sconosciuta_s' { return 'mail setup: unknown option %s' }
+    'en:line.mail_setup_password_vuota' { return 'mail setup: empty password' }
+    'en:line.nessun_provider_attivo_scegline_uno' { return 'no active provider: choose one with ''jht providers use glm''' }
+    'en:line.nessun_ruolo_ha_un_token' { return 'No role has a legacy token: for a new bot use jht telegram pair <role>.' }
+    'en:line.non_autorizzabile_s' { return 'Cannot be authorized: %s.' }
+    'en:line.non_autorizzata_s' { return 'Not authorized: %s.' }
+    'en:line.os_and_version_are_required' { return '--os and --version are required' }
+    'en:line.podman_non_trovato_reinstalla_il' { return 'Podman not found: reinstall the JHT runtime.' }
+    'en:line.preparo_il_servizio_della_posta' { return ('Preparing the mail service (it is created only the first time it is needed)' + [char]0x2026) }
+    'en:line.provider_attivo_non_riconosciuto_s' { return 'active provider not recognized: %s' }
+    'en:line.reset_impossibile_cancellare_il_marcatore' { return 'reset: cannot delete the broker migration marker %s.' }
+    'en:line.reset_impossibile_cancellare_il_marcatore_2' { return 'reset: cannot delete the broker marker %s.' }
+    'en:line.reset_impossibile_cancellare_il_volume' { return 'reset: cannot delete the broker volume %s (%s).' }
+    'en:line.reset_nome_volume_non_valido' { return 'reset: invalid volume name for %s; removal refused.' }
+    'en:line.reset_non_riesco_a_determinare' { return 'reset: cannot find the Compose project; the broker volumes were not touched.' }
+    'en:line.reset_non_riesco_a_fermare' { return 'reset: cannot stop the runtime; the broker volumes were not touched.' }
+    'en:line.reset_ricerca_del_volume_s_2' { return 'reset: search for the volume %s failed.' }
+    'en:line.restano_token_legacy_per_s' { return 'Legacy tokens are left for: %s. Until you pair these roles too, %s stays silent on Telegram: pair them all in this session (jht telegram pair --all).' }
+    'en:line.risposta_del_container_non_valida' { return 'Invalid answer from the container: authorization withdrawn, nothing will be sent.' }
+    'en:line.ritirata_s_non_verra_inviata' { return 'Withdrawn #%s: it will not be sent.' }
+    'en:line.ritiro_non_riuscito_s' { return 'Withdrawal failed: %s.' }
+    'en:line.runtime_migration_docker_missing.il_client_docker_originale_non' { return 'the original Docker client is not available.' }
+    'en:line.runtime_migration_image_invalid.serve_l_immagine_jht_fissata' { return 'the JHT image pinned by digest is needed.' }
+    'en:line.runtime_migration_podman_missing.podman_non_e_disponibile' { return 'Podman is not available.' }
+    'en:line.runtime_migration_team_running.ferma_prima_il_team_docker' { return 'stop the Docker team first.' }
+    'en:line.runtime_migration_team_running.ferma_prima_il_team_podman' { return 'stop the Podman team first.' }
+    'en:line.runtime_o_container_jht_non' { return 'JHT runtime or container not available' }
+    'en:line.ruoli_da_abbinare_in_questa' { return 'Roles to pair in this session: %s' }
+    'en:line.s_ha_gi_un_bot' { return '%s already has a paired bot: removing only its legacy copy.' }
+    'en:line.s_needs_a_value' { return '%s needs a value' }
+    'en:line.saltato_non_trovato_volume_broker' { return 'Skipped (not found): broker volume %s' }
+    'en:line.serve_un_terminale_l_autorizzazione' { return 'A terminal is needed: the authorization is confirmed by hand.' }
+    'en:line.telegram_isolato_attivo_il_bridge' { return 'Isolated Telegram is active; the agents can no longer turn the legacy bridge back on.' }
+    'en:line.the_setup_keeps_the_key' { return 'The setup keeps the key: you can delete the file on this computer now (%s).' }
+    'en:line.upgrade.done' { return 'Update completed: %s (%s) -> %s (%s). %s' }
+    'en:line.upgrade.restored' { return 'Previous runtime restored.' }
+    'en:line.uso_jht_apply_relink_account' { return 'usage: jht apply relink-account' }
+    'en:line.uso_jht_apply_request_cancel_2' { return 'usage: jht apply request|cancel <id>' }
+    'en:line.uso_jht_mail_setup_status' { return 'usage: jht mail setup|status|admission <allowlist|whole_mailbox>|allow add|remove <indirizzo|@dominio>|drafts|approve <id>|discard <id>|journal|delete|migrate' }
+    'en:line.uso_jht_migrate_runtime_podman' { return 'usage: jht migrate-runtime podman' }
+    'en:line.uso_jht_screen_on_off' { return 'usage: jht screen on | off | status [--json]' }
+    'en:line.uso_jht_telegram_chat_id' { return 'usage: jht telegram chat-id <assistente|capitano|mentor>' }
+    'en:line.uso_jht_telegram_pair_assistente' { return 'usage: jht telegram pair <assistente|capitano|mentor>|--all' }
+    'en:line.uso_jht_telegram_remove_assistente' { return 'usage: jht telegram remove <assistente|capitano|mentor>' }
+    'en:line.uso_jht_telegram_status_pair' { return 'usage: jht telegram status|pair <ruolo>|pair --all|chat-id <ruolo>|remove <ruolo>' }
+    'en:monitor.window_invalid' { return 'monitor_window_invalid: use ''jht monitor --window'' without other options.' }
+    'en:ps.apply_auto_send_warning_1' { return '  With automatic sending on, the team fills in and SENDS the application,' }
+    'en:ps.apply_auto_send_warning_2' { return '  without another confirmation. Once it has gone out it cannot be recalled.' }
+    'en:ps.bot_token_prompt_hidden' { return 'Bot token for %s (hidden input)' }
+    'en:ps.botfather_fresh_token' { return 'Always use a freshly generated token in BotFather (/revoke on the bot, or a new bot): an existing token may have been read by the agents even if it no longer appears in ~/.jht.' }
+    'en:ps.broker_network_proxy_not_ready' { return 'broker_network_unavailable: the mail proxy is not ready (code %s).' }
+    'en:ps.broker_network_scripts_not_downloadable' { return 'broker_network_unavailable: cannot download the mail proxy scripts. What to do: jht upgrade' }
+    'en:ps.broker_network_scripts_not_verified' { return 'broker_network_unavailable: the mail proxy scripts cannot be verified. What to do: jht upgrade' }
+    'en:ps.broker_restart_failed_secrets_broker_not_ours' { return 'broker_restart_failed: the secrets broker cannot be verified as ours: not touching it. What to do: jht mail status' }
+    'en:ps.broker_unavailable_secrets_broker_not_running' { return 'broker_unavailable: the secrets broker is not running.' }
+    'en:ps.cli_version_needs_container' { return 'The version of the running CLI needs the container running: ''jht up''.' }
+    'en:ps.compose_up_failed_team_not_started' { return 'compose_up_failed: the team did not start (docker compose up, code %s). Check ''jht logs''.' }
+    'en:ps.container_not_running' { return 'container ''%s'' is not running' }
+    'en:ps.container_runtime_unsupported' { return 'unsupported container runtime: %s' }
+    'en:ps.docker_desktop_file_sharing_hint' { return '  What to do: open Docker Desktop > Settings > Resources > File sharing, check that the user''s folder is shared, then run ''jht up'' again.' }
+    'en:ps.docker_podman_verified_future_removal' { return 'Docker -> Podman migration verified. The Docker volumes stay intact and still hold the mail passwords, the portal logins and the Telegram tokens: removing them will require an explicit confirmation in the future.' }
+    'en:ps.doctor.wsl_memory' { return 'WSL has no memory limit (other WSL distributions are registered): in %s, under [wsl2], add memory=%s' }
+    'en:ps.download_asset_failed_detail' { return 'download failed: %s (%s)' }
+    'en:ps.download_shared_folder_no_path' { return 'the destination is inside a folder shared with the team: choose one outside it, like Downloads.' }
+    'en:ps.download_sums_failed_detail' { return 'download failed: SHA256SUMS of v%s (%s)' }
+    'en:ps.full_pull_failed_keep_old' { return 'full_pull_failed: the new full image did not arrive, the old one stays. What to do: jht tools pull' }
+    'en:ps.help.main' { return (('jht - Job Hunter Team', '', '  Host commands (they work from here):', '    jht up                 starts the team''s container', '    jht down               stops it', '                           (with --verbose you also see the engine''s lines)', '    jht restart            restarts it', '    jht status             status of the container and the team', '    jht logs [-f]          container log', '    jht upgrade            updates to the latest image', '    jht setup              guided installation', '    jht shell              shell inside the container', '    jht mail setup         saves the mailbox in the secrets broker', '    jht mail drafts        emails written by the agents, waiting for your ok', '    jht mail approve <id>  sends them; jht mail discard <id> discards them', '    jht integration list|status [ID]|add ID|remove ID [--purge --yes] [--remove-image] [--json]', '                           the integrations you add after setup', '                           (google, telegram, mail): status read from the engine', '    jht telegram status    status of the isolated Telegram service', '    jht telegram pair ROLE asks for the token without echo on the host computer, then', '                           shows a code to send to the bot from your Telegram.', '                           For automation: JSON on stdin. Do not save the token', '                           in ~/.jht; delete right away any file used outside it.', '    jht telegram pair --all pairs all the legacy roles in one session', '    jht telegram chat-id ROLE moves the bot to another chat, with the same code', '    jht reset              deletes the broker''s configuration and volumes', '    jht migrate-runtime podman', '                           copies and checks the Docker volumes into Podman;', '                           it does not select the new runtime and does not delete Docker', '    jht uninstall --confirm removes the local Windows runtime, but keeps data,', '                           documents, Podman and Compose', '', '  All the other commands (positions, stats, team, providers, cron,', '  working-hours, cloud...) run INSIDE the container: for their help', '  the container must be running.', '', '      jht up ; jht --help') -join [char]10) }
+    'en:ps.home_unavailable_bind_mount' { return 'HOME/USERPROFILE is not available: JHT bind mount refused' }
+    'en:ps.host_download_failed' { return 'download on the host failed: %s' }
+    'en:ps.input_not_json_bot_token_stdin' { return 'input_not_json: pass bot_token as JSON on stdin.' }
+    'en:ps.integration_not_installed' { return 'not installed' }
+    'en:ps.integration_not_installed_yet' { return 'not installed yet' }
+    'en:ps.jht_container_not_verifiable' { return 'JHT container cannot be verified.' }
+    'en:ps.jht_home_missing' { return 'Job Hunter Team is not installed yet: the folder %s does not exist. Run the installer, then ''jht setup''.' }
+    'en:ps.legacy_cleanup_failed_old_token_still_there' { return 'legacy_cleanup_failed: the old token is still in ~/.jht; cutover refused.' }
+    'en:ps.legacy_migration_failed_stays' { return 'legacy_migration_failed: %s stays in ~/.jht/credentials.' }
+    'en:ps.lifecycle.restarted' { return 'Job Hunter Team restarted.' }
+    'en:ps.link_or_not_folder' { return 'a link or not a folder' }
+    'en:ps.localappdata_unavailable' { return 'LOCALAPPDATA is not available: host runtime refused' }
+    'en:ps.machine_state_unreadable' { return 'the state of the machine cannot be read (podman and wsl do not answer)' }
+    'en:ps.monitor_window_unavailable' { return 'monitor_window_unavailable: cannot open a terminal window here. Run ''jht monitor'' in the current terminal.' }
+    'en:ps.mount_repair_failed_folders_not_writable' { return 'mount_repair_failed: the Job Hunter Team folders (%s, %s) are not writable by the container and could not be fixed.' }
+    'en:ps.old_images_busy' { return ' In use by a container (kept): %s.' }
+    'en:ps.old_images_kept_all' { return 'Old JHT images: all kept (JHT_KEEP_OLD_IMAGES=1).' }
+    'en:ps.old_images_refused' { return ' Rejected by the engine (kept): %s.' }
+    'en:ps.old_images_removed' { return 'Old JHT images: removed %s, about %s MB freed (nominal size: shared layers are only partly freed), kept: current, previous.' }
+    'en:ps.pair_role_now_prompt' { return 'Pair %s now? [s/N]' }
+    'en:ps.podman_exe_not_found' { return 'podman.exe not found' }
+    'en:ps.podman_machine_not_responding' { return 'The JHT Podman machine is not responding. Run ''jht up''.' }
+    'en:ps.release_arrived_without_https' { return 'the release arrived without HTTPS: %s' }
+    'en:ps.relink_account_container_not_running' { return 'apply relink-account: container not running.' }
+    'en:ps.script_integration_not_installed' { return 'script jht-integration.ps1 is not installed yet: run ''jht upgrade'' (or a ''jht integration add/remove'') and try again' }
+    'en:ps.script_tools_not_installed' { return 'script jht-tools.ps1 is not installed yet: run ''jht upgrade'' and try again' }
+    'en:ps.startup_task_still_registered' { return 'the task is still registered' }
+    'en:ps.team_container_unavailable' { return 'team_container_unavailable: start the team with jht up and try again.' }
+    'en:ps.telegram_not_configured' { return 'Telegram not active: Telegram is not configured.' }
+    'en:ps.telegram_status_unverifiable' { return 'Telegram: status cannot be verified right now (service stopped or unreachable). Details: jht telegram status' }
+    'en:ps.telegram_unavailable_isolated_not_running' { return 'telegram_unavailable: the isolated Telegram service is not running.' }
+    'en:ps.telegram_unavailable_run_jht_up' { return 'telegram_unavailable: run jht up' }
+    'en:ps.uninstall.bad.target' { return 'Refused: {0} is a link or not a folder: it is not followed and not deleted.' }
+    'en:ps.uninstall.done' { return 'Done: the <machine> machine (and with it the JHT images, the core and the full one), the runtime and the jht command are gone.' }
+    'en:ps.uninstall.done.kept' { return ' ~/.jht and Documents\Job Hunter Team stay (--purge deletes them).' }
+    'en:ps.uninstall.done.wsl' { return 'WSL stays in memory: vmmem, wslservice and wslrelay are parts of Windows (Job Hunter Team did not install them) and the other WSL machines of this user need them too; they normally stop by themselves after a while of inactivity. To stop them now: wsl --shutdown (it stops ALL the open WSL machines).' }
+    'en:ps.uninstall.kept.machine' { return 'The Podman machine {0} is not marked as created by the installer: it stays where it is. By hand, if it is yours to remove: podman machine stop {0}; podman machine rm {0}.' }
+    'en:ps.uninstall.left.commands' { return 'Not removed: the jht command or the installer files in {0} ({1}), or the variables and PATH lines the installer added. By hand: Remove-Item the file; the JHT_CONTAINER_RUNTIME and JHT_PODMAN_MACHINE variables and the {0} folder in the PATH from Settings > Environment variables.' }
+    'en:ps.uninstall.left.data' { return 'The JHT data was not deleted ({0}). By hand: Remove-Item -Recurse -Force {1}. The jht command and the runtime are still there: run jht uninstall --confirm --purge again once it is sorted out.' }
+    'en:ps.uninstall.left.machine' { return 'Not removed: the <machine> Podman machine. Reason: {0}. By hand: podman machine stop <machine>; wsl --unregister {1}; then run jht uninstall --confirm again.' }
+    'en:ps.uninstall.left.runtime' { return 'Not removed: the JHT runtime in {0}. By hand: Remove-Item -Recurse -Force ''{0}''.' }
+    'en:ps.uninstall.left.task' { return 'Not removed: the logon start task ''{0}'' (reason: {1}). Everything else was removed. By hand: schtasks /Delete /TN "{0}" /F.' }
+    'en:ps.uninstall.phase.commands' { return 'Removing the jht command, the installer files and the PATH lines...' }
+    'en:ps.uninstall.phase.data' { return 'Deleting ~/.jht and Documents\Job Hunter Team (--purge)...' }
+    'en:ps.uninstall.phase.machine' { return 'Removing the <machine> Podman machine (with the secrets and the images of JHT)...' }
+    'en:ps.uninstall.phase.runtime' { return 'Removing the JHT runtime...' }
+    'en:ps.uninstall.purge_notice' { return 'With --purge ~/.jht and Documents\Job Hunter Team are deleted too: configuration, database, CVs and output. There is no way back.' }
+    'en:ps.uninstall.purge_removal_notice' { return 'The saved mail password and Telegram tokens are deleted too.' }
+    'en:ps.uninstall.removal_notice' { return 'The saved mail password and Telegram tokens are deleted too; ~/.jht and Documents stay, and with them the saved LinkedIn session (secrets/linkedin-profile and .cache/linkedin): remove it with jht reset --scope creds.' }
+    'en:ps.uninstall.secrets' { return 'The saved secrets were not removed: the mail password and the Telegram tokens are in the jht-secrets and jht-telegram-secrets volumes of the <machine> machine, which is still there.' }
+    'en:ps.uninstall.wslconfig.done' { return 'Removed from {0} the lines the installer added (WSL memory).' }
+    'en:ps.uninstall.wslconfig.kept' { return 'Left in {0} the lines you changed: they are yours.' }
+    'en:ps.uninstall.wslconfig.left' { return 'Not touched: {0} ({1}). The lines the installer added (WSL memory) stay. Remove them by hand: each has a comment line above it.' }
+    'en:ps.unknown_argument' { return 'unknown argument: %s' }
+    'en:ps.upgrade_already_running' { return 'An update is already in progress' }
+    'en:ps.upgrade_broker_restart_failed' { return 'broker_restart_failed: the secrets broker did not restart. What to do: jht up' }
+    'en:ps.upgrade_disk_low' { return ('disk_low: The agents need at least %s GiB of disk ' + [char]0x2014 + ' available: %s GiB. To free space, empty the Trash, delete the large files you do not need and the unused Docker images, then try again: nothing was downloaded or changed.') }
+    'en:ps.upgrade_docker_unavailable' { return 'Docker or host runtime not available' }
+    'en:ps.upgrade_helper_install_failed' { return 'helper_install_failed: the new host scripts are fetched on the first request or with another ''jht upgrade''' }
+    'en:ps.upgrade_host_runtime_not_installable' { return 'Protected host runtime cannot be installed' }
+    'en:ps.upgrade_host_runtime_untrusted' { return 'Host runtime cannot be trusted' }
+    'en:ps.upgrade_image_download_failed' { return 'Image download failed' }
+    'en:ps.upgrade_journal_not_updated' { return 'Cannot update the journal' }
+    'en:ps.upgrade_metadata_not_persisted' { return 'Runtime metadata not persisted' }
+    'en:ps.upgrade_mounts_not_writable' { return 'Job Hunter Team folders not writable from the container (mount_repair_failed)' }
+    'en:ps.upgrade_not_completed' { return 'Update not completed (%s): %s' }
+    'en:ps.upgrade_note_activate_runtime' { return 'Activating the new runtime...' }
+    'en:ps.upgrade_note_download_image' { return 'Downloading the latest image...' }
+    'en:ps.upgrade_note_download_runtime' { return 'Downloading the updated runtime...' }
+    'en:ps.upgrade_option_unsupported' { return 'Unsupported upgrade option' }
+    'en:ps.upgrade_pulling_full_image' { return 'Downloading the updated full image...' }
+    'en:ps.upgrade_recovery_failed' { return 'Recovery of the previous upgrade failed' }
+    'en:ps.upgrade_release_core_invalid' { return 'The release does not carry a valid core for this installation: reinstall' }
+    'en:ps.upgrade_remote_compose_invalid' { return 'Remote compose invalid' }
+    'en:ps.upgrade_remote_runtime_invalid' { return 'Remote runtime invalid or unreachable' }
+    'en:ps.upgrade_rollback_not_prepared' { return 'Cannot prepare the rollback' }
+    'en:ps.upgrade_telegram_restart_failed' { return 'telegram_restart_failed: the isolated Telegram service did not restart. What to do: jht up' }
+    'en:ps.upgrade_test_channel' { return 'Test channel: update by reinstalling from the test build' }
+    'en:ps.upgrade_unexpected_error' { return 'Unexpected error during the update' }
+    'en:ps.upgrade_verify_failed' { return 'The new runtime did not pass verification' }
+    'en:ps.use_fresh_botfather_token' { return 'Always use a token freshly generated in BotFather (/revoke on the bot, or a new bot): an existing token may have been read by the agents even if it does not show up in ~/.jht today.' }
+    'en:ps.user_dir_unavailable_cannot_create' { return 'user_dir_unavailable: cannot create the folder %s, which the team uses.' }
+    'en:ps.wsl_exe_not_found' { return 'wsl.exe not found' }
+    'en:ps.wsl_not_answering' { return 'WSL does not answer (wsl --status)' }
+    'en:removed.office' { return '''jht %s'' was removed in 0.4.0 with the Godot office: use the jht commands (jht help).' }
+    'en:status.no_options' { return '''jht status'' takes no options (%s): run it as ''jht status''.' }
+    'en:team.stopped' { return 'Job Hunter Team is stopped: ''jht up'' starts it again.' }
+    'en:tools.arriving' { return 'The Scouts'' tools are on their way: the full image is downloading in the background (about 3 GB). The search for positions starts by itself once they are here; there is nothing to do.' }
+    'en:tools.failed' { return 'The download of the Scouts'' tools failed, so the team cannot search for positions yet. Run jht tools pull to try again (jht up tries again too).' }
+    'en:tools.switch_failed' { return 'The Scouts'' tools are here, but the team could not be restarted on them: run jht down, then jht up.' }
+    'en:tools.waiting' { return 'The Scouts'' tools are here: the team moves onto them by itself once the onboarding is closed.' }
+    'en:uninstall.usage' { return 'usage: jht uninstall --confirm [--purge]' }
+    'en:up.done' { return 'Job Hunter Team started.' }
+    'it:container.starting' { return 'Container ''%s'' non attivo, lo avvio...' }
+    'it:doctor.host_config_none' { return 'ancora nessuna configurazione: ''jht setup''' }
+    'it:doctor.host_config_ok' { return 'configurazione presente' }
+    'it:doctor.host_engine_fail' { return 'motore dei container non raggiungibile' }
+    'it:doctor.host_engine_ok' { return 'motore dei container raggiungibile' }
+    'it:doctor.host_more' { return 'Per i controlli completi (configurazione, provider, database, agenti): ''jht up'', poi ''jht doctor''.' }
+    'it:doctor.host_runtime_fail' { return 'runtime JHT mancante o cambiato: ''jht upgrade'' lo reinstalla' }
+    'it:doctor.host_runtime_ok' { return 'runtime JHT integro' }
+    'it:doctor.host_team_off' { return 'squadra spenta: ''jht up'' la accende' }
+    'it:doctor.host_team_unattestable' { return 'c''e'' un container della squadra ma non si puo'' verificare che sia nostro: non ho toccato niente (''jht status'' dice di piu'')' }
+    'it:doctor.host_title' { return 'Job Hunter Team: squadra spenta (il suo container non gira). Controlli fatti da questo computer:' }
+    'it:down.done' { return 'Job Hunter Team fermato.' }
+    'it:download.bad_version' { return 'versione non valida: %s. Esempio: 0.3.5.' }
+    'it:download.deb_only_linux' { return '--deb vale solo per Linux.' }
+    'it:download.dest_is_link' { return 'la destinazione e'' un link: %s' }
+    'it:download.dest_not_file' { return 'la destinazione esiste e non e'' un file: %s' }
+    'it:download.fetching' { return 'Scarico %s...' }
+    'it:download.hash_invalid' { return 'SHA-256 non valido per %s: atteso %s, ottenuto %s.' }
+    'it:download.intel_mac' { return 'L''app per macOS della 0.4 gira solo su Mac con Apple silicon (M1 e successivi); questo e'' un Mac Intel, non supportato nella 0.4. Non e'' stato scaricato niente.' }
+    'it:download.linux_no_app' { return 'In questa versione non c''e'' l''app desktop per Linux: usa install.sh. Non e'' stato scaricato niente.' }
+    'it:download.mismatch_existing' { return 'il file %s esiste ma il suo SHA-256 non corrisponde: non e'' stato sovrascritto.' }
+    'it:download.mkdir_failed' { return 'impossibile creare la directory di destinazione: %s' }
+    'it:download.present_verified' { return 'File gia'' presente e verificato: %s' }
+    'it:download.release_no_app' { return 'Questa release (v%s) non ha l''app per macOS: usa la 0.4.0 o successive. Non e'' stato scaricato niente.' }
+    'it:download.saved_in' { return 'Salvato in: %s' }
+    'it:download.sha_verified' { return 'SHA-256 verificato: %s' }
+    'it:download.sum_missing' { return 'SHA-256 dichiarato non trovato per %s.' }
+    'it:download.unsupported_os' { return 'sistema non supportato: %s. Usa windows o macos.' }
+    'it:download.windows_missing' { return 'Windows non fa parte della 0.4.0: la release non ha un installer per Windows. Non e'' stato scaricato niente.' }
+    'it:help.integration' { return (('Uso: jht integration <comando>', '', '  list [--json]                   le integrazioni e il loro stato', '  status [ID] [--json]            lo stato di una, o di tutte', '  add ID [--json]                 aggiunge un''integrazione', '  remove ID [--purge --yes] [--remove-image] [--json]', '                                  la toglie; --purge cancella anche i suoi dati (serve --yes);', '                                  --remove-image (solo screen e media) toglie anche l''immagine degli strumenti', '', 'Gli ID ammessi sono quelli che mostra `jht integration list`. Niente si scarica o si accende', 'finche'' non lo chiedi con `add`.') -join [char]10) }
+    'it:help.linkedin' { return (('Uso: jht linkedin <comando>', '', '  login [--stop]    l''accesso a mano a LinkedIn (con Google): un browser in un container a parte, senza rete, di cui vedi', '                    e usi la finestra dall''app; --stop chiude tutto', '  status --json     dice se l''accesso e'' in corso e se la sessione di LinkedIn e'' salvata', '', 'Niente si scarica o si accende finche'' non lo chiedi con `login`.') -join [char]10) }
+    'it:help.screen' { return (('Uso: jht screen <comando>', '', '  on [--json]       accende lo schermo dal vivo del closer: un container a parte, con lo stream solo su 127.0.0.1', '  off [--remove-image] [--json]', '                    lo spegne e toglie il container; l''immagine degli strumenti resta sul disco, per riaccenderlo', '                    senza riscaricarla: --remove-image la toglie e libera lo spazio', '  status [--json]   dice se e'' acceso', '', 'Niente si scarica o si accende finche'' non lo chiedi con `on`. Lo stream e'' in sola visione.') -join [char]10) }
+    'it:help.setup' { return (('Uso: jht setup [opzioni]', '', 'Senza opzioni parte l''installazione guidata. Con --non-interactive non chiede niente:', 'tutto si da'' con le opzioni.', '', '  --non-interactive            nessuna domanda', '  --provider <nome>            glm (Z.ai, predefinito), kimi (Moonshot), openai o claude (Anthropic)', '  --harness <nome>             pi (predefinito)', '  --api-key-file <percorso>    file che contiene la chiave API (una riga, leggibile solo da te).', '                               Un file del tuo computer lo legge jht e lo passa al setup: con glm e kimi', '                               il setup tiene la chiave per conto suo, mai nella configurazione', '  --api-key-stdin              legge la chiave API dallo standard input (una riga): mai sulla riga di comando', '  --api-key <chiave>           la chiave scritta qui, in chiaro (non ammessa per glm e kimi)', '  --secret-mode <modo>         come si salva la chiave: plaintext (predefinito), env o file', '  --secret-env <nome>          con --secret-mode env: la variabile d''ambiente che la contiene', '  --secret-file <percorso>     con --secret-mode file: il file che la contiene', '  --model <modello>            il modello da usare', '  --language <codice>          la lingua (per esempio it o en)', '  --skip-health                salta il controllo finale', '  --reset                      riparte da una configurazione pulita', '', 'Esempi:', '  con una chiave GLM in un file:', '    jht setup --non-interactive --provider glm --harness pi --api-key-file chiave.txt', '  OpenAI con una chiave API, su Pi (per Claude: --provider claude):', '    jht setup --non-interactive --provider openai --harness pi --api-key-stdin') -join [char]10) }
+    'it:help.tools' { return (('Uso: jht tools <comando>', '', '  status --json   se gli strumenti degli Scout (l''immagine piena) sono arrivati, in arrivo o falliti', '  pull            li scarica in background (jht up e jht setup lo avviano da soli)', '  switch          ci porta la squadra quando l''onboarding e'' chiuso (il download lo fa da solo)', '', 'Questo aiuto non avvia niente e non scarica niente.') -join [char]10) }
+    'it:keyfile.both' { return 'usa --api-key-file o --api-key-stdin, non tutti e due' }
+    'it:keyfile.not_file' { return 'il file dato a --api-key-file deve essere un file normale, non una cartella o un collegamento: %s' }
+    'it:keyfile.shape' { return 'il contenuto del file dato a --api-key-file non e'' una riga da 16 a 512 caratteri stampabili senza spazi: %s' }
+    'it:keyfile.size' { return 'il file dato a --api-key-file e'' vuoto o troppo grande per una chiave (da 1 a 4096 byte): %s' }
+    'it:keyfile.twice' { return '--api-key-file e'' stato dato due volte' }
+    'it:keyfile.unreadable' { return 'il file dato a --api-key-file non si puo'' leggere: %s' }
+    'it:line.abbinamento_annullato_nessuna_modifica' { return 'Abbinamento annullato: nessuna modifica.' }
+    'it:line.abbinamento_di_s_non_riuscito' { return ('Abbinamento di %s non riuscito: le copie legacy restano tutte. Rilancia jht telegram pair --all: i ruoli gi' + [char]0x00E0 + ' abbinati non chiedono un altro token.') }
+    'it:line.abbinamento_rifiutato_genera_un_token' { return 'Abbinamento rifiutato: genera un token nuovo in BotFather (/revoke) e riprova.' }
+    'it:line.agent_restart_failed.inventario_conservato_ma_il_team' { return ('inventario conservato, ma il team non ' + [char]0x00E8 + ' ripartito. Cosa fare: jht up') }
+    'it:line.annullato_niente_autorizzato' { return 'Annullato: niente autorizzato.' }
+    'it:line.anteprima_non_valida_niente_autorizzato' { return 'Anteprima non valida: niente autorizzato.' }
+    'it:line.apply.authorize' { return 'Autorizzi questa candidatura?' }
+    'it:line.apply_relink_account_cloud_account' { return 'apply relink-account: cloud account non disponibile. Esegui prima jht cloud pair.' }
+    'it:line.autorizzata_s_verso_s_il' { return 'Autorizzata #%s, verso %s: il CLOSER la prendera'' al prossimo giro.' }
+    'it:line.bot_abbinato_e_copia_legacy' { return 'Bot abbinato e copia legacy rimossa. Restano altri token legacy o un token nell''ambiente del container: rimuovili e completa la rotazione prima del cutover.' }
+    'it:line.bot_token_invalid.controlla_il_token_generato_da' { return 'controlla il token generato da BotFather.' }
+    'it:line.broker_restart_failed.il_servizio_della_posta_non_4' { return ('il servizio della posta non ' + [char]0x00E8 + ' ripartito. Cosa fare: jht mail status') }
+    'it:line.broker_start_failed.il_servizio_della_posta_non_2' { return ('il servizio della posta non ' + [char]0x00E8 + ' partito.') }
+    'it:line.broker_start_failed.il_servizio_della_posta_non_3' { return 'il servizio della posta non risponde dopo 30 secondi.' }
+    'it:line.broker_unavailable.il_broker_dei_segreti_esiste' { return ('il broker dei segreti esiste ma non ' + [char]0x00E8 + ' attestabile come nostro: non lo tocco.') }
+    'it:line.broker_unavailable.il_runtime_installato_pi_vecchio_2' { return ('il runtime installato ' + [char]0x00E8 + ' pi' + [char]0x00F9 + ' vecchio e non ha il broker dei segreti.') }
+    'it:line.broker_unavailable.il_servizio_della_posta_non' { return ('il servizio della posta non c''' + [char]0x00E8 + ' ancora: si crea la prima volta che serve.') }
+    'it:line.cancellato_marcatore_migrazione_broker_s' { return 'Cancellato: marcatore migrazione broker %s' }
+    'it:line.cancellato_volume_broker_s_s' { return 'Cancellato: volume broker %s (%s)' }
+    'it:line.container_s_non_e_partito' { return 'Container ''%s'' non e'' partito entro 10s. Controlla ''jht logs''.' }
+    'it:line.cosa_fare_jht_mail_setup' { return 'Cosa fare: jht mail setup' }
+    'it:line.cosa_fare_jht_up_3' { return 'Cosa fare: jht up' }
+    'it:line.cosa_fare_jht_upgrade_4' { return 'Cosa fare: jht upgrade' }
+    'it:line.cosa_fare_riprova_il_comando_2' { return 'Cosa fare: riprova il comando' }
+    'it:line.fino_ad_allora_la_posta' { return 'Fino ad allora la posta si legge e si invia con la password di oggi; l''avviso resta in jht mail status.' }
+    'it:line.genera_una_nuova_password_per' { return 'genera una nuova password per app dal tuo provider e salvala con: jht mail setup' }
+    'it:line.i_segreti_e_lo_stato' { return 'I segreti e lo stato del broker sono stati cancellati: rifai i login dei portali e configura di nuovo la posta.' }
+    'it:line.il_broker_non_ha_registrato' { return 'Il broker non ha registrato l''autorizzazione: ritirata, niente partira''.' }
+    'it:line.integration.install_hint' { return 'per installarli: ''jht upgrade'' (o un ''jht integration add <id>'')' }
+    'it:line.interattivo_il_token_viene_chiesto' { return ('Interattivo: il token viene chiesto senza eco, poi il bot nuovo riceve un codice monouso dal tuo Telegram. Automazioni: {"bot_token": ...} come JSON su stdin; non salvare il token in ~/.jht e cancella subito qualunque file usato fuori da l' + [char]0x00EC + '.') }
+    'it:line.jht_telegram_pair_all_interattivo' { return ('jht telegram pair --all ' + [char]0x00E8 + ' interattivo: per le automazioni abbina un ruolo alla volta.') }
+    'it:line.job_hunter_team_non_installato' { return ('Job Hunter Team non ' + [char]0x00E8 + ' installato del tutto: nella cartella del runtime manca il file di integrit' + [char]0x00E0 + ' (un''installazione interrotta?). Rilancia l''installer.') }
+    'it:line.la_casella_di_posta_ora' { return 'La casella di posta ora sta nel broker dei segreti. La sua password era leggibile dagli agenti:' }
+    'it:line.legacy_cleanup_failed.i_token_nuovi_sono_al' { return ('i token nuovi sono al sicuro, ma la copia legacy di %s ' + [char]0x00E8 + ' ancora in ~/.jht; cutover negato.') }
+    'it:line.legacy_inventory_failed.il_team_resta_fermo_perch_4' { return ('il team resta fermo perch' + [char]0x00E9 + ' l''inventario Telegram host non ' + [char]0x00E8 + ' stato conservato.') }
+    'it:line.legacy_inventory_failed.le_impronte_non_sono_state' { return 'le impronte non sono state conservate dal servizio isolato.' }
+    'it:line.legacy_inventory_failed.migrazione_telegram_interrotta' { return 'migrazione Telegram interrotta.' }
+    'it:line.legacy_inventory_failed.non_posso_provare_che_jht' { return 'non posso provare che ~/.jht sia privo di token Telegram.' }
+    'it:line.legacy_inventory_failed.non_riesco_a_fermare_gli' { return 'non riesco a fermare gli agenti prima dell''inventario host.' }
+    'it:line.legacy_inventory_failed.non_riesco_a_leggere_i' { return 'non riesco a leggere i token legacy in ~/.jht.' }
+    'it:line.legacy_inventory_failed.ruoli_legacy_non_riconosciuti' { return 'ruoli legacy non riconosciuti.' }
+    'it:line.legacy_remove_failed.s_nel_broker_ma_la' { return ('%s ' + [char]0x00E8 + ' nel broker ma la copia in ~/.jht/credentials ' + [char]0x00E8 + ' rimasta.') }
+    'it:line.legacy_secret_reappeared.jht_credentials_s_json_ricomparso' { return ('~/.jht/credentials/%s.json ' + [char]0x00E8 + ' ricomparso dopo la migrazione; rimosso senza importarlo.') }
+    'it:line.mail.address_prompt' { return 'Indirizzo della casella:' }
+    'it:line.mail.app_password_prompt' { return 'Password per app (non viene mostrata):' }
+    'it:line.mail.dedicated_prompt' { return ('' + [char]0x00C8 + ' una casella DEDICATA agli avvisi di lavoro inoltrati?') }
+    'it:line.mail_setup_opzione_sconosciuta_s' { return 'mail setup: opzione sconosciuta %s' }
+    'it:line.mail_setup_password_vuota' { return 'mail setup: password vuota' }
+    'it:line.nessun_provider_attivo_scegline_uno' { return 'nessun provider attivo: scegline uno con ''jht providers use glm''' }
+    'it:line.nessun_ruolo_ha_un_token' { return 'Nessun ruolo ha un token legacy: per un bot nuovo usa jht telegram pair <ruolo>.' }
+    'it:line.non_autorizzabile_s' { return 'Non autorizzabile: %s.' }
+    'it:line.non_autorizzata_s' { return 'Non autorizzata: %s.' }
+    'it:line.os_and_version_are_required' { return '--os e --version sono obbligatori' }
+    'it:line.podman_non_trovato_reinstalla_il' { return 'Podman non trovato: reinstalla il runtime JHT.' }
+    'it:line.preparo_il_servizio_della_posta' { return ('Preparo il servizio della posta (si crea solo la prima volta che serve)' + [char]0x2026) }
+    'it:line.provider_attivo_non_riconosciuto_s' { return 'provider attivo non riconosciuto: %s' }
+    'it:line.reset_impossibile_cancellare_il_marcatore' { return 'reset: impossibile cancellare il marcatore migrazione broker %s.' }
+    'it:line.reset_impossibile_cancellare_il_marcatore_2' { return 'reset: impossibile cancellare il marcatore del broker %s.' }
+    'it:line.reset_impossibile_cancellare_il_volume' { return 'reset: impossibile cancellare il volume broker %s (%s).' }
+    'it:line.reset_nome_volume_non_valido' { return 'reset: nome volume non valido per %s; rimozione negata.' }
+    'it:line.reset_non_riesco_a_determinare' { return 'reset: non riesco a determinare il progetto Compose; i volumi del broker non sono stati toccati.' }
+    'it:line.reset_non_riesco_a_fermare' { return 'reset: non riesco a fermare il runtime; i volumi del broker non sono stati toccati.' }
+    'it:line.reset_ricerca_del_volume_s_2' { return 'reset: ricerca del volume %s non riuscita.' }
+    'it:line.restano_token_legacy_per_s' { return ('Restano token legacy per: %s. Finch' + [char]0x00E9 + ' non abbini anche questi ruoli, %s resta muto su Telegram: abbinali tutti in questa seduta (jht telegram pair --all).') }
+    'it:line.risposta_del_container_non_valida' { return 'Risposta del container non valida: autorizzazione ritirata, niente partira''.' }
+    'it:line.ritirata_s_non_verra_inviata' { return 'Ritirata #%s: non verra'' inviata.' }
+    'it:line.ritiro_non_riuscito_s' { return 'Ritiro non riuscito: %s.' }
+    'it:line.runtime_migration_docker_missing.il_client_docker_originale_non' { return 'il client Docker originale non e'' disponibile.' }
+    'it:line.runtime_migration_image_invalid.serve_l_immagine_jht_fissata' { return 'serve l''immagine JHT fissata per digest.' }
+    'it:line.runtime_migration_podman_missing.podman_non_e_disponibile' { return 'Podman non e'' disponibile.' }
+    'it:line.runtime_migration_team_running.ferma_prima_il_team_docker' { return 'ferma prima il team Docker.' }
+    'it:line.runtime_migration_team_running.ferma_prima_il_team_podman' { return 'ferma prima il team Podman.' }
+    'it:line.runtime_o_container_jht_non' { return 'runtime o container JHT non disponibile' }
+    'it:line.ruoli_da_abbinare_in_questa' { return 'Ruoli da abbinare in questa seduta: %s' }
+    'it:line.s_ha_gi_un_bot' { return ('%s ha gi' + [char]0x00E0 + ' un bot abbinato: tolgo solo la sua copia legacy.') }
+    'it:line.s_needs_a_value' { return '%s richiede un valore' }
+    'it:line.saltato_non_trovato_volume_broker' { return 'Saltato (non trovato): volume broker %s' }
+    'it:line.serve_un_terminale_l_autorizzazione' { return 'Serve un terminale: l''autorizzazione si conferma a mano.' }
+    'it:line.telegram_isolato_attivo_il_bridge' { return ('Telegram isolato attivo; il bridge legacy non pu' + [char]0x00F2 + ' pi' + [char]0x00F9 + ' essere riabilitato dagli agenti.') }
+    'it:line.the_setup_keeps_the_key' { return 'Il setup tiene la chiave: ora puoi cancellare il file su questo computer (%s).' }
+    'it:line.upgrade.done' { return 'Aggiornamento completato: %s (%s) -> %s (%s). %s' }
+    'it:line.upgrade.restored' { return 'Runtime precedente ripristinato.' }
+    'it:line.uso_jht_apply_relink_account' { return 'uso: jht apply relink-account' }
+    'it:line.uso_jht_apply_request_cancel_2' { return 'uso: jht apply request|cancel <id>' }
+    'it:line.uso_jht_mail_setup_status' { return 'uso: jht mail setup|status|admission <allowlist|whole_mailbox>|allow add|remove <indirizzo|@dominio>|drafts|approve <id>|discard <id>|journal|delete|migrate' }
+    'it:line.uso_jht_migrate_runtime_podman' { return 'uso: jht migrate-runtime podman' }
+    'it:line.uso_jht_screen_on_off' { return 'uso: jht screen on | off | status [--json]' }
+    'it:line.uso_jht_telegram_chat_id' { return 'uso: jht telegram chat-id <assistente|capitano|mentor>' }
+    'it:line.uso_jht_telegram_pair_assistente' { return 'uso: jht telegram pair <assistente|capitano|mentor>|--all' }
+    'it:line.uso_jht_telegram_remove_assistente' { return 'uso: jht telegram remove <assistente|capitano|mentor>' }
+    'it:line.uso_jht_telegram_status_pair' { return 'uso: jht telegram status|pair <ruolo>|pair --all|chat-id <ruolo>|remove <ruolo>' }
+    'it:monitor.window_invalid' { return 'monitor_window_invalid: usa ''jht monitor --window'' senza altre opzioni.' }
+    'it:ps.apply_auto_send_warning_1' { return '  Con l''invio automatico acceso il team compila e INVIA la candidatura,' }
+    'it:ps.apply_auto_send_warning_2' { return '  senza un''altra conferma. Una volta partita non si richiama.' }
+    'it:ps.bot_token_prompt_hidden' { return 'Token del bot %s (input nascosto)' }
+    'it:ps.botfather_fresh_token' { return ('Usa sempre un token appena generato in BotFather (/revoke sul bot, oppure un bot nuovo): un token gi' + [char]0x00E0 + ' esistente pu' + [char]0x00F2 + ' essere stato letto dagli agenti anche se oggi non compare in ~/.jht.') }
+    'it:ps.broker_network_proxy_not_ready' { return ('broker_network_unavailable: il proxy della posta non ' + [char]0x00E8 + ' pronto (codice %s).') }
+    'it:ps.broker_network_scripts_not_downloadable' { return 'broker_network_unavailable: non riesco a scaricare gli script del proxy della posta. Cosa fare: jht upgrade' }
+    'it:ps.broker_network_scripts_not_verified' { return 'broker_network_unavailable: gli script del proxy della posta non sono attestati. Cosa fare: jht upgrade' }
+    'it:ps.broker_restart_failed_secrets_broker_not_ours' { return ('broker_restart_failed: il broker dei segreti non ' + [char]0x00E8 + ' attestabile come nostro: non lo tocco. Cosa fare: jht mail status') }
+    'it:ps.broker_unavailable_secrets_broker_not_running' { return ('broker_unavailable: il broker dei segreti non ' + [char]0x00E8 + ' attivo.') }
+    'it:ps.cli_version_needs_container' { return 'Per la versione del CLI in esecuzione serve il container attivo: ''jht up''.' }
+    'it:ps.compose_up_failed_team_not_started' { return ('compose_up_failed: il team non si ' + [char]0x00E8 + ' avviato (docker compose up, codice %s). Controlla ''jht logs''.') }
+    'it:ps.container_not_running' { return 'container ''%s'' non attivo' }
+    'it:ps.container_runtime_unsupported' { return 'runtime container non supportato: %s' }
+    'it:ps.docker_desktop_file_sharing_hint' { return '  Cosa fare: apri Docker Desktop > Settings > Resources > File sharing, controlla che la cartella dell''utente sia condivisa, poi rilancia ''jht up''.' }
+    'it:ps.docker_podman_verified_future_removal' { return 'Migrazione Docker -> Podman verificata. I volumi Docker restano intatti e contengono ancora le password della posta, gli accessi ai portali e i token di Telegram: richiedono una futura conferma esplicita per la rimozione.' }
+    'it:ps.doctor.wsl_memory' { return 'WSL non ha un limite di memoria (sono registrate altre distribuzioni WSL): in %s, sotto [wsl2], aggiungi memory=%s' }
+    'it:ps.download_asset_failed_detail' { return 'download non riuscito: %s (%s)' }
+    'it:ps.download_shared_folder_no_path' { return 'la destinazione sta in una cartella condivisa con il team: scegline una fuori, come Downloads.' }
+    'it:ps.download_sums_failed_detail' { return 'download non riuscito: SHA256SUMS di v%s (%s)' }
+    'it:ps.full_pull_failed_keep_old' { return ('full_pull_failed: l''immagine piena nuova non ' + [char]0x00E8 + ' arrivata, resta la vecchia. Cosa fare: jht tools pull') }
+    'it:ps.help.main' { return (('jht - Job Hunter Team', '', '  Comandi dell''host (funzionano da qui):', '    jht up                 avvia il container del team', '    jht down               lo ferma', '                           (con --verbose si vedono anche le righe del motore)', '    jht restart            lo riavvia', '    jht status             stato di container e team', '    jht logs [-f]          log del container', ('    jht upgrade            aggiorna all''immagine pi' + [char]0x00F9 + ' recente'), '    jht setup              installazione guidata', '    jht shell              shell dentro il container', '    jht mail setup         salva la casella di posta nel broker dei segreti', '    jht mail drafts        email scritte dagli agenti in attesa del tuo ok', '    jht mail approve <id>  le manda; jht mail discard <id> le scarta', '    jht integration list|status [ID]|add ID|remove ID [--purge --yes] [--remove-image] [--json]', '                           le integrazioni che si aggiungono dopo il setup', '                           (google, telegram, mail): stato letto dal motore', '    jht telegram status    stato del servizio Telegram isolato', '    jht telegram pair ROLE chiede il token senza eco sul computer host, poi', '                           mostra un codice da mandare al bot dal tuo Telegram', '                           Per automazioni: JSON su stdin. Non salvare il token', ('                           in ~/.jht; cancella subito file usati fuori da l' + [char]0x00EC + '.'), '    jht telegram pair --all abbina in una seduta tutti i ruoli legacy', '    jht telegram chat-id ROLE sposta il bot su un''altra chat, con lo stesso codice', '    jht reset              cancella configurazione e volumi del broker', '    jht migrate-runtime podman', '                           copia e verifica i volumi Docker in Podman;', '                           non seleziona il nuovo runtime e non cancella Docker', '    jht uninstall --confirm rimuove il runtime locale Windows, ma conserva dati,', '                           documenti, Podman e Compose', '', '  Tutti gli altri comandi (positions, stats, team, providers, cron,', '  working-hours, cloud...) girano DENTRO il container: per il loro aiuto', '  serve il container attivo.', '', '      jht up ; jht --help') -join [char]10) }
+    'it:ps.home_unavailable_bind_mount' { return 'HOME/USERPROFILE non disponibile: bind mount JHT rifiutato' }
+    'it:ps.host_download_failed' { return 'download sull''host non riuscito: %s' }
+    'it:ps.input_not_json_bot_token_stdin' { return 'input_not_json: passa bot_token come JSON su stdin.' }
+    'it:ps.integration_not_installed' { return 'non installato' }
+    'it:ps.integration_not_installed_yet' { return 'non ancora installato' }
+    'it:ps.jht_container_not_verifiable' { return 'Container JHT non attestabile.' }
+    'it:ps.jht_home_missing' { return ('Job Hunter Team non ' + [char]0x00E8 + ' ancora installato: la cartella %s non esiste. Lancia l''installer, poi ''jht setup''.') }
+    'it:ps.legacy_cleanup_failed_old_token_still_there' { return ('legacy_cleanup_failed: il token vecchio ' + [char]0x00E8 + ' ancora in ~/.jht; cutover negato.') }
+    'it:ps.legacy_migration_failed_stays' { return 'legacy_migration_failed: %s resta in ~/.jht/credentials.' }
+    'it:ps.lifecycle.restarted' { return 'Job Hunter Team riavviato.' }
+    'it:ps.link_or_not_folder' { return 'collegamento o non cartella' }
+    'it:ps.localappdata_unavailable' { return 'LOCALAPPDATA non disponibile: runtime host rifiutato' }
+    'it:ps.machine_state_unreadable' { return 'lo stato della macchina non si legge (podman e wsl non rispondono)' }
+    'it:ps.monitor_window_unavailable' { return 'monitor_window_unavailable: impossibile aprire una finestra qui. Esegui ''jht monitor'' nel terminale corrente.' }
+    'it:ps.mount_repair_failed_folders_not_writable' { return 'mount_repair_failed: le cartelle di Job Hunter Team (%s, %s) non sono scrivibili dal container e non si sono potute sistemare.' }
+    'it:ps.old_images_busy' { return ' In uso da un container (tenute): %s.' }
+    'it:ps.old_images_kept_all' { return 'Immagini JHT vecchie: tenute tutte (JHT_KEEP_OLD_IMAGES=1).' }
+    'it:ps.old_images_refused' { return ' Rifiutate dal motore (tenute): %s.' }
+    'it:ps.old_images_removed' { return 'Immagini JHT vecchie: rimosse %s, liberati circa %s MB (dimensione nominale: i layer condivisi si liberano solo in parte), tenute: corrente, precedente.' }
+    'it:ps.pair_role_now_prompt' { return 'Abbinare %s adesso? [s/N]' }
+    'it:ps.podman_exe_not_found' { return 'podman.exe non trovato' }
+    'it:ps.podman_machine_not_responding' { return 'La macchina Podman JHT non risponde. Esegui ''jht up''.' }
+    'it:ps.release_arrived_without_https' { return ('la release ' + [char]0x00E8 + ' arrivata senza HTTPS: %s') }
+    'it:ps.relink_account_container_not_running' { return 'apply relink-account: container non attivo.' }
+    'it:ps.script_integration_not_installed' { return 'script jht-integration.ps1 non ancora installato: ''jht upgrade'' (o un ''jht integration add/remove'') e riprova' }
+    'it:ps.script_tools_not_installed' { return 'script jht-tools.ps1 non ancora installato: ''jht upgrade'' e riprova' }
+    'it:ps.startup_task_still_registered' { return ('l''attivit' + [char]0x00E0 + ' risulta ancora registrata') }
+    'it:ps.team_container_unavailable' { return 'team_container_unavailable: avvia la squadra con jht up e riprova.' }
+    'it:ps.telegram_not_configured' { return 'Telegram non attivo: Telegram non configurato.' }
+    'it:ps.telegram_status_unverifiable' { return 'Telegram: stato non verificabile adesso (servizio spento o non raggiungibile). Dettagli: jht telegram status' }
+    'it:ps.telegram_unavailable_isolated_not_running' { return ('telegram_unavailable: il servizio Telegram isolato non ' + [char]0x00E8 + ' attivo.') }
+    'it:ps.telegram_unavailable_run_jht_up' { return 'telegram_unavailable: esegui jht up' }
+    'it:ps.uninstall.bad.target' { return ('Rifiutato: {0} ' + [char]0x00E8 + ' un collegamento o non ' + [char]0x00E8 + ' una cartella: non lo seguo e non lo cancello.') }
+    'it:ps.uninstall.done' { return 'Fatto: la macchina <machine> (e con lei le immagini di JHT, il nucleo e quella piena), il runtime e il comando jht sono stati tolti.' }
+    'it:ps.uninstall.done.kept' { return ' ~/.jht e Documents\Job Hunter Team restano (con --purge si cancellano).' }
+    'it:ps.uninstall.done.wsl' { return ('WSL resta in memoria: vmmem, wslservice e wslrelay sono componenti di Windows (non li ha installati Job Hunter Team) e servono anche alle altre macchine WSL di questo utente; di norma si fermano da soli dopo un po'' di inattivit' + [char]0x00E0 + '. Per fermarli subito: wsl --shutdown (ferma TUTTE le macchine WSL aperte).') }
+    'it:ps.uninstall.kept.machine' { return ('La macchina Podman {0} non risulta creata dall''installer: resta dov''' + [char]0x00E8 + '. A mano, se ' + [char]0x00E8 + ' tua da togliere: podman machine stop {0}; podman machine rm {0}.') }
+    'it:ps.uninstall.left.commands' { return 'Non tolti il comando jht o i file dell''installer in {0} ({1}), o le variabili e le righe PATH aggiunte dall''installer. A mano: Remove-Item il file; variabili JHT_CONTAINER_RUNTIME e JHT_PODMAN_MACHINE e la cartella {0} nel PATH da Impostazioni > Variabili d''ambiente.' }
+    'it:ps.uninstall.left.data' { return 'Non cancellati i dati di JHT ({0}). A mano: Remove-Item -Recurse -Force {1}. Il comando jht e il runtime sono rimasti: rilancia jht uninstall --confirm --purge dopo aver risolto.' }
+    'it:ps.uninstall.left.machine' { return 'Non tolta: la macchina Podman <machine>. Motivo: {0}. A mano: podman machine stop <machine>; wsl --unregister {1}; poi rilancia jht uninstall --confirm.' }
+    'it:ps.uninstall.left.runtime' { return 'Non tolto: il runtime di JHT in {0}. A mano: Remove-Item -Recurse -Force ''{0}''.' }
+    'it:ps.uninstall.left.task' { return ('Non tolta l''attivit' + [char]0x00E0 + ' di avvio al logon ''{0}'' (motivo: {1}). Il resto ' + [char]0x00E8 + ' stato tolto. A mano: schtasks /Delete /TN "{0}" /F.') }
+    'it:ps.uninstall.phase.commands' { return 'Tolgo il comando jht, i file dell''installer e le righe PATH...' }
+    'it:ps.uninstall.phase.data' { return 'Cancello ~/.jht e Documents\Job Hunter Team (--purge)...' }
+    'it:ps.uninstall.phase.machine' { return 'Tolgo la macchina Podman <machine> (con i segreti e le immagini di JHT)...' }
+    'it:ps.uninstall.phase.runtime' { return 'Tolgo il runtime di JHT...' }
+    'it:ps.uninstall.purge_notice' { return 'Con --purge vengono cancellati anche ~/.jht e Documents\Job Hunter Team: configurazione, database, CV e output. Non si torna indietro.' }
+    'it:ps.uninstall.purge_removal_notice' { return 'Vengono cancellati anche la password della posta e i token di Telegram salvati.' }
+    'it:ps.uninstall.removal_notice' { return 'Vengono cancellati anche la password della posta e i token di Telegram salvati; ~/.jht e Documenti restano, e con loro la sessione LinkedIn salvata (secrets/linkedin-profile e .cache/linkedin): si toglie con jht reset --scope creds.' }
+    'it:ps.uninstall.secrets' { return ('I segreti salvati non sono stati rimossi: la password della posta e i token di Telegram stanno nei volumi jht-secrets e jht-telegram-secrets della macchina <machine>, che ' + [char]0x00E8 + ' ancora qui.') }
+    'it:ps.uninstall.wslconfig.done' { return 'Tolte da {0} le righe aggiunte dall''installer (memoria di WSL).' }
+    'it:ps.uninstall.wslconfig.kept' { return 'Lasciate in {0} le righe che hai cambiato tu: sono tue.' }
+    'it:ps.uninstall.wslconfig.left' { return 'Non toccato {0} ({1}): le righe aggiunte dall''installer (memoria di WSL) restano. Toglile a mano: hanno una riga di commento sopra.' }
+    'it:ps.unknown_argument' { return 'argomento sconosciuto: %s' }
+    'it:ps.upgrade_already_running' { return ('Un aggiornamento ' + [char]0x00E8 + ' gi' + [char]0x00E0 + ' in corso') }
+    'it:ps.upgrade_broker_restart_failed' { return ('broker_restart_failed: il broker dei segreti non ' + [char]0x00E8 + ' ripartito. Cosa fare: jht up') }
+    'it:ps.upgrade_disk_low' { return ('disk_low: Gli agenti richiedono almeno %s GiB di disco ' + [char]0x2014 + ' disponibili: %s GiB. Per liberare spazio svuota il Cestino ed elimina i file grandi che non ti servono e le immagini Docker inutilizzate, poi riprova: non ' + [char]0x00E8 + ' stato scaricato n' + [char]0x00E9 + ' modificato niente.') }
+    'it:ps.upgrade_docker_unavailable' { return 'Docker o runtime host non disponibile' }
+    'it:ps.upgrade_helper_install_failed' { return 'helper_install_failed: gli script host nuovi si prendono alla prima richiesta o con un altro ''jht upgrade''' }
+    'it:ps.upgrade_host_runtime_not_installable' { return 'Runtime host protetto non installabile' }
+    'it:ps.upgrade_host_runtime_untrusted' { return 'Runtime host non attendibile' }
+    'it:ps.upgrade_image_download_failed' { return 'Download immagine non riuscito' }
+    'it:ps.upgrade_journal_not_updated' { return 'Impossibile aggiornare il journal' }
+    'it:ps.upgrade_metadata_not_persisted' { return 'Metadata runtime non persistiti' }
+    'it:ps.upgrade_mounts_not_writable' { return 'Cartelle di Job Hunter Team non scrivibili dal container (mount_repair_failed)' }
+    'it:ps.upgrade_not_completed' { return 'Aggiornamento non completato (%s): %s' }
+    'it:ps.upgrade_note_activate_runtime' { return 'Attivo il nuovo runtime...' }
+    'it:ps.upgrade_note_download_image' { return ('Scarico l''immagine pi' + [char]0x00F9 + ' recente...') }
+    'it:ps.upgrade_note_download_runtime' { return 'Scarico il runtime aggiornato...' }
+    'it:ps.upgrade_option_unsupported' { return 'Opzione upgrade non supportata' }
+    'it:ps.upgrade_pulling_full_image' { return 'Scarico l''immagine piena aggiornata...' }
+    'it:ps.upgrade_recovery_failed' { return 'Recovery dell''upgrade precedente non riuscita' }
+    'it:ps.upgrade_release_core_invalid' { return 'Il rilascio non porta un nucleo valido per questa installazione: reinstalla' }
+    'it:ps.upgrade_remote_compose_invalid' { return 'Compose remoto non valido' }
+    'it:ps.upgrade_remote_runtime_invalid' { return 'Runtime remoto non valido o non raggiungibile' }
+    'it:ps.upgrade_rollback_not_prepared' { return 'Impossibile preparare il rollback' }
+    'it:ps.upgrade_telegram_restart_failed' { return ('telegram_restart_failed: il servizio Telegram isolato non ' + [char]0x00E8 + ' ripartito. Cosa fare: jht up') }
+    'it:ps.upgrade_test_channel' { return 'Canale di test: si aggiorna reinstallando dalla build di test' }
+    'it:ps.upgrade_unexpected_error' { return 'Errore inatteso durante l''aggiornamento' }
+    'it:ps.upgrade_verify_failed' { return 'Il nuovo runtime non ha superato la verifica' }
+    'it:ps.use_fresh_botfather_token' { return ('Usa sempre un token appena generato in BotFather (/revoke sul bot, oppure un bot nuovo): un token gi' + [char]0x00E0 + ' esistente pu' + [char]0x00F2 + ' essere stato letto dagli agenti anche se oggi non compare in ~/.jht.') }
+    'it:ps.user_dir_unavailable_cannot_create' { return 'user_dir_unavailable: non riesco a creare la cartella %s, che il team usa.' }
+    'it:ps.wsl_exe_not_found' { return 'wsl.exe non trovato' }
+    'it:ps.wsl_not_answering' { return 'WSL non risponde (wsl --status)' }
+    'it:removed.office' { return '''jht %s'' e'' stato tolto nella 0.4.0 insieme all''ufficio Godot: usa i comandi jht (jht help).' }
+    'it:status.no_options' { return '''jht status'' non ha opzioni (%s): si lancia come ''jht status''.' }
+    'it:team.stopped' { return 'Job Hunter Team e'' fermato: jht up per riaccenderlo.' }
+    'it:tools.arriving' { return 'Gli strumenti degli Scout stanno arrivando: l''immagine piena si scarica in background (circa 3 GB). La ricerca delle posizioni parte da sola quando sono arrivati; non devi fare niente.' }
+    'it:tools.failed' { return 'Il download degli strumenti degli Scout non e'' riuscito: la squadra non puo'' ancora cercare posizioni. Esegui jht tools pull per riprovare (anche jht up riprova).' }
+    'it:tools.switch_failed' { return 'Gli strumenti degli Scout sono arrivati, ma la squadra non si e'' potuta riavviare con loro: esegui jht down, poi jht up.' }
+    'it:tools.waiting' { return 'Gli strumenti degli Scout sono arrivati: la squadra ci passa da sola quando l''onboarding e'' chiuso.' }
+    'it:uninstall.usage' { return 'uso: jht uninstall --confirm [--purge]' }
+    'it:up.done' { return 'Job Hunter Team avviato.' }
+    'hu:container.starting' { return ('A(z) ''%s'' kont' + [char]0x00E9 + 'ner nem fut, elind' + [char]0x00ED + 'tom...') }
+    'hu:doctor.host_config_none' { return ('m' + [char]0x00E9 + 'g nincs be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 's: ''jht setup''') }
+    'hu:doctor.host_config_ok' { return ('a be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 's megvan') }
+    'hu:doctor.host_engine_fail' { return ('a kont' + [char]0x00E9 + 'nermotor nem ' + [char]0x00E9 + 'rhet' + [char]0x0151 + ' el') }
+    'hu:doctor.host_engine_ok' { return ('a kont' + [char]0x00E9 + 'nermotor el' + [char]0x00E9 + 'rhet' + [char]0x0151) }
+    'hu:doctor.host_more' { return ('A teljes ellen' + [char]0x0151 + 'rz' + [char]0x00E9 + 'sekhez (be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 's, szolg' + [char]0x00E1 + 'ltat' + [char]0x00F3 + ', adatb' + [char]0x00E1 + 'zis, ' + [char]0x00FC + 'gyn' + [char]0x00F6 + 'k' + [char]0x00F6 + 'k): ''jht up'', majd ''jht doctor''.') }
+    'hu:doctor.host_runtime_fail' { return ('a JHT futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezete hi' + [char]0x00E1 + 'nyzik vagy megv' + [char]0x00E1 + 'ltozott: a ''jht upgrade'' ' + [char]0x00FA + 'jratelep' + [char]0x00ED + 'ti') }
+    'hu:doctor.host_runtime_ok' { return ('a JHT futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezete ' + [char]0x00E9 + 'p') }
+    'hu:doctor.host_team_off' { return ('a csapat le van ' + [char]0x00E1 + 'll' + [char]0x00ED + 'tva: a ''jht up'' elind' + [char]0x00ED + 'tja') }
+    'hu:doctor.host_team_unattestable' { return ('van egy kont' + [char]0x00E9 + 'ner a csapatb' + [char]0x00F3 + 'l, de nem ellen' + [char]0x0151 + 'rizhet' + [char]0x0151 + ', hogy a mi' + [char]0x00E9 + 'nk-e: semmihez nem ny' + [char]0x00FA + 'ltam (a ''jht status'' t' + [char]0x00F6 + 'bbet mond)') }
+    'hu:doctor.host_title' { return ('Job Hunter Team: a csapat le van ' + [char]0x00E1 + 'll' + [char]0x00ED + 'tva (a kont' + [char]0x00E9 + 'nere nem fut). Err' + [char]0x0151 + 'l a g' + [char]0x00E9 + 'pr' + [char]0x0151 + 'l v' + [char]0x00E9 + 'gzett ellen' + [char]0x0151 + 'rz' + [char]0x00E9 + 'sek:') }
+    'hu:down.done' { return ('A Job Hunter Team le' + [char]0x00E1 + 'llt.') }
+    'hu:download.bad_version' { return ('' + [char]0x00E9 + 'rv' + [char]0x00E9 + 'nytelen verzi' + [char]0x00F3 + ': %s. P' + [char]0x00E9 + 'lda: 0.3.5.') }
+    'hu:download.deb_only_linux' { return ('a --deb csak Linuxra val' + [char]0x00F3 + '.') }
+    'hu:download.dest_is_link' { return ('a c' + [char]0x00E9 + 'lhely egy link: %s') }
+    'hu:download.dest_not_file' { return ('a c' + [char]0x00E9 + 'lhely l' + [char]0x00E9 + 'tezik, ' + [char]0x00E9 + 's nem f' + [char]0x00E1 + 'jl: %s') }
+    'hu:download.fetching' { return ('Let' + [char]0x00F6 + 'lt' + [char]0x00E9 + 's: %s...') }
+    'hu:download.hash_invalid' { return ('' + [char]0x00E9 + 'rv' + [char]0x00E9 + 'nytelen SHA-256 ehhez: %s: v' + [char]0x00E1 + 'rt %s, kapott %s.') }
+    'hu:download.intel_mac' { return ('A 0.4-es macOS-alkalmaz' + [char]0x00E1 + 's csak Apple siliconos Maceken fut (M1 ' + [char]0x00E9 + 's ' + [char]0x00FA + 'jabb); ez egy Intel Mac, amelyet a 0.4 nem t' + [char]0x00E1 + 'mogat. Semmi sem lett let' + [char]0x00F6 + 'ltve.') }
+    'hu:download.linux_no_app' { return ('Ebben a verzi' + [char]0x00F3 + 'ban nincs asztali alkalmaz' + [char]0x00E1 + 's Linuxra: haszn' + [char]0x00E1 + 'ld az install.sh-t. Semmi sem lett let' + [char]0x00F6 + 'ltve.') }
+    'hu:download.mismatch_existing' { return ('a(z) %s f' + [char]0x00E1 + 'jl l' + [char]0x00E9 + 'tezik, de az SHA-256-ja nem egyezik: nem ' + [char]0x00ED + 'rtam fel' + [char]0x00FC + 'l.') }
+    'hu:download.mkdir_failed' { return ('nem tudom l' + [char]0x00E9 + 'trehozni a c' + [char]0x00E9 + 'lmapp' + [char]0x00E1 + 't: %s') }
+    'hu:download.present_verified' { return ('A f' + [char]0x00E1 + 'jl m' + [char]0x00E1 + 'r megvan ' + [char]0x00E9 + 's ellen' + [char]0x0151 + 'rizve: %s') }
+    'hu:download.release_no_app' { return ('Ehhez a kiad' + [char]0x00E1 + 'shoz (v%s) nincs macOS-alkalmaz' + [char]0x00E1 + 's: haszn' + [char]0x00E1 + 'ld a 0.4.0-s vagy ' + [char]0x00FA + 'jabb verzi' + [char]0x00F3 + 't. Semmi sem lett let' + [char]0x00F6 + 'ltve.') }
+    'hu:download.saved_in' { return 'Mentve ide: %s' }
+    'hu:download.sha_verified' { return ('SHA-256 ellen' + [char]0x0151 + 'rizve: %s') }
+    'hu:download.sum_missing' { return 'nincs megadott SHA-256 ehhez: %s.' }
+    'hu:download.unsupported_os' { return ('nem t' + [char]0x00E1 + 'mogatott rendszer: %s. Haszn' + [char]0x00E1 + 'ld a windows vagy a macos ' + [char]0x00E9 + 'rt' + [char]0x00E9 + 'ket.') }
+    'hu:download.windows_missing' { return ('A Windows nem r' + [char]0x00E9 + 'sze a 0.4.0-nak: a kiad' + [char]0x00E1 + 'sban nincs Windows-telep' + [char]0x00ED + 't' + [char]0x0151 + '. Semmi sem lett let' + [char]0x00F6 + 'ltve.') }
+    'hu:help.integration' { return ((('Haszn' + [char]0x00E1 + 'lat: jht integration <parancs>'), '', ('  list [--json]                   az integr' + [char]0x00E1 + 'ci' + [char]0x00F3 + 'k ' + [char]0x00E9 + 's az ' + [char]0x00E1 + 'llapotuk'), ('  status [ID] [--json]            egynek vagy mindnek az ' + [char]0x00E1 + 'llapota'), ('  add ID [--json]                 hozz' + [char]0x00E1 + 'ad egy integr' + [char]0x00E1 + 'ci' + [char]0x00F3 + 't'), '  remove ID [--purge --yes] [--remove-image] [--json]', ('                                  elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tja; a --purge az adatait is t' + [char]0x00F6 + 'rli (--yes kell hozz' + [char]0x00E1 + ');'), ('                                  a --remove-image (csak screen ' + [char]0x00E9 + 's media) az eszk' + [char]0x00F6 + 'z' + [char]0x00F6 + 'k k' + [char]0x00E9 + 'p' + [char]0x00E9 + 't is elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tja'), '', ('Az enged' + [char]0x00E9 + 'lyezett ID-k azok, amelyeket a `jht integration list` mutat. Semmi sem t' + [char]0x00F6 + 'lt' + [char]0x0151 + 'dik le ' + [char]0x00E9 + 's nem'), ('kapcsol be, am' + [char]0x00ED + 'g az `add` paranccsal nem k' + [char]0x00E9 + 'red.')) -join [char]10) }
+    'hu:help.linkedin' { return ((('Haszn' + [char]0x00E1 + 'lat: jht linkedin <parancs>'), '', ('  login [--stop]    k' + [char]0x00E9 + 'zi bejelentkez' + [char]0x00E9 + 's a LinkedInre (Google-lel): b' + [char]0x00F6 + 'ng' + [char]0x00E9 + 'sz' + [char]0x0151 + ' egy k' + [char]0x00FC + 'l' + [char]0x00F6 + 'n, h' + [char]0x00E1 + 'l' + [char]0x00F3 + 'zat n' + [char]0x00E9 + 'lk' + [char]0x00FC + 'li'), ('                    kont' + [char]0x00E9 + 'nerben, amelynek ablak' + [char]0x00E1 + 't az alkalmaz' + [char]0x00E1 + 'sb' + [char]0x00F3 + 'l l' + [char]0x00E1 + 'tod ' + [char]0x00E9 + 's haszn' + [char]0x00E1 + 'lod; a --stop mindent bez' + [char]0x00E1 + 'r'), ('  status --json     megmondja, folyamatban van-e a bejelentkez' + [char]0x00E9 + 's, ' + [char]0x00E9 + 's el van-e mentve'), '                    a LinkedIn-munkamenet', '', ('Semmi sem t' + [char]0x00F6 + 'lt' + [char]0x0151 + 'dik le ' + [char]0x00E9 + 's nem kapcsol be, am' + [char]0x00ED + 'g a `login` paranccsal nem k' + [char]0x00E9 + 'red.')) -join [char]10) }
+    'hu:help.screen' { return ((('Haszn' + [char]0x00E1 + 'lat: jht screen <parancs>'), '', ('  on [--json]       bekapcsolja a closer ' + [char]0x00E9 + 'l' + [char]0x0151 + ' k' + [char]0x00E9 + 'perny' + [char]0x0151 + 'j' + [char]0x00E9 + 't: k' + [char]0x00FC + 'l' + [char]0x00F6 + 'n kont' + [char]0x00E9 + 'ner, a stream csak a 127.0.0.1-en'), '  off [--remove-image] [--json]', ('                    kikapcsolja ' + [char]0x00E9 + 's elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tja a kont' + [char]0x00E9 + 'nert; az eszk' + [char]0x00F6 + 'z' + [char]0x00F6 + 'k k' + [char]0x00E9 + 'pe a lemezen marad, hogy ' + [char]0x00FA + 'jralet' + [char]0x00F6 + 'lt' + [char]0x00E9 + 's'), ('                    n' + [char]0x00E9 + 'lk' + [char]0x00FC + 'l kapcsolhasd vissza: a --remove-image elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tja, ' + [char]0x00E9 + 's felszabad' + [char]0x00ED + 'tja a helyet'), '  status [--json]   megmondja, be van-e kapcsolva', '', ('Semmi sem t' + [char]0x00F6 + 'lt' + [char]0x0151 + 'dik le ' + [char]0x00E9 + 's nem kapcsol be, am' + [char]0x00ED + 'g az `on` paranccsal nem k' + [char]0x00E9 + 'red. A stream csak megtekinthet' + [char]0x0151 + '.')) -join [char]10) }
+    'hu:help.setup' { return ((('Haszn' + [char]0x00E1 + 'lat: jht setup [kapcsol' + [char]0x00F3 + 'k]'), '', ('Kapcsol' + [char]0x00F3 + 'k n' + [char]0x00E9 + 'lk' + [char]0x00FC + 'l az ir' + [char]0x00E1 + 'ny' + [char]0x00ED + 'tott telep' + [char]0x00ED + 't' + [char]0x00E9 + 's indul. A --non-interactive kapcsol' + [char]0x00F3 + 'val semmit sem k' + [char]0x00E9 + 'rdez:'), ('mindent kapcsol' + [char]0x00F3 + 'kkal adsz meg.'), '', ('  --non-interactive            nincs k' + [char]0x00E9 + 'rd' + [char]0x00E9 + 's'), ('  --provider <name>            glm (Z.ai, alap' + [char]0x00E9 + 'rtelmezett), kimi (Moonshot), openai vagy claude (Anthropic)'), ('  --harness <name>             pi (alap' + [char]0x00E9 + 'rtelmezett)'), ('  --api-key-file <path>        az API-kulcsot tartalmaz' + [char]0x00F3 + ' f' + [char]0x00E1 + 'jl (egy sor, csak te olvashatod).'), ('                               A g' + [char]0x00E9 + 'peden l' + [char]0x00E9 + 'v' + [char]0x0151 + ' f' + [char]0x00E1 + 'jlt a jht olvassa be ' + [char]0x00E9 + 's adja ' + [char]0x00E1 + 't a be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 'snak: glm ' + [char]0x00E9 + 's kimi'), ('                               eset' + [char]0x00E9 + 'n a be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 's mag' + [char]0x00E1 + 'n' + [char]0x00E1 + 'l tartja a kulcsot, sosem a konfigur' + [char]0x00E1 + 'ci' + [char]0x00F3 + 'ban'), ('  --api-key-stdin              a standard bemenetr' + [char]0x0151 + 'l olvassa az API-kulcsot (egy sor): sosem a parancssorban'), ('  --api-key <key>              az itt be' + [char]0x00ED + 'rt kulcs, ny' + [char]0x00ED + 'lt sz' + [char]0x00F6 + 'vegk' + [char]0x00E9 + 'nt (glm ' + [char]0x00E9 + 's kimi eset' + [char]0x00E9 + 'n nem enged' + [char]0x00E9 + 'lyezett)'), ('  --secret-mode <mode>         hogyan ment' + [char]0x0151 + 'dik a kulcs: plaintext (alap' + [char]0x00E9 + 'rtelmezett), env vagy file'), ('  --secret-env <name>          --secret-mode env eset' + [char]0x00E9 + 'n: a kulcsot tartalmaz' + [char]0x00F3 + ' k' + [char]0x00F6 + 'rnyezeti v' + [char]0x00E1 + 'ltoz' + [char]0x00F3), ('  --secret-file <path>         --secret-mode file eset' + [char]0x00E9 + 'n: a kulcsot tartalmaz' + [char]0x00F3 + ' f' + [char]0x00E1 + 'jl'), ('  --model <model>              a haszn' + [char]0x00E1 + 'land' + [char]0x00F3 + ' modell'), ('  --language <code>            a nyelv (p' + [char]0x00E9 + 'ld' + [char]0x00E1 + 'ul it vagy en)'), ('  --skip-health                kihagyja a v' + [char]0x00E9 + 'gs' + [char]0x0151 + ' ellen' + [char]0x0151 + 'rz' + [char]0x00E9 + 'st'), ('  --reset                      tiszta be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 'sb' + [char]0x00F3 + 'l indul ' + [char]0x00FA + 'jra'), '', ('P' + [char]0x00E9 + 'ld' + [char]0x00E1 + 'k:'), ('  egy f' + [char]0x00E1 + 'jlban l' + [char]0x00E9 + 'v' + [char]0x0151 + ' GLM-kulccsal:'), '    jht setup --non-interactive --provider glm --harness pi --api-key-file kulcs.txt', '  OpenAI API-kulccsal, Pi-n (Claude-hoz: --provider claude):', '    jht setup --non-interactive --provider openai --harness pi --api-key-stdin') -join [char]10) }
+    'hu:help.tools' { return ((('Haszn' + [char]0x00E1 + 'lat: jht tools <parancs>'), '', ('  status --json   megvannak-e a felder' + [char]0x00ED + 't' + [char]0x0151 + 'k (Scout) eszk' + [char]0x00F6 + 'zei (a teljes k' + [char]0x00E9 + 'p), ' + [char]0x00FA + 'ton vannak-e, vagy sikertelen volt a let' + [char]0x00F6 + 'lt' + [char]0x00E9 + 's'), ('  pull            let' + [char]0x00F6 + 'lti ' + [char]0x0151 + 'ket a h' + [char]0x00E1 + 'tt' + [char]0x00E9 + 'rben (a jht up ' + [char]0x00E9 + 's a jht setup mag' + [char]0x00E1 + 't' + [char]0x00F3 + 'l elind' + [char]0x00ED + 'tja)'), ('  switch          ' + [char]0x00E1 + 'tviszi r' + [char]0x00E1 + 'juk a csapatot, amint a bevezet' + [char]0x00E9 + 's lez' + [char]0x00E1 + 'rult (a let' + [char]0x00F6 + 'lt' + [char]0x00E9 + 's mag' + [char]0x00E1 + 't' + [char]0x00F3 + 'l megteszi)'), '', ('Ez a s' + [char]0x00FA + 'g' + [char]0x00F3 + ' semmit nem ind' + [char]0x00ED + 't el ' + [char]0x00E9 + 's semmit nem t' + [char]0x00F6 + 'lt le.')) -join [char]10) }
+    'hu:keyfile.both' { return ('a --api-key-file vagy a --api-key-stdin kapcsol' + [char]0x00F3 + 't haszn' + [char]0x00E1 + 'ld, ne mindkett' + [char]0x0151 + 't') }
+    'hu:keyfile.not_file' { return ('a --api-key-file kapcsol' + [char]0x00F3 + 'nak megadott f' + [char]0x00E1 + 'jlnak k' + [char]0x00F6 + 'z' + [char]0x00F6 + 'ns' + [char]0x00E9 + 'ges f' + [char]0x00E1 + 'jlnak kell lennie, nem mapp' + [char]0x00E1 + 'nak vagy linknek: %s') }
+    'hu:keyfile.shape' { return ('a --api-key-file kapcsol' + [char]0x00F3 + 'nak megadott f' + [char]0x00E1 + 'jl tartalma nem egyetlen, 16' + [char]0x2013 + '512 nyomtathat' + [char]0x00F3 + ' karakterb' + [char]0x0151 + 'l ' + [char]0x00E1 + 'll' + [char]0x00F3 + ', sz' + [char]0x00F3 + 'k' + [char]0x00F6 + 'z n' + [char]0x00E9 + 'lk' + [char]0x00FC + 'li sor: %s') }
+    'hu:keyfile.size' { return ('a --api-key-file kapcsol' + [char]0x00F3 + 'nak megadott f' + [char]0x00E1 + 'jl ' + [char]0x00FC + 'res, vagy t' + [char]0x00FA + 'l nagy egy kulcshoz (1' + [char]0x2013 + '4096 b' + [char]0x00E1 + 'jt): %s') }
+    'hu:keyfile.twice' { return ('a --api-key-file kapcsol' + [char]0x00F3 + 't k' + [char]0x00E9 + 'tszer adtad meg') }
+    'hu:keyfile.unreadable' { return ('a --api-key-file kapcsol' + [char]0x00F3 + 'nak megadott f' + [char]0x00E1 + 'jl nem olvashat' + [char]0x00F3 + ': %s') }
+    'hu:line.abbinamento_annullato_nessuna_modifica' { return ('P' + [char]0x00E1 + 'ros' + [char]0x00ED + 't' + [char]0x00E1 + 's megszak' + [char]0x00ED + 'tva: nincs v' + [char]0x00E1 + 'ltoz' + [char]0x00E1 + 's.') }
+    'hu:line.abbinamento_di_s_non_riuscito' { return ('%s p' + [char]0x00E1 + 'ros' + [char]0x00ED + 't' + [char]0x00E1 + 'sa nem siker' + [char]0x00FC + 'lt: a r' + [char]0x00E9 + 'gi m' + [char]0x00E1 + 'solatok mind megmaradnak. Futtasd ' + [char]0x00FA + 'jra a jht telegram pair --all parancsot: a m' + [char]0x00E1 + 'r p' + [char]0x00E1 + 'ros' + [char]0x00ED + 'tott szerepek nem k' + [char]0x00E9 + 'rnek ' + [char]0x00FA + 'j tokent.') }
+    'hu:line.abbinamento_rifiutato_genera_un_token' { return ('P' + [char]0x00E1 + 'ros' + [char]0x00ED + 't' + [char]0x00E1 + 's elutas' + [char]0x00ED + 'tva: gener' + [char]0x00E1 + 'lj ' + [char]0x00FA + 'j tokent a BotFatherben (/revoke), ' + [char]0x00E9 + 's pr' + [char]0x00F3 + 'b' + [char]0x00E1 + 'ld ' + [char]0x00FA + 'jra.') }
+    'hu:line.agent_restart_failed.inventario_conservato_ma_il_team' { return ('a lelt' + [char]0x00E1 + 'r megmaradt, de a csapat nem indult ' + [char]0x00FA + 'jra. Teend' + [char]0x0151 + ': jht up') }
+    'hu:line.annullato_niente_autorizzato' { return ('Megszak' + [char]0x00ED + 'tva: semmi sincs enged' + [char]0x00E9 + 'lyezve.') }
+    'hu:line.anteprima_non_valida_niente_autorizzato' { return ('' + [char]0x00C9 + 'rv' + [char]0x00E9 + 'nytelen el' + [char]0x0151 + 'n' + [char]0x00E9 + 'zet: semmi sincs enged' + [char]0x00E9 + 'lyezve.') }
+    'hu:line.apply.authorize' { return ('Enged' + [char]0x00E9 + 'lyezed ezt a jelentkez' + [char]0x00E9 + 'st?') }
+    'hu:line.apply_relink_account_cloud_account' { return ('apply relink-account: a felh' + [char]0x0151 + 'fi' + [char]0x00F3 + 'k nem ' + [char]0x00E9 + 'rhet' + [char]0x0151 + ' el. El' + [char]0x0151 + 'bb futtasd a jht cloud pair parancsot.') }
+    'hu:line.autorizzata_s_verso_s_il' { return ('#%s enged' + [char]0x00E9 + 'lyezve, c' + [char]0x00ED + 'm: %s: a CLOSER a k' + [char]0x00F6 + 'vetkez' + [char]0x0151 + ' k' + [char]0x00F6 + 'rben veszi ' + [char]0x00E1 + 't.') }
+    'hu:line.bot_abbinato_e_copia_legacy' { return ('A bot p' + [char]0x00E1 + 'ros' + [char]0x00ED + 'tva, a r' + [char]0x00E9 + 'gi m' + [char]0x00E1 + 'solat elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tva. Maradtak m' + [char]0x00E9 + 'g r' + [char]0x00E9 + 'gi tokenek, vagy van egy token a kont' + [char]0x00E9 + 'ner k' + [char]0x00F6 + 'rnyezet' + [char]0x00E9 + 'ben: t' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tsd el ' + [char]0x0151 + 'ket, ' + [char]0x00E9 + 's fejezd be a cser' + [char]0x00E9 + 't az ' + [char]0x00E1 + 't' + [char]0x00E1 + 'll' + [char]0x00E1 + 's el' + [char]0x0151 + 'tt.') }
+    'hu:line.bot_token_invalid.controlla_il_token_generato_da' { return ('ellen' + [char]0x0151 + 'rizd a BotFather ' + [char]0x00E1 + 'ltal gener' + [char]0x00E1 + 'lt tokent.') }
+    'hu:line.broker_restart_failed.il_servizio_della_posta_non_4' { return ('a levelez' + [char]0x00E9 + 'si szolg' + [char]0x00E1 + 'ltat' + [char]0x00E1 + 's nem indult ' + [char]0x00FA + 'jra. Teend' + [char]0x0151 + ': jht mail status') }
+    'hu:line.broker_start_failed.il_servizio_della_posta_non_2' { return ('a levelez' + [char]0x00E9 + 'si szolg' + [char]0x00E1 + 'ltat' + [char]0x00E1 + 's nem indult el.') }
+    'hu:line.broker_start_failed.il_servizio_della_posta_non_3' { return ('a levelez' + [char]0x00E9 + 'si szolg' + [char]0x00E1 + 'ltat' + [char]0x00E1 + 's 30 m' + [char]0x00E1 + 'sodperc ut' + [char]0x00E1 + 'n sem v' + [char]0x00E1 + 'laszol.') }
+    'hu:line.broker_unavailable.il_broker_dei_segreti_esiste' { return ('a titokbroker l' + [char]0x00E9 + 'tezik, de nem igazolhat' + [char]0x00F3 + ', hogy a mi' + [char]0x00E9 + 'nk: nem ny' + [char]0x00FA + 'lok hozz' + [char]0x00E1 + '.') }
+    'hu:line.broker_unavailable.il_runtime_installato_pi_vecchio_2' { return ('a telep' + [char]0x00ED + 'tett futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezet r' + [char]0x00E9 + 'gebbi, ' + [char]0x00E9 + 's nincs benne titokbroker.') }
+    'hu:line.broker_unavailable.il_servizio_della_posta_non' { return ('a levelez' + [char]0x00E9 + 'si szolg' + [char]0x00E1 + 'ltat' + [char]0x00E1 + 's m' + [char]0x00E9 + 'g nem l' + [char]0x00E9 + 'tezik: az els' + [char]0x0151 + ' alkalommal j' + [char]0x00F6 + 'n l' + [char]0x00E9 + 'tre, amikor sz' + [char]0x00FC + 'ks' + [char]0x00E9 + 'g van r' + [char]0x00E1 + '.') }
+    'hu:line.cancellato_marcatore_migrazione_broker_s' { return ('T' + [char]0x00F6 + 'r' + [char]0x00F6 + 'lve: a broker migr' + [char]0x00E1 + 'ci' + [char]0x00F3 + 's jel' + [char]0x00F6 + 'l' + [char]0x0151 + 'je, %s') }
+    'hu:line.cancellato_volume_broker_s_s' { return ('T' + [char]0x00F6 + 'r' + [char]0x00F6 + 'lve: %s brokerk' + [char]0x00F6 + 'tet (%s)') }
+    'hu:line.container_s_non_e_partito' { return ('A(z) ''%s'' kont' + [char]0x00E9 + 'ner nem indult el 10 m' + [char]0x00E1 + 'sodpercen bel' + [char]0x00FC + 'l. N' + [char]0x00E9 + 'zd meg: ''jht logs''.') }
+    'hu:line.cosa_fare_jht_mail_setup' { return ('Teend' + [char]0x0151 + ': jht mail setup') }
+    'hu:line.cosa_fare_jht_up_3' { return ('Teend' + [char]0x0151 + ': jht up') }
+    'hu:line.cosa_fare_jht_upgrade_4' { return ('Teend' + [char]0x0151 + ': jht upgrade') }
+    'hu:line.cosa_fare_riprova_il_comando_2' { return ('Teend' + [char]0x0151 + ': pr' + [char]0x00F3 + 'b' + [char]0x00E1 + 'ld ' + [char]0x00FA + 'jra a parancsot') }
+    'hu:line.fino_ad_allora_la_posta' { return ('Addig a leveleket a mostani jelsz' + [char]0x00F3 + 'val lehet olvasni ' + [char]0x00E9 + 's k' + [char]0x00FC + 'ldeni; a figyelmeztet' + [char]0x00E9 + 's a jht mail status kimenet' + [char]0x00E9 + 'ben marad.') }
+    'hu:line.genera_una_nuova_password_per' { return ('gener' + [char]0x00E1 + 'lj ' + [char]0x00FA + 'j alkalmaz' + [char]0x00E1 + 'sjelsz' + [char]0x00F3 + 't a szolg' + [char]0x00E1 + 'ltat' + [char]0x00F3 + 'dn' + [char]0x00E1 + 'l, ' + [char]0x00E9 + 's mentsd el ezzel: jht mail setup') }
+    'hu:line.i_segreti_e_lo_stato' { return ('A titkok ' + [char]0x00E9 + 's a broker ' + [char]0x00E1 + 'llapota t' + [char]0x00F6 + 'r' + [char]0x00F6 + 'lve: jelentkezz be ' + [char]0x00FA + 'jra a port' + [char]0x00E1 + 'lokra, ' + [char]0x00E9 + 's ' + [char]0x00E1 + 'll' + [char]0x00ED + 'tsd be ' + [char]0x00FA + 'jra a levelez' + [char]0x00E9 + 'st.') }
+    'hu:line.il_broker_non_ha_registrato' { return ('A broker nem r' + [char]0x00F6 + 'gz' + [char]0x00ED + 'tette az enged' + [char]0x00E9 + 'lyt: visszavonva, semmi sem indul el.') }
+    'hu:line.integration.install_hint' { return ('a telep' + [char]0x00ED + 't' + [char]0x00E9 + 's' + [char]0x00FC + 'kh' + [char]0x00F6 + 'z: ''jht upgrade'' (vagy egy ''jht integration add <id>'')') }
+    'hu:line.interattivo_il_token_viene_chiesto' { return ('Interakt' + [char]0x00ED + 'v: a tokent kijelz' + [char]0x00E9 + 's n' + [char]0x00E9 + 'lk' + [char]0x00FC + 'l k' + [char]0x00E9 + 'ri, majd az ' + [char]0x00FA + 'j bot egyszer haszn' + [char]0x00E1 + 'latos k' + [char]0x00F3 + 'dot kap a Telegramodr' + [char]0x00F3 + 'l. Automatiz' + [char]0x00E1 + 'l' + [char]0x00E1 + 'shoz: {"bot_token": ...} JSON-k' + [char]0x00E9 + 'nt a stdin-en; ne mentsd a tokent a ~/.jht mapp' + [char]0x00E1 + 'ba, ' + [char]0x00E9 + 's azonnal t' + [char]0x00F6 + 'r' + [char]0x00F6 + 'ld az azon k' + [char]0x00ED + 'v' + [char]0x00FC + 'l haszn' + [char]0x00E1 + 'lt f' + [char]0x00E1 + 'jlokat.') }
+    'hu:line.jht_telegram_pair_all_interattivo' { return ('a jht telegram pair --all interakt' + [char]0x00ED + 'v: automatiz' + [char]0x00E1 + 'l' + [char]0x00E1 + 'shoz egyszerre egy szerepet p' + [char]0x00E1 + 'ros' + [char]0x00ED + 'ts.') }
+    'hu:line.job_hunter_team_non_installato' { return ('A Job Hunter Team nincs teljesen telep' + [char]0x00ED + 'tve: a futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezet mapp' + [char]0x00E1 + 'j' + [char]0x00E1 + 'b' + [char]0x00F3 + 'l hi' + [char]0x00E1 + 'nyzik az integrit' + [char]0x00E1 + 'sf' + [char]0x00E1 + 'jl (megszakadt telep' + [char]0x00ED + 't' + [char]0x00E9 + 's?). Futtasd ' + [char]0x00FA + 'jra a telep' + [char]0x00ED + 't' + [char]0x0151 + 't.') }
+    'hu:line.la_casella_di_posta_ora' { return ('A postafi' + [char]0x00F3 + 'k most a titokbrokerben van. A jelszav' + [char]0x00E1 + 't az ' + [char]0x00FC + 'gyn' + [char]0x00F6 + 'k' + [char]0x00F6 + 'k olvasni tudt' + [char]0x00E1 + 'k:') }
+    'hu:line.legacy_cleanup_failed.i_token_nuovi_sono_al' { return ('az ' + [char]0x00FA + 'j tokenek biztons' + [char]0x00E1 + 'gban vannak, de %s r' + [char]0x00E9 + 'gi m' + [char]0x00E1 + 'solata m' + [char]0x00E9 + 'g a ~/.jht mapp' + [char]0x00E1 + 'ban van; az ' + [char]0x00E1 + 't' + [char]0x00E1 + 'll' + [char]0x00E1 + 's megtagadva.') }
+    'hu:line.legacy_inventory_failed.il_team_resta_fermo_perch_4' { return ('a csapat le' + [char]0x00E1 + 'll' + [char]0x00ED + 'tva marad, mert a g' + [char]0x00E9 + 'pen l' + [char]0x00E9 + 'v' + [char]0x0151 + ' Telegram-lelt' + [char]0x00E1 + 'r nem maradt meg.') }
+    'hu:line.legacy_inventory_failed.le_impronte_non_sono_state' { return ('az ujjlenyomatokat az elk' + [char]0x00FC + 'l' + [char]0x00F6 + 'n' + [char]0x00ED + 'tett szolg' + [char]0x00E1 + 'ltat' + [char]0x00E1 + 's nem ' + [char]0x0151 + 'rizte meg.') }
+    'hu:line.legacy_inventory_failed.migrazione_telegram_interrotta' { return ('a Telegram-migr' + [char]0x00E1 + 'ci' + [char]0x00F3 + ' megszakadt.') }
+    'hu:line.legacy_inventory_failed.non_posso_provare_che_jht' { return ('nem tudom bizony' + [char]0x00ED + 'tani, hogy a ~/.jht nem tartalmaz Telegram-tokent.') }
+    'hu:line.legacy_inventory_failed.non_riesco_a_fermare_gli' { return ('nem tudom le' + [char]0x00E1 + 'll' + [char]0x00ED + 'tani az ' + [char]0x00FC + 'gyn' + [char]0x00F6 + 'k' + [char]0x00F6 + 'ket a g' + [char]0x00E9 + 'pen l' + [char]0x00E9 + 'v' + [char]0x0151 + ' lelt' + [char]0x00E1 + 'r el' + [char]0x0151 + 'tt.') }
+    'hu:line.legacy_inventory_failed.non_riesco_a_leggere_i' { return ('nem tudom beolvasni a r' + [char]0x00E9 + 'gi tokeneket a ~/.jht mapp' + [char]0x00E1 + 'ban.') }
+    'hu:line.legacy_inventory_failed.ruoli_legacy_non_riconosciuti' { return ('ismeretlen r' + [char]0x00E9 + 'gi szerepek.') }
+    'hu:line.legacy_remove_failed.s_nel_broker_ma_la' { return ('%s a brokerben van, de a ~/.jht/credentials mapp' + [char]0x00E1 + 'ban l' + [char]0x00E9 + 'v' + [char]0x0151 + ' m' + [char]0x00E1 + 'solat megmaradt.') }
+    'hu:line.legacy_secret_reappeared.jht_credentials_s_json_ricomparso' { return ('a ~/.jht/credentials/%s.json a migr' + [char]0x00E1 + 'ci' + [char]0x00F3 + ' ut' + [char]0x00E1 + 'n ' + [char]0x00FA + 'jra megjelent; import' + [char]0x00E1 + 'l' + [char]0x00E1 + 's n' + [char]0x00E9 + 'lk' + [char]0x00FC + 'l elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tottam.') }
+    'hu:line.mail.address_prompt' { return ('A postafi' + [char]0x00F3 + 'k c' + [char]0x00ED + 'me:') }
+    'hu:line.mail.app_password_prompt' { return ('Alkalmaz' + [char]0x00E1 + 'sjelsz' + [char]0x00F3 + ' (nem jelenik meg):') }
+    'hu:line.mail.dedicated_prompt' { return ('Ez a postafi' + [char]0x00F3 + 'k KIZ' + [char]0x00C1 + 'R' + [char]0x00D3 + 'LAG a tov' + [char]0x00E1 + 'bb' + [char]0x00ED + 'tott ' + [char]0x00E1 + 'll' + [char]0x00E1 + 's' + [char]0x00E9 + 'rtes' + [char]0x00ED + 't' + [char]0x0151 + 'knek sz' + [char]0x00F3 + 'l?') }
+    'hu:line.mail_setup_opzione_sconosciuta_s' { return ('mail setup: ismeretlen kapcsol' + [char]0x00F3 + ': %s') }
+    'hu:line.mail_setup_password_vuota' { return ('mail setup: ' + [char]0x00FC + 'res jelsz' + [char]0x00F3) }
+    'hu:line.nessun_provider_attivo_scegline_uno' { return ('nincs akt' + [char]0x00ED + 'v szolg' + [char]0x00E1 + 'ltat' + [char]0x00F3 + ': v' + [char]0x00E1 + 'lassz egyet a ''jht providers use glm'' paranccsal') }
+    'hu:line.nessun_ruolo_ha_un_token' { return ('Egyik szerepnek sincs r' + [char]0x00E9 + 'gi tokenje: ' + [char]0x00FA + 'j bothoz haszn' + [char]0x00E1 + 'ld a jht telegram pair <szerep> parancsot.') }
+    'hu:line.non_autorizzabile_s' { return ('Nem enged' + [char]0x00E9 + 'lyezhet' + [char]0x0151 + ': %s.') }
+    'hu:line.non_autorizzata_s' { return ('Nincs enged' + [char]0x00E9 + 'lyezve: %s.') }
+    'hu:line.os_and_version_are_required' { return ('a --os ' + [char]0x00E9 + 's a --version k' + [char]0x00F6 + 'telez' + [char]0x0151) }
+    'hu:line.podman_non_trovato_reinstalla_il' { return ('A Podman nem tal' + [char]0x00E1 + 'lhat' + [char]0x00F3 + ': telep' + [char]0x00ED + 'tsd ' + [char]0x00FA + 'jra a JHT futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezet' + [char]0x00E9 + 't.') }
+    'hu:line.preparo_il_servizio_della_posta' { return ('El' + [char]0x0151 + 'k' + [char]0x00E9 + 'sz' + [char]0x00ED + 'tem a levelez' + [char]0x00E9 + 'si szolg' + [char]0x00E1 + 'ltat' + [char]0x00E1 + 'st (csak az els' + [char]0x0151 + ' alkalommal j' + [char]0x00F6 + 'n l' + [char]0x00E9 + 'tre, amikor sz' + [char]0x00FC + 'ks' + [char]0x00E9 + 'g van r' + [char]0x00E1 + ')' + [char]0x2026) }
+    'hu:line.provider_attivo_non_riconosciuto_s' { return ('ismeretlen akt' + [char]0x00ED + 'v szolg' + [char]0x00E1 + 'ltat' + [char]0x00F3 + ': %s') }
+    'hu:line.reset_impossibile_cancellare_il_marcatore' { return ('reset: nem lehet t' + [char]0x00F6 + 'r' + [char]0x00F6 + 'lni a broker migr' + [char]0x00E1 + 'ci' + [char]0x00F3 + 's jel' + [char]0x00F6 + 'l' + [char]0x0151 + 'j' + [char]0x00E9 + 't: %s.') }
+    'hu:line.reset_impossibile_cancellare_il_marcatore_2' { return ('reset: nem lehet t' + [char]0x00F6 + 'r' + [char]0x00F6 + 'lni a broker jel' + [char]0x00F6 + 'l' + [char]0x0151 + 'j' + [char]0x00E9 + 't: %s.') }
+    'hu:line.reset_impossibile_cancellare_il_volume' { return ('reset: nem lehet t' + [char]0x00F6 + 'r' + [char]0x00F6 + 'lni a(z) %s brokerk' + [char]0x00F6 + 'tetet (%s).') }
+    'hu:line.reset_nome_volume_non_valido' { return ('reset: ' + [char]0x00E9 + 'rv' + [char]0x00E9 + 'nytelen k' + [char]0x00F6 + 'tetn' + [char]0x00E9 + 'v ehhez: %s; az elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 't' + [char]0x00E1 + 's megtagadva.') }
+    'hu:line.reset_non_riesco_a_determinare' { return ('reset: nem tudom meghat' + [char]0x00E1 + 'rozni a Compose-projektet; a broker k' + [char]0x00F6 + 'teteihez nem ny' + [char]0x00FA + 'ltam.') }
+    'hu:line.reset_non_riesco_a_fermare' { return ('reset: nem tudom le' + [char]0x00E1 + 'll' + [char]0x00ED + 'tani a futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezetet; a broker k' + [char]0x00F6 + 'teteihez nem ny' + [char]0x00FA + 'ltam.') }
+    'hu:line.reset_ricerca_del_volume_s_2' { return ('reset: a(z) %s k' + [char]0x00F6 + 'tet keres' + [char]0x00E9 + 'se nem siker' + [char]0x00FC + 'lt.') }
+    'hu:line.restano_token_legacy_per_s' { return ('R' + [char]0x00E9 + 'gi tokenek maradtak ezekhez: %s. Am' + [char]0x00ED + 'g ezeket a szerepeket is nem p' + [char]0x00E1 + 'ros' + [char]0x00ED + 'tod, %s n' + [char]0x00E9 + 'ma marad a Telegramon: p' + [char]0x00E1 + 'ros' + [char]0x00ED + 'tsd mindet ebben a menetben (jht telegram pair --all).') }
+    'hu:line.risposta_del_container_non_valida' { return ('' + [char]0x00C9 + 'rv' + [char]0x00E9 + 'nytelen v' + [char]0x00E1 + 'lasz a kont' + [char]0x00E9 + 'nert' + [char]0x0151 + 'l: az enged' + [char]0x00E9 + 'ly visszavonva, semmi sem indul el.') }
+    'hu:line.ritirata_s_non_verra_inviata' { return ('#%s visszavonva: nem lesz elk' + [char]0x00FC + 'ldve.') }
+    'hu:line.ritiro_non_riuscito_s' { return ('A visszavon' + [char]0x00E1 + 's nem siker' + [char]0x00FC + 'lt: %s.') }
+    'hu:line.runtime_migration_docker_missing.il_client_docker_originale_non' { return ('az eredeti Docker-kliens nem ' + [char]0x00E9 + 'rhet' + [char]0x0151 + ' el.') }
+    'hu:line.runtime_migration_image_invalid.serve_l_immagine_jht_fissata' { return ('digest alapj' + [char]0x00E1 + 'n r' + [char]0x00F6 + 'gz' + [char]0x00ED + 'tett JHT-k' + [char]0x00E9 + 'p kell.') }
+    'hu:line.runtime_migration_podman_missing.podman_non_e_disponibile' { return ('a Podman nem ' + [char]0x00E9 + 'rhet' + [char]0x0151 + ' el.') }
+    'hu:line.runtime_migration_team_running.ferma_prima_il_team_docker' { return ('el' + [char]0x0151 + 'bb ' + [char]0x00E1 + 'll' + [char]0x00ED + 'tsd le a Docker-csapatot.') }
+    'hu:line.runtime_migration_team_running.ferma_prima_il_team_podman' { return ('el' + [char]0x0151 + 'bb ' + [char]0x00E1 + 'll' + [char]0x00ED + 'tsd le a Podman-csapatot.') }
+    'hu:line.runtime_o_container_jht_non' { return ('a JHT futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezete vagy kont' + [char]0x00E9 + 'nere nem ' + [char]0x00E9 + 'rhet' + [char]0x0151 + ' el') }
+    'hu:line.ruoli_da_abbinare_in_questa' { return ('Ebben a menetben p' + [char]0x00E1 + 'ros' + [char]0x00ED + 'tand' + [char]0x00F3 + ' szerepek: %s') }
+    'hu:line.s_ha_gi_un_bot' { return ('%s: m' + [char]0x00E1 + 'r van p' + [char]0x00E1 + 'ros' + [char]0x00ED + 'tott bot: csak a r' + [char]0x00E9 + 'gi m' + [char]0x00E1 + 'solat' + [char]0x00E1 + 't t' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tom el.') }
+    'hu:line.s_needs_a_value' { return ('%s: ' + [char]0x00E9 + 'rt' + [char]0x00E9 + 'k kell hozz' + [char]0x00E1) }
+    'hu:line.saltato_non_trovato_volume_broker' { return ('Kihagyva (nem tal' + [char]0x00E1 + 'lhat' + [char]0x00F3 + '): %s brokerk' + [char]0x00F6 + 'tet') }
+    'hu:line.serve_un_terminale_l_autorizzazione' { return ('Termin' + [char]0x00E1 + 'l kell: az enged' + [char]0x00E9 + 'lyt k' + [char]0x00E9 + 'zzel kell meger' + [char]0x0151 + 's' + [char]0x00ED + 'teni.') }
+    'hu:line.telegram_isolato_attivo_il_bridge' { return ('Az elk' + [char]0x00FC + 'l' + [char]0x00F6 + 'n' + [char]0x00ED + 'tett Telegram akt' + [char]0x00ED + 'v; a r' + [char]0x00E9 + 'gi bridge-et az ' + [char]0x00FC + 'gyn' + [char]0x00F6 + 'k' + [char]0x00F6 + 'k m' + [char]0x00E1 + 'r nem kapcsolhatj' + [char]0x00E1 + 'k vissza.') }
+    'hu:line.the_setup_keeps_the_key' { return ('A be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 's meg' + [char]0x0151 + 'rzi a kulcsot: most m' + [char]0x00E1 + 'r t' + [char]0x00F6 + 'r' + [char]0x00F6 + 'lheted a f' + [char]0x00E1 + 'jlt err' + [char]0x0151 + 'l a g' + [char]0x00E9 + 'pr' + [char]0x0151 + 'l (%s).') }
+    'hu:line.upgrade.done' { return ('A friss' + [char]0x00ED + 't' + [char]0x00E9 + 's k' + [char]0x00E9 + 'sz: %s (%s) -> %s (%s). %s') }
+    'hu:line.upgrade.restored' { return ('Az el' + [char]0x0151 + 'z' + [char]0x0151 + ' futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezet vissza' + [char]0x00E1 + 'll' + [char]0x00ED + 'tva.') }
+    'hu:line.uso_jht_apply_relink_account' { return ('haszn' + [char]0x00E1 + 'lat: jht apply relink-account') }
+    'hu:line.uso_jht_apply_request_cancel_2' { return ('haszn' + [char]0x00E1 + 'lat: jht apply request|cancel <id>') }
+    'hu:line.uso_jht_mail_setup_status' { return ('haszn' + [char]0x00E1 + 'lat: jht mail setup|status|admission <allowlist|whole_mailbox>|allow add|remove <c' + [char]0x00ED + 'm|@domain>|drafts|approve <id>|discard <id>|journal|delete|migrate') }
+    'hu:line.uso_jht_migrate_runtime_podman' { return ('haszn' + [char]0x00E1 + 'lat: jht migrate-runtime podman') }
+    'hu:line.uso_jht_screen_on_off' { return ('haszn' + [char]0x00E1 + 'lat: jht screen on | off | status [--json]') }
+    'hu:line.uso_jht_telegram_chat_id' { return ('haszn' + [char]0x00E1 + 'lat: jht telegram chat-id <assistente|capitano|mentor>') }
+    'hu:line.uso_jht_telegram_pair_assistente' { return ('haszn' + [char]0x00E1 + 'lat: jht telegram pair <assistente|capitano|mentor>|--all') }
+    'hu:line.uso_jht_telegram_remove_assistente' { return ('haszn' + [char]0x00E1 + 'lat: jht telegram remove <assistente|capitano|mentor>') }
+    'hu:line.uso_jht_telegram_status_pair' { return ('haszn' + [char]0x00E1 + 'lat: jht telegram status|pair <szerep>|pair --all|chat-id <szerep>|remove <szerep>') }
+    'hu:monitor.window_invalid' { return ('monitor_window_invalid: a ''jht monitor --window'' parancsot m' + [char]0x00E1 + 's kapcsol' + [char]0x00F3 + 'k n' + [char]0x00E9 + 'lk' + [char]0x00FC + 'l haszn' + [char]0x00E1 + 'ld.') }
+    'hu:ps.apply_auto_send_warning_1' { return ('  Bekapcsolt automatikus k' + [char]0x00FC + 'ld' + [char]0x00E9 + 'sn' + [char]0x00E9 + 'l a csapat kit' + [char]0x00F6 + 'lti ' + [char]0x00C9 + 'S ELK' + [char]0x00DC + 'LDI a jelentkez' + [char]0x00E9 + 'st,') }
+    'hu:ps.apply_auto_send_warning_2' { return ('  ' + [char]0x00FA + 'jabb meger' + [char]0x0151 + 's' + [char]0x00ED + 't' + [char]0x00E9 + 's n' + [char]0x00E9 + 'lk' + [char]0x00FC + 'l. Ha egyszer elment, nem h' + [char]0x00ED + 'vhat' + [char]0x00F3 + ' vissza.') }
+    'hu:ps.bot_token_prompt_hidden' { return 'A(z) %s bot tokenje (rejtett bevitel)' }
+    'hu:ps.botfather_fresh_token' { return ('Mindig a BotFatherben frissen gener' + [char]0x00E1 + 'lt tokent haszn' + [char]0x00E1 + 'lj (/revoke a boton, vagy egy ' + [char]0x00FA + 'j bot): egy m' + [char]0x00E1 + 'r l' + [char]0x00E9 + 'tez' + [char]0x0151 + ' tokent az ' + [char]0x00FC + 'gyn' + [char]0x00F6 + 'k' + [char]0x00F6 + 'k elolvashattak, akkor is, ha ma m' + [char]0x00E1 + 'r nem szerepel a ~/.jht mapp' + [char]0x00E1 + 'ban.') }
+    'hu:ps.broker_network_proxy_not_ready' { return ('broker_network_unavailable: a levelez' + [char]0x00E9 + 'si proxy nem ' + [char]0x00E1 + 'll k' + [char]0x00E9 + 'szen (k' + [char]0x00F3 + 'd: %s).') }
+    'hu:ps.broker_network_scripts_not_downloadable' { return ('broker_network_unavailable: nem tudom let' + [char]0x00F6 + 'lteni a levelez' + [char]0x00E9 + 'si proxy szkriptjeit. Teend' + [char]0x0151 + ': jht upgrade') }
+    'hu:ps.broker_network_scripts_not_verified' { return ('broker_network_unavailable: a levelez' + [char]0x00E9 + 'si proxy szkriptjei nem igazolhat' + [char]0x00F3 + 'k. Teend' + [char]0x0151 + ': jht upgrade') }
+    'hu:ps.broker_restart_failed_secrets_broker_not_ours' { return ('broker_restart_failed: a titokbroker nem igazolhat' + [char]0x00F3 + ' a saj' + [char]0x00E1 + 'tunkk' + [char]0x00E9 + 'nt: nem ny' + [char]0x00FA + 'lok hozz' + [char]0x00E1 + '. Teend' + [char]0x0151 + ': jht mail status') }
+    'hu:ps.broker_unavailable_secrets_broker_not_running' { return 'broker_unavailable: a titokbroker nem fut.' }
+    'hu:ps.cli_version_needs_container' { return ('A fut' + [char]0x00F3 + ' CLI verzi' + [char]0x00F3 + 'j' + [char]0x00E1 + 'hoz fut' + [char]0x00F3 + ' kont' + [char]0x00E9 + 'ner kell: ''jht up''.') }
+    'hu:ps.compose_up_failed_team_not_started' { return ('compose_up_failed: a csapat nem indult el (docker compose up, k' + [char]0x00F3 + 'd: %s). N' + [char]0x00E9 + 'zd meg: ''jht logs''.') }
+    'hu:ps.container_not_running' { return ('a(z) ''%s'' kont' + [char]0x00E9 + 'ner nem fut') }
+    'hu:ps.container_runtime_unsupported' { return ('nem t' + [char]0x00E1 + 'mogatott kont' + [char]0x00E9 + 'ner-futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezet: %s') }
+    'hu:ps.docker_desktop_file_sharing_hint' { return ('  Teend' + [char]0x0151 + ': nyisd meg a Docker Desktop > Settings > Resources > File sharing r' + [char]0x00E9 + 'szt, ellen' + [char]0x0151 + 'rizd, hogy a felhaszn' + [char]0x00E1 + 'l' + [char]0x00F3 + ' mapp' + [char]0x00E1 + 'ja meg van osztva, majd futtasd ' + [char]0x00FA + 'jra a ''jht up'' parancsot.') }
+    'hu:ps.docker_podman_verified_future_removal' { return ('A Docker -> Podman migr' + [char]0x00E1 + 'ci' + [char]0x00F3 + ' ellen' + [char]0x0151 + 'rizve. A Docker-k' + [char]0x00F6 + 'tetek ' + [char]0x00E9 + 'rintetlenek maradnak, ' + [char]0x00E9 + 's m' + [char]0x00E9 + 'g tartalmazz' + [char]0x00E1 + 'k a levelez' + [char]0x00E9 + 'si jelszavakat, a port' + [char]0x00E1 + 'lok hozz' + [char]0x00E1 + 'f' + [char]0x00E9 + 'r' + [char]0x00E9 + 'seit ' + [char]0x00E9 + 's a Telegram-tokeneket: az elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 't' + [char]0x00E1 + 'sukhoz a j' + [char]0x00F6 + 'v' + [char]0x0151 + 'ben kifejezett meger' + [char]0x0151 + 's' + [char]0x00ED + 't' + [char]0x00E9 + 's kell.') }
+    'hu:ps.doctor.wsl_memory' { return ('A WSL-nek nincs mem' + [char]0x00F3 + 'riakorl' + [char]0x00E1 + 'tja (m' + [char]0x00E1 + 's WSL-disztrib' + [char]0x00FA + 'ci' + [char]0x00F3 + 'k is regisztr' + [char]0x00E1 + 'lva vannak): add hozz' + [char]0x00E1 + ' a(z) %s f' + [char]0x00E1 + 'jlban a [wsl2] alatt: memory=%s') }
+    'hu:ps.download_asset_failed_detail' { return ('sikertelen let' + [char]0x00F6 + 'lt' + [char]0x00E9 + 's: %s (%s)') }
+    'hu:ps.download_shared_folder_no_path' { return ('a c' + [char]0x00E9 + 'lhely egy, a csapattal megosztott mapp' + [char]0x00E1 + 'ban van: v' + [char]0x00E1 + 'lassz azon k' + [char]0x00ED + 'v' + [char]0x00FC + 'li helyet, p' + [char]0x00E9 + 'ld' + [char]0x00E1 + 'ul a Downloads mapp' + [char]0x00E1 + 't.') }
+    'hu:ps.download_sums_failed_detail' { return ('sikertelen let' + [char]0x00F6 + 'lt' + [char]0x00E9 + 's: a v%s SHA256SUMS f' + [char]0x00E1 + 'jlja (%s)') }
+    'hu:ps.full_pull_failed_keep_old' { return ('full_pull_failed: az ' + [char]0x00FA + 'j teljes k' + [char]0x00E9 + 'p nem ' + [char]0x00E9 + 'rkezett meg, a r' + [char]0x00E9 + 'gi marad. Teend' + [char]0x0151 + ': jht tools pull') }
+    'hu:ps.help.main' { return (('jht - Job Hunter Team', '', ('  Gazdag' + [char]0x00E9 + 'p-parancsok (innen m' + [char]0x0171 + 'k' + [char]0x00F6 + 'dnek):'), ('    jht up                 elind' + [char]0x00ED + 'tja a csapat kont' + [char]0x00E9 + 'ner' + [char]0x00E9 + 't'), ('    jht down               le' + [char]0x00E1 + 'll' + [char]0x00ED + 'tja'), ('                           (a --verbose kapcsol' + [char]0x00F3 + 'val a motor sorai is l' + [char]0x00E1 + 'tszanak)'), ('    jht restart            ' + [char]0x00FA + 'jraind' + [char]0x00ED + 'tja'), ('    jht status             a kont' + [char]0x00E9 + 'ner ' + [char]0x00E9 + 's a csapat ' + [char]0x00E1 + 'llapota'), ('    jht logs [-f]          a kont' + [char]0x00E9 + 'ner napl' + [char]0x00F3 + 'ja'), ('    jht upgrade            friss' + [char]0x00ED + 't a leg' + [char]0x00FA + 'jabb k' + [char]0x00E9 + 'pre'), ('    jht setup              ir' + [char]0x00E1 + 'ny' + [char]0x00ED + 'tott telep' + [char]0x00ED + 't' + [char]0x00E9 + 's'), ('    jht shell              shell a kont' + [char]0x00E9 + 'neren bel' + [char]0x00FC + 'l'), ('    jht mail setup         elmenti a postafi' + [char]0x00F3 + 'kot a titokbrokerbe'), ('    jht mail drafts        az ' + [char]0x00FC + 'gyn' + [char]0x00F6 + 'k' + [char]0x00F6 + 'k ' + [char]0x00E1 + 'ltal ' + [char]0x00ED + 'rt e-mailek, amelyek a j' + [char]0x00F3 + 'v' + [char]0x00E1 + 'hagy' + [char]0x00E1 + 'sodra v' + [char]0x00E1 + 'rnak'), ('    jht mail approve <id>  elk' + [char]0x00FC + 'ldi ' + [char]0x0151 + 'ket; a jht mail discard <id> elveti ' + [char]0x0151 + 'ket'), '    jht integration list|status [ID]|add ID|remove ID [--purge --yes] [--remove-image] [--json]', ('                           a be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 's ut' + [char]0x00E1 + 'n hozz' + [char]0x00E1 + 'adhat' + [char]0x00F3 + ' integr' + [char]0x00E1 + 'ci' + [char]0x00F3 + 'k'), ('                           (google, telegram, mail): az ' + [char]0x00E1 + 'llapotot a motorb' + [char]0x00F3 + 'l olvassa'), ('    jht telegram status    az elk' + [char]0x00FC + 'l' + [char]0x00F6 + 'n' + [char]0x00ED + 'tett Telegram-szolg' + [char]0x00E1 + 'ltat' + [char]0x00E1 + 's ' + [char]0x00E1 + 'llapota'), ('    jht telegram pair ROLE kijelz' + [char]0x00E9 + 's n' + [char]0x00E9 + 'lk' + [char]0x00FC + 'l k' + [char]0x00E9 + 'ri a tokent a gazdag' + [char]0x00E9 + 'pen, majd'), ('                           mutat egy k' + [char]0x00F3 + 'dot, amelyet a Telegramodr' + [char]0x00F3 + 'l k' + [char]0x00FC + 'ldj el a botnak'), ('                           Automatiz' + [char]0x00E1 + 'l' + [char]0x00E1 + 'shoz: JSON a stdin-en. Ne mentsd a tokent'), ('                           a ~/.jht-be; az onnan k' + [char]0x00ED + 'v' + [char]0x00FC + 'l haszn' + [char]0x00E1 + 'lt f' + [char]0x00E1 + 'jlokat azonnal t' + [char]0x00F6 + 'r' + [char]0x00F6 + 'ld.'), ('    jht telegram pair --all egy menetben p' + [char]0x00E1 + 'ros' + [char]0x00ED + 'tja az ' + [char]0x00F6 + 'sszes r' + [char]0x00E9 + 'gi szerepet'), ('    jht telegram chat-id ROLE ugyanazzal a k' + [char]0x00F3 + 'ddal m' + [char]0x00E1 + 'sik chatre k' + [char]0x00F6 + 'lt' + [char]0x00F6 + 'zteti a botot'), ('    jht reset              t' + [char]0x00F6 + 'rli a be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 'st ' + [char]0x00E9 + 's a broker k' + [char]0x00F6 + 'teteit'), '    jht migrate-runtime podman', ('                           ' + [char]0x00E1 + 'tm' + [char]0x00E1 + 'solja ' + [char]0x00E9 + 's ellen' + [char]0x0151 + 'rzi a Docker-k' + [char]0x00F6 + 'teteket a Podmanbe; nem'), ('                           v' + [char]0x00E1 + 'lasztja ki az ' + [char]0x00FA + 'j futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezetet, ' + [char]0x00E9 + 's nem t' + [char]0x00F6 + 'rli a Dockert'), ('    jht uninstall --confirm elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tja a helyi Windows-futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezetet, de megtartja az'), ('                           adatokat, a dokumentumokat, a Podmant ' + [char]0x00E9 + 's a Composet'), '', ('  Az ' + [char]0x00F6 + 'sszes t' + [char]0x00F6 + 'bbi parancs (positions, stats, team, providers, cron,'), ('  working-hours, cloud...) a kont' + [char]0x00E9 + 'neren BEL' + [char]0x00DC + 'L fut: a s' + [char]0x00FA + 'g' + [char]0x00F3 + 'jukhoz'), ('  fut' + [char]0x00F3 + ' kont' + [char]0x00E9 + 'ner kell.'), '', '      jht up ; jht --help') -join [char]10) }
+    'hu:ps.home_unavailable_bind_mount' { return ('a HOME/USERPROFILE nem ' + [char]0x00E9 + 'rhet' + [char]0x0151 + ' el: a JHT bind mount elutas' + [char]0x00ED + 'tva') }
+    'hu:ps.host_download_failed' { return ('a g' + [char]0x00E9 + 'pen v' + [char]0x00E9 + 'gzett let' + [char]0x00F6 + 'lt' + [char]0x00E9 + 's sikertelen: %s') }
+    'hu:ps.input_not_json_bot_token_stdin' { return ('input_not_json: add meg a bot_token ' + [char]0x00E9 + 'rt' + [char]0x00E9 + 'k' + [char]0x00E9 + 't JSON-k' + [char]0x00E9 + 'nt a stdin-en.') }
+    'hu:ps.integration_not_installed' { return ('nincs telep' + [char]0x00ED + 'tve') }
+    'hu:ps.integration_not_installed_yet' { return ('m' + [char]0x00E9 + 'g nincs telep' + [char]0x00ED + 'tve') }
+    'hu:ps.jht_container_not_verifiable' { return ('A JHT kont' + [char]0x00E9 + 'nere nem igazolhat' + [char]0x00F3 + '.') }
+    'hu:ps.jht_home_missing' { return ('A Job Hunter Team m' + [char]0x00E9 + 'g nincs telep' + [char]0x00ED + 'tve: a(z) %s mappa nem l' + [char]0x00E9 + 'tezik. Futtasd a telep' + [char]0x00ED + 't' + [char]0x0151 + 't, majd a ''jht setup'' parancsot.') }
+    'hu:ps.legacy_cleanup_failed_old_token_still_there' { return ('legacy_cleanup_failed: a r' + [char]0x00E9 + 'gi token m' + [char]0x00E9 + 'g a ~/.jht mapp' + [char]0x00E1 + 'ban van; az ' + [char]0x00E1 + 't' + [char]0x00E1 + 'll' + [char]0x00E1 + 's megtagadva.') }
+    'hu:ps.legacy_migration_failed_stays' { return ('legacy_migration_failed: %s a ~/.jht/credentials mapp' + [char]0x00E1 + 'ban marad.') }
+    'hu:ps.lifecycle.restarted' { return ('A Job Hunter Team ' + [char]0x00FA + 'jraindult.') }
+    'hu:ps.link_or_not_folder' { return 'link vagy nem mappa' }
+    'hu:ps.localappdata_unavailable' { return ('a LOCALAPPDATA nem ' + [char]0x00E9 + 'rhet' + [char]0x0151 + ' el: a g' + [char]0x00E9 + 'pen fut' + [char]0x00F3 + ' futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezet elutas' + [char]0x00ED + 'tva') }
+    'hu:ps.machine_state_unreadable' { return ('a g' + [char]0x00E9 + 'p ' + [char]0x00E1 + 'llapota nem olvashat' + [char]0x00F3 + ' (a podman ' + [char]0x00E9 + 's a wsl nem v' + [char]0x00E1 + 'laszol)') }
+    'hu:ps.monitor_window_unavailable' { return ('monitor_window_unavailable: itt nem tudok termin' + [char]0x00E1 + 'lablakot nyitni. Futtasd a ''jht monitor'' parancsot a jelenlegi termin' + [char]0x00E1 + 'lban.') }
+    'hu:ps.mount_repair_failed_folders_not_writable' { return ('mount_repair_failed: a Job Hunter Team mapp' + [char]0x00E1 + 'i (%s, %s) nem ' + [char]0x00ED + 'rhat' + [char]0x00F3 + 'k a kont' + [char]0x00E9 + 'ner sz' + [char]0x00E1 + 'm' + [char]0x00E1 + 'ra, ' + [char]0x00E9 + 's nem siker' + [char]0x00FC + 'lt rendbe hozni ' + [char]0x0151 + 'ket.') }
+    'hu:ps.old_images_busy' { return (' Kont' + [char]0x00E9 + 'ner haszn' + [char]0x00E1 + 'lja (megtartva): %s.') }
+    'hu:ps.old_images_kept_all' { return ('R' + [char]0x00E9 + 'gi JHT-k' + [char]0x00E9 + 'pek: mind megtartva (JHT_KEEP_OLD_IMAGES=1).') }
+    'hu:ps.old_images_refused' { return (' A motor elutas' + [char]0x00ED + 'totta (megtartva): %s.') }
+    'hu:ps.old_images_removed' { return ('R' + [char]0x00E9 + 'gi JHT-k' + [char]0x00E9 + 'pek: %s elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tva, kb. %s MB felszabad' + [char]0x00ED + 'tva (n' + [char]0x00E9 + 'vleges m' + [char]0x00E9 + 'ret: a megosztott r' + [char]0x00E9 + 'tegek csak r' + [char]0x00E9 + 'szben szabadulnak fel), megtartva: a jelenlegi ' + [char]0x00E9 + 's az el' + [char]0x0151 + 'z' + [char]0x0151 + '.') }
+    'hu:ps.pair_role_now_prompt' { return ('P' + [char]0x00E1 + 'ros' + [char]0x00ED + 'tod most a(z) %s szerepk' + [char]0x00F6 + 'rt? [s/N]') }
+    'hu:ps.podman_exe_not_found' { return ('a podman.exe nem tal' + [char]0x00E1 + 'lhat' + [char]0x00F3) }
+    'hu:ps.podman_machine_not_responding' { return ('A JHT Podman-g' + [char]0x00E9 + 'pe nem v' + [char]0x00E1 + 'laszol. Futtasd a ''jht up'' parancsot.') }
+    'hu:ps.release_arrived_without_https' { return ('a kiad' + [char]0x00E1 + 's HTTPS n' + [char]0x00E9 + 'lk' + [char]0x00FC + 'l ' + [char]0x00E9 + 'rkezett: %s') }
+    'hu:ps.relink_account_container_not_running' { return ('apply relink-account: a kont' + [char]0x00E9 + 'ner nem fut.') }
+    'hu:ps.script_integration_not_installed' { return ('a(z) jht-integration.ps1 szkript m' + [char]0x00E9 + 'g nincs telep' + [char]0x00ED + 'tve: ''jht upgrade'' (vagy egy ''jht integration add/remove''), majd pr' + [char]0x00F3 + 'b' + [char]0x00E1 + 'ld ' + [char]0x00FA + 'jra') }
+    'hu:ps.script_tools_not_installed' { return ('a(z) jht-tools.ps1 szkript m' + [char]0x00E9 + 'g nincs telep' + [char]0x00ED + 'tve: ''jht upgrade'', majd pr' + [char]0x00F3 + 'b' + [char]0x00E1 + 'ld ' + [char]0x00FA + 'jra') }
+    'hu:ps.startup_task_still_registered' { return ('a feladat m' + [char]0x00E9 + 'g mindig regisztr' + [char]0x00E1 + 'lva van') }
+    'hu:ps.team_container_unavailable' { return ('team_container_unavailable: ind' + [char]0x00ED + 'tsd el a csapatot a jht up paranccsal, ' + [char]0x00E9 + 's pr' + [char]0x00F3 + 'b' + [char]0x00E1 + 'ld ' + [char]0x00FA + 'jra.') }
+    'hu:ps.telegram_not_configured' { return ('A Telegram nem akt' + [char]0x00ED + 'v: a Telegram nincs be' + [char]0x00E1 + 'll' + [char]0x00ED + 'tva.') }
+    'hu:ps.telegram_status_unverifiable' { return ('Telegram: az ' + [char]0x00E1 + 'llapot most nem ellen' + [char]0x0151 + 'rizhet' + [char]0x0151 + ' (a szolg' + [char]0x00E1 + 'ltat' + [char]0x00E1 + 's le van ' + [char]0x00E1 + 'll' + [char]0x00ED + 'tva, vagy nem ' + [char]0x00E9 + 'rhet' + [char]0x0151 + ' el). R' + [char]0x00E9 + 'szletek: jht telegram status') }
+    'hu:ps.telegram_unavailable_isolated_not_running' { return ('telegram_unavailable: az elk' + [char]0x00FC + 'l' + [char]0x00F6 + 'n' + [char]0x00ED + 'tett Telegram-szolg' + [char]0x00E1 + 'ltat' + [char]0x00E1 + 's nem fut.') }
+    'hu:ps.telegram_unavailable_run_jht_up' { return 'telegram_unavailable: futtasd: jht up' }
+    'hu:ps.uninstall.bad.target' { return ('Megtagadva: a(z) {0} hivatkoz' + [char]0x00E1 + 's vagy nem mappa: nem k' + [char]0x00F6 + 'vetem, ' + [char]0x00E9 + 's nem t' + [char]0x00F6 + 'rl' + [char]0x00F6 + 'm.') }
+    'hu:ps.uninstall.done' { return ('K' + [char]0x00E9 + 'sz: a <machine> g' + [char]0x00E9 + 'p (' + [char]0x00E9 + 's vele egy' + [char]0x00FC + 'tt a JHT k' + [char]0x00E9 + 'pei, az alap ' + [char]0x00E9 + 's a teljes), a futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezet ' + [char]0x00E9 + 's a jht parancs elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tva.') }
+    'hu:ps.uninstall.done.kept' { return (' A ~/.jht ' + [char]0x00E9 + 's a Documents\Job Hunter Team megmarad (a --purge t' + [char]0x00F6 + 'rli ' + [char]0x0151 + 'ket).') }
+    'hu:ps.uninstall.done.wsl' { return ('A WSL a mem' + [char]0x00F3 + 'ri' + [char]0x00E1 + 'ban marad: a vmmem, a wslservice ' + [char]0x00E9 + 's a wslrelay a Windows ' + [char]0x00F6 + 'sszetev' + [char]0x0151 + 'i (nem a Job Hunter Team telep' + [char]0x00ED + 'tette ' + [char]0x0151 + 'ket), ' + [char]0x00E9 + 's ennek a felhaszn' + [char]0x00E1 + 'l' + [char]0x00F3 + 'nak a t' + [char]0x00F6 + 'bbi WSL-g' + [char]0x00E9 + 'p' + [char]0x00E9 + 'hez is kellenek; ' + [char]0x00E1 + 'ltal' + [char]0x00E1 + 'ban egy id' + [char]0x0151 + ' ut' + [char]0x00E1 + 'n, ha nincs rajtuk tev' + [char]0x00E9 + 'kenys' + [char]0x00E9 + 'g, magukt' + [char]0x00F3 + 'l le' + [char]0x00E1 + 'llnak. Azonnali le' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 'sukhoz: wsl --shutdown (ez az ' + [char]0x00D6 + 'SSZES megnyitott WSL-g' + [char]0x00E9 + 'pet le' + [char]0x00E1 + 'll' + [char]0x00ED + 'tja).') }
+    'hu:ps.uninstall.kept.machine' { return ('A(z) {0} Podman-g' + [char]0x00E9 + 'pr' + [char]0x0151 + 'l nem l' + [char]0x00E1 + 'tszik, hogy a telep' + [char]0x00ED + 't' + [char]0x0151 + ' hozta volna l' + [char]0x00E9 + 'tre: ott marad, ahol van. K' + [char]0x00E9 + 'zzel, ha a ti' + [char]0x00E9 + 'd, ' + [char]0x00E9 + 's el akarod t' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tani: podman machine stop {0}; podman machine rm {0}.') }
+    'hu:ps.uninstall.left.commands' { return ('Nincs elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tva a jht parancs vagy a telep' + [char]0x00ED + 't' + [char]0x0151 + ' f' + [char]0x00E1 + 'jljai itt: {0} ({1}), vagy a telep' + [char]0x00ED + 't' + [char]0x0151 + ' ' + [char]0x00E1 + 'ltal hozz' + [char]0x00E1 + 'adott v' + [char]0x00E1 + 'ltoz' + [char]0x00F3 + 'k ' + [char]0x00E9 + 's PATH-sorok. K' + [char]0x00E9 + 'zzel: Remove-Item a f' + [char]0x00E1 + 'jlra; a JHT_CONTAINER_RUNTIME ' + [char]0x00E9 + 's JHT_PODMAN_MACHINE v' + [char]0x00E1 + 'ltoz' + [char]0x00F3 + 'k, ' + [char]0x00E9 + 's a {0} mappa a PATH-b' + [char]0x00F3 + 'l a Be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 'sok > K' + [char]0x00F6 + 'rnyezeti v' + [char]0x00E1 + 'ltoz' + [char]0x00F3 + 'k alatt.') }
+    'hu:ps.uninstall.left.data' { return ('A JHT adatai nem lettek t' + [char]0x00F6 + 'r' + [char]0x00F6 + 'lve ({0}). K' + [char]0x00E9 + 'zzel: Remove-Item -Recurse -Force {1}. A jht parancs ' + [char]0x00E9 + 's a futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezet megmaradt: ha rendezted, futtasd ' + [char]0x00FA + 'jra a jht uninstall --confirm --purge parancsot.') }
+    'hu:ps.uninstall.left.machine' { return ('Nincs elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tva: a <machine> Podman-g' + [char]0x00E9 + 'p. Ok: {0}. K' + [char]0x00E9 + 'zzel: podman machine stop <machine>; wsl --unregister {1}; majd futtasd ' + [char]0x00FA + 'jra a jht uninstall --confirm parancsot.') }
+    'hu:ps.uninstall.left.runtime' { return ('Nincs elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tva: a JHT futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezete itt: {0}. K' + [char]0x00E9 + 'zzel: Remove-Item -Recurse -Force ''{0}''.') }
+    'hu:ps.uninstall.left.task' { return ('Nincs elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tva a bejelentkez' + [char]0x00E9 + 'skor indul' + [char]0x00F3 + ' feladat: ''{0}'' (ok: {1}). A t' + [char]0x00F6 + 'bbi el lett t' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tva. K' + [char]0x00E9 + 'zzel: schtasks /Delete /TN "{0}" /F.') }
+    'hu:ps.uninstall.phase.commands' { return ('Elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tom a jht parancsot, a telep' + [char]0x00ED + 't' + [char]0x0151 + ' f' + [char]0x00E1 + 'jljait ' + [char]0x00E9 + 's a PATH-sorokat...') }
+    'hu:ps.uninstall.phase.data' { return ('T' + [char]0x00F6 + 'rl' + [char]0x00F6 + 'm a ~/.jht ' + [char]0x00E9 + 's a Documents\Job Hunter Team mapp' + [char]0x00E1 + 't (--purge)...') }
+    'hu:ps.uninstall.phase.machine' { return ('Elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tom a(z) <machine> Podman-g' + [char]0x00E9 + 'pet (a JHT titkaival ' + [char]0x00E9 + 's k' + [char]0x00E9 + 'peivel egy' + [char]0x00FC + 'tt)...') }
+    'hu:ps.uninstall.phase.runtime' { return ('Elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tom a JHT futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezet' + [char]0x00E9 + 't...') }
+    'hu:ps.uninstall.purge_notice' { return ('A --purge kapcsol' + [char]0x00F3 + 'val a ~/.jht ' + [char]0x00E9 + 's a Documents\Job Hunter Team is t' + [char]0x00F6 + 'rl' + [char]0x0151 + 'dik: be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 'sok, adatb' + [char]0x00E1 + 'zis, ' + [char]0x00F6 + 'n' + [char]0x00E9 + 'letrajzok ' + [char]0x00E9 + 's kimenetek. Nincs vissza' + [char]0x00FA + 't.') }
+    'hu:ps.uninstall.purge_removal_notice' { return ('A mentett levelez' + [char]0x00E9 + 'si jelsz' + [char]0x00F3 + ' ' + [char]0x00E9 + 's a Telegram-tokenek is t' + [char]0x00F6 + 'rl' + [char]0x0151 + 'dnek.') }
+    'hu:ps.uninstall.removal_notice' { return ('A mentett levelez' + [char]0x00E9 + 'si jelsz' + [char]0x00F3 + ' ' + [char]0x00E9 + 's a Telegram-tokenek is t' + [char]0x00F6 + 'rl' + [char]0x0151 + 'dnek; a ~/.jht ' + [char]0x00E9 + 's a Dokumentumok megmarad, ' + [char]0x00E9 + 's vel' + [char]0x00FC + 'k a mentett LinkedIn-munkamenet is (secrets/linkedin-profile ' + [char]0x00E9 + 's .cache/linkedin): ezt a jht reset --scope creds paranccsal t' + [char]0x00F6 + 'r' + [char]0x00F6 + 'lheted.') }
+    'hu:ps.uninstall.secrets' { return ('A mentett titkok nem lettek elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tva: a levelez' + [char]0x00E9 + 'si jelsz' + [char]0x00F3 + ' ' + [char]0x00E9 + 's a Telegram-tokenek a <machine> g' + [char]0x00E9 + 'p jht-secrets ' + [char]0x00E9 + 's jht-telegram-secrets k' + [char]0x00F6 + 'tet' + [char]0x00E9 + 'ben vannak, amely m' + [char]0x00E9 + 'g megvan.') }
+    'hu:ps.uninstall.wslconfig.done' { return ('Elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tva a(z) {0} f' + [char]0x00E1 + 'jlb' + [char]0x00F3 + 'l a telep' + [char]0x00ED + 't' + [char]0x0151 + ' ' + [char]0x00E1 + 'ltal hozz' + [char]0x00E1 + 'adott sorok (WSL-mem' + [char]0x00F3 + 'ria).') }
+    'hu:ps.uninstall.wslconfig.kept' { return ('A(z) {0} f' + [char]0x00E1 + 'jlban meghagytam a te ' + [char]0x00E1 + 'ltalad m' + [char]0x00F3 + 'dos' + [char]0x00ED + 'tott sorokat: azok a tieid.') }
+    'hu:ps.uninstall.wslconfig.left' { return ('Nem m' + [char]0x00F3 + 'dos' + [char]0x00ED + 'tottam: {0} ({1}). A telep' + [char]0x00ED + 't' + [char]0x0151 + ' ' + [char]0x00E1 + 'ltal hozz' + [char]0x00E1 + 'adott sorok (WSL-mem' + [char]0x00F3 + 'ria) megmaradnak. T' + [char]0x00F6 + 'r' + [char]0x00F6 + 'ld ' + [char]0x0151 + 'ket k' + [char]0x00E9 + 'zzel: mindegyik felett van egy megjegyz' + [char]0x00E9 + 'ssor.') }
+    'hu:ps.unknown_argument' { return 'ismeretlen argumentum: %s' }
+    'hu:ps.upgrade_already_running' { return ('M' + [char]0x00E1 + 'r folyamatban van egy friss' + [char]0x00ED + 't' + [char]0x00E9 + 's') }
+    'hu:ps.upgrade_broker_restart_failed' { return ('broker_restart_failed: a titokbroker nem indult ' + [char]0x00FA + 'jra. Teend' + [char]0x0151 + ': jht up') }
+    'hu:ps.upgrade_disk_low' { return ('disk_low: Az ' + [char]0x00FC + 'gyn' + [char]0x00F6 + 'k' + [char]0x00F6 + 'knek legal' + [char]0x00E1 + 'bb %s GiB lemezter' + [char]0x00FC + 'let kell ' + [char]0x2014 + ' szabad: %s GiB. Hely felszabad' + [char]0x00ED + 't' + [char]0x00E1 + 's' + [char]0x00E1 + 'hoz ' + [char]0x00FC + 'r' + [char]0x00ED + 'tsd ki a Kuk' + [char]0x00E1 + 't, t' + [char]0x00F6 + 'r' + [char]0x00F6 + 'ld a nagy f' + [char]0x00E1 + 'jlokat, amelyekre nincs sz' + [char]0x00FC + 'ks' + [char]0x00E9 + 'ged, ' + [char]0x00E9 + 's a nem haszn' + [char]0x00E1 + 'lt Docker-k' + [char]0x00E9 + 'peket, majd pr' + [char]0x00F3 + 'b' + [char]0x00E1 + 'ld ' + [char]0x00FA + 'jra: semmi nem lett let' + [char]0x00F6 + 'ltve vagy m' + [char]0x00F3 + 'dos' + [char]0x00ED + 'tva.') }
+    'hu:ps.upgrade_docker_unavailable' { return ('A Docker vagy a g' + [char]0x00E9 + 'pen fut' + [char]0x00F3 + ' futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezet nem ' + [char]0x00E9 + 'rhet' + [char]0x0151 + ' el') }
+    'hu:ps.upgrade_helper_install_failed' { return ('helper_install_failed: a g' + [char]0x00E9 + 'pen fut' + [char]0x00F3 + ' ' + [char]0x00FA + 'j szkriptek az els' + [char]0x0151 + ' k' + [char]0x00E9 + 'r' + [char]0x00E9 + 'skor vagy egy ' + [char]0x00FA + 'jabb ''jht upgrade'' futtat' + [char]0x00E1 + 'sakor t' + [char]0x00F6 + 'lt' + [char]0x0151 + 'dnek le') }
+    'hu:ps.upgrade_host_runtime_not_installable' { return ('A v' + [char]0x00E9 + 'dett, g' + [char]0x00E9 + 'pen fut' + [char]0x00F3 + ' futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezet nem telep' + [char]0x00ED + 'thet' + [char]0x0151) }
+    'hu:ps.upgrade_host_runtime_untrusted' { return ('A g' + [char]0x00E9 + 'pen fut' + [char]0x00F3 + ' futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezet nem megb' + [char]0x00ED + 'zhat' + [char]0x00F3) }
+    'hu:ps.upgrade_image_download_failed' { return ('A k' + [char]0x00E9 + 'p let' + [char]0x00F6 + 'lt' + [char]0x00E9 + 'se nem siker' + [char]0x00FC + 'lt') }
+    'hu:ps.upgrade_journal_not_updated' { return ('A napl' + [char]0x00F3 + ' friss' + [char]0x00ED + 't' + [char]0x00E9 + 'se nem siker' + [char]0x00FC + 'lt') }
+    'hu:ps.upgrade_metadata_not_persisted' { return ('A futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezet metaadatai nem lettek elmentve') }
+    'hu:ps.upgrade_mounts_not_writable' { return ('A Job Hunter Team mapp' + [char]0x00E1 + 'i nem ' + [char]0x00ED + 'rhat' + [char]0x00F3 + 'k a kont' + [char]0x00E9 + 'nerb' + [char]0x0151 + 'l (mount_repair_failed)') }
+    'hu:ps.upgrade_not_completed' { return ('A friss' + [char]0x00ED + 't' + [char]0x00E9 + 's nem fejez' + [char]0x0151 + 'd' + [char]0x00F6 + 'tt be (%s): %s') }
+    'hu:ps.upgrade_note_activate_runtime' { return ('Aktiv' + [char]0x00E1 + 'lom az ' + [char]0x00FA + 'j futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezetet...') }
+    'hu:ps.upgrade_note_download_image' { return ('Let' + [char]0x00F6 + 'lt' + [char]0x00F6 + 'm a legfrissebb k' + [char]0x00E9 + 'pet...') }
+    'hu:ps.upgrade_note_download_runtime' { return ('Let' + [char]0x00F6 + 'lt' + [char]0x00F6 + 'm a friss' + [char]0x00ED + 'tett futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezetet...') }
+    'hu:ps.upgrade_option_unsupported' { return ('Nem t' + [char]0x00E1 + 'mogatott upgrade-kapcsol' + [char]0x00F3) }
+    'hu:ps.upgrade_pulling_full_image' { return ('Let' + [char]0x00F6 + 'lt' + [char]0x00F6 + 'm a friss' + [char]0x00ED + 'tett teljes k' + [char]0x00E9 + 'pet...') }
+    'hu:ps.upgrade_recovery_failed' { return ('Az el' + [char]0x0151 + 'z' + [char]0x0151 + ' upgrade helyre' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 'sa nem siker' + [char]0x00FC + 'lt') }
+    'hu:ps.upgrade_release_core_invalid' { return ('A kiad' + [char]0x00E1 + 's nem tartalmaz ' + [char]0x00E9 + 'rv' + [char]0x00E9 + 'nyes magot ehhez a telep' + [char]0x00ED + 't' + [char]0x00E9 + 'shez: telep' + [char]0x00ED + 'tsd ' + [char]0x00FA + 'jra') }
+    'hu:ps.upgrade_remote_compose_invalid' { return ('A t' + [char]0x00E1 + 'voli compose ' + [char]0x00E9 + 'rv' + [char]0x00E9 + 'nytelen') }
+    'hu:ps.upgrade_remote_runtime_invalid' { return ('A t' + [char]0x00E1 + 'voli futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezet ' + [char]0x00E9 + 'rv' + [char]0x00E9 + 'nytelen vagy nem ' + [char]0x00E9 + 'rhet' + [char]0x0151 + ' el') }
+    'hu:ps.upgrade_rollback_not_prepared' { return ('A vissza' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 's el' + [char]0x0151 + 'k' + [char]0x00E9 + 'sz' + [char]0x00ED + 't' + [char]0x00E9 + 'se nem siker' + [char]0x00FC + 'lt') }
+    'hu:ps.upgrade_telegram_restart_failed' { return ('telegram_restart_failed: az elk' + [char]0x00FC + 'l' + [char]0x00F6 + 'n' + [char]0x00ED + 'tett Telegram-szolg' + [char]0x00E1 + 'ltat' + [char]0x00E1 + 's nem indult ' + [char]0x00FA + 'jra. Teend' + [char]0x0151 + ': jht up') }
+    'hu:ps.upgrade_test_channel' { return ('Tesztcsatorna: friss' + [char]0x00ED + 't' + [char]0x00E9 + 'shez ' + [char]0x00FA + 'jra kell telep' + [char]0x00ED + 'teni a teszt-buildb' + [char]0x0151 + 'l') }
+    'hu:ps.upgrade_unexpected_error' { return ('V' + [char]0x00E1 + 'ratlan hiba a friss' + [char]0x00ED + 't' + [char]0x00E9 + 's k' + [char]0x00F6 + 'zben') }
+    'hu:ps.upgrade_verify_failed' { return ('Az ' + [char]0x00FA + 'j futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezet nem ment ' + [char]0x00E1 + 't az ellen' + [char]0x0151 + 'rz' + [char]0x00E9 + 'sen') }
+    'hu:ps.use_fresh_botfather_token' { return ('Mindig a BotFatherben frissen gener' + [char]0x00E1 + 'lt tokent haszn' + [char]0x00E1 + 'lj (/revoke a boton, vagy egy ' + [char]0x00FA + 'j bot): egy m' + [char]0x00E1 + 'r megl' + [char]0x00E9 + 'v' + [char]0x0151 + ' tokent az ' + [char]0x00FC + 'gyn' + [char]0x00F6 + 'k' + [char]0x00F6 + 'k elolvashattak, m' + [char]0x00E9 + 'g ha ma nem is szerepel a ~/.jht mapp' + [char]0x00E1 + 'ban.') }
+    'hu:ps.user_dir_unavailable_cannot_create' { return ('user_dir_unavailable: nem tudom l' + [char]0x00E9 + 'trehozni a(z) %s mapp' + [char]0x00E1 + 't, amelyet a csapat haszn' + [char]0x00E1 + 'l.') }
+    'hu:ps.wsl_exe_not_found' { return ('a wsl.exe nem tal' + [char]0x00E1 + 'lhat' + [char]0x00F3) }
+    'hu:ps.wsl_not_answering' { return ('a WSL nem v' + [char]0x00E1 + 'laszol (wsl --status)') }
+    'hu:removed.office' { return ('A ''jht %s'' a 0.4.0-ban a Godot-irod' + [char]0x00E1 + 'val egy' + [char]0x00FC + 'tt megsz' + [char]0x0171 + 'nt: haszn' + [char]0x00E1 + 'ld a jht parancsokat (jht help).') }
+    'hu:status.no_options' { return ('A ''jht status'' nem fogad kapcsol' + [char]0x00F3 + 'kat (%s): egyszer' + [char]0x0171 + 'en ''jht status''-k' + [char]0x00E9 + 'nt futtasd.') }
+    'hu:team.stopped' { return ('A Job Hunter Team le van ' + [char]0x00E1 + 'll' + [char]0x00ED + 'tva: a ''jht up'' ' + [char]0x00FA + 'jraind' + [char]0x00ED + 'tja.') }
+    'hu:tools.arriving' { return ('A felder' + [char]0x00ED + 't' + [char]0x0151 + 'k (Scout) eszk' + [char]0x00F6 + 'zei ' + [char]0x00FA + 'ton vannak: a teljes k' + [char]0x00E9 + 'p a h' + [char]0x00E1 + 'tt' + [char]0x00E9 + 'rben t' + [char]0x00F6 + 'lt' + [char]0x0151 + 'dik le (kb. 3 GB). Az ' + [char]0x00E1 + 'll' + [char]0x00E1 + 'sok keres' + [char]0x00E9 + 'se mag' + [char]0x00E1 + 't' + [char]0x00F3 + 'l elindul, amint meg' + [char]0x00E9 + 'rkeztek; nincs teend' + [char]0x0151 + 'd.') }
+    'hu:tools.failed' { return ('A felder' + [char]0x00ED + 't' + [char]0x0151 + 'k (Scout) eszk' + [char]0x00F6 + 'zeinek let' + [char]0x00F6 + 'lt' + [char]0x00E9 + 'se nem siker' + [char]0x00FC + 'lt, ' + [char]0x00ED + 'gy a csapat m' + [char]0x00E9 + 'g nem tud ' + [char]0x00E1 + 'll' + [char]0x00E1 + 'sokat keresni. Futtasd a jht tools pull parancsot az ' + [char]0x00FA + 'jrapr' + [char]0x00F3 + 'b' + [char]0x00E1 + 'l' + [char]0x00E1 + 'shoz (a jht up is ' + [char]0x00FA + 'jrapr' + [char]0x00F3 + 'b' + [char]0x00E1 + 'lja).') }
+    'hu:tools.switch_failed' { return ('A felder' + [char]0x00ED + 't' + [char]0x0151 + 'k (Scout) eszk' + [char]0x00F6 + 'zei meg' + [char]0x00E9 + 'rkeztek, de a csapatot nem siker' + [char]0x00FC + 'lt vel' + [char]0x00FC + 'k ' + [char]0x00FA + 'jraind' + [char]0x00ED + 'tani: futtasd a jht down, majd a jht up parancsot.') }
+    'hu:tools.waiting' { return ('A felder' + [char]0x00ED + 't' + [char]0x0151 + 'k (Scout) eszk' + [char]0x00F6 + 'zei meg' + [char]0x00E9 + 'rkeztek: a csapat mag' + [char]0x00E1 + 't' + [char]0x00F3 + 'l ' + [char]0x00E1 + 'tv' + [char]0x00E1 + 'lt r' + [char]0x00E1 + 'juk, amint a bevezet' + [char]0x00E9 + 's lez' + [char]0x00E1 + 'rult.') }
+    'hu:uninstall.usage' { return ('haszn' + [char]0x00E1 + 'lat: jht uninstall --confirm [--purge]') }
+    'hu:up.done' { return 'A Job Hunter Team elindult.' }
+    'es:container.starting' { return ('El contenedor ''%s'' no est' + [char]0x00E1 + ' en marcha, lo arranco...') }
+    'es:doctor.host_config_none' { return ('todav' + [char]0x00ED + 'a no hay configuraci' + [char]0x00F3 + 'n: ''jht setup''') }
+    'es:doctor.host_config_ok' { return ('configuraci' + [char]0x00F3 + 'n presente') }
+    'es:doctor.host_engine_fail' { return 'motor de contenedores no accesible' }
+    'es:doctor.host_engine_ok' { return 'motor de contenedores accesible' }
+    'es:doctor.host_more' { return ('Para las comprobaciones completas (configuraci' + [char]0x00F3 + 'n, proveedor, base de datos, agentes): ''jht up'' y luego ''jht doctor''.') }
+    'es:doctor.host_runtime_fail' { return 'runtime de JHT ausente o cambiado: ''jht upgrade'' lo vuelve a instalar' }
+    'es:doctor.host_runtime_ok' { return 'runtime de JHT intacto' }
+    'es:doctor.host_team_off' { return 'equipo apagado: ''jht up'' lo enciende' }
+    'es:doctor.host_team_unattestable' { return ('hay un contenedor del equipo, pero no se puede verificar que sea nuestro: no he tocado nada (''jht status'' te dice m' + [char]0x00E1 + 's)') }
+    'es:doctor.host_title' { return ('Job Hunter Team: el equipo est' + [char]0x00E1 + ' apagado (su contenedor no est' + [char]0x00E1 + ' en marcha). Comprobaciones hechas desde este ordenador:') }
+    'es:down.done' { return 'Job Hunter Team detenido.' }
+    'es:download.bad_version' { return ('versi' + [char]0x00F3 + 'n no v' + [char]0x00E1 + 'lida: %s. Ejemplo: 0.3.5.') }
+    'es:download.deb_only_linux' { return '--deb solo es para Linux.' }
+    'es:download.dest_is_link' { return 'el destino es un enlace: %s' }
+    'es:download.dest_not_file' { return 'el destino existe y no es un archivo: %s' }
+    'es:download.fetching' { return 'Descargando %s...' }
+    'es:download.hash_invalid' { return ('SHA-256 no v' + [char]0x00E1 + 'lido para %s: se esperaba %s, se ha obtenido %s.') }
+    'es:download.intel_mac' { return 'La app de macOS de la 0.4 solo funciona en Mac con Apple silicon (M1 y posteriores); este es un Mac Intel, que la 0.4 no admite. No se ha descargado nada.' }
+    'es:download.linux_no_app' { return ('En esta versi' + [char]0x00F3 + 'n no hay app de escritorio para Linux: usa install.sh. No se ha descargado nada.') }
+    'es:download.mismatch_existing' { return 'el archivo %s existe, pero su SHA-256 no coincide: no se ha sobrescrito.' }
+    'es:download.mkdir_failed' { return 'no se puede crear la carpeta de destino: %s' }
+    'es:download.present_verified' { return 'Archivo ya presente y verificado: %s' }
+    'es:download.release_no_app' { return ('Esta versi' + [char]0x00F3 + 'n (v%s) no tiene app para macOS: usa la 0.4.0 o posterior. No se ha descargado nada.') }
+    'es:download.saved_in' { return 'Guardado en: %s' }
+    'es:download.sha_verified' { return 'SHA-256 verificado: %s' }
+    'es:download.sum_missing' { return 'no hay SHA-256 declarado para %s.' }
+    'es:download.unsupported_os' { return 'sistema no compatible: %s. Usa windows o macos.' }
+    'es:download.windows_missing' { return ('Windows no forma parte de la 0.4.0: la versi' + [char]0x00F3 + 'n no tiene instalador para Windows. No se ha descargado nada.') }
+    'es:help.integration' { return (('Uso: jht integration <command>', '', '  list [--json]                   las integraciones y su estado', '  status [ID] [--json]            el estado de una, o de todas', ('  add ID [--json]                 a' + [char]0x00F1 + 'ade una integraci' + [char]0x00F3 + 'n'), '  remove ID [--purge --yes] [--remove-image] [--json]', ('                                  la quita; --purge borra tambi' + [char]0x00E9 + 'n sus datos (hace falta --yes);'), ('                                  --remove-image (solo screen y media) quita tambi' + [char]0x00E9 + 'n la imagen de las'), '                                  herramientas', '', 'Los ID admitidos son los que muestra `jht integration list`. No se descarga ni se enciende nada', 'hasta que lo pidas con `add`.') -join [char]10) }
+    'es:help.linkedin' { return (('Uso: jht linkedin <command>', '', '  login [--stop]    el acceso a mano a LinkedIn (con Google): un navegador en un contenedor aparte,', '                    sin red, cuya ventana ves y usas desde la app; --stop lo cierra todo', ('  status --json     dice si el acceso est' + [char]0x00E1 + ' en curso y si la sesi' + [char]0x00F3 + 'n de LinkedIn est' + [char]0x00E1 + ' guardada'), '', 'No se descarga ni se enciende nada hasta que lo pidas con `login`.') -join [char]10) }
+    'es:help.screen' { return (('Uso: jht screen <command>', '', '  on [--json]       enciende la pantalla en directo del closer: un contenedor aparte,', '                    con el stream solo en 127.0.0.1', '  off [--remove-image] [--json]', '                    la apaga y quita el contenedor; la imagen de las herramientas se queda en el disco,', '                    para volver a encenderla sin descargarla otra vez: --remove-image la quita y libera', '                    el espacio', ('  status [--json]   dice si est' + [char]0x00E1 + ' encendida'), '', 'No se descarga ni se enciende nada hasta que lo pidas con `on`. El stream es solo para ver.') -join [char]10) }
+    'es:help.setup' { return (('Uso: jht setup [options]', '', ('Sin opciones arranca la instalaci' + [char]0x00F3 + 'n guiada. Con --non-interactive no pregunta nada:'), 'todo se da con las opciones.', '', '  --non-interactive            ninguna pregunta', '  --provider <name>            glm (Z.ai, predeterminado), kimi (Moonshot), openai o claude (Anthropic)', '  --harness <name>             pi (predeterminado)', ('  --api-key-file <path>        archivo que contiene la clave API (una l' + [char]0x00ED + 'nea, que solo puedas leer t' + [char]0x00FA + ').'), '                               Un archivo de tu ordenador lo lee jht y se lo pasa al setup: con glm y kimi', ('                               el setup guarda la clave por su cuenta, nunca en la configuraci' + [char]0x00F3 + 'n'), ('  --api-key-stdin              lee la clave API de la entrada est' + [char]0x00E1 + 'ndar (una l' + [char]0x00ED + 'nea):'), ('                               nunca en la l' + [char]0x00ED + 'nea de comandos'), ('  --api-key <key>              la clave escrita aqu' + [char]0x00ED + ', en claro (no admitida para glm y kimi)'), ('  --secret-mode <mode>         c' + [char]0x00F3 + 'mo se guarda la clave: plaintext (predeterminado), env o file'), '  --secret-env <name>          con --secret-mode env: la variable de entorno que la contiene', '  --secret-file <path>         con --secret-mode file: el archivo que la contiene', '  --model <model>              el modelo que usar', '  --language <code>            el idioma (por ejemplo es o en)', ('  --skip-health                se salta la comprobaci' + [char]0x00F3 + 'n final'), ('  --reset                      vuelve a empezar desde una configuraci' + [char]0x00F3 + 'n limpia'), '', 'Ejemplos:', '  con una clave GLM en un archivo:', '    jht setup --non-interactive --provider glm --harness pi --api-key-file clave.txt', '  OpenAI con una clave API, en Pi (para Claude: --provider claude):', '    jht setup --non-interactive --provider openai --harness pi --api-key-stdin') -join [char]10) }
+    'es:help.tools' { return (('Uso: jht tools <comando>', '', ('  status --json   si las herramientas de los Scout (la imagen completa) ya est' + [char]0x00E1 + 'n, est' + [char]0x00E1 + 'n en camino o han fallado'), '  pull            las descarga en segundo plano (jht up y jht setup lo inician solos)', ('  switch          pasa el equipo a ellas cuando el onboarding est' + [char]0x00E1 + ' cerrado (la descarga lo hace sola)'), '', 'Esta ayuda no arranca nada ni descarga nada.') -join [char]10) }
+    'es:keyfile.both' { return 'usa --api-key-file o --api-key-stdin, no los dos' }
+    'es:keyfile.not_file' { return 'el archivo dado a --api-key-file tiene que ser un archivo normal, no una carpeta ni un enlace: %s' }
+    'es:keyfile.shape' { return ('el contenido del archivo dado a --api-key-file no es una l' + [char]0x00ED + 'nea de 16 a 512 caracteres imprimibles sin espacios: %s') }
+    'es:keyfile.size' { return ('el archivo dado a --api-key-file est' + [char]0x00E1 + ' vac' + [char]0x00ED + 'o o es demasiado grande para una clave (de 1 a 4096 bytes): %s') }
+    'es:keyfile.twice' { return '--api-key-file se ha dado dos veces' }
+    'es:keyfile.unreadable' { return 'no se puede leer el archivo dado a --api-key-file: %s' }
+    'es:line.abbinamento_annullato_nessuna_modifica' { return ('Vinculaci' + [char]0x00F3 + 'n cancelada: no se ha cambiado nada.') }
+    'es:line.abbinamento_di_s_non_riuscito' { return ('La vinculaci' + [char]0x00F3 + 'n de %s no ha salido bien: todas las copias antiguas se quedan. Vuelve a ejecutar jht telegram pair --all: los roles ya vinculados no piden otro token.') }
+    'es:line.abbinamento_rifiutato_genera_un_token' { return ('Vinculaci' + [char]0x00F3 + 'n rechazada: genera un token nuevo en BotFather (/revoke) y vuelve a intentarlo.') }
+    'es:line.agent_restart_failed.inventario_conservato_ma_il_team' { return ('inventario conservado, pero el equipo no ha vuelto a arrancar. Qu' + [char]0x00E9 + ' hacer: jht up') }
+    'es:line.annullato_niente_autorizzato' { return 'Cancelado: no se ha autorizado nada.' }
+    'es:line.anteprima_non_valida_niente_autorizzato' { return ('Vista previa no v' + [char]0x00E1 + 'lida: no se ha autorizado nada.') }
+    'es:line.apply.authorize' { return ('' + [char]0x00BF + 'Autorizas esta candidatura?') }
+    'es:line.apply_relink_account_cloud_account' { return ('apply relink-account: la cuenta cloud no est' + [char]0x00E1 + ' disponible. Ejecuta antes jht cloud pair.') }
+    'es:line.autorizzata_s_verso_s_il' { return ('Autorizada la #%s, hacia %s: el CLOSER la recoger' + [char]0x00E1 + ' en la pr' + [char]0x00F3 + 'xima ronda.') }
+    'es:line.bot_abbinato_e_copia_legacy' { return ('Bot vinculado y copia antigua eliminada. Quedan otros tokens antiguos o un token en el entorno del contenedor: qu' + [char]0x00ED + 'talos y completa la rotaci' + [char]0x00F3 + 'n antes del cambio definitivo.') }
+    'es:line.bot_token_invalid.controlla_il_token_generato_da' { return 'revisa el token que te ha generado BotFather.' }
+    'es:line.broker_restart_failed.il_servizio_della_posta_non_4' { return ('el servicio de correo no se ha reiniciado. Qu' + [char]0x00E9 + ' hacer: jht mail status') }
+    'es:line.broker_start_failed.il_servizio_della_posta_non_2' { return 'el servicio de correo no ha arrancado.' }
+    'es:line.broker_start_failed.il_servizio_della_posta_non_3' { return ('el servicio de correo no responde despu' + [char]0x00E9 + 's de 30 segundos.') }
+    'es:line.broker_unavailable.il_broker_dei_segreti_esiste' { return 'el broker de secretos existe, pero no se puede verificar que sea nuestro: no lo toco.' }
+    'es:line.broker_unavailable.il_runtime_installato_pi_vecchio_2' { return ('el runtime instalado es m' + [char]0x00E1 + 's antiguo y no tiene el broker de secretos.') }
+    'es:line.broker_unavailable.il_servizio_della_posta_non' { return ('el servicio de correo a' + [char]0x00FA + 'n no existe: se crea la primera vez que hace falta.') }
+    'es:line.cancellato_marcatore_migrazione_broker_s' { return ('Borrado: marcador de migraci' + [char]0x00F3 + 'n del broker %s') }
+    'es:line.cancellato_volume_broker_s_s' { return 'Borrado: volumen del broker %s (%s)' }
+    'es:line.container_s_non_e_partito' { return 'El contenedor ''%s'' no ha arrancado en 10 s. Revisa ''jht logs''.' }
+    'es:line.cosa_fare_jht_mail_setup' { return ('Qu' + [char]0x00E9 + ' hacer: jht mail setup') }
+    'es:line.cosa_fare_jht_up_3' { return ('Qu' + [char]0x00E9 + ' hacer: jht up') }
+    'es:line.cosa_fare_jht_upgrade_4' { return ('Qu' + [char]0x00E9 + ' hacer: jht upgrade') }
+    'es:line.cosa_fare_riprova_il_comando_2' { return ('Qu' + [char]0x00E9 + ' hacer: vuelve a intentar el comando') }
+    'es:line.fino_ad_allora_la_posta' { return ('Hasta entonces el correo se lee y se env' + [char]0x00ED + 'a con la contrase' + [char]0x00F1 + 'a actual; el aviso sigue en jht mail status.') }
+    'es:line.genera_una_nuova_password_per' { return ('genera una nueva contrase' + [char]0x00F1 + 'a de aplicaci' + [char]0x00F3 + 'n en tu proveedor y gu' + [char]0x00E1 + 'rdala con: jht mail setup') }
+    'es:line.i_segreti_e_lo_stato' { return ('Se han borrado los secretos y el estado del broker: vuelve a iniciar sesi' + [char]0x00F3 + 'n en los portales y configura otra vez el correo.') }
+    'es:line.il_broker_non_ha_registrato' { return ('El broker no ha registrado la autorizaci' + [char]0x00F3 + 'n: retirada, no saldr' + [char]0x00E1 + ' nada.') }
+    'es:line.integration.install_hint' { return 'para instalarlas: ''jht upgrade'' (o un ''jht integration add <id>'')' }
+    'es:line.interattivo_il_token_viene_chiesto' { return ('Interactivo: el token se pide sin eco y luego el bot nuevo recibe un c' + [char]0x00F3 + 'digo de un solo uso desde tu Telegram. Automatizaciones: {"bot_token": ...} como JSON por stdin; no guardes el token en ~/.jht y borra enseguida cualquier archivo usado fuera de ah' + [char]0x00ED + '.') }
+    'es:line.jht_telegram_pair_all_interattivo' { return 'jht telegram pair --all es interactivo: para las automatizaciones vincula un rol cada vez.' }
+    'es:line.job_hunter_team_non_installato' { return ('Job Hunter Team no est' + [char]0x00E1 + ' instalado del todo: en la carpeta del runtime falta el archivo de integridad (' + [char]0x00BF + 'una instalaci' + [char]0x00F3 + 'n interrumpida?). Vuelve a ejecutar el instalador.') }
+    'es:line.la_casella_di_posta_ora' { return ('El buz' + [char]0x00F3 + 'n de correo ahora est' + [char]0x00E1 + ' en el broker de secretos. Su contrase' + [char]0x00F1 + 'a la pod' + [char]0x00ED + 'an leer los agentes:') }
+    'es:line.legacy_cleanup_failed.i_token_nuovi_sono_al' { return ('los tokens nuevos est' + [char]0x00E1 + 'n a salvo, pero la copia antigua de %s sigue en ~/.jht; cambio definitivo rechazado.') }
+    'es:line.legacy_inventory_failed.il_team_resta_fermo_perch_4' { return 'el equipo sigue detenido porque no se ha conservado el inventario de Telegram del host.' }
+    'es:line.legacy_inventory_failed.le_impronte_non_sono_state' { return 'el servicio aislado no ha conservado las huellas.' }
+    'es:line.legacy_inventory_failed.migrazione_telegram_interrotta' { return ('migraci' + [char]0x00F3 + 'n de Telegram interrumpida.') }
+    'es:line.legacy_inventory_failed.non_posso_provare_che_jht' { return 'no puedo demostrar que ~/.jht no tenga tokens de Telegram.' }
+    'es:line.legacy_inventory_failed.non_riesco_a_fermare_gli' { return 'no puedo detener a los agentes antes del inventario del host.' }
+    'es:line.legacy_inventory_failed.non_riesco_a_leggere_i' { return 'no puedo leer los tokens antiguos en ~/.jht.' }
+    'es:line.legacy_inventory_failed.ruoli_legacy_non_riconosciuti' { return 'roles antiguos no reconocidos.' }
+    'es:line.legacy_remove_failed.s_nel_broker_ma_la' { return ('%s est' + [char]0x00E1 + ' en el broker, pero la copia en ~/.jht/credentials se ha quedado.') }
+    'es:line.legacy_secret_reappeared.jht_credentials_s_json_ricomparso' { return ('~/.jht/credentials/%s.json ha vuelto a aparecer despu' + [char]0x00E9 + 's de la migraci' + [char]0x00F3 + 'n; eliminado sin importarlo.') }
+    'es:line.mail.address_prompt' { return ('Direcci' + [char]0x00F3 + 'n del buz' + [char]0x00F3 + 'n:') }
+    'es:line.mail.app_password_prompt' { return ('Contrase' + [char]0x00F1 + 'a de aplicaci' + [char]0x00F3 + 'n (no se muestra):') }
+    'es:line.mail.dedicated_prompt' { return ('' + [char]0x00BF + 'Es un buz' + [char]0x00F3 + 'n DEDICADO a los avisos de empleo reenviados?') }
+    'es:line.mail_setup_opzione_sconosciuta_s' { return ('mail setup: opci' + [char]0x00F3 + 'n desconocida %s') }
+    'es:line.mail_setup_password_vuota' { return ('mail setup: contrase' + [char]0x00F1 + 'a vac' + [char]0x00ED + 'a') }
+    'es:line.nessun_provider_attivo_scegline_uno' { return ('no hay ning' + [char]0x00FA + 'n proveedor activo: elige uno con ''jht providers use glm''') }
+    'es:line.nessun_ruolo_ha_un_token' { return ('Ning' + [char]0x00FA + 'n rol tiene un token antiguo: para un bot nuevo usa jht telegram pair <rol>.') }
+    'es:line.non_autorizzabile_s' { return 'No se puede autorizar: %s.' }
+    'es:line.non_autorizzata_s' { return 'No autorizada: %s.' }
+    'es:line.os_and_version_are_required' { return '--os y --version son obligatorios' }
+    'es:line.podman_non_trovato_reinstalla_il' { return 'No se encuentra Podman: vuelve a instalar el runtime de JHT.' }
+    'es:line.preparo_il_servizio_della_posta' { return ('Preparando el servicio de correo (solo se crea la primera vez que hace falta)' + [char]0x2026) }
+    'es:line.provider_attivo_non_riconosciuto_s' { return 'proveedor activo no reconocido: %s' }
+    'es:line.reset_impossibile_cancellare_il_marcatore' { return ('reset: no se puede borrar el marcador de migraci' + [char]0x00F3 + 'n del broker %s.') }
+    'es:line.reset_impossibile_cancellare_il_marcatore_2' { return 'reset: no se puede borrar el marcador del broker %s.' }
+    'es:line.reset_impossibile_cancellare_il_volume' { return 'reset: no se puede borrar el volumen del broker %s (%s).' }
+    'es:line.reset_nome_volume_non_valido' { return ('reset: nombre de volumen no v' + [char]0x00E1 + 'lido para %s; eliminaci' + [char]0x00F3 + 'n rechazada.') }
+    'es:line.reset_non_riesco_a_determinare' { return ('reset: no puedo determinar el proyecto Compose; no se han tocado los vol' + [char]0x00FA + 'menes del broker.') }
+    'es:line.reset_non_riesco_a_fermare' { return ('reset: no puedo detener el runtime; no se han tocado los vol' + [char]0x00FA + 'menes del broker.') }
+    'es:line.reset_ricerca_del_volume_s_2' { return 'reset: no se ha podido buscar el volumen %s.' }
+    'es:line.restano_token_legacy_per_s' { return ('Quedan tokens antiguos para: %s. Hasta que vincules tambi' + [char]0x00E9 + 'n estos roles, %s se queda mudo en Telegram: vinc' + [char]0x00FA + 'lalos todos en esta sesi' + [char]0x00F3 + 'n (jht telegram pair --all).') }
+    'es:line.risposta_del_container_non_valida' { return ('Respuesta del contenedor no v' + [char]0x00E1 + 'lida: autorizaci' + [char]0x00F3 + 'n retirada, no saldr' + [char]0x00E1 + ' nada.') }
+    'es:line.ritirata_s_non_verra_inviata' { return ('Retirada la #%s: no se enviar' + [char]0x00E1 + '.') }
+    'es:line.ritiro_non_riuscito_s' { return 'No se ha podido retirar: %s.' }
+    'es:line.runtime_migration_docker_missing.il_client_docker_originale_non' { return ('el cliente Docker original no est' + [char]0x00E1 + ' disponible.') }
+    'es:line.runtime_migration_image_invalid.serve_l_immagine_jht_fissata' { return 'hace falta la imagen de JHT fijada por digest.' }
+    'es:line.runtime_migration_podman_missing.podman_non_e_disponibile' { return ('Podman no est' + [char]0x00E1 + ' disponible.') }
+    'es:line.runtime_migration_team_running.ferma_prima_il_team_docker' { return ('det' + [char]0x00E9 + 'n antes el equipo de Docker.') }
+    'es:line.runtime_migration_team_running.ferma_prima_il_team_podman' { return ('det' + [char]0x00E9 + 'n antes el equipo de Podman.') }
+    'es:line.runtime_o_container_jht_non' { return 'runtime o contenedor de JHT no disponible' }
+    'es:line.ruoli_da_abbinare_in_questa' { return ('Roles que vincular en esta sesi' + [char]0x00F3 + 'n: %s') }
+    'es:line.s_ha_gi_un_bot' { return '%s ya tiene un bot vinculado: solo quito su copia antigua.' }
+    'es:line.s_needs_a_value' { return '%s necesita un valor' }
+    'es:line.saltato_non_trovato_volume_broker' { return 'Omitido (no encontrado): volumen del broker %s' }
+    'es:line.serve_un_terminale_l_autorizzazione' { return ('Hace falta un terminal: la autorizaci' + [char]0x00F3 + 'n se confirma a mano.') }
+    'es:line.telegram_isolato_attivo_il_bridge' { return 'Telegram aislado activo; los agentes ya no pueden volver a activar el bridge antiguo.' }
+    'es:line.the_setup_keeps_the_key' { return ('La configuraci' + [char]0x00F3 + 'n guarda la clave: ya puedes borrar el archivo de este ordenador (%s).') }
+    'es:line.upgrade.done' { return ('Actualizaci' + [char]0x00F3 + 'n completada: %s (%s) -> %s (%s). %s') }
+    'es:line.upgrade.restored' { return 'Runtime anterior restaurado.' }
+    'es:line.uso_jht_apply_relink_account' { return 'uso: jht apply relink-account' }
+    'es:line.uso_jht_apply_request_cancel_2' { return 'uso: jht apply request|cancel <id>' }
+    'es:line.uso_jht_mail_setup_status' { return ('uso: jht mail setup|status|admission <allowlist|whole_mailbox>|allow add|remove <direcci' + [char]0x00F3 + 'n|@dominio>|drafts|approve <id>|discard <id>|journal|delete|migrate') }
+    'es:line.uso_jht_migrate_runtime_podman' { return 'uso: jht migrate-runtime podman' }
+    'es:line.uso_jht_screen_on_off' { return 'uso: jht screen on | off | status [--json]' }
+    'es:line.uso_jht_telegram_chat_id' { return 'uso: jht telegram chat-id <assistente|capitano|mentor>' }
+    'es:line.uso_jht_telegram_pair_assistente' { return 'uso: jht telegram pair <assistente|capitano|mentor>|--all' }
+    'es:line.uso_jht_telegram_remove_assistente' { return 'uso: jht telegram remove <assistente|capitano|mentor>' }
+    'es:line.uso_jht_telegram_status_pair' { return 'uso: jht telegram status|pair <rol>|pair --all|chat-id <rol>|remove <rol>' }
+    'es:monitor.window_invalid' { return 'monitor_window_invalid: usa ''jht monitor --window'' sin otras opciones.' }
+    'es:ps.apply_auto_send_warning_1' { return ('  Con el env' + [char]0x00ED + 'o autom' + [char]0x00E1 + 'tico activado, el equipo rellena y ENV' + [char]0x00CD + 'A la candidatura,') }
+    'es:ps.apply_auto_send_warning_2' { return ('  sin otra confirmaci' + [char]0x00F3 + 'n. Una vez enviada, no se puede retirar.') }
+    'es:ps.bot_token_prompt_hidden' { return 'Token del bot %s (entrada oculta)' }
+    'es:ps.botfather_fresh_token' { return ('Usa siempre un token reci' + [char]0x00E9 + 'n generado en BotFather (/revoke en el bot, o un bot nuevo): un token ya existente pueden haberlo le' + [char]0x00ED + 'do los agentes aunque hoy no aparezca en ~/.jht.') }
+    'es:ps.broker_network_proxy_not_ready' { return ('broker_network_unavailable: el proxy de correo no est' + [char]0x00E1 + ' listo (c' + [char]0x00F3 + 'digo %s).') }
+    'es:ps.broker_network_scripts_not_downloadable' { return ('broker_network_unavailable: no puedo descargar los scripts del proxy de correo. Qu' + [char]0x00E9 + ' hacer: jht upgrade') }
+    'es:ps.broker_network_scripts_not_verified' { return ('broker_network_unavailable: los scripts del proxy de correo no se pueden verificar. Qu' + [char]0x00E9 + ' hacer: jht upgrade') }
+    'es:ps.broker_restart_failed_secrets_broker_not_ours' { return ('broker_restart_failed: el broker de secretos no se puede verificar como nuestro: no lo toco. Qu' + [char]0x00E9 + ' hacer: jht mail status') }
+    'es:ps.broker_unavailable_secrets_broker_not_running' { return ('broker_unavailable: el broker de secretos no est' + [char]0x00E1 + ' activo.') }
+    'es:ps.cli_version_needs_container' { return ('Para la versi' + [char]0x00F3 + 'n del CLI en ejecuci' + [char]0x00F3 + 'n hace falta el contenedor en marcha: ''jht up''.') }
+    'es:ps.compose_up_failed_team_not_started' { return ('compose_up_failed: el equipo no ha arrancado (docker compose up, c' + [char]0x00F3 + 'digo %s). Revisa ''jht logs''.') }
+    'es:ps.container_not_running' { return ('el contenedor ''%s'' no est' + [char]0x00E1 + ' en marcha') }
+    'es:ps.container_runtime_unsupported' { return 'runtime de contenedores no compatible: %s' }
+    'es:ps.docker_desktop_file_sharing_hint' { return ('  Qu' + [char]0x00E9 + ' hacer: abre Docker Desktop > Settings > Resources > File sharing, comprueba que la carpeta del usuario est' + [char]0x00E9 + ' compartida y vuelve a ejecutar ''jht up''.') }
+    'es:ps.docker_podman_verified_future_removal' { return ('Migraci' + [char]0x00F3 + 'n Docker -> Podman verificada. Los vol' + [char]0x00FA + 'menes de Docker siguen intactos y a' + [char]0x00FA + 'n contienen las contrase' + [char]0x00F1 + 'as del correo, los accesos a los portales y los tokens de Telegram: para eliminarlos har' + [char]0x00E1 + ' falta en el futuro una confirmaci' + [char]0x00F3 + 'n expl' + [char]0x00ED + 'cita.') }
+    'es:ps.doctor.wsl_memory' { return ('WSL no tiene l' + [char]0x00ED + 'mite de memoria (hay otras distribuciones de WSL registradas): en %s, bajo [wsl2], a' + [char]0x00F1 + 'ade memory=%s') }
+    'es:ps.download_asset_failed_detail' { return 'la descarga ha fallado: %s (%s)' }
+    'es:ps.download_shared_folder_no_path' { return ('el destino est' + [char]0x00E1 + ' dentro de una carpeta compartida con el equipo: elige una fuera de ella, como Downloads.') }
+    'es:ps.download_sums_failed_detail' { return 'la descarga ha fallado: SHA256SUMS de v%s (%s)' }
+    'es:ps.full_pull_failed_keep_old' { return ('full_pull_failed: no ha llegado la imagen completa nueva, se queda la anterior. Qu' + [char]0x00E9 + ' hacer: jht tools pull') }
+    'es:ps.help.main' { return (('jht - Job Hunter Team', '', ('  Comandos del host (funcionan desde aqu' + [char]0x00ED + '):'), '    jht up                 arranca el contenedor del equipo', '    jht down               lo detiene', ('                           (con --verbose se ven tambi' + [char]0x00E9 + 'n las l' + [char]0x00ED + 'neas del motor)'), '    jht restart            lo reinicia', '    jht status             estado del contenedor y del equipo', '    jht logs [-f]          logs del contenedor', ('    jht upgrade            actualiza a la imagen m' + [char]0x00E1 + 's reciente'), ('    jht setup              instalaci' + [char]0x00F3 + 'n guiada'), '    jht shell              shell dentro del contenedor', ('    jht mail setup         guarda el buz' + [char]0x00F3 + 'n de correo en el broker de secretos'), '    jht mail drafts        correos escritos por los agentes que esperan tu ok', ('    jht mail approve <id>  los env' + [char]0x00ED + 'a; jht mail discard <id> los descarta'), '    jht integration list|status [ID]|add ID|remove ID [--purge --yes] [--remove-image] [--json]', ('                           las integraciones que se a' + [char]0x00F1 + 'aden despu' + [char]0x00E9 + 's del setup'), ('                           (google, telegram, mail): estado le' + [char]0x00ED + 'do del motor'), '    jht telegram status    estado del servicio de Telegram aislado', '    jht telegram pair ROLE pide el token sin eco en el ordenador host, luego', ('                           muestra un c' + [char]0x00F3 + 'digo que mandar al bot desde tu Telegram'), '                           Para automatizaciones: JSON por stdin. No guardes el token', ('                           en ~/.jht; borra enseguida los archivos usados fuera de ah' + [char]0x00ED + '.'), ('    jht telegram pair --all empareja en una sola sesi' + [char]0x00F3 + 'n todos los roles legacy'), ('    jht telegram chat-id ROLE mueve el bot a otro chat, con el mismo c' + [char]0x00F3 + 'digo'), ('    jht reset              borra la configuraci' + [char]0x00F3 + 'n y los vol' + [char]0x00FA + 'menes del broker'), '    jht migrate-runtime podman', ('                           copia y verifica los vol' + [char]0x00FA + 'menes de Docker en Podman;'), '                           no selecciona el nuevo runtime y no borra Docker', '    jht uninstall --confirm elimina el runtime local de Windows, pero conserva datos,', '                           documentos, Podman y Compose', '', ('  Todos los dem' + [char]0x00E1 + 's comandos (positions, stats, team, providers, cron,'), '  working-hours, cloud...) se ejecutan DENTRO del contenedor: para su ayuda', '  hace falta el contenedor en marcha.', '', '      jht up ; jht --help') -join [char]10) }
+    'es:ps.home_unavailable_bind_mount' { return 'HOME/USERPROFILE no disponible: bind mount de JHT rechazado' }
+    'es:ps.host_download_failed' { return 'la descarga en el host ha fallado: %s' }
+    'es:ps.input_not_json_bot_token_stdin' { return 'input_not_json: pasa bot_token como JSON por stdin.' }
+    'es:ps.integration_not_installed' { return 'no instalado' }
+    'es:ps.integration_not_installed_yet' { return ('a' + [char]0x00FA + 'n no instalado') }
+    'es:ps.jht_container_not_verifiable' { return 'El contenedor de JHT no se puede verificar.' }
+    'es:ps.jht_home_missing' { return ('Job Hunter Team a' + [char]0x00FA + 'n no est' + [char]0x00E1 + ' instalado: la carpeta %s no existe. Ejecuta el instalador y despu' + [char]0x00E9 + 's ''jht setup''.') }
+    'es:ps.legacy_cleanup_failed_old_token_still_there' { return 'legacy_cleanup_failed: el token antiguo sigue en ~/.jht; cambio definitivo rechazado.' }
+    'es:ps.legacy_migration_failed_stays' { return 'legacy_migration_failed: %s se queda en ~/.jht/credentials.' }
+    'es:ps.lifecycle.restarted' { return 'Job Hunter Team reiniciado.' }
+    'es:ps.link_or_not_folder' { return 'enlace o no es una carpeta' }
+    'es:ps.localappdata_unavailable' { return 'LOCALAPPDATA no disponible: runtime del host rechazado' }
+    'es:ps.machine_state_unreadable' { return ('el estado de la m' + [char]0x00E1 + 'quina no se puede leer (podman y wsl no responden)') }
+    'es:ps.monitor_window_unavailable' { return ('monitor_window_unavailable: aqu' + [char]0x00ED + ' no se puede abrir una ventana de terminal. Ejecuta ''jht monitor'' en el terminal actual.') }
+    'es:ps.mount_repair_failed_folders_not_writable' { return 'mount_repair_failed: las carpetas de Job Hunter Team (%s, %s) no son escribibles para el contenedor y no se han podido arreglar.' }
+    'es:ps.old_images_busy' { return ' En uso por un contenedor (conservadas): %s.' }
+    'es:ps.old_images_kept_all' { return ('Im' + [char]0x00E1 + 'genes de JHT antiguas: se conservan todas (JHT_KEEP_OLD_IMAGES=1).') }
+    'es:ps.old_images_refused' { return ' Rechazadas por el motor (conservadas): %s.' }
+    'es:ps.old_images_removed' { return ('Im' + [char]0x00E1 + 'genes de JHT antiguas: eliminadas %s, liberados unos %s MB (tama' + [char]0x00F1 + 'o nominal: las capas compartidas se liberan solo en parte), conservadas: la actual y la anterior.') }
+    'es:ps.pair_role_now_prompt' { return ('' + [char]0x00BF + 'Emparejar %s ahora? [s/N]') }
+    'es:ps.podman_exe_not_found' { return 'no se encuentra podman.exe' }
+    'es:ps.podman_machine_not_responding' { return ('La m' + [char]0x00E1 + 'quina Podman de JHT no responde. Ejecuta ''jht up''.') }
+    'es:ps.release_arrived_without_https' { return 'la release ha llegado sin HTTPS: %s' }
+    'es:ps.relink_account_container_not_running' { return ('apply relink-account: el contenedor no est' + [char]0x00E1 + ' en marcha.') }
+    'es:ps.script_integration_not_installed' { return ('el script jht-integration.ps1 a' + [char]0x00FA + 'n no est' + [char]0x00E1 + ' instalado: ''jht upgrade'' (o un ''jht integration add/remove'') y vuelve a intentarlo') }
+    'es:ps.script_tools_not_installed' { return ('el script jht-tools.ps1 a' + [char]0x00FA + 'n no est' + [char]0x00E1 + ' instalado: ''jht upgrade'' y vuelve a intentarlo') }
+    'es:ps.startup_task_still_registered' { return 'la tarea sigue registrada' }
+    'es:ps.team_container_unavailable' { return 'team_container_unavailable: arranca el equipo con jht up y vuelve a intentarlo.' }
+    'es:ps.telegram_not_configured' { return ('Telegram no activo: Telegram no est' + [char]0x00E1 + ' configurado.') }
+    'es:ps.telegram_status_unverifiable' { return 'Telegram: estado no verificable ahora (servicio apagado o inalcanzable). Detalles: jht telegram status' }
+    'es:ps.telegram_unavailable_isolated_not_running' { return ('telegram_unavailable: el servicio de Telegram aislado no est' + [char]0x00E1 + ' activo.') }
+    'es:ps.telegram_unavailable_run_jht_up' { return 'telegram_unavailable: ejecuta jht up' }
+    'es:ps.uninstall.bad.target' { return 'Rechazado: {0} es un enlace o no es una carpeta: no lo sigo ni lo borro.' }
+    'es:ps.uninstall.done' { return ('Hecho: la m' + [char]0x00E1 + 'quina <machine> (y con ella las im' + [char]0x00E1 + 'genes de JHT, la b' + [char]0x00E1 + 'sica y la completa), el runtime y el comando jht se han eliminado.') }
+    'es:ps.uninstall.done.kept' { return ' ~/.jht y Documents\Job Hunter Team se quedan (con --purge se borran).' }
+    'es:ps.uninstall.done.wsl' { return ('WSL se queda en memoria: vmmem, wslservice y wslrelay son componentes de Windows (no los instal' + [char]0x00F3 + ' Job Hunter Team) y las otras m' + [char]0x00E1 + 'quinas WSL de este usuario tambi' + [char]0x00E9 + 'n los necesitan; normalmente se detienen solos al cabo de un rato de inactividad. Para detenerlos ahora: wsl --shutdown (detiene TODAS las m' + [char]0x00E1 + 'quinas WSL abiertas).') }
+    'es:ps.uninstall.kept.machine' { return ('La m' + [char]0x00E1 + 'quina Podman {0} no figura como creada por el instalador: se queda donde est' + [char]0x00E1 + '. A mano, si es tuya y quieres eliminarla: podman machine stop {0}; podman machine rm {0}.') }
+    'es:ps.uninstall.left.commands' { return ('No se han eliminado el comando jht o los archivos del instalador en {0} ({1}), ni las variables y las l' + [char]0x00ED + 'neas del PATH que a' + [char]0x00F1 + 'adi' + [char]0x00F3 + ' el instalador. A mano: Remove-Item del archivo; las variables JHT_CONTAINER_RUNTIME y JHT_PODMAN_MACHINE y la carpeta {0} del PATH desde Configuraci' + [char]0x00F3 + 'n > Variables de entorno.') }
+    'es:ps.uninstall.left.data' { return ('No se han borrado los datos de JHT ({0}). A mano: Remove-Item -Recurse -Force {1}. El comando jht y el runtime siguen ah' + [char]0x00ED + ': vuelve a ejecutar jht uninstall --confirm --purge cuando lo hayas resuelto.') }
+    'es:ps.uninstall.left.machine' { return ('No eliminada: la m' + [char]0x00E1 + 'quina Podman <machine>. Motivo: {0}. A mano: podman machine stop <machine>; wsl --unregister {1}; luego vuelve a ejecutar jht uninstall --confirm.') }
+    'es:ps.uninstall.left.runtime' { return 'No eliminado: el runtime de JHT en {0}. A mano: Remove-Item -Recurse -Force ''{0}''.' }
+    'es:ps.uninstall.left.task' { return ('No se ha eliminado la tarea de inicio al iniciar sesi' + [char]0x00F3 + 'n ''{0}'' (motivo: {1}). Lo dem' + [char]0x00E1 + 's se ha eliminado. A mano: schtasks /Delete /TN "{0}" /F.') }
+    'es:ps.uninstall.phase.commands' { return ('Eliminando el comando jht, los archivos del instalador y las l' + [char]0x00ED + 'neas del PATH...') }
+    'es:ps.uninstall.phase.data' { return 'Borrando ~/.jht y Documents\Job Hunter Team (--purge)...' }
+    'es:ps.uninstall.phase.machine' { return ('Eliminando la m' + [char]0x00E1 + 'quina Podman <machine> (con los secretos y las im' + [char]0x00E1 + 'genes de JHT)...') }
+    'es:ps.uninstall.phase.runtime' { return 'Eliminando el runtime de JHT...' }
+    'es:ps.uninstall.purge_notice' { return ('Con --purge tambi' + [char]0x00E9 + 'n se borran ~/.jht y Documents\Job Hunter Team: configuraci' + [char]0x00F3 + 'n, base de datos, CV y resultados. No hay vuelta atr' + [char]0x00E1 + 's.') }
+    'es:ps.uninstall.purge_removal_notice' { return ('Tambi' + [char]0x00E9 + 'n se borran la contrase' + [char]0x00F1 + 'a del correo y los tokens de Telegram guardados.') }
+    'es:ps.uninstall.removal_notice' { return ('Tambi' + [char]0x00E9 + 'n se borran la contrase' + [char]0x00F1 + 'a del correo y los tokens de Telegram guardados; ~/.jht y Documentos se quedan, y con ellos la sesi' + [char]0x00F3 + 'n de LinkedIn guardada (secrets/linkedin-profile y .cache/linkedin): b' + [char]0x00F3 + 'rrala con jht reset --scope creds.') }
+    'es:ps.uninstall.secrets' { return ('No se han eliminado los secretos guardados: la contrase' + [char]0x00F1 + 'a del correo y los tokens de Telegram est' + [char]0x00E1 + 'n en los vol' + [char]0x00FA + 'menes jht-secrets y jht-telegram-secrets de la m' + [char]0x00E1 + 'quina <machine>, que sigue ah' + [char]0x00ED + '.') }
+    'es:ps.uninstall.wslconfig.done' { return ('Se han quitado de {0} las l' + [char]0x00ED + 'neas que a' + [char]0x00F1 + 'adi' + [char]0x00F3 + ' el instalador (memoria de WSL).') }
+    'es:ps.uninstall.wslconfig.kept' { return ('Se han dejado en {0} las l' + [char]0x00ED + 'neas que cambiaste t' + [char]0x00FA + ': son tuyas.') }
+    'es:ps.uninstall.wslconfig.left' { return ('No se ha tocado {0} ({1}): las l' + [char]0x00ED + 'neas que a' + [char]0x00F1 + 'adi' + [char]0x00F3 + ' el instalador (memoria de WSL) se quedan. Qu' + [char]0x00ED + 'talas a mano: cada una tiene una l' + [char]0x00ED + 'nea de comentario encima.') }
+    'es:ps.unknown_argument' { return 'argumento desconocido: %s' }
+    'es:ps.upgrade_already_running' { return ('Ya hay una actualizaci' + [char]0x00F3 + 'n en curso') }
+    'es:ps.upgrade_broker_restart_failed' { return ('broker_restart_failed: el broker de secretos no se ha reiniciado. Qu' + [char]0x00E9 + ' hacer: jht up') }
+    'es:ps.upgrade_disk_low' { return ('disk_low: Los agentes necesitan al menos %s GiB de disco ' + [char]0x2014 + ' disponibles: %s GiB. Para liberar espacio vac' + [char]0x00ED + 'a la Papelera y borra los archivos grandes que no necesites y las im' + [char]0x00E1 + 'genes de Docker sin usar; luego vuelve a intentarlo: no se ha descargado ni cambiado nada.') }
+    'es:ps.upgrade_docker_unavailable' { return 'Docker o runtime del host no disponible' }
+    'es:ps.upgrade_helper_install_failed' { return ('helper_install_failed: los scripts nuevos del host se descargan en la primera petici' + [char]0x00F3 + 'n o con otro ''jht upgrade''') }
+    'es:ps.upgrade_host_runtime_not_installable' { return 'No se puede instalar el runtime protegido del host' }
+    'es:ps.upgrade_host_runtime_untrusted' { return 'Runtime del host no fiable' }
+    'es:ps.upgrade_image_download_failed' { return 'La descarga de la imagen ha fallado' }
+    'es:ps.upgrade_journal_not_updated' { return 'No se puede actualizar el journal' }
+    'es:ps.upgrade_metadata_not_persisted' { return 'Metadatos del runtime no guardados' }
+    'es:ps.upgrade_mounts_not_writable' { return 'Las carpetas de Job Hunter Team no se pueden escribir desde el contenedor (mount_repair_failed)' }
+    'es:ps.upgrade_not_completed' { return ('Actualizaci' + [char]0x00F3 + 'n no completada (%s): %s') }
+    'es:ps.upgrade_note_activate_runtime' { return 'Activando el nuevo runtime...' }
+    'es:ps.upgrade_note_download_image' { return ('Descargando la imagen m' + [char]0x00E1 + 's reciente...') }
+    'es:ps.upgrade_note_download_runtime' { return 'Descargando el runtime actualizado...' }
+    'es:ps.upgrade_option_unsupported' { return ('Opci' + [char]0x00F3 + 'n de upgrade no admitida') }
+    'es:ps.upgrade_pulling_full_image' { return 'Descargo la imagen completa actualizada...' }
+    'es:ps.upgrade_recovery_failed' { return ('La recuperaci' + [char]0x00F3 + 'n del upgrade anterior ha fallado') }
+    'es:ps.upgrade_release_core_invalid' { return ('La versi' + [char]0x00F3 + 'n no incluye un n' + [char]0x00FA + 'cleo v' + [char]0x00E1 + 'lido para esta instalaci' + [char]0x00F3 + 'n: reinstala') }
+    'es:ps.upgrade_remote_compose_invalid' { return ('Compose remoto no v' + [char]0x00E1 + 'lido') }
+    'es:ps.upgrade_remote_runtime_invalid' { return ('Runtime remoto no v' + [char]0x00E1 + 'lido o inaccesible') }
+    'es:ps.upgrade_rollback_not_prepared' { return 'No se puede preparar el rollback' }
+    'es:ps.upgrade_telegram_restart_failed' { return ('telegram_restart_failed: el servicio de Telegram aislado no se ha reiniciado. Qu' + [char]0x00E9 + ' hacer: jht up') }
+    'es:ps.upgrade_test_channel' { return 'Canal de pruebas: se actualiza reinstalando desde la build de pruebas' }
+    'es:ps.upgrade_unexpected_error' { return ('Error inesperado durante la actualizaci' + [char]0x00F3 + 'n') }
+    'es:ps.upgrade_verify_failed' { return ('El nuevo runtime no ha superado la verificaci' + [char]0x00F3 + 'n') }
+    'es:ps.use_fresh_botfather_token' { return ('Usa siempre un token reci' + [char]0x00E9 + 'n generado en BotFather (/revoke en el bot, o un bot nuevo): un token que ya exist' + [char]0x00ED + 'a puede haber sido le' + [char]0x00ED + 'do por los agentes aunque hoy no aparezca en ~/.jht.') }
+    'es:ps.user_dir_unavailable_cannot_create' { return 'user_dir_unavailable: no puedo crear la carpeta %s, que usa el equipo.' }
+    'es:ps.wsl_exe_not_found' { return 'no se encuentra wsl.exe' }
+    'es:ps.wsl_not_answering' { return 'WSL no responde (wsl --status)' }
+    'es:removed.office' { return ('''jht %s'' se elimin' + [char]0x00F3 + ' en la 0.4.0 junto con la oficina de Godot: usa los comandos jht (jht help).') }
+    'es:status.no_options' { return ('''jht status'' no admite opciones (%s): ejec' + [char]0x00FA + 'talo como ''jht status''.') }
+    'es:team.stopped' { return ('Job Hunter Team est' + [char]0x00E1 + ' detenido: ''jht up'' lo vuelve a arrancar.') }
+    'es:tools.arriving' { return ('Las herramientas de los Scout est' + [char]0x00E1 + 'n en camino: la imagen completa se descarga en segundo plano (unos 3 GB). La b' + [char]0x00FA + 'squeda de puestos empieza sola cuando lleguen; no tienes que hacer nada.') }
+    'es:tools.failed' { return ('La descarga de las herramientas de los Scout ha fallado, as' + [char]0x00ED + ' que el equipo a' + [char]0x00FA + 'n no puede buscar puestos. Ejecuta jht tools pull para reintentarlo (jht up tambi' + [char]0x00E9 + 'n lo reintenta).') }
+    'es:tools.switch_failed' { return ('Las herramientas de los Scout ya est' + [char]0x00E1 + 'n aqu' + [char]0x00ED + ', pero el equipo no se ha podido reiniciar con ellas: ejecuta jht down y luego jht up.') }
+    'es:tools.waiting' { return ('Las herramientas de los Scout ya est' + [char]0x00E1 + 'n aqu' + [char]0x00ED + ': el equipo pasa a ellas solo cuando el onboarding est' + [char]0x00E9 + ' cerrado.') }
+    'es:uninstall.usage' { return 'uso: jht uninstall --confirm [--purge]' }
+    'es:up.done' { return 'Job Hunter Team arrancado.' }
+    'de:container.starting' { return ('Container ''%s'' l' + [char]0x00E4 + 'uft nicht, starte ihn...') }
+    'de:doctor.host_config_none' { return 'noch keine Konfiguration: ''jht setup''' }
+    'de:doctor.host_config_ok' { return 'Konfiguration vorhanden' }
+    'de:doctor.host_engine_fail' { return 'Container-Engine nicht erreichbar' }
+    'de:doctor.host_engine_ok' { return 'Container-Engine erreichbar' }
+    'de:doctor.host_more' { return ('F' + [char]0x00FC + 'r die vollst' + [char]0x00E4 + 'ndigen Pr' + [char]0x00FC + 'fungen (Konfiguration, Anbieter, Datenbank, Agenten): ''jht up'', dann ''jht doctor''.') }
+    'de:doctor.host_runtime_fail' { return ('JHT-Runtime fehlt oder wurde ver' + [char]0x00E4 + 'ndert: ''jht upgrade'' installiert sie neu') }
+    'de:doctor.host_runtime_ok' { return 'JHT-Runtime intakt' }
+    'de:doctor.host_team_off' { return 'Team aus: ''jht up'' startet es' }
+    'de:doctor.host_team_unattestable' { return ('Ein Container des Teams ist da, l' + [char]0x00E4 + 'sst sich aber nicht als unserer best' + [char]0x00E4 + 'tigen: Nichts wurde angefasst (''jht status'' sagt mehr)') }
+    'de:doctor.host_title' { return ('Job Hunter Team: Das Team ist aus (sein Container l' + [char]0x00E4 + 'uft nicht). Pr' + [char]0x00FC + 'fungen von diesem Computer aus:') }
+    'de:down.done' { return 'Job Hunter Team gestoppt.' }
+    'de:download.bad_version' { return ('Ung' + [char]0x00FC + 'ltige Version: %s. Beispiel: 0.3.5.') }
+    'de:download.deb_only_linux' { return ('--deb gibt es nur f' + [char]0x00FC + 'r Linux.') }
+    'de:download.dest_is_link' { return 'Das Ziel ist ein Link: %s' }
+    'de:download.dest_not_file' { return 'Das Ziel existiert und ist keine Datei: %s' }
+    'de:download.fetching' { return 'Lade %s herunter...' }
+    'de:download.hash_invalid' { return ('Ung' + [char]0x00FC + 'ltige SHA-256 f' + [char]0x00FC + 'r %s: erwartet %s, erhalten %s.') }
+    'de:download.intel_mac' { return ('Die macOS-App von 0.4 l' + [char]0x00E4 + 'uft nur auf Macs mit Apple silicon (M1 und neuer); das hier ist ein Intel-Mac, den 0.4 nicht unterst' + [char]0x00FC + 'tzt. Nichts wurde heruntergeladen.') }
+    'de:download.linux_no_app' { return ('In dieser Version gibt es keine Desktop-App f' + [char]0x00FC + 'r Linux: Nutze install.sh. Nichts wurde heruntergeladen.') }
+    'de:download.mismatch_existing' { return ('Die Datei %s existiert, aber ihre SHA-256 stimmt nicht: Sie wurde nicht ' + [char]0x00FC + 'berschrieben.') }
+    'de:download.mkdir_failed' { return ('Der Zielordner l' + [char]0x00E4 + 'sst sich nicht erstellen: %s') }
+    'de:download.present_verified' { return ('Datei schon vorhanden und gepr' + [char]0x00FC + 'ft: %s') }
+    'de:download.release_no_app' { return ('Dieses Release (v%s) hat keine App f' + [char]0x00FC + 'r macOS: Nutze 0.4.0 oder neuer. Nichts wurde heruntergeladen.') }
+    'de:download.saved_in' { return 'Gespeichert in: %s' }
+    'de:download.sha_verified' { return ('SHA-256 gepr' + [char]0x00FC + 'ft: %s') }
+    'de:download.sum_missing' { return ('Keine SHA-256 angegeben f' + [char]0x00FC + 'r %s.') }
+    'de:download.unsupported_os' { return ('Nicht unterst' + [char]0x00FC + 'tztes System: %s. Nutze windows oder macos.') }
+    'de:download.windows_missing' { return ('Windows ist nicht Teil von 0.4.0: Das Release hat keinen Installer f' + [char]0x00FC + 'r Windows. Nichts wurde heruntergeladen.') }
+    'de:help.integration' { return (('Verwendung: jht integration <command>', '', '  list [--json]                   die Integrationen und ihr Zustand', '  status [ID] [--json]            der Zustand einer oder aller', ('  add ID [--json]                 f' + [char]0x00FC + 'gt eine Integration hinzu'), '  remove ID [--purge --yes] [--remove-image] [--json]', ('                                  entfernt sie; --purge l' + [char]0x00F6 + 'scht auch ihre Daten (braucht --yes);'), '                                  --remove-image (nur screen und media) entfernt auch das Tool-Image', '', 'Erlaubt sind die IDs, die `jht integration list` zeigt. Nichts wird heruntergeladen oder gestartet,', 'bevor du es mit `add` verlangst.') -join [char]10) }
+    'de:help.linkedin' { return (('Verwendung: jht linkedin <command>', '', '  login [--stop]    die Anmeldung von Hand bei LinkedIn (mit Google): ein Browser in einem eigenen Container, ohne', ('                    Netzwerk, dessen Fenster du in der App siehst und bedienst; --stop schlie' + [char]0x00DF + 't alles'), ('  status --json     sagt, ob die Anmeldung l' + [char]0x00E4 + 'uft und ob die LinkedIn-Sitzung gespeichert ist'), '', 'Nichts wird heruntergeladen oder gestartet, bevor du es mit `login` verlangst.') -join [char]10) }
+    'de:help.screen' { return (('Verwendung: jht screen <command>', '', '  on [--json]       startet den Live-Bildschirm des Closers: ein eigener Container, mit dem Stream nur auf 127.0.0.1', '  off [--remove-image] [--json]', '                    stoppt ihn und entfernt den Container; das Tool-Image bleibt auf der Festplatte, damit du ihn', '                    ohne neuen Download wieder starten kannst: --remove-image entfernt es und gibt den Platz frei', ('  status [--json]   sagt, ob er l' + [char]0x00E4 + 'uft'), '', 'Nichts wird heruntergeladen oder gestartet, bevor du es mit `on` verlangst. Der Stream ist nur zum Ansehen.') -join [char]10) }
+    'de:help.setup' { return (('Verwendung: jht setup [options]', '', ('Ohne Optionen startet die gef' + [char]0x00FC + 'hrte Installation. Mit --non-interactive wird nichts gefragt:'), ('Alles wird ' + [char]0x00FC + 'ber die Optionen angegeben.'), '', '  --non-interactive            keine Fragen', '  --provider <name>            glm (Z.ai, Standard), kimi (Moonshot), openai oder claude (Anthropic)', '  --harness <name>             pi (Standard)', ('  --api-key-file <path>        Datei mit dem API-Schl' + [char]0x00FC + 'ssel (eine Zeile, nur f' + [char]0x00FC + 'r dich lesbar).'), '                               jht liest die Datei auf deinem Computer und gibt sie ans Setup weiter; bei glm', ('                               und kimi beh' + [char]0x00E4 + 'lt das Setup den Schl' + [char]0x00FC + 'ssel f' + [char]0x00FC + 'r sich, nie in der Konfiguration'), ('  --api-key-stdin              liest den API-Schl' + [char]0x00FC + 'ssel von stdin (eine Zeile): nie auf der Befehlszeile'), ('  --api-key <key>              der Schl' + [char]0x00FC + 'ssel direkt hier, im Klartext (nicht erlaubt f' + [char]0x00FC + 'r glm und kimi)'), ('  --secret-mode <mode>         wie der Schl' + [char]0x00FC + 'ssel gespeichert wird: plaintext (Standard), env oder file'), ('  --secret-env <name>          mit --secret-mode env: die Umgebungsvariable, die ihn enth' + [char]0x00E4 + 'lt'), ('  --secret-file <path>         mit --secret-mode file: die Datei, die ihn enth' + [char]0x00E4 + 'lt'), '  --model <model>              das zu verwendende Modell', '  --language <code>            die Sprache (zum Beispiel it oder en)', ('  --skip-health                ' + [char]0x00FC + 'berspringt die abschlie' + [char]0x00DF + 'ende Pr' + [char]0x00FC + 'fung'), '  --reset                      beginnt mit einer sauberen Konfiguration neu', '', 'Beispiele:', ('  mit einem GLM-Schl' + [char]0x00FC + 'ssel in einer Datei:'), '    jht setup --non-interactive --provider glm --harness pi --api-key-file schluessel.txt', ('  OpenAI mit einem API-Schl' + [char]0x00FC + 'ssel, auf Pi (f' + [char]0x00FC + 'r Claude: --provider claude):'), '    jht setup --non-interactive --provider openai --harness pi --api-key-stdin') -join [char]10) }
+    'de:help.tools' { return (('Verwendung: jht tools <Befehl>', '', ('  status --json   ob die Werkzeuge der Scouts (das vollst' + [char]0x00E4 + 'ndige Image) da, unterwegs oder fehlgeschlagen sind'), ('  pull            l' + [char]0x00E4 + 'dt sie im Hintergrund herunter (jht up und jht setup starten das von selbst)'), '  switch          bringt das Team darauf, sobald das Onboarding abgeschlossen ist (der Download macht das von selbst)', '', ('Diese Hilfe startet nichts und l' + [char]0x00E4 + 'dt nichts herunter.')) -join [char]10) }
+    'de:keyfile.both' { return 'Nutze --api-key-file oder --api-key-stdin, nicht beides' }
+    'de:keyfile.not_file' { return ('Die an --api-key-file ' + [char]0x00FC + 'bergebene Datei muss eine normale Datei sein, kein Ordner und kein Link: %s') }
+    'de:keyfile.shape' { return ('Der Inhalt der an --api-key-file ' + [char]0x00FC + 'bergebenen Datei ist keine einzelne Zeile mit 16 bis 512 druckbaren Zeichen ohne Leerzeichen: %s') }
+    'de:keyfile.size' { return ('Die an --api-key-file ' + [char]0x00FC + 'bergebene Datei ist leer oder zu gro' + [char]0x00DF + ' f' + [char]0x00FC + 'r einen Schl' + [char]0x00FC + 'ssel (1 bis 4096 Bytes): %s') }
+    'de:keyfile.twice' { return '--api-key-file wurde zweimal angegeben' }
+    'de:keyfile.unreadable' { return ('Die an --api-key-file ' + [char]0x00FC + 'bergebene Datei l' + [char]0x00E4 + 'sst sich nicht lesen: %s') }
+    'de:line.abbinamento_annullato_nessuna_modifica' { return ('Kopplung abgebrochen: keine ' + [char]0x00C4 + 'nderung.') }
+    'de:line.abbinamento_di_s_non_riuscito' { return 'Kopplung von %s fehlgeschlagen: Die alten Kopien bleiben alle. Starte jht telegram pair --all erneut: Bereits gekoppelte Rollen fragen nicht nach einem weiteren Token.' }
+    'de:line.abbinamento_rifiutato_genera_un_token' { return 'Kopplung abgelehnt: Erzeuge einen neuen Token in BotFather (/revoke) und versuch es erneut.' }
+    'de:line.agent_restart_failed.inventario_conservato_ma_il_team' { return 'Inventur gesichert, aber das Team ist nicht neu gestartet. Was tun: jht up' }
+    'de:line.annullato_niente_autorizzato' { return 'Abgebrochen: nichts autorisiert.' }
+    'de:line.anteprima_non_valida_niente_autorizzato' { return ('Vorschau ung' + [char]0x00FC + 'ltig: nichts autorisiert.') }
+    'de:line.apply.authorize' { return 'Autorisierst du diese Bewerbung?' }
+    'de:line.apply_relink_account_cloud_account' { return ('apply relink-account: Cloud-Konto nicht verf' + [char]0x00FC + 'gbar. F' + [char]0x00FC + 'hre zuerst jht cloud pair aus.') }
+    'de:line.autorizzata_s_verso_s_il' { return ('#%s autorisiert, an %s: Der CLOSER nimmt sie in der n' + [char]0x00E4 + 'chsten Runde.') }
+    'de:line.bot_abbinato_e_copia_legacy' { return ('Bot gekoppelt und alte Kopie entfernt. Es bleiben andere alte Tokens oder ein Token in der Umgebung des Containers: Entferne sie und schlie' + [char]0x00DF + ' die Rotation vor dem Cutover ab.') }
+    'de:line.bot_token_invalid.controlla_il_token_generato_da' { return ('Pr' + [char]0x00FC + 'fe den von BotFather erzeugten Token.') }
+    'de:line.broker_restart_failed.il_servizio_della_posta_non_4' { return 'Der Mail-Dienst ist nicht neu gestartet. Was tun: jht mail status' }
+    'de:line.broker_start_failed.il_servizio_della_posta_non_2' { return 'Der Mail-Dienst ist nicht gestartet.' }
+    'de:line.broker_start_failed.il_servizio_della_posta_non_3' { return 'Der Mail-Dienst antwortet nach 30 Sekunden nicht.' }
+    'de:line.broker_unavailable.il_broker_dei_segreti_esiste' { return ('Der Secrets-Broker existiert, l' + [char]0x00E4 + 'sst sich aber nicht als unserer best' + [char]0x00E4 + 'tigen: Ich fasse ihn nicht an.') }
+    'de:line.broker_unavailable.il_runtime_installato_pi_vecchio_2' { return ('Die installierte Runtime ist ' + [char]0x00E4 + 'lter und hat keinen Secrets-Broker.') }
+    'de:line.broker_unavailable.il_servizio_della_posta_non' { return 'Der Mail-Dienst existiert noch nicht: Er wird beim ersten Bedarf erstellt.' }
+    'de:line.cancellato_marcatore_migrazione_broker_s' { return ('Gel' + [char]0x00F6 + 'scht: Migrationsmarker des Brokers %s') }
+    'de:line.cancellato_volume_broker_s_s' { return ('Gel' + [char]0x00F6 + 'scht: Broker-Volume %s (%s)') }
+    'de:line.container_s_non_e_partito' { return ('Container ''%s'' ist nicht innerhalb von 10s gestartet. Pr' + [char]0x00FC + 'fe ''jht logs''.') }
+    'de:line.cosa_fare_jht_mail_setup' { return 'Was tun: jht mail setup' }
+    'de:line.cosa_fare_jht_up_3' { return 'Was tun: jht up' }
+    'de:line.cosa_fare_jht_upgrade_4' { return 'Was tun: jht upgrade' }
+    'de:line.cosa_fare_riprova_il_comando_2' { return 'Was tun: Versuch den Befehl erneut' }
+    'de:line.fino_ad_allora_la_posta' { return 'Bis dahin wird die Mail mit dem heutigen Passwort gelesen und gesendet; der Hinweis bleibt in jht mail status.' }
+    'de:line.genera_una_nuova_password_per' { return 'Erzeuge ein neues App-Passwort bei deinem Anbieter und speichere es mit: jht mail setup' }
+    'de:line.i_segreti_e_lo_stato' { return ('Die Geheimnisse und der Zustand des Brokers wurden gel' + [char]0x00F6 + 'scht: Melde dich erneut bei den Portalen an und richte die Mail neu ein.') }
+    'de:line.il_broker_non_ha_registrato' { return ('Der Broker hat die Autorisierung nicht registriert: zur' + [char]0x00FC + 'ckgezogen, nichts wird gesendet.') }
+    'de:line.integration.install_hint' { return 'zum Installieren: ''jht upgrade'' (oder ein ''jht integration add <id>'')' }
+    'de:line.interattivo_il_token_viene_chiesto' { return ('Interaktiv: Der Token wird ohne Echo abgefragt, dann bekommt der neue Bot einen Einmalcode von deinem Telegram. Automatisierungen: {"bot_token": ...} als JSON auf stdin; speichere den Token nicht in ~/.jht und l' + [char]0x00F6 + 'sche jede au' + [char]0x00DF + 'erhalb davon verwendete Datei sofort.') }
+    'de:line.jht_telegram_pair_all_interattivo' { return ('jht telegram pair --all ist interaktiv: F' + [char]0x00FC + 'r Automatisierungen kopple eine Rolle nach der anderen.') }
+    'de:line.job_hunter_team_non_installato' { return ('Job Hunter Team ist nicht vollst' + [char]0x00E4 + 'ndig installiert: Im Runtime-Ordner fehlt die Integrit' + [char]0x00E4 + 'tsdatei (eine abgebrochene Installation?). Starte den Installer erneut.') }
+    'de:line.la_casella_di_posta_ora' { return ('Das Postfach liegt jetzt im Secrets-Broker. Sein Passwort war f' + [char]0x00FC + 'r die Agenten lesbar:') }
+    'de:line.legacy_cleanup_failed.i_token_nuovi_sono_al' { return 'Die neuen Tokens sind sicher, aber die alte Kopie von %s ist noch in ~/.jht; Cutover verweigert.' }
+    'de:line.legacy_inventory_failed.il_team_resta_fermo_perch_4' { return 'Das Team bleibt gestoppt, weil die Telegram-Inventur des Hosts nicht gesichert wurde.' }
+    'de:line.legacy_inventory_failed.le_impronte_non_sono_state' { return ('Die Fingerabdr' + [char]0x00FC + 'cke wurden vom isolierten Dienst nicht gesichert.') }
+    'de:line.legacy_inventory_failed.migrazione_telegram_interrotta' { return 'Telegram-Migration abgebrochen.' }
+    'de:line.legacy_inventory_failed.non_posso_provare_che_jht' { return 'Ich kann nicht beweisen, dass ~/.jht frei von Telegram-Tokens ist.' }
+    'de:line.legacy_inventory_failed.non_riesco_a_fermare_gli' { return 'Ich kann die Agenten vor der Host-Inventur nicht stoppen.' }
+    'de:line.legacy_inventory_failed.non_riesco_a_leggere_i' { return 'Ich kann die alten Tokens in ~/.jht nicht lesen.' }
+    'de:line.legacy_inventory_failed.ruoli_legacy_non_riconosciuti' { return 'Alte Rollen nicht erkannt.' }
+    'de:line.legacy_remove_failed.s_nel_broker_ma_la' { return '%s ist im Broker, aber die Kopie in ~/.jht/credentials ist geblieben.' }
+    'de:line.legacy_secret_reappeared.jht_credentials_s_json_ricomparso' { return '~/.jht/credentials/%s.json ist nach der Migration wieder aufgetaucht; ohne Import entfernt.' }
+    'de:line.mail.address_prompt' { return 'Adresse des Postfachs:' }
+    'de:line.mail.app_password_prompt' { return 'App-Passwort (wird nicht angezeigt):' }
+    'de:line.mail.dedicated_prompt' { return ('Ist das ein EIGENES Postfach f' + [char]0x00FC + 'r weitergeleitete Jobbenachrichtigungen?') }
+    'de:line.mail_setup_opzione_sconosciuta_s' { return 'mail setup: unbekannte Option %s' }
+    'de:line.mail_setup_password_vuota' { return 'mail setup: leeres Passwort' }
+    'de:line.nessun_provider_attivo_scegline_uno' { return ('Kein Anbieter aktiv: W' + [char]0x00E4 + 'hle einen mit ''jht providers use glm''') }
+    'de:line.nessun_ruolo_ha_un_token' { return ('Keine Rolle hat einen alten Token: F' + [char]0x00FC + 'r einen neuen Bot nutze jht telegram pair <Rolle>.') }
+    'de:line.non_autorizzabile_s' { return 'Nicht autorisierbar: %s.' }
+    'de:line.non_autorizzata_s' { return 'Nicht autorisiert: %s.' }
+    'de:line.os_and_version_are_required' { return '--os und --version sind erforderlich' }
+    'de:line.podman_non_trovato_reinstalla_il' { return 'Podman nicht gefunden: Installiere die JHT-Runtime neu.' }
+    'de:line.preparo_il_servizio_della_posta' { return ('Bereite den Mail-Dienst vor (er wird nur beim ersten Bedarf erstellt)' + [char]0x2026) }
+    'de:line.provider_attivo_non_riconosciuto_s' { return 'Aktiver Anbieter nicht erkannt: %s' }
+    'de:line.reset_impossibile_cancellare_il_marcatore' { return ('reset: Der Migrationsmarker des Brokers %s l' + [char]0x00E4 + 'sst sich nicht l' + [char]0x00F6 + 'schen.') }
+    'de:line.reset_impossibile_cancellare_il_marcatore_2' { return ('reset: Der Marker des Brokers %s l' + [char]0x00E4 + 'sst sich nicht l' + [char]0x00F6 + 'schen.') }
+    'de:line.reset_impossibile_cancellare_il_volume' { return ('reset: Das Broker-Volume %s (%s) l' + [char]0x00E4 + 'sst sich nicht l' + [char]0x00F6 + 'schen.') }
+    'de:line.reset_nome_volume_non_valido' { return ('reset: Ung' + [char]0x00FC + 'ltiger Volume-Name f' + [char]0x00FC + 'r %s; Entfernen verweigert.') }
+    'de:line.reset_non_riesco_a_determinare' { return 'reset: Ich kann das Compose-Projekt nicht bestimmen; die Volumes des Brokers wurden nicht angefasst.' }
+    'de:line.reset_non_riesco_a_fermare' { return 'reset: Ich kann die Runtime nicht stoppen; die Volumes des Brokers wurden nicht angefasst.' }
+    'de:line.reset_ricerca_del_volume_s_2' { return 'reset: Suche nach dem Volume %s fehlgeschlagen.' }
+    'de:line.restano_token_legacy_per_s' { return ('Es bleiben alte Tokens f' + [char]0x00FC + 'r: %s. Solange du nicht auch diese Rollen koppelst, bleibt %s auf Telegram stumm: Kopple sie alle in dieser Sitzung (jht telegram pair --all).') }
+    'de:line.risposta_del_container_non_valida' { return ('Ung' + [char]0x00FC + 'ltige Antwort des Containers: Autorisierung zur' + [char]0x00FC + 'ckgezogen, nichts wird gesendet.') }
+    'de:line.ritirata_s_non_verra_inviata' { return ('#%s zur' + [char]0x00FC + 'ckgezogen: Sie wird nicht gesendet.') }
+    'de:line.ritiro_non_riuscito_s' { return ('Zur' + [char]0x00FC + 'ckziehen fehlgeschlagen: %s.') }
+    'de:line.runtime_migration_docker_missing.il_client_docker_originale_non' { return ('Der urspr' + [char]0x00FC + 'ngliche Docker-Client ist nicht verf' + [char]0x00FC + 'gbar.') }
+    'de:line.runtime_migration_image_invalid.serve_l_immagine_jht_fissata' { return ('Das per Digest fixierte JHT-Image ist n' + [char]0x00F6 + 'tig.') }
+    'de:line.runtime_migration_podman_missing.podman_non_e_disponibile' { return ('Podman ist nicht verf' + [char]0x00FC + 'gbar.') }
+    'de:line.runtime_migration_team_running.ferma_prima_il_team_docker' { return 'Stoppe zuerst das Docker-Team.' }
+    'de:line.runtime_migration_team_running.ferma_prima_il_team_podman' { return 'Stoppe zuerst das Podman-Team.' }
+    'de:line.runtime_o_container_jht_non' { return ('JHT-Runtime oder -Container nicht verf' + [char]0x00FC + 'gbar') }
+    'de:line.ruoli_da_abbinare_in_questa' { return 'Zu koppelnde Rollen in dieser Sitzung: %s' }
+    'de:line.s_ha_gi_un_bot' { return '%s hat schon einen gekoppelten Bot: Ich entferne nur seine alte Kopie.' }
+    'de:line.s_needs_a_value' { return '%s braucht einen Wert' }
+    'de:line.saltato_non_trovato_volume_broker' { return ('' + [char]0x00DC + 'bersprungen (nicht gefunden): Broker-Volume %s') }
+    'de:line.serve_un_terminale_l_autorizzazione' { return ('Ein Terminal ist n' + [char]0x00F6 + 'tig: Die Autorisierung wird von Hand best' + [char]0x00E4 + 'tigt.') }
+    'de:line.telegram_isolato_attivo_il_bridge' { return 'Isoliertes Telegram aktiv; die alte Bridge kann von den Agenten nicht mehr reaktiviert werden.' }
+    'de:line.the_setup_keeps_the_key' { return ('Das Setup beh' + [char]0x00E4 + 'lt den Schl' + [char]0x00FC + 'ssel: Du kannst die Datei auf diesem Computer jetzt l' + [char]0x00F6 + 'schen (%s).') }
+    'de:line.upgrade.done' { return 'Update abgeschlossen: %s (%s) -> %s (%s). %s' }
+    'de:line.upgrade.restored' { return 'Vorherige Runtime wiederhergestellt.' }
+    'de:line.uso_jht_apply_relink_account' { return 'Verwendung: jht apply relink-account' }
+    'de:line.uso_jht_apply_request_cancel_2' { return 'Verwendung: jht apply request|cancel <id>' }
+    'de:line.uso_jht_mail_setup_status' { return 'Verwendung: jht mail setup|status|admission <allowlist|whole_mailbox>|allow add|remove <Adresse|@Domain>|drafts|approve <id>|discard <id>|journal|delete|migrate' }
+    'de:line.uso_jht_migrate_runtime_podman' { return 'Verwendung: jht migrate-runtime podman' }
+    'de:line.uso_jht_screen_on_off' { return 'Verwendung: jht screen on | off | status [--json]' }
+    'de:line.uso_jht_telegram_chat_id' { return 'Verwendung: jht telegram chat-id <assistente|capitano|mentor>' }
+    'de:line.uso_jht_telegram_pair_assistente' { return 'Verwendung: jht telegram pair <assistente|capitano|mentor>|--all' }
+    'de:line.uso_jht_telegram_remove_assistente' { return 'Verwendung: jht telegram remove <assistente|capitano|mentor>' }
+    'de:line.uso_jht_telegram_status_pair' { return 'Verwendung: jht telegram status|pair <Rolle>|pair --all|chat-id <Rolle>|remove <Rolle>' }
+    'de:monitor.window_invalid' { return 'monitor_window_invalid: Nutze ''jht monitor --window'' ohne weitere Optionen.' }
+    'de:ps.apply_auto_send_warning_1' { return ('  Bei eingeschaltetem automatischem Versand f' + [char]0x00FC + 'llt das Team die Bewerbung aus und SENDET sie,') }
+    'de:ps.apply_auto_send_warning_2' { return ('  ohne weitere Best' + [char]0x00E4 + 'tigung. Einmal abgeschickt, l' + [char]0x00E4 + 'sst sie sich nicht zur' + [char]0x00FC + 'ckrufen.') }
+    'de:ps.bot_token_prompt_hidden' { return 'Token des Bots %s (verdeckte Eingabe)' }
+    'de:ps.botfather_fresh_token' { return 'Verwende immer ein frisch in BotFather erzeugtes Token (/revoke beim Bot, oder ein neuer Bot): Ein bereits vorhandenes Token kann von den Agenten gelesen worden sein, auch wenn es heute nicht mehr in ~/.jht auftaucht.' }
+    'de:ps.broker_network_proxy_not_ready' { return 'broker_network_unavailable: Der Mail-Proxy ist nicht bereit (Code %s).' }
+    'de:ps.broker_network_scripts_not_downloadable' { return 'broker_network_unavailable: Ich kann die Skripte des Mail-Proxys nicht herunterladen. Was tun: jht upgrade' }
+    'de:ps.broker_network_scripts_not_verified' { return ('broker_network_unavailable: Die Skripte des Mail-Proxys lassen sich nicht best' + [char]0x00E4 + 'tigen. Was tun: jht upgrade') }
+    'de:ps.broker_restart_failed_secrets_broker_not_ours' { return ('broker_restart_failed: Der Secrets-Broker l' + [char]0x00E4 + 'sst sich nicht als unserer best' + [char]0x00E4 + 'tigen: Ich r' + [char]0x00FC + 'hre ihn nicht an. Was tun: jht mail status') }
+    'de:ps.broker_unavailable_secrets_broker_not_running' { return 'broker_unavailable: Der Secrets-Broker ist nicht aktiv.' }
+    'de:ps.cli_version_needs_container' { return ('F' + [char]0x00FC + 'r die Version der laufenden CLI muss der Container laufen: ''jht up''.') }
+    'de:ps.compose_up_failed_team_not_started' { return ('compose_up_failed: Das Team ist nicht gestartet (docker compose up, Code %s). Pr' + [char]0x00FC + 'fe ''jht logs''.') }
+    'de:ps.container_not_running' { return 'Container ''%s'' nicht aktiv' }
+    'de:ps.container_runtime_unsupported' { return ('nicht unterst' + [char]0x00FC + 'tzte Container-Runtime: %s') }
+    'de:ps.docker_desktop_file_sharing_hint' { return ('  Was tun: ' + [char]0x00D6 + 'ffne Docker Desktop > Settings > Resources > File sharing, pr' + [char]0x00FC + 'fe, ob der Ordner des Benutzers freigegeben ist, und f' + [char]0x00FC + 'hre dann ''jht up'' erneut aus.') }
+    'de:ps.docker_podman_verified_future_removal' { return ('Migration Docker -> Podman gepr' + [char]0x00FC + 'ft. Die Docker-Volumes bleiben unver' + [char]0x00E4 + 'ndert und enthalten noch die Mail-Passw' + [char]0x00F6 + 'rter, die Portal-Zug' + [char]0x00E4 + 'nge und die Telegram-Tokens: Zum Entfernen ist k' + [char]0x00FC + 'nftig eine ausdr' + [char]0x00FC + 'ckliche Best' + [char]0x00E4 + 'tigung n' + [char]0x00F6 + 'tig.') }
+    'de:ps.doctor.wsl_memory' { return 'WSL hat kein Speicherlimit (andere WSL-Distributionen sind registriert): trage in %s unter [wsl2] memory=%s ein' }
+    'de:ps.download_asset_failed_detail' { return 'Download fehlgeschlagen: %s (%s)' }
+    'de:ps.download_shared_folder_no_path' { return ('Das Ziel liegt in einem Ordner, den du mit dem Team teilst: W' + [char]0x00E4 + 'hle einen au' + [char]0x00DF + 'erhalb, z. B. Downloads.') }
+    'de:ps.download_sums_failed_detail' { return 'Download fehlgeschlagen: SHA256SUMS von v%s (%s)' }
+    'de:ps.full_pull_failed_keep_old' { return ('full_pull_failed: Das neue vollst' + [char]0x00E4 + 'ndige Image ist nicht angekommen, das alte bleibt. Was tun: jht tools pull') }
+    'de:ps.help.main' { return (('jht - Job Hunter Team', '', '  Host-Befehle (funktionieren von hier aus):', '    jht up                 startet den Container des Teams', '    jht down               stoppt ihn', '                           (mit --verbose siehst du auch die Zeilen der Engine)', '    jht restart            startet ihn neu', '    jht status             Zustand von Container und Team', '    jht logs [-f]          Logs des Containers', '    jht upgrade            aktualisiert auf das neueste Image', ('    jht setup              gef' + [char]0x00FC + 'hrte Installation'), '    jht shell              Shell im Container', '    jht mail setup         speichert das Postfach im Secrets-Broker', '    jht mail drafts        von den Agenten geschriebene Mails, die auf dein Okay warten', '    jht mail approve <id>  sendet sie; jht mail discard <id> verwirft sie', '    jht integration list|status [ID]|add ID|remove ID [--purge --yes] [--remove-image] [--json]', '                           die Integrationen, die nach dem Setup dazukommen', '                           (google, telegram, mail): Zustand von der Engine gelesen', '    jht telegram status    Zustand des isolierten Telegram-Dienstes', '    jht telegram pair ROLE fragt den Token ohne Echo auf dem Host-Computer ab, dann', '                           zeigt es einen Code, den du dem Bot von deinem Telegram schickst', ('                           F' + [char]0x00FC + 'r Automatisierungen: JSON auf stdin. Speichere den Token nicht'), ('                           in ~/.jht; l' + [char]0x00F6 + 'sche au' + [char]0x00DF + 'erhalb davon verwendete Dateien sofort.'), '    jht telegram pair --all koppelt alle alten Rollen in einer Sitzung', '    jht telegram chat-id ROLE verlegt den Bot in einen anderen Chat, mit demselben Code', ('    jht reset              l' + [char]0x00F6 + 'scht Konfiguration und Volumes des Brokers'), '    jht migrate-runtime podman', ('                           kopiert und pr' + [char]0x00FC + 'ft die Docker-Volumes in Podman;'), ('                           w' + [char]0x00E4 + 'hlt die neue Runtime nicht und l' + [char]0x00F6 + 'scht Docker nicht'), ('    jht uninstall --confirm entfernt die lokale Windows-Runtime, beh' + [char]0x00E4 + 'lt aber Daten,'), '                           Dokumente, Podman und Compose', '', '  Alle anderen Befehle (positions, stats, team, providers, cron,', ('  working-hours, cloud...) laufen IM Container: F' + [char]0x00FC + 'r ihre Hilfe'), '  muss der Container laufen.', '', '      jht up ; jht --help') -join [char]10) }
+    'de:ps.home_unavailable_bind_mount' { return ('HOME/USERPROFILE nicht verf' + [char]0x00FC + 'gbar: JHT-Bind-Mount abgelehnt') }
+    'de:ps.host_download_failed' { return 'Download auf dem Host fehlgeschlagen: %s' }
+    'de:ps.input_not_json_bot_token_stdin' { return ('input_not_json: ' + [char]0x00DC + 'bergib bot_token als JSON ' + [char]0x00FC + 'ber stdin.') }
+    'de:ps.integration_not_installed' { return 'nicht installiert' }
+    'de:ps.integration_not_installed_yet' { return 'noch nicht installiert' }
+    'de:ps.jht_container_not_verifiable' { return ('Der JHT-Container l' + [char]0x00E4 + 'sst sich nicht best' + [char]0x00E4 + 'tigen.') }
+    'de:ps.jht_home_missing' { return ('Job Hunter Team ist noch nicht installiert: Der Ordner %s existiert nicht. F' + [char]0x00FC + 'hre den Installer aus, dann ''jht setup''.') }
+    'de:ps.legacy_cleanup_failed_old_token_still_there' { return 'legacy_cleanup_failed: Der alte Token ist noch in ~/.jht; Cutover verweigert.' }
+    'de:ps.legacy_migration_failed_stays' { return 'legacy_migration_failed: %s bleibt in ~/.jht/credentials.' }
+    'de:ps.lifecycle.restarted' { return 'Job Hunter Team neu gestartet.' }
+    'de:ps.link_or_not_folder' { return ('Verkn' + [char]0x00FC + 'pfung oder kein Ordner') }
+    'de:ps.localappdata_unavailable' { return ('LOCALAPPDATA nicht verf' + [char]0x00FC + 'gbar: Host-Runtime abgelehnt') }
+    'de:ps.machine_state_unreadable' { return ('der Zustand der Maschine l' + [char]0x00E4 + 'sst sich nicht lesen (podman und wsl antworten nicht)') }
+    'de:ps.monitor_window_unavailable' { return ('monitor_window_unavailable: Hier l' + [char]0x00E4 + 'sst sich kein Terminalfenster ' + [char]0x00F6 + 'ffnen. F' + [char]0x00FC + 'hre ''jht monitor'' im aktuellen Terminal aus.') }
+    'de:ps.mount_repair_failed_folders_not_writable' { return ('mount_repair_failed: Die Ordner von Job Hunter Team (%s, %s) sind f' + [char]0x00FC + 'r den Container nicht beschreibbar und lie' + [char]0x00DF + 'en sich nicht reparieren.') }
+    'de:ps.old_images_busy' { return ' Von einem Container verwendet (behalten): %s.' }
+    'de:ps.old_images_kept_all' { return 'Alte JHT-Images: alle behalten (JHT_KEEP_OLD_IMAGES=1).' }
+    'de:ps.old_images_refused' { return ' Von der Engine abgelehnt (behalten): %s.' }
+    'de:ps.old_images_removed' { return ('Alte JHT-Images: %s entfernt, etwa %s MB freigegeben (Nenngr' + [char]0x00F6 + [char]0x00DF + 'e: geteilte Layer werden nur teilweise freigegeben), behalten: aktuelles und vorheriges.') }
+    'de:ps.pair_role_now_prompt' { return '%s jetzt koppeln? [s/N]' }
+    'de:ps.podman_exe_not_found' { return 'podman.exe nicht gefunden' }
+    'de:ps.podman_machine_not_responding' { return ('Die JHT-Podman-Maschine antwortet nicht. F' + [char]0x00FC + 'hre ''jht up'' aus.') }
+    'de:ps.release_arrived_without_https' { return 'Das Release kam ohne HTTPS an: %s' }
+    'de:ps.relink_account_container_not_running' { return ('apply relink-account: Container l' + [char]0x00E4 + 'uft nicht.') }
+    'de:ps.script_integration_not_installed' { return 'Skript jht-integration.ps1 noch nicht installiert: ''jht upgrade'' (oder ein ''jht integration add/remove'') und versuch es erneut' }
+    'de:ps.script_tools_not_installed' { return 'Skript jht-tools.ps1 noch nicht installiert: ''jht upgrade'' und versuch es erneut' }
+    'de:ps.startup_task_still_registered' { return 'die Aufgabe ist weiterhin registriert' }
+    'de:ps.team_container_unavailable' { return 'team_container_unavailable: Starte das Team mit jht up und versuch es erneut.' }
+    'de:ps.telegram_not_configured' { return 'Telegram nicht aktiv: Telegram ist nicht eingerichtet.' }
+    'de:ps.telegram_status_unverifiable' { return ('Telegram: Status derzeit nicht pr' + [char]0x00FC + 'fbar (Dienst gestoppt oder nicht erreichbar). Details: jht telegram status') }
+    'de:ps.telegram_unavailable_isolated_not_running' { return 'telegram_unavailable: Der isolierte Telegram-Dienst ist nicht aktiv.' }
+    'de:ps.telegram_unavailable_run_jht_up' { return ('telegram_unavailable: F' + [char]0x00FC + 'hre jht up aus') }
+    'de:ps.uninstall.bad.target' { return ('Verweigert: {0} ist ein Link oder kein Ordner: Ich folge dem Eintrag nicht und l' + [char]0x00F6 + 'sche ihn nicht.') }
+    'de:ps.uninstall.done' { return ('Fertig: Die Maschine <machine> (und mit ihr die Images von JHT, das Core-Image und das vollst' + [char]0x00E4 + 'ndige), die Runtime und der Befehl jht sind entfernt.') }
+    'de:ps.uninstall.done.kept' { return (' ~/.jht und Documents\Job Hunter Team bleiben (mit --purge werden sie gel' + [char]0x00F6 + 'scht).') }
+    'de:ps.uninstall.done.wsl' { return ('WSL bleibt im Speicher: vmmem, wslservice und wslrelay sind Komponenten von Windows (Job Hunter Team hat sie nicht installiert) und werden auch von den anderen WSL-Maschinen dieses Benutzers gebraucht; normalerweise beenden sie sich nach einer Weile Inaktivit' + [char]0x00E4 + 't von selbst. Um sie sofort zu stoppen: wsl --shutdown (das stoppt ALLE ge' + [char]0x00F6 + 'ffneten WSL-Maschinen).') }
+    'de:ps.uninstall.kept.machine' { return 'Die Podman-Maschine {0} ist nicht als vom Installer erstellt vermerkt: Sie bleibt, wo sie ist. Von Hand, falls sie deine ist und weg soll: podman machine stop {0}; podman machine rm {0}.' }
+    'de:ps.uninstall.left.commands' { return ('Nicht entfernt: der Befehl jht oder die Dateien des Installers in {0} ({1}) oder die vom Installer hinzugef' + [char]0x00FC + 'gten Variablen und PATH-Zeilen. Von Hand: Remove-Item f' + [char]0x00FC + 'r die Datei; die Variablen JHT_CONTAINER_RUNTIME und JHT_PODMAN_MACHINE und der Ordner {0} im PATH unter Einstellungen > Umgebungsvariablen.') }
+    'de:ps.uninstall.left.data' { return ('Die JHT-Daten wurden nicht gel' + [char]0x00F6 + 'scht ({0}). Von Hand: Remove-Item -Recurse -Force {1}. Der Befehl jht und die Runtime sind noch da: F' + [char]0x00FC + 'hre jht uninstall --confirm --purge erneut aus, sobald das gekl' + [char]0x00E4 + 'rt ist.') }
+    'de:ps.uninstall.left.machine' { return ('Nicht entfernt: die Podman-Maschine <machine>. Grund: {0}. Von Hand: podman machine stop <machine>; wsl --unregister {1}; f' + [char]0x00FC + 'hre danach jht uninstall --confirm erneut aus.') }
+    'de:ps.uninstall.left.runtime' { return 'Nicht entfernt: die JHT-Runtime in {0}. Von Hand: Remove-Item -Recurse -Force ''{0}''.' }
+    'de:ps.uninstall.left.task' { return 'Nicht entfernt: die Startaufgabe bei der Anmeldung ''{0}'' (Grund: {1}). Alles andere wurde entfernt. Von Hand: schtasks /Delete /TN "{0}" /F.' }
+    'de:ps.uninstall.phase.commands' { return 'Entferne den Befehl jht, die Dateien des Installers und die PATH-Zeilen...' }
+    'de:ps.uninstall.phase.data' { return ('L' + [char]0x00F6 + 'sche ~/.jht und Documents\Job Hunter Team (--purge)...') }
+    'de:ps.uninstall.phase.machine' { return 'Entferne die Podman-Maschine <machine> (mit den Geheimnissen und Images von JHT)...' }
+    'de:ps.uninstall.phase.runtime' { return 'Entferne die JHT-Runtime...' }
+    'de:ps.uninstall.purge_notice' { return ('Mit --purge werden auch ~/.jht und Documents\Job Hunter Team gel' + [char]0x00F6 + 'scht: Konfiguration, Datenbank, Lebensl' + [char]0x00E4 + 'ufe und Ergebnisse. Das l' + [char]0x00E4 + 'sst sich nicht r' + [char]0x00FC + 'ckg' + [char]0x00E4 + 'ngig machen.') }
+    'de:ps.uninstall.purge_removal_notice' { return ('Das gespeicherte Mail-Passwort und die Telegram-Tokens werden ebenfalls gel' + [char]0x00F6 + 'scht.') }
+    'de:ps.uninstall.removal_notice' { return ('Das gespeicherte Mail-Passwort und die Telegram-Tokens werden ebenfalls gel' + [char]0x00F6 + 'scht; ~/.jht und Documents bleiben, und mit ihnen die gespeicherte LinkedIn-Sitzung (secrets/linkedin-profile und .cache/linkedin): Entferne sie mit jht reset --scope creds.') }
+    'de:ps.uninstall.secrets' { return 'Die gespeicherten Geheimnisse wurden nicht entfernt: Das Mail-Passwort und die Telegram-Tokens liegen in den Volumes jht-secrets und jht-telegram-secrets der Maschine <machine>, die noch da ist.' }
+    'de:ps.uninstall.wslconfig.done' { return ('Aus {0} wurden die vom Installer hinzugef' + [char]0x00FC + 'gten Zeilen entfernt (WSL-Speicher).') }
+    'de:ps.uninstall.wslconfig.kept' { return ('In {0} wurden die Zeilen belassen, die du ge' + [char]0x00E4 + 'ndert hast: Sie sind deine.') }
+    'de:ps.uninstall.wslconfig.left' { return ('Nicht angefasst: {0} ({1}). Die vom Installer hinzugef' + [char]0x00FC + 'gten Zeilen (WSL-Speicher) bleiben. Entferne sie von Hand: ' + [char]0x00DC + 'ber jeder steht eine Kommentarzeile.') }
+    'de:ps.unknown_argument' { return 'Unbekanntes Argument: %s' }
+    'de:ps.upgrade_already_running' { return ('Ein Update l' + [char]0x00E4 + 'uft bereits') }
+    'de:ps.upgrade_broker_restart_failed' { return 'broker_restart_failed: Der Secrets-Broker ist nicht neu gestartet. Was tun: jht up' }
+    'de:ps.upgrade_disk_low' { return ('disk_low: Die Agenten brauchen mindestens %s GiB Speicherplatz ' + [char]0x2014 + ' verf' + [char]0x00FC + 'gbar: %s GiB. Um Platz freizugeben, leere den Papierkorb und l' + [char]0x00F6 + 'sche gro' + [char]0x00DF + 'e Dateien, die du nicht brauchst, sowie nicht genutzte Docker-Images, dann versuch es erneut: Es wurde nichts heruntergeladen oder ge' + [char]0x00E4 + 'ndert.') }
+    'de:ps.upgrade_docker_unavailable' { return ('Docker oder Host-Runtime nicht verf' + [char]0x00FC + 'gbar') }
+    'de:ps.upgrade_helper_install_failed' { return 'helper_install_failed: Die neuen Host-Skripte werden bei der ersten Anforderung oder mit einem weiteren ''jht upgrade'' geholt' }
+    'de:ps.upgrade_host_runtime_not_installable' { return ('Gesch' + [char]0x00FC + 'tzte Host-Runtime nicht installierbar') }
+    'de:ps.upgrade_host_runtime_untrusted' { return ('Host-Runtime nicht vertrauensw' + [char]0x00FC + 'rdig') }
+    'de:ps.upgrade_image_download_failed' { return 'Image-Download fehlgeschlagen' }
+    'de:ps.upgrade_journal_not_updated' { return 'Journal konnte nicht aktualisiert werden' }
+    'de:ps.upgrade_metadata_not_persisted' { return 'Runtime-Metadaten nicht gespeichert' }
+    'de:ps.upgrade_mounts_not_writable' { return 'Job-Hunter-Team-Ordner sind aus dem Container nicht beschreibbar (mount_repair_failed)' }
+    'de:ps.upgrade_not_completed' { return 'Update nicht abgeschlossen (%s): %s' }
+    'de:ps.upgrade_note_activate_runtime' { return 'Aktiviere die neue Runtime...' }
+    'de:ps.upgrade_note_download_image' { return 'Lade das neueste Image herunter...' }
+    'de:ps.upgrade_note_download_runtime' { return 'Lade die aktualisierte Runtime herunter...' }
+    'de:ps.upgrade_option_unsupported' { return ('Nicht unterst' + [char]0x00FC + 'tzte Upgrade-Option') }
+    'de:ps.upgrade_pulling_full_image' { return ('Lade das aktualisierte vollst' + [char]0x00E4 + 'ndige Image herunter...') }
+    'de:ps.upgrade_recovery_failed' { return 'Wiederherstellung des vorherigen Upgrades fehlgeschlagen' }
+    'de:ps.upgrade_release_core_invalid' { return ('Das Release enth' + [char]0x00E4 + 'lt keinen g' + [char]0x00FC + 'ltigen Kern f' + [char]0x00FC + 'r diese Installation: Installiere neu') }
+    'de:ps.upgrade_remote_compose_invalid' { return ('Remote-Compose ung' + [char]0x00FC + 'ltig') }
+    'de:ps.upgrade_remote_runtime_invalid' { return ('Remote-Runtime ung' + [char]0x00FC + 'ltig oder nicht erreichbar') }
+    'de:ps.upgrade_rollback_not_prepared' { return 'Rollback konnte nicht vorbereitet werden' }
+    'de:ps.upgrade_telegram_restart_failed' { return 'telegram_restart_failed: Der isolierte Telegram-Dienst ist nicht neu gestartet. Was tun: jht up' }
+    'de:ps.upgrade_test_channel' { return 'Testkanal: Das Update erfolgt durch Neuinstallation aus dem Test-Build' }
+    'de:ps.upgrade_unexpected_error' { return 'Unerwarteter Fehler beim Update' }
+    'de:ps.upgrade_verify_failed' { return ('Die neue Runtime hat die Pr' + [char]0x00FC + 'fung nicht bestanden') }
+    'de:ps.use_fresh_botfather_token' { return 'Verwende immer einen frisch in BotFather erzeugten Token (/revoke auf dem Bot oder ein neuer Bot): Ein bereits vorhandener Token kann von den Agenten gelesen worden sein, auch wenn er heute nicht in ~/.jht auftaucht.' }
+    'de:ps.user_dir_unavailable_cannot_create' { return 'user_dir_unavailable: Ich kann den Ordner %s, den das Team verwendet, nicht anlegen.' }
+    'de:ps.wsl_exe_not_found' { return 'wsl.exe nicht gefunden' }
+    'de:ps.wsl_not_answering' { return 'WSL antwortet nicht (wsl --status)' }
+    'de:removed.office' { return ('''jht %s'' wurde in 0.4.0 zusammen mit dem Godot-B' + [char]0x00FC + 'ro entfernt: Nutze die jht-Befehle (jht help).') }
+    'de:status.no_options' { return ('''jht status'' nimmt keine Optionen (%s): F' + [char]0x00FC + 'hre es als ''jht status'' aus.') }
+    'de:team.stopped' { return 'Job Hunter Team ist gestoppt: ''jht up'' startet es wieder.' }
+    'de:tools.arriving' { return ('Die Werkzeuge der Scouts sind unterwegs: Das vollst' + [char]0x00E4 + 'ndige Image wird im Hintergrund heruntergeladen (etwa 3 GB). Die Stellensuche startet von selbst, sobald sie da sind; du musst nichts tun.') }
+    'de:tools.failed' { return ('Der Download der Werkzeuge der Scouts ist fehlgeschlagen, daher kann das Team noch keine Stellen suchen. F' + [char]0x00FC + 'hre jht tools pull aus, um es erneut zu versuchen (jht up versucht es auch).') }
+    'de:tools.switch_failed' { return ('Die Werkzeuge der Scouts sind da, aber das Team konnte damit nicht neu gestartet werden: F' + [char]0x00FC + 'hre jht down und dann jht up aus.') }
+    'de:tools.waiting' { return 'Die Werkzeuge der Scouts sind da: Das Team wechselt von selbst darauf, sobald das Onboarding abgeschlossen ist.' }
+    'de:uninstall.usage' { return 'Verwendung: jht uninstall --confirm [--purge]' }
+    'de:up.done' { return 'Job Hunter Team gestartet.' }
+    'fr:container.starting' { return ('Le conteneur ''%s'' n''est pas actif, je le d' + [char]0x00E9 + 'marre...') }
+    'fr:doctor.host_config_none' { return 'pas encore de configuration : ''jht setup''' }
+    'fr:doctor.host_config_ok' { return ('configuration pr' + [char]0x00E9 + 'sente') }
+    'fr:doctor.host_engine_fail' { return 'moteur de conteneurs injoignable' }
+    'fr:doctor.host_engine_ok' { return 'moteur de conteneurs joignable' }
+    'fr:doctor.host_more' { return ('Pour les v' + [char]0x00E9 + 'rifications compl' + [char]0x00E8 + 'tes (configuration, fournisseur, base de donn' + [char]0x00E9 + 'es, agents) : ''jht up'', puis ''jht doctor''.') }
+    'fr:doctor.host_runtime_fail' { return ('runtime JHT manquant ou modifi' + [char]0x00E9 + ' : ''jht upgrade'' le r' + [char]0x00E9 + 'installe') }
+    'fr:doctor.host_runtime_ok' { return 'runtime JHT intact' }
+    'fr:doctor.host_team_off' { return ('' + [char]0x00E9 + 'quipe ' + [char]0x00E9 + 'teinte : ''jht up'' la d' + [char]0x00E9 + 'marre') }
+    'fr:doctor.host_team_unattestable' { return ('un conteneur de l''' + [char]0x00E9 + 'quipe est l' + [char]0x00E0 + ' mais on ne peut pas v' + [char]0x00E9 + 'rifier qu''il est le n' + [char]0x00F4 + 'tre : rien n''a ' + [char]0x00E9 + 't' + [char]0x00E9 + ' touch' + [char]0x00E9 + ' (''jht status'' en dit plus)') }
+    'fr:doctor.host_title' { return ('Job Hunter Team : l''' + [char]0x00E9 + 'quipe est ' + [char]0x00E9 + 'teinte (son conteneur ne tourne pas). V' + [char]0x00E9 + 'rifications faites depuis cet ordinateur :') }
+    'fr:down.done' { return ('Job Hunter Team arr' + [char]0x00EA + 't' + [char]0x00E9 + '.') }
+    'fr:download.bad_version' { return 'version non valide : %s. Exemple : 0.3.5.' }
+    'fr:download.deb_only_linux' { return '--deb est seulement pour Linux.' }
+    'fr:download.dest_is_link' { return 'la destination est un lien : %s' }
+    'fr:download.dest_not_file' { return 'la destination existe et n''est pas un fichier : %s' }
+    'fr:download.fetching' { return ('T' + [char]0x00E9 + 'l' + [char]0x00E9 + 'chargement de %s...') }
+    'fr:download.hash_invalid' { return 'SHA-256 non valide pour %s : attendu %s, obtenu %s.' }
+    'fr:download.intel_mac' { return ('L''app macOS 0.4 ne tourne que sur les Mac avec puce Apple (M1 et suivants) ; ce Mac est un Mac Intel, que la 0.4 ne prend pas en charge. Rien n''a ' + [char]0x00E9 + 't' + [char]0x00E9 + ' t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charg' + [char]0x00E9 + '.') }
+    'fr:download.linux_no_app' { return ('Dans cette version il n''y a pas d''app de bureau pour Linux : utilise install.sh. Rien n''a ' + [char]0x00E9 + 't' + [char]0x00E9 + ' t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charg' + [char]0x00E9 + '.') }
+    'fr:download.mismatch_existing' { return ('le fichier %s existe mais son SHA-256 ne correspond pas : il n''a pas ' + [char]0x00E9 + 't' + [char]0x00E9 + ' ' + [char]0x00E9 + 'cras' + [char]0x00E9 + '.') }
+    'fr:download.mkdir_failed' { return ('impossible de cr' + [char]0x00E9 + 'er le dossier de destination : %s') }
+    'fr:download.present_verified' { return ('Fichier d' + [char]0x00E9 + 'j' + [char]0x00E0 + ' pr' + [char]0x00E9 + 'sent et v' + [char]0x00E9 + 'rifi' + [char]0x00E9 + ' : %s') }
+    'fr:download.release_no_app' { return ('Cette version (v%s) n''a pas d''app pour macOS : utilise la 0.4.0 ou une plus r' + [char]0x00E9 + 'cente. Rien n''a ' + [char]0x00E9 + 't' + [char]0x00E9 + ' t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charg' + [char]0x00E9 + '.') }
+    'fr:download.saved_in' { return ('Enregistr' + [char]0x00E9 + ' dans : %s') }
+    'fr:download.sha_verified' { return ('SHA-256 v' + [char]0x00E9 + 'rifi' + [char]0x00E9 + ' : %s') }
+    'fr:download.sum_missing' { return ('aucun SHA-256 d' + [char]0x00E9 + 'clar' + [char]0x00E9 + ' pour %s.') }
+    'fr:download.unsupported_os' { return ('syst' + [char]0x00E8 + 'me non pris en charge : %s. Utilise windows ou macos.') }
+    'fr:download.windows_missing' { return ('Windows ne fait pas partie de la 0.4.0 : la version n''a pas d''installeur pour Windows. Rien n''a ' + [char]0x00E9 + 't' + [char]0x00E9 + ' t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charg' + [char]0x00E9 + '.') }
+    'fr:help.integration' { return (('Usage : jht integration <commande>', '', ('  list [--json]                   les int' + [char]0x00E9 + 'grations et leur ' + [char]0x00E9 + 'tat'), ('  status [ID] [--json]            l''' + [char]0x00E9 + 'tat d''une seule, ou de toutes'), ('  add ID [--json]                 ajoute une int' + [char]0x00E9 + 'gration'), '  remove ID [--purge --yes] [--remove-image] [--json]', ('                                  la retire ; --purge efface aussi ses donn' + [char]0x00E9 + 'es (il faut --yes) ;'), '                                  --remove-image (seulement screen et media) retire aussi l''image des outils', '', ('Les ID admis sont ceux qu''affiche `jht integration list`. Rien ne se t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charge ni ne s''allume'), 'tant que tu ne le demandes pas avec `add`.') -join [char]10) }
+    'fr:help.linkedin' { return (('Usage : jht linkedin <commande>', '', ('  login [--stop]    la connexion manuelle ' + [char]0x00E0 + ' LinkedIn (avec Google) : un navigateur dans un conteneur ' + [char]0x00E0 + ' part, sans r' + [char]0x00E9 + 'seau,'), ('                    dont tu vois et utilises la fen' + [char]0x00EA + 'tre depuis l''app ; --stop ferme tout'), ('  status --json     dit si la connexion est en cours et si la session LinkedIn est enregistr' + [char]0x00E9 + 'e'), '', ('Rien ne se t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charge ni ne s''allume tant que tu ne le demandes pas avec `login`.')) -join [char]10) }
+    'fr:help.screen' { return (('Usage : jht screen <commande>', '', ('  on [--json]       allume l''' + [char]0x00E9 + 'cran en direct du closer : un conteneur ' + [char]0x00E0 + ' part, avec le stream seulement sur 127.0.0.1'), '  off [--remove-image] [--json]', ('                    l''' + [char]0x00E9 + 'teint et retire le conteneur ; l''image des outils reste sur le disque, pour le rallumer'), ('                    sans la ret' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charger : --remove-image la retire et lib' + [char]0x00E8 + 're l''espace'), ('  status [--json]   dit s''il est allum' + [char]0x00E9), '', ('Rien ne se t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charge ni ne s''allume tant que tu ne le demandes pas avec `on`. Le stream se regarde seulement.')) -join [char]10) }
+    'fr:help.setup' { return (('Usage : jht setup [options]', '', ('Sans options, l''installation guid' + [char]0x00E9 + 'e d' + [char]0x00E9 + 'marre. Avec --non-interactive, rien n''est demand' + [char]0x00E9 + ' :'), 'tout se donne avec les options.', '', '  --non-interactive            aucune question', ('  --provider <name>            glm (Z.ai, par d' + [char]0x00E9 + 'faut), kimi (Moonshot), openai ou claude (Anthropic)'), ('  --harness <name>             pi (par d' + [char]0x00E9 + 'faut)'), ('  --api-key-file <path>        fichier qui contient la cl' + [char]0x00E9 + ' API (une ligne, lisible seulement par toi).'), '                               jht lit ce fichier sur ton ordinateur et le passe au setup :', ('                               avec glm et kimi, le setup garde la cl' + [char]0x00E9 + ' ' + [char]0x00E0 + ' part, jamais dans la configuration'), ('  --api-key-stdin              lit la cl' + [char]0x00E9 + ' API sur l''entr' + [char]0x00E9 + 'e standard (une ligne) : jamais sur la ligne de commande'), ('  --api-key <key>              la cl' + [char]0x00E9 + ' ' + [char]0x00E9 + 'crite ici, en clair (refus' + [char]0x00E9 + 'e pour glm et kimi)'), ('  --secret-mode <mode>         comment la cl' + [char]0x00E9 + ' est enregistr' + [char]0x00E9 + 'e : plaintext (par d' + [char]0x00E9 + 'faut), env ou file'), '  --secret-env <name>          avec --secret-mode env : la variable d''environnement qui la contient', '  --secret-file <path>         avec --secret-mode file : le fichier qui la contient', ('  --model <model>              le mod' + [char]0x00E8 + 'le ' + [char]0x00E0 + ' utiliser'), '  --language <code>            la langue (par exemple it ou en)', ('  --skip-health                saute la v' + [char]0x00E9 + 'rification finale'), '  --reset                      repart d''une configuration propre', '', 'Exemples :', ('  avec une cl' + [char]0x00E9 + ' GLM dans un fichier :'), '    jht setup --non-interactive --provider glm --harness pi --api-key-file cle.txt', ('  OpenAI avec une cl' + [char]0x00E9 + ' API, sur Pi (pour Claude : --provider claude) :'), '    jht setup --non-interactive --provider openai --harness pi --api-key-stdin') -join [char]10) }
+    'fr:help.tools' { return (('Utilisation : jht tools <commande>', '', ('  status --json   si les outils des Scout (l''image compl' + [char]0x00E8 + 'te) sont l' + [char]0x00E0 + ', en route ou en ' + [char]0x00E9 + 'chec'), ('  pull            les t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charge en arri' + [char]0x00E8 + 're-plan (jht up et jht setup le lancent tout seuls)'), ('  switch          fait passer l''' + [char]0x00E9 + 'quipe dessus une fois l''onboarding termin' + [char]0x00E9 + ' (le t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'chargement le fait tout seul)'), '', ('Cette aide ne d' + [char]0x00E9 + 'marre rien et ne t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charge rien.')) -join [char]10) }
+    'fr:keyfile.both' { return 'utilise --api-key-file ou --api-key-stdin, pas les deux' }
+    'fr:keyfile.not_file' { return ('le fichier pass' + [char]0x00E9 + ' ' + [char]0x00E0 + ' --api-key-file doit ' + [char]0x00EA + 'tre un fichier normal, pas un dossier ni un lien : %s') }
+    'fr:keyfile.shape' { return ('le contenu du fichier pass' + [char]0x00E9 + ' ' + [char]0x00E0 + ' --api-key-file n''est pas une ligne de 16 ' + [char]0x00E0 + ' 512 caract' + [char]0x00E8 + 'res imprimables sans espaces : %s') }
+    'fr:keyfile.size' { return ('le fichier pass' + [char]0x00E9 + ' ' + [char]0x00E0 + ' --api-key-file est vide ou trop gros pour une cl' + [char]0x00E9 + ' (1 ' + [char]0x00E0 + ' 4096 octets) : %s') }
+    'fr:keyfile.twice' { return ('--api-key-file a ' + [char]0x00E9 + 't' + [char]0x00E9 + ' pass' + [char]0x00E9 + ' deux fois') }
+    'fr:keyfile.unreadable' { return ('le fichier pass' + [char]0x00E9 + ' ' + [char]0x00E0 + ' --api-key-file est illisible : %s') }
+    'fr:line.abbinamento_annullato_nessuna_modifica' { return ('Association annul' + [char]0x00E9 + 'e : aucune modification.') }
+    'fr:line.abbinamento_di_s_non_riuscito' { return ('L''association de %s a ' + [char]0x00E9 + 'chou' + [char]0x00E9 + ' : toutes les anciennes copies restent. Relance jht telegram pair --all : les r' + [char]0x00F4 + 'les d' + [char]0x00E9 + 'j' + [char]0x00E0 + ' associ' + [char]0x00E9 + 's ne redemandent pas de token.') }
+    'fr:line.abbinamento_rifiutato_genera_un_token' { return ('Association refus' + [char]0x00E9 + 'e : g' + [char]0x00E9 + 'n' + [char]0x00E8 + 're un nouveau token dans BotFather (/revoke) et r' + [char]0x00E9 + 'essaie.') }
+    'fr:line.agent_restart_failed.inventario_conservato_ma_il_team' { return ('inventaire conserv' + [char]0x00E9 + ', mais l''' + [char]0x00E9 + 'quipe n''a pas red' + [char]0x00E9 + 'marr' + [char]0x00E9 + '. Que faire : jht up') }
+    'fr:line.annullato_niente_autorizzato' { return ('Annul' + [char]0x00E9 + ' : rien d''autoris' + [char]0x00E9 + '.') }
+    'fr:line.anteprima_non_valida_niente_autorizzato' { return ('Aper' + [char]0x00E7 + 'u non valide : rien d''autoris' + [char]0x00E9 + '.') }
+    'fr:line.apply.authorize' { return 'Tu autorises cette candidature ?' }
+    'fr:line.apply_relink_account_cloud_account' { return 'apply relink-account : compte cloud non disponible. Lance d''abord jht cloud pair.' }
+    'fr:line.autorizzata_s_verso_s_il' { return ('#%s autoris' + [char]0x00E9 + 'e, vers %s : le CLOSER la prendra au prochain tour.') }
+    'fr:line.bot_abbinato_e_copia_legacy' { return ('Bot associ' + [char]0x00E9 + ' et ancienne copie supprim' + [char]0x00E9 + 'e. Il reste d''autres anciens tokens ou un token dans l''environnement du conteneur : supprime-les et termine la rotation avant le basculement.') }
+    'fr:line.bot_token_invalid.controlla_il_token_generato_da' { return ('v' + [char]0x00E9 + 'rifie le token g' + [char]0x00E9 + 'n' + [char]0x00E9 + 'r' + [char]0x00E9 + ' par BotFather.') }
+    'fr:line.broker_restart_failed.il_servizio_della_posta_non_4' { return ('le service mail n''a pas red' + [char]0x00E9 + 'marr' + [char]0x00E9 + '. Que faire : jht mail status') }
+    'fr:line.broker_start_failed.il_servizio_della_posta_non_2' { return ('le service mail n''a pas d' + [char]0x00E9 + 'marr' + [char]0x00E9 + '.') }
+    'fr:line.broker_start_failed.il_servizio_della_posta_non_3' { return ('le service mail ne r' + [char]0x00E9 + 'pond pas apr' + [char]0x00E8 + 's 30 secondes.') }
+    'fr:line.broker_unavailable.il_broker_dei_segreti_esiste' { return ('le broker des secrets existe mais on ne peut pas attester qu''il est le n' + [char]0x00F4 + 'tre : je n''y touche pas.') }
+    'fr:line.broker_unavailable.il_runtime_installato_pi_vecchio_2' { return ('le runtime install' + [char]0x00E9 + ' est plus ancien et n''a pas le broker des secrets.') }
+    'fr:line.broker_unavailable.il_servizio_della_posta_non' { return ('le service mail n''existe pas encore : il est cr' + [char]0x00E9 + [char]0x00E9 + ' la premi' + [char]0x00E8 + 're fois qu''on en a besoin.') }
+    'fr:line.cancellato_marcatore_migrazione_broker_s' { return ('Effac' + [char]0x00E9 + ' : marqueur de migration du broker %s') }
+    'fr:line.cancellato_volume_broker_s_s' { return ('Effac' + [char]0x00E9 + ' : volume broker %s (%s)') }
+    'fr:line.container_s_non_e_partito' { return ('Le conteneur ''%s'' n''a pas d' + [char]0x00E9 + 'marr' + [char]0x00E9 + ' en 10 s. Regarde ''jht logs''.') }
+    'fr:line.cosa_fare_jht_mail_setup' { return 'Que faire : jht mail setup' }
+    'fr:line.cosa_fare_jht_up_3' { return 'Que faire : jht up' }
+    'fr:line.cosa_fare_jht_upgrade_4' { return 'Que faire : jht upgrade' }
+    'fr:line.cosa_fare_riprova_il_comando_2' { return 'Que faire : relance la commande' }
+    'fr:line.fino_ad_allora_la_posta' { return ('D''ici l' + [char]0x00E0 + ', le mail se lit et s''envoie avec le mot de passe actuel ; l''avertissement reste dans jht mail status.') }
+    'fr:line.genera_una_nuova_password_per' { return ('g' + [char]0x00E9 + 'n' + [char]0x00E8 + 're un nouveau mot de passe d''application chez ton fournisseur et enregistre-le avec : jht mail setup') }
+    'fr:line.i_segreti_e_lo_stato' { return ('Les secrets et l''' + [char]0x00E9 + 'tat du broker ont ' + [char]0x00E9 + 't' + [char]0x00E9 + ' effac' + [char]0x00E9 + 's : refais les connexions aux portails et reconfigure le mail.') }
+    'fr:line.il_broker_non_ha_registrato' { return ('Le broker n''a pas enregistr' + [char]0x00E9 + ' l''autorisation : retir' + [char]0x00E9 + 'e, rien ne partira.') }
+    'fr:line.integration.install_hint' { return 'pour les installer : ''jht upgrade'' (ou un ''jht integration add <id>'')' }
+    'fr:line.interattivo_il_token_viene_chiesto' { return ('Interactif : le token est demand' + [char]0x00E9 + ' sans ' + [char]0x00E9 + 'cho, puis le nouveau bot re' + [char]0x00E7 + 'oit un code ' + [char]0x00E0 + ' usage unique depuis ton Telegram. Automatisations : {"bot_token": ...} en JSON sur stdin ; n''enregistre pas le token dans ~/.jht et efface tout de suite tout fichier utilis' + [char]0x00E9 + ' en dehors.') }
+    'fr:line.jht_telegram_pair_all_interattivo' { return ('jht telegram pair --all est interactif : pour les automatisations, associe un r' + [char]0x00F4 + 'le ' + [char]0x00E0 + ' la fois.') }
+    'fr:line.job_hunter_team_non_installato' { return ('Job Hunter Team n''est pas compl' + [char]0x00E8 + 'tement install' + [char]0x00E9 + ' : le fichier d''int' + [char]0x00E9 + 'grit' + [char]0x00E9 + ' manque dans le dossier du runtime (une installation interrompue ?). Relance l''installeur.') }
+    'fr:line.la_casella_di_posta_ora' { return ('La bo' + [char]0x00EE + 'te mail est maintenant dans le broker des secrets. Son mot de passe ' + [char]0x00E9 + 'tait lisible par les agents :') }
+    'fr:line.legacy_cleanup_failed.i_token_nuovi_sono_al' { return ('les nouveaux tokens sont en s' + [char]0x00E9 + 'curit' + [char]0x00E9 + ', mais l''ancienne copie de %s est encore dans ~/.jht ; basculement refus' + [char]0x00E9 + '.') }
+    'fr:line.legacy_inventory_failed.il_team_resta_fermo_perch_4' { return ('l''' + [char]0x00E9 + 'quipe reste arr' + [char]0x00EA + 't' + [char]0x00E9 + 'e parce que l''inventaire Telegram de l''h' + [char]0x00F4 + 'te n''a pas ' + [char]0x00E9 + 't' + [char]0x00E9 + ' conserv' + [char]0x00E9 + '.') }
+    'fr:line.legacy_inventory_failed.le_impronte_non_sono_state' { return ('les empreintes n''ont pas ' + [char]0x00E9 + 't' + [char]0x00E9 + ' conserv' + [char]0x00E9 + 'es par le service isol' + [char]0x00E9 + '.') }
+    'fr:line.legacy_inventory_failed.migrazione_telegram_interrotta' { return 'migration Telegram interrompue.' }
+    'fr:line.legacy_inventory_failed.non_posso_provare_che_jht' { return 'impossible de prouver que ~/.jht ne contient aucun token Telegram.' }
+    'fr:line.legacy_inventory_failed.non_riesco_a_fermare_gli' { return ('impossible d''arr' + [char]0x00EA + 'ter les agents avant l''inventaire de l''h' + [char]0x00F4 + 'te.') }
+    'fr:line.legacy_inventory_failed.non_riesco_a_leggere_i' { return 'impossible de lire les anciens tokens dans ~/.jht.' }
+    'fr:line.legacy_inventory_failed.ruoli_legacy_non_riconosciuti' { return ('anciens r' + [char]0x00F4 + 'les non reconnus.') }
+    'fr:line.legacy_remove_failed.s_nel_broker_ma_la' { return ('%s est dans le broker mais la copie dans ~/.jht/credentials est rest' + [char]0x00E9 + 'e.') }
+    'fr:line.legacy_secret_reappeared.jht_credentials_s_json_ricomparso' { return ('~/.jht/credentials/%s.json est r' + [char]0x00E9 + 'apparu apr' + [char]0x00E8 + 's la migration ; supprim' + [char]0x00E9 + ' sans ' + [char]0x00EA + 'tre import' + [char]0x00E9 + '.') }
+    'fr:line.mail.address_prompt' { return ('Adresse de la bo' + [char]0x00EE + 'te :') }
+    'fr:line.mail.app_password_prompt' { return 'Mot de passe d''application (il ne s''affiche pas) :' }
+    'fr:line.mail.dedicated_prompt' { return ('C''est une bo' + [char]0x00EE + 'te D' + [char]0x00C9 + 'DI' + [char]0x00C9 + 'E aux alertes d''emploi transf' + [char]0x00E9 + 'r' + [char]0x00E9 + 'es ?') }
+    'fr:line.mail_setup_opzione_sconosciuta_s' { return 'mail setup : option inconnue %s' }
+    'fr:line.mail_setup_password_vuota' { return 'mail setup : mot de passe vide' }
+    'fr:line.nessun_provider_attivo_scegline_uno' { return 'aucun fournisseur actif : choisis-en un avec ''jht providers use glm''' }
+    'fr:line.nessun_ruolo_ha_un_token' { return ('Aucun r' + [char]0x00F4 + 'le n''a d''ancien token : pour un nouveau bot, utilise jht telegram pair <r' + [char]0x00F4 + 'le>.') }
+    'fr:line.non_autorizzabile_s' { return ('Impossible ' + [char]0x00E0 + ' autoriser : %s.') }
+    'fr:line.non_autorizzata_s' { return ('Non autoris' + [char]0x00E9 + 'e : %s.') }
+    'fr:line.os_and_version_are_required' { return '--os et --version sont obligatoires' }
+    'fr:line.podman_non_trovato_reinstalla_il' { return ('Podman introuvable : r' + [char]0x00E9 + 'installe le runtime JHT.') }
+    'fr:line.preparo_il_servizio_della_posta' { return ('Je pr' + [char]0x00E9 + 'pare le service mail (il n''est cr' + [char]0x00E9 + [char]0x00E9 + ' que la premi' + [char]0x00E8 + 're fois qu''on en a besoin)' + [char]0x2026) }
+    'fr:line.provider_attivo_non_riconosciuto_s' { return 'fournisseur actif non reconnu : %s' }
+    'fr:line.reset_impossibile_cancellare_il_marcatore' { return 'reset : impossible d''effacer le marqueur de migration du broker %s.' }
+    'fr:line.reset_impossibile_cancellare_il_marcatore_2' { return 'reset : impossible d''effacer le marqueur du broker %s.' }
+    'fr:line.reset_impossibile_cancellare_il_volume' { return 'reset : impossible d''effacer le volume broker %s (%s).' }
+    'fr:line.reset_nome_volume_non_valido' { return ('reset : nom de volume non valide pour %s ; suppression refus' + [char]0x00E9 + 'e.') }
+    'fr:line.reset_non_riesco_a_determinare' { return ('reset : impossible de d' + [char]0x00E9 + 'terminer le projet Compose ; les volumes du broker n''ont pas ' + [char]0x00E9 + 't' + [char]0x00E9 + ' touch' + [char]0x00E9 + 's.') }
+    'fr:line.reset_non_riesco_a_fermare' { return ('reset : impossible d''arr' + [char]0x00EA + 'ter le runtime ; les volumes du broker n''ont pas ' + [char]0x00E9 + 't' + [char]0x00E9 + ' touch' + [char]0x00E9 + 's.') }
+    'fr:line.reset_ricerca_del_volume_s_2' { return ('reset : la recherche du volume %s a ' + [char]0x00E9 + 'chou' + [char]0x00E9 + '.') }
+    'fr:line.restano_token_legacy_per_s' { return ('Il reste d''anciens tokens pour : %s. Tant que tu n''associes pas aussi ces r' + [char]0x00F4 + 'les, %s reste muet sur Telegram : associe-les tous dans cette session (jht telegram pair --all).') }
+    'fr:line.risposta_del_container_non_valida' { return ('R' + [char]0x00E9 + 'ponse du conteneur non valide : autorisation retir' + [char]0x00E9 + 'e, rien ne partira.') }
+    'fr:line.ritirata_s_non_verra_inviata' { return ('#%s retir' + [char]0x00E9 + 'e : elle ne sera pas envoy' + [char]0x00E9 + 'e.') }
+    'fr:line.ritiro_non_riuscito_s' { return ('Retrait ' + [char]0x00E9 + 'chou' + [char]0x00E9 + ' : %s.') }
+    'fr:line.runtime_migration_docker_missing.il_client_docker_originale_non' { return 'le client Docker d''origine n''est pas disponible.' }
+    'fr:line.runtime_migration_image_invalid.serve_l_immagine_jht_fissata' { return ('il faut l''image JHT fix' + [char]0x00E9 + 'e par digest.') }
+    'fr:line.runtime_migration_podman_missing.podman_non_e_disponibile' { return 'Podman n''est pas disponible.' }
+    'fr:line.runtime_migration_team_running.ferma_prima_il_team_docker' { return ('arr' + [char]0x00EA + 'te d''abord l''' + [char]0x00E9 + 'quipe Docker.') }
+    'fr:line.runtime_migration_team_running.ferma_prima_il_team_podman' { return ('arr' + [char]0x00EA + 'te d''abord l''' + [char]0x00E9 + 'quipe Podman.') }
+    'fr:line.runtime_o_container_jht_non' { return 'runtime ou conteneur JHT non disponible' }
+    'fr:line.ruoli_da_abbinare_in_questa' { return ('R' + [char]0x00F4 + 'les ' + [char]0x00E0 + ' associer dans cette session : %s') }
+    'fr:line.s_ha_gi_un_bot' { return ('%s a d' + [char]0x00E9 + 'j' + [char]0x00E0 + ' un bot associ' + [char]0x00E9 + ' : je supprime seulement son ancienne copie.') }
+    'fr:line.s_needs_a_value' { return '%s demande une valeur' }
+    'fr:line.saltato_non_trovato_volume_broker' { return ('Ignor' + [char]0x00E9 + ' (introuvable) : volume broker %s') }
+    'fr:line.serve_un_terminale_l_autorizzazione' { return ('Il faut un terminal : l''autorisation se confirme ' + [char]0x00E0 + ' la main.') }
+    'fr:line.telegram_isolato_attivo_il_bridge' { return ('Telegram isol' + [char]0x00E9 + ' actif ; les agents ne peuvent plus r' + [char]0x00E9 + 'activer l''ancien bridge.') }
+    'fr:line.the_setup_keeps_the_key' { return ('La configuration garde la cl' + [char]0x00E9 + ' : tu peux effacer le fichier sur cet ordinateur maintenant (%s).') }
+    'fr:line.upgrade.done' { return ('Mise ' + [char]0x00E0 + ' jour termin' + [char]0x00E9 + 'e : %s (%s) -> %s (%s). %s') }
+    'fr:line.upgrade.restored' { return ('Runtime pr' + [char]0x00E9 + 'c' + [char]0x00E9 + 'dent restaur' + [char]0x00E9 + '.') }
+    'fr:line.uso_jht_apply_relink_account' { return 'usage : jht apply relink-account' }
+    'fr:line.uso_jht_apply_request_cancel_2' { return 'usage : jht apply request|cancel <id>' }
+    'fr:line.uso_jht_mail_setup_status' { return 'usage : jht mail setup|status|admission <allowlist|whole_mailbox>|allow add|remove <adresse|@domaine>|drafts|approve <id>|discard <id>|journal|delete|migrate' }
+    'fr:line.uso_jht_migrate_runtime_podman' { return 'usage : jht migrate-runtime podman' }
+    'fr:line.uso_jht_screen_on_off' { return 'usage : jht screen on | off | status [--json]' }
+    'fr:line.uso_jht_telegram_chat_id' { return 'usage : jht telegram chat-id <assistente|capitano|mentor>' }
+    'fr:line.uso_jht_telegram_pair_assistente' { return 'usage : jht telegram pair <assistente|capitano|mentor>|--all' }
+    'fr:line.uso_jht_telegram_remove_assistente' { return 'usage : jht telegram remove <assistente|capitano|mentor>' }
+    'fr:line.uso_jht_telegram_status_pair' { return ('usage : jht telegram status|pair <r' + [char]0x00F4 + 'le>|pair --all|chat-id <r' + [char]0x00F4 + 'le>|remove <r' + [char]0x00F4 + 'le>') }
+    'fr:monitor.window_invalid' { return 'monitor_window_invalid : utilise ''jht monitor --window'' sans autres options.' }
+    'fr:ps.apply_auto_send_warning_1' { return ('  Quand l''envoi automatique est activ' + [char]0x00E9 + ', l''' + [char]0x00E9 + 'quipe remplit et ENVOIE la candidature,') }
+    'fr:ps.apply_auto_send_warning_2' { return ('  sans autre confirmation. Une fois partie, elle ne peut plus ' + [char]0x00EA + 'tre rappel' + [char]0x00E9 + 'e.') }
+    'fr:ps.bot_token_prompt_hidden' { return ('Token du bot %s (saisie masqu' + [char]0x00E9 + 'e)') }
+    'fr:ps.botfather_fresh_token' { return ('Utilise toujours un token tout juste g' + [char]0x00E9 + 'n' + [char]0x00E9 + 'r' + [char]0x00E9 + ' dans BotFather (/revoke sur le bot, ou un nouveau bot) : un token d' + [char]0x00E9 + 'j' + [char]0x00E0 + ' existant a pu ' + [char]0x00EA + 'tre lu par les agents m' + [char]0x00EA + 'me s''il n''appara' + [char]0x00EE + 't plus aujourd''hui dans ~/.jht.') }
+    'fr:ps.broker_network_proxy_not_ready' { return ('broker_network_unavailable: le proxy mail n''est pas pr' + [char]0x00EA + 't (code %s).') }
+    'fr:ps.broker_network_scripts_not_downloadable' { return ('broker_network_unavailable: impossible de t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charger les scripts du proxy mail. Que faire : jht upgrade') }
+    'fr:ps.broker_network_scripts_not_verified' { return 'broker_network_unavailable: les scripts du proxy mail ne sont pas attestables. Que faire : jht upgrade' }
+    'fr:ps.broker_restart_failed_secrets_broker_not_ours' { return ('broker_restart_failed: le broker des secrets n''est pas attestable comme le n' + [char]0x00F4 + 'tre : je n''y touche pas. Que faire : jht mail status') }
+    'fr:ps.broker_unavailable_secrets_broker_not_running' { return 'broker_unavailable: le broker des secrets n''est pas actif.' }
+    'fr:ps.cli_version_needs_container' { return ('La version du CLI en cours d''ex' + [char]0x00E9 + 'cution demande le conteneur actif : ''jht up''.') }
+    'fr:ps.compose_up_failed_team_not_started' { return ('compose_up_failed: l''' + [char]0x00E9 + 'quipe n''a pas d' + [char]0x00E9 + 'marr' + [char]0x00E9 + ' (docker compose up, code %s). Regarde ''jht logs''.') }
+    'fr:ps.container_not_running' { return 'conteneur ''%s'' inactif' }
+    'fr:ps.container_runtime_unsupported' { return 'runtime de conteneurs non pris en charge : %s' }
+    'fr:ps.docker_desktop_file_sharing_hint' { return ('  Que faire : ouvre Docker Desktop > Settings > Resources > File sharing, v' + [char]0x00E9 + 'rifie que le dossier de l''utilisateur est partag' + [char]0x00E9 + ', puis relance ''jht up''.') }
+    'fr:ps.docker_podman_verified_future_removal' { return ('Migration Docker -> Podman v' + [char]0x00E9 + 'rifi' + [char]0x00E9 + 'e. Les volumes Docker restent intacts et contiennent encore les mots de passe mail, les acc' + [char]0x00E8 + 's aux portails et les tokens Telegram : leur suppression demandera ' + [char]0x00E0 + ' l''avenir une confirmation explicite.') }
+    'fr:ps.doctor.wsl_memory' { return ('WSL n''a pas de limite de m' + [char]0x00E9 + 'moire (d''autres distributions WSL sont enregistr' + [char]0x00E9 + 'es) : dans %s, sous [wsl2], ajoute memory=%s') }
+    'fr:ps.download_asset_failed_detail' { return ('' + [char]0x00E9 + 'chec du t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'chargement : %s (%s)') }
+    'fr:ps.download_shared_folder_no_path' { return ('la destination est dans un dossier partag' + [char]0x00E9 + ' avec l''' + [char]0x00E9 + 'quipe : choisis-en un en dehors, comme Downloads.') }
+    'fr:ps.download_sums_failed_detail' { return ('' + [char]0x00E9 + 'chec du t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'chargement : SHA256SUMS de v%s (%s)') }
+    'fr:ps.full_pull_failed_keep_old' { return ('full_pull_failed: la nouvelle image compl' + [char]0x00E8 + 'te n''est pas arriv' + [char]0x00E9 + 'e, l''ancienne reste. Que faire : jht tools pull') }
+    'fr:ps.help.main' { return (('jht - Job Hunter Team', '', ('  Commandes de l''h' + [char]0x00F4 + 'te (elles marchent d''ici) :'), ('    jht up                 d' + [char]0x00E9 + 'marre le conteneur de l''' + [char]0x00E9 + 'quipe'), ('    jht down               l''arr' + [char]0x00EA + 'te'), '                           (avec --verbose on voit aussi les lignes du moteur)', ('    jht restart            le red' + [char]0x00E9 + 'marre'), ('    jht status             ' + [char]0x00E9 + 'tat du conteneur et de l''' + [char]0x00E9 + 'quipe'), '    jht logs [-f]          logs du conteneur', ('    jht upgrade            met ' + [char]0x00E0 + ' jour vers l''image la plus r' + [char]0x00E9 + 'cente'), ('    jht setup              installation guid' + [char]0x00E9 + 'e'), '    jht shell              shell dans le conteneur', ('    jht mail setup         enregistre la bo' + [char]0x00EE + 'te mail dans le broker des secrets'), ('    jht mail drafts        mails ' + [char]0x00E9 + 'crits par les agents qui attendent ton accord'), ('    jht mail approve <id>  les envoie ; jht mail discard <id> les ' + [char]0x00E9 + 'carte'), '    jht integration list|status [ID]|add ID|remove ID [--purge --yes] [--remove-image] [--json]', ('                           les int' + [char]0x00E9 + 'grations qu''on ajoute apr' + [char]0x00E8 + 's le setup'), ('                           (google, telegram, mail) : ' + [char]0x00E9 + 'tat lu par le moteur'), ('    jht telegram status    ' + [char]0x00E9 + 'tat du service Telegram isol' + [char]0x00E9), ('    jht telegram pair ROLE demande le token sans ' + [char]0x00E9 + 'cho sur l''ordinateur h' + [char]0x00F4 + 'te, puis'), ('                           affiche un code ' + [char]0x00E0 + ' envoyer au bot depuis ton Telegram'), '                           Pour les automatisations : JSON sur stdin. N''enregistre pas le token', ('                           dans ~/.jht ; efface tout de suite les fichiers utilis' + [char]0x00E9 + 's hors de l' + [char]0x00E0 + '.'), ('    jht telegram pair --all associe en une session tous les r' + [char]0x00F4 + 'les aux anciens tokens'), ('    jht telegram chat-id ROLE d' + [char]0x00E9 + 'place le bot vers un autre chat, avec le m' + [char]0x00EA + 'me code'), '    jht reset              efface la configuration et les volumes du broker', '    jht migrate-runtime podman', ('                           copie et v' + [char]0x00E9 + 'rifie les volumes Docker dans Podman ;'), ('                           ne s' + [char]0x00E9 + 'lectionne pas le nouveau runtime et n''efface pas Docker'), ('    jht uninstall --confirm supprime le runtime local Windows, mais conserve les donn' + [char]0x00E9 + 'es,'), '                           les documents, Podman et Compose', '', '  Toutes les autres commandes (positions, stats, team, providers, cron,', '  working-hours, cloud...) tournent DANS le conteneur : pour leur aide', '  il faut le conteneur actif.', '', '      jht up ; jht --help') -join [char]10) }
+    'fr:ps.home_unavailable_bind_mount' { return ('HOME/USERPROFILE indisponible : bind mount JHT refus' + [char]0x00E9) }
+    'fr:ps.host_download_failed' { return ('' + [char]0x00E9 + 'chec du t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'chargement sur l''h' + [char]0x00F4 + 'te : %s') }
+    'fr:ps.input_not_json_bot_token_stdin' { return 'input_not_json: passe bot_token en JSON sur stdin.' }
+    'fr:ps.integration_not_installed' { return ('non install' + [char]0x00E9) }
+    'fr:ps.integration_not_installed_yet' { return ('pas encore install' + [char]0x00E9) }
+    'fr:ps.jht_container_not_verifiable' { return 'Le conteneur JHT n''est pas attestable.' }
+    'fr:ps.jht_home_missing' { return ('Job Hunter Team n''est pas encore install' + [char]0x00E9 + ' : le dossier %s n''existe pas. Lance l''installeur, puis ''jht setup''.') }
+    'fr:ps.legacy_cleanup_failed_old_token_still_there' { return ('legacy_cleanup_failed: l''ancien token est encore dans ~/.jht ; basculement refus' + [char]0x00E9 + '.') }
+    'fr:ps.legacy_migration_failed_stays' { return 'legacy_migration_failed: %s reste dans ~/.jht/credentials.' }
+    'fr:ps.lifecycle.restarted' { return ('Job Hunter Team red' + [char]0x00E9 + 'marr' + [char]0x00E9 + '.') }
+    'fr:ps.link_or_not_folder' { return 'lien ou pas un dossier' }
+    'fr:ps.localappdata_unavailable' { return ('LOCALAPPDATA indisponible : runtime h' + [char]0x00F4 + 'te refus' + [char]0x00E9) }
+    'fr:ps.machine_state_unreadable' { return ('l''' + [char]0x00E9 + 'tat de la machine ne se lit pas (podman et wsl ne r' + [char]0x00E9 + 'pondent pas)') }
+    'fr:ps.monitor_window_unavailable' { return ('monitor_window_unavailable : impossible d''ouvrir une fen' + [char]0x00EA + 'tre de terminal ici. Lance ''jht monitor'' dans le terminal actuel.') }
+    'fr:ps.mount_repair_failed_folders_not_writable' { return ('mount_repair_failed: les dossiers de Job Hunter Team (%s, %s) ne sont pas accessibles en ' + [char]0x00E9 + 'criture au conteneur et n''ont pas pu ' + [char]0x00EA + 'tre r' + [char]0x00E9 + 'par' + [char]0x00E9 + 's.') }
+    'fr:ps.old_images_busy' { return (' Utilis' + [char]0x00E9 + 'es par un conteneur (conserv' + [char]0x00E9 + 'es) : %s.') }
+    'fr:ps.old_images_kept_all' { return ('Anciennes images JHT : toutes conserv' + [char]0x00E9 + 'es (JHT_KEEP_OLD_IMAGES=1).') }
+    'fr:ps.old_images_refused' { return (' Refus' + [char]0x00E9 + 'es par le moteur (conserv' + [char]0x00E9 + 'es) : %s.') }
+    'fr:ps.old_images_removed' { return ('Anciennes images JHT : %s supprim' + [char]0x00E9 + 'es, environ %s Mo lib' + [char]0x00E9 + 'r' + [char]0x00E9 + 's (taille nominale : les couches partag' + [char]0x00E9 + 'es ne se lib' + [char]0x00E8 + 'rent qu''en partie), conserv' + [char]0x00E9 + 'es : l''actuelle et la pr' + [char]0x00E9 + 'c' + [char]0x00E9 + 'dente.') }
+    'fr:ps.pair_role_now_prompt' { return 'Associer %s maintenant ? [s/N]' }
+    'fr:ps.podman_exe_not_found' { return 'podman.exe introuvable' }
+    'fr:ps.podman_machine_not_responding' { return ('La machine Podman JHT ne r' + [char]0x00E9 + 'pond pas. Lance ''jht up''.') }
+    'fr:ps.release_arrived_without_https' { return ('la release est arriv' + [char]0x00E9 + 'e sans HTTPS : %s') }
+    'fr:ps.relink_account_container_not_running' { return 'apply relink-account: le conteneur n''est pas actif.' }
+    'fr:ps.script_integration_not_installed' { return ('script jht-integration.ps1 pas encore install' + [char]0x00E9 + ' : ''jht upgrade'' (ou un ''jht integration add/remove'') et r' + [char]0x00E9 + 'essaie') }
+    'fr:ps.script_tools_not_installed' { return ('script jht-tools.ps1 pas encore install' + [char]0x00E9 + ' : ''jht upgrade'' et r' + [char]0x00E9 + 'essaie') }
+    'fr:ps.startup_task_still_registered' { return ('la t' + [char]0x00E2 + 'che est toujours enregistr' + [char]0x00E9 + 'e') }
+    'fr:ps.team_container_unavailable' { return ('team_container_unavailable: d' + [char]0x00E9 + 'marre l''' + [char]0x00E9 + 'quipe avec jht up et r' + [char]0x00E9 + 'essaie.') }
+    'fr:ps.telegram_not_configured' { return ('Telegram non actif : Telegram n''est pas configur' + [char]0x00E9 + '.') }
+    'fr:ps.telegram_status_unverifiable' { return ('Telegram : ' + [char]0x00E9 + 'tat non v' + [char]0x00E9 + 'rifiable pour le moment (service arr' + [char]0x00EA + 't' + [char]0x00E9 + ' ou injoignable). D' + [char]0x00E9 + 'tails : jht telegram status') }
+    'fr:ps.telegram_unavailable_isolated_not_running' { return ('telegram_unavailable: le service Telegram isol' + [char]0x00E9 + ' n''est pas actif.') }
+    'fr:ps.telegram_unavailable_run_jht_up' { return ('telegram_unavailable: ex' + [char]0x00E9 + 'cute jht up') }
+    'fr:ps.uninstall.bad.target' { return ('Refus' + [char]0x00E9 + ' : {0} est un lien ou n''est pas un dossier : je ne le suis pas et je ne l''efface pas.') }
+    'fr:ps.uninstall.done' { return ('Termin' + [char]0x00E9 + ' : la machine <machine> (et avec elle les images JHT, celle de base et la compl' + [char]0x00E8 + 'te), le runtime et la commande jht ont ' + [char]0x00E9 + 't' + [char]0x00E9 + ' supprim' + [char]0x00E9 + 's.') }
+    'fr:ps.uninstall.done.kept' { return (' ~/.jht et Documents\Job Hunter Team restent (avec --purge ils sont effac' + [char]0x00E9 + 's).') }
+    'fr:ps.uninstall.done.wsl' { return ('WSL reste en m' + [char]0x00E9 + 'moire : vmmem, wslservice et wslrelay sont des composants de Windows (Job Hunter Team ne les a pas install' + [char]0x00E9 + 's) et les autres machines WSL de cet utilisateur en ont aussi besoin ; en g' + [char]0x00E9 + 'n' + [char]0x00E9 + 'ral ils s''arr' + [char]0x00EA + 'tent d''eux-m' + [char]0x00EA + 'mes apr' + [char]0x00E8 + 's un moment d''inactivit' + [char]0x00E9 + '. Pour les arr' + [char]0x00EA + 'ter tout de suite : wsl --shutdown (il arr' + [char]0x00EA + 'te TOUTES les machines WSL ouvertes).') }
+    'fr:ps.uninstall.kept.machine' { return ('La machine Podman {0} n''est pas marqu' + [char]0x00E9 + 'e comme cr' + [char]0x00E9 + [char]0x00E9 + 'e par l''installeur : elle reste o' + [char]0x00F9 + ' elle est. ' + [char]0x00C0 + ' la main, si elle est ' + [char]0x00E0 + ' toi et que tu veux la supprimer : podman machine stop {0}; podman machine rm {0}.') }
+    'fr:ps.uninstall.left.commands' { return ('Non supprim' + [char]0x00E9 + 's : la commande jht ou les fichiers de l''installeur dans {0} ({1}), ou les variables et les lignes PATH ajout' + [char]0x00E9 + 'es par l''installeur. ' + [char]0x00C0 + ' la main : Remove-Item sur le fichier ; les variables JHT_CONTAINER_RUNTIME et JHT_PODMAN_MACHINE et le dossier {0} dans le PATH depuis Param' + [char]0x00E8 + 'tres > Variables d''environnement.') }
+    'fr:ps.uninstall.left.data' { return ('Les donn' + [char]0x00E9 + 'es JHT n''ont pas ' + [char]0x00E9 + 't' + [char]0x00E9 + ' effac' + [char]0x00E9 + 'es ({0}). ' + [char]0x00C0 + ' la main : Remove-Item -Recurse -Force {1}. La commande jht et le runtime sont toujours l' + [char]0x00E0 + ' : relance jht uninstall --confirm --purge une fois le probl' + [char]0x00E8 + 'me r' + [char]0x00E9 + 'gl' + [char]0x00E9 + '.') }
+    'fr:ps.uninstall.left.machine' { return ('Non supprim' + [char]0x00E9 + 'e : la machine Podman <machine>. Motif : {0}. ' + [char]0x00C0 + ' la main : podman machine stop <machine>; wsl --unregister {1}; puis relance jht uninstall --confirm.') }
+    'fr:ps.uninstall.left.runtime' { return ('Non supprim' + [char]0x00E9 + ' : le runtime JHT dans {0}. ' + [char]0x00C0 + ' la main : Remove-Item -Recurse -Force ''{0}''.') }
+    'fr:ps.uninstall.left.task' { return ('Non supprim' + [char]0x00E9 + 'e : la t' + [char]0x00E2 + 'che de d' + [char]0x00E9 + 'marrage ' + [char]0x00E0 + ' l''ouverture de session ''{0}'' (motif : {1}). Tout le reste a ' + [char]0x00E9 + 't' + [char]0x00E9 + ' supprim' + [char]0x00E9 + '. ' + [char]0x00C0 + ' la main : schtasks /Delete /TN "{0}" /F.') }
+    'fr:ps.uninstall.phase.commands' { return 'Suppression de la commande jht, des fichiers de l''installeur et des lignes PATH...' }
+    'fr:ps.uninstall.phase.data' { return 'Effacement de ~/.jht et de Documents\Job Hunter Team (--purge)...' }
+    'fr:ps.uninstall.phase.machine' { return 'Suppression de la machine Podman <machine> (avec les secrets et les images de JHT)...' }
+    'fr:ps.uninstall.phase.runtime' { return 'Suppression du runtime JHT...' }
+    'fr:ps.uninstall.purge_notice' { return ('Avec --purge, ~/.jht et Documents\Job Hunter Team sont aussi effac' + [char]0x00E9 + 's : configuration, base de donn' + [char]0x00E9 + 'es, CV et r' + [char]0x00E9 + 'sultats. Pas de retour en arri' + [char]0x00E8 + 're.') }
+    'fr:ps.uninstall.purge_removal_notice' { return ('Le mot de passe mail et les tokens Telegram enregistr' + [char]0x00E9 + 's sont aussi effac' + [char]0x00E9 + 's.') }
+    'fr:ps.uninstall.removal_notice' { return ('Le mot de passe mail et les tokens Telegram enregistr' + [char]0x00E9 + 's sont aussi effac' + [char]0x00E9 + 's ; ~/.jht et Documents restent, et avec eux la session LinkedIn enregistr' + [char]0x00E9 + 'e (secrets/linkedin-profile et .cache/linkedin) : supprime-la avec jht reset --scope creds.') }
+    'fr:ps.uninstall.secrets' { return ('Les secrets enregistr' + [char]0x00E9 + 's n''ont pas ' + [char]0x00E9 + 't' + [char]0x00E9 + ' supprim' + [char]0x00E9 + 's : le mot de passe mail et les tokens Telegram sont dans les volumes jht-secrets et jht-telegram-secrets de la machine <machine>, qui est toujours l' + [char]0x00E0 + '.') }
+    'fr:ps.uninstall.wslconfig.done' { return ('Retir' + [char]0x00E9 + 'es de {0} : les lignes ajout' + [char]0x00E9 + 'es par l''installeur (m' + [char]0x00E9 + 'moire de WSL).') }
+    'fr:ps.uninstall.wslconfig.kept' { return ('Laiss' + [char]0x00E9 + 'es dans {0} : les lignes que tu as modifi' + [char]0x00E9 + 'es, elles sont ' + [char]0x00E0 + ' toi.') }
+    'fr:ps.uninstall.wslconfig.left' { return ('Non touch' + [char]0x00E9 + ' : {0} ({1}). Les lignes ajout' + [char]0x00E9 + 'es par l''installeur (m' + [char]0x00E9 + 'moire de WSL) restent. Retire-les ' + [char]0x00E0 + ' la main : chacune a une ligne de commentaire au-dessus.') }
+    'fr:ps.unknown_argument' { return 'argument inconnu : %s' }
+    'fr:ps.upgrade_already_running' { return ('Une mise ' + [char]0x00E0 + ' jour est d' + [char]0x00E9 + 'j' + [char]0x00E0 + ' en cours') }
+    'fr:ps.upgrade_broker_restart_failed' { return ('broker_restart_failed: le broker des secrets n''a pas red' + [char]0x00E9 + 'marr' + [char]0x00E9 + '. Que faire : jht up') }
+    'fr:ps.upgrade_disk_low' { return ('disk_low: Les agents ont besoin d''au moins %s Gio de disque ' + [char]0x2014 + ' disponibles : %s Gio. Pour lib' + [char]0x00E9 + 'rer de l''espace, vide la Corbeille et supprime les gros fichiers dont tu n''as pas besoin ainsi que les images Docker inutilis' + [char]0x00E9 + 'es, puis r' + [char]0x00E9 + 'essaie : rien n''a ' + [char]0x00E9 + 't' + [char]0x00E9 + ' t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charg' + [char]0x00E9 + ' ni modifi' + [char]0x00E9 + '.') }
+    'fr:ps.upgrade_docker_unavailable' { return ('Docker ou runtime h' + [char]0x00F4 + 'te indisponible') }
+    'fr:ps.upgrade_helper_install_failed' { return ('helper_install_failed: les nouveaux scripts de l''h' + [char]0x00F4 + 'te sont r' + [char]0x00E9 + 'cup' + [char]0x00E9 + 'r' + [char]0x00E9 + 's ' + [char]0x00E0 + ' la premi' + [char]0x00E8 + 're demande ou avec un autre ''jht upgrade''') }
+    'fr:ps.upgrade_host_runtime_not_installable' { return ('Runtime h' + [char]0x00F4 + 'te prot' + [char]0x00E9 + 'g' + [char]0x00E9 + ' impossible ' + [char]0x00E0 + ' installer') }
+    'fr:ps.upgrade_host_runtime_untrusted' { return ('Runtime h' + [char]0x00F4 + 'te non fiable') }
+    'fr:ps.upgrade_image_download_failed' { return ('Le t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'chargement de l''image a ' + [char]0x00E9 + 'chou' + [char]0x00E9) }
+    'fr:ps.upgrade_journal_not_updated' { return ('Impossible de mettre ' + [char]0x00E0 + ' jour le journal') }
+    'fr:ps.upgrade_metadata_not_persisted' { return ('M' + [char]0x00E9 + 'tadonn' + [char]0x00E9 + 'es du runtime non enregistr' + [char]0x00E9 + 'es') }
+    'fr:ps.upgrade_mounts_not_writable' { return ('Les dossiers de Job Hunter Team ne sont pas accessibles en ' + [char]0x00E9 + 'criture depuis le conteneur (mount_repair_failed)') }
+    'fr:ps.upgrade_not_completed' { return ('Mise ' + [char]0x00E0 + ' jour non termin' + [char]0x00E9 + 'e (%s) : %s') }
+    'fr:ps.upgrade_note_activate_runtime' { return 'Activation du nouveau runtime...' }
+    'fr:ps.upgrade_note_download_image' { return ('T' + [char]0x00E9 + 'l' + [char]0x00E9 + 'chargement de l''image la plus r' + [char]0x00E9 + 'cente...') }
+    'fr:ps.upgrade_note_download_runtime' { return ('T' + [char]0x00E9 + 'l' + [char]0x00E9 + 'chargement du runtime mis ' + [char]0x00E0 + ' jour...') }
+    'fr:ps.upgrade_option_unsupported' { return 'Option d''upgrade non prise en charge' }
+    'fr:ps.upgrade_pulling_full_image' { return ('Je t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charge l''image compl' + [char]0x00E8 + 'te mise ' + [char]0x00E0 + ' jour...') }
+    'fr:ps.upgrade_recovery_failed' { return ('La r' + [char]0x00E9 + 'cup' + [char]0x00E9 + 'ration de l''upgrade pr' + [char]0x00E9 + 'c' + [char]0x00E9 + 'dent a ' + [char]0x00E9 + 'chou' + [char]0x00E9) }
+    'fr:ps.upgrade_release_core_invalid' { return ('La version ne contient pas de noyau valide pour cette installation : r' + [char]0x00E9 + 'installe') }
+    'fr:ps.upgrade_remote_compose_invalid' { return 'Compose distant invalide' }
+    'fr:ps.upgrade_remote_runtime_invalid' { return 'Runtime distant invalide ou injoignable' }
+    'fr:ps.upgrade_rollback_not_prepared' { return ('Impossible de pr' + [char]0x00E9 + 'parer le rollback') }
+    'fr:ps.upgrade_telegram_restart_failed' { return ('telegram_restart_failed: le service Telegram isol' + [char]0x00E9 + ' n''a pas red' + [char]0x00E9 + 'marr' + [char]0x00E9 + '. Que faire : jht up') }
+    'fr:ps.upgrade_test_channel' { return ('Canal de test : la mise ' + [char]0x00E0 + ' jour se fait en r' + [char]0x00E9 + 'installant depuis la build de test') }
+    'fr:ps.upgrade_unexpected_error' { return ('Erreur inattendue pendant la mise ' + [char]0x00E0 + ' jour') }
+    'fr:ps.upgrade_verify_failed' { return ('Le nouveau runtime n''a pas r' + [char]0x00E9 + 'ussi la v' + [char]0x00E9 + 'rification') }
+    'fr:ps.use_fresh_botfather_token' { return ('Utilise toujours un token tout juste g' + [char]0x00E9 + 'n' + [char]0x00E9 + 'r' + [char]0x00E9 + ' dans BotFather (/revoke sur le bot, ou un nouveau bot) : un token d' + [char]0x00E9 + 'j' + [char]0x00E0 + ' existant a pu ' + [char]0x00EA + 'tre lu par les agents m' + [char]0x00EA + 'me s''il n''appara' + [char]0x00EE + 't pas aujourd''hui dans ~/.jht.') }
+    'fr:ps.user_dir_unavailable_cannot_create' { return ('user_dir_unavailable: impossible de cr' + [char]0x00E9 + 'er le dossier %s, que l''' + [char]0x00E9 + 'quipe utilise.') }
+    'fr:ps.wsl_exe_not_found' { return 'wsl.exe introuvable' }
+    'fr:ps.wsl_not_answering' { return ('WSL ne r' + [char]0x00E9 + 'pond pas (wsl --status)') }
+    'fr:removed.office' { return ('''jht %s'' a ' + [char]0x00E9 + 't' + [char]0x00E9 + ' retir' + [char]0x00E9 + ' dans la 0.4.0 avec le bureau Godot : utilise les commandes jht (jht help).') }
+    'fr:status.no_options' { return '''jht status'' ne prend pas d''options (%s) : lance-le simplement ''jht status''.' }
+    'fr:team.stopped' { return ('Job Hunter Team est arr' + [char]0x00EA + 't' + [char]0x00E9 + ' : ''jht up'' le red' + [char]0x00E9 + 'marre.') }
+    'fr:tools.arriving' { return ('Les outils des Scout arrivent : l''image compl' + [char]0x00E8 + 'te se t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charge en arri' + [char]0x00E8 + 're-plan (environ 3 Go). La recherche d''offres d' + [char]0x00E9 + 'marre toute seule d' + [char]0x00E8 + 's qu''ils sont l' + [char]0x00E0 + ' ; tu n''as rien ' + [char]0x00E0 + ' faire.') }
+    'fr:tools.failed' { return ('Le t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'chargement des outils des Scout a ' + [char]0x00E9 + 'chou' + [char]0x00E9 + ' : l''' + [char]0x00E9 + 'quipe ne peut pas encore chercher d''offres. Lance jht tools pull pour r' + [char]0x00E9 + 'essayer (jht up r' + [char]0x00E9 + 'essaie aussi).') }
+    'fr:tools.switch_failed' { return ('Les outils des Scout sont l' + [char]0x00E0 + ', mais l''' + [char]0x00E9 + 'quipe n''a pas pu red' + [char]0x00E9 + 'marrer avec eux : lance jht down, puis jht up.') }
+    'fr:tools.waiting' { return ('Les outils des Scout sont l' + [char]0x00E0 + ' : l''' + [char]0x00E9 + 'quipe passe dessus toute seule d' + [char]0x00E8 + 's que l''onboarding est termin' + [char]0x00E9 + '.') }
+    'fr:uninstall.usage' { return 'usage : jht uninstall --confirm [--purge]' }
+    'fr:up.done' { return ('Job Hunter Team d' + [char]0x00E9 + 'marr' + [char]0x00E9 + '.') }
+    'pt:container.starting' { return ('O contentor ''%s'' n' + [char]0x00E3 + 'o est' + [char]0x00E1 + ' a correr, vou inici' + [char]0x00E1 + '-lo...') }
+    'pt:doctor.host_config_none' { return ('ainda sem configura' + [char]0x00E7 + [char]0x00E3 + 'o: ''jht setup''') }
+    'pt:doctor.host_config_ok' { return ('configura' + [char]0x00E7 + [char]0x00E3 + 'o presente') }
+    'pt:doctor.host_engine_fail' { return ('motor de contentores inacess' + [char]0x00ED + 'vel') }
+    'pt:doctor.host_engine_ok' { return ('motor de contentores acess' + [char]0x00ED + 'vel') }
+    'pt:doctor.host_more' { return ('Para as verifica' + [char]0x00E7 + [char]0x00F5 + 'es completas (configura' + [char]0x00E7 + [char]0x00E3 + 'o, fornecedor, base de dados, agentes): ''jht up'' e depois ''jht doctor''.') }
+    'pt:doctor.host_runtime_fail' { return ('runtime do JHT em falta ou alterado: ''jht upgrade'' volta a instal' + [char]0x00E1 + '-lo') }
+    'pt:doctor.host_runtime_ok' { return 'runtime do JHT intacto' }
+    'pt:doctor.host_team_off' { return 'equipa desligada: ''jht up'' liga-a' }
+    'pt:doctor.host_team_unattestable' { return ('h' + [char]0x00E1 + ' um contentor da equipa, mas n' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' poss' + [char]0x00ED + 'vel verificar que ' + [char]0x00E9 + ' nosso: n' + [char]0x00E3 + 'o toquei em nada (''jht status'' diz mais)') }
+    'pt:doctor.host_title' { return ('Job Hunter Team: a equipa est' + [char]0x00E1 + ' desligada (o seu contentor n' + [char]0x00E3 + 'o est' + [char]0x00E1 + ' a correr). Verifica' + [char]0x00E7 + [char]0x00F5 + 'es feitas a partir deste computador:') }
+    'pt:down.done' { return 'Job Hunter Team parado.' }
+    'pt:download.bad_version' { return ('vers' + [char]0x00E3 + 'o inv' + [char]0x00E1 + 'lida: %s. Exemplo: 0.3.5.') }
+    'pt:download.deb_only_linux' { return ('--deb ' + [char]0x00E9 + ' s' + [char]0x00F3 + ' para Linux.') }
+    'pt:download.dest_is_link' { return ('o destino ' + [char]0x00E9 + ' uma liga' + [char]0x00E7 + [char]0x00E3 + 'o: %s') }
+    'pt:download.dest_not_file' { return ('o destino existe e n' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' um ficheiro: %s') }
+    'pt:download.fetching' { return 'A descarregar %s...' }
+    'pt:download.hash_invalid' { return ('SHA-256 inv' + [char]0x00E1 + 'lido para %s: esperado %s, obtido %s.') }
+    'pt:download.intel_mac' { return ('A app para macOS da 0.4 s' + [char]0x00F3 + ' corre em Macs com Apple silicon (M1 e posteriores); este ' + [char]0x00E9 + ' um Mac Intel, que a 0.4 n' + [char]0x00E3 + 'o suporta. N' + [char]0x00E3 + 'o foi descarregado nada.') }
+    'pt:download.linux_no_app' { return ('Nesta vers' + [char]0x00E3 + 'o n' + [char]0x00E3 + 'o h' + [char]0x00E1 + ' app de ambiente de trabalho para Linux: usa install.sh. N' + [char]0x00E3 + 'o foi descarregado nada.') }
+    'pt:download.mismatch_existing' { return ('o ficheiro %s existe, mas o seu SHA-256 n' + [char]0x00E3 + 'o corresponde: n' + [char]0x00E3 + 'o foi substitu' + [char]0x00ED + 'do.') }
+    'pt:download.mkdir_failed' { return ('n' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' poss' + [char]0x00ED + 'vel criar a pasta de destino: %s') }
+    'pt:download.present_verified' { return ('Ficheiro j' + [char]0x00E1 + ' presente e verificado: %s') }
+    'pt:download.release_no_app' { return ('Esta vers' + [char]0x00E3 + 'o (v%s) n' + [char]0x00E3 + 'o tem app para macOS: usa a 0.4.0 ou posterior. N' + [char]0x00E3 + 'o foi descarregado nada.') }
+    'pt:download.saved_in' { return 'Guardado em: %s' }
+    'pt:download.sha_verified' { return 'SHA-256 verificado: %s' }
+    'pt:download.sum_missing' { return 'nenhum SHA-256 declarado para %s.' }
+    'pt:download.unsupported_os' { return ('sistema n' + [char]0x00E3 + 'o suportado: %s. Usa windows ou macos.') }
+    'pt:download.windows_missing' { return ('O Windows n' + [char]0x00E3 + 'o faz parte da 0.4.0: a vers' + [char]0x00E3 + 'o n' + [char]0x00E3 + 'o tem instalador para Windows. N' + [char]0x00E3 + 'o foi descarregado nada.') }
+    'pt:help.integration' { return (('Uso: jht integration <command>', '', ('  list [--json]                   as integra' + [char]0x00E7 + [char]0x00F5 + 'es e o seu estado'), '  status [ID] [--json]            o estado de uma, ou de todas', ('  add ID [--json]                 acrescenta uma integra' + [char]0x00E7 + [char]0x00E3 + 'o'), '  remove ID [--purge --yes] [--remove-image] [--json]', ('                                  remove-a; --purge apaga tamb' + [char]0x00E9 + 'm os seus dados (precisa de --yes);'), ('                                  --remove-image (s' + [char]0x00F3 + ' screen e media) remove tamb' + [char]0x00E9 + 'm a imagem das ferramentas'), '', ('Os ID admitidos s' + [char]0x00E3 + 'o os que `jht integration list` mostra. Nada ' + [char]0x00E9 + ' descarregado nem ligado'), ('at' + [char]0x00E9 + ' o pedires com `add`.')) -join [char]10) }
+    'pt:help.linkedin' { return (('Uso: jht linkedin <command>', '', ('  login [--stop]    o acesso manual ao LinkedIn (com o Google): um browser num contentor ' + [char]0x00E0 + ' parte, sem rede, cuja'), ('                    janela v' + [char]0x00EA + 's e usas a partir da app; --stop fecha tudo'), ('  status --json     diz se o acesso est' + [char]0x00E1 + ' em curso e se a sess' + [char]0x00E3 + 'o do LinkedIn est' + [char]0x00E1 + ' guardada'), '', ('Nada ' + [char]0x00E9 + ' descarregado nem ligado at' + [char]0x00E9 + ' o pedires com `login`.')) -join [char]10) }
+    'pt:help.screen' { return (('Uso: jht screen <command>', '', ('  on [--json]       liga o ecr' + [char]0x00E3 + ' ao vivo do closer: um contentor ' + [char]0x00E0 + ' parte, com o stream s' + [char]0x00F3 + ' em 127.0.0.1'), '  off [--remove-image] [--json]', '                    desliga-o e remove o contentor; a imagem das ferramentas fica no disco, para o voltares', ('                    a ligar sem a descarregar de novo: --remove-image remove-a e liberta o espa' + [char]0x00E7 + 'o'), ('  status [--json]   diz se est' + [char]0x00E1 + ' ligado'), '', ('Nada ' + [char]0x00E9 + ' descarregado nem ligado at' + [char]0x00E9 + ' o pedires com `on`. O stream ' + [char]0x00E9 + ' s' + [char]0x00F3 + ' de visualiza' + [char]0x00E7 + [char]0x00E3 + 'o.')) -join [char]10) }
+    'pt:help.setup' { return ((('Uso: jht setup [op' + [char]0x00E7 + [char]0x00F5 + 'es]'), '', ('Sem op' + [char]0x00E7 + [char]0x00F5 + 'es arranca a instala' + [char]0x00E7 + [char]0x00E3 + 'o guiada. Com --non-interactive n' + [char]0x00E3 + 'o pergunta nada:'), ('tudo se d' + [char]0x00E1 + ' com as op' + [char]0x00E7 + [char]0x00F5 + 'es.'), '', '  --non-interactive            nenhuma pergunta', '  --provider <name>            glm (Z.ai, predefinido), kimi (Moonshot), openai ou claude (Anthropic)', '  --harness <name>             pi (predefinido)', ('  --api-key-file <path>        ficheiro que cont' + [char]0x00E9 + 'm a chave API (uma linha, leg' + [char]0x00ED + 'vel s' + [char]0x00F3 + ' por ti).'), ('                               O jht l' + [char]0x00EA + ' um ficheiro do teu computador e passa-o ao setup: com glm e kimi'), ('                               o setup guarda a chave por conta pr' + [char]0x00F3 + 'pria, nunca na configura' + [char]0x00E7 + [char]0x00E3 + 'o'), ('  --api-key-stdin              l' + [char]0x00EA + ' a chave API da entrada padr' + [char]0x00E3 + 'o (uma linha): nunca na linha de comandos'), ('  --api-key <key>              a chave escrita aqui, em claro (n' + [char]0x00E3 + 'o admitida para glm e kimi)'), '  --secret-mode <mode>         como se guarda a chave: plaintext (predefinido), env ou file', ('  --secret-env <name>          com --secret-mode env: a vari' + [char]0x00E1 + 'vel de ambiente que a cont' + [char]0x00E9 + 'm'), ('  --secret-file <path>         com --secret-mode file: o ficheiro que a cont' + [char]0x00E9 + 'm'), '  --model <model>              o modelo a usar', ('  --language <code>            a l' + [char]0x00ED + 'ngua (por exemplo pt ou en)'), ('  --skip-health                salta a verifica' + [char]0x00E7 + [char]0x00E3 + 'o final'), ('  --reset                      recome' + [char]0x00E7 + 'a de uma configura' + [char]0x00E7 + [char]0x00E3 + 'o limpa'), '', 'Exemplos:', '  com uma chave GLM num ficheiro:', '    jht setup --non-interactive --provider glm --harness pi --api-key-file chave.txt', '  OpenAI com uma chave API, no Pi (para Claude: --provider claude):', '    jht setup --non-interactive --provider openai --harness pi --api-key-stdin') -join [char]10) }
+    'pt:help.tools' { return (('Uso: jht tools <comando>', '', ('  status --json   se as ferramentas dos Scout (a imagem completa) j' + [char]0x00E1 + ' chegaram, est' + [char]0x00E3 + 'o a caminho ou falharam'), '  pull            descarrega-as em segundo plano (jht up e jht setup iniciam-no sozinhos)', ('  switch          passa a equipa para elas quando o onboarding estiver conclu' + [char]0x00ED + 'do (o descarregamento f' + [char]0x00E1 + '-lo sozinho)'), '', ('Esta ajuda n' + [char]0x00E3 + 'o inicia nada nem descarrega nada.')) -join [char]10) }
+    'pt:keyfile.both' { return ('usa --api-key-file ou --api-key-stdin, n' + [char]0x00E3 + 'o os dois') }
+    'pt:keyfile.not_file' { return ('o ficheiro dado a --api-key-file tem de ser um ficheiro normal, n' + [char]0x00E3 + 'o uma pasta nem uma liga' + [char]0x00E7 + [char]0x00E3 + 'o: %s') }
+    'pt:keyfile.shape' { return ('o conte' + [char]0x00FA + 'do do ficheiro dado a --api-key-file n' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' uma linha de 16 a 512 caracteres imprim' + [char]0x00ED + 'veis sem espa' + [char]0x00E7 + 'os: %s') }
+    'pt:keyfile.size' { return ('o ficheiro dado a --api-key-file est' + [char]0x00E1 + ' vazio ou ' + [char]0x00E9 + ' grande demais para uma chave (1 a 4096 bytes): %s') }
+    'pt:keyfile.twice' { return '--api-key-file foi dado duas vezes' }
+    'pt:keyfile.unreadable' { return ('o ficheiro dado a --api-key-file n' + [char]0x00E3 + 'o pode ser lido: %s') }
+    'pt:line.abbinamento_annullato_nessuna_modifica' { return ('Emparelhamento cancelado: nenhuma altera' + [char]0x00E7 + [char]0x00E3 + 'o.') }
+    'pt:line.abbinamento_di_s_non_riuscito' { return ('O emparelhamento de %s falhou: as c' + [char]0x00F3 + 'pias antigas ficam todas. Corre jht telegram pair --all de novo: as fun' + [char]0x00E7 + [char]0x00F5 + 'es j' + [char]0x00E1 + ' emparelhadas n' + [char]0x00E3 + 'o pedem outro token.') }
+    'pt:line.abbinamento_rifiutato_genera_un_token' { return 'Emparelhamento recusado: gera um token novo no BotFather (/revoke) e tenta de novo.' }
+    'pt:line.agent_restart_failed.inventario_conservato_ma_il_team' { return ('invent' + [char]0x00E1 + 'rio guardado, mas a equipa n' + [char]0x00E3 + 'o voltou a arrancar. O que fazer: jht up') }
+    'pt:line.annullato_niente_autorizzato' { return 'Cancelado: nada autorizado.' }
+    'pt:line.anteprima_non_valida_niente_autorizzato' { return ('Pr' + [char]0x00E9 + '-visualiza' + [char]0x00E7 + [char]0x00E3 + 'o inv' + [char]0x00E1 + 'lida: nada autorizado.') }
+    'pt:line.apply.authorize' { return 'Autorizas esta candidatura?' }
+    'pt:line.apply_relink_account_cloud_account' { return ('apply relink-account: conta cloud n' + [char]0x00E3 + 'o dispon' + [char]0x00ED + 'vel. Corre primeiro jht cloud pair.') }
+    'pt:line.autorizzata_s_verso_s_il' { return ('Autorizada #%s, para %s: o CLOSER vai trat' + [char]0x00E1 + '-la na pr' + [char]0x00F3 + 'xima ronda.') }
+    'pt:line.bot_abbinato_e_copia_legacy' { return ('Bot emparelhado e c' + [char]0x00F3 + 'pia antiga removida. Restam outros tokens antigos ou um token no ambiente do contentor: remove-os e conclui a rota' + [char]0x00E7 + [char]0x00E3 + 'o antes da transi' + [char]0x00E7 + [char]0x00E3 + 'o.') }
+    'pt:line.bot_token_invalid.controlla_il_token_generato_da' { return 'verifica o token gerado pelo BotFather.' }
+    'pt:line.broker_restart_failed.il_servizio_della_posta_non_4' { return ('o servi' + [char]0x00E7 + 'o de correio n' + [char]0x00E3 + 'o voltou a arrancar. O que fazer: jht mail status') }
+    'pt:line.broker_start_failed.il_servizio_della_posta_non_2' { return ('o servi' + [char]0x00E7 + 'o de correio n' + [char]0x00E3 + 'o arrancou.') }
+    'pt:line.broker_start_failed.il_servizio_della_posta_non_3' { return ('o servi' + [char]0x00E7 + 'o de correio n' + [char]0x00E3 + 'o responde ap' + [char]0x00F3 + 's 30 segundos.') }
+    'pt:line.broker_unavailable.il_broker_dei_segreti_esiste' { return ('o broker dos segredos existe, mas n' + [char]0x00E3 + 'o pode ser atestado como nosso: n' + [char]0x00E3 + 'o lhe toco.') }
+    'pt:line.broker_unavailable.il_runtime_installato_pi_vecchio_2' { return ('o runtime instalado ' + [char]0x00E9 + ' mais antigo e n' + [char]0x00E3 + 'o tem o broker dos segredos.') }
+    'pt:line.broker_unavailable.il_servizio_della_posta_non' { return ('o servi' + [char]0x00E7 + 'o de correio ainda n' + [char]0x00E3 + 'o existe: ' + [char]0x00E9 + ' criado na primeira vez que for preciso.') }
+    'pt:line.cancellato_marcatore_migrazione_broker_s' { return ('Apagado: marcador de migra' + [char]0x00E7 + [char]0x00E3 + 'o do broker %s') }
+    'pt:line.cancellato_volume_broker_s_s' { return 'Apagado: volume do broker %s (%s)' }
+    'pt:line.container_s_non_e_partito' { return ('O contentor ''%s'' n' + [char]0x00E3 + 'o arrancou em 10s. V' + [char]0x00EA + ' ''jht logs''.') }
+    'pt:line.cosa_fare_jht_mail_setup' { return 'O que fazer: jht mail setup' }
+    'pt:line.cosa_fare_jht_up_3' { return 'O que fazer: jht up' }
+    'pt:line.cosa_fare_jht_upgrade_4' { return 'O que fazer: jht upgrade' }
+    'pt:line.cosa_fare_riprova_il_comando_2' { return 'O que fazer: tenta o comando de novo' }
+    'pt:line.fino_ad_allora_la_posta' { return ('At' + [char]0x00E9 + ' l' + [char]0x00E1 + ', o correio l' + [char]0x00EA + '-se e envia-se com a palavra-passe atual; o aviso fica em jht mail status.') }
+    'pt:line.genera_una_nuova_password_per' { return ('gera uma nova palavra-passe de aplica' + [char]0x00E7 + [char]0x00E3 + 'o no teu fornecedor e guarda-a com: jht mail setup') }
+    'pt:line.i_segreti_e_lo_stato' { return ('Os segredos e o estado do broker foram apagados: volta a iniciar sess' + [char]0x00E3 + 'o nos portais e configura o correio de novo.') }
+    'pt:line.il_broker_non_ha_registrato' { return ('O broker n' + [char]0x00E3 + 'o registou a autoriza' + [char]0x00E7 + [char]0x00E3 + 'o: retirada, nada vai partir.') }
+    'pt:line.integration.install_hint' { return 'para os instalar: ''jht upgrade'' (ou um ''jht integration add <id>'')' }
+    'pt:line.interattivo_il_token_viene_chiesto' { return ('Interativo: o token ' + [char]0x00E9 + ' pedido sem eco e depois o bot novo recebe um c' + [char]0x00F3 + 'digo de utiliza' + [char]0x00E7 + [char]0x00E3 + 'o ' + [char]0x00FA + 'nica do teu Telegram. Automatiza' + [char]0x00E7 + [char]0x00F5 + 'es: {"bot_token": ...} como JSON no stdin; n' + [char]0x00E3 + 'o guardes o token em ~/.jht e apaga logo qualquer ficheiro usado fora dali.') }
+    'pt:line.jht_telegram_pair_all_interattivo' { return ('jht telegram pair --all ' + [char]0x00E9 + ' interativo: para as automatiza' + [char]0x00E7 + [char]0x00F5 + 'es emparelha uma fun' + [char]0x00E7 + [char]0x00E3 + 'o de cada vez.') }
+    'pt:line.job_hunter_team_non_installato' { return ('O Job Hunter Team n' + [char]0x00E3 + 'o est' + [char]0x00E1 + ' totalmente instalado: na pasta do runtime falta o ficheiro de integridade (uma instala' + [char]0x00E7 + [char]0x00E3 + 'o interrompida?). Corre o instalador de novo.') }
+    'pt:line.la_casella_di_posta_ora' { return ('A caixa de correio est' + [char]0x00E1 + ' agora no broker dos segredos. A sua palavra-passe podia ser lida pelos agentes:') }
+    'pt:line.legacy_cleanup_failed.i_token_nuovi_sono_al' { return ('os tokens novos est' + [char]0x00E3 + 'o seguros, mas a c' + [char]0x00F3 + 'pia antiga de %s ainda est' + [char]0x00E1 + ' em ~/.jht; transi' + [char]0x00E7 + [char]0x00E3 + 'o recusada.') }
+    'pt:line.legacy_inventory_failed.il_team_resta_fermo_perch_4' { return ('a equipa fica parada porque o invent' + [char]0x00E1 + 'rio do Telegram do anfitri' + [char]0x00E3 + 'o n' + [char]0x00E3 + 'o foi guardado.') }
+    'pt:line.legacy_inventory_failed.le_impronte_non_sono_state' { return ('as impress' + [char]0x00F5 + 'es digitais n' + [char]0x00E3 + 'o foram guardadas pelo servi' + [char]0x00E7 + 'o isolado.') }
+    'pt:line.legacy_inventory_failed.migrazione_telegram_interrotta' { return ('migra' + [char]0x00E7 + [char]0x00E3 + 'o do Telegram interrompida.') }
+    'pt:line.legacy_inventory_failed.non_posso_provare_che_jht' { return ('n' + [char]0x00E3 + 'o posso provar que ~/.jht n' + [char]0x00E3 + 'o tem tokens do Telegram.') }
+    'pt:line.legacy_inventory_failed.non_riesco_a_fermare_gli' { return ('n' + [char]0x00E3 + 'o consigo parar os agentes antes do invent' + [char]0x00E1 + 'rio do anfitri' + [char]0x00E3 + 'o.') }
+    'pt:line.legacy_inventory_failed.non_riesco_a_leggere_i' { return ('n' + [char]0x00E3 + 'o consigo ler os tokens antigos em ~/.jht.') }
+    'pt:line.legacy_inventory_failed.ruoli_legacy_non_riconosciuti' { return ('fun' + [char]0x00E7 + [char]0x00F5 + 'es antigas n' + [char]0x00E3 + 'o reconhecidas.') }
+    'pt:line.legacy_remove_failed.s_nel_broker_ma_la' { return ('%s est' + [char]0x00E1 + ' no broker, mas a c' + [char]0x00F3 + 'pia em ~/.jht/credentials ficou.') }
+    'pt:line.legacy_secret_reappeared.jht_credentials_s_json_ricomparso' { return ('~/.jht/credentials/%s.json reapareceu depois da migra' + [char]0x00E7 + [char]0x00E3 + 'o; removido sem o importar.') }
+    'pt:line.mail.address_prompt' { return ('Endere' + [char]0x00E7 + 'o da caixa de correio:') }
+    'pt:line.mail.app_password_prompt' { return ('Palavra-passe de aplica' + [char]0x00E7 + [char]0x00E3 + 'o (n' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' mostrada):') }
+    'pt:line.mail.dedicated_prompt' { return ('' + [char]0x00C9 + ' uma caixa DEDICADA aos alertas de emprego reencaminhados?') }
+    'pt:line.mail_setup_opzione_sconosciuta_s' { return ('mail setup: op' + [char]0x00E7 + [char]0x00E3 + 'o desconhecida %s') }
+    'pt:line.mail_setup_password_vuota' { return 'mail setup: palavra-passe vazia' }
+    'pt:line.nessun_provider_attivo_scegline_uno' { return 'nenhum fornecedor ativo: escolhe um com ''jht providers use glm''' }
+    'pt:line.nessun_ruolo_ha_un_token' { return ('Nenhuma fun' + [char]0x00E7 + [char]0x00E3 + 'o tem um token antigo: para um bot novo usa jht telegram pair <fun' + [char]0x00E7 + [char]0x00E3 + 'o>.') }
+    'pt:line.non_autorizzabile_s' { return ('N' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' poss' + [char]0x00ED + 'vel autorizar: %s.') }
+    'pt:line.non_autorizzata_s' { return ('N' + [char]0x00E3 + 'o autorizada: %s.') }
+    'pt:line.os_and_version_are_required' { return ('--os e --version s' + [char]0x00E3 + 'o obrigat' + [char]0x00F3 + 'rios') }
+    'pt:line.podman_non_trovato_reinstalla_il' { return ('Podman n' + [char]0x00E3 + 'o encontrado: reinstala o runtime do JHT.') }
+    'pt:line.preparo_il_servizio_della_posta' { return ('A preparar o servi' + [char]0x00E7 + 'o de correio (s' + [char]0x00F3 + ' ' + [char]0x00E9 + ' criado na primeira vez que for preciso)' + [char]0x2026) }
+    'pt:line.provider_attivo_non_riconosciuto_s' { return ('fornecedor ativo n' + [char]0x00E3 + 'o reconhecido: %s') }
+    'pt:line.reset_impossibile_cancellare_il_marcatore' { return ('reset: n' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' poss' + [char]0x00ED + 'vel apagar o marcador de migra' + [char]0x00E7 + [char]0x00E3 + 'o do broker %s.') }
+    'pt:line.reset_impossibile_cancellare_il_marcatore_2' { return ('reset: n' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' poss' + [char]0x00ED + 'vel apagar o marcador do broker %s.') }
+    'pt:line.reset_impossibile_cancellare_il_volume' { return ('reset: n' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' poss' + [char]0x00ED + 'vel apagar o volume do broker %s (%s).') }
+    'pt:line.reset_nome_volume_non_valido' { return ('reset: nome de volume inv' + [char]0x00E1 + 'lido para %s; remo' + [char]0x00E7 + [char]0x00E3 + 'o recusada.') }
+    'pt:line.reset_non_riesco_a_determinare' { return ('reset: n' + [char]0x00E3 + 'o consigo determinar o projeto Compose; os volumes do broker n' + [char]0x00E3 + 'o foram tocados.') }
+    'pt:line.reset_non_riesco_a_fermare' { return ('reset: n' + [char]0x00E3 + 'o consigo parar o runtime; os volumes do broker n' + [char]0x00E3 + 'o foram tocados.') }
+    'pt:line.reset_ricerca_del_volume_s_2' { return 'reset: a procura do volume %s falhou.' }
+    'pt:line.restano_token_legacy_per_s' { return ('Restam tokens antigos para: %s. Enquanto n' + [char]0x00E3 + 'o emparelhares tamb' + [char]0x00E9 + 'm estas fun' + [char]0x00E7 + [char]0x00F5 + 'es, %s fica calado no Telegram: emparelha-as todas nesta sess' + [char]0x00E3 + 'o (jht telegram pair --all).') }
+    'pt:line.risposta_del_container_non_valida' { return ('Resposta do contentor inv' + [char]0x00E1 + 'lida: autoriza' + [char]0x00E7 + [char]0x00E3 + 'o retirada, nada vai partir.') }
+    'pt:line.ritirata_s_non_verra_inviata' { return ('Retirada #%s: n' + [char]0x00E3 + 'o vai ser enviada.') }
+    'pt:line.ritiro_non_riuscito_s' { return 'A retirada falhou: %s.' }
+    'pt:line.runtime_migration_docker_missing.il_client_docker_originale_non' { return ('o cliente Docker original n' + [char]0x00E3 + 'o est' + [char]0x00E1 + ' dispon' + [char]0x00ED + 'vel.') }
+    'pt:line.runtime_migration_image_invalid.serve_l_immagine_jht_fissata' { return ('' + [char]0x00E9 + ' precisa a imagem do JHT fixada por digest.') }
+    'pt:line.runtime_migration_podman_missing.podman_non_e_disponibile' { return ('O Podman n' + [char]0x00E3 + 'o est' + [char]0x00E1 + ' dispon' + [char]0x00ED + 'vel.') }
+    'pt:line.runtime_migration_team_running.ferma_prima_il_team_docker' { return 'para primeiro a equipa no Docker.' }
+    'pt:line.runtime_migration_team_running.ferma_prima_il_team_podman' { return 'para primeiro a equipa no Podman.' }
+    'pt:line.runtime_o_container_jht_non' { return ('runtime ou contentor do JHT n' + [char]0x00E3 + 'o dispon' + [char]0x00ED + 'vel') }
+    'pt:line.ruoli_da_abbinare_in_questa' { return ('Fun' + [char]0x00E7 + [char]0x00F5 + 'es a emparelhar nesta sess' + [char]0x00E3 + 'o: %s') }
+    'pt:line.s_ha_gi_un_bot' { return ('%s j' + [char]0x00E1 + ' tem um bot emparelhado: s' + [char]0x00F3 + ' removo a sua c' + [char]0x00F3 + 'pia antiga.') }
+    'pt:line.s_needs_a_value' { return '%s precisa de um valor' }
+    'pt:line.saltato_non_trovato_volume_broker' { return ('Saltado (n' + [char]0x00E3 + 'o encontrado): volume do broker %s') }
+    'pt:line.serve_un_terminale_l_autorizzazione' { return ('' + [char]0x00C9 + ' preciso um terminal: a autoriza' + [char]0x00E7 + [char]0x00E3 + 'o confirma-se ' + [char]0x00E0 + ' m' + [char]0x00E3 + 'o.') }
+    'pt:line.telegram_isolato_attivo_il_bridge' { return ('Telegram isolado ativo; a bridge antiga j' + [char]0x00E1 + ' n' + [char]0x00E3 + 'o pode ser reativada pelos agentes.') }
+    'pt:line.the_setup_keeps_the_key' { return ('A configura' + [char]0x00E7 + [char]0x00E3 + 'o guarda a chave: podes apagar j' + [char]0x00E1 + ' o ficheiro neste computador (%s).') }
+    'pt:line.upgrade.done' { return ('Atualiza' + [char]0x00E7 + [char]0x00E3 + 'o conclu' + [char]0x00ED + 'da: %s (%s) -> %s (%s). %s') }
+    'pt:line.upgrade.restored' { return 'Runtime anterior reposto.' }
+    'pt:line.uso_jht_apply_relink_account' { return 'uso: jht apply relink-account' }
+    'pt:line.uso_jht_apply_request_cancel_2' { return 'uso: jht apply request|cancel <id>' }
+    'pt:line.uso_jht_mail_setup_status' { return ('uso: jht mail setup|status|admission <allowlist|whole_mailbox>|allow add|remove <endere' + [char]0x00E7 + 'o|@dom' + [char]0x00ED + 'nio>|drafts|approve <id>|discard <id>|journal|delete|migrate') }
+    'pt:line.uso_jht_migrate_runtime_podman' { return 'uso: jht migrate-runtime podman' }
+    'pt:line.uso_jht_screen_on_off' { return 'uso: jht screen on | off | status [--json]' }
+    'pt:line.uso_jht_telegram_chat_id' { return 'uso: jht telegram chat-id <assistente|capitano|mentor>' }
+    'pt:line.uso_jht_telegram_pair_assistente' { return 'uso: jht telegram pair <assistente|capitano|mentor>|--all' }
+    'pt:line.uso_jht_telegram_remove_assistente' { return 'uso: jht telegram remove <assistente|capitano|mentor>' }
+    'pt:line.uso_jht_telegram_status_pair' { return ('uso: jht telegram status|pair <fun' + [char]0x00E7 + [char]0x00E3 + 'o>|pair --all|chat-id <fun' + [char]0x00E7 + [char]0x00E3 + 'o>|remove <fun' + [char]0x00E7 + [char]0x00E3 + 'o>') }
+    'pt:monitor.window_invalid' { return ('monitor_window_invalid: usa ''jht monitor --window'' sem outras op' + [char]0x00E7 + [char]0x00F5 + 'es.') }
+    'pt:ps.apply_auto_send_warning_1' { return ('  Com o envio autom' + [char]0x00E1 + 'tico ligado, a equipa preenche e ENVIA a candidatura,') }
+    'pt:ps.apply_auto_send_warning_2' { return ('  sem outra confirma' + [char]0x00E7 + [char]0x00E3 + 'o. Depois de enviada, n' + [char]0x00E3 + 'o se pode retirar.') }
+    'pt:ps.bot_token_prompt_hidden' { return 'Token do bot %s (entrada oculta)' }
+    'pt:ps.botfather_fresh_token' { return ('Usa sempre um token acabado de gerar no BotFather (/revoke no bot, ou um bot novo): um token j' + [char]0x00E1 + ' existente pode ter sido lido pelos agentes, mesmo que hoje j' + [char]0x00E1 + ' n' + [char]0x00E3 + 'o apare' + [char]0x00E7 + 'a em ~/.jht.') }
+    'pt:ps.broker_network_proxy_not_ready' { return ('broker_network_unavailable: o proxy de correio n' + [char]0x00E3 + 'o est' + [char]0x00E1 + ' pronto (c' + [char]0x00F3 + 'digo %s).') }
+    'pt:ps.broker_network_scripts_not_downloadable' { return ('broker_network_unavailable: n' + [char]0x00E3 + 'o consigo descarregar os scripts do proxy de correio. O que fazer: jht upgrade') }
+    'pt:ps.broker_network_scripts_not_verified' { return ('broker_network_unavailable: os scripts do proxy de correio n' + [char]0x00E3 + 'o podem ser atestados. O que fazer: jht upgrade') }
+    'pt:ps.broker_restart_failed_secrets_broker_not_ours' { return ('broker_restart_failed: o broker dos segredos n' + [char]0x00E3 + 'o pode ser atestado como nosso: n' + [char]0x00E3 + 'o lhe toco. O que fazer: jht mail status') }
+    'pt:ps.broker_unavailable_secrets_broker_not_running' { return ('broker_unavailable: o broker dos segredos n' + [char]0x00E3 + 'o est' + [char]0x00E1 + ' ativo.') }
+    'pt:ps.cli_version_needs_container' { return ('Para a vers' + [char]0x00E3 + 'o do CLI em execu' + [char]0x00E7 + [char]0x00E3 + 'o ' + [char]0x00E9 + ' preciso o contentor ativo: ''jht up''.') }
+    'pt:ps.compose_up_failed_team_not_started' { return ('compose_up_failed: a equipa n' + [char]0x00E3 + 'o arrancou (docker compose up, c' + [char]0x00F3 + 'digo %s). V' + [char]0x00EA + ' ''jht logs''.') }
+    'pt:ps.container_not_running' { return ('o contentor ''%s'' n' + [char]0x00E3 + 'o est' + [char]0x00E1 + ' ativo') }
+    'pt:ps.container_runtime_unsupported' { return ('runtime de contentores n' + [char]0x00E3 + 'o suportado: %s') }
+    'pt:ps.docker_desktop_file_sharing_hint' { return ('  O que fazer: abre o Docker Desktop > Settings > Resources > File sharing, verifica se a pasta do utilizador est' + [char]0x00E1 + ' partilhada e corre ''jht up'' de novo.') }
+    'pt:ps.docker_podman_verified_future_removal' { return ('Migra' + [char]0x00E7 + [char]0x00E3 + 'o Docker -> Podman verificada. Os volumes do Docker ficam intactos e ainda cont' + [char]0x00EA + 'm as palavras-passe do correio, os acessos aos portais e os tokens do Telegram: a remo' + [char]0x00E7 + [char]0x00E3 + 'o exigir' + [char]0x00E1 + ' no futuro uma confirma' + [char]0x00E7 + [char]0x00E3 + 'o expl' + [char]0x00ED + 'cita.') }
+    'pt:ps.doctor.wsl_memory' { return ('O WSL n' + [char]0x00E3 + 'o tem limite de mem' + [char]0x00F3 + 'ria (h' + [char]0x00E1 + ' outras distribui' + [char]0x00E7 + [char]0x00F5 + 'es WSL registadas): em %s, em [wsl2], acrescenta memory=%s') }
+    'pt:ps.download_asset_failed_detail' { return 'o descarregamento falhou: %s (%s)' }
+    'pt:ps.download_shared_folder_no_path' { return ('o destino est' + [char]0x00E1 + ' dentro de uma pasta partilhada com a equipa: escolhe uma fora dela, como Downloads.') }
+    'pt:ps.download_sums_failed_detail' { return 'o descarregamento falhou: SHA256SUMS de v%s (%s)' }
+    'pt:ps.full_pull_failed_keep_old' { return ('full_pull_failed: a imagem completa nova n' + [char]0x00E3 + 'o chegou, fica a antiga. O que fazer: jht tools pull') }
+    'pt:ps.help.main' { return (('jht - Job Hunter Team', '', ('  Comandos do anfitri' + [char]0x00E3 + 'o (funcionam a partir daqui):'), '    jht up                 inicia o contentor da equipa', '    jht down               para-o', ('                           (com --verbose v' + [char]0x00EA + 's tamb' + [char]0x00E9 + 'm as linhas do motor)'), '    jht restart            reinicia-o', '    jht status             estado do contentor e da equipa', '    jht logs [-f]          registos do contentor', '    jht upgrade            atualiza para a imagem mais recente', ('    jht setup              instala' + [char]0x00E7 + [char]0x00E3 + 'o guiada'), '    jht shell              shell dentro do contentor', '    jht mail setup         guarda a caixa de correio no broker dos segredos', ('    jht mail drafts        emails escritos pelos agentes ' + [char]0x00E0 + ' espera do teu ok'), '    jht mail approve <id>  envia-os; jht mail discard <id> descarta-os', '    jht integration list|status [ID]|add ID|remove ID [--purge --yes] [--remove-image] [--json]', ('                           as integra' + [char]0x00E7 + [char]0x00F5 + 'es que se acrescentam depois do setup'), '                           (google, telegram, mail): estado lido no motor', ('    jht telegram status    estado do servi' + [char]0x00E7 + 'o Telegram isolado'), ('    jht telegram pair ROLE pede o token sem eco no computador anfitri' + [char]0x00E3 + 'o, depois'), ('                           mostra um c' + [char]0x00F3 + 'digo para enviares ao bot a partir do teu Telegram'), ('                           Para automa' + [char]0x00E7 + [char]0x00F5 + 'es: JSON no stdin. N' + [char]0x00E3 + 'o guardes o token'), ('                           em ~/.jht; apaga logo os ficheiros usados fora de l' + [char]0x00E1 + '.'), ('    jht telegram pair --all associa numa s' + [char]0x00F3 + ' sess' + [char]0x00E3 + 'o todas as fun' + [char]0x00E7 + [char]0x00F5 + 'es legacy'), ('    jht telegram chat-id ROLE muda o bot para outro chat, com o mesmo c' + [char]0x00F3 + 'digo'), ('    jht reset              apaga a configura' + [char]0x00E7 + [char]0x00E3 + 'o e os volumes do broker'), '    jht migrate-runtime podman', '                           copia e verifica os volumes do Docker no Podman;', ('                           n' + [char]0x00E3 + 'o seleciona o novo runtime e n' + [char]0x00E3 + 'o apaga o Docker'), ('    jht uninstall --confirm remove o runtime local do Windows, mas mant' + [char]0x00E9 + 'm dados,'), '                           documentos, Podman e Compose', '', '  Todos os outros comandos (positions, stats, team, providers, cron,', '  working-hours, cloud...) correm DENTRO do contentor: para a sua ajuda', ('  ' + [char]0x00E9 + ' preciso o contentor ativo.'), '', '      jht up ; jht --help') -join [char]10) }
+    'pt:ps.home_unavailable_bind_mount' { return ('HOME/USERPROFILE n' + [char]0x00E3 + 'o dispon' + [char]0x00ED + 'vel: bind mount do JHT recusado') }
+    'pt:ps.host_download_failed' { return ('o descarregamento no anfitri' + [char]0x00E3 + 'o falhou: %s') }
+    'pt:ps.input_not_json_bot_token_stdin' { return 'input_not_json: passa bot_token como JSON no stdin.' }
+    'pt:ps.integration_not_installed' { return ('n' + [char]0x00E3 + 'o instalado') }
+    'pt:ps.integration_not_installed_yet' { return ('ainda n' + [char]0x00E3 + 'o instalado') }
+    'pt:ps.jht_container_not_verifiable' { return ('O contentor do JHT n' + [char]0x00E3 + 'o pode ser atestado.') }
+    'pt:ps.jht_home_missing' { return ('O Job Hunter Team ainda n' + [char]0x00E3 + 'o est' + [char]0x00E1 + ' instalado: a pasta %s n' + [char]0x00E3 + 'o existe. Corre o instalador e depois ''jht setup''.') }
+    'pt:ps.legacy_cleanup_failed_old_token_still_there' { return ('legacy_cleanup_failed: o token antigo ainda est' + [char]0x00E1 + ' em ~/.jht; transi' + [char]0x00E7 + [char]0x00E3 + 'o recusada.') }
+    'pt:ps.legacy_migration_failed_stays' { return 'legacy_migration_failed: %s fica em ~/.jht/credentials.' }
+    'pt:ps.lifecycle.restarted' { return 'Job Hunter Team reiniciado.' }
+    'pt:ps.link_or_not_folder' { return ('liga' + [char]0x00E7 + [char]0x00E3 + 'o ou n' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' uma pasta') }
+    'pt:ps.localappdata_unavailable' { return ('LOCALAPPDATA n' + [char]0x00E3 + 'o dispon' + [char]0x00ED + 'vel: runtime do anfitri' + [char]0x00E3 + 'o recusado') }
+    'pt:ps.machine_state_unreadable' { return ('o estado da m' + [char]0x00E1 + 'quina n' + [char]0x00E3 + 'o se consegue ler (o podman e o wsl n' + [char]0x00E3 + 'o respondem)') }
+    'pt:ps.monitor_window_unavailable' { return ('monitor_window_unavailable: n' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' poss' + [char]0x00ED + 'vel abrir uma janela de terminal aqui. Corre ''jht monitor'' no terminal atual.') }
+    'pt:ps.mount_repair_failed_folders_not_writable' { return ('mount_repair_failed: as pastas do Job Hunter Team (%s, %s) n' + [char]0x00E3 + 'o s' + [char]0x00E3 + 'o grav' + [char]0x00E1 + 'veis pelo contentor e n' + [char]0x00E3 + 'o foi poss' + [char]0x00ED + 'vel arranj' + [char]0x00E1 + '-las.') }
+    'pt:ps.old_images_busy' { return ' Em uso por um contentor (mantidas): %s.' }
+    'pt:ps.old_images_kept_all' { return 'Imagens do JHT antigas: mantidas todas (JHT_KEEP_OLD_IMAGES=1).' }
+    'pt:ps.old_images_refused' { return ' Recusadas pelo motor (mantidas): %s.' }
+    'pt:ps.old_images_removed' { return ('Imagens do JHT antigas: removidas %s, libertados cerca de %s MB (tamanho nominal: as camadas partilhadas s' + [char]0x00F3 + ' s' + [char]0x00E3 + 'o libertadas em parte), mantidas: a atual e a anterior.') }
+    'pt:ps.pair_role_now_prompt' { return 'Emparelhar %s agora? [s/N]' }
+    'pt:ps.podman_exe_not_found' { return ('podman.exe n' + [char]0x00E3 + 'o encontrado') }
+    'pt:ps.podman_machine_not_responding' { return ('A m' + [char]0x00E1 + 'quina Podman do JHT n' + [char]0x00E3 + 'o responde. Corre ''jht up''.') }
+    'pt:ps.release_arrived_without_https' { return 'a release chegou sem HTTPS: %s' }
+    'pt:ps.relink_account_container_not_running' { return ('apply relink-account: o contentor n' + [char]0x00E3 + 'o est' + [char]0x00E1 + ' a correr.') }
+    'pt:ps.script_integration_not_installed' { return ('o script jht-integration.ps1 ainda n' + [char]0x00E3 + 'o est' + [char]0x00E1 + ' instalado: ''jht upgrade'' (ou um ''jht integration add/remove'') e tenta de novo') }
+    'pt:ps.script_tools_not_installed' { return ('o script jht-tools.ps1 ainda n' + [char]0x00E3 + 'o est' + [char]0x00E1 + ' instalado: ''jht upgrade'' e tenta de novo') }
+    'pt:ps.startup_task_still_registered' { return 'a tarefa continua registada' }
+    'pt:ps.team_container_unavailable' { return 'team_container_unavailable: inicia a equipa com jht up e tenta de novo.' }
+    'pt:ps.telegram_not_configured' { return ('Telegram n' + [char]0x00E3 + 'o ativo: o Telegram n' + [char]0x00E3 + 'o est' + [char]0x00E1 + ' configurado.') }
+    'pt:ps.telegram_status_unverifiable' { return ('Telegram: estado n' + [char]0x00E3 + 'o verific' + [char]0x00E1 + 'vel neste momento (servi' + [char]0x00E7 + 'o parado ou inacess' + [char]0x00ED + 'vel). Detalhes: jht telegram status') }
+    'pt:ps.telegram_unavailable_isolated_not_running' { return ('telegram_unavailable: o servi' + [char]0x00E7 + 'o Telegram isolado n' + [char]0x00E3 + 'o est' + [char]0x00E1 + ' ativo.') }
+    'pt:ps.telegram_unavailable_run_jht_up' { return 'telegram_unavailable: executa jht up' }
+    'pt:ps.uninstall.bad.target' { return ('Recusado: {0} ' + [char]0x00E9 + ' uma liga' + [char]0x00E7 + [char]0x00E3 + 'o ou n' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' uma pasta: n' + [char]0x00E3 + 'o o sigo nem o apago.') }
+    'pt:ps.uninstall.done' { return ('Feito: a m' + [char]0x00E1 + 'quina <machine> (e com ela as imagens do JHT, o n' + [char]0x00FA + 'cleo e a completa), o runtime e o comando jht foram removidos.') }
+    'pt:ps.uninstall.done.kept' { return (' ~/.jht e Documents\Job Hunter Team ficam (com --purge s' + [char]0x00E3 + 'o apagados).') }
+    'pt:ps.uninstall.done.wsl' { return ('O WSL fica na mem' + [char]0x00F3 + 'ria: vmmem, wslservice e wslrelay s' + [char]0x00E3 + 'o componentes do Windows (n' + [char]0x00E3 + 'o foi o Job Hunter Team que os instalou) e as outras m' + [char]0x00E1 + 'quinas WSL deste utilizador tamb' + [char]0x00E9 + 'm precisam deles; normalmente param sozinhos ao fim de algum tempo de inatividade. Para os parar j' + [char]0x00E1 + ': wsl --shutdown (para TODAS as m' + [char]0x00E1 + 'quinas WSL abertas).') }
+    'pt:ps.uninstall.kept.machine' { return ('A m' + [char]0x00E1 + 'quina Podman {0} n' + [char]0x00E3 + 'o consta como criada pelo instalador: fica onde est' + [char]0x00E1 + '. ' + [char]0x00C0 + ' m' + [char]0x00E3 + 'o, se ' + [char]0x00E9 + ' tua e a queres remover: podman machine stop {0}; podman machine rm {0}.') }
+    'pt:ps.uninstall.left.commands' { return ('N' + [char]0x00E3 + 'o removidos: o comando jht ou os ficheiros do instalador em {0} ({1}), ou as vari' + [char]0x00E1 + 'veis e as linhas do PATH adicionadas pelo instalador. ' + [char]0x00C0 + ' m' + [char]0x00E3 + 'o: Remove-Item no ficheiro; as vari' + [char]0x00E1 + 'veis JHT_CONTAINER_RUNTIME e JHT_PODMAN_MACHINE e a pasta {0} no PATH em Defini' + [char]0x00E7 + [char]0x00F5 + 'es > Vari' + [char]0x00E1 + 'veis de ambiente.') }
+    'pt:ps.uninstall.left.data' { return ('Os dados do JHT n' + [char]0x00E3 + 'o foram apagados ({0}). ' + [char]0x00C0 + ' m' + [char]0x00E3 + 'o: Remove-Item -Recurse -Force {1}. O comando jht e o runtime continuam l' + [char]0x00E1 + ': corre jht uninstall --confirm --purge de novo depois de resolveres isso.') }
+    'pt:ps.uninstall.left.machine' { return ('N' + [char]0x00E3 + 'o removida: a m' + [char]0x00E1 + 'quina Podman <machine>. Motivo: {0}. ' + [char]0x00C0 + ' m' + [char]0x00E3 + 'o: podman machine stop <machine>; wsl --unregister {1}; depois corre jht uninstall --confirm de novo.') }
+    'pt:ps.uninstall.left.runtime' { return ('N' + [char]0x00E3 + 'o removido: o runtime do JHT em {0}. ' + [char]0x00C0 + ' m' + [char]0x00E3 + 'o: Remove-Item -Recurse -Force ''{0}''.') }
+    'pt:ps.uninstall.left.task' { return ('N' + [char]0x00E3 + 'o removida: a tarefa de arranque no in' + [char]0x00ED + 'cio de sess' + [char]0x00E3 + 'o ''{0}'' (motivo: {1}). O resto foi removido. ' + [char]0x00C0 + ' m' + [char]0x00E3 + 'o: schtasks /Delete /TN "{0}" /F.') }
+    'pt:ps.uninstall.phase.commands' { return 'A remover o comando jht, os ficheiros do instalador e as linhas do PATH...' }
+    'pt:ps.uninstall.phase.data' { return 'A apagar ~/.jht e Documents\Job Hunter Team (--purge)...' }
+    'pt:ps.uninstall.phase.machine' { return ('A remover a m' + [char]0x00E1 + 'quina Podman <machine> (com os segredos e as imagens do JHT)...') }
+    'pt:ps.uninstall.phase.runtime' { return 'A remover o runtime do JHT...' }
+    'pt:ps.uninstall.purge_notice' { return ('Com --purge tamb' + [char]0x00E9 + 'm s' + [char]0x00E3 + 'o apagados ~/.jht e Documents\Job Hunter Team: configura' + [char]0x00E7 + [char]0x00E3 + 'o, base de dados, curr' + [char]0x00ED + 'culos e resultados. N' + [char]0x00E3 + 'o h' + [char]0x00E1 + ' volta atr' + [char]0x00E1 + 's.') }
+    'pt:ps.uninstall.purge_removal_notice' { return ('A palavra-passe do correio e os tokens do Telegram guardados tamb' + [char]0x00E9 + 'm s' + [char]0x00E3 + 'o apagados.') }
+    'pt:ps.uninstall.removal_notice' { return ('A palavra-passe do correio e os tokens do Telegram guardados tamb' + [char]0x00E9 + 'm s' + [char]0x00E3 + 'o apagados; ~/.jht e Documentos ficam, e com eles a sess' + [char]0x00E3 + 'o do LinkedIn guardada (secrets/linkedin-profile e .cache/linkedin): remove-a com jht reset --scope creds.') }
+    'pt:ps.uninstall.secrets' { return ('Os segredos guardados n' + [char]0x00E3 + 'o foram removidos: a palavra-passe do correio e os tokens do Telegram est' + [char]0x00E3 + 'o nos volumes jht-secrets e jht-telegram-secrets da m' + [char]0x00E1 + 'quina <machine>, que continua c' + [char]0x00E1 + '.') }
+    'pt:ps.uninstall.wslconfig.done' { return ('Removidas de {0} as linhas adicionadas pelo instalador (mem' + [char]0x00F3 + 'ria do WSL).') }
+    'pt:ps.uninstall.wslconfig.kept' { return ('Deixadas em {0} as linhas que alteraste tu: s' + [char]0x00E3 + 'o tuas.') }
+    'pt:ps.uninstall.wslconfig.left' { return ('N' + [char]0x00E3 + 'o tocado: {0} ({1}). As linhas adicionadas pelo instalador (mem' + [char]0x00F3 + 'ria do WSL) ficam. Remove-as ' + [char]0x00E0 + ' m' + [char]0x00E3 + 'o: cada uma tem uma linha de coment' + [char]0x00E1 + 'rio por cima.') }
+    'pt:ps.unknown_argument' { return 'argumento desconhecido: %s' }
+    'pt:ps.upgrade_already_running' { return ('J' + [char]0x00E1 + ' h' + [char]0x00E1 + ' uma atualiza' + [char]0x00E7 + [char]0x00E3 + 'o em curso') }
+    'pt:ps.upgrade_broker_restart_failed' { return ('broker_restart_failed: o broker dos segredos n' + [char]0x00E3 + 'o voltou a arrancar. O que fazer: jht up') }
+    'pt:ps.upgrade_disk_low' { return ('disk_low: Os agentes precisam de pelo menos %s GiB de disco ' + [char]0x2014 + ' dispon' + [char]0x00ED + 'veis: %s GiB. Para libertar espa' + [char]0x00E7 + 'o esvazia o Lixo e apaga os ficheiros grandes de que n' + [char]0x00E3 + 'o precisas e as imagens Docker n' + [char]0x00E3 + 'o utilizadas; depois tenta de novo: nada foi descarregado nem alterado.') }
+    'pt:ps.upgrade_docker_unavailable' { return ('Docker ou runtime do anfitri' + [char]0x00E3 + 'o indispon' + [char]0x00ED + 'vel') }
+    'pt:ps.upgrade_helper_install_failed' { return ('helper_install_failed: os novos scripts do anfitri' + [char]0x00E3 + 'o s' + [char]0x00E3 + 'o obtidos no primeiro pedido ou com outro ''jht upgrade''') }
+    'pt:ps.upgrade_host_runtime_not_installable' { return ('N' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' poss' + [char]0x00ED + 'vel instalar o runtime protegido do anfitri' + [char]0x00E3 + 'o') }
+    'pt:ps.upgrade_host_runtime_untrusted' { return ('Runtime do anfitri' + [char]0x00E3 + 'o n' + [char]0x00E3 + 'o fi' + [char]0x00E1 + 'vel') }
+    'pt:ps.upgrade_image_download_failed' { return 'A descarga da imagem falhou' }
+    'pt:ps.upgrade_journal_not_updated' { return ('N' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' poss' + [char]0x00ED + 'vel atualizar o journal') }
+    'pt:ps.upgrade_metadata_not_persisted' { return ('Metadados do runtime n' + [char]0x00E3 + 'o guardados') }
+    'pt:ps.upgrade_mounts_not_writable' { return ('As pastas do Job Hunter Team n' + [char]0x00E3 + 'o s' + [char]0x00E3 + 'o grav' + [char]0x00E1 + 'veis a partir do contentor (mount_repair_failed)') }
+    'pt:ps.upgrade_not_completed' { return ('Atualiza' + [char]0x00E7 + [char]0x00E3 + 'o n' + [char]0x00E3 + 'o conclu' + [char]0x00ED + 'da (%s): %s') }
+    'pt:ps.upgrade_note_activate_runtime' { return 'A ativar o novo runtime...' }
+    'pt:ps.upgrade_note_download_image' { return 'A descarregar a imagem mais recente...' }
+    'pt:ps.upgrade_note_download_runtime' { return 'A descarregar o runtime atualizado...' }
+    'pt:ps.upgrade_option_unsupported' { return ('Op' + [char]0x00E7 + [char]0x00E3 + 'o de upgrade n' + [char]0x00E3 + 'o suportada') }
+    'pt:ps.upgrade_pulling_full_image' { return 'Estou a descarregar a imagem completa atualizada...' }
+    'pt:ps.upgrade_recovery_failed' { return ('A recupera' + [char]0x00E7 + [char]0x00E3 + 'o do upgrade anterior falhou') }
+    'pt:ps.upgrade_release_core_invalid' { return ('A vers' + [char]0x00E3 + 'o n' + [char]0x00E3 + 'o inclui um n' + [char]0x00FA + 'cleo v' + [char]0x00E1 + 'lido para esta instala' + [char]0x00E7 + [char]0x00E3 + 'o: reinstala') }
+    'pt:ps.upgrade_remote_compose_invalid' { return ('Compose remoto inv' + [char]0x00E1 + 'lido') }
+    'pt:ps.upgrade_remote_runtime_invalid' { return ('Runtime remoto inv' + [char]0x00E1 + 'lido ou inacess' + [char]0x00ED + 'vel') }
+    'pt:ps.upgrade_rollback_not_prepared' { return ('N' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' poss' + [char]0x00ED + 'vel preparar o rollback') }
+    'pt:ps.upgrade_telegram_restart_failed' { return ('telegram_restart_failed: o servi' + [char]0x00E7 + 'o Telegram isolado n' + [char]0x00E3 + 'o voltou a arrancar. O que fazer: jht up') }
+    'pt:ps.upgrade_test_channel' { return 'Canal de testes: atualiza-se reinstalando a partir da build de testes' }
+    'pt:ps.upgrade_unexpected_error' { return ('Erro inesperado durante a atualiza' + [char]0x00E7 + [char]0x00E3 + 'o') }
+    'pt:ps.upgrade_verify_failed' { return ('O novo runtime n' + [char]0x00E3 + 'o passou na verifica' + [char]0x00E7 + [char]0x00E3 + 'o') }
+    'pt:ps.use_fresh_botfather_token' { return ('Usa sempre um token acabado de gerar no BotFather (/revoke no bot, ou um bot novo): um token que j' + [char]0x00E1 + ' existia pode ter sido lido pelos agentes, mesmo que hoje n' + [char]0x00E3 + 'o apare' + [char]0x00E7 + 'a em ~/.jht.') }
+    'pt:ps.user_dir_unavailable_cannot_create' { return ('user_dir_unavailable: n' + [char]0x00E3 + 'o consigo criar a pasta %s, que a equipa usa.') }
+    'pt:ps.wsl_exe_not_found' { return ('wsl.exe n' + [char]0x00E3 + 'o encontrado') }
+    'pt:ps.wsl_not_answering' { return ('o WSL n' + [char]0x00E3 + 'o responde (wsl --status)') }
+    'pt:removed.office' { return ('''jht %s'' foi removido na 0.4.0 juntamente com o escrit' + [char]0x00F3 + 'rio Godot: usa os comandos jht (jht help).') }
+    'pt:status.no_options' { return ('''jht status'' n' + [char]0x00E3 + 'o aceita op' + [char]0x00E7 + [char]0x00F5 + 'es (%s): corre-o como ''jht status''.') }
+    'pt:team.stopped' { return ('O Job Hunter Team est' + [char]0x00E1 + ' parado: ''jht up'' volta a lig' + [char]0x00E1 + '-lo.') }
+    'pt:tools.arriving' { return ('As ferramentas dos Scout est' + [char]0x00E3 + 'o a caminho: a imagem completa est' + [char]0x00E1 + ' a ser descarregada em segundo plano (cerca de 3 GB). A procura de vagas come' + [char]0x00E7 + 'a sozinha quando chegarem; n' + [char]0x00E3 + 'o tens de fazer nada.') }
+    'pt:tools.failed' { return ('O descarregamento das ferramentas dos Scout falhou, por isso a equipa ainda n' + [char]0x00E3 + 'o pode procurar vagas. Corre jht tools pull para tentar de novo (jht up tamb' + [char]0x00E9 + 'm tenta de novo).') }
+    'pt:tools.switch_failed' { return ('As ferramentas dos Scout j' + [char]0x00E1 + ' chegaram, mas n' + [char]0x00E3 + 'o foi poss' + [char]0x00ED + 'vel reiniciar a equipa com elas: corre jht down e depois jht up.') }
+    'pt:tools.waiting' { return ('As ferramentas dos Scout j' + [char]0x00E1 + ' chegaram: a equipa passa para elas sozinha quando o onboarding estiver conclu' + [char]0x00ED + 'do.') }
+    'pt:uninstall.usage' { return ('utiliza' + [char]0x00E7 + [char]0x00E3 + 'o: jht uninstall --confirm [--purge]') }
+    'pt:up.done' { return 'Job Hunter Team iniciado.' }
+  }
+  return $null
+}
+# <<< texts in the 7 languages
 
 # The tools of a core install (P4), as in jht-wrapper.sh (tools_tell_person). The installer leaves the core image; the full one,
 # with the Scouts' tools, comes after, pulled in the background, and the team moves onto it once the onboarding has closed. The
@@ -121,15 +1875,8 @@ function Get-JhtTextLanguage {
 # not trusted says nothing here, and never fails the command it rides on.
 function Get-JhtToolsText {
   param([Parameter(Mandatory)][string]$Key)
-  $texts = @{
-    'arriving'      = @("Gli strumenti degli Scout stanno arrivando: l'immagine piena si scarica in background (circa 3 GB). La ricerca delle posizioni parte da sola quando sono arrivati; non devi fare niente.", "The Scouts' tools are on their way: the full image is downloading in the background (about 3 GB). The search for positions starts by itself once they are here; there is nothing to do.")
-    'waiting'       = @("Gli strumenti degli Scout sono arrivati: la squadra ci passa da sola quando l'onboarding e' chiuso.", "The Scouts' tools are here: the team moves onto them by itself once the onboarding is closed.")
-    'failed'        = @("Il download degli strumenti degli Scout non e' riuscito: la squadra non puo' ancora cercare posizioni. Esegui jht tools pull per riprovare (anche jht up riprova).", "The download of the Scouts' tools failed, so the team cannot search for positions yet. Run jht tools pull to try again (jht up tries again too).")
-    'switch_failed' = @("Gli strumenti degli Scout sono arrivati, ma la squadra non si e' potuta riavviare con loro: esegui jht down, poi jht up.", "The Scouts' tools are here, but the team could not be restarted on them: run jht down, then jht up.")
-  }
-  $pair = $texts[$Key]
-  if ((Get-JhtTextLanguage) -ceq 'it') { return $pair[0] }
-  return $pair[1]
+  # texts said through a variable: tools.arriving tools.waiting tools.failed tools.switch_failed
+  return (Get-JhtText ('tools.' + $Key))
 }
 
 function Write-JhtToolsNotice {
@@ -151,30 +1898,9 @@ function Write-JhtToolsNotice {
 
 function Get-JhtUninstallText {
   param([Parameter(Mandatory)][string]$Key, [string[]]$Values = @())
-  $english = ((Get-JhtTextLanguage) -ceq 'en')
-  $texts = @{
-    'phase.machine'  = @('Tolgo la macchina Podman <machine> (con i segreti e le immagini di JHT)...', 'Removing the <machine> Podman machine (with the secrets and the images of JHT)...')
-    'phase.data'     = @('Cancello ~/.jht e Documents\Job Hunter Team (--purge)...', 'Deleting ~/.jht and Documents\Job Hunter Team (--purge)...')
-    'phase.runtime'  = @('Tolgo il runtime di JHT...', 'Removing the JHT runtime...')
-    'phase.commands' = @('Tolgo il comando jht, i file dell''installer e le righe PATH...', 'Removing the jht command, the installer files and the PATH lines...')
-    'done'           = @('Fatto: la macchina <machine> (e con lei le immagini di JHT, il nucleo e quella piena), il runtime e il comando jht sono stati tolti.', 'Done: the <machine> machine (and with it the JHT images, the core and the full one), the runtime and the jht command are gone.')
-    'done.kept'      = @(' ~/.jht e Documents\Job Hunter Team restano (con --purge si cancellano).', ' ~/.jht and Documents\Job Hunter Team stay (--purge deletes them).')
-    'done.wsl'       = @('WSL resta in memoria: vmmem, wslservice e wslrelay sono componenti di Windows (non li ha installati Job Hunter Team) e servono anche alle altre macchine WSL di questo utente; di norma si fermano da soli dopo un po'' di inattivita''. Per fermarli subito: wsl --shutdown (ferma TUTTE le macchine WSL aperte).', 'WSL stays in memory: vmmem, wslservice and wslrelay are parts of Windows (Job Hunter Team did not install them) and the other WSL machines of this user need them too; they normally stop by themselves after a while of inactivity. To stop them now: wsl --shutdown (it stops ALL the open WSL machines).')
-    'secrets'        = @('I segreti salvati non sono stati rimossi: la password della posta e i token di Telegram stanno nei volumi jht-secrets e jht-telegram-secrets della macchina <machine>, che e'' ancora qui.', 'The saved secrets were not removed: the mail password and the Telegram tokens are in the jht-secrets and jht-telegram-secrets volumes of the <machine> machine, which is still there.')
-    'left.machine'   = @('Non tolta: la macchina Podman <machine>. Motivo: {0}. A mano: podman machine stop <machine>; wsl --unregister {1}; poi rilancia jht uninstall --confirm.', 'Not removed: the <machine> Podman machine. Reason: {0}. By hand: podman machine stop <machine>; wsl --unregister {1}; then run jht uninstall --confirm again.')
-    'left.task'      = @('Non tolta l''attivita'' di avvio al logon ''{0}'' (motivo: {1}). Il resto e'' stato tolto. A mano: schtasks /Delete /TN "{0}" /F.', 'Not removed: the logon start task ''{0}'' (reason: {1}). Everything else was removed. By hand: schtasks /Delete /TN "{0}" /F.')
-    'left.data'      = @('Non cancellati i dati di JHT ({0}). A mano: Remove-Item -Recurse -Force {1}. Il comando jht e il runtime sono rimasti: rilancia jht uninstall --confirm --purge dopo aver risolto.', 'The JHT data was not deleted ({0}). By hand: Remove-Item -Recurse -Force {1}. The jht command and the runtime are still there: run jht uninstall --confirm --purge again once it is sorted out.')
-    'left.runtime'   = @('Non tolto: il runtime di JHT in {0}. A mano: Remove-Item -Recurse -Force ''{0}''.', 'Not removed: the JHT runtime in {0}. By hand: Remove-Item -Recurse -Force ''{0}''.')
-    'left.commands'  = @('Non tolti il comando jht o i file dell''installer in {0} ({1}), o le variabili e le righe PATH aggiunte dall''installer. A mano: Remove-Item il file; variabili JHT_CONTAINER_RUNTIME e JHT_PODMAN_MACHINE e la cartella {0} nel PATH da Impostazioni > Variabili d''ambiente.', 'Not removed: the jht command or the installer files in {0} ({1}), or the variables and PATH lines the installer added. By hand: Remove-Item the file; the JHT_CONTAINER_RUNTIME and JHT_PODMAN_MACHINE variables and the {0} folder in the PATH from Settings > Environment variables.')
-    'kept.machine'   = @('La macchina Podman {0} non risulta creata dall''installer: resta dov''e''. A mano, se e'' tua da togliere: podman machine stop {0}; podman machine rm {0}.', 'The Podman machine {0} is not marked as created by the installer: it stays where it is. By hand, if it is yours to remove: podman machine stop {0}; podman machine rm {0}.')
-    'wslconfig.done' = @('Tolte da {0} le righe aggiunte dall''installer (memoria di WSL).', 'Removed from {0} the lines the installer added (WSL memory).')
-    'wslconfig.kept' = @('Lasciate in {0} le righe che hai cambiato tu: sono tue.', 'Left in {0} the lines you changed: they are yours.')
-    'wslconfig.left' = @('Non toccato {0} ({1}): le righe aggiunte dall''installer (memoria di WSL) restano. Toglile a mano: hanno una riga di commento sopra.', 'Not touched: {0} ({1}). The lines the installer added (WSL memory) stay. Remove them by hand: each has a comment line above it.')
-    'bad.target'     = @('Rifiutato: {0} e'' un collegamento o non e'' una cartella: non lo seguo e non lo cancello.', 'Refused: {0} is a link or not a folder: it is not followed and not deleted.')
-  }
-  $pair = $texts[$Key]
-  if (-not $pair) { return $Key }
-  $format = if ($english) { $pair[1] } else { $pair[0] }
+  # texts said through a variable: ps.uninstall.phase.machine ps.uninstall.phase.data ps.uninstall.phase.runtime ps.uninstall.phase.commands ps.uninstall.done ps.uninstall.done.kept ps.uninstall.done.wsl ps.uninstall.secrets ps.uninstall.left.machine ps.uninstall.left.task ps.uninstall.left.data ps.uninstall.left.runtime ps.uninstall.left.commands ps.uninstall.kept.machine ps.uninstall.wslconfig.done ps.uninstall.wslconfig.kept ps.uninstall.wslconfig.left ps.uninstall.bad.target ps.uninstall.removal_notice ps.uninstall.purge_removal_notice ps.uninstall.purge_notice
+  $format = Get-JhtText ('ps.uninstall.' + $Key)
+  if ($format -ceq ('ps.uninstall.' + $Key)) { return $Key }
   return (($format -f $Values).Replace('<machine>', $script:JhtUninstallMachine))
 }
 
@@ -569,7 +2295,7 @@ function Remove-JhtStartupTask {
     if ($tasks.Count -eq 0) { return $true }
     foreach ($task in $tasks) { Unregister-ScheduledTask -InputObject $task -Confirm:$false -ErrorAction Stop }
     if (@(Get-JhtStartupTaskExact $TaskName).Count -eq 0) { return $true }
-    $script:JhtStartupTaskReason = 'la attivita'' risulta ancora registrata'
+    $script:JhtStartupTaskReason = (Get-JhtText 'ps.startup_task_still_registered')
     return $false
   } catch {
     $script:JhtStartupTaskReason = (Format-JhtUninstallReason $_.Exception.Message)
@@ -633,7 +2359,7 @@ function Remove-JhtUserDataFolder {
   try { $attributes = [IO.File]::GetAttributes($Path) } catch { return $true }
   if (($attributes -band [IO.FileAttributes]::Directory) -eq 0 -or ($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
     [Console]::Error.WriteLine((Get-JhtUninstallText 'bad.target' @($Path)))
-    $script:JhtUninstallReason = 'collegamento o non cartella'
+    $script:JhtUninstallReason = (Get-JhtText 'ps.link_or_not_folder')
     return $false
   }
   try {
@@ -717,14 +2443,14 @@ function Invoke-JhtWindowsUninstall {
   $argsOk = ($UninstallArgs.Count -eq 1 -and $UninstallArgs[0] -ceq '--confirm') -or
     ($UninstallArgs.Count -eq 2 -and @($UninstallArgs | Where-Object { $_ -ceq '--confirm' }).Count -eq 1 -and @($UninstallArgs | Where-Object { $_ -ceq '--purge' }).Count -eq 1)
   if (-not $argsOk) {
-    [Console]::Error.WriteLine('uso: jht uninstall --confirm [--purge]')
-    [Console]::Error.WriteLine($JhtUninstallRemovalNotice)
-    [Console]::Error.WriteLine($script:JhtUninstallPurgeNotice)
+    [Console]::Error.WriteLine((Get-JhtText 'uninstall.usage'))
+    [Console]::Error.WriteLine((Get-JhtUninstallText 'removal_notice'))
+    [Console]::Error.WriteLine((Get-JhtUninstallText 'purge_notice'))
     return 2
   }
   $purge = $UninstallArgs.Count -eq 2
-  if ($purge) { [Console]::Error.WriteLine($script:JhtUninstallPurgeRemovalNotice) } else { [Console]::Error.WriteLine($JhtUninstallRemovalNotice) }
-  if ($purge) { [Console]::Error.WriteLine($script:JhtUninstallPurgeNotice) }
+  if ($purge) { [Console]::Error.WriteLine((Get-JhtUninstallText 'purge_removal_notice')) } else { [Console]::Error.WriteLine((Get-JhtUninstallText 'removal_notice')) }
+  if ($purge) { [Console]::Error.WriteLine((Get-JhtUninstallText 'purge_notice')) }
   $script:JhtUninstallReason = ''
 
   $machineName = 'jht-podman'
@@ -783,9 +2509,9 @@ function Invoke-JhtWindowsUninstall {
     if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands @($binPath, (& $leftCommands)) }
   }
   if ($machineState -eq 'present') {
-    if (-not $WslPath) { & $leaveForRetry 'wsl.exe non trovato'; return 24 }
+    if (-not $WslPath) { & $leaveForRetry (Get-JhtText 'ps.wsl_exe_not_found'); return 24 }
     & { $ErrorActionPreference = 'Continue'; & $WslPath --status *> $null }
-    if ($LASTEXITCODE -ne 0) { & $leaveForRetry 'WSL non risponde (wsl --status)'; return 24 }
+    if ($LASTEXITCODE -ne 0) { & $leaveForRetry (Get-JhtText 'ps.wsl_not_answering'); return 24 }
     $gone = $false
     if ($PodmanPath) {
       $removal = Invoke-JhtUninstallNative $PodmanPath @('machine', 'rm', '--force', $machineName)
@@ -793,13 +2519,13 @@ function Invoke-JhtWindowsUninstall {
         ((Get-JhtPodmanMachineState -PodmanPath $PodmanPath -WslPath $WslPath -MachineName $machineName) -eq 'absent')
       if (-not $gone) { $script:JhtUninstallReason = "podman machine rm --force $machineName : exit $($removal.Code), $($removal.Text)" }
     } else {
-      $script:JhtUninstallReason = 'podman.exe non trovato'
+      $script:JhtUninstallReason = (Get-JhtText 'ps.podman_exe_not_found')
     }
     # Podman could not (or is not there): the distro of our machine, by its exact name, through WSL.
     if (-not $gone) { $gone = Remove-JhtPodmanMachineThroughWsl -PodmanPath $PodmanPath -WslPath $WslPath -MachineName $machineName }
     if (-not $gone) { & $leaveForRetry ''; return 24 }
   } elseif ($machineState -ne 'absent') {
-    & $leaveForRetry 'lo stato della macchina non si legge (podman e wsl non rispondono)'
+    & $leaveForRetry (Get-JhtText 'ps.machine_state_unreadable')
     return 24
   }
 
@@ -904,9 +2630,9 @@ $BrokerVolumeNames = @('jht-secrets', 'jht-broker-state', 'jht-broker-sock')
 $RuntimeMigrationVolumes = @('jht-broker-state', 'jht-secrets', 'jht-telegram-secrets', 'jht-telegram-state')
 $HostResetConfirmedExit = 20
 $LocalAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { [Environment]::GetFolderPath('LocalApplicationData') }
-if (-not $LocalAppData) { throw 'LOCALAPPDATA non disponibile: runtime host rifiutato' }
+if (-not $LocalAppData) { throw (Get-JhtText 'ps.localappdata_unavailable') }
 if (-not $env:HOME) { $env:HOME = $env:USERPROFILE }
-if (-not $env:HOME) { throw 'HOME/USERPROFILE non disponibile: bind mount JHT rifiutato' }
+if (-not $env:HOME) { throw (Get-JhtText 'ps.home_unavailable_bind_mount') }
 $RuntimeDir  = if ($env:JHT_RUNTIME_DIR) { $env:JHT_RUNTIME_DIR } else { Join-Path $LocalAppData 'Job Hunter Team\host-runtime' }
 $ComposeFile = if ($env:JHT_COMPOSE_FILE)   { $env:JHT_COMPOSE_FILE }   else { Join-Path $RuntimeDir 'docker-compose.yml' }
 $WrapperPath = if ($env:JHT_WRAPPER_PATH)   { $env:JHT_WRAPPER_PATH }   else { $PSCommandPath }
@@ -921,7 +2647,7 @@ $ContainerRuntime = if ($env:JHT_TEST_CONTAINER_RUNTIME) {
   ([IO.File]::ReadAllText($RuntimeSelectionFile)).Trim().ToLowerInvariant()
 } else { 'docker' }
 Remove-Item -LiteralPath Env:JHT_CONTAINER_RUNTIME -ErrorAction SilentlyContinue
-if ($ContainerRuntime -notin @('docker', 'podman')) { throw "runtime container non supportato: $ContainerRuntime" }
+if ($ContainerRuntime -notin @('docker', 'podman')) { throw (Format-JhtText 'ps.container_runtime_unsupported' $ContainerRuntime) }
 $PodmanComposeFile = Join-Path $RuntimeDir 'docker-compose.podman.yml'
 $ContainerUnitFile = Join-Path $RuntimeDir 'jht-container.service'
 $RuntimeShimDir = Join-Path $RuntimeDir 'bin'
@@ -1028,7 +2754,7 @@ function Write-Info { param([string]$Msg) Write-Host $Msg -ForegroundColor DarkG
 function Open-JhtMonitorWindow {
   param([string]$CommandPath, [string[]]$WindowArgs)
   if ($WindowArgs.Count -ne 1 -or $WindowArgs[0] -cne '--window') {
-    Write-Err "monitor_window_invalid: use 'jht monitor --window' without other options."
+    Write-Err (Get-JhtText 'monitor.window_invalid')
     return 2
   }
   $process = $null
@@ -1052,7 +2778,7 @@ function Open-JhtMonitorWindow {
     if ($process.WaitForExit(250) -and $process.ExitCode -ne 0) { throw 'terminal launch failed' }
     return 0
   } catch {
-    Write-Err "monitor_window_unavailable: cannot open a terminal window here. Run 'jht monitor' in the current terminal."
+    Write-Err (Get-JhtText 'ps.monitor_window_unavailable')
     return 1
   } finally { if ($process) { $process.Dispose() } }
 }
@@ -1237,9 +2963,9 @@ function Write-RuntimeHelperAbsentAnswer {
   $rows = @(foreach ($one in $ids) { '{"id":"' + $one + '","state":"not_installed","reason":"non ancora installato"}' })
   if ($json -and $id) { [Console]::Out.WriteLine($rows[0]); return $true }
   if ($json) { [Console]::Out.WriteLine('{"integrations":[' + ($rows -join ',') + ']}'); return $true }
-  foreach ($one in $ids) { [Console]::Out.WriteLine(('{0,-15} {1,-16} {2}' -f $one, 'non installato', 'non ancora installato')) }
+  foreach ($one in $ids) { [Console]::Out.WriteLine(('{0,-15} {1,-16} {2}' -f $one, (Get-JhtText 'ps.integration_not_installed'), (Get-JhtText 'ps.integration_not_installed_yet'))) }
   # In words, the person is told which command installs them (the lines above stay the shape the helper gives).
-  [Console]::Error.WriteLine("per installarli: 'jht upgrade' (o un 'jht integration add <id>')")
+  [Console]::Error.WriteLine((Get-JhtText 'line.integration.install_hint'))
   return $true
 }
 
@@ -1432,7 +3158,7 @@ function Assert-TrustedRuntime {
   if (-not (Test-RuntimeBundleTrusted)) {
     # A manifest that is not there at all is an install that never finished, not a file somebody changed: said as what it is.
     if (-not (Test-Path -LiteralPath $RuntimeManifest)) {
-      throw "Job Hunter Team non e' installato del tutto: nella cartella del runtime manca il file di integrita (un'installazione interrotta?). Rilancia l'installer."
+      throw (Get-JhtText 'line.job_hunter_team_non_installato')
     }
     throw 'untrusted host runtime path, owner, reparse point or SHA-256'
   }
@@ -1450,7 +3176,7 @@ if ($env:JHT_RUNTIME_AUTHORITY_SELFTEST -eq '1') {
 # exist cannot be read, and «ACL is not owner-only» sent the person to look at permissions); only a folder that is there is an ACL.
 function Get-JhtHomeAclFailure {
   if (-not (Test-Path -LiteralPath $JhtHome)) {
-    return "Job Hunter Team non e' ancora installato: la cartella $JhtHome non esiste. Lancia l'installer, poi 'jht setup'."
+    return (Format-JhtText 'ps.jht_home_missing' $JhtHome)
   }
   return "JHT_HOME ACL is not owner-only: $JhtHome"
 }
@@ -1464,12 +3190,12 @@ function Require-PrivateJhtHomeAcl {
 function Require-Docker {
   Require-PrivateJhtHomeAcl
   if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-    Write-Err "client Podman JHT non trovato nel PATH. Reinstalla il runtime locale."
+    Write-Err (Get-JhtText 'line.podman_non_trovato_reinstalla_il')
     exit 127
   }
   $null = & { $ErrorActionPreference = 'Continue'; & docker info 2>&1 }
   if ($LASTEXITCODE -ne 0) {
-    Write-Err "La macchina Podman JHT non risponde. Esegui 'jht up'."
+    Write-Err (Get-JhtText 'ps.podman_machine_not_responding')
     exit 1
   }
 }
@@ -1568,10 +3294,9 @@ function Invoke-ComposeAnswer {
 
 function Write-JhtLifecycleDone {
   param([Parameter(Mandatory)][ValidateSet('up', 'down', 'restart')][string]$What)
-  $english = ((Get-JhtTextLanguage) -ceq 'en')
-  $text = if ($What -ceq 'up') { if ($english) { 'Job Hunter Team started.' } else { 'Job Hunter Team avviato.' } }
-          elseif ($What -ceq 'restart') { if ($english) { 'Job Hunter Team restarted.' } else { 'Job Hunter Team riavviato.' } }
-          else { if ($english) { 'Job Hunter Team stopped.' } else { 'Job Hunter Team fermato.' } }
+  $text = if ($What -ceq 'up') { (Get-JhtText 'up.done') }
+          elseif ($What -ceq 'restart') { (Get-JhtText 'ps.lifecycle.restarted') }
+          else { (Get-JhtText 'down.done') }
   [Console]::Out.WriteLine($text)
 }
 
@@ -1606,35 +3331,32 @@ function Clear-JhtTeamStopped {
   try { [void](Remove-JhtTeamStoppedEntry) } catch { }
 }
 function Get-JhtTeamStoppedText {
-  if ((Get-JhtTextLanguage) -ceq 'en') { return "Job Hunter Team is stopped: 'jht up' starts it again." }
-  return "Job Hunter Team e' fermato: jht up per riaccenderlo."
+  return (Get-JhtText 'team.stopped')
 }
 
 # `jht doctor` with the team off: what this computer can check without starting anything (the engine, the runtime, the configuration,
 # the memory limit of WSL), and the team said off. The same shape as the CLI's doctor; with --json the same keys. 1 with a problem.
 function Invoke-JhtHostDoctor {
   param([string]$Team = 'off', [string[]]$DoctorArgs = @())
-  $en = ((Get-JhtTextLanguage) -ceq 'en')
-  $t = { param($english, $italian) if ($en) { $english } else { $italian } }
   $rows = [System.Collections.Generic.List[object]]::new()
   $engine = $false; try { $engine = [bool](Test-DockerReachable) } catch { $engine = $false }
-  if ($engine) { $rows.Add(@('ok', (& $t 'container engine reachable' 'motore dei container raggiungibile'))) }
-  else { $rows.Add(@('fail', (& $t 'container engine not reachable' 'motore dei container non raggiungibile'))) }
+  if ($engine) { $rows.Add(@('ok', (Get-JhtText 'doctor.host_engine_ok'))) }
+  else { $rows.Add(@('fail', (Get-JhtText 'doctor.host_engine_fail'))) }
   $runtime = $false; try { $runtime = [bool](Test-RuntimeBundleTrusted) } catch { $runtime = $false }
-  if ($runtime) { $rows.Add(@('ok', (& $t 'JHT runtime intact' 'runtime JHT integro'))) }
-  else { $rows.Add(@('fail', (& $t "JHT runtime missing or changed: 'jht upgrade' installs it again" "runtime JHT mancante o cambiato: 'jht upgrade' lo reinstalla"))) }
+  if ($runtime) { $rows.Add(@('ok', (Get-JhtText 'doctor.host_runtime_ok'))) }
+  else { $rows.Add(@('fail', (Get-JhtText 'doctor.host_runtime_fail'))) }
   $profileDir = if ($env:USERPROFILE) { $env:USERPROFILE } else { [Environment]::GetFolderPath('UserProfile') }
   $configPath = Join-Path (Join-Path $profileDir '.jht') 'jht.config.json'
-  if ($profileDir -and (Test-Path -LiteralPath $configPath -PathType Leaf)) { $rows.Add(@('ok', (& $t 'configuration present' 'configurazione presente'))) }
-  else { $rows.Add(@('warn', (& $t "no configuration yet: 'jht setup'" "ancora nessuna configurazione: 'jht setup'"))) }
+  if ($profileDir -and (Test-Path -LiteralPath $configPath -PathType Leaf)) { $rows.Add(@('ok', (Get-JhtText 'doctor.host_config_ok'))) }
+  else { $rows.Add(@('warn', (Get-JhtText 'doctor.host_config_none'))) }
   $wslAdvice = Get-JhtDoctorWslMemoryAdvice
   if ($wslAdvice) {
-    $rows.Add(@('warn', (& $t "WSL has no memory limit (other WSL distributions are registered): in %USERPROFILE%\.wslconfig, under [wsl2], add memory=$wslAdvice" "WSL non ha un limite di memoria (sono registrate altre distribuzioni WSL): in %USERPROFILE%\.wslconfig, sotto [wsl2], aggiungi memory=$wslAdvice")))
+    $rows.Add(@('warn', (Format-JhtText 'ps.doctor.wsl_memory' '%USERPROFILE%\.wslconfig' $wslAdvice)))
   }
   if ($Team -ceq 'unattestable') {
-    $rows.Add(@('fail', (& $t "a container of the team is there but cannot be verified as ours: nothing was touched ('jht status' says more)" "c'e' un container della squadra ma non si puo' verificare che sia nostro: non ho toccato niente ('jht status' dice di piu')")))
+    $rows.Add(@('fail', (Get-JhtText 'doctor.host_team_unattestable')))
   } else {
-    $rows.Add(@('warn', (& $t "team off: 'jht up' starts it" "squadra spenta: 'jht up' la accende")))
+    $rows.Add(@('warn', (Get-JhtText 'doctor.host_team_off')))
   }
   $count = @{ ok = 0; warn = 0; fail = 0 }
   foreach ($row in $rows) { $count[$row[0]] += 1 }
@@ -1643,12 +3365,12 @@ function Invoke-JhtHostDoctor {
     $answer = [ordered]@{ ok = ($count.fail -eq 0); teamRunning = $false; summary = [ordered]@{ ok = $count.ok; warnings = $count.warn; problems = $count.fail }; checks = $checks }
     [Console]::Out.WriteLine(($answer | ConvertTo-Json -Depth 5))
   } else {
-    [Console]::Out.WriteLine((& $t 'Job Hunter Team: the team is off (its container is not running). Checks made from this computer:' 'Job Hunter Team: squadra spenta (il suo container non gira). Controlli fatti da questo computer:'))
+    [Console]::Out.WriteLine((Get-JhtText 'doctor.host_title'))
     foreach ($row in $rows) {
       $mark = switch ($row[0]) { 'ok' { '+' } 'warn' { '!' } default { 'x' } }
       [Console]::Out.WriteLine("  $mark $($row[1])")
     }
-    [Console]::Out.WriteLine((& $t "For the full checks (configuration, provider, database, agents): 'jht up', then 'jht doctor'." "Per i controlli completi (configurazione, provider, database, agenti): 'jht up', poi 'jht doctor'."))
+    [Console]::Out.WriteLine((Get-JhtText 'doctor.host_more'))
   }
   if ($count.fail -gt 0) { return 1 }
   return 0
@@ -1660,7 +3382,7 @@ function Invoke-JhtHostDoctor {
 function Stop-OnFailedComposeUp {
   param([int]$Code)
   if ($Code -eq 0) { return }
-  Write-Err "compose_up_failed: il team non si e' avviato (docker compose up, codice $Code). Controlla 'jht logs'."
+  Write-Err (Format-JhtText 'ps.compose_up_failed_team_not_started' $Code)
   exit $Code
 }
 
@@ -1693,49 +3415,8 @@ function Test-DockerReachable {
 }
 
 function Write-LocalHelp {
-  # L'aiuto completo vive nel CLI DENTRO il container: senza container si
-  # stampa questo, che elenca cio' che il wrapper sa fare da se' sull'host.
-  @'
-jht - Job Hunter Team
-
-  Comandi dell'host (funzionano da qui):
-    jht up                 avvia il container del team
-    jht down               lo ferma
-                           (con --verbose si vedono anche le righe del motore)
-    jht restart            lo riavvia
-    jht status             stato di container e team
-    jht logs [-f]          log del container
-    jht upgrade            aggiorna all'immagine piu' recente
-    jht setup              installazione guidata
-    jht download --os X    scarica l'app desktop per un sistema
-    jht shell              shell dentro il container
-    jht mail setup         salva la casella di posta nel broker dei segreti
-    jht mail drafts        email scritte dagli agenti in attesa del tuo ok
-    jht mail approve <id>  le manda; jht mail discard <id> le scarta
-    jht integration list|status [ID]|add ID|remove ID [--purge --yes] [--remove-image] [--json]
-                           le integrazioni che si aggiungono dopo il setup
-                           (google, telegram, mail): stato letto dal motore
-    jht telegram status    stato del servizio Telegram isolato
-    jht telegram pair ROLE chiede il token senza eco sul computer host, poi
-                           mostra un codice da mandare al bot dal tuo Telegram
-                           Per automazioni: JSON su stdin. Non salvare il token
-                           in ~/.jht; cancella subito file usati fuori da li'.
-    jht telegram pair --all abbina in una seduta tutti i ruoli legacy
-    jht telegram chat-id ROLE sposta il bot su un'altra chat, con lo stesso codice
-    jht reset              cancella configurazione e volumi del broker
-    jht migrate-runtime podman
-                           copia/verifica i volumi Docker in Podman senza
-                           selezionare il nuovo runtime o cancellare Docker
-    jht uninstall --confirm rimuove il runtime locale Windows, ma conserva dati,
-                            documenti, Podman e Compose
-
-  Tutti gli altri comandi (positions, stats, team, providers, cron,
-  working-hours, cloud...) girano DENTRO il container: per il loro aiuto
-  serve il container attivo.
-
-      jht up ; jht --help
-
-'@ | Write-Host
+  # The full help lives in the CLI INSIDE the container: with no container this one is printed, with what the wrapper does by itself on the host.
+  Write-Host (Get-JhtText 'ps.help.main')
 }
 
 function Invoke-HelpWithoutDocker {
@@ -1750,106 +3431,29 @@ function Invoke-HelpWithoutDocker {
 
 # `jht tools --help`: its subcommands, as in jht-wrapper.sh (tools_help): a help never starts the container nor loads the helper.
 function Write-ToolsHelp {
-  if ((Get-JhtTextLanguage) -ceq 'it') {
-    [Console]::Out.WriteLine(@'
-Uso: jht tools <comando>
-
-  status --json   se gli strumenti degli Scout (l'immagine piena) sono arrivati, in arrivo o falliti
-  pull            li scarica in background (jht up e jht setup lo avviano da soli)
-  switch          ci porta la squadra quando l'onboarding e' chiuso (il download lo fa da solo)
-
-Questo aiuto non avvia niente e non scarica niente.
-'@)
-  } else {
-    [Console]::Out.WriteLine(@'
-Usage: jht tools <command>
-
-  status --json   whether the Scouts' tools (the full image) are here, on their way or failed
-  pull            downloads them in the background (jht up and jht setup start it by themselves)
-  switch          moves the team onto them once the onboarding is closed (the download does it by itself)
-
-This help starts nothing and downloads nothing.
-'@)
-  }
+  [Console]::Out.WriteLine((Get-JhtText 'help.tools'))
 }
 
 # `jht integration --help`: its usage line, not the generic help of the host. Fixed text: the command lives in a helper that
 # is fetched only when it is needed, and a help never fetches anything.
 function Write-IntegrationHelp {
-  [Console]::Out.WriteLine(@'
-Uso: jht integration <comando>
-
-  list [--json]                   le integrazioni e il loro stato
-  status [ID] [--json]            lo stato di una, o di tutte
-  add ID [--json]                 aggiunge un'integrazione
-  remove ID [--purge --yes] [--remove-image] [--json]
-                                  la toglie; --purge cancella anche i suoi dati (serve --yes);
-                                  --remove-image (solo screen e media) toglie anche l'immagine degli strumenti
-
-Gli ID ammessi sono quelli che mostra `jht integration list`. Niente si scarica o si accende
-finche' non lo chiedi con `add`.
-'@)
+  [Console]::Out.WriteLine((Get-JhtText 'help.integration'))
 }
 
 # `jht setup --help`: its options, not the generic help of the host. Fixed text: the setup itself runs in the container and a help
 # never starts it. Keep it in step with the options of cli/src/commands/setup.js (a test compares them).
 function Write-SetupHelp {
-  [Console]::Out.WriteLine(@'
-Uso: jht setup [opzioni]
-
-Senza opzioni parte l'installazione guidata. Con --non-interactive non chiede niente:
-tutto si da' con le opzioni.
-
-  --non-interactive            nessuna domanda
-  --provider <nome>            glm (Z.ai, predefinito), kimi (Moonshot), openai o claude (Anthropic)
-  --harness <nome>             pi (predefinito)
-  --api-key-file <percorso>    file che contiene la chiave API (una riga, leggibile solo da te).
-                               Un file del tuo computer lo legge jht e lo passa al setup: con glm e kimi
-                               il setup tiene la chiave per conto suo, mai nella configurazione
-  --api-key-stdin              legge la chiave API dallo standard input (una riga): mai sulla riga di comando
-  --api-key <chiave>           la chiave scritta qui, in chiaro (non ammessa per glm e kimi)
-  --secret-mode <modo>         come si salva la chiave: plaintext (predefinito), env o file
-  --secret-env <nome>          con --secret-mode env: la variabile d'ambiente che la contiene
-  --secret-file <percorso>     con --secret-mode file: il file che la contiene
-  --model <modello>            il modello da usare
-  --language <codice>          la lingua (per esempio it o en)
-  --skip-health                salta il controllo finale
-  --reset                      riparte da una configurazione pulita
-
-Esempi:
-  con una chiave GLM in un file:
-    jht setup --non-interactive --provider glm --harness pi --api-key-file chiave.txt
-  OpenAI con una chiave API, su Pi (per Claude: --provider claude):
-    jht setup --non-interactive --provider openai --harness pi --api-key-stdin
-'@)
+  [Console]::Out.WriteLine((Get-JhtText 'help.setup'))
 }
 
 # `jht screen --help`: its line of use, fixed text like the one of `jht integration`: a help downloads nothing.
 function Write-ScreenHelp {
-  [Console]::Out.WriteLine(@'
-Uso: jht screen <comando>
-
-  on [--json]       accende lo schermo dal vivo del closer: un container a parte, con lo stream solo su 127.0.0.1
-  off [--remove-image] [--json]
-                    lo spegne e toglie il container; l'immagine degli strumenti resta sul disco, per riaccenderlo
-                    senza riscaricarla: --remove-image la toglie e libera lo spazio
-  status [--json]   dice se e' acceso
-
-Niente si scarica o si accende finche' non lo chiedi con `on`. Lo stream e' in sola visione.
-'@)
+  [Console]::Out.WriteLine((Get-JhtText 'help.screen'))
 }
 
 # `jht linkedin --help`: its line of use, fixed text: a help downloads nothing.
 function Write-LinkedinHelp {
-  [Console]::Out.WriteLine(@'
-Uso: jht linkedin <comando>
-
-  login [--stop]    l'accesso a mano a LinkedIn (con Google): un browser in un container a parte, senza rete, di cui vedi
-                    e usi la finestra dall'app; --stop chiude tutto
-  status --json     dice se l'accesso e' in corso e se la sessione di LinkedIn e' salvata
-
-Niente si scarica o si accende finche' non lo chiedi con `login`.
-'@)
+  [Console]::Out.WriteLine((Get-JhtText 'help.linkedin'))
 }
 
 function Test-HostCommandUsesLocalHelp {
@@ -1897,7 +3501,7 @@ function Repair-MountOwnership {
     if (-not (Test-Path -LiteralPath $dir -PathType Container)) {
       try { New-Item -ItemType Directory -Path $dir -Force -ErrorAction Stop | Out-Null }
       catch {
-        Write-Err "user_dir_unavailable: non riesco a creare la cartella $dir, che il team usa."
+        Write-Err (Format-JhtText 'ps.user_dir_unavailable_cannot_create' $dir)
         return $false
       }
     }
@@ -1926,8 +3530,8 @@ function Repair-MountOwnership {
     return $true
   }
   # Codice, frase, azione: mai un avvio che si ferma in silenzio.
-  Write-Err "mount_repair_failed: le cartelle di Job Hunter Team ($homeMount, $userMount) non sono scrivibili dal container e non si sono potute sistemare."
-  Write-Info "  Cosa fare: apri Docker Desktop > Settings > Resources > File sharing, controlla che la cartella dell'utente sia condivisa, poi rilancia 'jht up'."
+  Write-Err (Format-JhtText 'ps.mount_repair_failed_folders_not_writable' $homeMount $userMount)
+  Write-Info (Get-JhtText 'ps.docker_desktop_file_sharing_hint')
   return $false
 }
 
@@ -2141,12 +3745,12 @@ function Invoke-DesktopChat {
   param([string[]]$ChatArgs)
   $script:DesktopChatExitCode = 1
   if (-not (Test-RuntimeBundleTrusted)) {
-    Write-Err 'runtime o container JHT non disponibile'
+    Write-Err (Get-JhtText 'line.runtime_o_container_jht_non')
     return
   }
   $containerId = Get-RunningComposeServiceId $Container
   if (-not $containerId) {
-    Write-Err 'runtime o container JHT non disponibile'
+    Write-Err (Get-JhtText 'line.runtime_o_container_jht_non')
     return
   }
   $action = if ($ChatArgs.Count -gt 0) { $ChatArgs[0] } else { '' }
@@ -2261,18 +3865,18 @@ function Invoke-BrokerNetwork {
   if ($ContainerRuntime -ne 'podman') { return $true }
   foreach ($name in @('configure-podman-windows-network.ps1', 'wsl-interop-connect-proxy.py')) {
     if (-not (Test-RuntimeHelperDeclared $name)) {
-      if (-not (Install-RuntimeHelpers)) { Write-Err 'broker_network_unavailable: non riesco a scaricare gli script del proxy della posta. Cosa fare: jht upgrade'; return $false }
+      if (-not (Install-RuntimeHelpers)) { Write-Err (Get-JhtText 'ps.broker_network_scripts_not_downloadable'); return $false }
       break
     }
   }
   if (-not (Test-RuntimeHelpersTrusted) -or -not (Test-RuntimeHelperDeclared 'configure-podman-windows-network.ps1')) {
-    Write-Err 'broker_network_unavailable: gli script del proxy della posta non sono attestati. Cosa fare: jht upgrade'
+    Write-Err (Get-JhtText 'ps.broker_network_scripts_not_verified')
     return $false
   }
   $shell = (Get-Process -Id $PID).Path
   & $shell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $RuntimeDir 'configure-podman-windows-network.ps1') `
     -MachineName $env:CONTAINER_CONNECTION -BridgeScript $PodmanMachineBridgePath -WithBroker | Write-EnsureLine -Quiet:$Quiet
-  if ($LASTEXITCODE -ne 0) { Write-Err "broker_network_unavailable: il proxy della posta non e' pronto (codice $LASTEXITCODE)."; return $false }
+  if ($LASTEXITCODE -ne 0) { Write-Err (Format-JhtText 'ps.broker_network_proxy_not_ready' $LASTEXITCODE); return $false }
   return $true
 }
 
@@ -2302,18 +3906,18 @@ function Ensure-Broker {
   if (Get-RunningComposeServiceId $BrokerContainer) { return 0 }
   $brokerState = Get-BrokerContainerState
   if ($brokerState -eq 'foreign') {
-    Write-Err 'broker_unavailable: il broker dei segreti esiste ma non e'' attestabile come nostro: non lo tocco.'
+    Write-Err ('broker_unavailable: ' + (Get-JhtText 'line.broker_unavailable.il_broker_dei_segreti_esiste'))
     return 1
   }
   if ((Get-Content -LiteralPath $ComposeFile -Raw) -notmatch "(?m)^  $([regex]::Escape($BrokerContainer)):") {
-    Write-Err 'broker_unavailable: il runtime installato e'' piu'' vecchio e non ha il broker dei segreti.'
-    Write-Err 'Cosa fare: jht upgrade'
+    Write-Err ('broker_unavailable: ' + (Get-JhtText 'line.broker_unavailable.il_runtime_installato_pi_vecchio_2'))
+    Write-Err (Get-JhtText 'line.cosa_fare_jht_upgrade_4')
     return 1
   }
-  Write-Info 'Preparo il servizio della posta (si crea solo la prima volta che serve)...'
+  Write-Info (Get-JhtText 'line.preparo_il_servizio_della_posta')
   if (-not (Invoke-BrokerNetwork -Quiet:$Quiet)) { return 1 }
   Invoke-Compose '--profile' 'broker' 'up' '-d' '--no-deps' $BrokerContainer | Write-EnsureLine -Quiet:$Quiet
-  if ($LASTEXITCODE -ne 0) { Write-Err 'broker_start_failed: il servizio della posta non e'' partito.'; Write-Err 'Cosa fare: riprova il comando'; return 1 }
+  if ($LASTEXITCODE -ne 0) { Write-Err ('broker_start_failed: ' + (Get-JhtText 'line.broker_start_failed.il_servizio_della_posta_non_2')); Write-Err (Get-JhtText 'line.cosa_fare_riprova_il_comando_2'); return 1 }
   $ready = $false
   for ($i = 0; $i -lt 30 -and -not $ready; $i++) {
     $brokerId = Get-RunningComposeServiceId $BrokerContainer
@@ -2323,7 +3927,7 @@ function Ensure-Broker {
     }
     if (-not $ready) { Start-Sleep -Seconds 1 }
   }
-  if (-not $ready) { Write-Err 'broker_start_failed: il servizio della posta non risponde dopo 30 secondi.'; Write-Err 'Cosa fare: riprova il comando'; return 1 }
+  if (-not $ready) { Write-Err ('broker_start_failed: ' + (Get-JhtText 'line.broker_start_failed.il_servizio_della_posta_non_3')); Write-Err (Get-JhtText 'line.cosa_fare_riprova_il_comando_2'); return 1 }
   New-Item -ItemType File -Path $BrokerMadeMarker -Force -ErrorAction SilentlyContinue | Out-Null
   $null = Invoke-BrokerMigrateLegacyOnce
   $null = Initialize-BrokerWebAuthorisations
@@ -2335,7 +3939,7 @@ function Resume-Broker {
   $brokerState = Get-BrokerContainerState
   if ($brokerState -eq 'foreign') {
     # a container of that name that is not this project's broker is neither adopted nor started over
-    if (Test-Path -LiteralPath $BrokerMadeMarker) { Write-Warn "broker_restart_failed: il broker dei segreti non e' attestabile come nostro: non lo tocco. Cosa fare: jht mail status" }
+    if (Test-Path -LiteralPath $BrokerMadeMarker) { Write-Warn (Get-JhtText 'ps.broker_restart_failed_secrets_broker_not_ours') }
     return
   }
   if (-not (Test-Path -LiteralPath $BrokerMadeMarker)) {
@@ -2344,7 +3948,7 @@ function Resume-Broker {
   }
   if ($brokerState -ne 'running') {
     $brokerCode = Invoke-ComposeQuiet '--profile' 'broker' 'up' '-d' '--no-deps' $BrokerContainer
-    if ($brokerCode -ne 0) { Write-Warn "broker_restart_failed: il servizio della posta non e' ripartito. Cosa fare: jht mail status" }
+    if ($brokerCode -ne 0) { Write-Warn ('broker_restart_failed: ' + (Get-JhtText 'line.broker_restart_failed.il_servizio_della_posta_non_4')) }
   }
   $null = Invoke-BrokerMigrateLegacyOnce
   Initialize-BrokerWebAuthorisations
@@ -2360,11 +3964,11 @@ function Invoke-BrokerAdmin {
   $brokerId = Get-RunningComposeServiceId $BrokerContainer
   if (-not $brokerId) {
     if (Test-Path -LiteralPath $BrokerMadeMarker) {
-      Write-Err 'broker_unavailable: il broker dei segreti non e'' attivo.'
-      Write-Err 'Cosa fare: jht up'
+      Write-Err (Get-JhtText 'ps.broker_unavailable_secrets_broker_not_running')
+      Write-Err (Get-JhtText 'line.cosa_fare_jht_up_3')
     } else {
-      Write-Err 'broker_unavailable: il servizio della posta non c''e'' ancora: si crea la prima volta che serve.'
-      Write-Err 'Cosa fare: jht mail setup'
+      Write-Err ('broker_unavailable: ' + (Get-JhtText 'line.broker_unavailable.il_servizio_della_posta_non'))
+      Write-Err (Get-JhtText 'line.cosa_fare_jht_mail_setup')
     }
     return 1
   }
@@ -2427,65 +4031,65 @@ function Invoke-ApplyHostCommand {
   $action = [string]$ApplyArgs[0]
   $id = ''
   if ($ApplyArgs.Count -ge 2) { $id = [string]$ApplyArgs[1] }
-  if ($id -cnotmatch '^[1-9][0-9]{0,9}$') { Write-Err 'uso: jht apply request|cancel <id>'; return 2 }
+  if ($id -cnotmatch '^[1-9][0-9]{0,9}$') { Write-Err (Get-JhtText 'line.uso_jht_apply_request_cancel_2'); return 2 }
   $containerId = Get-RunningComposeServiceId $Container
-  if (-not $containerId) { Write-Err 'Container JHT non attestabile.'; return 1 }
+  if (-not $containerId) { Write-Err (Get-JhtText 'ps.jht_container_not_verifiable'); return 1 }
 
   if ($action -ceq 'cancel') {
     $withdrawn = Invoke-ApplySkill $containerId @('cancel', $id)
     if ($null -eq $withdrawn -or $withdrawn[0] -cne '1') {
-      Write-Err "Ritiro non riuscito: $(Get-ApplyReason $withdrawn)."
+      Write-Err (Format-JhtText 'line.ritiro_non_riuscito_s' (Get-ApplyReason $withdrawn))
       return 1
     }
-    Write-Info "Ritirata #${id}: non verra' inviata."
+    Write-Info (Format-JhtText 'line.ritirata_s_non_verra_inviata' $id)
     return 0
   }
 
   $shown = Invoke-ApplySkill $containerId @('show', $id)
   if ($null -eq $shown -or $shown[0] -cne '1') {
-    Write-Err "Non autorizzabile: $(Get-ApplyReason $shown)."
+    Write-Err (Format-JhtText 'line.non_autorizzabile_s' (Get-ApplyReason $shown))
     return 1
   }
   $confirm = [string]$shown[2]
   $shownDestination = [string]$shown[3]
   if ($confirm -cnotmatch '^[0-9a-f]{64}$' -or $shownDestination -cnotmatch '^((web|email):[a-z0-9.-]{3,253}|portal:[a-z]{2,20})$') {
-    Write-Err 'Anteprima non valida: niente autorizzato.'
+    Write-Err (Get-JhtText 'line.anteprima_non_valida_niente_autorizzato')
     return 1
   }
   if ([Console]::IsInputRedirected -or -not [Environment]::UserInteractive) {
-    Write-Err "Serve un terminale: l'autorizzazione si conferma a mano."
+    Write-Err (Get-JhtText 'line.serve_un_terminale_l_autorizzazione')
     return 1
   }
   Write-Host ''
   Write-Host "  #${id}  $([string]$shown[5])"
   Write-Host ''
-  Write-Host "  Con l'invio automatico acceso il team compila e INVIA la candidatura,"
-  Write-Host "  senza un'altra conferma. Una volta partita non si richiama."
-  $answer = Read-Host '  Autorizzi questa candidatura? [s/N]'
-  if (@('s', 'si', 'sì', 'y', 'yes') -notcontains ([string]$answer).Trim().ToLowerInvariant()) {
-    Write-Info 'Annullato: niente autorizzato.'
+  Write-Host (Get-JhtText 'ps.apply_auto_send_warning_1')
+  Write-Host (Get-JhtText 'ps.apply_auto_send_warning_2')
+  $answer = Read-Host ('  ' + (Get-JhtText 'line.apply.authorize') + ' [s/N]')
+  if (@('s', 'si', ('s' + [char]0x00EC), 'y', 'yes') -notcontains ([string]$answer).Trim().ToLowerInvariant()) {
+    Write-Info (Get-JhtText 'line.annullato_niente_autorizzato')
     return 1
   }
 
   $written = Invoke-ApplySkill $containerId @('request', $id, '--expect', $confirm)
   if ($null -eq $written -or $written[0] -cne '1') {
-    Write-Err "Non autorizzata: $(Get-ApplyReason $written)."
+    Write-Err (Format-JhtText 'line.non_autorizzata_s' (Get-ApplyReason $written))
     return 1
   }
   $destination = [string]$written[3]
   $instant = [string]$written[4]
   if ($destination -cne $shownDestination -or $instant -cnotmatch '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$') {
     $null = Invoke-ApplySkill $containerId @('cancel', $id)
-    Write-Err "Risposta del container non valida: autorizzazione ritirata, niente partira'."
+    Write-Err (Get-JhtText 'line.risposta_del_container_non_valida')
     return 1
   }
   $recorded = Invoke-BrokerAdmin -InputText '' -AdminArgs @('apply', 'record', $id, $instant, $destination)
   if ($recorded -ne 0) {
     $null = Invoke-ApplySkill $containerId @('cancel', $id)
-    Write-Err "Il broker non ha registrato l'autorizzazione: ritirata, niente partira'."
+    Write-Err (Get-JhtText 'line.il_broker_non_ha_registrato')
     return 1
   }
-  Write-Info "Autorizzata #${id}, verso ${destination}: il CLOSER la prendera' al prossimo giro."
+  Write-Info (Format-JhtText 'line.autorizzata_s_verso_s_il' $id $destination)
   return 0
 }
 
@@ -2493,8 +4097,8 @@ function Invoke-TelegramAdmin {
   param([string]$InputText = $null, [Parameter(ValueFromRemainingArguments)] [string[]]$AdminArgs)
   $telegramId = Get-RunningComposeServiceId $TelegramContainer
   if (-not $telegramId) {
-    Write-Err 'telegram_unavailable: il servizio Telegram isolato non e'' attivo.'
-    Write-Err 'Cosa fare: jht up'
+    Write-Err (Get-JhtText 'ps.telegram_unavailable_isolated_not_running')
+    Write-Err (Get-JhtText 'line.cosa_fare_jht_up_3')
     return 1
   }
   # [string] trasforma $null in "": solo un -InputText passato davvero (anche
@@ -2581,11 +4185,11 @@ function Get-TelegramPairInventory {
   param([string]$Role)
   $digests = @(& { $ErrorActionPreference = 'Continue'; Invoke-TelegramLegacy inventory $Role 2>$null })
   if ($LASTEXITCODE -ne 0 -or @($digests | Where-Object { $_ -notmatch '^[0-9a-f]{64}$' }).Count -gt 0) {
-    Write-Err 'legacy_inventory_failed: migrazione Telegram interrotta.'
+    Write-Err ('legacy_inventory_failed: ' + (Get-JhtText 'line.legacy_inventory_failed.migrazione_telegram_interrotta'))
     return @{ Ok = $false; Digests = @() }
   }
   if ((Invoke-TelegramAdmin -InputText ($digests -join "`n") -AdminArgs @('legacy', 'remember', $Role)) -ne 0) {
-    Write-Err 'legacy_inventory_failed: le impronte non sono state conservate dal servizio isolato.'
+    Write-Err ('legacy_inventory_failed: ' + (Get-JhtText 'line.legacy_inventory_failed.le_impronte_non_sono_state'))
     return @{ Ok = $false; Digests = @() }
   }
   return @{ Ok = $true; Digests = $digests }
@@ -2602,24 +4206,24 @@ function Send-TelegramPairToken {
   if ([Console]::IsInputRedirected) {
     $payload = [Console]::In.ReadToEnd()
   } else {
-    $secureToken = Read-Host "Token del bot $Role (input nascosto)" -AsSecureString
+    $secureToken = Read-Host (Format-JhtText 'ps.bot_token_prompt_hidden' $Role) -AsSecureString
     $tokenPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
     try { $token = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($tokenPointer) }
     finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($tokenPointer) }
     $secureToken = $null
     if ($token -notmatch '^[0-9]{5,12}:[A-Za-z0-9_-]{20,}$') {
       $token = $null
-      Write-Err 'bot_token_invalid: controlla il token generato da BotFather.'
+      Write-Err ('bot_token_invalid: ' + (Get-JhtText 'line.bot_token_invalid.controlla_il_token_generato_da'))
       return 1
     }
     $payload = @{ bot_token = $token } | ConvertTo-Json -Compress
     $token = $null
   }
-  if (-not $payload) { Write-Err 'input_not_json: passa bot_token come JSON su stdin.'; return 2 }
+  if (-not $payload) { Write-Err (Get-JhtText 'ps.input_not_json_bot_token_stdin'); return 2 }
   $code = Invoke-TelegramAdmin -InputText $payload -AdminArgs $adminArgs
   $payload = $null
   if ($code -ne 0) {
-    Write-Err 'Abbinamento rifiutato: genera un token nuovo in BotFather (/revoke) e riprova.'
+    Write-Err (Get-JhtText 'line.abbinamento_rifiutato_genera_un_token')
     return $code
   }
   return 0
@@ -2635,14 +4239,14 @@ function Complete-TelegramPair {
     if ((Invoke-TelegramAdmin -AdminArgs @('cutover', 'enable')) -ne 0) { return 1 }
     Invoke-Compose '--profile' 'telegram' restart $TelegramContainer
     if (-not $WasEnabled -and $AgentWasRunning) { Invoke-Compose restart $Container }
-    Write-Info 'Telegram isolato attivo; il bridge legacy non puo'' essere riabilitato dagli agenti.'
+    Write-Info (Get-JhtText 'line.telegram_isolato_attivo_il_bridge')
     return 0
   }
   if ($remainingCode -eq 1) {
-    Write-Warn 'Bot abbinato e copia legacy rimossa. Restano altri token legacy o un token nell''ambiente del container: rimuovili e completa la rotazione prima del cutover.'
+    Write-Warn (Get-JhtText 'line.bot_abbinato_e_copia_legacy')
     return 0
   }
-  Write-Err 'legacy_inventory_failed: non posso provare che ~/.jht sia privo di token Telegram.'
+  Write-Err ('legacy_inventory_failed: ' + (Get-JhtText 'line.legacy_inventory_failed.non_posso_provare_che_jht'))
   return 1
 }
 
@@ -2650,22 +4254,22 @@ function Invoke-TelegramPair {
   param([string]$Role)
   if ($Role -eq '--all') { return Invoke-TelegramPairAll }
   if ($Role -notin @('assistente', 'capitano', 'mentor')) {
-    Write-Err 'uso: jht telegram pair <assistente|capitano|mentor>|--all'
-    Write-Err 'Interattivo: il token viene chiesto senza eco, poi il bot nuovo riceve un codice monouso dal tuo Telegram. Automazioni: {"bot_token": ...} come JSON su stdin; non salvare il token in ~/.jht e cancella subito qualunque file usato fuori da li''.'
+    Write-Err (Get-JhtText 'line.uso_jht_telegram_pair_assistente')
+    Write-Err (Get-JhtText 'line.interattivo_il_token_viene_chiesto')
     return 2
   }
   $telegramId = Get-RunningComposeServiceId $TelegramContainer
-  if (-not $telegramId) { Write-Err 'telegram_unavailable: esegui jht up'; return 1 }
+  if (-not $telegramId) { Write-Err (Get-JhtText 'ps.telegram_unavailable_run_jht_up'); return 1 }
   # Gli altri ruoli con un token legacy: finche' ne resta uno il servizio non si
   # accende e il ruolo appena abbinato resta muto. Serve solo ad avvisare.
   $remainingOut = @(& { $ErrorActionPreference = 'Continue'; Invoke-TelegramLegacy remaining 2>$null })
   if ($LASTEXITCODE -eq 1) {
     $others = @(($remainingOut -join ' ') -split '\s+' | Where-Object { $_ -in @('assistente', 'capitano', 'mentor') -and $_ -ne $Role })
     if ($others.Count -gt 0) {
-      Write-Warn "Restano token legacy per: $($others -join ' '). Finche' non abbini anche questi ruoli, $Role resta muto su Telegram: abbinali tutti in questa seduta (jht telegram pair --all)."
+      Write-Warn (Format-JhtText 'line.restano_token_legacy_per_s' ($others -join ' ') $Role)
       if (-not [Console]::IsInputRedirected) {
-        $answer = Read-Host "Abbinare $Role adesso? [s/N]"
-        if ($answer -notmatch '^(s|si)$') { Write-Info 'Abbinamento annullato: nessuna modifica.'; return 1 }
+        $answer = Read-Host (Format-JhtText 'ps.pair_role_now_prompt' $Role)
+        if ($answer -notmatch '^(s|si)$') { Write-Info (Get-JhtText 'line.abbinamento_annullato_nessuna_modifica'); return 1 }
       }
     }
   }
@@ -2673,7 +4277,7 @@ function Invoke-TelegramPair {
   if ($agentWasRunning) {
     Invoke-Compose stop $Container | Out-Null
     if ($LASTEXITCODE -ne 0) {
-      Write-Err 'legacy_inventory_failed: non riesco a fermare gli agenti prima dell''inventario host.'
+      Write-Err ('legacy_inventory_failed: ' + (Get-JhtText 'line.legacy_inventory_failed.non_riesco_a_fermare_gli'))
       return 1
     }
   }
@@ -2681,7 +4285,7 @@ function Invoke-TelegramPair {
   if ($agentWasRunning) {
     Invoke-Compose start $Container | Out-Null
     if ($inventory.Ok -and $LASTEXITCODE -ne 0) {
-      Write-Err 'agent_restart_failed: inventario conservato, ma il team non e'' ripartito. Cosa fare: jht up'
+      Write-Err ('agent_restart_failed: ' + (Get-JhtText 'line.agent_restart_failed.inventario_conservato_ma_il_team'))
       return 1
     }
   }
@@ -2690,12 +4294,12 @@ function Invoke-TelegramPair {
   $wasEnabled = $status -match '"enabled"\s*:\s*true'
   # Anche quando l'inventario non trova niente: un agente di una versione
   # precedente puo' aver tolto il token dalla config prima dell'aggiornamento.
-  Write-Info 'Usa sempre un token appena generato in BotFather (/revoke sul bot, oppure un bot nuovo): un token gia'' esistente puo'' essere stato letto dagli agenti anche se oggi non compare in ~/.jht.'
+  Write-Info (Get-JhtText 'ps.use_fresh_botfather_token')
   $code = Send-TelegramPairToken $Role $inventory.Digests
   if ($code -ne 0) { return $code }
   Invoke-TelegramLegacy remove $Role | Out-Null
   if ($LASTEXITCODE -ne 0) {
-    Write-Err 'legacy_cleanup_failed: il token vecchio e'' ancora in ~/.jht; cutover negato.'
+    Write-Err (Get-JhtText 'ps.legacy_cleanup_failed_old_token_still_there')
     return 1
   }
   return Complete-TelegramPair -WasEnabled $wasEnabled -AgentWasRunning $agentWasRunning
@@ -2706,23 +4310,23 @@ function Invoke-TelegramPair {
 # meta' strada, e la storia delle impronte rifiuta comunque quei token.
 function Invoke-TelegramPairAll {
   if ([Console]::IsInputRedirected) {
-    Write-Err 'jht telegram pair --all e'' interattivo: per le automazioni abbina un ruolo alla volta.'
+    Write-Err (Get-JhtText 'line.jht_telegram_pair_all_interattivo')
     return 2
   }
   $telegramId = Get-RunningComposeServiceId $TelegramContainer
-  if (-not $telegramId) { Write-Err 'telegram_unavailable: esegui jht up'; return 1 }
+  if (-not $telegramId) { Write-Err (Get-JhtText 'ps.telegram_unavailable_run_jht_up'); return 1 }
   $remainingOut = @(& { $ErrorActionPreference = 'Continue'; Invoke-TelegramLegacy remaining 2>$null })
   $remainingCode = $LASTEXITCODE
-  if ($remainingCode -eq 0) { Write-Info 'Nessun ruolo ha un token legacy: per un bot nuovo usa jht telegram pair <ruolo>.'; return 0 }
-  if ($remainingCode -ne 1) { Write-Err 'legacy_inventory_failed: non riesco a leggere i token legacy in ~/.jht.'; return 1 }
+  if ($remainingCode -eq 0) { Write-Info (Get-JhtText 'line.nessun_ruolo_ha_un_token'); return 0 }
+  if ($remainingCode -ne 1) { Write-Err ('legacy_inventory_failed: ' + (Get-JhtText 'line.legacy_inventory_failed.non_riesco_a_leggere_i')); return 1 }
   $roles = @(($remainingOut -join ' ') -split '\s+' | Where-Object { $_ -in @('assistente', 'capitano', 'mentor') })
-  if ($roles.Count -eq 0) { Write-Err 'legacy_inventory_failed: ruoli legacy non riconosciuti.'; return 1 }
-  Write-Info "Ruoli da abbinare in questa seduta: $($roles -join ' ')"
+  if ($roles.Count -eq 0) { Write-Err ('legacy_inventory_failed: ' + (Get-JhtText 'line.legacy_inventory_failed.ruoli_legacy_non_riconosciuti')); return 1 }
+  Write-Info (Format-JhtText 'line.ruoli_da_abbinare_in_questa' ($roles -join ' '))
   $agentWasRunning = Test-ContainerUp
   if ($agentWasRunning) {
     Invoke-Compose stop $Container | Out-Null
     if ($LASTEXITCODE -ne 0) {
-      Write-Err 'legacy_inventory_failed: non riesco a fermare gli agenti prima dell''inventario host.'
+      Write-Err ('legacy_inventory_failed: ' + (Get-JhtText 'line.legacy_inventory_failed.non_riesco_a_fermare_gli'))
       return 1
     }
   }
@@ -2738,29 +4342,29 @@ function Invoke-TelegramPairAll {
   if ($agentWasRunning) {
     Invoke-Compose start $Container | Out-Null
     if ($LASTEXITCODE -ne 0) {
-      Write-Err 'agent_restart_failed: inventario conservato, ma il team non e'' ripartito. Cosa fare: jht up'
+      Write-Err ('agent_restart_failed: ' + (Get-JhtText 'line.agent_restart_failed.inventario_conservato_ma_il_team'))
       return 1
     }
   }
   $status = ((& { $ErrorActionPreference = 'Continue'; & docker exec $telegramId jht-telegram-admin cutover status 2>$null }) -join "`n")
   $wasEnabled = $status -match '"enabled"\s*:\s*true'
   $bots = ((& { $ErrorActionPreference = 'Continue'; & docker exec $telegramId jht-telegram-admin bots status 2>$null }) -join "`n")
-  Write-Info 'Usa sempre un token appena generato in BotFather (/revoke sul bot, oppure un bot nuovo): un token gia'' esistente puo'' essere stato letto dagli agenti anche se oggi non compare in ~/.jht.'
+  Write-Info (Get-JhtText 'ps.botfather_fresh_token')
   foreach ($role in $roles) {
     if ($bots -match ('"' + $role + '"\s*:\s*"present"')) {
-      Write-Info "$role ha gia' un bot abbinato: tolgo solo la sua copia legacy."
+      Write-Info (Format-JhtText 'line.s_ha_gi_un_bot' $role)
       continue
     }
     $code = Send-TelegramPairToken $role $digestsByRole[$role]
     if ($code -ne 0) {
-      Write-Err "Abbinamento di $role non riuscito: le copie legacy restano tutte. Rilancia jht telegram pair --all: i ruoli gia' abbinati non chiedono un altro token."
+      Write-Err (Format-JhtText 'line.abbinamento_di_s_non_riuscito' $role)
       return $code
     }
   }
   foreach ($role in $roles) {
     Invoke-TelegramLegacy remove $role | Out-Null
     if ($LASTEXITCODE -ne 0) {
-      Write-Err "legacy_cleanup_failed: i token nuovi sono al sicuro, ma la copia legacy di $role e' ancora in ~/.jht; cutover negato."
+      Write-Err ('legacy_cleanup_failed: ' + (Format-JhtText 'line.legacy_cleanup_failed.i_token_nuovi_sono_al' $role))
       return 1
     }
   }
@@ -2807,7 +4411,7 @@ function Invoke-TelegramLifecycleSteps {
       'remove' { $code = Invoke-TelegramAdmin -AdminArgs @('bots', 'delete', $Role); if ($code -ne 0) { return $code } }
       'chat-id' { $code = Invoke-TelegramAdmin -AdminArgs @('bots', 'chat-id', $Role); if ($code -ne 0) { return $code } }
       'status' { $code = Invoke-TelegramAdmin -AdminArgs @('bots', 'status'); if ($code -ne 0) { return $code } }
-      'not-configured' { Write-Host 'Telegram non attivo: Telegram non configurato.' }
+      'not-configured' { Write-Host (Get-JhtText 'ps.telegram_not_configured') }
       default { throw 'telegram_lifecycle_plan_invalid' }
     }
   }
@@ -2849,13 +4453,13 @@ function Get-TelegramBotsConfigured {
 # no run container, only questions to the engine. «Never configured» (no state volume) and «no bot» are said in one line.
 function Write-TelegramStatusLine {
   if ((Get-Content -LiteralPath $ComposeFile -Raw) -notmatch '(?m)^  jht-telegram:') { return 0 }
-  if (Test-TelegramStateVolumeAbsent) { Write-Host 'Telegram non attivo: Telegram non configurato.'; return 0 }
+  if (Test-TelegramStateVolumeAbsent) { Write-Host (Get-JhtText 'ps.telegram_not_configured'); return 0 }
   $configured = Get-TelegramBotsConfigured
   if ($null -eq $configured) {
-    Write-Host 'Telegram: stato non verificabile adesso (servizio spento o non raggiungibile). Dettagli: jht telegram status'
+    Write-Host (Get-JhtText 'ps.telegram_status_unverifiable')
     return 0
   }
-  if (-not $configured) { Write-Host 'Telegram non attivo: Telegram non configurato.'; return 0 }
+  if (-not $configured) { Write-Host (Get-JhtText 'ps.telegram_not_configured'); return 0 }
   return (Invoke-TelegramAdmin -AdminArgs @('bots', 'status'))
 }
 
@@ -2882,17 +4486,17 @@ function Invoke-TelegramCommand {
     'pair' { return Invoke-TelegramPair $role }
     'chat-id' {
       if ($role -notin @('assistente', 'capitano', 'mentor')) {
-        Write-Err 'uso: jht telegram chat-id <assistente|capitano|mentor>'; return 2
+        Write-Err (Get-JhtText 'line.uso_jht_telegram_chat_id'); return 2
       }
       return Invoke-TelegramAdmin -AdminArgs @('bots', 'chat-id', $role)
     }
     'remove' {
       if ($role -notin @('assistente', 'capitano', 'mentor')) {
-        Write-Err 'uso: jht telegram remove <assistente|capitano|mentor>'; return 2
+        Write-Err (Get-JhtText 'line.uso_jht_telegram_remove_assistente'); return 2
       }
       return Invoke-TelegramAdmin -AdminArgs @('bots', 'delete', $role)
     }
-    default { Write-Err 'uso: jht telegram status|pair <ruolo>|pair --all|chat-id <ruolo>|remove <ruolo>'; return 2 }
+    default { Write-Err (Get-JhtText 'line.uso_jht_telegram_status_pair'); return 2 }
   }
 }
 
@@ -2914,20 +4518,20 @@ function Invoke-BrokerMigrateLegacy {
     if ($envelope) { $answer = (Invoke-NativeWithStdin { $envelope | & { $ErrorActionPreference = 'Continue'; $input | & docker exec -i $brokerId jht-broker-admin secrets import-legacy $name 2>$null } }) -join '' }
     if ($answer -match '"ok": true' -and $answer -match '"state": "imported"') {
       & { $ErrorActionPreference = 'Continue'; & docker exec -u 1001 $agentId /usr/bin/python3 -I /app/shared/broker/legacy.py remove $name *> $null }
-      if ($LASTEXITCODE -ne 0) { Write-Warn "legacy_remove_failed: $name e' nel broker ma la copia in ~/.jht/credentials e' rimasta." }
+      if ($LASTEXITCODE -ne 0) { Write-Warn ('legacy_remove_failed: ' + (Format-JhtText 'line.legacy_remove_failed.s_nel_broker_ma_la' $name)) }
       $migrated = $true
     } elseif ($answer -match '"ok": true' -and $answer -match '"state": "already_migrated"') {
       & { $ErrorActionPreference = 'Continue'; & docker exec -u 1001 $agentId /usr/bin/python3 -I /app/shared/broker/legacy.py remove $name *> $null }
-      Write-Warn "legacy_secret_reappeared: ~/.jht/credentials/$name.json e' ricomparso dopo la migrazione; rimosso senza importarlo."
+      Write-Warn ('legacy_secret_reappeared: ' + (Format-JhtText 'line.legacy_secret_reappeared.jht_credentials_s_json_ricomparso' $name))
     } else {
-      Write-Warn "legacy_migration_failed: $name resta in ~/.jht/credentials."
+      Write-Warn (Format-JhtText 'ps.legacy_migration_failed_stays' $name)
       $failed = $true
     }
   }
   if ($migrated) {
-    Write-Warn 'La casella di posta ora sta nel broker dei segreti. La sua password era leggibile dagli agenti:'
-    Write-Warn 'genera una nuova password per app dal tuo provider e salvala con: jht mail setup'
-    Write-Warn "Fino ad allora la posta si legge e si invia con la password di oggi; l'avviso resta in jht mail status."
+    Write-Warn (Get-JhtText 'line.la_casella_di_posta_ora')
+    Write-Warn (Get-JhtText 'line.genera_una_nuova_password_per')
+    Write-Warn (Get-JhtText 'line.fino_ad_allora_la_posta')
   }
   if ($failed) { return 1 }
   return 0
@@ -2992,21 +4596,21 @@ function Initialize-BrokerWebAuthorisations {
 
 function Reset-BrokerWebAccount {
   $agentId = Get-RunningComposeServiceId 'jht'
-  if (-not $agentId) { Write-Err 'apply relink-account: container non attivo.'; return 1 }
+  if (-not $agentId) { Write-Err (Get-JhtText 'ps.relink_account_container_not_running'); return 1 }
   $account = Get-AgentCloudField -AgentId $agentId -Field 'user_id'
-  if (-not $account) { Write-Err 'apply relink-account: cloud account non disponibile. Esegui prima jht cloud pair.'; return 1 }
+  if (-not $account) { Write-Err (Get-JhtText 'line.apply_relink_account_cloud_account'); return 1 }
   return Invoke-BrokerAdmin -AdminArgs @('apply', 'account', $account)
 }
 
 function Remove-BrokerResetData {
   $project = Get-ComposeProjectName
   if (-not $project) {
-    Write-Err 'reset: non riesco a determinare il progetto Compose; i volumi del broker non sono stati toccati.'
+    Write-Err (Get-JhtText 'line.reset_non_riesco_a_determinare')
     return 1
   }
   Invoke-Compose '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' '--profile' 'login' down
   if ($LASTEXITCODE -ne 0) {
-    Write-Err 'reset: non riesco a fermare il runtime; i volumi del broker non sono stati toccati.'
+    Write-Err (Get-JhtText 'line.reset_non_riesco_a_fermare')
     return 1
   }
   $failed = $false
@@ -3026,25 +4630,25 @@ function Remove-BrokerResetData {
         ForEach-Object { "$($_)".Trim() } | Where-Object { $_ })
     }
     if ($LASTEXITCODE -ne 0) {
-      Write-Err "reset: ricerca del volume $logical non riuscita."
+      Write-Err (Format-JhtText 'line.reset_ricerca_del_volume_s_2' $logical)
       $failed = $true
       continue
     }
     if ($ids.Count -eq 0) {
-      Write-Info "Saltato (non trovato): volume broker $logical"
+      Write-Info (Format-JhtText 'line.saltato_non_trovato_volume_broker' $logical)
       continue
     }
     foreach ($id in $ids) {
       if ($id -notmatch '^[A-Za-z0-9_.-]+$') {
-        Write-Err "reset: nome volume non valido per $logical; rimozione negata."
+        Write-Err (Format-JhtText 'line.reset_nome_volume_non_valido' $logical)
         $failed = $true
         continue
       }
       & { $ErrorActionPreference = 'Continue'; & docker volume rm $id *> $null }
       if ($LASTEXITCODE -eq 0) {
-        Write-Info "Cancellato: volume broker $logical ($id)"
+        Write-Info (Format-JhtText 'line.cancellato_volume_broker_s_s' $logical $id)
       } else {
-        Write-Err "reset: impossibile cancellare il volume broker $logical ($id)."
+        Write-Err (Format-JhtText 'line.reset_impossibile_cancellare_il_volume' $logical $id)
         $failed = $true
       }
     }
@@ -3052,20 +4656,20 @@ function Remove-BrokerResetData {
   if (Test-Path -LiteralPath $BrokerLegacyMarker) {
     try {
       Remove-Item -LiteralPath $BrokerLegacyMarker -Force -ErrorAction Stop
-      Write-Info "Cancellato: marcatore migrazione broker $BrokerLegacyMarker"
+      Write-Info (Format-JhtText 'line.cancellato_marcatore_migrazione_broker_s' $BrokerLegacyMarker)
     } catch {
-      Write-Err "reset: impossibile cancellare il marcatore migrazione broker $BrokerLegacyMarker."
+      Write-Err (Format-JhtText 'line.reset_impossibile_cancellare_il_marcatore' $BrokerLegacyMarker)
       $failed = $true
     }
   }
   if (Test-Path -LiteralPath $BrokerMadeMarker) {
     try { Remove-Item -LiteralPath $BrokerMadeMarker -Force -ErrorAction Stop } catch {
-      Write-Err "reset: impossibile cancellare il marcatore del broker $BrokerMadeMarker."
+      Write-Err (Format-JhtText 'line.reset_impossibile_cancellare_il_marcatore_2' $BrokerMadeMarker)
       $failed = $true
     }
   }
   if (-not $failed) {
-    Write-Warn 'I segreti e lo stato del broker sono stati cancellati: rifai i login dei portali e configura di nuovo la posta.'
+    Write-Warn (Get-JhtText 'line.i_segreti_e_lo_stato')
     return 0
   }
   return 1
@@ -3240,15 +4844,15 @@ function Invoke-RuntimeMigrationPodman {
   )
   $verified = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
   if (-not $DockerPath -or -not (Test-Path -LiteralPath $DockerPath -PathType Leaf)) {
-    Write-Err 'runtime_migration_docker_missing: il client Docker originale non e'' disponibile.'
+    Write-Err ('runtime_migration_docker_missing: ' + (Get-JhtText 'line.runtime_migration_docker_missing.il_client_docker_originale_non'))
     Write-RuntimeMigrationLeft $verified; return 24
   }
   if (-not $PodmanPath -or -not (Test-Path -LiteralPath $PodmanPath -PathType Leaf)) {
-    Write-Err 'runtime_migration_podman_missing: Podman non e'' disponibile.'
+    Write-Err ('runtime_migration_podman_missing: ' + (Get-JhtText 'line.runtime_migration_podman_missing.podman_non_e_disponibile'))
     Write-RuntimeMigrationLeft $verified; return 24
   }
   if ($Image -notmatch '^ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64}$') {
-    Write-Err 'runtime_migration_image_invalid: serve l''immagine JHT fissata per digest.'
+    Write-Err ('runtime_migration_image_invalid: ' + (Get-JhtText 'line.runtime_migration_image_invalid.serve_l_immagine_jht_fissata'))
     Write-RuntimeMigrationLeft $verified; return 24
   }
   & { $ErrorActionPreference = 'Continue'; & $DockerPath image inspect $Image *> $null }
@@ -3257,12 +4861,12 @@ function Invoke-RuntimeMigrationPodman {
   if ($LASTEXITCODE -ne 0) { Write-RuntimeMigrationLeft $verified; return 24 }
   $running = @(& { $ErrorActionPreference = 'Continue'; & $DockerPath ps -q --filter 'label=com.docker.compose.project=host-runtime' 2>$null })
   if ($LASTEXITCODE -ne 0 -or @($running | Where-Object { $_ }).Count -gt 0) {
-    Write-Err 'runtime_migration_team_running: ferma prima il team Docker.'
+    Write-Err ('runtime_migration_team_running: ' + (Get-JhtText 'line.runtime_migration_team_running.ferma_prima_il_team_docker'))
     Write-RuntimeMigrationLeft $verified; return 24
   }
   $running = @(& { $ErrorActionPreference = 'Continue'; & $PodmanPath @(Get-RuntimeMigrationPodmanArgs $Machine @('ps', '-q', '--filter', 'label=com.docker.compose.project=jht')) 2>$null })
   if ($LASTEXITCODE -ne 0 -or @($running | Where-Object { $_ }).Count -gt 0) {
-    Write-Err 'runtime_migration_team_running: ferma prima il team Podman.'
+    Write-Err ('runtime_migration_team_running: ' + (Get-JhtText 'line.runtime_migration_team_running.ferma_prima_il_team_podman'))
     Write-RuntimeMigrationLeft $verified; return 24
   }
 
@@ -3327,7 +4931,7 @@ function Invoke-RuntimeMigrationPodman {
       return 24
     }
   }
-  Write-Info 'Migrazione Docker -> Podman verificata. I volumi Docker restano intatti e contengono ancora le password della posta, gli accessi ai portali e i token di Telegram: richiedono una futura conferma esplicita per la rimozione.'
+  Write-Info (Get-JhtText 'ps.docker_podman_verified_future_removal')
   return 0
 }
 
@@ -3346,7 +4950,7 @@ function Invoke-MailSetup {
       '--dedicated' { $dedicated = 'yes' }
       '--not-dedicated' { $dedicated = 'no' }
       '--password-stdin' { $fromStdin = $true }
-      default { Write-Err "mail setup: opzione sconosciuta $($MailArgs[$i])"; return 2 }
+      default { Write-Err (Format-JhtText 'line.mail_setup_opzione_sconosciuta_s' ($MailArgs[$i])); return 2 }
     }
   }
   if ($fromStdin) {
@@ -3361,16 +4965,16 @@ function Invoke-MailSetup {
       return 1
     }
   }
-  if (-not $user) { $user = Read-Host 'Indirizzo della casella' }
+  if (-not $user) { $user = Read-Host ((Get-JhtText 'line.mail.address_prompt').TrimEnd(':', ' ')) }
   if (-not $dedicated) {
-    $answer = Read-Host "E' una casella DEDICATA agli avvisi di lavoro inoltrati? [s/N]"
+    $answer = Read-Host ((Get-JhtText 'line.mail.dedicated_prompt') + ' [s/N]')
     $dedicated = if ($answer -match '^(s|si|y|yes)$') { 'yes' } else { 'no' }
   }
   $admission = if ($dedicated -eq 'yes') { 'whole_mailbox' } else { 'allowlist' }
   if (-not $fromStdin) {
-    $secure = Read-Host 'Password per app (non viene mostrata)' -AsSecureString
+    $secure = Read-Host ((Get-JhtText 'line.mail.app_password_prompt').TrimEnd(':', ' ')) -AsSecureString
     $password = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
-    if (-not $password) { Write-Err 'mail setup: password vuota'; return 1 }
+    if (-not $password) { Write-Err (Get-JhtText 'line.mail_setup_password_vuota'); return 1 }
   }
   $adminArgs = @('mailbox', 'setup', '--user', $user, '--admission', $admission)
   if ($imapHost) { $adminArgs += @('--imap-host', $imapHost) }
@@ -3401,7 +5005,7 @@ function Invoke-MailCommand {
       return $code
     }
     default {
-      Write-Err 'uso: jht mail setup|status|admission <allowlist|whole_mailbox>|allow add|remove <indirizzo|@dominio>|drafts|approve <id>|discard <id>|journal|delete|migrate'
+      Write-Err (Get-JhtText 'line.uso_jht_mail_setup_status')
       return 2
     }
   }
@@ -3410,10 +5014,10 @@ function Invoke-MailCommand {
 function Ensure-Up {
   if (-not (Test-ContainerUp)) {
     if (Test-JhtTeamStoppedByPerson) { Write-Err (Get-JhtTeamStoppedText); exit 1 }
-    Write-Info "Container '$Container' non attivo, lo avvio..."
+    Write-Info (Format-JhtText 'container.starting' $Container)
     if (-not (Repair-MountOwnership)) { exit 1 }
     if (-not (Initialize-TelegramLegacyInventory)) {
-      Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'
+      Write-Err ('legacy_inventory_failed: ' + (Get-JhtText 'line.legacy_inventory_failed.il_team_resta_fermo_perch_4'))
       exit 1
     }
     # compose's own lines out of sight when it works, whole when it does not (as on `jht up`): the setup starts the team through here
@@ -3424,7 +5028,7 @@ function Ensure-Up {
     while (-not (Test-ContainerUp)) {
       $tries -= 1
       if ($tries -le 0) {
-        Write-Err "Container '$Container' non e' partito entro 10s. Controlla 'jht logs'."
+        Write-Err (Format-JhtText 'line.container_s_non_e_partito' $Container)
         exit 1
       }
       Start-Sleep -Milliseconds 500
@@ -3488,16 +5092,16 @@ function Invoke-HostDownload {
     if ($arg -eq '--help' -or $arg -eq '-h') { Write-Host $usage; $script:HostDownloadExitCode = 0; return }
     elseif ($arg -eq '--deb') { $deb = $true }
     elseif ($arg -in @('--os', '--version', '--output', '-o')) {
-      if ($i + 1 -ge $DownloadArgs.Count -or -not $DownloadArgs[$i + 1]) { Write-Err "$arg needs a value"; $script:HostDownloadExitCode = 2; return }
+      if ($i + 1 -ge $DownloadArgs.Count -or -not $DownloadArgs[$i + 1]) { Write-Err (Format-JhtText 'line.s_needs_a_value' $arg); $script:HostDownloadExitCode = 2; return }
       $i += 1
       if ($arg -eq '--os') { $os = $DownloadArgs[$i] } elseif ($arg -eq '--version') { $version = $DownloadArgs[$i] } else { $output = $DownloadArgs[$i] }
     }
     elseif ($arg.StartsWith('--os=')) { $os = $arg.Substring(5) }
     elseif ($arg.StartsWith('--version=')) { $version = $arg.Substring(10) }
     elseif ($arg.StartsWith('--output=')) { $output = $arg.Substring(9) }
-    else { Write-Err "unknown argument: $arg"; Write-Host $usage; $script:HostDownloadExitCode = 2; return }
+    else { Write-Err (Format-JhtText 'ps.unknown_argument' $arg); Write-Host $usage; $script:HostDownloadExitCode = 2; return }
   }
-  if (-not $os -or -not $version) { Write-Err '--os and --version are required'; Write-Host $usage; $script:HostDownloadExitCode = 2; return }
+  if (-not $os -or -not $version) { Write-Err (Get-JhtText 'line.os_and_version_are_required'); Write-Host $usage; $script:HostDownloadExitCode = 2; return }
 
   $platform = switch ($os.ToLowerInvariant()) {
     { $_ -in @('win', 'win32', 'windows') } { 'windows' }
@@ -3505,29 +5109,29 @@ function Invoke-HostDownload {
     'linux' { 'linux' }
     default { $null }
   }
-  if (-not $platform) { Write-Err "sistema non supportato: $os. Usa windows o macos."; $script:HostDownloadExitCode = 2; return }
+  if (-not $platform) { Write-Err (Format-JhtText 'download.unsupported_os' $os); $script:HostDownloadExitCode = 2; return }
   $version = $version -replace '^v', ''
-  if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') { Write-Err "versione non valida: $version. Esempio: 0.3.5."; $script:HostDownloadExitCode = 2; return }
-  if ($deb -and $platform -ne 'linux') { Write-Err '--deb vale solo per Linux.'; $script:HostDownloadExitCode = 2; return }
+  if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') { Write-Err (Format-JhtText 'download.bad_version' $version); $script:HostDownloadExitCode = 2; return }
+  if ($deb -and $platform -ne 'linux') { Write-Err (Get-JhtText 'download.deb_only_linux'); $script:HostDownloadExitCode = 2; return }
   if ($platform -eq 'linux') {
-    Write-Err 'In questa versione non c''e'' l''app desktop per Linux: usa install.sh. Non e'' stato scaricato niente.'
+    Write-Err (Get-JhtText 'download.linux_no_app')
     $script:HostDownloadExitCode = 1
     return
   }
   $parts = $version.Split('-')[0].Split('.')
   if ($platform -eq 'windows' -and (([int]$parts[0] -gt 0) -or ([int]$parts[1] -ge 4))) {
-    Write-Err 'Windows non fa parte della 0.4.0: la release non ha un installer per Windows. Non e'' stato scaricato niente.'
+    Write-Err (Get-JhtText 'download.windows_missing')
     $script:HostDownloadExitCode = 1
     return
   }
   # Le release 0.3.x hanno altri file (tar.gz, setup.exe, zip): l'app per macOS e' dalla 0.4.0.
   if ($platform -ne 'windows' -and [int]$parts[0] -eq 0 -and [int]$parts[1] -lt 4) {
-    Write-Err "Questa release (v$version) non ha l'app per macOS: usa la 0.4.0 o successive. Non e' stato scaricato niente."
+    Write-Err (Format-JhtText 'download.release_no_app' $version)
     $script:HostDownloadExitCode = 1
     return
   }
   if ($platform -eq 'macos' -and $env:JHT_DOWNLOAD_HOST -eq 'darwin-x64') {
-    Write-Err 'L''app per macOS della 0.4 gira solo su Mac con Apple silicon (M1 e successivi); questo e'' un Mac Intel, non supportato nella 0.4. Non e'' stato scaricato niente.'
+    Write-Err (Get-JhtText 'download.intel_mac')
     $script:HostDownloadExitCode = 1
     return
   }
@@ -3538,17 +5142,17 @@ function Invoke-HostDownload {
   $destination = if ($output) { [IO.Path]::GetFullPath($output) } else { Join-Path (Join-Path $env:USERPROFILE 'Downloads') $asset }
   $parent = Split-Path -Parent $destination
   try { New-Item -ItemType Directory -Force -Path $parent -ErrorAction Stop | Out-Null }
-  catch { Write-Err "impossibile creare la directory di destinazione: $parent"; return }
+  catch { Write-Err (Format-JhtText 'download.mkdir_failed' $parent); return }
   $userData = if ($env:JHT_USER_DIR_HOST) { $env:JHT_USER_DIR_HOST } else { Join-Path $env:USERPROFILE 'Documents\Job Hunter Team' }
   $jhtHome = if ($env:JHT_HOME_HOST) { $env:JHT_HOME_HOST } else { Join-Path $env:USERPROFILE '.jht' }
   if (Test-DownloadInsideShared -Directory $parent -Shared @($jhtHome, $userData)) {
-    Write-Err "la destinazione sta in una cartella condivisa con il team: scegline una fuori, come Downloads."
+    Write-Err (Get-JhtText 'ps.download_shared_folder_no_path')
     return
   }
   $existing = Get-Item -LiteralPath $destination -Force -ErrorAction SilentlyContinue
   if ($existing) {
-    if (($existing.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { Write-Err "la destinazione e' un link: $destination"; return }
-    if ($existing.PSIsContainer) { Write-Err "la destinazione esiste e non e' un file: $destination"; return }
+    if (($existing.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { Write-Err (Format-JhtText 'download.dest_is_link' $destination); return }
+    if ($existing.PSIsContainer) { Write-Err (Format-JhtText 'download.dest_not_file' $destination); return }
   }
 
   $base = if ($env:JHT_RELEASE_BASE_URL) { $env:JHT_RELEASE_BASE_URL } else { 'https://github.com/leopu00/job-hunter-team/releases/download' }
@@ -3568,43 +5172,43 @@ function Invoke-HostDownload {
       $final = if ($response.BaseResponse.ResponseUri) { $response.BaseResponse.ResponseUri }
                elseif ($response.BaseResponse.RequestMessage) { $response.BaseResponse.RequestMessage.RequestUri }
                else { $null }
-      if (-not $seam -and $final -and $final.Scheme -ne 'https') { throw "la release e' arrivata senza HTTPS: $url" }
+      if (-not $seam -and $final -and $final.Scheme -ne 'https') { throw (Format-JhtText 'ps.release_arrived_without_https' $url) }
     }
     try { & $fetch "$base/SHA256SUMS" (Join-Path $work 'SHA256SUMS') }
-    catch { Write-Err "download non riuscito: SHA256SUMS di v$version ($($_.Exception.Message))"; return }
+    catch { Write-Err (Format-JhtText 'ps.download_sums_failed_detail' $version ($_.Exception.Message)); return }
     $expected = ''
     foreach ($line in (Get-Content -LiteralPath (Join-Path $work 'SHA256SUMS'))) {
       if ($line -match '^([0-9a-fA-F]{64})\s+\*?(.+?)\s*$' -and $Matches[2] -ceq $asset) { $expected = $Matches[1].ToLowerInvariant(); break }
     }
-    if (-not $expected) { Write-Err "SHA-256 dichiarato non trovato per $asset."; return }
+    if (-not $expected) { Write-Err (Format-JhtText 'download.sum_missing' $asset); return }
 
     if ($existing) {
       if ((Get-DownloadSha256 -Path $destination) -eq $expected) {
         Write-Host ''
-        Write-Host "  File gia' presente e verificato: $destination"
-        Write-Host "  SHA-256 verificato: $expected"
+        Write-Host (Format-JhtText 'download.present_verified' $destination)
+        Write-Host (Format-JhtText 'download.sha_verified' $expected)
         $script:HostDownloadExitCode = 0
         return
       }
-      Write-Err "il file $destination esiste ma il suo SHA-256 non corrisponde: non e' stato sovrascritto."
+      Write-Err (Format-JhtText 'download.mismatch_existing' $destination)
       return
     }
 
-    Write-Host "  Scarico $asset..."
+    Write-Host (Format-JhtText 'download.fetching' $asset)
     try { & $fetch "$base/$asset" (Join-Path $work 'asset') }
-    catch { Write-Err "download non riuscito: $asset ($($_.Exception.Message))"; return }
+    catch { Write-Err (Format-JhtText 'ps.download_asset_failed_detail' $asset ($_.Exception.Message)); return }
     $actual = (Get-DownloadSha256 -Path (Join-Path $work 'asset'))
-    if ($actual -ne $expected) { Write-Err "SHA-256 non valido per ${asset}: atteso $expected, ottenuto $actual."; return }
+    if ($actual -ne $expected) { Write-Err (Format-JhtText 'download.hash_invalid' $asset $expected $actual); return }
 
     # Pubblicazione: copia in un nome nuovo accanto alla destinazione e rinomina senza sostituire (File.Move a due
     # argomenti e' no-clobber anche su Windows PowerShell 5.1: se il target compare durante il download fallisce).
     [IO.File]::Copy((Join-Path $work 'asset'), $part, $false)
     [IO.File]::Move($part, $destination)
-    Write-Host "  SHA-256 verificato: $actual"
-    Write-Host "  Salvato in: $destination"
+    Write-Host (Format-JhtText 'download.sha_verified' $actual)
+    Write-Host (Format-JhtText 'download.saved_in' $destination)
     $script:HostDownloadExitCode = 0
   } catch {
-    Write-Err "download sull'host non riuscito: $($_.Exception.Message)"
+    Write-Err (Format-JhtText 'ps.host_download_failed' ($_.Exception.Message))
   } finally {
     $ProgressPreference = $previousProgress
     if (Test-Path -LiteralPath $part) { Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue }
@@ -3647,10 +5251,10 @@ function Write-UpgradeResult {
   if ($script:UpgradeJson) {
     [Console]::Out.WriteLine(($result | ConvertTo-Json -Compress -Depth 4))
   } elseif ($Ok) {
-    Write-Host "Aggiornamento completato: $PreviousVersion ($PreviousImage) -> $CurrentVersion ($CurrentImage). $Message" -ForegroundColor Green
+    Write-Host (Format-JhtText 'line.upgrade.done' $PreviousVersion $PreviousImage $CurrentVersion $CurrentImage $Message) -ForegroundColor Green
   } else {
-    Write-Err "Aggiornamento non completato ($Phase): $Message"
-    if ($RolledBack) { Write-Info 'Runtime precedente ripristinato.' }
+    Write-Err (Format-JhtText 'ps.upgrade_not_completed' $Phase $Message)
+    if ($RolledBack) { Write-Info (Get-JhtText 'line.upgrade.restored') }
   }
 }
 
@@ -3779,10 +5383,10 @@ function Invoke-UpgradeFullPull {
   $script:UpgradeFullKeep = ''
   if (-not $script:UpgradeFullRef) { return }
   if ($script:UpgradeFullRef -eq $DefaultRuntimeImage) { $script:UpgradeFullKeep = $script:UpgradeFullRef; return }
-  Write-UpgradeNote "Scarico l'immagine piena aggiornata..."
+  Write-UpgradeNote (Get-JhtText 'ps.upgrade_pulling_full_image')
   & { $ErrorActionPreference = 'Continue'; & docker pull $script:UpgradeFullRef *> $null }
   if ($LASTEXITCODE -eq 0) { $script:UpgradeFullKeep = $script:UpgradeFullRef }
-  else { Write-UpgradeNote "full_pull_failed: l'immagine piena nuova non e' arrivata, resta la vecchia. Cosa fare: jht tools pull" }
+  else { Write-UpgradeNote (Get-JhtText 'ps.full_pull_failed_keep_old') }
 }
 
 # L'ID (senza prefisso) della piena che un'installazione a livello core tiene; niente se non e' qui.
@@ -3799,7 +5403,7 @@ function Remove-OldJhtImages {
   $script:UpgradePrune = $null
   if ($env:JHT_KEEP_OLD_IMAGES -eq '1') {
     $script:UpgradePrune = New-UpgradePrune 'opt-out'
-    Write-UpgradeNote 'Immagini JHT vecchie: tenute tutte (JHT_KEEP_OLD_IMAGES=1).'
+    Write-UpgradeNote (Get-JhtText 'ps.old_images_kept_all')
     return
   }
   $currentId = Get-PlainImageId $Current
@@ -3837,9 +5441,9 @@ function Remove-OldJhtImages {
     if ($LASTEXITCODE -eq 0) { $removed++; $freed += $size } else { $refused++ }
   }
   $script:UpgradePrune = New-UpgradePrune '' $removed $freed $refused $busy
-  $note = "Immagini JHT vecchie: rimosse $removed, liberati circa $([long]($freed / 1MB)) MB (dimensione nominale: i layer condivisi si liberano solo in parte), tenute: corrente, precedente."
-  if ($busy -gt 0) { $note += " In uso da un container (tenute): $busy." }
-  if ($refused -gt 0) { $note += " Rifiutate dal motore (tenute): $refused." }
+  $note = (Format-JhtText 'ps.old_images_removed' $removed ([long]($freed / 1MB)))
+  if ($busy -gt 0) { $note += (Format-JhtText 'ps.old_images_busy' $busy) }
+  if ($refused -gt 0) { $note += (Format-JhtText 'ps.old_images_refused' $refused) }
   Write-UpgradeNote $note
 }
 
@@ -4027,25 +5631,25 @@ function Invoke-RuntimeUpgrade {
   foreach ($arg in $UpgradeArgs) {
     if ($arg -eq '--json') { $script:UpgradeJson = $true }
     elseif ($arg -eq '--check') { $checkOnly = $true }
-    elseif ($arg -ne '--apply') { Write-UpgradeResult $false $false 'preflight' 'unknown' 'none' 'unknown' 'none' $false 'Opzione upgrade non supportata' $false; return 2 }
+    elseif ($arg -ne '--apply') { Write-UpgradeResult $false $false 'preflight' 'unknown' 'none' 'unknown' 'none' $false (Get-JhtText 'ps.upgrade_option_unsupported') $false; return 2 }
   }
   if (Test-Path -LiteralPath $RuntimeImageFile -PathType Leaf) {
-    Write-UpgradeResult $false $false 'preflight' 'pinned' 'none' 'pinned' 'none' $false 'Canale di test: si aggiorna reinstallando dalla build di test' $false
+    Write-UpgradeResult $false $false 'preflight' 'pinned' 'none' 'pinned' 'none' $false (Get-JhtText 'ps.upgrade_test_channel') $false
     return 1
   }
   if (-not (Test-Path -LiteralPath $RuntimeDir)) {
-    if (-not (Install-ProtectedRuntimeFromRelease)) { Write-UpgradeResult $false $false 'preflight' 'unknown' 'none' 'unknown' 'none' $false 'Runtime host protetto non installabile' $false; return 1 }
+    if (-not (Install-ProtectedRuntimeFromRelease)) { Write-UpgradeResult $false $false 'preflight' 'unknown' 'none' 'unknown' 'none' $false (Get-JhtText 'ps.upgrade_host_runtime_not_installable') $false; return 1 }
   }
   if (-not (Test-RuntimePathAuthority) -or -not (Test-RuntimeAncestorsWithoutReparsePoint $RuntimeDir) -or -not (Test-ProtectedRuntimeNode $RuntimeDir -Directory) -or -not (Test-RuntimeDirectoryAcl)) {
     Write-UpgradeResult $false $false 'preflight' 'unknown' 'none' 'unknown' 'none' $false 'Runtime host fuori authority' $false
     return 1
   }
-  if (-not (Enter-UpgradeLock)) { Write-UpgradeResult $false $false 'preflight' 'unknown' 'none' 'unknown' 'none' $false 'Un aggiornamento e gia in corso' $false; return 1 }
+  if (-not (Enter-UpgradeLock)) { Write-UpgradeResult $false $false 'preflight' 'unknown' 'none' 'unknown' 'none' $false (Get-JhtText 'ps.upgrade_already_running') $false; return 1 }
   $script:UpgradeJournal = Join-Path $RuntimeDir '.upgrade-journal'
   try {
-    if ((Test-Path $script:UpgradeJournal) -and -not (Restore-UpgradePrevious)) { Write-UpgradeResult $false $false 'recovery' 'unknown' 'none' 'unknown' 'none' $false 'Recovery dell upgrade precedente non riuscita' $false; return 1 }
-    try { Assert-TrustedRuntime } catch { Write-UpgradeResult $false $false 'preflight' 'unknown' 'none' 'unknown' 'none' $false 'Runtime host non attendibile' $false; return 1 }
-    if (-not (Test-UpgradeDockerReady) -or -not (Test-Path $ComposeFile) -or -not (Test-Path $WrapperPath)) { Write-UpgradeResult $false $false 'preflight' 'unknown' 'none' 'unknown' 'none' $false 'Docker o runtime host non disponibile' $false; return 1 }
+    if ((Test-Path $script:UpgradeJournal) -and -not (Restore-UpgradePrevious)) { Write-UpgradeResult $false $false 'recovery' 'unknown' 'none' 'unknown' 'none' $false (Get-JhtText 'ps.upgrade_recovery_failed') $false; return 1 }
+    try { Assert-TrustedRuntime } catch { Write-UpgradeResult $false $false 'preflight' 'unknown' 'none' 'unknown' 'none' $false (Get-JhtText 'ps.upgrade_host_runtime_untrusted') $false; return 1 }
+    if (-not (Test-UpgradeDockerReady) -or -not (Test-Path $ComposeFile) -or -not (Test-Path $WrapperPath)) { Write-UpgradeResult $false $false 'preflight' 'unknown' 'none' 'unknown' 'none' $false (Get-JhtText 'ps.upgrade_docker_unavailable') $false; return 1 }
     $wasRunning = Test-ContainerUp
     $oldImage = if ($wasRunning) { Get-UpgradeImage } else { 'none' }
     $oldVersion = if ($wasRunning) { Get-UpgradeVersion } else { 'non-installata' }
@@ -4055,14 +5659,14 @@ function Invoke-RuntimeUpgrade {
     # `disk_low`; la frase la mostra l'app dalla sua tabella codice->frase.
     $diskLow = Get-DiskLowPermille
     if ($null -ne $diskLow) {
-      if (-not $script:UpgradeJson) { Write-Err "disk_low: Gli agenti richiedono almeno $(Get-DiskGibText $DiskBlockFreeKib) GiB di disco - disponibili: $(Get-DiskGibText $script:DiskLowFreeKib) GiB. Per liberare spazio svuota il Cestino ed elimina i file grandi che non ti servono e le immagini Docker inutilizzate, poi riprova: non e' stato scaricato ne' modificato niente." }
+      if (-not $script:UpgradeJson) { Write-Err (Format-JhtText 'ps.upgrade_disk_low' (Get-DiskGibText $DiskBlockFreeKib) (Get-DiskGibText $script:DiskLowFreeKib)) }
       Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'disk_low' $false
       return 1
     }
     $script:UpgradeStage = Join-Path $RuntimeDir ('.upgrade-stage-' + $PID + '-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $script:UpgradeStage -ErrorAction Stop | Out-Null
     $newCompose = Join-Path $script:UpgradeStage 'docker-compose.yml'; $newWrapper = Join-Path $script:UpgradeStage 'jht-wrapper.ps1'
-    Write-UpgradeNote 'Scarico runtime aggiornato...'
+    Write-UpgradeNote (Get-JhtText 'ps.upgrade_note_download_runtime')
     try {
       $releaseBase = Get-AttestedRawBase
       Invoke-WebRequest -UseBasicParsing -Uri "$releaseBase/docker-compose.yml" -OutFile $newCompose
@@ -4070,10 +5674,10 @@ function Invoke-RuntimeUpgrade {
       [scriptblock]::Create((Get-Content -LiteralPath $newWrapper -Raw)) | Out-Null
       if (-not (Select-String -LiteralPath $newWrapper -SimpleMatch '$JHT_HOST_RUNTIME_PROTOCOL = 1' -Quiet)) { throw 'wrapper runtime protocol missing' }
       if (-not (Select-String -LiteralPath $newCompose -Pattern '^\s*-\s*jht-runtime-mask:/jht_home/runtime(?:\s|$)' -Quiet)) { throw 'compose runtime mask missing' }
-    } catch { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Runtime remoto non valido o non raggiungibile' $false; return 1 }
-    if (-not (Invoke-UpgradeCompose $newCompose 'config' '-q')) { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Compose remoto non valido' $false; return 1 }
+    } catch { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false (Get-JhtText 'ps.upgrade_remote_runtime_invalid') $false; return 1 }
+    if (-not (Invoke-UpgradeCompose $newCompose 'config' '-q')) { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false (Get-JhtText 'ps.upgrade_remote_compose_invalid') $false; return 1 }
     $metadataChanged = -not ((Get-FileHash $newCompose).Hash -eq (Get-FileHash $ComposeFile).Hash) -or -not ((Get-FileHash $newWrapper).Hash -eq (Get-FileHash $WrapperPath).Hash)
-    if (-not (Initialize-UpgradeTierPlan $newWrapper)) { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Il rilascio non porta un nucleo valido per questa installazione: reinstalla' $false; return 1 }
+    if (-not (Initialize-UpgradeTierPlan $newWrapper)) { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false (Get-JhtText 'ps.upgrade_release_core_invalid') $false; return 1 }
     # A livello core il nucleo candidato e' l'immagine di tutto l'upgrade (pull, avvio, verifica, broker), come per `up`.
     if ($script:UpgradeCoreRef) { $env:JHT_IMAGE = $script:UpgradeCoreRef }
     $script:UpgradeRollbackDir = Join-Path $RuntimeDir ('.upgrade-rollback-' + [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() + '-' + $PID)
@@ -4086,29 +5690,29 @@ function Invoke-RuntimeUpgrade {
     foreach ($snapshot in @('docker-compose.yml', 'jht-wrapper.ps1', '.runtime-integrity')) {
       if (-not (Set-ProtectedRuntimeNodeOwner (Join-Path $script:UpgradeRollbackDir $snapshot))) { $rollbackOwned = $false }
     }
-    if (-not $rollbackOwned -or -not (Write-UpgradeJournal 'prepared' $oldImage $wasRunning)) { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'Impossibile preparare il rollback' $false; return 1 }
-    Write-UpgradeNote 'Scarico l immagine piu recente...'
-    if (-not (Invoke-UpgradeCompose $newCompose 'pull' $Container)) { Remove-UpgradeTransaction; Write-UpgradeResult $false $false 'pull' $oldVersion $oldImage $oldVersion $oldImage $false 'Download immagine non riuscito' $false; return 1 }
+    if (-not $rollbackOwned -or -not (Write-UpgradeJournal 'prepared' $oldImage $wasRunning)) { Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false (Get-JhtText 'ps.upgrade_rollback_not_prepared') $false; return 1 }
+    Write-UpgradeNote (Get-JhtText 'ps.upgrade_note_download_image')
+    if (-not (Invoke-UpgradeCompose $newCompose 'pull' $Container)) { Remove-UpgradeTransaction; Write-UpgradeResult $false $false 'pull' $oldVersion $oldImage $oldVersion $oldImage $false (Get-JhtText 'ps.upgrade_image_download_failed') $false; return 1 }
     $candidateFiles = @('-f', $newCompose)
     if ($ContainerRuntime -eq 'podman') { $candidateFiles += @('-f', $PodmanComposeFile) }
     $candidateRef = ((& { $ErrorActionPreference = 'Continue'; & docker compose @candidateFiles --project-directory $RuntimeDir config --images 2>$null } | Select-Object -First 1) -as [string]).Trim()
     if (-not $candidateRef) { $candidateRef = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { $DefaultRuntimeImage } }
     $candidateImage = ((& { $ErrorActionPreference = 'Continue'; & docker image inspect $candidateRef --format '{{.Id}}' 2>$null } | Select-Object -First 1) -as [string]).Trim()
     if (-not $candidateImage) { $candidateImage = 'sconosciuta' }
-    if (-not (Write-UpgradeJournal 'pulled' $oldImage $wasRunning)) { Write-UpgradeResult $false $false 'pull' $oldVersion $oldImage $oldVersion $oldImage $false 'Impossibile aggiornare il journal' $false; return 1 }
+    if (-not (Write-UpgradeJournal 'pulled' $oldImage $wasRunning)) { Write-UpgradeResult $false $false 'pull' $oldVersion $oldImage $oldVersion $oldImage $false (Get-JhtText 'ps.upgrade_journal_not_updated') $false; return 1 }
     if ($checkOnly) { Remove-UpgradeTransaction; $changed = ($candidateImage -ne $oldImage) -or $metadataChanged; Write-UpgradeResult $true $changed 'check' $oldVersion $oldImage $oldVersion $candidateImage $changed 'Controllo completato; nessuna modifica al runtime' $false; return 0 }
-    Write-UpgradeNote 'Attivo il nuovo runtime...'
-    if (-not (Repair-MountOwnership $candidateRef)) { Remove-UpgradeTransaction; Write-UpgradeResult $false $false 'mounts' $oldVersion $oldImage $oldVersion $oldImage $false 'Cartelle di Job Hunter Team non scrivibili dal container (mount_repair_failed)' $false; return 1 }
+    Write-UpgradeNote (Get-JhtText 'ps.upgrade_note_activate_runtime')
+    if (-not (Repair-MountOwnership $candidateRef)) { Remove-UpgradeTransaction; Write-UpgradeResult $false $false 'mounts' $oldVersion $oldImage $oldVersion $oldImage $false (Get-JhtText 'ps.upgrade_mounts_not_writable') $false; return 1 }
     if (-not (Invoke-UpgradeCompose $newCompose 'up' '-d' '--force-recreate' $Container) -or -not (Write-UpgradeJournal 'candidate_started' $oldImage $wasRunning) -or -not (Test-UpgradeRunning)) {
-      $rolledBack = Restore-UpgradePrevious; Write-UpgradeResult $false $false 'verify' $oldVersion $oldImage $oldVersion $oldImage $false 'Il nuovo runtime non ha superato la verifica' $rolledBack; return 1
+      $rolledBack = Restore-UpgradePrevious; Write-UpgradeResult $false $false 'verify' $oldVersion $oldImage $oldVersion $oldImage $false (Get-JhtText 'ps.upgrade_verify_failed') $rolledBack; return 1
     }
     $newVersion = Get-UpgradeVersion; if (-not $newVersion) { $newVersion = 'sconosciuta' }
     if (-not (Replace-UpgradeFile $newCompose $ComposeFile) -or -not (Replace-UpgradeFile $newWrapper $WrapperPath)) {
-      $rolledBack = Restore-UpgradePrevious; Write-UpgradeResult $false $false 'commit' $oldVersion $oldImage $oldVersion $oldImage $false 'Metadata runtime non persistiti' $rolledBack; return 1
+      $rolledBack = Restore-UpgradePrevious; Write-UpgradeResult $false $false 'commit' $oldVersion $oldImage $oldVersion $oldImage $false (Get-JhtText 'ps.upgrade_metadata_not_persisted') $rolledBack; return 1
     }
     Write-RuntimeManifest
     if (-not (Write-UpgradeJournal 'metadata_committed' $oldImage $wasRunning)) {
-      $rolledBack = Restore-UpgradePrevious; Write-UpgradeResult $false $false 'commit' $oldVersion $oldImage $oldVersion $oldImage $false 'Metadata runtime non persistiti' $rolledBack; return 1
+      $rolledBack = Restore-UpgradePrevious; Write-UpgradeResult $false $false 'commit' $oldVersion $oldImage $oldVersion $oldImage $false (Get-JhtText 'ps.upgrade_metadata_not_persisted') $rolledBack; return 1
     }
     Remove-UpgradeTransaction
     # Il broker dei segreti (P1 del 08/10) usa la stessa immagine del team:
@@ -4119,13 +5723,13 @@ function Invoke-RuntimeUpgrade {
     if ($brokerThere -and (Get-Content -LiteralPath $ComposeFile -Raw) -match "(?m)^  $([regex]::Escape($BrokerContainer)):") {
       New-Item -ItemType File -Path $BrokerMadeMarker -Force -ErrorAction SilentlyContinue | Out-Null
       if (-not (Invoke-UpgradeCompose $ComposeFile '--profile' 'broker' 'up' '-d' '--force-recreate' '--no-deps' $BrokerContainer)) {
-        Write-UpgradeNote "broker_restart_failed: il broker dei segreti non e' ripartito. Cosa fare: jht up"
+        Write-UpgradeNote (Get-JhtText 'ps.upgrade_broker_restart_failed')
       }
       $null = Invoke-BrokerMigrateLegacyOnce
     }
-    if (-not (Install-RuntimeHelpers)) { Write-UpgradeNote "helper_install_failed: gli script host nuovi si prendono alla prima richiesta o con un altro 'jht upgrade'" }
+    if (-not (Install-RuntimeHelpers)) { Write-UpgradeNote (Get-JhtText 'ps.upgrade_helper_install_failed') }
     if ((Invoke-AvailableTelegramLifecycle 'resume') -ne 0) {
-      Write-UpgradeNote "telegram_restart_failed: il servizio Telegram isolato non e' ripartito. Cosa fare: jht up"
+      Write-UpgradeNote (Get-JhtText 'ps.upgrade_telegram_restart_failed')
     }
     # Solo qui: upgrade riuscito, container nuovo verificato e commit fatto.
     # Un errore della pulizia non deve mai far ripristinare un upgrade riuscito.
@@ -4141,7 +5745,7 @@ function Invoke-RuntimeUpgrade {
       Remove-UpgradeTransaction
       $rolledBack = $false
     }
-    Write-UpgradeResult $false $false 'unexpected' 'unknown' 'none' 'unknown' 'none' $false 'Errore inatteso durante l aggiornamento' $rolledBack
+    Write-UpgradeResult $false $false 'unexpected' 'unknown' 'none' 'unknown' 'none' $false (Get-JhtText 'ps.upgrade_unexpected_error') $rolledBack
     return 1
   } finally { Clear-UpgradeEphemeral }
 }
@@ -4165,26 +5769,26 @@ function Convert-SetupKeyFileArgs {
     if (($arg -ceq '--api-key-file') -and (($i + 1) -lt $SetupArgs.Count)) { $value = $SetupArgs[$i + 1]; $takesNext = $true }
     elseif ($arg.StartsWith('--api-key-file=', [System.StringComparison]::Ordinal)) { $value = $arg.Substring(15) }
     if (($null -eq $value) -or ($value.StartsWith('/') -and -not (Test-Path -LiteralPath $value))) { $out.Add($arg); continue }
-    if ($null -ne $hostFile) { $plan.Error = '--api-key-file was given twice'; return $plan }
+    if ($null -ne $hostFile) { $plan.Error = (Get-JhtText 'keyfile.twice'); return $plan }
     $hostFile = $value
     if ($takesNext) { $i++ }
     $out.Add('--api-key-stdin')
   }
   if ($null -eq $hostFile) { return $plan }
-  if (@($SetupArgs | Where-Object { $_ -ceq '--api-key-stdin' }).Count -gt 0) { $plan.Error = 'use --api-key-file or --api-key-stdin, not both'; return $plan }
+  if (@($SetupArgs | Where-Object { $_ -ceq '--api-key-stdin' }).Count -gt 0) { $plan.Error = (Get-JhtText 'keyfile.both'); return $plan }
   $item = $null
-  try { $item = Get-Item -LiteralPath $hostFile -Force -ErrorAction Stop } catch { $plan.Error = "the file given to --api-key-file cannot be read: $hostFile"; return $plan }
-  if ($item.PSIsContainer -or (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)) { $plan.Error = "the file given to --api-key-file must be a regular file, not a folder or a link: $hostFile"; return $plan }
-  if (($item.Length -lt 1) -or ($item.Length -gt 4096)) { $plan.Error = "the file given to --api-key-file is empty or too big for a key (1 to 4096 bytes): $hostFile"; return $plan }
+  try { $item = Get-Item -LiteralPath $hostFile -Force -ErrorAction Stop } catch { $plan.Error = (Format-JhtText 'keyfile.unreadable' $hostFile); return $plan }
+  if ($item.PSIsContainer -or (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)) { $plan.Error = (Format-JhtText 'keyfile.not_file' $hostFile); return $plan }
+  if (($item.Length -lt 1) -or ($item.Length -gt 4096)) { $plan.Error = (Format-JhtText 'keyfile.size' $hostFile); return $plan }
   $bytes = $null
-  try { $bytes = [System.IO.File]::ReadAllBytes($item.FullName) } catch { $plan.Error = "the file given to --api-key-file cannot be read: $hostFile"; return $plan }
+  try { $bytes = [System.IO.File]::ReadAllBytes($item.FullName) } catch { $plan.Error = (Format-JhtText 'keyfile.unreadable' $hostFile); return $plan }
   # A file written by `echo key > file` in Windows PowerShell 5.1 is UTF-16; Notepad may add a UTF-8 mark: both are read.
   if (($bytes.Length -ge 2) -and ($bytes[0] -eq 0xFF) -and ($bytes[1] -eq 0xFE)) { $text = [System.Text.Encoding]::Unicode.GetString($bytes, 2, $bytes.Length - 2) }
   elseif (($bytes.Length -ge 2) -and ($bytes[0] -eq 0xFE) -and ($bytes[1] -eq 0xFF)) { $text = [System.Text.Encoding]::BigEndianUnicode.GetString($bytes, 2, $bytes.Length - 2) }
   elseif (($bytes.Length -ge 3) -and ($bytes[0] -eq 0xEF) -and ($bytes[1] -eq 0xBB) -and ($bytes[2] -eq 0xBF)) { $text = [System.Text.Encoding]::UTF8.GetString($bytes, 3, $bytes.Length - 3) }
   else { $text = [System.Text.Encoding]::UTF8.GetString($bytes) }
   $line = ([string](($text -split "\r?\n")[0])).Trim()
-  if ($line -cnotmatch '^[\x21-\x7E]{16,512}$') { $plan.Error = "the content of the file given to --api-key-file is not one line of 16 to 512 printable characters without spaces: $hostFile"; return $plan }
+  if ($line -cnotmatch '^[\x21-\x7E]{16,512}$') { $plan.Error = (Format-JhtText 'keyfile.shape' $hostFile); return $plan }
   $plan.Args = $out.ToArray()
   $plan.Key = $line
   $plan.File = $item.FullName
@@ -4280,7 +5884,7 @@ switch ($Sub) {
         $DefaultRuntimeVersion
       }
       Write-Output $ConfiguredVersion
-      Write-Info "Per la versione del CLI in esecuzione serve il container attivo: 'jht up'."
+      Write-Info (Get-JhtText 'ps.cli_version_needs_container')
     }
     exit 0
   }
@@ -4302,7 +5906,7 @@ switch ($Sub) {
     if (-not (Test-Path -LiteralPath $uploader -PathType Leaf)) {
       Require-ComposeFile; Require-Docker; Ensure-Up
       $target = Get-RunningComposeServiceId $Container
-      if (-not $target) { Write-Err 'team_container_unavailable: avvia la squadra con jht up e riprova.'; exit 1 }
+      if (-not $target) { Write-Err (Get-JhtText 'ps.team_container_unavailable'); exit 1 }
       $mounts = & docker inspect --type container $target --format '{{json .Mounts}}'
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       $context = @{ mounts = ($mounts -join "`n"); cwd = $PWD.Path } | ConvertTo-Json -Compress
@@ -4320,8 +5924,7 @@ switch ($Sub) {
   }
   # The Godot office and its commands are gone (0.4.0): said here, on the host, before anything would start the team for them.
   { $_ -in @('game', 'gui') } {
-    if ((Get-JhtTextLanguage) -ceq 'en') { Write-Err "'jht $Sub' was removed in 0.4.0 with the Godot office: use the jht commands (jht help)." }
-    else { Write-Err "'jht $Sub' e' stato tolto nella 0.4.0 insieme all'ufficio Godot: usa i comandi jht (jht help)." }
+    Write-Err (Format-JhtText 'removed.office' $Sub)
     exit 2
   }
 
@@ -4332,7 +5935,7 @@ switch ($Sub) {
     Clear-JhtTeamStopped
     if (-not (Repair-MountOwnership)) { exit 1 }
     if (-not (Initialize-TelegramLegacyInventory)) {
-      Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'
+      Write-Err ('legacy_inventory_failed: ' + (Get-JhtText 'line.legacy_inventory_failed.il_team_resta_fermo_perch_4'))
       exit 1
     }
     Stop-OnFailedComposeUp (Invoke-PodmanServicesUpInTurn)
@@ -4372,7 +5975,7 @@ switch ($Sub) {
     $null = Invoke-ComposeQuiet '--profile' 'telegram' '--profile' 'broker' '--profile' 'media' '--profile' 'playwright' '--profile' 'screen' '--profile' 'login' 'down'
     if (-not (Repair-MountOwnership)) { exit 1 }
     if (-not (Initialize-TelegramLegacyInventory)) {
-      Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'
+      Write-Err ('legacy_inventory_failed: ' + (Get-JhtText 'line.legacy_inventory_failed.il_team_resta_fermo_perch_4'))
       exit 1
     }
     Stop-OnFailedComposeUp (Invoke-PodmanServicesUpInTurn)
@@ -4402,7 +6005,7 @@ switch ($Sub) {
     Require-Docker
     Ensure-Up
     if ($Rest.Count -gt 0 -and $Rest[0] -eq 'relink-account') {
-      if ($Rest.Count -ne 1) { Write-Err 'uso: jht apply relink-account'; exit 2 }
+      if ($Rest.Count -ne 1) { Write-Err (Get-JhtText 'line.uso_jht_apply_relink_account'); exit 2 }
       exit (Reset-BrokerWebAccount)
     }
     if ($Rest.Count -ge 1 -and @('request', 'cancel') -ccontains [string]$Rest[0]) {
@@ -4421,7 +6024,7 @@ switch ($Sub) {
     if (-not (Test-RuntimeHelperDeclared 'jht-integration.ps1')) {
       $mayFetch = $Rest.Count -gt 0 -and (@('add', 'remove') -ccontains [string]$Rest[0])
       if (-not $mayFetch -or -not (Install-RuntimeHelpers)) {
-        Write-Err "script jht-integration.ps1 non ancora installato: 'jht upgrade' (o un 'jht integration add/remove') e riprova"
+        Write-Err (Get-JhtText 'ps.script_integration_not_installed')
         exit 1
       }
     }
@@ -4435,14 +6038,14 @@ switch ($Sub) {
     Require-ComposeFile
     $screenWord = if ($Rest.Count -gt 0) { [string]$Rest[0] } else { '' }
     $screenVerb = switch -CaseSensitive ($screenWord) { 'on' { 'add' } 'off' { 'remove' } 'status' { 'status' } default { '' } }
-    if (-not $screenVerb) { Write-Err 'uso: jht screen on | off | status [--json]'; exit 2 }
+    if (-not $screenVerb) { Write-Err (Get-JhtText 'line.uso_jht_screen_on_off'); exit 2 }
     $screenArgs = @($screenVerb, 'screen') + @($Rest | Select-Object -Skip 1)
     if (-not (Test-RuntimeHelperDeclared 'jht-integration.ps1') -and $screenVerb -ceq 'status' -and (Write-RuntimeHelperAbsentAnswer 'integration' $screenArgs)) { exit 0 }
     $helperPath = Join-Path $RuntimeDir 'jht-integration.ps1'
     # Same as `integration`: a helper that is missing is fetched only for `on` and `off`, never from a read-only command.
     if (-not (Test-RuntimeHelperDeclared 'jht-integration.ps1')) {
       if (@('add', 'remove') -cnotcontains $screenVerb -or -not (Install-RuntimeHelpers)) {
-        Write-Err "script jht-integration.ps1 non ancora installato: 'jht upgrade' (o un 'jht integration add/remove') e riprova"
+        Write-Err (Get-JhtText 'ps.script_integration_not_installed')
         exit 1
       }
     }
@@ -4463,7 +6066,7 @@ switch ($Sub) {
     $helperPath = Join-Path $RuntimeDir 'jht-integration.ps1'
     if (-not (Test-RuntimeHelperDeclared 'jht-integration.ps1')) {
       if (-not (Install-RuntimeHelpers)) {
-        Write-Err "script jht-integration.ps1 non ancora installato: 'jht upgrade' (o un 'jht integration add/remove') e riprova"
+        Write-Err (Get-JhtText 'ps.script_integration_not_installed')
         exit 1
       }
     }
@@ -4478,7 +6081,7 @@ switch ($Sub) {
     # Same as `integration`: dot-sourced at script level. A helper that is missing is never fetched from here: these commands run by
     # themselves after the install, and a download at the tip of the branch is not something to start without the person asking.
     if (-not (Test-RuntimeHelperDeclared 'jht-tools.ps1')) {
-      Write-Err "script jht-tools.ps1 non ancora installato: 'jht upgrade' e riprova"
+      Write-Err (Get-JhtText 'ps.script_tools_not_installed')
       exit 1
     }
     Assert-TrustedRuntime
@@ -4501,7 +6104,7 @@ switch ($Sub) {
   'migrate-runtime' {
     Require-ComposeFile
     if ($Rest.Count -ne 1 -or $Rest[0] -cne 'podman') {
-      Write-Err 'uso: jht migrate-runtime podman'
+      Write-Err (Get-JhtText 'line.uso_jht_migrate_runtime_podman')
       exit 2
     }
     $migrationImage = if ($env:JHT_MIGRATION_IMAGE) {
@@ -4526,8 +6129,7 @@ switch ($Sub) {
     # No options here (--json lives in the jht of the container): refused out loud, never ignored.
     if ($Rest.Count -gt 0) {
       $given = $Rest -join ' '
-      if ((Get-JhtTextLanguage) -ceq 'en') { Write-Err "'jht status' takes no options ($given): run it as 'jht status'." }
-      else { Write-Err "'jht status' non ha opzioni ($given): si lancia come 'jht status'." }
+      Write-Err (Format-JhtText 'status.no_options' $given)
       exit 2
     }
     Require-Docker
@@ -4539,7 +6141,7 @@ switch ($Sub) {
         Write-JhtToolsNotice
       }
     } else {
-      Write-Host "container '$Container' non attivo"
+      Write-Host (Format-JhtText 'ps.container_not_running' $Container)
       exit 1
     }
     break
@@ -4568,8 +6170,8 @@ switch ($Sub) {
       { $_ -in @('openai', 'codex') } { & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags $Container bash -c '[ -f /app/.launcher/oauth-login-openai.sh ] && exec bash /app/.launcher/oauth-login-openai.sh; exec codex login --device-auth' }; break }
       { $_ -in @('kimi', 'moonshot') } { & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags $Container kimi --yolo }; break }
       { $_ -in @('claude', 'anthropic') } { & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags $Container claude --dangerously-skip-permissions }; break }
-      '' { throw "nessun provider attivo: scegline uno con 'jht providers use openai'" }
-      default { throw "provider attivo non riconosciuto: $Provider" }
+      '' { throw (Get-JhtText 'line.nessun_provider_attivo_scegline_uno') }
+      default { throw (Format-JhtText 'line.provider_attivo_non_riconosciuto_s' $Provider) }
     }
     break
   }
@@ -4590,7 +6192,7 @@ switch ($Sub) {
       try {
         [string[]]$setupArgs = $keyPlan.Args
         Invoke-NativeWithStdin { $keyPlan.Key | & docker exec -i -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry 'setup' @setupArgs }
-        if ($LASTEXITCODE -eq 0) { Write-Host "The setup keeps the key: you can delete the file on this computer now ($($keyPlan.File))." }
+        if ($LASTEXITCODE -eq 0) { Write-Host (Format-JhtText 'line.the_setup_keeps_the_key' ($keyPlan.File)) }
       } finally {
         $keyPlan.Key = $null
       }

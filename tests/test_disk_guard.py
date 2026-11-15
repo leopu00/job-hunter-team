@@ -28,6 +28,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -1163,12 +1164,20 @@ def test_powershell_refuses_only_on_a_measure_that_says_low_and_says_so_in_the_m
     low = ps1[ps1.index("function Get-DiskLowPermille"):]
     low = low[: low.index("\n}\n")]
     assert "Get-DiskLevelOf" in low and "-eq 'low'" in low and "return $null" in low
-    message = ps1[ps1.index('Write-Err "disk_low: '):][:260]
-    assert "almeno $(Get-DiskGibText $DiskBlockFreeKib) GiB" in message and "disponibili: $(Get-DiskGibText $script:DiskLowFreeKib) GiB" in message
-    assert "per mille" not in message and "%" not in message  # valori assoluti, mai la percentuale
+    # the sentence is a text of the catalog (7 languages), said with the two absolute values, in this order
+    call = ps1[ps1.index("Write-Err (Format-JhtText 'ps.upgrade_disk_low'"):][:200]
+    assert call.index("(Get-DiskGibText $DiskBlockFreeKib)") < call.index("(Get-DiskGibText $script:DiskLowFreeKib)")
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from script_texts import LANGUAGES, catalog
+
+    for lang in LANGUAGES:
+        text = catalog(lang)["wrapper.ps.upgrade_disk_low"]
+        assert text.startswith("disk_low: ") and text.count("%s") == 2 and "%" not in text.replace("%s", ""), lang  # absolute values, never the percentage
+    italian = catalog("it")["wrapper.ps.upgrade_disk_low"]
+    assert "almeno %s GiB" in italian and "disponibili: %s GiB" in italian and "per mille" not in italian
     assert "$script:DiskLowFreeKib = [long][Math]::Floor([double]$measure.Free / 1024)" in low
-    # il messaggio resta ASCII dove un 5.1 senza BOM leggerebbe male: niente trattino lungo ne' virgolette tipografiche in codice
-    assert "\u2014" not in message and "\u201c" not in message and "\u201d" not in message
+    # il file resta ASCII fuori dai commenti: dove un 5.1 senza BOM leggerebbe male, l'accento e il trattino lungo sono un carattere del blocco
+    assert all(line.isascii() or line.lstrip().startswith("#") for line in ps1.splitlines())
     # il commento che diceva «stesse soglie» quando non lo erano non c'e' piu'
     assert "NON E' MAI STATO ESEGUITO" in ps1
 

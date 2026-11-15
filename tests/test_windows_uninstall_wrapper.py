@@ -51,26 +51,31 @@ def test_uninstall_is_an_early_fixed_scope_protocol():
 
 def test_uninstall_requires_one_explicit_confirmation_and_has_stable_output():
     uninstall = _uninstall_source()
-    notice = (
-        "Vengono cancellati anche la password della posta e i token di Telegram "
-        "salvati; ~/.jht e Documenti restano, e con loro la sessione LinkedIn salvata "
-        "(secrets/linkedin-profile e .cache/linkedin): si toglie con jht reset --scope creds."
-    )
+    # what it says before anything is removed is a text of the catalog, in the 7 languages
+    notice = "Get-JhtUninstallText 'removal_notice'"
 
     # --confirm alone, or --confirm with --purge (either order): nothing else
     assert "$UninstallArgs[0] -ceq '--confirm'" in uninstall
     assert "$_ -ceq '--confirm'" in uninstall and "$_ -ceq '--purge'" in uninstall
-    assert "uso: jht uninstall --confirm [--purge]" in uninstall
+    assert "(Get-JhtText 'uninstall.usage')" in uninstall
     assert "return 2" in uninstall
     for phase in ("uninstall_machine", "uninstall_runtime", "uninstall_commands"):
         assert f"'{phase}'" in uninstall
     for leftover in ("machine", "runtime", "commands"):
         assert f"'{leftover}'" in uninstall
     assert "return 24" in uninstall
-    assert notice in SOURCE
-    assert uninstall.count("WriteLine($JhtUninstallRemovalNotice)") == 2
+    assert notice in uninstall
+    import sys as _sys
+
+    _sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from script_texts import LANGUAGES, catalog
+
+    for lang in LANGUAGES:
+        assert "jht reset --scope creds" in catalog(lang)["wrapper.ps.uninstall.removal_notice"], lang
+    assert catalog("it")["wrapper.uninstall.usage"] == "uso: jht uninstall --confirm [--purge]"
+    assert uninstall.count("WriteLine((Get-JhtUninstallText 'removal_notice'))") == 2
     assert "Write-JhtUninstallMachineLeft" in uninstall
-    assert "I segreti salvati non sono stati rimossi" in SOURCE
+    assert "Get-JhtUninstallText 'secrets'" in SOURCE and "I segreti salvati non sono stati rimossi" in catalog("it")["wrapper.ps.uninstall.secrets"]
     assert "--remove-data" not in uninstall
     assert "--remove-podman" not in uninstall
 

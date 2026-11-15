@@ -20,6 +20,8 @@ from wrapper_texts import say_functions
 
 ROOT = Path(__file__).resolve().parents[1]
 SHELL_WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
+from wrapper_ps_texts import say_functions as ps_say_functions  # noqa: E402
+
 POWERSHELL_WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
 RESET_COMMAND = ROOT / "cli" / "src" / "commands" / "reset.js"
 VOLUMES = ("jht-secrets", "jht-broker-state", "jht-broker-sock")
@@ -177,8 +179,10 @@ def run_powershell_reset(
     log = tmp_path / "calls.log"
     script = tmp_path / "reset-harness.ps1"
     functions = powershell_reset_functions()
+    texts = ps_say_functions("it")
     script.write_text(
         rf'''
+{texts}
 $ContainerRuntime = {runtime!r}
 $RuntimeDir = {str(runtime_dir)!r}
 $ComposeFile = Join-Path $RuntimeDir 'docker-compose.yml'

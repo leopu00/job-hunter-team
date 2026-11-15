@@ -117,7 +117,7 @@ Write-JhtLifecycleDone 'down'
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     _fake(bin_dir, "docker", COMPOSE_CASES)
-    result, _calls = _run(tmp_path, PS1, ["Get-JhtTextLanguage", "Write-JhtLifecycleDone"], body, {})
+    result, _calls = _run(tmp_path, PS1, ["Get-JhtTextLanguage", "Get-JhtTextTable", "Get-JhtText", "Write-JhtLifecycleDone"], body, {})
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.splitlines() == [
         "Job Hunter Team avviato.",    # no saved choice: JHT_LANG says it

@@ -81,7 +81,7 @@ def test_restart_says_its_result_in_the_language_of_the_person(tmp_path):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     _fake(bin_dir, "docker", COMPOSE_CASES)
-    result, _ = _run(tmp_path, PS1, ["Get-JhtTextLanguage", "Write-JhtLifecycleDone"], body, {})
+    result, _ = _run(tmp_path, PS1, ["Get-JhtTextLanguage", "Get-JhtTextTable", "Get-JhtText", "Write-JhtLifecycleDone"], body, {})
     assert result.stdout.splitlines() == ["Job Hunter Team riavviato.", "Job Hunter Team restarted."], result.stdout + result.stderr
 
 

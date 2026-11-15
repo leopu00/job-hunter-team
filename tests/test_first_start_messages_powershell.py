@@ -11,9 +11,13 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from wrapper_ps_texts import say_functions  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -31,6 +35,7 @@ def _pwsh():
 
 
 HOME = """$ErrorActionPreference = 'Stop'
+""" + say_functions("it") + """
 $JhtHome = $env:TEST_HOME
 function Test-PrivateJhtHomeAcl { param([string]$Path); return $false }
 """ + _functions("Get-JhtHomeAclFailure", "Require-PrivateJhtHomeAcl") + """
@@ -38,6 +43,7 @@ try { Require-PrivateJhtHomeAcl; 'NO-THROW' } catch { $_.Exception.Message }
 """
 
 TRUST = """$ErrorActionPreference = 'Stop'
+""" + say_functions("it") + """
 $RuntimeDir = $env:TEST_RUNTIME
 $RuntimeManifest = Join-Path $RuntimeDir '.runtime-integrity'
 function Install-ProtectedRuntimeFromRelease { return $true }
@@ -56,7 +62,7 @@ def _with_env(tmp_path, body, **env):
 
 def test_a_home_that_does_not_exist_is_a_team_not_installed_not_a_permissions_problem(tmp_path):
     done = _with_env(tmp_path, HOME, TEST_HOME=str(tmp_path / "no-such-home"))
-    assert "non e' ancora installato" in done.stdout and "installer" in done.stdout and "'jht setup'" in done.stdout, done.stdout + done.stderr
+    assert "non è ancora installato" in done.stdout and "installer" in done.stdout and "'jht setup'" in done.stdout, done.stdout + done.stderr
     assert "owner-only" not in done.stdout
 
 
@@ -65,14 +71,14 @@ def test_a_home_that_is_there_and_refused_is_still_the_acl_message(tmp_path):
     home.mkdir()
     done = _with_env(tmp_path, HOME, TEST_HOME=str(home))
     assert "JHT_HOME ACL is not owner-only" in done.stdout, done.stdout + done.stderr
-    assert "non e' ancora installato" not in done.stdout
+    assert "non è ancora installato" not in done.stdout
 
 
 def test_a_runtime_without_its_manifest_is_an_install_not_finished(tmp_path):
     runtime = tmp_path / "runtime"
     runtime.mkdir()
     done = _with_env(tmp_path, TRUST, TEST_RUNTIME=str(runtime))
-    assert "non e' installato del tutto" in done.stdout and "installer" in done.stdout, done.stdout + done.stderr
+    assert "non è installato del tutto" in done.stdout and "installer" in done.stdout, done.stdout + done.stderr
     assert "untrusted" not in done.stdout
 
 
@@ -81,4 +87,4 @@ def test_a_runtime_whose_manifest_is_there_but_wrong_is_still_untrusted(tmp_path
     runtime.mkdir()
     (runtime / ".runtime-integrity").write_text("version=1\n", encoding="utf-8")
     done = _with_env(tmp_path, TRUST, TEST_RUNTIME=str(runtime))
-    assert "untrusted host runtime" in done.stdout and "non e' installato del tutto" not in done.stdout, done.stdout + done.stderr
+    assert "untrusted host runtime" in done.stdout and "non è installato del tutto" not in done.stdout, done.stdout + done.stderr

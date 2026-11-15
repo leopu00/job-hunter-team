@@ -90,7 +90,15 @@ def _fake(directory: Path, name: str, cases: str) -> None:
     install_fake(directory, name, FAKE.format(cases=cases))
 
 
+# What the wrapper's functions say, they say by key: the texts and the functions that put them together come with them, and the person
+# of these cases reads Italian (the language of the sentences these tests were written against; a case that wants another sets JHT_LANG).
+TEXT_FUNCTIONS = ["Get-JhtTextTable", "Get-JhtText", "Format-JhtText", "Get-JhtTextLanguage"]
+
+
 def _run(tmp_path: Path, script: Path, imports: list[str], body: str, env: dict[str, str]):
+    if script.name == "jht-wrapper.ps1":
+        imports = [*imports, *[name for name in TEXT_FUNCTIONS if name not in imports]]
+        env = {"JHT_LANG": "it", **env}
     prelude = tmp_path / "prelude.ps1"
     # The engine check first: every case says which PowerShell ran it.
     prelude.write_text(ENGINE_CHECK + PRELUDE, encoding="utf-8")

@@ -349,8 +349,11 @@ $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($env:T_WRAPPER_SRC, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw "parse: $($errors[0])" }
 $null = Invoke-Expression ($ast.Extent.Text.Substring($ast.Extent.Text.IndexOf('$IntegrationIdsAbsent = ')).Split("`n")[0])
-$fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Write-RuntimeHelperAbsentAnswer' }, $true)
-Invoke-Expression $fn.Extent.Text
+foreach ($name in 'Get-JhtTextTable', 'Get-JhtText', 'Format-JhtText', 'Write-RuntimeHelperAbsentAnswer') {
+  $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name }, $true)
+  Invoke-Expression $fn.Extent.Text
+}
+function Get-JhtTextLanguage { return 'it' }
 $argv = @(ConvertFrom-Json -InputObject $env:T_ARGS | ForEach-Object { $_ })
 $answered = Write-RuntimeHelperAbsentAnswer $argv[0] ([string[]]@($argv | Select-Object -Skip 1))
 [Console]::Out.WriteLine("answered=$answered")

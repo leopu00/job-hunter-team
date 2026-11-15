@@ -225,14 +225,12 @@ def test_the_windows_wrapper_says_the_same_two_things():
     powershell = POWERSHELL_WRAPPER.read_text(encoding="utf-8")
     status = powershell[powershell.index("\n  'status' {"):]
     assert status.index("if ($Rest.Count -gt 0)") < status.index("Require-Docker")
-    assert "'jht status' non ha opzioni ($given)" in status and "'jht status' takes no options ($given)" in status
+    assert "Write-Err (Format-JhtText 'status.no_options' $given)" in status
     # the same sentence on both sides, word for word: the .sh says the key, its texts are in the catalogs
     bash = BASH_WRAPPER.read_text(encoding="utf-8")
     assert 'jht_say status.no_options "$*"' in bash
-    for lang in ("en", "it"):
-        sentence = catalog(lang)["wrapper.status.no_options"]
-        assert sentence.replace("%s", "$given") in status, lang
-    assert "e' stato tolto nella 0.4.0 insieme all'ufficio Godot" in powershell
+    # the sentence is the catalog's, in each of the 7 languages (the PowerShell wrapper says it by key, as the .sh does)
+    assert "Write-Err (Format-JhtText 'removed.office' $Sub)" in powershell
 
 def test_version_prints_without_docker_effects(tmp_path):
     fake_bin, log = make_docker_spy(

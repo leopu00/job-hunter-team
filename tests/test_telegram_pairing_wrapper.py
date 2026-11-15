@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 
+from wrapper_ps_texts import say_functions as ps_say_functions
 from wrapper_texts import say_functions
 
 
@@ -123,7 +124,7 @@ def powershell_functions(*names: str) -> str:
         match = re.search(rf"^function {name} \{{\n.*?^\}}\n", source, re.S | re.M)
         assert match, name
         found.append(match.group(0))
-    return "\n".join(found)
+    return ps_say_functions("it") + "\n" + "\n".join(found)
 
 
 def pair_script(command: str = "telegram_pair assistente", home: str = "/host-home") -> str:
@@ -481,7 +482,7 @@ def test_both_wrappers_document_safe_interactive_and_noninteractive_pairing() ->
     assert ps_submit
     assert "read_hidden_tty" in shell_submit
     assert "stty -echo" in functions("read_hidden_tty")
-    assert 'Read-Host "Token del bot $Role (input nascosto)" -AsSecureString' in ps_submit.group(0)
+    assert "Read-Host (Format-JhtText 'ps.bot_token_prompt_hidden' $Role) -AsSecureString" in ps_submit.group(0)
     assert "[Console]::IsInputRedirected" in ps_submit.group(0)
     for source in (shell_submit, functions("telegram_pair"), functions("telegram_pair_all")):
         assert "mktemp" not in source
@@ -893,7 +894,7 @@ def test_powershell_pair_all_and_chat_id(tmp_path: Path) -> None:
     )
 
     assert "all=2 chat=0 bad=2" in done.stdout, done.stderr
-    assert "pair --all e' interattivo" in done.stderr
+    assert "pair --all è interattivo" in done.stderr
     assert "CHATID mentor interactive=0" in (tmp_path / "calls.log").read_text(encoding="utf-8")
 
 
