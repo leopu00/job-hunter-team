@@ -65,15 +65,29 @@ export function configOffered(config) {
  * key»). Built from RELEASE_OFFERS, so it never says less than the list.
  */
 export function offersSentence() {
-  const words = { api_key: 'an API key', subscription: 'the ChatGPT subscription', cli: 'the sign-in of its CLI' };
-  const programs = { pi: 'Pi', codex: 'Codex' };
+  const words = {
+    api_key: "an API key",
+    subscription: "the ChatGPT subscription",
+    cli: "the sign-in of its CLI",
+  };
+  const programs = { pi: "Pi", codex: "Codex" };
   const groups = [];
   for (const offer of RELEASE_OFFERS) {
-    let group = groups.find((g) => g.harness === offer.harness && g.auth === offer.auth);
-    if (!group) groups.push(group = { harness: offer.harness, auth: offer.auth, providers: [] });
+    let group = groups.find(
+      (g) => g.harness === offer.harness && g.auth === offer.auth,
+    );
+    if (!group)
+      groups.push(
+        (group = { harness: offer.harness, auth: offer.auth, providers: [] }),
+      );
     group.providers.push(offer.provider);
   }
-  return groups.map((g) => `${g.providers.join(', ')} on ${programs[g.harness] ?? g.harness} with ${words[g.auth] ?? g.auth}`).join('; ');
+  return groups
+    .map(
+      (g) =>
+        `${g.providers.join(", ")} on ${programs[g.harness] ?? g.harness} with ${words[g.auth] ?? g.auth}`,
+    )
+    .join("; ");
 }
 
 /**
@@ -83,11 +97,16 @@ export function offersSentence() {
  *   'provider'            a provider this release does not offer at all
  */
 export function notOfferedReason(config) {
-  const provider = typeof config?.active_provider === 'string' ? config.active_provider.trim().toLowerCase() : '';
+  const provider =
+    typeof config?.active_provider === "string"
+      ? config.active_provider.trim().toLowerCase()
+      : "";
   if (!provider || configOffered(config)) return null;
-  const harness = typeof config?.harness === 'string' ? config.harness : 'codex';
-  if ((provider === 'openai' || provider === 'codex') && harness === 'codex') return 'codex_subscription';
-  return offeredInRelease(provider) ? 'way' : 'provider';
+  const harness =
+    typeof config?.harness === "string" ? config.harness : "codex";
+  if ((provider === "openai" || provider === "codex") && harness === "codex")
+    return "codex_subscription";
+  return offeredInRelease(provider) ? "way" : "provider";
 }
 
 /**
@@ -95,8 +114,9 @@ export function notOfferedReason(config) {
  * Every command that sees such a team accepts it and says the same warning (CODEX_LEGACY_WARNING).
  */
 export function codexLegacy(config) {
-  return notOfferedReason(config) === 'codex_subscription';
+  return notOfferedReason(config) === "codex_subscription";
 }
 
 /** The one warning, in English, for the programs that have no catalog of their own (the launcher writes the same). */
-export const CODEX_LEGACY_WARNING = 'The ChatGPT subscription (Codex) is no longer offered to new users from 0.4.0: your team keeps working; to move to GLM, Kimi, OpenAI or Claude with an API key: jht setup';
+export const CODEX_LEGACY_WARNING =
+  "The ChatGPT subscription (Codex) is no longer offered to new users from 0.4.0: your team keeps working; to move to GLM, Kimi, OpenAI or Claude with an API key: jht setup";
