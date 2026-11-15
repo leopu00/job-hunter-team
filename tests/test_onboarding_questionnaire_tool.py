@@ -395,3 +395,56 @@ def test_the_first_card_is_posted_on_an_installation_with_no_database_and_a_fail
     blocked.write_text("x")
     code, out = run({"JHT_HOME": str(tmp_path / "other"), "JHT_DB": str(blocked / "jobs.db")})
     assert code == 1 and out["error"] == "card_not_posted" and out["why"]
+
+
+# ── the choices the program reads, not only the person ──────────────────────────────────────────────────────────────
+
+def _option_effect(step_id: str, option_id: str):
+    data = json.loads((ROOT / "shared" / "config" / "onboarding-questionnaire.json").read_text(encoding="utf-8"))
+    step = next(s for s in data["steps"] if s["id"] == step_id)
+    return step, next(o for o in step["options"] if o["id"] == option_id)
+
+
+@pytest.mark.parametrize("option,expected", [("remote", "remote"), ("remote_first", "remote-first"), ("hybrid", "hybrid"),
+                                             ("onsite", "on-site"), ("flexible", "flexible")])
+def test_the_mode_card_writes_preferences_work_mode_besides_the_item_the_person_reads(option, expected):
+    sys.path.insert(0, str(ROOT / "shared" / "skills"))
+    import onboarding_questionnaire as oq
+    step, chosen = _option_effect("mode", option)
+    profile: dict = {"name": "Test Person"}
+    oq.write_effect(profile, step, chosen, lambda key: key)
+    # what the Scout's plan reads (a profile with only the text item has no work mode: the remote boards came for a person on site)
+    assert profile["preferences"]["work_mode"] == expected
+    block = next(b for b in profile["blocks"] if b["key"] == "preferences")
+    assert block["content"][0]["text"] == "onb.mode.opt." + option
+
+
+@pytest.mark.parametrize("option,expected", [("never", False), ("eu", True), ("worldwide", True), ("sponsored", True)])
+def test_the_relocation_card_writes_preferences_relocation(option, expected):
+    sys.path.insert(0, str(ROOT / "shared" / "skills"))
+    import onboarding_questionnaire as oq
+    step, chosen = _option_effect("relocation", option)
+    profile: dict = {"preferences": {"work_mode": "on-site"}}
+    oq.write_effect(profile, step, chosen, lambda key: key)
+    assert profile["preferences"] == {"work_mode": "on-site", "relocation": expected}
+
+
+@pytest.mark.parametrize("option", ["same_country", "depends"])
+def test_a_relocation_answer_that_is_not_a_yes_or_a_no_writes_no_field(option):
+    # unset is never assumed to be a yes: the Scout keeps to the person's own country
+    sys.path.insert(0, str(ROOT / "shared" / "skills"))
+    import onboarding_questionnaire as oq
+    step, chosen = _option_effect("relocation", option)
+    profile: dict = {}
+    oq.write_effect(profile, step, chosen, lambda key: key)
+    assert "preferences" not in profile and any(b["key"] == "preferences" for b in profile["blocks"])
+
+
+def test_a_preferences_that_is_not_a_mapping_is_refused_and_a_field_outside_the_list_is_not_written():
+    sys.path.insert(0, str(ROOT / "shared" / "skills"))
+    import onboarding_questionnaire as oq
+    step, chosen = _option_effect("mode", "onsite")
+    with pytest.raises(oq.QuestionnaireError):
+        oq.write_effect({"preferences": "on site"}, step, chosen, lambda key: key)
+    with pytest.raises(oq.QuestionnaireError):
+        oq.write_effect({}, step, {"id": "x", "effect": {"preference_field": {"salary_annual_eur": "1"}}}, lambda key: key)
