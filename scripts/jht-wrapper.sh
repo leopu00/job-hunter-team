@@ -802,8 +802,10 @@ This help starts nothing and downloads nothing.' ;;
     status.title) printf '%s' 'Status' ;;
     team.stopped) printf '%s' 'Job Hunter Team is stopped: '\''jht up'\'' starts it again.' ;;
     tools.arriving) printf '%s' 'The Scouts'\'' tools are on their way: the full image is downloading in the background (about 3 GB). The search for positions starts by itself once they are here; there is nothing to do.' ;;
+    tools.chat_switched) printf '%s' 'The team is moving onto the Scouts'\'' full tools, so this chat has closed. Open it again in a couple of minutes with jht team chat.' ;;
     tools.failed) printf '%s' 'The download of the Scouts'\'' tools failed, so the team cannot search for positions yet. Run jht tools pull to try again (jht up tries again too).' ;;
     tools.switch_failed) printf '%s' 'The Scouts'\'' tools are here, but the team could not be restarted on them: run jht down, then jht up.' ;;
+    tools.switch_wait) printf '%s' 'The team is moving onto the Scouts'\'' full tools: waiting for it to start again (a couple of minutes at most).' ;;
     tools.waiting) printf '%s' 'The Scouts'\'' tools are here: the team moves onto them by itself once the onboarding is closed.' ;;
     uninstall.bad_home) printf '%s' 'HOME is not valid: removal refused.' ;;
     uninstall.colima_busy) printf '%s' 'Colima is still running: the JHT installer started it, but other containers are running in it, so it is left on. To stop it: colima stop.' ;;
@@ -1287,8 +1289,10 @@ Questo aiuto non avvia niente e non scarica niente.' ;;
     status.title) printf '%s' 'Stato' ;;
     team.stopped) printf '%s' 'Job Hunter Team e'\'' fermato: jht up per riaccenderlo.' ;;
     tools.arriving) printf '%s' 'Gli strumenti degli Scout stanno arrivando: l'\''immagine piena si scarica in background (circa 3 GB). La ricerca delle posizioni parte da sola quando sono arrivati; non devi fare niente.' ;;
+    tools.chat_switched) printf '%s' 'La squadra passa agli strumenti completi degli Scout, quindi questa chat si e'\'' chiusa. Riaprila fra un paio di minuti con jht team chat.' ;;
     tools.failed) printf '%s' 'Il download degli strumenti degli Scout non e'\'' riuscito: la squadra non puo'\'' ancora cercare posizioni. Esegui jht tools pull per riprovare (anche jht up riprova).' ;;
     tools.switch_failed) printf '%s' 'Gli strumenti degli Scout sono arrivati, ma la squadra non si e'\'' potuta riavviare con loro: esegui jht down, poi jht up.' ;;
+    tools.switch_wait) printf '%s' 'La squadra sta passando agli strumenti completi degli Scout: aspetto che riparta (al massimo un paio di minuti).' ;;
     tools.waiting) printf '%s' 'Gli strumenti degli Scout sono arrivati: la squadra ci passa da sola quando l'\''onboarding e'\'' chiuso.' ;;
     uninstall.bad_home) printf '%s' 'HOME non valida: rimozione negata.' ;;
     uninstall.colima_busy) printf '%s' 'Colima resta accesa: l'\''ha accesa l'\''installer di JHT, ma dentro girano altri container, quindi la lascio. Per fermarla: colima stop.' ;;
@@ -1773,8 +1777,10 @@ Ez a súgó semmit nem indít el és semmit nem tölt le.' ;;
     status.title) printf '%s' 'Állapot' ;;
     team.stopped) printf '%s' 'A Job Hunter Team le van állítva: a '\''jht up'\'' újraindítja.' ;;
     tools.arriving) printf '%s' 'A felderítők (Scout) eszközei úton vannak: a teljes kép a háttérben töltődik le (kb. 3 GB). Az állások keresése magától elindul, amint megérkeztek; nincs teendőd.' ;;
+    tools.chat_switched) printf '%s' 'A csapat átáll a felderítők (Scout) teljes eszközeire, ezért ez a csevegés bezárult. Pár perc múlva nyisd meg újra a jht team chat paranccsal.' ;;
     tools.failed) printf '%s' 'A felderítők (Scout) eszközeinek letöltése nem sikerült, így a csapat még nem tud állásokat keresni. Futtasd a jht tools pull parancsot az újrapróbáláshoz (a jht up is újrapróbálja).' ;;
     tools.switch_failed) printf '%s' 'A felderítők (Scout) eszközei megérkeztek, de a csapatot nem sikerült velük újraindítani: futtasd a jht down, majd a jht up parancsot.' ;;
+    tools.switch_wait) printf '%s' 'A csapat átáll a felderítők (Scout) teljes eszközeire: megvárom, amíg újraindul (legfeljebb pár perc).' ;;
     tools.waiting) printf '%s' 'A felderítők (Scout) eszközei megérkeztek: a csapat magától átvált rájuk, amint a bevezetés lezárult.' ;;
     uninstall.bad_home) printf '%s' 'A HOME érvénytelen: az eltávolítás megtagadva.' ;;
     uninstall.colima_busy) printf '%s' 'A Colima még fut: a JHT telepítője indította el, de más konténerek is futnak benne, ezért bekapcsolva hagyom. Leállítás: colima stop.' ;;
@@ -2263,8 +2269,10 @@ Esta ayuda no arranca nada ni descarga nada.' ;;
     status.title) printf '%s' 'Estado' ;;
     team.stopped) printf '%s' 'Job Hunter Team está detenido: '\''jht up'\'' lo vuelve a arrancar.' ;;
     tools.arriving) printf '%s' 'Las herramientas de los Scout están en camino: la imagen completa se descarga en segundo plano (unos 3 GB). La búsqueda de puestos empieza sola cuando lleguen; no tienes que hacer nada.' ;;
+    tools.chat_switched) printf '%s' 'El equipo pasa a las herramientas completas de los Scout, así que este chat se ha cerrado. Vuelve a abrirlo en un par de minutos con jht team chat.' ;;
     tools.failed) printf '%s' 'La descarga de las herramientas de los Scout ha fallado, así que el equipo aún no puede buscar puestos. Ejecuta jht tools pull para reintentarlo (jht up también lo reintenta).' ;;
     tools.switch_failed) printf '%s' 'Las herramientas de los Scout ya están aquí, pero el equipo no se ha podido reiniciar con ellas: ejecuta jht down y luego jht up.' ;;
+    tools.switch_wait) printf '%s' 'El equipo está pasando a las herramientas completas de los Scout: espero a que vuelva a arrancar (un par de minutos como mucho).' ;;
     tools.waiting) printf '%s' 'Las herramientas de los Scout ya están aquí: el equipo pasa a ellas solo cuando el onboarding esté cerrado.' ;;
     uninstall.bad_home) printf '%s' 'HOME no es válida: eliminación rechazada.' ;;
     uninstall.colima_busy) printf '%s' 'Colima sigue en marcha: la arrancó el instalador de JHT, pero dentro hay otros contenedores en marcha, así que la dejo encendida. Para detenerla: colima stop.' ;;
@@ -2748,8 +2756,10 @@ Diese Hilfe startet nichts und lädt nichts herunter.' ;;
     status.title) printf '%s' 'Status' ;;
     team.stopped) printf '%s' 'Job Hunter Team ist gestoppt: '\''jht up'\'' startet es wieder.' ;;
     tools.arriving) printf '%s' 'Die Werkzeuge der Scouts sind unterwegs: Das vollständige Image wird im Hintergrund heruntergeladen (etwa 3 GB). Die Stellensuche startet von selbst, sobald sie da sind; du musst nichts tun.' ;;
+    tools.chat_switched) printf '%s' 'Das Team wechselt auf die vollständigen Werkzeuge der Scouts, deshalb wurde dieser Chat geschlossen. Öffne ihn in ein paar Minuten wieder mit jht team chat.' ;;
     tools.failed) printf '%s' 'Der Download der Werkzeuge der Scouts ist fehlgeschlagen, daher kann das Team noch keine Stellen suchen. Führe jht tools pull aus, um es erneut zu versuchen (jht up versucht es auch).' ;;
     tools.switch_failed) printf '%s' 'Die Werkzeuge der Scouts sind da, aber das Team konnte damit nicht neu gestartet werden: Führe jht down und dann jht up aus.' ;;
+    tools.switch_wait) printf '%s' 'Das Team wechselt gerade auf die vollständigen Werkzeuge der Scouts: Ich warte, bis es wieder läuft (höchstens ein paar Minuten).' ;;
     tools.waiting) printf '%s' 'Die Werkzeuge der Scouts sind da: Das Team wechselt von selbst darauf, sobald das Onboarding abgeschlossen ist.' ;;
     uninstall.bad_home) printf '%s' 'HOME ist ungültig: Entfernen verweigert.' ;;
     uninstall.colima_busy) printf '%s' 'Colima läuft noch: Der JHT-Installer hat es gestartet, aber darin laufen andere Container, also bleibt es an. Zum Stoppen: colima stop.' ;;
@@ -3233,8 +3243,10 @@ Cette aide ne démarre rien et ne télécharge rien.' ;;
     status.title) printf '%s' 'État' ;;
     team.stopped) printf '%s' 'Job Hunter Team est arrêté : '\''jht up'\'' le redémarre.' ;;
     tools.arriving) printf '%s' 'Les outils des Scout arrivent : l'\''image complète se télécharge en arrière-plan (environ 3 Go). La recherche d'\''offres démarre toute seule dès qu'\''ils sont là ; tu n'\''as rien à faire.' ;;
+    tools.chat_switched) printf '%s' 'L'\''équipe passe aux outils complets des Scout, donc ce chat s'\''est fermé. Rouvre-le dans quelques minutes avec jht team chat.' ;;
     tools.failed) printf '%s' 'Le téléchargement des outils des Scout a échoué : l'\''équipe ne peut pas encore chercher d'\''offres. Lance jht tools pull pour réessayer (jht up réessaie aussi).' ;;
     tools.switch_failed) printf '%s' 'Les outils des Scout sont là, mais l'\''équipe n'\''a pas pu redémarrer avec eux : lance jht down, puis jht up.' ;;
+    tools.switch_wait) printf '%s' 'L'\''équipe passe aux outils complets des Scout : j'\''attends qu'\''elle redémarre (quelques minutes au plus).' ;;
     tools.waiting) printf '%s' 'Les outils des Scout sont là : l'\''équipe passe dessus toute seule dès que l'\''onboarding est terminé.' ;;
     uninstall.bad_home) printf '%s' 'HOME n'\''est pas valide : suppression refusée.' ;;
     uninstall.colima_busy) printf '%s' 'Colima tourne encore : l'\''installeur JHT l'\''a démarré, mais d'\''autres conteneurs y tournent, donc il reste allumé. Pour l'\''arrêter : colima stop.' ;;
@@ -3718,8 +3730,10 @@ Esta ajuda não inicia nada nem descarrega nada.' ;;
     status.title) printf '%s' 'Estado' ;;
     team.stopped) printf '%s' 'O Job Hunter Team está parado: '\''jht up'\'' volta a ligá-lo.' ;;
     tools.arriving) printf '%s' 'As ferramentas dos Scout estão a caminho: a imagem completa está a ser descarregada em segundo plano (cerca de 3 GB). A procura de vagas começa sozinha quando chegarem; não tens de fazer nada.' ;;
+    tools.chat_switched) printf '%s' 'A equipa passa para as ferramentas completas dos Scout, por isso este chat fechou-se. Volta a abri-lo dentro de alguns minutos com jht team chat.' ;;
     tools.failed) printf '%s' 'O descarregamento das ferramentas dos Scout falhou, por isso a equipa ainda não pode procurar vagas. Corre jht tools pull para tentar de novo (jht up também tenta de novo).' ;;
     tools.switch_failed) printf '%s' 'As ferramentas dos Scout já chegaram, mas não foi possível reiniciar a equipa com elas: corre jht down e depois jht up.' ;;
+    tools.switch_wait) printf '%s' 'A equipa está a passar para as ferramentas completas dos Scout: espero que volte a arrancar (no máximo alguns minutos).' ;;
     tools.waiting) printf '%s' 'As ferramentas dos Scout já chegaram: a equipa passa para elas sozinha quando o onboarding estiver concluído.' ;;
     uninstall.bad_home) printf '%s' 'HOME não é válida: remoção recusada.' ;;
     uninstall.colima_busy) printf '%s' 'O Colima continua a correr: foi o instalador do JHT que o ligou, mas há outros contentores a correr nele, por isso fica ligado. Para o parar: colima stop.' ;;
@@ -3969,6 +3983,27 @@ tools_tell_person() {
       switch_failed) warn "$(jht_say tools.switch_failed)" ;;
     esac
   ) || true
+}
+
+# `jht team chat` whose REPL the switch of the tools ended: the down of the core team stops the container the REPL runs in, and the
+# REPL ends with nothing said. The job of the switch writes its pid in .tools-switching while it stops the core team and starts the
+# full one; a file whose process is gone is an old one and says nothing.
+team_chat_ended_by_switch() {
+  local pid
+  [ -f "$RUNTIME_DIR/.tools-switching" ] && [ ! -L "$RUNTIME_DIR/.tools-switching" ] || return 1
+  pid="$(head -c 20 "$RUNTIME_DIR/.tools-switching" 2>/dev/null | tr -cd '0-9')"
+  [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+}
+
+# A command that starts the team (ensure_up) while the switch of the tools is between its down and its up: it waits for the switch
+# to end instead of starting a second `compose up` next to the job's (two creates at once lose the keep-id map on Podman <= 6.0.2,
+# and an up before the tier goes starts the core image again). A tetto: JHT_TOOLS_SWITCH_WAIT_MAX seconds, 300 by default.
+wait_for_tools_switch() {
+  local left="${JHT_TOOLS_SWITCH_WAIT_MAX:-300}"
+  case "$left" in ''|*[!0-9]*) left=300 ;; esac
+  team_chat_ended_by_switch || return 0
+  info "$(jht_say tools.switch_wait)"
+  while team_chat_ended_by_switch && [ "$left" -gt 0 ]; do sleep 2; left=$((left - 2)); done
 }
 
 runtime_write_manifest() {
@@ -7614,6 +7649,7 @@ not_started_or_unattestable() { # $1 = the status of the check, $2 = what is den
 
 ensure_up() {
   local status=0
+  wait_for_tools_switch
   if container_up; then
     return 0
   else
@@ -10287,7 +10323,14 @@ case "$SUB" in
     require_compose_file
     require_docker
     if [ "${2:-}" = stop ]; then ensure_up_for_stop; else ensure_up; fi
-    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
+    team_rc=0
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@" || team_rc=$?
+    # the REPL ended because the team is moving onto the full image: say so, and end clean
+    if [ "${2:-}" = chat ] && team_chat_ended_by_switch; then
+      info "$(jht_say tools.chat_switched)"
+      exit 0
+    fi
+    exit "$team_rc"
     ;;
 
   # ── Operativita': delegata al CLI Node nel container ───────────────────

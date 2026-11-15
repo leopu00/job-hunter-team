@@ -374,6 +374,8 @@
   "wrapper.tools.waiting": "As ferramentas dos Scout já chegaram: a equipa passa para elas sozinha quando o onboarding estiver concluído.",
   "wrapper.tools.failed": "O descarregamento das ferramentas dos Scout falhou, por isso a equipa ainda não pode procurar vagas. Corre jht tools pull para tentar de novo (jht up também tenta de novo).",
   "wrapper.tools.switch_failed": "As ferramentas dos Scout já chegaram, mas não foi possível reiniciar a equipa com elas: corre jht down e depois jht up.",
+  "wrapper.tools.chat_switched": "A equipa passa para as ferramentas completas dos Scout, por isso este chat fechou-se. Volta a abri-lo dentro de alguns minutos com jht team chat.",
+  "wrapper.tools.switch_wait": "A equipa está a passar para as ferramentas completas dos Scout: espero que volte a arrancar (no máximo alguns minutos).",
   "wrapper.ps.startup_task_still_registered": "a tarefa continua registada",
   "wrapper.ps.link_or_not_folder": "ligação ou não é uma pasta",
   "wrapper.ps.wsl_exe_not_found": "wsl.exe não encontrado",

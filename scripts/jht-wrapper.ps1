@@ -395,8 +395,10 @@ function Get-JhtTextTable {
     'en:status.no_options' { return '''jht status'' takes no options (%s): run it as ''jht status''.' }
     'en:team.stopped' { return 'Job Hunter Team is stopped: ''jht up'' starts it again.' }
     'en:tools.arriving' { return 'The Scouts'' tools are on their way: the full image is downloading in the background (about 3 GB). The search for positions starts by itself once they are here; there is nothing to do.' }
+    'en:tools.chat_switched' { return 'The team is moving onto the Scouts'' full tools, so this chat has closed. Open it again in a couple of minutes with jht team chat.' }
     'en:tools.failed' { return 'The download of the Scouts'' tools failed, so the team cannot search for positions yet. Run jht tools pull to try again (jht up tries again too).' }
     'en:tools.switch_failed' { return 'The Scouts'' tools are here, but the team could not be restarted on them: run jht down, then jht up.' }
+    'en:tools.switch_wait' { return 'The team is moving onto the Scouts'' full tools: waiting for it to start again (a couple of minutes at most).' }
     'en:tools.waiting' { return 'The Scouts'' tools are here: the team moves onto them by itself once the onboarding is closed.' }
     'en:uninstall.usage' { return 'usage: jht uninstall --confirm [--purge]' }
     'en:up.done' { return 'Job Hunter Team started.' }
@@ -654,8 +656,10 @@ function Get-JhtTextTable {
     'it:status.no_options' { return '''jht status'' non ha opzioni (%s): si lancia come ''jht status''.' }
     'it:team.stopped' { return 'Job Hunter Team e'' fermato: jht up per riaccenderlo.' }
     'it:tools.arriving' { return 'Gli strumenti degli Scout stanno arrivando: l''immagine piena si scarica in background (circa 3 GB). La ricerca delle posizioni parte da sola quando sono arrivati; non devi fare niente.' }
+    'it:tools.chat_switched' { return 'La squadra passa agli strumenti completi degli Scout, quindi questa chat si e'' chiusa. Riaprila fra un paio di minuti con jht team chat.' }
     'it:tools.failed' { return 'Il download degli strumenti degli Scout non e'' riuscito: la squadra non puo'' ancora cercare posizioni. Esegui jht tools pull per riprovare (anche jht up riprova).' }
     'it:tools.switch_failed' { return 'Gli strumenti degli Scout sono arrivati, ma la squadra non si e'' potuta riavviare con loro: esegui jht down, poi jht up.' }
+    'it:tools.switch_wait' { return 'La squadra sta passando agli strumenti completi degli Scout: aspetto che riparta (al massimo un paio di minuti).' }
     'it:tools.waiting' { return 'Gli strumenti degli Scout sono arrivati: la squadra ci passa da sola quando l''onboarding e'' chiuso.' }
     'it:uninstall.usage' { return 'uso: jht uninstall --confirm [--purge]' }
     'it:up.done' { return 'Job Hunter Team avviato.' }
@@ -913,8 +917,10 @@ function Get-JhtTextTable {
     'hu:status.no_options' { return ('A ''jht status'' nem fogad kapcsol' + [char]0x00F3 + 'kat (%s): egyszer' + [char]0x0171 + 'en ''jht status''-k' + [char]0x00E9 + 'nt futtasd.') }
     'hu:team.stopped' { return ('A Job Hunter Team le van ' + [char]0x00E1 + 'll' + [char]0x00ED + 'tva: a ''jht up'' ' + [char]0x00FA + 'jraind' + [char]0x00ED + 'tja.') }
     'hu:tools.arriving' { return ('A felder' + [char]0x00ED + 't' + [char]0x0151 + 'k (Scout) eszk' + [char]0x00F6 + 'zei ' + [char]0x00FA + 'ton vannak: a teljes k' + [char]0x00E9 + 'p a h' + [char]0x00E1 + 'tt' + [char]0x00E9 + 'rben t' + [char]0x00F6 + 'lt' + [char]0x0151 + 'dik le (kb. 3 GB). Az ' + [char]0x00E1 + 'll' + [char]0x00E1 + 'sok keres' + [char]0x00E9 + 'se mag' + [char]0x00E1 + 't' + [char]0x00F3 + 'l elindul, amint meg' + [char]0x00E9 + 'rkeztek; nincs teend' + [char]0x0151 + 'd.') }
+    'hu:tools.chat_switched' { return ('A csapat ' + [char]0x00E1 + 't' + [char]0x00E1 + 'll a felder' + [char]0x00ED + 't' + [char]0x0151 + 'k (Scout) teljes eszk' + [char]0x00F6 + 'zeire, ez' + [char]0x00E9 + 'rt ez a cseveg' + [char]0x00E9 + 's bez' + [char]0x00E1 + 'rult. P' + [char]0x00E1 + 'r perc m' + [char]0x00FA + 'lva nyisd meg ' + [char]0x00FA + 'jra a jht team chat paranccsal.') }
     'hu:tools.failed' { return ('A felder' + [char]0x00ED + 't' + [char]0x0151 + 'k (Scout) eszk' + [char]0x00F6 + 'zeinek let' + [char]0x00F6 + 'lt' + [char]0x00E9 + 'se nem siker' + [char]0x00FC + 'lt, ' + [char]0x00ED + 'gy a csapat m' + [char]0x00E9 + 'g nem tud ' + [char]0x00E1 + 'll' + [char]0x00E1 + 'sokat keresni. Futtasd a jht tools pull parancsot az ' + [char]0x00FA + 'jrapr' + [char]0x00F3 + 'b' + [char]0x00E1 + 'l' + [char]0x00E1 + 'shoz (a jht up is ' + [char]0x00FA + 'jrapr' + [char]0x00F3 + 'b' + [char]0x00E1 + 'lja).') }
     'hu:tools.switch_failed' { return ('A felder' + [char]0x00ED + 't' + [char]0x0151 + 'k (Scout) eszk' + [char]0x00F6 + 'zei meg' + [char]0x00E9 + 'rkeztek, de a csapatot nem siker' + [char]0x00FC + 'lt vel' + [char]0x00FC + 'k ' + [char]0x00FA + 'jraind' + [char]0x00ED + 'tani: futtasd a jht down, majd a jht up parancsot.') }
+    'hu:tools.switch_wait' { return ('A csapat ' + [char]0x00E1 + 't' + [char]0x00E1 + 'll a felder' + [char]0x00ED + 't' + [char]0x0151 + 'k (Scout) teljes eszk' + [char]0x00F6 + 'zeire: megv' + [char]0x00E1 + 'rom, am' + [char]0x00ED + 'g ' + [char]0x00FA + 'jraindul (legfeljebb p' + [char]0x00E1 + 'r perc).') }
     'hu:tools.waiting' { return ('A felder' + [char]0x00ED + 't' + [char]0x0151 + 'k (Scout) eszk' + [char]0x00F6 + 'zei meg' + [char]0x00E9 + 'rkeztek: a csapat mag' + [char]0x00E1 + 't' + [char]0x00F3 + 'l ' + [char]0x00E1 + 'tv' + [char]0x00E1 + 'lt r' + [char]0x00E1 + 'juk, amint a bevezet' + [char]0x00E9 + 's lez' + [char]0x00E1 + 'rult.') }
     'hu:uninstall.usage' { return ('haszn' + [char]0x00E1 + 'lat: jht uninstall --confirm [--purge]') }
     'hu:up.done' { return 'A Job Hunter Team elindult.' }
@@ -1172,8 +1178,10 @@ function Get-JhtTextTable {
     'es:status.no_options' { return ('''jht status'' no admite opciones (%s): ejec' + [char]0x00FA + 'talo como ''jht status''.') }
     'es:team.stopped' { return ('Job Hunter Team est' + [char]0x00E1 + ' detenido: ''jht up'' lo vuelve a arrancar.') }
     'es:tools.arriving' { return ('Las herramientas de los Scout est' + [char]0x00E1 + 'n en camino: la imagen completa se descarga en segundo plano (unos 3 GB). La b' + [char]0x00FA + 'squeda de puestos empieza sola cuando lleguen; no tienes que hacer nada.') }
+    'es:tools.chat_switched' { return ('El equipo pasa a las herramientas completas de los Scout, as' + [char]0x00ED + ' que este chat se ha cerrado. Vuelve a abrirlo en un par de minutos con jht team chat.') }
     'es:tools.failed' { return ('La descarga de las herramientas de los Scout ha fallado, as' + [char]0x00ED + ' que el equipo a' + [char]0x00FA + 'n no puede buscar puestos. Ejecuta jht tools pull para reintentarlo (jht up tambi' + [char]0x00E9 + 'n lo reintenta).') }
     'es:tools.switch_failed' { return ('Las herramientas de los Scout ya est' + [char]0x00E1 + 'n aqu' + [char]0x00ED + ', pero el equipo no se ha podido reiniciar con ellas: ejecuta jht down y luego jht up.') }
+    'es:tools.switch_wait' { return ('El equipo est' + [char]0x00E1 + ' pasando a las herramientas completas de los Scout: espero a que vuelva a arrancar (un par de minutos como mucho).') }
     'es:tools.waiting' { return ('Las herramientas de los Scout ya est' + [char]0x00E1 + 'n aqu' + [char]0x00ED + ': el equipo pasa a ellas solo cuando el onboarding est' + [char]0x00E9 + ' cerrado.') }
     'es:uninstall.usage' { return 'uso: jht uninstall --confirm [--purge]' }
     'es:up.done' { return 'Job Hunter Team arrancado.' }
@@ -1431,8 +1439,10 @@ function Get-JhtTextTable {
     'de:status.no_options' { return ('''jht status'' nimmt keine Optionen (%s): F' + [char]0x00FC + 'hre es als ''jht status'' aus.') }
     'de:team.stopped' { return 'Job Hunter Team ist gestoppt: ''jht up'' startet es wieder.' }
     'de:tools.arriving' { return ('Die Werkzeuge der Scouts sind unterwegs: Das vollst' + [char]0x00E4 + 'ndige Image wird im Hintergrund heruntergeladen (etwa 3 GB). Die Stellensuche startet von selbst, sobald sie da sind; du musst nichts tun.') }
+    'de:tools.chat_switched' { return ('Das Team wechselt auf die vollst' + [char]0x00E4 + 'ndigen Werkzeuge der Scouts, deshalb wurde dieser Chat geschlossen. ' + [char]0x00D6 + 'ffne ihn in ein paar Minuten wieder mit jht team chat.') }
     'de:tools.failed' { return ('Der Download der Werkzeuge der Scouts ist fehlgeschlagen, daher kann das Team noch keine Stellen suchen. F' + [char]0x00FC + 'hre jht tools pull aus, um es erneut zu versuchen (jht up versucht es auch).') }
     'de:tools.switch_failed' { return ('Die Werkzeuge der Scouts sind da, aber das Team konnte damit nicht neu gestartet werden: F' + [char]0x00FC + 'hre jht down und dann jht up aus.') }
+    'de:tools.switch_wait' { return ('Das Team wechselt gerade auf die vollst' + [char]0x00E4 + 'ndigen Werkzeuge der Scouts: Ich warte, bis es wieder l' + [char]0x00E4 + 'uft (h' + [char]0x00F6 + 'chstens ein paar Minuten).') }
     'de:tools.waiting' { return 'Die Werkzeuge der Scouts sind da: Das Team wechselt von selbst darauf, sobald das Onboarding abgeschlossen ist.' }
     'de:uninstall.usage' { return 'Verwendung: jht uninstall --confirm [--purge]' }
     'de:up.done' { return 'Job Hunter Team gestartet.' }
@@ -1690,8 +1700,10 @@ function Get-JhtTextTable {
     'fr:status.no_options' { return '''jht status'' ne prend pas d''options (%s) : lance-le simplement ''jht status''.' }
     'fr:team.stopped' { return ('Job Hunter Team est arr' + [char]0x00EA + 't' + [char]0x00E9 + ' : ''jht up'' le red' + [char]0x00E9 + 'marre.') }
     'fr:tools.arriving' { return ('Les outils des Scout arrivent : l''image compl' + [char]0x00E8 + 'te se t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charge en arri' + [char]0x00E8 + 're-plan (environ 3 Go). La recherche d''offres d' + [char]0x00E9 + 'marre toute seule d' + [char]0x00E8 + 's qu''ils sont l' + [char]0x00E0 + ' ; tu n''as rien ' + [char]0x00E0 + ' faire.') }
+    'fr:tools.chat_switched' { return ('L''' + [char]0x00E9 + 'quipe passe aux outils complets des Scout, donc ce chat s''est ferm' + [char]0x00E9 + '. Rouvre-le dans quelques minutes avec jht team chat.') }
     'fr:tools.failed' { return ('Le t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'chargement des outils des Scout a ' + [char]0x00E9 + 'chou' + [char]0x00E9 + ' : l''' + [char]0x00E9 + 'quipe ne peut pas encore chercher d''offres. Lance jht tools pull pour r' + [char]0x00E9 + 'essayer (jht up r' + [char]0x00E9 + 'essaie aussi).') }
     'fr:tools.switch_failed' { return ('Les outils des Scout sont l' + [char]0x00E0 + ', mais l''' + [char]0x00E9 + 'quipe n''a pas pu red' + [char]0x00E9 + 'marrer avec eux : lance jht down, puis jht up.') }
+    'fr:tools.switch_wait' { return ('L''' + [char]0x00E9 + 'quipe passe aux outils complets des Scout : j''attends qu''elle red' + [char]0x00E9 + 'marre (quelques minutes au plus).') }
     'fr:tools.waiting' { return ('Les outils des Scout sont l' + [char]0x00E0 + ' : l''' + [char]0x00E9 + 'quipe passe dessus toute seule d' + [char]0x00E8 + 's que l''onboarding est termin' + [char]0x00E9 + '.') }
     'fr:uninstall.usage' { return 'usage : jht uninstall --confirm [--purge]' }
     'fr:up.done' { return ('Job Hunter Team d' + [char]0x00E9 + 'marr' + [char]0x00E9 + '.') }
@@ -1949,8 +1961,10 @@ function Get-JhtTextTable {
     'pt:status.no_options' { return ('''jht status'' n' + [char]0x00E3 + 'o aceita op' + [char]0x00E7 + [char]0x00F5 + 'es (%s): corre-o como ''jht status''.') }
     'pt:team.stopped' { return ('O Job Hunter Team est' + [char]0x00E1 + ' parado: ''jht up'' volta a lig' + [char]0x00E1 + '-lo.') }
     'pt:tools.arriving' { return ('As ferramentas dos Scout est' + [char]0x00E3 + 'o a caminho: a imagem completa est' + [char]0x00E1 + ' a ser descarregada em segundo plano (cerca de 3 GB). A procura de vagas come' + [char]0x00E7 + 'a sozinha quando chegarem; n' + [char]0x00E3 + 'o tens de fazer nada.') }
+    'pt:tools.chat_switched' { return 'A equipa passa para as ferramentas completas dos Scout, por isso este chat fechou-se. Volta a abri-lo dentro de alguns minutos com jht team chat.' }
     'pt:tools.failed' { return ('O descarregamento das ferramentas dos Scout falhou, por isso a equipa ainda n' + [char]0x00E3 + 'o pode procurar vagas. Corre jht tools pull para tentar de novo (jht up tamb' + [char]0x00E9 + 'm tenta de novo).') }
     'pt:tools.switch_failed' { return ('As ferramentas dos Scout j' + [char]0x00E1 + ' chegaram, mas n' + [char]0x00E3 + 'o foi poss' + [char]0x00ED + 'vel reiniciar a equipa com elas: corre jht down e depois jht up.') }
+    'pt:tools.switch_wait' { return ('A equipa est' + [char]0x00E1 + ' a passar para as ferramentas completas dos Scout: espero que volte a arrancar (no m' + [char]0x00E1 + 'ximo alguns minutos).') }
     'pt:tools.waiting' { return ('As ferramentas dos Scout j' + [char]0x00E1 + ' chegaram: a equipa passa para elas sozinha quando o onboarding estiver conclu' + [char]0x00ED + 'do.') }
     'pt:uninstall.usage' { return ('utiliza' + [char]0x00E7 + [char]0x00E3 + 'o: jht uninstall --confirm [--purge]') }
     'pt:up.done' { return 'Job Hunter Team iniciado.' }
@@ -1985,6 +1999,30 @@ function Write-JhtToolsNotice {
       'switch_failed' { Write-Warn (Get-JhtToolsText 'switch_failed') }
     }
   } catch { }
+}
+
+# `jht team chat` whose REPL the switch of the tools ended: the down of the core team stops the container the REPL runs in, and the
+# REPL ends with nothing said. The job of the switch writes its pid in .tools-switching while it stops the core team and starts the
+# full one; a file whose process is gone is an old one and says nothing.
+function Test-JhtTeamChatEndedBySwitch {
+  try {
+    $item = Get-Item -LiteralPath (Join-Path $RuntimeDir '.tools-switching') -Force -ErrorAction Stop
+    if ($item.PSIsContainer -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) { return $false }
+    $text = [IO.File]::ReadAllText($item.FullName).Trim()
+    if ($text -notmatch '^[0-9]{1,10}$') { return $false }
+    return [bool](Get-Process -Id ([int]$text) -ErrorAction SilentlyContinue)
+  } catch { return $false }
+}
+
+# A command that starts the team (Ensure-Up) while the switch of the tools is between its down and its up: it waits for the switch
+# to end instead of starting a second `compose up` next to the job's (two creates at once lose the keep-id map on Podman <= 6.0.2,
+# and an up before the tier goes starts the core image again). A tetto: JHT_TOOLS_SWITCH_WAIT_MAX seconds, 300 by default.
+function Wait-JhtToolsSwitch {
+  $left = 300
+  if ($env:JHT_TOOLS_SWITCH_WAIT_MAX -match '^[0-9]{1,6}$') { $left = [int]$env:JHT_TOOLS_SWITCH_WAIT_MAX }
+  if (-not (Test-JhtTeamChatEndedBySwitch)) { return }
+  Write-Info (Get-JhtText 'tools.switch_wait')
+  while ((Test-JhtTeamChatEndedBySwitch) -and $left -gt 0) { Start-Sleep -Seconds 2; $left -= 2 }
 }
 
 function Get-JhtUninstallText {
@@ -6873,6 +6911,7 @@ function Invoke-MailCommand {
 }
 
 function Ensure-Up {
+  Wait-JhtToolsSwitch
   if (-not (Test-ContainerUp)) {
     if (Test-JhtTeamStoppedByPerson) { Write-Err (Get-JhtTeamStoppedText); exit 1 }
     Write-Info (Format-JhtText 'container.starting' $Container)
@@ -8098,6 +8137,11 @@ switch ($Sub) {
     $hostFlags = @('-e', "JHT_HOST_TYPE=$env:JHT_HOST_TYPE")
     & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @hostFlags $Container node $NodeEntry $Sub @Rest }
     $code = $LASTEXITCODE
+    # the REPL ended because the team is moving onto the full image: say so, and end clean
+    if ($Sub -ceq 'team' -and $Rest.Count -gt 0 -and $Rest[0] -ceq 'chat' -and (Test-JhtTeamChatEndedBySwitch)) {
+      Write-Info (Get-JhtText 'tools.chat_switched')
+      exit 0
+    }
     if ($Sub -eq 'cloud' -and $Rest.Count -gt 0 -and $Rest[0] -eq 'pair' -and $code -eq 0) { if ((Ensure-Broker) -eq 0) { Initialize-BrokerWebAuthorisations } }
     exit $code
     break
