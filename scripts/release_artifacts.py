@@ -314,19 +314,23 @@ def render_release_notes(
 
 {curated}
 
-### Windows
+### How to install
 
-Windows is not part of 0.4.0: there is no Windows installer in this release.
+0.4.0 installs from the command line: there is no desktop app in this release, and the team runs in Podman on every
+platform. `install.sh` (Mac, Linux) and `install.ps1` (Windows) come from this tag; the README says how to run them.
 
 ### macOS
 
-`job-hunter-team-macos-universal.dmg` is a Tauri 2 build for Apple silicon (M1 and later) signed with Developer ID, notarized by Apple and stapled. The file name says "universal" but it holds only the Apple silicon build.
-
-On a Mac the team runs in a Podman machine of 4 GiB of memory: a Mac with at least 16 GB of RAM is recommended.
+Apple silicon (M1 and later), macOS 15 or later: the installer sets up Podman and its machine. On a Mac the team runs in a
+Podman machine of 4 GiB of memory: a Mac with at least 16 GB of RAM is recommended. Intel Macs are not supported.
 
 ### Linux
 
-There is no desktop app for Linux in this version: use the command-line install (`install.sh`).
+Command line only, on rootless Podman 5.0 or later.
+
+### Windows
+
+Preview, command line only: the PowerShell installer, with Podman inside WSL. Tested on Windows 10, not on Windows 11.
 
 ### SHA-256 checksums
 

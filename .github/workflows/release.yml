@@ -33,8 +33,15 @@ jobs:
       - name: Verify tag matches package.json versions
         run: scripts/check-release-version.sh "$GITHUB_REF_NAME"
 
+  # 0.4.0 has no desktop app: the release neither builds nor attaches it. The job stays here, whole, for the release
+  # that brings the app back (the repository variable JHT_RELEASE_DESKTOP_APP is unset, so the job never runs): to turn
+  # it on again, drop the `if:` below, put `build-desktop` back in the `needs:` of
+  # publish-runtime and release, restore the «Download desktop app artifacts» step, the `--expected-asset
+  # job-hunter-team-macos-universal.dmg` of the verify step and `release-assets/*.dmg` in the files of the release,
+  # and the macOS part of the notes in scripts/release_artifacts.py.
   build-desktop:
     name: Build Desktop App (Tauri 2) — ${{ matrix.label }}
+    if: ${{ vars.JHT_RELEASE_DESKTOP_APP == 'true' }}
     runs-on: ${{ matrix.os }}
     needs: check-version
     permissions:
@@ -219,7 +226,6 @@ jobs:
     runs-on: ubuntu-24.04
     needs:
       - check-version
-      - build-desktop
     permissions:
       contents: read
       packages: write
@@ -259,7 +265,6 @@ jobs:
     runs-on: ubuntu-24.04
     needs:
       - check-version
-      - build-desktop
       - publish-runtime
     permissions:
       contents: write
@@ -348,12 +353,8 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Download desktop app artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          pattern: app-*-release
-          path: release-assets
-          merge-multiple: true
+      - name: Make the folder of the release assets
+        run: mkdir -p release-assets
 
       - name: Record the runtime manifest as a release asset
         env:
@@ -374,7 +375,6 @@ jobs:
         run: |
           python scripts/release_artifacts.py verify \
             --directory release-assets \
-            --expected-asset job-hunter-team-macos-universal.dmg \
             --expected-asset RUNTIME-IMAGE.json \
             --tag "$GITHUB_REF_NAME" \
             --commit "$TAG_SHA" \
@@ -405,7 +405,6 @@ jobs:
           draft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
-            release-assets/*.dmg
             release-assets/RUNTIME-IMAGE.json
             release-assets/SHA256SUMS
             release-assets/RELEASE-PROVENANCE.json
