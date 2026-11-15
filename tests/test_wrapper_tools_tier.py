@@ -334,7 +334,7 @@ def test_a_real_state_folder_and_a_plain_old_tools_json_are_written_as_before(bo
 
 # ── tools_kick: the CLI keeps the tools moving, as the desktop app's round did ───────────────────────────────────────────────
 
-KICK_ENV = {"JHT_TOOLS_WAIT_STEP": "1", "JHT_TOOLS_SWITCH_GRACE": "0", "JHT_TOOLS_WAIT_MAX": "60", "JHT_TOOLS_QUIET_MAX": "20"}
+KICK_ENV = {"JHT_TOOLS_WAIT_STEP": "1", "JHT_TOOLS_SWITCH_GRACE": "0", "JHT_TOOLS_WAIT_MAX": "60", "JHT_TOOLS_QUIET_MAX": "600"}   # a switch that waited for nothing would miss every deadline below
 
 
 def _wait_until(check, what):
@@ -511,3 +511,26 @@ def test_tools_help_runs_and_touches_nothing(tmp_path):
     result = subprocess.run(["bash", "-c", script], text=True, capture_output=True, timeout=30)
     assert result.returncode == 0 and result.stdout.startswith("Usage: jht tools <command>"), result.stderr
     assert "DOCKER" not in result.stderr
+
+
+def test_the_job_does_not_take_its_own_subshells_for_another_command(tmp_path):
+    """In production the job is a fork of the wrapper: every subshell it makes has the wrapper's command line. A subshell of a
+    command substitution is a real fork on Linux (bash 5, procps pgrep), and pgrep leaves only itself out: the check must not
+    count the job's own children, or the switch waits its whole half hour every time."""
+    wrapper = tmp_path / "jht-wrapper.sh"
+    wrapper.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    body = (f'RUNTIME_DIR="{tmp_path}"; JHT_HOME_HOST="{tmp_path}"; WRAPPER_PATH="{wrapper}"\n'
+            f'source "{TOOLS}"\n'
+            # the job runs it from a function in a background subshell, like tools_pull_job
+            '( x="$(true)"; if tools_other_wrapper_running; then echo OTHER; else echo NONE; fi ) &\nwait\n')
+    # $0 = the wrapper's path: the shell and all its forks carry it on their command line, as the real job does
+    done = subprocess.run(["bash", "-c", body, str(wrapper)], capture_output=True, text=True, timeout=30)
+    assert done.stdout.strip() == "NONE", done.stdout + done.stderr
+    # and a real other command is still seen
+    other = subprocess.Popen(["sh", "-c", "sleep 4; :", str(wrapper)])
+    try:
+        time.sleep(0.5)
+        seen = subprocess.run(["bash", "-c", body, str(wrapper)], capture_output=True, text=True, timeout=30)
+        assert seen.stdout.strip() == "OTHER", seen.stdout + seen.stderr
+    finally:
+        other.wait(timeout=10)
