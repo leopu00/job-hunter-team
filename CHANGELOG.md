@@ -67,8 +67,8 @@ this was tested on real machines and which was not.
 ### Known limits
 
 - **What 0.4.0 runs**: only the Pi harness, with an API key from GLM, Kimi, OpenAI or Claude. The Codex CLI and
-  the ChatGPT subscription are not in this release, and neither is Claude Code as a harness; the desktop app is not
-  in it either.
+  the ChatGPT subscription are not offered to new setups (a team set up with 0.3.9 on them keeps working, with a
+  warning), and neither is Claude Code as a harness; the desktop app is not in this release either.
 - **The Scouts' tools arrive after the install.** The first download is the core image. At the end of the
   onboarding a background job downloads the Scouts' tools (the full image) and moves the team there. If the move
   fails even after a `jht down` and `jht up`, the team stays stopped until the person runs `jht down` and then

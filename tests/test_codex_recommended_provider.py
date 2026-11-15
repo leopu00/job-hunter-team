@@ -117,7 +117,7 @@ def test_the_guides_and_the_changelog_say_codex_only():
     # 0.4.0: one way (Pi with a GLM key), the others are not in 0.4.0 and are refused by the CLI
     assert "team runs on Pi with an API key, from GLM (Z.ai), Kimi (Moonshot), OpenAI or Claude (Anthropic).**" in release[:4000]
     assert "Four ways to power the team: **Pi with GLM (Z.ai)**" in release[:4000]
-    assert "The Codex CLI and the ChatGPT subscription are\n  not in 0.4.0" in release[:4000]
+    assert "a team you set up with 0.3.9 on it keeps working**, with one warning" in release[:4000].replace("\n  ", " ")
     readme = text("README.md")
     assert "in 0.4.0, **GLM (Z.ai), Kimi (Moonshot), OpenAI or Claude (Anthropic) with an API key** on the Pi harness" in readme and "**Codex** (recommended)" not in readme
 
