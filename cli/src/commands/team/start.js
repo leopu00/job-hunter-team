@@ -11,7 +11,7 @@ import {
 import { execArgvInContainer, execInContainer, execScriptInContainer } from '../../utils/container-proxy.js';
 import { diskLowRefusal } from '../../lib/disk-guard.js';
 import { harnessOf, harnessProblem } from '../../../../shared/runtime/agent-harness.js';
-import { RELEASE_PROVIDERS, configOffered, offeredInRelease } from '../../../../shared/runtime/release-providers.js';
+import { codexLegacy, configOffered, offeredInRelease, offersSentence } from '../../../../shared/runtime/release-providers.js';
 import { PI_API_PROVIDERS, piApiProvider } from '../../../../shared/runtime/provider-models.js';
 import { KEY_REFUSED_EXIT_CODE } from '../providers-key-check.js';
 import { readRegularFileText } from '../../lib/secure-config-io.js';
@@ -580,8 +580,9 @@ export function startRefusal(config, { containerMode, hasTmux = tmuxAvailable, h
   // install of a CLI the release does not support
   const active = config?.active_provider;
   // a provider of the release on the wrong harness (glm on codex) is said below with its own reason
-  if (active && (!offeredInRelease(active) || (!configOffered(config) && !piApiProvider(active))) && (providerCli(config) || piApiProvider(active))) {
-    return `provider '${active}' is not offered in this release (offered: ${RELEASE_PROVIDERS.join(', ')}, on Pi with an API key). Run: jht setup`;
+  // a team on the ChatGPT subscription (Codex) from before 0.4.0 keeps working (startAction says the warning)
+  if (active && !codexLegacy(config) && (!offeredInRelease(active) || (!configOffered(config) && !piApiProvider(active))) && (providerCli(config) || piApiProvider(active))) {
+    return `provider '${active}' is not offered in this release (offered: ${offersSentence()}). Run: jht setup`;
   }
   const cliBin = providerCli(config);
   if (!cliBin) {
@@ -632,6 +633,9 @@ export async function startAction(agentArg, options) {
     reportUserHolds(agentArg, containerMode);
     return true;
   };
+
+  // a team on the ChatGPT subscription (Codex) from before 0.4.0: it starts, with the one warning
+  if (codexLegacy(readJhtConfig())) console.log(c.yellow(`⚠ ${say('release.codex_legacy')}`));
 
   // A team on an empty balance «starts» (or is «already active») and then gets every call refused: say it first.
   const credit = creditNotice();

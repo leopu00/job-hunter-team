@@ -29,7 +29,8 @@ const PAIRS = [...AI_PROVIDERS, ...PI_API_CHOICES].flatMap((provider) => AGENT_H
 // what this release offers (shared/runtime/release-providers.js); the others are refused with the way out
 // a pair is offered when the release offers that provider on that harness with a key (openai on pi, not on codex)
 const OFFERED = PAIRS.filter(({ provider, harness }) => offeredWay(provider.value, harness, 'api_key'));
-const NOT_OFFERED = PAIRS.filter(({ provider, harness }) => !offeredWay(provider.value, harness, 'api_key'));
+// OpenAI on Codex is the way of 0.3.x: not offered, but a team on it keeps working (the test below)
+const NOT_OFFERED = PAIRS.filter(({ provider, harness }) => !offeredWay(provider.value, harness, 'api_key') && !(provider.value === 'openai' && harness === 'codex'));
 
 test('the code still knows codex and the two providers that run only on pi, each with the harness it allows', () => {
   const pairs = PAIRS.map(({ provider, harness }) => `${provider.value}/${harness}`);
@@ -96,4 +97,12 @@ test('glm and kimi on pi count as signed in only with their key: a file that is 
   assert.equal(piApiKeyConfigured({ ...glm({ api_key: 'x' }), harness: 'codex' }), false);
   assert.equal(piApiKeyConfigured({ active_provider: 'openai', harness: 'pi', providers: { openai: { api_key: 'x' } } }), false);
   assert.equal(piApiKeyConfigured({ ...glm({ api_key: 'x' }), active_provider: 'moonshot' }), false);
+});
+
+test('a team on the ChatGPT subscription (Codex) from 0.3.9 is not refused: it starts on Codex (team start says the warning)', () => {
+  for (const auth_method of ['subscription', 'cli']) {
+    const config = { version: 4, active_provider: 'openai', harness: 'codex', providers: { openai: { name: 'openai', auth_method } }, channels: {} };
+    assert.equal(providerCli(config), 'codex');
+    assert.equal(startRefusal(config, { containerMode: true }), null, auth_method);
+  }
 });
