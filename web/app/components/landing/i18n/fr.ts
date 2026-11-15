@@ -74,7 +74,7 @@ export const fr: Record<string, string> = {
     "Windows : l'installateur est le choix recommandé.",
   dl_windows_portable_link: "Télécharger plutôt la version portable",
   dl_desktop_unsigned_note:
-    "Sur macOS, le DMG est signé et notarié. Pour Linux, il n'y a pas d'application de bureau dans cette version : utilisez le terminal (install.sh).",
+    "Il n'y a pas d'application de bureau dans cette version : sous Mac et Linux, utilisez le terminal (install.sh).",
   dl_mac_apple_silicon_only:
     "Uniquement les Mac avec Apple silicon (M1 et suivants). Les Mac Intel ne sont pas pris en charge dans la 0.4.",
   dl_windows_not_in_version: "Pas dans cette version",

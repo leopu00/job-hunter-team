@@ -17,25 +17,20 @@ import type { OsId } from "./guide-types";
  *  route, tutti i riferimenti interni seguono. */
 export const GUIDE_PATH = "/setup-guide";
 
-/** Base delle release GitHub: risolve sempre l'ultima pubblicata, così il
- *  link non va aggiornato a ogni versione (stesso meccanismo di /download,
- *  W04 — qualunque modifica qui si verifica contro una release reale). */
-const RELEASE_BASE =
-  "https://github.com/leopu00/job-hunter-team/releases/latest/download";
+/** Il sito, da cui si scaricano gli script di installazione. */
+const SITE = "https://jobhunterteam.ai";
 
-/** Nome dell'asset di release per sistema operativo. Allineato a
- *  `app/download/DownloadClient.tsx`: se cambia lì, cambia qui. */
-const DESKTOP_ASSET: Partial<Record<OsId, string>> = {
-  macos: "job-hunter-team-macos-universal.dmg",
-  // Windows and Linux have no desktop app in 0.4.0: no asset, so no download link for them
-  // (on Linux the way in is the CLI, `CLI_INSTALL_CMD`).
+/** Lo script di installazione per sistema operativo. La 0.4.0 non ha un'app da scaricare e la release non porta file
+ *  installabili: si entra dal terminale con install.sh (Mac e Linux) o install.ps1 (Windows, anteprima della CLI). */
+const INSTALL_SCRIPT: Partial<Record<OsId, string>> = {
+  macos: `${SITE}/install.sh`,
+  linux: `${SITE}/install.sh`,
+  windows: `${SITE}/install.ps1`,
 };
 
-/** URL di download diretto. Senza `asset` prende quello predefinito del
- *  sistema; con `asset` scarica quel file preciso dalla stessa release. */
-export function downloadUrlFor(os: OsId, asset?: string): string | null {
-  const name = asset ?? DESKTOP_ASSET[os];
-  return name ? `${RELEASE_BASE}/${name}` : null;
+/** L'indirizzo dello script di installazione del sistema, se c'è. Non è un asset di release. */
+export function downloadUrlFor(os: OsId, _asset?: string): string | null {
+  return INSTALL_SCRIPT[os] ?? null;
 }
 
 /** La pagina Download del sito, per chi arriva qui da un link diretto. */

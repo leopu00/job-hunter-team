@@ -1,64 +1,19 @@
-const RELEASE_REPO = "leopu00/job-hunter-team";
 export const DOWNLOAD_RELEASE_TAG = "v0.4.0";
-export const DOWNLOAD_RELEASE_API = `https://api.github.com/repos/${RELEASE_REPO}/releases/tags/${DOWNLOAD_RELEASE_TAG}`;
-const RELEASE_BASE = `https://github.com/${RELEASE_REPO}/releases/download/${DOWNLOAD_RELEASE_TAG}`;
+const SITE = "https://jobhunterteam.ai";
 
-// Windows is not part of 0.4.0: no slug, no link. The page shows it as "not in this version".
-// Linux has no desktop app in this version either (the CLI install.sh is the way in): no slug, no card.
+// 0.4.0 has no desktop app and its release carries no installer file: nothing here points at a release asset. The way in is
+// the installer script the site serves: install.sh for Mac and Linux, install.ps1 for Windows (a preview of the CLI).
 export const DOWNLOAD_TARGETS = {
-  mac: `${RELEASE_BASE}/job-hunter-team-macos-universal.dmg`,
+  mac: `${SITE}/install.sh`,
+  linux: `${SITE}/install.sh`,
+  windows: `${SITE}/install.ps1`,
 } as const;
 
 export type DownloadSlug = keyof typeof DOWNLOAD_TARGETS;
 
-const DOWNLOAD_ASSET_CANDIDATES: Record<DownloadSlug, readonly string[]> = {
-  mac: ["job-hunter-team-macos-universal.dmg", "job-hunter-team.zip"],
-};
-
-/**
- * Resolve only assets published inside the Tauri 0.4.0 release. The legacy
- * filenames are temporary aliases for a mixed-name 0.4.0 publication; they
- * must never fall through to the 0.3.9 release, whose bytes are Godot.
- */
-export function resolveDownloadTarget(
-  slug: string,
-  release: unknown,
-): string | null {
-  if (!isDownloadSlug(slug) || !release || typeof release !== "object") {
-    return null;
-  }
-  const payload = release as Record<string, unknown>;
-  if (
-    payload.tag_name !== DOWNLOAD_RELEASE_TAG ||
-    payload.draft !== false ||
-    payload.prerelease !== false ||
-    !Array.isArray(payload.assets)
-  ) {
-    return null;
-  }
-
-  const uploaded = new Map(
-    payload.assets.flatMap((asset) => {
-      if (!asset || typeof asset !== "object") return [];
-      const row = asset as Record<string, unknown>;
-      if (
-        typeof row.name !== "string" ||
-        row.state !== "uploaded" ||
-        typeof row.size !== "number" ||
-        row.size <= 0
-      ) {
-        return [];
-      }
-      const expectedUrl = `${RELEASE_BASE}/${row.name}`;
-      return row.browser_download_url === expectedUrl
-        ? [[row.name, expectedUrl] as const]
-        : [];
-    }),
-  );
-  const selected = DOWNLOAD_ASSET_CANDIDATES[slug].find((name) =>
-    uploaded.has(name),
-  );
-  return selected ? uploaded.get(selected)! : null;
+/** The address a slug leads to, or null for a slug that is not one of the three. */
+export function resolveDownloadTarget(slug: string): string | null {
+  return isDownloadSlug(slug) ? DOWNLOAD_TARGETS[slug] : null;
 }
 
 export type DownloadAttribution = {

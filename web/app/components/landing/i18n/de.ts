@@ -73,7 +73,7 @@ export const de: Record<string, string> = {
     "Windows: Das Installationsprogramm wird empfohlen.",
   dl_windows_portable_link: "Stattdessen die portable Version herunterladen",
   dl_desktop_unsigned_note:
-    "Unter macOS ist das DMG signiert und notarisiert. Für Linux gibt es in dieser Version keine Desktop-App: nutze das Terminal (install.sh).",
+    "In dieser Version gibt es keine Desktop-App: Unter Mac und Linux nutze das Terminal (install.sh).",
   dl_mac_apple_silicon_only:
     "Nur Macs mit Apple Silicon (M1 und neuer). Intel-Macs werden in 0.4 nicht unterstützt.",
   dl_windows_not_in_version: "Nicht in dieser Version",

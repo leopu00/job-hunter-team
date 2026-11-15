@@ -77,54 +77,6 @@ const SCREEN_LIST: GuideScreen[] = [
       "Superficie nativa: la scheda è `RequirementsCard`, costruita nella pagina. Il team docs ha cancellato la richiesta PNG il 7 agosto 2026 — resta la fase, non l'immagine. Nessuna ripresa da fare per E2E.",
   },
   {
-    id: "S03-artifact-download",
-    alt: {
-      en: "The official release download for this system.",
-      it: "Il download della release ufficiale per questo sistema.",
-      es: "La descarga de la versión oficial para este sistema.",
-      fr: "Le téléchargement de la version officielle pour ce système.",
-      de: "Der offizielle Release-Download für dieses System.",
-      pt: "A transferência da versão oficial para este sistema.",
-      hu: "A hivatalos kiadás letöltése ehhez a rendszerhez.",
-    },
-    caption: {
-      en: "On Windows the installer is the primary path; the portable build is the alternative.",
-      it: "Su Windows l'installer è la via principale; la versione portable è l'alternativa.",
-      es: "En Windows el instalador es la vía principal; la versión portable es la alternativa.",
-      fr: "Sous Windows, l'installeur est la voie principale ; la version portable est l'alternative.",
-      de: "Unter Windows ist der Installer der Hauptweg; der portable Build ist die Alternative.",
-      pt: "No Windows o instalador é o caminho principal; a versão portátil é a alternativa.",
-      hu: "Windowson a telepítő az elsődleges út; a hordozható változat az alternatíva.",
-    },
-    assets: {},
-    pending:
-      "Windows: tolta, la 0.4 non ha Windows. Linux: revocata dall'audit. macOS: Da rifare con l'app 0.4, dati finti, build 2. File: web/public/setup-guide/S03-artifact-download-macos.jpg (1506×825 px), poi rimettere la voce in assets.",
-  },
-  {
-    id: "S04-installation-macos",
-    alt: {
-      en: "The extracted app ready to open on macOS.",
-      it: "L'app estratta e pronta da aprire su macOS.",
-      es: "La aplicación extraída y lista para abrir en macOS.",
-      fr: "L'application extraite, prête à être ouverte sur macOS.",
-      de: "Die entpackte App, bereit zum Öffnen unter macOS.",
-      pt: "A aplicação extraída e pronta a abrir no macOS.",
-      hu: "A kicsomagolt alkalmazás, megnyitásra készen macOS-en.",
-    },
-    caption: {
-      en: "The macOS build is signed and notarized: a double click is enough.",
-      it: "La build macOS è firmata e notarizzata: basta un doppio clic.",
-      es: "La versión de macOS está firmada y notarizada: basta un doble clic.",
-      fr: "La version macOS est signée et notariée : un double clic suffit.",
-      de: "Der macOS-Build ist signiert und notarisiert: Ein Doppelklick genügt.",
-      pt: "A versão macOS está assinada e notarizada: basta um duplo clique.",
-      hu: "A macOS-változat aláírt és hitelesített: elég egy dupla kattintás.",
-    },
-    assets: {},
-    pending:
-      "Da rifare con l'app 0.4 su Mac, dati finti, build 2. File in web/public/setup-guide/: S04-installation-macos.png (2064×1096 px); poi rimettere le voci in assets.",
-  },
-  {
     id: "S04-installation-windows",
     alt: {
       en: "The downloaded Windows build ready to open.",

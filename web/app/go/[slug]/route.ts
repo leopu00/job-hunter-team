@@ -1,7 +1,6 @@
 import { after } from "next/server";
 import {
   createDownloadClick,
-  DOWNLOAD_RELEASE_API,
   isDownloadSlug,
   resolveDownloadTarget,
   type DownloadClick,
@@ -12,7 +11,6 @@ export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ slug: string }> };
 type RedirectDependencies = {
-  release: unknown;
   schedule: (task: () => void | Promise<void>) => void;
   record: (event: DownloadClick) => Promise<void>;
   now: () => Date;
@@ -20,7 +18,6 @@ type RedirectDependencies = {
 };
 
 const DEFAULT_DEPENDENCIES: RedirectDependencies = {
-  release: null,
   schedule: after,
   record: recordDownloadClick,
   now: () => new Date(),
@@ -30,28 +27,6 @@ const DEFAULT_DEPENDENCIES: RedirectDependencies = {
 };
 
 const RESPONSE_HEADERS = { "Cache-Control": "no-store" } as const;
-const RELEASE_CACHE_SECONDS = 60;
-
-async function readDownloadRelease(): Promise<unknown> {
-  try {
-    const response = await fetch(DOWNLOAD_RELEASE_API, {
-      headers: { Accept: "application/vnd.github+json" },
-      signal: AbortSignal.timeout(5000),
-      next: { revalidate: RELEASE_CACHE_SECONDS },
-    });
-    if (!response.ok) {
-      console.error(
-        `[download-funnel] release assets unavailable (${response.status})`,
-      );
-      return null;
-    }
-    return response.json();
-  } catch {
-    console.error("[download-funnel] release assets unavailable");
-    return null;
-  }
-}
-
 export function handleDownloadRedirect(
   request: Request,
   slug: string,
@@ -64,18 +39,12 @@ export function handleDownloadRedirect(
     });
   }
 
-  const target = resolveDownloadTarget(slug, dependencies.release);
+  const target = resolveDownloadTarget(slug);
   if (!target) {
-    return new Response(
-      request.method === "HEAD" ? null : "Download unavailable",
-      {
-        status: 503,
-        headers: {
-          ...RESPONSE_HEADERS,
-          "Retry-After": String(RELEASE_CACHE_SECONDS),
-        },
-      },
-    );
+    return new Response(request.method === "HEAD" ? null : "Not found", {
+      status: 404,
+      headers: RESPONSE_HEADERS,
+    });
   }
 
   const event = createDownloadClick(
@@ -110,11 +79,7 @@ export function handleDownloadRedirect(
 
 async function handleRoute(request: Request, context: RouteContext) {
   const { slug } = await context.params;
-  const release = isDownloadSlug(slug) ? await readDownloadRelease() : null;
-  return handleDownloadRedirect(request, slug, {
-    ...DEFAULT_DEPENDENCIES,
-    release,
-  });
+  return handleDownloadRedirect(request, slug, DEFAULT_DEPENDENCIES);
 }
 
 export async function GET(request: Request, context: RouteContext) {

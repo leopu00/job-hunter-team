@@ -52,40 +52,13 @@ const PRIVACY_PAGE = readFileSync(
 
 const FIXED_NOW = new Date("2026-08-09T14:37:58.123Z");
 
-function releaseFixture(
-  names: string[],
-  tag = DOWNLOAD_RELEASE_TAG,
-  withLinks = true,
-) {
-  return {
-    tag_name: tag,
-    draft: false,
-    prerelease: false,
-    assets: names.map((name) => ({
-      name,
-      state: "uploaded",
-      size: 1,
-      browser_download_url: withLinks
-        ? `https://github.com/leopu00/job-hunter-team/releases/download/${tag}/${name}`
-        : undefined,
-    })),
-  };
-}
-
-// 0.4.0: no Windows installer in the release
-const PRIMARY_RELEASE = releaseFixture([
-  "job-hunter-team-macos-universal.dmg",
-]);
-
 function testDependencies(
   record = vi.fn(async (_event: DownloadClick) => {}),
-  release: unknown = PRIMARY_RELEASE,
 ) {
   const tasks: Array<() => void | Promise<void>> = [];
   const logFailure = vi.fn();
   return {
     dependencies: {
-      release,
       schedule: (task: () => void | Promise<void>) => tasks.push(task),
       record,
       now: () => FIXED_NOW,
@@ -98,7 +71,7 @@ function testDependencies(
 }
 
 describe("B8 download funnel", () => {
-  it("T1 redirects every allowlisted slug to its exact GitHub asset", async () => {
+  it("T1 redirects every allowlisted slug to the install script of the site", async () => {
     for (const [slug, destination] of Object.entries(DOWNLOAD_TARGETS)) {
       const state = testDependencies();
       const response = handleDownloadRedirect(
@@ -123,39 +96,25 @@ describe("B8 download funnel", () => {
     }
   });
 
-  it("D13 offers Mac only: Windows and Linux have no slug and no link", () => {
-    expect(Object.keys(DOWNLOAD_TARGETS)).toEqual(["mac"]);
-    expect(Object.values(DOWNLOAD_TARGETS).join(" ")).not.toMatch(/windows|\.exe|linux|appimage|\.deb/i);
-    // a link to the Linux file of the old page: unknown slug, 404, nothing recorded, even if someone attaches the file
-    const linuxState = testDependencies(
-      undefined,
-      releaseFixture(["job-hunter-team-macos-universal.dmg", "job-hunter-team-linux-x64.AppImage"]),
-    );
-    const linux = handleDownloadRedirect(
-      new Request("https://jobhunterteam.ai/go/linux"),
-      "linux",
-      linuxState.dependencies,
-    );
-    expect(linux.status).toBe(404);
-    expect(linux.headers.has("location")).toBe(false);
-    expect(linuxState.tasks).toHaveLength(0);
-    expect(resolveDownloadTarget("linux", linuxState.dependencies.release)).toBeNull();
+  it("0.4.0 leads only to the install scripts of the site: no release asset, no installer file", () => {
+    expect(Object.keys(DOWNLOAD_TARGETS)).toEqual(["mac", "linux", "windows"]);
+    expect(DOWNLOAD_TARGETS.mac).toBe("https://jobhunterteam.ai/install.sh");
+    expect(DOWNLOAD_TARGETS.linux).toBe("https://jobhunterteam.ai/install.sh");
+    expect(DOWNLOAD_TARGETS.windows).toBe("https://jobhunterteam.ai/install.ps1");
+    expect(Object.values(DOWNLOAD_TARGETS).join(" ")).not.toMatch(/github|releases|\.dmg|\.exe|appimage|\.deb|\.zip|universal/i);
     // a link of the old page must not reach a file: unknown slug, 404, nothing recorded
-    const state = testDependencies();
-    const response = handleDownloadRedirect(
-      new Request("https://jobhunterteam.ai/go/win-setup"),
-      "win-setup",
-      state.dependencies,
-    );
-    expect(response.status).toBe(404);
-    expect(state.tasks).toHaveLength(0);
-    // and an installer that someone attaches to the release is never resolved for any slug
-    const withInstaller = releaseFixture([
-      "job-hunter-team-windows-x64-setup.exe",
-      "job-hunter-team-macos-universal.dmg",
-    ]);
-    expect(resolveDownloadTarget("win-setup", withInstaller)).toBeNull();
-    expect(resolveDownloadTarget("mac", withInstaller)).toBe(DOWNLOAD_TARGETS.mac);
+    for (const slug of ["win-setup", "win-portable", "linux-x64"]) {
+      const state = testDependencies();
+      const response = handleDownloadRedirect(
+        new Request(`https://jobhunterteam.ai/go/${slug}`),
+        slug,
+        state.dependencies,
+      );
+      expect(response.status).toBe(404);
+      expect(response.headers.has("location")).toBe(false);
+      expect(state.tasks).toHaveLength(0);
+      expect(resolveDownloadTarget(slug)).toBeNull();
+    }
   });
 
   it("D13 the 0.4.0 page links no file: no platform card, Windows said as the CLI preview, no Linux card", () => {
@@ -181,76 +140,6 @@ describe("B8 download funnel", () => {
       // and it says in the language of the file that Linux goes through install.sh
       expect(note).toContain("install.sh");
     }
-  });
-
-  it("prefers the 0.4.0 names when both new and legacy aliases exist", () => {
-    const mixedRelease = releaseFixture([
-      "job-hunter-team-macos-universal.dmg",
-      "job-hunter-team.zip",
-    ]);
-
-    expect(resolveDownloadTarget("mac", mixedRelease)).toBe(
-      DOWNLOAD_TARGETS.mac,
-    );
-  });
-
-  it.each([["mac", "job-hunter-team.zip"]] as const)(
-    "uses the legacy %s alias only inside the 0.4.0 release",
-    (slug, legacyName) => {
-      const state = testDependencies(undefined, releaseFixture([legacyName]));
-      const response = handleDownloadRedirect(
-        new Request(`https://jobhunterteam.ai/go/${slug}`),
-        slug,
-        state.dependencies,
-      );
-
-      expect(response.status).toBe(302);
-      expect(response.headers.get("location")).toBe(
-        `https://github.com/leopu00/job-hunter-team/releases/download/v0.4.0/${legacyName}`,
-      );
-    },
-  );
-
-  it("never falls back to the legacy Godot 0.3.9 release", () => {
-    const godotRelease = releaseFixture(
-      ["job-hunter-team.zip", "job-hunter-team-linux-x64.tar.gz"],
-      "v0.3.9",
-    );
-
-    for (const slug of ["mac"] as const) {
-      const state = testDependencies(undefined, godotRelease);
-      const response = handleDownloadRedirect(
-        new Request(`https://jobhunterteam.ai/go/${slug}`),
-        slug,
-        state.dependencies,
-      );
-      expect(response.status).toBe(503);
-      expect(response.headers.has("location")).toBe(false);
-      expect(state.tasks).toHaveLength(0);
-    }
-  });
-
-  it("fails closed when the requested 0.4.0 asset link is missing", async () => {
-    const state = testDependencies(
-      undefined,
-      releaseFixture(
-        ["job-hunter-team-macos-universal.dmg"],
-        DOWNLOAD_RELEASE_TAG,
-        false,
-      ),
-    );
-    const response = handleDownloadRedirect(
-      new Request("https://jobhunterteam.ai/go/mac", { method: "HEAD" }),
-      "mac",
-      state.dependencies,
-    );
-
-    expect(response.status).toBe(503);
-    expect(response.headers.has("location")).toBe(false);
-    expect(response.headers.get("retry-after")).toBe("60");
-    expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(await response.text()).toBe("");
-    expect(state.tasks).toHaveLength(0);
   });
 
   it("T2 fails closed for unknown assets without Location or persistence", () => {
@@ -406,7 +295,6 @@ describe("B8 download funnel", () => {
         ),
         "mac",
         {
-          release: PRIMARY_RELEASE,
           schedule: (task) => tasks.push(task),
           record,
           now: () => FIXED_NOW,
@@ -453,7 +341,6 @@ describe("B8 download funnel", () => {
       new Request("https://jobhunterteam.ai/go/mac?utm_source=reddit"),
       "mac",
       {
-        release: PRIMARY_RELEASE,
         schedule: () => {
           throw new Error("scheduler unavailable");
         },
@@ -555,7 +442,6 @@ describe("B8 download funnel", () => {
         ),
         "mac",
         {
-          release: PRIMARY_RELEASE,
           schedule: (task) => tasks.push(task),
           record: async (event) => {
             recorded.push(event);

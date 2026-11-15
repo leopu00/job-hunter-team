@@ -26,7 +26,10 @@ def test_download_page_links_no_windows_installer() -> None:
     # Windows is said as in the README: a preview of the CLI
     assert "data-windows-cli-preview" in client and 't("dl_windows_cli_preview")' in client
     assert '{ id: "linux"' not in client and "data-linux" not in client and "dl_linux" not in client
-    assert "linux" not in funnel.split("DOWNLOAD_TARGETS", 1)[1].split("} as const", 1)[0].lower()
+    targets = funnel.split("DOWNLOAD_TARGETS", 1)[1].split("} as const", 1)[0]
+    # Linux has no file of its own: its slug leads to the same install.sh as the Mac, and Windows to install.ps1
+    assert "linux: `${SITE}/install.sh`" in targets and "windows: `${SITE}/install.ps1`" in targets
+    assert not any(word in targets.lower() for word in ("appimage", ".deb", "linux-x64", ".exe", "github"))
 
 
 SENTENCE = "Windows is a preview in 0.4.0, CLI only: tested on Windows 10, not on Windows 11."

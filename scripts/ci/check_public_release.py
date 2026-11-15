@@ -45,14 +45,14 @@ class CannotRun(Exception):
 
 
 def site_targets(source: str) -> tuple:
-    """(release tag, asset names) as web/lib/download-funnel.ts declares them."""
+    """(release tag, asset names) as web/lib/download-funnel.ts declares them. Since 0.4.0 the site links no release asset
+    (it leads to the install scripts it serves), so the list of names can be empty: the release must still be public and
+    carry SHA256SUMS."""
     tag = re.search(r'DOWNLOAD_RELEASE_TAG = "([^"]+)"', source)
     block = re.search(r"export const DOWNLOAD_TARGETS = \{(.*?)\} as const", source, re.S)
     if not tag or not block:
         raise CannotRun("web/lib/download-funnel.ts no longer declares DOWNLOAD_RELEASE_TAG / DOWNLOAD_TARGETS")
     names = re.findall(r"RELEASE_BASE\}/([^`]+)`", block.group(1))
-    if not names:
-        raise CannotRun("no download target found in web/lib/download-funnel.ts")
     return tag.group(1), names
 
 

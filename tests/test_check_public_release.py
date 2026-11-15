@@ -23,7 +23,8 @@ TAG, NAMES = check.site_targets((ROOT / "web/lib/download-funnel.ts").read_text(
 REPO = "leopu00/job-hunter-team"
 BASE = f"https://github.com/{REPO}/releases/download/{TAG}"
 API = f"https://api.github.com/repos/{REPO}/releases/tags/{TAG}"
-BODIES = {name: (name * 3).encode() for name in NAMES}
+# 0.4.0: the site links no release asset, so NAMES is empty; the release still carries its own files and SHA256SUMS
+BODIES = {"RUNTIME-IMAGE.json": b'{"schema_version": 3}'}
 
 
 def sums(bodies):
@@ -77,10 +78,11 @@ def run(*argv):
     return check.main()
 
 
-def test_the_names_are_the_ones_the_site_links():
-    # D13: Mac only; Windows and Linux are not in the release, so they are not asked for
-    assert TAG.startswith("v") and len(NAMES) == 1 and all(n.endswith(".dmg") for n in NAMES)
-    assert not any(n.endswith((".exe", ".AppImage", ".deb")) for n in NAMES)
+def test_the_site_links_no_release_asset():
+    # 0.4.0 has no desktop app: the site leads to install.sh / install.ps1, so no release file is asked for
+    assert TAG.startswith("v") and NAMES == []
+    funnel = (ROOT / "web/lib/download-funnel.ts").read_text(encoding="utf-8")
+    assert ".dmg" not in funnel and "macos-universal" not in funnel and "RELEASE_BASE" not in funnel
 
 
 def test_a_public_release_that_holds_the_files_is_green(github, capsys):
@@ -103,29 +105,27 @@ def test_a_release_the_site_would_not_link_is_red(github, change):
 
 def test_a_missing_or_misplaced_asset_is_red(github, capsys):
     data = release()
-    data["assets"] = [a for a in data["assets"] if not a["name"].endswith(".dmg")]
+    data["assets"] = [a for a in data["assets"] if a["name"] != "SHA256SUMS"]
     github["release"] = data
-    assert run() == 1 and ".dmg" in capsys.readouterr().err
+    assert run() == 1 and "SHA256SUMS" in capsys.readouterr().err
     data = release()
-    data["assets"][0]["browser_download_url"] = "https://example.invalid/x"
+    next(a for a in data["assets"] if a["name"] == "SHA256SUMS")["browser_download_url"] = "https://example.invalid/x"
     github["release"] = data
     assert run() == 1
     data = release()
-    data["assets"][0]["state"] = "starter"
+    next(a for a in data["assets"] if a["name"] == "SHA256SUMS")["state"] = "starter"
     github["release"] = data
     assert run() == 1
 
 
 def test_a_file_that_is_not_what_the_release_announces_is_red(github, capsys):
-    github["files"][NAMES[0]] = b"short"
+    github["files"]["SHA256SUMS"] = b"short"
     assert run() == 1 and "bytes arrived" in capsys.readouterr().err
-    github["files"][NAMES[0]] = bytes(len(BODIES[NAMES[0]]))
-    assert run() == 1 and "SHA256SUMS" in capsys.readouterr().err
 
 
-def test_an_address_that_gives_404_is_red_even_without_downloading(github):
-    del github["files"][NAMES[0]]
-    assert run("--no-bytes") == 1
+def test_an_address_that_gives_404_is_red(github):
+    del github["files"]["SHA256SUMS"]
+    assert run() == 1
 
 
 def test_a_tag_other_than_the_one_the_site_links_is_red(github, capsys):

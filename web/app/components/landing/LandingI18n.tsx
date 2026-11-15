@@ -217,9 +217,9 @@ const translations = {
     hu: "Helyette a hordozható verzió letöltése",
   },
   dl_desktop_unsigned_note: {
-    it: "Su macOS il DMG è firmato e notarizzato. Per Linux in questa versione non c'è l'app desktop: usa il terminale (install.sh).",
-    en: "On macOS the DMG is signed and notarized. There is no desktop app for Linux in this version: use the terminal (install.sh).",
-    hu: "macOS-en a DMG aláírt és notarizált. Linuxra ebben a verzióban nincs asztali app: használd a terminált (install.sh).",
+    it: "In questa versione non c'è l'app desktop: su Mac e Linux usa il terminale (install.sh).",
+    en: "There is no desktop app in this version: on Mac and Linux use the terminal (install.sh).",
+    hu: "Ebben a verzióban nincs asztali app: Macen és Linuxon használd a terminált (install.sh).",
   },
   dl_mac_apple_silicon_only: {
     it: "Solo Mac con Apple silicon (M1 e successivi). I Mac Intel non sono supportati nella 0.4.",
