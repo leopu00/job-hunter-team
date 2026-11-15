@@ -65,7 +65,8 @@ def lrun(host, args: list[str], stdin: str | None = TOKEN + "\n", **extra: str) 
            "T_RUNNING": str(host.running), "T_LIBRARY": str(Path(host.script).parent.parent.parent / "scripts" / "jht-integration.ps1")
            if False else str(__import__("test_integration_command_windows").LIBRARY),
            "T_STDIN": str(host.tmp / "grant-stdin"), "T_ARGS": json.dumps(args), "T_JHT_HOME": str(host.tmp / "jht-home"), "T_EXTRAS": DIGEST, **extra}
-    return subprocess.run([*host.argv, "-File", str(host.script)], env=env, input=stdin, capture_output=True, text=True, timeout=120)
+    # the library writes its sentences as UTF-8 (what the app reads); Python on Windows would read them in the code page of the system
+    return subprocess.run([*host.argv, "-File", str(host.script)], env=env, input=stdin, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
 
 
 def last(done) -> dict:
