@@ -119,14 +119,15 @@ def test_windows_writes_the_language_of_the_person_in_host_env_and_reads_it_by_t
     assert "JHT_LANG=en\n" not in installer.replace("\r\n", "\n")
     assert "JHT_LANG=$lang" in installer
     person = installer[installer.index("function Get-JhtTextLanguage"):installer.index("function Get-Windows10SupportWarning")]
-    order = [person.index(p) for p in ("i18n-prefs.json", "$env:JHT_LANG", "CurrentUICulture", "return 'en'")]
+    # the last English is the one of nothing known at all (a choice of a language we do not have reads English before it)
+    order = [person.index(p) for p in ("i18n-prefs.json", "$env:JHT_LANG", "CurrentUICulture")] + [person.rindex("return 'en'")]
     # host.env gets the same language as the sentences of the installer
     assert "return (Get-JhtTextLanguage)" in installer[installer.index("function Get-JhtPersonLanguage"):installer.index("function Write-HostEnv")]
     assert order == sorted(order)
     wrapper = WRAPPER_PS1.read_text(encoding="utf-8")
     assert wrapper.index("$script:JhtCallerLang = [string]$env:JHT_LANG") < wrapper.index("Get-Content $HostEnvFile")
     text = wrapper[wrapper.index("function Get-JhtTextLanguage"):wrapper.index("function Get-JhtUninstallText")]
-    order = [text.index(p) for p in ("i18n-prefs.json", "$caller -cmatch", "$script:JhtHostEnvLang -cmatch", "Get-UICulture", "return 'en'")]
+    order = [text.index(p) for p in ("i18n-prefs.json", "$caller", "$script:JhtHostEnvLang", "CurrentUICulture")] + [text.rindex("return 'en'")]
     assert order == sorted(order)
 
 

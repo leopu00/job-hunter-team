@@ -8,6 +8,7 @@ fake zoneinfo folder (JHT_ZONEINFO_DIR) and a fake /etc/localtime (JHT_LOCALTIME
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import select
@@ -49,12 +50,19 @@ def zoneinfo(tmp_path):
     return folder
 
 
-def _run(tmp_path, zoneinfo, answers, *, lang="en", detected="Europe/Rome", saved=None, host="1", extra=None):
+def _run(tmp_path, zoneinfo, answers, *, lang="en", detected="Europe/Rome", saved=None, host="1", extra=None, confirmed=False):
     pty = pytest.importorskip("pty")
     home = tmp_path / "home"
     (home / ".jht").mkdir(parents=True, exist_ok=True)
     if saved:
         (home / ".jht" / "host.env").write_text(f"JHT_LANG={lang}\nJHT_HOST_TYPE=local\nJHT_USER_TZ={saved}\n", encoding="utf-8")
+        if not confirmed:  # written by the installer with nobody to ask: the first run with a person asks it all
+            (home / ".jht" / ".host-setup-unconfirmed").write_text("", encoding="utf-8")
+        # the trusted copy of an earlier host setup, in the folder of the runtime (not mounted in the container)
+        runtime = tmp_path / "runtime"
+        runtime.mkdir(mode=0o700, exist_ok=True)
+        (runtime / "host-values").write_text(f"JHT_HOST_TYPE=local\nJHT_LANG={lang}\nJHT_USER_TZ={saved}\n", encoding="utf-8")
+        (runtime / "host-values").chmod(0o600)
     localtime = tmp_path / "localtime"
     if detected:
         localtime.symlink_to(zoneinfo / detected)
@@ -157,6 +165,19 @@ def test_a_saved_zone_other_than_the_machine_s_shows_both_and_enter_keeps_the_sa
     assert code == 0 and not left, out
     assert re.search(r"Saved: America/Chicago \(now \d\d:\d\d\) · Detected now: Europe/Rome \(now \d\d:\d\d\)", out), out
     assert _tz(saved) == "America/Chicago"
+
+
+def test_an_update_keeps_the_language_the_host_type_and_the_zone_saved_and_asks_nothing(tmp_path, zoneinfo):
+    """host.env of an earlier setup (no mark of a run without a person): `jht setup` after an update asks none of the three."""
+    code, out, saved, left = _run(tmp_path, zoneinfo, [""], lang="pt", detected="Europe/Rome", saved="America/Chicago",
+                                  host="2", confirmed=True)
+    assert code == 0, out
+    assert len(left) == 3, out   # not one answer was asked for
+    assert "Choose your language" not in out and catalog("pt")["host_setup.where_running"] not in out, out
+    assert saved == "JHT_LANG=pt\nJHT_HOST_TYPE=local\nJHT_USER_TZ=America/Chicago\n", saved
+    prefs = json.loads((tmp_path / "home" / ".jht" / "i18n-prefs.json").read_text(encoding="utf-8"))
+    # the wizard in the container does not ask the language either
+    assert prefs["locale"] == "pt" and isinstance(prefs.get("asked_at"), int), prefs
 
 
 @pytest.mark.parametrize("lang", LANGUAGES)

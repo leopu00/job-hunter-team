@@ -16,6 +16,7 @@ The production functions are cut out of the scripts and run in bash with fake en
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -118,8 +119,24 @@ def test_the_refusal_is_said_in_italian_to_an_italian_person(tmp_path):
     assert done.returncode == 84
     assert done.stderr.splitlines()[0] == "JHT_ERROR team_running"  # the code stays the same for the app
     text = " ".join(done.stderr.split())
-    assert "Job Hunter Team e' acceso su questo computer (jht)" in text and "Non e' stato cambiato niente" in text
+    assert "Job Hunter Team è acceso su questo computer (jht)" in text and "Non è stato cambiato niente" in text
     assert text.index("jht setup") < text.index("jht down") < text.index("jht up")
+
+
+@pytest.mark.parametrize("lang", ["en", "it", "hu", "es", "de", "fr", "pt"])
+def test_an_update_of_a_finished_setup_is_told_how_to_update_in_the_language_saved(tmp_path, lang):
+    """A setup that was finished (its configuration is there) is an update: no word of a setup to resume, in the person's
+    language (the saved one, not the system's: giro Linux, a German installation read the refusal in Italian)."""
+    jht = tmp_path / "home" / ".jht"
+    jht.mkdir(parents=True)
+    (jht / "jht.config.json").write_text("{}", encoding="utf-8")
+    (jht / "host.env").write_text(f"JHT_LANG={lang}\nJHT_HOST_TYPE=local\n", encoding="utf-8")
+    done = install(tmp_path, "jht\n", env={"LANG": "it_IT.UTF-8" if lang != "it" else "en_US.UTF-8"})
+    assert done.returncode == 84, done.stdout + done.stderr
+    assert done.stderr.splitlines()[0] == "JHT_ERROR team_running"
+    expected = json.loads((ROOT / "shared" / "locales" / f"{lang}.json").read_text(encoding="utf-8"))["installer.team_running_update"]
+    assert expected.replace("%s", "jht") in " ".join(done.stderr.split()), done.stderr
+    assert "jht setup" not in done.stderr
 
 
 def test_on_the_mac_the_check_runs_before_the_image_is_downloaded():

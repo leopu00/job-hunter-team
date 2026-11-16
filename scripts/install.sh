@@ -542,6 +542,7 @@ ts_table() {
     en:installer.subuid_subgid_range) printf '%s' 'subuid/subgid range %s-%s for %s' ;;
     en:installer.system_detection) printf '%s' 'System detection' ;;
     en:installer.team_running) printf '%s' 'Job Hunter Team is running on this computer (%s). If setup was interrupted, resume it with «jht setup» in this terminal; no down is needed. To reinstall instead, stop it with «jht down», run the installer again, then start it with «jht up». Nothing was changed: your profile and documents in ~/.jht and ~/Documents/Job Hunter Team stay where they are.' ;;
+    en:installer.team_running_update) printf '%s' 'Job Hunter Team is running on this computer (%s). To update it, stop it with «jht down», run the installer again, then start it with «jht up». Nothing was changed: your profile and documents in ~/.jht and ~/Documents/Job Hunter Team stay where they are.' ;;
     en:installer.terminal_run) printf '%s' 'In this terminal, run:' ;;
     en:installer.uid_1001_taken) printf '%s' 'uid 1001 on this computer is the account '\''%s'\''. The Job Hunter Team container runs as uid 1001, so that account would own ~/.jht (your data and the portal credentials). Nothing was changed. Run JHT from the account '\''%s'\'', or give '\''%s'\'' another uid, then try again.' ;;
     en:installer.uninstall_keeps_your_data) printf '%s' 'To uninstall (keeps your data in ~/.jht and ~/Documents/Job Hunter Team):' ;;
@@ -694,7 +695,8 @@ ts_table() {
     it:installer.starting_podman_machine) printf '%s' 'Avvio la macchina Podman '\''%s'\''...' ;;
     it:installer.subuid_subgid_range) printf '%s' 'intervallo subuid/subgid %s-%s per %s' ;;
     it:installer.system_detection) printf '%s' 'Rilevamento del sistema' ;;
-    it:installer.team_running) printf '%s' 'Job Hunter Team e'\'' acceso su questo computer (%s). Se il setup si era interrotto, riprendilo con «jht setup» in questo terminale; non serve spegnere niente. Per reinstallare invece: spegnilo con «jht down», rilancia l'\''installer, poi riaccendilo con «jht up». Non e'\'' stato cambiato niente: il tuo profilo e i tuoi documenti in ~/.jht e ~/Documents/Job Hunter Team restano dove sono.' ;;
+    it:installer.team_running) printf '%s' 'Job Hunter Team è acceso su questo computer (%s). Se il setup si era interrotto, riprendilo con «jht setup» in questo terminale; non serve spegnere niente. Per reinstallare invece: spegnilo con «jht down», rilancia l'\''installer, poi riaccendilo con «jht up». Non è stato cambiato niente: il tuo profilo e i tuoi documenti in ~/.jht e ~/Documents/Job Hunter Team restano dove sono.' ;;
+    it:installer.team_running_update) printf '%s' 'Job Hunter Team è acceso su questo computer (%s). Per aggiornarlo, spegnilo con «jht down», rilancia l'\''installer, poi riaccendilo con «jht up». Non è stato cambiato niente: il tuo profilo e i tuoi documenti in ~/.jht e ~/Documents/Job Hunter Team restano dove sono.' ;;
     it:installer.terminal_run) printf '%s' 'In questo terminale, lancia:' ;;
     it:installer.uid_1001_taken) printf '%s' 'l'\''uid 1001 su questo computer e'\'' l'\''account '\''%s'\''. Il container di Job Hunter Team gira come uid 1001, quindi quell'\''account sarebbe il proprietario di ~/.jht (i tuoi dati e le credenziali dei portali). Non e'\'' stato cambiato niente. Lancia JHT dall'\''account '\''%s'\'', o dai a '\''%s'\'' un altro uid, poi riprova.' ;;
     it:installer.uninstall_keeps_your_data) printf '%s' 'Per disinstallare (i tuoi dati in ~/.jht e ~/Documents/Job Hunter Team restano):' ;;
@@ -848,6 +850,7 @@ ts_table() {
     hu:installer.subuid_subgid_range) printf '%s' 'subuid/subgid tartomány %s-%s ehhez: %s' ;;
     hu:installer.system_detection) printf '%s' 'A rendszer felismerése' ;;
     hu:installer.team_running) printf '%s' 'A Job Hunter Team fut ezen a gépen (%s). Ha a beállítás megszakadt, folytasd a «jht setup» paranccsal ebben a terminálban; nem kell leállítani. Ha inkább újratelepítenéd: állítsd le a «jht down» paranccsal, futtasd újra a telepítőt, majd indítsd el a «jht up» paranccsal. Semmi sem változott: a profilod és a dokumentumaid a ~/.jht és a ~/Documents/Job Hunter Team mappában maradnak.' ;;
+    hu:installer.team_running_update) printf '%s' 'A Job Hunter Team fut ezen a gépen (%s). A frissítéshez állítsd le a «jht down» paranccsal, futtasd újra a telepítőt, majd indítsd el a «jht up» paranccsal. Semmi sem változott: a profilod és a dokumentumaid a ~/.jht és a ~/Documents/Job Hunter Team mappában maradnak.' ;;
     hu:installer.terminal_run) printf '%s' 'Ebben a terminálban futtasd:' ;;
     hu:installer.uid_1001_taken) printf '%s' 'Ezen a gépen az uid 1001 a(z) '\''%s'\'' fiók. A Job Hunter Team konténere uid 1001-ként fut, így az a fiók lenne a ~/.jht tulajdonosa (az adataid és a portálok hitelesítő adatai). Semmi sem változott. Futtasd a JHT-t a(z) '\''%s'\'' fiókból, vagy adj a(z) '\''%s'\'' fióknak másik uid-t, majd próbáld újra.' ;;
     hu:installer.uninstall_keeps_your_data) printf '%s' 'Eltávolítás (az adataid megmaradnak a ~/.jht és a ~/Documents/Job Hunter Team mappában):' ;;
@@ -1001,6 +1004,7 @@ ts_table() {
     es:installer.subuid_subgid_range) printf '%s' 'rango subuid/subgid %s-%s para %s' ;;
     es:installer.system_detection) printf '%s' 'Detección del sistema' ;;
     es:installer.team_running) printf '%s' 'Job Hunter Team está en marcha en este ordenador (%s). Si la configuración se interrumpió, retómala con «jht setup» en este terminal; no hace falta apagar nada. Para reinstalar, en cambio: detenlo con «jht down», vuelve a ejecutar el instalador y luego arráncalo con «jht up». No se ha cambiado nada: tu perfil y tus documentos en ~/.jht y ~/Documents/Job Hunter Team se quedan donde están.' ;;
+    es:installer.team_running_update) printf '%s' 'Job Hunter Team está en marcha en este ordenador (%s). Para actualizarlo, detenlo con «jht down», vuelve a ejecutar el instalador y luego arráncalo con «jht up». No se ha cambiado nada: tu perfil y tus documentos en ~/.jht y ~/Documents/Job Hunter Team se quedan donde están.' ;;
     es:installer.terminal_run) printf '%s' 'En este terminal, ejecuta:' ;;
     es:installer.uid_1001_taken) printf '%s' 'el uid 1001 en este ordenador es la cuenta '\''%s'\''. El contenedor de Job Hunter Team se ejecuta como uid 1001, así que esa cuenta sería la propietaria de ~/.jht (tus datos y las credenciales de los portales). No se ha cambiado nada. Ejecuta JHT desde la cuenta '\''%s'\'', o da a '\''%s'\'' otro uid, y vuelve a intentarlo.' ;;
     es:installer.uninstall_keeps_your_data) printf '%s' 'Para desinstalar (tus datos en ~/.jht y ~/Documents/Job Hunter Team se quedan):' ;;
@@ -1154,6 +1158,7 @@ ts_table() {
     de:installer.subuid_subgid_range) printf '%s' 'subuid/subgid-Bereich %s-%s für %s' ;;
     de:installer.system_detection) printf '%s' 'Systemerkennung' ;;
     de:installer.team_running) printf '%s' 'Job Hunter Team läuft auf diesem Computer (%s). Wenn die Einrichtung unterbrochen wurde, setze sie mit «jht setup» in diesem Terminal fort; ein down ist nicht nötig. Um stattdessen neu zu installieren, stoppe es mit «jht down», führe den Installer erneut aus und starte es dann mit «jht up». Nichts wurde geändert: Dein Profil und deine Dokumente in ~/.jht und ~/Documents/Job Hunter Team bleiben, wo sie sind.' ;;
+    de:installer.team_running_update) printf '%s' 'Job Hunter Team läuft auf diesem Computer (%s). Zum Aktualisieren stoppe es mit «jht down», führe den Installer erneut aus und starte es dann mit «jht up». Nichts wurde geändert: Dein Profil und deine Dokumente in ~/.jht und ~/Documents/Job Hunter Team bleiben, wo sie sind.' ;;
     de:installer.terminal_run) printf '%s' 'Führe in diesem Terminal aus:' ;;
     de:installer.uid_1001_taken) printf '%s' 'uid 1001 ist auf diesem Computer das Konto '\''%s'\''. Der Container von Job Hunter Team läuft als uid 1001, also würde dieses Konto ~/.jht besitzen (deine Daten und die Zugangsdaten der Portale). Nichts wurde geändert. Starte JHT vom Konto '\''%s'\'' aus, oder gib '\''%s'\'' eine andere uid, dann versuch es erneut.' ;;
     de:installer.uninstall_keeps_your_data) printf '%s' 'Zum Deinstallieren (deine Daten in ~/.jht und ~/Documents/Job Hunter Team bleiben):' ;;
@@ -1307,6 +1312,7 @@ ts_table() {
     fr:installer.subuid_subgid_range) printf '%s' 'plage subuid/subgid %s-%s pour %s' ;;
     fr:installer.system_detection) printf '%s' 'Détection du système' ;;
     fr:installer.team_running) printf '%s' 'Job Hunter Team tourne sur cet ordinateur (%s). Si la configuration a été interrompue, reprends-la avec «jht setup» dans ce terminal ; pas besoin d'\''arrêter quoi que ce soit. Pour réinstaller plutôt : arrête-le avec «jht down», relance l'\''installeur, puis démarre-le avec «jht up». Rien n'\''a été modifié : ton profil et tes documents dans ~/.jht et ~/Documents/Job Hunter Team restent où ils sont.' ;;
+    fr:installer.team_running_update) printf '%s' 'Job Hunter Team tourne sur cet ordinateur (%s). Pour le mettre à jour, arrête-le avec «jht down», relance l'\''installeur, puis démarre-le avec «jht up». Rien n'\''a été modifié : ton profil et tes documents dans ~/.jht et ~/Documents/Job Hunter Team restent où ils sont.' ;;
     fr:installer.terminal_run) printf '%s' 'Dans ce terminal, lance :' ;;
     fr:installer.uid_1001_taken) printf '%s' 'l'\''uid 1001 sur cet ordinateur est le compte '\''%s'\''. Le conteneur de Job Hunter Team tourne en uid 1001, donc ce compte serait propriétaire de ~/.jht (tes données et les identifiants des portails). Rien n'\''a été modifié. Lance JHT depuis le compte '\''%s'\'', ou donne à '\''%s'\'' un autre uid, puis réessaie.' ;;
     fr:installer.uninstall_keeps_your_data) printf '%s' 'Pour désinstaller (tes données dans ~/.jht et ~/Documents/Job Hunter Team restent) :' ;;
@@ -1460,6 +1466,7 @@ ts_table() {
     pt:installer.subuid_subgid_range) printf '%s' 'intervalo subuid/subgid %s-%s para %s' ;;
     pt:installer.system_detection) printf '%s' 'Deteção do sistema' ;;
     pt:installer.team_running) printf '%s' 'O Job Hunter Team está a correr neste computador (%s). Se a configuração foi interrompida, retoma-a com «jht setup» neste terminal; não é preciso desligar nada. Para reinstalar em vez disso, para-o com «jht down», corre o instalador de novo e depois inicia-o com «jht up». Não foi alterado nada: o teu perfil e os teus documentos em ~/.jht e ~/Documents/Job Hunter Team ficam onde estão.' ;;
+    pt:installer.team_running_update) printf '%s' 'O Job Hunter Team está a correr neste computador (%s). Para o atualizar, para-o com «jht down», corre o instalador de novo e depois inicia-o com «jht up». Não foi alterado nada: o teu perfil e os teus documentos em ~/.jht e ~/Documents/Job Hunter Team ficam onde estão.' ;;
     pt:installer.terminal_run) printf '%s' 'Neste terminal, corre:' ;;
     pt:installer.uid_1001_taken) printf '%s' 'o uid 1001 neste computador é a conta '\''%s'\''. O contentor do Job Hunter Team corre como uid 1001, por isso essa conta seria a proprietária de ~/.jht (os teus dados e as credenciais dos portais). Não foi alterado nada. Corre o JHT a partir da conta '\''%s'\'', ou dá a '\''%s'\'' outro uid, e depois tenta de novo.' ;;
     pt:installer.uninstall_keeps_your_data) printf '%s' 'Para desinstalar (os teus dados em ~/.jht e ~/Documents/Job Hunter Team ficam):' ;;
@@ -3499,6 +3506,11 @@ refuse_running_team() {
   done
   [ -z "$running" ] && return 0
   jht_error_marker team_running
+  # a setup that was finished (its configuration is there): this is an update, and there is no setup to resume
+  if [ -f "$HOME/.jht/jht.config.json" ]; then
+    printf "  ${RED}✗${RESET} %s%s\n" "$(jht_code_prefix team_running)" "$(tsf installer.team_running_update 'Job Hunter Team is running on this computer (%s). To update it, stop it with «jht down», run the installer again, then start it with «jht up». Nothing was changed: your profile and documents in ~/.jht and ~/Documents/Job Hunter Team stay where they are.' "$running")" >&2
+    exit "$TEAM_RUNNING_EXIT"
+  fi
   printf "  ${RED}✗${RESET} %s%s\n" "$(jht_code_prefix team_running)" "$(tsf installer.team_running 'Job Hunter Team is running on this computer (%s). If setup was interrupted, resume it with «jht setup» in this terminal; no down is needed. To reinstall instead, stop it with «jht down», run the installer again, then start it with «jht up». Nothing was changed: your profile and documents in ~/.jht and ~/Documents/Job Hunter Team stay where they are.' "$running")" >&2
   exit "$TEAM_RUNNING_EXIT"
 }

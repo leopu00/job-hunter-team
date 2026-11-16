@@ -120,8 +120,15 @@ def box(tmp_path):
         return path
 
     def notice():
+        # The detached job writes the notice beside it and renames it over it: on Windows a read that meets the rename is
+        # refused (PermissionError), and an instant later the whole new file is there. The test reads again, as the Capitano does.
         path = home / "state" / "tools.json"
-        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+        for _ in range(50):
+            try:
+                return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+            except PermissionError:
+                time.sleep(0.1)
+        return json.loads(path.read_text(encoding="utf-8"))
 
     def wait_for(state: str):
         # The pull runs in a process of its own: on the gate's Windows runner, with Windows PowerShell 5.1 and the other tests of the

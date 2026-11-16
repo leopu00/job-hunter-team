@@ -68,5 +68,5 @@ def test_the_installer_at_a_terminal_refuses_with_the_sentence_alone(tmp_path: P
         os.close(master)
     plain = _plain(b"".join(chunks).decode("utf-8", "replace"))
     assert process.returncode == 84, plain
-    assert "Job Hunter Team e' acceso su questo computer (jht)" in plain
+    assert "Job Hunter Team è acceso su questo computer (jht)" in plain
     assert "team_running" not in plain and "JHT_ERROR" not in plain

@@ -244,7 +244,7 @@ ITALIAN = "Podman non supporta piu' Windows 10: puo' funzionare, ma non lo garan
         ("en", WARNING),
         ("it_IT.UTF-8", ITALIAN),
         ("DE", "Podman unterstuetzt Windows 10 nicht mehr: Es kann funktionieren, aber wir garantieren es nicht. Unterstuetzt wird Windows 11."),
-        ("zz", "windows"),  # a language we do not have: the next in the rule, the one of Windows
+        ("zz", WARNING),  # a language chosen that the product does not have: English, not the language of Windows
     ],
 )
 def test_the_terminal_warning_follows_jht_lang_then_the_language_of_windows(tmp_path, jht_lang, expected):

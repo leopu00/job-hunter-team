@@ -75,3 +75,71 @@ def test_in_a_folder_it_can_write_the_file_is_brought_up_to_date(jht):
     assert (folder / "host.env").read_text(encoding="utf-8") == HOST_ENV
     code, out = run(home)
     assert code == 0 and (folder / "host.env").read_text(encoding="utf-8") == HOST_ENV
+
+
+def _unattended(home: Path):
+    """The run of the installer: nobody at the terminal, no forced host type (it is detected, or kept)."""
+    env = {**os.environ, "HOME": str(home), "JHT_RUNTIME_DIR": str(home / "runtime"), "LANG": "C"}
+    for name in ("JHT_LANG", "JHT_HOME_HOST", "JHT_USER_TZ", "LC_ALL", "LC_MESSAGES", "DISPLAY", "WAYLAND_DISPLAY"):
+        env.pop(name, None)
+    (home / "runtime").mkdir(exist_ok=True)
+    done = subprocess.run(["bash", str(SCRIPT)], stdin=subprocess.DEVNULL, capture_output=True, text=True, env=env,
+                          timeout=120, check=False)
+    return done.returncode, done.stdout + done.stderr
+
+
+def test_a_first_host_env_written_with_nobody_to_ask_is_marked_so_that_jht_setup_asks(tmp_path: Path):
+    home = tmp_path / "home"
+    (home / ".jht").mkdir(parents=True)
+    code, out = _unattended(home)
+    assert code == 0, out
+    assert (home / ".jht" / "host.env").is_file() and (home / ".jht" / ".host-setup-unconfirmed").is_file(), out
+
+
+def _host_values(home: Path, text: str) -> Path:
+    runtime = home / "runtime"
+    runtime.mkdir(mode=0o700, exist_ok=True)
+    runtime.chmod(0o700)
+    values = runtime / "host-values"
+    values.write_text(text, encoding="utf-8")
+    values.chmod(0o600)
+    return values
+
+
+def test_an_update_with_nobody_to_ask_keeps_the_saved_values_and_marks_nothing(jht):
+    home, folder = jht
+    values = _host_values(home, "JHT_HOST_TYPE=local\nJHT_LANG=en\nJHT_USER_TZ=Europe/Rome\n")
+    # a Linux server without a display is detected as a VPS: the local computer the person chose stays
+    code, out = _unattended(home)
+    assert code == 0, out
+    assert (folder / "host.env").read_text(encoding="utf-8") == HOST_ENV, out
+    assert "JHT_HOST_TYPE=local\n" in values.read_text(encoding="utf-8")
+    assert not (folder / ".host-setup-unconfirmed").exists()
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="a Mac is detected as a local computer: a vps can only come from a file")
+def test_a_vps_an_agent_wrote_in_host_env_never_becomes_the_trusted_host_type(jht):
+    """~/.jht is mounted in the container: an agent can write JHT_HOST_TYPE=vps in host.env and take the mark away. The update
+    keeps the host type of host-values (the trusted copy), and with no host-values it detects it: never the one of host.env."""
+    home, folder = jht
+    (folder / "host.env").write_text("JHT_LANG=en\nJHT_HOST_TYPE=vps\nJHT_USER_TZ=Europe/Rome\n", encoding="utf-8")
+    values = _host_values(home, "JHT_HOST_TYPE=local\nJHT_LANG=en\nJHT_USER_TZ=Europe/Rome\n")
+    code, out = _unattended(home)
+    assert code == 0, out
+    assert "JHT_HOST_TYPE=local\n" in values.read_text(encoding="utf-8") and "JHT_HOST_TYPE=local\n" in (folder / "host.env").read_text()
+    values.unlink()
+    (folder / "host.env").write_text("JHT_LANG=en\nJHT_HOST_TYPE=vps\nJHT_USER_TZ=Europe/Rome\n", encoding="utf-8")
+    code, out = _unattended(home)
+    assert code == 0, out
+    assert "JHT_HOST_TYPE=local\n" in values.read_text(encoding="utf-8"), out
+
+
+def test_a_host_values_others_can_write_is_not_believed(jht):
+    home, folder = jht
+    values = _host_values(home, "JHT_HOST_TYPE=local\nJHT_LANG=en\nJHT_USER_TZ=America/Chicago\n")
+    values.chmod(0o622)
+    code, out = _unattended(home)
+    assert code == 0, out
+    # not the zone of a file the group could have written: the one of the earlier host.env stays the default, as before
+    assert "JHT_USER_TZ=Europe/Rome\n" in (folder / "host.env").read_text(encoding="utf-8"), out
+    assert (folder / ".host-setup-unconfirmed").exists()
