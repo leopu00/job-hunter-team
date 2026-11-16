@@ -568,7 +568,8 @@ def test_jht_team_chat_comes_back_by_itself_when_the_switch_ended_it():
     assert '"$NODE_ENTRY" "$@" || team_rc=$?' in arm                       # set -e does not end the wrapper on the REPL's exit
     # a chat that resumes after a switch never starts the container: no ensure_up for it
     assert re.search(r'if \[ "\$\{2:-\}" = chat \] && \[ -n "\$\{JHT_TEAM_CHAT_RESUME:-\}" \]; then team_chat_resume "\$@"\n', arm)
-    assert re.search(r'if \[ "\$\{2:-\}" = chat \] && team_chat_ended_by_switch; then\n\s+team_chat_through_switch "\$@"\n\s+exit \$\?\n', arm)
+    assert re.search(r'if \[ "\$\{2:-\}" = chat \] && team_chat_ended_by_switch; then\n(?:\s+\[ -z "\$team_err" \] \|\| rm -f "\$team_err"\n)'
+                     r'\s+team_chat_through_switch "\$@"\n\s+exit \$\?\n', arm)
     assert arm.rstrip().endswith('exit "$team_rc"')                       # any other end: the REPL's own code, as before
     import sys as _sys
     _sys.path.insert(0, str(ROOT / "tests"))
@@ -599,6 +600,41 @@ def _chat_functions(tmp_path, docker_body: str, env_lines: str, call: str, **env
             f'export PATH="{fake}:$PATH"\nRUNTIME_DIR="{tmp_path}"\nWRAPPER_PATH="{wrapper}"\nATTESTED_CONTAINER_ID=jht\n'
             f'ensure_up() {{ echo ENSURE_UP >> "{tmp_path}/calls"; }}\n' + env_lines + "".join(parts) + call)
     return subprocess.run(["bash", "-c", body], capture_output=True, text=True, timeout=60, env={**os.environ, **env})
+
+
+def _team_arm_chat(tmp_path, switching: bool, exec_flags: str = "-it"):
+    """The wrapper's own `team)` arm on `jht team chat assistente`, with a docker whose REPL ends as the switch ends it: Podman's line
+    on the client's stderr and code 125."""
+    text = WRAPPER.read_text(encoding="utf-8")
+    start = text.index("\n  team)\n") + 1
+    arm = text[start:text.index("\n    ;;\n", start) + len("\n    ;;\n")]
+    if switching:
+        (tmp_path / ".tools-switching").write_text(f"{os.getpid()}\n", encoding="utf-8")
+    docker = ('[ "$1" = exec ] || exit 0\necho REPL-LINE\n'
+              'echo \'Error: no container with name or ID "jht" found: no such container\' >&2\nexit 125\n')
+    lines = (f'EXEC_FLAGS="{exec_flags}"\nJHT_HOST_TYPE=linux\nNODE_ENTRY=/app/cli.js\n'
+             "require_compose_file() { :; }\nrequire_docker() { :; }\nensure_up_for_stop() { :; }\n")
+    return _chat_functions(tmp_path, docker, lines, 'set -- team chat assistente\ncase "$1" in\n' + arm + "esac\n",
+                           TMPDIR=str(tmp_path), JHT_TOOLS_SWITCH_WAIT_MAX="0")   # the switch's pid is this test's: no wait
+
+
+def test_a_chat_the_switch_ended_does_not_show_the_engine_line(tmp_path):
+    """Giro Windows of the build6, the same in this wrapper: the switch removed the container under `jht team chat`, and Podman's
+    own line «Error: no container with name or ID "jht" found» reached the person next to the line that says why the chat stops."""
+    done = _team_arm_chat(tmp_path, switching=True)
+    assert done.returncode == 0, done.stderr
+    assert "REPL-LINE" in done.stdout
+    assert "no container" not in done.stderr and "so the chat stops for a moment" in done.stderr
+    assert (tmp_path / "calls").read_text(encoding="utf-8").splitlines()[-1] == "again team chat assistente resume=1"
+    assert not list(tmp_path.glob("jht-chat-err.*"))                        # the file of the client's lines is taken away
+
+
+@pytest.mark.parametrize("exec_flags", ["-it", "-i"])
+def test_a_chat_that_ends_otherwise_still_shows_the_engine_line_and_its_code(tmp_path, exec_flags):
+    done = _team_arm_chat(tmp_path, switching=False, exec_flags=exec_flags)
+    assert done.returncode == 125
+    assert 'Error: no container with name or ID "jht" found' in done.stderr and "stops for a moment" not in done.stderr
+    assert not list(tmp_path.glob("jht-chat-err.*"))
 
 
 def test_a_chat_the_switch_ended_starts_a_fresh_wrapper_and_starts_nothing_itself(tmp_path):

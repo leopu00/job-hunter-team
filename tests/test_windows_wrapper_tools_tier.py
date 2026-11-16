@@ -36,6 +36,9 @@ case "$1" in
       [ -e "$FAKE/full-present" ] && { echo sha256:fullid; exit 0; }; exit 1
     fi
     [ -e "$FAKE/full-present" ] && exit 0; exit 1 ;;
+  exec) echo "$*" >> "$FAKE/exec-args"
+    [ -e "$FAKE/exec-gone" ] && { echo REPL-LINE; echo 'Error: no container with name or ID "jht" found: no such container' >&2; exit 125; }
+    exit 0 ;;
   pull) echo "$*" >> "$FAKE/pulls"; n=0; while [ -e "$FAKE/pull-hold" ] && [ "$n" -lt 300 ]; do sleep 0.1; n=$((n+1)); done; [ -e "$FAKE/pull-fails" ] && exit 1; : > "$FAKE/full-present"; exit 0 ;;
 esac
 exit 0
@@ -676,8 +679,10 @@ def test_jht_team_chat_comes_back_by_itself_when_the_switch_ended_it():
     text = WRAPPER.read_text(encoding="utf-8")
     arm = text[text.index("\n  default {\n    Require-ComposeFile"):]
     arm = arm[:arm.index("\n    break\n")]
-    assert re.search(r"\$code = \$LASTEXITCODE\n(?:\s*#.*\n)?\s+if \(\$Sub -ceq 'team' -and \$Rest\.Count -gt 0 -and \$Rest\[0\] -ceq 'chat' "
-                     r"-and \(Test-JhtTeamChatEndedBySwitch\)\) \{\n\s+Invoke-JhtTeamChatThroughSwitch \$Rest\n\s+exit \$script:JhtTeamChatCode\n", arm)
+    assert re.search(r"\$code = \$LASTEXITCODE\n\s+\}\n(?:\s*#.*\n)?\s+if \(\$Sub -ceq 'team' -and \$Rest\.Count -gt 0 -and \$Rest\[0\] -ceq 'chat' "
+                     r"-and \(Test-JhtTeamChatEndedBySwitch\)\) \{\n\s+Complete-JhtTeamChatErrors -Drop\n\s+Invoke-JhtTeamChatThroughSwitch \$Rest\n"
+                     r"\s+exit \$script:JhtTeamChatCode\n\s+\}\n\s+Complete-JhtTeamChatErrors\n", arm)
+    assert "$code = Invoke-JhtTeamChatOnConsole $hostFlags" in arm
     assert "exit $code" in arm
     body = text[text.index("function Invoke-JhtTeamChatThroughSwitch {"):]
     body = body[:body.index("\n}\n")]
@@ -694,6 +699,44 @@ def test_jht_team_chat_comes_back_by_itself_when_the_switch_ended_it():
     assert ("if ($Sub -ceq 'team' -and $Rest.Count -gt 1 -and $Rest[0] -ceq 'chat' -and $env:JHT_TEAM_CHAT_RESUME) "
             "{ Invoke-JhtTeamChatResume $Rest[1] }\n    else { Ensure-Up }") in arm.replace("\r\n", "\n") or \
            ("{ Invoke-JhtTeamChatResume $Rest[1] }" in text and "    else { Ensure-Up }" in text)
+
+
+def _console_chat_functions() -> str:
+    text = WRAPPER.read_text(encoding="utf-8").replace("\r\n", "\n")
+    return "".join(re.search(rf"^function {name} \{{\n.*?^\}}\n", text, re.S | re.M).group(0)
+                   for name in ("Invoke-JhtTeamChatOnConsole", "Complete-JhtTeamChatErrors"))
+
+
+def _console_chat(box, flags: str = "'-it'", rest: str = "'chat', 'assistente'", drop: bool = False):
+    body = (_console_chat_functions()
+            + f"\n$ExecFlags = @({flags}); $Container = 'jht'; $NodeEntry = '/app/cli/bin/jht.js'; $Sub = 'team'; $Rest = @({rest})\n"
+            "$code = Invoke-JhtTeamChatOnConsole @('-e', 'JHT_HOST_TYPE=windows')\n"
+            "[Console]::Out.WriteLine('CODE ' + $(if ($null -eq $code) { 'none' } else { [string]$code }))\n"
+            "$file = $script:JhtTeamChatErrFile\n"
+            + ("Complete-JhtTeamChatErrors -Drop\n" if drop else "Complete-JhtTeamChatErrors\n")
+            + "[Console]::Out.WriteLine('LEFT ' + [string]($file -and (Test-Path -LiteralPath $file)))\n")
+    return box.run(body)
+
+
+def test_a_chat_the_switch_ended_does_not_show_the_engine_line_and_any_other_end_does(box):
+    """Giro Windows of the build6: the switch removed the container under `jht team chat`, and Podman's own line
+    «Error: no container with name or ID "jht" found» reached the person's chat next to the line that says why it stops."""
+    (box.fake / "exec-gone").touch()
+    dropped = _console_chat(box, drop=True)
+    assert "REPL-LINE" in dropped.stdout and "CODE 125" in dropped.stdout, dropped.stdout + dropped.stderr
+    assert "no container" not in dropped.stderr and "no container" not in dropped.stdout
+    assert "LEFT False" in dropped.stdout                                   # the file is taken away
+    assert (box.fake / "exec-args").read_text(encoding="utf-8").split() == [
+        "exec", "-it", "-e", "JHT_HOST_TYPE=windows", "jht", "node", "/app/cli/bin/jht.js", "team", "chat", "assistente"]
+    shown = _console_chat(box)
+    assert 'Error: no container with name or ID "jht" found' in shown.stderr, shown.stdout + shown.stderr
+    assert "CODE 125" in shown.stdout and "LEFT False" in shown.stdout
+
+
+@pytest.mark.parametrize("flags,rest", [("'-i'", "'chat', 'assistente'"), ("'-it'", "'chat', 'a b'")])
+def test_a_chat_not_on_a_console_or_with_a_word_a_command_line_cannot_carry_runs_as_before(box, flags, rest):
+    done = _console_chat(box, flags, rest)
+    assert "CODE none" in done.stdout and not (box.fake / "exec-args").exists(), done.stdout + done.stderr
 
 
 def test_the_chat_waits_for_the_agent_of_its_own_name(box):
