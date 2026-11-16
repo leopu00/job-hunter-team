@@ -42,7 +42,7 @@ def launch(tmp_path, provider, role="scout", **kw):
     ("openai", "scorer", "openai", "gpt-5.6-terra"),  # the Scorer keeps its class
     ("claude", "scout", "anthropic", "claude-haiku-5-5"),      # a light role on luna
     ("anthropic", "scorer", "anthropic", "claude-sonnet-5-5"),  # terra; anthropic is claude
-    ("claude", "capitano", "anthropic", "claude-opus-5-5"),     # sol
+    ("claude", "capitano", "anthropic", "claude-sonnet-5-5"),   # terra on Claude (provider-models.list rolemodel)
 ])
 def test_pi_gets_the_provider_pi_knows_and_the_model_of_the_class(tmp_path, provider, role, pi_provider, model):
     done = launch(tmp_path, provider, role=role)
