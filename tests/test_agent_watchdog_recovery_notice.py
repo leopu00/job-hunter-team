@@ -91,9 +91,10 @@ def _rows(path: Path):
 def test_core_recovery_is_durable_and_notified_with_its_daily_count(tmp_path):
     result, journal, node_calls, sender_calls, _ = _run(
         tmp_path,
+        # alive at the first check (seen), then gone and made again twice
         "checks=0\n"
-        "is_session_alive() { checks=$((checks + 1)); [ $((checks % 2)) -eq 0 ]; }\n"
-        "ensure_agent capitano\nensure_agent capitano",
+        "is_session_alive() { checks=$((checks + 1)); [ $((checks % 2)) -eq 1 ]; }\n"
+        "ensure_agent capitano\nensure_agent capitano\nensure_agent capitano",
     )
 
     assert result.returncode == 0, result.stderr
@@ -163,3 +164,30 @@ def test_start_success_without_a_live_session_is_not_a_recovery(tmp_path):
     assert result.returncode == 1
     assert _rows(journal) == []
     assert not sender_calls.exists()
+
+
+def test_a_first_start_is_not_a_recovery_and_the_capitano_is_not_told(tmp_path):
+    """Giro Mac m21 (build6): at every start the Capitano got «[WATCHDOG] Automatic recovery» for a session that had never
+    been up in this container (its own, once the onboarding was over) and spent a turn on it with nothing to take up."""
+    result, journal, node_calls, sender_calls, _ = _run(
+        tmp_path,
+        # never seen: gone, made, alive; then alive at the next check; then gone and made again
+        "states='0 1 1 0 1'\n"
+        "is_session_alive() { set -- $states; s=$1; shift; states=\"$*\"; [ \"$s\" = 1 ]; }\n"
+        "ensure_agent capitano\nensure_agent capitano\nensure_agent capitano",
+    )
+    assert result.returncode == 0, result.stderr
+    assert len(node_calls.read_text().splitlines()) == 2, "two starts: the first one, then the recovery"
+    assert [row[1:] for row in _rows(journal)] == [["CAPITANO", "inactive at the watchdog check"]]
+    notices = sender_calls.read_text(encoding="utf-8").splitlines() if sender_calls.exists() else []
+    assert len(notices) == 1 and "Recovery #1 for CAPITANO today" in notices[0]
+
+
+def test_a_core_session_never_seen_is_started_without_a_notice(tmp_path):
+    result, journal, node_calls, sender_calls, _ = _run(
+        tmp_path,
+        "checks=0\nis_session_alive() { checks=$((checks + 1)); [ $checks -ge 2 ]; }\nensure_agent sentinella",
+    )
+    assert result.returncode == 0, result.stderr
+    assert node_calls.read_text().splitlines() == ["/app/cli/bin/jht.js team start sentinella"]
+    assert not sender_calls.exists() and _rows(journal) == []

@@ -120,6 +120,11 @@ MAIL_BIN="${JHT_MAIL_BIN:-jht-mail}"
 # TTL e refresh della Sentinella sono ricreazioni DECISIONALI, non morti da
 # misurare. Il prossimo ensure_agent consuma questo singolo marcatore.
 INTENTIONAL_RECREATE_SESSION=""
+# The core sessions this watchdog has seen alive, one per line. Only one of them that is gone again is RECOVERED, and the
+# Capitano is told: a session that was never up in this container's life (the first start after `jht up`, the container made
+# again, the Capitano itself once the onboarding is over) is a start, not a recovery. The notice made the Capitano spend a turn
+# at every start with nothing to take up (giro Mac m21, build6: ~0.13 $).
+SEEN_ALIVE_SESSIONS=""
 
 # ── Fallimenti di spawn: la misura che mancava ──────────────────────────
 # Il watchdog misurava i propri SUCCESSI (RECOVERY_LOG) e restava cieco sui
@@ -600,9 +605,22 @@ mentor_due() {
 # Capitano e Sentinella (guarda il budget PER lui) aspettano la fine dell'onboarding (captain_gate.py: 1 = non ancora).
 captain_due() { local rc=0; python3 /app/shared/skills/captain_gate.py >/dev/null 2>&1 || rc=$?; [ "$rc" -ne 1 ]; }
 
+seen_alive() {
+  was_seen_alive "$1" || SEEN_ALIVE_SESSIONS="${SEEN_ALIVE_SESSIONS}${1}
+"
+}
+
+was_seen_alive() {
+  case "
+$SEEN_ALIVE_SESSIONS" in *"
+$1
+"*) return 0 ;; esac
+  return 1
+}
+
 ensure_agent() {
   local role="$1"
-  local session mark rc detail
+  local session mark rc detail failed_before
   session="$(echo "$role" | tr '[:lower:]' '[:upper:]')"
   # Un containment e' sticky e vale anche per i core: il normale `record` di start-agent non puo' revocarlo, soltanto
   # `release` puo' farlo. Deliberatamente PRIMA di qualsiasi misura: una sessione tenuta giu' non e' un fallimento di
@@ -614,6 +632,7 @@ ensure_agent() {
     # La serie deve essere CONSECUTIVA: se la sessione e' tornata su per una strada che non e' questa (Dottore,
     # Capitano, riavvio), il conteggio va chiuso qui, altrimenti fallimenti di incidenti diversi si sommerebbero.
     clear_spawn_failures "$session"
+    seen_alive "$session"
     return 0
   fi
   # Non e' un guasto ne' un fallimento di spawn: il Mentor e il Capitano aspettano il loro momento.
@@ -642,13 +661,19 @@ ensure_agent() {
       return 1
     fi
     log "agent $role: start OK and session verified alive"
+    # Starts that failed before this one (an alarm may have gone out): this start takes something up, it is a recovery.
+    failed_before="$(spawn_streak_state "$session")"
+    failed_before="${failed_before%% *}"
     clear_spawn_failures "$session"
     if [ "$INTENTIONAL_RECREATE_SESSION" = "$session" ]; then
       log "agent $role: intentional refresh recreated — not counted as an inactive-session recovery"
       INTENTIONAL_RECREATE_SESSION=""
+    elif ! was_seen_alive "$session" && [ "${failed_before:-0}" = 0 ]; then
+      log "agent $role: first start of $session in this container — not a recovery, the Capitano is not told"
     else
       notify_captain_recovery "$session" "inactive at the watchdog check" || true
     fi
+    seen_alive "$session"
   else
     rc=$?
     detail="$(spawn_detail_since "$mark")"
