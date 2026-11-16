@@ -30,8 +30,14 @@ def test_team_stop_still_refuses_a_container_that_is_not_ours_by_any_other_label
 
 
 def test_other_team_commands_still_need_the_exact_attestation(tmp_path: Path):
+    # `team status` only reads (it never starts the team): a container that is not exactly ours is refused with the read-only words
     result, created = _team(tmp_path, "status", key="sk-test-terminal", made_with="sk-another")
-    assert result.returncode != 0 and "automatic start refused" in result.stderr
+    assert result.returncode != 0 and "cannot be verified as ours; operation refused" in result.stderr, result.stderr
+    assert not created.exists()
+    # a team command that acts still refuses to start it
+    (tmp_path / "start").mkdir()
+    result, created = _team(tmp_path / "start", "start", key="sk-test-terminal", made_with="sk-another")
+    assert result.returncode != 0 and "automatic start refused" in result.stderr, result.stderr
     assert not created.exists()
 
 
