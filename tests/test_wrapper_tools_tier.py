@@ -1052,3 +1052,39 @@ def test_jht_up_setup_and_status_say_the_disk_is_short():
     assert 'disk_low) warn "$(tools_disk_low_text)" ;;' in tell
     status = re.search(r"(?ms)^tools_say_status\(\) \{\n.*?^\}\n", text).group(0)
     assert "disk_low) printf '%s\\n' \"$(tools_disk_low_text)\" ;;" in status
+
+
+# --- a container's process is not another jht command; a cap that is not a number is the default (review of p45) -------
+
+def test_a_process_of_another_pid_namespace_does_not_hold_the_switch(tmp_path):
+    """With a rootful Docker on Linux the host sees the processes of the containers: one with «<wrapper path> setup» on its
+    command line held the switch for a day. Only the processes of the job's own pid namespace count."""
+    wrapper = tmp_path / "jht-wrapper.sh"
+    wrapper.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    other = subprocess.Popen(["sh", "-c", "sleep 8; :", str(wrapper), "setup"])
+    try:
+        time.sleep(0.5)
+        check = (f'RUNTIME_DIR="{tmp_path}"; JHT_HOME_HOST="{tmp_path}"; WRAPPER_PATH="{wrapper}"\n'
+                 f'source "{TOOLS}"\n'
+                 '{fake}'
+                 'if tools_other_wrapper_running; then echo OTHER; else echo NONE; fi\n')
+        same = check.replace("{fake}", 'tools_pid_ns() { echo "pid:[1]"; }\n')
+        foreign = check.replace("{fake}", f'tools_pid_ns() {{ if [ "$1" = {other.pid} ]; then echo "pid:[2]"; else echo "pid:[1]"; fi; }}\n')
+        none = check.replace("{fake}", 'tools_pid_ns() { :; }\n')   # macOS: no namespace to read, nothing left out
+        for body, expected in ((same, "OTHER"), (foreign, "NONE"), (none, "OTHER")):
+            seen = subprocess.run(["bash", "-c", body], capture_output=True, text=True, timeout=30)
+            assert seen.stdout.strip() == expected, (expected, seen.stdout + seen.stderr)
+    finally:
+        other.kill()
+        other.wait(timeout=10)
+
+
+@pytest.mark.parametrize("variable,command,default", [("JHT_TOOLS_SETUP_MAX", "setup", 86400), ("JHT_TOOLS_QUIET_MAX", "up", 1800)])
+@pytest.mark.parametrize("value", ["abc", "", "-5", "1h"])
+def test_a_cap_that_is_not_a_number_is_the_default_not_no_wait(box, variable, command, default, value):
+    """`[ "$x" -gt 0 ]` on a word fails, and the wait read it as «over»: the switch went under the open wizard at once."""
+    body = (f'n=0\ntools_other_wrapper_running() {{ n=$((n + 1)); TOOLS_RUNNING_COMMAND={command}; [ "$n" -le 3 ]; }}\n'
+            'sleep() { :; }\n'
+            'tools_wait_quiet\necho "looked=$n"\n')
+    done = box.run(body, **{variable: value})
+    assert done.stdout.strip() == "looked=4", f"{variable}={value!r}: {done.stdout}{done.stderr}"

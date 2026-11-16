@@ -259,16 +259,24 @@ tools_command_changes_runtime() {
 # profile already there, so the job switches as soon as the pull ends) the switch recreated the container under its wizard, which
 # died with 137 (giro Mac m21). The command found is in TOOLS_RUNNING_COMMAND, for tools_wait_quiet.
 TOOLS_RUNNING_COMMAND=""
+
+# The pid namespace of a process (Linux), or nothing where there is none to read (macOS, a process gone, one not ours).
+tools_pid_ns() { readlink "/proc/$1/ns/pid" 2>/dev/null; }
+
 tools_other_wrapper_running() {
   # bash 3.2 (the system bash of macOS) has no BASHPID, and $$ in a subshell is still the wrapper's: the parent of a new sh is
   # this process (exec, so no subshell of the command substitution comes in between)
-  local me="${BASHPID:-$(exec sh -c 'echo "$PPID"')}" pids pid parent line command sub ancestors=""
+  local me="${BASHPID:-$(exec sh -c 'echo "$PPID"')}" pids pid parent line command sub ancestors="" my_ns
   # the pgrep of macOS leaves out the ancestors of the caller unless told -a, and the `jht setup` that started the job is one
   # (procps on Linux leaves out none, and its -a is another option: the full command line)
   [ "$(uname -s 2>/dev/null)" = Darwin ] && ancestors="-a"
-  pids="$(pgrep $ancestors -f -- "$WRAPPER_PATH" 2>/dev/null)" || return 1
+  # Only this user's processes, and on Linux only those of this pid namespace: with a rootful Docker the host sees the
+  # processes of the containers too, and one of them with «<wrapper path> setup» on its command line held the switch for a day.
+  my_ns="$(tools_pid_ns "$me")"
+  pids="$(pgrep $ancestors -u "$(id -u)" -f -- "$WRAPPER_PATH" 2>/dev/null)" || return 1
   for pid in $pids; do
     [ "$pid" = "$me" ] && continue
+    if [ -n "$my_ns" ] && [ "$(tools_pid_ns "$pid")" != "$my_ns" ]; then continue; fi
     parent="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')"
     [ -n "$parent" ] || continue          # gone already
     [ "$parent" = "$me" ] && continue     # a child of this job (the subshell of the command substitution above)
@@ -287,6 +295,9 @@ EOF
 # it runs (JHT_TOOLS_SETUP_MAX, a day): its wizard waits for the person, and a switch under it ends it all the same, half an hour on.
 tools_wait_quiet() {
   local left="${JHT_TOOLS_QUIET_MAX:-1800}" setup_left="${JHT_TOOLS_SETUP_MAX:-86400}"
+  # a value that is not a whole number of seconds is the default, never «no wait» (a failed test of [ -gt ] read as «over»)
+  case "$left" in ''|*[!0-9]*) left=1800 ;; esac
+  case "$setup_left" in ''|*[!0-9]*) setup_left=86400 ;; esac
   while tools_other_wrapper_running; do
     if [ "$TOOLS_RUNNING_COMMAND" = setup ]; then
       [ "$setup_left" -gt 0 ] || return 0
