@@ -178,9 +178,9 @@ jobs:
           . "$env:GITHUB_WORKSPACE\scripts\ci\windows_gate_group.ps1"
           exit (Invoke-GateGroup -Group strict -MaxSkipped 0)
 
-      # `skipped` 120 = the 111 skips of what Windows is at the measure of 15/11, the 6 of the link tests of the upload of an artifact
-      # (a symbolic link needs a privilege the runner does not give, as for the 5 tests of the same reason counted before: the skip is
-      # the right one) and a margin of 3.
+      # `skipped` 118 = the 111 skips of what Windows is at the measure of 15/11, the 4 of the tests of the upload of an artifact that
+      # need a symbolic link to a file (no junction for a file, and a symbolic link needs a privilege the runner does not give, as for the
+      # 5 tests of the same reason counted before) and a margin of 3. The test of the folder that is a link runs here with a junction.
       - name: PowerShell 7 (pwsh), open group
         shell: pwsh
         env:
@@ -189,7 +189,7 @@ jobs:
           JHT_TEST_SLICE: "0/1"
         run: |
           . "$env:GITHUB_WORKSPACE\scripts\ci\windows_gate_group.ps1"
-          exit (Invoke-GateGroup -Group open -MaxSkipped 120)
+          exit (Invoke-GateGroup -Group open -MaxSkipped 118)
 
   shells:
     name: ${{ matrix.title }}
