@@ -188,10 +188,12 @@ def _money(value):
 
 
 def clock(moment, config, today=None):
-    """HH:MM in the person's zone; with the date in front when it is not today."""
+    """HH:MM (zone name) in the person's zone; with the date in front when it is not today."""
     local = datetime.fromtimestamp(moment, team_budget.timezone_of(config))
     day = datetime.fromtimestamp(today, team_budget.timezone_of(config)).date() if today is not None else local.date()
-    return local.strftime("%H:%M") if local.date() == day else local.strftime("%Y-%m-%d %H:%M")
+    when = local.strftime("%H:%M") if local.date() == day else local.strftime("%Y-%m-%d %H:%M")
+    zone = team_budget.timezone_of(config)
+    return "%s (%s)" % (when, getattr(zone, "key", None) or local.tzname() or "UTC") if zone is not None else when
 
 
 def user_text(verdict, spent, config=None, now=None):

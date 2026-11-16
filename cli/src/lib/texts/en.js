@@ -228,4 +228,5 @@ export default {
   'budget.paused_pace_late': 'The team is paused to spread its budget over the period (${spent} spent, ${ceiling} allowed so far) and does not resume before the period ends at {end}. To go on, set a new budget with: jht setup',
   'alerts.open': "{agent} says: {body}",
   'alerts.where': "Also in the chat with the Assistente (jht team chat assistente) and in the Messages of the app.",
+  'budget.onboarding_spend': "${spent} of your ${budget} budget went to the onboarding and the Capitano before the Scouts started searching: with a budget this small the team has little left to search with. Raise it with: jht setup",
 };

@@ -845,3 +845,9 @@ def test_a_burn_intent_opens_the_pause_of_the_brake_for_the_gate_of_the_agents(t
     assert bridge.flag.exists()
     bridge.tick(state=state, burn_intent=True)
     assert not bridge.flag.exists(), "the person's override: the agents' gate reads the flag, so it goes"
+
+
+def test_clock_names_the_zone_of_the_person():
+    config = {"team": {"budget": {"usd": 5, "timezone": "Europe/Rome"}}}
+    moment = datetime(2026, 11, 16, 13, 26, tzinfo=timezone.utc).timestamp()
+    assert cap.clock(moment, config, today=moment) == "14:26 (Europe/Rome)"

@@ -1,6 +1,6 @@
 import { errorBlock } from '../lib/ui.js';
 import { say, show } from '../lib/texts.js';
-import { budgetPauseText } from '../lib/budget-pause.js';
+import { budgetPauseText, onboardingSpendText } from '../lib/budget-pause.js';
 import { readObservation } from '../lib/agent-observation.js';
 import { errorText, renderObservation } from '../lib/agent-observation-view.js';
 import { appendDiagnostic } from '../lib/runtime-diagnostic.js';
@@ -13,7 +13,7 @@ export function handleAgents(options = {}, read = readObservation) {
     else {
       process.stdout.write(renderObservation(snapshot, { usage: Boolean(options.usage), provider: readActiveProvider() }));
       // the pause of the brake of pi on the budget (JHT-T322): read again at every status, the reason can change
-      const paused = budgetPauseText();
+      const paused = budgetPauseText() ?? onboardingSpendText();
       if (paused) console.log(`⚠ ${show(paused)}`);
     }
     if (options.verbose && !options.json) {
