@@ -262,4 +262,13 @@ export default {
   'alerts.open': "{agent} ti avvisa: {body}",
   'alerts.where': "Lo trovi anche nella chat con l'Assistente (jht team chat assistente) e nei Messaggi dell'app.",
   'budget.onboarding_spend': "{spent} $ del tuo budget di {budget} $ sono andati nell'onboarding e nel Capitano prima che gli Scout cominciassero a cercare: con un budget così piccolo alla squadra resta poco per cercare. Alzalo con: jht setup",
+  "chat.answer.recorded": "Risposta registrata",
+  "chat.answer.recorded_label": "Risposta registrata: {label}",
+  "chat.answer.closed": "Quella domanda è già chiusa: non è stato inviato niente.",
+  "chat.answer.not_sent": "Non inviato: {reason}. Rispondi con il numero che vedi sulla scheda.",
+  "chat.answer.reason.number_out_of_range": "quel numero non è fra le opzioni",
+  "chat.answer.reason.code_mismatch": "quel codice non è quello della domanda aperta",
+  "chat.answer.reason.reply_not_an_option": "non è fra le opzioni",
+  "chat.card.answer_number": "Rispondi con il numero (con più schede aperte scrivi prima il codice, per esempio «{code} 1»).",
+  "chat.card.answer_in_app": "Su questa scheda si possono scegliere più opzioni: rispondi dall'app.",
 };

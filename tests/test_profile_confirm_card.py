@@ -101,7 +101,7 @@ def test_the_card_has_the_summary_the_deduced_marks_and_the_two_buttons(box):
     assert "Data Engineer" in text and "senior" in text and "Milano" in text and "7 anni" in text
     assert "Python, SQL, Airflow" in text and "Italian (native)" in text
     lines = {line.split(":")[0].lstrip("- "): line for line in text.splitlines() if line.startswith("- ")}
-    assert "dedotto" in lines["Ruolo che cerchi"] and "dedotto" in lines["Seniority"]
+    assert "dedotto" in lines["Ruolo che cerchi"] and "dedotto" in lines["Livello di esperienza"]
     assert "dedotto" not in lines["Città"] and "dedotto" not in lines["Esperienza"]
 
 
@@ -121,7 +121,7 @@ def test_a_preference_the_eight_fields_do_not_carry_is_said_by_its_name_in_words
     ask(box, "location_preferences")
 
     (card,) = cards(box)
-    line = next(l for l in card["payload"]["testo"].splitlines() if l.startswith("- Location preferences"))
+    line = next(l for l in card["payload"]["testo"].splitlines() if l.startswith("- Dove vuoi lavorare"))
     assert "Milan, remote" in line and "dedotto" in line
 
 
@@ -187,8 +187,32 @@ def test_several_records_are_said_one_after_the_other_and_a_nested_name_has_its_
 def test_another_flat_record_is_said_as_pairs(box):
     stage(box, patch(notice_period={"weeks": 4, "remote": True}))
     ask(box, "notice_period", lang="en")
-    assert "- Notice period: Remote: True, Weeks: 4 (deduced by me, it is not in your CV)" in cards(box)[0]["payload"]["testo"].splitlines()
+    assert "- Notice period: Remote: yes, Weeks: 4 (deduced by me, it is not in your CV)" in cards(box)[0]["payload"]["testo"].splitlines()
 
+
+
+def test_the_fields_of_the_windows_round_are_said_in_italian_and_a_yes_or_no_is_not_true_or_false(box):
+    # giro Windows 16/11: an Italian card said «Seniority», «Target roles priority», «Has degree: False» and «Preferences»
+    stage(box, patch(has_degree=False, target_roles_priority=["Commessa", "Barista"], preferences={"relocation": False, "work_mode": "in presenza"}))
+    ask(box, "seniority_target,has_degree,target_roles_priority,preferences")
+    text = cards(box)[0]["payload"]["testo"]
+    for english in ("Seniority", "Target roles priority", "Has degree", "Preferences", "Relocation", "Work mode", "False", "True"):
+        assert english not in text, (english, text)
+    lines = text.splitlines()
+    assert any(line.startswith("- Laurea: no (dedotto") for line in lines), text
+    assert any(line.startswith("- Priorità dei ruoli: Commessa, Barista") for line in lines), text
+    assert any(line.startswith("- Preferenze: Trasferimento: no, Modalità di lavoro: in presenza") for line in lines), text
+    assert any(line.startswith("- Livello di esperienza: senior") for line in lines), text
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_every_language_has_the_labels_of_the_profile_fields(lang: str):
+    catalog = json.loads((LOCALES / f"{lang}.json").read_text(encoding="utf-8"))
+    english = json.loads((LOCALES / "en.json").read_text(encoding="utf-8"))
+    labels = [key for key in english if key.startswith("profile_confirm.field.")]
+    assert len(labels) >= 19
+    for key in labels:
+        assert isinstance(catalog.get(key), str) and catalog[key].strip(), (lang, key)
 
 def _profile_review_module():
     import importlib

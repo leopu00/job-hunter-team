@@ -4,6 +4,7 @@
 // agent; only a line that is not an answer goes on to the agent as text, as it always did.
 
 import { execScriptInContainer } from '../utils/container-proxy.js';
+import { say, textLanguage } from './texts.js';
 
 export const AGENT_CHAT_SCRIPT = '/app/shared/skills/agent_chat.py';
 // The agents a person talks to (agent_chat.AGENTS); another session name is just text.
@@ -44,7 +45,8 @@ export function answerTyped(session, message, { usingContainer, run = runInConta
     if (found && found.result === 'answered') return { result: 'answered', label: String(found.label || '') };
     if (found && found.result === 'closed') return { result: 'closed' };
     if (found && found.result === 'invalid') {
-      return { result: 'invalid', reason: INVALID_REASONS[found.reason] || 'that is not one of the options', code: String(found.code || '') };
+      const reasonKey = Object.hasOwn(INVALID_REASONS, found.reason) ? found.reason : 'reply_not_an_option';
+      return { result: 'invalid', reason: INVALID_REASONS[reasonKey], reasonKey, code: String(found.code || '') };
     }
   } catch {
     return { result: 'chat' };
@@ -52,11 +54,12 @@ export function answerTyped(session, message, { usingContainer, run = runInConta
   return { result: 'chat' };
 }
 
-/** The line to print for a result that is not `chat`, and whether the line counts as a failure. */
-export function describeAnswer(found) {
+/** The line to print for a result that is not `chat`, in the person's language, and whether the line counts as a failure. */
+export function describeAnswer(found, language = textLanguage()) {
   if (found.result === 'answered') {
-    return { text: found.label ? `Answer recorded: ${found.label}` : 'Answer recorded', failed: false };
+    return { text: found.label ? say('chat.answer.recorded_label', { label: found.label }, language) : say('chat.answer.recorded', {}, language), failed: false };
   }
-  if (found.result === 'closed') return { text: 'That question is already closed: nothing was sent.', failed: false };
-  return { text: `Not sent — ${found.reason}. Answer with the number shown on the card.`, failed: true };
+  if (found.result === 'closed') return { text: say('chat.answer.closed', {}, language), failed: false };
+  const reason = found.reasonKey ? say(`chat.answer.reason.${found.reasonKey}`, {}, language) : found.reason;
+  return { text: say('chat.answer.not_sent', { reason }, language), failed: true };
 }

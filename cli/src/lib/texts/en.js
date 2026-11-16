@@ -229,4 +229,13 @@ export default {
   'alerts.open': "{agent} says: {body}",
   'alerts.where': "Also in the chat with the Assistente (jht team chat assistente) and in the Messages of the app.",
   'budget.onboarding_spend': "${spent} of your ${budget} budget went to the onboarding and the Capitano before the Scouts started searching: with a budget this small the team has little left to search with. Raise it with: jht setup",
+  "chat.answer.recorded": "Answer recorded",
+  "chat.answer.recorded_label": "Answer recorded: {label}",
+  "chat.answer.closed": "That question is already closed: nothing was sent.",
+  "chat.answer.not_sent": "Not sent — {reason}. Answer with the number shown on the card.",
+  "chat.answer.reason.number_out_of_range": "that number is not one of the options",
+  "chat.answer.reason.code_mismatch": "that code is not the open question’s",
+  "chat.answer.reason.reply_not_an_option": "that is not one of the options",
+  "chat.card.answer_number": "Answer with the number (several cards open: write the code first, e.g. «{code} 1»).",
+  "chat.card.answer_in_app": "Several options can be chosen on this card: answer it in the app.",
 };
