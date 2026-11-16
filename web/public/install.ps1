@@ -114,6 +114,8 @@ if (-not $LocalAppData) { throw 'LOCALAPPDATA is unavailable: refusing an unprot
 $RuntimeDir = if ($env:JHT_RUNTIME_DIR) { $env:JHT_RUNTIME_DIR } else { Join-Path $LocalAppData 'Job Hunter Team\host-runtime' }
 $BinDir     = if ($env:JHT_BIN_DIR)     { $env:JHT_BIN_DIR }     else { Join-Path $env:USERPROFILE '.local\bin' }
 $ShimBin    = Join-Path $BinDir 'shim'
+# The PATH of the window that launched the installer, before any step adds to it (Show-Final reads it).
+$script:JhtStartPath = $env:Path
 $JhtHome    = Join-Path $env:USERPROFILE '.jht'
 # Never Set-Acl. When the target's access rules are already protected (as a
 # previous install leaves ~/.jht), Windows PowerShell's Set-Acl writes the SACL
@@ -1311,6 +1313,19 @@ function Write-JhtNewWindowNotice {
   Write-Host ""
 }
 
+# The window that launched the installer already finds jht and podman when its PATH had the jht folders and a podman.exe
+# (an install over an earlier one): then the notice of the new window has nothing to say.
+function Test-JhtStartWindowHasTools {
+  param([string]$StartPath = $script:JhtStartPath)
+  if (-not $StartPath) { return $false }
+  $entries = @($StartPath -split ';' | Where-Object { $_ -and ($_.Trim() -ne '') } | ForEach-Object { $_.TrimEnd('\') })
+  if (-not ($entries -icontains $BinDir.TrimEnd('\')) -or -not ($entries -icontains $ShimBin.TrimEnd('\'))) { return $false }
+  foreach ($entry in $entries) {
+    try { if (Test-Path -LiteralPath (Join-Path $entry 'podman.exe') -PathType Leaf) { return $true } } catch { }
+  }
+  return $false
+}
+
 function Add-ToUserPath {
   Write-Step 4 $TotalSteps (Ts 'installer.windows.registering_user_path' 'Registering the user PATH')
 
@@ -1474,7 +1489,7 @@ function Show-Final {
   Write-Host ""
 
   # Not for the desktop app, which reads this output through a pipe, nor for a dry run (nothing was installed).
-  if (-not $DryRun -and $env:JHT_MACHINE_OUTPUT -ne '1') { Write-JhtNewWindowNotice }
+  if (-not $DryRun -and $env:JHT_MACHINE_OUTPUT -ne '1' -and -not (Test-JhtStartWindowHasTools)) { Write-JhtNewWindowNotice }
   if (-not (Test-WillAutoOnboard)) {
     Write-Host "  $(Ts 'installer.windows.next_steps' 'Next steps:')" -ForegroundColor White
     Write-Host ""
