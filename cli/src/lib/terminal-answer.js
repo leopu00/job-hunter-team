@@ -17,6 +17,13 @@ const INVALID_REASONS = {
   reply_not_an_option: 'that is not one of the options',
 };
 
+// The same reasons in the person's language (the CLI catalog, cli/src/lib/texts).
+const REASON_TEXTS = {
+  number_out_of_range: (language) => say('chat.answer.reason.number_out_of_range', {}, language),
+  code_mismatch: (language) => say('chat.answer.reason.code_mismatch', {}, language),
+  reply_not_an_option: (language) => say('chat.answer.reason.reply_not_an_option', {}, language),
+};
+
 function runInContainer(agent, message) {
   return execScriptInContainer(AGENT_CHAT_SCRIPT, ['reply', agent], {
     interpreter: 'python3', input: message, timeoutMs: 40_000,
@@ -60,6 +67,6 @@ export function describeAnswer(found, language = textLanguage()) {
     return { text: found.label ? say('chat.answer.recorded_label', { label: found.label }, language) : say('chat.answer.recorded', {}, language), failed: false };
   }
   if (found.result === 'closed') return { text: say('chat.answer.closed', {}, language), failed: false };
-  const reason = found.reasonKey ? say(`chat.answer.reason.${found.reasonKey}`, {}, language) : found.reason;
+  const reason = Object.hasOwn(REASON_TEXTS, found.reasonKey ?? '') ? REASON_TEXTS[found.reasonKey](language) : found.reason;
   return { text: say('chat.answer.not_sent', { reason }, language), failed: true };
 }
