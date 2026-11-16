@@ -46,7 +46,6 @@ type Copy = {
     kit: string;
     seen: string;
     rate: string;
-    credit: string;
   };
   servicesCaveat: string;
   osTitle: string;
@@ -58,7 +57,6 @@ type Copy = {
   back: string;
   footer: string;
   outcome: Record<string, string>;
-  credit: Record<string, string>;
   system: Record<string, string>;
   profiles: Record<string, string>;
   modes: Record<string, string>;
@@ -102,7 +100,6 @@ const T: Record<Locale, Copy> = {
       kit: "Estimate for 30 min",
       seen: "Seen in the rounds",
       rate: "Pace seen",
-      credit: "Credit",
     },
     servicesCaveat:
       "The estimates come from GLM's volume re-priced, not from measurements on the other services. Claude on Windows spent more than estimated: the Captain and the Scorer weigh 3.05 $ of 5.28 $.",
@@ -128,7 +125,6 @@ const T: Record<Locale, Copy> = {
       fail: "fail",
       running: "running",
     },
-    credit: { ok: "available", ended: "ended" },
     system: {
       pass: "passes",
       withReservations: "passes with reservations",
@@ -261,7 +257,6 @@ const T: Record<Locale, Copy> = {
       kit: "Stima per 30 min",
       seen: "Visto nei giri",
       rate: "Ritmo visto",
-      credit: "Credito",
     },
     servicesCaveat:
       "Le stime vengono dal volume di GLM riprezzato, non da misure sugli altri servizi. Claude su Windows ha speso più della stima: Capitano e Scorer pesano 3,05 $ su 5,28 $.",
@@ -287,7 +282,6 @@ const T: Record<Locale, Copy> = {
       fail: "non passa",
       running: "in corso",
     },
-    credit: { ok: "c'è", ended: "finito" },
     system: {
       pass: "passa",
       withReservations: "passa con riserva",
@@ -420,7 +414,6 @@ const T: Record<Locale, Copy> = {
       kit: "Schätzung für 30 Min",
       seen: "In den Läufen gesehen",
       rate: "Beobachtetes Tempo",
-      credit: "Guthaben",
     },
     servicesCaveat:
       "Die Schätzungen stammen aus dem umgerechneten GLM-Volumen, nicht aus Messungen der anderen Dienste. Claude unter Windows gab mehr aus als geschätzt: Capitano und Scorer machen 3,05 $ von 5,28 $ aus.",
@@ -446,7 +439,6 @@ const T: Record<Locale, Copy> = {
       fail: "nicht bestanden",
       running: "läuft",
     },
-    credit: { ok: "vorhanden", ended: "aufgebraucht" },
     system: {
       pass: "besteht",
       withReservations: "besteht mit Vorbehalt",
@@ -579,7 +571,6 @@ const T: Record<Locale, Copy> = {
       kit: "Estimación para 30 min",
       seen: "Visto en las rondas",
       rate: "Ritmo visto",
-      credit: "Crédito",
     },
     servicesCaveat:
       "Las estimaciones salen del volumen de GLM reevaluado, no de mediciones en los otros servicios. Claude en Windows gastó más de lo estimado: Capitán y Scorer pesan 3,05 $ de 5,28 $.",
@@ -605,7 +596,6 @@ const T: Record<Locale, Copy> = {
       fail: "no pasa",
       running: "en curso",
     },
-    credit: { ok: "disponible", ended: "agotado" },
     system: {
       pass: "pasa",
       withReservations: "pasa con reservas",
@@ -740,7 +730,6 @@ const T: Record<Locale, Copy> = {
       kit: "Estimation pour 30 min",
       seen: "Vu dans les tours",
       rate: "Rythme observé",
-      credit: "Crédit",
     },
     servicesCaveat:
       "Les estimations viennent du volume de GLM retarifé, pas de mesures sur les autres services. Claude sous Windows a dépensé plus que prévu : Capitaine et Scorer pèsent 3,05 $ sur 5,28 $.",
@@ -766,7 +755,6 @@ const T: Record<Locale, Copy> = {
       fail: "échec",
       running: "en cours",
     },
-    credit: { ok: "disponible", ended: "épuisé" },
     system: {
       pass: "réussit",
       withReservations: "réussit avec réserves",
@@ -900,7 +888,6 @@ const T: Record<Locale, Copy> = {
       kit: "Estimativa para 30 min",
       seen: "Visto nas rondas",
       rate: "Ritmo visto",
-      credit: "Crédito",
     },
     servicesCaveat:
       "As estimativas vêm do volume do GLM reprecificado, não de medições nos outros serviços. O Claude no Windows gastou mais do que o estimado: Capitano e Scorer pesam 3,05 $ de 5,28 $.",
@@ -925,7 +912,6 @@ const T: Record<Locale, Copy> = {
       fail: "falha",
       running: "em curso",
     },
-    credit: { ok: "disponível", ended: "esgotado" },
     system: {
       pass: "passa",
       withReservations: "passa com reservas",
@@ -1058,7 +1044,6 @@ const T: Record<Locale, Copy> = {
       kit: "Becslés 30 percre",
       seen: "Látott a futásokban",
       rate: "Látott tempó",
-      credit: "Egyenleg",
     },
     servicesCaveat:
       "A becslések az újraárazott GLM-volumenből származnak, nem a többi szolgáltatás méréseiből. A Claude Windowson többet költött a becsültnél: a Capitano és a Scorer 3,05 $-t nyom az 5,28 $-ból.",
@@ -1084,7 +1069,6 @@ const T: Record<Locale, Copy> = {
       fail: "megbukott",
       running: "folyamatban",
     },
-    credit: { ok: "van", ended: "elfogyott" },
     system: {
       pass: "megfelel",
       withReservations: "fenntartással megfelel",
@@ -1194,9 +1178,10 @@ const ICON: Record<string, string[]> = {
   openai: ["openai"],
   kimi: ["kimi"],
   "openai-glm": ["openai", "zai"],
-  linux: ["linux"],
-  windows: ["windows"],
-  macos: ["macos"],
+  // generic icons (Lucide, ISC), not the marks of Apple, Microsoft or Linux: the name of the system is always written next to them
+  linux: ["terminal"],
+  windows: ["app-window"],
+  macos: ["laptop"],
 };
 
 function Logo({
@@ -1557,14 +1542,6 @@ export default async function BenchmarkPage() {
                           : `${nf.format(s.ratePerMinute[0])} – ${nf.format(s.ratePerMinute[1])} $/min`
                         : "—"}
                     </td>
-                    <td
-                      className="px-3 py-2"
-                      style={{
-                        color: s.credit === "ok" ? "#22C55E" : "#EF4444",
-                      }}
-                    >
-                      {t.credit[s.credit]}
-                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -1584,7 +1561,7 @@ export default async function BenchmarkPage() {
                 className="border border-[var(--color-border)] bg-[var(--color-card)] p-4 space-y-2"
               >
                 <div className="flex items-center gap-2">
-                  <Logo name={os} label={OS_LABEL[os]} size={22} />
+                  <Logo name={ICON[os][0]} label={OS_LABEL[os]} size={22} />
                   <span className="text-[14px] font-bold">{OS_LABEL[os]}</span>
                   <span className="ml-auto text-[10px] uppercase tracking-wide text-[var(--color-muted)]">
                     {t.system[data.systems[os]]}

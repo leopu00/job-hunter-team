@@ -186,8 +186,7 @@
       "ratePerMinute": [
         0.08,
         0.12
-      ],
-      "credit": "ok"
+      ]
     },
     {
       "id": "claude",
@@ -208,8 +207,7 @@
       "ratePerMinute": [
         0.18,
         0.51
-      ],
-      "credit": "ok"
+      ]
     },
     {
       "id": "openai",
@@ -226,8 +224,7 @@
       "ratePerMinute": [
         0.16,
         0.16
-      ],
-      "credit": "ended"
+      ]
     },
     {
       "id": "kimi",
@@ -236,8 +233,7 @@
         18.7
       ],
       "seen": [],
-      "ratePerMinute": null,
-      "credit": "ended"
+      "ratePerMinute": null
     }
   ],
   "systems": {
