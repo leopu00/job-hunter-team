@@ -190,7 +190,8 @@ def test_without_a_boot_marker_an_existing_flag_is_not_trusted(shell, tmp_path):
 
 def test_start_agent_wires_the_boot_marker_into_the_watchdog():
     source = START_AGENT.read_text(encoding="utf-8")
-    block = source[source.index("_welcome_kickoff() {"): source.index('if [ "$ROLE" = "assistente" ]; then\n  _welcome_kickoff')]
+    start = source.index("_welcome_kickoff() {")
+    block = source[start: source.index('\nif [ "$ROLE" = "assistente" ]', start)]
     assert "tui_welcome_watchdog" in block
     assert 'welcome_boot_marker="${welcome_log%.log}.boot"' in block
     # il marcatore nasce PRIMA del kickoff, o un flag toccato subito sarebbe "vecchio"

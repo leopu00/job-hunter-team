@@ -2068,8 +2068,15 @@ _welcome_kickoff() {
 }
 
 # The text is not passed to the Assistente: assistant_welcome.py reads it from the catalog.
+# Welcome already in the chat and onboarding over: the message would only be acknowledged (a call of the model at every restart,
+# a `jht up` during the pause of the budget too). Nothing is sent; the Assistente waits for the person's [CHAT].
 if [ "$ROLE" = "assistente" ]; then
-  _welcome_kickoff "assistente" "welcomed.flag" ""
+  if _welcome_state="$(timeout 30 python3 /app/shared/skills/assistant_welcome.py settled 2>/dev/null)"; then
+    printf '[%s] %s: no welcome message, nothing left for it to do\n' "$(date +%H:%M:%S)" "$_welcome_state" \
+      >"$(jht_daemon_log "welcome-watchdog-assistente.log")" 2>/dev/null || true
+  else
+    _welcome_kickoff "assistente" "welcomed.flag" ""
+  fi
 fi
 
 if [ "$ROLE" = "capitano" ]; then
