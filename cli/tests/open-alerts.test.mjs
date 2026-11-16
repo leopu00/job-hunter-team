@@ -65,3 +65,17 @@ test('jht team status says the open alert of the Capitano, and does not mark it 
   assert.equal(db.prepare('SELECT acknowledged_at FROM pending_user_messages').get().acknowledged_at, null);
   db.close();
 });
+
+test('the agent of a row is a plain name too: escape sequences, bidi marks and long text in it are not printed', async () => {
+  const { safeAgent, agentLabel } = await import('../src/lib/open-alerts.js');
+  assert.equal(safeAgent('capitano'), 'capitano');
+  assert.equal(safeAgent('Scout-2'), 'scout-2');
+  for (const bad of ['cap\x1b[2Jitano', 'capi‮tano', 'cap itano', 'capi\ntano', '', null, 'a'.repeat(41), '-capitano']) assert.equal(safeAgent(bad), '', JSON.stringify(bad));
+  const root = home([{ agent: 'capi\x1b]0;owned\x07tano‮', body: CEILING }]);
+  const [alert] = await openAlerts({ dbPath: join(root, 'jobs.db') });
+  assert.equal(alert.agent, '');
+  const [line] = await openAlertLines({ dbPath: join(root, 'jobs.db') });
+  assert.equal(line, `? says: ${CEILING}`);
+  assert.doesNotMatch(line, /[\x00-\x1f\x7f-\x9f‮]/);
+  assert.equal(agentLabel(''), '?');
+});

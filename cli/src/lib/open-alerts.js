@@ -17,6 +17,13 @@ const clean = (text) => {
   return plain.length > MAX_BODY ? `${plain.slice(0, MAX_BODY - 1)}…` : plain;
 };
 
+/** The agent of a row as a name: only letters, digits, «_» and «-» (an agent id), anything else is no name. The body is cleaned by
+ * `clean`; the agent is written by the same tools and is printed on the terminal too, so it does not go through unchecked. */
+export const safeAgent = (agent) => {
+  const plain = String(agent ?? '');
+  return /^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$/.test(plain) ? plain.toLowerCase() : '';
+};
+
 /**
  * @returns {Promise<Array<{ id: number, agent: string, body: string, createdAt: string }>>} newest first, one per source;
  *   [] when there is no database or it cannot be read (nothing here stops a command).
@@ -37,7 +44,7 @@ export async function openAlerts({ dbPath = JHT_DB_PATH, windowDays = ALERT_WIND
     const ids = rows.map((r) => Number(r.id));
     if (!ids.length) return [];
     const full = db.prepare(`SELECT id, agent, body, created_at FROM pending_user_messages WHERE id IN (${ids.map(() => '?').join(',')}) ORDER BY created_at DESC, id DESC`).all(...ids);
-    return full.map((r) => ({ id: Number(r.id), agent: String(r.agent ?? ''), body: clean(r.body), createdAt: String(r.created_at ?? '') }))
+    return full.map((r) => ({ id: Number(r.id), agent: safeAgent(r.agent), body: clean(r.body), createdAt: String(r.created_at ?? '') }))
       .filter((r) => r.body);
   } catch {
     return [];
