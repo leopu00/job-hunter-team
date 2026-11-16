@@ -998,7 +998,7 @@ tutto si da'\'' con le opzioni.
   --secret-file <percorso>     con --secret-mode file: il file che la contiene
   --model <modello>            il modello da usare
   --language <codice>          la lingua (per esempio it o en)
-  --budget-usd <dollari>       quanto può spendere il team, in dollari (con una fra --budget-minutes, --budget-days, --budget-until)
+  --budget-usd <dollari>       quanto puo'\'' spendere il team, in dollari (con una fra --budget-minutes, --budget-days, --budget-until)
   --budget-minutes <n>         il budget dura questi minuti da ora
   --budget-days <n>            il budget dura questi giorni da ora
   --budget-until <ora>         il budget dura fino a questa ora del giorno, 0-23 (la prossima)
