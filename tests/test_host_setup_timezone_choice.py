@@ -58,6 +58,11 @@ def _run(tmp_path, zoneinfo, answers, *, lang="en", detected="Europe/Rome", save
         (home / ".jht" / "host.env").write_text(f"JHT_LANG={lang}\nJHT_HOST_TYPE=local\nJHT_USER_TZ={saved}\n", encoding="utf-8")
         if not confirmed:  # written by the installer with nobody to ask: the first run with a person asks it all
             (home / ".jht" / ".host-setup-unconfirmed").write_text("", encoding="utf-8")
+        # the trusted copy of an earlier host setup, in the folder of the runtime (not mounted in the container)
+        runtime = tmp_path / "runtime"
+        runtime.mkdir(mode=0o700, exist_ok=True)
+        (runtime / "host-values").write_text(f"JHT_HOST_TYPE=local\nJHT_LANG={lang}\nJHT_USER_TZ={saved}\n", encoding="utf-8")
+        (runtime / "host-values").chmod(0o600)
     localtime = tmp_path / "localtime"
     if detected:
         localtime.symlink_to(zoneinfo / detected)
