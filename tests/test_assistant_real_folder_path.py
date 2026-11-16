@@ -33,3 +33,10 @@ def test_the_assistant_prompt_says_the_real_path_and_never_a_translated_name_in_
     assert "`%USERPROFILE%\\Documents\\Job Hunter Team\\allegati`" in text
     assert "Dokumente" in text and "Documentos" in text         # named only as what must NOT be written
     assert not TRANSLATED.search(text)
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_every_option_label_of_the_onboarding_cards_fits_the_60_characters_a_card_allows(lang):
+    catalog = json.loads((ROOT / "shared" / "locales" / f"{lang}.json").read_text(encoding="utf-8"))
+    too_long = {k: len(v) for k, v in catalog.items() if re.fullmatch(r"onb\.[a-z_]+\.opt\.[a-z_]+", k) and len(v) > 60}
+    assert not too_long
