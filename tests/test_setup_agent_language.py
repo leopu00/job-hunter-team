@@ -164,7 +164,9 @@ def test_setup_italian_reaches_every_agent_even_with_a_stale_english_tmux_server
     if previous:
         (home / "i18n-prefs.json").write_text(json.dumps({"locale": previous}))
     (home / "host.env").write_text("JHT_LANG=en\nJHT_USER_TZ=Europe/Rome\n")
+    (home / ".host-setup-unconfirmed").write_text("")   # written by the installer with nobody to ask: `jht setup` asks it all
     screen = choose_language(home)
+    assert not (home / ".host-setup-unconfirmed").exists()
     prefs = json.loads((home / "i18n-prefs.json").read_text())
     # asked_at: the host setup asked the language now, so the wizard in the container does not ask it again
     assert prefs["locale"] == "it" and set(prefs) <= {"locale", "asked_at"} and isinstance(prefs.get("asked_at", 0), int)

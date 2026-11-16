@@ -541,6 +541,18 @@ jht_system_language() {
   printf 'en'
 }
 
+# An update keeps what the person answered before. host.env already there means the language, the host type and the time zone
+# were set by an earlier host setup: with a person at the terminal only what is missing from it is asked again. The exception is
+# a host.env written by a run with nobody to ask (the installer, before `jht setup`): that run leaves .host-setup-unconfirmed
+# beside it, and the first run with a person asks everything and takes the mark away.
+HOST_SETUP_UNCONFIRMED="$JHT_HOME_HOST/.host-setup-unconfirmed"
+HOST_ENV_EXISTED=0
+if [ -f "$HOST_ENV_PATH" ] && [ ! -L "$HOST_ENV_PATH" ]; then HOST_ENV_EXISTED=1; fi
+HOST_ENV_SAVED=0
+if [ "$HOST_ENV_EXISTED" -eq 1 ] && [ ! -e "$HOST_SETUP_UNCONFIRMED" ] && [ ! -L "$HOST_SETUP_UNCONFIRMED" ]; then HOST_ENV_SAVED=1; fi
+HOST_SETUP_ASKS=0
+if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then HOST_SETUP_ASKS=1; fi
+
 JHT_LANG_DEFAULT=en
 JHT_LANG_CHOSEN=0
 # La preferenza canonica vince. Env e host.env inizializzano soltanto una
@@ -565,7 +577,10 @@ if [ "$JHT_LANG_CHOSEN" -eq 0 ]; then
 fi
 JHT_LANG="$JHT_LANG_DEFAULT"
 JHT_LANG_ASKED_AT=""
-if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
+if [ "$HOST_SETUP_ASKS" -eq 1 ] && [ "$HOST_ENV_SAVED" -eq 1 ] && [ "$JHT_LANG_CHOSEN" -eq 1 ]; then
+  # the language chosen before stays, with no question: the wizard in the container reads `asked_at` and does not ask either
+  JHT_LANG_ASKED_AT="$(date +%s)"
+elif [ "$HOST_SETUP_ASKS" -eq 1 ]; then
   # the person answers here: the wizard in the container reads `asked_at` and does not ask a second time
   JHT_LANG_ASKED_AT="$(date +%s)"
   # Picker multilingue: il prompt resta in più lingue perché ovviamente
@@ -669,12 +684,18 @@ printf "%s %b\n" "$(ts host_setup.detected 'Detected:')" "$DETECTED_LABEL"
 # Niente finta-checkbox `[V]`/`[ ]`: era ambigua (sembrava interattiva).
 # Il default va tra parentesi quadre nel prompt, premere Invio lo accetta.
 HOST_TYPE="$DETECTED"
+# The host type saved by an earlier host setup stays (an update asks nothing it already knows), with or without a person.
+SAVED_HOST_TYPE=""
+if [ "$HOST_ENV_SAVED" -eq 1 ]; then
+  SAVED_HOST_TYPE="$(jht_read_host_env_value "$HOST_ENV_PATH" JHT_HOST_TYPE)" || SAVED_HOST_TYPE=""
+fi
+[ -z "$SAVED_HOST_TYPE" ] || HOST_TYPE="$SAVED_HOST_TYPE"
 # Override esplicito via --host-type: il flusso VPS in-game lo passa per
 # evitare la prompt (non c'è utente al terminale durante install.sh remoto).
 if [ -n "$FORCED_HOST_TYPE" ]; then
   HOST_TYPE="$FORCED_HOST_TYPE"
 fi
-if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
+if [ "$HOST_SETUP_ASKS" -eq 1 ] && [ -z "$SAVED_HOST_TYPE" ]; then
   if [ "$DETECTED" = "vps" ]; then
     DEFAULT_NUM=2
   else
@@ -1256,7 +1277,8 @@ if [ "$HOST_TYPE" = vps ] && [ -z "$JHT_USER_TZ_SAVED$JHT_USER_TZ_CALLER" ]; the
 fi
 
 JHT_USER_TZ="${JHT_USER_TZ_DEFAULT:-UTC}"
-if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
+# the zone saved by an earlier host setup stays with no question (an update); a host.env without one asks it
+if [ "$HOST_SETUP_ASKS" -eq 1 ] && ! { [ "$HOST_ENV_SAVED" -eq 1 ] && [ -n "$JHT_USER_TZ_SAVED" ]; }; then
   printf "\n${CYAN}━━━ %s ━━━${RESET}\n\n" "$(ts host_setup.timezone_header 'User timezone')"
   printf "%s\n\n" "$(ts host_setup.timezone_explain 'The Captain uses it to convert times in Telegram messages and charts.')"
   if [ -n "$JHT_USER_TZ_SAVED" ] && [ -n "$JHT_USER_TZ_DETECTED" ] && [ "$JHT_USER_TZ_SAVED" != "$JHT_USER_TZ_DETECTED" ]; then
@@ -1353,6 +1375,12 @@ mkdir -p "$JHT_HOME_HOST" 2>/dev/null || true
   printf 'JHT_HOST_TYPE=%s\n' "$HOST_TYPE"
   printf 'JHT_USER_TZ=%s\n' "$JHT_USER_TZ"
 } | jht_write_host_env
+# A person answered (or kept what was saved): the values are the person's. A first host.env written with nobody to ask is marked.
+if [ "$HOST_SETUP_ASKS" -eq 1 ]; then
+  rm -f -- "$HOST_SETUP_UNCONFIRMED" 2>/dev/null || true
+elif [ "$HOST_ENV_EXISTED" -eq 0 ]; then
+  : | jht_write_host_file "$HOST_SETUP_UNCONFIRMED" || true
+fi
 
 # Gli stessi tre valori, per il wrapper, nella cartella del runtime: NON e' montata nel container (host.env si', e un agente puo'
 # riscriverlo). Sono questi a decidere come il container viene creato e attestato. Temporaneo + rename, 0600; la cartella del

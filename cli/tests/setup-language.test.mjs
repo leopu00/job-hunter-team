@@ -73,9 +73,11 @@ test('the wizard asks the language, with the saved one (else the system one) as 
   assert.equal(await askLanguage(prompter, { env: { LANG: 'es_ES.UTF-8' }, home: h }), 'es');
   assert.equal(asked[0].options.length, 7);
   assert.equal(prefs(h).locale, 'es');
-  // a file written by the host setup with the default must not hide the question: it is asked, the saved language is the default
+  // a file written by the host setup with the default (nobody to ask: the mark beside it) must not hide the question: it is asked,
+  // the saved language is the default
   const h2 = home();
   writeFileSync(join(h2, 'i18n-prefs.json'), JSON.stringify({ locale: 'de' }));
+  writeFileSync(join(h2, '.host-setup-unconfirmed'), '');
   process.env.JHT_HOME = h2;
   assert.equal(await askLanguage(prompter, { env: { LANG: 'es_ES.UTF-8' }, home: h2 }), 'de');
   assert.equal(asked.length, 2, 'asked again, Enter keeps the saved language');
@@ -106,12 +108,24 @@ test('the language the host setup has just asked is not asked again by the wizar
   writeFileSync(join(h, 'i18n-prefs.json'), JSON.stringify({ locale: 'it', asked_at: Math.floor(now / 1000) - 60 }));
   assert.equal(await askLanguage(prompter, { env: {}, home: h, now }), 'it');
   assert.equal(asked.length, 0, 'asked a minute ago by the host setup: not asked again');
+  writeFileSync(join(h, '.host-setup-unconfirmed'), '');
   writeFileSync(join(h, 'i18n-prefs.json'), JSON.stringify({ locale: 'it', asked_at: Math.floor(now / 1000) - 7200 }));
   await askLanguage(prompter, { env: {}, home: h, now });
-  assert.equal(asked.length, 1, 'two hours ago: a new setup asks');
+  assert.equal(asked.length, 1, 'two hours ago, and the host setup left its values unconfirmed: a new setup asks');
   writeFileSync(join(h, 'i18n-prefs.json'), JSON.stringify({ locale: 'it' }));
   await askLanguage(prompter, { env: {}, home: h, now });
   assert.equal(asked.length, 2, 'a default written without asking: asked');
+});
+
+test('an update keeps the language the person chose before: no question, the saved one stays', async () => {
+  const asked = [];
+  const prompter = { select: async (p) => { asked.push(p); return 'it'; }, note: async () => {} };
+  const h = home();
+  process.env.JHT_HOME = h;
+  writeFileSync(join(h, 'i18n-prefs.json'), JSON.stringify({ locale: 'pt', asked_at: 1700000000 }));
+  assert.equal(await askLanguage(prompter, { env: { LANG: 'it_IT.UTF-8' }, home: h, now: Date.now() }), 'pt');
+  assert.equal(asked.length, 0);
+  assert.equal(prefs(h).locale, 'pt');
 });
 
 test('the working hours take the zone the host setup chose, not the UTC of the container', async () => {

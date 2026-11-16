@@ -118,3 +118,26 @@ def test_a_language_the_product_does_not_have_reads_english_not_the_language_of_
     assert _language_case(path, culture="it-IT", jht_lang=None, prefs=None, tmp_path=tmp_path / "c") == "it"
     assert _language_case(path, culture="it-IT", jht_lang="pt", prefs=None, tmp_path=tmp_path / "d") == "pt"
     assert _language_case(path, culture="it-IT", jht_lang="it", prefs="de", tmp_path=tmp_path / "e") == "de"
+
+
+@pytest.mark.parametrize("culture", ["it-IT"])
+def test_an_update_keeps_the_language_the_host_type_and_the_zone_of_host_env(tmp_path, culture):
+    """An update on Windows (host.env of the install before, no i18n-prefs.json, JHT_LANG not set): host.env is written again
+    with the language, the host type and the time zone it had, not with the language of Windows, `local` and the zone detected."""
+    from windows_native_fakes import powershell_argv
+    home = tmp_path / "home" / ".jht"
+    home.mkdir(parents=True)
+    (home / "host.env").write_text("JHT_LANG=pt\nJHT_HOST_TYPE=vps\nJHT_USER_TZ=America/Sao_Paulo\n", encoding="utf-8")
+    script = (f"[Globalization.CultureInfo]::CurrentUICulture = [Globalization.CultureInfo]::new('{culture}')\n"
+              f"$JhtHome = '{home}'\n$PairingToken = ''\n$DryRun = $true\n$TotalSteps = 5\n"
+              "function Write-Step { }\nfunction Ts { param($Key, $English) return $English }\n"
+              "function Write-Dry { param($Text) [Console]::Out.WriteLine($Text) }\n"
+              + _functions("Get-JhtSavedHostEnvValue", "Get-JhtTextLanguage", "Get-JhtPersonLanguage", "Write-HostEnv")
+              + "\nWrite-HostEnv\n")
+    case = tmp_path / "case.ps1"
+    case.write_text(script, encoding="utf-8")
+    import os as _os
+    env = {key: value for key, value in _os.environ.items() if key.upper() != "JHT_LANG"}
+    done = subprocess.run([*powershell_argv(), "-File", str(case)], capture_output=True, text=True, timeout=60, env=env)
+    assert done.returncode == 0 and not done.stderr.strip(), done.stdout + done.stderr
+    assert "(JHT_HOST_TYPE=vps, JHT_LANG=pt, JHT_USER_TZ=America/Sao_Paulo)" in done.stdout, done.stdout

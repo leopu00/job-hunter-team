@@ -75,3 +75,31 @@ def test_in_a_folder_it_can_write_the_file_is_brought_up_to_date(jht):
     assert (folder / "host.env").read_text(encoding="utf-8") == HOST_ENV
     code, out = run(home)
     assert code == 0 and (folder / "host.env").read_text(encoding="utf-8") == HOST_ENV
+
+
+def _unattended(home: Path):
+    """The run of the installer: nobody at the terminal, no forced host type (it is detected, or kept)."""
+    env = {**os.environ, "HOME": str(home), "JHT_RUNTIME_DIR": str(home / "runtime"), "LANG": "C"}
+    for name in ("JHT_LANG", "JHT_HOME_HOST", "JHT_USER_TZ", "LC_ALL", "LC_MESSAGES", "DISPLAY", "WAYLAND_DISPLAY"):
+        env.pop(name, None)
+    (home / "runtime").mkdir(exist_ok=True)
+    done = subprocess.run(["bash", str(SCRIPT)], stdin=subprocess.DEVNULL, capture_output=True, text=True, env=env,
+                          timeout=120, check=False)
+    return done.returncode, done.stdout + done.stderr
+
+
+def test_a_first_host_env_written_with_nobody_to_ask_is_marked_so_that_jht_setup_asks(tmp_path: Path):
+    home = tmp_path / "home"
+    (home / ".jht").mkdir(parents=True)
+    code, out = _unattended(home)
+    assert code == 0, out
+    assert (home / ".jht" / "host.env").is_file() and (home / ".jht" / ".host-setup-unconfirmed").is_file(), out
+
+
+def test_an_update_with_nobody_to_ask_keeps_the_saved_values_and_marks_nothing(jht):
+    home, folder = jht
+    # a Linux server without a display is detected as a VPS: the local computer the person chose stays
+    code, out = _unattended(home)
+    assert code == 0, out
+    assert (folder / "host.env").read_text(encoding="utf-8") == HOST_ENV, out
+    assert not (folder / ".host-setup-unconfirmed").exists()

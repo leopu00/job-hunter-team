@@ -55,7 +55,8 @@ def _assert_regular_host_env(home: Path):
 
 
 def _no_leftovers(home: Path):
-    assert sorted(p.name for p in (home / ".jht").iterdir()) == ["host.env", "i18n-prefs.json"]
+    # the mark is the host setup's own (a host.env written with nobody to ask), not a leftover
+    assert sorted(p.name for p in (home / ".jht").iterdir() if p.name != ".host-setup-unconfirmed") == ["host.env", "i18n-prefs.json"]
     assert [p.name for p in home.iterdir() if p.name.startswith(".jht-host-file.")] == []
 
 
