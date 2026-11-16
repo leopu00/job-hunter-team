@@ -184,8 +184,8 @@ function Set-JhtNodeOwner {
   if ($actualSid.Value -ne $ownerSid.Value) { throw "Owner is not the current user: $Path" }
 }
 $TestChannelImage = $Image
-$Image = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { 'ghcr.io/leopu00/jht@sha256:03c9387ccf439536d1eb537ef0e159100c3169002caa255e5b8538b862a105ca' }
-$CoreImageDigest = if ($env:JHT_CORE_IMAGE_DIGEST) { $env:JHT_CORE_IMAGE_DIGEST } else { 'sha256:18d517f1d99a6243c54b9b80926e4eaa1e930371503355965018276d973e33aa' }
+$Image = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { 'ghcr.io/leopu00/jht@sha256:0c336564ff25e7cb582484aa7890d437ff9332ad540bbe921809855ccae87705' }
+$CoreImageDigest = if ($env:JHT_CORE_IMAGE_DIGEST) { $env:JHT_CORE_IMAGE_DIGEST } else { 'sha256:19fb6541dcf7da095caf564a98d3847eb693f711b02c4b206ae63bcab9004a02' }
 # It becomes an image name, a file and a hash: only the exact shape of a digest goes through, whatever the environment says.
 if ($CoreImageDigest -and $CoreImageDigest -cnotmatch '^sha256:[0-9a-f]{64}\z') { throw 'JHT_CORE_IMAGE_DIGEST is not a sha256 digest' }
 $RuntimeTier = if ($CoreImageDigest -and -not $env:JHT_IMAGE -and -not $TestChannel) { 'core' } else { '' }  # core: the tools come later

@@ -107,9 +107,9 @@ elif [ "$(uname -s)" = "Darwin" ]; then
 else
   RUNTIME_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/job-hunter-team/host-runtime"
 fi
-IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht@sha256:03c9387ccf439536d1eb537ef0e159100c3169002caa255e5b8538b862a105ca}"
+IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht@sha256:0c336564ff25e7cb582484aa7890d437ff9332ad540bbe921809855ccae87705}"
 # The core image (tools come later): empty while the release has none; with one, the install uses it unless JHT_IMAGE names another.
-CORE_IMAGE_DIGEST="${JHT_CORE_IMAGE_DIGEST:-sha256:18d517f1d99a6243c54b9b80926e4eaa1e930371503355965018276d973e33aa}"
+CORE_IMAGE_DIGEST="${JHT_CORE_IMAGE_DIGEST:-sha256:19fb6541dcf7da095caf564a98d3847eb693f711b02c4b206ae63bcab9004a02}"
 # It becomes an image name, a file and a hash: only the exact shape of a digest goes through, whatever the environment says.
 [ -z "$CORE_IMAGE_DIGEST" ] || [[ "$CORE_IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { printf 'JHT_CORE_IMAGE_DIGEST is not a sha256 digest\n' >&2; exit 2; }
 RUNTIME_TIER="" TIER_STAGED="" TIER_STAGED_SHA=""
