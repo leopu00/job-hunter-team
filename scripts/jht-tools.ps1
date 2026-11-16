@@ -313,7 +313,12 @@ function Test-ToolsRegisteredCommandRunning {
         if ($id -eq $PID) { continue }
         $process = Get-Process -Id $id -ErrorAction SilentlyContinue
         $alive = $false
-        if ($process) { try { $alive = ($process.StartTime.ToUniversalTime().Ticks -eq [long]$fields[1]) } catch { $alive = $true } }
+        # the same start, give or take 2 s: on Linux .NET works the start out from the boot time, which each process reckons
+        # a little differently; a PID used again by another process starts later than that
+        if ($process) {
+          try { $alive = ([Math]::Abs($process.StartTime.ToUniversalTime().Ticks - [long]$fields[1]) -le 2 * [TimeSpan]::TicksPerSecond) }
+          catch { $alive = $true }
+        }
         if (-not $alive) { Remove-Item -LiteralPath $file.FullName -Force -ErrorAction SilentlyContinue; continue }
         $sub = ''
         if ($fields.Count -gt 3) { $sub = $fields[3] }
