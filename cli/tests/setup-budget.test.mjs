@@ -111,3 +111,17 @@ test('below the least that lets a team work on the service the setup asks an exp
   const yes = prompter({ 'How much should the team work?': 'days', 'How many dollars in total?': ['3'], confirm: true });
   assert.equal((await promptBudget(yes, { t, tf, now: NOW, timeZone: 'Europe/Rome', provider: 'openai' })).budget.usd, 3);
 });
+
+test('the budget is saved with the moment of the confirmation, not the one of the question', async () => {
+  const { durationBudget, budgetOf, stampedAt } = await import('../wizard/setup-budget.js');
+  const asked = new Date('2026-11-16T18:36:22Z');
+  const confirmed = new Date('2026-11-16T18:46:44Z');
+  const trial = stampedAt(durationBudget(5, 30, asked, 'Europe/Rome'), confirmed);
+  assert.equal(trial.saved_at, confirmed.toISOString());
+  assert.deepEqual([trial.usd, trial.duration_minutes, trial.timezone], [5, 30, 'Europe/Rome']);
+  const night = budgetOf(5, new Date('2026-11-17T07:00:00Z'), asked, 'Europe/Rome');
+  assert.deepEqual([stampedAt(night, confirmed).starts_at, stampedAt(night, confirmed).ends_at], [confirmed.toISOString(), night.ends_at]);
+  const over = budgetOf(5, new Date('2026-11-16T18:40:00Z'), asked, 'Europe/Rome');
+  assert.equal(stampedAt(over, confirmed), over, 'a night already over is left as it is');
+  assert.equal(stampedAt(null, confirmed), null);
+});

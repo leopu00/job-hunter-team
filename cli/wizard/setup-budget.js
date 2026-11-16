@@ -86,6 +86,19 @@ export function durationBudget(usd, minutes, now, timeZone = localTimeZone()) {
   return { usd, duration_minutes: minutes, saved_at: now.toISOString(), timezone: timeZone, set_by: 'setup' };
 }
 
+/**
+ * The budget as it is saved: its moment is the one of the CONFIRMATION, not of the question. The person may take minutes
+ * between the two (the summary, a confirmation of a small amount): a trial of 30 minutes whose dollars count from the moment the
+ * question appeared lost those minutes before the team started. A duration counts its dollars from `saved_at`; a night starts now
+ * (and keeps its end, unless the end is already past).
+ */
+export function stampedAt(budget, now = new Date()) {
+  if (!budget || Number.isNaN(now.getTime())) return budget;
+  if (Number.isFinite(Number(budget.duration_minutes))) return { ...budget, saved_at: now.toISOString() };
+  if (Date.parse(budget.ends_at) > now.getTime()) return { ...budget, starts_at: now.toISOString() };
+  return budget;
+}
+
 /** The length of the period in minutes: the duration given, or ends_at − starts_at. */
 export function budgetMinutes(budget) {
   if (Number.isFinite(Number(budget?.duration_minutes))) return Number(budget.duration_minutes);
