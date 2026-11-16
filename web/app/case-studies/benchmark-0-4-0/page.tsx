@@ -1,6 +1,7 @@
 // /case-studies/benchmark-0-4-0: first comparison of the 0.4.0 test rounds (services × systems).
 // Static data in web/data/benchmark/benchmark-0-4-0.json (synthetic profiles only); the existing case studies page is untouched.
 
+import { Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { LandingI18nProvider } from "../../components/landing/LandingI18n";
@@ -8,6 +9,9 @@ import LandingNav from "../../components/landing/LandingNav";
 import { getRequestLocale } from "@/lib/request-locale";
 import type { Locale } from "@/i18n/config";
 import data from "@/data/benchmark/benchmark-0-4-0.json";
+import BenchmarkFinder, { type CandidateView, type FinderCopy } from "./BenchmarkFinder";
+import type { Sector } from "@/lib/benchmark-match";
+import { CASE_STUDIES, localizeCaseStudy } from "@/lib/case-studies";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +58,7 @@ type Copy = {
   osNotes: Record<string, string>;
   night: string;
   day: string;
+  finder: FinderCopy;
 };
 
 const T: Record<Locale, Copy> = {
@@ -86,7 +91,7 @@ const T: Record<Locale, Copy> = {
     need: "Four identical VPSs started together, the same profile for everyone, 30 minutes of work after onboarding, the same build with the budget brake fixed, and credit on all four services.",
     back: "← All case studies",
     footer: "Synthetic profiles, no personal data · numbers from the test reports of 14-16/11/2026.",
-    outcome: { pass: "pass", fail: "fail", running: "running" },
+    outcome: { pass: "pass", reservations: "with reservations", fail: "fail", running: "running" },
     credit: { ok: "available", ended: "ended" },
     system: { pass: "passes", withReservations: "passes with reservations", running: "in progress" },
     profiles: { dataAnalyst: "Data analyst", generic: "Generic test profile", restorer: "Restorer", waiter: "Waiter", receptionist: "Receptionist", truckDriver: "Truck driver" },
@@ -109,6 +114,36 @@ const T: Record<Locale, Copy> = {
     },
     night: "night",
     day: "",
+    finder: {
+      title: "Find the tests closest to your case",
+      lead: "Say which computer you have, which service you would use, your budget and your trade. You see the rounds and case studies that match, then the closest ones, with the reason. In our tests, with our profiles: not a promise of what you will get.",
+      computer: "Your computer",
+      service: "Service",
+      budget: "Budget (US dollars)",
+      budgetHint: "What you would spend, e.g. 15",
+      trade: "Your trade",
+      tradeHint: "Free text; the suggestions are the trades of our tests",
+      sector: "Sector",
+      any: "Any",
+      reset: "Clear the fields",
+      searchLabel: "Find tests close to your case",
+      prompt: "Fill in at least one field to see the tests closest to your case.",
+      matchTitle: "They match",
+      closeTitle: "The closest",
+      none: "No round or case study is close to this: change a field.",
+      count: "{n} tests found",
+      roundKind: "Round",
+      caseKind: "Case study",
+      openCase: "Open the case study",
+      nothingExact: "None matches every field you filled in: here are the closest.",
+      disclaimer: "In our tests, with synthetic profiles and the builds shown. What you get depends on your CV, your market and your budget; we do not promise a result.",
+      whyLabel: "Why:",
+      estimateLabel: "estimate",
+      estimateMore: "With {b} $ ≈ {x}× what this round spent ({c} $). A proportion, not a promise: costs and results do not scale in a straight line.",
+      estimateLess: "With {b} $ ≈ {x}% of what this round spent ({c} $). A proportion, not a promise: a smaller budget may stop the team earlier.",
+      sectors: {"hospitality": "Hospitality and catering", "health": "Health", "trades": "Trades and crafts", "office": "Office and finance", "culture": "Culture and heritage", "it": "IT", "transport": "Transport and logistics"},
+      reasons: {"service-same": "same service ({v})", "service-other": "another service ({v})", "os-same": "same system ({v})", "os-other": "another system ({v})", "sector-same": "same sector ({v})", "sector-other": "another sector ({v})", "trade-same": "same trade", "trade-similar": "similar trade ({v})", "budget-close": "close budget ({v} $ spent)", "budget-other": "this one spent {v} $, you have {w} $"},
+    },
   },
   it: {
     metaTitle: "Benchmark 0.4.0 · Job Hunter Team",
@@ -139,7 +174,7 @@ const T: Record<Locale, Copy> = {
     need: "Quattro VPS uguali accese insieme, lo stesso profilo per tutti, 30 minuti di lavoro dopo l'onboarding, la stessa build con il freno del budget corretto e credito su tutti e quattro i servizi.",
     back: "← Tutti i case study",
     footer: "Profili finti, nessun dato personale · numeri dai verbali dei collaudi del 14-16/11/2026.",
-    outcome: { pass: "passa", fail: "non passa", running: "in corso" },
+    outcome: { pass: "passa", reservations: "con riserva", fail: "non passa", running: "in corso" },
     credit: { ok: "c'è", ended: "finito" },
     system: { pass: "passa", withReservations: "passa con riserva", running: "in corso" },
     profiles: { dataAnalyst: "Data analyst", generic: "Profilo di prova generico", restorer: "Restauratrice", waiter: "Cameriere", receptionist: "Receptionist", truckDriver: "Autista C+E" },
@@ -162,6 +197,36 @@ const T: Record<Locale, Copy> = {
     },
     night: "notte",
     day: "",
+    finder: {
+      title: "Trova i test più vicini al tuo caso",
+      lead: "Dicci che computer hai, quale servizio useresti, il tuo budget e il tuo mestiere. Vedi i giri e i case study che corrispondono, poi i più vicini, con il motivo. Nei nostri test, con i nostri profili: non è una promessa di quello che otterrai.",
+      computer: "Il tuo computer",
+      service: "Servizio",
+      budget: "Budget (dollari)",
+      budgetHint: "Quanto spenderesti, es. 15",
+      trade: "Il tuo mestiere",
+      tradeHint: "Testo libero; i suggerimenti sono i mestieri dei nostri test",
+      sector: "Settore",
+      any: "Qualsiasi",
+      reset: "Svuota i campi",
+      searchLabel: "Trova i test vicini al tuo caso",
+      prompt: "Compila almeno un campo per vedere i test più vicini al tuo caso.",
+      matchTitle: "Corrispondono",
+      closeTitle: "I più vicini",
+      none: "Nessun giro o case study è vicino a questo: cambia un campo.",
+      count: "{n} test trovati",
+      roundKind: "Giro",
+      caseKind: "Case study",
+      openCase: "Apri il case study",
+      nothingExact: "Nessuno corrisponde a tutti i campi compilati: ecco i più vicini.",
+      disclaimer: "Nei nostri test, con profili finti e le build indicate. Quello che otterrai dipende dal tuo CV, dal tuo mercato e dal tuo budget; non promettiamo un risultato.",
+      whyLabel: "Perché:",
+      estimateLabel: "stima",
+      estimateMore: "Con {b} $ ≈ {x}× quello che ha speso questo giro ({c} $). Una proporzione, non una promessa: costi e risultati non crescono in linea retta.",
+      estimateLess: "Con {b} $ ≈ {x}% di quello che ha speso questo giro ({c} $). Una proporzione, non una promessa: un budget più piccolo può fermare la squadra prima.",
+      sectors: {"hospitality": "Ristorazione e ospitalità", "health": "Sanità", "trades": "Artigianato e mestieri", "office": "Ufficio e finanza", "culture": "Cultura e beni culturali", "it": "Informatica", "transport": "Trasporti e logistica"},
+      reasons: {"service-same": "stesso servizio ({v})", "service-other": "altro servizio ({v})", "os-same": "stesso sistema ({v})", "os-other": "altro sistema ({v})", "sector-same": "stesso settore ({v})", "sector-other": "altro settore ({v})", "trade-same": "stesso mestiere", "trade-similar": "mestiere simile ({v})", "budget-close": "budget vicino ({v} $ spesi)", "budget-other": "questo ha speso {v} $, tu hai {w} $"},
+    },
   },
   de: {
     metaTitle: "Benchmark 0.4.0 · Job Hunter Team",
@@ -192,7 +257,7 @@ const T: Record<Locale, Copy> = {
     need: "Vier identische VPS gleichzeitig gestartet, dasselbe Profil für alle, 30 Minuten Arbeit nach dem Onboarding, derselbe Build mit korrigierter Budgetbremse und Guthaben bei allen vier Diensten.",
     back: "← Alle Fallstudien",
     footer: "Synthetische Profile, keine personenbezogenen Daten · Zahlen aus den Testprotokollen vom 14.-16.11.2026.",
-    outcome: { pass: "bestanden", fail: "nicht bestanden", running: "läuft" },
+    outcome: { pass: "bestanden", reservations: "mit Vorbehalt", fail: "nicht bestanden", running: "läuft" },
     credit: { ok: "vorhanden", ended: "aufgebraucht" },
     system: { pass: "besteht", withReservations: "besteht mit Vorbehalt", running: "läuft" },
     profiles: { dataAnalyst: "Data Analyst", generic: "Allgemeines Testprofil", restorer: "Restauratorin", waiter: "Kellner", receptionist: "Rezeptionist", truckDriver: "Lkw-Fahrer" },
@@ -215,6 +280,36 @@ const T: Record<Locale, Copy> = {
     },
     night: "Nacht",
     day: "",
+    finder: {
+      title: "Finde die Tests, die deinem Fall am nächsten kommen",
+      lead: "Sag, welchen Computer du hast, welchen Dienst du nutzen würdest, dein Budget und deinen Beruf. Du siehst die passenden Läufe und Fallstudien, dann die nächstliegenden, mit Begründung. In unseren Tests, mit unseren Profilen: kein Versprechen dafür, was du bekommst.",
+      computer: "Dein Computer",
+      service: "Dienst",
+      budget: "Budget (US-Dollar)",
+      budgetHint: "Was du ausgeben würdest, z. B. 15",
+      trade: "Dein Beruf",
+      tradeHint: "Freitext; die Vorschläge sind die Berufe unserer Tests",
+      sector: "Branche",
+      any: "Beliebig",
+      reset: "Felder leeren",
+      searchLabel: "Tests nahe an deinem Fall finden",
+      prompt: "Fülle mindestens ein Feld aus, um die Tests zu sehen, die deinem Fall am nächsten kommen.",
+      matchTitle: "Passen",
+      closeTitle: "Die nächstliegenden",
+      none: "Kein Lauf und keine Fallstudie kommt dem nahe: ändere ein Feld.",
+      count: "{n} Tests gefunden",
+      roundKind: "Lauf",
+      caseKind: "Fallstudie",
+      openCase: "Fallstudie öffnen",
+      nothingExact: "Keiner passt zu allen ausgefüllten Feldern: hier die nächstliegenden.",
+      disclaimer: "In unseren Tests, mit synthetischen Profilen und den angegebenen Builds. Was du bekommst, hängt von deinem Lebenslauf, deinem Markt und deinem Budget ab; wir versprechen kein Ergebnis.",
+      whyLabel: "Warum:",
+      estimateLabel: "Schätzung",
+      estimateMore: "Mit {b} $ ≈ {x}× dessen, was dieser Lauf ausgab ({c} $). Ein Verhältnis, kein Versprechen: Kosten und Ergebnisse wachsen nicht linear.",
+      estimateLess: "Mit {b} $ ≈ {x} % dessen, was dieser Lauf ausgab ({c} $). Ein Verhältnis, kein Versprechen: ein kleineres Budget kann das Team früher stoppen.",
+      sectors: {"hospitality": "Gastronomie und Hotellerie", "health": "Gesundheit", "trades": "Handwerk", "office": "Büro und Finanzen", "culture": "Kultur und Denkmalpflege", "it": "IT", "transport": "Transport und Logistik"},
+      reasons: {"service-same": "gleicher Dienst ({v})", "service-other": "anderer Dienst ({v})", "os-same": "gleiches System ({v})", "os-other": "anderes System ({v})", "sector-same": "gleiche Branche ({v})", "sector-other": "andere Branche ({v})", "trade-same": "gleicher Beruf", "trade-similar": "ähnlicher Beruf ({v})", "budget-close": "ähnliches Budget ({v} $ ausgegeben)", "budget-other": "dieser gab {v} $ aus, du hast {w} $"},
+    },
   },
   es: {
     metaTitle: "Benchmark 0.4.0 · Job Hunter Team",
@@ -245,7 +340,7 @@ const T: Record<Locale, Copy> = {
     need: "Cuatro VPS iguales encendidas a la vez, el mismo perfil para todos, 30 minutos de trabajo después del onboarding, la misma build con el freno del presupuesto corregido y crédito en los cuatro servicios.",
     back: "← Todos los casos de estudio",
     footer: "Perfiles ficticios, sin datos personales · cifras de los informes de prueba del 14-16/11/2026.",
-    outcome: { pass: "pasa", fail: "no pasa", running: "en curso" },
+    outcome: { pass: "pasa", reservations: "con reservas", fail: "no pasa", running: "en curso" },
     credit: { ok: "disponible", ended: "agotado" },
     system: { pass: "pasa", withReservations: "pasa con reservas", running: "en curso" },
     profiles: { dataAnalyst: "Analista de datos", generic: "Perfil de prueba genérico", restorer: "Restauradora", waiter: "Camarero", receptionist: "Recepcionista", truckDriver: "Conductor de camión" },
@@ -268,6 +363,36 @@ const T: Record<Locale, Copy> = {
     },
     night: "noche",
     day: "",
+    finder: {
+      title: "Encuentra las pruebas más cercanas a tu caso",
+      lead: "Di qué ordenador tienes, qué servicio usarías, tu presupuesto y tu oficio. Ves las rondas y casos de estudio que coinciden, luego los más cercanos, con el motivo. En nuestras pruebas, con nuestros perfiles: no es una promesa de lo que conseguirás.",
+      computer: "Tu ordenador",
+      service: "Servicio",
+      budget: "Presupuesto (dólares)",
+      budgetHint: "Lo que gastarías, p. ej. 15",
+      trade: "Tu oficio",
+      tradeHint: "Texto libre; las sugerencias son los oficios de nuestras pruebas",
+      sector: "Sector",
+      any: "Cualquiera",
+      reset: "Vaciar los campos",
+      searchLabel: "Encontrar pruebas cercanas a tu caso",
+      prompt: "Rellena al menos un campo para ver las pruebas más cercanas a tu caso.",
+      matchTitle: "Coinciden",
+      closeTitle: "Las más cercanas",
+      none: "Ninguna ronda ni caso de estudio se acerca a esto: cambia un campo.",
+      count: "{n} pruebas encontradas",
+      roundKind: "Ronda",
+      caseKind: "Caso de estudio",
+      openCase: "Abrir el caso de estudio",
+      nothingExact: "Ninguna coincide con todos los campos rellenados: aquí van las más cercanas.",
+      disclaimer: "En nuestras pruebas, con perfiles ficticios y las builds indicadas. Lo que consigas depende de tu CV, tu mercado y tu presupuesto; no prometemos un resultado.",
+      whyLabel: "Por qué:",
+      estimateLabel: "estimación",
+      estimateMore: "Con {b} $ ≈ {x}× lo que gastó esta ronda ({c} $). Una proporción, no una promesa: costes y resultados no crecen en línea recta.",
+      estimateLess: "Con {b} $ ≈ {x} % de lo que gastó esta ronda ({c} $). Una proporción, no una promesa: un presupuesto menor puede detener antes al equipo.",
+      sectors: {"hospitality": "Hostelería y restauración", "health": "Sanidad", "trades": "Oficios y artesanía", "office": "Oficina y finanzas", "culture": "Cultura y patrimonio", "it": "Informática", "transport": "Transporte y logística"},
+      reasons: {"service-same": "mismo servicio ({v})", "service-other": "otro servicio ({v})", "os-same": "mismo sistema ({v})", "os-other": "otro sistema ({v})", "sector-same": "mismo sector ({v})", "sector-other": "otro sector ({v})", "trade-same": "mismo oficio", "trade-similar": "oficio parecido ({v})", "budget-close": "presupuesto cercano ({v} $ gastados)", "budget-other": "esta gastó {v} $, tú tienes {w} $"},
+    },
   },
   fr: {
     metaTitle: "Benchmark 0.4.0 · Job Hunter Team",
@@ -298,7 +423,7 @@ const T: Record<Locale, Copy> = {
     need: "Quatre VPS identiques allumés ensemble, le même profil pour tous, 30 minutes de travail après l'onboarding, la même build avec le frein du budget corrigé et du crédit sur les quatre services.",
     back: "← Toutes les études de cas",
     footer: "Profils fictifs, aucune donnée personnelle · chiffres des procès-verbaux d'essai du 14-16/11/2026.",
-    outcome: { pass: "réussi", fail: "échec", running: "en cours" },
+    outcome: { pass: "réussi", reservations: "avec réserves", fail: "échec", running: "en cours" },
     credit: { ok: "disponible", ended: "épuisé" },
     system: { pass: "réussit", withReservations: "réussit avec réserves", running: "en cours" },
     profiles: { dataAnalyst: "Data analyst", generic: "Profil d'essai générique", restorer: "Restauratrice", waiter: "Serveur", receptionist: "Réceptionniste", truckDriver: "Chauffeur routier" },
@@ -321,6 +446,36 @@ const T: Record<Locale, Copy> = {
     },
     night: "nuit",
     day: "",
+    finder: {
+      title: "Trouve les tests les plus proches de ton cas",
+      lead: "Dis quel ordinateur tu as, quel service tu utiliserais, ton budget et ton métier. Tu vois les tours et études de cas qui correspondent, puis les plus proches, avec la raison. Dans nos tests, avec nos profils : pas une promesse de ce que tu obtiendras.",
+      computer: "Ton ordinateur",
+      service: "Service",
+      budget: "Budget (dollars)",
+      budgetHint: "Ce que tu dépenserais, p. ex. 15",
+      trade: "Ton métier",
+      tradeHint: "Texte libre ; les suggestions sont les métiers de nos tests",
+      sector: "Secteur",
+      any: "Peu importe",
+      reset: "Vider les champs",
+      searchLabel: "Trouver des tests proches de ton cas",
+      prompt: "Remplis au moins un champ pour voir les tests les plus proches de ton cas.",
+      matchTitle: "Correspondent",
+      closeTitle: "Les plus proches",
+      none: "Aucun tour ni étude de cas n'est proche : change un champ.",
+      count: "{n} tests trouvés",
+      roundKind: "Tour",
+      caseKind: "Étude de cas",
+      openCase: "Ouvrir l'étude de cas",
+      nothingExact: "Aucun ne correspond à tous les champs remplis : voici les plus proches.",
+      disclaimer: "Dans nos tests, avec des profils fictifs et les builds indiquées. Ce que tu obtiendras dépend de ton CV, de ton marché et de ton budget ; nous ne promettons aucun résultat.",
+      whyLabel: "Pourquoi :",
+      estimateLabel: "estimation",
+      estimateMore: "Avec {b} $ ≈ {x}× ce que ce tour a dépensé ({c} $). Une proportion, pas une promesse : coûts et résultats ne croissent pas en ligne droite.",
+      estimateLess: "Avec {b} $ ≈ {x} % de ce que ce tour a dépensé ({c} $). Une proportion, pas une promesse : un budget plus petit peut arrêter l'équipe plus tôt.",
+      sectors: {"hospitality": "Restauration et hôtellerie", "health": "Santé", "trades": "Artisanat et métiers manuels", "office": "Bureau et finance", "culture": "Culture et patrimoine", "it": "Informatique", "transport": "Transport et logistique"},
+      reasons: {"service-same": "même service ({v})", "service-other": "autre service ({v})", "os-same": "même système ({v})", "os-other": "autre système ({v})", "sector-same": "même secteur ({v})", "sector-other": "autre secteur ({v})", "trade-same": "même métier", "trade-similar": "métier proche ({v})", "budget-close": "budget proche ({v} $ dépensés)", "budget-other": "celui-ci a dépensé {v} $, tu as {w} $"},
+    },
   },
   pt: {
     metaTitle: "Benchmark 0.4.0 · Job Hunter Team",
@@ -351,7 +506,7 @@ const T: Record<Locale, Copy> = {
     need: "Quatro VPS iguais ligadas ao mesmo tempo, o mesmo perfil para todos, 30 minutos de trabalho depois do onboarding, a mesma build com o travão do orçamento corrigido e crédito nos quatro serviços.",
     back: "← Todos os estudos de caso",
     footer: "Perfis fictícios, sem dados pessoais · números dos relatórios de teste de 14-16/11/2026.",
-    outcome: { pass: "passa", fail: "falha", running: "em curso" },
+    outcome: { pass: "passa", reservations: "com reservas", fail: "falha", running: "em curso" },
     credit: { ok: "disponível", ended: "esgotado" },
     system: { pass: "passa", withReservations: "passa com reservas", running: "em curso" },
     profiles: { dataAnalyst: "Analista de dados", generic: "Perfil de teste genérico", restorer: "Restauradora", waiter: "Empregado de mesa", receptionist: "Rececionista", truckDriver: "Motorista de pesados" },
@@ -374,6 +529,36 @@ const T: Record<Locale, Copy> = {
     },
     night: "noite",
     day: "",
+    finder: {
+      title: "Encontra os testes mais próximos do teu caso",
+      lead: "Diz que computador tens, que serviço usarias, o teu orçamento e o teu ofício. Vês as rondas e os estudos de caso que correspondem, depois os mais próximos, com o motivo. Nos nossos testes, com os nossos perfis: não é uma promessa do que vais conseguir.",
+      computer: "O teu computador",
+      service: "Serviço",
+      budget: "Orçamento (dólares)",
+      budgetHint: "O que gastarias, p. ex. 15",
+      trade: "O teu ofício",
+      tradeHint: "Texto livre; as sugestões são os ofícios dos nossos testes",
+      sector: "Setor",
+      any: "Qualquer",
+      reset: "Limpar os campos",
+      searchLabel: "Encontrar testes próximos do teu caso",
+      prompt: "Preenche pelo menos um campo para ver os testes mais próximos do teu caso.",
+      matchTitle: "Correspondem",
+      closeTitle: "Os mais próximos",
+      none: "Nenhuma ronda nem estudo de caso se aproxima disto: muda um campo.",
+      count: "{n} testes encontrados",
+      roundKind: "Ronda",
+      caseKind: "Estudo de caso",
+      openCase: "Abrir o estudo de caso",
+      nothingExact: "Nenhum corresponde a todos os campos preenchidos: aqui ficam os mais próximos.",
+      disclaimer: "Nos nossos testes, com perfis fictícios e as builds indicadas. O que vais conseguir depende do teu CV, do teu mercado e do teu orçamento; não prometemos um resultado.",
+      whyLabel: "Porquê:",
+      estimateLabel: "estimativa",
+      estimateMore: "Com {b} $ ≈ {x}× o que esta ronda gastou ({c} $). Uma proporção, não uma promessa: custos e resultados não crescem em linha reta.",
+      estimateLess: "Com {b} $ ≈ {x} % do que esta ronda gastou ({c} $). Uma proporção, não uma promessa: um orçamento menor pode parar a equipa mais cedo.",
+      sectors: {"hospitality": "Restauração e hotelaria", "health": "Saúde", "trades": "Ofícios e artesanato", "office": "Escritório e finanças", "culture": "Cultura e património", "it": "Informática", "transport": "Transporte e logística"},
+      reasons: {"service-same": "mesmo serviço ({v})", "service-other": "outro serviço ({v})", "os-same": "mesmo sistema ({v})", "os-other": "outro sistema ({v})", "sector-same": "mesmo setor ({v})", "sector-other": "outro setor ({v})", "trade-same": "mesmo ofício", "trade-similar": "ofício parecido ({v})", "budget-close": "orçamento próximo ({v} $ gastos)", "budget-other": "esta gastou {v} $, tu tens {w} $"},
+    },
   },
   hu: {
     metaTitle: "0.4.0 benchmark · Job Hunter Team",
@@ -404,7 +589,7 @@ const T: Record<Locale, Copy> = {
     need: "Négy egyforma VPS egyszerre elindítva, mindenkinek ugyanaz a profil, az onboarding után 30 perc munka, ugyanaz a build javított költségfékkel, és egyenleg mind a négy szolgáltatáson.",
     back: "← Minden esettanulmány",
     footer: "Kitalált profilok, személyes adat nélkül · számok a 2026.11.14–16-i próbák jegyzőkönyveiből.",
-    outcome: { pass: "megfelelt", fail: "megbukott", running: "folyamatban" },
+    outcome: { pass: "megfelelt", reservations: "fenntartással", fail: "megbukott", running: "folyamatban" },
     credit: { ok: "van", ended: "elfogyott" },
     system: { pass: "megfelel", withReservations: "fenntartással megfelel", running: "folyamatban" },
     profiles: { dataAnalyst: "Adatelemző", generic: "Általános próbaprofil", restorer: "Restaurátor", waiter: "Pincér", receptionist: "Recepciós", truckDriver: "Kamionsofőr" },
@@ -427,6 +612,36 @@ const T: Record<Locale, Copy> = {
     },
     night: "éjszaka",
     day: "",
+    finder: {
+      title: "Keresd meg a te esetedhez legközelebbi teszteket",
+      lead: "Add meg, milyen számítógéped van, melyik szolgáltatást használnád, mekkora a költségkereted és mi a szakmád. Látod az egyező futásokat és esettanulmányokat, utána a legközelebbieket, indoklással. A mi tesztjeinkben, a mi profiljainkkal: nem ígéret arra, amit te elérsz.",
+      computer: "A számítógéped",
+      service: "Szolgáltatás",
+      budget: "Költségkeret (dollár)",
+      budgetHint: "Amit elköltenél, pl. 15",
+      trade: "A szakmád",
+      tradeHint: "Szabad szöveg; a javaslatok a tesztjeink szakmái",
+      sector: "Ágazat",
+      any: "Bármelyik",
+      reset: "Mezők törlése",
+      searchLabel: "Az esetedhez közeli tesztek keresése",
+      prompt: "Tölts ki legalább egy mezőt, hogy lásd az esetedhez legközelebbi teszteket.",
+      matchTitle: "Egyeznek",
+      closeTitle: "A legközelebbiek",
+      none: "Egyetlen futás vagy esettanulmány sem áll ehhez közel: módosíts egy mezőt.",
+      count: "{n} teszt található",
+      roundKind: "Futás",
+      caseKind: "Esettanulmány",
+      openCase: "Az esettanulmány megnyitása",
+      nothingExact: "Egyik sem egyezik az összes kitöltött mezővel: itt vannak a legközelebbiek.",
+      disclaimer: "A mi tesztjeinkben, kitalált profilokkal és a jelzett buildekkel. Amit elérsz, az az önéletrajzodtól, a piacodtól és a költségkeretedtől függ; eredményt nem ígérünk.",
+      whyLabel: "Miért:",
+      estimateLabel: "becslés",
+      estimateMore: "{b} $-ral ≈ {x}× annyi, mint amennyit ez a futás költött ({c} $). Arány, nem ígéret: a költség és az eredmény nem nő egyenes vonalban.",
+      estimateLess: "{b} $-ral ≈ {x} %-a annak, amennyit ez a futás költött ({c} $). Arány, nem ígéret: kisebb költségkeret korábban leállíthatja a csapatot.",
+      sectors: {"hospitality": "Vendéglátás és szállodaipar", "health": "Egészségügy", "trades": "Kézműipar és szakmák", "office": "Iroda és pénzügy", "culture": "Kultúra és örökségvédelem", "it": "Informatika", "transport": "Szállítás és logisztika"},
+      reasons: {"service-same": "ugyanaz a szolgáltatás ({v})", "service-other": "másik szolgáltatás ({v})", "os-same": "ugyanaz a rendszer ({v})", "os-other": "másik rendszer ({v})", "sector-same": "ugyanaz az ágazat ({v})", "sector-other": "másik ágazat ({v})", "trade-same": "ugyanaz a szakma", "trade-similar": "hasonló szakma ({v})", "budget-close": "közeli költségkeret ({v} $ elköltve)", "budget-other": "ez {v} $-t költött, neked {w} $ van"},
+    },
   },
 };
 
@@ -465,7 +680,11 @@ function Mark({ id, label }: { id: string; label: string }) {
 }
 
 const OS_LABEL: Record<string, string> = { linux: "Linux", windows: "Windows", macos: "macOS" };
-const OUTCOME_COLOR: Record<string, string> = { pass: "#22C55E", fail: "#EF4444", running: "#F59E0B" };
+const OUTCOME_COLOR: Record<string, string> = { pass: "#22C55E", reservations: "#84CC16", fail: "#EF4444", running: "#F59E0B" };
+
+// The sector of each profile of the rounds and of the category of a case study (the finder matches on it when the words differ).
+const PROFILE_SECTOR: Record<string, Sector | ""> = { dataAnalyst: "it", generic: "", restorer: "culture", waiter: "hospitality", receptionist: "hospitality", truckDriver: "transport" };
+const CATEGORY_SECTOR: Record<string, Sector | ""> = { finance: "office" };
 
 export async function generateMetadata() {
   const t = T[await getRequestLocale()];
@@ -486,6 +705,43 @@ export default async function BenchmarkPage() {
   const perScored = (r: Round) => (r.cost != null && r.scored ? r.cost / r.scored : null);
   const chartRows = data.rounds.filter((r) => r.outcome !== "running");
   const maxChart = Math.max(...chartRows.map((r) => perScored(r) ?? 0), 0.0001);
+
+  const trade = (key: string) => (Object.values(T) as Copy[]).map((c) => c.profiles[key]).filter(Boolean);
+  const roundViews: CandidateView[] = data.rounds.map((r) => ({
+    kind: "round",
+    id: r.id,
+    os: r.os,
+    service: r.service,
+    cost: r.cost,
+    sector: PROFILE_SECTOR[r.profile] ?? "",
+    trades: trade(r.profile),
+    title: `${t.services[r.service]} · ${OS_LABEL[r.os]}`,
+    subtitle: `${t.profiles[r.profile]}${t.modes[r.mode] ? ` · ${t.modes[r.mode]}` : ""} · ${dayLabel(r)}`,
+    pill: { label: t.outcome[r.outcome], color: OUTCOME_COLOR[r.outcome] },
+    stats: [
+      { label: t.cols.spent, value: money(r.cost) },
+      { label: t.cols.found, value: found(r) },
+    ],
+  }));
+  const caseViews: CandidateView[] = CASE_STUDIES.map((c) => {
+    const l = localizeCaseStudy(c, locale);
+    return {
+      kind: "case",
+      id: c.id,
+      href: `/case-studies/${c.id}`,
+      service: c.model.toLowerCase(),
+      sector: CATEGORY_SECTOR[c.category.toLowerCase()] ?? "",
+      trades: [l.category, c.category, l.label],
+      title: l.label,
+      subtitle: l.tagline,
+      stats: [{ label: c.subscription.provider, value: l.subscription.price }],
+    };
+  });
+  const tradeSuggestions = Array.from(
+    new Set([...Object.keys(t.profiles).filter((k) => k !== "generic").map((k) => t.profiles[k]), ...CASE_STUDIES.map((c) => localizeCaseStudy(c, locale).category)]),
+  );
+  const serviceOptions = ["glm", "kimi", "openai", "claude"].map((v) => ({ value: v, label: t.services[v] }));
+  const osOptions = ["macos", "windows", "linux"].map((v) => ({ value: v, label: OS_LABEL[v] }));
 
   return (
     <main className="min-h-screen bg-[var(--color-panel)] text-[var(--color-white)]">
@@ -509,6 +765,17 @@ export default async function BenchmarkPage() {
             {t.banner}
           </div>
         </header>
+
+        <Suspense fallback={null}>
+          <BenchmarkFinder
+            copy={t.finder}
+            candidates={[...roundViews, ...caseViews]}
+            trades={tradeSuggestions}
+            osOptions={osOptions}
+            serviceOptions={serviceOptions}
+            locale={locale}
+          />
+        </Suspense>
 
         <section className="space-y-3">
           <h2 className="section-label">{t.roundsTitle}</h2>
