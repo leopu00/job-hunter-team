@@ -10503,11 +10503,28 @@ case "$SUB" in
     else ensure_up
     fi
     team_rc=0
-    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@" || team_rc=$?
+    # A chat on a terminal: what the container client says on its own stderr is kept aside until the REPL ends (on a terminal the
+    # REPL's own lines all come through the tty, on stdout). The switch of the tools removes the container under the REPL, and
+    # Podman then says «Error: no container with name or ID "jht" found»: that line is not for the person, the chat says why
+    # it stops and comes back. Any other end shows it as before.
+    team_err=""
+    if [ "${2:-}" = chat ] && [ "$EXEC_FLAGS" = "-it" ]; then
+      team_err="$(mktemp "${TMPDIR:-/tmp}/jht-chat-err.XXXXXX" 2>/dev/null)" || team_err=""
+    fi
+    if [ -n "$team_err" ]; then
+      docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@" 2>"$team_err" || team_rc=$?
+    else
+      docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@" || team_rc=$?
+    fi
     # the REPL ended because the team is moving onto the full image: it comes back by itself once the team runs again
     if [ "${2:-}" = chat ] && team_chat_ended_by_switch; then
+      [ -z "$team_err" ] || rm -f "$team_err"
       team_chat_through_switch "$@"
       exit $?
+    fi
+    if [ -n "$team_err" ]; then
+      cat "$team_err" >&2 2>/dev/null || true
+      rm -f "$team_err"
     fi
     exit "$team_rc"
     ;;
