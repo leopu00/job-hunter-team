@@ -815,6 +815,18 @@ if { [ "$ROLE" = "capitano" ] || [ "$ROLE" = "sentinella" ]; } && ! tmux has-ses
   fi
 fi
 # --- fine cancello del Capitano
+# --- cancello dello Scorer
+# Lo Scorer da' i punteggi contro il profilo: parte a profilo completo (captain_gate.py scorer: onboarding-done.flag, o 30 min
+# dopo ready.flag), non a ready.flag col Capitano. Prima spende per niente e la sua prima chiamata fa partire il budget.
+if [ "$ROLE" = "scorer" ] && ! tmux has-session -t "=$SESSION" 2>/dev/null; then
+  _scorer_rc=0
+  python3 /app/shared/skills/captain_gate.py scorer >/dev/null 2>&1 || _scorer_rc=$?
+  if [ "$_scorer_rc" -eq 1 ]; then
+    echo "SCORER not started: the profile is not complete yet (the Assistente is still asking; it can start when the onboarding is over, or 30 minutes after ready.flag; JHT_SCORER_BEFORE_PROFILE=1 starts it anyway)." >&2
+    exit 75
+  fi
+fi
+# --- fine cancello dello Scorer
 
 # --- cancello degli strumenti (tools_tier.py): l'immagine core non ha browser ne' pandoc; 1 = il ruolo ne ha bisogno, 75 = «non ora»
 _tools_rc=0

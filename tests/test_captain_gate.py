@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -193,4 +194,94 @@ def test_start_agent_refuses_the_sentinella_with_the_capitano(tmp_path: Path):
 def test_start_agent_lets_the_start_go_on(tmp_path: Path, answer: int, alive: bool, role: str):
     """Due, an unclear answer (set -e must not kill the script), a session already up, or another role."""
     code, out = _start_agent_gate(tmp_path, answer=answer, session_alive=alive, role=role)
+    assert code == 0 and "went on" in out, out
+
+
+# ── the Scorer waits for the whole profile (giro Windows 16/11: 19 calls during the onboarding, the budget started early) ─
+
+
+def _ask_scorer(tmp_path: Path, *, state: str | None = None, ready_age: float | None = None, done: bool = False,
+                **env_extra: str) -> tuple[int, dict]:
+    home = tmp_path / "jht"
+    (home / "state").mkdir(parents=True, exist_ok=True)
+    (home / "profile").mkdir(parents=True, exist_ok=True)
+    if state is not None:
+        (home / "state" / "first-run.json").write_text(state, encoding="utf-8")
+    if ready_age is not None:
+        flag = home / "profile" / "ready.flag"
+        flag.write_text("2026-11-16T14:08:44Z\n", encoding="utf-8")
+        moment = time.time() - ready_age
+        os.utime(flag, (moment, moment))
+    if done:
+        (home / "profile" / "onboarding-done.flag").write_text("2026-11-16T14:16:59Z\n", encoding="utf-8")
+    env = {"PATH": os.environ.get("PATH", ""), "JHT_HOME": str(home), "JHT_DB": str(home / "no.db"),
+           "PYTHONDONTWRITEBYTECODE": "1", **env_extra}
+    ran = subprocess.run([sys.executable, "-I", str(GATE), "scorer"], capture_output=True, text=True, timeout=60, env=env,
+                         check=False)
+    return ran.returncode, (json.loads(ran.stdout) if ran.stdout.strip() else {})
+
+
+def test_the_scorer_waits_while_the_assistente_still_asks(tmp_path: Path):
+    """ready.flag starts the Capitano (three fields of the profile), not the Scorer: in burst, a minute after the flag."""
+    code, out = _ask_scorer(tmp_path, state=_state("burst"), ready_age=60)
+    assert (code, out["scorer_due"], out["reason"]) == (1, False, "profile_open")
+
+
+def test_the_end_of_the_onboarding_makes_the_scorer_due(tmp_path: Path):
+    code, out = _ask_scorer(tmp_path, state=_state("burst"), ready_age=60, done=True)
+    assert (code, out["reason"]) == (0, "onboarding_done")
+
+
+def test_half_an_hour_after_ready_flag_the_scorer_is_due_without_the_end_of_the_onboarding(tmp_path: Path):
+    """An Assistente that never writes the flag (an older install, a person who went away) does not hold it for ever."""
+    code, out = _ask_scorer(tmp_path, state=_state("burst"), ready_age=1801)
+    assert (code, out["reason"]) == (0, "onboarding_cap")
+    code, out = _ask_scorer(tmp_path, state=_state("burst"), ready_age=200, JHT_SCORER_ONBOARDING_MAX="100")
+    assert (code, out["reason"]) == (0, "onboarding_cap")
+
+
+def test_a_steady_team_and_an_imported_profile_have_their_scorer(tmp_path: Path):
+    code, out = _ask_scorer(tmp_path, state=_state("steady"), ready_age=10)
+    assert (code, out["reason"]) == (0, "phase")
+
+
+def test_the_scorer_override_starts_it_anyway(tmp_path: Path):
+    code, out = _ask_scorer(tmp_path, state=_state("burst"), ready_age=10, JHT_SCORER_BEFORE_PROFILE="1")
+    assert (code, out["reason"]) == (0, "override")
+
+
+def test_a_done_flag_that_is_a_link_does_not_count(tmp_path: Path):
+    home = tmp_path / "jht"
+    (home / "profile").mkdir(parents=True)
+    (home / "profile" / "elsewhere").write_text("", encoding="utf-8")
+    (home / "profile" / "onboarding-done.flag").symlink_to(home / "profile" / "elsewhere")
+    code, out = _ask_scorer(tmp_path, state=_state("burst"), ready_age=10)
+    assert (code, out["reason"]) == (1, "profile_open")
+
+
+def _start_agent_scorer_gate(tmp_path: Path, *, answer: int, session_alive: bool, role: str) -> tuple[int, str]:
+    source = START_AGENT.read_text(encoding="utf-8")
+    gate = source[source.index("# --- cancello dello Scorer"):source.index("# --- fine cancello dello Scorer")]
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    (bindir / "python3").write_text(f"#!/bin/sh\n[ \"$2\" = scorer ] || exit 99\nexit {answer}\n", encoding="utf-8")
+    (bindir / "tmux").write_text(f"#!/bin/sh\nexit {0 if session_alive else 1}\n", encoding="utf-8")
+    for name in ("python3", "tmux"):
+        (bindir / name).chmod(0o755)
+    script = tmp_path / "gate.sh"
+    script.write_text(f"set -euo pipefail\nROLE={role}\nSESSION=X\n{gate}\necho went on\n", encoding="utf-8")
+    ran = subprocess.run(["bash", str(script)], capture_output=True, text=True, timeout=60, check=False,
+                         env={"PATH": f"{bindir}:/usr/bin:/bin"})
+    return ran.returncode, ran.stdout + ran.stderr
+
+
+def test_start_agent_refuses_the_scorer_while_the_profile_is_open(tmp_path: Path):
+    code, out = _start_agent_scorer_gate(tmp_path, answer=1, session_alive=False, role="scorer")
+    assert code == 75 and "went on" not in out and "SCORER not started" in out
+
+
+@pytest.mark.parametrize("answer, alive, role", [(0, False, "scorer"), (2, False, "scorer"), (1, True, "scorer"),
+                                                 (1, False, "scout"), (1, False, "analista")])
+def test_start_agent_lets_the_scorer_start_go_on(tmp_path: Path, answer: int, alive: bool, role: str):
+    code, out = _start_agent_scorer_gate(tmp_path, answer=answer, session_alive=alive, role=role)
     assert code == 0 and "went on" in out, out

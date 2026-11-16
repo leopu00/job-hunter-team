@@ -22,6 +22,20 @@ at most ten more minutes: `tools_pending`. After that, or when the pull failed, 
 
   python3 captain_gate.py        # {"captain_due": bool, "reason": ..., "phase": ...}; exit 0 = due, 1 = wait
 Same contract as `first_run.py mentor-due`; the CLI (`jht team start`) and the agent watchdog both ask it.
+
+The Scorer waits longer: ready.flag starts the team with three fields of the profile, and the Assistente goes on asking. A
+Scorer scores positions against the profile, so before the profile is whole its scores are of a profile that is not the
+person's yet, and it spends: on giro Windows 16/11 a Scorer made 19 calls during the onboarding, and its first call started
+the budget's period half an hour early. It is due on the first of (`reason`):
+  * `onboarding_done`  profile/onboarding-done.flag (the Assistente's questions are over, or the person said to stop);
+  * `onboarding_cap`   JHT_SCORER_ONBOARDING_MAX seconds (1800) since ready.flag, as the switch to the full image waits;
+  * `phase`            the first run is steady (an installation that has worked for a while);
+  * `profile_fit`      no ready.flag, and a profile that passes the gate to start the search (imported, or from before);
+  * `override`         JHT_SCORER_BEFORE_PROFILE=1;
+  * `unknown`          the state cannot be read: it starts, as it always did.
+Otherwise `profile_open`.
+
+  python3 captain_gate.py scorer # {"scorer_due": bool, "reason": ...}; exit 0 = due, 1 = wait
 """
 from __future__ import annotations
 
@@ -68,7 +82,44 @@ def check() -> dict:
         return {"captain_due": True, "reason": "unknown", "phase": phase}
 
 
+def _real_file(path: Path) -> bool:
+    return path.is_file() and not path.is_symlink()
+
+
+def scorer_check(now: float | None = None) -> dict:
+    import time
+
+    try:
+        import first_run
+        if os.environ.get("JHT_SCORER_BEFORE_PROFILE") == "1":
+            return {"scorer_due": True, "reason": "override"}
+        profile = first_run._path("JHT_HOME") / "profile"
+        if _real_file(profile / "onboarding-done.flag"):
+            return {"scorer_due": True, "reason": "onboarding_done"}
+        if first_run.status().get("phase") == first_run.PHASE_STEADY:
+            return {"scorer_due": True, "reason": "phase"}
+        ready = profile / "ready.flag"
+        if _real_file(ready):
+            try:
+                cap = int(os.environ.get("JHT_SCORER_ONBOARDING_MAX", "1800"))
+            except ValueError:
+                cap = 1800
+            moment = time.time() if now is None else now
+            if moment - ready.stat().st_mtime >= cap:
+                return {"scorer_due": True, "reason": "onboarding_cap"}
+            return {"scorer_due": False, "reason": "profile_open"}
+        if first_run._profile_imported() is not None:
+            return {"scorer_due": True, "reason": "profile_fit"}
+        return {"scorer_due": False, "reason": "profile_open"}
+    except Exception:  # whatever cannot be read, the Scorer starts as it always did
+        return {"scorer_due": True, "reason": "unknown"}
+
+
 def main() -> int:
+    if sys.argv[1:] == ["scorer"]:
+        answer = scorer_check()
+        print(json.dumps(answer))
+        return 0 if answer["scorer_due"] else 1
     answer = check()
     print(json.dumps(answer))
     return 0 if answer["captain_due"] else 1
