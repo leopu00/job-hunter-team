@@ -2,6 +2,7 @@
 """The Assistente's welcome, delivered in the chat of the app.
 
     assistant_welcome.py deliver
+    assistant_welcome.py settled
 
 The welcome goes to the chat the app reads (`agents/assistente/chat.jsonl`,
 the file `jht-send` writes) ALWAYS; Telegram is an extra, only when a bot is
@@ -22,6 +23,13 @@ language and whichever version of the catalog (the text has changed since the
 first installs): it is known by its opening, not by today's whole text. Two
 callers at once (the container boot and the agent) take one lock.
 
+`settled` asks, without the model, whether a start of the Assistente has
+anything left for its welcome message to do: the flag is there, a welcome is in
+the chat, and the onboarding is over (`profile/onboarding-done.flag`). Then the
+launcher sends nothing: a restart (a `jht up` during the pause of the budget
+too) costs no call. Exit 0 and `WELCOME_SETTLED`, else exit 1 and
+`WELCOME_PENDING <what is missing>`.
+
 One line on stdout:
     WELCOME_DELIVERED chat=posted|already telegram=sent|failed|skipped|replay flag=ok|not_written
     WELCOME_NOT_DELIVERED <reason>
@@ -39,6 +47,7 @@ from pathlib import Path
 AGENT = "assistente"
 FLAG = "welcomed.flag"
 READY_FLAG = "ready.flag"
+ONBOARDING_DONE_FLAG = "onboarding-done.flag"
 SEND_TIMEOUT_S = 30
 TELEGRAM_TIMEOUT_S = 60
 
@@ -260,11 +269,28 @@ def deliver() -> int:
     return 0
 
 
+def settled() -> int:
+    profile = jht_home() / "profile"
+    if not (profile / FLAG).is_file():
+        missing = "flag"
+    elif not _in_chat():
+        missing = "chat"
+    elif not (profile / ONBOARDING_DONE_FLAG).is_file():
+        missing = "onboarding"
+    else:
+        print("WELCOME_SETTLED")
+        return 0
+    print(f"WELCOME_PENDING {missing}")
+    return 1
+
+
 def main(argv: list[str]) -> int:
-    if argv != ["deliver"]:
-        print("usage: assistant_welcome.py deliver", file=sys.stderr)
-        return 2
-    return deliver()
+    if argv == ["deliver"]:
+        return deliver()
+    if argv == ["settled"]:
+        return settled()
+    print("usage: assistant_welcome.py deliver|settled", file=sys.stderr)
+    return 2
 
 
 if __name__ == "__main__":

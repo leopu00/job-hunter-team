@@ -489,3 +489,68 @@ def test_the_ready_welcome_says_who_she_is_without_saying_the_team_is_about_to_s
     home.chat.parent.mkdir(parents=True, exist_ok=True)
     home.chat.write_text(json.dumps({"role": "assistant", "text": text}) + "\n", encoding="utf-8")
     assert "chat=already" in home.deliver().stdout
+
+
+# --- a start with nothing left for the welcome to do ---------------------------------------------
+
+
+def _settle(home: Home, *, flag: bool, chat: bool, done: bool) -> subprocess.CompletedProcess:
+    profile = home.path / "profile"
+    profile.mkdir(parents=True, exist_ok=True)
+    if chat:
+        assert home.deliver().returncode == 0
+    if not flag:
+        (profile / "welcomed.flag").unlink(missing_ok=True)
+    if done:
+        (profile / "onboarding-done.flag").write_text("2026-11-16T15:00:00Z\n", encoding="utf-8")
+    return home.deliver("settled")
+
+
+def test_settled_only_with_the_flag_the_welcome_in_the_chat_and_the_onboarding_over(home):
+    done = _settle(home, flag=True, chat=True, done=True)
+    assert (done.returncode, done.stdout.strip()) == (0, "WELCOME_SETTLED")
+
+
+@pytest.mark.parametrize("flag,chat,done,missing", [(False, True, True, "flag"), (True, True, False, "onboarding")])
+def test_anything_missing_is_not_settled_and_says_what(home, flag, chat, done, missing):
+    out = _settle(home, flag=flag, chat=chat, done=done)
+    assert (out.returncode, out.stdout.strip()) == (1, f"WELCOME_PENDING {missing}")
+
+
+def test_a_flag_with_no_welcome_in_the_chat_is_not_settled(home):
+    profile = home.path / "profile"
+    profile.mkdir(parents=True)
+    (profile / "welcomed.flag").touch()
+    (profile / "onboarding-done.flag").touch()
+    out = home.deliver("settled")
+    assert (out.returncode, out.stdout.strip()) == (1, "WELCOME_PENDING chat")
+
+
+def _assistente_start(tmp_path: Path, settled_rc: int) -> tuple[str, str]:
+    """The block of start-agent.sh that starts the Assistente's welcome, with `settled` answering settled_rc."""
+    source = START_AGENT.read_text(encoding="utf-8")
+    start = source.index('\n# The text is not passed to the Assistente')
+    block = source[start: source.index('\nif [ "$ROLE" = "capitano" ]', start)]
+    sent, log = tmp_path / "sent.txt", tmp_path / "welcome.log"
+    script = "\n".join([
+        f'jht_daemon_log() {{ echo "{log}"; }}',
+        f'_welcome_kickoff() {{ echo "$1" >> "{sent}"; }}',
+        f'timeout() {{ shift; echo "WELCOME_{"SETTLED" if settled_rc == 0 else "PENDING onboarding"}"; return {settled_rc}; }}',
+        "ROLE=assistente",
+        block,
+    ])
+    shell = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30)
+    assert shell.returncode == 0, shell.stderr
+    return (sent.read_text(encoding="utf-8") if sent.exists() else ""), (log.read_text(encoding="utf-8") if log.exists() else "")
+
+
+def test_a_restart_with_the_welcome_settled_sends_the_assistente_nothing(tmp_path):
+    """giro Windows: a `jht up` during the pause of the budget sent [WELCOME-USER] again (0.14 $) with the welcome already given."""
+    sent, log = _assistente_start(tmp_path, 0)
+    assert sent == ""
+    assert "WELCOME_SETTLED" in log
+
+
+def test_a_start_with_the_onboarding_not_over_still_sends_the_welcome_message(tmp_path):
+    sent, _ = _assistente_start(tmp_path, 1)
+    assert sent.strip() == "assistente"

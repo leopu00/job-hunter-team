@@ -263,6 +263,30 @@ def test_the_person_notice_exists_in_every_language(lang, monkeypatch):
     assert "10 EUR" in text and "quota_mode." not in text
 
 
+@pytest.mark.parametrize("lang", ["en", "it", "de", "es", "fr", "hu", "pt"])
+def test_with_a_budget_of_the_team_the_person_reads_that_the_budget_bounds_the_spending(lang, monkeypatch, tmp_path):
+    """giro Windows build5: the notice said that the only ceiling was the provider's, then quoted the budget of 2 USD in English
+    with the name of an internal brake (pi_spend_cap). With a budget the notice speaks of it, in the person's language."""
+    catalog = json.loads((ROOT / "shared" / "locales" / f"{lang}.json").read_text(encoding="utf-8"))
+    monkeypatch.setenv("JHT_LANG", lang)
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    import i18n
+    i18n._load.cache_clear() if hasattr(i18n, "_load") else None
+    config = dict(API_KEY, team={"budget": {"usd": 2, "duration_minutes": 1440, "saved_at": "2026-11-16T13:00:00Z"}})
+    text = quota_data.user_text(quota_data._declared_ceiling(config), config)
+    assert text.startswith(catalog["quota_mode.noquota_budget"].split("%s")[0]), text
+    assert catalog["quota_mode.budget_hours"].replace("%s", "2", 1).replace("%s", "24", 1) in text, text
+    for internal in ("pi_spend_cap", "Scout", "Analista", "Scorer", "quota_mode.", "over 1440 minutes"):
+        assert internal not in text, (internal, text)
+    assert catalog["quota_mode.noquota"].split("%s")[0] not in text   # not the «only the provider's ceiling» notice
+    dated = dict(API_KEY, no_quota_cap={"eur": 10}, team={"budget": {"usd": 5, "starts_at": "2026-11-16T08:00:00Z",
+                                                                          "ends_at": "2026-11-17T08:00:00Z"}})
+    text = quota_data.user_text("", dated)
+    assert "5 USD" in text and "10 EUR" in text and "pi_spend_cap" not in text, text
+    # no budget: the notice of the ceilings declared for the key, as before
+    assert quota_data.user_text("", dict(API_KEY, no_quota_cap={"eur": 10})) == catalog["quota_mode.noquota"].replace("%s", "10 EUR")
+
+
 # --- the pi harness: agents that write no Codex rollout ------------------------------------------------------
 
 def pi_session(home, age_sec=60, name="one.jsonl"):
