@@ -41,7 +41,7 @@ import { WizardCancelledError } from './prompts.js';
 import { lstatSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { keyStoreDir } from './key-store.js';
-import { JHT_CONFIG_PATH } from './setup-helpers.js';
+import { JHT_CONFIG_PATH, serviceChanged } from './setup-helpers.js';
 import { piApiProvider } from '../../shared/runtime/provider-models.js';
 import { RELEASE_PROVIDERS, RELEASE_HARNESS, codexLegacy, configOffered, offeredWay } from '../../shared/runtime/release-providers.js';
 import pc from 'picocolors';
@@ -436,6 +436,13 @@ async function runSetupSteps(prompter, state) {
   // ────────────────────────────────────────────────────────────────────────
   console.log('');
   console.log(stepLine(3, 3, t('wizard.team.starting')));
+  // A team that ran on another service is stopped first, the Assistente too (`stop --all` keeps it after the onboarding): the
+  // agents read the service when they start, so «already active» would leave all of them on the old one and its refusals.
+  if (serviceChanged(snapshot.config, providerChoice, harness)) {
+    console.log(t('wizard.team.restarting'));
+    runJhtSubcommand(['team', 'stop', '--all'], 'team stop');
+    runJhtSubcommand(['team', 'stop', 'assistente'], 'team stop');
+  }
   const startOk = runJhtSubcommand(['team', 'start'], 'team start');
   if (!startOk) {
     await prompter.outro(t('wizard.team.start_failed'));

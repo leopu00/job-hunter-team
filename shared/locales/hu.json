@@ -649,6 +649,7 @@
   "wizard.budget.below_min": "%s a minimum alatt van, amellyel a csapat valamennyit tud dolgozni ezen a szolgáltatáson (%s): az Asszisztenssel való első beállítás és a Kapitány első körei elhasználhatják a legnagyobb részét, mielőtt a Scoutok keresnének. Megtartod mégis a(z) %s összeget?",
   "wizard.budget.below_min_note": "%s a minimum alatt van, amellyel a csapat valamennyit tud dolgozni ezen a szolgáltatáson (%s): az első keresés előtt elköltheti a legnagyobb részét.",
   "wizard.team.starting": "Csapat indítása (Sentinella + Bridge + Capitano)...",
+  "wizard.team.restarting": "A szolgáltatás megváltozott: a régin futó ügynökök leállnak, majd az újon indulnak újra...",
   "wizard.team.start_failed": "Csapat indítása sikertelen. Lásd a fenti naplót. Próbáld újra: jht team start",
   "wizard.outro_done": "Minden kész! Az Assistente vár rád: válaszolj a kérdéseire az onboarding indításához.\n  Válasz: jht team chat assistente   (vagy az alkalmazás Assistente chatjében)\n  Állapot:  jht team status\n  Naplók:   jht logs --tail 30\n  Leállás:  jht team stop --all",
   "wizard.outro_no_credit": "A beállítás elmentve, de a kredit elfogyott itt: %s. Az Assistente nem tud válaszolni, amíg fel nem töltöd a szolgáltató oldalán.\n  Utána:   jht team chat assistente   (vagy az app Assistente-csevegésében)\n  Állapot: jht team status\n  Leállítás: jht team stop --all",

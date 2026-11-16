@@ -710,6 +710,7 @@
   "wizard.cli.budget_until": "The budget lasts until this hour of the day, 0-23 (the next one)",
   "wizard.cli.no_budget": "No spending limit (the team stops only at the credit of the provider)",
   "wizard.team.starting": "Starting the team (Sentinella + Bridge + Capitano)...",
+  "wizard.team.restarting": "The service changed: stopping the agents that run on the old one, to start them again on the new one...",
   "wizard.team.start_failed": "Team start failed. See log above. Retry: jht team start",
   "wizard.outro_done": "All set! The Assistente is waiting for you: answer its questions to start the onboarding.\n  Answer:  jht team chat assistente   (or in the Assistente chat of the app)\n  Status:  jht team status\n  Logs:    jht logs --tail 30\n  Stop:    jht team stop --all",
   "wizard.outro_no_credit": "Configuration saved, but the credit on %s is used up: the Assistente cannot answer until you top it up on the provider's site.\n  Then:    jht team chat assistente   (or in the Assistente chat of the app)\n  Status:  jht team status\n  Stop:    jht team stop --all",
