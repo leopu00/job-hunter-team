@@ -78,9 +78,12 @@ class Bridge:
         self.flag.write_text(json.dumps(payload), encoding="utf-8")
         return True
 
-    def activate(self, consumed, cap_pct, budget):
+    def activate(self, consumed, cap_pct, budget, extra=None):
+        # as the bridge: the flag (with what the brake adds) is written before the ESC
         self.esc += 1
-        self.write({"consumed_pct": consumed, "cap_pct": cap_pct, "budget_pct": budget, "sessions": []})
+        self.write({"consumed_pct": consumed, "cap_pct": cap_pct, "budget_pct": budget, "sessions": [], **(extra or {})})
+        self.gate_at_esc = json.loads(self.flag.read_text(encoding="utf-8"))
+        self.told_at_esc = len(self.sent) + len(self.users)
         return ["scout-1"]
 
     def tick(self, no_quota=True, burn_intent=False, state=None):
@@ -851,3 +854,69 @@ def test_clock_names_the_zone_of_the_person():
     config = {"team": {"budget": {"usd": 5, "timezone": "Europe/Rome"}}}
     moment = datetime(2026, 11, 16, 13, 26, tzinfo=timezone.utc).timestamp()
     assert cap.clock(moment, config, today=moment) == "14:26 (Europe/Rome)"
+
+
+# --- the gate before the words, and a resume time that moves (giro Windows 16/11, build5, Claude, 2 $) ---------------------
+
+def test_the_gate_of_the_agents_is_closed_before_anyone_is_told(tmp_path):
+    """The notices to the Captain and the Sentinella wait for the sessions: written first, they held the flag back 23 s, and
+    the Captain made four more calls (0.16 $). The flag with the brake's reason now comes before the ESC and the words."""
+    pi_calls(tmp_path, [(NOON + 1800, 2.0, 100)])
+    bridge = Bridge(tmp_path, budget(5, NOON, NOON + 10 * HOUR))
+    bridge.clock["now"] = NOON + HOUR
+    bridge.tick()
+    assert bridge.esc == 1
+    assert bridge.gate_at_esc["reason"] == "pi_spend_cap" and bridge.gate_at_esc["pi_spend_cap"]["why"] == "pace"
+    assert bridge.told_at_esc == 0, "someone was told before the gate closed"
+    assert sorted(s for s, _ in bridge.sent) == ["CAPITANO", "SENTINELLA"] and len(bridge.users) == 1
+
+
+def _paused_at_13_30(tmp_path):
+    pi_calls(tmp_path, [(NOON + 1800, 2.0, 100)])
+    bridge = Bridge(tmp_path, budget(5, NOON, NOON + 10 * HOUR))
+    bridge.clock["now"] = NOON + HOUR
+    state: dict = {}
+    bridge.tick(state=state)
+    assert flag_record(bridge)["resumes_at"] == "2026-11-09T13:30:00+00:00" and len(bridge.users) == 1
+    return bridge, state
+
+
+def test_spending_after_the_pause_moves_the_resume_time_in_the_flag_and_the_person_is_told(tmp_path):
+    """A turn already running and a welcome at `jht up` spent after the pause: the brake reckoned 16:53, the flag and the chat
+    still said 14:58, and at 16:11 the team was still paused past the time the person was given."""
+    bridge, state = _paused_at_13_30(tmp_path)
+    pi_calls(tmp_path, [(NOON + HOUR + 30, 0.5, 100)], name="after.jsonl", agent="capitano")   # 0.50 $ more: one hour later
+    bridge.clock["now"] = NOON + HOUR + 120
+    bridge.tick(state=state)
+    record = flag_record(bridge)
+    assert record["resumes_at"] == "2026-11-09T14:30:00+00:00" and record["resumes_told_at"] == record["resumes_at"]
+    assert bridge.esc == 1, "no second ESC"
+    assert len(bridge.users) == 2 and "14:30" in bridge.users[-1][0]
+    assert any("lifts by itself at 14:30" in t for t in bridge.texts())
+    bridge.clock["now"] = NOON + HOUR + 180
+    bridge.tick(state=state)
+    assert len(bridge.users) == 2, "the same time is not said again"
+
+
+def test_a_small_move_is_written_in_the_flag_and_said_once_the_moves_add_up(tmp_path):
+    bridge, state = _paused_at_13_30(tmp_path)
+    pi_calls(tmp_path, [(NOON + HOUR + 30, 0.02, 100)], name="a.jsonl", agent="capitano")     # 2.4 minutes later
+    bridge.clock["now"] = NOON + HOUR + 120
+    bridge.tick(state=state)
+    record = flag_record(bridge)
+    assert record["resumes_at"] == "2026-11-09T13:32:24+00:00" and record["resumes_told_at"] == "2026-11-09T13:30:00+00:00"
+    assert len(bridge.users) == 1, "a move of two minutes is not a new message"
+    pi_calls(tmp_path, [(NOON + HOUR + 150, 0.03, 100)], name="b.jsonl", agent="capitano")    # 6 minutes in all
+    bridge.clock["now"] = NOON + HOUR + 240
+    bridge.tick(state=state)
+    assert flag_record(bridge)["resumes_at"] == "2026-11-09T13:36:00+00:00" and len(bridge.users) == 2
+    assert flag_record(bridge)["resumes_told_at"] == "2026-11-09T13:36:00+00:00"
+
+
+def test_a_pause_that_does_not_move_is_left_alone(tmp_path):
+    bridge, state = _paused_at_13_30(tmp_path)
+    before = bridge.flag.read_text(encoding="utf-8")
+    for minutes in (5, 10, 20):
+        bridge.clock["now"] = NOON + HOUR + minutes * 60
+        bridge.tick(state=state)
+    assert bridge.flag.read_text(encoding="utf-8") == before and len(bridge.users) == 1 and bridge.esc == 1

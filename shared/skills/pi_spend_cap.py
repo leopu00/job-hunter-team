@@ -340,21 +340,62 @@ def _halt_key(verdict, day):
 
 
 def _halt(api, run, verdict, spent, day, notify_user, config=None, now=None, escape=True):
-    burst = first_burst_progress(api._path("JHT_HOME"))
-    _tell(api, run, _halt_key(verdict, day), captain_text(verdict, spent, burst, config, now),
-          user_text(verdict, spent, config, now), notify_user)
+    """The gate first, then the ESC, then the words. The gate of the agents (spend-gate.js) reads the flag with this reason:
+    written after the notices to the Captain and the Sentinella, which wait for the sessions, it came 23 s after the
+    «reached» line, and the Captain made four more calls in between (giro Windows 16/11: 0.16 $). A Captain held by the gate
+    does not read its notice; the person is told by the notifier, and the Captain by the notice of the resume."""
+    record = _record(verdict, config)
     if escape:
         api._activate_daily_halt(100.0 * verdict["spent"] / verdict["ceiling"] if verdict["ceiling"] else 100.0, 100.0,
-                                 100.0)
+                                 100.0, extra={"reason": REASON, "pi_spend_cap": record})
     try:
         payload = json.loads(api._path("DAILY_HALT_FLAG").read_text(encoding="utf-8"))
         payload["reason"] = REASON
-        payload["pi_spend_cap"] = _record(verdict, config)
+        payload["pi_spend_cap"] = record
         api._write_daily_halt_payload(payload)
     except (OSError, ValueError):
         pass
     print("[bridge V6] %s PI-SPEND-CEILING reached (%s: %s of %s): team paused"
           % (run.now_h, verdict["why"], verdict["spent"], verdict["ceiling"]))
+    burst = first_burst_progress(api._path("JHT_HOME"))
+    _tell(api, run, _halt_key(verdict, day), captain_text(verdict, spent, burst, config, now),
+          user_text(verdict, spent, config, now), notify_user)
+
+
+# A resume time that moves (spending after the pause: a turn already running, a welcome at `jht up`) is written in the flag
+# at once, for `jht team status` and the chat; the person is told again when it moved by this much or the time they were told
+# is already gone (giro Windows 16/11: «resumes at 14:58», still paused at 16:11, the brake reckoning 16:53).
+RESUME_MOVED_SEC = 300
+
+
+def _resume_moved(api, run, verdict, spent, day, notify_user, config, now, flag):
+    """The flag says the resume time the brake reckons now; the person is told again when it moved RESUME_MOVED_SEC from the
+    time they were told (`resumes_told_at`: small moves add up), or that time is gone. Never a second ESC."""
+    record = flag.get("pi_spend_cap") or {}
+
+    def moment(text):
+        try:
+            return datetime.fromisoformat(text).timestamp() if text else None
+        except (TypeError, ValueError):
+            return None
+
+    new = verdict.get("resumes")
+    if new is None:
+        return
+    written = moment(record.get("resumes_at"))
+    told = moment(record.get("resumes_told_at") or record.get("resumes_at"))
+    tell = told is None or abs(new - told) >= RESUME_MOVED_SEC or (told <= now and int(told // 60) != int(new // 60))
+    if written is not None and int(written // 60) == int(new // 60) and not tell:
+        return
+    fresh = _record(verdict, config)
+    fresh["resumes_told_at"] = fresh["resumes_at"] if tell else record.get("resumes_told_at") or record.get("resumes_at")
+    flag["pi_spend_cap"] = fresh
+    api._write_daily_halt_payload(flag)
+    if tell:
+        print("[bridge V6] %s PI-SPEND-CEILING pause moved: resumes %s (was %s)"
+              % (run.now_h, fresh["resumes_at"], record.get("resumes_at")))
+        _tell(api, run, _halt_key(verdict, day), captain_text(verdict, spent, None, config, now),
+              user_text(verdict, spent, config, now), notify_user)
 
 
 def _resume(api, run, day, notify_user):
@@ -434,6 +475,8 @@ def step(api, run, notify_user=None):
                 # Already paused by this brake for another reason (the pace, and now the budget or the period is over):
                 # the person and the Captain are told the new one, the flag says it; no second ESC.
                 _halt(api, run, verdict, spent, day, notify_user, config, now, escape=False)
+            elif mine and verdict["why"] == "pace":
+                _resume_moved(api, run, verdict, spent, day, notify_user, config, now, flag)
         elif mine and (budget is not None or run.state.get("no_quota_declared")):
             # Lifted only by a tick that looked: without a budget and before the no-quota mode is declared (the first tick
             # of a bridge started again) the ceilings were not read, and «nothing to stop» is not «back under».

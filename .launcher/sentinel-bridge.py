@@ -1123,13 +1123,18 @@ def _write_daily_halt_payload(payload):
         return False
 
 
-def _activate_daily_halt(consumed, cap, budget):
+def _activate_daily_halt(consumed, cap, budget, extra=None):
     """Chiude il gate PRIMA dell'ESC, poi registra le sessioni interrotte.
 
     Scrivere il flag dopo l'ESC lasciava una race: un timer poteva scadere fra
     i due passi e consegnare un wake senza che il motore vedesse ancora il
     daily halt. Il secondo write completa solo l'osservabilita'; la protezione
     e' gia' attiva quando parte il primo ESC.
+
+    `extra` entra gia' nel PRIMO write: il freno della spesa ci mette il suo
+    motivo (`reason`), che e' quello che legge il gate degli agenti
+    (spend-gate.js). Aggiunto dopo, fra l'ESC e il secondo write il gate
+    vedeva un flag senza motivo e lasciava passare le chiamate.
     """
     payload = {
         "halted_at": datetime.now(timezone.utc).isoformat(),
@@ -1137,8 +1142,10 @@ def _activate_daily_halt(consumed, cap, budget):
         "cap_pct": cap,
         "budget_pct": budget,
         "sessions": [],
-        "pane_signatures": _session_pane_signatures(),
     }
+    payload.update(extra or {})
+    _write_daily_halt_payload(payload)
+    payload["pane_signatures"] = _session_pane_signatures()
     _write_daily_halt_payload(payload)
     paused = _esc_all_sessions()
     payload["sessions"] = paused
