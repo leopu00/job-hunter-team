@@ -134,3 +134,19 @@ def test_an_answer_from_before_the_setup_changed_the_service_is_no_verdict_on_th
     assert provider_credit.exhausted(tmp_path, NOW) is None, "the words of Anthropic are not one of the signs: unchanged"
     session(tmp_path, "assistente", [error_row(stamp(-120), "zai", ZAI_1113), error_row(stamp(-20), "zai", ZAI_1113)])
     assert provider_credit.exhausted(tmp_path, NOW)["provider"] == "zai"
+
+
+def test_a_refusal_of_the_old_service_after_the_setup_is_no_verdict_on_the_new_one(tmp_path):
+    import os
+    config = tmp_path / "jht.config.json"
+    config.write_text(json.dumps({"active_provider": "claude"}), encoding="utf-8")
+    os.utime(config, (NOW - 300, NOW - 300))
+    # the agents of GLM were still running when the config was saved: they refused after it, and the refusal stays in their sessions
+    session(tmp_path, "assistente", [error_row(stamp(-20), "zai", ZAI_1113)])
+    assert provider_credit.exhausted(tmp_path, NOW) is None
+    config.write_text(json.dumps({"active_provider": "glm"}), encoding="utf-8")
+    os.utime(config, (NOW - 300, NOW - 300))
+    assert provider_credit.exhausted(tmp_path, NOW)["provider"] == "zai", "on GLM itself it is still the verdict"
+    config.write_text(json.dumps({"active_provider": "something-new"}), encoding="utf-8")
+    os.utime(config, (NOW - 300, NOW - 300))
+    assert provider_credit.exhausted(tmp_path, NOW)["provider"] == "zai", "a service not in the list filters nothing"

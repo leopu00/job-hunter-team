@@ -8,7 +8,7 @@ import os from 'node:os';
 import { CODEX_MODEL } from '../../shared/runtime/role-models.js';
 import { PI_API_MODELS, PI_API_PROVIDERS, piApiProvider } from '../../shared/runtime/provider-models.js';
 import { summarizeRoleModels } from './setup-models.js';
-import { harnessProblem } from '../../shared/runtime/agent-harness.js';
+import { harnessProblem, DEFAULT_HARNESS } from '../../shared/runtime/agent-harness.js';
 
 // Path fissi JHT (specchio di shared/paths.js, con override env var).
 // cli/wizard e' ESM .js e non puo' importare shared/*.ts direttamente.
@@ -225,4 +225,16 @@ export function summarizeExistingConfig(config) {
     lines.push(`Telegram: incomplete (${present.length}/3 bots)`);
   }
   return lines.join('\n') || 'Empty configuration';
+}
+
+/**
+ * Whether the setup moves a team that is already saved to another service or another CLI (GLM → Claude, pi → codex): the agents
+ * that are running read the service when their session STARTS, so they stay on the old one until they are stopped. No saved
+ * team (or none with a provider) is no change; «moonshot» and «kimi» are the same service.
+ */
+export function serviceChanged(previous, providerName, harness) {
+  if (!previous || typeof previous !== 'object' || typeof previous.active_provider !== 'string') return false;
+  const was = piApiProvider(previous.active_provider) ?? previous.active_provider;
+  const now = piApiProvider(providerName) ?? providerName;
+  return was !== now || (previous.harness ?? DEFAULT_HARNESS) !== harness;
 }

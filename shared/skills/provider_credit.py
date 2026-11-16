@@ -14,6 +14,8 @@ the state of an agent (`agent_pi_log.py`) calls it «credito_esaurito» instead 
 
 Run as a script it prints, as JSON, what `exhausted` sees (or null): `jht doctor`, `jht team start` and `jht team send`
 read it (cli/src/lib/provider-credit.js), so the person reads «top up the credit» where the team looks merely silent.
+
+The refusal is the one of the service the team runs on: an answer of another provider than `active_provider` is not read.
 """
 
 from __future__ import annotations
@@ -54,6 +56,20 @@ def _config_written(jht_home) -> float:
         return 0.0
 
 
+# The service the person chose (`active_provider` of jht.config.json) as pi names it; one that is not here (or no config) filters nothing.
+ACTIVE_AS_PI = {"glm": "zai", "zai": "zai", "kimi": "moonshotai", "moonshot": "moonshotai", "moonshotai": "moonshotai",
+                "openai": "openai", "codex": "openai", "claude": "anthropic", "anthropic": "anthropic"}
+
+
+def _active_provider(jht_home) -> str | None:
+    try:
+        with open(os.path.join(str(jht_home), "jht.config.json"), encoding="utf-8") as handle:
+            name = json.load(handle).get("active_provider")
+        return ACTIVE_AS_PI.get(name.strip().lower()) if isinstance(name, str) else None
+    except Exception:  # noqa: BLE001 - no readable config: no filter
+        return None
+
+
 def exhausted(jht_home, now_ts: float, window_s: float = WINDOW_S) -> dict | None:
     """`{provider, agent, ts}` of the newest «no credit» answer in the last `window_s` seconds that no call has passed
     since (a call that went through proves the credit is back), else None. Never raises: no reading is None."""
@@ -61,11 +77,17 @@ def exhausted(jht_home, now_ts: float, window_s: float = WINDOW_S) -> dict | Non
         import pi_sessions  # here, not at the top: agent_pi_log imports credit_gone also as shared.skills.provider_credit
 
         since = max(now_ts - window_s, _config_written(jht_home))
+        active = _active_provider(jht_home)
         newest = None
         for event in pi_sessions.error_events(jht_home, since):
             provider = credit_gone(event["message"])
-            if provider:
-                newest = {"provider": event["provider"] or provider, "agent": event["agent"], "ts": event["ts"]}
+            if not provider:
+                continue
+            # an agent still on the old service (stopped late, or restarted by hand) can refuse AFTER the setup: that is the old
+            # service's answer, not a verdict on the one the person chose, so it never pauses the team on the new one
+            if active and (event["provider"] or provider) != active:
+                continue
+            newest = {"provider": event["provider"] or provider, "agent": event["agent"], "ts": event["ts"]}
         if newest is None:
             return None
         if any(call["ts"] > newest["ts"] and call["input"] + call["output"] + call["cache_read"] > 0

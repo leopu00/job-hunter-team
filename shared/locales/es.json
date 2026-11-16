@@ -647,6 +647,7 @@
   "wizard.budget.below_min": "%s está por debajo del mínimo que permite al equipo trabajar un poco con este servicio (%s): la puesta en marcha con el Assistente y las primeras rondas del Capitán pueden gastar casi todo antes de que los Scouts busquen. ¿Mantener %s de todos modos?",
   "wizard.budget.below_min_note": "%s está por debajo del mínimo que permite al equipo trabajar un poco con este servicio (%s): puede gastar casi todo antes de la primera búsqueda.",
   "wizard.team.starting": "Arrancando el equipo (Sentinella + Bridge + Capitano)...",
+  "wizard.team.restarting": "El servicio ha cambiado: se paran los agentes del anterior para arrancarlos de nuevo en el nuevo...",
   "wizard.team.start_failed": "Arranque del equipo fallido. Mira el log de arriba. Reintentar: jht team start",
   "wizard.outro_done": "¡Todo listo! El Assistente te espera: responde a sus preguntas para empezar el onboarding.\n  Responder: jht team chat assistente   (o en el chat del Assistente de la app)\n  Estado:  jht team status\n  Logs:    jht logs --tail 30\n  Parar:   jht team stop --all",
   "wizard.outro_no_credit": "Configuración guardada, pero el crédito en %s está agotado: el Assistente no puede responder hasta que lo recargues en el sitio del proveedor.\n  Luego:   jht team chat assistente   (o en el chat del Assistente de la app)\n  Estado:  jht team status\n  Parar:   jht team stop --all",
