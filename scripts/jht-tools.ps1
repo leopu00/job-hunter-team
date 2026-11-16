@@ -304,18 +304,21 @@ function Test-ToolsRegisteredCommandRunning {
     $item = Get-Item -LiteralPath $dir -Force -ErrorAction Stop
     if (-not $item.PSIsContainer -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) { return $false }
     foreach ($file in @(Get-ChildItem -LiteralPath $dir -File -Force -ErrorAction Stop)) {
-      if ($file.Name -notmatch '^[0-9]{1,10}$' -or ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { continue }
-      $fields = @(([IO.File]::ReadAllText($file.FullName)).Trim().Split([char]32))
-      if ($fields.Count -lt 3 -or $fields[0] -cne $file.Name -or $fields[1] -notmatch '^[0-9]{1,19}$') { continue }
-      $id = [int]$fields[0]
-      if ($id -eq $PID) { continue }
-      $process = Get-Process -Id $id -ErrorAction SilentlyContinue
-      $alive = $false
-      if ($process) { try { $alive = ($process.StartTime.ToUniversalTime().Ticks -eq [long]$fields[1]) } catch { $alive = $true } }
-      if (-not $alive) { Remove-Item -LiteralPath $file.FullName -Force -ErrorAction SilentlyContinue; continue }
-      $sub = ''
-      if ($fields.Count -gt 3) { $sub = $fields[3] }
-      if (Test-ToolsCommandChangesRuntime $fields[2] $sub) { return $true }
+      # one file that cannot be read or believed is left out, never the whole folder
+      try {
+        if ($file.Name -notmatch '^[0-9]{1,9}$' -or ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { continue }
+        $fields = @(([IO.File]::ReadAllText($file.FullName)).Trim().Split([char]32))
+        if ($fields.Count -lt 3 -or $fields[0] -cne $file.Name -or $fields[1] -notmatch '^[0-9]{1,19}$') { continue }
+        $id = [int]$fields[0]
+        if ($id -eq $PID) { continue }
+        $process = Get-Process -Id $id -ErrorAction SilentlyContinue
+        $alive = $false
+        if ($process) { try { $alive = ($process.StartTime.ToUniversalTime().Ticks -eq [long]$fields[1]) } catch { $alive = $true } }
+        if (-not $alive) { Remove-Item -LiteralPath $file.FullName -Force -ErrorAction SilentlyContinue; continue }
+        $sub = ''
+        if ($fields.Count -gt 3) { $sub = $fields[3] }
+        if (Test-ToolsCommandChangesRuntime $fields[2] $sub) { return $true }
+      } catch { continue }
     }
   } catch { }
   return $false

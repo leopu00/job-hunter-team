@@ -524,7 +524,7 @@ def test_the_chat_of_the_onboarding_does_not_hold_the_switch_and_an_up_does(box,
         chat.wait(timeout=20)
 
 
-def test_a_file_of_another_process_with_the_same_pid_says_nothing(box):
+def test_a_file_of_another_process_with_the_same_pid_says_nothing(box, tmp_path):
     """A PID can come back for another process: the file says the start of the one that wrote it."""
     folder = box.runtime / ".commands"
     folder.mkdir()
@@ -532,9 +532,18 @@ def test_a_file_of_another_process_with_the_same_pid_says_nothing(box):
     try:
         (folder / str(other.pid)).write_text(f"{other.pid} 1 up \n", encoding="utf-8")   # a start that is not this process's
         (folder / "notapid").write_text("1 1 up\n", encoding="utf-8")
+        (folder / "2147483648").write_text("2147483648 1 up\n", encoding="utf-8")   # past [int] (sorts before most PIDs): one file, not the folder
         done = box.run("if (Test-ToolsRegisteredCommandRunning) { [Console]::Out.WriteLine('OTHER') } "
                        "else { [Console]::Out.WriteLine('NONE') }")
         assert done.stdout.strip() == "NONE", done.stdout + done.stderr
+        up = _running_command(box, tmp_path, "up")              # files that cannot be believed do not hide a real `up`
+        try:
+            seen = box.run("if (Test-ToolsRegisteredCommandRunning) { [Console]::Out.WriteLine('OTHER') } "
+                           "else { [Console]::Out.WriteLine('NONE') }")
+            assert seen.stdout.strip() == "OTHER", seen.stdout + seen.stderr
+        finally:
+            up.kill()
+            up.wait(timeout=20)
     finally:
         other.kill()
         other.wait(timeout=20)
@@ -544,6 +553,9 @@ def test_every_jht_command_says_it_is_running_before_it_does_anything(box):
     text = WRAPPER.read_text(encoding="utf-8")
     dispatch = text[text.index("[string[]]$Rest = "):text.index("\nswitch ($Sub) {")]
     assert "Register-JhtRunningCommand $Sub $Rest" in dispatch
+    secret = box.run(_register_function() + "\nRegister-JhtRunningCommand 'setup' @('--api-key=sk-fake-123')\n"
+                     "[Console]::Out.WriteLine([IO.File]::ReadAllText((Join-Path (Join-Path $RuntimeDir '.commands') ([string]$PID))))")
+    assert "sk-fake" not in secret.stdout and secret.stdout.split()[2:] == ["setup", "-"], secret.stdout + secret.stderr
     done = box.run(_register_function() + "\nRegister-JhtRunningCommand 'config' @('set', 'a b')\n"
                    "[Console]::Out.WriteLine([IO.File]::ReadAllText((Join-Path (Join-Path $RuntimeDir '.commands') ([string]$PID))))")
     fields = done.stdout.strip().split(" ")

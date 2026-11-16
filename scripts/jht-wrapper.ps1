@@ -2146,9 +2146,10 @@ function Register-JhtRunningCommand {
         }
       }
     }
-    $first = ''
-    if ($Arguments.Count -gt 0) { $first = [string]$Arguments[0] }
-    $words = @($Command, $first) | ForEach-Object { ([string]$_ -replace '\s', '_') }
+    # only a word: never a value (`jht setup --api-key=...` must not leave the key in a file)
+    $words = @($Command, $(if ($Arguments.Count -gt 0) { [string]$Arguments[0] } else { '' })) | ForEach-Object {
+      if ([string]$_ -cmatch '^[a-z][a-z0-9-]{0,40}$') { [string]$_ } else { '-' }
+    }
     $ticks = (Get-Process -Id $PID).StartTime.ToUniversalTime().Ticks
     [IO.File]::WriteAllText((Join-Path $dir "$PID"), ("$PID $ticks " + ($words -join ' ') + "`n"), [Text.UTF8Encoding]::new($false))
   } catch { }
