@@ -1281,6 +1281,8 @@
   "position_card.value.approved": "Freigegeben",
   "quota_mode.noquota": "ℹ️ Dieser Anbieter meldet keine Nutzungslimits: Das Team wird daher nicht über ein Kontingent gesteuert und bei fehlenden Daten nicht pausiert. Die Ausgaben sind nur durch die Obergrenze begrenzt, die du beim Anbieter für diesen Schlüssel gesetzt hast (hier angegeben: %s). Prüfe sie und sag dem Kapitän, wenn das Team langsamer laufen oder stoppen soll.",
   "quota_mode.no_ceiling": "keine angegeben",
+  "quota_mode.budget_dates": "ein Budget von %s USD von %s bis %s",
+  "quota_mode.budget_duration": "ein Budget von %s USD für %s Minuten, gezählt ab der ersten Arbeit des Teams",
   "pi_cap.halt_eur": "⛔ Das Team ist pausiert: Die Agenten auf pi haben heute %s ausgegeben und die von dir angegebene Obergrenze erreicht (%s). Es geht nichts verloren. Die Arbeit läuft morgen weiter, oder sobald du die Obergrenze in der Konfiguration erhöhst.",
   "pi_cap.halt_tokens": "⛔ Das Team ist pausiert: Die Agenten auf pi haben in der letzten Stunde %s Tokens verbraucht und die von dir angegebene Obergrenze erreicht (%s pro Stunde). Es geht nichts verloren. Die Arbeit läuft weiter, wenn die Stundenzahl darunter fällt, oder sobald du die Obergrenze in der Konfiguration erhöhst.",
   "pi_cap.halt_credit": "⛔ Das Team ist pausiert: %s meldet, dass das Guthaben deines Kontos aufgebraucht ist. Es geht nichts verloren. Lade das Konto beim Anbieter auf: Die Arbeit läuft von selbst weiter, sobald wieder ein Aufruf durchgeht.",

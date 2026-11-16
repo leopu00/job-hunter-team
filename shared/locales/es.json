@@ -1281,6 +1281,8 @@
   "position_card.value.approved": "Aprobada",
   "quota_mode.noquota": "ℹ️ Este proveedor no informa de límites de uso: el equipo no se regula por una cuota y no se pausa por falta de datos. El gasto solo tiene como tope el que fijaste en el proveedor para esta clave (declarado aquí: %s). Revísalo y, si quieres el equipo más lento o parado, díselo al Capitán.",
   "quota_mode.no_ceiling": "ninguno declarado",
+  "quota_mode.budget_dates": "un presupuesto de %s USD de %s a %s",
+  "quota_mode.budget_duration": "un presupuesto de %s USD durante %s minutos, contados desde el primer trabajo del equipo",
   "pi_cap.halt_eur": "⛔ El equipo está en pausa: los agentes en pi han gastado hoy %s y han alcanzado el tope que declaraste (%s). No se pierde nada. El trabajo se reanuda mañana, o en cuanto subas el tope en la configuración.",
   "pi_cap.halt_tokens": "⛔ El equipo está en pausa: los agentes en pi usaron %s tokens en la última hora y han alcanzado el tope que declaraste (%s por hora). No se pierde nada. El trabajo se reanuda cuando la cuenta por hora baje de él, o en cuanto subas el tope en la configuración.",
   "pi_cap.halt_credit": "⛔ El equipo está en pausa: %s dice que el crédito de tu cuenta se ha acabado. No se pierde nada. Recarga la cuenta con el proveedor: el trabajo se reanuda solo cuando una llamada vuelve a pasar.",

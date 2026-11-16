@@ -253,6 +253,24 @@ def test_the_declared_ceiling_is_repeated_to_the_captain_and_to_the_person():
 
 
 @pytest.mark.parametrize("lang", ["en", "it", "de", "es", "fr", "hu", "pt"])
+def test_the_budget_in_the_notice_to_the_person_is_in_the_language_of_the_person(lang, monkeypatch):
+    catalog = json.loads((ROOT / "shared" / "locales" / f"{lang}.json").read_text(encoding="utf-8"))
+    assert catalog["quota_mode.budget_dates"].count("%s") == 3 and catalog["quota_mode.budget_duration"].count("%s") == 2
+    monkeypatch.setenv("JHT_LANG", lang)
+    import i18n
+    i18n._load.cache_clear() if hasattr(i18n, "_load") else None
+    trial = dict(API_KEY, team={"budget": {"usd": 5, "duration_minutes": 30, "saved_at": "2026-11-16T07:34:17Z", "timezone": "UTC"}})
+    night = dict(API_KEY, team={"budget": {"usd": 5, "starts_at": "2026-11-16T13:07:00Z", "ends_at": "2026-11-17T07:00:00Z"}})
+    for config, number in ((trial, "30"), (night, "5")):
+        said = quota_data._declared_ceiling(config, speak=True)
+        assert "5" in said and number in said and "quota_mode." not in said
+        assert "Scout" not in said and "pi_spend_cap" not in said
+    if lang != "en":
+        assert "budget of" not in quota_data._declared_ceiling(trial, speak=True)
+    assert "pi_spend_cap" in quota_data._declared_ceiling(trial), "the Captain still reads its English line"
+
+
+@pytest.mark.parametrize("lang", ["en", "it", "de", "es", "fr", "hu", "pt"])
 def test_the_person_notice_exists_in_every_language(lang, monkeypatch):
     catalog = json.loads((ROOT / "shared" / "locales" / f"{lang}.json").read_text(encoding="utf-8"))
     assert catalog["quota_mode.noquota"].count("%s") == 1 and catalog["quota_mode.no_ceiling"]

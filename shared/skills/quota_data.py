@@ -165,7 +165,9 @@ def classify_failure(api, provider, fail_reason):
     return NO_QUOTA_PREFIX + why if why else fail_reason
 
 
-def _declared_ceiling(config):
+def _declared_ceiling(config, speak=False):
+    """The ceilings the person declared, as a text. `speak` writes the budget in the person's language (the notice to the person);
+    the Captain reads it in English, like the rest of its line."""
     parts = []
     try:
         import team_budget  # the skills folder is on the path wherever this module is
@@ -175,10 +177,16 @@ def _declared_ceiling(config):
         budget = None
     if budget:
         when = (lambda moment: time.strftime("%Y-%m-%d %H:%M %z", time.localtime(moment)))
-        period = ("from %s to %s" % (when(budget["starts"]), when(budget["ends"])) if budget["starts"] is not None else
-                  "over %g minutes that start at the first work of a Scout, an Analista or a Scorer" % (budget["duration"] / 60))
-        parts.append("a budget of %g USD %s (pi_spend_cap pauses the team at it, at its pace over the working hours, and "
-                     "at the end of the period)" % (budget["usd"], period))
+        if speak:
+            i18n = shared_i18n()
+            parts.append(i18n.tf("quota_mode.budget_dates", "%g" % budget["usd"], when(budget["starts"]), when(budget["ends"]))
+                         if budget["starts"] is not None else
+                         i18n.tf("quota_mode.budget_duration", "%g" % budget["usd"], "%g" % (budget["duration"] / 60)))
+        else:
+            period = ("from %s to %s" % (when(budget["starts"]), when(budget["ends"])) if budget["starts"] is not None else
+                      "over %g minutes that start at the first work of a Scout, an Analista or a Scorer" % (budget["duration"] / 60))
+            parts.append("a budget of %g USD %s (pi_spend_cap pauses the team at it, at its pace over the working hours, and "
+                         "at the end of the period)" % (budget["usd"], period))
     cap = config.get("no_quota_cap") if isinstance(config, dict) else None
     if not isinstance(cap, dict):
         return "; ".join(parts)
@@ -242,9 +250,14 @@ def declare(api, run, notify_user=None):
     reason = str(run.fail_reason)[len(NO_QUOTA_PREFIX):]
     state = run.state
     try:
-        ceiling = _declared_ceiling(api._read_config_json())
+        config = api._read_config_json()
+        ceiling = _declared_ceiling(config)
     except Exception:  # noqa: BLE001
-        ceiling = ""
+        config, ceiling = None, ""
+    try:
+        spoken = _declared_ceiling(config, speak=True) if config is not None else ""
+    except Exception:  # noqa: BLE001 - the notice goes with the English text rather than not at all
+        spoken = ceiling
     done = state.setdefault("no_quota_declared", {})
     if reason != done.get("reason"):
         done.clear()
@@ -255,7 +268,7 @@ def declare(api, run, notify_user=None):
                                       captain_text(reason, ceiling)))
     if not done.get("user"):
         try:
-            notify_user(user_text(ceiling), reason)
+            notify_user(user_text(spoken), reason)
             done["user"] = True
         except Exception as error:  # noqa: BLE001 - not a reason to stop the tick
             print("[bridge V6] WARN no-quota user notice: %s" % error)
