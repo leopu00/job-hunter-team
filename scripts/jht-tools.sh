@@ -305,7 +305,7 @@ tools_wait_quiet() {
 # core one and the wrapper already expects the full one (the commands of the person in that window refused it as not ours).
 # Refused still: the marker says so, and `jht up` / `jht status` tell the person to run `jht down` and `jht up`.
 tools_switch_auto() {
-  local stopped=0
+  local stopped=0 up=0
   tools_wait_quiet
   [ -f "$RUNTIME_TIER_FILE" ] || return 0
   if declare -F team_stopped_by_person >/dev/null 2>&1 && team_stopped_by_person; then stopped=1; fi
@@ -320,12 +320,14 @@ tools_switch_auto() {
     tools_notice ready full "" "$(tools_now)"
   elif "$WRAPPER_PATH" up </dev/null >/dev/null 2>&1; then
     tools_notice ready full "" "$(tools_now)"
-    tools_clean_old_images
+    up=1
   else
     printf 'switch_failed\n' > "$TOOLS_SWITCH_FAILED_FILE"
     tools_notice failed full switch_failed "$(tools_now)"
   fi
   rm -f "$TOOLS_SWITCHING_FILE"
+  # the switch is over (a chat that ended reads it from .tools-switching): then the old images go
+  [ "$up" -eq 0 ] || tools_clean_old_images
 }
 
 # What the wrapper tells the person, one word: arriving (pulling or waiting), failed (the pull), disk_low (no room for the pull),

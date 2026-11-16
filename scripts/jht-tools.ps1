@@ -440,6 +440,7 @@ function Invoke-ToolsSwitchAuto {
   if (Get-Command Test-JhtTeamStoppedByPerson -ErrorAction SilentlyContinue) { $stopped = [bool](Test-JhtTeamStoppedByPerson) }
   Remove-Item -LiteralPath $ToolsSwitchFailedFile -Force -ErrorAction SilentlyContinue
   Remove-Item Env:\JHT_IMAGE -ErrorAction SilentlyContinue
+  $up = $false
   if (-not $stopped) {
     [IO.File]::WriteAllText($ToolsSwitchingFile, "$PID`n", [Text.UTF8Encoding]::new($false))
     $null = Invoke-ToolsWrapperStep 'down'
@@ -450,7 +451,7 @@ function Invoke-ToolsSwitchAuto {
       Remove-Item -LiteralPath $RuntimeTierIntegrity -Force -ErrorAction SilentlyContinue
     } catch { return }
     if ($stopped) { Write-ToolsNotice 'ready' 'full' '' (Get-ToolsNow) }
-    elseif ((Invoke-ToolsWrapperStep 'up') -eq 0) { Write-ToolsNotice 'ready' 'full' '' (Get-ToolsNow); $null = Remove-ToolsOldImages }
+    elseif ((Invoke-ToolsWrapperStep 'up') -eq 0) { Write-ToolsNotice 'ready' 'full' '' (Get-ToolsNow); $up = $true }
     else {
       [IO.File]::WriteAllText($ToolsSwitchFailedFile, "switch_failed`n", [Text.UTF8Encoding]::new($false))
       Write-ToolsNotice 'failed' 'full' 'switch_failed' (Get-ToolsNow)
@@ -458,6 +459,8 @@ function Invoke-ToolsSwitchAuto {
   } finally {
     Remove-Item -LiteralPath $ToolsSwitchingFile -Force -ErrorAction SilentlyContinue
   }
+  # the switch is over (a chat that ended reads it from .tools-switching): then the old images go
+  if ($up) { $null = Remove-ToolsOldImages }
 }
 
 # What the wrapper tells the person, one word: arriving (pulling or waiting), failed (the pull), disk_low (no room for the pull),
