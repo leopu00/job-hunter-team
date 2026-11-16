@@ -3,7 +3,7 @@
 // Synthetic homes and sessions only: no provider is called.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -52,6 +52,9 @@ test('jht doctor says the credit is gone, with the provider and the top-up, wher
   writeFileSync(keyFile, `${KEY}\n`, { mode: 0o600 });
   writeFileSync(join(root, 'jht.config.json'), JSON.stringify({ version: 4, active_provider: 'glm', harness: 'pi',
     providers: { glm: { auth_method: 'api_key', model: 'glm-5.3', api_key_ref: { source: 'file', path: keyFile } } } }));
+  // a refusal older than the last write of the configuration is the old service's (a setup came after it): here the setup was before it
+  const before = new Date(Date.now() - 300_000);
+  utimesSync(join(root, 'jht.config.json'), before, before);
   const doctor = () => {
     const r = spawnSync(process.execPath, [JHT, 'doctor'], { encoding: 'utf8', timeout: 60_000,
       env: { ...process.env, JHT_HOME: root, JHT_LANG: 'en', NO_COLOR: '1' } });
