@@ -119,3 +119,18 @@ def test_senza_flag_la_cintura_non_osserva_neppure_tmux(bridge, monkeypatch):
 
     monkeypatch.setattr(bridge, "_session_pane_signatures", forbidden)
     assert bridge._enforce_daily_halt() == []
+
+
+def test_quello_che_aggiunge_il_freno_della_spesa_e_gia_nel_primo_write(bridge, monkeypatch):
+    """Il gate degli agenti (spend-gate.js) legge il motivo del flag: aggiunto dopo l'ESC, fra i due write le chiamate
+    passavano (giro Windows 16/11)."""
+    writes = []
+    real = bridge._write_daily_halt_payload
+    monkeypatch.setattr(bridge, "_write_daily_halt_payload", lambda p: writes.append(dict(p)) or real(p))
+    monkeypatch.setattr(bridge, "_session_pane_signatures", lambda: {"SCOUT-1": "x"})
+    monkeypatch.setattr(bridge, "_esc_all_sessions", lambda: ["SCOUT-1"])
+    bridge._activate_daily_halt(100.0, 100.0, 100.0, extra={"reason": "pi_spend_cap", "pi_spend_cap": {"why": "pace"}})
+    assert writes[0]["reason"] == "pi_spend_cap" and writes[0]["pi_spend_cap"] == {"why": "pace"}
+    assert "pane_signatures" not in writes[0], "the gate goes first, before the panes are read"
+    payload = json.loads(bridge._path("DAILY_HALT_FLAG").read_text(encoding="utf-8"))
+    assert payload["reason"] == "pi_spend_cap" and payload["sessions"] == ["SCOUT-1"]
