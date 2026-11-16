@@ -8131,7 +8131,7 @@ switch ($Sub) {
   }
 
   # Commands that only read the team (agents, stats, health, team list, team status): with the container running they are the CLI's
-  # in the container; with it off they say so and start nothing, as jht status does. Never Ensure-Up: a sampler or a person looking
+  # in the container; with it off they say so and start nothing, as jht status does (it is never started from here): a sampler or a person looking
   # at the team must not undo their own jht down.
   { $_ -cin @('agents', 'stats', 'health') -or ($_ -ceq 'team' -and $Rest.Count -gt 0 -and @('list', 'status') -ccontains [string]$Rest[0]) } {
     Require-ComposeFile
