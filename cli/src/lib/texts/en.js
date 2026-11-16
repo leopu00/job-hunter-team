@@ -75,6 +75,9 @@ export default {
   // agents
   'agents.title': 'Agents',
   'agents.running_of': '{running} of {total} running',
+  'agents.cannot_start': '{name} cannot start (last try {at}, tried again every 5 minutes): {why}',
+  'agents.cannot_start_no_reason': '{name} cannot start (last try {at}, tried again every 5 minutes): see logs/doctor-watchdog-loop.log',
+  'agents.cannot_start_fix': 'jht doctor; the details in logs/doctor-watchdog-loop.log',
   'agents.col_agent': 'Agent',
   'agents.col_session': 'Session',
   'agents.col_state': 'State',

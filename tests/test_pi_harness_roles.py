@@ -404,3 +404,80 @@ def test_the_gate_path_is_not_taken_from_the_environment(tmp_path: Path) -> None
         capture_output=True, text=True, check=True, env=_clean_env(JHT_PI_SPEND_GATE_EXT=str(evil)),
     )
     assert result.stdout == "/app/shared/runtime/pi-harness/spend-gate.js"
+
+
+# ── Dottore and Mantenitore on pi get the skills pi reads (giro Windows build6: they never started) ──────────
+
+
+@pytest.mark.parametrize("role", ["dottore", "mantenitore"])
+def test_the_service_agents_on_pi_get_their_skills_where_pi_reads_them(tmp_path: Path, role: str) -> None:
+    """Claude with the pi harness: the spawners gave the copy the PROVIDER (claude, .claude/skills only), pi wants
+    .agents/skills, and every start stopped on «pi needs … .agents/skills». They give it the CLI now, as start-agent.sh."""
+    for cli, present, absent in (("pi", ".agents/skills", ".claude/skills"), ("claude", ".claude/skills", ".agents/skills")):
+        workdir = tmp_path / cli / role
+        workdir.mkdir(parents=True)
+        result = subprocess.run(
+            [_bash(), "-c", f'source "{SPAWN_LIB}"; JHT_APP_ROOT="{ROOT}" jht_spawn_copy_skills {role} "{workdir}" test {cli}'],
+            capture_output=True, text=True, check=False, env=_clean_env(JHT_HOME=str(tmp_path / "home")),
+        )
+        assert result.returncode == 0, result.stderr
+        assert (workdir / present).is_dir() and any((workdir / present).iterdir()), (cli, present)
+        assert not (workdir / absent).exists(), (cli, absent)
+
+
+@pytest.mark.parametrize("script", ["spawn-doctor.sh", "spawn-maintainer.sh"])
+def test_the_service_spawners_copy_the_skills_for_the_cli_and_check_before_the_session(script: str) -> None:
+    text = (ROOT / ".launcher" / script).read_text(encoding="utf-8")
+    copy = text[text.index("jht_spawn_copy_skills "):]
+    copy = copy[:copy.index("\n\n")]
+    assert copy.rstrip().endswith('"$ACTIVE_CLI"'), copy
+    workdir = "DOTTORE_DIR" if script == "spawn-doctor.sh" else "MANT_DIR"
+    check = f'jht_spawn_repl_cmd "$ACTIVE_CLI" "${workdir}" >/dev/null || exit 1'
+    # a check that fails leaves no empty session that `jht team status` counts as running
+    assert text.index(check) < text.index('jht_spawn_new_session "$SESSION"')
+    # a REPL that does not come up after the session was made takes its session away too
+    wait = text[text.index('jht_spawn_wait_repl "$SESSION"'):]
+    assert 'tmux kill-session -t "=$SESSION"' in wait[:wait.index("\n\n")]
+
+
+SPAWN_FAILED = ROOT / "shared" / "skills" / "spawn_failed.py"
+
+
+def _spawn_failed(tmp_path: Path, *calls: tuple[str, ...]) -> dict:
+    target = tmp_path / "logs" / "spawn-failed.json"
+    for args in calls:
+        done = subprocess.run(["python3", "-I", str(SPAWN_FAILED), str(target), *args], capture_output=True, text=True,
+                              check=False, env=_clean_env())
+        assert done.returncode == 0, done.stderr
+    return json.loads(target.read_text(encoding="utf-8")) if target.exists() else {}
+
+
+def test_the_watchdog_writes_a_role_that_cannot_start_and_takes_it_out_when_it_starts(tmp_path: Path) -> None:
+    error = ("[spawn-doctor] killing\n[spawn-lib] ERROR: pi needs /jht_home/agents/dottore/AGENTS.md and "
+             "/jht_home/agents/dottore/.agents/skills before it starts; one is missing.\n\x1b[31mtail")
+    data = _spawn_failed(tmp_path, ("dottore", "1", error), ("mantenitore", "1", "Error: x"))
+    assert set(data) == {"dottore", "mantenitore"}
+    assert data["dottore"]["rc"] == 1 and data["dottore"]["why"].startswith("[spawn-lib] ERROR: pi needs")
+    assert "\x1b" not in json.dumps(data) and data["dottore"]["at"]
+    data = _spawn_failed(tmp_path, ("dottore", "ok"))
+    assert set(data) == {"mantenitore"}
+
+
+@pytest.mark.parametrize("args", [(), ("capitano", "1", "x"), ("dottore", "maybe")])
+def test_the_writer_refuses_what_it_does_not_know(tmp_path: Path, args: tuple[str, ...]) -> None:
+    done = subprocess.run(["python3", "-I", str(SPAWN_FAILED), str(tmp_path / "f.json"), *args], capture_output=True,
+                          text=True, check=False, env=_clean_env())
+    assert done.returncode == 2 and not (tmp_path / "f.json").exists()
+
+
+def test_the_watchdog_writes_through_its_bounded_helper() -> None:
+    text = (ROOT / ".launcher" / "doctor-watchdog.sh").read_text(encoding="utf-8")
+    body = text[text.index("spawn_failed() {"):]
+    body = body[:body.index("\n}\n")]
+    assert 'jht_doctor_bounded "$HELPER_TIMEOUT_SEC"' in body and 'python3 "$SPAWN_FAILED_PY"' in body
+
+
+@pytest.mark.parametrize("branch", ['spawn_failed mantenitore "$mrc" "$mout"', "spawn_failed mantenitore ok",
+                                    'spawn_failed dottore "$rc" "$out"', "spawn_failed dottore ok"])
+def test_the_watchdog_says_every_failed_and_every_good_start(branch: str) -> None:
+    assert branch in (ROOT / ".launcher" / "doctor-watchdog.sh").read_text(encoding="utf-8")
