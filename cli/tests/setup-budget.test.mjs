@@ -107,3 +107,20 @@ test('the same duration budget saved again keeps its period (jht setup --reset m
   const night = { usd: 5, starts_at: '2026-11-15T21:30:00.000Z', ends_at: '2026-11-16T07:00:00.000Z', timezone: 'Europe/Rome', set_by: 'setup' };
   assert.equal(keepSamePeriod(night, night), night, 'fixed hours are left as they are');
 });
+
+test('below the least that lets a team work on the service the setup asks an explicit yes; a no asks the amount again', async () => {
+  const { minimumFor } = await import('../wizard/setup-budget.js');
+  assert.deepEqual(['glm', 'kimi', 'openai', 'claude', 'anthropic', 'moonshot', 'other'].map(minimumFor), [2, 2, 5, 5, 5, 2, 0]);
+  const p = prompter({ 'How much should the team work?': 'days', 'How many dollars in total?': ['2', '6'], confirm: false });
+  const r = await promptBudget(p, { t, tf, now: NOW, timeZone: 'Europe/Rome', provider: 'claude' });
+  assert.equal(r.budget.usd, 6, 'the $2 was not kept on Claude: the amount was asked again');
+  assert.equal(p.asked.filter((a) => a[0] === 'confirm').length, 1);
+  assert.match(p.asked.find((a) => a[0] === 'confirm')[1], /^\$2 is below the least that lets a team do some work on this service \(\$5\)/);
+  // the same $2 on GLM is enough: no question
+  const glm = prompter({ 'How much should the team work?': 'days', 'How many dollars in total?': ['2'] });
+  assert.equal((await promptBudget(glm, { t, tf, now: NOW, timeZone: 'Europe/Rome', provider: 'glm' })).budget.usd, 2);
+  assert.equal(glm.asked.filter((a) => a[0] === 'confirm').length, 0);
+  // the trial of $5 and an answer of «yes» are never stopped
+  const yes = prompter({ 'How much should the team work?': 'days', 'How many dollars in total?': ['3'], confirm: true });
+  assert.equal((await promptBudget(yes, { t, tf, now: NOW, timeZone: 'Europe/Rome', provider: 'openai' })).budget.usd, 3);
+});

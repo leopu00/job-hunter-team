@@ -70,10 +70,17 @@ def test_the_class_of_each_role_is_the_one_written_down_here():
     assert rows == CLASS_OF, "a role changed class: say so in this table, with the reason"
 
 
-def test_the_rows_for_a_role_are_the_three_light_roles_of_the_same_providers():
+# Claude on pi: the Capitano (the voice that runs all the time, the biggest cost) is on Sonnet, not on the class «sol» (Opus);
+# Opus stays for the writing roles. The only row that is not a light role.
+CLAUDE_CAPITANO_ROW = ("claude", "capitano", "terra")
+
+
+def test_the_rows_for_a_role_are_the_three_light_roles_of_the_same_providers_and_the_capitano_of_claude():
     rows = [line.split("|") for line in PROVIDER_LIST.read_text(encoding="utf-8").splitlines() if line.startswith("rolemodel|")]
-    assert {(row[1], row[2]) for row in rows} == {(p, role) for p in LIGHT_ROLE_PROVIDERS for role in LIGHT_ROLES_OF_GLM}, rows
-    assert all(row[3] == "luna" for row in rows), "the light class"
+    light = [row for row in rows if tuple(row[1:4]) != CLAUDE_CAPITANO_ROW]
+    assert {(row[1], row[2]) for row in light} == {(p, role) for p in LIGHT_ROLE_PROVIDERS for role in LIGHT_ROLES_OF_GLM}, rows
+    assert all(row[3] == "luna" for row in light), "the light class"
+    assert [tuple(row[1:4]) for row in rows if tuple(row[1:4]) == CLAUDE_CAPITANO_ROW] == [CLAUDE_CAPITANO_ROW]
 
 
 # ── GLM ──────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -161,7 +168,7 @@ def test_the_light_class_of_a_role_on_openai_is_its_row_and_codex_is_openai():
             assert bash_value(f'jht_provider_role_class "{provider}" "{role}"') == expected, (provider, role)
 
 
-# ── Claude (Anthropic) on pi with a key: Opus, Sonnet, Haiku by class, the three light roles on luna ─────────────
+# ── Claude (Anthropic) on pi with a key: Opus, Sonnet, Haiku by class, the three light roles on luna, the Capitano on Sonnet ─────────────
 
 CLAUDE_MODEL = {"sol": "claude-opus-5-5", "terra": "claude-sonnet-5-5", "luna": "claude-haiku-5-5"}
 
@@ -169,7 +176,7 @@ CLAUDE_MODEL = {"sol": "claude-opus-5-5", "terra": "claude-sonnet-5-5", "luna": 
 @pytest.mark.parametrize("provider", ["claude", "anthropic"])
 @pytest.mark.parametrize("role", ROLES)
 def test_claude_on_pi_gives_each_role_its_class_and_the_light_roles_haiku(tmp_path, provider, role):
-    expected = "luna" if role in LIGHT_ROLES_OF_GLM else CLASS_OF[role]
+    expected = "luna" if role in LIGHT_ROLES_OF_GLM else "terra" if role == "capitano" else CLASS_OF[role]
     assert pi_model(tmp_path, provider, role) == CLAUDE_MODEL[expected]
 
 

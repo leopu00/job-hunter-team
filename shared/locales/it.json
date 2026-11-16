@@ -671,6 +671,8 @@
   "wizard.budget.summary_days": "La squadra può spendere %s in tutto, per %s da quando comincia a lavorare, %s (%s %s), poi si ferma da sola.",
   "wizard.budget.summary_days_always": "La squadra può spendere %s in tutto, per %s da quando comincia a lavorare, a qualunque ora, poi si ferma da sola.",
   "wizard.budget.summary_none": "Nessun limite: la squadra spende finché c'è credito sul tuo conto.",
+  "wizard.budget.below_min": "%s è sotto il minimo che permette alla squadra di lavorare un po' su questo servizio (%s): l'onboarding dell'Assistente e i primi giri del Capitano possono consumarne la maggior parte prima che gli Scout cerchino. Tenere comunque %s?",
+  "wizard.budget.below_min_note": "%s è sotto il minimo che permette alla squadra di lavorare un po' su questo servizio (%s): può spenderne la maggior parte prima della prima ricerca.",
   "wizard.team.starting": "Avvio il team (Sentinella + Bridge + Capitano)...",
   "wizard.team.start_failed": "Avvio team fallito. Vedi log sopra. Riprova: jht team start",
   "wizard.outro_done": "Tutto pronto! L’Assistente ti aspetta: rispondi alle sue domande per iniziare l’onboarding.\n  Rispondi: jht team chat assistente   (o nella chat dell’Assistente nell’app)\n  Status:  jht team status\n  Logs:    jht logs --tail 30\n  Stop:    jht team stop --all",

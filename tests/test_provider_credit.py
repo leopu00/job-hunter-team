@@ -118,3 +118,19 @@ def test_run_as_a_script_it_prints_what_it_found_with_the_name_the_person_knows(
     found = json.loads(run("--window", "86400").stdout)
     assert found["provider"] == "zai" and found["label"] == "GLM (Z.ai)" and found["agent"] == "assistente"
     assert run("--window").returncode == 2 and run("--bogus").returncode == 2
+
+
+def test_an_answer_from_before_the_setup_changed_the_service_is_no_verdict_on_the_new_one(tmp_path):
+    import os
+    # GLM refused 2 minutes ago; the person ran `jht setup` (new service, new key) one minute ago: that refusal is about the old service
+    session(tmp_path, "assistente", [error_row(stamp(-120), "zai", ZAI_1113)])
+    assert provider_credit.exhausted(tmp_path, NOW)["provider"] == "zai", "with no setup since, it is still the verdict"
+    config = tmp_path / "jht.config.json"
+    config.write_text("{}", encoding="utf-8")
+    os.utime(config, (NOW - 60, NOW - 60))
+    assert provider_credit.exhausted(tmp_path, NOW) is None
+    # the new service refuses too, after the setup: that answer is newer and counts
+    session(tmp_path, "assistente", [error_row(stamp(-120), "zai", ZAI_1113), error_row(stamp(-20), "anthropic", "402 credit balance is too low")])
+    assert provider_credit.exhausted(tmp_path, NOW) is None, "the words of Anthropic are not one of the signs: unchanged"
+    session(tmp_path, "assistente", [error_row(stamp(-120), "zai", ZAI_1113), error_row(stamp(-20), "zai", ZAI_1113)])
+    assert provider_credit.exhausted(tmp_path, NOW)["provider"] == "zai"

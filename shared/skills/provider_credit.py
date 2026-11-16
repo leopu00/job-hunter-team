@@ -45,13 +45,22 @@ def credit_gone(message: str) -> str | None:
     return None
 
 
+def _config_written(jht_home) -> float:
+    """When jht.config.json was last written, or 0: a «no credit» answer older than that came before the person changed the service
+    or the key (`jht setup`), so it is no verdict on the one the team runs on now. If the new one refuses too, its own answer is newer."""
+    try:
+        return os.stat(os.path.join(str(jht_home), "jht.config.json")).st_mtime
+    except OSError:
+        return 0.0
+
+
 def exhausted(jht_home, now_ts: float, window_s: float = WINDOW_S) -> dict | None:
     """`{provider, agent, ts}` of the newest «no credit» answer in the last `window_s` seconds that no call has passed
     since (a call that went through proves the credit is back), else None. Never raises: no reading is None."""
     try:
         import pi_sessions  # here, not at the top: agent_pi_log imports credit_gone also as shared.skills.provider_credit
 
-        since = now_ts - window_s
+        since = max(now_ts - window_s, _config_written(jht_home))
         newest = None
         for event in pi_sessions.error_events(jht_home, since):
             provider = credit_gone(event["message"])

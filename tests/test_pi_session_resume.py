@@ -111,3 +111,11 @@ def test_the_command_line_of_pi_gets_the_session_for_the_assistente_only(tmp_pat
 def test_start_agent_puts_the_session_on_the_command_line_of_pi():
     text = (ROOT / ".launcher" / "start-agent.sh").read_text(encoding="utf-8")
     assert 'CLI_ARGS="$CLI_ARGS$(jht_pi_resume_args "$ROLE" "$AGENT_DIR" "$pi_model" "$PROVIDER")"' in text
+
+
+def test_a_glm_session_ended_by_a_refusal_is_not_taken_up_after_the_switch_to_claude(tmp_path):
+    # the call that failed with 1113 is the last message of the session: GLM, no usage; the team now runs on Claude
+    failed = {"type": "message", "id": "a3", "parentId": "a2", "message": {"role": "assistant", "content": [], "provider": "zai", "model": "glm-5.3",
+                                                                      "stopReason": "error", "errorMessage": "429 insufficient balance"}}
+    _session(tmp_path, "2026-11-16T09-00-00-000Z_x.jsonl", [_talk()[1], failed])
+    assert resume.pick(tmp_path, CWD, "anthropic", "claude-sonnet-5-5") == (None, "another provider or model (zai/glm-5.3)")

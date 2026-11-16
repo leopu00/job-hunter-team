@@ -66,13 +66,26 @@ jht_role_harness() {
 # --search (JHT_CODEX_WEB_SEARCH_ROLES). Percorso fisso, non da ambiente: è codice che pi carica.
 JHT_PI_WEB_SEARCH_EXT="/app/shared/runtime/pi-harness/web-search.js"
 
+# The spending gate (shared/runtime/pi-harness/spend-gate.js): while the spending brake holds the team, no new turn and
+# no new model call start. Every role but the Assistente, which answers the person while the team waits. Fixed path, not
+# from the environment: it is code pi loads.
+JHT_PI_SPEND_GATE_EXT="/app/shared/runtime/pi-harness/spend-gate.js"
+
 # jht_pi_extension_args <ruolo>
 #   Gli argomenti di pi in più per quel ruolo: l'estensione di ricerca (-e esplicito: vale con -ne), solo per i
-#   ruoli con la ricerca web su Codex. Se il file manca lo dice e il ruolo parte senza ricerca, invece di far
-#   fallire pi all'avvio. Si accoda a jht_pi_args.
+#   ruoli con la ricerca web su Codex, e il cancello della spesa per ogni ruolo tranne l'Assistente. Se un file
+#   manca lo dice e il ruolo parte senza, invece di far fallire pi all'avvio. Si accoda a jht_pi_args.
 jht_pi_extension_args() {
   local role="${1:-}"
-  [ -n "$role" ] && jht_codex_web_search_role "$role" || return 0
+  [ -n "$role" ] || return 0
+  if [ "$role" != assistente ]; then
+    if [ -f "$JHT_PI_SPEND_GATE_EXT" ]; then
+      printf '%s' " -e '$JHT_PI_SPEND_GATE_EXT'"
+    else
+      echo "Warning: $JHT_PI_SPEND_GATE_EXT is missing: the $role starts on pi without the spending gate." >&2
+    fi
+  fi
+  jht_codex_web_search_role "$role" || return 0
   if [ -f "$JHT_PI_WEB_SEARCH_EXT" ]; then
     printf '%s' " -e '$JHT_PI_WEB_SEARCH_EXT'"
   else
