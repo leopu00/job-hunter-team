@@ -852,7 +852,7 @@ try {
     }
     $applied = $false
     if ($mayStop) {
-      Write-Host '  Applying the memory limit to WSL: the machine waits for WSL to restart (about a minute).' -ForegroundColor Cyan
+      Write-Host ('  ' + (Get-BridgeText 'podman_machine.wsl_applying' 'Applying the memory limit to WSL: the machine waits for WSL to restart (about a minute).')) -ForegroundColor Cyan
       if ($machine -and [bool]$machine.Running) {
         Invoke-Checked $Podman 'machine' 'stop' $MachineName
         $restartForLimit = $true

@@ -30,13 +30,14 @@ def test_the_block_is_the_catalogs_and_the_scripts_are_ascii_outside_comments():
 @pytest.mark.parametrize("lang", LANGUAGES)
 def test_every_catalog_has_every_sentence(lang):
     assert TEXTS.problems(lang) == []
-    assert len(TEXTS.calls()) == 11
+    assert len(TEXTS.calls()) == 15
 
 
 def test_no_sentence_of_the_machine_is_left_written_by_hand():
     for source in (TEXTS._without_block(TEXTS.source()), ENABLER.read_text(encoding="utf-8")):
         body = "\n".join(line for line in source.split("\n") if not line.lstrip().startswith("#"))
-        for left in ("Write-Host '  > Downloading", "Said = 'Creating", "Said = 'Starting", 'Write-Host "  WSL settings', "Write-Host '  To undo"):
+        for left in ("Write-Host '  > Downloading", "Said = 'Creating", "Said = 'Starting", 'Write-Host "  WSL settings added', "Write-Host '  To undo",
+                     "Write-Host '  WSL memory", 'Write-Host "  To set one', "Write-Host '  Applying the memory", "= '  WSL is already"):
             assert left not in body, left
 
 

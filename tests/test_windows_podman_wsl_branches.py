@@ -638,6 +638,25 @@ def test_setup_forwards_the_subcommand_and_arguments_to_the_container(tmp_path):
     assert calls == ["guard-compose", "guard-docker", "guard-up", " ".join(expected)]
 
 
+
+def test_setup_gives_the_container_the_language_and_the_timezone_of_host_env(tmp_path):
+    # giro Windows 16/11: the container made before host.env kept JHT_LANG=en and JHT_USER_TZ=UTC; the setup reads the wrapper's
+    # (host.env's) instead. A value the host.env check refuses never reaches the command line.
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    argv_file = tmp_path / "docker-argv"
+    _fake(bin_dir, "docker", r'''  "exec "*) printf '%s\0' "$@" > "$FAKE_ARGV" ;;''')
+    for tz, sent in (("Europe/Berlin", True), ("Europe/Berlin; rm -rf /", False)):
+        result, _ = _run(tmp_path, WRAPPER, ["Convert-SetupKeyFileArgs", "Test-HostEnvValue"], SETUP_BODY,
+                         {"FAKE_ARGV": str(argv_file), "JHT_HOST_TYPE": "windows", "JHT_LANG": "it", "JHT_USER_TZ": tz})
+        assert result.returncode == 0, result.stdout + result.stderr
+        argv = [arg.decode("utf-8") for arg in argv_file.read_bytes().split(b"\0")[:-1]]
+        head = ["exec", "-i", "-e", "JHT_HOST_TYPE=windows", "-e", "JHT_LANG=it"]
+        assert argv[: len(head)] == head, argv
+        assert ("-e" in argv and "JHT_USER_TZ=Europe/Berlin" in argv) is sent, argv
+        assert not any(arg.startswith("JHT_USER_TZ=Europe/Berlin;") for arg in argv), argv
+        assert argv[-5:] == ["node", "/app/cli/bin/jht.js", "setup", "--x", "value with spaces"], argv
+
 UNINSTALL_BODY = r"""
 function Get-JhtScopedStartupTaskName { return 'Job Hunter Team - Start runtime [S-1-5-21-1111-2222-3333-1001]' }
 function Get-ScheduledTask { param($TaskName, $ErrorAction) return $null }

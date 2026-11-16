@@ -424,6 +424,10 @@ function Get-BridgeTextTable {
     'en:podman_machine.stop' { return 'Stopping the Linux machine.' }
     'en:podman_machine.stop_wait' { return 'still stopping the Linux machine' }
     'en:podman_machine.wsl_added' { return 'WSL settings added to %s:' }
+    'en:podman_machine.wsl_applying' { return 'Applying the memory limit to WSL: the machine waits for WSL to restart (about a minute).' }
+    'en:podman_machine.wsl_limit_waits' { return 'WSL is already running: the memory limit applies from the next restart of Windows, or of WSL (wsl --shutdown stops all your WSL distributions, so it is not done for you).' }
+    'en:podman_machine.wsl_no_limit' { return 'WSL memory: no limit was set, because other WSL distributions are registered and a limit would apply to them too.' }
+    'en:podman_machine.wsl_set_yourself' { return 'To set one yourself: in %s, under [wsl2], add memory=%s (it applies after the next restart of Windows or of WSL).' }
     'en:podman_machine.wsl_undo' { return 'To undo it: jht uninstall takes these lines out, or delete them by hand (each has a comment line above it).' }
     'it:podman_machine.init' { return 'Creo la macchina Linux per Podman: scarica la sua immagine di sistema (alcune centinaia di MB) e la prepara. Ci vuole qualche minuto.' }
     'it:podman_machine.init_wait' { return 'sto ancora creando la macchina Linux' }
@@ -435,6 +439,10 @@ function Get-BridgeTextTable {
     'it:podman_machine.stop' { return 'Fermo la macchina Linux.' }
     'it:podman_machine.stop_wait' { return 'sto ancora fermando la macchina Linux' }
     'it:podman_machine.wsl_added' { return 'Impostazioni di WSL aggiunte a %s:' }
+    'it:podman_machine.wsl_applying' { return 'Applico il limite di memoria a WSL: la macchina aspetta che WSL si riavvii (circa un minuto).' }
+    'it:podman_machine.wsl_limit_waits' { return ('WSL ' + [char]0x00E8 + ' gi' + [char]0x00E0 + ' acceso: il limite di memoria vale dal prossimo riavvio di Windows o di WSL (wsl --shutdown ferma tutte le tue distribuzioni WSL, per questo non lo faccio io).') }
+    'it:podman_machine.wsl_no_limit' { return ('Memoria di WSL: nessun limite impostato, perch' + [char]0x00E9 + ' ci sono altre distribuzioni WSL registrate e il limite varrebbe anche per loro.') }
+    'it:podman_machine.wsl_set_yourself' { return 'Per impostarlo tu: in %s, sotto [wsl2], aggiungi memory=%s (vale dal prossimo riavvio di Windows o di WSL).' }
     'it:podman_machine.wsl_undo' { return 'Per toglierle: jht uninstall toglie queste righe, oppure cancellale a mano (ognuna ha sopra una riga di commento).' }
     'hu:podman_machine.init' { return ('L' + [char]0x00E9 + 'trehozom a Podman Linux-g' + [char]0x00E9 + 'p' + [char]0x00E9 + 't: let' + [char]0x00F6 + 'lti a rendszerk' + [char]0x00E9 + 'p' + [char]0x00E9 + 't (n' + [char]0x00E9 + 'h' + [char]0x00E1 + 'ny sz' + [char]0x00E1 + 'z MB) ' + [char]0x00E9 + 's be' + [char]0x00E1 + 'll' + [char]0x00ED + 'tja. Ez n' + [char]0x00E9 + 'h' + [char]0x00E1 + 'ny percig tart.') }
     'hu:podman_machine.init_wait' { return ('m' + [char]0x00E9 + 'g tart a Linux-g' + [char]0x00E9 + 'p l' + [char]0x00E9 + 'trehoz' + [char]0x00E1 + 'sa') }
@@ -446,6 +454,10 @@ function Get-BridgeTextTable {
     'hu:podman_machine.stop' { return ('Le' + [char]0x00E1 + 'll' + [char]0x00ED + 'tom a Linux-g' + [char]0x00E9 + 'pet.') }
     'hu:podman_machine.stop_wait' { return ('m' + [char]0x00E9 + 'g tart a Linux-g' + [char]0x00E9 + 'p le' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 'sa') }
     'hu:podman_machine.wsl_added' { return ('WSL-be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 'sok hozz' + [char]0x00E1 + 'adva: %s:') }
+    'hu:podman_machine.wsl_applying' { return ('Alkalmazom a mem' + [char]0x00F3 + 'riakorl' + [char]0x00E1 + 'tot a WSL-re: a g' + [char]0x00E9 + 'p megv' + [char]0x00E1 + 'rja a WSL ' + [char]0x00FA + 'jraindul' + [char]0x00E1 + 's' + [char]0x00E1 + 't (kb. egy perc).') }
+    'hu:podman_machine.wsl_limit_waits' { return ('A WSL m' + [char]0x00E1 + 'r fut: a mem' + [char]0x00F3 + 'riakorl' + [char]0x00E1 + 't a Windows vagy a WSL k' + [char]0x00F6 + 'vetkez' + [char]0x0151 + ' ' + [char]0x00FA + 'jraind' + [char]0x00ED + 't' + [char]0x00E1 + 's' + [char]0x00E1 + 't' + [char]0x00F3 + 'l ' + [char]0x00E9 + 'rv' + [char]0x00E9 + 'nyes (a wsl --shutdown minden WSL-disztrib' + [char]0x00FA + 'ci' + [char]0x00F3 + 'dat le' + [char]0x00E1 + 'll' + [char]0x00ED + 'tja, ez' + [char]0x00E9 + 'rt nem teszem meg helyetted).') }
+    'hu:podman_machine.wsl_no_limit' { return ('WSL-mem' + [char]0x00F3 + 'ria: nincs korl' + [char]0x00E1 + 't be' + [char]0x00E1 + 'll' + [char]0x00ED + 'tva, mert m' + [char]0x00E1 + 's WSL-disztrib' + [char]0x00FA + 'ci' + [char]0x00F3 + 'k is regisztr' + [char]0x00E1 + 'lva vannak, ' + [char]0x00E9 + 's a korl' + [char]0x00E1 + 't r' + [char]0x00E1 + 'juk is vonatkozna.') }
+    'hu:podman_machine.wsl_set_yourself' { return ('Ha magad ' + [char]0x00E1 + 'll' + [char]0x00ED + 'tan' + [char]0x00E1 + 'd be: a %s f' + [char]0x00E1 + 'jlban, a [wsl2] alatt add hozz' + [char]0x00E1 + ': memory=%s (a Windows vagy a WSL k' + [char]0x00F6 + 'vetkez' + [char]0x0151 + ' ' + [char]0x00FA + 'jraind' + [char]0x00ED + 't' + [char]0x00E1 + 'sa ut' + [char]0x00E1 + 'n ' + [char]0x00E9 + 'rv' + [char]0x00E9 + 'nyes).') }
     'hu:podman_machine.wsl_undo' { return ('Visszavon' + [char]0x00E1 + 's: a jht uninstall kiveszi ezeket a sorokat, vagy t' + [char]0x00F6 + 'r' + [char]0x00F6 + 'ld ' + [char]0x0151 + 'ket k' + [char]0x00E9 + 'zzel (mindegyik f' + [char]0x00F6 + 'l' + [char]0x00F6 + 'tt van egy megjegyz' + [char]0x00E9 + 'ssor).') }
     'es:podman_machine.init' { return ('Creo la m' + [char]0x00E1 + 'quina Linux de Podman: descarga su imagen del sistema (unos cientos de MB) y la prepara. Tarda unos minutos.') }
     'es:podman_machine.init_wait' { return ('sigo creando la m' + [char]0x00E1 + 'quina Linux') }
@@ -457,6 +469,10 @@ function Get-BridgeTextTable {
     'es:podman_machine.stop' { return ('Detengo la m' + [char]0x00E1 + 'quina Linux.') }
     'es:podman_machine.stop_wait' { return ('sigo deteniendo la m' + [char]0x00E1 + 'quina Linux') }
     'es:podman_machine.wsl_added' { return ('Ajustes de WSL a' + [char]0x00F1 + 'adidos a %s:') }
+    'es:podman_machine.wsl_applying' { return ('Aplico el l' + [char]0x00ED + 'mite de memoria a WSL: la m' + [char]0x00E1 + 'quina espera a que WSL se reinicie (alrededor de un minuto).') }
+    'es:podman_machine.wsl_limit_waits' { return ('WSL ya est' + [char]0x00E1 + ' en marcha: el l' + [char]0x00ED + 'mite de memoria se aplica desde el pr' + [char]0x00F3 + 'ximo reinicio de Windows o de WSL (wsl --shutdown detiene todas tus distribuciones de WSL, por eso no lo hago yo).') }
+    'es:podman_machine.wsl_no_limit' { return ('Memoria de WSL: no se ha puesto ning' + [char]0x00FA + 'n l' + [char]0x00ED + 'mite, porque hay otras distribuciones de WSL registradas y el l' + [char]0x00ED + 'mite tambi' + [char]0x00E9 + 'n se aplicar' + [char]0x00ED + 'a a ellas.') }
+    'es:podman_machine.wsl_set_yourself' { return ('Para ponerlo t' + [char]0x00FA + ': en %s, bajo [wsl2], a' + [char]0x00F1 + 'ade memory=%s (se aplica tras el pr' + [char]0x00F3 + 'ximo reinicio de Windows o de WSL).') }
     'es:podman_machine.wsl_undo' { return ('Para deshacerlo: jht uninstall quita estas l' + [char]0x00ED + 'neas, o b' + [char]0x00F3 + 'rralas a mano (cada una tiene encima una l' + [char]0x00ED + 'nea de comentario).') }
     'de:podman_machine.init' { return ('Ich erstelle die Linux-Maschine f' + [char]0x00FC + 'r Podman: Sie l' + [char]0x00E4 + 'dt ihr Systemabbild herunter (einige hundert MB) und richtet es ein. Das dauert einige Minuten.') }
     'de:podman_machine.init_wait' { return 'erstelle noch die Linux-Maschine' }
@@ -468,6 +484,10 @@ function Get-BridgeTextTable {
     'de:podman_machine.stop' { return 'Ich halte die Linux-Maschine an.' }
     'de:podman_machine.stop_wait' { return 'halte noch die Linux-Maschine an' }
     'de:podman_machine.wsl_added' { return ('WSL-Einstellungen hinzugef' + [char]0x00FC + 'gt zu %s:') }
+    'de:podman_machine.wsl_applying' { return 'Ich wende das Speicherlimit auf WSL an: Die Maschine wartet, bis WSL neu startet (etwa eine Minute).' }
+    'de:podman_machine.wsl_limit_waits' { return ('WSL l' + [char]0x00E4 + 'uft bereits: Das Speicherlimit gilt ab dem n' + [char]0x00E4 + 'chsten Neustart von Windows oder WSL (wsl --shutdown h' + [char]0x00E4 + 'lt alle deine WSL-Distributionen an, deshalb mache ich das nicht f' + [char]0x00FC + 'r dich).') }
+    'de:podman_machine.wsl_no_limit' { return ('WSL-Speicher: Es wurde kein Limit gesetzt, weil andere WSL-Distributionen registriert sind und ein Limit auch f' + [char]0x00FC + 'r sie gelten w' + [char]0x00FC + 'rde.') }
+    'de:podman_machine.wsl_set_yourself' { return ('Um selbst eines zu setzen: in %s unter [wsl2] memory=%s hinzuf' + [char]0x00FC + 'gen (gilt nach dem n' + [char]0x00E4 + 'chsten Neustart von Windows oder WSL).') }
     'de:podman_machine.wsl_undo' { return ('R' + [char]0x00FC + 'ckg' + [char]0x00E4 + 'ngig machen: jht uninstall entfernt diese Zeilen, oder l' + [char]0x00F6 + 'sche sie von Hand (' + [char]0x00FC + 'ber jeder steht eine Kommentarzeile).') }
     'fr:podman_machine.init' { return ('Je cr' + [char]0x00E9 + 'e la machine Linux de Podman : elle t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charge son image syst' + [char]0x00E8 + 'me (quelques centaines de Mo) et la pr' + [char]0x00E9 + 'pare. Cela prend quelques minutes.') }
     'fr:podman_machine.init_wait' { return ('je cr' + [char]0x00E9 + 'e encore la machine Linux') }
@@ -479,6 +499,10 @@ function Get-BridgeTextTable {
     'fr:podman_machine.stop' { return ('J''arr' + [char]0x00EA + 'te la machine Linux.') }
     'fr:podman_machine.stop_wait' { return ('j''arr' + [char]0x00EA + 'te encore la machine Linux') }
     'fr:podman_machine.wsl_added' { return ('R' + [char]0x00E9 + 'glages WSL ajout' + [char]0x00E9 + 's ' + [char]0x00E0 + ' %s :') }
+    'fr:podman_machine.wsl_applying' { return ('J''applique la limite de m' + [char]0x00E9 + 'moire ' + [char]0x00E0 + ' WSL : la machine attend que WSL red' + [char]0x00E9 + 'marre (environ une minute).') }
+    'fr:podman_machine.wsl_limit_waits' { return ('WSL tourne d' + [char]0x00E9 + 'j' + [char]0x00E0 + ' : la limite de m' + [char]0x00E9 + 'moire s''applique au prochain red' + [char]0x00E9 + 'marrage de Windows ou de WSL (wsl --shutdown arr' + [char]0x00EA + 'te toutes tes distributions WSL, c''est pourquoi je ne le fais pas ' + [char]0x00E0 + ' ta place).') }
+    'fr:podman_machine.wsl_no_limit' { return ('M' + [char]0x00E9 + 'moire de WSL : aucune limite n''a ' + [char]0x00E9 + 't' + [char]0x00E9 + ' fix' + [char]0x00E9 + 'e, car d''autres distributions WSL sont enregistr' + [char]0x00E9 + 'es et une limite s''appliquerait aussi ' + [char]0x00E0 + ' elles.') }
+    'fr:podman_machine.wsl_set_yourself' { return ('Pour en fixer une toi-m' + [char]0x00EA + 'me : dans %s, sous [wsl2], ajoute memory=%s (elle s''applique apr' + [char]0x00E8 + 's le prochain red' + [char]0x00E9 + 'marrage de Windows ou de WSL).') }
     'fr:podman_machine.wsl_undo' { return ('Pour annuler : jht uninstall retire ces lignes, ou supprime-les ' + [char]0x00E0 + ' la main (chacune a une ligne de commentaire au-dessus).') }
     'pt:podman_machine.init' { return ('Estou a criar a m' + [char]0x00E1 + 'quina Linux do Podman: descarrega a sua imagem de sistema (algumas centenas de MB) e prepara-a. Demora alguns minutos.') }
     'pt:podman_machine.init_wait' { return ('ainda a criar a m' + [char]0x00E1 + 'quina Linux') }
@@ -490,6 +514,10 @@ function Get-BridgeTextTable {
     'pt:podman_machine.stop' { return ('Estou a parar a m' + [char]0x00E1 + 'quina Linux.') }
     'pt:podman_machine.stop_wait' { return ('ainda a parar a m' + [char]0x00E1 + 'quina Linux') }
     'pt:podman_machine.wsl_added' { return ('Defini' + [char]0x00E7 + [char]0x00F5 + 'es do WSL adicionadas a %s:') }
+    'pt:podman_machine.wsl_applying' { return ('Estou a aplicar o limite de mem' + [char]0x00F3 + 'ria ao WSL: a m' + [char]0x00E1 + 'quina espera que o WSL reinicie (cerca de um minuto).') }
+    'pt:podman_machine.wsl_limit_waits' { return ('O WSL j' + [char]0x00E1 + ' est' + [char]0x00E1 + ' a correr: o limite de mem' + [char]0x00F3 + 'ria aplica-se a partir do pr' + [char]0x00F3 + 'ximo rein' + [char]0x00ED + 'cio do Windows ou do WSL (wsl --shutdown para todas as tuas distribui' + [char]0x00E7 + [char]0x00F5 + 'es WSL, por isso n' + [char]0x00E3 + 'o o fa' + [char]0x00E7 + 'o por ti).') }
+    'pt:podman_machine.wsl_no_limit' { return ('Mem' + [char]0x00F3 + 'ria do WSL: n' + [char]0x00E3 + 'o foi definido nenhum limite, porque h' + [char]0x00E1 + ' outras distribui' + [char]0x00E7 + [char]0x00F5 + 'es WSL registadas e o limite aplicar-se-ia tamb' + [char]0x00E9 + 'm a elas.') }
+    'pt:podman_machine.wsl_set_yourself' { return ('Para o definires tu: em %s, em [wsl2], acrescenta memory=%s (aplica-se depois do pr' + [char]0x00F3 + 'ximo rein' + [char]0x00ED + 'cio do Windows ou do WSL).') }
     'pt:podman_machine.wsl_undo' { return ('Para desfazer: jht uninstall retira estas linhas, ou apaga-as ' + [char]0x00E0 + ' m' + [char]0x00E3 + 'o (cada uma tem por cima uma linha de coment' + [char]0x00E1 + 'rio).') }
   }
   return $null
@@ -974,7 +1002,7 @@ function Test-JhtWslConfigHasMemory {
 }
 
 # What the setup says when the limit was written while the WSL VM runs and the VM could not be restarted for it.
-$script:JhtWslLimitWaitsText = '  WSL is already running: the memory limit applies from the next restart of Windows, or of WSL (wsl --shutdown stops all your WSL distributions, so it is not done for you).'
+$script:JhtWslLimitWaitsText = '  ' + (Get-BridgeText 'podman_machine.wsl_limit_waits' 'WSL is already running: the memory limit applies from the next restart of Windows, or of WSL (wsl --shutdown stops all your WSL distributions, so it is not done for you).')
 
 # Waits for the WSL virtual machine to stop by itself (WSL ends it about a minute after its last distribution stopped): $true once it
 # is gone, $false after the time (120 seconds, or JHT_WSL_STOP_WAIT_SECONDS, 1 to 300, for the tests). It never stops anything.
@@ -1008,8 +1036,8 @@ function Set-JhtWslConfigForMachine {
     if ($advice -and -not (Test-JhtWslConfigHasMemory -Path $path)) {
       [IO.Directory]::CreateDirectory($RuntimeDir) | Out-Null
       [IO.File]::WriteAllText($advicePath, "memory=$advice`n", [Text.UTF8Encoding]::new($false))
-      Write-Host '  WSL memory: no limit was set, because other WSL distributions are registered and a limit would apply to them too.' -ForegroundColor Yellow
-      Write-Host "  To set one yourself: in $path, under [wsl2], add memory=$advice (it applies after the next restart of Windows or of WSL)." -ForegroundColor Yellow
+      Write-Host ('  ' + (Get-BridgeText 'podman_machine.wsl_no_limit' 'WSL memory: no limit was set, because other WSL distributions are registered and a limit would apply to them too.')) -ForegroundColor Yellow
+      Write-Host ('  ' + (Format-BridgeText 'podman_machine.wsl_set_yourself' 'To set one yourself: in %s, under [wsl2], add memory=%s (it applies after the next restart of Windows or of WSL).' $path $advice)) -ForegroundColor Yellow
     } elseif ([IO.File]::Exists($advicePath)) { [IO.File]::Delete($advicePath) }
     return ''
   }

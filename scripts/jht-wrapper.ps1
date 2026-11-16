@@ -8360,11 +8360,12 @@ switch ($Sub) {
     # The language and the timezone of host.env go to the setup with the run: a container made before host.env existed (the
     # installer starts the team before it writes host.env) keeps JHT_LANG=en and JHT_USER_TZ=UTC in its environment until it is
     # made again, and the setup then proposed English and wrote the hours in UTC (giro Windows 16/11). Only values the host.env
-    # check accepts go on the command line.
+    # check accepts go on the command line (none, where that check is not loaded).
     [string[]]$setupEnv = @('-e', "JHT_HOST_TYPE=$env:JHT_HOST_TYPE")
+    $canCheck = [bool](Get-Command Test-HostEnvValue -CommandType Function -ErrorAction SilentlyContinue)
     foreach ($name in @('JHT_LANG', 'JHT_USER_TZ')) {
       $value = [string][Environment]::GetEnvironmentVariable($name)
-      if ($value -and (Test-HostEnvValue -Name $name -Value $value)) { $setupEnv += @('-e', "$name=$value") }
+      if ($canCheck -and $value -and (Test-HostEnvValue -Name $name -Value $value)) { $setupEnv += @('-e', "$name=$value") }
     }
     if ($null -ne $keyPlan.Key) {
       # -i only: a pipe is not a terminal. No byte-order mark goes in front of the key (Invoke-NativeWithStdin).
