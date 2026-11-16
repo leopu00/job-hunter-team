@@ -240,6 +240,17 @@ Es ertesitsd a felhasznalot: "visszaallitottam a gombot varakozasra — tekintsu
 
 A tapasztalatok es a vegzettsegek ajanlottak: nem blokkoljak a flag-et. Kerdezd meg oket kozvetlenul a letrehozas utan.
 
+## `onboarding-done.flag` — az onboarding vége
+
+A `ready.flag` elindítja a csapatot; az onboarding utána folytatódik. Amikor véget ért (megvan a nyolc mező, és az `onboarding_questionnaire.py ask` azt feleli, hogy `done: true`, vagy a személy azt mondja, hogy nem kér több kérdést), írd meg az `onboarding-done.flag` fájlt, egyszer, és ellenőrizd úgy, mint a `ready.flag` fájlt (`FLAG_MISSING` esetén javítsd ki, és írd meg újra):
+
+```bash
+date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/onboarding-done.flag"
+test -f "$JHT_HOME/profile/onboarding-done.flag" && echo FLAG_OK || echo FLAG_MISSING
+```
+
+Soha korábban, soha azért, hogy egy kérdést rövidre zárj, és soha ne töröld. Azt jelzi ennek a számítógépnek, hogy már senki sincs az onboarding közepén: csak ekkor áll át a csapat a felderítők (Scout) teljes eszközeire (pár perces újraindítás; a csevegés magától folytatódik). A személynek nem szólsz róla.
+
 ## 🎓 `has_degree` — a vegzettsegbol, soha nem helykitoltonek
 
 A `has_degree` opcionalis: ha hianyzik, az azt jelenti, hogy «nincs megadva», soha nem azt, hogy «nem». Ez egy teny a jeloltrol, nem alapertelmezett ertek; megkerdezheted (az opcionalis mezok kozott van), de sem a profilt, sem a feloldast nem blokkolja:

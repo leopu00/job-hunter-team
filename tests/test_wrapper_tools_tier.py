@@ -605,19 +605,6 @@ def test_an_agent_that_does_not_come_back_in_time_leaves_the_line_to_open_it_aga
     assert not any("node" in line for line in (tmp_path / "calls").read_text(encoding="utf-8").splitlines())
 
 
-ASSISTANT_SESSIONS = (".pi", "agent", "sessions", "--jht_home-agents-assistente--")
-
-
-def _assistant_session(box, age: float):
-    folder = box.home.joinpath(*ASSISTANT_SESSIONS)
-    folder.mkdir(parents=True, exist_ok=True)
-    path = folder / "2026-11-15T21-00-00_abc.jsonl"
-    path.write_text('{"type":"session"}\n', encoding="utf-8")
-    stamp = time.time() - age
-    os.utime(path, (stamp, stamp))
-    return path
-
-
 def _ready(box, age: float = 0):
     flag = box.home / "profile" / "ready.flag"
     flag.write_text("2026-11-15T21:10:19Z\n", encoding="utf-8")
@@ -625,34 +612,35 @@ def _ready(box, age: float = 0):
     os.utime(flag, (stamp, stamp))
 
 
-def test_the_switch_waits_while_the_assistant_is_still_talking_then_goes_when_it_is_quiet(box):
+def test_the_switch_waits_for_the_end_of_the_onboarding_not_for_ready_flag(box):
     """ready.flag is «the team starts» (three fields), not «the onboarding is over»: the Assistente goes on asking. Giro Linux:
-    the switch closed the chat in the middle of the onboarding. It waits for the Assistente's session to stay still."""
+    the switch closed the chat in the middle of the onboarding. It waits for onboarding-done.flag, which the Assistente writes
+    when its questions are over."""
     tier = box.tier()
     (box.fake / "full-present").write_text("", encoding="utf-8")
-    session = _assistant_session(box, 0)
-    _ready(box)
-    env = {**KICK_ENV, "JHT_TOOLS_ONBOARDING_MAX": "600", "JHT_TOOLS_ASSISTANT_QUIET": "3"}
-    talking = subprocess.Popen(["sh", "-c", f'i=0; while [ $i -lt 6 ]; do touch "{session}"; sleep 1; i=$((i+1)); done'])
-    try:
-        assert box.run("tools_kick", **env).returncode == 0
-        time.sleep(4)
-        assert tier.exists() and _calls(box) == [], "the switch did not wait for the Assistente"
-    finally:
-        talking.wait(timeout=20)
-    _wait_until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"no switch once the Assistente was quiet: {_calls(box)}")
-
-
-def test_an_assistant_quiet_for_long_lets_the_switch_go_at_once(box):
-    tier = box.tier()
-    (box.fake / "full-present").write_text("", encoding="utf-8")
-    _assistant_session(box, 400)
     _ready(box)
     assert box.run("tools_kick", **{**KICK_ENV, "JHT_TOOLS_ONBOARDING_MAX": "600"}).returncode == 0
-    _wait_until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"no switch: {_calls(box)}")
+    time.sleep(3)
+    assert tier.exists() and _calls(box) == [], "the switch did not wait for the end of the onboarding"
+    (box.home / "profile" / "onboarding-done.flag").write_text("2026-11-15T21:40:00Z\n", encoding="utf-8")
+    _wait_until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"no switch after the onboarding: {_calls(box)}")
 
 
-def test_with_no_session_to_read_the_tetto_after_ready_flag_decides(box):
+def test_a_link_in_place_of_onboarding_done_is_not_believed(box, tmp_path):
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    _ready(box)
+    (tmp_path / "elsewhere").write_text("x\n", encoding="utf-8")
+    (box.home / "profile" / "onboarding-done.flag").symlink_to(tmp_path / "elsewhere")
+    assert box.run("tools_kick", **{**KICK_ENV, "JHT_TOOLS_ONBOARDING_MAX": "600"}).returncode == 0
+    time.sleep(3)
+    assert tier.exists() and _calls(box) == [], "a link made the switch"
+    (box.home / "profile" / "onboarding-done.flag").unlink()
+    (box.home / "profile" / "onboarding-done.flag").write_text("x\n", encoding="utf-8")
+    _wait_until(lambda: not tier.exists(), "no switch")
+
+
+def test_without_the_end_of_the_onboarding_the_tetto_after_ready_flag_decides(box):
     tier = box.tier()
     (box.fake / "full-present").write_text("", encoding="utf-8")
     _ready(box)
@@ -662,18 +650,12 @@ def test_with_no_session_to_read_the_tetto_after_ready_flag_decides(box):
     _wait_until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"no switch at the tetto: {_calls(box)}")
 
 
-def test_a_session_kept_moving_never_holds_the_switch_past_the_tetto(box):
+def test_an_onboarding_over_long_ago_lets_the_switch_go_at_once(box):
     tier = box.tier()
     (box.fake / "full-present").write_text("", encoding="utf-8")
-    session = _assistant_session(box, 0)
-    _ready(box, age=5)                                                      # ready.flag 5 s ago, tetto 6 s
-    talking = subprocess.Popen(["sh", "-c", f'i=0; while [ $i -lt 15 ]; do touch "{session}"; sleep 1; i=$((i+1)); done'])
-    try:
-        assert box.run("tools_kick", **{**KICK_ENV, "JHT_TOOLS_ONBOARDING_MAX": "6", "JHT_TOOLS_ASSISTANT_QUIET": "60"}).returncode == 0
-        _wait_until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"the moving session held the switch: {_calls(box)}")
-    finally:
-        talking.kill()
-        talking.wait(timeout=20)
+    _ready(box, age=4000)
+    assert box.run("tools_kick", **KICK_ENV).returncode == 0   # tetto 0 in KICK_ENV; and an old install: no done flag at all
+    _wait_until(lambda: not tier.exists(), "no switch")
 
 
 def test_a_switch_that_still_fails_is_said_until_an_up_goes_well(box):

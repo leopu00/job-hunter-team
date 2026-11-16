@@ -245,6 +245,17 @@ And tell the user: "I've put the button back on hold — let's review this point
 
 Experiences and degrees are recommended: they do not block the flag. Ask for them right after creating it.
 
+## `onboarding-done.flag` — the end of the onboarding
+
+`ready.flag` starts the team; the onboarding goes on after it. When it is over (the eight fields are there and `onboarding_questionnaire.py ask` says `done: true`, or the person says they want to stop with the questions), write `onboarding-done.flag`, once, and check it as for `ready.flag` (on `FLAG_MISSING` fix it and write it again):
+
+```bash
+date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/onboarding-done.flag"
+test -f "$JHT_HOME/profile/onboarding-done.flag" && echo FLAG_OK || echo FLAG_MISSING
+```
+
+Never before, never to cut a question short, never remove it. It tells this computer that nobody is in the middle of the onboarding any more: only then does the team move onto the Scouts' full tools (a restart of a couple of minutes; the chat comes back by itself). You say nothing about it to the person.
+
 ## 🎓 `has_degree` — from the education, never as a placeholder
 
 `has_degree` is optional: absent means "not declared", never "no". It is a fact about the candidate, not a default; you may ask for it (it is among the optional fields), but it blocks neither the profile nor the unlock:

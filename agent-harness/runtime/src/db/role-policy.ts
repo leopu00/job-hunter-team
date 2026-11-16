@@ -293,12 +293,13 @@ export const DB_ROLE_POLICIES: Readonly<Record<string, DbRolePolicy>> = {
  *
  * The list is what the role's own prompt and skills write, counted in them:
  * the profile, the four narrative summaries, the folder where an uploaded
- * document is archived, and its two named flags — `ready.flag` is the "go to
- * dashboard" button, `welcomed.flag` the Telegram welcome handshake
+ * document is archived, and its three named flags — `ready.flag` is the "go to
+ * dashboard" button, `onboarding-done.flag` the end of the onboarding (the switch of
+ * the tools on the host waits for it), `welcomed.flag` the Telegram welcome handshake
  * (assistente.md § welcome). `inbox/` is left out on purpose: there the
  * tg-bridge writes and this role reads.
  */
-export const PROFILE_WRITABLE: readonly string[] = ["candidate_profile.yml", "ready.flag", "welcomed.flag", "summaries", "sources"];
+export const PROFILE_WRITABLE: readonly string[] = ["candidate_profile.yml", "ready.flag", "onboarding-done.flag", "welcomed.flag", "summaries", "sources"];
 
 /**
  * The paths of the profile folder this agent may write, absolute. Empty for

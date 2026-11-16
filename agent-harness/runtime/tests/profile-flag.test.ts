@@ -1,5 +1,5 @@
 /**
- * The ASSISTENTE's flags (ready.flag, welcomed.flag) as a tool.
+ * The ASSISTENTE's flags (ready.flag, onboarding-done.flag, welcomed.flag) as a tool.
  *
  * With bash in the kernel sandbox the ASSISTENTE can no longer write the
  * person's profile from the shell (integrated in 811212588): `date > ready.flag`
@@ -61,9 +61,16 @@ describe("profile_flag", () => {
     expect(readFileSync(join(profileDir, "welcomed.flag"), "utf8")).toBe("");
   });
 
-  it("names no path: two flags, three actions, nothing else in the folder", () => {
+  it("writes onboarding-done.flag with the time, as `date -u … > onboarding-done.flag` does", async () => {
+    expect(await call("done", "check")).toMatchObject({ ok: true, content: "FLAG_MISSING onboarding-done.flag" });
+    expect(await call("done", "set")).toMatchObject({ ok: true, content: "FLAG_OK onboarding-done.flag" });
+    expect(readFileSync(join(profileDir, "onboarding-done.flag"), "utf8")).toBe("2026-09-28T01:30:12Z\n");
+  });
+
+  it("names no path: three flags, three actions, nothing else in the folder", () => {
     const schema = tool().spec.schema;
     expect(schema.safeParse({ flag: "ready", action: "set" }).success).toBe(true);
+    expect(schema.safeParse({ flag: "done", action: "set" }).success).toBe(true);
     for (const args of [
       { flag: "candidate_profile.yml", action: "set" },
       { flag: "../ready", action: "set" },

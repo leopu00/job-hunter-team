@@ -30,20 +30,20 @@ export const PROFILE_FLAG_TOOL = "profile_flag";
  * the notes the role reads each round.
  */
 export const PROFILE_FLAG_NOTE =
-  "Your flags in the person's profile folder, ready.flag and welcomed.flag, are the `profile_flag` tool here: " +
-  "`set` for `date -u … > ready.flag` and `touch welcomed.flag`, `check` for `test -f`, `clear` for `rm -f`. " +
+  "Your flags in the person's profile folder, ready.flag, onboarding-done.flag and welcomed.flag, are the `profile_flag` tool here: " +
+  "`set` for `date -u … > ready.flag`, `date -u … > onboarding-done.flag` and `touch welcomed.flag`, `check` for `test -f`, `clear` for `rm -f`. " +
   "Your shell cannot write the person's profile, so those lines would fail; FLAG_OK and FLAG_MISSING mean what " +
   "your skill says they mean.";
 
 /** The flags and their files: the names the product's frontend and bridge read. */
-const FILES = { ready: "ready.flag", welcomed: "welcomed.flag" } as const;
+const FILES = { ready: "ready.flag", done: "onboarding-done.flag", welcomed: "welcomed.flag" } as const;
 
 type Flag = keyof typeof FILES;
 type Action = "set" | "clear" | "check";
 
 const ARGS = z
   .object({
-    flag: z.enum(["ready", "welcomed"]),
+    flag: z.enum(["ready", "done", "welcomed"]),
     action: z.enum(["set", "clear", "check"]),
   })
   .strict();
@@ -63,9 +63,10 @@ export function createProfileFlagTool(options: ProfileFlagToolOptions): ToolHand
     spec: {
       name: PROFILE_FLAG_TOOL,
       description:
-        "Set, clear or check one of your two flags in the person's profile folder: `ready` (ready.flag, the " +
-        "'Vai alla dashboard' button) or `welcomed` (welcomed.flag, the welcome already sent). This is what your " +
-        "instructions do with `date -u … > ready.flag`, `touch welcomed.flag`, `test -f` and `rm -f`: here the shell " +
+        "Set, clear or check one of your flags in the person's profile folder: `ready` (ready.flag, the " +
+        "'Vai alla dashboard' button), `done` (onboarding-done.flag, the onboarding is over) or `welcomed` " +
+        "(welcomed.flag, the welcome already sent). This is what your instructions do with `date -u … > ready.flag`, " +
+        "`date -u … > onboarding-done.flag`, `touch welcomed.flag`, `test -f` and `rm -f`: here the shell " +
         "cannot write the person's profile. It answers FLAG_OK when the flag is there, FLAG_MISSING when it is not.",
       schema: ARGS,
     },
@@ -87,7 +88,7 @@ export function createProfileFlagTool(options: ProfileFlagToolOptions): ToolHand
       if (action === "set") {
         mkdirSync(options.profileDir, { recursive: true });
         removeStaleTemps(options.profileDir, FILES[flag]);
-        const content = flag === "ready" ? `${now().toISOString().replace(/\.\d{3}Z$/, "Z")}\n` : "";
+        const content = flag !== "welcomed" ? `${now().toISOString().replace(/\.\d{3}Z$/, "Z")}\n` : "";
         // Written beside it and renamed over it: a reader sees the flag whole or not at all.
         // The random part keeps a leftover from a failed write from ever owning the name:
         // the pid alone is the same after every restart of the container.
