@@ -645,6 +645,8 @@
   "wizard.budget.summary_days": "A csapat összesen %s összeget költhet, %s időtartamra attól kezdve, hogy elkezd dolgozni, %s (%s %s), utána magától leáll.",
   "wizard.budget.summary_days_always": "A csapat összesen %s összeget költhet, %s időtartamra attól kezdve, hogy elkezd dolgozni, bármelyik órában, utána magától leáll.",
   "wizard.budget.summary_none": "Nincs korlát: a csapat addig költ, amíg van egyenleg a számládon.",
+  "wizard.budget.below_min": "%s a minimum alatt van, amellyel a csapat valamennyit tud dolgozni ezen a szolgáltatáson (%s): az Asszisztenssel való első beállítás és a Kapitány első körei elhasználhatják a legnagyobb részét, mielőtt a Scoutok keresnének. Megtartod mégis a(z) %s összeget?",
+  "wizard.budget.below_min_note": "%s a minimum alatt van, amellyel a csapat valamennyit tud dolgozni ezen a szolgáltatáson (%s): az első keresés előtt elköltheti a legnagyobb részét.",
   "wizard.team.starting": "Csapat indítása (Sentinella + Bridge + Capitano)...",
   "wizard.team.start_failed": "Csapat indítása sikertelen. Lásd a fenti naplót. Próbáld újra: jht team start",
   "wizard.outro_done": "Minden kész! Az Assistente vár rád: válaszolj a kérdéseire az onboarding indításához.\n  Válasz: jht team chat assistente   (vagy az alkalmazás Assistente chatjében)\n  Állapot:  jht team status\n  Naplók:   jht logs --tail 30\n  Leállás:  jht team stop --all",
