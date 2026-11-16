@@ -277,6 +277,8 @@ tools_switch() {
 tools_main() {
   case "${1:-}:${2:-}" in
     status:--json) tools_status_json ;;
+    # one line for the person: the words are the wrapper's (tools_say_status in jht-wrapper.sh, the 7 languages)
+    status:) if declare -F tools_say_status >/dev/null 2>&1; then tools_say_status; else tools_status_json; fi ;;
     pull:) tools_pull ;;
     switch:) tools_switch ;;
     *) err "uso: jht tools status --json | pull | switch"; return 2 ;;

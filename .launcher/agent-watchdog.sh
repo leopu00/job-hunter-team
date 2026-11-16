@@ -247,7 +247,13 @@ def api_key_there():
   if isinstance(ref, dict) and ref.get('source') == 'file':
     return os.path.exists(str(ref.get('path') or ''))
   return bool(ref) or bool(cfg.get('api_key'))
-if pi and prov in ('glm', 'kimi', 'moonshot'):
+# claude/anthropic and openai on pi with an API key (the setup's auth_method api_key, or a key in the config) are the same: the
+# key is the whole of it. Without this a team on Claude with an API key was never respawned after the container was made again
+# (the switch onto the full image), since the sign-in file of the subscription is not there (giro Windows, 15/11).
+def api_key_access():
+  cfg = (d.get('providers') or {}).get(prov) or {}
+  return cfg.get('auth_method') == 'api_key' or bool(cfg.get('api_key_ref')) or bool(cfg.get('api_key'))
+if pi and (prov in ('glm', 'kimi', 'moonshot') or (prov in ('claude', 'anthropic', 'openai') and api_key_access())):
   has_creds = api_key_there()
 else:
   has_creds = bool(prov) and os.path.exists(f'{jht_home}/.pi/agent/auth.json' if pi and prov in ('openai', 'codex') else markers.get(prov, ''))

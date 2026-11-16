@@ -792,3 +792,34 @@ def test_the_job_does_not_take_its_own_subshells_for_another_command(tmp_path):
         assert seen.stdout.strip() == "OTHER", seen.stdout + seen.stderr
     finally:
         other.wait(timeout=10)
+
+
+
+# --- `jht tools status`: one line for the person (the words `jht up` says), --json stays for programs ----------------
+
+def _say_status(box):
+    body = re.search(r"(?ms)^tools_say_status\(\) \{\n.*?^\}\n", WRAPPER.read_text(encoding="utf-8")).group(0)
+    done = box.run("jht_say() { printf '%s' \"$1\"; }\n" + body + "tools_say_status")
+    assert done.returncode == 0, done.stderr
+    return done.stdout
+
+
+def test_tools_status_says_where_the_tools_stand_in_one_line(box):
+    assert _say_status(box) == "tools.ready\n", "no tier file: the tools are here"
+    box.tier()
+    assert _say_status(box) == "tools.arriving\n"
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    assert _say_status(box) == "tools.waiting\n"
+    (box.fake / "engine-down").write_text("", encoding="utf-8")
+    assert _say_status(box) == "tools.engine_down\n"
+
+
+def test_tools_status_says_a_failed_switch(box):
+    (box.runtime / ".tools-switch-failed").write_text("switch_failed\n", encoding="utf-8")
+    assert _say_status(box) == "tools.switch_failed\n"
+
+
+def test_the_wrapper_answers_tools_status_alone_and_leaves_json_to_the_helper():
+    text = WRAPPER.read_text(encoding="utf-8")
+    assert "status:) if declare -F tools_say_status >/dev/null 2>&1; then tools_say_status; else tools_status_json; fi ;;" in TOOLS.read_text(encoding="utf-8")
+    assert "tools_say_status() {" in text

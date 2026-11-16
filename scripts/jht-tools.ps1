@@ -390,6 +390,8 @@ function Invoke-ToolsCommand {
   $a = @($ToolsArgs)
   $sub = if ($a.Count -ge 1) { $a[0] } else { '' }
   if ($sub -eq 'status' -and $a.Count -eq 2 -and $a[1] -eq '--json') { return (Write-ToolsStatusJson) }
+  # one line for the person: the words are the wrapper's (Write-JhtToolsStatus in jht-wrapper.ps1, the 7 languages)
+  if ($sub -eq 'status' -and $a.Count -eq 1 -and (Get-Command Write-JhtToolsStatus -CommandType Function -ErrorAction SilentlyContinue)) { Write-JhtToolsStatus; return 0 }
   if ($sub -eq 'pull' -and $a.Count -eq 1) { return (Start-ToolsPull) }
   if ($sub -eq 'switch' -and $a.Count -eq 1) { return (Invoke-ToolsSwitch) }
   if ($sub -eq 'pull-job' -and $a.Count -eq 2) { return (Invoke-ToolsPullJob $a[1]) }
