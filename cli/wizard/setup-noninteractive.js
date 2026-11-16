@@ -24,7 +24,7 @@ import {
 import { formatSecretForConfig, resolveSecret, describeSecret } from './secret-ref.js';
 import { runHealthCheck } from './setup-checks.js';
 import { checkPiApiKey, rejectedKeyMessage } from '../../shared/runtime/provider-key-check.js';
-import { budgetFromOptions, budgetSummary, keepSamePeriod } from './setup-budget.js';
+import { budgetFromOptions, budgetSummary, keepSamePeriod, minimumFor } from './setup-budget.js';
 import { t, tf, LANGUAGES, hasLanguageChoice, systemLanguage, saveLanguage } from './i18n.js';
 import { summarizeRoleModels } from './setup-models.js';
 import { AGENT_HARNESSES, DEFAULT_HARNESS } from '../../shared/runtime/agent-harness.js';
@@ -392,6 +392,9 @@ function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, 
     console.log(`  Auth:       subscription (${subscriptionConfig.email}${subscriptionConfig.session_token ? ' · token preset' : ''})`);
   }
   console.log(summarizeRoleModels(config));
+  if (budgetChoice.budget && Number(budgetChoice.budget.usd) < minimumFor(providerName)) {
+    console.log(`  Budget:     ${tf('wizard.budget.below_min_note', `$${budgetChoice.budget.usd}`, `$${minimumFor(providerName)}`)}`);
+  }
   if ('budget' in budgetChoice) console.log(`  Budget:     ${budgetSummary(t, tf, { budget: budgetChoice.budget, workingHours: config.team?.working_hours, kind: budgetChoice.kind })}`);
   console.log(`  JHT home:   ${JHT_CONFIG_DIR}`);
   console.log('');

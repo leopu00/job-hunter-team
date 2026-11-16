@@ -31,6 +31,18 @@ export const HOURS_PRESETS = Object.freeze({
 });
 
 export const BUDGET_DAYS = Object.freeze([1, 3, 7, 14, 30]);
+/**
+ * The least that lets a team do some work on each service: the Assistente's onboarding and the Capitano's first rounds come before
+ * the Scouts (a trial on Claude spent $1.7 of $2 before the first search). Below it the setup asks for an explicit yes.
+ */
+export const BUDGET_MIN_USD = Object.freeze({ glm: 2, kimi: 2, openai: 5, claude: 5 });
+const PROVIDER_NAMES = Object.freeze({ anthropic: 'claude', moonshot: 'kimi' });
+
+/** The recommended minimum for a provider (by any name the config uses), or 0 when the setup knows none. */
+export function minimumFor(provider) {
+  const name = String(provider ?? '').trim().toLowerCase();
+  return BUDGET_MIN_USD[PROVIDER_NAMES[name] ?? name] ?? 0;
+}
 /** Above this the person is asked once more: a typo of a zero is a lot of money. */
 export const BUDGET_CONFIRM_ABOVE = 500;
 
@@ -137,7 +149,7 @@ export function budgetSummary(t, tf, { budget, workingHours, kind }) {
  * @param {{ t: Function, tf: Function, now?: Date, timeZone?: string, askHours?: Function }} params askHours = the hours step of
  *   before (promptWorkingHours), asked only with «no limit»
  */
-export async function promptBudget(prompter, { t, tf, now = new Date(), timeZone = localTimeZone(), askHours = async () => undefined }) {
+export async function promptBudget(prompter, { t, tf, now = new Date(), timeZone = localTimeZone(), askHours = async () => undefined, provider = '' }) {
   const choice = await prompter.select({
     message: t('wizard.budget.prompt'),
     initialValue: 'trial',
@@ -172,6 +184,8 @@ export async function promptBudget(prompter, { t, tf, now = new Date(), timeZone
     usd = parseUsd(String(typed ?? '').trim() === '' ? '10' : typed);
     if (usd === null) { await prompter.note(t('wizard.budget.amount_invalid'), t('wizard.budget.title')); continue; }
     if (usd > BUDGET_CONFIRM_ABOVE && !(await prompter.confirm({ message: tf('wizard.budget.amount_confirm', `$${usd}`), initialValue: false }))) usd = null;
+    const least = minimumFor(provider);
+    if (usd !== null && usd < least && !(await prompter.confirm({ message: tf('wizard.budget.below_min', `$${usd}`, `$${least}`, `$${usd}`), initialValue: false }))) usd = null;
   }
   const days = await prompter.select({
     message: t('wizard.budget.days_prompt'),

@@ -356,7 +356,7 @@ async function runSetupSteps(prompter, state) {
   // Asked BEFORE the config is saved, so it lands in jht.config.json at the first write and the brake of pi reads it at
   // the first tick. «No limit» asks the working hours as before.
   const { kind: budgetKind, budget, workingHours } = await promptBudget(prompter, {
-    t, tf,
+    t, tf, provider: providerChoice,
     askHours: () => promptWorkingHours(prompter, baseConfig.team?.working_hours),
   });
   await prompter.note(budgetSummary(t, tf, { budget, workingHours, kind: budgetKind }), t('wizard.budget.title'));

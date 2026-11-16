@@ -701,6 +701,8 @@
   "wizard.budget.summary_days": "The team can spend %s in all, for %s from when it starts working, %s (%s %s), then it stops by itself.",
   "wizard.budget.summary_days_always": "The team can spend %s in all, for %s from when it starts working, at any hour, then it stops by itself.",
   "wizard.budget.summary_none": "No limit: the team spends as long as there is credit on your account.",
+  "wizard.budget.below_min": "%s is below the least that lets a team do some work on this service (%s): the Assistente's onboarding and the Capitano's first rounds can use most of it before the Scouts search. Keep %s anyway?",
+  "wizard.budget.below_min_note": "%s is below the least that lets a team do some work on this service (%s): it may spend most of it before the first search.",
   "wizard.cli.budget_usd": "How much the team may spend, in dollars (with one of --budget-minutes, --budget-days, --budget-until)",
   "wizard.cli.budget_minutes": "The budget lasts this many minutes from now",
   "wizard.cli.budget_days": "The budget lasts this many days from now",
