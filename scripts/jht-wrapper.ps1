@@ -8357,17 +8357,26 @@ switch ($Sub) {
     Clear-JhtTeamStopped
     Ensure-Up
     Write-JhtToolsNotice -Kick
+    # The language and the timezone of host.env go to the setup with the run: a container made before host.env existed (the
+    # installer starts the team before it writes host.env) keeps JHT_LANG=en and JHT_USER_TZ=UTC in its environment until it is
+    # made again, and the setup then proposed English and wrote the hours in UTC (giro Windows 16/11). Only values the host.env
+    # check accepts go on the command line.
+    [string[]]$setupEnv = @('-e', "JHT_HOST_TYPE=$env:JHT_HOST_TYPE")
+    foreach ($name in @('JHT_LANG', 'JHT_USER_TZ')) {
+      $value = [string][Environment]::GetEnvironmentVariable($name)
+      if ($value -and (Test-HostEnvValue -Name $name -Value $value)) { $setupEnv += @('-e', "$name=$value") }
+    }
     if ($null -ne $keyPlan.Key) {
       # -i only: a pipe is not a terminal. No byte-order mark goes in front of the key (Invoke-NativeWithStdin).
       try {
         [string[]]$setupArgs = $keyPlan.Args
-        Invoke-NativeWithStdin { $keyPlan.Key | & docker exec -i -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry 'setup' @setupArgs }
+        Invoke-NativeWithStdin { $keyPlan.Key | & docker exec -i @setupEnv $Container node $NodeEntry 'setup' @setupArgs }
         if ($LASTEXITCODE -eq 0) { Write-Host (Format-JhtText 'line.the_setup_keeps_the_key' ($keyPlan.File)) }
       } finally {
         $keyPlan.Key = $null
       }
     } else {
-      & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry 'setup' @Rest }
+      & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @setupEnv $Container node $NodeEntry 'setup' @Rest }
     }
     break
   }
