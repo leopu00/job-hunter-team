@@ -91,8 +91,8 @@ function Invoke-PodmanPull {
   $layers = New-Object System.Collections.Generic.HashSet[string]
   $wait = $null
   if ($human) {
-    Write-Host '  > Downloading the Job Hunter Team runtime image: this can take several minutes.' -ForegroundColor Cyan
-    $wait = Start-JhtLiveWait -Label 'downloading the runtime image'
+    Write-Host ('  > ' + (Get-BridgeText 'podman_machine.pull' 'Downloading the Job Hunter Team runtime image: this can take several minutes.')) -ForegroundColor Cyan
+    $wait = Start-JhtLiveWait -Label (Get-BridgeText 'podman_machine.pull_wait' 'still downloading the runtime image')
   }
   try {
     & { $ErrorActionPreference = 'Continue'
@@ -101,7 +101,7 @@ function Invoke-PodmanPull {
         if ($line) {
           if (-not $human) { [Console]::Out.WriteLine("JHT_PULL $line") }
           # a redrawn bar repeats its layer: each one counts once
-          if ($wait -and $line -match '^Copying blob (\S+)') { [void]$layers.Add($Matches[1]); $wait.Detail = "$($layers.Count) layers started" }
+          if ($wait -and $line -match '^Copying blob (\S+)') { [void]$layers.Add($Matches[1]); $wait.Detail = (Format-BridgeText 'podman_machine.layers_started' '%s layers started' $layers.Count) }
           return
         }
         $other = ConvertTo-JhtPullLine ([string]$_) -AnyLine

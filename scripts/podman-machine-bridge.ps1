@@ -213,7 +213,7 @@ public sealed class JhtLiveWait : IDisposable {
     private void Tick(object state) {
         lock (gate) {
             if (stopped) return;
-            string line = "  ... still " + label + " (" + Format(watch.Elapsed) + (detail.Length > 0 ? ", " + detail : "") + ")";
+            string line = "  ... " + label + " (" + Format(watch.Elapsed) + (detail.Length > 0 ? ", " + detail : "") + ")";
             try { Console.Out.WriteLine(line); } catch (Exception) { }
         }
     }
@@ -375,13 +375,134 @@ function Get-JhtPodmanTextLines {
   return @([regex]::Split($Text, '\r?\n') | ForEach-Object { ([string]$_).TrimEnd() } | Where-Object { $_ -and -not (Test-JhtPodmanNoiseLine $_) })
 }
 
+# What a person reads is in their language: the wrapper's (Get-JhtTextLanguage) when this file is dot-sourced there, else JHT_LANG,
+# which the installer gives the enabler (the person's language, the one it writes in host.env), else English. The block below is made
+# from shared/locales (python3 tests/bridge_ps1_texts.py --write), in ASCII for Windows PowerShell 5.1; a test fails when the two
+# differ. A key a language lacks says the English of the call. Own names: this file is dot-sourced into other scripts.
+function Get-BridgeTextLanguage {
+  if (Get-Command Get-JhtTextLanguage -CommandType Function -ErrorAction SilentlyContinue) { return [string](Get-JhtTextLanguage) }
+  $asked = ([string]$env:JHT_LANG).ToLowerInvariant() -replace '[-_.@].*$', ''
+  if (@('en', 'it', 'de', 'fr', 'es', 'hu', 'pt') -ccontains $asked) { return $asked }
+  return 'en'
+}
+
+function Get-BridgeText {
+  param([string]$Key, [string]$English)
+  $text = Get-BridgeTextTable (Get-BridgeTextLanguage) $Key
+  if ($null -eq $text) { return $English }
+  return $text
+}
+
+# The same, with the values put in for %s/%d in order (never -f: a { in a text breaks nothing).
+function Format-BridgeText {
+  param([string]$Key, [string]$English, [Parameter(ValueFromRemainingArguments = $true)][object[]]$Values)
+  $text = Get-BridgeText $Key $English
+  $out = New-Object System.Text.StringBuilder
+  $at = 0
+  $next = 0
+  foreach ($match in [regex]::Matches($text, '%[sd]')) {
+    [void]$out.Append($text.Substring($at, $match.Index - $at))
+    if ($null -ne $Values -and $next -lt $Values.Count) { [void]$out.Append([string]$Values[$next]) }
+    $next++
+    $at = $match.Index + $match.Length
+  }
+  [void]$out.Append($text.Substring($at))
+  return $out.ToString()
+}
+
+# >>> texts in the 7 languages, made from shared/locales by `python3 tests/bridge_ps1_texts.py --write`: do not edit by hand
+function Get-BridgeTextTable {
+  param([string]$Lang, [string]$Key)
+  switch -CaseSensitive ("$Lang`:$Key") {
+    'en:podman_machine.init' { return 'Creating the Linux machine for Podman: it downloads its system image (several hundred MB) and sets it up. This takes several minutes.' }
+    'en:podman_machine.init_wait' { return 'still creating the Linux machine' }
+    'en:podman_machine.layers_started' { return '%s layers started' }
+    'en:podman_machine.pull' { return 'Downloading the Job Hunter Team runtime image: this can take several minutes.' }
+    'en:podman_machine.pull_wait' { return 'still downloading the runtime image' }
+    'en:podman_machine.start' { return 'Starting the Linux machine (about a minute).' }
+    'en:podman_machine.start_wait' { return 'still starting the Linux machine' }
+    'en:podman_machine.stop' { return 'Stopping the Linux machine.' }
+    'en:podman_machine.stop_wait' { return 'still stopping the Linux machine' }
+    'en:podman_machine.wsl_added' { return 'WSL settings added to %s:' }
+    'en:podman_machine.wsl_undo' { return 'To undo it: jht uninstall takes these lines out, or delete them by hand (each has a comment line above it).' }
+    'it:podman_machine.init' { return 'Creo la macchina Linux per Podman: scarica la sua immagine di sistema (alcune centinaia di MB) e la prepara. Ci vuole qualche minuto.' }
+    'it:podman_machine.init_wait' { return 'sto ancora creando la macchina Linux' }
+    'it:podman_machine.layers_started' { return '%s strati iniziati' }
+    'it:podman_machine.pull' { return ('Scarico l''immagine di Job Hunter Team: pu' + [char]0x00F2 + ' volerci qualche minuto.') }
+    'it:podman_machine.pull_wait' { return 'sto ancora scaricando l''immagine' }
+    'it:podman_machine.start' { return 'Avvio la macchina Linux (circa un minuto).' }
+    'it:podman_machine.start_wait' { return 'sto ancora avviando la macchina Linux' }
+    'it:podman_machine.stop' { return 'Fermo la macchina Linux.' }
+    'it:podman_machine.stop_wait' { return 'sto ancora fermando la macchina Linux' }
+    'it:podman_machine.wsl_added' { return 'Impostazioni di WSL aggiunte a %s:' }
+    'it:podman_machine.wsl_undo' { return 'Per toglierle: jht uninstall toglie queste righe, oppure cancellale a mano (ognuna ha sopra una riga di commento).' }
+    'hu:podman_machine.init' { return ('L' + [char]0x00E9 + 'trehozom a Podman Linux-g' + [char]0x00E9 + 'p' + [char]0x00E9 + 't: let' + [char]0x00F6 + 'lti a rendszerk' + [char]0x00E9 + 'p' + [char]0x00E9 + 't (n' + [char]0x00E9 + 'h' + [char]0x00E1 + 'ny sz' + [char]0x00E1 + 'z MB) ' + [char]0x00E9 + 's be' + [char]0x00E1 + 'll' + [char]0x00ED + 'tja. Ez n' + [char]0x00E9 + 'h' + [char]0x00E1 + 'ny percig tart.') }
+    'hu:podman_machine.init_wait' { return ('m' + [char]0x00E9 + 'g tart a Linux-g' + [char]0x00E9 + 'p l' + [char]0x00E9 + 'trehoz' + [char]0x00E1 + 'sa') }
+    'hu:podman_machine.layers_started' { return ('%s r' + [char]0x00E9 + 'teg elkezdve') }
+    'hu:podman_machine.pull' { return ('Let' + [char]0x00F6 + 'lt' + [char]0x00F6 + 'm a Job Hunter Team k' + [char]0x00E9 + 'p' + [char]0x00E9 + 't: ez n' + [char]0x00E9 + 'h' + [char]0x00E1 + 'ny percig tarthat.') }
+    'hu:podman_machine.pull_wait' { return ('m' + [char]0x00E9 + 'g tart a k' + [char]0x00E9 + 'p let' + [char]0x00F6 + 'lt' + [char]0x00E9 + 'se') }
+    'hu:podman_machine.start' { return ('Elind' + [char]0x00ED + 'tom a Linux-g' + [char]0x00E9 + 'pet (kb. egy perc).') }
+    'hu:podman_machine.start_wait' { return ('m' + [char]0x00E9 + 'g tart a Linux-g' + [char]0x00E9 + 'p ind' + [char]0x00ED + 't' + [char]0x00E1 + 'sa') }
+    'hu:podman_machine.stop' { return ('Le' + [char]0x00E1 + 'll' + [char]0x00ED + 'tom a Linux-g' + [char]0x00E9 + 'pet.') }
+    'hu:podman_machine.stop_wait' { return ('m' + [char]0x00E9 + 'g tart a Linux-g' + [char]0x00E9 + 'p le' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 'sa') }
+    'hu:podman_machine.wsl_added' { return ('WSL-be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 'sok hozz' + [char]0x00E1 + 'adva: %s:') }
+    'hu:podman_machine.wsl_undo' { return ('Visszavon' + [char]0x00E1 + 's: a jht uninstall kiveszi ezeket a sorokat, vagy t' + [char]0x00F6 + 'r' + [char]0x00F6 + 'ld ' + [char]0x0151 + 'ket k' + [char]0x00E9 + 'zzel (mindegyik f' + [char]0x00F6 + 'l' + [char]0x00F6 + 'tt van egy megjegyz' + [char]0x00E9 + 'ssor).') }
+    'es:podman_machine.init' { return ('Creo la m' + [char]0x00E1 + 'quina Linux de Podman: descarga su imagen del sistema (unos cientos de MB) y la prepara. Tarda unos minutos.') }
+    'es:podman_machine.init_wait' { return ('sigo creando la m' + [char]0x00E1 + 'quina Linux') }
+    'es:podman_machine.layers_started' { return '%s capas empezadas' }
+    'es:podman_machine.pull' { return 'Descargo la imagen de Job Hunter Team: puede tardar unos minutos.' }
+    'es:podman_machine.pull_wait' { return 'sigo descargando la imagen' }
+    'es:podman_machine.start' { return ('Arranco la m' + [char]0x00E1 + 'quina Linux (alrededor de un minuto).') }
+    'es:podman_machine.start_wait' { return ('sigo arrancando la m' + [char]0x00E1 + 'quina Linux') }
+    'es:podman_machine.stop' { return ('Detengo la m' + [char]0x00E1 + 'quina Linux.') }
+    'es:podman_machine.stop_wait' { return ('sigo deteniendo la m' + [char]0x00E1 + 'quina Linux') }
+    'es:podman_machine.wsl_added' { return ('Ajustes de WSL a' + [char]0x00F1 + 'adidos a %s:') }
+    'es:podman_machine.wsl_undo' { return ('Para deshacerlo: jht uninstall quita estas l' + [char]0x00ED + 'neas, o b' + [char]0x00F3 + 'rralas a mano (cada una tiene encima una l' + [char]0x00ED + 'nea de comentario).') }
+    'de:podman_machine.init' { return ('Ich erstelle die Linux-Maschine f' + [char]0x00FC + 'r Podman: Sie l' + [char]0x00E4 + 'dt ihr Systemabbild herunter (einige hundert MB) und richtet es ein. Das dauert einige Minuten.') }
+    'de:podman_machine.init_wait' { return 'erstelle noch die Linux-Maschine' }
+    'de:podman_machine.layers_started' { return '%s Schichten begonnen' }
+    'de:podman_machine.pull' { return 'Ich lade das Image von Job Hunter Team herunter: Das kann einige Minuten dauern.' }
+    'de:podman_machine.pull_wait' { return 'lade noch das Image herunter' }
+    'de:podman_machine.start' { return 'Ich starte die Linux-Maschine (etwa eine Minute).' }
+    'de:podman_machine.start_wait' { return 'starte noch die Linux-Maschine' }
+    'de:podman_machine.stop' { return 'Ich halte die Linux-Maschine an.' }
+    'de:podman_machine.stop_wait' { return 'halte noch die Linux-Maschine an' }
+    'de:podman_machine.wsl_added' { return ('WSL-Einstellungen hinzugef' + [char]0x00FC + 'gt zu %s:') }
+    'de:podman_machine.wsl_undo' { return ('R' + [char]0x00FC + 'ckg' + [char]0x00E4 + 'ngig machen: jht uninstall entfernt diese Zeilen, oder l' + [char]0x00F6 + 'sche sie von Hand (' + [char]0x00FC + 'ber jeder steht eine Kommentarzeile).') }
+    'fr:podman_machine.init' { return ('Je cr' + [char]0x00E9 + 'e la machine Linux de Podman : elle t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charge son image syst' + [char]0x00E8 + 'me (quelques centaines de Mo) et la pr' + [char]0x00E9 + 'pare. Cela prend quelques minutes.') }
+    'fr:podman_machine.init_wait' { return ('je cr' + [char]0x00E9 + 'e encore la machine Linux') }
+    'fr:podman_machine.layers_started' { return ('%s couches commenc' + [char]0x00E9 + 'es') }
+    'fr:podman_machine.pull' { return ('Je t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charge l''image de Job Hunter Team : cela peut prendre quelques minutes.') }
+    'fr:podman_machine.pull_wait' { return ('je t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charge encore l''image') }
+    'fr:podman_machine.start' { return ('Je d' + [char]0x00E9 + 'marre la machine Linux (environ une minute).') }
+    'fr:podman_machine.start_wait' { return ('je d' + [char]0x00E9 + 'marre encore la machine Linux') }
+    'fr:podman_machine.stop' { return ('J''arr' + [char]0x00EA + 'te la machine Linux.') }
+    'fr:podman_machine.stop_wait' { return ('j''arr' + [char]0x00EA + 'te encore la machine Linux') }
+    'fr:podman_machine.wsl_added' { return ('R' + [char]0x00E9 + 'glages WSL ajout' + [char]0x00E9 + 's ' + [char]0x00E0 + ' %s :') }
+    'fr:podman_machine.wsl_undo' { return ('Pour annuler : jht uninstall retire ces lignes, ou supprime-les ' + [char]0x00E0 + ' la main (chacune a une ligne de commentaire au-dessus).') }
+    'pt:podman_machine.init' { return ('Estou a criar a m' + [char]0x00E1 + 'quina Linux do Podman: descarrega a sua imagem de sistema (algumas centenas de MB) e prepara-a. Demora alguns minutos.') }
+    'pt:podman_machine.init_wait' { return ('ainda a criar a m' + [char]0x00E1 + 'quina Linux') }
+    'pt:podman_machine.layers_started' { return '%s camadas iniciadas' }
+    'pt:podman_machine.pull' { return 'Estou a descarregar a imagem do Job Hunter Team: pode demorar alguns minutos.' }
+    'pt:podman_machine.pull_wait' { return 'ainda a descarregar a imagem' }
+    'pt:podman_machine.start' { return ('Estou a iniciar a m' + [char]0x00E1 + 'quina Linux (cerca de um minuto).') }
+    'pt:podman_machine.start_wait' { return ('ainda a iniciar a m' + [char]0x00E1 + 'quina Linux') }
+    'pt:podman_machine.stop' { return ('Estou a parar a m' + [char]0x00E1 + 'quina Linux.') }
+    'pt:podman_machine.stop_wait' { return ('ainda a parar a m' + [char]0x00E1 + 'quina Linux') }
+    'pt:podman_machine.wsl_added' { return ('Defini' + [char]0x00E7 + [char]0x00F5 + 'es do WSL adicionadas a %s:') }
+    'pt:podman_machine.wsl_undo' { return ('Para desfazer: jht uninstall retira estas linhas, ou apaga-as ' + [char]0x00E0 + ' m' + [char]0x00E3 + 'o (cada uma tem por cima uma linha de coment' + [char]0x00E1 + 'rio).') }
+  }
+  return $null
+}
+# <<< texts in the 7 languages
+
 # What a person is told before each long machine command, and what the wait line says it is doing.
 function Get-JhtPodmanMachineAnnouncement {
   param([string]$Verb)
   switch ($Verb) {
-    'init' { return @{ Said = 'Creating the Linux machine for Podman: it downloads its system image (several hundred MB) and sets it up. This takes several minutes.'; Doing = 'creating the Linux machine' } }
-    'start' { return @{ Said = 'Starting the Linux machine (about a minute).'; Doing = 'starting the Linux machine' } }
-    'stop' { return @{ Said = 'Stopping the Linux machine.'; Doing = 'stopping the Linux machine' } }
+    'init' { return @{ Said = (Get-BridgeText 'podman_machine.init' 'Creating the Linux machine for Podman: it downloads its system image (several hundred MB) and sets it up. This takes several minutes.'); Doing = (Get-BridgeText 'podman_machine.init_wait' 'still creating the Linux machine') } }
+    'start' { return @{ Said = (Get-BridgeText 'podman_machine.start' 'Starting the Linux machine (about a minute).'); Doing = (Get-BridgeText 'podman_machine.start_wait' 'still starting the Linux machine') } }
+    'stop' { return @{ Said = (Get-BridgeText 'podman_machine.stop' 'Stopping the Linux machine.'); Doing = (Get-BridgeText 'podman_machine.stop_wait' 'still stopping the Linux machine') } }
     default { return $null }
   }
 }
@@ -912,9 +1033,9 @@ function Set-JhtWslConfigForMachine {
   }
   [IO.Directory]::CreateDirectory($RuntimeDir) | Out-Null
   [IO.File]::WriteAllText($recordPath, (ConvertTo-JhtWslConfigRecord -Path $path -Created $created -Added $added), [Text.UTF8Encoding]::new($false))
-  Write-Host "  WSL settings added to ${path}:" -ForegroundColor Cyan
+  Write-Host ('  ' + (Format-BridgeText 'podman_machine.wsl_added' 'WSL settings added to %s:' $path)) -ForegroundColor Cyan
   foreach ($entry in @($answer.Added)) { Write-Host "    [$($entry.Section)] $($entry.Key)=$($entry.Value)" -ForegroundColor Cyan }
-  Write-Host '  To undo it: jht uninstall takes these lines out, or delete them by hand (each has a comment line above it).' -ForegroundColor DarkGray
+  Write-Host ('  ' + (Get-BridgeText 'podman_machine.wsl_undo' 'To undo it: jht uninstall takes these lines out, or delete them by hand (each has a comment line above it).')) -ForegroundColor DarkGray
   # The setup starts the machine right after this: with WSL off, that start reads the file and nothing needs saying.
   if (Test-JhtWslVmRunning) { return 'vm-running' }
   return ''
