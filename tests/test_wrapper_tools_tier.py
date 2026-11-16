@@ -334,7 +334,7 @@ def test_a_real_state_folder_and_a_plain_old_tools_json_are_written_as_before(bo
 
 # ── tools_kick: the CLI keeps the tools moving, as the desktop app's round did ───────────────────────────────────────────────
 
-KICK_ENV = {"JHT_TOOLS_WAIT_STEP": "1", "JHT_TOOLS_SWITCH_GRACE": "0", "JHT_TOOLS_WAIT_MAX": "60", "JHT_TOOLS_QUIET_MAX": "600"}   # a switch that waited for nothing would miss every deadline below
+KICK_ENV = {"JHT_TOOLS_WAIT_STEP": "1", "JHT_TOOLS_SWITCH_GRACE": "0", "JHT_TOOLS_WAIT_MAX": "60", "JHT_TOOLS_QUIET_MAX": "600", "JHT_TOOLS_ONBOARDING_MAX": "0"}   # a switch that waited for nothing would miss every deadline below
 
 
 def _wait_until(check, what):
@@ -552,19 +552,128 @@ def test_a_command_that_starts_the_team_waits_for_the_switch_to_end(tmp_path):
         job.wait(timeout=10)
 
 
-def test_jht_team_chat_ends_clean_with_a_line_when_the_switch_ended_it():
+def test_jht_team_chat_comes_back_by_itself_when_the_switch_ended_it():
     text = WRAPPER.read_text(encoding="utf-8")
     arm = text[text.index("\n  team)\n"):]
     arm = arm[:arm.index("\n    ;;\n")]
     assert '"$NODE_ENTRY" "$@" || team_rc=$?' in arm                       # set -e does not end the wrapper on the REPL's exit
-    assert re.search(r'if \[ "\$\{2:-\}" = chat \] && team_chat_ended_by_switch; then\n\s+info "\$\(jht_say tools\.chat_switched\)"\n\s+exit 0\n', arm)
+    assert re.search(r'if \[ "\$\{2:-\}" = chat \] && team_chat_ended_by_switch; then\n\s+team_chat_through_switch "\$@"\n\s+exit \$\?\n', arm)
     assert arm.rstrip().endswith('exit "$team_rc"')                       # any other end: the REPL's own code, as before
     import sys as _sys
     _sys.path.insert(0, str(ROOT / "tests"))
     from wrapper_texts import catalog
     for lang in ("en", "it", "hu", "es", "de", "fr", "pt"):
-        line = catalog(lang)["wrapper.tools.chat_switched"]
-        assert "jht team chat" in line and "%" not in line, lang
+        texts = catalog(lang)
+        assert "jht team chat" in texts["wrapper.tools.chat_switched"], lang
+        for key in ("wrapper.tools.chat_reconnecting", "wrapper.tools.chat_resumed", "wrapper.tools.switch_wait"):
+            assert texts[key] and "%" not in texts[key], (lang, key)
+
+
+def _through_switch(tmp_path, docker_body: str, **env):
+    """team_chat_through_switch with the wrapper's own functions, a fake docker and stand-ins for what starts the team."""
+    import sys as _sys
+    _sys.path.insert(0, str(ROOT / "tests"))
+    from wrapper_texts import say_functions
+    text = WRAPPER.read_text(encoding="utf-8")
+    parts = [re.search(rf"^{name}\(\) \{{\n.*?^\}}\n", text, re.S | re.M).group(0)
+             for name in ("team_chat_ended_by_switch", "wait_for_tools_switch", "team_chat_agent_back", "team_chat_through_switch")]
+    fake = tmp_path / "bin"
+    fake.mkdir(exist_ok=True)
+    (fake / "docker").write_text("#!/bin/sh\n" + docker_body, encoding="utf-8")
+    (fake / "docker").chmod(0o755)
+    body = ("set -euo pipefail\n" + say_functions("en") + 'info() { printf "%s\\n" "$*" >&2; }\n'
+            f'export PATH="{fake}:$PATH"\nRUNTIME_DIR="{tmp_path}"\nEXEC_FLAGS=-i\nJHT_HOST_TYPE=linux\nNODE_ENTRY=/app/cli.js\n'
+            'ATTESTED_CONTAINER_ID=old\nensure_up() { ATTESTED_CONTAINER_ID=new; }\n' + "".join(parts)
+            + 'team_chat_through_switch team chat assistente\n')
+    return subprocess.run(["bash", "-c", body], capture_output=True, text=True, timeout=60, env={**os.environ, **env})
+
+
+def test_the_chat_comes_back_on_the_same_agent_once_its_session_is_there(tmp_path):
+    done = _through_switch(tmp_path, f'echo "$*" >> "{tmp_path}/calls"\nexit 0\n')
+    assert done.returncode == 0, done.stderr
+    calls = (tmp_path / "calls").read_text(encoding="utf-8").splitlines()
+    assert calls[0] == "exec new tmux has-session -t =ASSISTENTE"             # the new container, the same agent
+    assert calls[-1] == "exec -i -e JHT_HOST_TYPE=linux new node /app/cli.js team chat assistente"
+    assert done.stderr.index("so the chat stops for a moment") < done.stderr.index("let's pick up again")
+
+
+def test_an_agent_that_does_not_come_back_in_time_leaves_the_line_to_open_it_again(tmp_path):
+    done = _through_switch(tmp_path, f'echo "$*" >> "{tmp_path}/calls"\n[ "$3" = tmux ] && exit 1\nexit 0\n',
+                           JHT_TOOLS_CHAT_RECONNECT_MAX="2")
+    assert done.returncode == 0, done.stderr
+    assert "Open it again in a couple of minutes with jht team chat." in done.stderr
+    assert not any("node" in line for line in (tmp_path / "calls").read_text(encoding="utf-8").splitlines())
+
+
+ASSISTANT_SESSIONS = (".pi", "agent", "sessions", "--jht_home-agents-assistente--")
+
+
+def _assistant_session(box, age: float):
+    folder = box.home.joinpath(*ASSISTANT_SESSIONS)
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / "2026-11-15T21-00-00_abc.jsonl"
+    path.write_text('{"type":"session"}\n', encoding="utf-8")
+    stamp = time.time() - age
+    os.utime(path, (stamp, stamp))
+    return path
+
+
+def _ready(box, age: float = 0):
+    flag = box.home / "profile" / "ready.flag"
+    flag.write_text("2026-11-15T21:10:19Z\n", encoding="utf-8")
+    stamp = time.time() - age
+    os.utime(flag, (stamp, stamp))
+
+
+def test_the_switch_waits_while_the_assistant_is_still_talking_then_goes_when_it_is_quiet(box):
+    """ready.flag is «the team starts» (three fields), not «the onboarding is over»: the Assistente goes on asking. Giro Linux:
+    the switch closed the chat in the middle of the onboarding. It waits for the Assistente's session to stay still."""
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    session = _assistant_session(box, 0)
+    _ready(box)
+    env = {**KICK_ENV, "JHT_TOOLS_ONBOARDING_MAX": "600", "JHT_TOOLS_ASSISTANT_QUIET": "3"}
+    talking = subprocess.Popen(["sh", "-c", f'i=0; while [ $i -lt 6 ]; do touch "{session}"; sleep 1; i=$((i+1)); done'])
+    try:
+        assert box.run("tools_kick", **env).returncode == 0
+        time.sleep(4)
+        assert tier.exists() and _calls(box) == [], "the switch did not wait for the Assistente"
+    finally:
+        talking.wait(timeout=20)
+    _wait_until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"no switch once the Assistente was quiet: {_calls(box)}")
+
+
+def test_an_assistant_quiet_for_long_lets_the_switch_go_at_once(box):
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    _assistant_session(box, 400)
+    _ready(box)
+    assert box.run("tools_kick", **{**KICK_ENV, "JHT_TOOLS_ONBOARDING_MAX": "600"}).returncode == 0
+    _wait_until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"no switch: {_calls(box)}")
+
+
+def test_with_no_session_to_read_the_tetto_after_ready_flag_decides(box):
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    _ready(box)
+    assert box.run("tools_kick", **{**KICK_ENV, "JHT_TOOLS_ONBOARDING_MAX": "4"}).returncode == 0
+    time.sleep(2)
+    assert tier.exists() and _calls(box) == [], "the switch did not wait for the tetto"
+    _wait_until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"no switch at the tetto: {_calls(box)}")
+
+
+def test_a_session_kept_moving_never_holds_the_switch_past_the_tetto(box):
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    session = _assistant_session(box, 0)
+    _ready(box, age=5)                                                      # ready.flag 5 s ago, tetto 6 s
+    talking = subprocess.Popen(["sh", "-c", f'i=0; while [ $i -lt 15 ]; do touch "{session}"; sleep 1; i=$((i+1)); done'])
+    try:
+        assert box.run("tools_kick", **{**KICK_ENV, "JHT_TOOLS_ONBOARDING_MAX": "6", "JHT_TOOLS_ASSISTANT_QUIET": "60"}).returncode == 0
+        _wait_until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"the moving session held the switch: {_calls(box)}")
+    finally:
+        talking.kill()
+        talking.wait(timeout=20)
 
 
 def test_a_switch_that_still_fails_is_said_until_an_up_goes_well(box):

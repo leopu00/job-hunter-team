@@ -1,5 +1,7 @@
 """`jht team chat` open while the switch of the tools stops the core team and starts it again, on a REAL container engine.
 
+The chat comes back by itself on the same agent once the container runs again (the session of the agent is a stand-in tmux here).
+
 The REPL of the chat runs in the container (`docker exec ... node ... team chat`): the down of the switch stops the container, and
 the REPL ends under the person's eyes. This runs the wrapper's own `team)` arm and the library's own tools_switch_auto against a
 throwaway container of its own (label jht-probe, removed at the end): a stand-in `node` in it is the REPL (it reads its input),
@@ -55,8 +57,9 @@ def container(tmp_path):
         _docker("pull", IMAGE, timeout=300)
     name = f"jht-probe-{uuid.uuid4().hex[:10]}"
     # the stand-in REPL: `node <entry> team chat assistente` says it is there and reads the person's lines until its input ends
+    # and a stand-in tmux: the agent's session is there once the container runs (the container's pid1 starts it in production)
     boot = ("printf '#!/bin/sh\\necho REPL-OPEN\\nwhile read -r line; do echo \"you: $line\"; done\\n' > /usr/local/bin/node; "
-            "chmod 755 /usr/local/bin/node; exec sleep 600")
+            "printf '#!/bin/sh\\nexit 0\\n' > /usr/local/bin/tmux; chmod 755 /usr/local/bin/node /usr/local/bin/tmux; exec sleep 600")
     _docker("run", "-d", "--name", name, "--label", "jht-probe=1", IMAGE, "sh", "-c", boot)
     try:
         yield name
@@ -73,9 +76,12 @@ def _chat(tmp_path, name: str):
     runtime = tmp_path / "runtime"
     runtime.mkdir(exist_ok=True)
     script = ("set -euo pipefail\n" + say_functions("en") + 'info() { printf "%s\\n" "$*" >&2; }\n'
-              + _function("team_chat_ended_by_switch")
+              + "".join(_function(name) for name in ("team_chat_ended_by_switch", "wait_for_tools_switch", "team_chat_agent_back",
+                                                      "team_chat_through_switch"))
               + f'RUNTIME_DIR="{runtime}"\nEXEC_FLAGS="-i"\nJHT_HOST_TYPE=linux\nATTESTED_CONTAINER_ID="{name}"\nNODE_ENTRY=/app/cli.js\n'
-              'require_compose_file() { :; }\nrequire_docker() { :; }\nensure_up() { :; }\nensure_up_for_stop() { :; }\n'
+              'require_compose_file() { :; }\nrequire_docker() { :; }\nensure_up_for_stop() { :; }\n'
+              # ensure_up of the wrapper waits for the switch (wait_for_tools_switch), then the container is running
+              'ensure_up() { wait_for_tools_switch; until [ "$(docker inspect -f "{{.State.Running}}" "$ATTESTED_CONTAINER_ID")" = true ]; do sleep 1; done; }\n'
               'case "$1" in\n' + _team_arm() + "esac\n")
     chat = subprocess.Popen(["bash", "-c", script, "jht", "team", "chat", "assistente"], stdin=subprocess.PIPE,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -89,7 +95,7 @@ def _chat(tmp_path, name: str):
     return chat, runtime
 
 
-def test_a_chat_open_through_the_switch_says_why_it_ended_and_ends_clean(tmp_path, container):
+def test_a_chat_open_through_the_switch_comes_back_by_itself_on_the_same_agent(tmp_path, container):
     chat, runtime = _chat(tmp_path, container)
     home = tmp_path / "jht"
     (home / "profile").mkdir(parents=True)
@@ -97,7 +103,7 @@ def test_a_chat_open_through_the_switch_says_why_it_ended_and_ends_clean(tmp_pat
     (runtime / "runtime-tier").write_text("core\n", encoding="utf-8")
     wrapper = tmp_path / "stand-in-wrapper.sh"
     wrapper.write_text("#!/bin/sh\n"
-                       f'case "$1" in down) docker stop -t 1 "{container}" ;; up) docker start "{container}" ;; esac\n'
+                       f'case "$1" in down) docker stop -t 1 "{container}" ;; up) sleep 3; docker start "{container}" ;; esac\n'
                        f'echo "$1" >> "{tmp_path}/switch-calls"\n', encoding="utf-8")
     wrapper.chmod(0o755)
     job = ("set -u\n"
@@ -109,16 +115,21 @@ def test_a_chat_open_through_the_switch_says_why_it_ended_and_ends_clean(tmp_pat
                             env={**os.environ, "JHT_TOOLS_QUIET_MAX": "10"})
     assert switch.returncode == 0, switch.stderr
     try:
+        again = chat.stdout.readline()                                      # the REPL of the same agent, open again by itself
+        assert again.strip() == "REPL-OPEN", again
+        chat.stdin.write("where were we\n")
+        chat.stdin.flush()
+        assert chat.stdout.readline().strip() == "you: where were we"
+        chat.stdin.close()                                                  # the person ends the chat
         rc = chat.wait(timeout=60)
     finally:
         chat.kill()
     said = chat.stderr.read()
-    print(f"switch took {time.time() - started:.1f}s; chat rc={rc}; chat said: {said!r}")
+    print(f"switch and chat back in {time.time() - started:.1f}s; chat rc={rc}; chat said: {said!r}")
     assert (tmp_path / "switch-calls").read_text(encoding="utf-8").split() == ["down", "up"]
-    assert _running(container), "the up of the switch started the team again"
     assert rc == 0, said
-    assert "The team is moving onto the Scouts' full tools, so this chat has closed." in said
-    assert "jht team chat" in said
+    assert said.index("so the chat stops for a moment") < said.index("let's pick up again")
+    assert "Open it again" not in said
     assert not (runtime / ".tools-switching").exists() and not (runtime / "runtime-tier").exists()
 
 

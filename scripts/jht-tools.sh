@@ -132,6 +132,33 @@ tools_kick() {
   return 0
 }
 
+tools_mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null; }
+
+# ready.flag means «the team starts», not «the onboarding is over»: the Assistente sets it with three fields and goes on asking.
+# The switch stops the container the conversation runs in, so it waits for the first of: the Assistente's Pi session has not moved
+# for JHT_TOOLS_ASSISTANT_QUIET seconds (180), or JHT_TOOLS_ONBOARDING_MAX seconds (1800) have gone since ready.flag. The session
+# files are the container's: they only say WHEN, never a state, and a folder that cannot be read leaves the tetto alone to decide.
+tools_wait_onboarding_quiet() {
+  local flag="$1" quiet="${JHT_TOOLS_ASSISTANT_QUIET:-180}" cap="${JHT_TOOLS_ONBOARDING_MAX:-1800}" step="${JHT_TOOLS_WAIT_STEP:-15}"
+  local dir="${JHT_HOME_HOST:-$HOME/.jht}/.pi/agent/sessions/--jht_home-agents-assistente--" since now newest file at
+  since="$(tools_mtime "$flag")" || since="$(date +%s)"
+  while :; do
+    [ -f "$RUNTIME_TIER_FILE" ] || return 0
+    now="$(date +%s)"
+    [ $((now - since)) -ge "$cap" ] && return 0
+    newest=""
+    if [ -d "$dir" ] && [ ! -L "$dir" ]; then
+      for file in "$dir"/*.jsonl; do
+        [ -f "$file" ] && [ ! -L "$file" ] || continue
+        at="$(tools_mtime "$file")" || continue
+        if [ -z "$newest" ] || [ "$at" -gt "$newest" ]; then newest="$at"; fi
+      done
+    fi
+    if [ -n "$newest" ] && [ $((now - newest)) -ge "$quiet" ]; then return 0; fi
+    sleep "$step"
+  done
+}
+
 # The job waits for the profile (the onboarding has closed), then a little more, so the switch does not cut the last answers of
 # the onboarding short; the tier file gone means someone made the switch by hand (`jht tools switch`).
 tools_wait_and_switch() {
@@ -140,6 +167,7 @@ tools_wait_and_switch() {
     [ -f "$RUNTIME_TIER_FILE" ] || return 0
     if [ -f "$flag" ] && [ ! -L "$flag" ]; then
       sleep "${JHT_TOOLS_SWITCH_GRACE:-30}"
+      tools_wait_onboarding_quiet "$flag"
       tools_switch_auto
       return 0
     fi
