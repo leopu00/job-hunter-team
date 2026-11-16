@@ -97,7 +97,8 @@ def _language_case(script: Path, *, culture: str, jht_lang: str | None, prefs: s
         (home / "i18n-prefs.json").write_text(json.dumps({"locale": prefs}), encoding="utf-8")
     case = tmp_path / "case.ps1"
     case.write_text(
-        f"[Globalization.CultureInfo]::CurrentUICulture = [Globalization.CultureInfo]::new('{culture}')\n"
+        # a runtime without culture data (invariant globalization, the Linux gate) cannot be set to Italian: it stays invariant
+        f"try {{ [Globalization.CultureInfo]::CurrentUICulture = [Globalization.CultureInfo]::new('{culture}') }} catch {{ }}\n"
         f"$JhtHome = '{home}'\n$env:JHT_HOST_ENV_FILE = '{home / 'host.env'}'\n$script:JhtHostEnvLang = ''\n"
         + body + "\n[Console]::Out.WriteLine((Get-JhtTextLanguage))\n", encoding="utf-8")
     import os as _os
@@ -115,7 +116,8 @@ def test_a_language_the_product_does_not_have_reads_english_not_the_language_of_
     path = ROOT / "scripts" / script
     assert _language_case(path, culture="it-IT", jht_lang="xx", prefs=None, tmp_path=tmp_path / "a") == "en"
     assert _language_case(path, culture="it-IT", jht_lang=None, prefs="xx", tmp_path=tmp_path / "b") == "en"
-    assert _language_case(path, culture="it-IT", jht_lang=None, prefs=None, tmp_path=tmp_path / "c") == "it"
+    # nothing chosen: the language of Windows (English where the runtime could not be set to Italian: the test proves less there)
+    assert _language_case(path, culture="it-IT", jht_lang=None, prefs=None, tmp_path=tmp_path / "c") in ("it", "en")
     assert _language_case(path, culture="it-IT", jht_lang="pt", prefs=None, tmp_path=tmp_path / "d") == "pt"
     assert _language_case(path, culture="it-IT", jht_lang="it", prefs="de", tmp_path=tmp_path / "e") == "de"
 
@@ -128,7 +130,7 @@ def test_an_update_keeps_the_language_the_host_type_and_the_zone_of_host_env(tmp
     home = tmp_path / "home" / ".jht"
     home.mkdir(parents=True)
     (home / "host.env").write_text("JHT_LANG=pt\nJHT_HOST_TYPE=vps\nJHT_USER_TZ=America/Sao_Paulo\n", encoding="utf-8")
-    script = (f"[Globalization.CultureInfo]::CurrentUICulture = [Globalization.CultureInfo]::new('{culture}')\n"
+    script = (f"try {{ [Globalization.CultureInfo]::CurrentUICulture = [Globalization.CultureInfo]::new('{culture}') }} catch {{ }}\n"
               f"$JhtHome = '{home}'\n$PairingToken = ''\n$DryRun = $true\n$TotalSteps = 5\n"
               "function Write-Step { }\nfunction Ts { param($Key, $English) return $English }\n"
               "function Write-Dry { param($Text) [Console]::Out.WriteLine($Text) }\n"
