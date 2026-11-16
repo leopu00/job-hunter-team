@@ -95,3 +95,13 @@ test('localTimeZone reads JHT_USER_TZ from host.env when the variable is not set
   assert.equal(localTimeZone({}, home), 'Europe/Rome');
   assert.equal(localTimeZone({ JHT_USER_TZ: 'America/Sao_Paulo' }, home), 'America/Sao_Paulo');
 });
+
+test('the zone read from jht.config.json is printed only when it is a plain zone name', () => {
+  const asked = (timezone) => {
+    const root = home(cap({ why: 'pace', resumes_at: '2026-11-16T03:10:00+01:00' }));
+    writeFileSync(join(root, 'jht.config.json'), JSON.stringify({ team: { budget: { timezone } } }));
+    return show(budgetPauseText({ home: root, now: NOW }), 'en');
+  };
+  assert.match(asked('Europe/Rome'), /\(Europe\/Rome\)/);
+  for (const bad of ['Europe/Rome\u001b[31m', 'Rome; rm -rf', 'a b', 'x\ny']) assert.match(asked(bad), /it resumes by itself at 16\/11 3:10\.$/);
+});
