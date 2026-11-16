@@ -19,6 +19,13 @@ import {
 } from '@clack/prompts';
 import pc from 'picocolors';
 import { WizardCancelledError } from './prompts.js';
+import { t } from './i18n.js';
+
+/** «Yes» / «No» in the person's language: clack's own are English. */
+export function answerWord(key) {
+  const word = t(key);
+  return word === key ? null : word.charAt(0).toUpperCase() + word.slice(1);
+}
 
 function guardCancel(value) {
   if (isCancel(value)) {
@@ -105,8 +112,9 @@ export function createClackPrompter() {
           message: pc.bold(params.message),
           initialValue: params.initialValue,
           // what each answer does, when the question says it («Yes, carry on» / «No, stop here»)
-          ...(params.active ? { active: params.active } : {}),
-          ...(params.inactive ? { inactive: params.inactive } : {}),
+          // and, when it does not, a plain «Yes» / «No» in the person's language
+          active: params.active || answerWord('common.yes') || 'Yes',
+          inactive: params.inactive || answerWord('common.no') || 'No',
         }),
       ),
 

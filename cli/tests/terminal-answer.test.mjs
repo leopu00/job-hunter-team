@@ -15,7 +15,7 @@ test('a line that answers the card is not sent on as text', () => {
   assert.deepEqual(found, { result: 'answered', label: 'Confirm and save' });
   assert.deepEqual(asked, [['assistente', '1']]);
   assert.equal(describeAnswer(found).failed, false);
-  assert.match(describeAnswer(found).text, /Answer recorded: Confirm and save/);
+  assert.match(describeAnswer(found, 'en').text, /Answer recorded: Confirm and save/);
 });
 
 test('chat, and every way the helper cannot say, is chat: the line is never lost', () => {
@@ -46,7 +46,7 @@ test('a number that is not an option is told and the line is not sent', () => {
     usingContainer: true, run: ok({ result: 'invalid', reason: 'number_out_of_range', code: 'Q1A2B' }),
   });
   assert.equal(found.result, 'invalid');
-  const said = describeAnswer(found);
+  const said = describeAnswer(found, 'en');
   assert.equal(said.failed, true);
   assert.match(said.text, /not one of the options/);
   assert.equal(describeAnswer({ result: 'closed' }).failed, false);

@@ -22,6 +22,8 @@ import { answerTyped, describeAnswer } from '../../lib/terminal-answer.js';
 import { errorBlock } from '../../lib/ui.js';
 import { blockedNoticeFor } from '../../lib/chat-blocked-notice.js';
 import { creditNotice } from '../../lib/provider-credit.js';
+import { localTimeZone } from '../../lib/local-tz.js';
+import { say, textLanguage } from '../../lib/texts.js';
 
 // Escape per passare il messaggio dentro single-quote bash:
 //   ' -> '\''   $ -> \$   ` -> \`
@@ -271,9 +273,22 @@ export function withoutMoodTag(text) {
   return found && MOOD_TAGS.includes(found[1]) ? text.slice(found[0].length) : text;
 }
 
-export function formatChatMessage(message, agent) {
+/**
+ * HH:MM:SS of a message in the person's zone. The CLI of the chat runs in the container, whose own zone is UTC: the
+ * time is said in the zone the person chose (localTimeZone), not in the container's (giro Windows 16/11: 14:07 for 15:07).
+ */
+export function chatClock(seconds, zone = localTimeZone()) {
+  const when = new Date(Number(seconds) * 1000);
+  try {
+    return new Intl.DateTimeFormat('en-GB', { timeZone: zone, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(when);
+  } catch {
+    return when.toTimeString().slice(0, 8);
+  }
+}
+
+export function formatChatMessage(message, agent, zone = undefined) {
   const who = message.role === 'user' ? 'you' : message.role === 'system' ? 'system' : agent;
-  const at = Number(message.at) > 0 ? new Date(Number(message.at) * 1000).toTimeString().slice(0, 8) : '';
+  const at = Number(message.at) > 0 ? chatClock(message.at, zone) : '';
   const written = String(message.text ?? '').replace(CONTROLS, '').trim();
   // only what the agent wrote carries a mood tag: a person's own «[caldo]» stays
   const text = message.role === 'user' || message.role === 'system' ? written : withoutMoodTag(written).trim();
@@ -286,14 +301,14 @@ export function formatChatMessage(message, agent) {
 }
 
 /** An open card as lines for the screen: its code, its text and its options numbered, and how to answer. */
-export function formatCard(card) {
+export function formatCard(card, language = textLanguage()) {
   const clean = (value) => String(value ?? '').replace(CONTROLS, '').trim();
   const head = c.bold('question') + c.dim(` ${clean(card.code)}  ${clean(card.subject)}`);
   const body = clean(card.text).split('\n').map((l) => `  ${l}`).join('\n');
   const options = card.options.map((option, index) => `  ${index + 1}) ${clean(option)}`).join('\n');
   const how = card.multiple
-    ? c.dim('  Several options can be chosen on this card: answer it in the app.')
-    : c.dim(`  Answer with the number (several cards open: write the code first, e.g. «${clean(card.code)} 1»).`);
+    ? c.dim(`  ${say('chat.card.answer_in_app', {}, language)}`)
+    : c.dim(`  ${say('chat.card.answer_number', { code: clean(card.code) }, language)}`);
   return `${head}\n${body}\n${options}\n${how}`;
 }
 

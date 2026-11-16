@@ -80,8 +80,11 @@ def _read_kv_file(path: Path, key: str) -> str | None:
 @lru_cache(maxsize=1)
 def _read_timezone_candidates(env_tz, host_candidates, profile_candidates) -> str:
     """Cascade lookup (vedi docstring modulo). Default UTC se niente settato."""
-    # 1. env var diretta (priorità massima, usata dal wrapper jht)
-    if env_tz:
+    # 1. env var diretta (priorità massima, usata dal wrapper jht). Un UTC nella variabile però non vale contro una
+    # zona in host.env: è il valore predefinito di un container creato prima che host.env la dicesse (l'installer
+    # Windows accende la squadra prima di scrivere host.env), e resta tale finché il container non viene ricreato.
+    # Chi sceglie UTC lo ha anche in host.env.
+    if env_tz and env_tz.upper() not in ("UTC", "ETC/UTC"):
         return env_tz
 
     # 2. host.env in vari path candidati
@@ -91,6 +94,8 @@ def _read_timezone_candidates(env_tz, host_candidates, profile_candidates) -> st
         val = _read_kv_file(path, "JHT_USER_TZ")
         if val:
             return val
+    if env_tz:
+        return env_tz
 
     # 3. candidate_profile.yml (legacy)
     for path in profile_candidates:

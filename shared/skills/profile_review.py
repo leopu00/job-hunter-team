@@ -576,6 +576,13 @@ def _field_label(t: Any, name: str) -> str:
     return spaced[:1].upper() + spaced[1:]
 
 
+def _said(value: Any, t: Any) -> str:
+    """A value in words: a yes or a no in the person's language, not Python's True / False."""
+    if isinstance(value, bool):
+        return t("common.yes" if value else "common.no")
+    return _text(value)
+
+
 def _record_words(name: str, record: dict[str, Any], t: Any) -> str:
     """A record said in words, not as the program holds it: what the person is allowed first and where in brackets
     (work authorization), any other as `Name: value` pairs."""
@@ -584,7 +591,7 @@ def _record_words(name: str, record: dict[str, Any], t: Any) -> str:
         if region.isalpha() and len(region) <= 3:  # a region code is written in capitals, whatever the Assistant wrote
             region = region.upper()
         return f"{_text(record['status'])} ({region})"
-    return ", ".join(f"{_field_label(t, str(k))}: {_text(v)}" for k, v in record.items())
+    return ", ".join(f"{_field_label(t, str(k))}: {_said(v, t)}" for k, v in record.items())
 
 
 def _short(value: Any) -> str:
@@ -641,7 +648,7 @@ def summary_text(envelope: dict[str, Any], inferred: list[str]) -> str:
             continue
         raw = _value_at(envelope["profile"], name)
         records = _flat_records(raw) or ([_flat_record(raw)] if _flat_record(raw) else [])
-        value = _short("; ".join(_record_words(name, record, t) for record in records) if records else raw)
+        value = _short("; ".join(_record_words(name, record, t) for record in records) if records else _said(raw, t) if isinstance(raw, bool) else raw)
         if value:
             lines.append(f"- {_field_label(t, name)}: {value}{mark}")
     missing = [t(_MISSING_LABEL[field]) for field in envelope.get("missing", []) if field in _MISSING_LABEL]

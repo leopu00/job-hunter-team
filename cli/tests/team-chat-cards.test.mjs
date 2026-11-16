@@ -29,7 +29,7 @@ test('cards that cannot be read are null, and a malformed one is left out', () =
 });
 
 test('a card is shown with its code, its text and its options numbered from 1', () => {
-  const text = plain(formatCard(plan));
+  const text = plain(formatCard(plan, 'en'));
   assert.match(text, /question\s+Q1A2B\s+Plan/);
   assert.match(text, /Which subscription plan do you have\?/);
   assert.match(text, /1\) Plus\n\s+2\) Pro\n\s+3\) Pro 20x\n\s+4\) I do not know/);
@@ -43,7 +43,7 @@ test('what a terminal obeys never reaches the screen from a card', () => {
 });
 
 test('a card that takes several options says to answer it in the app', () => {
-  assert.match(plain(formatCard({ ...plan, multiple: true })), /answer it in the app/);
+  assert.match(plain(formatCard({ ...plan, multiple: true }, 'en')), /answer it in the app/);
 });
 
 test('the history opens with the welcome and then the cards that are open', () => {
