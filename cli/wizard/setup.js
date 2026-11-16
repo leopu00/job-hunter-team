@@ -30,7 +30,7 @@ import {
   showSummary,
 } from './setup-steps.js';
 import { formatSecretForConfig } from './secret-ref.js';
-import { promptBudget, budgetSummary, keepSamePeriod } from './setup-budget.js';
+import { promptBudget, budgetSummary } from './setup-budget.js';
 import { checkPrerequisites, runHealthCheck } from './setup-checks.js';
 import { t, tf } from './i18n.js';
 import { askLanguage } from './setup-language.js';
@@ -364,8 +364,8 @@ async function runSetupSteps(prompter, state) {
   // --- Salva e riepilogo ---
   await assembleAndSaveConfig(prompter, {
     providerChoice, authMethod, apiKey: apiKeySecret, subscriptionConfig, model,
-    // the same budget saved again (also after a reset) keeps its period: the brake started it once
-    baseProviders: baseConfig.providers || {}, workingHours, budget: keepSamePeriod(snapshot.config?.team?.budget, budget), harness,
+    // a budget confirmed in the setup always opens a new period (new saved_at: the dollars and state/budget-start.json start again)
+    baseProviders: baseConfig.providers || {}, workingHours, budget, harness,
   });
 
   // ────────────────────────────────────────────────────────────────────────
