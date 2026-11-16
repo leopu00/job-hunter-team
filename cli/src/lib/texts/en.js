@@ -238,4 +238,8 @@ export default {
   "chat.answer.reason.reply_not_an_option": "that is not one of the options",
   "chat.card.answer_number": "Answer with the number (several cards open: write the code first, e.g. «{code} 1»).",
   "chat.card.answer_in_app": "Several options can be chosen on this card: answer it in the app.",
+  "chat.header.title": "Chat with {session}",
+  "chat.header.container": "container jht",
+  "chat.header.host": "tmux host",
+  "chat.header.commands": "/exit to exit · /read for new messages · /cards for the open questions · /pane for the terminal · /clear to clean",
 };

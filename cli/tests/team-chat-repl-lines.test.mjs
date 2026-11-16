@@ -44,8 +44,9 @@ function fixture({ workSeconds = 0 } = {}) {
 }
 
 /** Runs the chat REPL; `script` is [delayMs, text] pairs written to its stdin. Resolves with what it printed and sent. */
-function runChat(script, work, chatOptions = '{}') {
+function runChat(script, work, chatOptions = '{}', locale = null) {
   const { bin, home, sent } = fixture(work);
+  if (locale) writeFileSync(join(home, 'i18n-prefs.json'), JSON.stringify({ locale }));
   const code = `import { chatAction } from '${CHAT}'; await chatAction('assistente', ${chatOptions});`;
   const child = spawn(process.execPath, ['--input-type=module', '-e', code], {
     env: { PATH: `${bin}:/usr/bin:/bin`, HOME: home, JHT_HOME: home, NO_COLOR: '1' },
@@ -100,4 +101,15 @@ test('an agent that is not blocked keeps the old words', async () => {
   const r = await runChat([[300, '/read'], [300, '/exit']], {}, notBlocked);
   assert.match(r.out, /no new messages/);
   assert.doesNotMatch(r.out, /is blocked/);
+}, { timeout: 60_000 });
+
+// Giro Windows of the build6: `jht team chat assistente` of an Italian person opened under «Chat with ASSISTENTE … /exit to exit».
+test('the head of the chat is in the language of the person', async () => {
+  const it = plain((await runChat([[300, '/exit']], {}, '{}', 'it')).out);
+  assert.match(it, /Chat con JHT-ASSISTENTE \(tmux dell'host\)/, it);
+  assert.match(it, /\/exit per uscire · \/read per i messaggi nuovi · \/cards per le domande aperte/);
+  assert.doesNotMatch(it, /Chat with|to exit/);
+  const en = plain((await runChat([[300, '/exit']], {}, '{}', 'en')).out);
+  assert.match(en, /Chat with JHT-ASSISTENTE \(tmux host\)/, en);
+  assert.match(en, /\/exit to exit · \/read for new messages/);
 }, { timeout: 60_000 });

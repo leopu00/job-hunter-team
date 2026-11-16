@@ -25,10 +25,12 @@ callers at once (the container boot and the agent) take one lock.
 
 `settled` asks, without the model, whether a start of the Assistente has
 anything left for its welcome message to do: the flag is there, a welcome is in
-the chat, and the onboarding is over (`profile/onboarding-done.flag`). Then the
-launcher sends nothing: a restart (a `jht up` during the pause of the budget
-too) costs no call. Exit 0 and `WELCOME_SETTLED`, else exit 1 and
-`WELCOME_PENDING <what is missing>`.
+the chat, and the onboarding is over (`profile/onboarding-done.flag`, or a
+profile that has nothing left to ask: the eight fields and the questionnaire
+done, as the Assistente itself would find after a restart; a profile made
+before the flag existed has none). Then the launcher sends nothing: a restart
+(a `jht up` during the pause of the budget, an update too) costs no call.
+Exit 0 and `WELCOME_SETTLED`, else exit 1 and `WELCOME_PENDING <what is missing>`.
 
 One line on stdout:
     WELCOME_DELIVERED chat=posted|already telegram=sent|failed|skipped|replay flag=ok|not_written
@@ -269,13 +271,31 @@ def deliver() -> int:
     return 0
 
 
+def _nothing_left_to_ask() -> bool:
+    """The eight fields are in the profile and the questionnaire has no step left: what the Assistente checks after a restart
+    before it writes onboarding-done.flag and asks nothing. Whatever cannot be read means there may be something to ask."""
+    try:
+        if str(HERE) not in sys.path:
+            sys.path.insert(0, str(HERE))
+        import onboarding_questionnaire  # type: ignore
+        import profile_review  # type: ignore
+        import validate_profile  # type: ignore
+
+        profile, raw = profile_review._read_profile()
+        if raw is None or not isinstance(profile, dict) or validate_profile.team_minimum_missing(profile):
+            return False
+        return onboarding_questionnaire.status().get("done") is True
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def settled() -> int:
     profile = jht_home() / "profile"
     if not (profile / FLAG).is_file():
         missing = "flag"
     elif not _in_chat():
         missing = "chat"
-    elif not (profile / ONBOARDING_DONE_FLAG).is_file():
+    elif not (profile / ONBOARDING_DONE_FLAG).is_file() and not _nothing_left_to_ask():
         missing = "onboarding"
     else:
         print("WELCOME_SETTLED")

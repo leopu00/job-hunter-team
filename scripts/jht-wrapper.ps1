@@ -2154,6 +2154,42 @@ function Invoke-JhtTeamChatThroughSwitch {
   $script:JhtTeamChatCode = $LASTEXITCODE
 }
 
+# `jht team chat` on a console: the REPL in the container, with what the container client says on its own stderr kept aside until
+# the REPL ends (on a console the REPL's lines all come through the tty, on stdout; stdin and stdout stay the console). The switch
+# of the tools removes the container under the REPL, and Podman then says «Error: no container with name or ID "jht" found»: that
+# line is not for the person, the chat says why it stops and comes back (Complete-JhtTeamChatErrors -Drop); any other end shows it.
+# Not on a console, or with a word a command line cannot carry as it is: nothing here ($null), the chat runs as any command.
+function Invoke-JhtTeamChatOnConsole {
+  param([string[]]$HostFlags)
+  $script:JhtTeamChatErrFile = $null
+  if (($ExecFlags -join ' ') -cne '-it') { return $null }
+  $words = @(@('exec') + $ExecFlags + $HostFlags + @($Container, 'node', $NodeEntry, $Sub) + @($Rest))
+  if (@($words | Where-Object { [string]$_ -cnotmatch '^[A-Za-z0-9_./:=@+-]+$' }).Count -gt 0) { return $null }
+  $client = Get-Command docker -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $client) { return $null }
+  try {
+    $script:JhtTeamChatErrFile = [IO.Path]::GetTempFileName()
+    $process = Start-Process -FilePath $client.Source -ArgumentList ($words -join ' ') -NoNewWindow -Wait -PassThru `
+      -RedirectStandardError $script:JhtTeamChatErrFile -ErrorAction Stop
+    return [int]$process.ExitCode
+  } catch {
+    Complete-JhtTeamChatErrors -Drop
+    return $null
+  }
+}
+
+# What the container client said on its stderr during the chat: shown (or, -Drop, left out), and its file taken away.
+function Complete-JhtTeamChatErrors {
+  param([switch]$Drop)
+  $file = $script:JhtTeamChatErrFile
+  $script:JhtTeamChatErrFile = $null
+  if (-not $file) { return }
+  if (-not $Drop) {
+    try { $text = [IO.File]::ReadAllText($file); if ($text) { [Console]::Error.Write($text) } } catch { }
+  }
+  Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
+}
+
 # The fresh wrapper of a chat that the switch ended: the container the switch started must be running and ours, and the agent
 # back in it. Nothing is started here: if they are not there, the person is told to open the chat again.
 function Invoke-JhtTeamChatResume {
@@ -8473,13 +8509,19 @@ switch ($Sub) {
     if ($Sub -ceq 'team' -and $Rest.Count -gt 1 -and $Rest[0] -ceq 'chat' -and $env:JHT_TEAM_CHAT_RESUME) { Invoke-JhtTeamChatResume $Rest[1] }
     else { Ensure-Up }
     $hostFlags = @('-e', "JHT_HOST_TYPE=$env:JHT_HOST_TYPE")
-    & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @hostFlags $Container node $NodeEntry $Sub @Rest }
-    $code = $LASTEXITCODE
+    $code = $null
+    if ($Sub -ceq 'team' -and $Rest.Count -gt 0 -and $Rest[0] -ceq 'chat') { $code = Invoke-JhtTeamChatOnConsole $hostFlags }
+    if ($null -eq $code) {
+      & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @hostFlags $Container node $NodeEntry $Sub @Rest }
+      $code = $LASTEXITCODE
+    }
     # the REPL ended because the team is moving onto the full image: it comes back by itself once the team runs again
     if ($Sub -ceq 'team' -and $Rest.Count -gt 0 -and $Rest[0] -ceq 'chat' -and (Test-JhtTeamChatEndedBySwitch)) {
+      Complete-JhtTeamChatErrors -Drop
       Invoke-JhtTeamChatThroughSwitch $Rest
       exit $script:JhtTeamChatCode
     }
+    Complete-JhtTeamChatErrors
     if ($Sub -eq 'cloud' -and $Rest.Count -gt 0 -and $Rest[0] -eq 'pair' -and $code -eq 0) { if ((Ensure-Broker) -eq 0) { Initialize-BrokerWebAuthorisations } }
     exit $code
     break

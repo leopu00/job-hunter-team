@@ -271,4 +271,8 @@ export default {
   "chat.answer.reason.reply_not_an_option": "non è fra le opzioni",
   "chat.card.answer_number": "Rispondi con il numero (con più schede aperte scrivi prima il codice, per esempio «{code} 1»).",
   "chat.card.answer_in_app": "Su questa scheda si possono scegliere più opzioni: rispondi dall'app.",
+  "chat.header.title": "Chat con {session}",
+  "chat.header.container": "container jht",
+  "chat.header.host": "tmux dell'host",
+  "chat.header.commands": "/exit per uscire · /read per i messaggi nuovi · /cards per le domande aperte · /pane per il terminale · /clear per pulire",
 };

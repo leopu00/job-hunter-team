@@ -468,8 +468,10 @@ export async function chatAction(agentArg, options = {}) {
   const rl = createInterface({ input, output, terminal: true });
   const typedLines = createLineQueue(rl);
   console.log('');
-  console.log(c.bold(`Chat with ${session}`) + c.dim(`  (${usingContainer() ? 'container jht' : 'tmux host'})`));
-  console.log(c.dim('  /exit to exit · /read for new messages · /cards for the open questions · /pane for the terminal · /clear to clean'));
+  const language = textLanguage();
+  console.log(c.bold(say('chat.header.title', { session }, language))
+    + c.dim(`  (${usingContainer() ? say('chat.header.container', {}, language) : say('chat.header.host', {}, language)})`));
+  console.log(c.dim(`  ${say('chat.header.commands', {}, language)}`));
   console.log('');
 
   // What the agent wrote to the chat (its welcome included), not only the terminal's screen.
