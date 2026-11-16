@@ -24,7 +24,7 @@ import {
 import { formatSecretForConfig, resolveSecret, describeSecret } from './secret-ref.js';
 import { runHealthCheck } from './setup-checks.js';
 import { checkPiApiKey, rejectedKeyMessage } from '../../shared/runtime/provider-key-check.js';
-import { budgetFromOptions, budgetSummary, keepSamePeriod, minimumFor } from './setup-budget.js';
+import { budgetFromOptions, budgetSummary, minimumFor } from './setup-budget.js';
 import { t, tf, LANGUAGES, hasLanguageChoice, systemLanguage, saveLanguage } from './i18n.js';
 import { summarizeRoleModels } from './setup-models.js';
 import { AGENT_HARNESSES, DEFAULT_HARNESS } from '../../shared/runtime/agent-harness.js';
@@ -370,7 +370,7 @@ function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, 
   // team.budget: a new one starts now; --no-budget removes it; no budget option keeps what the config has (JHT-T322)
   if ('budget' in budgetChoice) {
     const { budget: _old, ...team } = config.team ?? {};
-    config = { ...config, team: budgetChoice.budget ? { ...team, budget: keepSamePeriod(readConfigFileSnapshot().config?.team?.budget, budgetChoice.budget) } : team };
+    config = { ...config, team: budgetChoice.budget ? { ...team, budget: budgetChoice.budget } : team };
     if (!budgetChoice.budget && Object.keys(config.team).length === 0) delete config.team;
   }
 
