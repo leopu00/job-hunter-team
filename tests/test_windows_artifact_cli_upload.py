@@ -35,6 +35,8 @@ function Require-Docker { }
 function Ensure-Up { }
 function Get-RunningComposeServiceId { param($Service) return $env:UPLOAD_CONTAINER_ID }
 function Write-Err { param($Message) [Console]::Error.WriteLine($Message) }
+# the copy of a file from outside the shared folder (its own tests, test_wrapper_ps1_artifact_upload_copies_into_shared.py): here the files are inside
+function Copy-JhtArtifactIntoShared { param([string[]]$UploadArgs) return ,@($UploadArgs) }
 function docker {
   [IO.File]::WriteAllText($env:UPLOAD_CALLS, (ConvertTo-Json -InputObject @($args) -Compress))
   if ($args[0] -ceq 'inspect') {

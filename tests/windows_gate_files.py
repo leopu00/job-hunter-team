@@ -81,6 +81,7 @@ WINDOWS_GATE_EXTRA = (
     "tests/test_telegram_status_is_read_only.py",
     "tests/test_tools_ps1_speaks_the_language_chosen.py",
     "tests/test_wrapper_desktop_apply.py",
+    "tests/test_wrapper_ps1_artifact_upload_copies_into_shared.py",
     "tests/test_wrapper_ps1_speaks_the_language_chosen.py",
     "tests/test_wrapper_ps1_timezone_choice.py",
 )
