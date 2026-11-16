@@ -79,3 +79,19 @@ test('most of the budget went to the onboarding: said when what was spent before
   const doctor = spawnSync(process.execPath, [JHT, 'doctor'], { encoding: 'utf8', timeout: 60_000, env: { ...process.env, JHT_HOME: setup(1.71), JHT_LANG: 'en', NO_COLOR: '1' } }).stdout;
   assert.match(doctor, /\$1\.71 of your \$2\.00 budget went to the onboarding/);
 });
+
+test('whenOf names the zone of the person after the time', async () => {
+  const { whenOf } = await import('../src/lib/budget-pause.js');
+  const now = new Date('2026-11-16T10:00:00Z');
+  assert.equal(whenOf('2026-11-16T14:26:00+01:00', now, 'Europe/Rome'), '14:26 (Europe/Rome)');
+  assert.equal(whenOf('2026-11-17T08:00:00+01:00', now, 'Europe/Rome'), '17/11 8:00 (Europe/Rome)');
+  assert.equal(whenOf('2026-11-16T14:26:00+01:00', now), '14:26');
+});
+
+test('localTimeZone reads JHT_USER_TZ from host.env when the variable is not set', async () => {
+  const { localTimeZone } = await import('../src/lib/local-tz.js');
+  const home = mkdtempSync(join(tmpdir(), 'jht-tz-'));
+  writeFileSync(join(home, 'host.env'), 'JHT_LANG=it\nJHT_USER_TZ=Europe/Rome\n');
+  assert.equal(localTimeZone({}, home), 'Europe/Rome');
+  assert.equal(localTimeZone({ JHT_USER_TZ: 'America/Sao_Paulo' }, home), 'America/Sao_Paulo');
+});

@@ -13,8 +13,16 @@ import { later } from './texts.js';
 const WHYS = new Set(['budget', 'period', 'pace']);
 const money = (value) => (Number.isFinite(Number(value)) ? Number(value).toFixed(2) : '?');
 
-/** «3:10» for an instant of today, «16/11 3:10» for another day, read in the offset the brake wrote (the zone of the person). */
-export function whenOf(iso, now = new Date()) {
+/** The zone the person chose for the budget (the one every time the CLI says is written in). */
+function zoneOf(home) {
+  try {
+    const team = JSON.parse(readFileSync(join(home, 'jht.config.json'), 'utf8'))?.team;
+    return String(team?.budget?.timezone || team?.working_hours?.timezone || '');
+  } catch { return ''; }
+}
+
+/** «3:10 (Europe/Rome)» for an instant of today, «16/11 3:10» for another day, read in the offset the brake wrote (the zone of the person). */
+export function whenOf(iso, now = new Date(), zone = '') {
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(iso ?? ''));
   const at = Date.parse(iso);
   if (!m || Number.isNaN(at)) return null;
@@ -22,7 +30,8 @@ export function whenOf(iso, now = new Date()) {
   const shift = offset ? (offset[1] === '-' ? -1 : 1) * (Number(offset[2]) * 60 + Number(offset[3])) : 0;
   const today = new Date(now.getTime() + shift * 60_000).toISOString().slice(0, 10);
   const clock = `${Number(m[4])}:${m[5]}`;
-  return today === `${m[1]}-${m[2]}-${m[3]}` ? clock : `${m[3]}/${m[2]} ${clock}`;
+  const when = today === `${m[1]}-${m[2]}-${m[3]}` ? clock : `${m[3]}/${m[2]} ${clock}`;
+  return zone ? `${when} (${zone})` : when;
 }
 
 /** @returns {{ why: 'budget'|'period'|'pace', spent: number, ceiling: number, budgetUsd: number, endsAt: string|null, resumesAt: string|null } | null} */
@@ -43,10 +52,11 @@ export function budgetPauseText(options = {}) {
   const pause = budgetPause(options);
   if (!pause) return null;
   const now = options.now ?? new Date();
-  const vars = { spent: money(pause.spent), ceiling: money(pause.ceiling), budget: money(pause.budgetUsd), end: whenOf(pause.endsAt, now) ?? '?' };
+  const zone = zoneOf(options.home ?? JHT_HOME);
+  const vars = { spent: money(pause.spent), ceiling: money(pause.ceiling), budget: money(pause.budgetUsd), end: whenOf(pause.endsAt, now, zone) ?? '?' };
   if (pause.why === 'budget') return later('budget.paused_budget', vars);
   if (pause.why === 'period') return later('budget.paused_period', vars);
-  const at = whenOf(pause.resumesAt, now);
+  const at = whenOf(pause.resumesAt, now, zone);
   return at ? later('budget.paused_pace', { ...vars, at }) : later('budget.paused_pace_late', vars);
 }
 

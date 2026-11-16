@@ -739,3 +739,9 @@ def test_the_sentinella_sleeps_between_ticks_looking_at_the_spending_every_minut
         quota_data._notify_user = original
     assert sleeps == [60, 60, 60, 60, 60], "the 5 minutes in steps of one, the brake after each but the last"
     assert bridge.esc == 1 and flag_record(bridge)["why"] == "period", "stopped inside the sleep, not at the next tick"
+
+
+def test_clock_names_the_zone_of_the_person():
+    config = {"team": {"budget": {"usd": 5, "timezone": "Europe/Rome"}}}
+    moment = datetime(2026, 11, 16, 13, 26, tzinfo=timezone.utc).timestamp()
+    assert cap.clock(moment, config, today=moment) == "14:26 (Europe/Rome)"
