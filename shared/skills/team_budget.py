@@ -124,14 +124,16 @@ def read(config, home=None):
     return {"usd": usd, "counts_from": starts, "starts": starts, "ends": ends, "duration": None, "saved_at": None}
 
 
-def record_start(home, budget, starts):
-    """Write the start of a budget of a duration: (starts, ends). Replaces the file in one step (a link in its place is
-    replaced, never followed). Returns (starts, ends); raises OSError when it cannot be written."""
+def record_start(home, budget, starts, spent_before=0.0):
+    """Write the start of a budget of a duration: (starts, ends), and what was spent before it (the onboarding:
+    `spent_before_usd`, which `jht team status` says when it is more than half the budget). Replaces the file in one step
+    (a link in its place is replaced, never followed). Returns (starts, ends); raises OSError when it cannot be written."""
     ends = starts + budget["duration"]
     path = Path(home) / START_FILE
     path.parent.mkdir(parents=True, exist_ok=True)
     stamp = lambda moment: datetime.fromtimestamp(moment).astimezone().isoformat(timespec="seconds")  # noqa: E731
-    body = json.dumps({"saved_at": budget["saved_at"], "starts_at": stamp(starts), "ends_at": stamp(ends)}) + "\n"
+    body = json.dumps({"saved_at": budget["saved_at"], "starts_at": stamp(starts), "ends_at": stamp(ends),
+                       "spent_before_usd": round(float(spent_before), 6)}) + "\n"
     tmp = path.with_name(".%s.%d.tmp" % (path.name, os.getpid()))
     fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
     try:

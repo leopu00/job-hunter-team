@@ -585,7 +585,7 @@ def test_the_trial_starts_at_the_first_call_of_a_worker_and_ends_30_minutes_late
     assert bridge.esc == 0
     record = json.loads(start_file(tmp_path).read_text(encoding="utf-8"))
     assert record == {"saved_at": iso(NOON - 2 * HOUR), "starts_at": "2026-11-09T11:50:00+00:00",
-                      "ends_at": "2026-11-09T12:20:00+00:00"}
+                      "ends_at": "2026-11-09T12:20:00+00:00", "spent_before_usd": 0.5}
     b = team_budget.read(config, tmp_path)
     assert (b["starts"], b["ends"], b["counts_from"]) == (NOON - 600, NOON + 1200, NOON - 2 * HOUR)
     bridge.clock["now"] = NOON + 1140  # the end (12:20) is a look away: not yet
@@ -779,3 +779,31 @@ def test_the_pace_after_an_onboarding_still_pauses_a_team_that_runs_ahead(tmp_pa
     record = flag_record(bridge)
     allowance = 0.29 * 1800 / 86400 + 0.25 * 0.29
     assert record["why"] == "pace" and record["ceiling"] == round(1.71 + allowance, 6)
+
+
+def test_an_onboarding_that_ate_more_than_half_the_budget_is_said(tmp_path):
+    """The Captain is told once, to say it to the person; the start file and the flag of a later pause carry it for the
+    status (spent_before_usd, before_work)."""
+    saved = NOON - 2 * HOUR
+    pi_calls(tmp_path, [(saved + 600, 1.71, 100)], name="a.jsonl", agent="assistente")
+    pi_calls(tmp_path, [(NOON - 1800, 0.05, 100), (NOON - 900, 0.10, 100)], name="s.jsonl", agent="scout-1")
+    bridge = Bridge(tmp_path, duration_budget(2, 1440, saved))
+    state: dict = {}
+    bridge.tick(state=state)
+    captain = [t for s, t in bridge.sent if s == "CAPITANO" and "ONBOARDING" in t]
+    assert len(captain) == 1 and "1.71 USD of the 2 USD" in captain[0] and "0.29 USD are left" in captain[0]
+    assert json.loads(start_file(tmp_path).read_text())["spent_before_usd"] == 1.71
+    assert flag_record(bridge)["before_work"] == {"spent": 1.71, "budget_usd": 2.0}
+    bridge.clock["now"] += 60
+    bridge.tick(state=state)
+    assert len([t for s, t in bridge.sent if "ONBOARDING" in t]) == 1, "once"
+
+
+def test_a_cheap_onboarding_says_nothing(tmp_path):
+    saved = NOON - 2 * HOUR
+    pi_calls(tmp_path, [(saved + 600, 0.30, 100)], name="a.jsonl", agent="assistente")
+    pi_calls(tmp_path, [(NOON - 900, 0.02, 100)], name="s.jsonl", agent="scout-1")
+    bridge = Bridge(tmp_path, duration_budget(2, 1440, saved))
+    bridge.tick()
+    assert not [t for _, t in bridge.sent if "ONBOARDING" in t]
+    assert json.loads(start_file(tmp_path).read_text())["spent_before_usd"] == 0.3

@@ -143,6 +143,7 @@ def _budget_verdict(config, budget, spent, now):
     # against the pace, which spreads what was LEFT at the start over the period (giro Mac 21: 2 $ for a day on Claude, 1.71 $
     # of onboarding, and the pace paused the team the minute the Scouts started).
     before = min(spent.get("before_start") or 0.0, used)
+    common["before"] = before
     period = dict(budget, usd=budget["usd"] - before)
     if period["usd"] <= 0:
         return None
@@ -317,6 +318,8 @@ def _record(verdict, config):
     if verdict["why"] in ("budget", "period", "pace"):
         record.update(budget_usd=verdict["usd"], starts_at=_iso(verdict["starts"], config),
                       ends_at=_iso(verdict["ends"], config), resumes_at=_iso(verdict["resumes"], config))
+        if verdict.get("before"):
+            record["before_work"] = {"spent": verdict["before"], "budget_usd": verdict["usd"]}
     return record
 
 
@@ -366,12 +369,15 @@ def _resume(api, run, day, notify_user):
     print("[bridge V6] %s PI-SPEND-CEILING cleared: spending back under the ceiling" % run.now_h)
 
 
-def _start(home, budget, moment, run):
+def _start(home, budget, moment, run, api=None, spent_before=0.0):
     """The team started working: the period of a budget of a duration starts at that first call, and is written down so
     the next tick, `jht team status` and a restarted bridge find it. A write that fails is a warning: this tick still
-    counts from it, the next one tries again."""
+    counts from it, the next one tries again. When the onboarding spent more than half the budget the Captain is told, to
+    say it to the person: they gave the money for the search."""
+    if api is not None and spent_before > budget["usd"] / 2:
+        _tell_onboarding(api, run, budget, spent_before)
     try:
-        starts, ends = team_budget.record_start(home, budget, moment)
+        starts, ends = team_budget.record_start(home, budget, moment, spent_before)
     except OSError as error:
         print("[bridge V6] WARN pi spend cap: the start of the budget is not written: %s" % error)
         starts, ends = moment, moment + budget["duration"]
@@ -379,6 +385,20 @@ def _start(home, budget, moment, run):
           % (run.now_h, datetime.fromtimestamp(starts).isoformat(timespec="seconds"),
              datetime.fromtimestamp(ends).isoformat(timespec="seconds")))
     return dict(budget, starts=starts, ends=ends)
+
+
+def _tell_onboarding(api, run, budget, spent_before):
+    from sentinel_delivery import notice
+
+    left = max(budget["usd"] - spent_before, 0.0)
+    text = ("[BRIDGE INFO] MOST OF THE BUDGET WENT TO THE ONBOARDING: %s USD of the %s USD budget were spent before the first "
+            "Scout worked, %s USD are left for the search, spread over the period. Not a fault. Tell the person once, in their "
+            "language, in plain words: how much the setup and the first talk cost, how much is left for the search, and that a "
+            "larger budget (jht setup) gives the search more." % (_money(spent_before), _money(budget["usd"]), _money(left)))
+    done = run.state.setdefault("pi_spend_cap", {})
+    key = "onboarding:%s" % budget.get("saved_at")
+    if not done.get(key):
+        done[key] = bool(notice(api, run.state, "pi_cap:%s" % key, api.CAPITANO_SESSION, text))
 
 
 def step(api, run, notify_user=None):
@@ -391,7 +411,7 @@ def step(api, run, notify_user=None):
         budget = team_budget.read(config, home)
         spent = spend(home, now, budget["counts_from"] if budget else None, budget["starts"] if budget else None)
         if budget is not None and budget["starts"] is None and spent["first_worker"] is not None:
-            budget = _start(home, budget, spent["first_worker"], run)
+            budget = _start(home, budget, spent["first_worker"], run, api, spent.get("before_start") or 0.0)
         verdict = decide(config, spent, bool(run.state.get("no_quota_declared")), now, budget)
         day = datetime.fromtimestamp(now).strftime("%Y-%m-%d")
         flag = _flag(api)
