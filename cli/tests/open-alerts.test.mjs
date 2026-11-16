@@ -3,7 +3,7 @@
 // start say them now. Synthetic databases in made-up homes; nothing is marked as read.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -78,4 +78,16 @@ test('the agent of a row is a plain name too: escape sequences, bidi marks and l
   assert.equal(line, `? says: ${CEILING}`);
   assert.doesNotMatch(line, /[\x00-\x1f\x7f-\x9f‮]/);
   assert.equal(agentLabel(''), '?');
+});
+
+test('an alert written before the last setup is about the service the person changed: it is not said again', async () => {
+  const root = home([
+    { body: 'the old service gives no limits', age: '-3 hours' },
+    { body: CEILING, source: 'later', age: '-10 minutes' },
+  ]);
+  const config = join(root, 'jht.config.json');
+  writeFileSync(config, '{}');
+  const hour = new Date(Date.now() - 60 * 60_000);
+  utimesSync(config, hour, hour);
+  assert.deepEqual((await openAlerts({ dbPath: join(root, 'jobs.db') })).map((a) => a.body), [CEILING]);
 });
