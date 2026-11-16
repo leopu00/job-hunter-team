@@ -26,7 +26,13 @@ FUNCTIONS = ("runtime_stat", "runtime_sha256", "runtime_manifest_value", "runtim
 FAKE_DOCKER = """#!/bin/sh
 case "$1" in
   info) [ -e "$FAKE/engine-down" ] && exit 1; exit 0 ;;
-  image) [ -e "$FAKE/full-present" ] && exit 0; exit 1 ;;
+  image)
+    # `image inspect --format '{{.Id}}' REF`: the core image is always here, the full one only once pulled
+    if [ "$2" = inspect ] && [ "$3" = --format ]; then
+      case "$5" in *@sha256:bbbb*) echo sha256:coreid; exit 0 ;; esac
+      [ -e "$FAKE/full-present" ] && { echo sha256:fullid; exit 0; }; exit 1
+    fi
+    [ -e "$FAKE/full-present" ] && exit 0; exit 1 ;;
   pull) printf '%s\\n' "$*" >> "$FAKE/pulls"; n=0; while [ -e "$FAKE/pull-hold" ] && [ "$n" -lt 300 ]; do sleep 0.1; n=$((n+1)); done; [ -e "$FAKE/pull-fails" ] && exit 1; touch "$FAKE/full-present"; exit 0 ;;
 esac
 exit 0
@@ -59,18 +65,21 @@ def box(tmp_path):
     wrapper.chmod(0o755)
     (runtime / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
 
-    def run(body: str, *, library: bool = True, core_digest: str = CORE_DIGEST, **env):
+    def run(body: str, *, library: bool = True, core_digest: str = CORE_DIGEST, argv: tuple = (), **env):
+        # with argv the shell's command line is «bash -c <script> <argv...>» and the wrapper's path is $0, as in a real `jht <cmd>`:
+        # the path then comes on the command line once, after the script, where tools_other_wrapper_running reads the command
+        wrapper_path = '"$0"' if argv else f'"{wrapper}"'
         script = (
             f'set -u\nexport PATH="{bin_dir}:/usr/bin:/bin"\nexport FAKE="{fake}"\n'
             f'RUNTIME_DIR="{runtime}"\nRUNTIME_TIER_FILE="{runtime}/runtime-tier"\nRUNTIME_IMAGE_PIN="{runtime}/runtime-image"\n'
             f'RUNTIME_TIER_INTEGRITY="{runtime}/.runtime-tier-integrity"\nRUNTIME_MANIFEST="{runtime}/.runtime-integrity"\nCOMPOSE_FILE="{runtime}/docker-compose.yml"\n'
-            f'HOST_SETUP_SCRIPT="{runtime}/host-setup.sh"\nWRAPPER_PATH="{wrapper}"\nRUNTIME_SELECTION_FILE="{runtime}/container-runtime"\n'
+            f'HOST_SETUP_SCRIPT="{runtime}/host-setup.sh"\nWRAPPER_PATH={wrapper_path}\nRUNTIME_SELECTION_FILE="{runtime}/container-runtime"\n'
             f'HOST_KERNEL="$(uname -s)"\nHOST_UID="$(id -u)"\nCORE_IMAGE_DIGEST="{core_digest}"\nDEFAULT_RUNTIME_IMAGE="{FULL}"\nJHT_HOME_HOST="{home}"\nCONTAINER_RUNTIME=docker\n'
             'err() { echo "error: $*" >&2; }\n' + _functions() + "\n"
             + (f'source "{TOOLS}"\n' if library else "")
             + body
         )
-        return subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=60,
+        return subprocess.run(["bash", "-c", script, *argv], capture_output=True, text=True, timeout=60,
                               env={**os.environ, "LC_ALL": "C", **env})
 
     def tier(attested: bool = True, text: str = "core\n"):
@@ -834,3 +843,212 @@ def test_the_wrapper_answers_tools_status_alone_and_leaves_json_to_the_helper():
     text = WRAPPER.read_text(encoding="utf-8")
     assert "status:) if declare -F tools_say_status >/dev/null 2>&1; then tools_say_status; else tools_status_json; fi ;;" in TOOLS.read_text(encoding="utf-8")
     assert "tools_say_status() {" in text
+
+
+# --- the setup that started the job holds the switch (giro Mac m21, vps-42 on Linux: the wizard of an update died with 137) ------
+
+def test_the_switch_waits_for_the_jht_setup_that_started_the_job(box):
+    """An update: the profile is already there, so the job of `jht setup` switches as soon as the full image is here. The wrapper
+    that started it is the `jht setup` whose wizard is open (the installer opens it and waits for it): $$ in the job is that wrapper,
+    and it was left out of the wait, so the switch recreated the container under the wizard, which died with 137. The job must wait
+    for it, and switch once it is over."""
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
+    wrapper = box.fake / "jht-wrapper.sh"
+    # the shell is the `jht setup`: «bash -c <script> <wrapper> setup»; it kicks the job, then its wizard stays open 4 seconds
+    body = ('tools_kick\nsleep 4\n'
+            f'if [ -e "{tier}" ]; then echo tier-during-setup; fi\n'
+            'if [ -s "$FAKE/wrapper-calls" ]; then echo switched-during-setup; fi\n')
+    done = box.run(body, argv=(str(wrapper), "setup"), **KICK_ENV)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == ["tier-during-setup"], f"the switch ran under the open wizard: {done.stdout}"
+    _wait_until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"no switch after the setup ended: {_calls(box)}")
+    box.wait_for_pull_end()
+
+
+def test_a_setup_holds_the_switch_past_the_cap_of_the_other_commands(box):
+    """`jht up` and the like hold the switch half an hour at most; a setup waits for the person, so it holds it as long as it runs."""
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
+    wrapper = box.fake / "jht-wrapper.sh"
+    other = subprocess.Popen(["sh", "-c", "sleep 6; :", str(wrapper), "setup"])
+    try:
+        assert box.run("tools_kick", **{**KICK_ENV, "JHT_TOOLS_QUIET_MAX": "2"}).returncode == 0
+        time.sleep(4.5)
+        assert tier.exists() and _calls(box) == [], "the setup was cut at the cap of the other commands"
+    finally:
+        other.wait(timeout=10)
+    _wait_until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"no switch after the setup: {_calls(box)}")
+    box.wait_for_pull_end()
+
+
+def test_another_command_still_holds_the_switch_only_up_to_its_cap(box):
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
+    wrapper = box.fake / "jht-wrapper.sh"
+    other = subprocess.Popen(["sh", "-c", "sleep 12; :", str(wrapper), "up"])
+    try:
+        assert box.run("tools_kick", **{**KICK_ENV, "JHT_TOOLS_QUIET_MAX": "2"}).returncode == 0
+        _wait_until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"the cap did not end the wait: {_calls(box)}")
+        assert other.poll() is None, "the switch waited for the end of the command, past its cap"
+    finally:
+        other.kill()
+        other.wait(timeout=10)
+    box.wait_for_pull_end()
+
+
+# --- room on the disk before the pull, and the old images of JHT (giro Mac m21: from 10 to 2 GiB free) ---------------------
+
+GIB = 1048576
+
+# the wrapper's functions the helper uses, faked: the free KiB in $FAKE/free-kib (none = cannot be measured), the image the
+# container runs in $FAKE/running, the cleaning writes its arguments in $FAKE/prune and frees $FAKE/freed bytes
+DISK_FAKES = r'''
+disk_free_measure() { [ -s "$FAKE/free-kib" ] || return 1; printf '500 %s' "$(cat "$FAKE/free-kib")"; }
+disk_engine_path() { :; }
+disk_gib_text() { printf '%s' $(( $1 / 1048576 )); }
+upgrade_image_plain() { printf '%s' "${1#sha256:}"; }
+upgrade_image() { cat "$FAKE/running" 2>/dev/null || true; }
+upgrade_prune_old_images() {
+  printf '%s %s json=%s\n' "$1" "$2" "${UPGRADE_JSON:-}" >> "$FAKE/prune"
+  UPGRADE_PRUNE_JSON="{\"removed\":2,\"freedBytes\":$(cat "$FAKE/freed" 2>/dev/null || echo 0),\"refused\":0}"
+}
+'''
+
+
+def _disk(box, free_gib=None, running="sha256:coreid", freed_gib=0):
+    if free_gib is not None:
+        (box.fake / "free-kib").write_text(str(int(free_gib * GIB)), encoding="utf-8")
+    (box.fake / "running").write_text(running, encoding="utf-8")
+    (box.fake / "freed").write_text(str(int(freed_gib * GIB * 1024)), encoding="utf-8")
+
+
+# no profile yet: the job ends 2 s after its pull instead of waiting for it a minute
+PULL_ONLY_ENV = {**KICK_ENV, "JHT_TOOLS_WAIT_MAX": "2"}
+
+
+def _prunes(box):
+    path = box.fake / "prune"
+    return path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+
+
+def test_with_room_on_the_disk_the_pull_goes_and_nothing_is_cleaned_first(box):
+    box.tier()
+    _disk(box, free_gib=20)
+    assert box.run(DISK_FAKES + "tools_kick", **PULL_ONLY_ENV).returncode == 0
+    box.wait_for("ready")
+    box.wait_for_pull_end()
+    assert (box.fake / "pulls").exists() and _prunes(box) == []
+
+
+def test_short_of_room_the_old_images_go_first_and_what_they_free_counts(box):
+    # inside the Podman machine of a Mac the space the old images freed is free for the pull before the Mac's disk shows it
+    box.tier()
+    _disk(box, free_gib=8, freed_gib=4)
+    assert box.run(DISK_FAKES + "tools_kick", **PULL_ONLY_ENV).returncode == 0
+    box.wait_for("ready")
+    box.wait_for_pull_end()
+    assert (box.fake / "pulls").exists()
+    assert _prunes(box) == ["coreid coreid json=1"], "kept: the running core image, this version's core"
+
+
+def test_with_no_room_nothing_is_pulled_and_the_person_is_told_then_up_tries_again(box):
+    box.tier()
+    _disk(box, free_gib=3, freed_gib=1)
+    done = box.run(DISK_FAKES + "tools_kick", **PULL_ONLY_ENV)
+    assert done.returncode == 0 and done.stdout == "", done.stderr
+    assert not (box.fake / "pulls").exists(), "pulled on a full disk"
+    assert not (box.runtime / ".tools-pull.lock").exists()
+    assert box.notice()["state"] == "failed" and box.notice()["reason"] == "disk_low"
+    assert box.run(DISK_FAKES + "tools_person_state", **KICK_ENV).stdout == "disk_low\n"
+    assert box.run(DISK_FAKES + "tools_status_json", **KICK_ENV).stdout.strip() == \
+        '{"ok":true,"state":"failed","tier":"core","reason":"disk_low"}'
+    # space made: the next `jht up` pulls
+    _disk(box, free_gib=30)
+    assert box.run(DISK_FAKES + "tools_kick", **PULL_ONLY_ENV).returncode == 0
+    box.wait_for("ready")
+    box.wait_for_pull_end()
+    assert (box.fake / "pulls").exists()
+
+
+def test_the_room_asked_for_can_be_changed_and_space_that_cannot_be_measured_refuses_nothing(box):
+    box.tier()
+    _disk(box, free_gib=3)
+    assert box.run(DISK_FAKES + "tools_disk_room && echo room", JHT_TOOLS_PULL_MIN_FREE_GIB="2").stdout == "room\n"
+    assert box.run(DISK_FAKES + "tools_disk_room || echo short").stdout == "short\n"
+    (box.fake / "free-kib").unlink()
+    assert box.run(DISK_FAKES + "tools_disk_room && echo room").stdout == "room\n"
+
+
+@pytest.mark.parametrize("case", ["other-image", "upgrade-lock", "upgrade-journal", "no-container"])
+def test_the_old_images_are_left_alone_when_the_container_is_not_on_this_version_or_an_upgrade_runs(box, case):
+    box.tier()
+    _disk(box, free_gib=3, running="sha256:someoldid" if case == "other-image" else "sha256:coreid")
+    if case == "upgrade-lock":
+        (box.runtime / ".upgrade.lock").mkdir()
+    if case == "upgrade-journal":
+        (box.runtime / ".upgrade-journal").write_text("x\n", encoding="utf-8")
+    if case == "no-container":
+        (box.fake / "running").unlink()
+    assert box.run(DISK_FAKES + "tools_clean_old_images").returncode == 0
+    assert _prunes(box) == []
+
+
+def test_after_a_switch_that_went_well_the_old_images_go_keeping_this_versions_core(box):
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
+    _disk(box, free_gib=30, running="sha256:fullid")
+    assert box.run(DISK_FAKES + "tools_kick", **KICK_ENV).returncode == 0
+    _wait_until(lambda: not tier.exists() and _prunes(box) == ["fullid coreid json=1"], f"no cleaning after the switch: {_prunes(box)}")
+    box.wait_for_pull_end()
+
+
+def test_a_switch_that_failed_or_a_team_left_stopped_cleans_nothing(box):
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
+    _disk(box, free_gib=30, running="sha256:fullid")
+    (box.fake / "jht-wrapper.sh").write_text('#!/bin/sh\necho "$@" >> "$FAKE/wrapper-calls"\n[ "$1" = up ] && exit 1\nexit 0\n',
+                                             encoding="utf-8")
+    assert box.run(DISK_FAKES + "tools_kick", **KICK_ENV).returncode == 0
+    box.wait_for("failed")
+    box.wait_for_pull_end()
+    assert _prunes(box) == []
+    tier = box.tier()
+    (box.runtime / ".tools-switch-failed").unlink(missing_ok=True)
+    assert box.run(DISK_FAKES + "team_stopped_by_person() { return 0; }; tools_kick", **KICK_ENV).returncode == 0
+    _wait_until(lambda: not tier.exists(), "the tier never went")
+    box.wait_for_pull_end()
+    assert _prunes(box) == []
+
+
+def test_the_manual_switch_cleans_the_old_images_too(box):
+    box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
+    _disk(box, running="sha256:fullid")
+    done = box.run(DISK_FAKES + "tools_switch")
+    assert done.returncode == 0 and "JHT_PHASE tools_ready" in done.stdout, done.stderr
+    assert _prunes(box) == ["fullid coreid json=1"]
+
+
+def test_tools_status_says_there_is_no_room_with_the_numbers(box):
+    box.tier()
+    (box.runtime / ".tools-pull-failed").write_text("disk_low\n", encoding="utf-8")
+    _disk(box, free_gib=3)
+    text = WRAPPER.read_text(encoding="utf-8")
+    body = "".join(re.search(rf"(?ms)^{name}\(\) \{{\n.*?^\}}\n", text).group(0) for name in ("tools_say_status", "tools_disk_low_text"))
+    done = box.run(DISK_FAKES + "jht_say() { printf '%s' \"$*\"; }\n" + body + "tools_say_status")
+    assert done.stdout == "tools.disk_low 10 3\n", done.stdout + done.stderr
+
+
+def test_jht_up_setup_and_status_say_the_disk_is_short():
+    text = WRAPPER.read_text(encoding="utf-8")
+    tell = re.search(r"(?ms)^tools_tell_person\(\) \{\n.*?^\}\n", text).group(0)
+    assert 'disk_low) warn "$(tools_disk_low_text)" ;;' in tell
+    status = re.search(r"(?ms)^tools_say_status\(\) \{\n.*?^\}\n", text).group(0)
+    assert "disk_low) printf '%s\\n' \"$(tools_disk_low_text)\" ;;" in status

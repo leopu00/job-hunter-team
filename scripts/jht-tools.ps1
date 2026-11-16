@@ -155,6 +155,68 @@ function Invoke-ToolsPullJob {
   return 0
 }
 
+# Room for the full image, and the old images of JHT, as in jht-tools.sh (tools_disk_room): the full image is about 3.4 GB and its
+# pull took some 6 GiB of a computer; when the room is short the old images of JHT go first, and still short nothing is pulled and
+# the person is told (state `disk_low`; `jht up` tries again). Space that cannot be measured refuses nothing.
+# JHT_TOOLS_PULL_MIN_FREE_GIB (10) is the room asked for.
+function Get-ToolsPullNeedKib {
+  $gib = [Environment]::GetEnvironmentVariable('JHT_TOOLS_PULL_MIN_FREE_GIB')
+  if ($gib -notmatch '^[0-9]{1,6}$') { $gib = '10' }
+  return ([long]$gib * 1048576)
+}
+
+# The least free KiB of the volumes the pull fills (the data folder's, and JHT_ENGINE_DISK_PATH: Get-DiskFreeMeasure is the
+# wrapper's, as for `jht upgrade`), or $null when none can be measured.
+function Get-ToolsDiskFreeKib {
+  if (-not (Get-Command Get-DiskFreeMeasure -CommandType Function -ErrorAction SilentlyContinue)) { return $null }
+  $volumes = @($JhtHome)
+  if ($env:JHT_ENGINE_DISK_PATH) { $volumes += $env:JHT_ENGINE_DISK_PATH }
+  $least = $null
+  foreach ($volume in $volumes) {
+    $measure = Get-DiskFreeMeasure $volume
+    if ($null -eq $measure) { continue }
+    $kib = [long][Math]::Floor([double]$measure.Free / 1024)
+    if ($null -eq $least -or $kib -lt $least) { $least = $kib }
+  }
+  return $least
+}
+
+# The old images of JHT go, by the rules of the cleaning after `jht upgrade` (Remove-OldJhtImages in the wrapper: only the
+# repositories of JHT by exact name, never an image of a container even stopped, by ID and without -f, never prune, never volumes,
+# JHT_KEEP_OLD_IMAGES=1 keeps them all). Kept: the image the container runs, the core image of this version and, while the tier
+# file is there, the full one. Only when the container runs on this version's core or full image, and never while an upgrade runs
+# or waits to be resumed. Returns the KiB it freed.
+function Remove-ToolsOldImages {
+  try {
+    if (-not ((Get-Command Remove-OldJhtImages -CommandType Function -ErrorAction SilentlyContinue) -and (Get-Command Get-UpgradeImage -CommandType Function -ErrorAction SilentlyContinue))) { return [long]0 }
+    if ((Test-Path -LiteralPath (Join-Path $RuntimeDir '.upgrade.lock')) -or (Test-Path -LiteralPath (Join-Path $RuntimeDir '.upgrade-journal'))) { return [long]0 }
+    $running = Get-PlainImageId (Get-UpgradeImage)
+    if (-not $running) { return [long]0 }
+    $coreId = Get-PlainImageId ((& { $ErrorActionPreference = 'Continue'; & docker image inspect --format '{{.Id}}' "ghcr.io/leopu00/jht@$CoreImageDigest" 2>$null } | Select-Object -First 1) -as [string])
+    $fullId = Get-PlainImageId ((& { $ErrorActionPreference = 'Continue'; & docker image inspect --format '{{.Id}}' $DefaultRuntimeImage 2>$null } | Select-Object -First 1) -as [string])
+    if ($running -ne $coreId -and $running -ne $fullId) { return [long]0 }
+    $keep = if ($coreId) { $coreId } else { $running }
+    $quiet = $script:UpgradeJson
+    $script:UpgradeJson = $true
+    try { Remove-OldJhtImages $running $keep } finally { $script:UpgradeJson = $quiet }
+    if ($script:UpgradePrune -and $script:UpgradePrune.freedBytes) { return [long][Math]::Floor([double]$script:UpgradePrune.freedBytes / 1024) }
+  } catch { }
+  return [long]0
+}
+
+# $true when there is room for the pull, or it cannot be measured. The space the old images freed counts even when the disk does
+# not show it yet (inside the machine of the engine it is free for the pull before the computer sees it).
+function Test-ToolsDiskRoom {
+  $need = Get-ToolsPullNeedKib
+  $free = Get-ToolsDiskFreeKib
+  if ($null -eq $free -or $free -ge $need) { return $true }
+  $freed = Remove-ToolsOldImages
+  $after = Get-ToolsDiskFreeKib
+  if ($null -eq $after) { $after = $free }
+  if (($free + $freed) -gt $after) { $after = $free + $freed }
+  return ($after -ge $need)
+}
+
 # One job at a time, detached. $Auto = 'auto' for the job of Invoke-ToolsKick (it pulls if needed, then switches by itself).
 function Start-ToolsJob {
   param([string]$Auto = '')
@@ -162,6 +224,12 @@ function Start-ToolsJob {
   Remove-Item -LiteralPath $ToolsLock -Recurse -Force -ErrorAction SilentlyContinue
   try { New-Item -ItemType Directory -Path $ToolsLock -ErrorAction Stop | Out-Null } catch { return 0 }  # another call won the race
   Remove-Item -LiteralPath $ToolsFailedFile -Force -ErrorAction SilentlyContinue
+  if (-not (Test-ToolsFullHere) -and -not (Test-ToolsDiskRoom)) {
+    [IO.File]::WriteAllText($ToolsFailedFile, "disk_low`n", [Text.UTF8Encoding]::new($false))
+    Write-ToolsNotice 'failed' 'core' 'disk_low' $since
+    Remove-Item -LiteralPath $ToolsLock -Recurse -Force -ErrorAction SilentlyContinue
+    return 0
+  }
   if (-not (Test-ToolsFullHere)) {
     if (-not $Auto) { [Console]::Out.WriteLine('JHT_PHASE tools_pull') }
     Write-ToolsNotice 'pulling' 'core' '' $since
@@ -311,7 +379,7 @@ function Test-ToolsRegisteredCommandRunning {
         if (-not $alive) { Remove-Item -LiteralPath $file.FullName -Force -ErrorAction SilentlyContinue; continue }
         $sub = ''
         if ($fields.Count -gt 3) { $sub = $fields[3] }
-        if (Test-ToolsCommandChangesRuntime $fields[2] $sub) { return $true }
+        if (Test-ToolsCommandChangesRuntime $fields[2] $sub) { $script:ToolsRunningCommand = $fields[2]; return $true }
       } catch { continue }
     }
   } catch { }
@@ -336,15 +404,28 @@ function Test-ToolsOtherWrapperRunning {
       if ($words.Count -eq 0) { continue }
       $sub = ''
       if ($words.Count -gt 1) { $sub = $words[1] }
-      if (Test-ToolsCommandChangesRuntime $words[0] $sub) { return $true }
+      if (Test-ToolsCommandChangesRuntime $words[0] $sub) { $script:ToolsRunningCommand = $words[0]; return $true }
     }
   } catch { }
   return $false
 }
 
+# A command that changes the runtime holds the switch for JHT_TOOLS_QUIET_MAX seconds (1800) at most; a `jht setup` for as long as
+# it runs (JHT_TOOLS_SETUP_MAX, a day): its wizard waits for the person, and a switch under it ends it all the same, half an hour on.
+$script:ToolsRunningCommand = ''
 function Wait-ToolsQuiet {
   $left = Get-ToolsWaitSeconds 'JHT_TOOLS_QUIET_MAX' 1800
-  while ((Test-ToolsOtherWrapperRunning) -and $left -gt 0) { Start-Sleep -Seconds 2; $left -= 2 }
+  $setupLeft = Get-ToolsWaitSeconds 'JHT_TOOLS_SETUP_MAX' 86400
+  while (Test-ToolsOtherWrapperRunning) {
+    if ($script:ToolsRunningCommand -ceq 'setup') {
+      if ($setupLeft -le 0) { return }
+      $setupLeft -= 2
+    } else {
+      if ($left -le 0) { return }
+      $left -= 2
+    }
+    Start-Sleep -Seconds 2
+  }
 }
 
 # The switch of the job, when no other command runs. A team the person stopped (`jht down`) stays stopped: only the tier goes, and
@@ -359,6 +440,7 @@ function Invoke-ToolsSwitchAuto {
   if (Get-Command Test-JhtTeamStoppedByPerson -ErrorAction SilentlyContinue) { $stopped = [bool](Test-JhtTeamStoppedByPerson) }
   Remove-Item -LiteralPath $ToolsSwitchFailedFile -Force -ErrorAction SilentlyContinue
   Remove-Item Env:\JHT_IMAGE -ErrorAction SilentlyContinue
+  $up = $false
   if (-not $stopped) {
     [IO.File]::WriteAllText($ToolsSwitchingFile, "$PID`n", [Text.UTF8Encoding]::new($false))
     $null = Invoke-ToolsWrapperStep 'down'
@@ -368,7 +450,8 @@ function Invoke-ToolsSwitchAuto {
       Remove-Item -LiteralPath $RuntimeTierFile -Force
       Remove-Item -LiteralPath $RuntimeTierIntegrity -Force -ErrorAction SilentlyContinue
     } catch { return }
-    if ($stopped -or ((Invoke-ToolsWrapperStep 'up') -eq 0)) { Write-ToolsNotice 'ready' 'full' '' (Get-ToolsNow) }
+    if ($stopped) { Write-ToolsNotice 'ready' 'full' '' (Get-ToolsNow) }
+    elseif ((Invoke-ToolsWrapperStep 'up') -eq 0) { Write-ToolsNotice 'ready' 'full' '' (Get-ToolsNow); $up = $true }
     else {
       [IO.File]::WriteAllText($ToolsSwitchFailedFile, "switch_failed`n", [Text.UTF8Encoding]::new($false))
       Write-ToolsNotice 'failed' 'full' 'switch_failed' (Get-ToolsNow)
@@ -376,9 +459,12 @@ function Invoke-ToolsSwitchAuto {
   } finally {
     Remove-Item -LiteralPath $ToolsSwitchingFile -Force -ErrorAction SilentlyContinue
   }
+  # the switch is over (a chat that ended reads it from .tools-switching): then the old images go
+  if ($up) { $null = Remove-ToolsOldImages }
 }
 
-# What the wrapper tells the person, one word: arriving (pulling or waiting), failed (the pull), switch_failed, or ''.
+# What the wrapper tells the person, one word: arriving (pulling or waiting), failed (the pull), disk_low (no room for the pull),
+# switch_failed, or ''.
 function Get-ToolsPersonState {
   $tierHere = Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf
   if ((-not $tierHere) -and (Test-Path -LiteralPath $ToolsSwitchFailedFile -PathType Leaf)) { return 'switch_failed' }
@@ -386,7 +472,10 @@ function Get-ToolsPersonState {
   if (-not (Test-ToolsEngineUp)) { return '' }
   if (Test-ToolsFullHere) { return 'waiting' }
   if (Test-ToolsPulling) { return 'arriving' }
-  if (Test-Path -LiteralPath $ToolsFailedFile -PathType Leaf) { return 'failed' }
+  if (Test-Path -LiteralPath $ToolsFailedFile -PathType Leaf) {
+    try { if ([IO.File]::ReadAllText($ToolsFailedFile).Trim() -ceq 'disk_low') { return 'disk_low' } } catch { }
+    return 'failed'
+  }
   return 'arriving'
 }
 
@@ -406,6 +495,7 @@ function Invoke-ToolsSwitch {
   $up = Start-Process -FilePath $shell -NoNewWindow -Wait -PassThru -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $WrapperPath, 'up')
   if ($up.ExitCode -ne 0) { return [int]$up.ExitCode }
   Write-ToolsNotice 'ready' 'full' '' (Get-ToolsNow)
+  $null = Remove-ToolsOldImages
   [Console]::Out.WriteLine('JHT_PHASE tools_ready')
   return 0
 }

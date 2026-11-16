@@ -375,6 +375,7 @@
   "wrapper.tools.ready": "Les outils des Scout sont là : l'équipe cherche avec l'image complète.",
   "wrapper.tools.engine_down": "L'état des outils des Scout ne peut pas être lu : le moteur de conteneurs ne répond pas. Démarre-le avec jht up.",
   "wrapper.tools.failed": "Le téléchargement des outils des Scout a échoué : l'équipe ne peut pas encore chercher d'offres. Lance jht tools pull pour réessayer (jht up réessaie aussi).",
+  "wrapper.tools.disk_low": "Les outils des Scout n'ont pas été téléchargés : il leur faut environ %s Gio libres sur le disque et il y en a %s, l'équipe ne peut donc pas encore chercher d'offres. Libère de l'espace (vide la Corbeille, supprime les gros fichiers dont tu n'as pas besoin), puis lance jht up : le téléchargement repart tout seul.",
   "wrapper.tools.switch_failed": "Les outils des Scout sont là, mais l'équipe n'a pas pu redémarrer avec eux : lance jht down, puis jht up.",
   "wrapper.tools.chat_switched": "L'équipe passe aux outils complets des Scout, donc ce chat s'est fermé. Rouvre-le dans quelques minutes avec jht team chat.",
   "wrapper.tools.chat_reconnecting": "L'équipe passe aux outils complets des Scout, donc le chat s'arrête un instant : il revient tout seul dès que l'équipe tourne à nouveau (quelques minutes).",

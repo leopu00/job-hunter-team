@@ -375,6 +375,7 @@
   "wrapper.tools.ready": "Las herramientas de los Scout ya están aquí: el equipo busca con la imagen completa.",
   "wrapper.tools.engine_down": "No se puede leer el estado de las herramientas de los Scout: el motor de contenedores no responde. Arráncalo con jht up.",
   "wrapper.tools.failed": "La descarga de las herramientas de los Scout ha fallado, así que el equipo aún no puede buscar puestos. Ejecuta jht tools pull para reintentarlo (jht up también lo reintenta).",
+  "wrapper.tools.disk_low": "Las herramientas de los Scout no se han descargado: necesitan unos %s GiB libres en el disco y hay %s GiB, así que el equipo aún no puede buscar puestos. Libera espacio (vacía la Papelera, borra los archivos grandes que no necesites) y luego ejecuta jht up: la descarga vuelve a empezar sola.",
   "wrapper.tools.switch_failed": "Las herramientas de los Scout ya están aquí, pero el equipo no se ha podido reiniciar con ellas: ejecuta jht down y luego jht up.",
   "wrapper.tools.chat_switched": "El equipo pasa a las herramientas completas de los Scout, así que este chat se ha cerrado. Vuelve a abrirlo en un par de minutos con jht team chat.",
   "wrapper.tools.chat_reconnecting": "El equipo pasa a las herramientas completas de los Scout, así que el chat se detiene un momento: vuelve solo en cuanto el equipo esté en marcha de nuevo (un par de minutos).",

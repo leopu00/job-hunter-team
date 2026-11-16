@@ -810,6 +810,7 @@ This help starts nothing and downloads nothing.' ;;
     tools.chat_reconnecting) printf '%s' 'The team is moving onto the Scouts'\'' full tools, so the chat stops for a moment: it comes back by itself once the team is running again (a couple of minutes).' ;;
     tools.chat_resumed) printf '%s' 'The team has moved onto the full tools: let'\''s pick up again.' ;;
     tools.chat_switched) printf '%s' 'The team is moving onto the Scouts'\'' full tools, so this chat has closed. Open it again in a couple of minutes with jht team chat.' ;;
+    tools.disk_low) printf '%s' 'The Scouts'\'' tools were not downloaded: they need about %s GiB free on the disk and there are %s GiB, so the team cannot search for positions yet. Free some space (empty the Trash, delete large files you do not need), then run jht up: the download starts again by itself.' ;;
     tools.engine_down) printf '%s' 'The state of the Scouts'\'' tools cannot be read: the container engine does not answer. Start it with jht up.' ;;
     tools.failed) printf '%s' 'The download of the Scouts'\'' tools failed, so the team cannot search for positions yet. Run jht tools pull to try again (jht up tries again too).' ;;
     tools.ready) printf '%s' 'The Scouts'\'' tools are here: the team searches with the full image.' ;;
@@ -1306,6 +1307,7 @@ Questo aiuto non avvia niente e non scarica niente.' ;;
     tools.chat_reconnecting) printf '%s' 'La squadra passa agli strumenti completi degli Scout, quindi la chat si ferma un momento: riprende da sola appena la squadra e'\'' ripartita (un paio di minuti).' ;;
     tools.chat_resumed) printf '%s' 'La squadra e'\'' passata agli strumenti completi: riprendiamo.' ;;
     tools.chat_switched) printf '%s' 'La squadra passa agli strumenti completi degli Scout, quindi questa chat si e'\'' chiusa. Riaprila fra un paio di minuti con jht team chat.' ;;
+    tools.disk_low) printf '%s' 'Gli strumenti degli Scout non sono stati scaricati: servono circa %s GiB liberi sul disco e ce ne sono %s, quindi la squadra non puo'\'' ancora cercare posizioni. Libera spazio (svuota il Cestino, elimina i file grandi che non ti servono), poi esegui jht up: il download riparte da solo.' ;;
     tools.engine_down) printf '%s' 'Lo stato degli strumenti degli Scout non si legge: il motore dei container non risponde. Avvialo con jht up.' ;;
     tools.failed) printf '%s' 'Il download degli strumenti degli Scout non e'\'' riuscito: la squadra non puo'\'' ancora cercare posizioni. Esegui jht tools pull per riprovare (anche jht up riprova).' ;;
     tools.ready) printf '%s' 'Gli strumenti degli Scout sono arrivati: la squadra cerca con l'\''immagine piena.' ;;
@@ -1803,6 +1805,7 @@ Ez a súgó semmit nem indít el és semmit nem tölt le.' ;;
     tools.chat_reconnecting) printf '%s' 'A csapat átáll a felderítők (Scout) teljes eszközeire, ezért a csevegés egy pillanatra megáll: magától folytatódik, amint a csapat újra fut (pár perc).' ;;
     tools.chat_resumed) printf '%s' 'A csapat átállt a teljes eszközökre: folytassuk.' ;;
     tools.chat_switched) printf '%s' 'A csapat átáll a felderítők (Scout) teljes eszközeire, ezért ez a csevegés bezárult. Pár perc múlva nyisd meg újra a jht team chat paranccsal.' ;;
+    tools.disk_low) printf '%s' 'A felderítők (Scout) eszközei nem töltődtek le: kb. %s GiB szabad lemezterület kell hozzájuk, és %s GiB van, így a csapat még nem tud állásokat keresni. Szabadíts fel helyet (ürítsd ki a Kukát, töröld a nagy fájlokat, amelyekre nincs szükséged), majd futtasd a jht up parancsot: a letöltés magától újraindul.' ;;
     tools.engine_down) printf '%s' 'A felderítők (Scout) eszközeinek állapota nem olvasható: a konténermotor nem válaszol. Indítsd el a jht up paranccsal.' ;;
     tools.failed) printf '%s' 'A felderítők (Scout) eszközeinek letöltése nem sikerült, így a csapat még nem tud állásokat keresni. Futtasd a jht tools pull parancsot az újrapróbáláshoz (a jht up is újrapróbálja).' ;;
     tools.ready) printf '%s' 'A felderítők (Scout) eszközei megérkeztek: a csapat a teljes képpel keres.' ;;
@@ -2304,6 +2307,7 @@ Esta ayuda no arranca nada ni descarga nada.' ;;
     tools.chat_reconnecting) printf '%s' 'El equipo pasa a las herramientas completas de los Scout, así que el chat se detiene un momento: vuelve solo en cuanto el equipo esté en marcha de nuevo (un par de minutos).' ;;
     tools.chat_resumed) printf '%s' 'El equipo ya usa las herramientas completas: sigamos.' ;;
     tools.chat_switched) printf '%s' 'El equipo pasa a las herramientas completas de los Scout, así que este chat se ha cerrado. Vuelve a abrirlo en un par de minutos con jht team chat.' ;;
+    tools.disk_low) printf '%s' 'Las herramientas de los Scout no se han descargado: necesitan unos %s GiB libres en el disco y hay %s GiB, así que el equipo aún no puede buscar puestos. Libera espacio (vacía la Papelera, borra los archivos grandes que no necesites) y luego ejecuta jht up: la descarga vuelve a empezar sola.' ;;
     tools.engine_down) printf '%s' 'No se puede leer el estado de las herramientas de los Scout: el motor de contenedores no responde. Arráncalo con jht up.' ;;
     tools.failed) printf '%s' 'La descarga de las herramientas de los Scout ha fallado, así que el equipo aún no puede buscar puestos. Ejecuta jht tools pull para reintentarlo (jht up también lo reintenta).' ;;
     tools.ready) printf '%s' 'Las herramientas de los Scout ya están aquí: el equipo busca con la imagen completa.' ;;
@@ -2800,6 +2804,7 @@ Diese Hilfe startet nichts und lädt nichts herunter.' ;;
     tools.chat_reconnecting) printf '%s' 'Das Team wechselt auf die vollständigen Werkzeuge der Scouts, deshalb hält der Chat kurz an: Er kommt von selbst zurück, sobald das Team wieder läuft (ein paar Minuten).' ;;
     tools.chat_resumed) printf '%s' 'Das Team nutzt jetzt die vollständigen Werkzeuge: Machen wir weiter.' ;;
     tools.chat_switched) printf '%s' 'Das Team wechselt auf die vollständigen Werkzeuge der Scouts, deshalb wurde dieser Chat geschlossen. Öffne ihn in ein paar Minuten wieder mit jht team chat.' ;;
+    tools.disk_low) printf '%s' 'Die Werkzeuge der Scouts wurden nicht heruntergeladen: Sie brauchen etwa %s GiB freien Speicherplatz, verfügbar sind %s GiB, daher kann das Team noch keine Stellen suchen. Gib Platz frei (leere den Papierkorb, lösche große Dateien, die du nicht brauchst), dann führe jht up aus: Der Download startet von selbst neu.' ;;
     tools.engine_down) printf '%s' 'Der Stand der Werkzeuge der Scouts lässt sich nicht lesen: Die Container-Engine antwortet nicht. Starte sie mit jht up.' ;;
     tools.failed) printf '%s' 'Der Download der Werkzeuge der Scouts ist fehlgeschlagen, daher kann das Team noch keine Stellen suchen. Führe jht tools pull aus, um es erneut zu versuchen (jht up versucht es auch).' ;;
     tools.ready) printf '%s' 'Die Werkzeuge der Scouts sind da: Das Team sucht mit dem vollständigen Image.' ;;
@@ -3296,6 +3301,7 @@ Cette aide ne démarre rien et ne télécharge rien.' ;;
     tools.chat_reconnecting) printf '%s' 'L'\''équipe passe aux outils complets des Scout, donc le chat s'\''arrête un instant : il revient tout seul dès que l'\''équipe tourne à nouveau (quelques minutes).' ;;
     tools.chat_resumed) printf '%s' 'L'\''équipe est passée aux outils complets : reprenons.' ;;
     tools.chat_switched) printf '%s' 'L'\''équipe passe aux outils complets des Scout, donc ce chat s'\''est fermé. Rouvre-le dans quelques minutes avec jht team chat.' ;;
+    tools.disk_low) printf '%s' 'Les outils des Scout n'\''ont pas été téléchargés : il leur faut environ %s Gio libres sur le disque et il y en a %s, l'\''équipe ne peut donc pas encore chercher d'\''offres. Libère de l'\''espace (vide la Corbeille, supprime les gros fichiers dont tu n'\''as pas besoin), puis lance jht up : le téléchargement repart tout seul.' ;;
     tools.engine_down) printf '%s' 'L'\''état des outils des Scout ne peut pas être lu : le moteur de conteneurs ne répond pas. Démarre-le avec jht up.' ;;
     tools.failed) printf '%s' 'Le téléchargement des outils des Scout a échoué : l'\''équipe ne peut pas encore chercher d'\''offres. Lance jht tools pull pour réessayer (jht up réessaie aussi).' ;;
     tools.ready) printf '%s' 'Les outils des Scout sont là : l'\''équipe cherche avec l'\''image complète.' ;;
@@ -3792,6 +3798,7 @@ Esta ajuda não inicia nada nem descarrega nada.' ;;
     tools.chat_reconnecting) printf '%s' 'A equipa passa para as ferramentas completas dos Scout, por isso o chat para por um momento: volta sozinho assim que a equipa estiver a funcionar outra vez (alguns minutos).' ;;
     tools.chat_resumed) printf '%s' 'A equipa passou para as ferramentas completas: vamos continuar.' ;;
     tools.chat_switched) printf '%s' 'A equipa passa para as ferramentas completas dos Scout, por isso este chat fechou-se. Volta a abri-lo dentro de alguns minutos com jht team chat.' ;;
+    tools.disk_low) printf '%s' 'As ferramentas dos Scout não foram descarregadas: precisam de cerca de %s GiB livres no disco e há %s GiB, por isso a equipa ainda não pode procurar vagas. Liberta espaço (esvazia o Lixo, apaga os ficheiros grandes de que não precisas) e depois corre jht up: o descarregamento recomeça sozinho.' ;;
     tools.engine_down) printf '%s' 'Não é possível ler o estado das ferramentas dos Scout: o motor de contentores não responde. Inicia-o com jht up.' ;;
     tools.failed) printf '%s' 'O descarregamento das ferramentas dos Scout falhou, por isso a equipa ainda não pode procurar vagas. Corre jht tools pull para tentar de novo (jht up também tenta de novo).' ;;
     tools.ready) printf '%s' 'As ferramentas dos Scout já chegaram: a equipa procura com a imagem completa.' ;;
@@ -4043,9 +4050,17 @@ tools_tell_person() {
       arriving) info "$(jht_say tools.arriving)" ;;
       waiting) info "$(jht_say tools.waiting)" ;;
       failed) warn "$(jht_say tools.failed)" ;;
+      disk_low) warn "$(tools_disk_low_text)" ;;
       switch_failed) warn "$(jht_say tools.switch_failed)" ;;
     esac
   ) || true
+}
+
+# No room on the disk for the full image (tools_disk_room in jht-tools.sh): how much it asks for and how much there is now.
+tools_disk_low_text() {
+  local free
+  free="$(tools_disk_free_kib)" || free=0
+  jht_say tools.disk_low "$(disk_gib_text "$(tools_pull_need_kib)")" "$(disk_gib_text "$free")"
 }
 
 # `jht tools status`: one line for the person, the same words `jht up` says (`--json` is for programs). With no tier file the
@@ -4055,6 +4070,7 @@ tools_say_status() {
     arriving) printf '%s\n' "$(jht_say tools.arriving)" ;;
     waiting) printf '%s\n' "$(jht_say tools.waiting)" ;;
     failed) printf '%s\n' "$(jht_say tools.failed)" ;;
+    disk_low) printf '%s\n' "$(tools_disk_low_text)" ;;
     switch_failed) printf '%s\n' "$(jht_say tools.switch_failed)" ;;
     *) if [ -f "$RUNTIME_TIER_FILE" ]; then printf '%s\n' "$(jht_say tools.engine_down)"; else printf '%s\n' "$(jht_say tools.ready)"; fi ;;
   esac
