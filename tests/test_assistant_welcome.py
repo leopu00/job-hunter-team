@@ -638,3 +638,37 @@ def test_the_first_start_of_the_captain_still_gets_its_welcome(tmp_path):
     sent, _, boot = _capitano_start(tmp_path, False)
     assert sent.strip() == "capitano capitano-welcomed.flag"
     assert boot == ""                                    # the welcome message runs it itself, once (_welcome_kickoff)
+
+
+def _mentor_start(tmp_path: Path, introduced: bool) -> tuple[str, str]:
+    """The block of start-agent.sh that starts the Mentor's welcome, in a home with or without mentor-welcomed.flag."""
+    source = START_AGENT.read_text(encoding="utf-8")
+    start = source.index("\n# The Mentor introduced on an earlier start")
+    block = source[start: source.index('\nif [ "$ROLE" = "sentinella" ]', start)]
+    home, sent, log = tmp_path / "home", tmp_path / "sent.txt", tmp_path / "welcome.log"
+    (home / "profile").mkdir(parents=True)
+    if introduced:
+        (home / "profile" / "mentor-welcomed.flag").touch()
+    script = "\n".join([
+        f'jht_daemon_log() {{ echo "{log}"; }}',
+        f'_welcome_kickoff() {{ echo "$1 $2" >> "{sent}"; }}',
+        "_welcome_body() { echo body; }",
+        "ROLE=mentor",
+        block,
+    ])
+    shell = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30,
+                           env={**os.environ, "JHT_HOME": str(home)})
+    assert shell.returncode == 0, shell.stderr
+    read = lambda p: p.read_text(encoding="utf-8") if p.exists() else ""  # noqa: E731
+    return read(sent), read(log)
+
+
+def test_a_start_of_the_mentor_already_introduced_sends_it_nothing(tmp_path):
+    sent, log = _mentor_start(tmp_path, True)
+    assert sent == ""
+    assert "mentor-welcomed.flag present" in log
+
+
+def test_the_first_start_of_the_mentor_still_gets_its_welcome(tmp_path):
+    sent, _ = _mentor_start(tmp_path, False)
+    assert sent.strip() == "mentor mentor-welcomed.flag"
