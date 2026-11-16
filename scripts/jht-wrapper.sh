@@ -4424,9 +4424,23 @@ running_podman_machine() {
     done
 }
 
+# The Podman machine (vfkit and gvproxy, started by `podman machine start`/`init --now`) must not live and die with the terminal
+# the person ran this from: closing that window sends SIGHUP to what it started, and the machine with the team stopped. The
+# command runs in a session of its own, with no terminal and SIGHUP ignored (perl's setsid on macOS, which has no setsid
+# command; setsid -w where there is one; nohup otherwise). `podman machine stop` (jht down) still stops it as before.
+jht_detached_from_terminal() {
+  if command -v perl >/dev/null 2>&1; then
+    perl -MPOSIX -e '$SIG{HUP} = "IGNORE"; POSIX::setsid(); exec { $ARGV[0] } @ARGV or exit 127' "$@" </dev/null
+  elif command -v setsid >/dev/null 2>&1; then
+    setsid -w "$@" </dev/null
+  else
+    nohup "$@" </dev/null
+  fi
+}
+
 start_jht_podman_machine() {
   local podman_bin="$1" start_error start_status running
-  start_error="$("$podman_bin" machine start --update-connection=false "$PODMAN_MACHINE_NAME" 2>&1 >/dev/null)" \
+  start_error="$(jht_detached_from_terminal "$podman_bin" machine start --update-connection=false "$PODMAN_MACHINE_NAME" 2>&1 >/dev/null)" \
     && start_status=0 || start_status=$?
   [ "$start_status" -eq 0 ] && return 0
   if printf '%s\n' "$start_error" | grep -Fqi 'only one VM can be active at a time'; then
@@ -9985,7 +9999,7 @@ case "$SUB" in
       || { err "$(jht_say line.non_riesco_a_rimuovere_la "$PODMAN_MACHINE_NAME")"; exit 1; }
     rm -f -- "$BROKER_LEGACY_MARKER" \
       || warn "$(jht_say line.non_ho_potuto_rimuovere_il "$BROKER_LEGACY_MARKER")"
-    if ! "$podman_bin" machine init --now --update-connection=false \
+    if ! jht_detached_from_terminal "$podman_bin" machine init --now --update-connection=false \
       --cpus "$PODMAN_MACHINE_CPUS" \
       --memory "$PODMAN_MACHINE_MEMORY_MIB" \
       --disk-size "$PODMAN_MACHINE_DISK_GIB" \
