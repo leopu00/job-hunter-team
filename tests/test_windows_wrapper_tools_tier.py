@@ -646,9 +646,19 @@ def test_jht_team_chat_comes_back_by_itself_when_the_switch_ended_it():
     assert "exit $code" in arm
     body = text[text.index("function Invoke-JhtTeamChatThroughSwitch {"):]
     body = body[:body.index("\n}\n")]
-    for needed in ("Wait-JhtToolsSwitch -Quiet", "Ensure-Up", "Test-JhtTeamChatAgentBack $agent", "'tools.chat_reconnecting'",
-                   "'tools.chat_resumed'", "'tools.chat_switched'", "node $NodeEntry 'team' @ChatArgs"):
+    # it waits for the switch and starts a fresh wrapper, told it resumes: it never starts the container itself
+    for needed in ("Wait-JhtToolsSwitch -Quiet", "'tools.chat_reconnecting'", "'tools.chat_switched'",
+                   "$env:JHT_TEAM_CHAT_RESUME = [string]($round + 1)", "-File $WrapperPath 'team' @ChatArgs"):
         assert needed in body, needed
+    assert "Ensure-Up" not in body and "docker" not in body
+    resume = text[text.index("function Invoke-JhtTeamChatResume {"):]
+    resume = resume[:resume.index("\n}\n")]
+    for needed in ("Test-ContainerUp", "Test-JhtTeamChatAgentBack $Agent", "'tools.chat_resumed'", "'tools.chat_switched'"):
+        assert needed in resume, needed
+    assert "Ensure-Up" not in resume
+    assert ("if ($Sub -ceq 'team' -and $Rest.Count -gt 1 -and $Rest[0] -ceq 'chat' -and $env:JHT_TEAM_CHAT_RESUME) "
+            "{ Invoke-JhtTeamChatResume $Rest[1] }\n    else { Ensure-Up }") in arm.replace("\r\n", "\n") or \
+           ("{ Invoke-JhtTeamChatResume $Rest[1] }" in text and "    else { Ensure-Up }" in text)
 
 
 def test_the_chat_waits_for_the_agent_of_its_own_name(box):

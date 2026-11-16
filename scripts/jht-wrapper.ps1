@@ -2102,27 +2102,32 @@ function Test-JhtTeamChatAgentBack {
   }
 }
 
-# `jht team chat` whose REPL the switch ended: it comes back by itself, on the same agent, once the team runs on the full image
-# (at most three switches in a row; one is what happens). If the agent is not back in time, the person is told to open it again.
-# Called as a statement, never inside (...): the REPL's output goes to the console as it comes; its exit code is in
-# $script:JhtTeamChatCode.
+# `jht team chat` whose REPL the switch ended: it comes back by itself, on the same agent, once the team runs on the full image.
+# This wrapper read the runtime before the switch (the core image, the core container) and would refuse the full container as not
+# ours: a fresh wrapper reads it as it is now. It is told it resumes a chat (JHT_TEAM_CHAT_RESUME, the round), so it never starts
+# or replaces the container: it waits for the agent and attaches (Invoke-JhtTeamChatResume). At most three switches in a row.
+# Called as a statement; the exit code is in $script:JhtTeamChatCode.
 function Invoke-JhtTeamChatThroughSwitch {
   param([string[]]$ChatArgs)
-  $agent = ''
-  if ($ChatArgs.Count -gt 1) { $agent = $ChatArgs[1] }
-  $hostFlags = @('-e', "JHT_HOST_TYPE=$env:JHT_HOST_TYPE")
-  for ($round = 0; $round -lt 3; $round++) {
-    Write-Info (Get-JhtText 'tools.chat_reconnecting')
-    Wait-JhtToolsSwitch -Quiet
-    Ensure-Up
-    if (-not (Test-JhtTeamChatAgentBack $agent)) { Write-Info (Get-JhtText 'tools.chat_switched'); $script:JhtTeamChatCode = 0; return }
-    Write-Info (Get-JhtText 'tools.chat_resumed')
-    & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @hostFlags $Container node $NodeEntry 'team' @ChatArgs }
-    $script:JhtTeamChatCode = $LASTEXITCODE
-    if (-not (Test-JhtTeamChatEndedBySwitch)) { return }
+  $round = 0
+  if ($env:JHT_TEAM_CHAT_RESUME -match '^[0-9]{1,2}$') { $round = [int]$env:JHT_TEAM_CHAT_RESUME }
+  if ($round -ge 3) { Write-Info (Get-JhtText 'tools.chat_switched'); $script:JhtTeamChatCode = 0; return }
+  Write-Info (Get-JhtText 'tools.chat_reconnecting')
+  Wait-JhtToolsSwitch -Quiet
+  $env:JHT_TEAM_CHAT_RESUME = [string]($round + 1)
+  & (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -File $WrapperPath 'team' @ChatArgs
+  $script:JhtTeamChatCode = $LASTEXITCODE
+}
+
+# The fresh wrapper of a chat that the switch ended: the container the switch started must be running and ours, and the agent
+# back in it. Nothing is started here: if they are not there, the person is told to open the chat again.
+function Invoke-JhtTeamChatResume {
+  param([string]$Agent)
+  if (-not (Test-ContainerUp) -or -not (Test-JhtTeamChatAgentBack $Agent)) {
+    Write-Info (Get-JhtText 'tools.chat_switched')
+    exit 0
   }
-  Write-Info (Get-JhtText 'tools.chat_switched')
-  $script:JhtTeamChatCode = 0
+  Write-Info (Get-JhtText 'tools.chat_resumed')
 }
 
 # Every `jht` command says it is running, in a file of the runtime folder named by its PID: "<pid> <start ticks> <command>
@@ -8376,7 +8381,8 @@ switch ($Sub) {
   default {
     Require-ComposeFile
     Require-Docker
-    Ensure-Up
+    if ($Sub -ceq 'team' -and $Rest.Count -gt 1 -and $Rest[0] -ceq 'chat' -and $env:JHT_TEAM_CHAT_RESUME) { Invoke-JhtTeamChatResume $Rest[1] }
+    else { Ensure-Up }
     $hostFlags = @('-e', "JHT_HOST_TYPE=$env:JHT_HOST_TYPE")
     & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @hostFlags $Container node $NodeEntry $Sub @Rest }
     $code = $LASTEXITCODE

@@ -557,6 +557,8 @@ def test_jht_team_chat_comes_back_by_itself_when_the_switch_ended_it():
     arm = text[text.index("\n  team)\n"):]
     arm = arm[:arm.index("\n    ;;\n")]
     assert '"$NODE_ENTRY" "$@" || team_rc=$?' in arm                       # set -e does not end the wrapper on the REPL's exit
+    # a chat that resumes after a switch never starts the container: no ensure_up for it
+    assert re.search(r'if \[ "\$\{2:-\}" = chat \] && \[ -n "\$\{JHT_TEAM_CHAT_RESUME:-\}" \]; then team_chat_resume "\$@"\n', arm)
     assert re.search(r'if \[ "\$\{2:-\}" = chat \] && team_chat_ended_by_switch; then\n\s+team_chat_through_switch "\$@"\n\s+exit \$\?\n', arm)
     assert arm.rstrip().endswith('exit "$team_rc"')                       # any other end: the REPL's own code, as before
     import sys as _sys
@@ -569,40 +571,67 @@ def test_jht_team_chat_comes_back_by_itself_when_the_switch_ended_it():
             assert texts[key] and "%" not in texts[key], (lang, key)
 
 
-def _through_switch(tmp_path, docker_body: str, **env):
-    """team_chat_through_switch with the wrapper's own functions, a fake docker and stand-ins for what starts the team."""
+def _chat_functions(tmp_path, docker_body: str, env_lines: str, call: str, **env):
+    """The chat functions of the wrapper with a fake docker, a stand-in wrapper and ensure_up/container_up that leave a trace."""
     import sys as _sys
     _sys.path.insert(0, str(ROOT / "tests"))
     from wrapper_texts import say_functions
     text = WRAPPER.read_text(encoding="utf-8")
     parts = [re.search(rf"^{name}\(\) \{{\n.*?^\}}\n", text, re.S | re.M).group(0)
-             for name in ("team_chat_ended_by_switch", "wait_for_tools_switch", "team_chat_agent_back", "team_chat_through_switch")]
+             for name in ("team_chat_ended_by_switch", "wait_for_tools_switch", "team_chat_agent_back", "team_chat_through_switch",
+                          "team_chat_resume")]
     fake = tmp_path / "bin"
     fake.mkdir(exist_ok=True)
     (fake / "docker").write_text("#!/bin/sh\n" + docker_body, encoding="utf-8")
     (fake / "docker").chmod(0o755)
+    wrapper = tmp_path / "again.sh"
+    wrapper.write_text(f'echo "again $* resume=$JHT_TEAM_CHAT_RESUME" >> "{tmp_path}/calls"\n', encoding="utf-8")
     body = ("set -euo pipefail\n" + say_functions("en") + 'info() { printf "%s\\n" "$*" >&2; }\n'
-            f'export PATH="{fake}:$PATH"\nRUNTIME_DIR="{tmp_path}"\nEXEC_FLAGS=-i\nJHT_HOST_TYPE=linux\nNODE_ENTRY=/app/cli.js\n'
-            'ATTESTED_CONTAINER_ID=old\nensure_up() { ATTESTED_CONTAINER_ID=new; }\n' + "".join(parts)
-            + 'team_chat_through_switch team chat assistente\n')
+            f'export PATH="{fake}:$PATH"\nRUNTIME_DIR="{tmp_path}"\nWRAPPER_PATH="{wrapper}"\nATTESTED_CONTAINER_ID=jht\n'
+            f'ensure_up() {{ echo ENSURE_UP >> "{tmp_path}/calls"; }}\n' + env_lines + "".join(parts) + call)
     return subprocess.run(["bash", "-c", body], capture_output=True, text=True, timeout=60, env={**os.environ, **env})
 
 
-def test_the_chat_comes_back_on_the_same_agent_once_its_session_is_there(tmp_path):
-    done = _through_switch(tmp_path, f'echo "$*" >> "{tmp_path}/calls"\nexit 0\n')
+def test_a_chat_the_switch_ended_starts_a_fresh_wrapper_and_starts_nothing_itself(tmp_path):
+    """Giro Linux: the wrapper that opened the chat read the core container; after the switch it refused the full one («cannot be
+    confirmed as ours; automatic start refused»). It now waits for the switch and starts a fresh wrapper, told it resumes."""
+    done = _chat_functions(tmp_path, f'echo "docker $*" >> "{tmp_path}/calls"\nexit 0\n', "",
+                           "team_chat_through_switch team chat assistente\n")
     assert done.returncode == 0, done.stderr
     calls = (tmp_path / "calls").read_text(encoding="utf-8").splitlines()
-    assert calls[0] == "exec new tmux has-session -t =ASSISTENTE"             # the new container, the same agent
-    assert calls[-1] == "exec -i -e JHT_HOST_TYPE=linux new node /app/cli.js team chat assistente"
-    assert done.stderr.index("so the chat stops for a moment") < done.stderr.index("let's pick up again")
+    assert calls == ["again team chat assistente resume=1"], calls          # no docker, no ensure_up: only the fresh wrapper
+    assert "so the chat stops for a moment" in done.stderr
+
+
+def test_after_three_switches_in_a_row_the_chat_says_to_open_it_again(tmp_path):
+    done = _chat_functions(tmp_path, "exit 0\n", "", "team_chat_through_switch team chat assistente\n", JHT_TEAM_CHAT_RESUME="3")
+    assert done.returncode == 0 and "Open it again in a couple of minutes with jht team chat." in done.stderr
+    assert not (tmp_path / "calls").exists()
+
+
+def test_the_fresh_wrapper_attaches_to_the_running_agent_and_starts_nothing(tmp_path):
+    done = _chat_functions(tmp_path, f'echo "docker $*" >> "{tmp_path}/calls"\nexit 0\n',
+                           'container_up() { ATTESTED_CONTAINER_ID=full; }\n', "team_chat_resume team chat assistente\necho ATTACH\n")
+    assert done.returncode == 0 and done.stdout.strip() == "ATTACH", done.stderr
+    calls = (tmp_path / "calls").read_text(encoding="utf-8").splitlines()
+    assert calls == ["docker exec full tmux has-session -t =ASSISTENTE"], calls   # the new container; no ENSURE_UP, no start
+    assert "let's pick up again" in done.stderr
+
+
+def test_the_fresh_wrapper_never_starts_a_container_that_is_not_there(tmp_path):
+    done = _chat_functions(tmp_path, f'echo "docker $*" >> "{tmp_path}/calls"\nexit 0\n',
+                           'container_up() { return 3; }\n', "team_chat_resume team chat assistente\necho ATTACH\n")
+    assert done.returncode == 0 and "ATTACH" not in done.stdout
+    assert "Open it again in a couple of minutes with jht team chat." in done.stderr
+    assert not (tmp_path / "calls").exists()                                 # no ensure_up, no docker at all
 
 
 def test_an_agent_that_does_not_come_back_in_time_leaves_the_line_to_open_it_again(tmp_path):
-    done = _through_switch(tmp_path, f'echo "$*" >> "{tmp_path}/calls"\n[ "$3" = tmux ] && exit 1\nexit 0\n',
+    done = _chat_functions(tmp_path, f'echo "docker $*" >> "{tmp_path}/calls"\n[ "$3" = tmux ] && exit 1\nexit 0\n',
+                           'container_up() { :; }\n', "team_chat_resume team chat assistente\necho ATTACH\n",
                            JHT_TOOLS_CHAT_RECONNECT_MAX="2")
-    assert done.returncode == 0, done.stderr
+    assert done.returncode == 0 and "ATTACH" not in done.stdout
     assert "Open it again in a couple of minutes with jht team chat." in done.stderr
-    assert not any("node" in line for line in (tmp_path / "calls").read_text(encoding="utf-8").splitlines())
 
 
 def _ready(box, age: float = 0):
