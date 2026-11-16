@@ -3557,6 +3557,10 @@ main() {
     publish_runtime_candidate_bundle
     return 0
   fi
+  # The PATH of the shell that launched the installer, before any step adds to it: when it already has BIN_DIR, `jht`
+  # works there and the last line has nothing to say.
+  local path_had_bin=0
+  case ":$PATH:" in *":$BIN_DIR:"*) path_had_bin=1 ;; esac
   [ "$USE_DOCKER" -eq 1 ] && keep_chosen_runtime
   header
   if [ "$USE_DOCKER" -eq 1 ]; then
@@ -3568,7 +3572,9 @@ main() {
   save_pairing_token
   run_host_setup
   final_message
-  maybe_onboard; local wizard_result=$?; printf '\n  %s export PATH=%q:"$PATH"\n' "$(ts installer.terminal_run 'In this terminal, run:')" "$BIN_DIR"; return "$wizard_result"
+  maybe_onboard; local wizard_result=$?
+  [ "$path_had_bin" -eq 1 ] || printf '\n  %s export PATH=%q:"$PATH"\n' "$(ts installer.terminal_run 'In this terminal, run:')" "$BIN_DIR"
+  return "$wizard_result"
 }
 
 if [ "${JHT_INSTALLER_SOURCE_ONLY:-0}" != "1" ]; then

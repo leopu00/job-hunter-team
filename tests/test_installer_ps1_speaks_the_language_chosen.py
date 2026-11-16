@@ -134,7 +134,8 @@ def test_an_update_keeps_the_language_the_host_type_and_the_zone_of_host_env(tmp
               f"$JhtHome = '{home}'\n$PairingToken = ''\n$DryRun = $true\n$TotalSteps = 5\n"
               "function Write-Step { }\nfunction Ts { param($Key, $English) return $English }\n"
               "function Write-Dry { param($Text) [Console]::Out.WriteLine($Text) }\n"
-              + _functions("Get-JhtSavedHostEnvValue", "Get-JhtTextLanguage", "Get-JhtPersonLanguage", "Get-JhtInstallTimezone", "Write-HostEnv")
+              + _functions("Get-JhtSavedHostEnvValue", "Get-JhtTextLanguage", "Get-JhtPersonLanguage", "Get-JhtComputerCountry",
+                         "Get-JhtWindowsZoneLines", "Get-JhtZoneOfWindowsId", "Get-JhtInstallTimezone", "Write-HostEnv")
               + "\nWrite-HostEnv\n")
     case = tmp_path / "case.ps1"
     case.write_text(script, encoding="utf-8")

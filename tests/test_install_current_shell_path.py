@@ -105,6 +105,28 @@ def test_the_last_instruction_follows_the_wizard_and_preserves_its_exit_code(tmp
         assert checked.stdout.startswith(str(tmp_path / "bin with spaces") + ":")
 
 
+@pytest.mark.parametrize("wizard_exit", [0, 7])
+def test_a_shell_that_already_has_the_bin_folder_gets_no_export_line(tmp_path, wizard_exit):
+    # Linux round of build6 (known defect #13): «~/.local/bin ist schon im PATH» and then «Führe in diesem Terminal aus:
+    # export PATH=…». The terminal that launched the installer already finds `jht`: the last line is not printed.
+    bin_dir = tmp_path / "bin with spaces"
+    script = (
+        f'JHT_INSTALLER_SOURCE_ONLY=1 . {shlex.quote(str(INSTALLERS[0]))}\n'
+        f'BIN_DIR={shlex.quote(str(bin_dir))}; USE_DOCKER=1; RUNTIME_CHOICE=""; OS=linux\n'
+        'PATH="/usr/bin:$BIN_DIR:/bin"\n'
+        'keep_chosen_runtime() { :; }; header() { :; }; main_docker() { PATH_READY=1; }\n'
+        'refuse_foreign_bind_uid() { :; }; save_pairing_token() { :; }; run_host_setup() { :; }\n'
+        'will_auto_onboard() { return 0; }\n'
+        f'maybe_onboard() {{ printf "WIZARD_FINISHED\\n"; return {wizard_exit}; }}\n'
+        'main\n'
+    )
+    done = subprocess.run(["bash", "-c", script], env={**os.environ, "HOME": str(tmp_path), "NO_COLOR": "1"},
+                          capture_output=True, text=True, timeout=10)
+    assert done.returncode == wizard_exit, done.stdout + done.stderr
+    assert "WIZARD_FINISHED" in done.stdout
+    assert PREFIX.strip() not in done.stdout and "export PATH=" not in done.stdout, done.stdout
+
+
 def test_the_installer_pin_and_public_payload_match_the_canonical_bytes():
     # Security artifact guard: these are the actual payload bytes the app downloads.
     payload = INSTALLERS[0].read_bytes()

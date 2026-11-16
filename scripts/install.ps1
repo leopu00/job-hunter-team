@@ -114,6 +114,8 @@ if (-not $LocalAppData) { throw 'LOCALAPPDATA is unavailable: refusing an unprot
 $RuntimeDir = if ($env:JHT_RUNTIME_DIR) { $env:JHT_RUNTIME_DIR } else { Join-Path $LocalAppData 'Job Hunter Team\host-runtime' }
 $BinDir     = if ($env:JHT_BIN_DIR)     { $env:JHT_BIN_DIR }     else { Join-Path $env:USERPROFILE '.local\bin' }
 $ShimBin    = Join-Path $BinDir 'shim'
+# The PATH of the window that launched the installer, before any step adds to it (Show-Final reads it).
+$script:JhtStartPath = $env:Path
 $JhtHome    = Join-Path $env:USERPROFILE '.jht'
 # Never Set-Acl. When the target's access rules are already protected (as a
 # previous install leaves ~/.jht), Windows PowerShell's Set-Acl writes the SACL
@@ -1311,6 +1313,19 @@ function Write-JhtNewWindowNotice {
   Write-Host ""
 }
 
+# The window that launched the installer already finds jht and podman when its PATH had the jht folders and a podman.exe
+# (an install over an earlier one): then the notice of the new window has nothing to say.
+function Test-JhtStartWindowHasTools {
+  param([string]$StartPath = $script:JhtStartPath)
+  if (-not $StartPath) { return $false }
+  $entries = @($StartPath -split ';' | Where-Object { $_ -and ($_.Trim() -ne '') } | ForEach-Object { $_.TrimEnd('\') })
+  if (-not ($entries -icontains $BinDir.TrimEnd('\')) -or -not ($entries -icontains $ShimBin.TrimEnd('\'))) { return $false }
+  foreach ($entry in $entries) {
+    try { if (Test-Path -LiteralPath (Join-Path $entry 'podman.exe') -PathType Leaf) { return $true } } catch { }
+  }
+  return $false
+}
+
 function Add-ToUserPath {
   Write-Step 4 $TotalSteps (Ts 'installer.windows.registering_user_path' 'Registering the user PATH')
 
@@ -1377,30 +1392,387 @@ function Get-JhtPersonLanguage {
   return (Get-JhtTextLanguage)
 }
 
-# Best-effort timezone detection (Windows TimeZoneInfo -> IANA name). When the mapping is unknown it is UTC and jht setup asks.
+# The country of this computer, two capital letters, or $null: the country of the region settings of Windows (Settings > Time & language >
+# Region: HKCU\Control Panel\International\Geo, Name), else the one of the culture of the user (it-IT: IT).
+function Get-JhtComputerCountry {
+  $country = $null
+  try { $country = [string](Get-ItemProperty -LiteralPath 'HKCU:\Control Panel\International\Geo' -Name 'Name' -ErrorAction Stop).Name } catch { }
+  if (-not $country) {
+    try { $country = [Globalization.RegionInfo]::CurrentRegion.TwoLetterISORegionName } catch { }
+  }
+  if ($country -cmatch '^[a-zA-Z]{2}\z') { return $country.ToUpperInvariant() }
+  return $null
+}
+
+# >>> zones of the Windows ids, made from shared/data/timezones.txt by `python3 tests/installer_ps1_zones.py --write`: do not edit by hand
+function Get-JhtWindowsZoneLines {
+  return @'
+P|AUS Central Standard Time|Australia/Darwin
+P|AUS Eastern Standard Time|Australia/Sydney
+P|Afghanistan Standard Time|Asia/Kabul
+P|Alaskan Standard Time|America/Anchorage
+P|Aleutian Standard Time|America/Adak
+P|Altai Standard Time|Asia/Barnaul
+P|Arab Standard Time|Asia/Riyadh
+P|Arabian Standard Time|Asia/Dubai
+P|Arabic Standard Time|Asia/Baghdad
+P|Argentina Standard Time|America/Argentina/Buenos_Aires
+P|Astrakhan Standard Time|Europe/Astrakhan
+P|Atlantic Standard Time|America/Halifax
+P|Aus Central W. Standard Time|Australia/Eucla
+P|Azerbaijan Standard Time|Asia/Baku
+P|Azores Standard Time|Atlantic/Azores
+P|Bahia Standard Time|America/Bahia
+P|Bangladesh Standard Time|Asia/Dhaka
+P|Belarus Standard Time|Europe/Minsk
+P|Bougainville Standard Time|Pacific/Bougainville
+P|Canada Central Standard Time|America/Regina
+P|Cape Verde Standard Time|Atlantic/Cape_Verde
+P|Caucasus Standard Time|Asia/Yerevan
+P|Cen. Australia Standard Time|Australia/Adelaide
+P|Central America Standard Time|America/Guatemala
+P|Central Asia Standard Time|Asia/Almaty
+P|Central Brazilian Standard Time|America/Cuiaba
+P|Central Europe Standard Time|Europe/Budapest
+P|Central European Standard Time|Europe/Warsaw
+P|Central Pacific Standard Time|Pacific/Guadalcanal
+P|Central Standard Time|America/Chicago
+P|Central Standard Time (Mexico)|America/Mexico_City
+P|Chatham Islands Standard Time|Pacific/Chatham
+P|China Standard Time|Asia/Shanghai
+P|Cuba Standard Time|America/Havana
+P|E. Africa Standard Time|Africa/Nairobi
+P|E. Australia Standard Time|Australia/Brisbane
+P|E. Europe Standard Time|Europe/Chisinau
+P|E. South America Standard Time|America/Sao_Paulo
+P|Easter Island Standard Time|Pacific/Easter
+P|Eastern Standard Time|America/New_York
+P|Eastern Standard Time (Mexico)|America/Cancun
+P|Egypt Standard Time|Africa/Cairo
+P|Ekaterinburg Standard Time|Asia/Yekaterinburg
+P|FLE Standard Time|Europe/Helsinki
+P|Fiji Standard Time|Pacific/Fiji
+P|GMT Standard Time|Europe/London
+P|GTB Standard Time|Europe/Bucharest
+P|Georgian Standard Time|Asia/Tbilisi
+P|Greenland Standard Time|America/Nuuk
+P|Greenwich Standard Time|Atlantic/Reykjavik
+P|Haiti Standard Time|America/Port-au-Prince
+P|Hawaiian Standard Time|Pacific/Honolulu
+P|India Standard Time|Asia/Kolkata
+P|Iran Standard Time|Asia/Tehran
+P|Israel Standard Time|Asia/Jerusalem
+P|Jordan Standard Time|Asia/Amman
+P|Kaliningrad Standard Time|Europe/Kaliningrad
+P|Korea Standard Time|Asia/Seoul
+P|Libya Standard Time|Africa/Tripoli
+P|Line Islands Standard Time|Pacific/Kiritimati
+P|Lord Howe Standard Time|Australia/Lord_Howe
+P|Magadan Standard Time|Asia/Magadan
+P|Magallanes Standard Time|America/Punta_Arenas
+P|Marquesas Standard Time|Pacific/Marquesas
+P|Mauritius Standard Time|Indian/Mauritius
+P|Middle East Standard Time|Asia/Beirut
+P|Montevideo Standard Time|America/Montevideo
+P|Morocco Standard Time|Africa/Casablanca
+P|Mountain Standard Time|America/Denver
+P|Mountain Standard Time (Mexico)|America/Mazatlan
+P|Myanmar Standard Time|Asia/Yangon
+P|N. Central Asia Standard Time|Asia/Novosibirsk
+P|Namibia Standard Time|Africa/Windhoek
+P|Nepal Standard Time|Asia/Kathmandu
+P|New Zealand Standard Time|Pacific/Auckland
+P|Newfoundland Standard Time|America/St_Johns
+P|Norfolk Standard Time|Pacific/Norfolk
+P|North Asia East Standard Time|Asia/Irkutsk
+P|North Asia Standard Time|Asia/Krasnoyarsk
+P|North Korea Standard Time|Asia/Pyongyang
+P|Omsk Standard Time|Asia/Omsk
+P|Pacific SA Standard Time|America/Santiago
+P|Pacific Standard Time|America/Los_Angeles
+P|Pacific Standard Time (Mexico)|America/Tijuana
+P|Pakistan Standard Time|Asia/Karachi
+P|Paraguay Standard Time|America/Asuncion
+P|Qyzylorda Standard Time|Asia/Qyzylorda
+P|Romance Standard Time|Europe/Paris
+P|Russia Time Zone 10|Asia/Srednekolymsk
+P|Russia Time Zone 11|Asia/Kamchatka
+P|Russia Time Zone 3|Europe/Samara
+P|Russian Standard Time|Europe/Moscow
+P|SA Eastern Standard Time|America/Cayenne
+P|SA Pacific Standard Time|America/Bogota
+P|SA Western Standard Time|America/La_Paz
+P|SE Asia Standard Time|Asia/Bangkok
+P|Saint Pierre Standard Time|America/Miquelon
+P|Sakhalin Standard Time|Asia/Sakhalin
+P|Samoa Standard Time|Pacific/Apia
+P|Sao Tome Standard Time|Africa/Sao_Tome
+P|Saratov Standard Time|Europe/Saratov
+P|Singapore Standard Time|Asia/Singapore
+P|South Africa Standard Time|Africa/Johannesburg
+P|South Sudan Standard Time|Africa/Juba
+P|Sri Lanka Standard Time|Asia/Colombo
+P|Sudan Standard Time|Africa/Khartoum
+P|Syria Standard Time|Asia/Damascus
+P|Taipei Standard Time|Asia/Taipei
+P|Tasmania Standard Time|Australia/Hobart
+P|Tocantins Standard Time|America/Araguaina
+P|Tokyo Standard Time|Asia/Tokyo
+P|Tomsk Standard Time|Asia/Tomsk
+P|Tonga Standard Time|Pacific/Tongatapu
+P|Transbaikal Standard Time|Asia/Chita
+P|Turkey Standard Time|Europe/Istanbul
+P|Turks And Caicos Standard Time|America/Grand_Turk
+P|US Eastern Standard Time|America/Indiana/Indianapolis
+P|US Mountain Standard Time|America/Phoenix
+P|UTC|UTC
+P|UTC+12|Pacific/Funafuti
+P|UTC+13|Pacific/Fakaofo
+P|UTC-02|America/Noronha
+P|UTC-08|Pacific/Pitcairn
+P|UTC-09|Pacific/Gambier
+P|UTC-11|Pacific/Midway
+P|Ulaanbaatar Standard Time|Asia/Ulaanbaatar
+P|Venezuela Standard Time|America/Caracas
+P|Vladivostok Standard Time|Asia/Vladivostok
+P|Volgograd Standard Time|Europe/Volgograd
+P|W. Australia Standard Time|Australia/Perth
+P|W. Central Africa Standard Time|Africa/Lagos
+P|W. Europe Standard Time|Europe/Berlin
+P|W. Mongolia Standard Time|Asia/Hovd
+P|West Asia Standard Time|Asia/Tashkent
+P|West Bank Standard Time|Asia/Hebron
+P|West Pacific Standard Time|Pacific/Port_Moresby
+P|Yakutsk Standard Time|Asia/Yakutsk
+P|Yukon Standard Time|America/Whitehorse
+T|Arab Standard Time|BH|Asia/Bahrain
+T|Arab Standard Time|KW|Asia/Kuwait
+T|Arab Standard Time|QA|Asia/Qatar
+T|Arab Standard Time|YE|Asia/Aden
+T|Arabian Standard Time|OM|Asia/Muscat
+T|Atlantic Standard Time|BM|Atlantic/Bermuda
+T|Atlantic Standard Time|GL|America/Thule
+T|Azores Standard Time|GL|America/Scoresbysund
+T|Bangladesh Standard Time|BT|Asia/Thimphu
+T|Central America Standard Time|BZ|America/Belize
+T|Central America Standard Time|CR|America/Costa_Rica
+T|Central America Standard Time|EC|Pacific/Galapagos
+T|Central America Standard Time|HN|America/Tegucigalpa
+T|Central America Standard Time|NI|America/Managua
+T|Central America Standard Time|SV|America/El_Salvador
+T|Central Asia Standard Time|AQ|Antarctica/Vostok
+T|Central Asia Standard Time|CN|Asia/Urumqi
+T|Central Asia Standard Time|IO|Indian/Chagos
+T|Central Asia Standard Time|KG|Asia/Bishkek
+T|Central Europe Standard Time|AL|Europe/Tirane
+T|Central Europe Standard Time|CZ|Europe/Prague
+T|Central Europe Standard Time|ME|Europe/Podgorica
+T|Central Europe Standard Time|RS|Europe/Belgrade
+T|Central Europe Standard Time|SI|Europe/Ljubljana
+T|Central Europe Standard Time|SK|Europe/Bratislava
+T|Central European Standard Time|BA|Europe/Sarajevo
+T|Central European Standard Time|HR|Europe/Zagreb
+T|Central European Standard Time|MK|Europe/Skopje
+T|Central Pacific Standard Time|AQ|Antarctica/Casey
+T|Central Pacific Standard Time|FM|Pacific/Pohnpei
+T|Central Pacific Standard Time|NC|Pacific/Noumea
+T|Central Pacific Standard Time|VU|Pacific/Efate
+T|Central Standard Time|CA|America/Winnipeg
+T|Central Standard Time|MX|America/Matamoros
+T|China Standard Time|HK|Asia/Hong_Kong
+T|China Standard Time|MO|Asia/Macau
+T|E. Africa Standard Time|AQ|Antarctica/Syowa
+T|E. Africa Standard Time|DJ|Africa/Djibouti
+T|E. Africa Standard Time|ER|Africa/Asmara
+T|E. Africa Standard Time|ET|Africa/Addis_Ababa
+T|E. Africa Standard Time|KM|Indian/Comoro
+T|E. Africa Standard Time|MG|Indian/Antananarivo
+T|E. Africa Standard Time|SO|Africa/Mogadishu
+T|E. Africa Standard Time|TZ|Africa/Dar_es_Salaam
+T|E. Africa Standard Time|UG|Africa/Kampala
+T|E. Africa Standard Time|YT|Indian/Mayotte
+T|Eastern Standard Time|BS|America/Nassau
+T|Eastern Standard Time|CA|America/Toronto
+T|FLE Standard Time|AX|Europe/Mariehamn
+T|FLE Standard Time|BG|Europe/Sofia
+T|FLE Standard Time|EE|Europe/Tallinn
+T|FLE Standard Time|LT|Europe/Vilnius
+T|FLE Standard Time|LV|Europe/Riga
+T|FLE Standard Time|UA|Europe/Kyiv
+T|GMT Standard Time|ES|Atlantic/Canary
+T|GMT Standard Time|FO|Atlantic/Faroe
+T|GMT Standard Time|GG|Europe/Guernsey
+T|GMT Standard Time|IE|Europe/Dublin
+T|GMT Standard Time|IM|Europe/Isle_of_Man
+T|GMT Standard Time|JE|Europe/Jersey
+T|GMT Standard Time|PT|Europe/Lisbon
+T|GTB Standard Time|CY|Asia/Nicosia
+T|GTB Standard Time|GR|Europe/Athens
+T|Greenwich Standard Time|BF|Africa/Ouagadougou
+T|Greenwich Standard Time|CI|Africa/Abidjan
+T|Greenwich Standard Time|GH|Africa/Accra
+T|Greenwich Standard Time|GL|America/Danmarkshavn
+T|Greenwich Standard Time|GM|Africa/Banjul
+T|Greenwich Standard Time|GN|Africa/Conakry
+T|Greenwich Standard Time|GW|Africa/Bissau
+T|Greenwich Standard Time|LR|Africa/Monrovia
+T|Greenwich Standard Time|ML|Africa/Bamako
+T|Greenwich Standard Time|MR|Africa/Nouakchott
+T|Greenwich Standard Time|SH|Atlantic/St_Helena
+T|Greenwich Standard Time|SL|Africa/Freetown
+T|Greenwich Standard Time|SN|Africa/Dakar
+T|Greenwich Standard Time|TG|Africa/Lome
+T|Hawaiian Standard Time|CK|Pacific/Rarotonga
+T|Hawaiian Standard Time|PF|Pacific/Tahiti
+T|Mauritius Standard Time|RE|Indian/Reunion
+T|Mauritius Standard Time|SC|Indian/Mahe
+T|Morocco Standard Time|EH|Africa/El_Aaiun
+T|Mountain Standard Time|CA|America/Edmonton
+T|Mountain Standard Time|MX|America/Ciudad_Juarez
+T|Myanmar Standard Time|CC|Indian/Cocos
+T|New Zealand Standard Time|AQ|Antarctica/McMurdo
+T|Pacific Standard Time|CA|America/Vancouver
+T|Romance Standard Time|BE|Europe/Brussels
+T|Romance Standard Time|DK|Europe/Copenhagen
+T|Romance Standard Time|ES|Europe/Madrid
+T|Russian Standard Time|UA|Europe/Simferopol
+T|SA Eastern Standard Time|AQ|Antarctica/Palmer
+T|SA Eastern Standard Time|BR|America/Belem
+T|SA Eastern Standard Time|FK|Atlantic/Stanley
+T|SA Eastern Standard Time|SR|America/Paramaribo
+T|SA Pacific Standard Time|BR|America/Eirunepe
+T|SA Pacific Standard Time|CA|America/Atikokan
+T|SA Pacific Standard Time|EC|America/Guayaquil
+T|SA Pacific Standard Time|JM|America/Jamaica
+T|SA Pacific Standard Time|KY|America/Cayman
+T|SA Pacific Standard Time|PA|America/Panama
+T|SA Pacific Standard Time|PE|America/Lima
+T|SA Western Standard Time|AG|America/Antigua
+T|SA Western Standard Time|AI|America/Anguilla
+T|SA Western Standard Time|AW|America/Aruba
+T|SA Western Standard Time|BB|America/Barbados
+T|SA Western Standard Time|BL|America/St_Barthelemy
+T|SA Western Standard Time|BQ|America/Kralendijk
+T|SA Western Standard Time|BR|America/Porto_Velho
+T|SA Western Standard Time|CA|America/Blanc-Sablon
+T|SA Western Standard Time|CW|America/Curacao
+T|SA Western Standard Time|DM|America/Dominica
+T|SA Western Standard Time|DO|America/Santo_Domingo
+T|SA Western Standard Time|GD|America/Grenada
+T|SA Western Standard Time|GP|America/Guadeloupe
+T|SA Western Standard Time|GY|America/Guyana
+T|SA Western Standard Time|KN|America/St_Kitts
+T|SA Western Standard Time|LC|America/St_Lucia
+T|SA Western Standard Time|MF|America/Marigot
+T|SA Western Standard Time|MQ|America/Martinique
+T|SA Western Standard Time|MS|America/Montserrat
+T|SA Western Standard Time|PR|America/Puerto_Rico
+T|SA Western Standard Time|SX|America/Lower_Princes
+T|SA Western Standard Time|TT|America/Port_of_Spain
+T|SA Western Standard Time|VC|America/St_Vincent
+T|SA Western Standard Time|VG|America/Tortola
+T|SA Western Standard Time|VI|America/St_Thomas
+T|SE Asia Standard Time|AQ|Antarctica/Davis
+T|SE Asia Standard Time|CX|Indian/Christmas
+T|SE Asia Standard Time|ID|Asia/Jakarta
+T|SE Asia Standard Time|KH|Asia/Phnom_Penh
+T|SE Asia Standard Time|LA|Asia/Vientiane
+T|SE Asia Standard Time|VN|Asia/Ho_Chi_Minh
+T|Singapore Standard Time|BN|Asia/Brunei
+T|Singapore Standard Time|ID|Asia/Makassar
+T|Singapore Standard Time|MY|Asia/Kuala_Lumpur
+T|Singapore Standard Time|PH|Asia/Manila
+T|South Africa Standard Time|BI|Africa/Bujumbura
+T|South Africa Standard Time|BW|Africa/Gaborone
+T|South Africa Standard Time|CD|Africa/Lubumbashi
+T|South Africa Standard Time|LS|Africa/Maseru
+T|South Africa Standard Time|MW|Africa/Blantyre
+T|South Africa Standard Time|MZ|Africa/Maputo
+T|South Africa Standard Time|RW|Africa/Kigali
+T|South Africa Standard Time|SZ|Africa/Mbabane
+T|South Africa Standard Time|ZM|Africa/Lusaka
+T|South Africa Standard Time|ZW|Africa/Harare
+T|Tokyo Standard Time|ID|Asia/Jayapura
+T|Tokyo Standard Time|PW|Pacific/Palau
+T|Tokyo Standard Time|TL|Asia/Dili
+T|US Mountain Standard Time|CA|America/Creston
+T|US Mountain Standard Time|MX|America/Hermosillo
+T|UTC+12|KI|Pacific/Tarawa
+T|UTC+12|MH|Pacific/Majuro
+T|UTC+12|NR|Pacific/Nauru
+T|UTC+12|UM|Pacific/Wake
+T|UTC+12|WF|Pacific/Wallis
+T|UTC+13|KI|Pacific/Kanton
+T|UTC-02|GS|Atlantic/South_Georgia
+T|UTC-11|AS|Pacific/Pago_Pago
+T|UTC-11|NU|Pacific/Niue
+T|W. Central Africa Standard Time|AO|Africa/Luanda
+T|W. Central Africa Standard Time|BJ|Africa/Porto-Novo
+T|W. Central Africa Standard Time|CD|Africa/Kinshasa
+T|W. Central Africa Standard Time|CF|Africa/Bangui
+T|W. Central Africa Standard Time|CG|Africa/Brazzaville
+T|W. Central Africa Standard Time|CM|Africa/Douala
+T|W. Central Africa Standard Time|DZ|Africa/Algiers
+T|W. Central Africa Standard Time|GA|Africa/Libreville
+T|W. Central Africa Standard Time|GQ|Africa/Malabo
+T|W. Central Africa Standard Time|NE|Africa/Niamey
+T|W. Central Africa Standard Time|TD|Africa/Ndjamena
+T|W. Central Africa Standard Time|TN|Africa/Tunis
+T|W. Europe Standard Time|AD|Europe/Andorra
+T|W. Europe Standard Time|AT|Europe/Vienna
+T|W. Europe Standard Time|CH|Europe/Zurich
+T|W. Europe Standard Time|GI|Europe/Gibraltar
+T|W. Europe Standard Time|IT|Europe/Rome
+T|W. Europe Standard Time|LI|Europe/Vaduz
+T|W. Europe Standard Time|LU|Europe/Luxembourg
+T|W. Europe Standard Time|MC|Europe/Monaco
+T|W. Europe Standard Time|MT|Europe/Malta
+T|W. Europe Standard Time|NL|Europe/Amsterdam
+T|W. Europe Standard Time|NO|Europe/Oslo
+T|W. Europe Standard Time|SE|Europe/Stockholm
+T|W. Europe Standard Time|SJ|Arctic/Longyearbyen
+T|W. Europe Standard Time|SM|Europe/San_Marino
+T|W. Europe Standard Time|VA|Europe/Vatican
+T|West Asia Standard Time|AQ|Antarctica/Mawson
+T|West Asia Standard Time|KZ|Asia/Aqtobe
+T|West Asia Standard Time|MV|Indian/Maldives
+T|West Asia Standard Time|TF|Indian/Kerguelen
+T|West Asia Standard Time|TJ|Asia/Dushanbe
+T|West Asia Standard Time|TM|Asia/Ashgabat
+T|West Pacific Standard Time|AQ|Antarctica/DumontDUrville
+T|West Pacific Standard Time|FM|Pacific/Chuuk
+T|West Pacific Standard Time|GU|Pacific/Guam
+T|West Pacific Standard Time|MP|Pacific/Saipan
+'@
+}
+# <<< zones of the Windows ids
+# The IANA zone of a Windows zone id, or $null. The country picks among the zones of the id (W. Europe Standard Time in IT: Europe/Rome), as
+# the CLDR does; without one of its own the id's zone of the CLDR, the 001 one (W. Europe Standard Time: Europe/Berlin).
+function Get-JhtZoneOfWindowsId {
+  param([string]$Id, [string]$Country)
+  if (-not $Id) { return $null }
+  $primary = $null
+  foreach ($line in [regex]::Split((Get-JhtWindowsZoneLines), '\r?\n')) {
+    $f = $line.Split('|')
+    if ($f[0] -ceq 'T' -and $f.Count -eq 4 -and $f[1] -ceq $Id -and $Country -and $f[2] -ceq $Country) { return $f[3] }
+    if ($f[0] -ceq 'P' -and $f.Count -eq 3 -and $f[1] -ceq $Id) { $primary = $f[2] }
+  }
+  return $primary
+}
+
+# The zone of this computer for host.env: its Windows zone, in its country. When the id is not known it is UTC and jht setup asks.
 # Written in host.env (step 5) and given to the enabler (step 3), whose `jht up` makes the container before host.env exists.
 function Get-JhtInstallTimezone {
-  $tz = 'UTC'
-  try {
-    $winTz = [System.TimeZoneInfo]::Local.Id
-    # Minimal mapping of the most common Windows time zones. Full list at
-    # https://github.com/unicode-org/cldr/blob/main/common/supplemental/windowsZones.xml
-    $tzMap = @{
-      'W. Europe Standard Time'      = 'Europe/Berlin'
-      'Central European Standard Time' = 'Europe/Warsaw'
-      'Romance Standard Time'        = 'Europe/Paris'
-      'GMT Standard Time'            = 'Europe/London'
-      'Eastern Standard Time'        = 'America/New_York'
-      'Pacific Standard Time'        = 'America/Los_Angeles'
-      'UTC'                          = 'UTC'
-    }
-    if ($tzMap.ContainsKey($winTz)) { $tz = $tzMap[$winTz] }
-  } catch {
-    # Silent fallback: $tz stays 'UTC', the wizard will ask.
-  }
-  # An update keeps the time zone saved by the install before (the enabler of step 3 makes the container with it too).
+  param([string]$WindowsId, [string]$Country)
+  if (-not $PSBoundParameters.ContainsKey('WindowsId')) { try { $WindowsId = [System.TimeZoneInfo]::Local.Id } catch { $WindowsId = '' } }
+  if (-not $PSBoundParameters.ContainsKey('Country')) { $Country = Get-JhtComputerCountry }
+  $tz = Get-JhtZoneOfWindowsId -Id $WindowsId -Country $Country
+  if (-not $tz) { $tz = 'UTC' }
+  # An update keeps the time zone saved by the install before (the enabler of step 3 makes the container with it too). Only the 001 zone
+  # of this very Windows id, which installs up to build 6 wrote whatever the country (Europe/Berlin in Italy), gives way to the zone of the
+  # country: the same clock, the right name.
   $savedTz = Get-JhtSavedHostEnvValue -Name 'JHT_USER_TZ'
-  if ($savedTz) { $tz = $savedTz }
+  if ($savedTz -and -not ($savedTz -ceq (Get-JhtZoneOfWindowsId -Id $WindowsId -Country ''))) { $tz = $savedTz }
   return $tz
 }
 
@@ -1474,7 +1846,7 @@ function Show-Final {
   Write-Host ""
 
   # Not for the desktop app, which reads this output through a pipe, nor for a dry run (nothing was installed).
-  if (-not $DryRun -and $env:JHT_MACHINE_OUTPUT -ne '1') { Write-JhtNewWindowNotice }
+  if (-not $DryRun -and $env:JHT_MACHINE_OUTPUT -ne '1' -and -not (Test-JhtStartWindowHasTools)) { Write-JhtNewWindowNotice }
   if (-not (Test-WillAutoOnboard)) {
     Write-Host "  $(Ts 'installer.windows.next_steps' 'Next steps:')" -ForegroundColor White
     Write-Host ""

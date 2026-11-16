@@ -25,6 +25,7 @@ on:
       - 'tests/test_artifact_links_every_backend.py'
       - 'tests/test_bridge_ps1_speaks_the_language_chosen.py'
       - 'tests/bridge_ps1_texts.py'
+      - 'tests/installer_ps1_zones.py'
       - 'tests/test_first_start_messages_powershell.py'
       - 'tests/test_installer_core_tier.py'
       - 'tests/test_installer_ps1_speaks_the_language_chosen.py'

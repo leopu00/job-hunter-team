@@ -3186,14 +3186,38 @@ function Get-JhtTzNow {
   return ''
 }
 
-# The IANA name of the zone of this computer, or $null. JHT_TZ_LOCAL_ID names the id to take for the computer's (a test seam: it only changes what the
-# person is shown).
+# The country of this computer, two capital letters, or $null: the one of the region settings of Windows (HKCU\Control Panel\International\Geo,
+# Name), else the one of the culture of the user (it-IT: IT).
+function Get-JhtComputerCountry {
+  $country = $null
+  try { $country = [string](Get-ItemProperty -LiteralPath 'HKCU:\Control Panel\International\Geo' -Name 'Name' -ErrorAction Stop).Name } catch { }
+  if (-not $country) {
+    try { $country = [Globalization.RegionInfo]::CurrentRegion.TwoLetterISORegionName } catch { }
+  }
+  if ($country -cmatch '^[a-zA-Z]{2}\z') { return $country.ToUpperInvariant() }
+  return $null
+}
+
+# The IANA name of the zone of this computer, or $null. A Windows id covers many zones: the country of the computer picks among them as the CLDR
+# does (W. Europe Standard Time in IT: Europe/Rome; the first of the country's zones with the id, or the id's own 001 zone when the country has
+# it), else the 001 zone (Europe/Berlin). install.ps1 writes the same zone in host.env (tests/installer_ps1_zones.py). JHT_TZ_LOCAL_ID names the
+# id to take for the computer's, and then the country is JHT_TZ_COUNTRY alone (a test seam: it only changes what the person is shown).
 function Get-JhtDetectedTimezone {
   $id = $env:JHT_TZ_LOCAL_ID
-  if (-not $id) { try { $id = [TimeZoneInfo]::Local.Id } catch { $id = '' } }
+  if ($id) { $country = $env:JHT_TZ_COUNTRY } else {
+    try { $id = [TimeZoneInfo]::Local.Id } catch { $id = '' }
+    $country = Get-JhtComputerCountry
+  }
   if (-not $id) { return $null }
   $index = Get-JhtTzIndex
-  if ($index.Primary.ContainsKey($id)) { return $index.Primary[$id] }
+  if ($index.Primary.ContainsKey($id)) {
+    $primary = $index.Primary[$id]
+    if ($country -and $index.ZonesOf.ContainsKey($country)) {
+      $ofId = @($index.ZonesOf[$country] | Where-Object { $index.WinOf.ContainsKey($_) -and $index.WinOf[$_] -ceq $id })
+      if ($ofId.Count -gt 0 -and -not ($ofId -ccontains $primary)) { return $ofId[0] }
+    }
+    return $primary
+  }
   if ($id -ceq 'Etc/UTC') { return 'UTC' }
   if ($index.Zones.Contains($id)) { return $id }
   return $null

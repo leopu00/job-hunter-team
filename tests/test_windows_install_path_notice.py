@@ -37,10 +37,12 @@ def require_the_requested_engine(monkeypatch):
     monkeypatch.setenv("JHT_REQUIRE_WINDOWS_SHELLS", "1")
 
 
-def _final(tmp_path, **env):
+def _final(tmp_path, before="", **env):
     (tmp_path / "bin").mkdir()
     env = {"JHT_LANG": "en", **env}  # the sentences read below are the English ones
-    result, _ = _run(tmp_path, INSTALLER, ["Show-Final", "Test-WillAutoOnboard", "Write-JhtNewWindowNotice"], FINAL_BODY, env)
+    body = FINAL_BODY.replace("Show-Final", before + "\nShow-Final")
+    result, _ = _run(tmp_path, INSTALLER, ["Show-Final", "Test-WillAutoOnboard", "Write-JhtNewWindowNotice", "Test-JhtStartWindowHasTools"],
+                     body, env)
     return result, result.stdout.replace("\r\n", "\n")
 
 
@@ -71,3 +73,26 @@ def test_what_the_registry_added_and_the_session_lacks_goes_at_the_end_once(tmp_
     line = [row for row in result.stdout.replace("\r\n", "\n").split("\n") if row.startswith("PATH=")]
     # C:\A and C:\B are already there (case and trailing backslash do not matter); C:\m\bin and C:\u are new, once
     assert line == [r"PATH=C:\a;C:\b\;C:\Windows;C:\m\bin;C:\u"], line
+
+
+def _start_window(tmp_path, with_podman):
+    # The PATH of the window that launched the installer: the jht folders of an earlier install, and a podman.exe or not.
+    podman = tmp_path / "podman bin"
+    podman.mkdir()
+    if with_podman:
+        (podman / "podman.exe").write_bytes(b"")
+    return (f"$ShimBin = 'C:\\bin\\shim'; $script:JhtStartPath = 'C:\\Windows;C:\\bin\\shim\\;C:\\BIN;{podman}'")
+
+
+def test_a_window_that_already_has_jht_and_podman_gets_no_notice(tmp_path):
+    # Known defect #13 (Linux round of build6), the same case on Windows: an install over an earlier one, in a window
+    # that already finds jht and podman, was told to open a new window.
+    result, out = _final(tmp_path, before=_start_window(tmp_path, with_podman=True))
+    assert result.returncode == 0, out + result.stderr
+    assert "Installation complete!" in out and "Open a NEW PowerShell window" not in out and PASTE_LINE not in out
+
+
+def test_a_window_without_podman_still_gets_the_notice(tmp_path):
+    result, out = _final(tmp_path, before=_start_window(tmp_path, with_podman=False))
+    assert result.returncode == 0, out + result.stderr
+    assert "Open a NEW PowerShell window to use jht and podman." in out and PASTE_LINE in out
