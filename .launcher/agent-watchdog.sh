@@ -1121,7 +1121,9 @@ capture_for_containment() {
     rm -f "$evidence" 2>/dev/null || true
     return 1
   fi
-  tmux capture-pane -t "$pane_id" -p -S - > "$evidence" 2>/dev/null || {
+  # Il file nasce 0600 (umask 077 nella subshell): con l'umask di default restava leggibile da altri fino al chmod qui sotto, e
+  # il pane puo' mostrare di tutto (anche una chiave incollata o stampata da un errore).
+  ( umask 077; tmux capture-pane -t "$pane_id" -p -S - > "$evidence" 2>/dev/null ) || {
     rm -f "$evidence" 2>/dev/null || true
     return 1
   }

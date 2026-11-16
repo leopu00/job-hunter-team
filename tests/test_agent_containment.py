@@ -211,7 +211,7 @@ def test_watchdog_does_not_respawn_a_contained_core(tmp_path):
 # comportamento: il tmux finto qui sotto rifiuta capture-pane su un target
 # che non e' un pane id, come il tmux vero.
 
-def _reenforce(tmp_path, pane_text="preserved pane before enforcement"):
+def _reenforce(tmp_path, pane_text="preserved pane before enforcement", open_umask=False):
     """Run maybe_enforce_containments against a fake tmux whose pane shows `pane_text`."""
     logs = tmp_path / "logs"
     logs.mkdir()
@@ -234,6 +234,7 @@ def _reenforce(tmp_path, pane_text="preserved pane before enforcement"):
         encoding="utf-8", newline="\n",
     )
     script = "\n".join((
+        "umask 000" if open_umask else ":",  # a watchdog started with an open umask: the evidence must still be born 0600
         f'JHT_HOME="{_bash_path(tmp_path)}"',
         f'ROSTER_TOOL="{_bash_path(fake_roster)}"',
         f'TMUX_SENDER="{_bash_path(sender)}"',
@@ -249,7 +250,7 @@ def _reenforce(tmp_path, pane_text="preserved pane before enforcement"):
             # piu' permissivo del tmux reale — ed e' il motivo per cui il bug del
             # prefisso `=` e' sopravvissuto a questo test ed e' finito in produzione.
             '''    list-panes) case "$3" in "=SCRITTORE-1:"|"=SCRITTORE-1"|SCRITTORE-1) echo "%7" ;; *) return 1 ;; esac ;;''',
-            f'''    capture-pane) case "$3" in %[0-9]*) printf '%s' '{pane_text}' ;; *) return 1 ;; esac ;;''',
+            f'''    capture-pane) case "$3" in %[0-9]*) umask > "{_bash_path(tmp_path / 'umask-at-capture')}"; printf '%s' '{pane_text}' ;; *) return 1 ;; esac ;;''',
             '    kill-session) return 0 ;;',
             '  esac',
             "}",
@@ -270,6 +271,16 @@ def _reenforce(tmp_path, pane_text="preserved pane before enforcement"):
     assert result.returncode == 0, result.stderr
     assert tmux_calls.exists(), f"stdout={result.stdout!r} stderr={result.stderr!r}"
     return tmux_calls.read_text(encoding="utf-8"), sender_calls, logs
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX modes")
+def test_the_evidence_of_a_pane_is_born_private_even_with_an_open_umask(tmp_path):
+    _calls, _sender, logs = _reenforce(tmp_path, pane_text="a pane that may show anything", open_umask=True)
+    evidence = list((logs / "containment").glob("*-SCRITTORE-1-reenforced.txt"))
+    assert len(evidence) == 1
+    assert evidence[0].stat().st_mode & 0o777 == 0o600
+    # the mode is also fixed afterwards, so the window is proved by the umask the capture ran with: the file is created then
+    assert (tmp_path / "umask-at-capture").read_text(encoding="utf-8").strip().lstrip("0") == "77"
 
 
 def test_watchdog_recaptures_and_stops_a_contained_session_started_again(tmp_path):
