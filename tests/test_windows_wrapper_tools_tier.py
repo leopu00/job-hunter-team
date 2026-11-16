@@ -484,32 +484,70 @@ def test_the_switch_says_it_is_under_way_while_it_stops_and_starts_the_team(box)
     assert not tier.exists() and not (box.runtime / ".tools-switching").exists()
 
 
-def _sleeper(stub, *words):
-    """A process with the wrapper and a command on its command line, as a `jht <command>` of the person (in a comment: it sleeps)."""
-    return subprocess.Popen([*powershell_argv(), "-Command", f"Start-Sleep -Seconds 25 # {stub} {' '.join(words)}"])
+def _register_function() -> str:
+    text = WRAPPER.read_text(encoding="utf-8")
+    return re.search(r"^function Register-JhtRunningCommand \{\n.*?^\}\n", text, re.S | re.M).group(0)
 
 
-@pytest.mark.skipif(sys.platform == "darwin", reason="PowerShell on macOS reads no command line of a process (Get-Process)")
+def _running_command(box, tmp_path, command, *arguments):
+    """A process that says it runs `jht <command> <arguments>` the way the wrapper does (its own Register-JhtRunningCommand)."""
+    script = tmp_path / f"running-{command}.ps1"
+    words = ", ".join("'" + word + "'" for word in arguments)
+    script.write_text(_register_function() + f"\n$RuntimeDir = '{box.runtime}'\nRegister-JhtRunningCommand '{command}' @({words})\n"
+                      "Start-Sleep -Seconds 40\n", encoding="utf-8")
+    process = subprocess.Popen([*powershell_argv(), "-File", str(script)])
+    marker = box.runtime / ".commands" / str(process.pid)
+    _until(lambda: marker.exists(), f"`jht {command}` never said it was running", rounds=150)
+    return process
+
+
 def test_the_chat_of_the_onboarding_does_not_hold_the_switch_and_an_up_does(box, tmp_path):
     """Giro Linux: `jht team chat assistente`, the REPL of the onboarding the person keeps open, held the switch for its whole half
-    hour. It reads and talks: the switch does not wait for it. A command that changes the runtime still holds it."""
-    stub = tmp_path / "stub.ps1"
+    hour. It reads and talks: the switch does not wait for it. A command that changes the runtime still holds it, on Windows
+    PowerShell 5.1 too, where the command line of another process cannot be read (no Get-Process .CommandLine, Win32_Process
+    refused to a standard user over ssh): every jht command says it is running in a file of the runtime folder."""
     words = ("if (Test-ToolsOtherWrapperRunning) { [Console]::Out.WriteLine('OTHER') } "
              "else { [Console]::Out.WriteLine('NONE') }")
-    chat = _sleeper(stub, "team", "chat", "assistente")
+    chat = _running_command(box, tmp_path, "team", "chat", "assistente")
     try:
-        time.sleep(3)
         assert box.run(words).stdout.strip() == "NONE"
-        up = _sleeper(stub, "up")
+        up = _running_command(box, tmp_path, "up")
         try:
-            time.sleep(3)
             assert box.run(words).stdout.strip() == "OTHER"
         finally:
             up.kill()
             up.wait(timeout=20)
+        assert box.run(words).stdout.strip() == "NONE"                      # the up is over
+        assert not (box.runtime / ".commands" / str(up.pid)).exists()       # and its file is taken away
     finally:
         chat.kill()
         chat.wait(timeout=20)
+
+
+def test_a_file_of_another_process_with_the_same_pid_says_nothing(box):
+    """A PID can come back for another process: the file says the start of the one that wrote it."""
+    folder = box.runtime / ".commands"
+    folder.mkdir()
+    other = subprocess.Popen([*powershell_argv(), "-Command", "Start-Sleep -Seconds 30"])
+    try:
+        (folder / str(other.pid)).write_text(f"{other.pid} 1 up \n", encoding="utf-8")   # a start that is not this process's
+        (folder / "notapid").write_text("1 1 up\n", encoding="utf-8")
+        done = box.run("if (Test-ToolsRegisteredCommandRunning) { [Console]::Out.WriteLine('OTHER') } "
+                       "else { [Console]::Out.WriteLine('NONE') }")
+        assert done.stdout.strip() == "NONE", done.stdout + done.stderr
+    finally:
+        other.kill()
+        other.wait(timeout=20)
+
+
+def test_every_jht_command_says_it_is_running_before_it_does_anything(box):
+    text = WRAPPER.read_text(encoding="utf-8")
+    dispatch = text[text.index("[string[]]$Rest = "):text.index("\nswitch ($Sub) {")]
+    assert "Register-JhtRunningCommand $Sub $Rest" in dispatch
+    done = box.run(_register_function() + "\nRegister-JhtRunningCommand 'config' @('set', 'a b')\n"
+                   "[Console]::Out.WriteLine([IO.File]::ReadAllText((Join-Path (Join-Path $RuntimeDir '.commands') ([string]$PID))))")
+    fields = done.stdout.strip().split(" ")
+    assert len(fields) == 4 and fields[2:] == ["config", "set"], done.stdout + done.stderr
 
 
 @pytest.mark.parametrize("line,holds", [

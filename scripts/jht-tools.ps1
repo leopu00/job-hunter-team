@@ -295,8 +295,36 @@ function Get-ToolsWrapperWords {
   return @($rest.Split([char[]]@([char]32, [char]9), [StringSplitOptions]::RemoveEmptyEntries) | ForEach-Object { $_.Trim([char]34, [char]39) })
 }
 
+# The commands of the wrapper that say they are running (Register-JhtRunningCommand in jht-wrapper.ps1): "<pid> <start ticks>
+# <command> <first argument>" in $RuntimeDir\.commands\<pid>. A process that is gone, or another one with the same PID (its start
+# differs), says nothing, and its file is taken away. The job's own process is left out.
+function Test-ToolsRegisteredCommandRunning {
+  try {
+    $dir = Join-Path $RuntimeDir '.commands'
+    $item = Get-Item -LiteralPath $dir -Force -ErrorAction Stop
+    if (-not $item.PSIsContainer -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) { return $false }
+    foreach ($file in @(Get-ChildItem -LiteralPath $dir -File -Force -ErrorAction Stop)) {
+      if ($file.Name -notmatch '^[0-9]{1,10}$' -or ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { continue }
+      $fields = @(([IO.File]::ReadAllText($file.FullName)).Trim().Split([char]32))
+      if ($fields.Count -lt 3 -or $fields[0] -cne $file.Name -or $fields[1] -notmatch '^[0-9]{1,19}$') { continue }
+      $id = [int]$fields[0]
+      if ($id -eq $PID) { continue }
+      $process = Get-Process -Id $id -ErrorAction SilentlyContinue
+      $alive = $false
+      if ($process) { try { $alive = ($process.StartTime.ToUniversalTime().Ticks -eq [long]$fields[1]) } catch { $alive = $true } }
+      if (-not $alive) { Remove-Item -LiteralPath $file.FullName -Force -ErrorAction SilentlyContinue; continue }
+      $sub = ''
+      if ($fields.Count -gt 3) { $sub = $fields[3] }
+      if (Test-ToolsCommandChangesRuntime $fields[2] $sub) { return $true }
+    }
+  } catch { }
+  return $false
+}
+
+# The same from the command lines of the processes, where they can be read (Win32_Process, or PowerShell 7's Get-Process).
 # The job is a process of its own with the wrapper on its command line: its own process is left out.
 function Test-ToolsOtherWrapperRunning {
+  if (Test-ToolsRegisteredCommandRunning) { return $true }
   try {
     # the path as the wrapper was given it and as GetFullPath says it (Windows PowerShell 5.1 turns an 8.3 short name into the long one)
     $wrappers = @($WrapperPath, [IO.Path]::GetFullPath($WrapperPath)) | Select-Object -Unique

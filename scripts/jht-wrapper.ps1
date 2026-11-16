@@ -2125,6 +2125,35 @@ function Invoke-JhtTeamChatThroughSwitch {
   $script:JhtTeamChatCode = 0
 }
 
+# Every `jht` command says it is running, in a file of the runtime folder named by its PID: "<pid> <start ticks> <command>
+# <first argument>". The switch of the tools (Test-ToolsRegisteredCommandRunning in jht-tools.ps1) reads them to wait for a
+# command that changes the runtime. The command line of another process is not enough: Windows PowerShell 5.1 has no
+# Get-Process .CommandLine, and Win32_Process can be refused (an ssh session of a standard user). A file whose process is gone,
+# or is another process with the same PID, says nothing, and the files of the gone ones are taken away.
+function Register-JhtRunningCommand {
+  param([string]$Command, [string[]]$Arguments = @())
+  try {
+    if (-not (Test-Path -LiteralPath $RuntimeDir -PathType Container)) { return }
+    $dir = Join-Path $RuntimeDir '.commands'
+    if (-not (Test-Path -LiteralPath $dir)) { $null = New-Item -ItemType Directory -Path $dir -ErrorAction Stop }
+    $item = Get-Item -LiteralPath $dir -Force -ErrorAction Stop
+    if (-not $item.PSIsContainer -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) { return }
+    $old = @(Get-ChildItem -LiteralPath $dir -File -Force -ErrorAction SilentlyContinue)
+    if ($old.Count -gt 20) {
+      foreach ($file in $old) {
+        if ($file.Name -notmatch '^[0-9]{1,10}$' -or -not (Get-Process -Id ([int]$file.Name) -ErrorAction SilentlyContinue)) {
+          Remove-Item -LiteralPath $file.FullName -Force -ErrorAction SilentlyContinue
+        }
+      }
+    }
+    $first = ''
+    if ($Arguments.Count -gt 0) { $first = [string]$Arguments[0] }
+    $words = @($Command, $first) | ForEach-Object { ([string]$_ -replace '\s', '_') }
+    $ticks = (Get-Process -Id $PID).StartTime.ToUniversalTime().Ticks
+    [IO.File]::WriteAllText((Join-Path $dir "$PID"), ("$PID $ticks " + ($words -join ' ') + "`n"), [Text.UTF8Encoding]::new($false))
+  } catch { }
+}
+
 function Get-JhtUninstallText {
   param([Parameter(Mandatory)][string]$Key, [string[]]$Values = @())
   # texts said through a variable: ps.uninstall.phase.machine ps.uninstall.phase.data ps.uninstall.phase.runtime ps.uninstall.phase.commands ps.uninstall.done ps.uninstall.done.kept ps.uninstall.done.wsl ps.uninstall.secrets ps.uninstall.left.machine ps.uninstall.left.task ps.uninstall.left.data ps.uninstall.left.runtime ps.uninstall.left.commands ps.uninstall.kept.machine ps.uninstall.wslconfig.done ps.uninstall.wslconfig.kept ps.uninstall.wslconfig.left ps.uninstall.bad.target ps.uninstall.removal_notice ps.uninstall.purge_removal_notice ps.uninstall.purge_notice
@@ -7965,6 +7994,9 @@ if ($HelpRequested -and $Sub -notin @('game', 'gui', 'agent-control', 'desktop-a
   }
   exit (Invoke-HelpWithoutDocker $Sub @Rest)
 }
+
+# the switch of the tools waits for a command that changes the runtime: this one says it is running
+Register-JhtRunningCommand $Sub $Rest
 
 # ORDINE: si guarda COSA e' stato chiesto PRIMA di decidere se serve Docker.
 # Il contrario - Ensure-Up in cima al default - faceva si' che un semplice
