@@ -353,9 +353,13 @@ def next_step(plan: dict, rows: list, need: dict | None = None, profile=None, no
     data = table()
     paused = []
     entries = plan["entries"]
+    if lane is not None and not lane:
+        return free_search_step(plan)          # a lane with no portal in it: nothing of the plan is this Scout's
     if lane:
         entries = [e for e in entries if lane & entry_keys(e)] + [e for e in entries if not lane & entry_keys(e)]
     for entry in entries:
+        if lane and entry["slug"] in SHARED_CAP_SOURCES and not lane & entry_keys(entry):
+            continue                           # the portal with one request cap for the whole team is its lane's alone, even when mine is done
         numbers = measure(entry, rows, need, now)
         if numbers["state"] in DONE_STATES:
             continue
@@ -406,13 +410,15 @@ ATS_FAMILIES = ("greenhouse", "lever", "ashby")      # the public company-board 
 SHARED_CAP_SOURCES = ("linkedin",)                   # one shared request cap for the whole team: one Scout holds it
 
 
-def lanes(plan: dict, count: int) -> list:
+def lanes(plan: dict, count: int, data: dict | None = None) -> list:
     """The partition of a burst of `count` Scouts, decided by the plan and not negotiated: `[{"lane", "areas", "sources"}]`, one
     per Scout, no source in two of them. The sources are the plan's own (a search a Scout reads; not the email ones, not the
     closed ones), in the plan's order. LinkedIn, which has one request cap for the whole team, is lane 0's alone; the others are
     dealt round robin from lane 1, so every lane gets core portals first; the company-board APIs (Greenhouse, Lever, Ashby) are
-    the last lane's when there are three Scouts or more. Same plan and same count: same lanes, whoever asks. Measured 11/11: the
-    Scouts spent their first 3.5 minutes agreeing on exactly this by message."""
+    the last lane's when there are three Scouts or more AND the table has company boards for a country of the plan (Italy has none).
+    A lane left with no source is `free`: its Scout searches by the profile's own trade and place, see `free_search_step`. Same plan
+    and same count: same lanes, whoever asks. Measured 11/11: the Scouts spent their first 3.5 minutes agreeing on exactly this by
+    message; measured 16/11: a plan with one searchable portal left three Scouts of five with an empty lane."""
     count = max(1, int(count))
     slugs = []
     for entry in plan["entries"]:
@@ -424,9 +430,30 @@ def lanes(plan: dict, count: int) -> list:
     order = list(range(1, count)) or [0]
     for number, slug in enumerate(others):
         out[order[number % len(order)]]["sources"].append(slug)
-    if count >= 3:
+    boards = set((data or table()).get("ats_boards", {}))
+    if count >= 3 and boards & {e["country"] for e in plan["entries"]}:
         out[-1]["sources"].extend(family for family in ATS_FAMILIES if family not in out[-1]["sources"])
+    for one in out:
+        one["free"] = not one["sources"]
     return out
+
+
+AI_CRAWLERS = "GPTBot, ChatGPT-User, OAI-SearchBot, ClaudeBot, Claude-Web, anthropic-ai, CCBot, Google-Extended, PerplexityBot, Bytespider, Amazonbot"
+
+
+def free_search_step(plan: dict) -> dict:
+    """What a Scout whose lane has no portal does: search by the profile's own trade and place, on public pages, instead of asking
+    the plan for a portal. Never LinkedIn (one request cap for the whole team, lane 0's) and never the portals other lanes hold."""
+    countries = sorted({e["country"] for e in plan["entries"] if e["country"] != "remote"})
+    return {"plan_done": False, "free_search": True, "in_lane": False, "countries": countries, "languages": plan["languages"],
+            "do": ("no portal of the plan is yours: search by the profile's own target role and place on public pages that list jobs of "
+                   "that trade (a regional or sector job board, a public-sector or association notice board, the careers page of "
+                   "employers of that place), in the language of the ads; read the results and filter them against the profile yourself"),
+            "never": "LinkedIn (one request cap for the whole team, another Scout's lane) and any portal the plan lists (another Scout's lane or closed)",
+            "robots": ("read the site's robots.txt BEFORE the first request; if a named AI crawler (%s ...) has `Disallow: /` and no `Allow: /`, "
+                       "the site is off limits for you, whatever it says about `*`. No login, no captcha to get around, no key" % AI_CRAWLERS),
+            "log": ("scout_pass_log.py pass --source <host of the site> --country <cc> --query-kind other --query \"<the query you ran>\" "
+                    "--returned <N> [--status closed|gone|empty|blocked]")}
 
 
 def avoid_list(plan: dict, rows: list, data: dict | None = None) -> list:
@@ -461,13 +488,13 @@ def avoid_list(plan: dict, rows: list, data: dict | None = None) -> list:
 
 
 def lane_of(agent):
-    """The portal keys of `agent`'s lane of the burst (scout_coord.py auto), or None: no lane, or it cannot be read."""
+    """The portal keys of `agent`'s lane of the burst (scout_coord.py auto): a set (empty when its lane has no portal), or None: no lane, or it cannot be read."""
     if not agent:
         return None
     try:
         import scout_coord
-        fonti = scout_coord.lane_sources(agent.strip().lower())
-        return frozenset(_lang.portal_slug(f) for f in fonti) if fonti else None
+        fonti = scout_coord.lane_assigned(agent.strip().lower())
+        return None if fonti is None else frozenset(_lang.portal_slug(f) for f in fonti)    # None: no lane; empty: a lane with no portal
     except Exception:  # noqa: BLE001 — a lane that cannot be read is no lane: the plan's own order
         return None
 

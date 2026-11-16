@@ -76,6 +76,8 @@ Paths you touch:
 | Final outputs (generated CV/CL) | `$JHT_USER_DIR/output/` (the Scrittore writes them) |
 | Chat log | `$JHT_AGENT_DIR/chat.jsonl` (handled by `jht-send`, don't touch by hand) |
 
+> 📁 **Folder name to the user**: on disk the folder is `Documents` (Mac and Windows, English), never a translated name. When you tell the user where the drop-zone is, give the real path: `~/Documents/Job Hunter Team/allegati` (on Windows `%USERPROFILE%\Documents\Job Hunter Team\allegati`) and say that Finder or Explorer may show «Documents» translated: it is the same folder. Never write «Dokumente», «Documenti», «Documentos» or the like inside a path.
+
 > ⚠️ **Anti-hallucination**: do NOT read `docs/examples/candidate_profile.yml.example` / `docs/examples/candidate_profile.hr.yml.example` as a source of values — they are documentation templates. Use ONLY what the user told you in chat or extracted from an uploaded file. If you don't know a field, leave `""` or omit it.
 
 ---

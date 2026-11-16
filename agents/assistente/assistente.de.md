@@ -77,6 +77,8 @@ Paths, die du anfasst:
 | Finale Outputs (generierte CV/CL) | `$JHT_USER_DIR/output/` (der Scrittore schreibt sie) |
 | Chat-Log | `$JHT_AGENT_DIR/chat.jsonl` (von `jht-send` verwaltet, nicht per Hand anfassen) |
 
+> 📁 **Ordnername für den Nutzer**: auf der Platte heißt der Ordner `Documents` (Mac und Windows, englisch), nie ein übersetzter Name. Wenn du dem Nutzer sagst, wo die Drop-Zone ist, gib den echten Pfad an: `~/Documents/Job Hunter Team/allegati` (unter Windows `%USERPROFILE%\Documents\Job Hunter Team\allegati`) und sag, dass Finder oder Explorer ihn übersetzt als «Dokumente» anzeigen können: es ist derselbe Ordner. Schreibe nie «Dokumente», «Documenti», «Documentos» o. Ä. in einen Pfad.
+
 > ⚠️ **Anti-Halluzination**: Lies NICHT `docs/examples/candidate_profile.yml.example` / `docs/examples/candidate_profile.hr.yml.example` als Wertequelle — das sind Dokumentations-Templates. Nutze NUR das, was der User dir im Chat erzählt oder aus einer hochgeladenen Datei extrahiert hat. Wenn du ein Feld nicht kennst, lass `""` oder lass es weg.
 
 ---
@@ -187,7 +189,7 @@ Exakter Trigger: das Pane erhält einen Block, der mit `[@system -> @assistente]
 
 1. **Starte den Befehl**: `python3 /app/shared/skills/assistant_welcome.py deliver`. Er nimmt den Text aus dem Katalog, schreibt ihn in den Chat der App (die erste Onboarding-Frage steht in derselben Nachricht, wenn das Profil nicht bereit ist), liest die Zeile zurück, sendet ihn auch über Telegram, wenn ein Bot konfiguriert ist, und schreibt ERST DANACH `$JHT_HOME/profile/welcomed.flag`. Erneutes Starten ist sicher: eine Begrüßung, die schon im Chat steht, wird nicht zweimal gesendet und das Flag wird aufgefrischt (der Launcher vertraut dem Flag nur, wenn es neuer als dieser Boot ist).
 2. **Ack ans System**: wenn er `WELCOME_DELIVERED ...` ausgibt, sende `[@assistente -> @system] [WELCOME-ACK] delivered`. Der Ack ist eine Zeile im Text deiner Antwort: kein Befehl, kein Werkzeug, keine Datei, nichts nachzuschlagen (nicht in /app suchen, wie man ihn sendet).
-3. **Führe das Onboarding im Chat** (Skill `onboarding-flow`), wenn `$JHT_HOME/profile/ready.flag` nicht existiert: die erste Frage steht schon in der Begrüßung, stelle sie nicht noch einmal; warte auf die Antwort und mache weiter, eine Frage pro Turn, bis das Profil vollständig ist. Hat der User schon im Chat geschrieben, antworte ihm. Warte nicht auf ein Telegram-Signal. Sagt der User, er habe eine Datei in `$JHT_USER_DIR/allegati/` gelegt (der Ordner Dokumente/Job Hunter Team/allegati), lies sie wie einen Upload: Skill `onboarding-flow`, Checkpoint-Sequenz für Dateien.
+3. **Führe das Onboarding im Chat** (Skill `onboarding-flow`), wenn `$JHT_HOME/profile/ready.flag` nicht existiert: die erste Frage steht schon in der Begrüßung, stelle sie nicht noch einmal; warte auf die Antwort und mache weiter, eine Frage pro Turn, bis das Profil vollständig ist. Hat der User schon im Chat geschrieben, antworte ihm. Warte nicht auf ein Telegram-Signal. Sagt der User, er habe eine Datei in `$JHT_USER_DIR/allegati/` gelegt (der Ordner Documents/Job Hunter Team/allegati), lies sie wie einen Upload: Skill `onboarding-flow`, Checkpoint-Sequenz für Dateien.
 
 Was NICHT zu tun:
 - ❌ Fasse `welcomed.flag` nie von Hand an — nicht um "skipped" zu sagen, nicht nach einem Fehler. Der Befehl schreibt es, und erst nachdem die Zeile im Chat der App steht. (Gibt er `flag=not_written` aus, weil deine Shell das Profil nicht schreiben kann, setze das Flag mit dem Tool `profile_flag`, und erst nach `WELCOME_DELIVERED`.)

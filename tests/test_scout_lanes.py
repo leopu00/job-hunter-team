@@ -206,3 +206,77 @@ def test_auto_prints_the_language_plan_so_the_scout_does_not_run_scout_language_
 def test_the_uk_portals_are_in_no_lane_of_an_eu_profile(home):
     for answer in (_auto(home, "scout-%d" % n, lanes=3) for n in (1, 2, 3)):
         assert not {"reed", "totaljobs"} & set(answer["sources"])
+
+
+# ── a plan with one portal to search: the Scouts without a lane do a free search, never LinkedIn ────────────────────────
+ONE_PORTAL = ("languages:\n  - language: Italian\n    level: native\n  - language: English\n    level: A2\n"
+              "location: Turin (Piedmont)\npreferences:\n  work_mode: on-site\n  relocation: false\n")
+
+
+@pytest.fixture
+def one_portal(home):
+    (home / "profile" / "candidate_profile.yml").write_text(ONE_PORTAL, encoding="utf-8")
+    return home
+
+
+def test_a_plan_with_one_searchable_portal_gives_it_to_lane_0_and_no_company_boards_where_the_table_has_none(one_portal):
+    plan = cov.load_plan()
+    assert [e["slug"] for e in plan["entries"] if e["access"] == "search"] == ["linkedin"]
+    assert {e["country"] for e in plan["entries"]} == {"it"} and "it" not in cov.table()["ats_boards"]
+    for count in (2, 3, 5):
+        out = cov.lanes(plan, count)
+        assert out[0]["sources"] == ["linkedin"] and not out[0]["free"]
+        assert all(l["sources"] == [] and l["free"] for l in out[1:]), count          # no company-board lane: Italy has no boards
+
+
+def test_the_company_boards_lane_stays_where_the_table_has_boards_for_a_country_of_the_plan(home):
+    (home / "profile" / "candidate_profile.yml").write_text(ONE_PORTAL.replace("Italian", "Spanish"), encoding="utf-8")
+    plan = cov.load_plan()
+    assert "es" in cov.table()["ats_boards"] and {e["country"] for e in plan["entries"]} == {"es"}
+    five = cov.lanes(plan, 5)
+    assert set(cov.ATS_FAMILIES) <= set(five[-1]["sources"]) and not any(l["free"] for l in five)
+
+
+def test_the_five_scouts_of_an_italian_profile_on_site_only_the_first_gets_linkedin_the_rest_search_freely(one_portal):
+    answers = [_auto(one_portal, "scout-%d" % n, lanes=5) for n in range(1, 6)]
+    assert [a["lane"] for a in answers] == [0, 1, 2, 3, 4]
+    assert answers[0]["sources"] == ["linkedin"] and answers[0]["next"]["source"] == "linkedin" and "free_search" not in answers[0]
+    for a in answers[1:]:
+        assert a["sources"] == [] and a["free_search"] is True
+        step = a["next"]
+        assert step["free_search"] is True and "source" not in step and step["plan_done"] is False
+        assert "robots.txt" in step["robots"] and "anthropic-ai" in step["robots"] and "Disallow: /" in step["robots"]
+        assert "LinkedIn" in step["never"] and "--query-kind other" in step["log"]
+
+
+def test_a_free_scout_asking_for_its_next_step_later_still_gets_the_free_search_not_the_first_portal_of_the_plan(one_portal):
+    for n in range(1, 4):
+        _auto(one_portal, "scout-%d" % n, lanes=3)
+    done = subprocess.run([sys.executable, str(SKILLS / "scout_coverage.py"), "next", "--agent", "scout-2"], capture_output=True, text=True,
+                          timeout=60, env=_env(one_portal, 3))
+    assert done.returncode == 0, done.stderr
+    assert json.loads(done.stdout.strip().splitlines()[-1])["free_search"] is True
+    first = subprocess.run([sys.executable, str(SKILLS / "scout_coverage.py"), "next", "--agent", "scout-1"], capture_output=True, text=True,
+                           timeout=60, env=_env(one_portal, 3))
+    assert json.loads(first.stdout.strip().splitlines()[-1])["source"] == "linkedin"
+
+
+def test_a_scout_without_any_lane_sees_the_plan_as_before_and_an_empty_lane_is_not_that(one_portal):
+    plan = cov.load_plan()
+    assert cov.next_step(plan, [], lane=None)["source"] == "linkedin"
+    assert cov.next_step(plan, [], lane=frozenset())["free_search"] is True
+
+
+def test_the_portal_with_one_request_cap_is_never_asked_of_a_scout_whose_own_lane_is_done(home):
+    plan = cov.load_plan()
+    second = cov.lanes(plan, 3)[1]
+    keys = frozenset(cov._lang.portal_slug(f) for f in second["sources"])
+    done = [{"kind": "pass", "ts": 1000.0 + i, "agent": "scout-2", "source": e["slug"], "country": e["country"], "returned": 0,
+             "query_kind": "broad", "status": "closed"} for i, e in enumerate(plan["entries"]) if keys & cov.entry_keys(e)]
+    for _ in range(3):
+        step = cov.next_step(plan, done, lane=keys)
+        assert step.get("source") != "linkedin"
+        if step.get("plan_done"):
+            break
+        done.append({"kind": "pass", "ts": 2000.0 + len(done), "agent": "scout-2", "source": step["source"], "country": step["country"],
+                     "returned": 0, "query_kind": "broad", "status": "closed"})

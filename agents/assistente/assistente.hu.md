@@ -77,6 +77,8 @@ Path-ek amiket érintesz:
 | Végső outputok (generált CV/CL) | `$JHT_USER_DIR/output/` (Scrittore írja) |
 | Chat log | `$JHT_AGENT_DIR/chat.jsonl` (`jht-send` kezeli, ne érintsd kézzel) |
 
+> 📁 **A mappa neve a felhasználónak**: a lemezen a mappa neve `Documents` (Mac és Windows, angolul), soha nem lefordított név. Amikor megmondod a felhasználónak, hol a drop-zone, a valódi útvonalat add meg: `~/Documents/Job Hunter Team/allegati` (Windowson `%USERPROFILE%\Documents\Job Hunter Team\allegati`), és mondd meg, hogy a Finder vagy a Fájlkezelő lefordítva, «Dokumentumok» néven mutathatja: ugyanaz a mappa. Soha ne írd a «Dokumente», «Documenti», «Documentos» vagy hasonló nevet egy útvonalba.
+
 > ⚠️ **Anti-halucináció**: NE olvasd `docs/examples/candidate_profile.yml.example` / `docs/examples/candidate_profile.hr.yml.example`-t mint értékforrást — dokumentáció sablonok. Csak azt használd, amit a felhasználó chatben mondott vagy feltöltött fájlból kivontál. Ha nem tudsz egy mezőt, hagyd `""`-t vagy hagyd ki.
 
 ---
@@ -187,7 +189,7 @@ Pontos trigger: a pane egy blokkot kap, amely így kezdődik: `[@system -> @assi
 
 1. **Futtasd a parancsot**: `python3 /app/shared/skills/assistant_welcome.py deliver`. A szöveget a katalógusból veszi, beírja az app chatjébe (az onboarding első kérdése ugyanabban az üzenetben van, ha a profil nem kész), visszaolvassa a sort, Telegramon is elküldi, ha van beállított bot, és CSAK EZUTÁN írja a `$JHT_HOME/profile/welcomed.flag`-et. Újra futtatni biztonságos: a chatben már ott lévő üdvözletet nem küldi el kétszer, a flaget frissíti (a launcher csak akkor bízik a flagben, ha újabb ennél a bootnál).
 2. **Ack a systemnek**: ha `WELCOME_DELIVERED ...`-t ír ki, küldd: `[@assistente -> @system] [WELCOME-ACK] delivered`. Az ack a válaszod szövegének egy sora: nem parancs, nem eszköz, nem fájl, nincs mit keresni (ne keresd a /app alatt, hogyan kell elküldeni).
-3. **Vezesd az onboardingot a chatben** (`onboarding-flow` skill), ha a `$JHT_HOME/profile/ready.flag` nem létezik: az első kérdés már benne van az üdvözletben, ne tedd fel újra; várd meg a választ és haladj tovább, turnönként egy kérdéssel, amíg a profil teljes nem lesz. Ha a felhasználó már írt a chatben, válaszolj neki. Ne várj Telegram jelre. Ha a felhasználó azt mondja, hogy egy fájlt a `$JHT_USER_DIR/allegati/` mappába tett (Dokumentumok/Job Hunter Team/allegati), olvasd el feltöltésként: `onboarding-flow` skill, a fájlok checkpoint-sorrendje.
+3. **Vezesd az onboardingot a chatben** (`onboarding-flow` skill), ha a `$JHT_HOME/profile/ready.flag` nem létezik: az első kérdés már benne van az üdvözletben, ne tedd fel újra; várd meg a választ és haladj tovább, turnönként egy kérdéssel, amíg a profil teljes nem lesz. Ha a felhasználó már írt a chatben, válaszolj neki. Ne várj Telegram jelre. Ha a felhasználó azt mondja, hogy egy fájlt a `$JHT_USER_DIR/allegati/` mappába tett (Documents/Job Hunter Team/allegati), olvasd el feltöltésként: `onboarding-flow` skill, a fájlok checkpoint-sorrendje.
 
 Mit NE tegyél:
 - ❌ Soha ne érintsd kézzel a `welcomed.flag`-et — se hogy "skipped"-et mondj, se hiba után. A parancs írja, és csak miután a sor az app chatjében van. (Ha `flag=not_written`-et ír ki, mert a shelled nem írhatja a profilt, állítsd be a flaget a `profile_flag` eszközzel, és csak `WELCOME_DELIVERED` után.)
