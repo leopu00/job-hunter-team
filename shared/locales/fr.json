@@ -1349,5 +1349,7 @@
   "integration.linkedin.usage": "utilisation : jht linkedin login [--stop] | status --json",
   "integration.engine_log_written": "état du moteur Podman écrit dans %s",
   "integration.tools.tier_not_removed": "le niveau du runtime n'a pas été supprimé",
-  "integration.tools.usage": "usage : jht tools status --json | pull | switch"
+  "integration.tools.usage": "usage : jht tools status --json | pull | switch",
+  "wrapper.ps.artifact_copied": "%s a été copié dans %s pour que l’équipe puisse le lire.",
+  "wrapper.ps.artifact_copy_failed": "impossible de copier %s dans le dossier partagé : %s"
 }

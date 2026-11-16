@@ -288,6 +288,8 @@ function Get-JhtTextTable {
     'en:monitor.window_invalid' { return 'monitor_window_invalid: use ''jht monitor --window'' without other options.' }
     'en:ps.apply_auto_send_warning_1' { return '  With automatic sending on, the team fills in and SENDS the application,' }
     'en:ps.apply_auto_send_warning_2' { return '  without another confirmation. Once it has gone out it cannot be recalled.' }
+    'en:ps.artifact_copied' { return 'Copied %s into %s so the team can read it.' }
+    'en:ps.artifact_copy_failed' { return 'cannot copy %s into the shared folder: %s' }
     'en:ps.bot_token_prompt_hidden' { return 'Bot token for %s (hidden input)' }
     'en:ps.botfather_fresh_token' { return 'Always use a freshly generated token in BotFather (/revoke on the bot, or a new bot): an existing token may have been read by the agents even if it no longer appears in ~/.jht.' }
     'en:ps.broker_network_proxy_not_ready' { return 'broker_network_unavailable: the mail proxy is not ready (code %s).' }
@@ -549,6 +551,8 @@ function Get-JhtTextTable {
     'it:monitor.window_invalid' { return 'monitor_window_invalid: usa ''jht monitor --window'' senza altre opzioni.' }
     'it:ps.apply_auto_send_warning_1' { return '  Con l''invio automatico acceso il team compila e INVIA la candidatura,' }
     'it:ps.apply_auto_send_warning_2' { return '  senza un''altra conferma. Una volta partita non si richiama.' }
+    'it:ps.artifact_copied' { return ('Ho copiato %s in %s perch' + [char]0x00E9 + ' il team possa leggerlo.') }
+    'it:ps.artifact_copy_failed' { return 'non riesco a copiare %s nella cartella condivisa: %s' }
     'it:ps.bot_token_prompt_hidden' { return 'Token del bot %s (input nascosto)' }
     'it:ps.botfather_fresh_token' { return ('Usa sempre un token appena generato in BotFather (/revoke sul bot, oppure un bot nuovo): un token gi' + [char]0x00E0 + ' esistente pu' + [char]0x00F2 + ' essere stato letto dagli agenti anche se oggi non compare in ~/.jht.') }
     'it:ps.broker_network_proxy_not_ready' { return ('broker_network_unavailable: il proxy della posta non ' + [char]0x00E8 + ' pronto (codice %s).') }
@@ -810,6 +814,8 @@ function Get-JhtTextTable {
     'hu:monitor.window_invalid' { return ('monitor_window_invalid: a ''jht monitor --window'' parancsot m' + [char]0x00E1 + 's kapcsol' + [char]0x00F3 + 'k n' + [char]0x00E9 + 'lk' + [char]0x00FC + 'l haszn' + [char]0x00E1 + 'ld.') }
     'hu:ps.apply_auto_send_warning_1' { return ('  Bekapcsolt automatikus k' + [char]0x00FC + 'ld' + [char]0x00E9 + 'sn' + [char]0x00E9 + 'l a csapat kit' + [char]0x00F6 + 'lti ' + [char]0x00C9 + 'S ELK' + [char]0x00DC + 'LDI a jelentkez' + [char]0x00E9 + 'st,') }
     'hu:ps.apply_auto_send_warning_2' { return ('  ' + [char]0x00FA + 'jabb meger' + [char]0x0151 + 's' + [char]0x00ED + 't' + [char]0x00E9 + 's n' + [char]0x00E9 + 'lk' + [char]0x00FC + 'l. Ha egyszer elment, nem h' + [char]0x00ED + 'vhat' + [char]0x00F3 + ' vissza.') }
+    'hu:ps.artifact_copied' { return ('A(z) %s f' + [char]0x00E1 + 'jlt ' + [char]0x00E1 + 'tm' + [char]0x00E1 + 'soltam ide: %s, hogy a csapat el tudja olvasni.') }
+    'hu:ps.artifact_copy_failed' { return ('nem tudom a(z) %s f' + [char]0x00E1 + 'jlt a megosztott mapp' + [char]0x00E1 + 'ba m' + [char]0x00E1 + 'solni: %s') }
     'hu:ps.bot_token_prompt_hidden' { return 'A(z) %s bot tokenje (rejtett bevitel)' }
     'hu:ps.botfather_fresh_token' { return ('Mindig a BotFatherben frissen gener' + [char]0x00E1 + 'lt tokent haszn' + [char]0x00E1 + 'lj (/revoke a boton, vagy egy ' + [char]0x00FA + 'j bot): egy m' + [char]0x00E1 + 'r l' + [char]0x00E9 + 'tez' + [char]0x0151 + ' tokent az ' + [char]0x00FC + 'gyn' + [char]0x00F6 + 'k' + [char]0x00F6 + 'k elolvashattak, akkor is, ha ma m' + [char]0x00E1 + 'r nem szerepel a ~/.jht mapp' + [char]0x00E1 + 'ban.') }
     'hu:ps.broker_network_proxy_not_ready' { return ('broker_network_unavailable: a levelez' + [char]0x00E9 + 'si proxy nem ' + [char]0x00E1 + 'll k' + [char]0x00E9 + 'szen (k' + [char]0x00F3 + 'd: %s).') }
@@ -1071,6 +1077,8 @@ function Get-JhtTextTable {
     'es:monitor.window_invalid' { return 'monitor_window_invalid: usa ''jht monitor --window'' sin otras opciones.' }
     'es:ps.apply_auto_send_warning_1' { return ('  Con el env' + [char]0x00ED + 'o autom' + [char]0x00E1 + 'tico activado, el equipo rellena y ENV' + [char]0x00CD + 'A la candidatura,') }
     'es:ps.apply_auto_send_warning_2' { return ('  sin otra confirmaci' + [char]0x00F3 + 'n. Una vez enviada, no se puede retirar.') }
+    'es:ps.artifact_copied' { return 'He copiado %s en %s para que el equipo pueda leerlo.' }
+    'es:ps.artifact_copy_failed' { return 'no puedo copiar %s en la carpeta compartida: %s' }
     'es:ps.bot_token_prompt_hidden' { return 'Token del bot %s (entrada oculta)' }
     'es:ps.botfather_fresh_token' { return ('Usa siempre un token reci' + [char]0x00E9 + 'n generado en BotFather (/revoke en el bot, o un bot nuevo): un token ya existente pueden haberlo le' + [char]0x00ED + 'do los agentes aunque hoy no aparezca en ~/.jht.') }
     'es:ps.broker_network_proxy_not_ready' { return ('broker_network_unavailable: el proxy de correo no est' + [char]0x00E1 + ' listo (c' + [char]0x00F3 + 'digo %s).') }
@@ -1332,6 +1340,8 @@ function Get-JhtTextTable {
     'de:monitor.window_invalid' { return 'monitor_window_invalid: Nutze ''jht monitor --window'' ohne weitere Optionen.' }
     'de:ps.apply_auto_send_warning_1' { return ('  Bei eingeschaltetem automatischem Versand f' + [char]0x00FC + 'llt das Team die Bewerbung aus und SENDET sie,') }
     'de:ps.apply_auto_send_warning_2' { return ('  ohne weitere Best' + [char]0x00E4 + 'tigung. Einmal abgeschickt, l' + [char]0x00E4 + 'sst sie sich nicht zur' + [char]0x00FC + 'ckrufen.') }
+    'de:ps.artifact_copied' { return '%s wurde nach %s kopiert, damit das Team es lesen kann.' }
+    'de:ps.artifact_copy_failed' { return '%s kann nicht in den gemeinsamen Ordner kopiert werden: %s' }
     'de:ps.bot_token_prompt_hidden' { return 'Token des Bots %s (verdeckte Eingabe)' }
     'de:ps.botfather_fresh_token' { return 'Verwende immer ein frisch in BotFather erzeugtes Token (/revoke beim Bot, oder ein neuer Bot): Ein bereits vorhandenes Token kann von den Agenten gelesen worden sein, auch wenn es heute nicht mehr in ~/.jht auftaucht.' }
     'de:ps.broker_network_proxy_not_ready' { return 'broker_network_unavailable: Der Mail-Proxy ist nicht bereit (Code %s).' }
@@ -1593,6 +1603,8 @@ function Get-JhtTextTable {
     'fr:monitor.window_invalid' { return 'monitor_window_invalid : utilise ''jht monitor --window'' sans autres options.' }
     'fr:ps.apply_auto_send_warning_1' { return ('  Quand l''envoi automatique est activ' + [char]0x00E9 + ', l''' + [char]0x00E9 + 'quipe remplit et ENVOIE la candidature,') }
     'fr:ps.apply_auto_send_warning_2' { return ('  sans autre confirmation. Une fois partie, elle ne peut plus ' + [char]0x00EA + 'tre rappel' + [char]0x00E9 + 'e.') }
+    'fr:ps.artifact_copied' { return ('%s a ' + [char]0x00E9 + 't' + [char]0x00E9 + ' copi' + [char]0x00E9 + ' dans %s pour que l' + [char]0x2019 + [char]0x00E9 + 'quipe puisse le lire.') }
+    'fr:ps.artifact_copy_failed' { return ('impossible de copier %s dans le dossier partag' + [char]0x00E9 + ' : %s') }
     'fr:ps.bot_token_prompt_hidden' { return ('Token du bot %s (saisie masqu' + [char]0x00E9 + 'e)') }
     'fr:ps.botfather_fresh_token' { return ('Utilise toujours un token tout juste g' + [char]0x00E9 + 'n' + [char]0x00E9 + 'r' + [char]0x00E9 + ' dans BotFather (/revoke sur le bot, ou un nouveau bot) : un token d' + [char]0x00E9 + 'j' + [char]0x00E0 + ' existant a pu ' + [char]0x00EA + 'tre lu par les agents m' + [char]0x00EA + 'me s''il n''appara' + [char]0x00EE + 't plus aujourd''hui dans ~/.jht.') }
     'fr:ps.broker_network_proxy_not_ready' { return ('broker_network_unavailable: le proxy mail n''est pas pr' + [char]0x00EA + 't (code %s).') }
@@ -1854,6 +1866,8 @@ function Get-JhtTextTable {
     'pt:monitor.window_invalid' { return ('monitor_window_invalid: usa ''jht monitor --window'' sem outras op' + [char]0x00E7 + [char]0x00F5 + 'es.') }
     'pt:ps.apply_auto_send_warning_1' { return ('  Com o envio autom' + [char]0x00E1 + 'tico ligado, a equipa preenche e ENVIA a candidatura,') }
     'pt:ps.apply_auto_send_warning_2' { return ('  sem outra confirma' + [char]0x00E7 + [char]0x00E3 + 'o. Depois de enviada, n' + [char]0x00E3 + 'o se pode retirar.') }
+    'pt:ps.artifact_copied' { return ('Copiei %s para %s para que a equipe possa l' + [char]0x00EA + '-lo.') }
+    'pt:ps.artifact_copy_failed' { return ('n' + [char]0x00E3 + 'o consigo copiar %s para a pasta compartilhada: %s') }
     'pt:ps.bot_token_prompt_hidden' { return 'Token do bot %s (entrada oculta)' }
     'pt:ps.botfather_fresh_token' { return ('Usa sempre um token acabado de gerar no BotFather (/revoke no bot, ou um bot novo): um token j' + [char]0x00E1 + ' existente pode ter sido lido pelos agentes, mesmo que hoje j' + [char]0x00E1 + ' n' + [char]0x00E3 + 'o apare' + [char]0x00E7 + 'a em ~/.jht.') }
     'pt:ps.broker_network_proxy_not_ready' { return ('broker_network_unavailable: o proxy de correio n' + [char]0x00E3 + 'o est' + [char]0x00E1 + ' pronto (c' + [char]0x00F3 + 'digo %s).') }
@@ -4671,6 +4685,66 @@ F|\u00c0\u00c1\u00c2\u00c3\u00c4\u00c5\u00c7\u00c8\u00c9\u00ca\u00cb\u00cc\u00cd
 function Write-Err  { param([string]$Msg) Write-Host "error: $Msg" -ForegroundColor Red }
 function Write-Warn { param([string]$Msg) Write-Host "warn:  $Msg" -ForegroundColor Yellow }
 function Write-Info { param([string]$Msg) Write-Host $Msg -ForegroundColor DarkGray }
+
+# jht artifact upload <file> with the CLI only: the container reads the shared folder (Documents\Job Hunter Team of the person) and nothing else of this
+# computer, so a file that lies elsewhere is copied into its allegati folder and the team is given the copy. The folder is the one the team is
+# started with (JHT_USER_DIR_HOST, or Documents of the profile; the folder Windows has for Documents where the profile has none by that name).
+function Get-JhtSharedFolderPath {
+  if ($env:JHT_USER_DIR_HOST) { return $env:JHT_USER_DIR_HOST }
+  $documents = Join-Path $env:USERPROFILE 'Documents'
+  if (-not (Test-Path -LiteralPath $documents -PathType Container)) {
+    $known = [Environment]::GetFolderPath('MyDocuments')
+    if ($known) { $documents = $known }
+  }
+  return (Join-Path $documents 'Job Hunter Team')
+}
+
+# The arguments of `artifact upload` (without the word upload) with the first file outside the shared folder replaced by its copy in allegati.
+# Returns the arguments as they are where there is nothing to copy (stdin, a path of the container, a file that is not there, a link, a file already inside).
+function Copy-JhtArtifactIntoShared {
+  param([string[]]$UploadArgs)
+  $out = @($UploadArgs)
+  if ($out -ccontains '--stdin') { return ,$out }
+  $index = -1
+  for ($i = 0; $i -lt $out.Count; $i++) { if (-not $out[$i].StartsWith('-')) { $index = $i; break } }
+  if ($index -lt 0) { return ,$out }
+  $given = $out[$index]
+  # a path with a / in front is the container's, unless it is a file of this computer (on Windows it never is: C:\...)
+  if ($given.StartsWith('/') -and -not $given.StartsWith('//') -and -not (Test-Path -LiteralPath $given -PathType Leaf)) { return ,$out }
+  try {
+    $full = if ([IO.Path]::IsPathRooted($given)) { [IO.Path]::GetFullPath($given) } else { [IO.Path]::GetFullPath((Join-Path $PWD.Path $given)) }
+    if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { return ,$out }
+    if (([IO.File]::GetAttributes($full) -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return ,$out }
+    $shared = [IO.Path]::GetFullPath((Get-JhtSharedFolderPath)).TrimEnd('\', '/')
+    $separator = [string][IO.Path]::DirectorySeparatorChar
+    if ($full.StartsWith($shared + $separator, [StringComparison]::OrdinalIgnoreCase)) { return ,$out }
+    $folder = Join-Path $shared 'allegati'
+    [void](New-Item -ItemType Directory -Force -Path $folder)
+    $name = [IO.Path]::GetFileName($full)
+    $destination = Join-Path $folder $name
+    $number = 1
+    while ((Test-Path -LiteralPath $destination) -and (Get-JhtFileSha256 $destination) -cne (Get-JhtFileSha256 $full)) {
+      $number++
+      $destination = Join-Path $folder ('{0}-{1}{2}' -f [IO.Path]::GetFileNameWithoutExtension($name), $number, [IO.Path]::GetExtension($name))
+    }
+    if (-not (Test-Path -LiteralPath $destination)) { Copy-Item -LiteralPath $full -Destination $destination }
+    Write-Host (Format-JhtText 'ps.artifact_copied' $full $destination)
+    $out[$index] = $destination
+    return ,$out
+  } catch {
+    Write-Err (Format-JhtText 'ps.artifact_copy_failed' $given ($_.Exception.Message))
+    return $null
+  }
+}
+
+function Get-JhtFileSha256 {
+  param([string]$Path)
+  $stream = [IO.File]::OpenRead($Path)
+  try {
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { return ([BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-', '').ToLowerInvariant()) } finally { $sha.Dispose() }
+  } finally { $stream.Dispose() }
+}
 
 # T220: declared host bridge to move into the T214 Rust sidecar. No data logic.
 # Explicit rule-2 exception: <=60 added lines, no installer/manifest dependency.
@@ -7835,6 +7909,10 @@ switch ($Sub) {
   { $_ -eq 'artifact' -and $Rest.Count -gt 0 -and $Rest[0] -eq 'upload' } {
     $uploader = Join-Path $LocalAppData 'Job Hunter Team\jht-desktop.exe'
     if (-not (Test-Path -LiteralPath $uploader -PathType Leaf)) {
+      $uploadSource = if ($Rest.Count -gt 1) { @($Rest[1..($Rest.Count - 1)]) } else { @() }
+      $uploadRest = Copy-JhtArtifactIntoShared $uploadSource
+      if ($null -eq $uploadRest) { exit 1 }
+      $Rest = @('upload') + @($uploadRest)
       Require-ComposeFile; Require-Docker; Ensure-Up
       $target = Get-RunningComposeServiceId $Container
       if (-not $target) { Write-Err (Get-JhtText 'ps.team_container_unavailable'); exit 1 }
