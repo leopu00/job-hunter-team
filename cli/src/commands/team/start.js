@@ -19,6 +19,7 @@ import { say, show } from '../../lib/texts.js';
 import { hint } from '../../lib/ui.js';
 import { creditNotice } from '../../lib/provider-credit.js';
 import { budgetPauseText } from '../../lib/budget-pause.js';
+import { openAlertLines } from '../../lib/open-alerts.js';
 
 const CONTAINER_TEAM_HALTED_FLAG = '/jht_home/.team-halted.flag';
 const SPAWN_ERROR_TAIL_LINES = 5;
@@ -644,6 +645,8 @@ export async function startAction(agentArg, options) {
   // a team paused on its budget starts its sessions and stays paused: the start does not lift the pause of the brake (JHT-T322)
   const budgetPaused = budgetPauseText();
   if (budgetPaused) console.log(c.yellow(`⚠ ${show(budgetPaused)}`));
+  // the alerts for the person nobody has read (the Capitano's «no spending ceiling»): delivered on the web, never seen here
+  for (const line of await openAlertLines()) console.log(c.yellow(`⚠ ${line}`));
 
   // Container mode: deleghiamo a /app/.launcher/start-agent.sh dentro
   // jht — coerente col boot del bridge Sentinella e con le dipendenze CLI

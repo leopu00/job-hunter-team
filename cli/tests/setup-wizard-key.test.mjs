@@ -307,11 +307,11 @@ test('the budget in the wizard: the trial of $5 for 30 minutes is the answer alr
   assert.equal(budget.usd, 5);
   assert.equal(budget.set_by, 'setup');
   assert.equal(budget.timezone, Intl.DateTimeFormat().resolvedOptions().timeZone, 'the zone of the person goes with the budget');
-  const minutes = (Date.parse(budget.ends_at) - Date.parse(budget.starts_at)) / 60_000;
-  assert.equal(minutes, 30);
-  assert.ok(Date.parse(budget.starts_at) >= t0 - 1000 && Date.parse(budget.starts_at) <= Date.now());
+  assert.equal(budget.duration_minutes, 30);
+  assert.equal(budget.starts_at, undefined, 'the 30 minutes start when the team starts working, not at the setup');
+  assert.ok(Date.parse(budget.saved_at) >= t0 - 1000 && Date.parse(budget.saved_at) <= Date.now());
   assert.equal(hours, undefined, 'no working hours = 24/7 for the trial');
-  assert.ok(events.some((e) => e.kind === 'note' && e.message === 'The team can spend $5 in 30 minutes, then it stops by itself.'));
+  assert.ok(events.some((e) => e.kind === 'note' && e.message === 'The team can spend $5 in all; the 30 minutes start when the team starts working, then it stops by itself.'));
   assert.equal(events.at(-1).ok, true);
 });
 
@@ -324,10 +324,10 @@ test('the budget in the wizard: «a few days» asks the amount, the days and the
   });
   const { budget, working_hours: hours } = JSON.parse(configText).team;
   assert.equal(budget.usd, 10);
-  assert.equal((Date.parse(budget.ends_at) - Date.parse(budget.starts_at)) / 3_600_000, 72);
+  assert.equal(budget.duration_minutes, 72 * 60);
   assert.deepEqual(hours.windows, [{ days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'], start: '08:00', end: '18:00' }]);
   assert.ok(hours.timezone);
-  assert.ok(events.some((e) => e.kind === 'note' && e.message === `The team can spend $10 in 3 days, 10 hours a day (8:00-18:00 ${hours.timezone}), then it stops by itself.`));
+  assert.ok(events.some((e) => e.kind === 'note' && e.message === `The team can spend $10 in all, for 3 days from when it starts working, 10 hours a day (8:00-18:00 ${hours.timezone}), then it stops by itself.`));
 });
 
 test('the budget in the wizard: «no limit» warns, saves no budget and asks the working hours as before', () => {
@@ -337,4 +337,16 @@ test('the budget in the wizard: «no limit» warns, saves no budget and asks the
   const team = JSON.parse(configText).team;
   assert.equal(team.budget, undefined);
   assert.deepEqual(team.working_hours.windows[0].days, ['mon', 'tue', 'wed', 'thu', 'fri']);
+});
+
+test('the budget in the wizard: a reset with the same trial keeps the period the brake already started', () => {
+  const saved = '2026-11-15T21:30:00.000Z';
+  const before = JSON.stringify({ version: 4, active_provider: 'glm', harness: 'pi', providers: { glm: { name: 'glm', auth_method: 'api_key', model: 'm' } }, channels: {},
+    team: { budget: { usd: 5, duration_minutes: 30, saved_at: saved, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, set_by: 'setup' } } });
+  const box = sandbox({ existingConfig: before });
+  const { configText } = run(box, { select: { 'Config management': 'reset', 'AI Provider': 'glm' }, keys: [KEY] });
+  assert.equal(JSON.parse(configText).team.budget.saved_at, saved, 'the same trial after a reset is the same period');
+  const box2 = sandbox({ existingConfig: before.replace('"usd":5', '"usd":7') });
+  const second = run(box2, { select: { 'Config management': 'reset', 'AI Provider': 'glm' }, keys: [KEY] });
+  assert.notEqual(JSON.parse(second.configText).team.budget.saved_at, saved, 'another amount starts again');
 });

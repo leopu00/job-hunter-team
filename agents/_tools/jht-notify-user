@@ -147,6 +147,27 @@ def bot_role_for(agent: str) -> str:
     return role if role in BOT_ROLES else DEFAULT_BOT_ROLE
 
 
+def echo_alert_to_assistant(agent: str, body: str) -> bool:
+    """An alert for the person (kind=alert) also goes into the chat with the Assistente, as an urgent line.
+
+    The row of pending_user_messages reaches the person on the web (Messages) or on Telegram; whoever follows the team from
+    the terminal (`jht team chat`) saw neither, and the notice of the Capitano «no spending ceiling» never reached them.
+    Best effort: a chat that cannot be written does not undo the row. The Assistente's own alerts are already in its chat."""
+    if agent == "assistente":
+        return False
+    tool = pathlib.Path(__file__).resolve().parent / "jht-send"
+    if not tool.is_file():
+        return False
+    try:
+        done = subprocess.run(
+            [sys.executable, str(tool), "--agent", "assistente", "--kind", "urgent", "--raw", "-"],
+            input=body, text=True, capture_output=True, timeout=30, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return done.returncode == 0
+
+
 def try_telegram(
     agent: str, body: str, row_id: int | None = None, kind: str = "notification", buttons: dict | None = None
 ) -> bool:
@@ -468,6 +489,9 @@ def main() -> int:
             f"jht-notify-user: warning, mark_delivered fallita (id={row_id}): {e}",
             file=sys.stderr,
         )
+
+    if created and args.kind == "alert" and not echo_alert_to_assistant(args.agent, body):
+        print(f"jht-notify-user: the alert is not in the chat of the Assistente (id={row_id})", file=sys.stderr)
 
     # Stampa l'id su stdout per pipeline / debug.
     if question is not None:

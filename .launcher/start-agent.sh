@@ -1532,6 +1532,8 @@ if [ "$CLI_BIN" = "pi" ]; then
     exit 1
   fi
   CLI_ARGS="$(jht_pi_args "$AGENT_DIR" "$pi_model" "$effort" "$PROVIDER")$(jht_pi_extension_args "$ROLE")"
+  # the Assistente takes up its last conversation again after a restart (spawn-lib.sh, jht_pi_resume_args)
+  CLI_ARGS="$CLI_ARGS$(jht_pi_resume_args "$ROLE" "$AGENT_DIR" "$pi_model" "$PROVIDER")"
 fi
 
 # Chiave da file (JHT_API_KEY_FILE): il wrapper sta dopo le assegnazioni e prima del binario; il comando del pane non la contiene.

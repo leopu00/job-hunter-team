@@ -26,12 +26,13 @@ function prompter(answers) {
 // 22:30 in Rome (UTC+1 in November)
 const NOW = new Date('2026-11-15T21:30:00Z');
 
-test('the trial is the answer already chosen: $5 for 30 minutes from now, 24/7', async () => {
+test('the trial is the answer already chosen: $5 for 30 minutes that start when the team starts working, not at the setup, 24/7', async () => {
   const p = prompter({});
   const r = await promptBudget(p, { t, tf, now: NOW, timeZone: 'Europe/Rome' });
   assert.equal(p.asked[0][2], 'trial');
-  assert.deepEqual(r, { kind: 'trial', workingHours: null, budget: { usd: 5, starts_at: '2026-11-15T21:30:00.000Z', ends_at: '2026-11-15T22:00:00.000Z', timezone: 'Europe/Rome', set_by: 'setup' } });
-  assert.equal(budgetSummary(t, tf, r), 'The team can spend $5 in 30 minutes, then it stops by itself.');
+  assert.deepEqual(r, { kind: 'trial', workingHours: null, budget: { usd: 5, duration_minutes: 30, saved_at: '2026-11-15T21:30:00.000Z', timezone: 'Europe/Rome', set_by: 'setup' } });
+  assert.equal('starts_at' in r.budget || 'ends_at' in r.budget, false, 'the period is fixed by the brake at the first work of the team');
+  assert.equal(budgetSummary(t, tf, r), 'The team can spend $5 in all; the 30 minutes start when the team starts working, then it stops by itself.');
 });
 
 test('one night ends at 8 tomorrow in the zone of the person, not in the zone of the computer', async () => {
@@ -48,12 +49,12 @@ test('a few days: the amount typed (a wrong one asked again), the days and the h
   const p = prompter({ 'How much should the team work?': 'days', 'How many dollars in total?': ['ten', '10'], 'For how many days?': 3, 'When does it work?': 'ten_from_8' });
   const r = await promptBudget(p, { t, tf, now: NOW, timeZone: 'Europe/Rome' });
   assert.equal(r.budget.usd, 10);
-  assert.equal(r.budget.ends_at, '2026-11-18T21:30:00.000Z');
+  assert.deepEqual([r.budget.duration_minutes, r.budget.saved_at, r.budget.ends_at], [3 * 24 * 60, '2026-11-15T21:30:00.000Z', undefined]);
   assert.deepEqual(r.workingHours, { timezone: 'Europe/Rome', windows: [{ days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'], start: '08:00', end: '18:00' }] });
   assert.equal(p.asked.filter((a) => a[1] === 'How many dollars in total?').length, 2);
-  assert.equal(budgetSummary(t, tf, r), 'The team can spend $10 in 3 days, 10 hours a day (8:00-18:00 Europe/Rome), then it stops by itself.');
+  assert.equal(budgetSummary(t, tf, r), 'The team can spend $10 in all, for 3 days from when it starts working, 10 hours a day (8:00-18:00 Europe/Rome), then it stops by itself.');
   const i = catalog(it);
-  assert.equal(budgetSummary(i.t, i.tf, r), 'La squadra può spendere 10 $ in 3 giorni, 10 ore al giorno (8:00-18:00 Europe/Rome), poi si ferma da sola.');
+  assert.equal(budgetSummary(i.t, i.tf, r), 'La squadra può spendere 10 $ in tutto, per 3 giorni da quando comincia a lavorare, 10 ore al giorno (8:00-18:00 Europe/Rome), poi si ferma da sola.');
 });
 
 test('an amount above the threshold is asked once more; a no asks the amount again', async () => {
@@ -92,4 +93,17 @@ test('--budget-until takes a whole hour as 8, 08 or 08:00, and refuses 08:30', a
     assert.equal(budgetFromOptions({ budgetUsd: '5', budgetUntil: hour }, { now: NOW, timeZone: 'Europe/Rome' }).budget.ends_at, '2026-11-16T07:00:00.000Z', hour);
   }
   assert.ok(budgetFromOptions({ budgetUsd: '5', budgetUntil: '08:30' }, { now: NOW, timeZone: 'Europe/Rome' }).error);
+});
+
+test('the same duration budget saved again keeps its period (jht setup --reset must not restart it); another one starts again', async () => {
+  const { keepSamePeriod, durationBudget } = await import('../wizard/setup-budget.js');
+  const before = durationBudget(5, 30, new Date('2026-11-15T21:30:00Z'), 'Europe/Rome');
+  const later = new Date('2026-11-16T07:00:00Z');
+  assert.deepEqual(keepSamePeriod(before, durationBudget(5, 30, later, 'Europe/Rome')), before);
+  for (const other of [durationBudget(10, 30, later, 'Europe/Rome'), durationBudget(5, 60, later, 'Europe/Rome'), durationBudget(5, 30, later, 'Europe/London')]) {
+    assert.equal(keepSamePeriod(before, other).saved_at, later.toISOString(), 'a changed budget starts from now');
+  }
+  assert.equal(keepSamePeriod(undefined, durationBudget(5, 30, later, 'Europe/Rome')).saved_at, later.toISOString());
+  const night = { usd: 5, starts_at: '2026-11-15T21:30:00.000Z', ends_at: '2026-11-16T07:00:00.000Z', timezone: 'Europe/Rome', set_by: 'setup' };
+  assert.equal(keepSamePeriod(night, night), night, 'fixed hours are left as they are');
 });

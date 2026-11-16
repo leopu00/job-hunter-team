@@ -1,4 +1,5 @@
 import { handleAgents } from '../agents.js';
+import { openAlertLines } from '../../lib/open-alerts.js';
 // Comandi team list e team status
 import { marks, table, terminalWidth, title, wrapText } from '../../lib/ui.js';
 import { say } from '../../lib/texts.js';
@@ -33,6 +34,8 @@ export function listAction() {
   console.log('');
 }
 
-export function statusAction() {
-  return handleAgents();
+export async function statusAction() {
+  handleAgents();
+  // the alerts for the person nobody has read: on the web or Telegram only, the terminal never saw them
+  for (const line of await openAlertLines()) console.log(c.yellow(`⚠ ${line}`));
 }

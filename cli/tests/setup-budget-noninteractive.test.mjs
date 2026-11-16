@@ -51,12 +51,12 @@ function parsed(...words) {
   return got;
 }
 
-test('$5 for 30 minutes: team.budget from now to now + 30 min', async () => {
+test('$5 for 30 minutes: a duration of 30 minutes that starts when the team starts working, the dollars counted from the setup', async () => {
   fresh();
   const { code, text } = await setup({ budgetUsd: '5', budgetMinutes: '30' });
   assert.equal(code, 0, text);
   assert.deepEqual(read().team.budget, {
-    usd: 5, starts_at: NOW.toISOString(), ends_at: new Date(NOW.getTime() + 30 * MINUTE).toISOString(), timezone: 'Europe/Rome', set_by: 'setup',
+    usd: 5, duration_minutes: 30, saved_at: NOW.toISOString(), timezone: 'Europe/Rome', set_by: 'setup',
   });
   assert.match(text, /Budget: /);
 });
@@ -77,7 +77,7 @@ test('$10 for 3 days', async () => {
   assert.equal(code, 0, text);
   const { budget } = read().team;
   assert.equal(budget.usd, 10);
-  assert.equal(budget.ends_at, new Date(NOW.getTime() + 3 * 24 * 60 * MINUTE).toISOString());
+  assert.deepEqual([budget.duration_minutes, budget.saved_at, budget.ends_at], [3 * 24 * 60, NOW.toISOString(), undefined]);
 });
 
 test('--no-budget: no team.budget, and a budget saved before is removed (the other team fields stay)', async () => {
@@ -148,4 +148,15 @@ test('the command line: the five options reach the setup as budgetFromOptions re
   }
   assert.ok(!text.includes('wizard.cli.budget'), 'the help has the sentences, not the keys of the catalog');
   assert.ok(!text.includes('wizard.cli.no_budget'));
+});
+
+test('a setup made again with the same duration budget (also with --reset) keeps the period; a different budget starts again', async () => {
+  fresh();
+  assert.equal((await setup({ budgetUsd: '5', budgetMinutes: '30' })).code, 0);
+  const first = read().team.budget;
+  const later = new Date(NOW.getTime() + 2 * 3600_000);
+  assert.equal((await setup({ budgetUsd: '5', budgetMinutes: '30', reset: true, now: later })).code, 0);
+  assert.deepEqual(read().team.budget, first, 'the same period');
+  assert.equal((await setup({ budgetUsd: '10', budgetMinutes: '30', now: later })).code, 0);
+  assert.equal(read().team.budget.saved_at, later.toISOString(), 'a new amount is a new budget, from now');
 });

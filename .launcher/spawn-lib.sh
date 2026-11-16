@@ -470,6 +470,24 @@ jht_pi_args() {
   printf '%s\n' " --provider $pi_provider --model $model --thinking $effort"
 }
 
+# jht_pi_resume_args <role> <agent_dir> <modello> [provider]
+#   ` --session '<file>'` when the agent takes up its last pi session again, nothing otherwise (a new one). Only the roles
+#   in JHT_PI_RESUME_ROLES (the Assistente: the conversation with the person must survive a restart of the container, the
+#   switch to the full image in the middle of the onboarding included). Which session, and why not, is decided by
+#   shared/skills/pi_session_resume.py: the newest one only, whole, of this provider and model, written in the last day.
+JHT_PI_RESUME_ROLES="${JHT_PI_RESUME_ROLES:-assistente}"
+jht_pi_resume_args() {
+  local role="$1" agent_dir="$2" model="$3" pi_provider=openai api path script
+  case " $JHT_PI_RESUME_ROLES " in *" $role "*) ;; *) return 0 ;; esac
+  if api="$(jht_pi_api_provider "${4:-}")"; then pi_provider="$(jht_provider_field "$api" pi)" || return 0; fi
+  script="$(dirname "${BASH_SOURCE[0]}")/../shared/skills/pi_session_resume.py"
+  [ -f "$script" ] || return 0
+  path="$(python3 "$script" --sessions-dir "$(jht_pi_agent_dir)/sessions" --cwd "$agent_dir" \
+    --provider "$pi_provider" --model "$model")" || return 0
+  case "$path" in ''|*[!A-Za-z0-9._/-]*) return 0 ;; esac
+  printf " --session '%s'" "$path"
+}
+
 # jht_pi_agent_dir — la cartella di pi (settings, auth.json del /login,
 # sessioni), condivisa dagli agenti pi del container: il login si fa una volta.
 # shared/skills/uncounted_usage.py guarda le sessioni qui dentro.
