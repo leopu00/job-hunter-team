@@ -1355,5 +1355,6 @@
   "integration.tools.tier_not_removed": "le niveau du runtime n'a pas été supprimé",
   "integration.tools.usage": "usage : jht tools status --json | pull | switch",
   "wrapper.ps.artifact_copied": "%s a été copié dans %s pour que l’équipe puisse le lire.",
-  "wrapper.ps.artifact_copy_failed": "impossible de copier %s dans le dossier partagé : %s"
+  "wrapper.ps.artifact_copy_failed": "impossible de copier %s dans le dossier partagé : %s",
+  "wrapper.ps.artifact_copy_refused": "%s n’est pas copié : %s est un lien ou n’est pas dans le dossier partagé"
 }

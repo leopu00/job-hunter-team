@@ -1356,5 +1356,6 @@
   "integration.tools.tier_not_removed": "a futtatókörnyezet szintje nem lett eltávolítva",
   "integration.tools.usage": "használat: jht tools status --json | pull | switch",
   "wrapper.ps.artifact_copied": "A(z) %s fájlt átmásoltam ide: %s, hogy a csapat el tudja olvasni.",
-  "wrapper.ps.artifact_copy_failed": "nem tudom a(z) %s fájlt a megosztott mappába másolni: %s"
+  "wrapper.ps.artifact_copy_failed": "nem tudom a(z) %s fájlt a megosztott mappába másolni: %s",
+  "wrapper.ps.artifact_copy_refused": "%s nem másolható: a(z) %s hivatkozás, vagy nincs a megosztott mappán belül"
 }

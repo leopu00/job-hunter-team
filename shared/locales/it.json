@@ -1380,5 +1380,6 @@
   "integration.tools.tier_not_removed": "livello del runtime non tolto",
   "integration.tools.usage": "uso: jht tools status --json | pull | switch",
   "wrapper.ps.artifact_copied": "Ho copiato %s in %s perché il team possa leggerlo.",
-  "wrapper.ps.artifact_copy_failed": "non riesco a copiare %s nella cartella condivisa: %s"
+  "wrapper.ps.artifact_copy_failed": "non riesco a copiare %s nella cartella condivisa: %s",
+  "wrapper.ps.artifact_copy_refused": "non copio %s: %s è un collegamento o non sta dentro la cartella condivisa"
 }

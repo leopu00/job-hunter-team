@@ -1434,5 +1434,6 @@
   "integration.tools.tier_not_removed": "the runtime tier was not removed",
   "integration.tools.usage": "usage: jht tools status --json | pull | switch",
   "wrapper.ps.artifact_copied": "Copied %s into %s so the team can read it.",
-  "wrapper.ps.artifact_copy_failed": "cannot copy %s into the shared folder: %s"
+  "wrapper.ps.artifact_copy_failed": "cannot copy %s into the shared folder: %s",
+  "wrapper.ps.artifact_copy_refused": "cannot copy %s: %s is a link, or is not inside the shared folder"
 }

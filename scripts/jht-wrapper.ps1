@@ -290,6 +290,7 @@ function Get-JhtTextTable {
     'en:ps.apply_auto_send_warning_2' { return '  without another confirmation. Once it has gone out it cannot be recalled.' }
     'en:ps.artifact_copied' { return 'Copied %s into %s so the team can read it.' }
     'en:ps.artifact_copy_failed' { return 'cannot copy %s into the shared folder: %s' }
+    'en:ps.artifact_copy_refused' { return 'cannot copy %s: %s is a link, or is not inside the shared folder' }
     'en:ps.bot_token_prompt_hidden' { return 'Bot token for %s (hidden input)' }
     'en:ps.botfather_fresh_token' { return 'Always use a freshly generated token in BotFather (/revoke on the bot, or a new bot): an existing token may have been read by the agents even if it no longer appears in ~/.jht.' }
     'en:ps.broker_network_proxy_not_ready' { return 'broker_network_unavailable: the mail proxy is not ready (code %s).' }
@@ -557,6 +558,7 @@ function Get-JhtTextTable {
     'it:ps.apply_auto_send_warning_2' { return '  senza un''altra conferma. Una volta partita non si richiama.' }
     'it:ps.artifact_copied' { return ('Ho copiato %s in %s perch' + [char]0x00E9 + ' il team possa leggerlo.') }
     'it:ps.artifact_copy_failed' { return 'non riesco a copiare %s nella cartella condivisa: %s' }
+    'it:ps.artifact_copy_refused' { return ('non copio %s: %s ' + [char]0x00E8 + ' un collegamento o non sta dentro la cartella condivisa') }
     'it:ps.bot_token_prompt_hidden' { return 'Token del bot %s (input nascosto)' }
     'it:ps.botfather_fresh_token' { return ('Usa sempre un token appena generato in BotFather (/revoke sul bot, oppure un bot nuovo): un token gi' + [char]0x00E0 + ' esistente pu' + [char]0x00F2 + ' essere stato letto dagli agenti anche se oggi non compare in ~/.jht.') }
     'it:ps.broker_network_proxy_not_ready' { return ('broker_network_unavailable: il proxy della posta non ' + [char]0x00E8 + ' pronto (codice %s).') }
@@ -824,6 +826,7 @@ function Get-JhtTextTable {
     'hu:ps.apply_auto_send_warning_2' { return ('  ' + [char]0x00FA + 'jabb meger' + [char]0x0151 + 's' + [char]0x00ED + 't' + [char]0x00E9 + 's n' + [char]0x00E9 + 'lk' + [char]0x00FC + 'l. Ha egyszer elment, nem h' + [char]0x00ED + 'vhat' + [char]0x00F3 + ' vissza.') }
     'hu:ps.artifact_copied' { return ('A(z) %s f' + [char]0x00E1 + 'jlt ' + [char]0x00E1 + 'tm' + [char]0x00E1 + 'soltam ide: %s, hogy a csapat el tudja olvasni.') }
     'hu:ps.artifact_copy_failed' { return ('nem tudom a(z) %s f' + [char]0x00E1 + 'jlt a megosztott mapp' + [char]0x00E1 + 'ba m' + [char]0x00E1 + 'solni: %s') }
+    'hu:ps.artifact_copy_refused' { return ('%s nem m' + [char]0x00E1 + 'solhat' + [char]0x00F3 + ': a(z) %s hivatkoz' + [char]0x00E1 + 's, vagy nincs a megosztott mapp' + [char]0x00E1 + 'n bel' + [char]0x00FC + 'l') }
     'hu:ps.bot_token_prompt_hidden' { return 'A(z) %s bot tokenje (rejtett bevitel)' }
     'hu:ps.botfather_fresh_token' { return ('Mindig a BotFatherben frissen gener' + [char]0x00E1 + 'lt tokent haszn' + [char]0x00E1 + 'lj (/revoke a boton, vagy egy ' + [char]0x00FA + 'j bot): egy m' + [char]0x00E1 + 'r l' + [char]0x00E9 + 'tez' + [char]0x0151 + ' tokent az ' + [char]0x00FC + 'gyn' + [char]0x00F6 + 'k' + [char]0x00F6 + 'k elolvashattak, akkor is, ha ma m' + [char]0x00E1 + 'r nem szerepel a ~/.jht mapp' + [char]0x00E1 + 'ban.') }
     'hu:ps.broker_network_proxy_not_ready' { return ('broker_network_unavailable: a levelez' + [char]0x00E9 + 'si proxy nem ' + [char]0x00E1 + 'll k' + [char]0x00E9 + 'szen (k' + [char]0x00F3 + 'd: %s).') }
@@ -1091,6 +1094,7 @@ function Get-JhtTextTable {
     'es:ps.apply_auto_send_warning_2' { return ('  sin otra confirmaci' + [char]0x00F3 + 'n. Una vez enviada, no se puede retirar.') }
     'es:ps.artifact_copied' { return 'He copiado %s en %s para que el equipo pueda leerlo.' }
     'es:ps.artifact_copy_failed' { return 'no puedo copiar %s en la carpeta compartida: %s' }
+    'es:ps.artifact_copy_refused' { return ('no copio %s: %s es un enlace o no est' + [char]0x00E1 + ' dentro de la carpeta compartida') }
     'es:ps.bot_token_prompt_hidden' { return 'Token del bot %s (entrada oculta)' }
     'es:ps.botfather_fresh_token' { return ('Usa siempre un token reci' + [char]0x00E9 + 'n generado en BotFather (/revoke en el bot, o un bot nuevo): un token ya existente pueden haberlo le' + [char]0x00ED + 'do los agentes aunque hoy no aparezca en ~/.jht.') }
     'es:ps.broker_network_proxy_not_ready' { return ('broker_network_unavailable: el proxy de correo no est' + [char]0x00E1 + ' listo (c' + [char]0x00F3 + 'digo %s).') }
@@ -1358,6 +1362,7 @@ function Get-JhtTextTable {
     'de:ps.apply_auto_send_warning_2' { return ('  ohne weitere Best' + [char]0x00E4 + 'tigung. Einmal abgeschickt, l' + [char]0x00E4 + 'sst sie sich nicht zur' + [char]0x00FC + 'ckrufen.') }
     'de:ps.artifact_copied' { return '%s wurde nach %s kopiert, damit das Team es lesen kann.' }
     'de:ps.artifact_copy_failed' { return '%s kann nicht in den gemeinsamen Ordner kopiert werden: %s' }
+    'de:ps.artifact_copy_refused' { return ('%s wird nicht kopiert: %s ist eine Verkn' + [char]0x00FC + 'pfung oder liegt nicht im gemeinsamen Ordner') }
     'de:ps.bot_token_prompt_hidden' { return 'Token des Bots %s (verdeckte Eingabe)' }
     'de:ps.botfather_fresh_token' { return 'Verwende immer ein frisch in BotFather erzeugtes Token (/revoke beim Bot, oder ein neuer Bot): Ein bereits vorhandenes Token kann von den Agenten gelesen worden sein, auch wenn es heute nicht mehr in ~/.jht auftaucht.' }
     'de:ps.broker_network_proxy_not_ready' { return 'broker_network_unavailable: Der Mail-Proxy ist nicht bereit (Code %s).' }
@@ -1625,6 +1630,7 @@ function Get-JhtTextTable {
     'fr:ps.apply_auto_send_warning_2' { return ('  sans autre confirmation. Une fois partie, elle ne peut plus ' + [char]0x00EA + 'tre rappel' + [char]0x00E9 + 'e.') }
     'fr:ps.artifact_copied' { return ('%s a ' + [char]0x00E9 + 't' + [char]0x00E9 + ' copi' + [char]0x00E9 + ' dans %s pour que l' + [char]0x2019 + [char]0x00E9 + 'quipe puisse le lire.') }
     'fr:ps.artifact_copy_failed' { return ('impossible de copier %s dans le dossier partag' + [char]0x00E9 + ' : %s') }
+    'fr:ps.artifact_copy_refused' { return ('%s n' + [char]0x2019 + 'est pas copi' + [char]0x00E9 + ' : %s est un lien ou n' + [char]0x2019 + 'est pas dans le dossier partag' + [char]0x00E9) }
     'fr:ps.bot_token_prompt_hidden' { return ('Token du bot %s (saisie masqu' + [char]0x00E9 + 'e)') }
     'fr:ps.botfather_fresh_token' { return ('Utilise toujours un token tout juste g' + [char]0x00E9 + 'n' + [char]0x00E9 + 'r' + [char]0x00E9 + ' dans BotFather (/revoke sur le bot, ou un nouveau bot) : un token d' + [char]0x00E9 + 'j' + [char]0x00E0 + ' existant a pu ' + [char]0x00EA + 'tre lu par les agents m' + [char]0x00EA + 'me s''il n''appara' + [char]0x00EE + 't plus aujourd''hui dans ~/.jht.') }
     'fr:ps.broker_network_proxy_not_ready' { return ('broker_network_unavailable: le proxy mail n''est pas pr' + [char]0x00EA + 't (code %s).') }
@@ -1890,8 +1896,9 @@ function Get-JhtTextTable {
     'pt:monitor.window_invalid' { return ('monitor_window_invalid: usa ''jht monitor --window'' sem outras op' + [char]0x00E7 + [char]0x00F5 + 'es.') }
     'pt:ps.apply_auto_send_warning_1' { return ('  Com o envio autom' + [char]0x00E1 + 'tico ligado, a equipa preenche e ENVIA a candidatura,') }
     'pt:ps.apply_auto_send_warning_2' { return ('  sem outra confirma' + [char]0x00E7 + [char]0x00E3 + 'o. Depois de enviada, n' + [char]0x00E3 + 'o se pode retirar.') }
-    'pt:ps.artifact_copied' { return ('Copiei %s para %s para que a equipe possa l' + [char]0x00EA + '-lo.') }
-    'pt:ps.artifact_copy_failed' { return ('n' + [char]0x00E3 + 'o consigo copiar %s para a pasta compartilhada: %s') }
+    'pt:ps.artifact_copied' { return ('Copiei %s para %s para que a equipa possa l' + [char]0x00EA + '-lo.') }
+    'pt:ps.artifact_copy_failed' { return ('n' + [char]0x00E3 + 'o consigo copiar %s para a pasta partilhada: %s') }
+    'pt:ps.artifact_copy_refused' { return ('n' + [char]0x00E3 + 'o copio %s: %s ' + [char]0x00E9 + ' uma liga' + [char]0x00E7 + [char]0x00E3 + 'o ou n' + [char]0x00E3 + 'o est' + [char]0x00E1 + ' dentro da pasta partilhada') }
     'pt:ps.bot_token_prompt_hidden' { return 'Token do bot %s (entrada oculta)' }
     'pt:ps.botfather_fresh_token' { return ('Usa sempre um token acabado de gerar no BotFather (/revoke no bot, ou um bot novo): um token j' + [char]0x00E1 + ' existente pode ter sido lido pelos agentes, mesmo que hoje j' + [char]0x00E1 + ' n' + [char]0x00E3 + 'o apare' + [char]0x00E7 + 'a em ~/.jht.') }
     'pt:ps.broker_network_proxy_not_ready' { return ('broker_network_unavailable: o proxy de correio n' + [char]0x00E3 + 'o est' + [char]0x00E1 + ' pronto (c' + [char]0x00F3 + 'digo %s).') }
@@ -4797,12 +4804,18 @@ function Copy-JhtArtifactIntoShared {
     $shared = [IO.Path]::GetFullPath((Get-JhtSharedFolderPath)).TrimEnd('\', '/')
     $separator = [string][IO.Path]::DirectorySeparatorChar
     if ($full.StartsWith($shared + $separator, [StringComparison]::OrdinalIgnoreCase)) { return ,$out }
+    # The shared folder is one the container can write: a link put where allegati or the copy goes would take the file of the person to the
+    # place it names. Neither is followed: allegati has to be a folder of its own and the copy a file of its own, and both inside the shared folder.
     $folder = Join-Path $shared 'allegati'
+    if (-not (Test-JhtInsideShared $folder $shared) -or (Test-JhtLinkOrWrongKind $folder $true)) { Write-Err (Format-JhtText 'ps.artifact_copy_refused' $given $folder); return $null }
     [void](New-Item -ItemType Directory -Force -Path $folder)
+    if (Test-JhtLinkOrWrongKind $folder $true) { Write-Err (Format-JhtText 'ps.artifact_copy_refused' $given $folder); return $null }
     $name = [IO.Path]::GetFileName($full)
     $destination = Join-Path $folder $name
     $number = 1
-    while ((Test-Path -LiteralPath $destination) -and (Get-JhtFileSha256 $destination) -cne (Get-JhtFileSha256 $full)) {
+    while ($true) {
+      if (-not (Test-JhtInsideShared $destination $shared) -or (Test-JhtLinkOrWrongKind $destination $false)) { Write-Err (Format-JhtText 'ps.artifact_copy_refused' $given $destination); return $null }
+      if (-not (Test-Path -LiteralPath $destination) -or (Get-JhtFileSha256 $destination) -ceq (Get-JhtFileSha256 $full)) { break }
       $number++
       $destination = Join-Path $folder ('{0}-{1}{2}' -f [IO.Path]::GetFileNameWithoutExtension($name), $number, [IO.Path]::GetExtension($name))
     }
@@ -4814,6 +4827,22 @@ function Copy-JhtArtifactIntoShared {
     Write-Err (Format-JhtText 'ps.artifact_copy_failed' $given ($_.Exception.Message))
     return $null
   }
+}
+
+# Whether a path, taken whole, lies inside the shared folder (no .. or other name that takes it out).
+function Test-JhtInsideShared {
+  param([string]$Path, [string]$Shared)
+  $whole = [IO.Path]::GetFullPath($Path)
+  return $whole.StartsWith($Shared.TrimEnd('\', '/') + [string][IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)
+}
+
+# Whether what is at a path is a link (a reparse point), or a file where a folder has to be, or a folder where a file has to be. Nothing there is fine.
+function Test-JhtLinkOrWrongKind {
+  param([string]$Path, [bool]$WantFolder)
+  try { $attributes = [IO.File]::GetAttributes($Path) } catch [IO.FileNotFoundException] { return $false } catch [IO.DirectoryNotFoundException] { return $false }
+  if (($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return $true }
+  $isFolder = (($attributes -band [IO.FileAttributes]::Directory) -ne 0)
+  return ($isFolder -ne $WantFolder)
 }
 
 function Get-JhtFileSha256 {

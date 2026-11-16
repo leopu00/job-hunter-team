@@ -23,7 +23,7 @@ from wrapper_ps_texts import UTF8_OUTPUT, say_functions  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
 SHELLS = ("powershell", "pwsh")
-FUNCTIONS = ("Get-JhtSharedFolderPath", "Get-JhtFileSha256", "Copy-JhtArtifactIntoShared")
+FUNCTIONS = ("Get-JhtSharedFolderPath", "Get-JhtFileSha256", "Test-JhtInsideShared", "Test-JhtLinkOrWrongKind", "Copy-JhtArtifactIntoShared")
 
 
 def _shell(name: str) -> str:
@@ -54,7 +54,7 @@ def _run(shell: str, tmp_path: Path, args: list[str], *, lang="en", cwd: Path | 
     script = tmp_path / "case.ps1"
     script.write_text("\n".join([
         UTF8_OUTPUT, "$ErrorActionPreference = 'Stop'", say_functions(lang), *[_function(name) for name in FUNCTIONS],
-        "function Write-Err { param([string]$Msg) [Console]::Error.WriteLine($Msg) }",
+        "function Write-Err { param([string]$Msg) Write-Host \"error: $Msg\" }",
         f"$result = Copy-JhtArtifactIntoShared @({quoted})",
         "if ($null -eq $result) { 'RESULT=FAILED' } else { 'RESULT=' + ($result -join '|') }", ""]), encoding="ascii")
     env = {k: v for k, v in os.environ.items() if not k.startswith(("JHT_", "FLEET"))}
@@ -154,10 +154,61 @@ def test_a_copy_that_cannot_be_made_says_why_and_stops(shell, tmp_path):
     assert result == "FAILED"
 
 
+def _shared(tmp_path: Path) -> Path:
+    shared = tmp_path / "profile" / "Documents" / "Job Hunter Team"
+    shared.mkdir(parents=True, exist_ok=True)
+    return shared
+
+
+@pytest.mark.skipif(os.name == "nt", reason="creating a link needs a privilege on Windows")
+@pytest.mark.parametrize("shell", SHELLS)
+def test_an_allegati_that_is_a_link_is_not_followed_and_nothing_is_written_where_it_points(shell, tmp_path):
+    source = _desktop_file(tmp_path)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (_shared(tmp_path) / "allegati").symlink_to(elsewhere, target_is_directory=True)
+    out, result = _run(shell, tmp_path, [str(source)])
+    assert result == "FAILED" and list(elsewhere.iterdir()) == []
+    assert catalog("en")["wrapper.ps.artifact_copy_refused"].replace("%s", str(source), 1).replace("%s", str(_allegati(tmp_path)), 1) in out
+
+
+@pytest.mark.skipif(os.name == "nt", reason="creating a link needs a privilege on Windows")
+@pytest.mark.parametrize("shell", SHELLS)
+def test_a_copy_that_is_a_link_is_not_written_through(shell, tmp_path):
+    source = _desktop_file(tmp_path, data=b"of the person")
+    precious = tmp_path / "precious.txt"
+    precious.write_bytes(b"not to be touched")
+    folder = _shared(tmp_path) / "allegati"
+    folder.mkdir()
+    (folder / "cv.pdf").symlink_to(precious)
+    _out, result = _run(shell, tmp_path, [str(source)])
+    assert result == "FAILED" and precious.read_bytes() == b"not to be touched"
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_an_allegati_that_is_a_file_and_a_copy_that_is_a_folder_are_refused(shell, tmp_path):
+    source = _desktop_file(tmp_path)
+    (_shared(tmp_path) / "allegati").write_text("a file where the folder goes", encoding="utf-8")
+    _out, result = _run(shell, tmp_path, [str(source)])
+    assert result == "FAILED"
+    (_shared(tmp_path) / "allegati").unlink()
+    (_shared(tmp_path) / "allegati" / "cv.pdf").mkdir(parents=True)
+    _out, result = _run(shell, tmp_path, [str(source)])
+    assert result == "FAILED"
+
+
 @pytest.mark.parametrize("lang", LANGUAGES)
 def test_the_sentences_are_in_the_7_catalogs(lang):
     texts = catalog(lang)
     assert texts["wrapper.ps.artifact_copied"].count("%s") == 2 and texts["wrapper.ps.artifact_copy_failed"].count("%s") == 2
+    assert texts["wrapper.ps.artifact_copy_refused"].count("%s") == 2
+
+
+def test_portuguese_is_the_one_of_portugal():
+    pt = catalog("pt")
+    for key in ("artifact_copied", "artifact_copy_failed", "artifact_copy_refused"):
+        assert "equipe" not in pt["wrapper.ps." + key] and "compartilhad" not in pt["wrapper.ps." + key]
+    assert "equipa" in pt["wrapper.ps.artifact_copied"] and "partilhada" in pt["wrapper.ps.artifact_copy_failed"]
 
 
 def test_the_artifact_branch_copies_before_it_asks_the_container():
