@@ -100,6 +100,71 @@ tools_pull_job() {
   rm -rf "$TOOLS_LOCK"
 }
 
+# ── Room for the full image, and the old images of JHT ─────────────────────────────────────────────────────────────────────────
+# The full image is about 3.4 GB, and pulling it took some 6 GiB of a Mac (the disk of the Podman machine grows on the Mac's own):
+# on giro Mac m21 an update went from 10 to 2 GiB free, the old images of the version before still there. Before the pull, when the
+# room is short, the old images of JHT go first (tools_clean_old_images); still short, nothing is pulled and the person is told
+# (state `disk_low`, said by `jht up`, `jht setup` and `jht status`; `jht up` tries again). Space that cannot be measured refuses
+# nothing. JHT_TOOLS_PULL_MIN_FREE_GIB (10) is the room asked for.
+tools_pull_need_kib() {
+  local gib="${JHT_TOOLS_PULL_MIN_FREE_GIB:-10}"
+  case "$gib" in ''|*[!0-9]*) gib=10 ;; esac
+  printf '%s\n' $((gib * 1048576))
+}
+
+# The least free KiB of the volumes the pull fills (the data folder's, and the engine's where the wrapper knows it: disk_free_measure
+# and disk_engine_path are the wrapper's, as for `jht upgrade`); nothing, and 1, when none can be measured.
+tools_disk_free_kib() {
+  local volume measure permille avail least=""
+  declare -F disk_free_measure >/dev/null 2>&1 || return 1
+  for volume in "${JHT_HOME_HOST:-$HOME/.jht}" "$(declare -F disk_engine_path >/dev/null 2>&1 && disk_engine_path)"; do
+    [ -n "$volume" ] || continue
+    measure="$(disk_free_measure "$volume")" || continue
+    read -r permille avail <<EOF
+$measure
+EOF
+    case "$avail" in ''|*[!0-9]*) continue ;; esac
+    if [ -z "$least" ] || [ "$avail" -lt "$least" ]; then least="$avail"; fi
+  done
+  [ -n "$least" ] || return 1
+  printf '%s\n' "$least"
+}
+
+# The old images of JHT go, by the rules of the cleaning after `jht upgrade` (upgrade_prune_old_images in the wrapper: only the
+# repositories of JHT by exact name, never an image of a container even stopped, by ID and without -f, never prune, never volumes,
+# JHT_KEEP_OLD_IMAGES=1 keeps them all). Kept: the image the container runs, the core image of this version and, while the tier
+# file is there, the full one. Only when the container runs on this version's core or full image, and never while an upgrade runs
+# or waits to be resumed (its previous version is its way back). The KiB it freed in TOOLS_FREED_KIB.
+TOOLS_FREED_KIB=0
+tools_clean_old_images() {
+  local running core_id full_id freed
+  TOOLS_FREED_KIB=0
+  declare -F upgrade_prune_old_images >/dev/null 2>&1 && declare -F upgrade_image >/dev/null 2>&1 || return 0
+  [ -e "$RUNTIME_DIR/.upgrade.lock" ] || [ -e "$RUNTIME_DIR/.upgrade-journal" ] && return 0
+  running="$(upgrade_image_plain "$(upgrade_image)")"
+  [ -n "$running" ] || return 0
+  core_id="$(docker image inspect --format '{{.Id}}' "ghcr.io/leopu00/jht@$CORE_IMAGE_DIGEST" 2>/dev/null | head -n 1)"
+  full_id="$(docker image inspect --format '{{.Id}}' "$DEFAULT_RUNTIME_IMAGE" 2>/dev/null | head -n 1)"
+  core_id="$(upgrade_image_plain "$core_id")" full_id="$(upgrade_image_plain "$full_id")"
+  [ "$running" = "$core_id" ] || [ "$running" = "$full_id" ] || return 0
+  UPGRADE_JSON=1 upgrade_prune_old_images "$running" "${core_id:-$running}" >/dev/null 2>&1 || true
+  freed="$(printf '%s' "${UPGRADE_PRUNE_JSON:-}" | sed -n 's/.*"freedBytes":\([0-9][0-9]*\).*/\1/p')"
+  TOOLS_FREED_KIB=$(( ${freed:-0} / 1024 ))
+}
+
+# 0 when there is room for the pull, or it cannot be measured. The space the old images freed counts even when the disk does not show
+# it yet: inside the Podman machine of a Mac it is free for the pull, while the Mac sees it only after the machine trims its disk.
+tools_disk_room() {
+  local need free after
+  need="$(tools_pull_need_kib)"
+  free="$(tools_disk_free_kib)" || return 0
+  [ "$free" -ge "$need" ] && return 0
+  tools_clean_old_images
+  after="$(tools_disk_free_kib)" || after="$free"
+  [ $((free + TOOLS_FREED_KIB)) -gt "$after" ] && after=$((free + TOOLS_FREED_KIB))
+  [ "$after" -ge "$need" ]
+}
+
 # One job at a time, detached. $1 = `auto` for the job of tools_kick (it pulls if needed, then switches by itself).
 tools_start_job() {
   local auto="${1:-}" since
@@ -107,6 +172,11 @@ tools_start_job() {
   rm -rf "$TOOLS_LOCK"
   mkdir "$TOOLS_LOCK" 2>/dev/null || return 0  # another call won the race: it is the one pulling
   rm -f "$TOOLS_FAILED_FILE"
+  if ! tools_full_here && ! tools_disk_room; then
+    printf 'disk_low\n' > "$TOOLS_FAILED_FILE"; tools_notice failed core disk_low "$since"
+    rm -rf "$TOOLS_LOCK"
+    return 0
+  fi
   tools_full_here || { [ -n "$auto" ] || printf 'JHT_PHASE tools_pull\n'; tools_notice pulling core "" "$since"; }
   tools_pull_job "$since" "$auto" </dev/null >/dev/null 2>&1 &
   printf '%s\n' "$!" > "$TOOLS_LOCK/pid"
@@ -184,15 +254,21 @@ tools_command_changes_runtime() {
 }
 
 # The job is a child of the wrapper that started it, with the same command line: its own process is left out, and so are its own
-# children (the subshell of a command substitution is a fork with the same command line, and pgrep only leaves itself out).
+# children (the subshell of a command substitution is a fork with the same command line, and pgrep only leaves itself out). The
+# wrapper that started it is NOT left out: $$ in the job is that wrapper's pid, and when it is the `jht setup` of an update (the
+# profile already there, so the job switches as soon as the pull ends) the switch recreated the container under its wizard, which
+# died with 137 (giro Mac m21). The command found is in TOOLS_RUNNING_COMMAND, for tools_wait_quiet.
+TOOLS_RUNNING_COMMAND=""
 tools_other_wrapper_running() {
   # bash 3.2 (the system bash of macOS) has no BASHPID, and $$ in a subshell is still the wrapper's: the parent of a new sh is
   # this process (exec, so no subshell of the command substitution comes in between)
-  local me="${BASHPID:-$(exec sh -c 'echo "$PPID"')}" pids pid parent line command sub
-  pids="$(pgrep -f -- "$WRAPPER_PATH" 2>/dev/null)" || return 1
+  local me="${BASHPID:-$(exec sh -c 'echo "$PPID"')}" pids pid parent line command sub ancestors=""
+  # the pgrep of macOS leaves out the ancestors of the caller unless told -a, and the `jht setup` that started the job is one
+  # (procps on Linux leaves out none, and its -a is another option: the full command line)
+  [ "$(uname -s 2>/dev/null)" = Darwin ] && ancestors="-a"
+  pids="$(pgrep $ancestors -f -- "$WRAPPER_PATH" 2>/dev/null)" || return 1
   for pid in $pids; do
     [ "$pid" = "$me" ] && continue
-    [ "$pid" = "$$" ] && continue
     parent="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')"
     [ -n "$parent" ] || continue          # gone already
     [ "$parent" = "$me" ] && continue     # a child of this job (the subshell of the command substitution above)
@@ -202,14 +278,25 @@ tools_other_wrapper_running() {
     read -r command sub _ <<EOF
 ${line#*"$WRAPPER_PATH"}
 EOF
-    tools_command_changes_runtime "$command" "$sub" && return 0
+    if tools_command_changes_runtime "$command" "$sub"; then TOOLS_RUNNING_COMMAND="$command"; return 0; fi
   done
   return 1
 }
 
+# A command that changes the runtime holds the switch for JHT_TOOLS_QUIET_MAX seconds (1800) at most; a `jht setup` for as long as
+# it runs (JHT_TOOLS_SETUP_MAX, a day): its wizard waits for the person, and a switch under it ends it all the same, half an hour on.
 tools_wait_quiet() {
-  local left="${JHT_TOOLS_QUIET_MAX:-1800}"
-  while tools_other_wrapper_running && [ "$left" -gt 0 ]; do sleep 2; left=$((left - 2)); done
+  local left="${JHT_TOOLS_QUIET_MAX:-1800}" setup_left="${JHT_TOOLS_SETUP_MAX:-86400}"
+  while tools_other_wrapper_running; do
+    if [ "$TOOLS_RUNNING_COMMAND" = setup ]; then
+      [ "$setup_left" -gt 0 ] || return 0
+      setup_left=$((setup_left - 2))
+    else
+      [ "$left" -gt 0 ] || return 0
+      left=$((left - 2))
+    fi
+    sleep 2
+  done
 }
 
 # The switch of the job, when no other command runs. A team the person stopped (`jht down`) stays stopped: only the tier goes, and
@@ -233,6 +320,7 @@ tools_switch_auto() {
     tools_notice ready full "" "$(tools_now)"
   elif "$WRAPPER_PATH" up </dev/null >/dev/null 2>&1; then
     tools_notice ready full "" "$(tools_now)"
+    tools_clean_old_images
   else
     printf 'switch_failed\n' > "$TOOLS_SWITCH_FAILED_FILE"
     tools_notice failed full switch_failed "$(tools_now)"
@@ -240,13 +328,15 @@ tools_switch_auto() {
   rm -f "$TOOLS_SWITCHING_FILE"
 }
 
-# What the wrapper tells the person, one word: arriving (pulling or waiting), failed (the pull), switch_failed, or nothing.
+# What the wrapper tells the person, one word: arriving (pulling or waiting), failed (the pull), disk_low (no room for the pull),
+# switch_failed, or nothing.
 tools_person_state() {
   if [ -s "$TOOLS_SWITCH_FAILED_FILE" ] && [ ! -f "$RUNTIME_TIER_FILE" ]; then printf 'switch_failed\n'; return 0; fi
   [ -f "$RUNTIME_TIER_FILE" ] || return 0
   tools_engine_up || return 0
   if tools_full_here; then printf 'waiting\n'
   elif tools_pulling; then printf 'arriving\n'
+  elif [ "$(head -c 40 "$TOOLS_FAILED_FILE" 2>/dev/null | tr -cd 'a-z_')" = disk_low ]; then printf 'disk_low\n'
   elif [ -s "$TOOLS_FAILED_FILE" ]; then printf 'failed\n'
   else printf 'arriving\n'
   fi
@@ -263,6 +353,7 @@ tools_switch() {
   unset JHT_IMAGE
   "$WRAPPER_PATH" up || return $?
   tools_notice ready full "" "$(tools_now)"
+  tools_clean_old_images
   printf 'JHT_PHASE tools_ready\n'
 }
 

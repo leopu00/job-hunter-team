@@ -29,7 +29,13 @@ CORE_DIGEST = "sha256:" + "b" * 64
 FAKE_DOCKER = r"""#!/bin/sh
 case "$1" in
   info) [ -e "$FAKE/engine-down" ] && exit 1; exit 0 ;;
-  image) [ -e "$FAKE/full-present" ] && exit 0; exit 1 ;;
+  image)
+    # `image inspect --format '{{.Id}}' REF`: the core image is always here, the full one only once pulled
+    if [ "$2" = inspect ] && [ "$3" = --format ]; then
+      case "$5" in *@sha256:bbbb*) echo sha256:coreid; exit 0 ;; esac
+      [ -e "$FAKE/full-present" ] && { echo sha256:fullid; exit 0; }; exit 1
+    fi
+    [ -e "$FAKE/full-present" ] && exit 0; exit 1 ;;
   pull) echo "$*" >> "$FAKE/pulls"; n=0; while [ -e "$FAKE/pull-hold" ] && [ "$n" -lt 300 ]; do sleep 0.1; n=$((n+1)); done; [ -e "$FAKE/pull-fails" ] && exit 1; : > "$FAKE/full-present"; exit 0 ;;
 esac
 exit 0
@@ -58,6 +64,8 @@ $WrapperPath = $env:T_STUB
 # the wrapper's own: a `jht down` of the person
 function Test-JhtTeamStoppedByPerson { return (Test-Path -LiteralPath (Join-Path $env:FAKE 'team-stopped')) }
 function Write-Err { param([string]$Msg) [Console]::Error.WriteLine("error: $Msg") }
+$CoreImageDigest = $env:T_CORE
+if (Test-Path -LiteralPath (Join-Path $env:FAKE 'running')) { . $env:T_CLEAN_FAKES }
 # the switch under way while it stops and starts the team: .tools-switching holds the pid of a living job
 $switching = Join-Path $RuntimeDir '.tools-switching'
 if ($Rest[0] -in @('down', 'up')) {
@@ -80,6 +88,22 @@ exit (Invoke-ToolsCommand @($Rest | Select-Object -Skip 1))
 """
 
 
+# The wrapper's functions the helper uses for the disk and the old images, faked: the free bytes in $FAKE/free (none = cannot be
+# measured), the image the container runs in $FAKE/running, the cleaning writes its arguments in $FAKE/prune and frees $FAKE/freed.
+CLEAN_FAKES = r"""
+function Get-DiskFreeMeasure { param([string]$Path) $f = Join-Path $env:FAKE 'free'; if (-not (Test-Path -LiteralPath $f)) { return $null }; return @{ Free = [long]([IO.File]::ReadAllText($f).Trim()); Total = [long]1000000000000 } }
+function Get-DiskGibText { param([long]$Kib) return [string][long][Math]::Floor($Kib / 1048576) }
+function Get-PlainImageId { param([string]$Id) return (([string]$Id).Trim() -replace '^sha256:', '') }
+function Get-UpgradeImage { $f = Join-Path $env:FAKE 'running'; if (Test-Path -LiteralPath $f) { return ([IO.File]::ReadAllText($f)).Trim() }; return '' }
+function Remove-OldJhtImages {
+  param([string]$Current, [string]$Previous)
+  Add-Content -LiteralPath (Join-Path $env:FAKE 'prune') -Value ("$Current $Previous json=" + $script:UpgradeJson)
+  $freed = [long]0; $f = Join-Path $env:FAKE 'freed'; if (Test-Path -LiteralPath $f) { $freed = [long]([IO.File]::ReadAllText($f).Trim()) }
+  $script:UpgradePrune = [ordered]@{ removed = 2; freedBytes = $freed }
+}
+"""
+
+
 @pytest.fixture()
 def box(tmp_path):
     runtime = tmp_path / "runtime"
@@ -93,6 +117,8 @@ def box(tmp_path):
     install_fake(bin_dir, "docker.exe" if WINDOWS else "docker", FAKE_DOCKER)
     stub = tmp_path / "stub.ps1"
     stub.write_text(STUB, encoding="utf-8")
+    clean_fakes = tmp_path / "clean-fakes.ps1"
+    clean_fakes.write_text(CLEAN_FAKES, encoding="utf-8")
 
     def run(body: str, **extra):
         harness = tmp_path / "harness.ps1"
@@ -102,7 +128,7 @@ def box(tmp_path):
             **(windows_env(tmp_path) if WINDOWS else os.environ),
             "PATH": str(bin_dir) if WINDOWS else f"{bin_dir}{os.pathsep}/usr/bin{os.pathsep}/bin",
             "JHT_ENGINE_FILE": str(engine), "FAKE": str(fake), "T_RUNTIME": str(runtime), "T_HOME": str(home),
-            "T_FULL": FULL, "T_CORE": CORE_DIGEST, "T_STUB": str(stub), "T_TOOLS": str(TOOLS), **extra,
+            "T_FULL": FULL, "T_CORE": CORE_DIGEST, "T_STUB": str(stub), "T_TOOLS": str(TOOLS), "T_CLEAN_FAKES": str(clean_fakes), **extra,
         }
         # Output goes to files, not pipes: on Linux the detached pull inherits the pipes of the harness and `capture_output` would wait
         # for it to close them, that is for the whole pull (Windows starts it with a window of its own and holds nothing).
@@ -734,3 +760,110 @@ def test_jht_up_setup_and_status_keep_the_tools_moving_and_say_where_they_stand(
     body = text[text.index("function Write-JhtToolsNotice {"):]
     body = body[:body.index("\n}\n")]
     assert "catch { }" in body and "Invoke-ToolsKick" in body and "Get-ToolsPersonState" in body
+
+
+# --- the setup holds the switch as long as it runs (giro Mac m21, vps-42: the wizard of an update died with 137) -----------------
+
+def test_a_setup_holds_the_switch_past_the_cap_of_the_other_commands(box, tmp_path):
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
+    setup = _running_command(box, tmp_path, "setup")
+    try:
+        assert box.run("exit (Invoke-ToolsKick)", **{**KICK_ENV, "JHT_TOOLS_QUIET_MAX": "2"}).returncode == 0
+        time.sleep(8)
+        assert tier.exists() and _calls(box) == [], "the setup was cut at the cap of the other commands"
+    finally:
+        setup.kill()
+        setup.wait(timeout=20)
+    _until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"no switch after the setup: {_calls(box)}")
+
+
+# --- room on the disk before the pull, and the old images of JHT (giro Mac m21: from 10 to 2 GiB free) ---------------------
+
+GIB = 1024 ** 3
+
+
+def _disk(box, free_gib=None, running="sha256:coreid", freed_gib=0):
+    if free_gib is not None:
+        (box.fake / "free").write_text(str(int(free_gib * GIB)), encoding="utf-8")
+    (box.fake / "running").write_text(running, encoding="utf-8")
+    (box.fake / "freed").write_text(str(int(freed_gib * GIB)), encoding="utf-8")
+
+
+def _prunes(box):
+    path = box.fake / "prune"
+    return path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+
+
+def _with_fakes(body: str) -> str:
+    return ". $env:T_CLEAN_FAKES\n" + body
+
+
+PULL_ONLY_ENV = {**KICK_ENV, "JHT_TOOLS_WAIT_MAX": "2"}
+
+
+def test_with_no_room_nothing_is_pulled_and_the_person_is_told(box):
+    box.tier()
+    _disk(box, free_gib=3, freed_gib=1)
+    done = box.run(_with_fakes("exit (Invoke-ToolsKick)"), **PULL_ONLY_ENV)
+    assert done.returncode == 0 and _lines(done) == [], done.stdout + done.stderr
+    assert not (box.fake / "pulls").exists(), "pulled on a full disk"
+    assert not (box.runtime / ".tools-pull.lock").exists()
+    assert box.notice()["state"] == "failed" and box.notice()["reason"] == "disk_low"
+    assert _prunes(box) == ["coreid coreid json=True"]
+    assert box.run(_with_fakes("[Console]::Out.WriteLine((Get-ToolsPersonState))")).stdout.strip() == "disk_low"
+    _disk(box, free_gib=30)
+    assert box.run(_with_fakes("exit (Invoke-ToolsKick)"), **PULL_ONLY_ENV).returncode == 0
+    box.wait_for("ready")
+
+
+def test_short_of_room_the_old_images_go_first_and_what_they_free_counts(box):
+    box.tier()
+    _disk(box, free_gib=8, freed_gib=4)
+    assert box.run(_with_fakes("exit (Invoke-ToolsKick)"), **PULL_ONLY_ENV).returncode == 0
+    box.wait_for("ready")
+    assert (box.fake / "pulls").exists() and _prunes(box) == ["coreid coreid json=True"]
+
+
+def test_the_room_asked_for_can_be_changed_and_space_that_cannot_be_measured_refuses_nothing(box):
+    box.tier()
+    _disk(box, free_gib=3)
+    say = "if (Test-ToolsDiskRoom) { [Console]::Out.WriteLine('room') } else { [Console]::Out.WriteLine('short') }"
+    assert box.run(_with_fakes(say), JHT_TOOLS_PULL_MIN_FREE_GIB="2").stdout.strip() == "room"
+    assert box.run(_with_fakes(say)).stdout.strip() == "short"
+    (box.fake / "free").unlink()
+    assert box.run(_with_fakes(say)).stdout.strip() == "room"
+
+
+@pytest.mark.parametrize("case", ["other-image", "upgrade-lock", "upgrade-journal", "no-container"])
+def test_the_old_images_are_left_alone_when_the_container_is_not_on_this_version_or_an_upgrade_runs(box, case):
+    _disk(box, free_gib=3, running="sha256:someoldid" if case == "other-image" else "sha256:coreid")
+    if case == "upgrade-lock":
+        (box.runtime / ".upgrade.lock").mkdir()
+    if case == "upgrade-journal":
+        (box.runtime / ".upgrade-journal").write_text("x\n", encoding="utf-8")
+    if case == "no-container":
+        (box.fake / "running").write_text("", encoding="utf-8")
+    assert box.run(_with_fakes("$null = Remove-ToolsOldImages")).returncode == 0
+    assert _prunes(box) == []
+
+
+def test_after_a_switch_that_went_well_the_old_images_go_keeping_this_versions_core(box):
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
+    _disk(box, free_gib=30, running="sha256:fullid")
+    assert box.run("exit (Invoke-ToolsKick)", **KICK_ENV).returncode == 0
+    _until(lambda: not tier.exists() and _prunes(box) == ["fullid coreid json=True"], f"no cleaning after the switch: {_prunes(box)}")
+
+
+def test_jht_up_setup_and_status_say_the_disk_is_short():
+    text = WRAPPER.read_text(encoding="utf-8")
+    body = text[text.index("function Write-JhtToolsNotice {"):]
+    body = body[:body.index("\n}\n")]
+    assert "'disk_low'      { Write-Warn (Get-JhtToolsDiskLowText) }" in body
+    status = text[text.index("function Write-JhtToolsStatus {"):]
+    status = status[:status.index("\n}\n")]
+    assert "if ($state -ceq 'disk_low') { [Console]::Out.WriteLine((Get-JhtToolsDiskLowText)); return }" in status
+    assert "(Format-JhtText 'tools.disk_low' (Get-DiskGibText (Get-ToolsPullNeedKib)) (Get-DiskGibText $free))" in text
