@@ -1355,5 +1355,6 @@
   "integration.tools.tier_not_removed": "die Stufe der Runtime wurde nicht entfernt",
   "integration.tools.usage": "Verwendung: jht tools status --json | pull | switch",
   "wrapper.ps.artifact_copied": "%s wurde nach %s kopiert, damit das Team es lesen kann.",
-  "wrapper.ps.artifact_copy_failed": "%s kann nicht in den gemeinsamen Ordner kopiert werden: %s"
+  "wrapper.ps.artifact_copy_failed": "%s kann nicht in den gemeinsamen Ordner kopiert werden: %s",
+  "wrapper.ps.artifact_copy_refused": "%s wird nicht kopiert: %s ist eine Verknüpfung oder liegt nicht im gemeinsamen Ordner"
 }
