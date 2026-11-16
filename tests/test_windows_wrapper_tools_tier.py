@@ -520,7 +520,9 @@ def _running_command(box, tmp_path, command, *arguments):
     script = tmp_path / f"running-{command}.ps1"
     words = ", ".join("'" + word + "'" for word in arguments)
     script.write_text(_register_function() + f"\n$RuntimeDir = '{box.runtime}'\nRegister-JhtRunningCommand '{command}' @({words})\n"
-                      "Start-Sleep -Seconds 40\n", encoding="utf-8")
+                      # long enough for the checks after it: on a loaded runner a Windows PowerShell 5.1 harness takes tens of
+                      # seconds to start, and a command that ended before the check is rightly not seen (the test kills it)
+                      "Start-Sleep -Seconds 300\n", encoding="utf-8")
     process = subprocess.Popen([*powershell_argv(), "-File", str(script)])
     marker = box.runtime / ".commands" / str(process.pid)
     _until(lambda: marker.exists(), f"`jht {command}` never said it was running", rounds=150)
