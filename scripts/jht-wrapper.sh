@@ -4101,26 +4101,31 @@ team_chat_agent_back() {
   done
 }
 
-# `jht team chat` whose REPL the switch ended: it comes back by itself, on the same agent, once the team runs on the full image
-# (at most three switches in a row; one is what happens). If the agent is not back in time, the person is told to open it again.
+# `jht team chat` whose REPL the switch ended: it comes back by itself, on the same agent, once the team runs on the full image.
+# This wrapper read the runtime before the switch (the core image, the core container) and would refuse the full container as not
+# ours: a fresh wrapper reads it as it is now. It is told it resumes a chat (JHT_TEAM_CHAT_RESUME, the round), so it never starts
+# or replaces the container: it waits for the agent and attaches (team_chat_resume). At most three switches in a row.
 team_chat_through_switch() {
-  local rc rounds=0
-  while [ "$rounds" -lt 3 ]; do
-    info "$(jht_say tools.chat_reconnecting)"
-    wait_for_tools_switch quiet
-    ensure_up
-    if ! team_chat_agent_back "${3:-}"; then
-      info "$(jht_say tools.chat_switched)"
-      return 0
-    fi
-    info "$(jht_say tools.chat_resumed)"
-    rc=0
-    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@" || rc=$?
-    team_chat_ended_by_switch || return "$rc"
-    rounds=$((rounds + 1))
-  done
-  info "$(jht_say tools.chat_switched)"
-  return 0
+  local round="${JHT_TEAM_CHAT_RESUME:-0}"
+  case "$round" in ''|*[!0-9]*) round=0 ;; esac
+  if [ "$round" -ge 3 ]; then
+    info "$(jht_say tools.chat_switched)"
+    return 0
+  fi
+  info "$(jht_say tools.chat_reconnecting)"
+  wait_for_tools_switch quiet
+  export JHT_TEAM_CHAT_RESUME=$((round + 1))
+  exec bash "$WRAPPER_PATH" "$@"
+}
+
+# The fresh wrapper of a chat that the switch ended: the container the switch started must be running and ours, and the agent
+# back in it. Nothing is started here: if they are not there, the person is told to open the chat again.
+team_chat_resume() {
+  if ! container_up >/dev/null 2>&1 || ! team_chat_agent_back "${3:-}"; then
+    info "$(jht_say tools.chat_switched)"
+    exit 0
+  fi
+  info "$(jht_say tools.chat_resumed)"
 }
 
 runtime_write_manifest() {
@@ -10453,7 +10458,10 @@ case "$SUB" in
   team)
     require_compose_file
     require_docker
-    if [ "${2:-}" = stop ]; then ensure_up_for_stop; else ensure_up; fi
+    if [ "${2:-}" = chat ] && [ -n "${JHT_TEAM_CHAT_RESUME:-}" ]; then team_chat_resume "$@"
+    elif [ "${2:-}" = stop ]; then ensure_up_for_stop
+    else ensure_up
+    fi
     team_rc=0
     docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@" || team_rc=$?
     # the REPL ended because the team is moving onto the full image: it comes back by itself once the team runs again

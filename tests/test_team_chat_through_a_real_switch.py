@@ -51,16 +51,22 @@ def _function(name: str) -> str:
     return match.group(0)
 
 
+# the stand-in REPL: `node <entry> team chat assistente` says it is there and reads the person's lines until its input ends,
+# and a stand-in tmux: the agent's session is there once the container runs (the container's pid1 starts it in production)
+BOOT = ("printf '#!/bin/sh\\necho REPL-OPEN\\nwhile read -r line; do echo \"you: $line\"; done\\n' > /usr/local/bin/node; "
+        "printf '#!/bin/sh\\nexit 0\\n' > /usr/local/bin/tmux; chmod 755 /usr/local/bin/node /usr/local/bin/tmux; exec sleep 600")
+
+
+def _run_container(name: str):
+    _docker("run", "-d", "--name", name, "--label", "jht-probe=1", IMAGE, "sh", "-c", BOOT)
+
+
 @pytest.fixture()
 def container(tmp_path):
     if _docker("image", "inspect", IMAGE, check=False).returncode != 0:
         _docker("pull", IMAGE, timeout=300)
     name = f"jht-probe-{uuid.uuid4().hex[:10]}"
-    # the stand-in REPL: `node <entry> team chat assistente` says it is there and reads the person's lines until its input ends
-    # and a stand-in tmux: the agent's session is there once the container runs (the container's pid1 starts it in production)
-    boot = ("printf '#!/bin/sh\\necho REPL-OPEN\\nwhile read -r line; do echo \"you: $line\"; done\\n' > /usr/local/bin/node; "
-            "printf '#!/bin/sh\\nexit 0\\n' > /usr/local/bin/tmux; chmod 755 /usr/local/bin/node /usr/local/bin/tmux; exec sleep 600")
-    _docker("run", "-d", "--name", name, "--label", "jht-probe=1", IMAGE, "sh", "-c", boot)
+    _run_container(name)
     try:
         yield name
     finally:
@@ -72,23 +78,28 @@ def _running(name: str) -> bool:
 
 
 def _chat(tmp_path, name: str):
+    """`jht team chat assistente` through the wrapper's own team arm, from a file (the wrapper starts itself again after a switch).
+    As the real wrapper does, it believes only the container it found when it started: a container made again by the switch is
+    not ours to a wrapper that started before it (giro Linux: «cannot be confirmed as ours; automatic start refused»)."""
     from wrapper_texts import say_functions
     runtime = tmp_path / "runtime"
     runtime.mkdir(exist_ok=True)
-    script = ("set -euo pipefail\n" + say_functions("en") + 'info() { printf "%s\\n" "$*" >&2; }\n'
-              + "".join(_function(name) for name in ("team_chat_ended_by_switch", "wait_for_tools_switch", "team_chat_agent_back",
-                                                      "team_chat_through_switch"))
-              + f'RUNTIME_DIR="{runtime}"\nEXEC_FLAGS="-i"\nJHT_HOST_TYPE=linux\nATTESTED_CONTAINER_ID="{name}"\nNODE_ENTRY=/app/cli.js\n'
-              'require_compose_file() { :; }\nrequire_docker() { :; }\nensure_up_for_stop() { :; }\n'
-              # ensure_up of the wrapper waits for the switch (wait_for_tools_switch), then the container is running
-              'ensure_up() { wait_for_tools_switch; until [ "$(docker inspect -f "{{.State.Running}}" "$ATTESTED_CONTAINER_ID")" = true ]; do sleep 1; done; }\n'
-              'case "$1" in\n' + _team_arm() + "esac\n")
-    chat = subprocess.Popen(["bash", "-c", script, "jht", "team", "chat", "assistente"], stdin=subprocess.PIPE,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    deadline = time.time() + 30
+    wrapper = tmp_path / "chat-wrapper.sh"
+    wrapper.write_text(
+        "set -euo pipefail\n" + say_functions("en") + 'info() { printf "%s\\n" "$*" >&2; }\n'
+        + "".join(_function(fn) for fn in ("team_chat_ended_by_switch", "wait_for_tools_switch", "team_chat_agent_back",
+                                            "team_chat_through_switch", "team_chat_resume"))
+        + f'RUNTIME_DIR="{runtime}"\nEXEC_FLAGS="-i"\nJHT_HOST_TYPE=linux\nNODE_ENTRY=/app/cli.js\nWRAPPER_PATH="{wrapper}"\n'
+        + f'NAME="{name}"\nSTART_ID="$(docker inspect -f "{{{{.Id}}}}" "$NAME" 2>/dev/null || true)"\n'
+        'container_up() {\n  local id\n  id="$(docker inspect -f "{{if .State.Running}}{{.Id}}{{end}}" "$NAME" 2>/dev/null || true)"\n'
+        '  [ -n "$id" ] && [ "$id" = "$START_ID" ] || return 1\n  ATTESTED_CONTAINER_ID="$NAME"\n}\n'
+        'require_compose_file() { :; }\nrequire_docker() { :; }\nensure_up_for_stop() { :; }\n'
+        'ensure_up() { wait_for_tools_switch; container_up || { echo "unattestable: automatic start refused" >&2; exit 1; }; }\n'
+        'case "$1" in\n' + _team_arm() + "esac\n", encoding="utf-8")
+    chat = subprocess.Popen(["bash", str(wrapper), "team", "chat", "assistente"], stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env={**os.environ, "JHT_TOOLS_CHAT_RECONNECT_MAX": "30"})
     first = chat.stdout.readline()
     assert first.strip() == "REPL-OPEN", first + (chat.stderr.read() if chat.poll() is not None else "")
-    assert time.time() < deadline
     chat.stdin.write("hello\n")
     chat.stdin.flush()
     assert chat.stdout.readline().strip() == "you: hello"
@@ -101,14 +112,18 @@ def test_a_chat_open_through_the_switch_comes_back_by_itself_on_the_same_agent(t
     (home / "profile").mkdir(parents=True)
     (home / "profile" / "ready.flag").write_text("2026-11-15T21:10:19Z\n", encoding="utf-8")
     (runtime / "runtime-tier").write_text("core\n", encoding="utf-8")
-    wrapper = tmp_path / "stand-in-wrapper.sh"
-    wrapper.write_text("#!/bin/sh\n"
-                       f'case "$1" in down) docker stop -t 1 "{container}" ;; up) sleep 3; docker start "{container}" ;; esac\n'
-                       f'echo "$1" >> "{tmp_path}/switch-calls"\n', encoding="utf-8")
-    wrapper.chmod(0o755)
+    switch_wrapper = tmp_path / "stand-in-wrapper.sh"
+    # the switch makes the container again, as compose does on the full image: a new container, the same name
+    boot = tmp_path / "boot.sh"
+    boot.write_text(BOOT, encoding="utf-8")
+    run = f'docker run -d --name "{container}" --label jht-probe=1 "{IMAGE}" sh -c "$(cat "{boot}")"'
+    switch_wrapper.write_text("#!/bin/sh\n"
+                              f'case "$1" in down) docker rm -f -v "{container}" >/dev/null ;; up) sleep 2; {run} >/dev/null ;; esac\n'
+                              f'echo "$1" >> "{tmp_path}/switch-calls"\n', encoding="utf-8")
+    switch_wrapper.chmod(0o755)
     job = ("set -u\n"
            f'RUNTIME_DIR="{runtime}"\nRUNTIME_TIER_FILE="{runtime}/runtime-tier"\nRUNTIME_TIER_INTEGRITY="{runtime}/.runtime-tier-integrity"\n'
-           f'WRAPPER_PATH="{wrapper}"\nJHT_HOME_HOST="{home}"\nDEFAULT_RUNTIME_IMAGE="{IMAGE}"\nerr() {{ echo "error: $*" >&2; }}\n'
+           f'WRAPPER_PATH="{switch_wrapper}"\nJHT_HOME_HOST="{home}"\nDEFAULT_RUNTIME_IMAGE="{IMAGE}"\nerr() {{ echo "error: $*" >&2; }}\n'
            f'source "{TOOLS}"\ntools_switch_auto\n')
     started = time.time()
     switch = subprocess.run(["bash", "-c", job], capture_output=True, text=True, timeout=120,
@@ -116,7 +131,7 @@ def test_a_chat_open_through_the_switch_comes_back_by_itself_on_the_same_agent(t
     assert switch.returncode == 0, switch.stderr
     try:
         again = chat.stdout.readline()                                      # the REPL of the same agent, open again by itself
-        assert again.strip() == "REPL-OPEN", again
+        assert again.strip() == "REPL-OPEN", again + chat.stderr.read()
         chat.stdin.write("where were we\n")
         chat.stdin.flush()
         assert chat.stdout.readline().strip() == "you: where were we"
@@ -129,7 +144,7 @@ def test_a_chat_open_through_the_switch_comes_back_by_itself_on_the_same_agent(t
     assert (tmp_path / "switch-calls").read_text(encoding="utf-8").split() == ["down", "up"]
     assert rc == 0, said
     assert said.index("so the chat stops for a moment") < said.index("let's pick up again")
-    assert "Open it again" not in said
+    assert "Open it again" not in said and "refused" not in said
     assert not (runtime / ".tools-switching").exists() and not (runtime / "runtime-tier").exists()
 
 
