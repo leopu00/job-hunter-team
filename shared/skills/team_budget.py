@@ -10,6 +10,19 @@
   starts_at    when the count starts: the spending before it does not count. A new setup writes it again.
   ends_at      when the period ends: from then on the team stays paused.
 
+A budget of a DURATION (a trial of 30 minutes, a few days) has no dates: its period starts when the team starts working,
+not when the setup saved it (the onboarding, the download of the full image or a hitch would eat the trial):
+
+      "budget": {"usd": 5, "duration_minutes": 30, "saved_at": "2026-11-15T22:30:00.000Z", "timezone": "Europe/Rome",
+                 "set_by": "setup"}
+
+  saved_at          when the setup saved it: the DOLLARS count from here (what the onboarding spends is spent too).
+  duration_minutes  how long the period lasts once it starts. The brake (pi_spend_cap.py) starts it at the first call
+                    of a worker of the team (a Scout, an Analista, a Scorer) after saved_at, and writes the moment in
+                    $JHT_HOME/state/budget-start.json ({saved_at, starts_at, ends_at}): the config is the setup's to
+                    write, never the brake's. A file of another saved_at is an old one: a new setup starts again.
+  Until it starts there is no period and no pace: only the dollars stop the team.
+
 The working hours (working_hours.py) say when the team works inside the period; with none declared it works all the
 time. The budget is spread over the WORKED time: by a moment, the team may have spent the share of the budget of the
 worked time gone by, plus one working hour ahead (so the first turn has something to start with and the last one can
@@ -21,7 +34,9 @@ without its offset, an end not after the start) is no budget, like a `no_quota_c
 
 from __future__ import annotations
 
+import json
 import math
+import os
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -30,6 +45,10 @@ _HERE = str(Path(__file__).resolve().parent)
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 import working_hours  # noqa: E402
+from plain_file import read_plain  # noqa: E402
+
+START_FILE = Path("state") / "budget-start.json"
+START_MAX_BYTES = 4096
 
 LEAD_SECONDS = 3600  # the working hour the pace allows ahead
 MARGIN_SHARE, MARGIN_USD = 0.02, 0.10  # the brake stops this much before the budget: max(2 %, 0.10 $)
@@ -48,19 +67,83 @@ def _moment(value):
     return moment.timestamp() if moment.tzinfo is not None else None  # a date without its offset is ambiguous
 
 
-def read(config):
-    """{"usd", "starts", "ends"} (epoch seconds) from `team.budget`, or None when there is none or it is not readable."""
+def _usd(raw):
+    usd = raw.get("usd")
+    if isinstance(usd, bool) or not isinstance(usd, (int, float)) or not math.isfinite(usd) or usd <= 0:
+        return None
+    return float(usd)
+
+
+def _minutes(raw):
+    value = raw.get("duration_minutes", raw.get("minutes"))
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+        return None
+    return float(value)
+
+
+def recorded_start(home, saved_at):
+    """(starts, ends) the brake wrote for the budget saved at `saved_at`, or None (no file, another budget's, unreadable)."""
+    if home is None:
+        return None
+    try:
+        record = json.loads(read_plain(Path(home) / START_FILE, max_size=START_MAX_BYTES).decode("utf-8"))
+    except Exception:  # noqa: BLE001 - no file, a link or a pipe in its place, broken JSON: not started
+        return None
+    if not isinstance(record, dict) or record.get("saved_at") != saved_at:
+        return None
+    starts, ends = _moment(record.get("starts_at")), _moment(record.get("ends_at"))
+    return (starts, ends) if starts is not None and ends is not None and ends > starts else None
+
+
+def read(config, home=None):
+    """The budget of `team.budget`, or None when there is none or it is not readable:
+
+    {"usd", "counts_from", "starts", "ends", "duration", "saved_at"} in epoch seconds. `counts_from` is where the dollars
+    count from; `starts`/`ends` the period, None while a budget of a duration has not started (`duration` is its length
+    in seconds then, None for a budget with dates). The start of a duration is read from `home` (JHT_HOME)."""
     team = config.get("team") if isinstance(config, dict) else None
     raw = team.get("budget") if isinstance(team, dict) else None
     if not isinstance(raw, dict):
         return None
-    usd = raw.get("usd")
-    if isinstance(usd, bool) or not isinstance(usd, (int, float)) or not math.isfinite(usd) or usd <= 0:
+    usd = _usd(raw)
+    if usd is None:
         return None
+    minutes = _minutes(raw)
+    if minutes is not None:
+        saved = _moment(raw.get("saved_at"))
+        if saved is None:
+            return None
+        started = recorded_start(home, raw.get("saved_at"))
+        starts, ends = started if started else (None, None)
+        return {"usd": usd, "counts_from": saved, "starts": starts, "ends": ends, "duration": minutes * 60.0,
+                "saved_at": raw.get("saved_at")}
     starts, ends = _moment(raw.get("starts_at")), _moment(raw.get("ends_at"))
     if starts is None or ends is None or ends <= starts:
         return None
-    return {"usd": float(usd), "starts": starts, "ends": ends}
+    return {"usd": usd, "counts_from": starts, "starts": starts, "ends": ends, "duration": None, "saved_at": None}
+
+
+def record_start(home, budget, starts):
+    """Write the start of a budget of a duration: (starts, ends). Replaces the file in one step (a link in its place is
+    replaced, never followed). Returns (starts, ends); raises OSError when it cannot be written."""
+    ends = starts + budget["duration"]
+    path = Path(home) / START_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    stamp = lambda moment: datetime.fromtimestamp(moment).astimezone().isoformat(timespec="seconds")  # noqa: E731
+    body = json.dumps({"saved_at": budget["saved_at"], "starts_at": stamp(starts), "ends_at": stamp(ends)}) + "\n"
+    tmp = path.with_name(".%s.%d.tmp" % (path.name, os.getpid()))
+    fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(body)
+        os.replace(str(tmp), str(path))
+    except BaseException:
+        try:
+            os.unlink(str(tmp))
+        except OSError:
+            pass
+        raise
+    return starts, ends
 
 
 def margin(usd):
@@ -73,7 +156,8 @@ def per_day(config):
     budget = read(config)
     if budget is None:
         return None
-    return budget["usd"] / max(1.0, (budget["ends"] - budget["starts"]) / 86400.0)
+    length = budget["duration"] if budget["duration"] is not None else budget["ends"] - budget["starts"]
+    return budget["usd"] / max(1.0, length / 86400.0)
 
 
 def timezone_of(config):

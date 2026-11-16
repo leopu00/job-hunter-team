@@ -51,6 +51,10 @@ import quota_data
 import team_budget
 
 REASON = "pi_spend_cap"
+# How often the brake looks at the spending: between two ticks of the Sentinella too (sentinel_loop._sleep_watching_the_spending).
+CHECK_EVERY_SEC = 60
+# The spending of the last minutes, as a pace: what the team will have spent by the next look is that pace times CHECK_EVERY_SEC.
+RATE_WINDOW_SEC = 300
 PROVIDER_NAMES = provider_credit.PROVIDER_NAMES
 
 
@@ -73,12 +77,21 @@ def day_start(now_ts):
     return datetime.fromtimestamp(now_ts).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
 
 
+WORKER_ROLES = ("scout", "analista", "scorer")  # the first call of one of them starts a budget of a duration
+
+
+def _is_worker(agent):
+    return isinstance(agent, str) and agent.split("-", 1)[0] in WORKER_ROLES
+
+
 def spend(home, now_ts, budget_start=None):
     """What pi spent: `cost` today (dollars: pi's estimate plus the fee of the web searches), `hour_tokens` in the last hour,
-    `calls` today, and `budget_cost` since `budget_start` when a budget is declared (else None)."""
+    `calls` today, `budget_cost` since `budget_start` when a budget is declared (else None), and `first_worker`, the
+    moment of the first call of a worker since `budget_start` (None without one)."""
     start, hour = day_start(now_ts), now_ts - 3600
     out = {"cost": 0.0, "hour_tokens": 0, "calls": 0, "credit": provider_credit.exhausted(home, now_ts),
-           "budget_cost": None if budget_start is None else 0.0}
+           "budget_cost": None if budget_start is None else 0.0, "first_worker": None,
+           "recent_cost": 0.0}
     since = min(start, hour) if budget_start is None else min(start, hour, budget_start)
     for event in pi_sessions.usage_events(home, since):
         if event["ts"] >= start:
@@ -88,11 +101,17 @@ def spend(home, now_ts, budget_start=None):
             out["hour_tokens"] += event["input"] + event["cache_write"] + event["output"]
         if budget_start is not None and event["ts"] >= budget_start:
             out["budget_cost"] += event["cost"]
+            if event["ts"] >= now_ts - RATE_WINDOW_SEC:
+                out["recent_cost"] += event["cost"]
+            if out["first_worker"] is None and _is_worker(event.get("agent")):
+                out["first_worker"] = event["ts"]  # the events come oldest first
     for event in pi_sessions.search_events(home, since):  # the fee of a search call, which pi does not price
         if event["ts"] >= start:
             out["cost"] += event["cost"]
         if budget_start is not None and event["ts"] >= budget_start:
             out["budget_cost"] += event["cost"]
+            if event["ts"] >= now_ts - RATE_WINDOW_SEC:
+                out["recent_cost"] += event["cost"]
     out["cost"] = round(out["cost"], 6)
     if budget_start is not None:
         out["budget_cost"] = round(out["budget_cost"], 6)
@@ -102,10 +121,16 @@ def spend(home, now_ts, budget_start=None):
 def _budget_verdict(config, budget, spent, now):
     """The pause the budget asks for, or None."""
     used = spent.get("budget_cost") or 0.0
-    common = {"action": "halt", "spent": used, "usd": budget["usd"], "ends": budget["ends"]}
-    if used >= budget["usd"] - team_budget.margin(budget["usd"]):
+    # What the team will have spent by the next look, at the pace of the last minutes: the brake stops BEFORE the budget, not
+    # one look after it (with Claude ~0.5 $ a minute, a look a minute late is half a dollar over).
+    ahead = (spent.get("recent_cost") or 0.0) / RATE_WINDOW_SEC * CHECK_EVERY_SEC
+    common = {"action": "halt", "spent": used, "usd": budget["usd"], "ends": budget["ends"], "starts": budget["starts"],
+              "counts_from": budget["counts_from"]}
+    if used + ahead >= budget["usd"] - team_budget.margin(budget["usd"]):
         return dict(common, why="budget", ceiling=budget["usd"], resumes=None)
-    if now >= budget["ends"]:
+    if budget["starts"] is None:
+        return None  # a budget of a duration that has not started: no period and no pace yet, only the dollars
+    if now + CHECK_EVERY_SEC > budget["ends"]:  # the end falls before the next look: now, not a look late
         return dict(common, why="period", ceiling=budget["usd"], resumes=None)
     allowance = team_budget.allowed(config, budget, now)
     if used >= allowance:
@@ -113,8 +138,9 @@ def _budget_verdict(config, budget, spent, now):
     return None
 
 
-def decide(config, spent, no_quota_mode, now=None):
-    """{"action": "none" | "halt" | "warn", ...}. Pure: a config, a measure and a moment in, a verdict out."""
+def decide(config, spent, no_quota_mode, now=None, budget=None):
+    """{"action": "none" | "halt" | "warn", ...}. Pure: a config, a measure and a moment in, a verdict out. `budget` is
+    the one team_budget.read gave with the start of a duration resolved; None reads it from the config alone."""
     # Before the mode: the bridge declares the no-quota mode at the END of its first tick, so a team that found the
     # credit already gone never got past here (collaudo Linux, 12/11), and a Codex team whose pi agents answer «no
     # credit» has quota data and would never pause either. Every call would fail: the team waits, whatever the mode.
@@ -122,7 +148,7 @@ def decide(config, spent, no_quota_mode, now=None):
         return {"action": "halt", "why": "credit", "provider": spent["credit"]["provider"], "spent": 0.0, "ceiling": 0.0}
     if not no_quota_mode:
         return {"action": "none"}  # with quota data the Sentinella paces by the windows and the daily cap
-    budget = team_budget.read(config)
+    budget = budget if budget is not None else team_budget.read(config)
     if budget is not None and now is not None:
         verdict = _budget_verdict(config, budget, spent, now)
         if verdict:
@@ -274,14 +300,16 @@ def _record(verdict, config):
     """What the flag says of the pause, for `jht team status`, `jht team start` and `jht doctor`."""
     record = {"why": verdict["why"], "spent": verdict["spent"], "ceiling": verdict["ceiling"]}
     if verdict["why"] in ("budget", "period", "pace"):
-        record.update(budget_usd=verdict["usd"], ends_at=_iso(verdict["ends"], config),
-                      resumes_at=_iso(verdict["resumes"], config))
+        record.update(budget_usd=verdict["usd"], starts_at=_iso(verdict["starts"], config),
+                      ends_at=_iso(verdict["ends"], config), resumes_at=_iso(verdict["resumes"], config))
     return record
 
 
 def _halt_key(verdict, day):
-    if verdict["why"] in ("budget", "period"):
-        return "halt:%s:%d" % (verdict["why"], int(verdict["ends"]))
+    if verdict["why"] == "budget":
+        return "halt:budget:%d" % int(verdict["counts_from"])
+    if verdict["why"] == "period":
+        return "halt:period:%d" % int(verdict["ends"])
     if verdict["why"] == "pace":
         return "halt:pace:%d" % int(verdict["resumes"] // 60)
     return "halt:%s:%s" % (day, verdict["why"])
@@ -323,6 +351,21 @@ def _resume(api, run, day, notify_user):
     print("[bridge V6] %s PI-SPEND-CEILING cleared: spending back under the ceiling" % run.now_h)
 
 
+def _start(home, budget, moment, run):
+    """The team started working: the period of a budget of a duration starts at that first call, and is written down so
+    the next tick, `jht team status` and a restarted bridge find it. A write that fails is a warning: this tick still
+    counts from it, the next one tries again."""
+    try:
+        starts, ends = team_budget.record_start(home, budget, moment)
+    except OSError as error:
+        print("[bridge V6] WARN pi spend cap: the start of the budget is not written: %s" % error)
+        starts, ends = moment, moment + budget["duration"]
+    print("[bridge V6] %s BUDGET started by the first work of the team: %s to %s"
+          % (run.now_h, datetime.fromtimestamp(starts).isoformat(timespec="seconds"),
+             datetime.fromtimestamp(ends).isoformat(timespec="seconds")))
+    return dict(budget, starts=starts, ends=ends)
+
+
 def step(api, run, notify_user=None):
     """One tick of the brake. Never raises."""
     try:
@@ -330,9 +373,11 @@ def step(api, run, notify_user=None):
         now = api.time.time()
         home = api._path("JHT_HOME")
         config = api._read_config_json()
-        budget = team_budget.read(config)
-        spent = spend(home, now, budget["starts"] if budget else None)
-        verdict = decide(config, spent, bool(run.state.get("no_quota_declared")), now)
+        budget = team_budget.read(config, home)
+        spent = spend(home, now, budget["counts_from"] if budget else None)
+        if budget is not None and budget["starts"] is None and spent["first_worker"] is not None:
+            budget = _start(home, budget, spent["first_worker"], run)
+        verdict = decide(config, spent, bool(run.state.get("no_quota_declared")), now, budget)
         day = datetime.fromtimestamp(now).strftime("%Y-%m-%d")
         flag = _flag(api)
         mine = bool(flag) and flag.get("reason") == REASON

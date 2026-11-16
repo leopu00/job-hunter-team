@@ -364,13 +364,13 @@ def flag_record(bridge):
 
 
 def test_a_trial_of_5_dollars_for_30_minutes_stops_just_before_the_5_dollars(tmp_path):
-    config = budget(5, NOON - 600, NOON + 1200)
-    pi_calls(tmp_path, [(NOON - 300, 4.89, 100)])
+    config = budget(5, NOON - 900, NOON + 1200)
+    pi_calls(tmp_path, [(NOON - 600, 4.89, 100)])  # older than the pace window: the margin alone
     bridge = Bridge(tmp_path, config)
     state: dict = {}
     bridge.tick(state=state)
     assert bridge.esc == 0, "4.89 is under 5 - max(2 %, 0.10)"
-    pi_calls(tmp_path, [(NOON - 300, 4.89, 100), (NOON - 60, 0.01, 100)])
+    pi_calls(tmp_path, [(NOON - 600, 4.89, 100), (NOON - 540, 0.01, 100)])
     bridge.tick(state=state)
     assert bridge.esc == 1
     record = flag_record(bridge)
@@ -381,11 +381,11 @@ def test_a_trial_of_5_dollars_for_30_minutes_stops_just_before_the_5_dollars(tmp
 
 
 def test_the_margin_is_two_percent_of_a_larger_budget(tmp_path):
-    pi_calls(tmp_path, [(NOON - 300, 9.79, 100)])
+    pi_calls(tmp_path, [(NOON - 400, 9.79, 100)])
     bridge = Bridge(tmp_path, budget(10, NOON - 600, NOON + 600))
     bridge.tick()
     assert bridge.esc == 0
-    pi_calls(tmp_path, [(NOON - 300, 9.80, 100)])
+    pi_calls(tmp_path, [(NOON - 400, 9.80, 100)])
     bridge.tick()
     assert bridge.esc == 1 and flag_record(bridge)["why"] == "budget"
 
@@ -544,3 +544,198 @@ def test_with_quota_data_the_budget_is_not_this_ones_business_either(tmp_path):
 def test_the_first_roster_of_an_api_key_follows_the_budget(config, tier):
     config = dict(config, providers={"zai": {"auth_method": "api_key"}})
     assert plan_registry.api_key_plan(config, "zai")["tier"] == tier
+
+
+# --- a budget of a DURATION starts when the team starts working, not when the setup saved it (JHT-T322 P2) ----------
+
+def duration_budget(usd, minutes, saved, hours=None, **extra):
+    team = {"budget": dict({"usd": usd, "duration_minutes": minutes, "saved_at": iso(saved), "timezone": "UTC",
+                            "set_by": "setup"}, **extra)}
+    if hours is not None:
+        team["working_hours"] = hours
+    return {"team": team}
+
+
+def start_file(home: Path) -> Path:
+    return home / "state" / "budget-start.json"
+
+
+def onboarding_then_scout(home: Path, onboarding, scout):
+    """The Captain and the Assistente talk during the onboarding; the first Scout works later."""
+    pi_calls(home, onboarding, name="c.jsonl", agent="capitano")
+    if scout:
+        pi_calls(home, scout, name="s.jsonl", agent="scout-1")
+
+
+def test_a_trial_does_not_run_out_during_the_onboarding(tmp_path):
+    """Saved two hours ago, nothing but the onboarding since: the 30 minutes have not started, no pause."""
+    onboarding_then_scout(tmp_path, [(NOON - HOUR, 0.5, 100)], [])
+    bridge = Bridge(tmp_path, duration_budget(5, 30, NOON - 2 * HOUR))
+    bridge.tick()
+    assert bridge.esc == 0 and bridge.sent == [] and not start_file(tmp_path).exists()
+
+
+def test_the_trial_starts_at_the_first_call_of_a_worker_and_ends_30_minutes_later(tmp_path):
+    onboarding_then_scout(tmp_path, [(NOON - HOUR, 0.5, 100)], [(NOON - 600, 0.2, 100)])
+    config = duration_budget(5, 30, NOON - 2 * HOUR)
+    bridge = Bridge(tmp_path, config)
+    state: dict = {}
+    bridge.tick(state=state)
+    assert bridge.esc == 0
+    record = json.loads(start_file(tmp_path).read_text(encoding="utf-8"))
+    assert record == {"saved_at": iso(NOON - 2 * HOUR), "starts_at": "2026-11-09T11:50:00+00:00",
+                      "ends_at": "2026-11-09T12:20:00+00:00"}
+    b = team_budget.read(config, tmp_path)
+    assert (b["starts"], b["ends"], b["counts_from"]) == (NOON - 600, NOON + 1200, NOON - 2 * HOUR)
+    bridge.clock["now"] = NOON + 1140  # the end (12:20) is a look away: not yet
+    bridge.tick(state=state)
+    assert bridge.esc == 0
+    bridge.clock["now"] = NOON + 1141  # the end falls before the next look: now
+    bridge.tick(state=state)
+    assert bridge.esc == 1
+    flag = flag_record(bridge)
+    assert flag["why"] == "period" and flag["starts_at"] == "2026-11-09T11:50:00+00:00"
+    assert flag["ends_at"] == "2026-11-09T12:20:00+00:00" and flag["spent"] == 0.7, "the onboarding's 0.50 counts too"
+
+
+def test_the_dollars_of_the_onboarding_count_and_stop_the_team_before_the_start(tmp_path):
+    onboarding_then_scout(tmp_path, [(NOON - HOUR, 4.9, 100)], [])
+    bridge = Bridge(tmp_path, duration_budget(5, 30, NOON - 2 * HOUR))
+    bridge.tick()
+    flag = flag_record(bridge)
+    assert bridge.esc == 1 and flag["why"] == "budget" and flag["starts_at"] is None and flag["ends_at"] is None
+    assert not start_file(tmp_path).exists()
+
+
+def test_the_spending_before_the_setup_never_counts(tmp_path):
+    onboarding_then_scout(tmp_path, [(NOON - 3 * HOUR, 30.0, 100), (NOON - HOUR, 0.5, 100)], [])
+    bridge = Bridge(tmp_path, duration_budget(5, 30, NOON - 2 * HOUR))
+    bridge.tick()
+    assert bridge.esc == 0
+
+
+def test_a_new_setup_starts_again_and_the_old_start_is_not_read(tmp_path):
+    onboarding_then_scout(tmp_path, [], [(NOON - 600, 0.2, 100)])
+    bridge = Bridge(tmp_path, duration_budget(5, 30, NOON - HOUR))
+    state: dict = {}
+    bridge.tick(state=state)
+    assert start_file(tmp_path).exists()
+    bridge.config = duration_budget(5, 30, NOON - 300)  # saved again after that Scout's call
+    assert team_budget.read(bridge.config, tmp_path)["starts"] is None
+    bridge.clock["now"] = NOON + 2 * HOUR
+    bridge.tick(state=state)
+    assert bridge.esc == 0, "no worker has worked since the new setup: its 30 minutes have not started"
+
+
+@pytest.mark.parametrize("bad", ["{broken", json.dumps(["x"]), json.dumps({"saved_at": "other"}),
+                                 json.dumps({"saved_at": None, "starts_at": "2026-11-09T11:00:00Z"})])
+def test_a_start_file_that_is_not_ours_is_not_a_start(tmp_path, bad):
+    config = duration_budget(5, 30, NOON - HOUR)
+    start_file(tmp_path).parent.mkdir(parents=True)
+    start_file(tmp_path).write_text(bad, encoding="utf-8")
+    assert team_budget.read(config, tmp_path)["starts"] is None
+
+
+def test_a_link_in_place_of_the_start_file_is_neither_read_nor_followed(tmp_path):
+    outside = tmp_path / "outside.json"
+    outside.write_text(json.dumps({"saved_at": iso(NOON - HOUR), "starts_at": "2026-11-01T00:00:00Z",
+                                   "ends_at": "2026-11-01T00:30:00Z"}), encoding="utf-8")
+    home = tmp_path / "home"
+    (home / "state").mkdir(parents=True)
+    start_file(home).symlink_to(outside)
+    config = duration_budget(5, 30, NOON - HOUR)
+    assert team_budget.read(config, home)["starts"] is None
+    onboarding_then_scout(home, [], [(NOON - 600, 0.2, 100)])
+    Bridge(home, config).tick()
+    assert not start_file(home).is_symlink() and json.loads(start_file(home).read_text())["starts_at"].startswith("2026-11-09")
+    assert json.loads(outside.read_text())["starts_at"] == "2026-11-01T00:00:00Z", "the target was not written"
+
+
+def test_a_few_days_start_at_the_first_work_and_go_at_their_pace_over_the_hours(tmp_path):
+    """10 $ for 3 days of 08:00-18:00 (Rome), saved on Sunday night, first Scout on Monday 13:00 Rome: the same 30
+    worked hours as a budget with dates from that moment."""
+    config = duration_budget(10, 3 * 1440, NOON - 15 * HOUR, ROME_8_18, timezone="Europe/Rome")
+    onboarding_then_scout(tmp_path, [], [(NOON, 0.1, 100), (NOON + 3 * HOUR, 2.4, 100)])
+    bridge = Bridge(tmp_path, config)
+    bridge.clock["now"] = NOON + 4 * HOUR
+    bridge.tick()
+    record = flag_record(bridge)
+    assert record["why"] == "pace" and record["resumes_at"] == "2026-11-10T09:30:00+01:00"
+    assert record["starts_at"] == "2026-11-09T13:00:00+01:00"
+
+
+def test_the_first_roster_of_a_budget_of_a_duration_is_the_full_one(tmp_path):
+    config = dict(duration_budget(5, 30, NOON), providers={"zai": {"auth_method": "api_key"}})
+    plan = plan_registry.api_key_plan(config, "zai")
+    assert plan["tier"] == 15 and "first work of the team" in plan["label"] and "assumed" not in plan
+    assert team_budget.per_day(config) == 5.0
+    assert team_budget.per_day(duration_budget(30, 3 * 1440, NOON)) == 10.0
+
+
+@pytest.mark.parametrize("raw", [
+    {"usd": 5, "duration_minutes": 0, "saved_at": "2026-11-09T11:00:00Z"},
+    {"usd": 5, "duration_minutes": "30", "saved_at": "2026-11-09T11:00:00Z"},
+    {"usd": 5, "duration_minutes": 30},
+    {"usd": 5, "duration_minutes": 30, "saved_at": "2026-11-09T11:00:00"}])
+def test_a_budget_of_a_duration_that_is_not_readable_is_no_budget(raw):
+    assert team_budget.read({"team": {"budget": raw}}) is None
+
+
+# --- the brake looks every minute and stops BEFORE the budget at the pace of the team (giro Windows 15/11) ------------
+
+def claude_minutes(home: Path, start: float, minutes: int, per_minute=0.5):
+    """A team on Claude: about 0.5 $ a minute, one call every 20 seconds."""
+    pi_calls(home, [(start + 20 * i, per_minute / 3, 100) for i in range(minutes * 3)], name="claude.jsonl")
+
+
+def test_a_team_on_claude_stops_within_the_budget_looking_every_minute(tmp_path):
+    """5 $ for 30 minutes at 0.5 $ a minute: looking every minute, at most one minute of spending more than when it looks,
+    and the look stops when the next minute would pass 5 $ - margin. The spending at the pause stays within 5.00 $."""
+    start = NOON - 3600
+    bridge = Bridge(tmp_path, budget(5, start, start + 1800))
+    state: dict = {}
+    for minute in range(1, 30):
+        bridge.clock["now"] = start + 60 * minute
+        claude_minutes(tmp_path, start, minute)  # what the team has spent by then
+        bridge.tick(state=state)
+        if bridge.esc:
+            break
+    record = flag_record(bridge)
+    assert record["why"] == "budget" and record["spent"] <= 5.0 - 0.10
+    # the calls already in flight at the pause: one more minute at most, still within the 5 $
+    assert record["spent"] + 0.5 <= 5.0
+
+
+def test_without_the_pace_the_brake_would_be_a_look_late(tmp_path):
+    """4.70 $ spent, 0.5 $ in the last 5 minutes (0.1 $ a minute): 4.70 + 0.10 is under 4.90, no pause; at 2.5 $ in the last
+    5 minutes (Claude) 4.70 + 0.50 is over it, and the team stops now."""
+    slow, fast = tmp_path / "slow", tmp_path / "fast"
+    for home, recent in ((slow, 0.5), (fast, 2.5)):
+        pi_calls(home, [(NOON - 1500, 4.70 - recent, 100), (NOON - 120, recent, 100)])
+    Bridge(slow, budget(5, NOON - 1800, NOON + 1800)).tick()
+    fast_bridge = Bridge(fast, budget(5, NOON - 1800, NOON + 1800))
+    fast_bridge.tick()
+    assert not (slow / "logs" / "daily-halt.flag").exists() and fast_bridge.esc == 1
+
+
+def test_the_sentinella_sleeps_between_ticks_looking_at_the_spending_every_minute(tmp_path):
+    pi_calls(tmp_path, [(NOON - 600, 1.0, 100)])
+    bridge = Bridge(tmp_path, budget(5, NOON - 1800, NOON + 150))  # the end falls inside the next sleep
+    sleeps = []
+
+    def sleep(seconds):
+        sleeps.append(seconds)
+        bridge.clock["now"] += seconds
+
+    bridge.api.time.sleep = sleep
+    bridge.api.datetime = datetime
+    run = SimpleNamespace(state={"no_quota_declared": dict(NO_QUOTA)}, now_h="12:00:00", _bi_on=False, sleep_sec=300)
+    import quota_data
+    original = quota_data._notify_user
+    quota_data._notify_user = lambda text, reason: bridge.users.append((text, reason))
+    try:
+        loop._sleep_watching_the_spending(bridge.api, run)
+    finally:
+        quota_data._notify_user = original
+    assert sleeps == [60, 60, 60, 60, 60], "the 5 minutes in steps of one, the brake after each but the last"
+    assert bridge.esc == 1 and flag_record(bridge)["why"] == "period", "stopped inside the sleep, not at the next tick"

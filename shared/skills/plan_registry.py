@@ -404,7 +404,8 @@ def spend_ceiling_eur(cfg: dict) -> Optional[float]:
     one to one)."""
     budget = _setup_budget(cfg)
     if budget is not None:
-        return budget["usd"] / max(1.0, (budget["ends"] - budget["starts"]) / 86400.0)
+        length = budget["duration"] if budget["duration"] is not None else budget["ends"] - budget["starts"]
+        return budget["usd"] / max(1.0, length / 86400.0)
     cap = cfg.get("no_quota_cap")
     eur = cap.get("eur") if isinstance(cap, dict) else None
     ok = isinstance(eur, (int, float)) and not isinstance(eur, bool) and eur > 0 and eur == eur and eur != float("inf")
@@ -420,9 +421,10 @@ def api_key_plan(cfg: dict, prov: str) -> Optional[dict]:
     plan = {"provider": prov, "id": "api-key", "weekly_capped": False, "window_5h": False}
     budget = _setup_budget(cfg)
     if budget is not None:
+        period = ("from %s to %s" % (_stamp(budget["starts"]), _stamp(budget["ends"])) if budget["starts"] is not None
+                  else "for %g minutes from the first work of the team" % (budget["duration"] / 60))
         return dict(plan, tier=_API_KEY_TIER_WITH_BUDGET, label=(
-            "API key, budget %g USD from %s to %s (the spending brake keeps the team to it)" % (
-                budget["usd"], _stamp(budget["starts"]), _stamp(budget["ends"]))))
+            "API key, budget %g USD %s (the spending brake keeps the team to it)" % (budget["usd"], period)))
     eur = spend_ceiling_eur(cfg)
     tier = next((t for floor, t in _API_KEY_TIER_BY_EUR if eur is not None and eur >= floor), 1)
     plan.update(tier=tier, label="API key, ceiling %g USD per day" % eur if eur is not None else "API key, no budget declared")
