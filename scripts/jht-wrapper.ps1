@@ -88,24 +88,29 @@ $script:JhtCallerLang = [string]$env:JHT_LANG
 $script:JhtHostEnvLang = ''
 function Get-JhtTextLanguage {
   $known = '^(en|it|hu|es|de|fr|pt)\z'
-  $code = ''
+  # The first choice the person made decides: the saved one, then JHT_LANG of the terminal, then host.env. A choice of a language
+  # the product does not have reads English; the language of Windows counts only when nothing was chosen at all.
+  $chosen = ''
   try {
     # inside the try: a text must never fail because the folder of the choice cannot be worked out
     $hostEnv = if ($env:JHT_HOST_ENV_FILE) { $env:JHT_HOST_ENV_FILE } else { Join-Path $env:USERPROFILE '.jht\host.env' }
     $prefs = Join-Path (Split-Path -Parent $hostEnv) 'i18n-prefs.json'
     $item = Get-Item -LiteralPath $prefs -Force -ErrorAction Stop
     if (-not $item.PSIsContainer -and -not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -and $item.Length -le 4096) {
-      $match = [regex]::Match(([IO.File]::ReadAllText($prefs) -replace '[\r\n]', ''), '"locale"\s*:\s*"(en|it|hu|es|de|fr|pt)"')
-      if ($match.Success) { $code = $match.Groups[1].Value }
+      $match = [regex]::Match(([IO.File]::ReadAllText($prefs) -replace '[\r\n]', ''), '"locale"\s*:\s*"([^"]{1,20})"')
+      if ($match.Success) { $chosen = $match.Groups[1].Value }
     }
-  } catch { $code = '' }
+  } catch { $chosen = '' }
   # outside the wrapper's own start (a function loaded alone) nothing was saved aside: JHT_LANG is the person's
   $caller = if ($null -ne $script:JhtCallerLang) { $script:JhtCallerLang } else { [string]$env:JHT_LANG }
-  if (-not $code -and $caller -cmatch $known) { $code = $caller }
-  if (-not $code -and $script:JhtHostEnvLang -cmatch $known) { $code = $script:JhtHostEnvLang }
-  if (-not $code) {
-    try { $code = ([string](Get-UICulture).TwoLetterISOLanguageName).ToLowerInvariant() } catch { $code = '' }
+  if (-not $chosen) { $chosen = [string]$caller }
+  if (-not $chosen) { $chosen = [string]$script:JhtHostEnvLang }
+  if ($chosen) {
+    if ($chosen -cmatch $known) { return $chosen }
+    return 'en'
   }
+  $code = ''
+  try { $code = ([string][Globalization.CultureInfo]::CurrentUICulture.TwoLetterISOLanguageName).ToLowerInvariant() } catch { $code = '' }
   if ($code -cmatch $known) { return $code }
   return 'en'
 }

@@ -331,12 +331,17 @@ function Get-JhtTextLanguage {
     $prefs = Join-Path $JhtHome 'i18n-prefs.json'
     $item = Get-Item -LiteralPath $prefs -Force -ErrorAction Stop
     if (-not $item.PSIsContainer -and -not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -and $item.Length -le 4096) {
-      $match = [regex]::Match(([IO.File]::ReadAllText($prefs) -replace '[\r\n]', ''), '"locale"\s*:\s*"(en|it|hu|es|de|fr|pt)"')
-      if ($match.Success) { return $match.Groups[1].Value }
+      # a saved choice of a language the product does not have reads English, not the language of Windows
+      $match = [regex]::Match(([IO.File]::ReadAllText($prefs) -replace '[\r\n]', ''), '"locale"\s*:\s*"([^"]{1,20})"')
+      if ($match.Success) {
+        if ($known -ccontains $match.Groups[1].Value) { return $match.Groups[1].Value }
+        return 'en'
+      }
     }
   } catch { }
   $asked = ([string]$env:JHT_LANG).ToLowerInvariant() -replace '[-_.@].*$', ''
   if ($known -contains $asked) { return $asked }
+  if ($asked) { return 'en' }   # asked for a language the product does not have
   try {
     $windows = ([string][Globalization.CultureInfo]::CurrentUICulture.TwoLetterISOLanguageName).ToLowerInvariant()
     if ($known -contains $windows) { return $windows }

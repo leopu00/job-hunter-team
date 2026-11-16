@@ -84,3 +84,37 @@ def test_powershell_says_the_catalogs_text_with_its_values_in_each_language(tmp_
         for i in range(len(re.findall(r"%[sd]", english))):
             expected = re.sub(r"%[sd]", f"V{i}", expected, count=1)
         assert said[key] == expected, key
+
+
+def _language_case(script: Path, *, culture: str, jht_lang: str | None, prefs: str | None, tmp_path: Path) -> str:
+    """Get-JhtTextLanguage of a script, on a Windows whose language is `culture` (giro Windows: an Italian ThinkPad)."""
+    from windows_native_fakes import powershell_argv
+    text = script.read_text(encoding="utf-8")
+    body = re.search(r"^function Get-JhtTextLanguage \{\n.*?^\}\n", text, re.S | re.M).group(0)
+    home = tmp_path / "home" / ".jht"
+    home.mkdir(parents=True, exist_ok=True)
+    if prefs is not None:
+        (home / "i18n-prefs.json").write_text(json.dumps({"locale": prefs}), encoding="utf-8")
+    case = tmp_path / "case.ps1"
+    case.write_text(
+        f"[Globalization.CultureInfo]::CurrentUICulture = [Globalization.CultureInfo]::new('{culture}')\n"
+        f"$JhtHome = '{home}'\n$env:JHT_HOST_ENV_FILE = '{home / 'host.env'}'\n$script:JhtHostEnvLang = ''\n"
+        + body + "\n[Console]::Out.WriteLine((Get-JhtTextLanguage))\n", encoding="utf-8")
+    import os as _os
+    env = {key: value for key, value in _os.environ.items() if key.upper() != "JHT_LANG"}
+    if jht_lang is not None:
+        env["JHT_LANG"] = jht_lang
+    done = subprocess.run([*powershell_argv(), "-File", str(case)], capture_output=True, text=True, timeout=60, env=env)
+    return done.stdout.strip() + done.stderr.strip()
+
+
+@pytest.mark.parametrize("script", ["install.ps1", "jht-wrapper.ps1"])
+def test_a_language_the_product_does_not_have_reads_english_not_the_language_of_windows(tmp_path, script):
+    """A person who asked for a language the product does not have reads English, even on an Italian Windows (giro ThinkPad: the
+    uninstall and `jht status` answered in Italian). The language of Windows counts only when nothing was chosen."""
+    path = ROOT / "scripts" / script
+    assert _language_case(path, culture="it-IT", jht_lang="xx", prefs=None, tmp_path=tmp_path / "a") == "en"
+    assert _language_case(path, culture="it-IT", jht_lang=None, prefs="xx", tmp_path=tmp_path / "b") == "en"
+    assert _language_case(path, culture="it-IT", jht_lang=None, prefs=None, tmp_path=tmp_path / "c") == "it"
+    assert _language_case(path, culture="it-IT", jht_lang="pt", prefs=None, tmp_path=tmp_path / "d") == "pt"
+    assert _language_case(path, culture="it-IT", jht_lang="it", prefs="de", tmp_path=tmp_path / "e") == "de"
