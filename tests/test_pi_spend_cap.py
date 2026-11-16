@@ -430,56 +430,57 @@ def test_the_period_over_pauses_the_team_and_does_not_lift_by_itself(tmp_path):
 
 
 def test_one_night_of_5_dollars_goes_at_its_pace_and_says_when_it_resumes(tmp_path):
-    """24/7 from 12:00 to 22:00: 0.50 $ an hour, one hour ahead. At 13:00 it may have spent 1.00; with 1.20 spent the
-    pace catches up at 13:24."""
+    """24/7 from 12:00 to 22:00: 0.50 $ an hour, 1.25 $ ahead (a quarter of the budget, more than one hour). At 13:00 it
+    may have spent 1.75; with 2.00 spent the pace catches up at 13:30."""
     config = budget(5, NOON, NOON + 10 * HOUR)
-    pi_calls(tmp_path, [(NOON + 1800, 1.2, 100)])
+    pi_calls(tmp_path, [(NOON + 1800, 2.0, 100)])
     bridge = Bridge(tmp_path, config)
     bridge.clock["now"] = NOON + HOUR
     state: dict = {}
     bridge.tick(state=state)
     assert bridge.esc == 1
     record = flag_record(bridge)
-    assert record["why"] == "pace" and record["ceiling"] == 1.0 and record["resumes_at"] == "2026-11-09T13:24:00+00:00"
-    assert all("BUDGET PACE" in t and "lifts by itself at 13:24" in t for t in bridge.texts())
-    assert "13:24" in bridge.users[0][0] and "⏸️" in bridge.users[0][0]
-    bridge.clock["now"] = NOON + HOUR + 23 * 60
+    assert record["why"] == "pace" and record["ceiling"] == 1.75 and record["resumes_at"] == "2026-11-09T13:30:00+00:00"
+    assert all("BUDGET PACE" in t and "lifts by itself at 13:30" in t for t in bridge.texts())
+    assert "13:30" in bridge.users[0][0] and "⏸️" in bridge.users[0][0]
+    bridge.clock["now"] = NOON + HOUR + 29 * 60
     bridge.tick(state=state)
-    assert bridge.flag.exists(), "13:23: not yet"
-    bridge.clock["now"] = NOON + HOUR + 25 * 60
+    assert bridge.flag.exists(), "13:29: not yet"
+    bridge.clock["now"] = NOON + HOUR + 31 * 60
     bridge.tick(state=state)
     assert not bridge.flag.exists() and bridge.esc == 1
 
 
 def test_the_pace_follows_the_working_hours_over_three_days(tmp_path):
-    """10 $ from Monday 13:00 to Thursday 13:00 (Rome), 08:00-18:00: 5 + 10 + 10 + 5 = 30 worked hours, 1/3 $ each."""
+    """10 $ from Monday 13:00 to Thursday 13:00 (Rome), 08:00-18:00: 5 + 10 + 10 + 5 = 30 worked hours, 1/3 $ each, 2.50 $
+    ahead (a quarter of the budget)."""
     config = budget(10, NOON, NOON + 3 * 24 * HOUR, ROME_8_18)
     blocks = team_budget.worked_intervals(config, NOON, NOON + 3 * 24 * HOUR)
     assert sum(hi - lo for lo, hi in blocks) == 30 * HOUR and len(blocks) == 4
     b = team_budget.read(config)
-    assert round(team_budget.allowed(config, b, NOON + 4 * HOUR), 4) == round(10 * 5 / 30, 4)
-    assert round(team_budget.allowed(config, b, NOON + 10 * HOUR), 4) == 2.0, "the evening off adds nothing"
-    pi_calls(tmp_path, [(NOON + 3 * HOUR, 2.5, 100)])
+    assert round(team_budget.allowed(config, b, NOON + 4 * HOUR), 4) == round(10 * 4 / 30 + 2.5, 4)
+    assert round(team_budget.allowed(config, b, NOON + 10 * HOUR), 4) == round(10 * 5 / 30 + 2.5, 4), "the evening off adds nothing"
+    pi_calls(tmp_path, [(NOON + 3 * HOUR, 4.5, 100)])
     bridge = Bridge(tmp_path, config)
     bridge.clock["now"] = NOON + 4 * HOUR  # Monday 17:00 in Rome
     bridge.tick()
     record = flag_record(bridge)
-    # 2.5 $ is 7.5 worked hours, less the hour ahead: 5 on Monday, 1.5 on Tuesday from 08:00
-    assert record["why"] == "pace" and record["resumes_at"] == "2026-11-10T09:30:00+01:00"
-    assert "2026-11-10 09:30" in bridge.users[0][0], "another day: the date in front"
+    # 4.5 $ less the 2.5 ahead is 6 worked hours: 5 on Monday, 1 on Tuesday from 08:00
+    assert record["why"] == "pace" and record["resumes_at"] == "2026-11-10T09:00:00+01:00"
+    assert "2026-11-10 09:00" in bridge.users[0][0], "another day: the date in front"
 
 
 def test_the_budget_zone_is_the_one_the_person_lives_in(tmp_path):
     config = budget(5, NOON, NOON + 10 * HOUR, timezone="Europe/Budapest")
-    pi_calls(tmp_path, [(NOON + 1800, 1.2, 100)])
+    pi_calls(tmp_path, [(NOON + 1800, 2.0, 100)])
     bridge = Bridge(tmp_path, config)
     bridge.clock["now"] = NOON + HOUR
     bridge.tick()
-    assert flag_record(bridge)["resumes_at"] == "2026-11-09T14:24:00+01:00" and "14:24" in bridge.users[0][0]
+    assert flag_record(bridge)["resumes_at"] == "2026-11-09T14:30:00+01:00" and "14:30" in bridge.users[0][0]
 
 
 def test_raising_the_budget_lifts_a_pause_of_the_pace(tmp_path):
-    pi_calls(tmp_path, [(NOON + 1800, 1.2, 100)])
+    pi_calls(tmp_path, [(NOON + 1800, 2.0, 100)])
     bridge = Bridge(tmp_path, budget(5, NOON, NOON + 10 * HOUR))
     bridge.clock["now"] = NOON + HOUR
     state: dict = {}
@@ -655,12 +656,12 @@ def test_a_few_days_start_at_the_first_work_and_go_at_their_pace_over_the_hours(
     """10 $ for 3 days of 08:00-18:00 (Rome), saved on Sunday night, first Scout on Monday 13:00 Rome: the same 30
     worked hours as a budget with dates from that moment."""
     config = duration_budget(10, 3 * 1440, NOON - 15 * HOUR, ROME_8_18, timezone="Europe/Rome")
-    onboarding_then_scout(tmp_path, [], [(NOON, 0.1, 100), (NOON + 3 * HOUR, 2.4, 100)])
+    onboarding_then_scout(tmp_path, [], [(NOON, 0.1, 100), (NOON + 3 * HOUR, 4.4, 100)])
     bridge = Bridge(tmp_path, config)
     bridge.clock["now"] = NOON + 4 * HOUR
     bridge.tick()
     record = flag_record(bridge)
-    assert record["why"] == "pace" and record["resumes_at"] == "2026-11-10T09:30:00+01:00"
+    assert record["why"] == "pace" and record["resumes_at"] == "2026-11-10T09:00:00+01:00"
     assert record["starts_at"] == "2026-11-09T13:00:00+01:00"
 
 
@@ -739,3 +740,42 @@ def test_the_sentinella_sleeps_between_ticks_looking_at_the_spending_every_minut
         quota_data._notify_user = original
     assert sleeps == [60, 60, 60, 60, 60], "the 5 minutes in steps of one, the brake after each but the last"
     assert bridge.esc == 1 and flag_record(bridge)["why"] == "period", "stopped inside the sleep, not at the next tick"
+
+
+# --- the onboarding is outside the pace, and the pace leaves the first burst something (giro Mac 21, JHT-T322 P2-3) -----
+
+def test_a_small_budget_on_claude_lets_the_scouts_search_after_an_expensive_onboarding(tmp_path):
+    """2 $ for a day on Claude: the Assistente and the Captain spend 1.71 $ in the onboarding, then the first Scout works.
+    The 1.71 $ count against the 2 $ (the budget), not against the pace: the pace spreads the 0.29 $ left over the day,
+    with a quarter of it ahead, so the Scouts search; before, the pace paused the team at their first minute."""
+    saved = NOON - 2 * HOUR
+    pi_calls(tmp_path, [(saved + 600, 0.71, 100)], name="a.jsonl", agent="assistente")
+    pi_calls(tmp_path, [(saved + 1200, 1.00, 100)], name="c.jsonl", agent="capitano")
+    pi_calls(tmp_path, [(NOON - 1800, 0.02, 100), (NOON - 900, 0.03, 100)], name="s.jsonl", agent="scout-1")
+    bridge = Bridge(tmp_path, duration_budget(2, 1440, saved))
+    bridge.tick()
+    assert bridge.esc == 0, "1.76 $ spent, 0.05 $ of them since the start: within 0.29 × (25 % + 30 min of a day)"
+    b = team_budget.read(bridge.config, tmp_path)
+    assert b["starts"] == NOON - 1800
+
+
+def test_the_onboarding_still_counts_against_the_budget(tmp_path):
+    saved = NOON - 2 * HOUR
+    pi_calls(tmp_path, [(saved + 600, 1.88, 100)], name="a.jsonl", agent="assistente")
+    pi_calls(tmp_path, [(NOON - 1800, 0.02, 100)], name="s.jsonl", agent="scout-1")
+    bridge = Bridge(tmp_path, duration_budget(2, 1440, saved))
+    bridge.tick()
+    assert bridge.esc == 1 and flag_record(bridge)["why"] == "budget", "1.90 $ of 2 is at the margin (0.10 $): the budget, whatever the pace"
+
+
+def test_the_pace_after_an_onboarding_still_pauses_a_team_that_runs_ahead(tmp_path):
+    """The same 2 $: 1.71 $ of onboarding, then the Scouts spend 0.15 $ in half an hour (0.29 $ left, a quarter ahead is
+    0.07 $ plus the half hour's share): above the pace, a pause, and the flag says the ceiling with the onboarding in it."""
+    saved = NOON - 2 * HOUR
+    pi_calls(tmp_path, [(saved + 600, 1.71, 100)], name="a.jsonl", agent="assistente")
+    pi_calls(tmp_path, [(NOON - 1800, 0.05, 100), (NOON - 900, 0.10, 100)], name="s.jsonl", agent="scout-1")
+    bridge = Bridge(tmp_path, duration_budget(2, 1440, saved))
+    bridge.tick()
+    record = flag_record(bridge)
+    allowance = 0.29 * 1800 / 86400 + 0.25 * 0.29
+    assert record["why"] == "pace" and record["ceiling"] == round(1.71 + allowance, 6)

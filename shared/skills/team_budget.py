@@ -51,6 +51,7 @@ START_FILE = Path("state") / "budget-start.json"
 START_MAX_BYTES = 4096
 
 LEAD_SECONDS = 3600  # the working hour the pace allows ahead
+FIRST_BURST_SHARE = 0.25  # ... or this share of the budget left at the start, when more: the first burst has something to spend
 MARGIN_SHARE, MARGIN_USD = 0.02, 0.10  # the brake stops this much before the budget: max(2 %, 0.10 $)
 
 
@@ -245,14 +246,20 @@ def _worked_until(intervals, moment):
     return sum(max(0.0, min(hi, moment) - lo) for lo, hi in intervals)
 
 
+def lead(budget, total):
+    """What the pace allows ahead: one working hour of the budget, or FIRST_BURST_SHARE of it when more, so the first burst
+    of a small budget (2 $ over a day: one hour is 0.08 $) can still search."""
+    return max(budget["usd"] * LEAD_SECONDS / total, FIRST_BURST_SHARE * budget["usd"])
+
+
 def allowed(config, budget, now):
-    """What the team may have spent by `now`: the share of the worked time gone by, one working hour ahead, at most the
-    whole budget. A period with no working time in it allows the whole budget (the gate keeps the team still anyway)."""
+    """What the team may have spent by `now`: the share of the worked time gone by plus the lead, at most the whole budget.
+    A period with no working time in it allows the whole budget (the gate keeps the team still anyway)."""
     intervals = worked_intervals(config, budget["starts"], budget["ends"])
     total = sum(hi - lo for lo, hi in intervals)
     if total <= 0:
         return budget["usd"]
-    return min(budget["usd"], budget["usd"] * (_worked_until(intervals, now) + LEAD_SECONDS) / total)
+    return min(budget["usd"], budget["usd"] * _worked_until(intervals, now) / total + lead(budget, total))
 
 
 def resumes_at(config, budget, spent):
@@ -261,7 +268,7 @@ def resumes_at(config, budget, spent):
     total = sum(hi - lo for lo, hi in intervals)
     if total <= 0 or spent >= budget["usd"]:
         return None
-    need = spent * total / budget["usd"] - LEAD_SECONDS  # worked seconds after which the allowance passes `spent`
+    need = (spent - lead(budget, total)) * total / budget["usd"]  # worked seconds after which the allowance passes `spent`
     gone = 0.0
     for lo, hi in intervals:
         if gone + (hi - lo) > need:

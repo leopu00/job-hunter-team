@@ -84,14 +84,16 @@ def _is_worker(agent):
     return isinstance(agent, str) and agent.split("-", 1)[0] in WORKER_ROLES
 
 
-def spend(home, now_ts, budget_start=None):
+def spend(home, now_ts, budget_start=None, split_at=None):
     """What pi spent: `cost` today (dollars: pi's estimate plus the fee of the web searches), `hour_tokens` in the last hour,
     `calls` today, `budget_cost` since `budget_start` when a budget is declared (else None), and `first_worker`, the
-    moment of the first call of a worker since `budget_start` (None without one)."""
+    moment of the first call of a worker since `budget_start` (None without one). `before_start` is what was spent from
+    `budget_start` to `split_at` (the start of the period), or to that first call when `split_at` is None: the onboarding."""
     start, hour = day_start(now_ts), now_ts - 3600
     out = {"cost": 0.0, "hour_tokens": 0, "calls": 0, "credit": provider_credit.exhausted(home, now_ts),
            "budget_cost": None if budget_start is None else 0.0, "first_worker": None,
-           "recent_cost": 0.0}
+           "recent_cost": 0.0, "before_start": 0.0}
+    budget_events = []
     since = min(start, hour) if budget_start is None else min(start, hour, budget_start)
     for event in pi_sessions.usage_events(home, since):
         if event["ts"] >= start:
@@ -101,6 +103,7 @@ def spend(home, now_ts, budget_start=None):
             out["hour_tokens"] += event["input"] + event["cache_write"] + event["output"]
         if budget_start is not None and event["ts"] >= budget_start:
             out["budget_cost"] += event["cost"]
+            budget_events.append((event["ts"], event["cost"]))
             if event["ts"] >= now_ts - RATE_WINDOW_SEC:
                 out["recent_cost"] += event["cost"]
             if out["first_worker"] is None and _is_worker(event.get("agent")):
@@ -110,8 +113,12 @@ def spend(home, now_ts, budget_start=None):
             out["cost"] += event["cost"]
         if budget_start is not None and event["ts"] >= budget_start:
             out["budget_cost"] += event["cost"]
+            budget_events.append((event["ts"], event["cost"]))
             if event["ts"] >= now_ts - RATE_WINDOW_SEC:
                 out["recent_cost"] += event["cost"]
+    split = split_at if split_at is not None else out["first_worker"]
+    if split is not None:
+        out["before_start"] = round(sum(cost for moment, cost in budget_events if moment < split), 6)
     out["cost"] = round(out["cost"], 6)
     if budget_start is not None:
         out["budget_cost"] = round(out["budget_cost"], 6)
@@ -132,9 +139,17 @@ def _budget_verdict(config, budget, spent, now):
         return None  # a budget of a duration that has not started: no period and no pace yet, only the dollars
     if now + CHECK_EVERY_SEC > budget["ends"]:  # the end falls before the next look: now, not a look late
         return dict(common, why="period", ceiling=budget["usd"], resumes=None)
-    allowance = team_budget.allowed(config, budget, now)
-    if used >= allowance:
-        return dict(common, why="pace", ceiling=round(allowance, 6), resumes=team_budget.resumes_at(config, budget, used) or budget["ends"])
+    # The pace is the period's: what the onboarding spent before the first worker counts against the budget (above), not
+    # against the pace, which spreads what was LEFT at the start over the period (giro Mac 21: 2 $ for a day on Claude, 1.71 $
+    # of onboarding, and the pace paused the team the minute the Scouts started).
+    before = min(spent.get("before_start") or 0.0, used)
+    period = dict(budget, usd=budget["usd"] - before)
+    if period["usd"] <= 0:
+        return None
+    allowance = team_budget.allowed(config, period, now)
+    if used - before >= allowance:
+        return dict(common, why="pace", ceiling=round(before + allowance, 6),
+                    resumes=team_budget.resumes_at(config, period, used - before) or budget["ends"])
     return None
 
 
@@ -374,7 +389,7 @@ def step(api, run, notify_user=None):
         home = api._path("JHT_HOME")
         config = api._read_config_json()
         budget = team_budget.read(config, home)
-        spent = spend(home, now, budget["counts_from"] if budget else None)
+        spent = spend(home, now, budget["counts_from"] if budget else None, budget["starts"] if budget else None)
         if budget is not None and budget["starts"] is None and spent["first_worker"] is not None:
             budget = _start(home, budget, spent["first_worker"], run)
         verdict = decide(config, spent, bool(run.state.get("no_quota_declared")), now, budget)
