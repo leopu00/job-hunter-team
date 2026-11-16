@@ -339,13 +339,13 @@ test('the budget in the wizard: «no limit» warns, saves no budget and asks the
   assert.deepEqual(team.working_hours.windows[0].days, ['mon', 'tue', 'wed', 'thu', 'fri']);
 });
 
-test('the budget in the wizard: a reset with the same trial keeps the period the brake already started', () => {
+test('the budget in the wizard: a reset with the same trial opens a new period (the old one may be spent or over)', () => {
   const saved = '2026-11-15T21:30:00.000Z';
   const before = JSON.stringify({ version: 4, active_provider: 'glm', harness: 'pi', providers: { glm: { name: 'glm', auth_method: 'api_key', model: 'm' } }, channels: {},
     team: { budget: { usd: 5, duration_minutes: 30, saved_at: saved, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, set_by: 'setup' } } });
   const box = sandbox({ existingConfig: before });
   const { configText } = run(box, { select: { 'Config management': 'reset', 'AI Provider': 'glm' }, keys: [KEY] });
-  assert.equal(JSON.parse(configText).team.budget.saved_at, saved, 'the same trial after a reset is the same period');
+  assert.notEqual(JSON.parse(configText).team.budget.saved_at, saved, 'the same trial after a reset is a new period');
   const box2 = sandbox({ existingConfig: before.replace('"usd":5', '"usd":7') });
   const second = run(box2, { select: { 'Config management': 'reset', 'AI Provider': 'glm' }, keys: [KEY] });
   assert.notEqual(JSON.parse(second.configText).team.budget.saved_at, saved, 'another amount starts again');

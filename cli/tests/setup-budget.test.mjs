@@ -95,19 +95,6 @@ test('--budget-until takes a whole hour as 8, 08 or 08:00, and refuses 08:30', a
   assert.ok(budgetFromOptions({ budgetUsd: '5', budgetUntil: '08:30' }, { now: NOW, timeZone: 'Europe/Rome' }).error);
 });
 
-test('the same duration budget saved again keeps its period (jht setup --reset must not restart it); another one starts again', async () => {
-  const { keepSamePeriod, durationBudget } = await import('../wizard/setup-budget.js');
-  const before = durationBudget(5, 30, new Date('2026-11-15T21:30:00Z'), 'Europe/Rome');
-  const later = new Date('2026-11-16T07:00:00Z');
-  assert.deepEqual(keepSamePeriod(before, durationBudget(5, 30, later, 'Europe/Rome')), before);
-  for (const other of [durationBudget(10, 30, later, 'Europe/Rome'), durationBudget(5, 60, later, 'Europe/Rome'), durationBudget(5, 30, later, 'Europe/London')]) {
-    assert.equal(keepSamePeriod(before, other).saved_at, later.toISOString(), 'a changed budget starts from now');
-  }
-  assert.equal(keepSamePeriod(undefined, durationBudget(5, 30, later, 'Europe/Rome')).saved_at, later.toISOString());
-  const night = { usd: 5, starts_at: '2026-11-15T21:30:00.000Z', ends_at: '2026-11-16T07:00:00.000Z', timezone: 'Europe/Rome', set_by: 'setup' };
-  assert.equal(keepSamePeriod(night, night), night, 'fixed hours are left as they are');
-});
-
 test('below the least that lets a team work on the service the setup asks an explicit yes; a no asks the amount again', async () => {
   const { minimumFor } = await import('../wizard/setup-budget.js');
   assert.deepEqual(['glm', 'kimi', 'openai', 'claude', 'anthropic', 'moonshot', 'other'].map(minimumFor), [2, 2, 5, 5, 5, 2, 0]);
