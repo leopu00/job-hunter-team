@@ -17,7 +17,8 @@ const money = (value) => (Number.isFinite(Number(value)) ? Number(value).toFixed
 function zoneOf(home) {
   try {
     const team = JSON.parse(readFileSync(join(home, 'jht.config.json'), 'utf8'))?.team;
-    return String(team?.budget?.timezone || team?.working_hours?.timezone || '');
+    const zone = String(team?.budget?.timezone || team?.working_hours?.timezone || '').trim();
+    return /^[A-Za-z0-9_+./-]+$/.test(zone) ? zone : '';
   } catch { return ''; }
 }
 
