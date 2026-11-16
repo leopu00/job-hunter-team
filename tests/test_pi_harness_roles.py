@@ -367,3 +367,40 @@ def test_the_service_agents_start_glm_on_pi_and_refuse_it_on_another_harness(tmp
     assert result.returncode == 2
     assert result.stdout == ""
     assert "runs only on the pi harness" in result.stderr
+
+
+# ── the spending gate: every role on pi but the Assistente ─────────────────────────────────────────────────────
+
+def _gate(tmp_path: Path) -> tuple[Path, tuple[str, ...]]:
+    gate = tmp_path / "gate" / "spend-gate.js"
+    gate.parent.mkdir()
+    gate.write_text("// fixture\n", encoding="utf-8")
+    return gate, (f"JHT_PI_SPEND_GATE_EXT='{gate}'",)
+
+
+@pytest.mark.parametrize("role", ROLES)
+def test_the_spending_gate_goes_to_every_role_but_the_assistente(tmp_path: Path, role: str) -> None:
+    gate, lines = _gate(tmp_path)
+    ext, search = _extension(tmp_path)
+    result = _launch(tmp_path, role=role, harness=None, config_harness="pi", after_lib=lines + search)
+    assert result.returncode == 0, result.stderr
+    _env, argv = _argv(result.stdout.strip())
+    expected = ([] if role == "assistente" else [str(gate)]) + ([str(ext)] if role in WEB_SEARCH_ROLES else [])
+    assert _extensions(argv) == expected
+
+
+def test_a_missing_gate_is_said_and_the_role_starts_without_it(tmp_path: Path) -> None:
+    result = _launch(tmp_path, role="capitano", harness=None, config_harness="pi",
+                     after_lib=(f"JHT_PI_SPEND_GATE_EXT='{tmp_path}/none.js'",))
+    assert result.returncode == 0, result.stderr
+    assert "capitano starts on pi without the spending gate" in result.stderr
+
+
+def test_the_gate_path_is_not_taken_from_the_environment(tmp_path: Path) -> None:
+    evil = tmp_path / "evil.js"
+    evil.write_text("// not ours\n", encoding="utf-8")
+    result = subprocess.run(
+        [_bash(), "-c", f'source "{SPAWN_LIB}"; printf %s "$JHT_PI_SPEND_GATE_EXT"'],
+        capture_output=True, text=True, check=True, env=_clean_env(JHT_PI_SPEND_GATE_EXT=str(evil)),
+    )
+    assert result.stdout == "/app/shared/runtime/pi-harness/spend-gate.js"

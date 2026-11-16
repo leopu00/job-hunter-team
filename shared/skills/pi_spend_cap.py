@@ -162,13 +162,17 @@ def decide(config, spent, no_quota_mode, now=None, budget=None):
     # credit» has quota data and would never pause either. Every call would fail: the team waits, whatever the mode.
     if spent.get("credit"):
         return {"action": "halt", "why": "credit", "provider": spent["credit"]["provider"], "spent": 0.0, "ceiling": 0.0}
-    if not no_quota_mode:
-        return {"action": "none"}  # with quota data the Sentinella paces by the windows and the daily cap
+    # The budget of the setup before the mode, as the credit: it is the person's own dollars, and the bridge declares the
+    # no-quota mode only at the END of its first tick. A bridge started again (the container made again by the switch onto
+    # the full image) read «no mode yet» as «nothing to stop» and lifted a pause of a spent budget (giro Windows 16/11:
+    # «cleared» at 2.05 $ of 2, then 2.81 $).
     budget = budget if budget is not None else team_budget.read(config)
     if budget is not None and now is not None:
         verdict = _budget_verdict(config, budget, spent, now)
         if verdict:
             return verdict
+    if not no_quota_mode:
+        return {"action": "none"}  # with quota data the Sentinella paces by the windows and the daily cap
     eur, tokens = ceilings(config)
     if eur is None and tokens is None:
         return {"action": "none" if budget is not None else ("warn" if spent["calls"] else "none")}
@@ -420,13 +424,17 @@ def step(api, run, notify_user=None):
             if run._bi_on:
                 print("[bridge V6] %s BURN-INTENT: pi spending ceiling reached, the team stays active (user override)"
                       % run.now_h)
+                if mine:  # the gate of the agents (spend-gate.js) reads this flag: the person's override opens it
+                    _resume(api, run, day, notify_user)
             elif not api._daily_halt_active():
                 _halt(api, run, verdict, spent, day, notify_user, config, now)
             elif mine and (flag.get("pi_spend_cap") or {}).get("why") != verdict["why"]:
                 # Already paused by this brake for another reason (the pace, and now the budget or the period is over):
                 # the person and the Captain are told the new one, the flag says it; no second ESC.
                 _halt(api, run, verdict, spent, day, notify_user, config, now, escape=False)
-        elif mine:
+        elif mine and (budget is not None or run.state.get("no_quota_declared")):
+            # Lifted only by a tick that looked: without a budget and before the no-quota mode is declared (the first tick
+            # of a bridge started again) the ceilings were not read, and «nothing to stop» is not «back under».
             _resume(api, run, day, notify_user)
         if verdict["action"] == "warn":
             _tell(api, run, "warn:%s" % day, captain_text(verdict, spent), user_text(verdict, spent), notify_user)

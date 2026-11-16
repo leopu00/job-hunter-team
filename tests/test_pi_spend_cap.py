@@ -527,11 +527,12 @@ def test_an_older_config_with_no_quota_cap_eur_works_as_before(tmp_path):
     assert flag_record(bridge) == {"why": "eur", "spent": 10.0, "ceiling": 10.0}
 
 
-def test_with_quota_data_the_budget_is_not_this_ones_business_either(tmp_path):
+def test_the_budget_holds_before_the_no_quota_mode_is_declared(tmp_path):
+    """The person's dollars, as the credit: the bridge declares the mode only at the end of its first tick."""
     pi_calls(tmp_path, [(NOON - 300, 5.0, 100)])
     bridge = Bridge(tmp_path, budget(5, NOON - 600, NOON + 1200))
     bridge.tick(no_quota=False)
-    assert bridge.esc == 0 and bridge.sent == []
+    assert bridge.esc == 1 and flag_record(bridge)["why"] == "budget"
 
 
 @pytest.mark.parametrize("config, tier", [
@@ -807,3 +808,40 @@ def test_a_cheap_onboarding_says_nothing(tmp_path):
     bridge.tick()
     assert not [t for _, t in bridge.sent if "ONBOARDING" in t]
     assert json.loads(start_file(tmp_path).read_text())["spent_before_usd"] == 0.3
+
+
+# --- a bridge started again (the container made again by the switch onto the full tools) keeps the pause (giro Windows
+# 16/11: «PI-SPEND-CEILING cleared» at 2.05 $ of 2, the team started again and ended at 2.81 $) ------------------------
+
+def test_a_bridge_started_again_keeps_the_pause_of_a_spent_budget(tmp_path):
+    pi_calls(tmp_path, [(NOON - 600, 2.05, 100)])
+    bridge = Bridge(tmp_path, budget(2, NOON - HOUR, NOON + 23 * HOUR))
+    bridge.tick()
+    assert flag_record(bridge)["why"] == "budget"
+    bridge.sent.clear()
+    for _ in range(3):  # a new bridge: its state is empty, the no-quota mode not declared yet
+        bridge.clock["now"] += 60
+        bridge.tick(no_quota=False, state={})
+    assert bridge.flag.exists() and flag_record(bridge)["why"] == "budget"
+    assert not any("allows work again" in text for text in bridge.texts())
+
+
+def test_a_bridge_started_again_does_not_lift_a_ceiling_it_has_not_read_yet(tmp_path):
+    pi_calls(tmp_path, [(NOON - 600, 25.0, 100)])
+    bridge = Bridge(tmp_path, {"no_quota_cap": EUR})
+    bridge.tick()
+    assert flag_record(bridge)["why"] == "eur"
+    bridge.tick(no_quota=False, state={})  # before the mode is declared: the eur ceiling is not read
+    assert bridge.flag.exists()
+    bridge.tick(state={})  # the mode declared: it reads it, still over: stays
+    assert bridge.flag.exists()
+
+
+def test_a_burn_intent_opens_the_pause_of_the_brake_for_the_gate_of_the_agents(tmp_path):
+    pi_calls(tmp_path, [(NOON - 600, 25.0, 100)])
+    bridge = Bridge(tmp_path, {"no_quota_cap": EUR})
+    state: dict = {}
+    bridge.tick(state=state)
+    assert bridge.flag.exists()
+    bridge.tick(state=state, burn_intent=True)
+    assert not bridge.flag.exists(), "the person's override: the agents' gate reads the flag, so it goes"
