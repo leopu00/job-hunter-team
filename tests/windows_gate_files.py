@@ -68,6 +68,7 @@ STRICT = (
 # Windows branch of a test that skips the POSIX one): green on Windows PowerShell 5.1 and on pwsh at the scan of 11/11.
 WINDOWS_GATE_EXTRA = (
     "tests/test_artifact_links_every_backend.py",
+    "tests/test_bridge_ps1_speaks_the_language_chosen.py",
     "tests/test_first_start_messages_powershell.py",
     "tests/test_installer_core_tier.py",
     "tests/test_installer_ps1_speaks_the_language_chosen.py",
