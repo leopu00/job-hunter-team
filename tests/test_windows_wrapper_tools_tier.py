@@ -497,14 +497,21 @@ def _register_function() -> str:
 
 
 def _running_command(box, tmp_path, command, *arguments):
-    """A process that says it runs `jht <command> <arguments>` the way the wrapper does (its own Register-JhtRunningCommand)."""
+    """A process that says it runs `jht <command> <arguments>` the way the wrapper does (its own Register-JhtRunningCommand).
+    It lives until the test kills it: on a loaded Windows PowerShell 5.1 runner one check of the switch took longer than a short
+    sleep, the process was gone by then and its file rightly said nothing."""
     script = tmp_path / f"running-{command}.ps1"
     words = ", ".join("'" + word + "'" for word in arguments)
     script.write_text(_register_function() + f"\n$RuntimeDir = '{box.runtime}'\nRegister-JhtRunningCommand '{command}' @({words})\n"
-                      "Start-Sleep -Seconds 40\n", encoding="utf-8")
+                      "Start-Sleep -Seconds 900\n", encoding="utf-8")
     process = subprocess.Popen([*powershell_argv(), "-File", str(script)])
     marker = box.runtime / ".commands" / str(process.pid)
-    _until(lambda: marker.exists(), f"`jht {command}` never said it was running", rounds=150)
+    try:
+        _until(lambda: marker.exists(), f"`jht {command}` never said it was running", rounds=150)
+    except BaseException:
+        process.kill()
+        process.wait(timeout=20)
+        raise
     return process
 
 
