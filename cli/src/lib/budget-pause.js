@@ -49,3 +49,22 @@ export function budgetPauseText(options = {}) {
   const at = whenOf(pause.resumesAt, now);
   return at ? later('budget.paused_pace', { ...vars, at }) : later('budget.paused_pace_late', vars);
 }
+
+/**
+ * «Most of the budget went to the onboarding»: the brake writes $JHT_HOME/state/budget-start.json = { saved_at, starts_at,
+ * spent_before_usd } at the first work of a Scout, Analista or Scorer. When what the Assistente and the Capitano spent before
+ * that is more than half of the budget of the setup (the file is of THIS budget: same saved_at), the person is told, so
+ * «I gave $2 and it searched nothing» has its reason. Null when it does not apply or cannot be read.
+ */
+export function onboardingSpendText({ home = JHT_HOME } = {}) {
+  try {
+    const start = JSON.parse(readFileSync(join(home, 'state', 'budget-start.json'), 'utf8'));
+    const budget = JSON.parse(readFileSync(join(home, 'jht.config.json'), 'utf8'))?.team?.budget;
+    const spent = Number(start?.spent_before_usd);
+    const usd = Number(budget?.usd);
+    if (!budget || !(usd > 0) || !(spent > usd / 2) || !start?.saved_at || start.saved_at !== budget.saved_at) return null;
+    return later('budget.onboarding_spend', { spent: money(spent), budget: money(usd) });
+  } catch {
+    return null;
+  }
+}

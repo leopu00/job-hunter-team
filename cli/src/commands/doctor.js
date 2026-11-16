@@ -13,7 +13,7 @@ import { PI_API_PROVIDERS, piApiProvider } from '../../../shared/runtime/provide
 import { RELEASE_PROVIDERS, codexLegacy, configOffered, offersSentence } from '../../../shared/runtime/release-providers.js'
 import { providerSignedIn } from '../lib/provider-signin.js'
 import { creditGone } from '../lib/provider-credit.js'
-import { budgetPauseText } from '../lib/budget-pause.js'
+import { budgetPauseText, onboardingSpendText } from '../lib/budget-pause.js'
 
 const JHT_DIR     = JHT_HOME
 const CONFIG_PATH = join(JHT_DIR, 'jht.config.json')
@@ -205,7 +205,7 @@ function checkWorkers() {
 }
 
 function budgetPauseCheck() {
-  const text = budgetPauseText()
+  const text = budgetPauseText() ?? onboardingSpendText()
   return text ? { warn: true, msg: text } : null
 }
 
