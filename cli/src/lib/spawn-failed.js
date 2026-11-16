@@ -32,6 +32,9 @@ export function spawnFailures({ home = JHT_HOME, now = new Date() } = {}) {
 
 /** One text per role that cannot start, to be written later in the person's language. */
 export function spawnFailureTexts(options = {}) {
-  return spawnFailures(options).map((f) => later(f.why ? 'agents.cannot_start' : 'agents.cannot_start_no_reason',
-    { name: f.name, at: f.at ?? '?', why: f.why }));
+  return spawnFailures(options).map((f) => {
+    const vars = { name: f.name, at: f.at ?? '?', why: f.why };
+    // each key written whole: the test of the catalog finds the texts a screen asks for by their name
+    return f.why ? later('agents.cannot_start', vars) : later('agents.cannot_start_no_reason', vars);
+  });
 }
