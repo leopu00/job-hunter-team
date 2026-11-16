@@ -58,6 +58,7 @@ STRICT = (
     # the long phases, the new-window notice and the wrapper's uninstall
     "tests/test_windows_long_phases_show_progress.py",
     "tests/test_windows_install_path_notice.py",
+    "tests/test_windows_install_timezone_of_the_country.py",
     "tests/test_windows_uninstall_wrapper.py",
     "tests/test_windows_uninstall_files.py",
     "tests/test_windows_machine_per_user.py",

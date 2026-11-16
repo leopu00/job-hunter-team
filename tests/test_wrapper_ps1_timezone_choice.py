@@ -70,7 +70,7 @@ class Result:
 
 
 def _run(shell: str, tmp_path: Path, typed: str, *, local: str | None = None, lang="en", host_env: str | None = HOST_ENV,
-         setup_args: str = "@()", redirected_ok: bool = True) -> Result:
+         setup_args: str = "@()", redirected_ok: bool = True, country: str = "") -> Result:
     home = tmp_path / "profile" / ".jht"
     home.mkdir(parents=True, exist_ok=True)
     path = home / "host.env"
@@ -79,7 +79,7 @@ def _run(shell: str, tmp_path: Path, typed: str, *, local: str | None = None, la
     script = tmp_path / "case.ps1"
     script.write_text(_script(lang, setup_args), encoding="ascii")
     env = {k: v for k, v in os.environ.items() if not k.startswith(("JHT_", "FLEET"))}
-    env.update(T_HOST_ENV=str(path), JHT_TZ_LOCAL_ID=local if local is not None else "No Such Standard Time")
+    env.update(T_HOST_ENV=str(path), JHT_TZ_LOCAL_ID=local if local is not None else "No Such Standard Time", JHT_TZ_COUNTRY=country)
     if redirected_ok:
         env["JHT_TZ_PROMPT_STDIN"] = "1"
     done = subprocess.run([_shell(shell), "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(script)],
