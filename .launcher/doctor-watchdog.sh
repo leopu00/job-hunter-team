@@ -202,6 +202,18 @@ log() {
   echo "[$ts] $*" | tee -a "$LOG_FILE"
 }
 
+# A role that cannot start is said, not only retried: logs/spawn-failed.json holds, per role, when the last start failed,
+# its exit code and the line of the error, for `jht team status` and `jht doctor` (cli/src/lib/spawn-failed.js). A start
+# that goes well takes its role out. Only the error line: never the pane, never a value of the configuration.
+# Giro Windows 16/11: Dottore and Mantenitore never started, 26 failures in an hour, and only this log said it.
+SPAWN_FAILED_FILE="$LOGS_DIR/spawn-failed.json"
+SPAWN_FAILED_PY="${JHT_SPAWN_FAILED_PY:-/app/shared/skills/spawn_failed.py}"
+[ -f "$SPAWN_FAILED_PY" ] || SPAWN_FAILED_PY="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)/shared/skills/spawn_failed.py"
+spawn_failed() {  # <role> <rc> <output of the spawner> | <role> ok
+  jht_doctor_bounded "$HELPER_TIMEOUT_SEC" "$RUN_PREFIX.spawnfail" python3 "$SPAWN_FAILED_PY" "$SPAWN_FAILED_FILE" "$@" \
+    || log "spawn-failed.json not written for $1 (rc=$?)"
+}
+
 TEAM_HALTED_FLAG="$JHT_HOME/.team-halted.flag"
 WEEKLY_HALT_FLAG="$JHT_HOME/.weekly-halt.flag"
 # Standby a spesa zero ([TEAM-STANDBY-ZERO-SPEND]): un Dottore/Mantenitore
@@ -387,6 +399,7 @@ while true; do
       mout="$(cat "$RUN_PREFIX.maint" 2>/dev/null || true)"
       if [ "$mrc" -eq 0 ]; then
         log "spawn mantenitore ok: $mout"
+        spawn_failed mantenitore ok
         jht_doctor_bounded "$HELPER_TIMEOUT_SEC" "$RUN_PREFIX.sched" \
           python3 "$SCHED" mark-maintainer || true
       elif [ "$mrc" -eq 124 ]; then
@@ -401,6 +414,7 @@ while true; do
           python3 "$SCHED" mark-maintainer || true
       else
         log "spawn mantenitore FAILED rc=$mrc: $mout"
+        spawn_failed mantenitore "$mrc" "$mout"
       fi
     fi
   fi
@@ -442,6 +456,7 @@ while true; do
           env JHT_DOCTOR_RETRY="$retry" bash "$SPAWNER" && rc=0 || rc=$?
         out="$(cat "$RUN_PREFIX.spawn" 2>/dev/null || true)"
         if [ "$rc" -eq 0 ]; then
+          spawn_failed dottore ok
           if jht_doctor_bounded "$HELPER_TIMEOUT_SEC" "$RUN_PREFIX.sched" \
                python3 "$SCHED" mark "$slot"; then
             log "spawn ok and claim finalized (slot=$slot): $out"
@@ -473,6 +488,7 @@ while true; do
           log "spawn dottore hit the ${SPAWN_TIMEOUT_SEC}s bound [${BOUND_STATE}] (slot=$slot) — claim RETAINED (outcome uncertain, no duplicate LLM spawn), loop alive: $out"
         else
           log "spawn FAILED (slot=$slot) rc=$rc: $out"
+          spawn_failed dottore "$rc" "$out"
           jht_doctor_bounded "$HELPER_TIMEOUT_SEC" "$RUN_PREFIX.sched" \
             python3 "$SCHED" release "$slot" \
             || log "schedule release FAILED (slot=$slot) — claim retained fail-closed"

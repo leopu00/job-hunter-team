@@ -5,6 +5,7 @@ import { readObservation } from '../lib/agent-observation.js';
 import { errorText, renderObservation } from '../lib/agent-observation-view.js';
 import { appendDiagnostic } from '../lib/runtime-diagnostic.js';
 import { readActiveProvider } from '../lib/agent-observation-provider.js';
+import { spawnFailureTexts } from '../lib/spawn-failed.js';
 
 export function handleAgents(options = {}, read = readObservation) {
   try {
@@ -15,6 +16,8 @@ export function handleAgents(options = {}, read = readObservation) {
       // the pause of the brake of pi on the budget (JHT-T322): read again at every status, the reason can change
       const paused = budgetPauseText() ?? onboardingSpendText();
       if (paused) console.log(`⚠ ${show(paused)}`);
+      // a role that cannot start (the Dottore, the Mantenitore): said here, not only retried in the watchdog's log
+      for (const text of spawnFailureTexts()) console.log(`⚠ ${show(text)}`);
     }
     if (options.verbose && !options.json) {
       console.log(say('agents.sessions_in_tmux'));

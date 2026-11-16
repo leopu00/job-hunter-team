@@ -14,6 +14,7 @@ import { RELEASE_PROVIDERS, codexLegacy, configOffered, offersSentence } from '.
 import { providerSignedIn } from '../lib/provider-signin.js'
 import { creditGone } from '../lib/provider-credit.js'
 import { budgetPauseText, onboardingSpendText } from '../lib/budget-pause.js'
+import { spawnFailureTexts } from '../lib/spawn-failed.js'
 
 const JHT_DIR     = JHT_HOME
 const CONFIG_PATH = join(JHT_DIR, 'jht.config.json')
@@ -204,6 +205,11 @@ function checkWorkers() {
   }
 }
 
+// the roles that cannot start (logs/spawn-failed.json, written by the watchdog of the Dottore): a problem, not a warning
+function spawnFailedChecks() {
+  return spawnFailureTexts().map((msg) => ({ fail: true, msg, hint: later('agents.cannot_start_fix') }))
+}
+
 function budgetPauseCheck() {
   const text = budgetPauseText() ?? onboardingSpendText()
   return text ? { warn: true, msg: text } : null
@@ -232,7 +238,7 @@ async function handleDoctor(options) {
     { title: later('doctor.sec_provider'), checks: [providerCk, apiCk] },
     { title: later('doctor.sec_database'),    checks: [dbCk] },
     // a team paused by the brake of pi on its budget (JHT-T322): the pause and the way on, never lifted from here
-    { title: later('doctor.sec_team'),        checks: [budgetPauseCheck(), ...workersCk] },
+    { title: later('doctor.sec_team'),        checks: [budgetPauseCheck(), ...spawnFailedChecks(), ...workersCk] },
   ].map((sec) => ({ ...sec, checks: sec.checks.filter(Boolean) })).filter((sec) => sec.checks.length > 0)
   // the checks hold their texts to be written later: a screen writes them in the person's language, the JSON in English
   const rows = sections.flatMap((sec) => sec.checks.map((ck) => ({ section: sec.title, status: kindOf(ck), message: ck.msg, hint: ck.hint ?? null })))
