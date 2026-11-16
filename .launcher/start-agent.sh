@@ -2108,7 +2108,11 @@ I coordinate the team that will work on your search: someone hunts positions, so
 For now I'll stay silent. As soon as your profile is ready I'll fire up the engine, and from there I'll write to you when I have something concrete: a batch of interesting positions, an application ready to review together, or a blocker worth flagging. Talk soon. 🎯")"
 fi
 
-if [ "$ROLE" = "mentor" ]; then
+# The Mentor introduced on an earlier start: as for the Captain, the message would only be acknowledged (a call of the model).
+if [ "$ROLE" = "mentor" ] && [ -f "${JHT_HOME:-/jht_home}/profile/mentor-welcomed.flag" ]; then
+  printf '[%s] mentor-welcomed.flag present: no welcome message, nothing left for it to do\n' "$(date +%H:%M:%S)" \
+    >"$(jht_daemon_log "welcome-watchdog-mentor.log")" 2>/dev/null || true
+elif [ "$ROLE" = "mentor" ]; then
   _welcome_kickoff "mentor" "mentor-welcomed.flag" \
 "$(_welcome_body mentor "I'm the Mentor. 🧙‍♂️
 
