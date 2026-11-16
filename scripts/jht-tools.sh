@@ -112,12 +112,19 @@ tools_pull_need_kib() {
   printf '%s\n' $((gib * 1048576))
 }
 
-# The least free KiB of the volumes the pull fills (the data folder's, and the engine's where the wrapper knows it: disk_free_measure
-# and disk_engine_path are the wrapper's, as for `jht upgrade`); nothing, and 1, when none can be measured.
+# The least free KiB of the volumes of THIS computer the pull fills: the data folder's, the engine's where the wrapper knows it
+# (disk_free_measure and disk_engine_path are the wrapper's, as for `jht upgrade`), and on a Mac the folder of the Podman
+# machine's disk image, which grows on the Mac whatever the disk inside the machine says. Nothing, and 1, when none can be measured.
+tools_machine_disk_dir() {
+  [ "${PODMAN_RUNTIME_MODE:-}" = machine ] || return 0
+  printf '%s\n' "${JHT_PODMAN_MACHINE_DIR:-$HOME/.local/share/containers/podman/machine}"
+}
+
 tools_disk_free_kib() {
   local volume measure permille avail least=""
   declare -F disk_free_measure >/dev/null 2>&1 || return 1
-  for volume in "${JHT_HOME_HOST:-$HOME/.jht}" "$(declare -F disk_engine_path >/dev/null 2>&1 && disk_engine_path)"; do
+  for volume in "${JHT_HOME_HOST:-$HOME/.jht}" "$(declare -F disk_engine_path >/dev/null 2>&1 && disk_engine_path)" \
+      "$(tools_machine_disk_dir)"; do
     [ -n "$volume" ] || continue
     measure="$(disk_free_measure "$volume")" || continue
     read -r permille avail <<EOF
@@ -136,7 +143,13 @@ EOF
 # file is there, the full one. Only when the container runs on this version's core or full image, and never while an upgrade runs
 # or waits to be resumed (its previous version is its way back). The KiB it freed in TOOLS_FREED_KIB.
 TOOLS_FREED_KIB=0
+# Then the machine trims its disk, whatever the cleaning did: a pull leaves layers behind too.
 tools_clean_old_images() {
+  tools_remove_old_images
+  tools_trim_machine
+}
+
+tools_remove_old_images() {
   local running core_id full_id freed
   TOOLS_FREED_KIB=0
   declare -F upgrade_prune_old_images >/dev/null 2>&1 && declare -F upgrade_image >/dev/null 2>&1 || return 0
@@ -152,17 +165,27 @@ tools_clean_old_images() {
   TOOLS_FREED_KIB=$(( ${freed:-0} / 1024 ))
 }
 
-# 0 when there is room for the pull, or it cannot be measured. The space the old images freed counts even when the disk does not show
-# it yet: inside the Podman machine of a Mac it is free for the pull, while the Mac sees it only after the machine trims its disk.
+# What was freed inside the Podman machine of a Mac (old images, the layers a pull leaves behind) goes back to the Mac only when
+# the machine trims its disk: the weekly timer did it days later, and on giro Mac m21 the disk image grew to 11 GiB and the Mac
+# went from 11.3 to 3.8 GiB free. fstrim runs now, in the machine of JHT only. A trim that fails changes nothing (the timer stays).
+tools_trim_machine() {
+  local podman_bin
+  [ "${PODMAN_RUNTIME_MODE:-}" = machine ] && [ -n "${PODMAN_MACHINE_NAME:-}" ] || return 0
+  declare -F podman_binary >/dev/null 2>&1 || return 0
+  podman_bin="$(podman_binary)" || return 0
+  "$podman_bin" machine ssh "$PODMAN_MACHINE_NAME" sudo fstrim -a </dev/null >/dev/null 2>&1 || return 0
+}
+
+# 0 when there is room for the pull, or it cannot be measured. What counts is the disk of this computer, measured again after the
+# old images went and the machine trimmed its disk: never the space freed inside the machine, which the Mac may not get back.
 tools_disk_room() {
-  local need free after
+  local need free
   need="$(tools_pull_need_kib)"
   free="$(tools_disk_free_kib)" || return 0
   [ "$free" -ge "$need" ] && return 0
   tools_clean_old_images
-  after="$(tools_disk_free_kib)" || after="$free"
-  [ $((free + TOOLS_FREED_KIB)) -gt "$after" ] && after=$((free + TOOLS_FREED_KIB))
-  [ "$after" -ge "$need" ]
+  free="$(tools_disk_free_kib)" || return 0
+  [ "$free" -ge "$need" ]
 }
 
 # One job at a time, detached. $1 = `auto` for the job of tools_kick (it pulls if needed, then switches by itself).

@@ -907,13 +907,15 @@ GIB = 1048576
 # the wrapper's functions the helper uses, faked: the free KiB in $FAKE/free-kib (none = cannot be measured), the image the
 # container runs in $FAKE/running, the cleaning writes its arguments in $FAKE/prune and frees $FAKE/freed bytes
 DISK_FAKES = r'''
-disk_free_measure() { [ -s "$FAKE/free-kib" ] || return 1; printf '500 %s' "$(cat "$FAKE/free-kib")"; }
+disk_free_measure() { printf '%s\n' "$1" >> "$FAKE/measured"; [ -s "$FAKE/free-kib" ] || return 1; printf '500 %s' "$(cat "$FAKE/free-kib")"; }
 disk_engine_path() { :; }
 disk_gib_text() { printf '%s' $(( $1 / 1048576 )); }
 upgrade_image_plain() { printf '%s' "${1#sha256:}"; }
 upgrade_image() { cat "$FAKE/running" 2>/dev/null || true; }
 upgrade_prune_old_images() {
   printf '%s %s json=%s\n' "$1" "$2" "${UPGRADE_JSON:-}" >> "$FAKE/prune"
+  # what the cleaning gives back to this computer's disk (the trim of the machine included), as a test says
+  [ -s "$FAKE/free-after" ] && cp "$FAKE/free-after" "$FAKE/free-kib"
   UPGRADE_PRUNE_JSON="{\"removed\":2,\"freedBytes\":$(cat "$FAKE/freed" 2>/dev/null || echo 0),\"refused\":0}"
 }
 '''
@@ -944,16 +946,24 @@ def test_with_room_on_the_disk_the_pull_goes_and_nothing_is_cleaned_first(box):
     assert (box.fake / "pulls").exists() and _prunes(box) == []
 
 
-def test_short_of_room_the_old_images_go_first_and_what_they_free_counts(box):
-    # inside the Podman machine of a Mac the space the old images freed is free for the pull before the Mac's disk shows it
+def test_short_of_room_the_old_images_go_first_and_the_disk_is_measured_again(box):
     box.tier()
     _disk(box, free_gib=8, freed_gib=4)
+    (box.fake / "free-after").write_text(str(12 * GIB), encoding="utf-8")   # the old images and the trim gave 4 GiB back
     assert box.run(DISK_FAKES + "tools_kick", **PULL_ONLY_ENV).returncode == 0
     box.wait_for("ready")
     box.wait_for_pull_end()
     assert (box.fake / "pulls").exists()
     assert _prunes(box) == ["coreid coreid json=1"], "kept: the running core image, this version's core"
 
+
+def test_space_freed_inside_the_machine_that_the_computer_does_not_get_back_does_not_count(box):
+    """Giro Mac m21 (build6): the old images went inside the Podman machine, the Mac did not get the space back, and the pull
+    took it from the Mac's own disk. Only the disk of this computer, measured again, says there is room."""
+    box.tier()
+    _disk(box, free_gib=8, freed_gib=4)                       # 4 GiB freed in the machine, the Mac still at 8
+    assert box.run(DISK_FAKES + "tools_kick", **PULL_ONLY_ENV).returncode == 0
+    assert not (box.fake / "pulls").exists() and box.notice()["reason"] == "disk_low"
 
 def test_with_no_room_nothing_is_pulled_and_the_person_is_told_then_up_tries_again(box):
     box.tier()
@@ -1088,3 +1098,73 @@ def test_a_cap_that_is_not_a_number_is_the_default_not_no_wait(box, variable, co
             'tools_wait_quiet\necho "looked=$n"\n')
     done = box.run(body, **{variable: value})
     assert done.stdout.strip() == "looked=4", f"{variable}={value!r}: {done.stdout}{done.stderr}"
+
+
+# --- the trim of the Podman machine gives the space back to the Mac (giro Mac m21, build6: 11.3 -> 3.8 GiB) ----------------
+
+TRIM_FAKES = r'''
+PODMAN_RUNTIME_MODE=machine
+PODMAN_MACHINE_NAME=jht-podman
+podman_binary() { printf '%s\n' "$FAKE/bin/podman"; }
+'''
+
+
+def _fake_podman(box, fails=False):
+    podman = box.fake / "bin" / "podman"
+    podman.write_text('#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$FAKE/podman-calls"\n' + ("exit 1\n" if fails else "exit 0\n"),
+                      encoding="utf-8")
+    podman.chmod(0o755)
+
+
+def _podman_calls(box):
+    path = box.fake / "podman-calls"
+    return path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+
+
+def test_on_a_podman_machine_the_cleaning_trims_the_machines_disk(box):
+    _fake_podman(box)
+    _disk(box, free_gib=30, running="sha256:fullid")
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    done = box.run(DISK_FAKES + TRIM_FAKES + "tools_clean_old_images")
+    assert done.returncode == 0, done.stderr
+    assert _prunes(box) == ["fullid coreid json=1"]
+    assert _podman_calls(box) == ["machine ssh jht-podman sudo fstrim -a"]
+
+
+def test_the_trim_runs_even_when_no_image_could_go_and_a_failed_trim_changes_nothing(box):
+    # an upgrade that waits keeps its images, but the layers a pull left behind still go back to the Mac
+    _fake_podman(box, fails=True)
+    _disk(box, free_gib=30, running="sha256:fullid")
+    (box.runtime / ".upgrade-journal").write_text("x\n", encoding="utf-8")
+    done = box.run(DISK_FAKES + TRIM_FAKES + "tools_clean_old_images; echo rc=$?")
+    assert done.stdout.strip() == "rc=0" and _prunes(box) == []
+    assert _podman_calls(box) == ["machine ssh jht-podman sudo fstrim -a"]
+
+
+def test_without_a_podman_machine_nothing_is_trimmed(box):
+    _fake_podman(box)
+    _disk(box, free_gib=30, running="sha256:fullid")
+    assert box.run(DISK_FAKES + TRIM_FAKES + "PODMAN_RUNTIME_MODE=native\ntools_clean_old_images").returncode == 0
+    assert _podman_calls(box) == []
+
+
+def test_after_the_switch_the_machine_is_trimmed(box):
+    _fake_podman(box)
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
+    _disk(box, free_gib=30, running="sha256:fullid")
+    assert box.run(DISK_FAKES + TRIM_FAKES + "tools_kick", **KICK_ENV).returncode == 0
+    _wait_until(lambda: not tier.exists() and _podman_calls(box) == ["machine ssh jht-podman sudo fstrim -a"],
+                f"no trim after the switch: {_podman_calls(box)}")
+    box.wait_for_pull_end()
+
+
+def test_on_a_mac_the_room_is_measured_where_the_machines_disk_grows_too(box):
+    _disk(box, free_gib=30)
+    box.run(DISK_FAKES + TRIM_FAKES + "JHT_PODMAN_MACHINE_DIR=/somewhere/machine\ntools_disk_free_kib")
+    measured = (box.fake / "measured").read_text(encoding="utf-8").splitlines()
+    assert str(box.home) in measured and "/somewhere/machine" in measured
+    (box.fake / "measured").unlink()
+    box.run(DISK_FAKES + "tools_disk_free_kib")
+    assert "/somewhere/machine" not in (box.fake / "measured").read_text(encoding="utf-8")
