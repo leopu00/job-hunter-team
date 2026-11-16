@@ -134,12 +134,11 @@ def test_the_folder_of_the_team_is_the_one_it_is_started_with(shell, tmp_path):
     assert result == str(elsewhere / "allegati" / "cv.pdf")
 
 
-@pytest.mark.skipif(os.name == "nt", reason="creating a link needs a privilege on Windows")
 @pytest.mark.parametrize("shell", SHELLS)
 def test_a_link_is_not_copied(shell, tmp_path):
     target = _desktop_file(tmp_path, "real.pdf")
     link = target.parent / "link.pdf"
-    link.symlink_to(target)
+    _link_to_file(link, target)
     _out, result = _run(shell, tmp_path, [str(link)])
     assert result == str(link) and not _allegati(tmp_path).exists()
 
@@ -160,19 +159,36 @@ def _shared(tmp_path: Path) -> Path:
     return shared
 
 
-@pytest.mark.skipif(os.name == "nt", reason="creating a link needs a privilege on Windows")
+def _link_to_folder(link: Path, target: Path) -> None:
+    """A folder that is a link. On Windows a junction: it makes no privilege and is a reparse point as a symbolic link is, which is what
+    the function looks at, so this case runs on the runner too."""
+    if os.name == "nt":
+        done = subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(target)], capture_output=True, text=True)
+        assert done.returncode == 0 and link.is_dir(), done.stdout + done.stderr
+    else:
+        link.symlink_to(target, target_is_directory=True)
+
+
+def _link_to_file(link: Path, target: Path) -> None:
+    """A file that is a link: there is no junction for a file, a symbolic link needs a privilege on Windows (Developer Mode or an
+    administrator), and where the machine does not give it the case is skipped."""
+    try:
+        link.symlink_to(target)
+    except OSError:
+        pytest.skip("creating a link to a file needs a privilege on Windows")
+
+
 @pytest.mark.parametrize("shell", SHELLS)
 def test_an_allegati_that_is_a_link_is_not_followed_and_nothing_is_written_where_it_points(shell, tmp_path):
     source = _desktop_file(tmp_path)
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
-    (_shared(tmp_path) / "allegati").symlink_to(elsewhere, target_is_directory=True)
+    _link_to_folder(_shared(tmp_path) / "allegati", elsewhere)
     out, result = _run(shell, tmp_path, [str(source)])
     assert result == "FAILED" and list(elsewhere.iterdir()) == []
     assert catalog("en")["wrapper.ps.artifact_copy_refused"].replace("%s", str(source), 1).replace("%s", str(_allegati(tmp_path)), 1) in out
 
 
-@pytest.mark.skipif(os.name == "nt", reason="creating a link needs a privilege on Windows")
 @pytest.mark.parametrize("shell", SHELLS)
 def test_a_copy_that_is_a_link_is_not_written_through(shell, tmp_path):
     source = _desktop_file(tmp_path, data=b"of the person")
@@ -180,7 +196,7 @@ def test_a_copy_that_is_a_link_is_not_written_through(shell, tmp_path):
     precious.write_bytes(b"not to be touched")
     folder = _shared(tmp_path) / "allegati"
     folder.mkdir()
-    (folder / "cv.pdf").symlink_to(precious)
+    _link_to_file(folder / "cv.pdf", precious)
     _out, result = _run(shell, tmp_path, [str(source)])
     assert result == "FAILED" and precious.read_bytes() == b"not to be touched"
 
