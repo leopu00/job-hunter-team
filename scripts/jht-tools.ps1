@@ -213,31 +213,20 @@ function Get-ToolsWaitSeconds {
 }
 
 # ready.flag means "the team starts", not "the onboarding is over": the Assistente sets it with three fields and goes on asking.
-# The switch stops the container the conversation runs in, so it waits for the first of: the Assistente's Pi session has not moved
-# for JHT_TOOLS_ASSISTANT_QUIET seconds (180), or JHT_TOOLS_ONBOARDING_MAX seconds (1800) have gone since ready.flag. The session
-# files are the container's: they only say WHEN, never a state, and a folder that cannot be read leaves the tetto alone to decide.
-function Wait-ToolsOnboardingQuiet {
+# The switch stops the container the conversation runs in, so it waits for the first of: profile\onboarding-done.flag, which the
+# Assistente writes when its questions are over or the person says to stop (skill profile-yaml), or JHT_TOOLS_ONBOARDING_MAX
+# seconds (1800) since ready.flag. The flag is the container's: it only says WHEN, and a link in its place is not believed.
+function Wait-ToolsOnboardingDone {
   param($Flag)
-  $quiet = Get-ToolsWaitSeconds 'JHT_TOOLS_ASSISTANT_QUIET' 180
   $cap = Get-ToolsWaitSeconds 'JHT_TOOLS_ONBOARDING_MAX' 1800
   $step = [Math]::Max(1, (Get-ToolsWaitSeconds 'JHT_TOOLS_WAIT_STEP' 15))
-  $dir = Join-Path (Join-Path (Join-Path (Join-Path $JhtHome '.pi') 'agent') 'sessions') '--jht_home-agents-assistente--'
+  $doneFlag = Join-Path (Join-Path $JhtHome 'profile') 'onboarding-done.flag'
   $since = $Flag.LastWriteTimeUtc
   while ($true) {
     if (-not (Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf)) { return }
-    $now = [DateTime]::UtcNow
-    if (($now - $since).TotalSeconds -ge $cap) { return }
-    $newest = $null
-    try {
-      $folder = Get-Item -LiteralPath $dir -Force -ErrorAction Stop
-      if ($folder.PSIsContainer -and (($folder.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0)) {
-        foreach ($file in @(Get-ChildItem -LiteralPath $dir -Filter '*.jsonl' -File -Force -ErrorAction Stop)) {
-          if (($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { continue }
-          if ($null -eq $newest -or $file.LastWriteTimeUtc -gt $newest) { $newest = $file.LastWriteTimeUtc }
-        }
-      }
-    } catch { $newest = $null }
-    if ($null -ne $newest -and ($now - $newest).TotalSeconds -ge $quiet) { return }
+    $item = Get-Item -LiteralPath $doneFlag -Force -ErrorAction SilentlyContinue
+    if ($item -and -not $item.PSIsContainer -and (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0)) { return }
+    if (([DateTime]::UtcNow - $since).TotalSeconds -ge $cap) { return }
     Start-Sleep -Seconds $step
   }
 }
@@ -253,7 +242,7 @@ function Wait-ToolsProfileAndSwitch {
     $item = Get-Item -LiteralPath $flag -Force -ErrorAction SilentlyContinue
     if ($item -and -not $item.PSIsContainer -and (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0)) {
       Start-Sleep -Seconds (Get-ToolsWaitSeconds 'JHT_TOOLS_SWITCH_GRACE' 30)
-      Wait-ToolsOnboardingQuiet $item
+      Wait-ToolsOnboardingDone $item
       Invoke-ToolsSwitchAuto
       return
     }

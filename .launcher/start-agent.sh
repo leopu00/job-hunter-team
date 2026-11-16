@@ -2027,7 +2027,7 @@ _welcome_kickoff() {
       "2. If it prints WELCOME_DELIVERED: acknowledge the system with one line: '[@assistente -> @system] [WELCOME-ACK] delivered' (that line is the text of your reply: no command, nothing to look up). Never touch ${welcome_flag} by hand, not even to say 'skipped'." \
       "   If it prints WELCOME_NOT_DELIVERED or fails: do NOT create the flag, write the error to \$JHT_AGENT_DIR/welcome-error.log, acknowledge with '[@assistente -> @system] [WELCOME-ACK] failed'. The launcher asks you again, up to 3 times." \
       "" \
-      "3. Then, if ${welcome_dir}/ready.flag does not exist, you lead the onboarding in the chat (skill onboarding-flow): the welcome already asked the first question, so do not ask it again; wait for the answer and go on one question per turn until the profile is complete. If the user has already written in the chat, answer them. Do not wait for any Telegram signal."
+      "3. Then, until ${welcome_dir}/onboarding-done.flag exists, you lead the onboarding in the chat (skill onboarding-flow; ${welcome_dir}/ready.flag only starts the team, the questions go on after it): the welcome already asked the first question, so do not ask it again; wait for the answer and go on one question per turn until the eight fields and the questionnaire cards are done or the person says to stop, then write onboarding-done.flag (skill profile-yaml). After a restart ask only what is still missing; if nothing is, write onboarding-done.flag and ask nothing. If the user has already written in the chat, answer them. Do not wait for any Telegram signal."
     )
   else
   msg=$(printf '%s\n' \

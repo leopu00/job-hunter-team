@@ -240,6 +240,17 @@ E avise o utilizador: "voltei a colocar o botao em espera — vamos rever este p
 
 Experiencias e formacoes sao recomendadas: nao bloqueiam o flag. Pede-as logo a seguir a cria-lo.
 
+## `onboarding-done.flag` — o fim do onboarding
+
+O `ready.flag` põe a equipa a funcionar; o onboarding continua depois. Quando acabar (os oito campos estão lá e `onboarding_questionnaire.py ask` responde `done: true`, ou a pessoa diz que quer parar com as perguntas), escreve `onboarding-done.flag`, uma vez, e verifica-o como o `ready.flag` (com `FLAG_MISSING`, corrige e volta a escrevê-lo):
+
+```bash
+date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/onboarding-done.flag"
+test -f "$JHT_HOME/profile/onboarding-done.flag" && echo FLAG_OK || echo FLAG_MISSING
+```
+
+Nunca antes, nunca para encurtar uma pergunta, nunca o tires. Diz a este computador que já ninguém está a meio do onboarding: só então a equipa passa para as ferramentas completas dos Scout (um reinício de alguns minutos; o chat volta sozinho). À pessoa não dizes nada sobre isso.
+
 ## 🎓 `has_degree` — a partir da formacao, nunca como valor provisorio
 
 `has_degree` e opcional: ausente quer dizer «nao declarado», nunca «nao». E um facto sobre o candidato, nao um valor por omissao; podes perguntar (esta entre os opcionais), mas nao bloqueia nem o perfil nem o desbloqueio:

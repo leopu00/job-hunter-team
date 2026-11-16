@@ -240,6 +240,17 @@ Y avisa al usuario: "he puesto el boton en espera — revisemos este punto antes
 
 Experiencias y titulos de estudio son recomendados: no bloquean el flag. Pidelos justo despues de crearlo.
 
+## `onboarding-done.flag` — el final del onboarding
+
+`ready.flag` pone en marcha el equipo; el onboarding sigue después. Cuando termine (están los ocho campos y `onboarding_questionnaire.py ask` responde `done: true`, o la persona dice que quiere dejar las preguntas), escribe `onboarding-done.flag`, una vez, y compruébalo como `ready.flag` (con `FLAG_MISSING` corrígelo y vuelve a escribirlo):
+
+```bash
+date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/onboarding-done.flag"
+test -f "$JHT_HOME/profile/onboarding-done.flag" && echo FLAG_OK || echo FLAG_MISSING
+```
+
+Nunca antes, nunca para cortar una pregunta, nunca lo borres. Le dice a este ordenador que ya nadie está a mitad del onboarding: solo entonces el equipo pasa a las herramientas completas de los Scout (un reinicio de un par de minutos; el chat vuelve solo). A la persona no le dices nada.
+
 ## 🎓 `has_degree` — de los estudios, nunca como relleno
 
 `has_degree` es opcional: ausente significa «no declarado», nunca «no». Es un hecho del candidato, no un valor por defecto; puedes preguntarlo (esta entre los opcionales), pero no bloquea ni el perfil ni el desbloqueo:

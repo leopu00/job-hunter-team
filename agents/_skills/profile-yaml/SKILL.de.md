@@ -240,6 +240,17 @@ Und informieren Sie den Benutzer: "Ich habe den Button wieder auf Warten gesetzt
 
 Erfahrungen und Abschlüsse sind empfohlen: Sie blockieren das Flag nicht. Frag direkt danach, wenn du es erstellt hast.
 
+## `onboarding-done.flag` — das Ende des Onboardings
+
+`ready.flag` startet das Team; das Onboarding geht danach weiter. Wenn es vorbei ist (die acht Felder sind da und `onboarding_questionnaire.py ask` antwortet `done: true`, oder die Person sagt, dass sie mit den Fragen aufhören will), schreibe `onboarding-done.flag`, einmal, und prüfe es wie `ready.flag` (bei `FLAG_MISSING` beheben und neu schreiben):
+
+```bash
+date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/onboarding-done.flag"
+test -f "$JHT_HOME/profile/onboarding-done.flag" && echo FLAG_OK || echo FLAG_MISSING
+```
+
+Nie vorher, nie um eine Frage abzukürzen, nie entfernen. Es sagt diesem Computer, dass niemand mehr mitten im Onboarding ist: erst dann wechselt das Team auf die vollständigen Werkzeuge der Scouts (ein Neustart von ein paar Minuten; der Chat kommt von selbst zurück). Der Person sagst du nichts davon.
+
 ## 🎓 `has_degree` — aus der Ausbildung, nie als Platzhalter
 
 `has_degree` ist optional: fehlt es, heißt das «nicht angegeben», nie «nein». Es ist eine Tatsache über den Kandidaten, kein Standardwert; du darfst danach fragen (es gehört zu den optionalen Feldern), aber es blockiert weder das Profil noch die Freigabe:
