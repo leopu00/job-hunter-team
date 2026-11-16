@@ -9027,6 +9027,29 @@ status_human_running() {
   if [ "$state" = running ]; then status_human_next "$(jht_say status.next_running)"; else status_human_next "$(jht_say status.next_other)"; fi
 }
 
+# A command that only reads the team (jht agents, stats, health, team list, team status): with the container running it is the
+# CLI's in the container; with it off (or the engine off) it says so and starts nothing, as jht status does. Never ensure_up: a
+# sampler or a person looking at the team must not undo their own jht down.
+read_only_team_command() {
+  local up=0
+  require_confined_podman_machine
+  if docker_reachable >/dev/null 2>&1; then
+    container_up >/dev/null 2>&1 || up=$?
+  else
+    up=3
+  fi
+  if [ "$up" -eq 0 ]; then
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
+    exit $?
+  fi
+  [ "$up" -eq 3 ] || not_started_or_unattestable "$up"
+  # A team that is simply off is not an error for a person (rc 0, as jht status); programs keep rc 1.
+  if jht_machine_output; then printf "container '%s' non attivo\n" "$CONTAINER_SERVICE"; exit 1; fi
+  printf '  %b○%b %s\n' "$DIM" "$RESET" "$(jht_say status.not_running)"
+  status_human_next "$(jht_say status.not_running_next)"
+  exit 0
+}
+
 status_human_not_running() {
   status_human_title
   printf '  %b○%b %s\n' "$DIM" "$RESET" "$(jht_say status.not_running)"
@@ -10356,6 +10379,7 @@ case "$SUB" in
   # `jht team stop`: si deve poter fermare anche un container che non si attesta per la sola hash (vedi ensure_up_for_stop).
   team)
     require_compose_file
+    case "${2:-}" in list|status) read_only_team_command "$@" ;; esac
     require_docker
     if [ "${2:-}" = stop ]; then ensure_up_for_stop; else ensure_up; fi
     team_rc=0
@@ -10366,6 +10390,12 @@ case "$SUB" in
       exit 0
     fi
     exit "$team_rc"
+    ;;
+
+  # Commands that only read: they never start a stopped team.
+  agents|stats|health)
+    require_compose_file
+    read_only_team_command "$@"
     ;;
 
   # ── Operativita': delegata al CLI Node nel container ───────────────────

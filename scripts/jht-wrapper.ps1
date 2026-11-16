@@ -393,6 +393,8 @@ function Get-JhtTextTable {
     'en:ps.wsl_not_answering' { return 'WSL does not answer (wsl --status)' }
     'en:removed.office' { return '''jht %s'' was removed in 0.4.0 with the Godot office: use the jht commands (jht help).' }
     'en:status.no_options' { return '''jht status'' takes no options (%s): run it as ''jht status''.' }
+    'en:status.not_running' { return 'The team''s container is not running.' }
+    'en:status.not_running_next' { return 'Start it with: jht up' }
     'en:team.stopped' { return 'Job Hunter Team is stopped: ''jht up'' starts it again.' }
     'en:tools.arriving' { return 'The Scouts'' tools are on their way: the full image is downloading in the background (about 3 GB). The search for positions starts by itself once they are here; there is nothing to do.' }
     'en:tools.chat_switched' { return 'The team is moving onto the Scouts'' full tools, so this chat has closed. Open it again in a couple of minutes with jht team chat.' }
@@ -654,6 +656,8 @@ function Get-JhtTextTable {
     'it:ps.wsl_not_answering' { return 'WSL non risponde (wsl --status)' }
     'it:removed.office' { return '''jht %s'' e'' stato tolto nella 0.4.0 insieme all''ufficio Godot: usa i comandi jht (jht help).' }
     'it:status.no_options' { return '''jht status'' non ha opzioni (%s): si lancia come ''jht status''.' }
+    'it:status.not_running' { return 'Il container della squadra non e'' acceso.' }
+    'it:status.not_running_next' { return 'Accendilo con: jht up' }
     'it:team.stopped' { return 'Job Hunter Team e'' fermato: jht up per riaccenderlo.' }
     'it:tools.arriving' { return 'Gli strumenti degli Scout stanno arrivando: l''immagine piena si scarica in background (circa 3 GB). La ricerca delle posizioni parte da sola quando sono arrivati; non devi fare niente.' }
     'it:tools.chat_switched' { return 'La squadra passa agli strumenti completi degli Scout, quindi questa chat si e'' chiusa. Riaprila fra un paio di minuti con jht team chat.' }
@@ -915,6 +919,8 @@ function Get-JhtTextTable {
     'hu:ps.wsl_not_answering' { return ('a WSL nem v' + [char]0x00E1 + 'laszol (wsl --status)') }
     'hu:removed.office' { return ('A ''jht %s'' a 0.4.0-ban a Godot-irod' + [char]0x00E1 + 'val egy' + [char]0x00FC + 'tt megsz' + [char]0x0171 + 'nt: haszn' + [char]0x00E1 + 'ld a jht parancsokat (jht help).') }
     'hu:status.no_options' { return ('A ''jht status'' nem fogad kapcsol' + [char]0x00F3 + 'kat (%s): egyszer' + [char]0x0171 + 'en ''jht status''-k' + [char]0x00E9 + 'nt futtasd.') }
+    'hu:status.not_running' { return ('A csapat kont' + [char]0x00E9 + 'nere nem fut.') }
+    'hu:status.not_running_next' { return ('Ind' + [char]0x00ED + 'tsd el: jht up') }
     'hu:team.stopped' { return ('A Job Hunter Team le van ' + [char]0x00E1 + 'll' + [char]0x00ED + 'tva: a ''jht up'' ' + [char]0x00FA + 'jraind' + [char]0x00ED + 'tja.') }
     'hu:tools.arriving' { return ('A felder' + [char]0x00ED + 't' + [char]0x0151 + 'k (Scout) eszk' + [char]0x00F6 + 'zei ' + [char]0x00FA + 'ton vannak: a teljes k' + [char]0x00E9 + 'p a h' + [char]0x00E1 + 'tt' + [char]0x00E9 + 'rben t' + [char]0x00F6 + 'lt' + [char]0x0151 + 'dik le (kb. 3 GB). Az ' + [char]0x00E1 + 'll' + [char]0x00E1 + 'sok keres' + [char]0x00E9 + 'se mag' + [char]0x00E1 + 't' + [char]0x00F3 + 'l elindul, amint meg' + [char]0x00E9 + 'rkeztek; nincs teend' + [char]0x0151 + 'd.') }
     'hu:tools.chat_switched' { return ('A csapat ' + [char]0x00E1 + 't' + [char]0x00E1 + 'll a felder' + [char]0x00ED + 't' + [char]0x0151 + 'k (Scout) teljes eszk' + [char]0x00F6 + 'zeire, ez' + [char]0x00E9 + 'rt ez a cseveg' + [char]0x00E9 + 's bez' + [char]0x00E1 + 'rult. P' + [char]0x00E1 + 'r perc m' + [char]0x00FA + 'lva nyisd meg ' + [char]0x00FA + 'jra a jht team chat paranccsal.') }
@@ -1176,6 +1182,8 @@ function Get-JhtTextTable {
     'es:ps.wsl_not_answering' { return 'WSL no responde (wsl --status)' }
     'es:removed.office' { return ('''jht %s'' se elimin' + [char]0x00F3 + ' en la 0.4.0 junto con la oficina de Godot: usa los comandos jht (jht help).') }
     'es:status.no_options' { return ('''jht status'' no admite opciones (%s): ejec' + [char]0x00FA + 'talo como ''jht status''.') }
+    'es:status.not_running' { return ('El contenedor del equipo no est' + [char]0x00E1 + ' en marcha.') }
+    'es:status.not_running_next' { return ('Arr' + [char]0x00E1 + 'ncalo con: jht up') }
     'es:team.stopped' { return ('Job Hunter Team est' + [char]0x00E1 + ' detenido: ''jht up'' lo vuelve a arrancar.') }
     'es:tools.arriving' { return ('Las herramientas de los Scout est' + [char]0x00E1 + 'n en camino: la imagen completa se descarga en segundo plano (unos 3 GB). La b' + [char]0x00FA + 'squeda de puestos empieza sola cuando lleguen; no tienes que hacer nada.') }
     'es:tools.chat_switched' { return ('El equipo pasa a las herramientas completas de los Scout, as' + [char]0x00ED + ' que este chat se ha cerrado. Vuelve a abrirlo en un par de minutos con jht team chat.') }
@@ -1437,6 +1445,8 @@ function Get-JhtTextTable {
     'de:ps.wsl_not_answering' { return 'WSL antwortet nicht (wsl --status)' }
     'de:removed.office' { return ('''jht %s'' wurde in 0.4.0 zusammen mit dem Godot-B' + [char]0x00FC + 'ro entfernt: Nutze die jht-Befehle (jht help).') }
     'de:status.no_options' { return ('''jht status'' nimmt keine Optionen (%s): F' + [char]0x00FC + 'hre es als ''jht status'' aus.') }
+    'de:status.not_running' { return ('Der Container des Teams l' + [char]0x00E4 + 'uft nicht.') }
+    'de:status.not_running_next' { return 'Starte ihn mit: jht up' }
     'de:team.stopped' { return 'Job Hunter Team ist gestoppt: ''jht up'' startet es wieder.' }
     'de:tools.arriving' { return ('Die Werkzeuge der Scouts sind unterwegs: Das vollst' + [char]0x00E4 + 'ndige Image wird im Hintergrund heruntergeladen (etwa 3 GB). Die Stellensuche startet von selbst, sobald sie da sind; du musst nichts tun.') }
     'de:tools.chat_switched' { return ('Das Team wechselt auf die vollst' + [char]0x00E4 + 'ndigen Werkzeuge der Scouts, deshalb wurde dieser Chat geschlossen. ' + [char]0x00D6 + 'ffne ihn in ein paar Minuten wieder mit jht team chat.') }
@@ -1698,6 +1708,8 @@ function Get-JhtTextTable {
     'fr:ps.wsl_not_answering' { return ('WSL ne r' + [char]0x00E9 + 'pond pas (wsl --status)') }
     'fr:removed.office' { return ('''jht %s'' a ' + [char]0x00E9 + 't' + [char]0x00E9 + ' retir' + [char]0x00E9 + ' dans la 0.4.0 avec le bureau Godot : utilise les commandes jht (jht help).') }
     'fr:status.no_options' { return '''jht status'' ne prend pas d''options (%s) : lance-le simplement ''jht status''.' }
+    'fr:status.not_running' { return ('Le conteneur de l''' + [char]0x00E9 + 'quipe ne tourne pas.') }
+    'fr:status.not_running_next' { return ('D' + [char]0x00E9 + 'marre-le avec : jht up') }
     'fr:team.stopped' { return ('Job Hunter Team est arr' + [char]0x00EA + 't' + [char]0x00E9 + ' : ''jht up'' le red' + [char]0x00E9 + 'marre.') }
     'fr:tools.arriving' { return ('Les outils des Scout arrivent : l''image compl' + [char]0x00E8 + 'te se t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charge en arri' + [char]0x00E8 + 're-plan (environ 3 Go). La recherche d''offres d' + [char]0x00E9 + 'marre toute seule d' + [char]0x00E8 + 's qu''ils sont l' + [char]0x00E0 + ' ; tu n''as rien ' + [char]0x00E0 + ' faire.') }
     'fr:tools.chat_switched' { return ('L''' + [char]0x00E9 + 'quipe passe aux outils complets des Scout, donc ce chat s''est ferm' + [char]0x00E9 + '. Rouvre-le dans quelques minutes avec jht team chat.') }
@@ -1959,6 +1971,8 @@ function Get-JhtTextTable {
     'pt:ps.wsl_not_answering' { return ('o WSL n' + [char]0x00E3 + 'o responde (wsl --status)') }
     'pt:removed.office' { return ('''jht %s'' foi removido na 0.4.0 juntamente com o escrit' + [char]0x00F3 + 'rio Godot: usa os comandos jht (jht help).') }
     'pt:status.no_options' { return ('''jht status'' n' + [char]0x00E3 + 'o aceita op' + [char]0x00E7 + [char]0x00F5 + 'es (%s): corre-o como ''jht status''.') }
+    'pt:status.not_running' { return ('O contentor da equipa n' + [char]0x00E3 + 'o est' + [char]0x00E1 + ' a correr.') }
+    'pt:status.not_running_next' { return 'Liga-o com: jht up' }
     'pt:team.stopped' { return ('O Job Hunter Team est' + [char]0x00E1 + ' parado: ''jht up'' volta a lig' + [char]0x00E1 + '-lo.') }
     'pt:tools.arriving' { return ('As ferramentas dos Scout est' + [char]0x00E3 + 'o a caminho: a imagem completa est' + [char]0x00E1 + ' a ser descarregada em segundo plano (cerca de 3 GB). A procura de vagas come' + [char]0x00E7 + 'a sozinha quando chegarem; n' + [char]0x00E3 + 'o tens de fazer nada.') }
     'pt:tools.chat_switched' { return 'A equipa passa para as ferramentas completas dos Scout, por isso este chat fechou-se. Volta a abri-lo dentro de alguns minutos com jht team chat.' }
@@ -8114,6 +8128,26 @@ switch ($Sub) {
   'download' {
     Invoke-HostDownload $Rest
     exit $script:HostDownloadExitCode
+  }
+
+  # Commands that only read the team (agents, stats, health, team list, team status): with the container running they are the CLI's
+  # in the container; with it off they say so and start nothing, as jht status does. Never Ensure-Up: a sampler or a person looking
+  # at the team must not undo their own jht down.
+  { $_ -cin @('agents', 'stats', 'health') -or ($_ -ceq 'team' -and $Rest.Count -gt 0 -and @('list', 'status') -ccontains [string]$Rest[0]) } {
+    Require-ComposeFile
+    if ((Test-DockerReachable) -and (Test-ContainerUp)) {
+      $hostFlags = @('-e', "JHT_HOST_TYPE=$env:JHT_HOST_TYPE")
+      & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @hostFlags $Container node $NodeEntry $Sub @Rest }
+      exit $LASTEXITCODE
+    }
+    # A team that is simply off is not an error for a person (rc 0); a program reading the output keeps the line and rc 1.
+    if ([Console]::IsOutputRedirected -and $env:JHT_MACHINE_OUTPUT -ne '0') {
+      Write-Host (Format-JhtText 'ps.container_not_running' $Container)
+      exit 1
+    }
+    Write-Host ('  ' + (Get-JhtText 'status.not_running'))
+    Write-Host ('  -> ' + (Get-JhtText 'status.not_running_next'))
+    exit 0
   }
 
   # Tutto il resto: delegato al CLI Node nel container.
