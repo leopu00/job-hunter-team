@@ -39,7 +39,7 @@ import { promptHarness, updateIdFor, loginCmdFor } from './setup-harness.js';
 import { askPiApiKey, askCodexApiKey, runCodexApiKeyLogin } from './setup-api-key.js';
 import { WizardCancelledError } from './prompts.js';
 import { lstatSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { keyStoreDir } from './key-store.js';
 import { JHT_CONFIG_PATH, serviceChanged } from './setup-helpers.js';
 import { piApiProvider } from '../../shared/runtime/provider-models.js';
@@ -452,6 +452,8 @@ async function runSetupSteps(prompter, state) {
   // The configuration is said to be saved here, at the end, once everything it was for has been done.
   await showSummary(prompter, { selectedProvider });
   // the key is right and the account is empty: the Assistente will not answer until it is topped up (collaudo Linux, 12/11)
-  await prompter.outro(keyVerdict?.state === 'no_credit' ? tf('wizard.outro_no_credit', keyVerdict.label) : t('wizard.outro_done'));
+  // the onboarding is over when the Assistente wrote profile/ready.flag: «answer its questions to start the onboarding» would be false
+  const onboardingDone = existsSync(join(dirname(JHT_CONFIG_PATH), 'profile', 'ready.flag'));
+  await prompter.outro(keyVerdict?.state === 'no_credit' ? tf('wizard.outro_no_credit', keyVerdict.label) : t(onboardingDone ? 'wizard.outro_done_running' : 'wizard.outro_done'));
   return true;
 }

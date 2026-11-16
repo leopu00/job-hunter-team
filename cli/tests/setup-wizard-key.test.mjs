@@ -153,6 +153,17 @@ test('a key the provider accepts on an empty account (Z.ai 429 code 1113): kept,
   assert.equal(out.includes(KEY), false);
 });
 
+test('the end of the setup does not ask to start the onboarding when the Assistente already closed it', () => {
+  const box = sandbox();
+  mkdirSync(join(box.home, 'profile'), { recursive: true });
+  writeFileSync(join(box.home, 'profile', 'ready.flag'), '');
+  const { events } = run(box, { select: { 'AI Provider': 'kimi' }, keys: [KEY] }, [200]);
+  const outro = events.find((e) => e.kind === 'outro').message;
+  assert.match(outro, /^All set! The team is running/);
+  assert.doesNotMatch(outro, /onboarding|Assistente/);
+  assert.match(outro, /jht team status/);
+});
+
 test('a key the provider accepts says the credit is not checked there, and the setup ends «All set»', () => {
   const box = sandbox();
   const { events, out } = run(box, { select: { 'AI Provider': 'kimi' }, keys: [KEY] }, [200]);
