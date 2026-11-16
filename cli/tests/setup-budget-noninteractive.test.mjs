@@ -149,3 +149,14 @@ test('the command line: the five options reach the setup as budgetFromOptions re
   assert.ok(!text.includes('wizard.cli.budget'), 'the help has the sentences, not the keys of the catalog');
   assert.ok(!text.includes('wizard.cli.no_budget'));
 });
+
+test('a setup made again with the same duration budget (also with --reset) keeps the period; a different budget starts again', async () => {
+  fresh();
+  assert.equal((await setup({ budgetUsd: '5', budgetMinutes: '30' })).code, 0);
+  const first = read().team.budget;
+  const later = new Date(NOW.getTime() + 2 * 3600_000);
+  assert.equal((await setup({ budgetUsd: '5', budgetMinutes: '30', reset: true, now: later })).code, 0);
+  assert.deepEqual(read().team.budget, first, 'the same period');
+  assert.equal((await setup({ budgetUsd: '10', budgetMinutes: '30', now: later })).code, 0);
+  assert.equal(read().team.budget.saved_at, later.toISOString(), 'a new amount is a new budget, from now');
+});

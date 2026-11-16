@@ -74,6 +74,21 @@ export function durationBudget(usd, minutes, now, timeZone = localTimeZone()) {
   return { usd, duration_minutes: minutes, saved_at: now.toISOString(), timezone: timeZone, set_by: 'setup' };
 }
 
+/**
+ * The budget to save when one is already saved: the same amount for the same duration in the same zone is the same budget, and it
+ * keeps its saved_at, so the period the brake already started (state/budget-start.json is valid for one saved_at) is not started
+ * again by `jht setup --reset` or by a setup made again with the same answers. A different amount, duration or zone, a budget at fixed
+ * hours or none before: the new one, from now.
+ */
+export function keepSamePeriod(previous, next) {
+  if (!next || !Number.isFinite(Number(next.duration_minutes))) return next;
+  const kept = previous && typeof previous === 'object' ? previous : null;
+  if (!kept || !Number.isFinite(Number(kept.duration_minutes)) || Number.isNaN(Date.parse(kept.saved_at))) return next;
+  const same = Number(kept.usd) === Number(next.usd) && Number(kept.duration_minutes) === Number(next.duration_minutes)
+    && kept.timezone === next.timezone;
+  return same ? { ...next, saved_at: kept.saved_at } : next;
+}
+
 /** The length of the period in minutes: the duration given, or ends_at − starts_at. */
 export function budgetMinutes(budget) {
   if (Number.isFinite(Number(budget?.duration_minutes))) return Number(budget.duration_minutes);
