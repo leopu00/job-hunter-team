@@ -644,6 +644,8 @@
   "wizard.budget.summary_days": "A equipa pode gastar %s no total, durante %s a partir do momento em que começa a trabalhar, %s (%s %s), e depois para sozinha.",
   "wizard.budget.summary_days_always": "A equipa pode gastar %s no total, durante %s a partir do momento em que começa a trabalhar, a qualquer hora, e depois para sozinha.",
   "wizard.budget.summary_none": "Sem limite: a equipa gasta enquanto houver crédito na tua conta.",
+  "wizard.budget.below_min": "%s está abaixo do mínimo que permite à equipa trabalhar um pouco neste serviço (%s): a configuração inicial com o Assistente e as primeiras rondas do Capitão podem gastar a maior parte antes de os Scouts procurarem. Manter %s mesmo assim?",
+  "wizard.budget.below_min_note": "%s está abaixo do mínimo que permite à equipa trabalhar um pouco neste serviço (%s): pode gastar a maior parte antes da primeira pesquisa.",
   "wizard.team.starting": "A iniciar a equipa (Sentinella + Bridge + Capitano)...",
   "wizard.team.start_failed": "Inicialização da equipa falhou. Vê o log acima. Tentar de novo: jht team start",
   "wizard.outro_done": "Tudo pronto! O Assistente está à tua espera: responde às perguntas dele para começar o onboarding.\n  Responder: jht team chat assistente   (ou no chat do Assistente da app)\n  Status:   jht team status\n  Logs:     jht logs --tail 30\n  Parar:    jht team stop --all",
