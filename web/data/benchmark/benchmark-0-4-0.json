@@ -1,0 +1,248 @@
+{
+  "version": 1,
+  "updated": "2026-11-16",
+  "kind": "first-comparison-not-a-clean-benchmark",
+  "privacy": "Synthetic profiles only: invented people, generic names, no real names, hosts, addresses or keys.",
+  "rounds": [
+    {
+      "id": "r1",
+      "os": "linux",
+      "service": "glm",
+      "day": "14/11",
+      "profile": "dataAnalyst",
+      "mode": "unspecified",
+      "build": "candidate-41",
+      "minutes": 42,
+      "cost": 3.41,
+      "calls": 1479,
+      "found": 47,
+      "scored": 26,
+      "relevant": null,
+      "bestScore": null,
+      "roster": "5/3/2",
+      "outcome": "fail",
+      "note": "scoutsNoTools",
+      "lang": "it"
+    },
+    {
+      "id": "r2",
+      "os": "windows",
+      "service": "glm",
+      "day": "14/11",
+      "profile": "generic",
+      "mode": "unspecified",
+      "build": "candidate-41",
+      "minutes": 10,
+      "cost": 1.75,
+      "calls": 176,
+      "found": null,
+      "scored": null,
+      "relevant": null,
+      "bestScore": null,
+      "roster": null,
+      "outcome": "fail",
+      "note": "creditEnded",
+      "lang": null
+    },
+    {
+      "id": "r3",
+      "os": "macos",
+      "service": "openai",
+      "day": "15/11",
+      "profile": "dataAnalyst",
+      "mode": "unspecified",
+      "build": "5268b336b",
+      "minutes": 10,
+      "cost": 1.61,
+      "calls": null,
+      "found": 7,
+      "scored": 1,
+      "relevant": null,
+      "bestScore": null,
+      "roster": "1/1/1",
+      "outcome": "reservations",
+      "note": "minimalTeam",
+      "lang": "it"
+    },
+    {
+      "id": "r4",
+      "os": "macos",
+      "service": "claude",
+      "day": "15/11",
+      "profile": "dataAnalyst",
+      "mode": "unspecified",
+      "build": "5268b336b",
+      "minutes": 5.7,
+      "cost": 2.92,
+      "calls": null,
+      "found": 7,
+      "scored": 1,
+      "relevant": null,
+      "bestScore": null,
+      "roster": "1/1/1",
+      "outcome": "reservations",
+      "note": "ceilingReached",
+      "lang": "it"
+    },
+    {
+      "id": "r5",
+      "os": "linux",
+      "service": "glm",
+      "day": "15/11",
+      "profile": "restorer",
+      "mode": "onsite",
+      "build": "26352eec5",
+      "minutes": 24,
+      "cost": 3.02,
+      "calls": 528,
+      "found": 0,
+      "scored": 0,
+      "relevant": 0,
+      "bestScore": null,
+      "roster": "1/1/1",
+      "outcome": "fail",
+      "note": "wrongSources",
+      "lang": "it"
+    },
+    {
+      "id": "r6",
+      "os": "linux",
+      "service": "glm",
+      "day": "15-16/11 night",
+      "profile": "waiter",
+      "mode": "onsite",
+      "build": "d03ab3fa4",
+      "minutes": 16,
+      "cost": 3.71,
+      "calls": 936,
+      "found": 14,
+      "scored": 12,
+      "relevant": 10,
+      "bestScore": 90,
+      "roster": "5/3/2",
+      "outcome": "reservations",
+      "note": "budgetFromSetup",
+      "lang": "es"
+    },
+    {
+      "id": "r7",
+      "os": "windows",
+      "service": "claude",
+      "day": "15-16/11 night",
+      "profile": "receptionist",
+      "mode": "onsite",
+      "build": "d03ab3fa4",
+      "minutes": 21,
+      "cost": 5.28,
+      "calls": 480,
+      "found": 50,
+      "scored": 20,
+      "relevant": 50,
+      "relevantApprox": true,
+      "bestScore": 94,
+      "roster": "1/1/1",
+      "outcome": "reservations",
+      "note": "brakeDidNotTrigger",
+      "lang": "de"
+    },
+    {
+      "id": "r8",
+      "os": "macos",
+      "service": "openai-glm",
+      "day": "15-16/11 night",
+      "profile": "truckDriver",
+      "mode": "onsite",
+      "build": "d03ab3fa4",
+      "minutes": 30,
+      "cost": 0.23,
+      "calls": null,
+      "found": 0,
+      "scored": 0,
+      "relevant": 0,
+      "bestScore": null,
+      "roster": null,
+      "outcome": "fail",
+      "note": "noCredit",
+      "lang": "fr"
+    }
+  ],
+  "services": [
+    {
+      "id": "glm",
+      "kitEstimate30min": [
+        3.2,
+        5.1
+      ],
+      "seen": [
+        {
+          "cost": 3.41,
+          "minutes": 42
+        },
+        {
+          "cost": 3.71,
+          "minutes": 31
+        }
+      ],
+      "ratePerMinute": [
+        0.08,
+        0.12
+      ],
+      "credit": "ok"
+    },
+    {
+      "id": "claude",
+      "kitEstimate30min": [
+        2.2,
+        4.2
+      ],
+      "seen": [
+        {
+          "cost": 2.92,
+          "minutes": 5.7
+        },
+        {
+          "cost": 5.28,
+          "minutes": 30
+        }
+      ],
+      "ratePerMinute": [
+        0.18,
+        0.51
+      ],
+      "credit": "ok"
+    },
+    {
+      "id": "openai",
+      "kitEstimate30min": [
+        3.6,
+        6.3
+      ],
+      "seen": [
+        {
+          "cost": 1.61,
+          "minutes": 10
+        }
+      ],
+      "ratePerMinute": [
+        0.16,
+        0.16
+      ],
+      "credit": "ended"
+    },
+    {
+      "id": "kimi",
+      "kitEstimate30min": [
+        10.6,
+        18.7
+      ],
+      "seen": [],
+      "ratePerMinute": null,
+      "credit": "ended"
+    }
+  ],
+  "systems": {
+    "linux": "pass",
+    "windows": "withReservations",
+    "macos": "withReservations"
+  }
+}
