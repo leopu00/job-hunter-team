@@ -517,6 +517,50 @@ def test_anything_missing_is_not_settled_and_says_what(home, flag, chat, done, m
     assert (out.returncode, out.stdout.strip()) == (1, f"WELCOME_PENDING {missing}")
 
 
+# A profile made before onboarding-done.flag existed (an update): the eight fields and every step of the questionnaire are there.
+FULL_PROFILE = """candidate:
+  name: Ada Test
+  target_role: Data analyst
+  skills: [SQL, Python]
+  languages: [English]
+personal:
+  email: ada@example.com
+location: Testville
+experience_years: 4
+seniority_target: mid
+"""
+ANSWERED = {"role": "software", "specialty_sw": "backend", "experience": "mid", "current_status": "employed", "mode": "remote",
+            "where": "here", "relocation": "no", "contract": "permanent", "salary": "skip", "company": "any"}
+
+
+def _profile_of_before_the_flag(home: Home, profile: str = FULL_PROFILE, answers: dict | None = None) -> None:
+    assert home.deliver().returncode == 0                                    # the welcome in the chat and its flag
+    (home.path / "profile" / "candidate_profile.yml").write_text(profile, encoding="utf-8")
+    (home.path / "state").mkdir(exist_ok=True)
+    (home.path / "state" / "questionnaire.json").write_text(
+        json.dumps({"answers": ANSWERED if answers is None else answers}), encoding="utf-8")
+
+
+def test_an_updated_profile_with_nothing_left_to_ask_is_settled_without_the_flag(home):
+    """build6, Mac update: a profile of an earlier build, onboarding over before onboarding-done.flag existed, sent the
+    Assistente [WELCOME-USER] at every restart (0.05 $ each)."""
+    _profile_of_before_the_flag(home)
+    out = home.deliver("settled")
+    assert (out.returncode, out.stdout.strip()) == (0, "WELCOME_SETTLED"), out.stderr
+    assert not (home.path / "profile" / "onboarding-done.flag").exists()   # settled only reads
+
+
+@pytest.mark.parametrize("profile,answers", [
+    (FULL_PROFILE.replace("experience_years: 4\n", ""), None),            # one of the eight fields still to ask
+    (FULL_PROFILE, {k: v for k, v in ANSWERED.items() if k != "salary"}),  # one card of the questionnaire still to ask
+    ("candidate: [not, a, mapping\n", None),                               # a profile that cannot be read
+])
+def test_a_profile_with_something_left_to_ask_still_gets_the_welcome_message(home, profile, answers):
+    _profile_of_before_the_flag(home, profile, answers)
+    out = home.deliver("settled")
+    assert (out.returncode, out.stdout.strip()) == (1, "WELCOME_PENDING onboarding")
+
+
 def test_a_flag_with_no_welcome_in_the_chat_is_not_settled(home):
     profile = home.path / "profile"
     profile.mkdir(parents=True)
@@ -554,3 +598,43 @@ def test_a_restart_with_the_welcome_settled_sends_the_assistente_nothing(tmp_pat
 def test_a_start_with_the_onboarding_not_over_still_sends_the_welcome_message(tmp_path):
     sent, _ = _assistente_start(tmp_path, 1)
     assert sent.strip() == "assistente"
+
+
+def _capitano_start(tmp_path: Path, introduced: bool) -> tuple[str, str, str]:
+    """The block of start-agent.sh that starts the Captain's welcome, in a home with or without capitano-welcomed.flag."""
+    source = START_AGENT.read_text(encoding="utf-8")
+    start = source.index("\n# The Captain introduced on an earlier start")
+    block = source[start: source.index('\nif [ "$ROLE" = "mentor" ]', start)]
+    home, sent, log, boot = tmp_path / "home", tmp_path / "sent.txt", tmp_path / "welcome.log", tmp_path / "boot.txt"
+    (home / "profile").mkdir(parents=True)
+    if introduced:
+        (home / "profile" / "capitano-welcomed.flag").touch()
+    script = "\n".join([
+        f'jht_daemon_log() {{ echo "{log}"; }}',
+        f'_welcome_kickoff() {{ echo "$1 $2" >> "{sent}"; }}',
+        "_welcome_body() { echo body; }",
+        f'timeout() {{ shift; [ "$2" = /app/shared/skills/captain_boot.py ] && echo ran >> "{boot}"; echo "FACTS"; }}',
+        "ROLE=capitano",
+        block,
+    ])
+    shell = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30,
+                           env={**os.environ, "JHT_HOME": str(home)})
+    assert shell.returncode == 0, shell.stderr
+    assert "FACTS" not in shell.stdout
+    read = lambda p: p.read_text(encoding="utf-8") if p.exists() else ""  # noqa: E731
+    return read(sent), read(log), read(boot)
+
+
+def test_a_start_of_the_captain_already_introduced_sends_it_nothing_and_still_runs_the_boot(tmp_path):
+    """build6, Mac update: with capitano-welcomed.flag there the Captain got [WELCOME-USER] at every start of the container
+    and at every recovery of its session, and spent a call to acknowledge it."""
+    sent, log, boot = _capitano_start(tmp_path, True)
+    assert sent == ""
+    assert "capitano-welcomed.flag present" in log
+    assert boot.strip() == "ran"
+
+
+def test_the_first_start_of_the_captain_still_gets_its_welcome(tmp_path):
+    sent, _, boot = _capitano_start(tmp_path, False)
+    assert sent.strip() == "capitano capitano-welcomed.flag"
+    assert boot == ""                                    # the welcome message runs it itself, once (_welcome_kickoff)

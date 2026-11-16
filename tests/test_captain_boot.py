@@ -88,8 +88,10 @@ def test_nothing_is_drained_by_the_briefing(tmp_path: Path):
 
 
 def test_the_capitano_welcome_message_carries_the_block():
-    """start-agent.sh appends captain_boot.py's block to the Capitano's welcome message, and only to that one."""
-    source = START_AGENT.read_text(encoding="utf-8")
-    lines = [l for l in source.splitlines() if "python3 /app/shared/skills/captain_boot.py" in l]
-    assert len(lines) == 1 and "timeout" in lines[0] and "|| true" in lines[0], lines
-    assert 'if [ "$role" = "capitano" ]' in source.splitlines()[source.splitlines().index(lines[0]) - 1]
+    """start-agent.sh appends captain_boot.py's block to the Capitano's welcome message, and only to that one; a start with
+    the Captain already introduced sends no message and still runs it, for the system's part of the boot."""
+    source = START_AGENT.read_text(encoding="utf-8").splitlines()
+    lines = [l for l in source if "python3 /app/shared/skills/captain_boot.py" in l]
+    assert len(lines) == 2 and all("timeout" in l and "|| true" in l for l in lines), lines
+    assert 'if [ "$role" = "capitano" ]' in source[source.index(lines[0]) - 1] and 'msg="$msg"' in lines[0]
+    assert '"$ROLE" = "capitano" ] && [ -f' in source[source.index(lines[1]) - 1] and ">/dev/null" in lines[1]

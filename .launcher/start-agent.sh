@@ -2091,7 +2091,15 @@ if [ "$ROLE" = "assistente" ]; then
   fi
 fi
 
-if [ "$ROLE" = "capitano" ]; then
+# The Captain introduced on an earlier start (its flag is there): the message would only be acknowledged, a call of the model
+# at every start of the container and at every recovery of its session. Nothing is sent; the system's part of the boot still
+# runs (captain_boot.py opens the first run and starts the roster when none of it is alive), and the Captain works on the
+# messages that come to it.
+if [ "$ROLE" = "capitano" ] && [ -f "${JHT_HOME:-/jht_home}/profile/capitano-welcomed.flag" ]; then
+  timeout 60 python3 /app/shared/skills/captain_boot.py >/dev/null 2>&1 || true
+  printf '[%s] capitano-welcomed.flag present: no welcome message, nothing left for it to do\n' "$(date +%H:%M:%S)" \
+    >"$(jht_daemon_log "welcome-watchdog-capitano.log")" 2>/dev/null || true
+elif [ "$ROLE" = "capitano" ]; then
   _welcome_kickoff "capitano" "capitano-welcomed.flag" \
 "$(_welcome_body capitano "I'm the Captain. 👨‍✈️
 
