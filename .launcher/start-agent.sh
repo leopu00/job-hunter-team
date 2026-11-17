@@ -1088,20 +1088,15 @@ jht_agent_identity() {
 
 # Override per ruolo dal config (team.role_models). L'effort lo cambia per ogni
 # CLI che lo riceve, ma non in modalita' fast, che e' una richiesta esplicita
-# di QUESTO avvio. La classe vale solo per Codex e pi: Claude e Kimi tengono la
-# mappa ruoli, e lo si dice invece di ignorarlo in silenzio.
+# di QUESTO avvio. La classe vale solo per Codex e pi: le CLI di Claude e Kimi
+# tengono la mappa ruoli, e lo si dice (più sotto, quando si sa l'harness)
+# invece di ignorarlo in silenzio.
 if ! _role_override="$(jht_role_model_override "$JHT_CONFIG_FILE" "$ROLE")"; then
   exit 1
 fi
 IFS='|' read -r role_model role_effort <<< "$_role_override"
 if [ -n "$role_effort" ] && [ "$MODE" != "fast" ]; then
   effort="$role_effort"
-fi
-if [ -n "$role_model" ]; then
-  case "$PROVIDER" in
-    openai|codex) ;;
-    *) echo "  Note: team.role_models.$ROLE.model applies to Codex and pi only; provider '$PROVIDER' keeps the role map." ;;
-  esac
 fi
 
 # Nessun default implicito: il provider e' configurazione utente. Se il file
@@ -1219,6 +1214,16 @@ esac
 # l'effort sono quelli che lo stesso ruolo avrebbe su Codex; gli argomenti si
 # compongono più sotto, quando la workdir con AGENTS.md e le skill esiste.
 AGENT_HARNESS="$(jht_role_harness "$ROLE" "$JHT_CONFIG_FILE")" || exit 1
+# Nota sul pin di classe ignorato: solo sulla CLI di Claude o Kimi. Sull'harness
+# pi il pin vale per ogni provider (blocco pi qui sotto: role_model vince), e dire
+# il contrario faceva credere che una prova con l'Analista su «terra» girasse sulla mappa.
+if [ -n "$role_model" ] && [ "$AGENT_HARNESS" != "pi" ]; then
+  case "$PROVIDER" in
+    openai|codex) ;;
+    *) echo "  Note: team.role_models.$ROLE.model applies to Codex and pi only; provider '$PROVIDER' keeps the role map." ;;
+  esac
+fi
+# Fine della nota sul pin di classe.
 if [ "$PROVIDER" = "glm" ] && [ "$AGENT_HARNESS" != "pi" ]; then
   echo "Error: GLM runs only on the pi harness (harness is '$AGENT_HARNESS'): jht setup --provider glm --harness pi, or jht providers harness pi." >&2
   exit 1
