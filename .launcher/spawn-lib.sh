@@ -765,8 +765,9 @@ jht_spawn_kickoff() {
 jht_spawn_record_start() {
   local logs_dir="$1" role="$2" session="$3" cli="$4" workdir="$5" tmp
   tmp="$logs_dir/.spawn-last-$role.json.$$"
-  printf '{"ts":%s,"session":"%s","role":"%s","cli":"%s","workdir":"%s"}\n' \
-    "$(date +%s)" "$session" "$role" "$cli" "$workdir" > "$tmp" 2>/dev/null \
+  # JSON written by json.dumps: a name or a folder with a quote or a control character cannot break the file or add a key
+  python3 -c 'import json, sys, time; print(json.dumps({"ts": int(time.time()), "session": sys.argv[1], "role": sys.argv[2], "cli": sys.argv[3], "workdir": sys.argv[4]}))' \
+    "$session" "$role" "$cli" "$workdir" > "$tmp" 2>/dev/null \
     && mv -f "$tmp" "$logs_dir/spawn-last-$role.json" 2>/dev/null || rm -f "$tmp" 2>/dev/null || true
   return 0
 }

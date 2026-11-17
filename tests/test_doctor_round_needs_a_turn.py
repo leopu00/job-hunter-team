@@ -421,3 +421,18 @@ def test_a_failed_maintainer_start_marks_nothing(tmp_path: Path):
     assert result.returncode == 0, result.stderr
     assert not any("spawned" in line or "mark" in line for line in trace)
     assert "mantenitore" in failed
+
+
+def test_a_session_name_in_the_record_that_is_not_the_roles_own_is_never_killed():
+    assert ds._session_of("dottore", {"session": "CAPITANO"}) == "DOTTORE"
+    assert ds._session_of("mantenitore", {"session": "x; kill-server"}) == "MANTENITORE"
+    assert ds._session_of("dottore", None) == "DOTTORE"
+
+
+def test_the_start_record_is_json_whatever_the_names_hold(tmp_path):
+    lib = Path(__file__).resolve().parent.parent / ".launcher" / "spawn-lib.sh"
+    out = subprocess.run(["bash", "-c", f'. "{lib}"; jht_spawn_record_start "{tmp_path}" dottore \'A"B\\C\' pi \'/w/"x y\''],
+                         capture_output=True, text=True, timeout=60, env={**os.environ, "JHT_HOME": str(tmp_path)})
+    record = json.loads((tmp_path / "spawn-last-dottore.json").read_text(encoding="utf-8"))
+    assert record["session"] == 'A"B\\C' and record["workdir"] == '/w/"x y' and record["cli"] == "pi", out.stderr
+    assert set(record) == {"ts", "role", "session", "cli", "workdir"}

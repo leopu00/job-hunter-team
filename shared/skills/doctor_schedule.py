@@ -531,6 +531,12 @@ def _session_alive(session: str) -> bool:
     return done.returncode != 1
 
 
+def _session_of(role: str, record) -> str:
+    """The tmux session of a role. The record on disk names a session too, but it counts only when it is the role's own
+    (DOTTORE, MANTENITORE): any other name in that file is never looked at or killed."""
+    return SESSION_OF_ROLE[role]
+
+
 def _kill_session(session: str) -> None:
     try:
         subprocess.run(["tmux", "kill-session", "-t", f"={session}"], capture_output=True, timeout=5, check=False)
@@ -550,7 +556,7 @@ def _turn_verdict(slot: str, spawned_at: float, now_s: float):
     started = float(record.get("ts") or spawned_at)
     if _pi_turn_seen(str(record.get("workdir") or ""), started):
         return "seen", record
-    session = str(record.get("session") or SESSION_OF_ROLE[role])
+    session = _session_of(role, record)
     if not _session_alive(session):
         return "session_lost", record
     if now_s - started >= TURN_WAIT_SEC:
@@ -585,7 +591,7 @@ def settle() -> list[str]:
         else:
             if verdict == "no_turn":
                 # a session without a turn is not left behind counted as running: the next start finds it clean
-                _kill_session(str((record or {}).get("session") or SESSION_OF_ROLE[ROLE_OF_SLOT.get(slot, "dottore")]))
+                _kill_session(_session_of(ROLE_OF_SLOT.get(slot, "dottore"), record))
             result = fail(slot, verdict)
             lines.append(f"{result.split(' ')[0]} {slot} {verdict} {' '.join(result.split(' ')[1:])}".rstrip())
     return lines
