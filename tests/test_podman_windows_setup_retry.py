@@ -1174,11 +1174,9 @@ def test_without_the_broker_its_proxy_is_not_asked_for_nor_checked(machine, tmp_
     assert "JHT_PROXY_CHECK broker" not in done.stdout
 
 
-def _network_run(machine, tmp_path, machine_output, *, case=None, **change):
-    # the table of the fake curl is the one the machine fixture writes, in the test's own tmp_path
+def _network_run(machine, tmp_path, machine_output, **change):
+    # the fake curl and the table are the machine fixture's, in the test's own tmp_path: one run at a time
     table = tmp_path / "curl-table"
-    tmp_path = case or tmp_path
-    (tmp_path / "bin").mkdir(parents=True, exist_ok=True)
     podman = install_fake(tmp_path / "bin", "podman", FAKE_PODMAN)
     agent, broker, telegram = machine.ports
     machine.answers(**change)
@@ -1197,10 +1195,10 @@ def _network_run(machine, tmp_path, machine_output, *, case=None, **change):
 @needs_powershell
 def test_a_person_at_a_terminal_gets_no_proxy_check_lines_and_the_app_still_does(machine, tmp_path):
     """Build8, German, step 3: «JHT_PROXY_CHECK agent 3128 …» came four times to a person (JHT_MACHINE_OUTPUT=0)."""
-    person = _network_run(machine, tmp_path, "0", case=tmp_path / "person")
+    person = _network_run(machine, tmp_path, "0")
     assert person.returncode == 0, person.stdout + person.stderr
     assert "JHT_PROXY" not in person.stdout + person.stderr, person.stdout + person.stderr
-    app = _network_run(machine, tmp_path, "1", case=tmp_path / "app")
+    app = _network_run(machine, tmp_path, "1")
     assert app.returncode == 0, app.stdout + app.stderr
     assert "JHT_PROXY_CHECK agent" in app.stdout and "JHT_PROXY_CHECK telegram" in app.stdout
 
