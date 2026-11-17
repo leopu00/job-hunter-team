@@ -128,6 +128,11 @@ export default function MessagesDrawer() {
   const [replyText, setReplyText] = useState("");
   const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
   const [sendingAnswerId, setSendingAnswerId] = useState<string | null>(null);
+  // On the site an answer saved for the CLOSER still needs the permission to apply, given on the page of the
+  // position (the L3 door): the id of that position, until another answer goes.
+  const [authorisePositionId, setAuthorisePositionId] = useState<
+    string | null
+  >(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retryState, setRetryState] = useState<
@@ -342,8 +347,10 @@ export default function MessagesDrawer() {
     if (!answer || sendingAnswerId) return;
     setSendingAnswerId(message.id);
     setError(null);
+    setAuthorisePositionId(null);
     try {
-      await postReply(message.id, answer);
+      const saved = await postReply(message.id, answer);
+      setAuthorisePositionId(saved.authorisePositionId);
       const now = new Date().toISOString();
       setMessages((rows) => withReply(rows, message.id, answer, now));
       setAnswerDrafts((drafts) => {
@@ -741,6 +748,26 @@ export default function MessagesDrawer() {
                       role="alert"
                     >
                       {error}
+                    </div>
+                  )}
+                  {authorisePositionId !== null && !error && (
+                    <div
+                      className="mb-2 px-2 py-1.5 rounded border text-[10px] leading-relaxed"
+                      style={{
+                        borderColor: "var(--color-yellow)",
+                        color: "var(--color-yellow)",
+                      }}
+                      role="status"
+                      data-testid="closer-answer-authorise"
+                    >
+                      {tr("answer_saved_authorise")}{" "}
+                      <Link
+                        href={`/positions/${authorisePositionId}`}
+                        onClick={() => setOpen(false)}
+                        className="text-[var(--color-blue)] hover:text-[var(--color-bright)] transition-colors"
+                      >
+                        {tr("authorise_on_position")}
+                      </Link>
                     </div>
                   )}
                   {/* Il box ha dichiarato di non saper ricevere la chat:

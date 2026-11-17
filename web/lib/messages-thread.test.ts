@@ -215,4 +215,28 @@ describe("richiesta risposta CLOSER", () => {
       }),
     );
   });
+
+  it("sul sito una risposta al CLOSER porta alla pagina della posizione da autorizzare", async () => {
+    const answer = (body: unknown) =>
+      vi.fn().mockResolvedValue({ ok: true, json: async () => body });
+    vi.stubGlobal(
+      "fetch",
+      answer({
+        ok: true,
+        application_reauthorised: false,
+        authorisation_required: { position_id: "pos-uuid" },
+      }),
+    );
+    expect(await postReply("request-uuid", "Remote")).toEqual({
+      authorisePositionId: "pos-uuid",
+    });
+    vi.stubGlobal("fetch", answer({ ok: true, changed: true }));
+    expect(await postReply("request-uuid", "Remote")).toEqual({
+      authorisePositionId: null,
+    });
+    vi.stubGlobal("fetch", answer({ authorisation_required: { position_id: 7 } }));
+    expect(await postReply("request-uuid", "Remote")).toEqual({
+      authorisePositionId: null,
+    });
+  });
 });
