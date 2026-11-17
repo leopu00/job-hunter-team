@@ -466,7 +466,7 @@ def assign_lane(scout):
         now = time.time()
         rows = cov.rows_since(cov.default_since(now))
         keys = frozenset(cov._lang.portal_slug(f) for f in chosen["sources"])
-        answer["next"] = cov.next_step(plan, rows, now=now, lane=keys)
+        answer["next"] = cov.next_step(plan, rows, now=now, lane=keys, agent=scout)
         avoid = cov.avoid_list(plan, rows)
         if avoid:
             answer["avoid"] = avoid

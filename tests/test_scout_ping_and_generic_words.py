@@ -47,3 +47,12 @@ def test_a_sector_word_is_said_to_need_a_worker_word_in_every_language():
     for path in SCOUT + CIRCLES:
         text = path.read_text(encoding="utf-8")
         assert "«Cuoco per RSA»" in text and "«Addetto RSA»" in text, path.name
+
+
+def test_the_brief_of_the_first_run_and_the_spawn_table_do_not_say_batches_either():
+    brief = (ROOT / "shared" / "skills" / "burst_roster.py").read_text(encoding="utf-8")
+    assert "after batches of 3-5" not in brief and "after each insert" in brief
+    for lang in LANGS:
+        table = (ROOT / "agents" / "_skills" / "spawn-agent" / f"SKILL{lang}.md").read_text(encoding="utf-8")
+        row = next(line for line in table.splitlines() if line.startswith("| `scout`"))
+        assert "3-5" not in row, lang

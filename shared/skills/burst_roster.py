@@ -69,7 +69,7 @@ def brief(role: str, number: int, cap: int | None) -> str:
         limit = (f"FIRST PASS (first run): at most {cap} positions this round — report when you reach it, do not search further. "
                  if cap else "")
         return (f"{head} Start the main loop. {first}Then read the candidate profile ($JHT_HOME/profile/candidate_profile.yml) "
-                f"and go on from CIRCLE 1 (the primary preference). {limit}Notify the Analisti after batches of 3-5 positions.")
+                f"and go on from CIRCLE 1 (the primary preference). {limit}Notify the Analisti after each insert (never wait for a batch).")
     if role == "analista":
         return (f"{head} Start the main loop. Queue: db_query.py next-for-analista. For each position fill the 5 mandatory "
                 "fields and promote it to checked or excluded. The very first position (first run): do it at once, do not wait for full queues.")
