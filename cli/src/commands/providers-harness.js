@@ -13,6 +13,7 @@ import { c, DIM, RESET } from './_colors.js';
 import { handleHarnessJson } from './providers-harness-json.js';
 import { offeredWay, releaseOffersOf } from '../../../shared/runtime/release-providers.js';
 import { marks } from '../lib/ui.js';
+import { say } from '../lib/texts.js';
 
 const CONFIG_PATH = join(JHT_HOME, 'jht.config.json');
 const OK = c.green(marks().ok);
@@ -27,11 +28,11 @@ async function fileExists(p) {
 // `jht providers update pi` is the check that it is there and answers: installing one under /opt/jht-deps
 // would only leave a Pi that the agents can write. It is never in UPDATE_TARGETS (the boot update).
 export function checkPi({ run = spawnSync, log = console } = {}) {
-  console.log(`\n  ${DIM}── Checking pi ──${RESET}`);
-  console.log(`  ${DIM}pi comes with the image, from the reviewed lock of this release (${PI_IMAGE_BIN})${RESET}`);
+  console.log(`\n  ${DIM}── ${say('pi.checking')} ──${RESET}`);
+  console.log(`  ${DIM}${say('pi.from_image', { path: PI_IMAGE_BIN })}${RESET}`);
   const r = run(PI_IMAGE_BIN, ['--version'], { encoding: 'utf8', timeout: 30_000, env: { ...process.env, PI_SKIP_VERSION_CHECK: '1', PI_TELEMETRY: '0' } });
   if (r.error || r.status !== 0) {
-    log.error(`  ${ERR}  pi does not answer from ${PI_IMAGE_BIN}: this image has no pi of its own (an older image?). Update the image.`);
+    log.error(`  ${ERR}  ${say('pi.no_answer', { path: PI_IMAGE_BIN })}`);
     process.exitCode = 1;
     return;
   }

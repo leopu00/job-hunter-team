@@ -77,7 +77,10 @@ describe("team start — retry reattivo", () => {
     const firstCloudSync = source.indexOf("cloud pull-desired-state");
     expect(earlyNoop).toBeGreaterThan(0);
     expect(earlyNoop).toBeLessThan(firstCloudSync);
-    expect(source).toContain("Team already running: no bridge or sync process restarted.");
+    // the line is a text of the catalog (the screens follow the language of the person)
+    expect(source).toContain("say('team.already_running')");
+    const english = readFileSync(path.join(REPO, "cli", "src", "lib", "texts", "en.js"), "utf-8");
+    expect(english).toContain("Team already running: no bridge or sync process restarted.");
   });
 
   it("applica lo stagger solo quando la voce precedente è stata avviata", () => {

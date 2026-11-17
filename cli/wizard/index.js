@@ -8,7 +8,7 @@ import { cancel } from '@clack/prompts';
 import pc from 'picocolors';
 import { createClackPrompter } from './clack-prompter.js';
 import { WizardCancelledError } from './prompts.js';
-import { runSetupWizard } from './setup.js';
+import { runSetupWizard, setupExitCode } from './setup.js';
 import { t } from './i18n.js';
 
 /**
@@ -41,7 +41,7 @@ async function main() {
   const prompter = createClackPrompter();
 
   try {
-    if (!(await runSetupWizard(prompter))) process.exitCode = 1;
+    process.exitCode = setupExitCode(await runSetupWizard(prompter)) || process.exitCode;
   } catch (err) {
     if (err instanceof WizardCancelledError) {
       process.exit(1);

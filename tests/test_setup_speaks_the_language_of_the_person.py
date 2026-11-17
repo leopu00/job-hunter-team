@@ -21,15 +21,16 @@ ROOT = Path(__file__).resolve().parents[1]
 LOCALES = ROOT / "shared" / "locales"
 LANGUAGES = ("it", "de", "es", "fr", "hu", "pt")
 ONBOARDING = re.compile(
-    r"^(host_setup\.|welcome\.|wizard\.(checks|cloud|step|provider|oauth|cli|access|language)\.|"
-    r"wizard\.(welcome_subtitle|aborted_prereqs|profile\.intro|outro_done|outro_done_running|outro_aborted|"
+    r"^(host_setup\.|welcome\.|wizard\.(checks|cloud|step|provider|oauth|cli|access|language|key|release|summary|telegram|substep)\.|"
+    r"wizard\.(welcome_subtitle|aborted_prereqs|profile\.intro|outro_done|outro_done_running|outro_aborted|cancelled|"
     r"start\.ready|start\.done|team\.starting|team\.start_failed)$)"
 )
 # the same in every language on purpose: the names of the languages and the picker, written in all of them;
-# «Node 22, npm OK» is the same words almost everywhere; «Host» is the word used in Italian too
+# «Node 22, npm OK» is the same words almost everywhere; «Host» is the word used in Italian too, and so are «Provider» and
+# «Config» in the summaries of the setup
 SAME_AS_ENGLISH = {
     "host_setup.choose_language", "host_setup.choice_prompt", "wizard.checks.prerequisites.ready",
-    "host_setup.host_line", "host_setup.host_line_no_swap",
+    "host_setup.host_line", "host_setup.host_line_no_swap", "wizard.summary.provider", "wizard.summary.config",
 }
 PLACEHOLDER = re.compile(r"%[sd]")
 

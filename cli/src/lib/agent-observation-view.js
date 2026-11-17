@@ -20,8 +20,10 @@ function identity(row) {
   return [model ? safe(MODEL_NAMES[model] || model) : nd(), value(row.identity?.effort)].join(' / ');
 }
 
-function state(row) {
+function state(row, paused = false) {
   if (row.running === false) return say('agents.stopped');
+  // the brake of pi paused the team on its budget: the sessions are there, nobody works
+  if (paused) return say('agents.paused');
   const labels = {
     spento: say('agents.stopped'), idle: say('observation.idle'), lavora: say('observation.working'),
     bloccato: say('observation.blocked'), aspetta_umano: say('observation.waiting'),
@@ -73,12 +75,14 @@ function usageLines(snapshot) {
   return lines;
 }
 
-export function renderObservation(snapshot, { usage = true, live = false, width = terminalWidth(), provider = null } = {}) {
+export function renderObservation(snapshot, { usage = true, live = false, width = terminalWidth(), provider = null, paused = false } = {}) {
+  // a team paused on its budget is not «running»: its sessions are counted as paused
   const out = [title(live ? say('observation.monitor') : say('agents.title'),
-    say('agents.running_of', { running: snapshot.running, total: snapshot.total }))];
+    paused ? say('agents.paused_of', { running: snapshot.running, total: snapshot.total })
+      : say('agents.running_of', { running: snapshot.running, total: snapshot.total }))];
   const columns = [{ label: say('agents.col_agent') }, { label: say('agents.col_session'), drop: true },
     { label: say('agents.col_state') }, { label: say('observation.identity'), shrink: true, min: 8 }];
-  const rows = snapshot.agents.map((row) => [safe(row.id), safe(row.session), state(row), identity(row)]);
+  const rows = snapshot.agents.map((row) => [safe(row.id), safe(row.session), state(row, paused), identity(row)]);
   if (usage) {
     columns.push({ label: say('observation.token_column') });
     rows.forEach((cells, i) => cells.push(value(snapshot.agents[i].usage.tokens)));

@@ -303,7 +303,7 @@ export function formatChatMessage(message, agent, zone = undefined) {
 /** An open card as lines for the screen: its code, its text and its options numbered, and how to answer. */
 export function formatCard(card, language = textLanguage()) {
   const clean = (value) => String(value ?? '').replace(CONTROLS, '').trim();
-  const head = c.bold('question') + c.dim(` ${clean(card.code)}  ${clean(card.subject)}`);
+  const head = c.bold(say('chat.card.question', {}, language)) + c.dim(` ${clean(card.code)}  ${clean(card.subject)}`);
   const body = clean(card.text).split('\n').map((l) => `  ${l}`).join('\n');
   const options = card.options.map((option, index) => `  ${index + 1}) ${clean(option)}`).join('\n');
   const how = card.multiple
@@ -484,7 +484,7 @@ export async function chatAction(agentArg, options = {}) {
   const show = (rows) => { for (const row of rows) console.log(`${row.card ? formatCard(row.card) : formatChatMessage(row, agent)}\n`); };
   if (feed) {
     const past = feed.history();
-    if (past === null) console.log(c.dim('  (the chat cannot be read here: /pane shows the terminal)\n'));
+    if (past === null) console.log(c.dim(`  ${say('chat.repl.unreadable')}\n`));
     else if (past.length) show(past);
   }
   printNotice(notice());
@@ -505,7 +505,7 @@ export async function chatAction(agentArg, options = {}) {
     const pane = capturePane(session, lines);
     const nonEmpty = pane.split('\n').filter((l) => l.trim()).slice(-lines).join('\n');
     console.log(c.dim('─── pane ─────────────────────────────────────────'));
-    console.log(nonEmpty || c.dim('(empty)'));
+    console.log(nonEmpty || c.dim(say('chat.repl.empty')));
     console.log(c.dim('──────────────────────────────────────────────────'));
   };
 
@@ -520,12 +520,12 @@ export async function chatAction(agentArg, options = {}) {
       if (msg === '/read') {
         const rows = feed ? feed.fresh() : [];
         if (rows.length) show(rows);
-        else { const why = notice(); if (why.length) printNotice(why); else console.log(c.dim('  (no new messages)')); }
+        else { const why = notice(); if (why.length) printNotice(why); else console.log(c.dim(`  ${say('chat.repl.no_new')}`)); }
         continue;
       }
       if (msg === '/cards') {
         const rows = feed ? feed.open() : [];
-        if (rows.length) show(rows); else console.log(c.dim('  (no open questions)'));
+        if (rows.length) show(rows); else console.log(c.dim(`  ${say('chat.repl.no_questions')}`));
         continue;
       }
       if (msg === '/clear') { console.clear(); continue; }
@@ -542,7 +542,7 @@ export async function chatAction(agentArg, options = {}) {
       // Never paste into a turn in progress: the text can be lost without a word. Wait for the agent, say so.
       const free = await waitForFreePane({
         capture: () => capturePane(session, 12),
-        onWait: () => console.log(c.dim('  (still answering your previous message: yours goes out as soon as it is free)')),
+        onWait: () => console.log(c.dim(`  ${say('chat.repl.busy')}`)),
       });
       if (!free) {
         console.log(c.red('  Your message was NOT sent: the agent is still busy after 3 minutes.'));
@@ -559,7 +559,7 @@ export async function chatAction(agentArg, options = {}) {
         if (feed) {
           const rows = await pump.awaitReply({ stop: typedLines.pending });
           if (rows.length) show(rows);
-          else if (!typedLines.pending()) { const why = notice(); if (why.length) printNotice(why); else console.log(c.dim('  (no reply yet: /read shows it when it comes)')); }
+          else if (!typedLines.pending()) { const why = notice(); if (why.length) printNotice(why); else console.log(c.dim(`  ${say('chat.repl.no_reply')}`)); }
         } else {
           await new Promise((res) => setTimeout(res, 3000));
           showPane(8);
@@ -569,6 +569,6 @@ export async function chatAction(agentArg, options = {}) {
   } finally {
     if (poller) clearInterval(poller);
     rl.close();
-    console.log(c.dim('  Closed chat.'));
+    console.log(c.dim(`  ${say('chat.repl.closed')}`));
   }
 }

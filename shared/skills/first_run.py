@@ -147,6 +147,14 @@ def _write(state: dict) -> dict:
     return state
 
 
+def _burst_window_over(state: dict) -> bool:
+    """A burst that began more than BURST_MAX_HOURS ago (a start time that cannot be read is no proof: it stays open)."""
+    if not isinstance(state, dict) or state.get("phase") != PHASE_BURST:
+        return False
+    began = _parse(state.get("burst_started_at"))
+    return began is not None and (datetime.now(timezone.utc) - began).total_seconds() / 3600.0 >= BURST_MAX_HOURS
+
+
 def status() -> dict:
     """Stato corrente, creandolo al primo accesso.
 
@@ -156,6 +164,14 @@ def status() -> dict:
     così l'aggiornamento non regala un burst a chi è già a regime.
     """
     state = _read()
+    if state and _burst_window_over(state):
+        # The window is over and nobody closed it (the Capitano is the one that runs `check`, and a stopped team, a lost
+        # message or a Capitano that never woke leaves the burst open for days): measured 17/11, a burst opened on 16/11
+        # 07:52 still «burst» 27 h later, its cap of 50 reached, so that no Scout could insert anything. The first run is a
+        # demonstration, not a regime: whoever reads the state past the window closes it, as `check` would have.
+        state.update({"phase": PHASE_STEADY, "completed_at": _now(),
+                      "completed_reason": f"window exhausted: {BURST_MAX_HOURS:g} h after the burst began"})
+        return _write(state)
     if not state:
         scored = _scored_count() or 0
         state = {
@@ -348,8 +364,8 @@ def sourcing_cap(conn=None) -> Optional[dict]:
         cap = state.get("scout_cap_first_pass")
         began = _parse(state.get("burst_started_at"))
         if (state.get("phase") != PHASE_BURST or began is None or isinstance(cap, bool)
-                or not isinstance(cap, int) or cap <= 0):
-            return None
+                or not isinstance(cap, int) or cap <= 0 or _burst_window_over(state)):
+            return None   # past the window the burst is over, even where nobody has written it yet (status closes it)
         since = began.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         own = conn is None
         if own:

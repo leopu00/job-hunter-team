@@ -147,11 +147,14 @@ function makeSandbox({
   // Lo spazio libero e' della macchina, non del codice: senza un `df` finto il
   // guard del 3% dell'upgrade (disk_low) renderebbe questa suite verde o rossa a
   // seconda del disco su cui gira. Sano (50%) di serie; FAKE_DF_FREE_PCT lo cambia.
+  // Un disco da 300 GiB: l'upgrade guarda anche cosa resta DOPO il suo download
+  // (circa 6 GiB, upgrade_disk_room), quindi al 2% (6 GiB) rifiuta e all'8%
+  // (24 GiB) parte, come sempre.
   writeExec(
     path.join(bin, "df"),
     [
       'pct="${FAKE_DF_FREE_PCT:-50}"',
-      "total=1000000",
+      "total=314572800",
       "avail=$((total * pct / 100))",
       "printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\\n'",
       "printf '/dev/fake %s %s %s 1%% /\\n' \"$total\" \"$((total - avail))\" \"$avail\"",

@@ -807,7 +807,7 @@
     "tier": "core",
     "access": "search",
     "host": "randstad.it/offerte-lavoro",
-    "hint": "The trades that are not IT: building (muratore, elettricista, idraulico), health (infermiere, OSS), catering (cuoco, cameriere) and logistics (magazziniere, autista). Public page, one WORD of the trade in the path: randstad.it/offerte-lavoro/q-<word>/ (q-muratore, q-infermiere, q-cuoco, q-magazziniere), about 15 ads per page with title, place and the link of the ad, in the static HTML; checked 17/11 with the Scout's user agent (job-hunter-team-scout/1), robots.txt allows the q- pages. Do not add a place or a distance to the path (/l-, /km-, /postcode- are disallowed: filter the place yourself on what the page returns) and do not follow /job-redirect/ or the apply links. It is an agency: the ad can be for a client, say so in the notes."
+    "hint": "The trades that are not IT: building (muratore, elettricista, idraulico), health (infermiere, OSS), catering (cuoco, cameriere) and logistics (magazziniere, autista). Public page, one WORD of the trade in the path: randstad.it/offerte-lavoro/q-<word>/ (q-muratore, q-infermiere, q-cuoco, q-magazziniere), about 15 ads per page with title, place and the link of the ad, in the static HTML; checked 17/11 with the Scout's user agent (job-hunter-team-scout/1), robots.txt allows the q- pages. For a place put the city after the word: randstad.it/offerte-lavoro/q-<word>/ci-<city>/ (q-muratore/ci-bari/, q-elettricista/ci-torino/: lowercase city, the site adds the region itself; the page lists the ads of that city and of the towns around it, so still read the place of each ad; a city the site does not know gives an empty page, not an error). A query string (?locationSearch=, ?searchField=) is ignored by the site: the page is the same for every place, never use it. /l-, /km-, /postcode- are disallowed. Do not follow /job-redirect/ or the apply links. It is an agency: the ad can be for a client, say so in the notes."
    },
    {
     "slug": "concorsipubblici-it",
@@ -826,6 +826,18 @@
     "access": "search",
     "host": "jobintourism.it",
     "hint": "Catering and hotels (cuoco, chef de rang, commis, barista, sala): the offers of the hotels and restaurants are public pages, jobintourism.it/offerte-primo-piano/<ad>/, listed on the home page; the group ads («varie figure professionali a <place>») list several roles. Checked 17/11 with job-hunter-team-scout/1, robots.txt allows them (only /wp-admin/ and /wp-content/uploads/ are disallowed)."
+   },
+   {
+    "slug": "talent-com-it",
+    "name": "Talent.com Italia",
+    "country": "it",
+    "tier": "minor",
+    "access": "search",
+    "host": "it.talent.com",
+    "aliases": [
+     "talent"
+    ],
+    "hint": "Public search page, no key: it.talent.com/jobs?k=<word>&l=<place>, from a few to about 20 ads per page, each with the link /view?id=<digits> in the static HTML and in the JSON-LD list; the link opens the ad (HTTP 200). Take the id from the page, never type it: a link with a made-up or shell-empty id (view?id=$id) answers 404. «NOT IN THE DATABASE YET» printed by db_query check-url only means the ad is new to the database, not that the link is dead. Checked 17/11 with job-hunter-team-scout/1: robots.txt disallows /search-jobs/*, /redirect*, /<lang>/redirect*, /convert*, /ajax/*, /api/ and *.shtml, and allows /jobs and /view; do not follow the apply redirects. An aggregator: the ad is often from an agency or another board, say so in the notes."
    },
    {
     "slug": "inpa-it",
@@ -1163,7 +1175,8 @@
     "aliases": [
      "talent"
     ],
-    "portal_language": "en"
+    "portal_language": "en",
+    "hint": "Public search page, no key: se.talent.com/jobs?k=<word>&l=<place> (the same on it.talent.com for Italy), from a few to about 20 ads per page, each with the link /view?id=<digits> in the static HTML and in the JSON-LD list; the link opens the ad (HTTP 200). Take the id from the page, never type it: a link with a made-up or shell-empty id (view?id=$id) answers 404. «NOT IN THE DATABASE YET» printed by db_query check-url only means the ad is new to the database, not that the link is dead. Checked 17/11 with job-hunter-team-scout/1: robots.txt disallows /search-jobs/*, /redirect*, /<lang>/redirect*, /convert*, /ajax/*, /api/ and *.shtml, and allows /jobs and /view; do not follow the apply redirects. An aggregator: the ad is often from an agency or another board, say so in the notes."
    },
    {
     "slug": "careerjet",

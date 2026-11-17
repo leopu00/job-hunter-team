@@ -71,6 +71,11 @@ def _setup(home, trade, declared=True):
     ("operaio edile", "Operaio metalmeccanico", False), ("capo cantiere", "Capocantiere", True), ("capocantiere", "Capo cantiere", True),
     ("oss", "OSS con attestato", True), ("oss", "Ossidazione e verniciatura", False), ("muratore", "Muratura a secco", False),
     ("cuoco", "Cucina industriale", False), ("maurer", "Maurermeister gesucht", True), ("cuoco", "", False),
+    # a word between the words of the phrase, or the other order: the specific word (not the generic «operaio») names the trade
+    ("operaio edile", "Operaio specializzato edile", True), ("operaio edile", "Capo squadra edile", True),
+    ("operaio edile", "Addetto ai lavori in cantiere edile", True), ("autista camion", "Camion: autista patente C", True),
+    ("operaio edile", "Operaio specializzato metalmeccanico", False), ("autista camion", "Autista di autobus", False),
+    ("operaio addetto", "Operaio addetto alle pulizie", True),
 ])
 def test_a_term_is_found_in_its_forms_and_not_in_another_trade(term, text, found):
     assert role.term_in(role._plain(term), role._tokens(text)) is found

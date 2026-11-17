@@ -492,7 +492,8 @@ describe("db_query against db_query.py", () => {
   });
 
   it.skipIf(skills === null).each(QUERIES.map((q) => [q.join(" ") || "(no args)", q]))("%s", async (_label, args) => {
-    const { call, py } = twins();
+    // check-url changed on both sides in the same commit («NOT IN THE DATABASE YET» for a position not seen before): its Python is this tree's.
+    const { call, py } = twins("scout-1", args[0] === "check-url" && TREE !== null ? TREE : skills);
     expectSame(await call("db_query", args as string[]), py("db_query.py", args as string[]));
   });
 

@@ -37,7 +37,7 @@ def _world(tmp_path: Path, *, sessions: list[str] | None = None, phase: str = "b
     (home / "state").mkdir(parents=True)
     bindir.mkdir()
     (home / "jht.config.json").write_text(json.dumps({"active_provider": "codex", "providers": {"openai": {"plan": "pro"}}}), encoding="utf-8")
-    state = {"phase": phase, "created_at": "2026-11-11T07:00:00+00:00", "burst_started_at": "2026-11-11T07:00:00+00:00",
+    state = {"phase": phase, "created_at": "2026-11-11T07:00:00+00:00", "burst_started_at": (__import__("datetime").datetime.now(__import__("datetime").timezone.utc) - __import__("datetime").timedelta(minutes=1)).isoformat(timespec="seconds"),
              "completed_at": None, "completed_reason": None, "scored_at_start": 0, "roster": ROSTER, "scout_cap_first_pass": 50}
     (home / "state" / "first-run.json").write_text(json.dumps(state), encoding="utf-8")
     listing = tmp_path / "sessions.txt"

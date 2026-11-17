@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import sqlite3
 from pathlib import Path
 from datetime import datetime
@@ -304,7 +305,9 @@ def _tell(api, run, key, text, user, notify_user):
             done["%s:%s" % (key, session)] = bool(notice(api, run.state, "pi_cap:%s:%s" % (key, session), session, text))
     if not done.get(key):
         try:
-            notify_user(user, REASON)
+            # one source id per notice: the tool refuses a second notice under the same id with another text (exit 2), so only
+            # the first pause of a team was ever told to the person (giro Windows 16/11: «jht-notify-user failed with exit 2»)
+            notify_user(user, "%s-%s" % (REASON, re.sub(r"[^A-Za-z0-9_.-]+", "-", key)))
             done[key] = True
         except Exception as error:  # noqa: BLE001 - not a reason to stop the tick
             print("[bridge V6] WARN pi spend cap user notice: %s" % error)
@@ -323,7 +326,8 @@ def _record(verdict, config):
     record = {"why": verdict["why"], "spent": verdict["spent"], "ceiling": verdict["ceiling"]}
     if verdict["why"] in ("budget", "period", "pace"):
         record.update(budget_usd=verdict["usd"], starts_at=_iso(verdict["starts"], config),
-                      ends_at=_iso(verdict["ends"], config), resumes_at=_iso(verdict["resumes"], config))
+                      ends_at=_iso(verdict["ends"], config), resumes_at=_iso(verdict["resumes"], config),
+                      counts_from=int(verdict["counts_from"]))
         if verdict.get("before"):
             record["before_work"] = {"spent": verdict["before"], "budget_usd": verdict["usd"]}
     return record
@@ -396,6 +400,26 @@ def _resume_moved(api, run, verdict, spent, day, notify_user, config, now, flag)
               % (run.now_h, fresh["resumes_at"], record.get("resumes_at")))
         _tell(api, run, _halt_key(verdict, day), captain_text(verdict, spent, None, config, now),
               user_text(verdict, spent, config, now), notify_user)
+
+
+def _held_by_the_budget(flag, budget):
+    """True when the flag is the pause of a spent budget or an ended period of THIS budget: it does not lift by itself, only a new
+    budget (jht setup) lifts it. The verdict that raised it can stop being one with no new budget at all: the stop looks AHEAD
+    at the pace of the last minutes, and a team that has stopped has no pace, so the next look finds 4.77 $ of 5 under the line
+    and would clear it, the team would work again and stop a second time at 4.93 $ (giro Windows 16/11: 13:00 stop, 13:02 «cleared»,
+    14 more calls). The budget is the same when the flag names the moment its dollars count from (`counts_from`); a flag written
+    before that field is the same when it names the same dollars and the same start."""
+    record = (flag or {}).get("pi_spend_cap") or {}
+    if record.get("why") not in ("budget", "period") or budget is None:
+        return False
+    if record.get("counts_from") is not None:
+        return int(record["counts_from"]) == int(budget["counts_from"])
+    try:
+        started = datetime.fromisoformat(record["starts_at"]).timestamp() if record.get("starts_at") else None
+    except (TypeError, ValueError):
+        return False
+    return (started is not None and budget.get("starts") is not None and int(started) == int(budget["starts"])
+            and record.get("budget_usd") == budget["usd"])
 
 
 def _resume(api, run, day, notify_user):
@@ -477,7 +501,7 @@ def step(api, run, notify_user=None):
                 _halt(api, run, verdict, spent, day, notify_user, config, now, escape=False)
             elif mine and verdict["why"] == "pace":
                 _resume_moved(api, run, verdict, spent, day, notify_user, config, now, flag)
-        elif mine and (budget is not None or run.state.get("no_quota_declared")):
+        elif mine and (budget is not None or run.state.get("no_quota_declared")) and not _held_by_the_budget(flag, budget):
             # Lifted only by a tick that looked: without a budget and before the no-quota mode is declared (the first tick
             # of a bridge started again) the ceilings were not read, and «nothing to stop» is not «back under».
             _resume(api, run, day, notify_user)
