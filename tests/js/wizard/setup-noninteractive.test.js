@@ -15,7 +15,7 @@ vi.mock('../../../cli/wizard/setup-helpers.js', async (importOriginal) => ({
 import { runNonInteractiveSetup } from '../../../cli/wizard/setup-noninteractive.js';
 import { writeConfigFile } from '../../../cli/wizard/setup-helpers.js';
 
-describe('runNonInteractiveSetup — Phase 1 health failure', () => {
+describe('runNonInteractiveSetup — health failure in the language of the person', () => {
   const originalLang = process.env.JHT_LANG;
   let logSpy;
 
@@ -31,7 +31,7 @@ describe('runNonInteractiveSetup — Phase 1 health failure', () => {
     else process.env.JHT_LANG = originalLang;
   });
 
-  it.skipIf(!codexOffered)('keeps the save-anyway warning in English', async () => {
+  it.skipIf(!codexOffered)('says the save-anyway warning in the language of the person', async () => {
     await runNonInteractiveSetup({
       provider: 'openai',
       authMethod: 'api_key',
@@ -40,7 +40,7 @@ describe('runNonInteractiveSetup — Phase 1 health failure', () => {
     });
 
     expect(logSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Health check failed — configuration will still be saved.')
+      expect.stringContaining('Il controllo non è riuscito: la configurazione viene salvata lo stesso.')
     );
     expect(writeConfigFile).toHaveBeenCalledOnce();
   });

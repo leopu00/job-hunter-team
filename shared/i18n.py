@@ -123,20 +123,6 @@ def _load_catalog(lang: str) -> dict:
 def t(key: str) -> str:
     """Lookup a translated string by key. Falls back to en, then to the key."""
     lang = _resolve_lang()
-    # T0-T1 launch copy is English-only in phase 1. The Assistente's chat
-    # welcome is product copy and follows the user's resolved language.
-    if (
-        key.startswith(("host_setup.", "wizard.checks.", "wizard.cloud.",
-                        "wizard.step.", "wizard.provider.", "wizard.oauth.", "wizard.cli."))
-        or (key.startswith("welcome.") and not key.startswith("welcome.assistente"))
-        or key in {
-            "wizard.welcome_subtitle", "wizard.aborted_prereqs",
-            "wizard.profile.intro", "wizard.team.starting",
-            "wizard.team.start_failed", "wizard.outro_done",
-            "wizard.outro_aborted", "wizard.start.ready", "wizard.start.done",
-        }
-    ):
-        lang = "en"
     cat = _load_catalog(lang)
     v = cat.get(key)
     if isinstance(v, str):
