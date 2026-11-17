@@ -86,8 +86,10 @@ const PROVIDER_OAUTH_CMD = {
 
 /** The one sentence for a step that did not complete, for the cases where the child could not even say it itself. */
 export function describeStepFailure(label, { missing = false, status = null } = {}) {
-  const why = missing ? 'the JHT program was not found here' : status === null ? 'it could not be started' : `it ended with code ${status}`;
-  return `  ${label} did not complete: ${why}. More details: JHT_DEBUG=1 jht setup`;
+  let why = tf('wizard.substep.code', status);
+  if (missing) why = t('wizard.substep.missing');
+  else if (status === null) why = t('wizard.substep.not_started');
+  return `  ${tf('wizard.substep.failed', label, why)}`;
 }
 
 /**
@@ -260,7 +262,7 @@ async function runSetupSteps(prompter, state) {
     );
     const pairCloud = await prompter.confirm({
       message: t('wizard.cloud.enable_prompt'),
-      initialValue: true,
+      initialValue: false, // integrations are turned on when asked for, after the setup: the default is no
     });
     if (pairCloud) {
       const cloudOk = runJhtSubcommand(['cloud', 'login'], 'cloud login');

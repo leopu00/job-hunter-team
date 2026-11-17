@@ -113,6 +113,13 @@ describe('writeConfigFile', () => {
 // --- summarizeExistingConfig ---
 
 describe('summarizeExistingConfig', () => {
+  // the summary is said with the words of the wizard (cli/wizard/i18n.js): the catalogs and the model table are read for real, nothing else
+  beforeEach(async () => {
+    const actual = await vi.importActual('node:fs');
+    const real = /[\\/]shared[\\/](locales[\\/][a-z]{2}\.json|runtime[\\/]role-models\.list)$/;
+    vi.mocked(fs.readFileSync).mockImplementation((file, ...args) => (real.test(file instanceof URL ? file.pathname : String(file)) ? actual.readFileSync(file, ...args) : undefined));
+  });
+
   it('mostra provider, modello, auth', () => {
     const summary = summarizeExistingConfig({
       active_provider: 'claude',
@@ -121,7 +128,7 @@ describe('summarizeExistingConfig', () => {
     expect(summary).toMatch(/Claude/i);
     expect(Object.values(CLAUDE_ALIAS).filter((model) => !summary.includes(model))).toEqual([]);
     expect(summary).not.toMatch(/claude-sonnet-4-6/);
-    expect(summary).toMatch(/api_key/);
+    expect(summary).toMatch(/Auth: API key/);
     // workspace non e' piu' parte del summary (path JHT fissi)
     expect(summary).not.toMatch(/Workspace/);
   });

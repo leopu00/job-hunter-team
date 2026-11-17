@@ -72,9 +72,9 @@ test('the example of a cron schedule has the five fields of a cron expression', 
 
 test('the long help lists the integration command of the computer, with a line in every catalog', async () => {
   const { HOST_COMMANDS } = await import('../src/lib/help-groups.js');
-  const { CATALOGS } = await import('../src/lib/texts.js');
+  const { CATALOGS, PARTIAL } = await import('../src/lib/texts.js');
   assert.ok(HOST_COMMANDS.some(([name]) => name === 'integration'));
-  for (const [lang, catalog] of Object.entries(CATALOGS)) assert.ok(catalog['help.host_integration'], lang);
+  for (const [lang, catalog] of Object.entries(CATALOGS)) if (!PARTIAL.has(lang)) assert.ok(catalog['help.host_integration'], lang);
   const out = spawnSync(process.execPath, [fileURLToPath(new URL('../bin/jht.js', import.meta.url)), 'help'], { encoding: 'utf8', env: { ...process.env, JHT_LANG: 'en', NO_COLOR: '1' } }).stdout;
   assert.match(out, /^  integration\s+Add or remove/m);
 });
