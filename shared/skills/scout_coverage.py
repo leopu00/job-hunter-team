@@ -499,6 +499,24 @@ def lane_of(agent):
         return None
 
 
+def lane_or_assign(agent):
+    """`lane_of`, and for a Scout with none, past the burst: when two Scouts or more are alive it takes the first lane nobody holds
+    (scout_coord.assign_lane, the burst's own rule), so two Scouts started by the watchdog do not search the same portal (banco
+    build9: two Scouts on one portal, 28 doubles). A single Scout has no lane to share. None when it cannot be done."""
+    lane = lane_of(agent)
+    if lane is not None or not agent or not re.fullmatch(r"scout-\d+", agent.strip().lower()):
+        return lane
+    try:
+        import scout_coord
+        live = scout_coord._live_scouts()
+        if not live or len(live) < 2 or agent.strip().lower() not in live:
+            return None
+        scout_coord.assign_lane(agent.strip().lower())
+        return lane_of(agent)
+    except Exception:  # noqa: BLE001 — no lane is the plan's own order, as before
+        return None
+
+
 def profile_news(agent: str, profile_path=None) -> dict:
     """What the Scout `agent` has to know about the profile it built its circles on: `changed`, the `groups` that changed
     (roles, places, languages, mode) and, when it did, what to do. Silence (no version file, a profile that cannot be read,
@@ -626,7 +644,7 @@ def main(argv=None) -> int:
         else:
             print(render(plan, report))
         return 0
-    step = next_step(plan, rows, profile=args.profile, now=now, lane=lane_of(args.agent))
+    step = next_step(plan, rows, profile=args.profile, now=now, lane=lane_or_assign(args.agent))
     avoid = avoid_list(plan, rows)
     if avoid:
         step["avoid"] = avoid          # do not open these: they fail with certainty (the table, or this run's own pass log)

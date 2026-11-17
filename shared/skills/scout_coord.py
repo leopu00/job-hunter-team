@@ -361,10 +361,13 @@ def planned_scouts(live=None):
         pass
     try:
         import first_run
-        roster = first_run._read().get("roster") or {}
-        planned = int(roster.get("scout"))
-        if 1 <= planned <= 32:
-            return planned
+        state = first_run._read()
+        # The roster is the burst's: past it (steady) the Scouts are the ones alive, and a roster of five for two Scouts would leave
+        # three lanes with nobody in them.
+        if state.get("phase") == getattr(first_run, "PHASE_BURST", "burst"):
+            planned = int((state.get("roster") or {}).get("scout"))
+            if 1 <= planned <= 32:
+                return planned
     except Exception:  # noqa: BLE001 — no first run, no roster: count who is here
         pass
     return max(1, len(live or ()))
@@ -403,6 +406,11 @@ def _get_db_waiting():
 
 
 def cmd_auto(scout):
+    print(json.dumps(assign_lane(scout), sort_keys=True, ensure_ascii=False))
+
+
+def assign_lane(scout):
+    """The lane of `scout` (the first nobody holds, in ONE write under a lock) and its first search, as a dict; `cmd_auto` prints it."""
     if not valid_scout_name(scout):
         raise CoordinationDbError(f"{scout!r} is not a Scout name (expected something like `scout-1`). Nothing was written.")
     import scout_coverage as cov
@@ -468,7 +476,7 @@ def cmd_auto(scout):
         answer["language_plan"] = cov._lang.plan(cov._lang.read_languages())   # what `scout_language.py plan` prints: one command less
     except Exception:  # noqa: BLE001 — then the Scout runs `scout_language.py plan` itself, as before
         pass
-    print(json.dumps(answer, sort_keys=True, ensure_ascii=False))
+    return answer
 
 
 def cmd_reset():
