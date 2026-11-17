@@ -141,6 +141,7 @@ export const T: Record<Locale, Copy> = {
     },
     profiles: {
       bricklayer: "Bricklayer",
+      warehouseWorker: "Warehouse worker",
       officeClerk: "Office clerk, part time",
       dataAnalyst: "Data analyst",
       generic: "Generic test profile",
@@ -428,6 +429,7 @@ export const T: Record<Locale, Copy> = {
     },
     profiles: {
       bricklayer: "Muratore",
+      warehouseWorker: "Magazziniere",
       officeClerk: "Impiegata amministrativa part time",
       dataAnalyst: "Data analyst",
       generic: "Profilo di prova generico",
@@ -715,6 +717,7 @@ export const T: Record<Locale, Copy> = {
     },
     profiles: {
       bricklayer: "Maurer",
+      warehouseWorker: "Lagerarbeiter",
       officeClerk: "Bürokraft, Teilzeit",
       dataAnalyst: "Data Analyst",
       generic: "Allgemeines Testprofil",
@@ -1002,6 +1005,7 @@ export const T: Record<Locale, Copy> = {
     },
     profiles: {
       bricklayer: "Albañil",
+      warehouseWorker: "Mozo de almacén",
       officeClerk: "Administrativa a tiempo parcial",
       dataAnalyst: "Analista de datos",
       generic: "Perfil de prueba genérico",
@@ -1291,6 +1295,7 @@ export const T: Record<Locale, Copy> = {
     },
     profiles: {
       bricklayer: "Maçon",
+      warehouseWorker: "Magasinier",
       officeClerk: "Employée administrative à temps partiel",
       dataAnalyst: "Data analyst",
       generic: "Profil d'essai générique",
@@ -1578,6 +1583,7 @@ export const T: Record<Locale, Copy> = {
     },
     profiles: {
       bricklayer: "Pedreiro",
+      warehouseWorker: "Operador de armazém",
       officeClerk: "Administrativa a tempo parcial",
       dataAnalyst: "Analista de dados",
       generic: "Perfil de teste genérico",
@@ -1865,6 +1871,7 @@ export const T: Record<Locale, Copy> = {
     },
     profiles: {
       bricklayer: "Kőműves",
+      warehouseWorker: "Raktáros",
       officeClerk: "Irodai ügyintéző, részmunkaidő",
       dataAnalyst: "Adatelemző",
       generic: "Általános próbaprofil",
