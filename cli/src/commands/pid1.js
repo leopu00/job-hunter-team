@@ -34,6 +34,7 @@ import { spawn } from 'node:child_process';
 import { watch } from 'node:fs';
 import { dirname } from 'node:path';
 import { providerSignedIn } from '../lib/provider-signin.js';
+import { setupOpen } from '../lib/setup-open.js';
 
 const JHT_ENTRY = '/app/cli/bin/jht.js';
 const JHT_HOME = '/jht_home';
@@ -309,6 +310,12 @@ async function startUserFacingAgents() {
   // partiva sempre con agenti attivi anche se l'utente li aveva spenti.
   if (existsSync(TEAM_HALTED_FLAG)) {
     pid1Log('auto-start agents SKIPPED: .team-halted.flag present (user clicked Stop)');
+    return;
+  }
+  // A `jht setup` open (the container restarted by the switch of service, or a start while the sign-in is not done): the team
+  // starts when the setup says so, not on the configuration of before.
+  if (setupOpen(JHT_HOME)) {
+    pid1Log('auto-start agents SKIPPED: a setup is open (.setup-open.flag)');
     return;
   }
   // Bug regressione post-recreate (osservato 2026-05-17 20:02): senza

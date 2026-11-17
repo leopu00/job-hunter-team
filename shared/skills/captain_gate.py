@@ -9,6 +9,7 @@ scales) waits until the onboarding has closed.
 The onboarding is closed when ANY of these holds (`reason`):
   * `ready_flag`   the Assistente wrote `$JHT_HOME/profile/ready.flag` (it does when the profile has the target role, the
                    place and a language: skill onboarding-flow);
+  * `onboarding_done` `$JHT_HOME/profile/onboarding-done.flag` is there (the questions are over) even with no ready.flag;
   * `phase`        the first run is already past awaiting_profile (burst or steady): an installation that works, or an
                    update of one, never loses its Capitano;
   * `profile_fit`  the profile already passes the gate to start the search (a profile that existed before the flag);
@@ -73,6 +74,10 @@ def check() -> dict:
         phase = first_run.status().get("phase")
         if flag.is_file() and not flag.is_symlink():
             return _with_tools({"captain_due": True, "reason": "ready_flag", "phase": phase}, flag)
+        # the Assistente's questions are over (or the person said to stop) even if ready.flag was never written: the onboarding is done
+        done = flag.parent / "onboarding-done.flag"
+        if _real_file(done):
+            return _with_tools({"captain_due": True, "reason": "onboarding_done", "phase": phase}, done)
         if phase in (first_run.PHASE_BURST, first_run.PHASE_STEADY):
             return {"captain_due": True, "reason": "phase", "phase": phase}
         if first_run._profile_imported() is not None:

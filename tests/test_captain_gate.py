@@ -23,7 +23,7 @@ def _state(phase: str) -> str:
                        "completed_at": None, "completed_reason": None, "scored_at_start": 0})
 
 
-def _ask(tmp_path: Path, *, state: str | None = None, flag: bool = False, override: str | None = None) -> tuple[int, dict]:
+def _ask(tmp_path: Path, *, state: str | None = None, flag: bool = False, done_flag: bool = False, override: str | None = None) -> tuple[int, dict]:
     home = tmp_path / "jht"
     (home / "state").mkdir(parents=True, exist_ok=True)
     (home / "profile").mkdir(parents=True, exist_ok=True)
@@ -31,6 +31,8 @@ def _ask(tmp_path: Path, *, state: str | None = None, flag: bool = False, overri
         (home / "state" / "first-run.json").write_text(state, encoding="utf-8")
     if flag:
         (home / "profile" / "ready.flag").write_text("", encoding="utf-8")
+    if done_flag:
+        (home / "profile" / "onboarding-done.flag").write_text("", encoding="utf-8")
     env = {"PATH": os.environ.get("PATH", ""), "JHT_HOME": str(home), "JHT_DB": str(home / "no.db"),
            "PYTHONDONTWRITEBYTECODE": "1"}
     if override is not None:
@@ -52,6 +54,21 @@ def test_awaiting_profile_without_the_flag_waits(tmp_path: Path):
 def test_the_ready_flag_makes_it_due(tmp_path: Path):
     code, out = _ask(tmp_path, state=_state("awaiting_profile"), flag=True)
     assert (code, out["reason"]) == (0, "ready_flag")
+
+
+def test_an_onboarding_that_is_done_makes_it_due_even_without_the_ready_flag(tmp_path: Path):
+    # the person finished the onboarding (the Assistente wrote onboarding-done.flag): the setup must not say «wait for the onboarding»
+    code, out = _ask(tmp_path, state=_state("awaiting_profile"), done_flag=True)
+    assert (code, out["captain_due"], out["reason"]) == (0, True, "onboarding_done")
+
+
+def test_a_done_flag_that_is_a_link_does_not_count(tmp_path: Path):
+    home = tmp_path / "jht"
+    (home / "profile").mkdir(parents=True)
+    (home / "profile" / "elsewhere").write_text("", encoding="utf-8")
+    (home / "profile" / "onboarding-done.flag").symlink_to(home / "profile" / "elsewhere")
+    code, out = _ask(tmp_path, state=_state("awaiting_profile"))
+    assert (code, out["reason"]) == (1, "onboarding_open")
 
 
 def test_a_flag_that_is_not_a_regular_file_does_not_count(tmp_path: Path):
