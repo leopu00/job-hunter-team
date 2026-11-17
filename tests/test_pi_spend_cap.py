@@ -1067,3 +1067,42 @@ def test_a_session_that_does_not_answer_does_not_stop_the_resume(tmp_path):
     bridge.config = budget(5, bridge.clock["now"], bridge.clock["now"] + 1800)
     bridge.tick(state=state)
     assert not bridge.flag.exists() and _woken(bridge) == ["scout-2"]
+
+
+def test_a_session_born_during_the_pause_is_woken_with_its_held_first_message_said(tmp_path):
+    """An update during the pause: the Analyst is born with the new container, its first message is held by the gate and never
+    comes again, and it is not in the list the ESC wrote. A new budget must wake it, and say that its first message never arrived."""
+    bridge, state = _a_stop_that_looks_ahead(tmp_path)
+    bridge.api.list_tmux_sessions = lambda: ["CAPITANO", "SENTINELLA", "ANALISTA-5", "scout-1", "my shell", "notes"]
+    bridge.clock["now"] += 600
+    bridge.config = budget(5, bridge.clock["now"], bridge.clock["now"] + 1800)
+    bridge.tick(state=state)
+    assert not bridge.flag.exists()
+    assert _woken(bridge) == ["ANALISTA-5", "scout-1", "scout-2"], "the newcomer too; not a session that is not an agent of the team"
+    newcomer = next(t for s, t in bridge.sent if s == "ANALISTA-5")
+    assert "held back" in newcomer and "never reached you" in newcomer
+    old = next(t for s, t in bridge.sent if s == "scout-1")
+    assert "pick up EXACTLY where you were" in old and "never reached you" not in old
+
+
+def test_the_newcomer_is_not_woken_when_the_team_is_stopped_by_the_person_or_paused_alone(tmp_path, monkeypatch):
+    import agent_pause
+    monkeypatch.setattr(agent_pause, "paused_sessions", lambda home=None: ["ANALISTA-5"])
+    bridge, state = _a_stop_that_looks_ahead(tmp_path)
+    bridge.api.list_tmux_sessions = lambda: ["ANALISTA-5"]
+    bridge.clock["now"] += 600
+    bridge.config = budget(5, bridge.clock["now"], bridge.clock["now"] + 1800)
+    bridge.tick(state=state)
+    assert "ANALISTA-5" not in _woken(bridge)
+
+
+def test_a_bridge_that_cannot_list_the_sessions_wakes_the_ones_the_esc_reached(tmp_path):
+    bridge, state = _a_stop_that_looks_ahead(tmp_path)
+
+    def broken():
+        raise OSError("tmux")
+    bridge.api.list_tmux_sessions = broken
+    bridge.clock["now"] += 600
+    bridge.config = budget(5, bridge.clock["now"], bridge.clock["now"] + 1800)
+    bridge.tick(state=state)
+    assert _woken(bridge) == ["scout-1", "scout-2"]

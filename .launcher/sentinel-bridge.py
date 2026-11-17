@@ -1043,6 +1043,16 @@ def _burn_intent_announce(state, bi):
     return _delivery_part("sentinel_delivery")._burn_intent_announce(_delivery_context(), state, bi)
 
 
+def list_tmux_sessions():
+    """I nomi delle sessioni tmux vive, o [] se tmux non risponde: il risveglio del freno ci cerca anche le sessioni nate
+    durante la pausa (il loro primo messaggio era stato trattenuto dal cancello e non arriva piu')."""
+    try:
+        out = subprocess.run(["tmux", "ls", "-F", "#{session_name}"], capture_output=True, text=True, timeout=10).stdout
+    except (subprocess.SubprocessError, OSError):
+        return []
+    return [line.strip() for line in out.splitlines() if line.strip()]
+
+
 def _esc_all_sessions():
     """Manda un ESC a ogni sessione tmux: interrompe il turno in corso senza
     uccidere il processo — una pausa pulita, non un kill. Best-effort: qualunque
