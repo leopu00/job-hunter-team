@@ -525,6 +525,11 @@
           "102.web.columns.cloud_sync_tokens"
         ]
       },
+      "cloud_sync_tokens.token_origin": {
+        "receipts": [
+          "102.web.columns.cloud_sync_tokens"
+        ]
+      },
       "cloud_sync_tokens.token_prefix": {
         "receipts": [
           "102.web.columns.cloud_sync_tokens"

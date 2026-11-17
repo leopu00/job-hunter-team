@@ -15,13 +15,36 @@
 --   page             created on the page of the tokens: no session goes to the box.
 -- A token of unknown origin (NULL: made before this migration and not recognised below) is treated as before: if
 -- active and without a session, it closes the door.  The person revokes it and pairs again.
-ALTER TABLE public.cloud_sync_tokens
-  ADD COLUMN IF NOT EXISTS token_origin TEXT;
+
+-- From here token_origin opens the door: it must stay a column that only the server writes.  105 took every write on
+-- the table from the browser roles and stops when one is left; the same check is repeated here, BEFORE anything
+-- changes, so that 107 never goes on top of a database where a write was given back by hand after 105.
 DO $$
 BEGIN
     IF to_regprocedure('web_door.ext_position(text, text, uuid, jsonb, text, uuid)') IS NULL THEN
         RAISE EXCEPTION '107: needs 105 (web_door.ext_position)';
     END IF;
+    IF EXISTS (
+        SELECT 1 FROM pg_policy
+         WHERE polrelid = 'public.cloud_sync_tokens'::regclass
+           AND polcmd IN ('a', 'w', 'd', '*')
+    ) THEN
+        RAISE EXCEPTION '107: cloud_sync_tokens still has an INSERT, UPDATE, DELETE or ALL policy';
+    END IF;
+    IF has_any_column_privilege('anon', 'public.cloud_sync_tokens', 'INSERT')
+       OR has_any_column_privilege('anon', 'public.cloud_sync_tokens', 'UPDATE')
+       OR has_table_privilege('anon', 'public.cloud_sync_tokens', 'DELETE')
+       OR has_any_column_privilege('authenticated', 'public.cloud_sync_tokens', 'INSERT')
+       OR has_any_column_privilege('authenticated', 'public.cloud_sync_tokens', 'UPDATE')
+       OR has_table_privilege('authenticated', 'public.cloud_sync_tokens', 'DELETE') THEN
+        RAISE EXCEPTION '107: anon or authenticated can still INSERT, UPDATE or DELETE cloud_sync_tokens';
+    END IF;
+END $$;
+
+ALTER TABLE public.cloud_sync_tokens
+  ADD COLUMN IF NOT EXISTS token_origin TEXT;
+DO $$
+BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM pg_constraint
          WHERE conrelid = 'public.cloud_sync_tokens'::regclass
