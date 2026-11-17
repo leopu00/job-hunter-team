@@ -14,6 +14,9 @@ import { fileURLToPath } from 'node:url';
 import { containerRunning, CONTAINER_NAME, execInContainer } from '../utils/container-proxy.js';
 import { c } from './_colors.js';
 import { resumeTelegram } from '../lib/telegram-lifecycle.js';
+import { say } from '../lib/texts.js';
+import { JHT_HOME } from '../jht-paths.js';
+import { teamStoppedByPerson } from '../lib/team-halt-note.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -73,6 +76,7 @@ async function upAction() {
       return;
     }
     console.log(c.yellow(`Container '${CONTAINER_NAME}' is already active.`));
+    if (teamStoppedByPerson(JHT_HOME)) console.log(c.yellow(`  ${say('container.team_stopped')}`));
     return;
   }
   console.log(c.bold('Starting the jht container...'));
@@ -91,6 +95,8 @@ async function upAction() {
   if (!resumeTelegram({ cwd: REPO_ROOT })) { process.exitCode = 1; return; }
   console.log(c.green(`✓ Container ${CONTAINER_NAME} started`));
   console.log(c.dim('  Interaction: JHT desktop app · logs: jht container logs -f'));
+  // the container is up, the team is not: it stays stopped as the person left it, and the start says so, not «started» alone
+  if (teamStoppedByPerson(JHT_HOME)) console.log(c.yellow(`  ${say('container.team_stopped')}`));
 }
 
 // ── down ───────────────────────────────────────────────────────────

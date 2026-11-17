@@ -27,7 +27,9 @@ export function setupOpen(home, now = Date.now()) {
 /** Marks the setup as open. A home that cannot be written to leaves things as they were: no flag, the setup goes on. */
 export function openSetup(home) {
   try {
-    writeFileSync(setupOpenPath(home), `${new Date().toISOString()}\n`, { mode: 0o600 });
+    // a new file, never written through what stands there (a link put in its place): taken off first, then created with 'wx'
+    rmSync(setupOpenPath(home), { force: true });
+    writeFileSync(setupOpenPath(home), `${new Date().toISOString()}\n`, { mode: 0o600, flag: 'wx' });
     return true;
   } catch {
     return false;

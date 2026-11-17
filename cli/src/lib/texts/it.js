@@ -254,6 +254,7 @@ export default {
   'team.captain_scales': 'Il CAPITANO regola gli altri agenti in base alle soglie del Bridge.',
   'team.captain_waits': 'Il resto della squadra parte da solo quando l’onboarding con l’Assistente è finito. Rispondi alle sue domande con: jht team chat assistente (o nella chat dell’Assistente nell’app).',
   'team.captain_tools': 'Il Capitano e la Sentinella partono da soli fra pochi minuti, quando gli strumenti dell’immagine completa sono pronti. L’onboarding è finito: non c’è niente da fare.',
+  'container.team_stopped': 'La squadra è ferma (l’hai fermata tu): il container è acceso, gli agenti no. Per farla ripartire: jht team start',
   'team.partial': 'La squadra NON è accesa del tutto: {n} non sono partiti (le righe ✗ sopra dicono perché). Correggi la causa e rilancia: jht team start',
   'empty.nothing_yet': 'Ancora niente: la squadra non è ancora partita su questo computer. Accendila con: jht team start',
   'team.done': 'Squadra accesa: {n} agenti in {s} s',
