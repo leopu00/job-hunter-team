@@ -89,7 +89,10 @@
 #         spiega) NON e' una bozza: il nostro messaggio si incolla dietro
 #         e un solo Invio li manda tutti e due (agent_chat/tmux_send_composer.signed_only). Una busta valida si puo' scrivere a
 #         mano: non e' un'autenticazione, il danno e' quello di un messaggio vecchio che arriva in ritardo. Una busta senza marchi che il
-#         registro non riconosce come nostra e' testo della persona: 130 come prima.
+#         registro non riconosce come nostra e' testo della persona: 130 come prima, finche' non e' rimasta IDENTICA per
+#         JHT_TMUX_STALE_AFTER secondi (3600, contata dalla prima volta che il trasporto l'ha vista): allora e' un messaggio
+#         lasciato, non una bozza, il suo testo va in pending-input.jsonl (`draft`, motivo stale_released) e il nostro si
+#         incolla dietro. Senza, una busta rimasta oltre il giorno dell'impronta rendeva sorda la chat per sempre.
 #
 # jht-tmux-send --flush-ours <session>: se nella casella c'e' un testo PROVATO nostro (quello che una consegna
 # nostra ha lasciato: testo identico, o il suo segnaposto di incolla con il numero di caratteri giusto, e il
@@ -820,6 +823,12 @@ _pending_file() {
 _fingerprints_file() {
   printf '%s/tmux-send-fingerprints-%s.log' "$lock_dir" "$(printf '%s' "$session" | tr -c 'A-Za-z0-9_.-' '_')"
 }
+# Da quando la casella tiene ESATTAMENTE questo testo (epoca della prima volta e impronta): una busta tra agenti che inizia
+# con la sua testata e non cambia per JHT_TMUX_STALE_AFTER secondi (3600) e' un messaggio lasciato, non una bozza di
+# qualcuno che scrive; vedi tmux_send_composer.unchanged_for.
+_seen_file() {
+  printf '%s/tmux-send-seen-%s.log' "$lock_dir" "$(printf '%s' "$session" | tr -c 'A-Za-z0-9_.-' '_')"
+}
 # L'impronta del testo (senza spazi), il suo numero di caratteri e di a capo: la lunghezza serve a provare
 # che un segnaposto di incolla («[Pasted Content N chars]») e' QUELLO che abbiamo lasciato noi.
 _pending_set() {
@@ -904,11 +913,53 @@ try:
 except OSError:
     seen = []
 known = tmux_send_composer.fingerprints_known(seen, time.time(), 86400)
-base = tmux_send_composer.signed_base(sys.stdin.read(), explained, known)
+pane = sys.stdin.read()
+try:
+    stale_after = float(os.environ.get("JHT_TMUX_STALE_AFTER", tmux_send_composer.STALE_AFTER))
+except ValueError:
+    stale_after = tmux_send_composer.STALE_AFTER
+# An envelope the transport has no (or no longer a) fingerprint of, left unchanged for hours: it is a message that was left.
+if tmux_send_composer.unchanged_for(sys.argv[4], agent_chat.composer_text(pane), time.time()) >= stale_after:
+    known = lambda squashed: True
+base = tmux_send_composer.signed_base(pane, explained, known)
 if base is None:
     sys.exit(1)
 sys.stdout.write(base)
-' "$CHAT_SKILLS" "$(_pending_file)" "$(_fingerprints_file)" 2>/dev/null
+' "$CHAT_SKILLS" "$(_pending_file)" "$(_fingerprints_file)" "$(_seen_file)" 2>/dev/null
+}
+# An envelope that the transport has no fingerprint of any more (left in the box beyond its day) goes out with ours: its text
+# is written in pending-input.jsonl (`stale_released`) first, so what the next Enter takes is also kept. Best effort.
+_record_stale_released() {
+  command -v python3 >/dev/null 2>&1 || return 0
+  python3 -I - "$CHAT_SKILLS" "$session" "$(_fingerprints_file)" "$(_seen_file)" "$1" <<'PYEOF' 2>/dev/null || true
+import hashlib, json, os, sys, time
+from datetime import datetime, timezone
+sys.path.insert(0, sys.argv[1])
+import agent_chat, tmux_send_composer
+session, fingerprints, seen_file = sys.argv[2:5]
+text = agent_chat.composer_text(sys.argv[5])
+if not tmux_send_composer.starts_with_envelope(text):
+    sys.exit(0)
+try:
+    known = tmux_send_composer.fingerprints_known(open(fingerprints).read().splitlines(), time.time(), 86400)
+except OSError:
+    known = lambda squashed: False
+if known(tmux_send_composer.squash(text)):
+    sys.exit(0)        # the transport's own text, still inside its day: nothing was abandoned
+d = os.path.join(os.environ.get("JHT_HOME") or os.path.expanduser("~/.jht"), "logs")
+os.makedirs(d, mode=0o700, exist_ok=True)
+fd = os.open(os.path.join(d, "pending-input.jsonl"), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+with os.fdopen(fd, "a") as f:
+    f.write(json.dumps({
+        "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+        "session": session, "draft": text[:65536], "owner": "agent",
+        "src": "jht-tmux-send", "reason": "stale_released",
+    }, ensure_ascii=False) + "\n")
+try:
+    os.remove(seen_file)
+except OSError:
+    pass
+PYEOF
 }
 _pending_is_ours() { _pending_state "$1"; }
 # The refusal for a draft that is not ours. Nothing was pasted: our message would exist nowhere but in the
@@ -1066,6 +1117,7 @@ if [ "$enter_mode" -eq 0 ]; then
         # takes both; at worst the agent gets the older one late.
         if signed_base=$(_signed_base_of "$pane") && [ -n "$signed_base" ]; then
           echo "jht-tmux-send: $session holds signed text left unsent: pasting behind it, one Enter for both" >&2
+          _record_stale_released "$pane"
           preflight_gate=signed
           break
         fi
