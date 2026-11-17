@@ -65,6 +65,17 @@ type Copy = {
   osNotes: Record<string, string>;
   night: string;
   day: string;
+  targetsTitle: string;
+  targetsLead: string;
+  targetsCount: string;
+  targetsCols: { target: string; status: string; build: string; proof: string };
+  targetStatus: Record<string, string>;
+  targets: Record<string, string>;
+  targetNotes: Record<string, string>;
+  buildsTitle: string;
+  buildLabel: string;
+  noRound: string;
+  none: string;
   finder: FinderCopy;
 };
 
@@ -72,7 +83,7 @@ const T: Record<Locale, Copy> = {
   en: {
     metaTitle: "0.4.0 benchmark · Job Hunter Team",
     title: "0.4.0 benchmark: four services, three systems",
-    lead: "What the team spent and found in the test rounds of 14-16 November 2026, with the API-key services the 0.4.0 harness offers. Numbers come from the test reports and the cost samplers.",
+    lead: "What the team spent and found in the test rounds of 14-17 November 2026, with the API-key services the 0.4.0 harness offers. Numbers come from the test reports and the cost samplers.",
     banner:
       "A first comparison, not a clean benchmark. Machines, profiles, builds, budgets and team sizes differ between rounds, and there is one round per service: read the limits below before comparing.",
     roundsTitle: "Every round",
@@ -118,7 +129,7 @@ const T: Record<Locale, Copy> = {
     need: "Four identical VPSs started together, the same profile for everyone, 30 minutes of work after onboarding, the same build with the budget brake fixed, and credit on all four services.",
     back: "← All case studies",
     footer:
-      "Synthetic profiles, no personal data · numbers from the test reports of 14-16/11/2026.",
+      "Synthetic profiles, no personal data · numbers from the test reports of 14-17/11/2026.",
     outcome: {
       pass: "pass",
       reservations: "with reservations",
@@ -131,6 +142,8 @@ const T: Record<Locale, Copy> = {
       running: "in progress",
     },
     profiles: {
+      bricklayer: "Bricklayer",
+      officeClerk: "Office clerk, part time",
       dataAnalyst: "Data analyst",
       generic: "Generic test profile",
       restorer: "Restorer",
@@ -147,6 +160,12 @@ const T: Record<Locale, Copy> = {
       "openai-glm": "OpenAI → GLM",
     },
     notes: {
+      updateSwitchKept: "Update with the team running: data kept, old images removed, GLM → Claude without stopping the team. 3 relevant of 26 new in 10 minutes.",
+      updateWelcomePaid: "Update and switch to Claude: 15 relevant of 18 in 12 minutes. The welcome was paid again at every restart.",
+      cleanInstallWarehouse: "New user, guided onboarding: the brake stopped at 2.67 $. Mostly warehouse jobs: 2 relevant of 19.",
+      updateNoNewPositions: "Update fine and no key file left on disk, but 0 new positions in 30 minutes: only 2 Scouts woken.",
+      diskLowAfterUpdate: "Update fine, team never started: 4 GiB free of the 8 needed, with no warning before the download.",
+      cleanInstallGerman: "New user in German: 10 relevant of 26. The brake stopped at 4.77 $, then a false unlock (4.95 $ at the end); Doctor and Maintainer did no turn.",
       scoutsNoTools:
         "Scouts had no tools from the CLI (fixed); CPU saturated on 2 vCPU.",
       creditEnded: "Same defect; the GLM credit ran out.",
@@ -171,6 +190,59 @@ const T: Record<Locale, Copy> = {
     },
     night: "night",
     day: "",
+    targetsTitle: "Release targets",
+    targetsLead: "0.4.0 is released only when every row is green. Updated at every build; the proof links to the round below.",
+    targetsCount: "{g} of {n} green",
+    targetsCols: {
+      "target": "Target",
+      "status": "Status",
+      "build": "Build",
+      "proof": "Proof"
+    },
+    targetStatus: {
+      "pass": "met",
+      "fail": "not met",
+      "pending": "to try",
+      "blocked": "blocked"
+    },
+    targets: {
+      "installWindows": "Install by a new user · Windows",
+      "installLinux": "Install by a new user · Linux",
+      "installMac": "Install by a new user · Mac",
+      "updateLinux": "Update with a team and data already there · Linux",
+      "updateMac": "Update with a team and data already there · Mac",
+      "updateWindows": "Update with a team and data already there · Windows",
+      "nonItRelevant": "Profile outside IT, on site: at least 70% relevant positions",
+      "scoutBench": "Scout bench, 4 trades outside IT (≥70% relevant, 0 duplicates, ≥15 positions)",
+      "budgetBrake": "Budget brake: never over the ceiling, no false unlock, the person is told",
+      "language": "Setup and onboarding in the chosen language",
+      "doctorMaintainer": "The Doctor and the Maintainer really work",
+      "serviceClaude": "Claude service",
+      "serviceOpenai": "OpenAI service with an API key",
+      "serviceGlmKimi": "GLM and Kimi services",
+      "openaiSubscription": "OpenAI on Pi with a ChatGPT subscription",
+      "noKeyOnDisk": "No key left on disk",
+      "betaTester": "Beta tester updated and at work"
+    },
+    targetNotes: {
+      "linuxRoundBuild6": "Linux round of build 6",
+      "redoOnBuild9": "to redo on build 9",
+      "diskFull": "disk full after the update (fix in progress)",
+      "neverTried": "never tried",
+      "relevantBelow": "0 new for the bricklayer, 10 of 26 for the receptionist",
+      "benchPaused": "paused until build 9",
+      "brakeFalseClear": "false unlock after the stop, the warning to the person failed",
+      "languageEnglish": "API key step, team start and status in English (fixed after build 8)",
+      "zeroTurns": "0 turns (fixed in build 9)",
+      "noCredit": "no credit to try them",
+      "loginNeverTried": "real sign-in never tried",
+      "keysChecked": "0 files with a key outside their place, on 20,927 file events",
+      "updateOnBuild9": "update on build 9"
+    },
+    buildsTitle: "Rounds of each build",
+    buildLabel: "Build {n}",
+    noRound: "no round",
+    none: "—",
     finder: {
       title: "Find the tests closest to your case",
       lead: "Say which computer you have, which service you would use, your budget and your trade. You see the rounds and case studies that match, then the closest ones, with the reason. In our tests, with our profiles: not a promise of what you will get.",
@@ -229,7 +301,7 @@ const T: Record<Locale, Copy> = {
   it: {
     metaTitle: "Benchmark 0.4.0 · Job Hunter Team",
     title: "Benchmark 0.4.0: quattro servizi, tre sistemi",
-    lead: "Quanto ha speso e trovato la squadra nei giri di prova del 14-16 novembre 2026, con i servizi a chiave API che l'harness 0.4.0 offre. I numeri vengono dai verbali dei collaudi e dai campionatori dei costi.",
+    lead: "Quanto ha speso e trovato la squadra nei giri di prova del 14-17 novembre 2026, con i servizi a chiave API che l'harness 0.4.0 offre. I numeri vengono dai verbali dei collaudi e dai campionatori dei costi.",
     banner:
       "Un primo confronto, non un benchmark pulito. Macchine, profili, build, budget e dimensioni della squadra cambiano da un giro all'altro, e c'è un giro per servizio: leggi i limiti qui sotto prima di confrontare.",
     roundsTitle: "Ogni giro",
@@ -275,7 +347,7 @@ const T: Record<Locale, Copy> = {
     need: "Quattro VPS uguali accese insieme, lo stesso profilo per tutti, 30 minuti di lavoro dopo l'onboarding, la stessa build con il freno del budget corretto e credito su tutti e quattro i servizi.",
     back: "← Tutti i case study",
     footer:
-      "Profili finti, nessun dato personale · numeri dai verbali dei collaudi del 14-16/11/2026.",
+      "Profili finti, nessun dato personale · numeri dai verbali dei collaudi del 14-17/11/2026.",
     outcome: {
       pass: "passa",
       reservations: "con riserva",
@@ -288,6 +360,8 @@ const T: Record<Locale, Copy> = {
       running: "in corso",
     },
     profiles: {
+      bricklayer: "Muratore",
+      officeClerk: "Impiegata amministrativa part time",
       dataAnalyst: "Data analyst",
       generic: "Profilo di prova generico",
       restorer: "Restauratrice",
@@ -304,6 +378,12 @@ const T: Record<Locale, Copy> = {
       "openai-glm": "OpenAI → GLM",
     },
     notes: {
+      updateSwitchKept: "Aggiornamento a squadra accesa: dati tenuti, immagini vecchie tolte, GLM → Claude senza fermare la squadra. 3 pertinenti su 26 nuove in 10 minuti.",
+      updateWelcomePaid: "Aggiornamento e passaggio a Claude: 15 pertinenti su 18 in 12 minuti. Il benvenuto è stato pagato di nuovo a ogni ripartenza.",
+      cleanInstallWarehouse: "Utente nuovo, onboarding guidato: il freno ha fermato a 2,67 $. Quasi solo magazzino: 2 pertinenti su 19.",
+      updateNoNewPositions: "Aggiornamento riuscito e nessun file con chiave su disco, ma 0 posizioni nuove in 30 minuti: svegliati solo 2 Scout.",
+      diskLowAfterUpdate: "Aggiornamento riuscito, squadra mai partita: 4 GiB liberi degli 8 necessari, senza avviso prima dello scaricamento.",
+      cleanInstallGerman: "Utente nuovo in tedesco: 10 pertinenti su 26. Il freno ha fermato a 4,77 $, poi uno sblocco falso (4,95 $ alla fine); Dottore e Mantenitore senza turni.",
       scoutsNoTools:
         "Gli Scout senza strumenti dalla CLI (corretto); CPU satura su 2 vCPU.",
       creditEnded: "Stesso difetto; credito GLM finito.",
@@ -328,6 +408,59 @@ const T: Record<Locale, Copy> = {
     },
     night: "notte",
     day: "",
+    targetsTitle: "Target di rilascio",
+    targetsLead: "La 0.4.0 si rilascia solo con tutte le righe verdi. Aggiornata a ogni build; la prova porta al giro qui sotto.",
+    targetsCount: "{g} di {n} verdi",
+    targetsCols: {
+      "target": "Target",
+      "status": "Stato",
+      "build": "Build",
+      "proof": "Prova"
+    },
+    targetStatus: {
+      "pass": "raggiunto",
+      "fail": "non raggiunto",
+      "pending": "da provare",
+      "blocked": "bloccato"
+    },
+    targets: {
+      "installWindows": "Installazione da utente vergine · Windows",
+      "installLinux": "Installazione da utente vergine · Linux",
+      "installMac": "Installazione da utente vergine · Mac",
+      "updateLinux": "Aggiornamento con squadra e dati esistenti · Linux",
+      "updateMac": "Aggiornamento con squadra e dati esistenti · Mac",
+      "updateWindows": "Aggiornamento con squadra e dati esistenti · Windows",
+      "nonItRelevant": "Profilo non IT in sede: almeno il 70% di posizioni pertinenti",
+      "scoutBench": "Banco degli Scout, 4 mestieri non IT (≥70% pertinenti, 0 doppioni, ≥15 posizioni)",
+      "budgetBrake": "Freno del budget: mai oltre il tetto, nessuno sblocco falso, avviso all'utente",
+      "language": "Setup e onboarding nella lingua scelta",
+      "doctorMaintainer": "Dottore e Mantenitore lavorano davvero",
+      "serviceClaude": "Servizio Claude",
+      "serviceOpenai": "Servizio OpenAI con chiave API",
+      "serviceGlmKimi": "Servizi GLM e Kimi",
+      "openaiSubscription": "OpenAI su Pi con abbonamento ChatGPT",
+      "noKeyOnDisk": "Nessuna chiave lasciata su disco",
+      "betaTester": "Beta tester aggiornata e al lavoro"
+    },
+    targetNotes: {
+      "linuxRoundBuild6": "giro Linux della build 6",
+      "redoOnBuild9": "da rifare sulla build 9",
+      "diskFull": "disco pieno dopo l'aggiornamento (correzione in corso)",
+      "neverTried": "mai provato",
+      "relevantBelow": "0 nuove per il muratore, 10 su 26 per la receptionist",
+      "benchPaused": "in pausa fino alla build 9",
+      "brakeFalseClear": "sblocco falso dopo lo stop, avviso all'utente fallito",
+      "languageEnglish": "passo della chiave API, avvio della squadra e status in inglese (corretti dopo la build 8)",
+      "zeroTurns": "0 turni (corretto nella build 9)",
+      "noCredit": "senza credito per provarli",
+      "loginNeverTried": "accesso vero mai provato",
+      "keysChecked": "0 file con chiave fuori posto, su 20.927 eventi sui file",
+      "updateOnBuild9": "aggiornamento sulla build 9"
+    },
+    buildsTitle: "Giri di ogni build",
+    buildLabel: "Build {n}",
+    noRound: "nessun giro",
+    none: "—",
     finder: {
       title: "Trova i test più vicini al tuo caso",
       lead: "Dicci che computer hai, quale servizio useresti, il tuo budget e il tuo mestiere. Vedi i giri e i case study che corrispondono, poi i più vicini, con il motivo. Nei nostri test, con i nostri profili: non è una promessa di quello che otterrai.",
@@ -386,7 +519,7 @@ const T: Record<Locale, Copy> = {
   de: {
     metaTitle: "Benchmark 0.4.0 · Job Hunter Team",
     title: "Benchmark 0.4.0: vier Dienste, drei Systeme",
-    lead: "Was das Team in den Testläufen vom 14. bis 16. November 2026 ausgegeben und gefunden hat, mit den API-Schlüssel-Diensten des 0.4.0-Harness. Die Zahlen stammen aus den Testprotokollen und den Kostenmessungen.",
+    lead: "Was das Team in den Testläufen vom 14. bis 17. November 2026 ausgegeben und gefunden hat, mit den API-Schlüssel-Diensten des 0.4.0-Harness. Die Zahlen stammen aus den Testprotokollen und den Kostenmessungen.",
     banner:
       "Ein erster Vergleich, kein sauberer Benchmark. Maschinen, Profile, Builds, Budgets und Teamgrößen unterscheiden sich von Lauf zu Lauf, und es gibt einen Lauf pro Dienst: lies die Grenzen unten, bevor du vergleichst.",
     roundsTitle: "Jeder Lauf",
@@ -432,7 +565,7 @@ const T: Record<Locale, Copy> = {
     need: "Vier identische VPS gleichzeitig gestartet, dasselbe Profil für alle, 30 Minuten Arbeit nach dem Onboarding, derselbe Build mit korrigierter Budgetbremse und Guthaben bei allen vier Diensten.",
     back: "← Alle Fallstudien",
     footer:
-      "Synthetische Profile, keine personenbezogenen Daten · Zahlen aus den Testprotokollen vom 14.-16.11.2026.",
+      "Synthetische Profile, keine personenbezogenen Daten · Zahlen aus den Testprotokollen vom 14.-17.11.2026.",
     outcome: {
       pass: "bestanden",
       reservations: "mit Vorbehalt",
@@ -445,6 +578,8 @@ const T: Record<Locale, Copy> = {
       running: "läuft",
     },
     profiles: {
+      bricklayer: "Maurer",
+      officeClerk: "Bürokraft, Teilzeit",
       dataAnalyst: "Data Analyst",
       generic: "Allgemeines Testprofil",
       restorer: "Restauratorin",
@@ -461,6 +596,12 @@ const T: Record<Locale, Copy> = {
       "openai-glm": "OpenAI → GLM",
     },
     notes: {
+      updateSwitchKept: "Update bei laufendem Team: Daten behalten, alte Images entfernt, GLM → Claude ohne das Team anzuhalten. 3 passende von 26 neuen in 10 Minuten.",
+      updateWelcomePaid: "Update und Wechsel zu Claude: 15 passende von 18 in 12 Minuten. Die Begrüßung wurde bei jedem Neustart wieder bezahlt.",
+      cleanInstallWarehouse: "Neuer Nutzer, geführtes Onboarding: Die Bremse hielt bei 2,67 $. Fast nur Lagerjobs: 2 passende von 19.",
+      updateNoNewPositions: "Update gelungen und keine Schlüsseldatei auf der Platte, aber 0 neue Stellen in 30 Minuten: nur 2 Scouts geweckt.",
+      diskLowAfterUpdate: "Update gelungen, Team nie gestartet: 4 GiB frei von 8 nötigen, ohne Warnung vor dem Download.",
+      cleanInstallGerman: "Neuer Nutzer auf Deutsch: 10 passende von 26. Die Bremse hielt bei 4,77 $, dann eine falsche Freigabe (4,95 $ am Ende); Doktor und Wartung ohne Durchgang.",
       scoutsNoTools:
         "Scouts ohne Werkzeuge aus der CLI (behoben); CPU auf 2 vCPU ausgelastet.",
       creditEnded: "Derselbe Fehler; das GLM-Guthaben war aufgebraucht.",
@@ -485,6 +626,59 @@ const T: Record<Locale, Copy> = {
     },
     night: "Nacht",
     day: "",
+    targetsTitle: "Release-Ziele",
+    targetsLead: "0.4.0 wird nur veröffentlicht, wenn jede Zeile grün ist. Bei jedem Build aktualisiert; der Nachweis führt zum Lauf weiter unten.",
+    targetsCount: "{g} von {n} grün",
+    targetsCols: {
+      "target": "Ziel",
+      "status": "Stand",
+      "build": "Build",
+      "proof": "Nachweis"
+    },
+    targetStatus: {
+      "pass": "erreicht",
+      "fail": "nicht erreicht",
+      "pending": "zu prüfen",
+      "blocked": "blockiert"
+    },
+    targets: {
+      "installWindows": "Installation durch neuen Nutzer · Windows",
+      "installLinux": "Installation durch neuen Nutzer · Linux",
+      "installMac": "Installation durch neuen Nutzer · Mac",
+      "updateLinux": "Update mit vorhandenem Team und Daten · Linux",
+      "updateMac": "Update mit vorhandenem Team und Daten · Mac",
+      "updateWindows": "Update mit vorhandenem Team und Daten · Windows",
+      "nonItRelevant": "Profil außerhalb der IT, vor Ort: mindestens 70% passende Stellen",
+      "scoutBench": "Scout-Prüfstand, 4 Berufe außerhalb der IT (≥70% passend, 0 Doppelte, ≥15 Stellen)",
+      "budgetBrake": "Budgetbremse: nie über der Obergrenze, keine falsche Freigabe, die Person wird informiert",
+      "language": "Setup und Onboarding in der gewählten Sprache",
+      "doctorMaintainer": "Doktor und Wartung arbeiten wirklich",
+      "serviceClaude": "Dienst Claude",
+      "serviceOpenai": "Dienst OpenAI mit API-Schlüssel",
+      "serviceGlmKimi": "Dienste GLM und Kimi",
+      "openaiSubscription": "OpenAI auf Pi mit ChatGPT-Abo",
+      "noKeyOnDisk": "Kein Schlüssel bleibt auf der Platte",
+      "betaTester": "Beta-Testerin aktualisiert und bei der Arbeit"
+    },
+    targetNotes: {
+      "linuxRoundBuild6": "Linux-Lauf von Build 6",
+      "redoOnBuild9": "auf Build 9 zu wiederholen",
+      "diskFull": "Platte voll nach dem Update (Korrektur in Arbeit)",
+      "neverTried": "nie geprüft",
+      "relevantBelow": "0 neue für den Maurer, 10 von 26 für die Rezeptionistin",
+      "benchPaused": "pausiert bis Build 9",
+      "brakeFalseClear": "falsche Freigabe nach dem Stopp, Hinweis an die Person fehlgeschlagen",
+      "languageEnglish": "API-Schlüssel, Teamstart und Status auf Englisch (nach Build 8 behoben)",
+      "zeroTurns": "0 Durchgänge (in Build 9 behoben)",
+      "noCredit": "kein Guthaben zum Prüfen",
+      "loginNeverTried": "echte Anmeldung nie geprüft",
+      "keysChecked": "0 Dateien mit Schlüssel am falschen Ort, bei 20.927 Dateiereignissen",
+      "updateOnBuild9": "Update auf Build 9"
+    },
+    buildsTitle: "Läufe jedes Builds",
+    buildLabel: "Build {n}",
+    noRound: "kein Lauf",
+    none: "—",
     finder: {
       title: "Finde die Tests, die deinem Fall am nächsten kommen",
       lead: "Sag, welchen Computer du hast, welchen Dienst du nutzen würdest, dein Budget und deinen Beruf. Du siehst die passenden Läufe und Fallstudien, dann die nächstliegenden, mit Begründung. In unseren Tests, mit unseren Profilen: kein Versprechen dafür, was du bekommst.",
@@ -543,7 +737,7 @@ const T: Record<Locale, Copy> = {
   es: {
     metaTitle: "Benchmark 0.4.0 · Job Hunter Team",
     title: "Benchmark 0.4.0: cuatro servicios, tres sistemas",
-    lead: "Lo que el equipo gastó y encontró en las rondas de prueba del 14 al 16 de noviembre de 2026, con los servicios de clave API que ofrece el harness 0.4.0. Las cifras salen de los informes de las pruebas y de los muestreadores de coste.",
+    lead: "Lo que el equipo gastó y encontró en las rondas de prueba del 14 al 17 de noviembre de 2026, con los servicios de clave API que ofrece el harness 0.4.0. Las cifras salen de los informes de las pruebas y de los muestreadores de coste.",
     banner:
       "Una primera comparación, no un benchmark limpio. Máquinas, perfiles, builds, presupuestos y tamaños del equipo cambian de una ronda a otra, y hay una ronda por servicio: lee los límites de abajo antes de comparar.",
     roundsTitle: "Cada ronda",
@@ -589,7 +783,7 @@ const T: Record<Locale, Copy> = {
     need: "Cuatro VPS iguales encendidas a la vez, el mismo perfil para todos, 30 minutos de trabajo después del onboarding, la misma build con el freno del presupuesto corregido y crédito en los cuatro servicios.",
     back: "← Todos los casos de estudio",
     footer:
-      "Perfiles ficticios, sin datos personales · cifras de los informes de prueba del 14-16/11/2026.",
+      "Perfiles ficticios, sin datos personales · cifras de los informes de prueba del 14-17/11/2026.",
     outcome: {
       pass: "pasa",
       reservations: "con reservas",
@@ -602,6 +796,8 @@ const T: Record<Locale, Copy> = {
       running: "en curso",
     },
     profiles: {
+      bricklayer: "Albañil",
+      officeClerk: "Administrativa a tiempo parcial",
       dataAnalyst: "Analista de datos",
       generic: "Perfil de prueba genérico",
       restorer: "Restauradora",
@@ -618,6 +814,12 @@ const T: Record<Locale, Copy> = {
       "openai-glm": "OpenAI → GLM",
     },
     notes: {
+      updateSwitchKept: "Actualización con el equipo en marcha: datos conservados, imágenes viejas quitadas, GLM → Claude sin parar el equipo. 3 pertinentes de 26 nuevas en 10 minutos.",
+      updateWelcomePaid: "Actualización y paso a Claude: 15 pertinentes de 18 en 12 minutos. La bienvenida se volvió a pagar en cada reinicio.",
+      cleanInstallWarehouse: "Usuario nuevo, onboarding guiado: el freno paró en 2,67 $. Casi solo almacén: 2 pertinentes de 19.",
+      updateNoNewPositions: "Actualización correcta y ningún archivo con clave en disco, pero 0 ofertas nuevas en 30 minutos: solo 2 Scouts despertados.",
+      diskLowAfterUpdate: "Actualización correcta, el equipo nunca arrancó: 4 GiB libres de los 8 necesarios, sin aviso antes de la descarga.",
+      cleanInstallGerman: "Usuario nuevo en alemán: 10 pertinentes de 26. El freno paró en 4,77 $ y luego un desbloqueo falso (4,95 $ al final); Doctor y Mantenedor sin turnos.",
       scoutsNoTools:
         "Scouts sin herramientas desde la CLI (corregido); CPU saturada en 2 vCPU.",
       creditEnded: "Mismo defecto; se agotó el crédito de GLM.",
@@ -643,6 +845,59 @@ const T: Record<Locale, Copy> = {
     },
     night: "noche",
     day: "",
+    targetsTitle: "Objetivos de lanzamiento",
+    targetsLead: "La 0.4.0 se publica solo con todas las filas en verde. Se actualiza en cada build; la prueba lleva a la ronda de abajo.",
+    targetsCount: "{g} de {n} en verde",
+    targetsCols: {
+      "target": "Objetivo",
+      "status": "Estado",
+      "build": "Build",
+      "proof": "Prueba"
+    },
+    targetStatus: {
+      "pass": "cumplido",
+      "fail": "no cumplido",
+      "pending": "por probar",
+      "blocked": "bloqueado"
+    },
+    targets: {
+      "installWindows": "Instalación por un usuario nuevo · Windows",
+      "installLinux": "Instalación por un usuario nuevo · Linux",
+      "installMac": "Instalación por un usuario nuevo · Mac",
+      "updateLinux": "Actualización con equipo y datos existentes · Linux",
+      "updateMac": "Actualización con equipo y datos existentes · Mac",
+      "updateWindows": "Actualización con equipo y datos existentes · Windows",
+      "nonItRelevant": "Perfil fuera de la informática, presencial: al menos 70% de ofertas pertinentes",
+      "scoutBench": "Banco de los Scouts, 4 oficios fuera de la informática (≥70% pertinentes, 0 duplicados, ≥15 ofertas)",
+      "budgetBrake": "Freno del presupuesto: nunca por encima del tope, ningún desbloqueo falso, aviso a la persona",
+      "language": "Setup y onboarding en el idioma elegido",
+      "doctorMaintainer": "El Doctor y el Mantenedor trabajan de verdad",
+      "serviceClaude": "Servicio Claude",
+      "serviceOpenai": "Servicio OpenAI con clave de API",
+      "serviceGlmKimi": "Servicios GLM y Kimi",
+      "openaiSubscription": "OpenAI en Pi con suscripción de ChatGPT",
+      "noKeyOnDisk": "Ninguna clave queda en disco",
+      "betaTester": "Beta tester actualizada y trabajando"
+    },
+    targetNotes: {
+      "linuxRoundBuild6": "ronda Linux de la build 6",
+      "redoOnBuild9": "por repetir en la build 9",
+      "diskFull": "disco lleno tras la actualización (corrección en curso)",
+      "neverTried": "nunca probado",
+      "relevantBelow": "0 nuevas para el albañil, 10 de 26 para la recepcionista",
+      "benchPaused": "en pausa hasta la build 9",
+      "brakeFalseClear": "desbloqueo falso tras la parada, el aviso a la persona falló",
+      "languageEnglish": "paso de la clave de API, arranque del equipo y estado en inglés (corregidos tras la build 8)",
+      "zeroTurns": "0 turnos (corregido en la build 9)",
+      "noCredit": "sin crédito para probarlos",
+      "loginNeverTried": "inicio de sesión real nunca probado",
+      "keysChecked": "0 archivos con clave fuera de su sitio, en 20.927 eventos de archivos",
+      "updateOnBuild9": "actualización en la build 9"
+    },
+    buildsTitle: "Rondas de cada build",
+    buildLabel: "Build {n}",
+    noRound: "ninguna ronda",
+    none: "—",
     finder: {
       title: "Encuentra las pruebas más cercanas a tu caso",
       lead: "Di qué ordenador tienes, qué servicio usarías, tu presupuesto y tu oficio. Ves las rondas y casos de estudio que coinciden, luego los más cercanos, con el motivo. En nuestras pruebas, con nuestros perfiles: no es una promesa de lo que conseguirás.",
@@ -702,7 +957,7 @@ const T: Record<Locale, Copy> = {
   fr: {
     metaTitle: "Benchmark 0.4.0 · Job Hunter Team",
     title: "Benchmark 0.4.0 : quatre services, trois systèmes",
-    lead: "Ce que l'équipe a dépensé et trouvé lors des tours d'essai du 14 au 16 novembre 2026, avec les services à clé API que propose le harness 0.4.0. Les chiffres viennent des procès-verbaux d'essai et des échantillonneurs de coûts.",
+    lead: "Ce que l'équipe a dépensé et trouvé lors des tours d'essai du 14 au 17 novembre 2026, avec les services à clé API que propose le harness 0.4.0. Les chiffres viennent des procès-verbaux d'essai et des échantillonneurs de coûts.",
     banner:
       "Une première comparaison, pas un benchmark propre. Machines, profils, builds, budgets et tailles d'équipe changent d'un tour à l'autre, et il y a un tour par service : lis les limites ci-dessous avant de comparer.",
     roundsTitle: "Chaque tour",
@@ -748,7 +1003,7 @@ const T: Record<Locale, Copy> = {
     need: "Quatre VPS identiques allumés ensemble, le même profil pour tous, 30 minutes de travail après l'onboarding, la même build avec le frein du budget corrigé et du crédit sur les quatre services.",
     back: "← Toutes les études de cas",
     footer:
-      "Profils fictifs, aucune donnée personnelle · chiffres des procès-verbaux d'essai du 14-16/11/2026.",
+      "Profils fictifs, aucune donnée personnelle · chiffres des procès-verbaux d'essai du 14-17/11/2026.",
     outcome: {
       pass: "réussi",
       reservations: "avec réserves",
@@ -761,6 +1016,8 @@ const T: Record<Locale, Copy> = {
       running: "en cours",
     },
     profiles: {
+      bricklayer: "Maçon",
+      officeClerk: "Employée administrative à temps partiel",
       dataAnalyst: "Data analyst",
       generic: "Profil d'essai générique",
       restorer: "Restauratrice",
@@ -777,6 +1034,12 @@ const T: Record<Locale, Copy> = {
       "openai-glm": "OpenAI → GLM",
     },
     notes: {
+      updateSwitchKept: "Mise à jour avec l'équipe en marche : données gardées, anciennes images retirées, GLM → Claude sans arrêter l'équipe. 3 pertinentes sur 26 nouvelles en 10 minutes.",
+      updateWelcomePaid: "Mise à jour et passage à Claude : 15 pertinentes sur 18 en 12 minutes. L'accueil a été payé de nouveau à chaque redémarrage.",
+      cleanInstallWarehouse: "Nouvel utilisateur, onboarding guidé : le frein s'est arrêté à 2,67 $. Presque que de l'entrepôt : 2 pertinentes sur 19.",
+      updateNoNewPositions: "Mise à jour réussie et aucun fichier avec clé sur le disque, mais 0 offre nouvelle en 30 minutes : seuls 2 Scouts réveillés.",
+      diskLowAfterUpdate: "Mise à jour réussie, équipe jamais démarrée : 4 Gio libres sur les 8 nécessaires, sans avertissement avant le téléchargement.",
+      cleanInstallGerman: "Nouvel utilisateur en allemand : 10 pertinentes sur 26. Le frein s'est arrêté à 4,77 $, puis un faux déblocage (4,95 $ à la fin) ; Docteur et Mainteneur sans tour.",
       scoutsNoTools:
         "Scouts sans outils depuis la CLI (corrigé) ; CPU saturé sur 2 vCPU.",
       creditEnded: "Même défaut ; le crédit GLM s'est épuisé.",
@@ -802,6 +1065,59 @@ const T: Record<Locale, Copy> = {
     },
     night: "nuit",
     day: "",
+    targetsTitle: "Objectifs de version",
+    targetsLead: "La 0.4.0 ne sort que si toutes les lignes sont vertes. Mis à jour à chaque build ; la preuve mène au tour ci-dessous.",
+    targetsCount: "{g} sur {n} au vert",
+    targetsCols: {
+      "target": "Objectif",
+      "status": "État",
+      "build": "Build",
+      "proof": "Preuve"
+    },
+    targetStatus: {
+      "pass": "atteint",
+      "fail": "non atteint",
+      "pending": "à essayer",
+      "blocked": "bloqué"
+    },
+    targets: {
+      "installWindows": "Installation par un nouvel utilisateur · Windows",
+      "installLinux": "Installation par un nouvel utilisateur · Linux",
+      "installMac": "Installation par un nouvel utilisateur · Mac",
+      "updateLinux": "Mise à jour avec équipe et données existantes · Linux",
+      "updateMac": "Mise à jour avec équipe et données existantes · Mac",
+      "updateWindows": "Mise à jour avec équipe et données existantes · Windows",
+      "nonItRelevant": "Profil hors informatique, sur site : au moins 70 % d'offres pertinentes",
+      "scoutBench": "Banc des Scouts, 4 métiers hors informatique (≥70 % pertinentes, 0 doublon, ≥15 offres)",
+      "budgetBrake": "Frein du budget : jamais au-dessus du plafond, aucun faux déblocage, la personne est prévenue",
+      "language": "Setup et onboarding dans la langue choisie",
+      "doctorMaintainer": "Le Docteur et le Mainteneur travaillent vraiment",
+      "serviceClaude": "Service Claude",
+      "serviceOpenai": "Service OpenAI avec clé API",
+      "serviceGlmKimi": "Services GLM et Kimi",
+      "openaiSubscription": "OpenAI sur Pi avec un abonnement ChatGPT",
+      "noKeyOnDisk": "Aucune clé laissée sur le disque",
+      "betaTester": "Bêta-testeuse mise à jour et au travail"
+    },
+    targetNotes: {
+      "linuxRoundBuild6": "tour Linux de la build 6",
+      "redoOnBuild9": "à refaire sur la build 9",
+      "diskFull": "disque plein après la mise à jour (correction en cours)",
+      "neverTried": "jamais essayé",
+      "relevantBelow": "0 nouvelle pour le maçon, 10 sur 26 pour la réceptionniste",
+      "benchPaused": "en pause jusqu'à la build 9",
+      "brakeFalseClear": "faux déblocage après l'arrêt, l'avertissement à la personne a échoué",
+      "languageEnglish": "étape de la clé API, démarrage de l'équipe et état en anglais (corrigés après la build 8)",
+      "zeroTurns": "0 tour (corrigé dans la build 9)",
+      "noCredit": "pas de crédit pour les essayer",
+      "loginNeverTried": "vraie connexion jamais essayée",
+      "keysChecked": "0 fichier avec clé hors de sa place, sur 20 927 événements de fichiers",
+      "updateOnBuild9": "mise à jour sur la build 9"
+    },
+    buildsTitle: "Tours de chaque build",
+    buildLabel: "Build {n}",
+    noRound: "aucun tour",
+    none: "—",
     finder: {
       title: "Trouve les tests les plus proches de ton cas",
       lead: "Dis quel ordinateur tu as, quel service tu utiliserais, ton budget et ton métier. Tu vois les tours et études de cas qui correspondent, puis les plus proches, avec la raison. Dans nos tests, avec nos profils : pas une promesse de ce que tu obtiendras.",
@@ -860,7 +1176,7 @@ const T: Record<Locale, Copy> = {
   pt: {
     metaTitle: "Benchmark 0.4.0 · Job Hunter Team",
     title: "Benchmark 0.4.0: quatro serviços, três sistemas",
-    lead: "O que a equipa gastou e encontrou nas rondas de teste de 14 a 16 de novembro de 2026, com os serviços de chave API que o harness 0.4.0 oferece. Os números vêm dos relatórios dos testes e dos amostradores de custo.",
+    lead: "O que a equipa gastou e encontrou nas rondas de teste de 14 a 17 de novembro de 2026, com os serviços de chave API que o harness 0.4.0 oferece. Os números vêm dos relatórios dos testes e dos amostradores de custo.",
     banner:
       "Uma primeira comparação, não um benchmark limpo. Máquinas, perfis, builds, orçamentos e tamanhos da equipa mudam de ronda para ronda, e há uma ronda por serviço: lê os limites abaixo antes de comparar.",
     roundsTitle: "Cada ronda",
@@ -905,7 +1221,7 @@ const T: Record<Locale, Copy> = {
     need: "Quatro VPS iguais ligadas ao mesmo tempo, o mesmo perfil para todos, 30 minutos de trabalho depois do onboarding, a mesma build com o travão do orçamento corrigido e crédito nos quatro serviços.",
     back: "← Todos os estudos de caso",
     footer:
-      "Perfis fictícios, sem dados pessoais · números dos relatórios de teste de 14-16/11/2026.",
+      "Perfis fictícios, sem dados pessoais · números dos relatórios de teste de 14-17/11/2026.",
     outcome: {
       pass: "passa",
       reservations: "com reservas",
@@ -918,6 +1234,8 @@ const T: Record<Locale, Copy> = {
       running: "em curso",
     },
     profiles: {
+      bricklayer: "Pedreiro",
+      officeClerk: "Administrativa a tempo parcial",
       dataAnalyst: "Analista de dados",
       generic: "Perfil de teste genérico",
       restorer: "Restauradora",
@@ -934,6 +1252,12 @@ const T: Record<Locale, Copy> = {
       "openai-glm": "OpenAI → GLM",
     },
     notes: {
+      updateSwitchKept: "Atualização com a equipa a correr: dados mantidos, imagens antigas retiradas, GLM → Claude sem parar a equipa. 3 pertinentes de 26 novas em 10 minutos.",
+      updateWelcomePaid: "Atualização e passagem para o Claude: 15 pertinentes de 18 em 12 minutos. As boas-vindas foram pagas de novo a cada reinício.",
+      cleanInstallWarehouse: "Utilizador novo, onboarding guiado: o travão parou em 2,67 $. Quase só armazém: 2 pertinentes de 19.",
+      updateNoNewPositions: "Atualização bem-sucedida e nenhum ficheiro com chave no disco, mas 0 vagas novas em 30 minutos: só 2 Scouts acordados.",
+      diskLowAfterUpdate: "Atualização bem-sucedida, a equipa nunca arrancou: 4 GiB livres dos 8 necessários, sem aviso antes da transferência.",
+      cleanInstallGerman: "Utilizador novo em alemão: 10 pertinentes de 26. O travão parou em 4,77 $, depois um falso desbloqueio (4,95 $ no fim); Doutor e Mantenedor sem turnos.",
       scoutsNoTools:
         "Scouts sem ferramentas a partir da CLI (corrigido); CPU saturado em 2 vCPU.",
       creditEnded: "Mesmo defeito; o crédito GLM esgotou-se.",
@@ -958,6 +1282,59 @@ const T: Record<Locale, Copy> = {
     },
     night: "noite",
     day: "",
+    targetsTitle: "Objetivos de lançamento",
+    targetsLead: "A 0.4.0 só é lançada com todas as linhas a verde. Atualizado a cada build; a prova leva à ronda mais abaixo.",
+    targetsCount: "{g} de {n} a verde",
+    targetsCols: {
+      "target": "Objetivo",
+      "status": "Estado",
+      "build": "Build",
+      "proof": "Prova"
+    },
+    targetStatus: {
+      "pass": "cumprido",
+      "fail": "não cumprido",
+      "pending": "por testar",
+      "blocked": "bloqueado"
+    },
+    targets: {
+      "installWindows": "Instalação por um utilizador novo · Windows",
+      "installLinux": "Instalação por um utilizador novo · Linux",
+      "installMac": "Instalação por um utilizador novo · Mac",
+      "updateLinux": "Atualização com equipa e dados existentes · Linux",
+      "updateMac": "Atualização com equipa e dados existentes · Mac",
+      "updateWindows": "Atualização com equipa e dados existentes · Windows",
+      "nonItRelevant": "Perfil fora da informática, presencial: pelo menos 70% de vagas pertinentes",
+      "scoutBench": "Banco dos Scouts, 4 profissões fora da informática (≥70% pertinentes, 0 duplicados, ≥15 vagas)",
+      "budgetBrake": "Travão do orçamento: nunca acima do teto, nenhum falso desbloqueio, aviso à pessoa",
+      "language": "Setup e onboarding na língua escolhida",
+      "doctorMaintainer": "O Doutor e o Mantenedor trabalham mesmo",
+      "serviceClaude": "Serviço Claude",
+      "serviceOpenai": "Serviço OpenAI com chave de API",
+      "serviceGlmKimi": "Serviços GLM e Kimi",
+      "openaiSubscription": "OpenAI no Pi com assinatura ChatGPT",
+      "noKeyOnDisk": "Nenhuma chave deixada no disco",
+      "betaTester": "Beta tester atualizada e a trabalhar"
+    },
+    targetNotes: {
+      "linuxRoundBuild6": "ronda Linux da build 6",
+      "redoOnBuild9": "a repetir na build 9",
+      "diskFull": "disco cheio após a atualização (correção em curso)",
+      "neverTried": "nunca testado",
+      "relevantBelow": "0 novas para o pedreiro, 10 de 26 para a rececionista",
+      "benchPaused": "em pausa até à build 9",
+      "brakeFalseClear": "falso desbloqueio após a paragem, o aviso à pessoa falhou",
+      "languageEnglish": "passo da chave de API, arranque da equipa e estado em inglês (corrigidos após a build 8)",
+      "zeroTurns": "0 turnos (corrigido na build 9)",
+      "noCredit": "sem crédito para os testar",
+      "loginNeverTried": "início de sessão real nunca testado",
+      "keysChecked": "0 ficheiros com chave fora do lugar, em 20 927 eventos de ficheiros",
+      "updateOnBuild9": "atualização na build 9"
+    },
+    buildsTitle: "Rondas de cada build",
+    buildLabel: "Build {n}",
+    noRound: "nenhuma ronda",
+    none: "—",
     finder: {
       title: "Encontra os testes mais próximos do teu caso",
       lead: "Diz que computador tens, que serviço usarias, o teu orçamento e o teu ofício. Vês as rondas e os estudos de caso que correspondem, depois os mais próximos, com o motivo. Nos nossos testes, com os nossos perfis: não é uma promessa do que vais conseguir.",
@@ -1016,7 +1393,7 @@ const T: Record<Locale, Copy> = {
   hu: {
     metaTitle: "0.4.0 benchmark · Job Hunter Team",
     title: "0.4.0 benchmark: négy szolgáltatás, három rendszer",
-    lead: "Amit a csapat 2026. november 14–16. próbafutásaiban elköltött és megtalált, a 0.4.0 harness API-kulcsos szolgáltatásaival. A számok a próbák jegyzőkönyveiből és a költségmintavevőkből származnak.",
+    lead: "Amit a csapat 2026. november 14–17. próbafutásaiban elköltött és megtalált, a 0.4.0 harness API-kulcsos szolgáltatásaival. A számok a próbák jegyzőkönyveiből és a költségmintavevőkből származnak.",
     banner:
       "Első összevetés, nem tiszta benchmark. A gépek, profilok, buildek, költségkeretek és csapatméretek futásonként eltérnek, és szolgáltatásonként egy futás van: összehasonlítás előtt olvasd el az alábbi korlátokat.",
     roundsTitle: "Minden futás",
@@ -1062,7 +1439,7 @@ const T: Record<Locale, Copy> = {
     need: "Négy egyforma VPS egyszerre elindítva, mindenkinek ugyanaz a profil, az onboarding után 30 perc munka, ugyanaz a build javított költségfékkel, és egyenleg mind a négy szolgáltatáson.",
     back: "← Minden esettanulmány",
     footer:
-      "Kitalált profilok, személyes adat nélkül · számok a 2026.11.14–16-i próbák jegyzőkönyveiből.",
+      "Kitalált profilok, személyes adat nélkül · számok a 2026.11.14–17-i próbák jegyzőkönyveiből.",
     outcome: {
       pass: "megfelelt",
       reservations: "fenntartással",
@@ -1075,6 +1452,8 @@ const T: Record<Locale, Copy> = {
       running: "folyamatban",
     },
     profiles: {
+      bricklayer: "Kőműves",
+      officeClerk: "Irodai ügyintéző, részmunkaidő",
       dataAnalyst: "Adatelemző",
       generic: "Általános próbaprofil",
       restorer: "Restaurátor",
@@ -1091,6 +1470,12 @@ const T: Record<Locale, Copy> = {
       "openai-glm": "OpenAI → GLM",
     },
     notes: {
+      updateSwitchKept: "Frissítés futó csapattal: adatok megtartva, régi képfájlok törölve, GLM → Claude a csapat leállítása nélkül. 26 újból 3 releváns 10 perc alatt.",
+      updateWelcomePaid: "Frissítés és váltás Claude-ra: 18-ból 15 releváns 12 perc alatt. Az üdvözlést minden újraindításkor újra kifizette.",
+      cleanInstallWarehouse: "Új felhasználó, vezetett bevezetés: a fék 2,67 $-nál állt meg. Szinte csak raktári állás: 19-ből 2 releváns.",
+      updateNoNewPositions: "A frissítés sikerült, és nem maradt kulcsos fájl a lemezen, de 30 perc alatt 0 új állás: csak 2 Scoutot ébresztett fel.",
+      diskLowAfterUpdate: "A frissítés sikerült, a csapat sosem indult el: 4 GiB szabad a szükséges 8-ból, figyelmeztetés nélkül a letöltés előtt.",
+      cleanInstallGerman: "Új felhasználó németül: 26-ból 10 releváns. A fék 4,77 $-nál megállt, aztán hamis feloldás (a végén 4,95 $); a Doktor és a Karbantartó egy kört sem futott.",
       scoutsNoTools:
         "A Scoutok eszközök nélkül a CLI-ből (javítva); a CPU 2 vCPU-n telített.",
       creditEnded: "Ugyanaz a hiba; a GLM-egyenleg elfogyott.",
@@ -1115,6 +1500,59 @@ const T: Record<Locale, Copy> = {
     },
     night: "éjszaka",
     day: "",
+    targetsTitle: "Kiadási célok",
+    targetsLead: "A 0.4.0 csak akkor jelenik meg, ha minden sor zöld. Minden buildnél frissül; a bizonyíték a lenti futáshoz visz.",
+    targetsCount: "{n}-ből {g} zöld",
+    targetsCols: {
+      "target": "Cél",
+      "status": "Állapot",
+      "build": "Build",
+      "proof": "Bizonyíték"
+    },
+    targetStatus: {
+      "pass": "teljesült",
+      "fail": "nem teljesült",
+      "pending": "kipróbálandó",
+      "blocked": "elakadt"
+    },
+    targets: {
+      "installWindows": "Telepítés új felhasználóként · Windows",
+      "installLinux": "Telepítés új felhasználóként · Linux",
+      "installMac": "Telepítés új felhasználóként · Mac",
+      "updateLinux": "Frissítés meglévő csapattal és adatokkal · Linux",
+      "updateMac": "Frissítés meglévő csapattal és adatokkal · Mac",
+      "updateWindows": "Frissítés meglévő csapattal és adatokkal · Windows",
+      "nonItRelevant": "IT-n kívüli, helyszíni profil: legalább 70% releváns állás",
+      "scoutBench": "Scout-próbapad, 4 IT-n kívüli szakma (≥70% releváns, 0 ismétlődés, ≥15 állás)",
+      "budgetBrake": "Keretfék: soha a plafon fölött, nincs hamis feloldás, a felhasználó értesül",
+      "language": "Beállítás és bevezetés a választott nyelven",
+      "doctorMaintainer": "A Doktor és a Karbantartó tényleg dolgozik",
+      "serviceClaude": "Claude szolgáltatás",
+      "serviceOpenai": "OpenAI szolgáltatás API-kulccsal",
+      "serviceGlmKimi": "GLM és Kimi szolgáltatás",
+      "openaiSubscription": "OpenAI a Pi-n ChatGPT-előfizetéssel",
+      "noKeyOnDisk": "Nem marad kulcs a lemezen",
+      "betaTester": "A béta tesztelő frissítve és munkában"
+    },
+    targetNotes: {
+      "linuxRoundBuild6": "a 6. build Linux-futása",
+      "redoOnBuild9": "a 9. buildön megismétlendő",
+      "diskFull": "megtelt lemez a frissítés után (javítás folyamatban)",
+      "neverTried": "sosem próbálták",
+      "relevantBelow": "0 új a kőművesnek, 26-ból 10 a recepciósnak",
+      "benchPaused": "szünetel a 9. buildig",
+      "brakeFalseClear": "hamis feloldás a leállás után, a felhasználó értesítése nem sikerült",
+      "languageEnglish": "API-kulcs lépés, csapatindítás és állapot angolul (a 8. build után javítva)",
+      "zeroTurns": "0 kör (a 9. buildben javítva)",
+      "noCredit": "nincs egyenleg a kipróbálásukhoz",
+      "loginNeverTried": "valódi bejelentkezés sosem próbálva",
+      "keysChecked": "0 kulcsos fájl a helyén kívül, 20 927 fájleseményből",
+      "updateOnBuild9": "frissítés a 9. buildön"
+    },
+    buildsTitle: "Az egyes buildek futásai",
+    buildLabel: "{n}. build",
+    noRound: "nincs futás",
+    none: "—",
     finder: {
       title: "Keresd meg a te esetedhez legközelebbi teszteket",
       lead: "Add meg, milyen számítógéped van, melyik szolgáltatást használnád, mekkora a költségkereted és mi a szakmád. Látod az egyező futásokat és esettanulmányokat, utána a legközelebbieket, indoklással. A mi tesztjeinkben, a mi profiljainkkal: nem ígéret arra, amit te elérsz.",
@@ -1226,6 +1664,22 @@ const OS_LABEL: Record<string, string> = {
   windows: "Windows",
   macos: "macOS",
 };
+// The release targets (web/data/benchmark/benchmark-0-4-0.json, «targets»): 0.4.0 is released only when every one is met.
+const TARGET_MARK: Record<string, string> = {
+  pass: "✅",
+  fail: "❌",
+  pending: "⏳",
+  blocked: "⛔",
+};
+const TARGET_COLOR: Record<string, string> = {
+  pass: "#22C55E",
+  fail: "#EF4444",
+  pending: "#F59E0B",
+  blocked: "#A855F7",
+};
+type Target = (typeof data.targets)[number];
+type Build = (typeof data.builds)[number];
+
 const OUTCOME_COLOR: Record<string, string> = {
   pass: "#22C55E",
   reservations: "#84CC16",
@@ -1241,6 +1695,8 @@ const PROFILE_SECTOR: Record<string, Sector | ""> = {
   waiter: "hospitality",
   receptionist: "hospitality",
   truckDriver: "transport",
+  bricklayer: "trades",
+  officeClerk: "office",
 };
 const CATEGORY_SECTOR: Record<string, Sector | ""> = { finance: "office" };
 
@@ -1266,6 +1722,22 @@ export default async function BenchmarkPage() {
   const perScored = (r: Round) =>
     r.cost != null && r.scored ? r.cost / r.scored : null;
   const chartRows = data.rounds.filter((r) => r.outcome !== "running");
+  const buildNo = (r: Round) => (r as { buildNo?: number }).buildNo;
+  const roundById = new Map(data.rounds.map((r) => [r.id, r]));
+  const green = data.targets.filter((x: Target) => x.status === "pass").length;
+  const roundLink = (id: string) => {
+    const r = roundById.get(id);
+    if (!r) return null;
+    return (
+      <a
+        key={id}
+        href={`#${id}`}
+        className="underline decoration-dotted hover:decoration-solid whitespace-nowrap"
+      >
+        {OS_LABEL[r.os]} · {t.profiles[r.profile]} · {dayLabel(r)}
+      </a>
+    );
+  };
   const maxChart = Math.max(...chartRows.map((r) => perScored(r) ?? 0), 0.0001);
 
   const trade = (key: string) =>
@@ -1347,6 +1819,110 @@ export default async function BenchmarkPage() {
           </div>
         </header>
 
+        <section className="space-y-3" id="targets">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="section-label">{t.targetsTitle}</h2>
+            <span
+              className="text-[12px] font-semibold tabular-nums"
+              style={{
+                color:
+                  green === data.targets.length
+                    ? TARGET_COLOR.pass
+                    : TARGET_COLOR.fail,
+              }}
+            >
+              {t.targetsCount
+                .replace("{g}", String(green))
+                .replace("{n}", String(data.targets.length))}
+            </span>
+          </div>
+          <p className="text-[12px] text-[var(--color-muted)] max-w-3xl">
+            {t.targetsLead}
+          </p>
+          <div className="overflow-x-auto border border-[var(--color-border)] bg-[var(--color-card)]">
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="text-left text-[10px] uppercase tracking-wide text-[var(--color-muted)]">
+                  {Object.values(t.targetsCols).map((h) => (
+                    <th
+                      key={h}
+                      className="px-3 py-2 font-semibold whitespace-nowrap"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {data.targets.map((x: Target) => (
+                  <tr
+                    key={x.id}
+                    className="border-t border-[var(--color-border)] align-top"
+                  >
+                    <td className="px-3 py-2 min-w-[220px]">
+                      {t.targets[x.id]}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <span
+                        className="text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5"
+                        style={{
+                          color: TARGET_COLOR[x.status],
+                          background: `color-mix(in srgb, ${TARGET_COLOR[x.status]} 16%, transparent)`,
+                        }}
+                      >
+                        <span aria-hidden="true">{TARGET_MARK[x.status]}</span>{" "}
+                        {t.targetStatus[x.status]}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap tabular-nums">
+                      {x.build == null
+                        ? t.none
+                        : t.buildLabel.replace("{n}", String(x.build))}
+                    </td>
+                    <td className="px-3 py-2 min-w-[240px] text-[var(--color-muted)]">
+                      <span className="inline-flex flex-wrap gap-x-3 gap-y-1">
+                        {x.proof.map((id: string) => roundLink(id))}
+                      </span>
+                      {x.note ? (
+                        <span className="block">{t.targetNotes[x.note]}</span>
+                      ) : null}
+                      {!x.note && x.proof.length === 0 ? t.none : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="space-y-1 text-[12px]">
+            <h3 className="text-[11px] uppercase tracking-wide text-[var(--color-muted)]">
+              {t.buildsTitle}
+            </h3>
+            <ul className="space-y-1">
+              {data.builds.map((b: Build) => (
+                <li key={b.n} className="flex flex-wrap gap-x-3 gap-y-1">
+                  <span className="font-semibold tabular-nums">
+                    {t.buildLabel.replace("{n}", String(b.n))}
+                    {b.commit ? (
+                      <span className="text-[var(--color-dim)] font-normal">
+                        {" "}
+                        · {b.commit}
+                        {b.day ? ` · ${b.day}` : ""}
+                      </span>
+                    ) : null}
+                  </span>
+                  {b.rounds.length ? (
+                    b.rounds.map((id: string) => roundLink(id))
+                  ) : (
+                    <span className="text-[var(--color-muted)]">
+                      {t.noRound}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
         <Suspense fallback={null}>
           <BenchmarkFinder
             copy={t.finder}
@@ -1387,7 +1963,8 @@ export default async function BenchmarkPage() {
                 {data.rounds.map((r) => (
                   <tr
                     key={r.id}
-                    className="border-t border-[var(--color-border)] align-top"
+                    id={r.id}
+                    className="border-t border-[var(--color-border)] align-top scroll-mt-20"
                   >
                     <td className="px-3 py-2 whitespace-nowrap">
                       <span className="inline-flex items-center gap-2">
@@ -1400,6 +1977,9 @@ export default async function BenchmarkPage() {
                           <br />
                           <span className="text-[var(--color-muted)]">
                             {OS_LABEL[r.os]} · {dayLabel(r)}
+                            {buildNo(r)
+                              ? ` · ${t.buildLabel.replace("{n}", String(buildNo(r)))}`
+                              : ""}
                           </span>
                         </span>
                       </span>
