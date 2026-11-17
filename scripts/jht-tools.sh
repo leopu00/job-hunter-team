@@ -102,39 +102,14 @@ tools_pull_job() {
 
 # ── Room for the full image, and the old images of JHT ─────────────────────────────────────────────────────────────────────────
 # The full image is about 3.4 GB, and pulling it took some 6 GiB of a Mac (the disk of the Podman machine grows on the Mac's own):
-# on giro Mac m21 an update went from 10 to 2 GiB free, the old images of the version before still there. Before the pull, when the
-# room is short, the old images of JHT go first (tools_clean_old_images); still short, nothing is pulled and the person is told
-# (state `disk_low`, said by `jht up`, `jht setup` and `jht status`; `jht up` tries again). Space that cannot be measured refuses
-# nothing. JHT_TOOLS_PULL_MIN_FREE_GIB (10) is the room asked for.
+# on giro Mac m21 an update went from 10 to 2 GiB free, the old images of the version before still there. The pull goes only when
+# what stays free AFTER it keeps the agents above their threshold (disk_room_after_download in the wrapper, the threshold of
+# disk_low): a pull that left the disk under it made every agent refuse to start (giro Mac build8). When the room is short, the old
+# images of JHT go first (tools_clean_old_images); still short, nothing is pulled and the person is told (state `disk_low`, said by
+# `jht up`, `jht setup` and `jht status`; `jht up` tries again). Space that cannot be measured refuses nothing. What the pull takes
+# is pull_need_kib full (JHT_PULL_FULL_GIB).
 tools_pull_need_kib() {
-  local gib="${JHT_TOOLS_PULL_MIN_FREE_GIB:-10}"
-  case "$gib" in ''|*[!0-9]*) gib=10 ;; esac
-  printf '%s\n' $((gib * 1048576))
-}
-
-# The least free KiB of the volumes of THIS computer the pull fills: the data folder's, the engine's where the wrapper knows it
-# (disk_free_measure and disk_engine_path are the wrapper's, as for `jht upgrade`), and on a Mac the folder of the Podman
-# machine's disk image, which grows on the Mac whatever the disk inside the machine says. Nothing, and 1, when none can be measured.
-tools_machine_disk_dir() {
-  [ "${PODMAN_RUNTIME_MODE:-}" = machine ] || return 0
-  printf '%s\n' "${JHT_PODMAN_MACHINE_DIR:-$HOME/.local/share/containers/podman/machine}"
-}
-
-tools_disk_free_kib() {
-  local volume measure permille avail least=""
-  declare -F disk_free_measure >/dev/null 2>&1 || return 1
-  for volume in "${JHT_HOME_HOST:-$HOME/.jht}" "$(declare -F disk_engine_path >/dev/null 2>&1 && disk_engine_path)" \
-      "$(tools_machine_disk_dir)"; do
-    [ -n "$volume" ] || continue
-    measure="$(disk_free_measure "$volume")" || continue
-    read -r permille avail <<EOF
-$measure
-EOF
-    case "$avail" in ''|*[!0-9]*) continue ;; esac
-    if [ -z "$least" ] || [ "$avail" -lt "$least" ]; then least="$avail"; fi
-  done
-  [ -n "$least" ] || return 1
-  printf '%s\n' "$least"
+  if declare -F pull_need_kib >/dev/null 2>&1; then pull_need_kib full; else printf '%s\n' $((6 * 1048576)); fi
 }
 
 # The old images of JHT go, by the rules of the cleaning after `jht upgrade` (upgrade_prune_old_images in the wrapper: only the
@@ -179,13 +154,10 @@ tools_trim_machine() {
 # 0 when there is room for the pull, or it cannot be measured. What counts is the disk of this computer, measured again after the
 # old images went and the machine trimmed its disk: never the space freed inside the machine, which the Mac may not get back.
 tools_disk_room() {
-  local need free
-  need="$(tools_pull_need_kib)"
-  free="$(tools_disk_free_kib)" || return 0
-  [ "$free" -ge "$need" ] && return 0
+  declare -F disk_room_after_download >/dev/null 2>&1 || return 0
+  disk_room_after_download "$(tools_pull_need_kib)" && return 0
   tools_clean_old_images
-  free="$(tools_disk_free_kib)" || return 0
-  [ "$free" -ge "$need" ]
+  disk_room_after_download "$(tools_pull_need_kib)"
 }
 
 # One job at a time, detached. $1 = `auto` for the job of tools_kick (it pulls if needed, then switches by itself).
