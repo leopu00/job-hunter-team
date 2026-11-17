@@ -67,6 +67,9 @@ export default {
   "stop.already_closed": "nicht gefunden (schon geschlossen?)",
   "stop.stopped_n": "{n} Agenten gestoppt",
   "stop.assistente_kept": "ASSISTENTE bleibt an (zum Schließen: jht team stop assistente)",
+  "chat.delivery.given_up_too_old": "⚠️ Deine Nachricht «{start}» hat den Agenten nicht erreicht: Sie hat länger als einen Tag gewartet. Wenn sie noch wichtig ist, schreib sie noch einmal.",
+  "chat.delivery.given_up_answered_later": "⚠️ Deine Nachricht «{start}» hat den Agenten nicht erreicht, und das Gespräch ging ohne sie weiter. Wenn sie noch wichtig ist, schreib sie noch einmal.",
+  "chat.delivery.given_up_refused": "⚠️ Deine Nachricht «{start}» hat den Agenten nicht erreicht: Die Zustellung ist viele Male hintereinander fehlgeschlagen. Wenn sie noch wichtig ist, schreib sie noch einmal.",
   "chat.header.title": "Chat mit {session}",
   "chat.header.container": "Container jht",
   "chat.header.host": "tmux des Hosts",
@@ -132,4 +135,6 @@ export default {
   "agents.running": "aktiv",
   "agents.stopped": "gestoppt",
   "agents.sessions_in_tmux": "Sitzungsnamen in tmux:",
+  "team.captain_tools": "Der Capitano und die Sentinella starten in ein paar Minuten von selbst, sobald die Werkzeuge des vollständigen Images bereit sind. Das Onboarding ist abgeschlossen: Es gibt nichts zu tun.",
+  "container.team_stopped": "Das Team ist gestoppt (du hast es gestoppt): Der Container läuft, die Agenten nicht. Um sie wieder zu starten: jht team start",
 };

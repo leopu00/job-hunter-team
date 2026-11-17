@@ -67,6 +67,9 @@ export default {
   "stop.already_closed": "nem található (már bezárva?)",
   "stop.stopped_n": "{n} ügynök leállítva",
   "stop.assistente_kept": "ASSISTENTE megtartva (a bezáráshoz: jht team stop assistente)",
+  "chat.delivery.given_up_too_old": "⚠️ Az üzeneted («{start}») nem jutott el az ügynökhöz: több mint egy napig várakozott. Ha még fontos, írd meg újra.",
+  "chat.delivery.given_up_answered_later": "⚠️ Az üzeneted («{start}») nem jutott el az ügynökhöz, és a beszélgetés nélküle folytatódott. Ha még fontos, írd meg újra.",
+  "chat.delivery.given_up_refused": "⚠️ Az üzeneted («{start}») nem jutott el az ügynökhöz: a kézbesítés sokszor egymás után nem sikerült. Ha még fontos, írd meg újra.",
   "chat.header.title": "Csevegés: {session}",
   "chat.header.container": "jht konténer",
   "chat.header.host": "a gazdagép tmuxa",
@@ -132,4 +135,6 @@ export default {
   "agents.running": "fut",
   "agents.stopped": "leállítva",
   "agents.sessions_in_tmux": "Munkamenetnevek a tmuxban:",
+  "team.captain_tools": "A Capitano és a Sentinella néhány perc múlva magától elindul, amikor a teljes image eszközei készen állnak. A bevezetés kész: nincs teendőd.",
+  "container.team_stopped": "A csapat le van állítva (te állítottad le): a konténer fut, az ügynökök nem. Az újraindításhoz: jht team start",
 };

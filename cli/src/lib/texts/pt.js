@@ -67,6 +67,9 @@ export default {
   "stop.already_closed": "não encontrado (já fechado?)",
   "stop.stopped_n": "{n} agentes parados",
   "stop.assistente_kept": "ASSISTENTE mantido (para o fechar: jht team stop assistente)",
+  "chat.delivery.given_up_too_old": "⚠️ A tua mensagem «{start}» não chegou ao agente: esperou mais de um dia. Se ainda for importante, escreve-a de novo.",
+  "chat.delivery.given_up_answered_later": "⚠️ A tua mensagem «{start}» não chegou ao agente, e a conversa continuou sem ela. Se ainda for importante, escreve-a de novo.",
+  "chat.delivery.given_up_refused": "⚠️ A tua mensagem «{start}» não chegou ao agente: a entrega falhou muitas vezes seguidas. Se ainda for importante, escreve-a de novo.",
   "chat.header.title": "Chat com {session}",
   "chat.header.container": "contentor jht",
   "chat.header.host": "tmux do host",
@@ -132,4 +135,6 @@ export default {
   "agents.running": "ativo",
   "agents.stopped": "parado",
   "agents.sessions_in_tmux": "Nomes das sessões no tmux:",
+  "team.captain_tools": "O Capitano e a Sentinella arrancam sozinhos dentro de alguns minutos, quando as ferramentas da imagem completa estiverem prontas. O onboarding está feito: não há nada a fazer.",
+  "container.team_stopped": "A equipa está parada (foste tu que a paraste): o contentor está ligado, os agentes não. Para os voltar a arrancar: jht team start",
 };
