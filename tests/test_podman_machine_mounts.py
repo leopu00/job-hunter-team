@@ -36,6 +36,7 @@ from podman_machine_fixture import (
     jht_mount_sources,
     write_linux_host_tools,
     write_machine_config,
+    write_healthy_df,
     write_macos_host_tools,
 )
 from test_desktop_chat_wrapper import _runtime
@@ -504,6 +505,8 @@ def test_the_installer_creates_a_machine_with_only_the_two_folders(tmp_path: Pat
         path = bin_dir / name
         path.write_text(f"#!/bin/sh\n{body}\n", encoding="utf-8")
         path.chmod(0o700)
+    # the room before the pull is measured on this computer's disk: a healthy fake one, not the runner's
+    write_healthy_df(bin_dir)
     env = {
         "HOME": str(home),
         "PATH": f"{bin_dir}:/usr/bin:/bin",
@@ -559,6 +562,8 @@ def test_the_installer_reports_but_never_resizes_an_existing_machine(tmp_path: P
         path = bin_dir / name
         path.write_text(f"#!/bin/sh\n{body}\n", encoding="utf-8")
         path.chmod(0o700)
+    # the room before the pull is measured on this computer's disk: a healthy fake one, not the runner's
+    write_healthy_df(bin_dir)
     env = {
         "HOME": str(home),
         "PATH": f"{bin_dir}:/usr/bin:/bin",

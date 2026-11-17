@@ -7,7 +7,7 @@
 import pc from 'picocolors';
 import { createClackPrompter } from '../../wizard/clack-prompter.js';
 import { WizardCancelledError } from '../../wizard/prompts.js';
-import { runSetupWizard } from '../../wizard/setup.js';
+import { runSetupWizard, setupExitCode } from '../../wizard/setup.js';
 import { runNonInteractiveSetup } from '../../wizard/setup-noninteractive.js';
 import { t } from '../../wizard/i18n.js';
 
@@ -20,7 +20,7 @@ async function handleSetup(opts) {
   const prompter = createClackPrompter();
   try {
     // a setup that stopped before its end leaves a code that a script can read
-    if (!(await runSetupWizard(prompter))) process.exitCode = 1;
+    process.exitCode = setupExitCode(await runSetupWizard(prompter)) || process.exitCode;
   } catch (err) {
     if (err instanceof WizardCancelledError) { process.exitCode = 1; return; }
     console.error(pc.red(t('wizard.cli.unexpected_error')), err.message);
