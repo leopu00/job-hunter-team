@@ -130,10 +130,10 @@ python3 /app/shared/skills/db_update.py position <DUP_ID> --status excluded \
 
 ## Nach dem INSERT — Analysten benachrichtigen
 
-Sende nach jedem Batch von 3-5 Inserts einen Ping an die Analyst-Sessions mit dem ID-Bereich. Sie holen `status=new` sowieso aus der DB, aber der Ping verkuerzt die Latenz:
+Sende nach JEDEM Insert (nie auf einen Batch von 3-5 warten: ein Scout, der den Ping bis zur dritten Position zurückhält, sendet ihn vielleicht nie) einen Ping an die Analyst-Sessions mit der ID. Sie holen `status=new` sowieso aus der DB, aber der Ping verkuerzt die Latenz. Gibt es die Session nicht, ist nichts weiter zu tun: der INSERT ist die Übergabe, und das System startet einen Analysten, wenn Positionen warten.
 
 ```bash
-jht-tmux-send ANALISTA-1 "[@$MY_ID -> @analista-1] [INFO] Batch 5 posizioni inserite (IDs: X-Y)"
+jht-tmux-send ANALISTA-1 "[@$MY_ID -> @analista-1] [INFO] Posizione inserita (ID: X)"
 ```
 
 Wenn du 2 Analysten hast, wechsle das Ping-Ziel ab, um die Last zu verteilen (Analysten haben auch eine `last_checked`-Claim-Koordination, sodass es nie falsch ist, aber die tmux-Benachrichtigung verbessert die Reaktionsfaehigkeit).

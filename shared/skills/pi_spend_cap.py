@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import sqlite3
 from pathlib import Path
 from datetime import datetime
@@ -304,7 +305,9 @@ def _tell(api, run, key, text, user, notify_user):
             done["%s:%s" % (key, session)] = bool(notice(api, run.state, "pi_cap:%s:%s" % (key, session), session, text))
     if not done.get(key):
         try:
-            notify_user(user, REASON)
+            # one source id per notice: the tool refuses a second notice under the same id with another text (exit 2), so only
+            # the first pause of a team was ever told to the person (giro Windows 16/11: «jht-notify-user failed with exit 2»)
+            notify_user(user, "%s-%s" % (REASON, re.sub(r"[^A-Za-z0-9_.-]+", "-", key)))
             done[key] = True
         except Exception as error:  # noqa: BLE001 - not a reason to stop the tick
             print("[bridge V6] WARN pi spend cap user notice: %s" % error)
@@ -323,7 +326,8 @@ def _record(verdict, config):
     record = {"why": verdict["why"], "spent": verdict["spent"], "ceiling": verdict["ceiling"]}
     if verdict["why"] in ("budget", "period", "pace"):
         record.update(budget_usd=verdict["usd"], starts_at=_iso(verdict["starts"], config),
-                      ends_at=_iso(verdict["ends"], config), resumes_at=_iso(verdict["resumes"], config))
+                      ends_at=_iso(verdict["ends"], config), resumes_at=_iso(verdict["resumes"], config),
+                      counts_from=int(verdict["counts_from"]))
         if verdict.get("before"):
             record["before_work"] = {"spent": verdict["before"], "budget_usd": verdict["usd"]}
     return record
@@ -398,10 +402,66 @@ def _resume_moved(api, run, verdict, spent, day, notify_user, config, now, flag)
               user_text(verdict, spent, config, now), notify_user)
 
 
+def _held_by_the_budget(flag, budget):
+    """True when the flag is the pause of a spent budget or an ended period of THIS budget: it does not lift by itself, only a new
+    budget (jht setup) lifts it. The verdict that raised it can stop being one with no new budget at all: the stop looks AHEAD
+    at the pace of the last minutes, and a team that has stopped has no pace, so the next look finds 4.77 $ of 5 under the line
+    and would clear it, the team would work again and stop a second time at 4.93 $ (giro Windows 16/11: 13:00 stop, 13:02 «cleared»,
+    14 more calls). The budget is the same when the flag names the moment its dollars count from (`counts_from`); a flag written
+    before that field is the same when it names the same dollars and the same start."""
+    record = (flag or {}).get("pi_spend_cap") or {}
+    if record.get("why") not in ("budget", "period") or budget is None:
+        return False
+    if record.get("counts_from") is not None:
+        return int(record["counts_from"]) == int(budget["counts_from"])
+    try:
+        started = datetime.fromisoformat(record["starts_at"]).timestamp() if record.get("starts_at") else None
+    except (TypeError, ValueError):
+        return False
+    return (started is not None and budget.get("starts") is not None and int(started) == int(budget["starts"])
+            and record.get("budget_usd") == budget["usd"])
+
+
+def _wake_the_team(api, sessions, why):
+    """[RIPRENDI] to every session the pause stopped, the moment the pause is lifted: they were ESC'd, and left to wait for the
+    Sentinella's next cycle they stayed silent for a quarter of an hour (giro vps-42: «allows work again» 18:31, the Scouts back at
+    18:46). The Captain and the Sentinella have their own notice; a team the person stopped, a standby, and an agent the person
+    paused alone are not woken here. Best effort: a session that does not answer is left to that next cycle, as before."""
+    home = api._path("JHT_HOME")
+    try:
+        if (Path(home) / ".team-halted.flag").exists() or (Path(home) / ".team-standby.flag").exists():
+            return []
+        alone = set()
+        try:
+            import agent_pause
+            alone = set(agent_pause.paused_sessions(home=home))
+        except Exception:  # noqa: BLE001 - without the list nobody is held back by it
+            pass
+        text = ("[RIPRENDI] The pause is over (%s). Your session and context were never closed: pick up EXACTLY where you were, "
+                "with the step you had in hand, and do not start over." % why)
+        woken = []
+        for session in sessions or []:
+            if session in (api.CAPITANO_SESSION, api.SENTINELLA_SESSION) or session in alone or session in NEVER_WAKE:
+                continue
+            try:
+                if api.jht_tmux_send(session, text):
+                    woken.append(session)
+            except Exception as error:  # noqa: BLE001
+                print("[bridge V6] WARN pi spend cap wake of %s: %s" % (session, error))
+        return woken
+    except Exception as error:  # noqa: BLE001 - a wake that fails must not stop the tick
+        print("[bridge V6] WARN pi spend cap wake: %s" % error)
+        return []
+
+
+NEVER_WAKE = {"SENTINELLA-WORKER", "DOCTOR-WATCHDOG"}
+
+
 def _resume(api, run, day, notify_user):
     i18n = quota_data.shared_i18n()
 
-    was = ((_flag(api) or {}).get("pi_spend_cap") or {}).get("why")
+    flag = _flag(api) or {}
+    was = (flag.get("pi_spend_cap") or {}).get("why")
     try:
         api._path("DAILY_HALT_FLAG").unlink()
     except OSError:
@@ -412,8 +472,10 @@ def _resume(api, run, day, notify_user):
     else:
         text = "[BRIDGE INFO] The pi spending ceiling allows work again: the team can resume; ticks are restarting."
         user = i18n.t("pi_cap.resume")
+    # the gate is open (the flag is gone) BEFORE anyone is told to work: the order of the standby too
+    woken = _wake_the_team(api, flag.get("sessions"), "the budget allows work again" if was in ("budget", "period", "pace") else "spending is back under the ceiling")
     _tell(api, run, "resume:%s:%d" % (day, int(api.time.time())), text, user, notify_user)
-    print("[bridge V6] %s PI-SPEND-CEILING cleared: spending back under the ceiling" % run.now_h)
+    print("[bridge V6] %s PI-SPEND-CEILING cleared: spending back under the ceiling%s" % (run.now_h, " · [RIPRENDI] to %s" % ", ".join(woken) if woken else ""))
 
 
 def _start(home, budget, moment, run, api=None, spent_before=0.0):
@@ -477,7 +539,7 @@ def step(api, run, notify_user=None):
                 _halt(api, run, verdict, spent, day, notify_user, config, now, escape=False)
             elif mine and verdict["why"] == "pace":
                 _resume_moved(api, run, verdict, spent, day, notify_user, config, now, flag)
-        elif mine and (budget is not None or run.state.get("no_quota_declared")):
+        elif mine and (budget is not None or run.state.get("no_quota_declared")) and not _held_by_the_budget(flag, budget):
             # Lifted only by a tick that looked: without a budget and before the no-quota mode is declared (the first tick
             # of a bridge started again) the ceilings were not read, and «nothing to stop» is not «back under».
             _resume(api, run, day, notify_user)

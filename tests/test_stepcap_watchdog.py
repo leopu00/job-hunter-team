@@ -669,3 +669,51 @@ def test_health_cli_esce_1_quando_il_log_e_stantio(home, monkeypatch, capsys):
 ])
 def test_solo_i_worker_sono_sorvegliati(name, expected):
     assert wd.is_worker_session(name) is expected
+
+
+# ── Un pane fermo da sé: lo Scout in pochi giri, e la ripresa senza una pausa sopra (banco 17/11) ───────────
+# Due Scout chiusero il turno con un riassunto: il watchdog li vide fermi dopo 15 giri e li mise in pausa altri 300 s,
+# 20 minuti senza una riga. Un pane fermo senza marcatore non e' un rabbit-hole: si riprende al giro dopo.
+
+def test_1i_uno_scout_fermo_e_uno_stallo_dopo_pochi_giri_e_senza_pausa_sopra(home, monkeypatch):
+    fake = FakeTmux({"SCOUT-1": IDLE_PANE}).install(monkeypatch)
+    monkeypatch.setattr(wd._throttle_engine(), "queue_is_empty", lambda agent: False)
+    assert wd.idle_rounds_for("scout-1") == 5 and wd.idle_rounds_for("scout") == 5
+    for i in range(5):
+        wd.tick(now=T0 + i * 60)
+        assert events("detected") == [], "scattato al giro %d" % i
+    wd.tick(now=T0 + 5 * 60)
+    assert len(events("detected")) == 1 and fake.resumes == []
+    wd.tick(now=T0 + 6 * 60)
+    assert [r["agent"] for r in fake.resumes] == ["scout-1"], "ripreso al giro dopo, non dopo 300 s"
+    throttled = events("throttled")
+    assert len(throttled) == 1 and throttled[0]["throttle_sec"] == 0
+    assert wd._throttle_engine().get_flag("scout-1") == {}, "nessuna pausa armata nel motore"
+    assert not (home / "state" / "throttle-scout-1.json").exists()
+
+
+def test_1j_gli_altri_ruoli_aspettano_i_giri_di_sempre(home):
+    for agent in ("analista-1", "scorer-2", "scrittore", "critico-1", "scout-x"):
+        assert wd.idle_rounds_for(agent) == wd.IDLE_STALL_ROUNDS == 15
+
+
+def test_1k_il_tetto_dei_passi_conserva_la_sua_pausa(home, monkeypatch):
+    fake = FakeTmux({"SCOUT-3": stall_pane()}).install(monkeypatch)
+    wd.tick(now=T0)
+    wd.tick(now=T0 + 60)
+    throttled = events("throttled")
+    assert len(throttled) == 1 and throttled[0]["throttle_sec"] > 0
+    assert fake.resumes == []
+
+
+def test_1l_cinque_stalli_di_pane_fermo_senza_produzione_vanno_comunque_al_capitano(home, monkeypatch):
+    """Lo stallo senza pausa non toglie il freno: al quarto di fila senza niente prodotto decide il Capitano."""
+    fake = FakeTmux({"SCOUT-1": IDLE_PANE}, resume_moves_pane=False).install(monkeypatch)
+    monkeypatch.setattr(wd._throttle_engine(), "queue_is_empty", lambda agent: False)
+    for i in range(80):
+        wd.tick(now=T0 + i * 60)
+        if events("escalated"):
+            break
+    assert events("escalated"), "mai passato al Capitano"
+    assert len(fake.resumes) <= 3, "non si riprende all'infinito"
+    assert any("resume it at once" in m for m in CAPTAIN_MSGS)

@@ -29,7 +29,7 @@ export function answerWord(key) {
 
 function guardCancel(value) {
   if (isCancel(value)) {
-    cancel(pc.red('Setup cancelled.'));
+    cancel(pc.red(t('wizard.cancelled')));
     throw new WizardCancelledError();
   }
   return value;

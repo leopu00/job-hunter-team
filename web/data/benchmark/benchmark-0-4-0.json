@@ -1,8 +1,178 @@
 {
   "version": 1,
-  "updated": "2026-11-16",
+  "updated": "2026-11-17",
   "kind": "first-comparison-not-a-clean-benchmark",
   "privacy": "Synthetic profiles only: invented people, generic names, no real names, hosts, addresses or keys.",
+  "targets": [
+    {
+      "id": "installWindows",
+      "status": "pass",
+      "build": 8,
+      "proof": [
+        "r14"
+      ],
+      "note": null
+    },
+    {
+      "id": "installLinux",
+      "status": "pass",
+      "build": 6,
+      "proof": [],
+      "note": "cleanLinuxRoundMissing"
+    },
+    {
+      "id": "installMac",
+      "status": "pending",
+      "build": null,
+      "proof": [],
+      "note": "redoOnBuild9"
+    },
+    {
+      "id": "updateLinux",
+      "status": "pass",
+      "build": 8,
+      "proof": [
+        "r12"
+      ],
+      "note": null
+    },
+    {
+      "id": "updateMac",
+      "status": "blocked",
+      "build": 8,
+      "proof": [
+        "r13"
+      ],
+      "note": "diskFull"
+    },
+    {
+      "id": "updateWindows",
+      "status": "pending",
+      "build": null,
+      "proof": [],
+      "note": "neverTried"
+    },
+    {
+      "id": "nonItRelevant",
+      "status": "fail",
+      "build": 8,
+      "proof": [
+        "r12",
+        "r14"
+      ],
+      "note": "relevantBelow"
+    },
+    {
+      "id": "scoutBench",
+      "status": "pending",
+      "build": null,
+      "proof": [],
+      "note": "benchPaused"
+    },
+    {
+      "id": "budgetBrake",
+      "status": "fail",
+      "build": 8,
+      "proof": [
+        "r14"
+      ],
+      "note": "brakeFalseClear"
+    },
+    {
+      "id": "language",
+      "status": "fail",
+      "build": 8,
+      "proof": [
+        "r12",
+        "r13",
+        "r14"
+      ],
+      "note": "languageEnglish"
+    },
+    {
+      "id": "doctorMaintainer",
+      "status": "fail",
+      "build": 8,
+      "proof": [
+        "r14"
+      ],
+      "note": "zeroTurns"
+    },
+    {
+      "id": "serviceClaude",
+      "status": "pass",
+      "build": 8,
+      "proof": [
+        "r14"
+      ],
+      "note": null
+    },
+    {
+      "id": "serviceOpenai",
+      "status": "pass",
+      "build": 6,
+      "proof": [],
+      "note": "openaiRoundMissing"
+    },
+    {
+      "id": "serviceGlmKimi",
+      "status": "pending",
+      "build": null,
+      "proof": [],
+      "note": "noCredit"
+    },
+    {
+      "id": "openaiSubscription",
+      "status": "pending",
+      "build": null,
+      "proof": [],
+      "note": "loginNeverTried"
+    },
+    {
+      "id": "noKeyOnDisk",
+      "status": "pass",
+      "build": 8,
+      "proof": [
+        "r12"
+      ],
+      "note": "keysChecked"
+    },
+    {
+      "id": "betaTester",
+      "status": "pending",
+      "build": null,
+      "proof": [],
+      "note": "updateOnBuild9"
+    }
+  ],
+  "builds": [
+    {
+      "n": 6,
+      "commit": "f1f386bd0",
+      "day": "16/11",
+      "rounds": [
+        "r9",
+        "r10",
+        "r11"
+      ]
+    },
+    {
+      "n": 7,
+      "commit": null,
+      "day": null,
+      "rounds": []
+    },
+    {
+      "n": 8,
+      "commit": "aa2d0f17e",
+      "day": "17/11",
+      "rounds": [
+        "r12",
+        "r13",
+        "r14"
+      ]
+    }
+  ],
   "rounds": [
     {
       "id": "r1",
@@ -164,6 +334,132 @@
       "outcome": "fail",
       "note": "noCredit",
       "lang": "fr"
+    },
+    {
+      "id": "r9",
+      "os": "linux",
+      "service": "claude",
+      "day": "16/11",
+      "profile": "bricklayer",
+      "mode": "onsite",
+      "build": "f1f386bd0",
+      "buildNo": 6,
+      "minutes": 10,
+      "cost": 3.06,
+      "calls": null,
+      "found": 26,
+      "scored": 21,
+      "relevant": 3,
+      "bestScore": 74,
+      "roster": null,
+      "outcome": "reservations",
+      "note": "updateSwitchKept",
+      "lang": "de"
+    },
+    {
+      "id": "r10",
+      "os": "macos",
+      "service": "claude",
+      "day": "16/11",
+      "profile": "officeClerk",
+      "mode": "onsite",
+      "build": "f1f386bd0",
+      "buildNo": 6,
+      "minutes": 12,
+      "cost": 1.39,
+      "calls": null,
+      "found": 18,
+      "scored": 5,
+      "relevant": 15,
+      "bestScore": 85,
+      "roster": null,
+      "outcome": "reservations",
+      "note": "updateWelcomePaid",
+      "lang": "pt"
+    },
+    {
+      "id": "r11",
+      "os": "windows",
+      "service": "claude",
+      "day": "16/11",
+      "profile": "truckDriver",
+      "mode": "onsite",
+      "build": "f1f386bd0",
+      "buildNo": 6,
+      "minutes": 30,
+      "cost": 2.67,
+      "calls": null,
+      "found": 19,
+      "scored": 12,
+      "relevant": 2,
+      "bestScore": 85,
+      "roster": null,
+      "outcome": "reservations",
+      "note": "cleanInstallWarehouse",
+      "lang": "it"
+    },
+    {
+      "id": "r12",
+      "os": "linux",
+      "service": "claude",
+      "day": "17/11",
+      "profile": "bricklayer",
+      "mode": "onsite",
+      "build": "aa2d0f17e",
+      "buildNo": 8,
+      "minutes": 30,
+      "cost": 0.91,
+      "calls": null,
+      "found": 0,
+      "scored": 0,
+      "relevant": 0,
+      "bestScore": null,
+      "roster": null,
+      "outcome": "fail",
+      "note": "updateNoNewPositions",
+      "lang": "de"
+    },
+    {
+      "id": "r13",
+      "os": "macos",
+      "service": "claude",
+      "day": "17/11",
+      "profile": "officeClerk",
+      "mode": "onsite",
+      "build": "aa2d0f17e",
+      "buildNo": 8,
+      "minutes": null,
+      "cost": 0,
+      "calls": null,
+      "found": null,
+      "scored": null,
+      "relevant": null,
+      "bestScore": null,
+      "roster": null,
+      "outcome": "fail",
+      "note": "diskLowAfterUpdate",
+      "lang": "pt"
+    },
+    {
+      "id": "r14",
+      "os": "windows",
+      "service": "claude",
+      "day": "17/11",
+      "profile": "receptionist",
+      "mode": "onsite",
+      "build": "aa2d0f17e",
+      "buildNo": 8,
+      "minutes": 30,
+      "cost": 4.95,
+      "calls": null,
+      "found": 26,
+      "scored": 19,
+      "relevant": 10,
+      "bestScore": 95,
+      "roster": null,
+      "outcome": "reservations",
+      "note": "cleanInstallGerman",
+      "lang": "de"
     }
   ],
   "services": [

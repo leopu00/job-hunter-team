@@ -1346,6 +1346,8 @@ describe("canale della chat senza lettore diretto", () => {
         sends.push([agent, body]);
         return { ok: true, code: 0 };
       },
+      // il giro gira un minuto dopo il turno: un turno di giorni fa non si consegna più (chat-sync-give-up.test.ts)
+      now: () => 1753790000000 + 60_000,
     });
 
     // Il punto: consegnato davvero, non "in coda".

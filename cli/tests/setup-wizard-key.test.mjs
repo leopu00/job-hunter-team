@@ -15,7 +15,7 @@ const cli = fileURLToPath(new URL('..', import.meta.url));
 const KEY = ['synthetic', 'key', '0123456789', 'abcdef'].join('-'); // built, so that no scanner reads it as a key
 const OTHER = ['synthetic', 'key', 'fedcba', '9876543210'].join('-');
 
-function sandbox({ installFails = false, existingConfig = null, piLogsIn = true } = {}) {
+function sandbox({ installFails = false, existingConfig = null, piLogsIn = true, teamStartFails = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'jht-wizard-key-'));
   const home = join(root, '.jht');
   const deps = join(root, 'deps');
@@ -25,7 +25,8 @@ function sandbox({ installFails = false, existingConfig = null, piLogsIn = true 
   if (existingConfig) writeFileSync(join(home, 'jht.config.json'), existingConfig);
   const calls = join(root, 'calls.log');
   const fake = join(root, 'fake-jht.js');
-  writeFileSync(fake, `require('node:fs').appendFileSync(${JSON.stringify(calls)}, 'jht ' + process.argv.slice(2).join(' ') + '\\n');\nprocess.exit(${installFails ? "process.argv[2] === 'providers' ? 1 : 0" : '0'});\n`);
+  writeFileSync(fake, `const fs = require('node:fs'); fs.appendFileSync(${JSON.stringify(calls)}, 'jht ' + process.argv.slice(2).join(' ') + '\\n');
+if (process.argv[2] === 'team' && process.argv[3] === 'start') fs.appendFileSync(${JSON.stringify(join(root, 'flag-at-start.log'))}, fs.existsSync(require('node:path').join(process.env.JHT_HOME, '.setup-open.flag')) ? 'present\\n' : 'absent\\n');\nprocess.exit(${installFails ? "process.argv[2] === 'providers' ? 1 : 0" : teamStartFails ? "process.argv[2] === 'team' && process.argv[3] === 'start' ? 1 : 0" : '0'});\n`);
   // a codex that takes its key from the standard input like `codex login --with-api-key`, and writes the marker
   const codex = join(bin, 'codex');
   writeFileSync(codex, `#!/bin/sh
@@ -41,6 +42,7 @@ fi
   const pi = join(bin, 'pi');
   writeFileSync(pi, `#!/bin/sh
 echo "pi $* dir=$PI_CODING_AGENT_DIR" >> ${JSON.stringify(calls)}
+if [ -f "$JHT_HOME/.setup-open.flag" ]; then echo present >> ${JSON.stringify(join(root, 'flag-at-login.log'))}; else echo absent >> ${JSON.stringify(join(root, 'flag-at-login.log'))}; fi
 ${piLogsIn ? `mkdir -p "$PI_CODING_AGENT_DIR" && echo '{"openai":{"type":"oauth","access":"synthetic"}}' > "$PI_CODING_AGENT_DIR/auth.json"` : 'true'}
 `);
   chmodSync(pi, 0o755);
@@ -59,22 +61,24 @@ const prompter = {
   intro: async () => {}, outro: async (message) => say('outro', { message }),
   note: async (message, title) => say('note', { message, title }),
   select: async (p) => { say('select', { message: p.message, options: p.options.map((o) => o.value), initial: p.initialValue });
-    const wanted = answers.select?.[p.message];
+    const wanted = answers.select?.[p.message] ?? answers.byOptions?.[p.options.map((o) => o.value).join()];
     return p.options.some((o) => o.value === wanted) ? wanted : (p.initialValue ?? p.options[0].value); },
   multiselect: async () => [], text: async (p) => { say('text', { message: p.message }); return answers.text?.[p.message] ?? ''; },
   password: async (p) => { say('password', { message: p.message, rejects: p.validate?.('short') ?? null }); return keys.shift() ?? ''; },
   confirm: async (p) => { if (answers.cancelAtConfirm) throw new WizardCancelledError(); return answers.confirm ?? p.initialValue ?? true; },
   progress: () => ({ update() {}, stop() {} }),
 };
-try { say('result', { ok: await runSetupWizard(prompter) }); } catch (err) { say('cancelled', { name: err.name }); }
+// FAKE_DISK: what the disk guard says after a team start that failed (low = the agents refused for the disk)
+const disk = process.env.FAKE_DISK ? { diskRefusal: () => (process.env.FAKE_DISK === 'low' ? { code: 'disk_low', message: 'SYNTHETIC DISK SENTENCE' } : null) } : undefined;
+try { say('result', { ok: await runSetupWizard(prompter, disk) }); } catch (err) { say('cancelled', { name: err.name }); }
 `);
   return { root, home, deps, bin, calls, fake, driver };
 }
 
-function run(box, answers = {}, verdicts = []) {
+function run(box, answers = {}, verdicts = [], extraEnv = {}) {
   const r = spawnSync(process.execPath, [box.driver], {
     env: { PATH: `${box.bin}:${dirname(process.execPath)}:/usr/bin:/bin`, HOME: box.root, JHT_HOME: box.home, JHT_DEPS_PREFIX: box.deps, JHT_NODE_ENTRY: box.fake,
-      LANG: 'en_US.UTF-8', NO_COLOR: '1', WIZARD_ANSWERS: JSON.stringify(answers), FAKE_VERDICTS: JSON.stringify(verdicts) },
+      LANG: 'en_US.UTF-8', NO_COLOR: '1', WIZARD_ANSWERS: JSON.stringify(answers), FAKE_VERDICTS: JSON.stringify(verdicts), ...extraEnv },
     encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60_000,
   });
   const events = r.stdout.split('\n').filter((l) => l.startsWith('EV ')).map((l) => JSON.parse(l.slice(3)));
@@ -406,4 +410,88 @@ test('the budget in the wizard: a reset with the same trial opens a new period (
   const box2 = sandbox({ existingConfig: before.replace('"usd":5', '"usd":7') });
   const second = run(box2, { select: { 'Config management': 'reset', 'AI Provider': 'glm' }, keys: [KEY] });
   assert.notEqual(JSON.parse(second.configText).team.budget.saved_at, saved, 'another amount starts again');
+});
+
+test('agents refused for the disk at the end of the setup: set up and saved, the team needs space, and the setup ends with 3 (giro Mac build8)', async () => {
+  const box = sandbox({ teamStartFails: true });
+  const { events, calls, configText } = run(box, { select: { 'AI Provider': 'kimi' }, keys: [KEY] }, [200], { FAKE_DISK: 'low' });
+  assert.ok(calls.includes('jht team start'));
+  assert.ok(configText, 'the configuration is saved');
+  const outro = events.find((e) => e.kind === 'outro').message;
+  assert.match(outro, /^The setup is done and your configuration is saved, but the team cannot start: the disk needs more free space\./);
+  assert.match(outro, /SYNTHETIC DISK SENTENCE/);
+  assert.match(outro, /jht team start/);
+  assert.doesNotMatch(outro, /Team start failed/);
+  assert.equal(events.at(-1).ok, 'team_needs_space');
+  const { setupExitCode } = await import('../wizard/setup.js');
+  assert.equal(setupExitCode('team_needs_space'), 3);
+  assert.equal(setupExitCode(true), 0);
+  assert.equal(setupExitCode(false), 1);
+});
+
+test('a team start that failed for something else than the disk is still a failed setup', () => {
+  const box = sandbox({ teamStartFails: true });
+  const { events } = run(box, { select: { 'AI Provider': 'kimi' }, keys: [KEY] }, [200], { FAKE_DISK: 'ok' });
+  assert.match(events.find((e) => e.kind === 'outro').message, /Team start failed/);
+  assert.equal(events.at(-1).ok, false);
+});
+
+test('while the setup is open the flag stands (the watchdogs start nothing), and it is gone before the team starts and at the end', () => {
+  const box = sandbox();
+  const { r } = run(box, { select: { 'AI Provider': 'openai', 'How does Pi sign in to OpenAI?': 'subscription' } });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(readFileSync(join(box.root, 'flag-at-login.log'), 'utf8').trim(), 'present', 'the sign-in of Pi is made with the setup open');
+  assert.equal(readFileSync(join(box.root, 'flag-at-start.log'), 'utf8').trim(), 'absent', 'the setup takes it off before it starts the team itself');
+  assert.equal(existsSync(join(box.home, '.setup-open.flag')), false);
+});
+
+test('a setup that leaves without a sign-in does not leave the flag behind', () => {
+  const box = sandbox({ piLogsIn: false });
+  run(box, { select: { 'AI Provider': 'openai', 'How does Pi sign in to OpenAI?': 'subscription' } });
+  assert.equal(existsSync(join(box.home, '.setup-open.flag')), false);
+});
+
+// «Update the values» with the same service and a key already kept (giro vps-42, build9): the key is not asked again, keeping it is the default
+const keptBefore = (provider) => JSON.stringify({ version: 4, active_provider: provider, harness: 'pi', providers: { [provider]: { name: provider, auth_method: 'api_key', model: 'm' } }, channels: {} });
+function withKeptKey(provider) {
+  const box = sandbox({ existingConfig: keptBefore(provider) });
+  mkdirSync(join(box.deps, 'keys'), { recursive: true, mode: 0o700 });
+  writeFileSync(join(box.deps, 'keys', `${provider}.key`), `${KEY}\n`, { mode: 0o600 });
+  return box;
+}
+const keepAsk = (events) => events.find((e) => e.kind === 'select' && e.options.join() === 'keep,new');
+
+test('same service, a key kept that the provider accepts: «keep the key» is the default and no key is typed', () => {
+  const box = withKeptKey('glm');
+  const { r, events, configText, out } = run(box, { select: { 'Config management': 'modify', 'AI Provider': 'glm' } }, [200]);
+  assert.equal(r.status, 0, r.stderr);
+  const ask = keepAsk(events);
+  assert.ok(ask, 'the choice to keep the key is offered');
+  assert.equal(ask.initial, 'keep');
+  assert.equal(events.some((e) => e.kind === 'password'), false, 'nothing is typed');
+  const config = JSON.parse(configText);
+  assert.equal(config.providers.glm.api_key_ref.path, join(box.deps, 'keys', 'glm.key'));
+  assert.equal(readFileSync(join(box.deps, 'keys', 'glm.key'), 'utf8'), `${KEY}\n`, 'the key is as it was');
+  assert.equal(out.includes(KEY), false);
+});
+
+test('same service and «a new key»: the key is asked and replaces the old one', () => {
+  const box = withKeptKey('glm');
+  const { events } = run(box, { select: { 'Config management': 'modify', 'AI Provider': 'glm' }, byOptions: { 'keep,new': 'new' }, keys: [OTHER] }, [200, 200]);
+  assert.ok(keepAsk(events));
+  assert.ok(events.some((e) => e.kind === 'password'));
+  assert.equal(readFileSync(join(box.deps, 'keys', 'glm.key'), 'utf8'), `${OTHER}\n`);
+});
+
+test('a kept key the provider refuses is not offered: the key is asked', () => {
+  const box = withKeptKey('glm');
+  const { events } = run(box, { select: { 'Config management': 'modify', 'AI Provider': 'glm' }, keys: [OTHER] }, [401, 200]);
+  assert.equal(keepAsk(events), undefined);
+  assert.ok(events.some((e) => e.kind === 'password'));
+});
+
+test('another service than the saved one: the key of that service is asked, nothing is offered to keep', () => {
+  const box = withKeptKey('glm');
+  const { events } = run(box, { select: { 'Config management': 'modify', 'AI Provider': 'kimi' }, keys: [OTHER] }, [200]);
+  assert.equal(keepAsk(events), undefined);
 });

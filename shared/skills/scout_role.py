@@ -38,6 +38,14 @@ from pathlib import Path
 MISMATCH_EXIT = 5
 MISSING_EXIT = 6
 MAX_TERMS = 80
+# A family of fewer terms is the trade and little else: measured 17/11 on a bricklayer (six terms: muratore, capo squadra,
+# capocantiere, operaio edile, piastrellista, mason), 45 of 155 refusals were his own sector (manovale edile, gruista,
+# escavatorista, geometra di cantiere, ispettore di cantiere). `declare` says so and what to add; it does not refuse.
+MIN_FAMILY = 10
+NARROW_ADVICE = ("the family is narrow (%d terms): add the neighbouring trades of the same sector (the labourer, the helper, the "
+                 "machine operator, the site or shift lead, the technician of the field) and the WORDS of the sector on their own "
+                 "(for building: edile, edilizia, cantiere), in the language of the portal and in English, then declare again: "
+                 "a title of your sector that the family misses is refused as another trade")
 MAX_TERM_WORDS = 4
 # One word that names no trade: declaring it would let a whole category in (the very defect). A phrase containing it is fine
 # («operaio edile»); the word alone is not.
@@ -60,6 +68,21 @@ def _plain(text) -> str:
 
 
 GENERIC = frozenset(_plain(w) for w in _GENERIC_RAW.split())
+
+# The words of a SECTOR or a PLACE of work, not of a trade: a family that declares them (the advice says to) lets a title in
+# through them alone. Measured 17/11 on a nurse in Torino: a «CUOCO/A PER RSA» passed for «rsa». Such a word counts only in a
+# TITLE that also holds a generic worker word («Addetto RSA», «Operaio di cantiere»): the cook has none, the nurse has her own
+# trade word in the family and never needs it.
+_SECTOR_RAW = """
+rsa residenza residenze ospedale ospedali ospedaliero ospedaliera sanitario sanitaria sanitari sanitarie reparto reparti
+ambulatorio ambulatori clinica cliniche cantiere cantieri edile edili edilizia edilizio costruzioni costruzione
+hospital hospitals ward clinic clinics site sites construction building healthcare
+krankenhaus klinik station bau baustelle
+hopital clinique chantier batiment
+obra obras construccion construcao
+korhaz
+"""
+SECTOR_WORDS = frozenset(_plain(w) for w in _SECTOR_RAW.split())
 
 
 def _tokens(text) -> list:
@@ -162,6 +185,12 @@ def term_in(term: str, tokens: list) -> bool:
         joined = "".join(words)
         if any(_word_match(joined, token) for token in tokens):
             return True
+        # a word between the words of the phrase, or the other order: «operaio edile» is «operaio specializzato edile», «edile
+        # qualificato», «addetto cantiere edile». What names the trade is the words that are not generic («edile»): all of them
+        # in the text is enough; a phrase made only of generic words stays consecutive (above).
+        specific = [w for w in words if w not in GENERIC]
+        if specific and all(any(_word_match(w, token) for token in tokens) for w in specific):
+            return True
     elif len(words[0]) >= 6:
         if any(_word_match(words[0], tokens[i] + tokens[i + 1]) for i in range(len(tokens) - 1)):
             return True
@@ -200,7 +229,11 @@ def declare(raw_terms, agent=None, profile=None) -> dict:
     if agent:
         by.add(agent)
     _write_declaration({"roles_key": key, "terms": merged, "by": sorted(by)})
-    return {"declared": True, "terms": merged, "refused": refused}
+    out = {"declared": True, "terms": merged, "refused": refused}
+    if len(merged) < MIN_FAMILY:
+        out["narrow"] = True
+        out["advice"] = NARROW_ADVICE % len(merged)
+    return out
 
 
 def verdict(title, requirements=None, snippet=None, profile=None) -> dict:
@@ -217,6 +250,8 @@ def verdict(title, requirements=None, snippet=None, profile=None) -> dict:
             continue
         for term in declaration["terms"]:
             if term_in(term, words):
+                if term in SECTOR_WORDS and not (label == "title" and any(w in GENERIC for w in words)):
+                    continue   # a word of the sector or the place is not a trade: it needs a worker word beside it, in the title
                 return {"verdict": "ok", "term": term, "where": label}
     if not (_tokens(title) or _tokens(requirements) or _tokens(snippet)):
         return {"verdict": "ok", "reason": "no text to compare"}
@@ -247,7 +282,8 @@ def family_state(profile=None) -> dict | None:
 
 def declare_hint(roles) -> str:
     return ("python3 /app/shared/skills/scout_role.py declare --term \"<the trade, as ads write it>\" --term \"<a synonym>\" "
-            "--term \"<an adjacent trade you accept>\" ...  (roles of the profile: %s)" % "; ".join(roles))
+            "--term \"<an adjacent trade you accept>\" --term \"<the sector's own word>\" ... (ten or more terms; roles of the profile: %s)"
+            % "; ".join(roles))
 
 
 def main(argv=None) -> int:
@@ -275,8 +311,12 @@ def main(argv=None) -> int:
         roles = read_roles(args.profile)
         declaration = read_declaration()
         fresh = bool(roles and declaration and declaration.get("roles_key") == roles_key(roles))
-        print(json.dumps({"roles": roles, "fresh": fresh, "terms": (declaration or {}).get("terms", []) if fresh else []},
-                         sort_keys=True, ensure_ascii=False))
+        terms = (declaration or {}).get("terms", []) if fresh else []
+        shown = {"roles": roles, "fresh": fresh, "terms": terms}
+        if fresh and len(terms) < MIN_FAMILY:
+            shown["narrow"] = True
+            shown["advice"] = NARROW_ADVICE % len(terms)
+        print(json.dumps(shown, sort_keys=True, ensure_ascii=False))
         return 0
     if args.cmd == "reset":
         try:

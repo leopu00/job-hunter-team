@@ -145,12 +145,11 @@ def test_an_expired_doctor_spawn_keeps_the_claim_and_the_loop_alive():
     assert 'finish_tick "$POLL_SEC"' in source[source.index(branch) :]
 
 
-def test_an_expired_maintainer_spawn_marks_the_day_instead_of_retrying():
+def test_an_expired_maintainer_spawn_waits_for_its_turn_instead_of_retrying_or_marking_the_day():
     source = _read(WATCHDOG)
     branch = _branch(source, 'elif [ "$mrc" -eq 124 ]; then', "\n      else")
-    assert "mark-maintainer" in branch, (
-        "un secondo spawn ucciderebbe e ricreerebbe un Mantenitore magari vivo"
-    )
+    # un secondo spawn ucciderebbe e ricreerebbe un Mantenitore magari vivo; ma la giornata non si segna senza un turno
+    assert 'spawned MAINT' in branch and "mark-maintainer" not in branch
     assert "loop alive" in branch
 
 

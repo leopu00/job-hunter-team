@@ -472,7 +472,7 @@ fs.statfsSync = () => {
 
 _HEALTHY_DISK_DF = '''#!/bin/sh
 pct="${FAKE_DISK_FREE_PCT:-50}"
-total=1000000
+total=1048576000
 avail=$((total * pct / 100))
 printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\\n'
 printf '/dev/fake %s %s %s 1%% /\\n' "$total" "$((total - avail))" "$avail"

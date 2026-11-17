@@ -137,6 +137,16 @@ TMUX_BUFFER = "jht-stepcap"
 # morso non porta marcatori: turno abortito su 429, riga appesa nel composer,
 # agente in attesa di una sveglia soppressa. Nessuno di questi stampa niente.
 IDLE_STALL_ROUNDS = int(os.environ.get("JHT_STEPCAP_IDLE_ROUNDS", "15"))
+# Lo Scout vive di un ciclo (cerca, inserisce, continua): un pane fermo e' un turno che ha chiuso con un riassunto, e ogni
+# minuto fermo e' produzione persa (banco 17/11: due Scout fermi 15 minuti dopo il riassunto). Per lui bastano 5 giri.
+IDLE_STALL_ROUNDS_SCOUT = int(os.environ.get("JHT_STEPCAP_IDLE_ROUNDS_SCOUT", "5"))
+
+
+def idle_rounds_for(agent: str) -> int:
+    """Giri di pane immobile che valgono uno stallo per questo agente: pochi per lo Scout, 15 per gli altri."""
+    if re.fullmatch(r"scout(-\d+)?", str(agent or "").strip().lower()):
+        return min(IDLE_STALL_ROUNDS, IDLE_STALL_ROUNDS_SCOUT)
+    return IDLE_STALL_ROUNDS
 # Dopo la fine di una pausa armata nel motore, il motore sveglia l'agente al suo giro: il watchdog aspetta questo tanto
 # prima di mandare lui la ripresa (motore fermo).
 ENGINE_WAKE_GRACE_SEC = float(os.environ.get("JHT_STEPCAP_ENGINE_WAKE_GRACE", "120"))

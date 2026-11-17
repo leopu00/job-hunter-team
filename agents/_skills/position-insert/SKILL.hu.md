@@ -130,10 +130,10 @@ python3 /app/shared/skills/db_update.py position <DUP_ID> --status excluded \
 
 ## Az INSERT utan — Analistak ertesitese
 
-Minden 3-5 insert batch utan pingelj az Analista munkameneteknek az ID-tartomanyt. Mindenkeppen felveszik a `status=new`-t az adatbazisbol, de a ping leroviti a kesleltetes:
+MINDEN insert utan (soha ne varj 3-5-os csomagra: az a Scout, aki a harmadik pozicioig visszatartja a pinget, lehet, hogy sosem kuldi el) pingelj az Analista munkameneteknek az ID-vel. Mindenkeppen felveszik a `status=new`-t az adatbazisbol, de a ping leroviti a kesleltetest. Ha a munkamenet nem letezik, nincs tobb teendo: az INSERT az atadas, es a rendszer elindit egy Analistat, amikor pozicio var.
 
 ```bash
-jht-tmux-send ANALISTA-1 "[@$MY_ID -> @analista-1] [INFO] Batch 5 posizioni inserite (IDs: X-Y)"
+jht-tmux-send ANALISTA-1 "[@$MY_ID -> @analista-1] [INFO] Posizione inserita (ID: X)"
 ```
 
 Ha 2 Analistad van, valtogasd a ping celpontot a terheles elosztasa erdekeben (az Analistak rendelkeznek `last_checked` igeny-koordinacioval is, tehat soha nem hibas, de a tmux ertesites javitja a reagalasi idot).

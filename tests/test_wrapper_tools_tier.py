@@ -942,8 +942,17 @@ GIB = 1048576
 
 # the wrapper's functions the helper uses, faked: the free KiB in $FAKE/free-kib (none = cannot be measured), the image the
 # container runs in $FAKE/running, the cleaning writes its arguments in $FAKE/prune and frees $FAKE/freed bytes
-DISK_FAKES = r'''
-disk_free_measure() { printf '%s\n' "$1" >> "$FAKE/measured"; [ -s "$FAKE/free-kib" ] || return 1; printf '500 %s' "$(cat "$FAKE/free-kib")"; }
+def _wrapper_disk_room() -> str:
+    """The wrapper's own room rule (what stays free AFTER a download), with its threshold: only the measure is faked."""
+    text = WRAPPER.read_text(encoding="utf-8")
+    names = ("pull_need_kib", "disk_download_volumes", "disk_room_after_download", "disk_gib_up_text")
+    body = "".join(re.search(rf"(?ms)^{name}\(\) \{{\n.*?^\}}\n", text).group(0) for name in names)
+    return "DISK_BLOCK_FREE_PERMILLE=30\nDISK_BLOCK_FREE_KIB=8388608\nDISK_ROOM_FREE_KIB=''\nDISK_ROOM_SHORT_KIB=''\n" + body
+
+
+# a disk of 1 TiB: its 3% (about 31 GiB) is above 8 GiB, so the 8 GiB decide, as on the Mac of giro build8
+DISK_FAKES = _wrapper_disk_room() + r'''
+disk_total_avail() { printf '%s\n' "$1" >> "$FAKE/measured"; [ -s "$FAKE/free-kib" ] || return 1; printf '1073741824 %s' "$(cat "$FAKE/free-kib")"; }
 disk_engine_path() { :; }
 disk_gib_text() { printf '%s' $(( $1 / 1048576 )); }
 upgrade_image_plain() { printf '%s' "${1#sha256:}"; }
@@ -984,8 +993,8 @@ def test_with_room_on_the_disk_the_pull_goes_and_nothing_is_cleaned_first(box):
 
 def test_short_of_room_the_old_images_go_first_and_the_disk_is_measured_again(box):
     box.tier()
-    _disk(box, free_gib=8, freed_gib=4)
-    (box.fake / "free-after").write_text(str(12 * GIB), encoding="utf-8")   # the old images and the trim gave 4 GiB back
+    _disk(box, free_gib=8, freed_gib=8)
+    (box.fake / "free-after").write_text(str(16 * GIB), encoding="utf-8")   # the old images and the trim gave 8 GiB back: 16 - 6 >= 8
     assert box.run(DISK_FAKES + "tools_kick", **PULL_ONLY_ENV).returncode == 0
     box.wait_for("ready")
     box.wait_for_pull_end()
@@ -1020,13 +1029,31 @@ def test_with_no_room_nothing_is_pulled_and_the_person_is_told_then_up_tries_aga
     assert (box.fake / "pulls").exists()
 
 
-def test_the_room_asked_for_can_be_changed_and_space_that_cannot_be_measured_refuses_nothing(box):
+def test_the_pull_goes_only_when_what_stays_free_after_it_keeps_the_agents_above_their_threshold(box):
+    """Giro Mac build8: 9.2 GiB free took the update, and then every agent refused to start (disk_low at 3.9 GiB). The full pull
+    takes about 5 GiB (JHT_PULL_FULL_GIB): it goes only when 8 GiB stay free after it."""
     box.tier()
-    _disk(box, free_gib=3)
-    assert box.run(DISK_FAKES + "tools_disk_room && echo room", JHT_TOOLS_PULL_MIN_FREE_GIB="2").stdout == "room\n"
+    _disk(box, free_gib=13)
+    assert box.run(DISK_FAKES + "tools_disk_room && echo room").stdout == "room\n"
+    _disk(box, free_gib=12.9)
     assert box.run(DISK_FAKES + "tools_disk_room || echo short").stdout == "short\n"
+    _disk(box, free_gib=10)
+    assert box.run(DISK_FAKES + "tools_disk_room && echo room", JHT_PULL_FULL_GIB="2").stdout == "room\n"
+    assert box.run(DISK_FAKES + "tools_disk_room || echo short", JHT_PULL_FULL_GIB="two").stdout == "short\n"
     (box.fake / "free-kib").unlink()
     assert box.run(DISK_FAKES + "tools_disk_room && echo room").stdout == "room\n"
+
+
+def test_on_a_small_disk_the_threshold_is_the_three_percent():
+    """The agents' threshold is under 3% AND under 8 GiB: on a disk of 100 GiB, 3 GiB free after the pull is still enough."""
+    body = _wrapper_disk_room() + 'disk_total_avail() { printf "%s %s" 104857600 "$FREE"; }\ndisk_engine_path() { :; }\n'
+    run = lambda free_gib, need_gib: subprocess.run(["bash", "-c", body + f"disk_room_after_download {int(need_gib * GIB)}; echo rc=$? short=$DISK_ROOM_SHORT_KIB"],
+                                             capture_output=True, text=True, env={**os.environ, "FREE": str(int(free_gib * GIB))}).stdout
+    assert run(9.1, 6) == "rc=0 short=\n"
+    assert run(8.9, 6).startswith("rc=1 short=")
+    # what is missing is the smaller of the two distances: here to the 3% (3.0 GiB after), not to the 8 GiB
+    short = int(run(8.9, 6).split("short=")[1])
+    assert 0 < short <= int(0.11 * GIB)
 
 
 @pytest.mark.parametrize("case", ["other-image", "upgrade-lock", "upgrade-journal", "no-container"])
@@ -1089,7 +1116,7 @@ def test_tools_status_says_there_is_no_room_with_the_numbers(box):
     text = WRAPPER.read_text(encoding="utf-8")
     body = "".join(re.search(rf"(?ms)^{name}\(\) \{{\n.*?^\}}\n", text).group(0) for name in ("tools_say_status", "tools_disk_low_text"))
     done = box.run(DISK_FAKES + "jht_say() { printf '%s' \"$*\"; }\n" + body + "tools_say_status")
-    assert done.stdout == "tools.disk_low 10 3\n", done.stdout + done.stderr
+    assert done.stdout == "tools.disk_low 13 3\n", done.stdout + done.stderr
 
 
 def test_jht_up_setup_and_status_say_the_disk_is_short():
@@ -1198,9 +1225,9 @@ def test_after_the_switch_the_machine_is_trimmed(box):
 
 def test_on_a_mac_the_room_is_measured_where_the_machines_disk_grows_too(box):
     _disk(box, free_gib=30)
-    box.run(DISK_FAKES + TRIM_FAKES + "JHT_PODMAN_MACHINE_DIR=/somewhere/machine\ntools_disk_free_kib")
+    box.run(DISK_FAKES + TRIM_FAKES + "PODMAN_RUNTIME_MODE=machine\nJHT_PODMAN_MACHINE_DIR=/somewhere/machine\ndisk_room_after_download 0")
     measured = (box.fake / "measured").read_text(encoding="utf-8").splitlines()
     assert str(box.home) in measured and "/somewhere/machine" in measured
     (box.fake / "measured").unlink()
-    box.run(DISK_FAKES + "tools_disk_free_kib")
+    box.run(DISK_FAKES + "PODMAN_RUNTIME_MODE=native\nJHT_PODMAN_MACHINE_DIR=/somewhere/machine\ndisk_room_after_download 0")
     assert "/somewhere/machine" not in (box.fake / "measured").read_text(encoding="utf-8")

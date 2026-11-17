@@ -203,3 +203,92 @@ def test_a_short_message_next_to_a_draft_is_not_the_text_already_in_the_box(box)
     done = box.run("5")
     assert done.returncode == 130, (done.returncode, done.stderr)
     assert box.typed() == [] and box.keys("Enter") == []
+
+
+# -- A message left in the box for hours is not a draft for ever (31 deliveries refused in 288 hours) ---------------------
+# An envelope between agents has no marks and no end of its own, so it is signed only while the transport's fingerprint of
+# it is in the record (a day). Past that, or when the transport never pasted it, every delivery ended in rc=130. What a person
+# types changes; an envelope that stays EXACTLY the same for an hour is a message that was left.
+
+def _seen(box):
+    return box.home / "locks" / "tmux-send-seen-CAPITANO.log"
+
+
+def _age_the_sighting(box, seconds):
+    stamp, sha = _seen(box).read_text(encoding="utf-8").split()
+    _seen(box).write_text(f"{int(stamp) - seconds} {sha}\n", encoding="utf-8")
+
+
+def test_d_an_envelope_left_unchanged_for_an_hour_is_released_ours_goes_in_behind_and_its_text_is_kept(box):
+    box.put("composer", AGENT_OLD)
+    first = box.run(MESSAGE_2)
+    assert first.returncode == 130, "the first time it is seen it is somebody's text: nothing pasted or pressed"
+    assert _seen(box).exists() and box.typed() == [] and box.keys("Enter") == []
+    _age_the_sighting(box, 2 * 3600)
+    done = box.run(MESSAGE_2)
+    assert done.returncode == 0, done.stderr
+    assert len(box.typed()) == 1 and len(box.keys("Enter")) == 1, "one paste, one Enter for both"
+    transcript = (box.state / "transcript").read_text(encoding="utf-8")
+    assert "un messaggio vecchio" in transcript and BODY_2 in transcript
+    assert transcript.index("un messaggio vecchio") < transcript.index(BODY_2)
+    assert _body(box, "composer") == []
+    kept = [row for row in _pending_input(box) if row["reason"] == "stale_released"]
+    assert len(kept) == 1 and kept[0]["draft"] == AGENT_OLD and kept[0]["session"] == "CAPITANO"
+    assert not _seen(box).exists(), "the sighting is over with the text"
+
+
+def test_d_a_fingerprint_gone_past_its_day_does_not_leave_the_box_closed_for_ever(box):
+    left = _left_by_us(box)
+    path = box.home / "locks" / "tmux-send-fingerprints-CAPITANO.log"
+    old = int(__import__("time").time()) - 2 * 86400
+    path.write_text("".join(f"{old} {line.split()[1]}\n" for line in path.read_text().splitlines()), encoding="utf-8")
+    assert box.run(MESSAGE_2).returncode == 130
+    _age_the_sighting(box, 2 * 3600)
+    done = box.run(MESSAGE_2)
+    assert done.returncode == 0, done.stderr
+    assert BODY_2 in (box.state / "transcript").read_text(encoding="utf-8") and left
+
+
+def test_d_an_envelope_seen_less_than_an_hour_ago_is_still_somebodys_text(box):
+    box.put("composer", AGENT_OLD)
+    assert box.run(MESSAGE_2).returncode == 130
+    _age_the_sighting(box, 1800)
+    done = box.run(MESSAGE_2)
+    assert done.returncode == 130, done.stderr
+    assert box.typed() == [] and box.keys("Enter") == []
+    assert (box.state / "composer").read_text(encoding="utf-8") == AGENT_OLD
+
+
+def test_d_an_envelope_that_changed_since_it_was_first_seen_starts_the_hour_again(box):
+    box.put("composer", AGENT_OLD)
+    assert box.run(MESSAGE_2).returncode == 130
+    _age_the_sighting(box, 5 * 3600)
+    box.put("composer", AGENT_OLD + " e un'aggiunta di chi sta scrivendo")
+    done = box.run(MESSAGE_2)
+    assert done.returncode == 130, done.stderr
+    assert box.typed() == [] and box.keys("Enter") == []
+
+
+@pytest.mark.parametrize("draft", [
+    "una bozza scritta da una persona",
+    "[@utente -> @capitano] [CHAT] parole senza il recinto",
+    "[@utente -> @capitano] [CHAT] ⟦UTENTE·ab12cd⟧ parole non chiuse",
+], ids=["hand", "unfenced", "unclosed"])
+def test_d_time_never_turns_a_persons_text_or_the_persons_words_without_their_fence_into_a_message(box, draft):
+    box.put("composer", draft)
+    assert box.run(MESSAGE_2).returncode == 130
+    if _seen(box).exists():
+        _age_the_sighting(box, 5 * 3600)
+    done = box.run(MESSAGE_2)
+    assert done.returncode == 130, done.stderr
+    assert box.typed() == [] and box.keys("Enter") == []
+    assert (box.state / "composer").read_text(encoding="utf-8") == draft
+
+
+def test_d_the_user_console_does_not_wait_for_a_released_envelope(box):
+    box.put("composer", AGENT_OLD)
+    assert box.run(MESSAGE_2).returncode == 130
+    _age_the_sighting(box, 2 * 3600)
+    done = box.run(MESSAGE_2, JHT_TMUX_SEND_FROM="user-console", JHT_TMUX_FOREIGN_WAIT="5")
+    assert done.returncode == 0, done.stderr
+    assert len(_captures(box)) < 15

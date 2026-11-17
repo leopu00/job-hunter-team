@@ -230,6 +230,46 @@ def check_duplicate(conn, url, company, title, location=None):
     return None, None
 
 
+# Livello 4 — lo STESSO annuncio ripubblicato da un'altra fonte. Un aggregatore (talent.com) rilancia l'annuncio di un'agenzia con
+# un'altra azienda («Randstad Healthcare» per «Randstad Professional Italia»), un altro titolo («infermiere» per «Infermiere per
+# centro di riabilitazione Torino») e un altro URL: azienda+titolo non lo riconosce, il TESTO si'. Misurato 17/11 (banco build9,
+# un'infermiera a Torino): lo stesso annuncio Randstad inserito due volte, da randstad.it e da talent.com.
+JD_SHINGLE_WORDS = 6        # parole per impronta
+JD_MIN_WORDS = 40           # sotto questa lunghezza un testo e' un modulo, non un annuncio: non si confronta
+JD_WINDOW_WORDS = 500       # si confronta l'inizio: l'aggregatore a volte aggiunge o toglie la coda
+JD_OVERLAP = 0.7            # quota delle impronte del testo piu' corto che il piu' lungo ha uguali
+
+
+def _jd_shingles(text):
+    """L'insieme delle impronte di sei parole consecutive dell'inizio del testo, o None se il testo e' troppo corto."""
+    import unicodedata
+    folded = "".join(c for c in unicodedata.normalize("NFKD", str(text or "").casefold()) if not unicodedata.combining(c))
+    words = re.findall(r"[^\W_]+", folded, re.UNICODE)[:JD_WINDOW_WORDS]
+    if len(words) < JD_MIN_WORDS:
+        return None
+    return {tuple(words[i:i + JD_SHINGLE_WORDS]) for i in range(len(words) - JD_SHINGLE_WORDS + 1)}
+
+
+def check_duplicate_text(conn, jd_text, location=None):
+    """Livello 4: stesso TESTO dell'annuncio (impronte di sei parole, almeno il 70% in comune) e stessa citta'.
+
+    Lo stesso testo in citta' diverse e' un'offerta diversa (il modulo di una filiale), per questo la citta' conta come per i
+    livelli 2 e 3. Ritorna (riga, tipo di match) o (None, None); senza testo, o troppo corto, non decide niente."""
+    mine = _jd_shingles(jd_text)
+    if not mine:
+        return None, None
+    rows = conn.execute(
+        "SELECT id, title, company, location, SUBSTR(jd_text, 1, 6000) AS jd FROM positions "
+        "WHERE jd_text IS NOT NULL AND LENGTH(jd_text) >= 200").fetchall()
+    for cand in rows:
+        if not _same_place(cand['location'], location):
+            continue
+        theirs = _jd_shingles(cand['jd'])
+        if theirs and len(mine & theirs) >= JD_OVERLAP * min(len(mine), len(theirs)):
+            return cand, "testo dell'annuncio+city-norm"
+    return None, None
+
+
 def _rollback_quietly(conn):
     """ROLLBACK che non copre l'errore vero se la transazione è già chiusa."""
     try:
@@ -319,6 +359,10 @@ def insert_position(args):
         existing, match_type = check_duplicate(
             conn, args.url, args.company, args.title, getattr(args, 'location', None),
         )
+        if not existing:
+            existing, match_type = check_duplicate_text(conn, getattr(args, 'jd_text', None), getattr(args, 'location', None))
+            if existing:
+                _log_dedup_skip(4, existing['id'], args.url, args.company, args.title)
         if existing:
             _rollback_quietly(conn)
             print(f"⚠️  DUPLICATE ({match_type}): '{args.company} — {args.title}' already exists as #{existing['id']} ({existing['company']} — {existing['title']}). INSERT aborted.")

@@ -48,7 +48,7 @@ jht_spawn_codex_dismiss_update
 # 3b) Gli stessi controlli del comando del REPL (pi senza AGENTS.md o .agents/skills, credenziali o settings
 #     illeggibili) PRIMA della sessione: un controllo che fallisce non lascia una sessione vuota che
 #     `jht team status` conta accesa. Il comando vero si compone al passo 6 (il modello di riserva arriva dopo).
-jht_spawn_repl_cmd "$ACTIVE_CLI" "$MANT_DIR" >/dev/null || exit 1
+jht_spawn_repl_cmd "$ACTIVE_CLI" "$MANT_DIR" mantenitore >/dev/null || exit 1
 
 # 4) Crea la sessione tmux MANTENITORE nella workdir corretta, con lo stesso
 #    tetto di tempo del gemello: `-c` fa chdir() nel bind mount e su un mount
@@ -63,7 +63,7 @@ sleep 1
 # 6) Avvia il REPL del provider attivo (stesso del team).
 # Chi legge o scrive nel pane deve sapere che qui gira pi, prima che il comando parta.
 jht_spawn_mark_harness "$SESSION" "$ACTIVE_CLI"
-MANT_CMD="$(jht_spawn_repl_cmd "$ACTIVE_CLI" "$MANT_DIR")" || exit 1
+MANT_CMD="$(jht_spawn_repl_cmd "$ACTIVE_CLI" "$MANT_DIR" mantenitore)" || exit 1
 tmux send-keys -t "$SESSION" "$MANT_CMD" C-m
 
 # 6b) Robustezza REPL: niente prompt-di-lavoro dentro una shell.
@@ -72,6 +72,9 @@ jht_spawn_wait_repl "$SESSION" "$MANT_CMD" "$LABEL" mantenitore "$LOGS_DIR" "spa
 
 # 6c) Auto-accept dei dialog + iniezione del prompt iniziale.
 jht_spawn_kickoff "$SESSION" 'Read AGENTS.md and run the maintainer sweep as documented. Outside working hours, log the condition and remain on standby. When finished, write the final log and REMAIN available on standby — DO NOT self-terminate (the next spawn replaces you using kill-then-create). If the coordinators contact you, respond to their request.'
+
+# 6d) Quale sessione, con quale CLI: `settle` di doctor_schedule.py cerca il suo turno vero.
+jht_spawn_record_start "$LOGS_DIR" mantenitore "$SESSION" "$ACTIVE_CLI" "$MANT_DIR"
 
 # 7) Log spawn evento per tracciabilità.
 ROUND_ID="$(date -u +%Y%m%dT%H%M%SZ)-maint"

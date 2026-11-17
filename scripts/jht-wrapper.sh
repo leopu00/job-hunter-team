@@ -147,9 +147,9 @@ if [ "$CONTAINER_RUNTIME" = "podman" ]; then
     export PODMAN_COMPOSE_PROVIDER="$(command -v podman-compose)"
   fi
 fi
-DEFAULT_RUNTIME_IMAGE="ghcr.io/leopu00/jht@sha256:a788d9c8377aab5f94fc576bbcfdf2df80e2a38a8cf4c51ab40647d23b9fd012"
-CORE_IMAGE_DIGEST="sha256:2d0d4da9a9cb9b01a232ea19e541780a00201772c3a450a9e61f460100ae2144"
-EXTRAS_IMAGE_DIGEST="sha256:c59f2a08291e436b8df3cc3f113ff52642e1836025f714030dbef915f3568b22"
+DEFAULT_RUNTIME_IMAGE="ghcr.io/leopu00/jht@sha256:4dd7f685c4cd7e664d5dead80ffed64e90e11d80f622d3ccb3dbf995bd5967af"
+CORE_IMAGE_DIGEST="sha256:4059519dd06b2b5cd2b3b83b9c48d06777beba153fd5698dfa71873a58a539b8"
+EXTRAS_IMAGE_DIGEST="sha256:f41ec97d6fbd17b0a8730617e284fb0cf44aa0f2fc2dd66a96f24dd0ad761566"
 RUNTIME_TIER_FILE="$RUNTIME_DIR/runtime-tier"
 RUNTIME_TIER_INTEGRITY="$RUNTIME_DIR/.runtime-tier-integrity"
 DEFAULT_RUNTIME_VERSION="0.4.0"
@@ -755,6 +755,7 @@ This help starts nothing and downloads nothing.' ;;
     line.upgrade.check_available) printf '%s' 'Check: there is an update, %s (%s) -> %s. %s. To apply it: jht upgrade' ;;
     line.upgrade.check_none) printf '%s' 'Check: no update, %s (%s) is already the latest. %s.' ;;
     line.upgrade.check_only) printf '%s' 'Check: %s.' ;;
+    line.upgrade.disk_room) printf '%s' 'The update downloads about %s GiB, and after the download the agents would have less than the %s GiB of disk they need: %s GiB are free now. Free at least %s GiB more (empty the Trash, delete large files you do not need), then try again: nothing was downloaded or changed (only the old versions of Job Hunter Team that nothing used were removed).' ;;
     line.upgrade.done) printf '%s' 'Update completed: %s (%s) -> %s (%s). %s' ;;
     line.upgrade.failed) printf '%s' 'Update not completed (%s): %s. %s' ;;
     line.upgrade.full_pull_failed) printf '%s' 'the new full image did not arrive, the old one stays. What to do: jht tools pull' ;;
@@ -1252,6 +1253,7 @@ Questo aiuto non avvia niente e non scarica niente.' ;;
     line.upgrade.check_available) printf '%s' 'Controllo: c'\''e'\'' un aggiornamento, %s (%s) -> %s. %s. Per applicarlo: jht upgrade' ;;
     line.upgrade.check_none) printf '%s' 'Controllo: nessun aggiornamento, %s (%s) e'\'' gia'\'' l'\''ultima. %s.' ;;
     line.upgrade.check_only) printf '%s' 'Controllo: %s.' ;;
+    line.upgrade.disk_room) printf '%s' 'L'\''aggiornamento scarica circa %s GiB, e dopo il download agli agenti resterebbero meno dei %s GiB di disco che servono: ora ne sono liberi %s. Libera almeno altri %s GiB (svuota il Cestino, elimina i file grandi che non ti servono), poi riprova: non è stato scaricato né cambiato niente (sono state tolte solo le vecchie versioni di Job Hunter Team che non usava nessuno).' ;;
     line.upgrade.done) printf '%s' 'Aggiornamento completato: %s (%s) -> %s (%s). %s' ;;
     line.upgrade.failed) printf '%s' 'Aggiornamento non completato (%s): %s. %s' ;;
     line.upgrade.full_pull_failed) printf '%s' 'l'\''immagine piena nuova non e'\'' arrivata, resta la vecchia. Cosa fare: jht tools pull' ;;
@@ -1750,6 +1752,7 @@ Ez a súgó semmit nem indít el és semmit nem tölt le.' ;;
     line.upgrade.check_available) printf '%s' 'Ellenőrzés: van frissítés, %s (%s) -> %s. %s. Az alkalmazásához: jht upgrade' ;;
     line.upgrade.check_none) printf '%s' 'Ellenőrzés: nincs frissítés, a(z) %s (%s) már a legújabb. %s.' ;;
     line.upgrade.check_only) printf '%s' 'Ellenőrzés: %s.' ;;
+    line.upgrade.disk_room) printf '%s' 'A frissítés körülbelül %s GiB-ot tölt le, és a letöltés után az ügynököknek kevesebb maradna a szükséges %s GiB lemezterületnél: most %s GiB szabad. Szabadíts fel még legalább %s GiB-ot (ürítsd ki a Kukát, töröld a nagy fájlokat, amelyekre nincs szükséged), majd próbáld újra: semmi nem lett letöltve vagy módosítva (csak a Job Hunter Team semmi által nem használt régi verziói lettek törölve).' ;;
     line.upgrade.done) printf '%s' 'A frissítés kész: %s (%s) -> %s (%s). %s' ;;
     line.upgrade.failed) printf '%s' 'A frissítés nem fejeződött be (%s): %s. %s' ;;
     line.upgrade.full_pull_failed) printf '%s' 'az új teljes kép nem érkezett meg, a régi marad. Teendő: jht tools pull' ;;
@@ -2252,6 +2255,7 @@ Esta ayuda no arranca nada ni descarga nada.' ;;
     line.upgrade.check_available) printf '%s' 'Comprobación: hay una actualización, %s (%s) -> %s. %s. Para aplicarla: jht upgrade' ;;
     line.upgrade.check_none) printf '%s' 'Comprobación: no hay actualizaciones, %s (%s) ya es la última. %s.' ;;
     line.upgrade.check_only) printf '%s' 'Comprobación: %s.' ;;
+    line.upgrade.disk_room) printf '%s' 'La actualización descarga unos %s GiB, y después de la descarga a los agentes les quedarían menos de los %s GiB de disco que necesitan: ahora hay %s GiB libres. Libera al menos %s GiB más (vacía la Papelera, borra los archivos grandes que no necesites) y vuelve a intentarlo: no se ha descargado ni cambiado nada (solo se han quitado las versiones antiguas de Job Hunter Team que nada usaba).' ;;
     line.upgrade.done) printf '%s' 'Actualización completada: %s (%s) -> %s (%s). %s' ;;
     line.upgrade.failed) printf '%s' 'Actualización no completada (%s): %s. %s' ;;
     line.upgrade.full_pull_failed) printf '%s' 'la nueva imagen completa no ha llegado, se queda la antigua. Qué hacer: jht tools pull' ;;
@@ -2749,6 +2753,7 @@ Diese Hilfe startet nichts und lädt nichts herunter.' ;;
     line.upgrade.check_available) printf '%s' 'Prüfung: Es gibt ein Update, %s (%s) -> %s. %s. Zum Anwenden: jht upgrade' ;;
     line.upgrade.check_none) printf '%s' 'Prüfung: kein Update, %s (%s) ist schon die neueste. %s.' ;;
     line.upgrade.check_only) printf '%s' 'Prüfung: %s.' ;;
+    line.upgrade.disk_room) printf '%s' 'Das Update lädt etwa %s GiB herunter, und nach dem Download hätten die Agenten weniger als die %s GiB Speicherplatz, die sie brauchen: Jetzt sind %s GiB frei. Gib mindestens %s GiB mehr frei (leere den Papierkorb, lösche große Dateien, die du nicht brauchst), dann versuch es erneut: Es wurde nichts heruntergeladen oder geändert (entfernt wurden nur alte Versionen von Job Hunter Team, die nichts mehr benutzte).' ;;
     line.upgrade.done) printf '%s' 'Update abgeschlossen: %s (%s) -> %s (%s). %s' ;;
     line.upgrade.failed) printf '%s' 'Update nicht abgeschlossen (%s): %s. %s' ;;
     line.upgrade.full_pull_failed) printf '%s' 'das neue vollständige Image ist nicht angekommen, das alte bleibt. Was tun: jht tools pull' ;;
@@ -3246,6 +3251,7 @@ Cette aide ne démarre rien et ne télécharge rien.' ;;
     line.upgrade.check_available) printf '%s' 'Vérification : il y a une mise à jour, %s (%s) -> %s. %s. Pour l'\''appliquer : jht upgrade' ;;
     line.upgrade.check_none) printf '%s' 'Vérification : aucune mise à jour, %s (%s) est déjà la dernière. %s.' ;;
     line.upgrade.check_only) printf '%s' 'Vérification : %s.' ;;
+    line.upgrade.disk_room) printf '%s' 'La mise à jour télécharge environ %s Gio, et après le téléchargement il resterait aux agents moins que les %s Gio de disque dont ils ont besoin : %s Gio sont libres maintenant. Libère au moins %s Gio de plus (vide la Corbeille, supprime les gros fichiers dont tu n'\''as pas besoin), puis réessaie : rien n'\''a été téléchargé ni modifié (seules les anciennes versions de Job Hunter Team que rien n'\''utilisait ont été supprimées).' ;;
     line.upgrade.done) printf '%s' 'Mise à jour terminée : %s (%s) -> %s (%s). %s' ;;
     line.upgrade.failed) printf '%s' 'Mise à jour non terminée (%s) : %s. %s' ;;
     line.upgrade.full_pull_failed) printf '%s' 'la nouvelle image complète n'\''est pas arrivée, l'\''ancienne reste. Que faire : jht tools pull' ;;
@@ -3743,6 +3749,7 @@ Esta ajuda não inicia nada nem descarrega nada.' ;;
     line.upgrade.check_available) printf '%s' 'Verificação: há uma atualização, %s (%s) -> %s. %s. Para a aplicar: jht upgrade' ;;
     line.upgrade.check_none) printf '%s' 'Verificação: nenhuma atualização, %s (%s) já é a mais recente. %s.' ;;
     line.upgrade.check_only) printf '%s' 'Verificação: %s.' ;;
+    line.upgrade.disk_room) printf '%s' 'A atualização descarrega cerca de %s GiB, e depois do descarregamento os agentes ficariam com menos dos %s GiB de disco de que precisam: agora há %s GiB livres. Liberta pelo menos mais %s GiB (esvazia o Lixo, apaga os ficheiros grandes de que não precisas) e tenta de novo: nada foi descarregado nem alterado (só foram removidas as versões antigas do Job Hunter Team que nada usava).' ;;
     line.upgrade.done) printf '%s' 'Atualização concluída: %s (%s) -> %s (%s). %s' ;;
     line.upgrade.failed) printf '%s' 'Atualização não concluída (%s): %s. %s' ;;
     line.upgrade.full_pull_failed) printf '%s' 'a nova imagem completa não chegou, fica a antiga. O que fazer: jht tools pull' ;;
@@ -4056,11 +4063,33 @@ tools_tell_person() {
   ) || true
 }
 
-# No room on the disk for the full image (tools_disk_room in jht-tools.sh): how much it asks for and how much there is now.
+# The team just moved onto this version (`jht up`, `jht setup`): when the disk is already under the agents' threshold (disk_low),
+# the old images of JHT go now, with the trim of a Mac's machine, before the agents start, and not only before the pull of the
+# tools. An update by the installer left the old version's image beside the new one, and every agent refused to start (giro Mac
+# build8). The rules are the cleaning's (tools_clean_old_images in jht-tools.sh: only when the container runs this version's
+# image, never during an upgrade, JHT_KEEP_OLD_IMAGES=1 keeps all). Never fails the command it rides on.
+agents_room_cleanup() {
+  disk_room_after_download 0 && return 0
+  [ -n "$(runtime_helper_digest jht-tools.sh 2>/dev/null)" ] || return 0
+  (
+    runtime_helper_load jht-tools.sh >/dev/null 2>&1 || exit 0
+    tools_clean_old_images
+  ) >/dev/null 2>&1 || true
+}
+
+# No room on the disk for the full image (tools_disk_room in jht-tools.sh): how much free space it asks for (the pull and, after it,
+# the agents' threshold) and how much there is now.
 tools_disk_low_text() {
-  local free
-  free="$(tools_disk_free_kib)" || free=0
-  jht_say tools.disk_low "$(disk_gib_text "$(tools_pull_need_kib)")" "$(disk_gib_text "$free")"
+  local need free=0 asked
+  need="$(tools_pull_need_kib)"
+  asked=$((need + DISK_BLOCK_FREE_KIB))
+  if ! disk_room_after_download "$need"; then
+    free="$DISK_ROOM_FREE_KIB"
+    asked=$((free + DISK_ROOM_SHORT_KIB))
+  elif [ -n "$DISK_ROOM_FREE_KIB" ]; then
+    free="$DISK_ROOM_FREE_KIB"
+  fi
+  jht_say tools.disk_low "$(disk_gib_up_text "$asked")" "$(disk_gib_text "$free")"
 }
 
 # `jht tools status`: one line for the person, the same words `jht up` says (`--json` is for programs). With no tier file the
@@ -8120,6 +8149,84 @@ disk_low() {
   return 1
 }
 
+# ── Room for a download: what stays free AFTER it ──────────────────────────
+# A pull grows the disk of this computer by the image unpacked plus its download (on a Mac the disk image of the Podman machine
+# grows on the Mac's own disk). The agents refuse to start under the threshold above (disk_low), so a download goes only when
+# what stays free after it is not under that threshold: on giro Mac build8 a disk with 9.2 GiB free took the update and then
+# refused every agent at 3.9 GiB. The sizes are estimates of what a pull takes, some 4 times the compressed layers (unpacked plus
+# the compressed copy of the pull), on the images of 0.4.0: core 0.27 GiB compressed, full 1.08 (they share some layers); on giro
+# Mac m21 core and full took some 4 GiB of the machine's disk, 5 at the peak. JHT_PULL_CORE_GIB and JHT_PULL_FULL_GIB change them,
+# a value that is not a number keeps the default. The installer reads the exact layers from the registry.
+pull_need_kib() {
+  local gib default
+  case "$1" in
+    core) default=1 gib="${JHT_PULL_CORE_GIB:-1}" ;;
+    full) default=5 gib="${JHT_PULL_FULL_GIB:-5}" ;;
+    *) printf '0\n'; return 0 ;;
+  esac
+  case "$gib" in ''|*[!0-9]*) gib="$default" ;; esac
+  printf '%s\n' $((gib * 1048576))
+}
+
+# «<total KiB> <free KiB>» of the volume that holds $1 (its first ancestor that exists); 1 when it cannot be measured.
+disk_total_avail() {
+  local target="$1" line total avail
+  [ -n "$target" ] || return 1
+  while [ ! -e "$target" ] && [ "$target" != "/" ] && [ "$target" != "." ]; do
+    target="$(dirname "$target")"
+  done
+  [ -e "$target" ] || return 1
+  line="$(df -Pk "$target" 2>/dev/null | awk 'NR==2 {print $2 " " $4}')" || return 1
+  read -r total avail <<<"$line"
+  case "$total" in ''|*[!0-9]*) return 1 ;; esac
+  case "$avail" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$total" -gt 0 ] || return 1
+  printf '%s %s' "$total" "$avail"
+}
+
+# The volumes of THIS computer a download fills, one per line: the data folder, the engine's root on Linux and, on a Mac, the
+# folder of the Podman machine's disk image.
+disk_download_volumes() {
+  printf '%s\n' "${JHT_HOME_HOST:-$HOME/.jht}"
+  printf '%s\n' "$(disk_engine_path)"
+  [ "${PODMAN_RUNTIME_MODE:-}" != machine ] || printf '%s\n' "${JHT_PODMAN_MACHINE_DIR:-$HOME/.local/share/containers/podman/machine}"
+}
+
+# 0 = after a download of $1 KiB no measured volume falls under the agents' threshold (under 3% AND under 8 GiB free), or none
+# can be measured; 1 = one would. The least free KiB measured now in DISK_ROOM_FREE_KIB; when short, the KiB to free in
+# DISK_ROOM_SHORT_KIB (the smaller of the two distances out of the threshold: either one is enough).
+DISK_ROOM_FREE_KIB=""
+DISK_ROOM_SHORT_KIB=""
+disk_room_after_download() {
+  local need="$1" volume measure total avail after short pct_short worst=0
+  DISK_ROOM_FREE_KIB=""
+  DISK_ROOM_SHORT_KIB=""
+  case "$need" in ''|*[!0-9]*) need=0 ;; esac
+  while IFS= read -r volume; do
+    [ -n "$volume" ] || continue
+    measure="$(disk_total_avail "$volume")" || continue
+    read -r total avail <<<"$measure"
+    if [ -z "$DISK_ROOM_FREE_KIB" ] || [ "$avail" -lt "$DISK_ROOM_FREE_KIB" ]; then DISK_ROOM_FREE_KIB="$avail"; fi
+    after=$((avail - need))
+    if [ $((after * 1000)) -lt $((DISK_BLOCK_FREE_PERMILLE * total)) ] && [ "$after" -lt "$DISK_BLOCK_FREE_KIB" ]; then
+      short=$((DISK_BLOCK_FREE_KIB - after))
+      pct_short=$(( (DISK_BLOCK_FREE_PERMILLE * total + 999) / 1000 - after ))
+      [ "$pct_short" -ge "$short" ] || short="$pct_short"
+      [ "$short" -le "$worst" ] || worst="$short"
+    fi
+  done <<EOF
+$(disk_download_volumes)
+EOF
+  [ "$worst" -gt 0 ] || return 0
+  DISK_ROOM_SHORT_KIB="$worst"
+  return 1
+}
+
+# KiB -> whole GiB rounded UP: how much to free is never said smaller than it is.
+disk_gib_up_text() {
+  printf '%s' $(( ($1 + 1048575) / 1048576 ))
+}
+
 UPGRADE_JSON=0
 UPGRADE_STAGE=""
 UPGRADE_LOCK=""
@@ -8770,6 +8877,36 @@ upgrade_pull_full() {
   fi
 }
 
+# Room on the disk for what this upgrade downloads: the image of the tier it pulls (core, or full) and, at core level with the full
+# image here, the new full one after the commit. What stays free AFTER the download must keep the agents above their threshold
+# (disk_room_after_download): an update that filled the disk left a team whose agents all refused to start (giro Mac build8). When
+# the room is short the old images of JHT go FIRST, by the rules of the cleaning after an upgrade (kept: the running image, the
+# full one a core install keeps), the machine of a Mac trims its disk, and the disk is measured again. 1 = still short.
+upgrade_disk_room() {
+  local running="$1" need
+  need="$(pull_need_kib "$([ -n "$UPGRADE_CORE_REF" ] && echo core || echo full)")"
+  if [ -n "$UPGRADE_FULL_REF" ] && [ "$UPGRADE_FULL_REF" != "$DEFAULT_RUNTIME_IMAGE" ]; then need=$((need + $(pull_need_kib full))); fi
+  UPGRADE_NEED_KIB="$need"
+  disk_room_after_download "$need" && return 0
+  case "$running" in ''|none|sconosciuta|unknown) ;; *)
+    UPGRADE_JSON=1 upgrade_prune_old_images "$running" "$running" >/dev/null 2>&1 || true
+    UPGRADE_PRUNE_JSON=""
+    upgrade_trim_machine
+    ;;
+  esac
+  disk_room_after_download "$need"
+}
+UPGRADE_NEED_KIB=0
+
+# What was freed inside the Podman machine of a Mac goes back to the Mac only when the machine trims its disk (as tools_trim_machine
+# in jht-tools.sh). A trim that fails changes nothing.
+upgrade_trim_machine() {
+  local podman_bin
+  [ "${PODMAN_RUNTIME_MODE:-}" = machine ] && [ -n "${PODMAN_MACHINE_NAME:-}" ] || return 0
+  podman_bin="$(podman_binary)" || return 0
+  "$podman_bin" machine ssh "$PODMAN_MACHINE_NAME" sudo fstrim -a </dev/null >/dev/null 2>&1 || return 0
+}
+
 # L'ID (senza prefisso) della piena che un'installazione a livello core tiene, uno per riga; niente se non e' qui.
 upgrade_tier_keep_ids() {
   local id
@@ -8919,6 +9056,11 @@ handle_runtime_upgrade() {
   fi
   # A livello core il nucleo candidato e' l'immagine di tutto l'upgrade (pull, avvio, verifica, broker), come per `up`.
   [ -z "$UPGRADE_CORE_REF" ] || export JHT_IMAGE="$UPGRADE_CORE_REF"
+  if ! upgrade_disk_room "$old_image"; then
+    [ "$UPGRADE_JSON" = "1" ] || err "disk_low: $(jht_say line.upgrade.disk_room "$(disk_gib_up_text "$UPGRADE_NEED_KIB")" "$(disk_gib_text "$DISK_BLOCK_FREE_KIB")" "$(disk_gib_text "${DISK_ROOM_FREE_KIB:-0}")" "$(disk_gib_up_text "${DISK_ROOM_SHORT_KIB:-0}")")"
+    upgrade_result false false preflight "$old_version" "$old_image" "$old_version" "$old_image" false "disk_low" false
+    return 1
+  fi
 
   UPGRADE_ROLLBACK_DIR="$RUNTIME_DIR/.upgrade-rollback-$(date +%s)-$$"
   if ! mkdir "$UPGRADE_ROLLBACK_DIR" \
@@ -10115,6 +10257,7 @@ case "$SUB" in
     printf '%s\n' "$(jht_say up.done)"
     telegram_lifecycle_if_available resume || exit $?
     broker_after_up
+    agents_room_cleanup
     tools_tell_person kick
     ;;
 
@@ -10421,6 +10564,7 @@ case "$SUB" in
     jht_load_host_values
     jht_record_host_values
     ensure_up
+    agents_room_cleanup
     tools_tell_person kick
     rc=0
     setup_exec_container "$@" || rc=$?

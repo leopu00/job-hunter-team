@@ -71,6 +71,11 @@ def _setup(home, trade, declared=True):
     ("operaio edile", "Operaio metalmeccanico", False), ("capo cantiere", "Capocantiere", True), ("capocantiere", "Capo cantiere", True),
     ("oss", "OSS con attestato", True), ("oss", "Ossidazione e verniciatura", False), ("muratore", "Muratura a secco", False),
     ("cuoco", "Cucina industriale", False), ("maurer", "Maurermeister gesucht", True), ("cuoco", "", False),
+    # a word between the words of the phrase, or the other order: the specific word (not the generic «operaio») names the trade
+    ("operaio edile", "Operaio specializzato edile", True), ("operaio edile", "Capo squadra edile", True),
+    ("operaio edile", "Addetto ai lavori in cantiere edile", True), ("autista camion", "Camion: autista patente C", True),
+    ("operaio edile", "Operaio specializzato metalmeccanico", False), ("autista camion", "Autista di autobus", False),
+    ("operaio addetto", "Operaio addetto alle pulizie", True),
 ])
 def test_a_term_is_found_in_its_forms_and_not_in_another_trade(term, text, found):
     assert role.term_in(role._plain(term), role._tokens(text)) is found
@@ -218,3 +223,37 @@ def test_next_says_nothing_of_a_family_for_a_profile_with_no_role(home):
     _profile(home, "name: X\nlocation: Bari, Italy\nlanguages:\n  - language: Italiano\n    level: native\n")
     step = _next(home)
     assert "declare_role_family" not in step and "trade_terms" not in step and "tirocinio" in step["broad_terms"]
+
+
+# ── a word of the sector or the place is not a trade (banco 17/11: a nurse in Torino got a «CUOCO/A PER RSA») ────────────────
+WIDE_NURSE = ["infermiere", "infermiera", "nurse", "oss", "operatore socio sanitario", "caposala", "ostetrica", "sanitario",
+              "ospedale", "rsa", "reparto", "ambulatorio", "assistenza domiciliare"]
+
+
+@pytest.mark.parametrize("title,verdict", [
+    ("CUOCO/A PER RSA", "mismatch"), ("Cuoco - Ospedale San Luca", "mismatch"), ("Autista per ambulatorio", "mismatch"),
+    ("Magazziniere reparto", "mismatch"),
+    # the trade's own words always pass, with or without a sector word
+    ("OSS per RSA", "ok"), ("Infermiere RSA", "ok"), ("Nurse - Ospedale", "ok"),
+    # a sector word beside a generic worker word in the title is a doubt, and a doubt is in
+    ("Addetto RSA", "ok"), ("Ausiliario reparto operatore", "ok"),
+])
+def test_a_sector_word_passes_only_beside_a_worker_word_in_the_title(home, title, verdict):
+    _profile(home, PROFILES["infermiera"])
+    assert role.declare(WIDE_NURSE)["declared"]
+    assert role.check_position(title)["verdict"] == verdict
+
+
+def test_a_sector_word_in_the_text_around_the_title_is_not_enough_either(home):
+    _profile(home, PROFILES["infermiera"])
+    assert role.declare(WIDE_NURSE)["declared"]
+    assert role.check_position("Cuoco", snippet="Cooperativa sociale, RSA di Torino, operatore", requirements="Esperienza in RSA")["verdict"] == "mismatch"
+
+
+def test_the_building_words_follow_the_same_rule(home):
+    _profile(home, PROFILES["muratore"])
+    assert role.declare(FAMILY["muratore"] + ["edile", "edilizia", "cantiere", "capo squadra", "carpentiere", "posatore"])["declared"]
+    assert role.check_position("Cuoco di cantiere")["verdict"] == "mismatch"
+    assert role.check_position("Addetto cantiere edile")["verdict"] == "ok"
+    assert role.check_position("Operaio di cantiere")["verdict"] == "ok"
+    assert role.check_position("Muratore")["verdict"] == "ok"

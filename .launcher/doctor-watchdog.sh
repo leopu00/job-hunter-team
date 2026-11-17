@@ -216,6 +216,9 @@ spawn_failed() {  # <role> <rc> <output of the spawner> | <role> ok
 
 TEAM_HALTED_FLAG="$JHT_HOME/.team-halted.flag"
 WEEKLY_HALT_FLAG="$JHT_HOME/.weekly-halt.flag"
+# `jht setup` open (see agent-watchdog.sh): no Dottore/Mantenitore on the configuration of before while the service is being chosen
+SETUP_OPEN_FLAG="$JHT_HOME/.setup-open.flag"
+setup_open() { [ -f "$SETUP_OPEN_FLAG" ] && [ -z "$(find "$SETUP_OPEN_FLAG" -mmin +120 2>/dev/null)" ]; }
 # Standby a spesa zero ([TEAM-STANDBY-ZERO-SPEND]): un Dottore/Mantenitore
 # spawnato in standby è un turno LLM speso mentre il team è fermo di proposito.
 TEAM_STANDBY_FLAG="$JHT_HOME/.team-standby.flag"
@@ -361,9 +364,11 @@ while true; do
 
   # Team-halted gate: se l'utente ha cliccato Stop, weekly-halt è attivo o il
   # team è in standby a spesa zero, NON spawnare dottore/mantenitore.
-  if [ -e "$TEAM_HALTED_FLAG" ] || [ -e "$WEEKLY_HALT_FLAG" ] || standby_active; then
+  if [ -e "$TEAM_HALTED_FLAG" ] || [ -e "$WEEKLY_HALT_FLAG" ] || setup_open || standby_active; then
     if [ $((halt_log_tick % 8)) -eq 0 ]; then
-      if standby_active; then
+      if setup_open; then
+        log "setup open — Dottore/Mantenitore spawn disabled until the setup ends"
+      elif standby_active; then
         log "standby ACTIVE — Dottore/Mantenitore spawn disabled"
       else
         log "halt flag present — Dottore spawn disabled"
@@ -376,6 +381,33 @@ while true; do
   if [ "$halt_log_tick" -gt 0 ]; then
     log "halt flag removed — resuming Dottore scheduling"
     halt_log_tick=0
+  fi
+
+  # Un giro partito (spawner uscito 0, o dall'esito incerto) NON e' ancora fatto: aspetta un TURNO VERO della sessione
+  # (doctor_schedule.py `settle`). Se il turno c'e', il giro si segna fatto; se la sessione e' sparita (container
+  # ricreato) o dopo DOCTOR_TURN_WAIT_SEC non ha preso il messaggio, il giro riparte con la regola dei tentativi.
+  # Giro Windows build8: Pi aveva la sessione vuota, 0 turni, e il giro era gia' segnato fatto: nessuna nuova partenza.
+  jht_doctor_bounded "$HELPER_TIMEOUT_SEC" "$RUN_PREFIX.settle" python3 "$SCHED" settle && settle_rc=0 || settle_rc=$?
+  if [ "$settle_rc" -eq 0 ]; then
+    settle_out="$(cat "$RUN_PREFIX.settle" 2>/dev/null || true)"
+    while IFS=' ' read -r s_verdict s_slot s_reason s_rest; do
+      [ -n "$s_verdict" ] || continue
+      case "$s_slot" in MAINT) s_role=mantenitore ;; *) s_role=dottore ;; esac
+      case "$s_verdict" in
+        DONE)    log "first turn seen: $s_role round done (slot=$s_slot)"; spawn_failed "$s_role" ok ;;
+        STALE)   log "$s_role round (slot=$s_slot) belonged to a window that ended — dropped, not marked" ;;
+        RETRY)   log "$s_role started but took NO TURN ($s_reason, slot=$s_slot) — round NOT done, it starts again [$s_rest]"
+                 spawn_failed "$s_role" 77 "ERROR: $s_role started but took no first turn ($s_reason)" ;;
+        FAILED)  log "ROUND FAILED: $s_role took no first turn ($s_reason, slot=$s_slot), no attempts left — round_failed recorded [$s_rest]"
+                 spawn_failed "$s_role" 77 "ERROR: $s_role took no first turn ($s_reason), no attempts left" ;;
+      esac
+    done <<SETTLE_LINES
+$settle_out
+SETTLE_LINES
+  elif [ "$settle_rc" -eq 124 ]; then
+    log "schedule settle hit the ${HELPER_TIMEOUT_SEC}s bound [${BOUND_STATE}] — rounds stay as they are, loop alive"
+  else
+    log "schedule settle FAILED rc=$settle_rc — rounds stay as they are: $(cat "$RUN_PREFIX.settle" 2>/dev/null | tail -n 1)"
   fi
 
   # 👷‍♂️ Slot MANTENITORE — cadenza GIORNALIERA indipendente dal Dottore (redesign
@@ -398,20 +430,17 @@ while true; do
         bash "$MAINT_SPAWNER" && mrc=0 || mrc=$?
       mout="$(cat "$RUN_PREFIX.maint" 2>/dev/null || true)"
       if [ "$mrc" -eq 0 ]; then
-        log "spawn mantenitore ok: $mout"
+        log "spawn mantenitore ok, waiting for its first turn: $mout"
         spawn_failed mantenitore ok
         jht_doctor_bounded "$HELPER_TIMEOUT_SEC" "$RUN_PREFIX.sched" \
-          python3 "$SCHED" mark-maintainer || true
+          python3 "$SCHED" spawned MAINT || log "schedule spawned FAILED for the Mantenitore — no day marked, it may start again"
       elif [ "$mrc" -eq 124 ]; then
-        # Esito INCERTO: il tetto ha chiuso lo spawner, ma la sessione
-        # MANTENITORE può essere già nata (l'hang può stare a valle della
-        # creazione). Vale la stessa regola del claim del Dottore qui sotto —
-        # un esito incerto NON si ritenta: un secondo spawn ucciderebbe e
-        # ricreerebbe un Mantenitore magari vivo, bruciando due turni LLM.
-        # Marchiamo la giornata; il gate working-hours riproverà domani.
-        log "spawn mantenitore hit the ${SPAWN_TIMEOUT_SEC}s bound [${BOUND_STATE}] — day marked to avoid a duplicate LLM spawn (outcome uncertain), loop alive: $mout"
+        # Esito INCERTO: il tetto ha chiuso lo spawner, ma la sessione MANTENITORE puo' essere gia' nata (l'hang puo'
+        # stare a valle della creazione). Non si ritenta subito (un secondo spawn ucciderebbe un Mantenitore magari
+        # vivo, due turni LLM) e non si segna la giornata: `settle` guarda se la sessione ha un turno vero.
+        log "spawn mantenitore hit the ${SPAWN_TIMEOUT_SEC}s bound [${BOUND_STATE}] — outcome uncertain, waiting for its first turn, loop alive: $mout"
         jht_doctor_bounded "$HELPER_TIMEOUT_SEC" "$RUN_PREFIX.sched" \
-          python3 "$SCHED" mark-maintainer || true
+          python3 "$SCHED" spawned MAINT || log "schedule spawned FAILED for the Mantenitore — no day marked, it may start again"
       else
         log "spawn mantenitore FAILED rc=$mrc: $mout"
         spawn_failed mantenitore "$mrc" "$mout"
@@ -456,14 +485,16 @@ while true; do
           env JHT_DOCTOR_RETRY="$retry" bash "$SPAWNER" && rc=0 || rc=$?
         out="$(cat "$RUN_PREFIX.spawn" 2>/dev/null || true)"
         if [ "$rc" -eq 0 ]; then
+          # Spawner uscito 0 = il kickoff e' partito, non che la sessione abbia un turno: il giro NON si segna fatto qui
+          # (`settle` lo fa al primo turno vero). Il claim pre-spawn resta su disco: niente doppio spawn al poll dopo.
+          # Lo spawner ha funzionato: l'errore di un suo avvio fallito esce da `jht team status`; se poi la sessione non
+          # prende un turno, `settle` lo riscrive con la sua causa.
           spawn_failed dottore ok
           if jht_doctor_bounded "$HELPER_TIMEOUT_SEC" "$RUN_PREFIX.sched" \
-               python3 "$SCHED" mark "$slot"; then
-            log "spawn ok and claim finalized (slot=$slot): $out"
+               python3 "$SCHED" spawned "$slot"; then
+            log "spawn ok, waiting for the first turn (slot=$slot): $out"
           else
-            # Il claim pre-spawn resta su disco: niente doppio spawn al poll
-            # successivo, anche se la finalizzazione ha perso la risposta.
-            log "schedule mark FAILED after successful spawn (slot=$slot) — claim retained, no duplicate retry"
+            log "schedule spawned FAILED after a successful spawn (slot=$slot) — claim retained, no duplicate retry"
           fi
         elif [ "$rc" -eq 75 ]; then
           # Sessione partita ma ferma sul prompt: il modello e' a capacita'. NON e' un giro fatto:
@@ -485,7 +516,9 @@ while true; do
           # nata e l'hang stare a valle). Il claim NON si rilascia — è la
           # regola dichiarata qui sopra: meglio saltare un rich round che
           # duplicare uno spawn LLM. Il loop riprende dal prossimo poll.
-          log "spawn dottore hit the ${SPAWN_TIMEOUT_SEC}s bound [${BOUND_STATE}] (slot=$slot) — claim RETAINED (outcome uncertain, no duplicate LLM spawn), loop alive: $out"
+          log "spawn dottore hit the ${SPAWN_TIMEOUT_SEC}s bound [${BOUND_STATE}] (slot=$slot) — claim RETAINED (outcome uncertain, no duplicate LLM spawn), waiting for its first turn, loop alive: $out"
+          jht_doctor_bounded "$HELPER_TIMEOUT_SEC" "$RUN_PREFIX.sched" \
+            python3 "$SCHED" spawned "$slot" || log "schedule spawned FAILED (slot=$slot) — claim retained"
         else
           log "spawn FAILED (slot=$slot) rc=$rc: $out"
           spawn_failed dottore "$rc" "$out"

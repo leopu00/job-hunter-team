@@ -94,6 +94,7 @@ WORKING_HOURS_ROOT="${JHT_APP_ROOT:-$_AGENT_WATCHDOG_DIR/..}"
 # Path overridabili solo per poterli esercitare nei test con dei finti: in
 # container restano quelli dell'immagine.
 ROSTER_TOOL="${JHT_ROSTER_TOOL:-/app/shared/skills/team_roster.py}"
+DEMAND_TOOL="${JHT_QUEUE_DEMAND_TOOL:-/app/shared/skills/queue_demand.py}"
 FIRST_RUN_TOOL="${JHT_FIRST_RUN_TOOL:-/app/shared/skills/first_run.py}"
 START_AGENT="${JHT_START_AGENT:-/app/.launcher/start-agent.sh}"
 PROCESS_HEALTH_TOOL="${JHT_PROCESS_HEALTH_TOOL:-/app/shared/skills/process_health.py}"
@@ -784,11 +785,11 @@ respawn_worker() {
     mark_roster_respawn "$session" ok
     clear_spawn_failures "$session"
     worker_kickoff "$session" "$role"
-    if [ "$recovery_kind" = "unexpected" ]; then
-      notify_captain_recovery "$session" "missing after recent worker activity" || true
-    else
-      log "worker $session: intentional refresh recreated — not counted as an inactive-session recovery"
-    fi
+    case "$recovery_kind" in
+      unexpected) notify_captain_recovery "$session" "missing after recent worker activity" || true ;;
+      demand) log "worker $session: started for the positions waiting in its queue — not a recovery" ;;
+      *) log "worker $session: intentional refresh recreated — not counted as an inactive-session recovery" ;;
+    esac
     return 0
   else
     # `recovery_kind` distingue solo i RECUPERI: una ricreazione voluta (TTL)
@@ -1000,6 +1001,26 @@ EOF
   log "roster: expected session $session is missing (recently active) — respawning via start-agent.sh $role $inst"
   JHT_HOME="$JHT_HOME" python3 "$ROSTER_TOOL" mark-respawn "$session" >/dev/null 2>&1 || true
   respawn_worker "$role" "$inst" "$session"
+}
+
+maybe_start_queued_roles() {
+  # Una coda di posizioni che nessuno lavora: se in steady l'Analista (o lo Scorer) non e' mai stato avviato, le
+  # posizioni restano ferme per sempre (banco 17/11: 4 posizioni `new`, 0 Analisti). Dopo l'attesa del Capitano il
+  # sistema avvia UN worker di quel ruolo, mai contro un freno (standby, halt, orario, tetto di capacita', pausa
+  # dell'utente) e con un intervallo fra due avvii: la decisione sta in queue_demand.py, qui si esegue e basta.
+  [ -f "$DEMAND_TOOL" ] || return 0
+  local plan role inst session
+  plan=$(JHT_HOME="$JHT_HOME" python3 "$DEMAND_TOOL" next 2>/dev/null) || return 0
+  [ -z "$plan" ] && return 0
+  read -r role inst session <<EOF
+$plan
+EOF
+  [ -z "${session:-}" ] && return 0
+  if spawn_backoff_active "$session"; then
+    return 0
+  fi
+  log "queue demand: positions wait for $role and no $session is alive — starting it via start-agent.sh $role $inst"
+  respawn_worker "$role" "$inst" "$session" demand
 }
 
 bridge_flap_ok() {
@@ -1217,6 +1238,12 @@ trap 'log "watchdog shutdown (SIGTERM)"; exit 0' TERM INT
 
 TEAM_HALTED_FLAG="$JHT_HOME/.team-halted.flag"
 WEEKLY_HALT_FLAG="$JHT_HOME/.weekly-halt.flag"
+# A `jht setup` that is open (it writes this flag while it runs, and takes it off when it ends, is cancelled, or starts the team
+# itself): the service is being chosen and its sign-in may not be done, so nothing is respawned on the configuration of before
+# (a trial of the ChatGPT subscription on Pi: the watchdog started the team on the old Claude key and spent 0.89 $). A flag that
+# a killed setup left stays good for two hours only.
+SETUP_OPEN_FLAG="$JHT_HOME/.setup-open.flag"
+setup_open() { [ -f "$SETUP_OPEN_FLAG" ] && [ -z "$(find "$SETUP_OPEN_FLAG" -mmin +120 2>/dev/null)" ]; }
 # Standby a spesa zero ([TEAM-STANDBY-ZERO-SPEND]): flag DIVERSO da halted,
 # semantica diversa — halted = "l'utente ha fermato il team" (tutto giù),
 # standby = sospensione tecnica che si risveglia da sola via sentinel-bridge.
@@ -1261,9 +1288,11 @@ while true; do
   # dalla dashboard). Source of truth: team_state.should_run. Quando
   # presente, NIENTE respawn — l'utente ha esplicitamente fermato.
   # Stesso comportamento per .weekly-halt.flag (limite rate budget).
-  if [ -e "$TEAM_HALTED_FLAG" ] || [ -e "$WEEKLY_HALT_FLAG" ]; then
+  if [ -e "$TEAM_HALTED_FLAG" ] || [ -e "$WEEKLY_HALT_FLAG" ] || setup_open; then
     if [ $((halt_log_tick % 20)) -eq 0 ]; then
-      if [ -e "$TEAM_HALTED_FLAG" ]; then
+      if setup_open; then
+        log "halt: setup open (.setup-open.flag) — agent respawn disabled until the setup ends"
+      elif [ -e "$TEAM_HALTED_FLAG" ]; then
         log "halt: .team-halted.flag present — agent respawn disabled"
       else
         log "halt: .weekly-halt.flag present — agent respawn disabled"
@@ -1319,6 +1348,8 @@ while true; do
     # Worker numerati: respawn guidato dal roster atteso (gate orario +
     # cancello di attività + sonda a colpo singolo dentro team_roster.py).
     maybe_respawn_workers
+    # Code ferme: nessun Analista (o Scorer) vivo e posizioni in attesa da piu' dell'attesa del Capitano.
+    maybe_start_queued_roles
     # Posta degli agenti: scadenze, avvisi e solleciti (non fa niente senza `mail_receivers`).
     maybe_mail_tick
     # Il piano dell'abbonamento: se nessuno l'ha chiesto con la card, la posta il sistema.

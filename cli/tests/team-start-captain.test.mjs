@@ -28,3 +28,9 @@ for (const code of [2, 127, 124, -1, null, undefined]) {
 test('a runner that gives nothing back starts the Capitano', () => {
   assert.equal(captainDeferred(() => undefined), false);
 });
+
+test('the reason of the wait is kept, so a closed onboarding that waits for the tools is not told to answer questions', async () => {
+  const { captainDeferred: ask } = await import('../src/commands/team/start.js');
+  assert.equal(ask(() => ({ ok: false, stdout: '{"captain_due": false, "reason": "tools_pending"}\n', stderr: '', code: 1 })), true);
+  assert.equal(ask(() => ({ ok: false, stdout: 'not json', stderr: '', code: 1 })), true);
+});

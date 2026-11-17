@@ -219,7 +219,7 @@ def one_portal(home):
     return home
 
 
-ITALIAN_SEARCH = ["linkedin", "randstad-it", "concorsipubblici-it", "jobintourism-it"]       # the Italian boards a Scout can read
+ITALIAN_SEARCH = ["linkedin", "randstad-it", "concorsipubblici-it", "jobintourism-it", "talent-com-it"]       # the Italian boards a Scout can read
 
 
 def test_an_italian_plan_gives_linkedin_to_lane_0_the_other_boards_round_robin_and_no_company_boards(one_portal):
@@ -232,9 +232,9 @@ def test_an_italian_plan_gives_linkedin_to_lane_0_the_other_boards_round_robin_a
         held = [s for l in out for s in l["sources"]]
         assert sorted(held) == sorted(ITALIAN_SEARCH), count                              # every board in one lane only, no company boards
         assert [l["free"] for l in out] == [not l["sources"] for l in out]
-    assert [l["sources"] for l in cov.lanes(plan, 2)] == [["linkedin"], ["randstad-it", "concorsipubblici-it", "jobintourism-it"]]
+    assert [l["sources"] for l in cov.lanes(plan, 2)] == [["linkedin"], ["randstad-it", "concorsipubblici-it", "jobintourism-it", "talent-com-it"]]
     eight = cov.lanes(plan, 8)
-    assert all(l["sources"] == [] and l["free"] for l in eight[4:])                        # more Scouts than boards: the rest search freely
+    assert all(l["sources"] == [] and l["free"] for l in eight[5:])                        # more Scouts than boards: the rest search freely
 
 
 def test_the_company_boards_lane_stays_where_the_table_has_boards_for_a_country_of_the_plan(home):
@@ -249,9 +249,9 @@ def test_the_eight_scouts_of_an_italian_profile_on_site_only_the_first_gets_link
     answers = [_auto(one_portal, "scout-%d" % n, lanes=8) for n in range(1, 9)]
     assert [a["lane"] for a in answers] == list(range(8))
     assert answers[0]["sources"] == ["linkedin"] and answers[0]["next"]["source"] == "linkedin" and "free_search" not in answers[0]
-    for a in answers[1:4]:
+    for a in answers[1:5]:
         assert a["sources"] and "free_search" not in a and "linkedin" not in a["sources"]
-    for a in answers[4:]:
+    for a in answers[5:]:
         assert a["sources"] == [] and a["free_search"] is True
         step = a["next"]
         assert step["free_search"] is True and "source" not in step and step["plan_done"] is False

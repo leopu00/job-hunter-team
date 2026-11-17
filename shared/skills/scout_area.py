@@ -46,8 +46,38 @@ def _plain(text: str) -> str:
     return " ".join(re.findall(r"[a-z0-9.]+", text))
 
 
+# The two letters an Italian place carries after its name («Bra (CN)», «Asti, AT»): a PROVINCE, not a country, even where the
+# same two letters are a country code (AT Austria, CN China, CH Switzerland, FR France, PT Portugal, RO Romania…).
+ITALIAN_PROVINCES = frozenset(
+    "AG AL AN AO AP AQ AR AT AV BA BG BI BL BN BO BR BS BT BZ CA CB CE CH CL CN CO CR CS CT CZ EN FC FE FG FI FM FR GE GO GR "
+    "IM IS KR LC LE LI LO LT LU MB MC ME MI MN MO MS MT NA NO NU OR PA PC PD PE PG PI PN PO PR PT PU PV PZ RA RC RE RG RI RM "
+    "RN RO SA SI SO SP SR SS SU SV TA TE TN TO TP TR TS TV UD VA VB VC VE VI VR VT VV".split())
+ITALIAN_REGIONS = frozenset(
+    "piemonte piedmont valle d aosta aosta lombardia lombardy trentino alto adige veneto friuli venezia giulia liguria emilia "
+    "romagna toscana tuscany umbria marche lazio abruzzo molise campania puglia apulia basilicata calabria sicilia sicily "
+    "sardegna sardinia".split())
+
+
+def _says_italy(parts, names) -> bool:
+    """True when the location says it is in Italy: the country (a name or `IT`) or one of its regions."""
+    for part in parts:
+        raw = part.strip()
+        plain = _plain(raw)
+        if not plain:
+            continue
+        if plain in ITALIAN_REGIONS or any(word in ITALIAN_REGIONS for word in plain.split()):
+            return True
+        if names.get(plain) == "it" and (len(plain) > 2 or raw.isupper()):
+            return True
+    return False
+
+
 def country_of(location, table: dict | None = None):
-    """The country code a location string NAMES (a name or a code in one of its comma, slash or bracket parts), or None."""
+    """The country code a location string NAMES (a name or a code in one of its comma, slash or bracket parts), or None.
+
+    The two letters of an Italian province after a place are not a country: between brackets («Bra (CN)», the way a place is
+    written in Italy) a province code is always a province, and after a comma («Torino, TO, Italia») when the location says it
+    is in Italy (the country or a region). «Zürich, CH» and «Wien, AT» stay countries."""
     if not isinstance(location, str) or not location.strip():
         return None
     table = table or _table()
@@ -58,9 +88,14 @@ def country_of(location, table: dict | None = None):
             names[_plain(name)] = code
     codes = set(table["country_names"])
     found = []
-    for part in re.split(r"[,;/|()\-–]+", location):
+    parts = re.split(r"[,;/|()\-–]+", location)
+    italian = _says_italy(parts, names)
+    bracketed = {code.upper() for code in re.findall(r"\(\s*([A-Za-z]{2})\s*\)", location)} & ITALIAN_PROVINCES
+    for part in parts:
         raw = part.strip()
         if not raw:
+            continue
+        if len(raw) == 2 and raw.isupper() and raw in ITALIAN_PROVINCES and (italian or raw in bracketed):
             continue
         plain = _plain(raw)
         if plain in names and (plain not in codes or raw.isupper() or len(plain) > 2):
@@ -103,6 +138,46 @@ def read_area(profile=None, table: dict | None = None) -> dict | None:
     return {"home": home, "relocation": relocation_allowed(scope.relocation), "work_mode": scope.work_mode}
 
 
+# Cities that are NOT Italian, for the country codes that are also an Italian province: «Zürich, CH» is Switzerland, «Bra, CN» is
+# Cuneo. For a profile that lives in Italy a bare code after a place is a province unless the place is one of these.
+_FOREIGN_CITIES = {
+    "at": "wien vienna graz salzburg linz innsbruck klagenfurt villach",
+    "ch": "zurich zuerich basel bern berne geneva geneve genf lausanne lugano luzern lucerne winterthur zug st gallen sion fribourg "
+          "neuchatel bellinzona locarno chiasso",
+    "cn": "beijing peking shanghai shenzhen guangzhou hong kong chengdu hangzhou wuhan tianjin nanjing",
+    "fr": "paris lyon marseille toulouse nice nantes strasbourg bordeaux lille montpellier rennes grenoble",
+    "pt": "lisboa lisbon porto braga coimbra faro",
+    "ro": "bucuresti bucharest cluj napoca timisoara iasi brasov",
+    "br": "sao paulo rio de janeiro brasilia salvador curitiba",
+    "ge": "tbilisi batumi",
+    "li": "vaduz schaan",
+    "mc": "monte carlo monaco",
+    "no": "oslo bergen trondheim stavanger",
+    "ca": "toronto vancouver montreal ottawa calgary edmonton",
+    "lu": "luxembourg luxemburg",
+    "lt": "vilnius kaunas",
+    "cz": "praha prague brno ostrava",
+    "to": "nuku alofa",
+}
+
+
+def _only_a_province_code(location, country, table) -> bool:
+    """True when `country` comes ONLY from a bare two-letter code that is an Italian province («Bra, CN»), and no place in the
+    location is a known city of that country."""
+    code = str(country or "").upper()
+    if code not in ITALIAN_PROVINCES or not isinstance(location, str):
+        return False
+    parts = [part.strip() for part in re.split(r"[,;/|()\-–]+", location) if part.strip()]
+    if code not in parts:
+        return False
+    rest = [part for part in parts if part != code]
+    if country_of(", ".join(rest), table) is not None:
+        return False
+    foreign = _plain(_FOREIGN_CITIES.get(country, ""))
+    plain_rest = [_plain(part) for part in rest]
+    return not any(city and f" {city} " in f" {foreign} " for city in plain_rest)
+
+
 def verdict(location, remote_type, area: dict | None, table: dict | None = None) -> dict:
     if not area:
         return {"verdict": "ok", "reason": "no profile area to compare with"}
@@ -117,6 +192,10 @@ def verdict(location, remote_type, area: dict | None, table: dict | None = None)
         return {"verdict": "ok", "reason": "the location names no country"}
     if country in area["home"]:
         return {"verdict": "ok", "reason": "the country is the profile's"}
+    if "it" in area["home"] and _only_a_province_code(location, country, table):
+        # «Bra, CN» for a profile in Italy: two letters that are an Italian province, after a place that is not a known city of the
+        # other country. «Zürich, CH» stays Switzerland. A doubt is «ok».
+        return {"verdict": "ok", "reason": "%s is an Italian province: the place is not a known city of that country" % country.upper()}
     return {"verdict": "outside", "country": country, "home": area["home"],
             "reason": "%s in %s: the profile lives in %s, wants remote or hybrid and says nothing about relocating" % (
                 remote_type, country.upper(), "/".join(h.upper() for h in area["home"]))}
