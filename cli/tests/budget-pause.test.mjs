@@ -121,7 +121,8 @@ test('a pause written before the budget now in the config was saved is the old b
 });
 
 test('a pause written after the budget was saved is the new budget\'s and is said; no saved_at, no budget, no config: said as before', () => {
-  assert.equal(budgetPause({ home: homeWithBudget(cap({ why: 'budget' }), '2026-11-16T10:00:00Z', '2026-11-16T09:30:00.000Z') })?.why, 'budget');
+  const ofTheNew = { ends_at: '2026-11-17T08:00:00+01:00' }; // the period of the budget saved at 09:30Z ends after it
+  assert.equal(budgetPause({ home: homeWithBudget(cap({ why: 'budget', ...ofTheNew }), '2026-11-16T10:00:00Z', '2026-11-16T09:30:00.000Z') })?.why, 'budget');
   assert.equal(budgetPause({ home: homeWithBudget(cap({ why: 'budget' }), '2026-11-16T07:00:00Z', 'not a date') })?.why, 'budget');
   assert.equal(budgetPause({ home: home(cap({ why: 'period' })) })?.why, 'period');
 });
