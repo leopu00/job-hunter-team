@@ -201,10 +201,10 @@ function Report-LegacyDockerVolumes {
   # v0.3.9/docker-compose.yml mounts all durable user state from Windows.
   # Its only named volumes are a reinstallable provider CLI/cache and an
   # empty mask over the protected host runtime directory.
-  [Console]::Out.WriteLine('JHT v0.3.9 Docker volumes contain only reinstallable provider CLI/cache (jht-deps) and an empty runtime mask; config, profile, provider login and documents are in ~/.jht and Documents.')
-  [Console]::Out.WriteLine('Those Docker volumes are not copied to Podman and remain in Docker Desktop for manual removal after the upgrade is verified.')
+  [Console]::Out.WriteLine((Get-BridgeText 'podman_machine.legacy_volumes_reinstallable' 'JHT v0.3.9 Docker volumes contain only reinstallable provider CLI/cache (jht-deps) and an empty runtime mask; config, profile, provider login and documents are in ~/.jht and Documents.'))
+  [Console]::Out.WriteLine((Get-BridgeText 'podman_machine.legacy_volumes_not_copied' 'Those Docker volumes are not copied to Podman and remain in Docker Desktop for manual removal after the upgrade is verified.'))
   if ($visible.Count -eq 0) {
-    [Console]::Out.WriteLine('Docker Desktop was not started; no legacy volume was enumerated.')
+    [Console]::Out.WriteLine((Get-BridgeText 'podman_machine.legacy_docker_not_started' 'Docker Desktop was not started; no legacy volume was enumerated.'))
     return
   }
   $expected = @($visible | Where-Object {
@@ -214,10 +214,10 @@ function Report-LegacyDockerVolumes {
     $_ -notin @('host-runtime_jht-deps', 'host-runtime_jht-runtime-mask')
   })
   if ($expected.Count -gt 0) {
-    [Console]::Out.WriteLine("Legacy v0.3.9 volumes left in Docker Desktop: $($expected -join ', ').")
+    [Console]::Out.WriteLine((Format-BridgeText 'podman_machine.legacy_volumes_left' 'Legacy v0.3.9 volumes left in Docker Desktop: %s.' ($expected -join ', ')))
   }
   if ($unexpected.Count -gt 0) {
-    [Console]::Error.WriteLine("Additional JHT Docker volumes were left untouched and were not migrated: $($unexpected -join ', ').")
+    [Console]::Error.WriteLine((Format-BridgeText 'podman_machine.legacy_volumes_untouched' 'Additional JHT Docker volumes were left untouched and were not migrated: %s.' ($unexpected -join ', ')))
   }
 }
 
@@ -956,12 +956,21 @@ if ($ExpectedImageDigest) {
 }
 $env:JHT_IMAGE = $canonicalImage
 
-$legacyInstallDetected = (Test-Path -LiteralPath (Join-Path $JhtHome 'jht.config.json')) -or
+# A move from v0.3.9 (Docker Desktop): data in ~/.jht and no Podman runtime yet. An install of 0.4 or later already wrote
+# container-runtime = podman in the runtime folder (further down, every run): an update from it is no move, and gets none of
+# these lines (they came in English to a person updating 0.4 to 0.4).
+$selectionBefore = Join-Path $RuntimeDir 'container-runtime'
+$podmanRuntimeBefore = $false
+try {
+  if (Test-Path -LiteralPath $selectionBefore -PathType Leaf) { $podmanRuntimeBefore = ([IO.File]::ReadAllText($selectionBefore)).Trim() -ceq 'podman' }
+} catch { $podmanRuntimeBefore = $false }
+$legacyInstallDetected = (-not $podmanRuntimeBefore) -and (
+  (Test-Path -LiteralPath (Join-Path $JhtHome 'jht.config.json')) -or
   (Test-Path -LiteralPath (Join-Path $JhtHome 'profile')) -or
-  (Test-Path -LiteralPath (Join-Path $JhtHome '.codex'))
+  (Test-Path -LiteralPath (Join-Path $JhtHome '.codex')))
 if ($legacyInstallDetected) {
-  Write-Host 'Existing JHT config, profile and Codex login will be reused in Podman; Documents stay in their current folder.' -ForegroundColor Yellow
-  Write-Host 'If the old game stored a mail password, rotate that app password after startup; the broker migration will keep warning until setup is renewed.' -ForegroundColor Yellow
+  Write-Host (Get-BridgeText 'podman_machine.legacy_reused' 'Existing JHT config, profile and Codex login will be reused in Podman; Documents stay in their current folder.') -ForegroundColor Yellow
+  Write-Host (Get-BridgeText 'podman_machine.legacy_mail_password' 'If the old game stored a mail password, rotate that app password after startup; the broker migration will keep warning until setup is renewed.') -ForegroundColor Yellow
   $legacyDocker = ''
   if ($env:ProgramFiles) {
     $dockerDesktopCli = Join-Path $env:ProgramFiles 'Docker\Docker\resources\bin\docker.exe'
@@ -1212,7 +1221,9 @@ foreach ($sidecar in @('jht-broker', 'jht-telegram')) {
 $runningImage = $runningImage.Trim()
 if ($runningImage -and $runningImage -ne $canonicalImage) {
   Write-JhtPhase team_restart
-  Write-Host "  The team restarts on the new runtime image: $canonicalImage (it ran on $runningImage)." -ForegroundColor Yellow
+  # a person reads it in their language, without the digests; the app and the log keep the line with both images
+  if (Test-JhtHumanOutput) { Write-Host "  $(Get-BridgeText 'podman_machine.team_restarts' 'The team restarts on the new version of its runtime.')" -ForegroundColor Yellow }
+  else { Write-Host "  The team restarts on the new runtime image: $canonicalImage (it ran on $runningImage)." -ForegroundColor Yellow }
 }
 & (Join-Path $BinDir 'jht.ps1') up
 if ($LASTEXITCODE -ne 0) { throw 'The migrated JHT container did not start.' }

@@ -417,12 +417,20 @@ function Get-BridgeTextTable {
     'en:podman_machine.init' { return 'Creating the Linux machine for Podman: it downloads its system image (several hundred MB) and sets it up. This takes several minutes.' }
     'en:podman_machine.init_wait' { return 'still creating the Linux machine' }
     'en:podman_machine.layers_started' { return '%s layers started' }
+    'en:podman_machine.legacy_docker_not_started' { return 'Docker Desktop was not started; no legacy volume was enumerated.' }
+    'en:podman_machine.legacy_mail_password' { return 'If the old game stored a mail password, rotate that app password after startup; the broker migration will keep warning until setup is renewed.' }
+    'en:podman_machine.legacy_reused' { return 'Existing JHT config, profile and Codex login will be reused in Podman; Documents stay in their current folder.' }
+    'en:podman_machine.legacy_volumes_left' { return 'Legacy v0.3.9 volumes left in Docker Desktop: %s.' }
+    'en:podman_machine.legacy_volumes_not_copied' { return 'Those Docker volumes are not copied to Podman and remain in Docker Desktop for manual removal after the upgrade is verified.' }
+    'en:podman_machine.legacy_volumes_reinstallable' { return 'JHT v0.3.9 Docker volumes contain only reinstallable provider CLI/cache (jht-deps) and an empty runtime mask; config, profile, provider login and documents are in ~/.jht and Documents.' }
+    'en:podman_machine.legacy_volumes_untouched' { return 'Additional JHT Docker volumes were left untouched and were not migrated: %s.' }
     'en:podman_machine.pull' { return 'Downloading the Job Hunter Team runtime image: this can take several minutes.' }
     'en:podman_machine.pull_wait' { return 'still downloading the runtime image' }
     'en:podman_machine.start' { return 'Starting the Linux machine (about a minute).' }
     'en:podman_machine.start_wait' { return 'still starting the Linux machine' }
     'en:podman_machine.stop' { return 'Stopping the Linux machine.' }
     'en:podman_machine.stop_wait' { return 'still stopping the Linux machine' }
+    'en:podman_machine.team_restarts' { return 'The team restarts on the new version of its runtime.' }
     'en:podman_machine.wsl_added' { return 'WSL settings added to %s:' }
     'en:podman_machine.wsl_applying' { return 'Applying the memory limit to WSL: the machine waits for WSL to restart (about a minute).' }
     'en:podman_machine.wsl_limit_waits' { return 'WSL is already running: the memory limit applies from the next restart of Windows, or of WSL (wsl --shutdown stops all your WSL distributions, so it is not done for you).' }
@@ -432,12 +440,20 @@ function Get-BridgeTextTable {
     'it:podman_machine.init' { return 'Creo la macchina Linux per Podman: scarica la sua immagine di sistema (alcune centinaia di MB) e la prepara. Ci vuole qualche minuto.' }
     'it:podman_machine.init_wait' { return 'sto ancora creando la macchina Linux' }
     'it:podman_machine.layers_started' { return '%s strati iniziati' }
+    'it:podman_machine.legacy_docker_not_started' { return ('Docker Desktop non ' + [char]0x00E8 + ' stato avviato: nessun volume vecchio ' + [char]0x00E8 + ' stato elencato.') }
+    'it:podman_machine.legacy_mail_password' { return ('Se la versione precedente aveva salvato una password della posta, cambia quella password per app dopo l''avvio: l''avviso resta finch' + [char]0x00E9 + ' non rifai il setup.') }
+    'it:podman_machine.legacy_reused' { return ('La configurazione, il profilo e il login di Codex che hai gi' + [char]0x00E0 + ' vengono usati anche con Podman; i Documenti restano nella loro cartella.') }
+    'it:podman_machine.legacy_volumes_left' { return 'Volumi della v0.3.9 rimasti in Docker Desktop: %s.' }
+    'it:podman_machine.legacy_volumes_not_copied' { return 'Quei volumi Docker non vengono copiati in Podman e restano in Docker Desktop: puoi toglierli a mano quando hai visto che l''aggiornamento funziona.' }
+    'it:podman_machine.legacy_volumes_reinstallable' { return 'I volumi Docker della v0.3.9 contengono solo programmi reinstallabili dei provider (jht-deps) e una cartella vuota; configurazione, profilo, login e documenti stanno in ~/.jht e in Documenti.' }
+    'it:podman_machine.legacy_volumes_untouched' { return 'Altri volumi Docker di JHT sono stati lasciati come sono e non sono stati migrati: %s.' }
     'it:podman_machine.pull' { return ('Scarico l''immagine di Job Hunter Team: pu' + [char]0x00F2 + ' volerci qualche minuto.') }
     'it:podman_machine.pull_wait' { return 'sto ancora scaricando l''immagine' }
     'it:podman_machine.start' { return 'Avvio la macchina Linux (circa un minuto).' }
     'it:podman_machine.start_wait' { return 'sto ancora avviando la macchina Linux' }
     'it:podman_machine.stop' { return 'Fermo la macchina Linux.' }
     'it:podman_machine.stop_wait' { return 'sto ancora fermando la macchina Linux' }
+    'it:podman_machine.team_restarts' { return 'La squadra riparte sulla nuova versione del suo ambiente.' }
     'it:podman_machine.wsl_added' { return 'Impostazioni di WSL aggiunte a %s:' }
     'it:podman_machine.wsl_applying' { return 'Applico il limite di memoria a WSL: la macchina aspetta che WSL si riavvii (circa un minuto).' }
     'it:podman_machine.wsl_limit_waits' { return ('WSL ' + [char]0x00E8 + ' gi' + [char]0x00E0 + ' acceso: il limite di memoria vale dal prossimo riavvio di Windows o di WSL (wsl --shutdown ferma tutte le tue distribuzioni WSL, per questo non lo faccio io).') }
@@ -447,12 +463,20 @@ function Get-BridgeTextTable {
     'hu:podman_machine.init' { return ('L' + [char]0x00E9 + 'trehozom a Podman Linux-g' + [char]0x00E9 + 'p' + [char]0x00E9 + 't: let' + [char]0x00F6 + 'lti a rendszerk' + [char]0x00E9 + 'p' + [char]0x00E9 + 't (n' + [char]0x00E9 + 'h' + [char]0x00E1 + 'ny sz' + [char]0x00E1 + 'z MB) ' + [char]0x00E9 + 's be' + [char]0x00E1 + 'll' + [char]0x00ED + 'tja. Ez n' + [char]0x00E9 + 'h' + [char]0x00E1 + 'ny percig tart.') }
     'hu:podman_machine.init_wait' { return ('m' + [char]0x00E9 + 'g tart a Linux-g' + [char]0x00E9 + 'p l' + [char]0x00E9 + 'trehoz' + [char]0x00E1 + 'sa') }
     'hu:podman_machine.layers_started' { return ('%s r' + [char]0x00E9 + 'teg elkezdve') }
+    'hu:podman_machine.legacy_docker_not_started' { return ('A Docker Desktop nem indult el: egyetlen r' + [char]0x00E9 + 'gi k' + [char]0x00F6 + 'tet sem lett list' + [char]0x00E1 + 'zva.') }
+    'hu:podman_machine.legacy_mail_password' { return ('Ha az el' + [char]0x0151 + 'z' + [char]0x0151 + ' verzi' + [char]0x00F3 + ' levelez' + [char]0x00E9 + 'si jelsz' + [char]0x00F3 + 't mentett, ind' + [char]0x00ED + 't' + [char]0x00E1 + 's ut' + [char]0x00E1 + 'n cser' + [char]0x00E9 + 'ld le azt az alkalmaz' + [char]0x00E1 + 'sjelsz' + [char]0x00F3 + 't: a figyelmeztet' + [char]0x00E9 + 's addig marad, am' + [char]0x00ED + 'g ' + [char]0x00FA + 'jra el nem v' + [char]0x00E9 + 'gzed a be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 'st.') }
+    'hu:podman_machine.legacy_reused' { return ('A megl' + [char]0x00E9 + 'v' + [char]0x0151 + ' be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 'saidat, profilodat ' + [char]0x00E9 + 's Codex-bejelentkez' + [char]0x00E9 + 'sedet a Podman is haszn' + [char]0x00E1 + 'lja; a Dokumentumok a hely' + [char]0x00FC + 'k' + [char]0x00F6 + 'n maradnak.') }
+    'hu:podman_machine.legacy_volumes_left' { return ('A Docker Desktopban maradt v0.3.9 k' + [char]0x00F6 + 'tetek: %s.') }
+    'hu:podman_machine.legacy_volumes_not_copied' { return ('Ezeket a Docker-k' + [char]0x00F6 + 'teteket nem m' + [char]0x00E1 + 'soljuk ' + [char]0x00E1 + 't a Podmanbe, a Docker Desktopban maradnak: k' + [char]0x00E9 + 'zzel t' + [char]0x00F6 + 'r' + [char]0x00F6 + 'lheted ' + [char]0x0151 + 'ket, ha l' + [char]0x00E1 + 'ttad, hogy a friss' + [char]0x00ED + 't' + [char]0x00E9 + 's m' + [char]0x0171 + 'k' + [char]0x00F6 + 'dik.') }
+    'hu:podman_machine.legacy_volumes_reinstallable' { return ('A v0.3.9 Docker-k' + [char]0x00F6 + 'tetei csak ' + [char]0x00FA + 'jratelep' + [char]0x00ED + 'thet' + [char]0x0151 + ' szolg' + [char]0x00E1 + 'ltat' + [char]0x00F3 + 'i programokat (jht-deps) ' + [char]0x00E9 + 's egy ' + [char]0x00FC + 'res mapp' + [char]0x00E1 + 't tartalmaznak; a be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 'sok, a profil, a bejelentkez' + [char]0x00E9 + 's ' + [char]0x00E9 + 's a dokumentumok a ~/.jht mapp' + [char]0x00E1 + 'ban ' + [char]0x00E9 + 's a Dokumentumokban vannak.') }
+    'hu:podman_machine.legacy_volumes_untouched' { return ('A JHT tov' + [char]0x00E1 + 'bbi Docker-k' + [char]0x00F6 + 'teteit ' + [char]0x00E9 + 'rintetlen' + [char]0x00FC + 'l hagytuk, ' + [char]0x00E9 + 's nem lettek ' + [char]0x00E1 + 'tk' + [char]0x00F6 + 'lt' + [char]0x00F6 + 'ztetve: %s.') }
     'hu:podman_machine.pull' { return ('Let' + [char]0x00F6 + 'lt' + [char]0x00F6 + 'm a Job Hunter Team k' + [char]0x00E9 + 'p' + [char]0x00E9 + 't: ez n' + [char]0x00E9 + 'h' + [char]0x00E1 + 'ny percig tarthat.') }
     'hu:podman_machine.pull_wait' { return ('m' + [char]0x00E9 + 'g tart a k' + [char]0x00E9 + 'p let' + [char]0x00F6 + 'lt' + [char]0x00E9 + 'se') }
     'hu:podman_machine.start' { return ('Elind' + [char]0x00ED + 'tom a Linux-g' + [char]0x00E9 + 'pet (kb. egy perc).') }
     'hu:podman_machine.start_wait' { return ('m' + [char]0x00E9 + 'g tart a Linux-g' + [char]0x00E9 + 'p ind' + [char]0x00ED + 't' + [char]0x00E1 + 'sa') }
     'hu:podman_machine.stop' { return ('Le' + [char]0x00E1 + 'll' + [char]0x00ED + 'tom a Linux-g' + [char]0x00E9 + 'pet.') }
     'hu:podman_machine.stop_wait' { return ('m' + [char]0x00E9 + 'g tart a Linux-g' + [char]0x00E9 + 'p le' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 'sa') }
+    'hu:podman_machine.team_restarts' { return ('A csapat a k' + [char]0x00F6 + 'rnyezete ' + [char]0x00FA + 'j verzi' + [char]0x00F3 + 'j' + [char]0x00E1 + 'val indul ' + [char]0x00FA + 'jra.') }
     'hu:podman_machine.wsl_added' { return ('WSL-be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 'sok hozz' + [char]0x00E1 + 'adva: %s:') }
     'hu:podman_machine.wsl_applying' { return ('Alkalmazom a mem' + [char]0x00F3 + 'riakorl' + [char]0x00E1 + 'tot a WSL-re: a g' + [char]0x00E9 + 'p megv' + [char]0x00E1 + 'rja a WSL ' + [char]0x00FA + 'jraindul' + [char]0x00E1 + 's' + [char]0x00E1 + 't (kb. egy perc).') }
     'hu:podman_machine.wsl_limit_waits' { return ('A WSL m' + [char]0x00E1 + 'r fut: a mem' + [char]0x00F3 + 'riakorl' + [char]0x00E1 + 't a Windows vagy a WSL k' + [char]0x00F6 + 'vetkez' + [char]0x0151 + ' ' + [char]0x00FA + 'jraind' + [char]0x00ED + 't' + [char]0x00E1 + 's' + [char]0x00E1 + 't' + [char]0x00F3 + 'l ' + [char]0x00E9 + 'rv' + [char]0x00E9 + 'nyes (a wsl --shutdown minden WSL-disztrib' + [char]0x00FA + 'ci' + [char]0x00F3 + 'dat le' + [char]0x00E1 + 'll' + [char]0x00ED + 'tja, ez' + [char]0x00E9 + 'rt nem teszem meg helyetted).') }
@@ -462,12 +486,20 @@ function Get-BridgeTextTable {
     'es:podman_machine.init' { return ('Creo la m' + [char]0x00E1 + 'quina Linux de Podman: descarga su imagen del sistema (unos cientos de MB) y la prepara. Tarda unos minutos.') }
     'es:podman_machine.init_wait' { return ('sigo creando la m' + [char]0x00E1 + 'quina Linux') }
     'es:podman_machine.layers_started' { return '%s capas empezadas' }
+    'es:podman_machine.legacy_docker_not_started' { return ('Docker Desktop no se ha iniciado: no se ha listado ning' + [char]0x00FA + 'n volumen antiguo.') }
+    'es:podman_machine.legacy_mail_password' { return ('Si la versi' + [char]0x00F3 + 'n anterior guard' + [char]0x00F3 + ' una contrase' + [char]0x00F1 + 'a de correo, cambia esa contrase' + [char]0x00F1 + 'a de aplicaci' + [char]0x00F3 + 'n despu' + [char]0x00E9 + 's del inicio: el aviso seguir' + [char]0x00E1 + ' hasta que vuelvas a hacer el setup.') }
+    'es:podman_machine.legacy_reused' { return ('Tu configuraci' + [char]0x00F3 + 'n, tu perfil y tu inicio de sesi' + [char]0x00F3 + 'n de Codex se reutilizan tambi' + [char]0x00E9 + 'n con Podman; los Documentos se quedan en su carpeta.') }
+    'es:podman_machine.legacy_volumes_left' { return ('Vol' + [char]0x00FA + 'menes de la v0.3.9 que quedan en Docker Desktop: %s.') }
+    'es:podman_machine.legacy_volumes_not_copied' { return ('Esos vol' + [char]0x00FA + 'menes Docker no se copian a Podman y se quedan en Docker Desktop: puedes quitarlos a mano cuando hayas visto que la actualizaci' + [char]0x00F3 + 'n funciona.') }
+    'es:podman_machine.legacy_volumes_reinstallable' { return ('Los vol' + [char]0x00FA + 'menes Docker de la v0.3.9 solo contienen programas reinstalables de los proveedores (jht-deps) y una carpeta vac' + [char]0x00ED + 'a; configuraci' + [char]0x00F3 + 'n, perfil, inicio de sesi' + [char]0x00F3 + 'n y documentos est' + [char]0x00E1 + 'n en ~/.jht y en Documentos.') }
+    'es:podman_machine.legacy_volumes_untouched' { return ('Otros vol' + [char]0x00FA + 'menes Docker de JHT se han dejado como estaban y no se han migrado: %s.') }
     'es:podman_machine.pull' { return 'Descargo la imagen de Job Hunter Team: puede tardar unos minutos.' }
     'es:podman_machine.pull_wait' { return 'sigo descargando la imagen' }
     'es:podman_machine.start' { return ('Arranco la m' + [char]0x00E1 + 'quina Linux (alrededor de un minuto).') }
     'es:podman_machine.start_wait' { return ('sigo arrancando la m' + [char]0x00E1 + 'quina Linux') }
     'es:podman_machine.stop' { return ('Detengo la m' + [char]0x00E1 + 'quina Linux.') }
     'es:podman_machine.stop_wait' { return ('sigo deteniendo la m' + [char]0x00E1 + 'quina Linux') }
+    'es:podman_machine.team_restarts' { return ('El equipo se reinicia con la nueva versi' + [char]0x00F3 + 'n de su entorno.') }
     'es:podman_machine.wsl_added' { return ('Ajustes de WSL a' + [char]0x00F1 + 'adidos a %s:') }
     'es:podman_machine.wsl_applying' { return ('Aplico el l' + [char]0x00ED + 'mite de memoria a WSL: la m' + [char]0x00E1 + 'quina espera a que WSL se reinicie (alrededor de un minuto).') }
     'es:podman_machine.wsl_limit_waits' { return ('WSL ya est' + [char]0x00E1 + ' en marcha: el l' + [char]0x00ED + 'mite de memoria se aplica desde el pr' + [char]0x00F3 + 'ximo reinicio de Windows o de WSL (wsl --shutdown detiene todas tus distribuciones de WSL, por eso no lo hago yo).') }
@@ -477,12 +509,20 @@ function Get-BridgeTextTable {
     'de:podman_machine.init' { return ('Ich erstelle die Linux-Maschine f' + [char]0x00FC + 'r Podman: Sie l' + [char]0x00E4 + 'dt ihr Systemabbild herunter (einige hundert MB) und richtet es ein. Das dauert einige Minuten.') }
     'de:podman_machine.init_wait' { return 'erstelle noch die Linux-Maschine' }
     'de:podman_machine.layers_started' { return '%s Schichten begonnen' }
+    'de:podman_machine.legacy_docker_not_started' { return 'Docker Desktop wurde nicht gestartet: Es wurde kein altes Volume aufgelistet.' }
+    'de:podman_machine.legacy_mail_password' { return ('Wenn die vorherige Version ein E-Mail-Passwort gespeichert hat, ' + [char]0x00E4 + 'ndere dieses App-Passwort nach dem Start: Der Hinweis bleibt, bis du das Setup erneut durchf' + [char]0x00FC + 'hrst.') }
+    'de:podman_machine.legacy_reused' { return 'Deine bisherige Konfiguration, dein Profil und deine Codex-Anmeldung werden auch mit Podman verwendet; die Dokumente bleiben in ihrem Ordner.' }
+    'de:podman_machine.legacy_volumes_left' { return 'In Docker Desktop verbliebene Volumes der v0.3.9: %s.' }
+    'de:podman_machine.legacy_volumes_not_copied' { return 'Diese Docker-Volumes werden nicht nach Podman kopiert und bleiben in Docker Desktop: Du kannst sie von Hand entfernen, wenn du gesehen hast, dass das Update funktioniert.' }
+    'de:podman_machine.legacy_volumes_reinstallable' { return 'Die Docker-Volumes der v0.3.9 enthalten nur neu installierbare Programme der Anbieter (jht-deps) und einen leeren Ordner; Konfiguration, Profil, Anmeldung und Dokumente liegen in ~/.jht und in Dokumente.' }
+    'de:podman_machine.legacy_volumes_untouched' { return ('Weitere Docker-Volumes von JHT wurden so gelassen und nicht ' + [char]0x00FC + 'bernommen: %s.') }
     'de:podman_machine.pull' { return 'Ich lade das Image von Job Hunter Team herunter: Das kann einige Minuten dauern.' }
     'de:podman_machine.pull_wait' { return 'lade noch das Image herunter' }
     'de:podman_machine.start' { return 'Ich starte die Linux-Maschine (etwa eine Minute).' }
     'de:podman_machine.start_wait' { return 'starte noch die Linux-Maschine' }
     'de:podman_machine.stop' { return 'Ich halte die Linux-Maschine an.' }
     'de:podman_machine.stop_wait' { return 'halte noch die Linux-Maschine an' }
+    'de:podman_machine.team_restarts' { return 'Das Team startet mit der neuen Version seiner Umgebung neu.' }
     'de:podman_machine.wsl_added' { return ('WSL-Einstellungen hinzugef' + [char]0x00FC + 'gt zu %s:') }
     'de:podman_machine.wsl_applying' { return 'Ich wende das Speicherlimit auf WSL an: Die Maschine wartet, bis WSL neu startet (etwa eine Minute).' }
     'de:podman_machine.wsl_limit_waits' { return ('WSL l' + [char]0x00E4 + 'uft bereits: Das Speicherlimit gilt ab dem n' + [char]0x00E4 + 'chsten Neustart von Windows oder WSL (wsl --shutdown h' + [char]0x00E4 + 'lt alle deine WSL-Distributionen an, deshalb mache ich das nicht f' + [char]0x00FC + 'r dich).') }
@@ -492,12 +532,20 @@ function Get-BridgeTextTable {
     'fr:podman_machine.init' { return ('Je cr' + [char]0x00E9 + 'e la machine Linux de Podman : elle t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charge son image syst' + [char]0x00E8 + 'me (quelques centaines de Mo) et la pr' + [char]0x00E9 + 'pare. Cela prend quelques minutes.') }
     'fr:podman_machine.init_wait' { return ('je cr' + [char]0x00E9 + 'e encore la machine Linux') }
     'fr:podman_machine.layers_started' { return ('%s couches commenc' + [char]0x00E9 + 'es') }
+    'fr:podman_machine.legacy_docker_not_started' { return ('Docker Desktop n''a pas ' + [char]0x00E9 + 't' + [char]0x00E9 + ' d' + [char]0x00E9 + 'marr' + [char]0x00E9 + ' : aucun ancien volume n''a ' + [char]0x00E9 + 't' + [char]0x00E9 + ' list' + [char]0x00E9 + '.') }
+    'fr:podman_machine.legacy_mail_password' { return ('Si la version pr' + [char]0x00E9 + 'c' + [char]0x00E9 + 'dente avait enregistr' + [char]0x00E9 + ' un mot de passe de messagerie, change ce mot de passe d''application apr' + [char]0x00E8 + 's le d' + [char]0x00E9 + 'marrage : l''avertissement reste jusqu''' + [char]0x00E0 + ' ce que tu refasses le setup.') }
+    'fr:podman_machine.legacy_reused' { return ('Ta configuration, ton profil et ta connexion Codex existants sont r' + [char]0x00E9 + 'utilis' + [char]0x00E9 + 's avec Podman ; les Documents restent dans leur dossier.') }
+    'fr:podman_machine.legacy_volumes_left' { return ('Volumes de la v0.3.9 rest' + [char]0x00E9 + 's dans Docker Desktop : %s.') }
+    'fr:podman_machine.legacy_volumes_not_copied' { return ('Ces volumes Docker ne sont pas copi' + [char]0x00E9 + 's dans Podman et restent dans Docker Desktop : tu peux les supprimer ' + [char]0x00E0 + ' la main une fois la mise ' + [char]0x00E0 + ' jour v' + [char]0x00E9 + 'rifi' + [char]0x00E9 + 'e.') }
+    'fr:podman_machine.legacy_volumes_reinstallable' { return ('Les volumes Docker de la v0.3.9 ne contiennent que des programmes r' + [char]0x00E9 + 'installables des fournisseurs (jht-deps) et un dossier vide ; configuration, profil, connexion et documents sont dans ~/.jht et dans Documents.') }
+    'fr:podman_machine.legacy_volumes_untouched' { return ('D''autres volumes Docker de JHT ont ' + [char]0x00E9 + 't' + [char]0x00E9 + ' laiss' + [char]0x00E9 + 's tels quels et n''ont pas ' + [char]0x00E9 + 't' + [char]0x00E9 + ' migr' + [char]0x00E9 + 's : %s.') }
     'fr:podman_machine.pull' { return ('Je t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charge l''image de Job Hunter Team : cela peut prendre quelques minutes.') }
     'fr:podman_machine.pull_wait' { return ('je t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charge encore l''image') }
     'fr:podman_machine.start' { return ('Je d' + [char]0x00E9 + 'marre la machine Linux (environ une minute).') }
     'fr:podman_machine.start_wait' { return ('je d' + [char]0x00E9 + 'marre encore la machine Linux') }
     'fr:podman_machine.stop' { return ('J''arr' + [char]0x00EA + 'te la machine Linux.') }
     'fr:podman_machine.stop_wait' { return ('j''arr' + [char]0x00EA + 'te encore la machine Linux') }
+    'fr:podman_machine.team_restarts' { return ('L''' + [char]0x00E9 + 'quipe red' + [char]0x00E9 + 'marre sur la nouvelle version de son environnement.') }
     'fr:podman_machine.wsl_added' { return ('R' + [char]0x00E9 + 'glages WSL ajout' + [char]0x00E9 + 's ' + [char]0x00E0 + ' %s :') }
     'fr:podman_machine.wsl_applying' { return ('J''applique la limite de m' + [char]0x00E9 + 'moire ' + [char]0x00E0 + ' WSL : la machine attend que WSL red' + [char]0x00E9 + 'marre (environ une minute).') }
     'fr:podman_machine.wsl_limit_waits' { return ('WSL tourne d' + [char]0x00E9 + 'j' + [char]0x00E0 + ' : la limite de m' + [char]0x00E9 + 'moire s''applique au prochain red' + [char]0x00E9 + 'marrage de Windows ou de WSL (wsl --shutdown arr' + [char]0x00EA + 'te toutes tes distributions WSL, c''est pourquoi je ne le fais pas ' + [char]0x00E0 + ' ta place).') }
@@ -507,12 +555,20 @@ function Get-BridgeTextTable {
     'pt:podman_machine.init' { return ('Estou a criar a m' + [char]0x00E1 + 'quina Linux do Podman: descarrega a sua imagem de sistema (algumas centenas de MB) e prepara-a. Demora alguns minutos.') }
     'pt:podman_machine.init_wait' { return ('ainda a criar a m' + [char]0x00E1 + 'quina Linux') }
     'pt:podman_machine.layers_started' { return '%s camadas iniciadas' }
+    'pt:podman_machine.legacy_docker_not_started' { return ('O Docker Desktop n' + [char]0x00E3 + 'o foi iniciado: nenhum volume antigo foi listado.') }
+    'pt:podman_machine.legacy_mail_password' { return ('Se a vers' + [char]0x00E3 + 'o anterior guardou uma palavra-passe de correio, muda essa palavra-passe de aplica' + [char]0x00E7 + [char]0x00E3 + 'o depois do arranque: o aviso continua at' + [char]0x00E9 + ' voltares a fazer o setup.') }
+    'pt:podman_machine.legacy_reused' { return ('A tua configura' + [char]0x00E7 + [char]0x00E3 + 'o, o teu perfil e o teu login do Codex s' + [char]0x00E3 + 'o reutilizados tamb' + [char]0x00E9 + 'm com o Podman; os Documentos ficam na sua pasta.') }
+    'pt:podman_machine.legacy_volumes_left' { return 'Volumes da v0.3.9 que ficaram no Docker Desktop: %s.' }
+    'pt:podman_machine.legacy_volumes_not_copied' { return ('Esses volumes Docker n' + [char]0x00E3 + 'o s' + [char]0x00E3 + 'o copiados para o Podman e ficam no Docker Desktop: podes remov' + [char]0x00EA + '-los ' + [char]0x00E0 + ' m' + [char]0x00E3 + 'o quando vires que a atualiza' + [char]0x00E7 + [char]0x00E3 + 'o funciona.') }
+    'pt:podman_machine.legacy_volumes_reinstallable' { return ('Os volumes Docker da v0.3.9 s' + [char]0x00F3 + ' cont' + [char]0x00EA + 'm programas reinstal' + [char]0x00E1 + 'veis dos fornecedores (jht-deps) e uma pasta vazia; configura' + [char]0x00E7 + [char]0x00E3 + 'o, perfil, login e documentos est' + [char]0x00E3 + 'o em ~/.jht e em Documentos.') }
+    'pt:podman_machine.legacy_volumes_untouched' { return ('Outros volumes Docker do JHT foram deixados como estavam e n' + [char]0x00E3 + 'o foram migrados: %s.') }
     'pt:podman_machine.pull' { return 'Estou a descarregar a imagem do Job Hunter Team: pode demorar alguns minutos.' }
     'pt:podman_machine.pull_wait' { return 'ainda a descarregar a imagem' }
     'pt:podman_machine.start' { return ('Estou a iniciar a m' + [char]0x00E1 + 'quina Linux (cerca de um minuto).') }
     'pt:podman_machine.start_wait' { return ('ainda a iniciar a m' + [char]0x00E1 + 'quina Linux') }
     'pt:podman_machine.stop' { return ('Estou a parar a m' + [char]0x00E1 + 'quina Linux.') }
     'pt:podman_machine.stop_wait' { return ('ainda a parar a m' + [char]0x00E1 + 'quina Linux') }
+    'pt:podman_machine.team_restarts' { return ('A equipa reinicia na nova vers' + [char]0x00E3 + 'o do seu ambiente.') }
     'pt:podman_machine.wsl_added' { return ('Defini' + [char]0x00E7 + [char]0x00F5 + 'es do WSL adicionadas a %s:') }
     'pt:podman_machine.wsl_applying' { return ('Estou a aplicar o limite de mem' + [char]0x00F3 + 'ria ao WSL: a m' + [char]0x00E1 + 'quina espera que o WSL reinicie (cerca de um minuto).') }
     'pt:podman_machine.wsl_limit_waits' { return ('O WSL j' + [char]0x00E1 + ' est' + [char]0x00E1 + ' a correr: o limite de mem' + [char]0x00F3 + 'ria aplica-se a partir do pr' + [char]0x00F3 + 'ximo rein' + [char]0x00ED + 'cio do Windows ou do WSL (wsl --shutdown para todas as tuas distribui' + [char]0x00E7 + [char]0x00F5 + 'es WSL, por isso n' + [char]0x00E3 + 'o o fa' + [char]0x00E7 + 'o por ti).') }
