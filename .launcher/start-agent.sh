@@ -64,6 +64,12 @@ MODE="${3:-default}"
 # sola riga conclusiva per invocazione evita di dover ricostruire coppie
 # attempt/result fra processi concorrenti.
 JHT_SPAWN_TRACE="$(jht_daemon_log spawn-attempts.jsonl)"
+# The tmux server and every agent descend from this script: with the memory gone the kernel must pick THEM, not the person's
+# session manager (a 7.7 GB server lost dbus, systemd --user, conmon and the container to the OOM killer). Raising the score is
+# the one change a process may make to itself; any failure is ignored. Same as raiseOomScore() in the pid1.
+if [ -w /proc/self/oom_score_adj ] && [ "$(cat /proc/self/oom_score_adj 2>/dev/null || echo 1000)" -lt 500 ] 2>/dev/null; then
+  echo 500 > /proc/self/oom_score_adj 2>/dev/null || true
+fi
 # Le TUI esportano JHT_AGENT_NAME: una chiamata diretta del Capitano o di una
 # skill conserva quindi il proprio autore anche senza un wrapper intermedio.
 # I processi deterministici impostano invece JHT_SPAWN_SRC esplicitamente.
