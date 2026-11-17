@@ -433,6 +433,8 @@
   "wrapper.ps.full_pull_failed_keep_old": "full_pull_failed: az új teljes kép nem érkezett meg, a régi marad. Teendő: jht tools pull",
   "wrapper.ps.old_images_kept_all": "Régi JHT-képek: mind megtartva (JHT_KEEP_OLD_IMAGES=1).",
   "wrapper.ps.old_images_removed": "Régi JHT-képek: %s eltávolítva, kb. %s MB felszabadítva (névleges méret: a megosztott rétegek csak részben szabadulnak fel), megtartva: a jelenlegi és az előző.",
+  "wrapper.ps.machine_space_back_on_stop": "A JHT gépén felszabadított kb. %s GB akkor kerül vissza a Windowshoz, amikor a gép leáll: a jht down után a podman machine stop %s paranccsal, vagy a számítógép újraindításakor.",
+  "wrapper.ps.machine_space_not_returned": "A JHT kb. %s GB-ot foglal a virtuális lemezén; ez a jht uninstall paranccsal teljesen felszabadul.",
   "wrapper.ps.old_images_busy": " Konténer használja (megtartva): %s.",
   "wrapper.ps.old_images_refused": " A motor elutasította (megtartva): %s.",
   "wrapper.ps.upgrade_option_unsupported": "Nem támogatott upgrade-kapcsoló",
