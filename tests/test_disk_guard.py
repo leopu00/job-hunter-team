@@ -692,16 +692,16 @@ def test_team_start_asks_the_guard_before_launching_anything():
     text = START_JS.read_text(encoding="utf-8")
     assert "import { diskLowRefusal } from '../../lib/disk-guard.js';" in text
     # container: dopo il "gia' attivo", prima delle sincronizzazioni cloud e dello spawn
-    already = text.index("Team already running")
+    already = text.index("say('team.already_running')")
     bootstrap_guard = text.index("refuseIfDiskLow('team')")
     assert already < bootstrap_guard < text.index("pull-desired-state")
     # ogni singolo avvio: dopo "already active", prima di start-agent.sh
     launch = text[text.index("function launchInContainer"):]
     spawn = launch.index("execScriptInContainer('/app/.launcher/start-agent.sh'")
-    assert launch.index("already active") < launch.index("refuseIfDiskLow(sName)") < spawn
+    assert launch.index("say('team.already_active')") < launch.index("refuseIfDiskLow(sName)") < spawn
     # host (tmux locale): dopo "already active", prima di mkdir/tmux
     host = text[text.index("for (const target of targets)"):]
-    assert host.index("already active") < host.index("refuseIfDiskLow(sName)") < host.index("tmux new-session")
+    assert host.index("say('team.already_active')") < host.index("refuseIfDiskLow(sName)") < host.index("tmux new-session")
 
 
 def test_the_cli_refusal_prints_the_closed_code_and_the_table_phrase():

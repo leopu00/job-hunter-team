@@ -5,7 +5,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync,
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CATALOGS, resolveLanguage } from '../src/lib/texts.js';
+import { CATALOGS, PARTIAL, resolveLanguage } from '../src/lib/texts.js';
 
 // The language of the screens: where it comes from, that every language has the same texts, and that the
 // screens come out in it while the machine output does not change.
@@ -42,6 +42,8 @@ test('every language has the same texts as English, with the same {words} to fil
   for (const [lang, catalog] of Object.entries(CATALOGS)) {
     if (lang === 'en') continue;
     for (const key of Object.keys(CATALOGS.en)) {
+      // a language with only some of the texts (PARTIAL) says the rest in English
+      if (PARTIAL.has(lang) && !(key in catalog)) continue;
       assert.ok(key in catalog, `${lang} misses ${key}`);
       assert.equal(words(catalog[key]), words(CATALOGS.en[key]), `${lang} ${key}: the {words} differ`);
     }

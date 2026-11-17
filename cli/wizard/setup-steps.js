@@ -24,29 +24,14 @@ import { localTimeZone } from '../src/lib/local-tz.js';
  */
 export async function promptTelegramOptional(prompter) {
   const wants = await prompter.confirm({
-    message:
-      'Show the host commands for Telegram pairing? Recommended for ' +
-      'notifications and chat away from the desktop.',
-    initialValue: true,
+    message: t('wizard.telegram.prompt'),
+    initialValue: false, // integrations are turned on when asked for, after the setup: the default is no
   });
   if (!wants) {
-    await prompter.note(
-      'Telegram skipped. The team remains available from the desktop ' +
-      '(dashboard and chat). To add Telegram later, run ' +
-      '`jht telegram pair <assistente|capitano|mentor>` on the host.',
-      'Optional Telegram — skipped',
-    );
+    await prompter.note(t('wizard.telegram.skipped_body'), t('wizard.telegram.skipped_title'));
     return;
   }
-  await prompter.note(
-    'Always pair a freshly generated token: create a new bot in BotFather, or /revoke the token of an existing one. Then run these commands in a host terminal:\n\n' +
-    '  jht telegram pair assistente\n' +
-    '  jht telegram pair capitano\n' +
-    '  jht telegram pair mentor\n\n' +
-    'Each command asks for the token without echo (automation: {"bot_token": ...} as JSON on stdin), then shows a one-time code you send to the bot from your Telegram: the chat id is never typed. An older token may already have been read by the agents, even if it no longer appears in ~/.jht; a token the service has already seen is refused with rotation_required.\n\n' +
-    'Check the result with: jht telegram status',
-    'Telegram pairing runs on the host',
-  );
+  await prompter.note(t('wizard.telegram.pair_body'), t('wizard.telegram.pair_title'));
 }
 /**
  * Step working-hours: chiede all'utente come distribuire il budget weekly
@@ -163,17 +148,21 @@ export async function showSummary(prompter, params) {
   // Riepilogo minimo: il wizard chiede il provider e la CLI che guida gli agenti, tutto il resto
   // (modello per-agente, autenticazione tramite OAuth CLI) e' implicito.
   const saved = readConfigFileSnapshot().config ?? {};
+  // the labels of the left column, in the person's language, padded to the longest (at least as wide as the English ones)
+  const label = Object.fromEntries(['provider', 'harness', 'signin', 'config', 'home'].map((k) => [k, `${t(`wizard.summary.${k}`)}:`]));
+  const width = Math.max(11, ...Object.values(label).map((l) => l.length)) + 1;
+  const row = (k, value) => `${label[k].padEnd(width)}${value}`;
   const summary = [
-    `Provider:   ${selectedProvider.label}`,
-    ...(saved.harness === 'pi' ? ['Harness:    Pi'] : []),
+    row('provider', selectedProvider.label),
+    ...(saved.harness === 'pi' ? [row('harness', 'Pi')] : []),
     summarizeRoleModels(saved),
-    'Sign-in:    through the provider, done',
+    row('signin', t('wizard.summary.signin_done')),
     '',
-    `Config:     ${JHT_CONFIG_PATH}`,
-    `JHT home:   ${JHT_CONFIG_DIR}`,
+    row('config', JHT_CONFIG_PATH),
+    row('home', JHT_CONFIG_DIR),
   ].join('\n');
 
-  await prompter.note(summary, 'Configuration saved');
+  await prompter.note(summary, t('wizard.summary.saved_title'));
   // L'outro finale viene emesso dal wizard chiamante (setup.js) DOPO gli step
   // post-config (providers update / OAuth / team start). Qui non chiudiamo il
   // flow perche' c'e' altro da chiedere.
