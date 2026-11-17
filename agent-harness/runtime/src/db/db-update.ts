@@ -335,6 +335,19 @@ export function updatePosition(db: Database, a: Parsed, actor: string, userId: s
         changed.push(`${k}=${str(k)}`);
       }
     }
+    // The PRECISE estimate the person asked for: the text is the result and closes the request in the same write
+    // (db_update.py; `salary_precise_requested_at` stays, so the cloud's desired-state pull does not win with an old instant).
+    if (a["salary_precise"] !== null && a["salary_precise"] !== undefined) {
+      const text = str("salary_precise").trim();
+      if (text === "") {
+        db.exec("ROLLBACK");
+        return { stdout: "", stderr: "⚠️  SALARY_PRECISE REJECTED: an empty text does not close the request.\n", exitCode: 1 };
+      }
+      set("salary_precise = ?", text);
+      set("salary_precise_requested = 0");
+      changed.push("salary_precise=written");
+      changed.push("salary_precise_requested=acknowledged");
+    }
     if (pyTruthy(a["last_checked"])) {
       if (a["last_checked"] === "now") set("last_checked = datetime('now', 'localtime')");
       else set("last_checked = ?", str("last_checked"));

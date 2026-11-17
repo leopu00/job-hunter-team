@@ -178,7 +178,7 @@ python3 /app/shared/skills/db_update.py position <ID> \
 Kihagyáshoz 3 kísérlet után:
 ```bash
 python3 /app/shared/skills/db_update.py position <ID> \
-  --office-geocoded false --office-verified false \
+  --office-geocoded true --office-verified false \
   --action geocode --outcome failed
 # (lat/lon/address NULL marad)
 ```
