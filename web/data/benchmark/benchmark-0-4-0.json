@@ -18,7 +18,7 @@
       "status": "pass",
       "build": 6,
       "proof": [],
-      "note": "linuxRoundBuild6"
+      "note": "cleanLinuxRoundMissing"
     },
     {
       "id": "installMac",
@@ -112,7 +112,7 @@
       "status": "pass",
       "build": 6,
       "proof": [],
-      "note": null
+      "note": "openaiRoundMissing"
     },
     {
       "id": "serviceGlmKimi",
