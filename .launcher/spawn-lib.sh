@@ -549,13 +549,13 @@ jht_spawn_model_name_ok() {
   [ "${#1}" -le 64 ]
 }
 
-# jht_spawn_repl_cmd
+# jht_spawn_repl_cmd [provider] [workdir-pi] [ruolo]
 #   Stampa il comando REPL del PROVIDER ATTIVO (non più codex hardcoded: su un
 #   setup claude, lanciare codex fallirebbe per CLI/auth assenti). effort=high
 #   per diagnosi/sweep non superficiali. Per claude pre-seed dell'onboarding
 #   (skip del wizard TUI) + IS_SANDBOX.
 jht_spawn_repl_cmd() {
-  local provider="${1:-}" pi_dir="${2:-}"
+  local provider="${1:-}" pi_dir="${2:-}" role="${3:-}"
   if [ -z "$provider" ]; then
     provider="$(jht_spawn_active_provider)" || return 2
   fi
@@ -570,7 +570,7 @@ jht_spawn_repl_cmd() {
     openai|codex)
       python3 "$JHT_SPAWN_LIB_DIR/../shared/skills/codex_launch_policy.py" --model "$override" --effort high --doc-max-bytes "$JHT_CODEX_PROJECT_DOC_MAX_BYTES" --command ;;
     kimi|moonshot) printf '%s\n' "kimi --yolo" ;;
-    pi) jht_spawn_pi_repl_cmd "$pi_dir" "$override" ;;
+    pi) jht_spawn_pi_repl_cmd "$pi_dir" "$override" "$role" ;;
     claude|anthropic)
       local home="${JHT_HOME:-/jht_home}"
       python3 - "$home/.claude.json" <<'PYDOC' 2>/dev/null || true
@@ -755,6 +755,20 @@ jht_spawn_kickoff() {
   JHT_SPAWN_SESSION="$session" JHT_SPAWN_PROMPT="$prompt" JHT_SPAWN_PROVIDER="${ACTIVE_CLI:-${ACTIVE_PROVIDER:-}}" \
     setsid python3 "$JHT_SPAWN_LIB_DIR/../shared/skills/spawn_kickoff.py" >/dev/null 2>&1 < /dev/null &
   disown 2>/dev/null || true
+}
+
+# jht_spawn_record_start <logs_dir> <ruolo> <sessione> <cli> <workdir>
+#   Scrive logs/spawn-last-<ruolo>.json: quando e' partita l'ultima sessione, quale, con quale CLI e dove lavora. Lo legge
+#   doctor_schedule.py (`settle`) per sapere se quella sessione ha avuto un turno vero: lo spawner esce 0 appena il
+#   kickoff e' partito in background, non quando il messaggio e' diventato un turno. Un file che non si scrive non
+#   ferma lo spawn: senza, il giro vale come prima.
+jht_spawn_record_start() {
+  local logs_dir="$1" role="$2" session="$3" cli="$4" workdir="$5" tmp
+  tmp="$logs_dir/.spawn-last-$role.json.$$"
+  printf '{"ts":%s,"session":"%s","role":"%s","cli":"%s","workdir":"%s"}\n' \
+    "$(date +%s)" "$session" "$role" "$cli" "$workdir" > "$tmp" 2>/dev/null \
+    && mv -f "$tmp" "$logs_dir/spawn-last-$role.json" 2>/dev/null || rm -f "$tmp" 2>/dev/null || true
+  return 0
 }
 
 # jht_spawn_verify_start <sessione> <label> <ruolo> <logs_dir> <src>

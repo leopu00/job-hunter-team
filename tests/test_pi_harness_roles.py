@@ -224,6 +224,52 @@ def test_the_service_agents_get_the_pi_command_of_the_team(tmp_path: Path) -> No
     assert (tmp_path / "home" / ".pi" / "agent" / "settings.json").is_file()
 
 
+def _service_pi_command(tmp_path: Path, role: str, *after_lib: str) -> subprocess.CompletedProcess[str]:
+    workdir = _workdir(tmp_path)
+    pinned = subprocess.run([_bash(), "-c", f'source "{SPAWN_LIB}"; printf %s "$JHT_PI_VERSION"'],
+                            capture_output=True, text=True, check=True).stdout
+    env = _fake_pi(tmp_path, pinned)
+    env["JHT_HOME"] = str(tmp_path / "home")
+    login = tmp_path / "home" / ".pi" / "agent" / "auth.json"
+    login.parent.mkdir(parents=True, exist_ok=True)
+    login.write_text("{}", encoding="utf-8")
+    lines = "".join(f"{line}; " for line in after_lib)
+    return subprocess.run(
+        [_bash(), "-c", f'source "{SPAWN_LIB}"; {lines}jht_spawn_repl_cmd pi "{workdir}" {role}'],
+        capture_output=True, text=True, check=False, env=env,
+    )
+
+
+@pytest.mark.parametrize("role", ["dottore", "mantenitore"])
+def test_the_service_agents_on_pi_start_with_the_spending_gate_and_the_environment_it_reads(
+    tmp_path: Path, role: str
+) -> None:
+    """Dottore and Mantenitore went to pi without `-e spend-gate.js`: working, they spent outside the budget's brake.
+    The gate also needs JHT_HOME (where the brake's flag is) and JHT_AGENT_NAME in the pane: a session made by the
+    spawner does not export them, and with no JHT_HOME the gate sees no flag and holds nothing."""
+    gate, lines = _gate(tmp_path)
+    result = _service_pi_command(tmp_path, role, *lines)
+    assert result.returncode == 0, result.stderr
+    env, argv = _argv(result.stdout.strip())
+    assert _extensions(argv) == [str(gate)]
+    assert "-ne" in argv
+    assert env["JHT_HOME"] == str(tmp_path / "home")
+    assert env["JHT_AGENT_NAME"] == role
+
+
+def test_a_service_agent_without_a_role_is_not_given_a_gate_it_cannot_name(tmp_path: Path) -> None:
+    result = _service_pi_command(tmp_path, "")
+    assert result.returncode == 0, result.stderr
+    env, argv = _argv(result.stdout.strip())
+    assert _extensions(argv) == [] and "JHT_AGENT_NAME" not in env
+
+
+def test_a_missing_gate_is_said_and_the_service_agent_starts_without_it(tmp_path: Path) -> None:
+    result = _service_pi_command(tmp_path, "dottore", f"JHT_PI_SPEND_GATE_EXT='{tmp_path}/none.js'")
+    assert result.returncode == 0, result.stderr
+    assert "dottore starts on pi without the spending gate" in result.stderr
+
+
 def test_the_service_agents_stop_without_their_identity_for_pi(tmp_path: Path) -> None:
     result = subprocess.run(
         [_bash(), "-c", f'source "{SPAWN_LIB}"; jht_spawn_repl_cmd pi "{_workdir(tmp_path, identity=False)}"'],
@@ -432,7 +478,8 @@ def test_the_service_spawners_copy_the_skills_for_the_cli_and_check_before_the_s
     copy = copy[:copy.index("\n\n")]
     assert copy.rstrip().endswith('"$ACTIVE_CLI"'), copy
     workdir = "DOTTORE_DIR" if script == "spawn-doctor.sh" else "MANT_DIR"
-    check = f'jht_spawn_repl_cmd "$ACTIVE_CLI" "${workdir}" >/dev/null || exit 1'
+    role = "dottore" if script == "spawn-doctor.sh" else "mantenitore"
+    check = f'jht_spawn_repl_cmd "$ACTIVE_CLI" "${workdir}" {role} >/dev/null || exit 1'
     # a check that fails leaves no empty session that `jht team status` counts as running
     assert text.index(check) < text.index('jht_spawn_new_session "$SESSION"')
     # a REPL that does not come up after the session was made takes its session away too

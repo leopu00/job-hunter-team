@@ -31,6 +31,15 @@ e dal secondo tentativo con il modello di riserva se la configurazione lo
 prevede; dopo DOCTOR_CAPACITY_MAX_ATTEMPTS tentativi il giro e' FALLITO in modo
 visibile: evento `round_failed` in logs/dottore-actions.jsonl.
 
+Un giro e' fatto solo dopo un TURNO VERO, non dopo uno spawner che esce 0. Lo spawner esce 0 appena il kickoff e' partito
+in background: su Pi (giro Windows build8) il messaggio non e' mai diventato un turno (cartella delle sessioni di Pi vuota),
+eppure `fallback_done_at` e `maint_date` erano gia' scritti e dopo la ricreazione del container nessuno rilanciava il
+Dottore o il Mantenitore. Ora il watchdog, dopo uno spawn riuscito (o dall'esito incerto), chiama `spawned <SLOT>`: il giro
+resta rivendicato ma NON fatto. Ogni poll chiama `settle`: se la sessione ha un turno vero il giro si segna fatto (`mark`);
+se la sessione e' sparita (container ricreato) o non ha ancora un turno dopo DOCTOR_TURN_WAIT_SEC il giro riparte con la
+stessa regola dei tentativi della capacita' (attesa, tentativi, `round_failed` in fondo). Il turno si vede solo su Pi (il file
+della sessione ha un messaggio dell'assistente che non e' un errore); per le altre CLI vale lo spawn riuscito, come prima.
+
 `FALLBACK` = claim periodico per un team 24/7 (nessuna finestra delimitata).
 `OFF` = fuori working hours. `WAIT` = nessuno slot dovuto ora. Il comando
 legacy read-only `check` conserva `NOWINDOW`; il runtime usa sempre `claim`.
@@ -39,6 +48,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 from contextlib import contextmanager
 from datetime import datetime
@@ -71,8 +81,15 @@ STATE_FILE = JHT_HOME / "logs" / "doctor-schedule-state.json"
 CAPACITY_MAX_ATTEMPTS = int(os.environ.get("DOCTOR_CAPACITY_MAX_ATTEMPTS", "4"))
 CAPACITY_WAIT_SEC = int(os.environ.get("DOCTOR_CAPACITY_WAIT_SEC", "600"))
 CAPACITY_WAIT_CAP_SEC = 3600
-# Le uniche cause che un giro non partito puo' dichiarare (testo libero mai nel log).
-FAIL_REASONS = ("capacity",)
+# Le uniche cause che un giro non partito puo' dichiarare (testo libero mai nel log):
+# capacity = modello a capacita'; no_turn = sessione viva ma nessun turno entro TURN_WAIT_SEC;
+# session_lost = sessione sparita senza un turno (container ricreato, kill).
+FAIL_REASONS = ("capacity", "no_turn", "session_lost")
+TURN_WAIT_SEC = int(os.environ.get("DOCTOR_TURN_WAIT_SEC", "600"))
+SESSION_LOST_WAIT_SEC = 60
+MAINT = "MAINT"
+ROLE_OF_SLOT = {"MAINT": "mantenitore"}
+SESSION_OF_ROLE = {"dottore": "DOTTORE", "mantenitore": "MANTENITORE"}
 ACTIONS_NAME = "dottore-actions.jsonl"
 WINDOW_SLOTS = {
     "T30": ("did_t30", "claimed_t30"),
@@ -159,8 +176,14 @@ def _window_state(state: dict, start: datetime) -> tuple[dict, bool]:
         "retry_after": {},
         "failed": {},
         "maint_date": state.get("maint_date"),
+        "maint_attempts": state.get("maint_attempts"),
+        "maint_retry_after": state.get("maint_retry_after"),
+        "maint_failed_date": state.get("maint_failed_date"),
         "fallback_done_at": state.get("fallback_done_at"),
         "fallback_claimed_at": state.get("fallback_claimed_at"),
+        "fallback_attempts": state.get("fallback_attempts"),
+        # chi aspetta ancora un primo turno fuori dalla finestra (Mantenitore, 24/7) lo continua ad aspettare
+        "spawned": {k: v for k, v in (state.get("spawned") or {}).items() if k in (MAINT, "FALLBACK")},
     }, True
 
 
@@ -253,14 +276,29 @@ def claim() -> str:
         return "WAIT"
 
 
+def _drop_spawned(state: dict, slot: str) -> None:
+    spawned_table = state.get("spawned")
+    if isinstance(spawned_table, dict):
+        spawned_table.pop(slot, None)
+
+
 def mark(slot: str) -> None:
     with _state_lock():
         b = _bounds_now()
+        if slot == MAINT:
+            state = _load_state()
+            state["maint_date"] = _today_local()
+            for key in ("maint_attempts", "maint_retry_after", "maint_failed_date"):
+                state.pop(key, None)
+            _drop_spawned(state, slot)
+            _save_state(state)
+            return
         if slot == "FALLBACK":
             state = _load_state()
             state["fallback_done_at"] = int(datetime.now().timestamp())
             state.pop("fallback_claimed_at", None)
             state.pop("fallback_attempts", None)
+            _drop_spawned(state, slot)
             _save_state(state)
             return
         if b is None:
@@ -272,6 +310,20 @@ def mark(slot: str) -> None:
         state[claim_field] = False
         for table in ("attempts", "retry_after", "failed"):
             (state.get(table) or {}).pop(slot, None)
+        _drop_spawned(state, slot)
+        _save_state(state)
+
+
+def spawned(slot: str) -> None:
+    """The spawner went through (or its outcome is uncertain): the round stays claimed, NOT done.
+
+    `settle` marks it done once the session has a real turn, or lets it start again.
+    """
+    with _state_lock():
+        state = _load_state()
+        table = dict(state.get("spawned") or {})
+        table[slot] = int(datetime.now().timestamp())
+        state["spawned"] = table
         _save_state(state)
 
 
@@ -295,7 +347,7 @@ def _capacity_wait(attempts: int) -> int:
     return min(CAPACITY_WAIT_CAP_SEC, CAPACITY_WAIT_SEC * (2 ** max(0, attempts - 1)))
 
 
-def _record_round_failed(slot: str, reason: str, attempts: int) -> None:
+def _record_round_failed(slot: str, reason: str, attempts: int, actions_name: str = ACTIONS_NAME) -> None:
     """Il giro non e' partito e non ripartira': visibile nello stesso file degli altri giri del Dottore."""
     now = datetime.now()
     entry = {
@@ -308,7 +360,7 @@ def _record_round_failed(slot: str, reason: str, attempts: int) -> None:
         "src": "doctor_schedule.py",
     }
     try:
-        actions = STATE_FILE.with_name(ACTIONS_NAME)
+        actions = STATE_FILE.with_name(actions_name)
         actions.parent.mkdir(parents=True, exist_ok=True)
         with actions.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -316,20 +368,42 @@ def _record_round_failed(slot: str, reason: str, attempts: int) -> None:
         print(f"doctor_schedule: round_failed not recorded: {exc}", file=sys.stderr)
 
 
+def _retry_wait(attempts: int, reason: str) -> int:
+    """A container made again is not the model's fault: it starts again soon. The rest waits as capacity does."""
+    return SESSION_LOST_WAIT_SEC if reason == "session_lost" else _capacity_wait(attempts)
+
+
 def fail(slot: str, reason: str) -> str:
-    """Il giro non e' partito per una causa nota (la sessione e' ferma, es. modello a capacita').
+    """Il giro non e' partito per una causa nota (la sessione e' ferma o sparita: modello a capacita', nessun turno).
 
     Il giro NON e' segnato fatto e il claim si libera. Ritorna `RETRY <secondi> attempt=<n>`
     (riprova dopo l'attesa) oppure `FAILED attempts=<n>` (tentativi finiti: `round_failed`
-    scritto nel diario del Dottore).
+    scritto nel diario del Dottore, o del Mantenitore per MAINT).
     """
     if reason not in FAIL_REASONS:
         raise OSError("unknown failure reason")
     with _state_lock():
         now_s = int(datetime.now().timestamp())
         state = _load_state()
+        if slot == MAINT:
+            attempts = int(state.get("maint_attempts") or 0) + 1
+            _drop_spawned(state, slot)
+            if attempts >= CAPACITY_MAX_ATTEMPTS:
+                # niente altri tentativi oggi: domani il giro riparte da capo
+                state["maint_failed_date"] = _today_local()
+                state.pop("maint_attempts", None)
+                state.pop("maint_retry_after", None)
+                _save_state(state)
+                _record_round_failed(slot, reason, attempts, "mantenitore-actions.jsonl")
+                return f"FAILED attempts={attempts}"
+            wait = _retry_wait(attempts, reason)
+            state["maint_attempts"] = attempts
+            state["maint_retry_after"] = now_s + wait
+            _save_state(state)
+            return f"RETRY {wait} attempt={attempts}"
         if slot == "FALLBACK":
             attempts = int(state.get("fallback_attempts") or 0) + 1
+            _drop_spawned(state, slot)
             if attempts >= CAPACITY_MAX_ATTEMPTS:
                 # niente altri tentativi ora: la cadenza normale (un claim ogni FALLBACK_SEC) riparte da adesso
                 state["fallback_claimed_at"] = now_s
@@ -337,7 +411,7 @@ def fail(slot: str, reason: str) -> str:
                 _save_state(state)
                 _record_round_failed(slot, reason, attempts)
                 return f"FAILED attempts={attempts}"
-            wait = _capacity_wait(attempts)
+            wait = _retry_wait(attempts, reason)
             state["fallback_attempts"] = attempts
             # il prossimo claim torna WAIT finche' non sono passati `wait` secondi
             state["fallback_claimed_at"] = now_s - FALLBACK_SEC + wait
@@ -352,12 +426,13 @@ def fail(slot: str, reason: str) -> str:
         attempts_by_slot[slot] = attempts
         state["attempts"] = attempts_by_slot
         state[WINDOW_SLOTS[slot][1]] = False
+        _drop_spawned(state, slot)
         if attempts >= CAPACITY_MAX_ATTEMPTS:
             state["failed"] = {**(state.get("failed") or {}), slot: reason}
             _save_state(state)
             _record_round_failed(slot, reason, attempts)
             return f"FAILED attempts={attempts}"
-        wait = _capacity_wait(attempts)
+        wait = _retry_wait(attempts, reason)
         state["retry_after"] = {**(state.get("retry_after") or {}), slot: now_s + wait}
         _save_state(state)
         return f"RETRY {wait} attempt={attempts}"
@@ -373,13 +448,18 @@ def _today_local() -> str:
 def check_maintainer() -> str:
     """Slot Mantenitore: 1x/GIORNO (non per-finestra). Ritorna:
     - MAINT  → non ancora fatto oggi ed è ora lavorabile → spawna il Mantenitore;
-    - WAIT   → già fatto oggi;
+    - WAIT   → già fatto oggi, o in attesa del suo primo turno, o di un nuovo tentativo, o fallito per oggi;
     - OFF    → fuori working hours (rimanda a quando il team è attivo).
     Gemello di check() ma su cadenza giornaliera: l'infra cambia lentamente,
     uno sweep al giorno basta (a differenza del context-refresh del Dottore).
     """
     state = _load_state()
-    if state.get("maint_date") == _today_local():
+    today = _today_local()
+    if state.get("maint_date") == today or state.get("maint_failed_date") == today:
+        return "WAIT"
+    if MAINT in (state.get("spawned") or {}):
+        return "WAIT"  # partito, aspetta il primo turno (`settle`)
+    if int(datetime.now().timestamp()) < int(state.get("maint_retry_after") or 0):
         return "WAIT"
     if not is_within_working_hours():
         return "OFF"
@@ -387,10 +467,128 @@ def check_maintainer() -> str:
 
 
 def mark_maintainer() -> None:
+    mark(MAINT)
+
+
+# ── il turno vero ───────────────────────────────────────────────────────────
+
+
+def _spawn_record(role: str) -> dict | None:
+    """What the spawner wrote about its last start (`jht_spawn_record_start`): when, which session, which CLI, where."""
+    try:
+        record = json.loads(STATE_FILE.with_name(f"spawn-last-{role}.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return record if isinstance(record, dict) else None
+
+
+def _pi_session_folder(workdir: str) -> Path:
+    """pi's folder for a working directory (shared/skills/pi_session_resume.py: session_folder)."""
+    name = workdir.lstrip("/\\")
+    for ch in "/\\:":
+        name = name.replace(ch, "-")
+    return JHT_HOME / ".pi" / "agent" / "sessions" / f"--{name}--"
+
+
+def _pi_turn_seen(workdir: str, since: float) -> bool:
+    """A session file of pi written since `since` with an answer of the model that is not an error or an abort."""
+    try:
+        files = [p for p in _pi_session_folder(workdir).glob("*.jsonl") if p.is_file()]
+    except OSError:
+        return False
+    for path in files:
+        try:
+            if path.stat().st_mtime < since - 2 or path.stat().st_size > 64 * 1024 * 1024:
+                continue
+            with path.open(encoding="utf-8", errors="replace") as handle:
+                for line in handle:
+                    try:
+                        entry = json.loads(line)
+                    except ValueError:
+                        continue
+                    message = entry.get("message") if isinstance(entry, dict) else None
+                    if (
+                        isinstance(entry, dict)
+                        and entry.get("type") == "message"
+                        and isinstance(message, dict)
+                        and message.get("role") == "assistant"
+                        and message.get("stopReason") not in ("error", "aborted")
+                    ):
+                        return True
+        except OSError:
+            continue
+    return False
+
+
+def _session_alive(session: str) -> bool:
+    """False only when tmux says there is no such session; a tmux that does not answer is no proof of anything."""
+    try:
+        done = subprocess.run(
+            ["tmux", "has-session", "-t", f"={session}"], capture_output=True, timeout=5, check=False
+        )
+    except (OSError, subprocess.SubprocessError):
+        return True
+    return done.returncode != 1
+
+
+def _kill_session(session: str) -> None:
+    try:
+        subprocess.run(["tmux", "kill-session", "-t", f"={session}"], capture_output=True, timeout=5, check=False)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
+def _turn_verdict(slot: str, spawned_at: float, now_s: float):
+    """`(verdict, record)`: seen | wait | no_turn | session_lost, for a round whose session was started."""
+    role = ROLE_OF_SLOT.get(slot, "dottore")
+    record = _spawn_record(role)
+    # No record of this start, or a record of an older one: nothing to judge by, the start counts as it did before.
+    if not record or float(record.get("ts") or 0) < spawned_at - 900 or float(record.get("ts") or 0) > spawned_at + 60:
+        return "seen", record
+    if record.get("cli") != "pi":
+        return "seen", record
+    started = float(record.get("ts") or spawned_at)
+    if _pi_turn_seen(str(record.get("workdir") or ""), started):
+        return "seen", record
+    session = str(record.get("session") or SESSION_OF_ROLE[role])
+    if not _session_alive(session):
+        return "session_lost", record
+    if now_s - started >= TURN_WAIT_SEC:
+        return "no_turn", record
+    return "wait", record
+
+
+def settle() -> list[str]:
+    """Settle every round that was started and is waiting for its first turn. One line per round:
+    `DONE <slot>` · `PENDING <slot>` · `RETRY <slot> <reason> <wait> attempt=<n>` · `FAILED <slot> <reason> attempts=<n>`."""
+    now_s = datetime.now().timestamp()
     with _state_lock():
-        state = _load_state()
-        state["maint_date"] = _today_local()
-        _save_state(state)
+        pending = {k: float(v) for k, v in (_load_state().get("spawned") or {}).items()}
+    lines = []
+    for slot, spawned_at in pending.items():
+        if slot in WINDOW_SLOTS:
+            bounds = _bounds_now()
+            with _state_lock():
+                state = _load_state()
+                if bounds is None or state.get("window_start") != bounds[0].isoformat():
+                    # the window ended while it waited: that round does not exist any more, and it must not mark the next one
+                    _drop_spawned(state, slot)
+                    _save_state(state)
+                    lines.append(f"STALE {slot}")
+                    continue
+        verdict, record = _turn_verdict(slot, spawned_at, now_s)
+        if verdict == "seen":
+            mark(slot)
+            lines.append(f"DONE {slot}")
+        elif verdict == "wait":
+            lines.append(f"PENDING {slot}")
+        else:
+            if verdict == "no_turn":
+                # a session without a turn is not left behind counted as running: the next start finds it clean
+                _kill_session(str((record or {}).get("session") or SESSION_OF_ROLE[ROLE_OF_SLOT.get(slot, "dottore")]))
+            result = fail(slot, verdict)
+            lines.append(f"{result.split(' ')[0]} {slot} {verdict} {' '.join(result.split(' ')[1:])}".rstrip())
+    return lines
 
 
 def main(argv):
@@ -410,9 +608,9 @@ def main(argv):
             print(f"doctor_schedule: claim persistence failed: {exc}", file=sys.stderr)
             return 1
     if cmd in ("mark", "release"):
-        if len(argv) < 2 or argv[1] not in (*WINDOW_SLOTS, "FALLBACK"):
+        if len(argv) < 2 or argv[1] not in (*WINDOW_SLOTS, "FALLBACK") + ((MAINT,) if cmd == "mark" else ()):
             print(
-                f"usage: doctor_schedule.py {cmd} <T30|MID|FALLBACK>",
+                f"usage: doctor_schedule.py {cmd} <T30|MID|FALLBACK{'|MAINT' if cmd == 'mark' else ''}>",
                 file=sys.stderr,
             )
             return 2
@@ -422,9 +620,27 @@ def main(argv):
         except OSError as exc:
             print(f"doctor_schedule: {cmd} persistence failed: {exc}", file=sys.stderr)
             return 1
+    if cmd == "spawned":
+        if len(argv) < 2 or argv[1] not in (*WINDOW_SLOTS, "FALLBACK", MAINT):
+            print("usage: doctor_schedule.py spawned <T30|MID|FALLBACK|MAINT>", file=sys.stderr)
+            return 2
+        try:
+            spawned(argv[1])
+            return 0
+        except OSError as exc:
+            print(f"doctor_schedule: spawned persistence failed: {exc}", file=sys.stderr)
+            return 1
+    if cmd == "settle":
+        try:
+            for line in settle():
+                print(line)
+            return 0
+        except OSError as exc:
+            print(f"doctor_schedule: settle persistence failed: {exc}", file=sys.stderr)
+            return 1
     if cmd == "fail":
-        if len(argv) < 3 or argv[1] not in (*WINDOW_SLOTS, "FALLBACK") or argv[2] not in FAIL_REASONS:
-            print("usage: doctor_schedule.py fail <T30|MID|FALLBACK> <capacity>", file=sys.stderr)
+        if len(argv) < 3 or argv[1] not in (*WINDOW_SLOTS, "FALLBACK", MAINT) or argv[2] not in FAIL_REASONS:
+            print("usage: doctor_schedule.py fail <T30|MID|FALLBACK|MAINT> <capacity|no_turn|session_lost>", file=sys.stderr)
             return 2
         try:
             print(fail(argv[1], argv[2]))
@@ -444,7 +660,7 @@ def main(argv):
             return 1
     print(
         "usage: doctor_schedule.py "
-        "<check|claim|mark SLOT|release SLOT|fail SLOT capacity|check-maintainer|mark-maintainer>",
+        "<check|claim|mark SLOT|spawned SLOT|settle|release SLOT|fail SLOT REASON|check-maintainer|mark-maintainer>",
         file=sys.stderr,
     )
     return 2
