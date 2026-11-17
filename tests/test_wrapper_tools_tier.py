@@ -881,7 +881,7 @@ def test_the_wrapper_answers_tools_status_alone_and_leaves_json_to_the_helper():
     assert "tools_say_status() {" in text
 
 
-# --- the setup that started the job holds the switch (giro Mac m21, vps-42 on Linux: the wizard of an update died with 137) ------
+# --- the setup that started the job holds the switch (a Mac round, a VPS round on Linux: the wizard of an update died with 137) ------
 
 def test_the_switch_waits_for_the_jht_setup_that_started_the_job(box):
     """An update: the profile is already there, so the job of `jht setup` switches as soon as the full image is here. The wrapper
