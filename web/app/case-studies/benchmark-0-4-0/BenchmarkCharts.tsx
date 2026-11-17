@@ -39,6 +39,7 @@ export type ChartRound = {
   scores: { m: number; best: number }[]; // best score so far, from the positions with a score and a time
   scorePoints: { m: number; s: number }[]; // every score with the minute it was given
   scoreValues: number[]; // every score of the round, for the distribution
+  scoresMissing?: string | null; // why there are none: dbGone, checking
   agents: Record<string, number> | null; // $ per agent role
 };
 
@@ -573,7 +574,13 @@ function RoundTimelines({ rounds, t, money, fixed = false }: { rounds: ChartRoun
       {r.scoreValues.length === 0 && (
         <p className="text-[11px] text-[var(--color-dim)]">
           {r.bestScore != null ? `${t.bestScore}: ${r.bestScore} · ` : ""}
-          {t.scoresNotRecorded}
+          {r.scoresMissing === "dbGone"
+            ? t.scoresDbGone
+            : r.scoresMissing === "checking"
+              ? t.scoresChecking
+              : !r.found
+                ? t.scoresNoPositions
+                : t.scoresNotRecorded}
         </p>
       )}
       <div className="grid gap-4 lg:grid-cols-2">

@@ -15,6 +15,7 @@ type Series = {
   scores?: { m: number; best: number }[];
   scorePoints?: { m: number; s: number }[];
   scoreValues?: number[];
+  scoresMissing?: string | null;
   brake?: { m: number; kind: string }[];
   agents?: Record<string, number> | null;
   relevance?: { P?: number; A?: number; X?: number } | null;
@@ -152,6 +153,7 @@ export function chartRoundOf(x: TestEntry, label: string): ChartRound {
     scores: s.scores ?? [],
     scorePoints: s.scorePoints ?? [],
     scoreValues: s.scoreValues ?? [],
+    scoresMissing: s.scoresMissing ?? null,
     agents: s.agents ?? null,
   };
 }

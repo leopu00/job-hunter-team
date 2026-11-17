@@ -201,6 +201,7 @@ export default async function BenchmarkPage() {
     scores?: ChartRound["scores"];
     scorePoints?: ChartRound["scorePoints"];
     scoreValues?: ChartRound["scoreValues"];
+    scoresMissing?: string | null;
     brake?: ChartRound["brake"];
     agents?: Record<string, number> | null;
     relevance?: BenchProfile["relevance"];
@@ -232,6 +233,7 @@ export default async function BenchmarkPage() {
         scores: x.scores ?? [],
         scorePoints: x.scorePoints ?? [],
         scoreValues: x.scoreValues ?? [],
+        scoresMissing: x.scoresMissing ?? null,
         agents: x.agents ?? null,
       };
     }),

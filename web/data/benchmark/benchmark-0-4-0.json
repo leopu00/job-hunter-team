@@ -1461,6 +1461,7 @@
         79,
         48
       ],
+      "scoresMissing": null,
       "brake": [
         {
           "m": 20.88,
@@ -1770,6 +1771,7 @@
         68,
         50
       ],
+      "scoresMissing": null,
       "brake": [
         {
           "m": 1.08,
@@ -2264,6 +2266,7 @@
         81,
         56
       ],
+      "scoresMissing": null,
       "brake": [
         {
           "m": 22.1,
@@ -2607,6 +2610,7 @@
         39,
         26
       ],
+      "scoresMissing": null,
       "brake": [
         {
           "m": 2.92,
@@ -2868,6 +2872,7 @@
       "scores": [],
       "scorePoints": [],
       "scoreValues": [],
+      "scoresMissing": null,
       "brake": [
         {
           "m": 3.63,
@@ -2906,6 +2911,7 @@
       "scores": [],
       "scorePoints": [],
       "scoreValues": [],
+      "scoresMissing": null,
       "brake": [
         {
           "m": 9.43,
@@ -3274,27 +3280,8 @@
       ],
       "scores": [],
       "scorePoints": [],
-      "scoreValues": [
-        75,
-        83,
-        72,
-        73,
-        85,
-        58,
-        78,
-        68,
-        87,
-        83,
-        86,
-        88,
-        95,
-        70,
-        94,
-        83,
-        73,
-        83,
-        78
-      ],
+      "scoreValues": [],
+      "scoresMissing": "checking",
       "brake": [
         {
           "m": 19.0,
@@ -3602,6 +3589,7 @@
       "scores": [],
       "scorePoints": [],
       "scoreValues": [],
+      "scoresMissing": "dbGone",
       "brake": [
         {
           "m": 0.73,
@@ -3878,6 +3866,7 @@
         85,
         79
       ],
+      "scoresMissing": null,
       "brake": [
         {
           "m": 0.97,
@@ -4339,70 +4328,9 @@
           "best": 85
         }
       ],
-      "scorePoints": [
-        {
-          "m": 22.63,
-          "s": 77
-        },
-        {
-          "m": 24.1,
-          "s": 85
-        },
-        {
-          "m": 27.0,
-          "s": 57
-        },
-        {
-          "m": 27.03,
-          "s": 49
-        },
-        {
-          "m": 30.22,
-          "s": 42
-        },
-        {
-          "m": 32.28,
-          "s": 29
-        },
-        {
-          "m": 32.43,
-          "s": 54
-        },
-        {
-          "m": 32.52,
-          "s": 49
-        },
-        {
-          "m": 32.58,
-          "s": 31
-        },
-        {
-          "m": 33.03,
-          "s": 42
-        },
-        {
-          "m": 33.27,
-          "s": 30
-        },
-        {
-          "m": 33.43,
-          "s": 30
-        }
-      ],
-      "scoreValues": [
-        77,
-        85,
-        57,
-        49,
-        42,
-        29,
-        54,
-        49,
-        31,
-        42,
-        30,
-        30
-      ],
+      "scorePoints": [],
+      "scoreValues": [],
+      "scoresMissing": "checking",
       "brake": [
         {
           "m": 1.47,
@@ -4680,6 +4608,7 @@
       "scores": [],
       "scorePoints": [],
       "scoreValues": [],
+      "scoresMissing": "checking",
       "brake": [
         {
           "m": 2.4,
@@ -4802,6 +4731,7 @@
       "scores": [],
       "scorePoints": [],
       "scoreValues": [],
+      "scoresMissing": "dbGone",
       "brake": [
         {
           "m": 0.88,
@@ -4877,6 +4807,7 @@
       "scores": [],
       "scorePoints": [],
       "scoreValues": [],
+      "scoresMissing": "dbGone",
       "brake": [
         {
           "m": 0.48,
@@ -5328,6 +5259,7 @@
       "scores": [],
       "scorePoints": [],
       "scoreValues": [],
+      "scoresMissing": "dbGone",
       "brake": [
         {
           "m": 26.67,
@@ -6051,20 +5983,8 @@
       ],
       "scores": [],
       "scorePoints": [],
-      "scoreValues": [
-        90,
-        89,
-        88,
-        82,
-        80,
-        77,
-        76,
-        72,
-        62,
-        52,
-        50,
-        48
-      ],
+      "scoreValues": [],
+      "scoresMissing": "dbGone",
       "brake": [
         {
           "m": -3.84,
@@ -6412,110 +6332,9 @@
           "best": 94
         }
       ],
-      "scorePoints": [
-        {
-          "m": 13.95,
-          "s": 70
-        },
-        {
-          "m": 14.15,
-          "s": 75
-        },
-        {
-          "m": 14.27,
-          "s": 74
-        },
-        {
-          "m": 14.42,
-          "s": 81
-        },
-        {
-          "m": 14.53,
-          "s": 70
-        },
-        {
-          "m": 14.77,
-          "s": 83
-        },
-        {
-          "m": 14.92,
-          "s": 77
-        },
-        {
-          "m": 15.03,
-          "s": 69
-        },
-        {
-          "m": 15.2,
-          "s": 70
-        },
-        {
-          "m": 15.3,
-          "s": 77
-        },
-        {
-          "m": 15.57,
-          "s": 74
-        },
-        {
-          "m": 15.75,
-          "s": 68
-        },
-        {
-          "m": 15.9,
-          "s": 63
-        },
-        {
-          "m": 16.05,
-          "s": 55
-        },
-        {
-          "m": 16.22,
-          "s": 66
-        },
-        {
-          "m": 18.58,
-          "s": 94
-        },
-        {
-          "m": 18.73,
-          "s": 94
-        },
-        {
-          "m": 18.98,
-          "s": 81
-        },
-        {
-          "m": 19.23,
-          "s": 82
-        },
-        {
-          "m": 19.45,
-          "s": 93
-        }
-      ],
-      "scoreValues": [
-        70,
-        75,
-        74,
-        81,
-        70,
-        83,
-        77,
-        69,
-        70,
-        77,
-        74,
-        68,
-        63,
-        55,
-        66,
-        94,
-        94,
-        81,
-        82,
-        93
-      ],
+      "scorePoints": [],
+      "scoreValues": [],
+      "scoresMissing": "checking",
       "brake": [
         {
           "m": 1.03,
@@ -6836,6 +6655,7 @@
       "scores": [],
       "scorePoints": [],
       "scoreValues": [],
+      "scoresMissing": null,
       "brake": [
         {
           "m": 10.35,
@@ -7141,6 +6961,7 @@
         15,
         16
       ],
+      "scoresMissing": null,
       "brake": [
         {
           "m": -13.42,
@@ -7479,6 +7300,7 @@
         60,
         74
       ],
+      "scoresMissing": null,
       "brake": [
         {
           "m": 1.33,

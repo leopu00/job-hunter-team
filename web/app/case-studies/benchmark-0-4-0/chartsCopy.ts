@@ -40,6 +40,9 @@ export type ChartCopy = {
   scoreDistribution: string;
   scoresCount: string;
   scoresNotRecorded: string;
+  scoresDbGone: string;
+  scoresChecking: string;
+  scoresNoPositions: string;
   ratePerMinute: string;
   dollarsPerMinute: string;
   rateHint: string;
@@ -172,6 +175,9 @@ const en: ChartCopy = {
   scoreDistribution: "Scores by band",
   scoresCount: "scores",
   scoresNotRecorded: "Scores per position were not recorded in this round.",
+  scoresDbGone: "Scores per position are no longer available for this round: its database was not kept.",
+  scoresChecking: "Scores per position of this round are being checked on the test PC.",
+  scoresNoPositions: "No position in this round, so no score.",
   ratePerMinute: "Spend per minute",
   dollarsPerMinute: "$ per minute",
   rateHint: "Total spend divided by the minutes of the round.",
@@ -309,6 +315,9 @@ const it: ChartCopy = {
   scoreDistribution: "Punteggi per fascia",
   scoresCount: "punteggi",
   scoresNotRecorded: "Punteggi per posizione non registrati in questo giro.",
+  scoresDbGone: "Punteggi per annuncio non più disponibili per questo giro: il suo database non è stato conservato.",
+  scoresChecking: "Punteggi per annuncio di questo giro in verifica sul PC di prova.",
+  scoresNoPositions: "Nessun annuncio in questo giro, quindi nessun punteggio.",
   ratePerMinute: "Spesa al minuto",
   dollarsPerMinute: "$ al minuto",
   rateHint: "Spesa totale divisa per i minuti del giro.",
@@ -444,6 +453,9 @@ const de: ChartCopy = {
   scoreDistribution: "Scores nach Bereich",
   scoresCount: "Scores",
   scoresNotRecorded: "Scores pro Stelle wurden in dieser Runde nicht erfasst.",
+  scoresDbGone: "Scores pro Stelle sind für diese Runde nicht mehr verfügbar: ihre Datenbank wurde nicht aufbewahrt.",
+  scoresChecking: "Die Scores pro Stelle dieser Runde werden auf dem Test-PC geprüft.",
+  scoresNoPositions: "Keine Stelle in dieser Runde, also kein Score.",
   ratePerMinute: "Ausgaben pro Minute",
   dollarsPerMinute: "$ pro Minute",
   rateHint: "Gesamtausgaben geteilt durch die Minuten der Runde.",
@@ -567,6 +579,9 @@ const es: ChartCopy = {
   scoreDistribution: "Puntuaciones por franja",
   scoresCount: "puntuaciones",
   scoresNotRecorded: "Las puntuaciones por anuncio no se registraron en esta ronda.",
+  scoresDbGone: "Las puntuaciones por anuncio ya no están disponibles para esta ronda: su base de datos no se conservó.",
+  scoresChecking: "Las puntuaciones por anuncio de esta ronda se están verificando en el PC de prueba.",
+  scoresNoPositions: "Ningún anuncio en esta ronda, así que ninguna puntuación.",
   ratePerMinute: "Gasto por minuto",
   dollarsPerMinute: "$ por minuto",
   rateHint: "Gasto total dividido por los minutos de la ronda.",
@@ -690,6 +705,9 @@ const fr: ChartCopy = {
   scoreDistribution: "Scores par tranche",
   scoresCount: "scores",
   scoresNotRecorded: "Les scores par annonce n'ont pas été enregistrés dans ce tour.",
+  scoresDbGone: "Les scores par annonce ne sont plus disponibles pour ce tour : sa base de données n'a pas été conservée.",
+  scoresChecking: "Les scores par annonce de ce tour sont en cours de vérification sur le PC de test.",
+  scoresNoPositions: "Aucune annonce dans ce tour, donc aucun score.",
   ratePerMinute: "Dépense par minute",
   dollarsPerMinute: "$ par minute",
   rateHint: "Dépense totale divisée par les minutes du tour.",
@@ -813,6 +831,9 @@ const hu: ChartCopy = {
   scoreDistribution: "Pontszámok sávonként",
   scoresCount: "pontszám",
   scoresNotRecorded: "Ebben a körben a hirdetésenkénti pontszámok nincsenek rögzítve.",
+  scoresDbGone: "Ebben a körben a hirdetésenkénti pontszámok már nem érhetők el: az adatbázisát nem őrizték meg.",
+  scoresChecking: "A kör hirdetésenkénti pontszámait a teszt-PC-n ellenőrzik.",
+  scoresNoPositions: "Ebben a körben nincs hirdetés, így pontszám sincs.",
   ratePerMinute: "Költés percenként",
   dollarsPerMinute: "$ percenként",
   rateHint: "A teljes költés osztva a kör perceivel.",
@@ -936,6 +957,9 @@ const pt: ChartCopy = {
   scoreDistribution: "Pontuações por faixa",
   scoresCount: "pontuações",
   scoresNotRecorded: "As pontuações por anúncio não foram registadas nesta rodada.",
+  scoresDbGone: "As pontuações por anúncio já não estão disponíveis para esta rodada: a sua base de dados não foi guardada.",
+  scoresChecking: "As pontuações por anúncio desta rodada estão a ser verificadas no PC de teste.",
+  scoresNoPositions: "Nenhum anúncio nesta rodada, por isso nenhuma pontuação.",
   ratePerMinute: "Gasto por minuto",
   dollarsPerMinute: "$ por minuto",
   rateHint: "Gasto total dividido pelos minutos da rodada.",
