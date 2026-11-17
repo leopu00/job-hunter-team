@@ -130,10 +130,10 @@ python3 /app/shared/skills/db_update.py position <DUP_ID> --status excluded \
 
 ## Después del INSERT — notificar a los Analysts
 
-Después de cada lote de 3-5 inserts, hacer ping a las sesiones de Analyst con el rango de IDs. Ellos recogen `status=new` de la DB de todas formas, pero el ping acorta la latencia:
+Después de CADA insert (nunca esperes un lote de 3-5: un Scout que retiene el ping hasta la tercera posición puede no enviarlo nunca), haz ping a las sesiones de Analyst con el ID. Ellos recogen `status=new` de la DB de todas formas, pero el ping acorta la latencia. Si la sesión no existe, no hay nada más que hacer: el INSERT es la entrega, y el sistema inicia un Analyst cuando hay posiciones esperando.
 
 ```bash
-jht-tmux-send ANALISTA-1 "[@$MY_ID -> @analista-1] [INFO] Batch 5 posizioni inserite (IDs: X-Y)"
+jht-tmux-send ANALISTA-1 "[@$MY_ID -> @analista-1] [INFO] Posizione inserita (ID: X)"
 ```
 
 Si tienes 2 Analysts, alterna el objetivo del ping para balancear carga (los Analysts también tienen coordinación de reclamación `last_checked` así que nunca está mal, pero la notificación tmux ayuda a la responsividad).
