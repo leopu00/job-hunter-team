@@ -132,4 +132,6 @@ export default {
   "agents.running": "activo",
   "agents.stopped": "detenido",
   "agents.sessions_in_tmux": "Nombres de las sesiones en tmux:",
+  "team.captain_tools": "El Capitano y la Sentinella arrancan solos en unos minutos, cuando las herramientas de la imagen completa estén listas. El onboarding está hecho: no hay nada que hacer.",
+  "container.team_stopped": "El equipo está parado (lo paraste tú): el contenedor está en marcha, los agentes no. Para volver a arrancarlos: jht team start",
 };

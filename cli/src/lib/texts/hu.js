@@ -132,4 +132,6 @@ export default {
   "agents.running": "fut",
   "agents.stopped": "leállítva",
   "agents.sessions_in_tmux": "Munkamenetnevek a tmuxban:",
+  "team.captain_tools": "A Capitano és a Sentinella néhány perc múlva magától elindul, amikor a teljes image eszközei készen állnak. A bevezetés kész: nincs teendőd.",
+  "container.team_stopped": "A csapat le van állítva (te állítottad le): a konténer fut, az ügynökök nem. Az újraindításhoz: jht team start",
 };
