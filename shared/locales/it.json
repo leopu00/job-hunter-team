@@ -603,6 +603,8 @@
   "wizard.access.prompt": "Come accede Codex?",
   "wizard.access.subscription": "Abbonamento ChatGPT — consigliato: accedi col tuo account, nessun costo a consumo",
   "wizard.access.api_key": "Chiave API OpenAI — a consumo, sul tuo account OpenAI",
+  "wizard.access.pi_prompt": "Come accede Pi a OpenAI?",
+  "wizard.access.pi_subscription": "Abbonamento ChatGPT — accedi col tuo account in Pi, nessun costo a consumo",
   "wizard.key.intro_codex": "Alla prossima domanda incolla la chiave API di %s. Si scrive nascosta e la controlla OpenAI; poi passa al login di Codex (codex login --with-api-key), che la tiene dove tiene ogni accesso. La configurazione non ha nessuna chiave.\nLa variabile che sostituisce è %s.",
   "wizard.key.codex_not_taken": "Codex non ha preso la chiave (codex login --with-api-key). Controlla la chiave, poi lancia: jht setup",
   "wizard.key.intro": "Alla prossima domanda incolla la chiave API di %s. Si scrive nascosta, la controlla il provider e resta in una cartella privata del container; la configurazione tiene solo dove sta, mai la chiave.\nSi può anche impostare senza domande: jht setup --non-interactive --provider %s --api-key-stdin (la chiave arriva dallo standard input). La sua variabile è %s.",
