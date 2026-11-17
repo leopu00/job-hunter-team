@@ -13,6 +13,6 @@ Windows and macOS are drawn in the page itself (`SYSTEM_MARK` in `page.tsx`): sm
 | `laptop.svg` | generic icon (no longer shown) | lucide-static 0.468.0 (`icons/laptop.svg`) | ISC, Copyright (c) Lucide Contributors 2022 and Cole Bemis 2013-2022 (Feather, MIT) |
 | `app-window.svg` | generic icon (no longer shown) | lucide-static 0.468.0 (`icons/app-window.svg`) | ISC, same |
 | `terminal.svg` | generic icon (no longer shown) | lucide-static 0.468.0 (`icons/terminal.svg`) | ISC, same |
-| `tux.svg` | Tux, Linux | Wikimedia Commons, `File:Tux.svg` (unmodified, renamed) | free use and modification crediting Larry Ewing and The GIMP |
+| `tux.png` | Tux, Linux | rendered from Wikimedia Commons `File:Tux.svg` as a 54×64 PNG on a transparent background | free use and modification crediting Larry Ewing and The GIMP |
 
 Official brand kits were not used: no logo here comes from a company press page. Checked 16/11/2026.

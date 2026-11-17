@@ -1974,9 +1974,7 @@ const ICON: Record<string, string[]> = {
   openai: ["openai"],
   kimi: ["kimi"],
   "openai-glm": ["openai", "zai"],
-  // Linux is Tux, free to use crediting Larry Ewing and The GIMP (the credit line is at the foot of the page);
-  // Windows and macOS are drawn inline below (SYSTEM_MARK), in the colour of the text
-  linux: ["tux"],
+  // the systems are drawn by Mark itself: Windows and macOS inline (SYSTEM_MARK), Linux as Tux (tux.png)
 };
 
 // The marks of Windows (four panes) and macOS (the apple): small monochrome shapes in a 16×16 box, in the colour of
@@ -2015,6 +2013,14 @@ function Logo({
 }
 
 function Mark({ id, label }: { id: string; label: string }) {
+  // Tux, the penguin of Larry Ewing drawn with The GIMP (credited at the foot of the page): a small PNG on a transparent
+  // background, as tall as the marks of Windows and macOS
+  if (id === "linux")
+    return (
+      <span className="inline-flex items-center justify-center shrink-0" style={{ width: 28, height: 28 }} title={label}>
+        <Image src="/benchmark/logos/tux.png" alt={label} width={15} height={18} unoptimized />
+      </span>
+    );
   if (SYSTEM_MARK[id])
     return (
       <span className="inline-flex items-center justify-center shrink-0" style={{ width: 28, height: 28 }} title={label}>
