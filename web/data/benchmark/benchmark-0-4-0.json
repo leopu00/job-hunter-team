@@ -61,10 +61,10 @@
       "section": "update",
       "row": "update",
       "os": "macos",
-      "status": "blocked",
-      "build": 9,
+      "status": "pass",
+      "build": 10,
       "proof": [],
-      "note": "installerBlockedBuild9"
+      "note": "updateMacBuild10"
     },
     {
       "id": "nonItRelevant",
@@ -259,12 +259,10 @@
       "section": "language",
       "row": "language",
       "os": "macos",
-      "status": "fail",
-      "build": 8,
-      "proof": [
-        "r13"
-      ],
-      "note": "languageEnglish"
+      "status": "pass",
+      "build": 10,
+      "proof": [],
+      "note": "languagePortugueseOk"
     },
     {
       "id": "doctorMaintainer",
@@ -5918,11 +5916,11 @@
   },
   "defects": {
     "5": {
-      "found": null,
+      "found": 20,
       "closed": 14
     },
     "6": {
-      "found": null,
+      "found": 12,
       "closed": 22
     },
     "7": {
@@ -5930,15 +5928,15 @@
       "closed": 14
     },
     "8": {
-      "found": null,
+      "found": 24,
       "closed": 8
     },
     "9": {
-      "found": null,
+      "found": 8,
       "closed": 16
     },
     "10": {
-      "found": null,
+      "found": 3,
       "closed": 16
     }
   },

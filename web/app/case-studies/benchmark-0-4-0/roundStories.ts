@@ -1,0 +1,386 @@
+// What happened in each test and the defects it found, written by hand in the seven languages. A test without an entry
+// tells its story from the events recorded during it. Generic words only: no person, machine or internal code.
+
+import type { Locale } from "@/i18n/config";
+
+export type RoundStory = {
+  story?: Record<Locale, string[]>;
+  // fixedIn: the build where a later test verified the fix; fixClaimedIn: the build that declares it, not verified yet
+  defects?: {
+    priority: string;
+    fixedIn: number | null;
+    fixClaimedIn: number | null;
+    text: Record<Locale, string>;
+  }[];
+};
+
+export const ROUND_STORIES: Record<string, RoundStory> = {
+  r14: {
+    story: {
+      it: [
+        "Installazione da zero su un PC Windows di prova, con un utente nuovo senza privilegi di amministratore e tutto in tedesco.",
+        "Setup guidato e colloquio con l'Assistente in chat: profilo salvato in circa dieci minuti.",
+        "Budget di prova di 5 $ per 30 minuti, che partono dal primo lavoro della squadra; la squadra parte da sola dopo il passaggio all'immagine completa.",
+        "In 25 minuti 26 annunci, tutti nella città del profilo, 19 già valutati (miglior punteggio 95): 10 adatti a una receptionist d'albergo, 13 reception di uffici e studi.",
+        "Il freno ferma la squadra a 4,77 $; un falso via libera la fa ripartire per due minuti, poi si ferma di nuovo a 4,93 $.",
+        "Riaccesa durante la pausa, la squadra non ripete il benvenuto a pagamento e non spende altro.",
+      ],
+      en: [
+        "Install from scratch on a test Windows PC, with a new user without administrator rights and everything in German.",
+        "Guided setup and a chat interview with the Assistant: profile saved in about ten minutes.",
+        "A test budget of 5 $ for 30 minutes, counted from the team's first work; the team starts by itself after the switch to the full image.",
+        "In 25 minutes 26 positions, all in the profile's city, 19 already scored (best score 95): 10 fit for a hotel receptionist, 13 reception desks of offices and practices.",
+        "The brake stops the team at 4.77 $; a false all-clear lets it run for two more minutes, then it stops again at 4.93 $.",
+        "Restarted during the pause, the team does not repeat the paid welcome and spends nothing more.",
+      ],
+      de: [
+        "Neuinstallation auf einem Windows-Test-PC, mit einem neuen Nutzer ohne Administratorrechte und alles auf Deutsch.",
+        "Geführtes Setup und Gespräch mit dem Assistenten im Chat: Profil in etwa zehn Minuten gespeichert.",
+        "Testbudget von 5 $ für 30 Minuten ab der ersten Arbeit des Teams; das Team startet nach dem Wechsel zum vollen Image von selbst.",
+        "In 25 Minuten 26 Stellen, alle in der Stadt des Profils, 19 schon bewertet (bester Score 95): 10 passend für eine Hotelrezeptionistin, 13 Empfänge von Büros und Praxen.",
+        "Die Bremse stoppt das Team bei 4,77 $; eine falsche Freigabe lässt es zwei Minuten weiterlaufen, dann stoppt es wieder bei 4,93 $.",
+        "Während der Pause neu gestartet, wiederholt das Team die kostenpflichtige Begrüßung nicht und gibt nichts mehr aus.",
+      ],
+      es: [
+        "Instalación desde cero en un PC Windows de prueba, con un usuario nuevo sin permisos de administrador y todo en alemán.",
+        "Configuración guiada y entrevista con el Asistente en el chat: perfil guardado en unos diez minutos.",
+        "Presupuesto de prueba de 5 $ por 30 minutos, contados desde el primer trabajo del equipo; el equipo arranca solo tras pasar a la imagen completa.",
+        "En 25 minutos 26 anuncios, todos en la ciudad del perfil, 19 ya puntuados (mejor puntuación 95): 10 aptos para una recepcionista de hotel, 13 recepciones de oficinas y despachos.",
+        "El freno para el equipo a 4,77 $; un falso desbloqueo lo hace seguir dos minutos y luego se para de nuevo a 4,93 $.",
+        "Reiniciado durante la pausa, el equipo no repite la bienvenida de pago y no gasta nada más.",
+      ],
+      fr: [
+        "Installation à partir de zéro sur un PC Windows de test, avec un nouvel utilisateur sans droits d'administrateur et tout en allemand.",
+        "Configuration guidée et entretien avec l'Assistant dans le chat : profil enregistré en une dizaine de minutes.",
+        "Budget de test de 5 $ pour 30 minutes, comptées dès le premier travail de l'équipe ; l'équipe démarre seule après le passage à l'image complète.",
+        "En 25 minutes 26 annonces, toutes dans la ville du profil, 19 déjà notées (meilleur score 95) : 10 adaptées à une réceptionniste d'hôtel, 13 accueils de bureaux et cabinets.",
+        "Le frein arrête l'équipe à 4,77 $ ; un faux feu vert la relance deux minutes, puis elle s'arrête de nouveau à 4,93 $.",
+        "Relancée pendant la pause, l'équipe ne répète pas l'accueil payant et ne dépense plus rien.",
+      ],
+      hu: [
+        "Telepítés a nulláról egy Windows tesztgépen, rendszergazdai jog nélküli új felhasználóval, mindent németül.",
+        "Vezetett beállítás és beszélgetés az Asszisztenssel a chatben: a profil kb. tíz perc alatt elmentve.",
+        "5 $ / 30 perces tesztkeret, a csapat első munkájától számolva; a csapat a teljes képre váltás után magától indul.",
+        "25 perc alatt 26 hirdetés, mind a profil városában, 19 már pontozva (legjobb pontszám 95): 10 szállodai recepciósnak való, 13 irodai és rendelői recepció.",
+        "A fék 4,77 $-nál megállítja a csapatot; egy hamis feloldás után két percig újra fut, majd 4,93 $-nál ismét leáll.",
+        "A szünetben újraindítva a csapat nem ismétli meg a fizetős üdvözlést, és nem költ többet.",
+      ],
+      pt: [
+        "Instalação de raiz num PC Windows de teste, com um utilizador novo sem permissões de administrador e tudo em alemão.",
+        "Configuração guiada e entrevista com o Assistente no chat: perfil guardado em cerca de dez minutos.",
+        "Orçamento de teste de 5 $ por 30 minutos, contados a partir do primeiro trabalho da equipa; a equipa arranca sozinha depois da passagem para a imagem completa.",
+        "Em 25 minutos 26 anúncios, todos na cidade do perfil, 19 já pontuados (melhor pontuação 95): 10 adequados a uma rececionista de hotel, 13 receções de escritórios e consultórios.",
+        "O travão para a equipa a 4,77 $; um falso desbloqueio fá-la recomeçar durante dois minutos, depois para de novo a 4,93 $.",
+        "Reiniciada durante a pausa, a equipa não repete as boas-vindas pagas e não gasta mais nada.",
+      ],
+    },
+    defects: [
+      {
+        priority: "P2",
+        fixedIn: null,
+        fixClaimedIn: 9,
+        text: {
+          it: "Il Dottore e il Mantenitore partono ma non fanno mai un turno di lavoro.",
+          en: "The Doctor and the Maintainer start but never do a turn of work.",
+          de: "Der Doktor und die Wartung starten, machen aber nie eine Arbeitsrunde.",
+          es: "El Doctor y el Mantenedor arrancan pero nunca hacen un turno de trabajo.",
+          fr: "Le Docteur et le Mainteneur démarrent mais ne font jamais un tour de travail.",
+          hu: "A Doktor és a Karbantartó elindul, de soha nem végez munkakört.",
+          pt: "O Doutor e o Mantenedor arrancam mas nunca fazem um turno de trabalho.",
+        },
+      },
+      {
+        priority: "P2",
+        fixedIn: 9,
+        fixClaimedIn: 9,
+        text: {
+          it: "Dopo lo stop del freno arriva un falso via libera: altre chiamate e 0,17 $ spesi, e il secondo stop non viene detto alla persona.",
+          en: "After the brake's stop comes a false all-clear: more calls and 0.17 $ spent, and the second stop is not told to the person.",
+          de: "Nach dem Stopp der Bremse kommt eine falsche Freigabe: weitere Aufrufe und 0,17 $ ausgegeben, und der zweite Stopp wird der Person nicht gesagt.",
+          es: "Tras la parada del freno llega un falso desbloqueo: más llamadas y 0,17 $ gastados, y la segunda parada no se le dice a la persona.",
+          fr: "Après l'arrêt du frein arrive un faux feu vert : d'autres appels et 0,17 $ dépensés, et le second arrêt n'est pas dit à la personne.",
+          hu: "A fék leállítása után hamis feloldás jön: további hívások és 0,17 $ költés, a második leállásról pedig nem szól a felhasználónak.",
+          pt: "Depois da paragem do travão chega um falso desbloqueio: mais chamadas e 0,17 $ gastos, e a segunda paragem não é dita à pessoa.",
+        },
+      },
+      {
+        priority: "P2",
+        fixedIn: 10,
+        fixClaimedIn: 9,
+        text: {
+          it: "Nel setup il passo della chiave API è in inglese anche se la persona ha scelto un'altra lingua.",
+          en: "In the setup the API key step is in English even when the person chose another language.",
+          de: "Im Setup ist der Schritt des API-Schlüssels auf Englisch, auch wenn die Person eine andere Sprache gewählt hat.",
+          es: "En la configuración el paso de la clave API está en inglés aunque la persona haya elegido otro idioma.",
+          fr: "Dans la configuration l'étape de la clé API est en anglais même si la personne a choisi une autre langue.",
+          hu: "A beállításban az API-kulcs lépése angolul van, akkor is, ha a felhasználó más nyelvet választott.",
+          pt: "Na configuração o passo da chave API está em inglês mesmo que a pessoa tenha escolhido outra língua.",
+        },
+      },
+      {
+        priority: "P2",
+        fixedIn: 10,
+        fixClaimedIn: 9,
+        text: {
+          it: "L'avvio della squadra e il riepilogo della configurazione sono in inglese.",
+          en: "The start of the team and the summary of the setup are in English.",
+          de: "Der Start des Teams und die Zusammenfassung des Setups sind auf Englisch.",
+          es: "El arranque del equipo y el resumen de la configuración están en inglés.",
+          fr: "Le démarrage de l'équipe et le résumé de la configuration sont en anglais.",
+          hu: "A csapat indítása és a beállítás összefoglalója angolul van.",
+          pt: "O arranque da equipa e o resumo da configuração estão em inglês.",
+        },
+      },
+      {
+        priority: "P3",
+        fixedIn: 10,
+        fixClaimedIn: 9,
+        text: {
+          it: "Una nota del setup annuncia come futura una funzione che c'è già.",
+          en: "A note of the setup announces as future a feature that is already there.",
+          de: "Ein Hinweis im Setup kündigt eine Funktion als künftig an, die es schon gibt.",
+          es: "Una nota de la configuración anuncia como futura una función que ya existe.",
+          fr: "Une note de la configuration annonce comme future une fonction qui existe déjà.",
+          hu: "A beállítás egyik megjegyzése jövőbeliként jelent be egy már meglévő funkciót.",
+          pt: "Uma nota da configuração anuncia como futura uma função que já existe.",
+        },
+      },
+      {
+        priority: "P3",
+        fixedIn: null,
+        fixClaimedIn: null,
+        text: {
+          it: "A fine installazione compare un suggerimento per modificare il PATH, che una persona non esperta non deve toccare.",
+          en: "At the end of the install a hint to change the PATH appears, which a non-expert person should not touch.",
+          de: "Am Ende der Installation erscheint ein Hinweis, den PATH zu ändern, den eine unerfahrene Person nicht anfassen sollte.",
+          es: "Al final de la instalación aparece una sugerencia para modificar el PATH, que una persona no experta no debe tocar.",
+          fr: "À la fin de l'installation apparaît une suggestion de modifier le PATH, qu'une personne non experte ne doit pas toucher.",
+          hu: "A telepítés végén megjelenik egy javaslat a PATH módosítására, amihez egy nem szakértő ne nyúljon.",
+          pt: "No fim da instalação aparece uma sugestão para alterar o PATH, que uma pessoa não especialista não deve tocar.",
+        },
+      },
+      {
+        priority: "P3",
+        fixedIn: null,
+        fixClaimedIn: null,
+        text: {
+          it: "L'installazione mostra righe tecniche in inglese pensate per le macchine, non per le persone.",
+          en: "The install shows technical lines in English meant for machines, not for people.",
+          de: "Die Installation zeigt technische Zeilen auf Englisch, gedacht für Maschinen, nicht für Menschen.",
+          es: "La instalación muestra líneas técnicas en inglés pensadas para máquinas, no para personas.",
+          fr: "L'installation affiche des lignes techniques en anglais pensées pour les machines, pas pour les personnes.",
+          hu: "A telepítés angol nyelvű, gépeknek szánt technikai sorokat mutat, nem embereknek.",
+          pt: "A instalação mostra linhas técnicas em inglês pensadas para máquinas, não para pessoas.",
+        },
+      },
+      {
+        priority: "P3",
+        fixedIn: null,
+        fixClaimedIn: null,
+        text: {
+          it: "L'intestazione della chat e le schede delle domande sono in inglese.",
+          en: "The heading of the chat and the cards of the questions are in English.",
+          de: "Die Kopfzeile des Chats und die Karten der Fragen sind auf Englisch.",
+          es: "La cabecera del chat y las fichas de las preguntas están en inglés.",
+          fr: "L'en-tête du chat et les fiches des questions sont en anglais.",
+          hu: "A chat fejléce és a kérdések kártyái angolul vannak.",
+          pt: "O cabeçalho do chat e os cartões das perguntas estão em inglês.",
+        },
+      },
+      {
+        priority: "P3",
+        fixedIn: null,
+        fixClaimedIn: 9,
+        text: {
+          it: "Lo stato della squadra è tutto in inglese e a squadra in pausa dice che tutti gli agenti sono accesi.",
+          en: "The status of the team is all in English and, with the team paused, says that every agent is on.",
+          de: "Der Status des Teams ist ganz auf Englisch und sagt bei pausiertem Team, dass alle Agenten laufen.",
+          es: "El estado del equipo está todo en inglés y, con el equipo en pausa, dice que todos los agentes están encendidos.",
+          fr: "L'état de l'équipe est tout en anglais et, équipe en pause, dit que tous les agents sont allumés.",
+          hu: "A csapat állapota teljesen angol, és szüneteltetett csapatnál azt írja, hogy minden ügynök fut.",
+          pt: "O estado da equipa está todo em inglês e, com a equipa em pausa, diz que todos os agentes estão ligados.",
+        },
+      },
+    ],
+  },
+  "b9-cook": {
+    story: {
+      it: [
+        "Banco di misura degli Scout su un server Linux: profilo di prova di un cuoco, lavoro in sede.",
+        "Primo tentativo annullato: con un budget giornaliero alto il freno a ritmo ha fermato la squadra dopo 70 secondi di ricerca.",
+        "Secondo tentativo con il preset «5 $ per 30 minuti»: il nuovo budget toglie la pausa, ma gli Scout restano fermi 15 minuti prima di ripartire.",
+        "In 12 minuti di ricerca 19 annunci inseriti: 15 nel mestiere, 2 vicini, 2 fuori (un franchising e un annuncio che non è un lavoro), nessun doppione.",
+        "Gli Scout scartano 203 candidati per la zona e 31 per il mestiere; 13 annunci valutati, spesa 2,11 $.",
+      ],
+      en: [
+        "A measuring bench of the Scouts on a Linux server: test profile of a cook, work on site.",
+        "First try cancelled: with a high daily budget the pace brake stopped the team after 70 seconds of search.",
+        "Second try with the «5 $ for 30 minutes» preset: the new budget lifts the pause, but the Scouts stay still for 15 minutes before starting again.",
+        "In 12 minutes of search 19 positions inserted: 15 in the trade, 2 close, 2 outside (a franchise and an ad that is not a job), no duplicate.",
+        "The Scouts discard 203 candidates for the area and 31 for the trade; 13 positions scored, 2.11 $ spent.",
+      ],
+      de: [
+        "Messbank der Scouts auf einem Linux-Server: Testprofil eines Kochs, Arbeit vor Ort.",
+        "Erster Versuch abgebrochen: mit einem hohen Tagesbudget stoppte die Tempobremse das Team nach 70 Sekunden Suche.",
+        "Zweiter Versuch mit der Vorgabe «5 $ für 30 Minuten»: das neue Budget hebt die Pause auf, aber die Scouts stehen 15 Minuten still, bevor sie wieder starten.",
+        "In 12 Minuten Suche 19 Stellen eingetragen: 15 im Beruf, 2 verwandt, 2 daneben (ein Franchise und eine Anzeige, die keine Stelle ist), kein Duplikat.",
+        "Die Scouts verwerfen 203 Kandidaten wegen der Region und 31 wegen des Berufs; 13 Stellen bewertet, 2,11 $ ausgegeben.",
+      ],
+      es: [
+        "Banco de medida de los Scouts en un servidor Linux: perfil de prueba de un cocinero, trabajo presencial.",
+        "Primer intento anulado: con un presupuesto diario alto, el freno de ritmo paró el equipo tras 70 segundos de búsqueda.",
+        "Segundo intento con el preajuste «5 $ por 30 minutos»: el nuevo presupuesto quita la pausa, pero los Scouts quedan parados 15 minutos antes de reanudar.",
+        "En 12 minutos de búsqueda 19 anuncios insertados: 15 del oficio, 2 cercanos, 2 fuera (una franquicia y un anuncio que no es un trabajo), ningún duplicado.",
+        "Los Scouts descartan 203 candidatos por la zona y 31 por el oficio; 13 anuncios puntuados, 2,11 $ gastados.",
+      ],
+      fr: [
+        "Banc de mesure des Scouts sur un serveur Linux : profil de test d'un cuisinier, travail sur place.",
+        "Premier essai annulé : avec un budget quotidien élevé, le frein de rythme a arrêté l'équipe après 70 secondes de recherche.",
+        "Second essai avec le préréglage « 5 $ pour 30 minutes » : le nouveau budget lève la pause, mais les Scouts restent immobiles 15 minutes avant de repartir.",
+        "En 12 minutes de recherche 19 annonces insérées : 15 dans le métier, 2 proches, 2 hors (une franchise et une annonce qui n'est pas un emploi), aucun doublon.",
+        "Les Scouts écartent 203 candidats pour la zone et 31 pour le métier ; 13 annonces notées, 2,11 $ dépensés.",
+      ],
+      hu: [
+        "Scout-mérőpad egy Linux szerveren: egy szakács tesztprofilja, helyszíni munka.",
+        "Az első próbát töröltük: magas napi kerettel az ütemfék 70 másodperc keresés után megállította a csapatot.",
+        "Második próba az «5 $ / 30 perc» beállítással: az új keret feloldja a szünetet, de a Scoutok 15 percig állnak, mielőtt újraindulnak.",
+        "12 perc keresés alatt 19 hirdetés: 15 a szakmában, 2 rokon, 2 kívül (egy franchise és egy nem munkát kínáló hirdetés), ismétlődés nélkül.",
+        "A Scoutok 203 jelöltet a körzet, 31-et a szakma miatt vetnek el; 13 hirdetés pontozva, 2,11 $ költés.",
+      ],
+      pt: [
+        "Bancada de medida dos Scouts num servidor Linux: perfil de teste de um cozinheiro, trabalho presencial.",
+        "Primeira tentativa anulada: com um orçamento diário alto, o travão de ritmo parou a equipa após 70 segundos de pesquisa.",
+        "Segunda tentativa com a predefinição «5 $ por 30 minutos»: o novo orçamento tira a pausa, mas os Scouts ficam parados 15 minutos antes de recomeçar.",
+        "Em 12 minutos de pesquisa 19 anúncios inseridos: 15 no ofício, 2 próximos, 2 fora (um franchising e um anúncio que não é um emprego), nenhum duplicado.",
+        "Os Scouts descartam 203 candidatos pela zona e 31 pelo ofício; 13 anúncios pontuados, 2,11 $ gastos.",
+      ],
+    },
+    defects: [
+      {
+        priority: "P3",
+        fixedIn: null,
+        fixClaimedIn: 10,
+        text: {
+          it: "Dopo un budget nuovo il freno toglie la pausa, ma gli Scout restano fermi 15 minuti prima di ripartire.",
+          en: "After a new budget the brake lifts the pause, but the Scouts stay still for 15 minutes before starting again.",
+          de: "Nach einem neuen Budget hebt die Bremse die Pause auf, aber die Scouts stehen 15 Minuten still, bevor sie wieder starten.",
+          es: "Tras un presupuesto nuevo el freno quita la pausa, pero los Scouts quedan parados 15 minutos antes de reanudar.",
+          fr: "Après un nouveau budget le frein lève la pause, mais les Scouts restent immobiles 15 minutes avant de repartir.",
+          hu: "Új keret után a fék feloldja a szünetet, de a Scoutok 15 percig állnak, mielőtt újraindulnak.",
+          pt: "Depois de um orçamento novo o travão tira a pausa, mas os Scouts ficam parados 15 minutos antes de recomeçar.",
+        },
+      },
+      {
+        priority: "P3",
+        fixedIn: 10,
+        fixClaimedIn: 10,
+        text: {
+          it: "Aggiornando il setup con lo stesso servizio, la chiave già salvata viene richiesta di nuovo.",
+          en: "Updating the setup with the same service asks again for the key already saved.",
+          de: "Beim Aktualisieren des Setups mit demselben Dienst wird der schon gespeicherte Schlüssel erneut verlangt.",
+          es: "Al actualizar la configuración con el mismo servicio, se vuelve a pedir la clave ya guardada.",
+          fr: "En mettant à jour la configuration avec le même service, la clé déjà enregistrée est redemandée.",
+          hu: "A beállítás frissítésekor ugyanazzal a szolgáltatással újra kéri a már elmentett kulcsot.",
+          pt: "Ao atualizar a configuração com o mesmo serviço, a chave já guardada é pedida de novo.",
+        },
+      },
+      {
+        priority: "P3",
+        fixedIn: null,
+        fixClaimedIn: 10,
+        text: {
+          it: "Dopo uno stop manuale della squadra, la riaccensione dice «avviata» ma la squadra resta ferma.",
+          en: "After the team is stopped by hand, starting it again says «started» but the team stays still.",
+          de: "Nach einem manuellen Stopp sagt der Neustart «gestartet», aber das Team bleibt stehen.",
+          es: "Tras una parada manual del equipo, el reinicio dice «arrancado» pero el equipo sigue parado.",
+          fr: "Après un arrêt manuel de l'équipe, la relance dit « démarrée » mais l'équipe reste immobile.",
+          hu: "A csapat kézi leállítása után az újraindítás azt írja, «elindult», de a csapat áll.",
+          pt: "Depois de uma paragem manual da equipa, o reinício diz «iniciada» mas a equipa fica parada.",
+        },
+      },
+      {
+        priority: "P3",
+        fixedIn: null,
+        fixClaimedIn: null,
+        text: {
+          it: "Uno Scout inserisce un annuncio che lui stesso descrive come non un lavoro.",
+          en: "A Scout inserts an ad that it describes itself as not a job.",
+          de: "Ein Scout trägt eine Anzeige ein, die er selbst als keine Stelle beschreibt.",
+          es: "Un Scout inserta un anuncio que él mismo describe como no un trabajo.",
+          fr: "Un Scout insère une annonce qu'il décrit lui-même comme n'étant pas un emploi.",
+          hu: "Egy Scout felvesz egy hirdetést, amelyet maga is nem munkaként ír le.",
+          pt: "Um Scout insere um anúncio que ele próprio descreve como não sendo um emprego.",
+        },
+      },
+    ],
+  },
+  "b9-warehouseWorker": {
+    story: {
+      it: [
+        "Profilo di prova di un magazziniere, preset «5 $ per 30 minuti», ricerca ripartita da zero.",
+        "La squadra parte con 5 Scout, 3 analisti e 2 valutatori; gli Scout dichiarano prima la famiglia del mestiere (31 termini) e solo dopo inseriscono.",
+        "50 annunci in 3 minuti, il massimo del primo giro di ricerca: 45 nel mestiere, 5 vicini, nessuno fuori, nessun doppione.",
+        "Tutti e 50 valutati entro il periodo; il freno ferma la squadra a 4,88 $ su 5 e dichiara il periodo finito.",
+        "Spesa totale 5,13 $, compresi il setup e l'avvio.",
+      ],
+      en: [
+        "Test profile of a warehouse worker, «5 $ for 30 minutes» preset, search started again from zero.",
+        "The team starts with 5 Scouts, 3 analysts and 2 scorers; the Scouts first declare the family of the trade (31 terms) and only then insert.",
+        "50 positions in 3 minutes, the most the first round of search takes: 45 in the trade, 5 close, none outside, no duplicate.",
+        "All 50 scored within the period; the brake stops the team at 4.88 $ of 5 and declares the period over.",
+        "Total spend 5.13 $, setup and start included.",
+      ],
+      de: [
+        "Testprofil eines Lagerarbeiters, Vorgabe «5 $ für 30 Minuten», Suche von null neu gestartet.",
+        "Das Team startet mit 5 Scouts, 3 Analysten und 2 Bewertern; die Scouts nennen zuerst die Berufsfamilie (31 Begriffe) und tragen erst dann ein.",
+        "50 Stellen in 3 Minuten, das Maximum der ersten Suchrunde: 45 im Beruf, 5 verwandt, keine daneben, kein Duplikat.",
+        "Alle 50 innerhalb der Periode bewertet; die Bremse stoppt das Team bei 4,88 $ von 5 und erklärt die Periode für beendet.",
+        "Gesamtausgaben 5,13 $, Setup und Start eingeschlossen.",
+      ],
+      es: [
+        "Perfil de prueba de un mozo de almacén, preajuste «5 $ por 30 minutos», búsqueda reiniciada desde cero.",
+        "El equipo arranca con 5 Scouts, 3 analistas y 2 puntuadores; los Scouts declaran primero la familia del oficio (31 términos) y solo después insertan.",
+        "50 anuncios en 3 minutos, el máximo de la primera ronda de búsqueda: 45 del oficio, 5 cercanos, ninguno fuera, ningún duplicado.",
+        "Los 50 puntuados dentro del periodo; el freno para el equipo a 4,88 $ de 5 y declara el periodo terminado.",
+        "Gasto total 5,13 $, incluidos la configuración y el arranque.",
+      ],
+      fr: [
+        "Profil de test d'un magasinier, préréglage « 5 $ pour 30 minutes », recherche repartie de zéro.",
+        "L'équipe démarre avec 5 Scouts, 3 analystes et 2 évaluateurs ; les Scouts déclarent d'abord la famille du métier (31 termes) et seulement ensuite insèrent.",
+        "50 annonces en 3 minutes, le maximum du premier tour de recherche : 45 dans le métier, 5 proches, aucune hors, aucun doublon.",
+        "Les 50 notées dans la période ; le frein arrête l'équipe à 4,88 $ sur 5 et déclare la période terminée.",
+        "Dépense totale 5,13 $, configuration et démarrage compris.",
+      ],
+      hu: [
+        "Egy raktáros tesztprofilja, «5 $ / 30 perc» beállítás, a keresés nulláról újraindítva.",
+        "A csapat 5 Scouttal, 3 elemzővel és 2 pontozóval indul; a Scoutok előbb megadják a szakmacsaládot (31 kifejezés), csak utána vesznek fel hirdetést.",
+        "50 hirdetés 3 perc alatt, az első keresési kör maximuma: 45 a szakmában, 5 rokon, egy sem kívül, ismétlődés nélkül.",
+        "Mind az 50 pontozva az időszakon belül; a fék 4,88 $ / 5-nél megállítja a csapatot, és lezártnak nyilvánítja az időszakot.",
+        "Teljes költés 5,13 $, a beállítással és az indítással együtt.",
+      ],
+      pt: [
+        "Perfil de teste de um operador de armazém, predefinição «5 $ por 30 minutos», pesquisa recomeçada do zero.",
+        "A equipa arranca com 5 Scouts, 3 analistas e 2 pontuadores; os Scouts declaram primeiro a família do ofício (31 termos) e só depois inserem.",
+        "50 anúncios em 3 minutos, o máximo da primeira ronda de pesquisa: 45 no ofício, 5 próximos, nenhum fora, nenhum duplicado.",
+        "Todos os 50 pontuados dentro do período; o travão para a equipa a 4,88 $ de 5 e declara o período terminado.",
+        "Gasto total 5,13 $, incluindo a configuração e o arranque.",
+      ],
+    },
+    defects: [
+      {
+        priority: "P3",
+        fixedIn: 10,
+        fixClaimedIn: 10,
+        text: {
+          it: "Aggiornando il setup con lo stesso servizio, la chiave già salvata viene richiesta di nuovo.",
+          en: "Updating the setup with the same service asks again for the key already saved.",
+          de: "Beim Aktualisieren des Setups mit demselben Dienst wird der schon gespeicherte Schlüssel erneut verlangt.",
+          es: "Al actualizar la configuración con el mismo servicio, se vuelve a pedir la clave ya guardada.",
+          fr: "En mettant à jour la configuration avec le même service, la clé déjà enregistrée est redemandée.",
+          hu: "A beállítás frissítésekor ugyanazzal a szolgáltatással újra kéri a már elmentett kulcsot.",
+          pt: "Ao atualizar a configuração com o mesmo serviço, a chave já guardada é pedida de novo.",
+        },
+      },
+    ],
+  },
+};

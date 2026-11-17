@@ -1,6 +1,6 @@
 """The release targets of the 0.4.0 benchmark page: the data hold together and every word is there in the seven languages.
 
-The page (web/app/case-studies/benchmark-0-4-0/page.tsx) reads web/data/benchmark/benchmark-0-4-0.json: the targets, the
+The page (web/app/case-studies/benchmark-0-4-0/page.tsx, its words in benchmarkShared.tsx) reads web/data/benchmark/benchmark-0-4-0.json: the targets, the
 rounds of each build, the rounds themselves. The JSON is updated at every build, so a target that points at a round that is
 not there, a status the page cannot draw or a word missing in one language would only show on the live page.
 """
@@ -14,7 +14,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = json.loads((ROOT / "web" / "data" / "benchmark" / "benchmark-0-4-0.json").read_text(encoding="utf-8"))
-PAGE = (ROOT / "web" / "app" / "case-studies" / "benchmark-0-4-0" / "page.tsx").read_text(encoding="utf-8")
+HERE = ROOT / "web" / "app" / "case-studies" / "benchmark-0-4-0"
+# the words of the seven languages and the sections of the targets live in benchmarkShared.tsx; every file of the page is scanned
+PAGE = (HERE / "benchmarkShared.tsx").read_text(encoding="utf-8")
+ALL_FILES = "".join(p.read_text(encoding="utf-8") for p in sorted(HERE.rglob("*.ts*")))
 LANGUAGES = ("en", "it", "de", "es", "fr", "pt", "hu")
 STATUSES = {"pass", "fail", "pending", "blocked"}
 
@@ -94,7 +97,7 @@ PRIVATE_FORMS = {
 
 
 def test_the_page_holds_no_name_of_a_test_person_and_no_machine():
-    text = json.dumps(DATA, ensure_ascii=False) + PAGE
+    text = json.dumps(DATA, ensure_ascii=False) + ALL_FILES
     for what, form in PRIVATE_FORMS.items():
         assert re.search(form, text, re.I) is None, what
     # a test person is a job, never a name: the profile of a round is a key the page translates

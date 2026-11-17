@@ -1,29 +1,26 @@
-# Logos of the 0.4.0 benchmark page
+# Marks of the 0.4.0 benchmark page
 
-The files are the unmodified SVGs of the libraries below (only renamed). The marks of the four services belong to their owners and are shown only to name the service a round used; no endorsement is implied.
+The marks name the service a test used and the system it ran on; no endorsement is implied. They are trademarks of their
+owners.
 
-Windows and macOS are drawn in the page itself (`SYSTEM_MARK` in `page.tsx`): small monochrome shapes, four panes and an apple, in the colour of the text, with the name of the system written next to them. They are marks of Microsoft and Apple, shown only to name the system a round ran on; no endorsement is implied. Linux is shown by Tux, the penguin of Larry Ewing, whose author allows its use and modification as long as he and The GIMP are credited: the page credits them at its foot.
+## Services, drawn inline (`app/case-studies/benchmark-0-4-0/providerMarks.tsx`)
 
-| File | What it shows | Source | License of the file |
-| --- | --- | --- | --- |
-| `openai.svg` | OpenAI (service) | simple-icons 14.15.0 (`icons/openai.svg`) | CC0 1.0 |
-| `claude.svg` | Claude, Anthropic (service) | simple-icons 14.15.0 (`icons/claude.svg`) | CC0 1.0 |
-| `zai.svg` | Z.ai, GLM (service) | @lobehub/icons-static-svg 1.60.0 (`icons/zai.svg`) | MIT, Copyright (c) 2023 LobeHub |
-| `kimi.svg` | Kimi, Moonshot AI (service) | @lobehub/icons-static-svg 1.60.0 (`icons/kimi.svg`) | MIT, Copyright (c) 2023 LobeHub |
-| `laptop.svg` | generic icon (no longer shown) | lucide-static 0.468.0 (`icons/laptop.svg`) | ISC, Copyright (c) Lucide Contributors 2022 and Cole Bemis 2013-2022 (Feather, MIT) |
-| `app-window.svg` | generic icon (no longer shown) | lucide-static 0.468.0 (`icons/app-window.svg`) | ISC, same |
-| `terminal.svg` | generic icon (no longer shown) | lucide-static 0.468.0 (`icons/terminal.svg`) | ISC, same |
-| `tux.png` | Tux, Linux | rendered from Wikimedia Commons `File:Tux.svg` as a 54×64 PNG on a transparent background | free use and modification crediting Larry Ewing and The GIMP |
-
-Official brand kits were not used: no logo here comes from a company press page. Checked 16/11/2026.
-
-## Marks drawn in the page
-
-The services in the targets table are drawn inline by `app/case-studies/benchmark-0-4-0/providerMarks.tsx`, as tall as the text:
+As tall as the text, with no tile: Claude in its own colour, the others in the colour of the text, so they read on the
+light and the dark theme. The paths keep the numbers of their source; a space separates each number that starts with a dot,
+which draws the same shape.
 
 | Mark | Source of the path | Licence |
 | --- | --- | --- |
-| Claude, Anthropic | Wikimedia Commons, `File:Claude AI symbol.svg` (from anthropic.com), in its colour `#D97757` | trademark of Anthropic, used only to name the service |
-| OpenAI (the 2025 «blossom») | Wikimedia Commons, `File:OpenAI logo 2025 (symbol).svg` (author OpenAI), in the colour of the text | trademark of OpenAI, used only to name the service |
-| Z.ai (GLM) | the path of `zai.svg` above (LobeHub), in the colour of the text | MIT, Copyright (c) 2023 LobeHub |
-| Kimi (Moonshot) | the path of `kimi.svg` above (LobeHub), in the colour of the text | MIT, Copyright (c) 2023 LobeHub |
+| Claude, Anthropic | Wikimedia Commons, `File:Claude AI symbol.svg` (from anthropic.com), colour `#D97757` | trademark of Anthropic |
+| OpenAI (the 2025 «blossom»), also for Codex | Wikimedia Commons, `File:OpenAI logo 2025 (symbol).svg` (author OpenAI) | trademark of OpenAI |
+| Z.ai (GLM) | `zai.svg` in this folder, from @lobehub/icons-static-svg 1.60.0 (`icons/zai.svg`) | MIT, Copyright (c) 2023 LobeHub |
+| Kimi (Moonshot) | `kimi.svg` in this folder, from @lobehub/icons-static-svg 1.60.0 (`icons/kimi.svg`) | MIT, Copyright (c) 2023 LobeHub |
+
+## Systems
+
+| Mark | Source | Licence |
+| --- | --- | --- |
+| Windows (four panes), macOS (an apple) | small monochrome shapes in a 16×16 box, drawn inline (`SYSTEM_MARK` in `benchmarkShared.tsx`), in the colour of the text | trademarks of Microsoft and Apple |
+| Linux, Tux (`tux.png`) | rendered from Wikimedia Commons `File:Tux.svg` as a 54×64 PNG on a transparent background | free use and modification crediting Larry Ewing and The GIMP: the page credits them at its foot |
+
+Official brand kits were not used. Checked 17/11/2026.

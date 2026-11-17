@@ -485,7 +485,7 @@ function HBars({
 
 // ---- the sections ----
 
-function RoundTimelines({ rounds, t, money }: { rounds: ChartRound[]; t: ChartCopy; money: (v: number) => string }) {
+function RoundTimelines({ rounds, t, money, fixed = false }: { rounds: ChartRound[]; t: ChartCopy; money: (v: number) => string; fixed?: boolean }) {
   const usable = rounds.filter((r) => r.minutes != null || r.timeline.length > 0);
   // Opens on the latest round that has a real minute-by-minute series.
   const withSeries = usable.filter((x) => x.group === "round" && x.timeline.length >= 2);
@@ -529,25 +529,26 @@ function RoundTimelines({ rounds, t, money }: { rounds: ChartRound[]; t: ChartCo
   ].filter((g) => g.items.length > 0);
   return (
     <div className="space-y-4">
-      {groups.map((g) => (
+      {/* on the page of one test there is nothing to choose */}
+      {!fixed && groups.map((g) => (
         <div key={g.id} className="space-y-1">
           <div className="text-[10px] uppercase tracking-wide text-[var(--color-dim)]">{g.label}</div>
           <Chips
             label={g.label}
             value={sel}
             onChange={setSel}
-            options={g.items.map((x) => ({ value: x.id, label: `${x.group === "round" ? `${x.id} · ` : ""}${x.label}${x.timeline.length >= 2 ? " ◆" : ""}` }))}
+            options={g.items.map((x) => ({ value: x.id, label: `${x.label}${x.timeline.length >= 2 ? " ◆" : ""}` }))}
           />
         </div>
       ))}
-      <p className="text-[10px] text-[var(--color-dim)]">{t.seriesMark}</p>
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] tabular-nums">
+      {!fixed && <p className="text-[10px] text-[var(--color-dim)]">{t.seriesMark}</p>}
+      {!fixed && <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] tabular-nums">
         <span className="font-semibold">{r.label}</span>
         <span>{`${t.minutes}: ${r.minutes ?? "—"}`}</span>
         <span>{`${t.spend}: ${r.cost == null ? "—" : money(r.cost)}`}</span>
         <span>{`${t.found}/${t.scored}/${t.relevant}: ${r.found ?? "—"}/${r.scored ?? "—"}/${r.relevant ?? "—"}`}</span>
         <span>{`${t.bestScore}: ${r.bestScore ?? "—"}`}</span>
-      </div>
+      </div>}
       {!real && <p className="text-[11px] text-[var(--color-yellow)]">{t.onlyTotals}</p>}
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title={t.spendOverTime}>
@@ -636,7 +637,7 @@ function Comparison({ rounds, t, money, labels }: { rounds: ChartRound[]; t: Cha
         const v = metricOf(r.cost!, r.minutes!, r.found!, r.relevant ?? 0);
         return {
           key: r.id,
-          label: r.group === "round" ? `${r.id} · ${r.label}` : `${t.bench} · ${r.label}`,
+          label: r.group === "round" ? r.label : `${t.bench} · ${r.label}`,
           note: `${labels.services[r.service] ?? r.service} · ${money(r.cost!)} · ${r.minutes} min · ${r.found}/${r.relevant ?? "—"}`,
           segments: [{ key: "v", label: t.metrics[metric], value: v ?? 0, color: SERVICE_COLOR[r.service] ?? C.found }],
         };
@@ -771,7 +772,7 @@ function Agents({ rounds, t, money }: { rounds: ChartRound[]; t: ChartCopy; mone
   const keys = Array.from(new Set(withAgents.flatMap((r) => Object.keys(r.agents!))));
   const rows: BarRow[] = withAgents.map((r) => ({
     key: r.id,
-    label: r.group === "round" ? `${r.id} · ${r.label}` : `${t.bench} · ${r.label}`,
+    label: r.group === "round" ? r.label : `${t.bench} · ${r.label}`,
     segments: keys.map((k, i) => ({ key: k, label: t.agents[k] ?? k, value: r.agents![k] ?? 0, color: colorOf(k, i, AGENT_COLOR) })),
   }));
   return (
@@ -949,5 +950,23 @@ export default function BenchmarkCharts(props: ChartsProps) {
         <Beta beta={props.beta} t={t} />
       </Panel>
     </section>
+  );
+}
+
+/** The charts of one test, for its own page: spend, positions and scores over time with the ceiling and the events of the
+ *  brake, and the spend of each role where the sampler recorded it. */
+export function RoundDetailCharts({ locale, round }: { locale: Locale; round: ChartRound }) {
+  const t = CHART_COPY[locale] ?? CHART_COPY.en;
+  const nf = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const money = (v: number) => `${nf.format(v)} $`;
+  return (
+    <div className="space-y-4">
+      <RoundTimelines rounds={[round]} t={t} money={money} fixed />
+      {round.agents && Object.keys(round.agents).length > 0 && (
+        <Panel title={t.s5} lead={t.s5Lead}>
+          <Agents rounds={[round]} t={t} money={money} />
+        </Panel>
+      )}
+    </div>
   );
 }
