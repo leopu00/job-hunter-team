@@ -295,3 +295,18 @@ def test_the_probe_reads_the_host_type_the_preflight_wrote(tmp_path, monkeypatch
         else:
             monkeypatch.setenv("JHT_HOST_TYPE", value)
         assert hc.read_probe(proc, tmp_path / "no-cgroup")["host_type"] == expected, value
+
+
+# A server on codex that the kernel OOM killer took down: 7.7 GB, no swap, 18 codex processes held ~6.5 GB (~360 MB each).
+def test_a_server_on_codex_is_sized_with_the_measured_360_mb_and_never_filled_to_the_last_byte():
+    probe = {**machine(7.7, 16), "host_type": "vps", "swap_total_gib": 0}
+    got = hc.capacity(probe, "codex")
+    assert got["ram_per_agent_gib"] == 0.36
+    sessions = got["cap"] + 6                      # the workers and the six fixed sessions (the Mantenitore counted)
+    assert sessions * 0.36 <= 7.7 * 0.8, "the sessions of the team use at most 80 % of the RAM"
+    assert got["cap"] < 18 - 5, "the 0.22 GiB figure allowed 25 workers here"
+
+
+def test_a_local_computer_keeps_the_figure_measured_on_it():
+    got = hc.capacity({**machine(16, 16), "host_type": "local"}, "codex")
+    assert got["ram_per_agent_gib"] == 0.22
