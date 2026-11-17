@@ -290,3 +290,55 @@ def test_the_portal_with_one_request_cap_is_never_asked_of_a_scout_whose_own_lan
             break
         done.append({"kind": "pass", "ts": 2000.0 + len(done), "agent": "scout-2", "source": step["source"], "country": step["country"],
                      "returned": 0, "query_kind": "broad", "status": "closed"})
+
+
+# ── past the burst two Scouts do not search the same portal (banco build9: two Scouts on talent.com, 28 doubles) ───────────────────
+def test_past_the_burst_the_count_is_who_is_alive_not_the_roster_of_the_first_run(home):
+    coord = _load("scout_coord_steady_test", SKILLS / "scout_coord.py")
+    (home / "state").mkdir(exist_ok=True)
+    (home / "state" / "first-run.json").write_text(json.dumps({"phase": "steady", "roster": {"scout": 5}}), encoding="utf-8")
+    assert coord.planned_scouts({"scout-1", "scout-4"}) == 2
+
+
+def test_next_gives_a_lane_to_each_of_two_live_scouts_that_have_none(home, monkeypatch):
+    coord = _load("scout_coord_assign_test", SKILLS / "scout_coord.py")
+    monkeypatch.setitem(sys.modules, "scout_coord", coord)
+    monkeypatch.setattr(coord, "_live_scouts", lambda: {"scout-1", "scout-4"})
+    (home / "state").mkdir(exist_ok=True)
+    (home / "state" / "first-run.json").write_text(json.dumps({"phase": "steady", "roster": {"scout": 5}}), encoding="utf-8")
+    assert cov.lane_of("scout-1") is None
+    one = cov.lane_or_assign("scout-1")
+    four = cov.lane_or_assign("scout-4")
+    assert one and four and not (one & four), "two Scouts, two lanes with no portal in both"
+    assert cov.lane_of("scout-1") == one, "the lane is kept"
+
+
+def test_a_single_live_scout_has_no_lane_to_share_and_a_burst_keeps_its_own_rule(home, monkeypatch):
+    coord = _load("scout_coord_single_test", SKILLS / "scout_coord.py")
+    monkeypatch.setitem(sys.modules, "scout_coord", coord)
+    monkeypatch.setattr(coord, "_live_scouts", lambda: {"scout-1"})
+    assert cov.lane_or_assign("scout-1") is None
+    monkeypatch.setattr(coord, "_live_scouts", lambda: {"scout-1", "scout-2"})
+    assert cov.lane_or_assign("capitano") is None, "a name that is not a Scout is no one's lane"
+
+
+# ── a Scout whose lane is done does not join the colleagues already on a portal (banco build9: three Scouts on randstad.it, 35 doubles) ──
+def test_a_scout_that_leaves_its_lane_goes_where_fewest_colleagues_are(home):
+    plan = cov.load_plan()
+    slugs = [e["slug"] for e in plan["entries"] if e["access"] == "search"]
+    lane = frozenset({"a-portal-that-is-not-in-the-plan"})         # a lane with nothing of the plan in it: every portal is a spill
+    now = 5000.0
+    closed = []
+    alone = cov.next_step(plan, closed, now=now, lane=lane, agent="scout-1")
+    first_other = alone["source"]
+    assert first_other in slugs
+    # two colleagues are already on that portal: the next Scout is sent to another one
+    crowded = closed + [{"kind": "pass", "ts": now - 60, "agent": a, "source": first_other, "country": alone["country"], "returned": 3,
+                         "query_kind": "broad"} for a in ("scout-2", "scout-5")]
+    moved = cov.next_step(plan, crowded, now=now, lane=lane, agent="scout-1")
+    assert moved["source"] != first_other
+    # a colleague that worked there a while ago does not count, and nor does the Scout itself
+    old = closed + [{"kind": "pass", "ts": now - 5000, "agent": "scout-2", "source": first_other, "country": alone["country"], "returned": 3,
+                     "query_kind": "broad"}, {"kind": "pass", "ts": now - 20, "agent": "scout-1", "source": first_other,
+                                              "country": alone["country"], "returned": 3, "query_kind": "broad"}]
+    assert cov.next_step(plan, old, now=now, lane=lane, agent="scout-1")["source"] == first_other

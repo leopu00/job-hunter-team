@@ -12,7 +12,8 @@ one (the Capitano scales a role up or down from there), and never against a brak
 
   · not in `steady` (the burst has its own roster, and `awaiting_profile` has nothing to work);
   · the standby, a halt (`.team-halted`, the daily and weekly halts, which is where the spending brake of a spent budget
-    stops the team), the hours outside the working window, an agent the person paused or the team contained: nothing;
+    stops the team), the hours outside the working window, an agent the person paused or the team contained: nothing; a
+    brake that cannot be read (standby, hours, capacity) counts as a brake;
   · a machine at its worker capacity (`plan_registry._host_agent_cap`): nothing;
   · COOLDOWN_S between two starts of the same role, and DAILY_CAP starts a day in all: a worker that dies at once is
     not started in a loop (the watchdog's own backoff for a failing spawn is applied by the caller as well).
@@ -107,8 +108,9 @@ def live_sessions() -> list[str] | None:
 
 
 def brake(now: float, live_workers: int) -> str | None:
-    """Why the system must NOT start anyone right now, or None. A reading it cannot take is a brake (standby), or no brake
-    (working hours, capacity: the same way the step-cap watchdog reads them)."""
+    """Why the system must NOT start anyone right now, or None. A brake that cannot be READ (the standby, the working hours, the
+    capacity of the machine: the module breaks, or raises) is a brake: nothing is started. A machine whose capacity is not
+    MEASURABLE (the module answers «none») has no cap to exceed, as for the step-cap watchdog."""
     home = _home()
     standby = _load("standby")
     try:
@@ -128,16 +130,20 @@ def brake(now: float, live_workers: int) -> str | None:
         except OSError:
             return name
     hours = _load("working_hours")
+    if hours is None:
+        return "hours-unreadable"
     try:
-        if hours is not None and not hours.is_within_working_hours(datetime.fromtimestamp(now, timezone.utc)):
+        if not hours.is_within_working_hours(datetime.fromtimestamp(now, timezone.utc)):
             return "off-hours"
     except Exception:  # noqa: BLE001
-        pass
+        return "hours-unreadable"
     registry = _load("plan_registry")
+    if registry is None:
+        return "capacity-unreadable"
     try:
-        cap = registry._host_agent_cap() if registry is not None else None  # noqa: SLF001 — the one source of the RAM cap
+        cap = registry._host_agent_cap()  # noqa: SLF001 — the one source of the RAM cap
     except Exception:  # noqa: BLE001
-        cap = None
+        return "capacity-unreadable"
     if cap is not None and live_workers >= cap:
         return "capacity"
     return None

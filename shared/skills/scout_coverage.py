@@ -345,7 +345,27 @@ def status(plan: dict, rows: list, need: dict | None = None, now: float | None =
     return out
 
 
-def next_step(plan: dict, rows: list, need: dict | None = None, profile=None, now: float | None = None, lane=None) -> dict:
+SPILL_WINDOW_S = 600.0
+
+
+def _spill_order(rest: list, rows: list, agent, now: float) -> list:
+    """The portals outside a Scout's lane, the ones fewest OTHER Scouts are working on in the last minutes first, the plan's order
+    among equals. A Scout whose lane is done (or paused: LinkedIn at its request cap) must not join the colleagues already on the
+    same portal: banco build9, a warehouse worker, three Scouts on randstad.it and 35 doubles of 50 inserted."""
+    me = str(agent or "").strip().lower()
+
+    def busy(entry):
+        keys = entry_keys(entry)
+        others = {str(r.get("agent") or "").strip().lower() for r in rows
+                  if now - float(r.get("ts") or 0) <= SPILL_WINDOW_S and _lang.portal_slug(str(r.get("source") or "")) in keys}
+        others.discard(me)
+        others.discard("")
+        return len(others)
+
+    return sorted(rest, key=busy)          # stable: the plan's order among equals
+
+
+def next_step(plan: dict, rows: list, need: dict | None = None, profile=None, now: float | None = None, lane=None, agent=None) -> dict:
     """The next thing to search. `lane` (a set of portal keys: the Scout's own sources of the burst, see `lanes`) puts the portals
     of that lane first, in the plan's order; the rest of the plan follows, so a Scout whose lane is done goes on to what is left."""
     need = need or needed()
@@ -356,7 +376,7 @@ def next_step(plan: dict, rows: list, need: dict | None = None, profile=None, no
     if lane is not None and not lane:
         return free_search_step(plan)          # a lane with no portal in it: nothing of the plan is this Scout's
     if lane:
-        entries = [e for e in entries if lane & entry_keys(e)] + [e for e in entries if not lane & entry_keys(e)]
+        entries = [e for e in entries if lane & entry_keys(e)] + _spill_order([e for e in entries if not lane & entry_keys(e)], rows, agent, now)
     for entry in entries:
         if lane and entry["slug"] in SHARED_CAP_SOURCES and not lane & entry_keys(entry):
             continue                           # the portal with one request cap for the whole team is its lane's alone, even when mine is done
@@ -499,6 +519,24 @@ def lane_of(agent):
         return None
 
 
+def lane_or_assign(agent):
+    """`lane_of`, and for a Scout with none, past the burst: when two Scouts or more are alive it takes the first lane nobody holds
+    (scout_coord.assign_lane, the burst's own rule), so two Scouts started by the watchdog do not search the same portal (banco
+    build9: two Scouts on one portal, 28 doubles). A single Scout has no lane to share. None when it cannot be done."""
+    lane = lane_of(agent)
+    if lane is not None or not agent or not re.fullmatch(r"scout-\d+", agent.strip().lower()):
+        return lane
+    try:
+        import scout_coord
+        live = scout_coord._live_scouts()
+        if not live or len(live) < 2 or agent.strip().lower() not in live:
+            return None
+        scout_coord.assign_lane(agent.strip().lower())
+        return lane_of(agent)
+    except Exception:  # noqa: BLE001 — no lane is the plan's own order, as before
+        return None
+
+
 def profile_news(agent: str, profile_path=None) -> dict:
     """What the Scout `agent` has to know about the profile it built its circles on: `changed`, the `groups` that changed
     (roles, places, languages, mode) and, when it did, what to do. Silence (no version file, a profile that cannot be read,
@@ -626,7 +664,7 @@ def main(argv=None) -> int:
         else:
             print(render(plan, report))
         return 0
-    step = next_step(plan, rows, profile=args.profile, now=now, lane=lane_of(args.agent))
+    step = next_step(plan, rows, profile=args.profile, now=now, lane=lane_or_assign(args.agent), agent=args.agent)
     avoid = avoid_list(plan, rows)
     if avoid:
         step["avoid"] = avoid          # do not open these: they fail with certainty (the table, or this run's own pass log)

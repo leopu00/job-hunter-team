@@ -230,6 +230,29 @@ def check_duplicate(conn, url, company, title, location=None):
     return None, None
 
 
+# Non e' un'offerta di lavoro (build11, banco cuoco 17/11): un franchising, un'attivita' in vendita, un lead. Lo Scout lo ha inserito
+# scrivendo lui stesso nelle note «non un contratto dipendente» / «lead marketplace, non posizione di lavoro»: l'INSERT lo rifiuta
+# quando il titolo e' di quel tipo o le note lo dicono. Solo frasi precise: «Responsabile franchising» e' un lavoro.
+NOT_A_JOB_EXIT = 6
+_NOT_A_JOB_TITLE = re.compile(
+    r"opportunit[aà]\s+(?:di\s+)?(?:franchising|business|investimento|affiliazione)|franchis(?:e|ing)\s+opportunity|business\s+opportunity|"
+    r"\b(?:cedesi|vendesi)\b|apri\s+(?:il\s+)?tuo\s+(?:negozio|locale|punto vendita)|diventa\s+(?:un\s+)?(?:imprenditore|affiliato|franchisee)",
+    re.I)
+_NOT_A_JOB_NOTES = re.compile(
+    r"non\s+(?:[eè]\s+)?(?:un[ao']?\s+)?(?:posizione|offerta|annuncio)\s+di\s+lavoro|non\s+[eè]\s+un\s+lavoro|"
+    r"not\s+a\s+job(?:\s+(?:offer|position|ad))?|no\s+es\s+(?:un\s+)?(?:trabajo|empleo|oferta\s+de\s+trabajo)|"
+    r"n'est\s+pas\s+(?:un\s+)?(?:emploi|poste|offre\s+d'emploi)|keine\s+stelle|kein\s+stellenangebot|lead\s+marketplace", re.I)
+
+
+def not_a_job(title, notes):
+    """The phrase that says an ad is not a job, from its title or from the Scout's own notes, or None."""
+    for text, pattern in ((title, _NOT_A_JOB_TITLE), (notes, _NOT_A_JOB_NOTES)):
+        found = pattern.search(str(text or ""))
+        if found:
+            return found.group(0)
+    return None
+
+
 # Livello 4 — lo STESSO annuncio ripubblicato da un'altra fonte. Un aggregatore (talent.com) rilancia l'annuncio di un'agenzia con
 # un'altra azienda («Randstad Healthcare» per «Randstad Professional Italia»), un altro titolo («infermiere» per «Infermiere per
 # centro di riabilitazione Torino») e un altro URL: azienda+titolo non lo riconosce, il TESTO si'. Misurato 17/11 (banco build9,
@@ -355,6 +378,16 @@ def insert_position(args):
                 # told after the INSERT, in the line it reads, and `scout_coverage.py next` asks for the declaration first.
                 role_nudge = (f"ROLE_FAMILY_NOT_DECLARED: the profile has a role ({'; '.join(role['roles'])}) and the family of the trade "
                               f"is not declared, so nothing off-trade is stopped. Declare it ONCE: {scout_role.declare_hint(role['roles'])}")
+        # Non e' un lavoro: franchising, attivita' in vendita, lead (lo dice il titolo o le note dello Scout stesso).
+        if first_run.is_scout(actor) or first_run.is_scout(args.found_by):
+            phrase = not_a_job(args.title, getattr(args, 'notes', None))
+            if phrase:
+                _rollback_quietly(conn)
+                conn.close()
+                print(f"NOT_A_JOB: «{phrase}»: this is not a job offer (a franchise, a business for sale, a lead, a paid course). INSERT "
+                      "refused: do not insert it, log it with reason `other` and take the next candidate. If it IS a job and the words "
+                      "are only in your notes, take them out of --notes and insert it again.")
+                sys.exit(NOT_A_JOB_EXIT)
         # Check duplicati PRIMA dell'inserimento (bug #25 SC-05: 4 livelli)
         existing, match_type = check_duplicate(
             conn, args.url, args.company, args.title, getattr(args, 'location', None),
@@ -372,16 +405,24 @@ def insert_position(args):
         # Auto-resolve company_id
         company_id = resolve_company_id(conn, args.company)
 
+        # Il paese della posizione, dal solo testo dello Scout: quello che il luogo nomina, un luogo scritto all'italiana
+        # («Bra (CN), Piemonte») o il paese del portale (talent-com-it, randstad.it). Prima restava vuoto fino all'Analista
+        # (banco build9: 26 posizioni nuove su 28 senza paese). Senza prove resta vuoto, mai indovinato dalla citta' (i nomi
+        # di citta' non implicano un paese, city_names.py).
+        import scout_area
+        country_code = scout_area.derive_country(getattr(args, 'location', None), args.source, args.url)
+        country_name = scout_area.country_name(country_code) if country_code else None
+
         cur = conn.execute("""
-            INSERT INTO positions (title, company, company_id, location,
+            INSERT INTO positions (title, company, company_id, location, loc_country, loc_country_code,
                                    remote_type,
                                    salary_declared_min, salary_declared_max, salary_declared_currency,
                                    salary_estimated_min, salary_estimated_max, salary_estimated_currency,
                                    salary_estimated_source,
                                    url, source, jd_text, requirements,
                                    found_by, deadline, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (args.title, args.company, company_id, args.location,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (args.title, args.company, company_id, args.location, country_name, country_code.upper() if country_code else None,
               args.remote_type,
               args.salary_declared_min, args.salary_declared_max, args.salary_declared_currency or 'EUR',
               args.salary_estimated_min, args.salary_estimated_max, args.salary_estimated_currency or 'EUR',

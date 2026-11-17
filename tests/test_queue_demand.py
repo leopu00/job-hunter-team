@@ -115,7 +115,9 @@ def test_a_tmux_that_cannot_be_read_starts_nobody(world, monkeypatch):
 
 def test_the_brakes_read_from_the_home(tmp_path, monkeypatch):
     monkeypatch.setenv("JHT_HOME", str(tmp_path))
-    monkeypatch.setattr(qd, "_MODULES", {"standby": None, "working_hours": None, "plan_registry": None})
+    fine_registry = type("R", (), {"_host_agent_cap": staticmethod(lambda: None)})
+    fine_hours = type("H", (), {"is_within_working_hours": staticmethod(lambda now=None: True)})
+    monkeypatch.setattr(qd, "_MODULES", {"standby": None, "working_hours": fine_hours, "plan_registry": fine_registry})
     assert qd.brake(T0, 2) is None
     (tmp_path / "logs").mkdir()
     (tmp_path / "logs" / "daily-halt.flag").write_text("{}")
@@ -133,6 +135,33 @@ def test_the_capacity_of_the_machine_and_the_hours_are_brakes(tmp_path, monkeypa
     assert qd.brake(T0, 2) is None and qd.brake(T0, 3) == "capacity"
     hours.is_within_working_hours = staticmethod(lambda now=None: False)
     assert qd.brake(T0, 0) == "off-hours"
+
+
+def test_a_brake_that_cannot_be_read_is_a_brake(tmp_path, monkeypatch):
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    fine_registry = type("R", (), {"_host_agent_cap": staticmethod(lambda: 3)})
+    fine_hours = type("H", (), {"is_within_working_hours": staticmethod(lambda now=None: True)})
+
+    def boom(*_a, **_k):
+        raise RuntimeError("unreadable")
+
+    broken_hours = type("H", (), {"is_within_working_hours": staticmethod(boom)})
+    broken_registry = type("R", (), {"_host_agent_cap": staticmethod(boom)})
+    unmeasurable = type("R", (), {"_host_agent_cap": staticmethod(lambda: None)})
+    base = {"standby": None}
+    monkeypatch.setattr(qd, "_MODULES", {**base, "working_hours": fine_hours, "plan_registry": fine_registry})
+    assert qd.brake(T0, 0) is None
+    monkeypatch.setattr(qd, "_MODULES", {**base, "working_hours": None, "plan_registry": fine_registry})
+    assert qd.brake(T0, 0) == "hours-unreadable"
+    monkeypatch.setattr(qd, "_MODULES", {**base, "working_hours": broken_hours, "plan_registry": fine_registry})
+    assert qd.brake(T0, 0) == "hours-unreadable"
+    monkeypatch.setattr(qd, "_MODULES", {**base, "working_hours": fine_hours, "plan_registry": None})
+    assert qd.brake(T0, 0) == "capacity-unreadable"
+    monkeypatch.setattr(qd, "_MODULES", {**base, "working_hours": fine_hours, "plan_registry": broken_registry})
+    assert qd.brake(T0, 0) == "capacity-unreadable"
+    # a machine whose capacity is not measurable has no cap to exceed
+    monkeypatch.setattr(qd, "_MODULES", {**base, "working_hours": fine_hours, "plan_registry": unmeasurable})
+    assert qd.brake(T0, 50) is None
 
 
 def test_the_command_prints_the_worker_and_status_changes_nothing(world, capfd, tmp_path):

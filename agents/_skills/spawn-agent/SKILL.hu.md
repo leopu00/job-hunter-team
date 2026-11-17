@@ -73,7 +73,7 @@ jht-tmux-send SCOUT-1 "[@capitano -> @scout-1] [MSG] <kick-off tartalom>"
 
 | Szerepkor   | Kick-off tartalom                                                                                            |
 |-------------|--------------------------------------------------------------------------------------------------------------|
-| `scout`     | "Inditsd el a fo ciklust. Olvasd el a promptodat, a jelolt profilt (`$JHT_HOME/profile/candidate_profile.yml`), es kezdj a KOR 1-nel (elsodelges preferencia). Ertesitsd az Analistakat 3-5 poziciobol allo kotegek utan." |
+| `scout`     | "Inditsd el a fo ciklust. Olvasd el a promptodat, a jelolt profilt (`$JHT_HOME/profile/candidate_profile.yml`), es kezdj a KOR 1-nel (elsodelges preferencia). Ertesitsd az Analistakat minden insert utan (soha ne varj csomagra)." |
 | `analista`  | "Inditsd el a fo ciklust. Sor: `db_query.py next-for-analista`. Minden pozicional toltsd ki az 5 kotelezo mezot es lepted elo `checked` vagy `excluded` allapotra." |
 | `scorer`    | "Inditsd el a fo ciklust. Sor: `db_query.py next-for-scorer`. Elobb PRE-CHECK, aztan 0-100 pontszam. Kuszobok: <40 kizarva, 40-49 parkolas, ≥50 Scrittori ertesitese." |
 | `scrittore` | "Inditsd el a fo ciklust. Sor: `db_query.py next-for-scrittore`. Maximalis erofeszites, 3 kotelezo kor a Criticoval. A PDF a `$JHT_USER_DIR/cv/` ala kerul." |
