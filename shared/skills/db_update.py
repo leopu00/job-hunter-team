@@ -437,6 +437,19 @@ def update_position(args):
         updates.append("salary_estimated_source = ?")
         params.append(args.salary_estimated_source)
         changed.append(f"salary_estimated_source={args.salary_estimated_source}")
+    # The PRECISE estimate (the person asked for it: `salary_precise_requested`): the text is the result, and it closes the request in
+    # the same write. The queue `next-for-salary-precise` held a request open until `salary_precise` was filled, and nothing could fill it.
+    # `salary_precise_requested_at` stays: the desired-state pull lets the cloud win only with a newer instant (as for geocoding).
+    if args.salary_precise is not None:
+        if not args.salary_precise.strip():
+            print("⚠️  SALARY_PRECISE REJECTED: an empty text does not close the request.", file=sys.stderr)
+            conn.close()
+            sys.exit(1)
+        updates.append("salary_precise = ?")
+        params.append(args.salary_precise.strip())
+        updates.append("salary_precise_requested = 0")
+        changed.append("salary_precise=written")
+        changed.append("salary_precise_requested=acknowledged")
     if args.source:
         updates.append("source = ?")
         params.append(args.source)
@@ -1200,6 +1213,7 @@ def main():
     p.add_argument('--salary-estimated-max', type=int)
     p.add_argument('--salary-estimated-currency')
     p.add_argument('--salary-estimated-source', help='Estimate source: glassdoor, levels.fyi, manual')
+    p.add_argument('--salary-precise', help='The PRECISE salary estimate the person asked for (text): it closes salary_precise_requested')
     p.add_argument('--source')
     p.add_argument('--last-checked', help='Date/time of the last link check (YYYY-MM-DD HH:MM or "now")')
     p.add_argument('--expires-at', help='Application deadline ISO YYYY-MM-DD (from deadline_extract); "" => NULL')

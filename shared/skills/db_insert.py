@@ -301,6 +301,14 @@ def _rollback_quietly(conn):
         pass
 
 
+def _estimated_currency(args):
+    """The currency of the rough estimate: only with an amount. A currency with nothing to measure is not a fact (it read as «EUR»
+    on every position, estimated or not): without amounts it is NULL, the one way to say «absent»."""
+    if args.salary_estimated_min is None and args.salary_estimated_max is None:
+        return None
+    return args.salary_estimated_currency or 'EUR'
+
+
 def insert_position(args):
     # Prima di tutto il resto, compreso il dedup: titolo, azienda, location,
     # URL, fonte e scadenza arrivano dalla pagina scrapata, e da qui in avanti
@@ -425,7 +433,7 @@ def insert_position(args):
         """, (args.title, args.company, company_id, args.location, country_name, country_code.upper() if country_code else None,
               args.remote_type,
               args.salary_declared_min, args.salary_declared_max, args.salary_declared_currency or 'EUR',
-              args.salary_estimated_min, args.salary_estimated_max, args.salary_estimated_currency or 'EUR',
+              args.salary_estimated_min, args.salary_estimated_max, _estimated_currency(args),
               args.salary_estimated_source,
               args.url, args.source, args.jd_text,
               args.requirements, args.found_by, args.deadline, args.notes))
@@ -667,7 +675,8 @@ def build_parser():
     p.add_argument('--salary-declared-currency', default='EUR')
     p.add_argument('--salary-estimated-min', type=int, help='Estimated minimum salary')
     p.add_argument('--salary-estimated-max', type=int, help='Estimated maximum salary')
-    p.add_argument('--salary-estimated-currency', default='EUR')
+    p.add_argument('--salary-estimated-currency', default=None,
+                   help='Currency of the estimate (EUR when amounts are given without one; ignored without amounts)')
     p.add_argument('--salary-estimated-source', help='Estimate source: glassdoor, levels.fyi, manual')
     p.add_argument('--url', required=True)
     p.add_argument('--source')

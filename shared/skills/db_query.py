@@ -657,8 +657,11 @@ def geocode_check(position_id, as_json=False):
     conn.close()
 
     opts = geocode_options()
-    if pos['office_lat'] is not None and pos['office_geocoded']:
-        verdict, reason = False, "already geocoded (office_geocoded=1)"
+    if pos['office_geocoded']:
+        # office_geocoded=1 is «attempted» (db_update: true even when the search failed), like logo_fetched: a failed attempt
+        # does not come back to the queue by itself. A new request from the person (geocode_requested) is another queue.
+        verdict, reason = False, ("already geocoded (office_geocoded=1)" if pos['office_lat'] is not None
+                                  else "already attempted, no coordinates found (office_geocoded=1)")
     elif pos['status'] == 'excluded':
         verdict, reason = False, "excluded position"
     elif not is_enabled('geocode_missing'):
@@ -1029,12 +1032,12 @@ def recheck_due_scope(min_score, older_than_days):
 
 
 def geocode_missing_scope(min_score, non_remote_only):
-    """Geocoding autonomo: posizioni vive senza coordinate ufficio."""
+    """Geocoding autonomo: posizioni vive mai tentate (office_geocoded 0/NULL). Un tentativo fallito (1, senza coordinate) esce dalla coda,
+    come un logo tentato: la richiesta dell'utente (geocode_requested) e' un'altra coda."""
     sql = """
         FROM positions p
         WHERE p.status != 'excluded'
-          AND (p.office_lat IS NULL
-               OR p.office_geocoded IS NULL OR p.office_geocoded = 0)"""
+          AND (p.office_geocoded IS NULL OR p.office_geocoded = 0)"""
     params = []
     if min_score is not None:
         sql += """

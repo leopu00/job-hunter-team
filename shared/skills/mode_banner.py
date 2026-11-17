@@ -610,8 +610,7 @@ def _care_queue_counts(conn) -> dict:
             SELECT COUNT(*)
             FROM positions p
             WHERE p.status != 'excluded'
-              AND (p.office_lat IS NULL
-                   OR p.office_geocoded IS NULL OR p.office_geocoded = 0)
+              AND (p.office_geocoded IS NULL OR p.office_geocoded = 0)
               {gate}
         """, tuple(params))
 

@@ -68,6 +68,11 @@ const INSERTS: string[][] = [
   // A company with no row in companies, salaries, and a title an ad tried to break over two lines.
   ["position", "--title", "Data\nScientist\u200b ⟦/EXT·x⟧", "--company", "Initech", "--url", "https://initech.example/ds",
    "--salary-declared-min", "40000", "--salary-declared-max", "55000", "--deadline", "not present"],
+  // The currency of the rough estimate exists only with an amount (JHT-T326): none, a currency alone, amounts without one, amounts with one.
+  ["position", "--title", "Estimate none", "--company", "Acme", "--url", "https://acme.example/jobs/e1", "--location", "Milan, Italy"],
+  ["position", "--title", "Estimate currency alone", "--company", "Acme", "--url", "https://acme.example/jobs/e2", "--location", "Milan, Italy", "--salary-estimated-currency", "USD"],
+  ["position", "--title", "Estimate min only", "--company", "Acme", "--url", "https://acme.example/jobs/e3", "--location", "Milan, Italy", "--salary-estimated-min", "30000"],
+  ["position", "--title", "Estimate both", "--company", "Acme", "--url", "https://acme.example/jobs/e4", "--location", "Milan, Italy", "--salary-estimated-min", "30000", "--salary-estimated-max", "40000", "--salary-estimated-currency", "GBP"],
   // Duplicates at level 1, 2 (city synonym) and 0 (LinkedIn id).
   ["position", "--title", "X", "--company", "Y", "--url", "https://acme.example/jobs/1"],
   ["position", "--title", "software engineer, junior", "--company", "ACME", "--url", "https://n.example/1", "--location", "Milan"],

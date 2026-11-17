@@ -177,7 +177,7 @@ python3 /app/shared/skills/db_update.py position <ID> \
 Zum Überspringen nach 3 Versuchen:
 ```bash
 python3 /app/shared/skills/db_update.py position <ID> \
-  --office-geocoded false --office-verified false \
+  --office-geocoded true --office-verified false \
   --action geocode --outcome failed
 # (lat/lon/address bleiben NULL)
 ```

@@ -716,8 +716,9 @@ export function dbQuery(db: () => Database, argv: string[], options: DbQueryOpti
     const minScore = typeof opts.min_score === "boolean" ? (opts.min_score ? "True" : "False") : String(opts.min_score);
     let verdict: boolean;
     let reason: string;
-    if (p["office_lat"] !== null && pyTruthy(p["office_geocoded"])) {
-      [verdict, reason] = [false, "already geocoded (office_geocoded=1)"];
+    if (pyTruthy(p["office_geocoded"])) {
+      // office_geocoded=1 is «attempted» (db_update: true even when the search failed), like logo_fetched.
+      [verdict, reason] = [false, p["office_lat"] !== null ? "already geocoded (office_geocoded=1)" : "already attempted, no coordinates found (office_geocoded=1)"];
     } else if (p["status"] === "excluded") {
       [verdict, reason] = [false, "excluded position"];
     } else if (!policy || !policy.isEnabled("geocode_missing")) {
@@ -1160,8 +1161,7 @@ function queue(db: Database, role: string, lim: number, asJson: boolean, gate: Q
     let scope = `
         FROM positions p
         WHERE p.status != 'excluded'
-          AND (p.office_lat IS NULL
-               OR p.office_geocoded IS NULL OR p.office_geocoded = 0)`;
+          AND (p.office_geocoded IS NULL OR p.office_geocoded = 0)`;
     if (opts.min_score !== null) {
       scope += `
           AND EXISTS (SELECT 1 FROM scores sg
