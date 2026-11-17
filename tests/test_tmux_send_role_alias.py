@@ -7,8 +7,10 @@ written out is never rewritten, because that message is for THAT session.
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -53,6 +55,7 @@ def box(tmp_path):
         calls = (tmp_path / "state" / "calls").read_text(encoding="utf-8").splitlines()
         return done, calls
 
+    run.home = tmp_path / "home"
     return run
 
 
@@ -100,3 +103,40 @@ def test_a_session_that_has_the_exact_name_is_used_as_it_is(box):
     done, calls = box(["ANALISTA", "ANALISTA-5"], "ANALISTA")
     assert "delivering to" not in done.stderr
     assert "ANALISTA" in _targets(calls)
+
+
+def _pause(box, session: str) -> None:
+    """The person paused this session by itself (agent_pause): a marker with an `until` in the future."""
+    from datetime import datetime, timedelta, timezone
+    folder = box.home / ".agent-pauses"
+    folder.mkdir(exist_ok=True)
+    until = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
+    (folder / f"{session}.json").write_text(json.dumps({"session": session, "since": int(time.time()), "until": until,
+                                                         "reason": "paused by the user from the app", "requested_by": "user"}), encoding="utf-8")
+
+
+def test_a_session_the_person_paused_is_skipped_when_another_of_the_role_works(box):
+    _pause(box, "ANALISTA-3")
+    done, calls = box(["ANALISTA-3", "ANALISTA-5"], "ANALISTA")
+    assert "delivering to ANALISTA-5" in done.stderr
+    assert "ANALISTA-3" not in _targets([c for c in calls if not c.startswith("has-session")])
+
+
+def test_a_role_whose_live_sessions_are_all_paused_is_not_redirected(box):
+    _pause(box, "ANALISTA-3")
+    _pause(box, "ANALISTA-5")
+    done, calls = box(["ANALISTA-3", "ANALISTA-5"], "ANALISTA")
+    # (a real tmux finds the bare name ambiguous between two sessions and says «not present»; the fake takes a prefix: what matters is
+    # that nothing was redirected to a paused session)
+    assert "delivering to" not in done.stderr
+    assert not ({"ANALISTA-3", "ANALISTA-5"} & _targets([c for c in calls if not c.startswith("has-session")]))
+
+
+def test_an_expired_pause_is_not_a_pause(box):
+    from datetime import datetime, timedelta, timezone
+    folder = box.home / ".agent-pauses"
+    folder.mkdir(exist_ok=True)
+    (folder / "ANALISTA-3.json").write_text(json.dumps({"session": "ANALISTA-3", "since": 1, "requested_by": "user",
+                                                         "until": (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()}), encoding="utf-8")
+    done, _ = box(["ANALISTA-3", "ANALISTA-5"], "ANALISTA")
+    assert "delivering to ANALISTA-3" in done.stderr
