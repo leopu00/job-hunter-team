@@ -1,7 +1,7 @@
 // What the benchmark page and the page of each round share: the words in the seven languages, the marks of the systems
 // and the services, the colours of the states. Static data in web/data/benchmark/benchmark-0-4-0.json (synthetic profiles only).
 
-import Image from "next/image";
+import { OsIcon } from "../../setup-guide/OsIcons";
 import type { Locale } from "@/i18n/config";
 import data from "@/data/benchmark/benchmark-0-4-0.json";
 import type { FinderCopy } from "./BenchmarkFinder";
@@ -46,7 +46,6 @@ export type Copy = {
   need: string;
   back: string;
   footer: string;
-  tuxCredit: string;
   outcome: Record<string, string>;
   system: Record<string, string>;
   profiles: Record<string, string>;
@@ -124,7 +123,6 @@ export const T: Record<Locale, Copy> = {
     needTitle: "What a clean benchmark needs",
     need: "Four identical VPSs started together, the same profile for everyone, 30 minutes of work after onboarding, the same build with the budget brake fixed, and credit on all four services.",
     back: "← All case studies",
-    tuxCredit: "Tux, the Linux penguin: Larry Ewing and The GIMP.",
     footer:
       "Synthetic profiles, no personal data · numbers from the test reports of 14-17/11/2026.",
     outcome: {
@@ -397,7 +395,6 @@ export const T: Record<Locale, Copy> = {
     needTitle: "Cosa serve per un benchmark pulito",
     need: "Quattro VPS uguali accese insieme, lo stesso profilo per tutti, 30 minuti di lavoro dopo l'onboarding, la stessa build con il freno del budget corretto e credito su tutti e quattro i servizi.",
     back: "← Tutti i case study",
-    tuxCredit: "Tux, il pinguino di Linux: Larry Ewing e The GIMP.",
     footer:
       "Profili finti, nessun dato personale · numeri dai verbali dei collaudi del 14-17/11/2026.",
     outcome: {
@@ -670,7 +667,6 @@ export const T: Record<Locale, Copy> = {
     needTitle: "Was ein sauberer Benchmark braucht",
     need: "Vier identische VPS gleichzeitig gestartet, dasselbe Profil für alle, 30 Minuten Arbeit nach dem Onboarding, derselbe Build mit korrigierter Budgetbremse und Guthaben bei allen vier Diensten.",
     back: "← Alle Fallstudien",
-    tuxCredit: "Tux, der Linux-Pinguin: Larry Ewing und The GIMP.",
     footer:
       "Synthetische Profile, keine personenbezogenen Daten · Zahlen aus den Testprotokollen vom 14.-17.11.2026.",
     outcome: {
@@ -943,7 +939,6 @@ export const T: Record<Locale, Copy> = {
     needTitle: "Qué hace falta para un benchmark limpio",
     need: "Cuatro VPS iguales encendidas a la vez, el mismo perfil para todos, 30 minutos de trabajo después del onboarding, la misma build con el freno del presupuesto corregido y crédito en los cuatro servicios.",
     back: "← Todos los casos de estudio",
-    tuxCredit: "Tux, el pingüino de Linux: Larry Ewing y The GIMP.",
     footer:
       "Perfiles ficticios, sin datos personales · cifras de los informes de prueba del 14-17/11/2026.",
     outcome: {
@@ -1218,7 +1213,6 @@ export const T: Record<Locale, Copy> = {
     needTitle: "Ce qu'il faut pour un benchmark propre",
     need: "Quatre VPS identiques allumés ensemble, le même profil pour tous, 30 minutes de travail après l'onboarding, la même build avec le frein du budget corrigé et du crédit sur les quatre services.",
     back: "← Toutes les études de cas",
-    tuxCredit: "Tux, le manchot de Linux : Larry Ewing et The GIMP.",
     footer:
       "Profils fictifs, aucune donnée personnelle · chiffres des procès-verbaux d'essai du 14-17/11/2026.",
     outcome: {
@@ -1491,7 +1485,6 @@ export const T: Record<Locale, Copy> = {
     needTitle: "O que é preciso para um benchmark limpo",
     need: "Quatro VPS iguais ligadas ao mesmo tempo, o mesmo perfil para todos, 30 minutos de trabalho depois do onboarding, a mesma build com o travão do orçamento corrigido e crédito nos quatro serviços.",
     back: "← Todos os estudos de caso",
-    tuxCredit: "Tux, o pinguim do Linux: Larry Ewing e The GIMP.",
     footer:
       "Perfis fictícios, sem dados pessoais · números dos relatórios de teste de 14-17/11/2026.",
     outcome: {
@@ -1764,7 +1757,6 @@ export const T: Record<Locale, Copy> = {
     needTitle: "Mi kell egy tiszta benchmarkhoz",
     need: "Négy egyforma VPS egyszerre elindítva, mindenkinek ugyanaz a profil, az onboarding után 30 perc munka, ugyanaz a build javított költségfékkel, és egyenleg mind a négy szolgáltatáson.",
     back: "← Minden esettanulmány",
-    tuxCredit: "Tux, a Linux pingvinje: Larry Ewing és The GIMP.",
     footer:
       "Kitalált profilok, személyes adat nélkül · számok a 2026.11.14–17-i próbák jegyzőkönyveiből.",
     outcome: {
@@ -1992,13 +1984,6 @@ export const T: Record<Locale, Copy> = {
 };
 
 
-// The marks of Windows (four panes) and macOS (the apple): small monochrome shapes in a 16×16 box, in the colour of
-// the text so they read on the light and the dark theme. Shown only to name the system a round ran on.
-export const SYSTEM_MARK: Record<string, string> = {
-  windows: "M1.5 1.5 H7.3 V7.3 H1.5 Z M8.7 1.5 H14.5 V7.3 H8.7 Z M1.5 8.7 H7.3 V14.5 H1.5 Z M8.7 8.7 H14.5 V14.5 H8.7 Z",
-  macos:
-    "M11.3 8.6 C11.3 7 12.6 6.2 12.7 6.1 C11.9 5 10.7 4.8 10.3 4.8 C9.3 4.7 8.3 5.4 7.8 5.4 C7.3 5.4 6.5 4.8 5.6 4.8 C4.5 4.8 3.4 5.5 2.8 6.6 C1.6 8.7 2.5 11.8 3.7 13.5 C4.3 14.3 4.9 15.2 5.8 15.2 C6.6 15.2 7 14.7 8 14.7 C9 14.7 9.3 15.2 10.2 15.2 C11.1 15.2 11.7 14.4 12.2 13.5 C12.8 12.6 13.1 11.7 13.1 11.6 C13.1 11.6 11.3 10.9 11.3 8.6 Z M9.7 3.7 C10.1 3.2 10.5 2.4 10.4 1.7 C9.8 1.7 9 2.1 8.6 2.6 C8.2 3.1 7.8 3.8 7.9 4.5 C8.6 4.6 9.3 4.2 9.7 3.7 Z",
-};
 
 
 export function Mark({ id, label }: { id: string; label: string }) {
@@ -2012,20 +1997,11 @@ export function Mark({ id, label }: { id: string; label: string }) {
         ))}
       </span>
     );
-  // Tux, the penguin of Larry Ewing drawn with The GIMP (credited at the foot of the page): a small PNG on a transparent
-  // background, as tall as the marks of Windows and macOS
-  if (id === "linux")
+  // the systems: the icons the site already draws in the setup guide, monochrome in the colour of the text
+  if (id === "linux" || id === "windows" || id === "macos")
     return (
-      <span className="inline-flex items-center justify-center shrink-0" style={{ width: 28, height: 28 }} title={label}>
-        <Image src="/benchmark/logos/tux.png" alt={label} width={15} height={18} unoptimized />
-      </span>
-    );
-  if (SYSTEM_MARK[id])
-    return (
-      <span className="inline-flex items-center justify-center shrink-0" style={{ width: 28, height: 28 }} title={label}>
-        <svg viewBox="0 0 16 16" width={18} height={18} role="img" aria-label={label} style={{ fill: "currentColor" }}>
-          <path d={SYSTEM_MARK[id]} />
-        </svg>
+      <span className="inline-flex items-center justify-center shrink-0" style={{ width: 22, height: 22 }} title={label}>
+        <OsIcon os={id} />
       </span>
     );
   return null;

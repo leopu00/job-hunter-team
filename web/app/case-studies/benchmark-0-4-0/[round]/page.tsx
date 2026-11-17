@@ -216,7 +216,6 @@ export default async function RoundPage({ params }: { params: Promise<{ round: s
 
       <footer className="border-t border-[var(--color-border)] py-6 text-center text-[11px] text-[var(--color-muted)]">
         {t.footer}
-        <p className="mt-1 text-[10px] text-[var(--color-dim)]">{t.tuxCredit}</p>
       </footer>
     </main>
   );

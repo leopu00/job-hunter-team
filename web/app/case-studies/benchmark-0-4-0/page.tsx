@@ -31,7 +31,6 @@ import ProviderMark from "./providerMarks";
 import { testHref } from "./roundsData";
 import BenchmarkFinder, {
   type CandidateView,
-  type FinderCopy,
 } from "./BenchmarkFinder";
 import { CASE_STUDIES, localizeCaseStudy } from "@/lib/case-studies";
 
@@ -713,7 +712,6 @@ export default async function BenchmarkPage() {
 
       <footer className="border-t border-[var(--color-border)] py-6 text-center text-[11px] text-[var(--color-muted)]">
         {t.footer}
-        <p className="mt-1 text-[10px] text-[var(--color-dim)]">{t.tuxCredit}</p>
       </footer>
     </main>
   );

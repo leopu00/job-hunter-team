@@ -1,7 +1,6 @@
 # Marks of the 0.4.0 benchmark page
 
-The marks name the service a test used and the system it ran on; no endorsement is implied. They are trademarks of their
-owners.
+The marks name the service a test used; no endorsement is implied. They are trademarks of their owners.
 
 ## Services, drawn inline (`app/case-studies/benchmark-0-4-0/providerMarks.tsx`)
 
@@ -18,9 +17,7 @@ which draws the same shape.
 
 ## Systems
 
-| Mark | Source | Licence |
-| --- | --- | --- |
-| Windows (four panes), macOS (an apple) | small monochrome shapes in a 16×16 box, drawn inline (`SYSTEM_MARK` in `benchmarkShared.tsx`), in the colour of the text | trademarks of Microsoft and Apple |
-| Linux, Tux (`tux.png`) | rendered from Wikimedia Commons `File:Tux.svg` as a 54×64 PNG on a transparent background | free use and modification crediting Larry Ewing and The GIMP: the page credits them at its foot |
+Windows, macOS and Linux use the icons the site already draws in its setup guide (`app/setup-guide/OsIcons.tsx`):
+monochrome SVG in the colour of the text, with the name of the system written next to them.
 
 Official brand kits were not used. Checked 17/11/2026.
