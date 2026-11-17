@@ -1073,12 +1073,12 @@ def test_a_session_born_during_the_pause_is_woken_with_its_held_first_message_sa
     """An update during the pause: the Analyst is born with the new container, its first message is held by the gate and never
     comes again, and it is not in the list the ESC wrote. A new budget must wake it, and say that its first message never arrived."""
     bridge, state = _a_stop_that_looks_ahead(tmp_path)
-    bridge.api.list_tmux_sessions = lambda: ["CAPITANO", "SENTINELLA", "ANALISTA-5", "scout-1", "my shell", "notes"]
+    bridge.api.list_tmux_sessions = lambda: ["CAPITANO", "SENTINELLA", "ANALISTA-5", "MENTOR", "scout-1", "my shell", "notes"]
     bridge.clock["now"] += 600
     bridge.config = budget(5, bridge.clock["now"], bridge.clock["now"] + 1800)
     bridge.tick(state=state)
     assert not bridge.flag.exists()
-    assert _woken(bridge) == ["ANALISTA-5", "scout-1", "scout-2"], "the newcomer too; not a session that is not an agent of the team"
+    assert _woken(bridge) == ["ANALISTA-5", "scout-1", "scout-2"], "the new worker too; not a fixed agent that was not in the list, nor a session that is not of the team"
     newcomer = next(t for s, t in bridge.sent if s == "ANALISTA-5")
     assert "held back" in newcomer and "never reached you" in newcomer
     old = next(t for s, t in bridge.sent if s == "scout-1")
