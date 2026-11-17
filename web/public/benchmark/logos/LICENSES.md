@@ -16,3 +16,14 @@ Windows and macOS are drawn in the page itself (`SYSTEM_MARK` in `page.tsx`): sm
 | `tux.png` | Tux, Linux | rendered from Wikimedia Commons `File:Tux.svg` as a 54×64 PNG on a transparent background | free use and modification crediting Larry Ewing and The GIMP |
 
 Official brand kits were not used: no logo here comes from a company press page. Checked 16/11/2026.
+
+## Marks drawn in the page
+
+The services in the targets table are drawn inline by `app/case-studies/benchmark-0-4-0/providerMarks.tsx`, as tall as the text:
+
+| Mark | Source of the path | Licence |
+| --- | --- | --- |
+| Claude, Anthropic | Wikimedia Commons, `File:Claude AI symbol.svg` (from anthropic.com), in its colour `#D97757` | trademark of Anthropic, used only to name the service |
+| OpenAI (the 2025 «blossom») | Wikimedia Commons, `File:OpenAI logo 2025 (symbol).svg` (author OpenAI), in the colour of the text | trademark of OpenAI, used only to name the service |
+| Z.ai (GLM) | the path of `zai.svg` above (LobeHub), in the colour of the text | MIT, Copyright (c) 2023 LobeHub |
+| Kimi (Moonshot) | the path of `kimi.svg` above (LobeHub), in the colour of the text | MIT, Copyright (c) 2023 LobeHub |

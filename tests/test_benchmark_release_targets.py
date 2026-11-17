@@ -38,8 +38,8 @@ def _has_key(block: str, key: str) -> bool:
 
 def test_every_target_has_a_status_the_page_draws_and_a_proof_that_exists():
     rounds = {r["id"] for r in DATA["rounds"]}
-    assert len(DATA["targets"]) == 23
-    assert len({t["id"] for t in DATA["targets"]}) == 23
+    assert len(DATA["targets"]) == 25
+    assert len({t["id"] for t in DATA["targets"]}) == 25
     sections = re.findall(r'^  \["(\w+)", "', PAGE, re.M)
     for target in DATA["targets"]:
         assert target["status"] in STATUSES, target

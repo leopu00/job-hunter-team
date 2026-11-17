@@ -11,6 +11,7 @@ import type { Locale } from "@/i18n/config";
 import data from "@/data/benchmark/benchmark-0-4-0.json";
 import BenchmarkCharts, { type BenchProfile, type BetaDay, type BuildPoint, type ChartRound } from "./BenchmarkCharts";
 import { CHART_COPY } from "./chartsCopy";
+import ProviderMark from "./providerMarks";
 import BenchmarkFinder, {
   type CandidateView,
   type FinderCopy,
@@ -234,14 +235,17 @@ const T: Record<Locale, Copy> = {
       "budgetBrake": "Budget brake: never over the ceiling, no false unlock, the person is told",
       "language": "Setup and onboarding in the chosen language",
       "doctorMaintainer": "The Doctor and the Maintainer, the agents that look after the team, really work",
-      "serviceClaude": "The team works with Claude (API key)",
-      "serviceOpenai": "The team works with OpenAI (API key)",
-      "serviceGlmKimi": "The team works with GLM / Kimi (no credit, not tried on the latest builds)",
-      "openaiSubscription": "The team works with the ChatGPT subscription on Pi (sign-in refused on the Free plan)",
+      "serviceClaude": "Claude (Anthropic) · API key",
+      "serviceOpenai": "OpenAI · API key",
+      "serviceGlm": "Z.ai (GLM) · API key",
+      "serviceKimi": "Kimi (Moonshot) · API key",
+      "codexSubscription": "OpenAI Codex · subscription (only for those who already have 0.3.x, like our beta tester)",
+      "openaiSubscription": "OpenAI · ChatGPT subscription on Pi",
       "noKeyOnDisk": "No API key is left written on the disk",
       "betaTester": "Beta test: version updated and team at work"
     },
     targetNotes: {
+      "codexBetaInUse": "in use every day by our beta tester (chart 6); not yet tried on builds 9 and 10",
       "updateLinuxBuild9": "build 9: passed (its round is not in the table below)",
       "installerBlockedBuild9": "build 9: stopped by the installer (fix in build 10, round under way)",
       "benchCook": "79% relevant",
@@ -502,14 +506,17 @@ const T: Record<Locale, Copy> = {
       "budgetBrake": "Freno del budget: mai oltre il tetto, nessuno sblocco falso, avviso all'utente",
       "language": "Setup e onboarding nella lingua scelta",
       "doctorMaintainer": "Il Dottore e il Mantenitore, gli agenti che curano la squadra, lavorano davvero",
-      "serviceClaude": "La squadra lavora con Claude (chiave API)",
-      "serviceOpenai": "La squadra lavora con OpenAI (chiave API)",
-      "serviceGlmKimi": "La squadra lavora con GLM / Kimi (senza credito, non provati sulle ultime build)",
-      "openaiSubscription": "La squadra lavora con l'abbonamento ChatGPT su Pi (login rifiutato col piano Free)",
+      "serviceClaude": "Claude (Anthropic) · chiave API",
+      "serviceOpenai": "OpenAI · chiave API",
+      "serviceGlm": "Z.ai (GLM) · chiave API",
+      "serviceKimi": "Kimi (Moonshot) · chiave API",
+      "codexSubscription": "OpenAI Codex · abbonamento (solo chi ha già la 0.3.x, come la nostra beta tester)",
+      "openaiSubscription": "OpenAI · abbonamento ChatGPT su Pi",
       "noKeyOnDisk": "Nessuna chiave API resta scritta sul disco",
       "betaTester": "Beta test: versione aggiornata e squadra al lavoro"
     },
     targetNotes: {
+      "codexBetaInUse": "in uso ogni giorno dalla nostra beta tester (grafico 6); non ancora provato sulle build 9 e 10",
       "updateLinuxBuild9": "build 9: superato (il giro non è nella tabella sotto)",
       "installerBlockedBuild9": "build 9: fermato dall'installer (correzione in build 10, giro in corso)",
       "benchCook": "79% pertinenti",
@@ -770,14 +777,17 @@ const T: Record<Locale, Copy> = {
       "budgetBrake": "Budgetbremse: nie über der Obergrenze, keine falsche Freigabe, die Person wird informiert",
       "language": "Setup und Onboarding in der gewählten Sprache",
       "doctorMaintainer": "Der Doktor und die Wartung, die Agenten, die sich um das Team kümmern, arbeiten wirklich",
-      "serviceClaude": "Das Team arbeitet mit Claude (API-Schlüssel)",
-      "serviceOpenai": "Das Team arbeitet mit OpenAI (API-Schlüssel)",
-      "serviceGlmKimi": "Das Team arbeitet mit GLM / Kimi (kein Guthaben, auf den letzten Builds nicht geprüft)",
-      "openaiSubscription": "Das Team arbeitet mit dem ChatGPT-Abo auf Pi (Anmeldung im Free-Tarif abgelehnt)",
+      "serviceClaude": "Claude (Anthropic) · API-Schlüssel",
+      "serviceOpenai": "OpenAI · API-Schlüssel",
+      "serviceGlm": "Z.ai (GLM) · API-Schlüssel",
+      "serviceKimi": "Kimi (Moonshot) · API-Schlüssel",
+      "codexSubscription": "OpenAI Codex · Abo (nur wer schon 0.3.x hat, wie unsere Betatesterin)",
+      "openaiSubscription": "OpenAI · ChatGPT-Abo auf Pi",
       "noKeyOnDisk": "Kein API-Schlüssel bleibt auf der Festplatte gespeichert",
       "betaTester": "Betatest: Version aktualisiert und Team bei der Arbeit"
     },
     targetNotes: {
+      "codexBetaInUse": "täglich im Einsatz bei unserer Betatesterin (Diagramm 6); auf Build 9 und 10 noch nicht geprüft",
       "updateLinuxBuild9": "Build 9: bestanden (die Runde steht nicht in der Tabelle unten)",
       "installerBlockedBuild9": "Build 9: vom Installer gestoppt (Korrektur in Build 10, Runde läuft)",
       "benchCook": "79 % passend",
@@ -1039,14 +1049,17 @@ const T: Record<Locale, Copy> = {
       "budgetBrake": "Freno del presupuesto: nunca por encima del tope, ningún desbloqueo falso, aviso a la persona",
       "language": "Setup y onboarding en el idioma elegido",
       "doctorMaintainer": "El Doctor y el Mantenedor, los agentes que cuidan del equipo, funcionan de verdad",
-      "serviceClaude": "El equipo trabaja con Claude (clave API)",
-      "serviceOpenai": "El equipo trabaja con OpenAI (clave API)",
-      "serviceGlmKimi": "El equipo trabaja con GLM / Kimi (sin crédito, no probados en las últimas builds)",
-      "openaiSubscription": "El equipo trabaja con la suscripción de ChatGPT en Pi (acceso rechazado con el plan Free)",
+      "serviceClaude": "Claude (Anthropic) · clave API",
+      "serviceOpenai": "OpenAI · clave API",
+      "serviceGlm": "Z.ai (GLM) · clave API",
+      "serviceKimi": "Kimi (Moonshot) · clave API",
+      "codexSubscription": "OpenAI Codex · suscripción (solo quien ya tiene la 0.3.x, como nuestra beta tester)",
+      "openaiSubscription": "OpenAI · suscripción ChatGPT en Pi",
       "noKeyOnDisk": "Ninguna clave API queda escrita en el disco",
       "betaTester": "Beta test: versión actualizada y equipo trabajando"
     },
     targetNotes: {
+      "codexBetaInUse": "en uso cada día por nuestra beta tester (gráfico 6); aún no probado en las builds 9 y 10",
       "updateLinuxBuild9": "build 9: superada (su ronda no está en la tabla de abajo)",
       "installerBlockedBuild9": "build 9: parada por el instalador (corrección en la build 10, ronda en curso)",
       "benchCook": "79 % pertinentes",
@@ -1309,14 +1322,17 @@ const T: Record<Locale, Copy> = {
       "budgetBrake": "Frein du budget : jamais au-dessus du plafond, aucun faux déblocage, la personne est prévenue",
       "language": "Setup et onboarding dans la langue choisie",
       "doctorMaintainer": "Le Docteur et le Mainteneur, les agents qui veillent sur l'équipe, fonctionnent vraiment",
-      "serviceClaude": "L'équipe travaille avec Claude (clé API)",
-      "serviceOpenai": "L'équipe travaille avec OpenAI (clé API)",
-      "serviceGlmKimi": "L'équipe travaille avec GLM / Kimi (sans crédit, pas essayés sur les dernières builds)",
-      "openaiSubscription": "L'équipe travaille avec l'abonnement ChatGPT sur Pi (connexion refusée avec le forfait Free)",
+      "serviceClaude": "Claude (Anthropic) · clé API",
+      "serviceOpenai": "OpenAI · clé API",
+      "serviceGlm": "Z.ai (GLM) · clé API",
+      "serviceKimi": "Kimi (Moonshot) · clé API",
+      "codexSubscription": "OpenAI Codex · abonnement (seulement pour qui a déjà la 0.3.x, comme notre bêta-testeuse)",
+      "openaiSubscription": "OpenAI · abonnement ChatGPT sur Pi",
       "noKeyOnDisk": "Aucune clé API ne reste écrite sur le disque",
       "betaTester": "Bêta-test : version mise à jour et équipe au travail"
     },
     targetNotes: {
+      "codexBetaInUse": "utilisé chaque jour par notre bêta-testeuse (graphique 6) ; pas encore essayé sur les builds 9 et 10",
       "updateLinuxBuild9": "build 9 : réussi (son tour n'est pas dans le tableau ci-dessous)",
       "installerBlockedBuild9": "build 9 : arrêté par l'installeur (correction dans la build 10, tour en cours)",
       "benchCook": "79 % pertinents",
@@ -1576,14 +1592,17 @@ const T: Record<Locale, Copy> = {
       "budgetBrake": "Travão do orçamento: nunca acima do teto, nenhum falso desbloqueio, aviso à pessoa",
       "language": "Setup e onboarding na língua escolhida",
       "doctorMaintainer": "O Doutor e o Mantenedor, os agentes que cuidam da equipa, funcionam mesmo",
-      "serviceClaude": "A equipa trabalha com Claude (chave API)",
-      "serviceOpenai": "A equipa trabalha com OpenAI (chave API)",
-      "serviceGlmKimi": "A equipa trabalha com GLM / Kimi (sem crédito, não testados nas últimas builds)",
-      "openaiSubscription": "A equipa trabalha com a assinatura ChatGPT no Pi (acesso recusado no plano Free)",
+      "serviceClaude": "Claude (Anthropic) · chave API",
+      "serviceOpenai": "OpenAI · chave API",
+      "serviceGlm": "Z.ai (GLM) · chave API",
+      "serviceKimi": "Kimi (Moonshot) · chave API",
+      "codexSubscription": "OpenAI Codex · assinatura (só quem já tem a 0.3.x, como a nossa beta tester)",
+      "openaiSubscription": "OpenAI · assinatura ChatGPT no Pi",
       "noKeyOnDisk": "Nenhuma chave API fica escrita no disco",
       "betaTester": "Beta teste: versão atualizada e equipa a trabalhar"
     },
     targetNotes: {
+      "codexBetaInUse": "em uso todos os dias pela nossa beta tester (gráfico 6); ainda não testado nas builds 9 e 10",
       "updateLinuxBuild9": "build 9: aprovado (a rodada não está na tabela abaixo)",
       "installerBlockedBuild9": "build 9: parado pelo instalador (correção na build 10, rodada em curso)",
       "benchCook": "79% pertinentes",
@@ -1844,14 +1863,17 @@ const T: Record<Locale, Copy> = {
       "budgetBrake": "Keretfék: soha a plafon fölött, nincs hamis feloldás, a felhasználó értesül",
       "language": "Beállítás és bevezetés a választott nyelven",
       "doctorMaintainer": "A Doktor és a Karbantartó, a csapatra vigyázó ügynökök, tényleg működnek",
-      "serviceClaude": "A csapat Claude-dal dolgozik (API-kulcs)",
-      "serviceOpenai": "A csapat OpenAI-jal dolgozik (API-kulcs)",
-      "serviceGlmKimi": "A csapat GLM / Kimi modellel dolgozik (nincs kredit, a legutóbbi buildeken nem próbálták)",
-      "openaiSubscription": "A csapat a ChatGPT-előfizetéssel dolgozik Pi-n (a Free csomaggal a bejelentkezés elutasítva)",
+      "serviceClaude": "Claude (Anthropic) · API-kulcs",
+      "serviceOpenai": "OpenAI · API-kulcs",
+      "serviceGlm": "Z.ai (GLM) · API-kulcs",
+      "serviceKimi": "Kimi (Moonshot) · API-kulcs",
+      "codexSubscription": "OpenAI Codex · előfizetés (csak akinek már megvan a 0.3.x, mint a bétatesztelőnknek)",
+      "openaiSubscription": "OpenAI · ChatGPT-előfizetés Pi-n",
       "noKeyOnDisk": "Egyetlen API-kulcs sem marad a lemezre írva",
       "betaTester": "Béta teszt: a verzió frissítve, a csapat munkában"
     },
     targetNotes: {
+      "codexBetaInUse": "a bétatesztelőnk minden nap használja (6. grafikon); a 9. és 10. buildön még nem próbálták",
       "updateLinuxBuild9": "9. build: sikeres (a köre nincs az alábbi táblázatban)",
       "installerBlockedBuild9": "9. build: a telepítő megállította (javítás a 10. buildben, a kör folyamatban)",
       "benchCook": "79% releváns",
@@ -2402,7 +2424,7 @@ export default async function BenchmarkPage() {
                 const list = (data.targets as Target[]).filter((x) => x.section === section);
                 if (list.length === 0) return null;
                 const ok = list.filter((x) => x.status === "pass").length;
-                const rows: { key: string; label: string; byOs: Record<string, Target> | null; one: Target | null }[] = [];
+                const rows: { key: string; label: string; byOs: Record<string, Target> | null; one: Target | null; provider?: string }[] = [];
                 for (const x of list) {
                   const row = (x as { row?: string }).row;
                   const os = (x as { os?: string }).os;
@@ -2412,7 +2434,7 @@ export default async function BenchmarkPage() {
                     else rows.push({ key: row, label: t.targetRows[row], byOs: { [os]: x }, one: null });
                   } else {
                     const emoji = (x as { emoji?: string }).emoji;
-                    rows.push({ key: x.id, label: `${emoji ? `${emoji} ` : ""}${t.targets[x.id]}`, byOs: null, one: x });
+                    rows.push({ key: x.id, label: `${emoji ? `${emoji} ` : ""}${t.targets[x.id]}`, byOs: null, one: x, provider: (x as { provider?: string }).provider });
                   }
                 }
                 return (
@@ -2439,7 +2461,16 @@ export default async function BenchmarkPage() {
                     {rows.map((r) => (
                       <tr key={r.key} className="border-t border-[var(--color-border)] align-top">
                         <th scope="row" className="px-3 py-2 text-left font-normal min-w-[180px]">
-                          {r.label}
+                          {r.provider ? (
+                            <span className="inline-flex items-start gap-2">
+                              <span className="mt-[2px]">
+                                <ProviderMark id={r.provider} label={t.services[r.provider] ?? r.provider} />
+                              </span>
+                              <span>{r.label}</span>
+                            </span>
+                          ) : (
+                            r.label
+                          )}
                         </th>
                         {r.byOs ? (
                           TARGET_OS.map((os) => (

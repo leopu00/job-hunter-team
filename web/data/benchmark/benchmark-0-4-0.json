@@ -286,7 +286,7 @@
         "r14"
       ],
       "note": null,
-      "emoji": "🤖"
+      "provider": "claude"
     },
     {
       "id": "serviceOpenai",
@@ -295,16 +295,7 @@
       "build": 6,
       "proof": [],
       "note": "openaiRoundMissing",
-      "emoji": "🤖"
-    },
-    {
-      "id": "serviceGlmKimi",
-      "section": "services",
-      "status": "pending",
-      "build": null,
-      "proof": [],
-      "note": "noCredit",
-      "emoji": "🤖"
+      "provider": "openai"
     },
     {
       "id": "openaiSubscription",
@@ -313,7 +304,34 @@
       "build": 9,
       "proof": [],
       "note": "chatgptFreeRefused",
-      "emoji": "🤖"
+      "provider": "openai"
+    },
+    {
+      "id": "serviceGlm",
+      "section": "services",
+      "status": "pending",
+      "build": null,
+      "proof": [],
+      "note": "noCredit",
+      "provider": "glm"
+    },
+    {
+      "id": "serviceKimi",
+      "section": "services",
+      "status": "pending",
+      "build": null,
+      "proof": [],
+      "note": "noCredit",
+      "provider": "kimi"
+    },
+    {
+      "id": "codexSubscription",
+      "section": "services",
+      "status": "pending",
+      "build": null,
+      "proof": [],
+      "note": "codexBetaInUse",
+      "provider": "openai"
     },
     {
       "id": "noKeyOnDisk",
