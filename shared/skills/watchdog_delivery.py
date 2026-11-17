@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import sys
 import time
@@ -61,6 +62,22 @@ def kickoff(session, role, *, sender=None, sleeper=time.sleep):
     return False
 
 
+def process_alert(key, what, cap, window, text, now):
+    """Write one alert about a process that is not an agent to `logs/process-alerts.jsonl`. False when it cannot be written."""
+    try:
+        home = Path(os.environ.get("JHT_HOME") or Path.home() / ".jht")
+        log = home / "logs"
+        log.mkdir(parents=True, exist_ok=True)
+        entry = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)), "key": key, "what": what, "cap": cap,
+                 "window_s": window, "text": text}
+        with open(log / "process-alerts.jsonl", "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        return True
+    except OSError:
+        report("delivery_state_unavailable")
+        return False
+
+
 def bridge(stamp, cooldown, what, cap, window, binary, *, sender=None, now=None):
     """True on delivery, None on suppression, False on an attempted delivery error."""
     path = Path(stamp)
@@ -88,8 +105,10 @@ def bridge(stamp, cooldown, what, cap, window, binary, *, sender=None, now=None)
         "Automatic respawn has been STOPPED to prevent a crash loop. Manual diagnosis is required: "
         "check $JHT_HOME/logs/*-bridge.log. The Mantenitore will still run a complete canary on the next sweep."
     )
-    delivered = checked(lambda: sender("CAPITANO", text)) if sender else send(binary, "CAPITANO", text)
-    if not delivered:
+    # A bridge, a Telegram bot or a process of pid1 is not an agent: the Capitano cannot repair it and spent turns answering that it
+    # does nothing (build10, Mac: the live screen). The alert goes to the log of the process alerts, which the Mantenitore's sweep reads
+    # (its canary is the check of these processes); no agent is written to. `sender` and `binary` stay in the signature for the callers.
+    if not process_alert(path.name, what, cap, window, text, now):
         return False
     try:
         atomic_text(path, str(int(now)) + "\n")
