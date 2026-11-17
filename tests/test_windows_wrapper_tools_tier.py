@@ -814,7 +814,7 @@ def test_jht_up_setup_and_status_keep_the_tools_moving_and_say_where_they_stand(
     assert "catch { }" in body and "Invoke-ToolsKick" in body and "Get-ToolsPersonState" in body
 
 
-# --- the setup holds the switch as long as it runs (giro Mac m21, vps-42: the wizard of an update died with 137) -----------------
+# --- the setup holds the switch as long as it runs (a Mac round, a VPS round: the wizard of an update died with 137) -----------------
 
 def test_a_setup_holds_the_switch_past_the_cap_of_the_other_commands(box, tmp_path):
     tier = box.tier()
