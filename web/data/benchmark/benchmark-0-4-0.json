@@ -6,6 +6,9 @@
   "targets": [
     {
       "id": "installWindows",
+      "section": "install",
+      "row": "install",
+      "os": "windows",
       "status": "pass",
       "build": 8,
       "proof": [
@@ -15,6 +18,9 @@
     },
     {
       "id": "installLinux",
+      "section": "install",
+      "row": "install",
+      "os": "linux",
       "status": "pass",
       "build": 6,
       "proof": [],
@@ -22,38 +28,47 @@
     },
     {
       "id": "installMac",
+      "section": "install",
+      "row": "install",
+      "os": "macos",
       "status": "pending",
       "build": null,
       "proof": [],
       "note": "redoOnBuild9"
     },
     {
-      "id": "updateLinux",
-      "status": "pass",
-      "build": 8,
-      "proof": [
-        "r12"
-      ],
-      "note": null
-    },
-    {
-      "id": "updateMac",
-      "status": "blocked",
-      "build": 8,
-      "proof": [
-        "r13"
-      ],
-      "note": "diskFull"
-    },
-    {
       "id": "updateWindows",
+      "section": "update",
+      "row": "update",
+      "os": "windows",
       "status": "pending",
       "build": null,
       "proof": [],
       "note": "neverTried"
     },
     {
+      "id": "updateLinux",
+      "section": "update",
+      "row": "update",
+      "os": "linux",
+      "status": "pass",
+      "build": 9,
+      "proof": [],
+      "note": "updateLinuxBuild9"
+    },
+    {
+      "id": "updateMac",
+      "section": "update",
+      "row": "update",
+      "os": "macos",
+      "status": "blocked",
+      "build": 9,
+      "proof": [],
+      "note": "installerBlockedBuild9"
+    },
+    {
       "id": "nonItRelevant",
+      "section": "scout",
       "status": "fail",
       "build": 8,
       "proof": [
@@ -63,34 +78,84 @@
       "note": "relevantBelow"
     },
     {
-      "id": "scoutBench",
-      "status": "pending",
-      "build": null,
+      "id": "scoutBenchCook",
+      "section": "scout",
+      "status": "pass",
+      "build": 9,
       "proof": [],
-      "note": "benchPaused"
+      "note": "benchCook"
+    },
+    {
+      "id": "scoutBenchWarehouse",
+      "section": "scout",
+      "status": "pass",
+      "build": 9,
+      "proof": [],
+      "note": "benchWarehouse"
+    },
+    {
+      "id": "scoutBenchNurse",
+      "section": "scout",
+      "status": "fail",
+      "build": 9,
+      "proof": [],
+      "note": "benchNurse"
+    },
+    {
+      "id": "scoutBenchBricklayer",
+      "section": "scout",
+      "status": "fail",
+      "build": 9,
+      "proof": [],
+      "note": "benchBricklayer"
     },
     {
       "id": "budgetBrake",
-      "status": "fail",
-      "build": 8,
+      "section": "brake",
+      "status": "pending",
+      "build": 10,
       "proof": [
         "r14"
       ],
-      "note": "brakeFalseClear"
+      "note": "brakeFixedRetry"
     },
     {
-      "id": "language",
+      "id": "languageWindows",
+      "section": "language",
+      "row": "language",
+      "os": "windows",
       "status": "fail",
       "build": 8,
       "proof": [
-        "r12",
-        "r13",
         "r14"
       ],
       "note": "languageEnglish"
     },
     {
+      "id": "languageLinux",
+      "section": "language",
+      "row": "language",
+      "os": "linux",
+      "status": "pass",
+      "build": 9,
+      "proof": [],
+      "note": "languageGermanOk"
+    },
+    {
+      "id": "languageMac",
+      "section": "language",
+      "row": "language",
+      "os": "macos",
+      "status": "fail",
+      "build": 8,
+      "proof": [
+        "r13"
+      ],
+      "note": "languageEnglish"
+    },
+    {
       "id": "doctorMaintainer",
+      "section": "doctor",
       "status": "fail",
       "build": 8,
       "proof": [
@@ -100,6 +165,7 @@
     },
     {
       "id": "serviceClaude",
+      "section": "services",
       "status": "pass",
       "build": 8,
       "proof": [
@@ -109,6 +175,7 @@
     },
     {
       "id": "serviceOpenai",
+      "section": "services",
       "status": "pass",
       "build": 6,
       "proof": [],
@@ -116,6 +183,7 @@
     },
     {
       "id": "serviceGlmKimi",
+      "section": "services",
       "status": "pending",
       "build": null,
       "proof": [],
@@ -123,13 +191,15 @@
     },
     {
       "id": "openaiSubscription",
-      "status": "pending",
-      "build": null,
+      "section": "services",
+      "status": "fail",
+      "build": 9,
       "proof": [],
-      "note": "loginNeverTried"
+      "note": "chatgptFreeRefused"
     },
     {
       "id": "noKeyOnDisk",
+      "section": "security",
       "status": "pass",
       "build": 8,
       "proof": [
@@ -138,7 +208,16 @@
       "note": "keysChecked"
     },
     {
+      "id": "preTagReview",
+      "section": "security",
+      "status": "pass",
+      "build": 10,
+      "proof": [],
+      "note": "securityPreTag"
+    },
+    {
       "id": "betaTester",
+      "section": "beta",
       "status": "pending",
       "build": null,
       "proof": [],

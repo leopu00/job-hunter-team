@@ -2,7 +2,7 @@
 
 The files are the unmodified SVGs of the libraries below (only renamed). The marks of the four services belong to their owners and are shown only to name the service a round used; no endorsement is implied.
 
-The systems (macOS, Windows, Linux) have **no brand logo**: they use generic icons (a laptop, a window, a terminal) with the name of the system written next to them. No mark of Apple, Microsoft or the Linux project is used.
+macOS and Windows have **no brand logo**: they use generic icons (a laptop, a window) with the name of the system written next to them. No mark of Apple or Microsoft is used. Linux is shown by Tux, the penguin of Larry Ewing, whose author allows its use and modification as long as he and The GIMP are credited: the page credits them at its foot.
 
 | File | What it shows | Source | License of the file |
 | --- | --- | --- | --- |
@@ -12,6 +12,7 @@ The systems (macOS, Windows, Linux) have **no brand logo**: they use generic ico
 | `kimi.svg` | Kimi, Moonshot AI (service) | @lobehub/icons-static-svg 1.60.0 (`icons/kimi.svg`) | MIT, Copyright (c) 2023 LobeHub |
 | `laptop.svg` | generic icon, macOS | lucide-static 0.468.0 (`icons/laptop.svg`) | ISC, Copyright (c) Lucide Contributors 2022 and Cole Bemis 2013-2022 (Feather, MIT) |
 | `app-window.svg` | generic icon, Windows | lucide-static 0.468.0 (`icons/app-window.svg`) | ISC, same |
-| `terminal.svg` | generic icon, Linux | lucide-static 0.468.0 (`icons/terminal.svg`) | ISC, same |
+| `terminal.svg` | generic icon (no longer shown) | lucide-static 0.468.0 (`icons/terminal.svg`) | ISC, same |
+| `tux.svg` | Tux, Linux | Wikimedia Commons, `File:Tux.svg` (unmodified, renamed) | free use and modification crediting Larry Ewing and The GIMP |
 
 Official brand kits were not used: no logo here comes from a company press page. Checked 16/11/2026.

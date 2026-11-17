@@ -58,6 +58,7 @@ type Copy = {
   need: string;
   back: string;
   footer: string;
+  tuxCredit: string;
   outcome: Record<string, string>;
   system: Record<string, string>;
   profiles: Record<string, string>;
@@ -74,6 +75,8 @@ type Copy = {
   targetStatus: Record<string, string>;
   targets: Record<string, string>;
   targetNotes: Record<string, string>;
+  targetSections: Record<string, string>;
+  targetRows: Record<string, string>;
   buildsTitle: string;
   buildLabel: string;
   noRound: string;
@@ -130,6 +133,7 @@ const T: Record<Locale, Copy> = {
     needTitle: "What a clean benchmark needs",
     need: "Four identical VPSs started together, the same profile for everyone, 30 minutes of work after onboarding, the same build with the budget brake fixed, and credit on all four services.",
     back: "← All case studies",
+    tuxCredit: "Tux, the Linux penguin: Larry Ewing and The GIMP.",
     footer:
       "Synthetic profiles, no personal data · numbers from the test reports of 14-17/11/2026.",
     outcome: {
@@ -208,6 +212,14 @@ const T: Record<Locale, Copy> = {
       "blocked": "blocked"
     },
     targets: {
+      "scoutBenchCook": "Scout bench · cook",
+      "scoutBenchWarehouse": "Scout bench · warehouse worker",
+      "scoutBenchNurse": "Scout bench · nurse",
+      "scoutBenchBricklayer": "Scout bench · bricklayer",
+      "languageWindows": "Setup and onboarding in the chosen language · Windows",
+      "languageLinux": "Setup and onboarding in the chosen language · Linux",
+      "languageMac": "Setup and onboarding in the chosen language · Mac",
+      "preTagReview": "Security review before the tag",
       "installWindows": "Install by a new user · Windows",
       "installLinux": "Install by a new user · Linux",
       "installMac": "Install by a new user · Mac",
@@ -227,6 +239,16 @@ const T: Record<Locale, Copy> = {
       "betaTester": "Beta test: version updated and team at work"
     },
     targetNotes: {
+      "updateLinuxBuild9": "build 9: passed (its round is not in the table below)",
+      "installerBlockedBuild9": "build 9: stopped by the installer (fix in build 10, round under way)",
+      "benchCook": "79% relevant",
+      "benchWarehouse": "90% relevant",
+      "benchNurse": "1 duplicate (94% relevant)",
+      "benchBricklayer": "6 positions, fewer than 15 (83% relevant)",
+      "brakeFixedRetry": "fixed in builds 9 and 10: to try again",
+      "languageGermanOk": "build 9: German all the way on Linux",
+      "chatgptFreeRefused": "sign-in refused (Free plan)",
+      "securityPreTag": "review before the tag: no P0 or P1; the key-on-disk case is closed",
       "cleanLinuxRoundMissing": "clean install on build 6: its round is not in the table below (r9 is an update)",
       "openaiRoundMissing": "proved on build 6: its round is not in the table below",
       "redoOnBuild9": "to redo on build 9",
@@ -241,6 +263,22 @@ const T: Record<Locale, Copy> = {
       "loginNeverTried": "real sign-in never tried",
       "keysChecked": "0 files with a key outside their place, on 20,927 file events",
       "updateOnBuild9": "update on build 9"
+    },
+    targetSections: {
+      "install": "Install by a new user",
+      "update": "Update with a team and data",
+      "scout": "Scout, trades outside IT",
+      "brake": "Spending brake",
+      "language": "Language",
+      "doctor": "Doctor and Maintainer",
+      "services": "Services",
+      "security": "Security",
+      "beta": "Beta tester",
+    },
+    targetRows: {
+      "install": "Install by a new user",
+      "update": "Update with a team and data already there",
+      "language": "Setup and onboarding in the chosen language",
     },
     buildsTitle: "Rounds of each build",
     buildLabel: "Build {n}",
@@ -349,6 +387,7 @@ const T: Record<Locale, Copy> = {
     needTitle: "Cosa serve per un benchmark pulito",
     need: "Quattro VPS uguali accese insieme, lo stesso profilo per tutti, 30 minuti di lavoro dopo l'onboarding, la stessa build con il freno del budget corretto e credito su tutti e quattro i servizi.",
     back: "← Tutti i case study",
+    tuxCredit: "Tux, il pinguino di Linux: Larry Ewing e The GIMP.",
     footer:
       "Profili finti, nessun dato personale · numeri dai verbali dei collaudi del 14-17/11/2026.",
     outcome: {
@@ -427,6 +466,14 @@ const T: Record<Locale, Copy> = {
       "blocked": "bloccato"
     },
     targets: {
+      "scoutBenchCook": "Banco Scout · cuoco",
+      "scoutBenchWarehouse": "Banco Scout · magazziniere",
+      "scoutBenchNurse": "Banco Scout · infermiera",
+      "scoutBenchBricklayer": "Banco Scout · muratore",
+      "languageWindows": "Setup e onboarding nella lingua scelta · Windows",
+      "languageLinux": "Setup e onboarding nella lingua scelta · Linux",
+      "languageMac": "Setup e onboarding nella lingua scelta · Mac",
+      "preTagReview": "Controllo di sicurezza prima del tag",
       "installWindows": "Installazione da utente vergine · Windows",
       "installLinux": "Installazione da utente vergine · Linux",
       "installMac": "Installazione da utente vergine · Mac",
@@ -446,6 +493,16 @@ const T: Record<Locale, Copy> = {
       "betaTester": "Beta test: versione aggiornata e squadra al lavoro"
     },
     targetNotes: {
+      "updateLinuxBuild9": "build 9: superato (il giro non è nella tabella sotto)",
+      "installerBlockedBuild9": "build 9: fermato dall'installer (correzione in build 10, giro in corso)",
+      "benchCook": "79% pertinenti",
+      "benchWarehouse": "90% pertinenti",
+      "benchNurse": "1 doppione (94% pertinenti)",
+      "benchBricklayer": "6 posizioni, meno di 15 (83% pertinenti)",
+      "brakeFixedRetry": "corretto nelle build 9 e 10: da riprovare",
+      "languageGermanOk": "build 9: tedesco dall'inizio alla fine su Linux",
+      "chatgptFreeRefused": "accesso rifiutato (piano Free)",
+      "securityPreTag": "controllo prima del tag: nessun P0 o P1; il caso della chiave su disco è chiuso",
       "cleanLinuxRoundMissing": "installazione vergine sulla build 6: il suo giro non è nella tabella qui sotto (r9 è un aggiornamento)",
       "openaiRoundMissing": "provato sulla build 6: il suo giro non è nella tabella qui sotto",
       "redoOnBuild9": "da rifare sulla build 9",
@@ -460,6 +517,22 @@ const T: Record<Locale, Copy> = {
       "loginNeverTried": "accesso vero mai provato",
       "keysChecked": "0 file con chiave fuori posto, su 20.927 eventi sui file",
       "updateOnBuild9": "aggiornamento sulla build 9"
+    },
+    targetSections: {
+      "install": "Installazione da utente nuovo",
+      "update": "Aggiornamento con squadra e dati",
+      "scout": "Scout, mestieri non IT",
+      "brake": "Freno della spesa",
+      "language": "Lingua",
+      "doctor": "Dottore e Mantenitore",
+      "services": "Servizi",
+      "security": "Sicurezza",
+      "beta": "Beta tester",
+    },
+    targetRows: {
+      "install": "Installazione da utente nuovo",
+      "update": "Aggiornamento con squadra e dati già presenti",
+      "language": "Setup e onboarding nella lingua scelta",
     },
     buildsTitle: "Giri di ogni build",
     buildLabel: "Build {n}",
@@ -568,6 +641,7 @@ const T: Record<Locale, Copy> = {
     needTitle: "Was ein sauberer Benchmark braucht",
     need: "Vier identische VPS gleichzeitig gestartet, dasselbe Profil für alle, 30 Minuten Arbeit nach dem Onboarding, derselbe Build mit korrigierter Budgetbremse und Guthaben bei allen vier Diensten.",
     back: "← Alle Fallstudien",
+    tuxCredit: "Tux, der Linux-Pinguin: Larry Ewing und The GIMP.",
     footer:
       "Synthetische Profile, keine personenbezogenen Daten · Zahlen aus den Testprotokollen vom 14.-17.11.2026.",
     outcome: {
@@ -646,6 +720,14 @@ const T: Record<Locale, Copy> = {
       "blocked": "blockiert"
     },
     targets: {
+      "scoutBenchCook": "Scout-Bank · Koch",
+      "scoutBenchWarehouse": "Scout-Bank · Lagerarbeiter",
+      "scoutBenchNurse": "Scout-Bank · Krankenpflegerin",
+      "scoutBenchBricklayer": "Scout-Bank · Maurer",
+      "languageWindows": "Setup und Onboarding in der gewählten Sprache · Windows",
+      "languageLinux": "Setup und Onboarding in der gewählten Sprache · Linux",
+      "languageMac": "Setup und Onboarding in der gewählten Sprache · Mac",
+      "preTagReview": "Sicherheitsprüfung vor dem Tag",
       "installWindows": "Installation durch neuen Nutzer · Windows",
       "installLinux": "Installation durch neuen Nutzer · Linux",
       "installMac": "Installation durch neuen Nutzer · Mac",
@@ -665,6 +747,16 @@ const T: Record<Locale, Copy> = {
       "betaTester": "Betatest: Version aktualisiert und Team bei der Arbeit"
     },
     targetNotes: {
+      "updateLinuxBuild9": "Build 9: bestanden (die Runde steht nicht in der Tabelle unten)",
+      "installerBlockedBuild9": "Build 9: vom Installer gestoppt (Korrektur in Build 10, Runde läuft)",
+      "benchCook": "79 % passend",
+      "benchWarehouse": "90 % passend",
+      "benchNurse": "1 Duplikat (94 % passend)",
+      "benchBricklayer": "6 Stellen, weniger als 15 (83 % passend)",
+      "brakeFixedRetry": "in Build 9 und 10 korrigiert: erneut zu prüfen",
+      "languageGermanOk": "Build 9: durchgehend Deutsch auf Linux",
+      "chatgptFreeRefused": "Anmeldung abgelehnt (Free-Tarif)",
+      "securityPreTag": "Prüfung vor dem Tag: kein P0 oder P1; der Fall des Schlüssels auf der Festplatte ist geschlossen",
       "cleanLinuxRoundMissing": "Neuinstallation auf Build 6: ihr Lauf fehlt in der Tabelle unten (r9 ist ein Update)",
       "openaiRoundMissing": "auf Build 6 geprüft: der Lauf fehlt in der Tabelle unten",
       "redoOnBuild9": "auf Build 9 zu wiederholen",
@@ -679,6 +771,22 @@ const T: Record<Locale, Copy> = {
       "loginNeverTried": "echte Anmeldung nie geprüft",
       "keysChecked": "0 Dateien mit Schlüssel am falschen Ort, bei 20.927 Dateiereignissen",
       "updateOnBuild9": "Update auf Build 9"
+    },
+    targetSections: {
+      "install": "Installation durch neue Nutzer",
+      "update": "Update mit Team und Daten",
+      "scout": "Scout, Berufe außerhalb der IT",
+      "brake": "Ausgabenbremse",
+      "language": "Sprache",
+      "doctor": "Doktor und Wartung",
+      "services": "Dienste",
+      "security": "Sicherheit",
+      "beta": "Betatester",
+    },
+    targetRows: {
+      "install": "Installation durch neue Nutzer",
+      "update": "Update mit vorhandenem Team und Daten",
+      "language": "Setup und Onboarding in der gewählten Sprache",
     },
     buildsTitle: "Läufe jedes Builds",
     buildLabel: "Build {n}",
@@ -787,6 +895,7 @@ const T: Record<Locale, Copy> = {
     needTitle: "Qué hace falta para un benchmark limpio",
     need: "Cuatro VPS iguales encendidas a la vez, el mismo perfil para todos, 30 minutos de trabajo después del onboarding, la misma build con el freno del presupuesto corregido y crédito en los cuatro servicios.",
     back: "← Todos los casos de estudio",
+    tuxCredit: "Tux, el pingüino de Linux: Larry Ewing y The GIMP.",
     footer:
       "Perfiles ficticios, sin datos personales · cifras de los informes de prueba del 14-17/11/2026.",
     outcome: {
@@ -866,6 +975,14 @@ const T: Record<Locale, Copy> = {
       "blocked": "bloqueado"
     },
     targets: {
+      "scoutBenchCook": "Banco de Scouts · cocinero",
+      "scoutBenchWarehouse": "Banco de Scouts · mozo de almacén",
+      "scoutBenchNurse": "Banco de Scouts · enfermera",
+      "scoutBenchBricklayer": "Banco de Scouts · albañil",
+      "languageWindows": "Configuración y onboarding en el idioma elegido · Windows",
+      "languageLinux": "Configuración y onboarding en el idioma elegido · Linux",
+      "languageMac": "Configuración y onboarding en el idioma elegido · Mac",
+      "preTagReview": "Revisión de seguridad antes del tag",
       "installWindows": "Instalación por un usuario nuevo · Windows",
       "installLinux": "Instalación por un usuario nuevo · Linux",
       "installMac": "Instalación por un usuario nuevo · Mac",
@@ -885,6 +1002,16 @@ const T: Record<Locale, Copy> = {
       "betaTester": "Beta test: versión actualizada y equipo trabajando"
     },
     targetNotes: {
+      "updateLinuxBuild9": "build 9: superada (su ronda no está en la tabla de abajo)",
+      "installerBlockedBuild9": "build 9: parada por el instalador (corrección en la build 10, ronda en curso)",
+      "benchCook": "79 % pertinentes",
+      "benchWarehouse": "90 % pertinentes",
+      "benchNurse": "1 duplicado (94 % pertinentes)",
+      "benchBricklayer": "6 puestos, menos de 15 (83 % pertinentes)",
+      "brakeFixedRetry": "corregido en las builds 9 y 10: por volver a probar",
+      "languageGermanOk": "build 9: alemán de principio a fin en Linux",
+      "chatgptFreeRefused": "acceso rechazado (plan Free)",
+      "securityPreTag": "revisión antes del tag: ningún P0 ni P1; el caso de la clave en disco está cerrado",
       "cleanLinuxRoundMissing": "instalación desde cero en la build 6: su ronda no está en la tabla de abajo (r9 es una actualización)",
       "openaiRoundMissing": "probado en la build 6: su ronda no está en la tabla de abajo",
       "redoOnBuild9": "por repetir en la build 9",
@@ -899,6 +1026,22 @@ const T: Record<Locale, Copy> = {
       "loginNeverTried": "inicio de sesión real nunca probado",
       "keysChecked": "0 archivos con clave fuera de su sitio, en 20.927 eventos de archivos",
       "updateOnBuild9": "actualización en la build 9"
+    },
+    targetSections: {
+      "install": "Instalación por un usuario nuevo",
+      "update": "Actualización con equipo y datos",
+      "scout": "Scout, oficios fuera de la informática",
+      "brake": "Freno del gasto",
+      "language": "Idioma",
+      "doctor": "Doctor y Mantenedor",
+      "services": "Servicios",
+      "security": "Seguridad",
+      "beta": "Beta tester",
+    },
+    targetRows: {
+      "install": "Instalación por un usuario nuevo",
+      "update": "Actualización con equipo y datos ya presentes",
+      "language": "Configuración y onboarding en el idioma elegido",
     },
     buildsTitle: "Rondas de cada build",
     buildLabel: "Build {n}",
@@ -1008,6 +1151,7 @@ const T: Record<Locale, Copy> = {
     needTitle: "Ce qu'il faut pour un benchmark propre",
     need: "Quatre VPS identiques allumés ensemble, le même profil pour tous, 30 minutes de travail après l'onboarding, la même build avec le frein du budget corrigé et du crédit sur les quatre services.",
     back: "← Toutes les études de cas",
+    tuxCredit: "Tux, le manchot de Linux : Larry Ewing et The GIMP.",
     footer:
       "Profils fictifs, aucune donnée personnelle · chiffres des procès-verbaux d'essai du 14-17/11/2026.",
     outcome: {
@@ -1087,6 +1231,14 @@ const T: Record<Locale, Copy> = {
       "blocked": "bloqué"
     },
     targets: {
+      "scoutBenchCook": "Banc des Scouts · cuisinier",
+      "scoutBenchWarehouse": "Banc des Scouts · magasinier",
+      "scoutBenchNurse": "Banc des Scouts · infirmière",
+      "scoutBenchBricklayer": "Banc des Scouts · maçon",
+      "languageWindows": "Configuration et onboarding dans la langue choisie · Windows",
+      "languageLinux": "Configuration et onboarding dans la langue choisie · Linux",
+      "languageMac": "Configuration et onboarding dans la langue choisie · Mac",
+      "preTagReview": "Revue de sécurité avant le tag",
       "installWindows": "Installation par un nouvel utilisateur · Windows",
       "installLinux": "Installation par un nouvel utilisateur · Linux",
       "installMac": "Installation par un nouvel utilisateur · Mac",
@@ -1106,6 +1258,16 @@ const T: Record<Locale, Copy> = {
       "betaTester": "Bêta-test : version mise à jour et équipe au travail"
     },
     targetNotes: {
+      "updateLinuxBuild9": "build 9 : réussi (son tour n'est pas dans le tableau ci-dessous)",
+      "installerBlockedBuild9": "build 9 : arrêté par l'installeur (correction dans la build 10, tour en cours)",
+      "benchCook": "79 % pertinents",
+      "benchWarehouse": "90 % pertinents",
+      "benchNurse": "1 doublon (94 % pertinents)",
+      "benchBricklayer": "6 postes, moins de 15 (83 % pertinents)",
+      "brakeFixedRetry": "corrigé dans les builds 9 et 10 : à réessayer",
+      "languageGermanOk": "build 9 : allemand du début à la fin sous Linux",
+      "chatgptFreeRefused": "connexion refusée (forfait Free)",
+      "securityPreTag": "revue avant le tag : aucun P0 ni P1 ; le cas de la clé sur disque est clos",
       "cleanLinuxRoundMissing": "installation vierge sur la build 6 : son tour n'est pas dans le tableau ci-dessous (r9 est une mise à jour)",
       "openaiRoundMissing": "vérifié sur la build 6 : son tour n'est pas dans le tableau ci-dessous",
       "redoOnBuild9": "à refaire sur la build 9",
@@ -1120,6 +1282,22 @@ const T: Record<Locale, Copy> = {
       "loginNeverTried": "vraie connexion jamais essayée",
       "keysChecked": "0 fichier avec clé hors de sa place, sur 20 927 événements de fichiers",
       "updateOnBuild9": "mise à jour sur la build 9"
+    },
+    targetSections: {
+      "install": "Installation par un nouvel utilisateur",
+      "update": "Mise à jour avec équipe et données",
+      "scout": "Scout, métiers hors informatique",
+      "brake": "Frein des dépenses",
+      "language": "Langue",
+      "doctor": "Docteur et Mainteneur",
+      "services": "Services",
+      "security": "Sécurité",
+      "beta": "Bêta-testeur",
+    },
+    targetRows: {
+      "install": "Installation par un nouvel utilisateur",
+      "update": "Mise à jour avec équipe et données déjà là",
+      "language": "Configuration et onboarding dans la langue choisie",
     },
     buildsTitle: "Tours de chaque build",
     buildLabel: "Build {n}",
@@ -1227,6 +1405,7 @@ const T: Record<Locale, Copy> = {
     needTitle: "O que é preciso para um benchmark limpo",
     need: "Quatro VPS iguais ligadas ao mesmo tempo, o mesmo perfil para todos, 30 minutos de trabalho depois do onboarding, a mesma build com o travão do orçamento corrigido e crédito nos quatro serviços.",
     back: "← Todos os estudos de caso",
+    tuxCredit: "Tux, o pinguim do Linux: Larry Ewing e The GIMP.",
     footer:
       "Perfis fictícios, sem dados pessoais · números dos relatórios de teste de 14-17/11/2026.",
     outcome: {
@@ -1305,6 +1484,14 @@ const T: Record<Locale, Copy> = {
       "blocked": "bloqueado"
     },
     targets: {
+      "scoutBenchCook": "Bancada de Scouts · cozinheiro",
+      "scoutBenchWarehouse": "Bancada de Scouts · operador de armazém",
+      "scoutBenchNurse": "Bancada de Scouts · enfermeira",
+      "scoutBenchBricklayer": "Bancada de Scouts · pedreiro",
+      "languageWindows": "Configuração e onboarding na língua escolhida · Windows",
+      "languageLinux": "Configuração e onboarding na língua escolhida · Linux",
+      "languageMac": "Configuração e onboarding na língua escolhida · Mac",
+      "preTagReview": "Revisão de segurança antes da tag",
       "installWindows": "Instalação por um utilizador novo · Windows",
       "installLinux": "Instalação por um utilizador novo · Linux",
       "installMac": "Instalação por um utilizador novo · Mac",
@@ -1324,6 +1511,16 @@ const T: Record<Locale, Copy> = {
       "betaTester": "Beta teste: versão atualizada e equipa a trabalhar"
     },
     targetNotes: {
+      "updateLinuxBuild9": "build 9: aprovado (a rodada não está na tabela abaixo)",
+      "installerBlockedBuild9": "build 9: parado pelo instalador (correção na build 10, rodada em curso)",
+      "benchCook": "79% pertinentes",
+      "benchWarehouse": "90% pertinentes",
+      "benchNurse": "1 duplicado (94% pertinentes)",
+      "benchBricklayer": "6 vagas, menos de 15 (83% pertinentes)",
+      "brakeFixedRetry": "corrigido nas builds 9 e 10: a voltar a testar",
+      "languageGermanOk": "build 9: alemão do início ao fim no Linux",
+      "chatgptFreeRefused": "acesso recusado (plano Free)",
+      "securityPreTag": "revisão antes da tag: nenhum P0 ou P1; o caso da chave no disco está fechado",
       "cleanLinuxRoundMissing": "instalação de raiz na build 6: a sua ronda não está na tabela abaixo (r9 é uma atualização)",
       "openaiRoundMissing": "provado na build 6: a sua ronda não está na tabela abaixo",
       "redoOnBuild9": "a repetir na build 9",
@@ -1338,6 +1535,22 @@ const T: Record<Locale, Copy> = {
       "loginNeverTried": "início de sessão real nunca testado",
       "keysChecked": "0 ficheiros com chave fora do lugar, em 20 927 eventos de ficheiros",
       "updateOnBuild9": "atualização na build 9"
+    },
+    targetSections: {
+      "install": "Instalação por um utilizador novo",
+      "update": "Atualização com equipa e dados",
+      "scout": "Scout, ofícios fora da informática",
+      "brake": "Travão da despesa",
+      "language": "Língua",
+      "doctor": "Doutor e Mantenedor",
+      "services": "Serviços",
+      "security": "Segurança",
+      "beta": "Beta tester",
+    },
+    targetRows: {
+      "install": "Instalação por um utilizador novo",
+      "update": "Atualização com equipa e dados já presentes",
+      "language": "Configuração e onboarding na língua escolhida",
     },
     buildsTitle: "Rondas de cada build",
     buildLabel: "Build {n}",
@@ -1446,6 +1659,7 @@ const T: Record<Locale, Copy> = {
     needTitle: "Mi kell egy tiszta benchmarkhoz",
     need: "Négy egyforma VPS egyszerre elindítva, mindenkinek ugyanaz a profil, az onboarding után 30 perc munka, ugyanaz a build javított költségfékkel, és egyenleg mind a négy szolgáltatáson.",
     back: "← Minden esettanulmány",
+    tuxCredit: "Tux, a Linux pingvinje: Larry Ewing és The GIMP.",
     footer:
       "Kitalált profilok, személyes adat nélkül · számok a 2026.11.14–17-i próbák jegyzőkönyveiből.",
     outcome: {
@@ -1524,6 +1738,14 @@ const T: Record<Locale, Copy> = {
       "blocked": "elakadt"
     },
     targets: {
+      "scoutBenchCook": "Scout-pad · szakács",
+      "scoutBenchWarehouse": "Scout-pad · raktáros",
+      "scoutBenchNurse": "Scout-pad · ápolónő",
+      "scoutBenchBricklayer": "Scout-pad · kőműves",
+      "languageWindows": "Beállítás és onboarding a választott nyelven · Windows",
+      "languageLinux": "Beállítás és onboarding a választott nyelven · Linux",
+      "languageMac": "Beállítás és onboarding a választott nyelven · Mac",
+      "preTagReview": "Biztonsági átnézés a tag előtt",
       "installWindows": "Telepítés új felhasználóként · Windows",
       "installLinux": "Telepítés új felhasználóként · Linux",
       "installMac": "Telepítés új felhasználóként · Mac",
@@ -1543,6 +1765,16 @@ const T: Record<Locale, Copy> = {
       "betaTester": "Béta teszt: a verzió frissítve, a csapat munkában"
     },
     targetNotes: {
+      "updateLinuxBuild9": "9. build: sikeres (a köre nincs az alábbi táblázatban)",
+      "installerBlockedBuild9": "9. build: a telepítő megállította (javítás a 10. buildben, a kör folyamatban)",
+      "benchCook": "79% releváns",
+      "benchWarehouse": "90% releváns",
+      "benchNurse": "1 ismétlődés (94% releváns)",
+      "benchBricklayer": "6 állás, kevesebb mint 15 (83% releváns)",
+      "brakeFixedRetry": "javítva a 9. és 10. buildben: újra kipróbálandó",
+      "languageGermanOk": "9. build: végig németül Linuxon",
+      "chatgptFreeRefused": "bejelentkezés elutasítva (Free csomag)",
+      "securityPreTag": "átnézés a tag előtt: nincs P0 vagy P1; a lemezen maradt kulcs ügye lezárva",
       "cleanLinuxRoundMissing": "tiszta telepítés a 6. buildön: a futása nincs a lenti táblázatban (az r9 frissítés)",
       "openaiRoundMissing": "a 6. buildön igazolva: a futása nincs a lenti táblázatban",
       "redoOnBuild9": "a 9. buildön megismétlendő",
@@ -1557,6 +1789,22 @@ const T: Record<Locale, Copy> = {
       "loginNeverTried": "valódi bejelentkezés sosem próbálva",
       "keysChecked": "0 kulcsos fájl a helyén kívül, 20 927 fájleseményből",
       "updateOnBuild9": "frissítés a 9. buildön"
+    },
+    targetSections: {
+      "install": "Telepítés új felhasználóként",
+      "update": "Frissítés csapattal és adatokkal",
+      "scout": "Scout, nem IT szakmák",
+      "brake": "Költségfék",
+      "language": "Nyelv",
+      "doctor": "Doktor és Karbantartó",
+      "services": "Szolgáltatások",
+      "security": "Biztonság",
+      "beta": "Bétatesztelő",
+    },
+    targetRows: {
+      "install": "Telepítés új felhasználóként",
+      "update": "Frissítés meglévő csapattal és adatokkal",
+      "language": "Beállítás és onboarding a választott nyelven",
     },
     buildsTitle: "Az egyes buildek futásai",
     buildLabel: "{n}. build",
@@ -1625,8 +1873,9 @@ const ICON: Record<string, string[]> = {
   openai: ["openai"],
   kimi: ["kimi"],
   "openai-glm": ["openai", "zai"],
-  // generic icons (Lucide, ISC), not the marks of Apple, Microsoft or Linux: the name of the system is always written next to them
-  linux: ["terminal"],
+  // generic icons (Lucide, ISC), not the marks of Apple or Microsoft: the name of the system is always written next to them;
+  // Linux is Tux, free to use crediting Larry Ewing and The GIMP (the credit line is at the foot of the page)
+  linux: ["tux"],
   windows: ["app-window"],
   macos: ["laptop"],
 };
@@ -1687,6 +1936,19 @@ const TARGET_COLOR: Record<string, string> = {
   blocked: "#A855F7",
 };
 type Target = (typeof data.targets)[number];
+// The sections of the targets table, with the emoji of their heading, and the columns of the targets that differ by system.
+const TARGET_SECTIONS: [string, string][] = [
+  ["install", "📦"],
+  ["update", "🔄"],
+  ["scout", "🔍"],
+  ["brake", "💸"],
+  ["language", "🌍"],
+  ["doctor", "🩺"],
+  ["services", "🔌"],
+  ["security", "🔒"],
+  ["beta", "🧑‍💼"],
+];
+const TARGET_OS = ["windows", "linux", "macos"];
 type Build = (typeof data.builds)[number];
 
 const OUTCOME_COLOR: Record<string, string> = {
@@ -1745,6 +2007,41 @@ export default async function BenchmarkPage() {
       >
         {OS_LABEL[r.os]} · {t.profiles[r.profile]} · {dayLabel(r)}
       </a>
+    );
+  };
+  // One cell of the targets table: the status, the build, the rounds that prove it; the note small below and whole in the tooltip.
+  const targetCell = (x: Target) => {
+    const note = x.note ? t.targetNotes[x.note] : "";
+    return (
+      <div className="space-y-0.5" title={note || undefined}>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <span
+            className="text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 whitespace-nowrap"
+            style={{ color: TARGET_COLOR[x.status], background: `color-mix(in srgb, ${TARGET_COLOR[x.status]} 16%, transparent)` }}
+          >
+            <span aria-hidden="true">{TARGET_MARK[x.status]}</span> {t.targetStatus[x.status]}
+          </span>
+          {x.build != null && (
+            <span className="text-[11px] tabular-nums text-[var(--color-muted)] whitespace-nowrap">
+              {t.buildLabel.replace("{n}", String(x.build))}
+            </span>
+          )}
+          {x.proof.map((id: string) => {
+            const r = roundById.get(id);
+            return (
+              <a
+                key={id}
+                href={`#${id}`}
+                title={r ? `${OS_LABEL[r.os]} · ${t.profiles[r.profile]} · ${dayLabel(r)}` : id}
+                className="text-[11px] underline decoration-dotted hover:decoration-solid tabular-nums"
+              >
+                {id}
+              </a>
+            );
+          })}
+        </div>
+        {note && <div className="text-[10px] leading-snug text-[var(--color-dim)] line-clamp-2">{note}</div>}
+      </div>
     );
   };
   const maxChart = Math.max(...chartRows.map((r) => perScored(r) ?? 0), 0.0001);
@@ -1942,57 +2239,74 @@ export default async function BenchmarkPage() {
             {t.targetsLead}
           </p>
           <div className="overflow-x-auto border border-[var(--color-border)] bg-[var(--color-card)]">
-            <table className="w-full text-[12px]">
+            <table className="w-full min-w-[620px] text-[12px] border-collapse">
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-wide text-[var(--color-muted)]">
-                  {Object.values(t.targetsCols).map((h) => (
-                    <th
-                      key={h}
-                      className="px-3 py-2 font-semibold whitespace-nowrap"
-                    >
-                      {h}
+                  <th className="px-3 py-2 font-semibold">{t.targetsCols.target}</th>
+                  {TARGET_OS.map((os) => (
+                    <th key={os} className="px-3 py-2 font-semibold w-[22%] border-l border-[var(--color-border)]">
+                      <span className="inline-flex items-center gap-1.5 normal-case text-[12px] text-[var(--color-white)]">
+                        <Mark id={os} label={OS_LABEL[os]} />
+                        {OS_LABEL[os]}
+                      </span>
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody>
-                {data.targets.map((x: Target) => (
-                  <tr
-                    key={x.id}
-                    className="border-t border-[var(--color-border)] align-top"
-                  >
-                    <td className="px-3 py-2 min-w-[220px]">
-                      {t.targets[x.id]}
-                    </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      <span
-                        className="text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5"
-                        style={{
-                          color: TARGET_COLOR[x.status],
-                          background: `color-mix(in srgb, ${TARGET_COLOR[x.status]} 16%, transparent)`,
-                        }}
-                      >
-                        <span aria-hidden="true">{TARGET_MARK[x.status]}</span>{" "}
-                        {t.targetStatus[x.status]}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 whitespace-nowrap tabular-nums">
-                      {x.build == null
-                        ? t.none
-                        : t.buildLabel.replace("{n}", String(x.build))}
-                    </td>
-                    <td className="px-3 py-2 min-w-[240px] text-[var(--color-muted)]">
-                      <span className="inline-flex flex-wrap gap-x-3 gap-y-1">
-                        {x.proof.map((id: string) => roundLink(id))}
-                      </span>
-                      {x.note ? (
-                        <span className="block">{t.targetNotes[x.note]}</span>
-                      ) : null}
-                      {!x.note && x.proof.length === 0 ? t.none : null}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+              {TARGET_SECTIONS.map(([section, emoji]) => {
+                const list = (data.targets as Target[]).filter((x) => x.section === section);
+                if (list.length === 0) return null;
+                const ok = list.filter((x) => x.status === "pass").length;
+                const rows: { key: string; label: string; byOs: Record<string, Target> | null; one: Target | null }[] = [];
+                for (const x of list) {
+                  const row = (x as { row?: string }).row;
+                  const os = (x as { os?: string }).os;
+                  if (row && os) {
+                    const r = rows.find((y) => y.key === row);
+                    if (r?.byOs) r.byOs[os] = x;
+                    else rows.push({ key: row, label: t.targetRows[row], byOs: { [os]: x }, one: null });
+                  } else rows.push({ key: x.id, label: t.targets[x.id], byOs: null, one: x });
+                }
+                return (
+                  <tbody key={section}>
+                    <tr className="border-t-2 border-[var(--color-border-glow)] bg-[var(--color-row)]">
+                      <th colSpan={4} scope="colgroup" className="px-3 py-2 text-left">
+                        <span className="inline-flex items-center gap-2 text-[13px] font-bold">
+                          <span aria-hidden="true">{emoji}</span>
+                          {t.targetSections[section]}
+                          <span
+                            className="text-[11px] font-semibold tabular-nums rounded-full px-2 py-0.5"
+                            style={{
+                              color: ok === list.length ? TARGET_COLOR.pass : TARGET_COLOR.fail,
+                              background: `color-mix(in srgb, ${ok === list.length ? TARGET_COLOR.pass : TARGET_COLOR.fail} 14%, transparent)`,
+                            }}
+                          >
+                            {`${ok}/${list.length}`}
+                          </span>
+                        </span>
+                      </th>
+                    </tr>
+                    {rows.map((r) => (
+                      <tr key={r.key} className="border-t border-[var(--color-border)] align-top">
+                        <th scope="row" className="px-3 py-2 text-left font-normal min-w-[180px]">
+                          {r.label}
+                        </th>
+                        {r.byOs ? (
+                          TARGET_OS.map((os) => (
+                            <td key={os} className="px-3 py-2 border-l border-[var(--color-border)]">
+                              {r.byOs![os] ? targetCell(r.byOs![os]) : <span className="text-[var(--color-dim)]">{t.none}</span>}
+                            </td>
+                          ))
+                        ) : (
+                          <td colSpan={3} className="px-3 py-2 border-l border-[var(--color-border)]">
+                            {targetCell(r.one!)}
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                );
+              })}
             </table>
           </div>
           <div className="space-y-1 text-[12px]">
@@ -2287,6 +2601,7 @@ export default async function BenchmarkPage() {
 
       <footer className="border-t border-[var(--color-border)] py-6 text-center text-[11px] text-[var(--color-muted)]">
         {t.footer}
+        <p className="mt-1 text-[10px] text-[var(--color-dim)]">{t.tuxCredit}</p>
       </footer>
     </main>
   );

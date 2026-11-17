@@ -38,10 +38,16 @@ def _has_key(block: str, key: str) -> bool:
 
 def test_every_target_has_a_status_the_page_draws_and_a_proof_that_exists():
     rounds = {r["id"] for r in DATA["rounds"]}
-    assert len(DATA["targets"]) == 17
-    assert len({t["id"] for t in DATA["targets"]}) == 17
+    assert len(DATA["targets"]) == 23
+    assert len({t["id"] for t in DATA["targets"]}) == 23
+    sections = re.findall(r'^  \["(\w+)", "', PAGE, re.M)
     for target in DATA["targets"]:
         assert target["status"] in STATUSES, target
+        # every target sits in a section the table draws; one that differs by system says which, once per row
+        assert target["section"] in sections, target
+        assert ("row" in target) == ("os" in target), target
+        if "os" in target:
+            assert target["os"] in {"windows", "linux", "macos"}, target
         assert set(target["proof"]) <= rounds, target
         # a target met says on which build
         if target["status"] in {"pass", "fail", "blocked"}:
@@ -63,11 +69,13 @@ def test_the_builds_list_their_rounds_and_a_build_without_rounds_says_so():
 def test_every_word_of_the_targets_and_of_the_rounds_is_there_in_the_seven_languages():
     keys = {t["id"] for t in DATA["targets"]}
     notes = {t["note"] for t in DATA["targets"] if t["note"]}
+    sections = {t["section"] for t in DATA["targets"]}
+    rows = {t["row"] for t in DATA["targets"] if "row" in t}
     profiles = {r["profile"] for r in DATA["rounds"]}
     round_notes = {r["note"] for r in DATA["rounds"]}
-    fields = ["targetsTitle", "targetsLead", "targetsCount", "targetsCols", "targetStatus", "buildsTitle", "buildLabel", "noRound"]
+    fields = ["targetsTitle", "targetsLead", "targetsCount", "targetsCols", "targetStatus", "targetSections", "targetRows", "buildsTitle", "buildLabel", "noRound"]
     for lang, block in BLOCKS.items():
-        missing = [k for k in sorted(keys | notes | profiles | round_notes | set(fields) | STATUSES) if not _has_key(block, k)]
+        missing = [k for k in sorted(keys | notes | sections | rows | profiles | round_notes | set(fields) | STATUSES) if not _has_key(block, k)]
         assert missing == [], f"{lang}: {missing}"
         assert "{g}" in re.search(r'targetsCount: "([^"]*)"', block).group(1), lang
         assert "{n}" in re.search(r'buildLabel: "([^"]*)"', block).group(1), lang
