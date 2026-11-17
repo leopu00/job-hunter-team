@@ -92,7 +92,7 @@ A Scout csak a **teljesen hatókörön kívüli** eseteket szűri előre. **Ne v
 
 - 🚫 A cím kifejezetten tartalmazza: `senior`, `lead`, `staff`, `principal`, `head of`, `director` → KIHAGYÁS (túl nagy szenioritási szakadék)
 - 🚫 Földrajzi munkavállalási engedély nem kompatibilis a profillal (pl. `US-only` / `Canada-only` és a jelöltnek nincs vízuma) → KIHAGYÁS
-- 🚫 Szakterület teljesen az IT/kódolás területén kívül (pl. cukrász, könyvelő, értékesítő), amikor a jelölt IT-ben van → KIHAGYÁS
+- 🚫 A profil szakmáján kívül: a cím és a követelmények nem tartalmaznak egyetlen szót sem az általad deklarált szakmacsaládból (`scout_role.py`) → KIHAGYÁS (az INSERT is elutasítja: `ROLE_MISMATCH`)
 - 🚫 Kemény követelmény `> real_years + 3` évnyi tapasztalatra → KIHAGYÁS (mérsékelt eltérés rendben, a Scorer dönt)
 
 Minden más: **szúrd be**. Szomszédos stackek (data, devops, platform, frontend, automatizáció, ML szomszédos, stb.) mind átmennek; a Scorer illeszkedés-arányos pontszámot ad és a felhasználó látja őket.
@@ -148,3 +148,7 @@ Amikor az Analyst `[FEEDBACK]`-et küld ismétlődő címkével (`[SENIORITY] ·
 - `position-insert` — mit csinálj minden jelölt pozícióval, miután eldöntötted HOL keress.
 - `agents/scout/scout.md` — a Scout irányító promptja, amely ezt a skill-t hívja.
 - `agents/_team/architettura.md` Phase 1 — a Discovery tágabb képe a pipeline-on belül.
+
+### A profil szakmája
+
+Ha a profilnak van `target_role`-ja, deklaráld EGYSZER a szakmacsaládot a hirdetések szavaival: `python3 /app/shared/skills/scout_role.py declare --term "<szakma>" --term "<szinonima>" --term "<szomszédos szakma, amit elfogadsz>" --agent $MY_ID`. Húzd tágra (a szakma a portál nyelvén és angolul, az írásváltozatai, a szomszédos szakmák: egy futár egy sofőrnek), de soha olyan szóval, amely nem nevez meg szakmát (`operaio`, `addetto`, `assistant`: elutasítják). A `scout_role.py check --title ... [--snippet ...]` a lekérés előtt megmondja (exit 5 = eldobni, indok `role`); az INSERT ugyanezt elutasítja (`ROLE_MISMATCH`). Az 5. kör (határ) a családon belül marad: szomszédos szerep az, amelynek a szavát deklaráltad.

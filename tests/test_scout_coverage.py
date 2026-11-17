@@ -562,7 +562,8 @@ def test_a_person_on_site_who_will_not_move_gets_only_her_own_countrys_boards_ev
     plan = cov.load_plan()
     assert plan["remote"] is False
     assert {e["country"] for e in plan["entries"]} == {"it"}
-    assert _lane_sources() == ["linkedin"]
+    # the Italian boards that are searched (the closed ones are covered, not searched); the trades that are not IT live on the last three
+    assert _lane_sources() == ["linkedin", "randstad-it", "concorsipubblici-it", "jobintourism-it"]
 
 
 def test_the_same_profile_without_the_mode_and_the_relocation_keeps_every_board_as_before(profile):
@@ -584,3 +585,18 @@ def test_an_english_speaking_person_on_site_keeps_the_english_speaking_countries
     profile.write_text("languages:\n  - language: English\n    level: native\npreferences:\n  work_mode: on-site\n  relocation: false\n",
                        encoding="utf-8")
     assert {"linkedin", "thehub"} <= set(_lane_sources())
+
+
+# ── the boards for the trades that are not IT (Italy) ─────────────────────────────────────────────────────────────────
+
+def test_the_italian_boards_for_manual_health_catering_and_logistics_trades_are_public_pages_with_a_checked_robots_hint():
+    data = cov.table()
+    by = {e["slug"]: e for e in data["groups"]["it"]}
+    randstad = by["randstad-it"]
+    assert randstad["tier"] == "core" and randstad["access"] == "search"
+    assert "q-<word>" in randstad["hint"] and "robots.txt" in randstad["hint"] and "/job-redirect/" in randstad["hint"]
+    for slug in ("concorsipubblici-it", "jobintourism-it"):
+        assert by[slug]["tier"] == "minor" and by[slug]["access"] == "search" and "robots.txt allows" in by[slug]["hint"], slug
+    for slug in ("inpa-it", "subito-lavoro", "bakeca-it", "jooble-it", "jobrapido-it"):
+        assert by[slug]["access"] == "closed" and "Log nothing there" in by[slug]["hint"], slug
+    assert sum(1 for e in data["groups"]["it"] if e["tier"] == "core") <= 8

@@ -60,11 +60,12 @@ def test_sc04_lists_only_mechanical_rejects(lang):
     path, text = _prompt('scout', lang)
     block = _rule_block(text, 'SC-04')
     assert block, f'{path}: SC-04 non trovata'
-    # I quattro reject meccanici, ognuno verificabile senza giudizio. I token
+    # I cinque reject meccanici, ognuno verificabile senza giudizio. I token
     # sono tecnici apposta: la prosa è localizzata, questi no.
     assert 'work-auth' in block.lower() or 'work auth' in block.lower(), path
     assert 'real_years + 3' in block, path
     assert 'SC-05' in block, path            # duplicato
+    assert '`scout_role.py`' in block and 'ROLE_MISMATCH' in block, path   # il mestiere
     # …e il perno: il punteggio atteso non è un criterio di ingresso.
     assert 'total_score' in block, path
     assert '`excluded`' in block, path
@@ -135,5 +136,5 @@ def test_the_scout_uses_the_accepted_exclusions_only_as_a_search_priority(lang):
     block = _rule_block(text, 'SC-04')
     assert '`db_query.py profile-exclusions`' in block, path
     assert 'PRIORI' in block.upper(), path
-    # …e le quattro regole meccaniche restano le quattro: nessun quinto reject.
+    # …e i reject meccanici sono cinque (il quinto, il mestiere, è `scout_role.py`): nessun sesto reject.
     assert 'real_years + 3' in block and 'SC-05' in block, path

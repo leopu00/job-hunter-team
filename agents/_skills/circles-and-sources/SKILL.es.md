@@ -92,7 +92,7 @@ El Scout pre-filtra solo los casos **totalmente fuera de alcance**. **No hagas e
 
 - 🚫 El título contiene explícitamente: `senior`, `lead`, `staff`, `principal`, `head of`, `director` → SKIP (brecha de seniority demasiado amplia)
 - 🚫 Incompatibilidad geográfica de work-auth con el perfil (ej. `US-only` / `Canada-only` y el candidato no tiene visado) → SKIP
-- 🚫 Dominio completamente fuera de IT/coding (ej. pastelero, contador, ventas) cuando el candidato está en IT → SKIP
+- 🚫 Fuera del oficio del perfil: el título y los requisitos no tienen ninguna palabra de la familia del oficio que declaraste (`scout_role.py`) → SKIP (el INSERT también lo rechaza: `ROLE_MISMATCH`)
 - 🚫 Requisito duro de `> real_years + 3` años de experiencia → SKIP (brecha moderada está bien, el Scorer decide)
 
 Todo lo demás: **insértalo**. Stacks adyacentes (data, devops, platform, frontend, automatización, ML adyacente, etc.) todos pasan; el Scorer asigna una puntuación proporcional al ajuste y el usuario los ve.
@@ -148,3 +148,7 @@ Cuando el Analyst envía `[FEEDBACK]` con una etiqueta recurrente (`[SENIORITY] 
 - `position-insert` — qué hacer para cada posición candidata una vez que has decidido DÓNDE buscar.
 - `agents/scout/scout.md` — el prompt orquestador del Scout que llama esta skill.
 - `agents/_team/architettura.md` Fase 1 — panorama más amplio del Discovery dentro del pipeline.
+
+### El oficio del perfil
+
+Si el perfil tiene un `target_role`, declara UNA vez la familia del oficio con las palabras de los anuncios: `python3 /app/shared/skills/scout_role.py declare --term "<oficio>" --term "<sinónimo>" --term "<oficio adyacente que aceptas>" --agent $MY_ID`. Dibújala amplia (el oficio en el idioma del portal y en inglés, sus grafías, los oficios adyacentes: un mensajero para un conductor) pero nunca con una palabra que no nombra un oficio (`operaio`, `addetto`, `assistant`: rechazada). `scout_role.py check --title ... [--snippet ...]` lo dice antes del fetch (exit 5 = descartar, motivo `role`); el INSERT rechaza lo mismo (`ROLE_MISMATCH`). El círculo 5 (frontera) se queda dentro de la familia: un rol adyacente es uno cuya palabra declaraste.

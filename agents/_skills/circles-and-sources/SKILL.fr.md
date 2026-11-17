@@ -92,7 +92,7 @@ Le Scout ne pré-filtre que les cas **totalement hors périmètre**. **Ne faites
 
 - 🚫 Le titre contient explicitement : `senior`, `lead`, `staff`, `principal`, `head of`, `director` → SKIP (écart de seniority trop large)
 - 🚫 Autorisation de travail géographique incompatible avec le profil (ex. `US-only` / `Canada-only` et le candidat n'a pas de visa) → SKIP
-- 🚫 Domaine complètement hors IT/coding (ex. pâtissier, comptable, commercial) quand le candidat est en IT → SKIP
+- 🚫 Hors du métier du profil : le titre et les exigences ne contiennent aucun mot de la famille du métier que tu as déclarée (`scout_role.py`) → SKIP (l'INSERT le refuse aussi : `ROLE_MISMATCH`)
 - 🚫 Exigence stricte de `> années_réelles + 3` ans d'expérience → SKIP (un écart modéré est acceptable, le Scorer décide)
 
 Tout le reste : **l'insérer**. Les stacks adjacents (data, devops, platform, frontend, automatisation, ML adjacent, etc.) passent tous ; le Scorer attribue un score proportionnel au fit et l'utilisateur les voit.
@@ -148,3 +148,7 @@ Quand l'Analista envoie `[FEEDBACK]` avec un tag récurrent (`[SENIORITY] · [ST
 - `position-insert` — quoi faire pour chaque position candidate une fois que vous avez décidé OÙ chercher.
 - `agents/scout/scout.md` — le prompt orchestrateur du Scout qui appelle cette skill.
 - `agents/_team/architettura.md` Phase 1 — vue d'ensemble de la Découverte dans le pipeline.
+
+### Le métier du profil
+
+Si le profil a un `target_role`, déclare UNE fois la famille du métier avec les mots des annonces : `python3 /app/shared/skills/scout_role.py declare --term "<métier>" --term "<synonyme>" --term "<métier adjacent que tu acceptes>" --agent $MY_ID`. Dessine-la large (le métier dans la langue du portail et en anglais, ses graphies, les métiers adjacents : un coursier pour un chauffeur) mais jamais avec un mot qui ne nomme aucun métier (`operaio`, `addetto`, `assistant` : refusé). `scout_role.py check --title ... [--snippet ...]` le dit avant le fetch (exit 5 = écarter, motif `role`) ; l'INSERT refuse la même chose (`ROLE_MISMATCH`). Le cercle 5 (frontière) reste dans la famille : un rôle adjacent est un rôle dont tu as déclaré le mot.

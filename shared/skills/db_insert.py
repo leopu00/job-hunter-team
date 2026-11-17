@@ -101,6 +101,7 @@ def _title_similarity(a, b):
 from city_names import (
     normalize_city as _normalize_city,
     canonical_city as _normalize_city_canonical,
+    same_place as _same_place,
     CITY_SYNONYMS as _CITY_SYNONYMS,
 )
 
@@ -146,7 +147,9 @@ def check_duplicate(conn, url, company, title, location=None):
     Livello 2 — Azienda + titolo identici + location uguale (o entrambe NULL/'').
                 Stesso ruolo dalla stessa azienda nella stessa città =
                 riskinning su altro provider. NON skip se city differisce
-                (Milano vs Berlino sono offerte distinte).
+                (Milano vs Berlino sono offerte distinte). Un luogo vuoto in
+                una delle due righe conta come lo stesso luogo; la provincia
+                fra parentesi («Gioia del Colle (BA)») non fa un luogo diverso.
     Livello 3 — Azienda + titolo SIMILE (ratio difflib > 0.85) + location uguale.
                 Cattura "Junior Software Engineer" vs "Software Engineer, Junior".
 
@@ -196,8 +199,9 @@ def check_duplicate(conn, url, company, title, location=None):
     # Livello 2 — azienda + titolo + city normalizzata (primo token + synonym map)
     # Address vps1-postmortem anomalia #3: 'Milan, Italy' vs 'Milan, Lombardy, IT'
     # vs 'Milano, IT' devono matchare. Carichiamo i candidati per azienda+titolo
-    # e applichiamo _normalize_city_canonical in Python (SQL non ha la synonym map).
-    city_new = _normalize_city_canonical(location)
+    # e confrontiamo i luoghi in Python con _same_place (SQL non ha la synonym map):
+    # «Gioia del Colle (BA)», «Gioia del Colle, Bari» e «Gioia del Colle» sono lo
+    # stesso luogo, e un luogo vuoto non e' un luogo diverso.
     if company and title:
         candidates_l2 = conn.execute(
             "SELECT id, title, company, location FROM positions "
@@ -205,7 +209,7 @@ def check_duplicate(conn, url, company, title, location=None):
             (company, title)
         ).fetchall()
         for cand in candidates_l2:
-            if _normalize_city_canonical(cand['location']) == city_new:
+            if _same_place(cand['location'], location):
                 _log_dedup_skip(2, cand['id'], url, company, title)
                 return cand, "azienda+titolo+city-norm"
 
@@ -217,7 +221,7 @@ def check_duplicate(conn, url, company, title, location=None):
             (company,)
         ).fetchall()
         for cand in candidates_l3:
-            if _normalize_city_canonical(cand['location']) != city_new:
+            if not _same_place(cand['location'], location):
                 continue
             if _title_similarity(title, cand['title']) > 0.85:
                 _log_dedup_skip(3, cand['id'], url, company, title)
@@ -292,6 +296,25 @@ def insert_position(args):
                       "the same kind (the same portal and country). Take the next candidate. If the ad is in fact "
                       "remote, or its place is the profile's, correct --remote-type or --location and insert it again.")
                 sys.exit(4)
+        # Il mestiere del profilo (SC-04, quinto rifiuto meccanico): titolo e requisiti senza nessuna parola della famiglia del
+        # mestiere che lo Scout ha dichiarato = fuori mestiere. Misurato 16/11: 22 posizioni su 32 di un altro mestiere per un
+        # muratore, ognuna con il suo INSERT, la sua analisi, il suo punteggio. Ogni dubbio e' «ok» (scout_role.py).
+        role_nudge = None
+        if first_run.is_scout(actor) or first_run.is_scout(args.found_by):
+            import scout_role
+            role = scout_role.check_position(args.title, getattr(args, 'requirements', None))
+            if role["verdict"] == "mismatch":
+                _rollback_quietly(conn)
+                conn.close()
+                print(f"ROLE_MISMATCH: {role['reason']} (profile's role: {'; '.join(role['roles'])}). INSERT refused: do not insert "
+                      "this position and take the next candidate; do not keep searching the same list for it. If its title names "
+                      "your trade in other words, declare that word (scout_role.py declare --term ...) and insert it again.")
+                sys.exit(5)
+            if role["verdict"] == "terms_missing":
+                # not a refusal: a position is never refused for a step the Scout has not done yet (a doubt is «ok»). The Scout is
+                # told after the INSERT, in the line it reads, and `scout_coverage.py next` asks for the declaration first.
+                role_nudge = (f"ROLE_FAMILY_NOT_DECLARED: the profile has a role ({'; '.join(role['roles'])}) and the family of the trade "
+                              f"is not declared, so nothing off-trade is stopped. Declare it ONCE: {scout_role.declare_hint(role['roles'])}")
         # Check duplicati PRIMA dell'inserimento (bug #25 SC-05: 4 livelli)
         existing, match_type = check_duplicate(
             conn, args.url, args.company, args.title, getattr(args, 'location', None),
@@ -357,6 +380,8 @@ def insert_position(args):
 
     cid_info = f" (company_id={company_id})" if company_id else " (company_id=NULL — company not found in DB)"
     print(f"Position inserted with ID: {position_id}{cid_info}")
+    if role_nudge:
+        print(role_nudge)
     conn.close()
     # JHT-T297: an Analista sitting idle at its prompt is woken by the event, not left to find the queue.
     event_wake.notify("new")

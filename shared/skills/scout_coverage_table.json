@@ -781,6 +781,78 @@
     "access": "closed",
     "host": "cliclavoro.gov.it",
     "hint": "Closed to the Scout's tools: the search is a form that returns a page with no results in it (11/11). Log nothing there."
+   },
+   {
+    "slug": "randstad-it",
+    "name": "Randstad Italia",
+    "country": "it",
+    "tier": "core",
+    "access": "search",
+    "host": "randstad.it/offerte-lavoro",
+    "hint": "The trades that are not IT: building (muratore, elettricista, idraulico), health (infermiere, OSS), catering (cuoco, cameriere) and logistics (magazziniere, autista). Public page, one WORD of the trade in the path: randstad.it/offerte-lavoro/q-<word>/ (q-muratore, q-infermiere, q-cuoco, q-magazziniere), about 15 ads per page with title, place and the link of the ad, in the static HTML; checked 17/11 with the Scout's user agent (job-hunter-team-scout/1), robots.txt allows the q- pages. Do not add a place or a distance to the path (/l-, /km-, /postcode- are disallowed: filter the place yourself on what the page returns) and do not follow /job-redirect/ or the apply links. It is an agency: the ad can be for a client, say so in the notes."
+   },
+   {
+    "slug": "concorsipubblici-it",
+    "name": "ConcorsiPubblici.com",
+    "country": "it",
+    "tier": "minor",
+    "access": "search",
+    "host": "concorsipubblici.com/concorsi",
+    "hint": "Public competitions (concorsi) of the health system and of the other public bodies: the way nurses, OSS, radiology and lab technicians, doctors and pharmacists are hired in Italy. Public pages, no key: concorsipubblici.com/concorsi/ente/ent/asl-aziende-sanitarie-locali-32419 (ASL), .../ospedali-32418, .../asp-aziende-sanitarie-provinciali-32420, .../asur-azienda-sanitaria-unica-regionale-32423; each ad has the body, the place (Località), the role (Occupazione), the posts (Posti) and the deadline (Scadenza): skip the expired ones. Checked 17/11 with job-hunter-team-scout/1, robots.txt allows these pages (content signal: search yes, reference use). A concorso is a call with a deadline, not an open ad: log the deadline."
+   },
+   {
+    "slug": "jobintourism-it",
+    "name": "JobInTourism",
+    "country": "it",
+    "tier": "minor",
+    "access": "search",
+    "host": "jobintourism.it",
+    "hint": "Catering and hotels (cuoco, chef de rang, commis, barista, sala): the offers of the hotels and restaurants are public pages, jobintourism.it/offerte-primo-piano/<ad>/, listed on the home page; the group ads («varie figure professionali a <place>») list several roles. Checked 17/11 with job-hunter-team-scout/1, robots.txt allows them (only /wp-admin/ and /wp-content/uploads/ are disallowed)."
+   },
+   {
+    "slug": "inpa-it",
+    "name": "inPA (public recruitment portal)",
+    "country": "it",
+    "tier": "minor",
+    "access": "closed",
+    "host": "inpa.gov.it/bandi-e-avvisi",
+    "hint": "Closed to the Scout's tools: the list of the calls is built by JavaScript (the static page has the search form and no ads) and robots.txt disallows /wp-json/ (17/11). Use concorsipubblici-it for the same calls. Log nothing there."
+   },
+   {
+    "slug": "subito-lavoro",
+    "name": "Subito Lavoro",
+    "country": "it",
+    "tier": "minor",
+    "access": "closed",
+    "host": "subito.it/annunci-italia/vendita/offerte-lavoro",
+    "hint": "Closed: the site answers 403 to the Scout, robots.txt included (17/11). Log nothing there."
+   },
+   {
+    "slug": "bakeca-it",
+    "name": "Bakeca Lavoro",
+    "country": "it",
+    "tier": "minor",
+    "access": "closed",
+    "host": "bakeca.it/annunci/offerte-lavoro",
+    "hint": "Closed: 403 to the Scout on the ads page (17/11). Log nothing there."
+   },
+   {
+    "slug": "jooble-it",
+    "name": "Jooble Italia",
+    "country": "it",
+    "tier": "minor",
+    "access": "closed",
+    "host": "it.jooble.org",
+    "hint": "Closed: 403 to the Scout on the search pages (17/11); its API wants a key. Log nothing there."
+   },
+   {
+    "slug": "jobrapido-it",
+    "name": "Jobrapido Italia",
+    "country": "it",
+    "tier": "minor",
+    "access": "closed",
+    "host": "it.jobrapido.com",
+    "hint": "Closed by its robots.txt: the search (?w=) and the ad pages (/jobpreview/, /job/) are disallowed (17/11), and its ads redirect to other portals. Log nothing there."
    }
   ],
   "es": [

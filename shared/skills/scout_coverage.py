@@ -565,6 +565,34 @@ def render(plan: dict, report: list) -> str:
     return "\n".join(lines)
 
 
+def apply_trade_family(step: dict, profile=None) -> dict:
+    """The trade of the profile in the answer of `next` (SC-04, fifth reject; scout_role.py). Measured 16/11: the WIDE query of an
+    entry word («tirocinio», «junior») on an agency portal read a whole category, and a bricklayer got 22 other trades out of 32.
+      * the family is not declared: the answer says so FIRST (`declare_role_family`), before the portal;
+      * the family is declared: the WIDE query is the trade's own words (`broad_terms` = the family; the entry words stay apart in
+        `entry_words`), and the free search too: `trade_terms`. Anything the INSERT refuses (ROLE_MISMATCH) is dropped before it."""
+    try:
+        import scout_role
+        state = scout_role.family_state(profile)
+    except Exception:  # noqa: BLE001 — a doubt is nothing said
+        return step
+    if not state:
+        return step
+    if not state["declared"]:
+        step["declare_role_family"] = {"roles": state["roles"], "do": scout_role.declare_hint(state["roles"]),
+                                       "why": "until the family of the trade is declared nothing off-trade is stopped at the INSERT; declare it once, then search"}
+        return step
+    step["trade_terms"] = state["terms"]
+    if step.get("query_kind") == "broad" and state["terms"]:
+        step["entry_words"] = step.get("broad_terms", [])
+        step["broad_terms"] = state["terms"]
+        step["how"] = ("WIDE: one of broad_terms on its own (the trade's own words, declared by a Scout), no full title and no place in "
+                       "keywords; keep the profile's geographic filter separate and unchanged; read ALL the results (every page) "
+                       "and drop the ones with no trade word (scout_role.py check --title ... --snippet ...: exit 5 = drop, reason `role`); "
+                       "entry_words only if the profile is an entry-level one")
+    return step
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="scout_coverage", description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -604,6 +632,7 @@ def main(argv=None) -> int:
         step["avoid"] = avoid          # do not open these: they fail with certainty (the table, or this run's own pass log)
     if args.agent:
         step["profile"] = profile_news(args.agent, args.profile)
+    apply_trade_family(step, args.profile)
     print(json.dumps(step, sort_keys=True, ensure_ascii=False))
     return 0
 
