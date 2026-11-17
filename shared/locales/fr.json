@@ -432,6 +432,8 @@
   "wrapper.ps.full_pull_failed_keep_old": "full_pull_failed: la nouvelle image complète n'est pas arrivée, l'ancienne reste. Que faire : jht tools pull",
   "wrapper.ps.old_images_kept_all": "Anciennes images JHT : toutes conservées (JHT_KEEP_OLD_IMAGES=1).",
   "wrapper.ps.old_images_removed": "Anciennes images JHT : %s supprimées, environ %s Mo libérés (taille nominale : les couches partagées ne se libèrent qu'en partie), conservées : l'actuelle et la précédente.",
+  "wrapper.ps.machine_space_back_on_stop": "Environ %s Go libérés dans la machine de JHT reviennent à Windows quand la machine s'arrête : après jht down, avec podman machine stop %s, ou au redémarrage de l'ordinateur.",
+  "wrapper.ps.machine_space_not_returned": "JHT occupe environ %s Go dans son disque virtuel ; ils sont entièrement libérés avec jht uninstall.",
   "wrapper.ps.old_images_busy": " Utilisées par un conteneur (conservées) : %s.",
   "wrapper.ps.old_images_refused": " Refusées par le moteur (conservées) : %s.",
   "wrapper.ps.upgrade_option_unsupported": "Option d'upgrade non prise en charge",
