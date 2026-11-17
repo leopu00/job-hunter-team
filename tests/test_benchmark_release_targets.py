@@ -45,7 +45,8 @@ def test_every_target_has_a_status_the_page_draws_and_a_proof_that_exists():
         # a target met says on which build
         if target["status"] in {"pass", "fail", "blocked"}:
             assert isinstance(target["build"], int), target
-        assert target["proof"] or target["note"] or target["status"] == "pass", target
+        # a target without a round below says why, met or not
+        assert target["proof"] or target["note"], target
 
 
 def test_the_builds_list_their_rounds_and_a_build_without_rounds_says_so():
