@@ -41,3 +41,9 @@ def test_a_generic_task_word_is_declared_with_its_sector_in_every_language():
     for path in SCOUT + CIRCLES:
         text = path.read_text(encoding="utf-8")
         assert "posatore di piastrelle" in text and "posatore edile" in text, path.name
+
+
+def test_a_sector_word_is_said_to_need_a_worker_word_in_every_language():
+    for path in SCOUT + CIRCLES:
+        text = path.read_text(encoding="utf-8")
+        assert "«Cuoco per RSA»" in text and "«Addetto RSA»" in text, path.name
