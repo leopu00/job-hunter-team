@@ -75,6 +75,7 @@ const en: RoundPageCopy = {
   spendDiffers: "The chart counts {a} spent in the window the sampler recorded; the overview counts {b} for the whole round, setup included.",
   criteria: {
     tooFew: "too few positions to judge relevance ({v})",
+    stalled: "the team stopped with {v} positions waiting for the Analyst",
     alone_ok: "starts and works with no manual step",
     alone_bad: "{v} manual steps (minute {at})",
     notStarted: "the agents did not start",
@@ -126,6 +127,7 @@ const it: RoundPageCopy = {
   spendDiffers: "Il grafico conta {a} spesi nella finestra registrata dal campionatore; la panoramica conta {b} per tutto il giro, setup compreso.",
   criteria: {
     tooFew: "troppo pochi annunci per giudicare la pertinenza ({v})",
+    stalled: "la squadra si è fermata con {v} annunci in attesa dell'Analista",
     alone_ok: "parte e lavora senza interventi a mano",
     alone_bad: "{v} interventi a mano (minuto {at})",
     notStarted: "gli agenti non sono partiti",
@@ -177,6 +179,7 @@ const de: RoundPageCopy = {
   spendDiffers: "Das Diagramm zählt {a} im vom Sampler erfassten Zeitraum; der Überblick zählt {b} für die ganze Runde, Setup eingeschlossen.",
   criteria: {
     tooFew: "zu wenige Stellen, um die Passung zu beurteilen ({v})",
+    stalled: "das Team blieb stehen, {v} Stellen warten auf den Analysten",
     alone_ok: "startet und arbeitet ohne Handgriffe",
     alone_bad: "{v} Handgriffe (Minute {at})",
     notStarted: "die Agenten sind nicht gestartet",
@@ -228,6 +231,7 @@ const es: RoundPageCopy = {
   spendDiffers: "El gráfico cuenta {a} gastados en la ventana registrada por el muestreador; el resumen cuenta {b} de toda la ronda, configuración incluida.",
   criteria: {
     tooFew: "demasiado pocos anuncios para juzgar la pertinencia ({v})",
+    stalled: "el equipo se paró con {v} anuncios esperando al Analista",
     alone_ok: "arranca y trabaja sin pasos a mano",
     alone_bad: "{v} pasos a mano (minuto {at})",
     notStarted: "los agentes no arrancaron",
@@ -279,6 +283,7 @@ const fr: RoundPageCopy = {
   spendDiffers: "Le graphique compte {a} dépensés dans la fenêtre enregistrée par l'échantillonneur ; l'aperçu compte {b} pour tout le tour, configuration comprise.",
   criteria: {
     tooFew: "trop peu d'annonces pour juger la pertinence ({v})",
+    stalled: "l'équipe s'est arrêtée avec {v} annonces en attente de l'Analyste",
     alone_ok: "démarre et travaille sans intervention à la main",
     alone_bad: "{v} interventions à la main (minute {at})",
     notStarted: "les agents n'ont pas démarré",
@@ -330,6 +335,7 @@ const hu: RoundPageCopy = {
   spendDiffers: "A grafikon a mintavevő által rögzített ablakban elköltött {a} összeget mutatja; az áttekintés a teljes kört, a beállítással együtt: {b}.",
   criteria: {
     tooFew: "túl kevés hirdetés a relevancia megítéléséhez ({v})",
+    stalled: "a csapat megállt, {v} hirdetés vár az elemzőre",
     alone_ok: "elindul és dolgozik kézi beavatkozás nélkül",
     alone_bad: "{v} kézi beavatkozás ({at}. perc)",
     notStarted: "az ügynökök nem indultak el",
@@ -381,6 +387,7 @@ const pt: RoundPageCopy = {
   spendDiffers: "O gráfico conta {a} gastos na janela registada pelo amostrador; a visão geral conta {b} da rodada inteira, configuração incluída.",
   criteria: {
     tooFew: "anúncios a menos para julgar a pertinência ({v})",
+    stalled: "a equipa parou com {v} anúncios à espera do Analista",
     alone_ok: "arranca e trabalha sem intervenções à mão",
     alone_bad: "{v} intervenções à mão (minuto {at})",
     notStarted: "os agentes não arrancaram",
