@@ -405,16 +405,24 @@ def insert_position(args):
         # Auto-resolve company_id
         company_id = resolve_company_id(conn, args.company)
 
+        # Il paese della posizione, dal solo testo dello Scout: quello che il luogo nomina, un luogo scritto all'italiana
+        # («Bra (CN), Piemonte») o il paese del portale (talent-com-it, randstad.it). Prima restava vuoto fino all'Analista
+        # (banco build9: 26 posizioni nuove su 28 senza paese). Senza prove resta vuoto, mai indovinato dalla citta' (i nomi
+        # di citta' non implicano un paese, city_names.py).
+        import scout_area
+        country_code = scout_area.derive_country(getattr(args, 'location', None), args.source, args.url)
+        country_name = scout_area.country_name(country_code) if country_code else None
+
         cur = conn.execute("""
-            INSERT INTO positions (title, company, company_id, location,
+            INSERT INTO positions (title, company, company_id, location, loc_country, loc_country_code,
                                    remote_type,
                                    salary_declared_min, salary_declared_max, salary_declared_currency,
                                    salary_estimated_min, salary_estimated_max, salary_estimated_currency,
                                    salary_estimated_source,
                                    url, source, jd_text, requirements,
                                    found_by, deadline, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (args.title, args.company, company_id, args.location,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (args.title, args.company, company_id, args.location, country_name, country_code.upper() if country_code else None,
               args.remote_type,
               args.salary_declared_min, args.salary_declared_max, args.salary_declared_currency or 'EUR',
               args.salary_estimated_min, args.salary_estimated_max, args.salary_estimated_currency or 'EUR',
