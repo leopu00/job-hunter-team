@@ -27,6 +27,9 @@ def send(binary, session, text, *, transport=run):
     return checked(lambda: transport([binary, session, text], 120).returncode == 0)
 
 
+KICKOFF_PAUSE_MAX_S = float(os.environ.get("JHT_KICKOFF_PAUSE_MAX_S", "21600"))
+
+
 def kickoff(session, role, *, sender=None, sleeper=time.sleep):
     from agent_pause import is_paused
     from standby import is_active
@@ -41,6 +44,11 @@ def kickoff(session, role, *, sender=None, sleeper=time.sleep):
         f"Session recreated by the watchdog. {body}"
     )
     binary = os.environ.get("JHT_TMUX_SENDER") or "jht-tmux-send"
+    # While the spending brake holds the team the pi spend gate drops every message (handled, never sent to the model): the recovery
+    # message waits for the pause to lift instead of being lost (banco build9: four Scouts «unbriefed am leeren Prompt»).
+    import spend_gate_state
+    if not spend_gate_state.wait_until_lifted(KICKOFF_PAUSE_MAX_S, home=home, sleeper=sleeper):
+        return False
     # A finite bootstrap retry: a newly created pane may still be its shell.
     for number in range(MAX_ATTEMPTS):
         if number:

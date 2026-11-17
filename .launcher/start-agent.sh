@@ -1994,6 +1994,22 @@ _kickoff() {
     . /app/.launcher/tui-helpers.sh
     echo "[$(date +%H:%M:%S)] waiting for ready..."
     if tui_wait_ready "$JHT_KICKOFF_SESS"; then
+      # While the spending brake holds the team the pi spend gate HOLDS every message (handled and dropped, the sender cannot
+      # tell): a brief sent now is lost and the worker stands at an empty prompt (banco build9, four Scouts). Wait for the pause to
+      # lift. The Assistente is the one the gate leaves out.
+      case "$JHT_KICKOFF_SESS" in
+        ASSISTENTE*) ;;
+        *)
+          if python3 /app/shared/skills/spend_gate_state.py paused; then
+            echo "[$(date +%H:%M:%S)] the spending brake holds the team: waiting for the pause to lift before sending"
+            if python3 /app/shared/skills/spend_gate_state.py wait --max "${JHT_KICKOFF_PAUSE_MAX_S:-21600}"; then
+              echo "[$(date +%H:%M:%S)] the pause is lifted"
+            else
+              echo "[$(date +%H:%M:%S)] SKIPPED: the pause still holds the team after ${JHT_KICKOFF_PAUSE_MAX_S:-21600} s, the message is not sent"
+              exit 0
+            fi
+          fi ;;
+      esac
       echo "[$(date +%H:%M:%S)] ready. sending message (${#JHT_KICKOFF_MSG} chars)..."
       tui_send_verified "$JHT_KICKOFF_SESS" "$JHT_KICKOFF_MSG"
       case $? in
