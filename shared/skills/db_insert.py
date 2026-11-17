@@ -20,7 +20,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _db import get_db, ensure_schema, resolve_company_id
+from _db import get_db, ensure_schema, resolve_company_id, link_positions_to_company
 from profile_gate import check_minimum_viable_profile
 from score_ranges import COMPONENT_LIMITS, SCORE_COMPONENT_LABELS, TOTAL_LIMIT
 from external_content import (
@@ -460,9 +460,11 @@ def insert_company(args):
     """, (args.name, args.website, args.hq_country, args.sector, args.size,
           args.glassdoor_rating, args.red_flags, args.culture_notes,
           args.analyzed_by, args.verdict, clean_about(args.about)))
-    conn.commit()
     # lastrowid non dice niente dopo un aggiornamento: l'id si legge.
     company_id = conn.execute("SELECT id FROM companies WHERE name = ?", (args.name,)).fetchone()[0]
+    # le posizioni inserite prima dell'azienda (dallo SCOUT) si collegano adesso
+    link_positions_to_company(conn, company_id, args.name)
+    conn.commit()
     print(f"Company inserted/updated: {args.name} (ID: {company_id})")
     conn.close()
 

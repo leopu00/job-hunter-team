@@ -15,6 +15,7 @@ import { readFileSync } from "node:fs";
 
 import type { Parsed } from "./argv.ts";
 import { cleanAbout } from "./company-about.ts";
+import { linkPositionsToCompany } from "./db-insert.ts";
 import { flattenExternalValue, EXTERNAL_INLINE_FIELDS } from "./external-content.ts";
 import type { Database } from "./jobs-db.ts";
 import { interpretEscapes, pyFloatRepr, pySlice, pyStr, pyTruthy, PY_SPACE_CLASS } from "./py-format.ts";
@@ -549,6 +550,8 @@ export function updateCompany(db: Database, a: Parsed, actor: string): ScriptRes
       return { stdout: "No fields to update.\n", exitCode: 0 };
     }
     db.prepare(`UPDATE companies SET ${sets.join(", ")} WHERE name = ?`).run(...params, name);
+    // a company already known gathers the positions left unlinked (inserted before it)
+    linkPositionsToCompany(db, companyId, name);
     if (pyTruthy(action) && companyId) {
       // The Python lets a closing check through here: companies have no closing write.
       recordDiffs(db, "company", companyId, action!, diffs(before, snapshot(db, "companies", companyId, COMPANY_TRACKED)), a, actor);
