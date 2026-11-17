@@ -50,9 +50,9 @@ function loadJson(path: string): unknown {
   });
 }
 
-/** `isinstance(v, int)`: an int, or a bool, which Python counts as one. */
-const isInt = (v: unknown): v is number | boolean => (typeof v === "number" && Number.isInteger(v)) || typeof v === "boolean";
 const asNumber = (v: number | boolean) => (typeof v === "boolean" ? Number(v) : v);
+/** An int that is not a bool: `true` is not a score or a number of days (enrichment_policy.load_policy, T327). */
+const isWholeNumber = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v);
 const isDict = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v) && !(v instanceof PyFloat);
 
 export class EnrichmentPolicy {
@@ -109,14 +109,14 @@ export class EnrichmentPolicy {
         const ms = sec["min_score"];
         // `sec.get("min_score")`: a missing key is None too.
         if (ms === undefined || ms === null) merged[section].min_score = null;
-        else if (isInt(ms) && asNumber(ms) >= 0 && asNumber(ms) <= 100) merged[section].min_score = ms;
+        else if (isWholeNumber(ms) && ms >= 0 && ms <= 100) merged[section].min_score = ms;
       }
       if (section === "geocode_missing" && typeof sec["non_remote_only"] === "boolean") merged.geocode_missing.non_remote_only = sec["non_remote_only"];
       if (section === "recheck_weekly") {
         const score = sec["min_score"];
         const days = sec["older_than_days"];
-        if (isInt(score) && asNumber(score) >= 0 && asNumber(score) <= 100) merged.recheck_weekly.min_score = score;
-        if (isInt(days) && asNumber(days) >= 1 && asNumber(days) <= 365) merged.recheck_weekly.older_than_days = days;
+        if (isWholeNumber(score) && score >= 0 && score <= 100) merged.recheck_weekly.min_score = score;
+        if (isWholeNumber(days) && days >= 1 && days <= 365) merged.recheck_weekly.older_than_days = days;
       }
     }
     return merged;
