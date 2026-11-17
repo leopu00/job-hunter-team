@@ -61,7 +61,7 @@ const prompter = {
   intro: async () => {}, outro: async (message) => say('outro', { message }),
   note: async (message, title) => say('note', { message, title }),
   select: async (p) => { say('select', { message: p.message, options: p.options.map((o) => o.value), initial: p.initialValue });
-    const wanted = answers.select?.[p.message];
+    const wanted = answers.select?.[p.message] ?? answers.byOptions?.[p.options.map((o) => o.value).join()];
     return p.options.some((o) => o.value === wanted) ? wanted : (p.initialValue ?? p.options[0].value); },
   multiselect: async () => [], text: async (p) => { say('text', { message: p.message }); return answers.text?.[p.message] ?? ''; },
   password: async (p) => { say('password', { message: p.message, rejects: p.validate?.('short') ?? null }); return keys.shift() ?? ''; },
@@ -449,4 +449,49 @@ test('a setup that leaves without a sign-in does not leave the flag behind', () 
   const box = sandbox({ piLogsIn: false });
   run(box, { select: { 'AI Provider': 'openai', 'How does Pi sign in to OpenAI?': 'subscription' } });
   assert.equal(existsSync(join(box.home, '.setup-open.flag')), false);
+});
+
+// «Update the values» with the same service and a key already kept (giro vps-42, build9): the key is not asked again, keeping it is the default
+const keptBefore = (provider) => JSON.stringify({ version: 4, active_provider: provider, harness: 'pi', providers: { [provider]: { name: provider, auth_method: 'api_key', model: 'm' } }, channels: {} });
+function withKeptKey(provider) {
+  const box = sandbox({ existingConfig: keptBefore(provider) });
+  mkdirSync(join(box.deps, 'keys'), { recursive: true, mode: 0o700 });
+  writeFileSync(join(box.deps, 'keys', `${provider}.key`), `${KEY}\n`, { mode: 0o600 });
+  return box;
+}
+const keepAsk = (events) => events.find((e) => e.kind === 'select' && e.options.join() === 'keep,new');
+
+test('same service, a key kept that the provider accepts: «keep the key» is the default and no key is typed', () => {
+  const box = withKeptKey('glm');
+  const { r, events, configText, out } = run(box, { select: { 'Config management': 'modify', 'AI Provider': 'glm' } }, [200]);
+  assert.equal(r.status, 0, r.stderr);
+  const ask = keepAsk(events);
+  assert.ok(ask, 'the choice to keep the key is offered');
+  assert.equal(ask.initial, 'keep');
+  assert.equal(events.some((e) => e.kind === 'password'), false, 'nothing is typed');
+  const config = JSON.parse(configText);
+  assert.equal(config.providers.glm.api_key_ref.path, join(box.deps, 'keys', 'glm.key'));
+  assert.equal(readFileSync(join(box.deps, 'keys', 'glm.key'), 'utf8'), `${KEY}\n`, 'the key is as it was');
+  assert.equal(out.includes(KEY), false);
+});
+
+test('same service and «a new key»: the key is asked and replaces the old one', () => {
+  const box = withKeptKey('glm');
+  const { events } = run(box, { select: { 'Config management': 'modify', 'AI Provider': 'glm' }, byOptions: { 'keep,new': 'new' }, keys: [OTHER] }, [200, 200]);
+  assert.ok(keepAsk(events));
+  assert.ok(events.some((e) => e.kind === 'password'));
+  assert.equal(readFileSync(join(box.deps, 'keys', 'glm.key'), 'utf8'), `${OTHER}\n`);
+});
+
+test('a kept key the provider refuses is not offered: the key is asked', () => {
+  const box = withKeptKey('glm');
+  const { events } = run(box, { select: { 'Config management': 'modify', 'AI Provider': 'glm' }, keys: [OTHER] }, [401, 200]);
+  assert.equal(keepAsk(events), undefined);
+  assert.ok(events.some((e) => e.kind === 'password'));
+});
+
+test('another service than the saved one: the key of that service is asked, nothing is offered to keep', () => {
+  const box = withKeptKey('glm');
+  const { events } = run(box, { select: { 'Config management': 'modify', 'AI Provider': 'kimi' }, keys: [OTHER] }, [200]);
+  assert.equal(keepAsk(events), undefined);
 });

@@ -422,10 +422,46 @@ def _held_by_the_budget(flag, budget):
             and record.get("budget_usd") == budget["usd"])
 
 
+def _wake_the_team(api, sessions, why):
+    """[RIPRENDI] to every session the pause stopped, the moment the pause is lifted: they were ESC'd, and left to wait for the
+    Sentinella's next cycle they stayed silent for a quarter of an hour (giro vps-42: «allows work again» 18:31, the Scouts back at
+    18:46). The Captain and the Sentinella have their own notice; a team the person stopped, a standby, and an agent the person
+    paused alone are not woken here. Best effort: a session that does not answer is left to that next cycle, as before."""
+    home = api._path("JHT_HOME")
+    try:
+        if (Path(home) / ".team-halted.flag").exists() or (Path(home) / ".team-standby.flag").exists():
+            return []
+        alone = set()
+        try:
+            import agent_pause
+            alone = set(agent_pause.paused_sessions(home=home))
+        except Exception:  # noqa: BLE001 - without the list nobody is held back by it
+            pass
+        text = ("[RIPRENDI] The pause is over (%s). Your session and context were never closed: pick up EXACTLY where you were, "
+                "with the step you had in hand, and do not start over." % why)
+        woken = []
+        for session in sessions or []:
+            if session in (api.CAPITANO_SESSION, api.SENTINELLA_SESSION) or session in alone or session in NEVER_WAKE:
+                continue
+            try:
+                if api.jht_tmux_send(session, text):
+                    woken.append(session)
+            except Exception as error:  # noqa: BLE001
+                print("[bridge V6] WARN pi spend cap wake of %s: %s" % (session, error))
+        return woken
+    except Exception as error:  # noqa: BLE001 - a wake that fails must not stop the tick
+        print("[bridge V6] WARN pi spend cap wake: %s" % error)
+        return []
+
+
+NEVER_WAKE = {"SENTINELLA-WORKER", "DOCTOR-WATCHDOG"}
+
+
 def _resume(api, run, day, notify_user):
     i18n = quota_data.shared_i18n()
 
-    was = ((_flag(api) or {}).get("pi_spend_cap") or {}).get("why")
+    flag = _flag(api) or {}
+    was = (flag.get("pi_spend_cap") or {}).get("why")
     try:
         api._path("DAILY_HALT_FLAG").unlink()
     except OSError:
@@ -436,8 +472,10 @@ def _resume(api, run, day, notify_user):
     else:
         text = "[BRIDGE INFO] The pi spending ceiling allows work again: the team can resume; ticks are restarting."
         user = i18n.t("pi_cap.resume")
+    # the gate is open (the flag is gone) BEFORE anyone is told to work: the order of the standby too
+    woken = _wake_the_team(api, flag.get("sessions"), "the budget allows work again" if was in ("budget", "period", "pace") else "spending is back under the ceiling")
     _tell(api, run, "resume:%s:%d" % (day, int(api.time.time())), text, user, notify_user)
-    print("[bridge V6] %s PI-SPEND-CEILING cleared: spending back under the ceiling" % run.now_h)
+    print("[bridge V6] %s PI-SPEND-CEILING cleared: spending back under the ceiling%s" % (run.now_h, " · [RIPRENDI] to %s" % ", ".join(woken) if woken else ""))
 
 
 def _start(home, budget, moment, run, api=None, spent_before=0.0):

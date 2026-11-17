@@ -84,7 +84,11 @@ class Bridge:
         self.write({"consumed_pct": consumed, "cap_pct": cap_pct, "budget_pct": budget, "sessions": [], **(extra or {})})
         self.gate_at_esc = json.loads(self.flag.read_text(encoding="utf-8"))
         self.told_at_esc = len(self.sent) + len(self.users)
-        return ["scout-1"]
+        self.paused = ["CAPITANO", "SENTINELLA", "scout-1", "scout-2", "DOCTOR-WATCHDOG"]
+        payload = json.loads(self.flag.read_text(encoding="utf-8"))
+        payload["sessions"] = self.paused  # what the bridge writes after the ESC
+        self.flag.write_text(json.dumps(payload), encoding="utf-8")
+        return self.paused
 
     def tick(self, no_quota=True, burn_intent=False, state=None):
         run = SimpleNamespace(state=state if state is not None else {}, now_h="12:00:00", _bi_on=burn_intent)
@@ -1003,3 +1007,63 @@ def test_the_notice_of_the_brake_to_the_person_is_accepted_by_jht_notify_user_ea
     bridge.config = budget(5, bridge.clock["now"], bridge.clock["now"] + 1800)
     cap.step(bridge.api, run, notify_user=real)
     assert seen == [0, 0], seen
+
+
+# --- the agents the pause stopped are woken the moment it is lifted (giro vps-42: «allows work again» 18:31, the Scouts back at 18:46) ---
+
+def _woken(bridge):
+    return sorted(s for s, t in bridge.sent if t.startswith("[RIPRENDI]"))
+
+
+def test_a_new_budget_wakes_the_agents_the_pause_stopped_at_once(tmp_path):
+    bridge, state = _a_stop_that_looks_ahead(tmp_path)
+    bridge.clock["now"] += 600
+    bridge.config = budget(5, bridge.clock["now"], bridge.clock["now"] + 1800)
+    bridge.tick(state=state)
+    assert not bridge.flag.exists()
+    assert _woken(bridge) == ["scout-1", "scout-2"], "the two Scouts, not the Captain or the Sentinella (own notice) or a watchdog"
+    wake = next(t for s, t in bridge.sent if s == "scout-1" and t.startswith("[RIPRENDI]"))
+    assert "budget allows work again" in wake and "pick up EXACTLY where you were" in wake
+
+
+def test_nobody_is_woken_while_the_pause_stands(tmp_path):
+    bridge, state = _a_stop_that_looks_ahead(tmp_path)
+    bridge.clock["now"] += 600
+    bridge.tick(state=state)
+    assert bridge.flag.exists() and _woken(bridge) == []
+
+
+def test_a_team_the_person_stopped_or_in_standby_is_not_woken_by_the_brake(tmp_path):
+    for name in (".team-halted.flag", ".team-standby.flag"):
+        bridge, state = _a_stop_that_looks_ahead(tmp_path / name.strip("."))
+        (bridge.home / name).write_text("x", encoding="utf-8")
+        bridge.clock["now"] += 600
+        bridge.config = budget(5, bridge.clock["now"], bridge.clock["now"] + 1800)
+        bridge.tick(state=state)
+        assert not bridge.flag.exists() and _woken(bridge) == [], name
+
+
+def test_an_agent_the_person_paused_alone_is_not_woken(tmp_path, monkeypatch):
+    import agent_pause
+    monkeypatch.setattr(agent_pause, "paused_sessions", lambda home=None: ["scout-2"])
+    bridge, state = _a_stop_that_looks_ahead(tmp_path)
+    bridge.clock["now"] += 600
+    bridge.config = budget(5, bridge.clock["now"], bridge.clock["now"] + 1800)
+    bridge.tick(state=state)
+    assert _woken(bridge) == ["scout-1"]
+
+
+def test_a_session_that_does_not_answer_does_not_stop_the_resume(tmp_path):
+    bridge, state = _a_stop_that_looks_ahead(tmp_path)
+    send = bridge.api.jht_tmux_send
+
+    def failing(session, text):
+        if session == "scout-1":
+            raise OSError("no pane")
+        return send(session, text)
+
+    bridge.api.jht_tmux_send = failing
+    bridge.clock["now"] += 600
+    bridge.config = budget(5, bridge.clock["now"], bridge.clock["now"] + 1800)
+    bridge.tick(state=state)
+    assert not bridge.flag.exists() and _woken(bridge) == ["scout-2"]
