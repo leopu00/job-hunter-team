@@ -496,7 +496,8 @@
           "k": "brakeNotRecorded",
           "ok": null
         }
-      ]
+      ],
+      "invalid": "creditEndedNoPositions"
     },
     {
       "id": "r3",
@@ -7480,6 +7481,10 @@
     ]
   },
   "invalidBench": [
+    {
+      "profile": "nurse",
+      "reason": "benchCancelled"
+    },
     {
       "profile": "cook",
       "reason": "benchDailyBudget"
