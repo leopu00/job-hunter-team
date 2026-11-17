@@ -718,6 +718,8 @@
   "wizard.cli.subscription_token": "Jeton de session de l'abonnement (facultatif ; la connexion est faite par le programme du fournisseur)",
   "wizard.cli.model": "Modèle d'IA par défaut",
   "wizard.cli.language": "Langue de l'équipe et de l'Assistente (en, it, hu, es, de, fr, pt)",
+  "wizard.language.save_failed": "La langue n'a pas pu être enregistrée (%s). Tant qu'elle ne l'est pas, l'équipe écrit en anglais.",
+  "wizard.language.title": "Langue",
   "wizard.cli.skip_health": "Ne pas vérifier la clé API",
   "wizard.cli.reset": "Recommencer la configuration à zéro",
   "wizard.cli.interrupted": "Setup interrompu.",

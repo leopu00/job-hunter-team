@@ -718,6 +718,8 @@
   "wizard.cli.subscription_token": "Token de sessão da subscrição (opcional; o login é feito pelo programa do fornecedor)",
   "wizard.cli.model": "Modelo de IA predefinido",
   "wizard.cli.language": "Idioma da equipa e do Assistente (en, it, hu, es, de, fr, pt)",
+  "wizard.language.save_failed": "Não foi possível guardar o idioma (%s). Até ficar guardado, a equipa escreve em inglês.",
+  "wizard.language.title": "Idioma",
   "wizard.cli.skip_health": "Saltar a verificação da chave API",
   "wizard.cli.reset": "Recomeçar a configuração do zero",
   "wizard.cli.interrupted": "Setup interrompido.",

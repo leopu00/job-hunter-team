@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 LOCALES = ROOT / "shared" / "locales"
 LANGUAGES = ("it", "de", "es", "fr", "hu", "pt")
 ONBOARDING = re.compile(
-    r"^(host_setup\.|welcome\.|wizard\.(checks|cloud|step|provider|oauth|cli|access)\.|"
+    r"^(host_setup\.|welcome\.|wizard\.(checks|cloud|step|provider|oauth|cli|access|language)\.|"
     r"wizard\.(welcome_subtitle|aborted_prereqs|profile\.intro|outro_done|outro_done_running|outro_aborted|"
     r"start\.ready|start\.done|team\.starting|team\.start_failed)$)"
 )

@@ -90,7 +90,19 @@ test('a language that cannot be saved does not stop the setup', async () => {
   const notes = [];
   const prompter = { select: async () => 'it', note: async (m) => notes.push(m) };
   await askLanguage(prompter, { env: {}, home: '/nonexistent/dir/for/jht' });
-  assert.match(notes[0], /could not be saved/);
+  assert.match(notes[0], /^Non è stato possibile salvare la lingua \(/, 'said in the language just chosen');
+});
+
+test('the note on a language not saved is in each language chosen', async () => {
+  const catalogs = Object.fromEntries(['en', 'it', 'de', 'es', 'fr', 'hu', 'pt'].map((l) => [l, JSON.parse(readFileSync(join(cli, '..', 'shared', 'locales', `${l}.json`), 'utf8'))]));
+  for (const [lang, catalog] of Object.entries(catalogs)) {
+    const notes = [];
+    const prompter = { select: async () => lang, note: async (m, title) => notes.push([m, title]) };
+    await askLanguage(prompter, { env: {}, home: '/nonexistent/dir/for/jht' });
+    const [before] = catalog['wizard.language.save_failed'].split('%s');
+    assert.ok(notes[0][0].startsWith(before), lang);
+    assert.equal(notes[0][1], catalog['wizard.language.title'], lang);
+  }
 });
 
 test('jht setup lists --language', () => {

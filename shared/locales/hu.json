@@ -719,6 +719,8 @@
   "wizard.cli.subscription_token": "Az előfizetés munkamenet-tokenje (nem kötelező; a belépést a szolgáltató programja intézi)",
   "wizard.cli.model": "Alapértelmezett AI-modell",
   "wizard.cli.language": "A csapat és az Assistente nyelve (en, it, hu, es, de, fr, pt)",
+  "wizard.language.save_failed": "A nyelvet nem sikerült menteni (%s). Amíg nincs mentve, a csapat angolul ír.",
+  "wizard.language.title": "Nyelv",
   "wizard.cli.skip_health": "Az API-kulcs ellenőrzésének kihagyása",
   "wizard.cli.reset": "A beállítás újrakezdése elölről",
   "wizard.cli.interrupted": "A setup megszakadt.",
