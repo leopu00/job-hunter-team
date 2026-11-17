@@ -157,27 +157,33 @@ export async function POST(req: NextRequest) {
   if (!admin) return NO_SERVICE_ROLE;
 
   const { token, prefix, hash } = generateSyncToken();
-  const row: Record<string, unknown> = {
-    user_id: user.id,
-    name,
-    token_prefix: prefix,
-    token_hash: hash,
-    expires_at: expiresAt,
-    // Created on this page: the box gets the bearer token only, no user session. Without a pairing session it does
-    // not close the L3 door of the website (107).
-    token_origin: "page",
-  };
-  const insertToken = (values: Record<string, unknown>) =>
-    admin
-      .from("cloud_sync_tokens")
-      .insert(values)
-      .select("id, name, token_prefix, created_at, expires_at")
-      .single();
-  let { data, error } = await insertToken(row);
+  // Created on this page: the box gets the bearer token only, no user session. Without a pairing session it does not
+  // close the L3 door of the website (107).
+  let { data, error } = await admin
+    .from("cloud_sync_tokens")
+    .insert({
+      user_id: user.id,
+      name,
+      token_prefix: prefix,
+      token_hash: hash,
+      expires_at: expiresAt,
+      token_origin: "page",
+    })
+    .select("id, name, token_prefix, created_at, expires_at")
+    .single();
   // 107 not applied yet: the token is born of unknown origin, as before 107.
   if (missingTokenOriginColumn(error)) {
-    const { token_origin: _origin, ...withoutOrigin } = row;
-    ({ data, error } = await insertToken(withoutOrigin));
+    ({ data, error } = await admin
+      .from("cloud_sync_tokens")
+      .insert({
+        user_id: user.id,
+        name,
+        token_prefix: prefix,
+        token_hash: hash,
+        expires_at: expiresAt,
+      })
+      .select("id, name, token_prefix, created_at, expires_at")
+      .single());
   }
 
   if (error)
