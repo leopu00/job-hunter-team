@@ -8,6 +8,7 @@ not there, a status the page cannot draw or a word missing in one language would
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 
@@ -72,9 +73,27 @@ def test_every_word_of_the_targets_and_of_the_rounds_is_there_in_the_seven_langu
         assert "{n}" in re.search(r'buildLabel: "([^"]*)"', block).group(1), lang
 
 
+# Generic forms only: a list of the real words would publish them here. A file outside the repo may add words.
+PRIVATE_FORMS = {
+    "an IP address": r"\b\d{1,3}(\.\d{1,3}){3}\b",
+    "an e-mail address": r"[\w.+-]+@[\w-]+\.[\w.-]+",
+    "an account of the test machines": r"\bjht[a-z]+\b",
+    "a numbered server": r"\b(VPS|server|host)[\s-]*\d+\b",
+    "a host of a private network": r"\b[\w-]+\.(local|lan|internal|home|ts\.net)\b",
+    "a home folder": r"/home/\w+|/Users/\w+|[A-Z]:\\\\Users",
+    "an API key": r"\b(sk|ghp|gho|xox[bp])[-_][A-Za-z0-9]|\bAKIA[0-9A-Z]{8,}|\beyJ[A-Za-z0-9_-]{10,}",
+}
+
+
 def test_the_page_holds_no_name_of_a_test_person_and_no_machine():
     text = json.dumps(DATA, ensure_ascii=False) + PAGE
-    for word in ("Antonio", "Esposito", "Franca", "Bellini", "Giovanni", "Pellegrini", "Lena", "Brandt", "jhtgiro", "VPS 42", "thinkpad"):
-        assert word not in text, word
-    assert re.search(r"\b\d{1,3}(\.\d{1,3}){3}\b", text) is None, "an IP address"
-    assert "sk-" not in text
+    for what, form in PRIVATE_FORMS.items():
+        assert re.search(form, text, re.I) is None, what
+    # a test person is a job, never a name: the profile of a round is a key the page translates
+    for r in DATA["rounds"]:
+        assert re.fullmatch(r"[a-z][A-Za-z]*", r["profile"]), r["id"]
+    extra = os.environ.get("JHT_PRIVATE_WORDS_FILE")
+    if extra and Path(extra).is_file():
+        for word in Path(extra).read_text(encoding="utf-8").split("\n"):
+            word = word.strip()
+            assert not word or re.search(rf"\b{re.escape(word)}\b", text, re.I) is None, "a word of the private list"

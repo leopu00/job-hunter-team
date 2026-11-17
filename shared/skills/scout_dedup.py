@@ -24,6 +24,7 @@ Exit code (per gateare anche in bash: `scout_dedup.py check … && db_insert.py 
 Livelli (gerarchia di check_duplicate):
   0 = LinkedIn job ID · 1 = URL esatto · 2 = azienda+titolo+city-norm
   3 = azienda+titolo simile (>0.85)+city-norm
+  4 = stesso testo dell'annuncio + city-norm (solo all'INSERT, che ha il testo: db_insert.check_duplicate_text)
 """
 import argparse
 import json
@@ -42,6 +43,7 @@ _LEVEL_BY_PREFIX = (
     ("URL esatto", 1),
     ("azienda+titolo+city", 2),
     ("azienda+titolo simile", 3),
+    ("testo dell'annuncio", 4),
 )
 
 

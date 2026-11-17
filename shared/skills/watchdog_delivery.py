@@ -15,7 +15,7 @@ from text_language import team_language_line
 from tmux_send_run import run
 
 KICKOFF = {
-    "scout": "Resume the main loop: start from CIRCLE 1 of the candidate profile and notify the Analysts in batches of 3–5 positions.",
+    "scout": "Resume the main loop: start from CIRCLE 1 of the candidate profile and notify the Analysts after each insert (never wait for a batch).",
     "analista": "Resume the main loop using the db_query.py next-for-analista queue.",
     "scorer": "Resume the main loop using the db_query.py next-for-scorer queue.",
     "scrittore": "Resume the main loop using the db_query.py next-for-scrittore queue.",

@@ -69,6 +69,21 @@ def _plain(text) -> str:
 
 GENERIC = frozenset(_plain(w) for w in _GENERIC_RAW.split())
 
+# The words of a SECTOR or a PLACE of work, not of a trade: a family that declares them (the advice says to) lets a title in
+# through them alone. Measured 17/11 on a nurse in Torino: a «CUOCO/A PER RSA» passed for «rsa». Such a word counts only in a
+# TITLE that also holds a generic worker word («Addetto RSA», «Operaio di cantiere»): the cook has none, the nurse has her own
+# trade word in the family and never needs it.
+_SECTOR_RAW = """
+rsa residenza residenze ospedale ospedali ospedaliero ospedaliera sanitario sanitaria sanitari sanitarie reparto reparti
+ambulatorio ambulatori clinica cliniche cantiere cantieri edile edili edilizia edilizio costruzioni costruzione
+hospital hospitals ward clinic clinics site sites construction building healthcare
+krankenhaus klinik station bau baustelle
+hopital clinique chantier batiment
+obra obras construccion construcao
+korhaz
+"""
+SECTOR_WORDS = frozenset(_plain(w) for w in _SECTOR_RAW.split())
+
 
 def _tokens(text) -> list:
     """The words of a text, one-letter ones left out: «Addetto/a magazzino» is «addetto magazzino» (the gender ending is no word)."""
@@ -235,6 +250,8 @@ def verdict(title, requirements=None, snippet=None, profile=None) -> dict:
             continue
         for term in declaration["terms"]:
             if term_in(term, words):
+                if term in SECTOR_WORDS and not (label == "title" and any(w in GENERIC for w in words)):
+                    continue   # a word of the sector or the place is not a trade: it needs a worker word beside it, in the title
                 return {"verdict": "ok", "term": term, "where": label}
     if not (_tokens(title) or _tokens(requirements) or _tokens(snippet)):
         return {"verdict": "ok", "reason": "no text to compare"}
