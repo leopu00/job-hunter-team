@@ -92,7 +92,7 @@ Der Scout vorfiltert nur die **komplett außerhalb des Scopes** liegenden Fälle
 
 - 🚫 Titel enthält explizit: `senior`, `lead`, `staff`, `principal`, `head of`, `director` → ÜBERSPRINGEN (Senioritätslücke zu groß)
 - 🚫 Geografische Arbeitserlaubnis inkompatibel mit dem Profil (z.B. `US-only` / `Canada-only` und der Kandidat hat kein Visum) → ÜBERSPRINGEN
-- 🚫 Domain komplett außerhalb IT/Coding (z.B. Konditor, Buchhalter, Vertrieb) wenn der Kandidat in IT ist → ÜBERSPRINGEN
+- 🚫 Außerhalb des Berufs des Profils: Titel und Anforderungen enthalten kein Wort der von dir deklarierten Berufsfamilie (`scout_role.py`) → ÜBERSPRINGEN (auch der INSERT lehnt es ab: `ROLE_MISMATCH`)
 - 🚫 Harte Anforderung von `> real_years + 3` Jahren Erfahrung → ÜBERSPRINGEN (moderate Lücke ist ok, der Scorer entscheidet)
 
 Alles andere: **einfügen**. Angrenzende Stacks (Data, DevOps, Platform, Frontend, Automation, ML-angrenzend, etc.) gehen alle durch; der Scorer weist einen fit-proportionalen Score zu und der Nutzer sieht sie.
@@ -148,3 +148,7 @@ Wenn der Analyst `[FEEDBACK]` mit einem wiederkehrenden Tag sendet (`[SENIORITY]
 - `position-insert` — was für jede Kandidatenposition zu tun ist, nachdem du entschieden hast WO du suchst.
 - `agents/scout/scout.md` — der Orchestrator-Prompt des Scout, der diesen Skill aufruft.
 - `agents/_team/architettura.md` Phase 1 — größeres Bild von Discovery innerhalb der Pipeline.
+
+### Der Beruf des Profils
+
+Hat das Profil eine `target_role`, deklariere EINMAL die Berufsfamilie mit den Wörtern der Anzeigen: `python3 /app/shared/skills/scout_role.py declare --term "<Beruf>" --term "<Synonym>" --term "<angrenzender Beruf, den du akzeptierst>" --agent $MY_ID`. Zeichne sie weit (der Beruf in der Sprache des Portals und auf Englisch, seine Schreibweisen, die angrenzenden Berufe: ein Kurier für einen Fahrer), aber nie mit einem Wort, das keinen Beruf nennt (`operaio`, `addetto`, `assistant`: abgelehnt). `scout_role.py check --title ... [--snippet ...]` sagt es vor dem Abruf (exit 5 = verwerfen, Grund `role`); der INSERT lehnt dasselbe ab (`ROLE_MISMATCH`). Kreis 5 (Grenze) bleibt innerhalb der Familie: Eine angrenzende Rolle ist eine, deren Wort du deklariert hast.

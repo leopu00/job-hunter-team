@@ -92,7 +92,7 @@ O Scout pré-filtra apenas os casos **totalmente fora de escopo**. **Não fazer 
 
 - 🚫 Título contém explicitamente: `senior`, `lead`, `staff`, `principal`, `head of`, `director` → SKIP (gap de seniority demasiado grande)
 - 🚫 Work-auth geográfico incompatível com o perfil (ex. `US-only` / `Canada-only` e o candidato não tem visto) → SKIP
-- 🚫 Domínio completamente fora de IT/coding (ex. pasteleiro, contabilista, vendas) quando o candidato está em IT → SKIP
+- 🚫 Fora do ofício do perfil: o título e os requisitos não têm nenhuma palavra da família do ofício que declaraste (`scout_role.py`) → SKIP (o INSERT também o recusa: `ROLE_MISMATCH`)
 - 🚫 Requisito rígido de `> anos_reais + 3` anos de experiência → SKIP (gap moderado é aceitável, o Scorer decide)
 
 Tudo o resto: **inserir**. Stacks adjacentes (dados, devops, plataforma, frontend, automação, ML adjacente, etc.) passam todos; o Scorer atribui uma pontuação proporcional ao fit e o utilizador vê-os.
@@ -148,3 +148,7 @@ Quando o Analista envia `[FEEDBACK]` com uma tag recorrente (`[SENIORITY] · [ST
 - `position-insert` — o que fazer para cada posição candidata uma vez decidido ONDE procurar.
 - `agents/scout/scout.md` — o prompt orquestrador do Scout que chama esta skill.
 - `agents/_team/architettura.md` Fase 1 — panorama geral da Descoberta dentro do pipeline.
+
+### O ofício do perfil
+
+Se o perfil tem um `target_role`, declara UMA vez a família do ofício com as palavras dos anúncios: `python3 /app/shared/skills/scout_role.py declare --term "<ofício>" --term "<sinónimo>" --term "<ofício adjacente que aceitas>" --agent $MY_ID`. Desenha-a ampla (o ofício na língua do portal e em inglês, as suas grafias, os ofícios adjacentes: um estafeta para um motorista) mas nunca com uma palavra que não nomeia um ofício (`operaio`, `addetto`, `assistant`: recusada). `scout_role.py check --title ... [--snippet ...]` di-lo antes do fetch (exit 5 = descartar, motivo `role`); o INSERT recusa o mesmo (`ROLE_MISMATCH`). O círculo 5 (fronteira) fica dentro da família: um papel adjacente é um cuja palavra declaraste.

@@ -81,10 +81,33 @@ def test_the_plan_puts_every_core_portal_before_any_minor_one_and_the_native_lan
 
 
 def test_a_language_the_table_does_not_have_is_said_not_silently_dropped(profile):
+    profile.write_text("languages:\n  - language: Polski\n    level: native\n  - language: English\n    level: C1\n", encoding="utf-8")
+    plan = cov.load_plan()
+    assert plan["unmapped"] == ["pl"]
+    assert plan["entries"] and all(e["language"] in ("en", "remote") for e in plan["entries"])
+
+
+def test_a_hungarian_profile_has_a_plan_with_the_board_of_the_trades_that_are_not_it(profile):
     profile.write_text("languages:\n  - language: Magyar\n    level: native\n  - language: English\n    level: C1\n", encoding="utf-8")
     plan = cov.load_plan()
-    assert plan["unmapped"] == ["hu"]
-    assert plan["entries"] and all(e["language"] in ("en", "remote") for e in plan["entries"])
+    assert plan["unmapped"] == []
+    hu = {e["slug"]: e for e in plan["entries"] if e["language"] == "hu"}
+    assert hu["profession-hu"]["tier"] == "core" and hu["profession-hu"]["access"] == "search"
+    assert "allasok/1,0,0,<word>" in hu["profession-hu"]["hint"] and "robots.txt" in hu["profession-hu"]["hint"]
+    assert hu["indeed"]["access"] == "email" and hu["cvonline-hu"]["tier"] == "minor" and "Crawl-delay: 10" in hu["cvonline-hu"]["hint"]
+    data = cov.table()
+    assert data["broad_terms"]["hu"] and data["level_terms"]["hu"]
+
+
+def test_the_boards_of_germany_and_sweden_for_the_trades_that_are_not_it():
+    data = cov.table()
+    de = {e["slug"]: e for e in data["groups"]["de"]}
+    assert de["jobs-de"]["access"] == "search" and "Crawl-delay: 10" in de["jobs-de"]["hint"] and "jobs.de/jobs/maurer" in de["jobs-de"]["hint"]
+    # a site whose robots.txt shuts the named AI crawlers out is off limits for the Scout: closed, with the reason
+    assert de["kimeta"]["access"] == "closed" and "ClaudeBot" in de["kimeta"]["hint"] and "Log nothing there" in de["kimeta"]["hint"]
+    assert "stepstone.de/jobs/maurer" in de["stepstone-de"]["hint"]
+    se = {e["slug"]: e for e in data["groups"]["sv"]}
+    assert "--field construction" in se["arbetsformedlingen"]["hint"] or "--field health" in se["arbetsformedlingen"]["hint"]
 
 
 def test_a_profile_that_cannot_be_read_has_no_plan_and_demands_nothing(tmp_path, monkeypatch):
@@ -562,7 +585,8 @@ def test_a_person_on_site_who_will_not_move_gets_only_her_own_countrys_boards_ev
     plan = cov.load_plan()
     assert plan["remote"] is False
     assert {e["country"] for e in plan["entries"]} == {"it"}
-    assert _lane_sources() == ["linkedin"]
+    # the Italian boards that are searched (the closed ones are covered, not searched); the trades that are not IT live on the last three
+    assert _lane_sources() == ["linkedin", "randstad-it", "concorsipubblici-it", "jobintourism-it"]
 
 
 def test_the_same_profile_without_the_mode_and_the_relocation_keeps_every_board_as_before(profile):
@@ -584,3 +608,18 @@ def test_an_english_speaking_person_on_site_keeps_the_english_speaking_countries
     profile.write_text("languages:\n  - language: English\n    level: native\npreferences:\n  work_mode: on-site\n  relocation: false\n",
                        encoding="utf-8")
     assert {"linkedin", "thehub"} <= set(_lane_sources())
+
+
+# ── the boards for the trades that are not IT (Italy) ─────────────────────────────────────────────────────────────────
+
+def test_the_italian_boards_for_manual_health_catering_and_logistics_trades_are_public_pages_with_a_checked_robots_hint():
+    data = cov.table()
+    by = {e["slug"]: e for e in data["groups"]["it"]}
+    randstad = by["randstad-it"]
+    assert randstad["tier"] == "core" and randstad["access"] == "search"
+    assert "q-<word>" in randstad["hint"] and "robots.txt" in randstad["hint"] and "/job-redirect/" in randstad["hint"]
+    for slug in ("concorsipubblici-it", "jobintourism-it"):
+        assert by[slug]["tier"] == "minor" and by[slug]["access"] == "search" and "robots.txt allows" in by[slug]["hint"], slug
+    for slug in ("inpa-it", "subito-lavoro", "bakeca-it", "jooble-it", "jobrapido-it"):
+        assert by[slug]["access"] == "closed" and "Log nothing there" in by[slug]["hint"], slug
+    assert sum(1 for e in data["groups"]["it"] if e["tier"] == "core") <= 8

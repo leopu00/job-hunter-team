@@ -92,7 +92,7 @@ Lo Scout pre-filtra solo i casi **totalmente fuori scope**. **Non fare il lavoro
 
 - 🚫 Il titolo contiene esplicitamente: `senior`, `lead`, `staff`, `principal`, `head of`, `director` → SKIP (gap di seniority troppo ampio)
 - 🚫 Work-auth geografica incompatibile con il profilo (es. `US-only` / `Canada-only` e il candidato non ha il visto) → SKIP
-- 🚫 Dominio completamente fuori dall'IT/coding (es. pasticciere, contabile, vendite) quando il candidato è in IT → SKIP
+- 🚫 Fuori dal mestiere del profilo: titolo e requisiti non hanno nessuna parola della famiglia del mestiere che hai dichiarato (`scout_role.py`) → SKIP (anche l'INSERT lo rifiuta: `ROLE_MISMATCH`)
 - 🚫 Requisito rigido di `> anni_reali + 3` anni di esperienza → SKIP (gap moderato va bene, lo Scorer decide)
 
 Tutto il resto: **inseriscilo**. Stack adiacenti (data, devops, platform, frontend, automazione, ML adiacente, ecc.) passano tutti; lo Scorer assegna un punteggio proporzionale al fit e l'utente li vede.
@@ -148,3 +148,7 @@ Quando l'Analista invia `[FEEDBACK]` con un tag ricorrente (`[SENIORITY] · [STA
 - `position-insert` — cosa fare per ogni posizione candidata una volta che hai deciso DOVE cercare.
 - `agents/scout/scout.md` — il prompt orchestratore dello Scout che chiama questa skill.
 - `agents/_team/architettura.md` Fase 1 — quadro più ampio della Discovery nella pipeline.
+
+### Il mestiere del profilo
+
+Se il profilo ha un `target_role`, dichiara UNA volta la famiglia del mestiere con le parole che usano gli annunci: `python3 /app/shared/skills/scout_role.py declare --term "<mestiere>" --term "<sinonimo>" --term "<mestiere adiacente che accetti>" --agent $MY_ID`. Disegnala larga (il mestiere nella lingua del portale e in inglese, le sue grafie, i mestieri adiacenti: un corriere per un autista) ma mai con una parola che non nomina un mestiere (`operaio`, `addetto`, `assistant`: rifiutata). `scout_role.py check --title ... [--snippet ...]` lo dice prima del fetch (exit 5 = scarta, motivo `role`); l'INSERT rifiuta lo stesso (`ROLE_MISMATCH`). Il cerchio 5 (frontiera) resta dentro la famiglia: un ruolo adiacente è uno di cui hai dichiarato la parola.

@@ -91,7 +91,7 @@ The Scout pre-filters only the **totally out-of-scope** cases. **Do not do the A
 
 - 🚫 Title contains explicitly: `senior`, `lead`, `staff`, `principal`, `head of`, `director` → SKIP (seniority gap too wide)
 - 🚫 Geographic work-auth incompatible with the profile (e.g. `US-only` / `Canada-only` and the candidate doesn't have visa) → SKIP
-- 🚫 Domain completely outside IT/coding (e.g. pastry chef, accountant, sales) when the candidate is in IT → SKIP
+- 🚫 Outside the trade of the profile: title and requirements hold no word of the trade family you declared (`scout_role.py`) → SKIP (the INSERT refuses it too: `ROLE_MISMATCH`)
 - 🚫 Hard requirement of `> real_years + 3` years of experience → SKIP (moderate gap is fine, the Scorer decides)
 
 Everything else: **insert it**. Adjacent stacks (data, devops, platform, frontend, automation, ML adjacent, etc.) all go through; the Scorer assigns a fit-proportional score and the user sees them.
@@ -147,3 +147,7 @@ When the Analyst sends `[FEEDBACK]` with a recurring tag (`[SENIORITY] · [STACK
 - `position-insert` — what to do for each candidate position once you've decided WHERE to look.
 - `agents/scout/scout.md` — the Scout's orchestrator prompt that calls this skill.
 - `agents/_team/architettura.md` Phase 1 — bigger picture of Discovery within the pipeline.
+
+### The trade of the profile
+
+If the profile has a `target_role`, declare ONCE the family of the trade in the words ads use: `python3 /app/shared/skills/scout_role.py declare --term "<trade>" --term "<synonym>" --term "<adjacent trade you accept>" --agent $MY_ID`. Draw it wide (the trade in the portal's language and in English, its spellings, the adjacent trades: a courier for a driver) but never with a word that names no trade (`operaio`, `addetto`, `assistant`: refused). `scout_role.py check --title ... [--snippet ...]` tells before the fetch (exit 5 = drop, reason `role`); the INSERT refuses the same (`ROLE_MISMATCH`). Circle 5 (frontier) stays inside the family: an adjacent role is one whose word you declared.

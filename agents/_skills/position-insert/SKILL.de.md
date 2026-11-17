@@ -79,11 +79,11 @@ Blockierte Seiten (NICHT `fetch` MCP verwenden, blockiert durch robots.txt):
 
 ## Gate 4 — Permissive Scout-Level-Filter
 
-Wende NUR die vier voellig-ausserhalb-des-Umfangs-Filter an (vollstaendige Tabelle im Skill `circles-and-sources`). Ueberspringe, wenn:
+Wende NUR die fünf voellig-ausserhalb-des-Umfangs-Filter an (vollstaendige Tabelle im Skill `circles-and-sources`). Ueberspringe, wenn:
 
 - Titel enthaelt explizit: `senior`, `lead`, `staff`, `principal`, `head of`, `director`
 - Geografische Arbeitserlaubnis inkompatibel (`US-only` / `Canada-only` und Kandidat hat kein Visum)
-- Domaene komplett ausserhalb von IT/Coding (und Kandidat ist in IT)
+- Außerhalb des Berufs des Profils: Titel und Anforderungen enthalten kein Wort der von dir deklarierten Berufsfamilie (`scout_role.py`) (auch der INSERT lehnt es ab: `ROLE_MISMATCH`)
 - Harte Anforderung von `> real_years + 3` Jahren Berufserfahrung
 
 Alles andere: durchlassen zu Gate 5. **Mach nicht die Arbeit des Analysten** — verwandte Stacks, Fast-Treffer, kleine Luecken sind alles `checked`-Material; der Scorer wendet den Gap-Penalty an.

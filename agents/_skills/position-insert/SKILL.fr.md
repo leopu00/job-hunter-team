@@ -79,11 +79,11 @@ Sites bloqués (NE PAS utiliser `fetch` MCP, bloqué par robots.txt) :
 
 ## Porte 4 — Filtres permissifs au niveau Scout
 
-Appliquer UNIQUEMENT les quatre filtres totalement hors périmètre (tableau complet dans la skill `circles-and-sources`). Sauter si :
+Appliquer UNIQUEMENT les cinq filtres totalement hors périmètre (tableau complet dans la skill `circles-and-sources`). Sauter si :
 
 - Le titre contient explicitement : `senior`, `lead`, `staff`, `principal`, `head of`, `director`
 - Autorisation de travail géographique incompatible (`US-only` / `Canada-only` et le candidat n'a pas de visa)
-- Domaine complètement hors IT/coding (et le candidat est en IT)
+- Hors du métier du profil : le titre et les exigences ne contiennent aucun mot de la famille du métier que tu as déclarée (`scout_role.py`) (l'INSERT le refuse aussi : `ROLE_MISMATCH`)
 - Exigence stricte de `> années_réelles + 3` ans d'expérience
 
 Tout le reste : passer à la Porte 5. **Ne pas faire le travail de l'Analista** — les stacks adjacents, quasi-correspondances, légers écarts sont tous du matériel `checked` ; le Scorer applique la pénalité de gap.

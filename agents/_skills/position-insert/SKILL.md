@@ -122,11 +122,11 @@ Blocked sites (do NOT use `fetch` MCP, blocked by robots.txt):
 
 ## Gate 4 — Permissive Scout-level filters
 
-Apply ONLY the four totally-out-of-scope filters (full table in `circles-and-sources` skill). Skip if:
+Apply ONLY the five totally-out-of-scope filters (full table in `circles-and-sources` skill). Skip if:
 
 - Title contains explicitly: `senior`, `lead`, `staff`, `principal`, `head of`, `director`
 - Geographic work-auth incompatible (`US-only` / `Canada-only` and candidate has no visa)
-- Domain completely outside IT/coding (and candidate is in IT)
+- Outside the trade of the profile: title and requirements hold no word of the trade family you declared (`scout_role.py`) (the INSERT refuses it too: `ROLE_MISMATCH`)
 - Hard requirement of `> real_years + 3` years of experience
 
 Everything else: pass through to Gate 5. **Don't do the Analyst's job** — adjacent stacks, near-fits, slight gaps are all `checked` material; the Scorer applies the gap penalty.

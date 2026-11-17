@@ -219,14 +219,22 @@ def one_portal(home):
     return home
 
 
-def test_a_plan_with_one_searchable_portal_gives_it_to_lane_0_and_no_company_boards_where_the_table_has_none(one_portal):
+ITALIAN_SEARCH = ["linkedin", "randstad-it", "concorsipubblici-it", "jobintourism-it"]       # the Italian boards a Scout can read
+
+
+def test_an_italian_plan_gives_linkedin_to_lane_0_the_other_boards_round_robin_and_no_company_boards(one_portal):
     plan = cov.load_plan()
-    assert [e["slug"] for e in plan["entries"] if e["access"] == "search"] == ["linkedin"]
+    assert [e["slug"] for e in plan["entries"] if e["access"] == "search"] == ITALIAN_SEARCH
     assert {e["country"] for e in plan["entries"]} == {"it"} and "it" not in cov.table()["ats_boards"]
-    for count in (2, 3, 5):
+    for count in (2, 3, 5, 8):
         out = cov.lanes(plan, count)
         assert out[0]["sources"] == ["linkedin"] and not out[0]["free"]
-        assert all(l["sources"] == [] and l["free"] for l in out[1:]), count          # no company-board lane: Italy has no boards
+        held = [s for l in out for s in l["sources"]]
+        assert sorted(held) == sorted(ITALIAN_SEARCH), count                              # every board in one lane only, no company boards
+        assert [l["free"] for l in out] == [not l["sources"] for l in out]
+    assert [l["sources"] for l in cov.lanes(plan, 2)] == [["linkedin"], ["randstad-it", "concorsipubblici-it", "jobintourism-it"]]
+    eight = cov.lanes(plan, 8)
+    assert all(l["sources"] == [] and l["free"] for l in eight[4:])                        # more Scouts than boards: the rest search freely
 
 
 def test_the_company_boards_lane_stays_where_the_table_has_boards_for_a_country_of_the_plan(home):
@@ -237,11 +245,13 @@ def test_the_company_boards_lane_stays_where_the_table_has_boards_for_a_country_
     assert set(cov.ATS_FAMILIES) <= set(five[-1]["sources"]) and not any(l["free"] for l in five)
 
 
-def test_the_five_scouts_of_an_italian_profile_on_site_only_the_first_gets_linkedin_the_rest_search_freely(one_portal):
-    answers = [_auto(one_portal, "scout-%d" % n, lanes=5) for n in range(1, 6)]
-    assert [a["lane"] for a in answers] == [0, 1, 2, 3, 4]
+def test_the_eight_scouts_of_an_italian_profile_on_site_only_the_first_gets_linkedin_and_the_ones_without_a_board_search_freely(one_portal):
+    answers = [_auto(one_portal, "scout-%d" % n, lanes=8) for n in range(1, 9)]
+    assert [a["lane"] for a in answers] == list(range(8))
     assert answers[0]["sources"] == ["linkedin"] and answers[0]["next"]["source"] == "linkedin" and "free_search" not in answers[0]
-    for a in answers[1:]:
+    for a in answers[1:4]:
+        assert a["sources"] and "free_search" not in a and "linkedin" not in a["sources"]
+    for a in answers[4:]:
         assert a["sources"] == [] and a["free_search"] is True
         step = a["next"]
         assert step["free_search"] is True and "source" not in step and step["plan_done"] is False
@@ -250,14 +260,14 @@ def test_the_five_scouts_of_an_italian_profile_on_site_only_the_first_gets_linke
 
 
 def test_a_free_scout_asking_for_its_next_step_later_still_gets_the_free_search_not_the_first_portal_of_the_plan(one_portal):
-    for n in range(1, 4):
-        _auto(one_portal, "scout-%d" % n, lanes=3)
-    done = subprocess.run([sys.executable, str(SKILLS / "scout_coverage.py"), "next", "--agent", "scout-2"], capture_output=True, text=True,
-                          timeout=60, env=_env(one_portal, 3))
+    for n in range(1, 9):
+        _auto(one_portal, "scout-%d" % n, lanes=8)
+    done = subprocess.run([sys.executable, str(SKILLS / "scout_coverage.py"), "next", "--agent", "scout-6"], capture_output=True, text=True,
+                          timeout=60, env=_env(one_portal, 8))
     assert done.returncode == 0, done.stderr
     assert json.loads(done.stdout.strip().splitlines()[-1])["free_search"] is True
     first = subprocess.run([sys.executable, str(SKILLS / "scout_coverage.py"), "next", "--agent", "scout-1"], capture_output=True, text=True,
-                           timeout=60, env=_env(one_portal, 3))
+                           timeout=60, env=_env(one_portal, 8))
     assert json.loads(first.stdout.strip().splitlines()[-1])["source"] == "linkedin"
 
 
