@@ -12,9 +12,10 @@ export function handleAgents(options = {}, read = readObservation) {
     const snapshot = read();
     if (options.json) console.log(JSON.stringify(snapshot, null, 2));
     else {
-      process.stdout.write(renderObservation(snapshot, { usage: Boolean(options.usage), provider: readActiveProvider() }));
       // the pause of the brake of pi on the budget (JHT-T322): read again at every status, the reason can change
-      const paused = budgetPauseText() ?? onboardingSpendText();
+      const pause = budgetPauseText();
+      process.stdout.write(renderObservation(snapshot, { usage: Boolean(options.usage), provider: readActiveProvider(), paused: Boolean(pause) }));
+      const paused = pause ?? onboardingSpendText();
       if (paused) console.log(`⚠ ${show(paused)}`);
       // a role that cannot start (the Dottore, the Mantenitore): said here, not only retried in the watchdog's log
       for (const text of spawnFailureTexts()) console.log(`⚠ ${show(text)}`);

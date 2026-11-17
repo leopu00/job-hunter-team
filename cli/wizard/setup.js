@@ -45,6 +45,7 @@ import { JHT_CONFIG_PATH, serviceChanged } from './setup-helpers.js';
 import { piApiProvider } from '../../shared/runtime/provider-models.js';
 import { RELEASE_PROVIDERS, RELEASE_HARNESS, codexLegacy, configOffered, offeredWay } from '../../shared/runtime/release-providers.js';
 import pc from 'picocolors';
+import { diskLowRefusal } from '../src/lib/disk-guard.js';
 
 /** «[2/3] text»: the slow steps after the choices, numbered the same way as the installer's. */
 export function stepLine(n, total, text) {
@@ -86,8 +87,10 @@ const PROVIDER_OAUTH_CMD = {
 
 /** The one sentence for a step that did not complete, for the cases where the child could not even say it itself. */
 export function describeStepFailure(label, { missing = false, status = null } = {}) {
-  const why = missing ? 'the JHT program was not found here' : status === null ? 'it could not be started' : `it ended with code ${status}`;
-  return `  ${label} did not complete: ${why}. More details: JHT_DEBUG=1 jht setup`;
+  let why = tf('wizard.substep.code', status);
+  if (missing) why = t('wizard.substep.missing');
+  else if (status === null) why = t('wizard.substep.not_started');
+  return `  ${tf('wizard.substep.failed', label, why)}`;
 }
 
 /**
@@ -132,13 +135,24 @@ function runProviderOauth(cmdName) {
  * Esegue il setup wizard JHT.
  * @param {import('./prompts.js').WizardPrompter} prompter
  */
-export async function runSetupWizard(prompter) {
+// What the setup gives back when everything was set up and saved but the agents refused to start for the disk (disk_low): the
+// command ends with SETUP_EXIT_TEAM_NEEDS_SPACE, and the installer says «set up, the team needs space», not «not set up».
+export const SETUP_TEAM_NEEDS_SPACE = 'team_needs_space';
+export const SETUP_EXIT_TEAM_NEEDS_SPACE = 3;
+
+/** The exit code of a setup that gave back `result`: 0 done, 3 done but the team needs space on the disk, 1 otherwise. */
+export function setupExitCode(result) {
+  if (result === SETUP_TEAM_NEEDS_SPACE) return SETUP_EXIT_TEAM_NEEDS_SPACE;
+  return result ? 0 : 1;
+}
+
+export async function runSetupWizard(prompter, { diskRefusal = diskLowRefusal } = {}) {
   // a setup that is cancelled leaves things as they were: the config as it was (or none), and the key it just stored
   const before = readConfigBytes();
   // keyPath: the file of the key this setup may write; keyBefore: what it held when the setup began (null = there was no file)
   const state = { keyPath: null, keyBefore: null };
   try {
-    return await runSetupSteps(prompter, state);
+    return await runSetupSteps(prompter, state, { diskRefusal });
   } catch (err) {
     if (err instanceof WizardCancelledError) undoCancelledSetup(before, state);
     throw err;
@@ -177,7 +191,7 @@ export function undoCancelledSetup(before, state, { path = JHT_CONFIG_PATH } = {
   }
 }
 
-async function runSetupSteps(prompter, state) {
+async function runSetupSteps(prompter, state, { diskRefusal = diskLowRefusal } = {}) {
   await prompter.intro(t('wizard.intro_title'));
   await askLanguage(prompter);
 
@@ -260,7 +274,7 @@ async function runSetupSteps(prompter, state) {
     );
     const pairCloud = await prompter.confirm({
       message: t('wizard.cloud.enable_prompt'),
-      initialValue: true,
+      initialValue: false, // integrations are turned on when asked for, after the setup: the default is no
     });
     if (pairCloud) {
       const cloudOk = runJhtSubcommand(['cloud', 'login'], 'cloud login');
@@ -460,6 +474,13 @@ async function runSetupSteps(prompter, state) {
     runJhtSubcommand(['team', 'stop', 'assistente'], 'team stop');
   }
   const startOk = runJhtSubcommand(['team', 'start'], 'team start');
+  // The agents refused because the disk is almost full (giro Mac build8): the setup is done and its configuration saved, what is
+  // missing is room on the disk. Said as such, and not as a setup that did not finish.
+  const disk = startOk ? null : diskRefusal();
+  if (disk) {
+    await prompter.outro(tf('wizard.team.start_disk_low', disk.message || ''));
+    return SETUP_TEAM_NEEDS_SPACE;
+  }
   if (!startOk) {
     await prompter.outro(t('wizard.team.start_failed'));
     return false;

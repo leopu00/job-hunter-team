@@ -148,13 +148,13 @@ export async function waitForReady({ probe, ceilingMs, intervalMs = 1000, run = 
 async function settleBefore(previous, item) {
   const seconds = (ms) => Math.max(1, Math.round(ms / 1000));
   if (!previous.ready) {
-    console.log(c.dim(`  ⏳ Waiting ${seconds(item.preDelayMs)}s before ${item.session}...`));
+    console.log(c.dim(`  ⏳ ${say('team.wait_before', { s: seconds(item.preDelayMs), session: item.session })}`));
     await sleep(item.preDelayMs);
     return;
   }
-  console.log(c.dim(`  ⏳ Waiting for ${previous.session} to be ready (up to ${seconds(item.preDelayMs)}s) before ${item.session}...`));
+  console.log(c.dim(`  ⏳ ${say('team.wait_ready', { previous: previous.session, s: seconds(item.preDelayMs), session: item.session })}`));
   const { ready, waitedMs } = await waitForReady({ probe: previous.ready, ceilingMs: item.preDelayMs });
-  console.log(c.dim(ready ? `  ✓ ${previous.session} ready after ${seconds(waitedMs)}s` : `  ⏭ ${previous.session} not seen ready after ${seconds(waitedMs)}s: going on`));
+  console.log(c.dim(ready ? `  ✓ ${say('team.ready_after', { session: previous.session, s: seconds(waitedMs) })}` : `  ⏭ ${say('team.not_ready', { session: previous.session, s: seconds(waitedMs) })}`));
 }
 
 // The Mentor has no record to walk until the first positions have a score, and its first wake at every start
@@ -166,7 +166,7 @@ export function mentorDeferred(run = execArgvInContainer) {
   return r?.code === 1;
 }
 
-const MENTOR_WAITING = 'not yet active (it starts when the first positions have a score)';
+const mentorWaiting = () => say('team.mentor_waits');
 
 // A new user does the onboarding with the Assistente FIRST: the Capitano (and with it the rest of the squad, which only it
 // scales, and the Sentinella, which watches the budget for it) is not started while `captain_gate.py` says the onboarding is open, and the agent watchdog starts it within a minute
@@ -245,9 +245,9 @@ export function releaseUserHolds(agentArg, containerMode, { run } = {}) {
 function reportUserHolds(agentArg, containerMode) {
   const done = releaseUserHolds(agentArg, containerMode);
   if (!done.ok) {
-    console.log(c.dim(`  ℹ holds set by Stop not lifted: ${done.error.split('\n').slice(-1)[0]}`));
+    console.log(c.dim(`  ℹ ${say('team.holds_not_lifted', { error: done.error.split('\n').slice(-1)[0] })}`));
   } else if (done.lifted.length) {
-    console.log(c.dim(`  ℹ lifted the Stop on ${done.lifted.join(', ')}`));
+    console.log(c.dim(`  ℹ ${say('team.holds_lifted', { list: done.lifted.join(', ') })}`));
   }
 }
 
@@ -295,7 +295,7 @@ export function syncNotApplied(label, res) {
   // «not enabled» is the reason itself (the last line), not a word somewhere in the output.
   if (reason && NOT_ENABLED.test(reason)) return null;
   // A step that failed says so even when all it left on stderr was Node's own warnings.
-  return `  ℹ ${label} not applied: ${reason ?? `exit code ${res.code ?? 'unknown'}`}`;
+  return `  ℹ ${say('team.sync_not_applied', { label, reason: reason ?? say('team.exit_code', { code: res.code ?? say('team.exit_unknown') }) })}`;
 }
 
 function reportSyncNotApplied(label, res) {
@@ -312,8 +312,8 @@ function keyRefusedInContainer() {
   // the last line the container wrote, with the colors and every other control character out: it is printed as it is
   const line = String(res.stderr || res.stdout || '').replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '')
     .trim().split('\n').map((l) => l.trim()).filter(Boolean).slice(-1)[0];
-  const said = (line || 'The provider rejected the API key. Run: jht setup').replace(/[.\s]*$/, '.');
-  return `${said} If the key is right (another plan, another route), start anyway: jht team start --skip-key-check`;
+  const said = (line || say('team.key_rejected')).replace(/[.\s]*$/, '.');
+  return `${said} ${say('team.key_skip_check')}`;
 }
 
 /** The person said the key is fine: the flag, or JHT_SKIP_KEY_CHECK=1 for the processes that start the team for them. */
@@ -334,7 +334,7 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
 
   console.log('');
   console.log(c.bold(say('team.starting_container')));
-  console.log(c.dim(`  Mode: ${mode}${useBootstrap ? `  | Bootstrap: ASSISTENTE + ${withTelegram ? 'TG-BRIDGE + ' : ''}SENTINELLA + BRIDGE + TOKEN-METER + CAPITANO` : ''}`));
+  console.log(c.dim(`  ${say('team.mode', { mode })}${useBootstrap ? `  | ${say('team.bootstrap', { list: `ASSISTENTE + ${withTelegram ? 'TG-BRIDGE + ' : ''}SENTINELLA + BRIDGE + TOKEN-METER + CAPITANO` })}` : ''}`));
   console.log('');
 
   let started = 0;
@@ -361,15 +361,15 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
     const coreSessions = ['ASSISTENTE', ...(captainWaits ? [] : ['SENTINELLA']), ...(mentorWaits ? [] : ['MENTOR']), ...(captainWaits ? [] : ['CAPITANO'])];
     if (coreSessions.every((session) => isSessionActive(session))) {
       for (const session of coreSessions) {
-        console.log(`  ${c.yellow('⏭')} ${session} — already active`);
+        console.log(`  ${c.yellow('⏭')} ${session} — ${say('team.already_active')}`);
       }
       if (!releaseHaltGate()) return;
       console.log('');
       console.log(say('team.result', { started: c.green(say('team.n_started', { n: 0 })), skipped: c.yellow(say('team.n_already', { n: coreSessions.length })), errors: '' }));
       console.log(hint(say('team.next_agents')));
-      if (mentorWaits) console.log(c.dim(`  MENTOR ${MENTOR_WAITING}`));
+      if (mentorWaits) console.log(c.dim(`  MENTOR ${mentorWaiting()}`));
       if (captainWaits) console.log(c.yellow(`  ${say('team.captain_waits')}`));
-      console.log(c.dim('  Team already running: no bridge or sync process restarted.'));
+      console.log(c.dim(`  ${say('team.already_running')}`));
       console.log('');
       return;
     }
@@ -386,7 +386,7 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
     // di Pi. Si prova DENTRO il container, dove il file della chiave c'è; solo un 401 ferma, e lo stop resta com'era.
     const keyIssue = keyCheckSkipped(options) ? null : keyRefusedInContainer();
     if (keyIssue) {
-      console.error(c.red(`Error: ${keyIssue}`));
+      console.error(c.red(say('team.error', { message: keyIssue })));
       console.log('');
       process.exitCode = 1;
       return;
@@ -405,7 +405,7 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
       'node /app/cli/bin/jht.js cloud pull-desired-state --silent',
       { timeoutMs: 15_000 },
     );
-    reportSyncNotApplied('desired-state pull', pullRes);
+    reportSyncNotApplied(say('team.sync_desired_state'), pullRes);
 
     // Sync ticket cloud↔VPS PRIMA dello spawn: importa i ticket 'open' creati
     // dal web durante il downtime così il Capitano (C-15) li vede al primo giro,
@@ -414,7 +414,7 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
       'node /app/cli/bin/jht.js cloud sync-tickets --silent',
       { timeoutMs: 15_000 },
     );
-    reportSyncNotApplied('ticket sync', ticketRes);
+    reportSyncNotApplied(say('team.sync_tickets'), ticketRes);
 
     // Sync bacheca (team_directives) cloud↔VPS PRIMA dello spawn: importa gli
     // ordini/strategia editati dal dashboard così il Capitano li legge al primo
@@ -423,7 +423,7 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
       'node /app/cli/bin/jht.js cloud sync-directives --silent',
       { timeoutMs: 15_000 },
     );
-    reportSyncNotApplied('directive sync', dirRes);
+    reportSyncNotApplied(say('team.sync_directives'), dirRes);
 
     // Pull profilo cloud → candidate_profile.yml se il file locale manca
     // (PC nuovo / container ricreato): chiude il cerchio cloud→locale. Only-if
@@ -432,7 +432,7 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
       'node /app/cli/bin/jht.js cloud pull-profile --silent',
       { timeoutMs: 15_000 },
     );
-    reportSyncNotApplied('profile pull', profileRes);
+    reportSyncNotApplied(say('team.sync_profile'), profileRes);
 
     // Il delay di ogni voce serve a far stabilizzare la voce precedente. In
     // un retry idempotente, se la precedente era già attiva, ripetere tutti i
@@ -443,7 +443,7 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
       step++;
       const progress = c.dim(`[${step}/${bootstrap.length}]`);
       if (item.role === 'mentor' && mentorWaits) {
-        console.log(`  ${progress} ${c.yellow('⏭')} MENTOR — ${MENTOR_WAITING}`);
+        console.log(`  ${progress} ${c.yellow('⏭')} MENTOR — ${mentorWaiting()}`);
         deferred++;
         previous = { ...item, started: false };
         continue;
@@ -469,10 +469,10 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
   } else {
     const parsed = parseAgentArg(agentArg);
     if (!parsed) {
-      console.log(`  ${c.red('✗')} ${agentArg} — unrecognized role`);
+      console.log(`  ${c.red('✗')} ${agentArg} — ${say('team.unknown_role')}`);
       errored++;
     } else if (parsed.role === 'mentor' && !isSessionActive('MENTOR') && mentorDeferred()) {
-      console.log(`  ${c.yellow('⏭')} MENTOR — ${MENTOR_WAITING}`);
+      console.log(`  ${c.yellow('⏭')} MENTOR — ${mentorWaiting()}`);
       deferred++;
     } else if ((parsed.role === 'capitano' || parsed.role === 'sentinella') && !isSessionActive(parsed.role.toUpperCase()) && captainDeferred()) {
       console.log(`  ${c.yellow('⏭')} ${parsed.role.toUpperCase()} — ${say('team.captain_waits')}`);
@@ -534,7 +534,7 @@ function launchInContainer({ role, instance, mode, env, notATmuxSession, session
   // Skip has-session check per i ruoli non-tmux (bridge): start-agent.sh
   // gestisce il singleton internamente via /proc cmdline scan.
   if (!notATmuxSession && isSessionActive(sName)) {
-    console.log(`  ${lead}${c.yellow('⏭')} ${sName} — already active`);
+    console.log(`  ${lead}${c.yellow('⏭')} ${sName} — ${say('team.already_active')}`);
     return 'skipped';
   }
 
@@ -565,7 +565,7 @@ function launchInContainer({ role, instance, mode, env, notATmuxSession, session
   });
   if (r.code === 0) {
     const took = Math.round((Date.now() - launchedAt) / 1000);
-    console.log(`  ${lead}${c.green('✓')} ${sName} started${took >= 2 ? c.dim(` (${took} s)`) : ''}`);
+    console.log(`  ${lead}${c.green('✓')} ${say('team.agent_started', { session: sName })}${took >= 2 ? c.dim(` (${took} s)`) : ''}`);
     return 'started';
   }
   const msg = spawnErrorTail(r.stderr || r.stdout);
@@ -617,7 +617,7 @@ export async function startAction(agentArg, options) {
   if (!agentArg || !containerMode) {
     const refusal = startRefusal(readJhtConfig(), { containerMode });
     if (refusal) {
-      console.error(c.red(`Error: ${refusal}`));
+      console.error(c.red(say('team.error', { message: refusal })));
       process.exitCode = 1;
       return;
     }
@@ -626,7 +626,7 @@ export async function startAction(agentArg, options) {
     if (!agentArg) {
       const gate = clearGlobalHaltGate(containerMode);
       if (!gate.ok) {
-        console.error(c.red(`Unable to resume the team: ${String(gate.error).trim()}`));
+        console.error(c.red(say('team.resume_failed', { error: String(gate.error).trim() })));
         process.exitCode = 1;
         return false;
       }
@@ -664,8 +664,8 @@ export async function startAction(agentArg, options) {
   const targets = agentArg ? [agentArg] : DEFAULT_TEAM;
 
   console.log('');
-  console.log(c.bold('Starting agents...'));
-  console.log(c.dim(`  Mode: ${mode} | JHT_HOME: ${JHT_HOME}`));
+  console.log(c.bold(say('team.starting_host')));
+  console.log(c.dim(`  ${say('team.mode', { mode })} | JHT_HOME: ${JHT_HOME}`));
   console.log(c.dim(`  JHT_USER_DIR: ${JHT_USER_DIR}`));
   console.log('');
 
@@ -676,7 +676,7 @@ export async function startAction(agentArg, options) {
   for (const target of targets) {
     const parsed = parseAgentArg(target);
     if (!parsed) {
-      console.log(`  ${c.red('✗')} ${target} — unrecognized role`);
+      console.log(`  ${c.red('✗')} ${target} — ${say('team.unknown_role')}`);
       errored++;
       continue;
     }
@@ -686,7 +686,7 @@ export async function startAction(agentArg, options) {
     const sName = sessionName(role, instance);
 
     if (isSessionActive(sName)) {
-      console.log(`  ${c.yellow('⏭')} ${sName} — already active`);
+      console.log(`  ${c.yellow('⏭')} ${sName} — ${say('team.already_active')}`);
       skipped++;
       continue;
     }
@@ -726,16 +726,20 @@ export async function startAction(agentArg, options) {
       spawn('bash', ['-c', `sleep 4 && tmux send-keys -t "${sName}" Enter && sleep 3 && tmux send-keys -t "${sName}" Enter`], {
         detached: true, stdio: 'ignore',
       }).unref();
-      console.log(`  ${c.green('✓')} ${sName} started (effort: ${effort})`);
+      console.log(`  ${c.green('✓')} ${say('team.agent_started_effort', { session: sName, effort })}`);
       started++;
     } catch (err) {
-      console.log(`  ${c.red('✗')} ${sName} — start error: ${err.message}`);
+      console.log(`  ${c.red('✗')} ${sName} — ${say('team.start_error', { message: err.message })}`);
       errored++;
     }
   }
 
   console.log('');
-  console.log(`Result: ${c.green(started + ' started')}, ${c.yellow(skipped + ' already active')}${errored ? `, ${c.red(say('team.n_errors', { n: errored }))}` : ''}`);
+  console.log(say('team.result', {
+    started: c.green(say('team.n_started', { n: started })),
+    skipped: c.yellow(say('team.n_already', { n: skipped })),
+    errors: errored ? `, ${c.red(say('team.n_errors', { n: errored }))}` : '',
+  }));
   if (errored > 0) {
     console.log(c.red(`  ${say('team.partial', { n: errored })}`));
     process.exitCode = 1;

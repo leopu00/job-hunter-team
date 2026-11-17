@@ -40,7 +40,7 @@ def write_healthy_df(bin_dir: Path) -> None:
     df.write_text(
         "#!/bin/sh\n"
         'pct="${FAKE_DF_FREE_PCT:-50}"\n'
-        "total=1000000\n"
+        "total=1048576000\n"
         "avail=$((total * pct / 100))\n"
         "printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\\n'\n"
         "printf '/dev/fake %s %s %s 1%% /\\n' \"$total\" \"$((total - avail))\" \"$avail\"\n",

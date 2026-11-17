@@ -81,8 +81,9 @@ describe.skipIf(!codexOffered)('runSetupWizard — VPS senza account cloud', () 
     expect(writeConfigFile).toHaveBeenCalledOnce();
     const [savedConfig] = vi.mocked(writeConfigFile).mock.calls[0];
     expect(savedConfig.active_provider).toBe('openai');
+    // integrations are turned on when asked for: the web account is not proposed as yes
     expect(prompter.confirm).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      initialValue: true,
+      initialValue: false,
     }));
   });
 

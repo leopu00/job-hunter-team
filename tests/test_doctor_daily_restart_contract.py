@@ -301,12 +301,15 @@ exit 0
 """,
     )
     assert result.returncode == 0, result.stderr
+    # the spawner exiting 0 is NOT a round done: the round is only «spawned», `settle` marks it at a real turn
     assert trace == [
+        "schedule settle",
         "schedule check-maintainer",
         "schedule claim",
         "spawn",
-        "schedule mark T30",
+        "schedule spawned T30",
     ]
+    assert not any(line.startswith("schedule mark") for line in trace)
 
 
 def test_watchdog_runtime_does_not_spawn_without_a_durable_claim(tmp_path: Path):
@@ -328,7 +331,7 @@ exit 0
 """,
     )
     assert result.returncode == 0, result.stderr
-    assert trace == ["schedule check-maintainer", "schedule claim"]
+    assert trace == ["schedule settle", "schedule check-maintainer", "schedule claim"]
     assert "schedule claim FAILED rc=7" in result.stdout
 
 
@@ -351,6 +354,7 @@ exit 4
     )
     assert result.returncode == 0, result.stderr
     assert trace == [
+        "schedule settle",
         "schedule check-maintainer",
         "schedule claim",
         "spawn",

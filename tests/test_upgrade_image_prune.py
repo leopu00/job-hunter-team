@@ -256,9 +256,11 @@ def test_pruning_runs_once_after_the_commit_of_a_successful_upgrade():
 def test_every_other_use_of_the_pruning_is_the_definition():
     text = WRAPPER.read_text(encoding="utf-8")
     code = [line for line in text.splitlines() if "upgrade_prune_old_images" in line and not line.lstrip().startswith("#")]
-    # the definition, the single call in the upgrade and the single one in `jht clean-images`
+    # the definition, the call after the upgrade, the one before its download when the disk is short (upgrade_disk_room: it
+    # keeps the running image) and the one in `jht clean-images`
     assert sorted(line.strip() for line in code) == sorted([
         "upgrade_prune_old_images() {",
+        'UPGRADE_JSON=1 upgrade_prune_old_images "$running" "$running" >/dev/null 2>&1 || true',
         'upgrade_prune_old_images "$candidate_image" "$old_image" || true',
         'upgrade_prune_old_images "$current" "$previous" || true',
     ]), code
