@@ -24,6 +24,7 @@ this was tested on real machines and which was not.
 
 ### Providers
 
+- **Pi with OpenAI and a ChatGPT subscription** is offered too, new in this release: `jht setup` asks how Pi signs in (a key or the subscription); with the subscription no key is asked and Pi is opened for its own `/login`; not yet measured; JHT promises nothing about OpenAI's terms for this use or about what a given plan covers.
 - Four ways to power the team: **Pi with GLM (Z.ai)**, **Pi with Kimi (Moonshot)**, **Pi with OpenAI** or **Pi with Claude (Anthropic)**, each with an **API key** that `jht setup` asks for (typed hidden)
   or takes from a file or from standard input: its cost is yours: set a spending ceiling (`no_quota_cap`, see PROVIDERS) and the team pauses there; without one nothing stops the spending. The
   services a release offers are one list (`shared/runtime/release-providers.js`); `jht setup`,
