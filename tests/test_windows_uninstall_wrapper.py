@@ -638,7 +638,7 @@ def test_the_nul_of_wsls_utf16_listing_is_removed_with_two_strings_not_a_char_an
     # Windows PowerShell 5.1 picks Replace(char, char) for ([char]0, '') and cannot turn '' into a char: the listing of the
     # distros failed there ("String must be exactly one character long") and the fallback through WSL never ran.
     assert "Replace([char]0, '')" not in SOURCE
-    assert SOURCE.count("Replace([string][char]0, '')") == 2
+    assert SOURCE.count("Replace([string][char]0, '')") == 3  # the listing, its fallback, and what the distro says to the cleaning
 
 
 # ── one Podman machine per Windows user (JHT-T305) ────────────────────────────────────────────────────────────────────
