@@ -214,7 +214,7 @@ export function dbQuery(db: () => Database, argv: string[], options: DbQueryOpti
     print(
       found
         ? `FOUND: #${pyStr(found["id"])} ${fence.inline(found["company"])} — ${fence.inline(found["title"])} [${pyStr(found["status"])}]`
-        : "NOT FOUND",
+        : "NOT IN THE DATABASE YET: a new position, not seen before (this is no check of the link: a dead link is found by fetching it)",
     );
     return done();
   }

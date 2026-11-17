@@ -152,7 +152,7 @@ def test_suggest_says_nothing_when_there_is_nothing_to_suggest(home: Path, case:
 def _state(home: Path, phase: str) -> None:
     (home / "state").mkdir(exist_ok=True)
     (home / "state" / "first-run.json").write_text(json.dumps({
-        "phase": phase, "created_at": "2026-10-26T07:29:00+00:00", "burst_started_at": "2026-10-26T07:29:00+00:00",
+        "phase": phase, "created_at": "2026-10-26T07:29:00+00:00", "burst_started_at": (__import__("datetime").datetime.now(__import__("datetime").timezone.utc) - __import__("datetime").timedelta(minutes=1)).isoformat(timespec="seconds"),
         "completed_at": None, "completed_reason": None, "scored_at_start": 0,
     }), encoding="utf-8")
 

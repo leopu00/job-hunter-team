@@ -32,7 +32,7 @@ def _status(tmp_path: Path, *, phase: str = "burst", roster: dict | None = ROSTE
             path_has_tmux: bool = True) -> dict:
     home = tmp_path / "jht"
     (home / "state").mkdir(parents=True, exist_ok=True)
-    state = {"phase": phase, "created_at": "2026-10-27T07:00:00+00:00", "burst_started_at": "2026-10-27T07:00:00+00:00",
+    state = {"phase": phase, "created_at": "2026-10-27T07:00:00+00:00", "burst_started_at": (__import__("datetime").datetime.now(__import__("datetime").timezone.utc) - __import__("datetime").timedelta(minutes=1)).isoformat(timespec="seconds"),
              "completed_at": None, "completed_reason": None, "scored_at_start": 0}
     if roster is not None:
         state["roster"] = roster
