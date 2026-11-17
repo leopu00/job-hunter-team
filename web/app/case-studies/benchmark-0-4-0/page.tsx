@@ -9,6 +9,8 @@ import LandingNav from "../../components/landing/LandingNav";
 import { getRequestLocale } from "@/lib/request-locale";
 import type { Locale } from "@/i18n/config";
 import data from "@/data/benchmark/benchmark-0-4-0.json";
+import BenchmarkCharts, { type BenchProfile, type BuildPoint, type ChartRound } from "./BenchmarkCharts";
+import { CHART_COPY } from "./chartsCopy";
 import BenchmarkFinder, {
   type CandidateView,
   type FinderCopy,
@@ -1787,6 +1789,89 @@ export default async function BenchmarkPage() {
       ...CASE_STUDIES.map((c) => localizeCaseStudy(c, locale).category),
     ]),
   );
+  // The charts: the rounds with their minute-by-minute series where one was extracted, and the Scout bench.
+  type Extra = {
+    minutes?: number | null;
+    cost?: number | null;
+    found?: number | null;
+    scored?: number | null;
+    ceiling?: number | null;
+    timeline?: ChartRound["timeline"];
+    scores?: ChartRound["scores"];
+    brake?: ChartRound["brake"];
+    agents?: Record<string, number> | null;
+    relevance?: BenchProfile["relevance"];
+    discarded?: Record<string, number> | null;
+    bySource?: Record<string, number> | null;
+  };
+  const cc = CHART_COPY[locale];
+  const roundSeries = ((data as { roundSeries?: Record<string, Extra> }).roundSeries ?? {}) as Record<string, Extra>;
+  const benchRaw = ((data as { bench?: (Extra & { id: string; profile: string; os: string; service: string; buildNo: number })[] }).bench ?? []);
+  const chartRounds: ChartRound[] = [
+    ...data.rounds.map((r) => {
+      const x = roundSeries[r.id] ?? {};
+      return {
+        id: r.id,
+        label: `${OS_LABEL[r.os]} · ${t.profiles[r.profile]} · ${dayLabel(r)}`,
+        group: "round" as const,
+        os: r.os,
+        service: r.service,
+        buildNo: buildNo(r) ?? null,
+        minutes: r.minutes,
+        cost: r.cost,
+        found: r.found,
+        scored: r.scored,
+        relevant: r.relevant,
+        bestScore: r.bestScore,
+        ceiling: x.ceiling ?? null,
+        brake: x.brake ?? [],
+        timeline: x.timeline ?? [],
+        scores: x.scores ?? [],
+        agents: x.agents ?? null,
+      };
+    }),
+    ...benchRaw.map((b) => ({
+      id: b.id,
+      label: `${OS_LABEL[b.os]} · ${cc.benchProfiles[b.profile] ?? b.profile}${b.id.endsWith("bricklayer") ? ` (${cc.second})` : ""}`,
+      group: "bench" as const,
+      os: b.os,
+      service: b.service,
+      buildNo: b.buildNo,
+      minutes: b.minutes ?? null,
+      cost: b.cost ?? null,
+      found: b.found ?? null,
+      scored: b.scored ?? null,
+      relevant: b.relevance?.P ?? null,
+      bestScore: null,
+      ceiling: b.ceiling ?? null,
+      brake: b.brake ?? [],
+      timeline: b.timeline ?? [],
+      scores: b.scores ?? [],
+      agents: b.agents ?? null,
+    })),
+  ];
+  const chartBench: BenchProfile[] = benchRaw.map((b) => ({
+    id: b.id,
+    label: `${cc.benchProfiles[b.profile] ?? b.profile}${b.id.endsWith("bricklayer") ? ` (${cc.second})` : ""}`,
+    relevance: b.relevance ?? null,
+    discarded: b.discarded ?? null,
+    bySource: b.bySource
+      ? Object.fromEntries(Object.entries(b.bySource).map(([k, v]) => [cc.sources[k] ?? k, v]))
+      : null,
+  }));
+  const buildNos = Array.from(new Set([5, 6, 7, 8, 9, 10, ...data.builds.map((b: Build) => b.n)])).sort((a, b) => a - b);
+  const chartBuilds: BuildPoint[] = buildNos.map((n) => {
+    const snap = data.builds.find((b: Build) => b.n === n) as (Build & { targetsSnapshot?: Record<string, number>; defects?: { found: number; closed: number } }) | undefined;
+    const counted: Record<string, number> = {};
+    for (const x of data.targets as Target[]) if (x.build === n) counted[x.status] = (counted[x.status] ?? 0) + 1;
+    return {
+      n,
+      targets: snap?.targetsSnapshot ?? (Object.keys(counted).length ? counted : null),
+      defects: snap?.defects ?? null,
+      fromCurrent: !snap?.targetsSnapshot,
+    };
+  });
+
   const serviceOptions = ["glm", "kimi", "openai", "claude"].map((v) => ({
     value: v,
     label: t.services[v],
@@ -2033,6 +2118,14 @@ export default async function BenchmarkPage() {
           </div>
           <p className="text-[11px] text-[var(--color-dim)]">{t.colsHint}</p>
         </section>
+
+        <BenchmarkCharts
+          locale={locale}
+          rounds={chartRounds}
+          bench={chartBench}
+          builds={chartBuilds}
+          labels={{ services: t.services, os: OS_LABEL, targetStatus: t.targetStatus }}
+        />
 
         <section className="space-y-3">
           <h2 className="section-label">{t.chartTitle}</h2>
