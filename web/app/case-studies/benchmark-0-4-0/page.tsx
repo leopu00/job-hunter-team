@@ -1873,11 +1873,17 @@ const ICON: Record<string, string[]> = {
   openai: ["openai"],
   kimi: ["kimi"],
   "openai-glm": ["openai", "zai"],
-  // generic icons (Lucide, ISC), not the marks of Apple or Microsoft: the name of the system is always written next to them;
-  // Linux is Tux, free to use crediting Larry Ewing and The GIMP (the credit line is at the foot of the page)
+  // Linux is Tux, free to use crediting Larry Ewing and The GIMP (the credit line is at the foot of the page);
+  // Windows and macOS are drawn inline below (SYSTEM_MARK), in the colour of the text
   linux: ["tux"],
-  windows: ["app-window"],
-  macos: ["laptop"],
+};
+
+// The marks of Windows (four panes) and macOS (the apple): small monochrome shapes in a 16×16 box, in the colour of
+// the text so they read on the light and the dark theme. Shown only to name the system a round ran on.
+const SYSTEM_MARK: Record<string, string> = {
+  windows: "M1.5 1.5 H7.3 V7.3 H1.5 Z M8.7 1.5 H14.5 V7.3 H8.7 Z M1.5 8.7 H7.3 V14.5 H1.5 Z M8.7 8.7 H14.5 V14.5 H8.7 Z",
+  macos:
+    "M11.3 8.6 C11.3 7 12.6 6.2 12.7 6.1 C11.9 5 10.7 4.8 10.3 4.8 C9.3 4.7 8.3 5.4 7.8 5.4 C7.3 5.4 6.5 4.8 5.6 4.8 C4.5 4.8 3.4 5.5 2.8 6.6 C1.6 8.7 2.5 11.8 3.7 13.5 C4.3 14.3 4.9 15.2 5.8 15.2 C6.6 15.2 7 14.7 8 14.7 C9 14.7 9.3 15.2 10.2 15.2 C11.1 15.2 11.7 14.4 12.2 13.5 C12.8 12.6 13.1 11.7 13.1 11.6 C13.1 11.6 11.3 10.9 11.3 8.6 Z M9.7 3.7 C10.1 3.2 10.5 2.4 10.4 1.7 C9.8 1.7 9 2.1 8.6 2.6 C8.2 3.1 7.8 3.8 7.9 4.5 C8.6 4.6 9.3 4.2 9.7 3.7 Z",
 };
 
 function Logo({
@@ -1908,6 +1914,14 @@ function Logo({
 }
 
 function Mark({ id, label }: { id: string; label: string }) {
+  if (SYSTEM_MARK[id])
+    return (
+      <span className="inline-flex items-center justify-center shrink-0" style={{ width: 28, height: 28 }} title={label}>
+        <svg viewBox="0 0 16 16" width={18} height={18} role="img" aria-label={label} style={{ fill: "currentColor" }}>
+          <path d={SYSTEM_MARK[id]} />
+        </svg>
+      </span>
+    );
   return (
     <span className="inline-flex items-center gap-1">
       {ICON[id].map((n) => (
@@ -2384,7 +2398,7 @@ export default async function BenchmarkPage() {
                   >
                     <td className="px-3 py-2 whitespace-nowrap">
                       <span className="inline-flex items-center gap-2">
-                        <Logo name={ICON[r.os][0]} label={OS_LABEL[r.os]} />
+                        <Mark id={r.os} label={OS_LABEL[r.os]} />
                         <Mark id={r.service} label={t.services[r.service]} />
                         <span>
                           <span className="font-semibold">
@@ -2566,7 +2580,7 @@ export default async function BenchmarkPage() {
                 className="border border-[var(--color-border)] bg-[var(--color-card)] p-4 space-y-2"
               >
                 <div className="flex items-center gap-2">
-                  <Logo name={ICON[os][0]} label={OS_LABEL[os]} size={22} />
+                  <Mark id={os} label={OS_LABEL[os]} />
                   <span className="text-[14px] font-bold">{OS_LABEL[os]}</span>
                   <span className="ml-auto text-[10px] uppercase tracking-wide text-[var(--color-muted)]">
                     {t.system[data.systems[os]]}
