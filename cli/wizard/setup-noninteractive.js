@@ -207,6 +207,10 @@ export async function runNonInteractiveSetup(opts) {
         apiKeySecret = formatSecretForConfig('plaintext', key);
       }
     }
+  } else if (authMethod === 'subscription' && harness === 'pi') {
+    // OpenAI with the ChatGPT subscription on pi: the sign-in is Pi's own, made after the setup (jht setup, keep the configuration);
+    // the config holds no email, no token, no key
+    subscriptionConfig = undefined;
   } else if (authMethod === 'subscription') {
     if (!opts.subscriptionEmail) {
       console.error(pc.red('--subscription-email is required with --auth-method subscription'));
@@ -389,7 +393,9 @@ function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, 
   if (authMethod === 'api_key') {
     console.log(`  Auth:       ${keptByTheSetup ? 'API key kept by the setup (not in the config)' : describeSecret(apiKeySecret)}`);
   } else {
-    console.log(`  Auth:       subscription (${subscriptionConfig.email}${subscriptionConfig.session_token ? ' · token preset' : ''})`);
+    console.log(subscriptionConfig
+      ? `  Auth:       subscription (${subscriptionConfig.email}${subscriptionConfig.session_token ? ' · token preset' : ''})`
+      : '  Auth:       ChatGPT subscription (the sign-in is Pi\'s own, made after the setup)');
   }
   console.log(summarizeRoleModels(config));
   if (budgetChoice.budget && Number(budgetChoice.budget.usd) < minimumFor(providerName)) {
@@ -401,6 +407,8 @@ function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, 
   if (authMethod === 'subscription') {
     const updateId = harness === 'pi' ? 'pi' : providerName === 'openai' ? 'codex' : providerName; // claude/kimi mantengono il nome
     console.log(pc.dim(`  Next step: jht providers update ${updateId}`));
-    console.log(pc.dim('  Then start the CLI OAuth login provider (device flow).\n'));
+    console.log(pc.dim(harness === 'pi' && !subscriptionConfig
+      ? '  Then sign in to Pi: jht setup (keep the configuration), which opens Pi for its /login.\n'
+      : '  Then start the CLI OAuth login provider (device flow).\n'));
   }
 }

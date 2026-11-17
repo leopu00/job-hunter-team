@@ -107,13 +107,35 @@ test('openai on pi with a key: pi is the default harness, the key by reference i
   assert.match(plain.text, /OpenAI takes its key by reference/);
 });
 
-test('openai: Codex and the ChatGPT subscription are not ways of this release, and are refused with the way that is', async () => {
+test('openai: Codex is not a way of this release, and is refused with the way that is', async () => {
   const codex = await setup({ provider: 'openai', harness: 'codex', secretMode: 'env' });
   assert.equal(codex.code, 1, codex.text);
   assert.match(codex.text, /This release runs OpenAI only on pi: drop --harness or use --harness pi/);
-  const subscription = await setup({ provider: 'openai', harness: 'pi', authMethod: 'subscription', subscriptionEmail: 'user@example.test' });
-  assert.equal(subscription.code, 1, subscription.text);
-  assert.match(subscription.text, /only with an API key/);
+  const codexSubscription = await setup({ provider: 'openai', harness: 'codex', authMethod: 'subscription', subscriptionEmail: 'user@example.test' });
+  assert.equal(codexSubscription.code, 1, codexSubscription.text);
+});
+
+test('openai on pi with the ChatGPT subscription: a way of this release, no key, no email, the sign-in is Pi\'s own (made by jht setup afterwards)', async () => {
+  const { code, text } = await setup({ provider: 'openai', harness: 'pi', authMethod: 'subscription' });
+  assert.equal(code, 0, text);
+  assert.match(text, /ChatGPT subscription \(the sign-in is Pi's own/);
+  assert.match(text, /jht providers update pi/);
+  const saved = config();
+  assert.equal(saved.active_provider, 'openai');
+  assert.equal(saved.harness, 'pi');
+  assert.equal(saved.providers.openai.auth_method, 'subscription');
+  assert.equal(saved.providers.openai.api_key_ref, undefined);
+  assert.equal(saved.providers.openai.api_key, undefined);
+  assert.equal(saved.providers.openai.subscription, undefined, 'no email in the config');
+  assert.equal(saved.providers.openai.model, 'gpt-5.6-sol');
+});
+
+test('the other services never take a subscription on pi: glm, kimi and claude are refused with the way that is', async () => {
+  for (const provider of ['glm', 'kimi', 'claude']) {
+    const { code, text } = await setup({ provider, authMethod: 'subscription', subscriptionEmail: 'user@example.test' });
+    assert.equal(code, 1, `${provider}: ${text}`);
+    assert.match(text, /only with an API key/, provider);
+  }
 });
 
 test('claude on pi: anthropic is claude, the key by reference in ANTHROPIC_API_KEY, never with a subscription or on codex', async () => {
