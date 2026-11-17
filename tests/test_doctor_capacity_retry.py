@@ -202,7 +202,7 @@ def test_a_start_at_capacity_does_not_mark_the_round_and_reports_the_retry(tmp_p
     result, trace = _run_watchdog(tmp_path, '#!/bin/sh\necho spawn >> "$TRACE"\nexit 75\n', "MID")
 
     assert result.returncode == 0, result.stderr
-    assert trace == ["schedule check-maintainer", "schedule claim", "spawn", "schedule fail MID capacity"]
+    assert trace == ["schedule settle", "schedule check-maintainer", "schedule claim", "spawn", "schedule fail MID capacity"]
     assert not any("mark" in line for line in trace), "the round must not be marked done"
     assert "model at capacity (slot=MID)" in result.stdout and "retry later" in result.stdout
 
@@ -224,10 +224,11 @@ def test_a_retry_tells_the_spawner_which_attempt_it_is(tmp_path: Path):
 
     assert result.returncode == 0, result.stderr
     assert trace == [
+        "schedule settle",
         "schedule check-maintainer",
         "schedule claim",
         "spawn retry=2",
-        "schedule mark MID",
+        "schedule spawned MID",
     ]
 
 
@@ -236,7 +237,7 @@ def test_a_first_attempt_is_not_a_retry(tmp_path: Path):
         tmp_path, '#!/bin/sh\necho "spawn retry=$JHT_DOCTOR_RETRY" >> "$TRACE"\nexit 0\n', "T30"
     )
     assert result.returncode == 0, result.stderr
-    assert "spawn retry=0" in trace and trace[-1] == "schedule mark T30"
+    assert "spawn retry=0" in trace and trace[-1] == "schedule spawned T30"
 
 
 # ── lo spawner: l'avvio riuscito e' la sessione NON ferma a capacita' ───────

@@ -119,14 +119,18 @@ print(value)
 PYEOF
 }
 
-# jht_spawn_pi_repl_cmd <workdir> [modello]
+# jht_spawn_pi_repl_cmd <workdir> [modello] [ruolo]
 #   Il comando di pi per i servizi che non passano da start-agent.sh (Dottore,
 #   Mantenitore), con gli stessi argomenti di un ruolo del team. Il modello è
 #   quello dato o, senza, la classe sol (il default di Codex). Ferma lo spawn
 #   (rc 2, perché su stderr) se mancano l'identità o le skill nella workdir,
 #   il pi del pin o le settings leggibili.
+#   Con il ruolo (dottore, mantenitore) parte anche con le estensioni che start-agent.sh dà a quel ruolo
+#   (jht_pi_extension_args: il cancello della spesa) e con l'ambiente che il cancello legge: senza, un Dottore o un
+#   Mantenitore al lavoro spendeva fuori dal freno del budget. JHT_HOME e JHT_AGENT_NAME vanno nel comando perché la
+#   shell di una sessione nata dallo spawner non li esporta: senza JHT_HOME il cancello non vede il flag e non ferma niente.
 jht_spawn_pi_repl_cmd() {
-  local workdir="${1:-}" model="${2:-}"
+  local workdir="${1:-}" model="${2:-}" role="${3:-}" role_env=""
   if [ ! -s "$workdir/AGENTS.md" ] || [ ! -d "$workdir/.agents/skills" ]; then
     echo "[spawn-lib] ERROR: pi needs $workdir/AGENTS.md and $workdir/.agents/skills before it starts; one is missing." >&2
     return 2
@@ -139,8 +143,9 @@ jht_spawn_pi_repl_cmd() {
     . "$JHT_SPAWN_LIB_DIR/role-models.sh"
     model="$(resolve_codex_model sol)" || return 2
   fi
-  printf '%s%s\n' "PI_CODING_AGENT_DIR='$(jht_pi_agent_dir)' PI_SKIP_VERSION_CHECK=1 PI_TELEMETRY=0 $(jht_pi_bin) " \
-    "$(jht_pi_args "$workdir" "$model" high)"
+  [ -z "$role" ] || role_env=" JHT_HOME='${JHT_HOME:-/jht_home}' JHT_AGENT_NAME='$role'"
+  printf '%s%s%s\n' "PI_CODING_AGENT_DIR='$(jht_pi_agent_dir)' PI_SKIP_VERSION_CHECK=1 PI_TELEMETRY=0${role_env} $(jht_pi_bin) " \
+    "$(jht_pi_args "$workdir" "$model" high)" "$(jht_pi_extension_args "$role")"
 }
 
 # jht_spawn_active_cli <ruolo>

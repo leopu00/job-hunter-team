@@ -517,6 +517,6 @@ def _check_url_out(tmp_path, monkeypatch, rows, needle):
 def test_check_url_identity(tmp_path, monkeypatch, title, url, needle, found):
     out = _check_url_out(tmp_path, monkeypatch, [(title, 'ACME', url, 'new')], needle)
     if found:
-        assert 'FOUND' in out and 'NOT FOUND' not in out
+        assert 'FOUND' in out and 'NOT IN THE DATABASE YET' not in out
     else:
-        assert 'NOT FOUND' in out
+        assert 'NOT IN THE DATABASE YET' in out

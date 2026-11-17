@@ -585,8 +585,8 @@ def test_a_person_on_site_who_will_not_move_gets_only_her_own_countrys_boards_ev
     plan = cov.load_plan()
     assert plan["remote"] is False
     assert {e["country"] for e in plan["entries"]} == {"it"}
-    # the Italian boards that are searched (the closed ones are covered, not searched); the trades that are not IT live on the last three
-    assert _lane_sources() == ["linkedin", "randstad-it", "concorsipubblici-it", "jobintourism-it"]
+    # the Italian boards that are searched (the closed ones are covered, not searched); the trades that are not IT live on the three before the aggregator
+    assert _lane_sources() == ["linkedin", "randstad-it", "concorsipubblici-it", "jobintourism-it", "talent-com-it"]
 
 
 def test_the_same_profile_without_the_mode_and_the_relocation_keeps_every_board_as_before(profile):
@@ -623,3 +623,30 @@ def test_the_italian_boards_for_manual_health_catering_and_logistics_trades_are_
     for slug in ("inpa-it", "subito-lavoro", "bakeca-it", "jooble-it", "jobrapido-it"):
         assert by[slug]["access"] == "closed" and "Log nothing there" in by[slug]["hint"], slug
     assert sum(1 for e in data["groups"]["it"] if e["tier"] == "core") <= 8
+
+
+# ── Randstad takes the place from the path, Talent.com's ad links are good (checked 17/11 with the Scout's user agent) ─────────────
+
+def test_randstad_hint_says_where_the_place_goes_and_that_the_query_string_is_ignored():
+    by = {e["slug"]: e for e in cov.table()["groups"]["it"]}
+    hint = by["randstad-it"]["hint"]
+    # the city after the word, in the path: the site adds the region itself; the old query string never filtered anything
+    assert "q-<word>/ci-<city>/" in hint and "q-muratore/ci-bari/" in hint
+    assert "?locationSearch=" in hint and "ignored" in hint
+    # the path parts robots.txt disallows stay named as disallowed, and the redirect is still not followed
+    assert "/l-, /km-, /postcode- are disallowed" in hint and "/job-redirect/" in hint
+
+
+def test_talent_hint_gives_the_search_and_the_ad_link_and_says_a_not_found_of_the_db_check_is_not_a_dead_link():
+    groups = cov.table()["groups"]
+    entries = [e for group in groups.values() for e in group if "talent" in e.get("aliases", [])]
+    # one entry per country (a source is matched by its slug or alias AND its country): Italy and Sweden
+    assert sorted((e["country"], e["slug"], e["host"]) for e in entries) == [("it", "talent-com-it", "it.talent.com"), ("se", "talent-com", "se.talent.com")]
+    assert [e["tier"] for e in groups["it"] if e["slug"] == "talent-com-it"] == ["minor"]
+    for entry in entries:
+        assert entry["access"] == "search"
+        hint = entry["hint"]
+        assert entry["host"] + "/jobs?k=<word>&l=<place>" in hint and "/view?id=<digits>" in hint
+        # the 404 came from an id typed by hand (the shell variable left empty); the «NOT IN THE DATABASE YET» of check-url means the ad is new
+        assert "404" in hint and "NOT IN THE DATABASE YET" in hint and "new to the database" in hint
+        assert "robots.txt disallows /search-jobs/*" in hint and "allows /jobs and /view" in hint and "job-hunter-team-scout/1" in hint

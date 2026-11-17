@@ -90,6 +90,31 @@ def test_without_a_burst_with_a_cap_nobody_is_stopped(tmp_path, state):
     assert insert(tmp_path, 1).returncode == 0
 
 
+def test_a_burst_past_its_window_is_over_and_the_cap_goes_with_it(tmp_path):
+    """17/11, vps: a burst opened 27 h before, never closed (the Capitano runs `check` and did not), its cap of 3 reached:
+    no Scout could insert. Past BURST_MAX_HOURS the cap is no cap, and the first run is written as over."""
+    for n in range(3):
+        assert insert(tmp_path, n).returncode == 0
+    burst_state(tmp_path, cap=3, began=datetime.now(timezone.utc) - timedelta(hours=27))
+    out = insert(tmp_path, 3)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert rows(tmp_path) == 4
+
+
+def test_the_state_read_past_the_window_closes_the_burst(tmp_path, monkeypatch):
+    import first_run
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    burst_state(tmp_path, cap=3, began=datetime.now(timezone.utc) - timedelta(hours=27))
+    state = first_run.status()
+    assert state["phase"] == "steady" and "window exhausted" in state["completed_reason"] and state["completed_at"]
+    assert json.loads((tmp_path / "state" / "first-run.json").read_text())["phase"] == "steady"
+    # inside the window it stays open, and a start time that cannot be read is no proof
+    burst_state(tmp_path, cap=3, began=datetime.now(timezone.utc) - timedelta(hours=4))
+    assert first_run.status()["phase"] == "burst"
+    (tmp_path / "state" / "first-run.json").write_text(json.dumps({"phase": "burst", "burst_started_at": "not a date"}))
+    assert first_run.status()["phase"] == "burst"
+
+
 def test_a_state_that_cannot_be_read_is_no_cap(tmp_path):
     (tmp_path / "state").mkdir()
     (tmp_path / "state" / "first-run.json").write_text("{not json", encoding="utf-8")

@@ -431,6 +431,41 @@ def test_kickoff_does_not_paste_over_a_draft_or_a_composer_that_never_appears(tm
     assert "message_not_delivered" in (tmp_path / "logs/runtime.log").read_text()
 
 
+def test_the_kickoff_says_where_it_stopped_and_leaves_that_in_a_file(tmp_path):
+    """The spawner exits 0 before the kickoff is done: a message that never became a turn left no trace
+    (giro Windows build8). The reason is kept in logs/kickoff-<SESSION>.result.json, never the text of the message."""
+    import spawn_kickoff
+    from pi_screens import screen
+
+    why = []
+    runtime = _pi_runtime(["fd not found. Downloading...\n"])
+    assert not spawn_kickoff.kickoff("DOTTORE", "synthetic task", "pi", tmp_path, tmux=runtime, sleeper=lambda _: None,
+                                      deliver=lambda *a: True, why=why)
+    assert why == ["pi_composer_not_ready"]
+    spawn_kickoff.record_result(tmp_path, "DOTTORE", False, why[-1])
+    result = json.loads((tmp_path / "logs" / "kickoff-DOTTORE.result.json").read_text())
+    assert result["delivered"] is False and result["why"] == "pi_composer_not_ready" and result["session"] == "DOTTORE"
+    assert "synthetic task" not in json.dumps(result)
+
+    why = []
+    runtime = _pi_runtime([screen()])
+    assert spawn_kickoff.kickoff("DOTTORE", "synthetic task", "pi", tmp_path, tmux=runtime, sleeper=lambda _: None,
+                                  deliver=lambda *a: True, why=why)
+    assert why == ["delivered"]
+    spawn_kickoff.record_result(tmp_path, "DOTTORE", True, why[-1])
+    assert json.loads((tmp_path / "logs" / "kickoff-DOTTORE.result.json").read_text())["delivered"] is True
+    assert not list((tmp_path / "logs").glob(".kickoff-*")), "no temporary file is left"
+
+
+def test_the_result_file_is_not_written_for_a_session_name_that_is_not_ours(tmp_path):
+    import spawn_kickoff
+
+    for name in ("../escape", "A/B", "", "DOT TORE"):
+        spawn_kickoff.record_result(tmp_path, name, True, "delivered")
+    assert not (tmp_path / "logs").exists() or not list((tmp_path / "logs").iterdir())
+    assert not (tmp_path.parent / "escape.result.json").exists()
+
+
 def test_the_harness_of_a_session_is_read_from_its_option():
     import spawn_kickoff
 
