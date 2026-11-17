@@ -473,7 +473,6 @@ function Get-InstallerTextTable {
     'en:installer.windows.then_run_installer_again' { return 'Then run this installer again.' }
     'en:installer.windows.token_acl_failed' { return 'ACL restriction failed (file still readable by Users): %s' }
     'en:installer.windows.uninstall_keeps_data_jht' { return 'To uninstall (keeps the data in ~/.jht and ~/Documents/Job Hunter Team):' }
-    'en:installer.windows.use_them_window_right' { return 'To use them in this window right away, paste:' }
     'en:installer.windows.user_path_updated_effective' { return 'User PATH updated (effective from the next terminal)' }
     'en:installer.windows.what_do_now' { return 'What to do now:' }
     'en:installer.windows.windows_subsystem_linux_check' { return 'Windows Subsystem for Linux check' }
@@ -544,7 +543,6 @@ function Get-InstallerTextTable {
     'it:installer.windows.then_run_installer_again' { return 'Poi rilancia questo installer.' }
     'it:installer.windows.token_acl_failed' { return 'La restrizione dei permessi (ACL) non e'' riuscita (il file e'' ancora leggibile dal gruppo Users): %s' }
     'it:installer.windows.uninstall_keeps_data_jht' { return 'Per disinstallare (i dati in ~/.jht e ~/Documents/Job Hunter Team restano):' }
-    'it:installer.windows.use_them_window_right' { return 'Per usarli subito in questa finestra, incolla:' }
     'it:installer.windows.user_path_updated_effective' { return 'PATH dell''utente aggiornato (vale dal prossimo terminale)' }
     'it:installer.windows.what_do_now' { return 'Cosa fare adesso:' }
     'it:installer.windows.windows_subsystem_linux_check' { return 'Controllo del Sottosistema Windows per Linux' }
@@ -615,7 +613,6 @@ function Get-InstallerTextTable {
     'hu:installer.windows.then_run_installer_again' { return ('Ut' + [char]0x00E1 + 'na futtasd ' + [char]0x00FA + 'jra ezt a telep' + [char]0x00ED + 't' + [char]0x0151 + 't.') }
     'hu:installer.windows.token_acl_failed' { return ('Az ACL-korl' + [char]0x00E1 + 'toz' + [char]0x00E1 + 's nem siker' + [char]0x00FC + 'lt (a f' + [char]0x00E1 + 'jlt a Users csoport m' + [char]0x00E9 + 'g olvashatja): %s') }
     'hu:installer.windows.uninstall_keeps_data_jht' { return ('Elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 't' + [char]0x00E1 + 's (az adatok megmaradnak a ~/.jht ' + [char]0x00E9 + 's a ~/Documents/Job Hunter Team mapp' + [char]0x00E1 + 'ban):') }
-    'hu:installer.windows.use_them_window_right' { return ('Ha r' + [char]0x00F6 + 'gt' + [char]0x00F6 + 'n ebben az ablakban haszn' + [char]0x00E1 + 'ln' + [char]0x00E1 + 'd ' + [char]0x0151 + 'ket, illeszd be:') }
     'hu:installer.windows.user_path_updated_effective' { return ('A felhaszn' + [char]0x00E1 + 'l' + [char]0x00F3 + 'i PATH friss' + [char]0x00ED + 'tve (a k' + [char]0x00F6 + 'vetkez' + [char]0x0151 + ' termin' + [char]0x00E1 + 'lt' + [char]0x00F3 + 'l ' + [char]0x00E9 + 'rv' + [char]0x00E9 + 'nyes)') }
     'hu:installer.windows.what_do_now' { return ('Mit tegy' + [char]0x00E9 + 'l most:') }
     'hu:installer.windows.windows_subsystem_linux_check' { return ('A Linuxos Windows-alrendszer (WSL) ellen' + [char]0x0151 + 'rz' + [char]0x00E9 + 'se') }
@@ -686,7 +683,6 @@ function Get-InstallerTextTable {
     'es:installer.windows.then_run_installer_again' { return 'Luego vuelve a ejecutar este instalador.' }
     'es:installer.windows.token_acl_failed' { return ('La restricci' + [char]0x00F3 + 'n de la ACL ha fallado (el grupo Users a' + [char]0x00FA + 'n puede leer el archivo): %s') }
     'es:installer.windows.uninstall_keeps_data_jht' { return 'Para desinstalar (conserva los datos en ~/.jht y ~/Documents/Job Hunter Team):' }
-    'es:installer.windows.use_them_window_right' { return 'Para usarlos ya en esta ventana, pega:' }
     'es:installer.windows.user_path_updated_effective' { return ('PATH del usuario actualizado (vale desde la pr' + [char]0x00F3 + 'xima terminal)') }
     'es:installer.windows.what_do_now' { return ('Qu' + [char]0x00E9 + ' hacer ahora:') }
     'es:installer.windows.windows_subsystem_linux_check' { return ('Comprobaci' + [char]0x00F3 + 'n del Subsistema de Windows para Linux') }
@@ -757,7 +753,6 @@ function Get-InstallerTextTable {
     'de:installer.windows.then_run_installer_again' { return ('Dann f' + [char]0x00FC + 'hre diesen Installer erneut aus.') }
     'de:installer.windows.token_acl_failed' { return ('Einschr' + [char]0x00E4 + 'nkung der ACL fehlgeschlagen (Datei ist f' + [char]0x00FC + 'r Users noch lesbar): %s') }
     'de:installer.windows.uninstall_keeps_data_jht' { return 'Zum Deinstallieren (die Daten in ~/.jht und ~/Documents/Job Hunter Team bleiben erhalten):' }
-    'de:installer.windows.use_them_window_right' { return ('Um sie sofort in diesem Fenster zu nutzen, f' + [char]0x00FC + 'ge ein:') }
     'de:installer.windows.user_path_updated_effective' { return ('Benutzer-PATH aktualisiert (gilt ab dem n' + [char]0x00E4 + 'chsten Terminal)') }
     'de:installer.windows.what_do_now' { return 'Was du jetzt tun kannst:' }
     'de:installer.windows.windows_subsystem_linux_check' { return ('Pr' + [char]0x00FC + 'fung des Windows-Subsystems f' + [char]0x00FC + 'r Linux') }
@@ -828,7 +823,6 @@ function Get-InstallerTextTable {
     'fr:installer.windows.then_run_installer_again' { return 'Puis relance cet installeur.' }
     'fr:installer.windows.token_acl_failed' { return ('' + [char]0x00C9 + 'chec de la restriction des ACL (fichier encore lisible par Users) : %s') }
     'fr:installer.windows.uninstall_keeps_data_jht' { return ('Pour d' + [char]0x00E9 + 'sinstaller (tes donn' + [char]0x00E9 + 'es dans ~/.jht et ~/Documents/Job Hunter Team restent) :') }
-    'fr:installer.windows.use_them_window_right' { return ('Pour les utiliser tout de suite dans cette fen' + [char]0x00EA + 'tre, colle :') }
     'fr:installer.windows.user_path_updated_effective' { return ('PATH utilisateur mis ' + [char]0x00E0 + ' jour (actif ' + [char]0x00E0 + ' partir du prochain terminal)') }
     'fr:installer.windows.what_do_now' { return 'Que faire maintenant :' }
     'fr:installer.windows.windows_subsystem_linux_check' { return ('V' + [char]0x00E9 + 'rification du Sous-syst' + [char]0x00E8 + 'me Windows pour Linux') }
@@ -899,7 +893,6 @@ function Get-InstallerTextTable {
     'pt:installer.windows.then_run_installer_again' { return 'Depois corre este instalador de novo.' }
     'pt:installer.windows.token_acl_failed' { return ('A restri' + [char]0x00E7 + [char]0x00E3 + 'o das permiss' + [char]0x00F5 + 'es (ACL) falhou (o ficheiro ainda pode ser lido pelo grupo Users): %s') }
     'pt:installer.windows.uninstall_keeps_data_jht' { return 'Para desinstalar (os dados em ~/.jht e ~/Documents/Job Hunter Team ficam):' }
-    'pt:installer.windows.use_them_window_right' { return ('Para os usares j' + [char]0x00E1 + ' nesta janela, cola:') }
     'pt:installer.windows.user_path_updated_effective' { return ('PATH do utilizador atualizado (vale a partir do pr' + [char]0x00F3 + 'ximo terminal)') }
     'pt:installer.windows.what_do_now' { return 'O que fazer agora:' }
     'pt:installer.windows.windows_subsystem_linux_check' { return ('Verifica' + [char]0x00E7 + [char]0x00E3 + 'o do Subsistema Windows para Linux') }
@@ -1302,14 +1295,12 @@ function Add-NewRegistryPathToSession {
 }
 
 # The window that ran the installer was open before it: a program the install put on the PATH (jht, and Podman when
-# the install added it) is not in that window's PATH, and only a new window, or this line, brings it in.
-# No restart of the computer is needed.
+# the install added it) is not in that window's PATH, and a new window brings it in. No restart of the computer is needed.
+# No command to paste: a person who is not technical is told only to open a new window.
 function Write-JhtNewWindowNotice {
   Write-Host "  $(Ts 'installer.windows.jht_podman_are_your' 'jht and podman are on your PATH from now on, but THIS PowerShell window was open before the')" -ForegroundColor Yellow
   Write-Host "  $(Ts 'installer.windows.install_may_not_know' 'install and may not know them yet ("not recognized as the name of a cmdlet").')" -ForegroundColor Yellow
   Write-Host "  $(Ts 'installer.windows.open_new_powershell_window' 'Open a NEW PowerShell window to use jht and podman. No restart of the computer is needed.')" -ForegroundColor Yellow
-  Write-Host "  $(Ts 'installer.windows.use_them_window_right' 'To use them in this window right away, paste:')" -ForegroundColor DarkGray
-  Write-Host "    `$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')" -ForegroundColor White
   Write-Host ""
 }
 

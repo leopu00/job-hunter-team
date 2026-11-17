@@ -911,7 +911,6 @@
   "installer.windows.jht_podman_are_your": "A partir de agora o jht e o podman estão no teu PATH, mas ESTA janela do PowerShell já estava aberta antes da",
   "installer.windows.install_may_not_know": "instalação e pode ainda não os conhecer (\"not recognized as the name of a cmdlet\").",
   "installer.windows.open_new_powershell_window": "Abre uma NOVA janela do PowerShell para usar o jht e o podman. Não é preciso reiniciar o computador.",
-  "installer.windows.use_them_window_right": "Para os usares já nesta janela, cola:",
   "installer.windows.registering_user_path": "A registar o PATH do utilizador",
   "installer.windows.already_user_path": "já está no PATH do utilizador",
   "installer.windows.user_path_updated_effective": "PATH do utilizador atualizado (vale a partir do próximo terminal)",

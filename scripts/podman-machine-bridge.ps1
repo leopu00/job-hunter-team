@@ -562,7 +562,8 @@ function Invoke-JhtPodmanMachine {
     if ($result.Stderr.Length) {
       # A command that succeeded and said things on stderr (systemctl enable, daemon-reload): notes, not red error records. A command that
       # failed keeps its stderr as an error, which a caller that redirects it (`2>$null`) can still hold back.
-      if ($result.ExitCode -eq 0) { Write-JhtPodmanNotes -Lines (Get-JhtPodmanTextLines -Text $result.Stderr) -Human (Test-JhtHumanOutput) }
+      # A person reads only the step's own sentences: what the machine says while it succeeds goes to the app alone.
+      if ($result.ExitCode -eq 0) { if (-not (Test-JhtHumanOutput)) { Write-JhtPodmanNotes -Lines (Get-JhtPodmanTextLines -Text $result.Stderr) -Human $false } }
       else { Write-Error -Message $result.Stderr -ErrorAction Continue }
     }
     if ($result.Stdout.Length) {
@@ -574,9 +575,10 @@ function Invoke-JhtPodmanMachine {
     return
   }
   # init, start and stop take minutes and say nothing until they end (the output is captured): a person is told
-  # what is going on, sees a line every few seconds, and reads Podman's own words afterwards as plain notes,
-  # not as the error records of PowerShell. A command that fails still leaves its stderr, and the caller's
-  # own message with the code.
+  # what is going on and sees a line every few seconds. Podman's own words (in English, "This machine is currently
+  # configured in rootless mode...") are not for a person when the command succeeds; a command that fails shows them,
+  # its stdout as grey notes and its stderr as plain lines on stderr, never as the error records of PowerShell, then
+  # the caller's own message with the code.
   $human = Test-JhtHumanOutput
   if ($human) { Write-Host "  > $($announcement.Said)" -ForegroundColor Cyan }
   $wait = if ($human) { Start-JhtLiveWait -Label $announcement.Doing } else { $null }
@@ -587,9 +589,11 @@ function Invoke-JhtPodmanMachine {
   }
   $errorLines = Get-JhtPodmanTextLines -Text $result.Stderr
   if ($human) {
-    foreach ($line in (Get-JhtPodmanTextLines -Text $result.Stdout)) { Write-Host "    $line" -ForegroundColor DarkGray }
-    # on a failure the lines go to stderr as plain text, as the app reads them
-    Write-JhtPodmanNotes -Lines $errorLines -Human ($result.ExitCode -eq 0)
+    if ($result.ExitCode -ne 0) {
+      foreach ($line in (Get-JhtPodmanTextLines -Text $result.Stdout)) { Write-Host "    $line" -ForegroundColor DarkGray }
+      # the lines go to stderr as plain text, as the app reads them
+      Write-JhtPodmanNotes -Lines $errorLines -Human $false
+    }
   } else {
     if ($result.Stdout.Length) {
       $lines = [regex]::Split($result.Stdout, '\r?\n')

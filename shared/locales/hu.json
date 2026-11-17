@@ -912,7 +912,6 @@
   "installer.windows.jht_podman_are_your": "a jht és a podman mostantól benne van a PATH-ban, de EZ a PowerShell-ablak még a",
   "installer.windows.install_may_not_know": "telepítés előtt nyílt meg, és lehet, hogy még nem ismeri őket (\"not recognized as the name of a cmdlet\").",
   "installer.windows.open_new_powershell_window": "Nyiss egy ÚJ PowerShell-ablakot a jht és a podman használatához. A számítógépet nem kell újraindítani.",
-  "installer.windows.use_them_window_right": "Ha rögtön ebben az ablakban használnád őket, illeszd be:",
   "installer.windows.registering_user_path": "A felhasználói PATH beállítása",
   "installer.windows.already_user_path": "már benne van a felhasználói PATH-ban",
   "installer.windows.user_path_updated_effective": "A felhasználói PATH frissítve (a következő termináltól érvényes)",

@@ -1234,4 +1234,5 @@ if ($containerUnitInstalled) { Start-JhtContainerServiceIfInactive -PodmanPath $
 # Compose has just created the team's containers from the image: the cache the first start filled goes back too.
 [void](Invoke-JhtMachineDropCaches -PodmanPath $Podman -MachineName $MachineName)
 
-Write-Host "PODMAN JHT RUNTIME ENABLED (machine=$MachineName, wrapper=$(Join-Path $BinDir 'jht.ps1'))" -ForegroundColor Green
+# For the app and the log only: a person at a terminal has the sentences of the installer's step.
+if (-not (Test-JhtHumanOutput)) { Write-Host "PODMAN JHT RUNTIME ENABLED (machine=$MachineName, wrapper=$(Join-Path $BinDir 'jht.ps1'))" -ForegroundColor Green }
