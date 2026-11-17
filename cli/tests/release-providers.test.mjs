@@ -13,7 +13,7 @@ const cli = fileURLToPath(new URL('..', import.meta.url));
 
 test('this release offers GLM, Kimi, OpenAI and Claude, on Pi with a key; the wizard offers exactly the list', () => {
   assert.deepEqual([...RELEASE_PROVIDERS], ['glm', 'kimi', 'openai', 'claude']);
-  assert.deepEqual(RELEASE_OFFERS.map((o) => [o.provider, o.harness, o.auth]), [['glm', 'pi', 'api_key'], ['kimi', 'pi', 'api_key'], ['openai', 'pi', 'api_key'], ['claude', 'pi', 'api_key']]);
+  assert.deepEqual(RELEASE_OFFERS.map((o) => [o.provider, o.harness, o.auth]), [['glm', 'pi', 'api_key'], ['kimi', 'pi', 'api_key'], ['openai', 'pi', 'api_key'], ['claude', 'pi', 'api_key'], ['openai', 'pi', 'subscription']]);
   assert.equal(RELEASE_HARNESS, 'pi');
   assert.deepEqual(WIZARD_PROVIDERS.map((p) => p.value), [...RELEASE_PROVIDERS]);
   for (const name of ['codex', '', null, 'gemini']) assert.equal(offeredInRelease(name), false, String(name));
@@ -23,6 +23,13 @@ test('this release offers GLM, Kimi, OpenAI and Claude, on Pi with a key; the wi
   // OpenAI with a key on pi, not Codex: a team on the ChatGPT subscription is not a way of this release
   assert.equal(offeredWay('openai', 'pi', 'api_key'), true);
   assert.equal(offeredWay('openai', 'codex'), false);
+  // ... and with the ChatGPT subscription on pi (Pi's own sign-in): a way too; the same subscription on codex is still not
+  assert.equal(offeredWay('openai', 'pi', 'subscription'), true);
+  assert.equal(offeredWay('openai', 'codex', 'subscription'), false);
+  assert.equal(configOffered({ active_provider: 'openai', harness: 'pi', providers: { openai: { auth_method: 'subscription' } } }), true);
+  assert.equal(codexLegacy({ active_provider: 'openai', harness: 'pi', providers: { openai: { auth_method: 'subscription' } } }), false);
+  // the other services never take a subscription on pi
+  for (const name of ['glm', 'kimi', 'claude']) assert.equal(offeredWay(name, 'pi', 'subscription'), false, name);
   assert.equal(configOffered({ active_provider: 'openai', harness: 'codex', providers: { openai: { auth_method: 'subscription' } } }), false);
   assert.equal(configOffered({ active_provider: 'openai', harness: 'pi', providers: { openai: { auth_method: 'api_key' } } }), true);
   assert.equal(configOffered({ active_provider: 'moonshot', harness: 'pi', providers: { moonshot: { auth_method: 'api_key' } } }), true);
@@ -60,7 +67,7 @@ test('jht doctor calls a team on a service this release does not offer not suppo
   const { text } = said({ active_provider: 'kimi', harness: 'codex', providers: { kimi: { name: 'kimi', auth_method: 'subscription', model: 'm' } } }, ['doctor', '--all']);
   assert.match(text, /Provider kimi is not supported in this release \(offered: glm, kimi, openai, claude on Pi with an API key\)/, text);
   assert.match(text, /jht setup \(choose glm and paste its API key/, text);
-  assert.equal(offersSentence(), 'glm, kimi, openai, claude on Pi with an API key');
+  assert.equal(offersSentence(), 'glm, kimi, openai, claude on Pi with an API key; openai on Pi with the ChatGPT subscription');
 });
 
 test('jht providers lists the services of the release first, and a provider it does not offer only to the team on it, saying so', () => {

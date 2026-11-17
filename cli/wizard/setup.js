@@ -291,7 +291,19 @@ async function runSetupSteps(prompter, state) {
   }
   await prompter.note(t('wizard.release.coming'), t('wizard.provider.prompt'));
   const selectedProvider = WIZARD_PROVIDERS.find((p) => p.value === providerChoice);
-  const takesApiKey = selectedProvider.piOnly === true || selectedProvider.keyOnPi === true;
+  // OpenAI on Pi is offered with a key or with the ChatGPT subscription (Pi's own sign-in): the person says which
+  let openaiOnPiAccess = 'api_key';
+  if (selectedProvider.keyOnPi === true && offeredWay('openai', 'pi', 'subscription')) {
+    openaiOnPiAccess = await prompter.select({
+      message: t('wizard.access.pi_prompt'),
+      options: [
+        { value: 'subscription', label: t('wizard.access.pi_subscription') },
+        { value: 'api_key', label: t('wizard.access.api_key') },
+      ],
+      initialValue: baseConfig.providers?.openai?.auth_method === 'subscription' && configOffered(baseConfig) ? 'subscription' : 'api_key',
+    });
+  }
+  const takesApiKey = selectedProvider.piOnly === true || (selectedProvider.keyOnPi === true && openaiOnPiAccess === 'api_key');
 
   // --- Harness: il programma che guida gli agenti (codex | pi), subito dopo il provider ---
   // GLM and Kimi run only on Pi, with an API key: nothing to ask, it is said.
@@ -299,6 +311,10 @@ async function runSetupSteps(prompter, state) {
   if (takesApiKey) {
     harness = RELEASE_HARNESS;
     await prompter.note(tf('wizard.provider.harness_pi_key_note', selectedProvider.label), t('wizard.provider.harness_prompt'));
+  } else if (selectedProvider.keyOnPi === true) {
+    // OpenAI with the subscription: Pi, with its own sign-in (the step below waits for it)
+    harness = RELEASE_HARNESS;
+    await prompter.note(t('wizard.provider.harness_pi_note'), t('wizard.provider.harness_prompt'));
   } else {
     harness = await promptHarness(prompter, {
       t, provider: providerChoice, authMethod: 'subscription', current: baseConfig.harness,

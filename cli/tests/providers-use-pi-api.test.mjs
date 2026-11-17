@@ -109,3 +109,24 @@ test('harness pi: the hint appears for openai without a login and not once Pi is
   assert.doesNotMatch(second.out, /Install Pi and sign in to it/);
   assert.match(second.out, /harness: codex → pi/);
 });
+
+test('harness pi on a team with the ChatGPT subscription: a way of this release (Pi\'s own sign-in), said as such; codex with it is refused with the way that is', () => {
+  const dir = home({ active_provider: 'openai', providers: { openai: { name: 'openai', auth_method: 'subscription', model: 'm' } } });
+  const pi = jht(dir, 'providers', 'harness', 'pi');
+  assert.equal(pi.code, 0, pi.out);
+  assert.equal(pi.config().harness, 'pi');
+  // the same team is now a way of this release: start, doctor and status no longer call it «not offered»
+  const status = jht(dir, 'status');
+  assert.doesNotMatch(status.out, /not offered in this release/);
+  const back = jht(dir, 'providers', 'harness', 'codex');
+  assert.equal(back.code, 1, back.out);
+  assert.match(back.out, /harness 'codex' is not offered in this release for openai: the agents run on pi with an API key or pi with the ChatGPT subscription/);
+  assert.equal(back.config().harness, 'pi');
+});
+
+test('harness pi on a team with a key keeps the words of the refusal for a way that is not offered (claude with a subscription)', () => {
+  const dir = home({ active_provider: 'claude', providers: { claude: { name: 'claude', auth_method: 'subscription', model: 'm' } } });
+  const r = jht(dir, 'providers', 'harness', 'pi');
+  assert.equal(r.code, 1, r.out);
+  assert.equal(r.config().harness, undefined);
+});

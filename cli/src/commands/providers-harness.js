@@ -92,8 +92,10 @@ export async function handleHarness(name) {
     return;
   }
   // only a harness this release offers for the active provider (shared/runtime/release-providers.js); the code of the others stays
-  if (!offeredWay(config.active_provider, wanted)) {
-    const offered = [...new Set(releaseOffersOf(config.active_provider).map((offer) => offer.harness))];
+  // the harness with the access the team has: pi with the ChatGPT subscription is a way of this release, codex with it is not
+  if (!offeredWay(config.active_provider, wanted, config.providers?.[config.active_provider]?.auth_method)) {
+    const words = { api_key: 'an API key', subscription: 'the ChatGPT subscription', cli: 'the sign-in of its CLI' };
+    const offered = releaseOffersOf(config.active_provider).map((offer) => `${offer.harness} with ${words[offer.auth] ?? offer.auth}`);
     console.error(`${ERR}  harness '${wanted}' is not offered in this release for ${config.active_provider}${offered.length ? `: the agents run on ${offered.join(' or ')}` : ''}. Set it up with: jht setup`);
     process.exitCode = 1;
     return;

@@ -207,6 +207,10 @@ export async function runNonInteractiveSetup(opts) {
         apiKeySecret = formatSecretForConfig('plaintext', key);
       }
     }
+  } else if (authMethod === 'subscription' && harness === 'pi') {
+    // OpenAI with the ChatGPT subscription on pi: the sign-in is Pi's own, made after the setup (jht setup, keep the configuration);
+    // the config holds no email, no token, no key
+    subscriptionConfig = undefined;
   } else if (authMethod === 'subscription') {
     if (!opts.subscriptionEmail) {
       console.error(pc.red('--subscription-email is required with --auth-method subscription'));

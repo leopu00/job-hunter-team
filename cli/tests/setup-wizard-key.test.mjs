@@ -15,7 +15,7 @@ const cli = fileURLToPath(new URL('..', import.meta.url));
 const KEY = ['synthetic', 'key', '0123456789', 'abcdef'].join('-'); // built, so that no scanner reads it as a key
 const OTHER = ['synthetic', 'key', 'fedcba', '9876543210'].join('-');
 
-function sandbox({ installFails = false, existingConfig = null } = {}) {
+function sandbox({ installFails = false, existingConfig = null, piLogsIn = true } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'jht-wizard-key-'));
   const home = join(root, '.jht');
   const deps = join(root, 'deps');
@@ -37,6 +37,13 @@ if [ "$1 $2" = "login --with-api-key" ]; then
 fi
 `);
   chmodSync(codex, 0o755);
+  // a pi that signs in like /login does (an entry named openai: the ChatGPT account), or leaves without a login
+  const pi = join(bin, 'pi');
+  writeFileSync(pi, `#!/bin/sh
+echo "pi $* dir=$PI_CODING_AGENT_DIR" >> ${JSON.stringify(calls)}
+${piLogsIn ? `mkdir -p "$PI_CODING_AGENT_DIR" && echo '{"openai":{"type":"oauth","access":"synthetic"}}' > "$PI_CODING_AGENT_DIR/auth.json"` : 'true'}
+`);
+  chmodSync(pi, 0o755);
   const driver = join(root, 'driver.mjs');
   writeFileSync(driver, `
 const verdicts = JSON.parse(process.env.FAKE_VERDICTS || '[]');
@@ -51,7 +58,7 @@ const keys = [...(answers.keys ?? [])];
 const prompter = {
   intro: async () => {}, outro: async (message) => say('outro', { message }),
   note: async (message, title) => say('note', { message, title }),
-  select: async (p) => { say('select', { message: p.message, options: p.options.map((o) => o.value) });
+  select: async (p) => { say('select', { message: p.message, options: p.options.map((o) => o.value), initial: p.initialValue });
     const wanted = answers.select?.[p.message];
     return p.options.some((o) => o.value === wanted) ? wanted : (p.initialValue ?? p.options[0].value); },
   multiselect: async () => [], text: async (p) => { say('text', { message: p.message }); return answers.text?.[p.message] ?? ''; },
@@ -108,6 +115,45 @@ for (const provider of ['glm', 'kimi'].filter((p) => offeredInRelease(p))) {
     assert.equal(events.at(-1).ok, true);
   });
 }
+
+test('OpenAI in the wizard with the ChatGPT subscription: Pi, its own sign-in, no key asked, no email, no Codex', () => {
+  const box = sandbox();
+  const { r, events, calls, configText, out } = run(box, { select: { 'AI Provider': 'openai', 'How does Pi sign in to OpenAI?': 'subscription' } });
+  assert.equal(r.status, 0, r.stderr);
+  const ask = events.find((e) => e.kind === 'select' && e.message === 'How does Pi sign in to OpenAI?');
+  assert.deepEqual(ask.options, ['subscription', 'api_key']);
+  assert.equal(events.some((e) => e.kind === 'password'), false, 'no key is asked');
+  assert.equal(events.some((e) => e.kind === 'select' && /Program that runs the agents|How does Codex sign in/.test(e.message)), false);
+  assert.ok(events.some((e) => e.kind === 'note' && /Pi signs in to ChatGPT with its own login/.test(e.message)), 'what Pi needs is said');
+  const config = JSON.parse(configText);
+  assert.equal(config.active_provider, 'openai');
+  assert.equal(config.harness, 'pi');
+  assert.equal(config.providers.openai.auth_method, 'subscription');
+  assert.equal(config.providers.openai.api_key_ref, undefined);
+  assert.equal(config.providers.openai.subscription, undefined);
+  // Pi is installed (not Codex), then opened for its /login in the team's own folder, then the team starts
+  const order = calls.map((c) => c.replace(/ dir=.*/, ''));
+  assert.ok(order.includes('jht providers update pi'));
+  assert.equal(order.some((c) => /^codex |providers update codex/.test(c)), false, 'Codex is not touched');
+  assert.ok(order.findIndex((c) => c.startsWith('pi ')) > order.indexOf('jht providers update pi'));
+  assert.ok(order.indexOf('jht team start') > order.findIndex((c) => c.startsWith('pi ')));
+  assert.match(calls.find((c) => c.startsWith('pi ')), new RegExp(`dir=${join(box.home, '.pi', 'agent').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
+  assert.equal(keyFiles(box).length, 0, 'no key kept');
+  assert.equal(events.at(-1).ok, true, out);
+});
+
+test('OpenAI with the ChatGPT subscription and a Pi that leaves without a login: the setup stops before the team starts', () => {
+  const box = sandbox({ piLogsIn: false });
+  const { events, calls } = run(box, { select: { 'AI Provider': 'openai', 'How does Pi sign in to OpenAI?': 'subscription' } });
+  assert.equal(events.at(-1).ok, false);
+  assert.equal(calls.includes('jht team start'), false);
+});
+
+test('OpenAI asks how Pi signs in, and with nothing set up the default is the key (the way of build 7 stays the default)', () => {
+  const { events, configText } = run(sandbox(), { select: { 'AI Provider': 'openai' }, keys: [`sk-${KEY}`] });
+  assert.equal(events.find((e) => e.kind === 'select' && e.message === 'How does Pi sign in to OpenAI?').initial, 'api_key');
+  assert.equal(JSON.parse(configText).providers.openai.auth_method, 'api_key');
+});
 
 test('OpenAI in the wizard: offered with a key on Pi, the key checked with OpenAI and kept in the key store, no Codex sign-in', () => {
   const box = sandbox();

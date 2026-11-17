@@ -9,6 +9,8 @@ export const RELEASE_OFFERS = Object.freeze([
   Object.freeze({ provider: "kimi", harness: "pi", auth: "api_key" }),
   Object.freeze({ provider: "openai", harness: "pi", auth: "api_key" }),
   Object.freeze({ provider: "claude", harness: "pi", auth: "api_key" }),
+  // OpenAI with the ChatGPT subscription, run by Pi with its own sign-in (not Codex's): no key, paced by the plan
+  Object.freeze({ provider: "openai", harness: "pi", auth: "subscription" }),
 ]);
 
 /** The providers of the offers, in their order (the first is the default of the setup). */
