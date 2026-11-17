@@ -1993,6 +1993,10 @@ export const T: Record<Locale, Copy> = {
 
 
 
+// The three icons fill their boxes differently (the panes fill it all, the apple and the penguin less): these sizes make
+// them look the same height next to each other.
+const OS_ICON_PX: Record<string, number> = { windows: 14, linux: 17, macos: 18 };
+
 export function Mark({ id, label }: { id: string; label: string }) {
   // a service (or two, «openai-glm»): its marks as inline SVG, as tall as the text, no tile
   const services = id.split("-").filter((x) => PROVIDER_IDS.includes(x));
@@ -2007,7 +2011,11 @@ export function Mark({ id, label }: { id: string; label: string }) {
   // the systems: the icons the site already draws in the setup guide, monochrome in the colour of the text
   if (id === "linux" || id === "windows" || id === "macos")
     return (
-      <span className="inline-flex items-center justify-center shrink-0" style={{ width: 22, height: 22 }} title={label}>
+      <span
+        className="inline-flex items-center justify-center shrink-0 [&>svg]:w-[var(--os-icon)] [&>svg]:h-[var(--os-icon)]"
+        style={{ width: 22, height: 22, ["--os-icon" as string]: `${OS_ICON_PX[id]}px` }}
+        title={label}
+      >
         <OsIcon os={id} />
       </span>
     );
