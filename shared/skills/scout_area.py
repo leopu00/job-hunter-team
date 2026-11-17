@@ -46,8 +46,38 @@ def _plain(text: str) -> str:
     return " ".join(re.findall(r"[a-z0-9.]+", text))
 
 
+# The two letters an Italian place carries after its name («Bra (CN)», «Asti, AT»): a PROVINCE, not a country, even where the
+# same two letters are a country code (AT Austria, CN China, CH Switzerland, FR France, PT Portugal, RO Romania…).
+ITALIAN_PROVINCES = frozenset(
+    "AG AL AN AO AP AQ AR AT AV BA BG BI BL BN BO BR BS BT BZ CA CB CE CH CL CN CO CR CS CT CZ EN FC FE FG FI FM FR GE GO GR "
+    "IM IS KR LC LE LI LO LT LU MB MC ME MI MN MO MS MT NA NO NU OR PA PC PD PE PG PI PN PO PR PT PU PV PZ RA RC RE RG RI RM "
+    "RN RO SA SI SO SP SR SS SU SV TA TE TN TO TP TR TS TV UD VA VB VC VE VI VR VT VV".split())
+ITALIAN_REGIONS = frozenset(
+    "piemonte piedmont valle d aosta aosta lombardia lombardy trentino alto adige veneto friuli venezia giulia liguria emilia "
+    "romagna toscana tuscany umbria marche lazio abruzzo molise campania puglia apulia basilicata calabria sicilia sicily "
+    "sardegna sardinia".split())
+
+
+def _says_italy(parts, names) -> bool:
+    """True when the location says it is in Italy: the country (a name or `IT`) or one of its regions."""
+    for part in parts:
+        raw = part.strip()
+        plain = _plain(raw)
+        if not plain:
+            continue
+        if plain in ITALIAN_REGIONS or any(word in ITALIAN_REGIONS for word in plain.split()):
+            return True
+        if names.get(plain) == "it" and (len(plain) > 2 or raw.isupper()):
+            return True
+    return False
+
+
 def country_of(location, table: dict | None = None):
-    """The country code a location string NAMES (a name or a code in one of its comma, slash or bracket parts), or None."""
+    """The country code a location string NAMES (a name or a code in one of its comma, slash or bracket parts), or None.
+
+    The two letters of an Italian province after a place are not a country: between brackets («Bra (CN)», the way a place is
+    written in Italy) a province code is always a province, and after a comma («Torino, TO, Italia») when the location says it
+    is in Italy (the country or a region). «Zürich, CH» and «Wien, AT» stay countries."""
     if not isinstance(location, str) or not location.strip():
         return None
     table = table or _table()
@@ -58,9 +88,14 @@ def country_of(location, table: dict | None = None):
             names[_plain(name)] = code
     codes = set(table["country_names"])
     found = []
-    for part in re.split(r"[,;/|()\-–]+", location):
+    parts = re.split(r"[,;/|()\-–]+", location)
+    italian = _says_italy(parts, names)
+    bracketed = {code.upper() for code in re.findall(r"\(\s*([A-Za-z]{2})\s*\)", location)} & ITALIAN_PROVINCES
+    for part in parts:
         raw = part.strip()
         if not raw:
+            continue
+        if len(raw) == 2 and raw.isupper() and raw in ITALIAN_PROVINCES and (italian or raw in bracketed):
             continue
         plain = _plain(raw)
         if plain in names and (plain not in codes or raw.isupper() or len(plain) > 2):
