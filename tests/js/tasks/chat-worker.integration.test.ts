@@ -51,6 +51,10 @@ beforeEach(() => {
 
 afterEach(() => rmSync(home, { recursive: true, force: true }));
 
+// The turns of these tests were written on 04/08: the round runs minutes later, not months (a turn older than a day is
+// given up, chat-sync-give-up.test.ts).
+const AUGUST_NOW = () => Date.parse("2026-08-04T10:05:00Z");
+
 describe("handleChatSync — worker completo", () => {
   it("importa, scrive JSONL, consegna e ACKa una volta sola", async () => {
     let reads = 0;
@@ -92,6 +96,7 @@ describe("handleChatSync — worker completo", () => {
       channel,
       state: { chat_requested_at: "2026-08-04T10:00:00Z", chat_delivered_at: null },
       sendFn,
+      now: AUGUST_NOW,
     });
     expect(first).toMatchObject({
       status: "completed",
@@ -117,6 +122,7 @@ describe("handleChatSync — worker completo", () => {
         chat_delivered_at: null,
       },
       sendFn,
+      now: AUGUST_NOW,
     });
     expect(second).toMatchObject({
       status: "completed",
@@ -176,6 +182,7 @@ describe("handleChatSync — worker completo", () => {
         chat_delivered_at: null,
         is_running: isRunning,
       },
+      now: AUGUST_NOW,
       sendFn: async () => {
         sends += 1;
         return { ok: true, code: 0, error: "" };
@@ -397,6 +404,7 @@ describe("handleChatSync — worker completo", () => {
       channel,
       state: { chat_requested_at: requestA, chat_delivered_at: null },
       sendFn: async () => ({ ok: true, code: 0, error: "" }),
+      now: AUGUST_NOW,
     });
     expect(result).toMatchObject({ status: "delivery_pending", delivered: 1, acked: false });
     expect(acknowledged).toEqual([rowId]);
@@ -429,6 +437,7 @@ describe("handleChatSync — worker completo", () => {
       channel,
       state: { chat_requested_at: "2026-08-04T10:00:00Z", chat_delivered_at: null },
       sendFn: async () => ({ ok: true, code: 0, error: "" }),
+      now: AUGUST_NOW,
     });
     expect(result).toMatchObject({
       status: "delivery_pending",

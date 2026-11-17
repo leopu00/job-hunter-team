@@ -3706,7 +3706,7 @@ export async function handleChatSync(options = {}) {
 
     // ── 4. Consegna al pane ────────────────────────────────────────────
     const sent = deliveryAllowed
-      ? await chat.deliverPendingUserTurns(db, { log, sendFn: options.sendFn })
+      ? await chat.deliverPendingUserTurns(db, { log, sendFn: options.sendFn, now: options.now })
       : { delivered: 0, failed: 0 };
 
     // ── 5. Push dei turni nuovi verso il cloud ─────────────────────────
@@ -3728,7 +3728,10 @@ export async function handleChatSync(options = {}) {
     // esaurito anche la pagina cloud.
     const queue = chat.undeliveredUserTurns(db);
     const deliveredCloudIds = chat.deliveredCloudUserTurnIds(db, cloudRows);
-    const wholeCloudPageDelivered = deliveredCloudIds.length === cloudRows.length;
+    // A turn given up is not acknowledged as delivered, but it no longer holds the rendezvous open: the person was
+    // told in the chat, and nothing more can happen to it.
+    const givenUpCloudIds = chat.givenUpCloudUserTurnIds(db, cloudRows);
+    const wholeCloudPageDelivered = deliveredCloudIds.length + givenUpCloudIds.length === cloudRows.length;
     const closeRendezvous = pending && !readError && sent.failed === 0 &&
       queue.count === 0 && wholeCloudPageDelivered &&
       cloudRows.length < chat.CLOUD_CHAT_PULL_LIMIT;
