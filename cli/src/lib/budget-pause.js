@@ -36,15 +36,20 @@ export function whenOf(iso, now = new Date(), zone = '') {
 }
 
 /**
- * True when the flag was written BEFORE the budget now in the config was saved: it is the pause of the old budget or period, which
- * the brake lifts at its next tick after `jht setup` (the flag carries no budget of its own). The setup itself, right after
- * saving the new budget, must not say «the period of its budget ended»: that was the old one. A flag the brake writes for the
- * new budget comes later than saved_at and is said. No budget, no saved_at, or a flag whose time cannot be read: not stale.
+ * True when the flag is the pause of an OLDER budget than the one now in the config. The brake lifts the pause of a spent budget
+ * or an ended period at its next tick after `jht setup` (the flag carries no budget of its own), so until then, and in
+ * `jht team status` after `jht up`, the old one is still on disk. The setup saves the new budget and starts the team in the same
+ * run: it must not say «the period of its budget ended» with the old figures. Three signs, any of which says it is an old one:
+ * the period the flag names started, or ended, before the budget in the config was saved (a new period starts after saved_at; this
+ * one does not change when something rewrites the flag), or the file itself was written before it was saved. A pause the brake
+ * writes for the new budget is later than saved_at on all three and is said. No budget, no saved_at: not stale.
  */
-function staleForTheSavedBudget(home, flagPath) {
+function staleForTheSavedBudget(home, flagPath, cap) {
   try {
     const saved = Date.parse(JSON.parse(readFileSync(join(home, 'jht.config.json'), 'utf8'))?.team?.budget?.saved_at);
-    return Number.isFinite(saved) && statSync(flagPath).mtimeMs < saved;
+    if (!Number.isFinite(saved)) return false;
+    const before = (iso) => typeof iso === 'string' && Date.parse(iso) < saved;
+    return before(cap?.starts_at) || before(cap?.ends_at) || statSync(flagPath).mtimeMs < saved;
   } catch { return false; }
 }
 
@@ -55,7 +60,7 @@ export function budgetPause({ home = JHT_HOME } = {}) {
     const flag = JSON.parse(readFileSync(flagPath, 'utf8'));
     const cap = flag?.pi_spend_cap;
     if (flag?.reason !== 'pi_spend_cap' || !cap || !WHYS.has(cap.why)) return null;
-    if (staleForTheSavedBudget(home, flagPath)) return null;
+    if (staleForTheSavedBudget(home, flagPath, cap)) return null;
     return { why: cap.why, spent: Number(cap.spent), ceiling: Number(cap.ceiling), budgetUsd: Number(cap.budget_usd ?? cap.ceiling),
       endsAt: typeof cap.ends_at === 'string' ? cap.ends_at : null, resumesAt: typeof cap.resumes_at === 'string' ? cap.resumes_at : null };
   } catch {

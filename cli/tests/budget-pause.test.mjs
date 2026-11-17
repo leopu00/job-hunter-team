@@ -125,3 +125,13 @@ test('a pause written after the budget was saved is the new budget\'s and is sai
   assert.equal(budgetPause({ home: homeWithBudget(cap({ why: 'budget' }), '2026-11-16T07:00:00Z', 'not a date') })?.why, 'budget');
   assert.equal(budgetPause({ home: home(cap({ why: 'period' })) })?.why, 'period');
 });
+
+test('a flag REWRITTEN after the new budget was saved still names the old period: not said (starts_at / ends_at before saved_at)', () => {
+  const rewritten = homeWithBudget(cap({ why: 'period', spent: 0.86, ends_at: '2026-11-16T20:21:00+01:00' }), '2026-11-17T12:30:00Z', '2026-11-17T11:10:00.000Z');
+  assert.equal(budgetPause({ home: rewritten }), null);
+  const started = homeWithBudget(cap({ why: 'pace', spent: 2, ceiling: 1, starts_at: '2026-11-16T09:00:00+01:00', ends_at: '2026-11-18T09:00:00+01:00' }), '2026-11-17T12:30:00Z', '2026-11-17T11:10:00.000Z');
+  assert.equal(budgetPause({ home: started }), null, 'a period that started before the save is the old one');
+  // the period of the new budget starts after the save: said
+  const fresh = homeWithBudget(cap({ why: 'budget', starts_at: '2026-11-17T12:14:09+01:00', ends_at: '2026-11-18T12:14:09+01:00' }), '2026-11-17T12:30:00Z', '2026-11-17T11:10:00.000Z');
+  assert.equal(budgetPause({ home: fresh })?.why, 'budget');
+});
