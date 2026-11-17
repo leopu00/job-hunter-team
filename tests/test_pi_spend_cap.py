@@ -1009,7 +1009,7 @@ def test_the_notice_of_the_brake_to_the_person_is_accepted_by_jht_notify_user_ea
     assert seen == [0, 0], seen
 
 
-# --- the agents the pause stopped are woken the moment it is lifted (giro vps-42: «allows work again» 18:31, the Scouts back at 18:46) ---
+# --- the agents the pause stopped are woken the moment it is lifted (a VPS round: «allows work again» 18:31, the Scouts back at 18:46) ---
 
 def _woken(bridge):
     return sorted(s for s, t in bridge.sent if t.startswith("[RIPRENDI]"))

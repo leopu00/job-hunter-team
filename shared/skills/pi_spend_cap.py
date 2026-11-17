@@ -424,7 +424,7 @@ def _held_by_the_budget(flag, budget):
 
 def _wake_the_team(api, sessions, why):
     """[RIPRENDI] to every session the pause stopped, the moment the pause is lifted: they were ESC'd, and left to wait for the
-    Sentinella's next cycle they stayed silent for a quarter of an hour (giro vps-42: «allows work again» 18:31, the Scouts back at
+    Sentinella's next cycle they stayed silent for a quarter of an hour (a VPS round: «allows work again» 18:31, the Scouts back at
     18:46). The Captain and the Sentinella have their own notice; a team the person stopped, a standby, and an agent the person
     paused alone are not woken here. Best effort: a session that does not answer is left to that next cycle, as before."""
     home = api._path("JHT_HOME")
