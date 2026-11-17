@@ -718,6 +718,8 @@
   "wizard.cli.subscription_token": "Sitzungs-Token des Abos (optional; die Anmeldung macht das Programm des Anbieters)",
   "wizard.cli.model": "Standard-KI-Modell",
   "wizard.cli.language": "Sprache des Teams und des Assistente (en, it, hu, es, de, fr, pt)",
+  "wizard.language.save_failed": "Die Sprache konnte nicht gespeichert werden (%s). Bis sie gespeichert ist, schreibt das Team auf Englisch.",
+  "wizard.language.title": "Sprache",
   "wizard.cli.skip_health": "Prüfung des API-Schlüssels überspringen",
   "wizard.cli.reset": "Einrichtung von vorne beginnen",
   "wizard.cli.interrupted": "Setup abgebrochen.",

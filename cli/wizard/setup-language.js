@@ -11,7 +11,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { LANGUAGES, hasLanguageChoice, saveLanguage, systemLanguage, currentLang } from './i18n.js';
+import { LANGUAGES, hasLanguageChoice, saveLanguage, systemLanguage, currentLang, tfIn } from './i18n.js';
 
 /** A language saved that no run without a person left unconfirmed: the person's, from an earlier setup. */
 export function languageAlreadyChosen(home) {
@@ -44,7 +44,8 @@ export async function askLanguage(prompter, { env = process.env, home, now } = {
     saveLanguage(code, home);
   } catch (err) {
     // Not being able to write the preference must not stop the setup: the team goes on in the default language.
-    await prompter.note(`The language could not be saved (${err.message}). The team will write in English until it is.`, 'Language');
+    // Said in the language just chosen: the person reads it now.
+    await prompter.note(tfIn(code, 'wizard.language.save_failed', err.message), tfIn(code, 'wizard.language.title'));
   }
   return code;
 }

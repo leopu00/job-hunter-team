@@ -105,6 +105,19 @@ export function tf(key, ...args) {
   return template;
 }
 
+/**
+ * Lookup with %s substitution in a given language (the one the person just chose, before it is saved).
+ * An unknown language reads the one in force.
+ */
+export function tfIn(lang, key, ...args) {
+  const cat = loadCatalog(VALID_LANGS.has(lang) ? lang : resolveLang());
+  let template = typeof cat[key] === 'string' ? cat[key] : key;
+  for (const a of args) {
+    template = template.replace(/%[ds]/, String(a));
+  }
+  return template;
+}
+
 /** Current resolved language (useful for downstream decisions). */
 export function currentLang() {
   return resolveLang();
