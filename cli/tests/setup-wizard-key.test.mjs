@@ -451,7 +451,7 @@ test('a setup that leaves without a sign-in does not leave the flag behind', () 
   assert.equal(existsSync(join(box.home, '.setup-open.flag')), false);
 });
 
-// «Update the values» with the same service and a key already kept (giro vps-42, build9): the key is not asked again, keeping it is the default
+// «Update the values» with the same service and a key already kept (the VPS round of build9): the key is not asked again, keeping it is the default
 const keptBefore = (provider) => JSON.stringify({ version: 4, active_provider: provider, harness: 'pi', providers: { [provider]: { name: provider, auth_method: 'api_key', model: 'm' } }, channels: {} });
 function withKeptKey(provider) {
   const box = sandbox({ existingConfig: keptBefore(provider) });

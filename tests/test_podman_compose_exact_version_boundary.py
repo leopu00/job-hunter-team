@@ -415,9 +415,9 @@ if command == "up" and dry_run and rest and rest[0] == "-d":
         if "# candidate-release" in Path(compose_file).read_text(encoding="utf-8")
         else os.environ["JHT_FIXTURE_CONFIG_HASH"]
     )
-    if os.environ.get("JHT_FIXTURE_ENV_IN_HASH") == "1" and os.environ.get("OPENAI_API_KEY"):
-        # 1.6.0 resolves ${OPENAI_API_KEY:-} of the compose from the caller's environment into the hash
-        config_hash = hashlib.sha256((config_hash + os.environ["OPENAI_API_KEY"]).encode()).hexdigest()
+    if os.environ.get("JHT_FIXTURE_ENV_IN_HASH") == "1" and os.environ.get("JHT_SCOUT_COORD_DB"):
+        # 1.6.0 resolves ${JHT_SCOUT_COORD_DB:-} of the compose from the caller's environment into the hash
+        config_hash = hashlib.sha256((config_hash + os.environ["JHT_SCOUT_COORD_DB"]).encode()).hexdigest()
     # 1.6.0 hashes each service's own configuration, and the plan of a service prints the create of its
     # dependency first, with its own hash (jht depends on jht-telegram), then the create of the service asked
     service = rest[-1]
@@ -878,21 +878,21 @@ OPERATIONS = (
 
 
 # ── The hash follows the caller's environment (TEST 19g) ────────────────────────────────────────────
-# podman-compose 1.6.0 puts the resolved ${OPENAI_API_KEY:-} (and the other variables the compose takes from the caller)
+# podman-compose 1.6.0 puts the resolved ${JHT_SCOUT_COORD_DB:-} (and the other variables the compose takes from the caller)
 # in the config-hash. A terminal with a key exported expected another hash than the app that made the container with a
 # clean environment, and every read said «container non attivo» while the team ran.
 
 def _status(tmp_path: Path, *, key: str | None, label_made_with: str | None):
     wrapper, env, podman_log, create_marker = _runtime(tmp_path)
     env["JHT_FIXTURE_ENV_IN_HASH"] = "1"
-    for name in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "MOONSHOT_API_KEY"):
+    for name in ("JHT_SCOUT_COORD_DB", "ANTHROPIC_API_KEY", "MOONSHOT_API_KEY"):
         env.pop(name, None)
     if label_made_with is not None:
         made = hashlib.sha256((env["JHT_FIXTURE_CONFIG_HASH"] + label_made_with).encode()).hexdigest()
         path = Path(env["JHT_FIXTURE_CONTAINER_METADATA"])
         path.write_text(json.dumps({**json.loads(path.read_text(encoding="utf-8")), "config_hash": made}), encoding="utf-8")
     if key is not None:
-        env["OPENAI_API_KEY"] = key
+        env["JHT_SCOUT_COORD_DB"] = key
     return _run(wrapper, env, "status"), create_marker
 
 
@@ -981,14 +981,14 @@ def _probe_version(tmp_path: Path, *, ensure: bool) -> subprocess.CompletedProce
 def _team(tmp_path: Path, *args: str, key: str | None, made_with: str | None):
     wrapper, env, podman_log, create_marker = _runtime(tmp_path)
     env["JHT_FIXTURE_ENV_IN_HASH"] = "1"
-    for name in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "MOONSHOT_API_KEY"):
+    for name in ("JHT_SCOUT_COORD_DB", "ANTHROPIC_API_KEY", "MOONSHOT_API_KEY"):
         env.pop(name, None)
     if made_with is not None:
         made = hashlib.sha256((env["JHT_FIXTURE_CONFIG_HASH"] + made_with).encode()).hexdigest()
         path = Path(env["JHT_FIXTURE_CONTAINER_METADATA"])
         path.write_text(json.dumps({**json.loads(path.read_text(encoding="utf-8")), "config_hash": made}), encoding="utf-8")
     if key is not None:
-        env["OPENAI_API_KEY"] = key
+        env["JHT_SCOUT_COORD_DB"] = key
     return _run(wrapper, env, "team", *args), create_marker
 
 

@@ -6656,12 +6656,12 @@ mail_command() {
 # il create-plan a contenere la label anche quando il container esiste gia'.
 # L'output verbose puo' contenere variabili risolte: resta confinato in memoria
 # e ne estraiamo solo un singolo SHA-256, mai stdout/stderr grezzo.
-# The variables docker-compose.yml takes from the CALLER's environment (`${NAME:-default}`): provider keys, the
+# The variables docker-compose.yml takes from the CALLER's environment (`${NAME:-default}`): the
 # coordinator database, the screen port, the Telegram limits. podman-compose 1.6.0 puts their resolved values in the
-# config-hash of the service, so a terminal that has one of them set (an `export OPENAI_API_KEY=…` for a login test) gets
+# config-hash of the service, so a terminal that has one of them set (an `export JHT_SCOUT_COORD_DB=…` for a login test) gets
 # another expected hash than the app that created the container with a clean environment, and every read said «container
 # non attivo» while the team ran (TEST 19g). docker-compose.yml and this list are held equal by a test.
-PODMAN_CALLER_ENV="JHT_EXTRAS_IMAGE JHT_EXTRAS_DIGEST ANTHROPIC_API_KEY OPENAI_API_KEY MOONSHOT_API_KEY NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY NEXT_PUBLIC_JHT_DEPLOY JHT_SCOUT_COORD_DB JHT_LIVE_SCREEN_PORT JHT_TELEGRAM_SERVICE_ENABLED JHT_TELEGRAM_BURST_LIMIT JHT_TELEGRAM_DAILY_LIMIT"
+PODMAN_CALLER_ENV="JHT_EXTRAS_IMAGE JHT_EXTRAS_DIGEST NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY NEXT_PUBLIC_JHT_DEPLOY JHT_SCOUT_COORD_DB JHT_LIVE_SCREEN_PORT JHT_TELEGRAM_SERVICE_ENABLED JHT_TELEGRAM_BURST_LIMIT JHT_TELEGRAM_DAILY_LIMIT"
 
 # 0 when the caller's environment sets (non-empty) at least one of them: only then does a «clean» hash differ.
 podman_caller_env_set() {

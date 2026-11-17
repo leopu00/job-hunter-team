@@ -79,9 +79,9 @@ services:
       # nel container non esisterebbe. Vuota = nessuna deroga (il codice
       # tratta la stringa vuota come assente).
       - JHT_SCOUT_COORD_DB=${JHT_SCOUT_COORD_DB:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-}
+      # NB: NESSUNA chiave dei provider qui (ANTHROPIC/OPENAI/MOONSHOT_API_KEY): questo ambiente arriva a tutti gli
+      # agenti, anche a quelli che non usano quel servizio. Ogni agente riceve la sua chiave dal keyfile al lancio
+      # (spawn-keyfile.sh); un test tiene la lista vuota.
       # NB: nonostante il prefisso NEXT_PUBLIC_, queste due NON servono a
       # Next (che qui non gira): le legge il sync del container —
       # shared/skills/db_to_supabase.py e `jht doctor` — come fallback
