@@ -5,7 +5,7 @@
  * and rewrites it when the reason changes: it is read again at every command. `jht team status`, `jht team start` and
  * `jht doctor` say it; none of them lifts it (a new budget from `jht setup` does, at the next tick of the brake).
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { JHT_HOME } from '../jht-paths.js';
 import { later } from './texts.js';
@@ -35,12 +35,27 @@ export function whenOf(iso, now = new Date(), zone = '') {
   return zone ? `${when} (${zone})` : when;
 }
 
+/**
+ * True when the flag was written BEFORE the budget now in the config was saved: it is the pause of the old budget or period, which
+ * the brake lifts at its next tick after `jht setup` (the flag carries no budget of its own). The setup itself, right after
+ * saving the new budget, must not say «the period of its budget ended»: that was the old one. A flag the brake writes for the
+ * new budget comes later than saved_at and is said. No budget, no saved_at, or a flag whose time cannot be read: not stale.
+ */
+function staleForTheSavedBudget(home, flagPath) {
+  try {
+    const saved = Date.parse(JSON.parse(readFileSync(join(home, 'jht.config.json'), 'utf8'))?.team?.budget?.saved_at);
+    return Number.isFinite(saved) && statSync(flagPath).mtimeMs < saved;
+  } catch { return false; }
+}
+
 /** @returns {{ why: 'budget'|'period'|'pace', spent: number, ceiling: number, budgetUsd: number, endsAt: string|null, resumesAt: string|null } | null} */
 export function budgetPause({ home = JHT_HOME } = {}) {
   try {
-    const flag = JSON.parse(readFileSync(join(home, 'logs', 'daily-halt.flag'), 'utf8'));
+    const flagPath = join(home, 'logs', 'daily-halt.flag');
+    const flag = JSON.parse(readFileSync(flagPath, 'utf8'));
     const cap = flag?.pi_spend_cap;
     if (flag?.reason !== 'pi_spend_cap' || !cap || !WHYS.has(cap.why)) return null;
+    if (staleForTheSavedBudget(home, flagPath)) return null;
     return { why: cap.why, spent: Number(cap.spent), ceiling: Number(cap.ceiling), budgetUsd: Number(cap.budget_usd ?? cap.ceiling),
       endsAt: typeof cap.ends_at === 'string' ? cap.ends_at : null, resumesAt: typeof cap.resumes_at === 'string' ? cap.resumes_at : null };
   } catch {

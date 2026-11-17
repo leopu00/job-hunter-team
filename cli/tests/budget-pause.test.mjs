@@ -2,7 +2,7 @@
 // the budget spent, the period over, the pace (resumes by itself, or not before the end). Synthetic flags in made-up homes.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -104,4 +104,24 @@ test('the zone read from jht.config.json is printed only when it is a plain zone
   };
   assert.match(asked('Europe/Rome'), /\(Europe\/Rome\)/);
   for (const bad of ['Europe/Rome\u001b[31m', 'Rome; rm -rf', 'a b', 'x\ny']) assert.match(asked(bad), /it resumes by itself at 16\/11 3:10\.$/);
+});
+
+// The setup saves the new budget and goes on to start the team: the flag of the OLD period is still there until the next tick of the brake.
+function homeWithBudget(flag, flagWrittenAt, savedAt) {
+  const root = home(flag);
+  writeFileSync(join(root, 'jht.config.json'), JSON.stringify({ team: { budget: { usd: 3, duration_minutes: 1440, saved_at: savedAt } } }));
+  utimesSync(join(root, 'logs', 'daily-halt.flag'), new Date(flagWrittenAt), new Date(flagWrittenAt));
+  return root;
+}
+
+test('a pause written before the budget now in the config was saved is the old budget\'s: not said (the brake lifts it at its next tick)', () => {
+  const old = homeWithBudget(cap({ why: 'period', spent: 0.86 }), '2026-11-16T07:00:00Z', '2026-11-16T09:30:00.000Z');
+  assert.equal(budgetPause({ home: old }), null);
+  assert.equal(budgetPauseText({ home: old, now: NOW }), null);
+});
+
+test('a pause written after the budget was saved is the new budget\'s and is said; no saved_at, no budget, no config: said as before', () => {
+  assert.equal(budgetPause({ home: homeWithBudget(cap({ why: 'budget' }), '2026-11-16T10:00:00Z', '2026-11-16T09:30:00.000Z') })?.why, 'budget');
+  assert.equal(budgetPause({ home: homeWithBudget(cap({ why: 'budget' }), '2026-11-16T07:00:00Z', 'not a date') })?.why, 'budget');
+  assert.equal(budgetPause({ home: home(cap({ why: 'period' })) })?.why, 'period');
 });
