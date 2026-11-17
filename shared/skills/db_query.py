@@ -1885,7 +1885,7 @@ def check_url(url_or_id):
         print(f"FOUND: #{r['id']} {inline_external_value(r['company'])} — "
               f"{inline_external_value(r['title'])} [{r['status']}]")
     else:
-        print("NOT FOUND")
+        print("NOT IN THE DATABASE YET: a new position, not seen before (this is no check of the link: a dead link is found by fetching it)")
 
     conn.close()
 
