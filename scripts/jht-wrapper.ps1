@@ -5565,6 +5565,29 @@ function Set-JhtTeamStopped {
 function Clear-JhtTeamStopped {
   try { [void](Remove-JhtTeamStoppedEntry) } catch { }
 }
+# The setup that is about to open says so on the HOST, before the container starts (see setup_open_flag_write in the sh wrapper):
+# the watchdog of the container wakes the Assistant and the Mentor as soon as it is up, before the wizard writes its own flag.
+# Only for the wizard (no sub-command, no --non-interactive); never through a link; any failure is ignored (the wizard writes it too).
+function Test-JhtSetupWizardArgs([string[]]$Rest) {
+  if ($Rest -and $Rest.Count -gt 0 -and -not ([string]$Rest[0]).StartsWith('-')) { return $false }
+  return -not ($Rest -contains '--non-interactive')
+}
+function Get-JhtSetupOpenFlagPath {
+  $home_ = if ($env:JHT_HOME_HOST) { $env:JHT_HOME_HOST } else { Join-Path $env:USERPROFILE '.jht' }
+  return (Join-Path $home_ '.setup-open.flag')
+}
+function Write-JhtSetupOpenFlag {
+  try {
+    $flag = Get-JhtSetupOpenFlagPath
+    if (-not (Test-Path -LiteralPath (Split-Path -Parent $flag) -PathType Container)) { return }
+    if (Test-Path -LiteralPath $flag) { Remove-Item -LiteralPath $flag -Force -ErrorAction SilentlyContinue }
+    $stream = [IO.File]::Open($flag, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write)
+    try { $bytes = [Text.Encoding]::ASCII.GetBytes([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ') + "`n"); $stream.Write($bytes, 0, $bytes.Length) } finally { $stream.Dispose() }
+  } catch { }
+}
+function Remove-JhtSetupOpenFlag {
+  try { Remove-Item -LiteralPath (Get-JhtSetupOpenFlagPath) -Force -ErrorAction SilentlyContinue } catch { }
+}
 function Get-JhtTeamStoppedText {
   return (Get-JhtText 'team.stopped')
 }
@@ -8436,6 +8459,7 @@ switch ($Sub) {
     Require-ComposeFile
     Require-Docker
     Clear-JhtTeamStopped
+    if (Test-JhtSetupWizardArgs $Rest) { Write-JhtSetupOpenFlag }
     Ensure-Up
     Write-JhtToolsNotice -Kick
     # The language and the timezone of host.env go to the setup with the run: a container made before host.env existed (the
@@ -8460,6 +8484,7 @@ switch ($Sub) {
     } else {
       & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @setupEnv $Container node $NodeEntry 'setup' @Rest }
     }
+    if (Test-JhtSetupWizardArgs $Rest) { Remove-JhtSetupOpenFlag }
     break
   }
 

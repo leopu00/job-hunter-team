@@ -3947,6 +3947,26 @@ team_stopped_by_person() { [ -f "$TEAM_STOPPED_MARKER" ] && [ ! -L "$TEAM_STOPPE
 team_stopped_mark() { rm -f -- "$TEAM_STOPPED_MARKER" 2>/dev/null; (umask 077 && printf 'jht down\n' > "$TEAM_STOPPED_MARKER") 2>/dev/null || true; }
 team_stopped_clear() { rm -f -- "$TEAM_STOPPED_MARKER" 2>/dev/null || true; }
 
+# The setup that is about to open says so on the HOST, before the container is started: the watchdog of the container wakes
+# the Assistant and the Mentor the moment it is up, and the flag the wizard writes itself came 40 seconds later (the Mentor
+# spent before the person chose the budget). Same file and same 2 h life as cli/src/lib/setup-open.js, which rewrites it when
+# the wizard opens and removes it when it ends. Only for the wizard (no sub-command, no --non-interactive), never through a
+# link, and silently skipped where the folder is not writable by this user (Linux with Docker: the container writes it).
+setup_wizard_args() {
+  local arg
+  [ "$#" -eq 0 ] || case "$1" in -*) ;; *) return 1 ;; esac
+  for arg in "$@"; do [ "$arg" != --non-interactive ] || return 1; done
+  return 0
+}
+setup_open_flag_path() { printf '%s' "${JHT_HOME_HOST:-$HOME/.jht}/.setup-open.flag"; }
+setup_open_flag_write() {
+  local flag; flag="$(setup_open_flag_path)"
+  [ -d "$(dirname "$flag")" ] || return 0
+  rm -f -- "$flag" 2>/dev/null || true
+  ( umask 077; set -C; date -u +%Y-%m-%dT%H:%M:%SZ > "$flag" ) 2>/dev/null || true
+}
+setup_open_flag_remove() { rm -f -- "$(setup_open_flag_path)" 2>/dev/null || true; }
+
 RUNTIME_HELPERS="jht-integration.sh jht-tools.sh"
 RUNTIME_HELPERS_MANIFEST="$RUNTIME_DIR/.runtime-helpers"
 
@@ -10544,6 +10564,7 @@ case "$SUB" in
     require_compose_file
     require_docker
     team_stopped_clear
+    if setup_wizard_args "$@"; then setup_open_flag_write; fi
     # Skip host-setup se utente ha passato --non-interactive (i flag CLI
     # del wizard sono espliciti, niente domande possibili) o env esplicita.
     if [ "${JHT_SKIP_HOST_SETUP:-0}" != "1" ] \
@@ -10568,6 +10589,7 @@ case "$SUB" in
     tools_tell_person kick
     rc=0
     setup_exec_container "$@" || rc=$?
+    if setup_wizard_args "$@"; then setup_open_flag_remove; fi
     if [ "${1:-}" = cloud ] && [ "${2:-}" = pair ] && [ "$rc" -eq 0 ]; then ensure_broker && broker_configure_web_authorisations; fi
     exit "$rc"
     ;;
