@@ -274,7 +274,8 @@
       "proof": [
         "r14"
       ],
-      "note": "zeroTurns"
+      "note": "zeroTurns",
+      "emoji": "🩺"
     },
     {
       "id": "serviceClaude",
@@ -284,7 +285,8 @@
       "proof": [
         "r14"
       ],
-      "note": null
+      "note": null,
+      "emoji": "🤖"
     },
     {
       "id": "serviceOpenai",
@@ -292,7 +294,8 @@
       "status": "pass",
       "build": 6,
       "proof": [],
-      "note": "openaiRoundMissing"
+      "note": "openaiRoundMissing",
+      "emoji": "🤖"
     },
     {
       "id": "serviceGlmKimi",
@@ -300,7 +303,8 @@
       "status": "pending",
       "build": null,
       "proof": [],
-      "note": "noCredit"
+      "note": "noCredit",
+      "emoji": "🤖"
     },
     {
       "id": "openaiSubscription",
@@ -308,7 +312,8 @@
       "status": "fail",
       "build": 9,
       "proof": [],
-      "note": "chatgptFreeRefused"
+      "note": "chatgptFreeRefused",
+      "emoji": "🤖"
     },
     {
       "id": "noKeyOnDisk",
@@ -318,7 +323,8 @@
       "proof": [
         "r12"
       ],
-      "note": "keysChecked"
+      "note": "keysChecked",
+      "emoji": "🔑"
     },
     {
       "id": "preTagReview",
