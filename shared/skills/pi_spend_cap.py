@@ -422,11 +422,17 @@ def _held_by_the_budget(flag, budget):
             and record.get("budget_usd") == budget["usd"])
 
 
-def _wake_the_team(api, sessions, why):
+def _wake_the_team(api, sessions, why, seen=()):
     """[RIPRENDI] to every session the pause stopped, the moment the pause is lifted: they were ESC'd, and left to wait for the
     Sentinella's next cycle they stayed silent for a quarter of an hour (a VPS round: «allows work again» 18:31, the Scouts back at
     18:46). The Captain and the Sentinella have their own notice; a team the person stopped, a standby, and an agent the person
-    paused alone are not woken here. Best effort: a session that does not answer is left to that next cycle, as before."""
+    paused alone are not woken here. Best effort: a session that does not answer is left to that next cycle, as before.
+
+    A session BORN during the pause is not in the list the ESC wrote: its first message was held by the gate (`input` handled,
+    nothing sent to the model, never delivered again), so it sat with nothing to do while the budget was back (an Analyst started
+    by an update during the pause: 14 minutes, 0 calls, 13 positions waiting). The live agent sessions are asked too (`seen`: the
+    sessions the bridge saw talking during the pause, and what tmux lists now), and those that were not in the list get a text
+    that says their first message never reached them."""
     home = api._path("JHT_HOME")
     try:
         if (Path(home) / ".team-halted.flag").exists() or (Path(home) / ".team-standby.flag").exists():
@@ -439,12 +445,23 @@ def _wake_the_team(api, sessions, why):
             pass
         text = ("[RIPRENDI] The pause is over (%s). Your session and context were never closed: pick up EXACTLY where you were, "
                 "with the step you had in hand, and do not start over." % why)
+        newcomer_text = ("[RIPRENDI] The pause is over (%s). The message that started you arrived DURING the pause and was held back: "
+                         "it never reached you. If you have not started your work yet, start it now from your role instructions; "
+                         "if you were in the middle of a step, pick up exactly there." % why)
+        known = list(sessions or [])
+        live = []
+        try:
+            lister = getattr(api, "list_tmux_sessions", None)
+            live = [s for s in (lister() if lister else []) if _AGENT_SESSION.match(s or "")]
+        except Exception:  # noqa: BLE001 - without the list only the sessions the ESC reached are woken, as before
+            live = []
+        extra = [s for s in list(seen or ()) + live if s not in known and _AGENT_SESSION.match(s or "")]
         woken = []
-        for session in sessions or []:
+        for session in known + list(dict.fromkeys(extra)):
             if session in (api.CAPITANO_SESSION, api.SENTINELLA_SESSION) or session in alone or session in NEVER_WAKE:
                 continue
             try:
-                if api.jht_tmux_send(session, text):
+                if api.jht_tmux_send(session, text if session in known else newcomer_text):
                     woken.append(session)
             except Exception as error:  # noqa: BLE001
                 print("[bridge V6] WARN pi spend cap wake of %s: %s" % (session, error))
@@ -455,6 +472,7 @@ def _wake_the_team(api, sessions, why):
 
 
 NEVER_WAKE = {"SENTINELLA-WORKER", "DOCTOR-WATCHDOG"}
+_AGENT_SESSION = re.compile(r"^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$")   # the sessions of the team: CAPITANO, SCOUT-1, ANALISTA-5
 
 
 def _resume(api, run, day, notify_user):
@@ -473,7 +491,8 @@ def _resume(api, run, day, notify_user):
         text = "[BRIDGE INFO] The pi spending ceiling allows work again: the team can resume; ticks are restarting."
         user = i18n.t("pi_cap.resume")
     # the gate is open (the flag is gone) BEFORE anyone is told to work: the order of the standby too
-    woken = _wake_the_team(api, flag.get("sessions"), "the budget allows work again" if was in ("budget", "period", "pace") else "spending is back under the ceiling")
+    woken = _wake_the_team(api, flag.get("sessions"), "the budget allows work again" if was in ("budget", "period", "pace") else "spending is back under the ceiling",
+                        seen=list((flag.get("pane_signatures") or {}).keys()))
     _tell(api, run, "resume:%s:%d" % (day, int(api.time.time())), text, user, notify_user)
     print("[bridge V6] %s PI-SPEND-CEILING cleared: spending back under the ceiling%s" % (run.now_h, " · [RIPRENDI] to %s" % ", ".join(woken) if woken else ""))
 
