@@ -811,6 +811,8 @@ This help starts nothing and downloads nothing.' ;;
     tools.chat_reconnecting) printf '%s' 'The team is moving onto the Scouts'\'' full tools, so the chat stops for a moment: it comes back by itself once the team is running again (a couple of minutes).' ;;
     tools.chat_resumed) printf '%s' 'The team has moved onto the full tools: let'\''s pick up again.' ;;
     tools.chat_switched) printf '%s' 'The team is moving onto the Scouts'\'' full tools, so this chat has closed. Open it again in a couple of minutes with jht team chat.' ;;
+    tools.chat_update_closed) printf '%s' 'JHT is updating, so this chat has closed. Open it again in a couple of minutes with jht team chat.' ;;
+    tools.chat_updating) printf '%s' 'JHT is updating, so the chat stops for a moment: it comes back by itself in a minute or two.' ;;
     tools.disk_low) printf '%s' 'The Scouts'\'' tools were not downloaded: they need about %s GiB free on the disk and there are %s GiB, so the team cannot search for positions yet. Free some space (empty the Trash, delete large files you do not need), then run jht up: the download starts again by itself.' ;;
     tools.engine_down) printf '%s' 'The state of the Scouts'\'' tools cannot be read: the container engine does not answer. Start it with jht up.' ;;
     tools.failed) printf '%s' 'The download of the Scouts'\'' tools failed, so the team cannot search for positions yet. Run jht tools pull to try again (jht up tries again too).' ;;
@@ -1309,6 +1311,8 @@ Questo aiuto non avvia niente e non scarica niente.' ;;
     tools.chat_reconnecting) printf '%s' 'La squadra passa agli strumenti completi degli Scout, quindi la chat si ferma un momento: riprende da sola appena la squadra e'\'' ripartita (un paio di minuti).' ;;
     tools.chat_resumed) printf '%s' 'La squadra e'\'' passata agli strumenti completi: riprendiamo.' ;;
     tools.chat_switched) printf '%s' 'La squadra passa agli strumenti completi degli Scout, quindi questa chat si e'\'' chiusa. Riaprila fra un paio di minuti con jht team chat.' ;;
+    tools.chat_update_closed) printf '%s' 'JHT si sta aggiornando, quindi questa chat si è chiusa. Riaprila fra un paio di minuti con jht team chat.' ;;
+    tools.chat_updating) printf '%s' 'JHT si sta aggiornando, quindi la chat si ferma un momento: riparte da sola fra poco.' ;;
     tools.disk_low) printf '%s' 'Gli strumenti degli Scout non sono stati scaricati: servono circa %s GiB liberi sul disco e ce ne sono %s, quindi la squadra non puo'\'' ancora cercare posizioni. Libera spazio (svuota il Cestino, elimina i file grandi che non ti servono), poi esegui jht up: il download riparte da solo.' ;;
     tools.engine_down) printf '%s' 'Lo stato degli strumenti degli Scout non si legge: il motore dei container non risponde. Avvialo con jht up.' ;;
     tools.failed) printf '%s' 'Il download degli strumenti degli Scout non e'\'' riuscito: la squadra non puo'\'' ancora cercare posizioni. Esegui jht tools pull per riprovare (anche jht up riprova).' ;;
@@ -1808,6 +1812,8 @@ Ez a súgó semmit nem indít el és semmit nem tölt le.' ;;
     tools.chat_reconnecting) printf '%s' 'A csapat átáll a felderítők (Scout) teljes eszközeire, ezért a csevegés egy pillanatra megáll: magától folytatódik, amint a csapat újra fut (pár perc).' ;;
     tools.chat_resumed) printf '%s' 'A csapat átállt a teljes eszközökre: folytassuk.' ;;
     tools.chat_switched) printf '%s' 'A csapat átáll a felderítők (Scout) teljes eszközeire, ezért ez a csevegés bezárult. Pár perc múlva nyisd meg újra a jht team chat paranccsal.' ;;
+    tools.chat_update_closed) printf '%s' 'A JHT frissül, ezért ez a csevegés bezárult. Pár perc múlva nyisd meg újra a jht team chat paranccsal.' ;;
+    tools.chat_updating) printf '%s' 'A JHT frissül, ezért a csevegés egy pillanatra megáll: magától újraindul egy-két percen belül.' ;;
     tools.disk_low) printf '%s' 'A felderítők (Scout) eszközei nem töltődtek le: kb. %s GiB szabad lemezterület kell hozzájuk, és %s GiB van, így a csapat még nem tud állásokat keresni. Szabadíts fel helyet (ürítsd ki a Kukát, töröld a nagy fájlokat, amelyekre nincs szükséged), majd futtasd a jht up parancsot: a letöltés magától újraindul.' ;;
     tools.engine_down) printf '%s' 'A felderítők (Scout) eszközeinek állapota nem olvasható: a konténermotor nem válaszol. Indítsd el a jht up paranccsal.' ;;
     tools.failed) printf '%s' 'A felderítők (Scout) eszközeinek letöltése nem sikerült, így a csapat még nem tud állásokat keresni. Futtasd a jht tools pull parancsot az újrapróbáláshoz (a jht up is újrapróbálja).' ;;
@@ -2311,6 +2317,8 @@ Esta ayuda no arranca nada ni descarga nada.' ;;
     tools.chat_reconnecting) printf '%s' 'El equipo pasa a las herramientas completas de los Scout, así que el chat se detiene un momento: vuelve solo en cuanto el equipo esté en marcha de nuevo (un par de minutos).' ;;
     tools.chat_resumed) printf '%s' 'El equipo ya usa las herramientas completas: sigamos.' ;;
     tools.chat_switched) printf '%s' 'El equipo pasa a las herramientas completas de los Scout, así que este chat se ha cerrado. Vuelve a abrirlo en un par de minutos con jht team chat.' ;;
+    tools.chat_update_closed) printf '%s' 'JHT se está actualizando, así que este chat se ha cerrado. Vuelve a abrirlo en un par de minutos con jht team chat.' ;;
+    tools.chat_updating) printf '%s' 'JHT se está actualizando, así que el chat se detiene un momento: vuelve solo en un minuto o dos.' ;;
     tools.disk_low) printf '%s' 'Las herramientas de los Scout no se han descargado: necesitan unos %s GiB libres en el disco y hay %s GiB, así que el equipo aún no puede buscar puestos. Libera espacio (vacía la Papelera, borra los archivos grandes que no necesites) y luego ejecuta jht up: la descarga vuelve a empezar sola.' ;;
     tools.engine_down) printf '%s' 'No se puede leer el estado de las herramientas de los Scout: el motor de contenedores no responde. Arráncalo con jht up.' ;;
     tools.failed) printf '%s' 'La descarga de las herramientas de los Scout ha fallado, así que el equipo aún no puede buscar puestos. Ejecuta jht tools pull para reintentarlo (jht up también lo reintenta).' ;;
@@ -2809,6 +2817,8 @@ Diese Hilfe startet nichts und lädt nichts herunter.' ;;
     tools.chat_reconnecting) printf '%s' 'Das Team wechselt auf die vollständigen Werkzeuge der Scouts, deshalb hält der Chat kurz an: Er kommt von selbst zurück, sobald das Team wieder läuft (ein paar Minuten).' ;;
     tools.chat_resumed) printf '%s' 'Das Team nutzt jetzt die vollständigen Werkzeuge: Machen wir weiter.' ;;
     tools.chat_switched) printf '%s' 'Das Team wechselt auf die vollständigen Werkzeuge der Scouts, deshalb wurde dieser Chat geschlossen. Öffne ihn in ein paar Minuten wieder mit jht team chat.' ;;
+    tools.chat_update_closed) printf '%s' 'JHT wird gerade aktualisiert, deshalb wurde dieser Chat geschlossen. Öffne ihn in ein paar Minuten wieder mit jht team chat.' ;;
+    tools.chat_updating) printf '%s' 'JHT wird gerade aktualisiert, deshalb hält der Chat kurz an: Er startet in ein bis zwei Minuten von selbst neu.' ;;
     tools.disk_low) printf '%s' 'Die Werkzeuge der Scouts wurden nicht heruntergeladen: Sie brauchen etwa %s GiB freien Speicherplatz, verfügbar sind %s GiB, daher kann das Team noch keine Stellen suchen. Gib Platz frei (leere den Papierkorb, lösche große Dateien, die du nicht brauchst), dann führe jht up aus: Der Download startet von selbst neu.' ;;
     tools.engine_down) printf '%s' 'Der Stand der Werkzeuge der Scouts lässt sich nicht lesen: Die Container-Engine antwortet nicht. Starte sie mit jht up.' ;;
     tools.failed) printf '%s' 'Der Download der Werkzeuge der Scouts ist fehlgeschlagen, daher kann das Team noch keine Stellen suchen. Führe jht tools pull aus, um es erneut zu versuchen (jht up versucht es auch).' ;;
@@ -3307,6 +3317,8 @@ Cette aide ne démarre rien et ne télécharge rien.' ;;
     tools.chat_reconnecting) printf '%s' 'L'\''équipe passe aux outils complets des Scout, donc le chat s'\''arrête un instant : il revient tout seul dès que l'\''équipe tourne à nouveau (quelques minutes).' ;;
     tools.chat_resumed) printf '%s' 'L'\''équipe est passée aux outils complets : reprenons.' ;;
     tools.chat_switched) printf '%s' 'L'\''équipe passe aux outils complets des Scout, donc ce chat s'\''est fermé. Rouvre-le dans quelques minutes avec jht team chat.' ;;
+    tools.chat_update_closed) printf '%s' 'JHT se met à jour, donc ce chat s'\''est fermé. Rouvre-le dans quelques minutes avec jht team chat.' ;;
+    tools.chat_updating) printf '%s' 'JHT se met à jour, donc le chat s'\''arrête un instant : il repart tout seul dans une minute ou deux.' ;;
     tools.disk_low) printf '%s' 'Les outils des Scout n'\''ont pas été téléchargés : il leur faut environ %s Gio libres sur le disque et il y en a %s, l'\''équipe ne peut donc pas encore chercher d'\''offres. Libère de l'\''espace (vide la Corbeille, supprime les gros fichiers dont tu n'\''as pas besoin), puis lance jht up : le téléchargement repart tout seul.' ;;
     tools.engine_down) printf '%s' 'L'\''état des outils des Scout ne peut pas être lu : le moteur de conteneurs ne répond pas. Démarre-le avec jht up.' ;;
     tools.failed) printf '%s' 'Le téléchargement des outils des Scout a échoué : l'\''équipe ne peut pas encore chercher d'\''offres. Lance jht tools pull pour réessayer (jht up réessaie aussi).' ;;
@@ -3805,6 +3817,8 @@ Esta ajuda não inicia nada nem descarrega nada.' ;;
     tools.chat_reconnecting) printf '%s' 'A equipa passa para as ferramentas completas dos Scout, por isso o chat para por um momento: volta sozinho assim que a equipa estiver a funcionar outra vez (alguns minutos).' ;;
     tools.chat_resumed) printf '%s' 'A equipa passou para as ferramentas completas: vamos continuar.' ;;
     tools.chat_switched) printf '%s' 'A equipa passa para as ferramentas completas dos Scout, por isso este chat fechou-se. Volta a abri-lo dentro de alguns minutos com jht team chat.' ;;
+    tools.chat_update_closed) printf '%s' 'O JHT está a atualizar-se, por isso este chat fechou-se. Volta a abri-lo dentro de alguns minutos com jht team chat.' ;;
+    tools.chat_updating) printf '%s' 'O JHT está a atualizar-se, por isso o chat para por um momento: volta sozinho dentro de um ou dois minutos.' ;;
     tools.disk_low) printf '%s' 'As ferramentas dos Scout não foram descarregadas: precisam de cerca de %s GiB livres no disco e há %s GiB, por isso a equipa ainda não pode procurar vagas. Liberta espaço (esvazia o Lixo, apaga os ficheiros grandes de que não precisas) e depois corre jht up: o descarregamento recomeça sozinho.' ;;
     tools.engine_down) printf '%s' 'Não é possível ler o estado das ferramentas dos Scout: o motor de contentores não responde. Inicia-o com jht up.' ;;
     tools.failed) printf '%s' 'O descarregamento das ferramentas dos Scout falhou, por isso a equipa ainda não pode procurar vagas. Corre jht tools pull para tentar de novo (jht up também tenta de novo).' ;;
@@ -4179,6 +4193,41 @@ team_chat_through_switch() {
   fi
   info "$(jht_say tools.chat_reconnecting)"
   wait_for_tools_switch quiet
+  export JHT_TEAM_CHAT_RESUME=$((round + 1))
+  exec bash "$WRAPPER_PATH" "$@"
+}
+
+# `jht team chat` whose REPL the container engine ended from under it: an update changes the units of the Podman machine and restarts
+# it, and the client of the REPL then says its raw line on stderr («Error: Get "http://d/v6.0.2/libpod/exec/…/json": EOF», «Cannot
+# connect to Podman», a connection refused or reset). That line is not for the person: the chat says it is updating and comes back.
+# The stderr kept aside by the REPL (see the arm of `team` below) is read, never the REPL's own lines.
+team_chat_engine_gone() {
+  [ -s "${1:-}" ] || return 1
+  grep -Eqi 'libpod/.*(EOF|connection (refused|reset))|Cannot connect to Podman|unable to connect to Podman|error during connect|connection reset by peer|unexpected EOF' "$1" 2>/dev/null
+}
+
+# The chat the engine ended comes back by itself: wait (JHT_CHAT_UPDATE_WAIT_MAX seconds, 300 by default) for the engine to answer and
+# the container to run again, then a fresh wrapper resumes it as after the switch of the tools (it never starts a container: it
+# waits for the agent and attaches). Past the wait, or after three rounds, the person is told to open the chat again.
+team_chat_through_update() {
+  local round="${JHT_TEAM_CHAT_RESUME:-0}" left="${JHT_CHAT_UPDATE_WAIT_MAX:-300}" back=0
+  case "$round" in ''|*[!0-9]*) round=0 ;; esac
+  case "$left" in ''|*[!0-9]*) left=300 ;; esac
+  if [ "$round" -ge 3 ]; then
+    info "$(jht_say tools.chat_update_closed)"
+    return 0
+  fi
+  info "$(jht_say tools.chat_updating)"
+  while :; do
+    if docker_reachable >/dev/null 2>&1 && container_up >/dev/null 2>&1; then back=1; break; fi
+    [ "$left" -gt 0 ] || break
+    sleep 2
+    left=$((left - 2))
+  done
+  if [ "$back" -ne 1 ]; then
+    info "$(jht_say tools.chat_update_closed)"
+    return 0
+  fi
   export JHT_TEAM_CHAT_RESUME=$((round + 1))
   exec bash "$WRAPPER_PATH" "$@"
 }
@@ -10686,6 +10735,12 @@ case "$SUB" in
     if [ "${2:-}" = chat ] && team_chat_ended_by_switch; then
       [ -z "$team_err" ] || rm -f "$team_err"
       team_chat_through_switch "$@"
+      exit $?
+    fi
+    # the engine went away under the REPL (an update restarts the Podman machine): no raw line, the chat comes back by itself
+    if [ "${2:-}" = chat ] && [ "$team_rc" -ne 0 ] && [ -n "$team_err" ] && team_chat_engine_gone "$team_err"; then
+      rm -f "$team_err"
+      team_chat_through_update "$@"
       exit $?
     fi
     if [ -n "$team_err" ]; then

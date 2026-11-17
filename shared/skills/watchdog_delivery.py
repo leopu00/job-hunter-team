@@ -62,6 +62,34 @@ def kickoff(session, role, *, sender=None, sleeper=time.sleep):
     return False
 
 
+def nudge(session, role, *, sender=None, sleeper=time.sleep):
+    """A worker that is alive and has not worked while positions wait in its queue: one message to resume the loop.
+
+    Not the kickoff of a new pane (no wait for the shell, no «recreated»): the session is old, it was never briefed, or its turn
+    ended with nothing to do. Never to a paused agent or in standby."""
+    from agent_pause import is_paused
+    from standby import is_active
+
+    home = os.environ.get("JHT_HOME") or Path.home() / ".jht"
+    if is_paused(session, home=home) or is_active(home=home):
+        return False
+    body = KICKOFF.get(role, "Resume the main loop as instructed by your prompt.")
+    message = (
+        f"[@watchdog -> @{session.lower()}] [RIPRENDI] {team_language_line()} "
+        f"Positions are waiting in the queue of your role and nothing has been worked for a while. {body}"
+    )
+    binary = os.environ.get("JHT_TMUX_SENDER") or "jht-tmux-send"
+    for number in range(MAX_ATTEMPTS):
+        if number:
+            sleeper(retry_delay(number))
+        if is_paused(session, home=home) or is_active(home=home):
+            return False
+        delivered = checked(lambda: sender(session, message)) if sender else send(binary, session, message)
+        if delivered:
+            return True
+    return False
+
+
 def process_alert(key, what, cap, window, text, now):
     """Write one alert about a process that is not an agent to `logs/process-alerts.jsonl`. False when it cannot be written."""
     try:
@@ -124,6 +152,9 @@ def main(argv=None):
     start = sub.add_parser("kickoff")
     start.add_argument("session")
     start.add_argument("role")
+    wake = sub.add_parser("nudge")
+    wake.add_argument("session")
+    wake.add_argument("role")
     alert = sub.add_parser("bridge")
     for name in ("stamp", "cooldown", "what", "cap", "window", "binary"):
         alert.add_argument(name, type=int if name in ("cooldown", "cap", "window") else str)
@@ -133,6 +164,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.command == "kickoff":
         return 0 if kickoff(args.session, args.role) else 3
+    if args.command == "nudge":
+        return 0 if nudge(args.session, args.role) else 3
     if args.command == "send":
         return 0 if send(args.binary, args.session, args.text) else 3
     result = bridge(args.stamp, args.cooldown, args.what, args.cap, args.window, args.binary)

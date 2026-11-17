@@ -379,6 +379,8 @@
   "wrapper.tools.disk_low": "Gli strumenti degli Scout non sono stati scaricati: servono circa %s GiB liberi sul disco e ce ne sono %s, quindi la squadra non puo' ancora cercare posizioni. Libera spazio (svuota il Cestino, elimina i file grandi che non ti servono), poi esegui jht up: il download riparte da solo.",
   "wrapper.tools.switch_failed": "Gli strumenti degli Scout sono arrivati, ma la squadra non si e' potuta riavviare con loro: esegui jht down, poi jht up.",
   "wrapper.tools.chat_switched": "La squadra passa agli strumenti completi degli Scout, quindi questa chat si e' chiusa. Riaprila fra un paio di minuti con jht team chat.",
+  "wrapper.tools.chat_update_closed": "JHT si sta aggiornando, quindi questa chat si è chiusa. Riaprila fra un paio di minuti con jht team chat.",
+  "wrapper.tools.chat_updating": "JHT si sta aggiornando, quindi la chat si ferma un momento: riparte da sola fra poco.",
   "wrapper.tools.chat_reconnecting": "La squadra passa agli strumenti completi degli Scout, quindi la chat si ferma un momento: riprende da sola appena la squadra e' ripartita (un paio di minuti).",
   "wrapper.tools.chat_resumed": "La squadra e' passata agli strumenti completi: riprendiamo.",
   "wrapper.tools.switch_wait": "La squadra sta passando agli strumenti completi degli Scout: aspetto che riparta (al massimo un paio di minuti).",

@@ -379,6 +379,8 @@
   "wrapper.tools.disk_low": "The Scouts' tools were not downloaded: they need about %s GiB free on the disk and there are %s GiB, so the team cannot search for positions yet. Free some space (empty the Trash, delete large files you do not need), then run jht up: the download starts again by itself.",
   "wrapper.tools.switch_failed": "The Scouts' tools are here, but the team could not be restarted on them: run jht down, then jht up.",
   "wrapper.tools.chat_switched": "The team is moving onto the Scouts' full tools, so this chat has closed. Open it again in a couple of minutes with jht team chat.",
+  "wrapper.tools.chat_update_closed": "JHT is updating, so this chat has closed. Open it again in a couple of minutes with jht team chat.",
+  "wrapper.tools.chat_updating": "JHT is updating, so the chat stops for a moment: it comes back by itself in a minute or two.",
   "wrapper.tools.chat_reconnecting": "The team is moving onto the Scouts' full tools, so the chat stops for a moment: it comes back by itself once the team is running again (a couple of minutes).",
   "wrapper.tools.chat_resumed": "The team has moved onto the full tools: let's pick up again.",
   "wrapper.tools.switch_wait": "The team is moving onto the Scouts' full tools: waiting for it to start again (a couple of minutes at most).",
