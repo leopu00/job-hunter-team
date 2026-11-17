@@ -1,56 +1,57 @@
 ---
 name: recheck-batch
-description: Recheck cadenzato della MODALITÀ CURA a costo minimo. Lo script fa il lavoro meccanico su un batch (verifica tiered di ogni URL, aggiorna last_checked per le OPEN verificate); tu giudichi SOLO i casi ambigui. Misurato 78-86kT a posizione col giro manuale — con il batch spendi un turno per 10 posizioni, non 10 turni. L'esclusione resta SEMPRE una tua decisione, mai dello script.
+description: Paced recheck of CARE MODE at minimum cost. The script does the mechanical work on a batch (tiered check of every URL, updates last_checked for the verified OPEN ones); you judge ONLY the ambiguous cases. Measured at 78-86kT per position with the manual round — with the batch you spend one turn for 10 positions, not 10 turns. Exclusion is ALWAYS your decision, never the script's.
 allowed-tools: Bash(python3 /app/shared/skills/recheck_batch.py *), Bash(python3 /app/shared/skills/db_update.py *), Bash(python3 /app/shared/skills/recheck_liveness.py *)
 ---
 
-# recheck-batch — il recheck della modalità cura, senza sprecare un turno a posizione
+# recheck-batch — the care mode recheck, without wasting a turn per position
 
-## Perché esiste
-Ricontrollare una posizione GIÀ analizzata è una frazione del check di una
-posizione nuova: niente ri-analisi, niente ri-lettura della JD, niente
-metadata. Il giro manuale (coda → una posizione → recheck-liveness →
-db_update → ripeti) costava 78-86kT a posizione perché ogni passo era un
-turno LLM. Questo batch comprime tutta la parte meccanica in UN comando.
+## Why it exists
+Rechecking an ALREADY analyzed position is a fraction of checking a new
+position: no re-analysis, no re-reading of the JD, no metadata. The manual
+round (queue → one position → recheck-liveness → db_update → repeat) cost
+78-86kT per position because every step was an LLM turn. This batch
+compresses the whole mechanical part into ONE command.
 
-## Come si usa (UN turno per batch)
+## How to use it (ONE turn per batch)
 ```sh
 python3 /app/shared/skills/recheck_batch.py            # batch di 10 dalla coda
 python3 /app/shared/skills/recheck_batch.py --limit 5
 ```
-Prende le posizioni dalla coda `next-for-recheck-due` (vive, score ≥ policy,
-non verificate da > 14gg, SCORE DESC: prima le migliori) e per ognuna esegue
-la verifica tiered di `recheck_liveness.py` (curl → browser, mai falso-aperto).
+It takes the positions from the `next-for-recheck-due` queue (alive, score ≥
+policy, not verified for > 14 days, SCORE DESC: best ones first) and for each
+one runs the tiered check of `recheck_liveness.py` (curl → browser, never a
+false-open).
 
-Il report ha tre esiti:
-- **OK aperte e aggiornate** — verificate `OPEN`: `last_checked` è già
-  aggiornato, escono dalla coda per 14 giorni. **Non toccarle, non
-  rileggerle, zero lavoro tuo.**
-- **DA GIUDICARE** — evidenza di chiusura (404/410, closed-marker, o
-  `expires_at` passata). Qui entri TU.
-- **NON VERIFICABILI** — host JS/authwall e browser non conclusivo. Qui
-  entri TU (one-shot).
+The report has three outcomes:
+- **OK open and updated** — verified `OPEN`: `last_checked` is already
+  updated, they leave the queue for 14 days. **Don't touch them, don't
+  re-read them, zero work for you.**
+- **TO JUDGE** — evidence of closure (404/410, closed-marker, or a past
+  `expires_at`). This is where YOU come in.
+- **NOT VERIFIABLE** — JS/authwall host and inconclusive browser. This is
+  where YOU come in (one-shot).
 
-## Il giudizio è tuo — lo script NON esclude MAI (ordine utente 2026-07-30)
-Uno script statico può sbagliare e buttare una posizione ancora viva.
-Per ogni posizione **DA GIUDICARE**: guarda l'evidenza riportata; se serve,
-UN solo sguardo diretto alla pagina. Se sei sicuro al 100% che è
-scaduta/chiusa:
+## The judgment is yours — the script NEVER excludes (user order 2026-07-30)
+A static script can be wrong and throw away a position that is still alive.
+For each position **TO JUDGE**: look at the reported evidence; if needed,
+ONE single direct look at the page. If you are 100% sure it is
+expired/closed:
 ```sh
 python3 /app/shared/skills/db_update.py position <ID> --status excluded \
   --is-open false --last-open-check now --notes "[SCADUTO] <evidenza>"
 ```
-Se invece è ancora viva (falso positivo dello script):
+If instead it is still alive (a false positive of the script):
 ```sh
 python3 /app/shared/skills/db_update.py position <ID> --is-open true --last-checked now
 ```
-Per ogni **NON VERIFICABILE**: one-shot col browser sull'URL; poi decidi come
-sopra. Se resta non verificabile → `--last-checked now` + nota
-`[OPEN_UNVERIFIED]`, `is_open` invariato (mai spacciarla per aperta).
+For each **NOT VERIFIABLE** one: one-shot with the browser on the URL; then
+decide as above. If it stays unverifiable → `--last-checked now` + note
+`[OPEN_UNVERIFIED]`, `is_open` unchanged (never pass it off as open).
 
-## Disciplina di costo (il punto della skill)
-- **Un batch = un turno.** Non fare un giro per posizione, non ri-analizzare,
-  non ri-leggere JD o company: il recheck decide solo "ancora aperta?".
-- Batch bounded (default 10): NON alzare il limit per "finire la coda in un
-  colpo" — la cadenza spalma il lavoro, il Capitano lo pace (C-09/C-18).
-- Coda OFF per enrichment-policy = stato voluto: fermati, non aggirarla.
+## Cost discipline (the point of the skill)
+- **One batch = one turn.** Don't do a round per position, don't re-analyze,
+  don't re-read JD or company: the recheck only decides "still open?".
+- Bounded batch (default 10): do NOT raise the limit to "finish the queue in
+  one go" — the cadence spreads the work, the Capitano paces it (C-09/C-18).
+- Queue OFF by enrichment-policy = intended state: stop, don't work around it.
