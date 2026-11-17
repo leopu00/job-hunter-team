@@ -765,7 +765,7 @@
   "installer.cvs_attachments_output": "(Lebensläufe, Anhänge, Ergebnisse)",
   "installer.disk_low_dry_run": "Nur %s GiB frei auf %s; eine echte Installation braucht mindestens %s GiB.",
   "installer.disk_not_enough": "nicht genug freier Speicherplatz: %s GiB frei auf %s, das Image von Job Hunter Team und seine Daten brauchen mindestens %s GiB. Schaffe Platz (auf einem Server, auf dem schon Docker läuft, entfernt 'docker image prune -af' ungenutzte Images) und führe den Installer erneut aus. Nichts wurde geändert.",
-  "installer.disk_room_short": "Job Hunter Team lädt etwa %s GiB herunter, und nach dem Download hätten die Agenten weniger als die %s GiB Speicherplatz, die sie brauchen: Jetzt sind %s GiB frei. Gib mindestens %s GiB mehr frei (leere den Papierkorb, lösche große Dateien, die du nicht brauchst), dann führe den Installer erneut aus: Es wurde nichts heruntergeladen (entfernt wurden nur alte Versionen von Job Hunter Team, die nichts mehr benutzte).",
+  "installer.disk_room_short": "Job Hunter Team lädt etwa %s GiB herunter, und nach dem Download hätten die Agenten weniger als die %s GiB Speicherplatz, die sie brauchen: Jetzt sind %s GiB frei. Gib mindestens %s GiB mehr frei (leere den Papierkorb, lösche große Dateien, die du nicht brauchst), dann führe den Installer erneut aus: Es wurde nichts heruntergeladen, und die installierte Version von Job Hunter Team wurde nicht angerührt.",
   "installer.done_compose": "Compose: %s",
   "installer.done_host_setup": "host-setup: %s",
   "installer.done_wrapper": "Wrapper: %s",

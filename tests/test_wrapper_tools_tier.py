@@ -1031,11 +1031,11 @@ def test_with_no_room_nothing_is_pulled_and_the_person_is_told_then_up_tries_aga
 
 def test_the_pull_goes_only_when_what_stays_free_after_it_keeps_the_agents_above_their_threshold(box):
     """Giro Mac build8: 9.2 GiB free took the update, and then every agent refused to start (disk_low at 3.9 GiB). The full pull
-    takes about 6 GiB (JHT_PULL_FULL_GIB): it goes only when 8 GiB stay free after it."""
+    takes about 5 GiB (JHT_PULL_FULL_GIB): it goes only when 8 GiB stay free after it."""
     box.tier()
-    _disk(box, free_gib=14)
+    _disk(box, free_gib=13)
     assert box.run(DISK_FAKES + "tools_disk_room && echo room").stdout == "room\n"
-    _disk(box, free_gib=13.9)
+    _disk(box, free_gib=12.9)
     assert box.run(DISK_FAKES + "tools_disk_room || echo short").stdout == "short\n"
     _disk(box, free_gib=10)
     assert box.run(DISK_FAKES + "tools_disk_room && echo room", JHT_PULL_FULL_GIB="2").stdout == "room\n"
@@ -1116,7 +1116,7 @@ def test_tools_status_says_there_is_no_room_with_the_numbers(box):
     text = WRAPPER.read_text(encoding="utf-8")
     body = "".join(re.search(rf"(?ms)^{name}\(\) \{{\n.*?^\}}\n", text).group(0) for name in ("tools_say_status", "tools_disk_low_text"))
     done = box.run(DISK_FAKES + "jht_say() { printf '%s' \"$*\"; }\n" + body + "tools_say_status")
-    assert done.stdout == "tools.disk_low 14 3\n", done.stdout + done.stderr
+    assert done.stdout == "tools.disk_low 13 3\n", done.stdout + done.stderr
 
 
 def test_jht_up_setup_and_status_say_the_disk_is_short():
