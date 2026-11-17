@@ -222,10 +222,11 @@ const T: Record<Locale, Copy> = {
       "serviceGlmKimi": "GLM and Kimi services",
       "openaiSubscription": "OpenAI on Pi with a ChatGPT subscription",
       "noKeyOnDisk": "No key left on disk",
-      "betaTester": "Beta tester updated and at work"
+      "betaTester": "Beta test: version updated and team at work"
     },
     targetNotes: {
-      "linuxRoundBuild6": "Linux round of build 6",
+      "cleanLinuxRoundMissing": "clean install on build 6: its round is not in the table below (r9 is an update)",
+      "openaiRoundMissing": "proved on build 6: its round is not in the table below",
       "redoOnBuild9": "to redo on build 9",
       "diskFull": "disk full after the update (fix in progress)",
       "neverTried": "never tried",
@@ -440,10 +441,11 @@ const T: Record<Locale, Copy> = {
       "serviceGlmKimi": "Servizi GLM e Kimi",
       "openaiSubscription": "OpenAI su Pi con abbonamento ChatGPT",
       "noKeyOnDisk": "Nessuna chiave lasciata su disco",
-      "betaTester": "Beta tester aggiornata e al lavoro"
+      "betaTester": "Beta test: versione aggiornata e squadra al lavoro"
     },
     targetNotes: {
-      "linuxRoundBuild6": "giro Linux della build 6",
+      "cleanLinuxRoundMissing": "installazione vergine sulla build 6: il suo giro non è nella tabella qui sotto (r9 è un aggiornamento)",
+      "openaiRoundMissing": "provato sulla build 6: il suo giro non è nella tabella qui sotto",
       "redoOnBuild9": "da rifare sulla build 9",
       "diskFull": "disco pieno dopo l'aggiornamento (correzione in corso)",
       "neverTried": "mai provato",
@@ -658,10 +660,11 @@ const T: Record<Locale, Copy> = {
       "serviceGlmKimi": "Dienste GLM und Kimi",
       "openaiSubscription": "OpenAI auf Pi mit ChatGPT-Abo",
       "noKeyOnDisk": "Kein Schlüssel bleibt auf der Platte",
-      "betaTester": "Beta-Testerin aktualisiert und bei der Arbeit"
+      "betaTester": "Betatest: Version aktualisiert und Team bei der Arbeit"
     },
     targetNotes: {
-      "linuxRoundBuild6": "Linux-Lauf von Build 6",
+      "cleanLinuxRoundMissing": "Neuinstallation auf Build 6: ihr Lauf fehlt in der Tabelle unten (r9 ist ein Update)",
+      "openaiRoundMissing": "auf Build 6 geprüft: der Lauf fehlt in der Tabelle unten",
       "redoOnBuild9": "auf Build 9 zu wiederholen",
       "diskFull": "Platte voll nach dem Update (Korrektur in Arbeit)",
       "neverTried": "nie geprüft",
@@ -877,10 +880,11 @@ const T: Record<Locale, Copy> = {
       "serviceGlmKimi": "Servicios GLM y Kimi",
       "openaiSubscription": "OpenAI en Pi con suscripción de ChatGPT",
       "noKeyOnDisk": "Ninguna clave queda en disco",
-      "betaTester": "Beta tester actualizada y trabajando"
+      "betaTester": "Beta test: versión actualizada y equipo trabajando"
     },
     targetNotes: {
-      "linuxRoundBuild6": "ronda Linux de la build 6",
+      "cleanLinuxRoundMissing": "instalación desde cero en la build 6: su ronda no está en la tabla de abajo (r9 es una actualización)",
+      "openaiRoundMissing": "probado en la build 6: su ronda no está en la tabla de abajo",
       "redoOnBuild9": "por repetir en la build 9",
       "diskFull": "disco lleno tras la actualización (corrección en curso)",
       "neverTried": "nunca probado",
@@ -1097,10 +1101,11 @@ const T: Record<Locale, Copy> = {
       "serviceGlmKimi": "Services GLM et Kimi",
       "openaiSubscription": "OpenAI sur Pi avec un abonnement ChatGPT",
       "noKeyOnDisk": "Aucune clé laissée sur le disque",
-      "betaTester": "Bêta-testeuse mise à jour et au travail"
+      "betaTester": "Bêta-test : version mise à jour et équipe au travail"
     },
     targetNotes: {
-      "linuxRoundBuild6": "tour Linux de la build 6",
+      "cleanLinuxRoundMissing": "installation vierge sur la build 6 : son tour n'est pas dans le tableau ci-dessous (r9 est une mise à jour)",
+      "openaiRoundMissing": "vérifié sur la build 6 : son tour n'est pas dans le tableau ci-dessous",
       "redoOnBuild9": "à refaire sur la build 9",
       "diskFull": "disque plein après la mise à jour (correction en cours)",
       "neverTried": "jamais essayé",
@@ -1314,10 +1319,11 @@ const T: Record<Locale, Copy> = {
       "serviceGlmKimi": "Serviços GLM e Kimi",
       "openaiSubscription": "OpenAI no Pi com assinatura ChatGPT",
       "noKeyOnDisk": "Nenhuma chave deixada no disco",
-      "betaTester": "Beta tester atualizada e a trabalhar"
+      "betaTester": "Beta teste: versão atualizada e equipa a trabalhar"
     },
     targetNotes: {
-      "linuxRoundBuild6": "ronda Linux da build 6",
+      "cleanLinuxRoundMissing": "instalação de raiz na build 6: a sua ronda não está na tabela abaixo (r9 é uma atualização)",
+      "openaiRoundMissing": "provado na build 6: a sua ronda não está na tabela abaixo",
       "redoOnBuild9": "a repetir na build 9",
       "diskFull": "disco cheio após a atualização (correção em curso)",
       "neverTried": "nunca testado",
@@ -1532,10 +1538,11 @@ const T: Record<Locale, Copy> = {
       "serviceGlmKimi": "GLM és Kimi szolgáltatás",
       "openaiSubscription": "OpenAI a Pi-n ChatGPT-előfizetéssel",
       "noKeyOnDisk": "Nem marad kulcs a lemezen",
-      "betaTester": "A béta tesztelő frissítve és munkában"
+      "betaTester": "Béta teszt: a verzió frissítve, a csapat munkában"
     },
     targetNotes: {
-      "linuxRoundBuild6": "a 6. build Linux-futása",
+      "cleanLinuxRoundMissing": "tiszta telepítés a 6. buildön: a futása nincs a lenti táblázatban (az r9 frissítés)",
+      "openaiRoundMissing": "a 6. buildön igazolva: a futása nincs a lenti táblázatban",
       "redoOnBuild9": "a 9. buildön megismétlendő",
       "diskFull": "megtelt lemez a frissítés után (javítás folyamatban)",
       "neverTried": "sosem próbálták",
