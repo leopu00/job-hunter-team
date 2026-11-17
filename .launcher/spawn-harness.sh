@@ -119,33 +119,105 @@ print(value)
 PYEOF
 }
 
+# jht_spawn_pi_role_pin <ruolo>
+#   La classe (sol|terra|luna) che `team.role_models.<ruolo>.model` del config fissa per il ruolo, o niente. Come start-agent.sh,
+#   ma senza fermare lo spawn per un valore fuori elenco: qui vale solo una classe che esiste.
+jht_spawn_pi_role_pin() {
+  local cfg="${JHT_HOME:-/jht_home}/jht.config.json"
+  [ -f "$cfg" ] || return 0
+  python3 - "$cfg" "${1:-}" <<'PYEOF'
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as handle:
+        cfg = json.load(handle)
+    entry = (((cfg.get("team") or {}).get("role_models") or {}).get(sys.argv[2]))
+    value = entry.get("model") if isinstance(entry, dict) else None
+    if value in ("sol", "terra", "luna"):
+        print(value)
+except Exception:
+    pass
+PYEOF
+}
+
+# jht_spawn_pi_key_env <provider>
+#   La chiave API scritta nel config, come variabile d'ambiente del comando di pi: la stessa che start-agent.sh mette davanti
+#   al comando di ogni agente (ANTHROPIC_API_KEY, OPENAI_API_KEY, MOONSHOT_API_KEY; GLM non ha un prefisso). Niente se la chiave non
+#   e' scritta nel config (un riferimento a un file o a una variabile lo mette jht_key_wrap) o se il metodo non e' la chiave.
+#   rc 1 se la chiave ha caratteri che non vanno dentro un comando digitato nel pane.
+jht_spawn_pi_key_env() {
+  local cfg="${JHT_HOME:-/jht_home}/jht.config.json" out
+  [ -z "${JHT_API_KEY_FILE:-}" ] || return 0
+  [ -f "$cfg" ] || return 0
+  out="$(python3 - "$cfg" "${1:-}" <<'PYEOF'
+import json, re, sys
+names = {"claude": "ANTHROPIC_API_KEY", "anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY", "codex": "OPENAI_API_KEY",
+         "kimi": "MOONSHOT_API_KEY", "moonshot": "MOONSHOT_API_KEY"}
+name = names.get(sys.argv[2])
+try:
+    with open(sys.argv[1], encoding="utf-8") as handle:
+        cfg = json.load(handle)
+    prov = (cfg.get("providers") or {}).get(cfg.get("active_provider") or "") or {}
+except Exception:
+    raise SystemExit(0)
+if not name or prov.get("auth_method") != "api_key" or prov.get("api_key_ref"):
+    raise SystemExit(0)
+key = str(prov.get("api_key") or "").strip()
+if not key:
+    raise SystemExit(0)
+if not re.fullmatch(r"[A-Za-z0-9_.:+=/-]{1,400}", key):
+    raise SystemExit(3)
+print("%s='%s' " % (name, key))
+PYEOF
+)"
+  case $? in
+    0) printf '%s' "$out" ;;
+    *) echo "Error: the API key in the configuration has characters that cannot be typed into a pane: use jht setup --secret-mode file|env." >&2; return 1 ;;
+  esac
+}
+
 # jht_spawn_pi_repl_cmd <workdir> [modello] [ruolo]
 #   Il comando di pi per i servizi che non passano da start-agent.sh (Dottore,
-#   Mantenitore), con gli stessi argomenti di un ruolo del team. Il modello è
-#   quello dato o, senza, la classe sol (il default di Codex). Ferma lo spawn
-#   (rc 2, perché su stderr) se mancano l'identità o le skill nella workdir,
+#   Mantenitore), con gli stessi argomenti di un ruolo del team: il provider e il modello sono quelli
+#   della configurazione attiva, come per ogni altro agente (provider di pi, classe del modello, chiave).
+#   Il modello e' quello dato (il modello di riserva di un tentativo dopo un errore di capacita') o, senza, quello
+#   della classe del ruolo: il pin di `team.role_models.<ruolo>.model`, altrimenti sol (terra su Claude, come la CLI
+#   di Claude, che per questi servizi usa Sonnet). Ferma lo spawn
+#   (rc 2, perché su stderr) se manca il provider attivo, l'identità o le skill nella workdir,
 #   il pi del pin o le settings leggibili.
 #   Con il ruolo (dottore, mantenitore) parte anche con le estensioni che start-agent.sh dà a quel ruolo
 #   (jht_pi_extension_args: il cancello della spesa) e con l'ambiente che il cancello legge: senza, un Dottore o un
 #   Mantenitore al lavoro spendeva fuori dal freno del budget. JHT_HOME e JHT_AGENT_NAME vanno nel comando perché la
 #   shell di una sessione nata dallo spawner non li esporta: senza JHT_HOME il cancello non vede il flag e non ferma niente.
 jht_spawn_pi_repl_cmd() {
-  local workdir="${1:-}" model="${2:-}" role="${3:-}" role_env=""
+  local workdir="${1:-}" model="${2:-}" role="${3:-}" role_env="" provider api class key_env key_wrap
+  local cfg="${JHT_HOME:-/jht_home}/jht.config.json"
   if [ ! -s "$workdir/AGENTS.md" ] || [ ! -d "$workdir/.agents/skills" ]; then
     echo "[spawn-lib] ERROR: pi needs $workdir/AGENTS.md and $workdir/.agents/skills before it starts; one is missing." >&2
     return 2
   fi
   jht_pi_version_check || return 2
-  jht_pi_credentials_check "${JHT_HOME:-/jht_home}/jht.config.json" || return 2
+  jht_pi_credentials_check "$cfg" || return 2
   jht_pi_settings "$(jht_pi_agent_dir)/settings.json" || return 2
+  # shellcheck source=/dev/null
+  . "$JHT_SPAWN_LIB_DIR/role-models.sh"
+  provider="$(jht_spawn_active_provider)" || return 2
   if [ -z "$model" ]; then
-    # shellcheck source=/dev/null
-    . "$JHT_SPAWN_LIB_DIR/role-models.sh"
-    model="$(resolve_codex_model sol)" || return 2
+    class="$(jht_spawn_pi_role_pin "$role")"
+    if api="$(jht_pi_api_provider "$provider")"; then
+      if [ -z "$class" ]; then
+        class=sol
+        [ "$api" != claude ] || class=terra
+      fi
+      model="$(jht_provider_model "$api" "$class")" || return 2
+    else
+      model="$(resolve_codex_model "${class:-sol}")" || return 2
+    fi
   fi
   [ -z "$role" ] || role_env=" JHT_HOME='${JHT_HOME:-/jht_home}' JHT_AGENT_NAME='$role'"
-  printf '%s%s%s\n' "PI_CODING_AGENT_DIR='$(jht_pi_agent_dir)' PI_SKIP_VERSION_CHECK=1 PI_TELEMETRY=0${role_env} $(jht_pi_bin) " \
-    "$(jht_pi_args "$workdir" "$model" high)" "$(jht_pi_extension_args "$role")"
+  key_env="$(jht_spawn_pi_key_env "$provider")" || return 2
+  key_wrap="$(jht_key_wrap "$provider" "$cfg")" || return 2
+  printf '%s%s%s\n' "PI_CODING_AGENT_DIR='$(jht_pi_agent_dir)' PI_SKIP_VERSION_CHECK=1 PI_TELEMETRY=0${role_env} ${key_env}${key_wrap}$(jht_pi_bin) " \
+    "$(jht_pi_args "$workdir" "$model" high "$provider")" "$(jht_pi_extension_args "$role")"
 }
 
 # jht_spawn_active_cli <ruolo>
