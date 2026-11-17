@@ -200,3 +200,23 @@ def test_a_scout_inserts_a_place_written_with_its_province_for_a_profile_in_ital
         done = _insert(home, "scout-1", n, place, "onsite")
         assert done.returncode == 0, done.stdout + done.stderr
     assert _insert(home, "scout-1", 3, "Zürich, CH", "onsite").returncode == 4, "a foreign code is still refused"
+
+
+# «Bra, CN»: for a profile that lives in Italy, two letters after a place are a province unless the place is a known city of the
+# other country. Between brackets, or with a region, country_of already reads a province.
+@pytest.mark.parametrize("location,verdict", [
+    ("Bra, CN", "ok"), ("Asti, AT", "ok"), ("Montiglio Monferrato, AT", "ok"), ("Chieti, CH", "ok"), ("Cagliari, CA", "ok"),
+    ("Bra (CN)", "ok"), ("Bra (CN), Piemonte", "ok"),
+    ("Zürich, CH", "outside"), ("Basel, CH (ibrido 50/50)", "outside"), ("Lugano, CH", "outside"), ("Wien, AT", "outside"),
+    ("Lyon, FR", "outside"), ("Beijing, CN", "outside"), ("Toronto, CA", "outside"),
+    ("Stockholm, Sweden", "outside"), ("Berlin, DE", "outside"),
+])
+def test_a_code_after_the_place_is_a_province_for_a_profile_in_italy_unless_the_city_is_foreign(home, location, verdict):
+    assert area.check_position(location, "onsite")["verdict"] == verdict
+
+
+def test_the_province_reading_is_the_profiles_not_the_codes(home):
+    # a profile that lives in Switzerland: «Bra, CN» is not its country either way, and «Zürich, CH» is its own
+    _profile(home, "location: Lugano, Switzerland\npreferences:\n  work_mode: remote o ibrido\n")
+    assert area.check_position("Zürich, CH", "onsite")["verdict"] == "ok"
+    assert area.check_position("Bra, CN", "onsite")["verdict"] == "outside"
