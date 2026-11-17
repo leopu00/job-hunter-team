@@ -455,7 +455,7 @@ def _wake_the_team(api, sessions, why, seen=()):
             live = [s for s in (lister() if lister else []) if _AGENT_SESSION.match(s or "")]
         except Exception:  # noqa: BLE001 - without the list only the sessions the ESC reached are woken, as before
             live = []
-        extra = [s for s in list(seen or ()) + live if s not in known and _AGENT_SESSION.match(s or "")]
+        extra = [s for s in list(seen or ()) + live if s not in known and _WORKER_SESSION.match(s or "")]
         woken = []
         for session in known + list(dict.fromkeys(extra)):
             if session in (api.CAPITANO_SESSION, api.SENTINELLA_SESSION) or session in alone or session in NEVER_WAKE:
@@ -473,6 +473,8 @@ def _wake_the_team(api, sessions, why, seen=()):
 
 NEVER_WAKE = {"SENTINELLA-WORKER", "DOCTOR-WATCHDOG"}
 _AGENT_SESSION = re.compile(r"^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$")   # the sessions of the team: CAPITANO, SCOUT-1, ANALISTA-5
+# Born during the pause and not woken by the ESC list: only the workers (the fixed agents were there when it started)
+_WORKER_SESSION = re.compile(r"^(SCOUT|ANALISTA|SCORER|SCRITTORE|CRITICO|CLOSER)(-S?\d+)?$")
 
 
 def _resume(api, run, day, notify_user):

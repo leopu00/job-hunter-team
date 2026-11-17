@@ -64,6 +64,12 @@ MODE="${3:-default}"
 # sola riga conclusiva per invocazione evita di dover ricostruire coppie
 # attempt/result fra processi concorrenti.
 JHT_SPAWN_TRACE="$(jht_daemon_log spawn-attempts.jsonl)"
+# The tmux server and every agent descend from this script: with the memory gone the kernel must pick THEM, not the person's
+# session manager (a 7.7 GB server lost dbus, systemd --user, conmon and the container to the OOM killer). Raising the score is
+# the one change a process may make to itself; any failure is ignored. Same as raiseOomScore() in the pid1.
+if [ -w /proc/self/oom_score_adj ] && [ "$(cat /proc/self/oom_score_adj 2>/dev/null || echo 1000)" -lt 500 ] 2>/dev/null; then
+  echo 500 > /proc/self/oom_score_adj 2>/dev/null || true
+fi
 # Le TUI esportano JHT_AGENT_NAME: una chiamata diretta del Capitano o di una
 # skill conserva quindi il proprio autore anche senza un wrapper intermedio.
 # I processi deterministici impostano invece JHT_SPAWN_SRC esplicitamente.
@@ -846,7 +852,10 @@ case "$ROLE" in
   scout|analista|scorer)
     case "$(printf '%s' "${JHT_AGENT_NAME:-}" | tr 'A-Z' 'a-z')" in
       capitano|capitano-*)
-        if [ -z "${JHT_SPAWN_SRC:-}" ] && [ "${JHT_SPAWN_GATE:-}" != "off" ] && ! tmux has-session -t "=$SESSION" 2>/dev/null; then
+        # `jht team start <ruolo>` dato dal Capitano mette da solo JHT_SPAWN_SRC=cli-team-start: e' lo stesso spawn chiesto
+        # dall'agente, non quello dell'operatore (che non ha JHT_AGENT_NAME), e deve passare dal cancello. Sulla VPS da 7,7 GB
+        # il Capitano ne ha avviati 12 cosi', a 18 sessioni il kernel ha ucciso tutto.
+        if { [ -z "${JHT_SPAWN_SRC:-}" ] || [ "${JHT_SPAWN_SRC:-}" = "cli-team-start" ]; } && [ "${JHT_SPAWN_GATE:-}" != "off" ] && ! tmux has-session -t "=$SESSION" 2>/dev/null; then
           _gate_rc=0
           python3 /app/shared/skills/spawn_gate.py check --role "$ROLE" || _gate_rc=$?
           if [ "$_gate_rc" -eq 10 ]; then

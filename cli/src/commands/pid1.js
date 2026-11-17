@@ -28,7 +28,7 @@
  */
 
 import { readFile, access, unlink, writeFile } from 'node:fs/promises';
-import { existsSync, createWriteStream, mkdirSync, statSync, renameSync } from 'node:fs';
+import { existsSync, createWriteStream, mkdirSync, statSync, renameSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { watch } from 'node:fs';
@@ -721,7 +721,26 @@ export function hostIsVps(hostType) {
   return hostType === 'vps' || hostType === 'server' || hostType === 'remote';
 }
 
+/**
+ * When the machine runs out of memory the kernel kills the process with the highest score. On a 7.7 GB server with no swap
+ * it took the person's session manager (dbus, systemd --user) and, with it, conmon, the container and tmux. Everything this
+ * container starts descends from here and inherits the score: raised, the agents' processes are the ones the kernel picks
+ * first, and the manager of the person stays. Only raising is ever allowed to a process without privileges, so it is
+ * best effort and silent (no /proc, a read-only /proc, a score already higher).
+ */
+export function raiseOomScore(score = 500, file = '/proc/self/oom_score_adj') {
+  try {
+    const now = Number.parseInt(readFileSync(file, 'utf8').trim(), 10);
+    if (Number.isFinite(now) && now >= score) return false;
+    writeFileSync(file, String(score));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function dispatch() {
+  raiseOomScore();
   const hostType = await readHostType();
   const isVps = hostIsVps(hostType);
 
