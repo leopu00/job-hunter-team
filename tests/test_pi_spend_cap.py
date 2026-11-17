@@ -117,7 +117,7 @@ def test_at_the_ceiling_the_team_is_paused_and_both_are_told(tmp_path):
     assert sorted(s for s, _ in bridge.sent) == ["CAPITANO", "SENTINELLA"]
     assert all("SPENDING CEILING REACHED" in t and "not FATAL" in t and "10 USD" in t and "10 EUR" in t
                for t in bridge.texts())
-    assert [r for _, r in bridge.users] == ["pi_spend_cap"] and "10 USD" in bridge.users[0][0]
+    assert [r.split("-")[0] for _, r in bridge.users] == ["pi_spend_cap"] and "10 USD" in bridge.users[0][0]
 
 
 def test_over_the_ceiling_is_the_same_pause_and_it_is_not_repeated_every_tick(tmp_path):
@@ -920,3 +920,86 @@ def test_a_pause_that_does_not_move_is_left_alone(tmp_path):
         bridge.clock["now"] = NOON + HOUR + minutes * 60
         bridge.tick(state=state)
     assert bridge.flag.read_text(encoding="utf-8") == before and len(bridge.users) == 1 and bridge.esc == 1
+
+
+# --- a stop for the budget is not lifted when the spending that raised it goes quiet (giro Windows 16/11, build 8) --------------
+# 13:00:14 «reached (budget: 4.77 of 5.0)», 13:02:56 «cleared» with the spending not lower, 14 more calls, a second stop at 4.93.
+
+def _a_stop_that_looks_ahead(tmp_path):
+    """4.80 $ spent, 1 $ of it in the last two minutes: 4.80 + 0.20 (the pace of the next look) is over 5.00 - 0.10, so the
+    brake stops BEFORE the budget; five minutes later that pace is gone and 4.80 alone is under the line."""
+    pi_calls(tmp_path, [(NOON - 1500, 3.8, 100), (NOON - 120, 1.0, 100)])
+    bridge = Bridge(tmp_path, budget(5, NOON - 1800, NOON + 1800))
+    state: dict = {}
+    bridge.tick(state=state)
+    assert bridge.esc == 1 and flag_record(bridge)["why"] == "budget"
+    return bridge, state
+
+
+def test_the_stop_of_a_budget_is_not_cleared_when_the_pace_that_raised_it_is_gone(tmp_path):
+    bridge, state = _a_stop_that_looks_ahead(tmp_path)
+    for _ in range(4):
+        bridge.clock["now"] += 150  # the last calls leave the window of the pace
+        bridge.sent.clear()
+        bridge.tick(state=state)
+    assert bridge.flag.exists() and bridge.esc == 1, "the pause stays: nothing said «allows work again»"
+    assert not any("allows work again" in t for t in bridge.texts())
+    assert len(bridge.users) == 1
+
+
+def test_a_new_budget_lifts_that_stop_and_the_person_is_told_under_another_id(tmp_path):
+    bridge, state = _a_stop_that_looks_ahead(tmp_path)
+    bridge.clock["now"] += 600
+    bridge.tick(state=state)
+    assert bridge.flag.exists()
+    bridge.config = budget(5, bridge.clock["now"], bridge.clock["now"] + 1800)  # jht setup: a new budget
+    bridge.tick(state=state)
+    assert not bridge.flag.exists()
+    ids = [reason for _, reason in bridge.users]
+    assert len(ids) == 2 and ids[0] != ids[1] and all(i.startswith("pi_spend_cap-") for i in ids)
+
+
+def test_the_same_budget_is_told_to_the_person_under_the_same_id_only_once_but_a_flag_without_the_budget_field_is_still_held(tmp_path):
+    bridge, state = _a_stop_that_looks_ahead(tmp_path)
+    payload = json.loads(bridge.flag.read_text(encoding="utf-8"))
+    del payload["pi_spend_cap"]["counts_from"]  # a flag written by a brake before the field
+    bridge.flag.write_text(json.dumps(payload), encoding="utf-8")
+    bridge.clock["now"] += 600
+    bridge.tick(state=state)
+    assert bridge.flag.exists() and bridge.esc == 1
+
+
+def test_the_notice_of_the_brake_to_the_person_is_accepted_by_jht_notify_user_each_time(tmp_path, monkeypatch):
+    """Every notice of the brake went under the SAME source id with another text: the tool answered exit 2 (collision) from the second
+    one on, and the person was told of the first pause only (giro Windows 16/11: «jht-notify-user failed with exit 2»)."""
+    import sqlite3
+    db = tmp_path / "jobs.db"
+    conn = sqlite3.connect(db)
+    conn.execute("""CREATE TABLE pending_user_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, agent TEXT, body TEXT, kind TEXT,
+        related_position_id INTEGER, source_id TEXT UNIQUE, source_action TEXT, source_payload TEXT,
+        delivered_via TEXT DEFAULT 'web', delivered_at TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)""")
+    conn.commit()
+    conn.close()
+    import quota_data
+    monkeypatch.setenv("JHT_DB", str(db))
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    seen = []
+
+    def real(text, reason):
+        # the very function of the product (it runs the tool by the repository path when /app is not there)
+        try:
+            quota_data._notify_user(text, reason)
+            seen.append(0)
+        except RuntimeError as error:
+            seen.append(str(error))
+
+    bridge, state = _a_stop_that_looks_ahead(tmp_path)
+    # the tick of the helper told through the test double; tell again through the real tool: a halt, then the resume of a new setup
+    run = SimpleNamespace(state={"no_quota_declared": dict(NO_QUOTA)}, now_h="12:00:00", _bi_on=False)
+    bridge.flag.unlink()
+    bridge.config = budget(5, NOON - 1800, NOON + 1800)
+    cap.step(bridge.api, run, notify_user=real)
+    bridge.clock["now"] += 600
+    bridge.config = budget(5, bridge.clock["now"], bridge.clock["now"] + 1800)
+    cap.step(bridge.api, run, notify_user=real)
+    assert seen == [0, 0], seen
