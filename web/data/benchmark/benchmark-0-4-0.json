@@ -75,7 +75,24 @@
         "r12",
         "r14"
       ],
-      "note": "relevantBelow"
+      "note": "relevantBelow",
+      "emoji": "🧪",
+      "criteria": [
+        {
+          "k": "newPositions",
+          "trade": "bricklayer",
+          "v": 0,
+          "ok": false
+        },
+        {
+          "k": "relevantOf",
+          "trade": "receptionist",
+          "v": 10,
+          "of": 26,
+          "min": 70,
+          "ok": false
+        }
+      ]
     },
     {
       "id": "scoutBenchCook",
@@ -83,7 +100,28 @@
       "status": "pass",
       "build": 9,
       "proof": [],
-      "note": "benchCook"
+      "note": "benchCook",
+      "emoji": "🍳",
+      "criteria": [
+        {
+          "k": "relevant",
+          "v": 79,
+          "min": 70,
+          "ok": true
+        },
+        {
+          "k": "duplicates",
+          "v": 0,
+          "max": 0,
+          "ok": true
+        },
+        {
+          "k": "positions",
+          "v": 19,
+          "min": 15,
+          "ok": true
+        }
+      ]
     },
     {
       "id": "scoutBenchWarehouse",
@@ -91,7 +129,28 @@
       "status": "pass",
       "build": 9,
       "proof": [],
-      "note": "benchWarehouse"
+      "note": "benchWarehouse",
+      "emoji": "📦",
+      "criteria": [
+        {
+          "k": "relevant",
+          "v": 90,
+          "min": 70,
+          "ok": true
+        },
+        {
+          "k": "duplicates",
+          "v": 0,
+          "max": 0,
+          "ok": true
+        },
+        {
+          "k": "positions",
+          "v": 50,
+          "min": 15,
+          "ok": true
+        }
+      ]
     },
     {
       "id": "scoutBenchNurse",
@@ -99,7 +158,28 @@
       "status": "fail",
       "build": 9,
       "proof": [],
-      "note": "benchNurse"
+      "note": "benchNurse",
+      "emoji": "🩺",
+      "criteria": [
+        {
+          "k": "relevant",
+          "v": 94,
+          "min": 70,
+          "ok": true
+        },
+        {
+          "k": "duplicates",
+          "v": 1,
+          "max": 0,
+          "ok": false
+        },
+        {
+          "k": "positions",
+          "v": 50,
+          "min": 15,
+          "ok": true
+        }
+      ]
     },
     {
       "id": "scoutBenchBricklayer",
@@ -107,7 +187,28 @@
       "status": "fail",
       "build": 9,
       "proof": [],
-      "note": "benchBricklayer"
+      "note": "benchBricklayer",
+      "emoji": "🧱",
+      "criteria": [
+        {
+          "k": "relevant",
+          "v": 83,
+          "min": 70,
+          "ok": true
+        },
+        {
+          "k": "duplicates",
+          "v": 1,
+          "max": 0,
+          "ok": false
+        },
+        {
+          "k": "positions",
+          "v": 6,
+          "min": 15,
+          "ok": false
+        }
+      ]
     },
     {
       "id": "budgetBrake",
@@ -117,7 +218,19 @@
       "proof": [
         "r14"
       ],
-      "note": "brakeFixedRetry"
+      "note": "brakeFixedRetry",
+      "criteria": [
+        {
+          "k": "underCeiling",
+          "v": 4.95,
+          "max": 5,
+          "ok": true
+        },
+        {
+          "k": "noFalseUnlock",
+          "ok": false
+        }
+      ]
     },
     {
       "id": "languageWindows",

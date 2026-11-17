@@ -77,6 +77,8 @@ type Copy = {
   targetNotes: Record<string, string>;
   targetSections: Record<string, string>;
   targetRows: Record<string, string>;
+  targetCriteria: Record<string, string>;
+  targetRules: Record<string, string>;
   buildsTitle: string;
   buildLabel: string;
   noRound: string;
@@ -226,7 +228,7 @@ const T: Record<Locale, Copy> = {
       "updateLinux": "Update with a team and data already there · Linux",
       "updateMac": "Update with a team and data already there · Mac",
       "updateWindows": "Update with a team and data already there · Windows",
-      "nonItRelevant": "Profile outside IT, on site: at least 70% relevant positions",
+      "nonItRelevant": "Full round as a real user, with a trade outside IT",
       "scoutBench": "Scout bench, 4 trades outside IT (≥70% relevant, 0 duplicates, ≥15 positions)",
       "budgetBrake": "Budget brake: never over the ceiling, no false unlock, the person is told",
       "language": "Setup and onboarding in the chosen language",
@@ -267,13 +269,26 @@ const T: Record<Locale, Copy> = {
     targetSections: {
       "install": "Install by a new user",
       "update": "Update with a team and data",
-      "scout": "Scout, trades outside IT",
+      "scout": "Jobs tested: does the Scout find ads of the right trade?",
       "brake": "Spending brake",
       "language": "Language",
       "doctor": "Doctor and Maintainer",
       "services": "Services",
       "security": "Security",
       "beta": "Beta tester",
+    },
+    targetCriteria: {
+      "relevant": "relevant {v}% (≥{min}%)",
+      "duplicates": "duplicates {v}",
+      "positions": "positions {v} (≥{min})",
+      "newPositions": "{trade}: {v} new",
+      "relevantOf": "{trade}: {v} relevant of {of}",
+      "underCeiling": "spent {v} of {max} $",
+      "noFalseUnlock": "no false unlock",
+    },
+    targetRules: {
+      "scout": "A bench row passes when all 3 criteria are green: at least 70% relevant, 0 duplicates, at least 15 positions.",
+      "brake": "Criteria of the last try (build 8, r14); fixed since, to try again.",
     },
     targetRows: {
       "install": "Install by a new user",
@@ -480,7 +495,7 @@ const T: Record<Locale, Copy> = {
       "updateLinux": "Aggiornamento con squadra e dati esistenti · Linux",
       "updateMac": "Aggiornamento con squadra e dati esistenti · Mac",
       "updateWindows": "Aggiornamento con squadra e dati esistenti · Windows",
-      "nonItRelevant": "Profilo non IT in sede: almeno il 70% di posizioni pertinenti",
+      "nonItRelevant": "Giro completo da utente vero, con un mestiere non IT",
       "scoutBench": "Banco degli Scout, 4 mestieri non IT (≥70% pertinenti, 0 doppioni, ≥15 posizioni)",
       "budgetBrake": "Freno del budget: mai oltre il tetto, nessuno sblocco falso, avviso all'utente",
       "language": "Setup e onboarding nella lingua scelta",
@@ -521,13 +536,26 @@ const T: Record<Locale, Copy> = {
     targetSections: {
       "install": "Installazione da utente nuovo",
       "update": "Aggiornamento con squadra e dati",
-      "scout": "Scout, mestieri non IT",
+      "scout": "Lavori testati: lo Scout trova annunci del mestiere giusto?",
       "brake": "Freno della spesa",
       "language": "Lingua",
       "doctor": "Dottore e Mantenitore",
       "services": "Servizi",
       "security": "Sicurezza",
       "beta": "Beta tester",
+    },
+    targetCriteria: {
+      "relevant": "pertinenti {v}% (≥{min}%)",
+      "duplicates": "doppioni {v}",
+      "positions": "annunci {v} (≥{min})",
+      "newPositions": "{trade}: {v} nuovi",
+      "relevantOf": "{trade}: {v} pertinenti su {of}",
+      "underCeiling": "spesi {v} di {max} $",
+      "noFalseUnlock": "nessuno sblocco falso",
+    },
+    targetRules: {
+      "scout": "Una riga del banco passa se tutti e 3 i criteri sono verdi: almeno 70% pertinenti, 0 doppioni, almeno 15 annunci.",
+      "brake": "Criteri dell'ultima prova (build 8, r14); corretto dopo, da riprovare.",
     },
     targetRows: {
       "install": "Installazione da utente nuovo",
@@ -734,7 +762,7 @@ const T: Record<Locale, Copy> = {
       "updateLinux": "Update mit vorhandenem Team und Daten · Linux",
       "updateMac": "Update mit vorhandenem Team und Daten · Mac",
       "updateWindows": "Update mit vorhandenem Team und Daten · Windows",
-      "nonItRelevant": "Profil außerhalb der IT, vor Ort: mindestens 70% passende Stellen",
+      "nonItRelevant": "Ganze Runde als echter Nutzer, mit einem Beruf außerhalb der IT",
       "scoutBench": "Scout-Prüfstand, 4 Berufe außerhalb der IT (≥70% passend, 0 Doppelte, ≥15 Stellen)",
       "budgetBrake": "Budgetbremse: nie über der Obergrenze, keine falsche Freigabe, die Person wird informiert",
       "language": "Setup und Onboarding in der gewählten Sprache",
@@ -775,13 +803,26 @@ const T: Record<Locale, Copy> = {
     targetSections: {
       "install": "Installation durch neue Nutzer",
       "update": "Update mit Team und Daten",
-      "scout": "Scout, Berufe außerhalb der IT",
+      "scout": "Getestete Berufe: findet der Scout Anzeigen des richtigen Berufs?",
       "brake": "Ausgabenbremse",
       "language": "Sprache",
       "doctor": "Doktor und Wartung",
       "services": "Dienste",
       "security": "Sicherheit",
       "beta": "Betatester",
+    },
+    targetCriteria: {
+      "relevant": "passend {v} % (≥{min} %)",
+      "duplicates": "Duplikate {v}",
+      "positions": "Anzeigen {v} (≥{min})",
+      "newPositions": "{trade}: {v} neu",
+      "relevantOf": "{trade}: {v} passend von {of}",
+      "underCeiling": "{v} von {max} $ ausgegeben",
+      "noFalseUnlock": "keine falsche Freigabe",
+    },
+    targetRules: {
+      "scout": "Eine Zeile der Bank besteht, wenn alle 3 Kriterien grün sind: mindestens 70 % passend, 0 Duplikate, mindestens 15 Anzeigen.",
+      "brake": "Kriterien des letzten Versuchs (Build 8, r14); seitdem korrigiert, erneut zu prüfen.",
     },
     targetRows: {
       "install": "Installation durch neue Nutzer",
@@ -989,7 +1030,7 @@ const T: Record<Locale, Copy> = {
       "updateLinux": "Actualización con equipo y datos existentes · Linux",
       "updateMac": "Actualización con equipo y datos existentes · Mac",
       "updateWindows": "Actualización con equipo y datos existentes · Windows",
-      "nonItRelevant": "Perfil fuera de la informática, presencial: al menos 70% de ofertas pertinentes",
+      "nonItRelevant": "Ronda completa como usuario real, con un oficio fuera de la informática",
       "scoutBench": "Banco de los Scouts, 4 oficios fuera de la informática (≥70% pertinentes, 0 duplicados, ≥15 ofertas)",
       "budgetBrake": "Freno del presupuesto: nunca por encima del tope, ningún desbloqueo falso, aviso a la persona",
       "language": "Setup y onboarding en el idioma elegido",
@@ -1030,13 +1071,26 @@ const T: Record<Locale, Copy> = {
     targetSections: {
       "install": "Instalación por un usuario nuevo",
       "update": "Actualización con equipo y datos",
-      "scout": "Scout, oficios fuera de la informática",
+      "scout": "Oficios probados: ¿encuentra el Scout anuncios del oficio correcto?",
       "brake": "Freno del gasto",
       "language": "Idioma",
       "doctor": "Doctor y Mantenedor",
       "services": "Servicios",
       "security": "Seguridad",
       "beta": "Beta tester",
+    },
+    targetCriteria: {
+      "relevant": "pertinentes {v} % (≥{min} %)",
+      "duplicates": "duplicados {v}",
+      "positions": "anuncios {v} (≥{min})",
+      "newPositions": "{trade}: {v} nuevos",
+      "relevantOf": "{trade}: {v} pertinentes de {of}",
+      "underCeiling": "gastados {v} de {max} $",
+      "noFalseUnlock": "ningún desbloqueo falso",
+    },
+    targetRules: {
+      "scout": "Una fila del banco pasa si los 3 criterios están en verde: al menos 70 % pertinentes, 0 duplicados, al menos 15 anuncios.",
+      "brake": "Criterios de la última prueba (build 8, r14); corregido después, por volver a probar.",
     },
     targetRows: {
       "install": "Instalación por un usuario nuevo",
@@ -1245,7 +1299,7 @@ const T: Record<Locale, Copy> = {
       "updateLinux": "Mise à jour avec équipe et données existantes · Linux",
       "updateMac": "Mise à jour avec équipe et données existantes · Mac",
       "updateWindows": "Mise à jour avec équipe et données existantes · Windows",
-      "nonItRelevant": "Profil hors informatique, sur site : au moins 70 % d'offres pertinentes",
+      "nonItRelevant": "Tour complet en vrai utilisateur, avec un métier hors informatique",
       "scoutBench": "Banc des Scouts, 4 métiers hors informatique (≥70 % pertinentes, 0 doublon, ≥15 offres)",
       "budgetBrake": "Frein du budget : jamais au-dessus du plafond, aucun faux déblocage, la personne est prévenue",
       "language": "Setup et onboarding dans la langue choisie",
@@ -1286,13 +1340,26 @@ const T: Record<Locale, Copy> = {
     targetSections: {
       "install": "Installation par un nouvel utilisateur",
       "update": "Mise à jour avec équipe et données",
-      "scout": "Scout, métiers hors informatique",
+      "scout": "Métiers testés : le Scout trouve-t-il des annonces du bon métier ?",
       "brake": "Frein des dépenses",
       "language": "Langue",
       "doctor": "Docteur et Mainteneur",
       "services": "Services",
       "security": "Sécurité",
       "beta": "Bêta-testeur",
+    },
+    targetCriteria: {
+      "relevant": "pertinents {v} % (≥{min} %)",
+      "duplicates": "doublons {v}",
+      "positions": "annonces {v} (≥{min})",
+      "newPositions": "{trade} : {v} nouveaux",
+      "relevantOf": "{trade} : {v} pertinents sur {of}",
+      "underCeiling": "dépensé {v} sur {max} $",
+      "noFalseUnlock": "aucun faux déblocage",
+    },
+    targetRules: {
+      "scout": "Une ligne du banc passe si les 3 critères sont verts : au moins 70 % pertinents, 0 doublon, au moins 15 annonces.",
+      "brake": "Critères du dernier essai (build 8, r14) ; corrigé depuis, à réessayer.",
     },
     targetRows: {
       "install": "Installation par un nouvel utilisateur",
@@ -1498,7 +1565,7 @@ const T: Record<Locale, Copy> = {
       "updateLinux": "Atualização com equipa e dados existentes · Linux",
       "updateMac": "Atualização com equipa e dados existentes · Mac",
       "updateWindows": "Atualização com equipa e dados existentes · Windows",
-      "nonItRelevant": "Perfil fora da informática, presencial: pelo menos 70% de vagas pertinentes",
+      "nonItRelevant": "Rodada completa como utilizador real, com um ofício fora da informática",
       "scoutBench": "Banco dos Scouts, 4 profissões fora da informática (≥70% pertinentes, 0 duplicados, ≥15 vagas)",
       "budgetBrake": "Travão do orçamento: nunca acima do teto, nenhum falso desbloqueio, aviso à pessoa",
       "language": "Setup e onboarding na língua escolhida",
@@ -1539,13 +1606,26 @@ const T: Record<Locale, Copy> = {
     targetSections: {
       "install": "Instalação por um utilizador novo",
       "update": "Atualização com equipa e dados",
-      "scout": "Scout, ofícios fora da informática",
+      "scout": "Ofícios testados: o Scout encontra anúncios do ofício certo?",
       "brake": "Travão da despesa",
       "language": "Língua",
       "doctor": "Doutor e Mantenedor",
       "services": "Serviços",
       "security": "Segurança",
       "beta": "Beta tester",
+    },
+    targetCriteria: {
+      "relevant": "pertinentes {v}% (≥{min}%)",
+      "duplicates": "duplicados {v}",
+      "positions": "anúncios {v} (≥{min})",
+      "newPositions": "{trade}: {v} novos",
+      "relevantOf": "{trade}: {v} pertinentes de {of}",
+      "underCeiling": "gastos {v} de {max} $",
+      "noFalseUnlock": "nenhum desbloqueio falso",
+    },
+    targetRules: {
+      "scout": "Uma linha da bancada passa se os 3 critérios estiverem verdes: pelo menos 70% pertinentes, 0 duplicados, pelo menos 15 anúncios.",
+      "brake": "Critérios da última tentativa (build 8, r14); corrigido depois, a voltar a testar.",
     },
     targetRows: {
       "install": "Instalação por um utilizador novo",
@@ -1752,7 +1832,7 @@ const T: Record<Locale, Copy> = {
       "updateLinux": "Frissítés meglévő csapattal és adatokkal · Linux",
       "updateMac": "Frissítés meglévő csapattal és adatokkal · Mac",
       "updateWindows": "Frissítés meglévő csapattal és adatokkal · Windows",
-      "nonItRelevant": "IT-n kívüli, helyszíni profil: legalább 70% releváns állás",
+      "nonItRelevant": "Teljes kör valódi felhasználóként, nem IT szakmával",
       "scoutBench": "Scout-próbapad, 4 IT-n kívüli szakma (≥70% releváns, 0 ismétlődés, ≥15 állás)",
       "budgetBrake": "Keretfék: soha a plafon fölött, nincs hamis feloldás, a felhasználó értesül",
       "language": "Beállítás és bevezetés a választott nyelven",
@@ -1793,13 +1873,26 @@ const T: Record<Locale, Copy> = {
     targetSections: {
       "install": "Telepítés új felhasználóként",
       "update": "Frissítés csapattal és adatokkal",
-      "scout": "Scout, nem IT szakmák",
+      "scout": "Kipróbált szakmák: a Scout a megfelelő szakma hirdetéseit találja?",
       "brake": "Költségfék",
       "language": "Nyelv",
       "doctor": "Doktor és Karbantartó",
       "services": "Szolgáltatások",
       "security": "Biztonság",
       "beta": "Bétatesztelő",
+    },
+    targetCriteria: {
+      "relevant": "releváns {v}% (≥{min}%)",
+      "duplicates": "ismétlődés {v}",
+      "positions": "hirdetés {v} (≥{min})",
+      "newPositions": "{trade}: {v} új",
+      "relevantOf": "{trade}: {v} releváns / {of}",
+      "underCeiling": "{v} / {max} $ elköltve",
+      "noFalseUnlock": "nincs hamis feloldás",
+    },
+    targetRules: {
+      "scout": "A pad egy sora akkor sikeres, ha mind a 3 feltétel zöld: legalább 70% releváns, 0 ismétlődés, legalább 15 hirdetés.",
+      "brake": "Az utolsó próba feltételei (8. build, r14); azóta javítva, újra kipróbálandó.",
     },
     targetRows: {
       "install": "Telepítés új felhasználóként",
@@ -1963,6 +2056,15 @@ const TARGET_SECTIONS: [string, string][] = [
   ["beta", "🧑‍💼"],
 ];
 const TARGET_OS = ["windows", "linux", "macos"];
+// The emoji of each trade in the targets table, next to its name.
+const TRADE_EMOJI: Record<string, string> = {
+  bricklayer: "🧱",
+  cook: "🍳",
+  warehouseWorker: "📦",
+  nurse: "🩺",
+  receptionist: "🛎️",
+  truckDriver: "🚚",
+};
 type Build = (typeof data.builds)[number];
 
 const OUTCOME_COLOR: Record<string, string> = {
@@ -2023,9 +2125,19 @@ export default async function BenchmarkPage() {
       </a>
     );
   };
+  // A criterion of a target with its real number, e.g. «relevant 79% (≥70%)»; the trade is named with its emoji.
+  type Criterion = { k: string; ok: boolean; v?: number; min?: number; max?: number; of?: number; trade?: string };
+  const criterion = (c: Criterion) =>
+    (t.targetCriteria[c.k] ?? c.k)
+      .replace("{v}", c.v == null ? "" : c.k === "underCeiling" ? nf.format(c.v) : String(c.v))
+      .replace("{min}", String(c.min ?? ""))
+      .replace("{max}", String(c.max ?? ""))
+      .replace("{of}", String(c.of ?? ""))
+      .replace("{trade}", c.trade ? `${TRADE_EMOJI[c.trade] ?? ""} ${t.profiles[c.trade] ?? c.trade}`.trim() : "");
   // One cell of the targets table: the status, the build, the rounds that prove it; the note small below and whole in the tooltip.
   const targetCell = (x: Target) => {
     const note = x.note ? t.targetNotes[x.note] : "";
+    const criteria = ((x as { criteria?: Criterion[] }).criteria ?? []) as Criterion[];
     return (
       <div className="space-y-0.5" title={note || undefined}>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -2054,7 +2166,17 @@ export default async function BenchmarkPage() {
             );
           })}
         </div>
-        {note && <div className="text-[10px] leading-snug text-[var(--color-dim)] line-clamp-2">{note}</div>}
+        {criteria.length > 0 && (
+          <ul className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] tabular-nums">
+            {criteria.map((c, i) => (
+              <li key={i} className="whitespace-nowrap" style={{ color: c.ok ? TARGET_COLOR.pass : TARGET_COLOR.fail }}>
+                <span aria-hidden="true">{c.ok ? "✅" : "❌"}</span> {criterion(c)}
+              </li>
+            ))}
+          </ul>
+        )}
+        {/* with criteria the numbers say it already: the note stays in the tooltip */}
+        {note && criteria.length === 0 && <div className="text-[10px] leading-snug text-[var(--color-dim)] line-clamp-2">{note}</div>}
       </div>
     );
   };
@@ -2279,7 +2401,10 @@ export default async function BenchmarkPage() {
                     const r = rows.find((y) => y.key === row);
                     if (r?.byOs) r.byOs[os] = x;
                     else rows.push({ key: row, label: t.targetRows[row], byOs: { [os]: x }, one: null });
-                  } else rows.push({ key: x.id, label: t.targets[x.id], byOs: null, one: x });
+                  } else {
+                    const emoji = (x as { emoji?: string }).emoji;
+                    rows.push({ key: x.id, label: `${emoji ? `${emoji} ` : ""}${t.targets[x.id]}`, byOs: null, one: x });
+                  }
                 }
                 return (
                   <tbody key={section}>
@@ -2298,6 +2423,9 @@ export default async function BenchmarkPage() {
                             {`${ok}/${list.length}`}
                           </span>
                         </span>
+                        {t.targetRules[section] && (
+                          <span className="block mt-1 text-[11px] font-normal text-[var(--color-muted)]">{t.targetRules[section]}</span>
+                        )}
                       </th>
                     </tr>
                     {rows.map((r) => (
