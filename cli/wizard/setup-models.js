@@ -1,3 +1,4 @@
+import { t } from './i18n.js';
 import { effectiveSettings, validRoleModels } from '../src/lib/team-settings.js';
 import { PI_API_MODELS, PROVIDER_ROLE_CLASS, piApiProvider } from '../../shared/runtime/provider-models.js';
 import { ROLES, ROLE_DEFAULT_CLASS, ROLE_DEFAULT_EFFORT } from '../../shared/runtime/role-models.js';
@@ -17,10 +18,10 @@ function piRoleModels(config, roles) {
 /** Describe the launcher's per-role choices, never the unused provider-wide model. */
 export function summarizeRoleModels(config) {
   const roles = config.team?.role_models ?? {};
-  if (!validRoleModels(roles)) return 'Models: invalid team.role_models; correct the role settings before starting.';
+  if (!validRoleModels(roles)) return t('wizard.summary.models_invalid');
   const effective = piRoleModels(config, roles) ?? effectiveSettings(config, roles).effective;
   if (!effective) return '';
-  return ['Models by role:', ...Object.entries(effective).map(
+  return [t('wizard.summary.models_by_role'), ...Object.entries(effective).map(
     ([role, { modelName, effort }]) => `  ${role}: ${modelName} (${effort})`,
   )].join('\n');
 }

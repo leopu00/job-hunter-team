@@ -5,8 +5,9 @@
  * (`i18n-prefs.json` in the team's home: `jht setup --language` and the picker save it there), `JHT_LANG`, the
  * `language` of the configuration, the system's (`LC_ALL`, `LC_MESSAGES`, `LANG`), and English. The saved choice
  * comes before `JHT_LANG` because the container gets `JHT_LANG` once, from the installation, and a language chosen
- * later with `jht setup --language` must win over it (the wizard and the Python and TypeScript readers do the same). A language whose texts are not written yet answers in English, never in
- * a mix: a text missing from a language falls back to the English one.
+ * later with `jht setup --language` must win over it (the wizard and the Python and TypeScript readers do the same). A language whose texts are not written yet answers in English;
+ * a language with only some of them (PARTIAL: so far the start of the team, the last steps of `jht setup`) says those
+ * screens whole in its words and the rest in English: a text missing from a language falls back to the English one.
  *
  * Machine output (`--json`, the markers) is never translated.
  */
@@ -15,8 +16,15 @@ import { join } from 'node:path';
 import { JHT_HOME } from '../jht-paths.js';
 import en from './texts/en.js';
 import it from './texts/it.js';
+import de from './texts/de.js';
+import es from './texts/es.js';
+import fr from './texts/fr.js';
+import hu from './texts/hu.js';
+import pt from './texts/pt.js';
 
-const CATALOGS = { en, it };
+const CATALOGS = { en, it, de, es, fr, hu, pt };
+/** The languages that have only some of the texts: the screens they cover, whole; English for the rest. */
+const PARTIAL = new Set(['de', 'es', 'fr', 'hu', 'pt']);
 const KNOWN = new Set(['en', 'it', 'de', 'fr', 'es', 'hu', 'pt']);
 
 function fromTag(tag) {
@@ -71,4 +79,4 @@ export function show(value, language = textLanguage()) {
   return value;
 }
 
-export { CATALOGS };
+export { CATALOGS, PARTIAL };
