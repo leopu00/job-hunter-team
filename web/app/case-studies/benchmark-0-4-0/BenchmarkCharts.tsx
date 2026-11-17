@@ -120,6 +120,9 @@ const AGENT_COLOR: Record<string, string> = {
   maintainer: "#84CC16",
   mentor: "#F5C518",
 };
+// Events that stop or hold the team are red, those that let it work again green, the rest (setup, start, notices) blue.
+const EVENT_STOP = new Set(["pace", "dailyHalt", "periodHalt", "periodOver", "periodEnd", "benchStop", "stop", "ceiling", "diskLow", "machineStopped", "creditGone", "creditExhausted", "inputHeld", "pause"]);
+const EVENT_GO = new Set(["resume", "resumeScouts", "cleared", "restart", "switch", "teamStart", "ready", "goalReached"]);
 const colorOf = (key: string, i: number, map?: Record<string, string>) => map?.[key] ?? PALETTE[i % PALETTE.length];
 
 // ---- small building blocks ----
@@ -267,7 +270,10 @@ function LineChart({
   const [hover, setHover] = useState<{ x: number; px: number; py: number; w: number } | null>(null);
   const all = series.flatMap((s) => s.points.map((p) => p.y));
   const yMax = niceMax(Math.max(yMaxHint, (refY?.y ?? 0) * 1.05, ...all.map((v) => v * 1.05), 0));
-  const xM = Math.max(5, Math.ceil(xMax / 5) * 5);
+  // A round step (1, 2, 5, 10, 15, 20, 30, 60 minutes) with at most 8 ticks, 6 on a phone.
+  const maxTicks = W < 420 ? 6 : 8;
+  const step = xStep ?? [1, 2, 5, 10, 15, 20, 30, 60, 120].find((st) => Math.ceil(xMax / st) <= maxTicks) ?? 240;
+  const xM = Math.max(step, Math.ceil(xMax / step) * step);
   const sx = (x: number) => pad.l + (x / xM) * (W - pad.l - pad.r);
   const sy = (y: number) => H - pad.b - (y / yMax) * (H - pad.t - pad.b);
   const xs = Array.from(new Set(series.flatMap((s) => s.points.map((p) => p.x)))).sort((a, b) => a - b);
@@ -305,7 +311,7 @@ function LineChart({
             </text>
           </g>
         ))}
-        {ticks(xM, xStep ? Math.round(xM / xStep) : xM / 5 <= (W < 420 ? 6 : 8) ? xM / 5 : xM % 10 === 0 && xM / 10 <= 8 ? xM / 10 : W < 420 ? 4 : 6).map((v) => (
+        {ticks(xM, Math.round(xM / step)).map((v) => (
           <text key={`x${v}`} x={sx(v)} y={H - pad.b + 16} textAnchor="middle" fontSize={11} fill="var(--color-muted)">
             {xTick(v)}
           </text>
@@ -321,15 +327,18 @@ function LineChart({
             </text>
           </g>
         )}
-        {(refX ?? []).map((m, i) => (
+        {(refX ?? []).map((m0, i) => {
+          const m = { ...m0, x: Math.min(Math.max(m0.x, 0), xM) }; // an event before the start sits on the axis; its minute is in the list
+          return (
           <g key={`b${i}`}>
             <line x1={sx(m.x)} x2={sx(m.x)} y1={pad.t} y2={H - pad.b} stroke={m.color} strokeWidth={1.5} strokeDasharray="3 3" />
-            <circle cx={sx(m.x)} cy={pad.t + 7 + (i % 2) * 15} r={7} fill={m.color} />
-            <text x={sx(m.x)} y={pad.t + 11 + (i % 2) * 15} textAnchor="middle" fontSize={10} fontWeight={700} fill="var(--color-card)">
+            <circle cx={sx(m.x)} cy={pad.t + 7 + (i % 3) * 15} r={7} fill={m.color} />
+            <text x={sx(m.x)} y={pad.t + 11 + (i % 3) * 15} textAnchor="middle" fontSize={10} fontWeight={700} fill="var(--color-card)">
               {i + 1}
             </text>
           </g>
-        ))}
+          );
+        })}
         {series.map((s) => (
           <g key={s.key}>
             <polyline
@@ -512,7 +521,7 @@ function RoundTimelines({ rounds, t, money }: { rounds: ChartRound[]; t: ChartCo
   const refX = r.brake.map((b) => ({
     x: b.m,
     label: t.brakeKinds[b.kind] ?? b.kind,
-    color: b.kind.startsWith("resume") ? "var(--color-green)" : C.brake,
+    color: EVENT_GO.has(b.kind) ? "var(--color-green)" : EVENT_STOP.has(b.kind) ? C.brake : "var(--color-blue)",
   }));
   const groups: { id: string; label: string; items: ChartRound[] }[] = [
     { id: "round", label: t.rounds, items: usable.filter((x) => x.group === "round") },
@@ -546,7 +555,7 @@ function RoundTimelines({ rounds, t, money }: { rounds: ChartRound[]; t: ChartCo
             items={[
               ...costS.map((s) => ({ label: s.label, color: s.color, dashed: s.dashed })),
               ...(refY ? [{ label: t.ceiling, color: C.ceiling, dashed: true }] : []),
-              ...(refX.length ? [{ label: t.brake, color: C.brake, dashed: true }] : []),
+              ...(refX.length ? [{ label: t.brake, color: C.brake, dashed: true }, { label: t.events, color: "var(--color-blue)", dashed: true }] : []),
             ]}
           />
           {costS[0].points.length > 0 ? (

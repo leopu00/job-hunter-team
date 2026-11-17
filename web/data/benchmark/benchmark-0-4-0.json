@@ -188,7 +188,7 @@
       "found": 47,
       "scored": 26,
       "relevant": null,
-      "bestScore": null,
+      "bestScore": 94,
       "roster": "5/3/2",
       "outcome": "fail",
       "note": "scoutsNoTools",
@@ -205,8 +205,8 @@
       "minutes": 10,
       "cost": 1.75,
       "calls": 176,
-      "found": null,
-      "scored": null,
+      "found": 0,
+      "scored": 0,
       "relevant": null,
       "bestScore": null,
       "roster": null,
@@ -223,8 +223,8 @@
       "mode": "unspecified",
       "build": "5268b336b",
       "minutes": 10,
-      "cost": 1.61,
-      "calls": null,
+      "cost": 1.67,
+      "calls": 273,
       "found": 7,
       "scored": 1,
       "relevant": null,
@@ -243,10 +243,10 @@
       "mode": "unspecified",
       "build": "5268b336b",
       "minutes": 5.7,
-      "cost": 2.92,
-      "calls": null,
-      "found": 7,
-      "scored": 1,
+      "cost": 1.25,
+      "calls": 123,
+      "found": 0,
+      "scored": 0,
       "relevant": null,
       "bestScore": null,
       "roster": "1/1/1",
@@ -307,8 +307,7 @@
       "calls": 480,
       "found": 50,
       "scored": 20,
-      "relevant": 50,
-      "relevantApprox": true,
+      "relevant": null,
       "bestScore": 94,
       "roster": "1/1/1",
       "outcome": "reservations",
@@ -2179,6 +2178,3525 @@
       "bySource": {
         "linkedin": 15,
         "karriere-at": 11
+      }
+    },
+    "r1": {
+      "minutes": 41.9,
+      "cost": 3.4061,
+      "calls": 1479,
+      "found": 47,
+      "scored": 26,
+      "relevance": null,
+      "ceiling": null,
+      "timeline": [
+        {
+          "m": 0.0,
+          "cost": 0.026,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 1.0,
+          "cost": 0.0895,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 2.0,
+          "cost": 0.1826,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 3.0,
+          "cost": 0.1852,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 4.0,
+          "cost": 0.2025,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 5.0,
+          "cost": 0.2187,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 6.0,
+          "cost": 0.3534,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 7.0,
+          "cost": 0.5083,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 8.0,
+          "cost": 0.5111,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 9.0,
+          "cost": 0.5135,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 10.0,
+          "cost": 0.5144,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 11.0,
+          "cost": 0.5169,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 12.0,
+          "cost": 0.5169,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 13.0,
+          "cost": 0.5843,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 14.0,
+          "cost": 0.6895,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 15.0,
+          "cost": 0.7672,
+          "found": 2,
+          "scored": 0
+        },
+        {
+          "m": 16.0,
+          "cost": 0.9174,
+          "found": 4,
+          "scored": 0
+        },
+        {
+          "m": 17.0,
+          "cost": 1.0081,
+          "found": 5,
+          "scored": 0
+        },
+        {
+          "m": 18.0,
+          "cost": 1.0561,
+          "found": 8,
+          "scored": 0
+        },
+        {
+          "m": 19.0,
+          "cost": 1.1357,
+          "found": 8,
+          "scored": 0
+        },
+        {
+          "m": 20.0,
+          "cost": 1.2155,
+          "found": 11,
+          "scored": 3
+        },
+        {
+          "m": 21.0,
+          "cost": 1.2731,
+          "found": 14,
+          "scored": 3
+        },
+        {
+          "m": 22.0,
+          "cost": 1.3327,
+          "found": 17,
+          "scored": 3
+        },
+        {
+          "m": 23.0,
+          "cost": 1.439,
+          "found": 23,
+          "scored": 3
+        },
+        {
+          "m": 24.0,
+          "cost": 1.5026,
+          "found": 23,
+          "scored": 5
+        },
+        {
+          "m": 25.0,
+          "cost": 1.5711,
+          "found": 25,
+          "scored": 6
+        },
+        {
+          "m": 26.0,
+          "cost": 1.646,
+          "found": 26,
+          "scored": 8
+        },
+        {
+          "m": 27.0,
+          "cost": 1.7297,
+          "found": 26,
+          "scored": 9
+        },
+        {
+          "m": 28.0,
+          "cost": 1.8591,
+          "found": 26,
+          "scored": 10
+        },
+        {
+          "m": 29.0,
+          "cost": 1.947,
+          "found": 29,
+          "scored": 11
+        },
+        {
+          "m": 30.0,
+          "cost": 2.0364,
+          "found": 31,
+          "scored": 12
+        },
+        {
+          "m": 31.0,
+          "cost": 2.1435,
+          "found": 35,
+          "scored": 14
+        },
+        {
+          "m": 32.0,
+          "cost": 2.2415,
+          "found": 36,
+          "scored": 16
+        },
+        {
+          "m": 33.0,
+          "cost": 2.3363,
+          "found": 36,
+          "scored": 17
+        },
+        {
+          "m": 34.0,
+          "cost": 2.4589,
+          "found": 37,
+          "scored": 19
+        },
+        {
+          "m": 35.0,
+          "cost": 2.5728,
+          "found": 39,
+          "scored": 20
+        },
+        {
+          "m": 36.0,
+          "cost": 2.6821,
+          "found": 39,
+          "scored": 21
+        },
+        {
+          "m": 37.0,
+          "cost": 2.8017,
+          "found": 41,
+          "scored": 22
+        },
+        {
+          "m": 38.0,
+          "cost": 2.9046,
+          "found": 43,
+          "scored": 23
+        },
+        {
+          "m": 39.0,
+          "cost": 3.0129,
+          "found": 44,
+          "scored": 24
+        },
+        {
+          "m": 40.0,
+          "cost": 3.1408,
+          "found": 45,
+          "scored": 25
+        },
+        {
+          "m": 41.0,
+          "cost": 3.3775,
+          "found": 47,
+          "scored": 26
+        },
+        {
+          "m": 41.92,
+          "cost": 3.4061,
+          "found": 47,
+          "scored": 26
+        }
+      ],
+      "scores": [],
+      "brake": [
+        {
+          "m": 0.73,
+          "kind": "toolsPending"
+        },
+        {
+          "m": 7.68,
+          "kind": "manual"
+        },
+        {
+          "m": 10.75,
+          "kind": "restart"
+        },
+        {
+          "m": 40.35,
+          "kind": "goalReached"
+        },
+        {
+          "m": 41.92,
+          "kind": "creditExhausted"
+        }
+      ],
+      "agents": {
+        "scout": 1.154,
+        "captain": 1.1201,
+        "analyst": 0.7125,
+        "scorer": 0.3078,
+        "assistant": 0.1077,
+        "sentinel": 0.004,
+        "mentor": 0.0
+      },
+      "discarded": null,
+      "bySource": null
+    },
+    "r10": {
+      "minutes": 31.1,
+      "cost": 1.3931,
+      "calls": null,
+      "found": 22,
+      "scored": 5,
+      "relevance": {
+        "P": 15,
+        "A": null,
+        "X": null
+      },
+      "ceiling": null,
+      "timeline": [
+        {
+          "m": 0.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 1.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 2.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 3.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 4.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 5.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 6.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 7.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 8.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 9.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 10.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 11.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 12.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 13.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 14.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 15.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 16.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 17.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 18.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 19.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 20.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 21.0,
+          "cost": 0.8781,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 22.0,
+          "cost": 0.9291,
+          "found": 13,
+          "scored": 0
+        },
+        {
+          "m": 23.0,
+          "cost": 0.9491,
+          "found": 18,
+          "scored": 0
+        },
+        {
+          "m": 24.0,
+          "cost": 0.9721,
+          "found": 18,
+          "scored": 0
+        },
+        {
+          "m": 25.0,
+          "cost": 1.0335,
+          "found": 18,
+          "scored": 1
+        },
+        {
+          "m": 26.0,
+          "cost": 1.0988,
+          "found": 18,
+          "scored": 1
+        },
+        {
+          "m": 27.0,
+          "cost": 1.1636,
+          "found": 18,
+          "scored": 4
+        },
+        {
+          "m": 28.0,
+          "cost": 1.2208,
+          "found": 18,
+          "scored": 4
+        },
+        {
+          "m": 29.0,
+          "cost": 1.2487,
+          "found": 18,
+          "scored": 4
+        },
+        {
+          "m": 30.0,
+          "cost": 1.2759,
+          "found": 18,
+          "scored": 4
+        },
+        {
+          "m": 31.0,
+          "cost": 1.3374,
+          "found": 22,
+          "scored": 5
+        },
+        {
+          "m": 31.15,
+          "cost": 1.3931,
+          "found": 22,
+          "scored": 5
+        }
+      ],
+      "scores": [],
+      "brake": [
+        {
+          "m": 0.97,
+          "kind": "other"
+        },
+        {
+          "m": 12.55,
+          "kind": "periodStart"
+        },
+        {
+          "m": 13.88,
+          "kind": "ceiling"
+        },
+        {
+          "m": 17.87,
+          "kind": "periodStart"
+        },
+        {
+          "m": 18.22,
+          "kind": "cleared"
+        },
+        {
+          "m": 30.82,
+          "kind": "benchStop"
+        }
+      ],
+      "agents": {
+        "captain": 0.6069,
+        "scorer": 0.4114,
+        "assistant": 0.1637,
+        "scout": 0.1293,
+        "analyst": 0.0741,
+        "sentinel": 0.0076
+      },
+      "discarded": null,
+      "bySource": null
+    },
+    "r11": {
+      "minutes": 60.0,
+      "cost": 2.6728,
+      "calls": 369,
+      "found": 19,
+      "scored": 12,
+      "relevance": {
+        "P": 2,
+        "A": 4,
+        "X": 13
+      },
+      "ceiling": 5.0,
+      "timeline": [
+        {
+          "m": 1.0,
+          "cost": null,
+          "found": 0,
+          "scored": null
+        },
+        {
+          "m": 2.0,
+          "cost": null,
+          "found": 0,
+          "scored": null
+        },
+        {
+          "m": 3.0,
+          "cost": null,
+          "found": 0,
+          "scored": null
+        },
+        {
+          "m": 4.0,
+          "cost": 0.0626,
+          "found": 0,
+          "scored": null
+        },
+        {
+          "m": 5.0,
+          "cost": 0.1492,
+          "found": 0,
+          "scored": null
+        },
+        {
+          "m": 6.0,
+          "cost": 0.1821,
+          "found": 0,
+          "scored": null
+        },
+        {
+          "m": 7.0,
+          "cost": 0.2324,
+          "found": 0,
+          "scored": null
+        },
+        {
+          "m": 8.0,
+          "cost": 0.2513,
+          "found": 0,
+          "scored": null
+        },
+        {
+          "m": 9.0,
+          "cost": 0.2905,
+          "found": 0,
+          "scored": null
+        },
+        {
+          "m": 10.0,
+          "cost": 0.2905,
+          "found": 0,
+          "scored": null
+        },
+        {
+          "m": 11.0,
+          "cost": 0.3367,
+          "found": 0,
+          "scored": null
+        },
+        {
+          "m": 12.0,
+          "cost": 0.3708,
+          "found": 0,
+          "scored": null
+        },
+        {
+          "m": 13.0,
+          "cost": 0.3978,
+          "found": 0,
+          "scored": null
+        },
+        {
+          "m": 14.0,
+          "cost": 0.3978,
+          "found": 0,
+          "scored": null
+        },
+        {
+          "m": 15.0,
+          "cost": 0.3978,
+          "found": 0,
+          "scored": null
+        },
+        {
+          "m": 16.0,
+          "cost": 0.3978,
+          "found": 0,
+          "scored": null
+        },
+        {
+          "m": 17.0,
+          "cost": 0.3978,
+          "found": 0,
+          "scored": null
+        },
+        {
+          "m": 18.0,
+          "cost": 0.4049,
+          "found": 0,
+          "scored": null
+        },
+        {
+          "m": 19.0,
+          "cost": 0.4049,
+          "found": 0,
+          "scored": null
+        },
+        {
+          "m": 20.0,
+          "cost": 0.5685,
+          "found": 0,
+          "scored": null
+        },
+        {
+          "m": 21.0,
+          "cost": 0.6293,
+          "found": 0,
+          "scored": null
+        },
+        {
+          "m": 22.0,
+          "cost": 0.7201,
+          "found": 0,
+          "scored": null
+        },
+        {
+          "m": 23.0,
+          "cost": 0.7439,
+          "found": 1,
+          "scored": null
+        },
+        {
+          "m": 24.0,
+          "cost": 0.7917,
+          "found": 1,
+          "scored": null
+        },
+        {
+          "m": 25.0,
+          "cost": 0.8043,
+          "found": 2,
+          "scored": null
+        },
+        {
+          "m": 26.0,
+          "cost": 0.9277,
+          "found": 2,
+          "scored": null
+        },
+        {
+          "m": 27.0,
+          "cost": 0.9547,
+          "found": 3,
+          "scored": null
+        },
+        {
+          "m": 28.0,
+          "cost": 1.0418,
+          "found": 6,
+          "scored": null
+        },
+        {
+          "m": 29.0,
+          "cost": 1.1424,
+          "found": 6,
+          "scored": null
+        },
+        {
+          "m": 30.0,
+          "cost": 1.192,
+          "found": 6,
+          "scored": null
+        },
+        {
+          "m": 31.0,
+          "cost": 1.2616,
+          "found": 7,
+          "scored": null
+        },
+        {
+          "m": 32.0,
+          "cost": 1.3151,
+          "found": 7,
+          "scored": null
+        },
+        {
+          "m": 33.0,
+          "cost": 1.3707,
+          "found": 16,
+          "scored": null
+        },
+        {
+          "m": 34.0,
+          "cost": 1.4141,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 35.0,
+          "cost": 1.5449,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 36.0,
+          "cost": 1.9523,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 37.0,
+          "cost": 2.1319,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 38.0,
+          "cost": 2.2571,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 39.0,
+          "cost": 2.3114,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 40.0,
+          "cost": 2.3551,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 41.0,
+          "cost": 2.3623,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 42.0,
+          "cost": 2.3991,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 43.0,
+          "cost": 2.4434,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 44.0,
+          "cost": 2.4507,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 45.0,
+          "cost": 2.4881,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 46.0,
+          "cost": 2.533,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 47.0,
+          "cost": 2.5783,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 48.0,
+          "cost": 2.5783,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 49.0,
+          "cost": 2.6269,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 50.0,
+          "cost": 2.6728,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 51.0,
+          "cost": 2.6728,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 52.0,
+          "cost": 2.6728,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 53.0,
+          "cost": 2.6728,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 54.0,
+          "cost": 2.6728,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 55.0,
+          "cost": 2.6728,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 56.0,
+          "cost": 2.6728,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 57.0,
+          "cost": 2.6728,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 58.0,
+          "cost": 2.6728,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 59.0,
+          "cost": 2.6728,
+          "found": 19,
+          "scored": null
+        },
+        {
+          "m": 60.0,
+          "cost": 2.6728,
+          "found": 19,
+          "scored": null
+        }
+      ],
+      "scores": [
+        {
+          "m": 22.63,
+          "best": 77
+        },
+        {
+          "m": 24.1,
+          "best": 85
+        },
+        {
+          "m": 27.0,
+          "best": 85
+        },
+        {
+          "m": 27.03,
+          "best": 85
+        },
+        {
+          "m": 30.22,
+          "best": 85
+        },
+        {
+          "m": 32.28,
+          "best": 85
+        },
+        {
+          "m": 32.43,
+          "best": 85
+        },
+        {
+          "m": 32.52,
+          "best": 85
+        },
+        {
+          "m": 32.58,
+          "best": 85
+        },
+        {
+          "m": 33.03,
+          "best": 85
+        },
+        {
+          "m": 33.27,
+          "best": 85
+        },
+        {
+          "m": 33.43,
+          "best": 85
+        }
+      ],
+      "brake": [
+        {
+          "m": 1.47,
+          "kind": "budgetSaved"
+        },
+        {
+          "m": 12.3,
+          "kind": "onboardingDone"
+        },
+        {
+          "m": 19.8,
+          "kind": "periodStart"
+        },
+        {
+          "m": 49.17,
+          "kind": "periodHalt"
+        },
+        {
+          "m": 49.25,
+          "kind": "inputHeld"
+        },
+        {
+          "m": 49.35,
+          "kind": "notice"
+        },
+        {
+          "m": 60.0,
+          "kind": "benchStop"
+        }
+      ],
+      "agents": {
+        "scorer": 0.8219,
+        "scout": 0.5319,
+        "analyst": 0.4784,
+        "captain": 0.4269,
+        "assistant": 0.4002,
+        "sentinel": 0.0136
+      },
+      "discarded": null,
+      "bySource": {
+        "manpower": 18,
+        "randstad": 1
+      }
+    },
+    "r2": {
+      "minutes": 34.2,
+      "cost": 1.7466,
+      "calls": 176,
+      "found": 0,
+      "scored": 0,
+      "relevance": {
+        "P": 0,
+        "A": 0,
+        "X": 0
+      },
+      "ceiling": null,
+      "timeline": [
+        {
+          "m": 0.0,
+          "cost": 0.0,
+          "found": null,
+          "scored": null
+        },
+        {
+          "m": 1.0,
+          "cost": 0.0,
+          "found": null,
+          "scored": null
+        },
+        {
+          "m": 2.0,
+          "cost": 0.0,
+          "found": null,
+          "scored": null
+        },
+        {
+          "m": 3.0,
+          "cost": 0.0,
+          "found": null,
+          "scored": null
+        },
+        {
+          "m": 4.0,
+          "cost": 0.0117,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 5.0,
+          "cost": 0.0117,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 6.0,
+          "cost": 0.0117,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 7.0,
+          "cost": 0.0117,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 8.0,
+          "cost": 0.0161,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 9.0,
+          "cost": 0.1286,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 10.0,
+          "cost": 0.3773,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 11.0,
+          "cost": 0.4567,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 12.0,
+          "cost": 0.514,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 13.0,
+          "cost": 0.7582,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 14.0,
+          "cost": 1.0368,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 15.0,
+          "cost": 1.2057,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 16.0,
+          "cost": 1.2789,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 17.0,
+          "cost": 1.3248,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 18.0,
+          "cost": 1.4041,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 19.0,
+          "cost": 1.4944,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 20.0,
+          "cost": 1.6116,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 21.0,
+          "cost": 1.6178,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 22.0,
+          "cost": 1.6428,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 23.0,
+          "cost": 1.6617,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 24.0,
+          "cost": 1.6681,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 25.0,
+          "cost": 1.6939,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 26.0,
+          "cost": 1.7201,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 27.0,
+          "cost": 1.7466,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 28.0,
+          "cost": 1.7466,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 29.0,
+          "cost": 1.7466,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 30.0,
+          "cost": 1.7466,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 31.0,
+          "cost": 1.7466,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 32.0,
+          "cost": 1.7466,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 33.0,
+          "cost": 1.7466,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 34.0,
+          "cost": 1.7466,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 34.25,
+          "cost": 1.7466,
+          "found": 0,
+          "scored": 0
+        }
+      ],
+      "scores": [],
+      "brake": [
+        {
+          "m": 2.4,
+          "kind": "teamStart"
+        },
+        {
+          "m": 18.25,
+          "kind": "onboardingDone"
+        },
+        {
+          "m": 25.67,
+          "kind": "other"
+        },
+        {
+          "m": 28.43,
+          "kind": "creditGone"
+        },
+        {
+          "m": 30.25,
+          "kind": "benchStop"
+        }
+      ],
+      "agents": {
+        "captain": 0.745,
+        "assistant": 0.631,
+        "scorer": 0.369,
+        "sentinel": 0.002
+      },
+      "discarded": null,
+      "bySource": null
+    },
+    "r3": {
+      "minutes": 11.7,
+      "cost": 1.6668,
+      "calls": 273,
+      "found": 7,
+      "scored": 1,
+      "relevance": null,
+      "ceiling": null,
+      "timeline": [
+        {
+          "m": 0.0,
+          "cost": 0.0,
+          "found": null,
+          "scored": null
+        },
+        {
+          "m": 1.0,
+          "cost": 0.0,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 2.0,
+          "cost": 0.4508,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 3.0,
+          "cost": 0.6767,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 4.0,
+          "cost": 0.7011,
+          "found": 1,
+          "scored": 0
+        },
+        {
+          "m": 5.0,
+          "cost": 0.8763,
+          "found": 1,
+          "scored": 0
+        },
+        {
+          "m": 6.0,
+          "cost": 0.9585,
+          "found": 1,
+          "scored": 0
+        },
+        {
+          "m": 7.0,
+          "cost": 0.9937,
+          "found": 1,
+          "scored": 0
+        },
+        {
+          "m": 8.0,
+          "cost": 1.1183,
+          "found": 3,
+          "scored": 0
+        },
+        {
+          "m": 9.0,
+          "cost": 1.1848,
+          "found": 4,
+          "scored": 0
+        },
+        {
+          "m": 10.0,
+          "cost": 1.3244,
+          "found": 5,
+          "scored": 1
+        },
+        {
+          "m": 11.0,
+          "cost": 1.4944,
+          "found": 6,
+          "scored": 1
+        },
+        {
+          "m": 11.67,
+          "cost": 1.6668,
+          "found": 6,
+          "scored": 1
+        }
+      ],
+      "scores": [],
+      "brake": [
+        {
+          "m": 0.88,
+          "kind": "teamStart"
+        },
+        {
+          "m": 11.3,
+          "kind": "benchStop"
+        }
+      ],
+      "agents": null,
+      "discarded": null,
+      "bySource": null
+    },
+    "r4": {
+      "minutes": 6.7,
+      "cost": 1.2487,
+      "calls": 123,
+      "found": 0,
+      "scored": 1,
+      "relevance": null,
+      "ceiling": null,
+      "timeline": [
+        {
+          "m": 0.0,
+          "cost": 0.0,
+          "found": null,
+          "scored": null
+        },
+        {
+          "m": 1.0,
+          "cost": 0.0,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 2.0,
+          "cost": 0.5045,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 3.0,
+          "cost": 0.5827,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 4.0,
+          "cost": 0.803,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 5.0,
+          "cost": 0.8799,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 6.0,
+          "cost": 1.107,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 6.7,
+          "cost": 1.2487,
+          "found": 0,
+          "scored": 0
+        }
+      ],
+      "scores": [],
+      "brake": [
+        {
+          "m": 0.48,
+          "kind": "teamStart"
+        },
+        {
+          "m": 6.42,
+          "kind": "benchStop"
+        }
+      ],
+      "agents": null,
+      "discarded": null,
+      "bySource": null
+    },
+    "r5": {
+      "minutes": 68.8,
+      "cost": 3.0225,
+      "calls": 528,
+      "found": 0,
+      "scored": 0,
+      "relevance": {
+        "P": 0,
+        "A": 0,
+        "X": 0
+      },
+      "ceiling": null,
+      "timeline": [
+        {
+          "m": 0.0,
+          "cost": 0.0565,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 1.0,
+          "cost": 0.0565,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 2.0,
+          "cost": 0.0565,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 3.0,
+          "cost": 0.0565,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 4.0,
+          "cost": 0.0565,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 5.0,
+          "cost": 0.0565,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 6.0,
+          "cost": 0.0565,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 7.0,
+          "cost": 0.0565,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 8.0,
+          "cost": 0.0565,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 9.0,
+          "cost": 0.0565,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 10.0,
+          "cost": 0.0565,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 11.0,
+          "cost": 0.0565,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 12.0,
+          "cost": 0.0565,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 13.0,
+          "cost": 0.0565,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 14.0,
+          "cost": 0.0565,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 15.0,
+          "cost": 0.0565,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 16.0,
+          "cost": 0.0565,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 17.0,
+          "cost": 0.0565,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 18.0,
+          "cost": 0.0729,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 19.0,
+          "cost": 0.0729,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 20.0,
+          "cost": 0.0729,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 21.0,
+          "cost": 0.0729,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 22.0,
+          "cost": 0.0729,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 23.0,
+          "cost": 0.1349,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 24.0,
+          "cost": 0.226,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 25.0,
+          "cost": 0.226,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 26.0,
+          "cost": 0.226,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 27.0,
+          "cost": 0.3149,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 28.0,
+          "cost": 0.5056,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 29.0,
+          "cost": 0.5545,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 30.0,
+          "cost": 0.5778,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 31.0,
+          "cost": 0.8672,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 32.0,
+          "cost": 1.1576,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 33.0,
+          "cost": 1.271,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 34.0,
+          "cost": 1.3691,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 35.0,
+          "cost": 1.5005,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 36.0,
+          "cost": 1.6205,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 37.0,
+          "cost": 1.6488,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 38.0,
+          "cost": 1.6525,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 39.0,
+          "cost": 1.6638,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 40.0,
+          "cost": 1.6791,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 41.0,
+          "cost": 1.6949,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 42.0,
+          "cost": 1.711,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 43.0,
+          "cost": 1.7151,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 44.0,
+          "cost": 1.7275,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 45.0,
+          "cost": 1.7317,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 46.0,
+          "cost": 1.8797,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 47.0,
+          "cost": 1.9644,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 48.0,
+          "cost": 2.0501,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 49.0,
+          "cost": 2.0917,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 50.0,
+          "cost": 2.1481,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 51.0,
+          "cost": 2.221,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 52.0,
+          "cost": 2.2463,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 53.0,
+          "cost": 2.2707,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 54.0,
+          "cost": 2.2992,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 55.0,
+          "cost": 2.311,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 56.0,
+          "cost": 2.3477,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 57.0,
+          "cost": 2.3882,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 58.0,
+          "cost": 2.4319,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 59.0,
+          "cost": 2.4469,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 60.0,
+          "cost": 2.4662,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 61.0,
+          "cost": 2.532,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 62.0,
+          "cost": 2.5856,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 63.0,
+          "cost": 2.6889,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 64.0,
+          "cost": 2.7222,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 65.0,
+          "cost": 2.735,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 66.0,
+          "cost": 2.7676,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 67.0,
+          "cost": 2.8106,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 68.0,
+          "cost": 2.9045,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 68.8,
+          "cost": 3.0225,
+          "found": 0,
+          "scored": 0
+        }
+      ],
+      "scores": [],
+      "brake": [
+        {
+          "m": 26.67,
+          "kind": "rosterMin"
+        },
+        {
+          "m": 26.67,
+          "kind": "toolsPending"
+        },
+        {
+          "m": 31.45,
+          "kind": "noCeilingNotice"
+        },
+        {
+          "m": 44.53,
+          "kind": "switch"
+        },
+        {
+          "m": 46.45,
+          "kind": "noCeilingNotice"
+        },
+        {
+          "m": 66.98,
+          "kind": "scoutExhausted"
+        },
+        {
+          "m": 68.8,
+          "kind": "benchStop"
+        }
+      ],
+      "agents": {
+        "captain": 1.0556,
+        "assistant": 0.9952,
+        "scorer": 0.6597,
+        "scout": 0.2553,
+        "analyst": 0.0515,
+        "sentinel": 0.0053
+      },
+      "discarded": null,
+      "bySource": null
+    },
+    "r6": {
+      "minutes": 109.5,
+      "cost": 3.7102,
+      "calls": 936,
+      "found": 14,
+      "scored": 12,
+      "relevance": {
+        "P": 10,
+        "A": 2,
+        "X": 2
+      },
+      "ceiling": null,
+      "timeline": [
+        {
+          "m": 0.0,
+          "cost": 0.1732,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 1.0,
+          "cost": 0.2128,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 2.0,
+          "cost": 0.2439,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 3.0,
+          "cost": 0.3778,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 4.0,
+          "cost": 0.4419,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 5.0,
+          "cost": 0.4988,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 6.0,
+          "cost": 0.5536,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 7.0,
+          "cost": 0.6098,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 8.0,
+          "cost": 0.7872,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 9.0,
+          "cost": 0.8385,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 10.0,
+          "cost": 0.9054,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 11.0,
+          "cost": 0.9313,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 12.0,
+          "cost": 1.0657,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 13.0,
+          "cost": 1.2084,
+          "found": 2,
+          "scored": 0
+        },
+        {
+          "m": 14.0,
+          "cost": 1.3618,
+          "found": 4,
+          "scored": 0
+        },
+        {
+          "m": 15.0,
+          "cost": 1.5639,
+          "found": 7,
+          "scored": 0
+        },
+        {
+          "m": 16.0,
+          "cost": 1.7497,
+          "found": 8,
+          "scored": 1
+        },
+        {
+          "m": 17.0,
+          "cost": 2.0123,
+          "found": 8,
+          "scored": 4
+        },
+        {
+          "m": 18.0,
+          "cost": 2.3807,
+          "found": 8,
+          "scored": 8
+        },
+        {
+          "m": 19.0,
+          "cost": 2.4567,
+          "found": 8,
+          "scored": 8
+        },
+        {
+          "m": 20.0,
+          "cost": 2.595,
+          "found": 8,
+          "scored": 8
+        },
+        {
+          "m": 21.0,
+          "cost": 2.7362,
+          "found": 9,
+          "scored": 8
+        },
+        {
+          "m": 22.0,
+          "cost": 2.8433,
+          "found": 10,
+          "scored": 8
+        },
+        {
+          "m": 23.0,
+          "cost": 3.0699,
+          "found": 10,
+          "scored": 9
+        },
+        {
+          "m": 24.0,
+          "cost": 3.1471,
+          "found": 12,
+          "scored": 9
+        },
+        {
+          "m": 25.0,
+          "cost": 3.4093,
+          "found": 13,
+          "scored": 11
+        },
+        {
+          "m": 26.0,
+          "cost": 3.5917,
+          "found": 13,
+          "scored": 12
+        },
+        {
+          "m": 27.0,
+          "cost": 3.644,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 28.0,
+          "cost": 3.708,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 29.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 30.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 31.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 32.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 33.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 34.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 35.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 36.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 37.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 38.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 39.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 40.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 41.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 42.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 43.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 44.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 45.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 46.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 47.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 48.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 49.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 50.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 51.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 52.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 53.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 54.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 55.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 56.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 57.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 58.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 59.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 60.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 61.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 62.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 63.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 64.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 65.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 66.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 67.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 68.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 69.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 70.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 71.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 72.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 73.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 74.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 75.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 76.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 77.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 78.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 79.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 80.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 81.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 82.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 83.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 84.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 85.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 86.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 87.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 88.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 89.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 90.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 91.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 92.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 93.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 94.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 95.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 96.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 97.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 98.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 99.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 100.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 101.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 102.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 103.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 104.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 105.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 106.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 107.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 108.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 109.0,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        },
+        {
+          "m": 109.55,
+          "cost": 3.7102,
+          "found": 14,
+          "scored": 12
+        }
+      ],
+      "scores": [],
+      "brake": [
+        {
+          "m": -3.84,
+          "kind": "periodStart"
+        },
+        {
+          "m": 9.81,
+          "kind": "ready"
+        },
+        {
+          "m": 11.05,
+          "kind": "switch"
+        },
+        {
+          "m": 26.16,
+          "kind": "periodEnd"
+        },
+        {
+          "m": 27.05,
+          "kind": "periodOver"
+        },
+        {
+          "m": 27.1,
+          "kind": "dailyHalt"
+        },
+        {
+          "m": 109.55,
+          "kind": "stop"
+        }
+      ],
+      "agents": {
+        "scorer": 1.487,
+        "assistant": 1.1037,
+        "scout": 0.558,
+        "analyst": 0.3162,
+        "captain": 0.2424,
+        "sentinel": 0.003
+      },
+      "discarded": null,
+      "bySource": {
+        "linkedin": 9,
+        "talent": 4,
+        "adecco": 1
+      }
+    },
+    "r7": {
+      "minutes": 33.2,
+      "cost": 5.2799,
+      "calls": 480,
+      "found": 50,
+      "scored": 20,
+      "relevance": null,
+      "ceiling": null,
+      "timeline": [
+        {
+          "m": 0.0,
+          "cost": 0.0,
+          "found": null,
+          "scored": null
+        },
+        {
+          "m": 1.0,
+          "cost": 0.0,
+          "found": null,
+          "scored": null
+        },
+        {
+          "m": 2.0,
+          "cost": 0.062,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 3.0,
+          "cost": 0.111,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 4.0,
+          "cost": 0.212,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 5.0,
+          "cost": 0.269,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 6.0,
+          "cost": 0.269,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 7.0,
+          "cost": 0.269,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 8.0,
+          "cost": 0.269,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 9.0,
+          "cost": 0.269,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 10.0,
+          "cost": 0.276,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 11.0,
+          "cost": 0.276,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 12.0,
+          "cost": 0.809,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 13.0,
+          "cost": 1.03,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 14.0,
+          "cost": 1.213,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 15.0,
+          "cost": 1.28,
+          "found": 6,
+          "scored": 0
+        },
+        {
+          "m": 16.0,
+          "cost": 1.405,
+          "found": 12,
+          "scored": 0
+        },
+        {
+          "m": 17.0,
+          "cost": 1.541,
+          "found": 16,
+          "scored": 2
+        },
+        {
+          "m": 18.0,
+          "cost": 1.663,
+          "found": 18,
+          "scored": 3
+        },
+        {
+          "m": 19.0,
+          "cost": 1.738,
+          "found": 20,
+          "scored": 4
+        },
+        {
+          "m": 20.0,
+          "cost": 1.872,
+          "found": 25,
+          "scored": 5
+        },
+        {
+          "m": 21.0,
+          "cost": 2.085,
+          "found": 28,
+          "scored": 7
+        },
+        {
+          "m": 22.0,
+          "cost": 2.273,
+          "found": 32,
+          "scored": 9
+        },
+        {
+          "m": 23.0,
+          "cost": 2.521,
+          "found": 35,
+          "scored": 10
+        },
+        {
+          "m": 24.0,
+          "cost": 2.746,
+          "found": 39,
+          "scored": 12
+        },
+        {
+          "m": 25.0,
+          "cost": 3.058,
+          "found": 40,
+          "scored": 14
+        },
+        {
+          "m": 26.0,
+          "cost": 3.319,
+          "found": 42,
+          "scored": 15
+        },
+        {
+          "m": 27.0,
+          "cost": 3.478,
+          "found": 42,
+          "scored": 15
+        },
+        {
+          "m": 28.0,
+          "cost": 3.752,
+          "found": 43,
+          "scored": 16
+        },
+        {
+          "m": 29.0,
+          "cost": 3.992,
+          "found": 47,
+          "scored": 17
+        },
+        {
+          "m": 30.0,
+          "cost": 4.298,
+          "found": 50,
+          "scored": 18
+        },
+        {
+          "m": 31.0,
+          "cost": 5.102,
+          "found": 50,
+          "scored": 19
+        },
+        {
+          "m": 32.0,
+          "cost": 5.28,
+          "found": 50,
+          "scored": 20
+        },
+        {
+          "m": 33.0,
+          "cost": 5.28,
+          "found": 50,
+          "scored": 20
+        },
+        {
+          "m": 33.17,
+          "cost": 5.28,
+          "found": 50,
+          "scored": 20
+        }
+      ],
+      "scores": [
+        {
+          "m": 13.95,
+          "best": 70
+        },
+        {
+          "m": 14.15,
+          "best": 75
+        },
+        {
+          "m": 14.27,
+          "best": 75
+        },
+        {
+          "m": 14.42,
+          "best": 81
+        },
+        {
+          "m": 14.53,
+          "best": 81
+        },
+        {
+          "m": 14.77,
+          "best": 83
+        },
+        {
+          "m": 14.92,
+          "best": 83
+        },
+        {
+          "m": 15.03,
+          "best": 83
+        },
+        {
+          "m": 15.2,
+          "best": 83
+        },
+        {
+          "m": 15.3,
+          "best": 83
+        },
+        {
+          "m": 15.57,
+          "best": 83
+        },
+        {
+          "m": 15.75,
+          "best": 83
+        },
+        {
+          "m": 15.9,
+          "best": 83
+        },
+        {
+          "m": 16.05,
+          "best": 83
+        },
+        {
+          "m": 16.22,
+          "best": 83
+        },
+        {
+          "m": 18.58,
+          "best": 94
+        },
+        {
+          "m": 18.73,
+          "best": 94
+        },
+        {
+          "m": 18.98,
+          "best": 94
+        },
+        {
+          "m": 19.23,
+          "best": 94
+        },
+        {
+          "m": 19.45,
+          "best": 94
+        }
+      ],
+      "brake": [
+        {
+          "m": 1.03,
+          "kind": "periodStart"
+        },
+        {
+          "m": 4.97,
+          "kind": "pause"
+        },
+        {
+          "m": 10.53,
+          "kind": "teamStart"
+        },
+        {
+          "m": 31.03,
+          "kind": "periodOver"
+        },
+        {
+          "m": 31.4,
+          "kind": "benchStop"
+        }
+      ],
+      "agents": {
+        "scorer": 1.8,
+        "captain": 1.29,
+        "analyst": 0.97,
+        "scout": 0.72,
+        "assistant": 0.49,
+        "sentinel": 0.01
+      },
+      "discarded": null,
+      "bySource": null
+    },
+    "r8": {
+      "minutes": 55.8,
+      "cost": 0.2263,
+      "calls": 26,
+      "found": 0,
+      "scored": 0,
+      "relevance": {
+        "P": 0,
+        "A": 0,
+        "X": 0
+      },
+      "ceiling": null,
+      "timeline": [
+        {
+          "m": 12.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 13.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 14.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 15.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 16.0,
+          "cost": null,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 17.0,
+          "cost": 0.0,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 18.0,
+          "cost": 0.0,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 19.0,
+          "cost": 0.0,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 20.0,
+          "cost": 0.0,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 21.0,
+          "cost": 0.0,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 22.0,
+          "cost": 0.0,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 23.0,
+          "cost": 0.0,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 24.0,
+          "cost": 0.0,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 25.0,
+          "cost": 0.0,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 26.0,
+          "cost": 0.0,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 27.0,
+          "cost": 0.0,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 28.0,
+          "cost": 0.0,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 29.0,
+          "cost": 0.0,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 30.0,
+          "cost": 0.0,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 31.0,
+          "cost": 0.0166,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 32.0,
+          "cost": 0.0166,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 33.0,
+          "cost": 0.0166,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 34.0,
+          "cost": 0.0211,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 35.0,
+          "cost": 0.0211,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 36.0,
+          "cost": 0.0421,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 37.0,
+          "cost": 0.0421,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 38.0,
+          "cost": 0.0675,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 39.0,
+          "cost": 0.0675,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 40.0,
+          "cost": 0.0675,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 41.0,
+          "cost": 0.0675,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 42.0,
+          "cost": 0.0675,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 43.0,
+          "cost": 0.0892,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 44.0,
+          "cost": 0.2136,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 45.0,
+          "cost": 0.2263,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 46.0,
+          "cost": 0.2263,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 47.0,
+          "cost": 0.2263,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 48.0,
+          "cost": 0.2263,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 49.0,
+          "cost": 0.2263,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 50.0,
+          "cost": 0.2263,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 51.0,
+          "cost": 0.2263,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 52.0,
+          "cost": 0.2263,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 53.0,
+          "cost": 0.2263,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 54.0,
+          "cost": 0.2263,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 55.0,
+          "cost": 0.2263,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 55.77,
+          "cost": 0.2263,
+          "found": 0,
+          "scored": 0
+        }
+      ],
+      "scores": [],
+      "brake": [
+        {
+          "m": 10.35,
+          "kind": "periodStart"
+        },
+        {
+          "m": 11.15,
+          "kind": "machineStopped"
+        },
+        {
+          "m": 15.37,
+          "kind": "creditGone"
+        },
+        {
+          "m": 23.78,
+          "kind": "periodStart"
+        },
+        {
+          "m": 53.78,
+          "kind": "periodOver"
+        },
+        {
+          "m": 55.42,
+          "kind": "benchStop"
+        }
+      ],
+      "agents": {
+        "assistant": 0.2263
+      },
+      "discarded": null,
+      "bySource": null
+    },
+    "r9": {
+      "minutes": 10.2,
+      "cost": 3.0603,
+      "calls": 612,
+      "found": 26,
+      "scored": 21,
+      "relevance": {
+        "P": 1,
+        "A": 2,
+        "X": 20
+      },
+      "ceiling": 5.0,
+      "timeline": [
+        {
+          "m": 0.0,
+          "cost": 0.0,
+          "found": 0,
+          "scored": 0
+        },
+        {
+          "m": 1.0,
+          "cost": 0.2818,
+          "found": 0,
+          "scored": 2
+        },
+        {
+          "m": 2.0,
+          "cost": 0.3771,
+          "found": 0,
+          "scored": 2
+        },
+        {
+          "m": 3.0,
+          "cost": 0.5124,
+          "found": 0,
+          "scored": 4
+        },
+        {
+          "m": 4.0,
+          "cost": 0.7481,
+          "found": 3,
+          "scored": 4
+        },
+        {
+          "m": 5.0,
+          "cost": 0.9871,
+          "found": 15,
+          "scored": 6
+        },
+        {
+          "m": 6.0,
+          "cost": 1.5828,
+          "found": 17,
+          "scored": 12
+        },
+        {
+          "m": 7.0,
+          "cost": 1.8399,
+          "found": 23,
+          "scored": 12
+        },
+        {
+          "m": 8.0,
+          "cost": 2.35,
+          "found": 26,
+          "scored": 16
+        },
+        {
+          "m": 9.0,
+          "cost": 2.7823,
+          "found": 26,
+          "scored": 18
+        },
+        {
+          "m": 10.0,
+          "cost": 3.0199,
+          "found": 26,
+          "scored": 21
+        },
+        {
+          "m": 10.22,
+          "cost": 3.0603,
+          "found": 26,
+          "scored": 21
+        }
+      ],
+      "scores": [
+        {
+          "m": -14.85,
+          "best": 28
+        },
+        {
+          "m": -13.98,
+          "best": 74
+        },
+        {
+          "m": -13.98,
+          "best": 74
+        },
+        {
+          "m": -13.97,
+          "best": 74
+        },
+        {
+          "m": -13.53,
+          "best": 74
+        },
+        {
+          "m": 3.33,
+          "best": 74
+        },
+        {
+          "m": 3.53,
+          "best": 74
+        },
+        {
+          "m": 3.65,
+          "best": 74
+        },
+        {
+          "m": 4.45,
+          "best": 74
+        },
+        {
+          "m": 4.45,
+          "best": 74
+        },
+        {
+          "m": 4.47,
+          "best": 74
+        },
+        {
+          "m": 4.47,
+          "best": 74
+        },
+        {
+          "m": 4.47,
+          "best": 74
+        },
+        {
+          "m": 4.68,
+          "best": 74
+        },
+        {
+          "m": 5.02,
+          "best": 74
+        },
+        {
+          "m": 5.28,
+          "best": 74
+        },
+        {
+          "m": 6.23,
+          "best": 74
+        },
+        {
+          "m": 6.27,
+          "best": 74
+        },
+        {
+          "m": 6.28,
+          "best": 74
+        }
+      ],
+      "brake": [
+        {
+          "m": -13.42,
+          "kind": "pace"
+        },
+        {
+          "m": -4.42,
+          "kind": "cleared"
+        },
+        {
+          "m": -3.37,
+          "kind": "ceiling"
+        },
+        {
+          "m": -0.45,
+          "kind": "cleared"
+        },
+        {
+          "m": 0.0,
+          "kind": "periodStart"
+        },
+        {
+          "m": 10.22,
+          "kind": "stop"
+        }
+      ],
+      "agents": {
+        "scout": 1.1439,
+        "scorer": 1.034,
+        "captain": 0.4522,
+        "analyst": 0.4268,
+        "sentinel": 0.0034
+      },
+      "discarded": null,
+      "bySource": {
+        "randstad": 13,
+        "lavoropiu": 6,
+        "talent": 3,
+        "unknown": 3,
+        "gigroup-it": 1
       }
     }
   },
