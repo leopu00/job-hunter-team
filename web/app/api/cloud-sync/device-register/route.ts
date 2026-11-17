@@ -9,7 +9,10 @@ import {
   missingClientColumns,
   parseClientHeader,
 } from "@/lib/cloud-sync/client-identity";
-import { missingPairingSessionColumn } from "@/lib/cloud-sync/pairing-session";
+import {
+  missingPairingSessionColumn,
+  missingTokenOriginColumn,
+} from "@/lib/cloud-sync/pairing-session";
 import { invalidJsonBody } from "@/app/api/_lib/error-body";
 import { sanitizedError } from "@/lib/error-response";
 
@@ -232,13 +235,23 @@ export async function POST(req: NextRequest) {
     token_hash: hash,
     expires_at: null,
     pairing_session_id: sessionId,
+    // This box holds a user session (it exchanged the pairing refresh token): 107 keeps it out of the L3 door.
+    token_origin: "device_register",
   };
-  const register = (row: Record<string, unknown>) =>
+  const insertRow = (row: Record<string, unknown>) =>
     admin
       .from("cloud_sync_tokens")
       .insert(row)
       .select("id, name, token_prefix, created_at")
       .single();
+  // Migration 107 not applied yet: the token is born without its origin, which the door reads as unknown (closed,
+  // as before 107). Only when the error names that column.
+  const register = async (row: Record<string, unknown>) => {
+    const done = await insertRow(row);
+    if (!missingTokenOriginColumn(done.error)) return done;
+    const { token_origin: _origin, ...withoutOrigin } = row;
+    return insertRow(withoutOrigin);
+  };
   // The same row in the four shapes the database can ask for: with or without the pairing session (migration 105),
   // with or without the client declaration (migration 064).
   const { pairing_session_id: _session, ...baseWithoutSession } = baseRow;

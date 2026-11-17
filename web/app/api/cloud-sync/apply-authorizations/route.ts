@@ -3,6 +3,10 @@ import { verifyBearerToken } from "@/lib/cloud-sync/auth";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
 import { sanitizedError } from "@/lib/error-response";
 import { fetchPostgrestRows } from "@/lib/postgrest-pages";
+import {
+  missingTokenOriginColumn,
+  originHoldsNoSession,
+} from "@/lib/cloud-sync/pairing-session";
 
 export const dynamic = "force-dynamic";
 
@@ -54,17 +58,29 @@ export async function GET(req: NextRequest) {
 
   // Every token of the account, the revoked and the expired ones too: the session a device was paired from
   // stays that device's after its token ends (migration 105 compares the door's caller with all of them).
-  const { data: deviceRows, error: deviceError } = await fetchPostgrestRows<{
+  type DeviceRow = {
     pairing_session_id?: unknown;
     revoked_at?: unknown;
     expires_at?: unknown;
-  }>(
-    admin
-      .from("cloud_sync_tokens")
-      .select("pairing_session_id, revoked_at, expires_at")
-      .eq("user_id", userId)
-      .order("id"),
+    token_origin?: unknown;
+  };
+  const readDevices = (columns: string) =>
+    fetchPostgrestRows<DeviceRow>(
+      admin
+        .from("cloud_sync_tokens")
+        .select(columns)
+        .eq("user_id", userId)
+        .order("id"),
+    );
+  let { data: deviceRows, error: deviceError } = await readDevices(
+    "pairing_session_id, revoked_at, expires_at, token_origin",
   );
+  // 107 not applied yet: no origin is known, every token without a session counts as before 107.
+  if (missingTokenOriginColumn(deviceError)) {
+    ({ data: deviceRows, error: deviceError } = await readDevices(
+      "pairing_session_id, revoked_at, expires_at",
+    ));
+  }
   if (deviceError) {
     return sanitizedError(deviceError, {
       status: 500,
@@ -75,7 +91,9 @@ export async function GET(req: NextRequest) {
   // Tokens created before pairing_session_id existed cannot be tied to a
   // browser session. Do not hand a box any L3 receipt until it pairs again.
   // Only an ACTIVE token without a session asks for that: a legacy one that is
-  // revoked or expired is over.
+  // revoked or expired is over. A token born from `jht cloud login` or on the
+  // page of the tokens (107: token_origin device_code / page) handed no user
+  // session to its box: it has none to tie, and asks nothing.
   const isActive = (row: { revoked_at?: unknown; expires_at?: unknown }) =>
     (row.revoked_at === null || row.revoked_at === undefined) &&
     (row.expires_at === null ||
@@ -83,7 +101,12 @@ export async function GET(req: NextRequest) {
       (typeof row.expires_at === "string" &&
         Date.parse(row.expires_at) > Date.now()));
   if (
-    deviceRows.some((row) => row.pairing_session_id === null && isActive(row))
+    deviceRows.some(
+      (row) =>
+        row.pairing_session_id === null &&
+        !originHoldsNoSession(row.token_origin) &&
+        isActive(row),
+    )
   ) {
     return NextResponse.json(
       { ok: false, error: "re_pair_required" },
