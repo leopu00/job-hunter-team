@@ -76,7 +76,7 @@ def _detect(wd, session, agent, entry, now, live_workers, current, tail, marker)
     else:
         rounds = int(entry.get("immobile") or 0) + 1
         entry["immobile"] = rounds
-        if rounds < wd.IDLE_STALL_ROUNDS:
+        if rounds < wd.idle_rounds_for(agent):
             return
         if wd.resume_gate(now, live_workers):
             return
@@ -95,10 +95,16 @@ def _detect(wd, session, agent, entry, now, live_workers, current, tail, marker)
 def _throttle(wd, session, agent, entry, now, marker, usage_line, observed, consecutive):
     seconds = wd.throttle_for(agent, consecutive)
     armed = {"via": "none", "applied_sec": 0, "until": now}
-    try:
-        armed = wd.arm_pause(agent, seconds, now, "stepcap: %s" % marker)
-    except OSError as exc:
-        wd._log("throttle was not written for %s: %s" % (agent, exc))
+    if str(marker).startswith("no marker:") and not usage_line:
+        # A pane that stopped by itself (the turn ended, the prompt is empty) is not a rabbit hole: a pause on top of an
+        # agent that already stands still only adds minutes. It is resumed at the next round; the backoff and the
+        # escalation to the Capitano (the Nth stall with nothing produced between) stay.
+        seconds = 0
+    else:
+        try:
+            armed = wd.arm_pause(agent, seconds, now, "stepcap: %s" % marker)
+        except OSError as exc:
+            wd._log("throttle was not written for %s: %s" % (agent, exc))
     seconds = armed["applied_sec"]
     entry.update(phase="throttled", until=armed["until"], throttle_sec=seconds, via=armed["via"])
     wd.emit(
@@ -117,9 +123,11 @@ def _throttle(wd, session, agent, entry, now, marker, usage_line, observed, cons
                 % (agent, observed, consecutive, max(1, seconds // 60))
             )
         else:
+            what = ("I paused it for %d min and will then resume it" % max(1, seconds // 60)
+                    if seconds else "I resume it at once, with no pause")
             wd.notify_captain(
-                "[FROM @SYSTEM TO @CAPITANO] %s %s, %d consecutive times without producing anything between attempts. I paused it for %d min and will then resume it; if it happens again, I will stop resuming and pass the decision to you. Inspect what is running."
-                % (agent, observed, consecutive, max(1, seconds // 60))
+                "[FROM @SYSTEM TO @CAPITANO] %s %s, %d consecutive times without producing anything between attempts. %s; if it happens again, I will stop resuming and pass the decision to you. Inspect what is running."
+                % (agent, observed, consecutive, what)
             )
 
 
