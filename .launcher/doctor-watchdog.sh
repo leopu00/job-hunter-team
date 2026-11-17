@@ -216,6 +216,9 @@ spawn_failed() {  # <role> <rc> <output of the spawner> | <role> ok
 
 TEAM_HALTED_FLAG="$JHT_HOME/.team-halted.flag"
 WEEKLY_HALT_FLAG="$JHT_HOME/.weekly-halt.flag"
+# `jht setup` open (see agent-watchdog.sh): no Dottore/Mantenitore on the configuration of before while the service is being chosen
+SETUP_OPEN_FLAG="$JHT_HOME/.setup-open.flag"
+setup_open() { [ -f "$SETUP_OPEN_FLAG" ] && [ -z "$(find "$SETUP_OPEN_FLAG" -mmin +120 2>/dev/null)" ]; }
 # Standby a spesa zero ([TEAM-STANDBY-ZERO-SPEND]): un Dottore/Mantenitore
 # spawnato in standby è un turno LLM speso mentre il team è fermo di proposito.
 TEAM_STANDBY_FLAG="$JHT_HOME/.team-standby.flag"
@@ -361,9 +364,11 @@ while true; do
 
   # Team-halted gate: se l'utente ha cliccato Stop, weekly-halt è attivo o il
   # team è in standby a spesa zero, NON spawnare dottore/mantenitore.
-  if [ -e "$TEAM_HALTED_FLAG" ] || [ -e "$WEEKLY_HALT_FLAG" ] || standby_active; then
+  if [ -e "$TEAM_HALTED_FLAG" ] || [ -e "$WEEKLY_HALT_FLAG" ] || setup_open || standby_active; then
     if [ $((halt_log_tick % 8)) -eq 0 ]; then
-      if standby_active; then
+      if setup_open; then
+        log "setup open — Dottore/Mantenitore spawn disabled until the setup ends"
+      elif standby_active; then
         log "standby ACTIVE — Dottore/Mantenitore spawn disabled"
       else
         log "halt flag present — Dottore spawn disabled"

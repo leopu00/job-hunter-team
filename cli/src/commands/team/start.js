@@ -175,8 +175,16 @@ const mentorWaiting = () => say('team.mentor_waits');
 // clean server).
 export function captainDeferred(run = execArgvInContainer) {
   const r = run(['python3', '/app/shared/skills/captain_gate.py'], { timeoutMs: 15_000 });
-  return r?.code === 1;
+  lastCaptainReason = null;
+  if (r?.code !== 1) return false;
+  try { lastCaptainReason = JSON.parse(String(r.stdout || '').trim().split('\n').pop()).reason ?? null; } catch { /* the reason only picks the words */ }
+  return true;
 }
+
+// Why the last answer was «wait»: the onboarding is open (`onboarding_open`), or it is over and the tools of the full image
+// are still on their way (`tools_pending`): the second must not tell a person who finished the onboarding to answer questions.
+let lastCaptainReason = null;
+const captainWaiting = () => (lastCaptainReason === 'tools_pending' ? say('team.captain_tools') : say('team.captain_waits'));
 
 // Disco quasi pieno (< 3% libero): nessun NUOVO avvio. Si chiede PRIMA di far
 // nascere una sessione, dopo che il controllo «gia' attiva» ha lasciato stare
@@ -368,7 +376,7 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
       console.log(say('team.result', { started: c.green(say('team.n_started', { n: 0 })), skipped: c.yellow(say('team.n_already', { n: coreSessions.length })), errors: '' }));
       console.log(hint(say('team.next_agents')));
       if (mentorWaits) console.log(c.dim(`  MENTOR ${mentorWaiting()}`));
-      if (captainWaits) console.log(c.yellow(`  ${say('team.captain_waits')}`));
+      if (captainWaits) console.log(c.yellow(`  ${captainWaiting()}`));
       console.log(c.dim(`  ${say('team.already_running')}`));
       console.log('');
       return;
@@ -450,7 +458,7 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
       }
       if ((item.role === 'capitano' || item.role === 'sentinella') && captainWaits) {
         // the Sentinella watches the budget FOR the Capitano: it has nothing to watch while the Capitano is down
-        console.log(`  ${progress} ${c.yellow('⏭')} ${item.role.toUpperCase()} — ${say('team.captain_waits')}`);
+        console.log(`  ${progress} ${c.yellow('⏭')} ${item.role.toUpperCase()} — ${captainWaiting()}`);
         deferred++;
         deferredCaptain = true;
         if (item.role === 'capitano') coordinatorReady = true; // the onboarding is the operative marker now: a start that waits is not a failed one
@@ -475,7 +483,7 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
       console.log(`  ${c.yellow('⏭')} MENTOR — ${mentorWaiting()}`);
       deferred++;
     } else if ((parsed.role === 'capitano' || parsed.role === 'sentinella') && !isSessionActive(parsed.role.toUpperCase()) && captainDeferred()) {
-      console.log(`  ${c.yellow('⏭')} ${parsed.role.toUpperCase()} — ${say('team.captain_waits')}`);
+      console.log(`  ${c.yellow('⏭')} ${parsed.role.toUpperCase()} — ${captainWaiting()}`);
       deferred++;
     } else {
       // a single start never lifts the global stop, but the agent's own Stop by the user goes

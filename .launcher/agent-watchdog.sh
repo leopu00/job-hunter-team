@@ -1217,6 +1217,12 @@ trap 'log "watchdog shutdown (SIGTERM)"; exit 0' TERM INT
 
 TEAM_HALTED_FLAG="$JHT_HOME/.team-halted.flag"
 WEEKLY_HALT_FLAG="$JHT_HOME/.weekly-halt.flag"
+# A `jht setup` that is open (it writes this flag while it runs, and takes it off when it ends, is cancelled, or starts the team
+# itself): the service is being chosen and its sign-in may not be done, so nothing is respawned on the configuration of before
+# (a trial of the ChatGPT subscription on Pi: the watchdog started the team on the old Claude key and spent 0.89 $). A flag that
+# a killed setup left stays good for two hours only.
+SETUP_OPEN_FLAG="$JHT_HOME/.setup-open.flag"
+setup_open() { [ -f "$SETUP_OPEN_FLAG" ] && [ -z "$(find "$SETUP_OPEN_FLAG" -mmin +120 2>/dev/null)" ]; }
 # Standby a spesa zero ([TEAM-STANDBY-ZERO-SPEND]): flag DIVERSO da halted,
 # semantica diversa — halted = "l'utente ha fermato il team" (tutto giù),
 # standby = sospensione tecnica che si risveglia da sola via sentinel-bridge.
@@ -1261,9 +1267,11 @@ while true; do
   # dalla dashboard). Source of truth: team_state.should_run. Quando
   # presente, NIENTE respawn — l'utente ha esplicitamente fermato.
   # Stesso comportamento per .weekly-halt.flag (limite rate budget).
-  if [ -e "$TEAM_HALTED_FLAG" ] || [ -e "$WEEKLY_HALT_FLAG" ]; then
+  if [ -e "$TEAM_HALTED_FLAG" ] || [ -e "$WEEKLY_HALT_FLAG" ] || setup_open; then
     if [ $((halt_log_tick % 20)) -eq 0 ]; then
-      if [ -e "$TEAM_HALTED_FLAG" ]; then
+      if setup_open; then
+        log "halt: setup open (.setup-open.flag) — agent respawn disabled until the setup ends"
+      elif [ -e "$TEAM_HALTED_FLAG" ]; then
         log "halt: .team-halted.flag present — agent respawn disabled"
       else
         log "halt: .weekly-halt.flag present — agent respawn disabled"

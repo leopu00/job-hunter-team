@@ -42,6 +42,7 @@ import { lstatSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { keyStoreDir } from './key-store.js';
 import { JHT_CONFIG_PATH, serviceChanged } from './setup-helpers.js';
+import { openSetup, closeSetup } from '../src/lib/setup-open.js';
 import { piApiProvider } from '../../shared/runtime/provider-models.js';
 import { RELEASE_PROVIDERS, RELEASE_HARNESS, codexLegacy, configOffered, offeredWay } from '../../shared/runtime/release-providers.js';
 import pc from 'picocolors';
@@ -151,11 +152,17 @@ export async function runSetupWizard(prompter, { diskRefusal = diskLowRefusal } 
   const before = readConfigBytes();
   // keyPath: the file of the key this setup may write; keyBefore: what it held when the setup began (null = there was no file)
   const state = { keyPath: null, keyBefore: null };
+  // while the setup is open nothing starts the team on the configuration of before (the watchdogs read this flag); the setup
+  // takes it off before it starts the team itself, and here whatever way it ends
+  const home = dirname(JHT_CONFIG_PATH);
+  openSetup(home);
   try {
     return await runSetupSteps(prompter, state, { diskRefusal });
   } catch (err) {
     if (err instanceof WizardCancelledError) undoCancelledSetup(before, state);
     throw err;
+  } finally {
+    closeSetup(home);
   }
 }
 
@@ -466,6 +473,7 @@ async function runSetupSteps(prompter, state, { diskRefusal = diskLowRefusal } =
   // ────────────────────────────────────────────────────────────────────────
   console.log('');
   console.log(stepLine(3, 3, t('wizard.team.starting')));
+  closeSetup(dirname(JHT_CONFIG_PATH)); // the sign-in is done and the configuration is saved: the team may start, and this setup starts it
   // A team that ran on another service is stopped first, the Assistente too (`stop --all` keeps it after the onboarding): the
   // agents read the service when they start, so «already active» would leave all of them on the old one and its refusals.
   if (serviceChanged(snapshot.config, providerChoice, harness)) {

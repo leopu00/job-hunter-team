@@ -25,7 +25,8 @@ function sandbox({ installFails = false, existingConfig = null, piLogsIn = true,
   if (existingConfig) writeFileSync(join(home, 'jht.config.json'), existingConfig);
   const calls = join(root, 'calls.log');
   const fake = join(root, 'fake-jht.js');
-  writeFileSync(fake, `require('node:fs').appendFileSync(${JSON.stringify(calls)}, 'jht ' + process.argv.slice(2).join(' ') + '\\n');\nprocess.exit(${installFails ? "process.argv[2] === 'providers' ? 1 : 0" : teamStartFails ? "process.argv[2] === 'team' && process.argv[3] === 'start' ? 1 : 0" : '0'});\n`);
+  writeFileSync(fake, `const fs = require('node:fs'); fs.appendFileSync(${JSON.stringify(calls)}, 'jht ' + process.argv.slice(2).join(' ') + '\\n');
+if (process.argv[2] === 'team' && process.argv[3] === 'start') fs.appendFileSync(${JSON.stringify(join(root, 'flag-at-start.log'))}, fs.existsSync(require('node:path').join(process.env.JHT_HOME, '.setup-open.flag')) ? 'present\\n' : 'absent\\n');\nprocess.exit(${installFails ? "process.argv[2] === 'providers' ? 1 : 0" : teamStartFails ? "process.argv[2] === 'team' && process.argv[3] === 'start' ? 1 : 0" : '0'});\n`);
   // a codex that takes its key from the standard input like `codex login --with-api-key`, and writes the marker
   const codex = join(bin, 'codex');
   writeFileSync(codex, `#!/bin/sh
@@ -41,6 +42,7 @@ fi
   const pi = join(bin, 'pi');
   writeFileSync(pi, `#!/bin/sh
 echo "pi $* dir=$PI_CODING_AGENT_DIR" >> ${JSON.stringify(calls)}
+if [ -f "$JHT_HOME/.setup-open.flag" ]; then echo present >> ${JSON.stringify(join(root, 'flag-at-login.log'))}; else echo absent >> ${JSON.stringify(join(root, 'flag-at-login.log'))}; fi
 ${piLogsIn ? `mkdir -p "$PI_CODING_AGENT_DIR" && echo '{"openai":{"type":"oauth","access":"synthetic"}}' > "$PI_CODING_AGENT_DIR/auth.json"` : 'true'}
 `);
   chmodSync(pi, 0o755);
@@ -432,4 +434,19 @@ test('a team start that failed for something else than the disk is still a faile
   const { events } = run(box, { select: { 'AI Provider': 'kimi' }, keys: [KEY] }, [200], { FAKE_DISK: 'ok' });
   assert.match(events.find((e) => e.kind === 'outro').message, /Team start failed/);
   assert.equal(events.at(-1).ok, false);
+});
+
+test('while the setup is open the flag stands (the watchdogs start nothing), and it is gone before the team starts and at the end', () => {
+  const box = sandbox();
+  const { r } = run(box, { select: { 'AI Provider': 'openai', 'How does Pi sign in to OpenAI?': 'subscription' } });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(readFileSync(join(box.root, 'flag-at-login.log'), 'utf8').trim(), 'present', 'the sign-in of Pi is made with the setup open');
+  assert.equal(readFileSync(join(box.root, 'flag-at-start.log'), 'utf8').trim(), 'absent', 'the setup takes it off before it starts the team itself');
+  assert.equal(existsSync(join(box.home, '.setup-open.flag')), false);
+});
+
+test('a setup that leaves without a sign-in does not leave the flag behind', () => {
+  const box = sandbox({ piLogsIn: false });
+  run(box, { select: { 'AI Provider': 'openai', 'How does Pi sign in to OpenAI?': 'subscription' } });
+  assert.equal(existsSync(join(box.home, '.setup-open.flag')), false);
 });
