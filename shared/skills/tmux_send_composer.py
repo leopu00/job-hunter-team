@@ -7,6 +7,7 @@ Kept apart from agent_chat.py (the composer reader, which others edit): this onl
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 
 import agent_chat
@@ -236,3 +237,40 @@ def fingerprints_known(lines: list[str], now: float, ttl: float):
         return hashlib.sha256(squashed.encode()).hexdigest() in shas
 
     return known
+
+
+# ── A message nobody has touched for hours ──────────────────────────────────────────────────────────
+# An envelope between agents has no marks, so it counts as signed only while the transport's fingerprint of it is in
+# the record (a day). A paste that stayed in the box longer than that (or that the transport never pasted, or pasted
+# half) was «somebody's typing» for ever: every delivery to that agent ended in rc=130 (31 attempts in 288 hours).
+# What a person is typing changes; text that begins with an envelope head and has stayed exactly the same for
+# STALE_AFTER seconds is a message that was left, not a draft.
+STALE_AFTER = 3600.0
+
+
+def starts_with_envelope(actual: str | None) -> bool:
+    """True when the composer's text begins with the head of an envelope ``[@from -> @to]`` (a message, not typing)."""
+    return bool(_HEAD.match((actual or "").lstrip()))
+
+
+def unchanged_for(path: str, actual: str | None, now: float) -> float:
+    """Seconds the composer has held exactly this text, from the record at ``path`` (``time sha``: the first time this
+    text was seen, its hash without spaces), which this call writes when the text is new. A text that does not begin
+    with an envelope head, an empty box or a record that cannot be read or written is 0: nothing is known of its age."""
+    if not starts_with_envelope(actual):
+        return 0.0
+    sha = hashlib.sha256(squash(actual or "").encode()).hexdigest()
+    try:
+        with open(path, encoding="utf-8") as handle:
+            parts = handle.read().split()
+        if len(parts) == 2 and parts[1] == sha and 0 <= now - int(parts[0]):
+            return now - int(parts[0])
+    except (OSError, ValueError):
+        pass
+    try:
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)   # the first look is before the transport makes its folder
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(f"{int(now)} {sha}\n")
+    except OSError:
+        pass
+    return 0.0

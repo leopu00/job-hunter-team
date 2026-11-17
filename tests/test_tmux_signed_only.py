@@ -166,3 +166,15 @@ def test_the_apps_chat_never_asks_for_the_flush_when_the_box_is_signed():
     assert 'new_turn_gate(pane) == "text"' in flush and '"signed"' in flush
     # the turns held in the composer keep their gate
     assert "gate = delivery_gate(pane)" in source.split("def _settle_typed(")[1].split("def _typed_open(")[0]
+
+
+def test_an_envelope_text_is_told_from_typing_and_its_age_is_counted_from_the_first_sight(tmp_path):
+    record = str(tmp_path / "seen.log")
+    assert composer.starts_with_envelope(AGENT) and not composer.starts_with_envelope("ciao " + AGENT)
+    assert composer.unchanged_for(record, AGENT, 1000.0) == 0.0, "first sight"
+    assert composer.unchanged_for(record, AGENT, 1000.0 + 4000) == 4000.0
+    assert composer.unchanged_for(record, AGENT + " e altro", 6000.0) == 0.0, "another text: the count starts again"
+    assert composer.unchanged_for(record, AGENT + " e altro", 6010.0) == 10.0
+    assert composer.unchanged_for(record, "una bozza", 9000.0) == 0.0, "typing is never aged"
+    (tmp_path / "file").write_text("x")
+    assert composer.unchanged_for(str(tmp_path / "file" / "x.log"), AGENT, 1.0) == 0.0, "no record: no age"
