@@ -55,6 +55,12 @@ export type ChartCopy = {
   roundsCount: string;
   notComputable: string;
   comparisonHint: string;
+  oneRound: string;
+  manyRounds: string;
+  onePosition: string;
+  manyPositions: string;
+  tooSmall: string;
+  tooSmallHint: string;
   relevance: Record<string, string>;
   discardReasons: Record<string, string>;
   benchMissing: string;
@@ -190,6 +196,12 @@ const en: ChartCopy = {
   roundsCount: "rounds",
   notComputable: "not computable",
   comparisonHint: "Groups are pooled: total spend over total positions, so a long round weighs more than a short one. Rounds without positions or minutes are left out.",
+  oneRound: "1 round",
+  manyRounds: "{n} rounds",
+  onePosition: "1 position",
+  manyPositions: "{n} positions",
+  tooSmall: "sample too small",
+  tooSmallHint: "Hatched bars: one round only or fewer than 10 positions, too small a sample to compare.",
   relevance: { P: "Pertinent", A: "Related", X: "Outside the trade" },
   discardReasons: { role: "Other trade", area: "Outside the area", duplicate: "Duplicate", domain: "Domain", other: "Other" },
   benchMissing: "The bench data are not in yet.",
@@ -329,6 +341,12 @@ const it: ChartCopy = {
   roundsCount: "giri",
   notComputable: "non calcolabile",
   comparisonHint: "I gruppi sono sommati: spesa totale su posizioni totali, quindi un giro lungo pesa più di uno corto. I giri senza posizioni o senza minuti restano fuori.",
+  oneRound: "1 giro",
+  manyRounds: "{n} giri",
+  onePosition: "1 annuncio",
+  manyPositions: "{n} annunci",
+  tooSmall: "campione troppo piccolo",
+  tooSmallHint: "Barre tratteggiate: un solo giro o meno di 10 annunci, campione troppo piccolo per un confronto.",
   relevance: { P: "Pertinenti", A: "Affini", X: "Fuori mestiere" },
   discardReasons: { role: "Altro mestiere", area: "Fuori zona", duplicate: "Doppione", domain: "Dominio", other: "Altro" },
   benchMissing: "I dati del banco non sono ancora arrivati.",
@@ -467,6 +485,12 @@ const de: ChartCopy = {
   roundsCount: "Runden",
   notComputable: "nicht berechenbar",
   comparisonHint: "Gruppen werden summiert: Gesamtausgaben durch Gesamtstellen, eine lange Runde wiegt also mehr als eine kurze. Runden ohne Stellen oder Minuten fehlen.",
+  oneRound: "1 Runde",
+  manyRounds: "{n} Runden",
+  onePosition: "1 Stelle",
+  manyPositions: "{n} Stellen",
+  tooSmall: "Stichprobe zu klein",
+  tooSmallHint: "Schraffierte Balken: nur eine Runde oder weniger als 10 Stellen, zu kleine Stichprobe für einen Vergleich.",
   relevance: { P: "Passend", A: "Verwandt", X: "Fachfremd" },
   discardReasons: { role: "Anderer Beruf", area: "Außerhalb der Region", duplicate: "Doppelt", domain: "Domain", other: "Sonstiges" },
   benchMissing: "Die Daten der Bank sind noch nicht da.",
@@ -593,6 +617,12 @@ const es: ChartCopy = {
   roundsCount: "rondas",
   notComputable: "no calculable",
   comparisonHint: "Los grupos se suman: gasto total sobre puestos totales, así una ronda larga pesa más que una corta. Las rondas sin puestos o sin minutos quedan fuera.",
+  oneRound: "1 ronda",
+  manyRounds: "{n} rondas",
+  onePosition: "1 anuncio",
+  manyPositions: "{n} anuncios",
+  tooSmall: "muestra demasiado pequeña",
+  tooSmallHint: "Barras rayadas: una sola ronda o menos de 10 anuncios, muestra demasiado pequeña para comparar.",
   relevance: { P: "Pertinentes", A: "Afines", X: "Fuera del oficio" },
   discardReasons: { role: "Otro oficio", area: "Fuera de la zona", duplicate: "Duplicado", domain: "Dominio", other: "Otro" },
   benchMissing: "Los datos del banco aún no han llegado.",
@@ -719,6 +749,12 @@ const fr: ChartCopy = {
   roundsCount: "tours",
   notComputable: "non calculable",
   comparisonHint: "Les groupes sont cumulés : dépense totale sur postes totaux, un tour long pèse donc plus qu'un tour court. Les tours sans postes ou sans minutes sont exclus.",
+  oneRound: "1 tour",
+  manyRounds: "{n} tours",
+  onePosition: "1 annonce",
+  manyPositions: "{n} annonces",
+  tooSmall: "échantillon trop petit",
+  tooSmallHint: "Barres hachurées : un seul tour ou moins de 10 annonces, échantillon trop petit pour comparer.",
   relevance: { P: "Pertinents", A: "Proches", X: "Hors métier" },
   discardReasons: { role: "Autre métier", area: "Hors zone", duplicate: "Doublon", domain: "Domaine", other: "Autre" },
   benchMissing: "Les données du banc ne sont pas encore arrivées.",
@@ -845,6 +881,12 @@ const hu: ChartCopy = {
   roundsCount: "kör",
   notComputable: "nem számolható",
   comparisonHint: "A csoportok összevontak: teljes költés per összes állás, így a hosszú kör többet nyom, mint a rövid. Az állás vagy perc nélküli körök kimaradnak.",
+  oneRound: "1 kör",
+  manyRounds: "{n} kör",
+  onePosition: "1 hirdetés",
+  manyPositions: "{n} hirdetés",
+  tooSmall: "túl kicsi minta",
+  tooSmallHint: "Csíkozott oszlopok: csak egy kör vagy 10-nél kevesebb hirdetés, túl kicsi minta az összehasonlításhoz.",
   relevance: { P: "Releváns", A: "Rokon", X: "Szakmán kívüli" },
   discardReasons: { role: "Más szakma", area: "Körzeten kívül", duplicate: "Ismétlődő", domain: "Domain", other: "Egyéb" },
   benchMissing: "A pad adatai még nem érkeztek meg.",
@@ -971,6 +1013,12 @@ const pt: ChartCopy = {
   roundsCount: "rodadas",
   notComputable: "não calculável",
   comparisonHint: "Os grupos são somados: gasto total sobre vagas totais, por isso uma rodada longa pesa mais do que uma curta. Rodadas sem vagas ou sem minutos ficam de fora.",
+  oneRound: "1 rodada",
+  manyRounds: "{n} rodadas",
+  onePosition: "1 anúncio",
+  manyPositions: "{n} anúncios",
+  tooSmall: "amostra pequena demais",
+  tooSmallHint: "Barras tracejadas: uma só rodada ou menos de 10 anúncios, amostra pequena demais para comparar.",
   relevance: { P: "Pertinentes", A: "Afins", X: "Fora do ofício" },
   discardReasons: { role: "Outro ofício", area: "Fora da zona", duplicate: "Duplicado", domain: "Domínio", other: "Outro" },
   benchMissing: "Os dados da bancada ainda não chegaram.",

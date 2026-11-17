@@ -64,6 +64,9 @@ export type Copy = {
   targetNotes: Record<string, string>;
   targetSections: Record<string, string>;
   targetRows: Record<string, string>;
+  invalidTitle: string;
+  invalidLead: string;
+  invalidReasons: Record<string, string>;
   targetTried: string;
   targetCriteria: Record<string, string>;
   targetRules: Record<string, string>;
@@ -152,7 +155,7 @@ export const T: Record<Locale, Copy> = {
       claude: "Claude",
       openai: "OpenAI",
       kimi: "Kimi",
-      "openai-glm": "OpenAI → GLM",
+      "openai-glm": "OpenAI (credit ended), then GLM",
     },
     notes: {
       updateBuild10Portuguese: "Update on build 10, all in Portuguese: the saved key kept, the queue restarted by itself, 1 new position (74); the pace brake paused the team and told the person.",
@@ -258,6 +261,14 @@ export const T: Record<Locale, Copy> = {
       "loginNeverTried": "real sign-in never tried",
       "keysChecked": "0 files with a key outside their place, on 20,927 file events",
       "updateOnBuild9": "update on build 9"
+    },
+    invalidTitle: "Rounds that do not count",
+    invalidLead: "Rounds broken by causes of ours (credit run out, a test machine that switched itself off, a measurement mistake, cancelled bench attempts), not by defects of the product. They are left out of the table and of the charts; the defects they found stay in the chart of the defects.",
+    invalidReasons: {
+      noCreditMachineOff: "OpenAI had no credit and the test machine switched itself off: no Scout started. The service was changed to GLM halfway through the round.",
+      cumulativeCap: "Our test ceiling of 3 $ was read on a counter that also held the round before: stopped after 6 minutes, before any new position.",
+      benchDailyBudget: "Cancelled bench attempt: it started with a high daily budget left from before, and the pace brake stopped it after 70 seconds.",
+      benchOpenRun: "Cancelled bench attempt: the first search of the previous build was still open.",
     },
     targetSections: {
       "install": "Install by a new user",
@@ -427,7 +438,7 @@ export const T: Record<Locale, Copy> = {
       claude: "Claude",
       openai: "OpenAI",
       kimi: "Kimi",
-      "openai-glm": "OpenAI → GLM",
+      "openai-glm": "OpenAI (credito finito), poi GLM",
     },
     notes: {
       updateBuild10Portuguese: "Aggiornamento sulla build 10, tutto in portoghese: chiave salvata tenuta, la coda ripartita da sola, 1 annuncio nuovo (74); il freno a ritmo ha messo in pausa la squadra e l'ha detto alla persona.",
@@ -533,6 +544,14 @@ export const T: Record<Locale, Copy> = {
       "loginNeverTried": "accesso vero mai provato",
       "keysChecked": "0 file con chiave fuori posto, su 20.927 eventi sui file",
       "updateOnBuild9": "aggiornamento sulla build 9"
+    },
+    invalidTitle: "Giri che non contano",
+    invalidLead: "Giri rotti da cause nostre (credito finito, una macchina di prova che si è spenta da sola, un errore di misura, tentativi annullati del banco), non da difetti del prodotto. Restano fuori dalla tabella e dai grafici; i difetti trovati restano nel grafico dei difetti.",
+    invalidReasons: {
+      noCreditMachineOff: "OpenAI senza credito e la macchina di prova si è spenta da sola: nessuno Scout è partito. A metà giro il servizio è stato cambiato in GLM.",
+      cumulativeCap: "Il nostro tetto di prova di 3 $ è stato letto su un contatore che conteneva anche il giro prima: fermato dopo 6 minuti, prima di qualsiasi annuncio nuovo.",
+      benchDailyBudget: "Tentativo del banco annullato: è partito con un budget giornaliero alto rimasto da prima, e il freno a ritmo l'ha fermato dopo 70 secondi.",
+      benchOpenRun: "Tentativo del banco annullato: la prima ricerca della build precedente era ancora aperta.",
     },
     targetSections: {
       "install": "Installazione da utente nuovo",
@@ -702,7 +721,7 @@ export const T: Record<Locale, Copy> = {
       claude: "Claude",
       openai: "OpenAI",
       kimi: "Kimi",
-      "openai-glm": "OpenAI → GLM",
+      "openai-glm": "OpenAI (Guthaben aufgebraucht), dann GLM",
     },
     notes: {
       updateBuild10Portuguese: "Update auf Build 10, ganz auf Portugiesisch: gespeicherter Schlüssel behalten, die Warteschlange lief von selbst weiter, 1 neue Stelle (74); die Tempobremse pausierte das Team und sagte es der Person.",
@@ -808,6 +827,14 @@ export const T: Record<Locale, Copy> = {
       "loginNeverTried": "echte Anmeldung nie geprüft",
       "keysChecked": "0 Dateien mit Schlüssel am falschen Ort, bei 20.927 Dateiereignissen",
       "updateOnBuild9": "Update auf Build 9"
+    },
+    invalidTitle: "Runden, die nicht zählen",
+    invalidLead: "Runden, die an Ursachen auf unserer Seite gescheitert sind (Guthaben aufgebraucht, eine Testmaschine, die sich selbst abgeschaltet hat, ein Messfehler, abgebrochene Versuche der Bank), nicht an Fehlern des Produkts. Sie fehlen in der Tabelle und in den Diagrammen; ihre Fehler bleiben im Fehlerdiagramm.",
+    invalidReasons: {
+      noCreditMachineOff: "OpenAI ohne Guthaben, und die Testmaschine hat sich selbst abgeschaltet: kein Scout ist gestartet. Mitten in der Runde wurde der Dienst auf GLM gewechselt.",
+      cumulativeCap: "Unsere Testgrenze von 3 $ wurde an einem Zähler abgelesen, der auch die Runde davor enthielt: nach 6 Minuten gestoppt, vor jeder neuen Stelle.",
+      benchDailyBudget: "Abgebrochener Versuch der Bank: er startete mit einem hohen Tagesbudget von vorher, und die Tempobremse stoppte ihn nach 70 Sekunden.",
+      benchOpenRun: "Abgebrochener Versuch der Bank: die erste Suche des vorherigen Builds war noch offen.",
     },
     targetSections: {
       "install": "Installation durch neue Nutzer",
@@ -977,7 +1004,7 @@ export const T: Record<Locale, Copy> = {
       claude: "Claude",
       openai: "OpenAI",
       kimi: "Kimi",
-      "openai-glm": "OpenAI → GLM",
+      "openai-glm": "OpenAI (crédito agotado), luego GLM",
     },
     notes: {
       updateBuild10Portuguese: "Actualización en la build 10, todo en portugués: clave guardada conservada, la cola volvió a arrancar sola, 1 anuncio nuevo (74); el freno de ritmo pausó el equipo y se lo dijo a la persona.",
@@ -1084,6 +1111,14 @@ export const T: Record<Locale, Copy> = {
       "loginNeverTried": "inicio de sesión real nunca probado",
       "keysChecked": "0 archivos con clave fuera de su sitio, en 20.927 eventos de archivos",
       "updateOnBuild9": "actualización en la build 9"
+    },
+    invalidTitle: "Rondas que no cuentan",
+    invalidLead: "Rondas rotas por causas nuestras (crédito agotado, una máquina de prueba que se apagó sola, un error de medida, intentos anulados del banco), no por defectos del producto. Quedan fuera de la tabla y de los gráficos; los defectos encontrados siguen en el gráfico de defectos.",
+    invalidReasons: {
+      noCreditMachineOff: "OpenAI sin crédito y la máquina de prueba se apagó sola: ningún Scout arrancó. A mitad de ronda se cambió el servicio a GLM.",
+      cumulativeCap: "Nuestro tope de prueba de 3 $ se leyó en un contador que incluía también la ronda anterior: parada a los 6 minutos, antes de ningún anuncio nuevo.",
+      benchDailyBudget: "Intento del banco anulado: arrancó con un presupuesto diario alto que quedaba de antes, y el freno de ritmo lo paró a los 70 segundos.",
+      benchOpenRun: "Intento del banco anulado: la primera búsqueda de la build anterior seguía abierta.",
     },
     targetSections: {
       "install": "Instalación por un usuario nuevo",
@@ -1254,7 +1289,7 @@ export const T: Record<Locale, Copy> = {
       claude: "Claude",
       openai: "OpenAI",
       kimi: "Kimi",
-      "openai-glm": "OpenAI → GLM",
+      "openai-glm": "OpenAI (crédit épuisé), puis GLM",
     },
     notes: {
       updateBuild10Portuguese: "Mise à jour sur la build 10, tout en portugais : clé enregistrée gardée, la file est repartie seule, 1 nouvelle annonce (74) ; le frein de rythme a mis l'équipe en pause et l'a dit à la personne.",
@@ -1361,6 +1396,14 @@ export const T: Record<Locale, Copy> = {
       "loginNeverTried": "vraie connexion jamais essayée",
       "keysChecked": "0 fichier avec clé hors de sa place, sur 20 927 événements de fichiers",
       "updateOnBuild9": "mise à jour sur la build 9"
+    },
+    invalidTitle: "Tours qui ne comptent pas",
+    invalidLead: "Tours cassés par des causes de notre côté (crédit épuisé, une machine de test qui s'est éteinte seule, une erreur de mesure, essais annulés du banc), pas par des défauts du produit. Ils sont exclus du tableau et des graphiques ; leurs défauts restent dans le graphique des défauts.",
+    invalidReasons: {
+      noCreditMachineOff: "OpenAI sans crédit et la machine de test s'est éteinte seule : aucun Scout n'a démarré. Le service a été changé pour GLM au milieu du tour.",
+      cumulativeCap: "Notre plafond de test de 3 $ a été lu sur un compteur qui contenait aussi le tour précédent : arrêté après 6 minutes, avant toute nouvelle annonce.",
+      benchDailyBudget: "Essai du banc annulé : il a démarré avec un budget quotidien élevé resté d'avant, et le frein de rythme l'a arrêté après 70 secondes.",
+      benchOpenRun: "Essai du banc annulé : la première recherche de la build précédente était encore ouverte.",
     },
     targetSections: {
       "install": "Installation par un nouvel utilisateur",
@@ -1529,7 +1572,7 @@ export const T: Record<Locale, Copy> = {
       claude: "Claude",
       openai: "OpenAI",
       kimi: "Kimi",
-      "openai-glm": "OpenAI → GLM",
+      "openai-glm": "OpenAI (crédito esgotado), depois GLM",
     },
     notes: {
       updateBuild10Portuguese: "Atualização na build 10, tudo em português: chave guardada mantida, a fila recomeçou sozinha, 1 anúncio novo (74); o travão de ritmo pôs a equipa em pausa e disse-o à pessoa.",
@@ -1635,6 +1678,14 @@ export const T: Record<Locale, Copy> = {
       "loginNeverTried": "início de sessão real nunca testado",
       "keysChecked": "0 ficheiros com chave fora do lugar, em 20 927 eventos de ficheiros",
       "updateOnBuild9": "atualização na build 9"
+    },
+    invalidTitle: "Rodadas que não contam",
+    invalidLead: "Rodadas partidas por causas nossas (crédito esgotado, uma máquina de teste que se desligou sozinha, um erro de medição, tentativas anuladas da bancada), não por defeitos do produto. Ficam fora da tabela e dos gráficos; os defeitos encontrados ficam no gráfico dos defeitos.",
+    invalidReasons: {
+      noCreditMachineOff: "OpenAI sem crédito e a máquina de teste desligou-se sozinha: nenhum Scout arrancou. A meio da rodada o serviço foi mudado para GLM.",
+      cumulativeCap: "O nosso teto de teste de 3 $ foi lido num contador que incluía também a rodada anterior: parada aos 6 minutos, antes de qualquer anúncio novo.",
+      benchDailyBudget: "Tentativa da bancada anulada: arrancou com um orçamento diário alto que vinha de antes, e o travão de ritmo parou-a aos 70 segundos.",
+      benchOpenRun: "Tentativa da bancada anulada: a primeira pesquisa da build anterior ainda estava aberta.",
     },
     targetSections: {
       "install": "Instalação por um utilizador novo",
@@ -1804,7 +1855,7 @@ export const T: Record<Locale, Copy> = {
       claude: "Claude",
       openai: "OpenAI",
       kimi: "Kimi",
-      "openai-glm": "OpenAI → GLM",
+      "openai-glm": "OpenAI (elfogyott a kredit), majd GLM",
     },
     notes: {
       updateBuild10Portuguese: "Frissítés a 10. buildre, végig portugálul: a mentett kulcs megmaradt, a sor magától újraindult, 1 új hirdetés (74); az ütemfék szüneteltette a csapatot és szólt a felhasználónak.",
@@ -1910,6 +1961,14 @@ export const T: Record<Locale, Copy> = {
       "loginNeverTried": "valódi bejelentkezés sosem próbálva",
       "keysChecked": "0 kulcsos fájl a helyén kívül, 20 927 fájleseményből",
       "updateOnBuild9": "frissítés a 9. buildön"
+    },
+    invalidTitle: "Nem számító körök",
+    invalidLead: "A mi oldalunkon keletkezett okok miatt megszakadt körök (elfogyott kredit, magától leállt tesztgép, mérési hiba, a pad törölt próbái), nem a termék hibái miatt. Kimaradnak a táblázatból és a grafikonokból; a bennük talált hibák a hibagrafikonon maradnak.",
+    invalidReasons: {
+      noCreditMachineOff: "Az OpenAI-nak nem volt kreditje, és a tesztgép magától leállt: egy Scout sem indult el. A kör közepén a szolgáltatást GLM-re cserélték.",
+      cumulativeCap: "A 3 $-os tesztplafonunkat egy olyan számlálón olvastuk le, amely az előző kört is tartalmazta: 6 perc után leállt, még egyetlen új hirdetés előtt.",
+      benchDailyBudget: "Törölt próba a padon: korábbról maradt magas napi kerettel indult, és az ütemfék 70 másodperc után megállította.",
+      benchOpenRun: "Törölt próba a padon: az előző build első keresése még nyitva volt.",
     },
     targetSections: {
       "install": "Telepítés új felhasználóként",

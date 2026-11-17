@@ -44,6 +44,7 @@ export type TestEntry = {
   outcome: string | null;
   note: string | null;
   target: string | null; // the release target this test proves, for its criteria
+  invalid: string | null; // broken by a cause of ours: why
   criteria: RoundCriterion[]; // the path of a person, for a round
   series: Series;
 };
@@ -89,6 +90,7 @@ export const TESTS: TestEntry[] = [
       outcome: r.outcome,
       note: r.note,
       target: null,
+      invalid: (r as { invalid?: string }).invalid ?? null,
       criteria: ((r as { criteria?: RoundCriterion[] }).criteria ?? []) as RoundCriterion[],
       series: s,
     };
@@ -112,6 +114,7 @@ export const TESTS: TestEntry[] = [
     outcome: null,
     note: null,
     target: BENCH_TARGET[b.profile] ?? null,
+    invalid: null,
     criteria: [],
     series: b,
   })),
@@ -126,7 +129,7 @@ export const testHref = (id: string) => {
 
 /** The test before and after this one on the same system, in the order they ran. */
 export function neighbours(x: TestEntry) {
-  const same = TESTS.filter((y) => y.os === x.os).sort((a, b) => (a.date === b.date ? TESTS.indexOf(a) - TESTS.indexOf(b) : a.date < b.date ? -1 : 1));
+  const same = TESTS.filter((y) => y.os === x.os && (!y.invalid || y.id === x.id)).sort((a, b) => (a.date === b.date ? TESTS.indexOf(a) - TESTS.indexOf(b) : a.date < b.date ? -1 : 1));
   const i = same.indexOf(x);
   return { prev: i > 0 ? same[i - 1] : null, next: i >= 0 && i < same.length - 1 ? same[i + 1] : null };
 }

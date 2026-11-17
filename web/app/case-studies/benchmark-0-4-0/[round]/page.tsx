@@ -108,6 +108,11 @@ export default async function RoundPage({ params }: { params: Promise<{ round: s
             {`${TRADE_EMOJI[x.profile] ?? ""} ${label(x)}`.trim()}
           </h1>
           <p className="text-[11px] text-[var(--color-dim)]">{p.synthetic}</p>
+          {x.invalid && (
+            <p className="text-[12px] border-l-4 border-[var(--color-border-glow)] pl-3 text-[var(--color-muted)] max-w-3xl">
+              <span className="font-semibold text-[var(--color-white)]">{t.invalidTitle}.</span> {t.invalidReasons[x.invalid]}
+            </p>
+          )}
         </header>
 
         <section className="space-y-3">

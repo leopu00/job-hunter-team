@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Locale } from "@/i18n/config";
 import { CHART_COPY, type ChartCopy } from "./chartsCopy";
+import { OsIcon } from "../../setup-guide/OsIcons";
 
 // ---- data shapes (all optional in the JSON: the page grows as the rounds are read) ----
 
@@ -126,6 +127,7 @@ const AGENT_COLOR: Record<string, string> = {
 // Events that stop or hold the team are red, those that let it work again green, the rest (setup, start, notices) blue.
 const EVENT_STOP = new Set(["pace", "dailyHalt", "periodHalt", "periodOver", "periodEnd", "benchStop", "stop", "ceiling", "diskLow", "machineStopped", "creditGone", "creditExhausted", "inputHeld", "pause"]);
 const EVENT_GO = new Set(["resume", "resumeScouts", "cleared", "restart", "switch", "teamStart", "ready", "goalReached", "queueStart", "scoutStart", "setupClosed"]);
+const OS_NAME: Record<string, string> = { windows: "Windows", linux: "Linux", macos: "macOS" };
 const colorOf = (key: string, i: number, map?: Record<string, string>) => map?.[key] ?? PALETTE[i % PALETTE.length];
 
 // ---- small building blocks ----
@@ -398,7 +400,7 @@ function LineChart({
 
 // ---- horizontal bars (stacked or single), HTML so they wrap well on a phone ----
 
-type BarRow = { key: string; label: ReactNode; segments: { key: string; label: string; value: number; color: string }[]; note?: string };
+type BarRow = { key: string; label: ReactNode; segments: { key: string; label: string; value: number; color: string }[]; note?: string; sub?: string; dim?: boolean };
 
 function HBars({
   rows,
@@ -416,7 +418,10 @@ function HBars({
   const [tip, setTip] = useState<{ row: string; x: number; y: number; w: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const totals = rows.map((r) => r.segments.reduce((a, s) => a + s.value, 0));
-  const max = Math.max(...(stacked ? totals : rows.flatMap((r) => r.segments.map((s) => s.value))), 0) || 1;
+  // the scale follows the rows that count: a sample too small does not stretch it (its bar stops at the edge)
+  const counted = rows.filter((r) => !r.dim);
+  const max =
+    Math.max(...(stacked ? totals : (counted.length ? counted : rows).flatMap((r) => r.segments.map((s) => s.value))), 0) || 1;
   const show = (row: string, e: React.PointerEvent) => {
     const box = ref.current?.getBoundingClientRect();
     if (box) setTip({ row, x: e.clientX - box.left, y: e.clientY - box.top, w: box.width });
@@ -442,7 +447,13 @@ function HBars({
                   <span
                     key={s.key}
                     className="block h-2.5 rounded-r-sm"
-                    style={{ width: `${(s.value / max) * 100}%`, background: s.color, minWidth: s.value > 0 ? 2 : 0 }}
+                    style={{
+                      width: `${Math.min(100, (s.value / max) * 100)}%`,
+                      // a sample too small: hatched and faded, so it does not read like the others
+                      background: r.dim ? `repeating-linear-gradient(45deg, ${s.color} 0 3px, transparent 3px 6px)` : s.color,
+                      opacity: r.dim ? 0.6 : 1,
+                      minWidth: s.value > 0 ? 2 : 0,
+                    }}
                   />
                 ),
               )
@@ -468,7 +479,10 @@ function HBars({
             onPointerMove={(e) => show(r.key, e)}
             onPointerDown={(e) => show(r.key, e)}
           >
-            <span className="truncate">{r.label}</span>
+            <span className="min-w-0">
+              <span className={`block truncate ${r.dim ? "text-[var(--color-muted)]" : ""}`}>{r.label}</span>
+              {r.sub && <span className="block text-[10px] text-[var(--color-dim)]">{r.sub}</span>}
+            </span>
             <div className="flex items-center gap-2 min-w-0">
               <div className="flex-1 min-w-0">{bar}</div>
               <span className="sm:hidden tabular-nums font-semibold">{has ? value : ""}</span>
@@ -544,25 +558,59 @@ function RoundTimelines({ rounds, t, money, fixed = false }: { rounds: ChartRoun
     label: t.brakeKinds[b.kind] ?? b.kind,
     color: EVENT_GO.has(b.kind) ? "var(--color-green)" : EVENT_STOP.has(b.kind) ? C.brake : "var(--color-blue)",
   }));
-  const groups: { id: string; label: string; items: ChartRound[] }[] = [
-    { id: "round", label: t.rounds, items: usable.filter((x) => x.group === "round") },
-    { id: "bench", label: t.benchRounds, items: usable.filter((x) => x.group === "bench") },
-  ].filter((g) => g.items.length > 0);
   return (
     <div className="space-y-4">
-      {/* on the page of one test there is nothing to choose */}
-      {!fixed && groups.map((g) => (
-        <div key={g.id} className="space-y-1">
-          <div className="text-[10px] uppercase tracking-wide text-[var(--color-dim)]">{g.label}</div>
-          <Chips
-            label={g.label}
-            value={sel}
-            onChange={setSel}
-            options={g.items.map((x) => ({ value: x.id, label: `${x.label}${x.timeline.length >= 2 ? " ◆" : ""}` }))}
-          />
+      {/* on the page of one test there is nothing to choose; on the benchmark page the tests sit in a column per system */}
+      {!fixed && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            ...(["windows", "linux", "macos"] as const).map((os) => ({
+              key: os,
+              head: (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-flex [&>svg]:w-[15px] [&>svg]:h-[15px]">
+                    <OsIcon os={os} />
+                  </span>
+                  {OS_NAME[os]}
+                </span>
+              ),
+              items: usable.filter((x) => x.group === "round" && x.os === os),
+            })),
+            { key: "bench", head: <span>🔍 {t.benchRounds}</span>, items: usable.filter((x) => x.group === "bench") },
+          ]
+            .filter((g) => g.items.length > 0)
+            .map((g) => (
+              <div key={g.key} className="border border-[var(--color-border)] bg-[var(--color-deep)]">
+                <div className="px-3 py-1.5 text-[12px] font-semibold border-b border-[var(--color-border)]">{g.head}</div>
+                <ul role="radiogroup" aria-label={typeof g.key === "string" ? g.key : ""}>
+                  {g.items.map((x) => {
+                    const on = x.id === sel;
+                    // «Office clerk, part time · 17/11»: the system is the column, so it is not repeated
+                    const short = x.label.split(" · ").slice(1).join(" · ");
+                    return (
+                      <li key={x.id}>
+                        <button
+                          type="button"
+                          role="radio"
+                          aria-checked={on}
+                          onClick={() => setSel(x.id)}
+                          className={`w-full text-left px-3 py-1.5 text-[12px] flex justify-between gap-2 border-l-2 ${
+                            on
+                              ? "border-[var(--color-blue)] bg-[color-mix(in_srgb,var(--color-blue)_14%,transparent)] text-[var(--color-white)] font-semibold"
+                              : "border-transparent text-[var(--color-base)] hover:bg-[var(--color-row)]"
+                          }`}
+                        >
+                          <span className="truncate">{short}</span>
+                          {x.buildNo != null && <span className="shrink-0 text-[10px] text-[var(--color-dim)] tabular-nums">{`${t.build} ${x.buildNo}`}</span>}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
         </div>
-      ))}
-      {!fixed && <p className="text-[10px] text-[var(--color-dim)]">{t.seriesMark}</p>}
+      )}
       {!fixed && <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] tabular-nums">
         <span className="font-semibold">{r.label}</span>
         <span>{`${t.minutes}: ${r.minutes ?? "—"}`}</span>
@@ -708,10 +756,13 @@ function Comparison({ rounds, t, money, labels }: { rounds: ChartRound[]; t: Cha
       const name =
         by === "service" ? labels.services[k] ?? k : by === "os" ? labels.os[k] ?? k : k === "?" ? t.buildUnknown : `${t.build} ${k}`;
       const color = by === "service" ? SERVICE_COLOR[k] : by === "os" ? OS_COLOR[k] : PALETTE[i % PALETTE.length];
+      const found = sum((r) => r.found!);
+      const small = list.length < 2 || found < 10;
       return {
         key: k,
         label: name,
-        note: `${list.length} ${t.roundsCount}: ${list.map((r) => r.id).join(", ")}`,
+        sub: `${(list.length === 1 ? t.oneRound : t.manyRounds).replace("{n}", String(list.length))} · ${(found === 1 ? t.onePosition : t.manyPositions).replace("{n}", String(found))}${small ? ` · ${t.tooSmall}` : ""}`,
+        dim: small,
         segments: [{ key: "v", label: t.metrics[metric], value: v ?? 0, color: color ?? C.found }],
       };
     });
@@ -733,6 +784,7 @@ function Comparison({ rounds, t, money, labels }: { rounds: ChartRound[]; t: Cha
       )}
       <HBars rows={rows} format={fmt} emptyLabel={t.notComputable} stacked={false} />
       <p className="text-[11px] text-[var(--color-dim)]">{t.comparisonHint}</p>
+      {by !== "round" && <p className="text-[11px] text-[var(--color-dim)]">{t.tooSmallHint}</p>}
     </div>
   );
 }

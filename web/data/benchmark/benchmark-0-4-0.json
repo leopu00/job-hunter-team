@@ -580,7 +580,8 @@
           "k": "brakeNotReached",
           "ok": null
         }
-      ]
+      ],
+      "invalid": "cumulativeCap"
     },
     {
       "id": "r5",
@@ -756,7 +757,8 @@
           "k": "brakeNotRecorded",
           "ok": null
         }
-      ]
+      ],
+      "invalid": "noCreditMachineOff"
     },
     {
       "id": "r9",
@@ -7020,223 +7022,223 @@
           "m": 0.0,
           "cost": 0.0,
           "found": 0,
-          "scored": 7
+          "scored": 0
         },
         {
           "m": 1.0,
           "cost": 0.0,
           "found": 0,
-          "scored": 7
+          "scored": 0
         },
         {
           "m": 2.0,
           "cost": 0.0,
           "found": 0,
-          "scored": 7
+          "scored": 0
         },
         {
           "m": 3.0,
           "cost": 0.1247,
           "found": 0,
-          "scored": 7
+          "scored": 0
         },
         {
           "m": 4.0,
           "cost": 0.3059,
           "found": 0,
-          "scored": 7
+          "scored": 0
         },
         {
           "m": 5.0,
           "cost": 0.3059,
           "found": 0,
-          "scored": 7
+          "scored": 0
         },
         {
           "m": 6.0,
           "cost": 0.3154,
           "found": 0,
-          "scored": 7
+          "scored": 0
         },
         {
           "m": 7.0,
           "cost": 0.3154,
           "found": 0,
-          "scored": 7
+          "scored": 0
         },
         {
           "m": 8.0,
           "cost": 0.3154,
           "found": 0,
-          "scored": 7
+          "scored": 0
         },
         {
           "m": 9.0,
           "cost": 0.3154,
           "found": 0,
-          "scored": 7
+          "scored": 0
         },
         {
           "m": 10.0,
           "cost": 0.3154,
           "found": 0,
-          "scored": 7
+          "scored": 0
         },
         {
           "m": 11.0,
           "cost": 0.3154,
           "found": 0,
-          "scored": 7
+          "scored": 0
         },
         {
           "m": 12.0,
           "cost": 0.3201,
           "found": 0,
-          "scored": 7
+          "scored": 0
         },
         {
           "m": 13.0,
           "cost": 0.3748,
           "found": 0,
-          "scored": 7
+          "scored": 0
         },
         {
           "m": 14.0,
           "cost": 0.3776,
           "found": 0,
-          "scored": 7
+          "scored": 0
         },
         {
           "m": 15.0,
           "cost": 0.6425,
           "found": 0,
-          "scored": 7
+          "scored": 0
         },
         {
           "m": 16.0,
           "cost": 0.6425,
           "found": 0,
-          "scored": 9
+          "scored": 2
         },
         {
           "m": 17.0,
           "cost": 0.648,
           "found": 0,
-          "scored": 9
+          "scored": 2
         },
         {
           "m": 18.0,
           "cost": 0.6538,
           "found": 0,
-          "scored": 9
+          "scored": 2
         },
         {
           "m": 19.0,
           "cost": 0.6618,
           "found": 0,
-          "scored": 9
+          "scored": 2
         },
         {
           "m": 20.0,
           "cost": 0.6711,
           "found": 0,
-          "scored": 9
+          "scored": 2
         },
         {
           "m": 21.0,
           "cost": 0.7686,
           "found": 0,
-          "scored": 11
+          "scored": 4
         },
         {
           "m": 22.0,
           "cost": 0.8347,
           "found": 0,
-          "scored": 11
+          "scored": 4
         },
         {
           "m": 23.0,
           "cost": 0.8844,
           "found": 0,
-          "scored": 11
+          "scored": 4
         },
         {
           "m": 24.0,
           "cost": 0.9397,
           "found": 1,
-          "scored": 11
+          "scored": 4
         },
         {
           "m": 25.0,
           "cost": 0.9942,
           "found": 1,
-          "scored": 11
+          "scored": 4
         },
         {
           "m": 26.0,
           "cost": 1.0132,
           "found": 1,
-          "scored": 11
+          "scored": 4
         },
         {
           "m": 27.0,
           "cost": 1.0943,
           "found": 1,
-          "scored": 13
+          "scored": 6
         },
         {
           "m": 28.0,
           "cost": 1.0943,
           "found": 1,
-          "scored": 13
+          "scored": 6
         },
         {
           "m": 29.0,
           "cost": 1.0943,
           "found": 1,
-          "scored": 13
+          "scored": 6
         },
         {
           "m": 30.0,
           "cost": 1.0943,
           "found": 1,
-          "scored": 13
+          "scored": 6
         },
         {
           "m": 31.0,
           "cost": 1.0943,
           "found": 1,
-          "scored": 13
+          "scored": 6
         },
         {
           "m": 32.0,
           "cost": 1.0943,
           "found": 1,
-          "scored": 13
+          "scored": 6
         },
         {
           "m": 33.0,
           "cost": 1.0943,
           "found": 1,
-          "scored": 13
+          "scored": 6
         },
         {
           "m": 34.0,
           "cost": 1.0943,
           "found": 1,
-          "scored": 13
+          "scored": 6
         },
         {
           "m": 35.0,
           "cost": 1.0943,
           "found": 1,
-          "scored": 13
+          "scored": 6
         },
         {
           "m": 35.18,
           "cost": 1.0943,
           "found": 1,
-          "scored": 13
+          "scored": 6
         }
       ],
       "scores": [
@@ -7476,5 +7478,15 @@
         "kind": "sectorPortal"
       }
     ]
-  }
+  },
+  "invalidBench": [
+    {
+      "profile": "cook",
+      "reason": "benchDailyBudget"
+    },
+    {
+      "profile": "bricklayer",
+      "reason": "benchOpenRun"
+    }
+  ]
 }

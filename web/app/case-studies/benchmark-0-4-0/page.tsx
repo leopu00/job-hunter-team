@@ -57,7 +57,11 @@ export default async function BenchmarkPage() {
       : `${r.found} / ${num(r.scored)} / ${r.relevant == null ? "—" : `${(r as { relevantApprox?: boolean }).relevantApprox ? "≈" : ""}${r.relevant}`}`;
   const perScored = (r: Round) =>
     r.cost != null && r.scored ? r.cost / r.scored : null;
-  const chartRows = data.rounds.filter((r) => r.outcome !== "running");
+  // the rounds that count: those broken by causes of ours sit apart, at the foot of the page
+  const isInvalid = (r: Round) => Boolean((r as { invalid?: string }).invalid);
+  const validRounds = data.rounds.filter((r) => !isInvalid(r));
+  const invalidRounds = data.rounds.filter(isInvalid);
+  const chartRows = validRounds.filter((r) => r.outcome !== "running");
   const buildNo = (r: Round) => (r as { buildNo?: number }).buildNo;
   const roundById = new Map(data.rounds.map((r) => [r.id, r]));
   const green = data.targets.filter((x: Target) => x.status === "pass").length;
@@ -152,7 +156,7 @@ export default async function BenchmarkPage() {
 
   const trade = (key: string) =>
     (Object.values(T) as Copy[]).map((c) => c.profiles[key]).filter(Boolean);
-  const roundViews: CandidateView[] = data.rounds.map((r) => ({
+  const roundViews: CandidateView[] = validRounds.map((r) => ({
     kind: "round",
     id: r.id,
     os: r.os,
@@ -212,7 +216,7 @@ export default async function BenchmarkPage() {
   const roundSeries = ((data as unknown as { roundSeries?: Record<string, Extra> }).roundSeries ?? {}) as Record<string, Extra>;
   const benchRaw = ((data as unknown as { bench?: (Extra & { id: string; profile: string; os: string; service: string; buildNo: number })[] }).bench ?? []);
   const chartRounds: ChartRound[] = [
-    ...data.rounds.map((r) => {
+    ...validRounds.map((r) => {
       const x = roundSeries[r.id] ?? {};
       return {
         id: r.id,
@@ -291,6 +295,8 @@ export default async function BenchmarkPage() {
     };
   });
 
+  const invalidBench = ((data as unknown as { invalidBench?: { profile: string; reason: string }[] }).invalidBench ?? []);
+  const BENCH_TARGET_OF: Record<string, string> = { cook: "scoutBenchCook", warehouseWorker: "scoutBenchWarehouse", nurse: "scoutBenchNurse", bricklayer: "scoutBenchBricklayer" };
   const serviceOptions = ["glm", "kimi", "openai", "claude"].map((v) => ({
     value: v,
     label: t.services[v],
@@ -499,7 +505,7 @@ export default async function BenchmarkPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.rounds.map((r) => (
+                {validRounds.map((r) => (
                   <tr
                     key={r.id}
                     id={r.id}
@@ -721,6 +727,31 @@ export default async function BenchmarkPage() {
             </p>
           </div>
         </section>
+        {/* rounds broken by causes of ours, closed by default */}
+        <details className="border border-[var(--color-border)] bg-[var(--color-card)]">
+          <summary className="cursor-pointer px-4 py-3 text-[13px] font-semibold">
+            {`${t.invalidTitle} (${invalidRounds.length + invalidBench.length})`}
+          </summary>
+          <div className="px-4 pb-4 space-y-2 text-[12px]">
+            <p className="text-[var(--color-muted)] max-w-3xl">{t.invalidLead}</p>
+            <ul className="space-y-1.5">
+              {invalidRounds.map((r) => (
+                <li key={r.id} className="flex flex-col sm:flex-row sm:gap-3">
+                  <Link href={testHref(r.id)} className="shrink-0 font-semibold underline decoration-dotted hover:decoration-solid" style={{ color: "inherit" }}>
+                    {`${OS_LABEL[r.os]} · ${t.profiles[r.profile]} · ${dayLabel(r)} · ${t.services[r.service]}`}
+                  </Link>
+                  <span className="text-[var(--color-muted)]">{t.invalidReasons[(r as { invalid?: string }).invalid ?? ""]}</span>
+                </li>
+              ))}
+              {invalidBench.map((b) => (
+                <li key={b.profile} className="flex flex-col sm:flex-row sm:gap-3">
+                  <span className="shrink-0 font-semibold">{`🔍 ${t.targets[BENCH_TARGET_OF[b.profile]] ?? b.profile}`}</span>
+                  <span className="text-[var(--color-muted)]">{t.invalidReasons[b.reason]}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </details>
       </div>
 
       <footer className="border-t border-[var(--color-border)] py-6 text-center text-[11px] text-[var(--color-muted)]">
