@@ -34,6 +34,9 @@ export type RoundPageCopy = {
   next: string;
   sameSystem: string;
   synthetic: string;
+  criteria: Record<string, string>;
+  why: string;
+  criteriaRule: string;
 };
 
 const en: RoundPageCopy = {
@@ -68,6 +71,22 @@ const en: RoundPageCopy = {
   next: "Next on {os} →",
   sameSystem: "Other tests on the same system",
   synthetic: "Synthetic profile: an invented person and trade, no real data.",
+  criteria: {
+    tooFew: "too few positions to judge relevance ({v})",
+    alone_ok: "starts and works with no manual step",
+    alone_bad: "{v} manual steps (minute {at})",
+    notStarted: "the agents did not start",
+    foundScored: "{v} positions found, {of} with a score",
+    relevantShare: "relevant {v}% (≥{min}%)",
+    relevantUnknown: "relevance not measured",
+    brakeHeld: "the brake held the ceiling",
+    brakeFalseUnlock: "the brake let the team go on after the stop",
+    brakeNotSeen: "the brake did not stop the team ({v} $ of {max} $)",
+    brakeNotRecorded: "brake: ceiling not recorded",
+    brakeNotReached: "brake: ceiling not reached in the test",
+  },
+  why: "Why:",
+  criteriaRule: "The path of a person: the team starts and works without manual steps, finds positions, finds them in the trade, and the brake holds the budget. — = not measured in this test.",
 };
 
 const it: RoundPageCopy = {
@@ -102,6 +121,22 @@ const it: RoundPageCopy = {
   next: "Successivo su {os} →",
   sameSystem: "Altri test sullo stesso sistema",
   synthetic: "Profilo sintetico: persona e mestiere inventati, nessun dato vero.",
+  criteria: {
+    tooFew: "troppo pochi annunci per giudicare la pertinenza ({v})",
+    alone_ok: "parte e lavora senza interventi a mano",
+    alone_bad: "{v} interventi a mano (minuto {at})",
+    notStarted: "gli agenti non sono partiti",
+    foundScored: "{v} annunci trovati, {of} con punteggio",
+    relevantShare: "pertinenti {v}% (≥{min}%)",
+    relevantUnknown: "pertinenza non misurata",
+    brakeHeld: "il freno ha tenuto il tetto",
+    brakeFalseUnlock: "il freno ha lasciato ripartire la squadra dopo lo stop",
+    brakeNotSeen: "il freno non ha fermato la squadra ({v} $ di {max} $)",
+    brakeNotRecorded: "freno: tetto non registrato",
+    brakeNotReached: "freno: tetto non raggiunto nel test",
+  },
+  why: "Perché:",
+  criteriaRule: "Il percorso di una persona: la squadra parte e lavora senza interventi a mano, trova annunci, li trova nel mestiere giusto, e il freno tiene il budget. — = non misurato in questo test.",
 };
 
 const de: RoundPageCopy = {
@@ -136,6 +171,22 @@ const de: RoundPageCopy = {
   next: "Nächster auf {os} →",
   sameSystem: "Andere Tests auf demselben System",
   synthetic: "Synthetisches Profil: erfundene Person und erfundener Beruf, keine echten Daten.",
+  criteria: {
+    tooFew: "zu wenige Stellen, um die Passung zu beurteilen ({v})",
+    alone_ok: "startet und arbeitet ohne Handgriffe",
+    alone_bad: "{v} Handgriffe (Minute {at})",
+    notStarted: "die Agenten sind nicht gestartet",
+    foundScored: "{v} Stellen gefunden, {of} bewertet",
+    relevantShare: "passend {v} % (≥{min} %)",
+    relevantUnknown: "Passung nicht gemessen",
+    brakeHeld: "die Bremse hat die Obergrenze gehalten",
+    brakeFalseUnlock: "die Bremse ließ das Team nach dem Stopp weiterlaufen",
+    brakeNotSeen: "die Bremse hat das Team nicht gestoppt ({v} $ von {max} $)",
+    brakeNotRecorded: "Bremse: Obergrenze nicht erfasst",
+    brakeNotReached: "Bremse: Obergrenze im Test nicht erreicht",
+  },
+  why: "Warum:",
+  criteriaRule: "Der Weg einer Person: das Team startet und arbeitet ohne Handgriffe, findet Stellen, findet sie im richtigen Beruf, und die Bremse hält das Budget. — = in diesem Test nicht gemessen.",
 };
 
 const es: RoundPageCopy = {
@@ -170,6 +221,22 @@ const es: RoundPageCopy = {
   next: "Siguiente en {os} →",
   sameSystem: "Otras pruebas en el mismo sistema",
   synthetic: "Perfil sintético: persona y oficio inventados, ningún dato real.",
+  criteria: {
+    tooFew: "demasiado pocos anuncios para juzgar la pertinencia ({v})",
+    alone_ok: "arranca y trabaja sin pasos a mano",
+    alone_bad: "{v} pasos a mano (minuto {at})",
+    notStarted: "los agentes no arrancaron",
+    foundScored: "{v} anuncios encontrados, {of} puntuados",
+    relevantShare: "pertinentes {v} % (≥{min} %)",
+    relevantUnknown: "pertinencia no medida",
+    brakeHeld: "el freno sostuvo el tope",
+    brakeFalseUnlock: "el freno dejó seguir al equipo tras la parada",
+    brakeNotSeen: "el freno no paró el equipo ({v} $ de {max} $)",
+    brakeNotRecorded: "freno: tope no registrado",
+    brakeNotReached: "freno: tope no alcanzado en la prueba",
+  },
+  why: "Por qué:",
+  criteriaRule: "El recorrido de una persona: el equipo arranca y trabaja sin pasos a mano, encuentra anuncios, los encuentra en su oficio, y el freno sostiene el presupuesto. — = no medido en esta prueba.",
 };
 
 const fr: RoundPageCopy = {
@@ -204,6 +271,22 @@ const fr: RoundPageCopy = {
   next: "Suivant sur {os} →",
   sameSystem: "Autres tests sur le même système",
   synthetic: "Profil synthétique : personne et métier inventés, aucune donnée réelle.",
+  criteria: {
+    tooFew: "trop peu d'annonces pour juger la pertinence ({v})",
+    alone_ok: "démarre et travaille sans intervention à la main",
+    alone_bad: "{v} interventions à la main (minute {at})",
+    notStarted: "les agents n'ont pas démarré",
+    foundScored: "{v} annonces trouvées, {of} notées",
+    relevantShare: "pertinentes {v} % (≥{min} %)",
+    relevantUnknown: "pertinence non mesurée",
+    brakeHeld: "le frein a tenu le plafond",
+    brakeFalseUnlock: "le frein a laissé l'équipe repartir après l'arrêt",
+    brakeNotSeen: "le frein n'a pas arrêté l'équipe ({v} $ sur {max} $)",
+    brakeNotRecorded: "frein : plafond non enregistré",
+    brakeNotReached: "frein : plafond non atteint pendant le test",
+  },
+  why: "Pourquoi :",
+  criteriaRule: "Le parcours d'une personne : l'équipe démarre et travaille sans intervention à la main, trouve des annonces, les trouve dans le bon métier, et le frein tient le budget. — = non mesuré dans ce test.",
 };
 
 const hu: RoundPageCopy = {
@@ -238,6 +321,22 @@ const hu: RoundPageCopy = {
   next: "Következő ezen: {os} →",
   sameSystem: "További tesztek ugyanazon a rendszeren",
   synthetic: "Szintetikus profil: kitalált személy és szakma, valódi adat nélkül.",
+  criteria: {
+    tooFew: "túl kevés hirdetés a relevancia megítéléséhez ({v})",
+    alone_ok: "elindul és dolgozik kézi beavatkozás nélkül",
+    alone_bad: "{v} kézi beavatkozás ({at}. perc)",
+    notStarted: "az ügynökök nem indultak el",
+    foundScored: "{v} talált hirdetés, {of} pontozott",
+    relevantShare: "releváns {v}% (≥{min}%)",
+    relevantUnknown: "a relevancia nincs mérve",
+    brakeHeld: "a fék tartotta a plafont",
+    brakeFalseUnlock: "a fék a leállás után újra engedte a csapatot",
+    brakeNotSeen: "a fék nem állította meg a csapatot ({v} $ / {max} $)",
+    brakeNotRecorded: "fék: a plafon nincs rögzítve",
+    brakeNotReached: "fék: a plafont a teszt nem érte el",
+  },
+  why: "Miért:",
+  criteriaRule: "Egy felhasználó útja: a csapat kézi beavatkozás nélkül indul és dolgozik, hirdetéseket talál, a megfelelő szakmában, és a fék tartja a keretet. — = ebben a tesztben nem mérték.",
 };
 
 const pt: RoundPageCopy = {
@@ -272,6 +371,22 @@ const pt: RoundPageCopy = {
   next: "Seguinte em {os} →",
   sameSystem: "Outros testes no mesmo sistema",
   synthetic: "Perfil sintético: pessoa e ofício inventados, nenhum dado real.",
+  criteria: {
+    tooFew: "anúncios a menos para julgar a pertinência ({v})",
+    alone_ok: "arranca e trabalha sem intervenções à mão",
+    alone_bad: "{v} intervenções à mão (minuto {at})",
+    notStarted: "os agentes não arrancaram",
+    foundScored: "{v} anúncios encontrados, {of} pontuados",
+    relevantShare: "pertinentes {v}% (≥{min}%)",
+    relevantUnknown: "pertinência não medida",
+    brakeHeld: "o travão manteve o teto",
+    brakeFalseUnlock: "o travão deixou a equipa recomeçar depois da paragem",
+    brakeNotSeen: "o travão não parou a equipa ({v} $ de {max} $)",
+    brakeNotRecorded: "travão: teto não registado",
+    brakeNotReached: "travão: teto não atingido no teste",
+  },
+  why: "Porquê:",
+  criteriaRule: "O percurso de uma pessoa: a equipa arranca e trabalha sem intervenções à mão, encontra anúncios, encontra-os no ofício certo, e o travão mantém o orçamento. — = não medido neste teste.",
 };
 
 export const ROUND_PAGE_COPY: Record<Locale, RoundPageCopy> = { en, it, de, es, fr, hu, pt };

@@ -15,7 +15,7 @@ import ProviderMark from "../providerMarks";
 import { Mark, OS_LABEL, T, TARGET_MARK, TRADE_EMOJI, type Target } from "../benchmarkShared";
 import { ROUND_PAGE_COPY } from "../roundPageCopy";
 import { ROUND_STORIES } from "../roundStories";
-import { TESTS, chartRoundOf, neighbours, testBySlug, type TestEntry } from "../roundsData";
+import { TESTS, chartRoundOf, neighbours, testBySlug, type RoundCriterion, type TestEntry } from "../roundsData";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +51,16 @@ export default async function RoundPage({ params }: { params: Promise<{ round: s
       .replace("{max}", String(c.max ?? ""))
       .replace("{of}", String(c.of ?? ""))
       .replace("{trade}", c.trade ? `${TRADE_EMOJI[c.trade] ?? ""} ${profileName(c.trade)}`.trim() : "");
+  // a criterion of the path of a person, e.g. «2 manual steps (minute 7.7, 10.8)»
+  const roundCriterion = (c: RoundCriterion) => {
+    const key = c.k === "alone" ? (c.ok ? "alone_ok" : "alone_bad") : c.k;
+    return (p.criteria[key] ?? key)
+      .replace("{v}", c.v == null ? "" : c.k === "brakeNotSeen" ? nf.format(c.v) : String(c.v))
+      .replace("{of}", String(c.of ?? ""))
+      .replace("{min}", String(c.min ?? ""))
+      .replace("{max}", String(c.max ?? ""))
+      .replace("{at}", (c.at ?? []).map((m) => String(m).replace(".", nf.format(1.5).charAt(1))).join(", "));
+  };
   const story = ROUND_STORIES[x.id];
   const { prev, next } = neighbours(x);
   const brake = x.series.brake ?? [];
@@ -75,6 +85,7 @@ export default async function RoundPage({ params }: { params: Promise<{ round: s
     { k: p.positions, v: `${x.found ?? "—"} / ${x.scored ?? "—"} / ${x.relevant ?? "—"}`, hint: p.positionsHint },
     { k: p.costPerPosition, v: x.cost != null && x.found ? money(x.cost / x.found) : "—" },
     { k: p.costPerRelevant, v: x.cost != null && x.relevant ? money(x.cost / x.relevant) : "—" },
+    { k: cc.bestScore, v: x.bestScore == null ? "—" : String(x.bestScore) },
   ];
 
   return (
@@ -99,9 +110,9 @@ export default async function RoundPage({ params }: { params: Promise<{ round: s
 
         <section className="space-y-3">
           <h2 className="section-label">{p.overview}</h2>
-          <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-px bg-[var(--color-border)] border border-[var(--color-border)]">
+          <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
             {tiles.map((tile) => (
-              <div key={tile.k} className="bg-[var(--color-card)] px-3 py-2.5 space-y-0.5">
+              <div key={tile.k} className="border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2.5 space-y-0.5">
                 <dt className="text-[10px] uppercase tracking-wide text-[var(--color-muted)]">{tile.k}</dt>
                 <dd className="text-[14px] font-semibold tabular-nums">{tile.v}</dd>
                 {tile.hint && <dd className="text-[10px] text-[var(--color-dim)]">{tile.hint}</dd>}
@@ -130,7 +141,21 @@ export default async function RoundPage({ params }: { params: Promise<{ round: s
             ) : (
               <>
                 <div className="font-semibold">{x.outcome ? t.outcome[x.outcome] : "—"}</div>
-                {x.note && <p className="text-[var(--color-muted)]">{t.notes[x.note]}</p>}
+                {x.criteria.length > 0 && (
+                  <ul className="flex flex-wrap gap-x-4 gap-y-0.5 text-[12px] tabular-nums text-[var(--color-base)]">
+                    {x.criteria.map((c, i) => (
+                      <li key={i} className="whitespace-nowrap">
+                        <span aria-hidden="true">{c.ok == null ? "—" : c.ok ? "✅" : "❌"}</span> {roundCriterion(c)}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {x.note && (
+                  <p className="text-[var(--color-muted)]">
+                    <span className="font-semibold">{p.why}</span> {t.notes[x.note]}
+                  </p>
+                )}
+                {x.criteria.length > 0 && <p className="text-[11px] text-[var(--color-dim)]">{p.criteriaRule}</p>}
               </>
             )}
           </div>

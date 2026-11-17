@@ -63,7 +63,9 @@
       "os": "macos",
       "status": "pass",
       "build": 10,
-      "proof": [],
+      "proof": [
+        "r15"
+      ],
       "note": "updateMacBuild10"
     },
     {
@@ -261,7 +263,9 @@
       "os": "macos",
       "status": "pass",
       "build": 10,
-      "proof": [],
+      "proof": [
+        "r15"
+      ],
       "note": "languagePortugueseOk"
     },
     {
@@ -385,6 +389,20 @@
         "r13",
         "r14"
       ]
+    },
+    {
+      "n": 9,
+      "commit": "2998be325",
+      "day": "17/11",
+      "rounds": []
+    },
+    {
+      "n": 10,
+      "commit": "1ea2fb5c6",
+      "day": "17/11",
+      "rounds": [
+        "r15"
+      ]
     }
   ],
   "rounds": [
@@ -406,7 +424,32 @@
       "roster": "5/3/2",
       "outcome": "fail",
       "note": "scoutsNoTools",
-      "lang": "it"
+      "lang": "it",
+      "criteria": [
+        {
+          "k": "alone",
+          "ok": false,
+          "v": 2,
+          "at": [
+            7.7,
+            10.8
+          ]
+        },
+        {
+          "k": "foundScored",
+          "ok": true,
+          "v": 47,
+          "of": 26
+        },
+        {
+          "k": "relevantUnknown",
+          "ok": null
+        },
+        {
+          "k": "brakeNotRecorded",
+          "ok": null
+        }
+      ]
     },
     {
       "id": "r2",
@@ -426,7 +469,31 @@
       "roster": null,
       "outcome": "fail",
       "note": "creditEnded",
-      "lang": null
+      "lang": null,
+      "criteria": [
+        {
+          "k": "alone",
+          "ok": false,
+          "v": 1,
+          "at": [
+            25.7
+          ]
+        },
+        {
+          "k": "foundScored",
+          "ok": false,
+          "v": 0,
+          "of": 0
+        },
+        {
+          "k": "relevantUnknown",
+          "ok": null
+        },
+        {
+          "k": "brakeNotRecorded",
+          "ok": null
+        }
+      ]
     },
     {
       "id": "r3",
@@ -446,7 +513,29 @@
       "roster": "1/1/1",
       "outcome": "reservations",
       "note": "minimalTeam",
-      "lang": "it"
+      "lang": "it",
+      "criteria": [
+        {
+          "k": "alone",
+          "ok": true,
+          "v": 0,
+          "at": []
+        },
+        {
+          "k": "foundScored",
+          "ok": true,
+          "v": 7,
+          "of": 1
+        },
+        {
+          "k": "relevantUnknown",
+          "ok": null
+        },
+        {
+          "k": "brakeNotReached",
+          "ok": null
+        }
+      ]
     },
     {
       "id": "r4",
@@ -466,7 +555,29 @@
       "roster": "1/1/1",
       "outcome": "reservations",
       "note": "ceilingReached",
-      "lang": "it"
+      "lang": "it",
+      "criteria": [
+        {
+          "k": "alone",
+          "ok": true,
+          "v": 0,
+          "at": []
+        },
+        {
+          "k": "foundScored",
+          "ok": false,
+          "v": 0,
+          "of": 0
+        },
+        {
+          "k": "relevantUnknown",
+          "ok": null
+        },
+        {
+          "k": "brakeNotReached",
+          "ok": null
+        }
+      ]
     },
     {
       "id": "r5",
@@ -486,7 +597,29 @@
       "roster": "1/1/1",
       "outcome": "fail",
       "note": "wrongSources",
-      "lang": "it"
+      "lang": "it",
+      "criteria": [
+        {
+          "k": "alone",
+          "ok": true,
+          "v": 0,
+          "at": []
+        },
+        {
+          "k": "foundScored",
+          "ok": false,
+          "v": 0,
+          "of": 0
+        },
+        {
+          "k": "relevantUnknown",
+          "ok": null
+        },
+        {
+          "k": "brakeNotRecorded",
+          "ok": null
+        }
+      ]
     },
     {
       "id": "r6",
@@ -506,7 +639,31 @@
       "roster": "5/3/2",
       "outcome": "reservations",
       "note": "budgetFromSetup",
-      "lang": "es"
+      "lang": "es",
+      "criteria": [
+        {
+          "k": "alone",
+          "ok": true,
+          "v": 0,
+          "at": []
+        },
+        {
+          "k": "foundScored",
+          "ok": true,
+          "v": 14,
+          "of": 12
+        },
+        {
+          "k": "relevantShare",
+          "ok": true,
+          "v": 71,
+          "min": 70
+        },
+        {
+          "k": "brakeHeld",
+          "ok": true
+        }
+      ]
     },
     {
       "id": "r7",
@@ -526,7 +683,33 @@
       "roster": "1/1/1",
       "outcome": "reservations",
       "note": "brakeDidNotTrigger",
-      "lang": "de"
+      "lang": "de",
+      "criteria": [
+        {
+          "k": "alone",
+          "ok": false,
+          "v": 1,
+          "at": [
+            10.5
+          ]
+        },
+        {
+          "k": "foundScored",
+          "ok": true,
+          "v": 50,
+          "of": 20
+        },
+        {
+          "k": "relevantUnknown",
+          "ok": null
+        },
+        {
+          "k": "brakeNotSeen",
+          "ok": false,
+          "v": 5.28,
+          "max": 5
+        }
+      ]
     },
     {
       "id": "r8",
@@ -546,7 +729,31 @@
       "roster": null,
       "outcome": "fail",
       "note": "noCredit",
-      "lang": "fr"
+      "lang": "fr",
+      "criteria": [
+        {
+          "k": "alone",
+          "ok": false,
+          "v": 1,
+          "at": [
+            11.2
+          ]
+        },
+        {
+          "k": "foundScored",
+          "ok": false,
+          "v": 0,
+          "of": 0
+        },
+        {
+          "k": "relevantUnknown",
+          "ok": null
+        },
+        {
+          "k": "brakeNotRecorded",
+          "ok": null
+        }
+      ]
     },
     {
       "id": "r9",
@@ -567,7 +774,31 @@
       "roster": null,
       "outcome": "reservations",
       "note": "updateSwitchKept",
-      "lang": "de"
+      "lang": "de",
+      "criteria": [
+        {
+          "k": "alone",
+          "ok": true,
+          "v": 0,
+          "at": []
+        },
+        {
+          "k": "foundScored",
+          "ok": true,
+          "v": 26,
+          "of": 21
+        },
+        {
+          "k": "relevantShare",
+          "ok": false,
+          "v": 12,
+          "min": 70
+        },
+        {
+          "k": "brakeNotReached",
+          "ok": null
+        }
+      ]
     },
     {
       "id": "r10",
@@ -588,7 +819,33 @@
       "roster": null,
       "outcome": "reservations",
       "note": "updateWelcomePaid",
-      "lang": "pt"
+      "lang": "pt",
+      "criteria": [
+        {
+          "k": "alone",
+          "ok": false,
+          "v": 1,
+          "at": [
+            1.0
+          ]
+        },
+        {
+          "k": "foundScored",
+          "ok": true,
+          "v": 18,
+          "of": 5
+        },
+        {
+          "k": "relevantShare",
+          "ok": true,
+          "v": 83,
+          "min": 70
+        },
+        {
+          "k": "brakeNotReached",
+          "ok": null
+        }
+      ]
     },
     {
       "id": "r11",
@@ -609,7 +866,31 @@
       "roster": null,
       "outcome": "reservations",
       "note": "cleanInstallWarehouse",
-      "lang": "it"
+      "lang": "it",
+      "criteria": [
+        {
+          "k": "alone",
+          "ok": true,
+          "v": 0,
+          "at": []
+        },
+        {
+          "k": "foundScored",
+          "ok": true,
+          "v": 19,
+          "of": 12
+        },
+        {
+          "k": "relevantShare",
+          "ok": false,
+          "v": 11,
+          "min": 70
+        },
+        {
+          "k": "brakeHeld",
+          "ok": true
+        }
+      ]
     },
     {
       "id": "r12",
@@ -630,7 +911,29 @@
       "roster": null,
       "outcome": "fail",
       "note": "updateNoNewPositions",
-      "lang": "de"
+      "lang": "de",
+      "criteria": [
+        {
+          "k": "alone",
+          "ok": true,
+          "v": 0,
+          "at": []
+        },
+        {
+          "k": "foundScored",
+          "ok": false,
+          "v": 0,
+          "of": 0
+        },
+        {
+          "k": "relevantUnknown",
+          "ok": null
+        },
+        {
+          "k": "brakeHeld",
+          "ok": true
+        }
+      ]
     },
     {
       "id": "r13",
@@ -651,7 +954,17 @@
       "roster": null,
       "outcome": "fail",
       "note": "diskLowAfterUpdate",
-      "lang": "pt"
+      "lang": "pt",
+      "criteria": [
+        {
+          "k": "notStarted",
+          "ok": false
+        },
+        {
+          "k": "brakeNotRecorded",
+          "ok": null
+        }
+      ]
     },
     {
       "id": "r14",
@@ -672,7 +985,75 @@
       "roster": null,
       "outcome": "reservations",
       "note": "cleanInstallGerman",
-      "lang": "de"
+      "lang": "de",
+      "criteria": [
+        {
+          "k": "alone",
+          "ok": true,
+          "v": 0,
+          "at": []
+        },
+        {
+          "k": "foundScored",
+          "ok": true,
+          "v": 26,
+          "of": 19
+        },
+        {
+          "k": "relevantShare",
+          "ok": false,
+          "v": 38,
+          "min": 70
+        },
+        {
+          "k": "brakeFalseUnlock",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "id": "r15",
+      "os": "macos",
+      "service": "claude",
+      "day": "17/11",
+      "profile": "officeClerk",
+      "mode": "onsite",
+      "build": "1ea2fb5c6",
+      "buildNo": 10,
+      "minutes": 35.2,
+      "cost": 1.09,
+      "calls": null,
+      "found": 1,
+      "scored": 6,
+      "relevant": 0,
+      "bestScore": 74,
+      "roster": null,
+      "outcome": "pass",
+      "note": "updateBuild10Portuguese",
+      "lang": "pt",
+      "criteria": [
+        {
+          "k": "alone",
+          "ok": true,
+          "v": 0,
+          "at": []
+        },
+        {
+          "k": "foundScored",
+          "ok": true,
+          "v": 1,
+          "of": 6
+        },
+        {
+          "k": "tooFew",
+          "ok": null,
+          "v": 1
+        },
+        {
+          "k": "brakeHeld",
+          "ok": true
+        }
+      ]
     }
   ],
   "services": [
@@ -897,6 +1278,185 @@
         }
       ],
       "scores": [],
+      "scorePoints": [
+        {
+          "m": 3.57,
+          "s": 81
+        },
+        {
+          "m": 3.83,
+          "s": 53
+        },
+        {
+          "m": 4.6,
+          "s": 83
+        },
+        {
+          "m": 5.12,
+          "s": 84
+        },
+        {
+          "m": 5.47,
+          "s": 85
+        },
+        {
+          "m": 5.53,
+          "s": 35
+        },
+        {
+          "m": 6.33,
+          "s": 79
+        },
+        {
+          "m": 6.57,
+          "s": 82
+        },
+        {
+          "m": 6.75,
+          "s": 33
+        },
+        {
+          "m": 6.78,
+          "s": 81
+        },
+        {
+          "m": 7.03,
+          "s": 83
+        },
+        {
+          "m": 7.03,
+          "s": 84
+        },
+        {
+          "m": 7.28,
+          "s": 80
+        },
+        {
+          "m": 7.33,
+          "s": 82
+        },
+        {
+          "m": 7.55,
+          "s": 82
+        },
+        {
+          "m": 7.77,
+          "s": 57
+        },
+        {
+          "m": 7.8,
+          "s": 81
+        },
+        {
+          "m": 7.95,
+          "s": 91
+        },
+        {
+          "m": 8.0,
+          "s": 18
+        },
+        {
+          "m": 8.13,
+          "s": 76
+        },
+        {
+          "m": 8.18,
+          "s": 78
+        },
+        {
+          "m": 8.3,
+          "s": 85
+        },
+        {
+          "m": 8.42,
+          "s": 80
+        },
+        {
+          "m": 8.45,
+          "s": 88
+        },
+        {
+          "m": 8.58,
+          "s": 83
+        },
+        {
+          "m": 8.63,
+          "s": 86
+        },
+        {
+          "m": 8.8,
+          "s": 82
+        },
+        {
+          "m": 8.8,
+          "s": 79
+        },
+        {
+          "m": 8.98,
+          "s": 86
+        },
+        {
+          "m": 9.03,
+          "s": 58
+        },
+        {
+          "m": 9.15,
+          "s": 81
+        },
+        {
+          "m": 9.2,
+          "s": 75
+        },
+        {
+          "m": 9.33,
+          "s": 83
+        },
+        {
+          "m": 9.35,
+          "s": 79
+        },
+        {
+          "m": 9.53,
+          "s": 48
+        }
+      ],
+      "scoreValues": [
+        81,
+        53,
+        83,
+        84,
+        85,
+        35,
+        79,
+        82,
+        33,
+        81,
+        83,
+        84,
+        80,
+        82,
+        82,
+        57,
+        81,
+        91,
+        18,
+        76,
+        78,
+        85,
+        80,
+        88,
+        83,
+        86,
+        82,
+        79,
+        86,
+        58,
+        81,
+        75,
+        83,
+        79,
+        48
+      ],
       "brake": [
         {
           "m": 20.88,
@@ -1137,6 +1697,75 @@
         }
       ],
       "scores": [],
+      "scorePoints": [
+        {
+          "m": 21.57,
+          "s": 63
+        },
+        {
+          "m": 21.6,
+          "s": 89
+        },
+        {
+          "m": 21.78,
+          "s": 85
+        },
+        {
+          "m": 21.83,
+          "s": 46
+        },
+        {
+          "m": 22.02,
+          "s": 89
+        },
+        {
+          "m": 22.18,
+          "s": 35
+        },
+        {
+          "m": 23.28,
+          "s": 53
+        },
+        {
+          "m": 23.43,
+          "s": 34
+        },
+        {
+          "m": 24.57,
+          "s": 57
+        },
+        {
+          "m": 25.85,
+          "s": 82
+        },
+        {
+          "m": 26.08,
+          "s": 65
+        },
+        {
+          "m": 27.03,
+          "s": 68
+        },
+        {
+          "m": 28.32,
+          "s": 50
+        }
+      ],
+      "scoreValues": [
+        63,
+        89,
+        85,
+        46,
+        89,
+        35,
+        53,
+        34,
+        57,
+        82,
+        65,
+        68,
+        50
+      ],
       "brake": [
         {
           "m": 1.08,
@@ -1377,6 +2006,260 @@
         }
       ],
       "scores": [],
+      "scorePoints": [
+        {
+          "m": 5.03,
+          "s": 81
+        },
+        {
+          "m": 5.17,
+          "s": 82
+        },
+        {
+          "m": 5.38,
+          "s": 79
+        },
+        {
+          "m": 5.4,
+          "s": 77
+        },
+        {
+          "m": 5.62,
+          "s": 86
+        },
+        {
+          "m": 6.15,
+          "s": 79
+        },
+        {
+          "m": 6.25,
+          "s": 79
+        },
+        {
+          "m": 6.47,
+          "s": 89
+        },
+        {
+          "m": 6.55,
+          "s": 82
+        },
+        {
+          "m": 6.7,
+          "s": 77
+        },
+        {
+          "m": 6.77,
+          "s": 91
+        },
+        {
+          "m": 6.87,
+          "s": 83
+        },
+        {
+          "m": 7.0,
+          "s": 93
+        },
+        {
+          "m": 7.02,
+          "s": 82
+        },
+        {
+          "m": 7.22,
+          "s": 86
+        },
+        {
+          "m": 7.22,
+          "s": 70
+        },
+        {
+          "m": 7.4,
+          "s": 77
+        },
+        {
+          "m": 7.47,
+          "s": 87
+        },
+        {
+          "m": 7.57,
+          "s": 89
+        },
+        {
+          "m": 7.92,
+          "s": 60
+        },
+        {
+          "m": 8.07,
+          "s": 72
+        },
+        {
+          "m": 8.08,
+          "s": 71
+        },
+        {
+          "m": 8.23,
+          "s": 83
+        },
+        {
+          "m": 8.28,
+          "s": 52
+        },
+        {
+          "m": 8.38,
+          "s": 74
+        },
+        {
+          "m": 8.47,
+          "s": 86
+        },
+        {
+          "m": 8.55,
+          "s": 67
+        },
+        {
+          "m": 8.65,
+          "s": 74
+        },
+        {
+          "m": 8.75,
+          "s": 29
+        },
+        {
+          "m": 8.83,
+          "s": 68
+        },
+        {
+          "m": 8.9,
+          "s": 87
+        },
+        {
+          "m": 9.02,
+          "s": 84
+        },
+        {
+          "m": 9.18,
+          "s": 68
+        },
+        {
+          "m": 9.25,
+          "s": 73
+        },
+        {
+          "m": 9.37,
+          "s": 80
+        },
+        {
+          "m": 9.53,
+          "s": 86
+        },
+        {
+          "m": 9.68,
+          "s": 51
+        },
+        {
+          "m": 9.7,
+          "s": 30
+        },
+        {
+          "m": 9.85,
+          "s": 86
+        },
+        {
+          "m": 9.88,
+          "s": 64
+        },
+        {
+          "m": 10.03,
+          "s": 82
+        },
+        {
+          "m": 10.03,
+          "s": 84
+        },
+        {
+          "m": 10.33,
+          "s": 73
+        },
+        {
+          "m": 10.47,
+          "s": 74
+        },
+        {
+          "m": 10.62,
+          "s": 71
+        },
+        {
+          "m": 10.77,
+          "s": 84
+        },
+        {
+          "m": 10.8,
+          "s": 86
+        },
+        {
+          "m": 10.95,
+          "s": 69
+        },
+        {
+          "m": 11.12,
+          "s": 81
+        },
+        {
+          "m": 11.12,
+          "s": 56
+        }
+      ],
+      "scoreValues": [
+        81,
+        82,
+        79,
+        77,
+        86,
+        79,
+        79,
+        89,
+        82,
+        77,
+        91,
+        83,
+        93,
+        82,
+        86,
+        70,
+        77,
+        87,
+        89,
+        60,
+        72,
+        71,
+        83,
+        52,
+        74,
+        86,
+        67,
+        74,
+        29,
+        68,
+        87,
+        84,
+        68,
+        73,
+        80,
+        86,
+        51,
+        30,
+        86,
+        64,
+        82,
+        84,
+        73,
+        74,
+        71,
+        84,
+        86,
+        69,
+        81,
+        56
+      ],
       "brake": [
         {
           "m": 22.1,
@@ -1696,6 +2579,30 @@
         }
       ],
       "scores": [],
+      "scorePoints": [
+        {
+          "m": 20.32,
+          "s": 89
+        },
+        {
+          "m": 21.55,
+          "s": 62
+        },
+        {
+          "m": 22.3,
+          "s": 39
+        },
+        {
+          "m": 22.48,
+          "s": 26
+        }
+      ],
+      "scoreValues": [
+        89,
+        62,
+        39,
+        26
+      ],
       "brake": [
         {
           "m": 2.92,
@@ -1955,6 +2862,8 @@
         }
       ],
       "scores": [],
+      "scorePoints": [],
+      "scoreValues": [],
       "brake": [
         {
           "m": 3.63,
@@ -1991,6 +2900,8 @@
       "ceiling": null,
       "timeline": [],
       "scores": [],
+      "scorePoints": [],
+      "scoreValues": [],
       "brake": [
         {
           "m": 9.43,
@@ -2358,6 +3269,28 @@
         }
       ],
       "scores": [],
+      "scorePoints": [],
+      "scoreValues": [
+        75,
+        83,
+        72,
+        73,
+        85,
+        58,
+        78,
+        68,
+        87,
+        83,
+        86,
+        88,
+        95,
+        70,
+        94,
+        83,
+        73,
+        83,
+        78
+      ],
       "brake": [
         {
           "m": 19.0,
@@ -2663,6 +3596,8 @@
         }
       ],
       "scores": [],
+      "scorePoints": [],
+      "scoreValues": [],
       "brake": [
         {
           "m": 0.73,
@@ -2910,6 +3845,35 @@
         }
       ],
       "scores": [],
+      "scorePoints": [
+        {
+          "m": 24.38,
+          "s": 64
+        },
+        {
+          "m": 25.32,
+          "s": 64
+        },
+        {
+          "m": 26.22,
+          "s": 68
+        },
+        {
+          "m": 26.93,
+          "s": 85
+        },
+        {
+          "m": 30.37,
+          "s": 79
+        }
+      ],
+      "scoreValues": [
+        64,
+        64,
+        68,
+        85,
+        79
+      ],
       "brake": [
         {
           "m": 0.97,
@@ -3371,6 +4335,70 @@
           "best": 85
         }
       ],
+      "scorePoints": [
+        {
+          "m": 22.63,
+          "s": 77
+        },
+        {
+          "m": 24.1,
+          "s": 85
+        },
+        {
+          "m": 27.0,
+          "s": 57
+        },
+        {
+          "m": 27.03,
+          "s": 49
+        },
+        {
+          "m": 30.22,
+          "s": 42
+        },
+        {
+          "m": 32.28,
+          "s": 29
+        },
+        {
+          "m": 32.43,
+          "s": 54
+        },
+        {
+          "m": 32.52,
+          "s": 49
+        },
+        {
+          "m": 32.58,
+          "s": 31
+        },
+        {
+          "m": 33.03,
+          "s": 42
+        },
+        {
+          "m": 33.27,
+          "s": 30
+        },
+        {
+          "m": 33.43,
+          "s": 30
+        }
+      ],
+      "scoreValues": [
+        77,
+        85,
+        57,
+        49,
+        42,
+        29,
+        54,
+        49,
+        31,
+        42,
+        30,
+        30
+      ],
       "brake": [
         {
           "m": 1.47,
@@ -3646,6 +4674,8 @@
         }
       ],
       "scores": [],
+      "scorePoints": [],
+      "scoreValues": [],
       "brake": [
         {
           "m": 2.4,
@@ -3766,6 +4796,8 @@
         }
       ],
       "scores": [],
+      "scorePoints": [],
+      "scoreValues": [],
       "brake": [
         {
           "m": 0.88,
@@ -3839,6 +4871,8 @@
         }
       ],
       "scores": [],
+      "scorePoints": [],
+      "scoreValues": [],
       "brake": [
         {
           "m": 0.48,
@@ -4288,6 +5322,8 @@
         }
       ],
       "scores": [],
+      "scorePoints": [],
+      "scoreValues": [],
       "brake": [
         {
           "m": 26.67,
@@ -5010,6 +6046,21 @@
         }
       ],
       "scores": [],
+      "scorePoints": [],
+      "scoreValues": [
+        90,
+        89,
+        88,
+        82,
+        80,
+        77,
+        76,
+        72,
+        62,
+        52,
+        50,
+        48
+      ],
       "brake": [
         {
           "m": -3.84,
@@ -5357,6 +6408,110 @@
           "best": 94
         }
       ],
+      "scorePoints": [
+        {
+          "m": 13.95,
+          "s": 70
+        },
+        {
+          "m": 14.15,
+          "s": 75
+        },
+        {
+          "m": 14.27,
+          "s": 74
+        },
+        {
+          "m": 14.42,
+          "s": 81
+        },
+        {
+          "m": 14.53,
+          "s": 70
+        },
+        {
+          "m": 14.77,
+          "s": 83
+        },
+        {
+          "m": 14.92,
+          "s": 77
+        },
+        {
+          "m": 15.03,
+          "s": 69
+        },
+        {
+          "m": 15.2,
+          "s": 70
+        },
+        {
+          "m": 15.3,
+          "s": 77
+        },
+        {
+          "m": 15.57,
+          "s": 74
+        },
+        {
+          "m": 15.75,
+          "s": 68
+        },
+        {
+          "m": 15.9,
+          "s": 63
+        },
+        {
+          "m": 16.05,
+          "s": 55
+        },
+        {
+          "m": 16.22,
+          "s": 66
+        },
+        {
+          "m": 18.58,
+          "s": 94
+        },
+        {
+          "m": 18.73,
+          "s": 94
+        },
+        {
+          "m": 18.98,
+          "s": 81
+        },
+        {
+          "m": 19.23,
+          "s": 82
+        },
+        {
+          "m": 19.45,
+          "s": 93
+        }
+      ],
+      "scoreValues": [
+        70,
+        75,
+        74,
+        81,
+        70,
+        83,
+        77,
+        69,
+        70,
+        77,
+        74,
+        68,
+        63,
+        55,
+        66,
+        94,
+        94,
+        81,
+        82,
+        93
+      ],
       "brake": [
         {
           "m": 1.03,
@@ -5675,6 +6830,8 @@
         }
       ],
       "scores": [],
+      "scorePoints": [],
+      "scoreValues": [],
       "brake": [
         {
           "m": 10.35,
@@ -5871,6 +7028,115 @@
           "best": 74
         }
       ],
+      "scorePoints": [
+        {
+          "m": 0.45,
+          "s": 28
+        },
+        {
+          "m": 0.67,
+          "s": 74
+        },
+        {
+          "m": 1.92,
+          "s": 64
+        },
+        {
+          "m": 1.92,
+          "s": 39
+        },
+        {
+          "m": 4.08,
+          "s": 43
+        },
+        {
+          "m": 4.23,
+          "s": 64
+        },
+        {
+          "m": 5.43,
+          "s": 49
+        },
+        {
+          "m": 5.47,
+          "s": 39
+        },
+        {
+          "m": 5.6,
+          "s": 21
+        },
+        {
+          "m": 5.67,
+          "s": 31
+        },
+        {
+          "m": 5.72,
+          "s": 18
+        },
+        {
+          "m": 5.87,
+          "s": 18
+        },
+        {
+          "m": 7.1,
+          "s": 20
+        },
+        {
+          "m": 7.2,
+          "s": 50
+        },
+        {
+          "m": 7.43,
+          "s": 39
+        },
+        {
+          "m": 7.62,
+          "s": 53
+        },
+        {
+          "m": 8.0,
+          "s": 30
+        },
+        {
+          "m": 8.32,
+          "s": 41
+        },
+        {
+          "m": 9.23,
+          "s": 24
+        },
+        {
+          "m": 9.38,
+          "s": 15
+        },
+        {
+          "m": 9.53,
+          "s": 16
+        }
+      ],
+      "scoreValues": [
+        28,
+        74,
+        64,
+        39,
+        43,
+        64,
+        49,
+        39,
+        21,
+        31,
+        18,
+        18,
+        20,
+        50,
+        39,
+        53,
+        30,
+        41,
+        24,
+        15,
+        16
+      ],
       "brake": [
         {
           "m": -13.42,
@@ -5911,6 +7177,349 @@
         "talent": 3,
         "unknown": 3,
         "gigroup-it": 1
+      }
+    },
+    "r15": {
+      "minutes": 35.2,
+      "cost": 1.0943,
+      "calls": null,
+      "found": 1,
+      "scored": 6,
+      "relevance": {
+        "P": 0,
+        "A": 1,
+        "X": 0
+      },
+      "ceiling": null,
+      "timeline": [
+        {
+          "m": 0.0,
+          "cost": 0.0,
+          "found": 0,
+          "scored": 7
+        },
+        {
+          "m": 1.0,
+          "cost": 0.0,
+          "found": 0,
+          "scored": 7
+        },
+        {
+          "m": 2.0,
+          "cost": 0.0,
+          "found": 0,
+          "scored": 7
+        },
+        {
+          "m": 3.0,
+          "cost": 0.1247,
+          "found": 0,
+          "scored": 7
+        },
+        {
+          "m": 4.0,
+          "cost": 0.3059,
+          "found": 0,
+          "scored": 7
+        },
+        {
+          "m": 5.0,
+          "cost": 0.3059,
+          "found": 0,
+          "scored": 7
+        },
+        {
+          "m": 6.0,
+          "cost": 0.3154,
+          "found": 0,
+          "scored": 7
+        },
+        {
+          "m": 7.0,
+          "cost": 0.3154,
+          "found": 0,
+          "scored": 7
+        },
+        {
+          "m": 8.0,
+          "cost": 0.3154,
+          "found": 0,
+          "scored": 7
+        },
+        {
+          "m": 9.0,
+          "cost": 0.3154,
+          "found": 0,
+          "scored": 7
+        },
+        {
+          "m": 10.0,
+          "cost": 0.3154,
+          "found": 0,
+          "scored": 7
+        },
+        {
+          "m": 11.0,
+          "cost": 0.3154,
+          "found": 0,
+          "scored": 7
+        },
+        {
+          "m": 12.0,
+          "cost": 0.3201,
+          "found": 0,
+          "scored": 7
+        },
+        {
+          "m": 13.0,
+          "cost": 0.3748,
+          "found": 0,
+          "scored": 7
+        },
+        {
+          "m": 14.0,
+          "cost": 0.3776,
+          "found": 0,
+          "scored": 7
+        },
+        {
+          "m": 15.0,
+          "cost": 0.6425,
+          "found": 0,
+          "scored": 7
+        },
+        {
+          "m": 16.0,
+          "cost": 0.6425,
+          "found": 0,
+          "scored": 9
+        },
+        {
+          "m": 17.0,
+          "cost": 0.648,
+          "found": 0,
+          "scored": 9
+        },
+        {
+          "m": 18.0,
+          "cost": 0.6538,
+          "found": 0,
+          "scored": 9
+        },
+        {
+          "m": 19.0,
+          "cost": 0.6618,
+          "found": 0,
+          "scored": 9
+        },
+        {
+          "m": 20.0,
+          "cost": 0.6711,
+          "found": 0,
+          "scored": 9
+        },
+        {
+          "m": 21.0,
+          "cost": 0.7686,
+          "found": 0,
+          "scored": 11
+        },
+        {
+          "m": 22.0,
+          "cost": 0.8347,
+          "found": 0,
+          "scored": 11
+        },
+        {
+          "m": 23.0,
+          "cost": 0.8844,
+          "found": 0,
+          "scored": 11
+        },
+        {
+          "m": 24.0,
+          "cost": 0.9397,
+          "found": 1,
+          "scored": 11
+        },
+        {
+          "m": 25.0,
+          "cost": 0.9942,
+          "found": 1,
+          "scored": 11
+        },
+        {
+          "m": 26.0,
+          "cost": 1.0132,
+          "found": 1,
+          "scored": 11
+        },
+        {
+          "m": 27.0,
+          "cost": 1.0943,
+          "found": 1,
+          "scored": 13
+        },
+        {
+          "m": 28.0,
+          "cost": 1.0943,
+          "found": 1,
+          "scored": 13
+        },
+        {
+          "m": 29.0,
+          "cost": 1.0943,
+          "found": 1,
+          "scored": 13
+        },
+        {
+          "m": 30.0,
+          "cost": 1.0943,
+          "found": 1,
+          "scored": 13
+        },
+        {
+          "m": 31.0,
+          "cost": 1.0943,
+          "found": 1,
+          "scored": 13
+        },
+        {
+          "m": 32.0,
+          "cost": 1.0943,
+          "found": 1,
+          "scored": 13
+        },
+        {
+          "m": 33.0,
+          "cost": 1.0943,
+          "found": 1,
+          "scored": 13
+        },
+        {
+          "m": 34.0,
+          "cost": 1.0943,
+          "found": 1,
+          "scored": 13
+        },
+        {
+          "m": 35.0,
+          "cost": 1.0943,
+          "found": 1,
+          "scored": 13
+        },
+        {
+          "m": 35.18,
+          "cost": 1.0943,
+          "found": 1,
+          "scored": 13
+        }
+      ],
+      "scores": [
+        {
+          "m": 14.23,
+          "best": 67
+        },
+        {
+          "m": 14.43,
+          "best": 71
+        },
+        {
+          "m": 19.8,
+          "best": 71
+        },
+        {
+          "m": 19.95,
+          "best": 71
+        },
+        {
+          "m": 22.23,
+          "best": 74
+        },
+        {
+          "m": 25.85,
+          "best": 74
+        }
+      ],
+      "scorePoints": [
+        {
+          "m": 14.23,
+          "s": 67
+        },
+        {
+          "m": 14.43,
+          "s": 71
+        },
+        {
+          "m": 19.8,
+          "s": 67
+        },
+        {
+          "m": 19.95,
+          "s": 53
+        },
+        {
+          "m": 25.85,
+          "s": 60
+        },
+        {
+          "m": 26.0,
+          "s": 74
+        }
+      ],
+      "scoreValues": [
+        67,
+        71,
+        67,
+        53,
+        60,
+        74
+      ],
+      "brake": [
+        {
+          "m": 1.33,
+          "kind": "earlyStart"
+        },
+        {
+          "m": 2.0,
+          "kind": "setupOpen"
+        },
+        {
+          "m": 3.02,
+          "kind": "setupClosed"
+        },
+        {
+          "m": 11.52,
+          "kind": "queueStart"
+        },
+        {
+          "m": 11.8,
+          "kind": "periodStart"
+        },
+        {
+          "m": 14.07,
+          "kind": "scoutStart"
+        },
+        {
+          "m": 26.23,
+          "kind": "pace"
+        }
+      ],
+      "agents": {
+        "captain": 0.3606,
+        "scorer": 0.3259,
+        "analyst": 0.248,
+        "mentor": 0.1246,
+        "scout": 0.0291,
+        "sentinel": 0.0061
+      },
+      "discarded": {
+        "area": 15,
+        "duplicate": 9,
+        "role": 2
+      },
+      "bySource": {
+        "linkedin": 1
       }
     }
   },

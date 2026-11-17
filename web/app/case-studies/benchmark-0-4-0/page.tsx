@@ -194,6 +194,8 @@ export default async function BenchmarkPage() {
     ceiling?: number | null;
     timeline?: ChartRound["timeline"];
     scores?: ChartRound["scores"];
+    scorePoints?: ChartRound["scorePoints"];
+    scoreValues?: ChartRound["scoreValues"];
     brake?: ChartRound["brake"];
     agents?: Record<string, number> | null;
     relevance?: BenchProfile["relevance"];
@@ -223,6 +225,8 @@ export default async function BenchmarkPage() {
         brake: x.brake ?? [],
         timeline: x.timeline ?? [],
         scores: x.scores ?? [],
+        scorePoints: x.scorePoints ?? [],
+        scoreValues: x.scoreValues ?? [],
         agents: x.agents ?? null,
       };
     }),
@@ -243,6 +247,8 @@ export default async function BenchmarkPage() {
       brake: b.brake ?? [],
       timeline: b.timeline ?? [],
       scores: b.scores ?? [],
+      scorePoints: b.scorePoints ?? [],
+      scoreValues: b.scoreValues ?? [],
       agents: b.agents ?? null,
     })),
   ];

@@ -13,12 +13,16 @@ type Series = {
   ceiling?: number | null;
   timeline?: TimelinePoint[];
   scores?: { m: number; best: number }[];
+  scorePoints?: { m: number; s: number }[];
+  scoreValues?: number[];
   brake?: { m: number; kind: string }[];
   agents?: Record<string, number> | null;
   relevance?: { P?: number; A?: number; X?: number } | null;
   discarded?: Record<string, number> | null;
   bySource?: Record<string, number> | null;
 };
+
+export type RoundCriterion = { k: string; ok: boolean | null; v?: number; of?: number; min?: number; max?: number; at?: number[] };
 
 export type TestEntry = {
   id: string;
@@ -39,6 +43,7 @@ export type TestEntry = {
   outcome: string | null;
   note: string | null;
   target: string | null; // the release target this test proves, for its criteria
+  criteria: RoundCriterion[]; // the path of a person, for a round
   series: Series;
 };
 
@@ -83,6 +88,7 @@ export const TESTS: TestEntry[] = [
       outcome: r.outcome,
       note: r.note,
       target: null,
+      criteria: ((r as { criteria?: RoundCriterion[] }).criteria ?? []) as RoundCriterion[],
       series: s,
     };
   }),
@@ -105,6 +111,7 @@ export const TESTS: TestEntry[] = [
     outcome: null,
     note: null,
     target: BENCH_TARGET[b.profile] ?? null,
+    criteria: [],
     series: b,
   })),
 ];
@@ -143,6 +150,8 @@ export function chartRoundOf(x: TestEntry, label: string): ChartRound {
     brake: s.brake ?? [],
     timeline: s.timeline ?? [],
     scores: s.scores ?? [],
+    scorePoints: s.scorePoints ?? [],
+    scoreValues: s.scoreValues ?? [],
     agents: s.agents ?? null,
   };
 }

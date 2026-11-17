@@ -37,6 +37,8 @@ export type ChartRound = {
   brake: { m: number; kind: string }[]; // brake and stop events, minutes from the start
   timeline: TimelinePoint[];
   scores: { m: number; best: number }[]; // best score so far, from the positions with a score and a time
+  scorePoints: { m: number; s: number }[]; // every score with the minute it was given
+  scoreValues: number[]; // every score of the round, for the distribution
   agents: Record<string, number> | null; // $ per agent role
 };
 
@@ -122,7 +124,7 @@ const AGENT_COLOR: Record<string, string> = {
 };
 // Events that stop or hold the team are red, those that let it work again green, the rest (setup, start, notices) blue.
 const EVENT_STOP = new Set(["pace", "dailyHalt", "periodHalt", "periodOver", "periodEnd", "benchStop", "stop", "ceiling", "diskLow", "machineStopped", "creditGone", "creditExhausted", "inputHeld", "pause"]);
-const EVENT_GO = new Set(["resume", "resumeScouts", "cleared", "restart", "switch", "teamStart", "ready", "goalReached"]);
+const EVENT_GO = new Set(["resume", "resumeScouts", "cleared", "restart", "switch", "teamStart", "ready", "goalReached", "queueStart", "scoutStart", "setupClosed"]);
 const colorOf = (key: string, i: number, map?: Record<string, string>) => map?.[key] ?? PALETTE[i % PALETTE.length];
 
 // ---- small building blocks ----
@@ -228,7 +230,7 @@ const ticks = (max: number, n?: number) => {
 
 // ---- line chart over minutes ----
 
-type LineSeries = { key: string; label: string; color: string; points: { x: number; y: number }[]; dashed?: boolean };
+type LineSeries = { key: string; label: string; color: string; points: { x: number; y: number }[]; dashed?: boolean; dots?: boolean };
 
 function LineChart({
   series,
@@ -242,6 +244,7 @@ function LineChart({
   xFormat = (v: number) => `${v} min`,
   xTick = (v: number) => String(Math.round(v)),
   xStep,
+  band = null,
 }: {
   series: LineSeries[];
   xMax: number;
@@ -254,6 +257,7 @@ function LineChart({
   xFormat?: (v: number) => string;
   xTick?: (v: number) => string;
   xStep?: number;
+  band?: { from: number; to: number; label: string } | null;
 }) {
   // Drawn at the real width of the box, so the text stays 11 px on a phone too.
   const ref = useRef<HTMLDivElement>(null);
@@ -319,6 +323,14 @@ function LineChart({
         <text x={W - pad.r} y={H - 2} textAnchor="end" fontSize={10} fill="var(--color-dim)">
           {xLabel}
         </text>
+        {band && (
+          <g>
+            <rect x={pad.l} width={W - pad.l - pad.r} y={sy(Math.min(band.to, yMax))} height={sy(band.from) - sy(Math.min(band.to, yMax))} fill="var(--color-green)" opacity={0.1} />
+            <text x={pad.l + 4} y={sy(Math.min(band.to, yMax)) + 12} fontSize={10} fill="var(--color-muted)">
+              {band.label}
+            </text>
+          </g>
+        )}
         {refY && (
           <g>
             <line x1={pad.l} x2={W - pad.r} y1={sy(refY.y)} y2={sy(refY.y)} stroke={refY.color} strokeWidth={1.5} strokeDasharray="6 4" />
@@ -341,16 +353,16 @@ function LineChart({
         })}
         {series.map((s) => (
           <g key={s.key}>
-            <polyline
+            {!s.dots && <polyline
               fill="none"
               stroke={s.color}
               strokeWidth={2.25}
               strokeDasharray={s.dashed ? "5 4" : undefined}
               strokeLinejoin="round"
               points={s.points.map((p) => `${sx(p.x)},${sy(p.y)}`).join(" ")}
-            />
-            {s.points.length <= 40 &&
-              s.points.map((p) => <circle key={p.x} cx={sx(p.x)} cy={sy(p.y)} r={2.6} fill={s.color} />)}
+            />}
+            {(s.dots || s.points.length <= 40) &&
+              s.points.map((p, i) => <circle key={`${p.x}-${i}`} cx={sx(p.x)} cy={sy(p.y)} r={s.dots ? 4 : 2.6} fill={s.color} opacity={s.dots ? 0.75 : 1} />)}
           </g>
         ))}
         {hover && (
@@ -513,10 +525,18 @@ function RoundTimelines({ rounds, t, money, fixed = false }: { rounds: ChartRoun
         { key: "scored", label: t.scored, color: C.scored, points: ends(r.scored), dashed: true },
         { key: "relevant", label: t.relevant, color: C.relevant, points: ends(r.relevant), dashed: true },
       ].filter((s) => s.points.length > 0);
-  const scoreS: LineSeries[] = [
-    { key: "best", label: t.bestScore, color: C.best, points: r.scores.length ? r.scores.map((p) => ({ x: p.m, y: p.best })) : pick("best") },
-    { key: "median", label: t.medianScore, color: C.median, points: pick("median") },
-  ].filter((s) => s.points.length > 0);
+  // every score as a dot at the minute it was given, and the best one so far as a line
+  const pts = r.scorePoints.filter((p) => p.m >= 0).sort((a, b) => a.m - b.m);
+  let top = 0;
+  const bestLine = pts.map((p) => ({ x: p.m, y: (top = Math.max(top, p.s)) }));
+  const scoreS: LineSeries[] = pts.length
+    ? [
+        { key: "pts", label: t.eachScore, color: C.scored, points: pts.map((p) => ({ x: p.m, y: p.s })), dots: true },
+        { key: "best", label: t.bestScore, color: C.best, points: bestLine },
+      ]
+    : [];
+  const BANDS: [number, number][] = [[0, 49], [50, 69], [70, 84], [85, 100]];
+  const dist = BANDS.map(([a, b]) => r.scoreValues.filter((v) => v >= a && v <= b).length);
   const refY = r.ceiling != null ? { y: r.ceiling, label: `${t.ceiling} ${money(r.ceiling)}`, color: C.ceiling } : null;
   const refX = r.brake.map((b) => ({
     x: b.m,
@@ -550,6 +570,12 @@ function RoundTimelines({ rounds, t, money, fixed = false }: { rounds: ChartRoun
         <span>{`${t.bestScore}: ${r.bestScore ?? "—"}`}</span>
       </div>}
       {!real && <p className="text-[11px] text-[var(--color-yellow)]">{t.onlyTotals}</p>}
+      {r.scoreValues.length === 0 && (
+        <p className="text-[11px] text-[var(--color-dim)]">
+          {r.bestScore != null ? `${t.bestScore}: ${r.bestScore} · ` : ""}
+          {t.scoresNotRecorded}
+        </p>
+      )}
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title={t.spendOverTime}>
           <Legend
@@ -585,14 +611,35 @@ function RoundTimelines({ rounds, t, money, fixed = false }: { rounds: ChartRoun
             <Missing text={t.noData} />
           )}
         </Panel>
-        <Panel title={t.scoresOverTime}>
-          <Legend items={scoreS.map((s) => ({ label: s.label, color: s.color }))} />
-          {scoreS.length > 0 ? (
-            <LineChart series={scoreS} xMax={xMax} yFormat={(v) => String(Math.round(v))} xLabel={t.minutesAxis} yMaxHint={100} refX={refX} />
-          ) : (
-            <Missing text={r.bestScore != null ? `${t.scoresOnlyFinal} ${r.bestScore}.` : t.noData} />
-          )}
-        </Panel>
+        {scoreS.length > 0 && (
+          <Panel title={t.scoresOverTime}>
+            <Legend items={scoreS.map((s) => ({ label: s.label, color: s.color }))} />
+            <LineChart
+              series={scoreS}
+              xMax={xMax}
+              yFormat={(v) => String(Math.round(v))}
+              xLabel={t.minutesAxis}
+              yMaxHint={100}
+              refX={refX}
+              band={{ from: 70, to: 100, label: "≥ 70" }}
+            />
+          </Panel>
+        )}
+        {r.scoreValues.length > 0 && (
+          <Panel title={t.scoreDistribution} lead={`${r.scoreValues.length} ${t.scoresCount}`}>
+            <HBars
+              format={(v) => String(v)}
+              emptyLabel="0"
+              stacked={false}
+              compact
+              rows={BANDS.map(([a, b], k) => ({
+                key: `${a}`,
+                label: `${a}–${b}`,
+                segments: [{ key: "n", label: t.scoresCount, value: dist[k], color: a >= 70 ? "var(--color-green)" : "var(--color-muted)" }],
+              }))}
+            />
+          </Panel>
+        )}
         <Panel title={t.ratePerMinute}>
           {r.cost != null && r.minutes ? (
             <HBars
