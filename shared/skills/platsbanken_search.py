@@ -48,6 +48,15 @@ FIELD = 200
 SOURCE, COUNTRY = "arbetsformedlingen", "se"
 SORTS = ("pubdate-desc", "relevance", "applydate-desc")
 
+# Fields of work (yrkesområde), as the public taxonomy gives them (taxonomy.api.jobtechdev.se, type occupation-field, 17/11/2026):
+# the filter for a trade without guessing its Swedish word: a nurse is `health`, a bricklayer `construction`, a cook `hospitality`.
+FIELDS = {
+    "construction": "j7Cq_ZJe_GkT", "health": "NYW6_mP6_vwf", "hospitality": "ScKy_FHB_7wT", "transport-warehouse": "ASGV_zcE_bWf",
+    "industry": "wTEr_CBC_bqh", "installation-maintenance": "yhCP_AqT_tns", "craft": "PaxQ_o1G_wWH", "cleaning": "whao_Q6A_ScE",
+    "security": "E7hm_BLq_fqZ", "social": "GazW_2TU_kJw", "teaching": "MVqp_eS8_kDZ", "agriculture": "VuuL_7CH_adj",
+    "technical": "6Hq3_tKo_V57", "sales": "RPTn_bxG_ExZ", "beauty": "Uuf1_GMh_Uvw", "administration": "X82t_awd_Qyc",
+}
+
 # Places, as the taxonomy codes the API itself gave (stats=municipality / stats=region on 02/11/2026).
 CITIES = {
     "stockholm": ("municipality", "AvNB_uwa_6n6"), "goteborg": ("municipality", "PVZL_BQT_XtL"),
@@ -70,7 +79,7 @@ def _text(value, limit=FIELD) -> str:
 
 def url_for(q: str = "", city: str = "", remote: bool = False, no_experience: bool = False, trainee: bool = False,
             apprentice: bool = False, published_minutes: int = 0, sort: str = "pubdate-desc", limit: int = 50,
-            offset: int = 0, any_word: bool = False) -> str:
+            offset: int = 0, any_word: bool = False, field: str = "") -> str:
     """The URL for these arguments, or `Refused`."""
     q = " ".join(str(q or "").split())
     if len(q) > 100 or _CONTROL.search(q):
@@ -85,6 +94,11 @@ def url_for(q: str = "", city: str = "", remote: bool = False, no_experience: bo
         if key not in CITIES:
             raise Refused("city must be one of: %s" % ", ".join(sorted(CITIES)))
         params.append(CITIES[key])
+    if field:
+        key = str(field).strip().lower()
+        if key not in FIELDS:
+            raise Refused("field must be one of: %s" % ", ".join(sorted(FIELDS)))
+        params.append(("occupation-field", FIELDS[key]))
     for flag, name in ((remote, "remote"), (trainee, "trainee"), (apprentice, "larling")):
         if flag:
             params.append((name, "true"))
@@ -209,6 +223,7 @@ def main(argv=None) -> int:
     ap.add_argument("--sort", default="pubdate-desc", choices=SORTS)
     ap.add_argument("--limit", type=int, default=50)
     ap.add_argument("--offset", type=int, default=0)
+    ap.add_argument("--field", default="", help="the field of work, for a trade: %s" % ", ".join(sorted(FIELDS)))
     ap.add_argument("--any-word", action="store_true", help="any word may match (the API default); without it all words must")
     ap.add_argument("--log", action="store_true", help="write the pass to the Scout's pass log")
     ap.add_argument("--query-kind", default="other", help="for the pass log: role_language, role, synonym, level, city...")
@@ -216,7 +231,7 @@ def main(argv=None) -> int:
     try:
         result = search(q=args.q, city=args.city, remote=args.remote, no_experience=args.no_experience, trainee=args.trainee,
                         apprentice=args.apprentice, published_minutes=args.published_minutes, sort=args.sort, limit=args.limit,
-                        offset=args.offset, any_word=args.any_word)
+                        offset=args.offset, any_word=args.any_word, field=args.field)
     except Refused as exc:
         print("platsbanken_search: refused: %s" % exc, file=sys.stderr)
         return 2

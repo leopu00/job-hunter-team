@@ -81,6 +81,11 @@
    "graduate",
    "entry level",
    "associate"
+  ],
+  "hu": [
+   "junior",
+   "pályakezdő",
+   "gyakornok"
   ]
  },
  "broad_terms": {
@@ -124,6 +129,10 @@
    "intern",
    "graduate",
    "trainee"
+  ],
+  "hu": [
+   "gyakornok",
+   "pályakezdő"
   ]
  },
  "groups": {
@@ -141,7 +150,7 @@
      "arbets"
     ],
     "api": "https://jobsearch.api.jobtechdev.se/search",
-    "hint": "Every public Swedish ad. The site is a JS app: use the public JobTech JobSearch API (no key): q, municipality, region, remote, experience=false, trainee, published-after, sort=pubdate-desc, limit<=100, x-feature-freetext-bool-method=and. Source of the kit of 02/11."
+    "hint": "Every public Swedish ad. The site is a JS app: use the public JobTech JobSearch API (no key): q, municipality, region, remote, experience=false, trainee, published-after, sort=pubdate-desc, limit<=100, x-feature-freetext-bool-method=and. Source of the kit of 02/11. For a trade, the field of work (yrkesområde) of the public taxonomy filters it without guessing the Swedish word: platsbanken_search.py --field construction|health|hospitality|transport-warehouse|industry|installation-maintenance|craft|cleaning|security|social|teaching|agriculture|technical|sales|beauty|administration (alone, or with --q for the word of the trade and --city). Checked 17/11: --field health + «sjuksköterska» = 2167 ads."
    },
    {
     "slug": "blocket-jobb",
@@ -517,7 +526,7 @@
      "stepstone-germany",
      "stepstone"
     ],
-    "hint": "Search: stepstone.de/jobs/{q} (200 from the Mac on 03/11, the list is in the page); page by the link «next»."
+    "hint": "Search: stepstone.de/jobs/{q} (200 from the Mac on 03/11, the list is in the page); page by the link «next». For the trades that are not IT the word of the trade alone works too (stepstone.de/jobs/maurer, /jobs/pflegefachkraft, /jobs/koch, /jobs/lagerist) and there are category pages (stepstone.de/jobs/handwerk)."
    },
    {
     "slug": "linkedin",
@@ -604,9 +613,9 @@
     "name": "Kimeta",
     "country": "de",
     "tier": "minor",
-    "access": "search",
+    "access": "closed",
     "host": "kimeta.de",
-    "hint": "kimeta.de/jobs/{q} answered 404 on 03/11: find its search address on the site before counting passes; if it has none, log --status gone."
+    "hint": "Closed by its robots.txt: ClaudeBot and GPTBot have Disallow: / and no Allow: / (17/11), so the site is off limits for the Scout whatever it says about *. Its search address also answered 404 on 03/11. Log nothing there."
    },
    {
     "slug": "jobscout24",
@@ -624,6 +633,15 @@
     "tier": "minor",
     "access": "closed",
     "host": "jobware.de"
+   },
+   {
+    "slug": "jobs-de",
+    "name": "jobs.de",
+    "country": "de",
+    "tier": "minor",
+    "access": "search",
+    "host": "jobs.de/jobs",
+    "hint": "One word of the trade in the path, jobs.de/jobs/maurer, ~10 ads a page, each ad jobs.de/job/<slug>-<id> (the title words of the ads are the trade's: «Maurerin», «Elektroniker»). Public pages, no key; robots.txt (17/11, job-hunter-team-scout/1) allows them and asks Crawl-delay: 10 (one request every 10 seconds). 200 from the Mac on 17/11."
    }
   ],
   "fr": [
@@ -1310,6 +1328,49 @@
     "aliases": [
      "the-hub"
     ]
+   }
+  ],
+  "hu": [
+   {
+    "slug": "profession-hu",
+    "name": "Profession.hu",
+    "country": "hu",
+    "tier": "core",
+    "access": "search",
+    "host": "profession.hu/allasok",
+    "hint": "The biggest Hungarian board and the one for the trades that are not IT (kőműves, ápoló, szakács, raktáros, targoncavezető...): one WORD of the trade in the path, profession.hu/allasok/1,0,0,<word> (percent-encode the accents: k%C5%91m%C5%B1ves), about 20 ads a page; each ad is profession.hu/allas/<slug>-<id>. Public pages, no key; robots.txt read with job-hunter-team-scout/1 on 17/11: /allasok and /allas are allowed (it disallows /en/, /job/send, */jelentkezes/ and the account pages). 200 from the Mac on 17/11 with the title words of all four trades on the list pages."
+   },
+   {
+    "slug": "linkedin",
+    "name": "LinkedIn Hungary",
+    "country": "hu",
+    "tier": "core",
+    "access": "search",
+    "host": "linkedin.com/jobs",
+    "cities": [
+     "Budapest",
+     "Debrecen",
+     "Szeged",
+     "Győr"
+    ],
+    "hint": "Public list: hu.linkedin.com/jobs/search/?keywords={q}&location={city}%2C%20Hungary&f_TPR=r604800&sortBy=DD ; start= in steps of 25. Few ads for the trades that are not IT: use profession-hu first."
+   },
+   {
+    "slug": "indeed",
+    "name": "Indeed Hungary",
+    "country": "hu",
+    "tier": "core",
+    "access": "email",
+    "host": "hu.indeed.com"
+   },
+   {
+    "slug": "cvonline-hu",
+    "name": "CVOnline Hungary",
+    "country": "hu",
+    "tier": "minor",
+    "access": "search",
+    "host": "cvonline.hu/hu/allashirdetesek",
+    "hint": "Categories as pages: cvonline.hu/hu/allashirdetesek/epites-ingatlan (building), .../idegenforgalom-szalloda-vendeglatas (hotels, catering), .../beszerzes-logisztika-szallitas (logistics), .../gyartas-termeles (industry), .../betanitott-fizikai-segedmunka (manual work); ?page=N for the next page; each ad is cvonline.hu/hu/allas/<slug>-<id>. A third of the ads of the building category are German-speaking apprenticeships (Austria): the language gate drops them. robots.txt (17/11, job-hunter-team-scout/1) allows the pages and asks Crawl-delay: 10 (one request every 10 seconds). Health has no category: use profession-hu."
    }
   ]
  },

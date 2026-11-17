@@ -81,10 +81,33 @@ def test_the_plan_puts_every_core_portal_before_any_minor_one_and_the_native_lan
 
 
 def test_a_language_the_table_does_not_have_is_said_not_silently_dropped(profile):
+    profile.write_text("languages:\n  - language: Polski\n    level: native\n  - language: English\n    level: C1\n", encoding="utf-8")
+    plan = cov.load_plan()
+    assert plan["unmapped"] == ["pl"]
+    assert plan["entries"] and all(e["language"] in ("en", "remote") for e in plan["entries"])
+
+
+def test_a_hungarian_profile_has_a_plan_with_the_board_of_the_trades_that_are_not_it(profile):
     profile.write_text("languages:\n  - language: Magyar\n    level: native\n  - language: English\n    level: C1\n", encoding="utf-8")
     plan = cov.load_plan()
-    assert plan["unmapped"] == ["hu"]
-    assert plan["entries"] and all(e["language"] in ("en", "remote") for e in plan["entries"])
+    assert plan["unmapped"] == []
+    hu = {e["slug"]: e for e in plan["entries"] if e["language"] == "hu"}
+    assert hu["profession-hu"]["tier"] == "core" and hu["profession-hu"]["access"] == "search"
+    assert "allasok/1,0,0,<word>" in hu["profession-hu"]["hint"] and "robots.txt" in hu["profession-hu"]["hint"]
+    assert hu["indeed"]["access"] == "email" and hu["cvonline-hu"]["tier"] == "minor" and "Crawl-delay: 10" in hu["cvonline-hu"]["hint"]
+    data = cov.table()
+    assert data["broad_terms"]["hu"] and data["level_terms"]["hu"]
+
+
+def test_the_boards_of_germany_and_sweden_for_the_trades_that_are_not_it():
+    data = cov.table()
+    de = {e["slug"]: e for e in data["groups"]["de"]}
+    assert de["jobs-de"]["access"] == "search" and "Crawl-delay: 10" in de["jobs-de"]["hint"] and "jobs.de/jobs/maurer" in de["jobs-de"]["hint"]
+    # a site whose robots.txt shuts the named AI crawlers out is off limits for the Scout: closed, with the reason
+    assert de["kimeta"]["access"] == "closed" and "ClaudeBot" in de["kimeta"]["hint"] and "Log nothing there" in de["kimeta"]["hint"]
+    assert "stepstone.de/jobs/maurer" in de["stepstone-de"]["hint"]
+    se = {e["slug"]: e for e in data["groups"]["sv"]}
+    assert "--field construction" in se["arbetsformedlingen"]["hint"] or "--field health" in se["arbetsformedlingen"]["hint"]
 
 
 def test_a_profile_that_cannot_be_read_has_no_plan_and_demands_nothing(tmp_path, monkeypatch):
