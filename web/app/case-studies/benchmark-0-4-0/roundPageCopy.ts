@@ -34,6 +34,7 @@ export type RoundPageCopy = {
   next: string;
   sameSystem: string;
   synthetic: string;
+  spendDiffers: string;
   criteria: Record<string, string>;
   why: string;
   criteriaRule: string;
@@ -71,6 +72,7 @@ const en: RoundPageCopy = {
   next: "Next on {os} →",
   sameSystem: "Other tests on the same system",
   synthetic: "Synthetic profile: an invented person and trade, no real data.",
+  spendDiffers: "The chart counts {a} spent in the window the sampler recorded; the overview counts {b} for the whole round, setup included.",
   criteria: {
     tooFew: "too few positions to judge relevance ({v})",
     alone_ok: "starts and works with no manual step",
@@ -121,6 +123,7 @@ const it: RoundPageCopy = {
   next: "Successivo su {os} →",
   sameSystem: "Altri test sullo stesso sistema",
   synthetic: "Profilo sintetico: persona e mestiere inventati, nessun dato vero.",
+  spendDiffers: "Il grafico conta {a} spesi nella finestra registrata dal campionatore; la panoramica conta {b} per tutto il giro, setup compreso.",
   criteria: {
     tooFew: "troppo pochi annunci per giudicare la pertinenza ({v})",
     alone_ok: "parte e lavora senza interventi a mano",
@@ -171,6 +174,7 @@ const de: RoundPageCopy = {
   next: "Nächster auf {os} →",
   sameSystem: "Andere Tests auf demselben System",
   synthetic: "Synthetisches Profil: erfundene Person und erfundener Beruf, keine echten Daten.",
+  spendDiffers: "Das Diagramm zählt {a} im vom Sampler erfassten Zeitraum; der Überblick zählt {b} für die ganze Runde, Setup eingeschlossen.",
   criteria: {
     tooFew: "zu wenige Stellen, um die Passung zu beurteilen ({v})",
     alone_ok: "startet und arbeitet ohne Handgriffe",
@@ -221,6 +225,7 @@ const es: RoundPageCopy = {
   next: "Siguiente en {os} →",
   sameSystem: "Otras pruebas en el mismo sistema",
   synthetic: "Perfil sintético: persona y oficio inventados, ningún dato real.",
+  spendDiffers: "El gráfico cuenta {a} gastados en la ventana registrada por el muestreador; el resumen cuenta {b} de toda la ronda, configuración incluida.",
   criteria: {
     tooFew: "demasiado pocos anuncios para juzgar la pertinencia ({v})",
     alone_ok: "arranca y trabaja sin pasos a mano",
@@ -271,6 +276,7 @@ const fr: RoundPageCopy = {
   next: "Suivant sur {os} →",
   sameSystem: "Autres tests sur le même système",
   synthetic: "Profil synthétique : personne et métier inventés, aucune donnée réelle.",
+  spendDiffers: "Le graphique compte {a} dépensés dans la fenêtre enregistrée par l'échantillonneur ; l'aperçu compte {b} pour tout le tour, configuration comprise.",
   criteria: {
     tooFew: "trop peu d'annonces pour juger la pertinence ({v})",
     alone_ok: "démarre et travaille sans intervention à la main",
@@ -321,6 +327,7 @@ const hu: RoundPageCopy = {
   next: "Következő ezen: {os} →",
   sameSystem: "További tesztek ugyanazon a rendszeren",
   synthetic: "Szintetikus profil: kitalált személy és szakma, valódi adat nélkül.",
+  spendDiffers: "A grafikon a mintavevő által rögzített ablakban elköltött {a} összeget mutatja; az áttekintés a teljes kört, a beállítással együtt: {b}.",
   criteria: {
     tooFew: "túl kevés hirdetés a relevancia megítéléséhez ({v})",
     alone_ok: "elindul és dolgozik kézi beavatkozás nélkül",
@@ -371,6 +378,7 @@ const pt: RoundPageCopy = {
   next: "Seguinte em {os} →",
   sameSystem: "Outros testes no mesmo sistema",
   synthetic: "Perfil sintético: pessoa e ofício inventados, nenhum dado real.",
+  spendDiffers: "O gráfico conta {a} gastos na janela registada pelo amostrador; a visão geral conta {b} da rodada inteira, configuração incluída.",
   criteria: {
     tooFew: "anúncios a menos para julgar a pertinência ({v})",
     alone_ok: "arranca e trabalha sem intervenções à mão",

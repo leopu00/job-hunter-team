@@ -84,7 +84,8 @@
           "k": "newPositions",
           "trade": "bricklayer",
           "v": 0,
-          "ok": false
+          "ok": false,
+          "round": "r12"
         },
         {
           "k": "relevantOf",
@@ -92,7 +93,8 @@
           "v": 10,
           "of": 26,
           "min": 70,
-          "ok": false
+          "ok": false,
+          "round": "r14"
         }
       ]
     },
@@ -226,11 +228,13 @@
           "k": "underCeiling",
           "v": 4.95,
           "max": 5,
-          "ok": true
+          "ok": true,
+          "round": "r14"
         },
         {
           "k": "noFalseUnlock",
-          "ok": false
+          "ok": false,
+          "round": "r14"
         }
       ]
     },

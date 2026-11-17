@@ -61,6 +61,8 @@ export default async function RoundPage({ params }: { params: Promise<{ round: s
       .replace("{max}", String(c.max ?? ""))
       .replace("{at}", (c.at ?? []).map((m) => String(m).replace(".", nf.format(1.5).charAt(1))).join(", "));
   };
+  // the last spend of the minute-by-minute series, when the series counts a different window than the overview
+  const seriesSpend = [...(x.series.timeline ?? [])].reverse().find((pt) => pt.cost != null)?.cost ?? null;
   const story = ROUND_STORIES[x.id];
   const { prev, next } = neighbours(x);
   const brake = x.series.brake ?? [];
@@ -164,6 +166,11 @@ export default async function RoundPage({ params }: { params: Promise<{ round: s
         <section className="space-y-3">
           <h2 className="section-label">{p.charts}</h2>
           <RoundDetailCharts locale={locale} round={chartRoundOf(x, label(x))} />
+          {seriesSpend != null && x.cost != null && Math.abs(seriesSpend - x.cost) >= 0.05 && (
+            <p className="text-[11px] text-[var(--color-dim)]">
+              {p.spendDiffers.replace("{a}", money(seriesSpend)).replace("{b}", money(x.cost))}
+            </p>
+          )}
         </section>
 
         <section className="space-y-3">

@@ -75,7 +75,7 @@ export default async function BenchmarkPage() {
     );
   };
   // A criterion of a target with its real number, e.g. «relevant 79% (≥70%)»; the trade is named with its emoji.
-  type Criterion = { k: string; ok: boolean; v?: number; min?: number; max?: number; of?: number; trade?: string };
+  type Criterion = { k: string; ok: boolean; v?: number; min?: number; max?: number; of?: number; trade?: string; round?: string };
   const criterion = (c: Criterion) =>
     (t.targetCriteria[c.k] ?? c.k)
       .replace("{v}", c.v == null ? "" : c.k === "underCeiling" ? nf.format(c.v) : String(c.v))
@@ -97,17 +97,24 @@ export default async function BenchmarkPage() {
     return (
       <div className="space-y-0.5" title={note || undefined}>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-          <span className="text-[11px] font-semibold whitespace-nowrap text-[var(--color-white)]">
-            <span aria-hidden="true">{TARGET_MARK[x.status]}</span> {t.targetStatus[x.status]}
-          </span>
+          {/* a row of the Scout bench opens the page of its test from its state */}
+          {BENCH_TEST[x.id] ? (
+            <Link href={testHref(BENCH_TEST[x.id])} className="text-[11px] font-semibold whitespace-nowrap underline decoration-dotted hover:decoration-solid" style={{ color: "var(--color-white)" }}>
+              <span aria-hidden="true">{TARGET_MARK[x.status]}</span> {t.targetStatus[x.status]}
+            </Link>
+          ) : (
+            <span className="text-[11px] font-semibold whitespace-nowrap text-[var(--color-white)]">
+              <span aria-hidden="true">{TARGET_MARK[x.status]}</span> {t.targetStatus[x.status]}
+            </span>
+          )}
           {x.build != null && (
             <span className="text-[11px] tabular-nums text-[var(--color-muted)] whitespace-nowrap">
               {t.targetTried.replace("{n}", String(x.build))}
             </span>
           )}
         </div>
-        {/* each round that proves it says itself, on its own line: system · profile · day */}
-        {x.proof.map((id: string) => {
+        {/* each round that proves it says itself, on its own line: system · profile · day; with criteria, the criteria link to it */}
+        {criteria.length === 0 && x.proof.map((id: string) => {
           const r = roundById.get(id);
           return (
             <a
@@ -120,20 +127,18 @@ export default async function BenchmarkPage() {
             </a>
           );
         })}
-        {BENCH_TEST[x.id] && (
-          <Link
-            href={testHref(BENCH_TEST[x.id])}
-            className="block w-fit text-[11px] underline decoration-dotted hover:decoration-solid"
-            style={{ color: "var(--color-muted)" }}
-          >
-            {`↳ ${t.targets[x.id]}`}
-          </Link>
-        )}
         {criteria.length > 0 && (
           <ul className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] tabular-nums">
             {criteria.map((c, i) => (
               <li key={i} className="whitespace-nowrap text-[var(--color-base)]">
-                <span aria-hidden="true">{c.ok ? "✅" : "❌"}</span> {criterion(c)}
+                <span aria-hidden="true">{c.ok ? "✅" : "❌"}</span>{" "}
+                {c.round ? (
+                  <Link href={testHref(c.round)} className="underline decoration-dotted hover:decoration-solid" style={{ color: "inherit" }}>
+                    {criterion(c)}
+                  </Link>
+                ) : (
+                  criterion(c)
+                )}
               </li>
             ))}
           </ul>
