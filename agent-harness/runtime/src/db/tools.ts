@@ -26,6 +26,7 @@ import { dbQuery } from "./db-query.ts";
 import { exclusionBreakdownLine, exclusionPenalty } from "./profile-exclusions.ts";
 import type { EnrichmentPolicy } from "./enrichment-policy.ts";
 import { EVIDENCE_KINDS, MAINTENANCE_ACTIONS, MAINTENANCE_OUTCOMES, recordDiffs, updateApplication, updateCompany, updatePosition } from "./db-update.ts";
+import { countryName, deriveCountry } from "./country.ts";
 import { checkDuplicate, type Duplicate } from "./dedup.ts";
 import { EXTERNAL_INLINE_FIELDS, Fence, flattenExternalValue } from "./external-content.ts";
 import { agentAliases, agentInstanceId } from "../core/agent-id.ts";
@@ -196,22 +197,26 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
         };
       }
       companyId = resolveCompanyId(db, a["company"] as string);
+      const country = deriveCountry(a["location"], a["source"] as string | null, a["url"] as string | null);
       const inserted = db
         .prepare(
-          `INSERT INTO positions (title, company, company_id, location,
+          `INSERT INTO positions (title, company, company_id, location, loc_country, loc_country_code,
                                    remote_type,
                                    salary_declared_min, salary_declared_max, salary_declared_currency,
                                    salary_estimated_min, salary_estimated_max, salary_estimated_currency,
                                    salary_estimated_source,
                                    url, source, jd_text, requirements,
                                    found_by, deadline, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           sql(a["title"]),
           sql(a["company"]),
           companyId,
           sql(a["location"]),
+          // The country, from what was written (`scout_area.derive_country`): the place, or the portal; empty when nothing says it.
+          country ? countryName(country) : null,
+          country ? country.toUpperCase() : null,
           sql(a["remote_type"]),
           sql(a["salary_declared_min"]),
           sql(a["salary_declared_max"]),
