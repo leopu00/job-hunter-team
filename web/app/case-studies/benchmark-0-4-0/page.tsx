@@ -9,7 +9,7 @@ import LandingNav from "../../components/landing/LandingNav";
 import { getRequestLocale } from "@/lib/request-locale";
 import type { Locale } from "@/i18n/config";
 import data from "@/data/benchmark/benchmark-0-4-0.json";
-import BenchmarkCharts, { type BenchProfile, type BuildPoint, type ChartRound } from "./BenchmarkCharts";
+import BenchmarkCharts, { type BenchProfile, type BetaDay, type BuildPoint, type ChartRound } from "./BenchmarkCharts";
 import { CHART_COPY } from "./chartsCopy";
 import BenchmarkFinder, {
   type CandidateView,
@@ -1859,6 +1859,16 @@ export default async function BenchmarkPage() {
       ? Object.fromEntries(Object.entries(b.bySource).map(([k, v]) => [cc.sources[k] ?? k, v]))
       : null,
   }));
+  type BetaRaw = {
+    day: string;
+    hours: { h: number; positions: number | null; atLeast70: number | null }[];
+    codex: { t: number; usedPct: number }[];
+    experiments: { t: number; kind: string }[];
+  };
+  const betaRaw = (data as { betaDay?: BetaRaw }).betaDay;
+  const chartBeta: BetaDay = betaRaw
+    ? { ...betaRaw, experiments: betaRaw.experiments.map((e) => ({ t: e.t, label: cc.experimentKinds[e.kind] ?? e.kind })) }
+    : null;
   const buildNos = Array.from(new Set([5, 6, 7, 8, 9, 10, ...data.builds.map((b: Build) => b.n)])).sort((a, b) => a - b);
   const chartBuilds: BuildPoint[] = buildNos.map((n) => {
     const snap = data.builds.find((b: Build) => b.n === n) as (Build & { targetsSnapshot?: Record<string, number>; defects?: { found: number; closed: number } }) | undefined;
@@ -1867,7 +1877,7 @@ export default async function BenchmarkPage() {
     return {
       n,
       targets: snap?.targetsSnapshot ?? (Object.keys(counted).length ? counted : null),
-      defects: snap?.defects ?? null,
+      defects: snap?.defects ?? ((data as { defects?: Record<string, { found: number | null; closed: number | null }> }).defects?.[String(n)] ?? null),
       fromCurrent: !snap?.targetsSnapshot,
     };
   });
@@ -2124,6 +2134,7 @@ export default async function BenchmarkPage() {
           rounds={chartRounds}
           bench={chartBench}
           builds={chartBuilds}
+          beta={chartBeta}
           labels={{ services: t.services, os: OS_LABEL, targetStatus: t.targetStatus }}
         />
 

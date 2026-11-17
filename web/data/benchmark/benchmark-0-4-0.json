@@ -2181,5 +2181,134 @@
         "karriere-at": 11
       }
     }
+  },
+  "defects": {
+    "5": {
+      "found": null,
+      "closed": 14
+    },
+    "6": {
+      "found": null,
+      "closed": 22
+    },
+    "7": {
+      "found": null,
+      "closed": 14
+    },
+    "8": {
+      "found": null,
+      "closed": 8
+    },
+    "9": {
+      "found": null,
+      "closed": 16
+    },
+    "10": {
+      "found": null,
+      "closed": 16
+    }
+  },
+  "betaDay": {
+    "day": "17/11",
+    "provisional": true,
+    "hours": [
+      {
+        "h": 9,
+        "positions": null,
+        "atLeast70": null
+      },
+      {
+        "h": 10,
+        "positions": null,
+        "atLeast70": null
+      },
+      {
+        "h": 11,
+        "positions": null,
+        "atLeast70": null
+      },
+      {
+        "h": 12,
+        "positions": 7,
+        "atLeast70": 1
+      },
+      {
+        "h": 13,
+        "positions": 5,
+        "atLeast70": 0
+      },
+      {
+        "h": 14,
+        "positions": 28,
+        "atLeast70": 1
+      },
+      {
+        "h": 15,
+        "positions": 5,
+        "atLeast70": 0
+      },
+      {
+        "h": 16,
+        "positions": 3,
+        "atLeast70": 8
+      },
+      {
+        "h": 17,
+        "positions": 0,
+        "atLeast70": 2
+      }
+    ],
+    "codex": [
+      {
+        "t": 9.833,
+        "usedPct": 27
+      },
+      {
+        "t": 12.067,
+        "usedPct": 30
+      },
+      {
+        "t": 12.9,
+        "usedPct": 32
+      },
+      {
+        "t": 13.917,
+        "usedPct": 34
+      },
+      {
+        "t": 14.933,
+        "usedPct": 37
+      },
+      {
+        "t": 15.95,
+        "usedPct": 40
+      },
+      {
+        "t": 16.95,
+        "usedPct": 42
+      },
+      {
+        "t": 17.95,
+        "usedPct": 43
+      },
+      {
+        "t": 18.167,
+        "usedPct": 43
+      }
+    ],
+    "experiments": [
+      {
+        "t": 12.933,
+        "kind": "newPlaces"
+      },
+      {
+        "t": 13.917,
+        "kind": "oneSourcePerScout"
+      },
+      {
+        "t": 16.95,
+        "kind": "sectorPortal"
+      }
+    ]
   }
 }

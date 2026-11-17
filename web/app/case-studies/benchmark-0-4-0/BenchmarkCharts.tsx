@@ -51,15 +51,23 @@ export type BenchProfile = {
 export type BuildPoint = {
   n: number;
   targets: Record<string, number> | null; // pass / fail / pending / blocked
-  defects: { found: number; closed: number } | null;
+  defects: { found: number | null; closed: number | null } | null;
   fromCurrent: boolean; // targets counted from the current table, not from a snapshot taken at that build
 };
+
+export type BetaDay = {
+  day: string;
+  hours: { h: number; positions: number | null; atLeast70: number | null }[];
+  codex: { t: number; usedPct: number }[]; // t = hour of the day, decimal
+  experiments: { t: number; label: string }[];
+} | null;
 
 export type ChartsProps = {
   locale: Locale;
   rounds: ChartRound[];
   bench: BenchProfile[];
   builds: BuildPoint[];
+  beta: BetaDay;
   labels: {
     services: Record<string, string>;
     os: Record<string, string>;
@@ -228,6 +236,9 @@ function LineChart({
   refX,
   height = 220,
   yMaxHint = 0,
+  xFormat = (v: number) => `${v} min`,
+  xTick = (v: number) => String(Math.round(v)),
+  xStep,
 }: {
   series: LineSeries[];
   xMax: number;
@@ -237,6 +248,9 @@ function LineChart({
   refX?: { x: number; label: string; color: string }[];
   height?: number;
   yMaxHint?: number;
+  xFormat?: (v: number) => string;
+  xTick?: (v: number) => string;
+  xStep?: number;
 }) {
   // Drawn at the real width of the box, so the text stays 11 px on a phone too.
   const ref = useRef<HTMLDivElement>(null);
@@ -252,7 +266,7 @@ function LineChart({
   const pad = { l: 52, r: 14, t: 12, b: 30 };
   const [hover, setHover] = useState<{ x: number; px: number; py: number; w: number } | null>(null);
   const all = series.flatMap((s) => s.points.map((p) => p.y));
-  const yMax = niceMax(Math.max(yMaxHint, refY?.y ?? 0, ...all, 0) * 1.05);
+  const yMax = niceMax(Math.max(yMaxHint, (refY?.y ?? 0) * 1.05, ...all.map((v) => v * 1.05), 0));
   const xM = Math.max(5, Math.ceil(xMax / 5) * 5);
   const sx = (x: number) => pad.l + (x / xM) * (W - pad.l - pad.r);
   const sy = (y: number) => H - pad.b - (y / yMax) * (H - pad.t - pad.b);
@@ -291,9 +305,9 @@ function LineChart({
             </text>
           </g>
         ))}
-        {ticks(xM, xM / 5 <= (W < 420 ? 6 : 8) ? xM / 5 : xM % 10 === 0 && xM / 10 <= 8 ? xM / 10 : W < 420 ? 4 : 6).map((v) => (
+        {ticks(xM, xStep ? Math.round(xM / xStep) : xM / 5 <= (W < 420 ? 6 : 8) ? xM / 5 : xM % 10 === 0 && xM / 10 <= 8 ? xM / 10 : W < 420 ? 4 : 6).map((v) => (
           <text key={`x${v}`} x={sx(v)} y={H - pad.b + 16} textAnchor="middle" fontSize={11} fill="var(--color-muted)">
-            {Math.round(v)}
+            {xTick(v)}
           </text>
         ))}
         <text x={W - pad.r} y={H - 2} textAnchor="end" fontSize={10} fill="var(--color-dim)">
@@ -336,7 +350,7 @@ function LineChart({
       </svg>
       {hover && (
         <Tip x={hover.px} y={hover.py} width={hover.w}>
-          <div className="font-semibold mb-0.5">{`${hover.x} min`}</div>
+          <div className="font-semibold mb-0.5">{xFormat(hover.x)}</div>
           {(refX ?? [])
             .map((m, i) => ({ ...m, i }))
             .filter((m) => m.x <= hover.x)
@@ -706,11 +720,12 @@ function Builds({ builds, t, labels }: { builds: BuildPoint[]; t: ChartCopy; lab
     note: b.fromCurrent ? t.buildsFromCurrent : undefined,
     segments: statuses.map((s) => ({ key: s, label: labels.targetStatus[s] ?? s, value: b.targets?.[s] ?? 0, color: STATUS_COLOR[s] })),
   }));
+  const anyFound = builds.some((b) => b.defects?.found != null);
   const dRows: BarRow[] = builds.map((b) => ({
     key: String(b.n),
     label: `${t.build} ${b.n}`,
     segments: [
-      { key: "found", label: t.defectsFound, value: b.defects?.found ?? 0, color: "#EF4444" },
+      ...(anyFound ? [{ key: "found", label: t.defectsFound, value: b.defects?.found ?? 0, color: "#EF4444" }] : []),
       { key: "closed", label: t.defectsClosed, value: b.defects?.closed ?? 0, color: "#22C55E" },
     ],
   }));
@@ -724,8 +739,14 @@ function Builds({ builds, t, labels }: { builds: BuildPoint[]; t: ChartCopy; lab
       <Panel title={t.buildsDefects}>
         {anyDefects ? (
           <>
-            <Legend items={[{ label: t.defectsFound, color: "#EF4444" }, { label: t.defectsClosed, color: "#22C55E" }]} />
+            <Legend
+              items={[
+                ...(anyFound ? [{ label: t.defectsFound, color: "#EF4444" }] : []),
+                { label: t.defectsClosed, color: "#22C55E" },
+              ]}
+            />
             <HBars rows={dRows} format={(v) => String(v)} emptyLabel={t.noData} stacked={false} compact />
+            <p className="text-[11px] text-[var(--color-dim)]">{anyFound ? t.defectsHint : `${t.defectsHint} ${t.defectsFoundMissing}`}</p>
           </>
         ) : (
           <Missing text={t.defectsMissing} />
@@ -752,6 +773,143 @@ function Agents({ rounds, t, money }: { rounds: ChartRound[]; t: ChartCopy; mone
   );
 }
 
+
+// ---- vertical grouped bars, one group per hour ----
+
+function VBars({
+  groups,
+  series,
+}: {
+  groups: { key: string; label: string; values: (number | null)[] }[];
+  series: { label: string; color: string }[];
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [W, setW] = useState(600);
+  const [tip, setTip] = useState<{ i: number; x: number; y: number; w: number } | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setW(Math.max(280, Math.round(e.contentRect.width))));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const H = 220;
+  const pad = { l: 36, r: 8, t: 10, b: 26 };
+  const max = niceMax(Math.max(1, ...groups.flatMap((g) => g.values.map((v) => v ?? 0))) * 1.05);
+  const gw = (W - pad.l - pad.r) / Math.max(groups.length, 1);
+  const bw = Math.max(3, (gw * 0.75) / series.length);
+  const sy = (v: number) => H - pad.b - (v / max) * (H - pad.t - pad.b);
+  return (
+    <div
+      ref={ref}
+      className="relative select-none touch-pan-y"
+      onPointerLeave={() => setTip(null)}
+      onPointerMove={(e) => {
+        const box = ref.current?.getBoundingClientRect();
+        if (!box) return;
+        const i = Math.floor((e.clientX - box.left - pad.l) / gw);
+        if (i >= 0 && i < groups.length) setTip({ i, x: e.clientX - box.left, y: e.clientY - box.top, w: box.width });
+      }}
+    >
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block" role="img" aria-label={series.map((s) => s.label).join(", ")}>
+        {ticks(max).map((v) => (
+          <g key={v}>
+            <line x1={pad.l} x2={W - pad.r} y1={sy(v)} y2={sy(v)} stroke="var(--color-border)" />
+            <text x={pad.l - 6} y={sy(v) + 4} textAnchor="end" fontSize={11} fill="var(--color-muted)">
+              {Math.round(v)}
+            </text>
+          </g>
+        ))}
+        {groups.map((g, i) => (
+          <g key={g.key}>
+            {g.values.map((v, j) =>
+              v == null ? null : (
+                <rect
+                  key={j}
+                  x={pad.l + i * gw + (gw - bw * series.length) / 2 + j * bw}
+                  y={sy(v)}
+                  width={bw - 1}
+                  height={H - pad.b - sy(v)}
+                  fill={series[j].color}
+                  opacity={tip && tip.i !== i ? 0.55 : 1}
+                />
+              ),
+            )}
+            {(groups.length <= 12 || i % 2 === 0) && (
+              <text x={pad.l + i * gw + gw / 2} y={H - pad.b + 16} textAnchor="middle" fontSize={11} fill="var(--color-muted)">
+                {g.label}
+              </text>
+            )}
+          </g>
+        ))}
+      </svg>
+      {tip && (
+        <Tip x={tip.x} y={tip.y} width={tip.w}>
+          <div className="font-semibold mb-0.5">{groups[tip.i].label}</div>
+          {series.map((s, j) => (
+            <div key={s.label} className="flex items-center gap-1.5">
+              <span className="inline-block w-2 h-2 rounded-full" style={{ background: s.color }} />
+              <span className="text-[var(--color-muted)]">{s.label}</span>
+              <span className="ml-auto pl-3 font-semibold">{groups[tip.i].values[j] ?? "—"}</span>
+            </div>
+          ))}
+        </Tip>
+      )}
+    </div>
+  );
+}
+
+function Beta({ beta, t }: { beta: BetaDay; t: ChartCopy }) {
+  if (!beta) return <Missing text={t.betaMissing} />;
+  const hh = (v: number) => `${String(Math.floor(v)).padStart(2, "0")}:${String(Math.round((v % 1) * 60)).padStart(2, "0")}`;
+  const start = Math.floor(Math.min(...beta.hours.map((h) => h.h), ...beta.codex.map((c) => c.t), ...beta.experiments.map((e) => e.t)));
+  const marks = beta.experiments.map((e) => ({ x: e.t - start, label: e.label, color: "var(--color-purple)" }));
+  const xMax = Math.max(...beta.codex.map((c) => c.t - start), ...marks.map((m) => m.x), 1);
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <Panel title={t.betaPositions}>
+        <Legend items={[{ label: t.found, color: C.found }, { label: t.atLeast70, color: C.relevant }]} />
+        <VBars
+          series={[{ label: t.found, color: C.found }, { label: t.atLeast70, color: C.relevant }]}
+          groups={beta.hours.map((h) => ({ key: String(h.h), label: `${String(h.h).padStart(2, "0")}`, values: [h.positions, h.atLeast70] }))}
+        />
+        <p className="text-[11px] text-[var(--color-dim)]">{t.betaHoursHint}</p>
+      </Panel>
+      <Panel title={t.betaCodex}>
+        <Legend items={[{ label: t.betaCodexUsed, color: C.cost }, { label: t.betaExperiments, color: "var(--color-purple)", dashed: true }]} />
+        {beta.codex.length > 0 ? (
+          <LineChart
+            series={[{ key: "codex", label: t.betaCodexUsed, color: C.cost, points: beta.codex.map((c) => ({ x: c.t - start, y: c.usedPct })) }]}
+            xMax={xMax}
+            yFormat={(v) => `${Math.round(v)}%`}
+            xLabel={t.betaHour}
+            yMaxHint={100}
+            refX={marks}
+            xFormat={(v) => hh(v + start)}
+            xTick={(v) => String(Math.round(v + start)).padStart(2, "0")}
+            xStep={1}
+          />
+        ) : (
+          <Missing text={t.noData} />
+        )}
+        {marks.length > 0 && (
+          <ol className="text-[11px] text-[var(--color-muted)] space-y-0.5 tabular-nums">
+            {beta.experiments.map((e, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="font-bold text-[var(--color-purple)]">{i + 1}</span>
+                <span>{hh(e.t)}</span>
+                <span>{e.label}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </Panel>
+    </div>
+  );
+}
+
+const beta = (b: BetaDay, t: ChartCopy) => (b ? `${t.s6Lead} ${b.day}.` : t.s6Lead);
+
 export default function BenchmarkCharts(props: ChartsProps) {
   const t = CHART_COPY[props.locale] ?? CHART_COPY.en;
   const nf = new Intl.NumberFormat(props.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -777,6 +935,9 @@ export default function BenchmarkCharts(props: ChartsProps) {
       </Panel>
       <Panel title={`5 · ${t.s5}`} lead={t.s5Lead}>
         <Agents rounds={all} t={t} money={money} />
+      </Panel>
+      <Panel title={`6 · ${t.s6}`} lead={beta(props.beta, t)}>
+        <Beta beta={props.beta} t={t} />
       </Panel>
     </section>
   );
