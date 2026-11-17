@@ -9,6 +9,7 @@ import { CODEX_MODEL } from '../../shared/runtime/role-models.js';
 import { PI_API_MODELS, PI_API_PROVIDERS, piApiProvider } from '../../shared/runtime/provider-models.js';
 import { summarizeRoleModels } from './setup-models.js';
 import { harnessProblem, DEFAULT_HARNESS } from '../../shared/runtime/agent-harness.js';
+import { t, tf } from './i18n.js';
 
 // Path fissi JHT (specchio di shared/paths.js, con override env var).
 // cli/wizard e' ESM .js e non puo' importare shared/*.ts direttamente.
@@ -208,23 +209,29 @@ export function summarizeExistingConfig(config) {
   const lines = [];
   if (config.active_provider) {
     const prov = AI_PROVIDERS.find((p) => p.value === config.active_provider);
-    lines.push(`Provider: ${prov?.label ?? config.active_provider}`);
+    lines.push(`${t('wizard.summary.provider')}: ${prov?.label ?? config.active_provider}`);
   }
-  if (config.harness) lines.push(`Harness: ${config.harness}`);
+  if (config.harness) lines.push(`${t('wizard.summary.harness')}: ${config.harness}`);
   const activeProviderConfig = config.providers?.[config.active_provider];
   const models = summarizeRoleModels(config);
   if (models) lines.push(models);
   if (activeProviderConfig?.auth_method) {
-    lines.push(`Auth: ${activeProviderConfig.auth_method}`);
+    lines.push(`${t('wizard.summary.auth')}: ${authWord(activeProviderConfig.auth_method)}`);
   }
   const bots = config.channels?.telegram?.bots;
   if (bots?.assistente?.bot_token && bots?.capitano?.bot_token && bots?.mentor?.bot_token) {
-    lines.push('Telegram: 3 bots configured (assistente, capitano, mentor)');
+    lines.push(t('wizard.summary.telegram_all'));
   } else if (bots) {
     const present = ['assistente', 'capitano', 'mentor'].filter((r) => bots?.[r]?.bot_token);
-    lines.push(`Telegram: incomplete (${present.length}/3 bots)`);
+    lines.push(tf('wizard.summary.telegram_some', present.length));
   }
-  return lines.join('\n') || 'Empty configuration';
+  return lines.join('\n') || t('wizard.summary.empty');
+}
+
+/** How the team signs in, in the words of the person (api_key, subscription, cli); a value it does not know is shown as it is. */
+const AUTH_WORD = { api_key: 'wizard.summary.auth_api_key', subscription: 'wizard.summary.auth_subscription', cli: 'wizard.summary.auth_cli' };
+function authWord(method) {
+  return AUTH_WORD[method] ? t(AUTH_WORD[method]) : String(method);
 }
 
 /**
