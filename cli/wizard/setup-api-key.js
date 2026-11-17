@@ -18,10 +18,29 @@ export const KEY_ATTEMPTS = 3;
  * @param {import('./prompts.js').WizardPrompter} prompter
  * @param {{ t: Function, tf: Function, choice: { value: string, label: string, keyVariable: string }, check?: Function, store?: Function, storeDir?: string, platform?: string }} params
  */
-export async function askPiApiKey(prompter, { t, tf, choice, check = checkPiApiKey, store = storeApiKey, storeDir = keyStoreDir(), platform = process.platform, onVerdict = () => {} }) {
+export async function askPiApiKey(prompter, { t, tf, choice, check = checkPiApiKey, store = storeApiKey, storeDir = keyStoreDir(), platform = process.platform, onVerdict = () => {}, kept = null }) {
   if (platform !== 'win32' && !isLauncherSafePath(storeDir)) {
     await prompter.note(tf('wizard.key.store_unusable', storeDir), t('wizard.key.title'));
     return null;
+  }
+  // The same service as the saved team, with a key already kept that the provider still accepts: keeping it is the default answer,
+  // and nothing is typed. `kept` is { path, key } (the key in memory only to ask the provider; it is never shown or written again).
+  if (kept?.path && kept.key) {
+    const seen = await check(choice.value, kept.key);
+    if (seen.state === 'valid') {
+      const answer = await prompter.select({
+        message: tf('wizard.key.keep_prompt', choice.label),
+        options: [
+          { value: 'keep', label: t('wizard.key.keep_current') },
+          { value: 'new', label: t('wizard.key.keep_new') },
+        ],
+        initialValue: 'keep',
+      });
+      if (answer === 'keep') {
+        onVerdict(seen);
+        return kept.path;
+      }
+    }
   }
   return askKey(prompter, { t, tf, choice, check, keep: store, intro: 'wizard.key.intro', onVerdict });
 }

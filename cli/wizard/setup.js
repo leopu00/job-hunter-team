@@ -40,7 +40,7 @@ import { askPiApiKey, askCodexApiKey, runCodexApiKeyLogin } from './setup-api-ke
 import { WizardCancelledError } from './prompts.js';
 import { lstatSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { keyStoreDir } from './key-store.js';
+import { keyStoreDir, firstLine } from './key-store.js';
 import { JHT_CONFIG_PATH, serviceChanged } from './setup-helpers.js';
 import { openSetup, closeSetup } from '../src/lib/setup-open.js';
 import { piApiProvider } from '../../shared/runtime/provider-models.js';
@@ -375,7 +375,11 @@ async function runSetupSteps(prompter, state, { diskRefusal = diskLowRefusal } =
     authMethod = 'api_key';
     // known before the key is asked: a cancel at any point from here on leaves this file as it was
     Object.assign(state, rememberKeyFile(selectedProvider.value));
-    const keyPath = await askPiApiKey(prompter, { t, tf, choice: selectedProvider, onVerdict: (verdict) => { keyVerdict = verdict; } });
+    // the service is the one already saved with a key of this provider kept in the key store: that key may be kept as it is
+    const sameService = !serviceChanged(snapshot.config, providerChoice, harness)
+      && baseConfig.providers?.[providerChoice]?.auth_method === 'api_key' && state.keyPath && state.keyBefore !== null;
+    const kept = sameService ? { path: state.keyPath, key: firstLine(state.keyBefore) } : null;
+    const keyPath = await askPiApiKey(prompter, { t, tf, choice: selectedProvider, kept, onVerdict: (verdict) => { keyVerdict = verdict; } });
     if (!keyPath) {
       await prompter.outro(t('wizard.key.aborted'));
       return false;
