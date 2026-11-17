@@ -196,3 +196,164 @@ def test_the_watchdog_starts_nothing_when_the_tool_says_nothing(tmux_factory, ho
 def test_the_tick_calls_it_after_the_respawn_of_the_workers():
     src = (Path(__file__).resolve().parents[1] / ".launcher" / "agent-watchdog.sh").read_text()
     assert src.index("    maybe_start_queued_roles\n") > src.index("    maybe_respawn_workers\n")
+
+
+# ── a session of the role is ALIVE but silent while positions wait (Windows, build 9 to 10) ─────────────────
+# 13 positions `new` for 17 minutes next to an ANALISTA-5 that had never made a call (its brief was held by the brake and never
+# delivered): `decide` starts nobody because a session of the role exists, and the Capitano read «bounded by the host».
+
+@pytest.fixture
+def silent(world, monkeypatch):
+    """The team of the fixture plus an ANALISTA-5 alive; its last sign of life is whatever the test says."""
+    world["sessions"] = ["CAPITANO", "SCOUT-2", "ANALISTA-5", "SCORER-5"]
+    world["queues"] = {"analista": 13, "scorer": 0}
+    world["sign"] = None
+    monkeypatch.setattr(qd, "last_activity", lambda session: world["sign"])
+    return world
+
+
+def test_a_live_session_that_never_worked_is_asked_to_resume_once_the_queue_waited(silent):
+    first = qd.decide_nudge(T0)
+    assert first["nudge"] is None and first["why"] == "nothing-stalled"
+    assert qd.decide_nudge(T0 + qd.STALL_S - 1)["nudge"] is None, "it has its time"
+    done = qd.decide_nudge(T0 + qd.STALL_S)
+    assert done["nudge"] == ["analista", 5, "ANALISTA-5"] and done["why"] == "nudge"
+
+
+def test_a_session_that_is_working_is_left_alone(silent):
+    from datetime import datetime, timezone
+    qd.decide_nudge(T0)
+    silent["sign"] = datetime.fromtimestamp(T0 + qd.STALL_S - 60, timezone.utc)   # it wrote a position a minute ago
+    assert qd.decide_nudge(T0 + qd.STALL_S)["nudge"] is None
+    assert "analista" not in json.loads(qd._state_path().read_text())["stalled_since"]
+
+
+def test_a_session_silent_for_longer_than_the_stall_is_asked(silent):
+    from datetime import datetime, timezone
+    silent["sign"] = datetime.fromtimestamp(T0 - 3 * qd.STALL_S, timezone.utc)
+    qd.decide_nudge(T0)
+    assert qd.decide_nudge(T0 + qd.STALL_S)["nudge"] == ["analista", 5, "ANALISTA-5"]
+
+
+def test_the_lowest_numbered_session_alive_is_asked_and_a_held_back_one_is_skipped(silent, monkeypatch):
+    silent["sessions"] = ["CAPITANO", "ANALISTA-7", "ANALISTA-3"]
+    qd.decide_nudge(T0)
+    assert qd.decide_nudge(T0 + qd.STALL_S)["nudge"] == ["analista", 3, "ANALISTA-3"]
+    monkeypatch.setattr(qd, "held_back", lambda session: session == "ANALISTA-3")
+    assert qd.decide_nudge(T0 + qd.STALL_S + qd.NUDGE_COOLDOWN_S)["nudge"] == ["analista", 7, "ANALISTA-7"]
+
+
+def test_an_empty_queue_or_no_session_is_not_a_stall(silent):
+    silent["queues"]["analista"] = 0
+    qd.decide_nudge(T0)
+    assert qd.decide_nudge(T0 + qd.STALL_S)["nudge"] is None
+    silent["queues"]["analista"] = 4
+    silent["sessions"] = ["CAPITANO", "SCOUT-2"]          # nobody alive: the start of a worker (`decide`) is for that
+    qd.decide_nudge(T0 + qd.STALL_S + 5)
+    assert qd.decide_nudge(T0 + 3 * qd.STALL_S)["nudge"] is None
+
+
+@pytest.mark.parametrize("phase", ["burst", "awaiting_profile", None])
+def test_the_nudge_serves_only_steady(silent, phase):
+    silent["phase"] = phase
+    qd.decide_nudge(T0)
+    assert qd.decide_nudge(T0 + 10 * qd.STALL_S)["nudge"] is None
+
+
+@pytest.mark.parametrize("why", ["team-standby", "team-halted", "daily-halt", "weekly-halt", "off-hours", "capacity"])
+def test_the_nudge_is_never_sent_against_a_brake(silent, why):
+    silent["brake"] = why
+    qd.decide_nudge(T0)
+    done = qd.decide_nudge(T0 + qd.STALL_S)
+    assert done["nudge"] is None and done["why"] == why
+    assert json.loads(qd._state_path().read_text())["nudges"] == [], "the claim is written only for a nudge that goes out"
+    silent["brake"] = None
+    assert qd.decide_nudge(T0 + qd.STALL_S + 60)["nudge"] is not None
+
+
+def test_one_nudge_per_cooldown_and_a_daily_cap(silent):
+    qd.decide_nudge(T0)
+    assert qd.decide_nudge(T0 + qd.STALL_S)["nudge"] is not None
+    again = qd.decide_nudge(T0 + qd.STALL_S + 60)
+    assert again["nudge"] is None and again["why"] == "cooldown"
+    when = T0 + qd.STALL_S
+    sent = 1
+    for _ in range(10):
+        when += qd.NUDGE_COOLDOWN_S
+        if qd.decide_nudge(when)["nudge"] is not None:
+            sent += 1
+    assert sent == qd.NUDGE_DAILY_CAP
+
+
+def test_the_start_and_the_nudge_keep_each_others_record(silent):
+    silent["sessions"] = ["CAPITANO", "SCOUT-2"]
+    qd.decide(T0)
+    qd.decide(T0 + qd.WAIT_S)                                    # a start is claimed
+    silent["sessions"] = ["CAPITANO", "ANALISTA-5"]
+    qd.decide_nudge(T0 + qd.WAIT_S + 10)
+    qd.decide(T0 + qd.WAIT_S + 20)                               # `decide` writes again: the nudge's keys survive it
+    state = json.loads(qd._state_path().read_text())
+    assert state["starts"] and "stalled_since" in state
+
+
+def test_the_command_prints_the_session_to_wake(silent, capfd):
+    qd.decide_nudge(time.time() - qd.STALL_S - 5)
+    assert qd.main(["queue_demand.py", "nudge"]) == 0
+    assert capfd.readouterr().out.split() == ["analista", "5", "ANALISTA-5"]
+
+
+def test_the_nudge_message_asks_the_session_to_resume_and_is_sent_to_that_session_only(tmp_path, monkeypatch):
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    sys.path.insert(0, str(SKILLS))
+    import watchdog_delivery as wd
+    sent = []
+    assert wd.nudge("ANALISTA-5", "analista", sender=lambda session, text: sent.append((session, text)) or True) is True
+    (session, text), = sent
+    assert session == "ANALISTA-5" and "[@watchdog -> @analista-5] [RIPRENDI]" in text
+    assert "next-for-analista" in text and "recreated" not in text
+
+
+def test_a_paused_session_is_not_nudged(tmp_path, monkeypatch):
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    sys.path.insert(0, str(SKILLS))
+    import watchdog_delivery as wd
+    (tmp_path / ".team-standby.flag").write_text("")
+    monkeypatch.setattr("standby.is_active", lambda home=None: True)
+    sent = []
+    assert wd.nudge("ANALISTA-5", "analista", sender=lambda s, t: sent.append(s) or True) is False and sent == []
+
+
+def test_the_watchdog_asks_the_silent_session_the_tool_names(tmux_factory, home):  # noqa: F811
+    tmux = tmux_factory({"CAPITANO": {"created": 1}, "ANALISTA-5": {"created": 1}})
+    tool = tmux.bin / "queue_demand.py"
+    tool.write_text("print('analista 5 ANALISTA-5')\n")
+    tool.chmod(0o755)
+    marker = home / "nudged.txt"
+    delivery = tmux.bin / "watchdog_delivery.py"
+    delivery.write_text(f"import sys\nopen({str(marker)!r}, 'w').write(' '.join(sys.argv[1:]))\n")
+    res = run_watchdog("maybe_nudge_stalled_queues", tmux, home, JHT_QUEUE_DEMAND_TOOL=str(tool), JHT_WATCHDOG_DELIVERY=str(delivery))
+    assert res.returncode == 0, res.stderr
+    import time as _t
+    for _ in range(50):
+        if marker.exists():
+            break
+        _t.sleep(0.1)
+    assert marker.read_text() == "nudge ANALISTA-5 analista", res.stdout
+    assert "queue stalled: positions wait for analista, ANALISTA-5 is alive" in res.stdout
+
+
+def test_the_watchdog_nudges_nobody_when_the_tool_says_nothing(tmux_factory, home):  # noqa: F811
+    tmux = tmux_factory({"CAPITANO": {"created": 1}})
+    tool = tmux.bin / "queue_demand.py"
+    tool.write_text("pass\n")
+    tool.chmod(0o755)
+    marker = home / "nudged.txt"
+    delivery = tmux.bin / "watchdog_delivery.py"
+    delivery.write_text(f"import sys\nopen({str(marker)!r}, 'w').write('x')\n")
+    res = run_watchdog("maybe_nudge_stalled_queues", tmux, home, JHT_QUEUE_DEMAND_TOOL=str(tool), JHT_WATCHDOG_DELIVERY=str(delivery))
+    assert res.returncode == 0 and not marker.exists()
+
+
+def test_the_tick_calls_the_nudge_after_the_start_of_the_missing_workers():
+    src = (Path(__file__).resolve().parents[1] / ".launcher" / "agent-watchdog.sh").read_text()
+    assert src.index("    maybe_nudge_stalled_queues\n") > src.index("    maybe_start_queued_roles\n")

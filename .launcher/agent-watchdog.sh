@@ -1023,6 +1023,23 @@ EOF
   respawn_worker "$role" "$inst" "$session" demand
 }
 
+maybe_nudge_stalled_queues() {
+  # Una coda ferma con una sessione del ruolo VIVA ma muta (mai briefata, o turno chiuso a coda vuota): maybe_start_queued_roles non
+  # scatta perche' la sessione esiste. La decisione sta in queue_demand.py (nudge), qui si consegna un messaggio [RIPRENDI].
+  [ -f "$DEMAND_TOOL" ] || return 0
+  local plan role inst session
+  plan=$(JHT_HOME="$JHT_HOME" python3 "$DEMAND_TOOL" nudge 2>/dev/null) || return 0
+  [ -z "$plan" ] && return 0
+  read -r role inst session <<EOF
+$plan
+EOF
+  [ -z "${session:-}" ] && return 0
+  log "queue stalled: positions wait for $role, $session is alive and has not worked — asking it to resume"
+  JHT_HOME="$JHT_HOME" python3 \
+    "${JHT_WATCHDOG_DELIVERY:-$_AGENT_WATCHDOG_DIR/../shared/skills/watchdog_delivery.py}" \
+    nudge "$session" "$role" >>"$LOG" 2>&1 &
+}
+
 bridge_flap_ok() {
   # 0 se sotto il cap di respawn nella finestra, 1 se il cap è superato.
   local key="$1" f="$BRIDGE_STATE_DIR/bridge-flap-$1" now cutoff cnt
@@ -1350,6 +1367,7 @@ while true; do
     maybe_respawn_workers
     # Code ferme: nessun Analista (o Scorer) vivo e posizioni in attesa da piu' dell'attesa del Capitano.
     maybe_start_queued_roles
+    maybe_nudge_stalled_queues
     # Posta degli agenti: scadenze, avvisi e solleciti (non fa niente senza `mail_receivers`).
     maybe_mail_tick
     # Il piano dell'abbonamento: se nessuno l'ha chiesto con la card, la posta il sistema.

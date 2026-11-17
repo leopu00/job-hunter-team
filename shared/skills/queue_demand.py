@@ -20,6 +20,7 @@ one (the Capitano scales a role up or down from there), and never against a brak
 The start itself is `start-agent.sh <role> <instance>`, which has the spend gate of the harness inside it.
 
   queue_demand.py next      prints `<role> <instance> <SESSION>` (and records the claim), or nothing
+  queue_demand.py nudge     a session of the role is alive but silent while positions wait: prints `<role> <instance> <SESSION>` to ask to resume
   queue_demand.py status    what it sees, as JSON; changes nothing
 
 Never raises: anything it cannot read is no demand.
@@ -42,6 +43,10 @@ WAIT_S = int(os.environ.get("JHT_QUEUE_DEMAND_WAIT_S", "600"))          # the Ca
 COOLDOWN_S = int(os.environ.get("JHT_QUEUE_DEMAND_COOLDOWN_S", "1800"))
 DAILY_CAP = int(os.environ.get("JHT_QUEUE_DEMAND_DAILY_CAP", "6"))
 INSTANCE = 1
+# A session of the role is alive and has not worked (no message, no position written) for STALL_S while positions wait: `nudge`.
+STALL_S = int(os.environ.get("JHT_QUEUE_STALL_S", "900"))
+NUDGE_COOLDOWN_S = int(os.environ.get("JHT_QUEUE_NUDGE_COOLDOWN_S", "1800"))
+NUDGE_DAILY_CAP = int(os.environ.get("JHT_QUEUE_NUDGE_DAILY_CAP", "4"))
 _MODULES: dict = {}
 
 
@@ -196,7 +201,9 @@ def decide(now: float | None = None, write: bool = True) -> dict:
     def finish(why: str) -> dict:
         out["why"] = why
         if write:
-            _write_state({"waiting_since": waiting_since, "starts": starts, "last": last})
+            fresh = _read_state()   # the keys of the nudge (decide_nudge) stay
+            fresh.update({"waiting_since": waiting_since, "starts": starts, "last": last})
+            _write_state(fresh)
         return out
 
     if phase() != "steady":
@@ -235,10 +242,94 @@ def decide(now: float | None = None, write: bool = True) -> dict:
     return finish("nothing-waits" if not out["waiting"] else "waiting")
 
 
+def last_activity(session: str):
+    """The last sign of life of a session (a message, a position written): a UTC datetime, or None (never worked)."""
+    roster = _load("team_roster")
+    try:
+        sign = roster.last_activity(session, _home()) if roster is not None else None
+        return sign.astimezone(timezone.utc) if sign is not None else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _number(session: str) -> int:
+    found = re.search(r"-(\d+)$", session.strip())
+    return int(found.group(1)) if found else INSTANCE
+
+
+def decide_nudge(now: float | None = None, write: bool = True) -> dict:
+    """A queue nobody works although a session of its role is ALIVE: {"nudge": [role, instance, session] | None, "why": str}.
+
+    `decide` starts a worker only when no session of the role exists. A session that exists but never worked (its brief held by a
+    brake and never delivered, a turn that ended on an empty queue) kept the positions in `new` for ever: the Capitano read «bounded by
+    the host» and did nothing (Windows, build 9 to 10: 13 positions waiting 17 minutes next to an Analista with no call). Once the
+    queue has waited STALL_S with every live session of the role silent for STALL_S, ONE of them is asked to resume. Never against a
+    brake, an agent the person paused or the team contained; COOLDOWN between two nudges of a role and a cap a day."""
+    now = time.time() if now is None else float(now)
+    state = _read_state()
+    stalled = state.get("stalled_since") if isinstance(state.get("stalled_since"), dict) else {}
+    nudges = [float(t) for t in (state.get("nudges") or []) if isinstance(t, (int, float)) and now - float(t) < 86400]
+    last = state.get("last_nudge") if isinstance(state.get("last_nudge"), dict) else {}
+    out: dict = {"nudge": None, "why": ""}
+
+    def finish(why: str) -> dict:
+        out["why"] = why
+        if write:
+            fresh = _read_state()
+            fresh.update({"stalled_since": stalled, "nudges": nudges, "last_nudge": last})
+            _write_state(fresh)
+        return out
+
+    if phase() != "steady":
+        stalled.clear()
+        return finish("not-steady")
+    sessions = live_sessions()
+    if sessions is None:
+        return finish("no-tmux-reading")
+    workers = [s for s in sessions if re.fullmatch(r"(SCOUT|ANALISTA|SCORER|SCRITTORE|CLOSER)(-\d+)?", s.strip().upper())]
+    for role in ROLES:
+        alive = sorted((s for s in sessions if _is_role_session(s, role)), key=_number)
+        count = queue_count(role)
+        if not alive or not count:
+            stalled.pop(role, None)
+            continue
+        signs = [last_activity(s) for s in alive]
+        recent = [t for t in signs if t is not None and now - t.timestamp() < STALL_S]
+        if recent:
+            stalled.pop(role, None)
+            continue
+        since = float(stalled.setdefault(role, now))
+        if now - since < STALL_S:
+            continue
+        if now - float(last.get(role) or 0) < NUDGE_COOLDOWN_S:
+            return finish("cooldown")
+        if len(nudges) >= NUDGE_DAILY_CAP:
+            return finish("daily-cap")
+        session = next((s for s in alive if not held_back(s)), None)
+        if session is None:
+            return finish("held-back")
+        reason = brake(now, len(workers))
+        if reason:
+            return finish(reason)
+        last[role] = now
+        nudges.append(now)
+        out["nudge"] = [role, _number(session), session]
+        return finish("nudge")
+    return finish("nothing-stalled")
+
+
 def main(argv: list[str]) -> int:
     command = argv[1] if len(argv) > 1 else "status"
+    if command == "nudge":
+        try:
+            result = decide_nudge()
+        except Exception:  # noqa: BLE001 — never an error for the watchdog's tick
+            return 0
+        if result["nudge"]:
+            print("%s %s %s" % tuple(result["nudge"]))
+        return 0
     if command not in ("next", "status"):
-        print("usage: queue_demand.py next|status", file=sys.stderr)
+        print("usage: queue_demand.py next|status|nudge", file=sys.stderr)
         return 2
     try:
         result = decide(write=command == "next")
