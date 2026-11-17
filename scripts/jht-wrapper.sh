@@ -8153,14 +8153,15 @@ disk_low() {
 # A pull grows the disk of this computer by the image unpacked plus its download (on a Mac the disk image of the Podman machine
 # grows on the Mac's own disk). The agents refuse to start under the threshold above (disk_low), so a download goes only when
 # what stays free after it is not under that threshold: on giro Mac build8 a disk with 9.2 GiB free took the update and then
-# refused every agent at 3.9 GiB. The sizes are estimates of what a pull took on a Mac, measured on the images of 0.4.0 (core:
-# 0.3 GiB compressed; full: 1.1 GiB compressed, 3.4 GB unpacked, some 6 GiB of the Mac); JHT_PULL_CORE_GIB and JHT_PULL_FULL_GIB
-# change them, a value that is not a number keeps the default.
+# refused every agent at 3.9 GiB. The sizes are estimates of what a pull takes, some 4 times the compressed layers (unpacked plus
+# the compressed copy of the pull), on the images of 0.4.0: core 0.27 GiB compressed, full 1.08 (they share some layers); on giro
+# Mac m21 core and full took some 4 GiB of the machine's disk, 5 at the peak. JHT_PULL_CORE_GIB and JHT_PULL_FULL_GIB change them,
+# a value that is not a number keeps the default. The installer reads the exact layers from the registry.
 pull_need_kib() {
   local gib default
   case "$1" in
-    core) default=2 gib="${JHT_PULL_CORE_GIB:-2}" ;;
-    full) default=6 gib="${JHT_PULL_FULL_GIB:-6}" ;;
+    core) default=1 gib="${JHT_PULL_CORE_GIB:-1}" ;;
+    full) default=5 gib="${JHT_PULL_FULL_GIB:-5}" ;;
     *) printf '0\n'; return 0 ;;
   esac
   case "$gib" in ''|*[!0-9]*) gib="$default" ;; esac

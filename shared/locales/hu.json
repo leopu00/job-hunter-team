@@ -766,7 +766,7 @@
   "installer.cvs_attachments_output": "(önéletrajzok, mellékletek, eredmények)",
   "installer.disk_low_dry_run": "Csak %s GiB szabad hely van itt: %s; egy valódi telepítéshez legalább %s GiB kell.",
   "installer.disk_not_enough": "nincs elég szabad hely a lemezen: %s GiB szabad itt: %s, a Job Hunter Team képének és adatainak legalább %s GiB kell. Szabadíts fel helyet (egy olyan szerveren, ahol már fut a Docker, a 'docker image prune -af' eltávolítja a nem használt képeket), és futtasd újra a telepítőt. Semmi sem változott.",
-  "installer.disk_room_short": "A Job Hunter Team körülbelül %s GiB-ot tölt le, és a letöltés után az ügynököknek kevesebb maradna a szükséges %s GiB lemezterületnél: most %s GiB szabad. Szabadíts fel még legalább %s GiB-ot (ürítsd ki a Kukát, töröld a nagy fájlokat, amelyekre nincs szükséged), majd futtasd újra a telepítőt: semmi nem lett letöltve (csak a Job Hunter Team semmi által nem használt régi verziói lettek törölve).",
+  "installer.disk_room_short": "A Job Hunter Team körülbelül %s GiB-ot tölt le, és a letöltés után az ügynököknek kevesebb maradna a szükséges %s GiB lemezterületnél: most %s GiB szabad. Szabadíts fel még legalább %s GiB-ot (ürítsd ki a Kukát, töröld a nagy fájlokat, amelyekre nincs szükséged), majd futtasd újra a telepítőt: semmi nem lett letöltve, és a Job Hunter Team telepített verziójához nem nyúltunk.",
   "installer.done_compose": "compose: %s",
   "installer.done_host_setup": "host-setup: %s",
   "installer.done_wrapper": "wrapper: %s",

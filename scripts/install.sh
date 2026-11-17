@@ -433,7 +433,7 @@ ts_table() {
     en:installer.cvs_attachments_output) printf '%s' '(CVs, attachments, output)' ;;
     en:installer.disk_low_dry_run) printf '%s' 'Only %s GiB free on %s; a real install needs at least %s GiB.' ;;
     en:installer.disk_not_enough) printf '%s' 'not enough free disk space: %s GiB free on %s, the Job Hunter Team image and its data need at least %s GiB. Free some space (on a server that already runs Docker, '\''docker image prune -af'\'' removes unused images) and run the installer again. Nothing was changed.' ;;
-    en:installer.disk_room_short) printf '%s' 'Job Hunter Team downloads about %s GiB, and after the download the agents would have less than the %s GiB of disk they need: %s GiB are free now. Free at least %s GiB more (empty the Trash, delete large files you do not need), then run the installer again: nothing was downloaded (only the old versions of Job Hunter Team that nothing used were removed).' ;;
+    en:installer.disk_room_short) printf '%s' 'Job Hunter Team downloads about %s GiB, and after the download the agents would have less than the %s GiB of disk they need: %s GiB are free now. Free at least %s GiB more (empty the Trash, delete large files you do not need), then run the installer again: nothing was downloaded, and the version of Job Hunter Team you have installed was not touched.' ;;
     en:installer.done_compose) printf '%s' 'compose: %s' ;;
     en:installer.done_host_setup) printf '%s' 'host-setup: %s' ;;
     en:installer.done_wrapper) printf '%s' 'wrapper: %s' ;;
@@ -589,7 +589,7 @@ ts_table() {
     it:installer.cvs_attachments_output) printf '%s' '(CV, allegati, risultati)' ;;
     it:installer.disk_low_dry_run) printf '%s' 'Solo %s GiB liberi su %s; un'\''installazione vera ne vuole almeno %s GiB.' ;;
     it:installer.disk_not_enough) printf '%s' 'spazio libero su disco insufficiente: %s GiB liberi su %s, l'\''immagine di Job Hunter Team e i suoi dati vogliono almeno %s GiB. Libera un po'\'' di spazio (su un server che usa gia'\'' Docker, '\''docker image prune -af'\'' toglie le immagini non usate) e rilancia l'\''installer. Non e'\'' stato cambiato niente.' ;;
-    it:installer.disk_room_short) printf '%s' 'Job Hunter Team scarica circa %s GiB, e dopo il download agli agenti resterebbero meno dei %s GiB di disco che servono: ora ne sono liberi %s. Libera almeno altri %s GiB (svuota il Cestino, elimina i file grandi che non ti servono), poi rilancia l'\''installer: non è stato scaricato niente (sono state tolte solo le vecchie versioni di Job Hunter Team che non usava nessuno).' ;;
+    it:installer.disk_room_short) printf '%s' 'Job Hunter Team scarica circa %s GiB, e dopo il download agli agenti resterebbero meno dei %s GiB di disco che servono: ora ne sono liberi %s. Libera almeno altri %s GiB (svuota il Cestino, elimina i file grandi che non ti servono), poi rilancia l'\''installer: non è stato scaricato niente, e la versione di Job Hunter Team che hai installata non è stata toccata.' ;;
     it:installer.done_compose) printf '%s' 'compose: %s' ;;
     it:installer.done_host_setup) printf '%s' 'host-setup: %s' ;;
     it:installer.done_wrapper) printf '%s' 'wrapper: %s' ;;
@@ -745,7 +745,7 @@ ts_table() {
     hu:installer.cvs_attachments_output) printf '%s' '(önéletrajzok, mellékletek, eredmények)' ;;
     hu:installer.disk_low_dry_run) printf '%s' 'Csak %s GiB szabad hely van itt: %s; egy valódi telepítéshez legalább %s GiB kell.' ;;
     hu:installer.disk_not_enough) printf '%s' 'nincs elég szabad hely a lemezen: %s GiB szabad itt: %s, a Job Hunter Team képének és adatainak legalább %s GiB kell. Szabadíts fel helyet (egy olyan szerveren, ahol már fut a Docker, a '\''docker image prune -af'\'' eltávolítja a nem használt képeket), és futtasd újra a telepítőt. Semmi sem változott.' ;;
-    hu:installer.disk_room_short) printf '%s' 'A Job Hunter Team körülbelül %s GiB-ot tölt le, és a letöltés után az ügynököknek kevesebb maradna a szükséges %s GiB lemezterületnél: most %s GiB szabad. Szabadíts fel még legalább %s GiB-ot (ürítsd ki a Kukát, töröld a nagy fájlokat, amelyekre nincs szükséged), majd futtasd újra a telepítőt: semmi nem lett letöltve (csak a Job Hunter Team semmi által nem használt régi verziói lettek törölve).' ;;
+    hu:installer.disk_room_short) printf '%s' 'A Job Hunter Team körülbelül %s GiB-ot tölt le, és a letöltés után az ügynököknek kevesebb maradna a szükséges %s GiB lemezterületnél: most %s GiB szabad. Szabadíts fel még legalább %s GiB-ot (ürítsd ki a Kukát, töröld a nagy fájlokat, amelyekre nincs szükséged), majd futtasd újra a telepítőt: semmi nem lett letöltve, és a Job Hunter Team telepített verziójához nem nyúltunk.' ;;
     hu:installer.done_compose) printf '%s' 'compose: %s' ;;
     hu:installer.done_host_setup) printf '%s' 'host-setup: %s' ;;
     hu:installer.done_wrapper) printf '%s' 'wrapper: %s' ;;
@@ -901,7 +901,7 @@ ts_table() {
     es:installer.cvs_attachments_output) printf '%s' '(CV, adjuntos, resultados)' ;;
     es:installer.disk_low_dry_run) printf '%s' 'Solo hay %s GiB libres en %s; una instalación de verdad necesita al menos %s GiB.' ;;
     es:installer.disk_not_enough) printf '%s' 'no hay espacio libre suficiente en el disco: %s GiB libres en %s, la imagen de Job Hunter Team y sus datos necesitan al menos %s GiB. Libera algo de espacio (en un servidor que ya usa Docker, '\''docker image prune -af'\'' quita las imágenes que no se usan) y vuelve a ejecutar el instalador. No se ha cambiado nada.' ;;
-    es:installer.disk_room_short) printf '%s' 'Job Hunter Team descarga unos %s GiB, y después de la descarga a los agentes les quedarían menos de los %s GiB de disco que necesitan: ahora hay %s GiB libres. Libera al menos %s GiB más (vacía la Papelera, borra los archivos grandes que no necesites) y vuelve a ejecutar el instalador: no se ha descargado nada (solo se han quitado las versiones antiguas de Job Hunter Team que nada usaba).' ;;
+    es:installer.disk_room_short) printf '%s' 'Job Hunter Team descarga unos %s GiB, y después de la descarga a los agentes les quedarían menos de los %s GiB de disco que necesitan: ahora hay %s GiB libres. Libera al menos %s GiB más (vacía la Papelera, borra los archivos grandes que no necesites) y vuelve a ejecutar el instalador: no se ha descargado nada, y la versión de Job Hunter Team que tienes instalada no se ha tocado.' ;;
     es:installer.done_compose) printf '%s' 'compose: %s' ;;
     es:installer.done_host_setup) printf '%s' 'host-setup: %s' ;;
     es:installer.done_wrapper) printf '%s' 'wrapper: %s' ;;
@@ -1057,7 +1057,7 @@ ts_table() {
     de:installer.cvs_attachments_output) printf '%s' '(Lebensläufe, Anhänge, Ergebnisse)' ;;
     de:installer.disk_low_dry_run) printf '%s' 'Nur %s GiB frei auf %s; eine echte Installation braucht mindestens %s GiB.' ;;
     de:installer.disk_not_enough) printf '%s' 'nicht genug freier Speicherplatz: %s GiB frei auf %s, das Image von Job Hunter Team und seine Daten brauchen mindestens %s GiB. Schaffe Platz (auf einem Server, auf dem schon Docker läuft, entfernt '\''docker image prune -af'\'' ungenutzte Images) und führe den Installer erneut aus. Nichts wurde geändert.' ;;
-    de:installer.disk_room_short) printf '%s' 'Job Hunter Team lädt etwa %s GiB herunter, und nach dem Download hätten die Agenten weniger als die %s GiB Speicherplatz, die sie brauchen: Jetzt sind %s GiB frei. Gib mindestens %s GiB mehr frei (leere den Papierkorb, lösche große Dateien, die du nicht brauchst), dann führe den Installer erneut aus: Es wurde nichts heruntergeladen (entfernt wurden nur alte Versionen von Job Hunter Team, die nichts mehr benutzte).' ;;
+    de:installer.disk_room_short) printf '%s' 'Job Hunter Team lädt etwa %s GiB herunter, und nach dem Download hätten die Agenten weniger als die %s GiB Speicherplatz, die sie brauchen: Jetzt sind %s GiB frei. Gib mindestens %s GiB mehr frei (leere den Papierkorb, lösche große Dateien, die du nicht brauchst), dann führe den Installer erneut aus: Es wurde nichts heruntergeladen, und die installierte Version von Job Hunter Team wurde nicht angerührt.' ;;
     de:installer.done_compose) printf '%s' 'Compose: %s' ;;
     de:installer.done_host_setup) printf '%s' 'host-setup: %s' ;;
     de:installer.done_wrapper) printf '%s' 'Wrapper: %s' ;;
@@ -1213,7 +1213,7 @@ ts_table() {
     fr:installer.cvs_attachments_output) printf '%s' '(CV, pièces jointes, résultats)' ;;
     fr:installer.disk_low_dry_run) printf '%s' 'Seulement %s GiB libres sur %s ; une vraie installation demande au moins %s GiB.' ;;
     fr:installer.disk_not_enough) printf '%s' 'pas assez d'\''espace libre sur le disque : %s GiB libres sur %s, l'\''image de Job Hunter Team et ses données demandent au moins %s GiB. Libère de l'\''espace (sur un serveur qui utilise déjà Docker, '\''docker image prune -af'\'' supprime les images inutilisées) et relance l'\''installeur. Rien n'\''a été modifié.' ;;
-    fr:installer.disk_room_short) printf '%s' 'Job Hunter Team télécharge environ %s Gio, et après le téléchargement il resterait aux agents moins que les %s Gio de disque dont ils ont besoin : %s Gio sont libres maintenant. Libère au moins %s Gio de plus (vide la Corbeille, supprime les gros fichiers dont tu n'\''as pas besoin), puis relance l'\''installateur : rien n'\''a été téléchargé (seules les anciennes versions de Job Hunter Team que rien n'\''utilisait ont été supprimées).' ;;
+    fr:installer.disk_room_short) printf '%s' 'Job Hunter Team télécharge environ %s Gio, et après le téléchargement il resterait aux agents moins que les %s Gio de disque dont ils ont besoin : %s Gio sont libres maintenant. Libère au moins %s Gio de plus (vide la Corbeille, supprime les gros fichiers dont tu n'\''as pas besoin), puis relance l'\''installateur : rien n'\''a été téléchargé, et la version de Job Hunter Team que tu as installée n'\''a pas été touchée.' ;;
     fr:installer.done_compose) printf '%s' 'compose : %s' ;;
     fr:installer.done_host_setup) printf '%s' 'host-setup : %s' ;;
     fr:installer.done_wrapper) printf '%s' 'wrapper : %s' ;;
@@ -1369,7 +1369,7 @@ ts_table() {
     pt:installer.cvs_attachments_output) printf '%s' '(CV, anexos, resultados)' ;;
     pt:installer.disk_low_dry_run) printf '%s' 'Só %s GiB livres em %s; uma instalação real precisa de pelo menos %s GiB.' ;;
     pt:installer.disk_not_enough) printf '%s' 'espaço livre em disco insuficiente: %s GiB livres em %s, a imagem do Job Hunter Team e os seus dados precisam de pelo menos %s GiB. Liberta algum espaço (num servidor que já usa o Docker, '\''docker image prune -af'\'' remove as imagens não usadas) e corre o instalador de novo. Não foi alterado nada.' ;;
-    pt:installer.disk_room_short) printf '%s' 'O Job Hunter Team descarrega cerca de %s GiB, e depois do descarregamento os agentes ficariam com menos dos %s GiB de disco de que precisam: agora há %s GiB livres. Liberta pelo menos mais %s GiB (esvazia o Lixo, apaga os ficheiros grandes de que não precisas) e corre o instalador de novo: nada foi descarregado (só foram removidas as versões antigas do Job Hunter Team que nada usava).' ;;
+    pt:installer.disk_room_short) printf '%s' 'O Job Hunter Team descarrega cerca de %s GiB, e depois do descarregamento os agentes ficariam com menos dos %s GiB de disco de que precisam: agora há %s GiB livres. Liberta pelo menos mais %s GiB (esvazia o Lixo, apaga os ficheiros grandes de que não precisas) e corre o instalador de novo: nada foi descarregado, e a versão do Job Hunter Team que tens instalada não foi tocada.' ;;
     pt:installer.done_compose) printf '%s' 'compose: %s' ;;
     pt:installer.done_host_setup) printf '%s' 'host-setup: %s' ;;
     pt:installer.done_wrapper) printf '%s' 'wrapper: %s' ;;
@@ -3493,18 +3493,22 @@ check_free_disk() {
 # disk is under 3% AND under 8 GiB free (the threshold of jht-wrapper.sh and cli/src/lib/disk-guard.js): an update that left the
 # disk under it ended in a setup whose team could not start (giro Mac build8: 9.2 GiB free before the installer, 3.9 after).
 # So, before the download: the old images of JHT that no container uses go (by ID, without -f, only the repositories of JHT by
-# exact name, never an image that also has another name), the machine of a Mac trims its disk, and what stays free AFTER the
-# download must keep the agents above the threshold. The image of a stopped JHT container counts as space that comes back: the
-# setup moves the team onto the new image and the wrapper then removes the old one when the disk is short. The sizes are the
-# wrapper's estimates (pull_need_kib: JHT_PULL_CORE_GIB 2, JHT_PULL_FULL_GIB 6). Otherwise nothing is downloaded and the person is
-# told how much to free. Space that cannot be measured refuses nothing.
+# exact name, never an image that also has another name, never an image of the version installed now: the person must keep a
+# version that starts, and the wrapper removes it only after the new one is here), the machine of a Mac trims its disk, and what
+# stays free AFTER the download must keep the agents above the threshold. The image of a stopped JHT container counts as space that
+# comes back: the setup moves the team onto the new image and the wrapper then removes the old one when the disk is short. The size
+# of the download is read from the registry: the compressed layers of the pinned images for this computer, each layer once (core
+# and full share some), less the layers already here, times PULL_DISK_PER_COMPRESSED (the unpacked layers plus the compressed copy
+# of the pull: on giro Mac m21 core and full took some 4 GiB of the machine's disk, 5 at the peak, for 1.3 GiB compressed). When
+# the registry cannot be read the wrapper's estimates stand in (pull_need_kib: JHT_PULL_CORE_GIB 1, JHT_PULL_FULL_GIB 5).
+# Otherwise nothing is downloaded and the person is told how much to free. Space that cannot be measured refuses nothing.
 DISK_BLOCK_FREE_PERMILLE=30
 DISK_BLOCK_FREE_KIB=8388608
 JHT_IMAGE_REPOSITORIES="ghcr.io/leopu00/jht jht localhost/jht"
 
 installer_pull_gib() {
   local gib default
-  case "$1" in core) default=2 gib="${JHT_PULL_CORE_GIB:-2}" ;; *) default=6 gib="${JHT_PULL_FULL_GIB:-6}" ;; esac
+  case "$1" in core) default=1 gib="${JHT_PULL_CORE_GIB:-1}" ;; *) default=5 gib="${JHT_PULL_FULL_GIB:-5}" ;; esac
   case "$gib" in ''|*[!0-9]*) gib="$default" ;; esac
   printf '%s' "$gib"
 }
@@ -3515,16 +3519,101 @@ installer_repo_is_jht() {
   return 1
 }
 
-# KiB the download of this install takes: the image (when it is not here yet) and, at core level, the full one that follows.
+PULL_DISK_PER_COMPRESSED=4
+
+# The platform of the images this computer pulls (the machine of a Mac has the Mac's own).
+installer_registry_arch() {
+  case "$(uname -m)" in
+    x86_64|amd64) printf 'amd64' ;;
+    arm64|aarch64) printf 'arm64' ;;
+    *) return 1 ;;
+  esac
+}
+
+# One JSON object of the registry per line, cut before each "mediaType": no jq on a fresh Mac.
+installer_json_objects() {
+  tr -d ' \t\r\n' | awk '{ gsub(/"mediaType"/, "\n&"); print }'
+}
+
+# «<diff_id> <compressed bytes>», one line per layer, of the pinned image $1 (ghcr.io/<repo>@sha256:…) for this computer; 1 when the
+# registry cannot be read. Read-only and anonymous, as the pull itself.
+installer_registry_layers() {
+  local ref="$1" repo digest arch token auth accept manifest config layers diff_ids
+  case "$ref" in ghcr.io/*@sha256:*) ;; *) return 1 ;; esac
+  command -v curl >/dev/null 2>&1 || return 1
+  repo="${ref#ghcr.io/}" repo="${repo%%@*}" digest="${ref#*@}"
+  arch="$(installer_registry_arch)" || return 1
+  token="$(curl -fsS --max-time 10 "https://ghcr.io/token?scope=repository:$repo:pull" 2>/dev/null | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')"
+  [ -n "$token" ] || return 1
+  auth="Authorization: Bearer $token"
+  accept="Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json"
+  manifest="$(curl -fsSL --max-time 15 -H "$auth" -H "$accept" "https://ghcr.io/v2/$repo/manifests/$digest" 2>/dev/null | installer_json_objects)" || return 1
+  if printf '%s\n' "$manifest" | grep -q '"manifests":'; then
+    digest="$(printf '%s\n' "$manifest" | grep -F "\"architecture\":\"$arch\"" | grep -F '"os":"linux"' | head -n 1 \
+      | sed -n 's/.*"digest":"\(sha256:[0-9a-f]*\)".*/\1/p')"
+    [ -n "$digest" ] || return 1
+    manifest="$(curl -fsSL --max-time 15 -H "$auth" -H "$accept" "https://ghcr.io/v2/$repo/manifests/$digest" 2>/dev/null | installer_json_objects)" || return 1
+  fi
+  config="$(printf '%s\n' "$manifest" | grep -E '"mediaType":"application/vnd\.(oci\.image\.config|docker\.container\.image)' | head -n 1 \
+    | sed -n 's/.*"digest":"\(sha256:[0-9a-f]*\)".*/\1/p')"
+  layers="$(printf '%s\n' "$manifest" | grep -E '"mediaType":"application/vnd\.(oci\.image\.layer|docker\.image\.rootfs)' \
+    | sed -n 's/.*"size":\([0-9][0-9]*\).*/\1/p')"
+  [ -n "$config" ] && [ -n "$layers" ] || return 1
+  diff_ids="$(curl -fsSL --max-time 15 -H "$auth" "https://ghcr.io/v2/$repo/blobs/$config" 2>/dev/null | tr -d ' \t\r\n' \
+    | sed -n 's/.*"diff_ids":\[\([^]]*\)\].*/\1/p' | tr ',' '\n' | tr -d '"')"
+  [ -n "$diff_ids" ] || return 1
+  [ "$(printf '%s\n' "$layers" | wc -l)" -eq "$(printf '%s\n' "$diff_ids" | wc -l)" ] || return 1
+  paste -d ' ' <(printf '%s\n' "$diff_ids") <(printf '%s\n' "$layers")
+}
+
+# The layers (diff_id) of every image already here, one per line.
+installer_local_layers() {
+  local ids
+  ids="$("${RUNTIME_ENGINE[@]}" image ls -q --no-trunc 2>/dev/null | awk '{print $1}' | sort -u)" || return 0
+  [ -n "$ids" ] || return 0
+  # shellcheck disable=SC2086
+  "${RUNTIME_ENGINE[@]}" image inspect --format '{{range .RootFS.Layers}}{{println .}}{{end}}' $ids 2>/dev/null | grep '^sha256:' || true
+}
+
+# KiB the download of this install takes on the disk: the image (when it is not here yet) and, at core level, the full one that
+# follows. Read from the registry, each layer once and none already here; the estimate of an image whose layers cannot be read.
 installer_download_need_kib() {
-  local gib=0
+  local refs="" ref kind gib=0 layers="" here bytes
   if ! "${RUNTIME_ENGINE[@]}" image inspect "$IMAGE" >/dev/null 2>&1; then
-    if [ "$RUNTIME_TIER" = core ]; then gib="$(installer_pull_gib core)"; else gib="$(installer_pull_gib full)"; fi
+    if [ "$RUNTIME_TIER" = core ]; then refs="core $IMAGE"; else refs="full $IMAGE"; fi
   fi
   if [ "$RUNTIME_TIER" = core ] && ! "${RUNTIME_ENGINE[@]}" image inspect "$FULL_IMAGE" >/dev/null 2>&1; then
-    gib=$((gib + $(installer_pull_gib full)))
+    refs="$refs
+full $FULL_IMAGE"
   fi
-  printf '%s' $((gib * 1048576))
+  while read -r kind ref; do
+    [ -n "$ref" ] || continue
+    if here="$(installer_registry_layers "$ref")"; then
+      layers="$layers
+$here"
+    else
+      gib=$((gib + $(installer_pull_gib "$kind")))
+    fi
+  done <<EOF
+$refs
+EOF
+  here="$(installer_local_layers)"
+  bytes="$(awk 'FILENAME == ARGV[1] { if ($1 != "") have[$1] = 1; next }
+    NF == 2 && !($1 in have) && !($1 in seen) { seen[$1] = 1; total += $2 }
+    END { printf "%.0f", total }' <(printf '%s\n' "$here") <(printf '%s\n' "$layers"))"
+  printf '%s' $(( gib * 1048576 + (bytes / 1024) * PULL_DISK_PER_COMPRESSED ))
+}
+
+# The ID (no prefix) of every image here of the version installed now (the pins in the files of the host runtime: the wrapper, the
+# compose file, the tier and extras pins), one per line.
+installer_installed_image_ids() {
+  local digest id
+  [ -d "$RUNTIME_DIR" ] || return 0
+  find "$RUNTIME_DIR" -maxdepth 1 -type f -size -4096k -exec grep -ohE 'sha256:[0-9a-f]{64}' {} + 2>/dev/null | sort -u \
+    | while IFS= read -r digest; do
+        id="$("${RUNTIME_ENGINE[@]}" image inspect --format '{{.Id}}' "ghcr.io/leopu00/jht@$digest" 2>/dev/null | head -n 1)" || continue
+        [ -z "$id" ] || printf '%s\n' "${id#sha256:}"
+      done
 }
 
 # The ID (no prefix) of every image a container uses, one per line, between two empty lines; 1 when they cannot be read.
@@ -3538,14 +3627,16 @@ installer_images_in_use() {
   printf '\n%s\n\n' "$(printf '%s\n' "$images" | sed 's/^sha256://')"
 }
 
-# The old images of JHT that no container uses go; the machine of a Mac trims its disk after. Prints nothing; a refusal of the
+# The old images of JHT that no container uses and that are not of the version installed now go; the machine of a Mac trims its
+# disk after. Prints nothing; a refusal of the
 # engine keeps the image.
 installer_remove_unused_old_images() {
   local in_use listing foreign="" id repo plain seen=""
   [ "${JHT_KEEP_OLD_IMAGES:-0}" = "1" ] && return 0
   in_use="$(installer_images_in_use)" || return 0
-  # $( ) drops the trailing newlines: the last ID needs its own to be matched as a whole line
+  # the images of the version installed now are kept as if in use; $( ) drops the trailing newlines: the last ID needs its own
   in_use="$in_use
+$(installer_installed_image_ids)
 "
   listing="$("${RUNTIME_ENGINE[@]}" image ls --no-trunc --format '{{.ID}} {{.Repository}}' 2>/dev/null)" || return 0
   while IFS=' ' read -r id repo; do
@@ -3661,7 +3752,7 @@ check_room_for_download() {
   installer_remove_unused_old_images
   installer_room_after_download "$need" "$back" && return 0
   jht_error_marker disk_low
-  printf "  ${RED}✗${RESET} %s%s\n" "$(jht_code_prefix disk_low)" "$(tsf installer.disk_room_short 'Job Hunter Team downloads about %s GiB, and after the download the agents would have less than the %s GiB of disk they need: %s GiB are free now. Free at least %s GiB more (empty the Trash, delete large files you do not need), then run the installer again: nothing was downloaded (only the old versions of Job Hunter Team that nothing used were removed).' "$(( (need + 1048575) / 1048576 ))" $((DISK_BLOCK_FREE_KIB / 1048576)) "$(( ${ROOM_FREE_KIB:-0} / 1048576 ))" "$(( (ROOM_SHORT_KIB + 1048575) / 1048576 ))")" >&2
+  printf "  ${RED}✗${RESET} %s%s\n" "$(jht_code_prefix disk_low)" "$(tsf installer.disk_room_short 'Job Hunter Team downloads about %s GiB, and after the download the agents would have less than the %s GiB of disk they need: %s GiB are free now. Free at least %s GiB more (empty the Trash, delete large files you do not need), then run the installer again: nothing was downloaded, and the version of Job Hunter Team you have installed was not touched.' "$(( (need + 1048575) / 1048576 ))" $((DISK_BLOCK_FREE_KIB / 1048576)) "$(( ${ROOM_FREE_KIB:-0} / 1048576 ))" "$(( (ROOM_SHORT_KIB + 1048575) / 1048576 ))")" >&2
   exit 1
 }
 

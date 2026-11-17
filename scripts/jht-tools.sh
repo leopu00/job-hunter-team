@@ -101,7 +101,7 @@ tools_pull_job() {
 }
 
 # ── Room for the full image, and the old images of JHT ─────────────────────────────────────────────────────────────────────────
-# The full image is about 3.4 GB, and pulling it took some 6 GiB of a Mac (the disk of the Podman machine grows on the Mac's own):
+# The full image is about 3.4 GB, and pulling it takes 4 to 5 GiB of a Mac (the disk of the Podman machine grows on the Mac's own):
 # on giro Mac m21 an update went from 10 to 2 GiB free, the old images of the version before still there. The pull goes only when
 # what stays free AFTER it keeps the agents above their threshold (disk_room_after_download in the wrapper, the threshold of
 # disk_low): a pull that left the disk under it made every agent refuse to start (giro Mac build8). When the room is short, the old
@@ -109,7 +109,7 @@ tools_pull_job() {
 # `jht up`, `jht setup` and `jht status`; `jht up` tries again). Space that cannot be measured refuses nothing. What the pull takes
 # is pull_need_kib full (JHT_PULL_FULL_GIB).
 tools_pull_need_kib() {
-  if declare -F pull_need_kib >/dev/null 2>&1; then pull_need_kib full; else printf '%s\n' $((6 * 1048576)); fi
+  if declare -F pull_need_kib >/dev/null 2>&1; then pull_need_kib full; else printf '%s\n' $((5 * 1048576)); fi
 }
 
 # The old images of JHT go, by the rules of the cleaning after `jht upgrade` (upgrade_prune_old_images in the wrapper: only the

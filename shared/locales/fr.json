@@ -765,7 +765,7 @@
   "installer.cvs_attachments_output": "(CV, pièces jointes, résultats)",
   "installer.disk_low_dry_run": "Seulement %s GiB libres sur %s ; une vraie installation demande au moins %s GiB.",
   "installer.disk_not_enough": "pas assez d'espace libre sur le disque : %s GiB libres sur %s, l'image de Job Hunter Team et ses données demandent au moins %s GiB. Libère de l'espace (sur un serveur qui utilise déjà Docker, 'docker image prune -af' supprime les images inutilisées) et relance l'installeur. Rien n'a été modifié.",
-  "installer.disk_room_short": "Job Hunter Team télécharge environ %s Gio, et après le téléchargement il resterait aux agents moins que les %s Gio de disque dont ils ont besoin : %s Gio sont libres maintenant. Libère au moins %s Gio de plus (vide la Corbeille, supprime les gros fichiers dont tu n'as pas besoin), puis relance l'installateur : rien n'a été téléchargé (seules les anciennes versions de Job Hunter Team que rien n'utilisait ont été supprimées).",
+  "installer.disk_room_short": "Job Hunter Team télécharge environ %s Gio, et après le téléchargement il resterait aux agents moins que les %s Gio de disque dont ils ont besoin : %s Gio sont libres maintenant. Libère au moins %s Gio de plus (vide la Corbeille, supprime les gros fichiers dont tu n'as pas besoin), puis relance l'installateur : rien n'a été téléchargé, et la version de Job Hunter Team que tu as installée n'a pas été touchée.",
   "installer.done_compose": "compose : %s",
   "installer.done_host_setup": "host-setup : %s",
   "installer.done_wrapper": "wrapper : %s",
