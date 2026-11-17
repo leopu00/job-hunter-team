@@ -589,7 +589,7 @@ def _chat_functions(tmp_path, docker_body: str, env_lines: str, call: str, **env
     text = WRAPPER.read_text(encoding="utf-8")
     parts = [re.search(rf"^{name}\(\) \{{\n.*?^\}}\n", text, re.S | re.M).group(0)
              for name in ("team_chat_ended_by_switch", "wait_for_tools_switch", "team_chat_agent_back", "team_chat_through_switch",
-                          "team_chat_resume")]
+                          "team_chat_engine_gone", "team_chat_through_update", "team_chat_resume")]
     fake = tmp_path / "bin"
     fake.mkdir(exist_ok=True)
     (fake / "docker").write_text("#!/bin/sh\n" + docker_body, encoding="utf-8")
@@ -602,7 +602,8 @@ def _chat_functions(tmp_path, docker_body: str, env_lines: str, call: str, **env
     return subprocess.run(["bash", "-c", body], capture_output=True, text=True, timeout=60, env={**os.environ, **env})
 
 
-def _team_arm_chat(tmp_path, switching: bool, exec_flags: str = "-it"):
+def _team_arm_chat(tmp_path, switching: bool, exec_flags: str = "-it", engine_line: str | None = None, code: int = 125,
+                   engine_up: bool = True, **env):
     """The wrapper's own `team)` arm on `jht team chat assistente`, with a docker whose REPL ends as the switch ends it: Podman's line
     on the client's stderr and code 125."""
     text = WRAPPER.read_text(encoding="utf-8")
@@ -610,12 +611,13 @@ def _team_arm_chat(tmp_path, switching: bool, exec_flags: str = "-it"):
     arm = text[start:text.index("\n    ;;\n", start) + len("\n    ;;\n")]
     if switching:
         (tmp_path / ".tools-switching").write_text(f"{os.getpid()}\n", encoding="utf-8")
-    docker = ('[ "$1" = exec ] || exit 0\necho REPL-LINE\n'
-              'echo \'Error: no container with name or ID "jht" found: no such container\' >&2\nexit 125\n')
+    line = engine_line or 'Error: no container with name or ID "jht" found: no such container'
+    docker = f'[ "$1" = exec ] || exit 0\necho REPL-LINE\necho \'{line}\' >&2\nexit {code}\n'
     lines = (f'EXEC_FLAGS="{exec_flags}"\nJHT_HOST_TYPE=linux\nNODE_ENTRY=/app/cli.js\n'
-             "require_compose_file() { :; }\nrequire_docker() { :; }\nensure_up_for_stop() { :; }\n")
+             "require_compose_file() { :; }\nrequire_docker() { :; }\nensure_up_for_stop() { :; }\n"
+             "docker_reachable() { return " + ("0" if engine_up else "1") + "; }\ncontainer_up() { return " + ("0" if engine_up else "3") + "; }\n")
     return _chat_functions(tmp_path, docker, lines, 'set -- team chat assistente\ncase "$1" in\n' + arm + "esac\n",
-                           TMPDIR=str(tmp_path), JHT_TOOLS_SWITCH_WAIT_MAX="0")   # the switch's pid is this test's: no wait
+                           TMPDIR=str(tmp_path), JHT_TOOLS_SWITCH_WAIT_MAX="0", **env)   # the switch's pid is this test's: no wait
 
 
 def test_a_chat_the_switch_ended_does_not_show_the_engine_line(tmp_path):
@@ -1231,3 +1233,56 @@ def test_on_a_mac_the_room_is_measured_where_the_machines_disk_grows_too(box):
     (box.fake / "measured").unlink()
     box.run(DISK_FAKES + "PODMAN_RUNTIME_MODE=native\nJHT_PODMAN_MACHINE_DIR=/somewhere/machine\ndisk_room_after_download 0")
     assert "/somewhere/machine" not in (box.fake / "measured").read_text(encoding="utf-8")
+
+
+# ── the engine goes away under the chat (an update restarts the Podman machine) ──────────────────────────────
+
+RAW_ENGINE_LINE = 'Error: Get "http://d/v6.0.2/libpod/exec/0123abcd/json": EOF'
+
+
+@pytest.mark.parametrize("line", [RAW_ENGINE_LINE, "Cannot connect to Podman. Please verify your connection to the Linux system",
+                                  "Error: unable to connect to Podman socket: dial unix: connection refused"])
+def test_a_chat_the_engine_ended_says_it_is_updating_and_comes_back_without_the_raw_line(tmp_path, line):
+    """Windows, build 9 to 10: the installer restarts the Podman machine and the chat died with «Error: Get "http://d/v6.0.2/libpod/exec/…/json": EOF»."""
+    done = _team_arm_chat(tmp_path, switching=False, engine_line=line)
+    assert done.returncode == 0, done.stderr
+    assert "libpod" not in done.stderr and "Cannot connect" not in done.stderr and "unable to connect" not in done.stderr
+    assert "JHT is updating, so the chat stops for a moment" in done.stderr
+    assert (tmp_path / "calls").read_text(encoding="utf-8").splitlines()[-1] == "again team chat assistente resume=1"
+    assert not list(tmp_path.glob("jht-chat-err.*"))
+
+
+def test_a_chat_the_engine_ended_that_does_not_come_back_says_to_open_it_again(tmp_path):
+    done = _team_arm_chat(tmp_path, switching=False, engine_line=RAW_ENGINE_LINE, engine_up=False, JHT_CHAT_UPDATE_WAIT_MAX="0")
+    assert done.returncode == 0, done.stderr
+    assert "libpod" not in done.stderr
+    assert "JHT is updating, so this chat has closed. Open it again in a couple of minutes with jht team chat." in done.stderr
+    assert (tmp_path / "calls").read_text(encoding="utf-8").splitlines() == ["ENSURE_UP"]   # no fresh wrapper, nothing started after
+
+
+def test_after_three_rounds_the_engine_chat_says_to_open_it_again(tmp_path):
+    done = _chat_functions(tmp_path, "exit 0\n", "docker_reachable() { return 0; }\ncontainer_up() { return 0; }\n",
+                           "team_chat_through_update team chat assistente\n", JHT_TEAM_CHAT_RESUME="3")
+    assert done.returncode == 0 and "so this chat has closed" in done.stderr
+    assert not (tmp_path / "calls").exists()
+
+
+def test_the_engine_line_of_a_chat_that_ended_well_is_left_alone(tmp_path):
+    done = _team_arm_chat(tmp_path, switching=False, engine_line=RAW_ENGINE_LINE, code=0)
+    assert done.returncode == 0 and RAW_ENGINE_LINE in done.stderr and "updating" not in done.stderr
+
+
+def test_a_chat_without_a_console_is_not_held_for_an_engine_line(tmp_path):
+    done = _team_arm_chat(tmp_path, switching=False, exec_flags="-i", engine_line=RAW_ENGINE_LINE)
+    assert done.returncode == 125 and "updating" not in done.stderr
+
+
+def test_the_update_texts_say_the_chat_in_every_language():
+    import sys as _sys
+    _sys.path.insert(0, str(ROOT / "tests"))
+    from wrapper_texts import catalog
+    for lang in ("en", "it", "hu", "es", "de", "fr", "pt"):
+        texts = catalog(lang)
+        assert texts["wrapper.tools.chat_updating"] and "%" not in texts["wrapper.tools.chat_updating"], lang
+        assert "jht team chat" in texts["wrapper.tools.chat_update_closed"], lang
+        assert "libpod" not in texts["wrapper.tools.chat_updating"]

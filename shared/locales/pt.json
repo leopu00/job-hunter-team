@@ -379,6 +379,8 @@
   "wrapper.tools.disk_low": "As ferramentas dos Scout não foram descarregadas: precisam de cerca de %s GiB livres no disco e há %s GiB, por isso a equipa ainda não pode procurar vagas. Liberta espaço (esvazia o Lixo, apaga os ficheiros grandes de que não precisas) e depois corre jht up: o descarregamento recomeça sozinho.",
   "wrapper.tools.switch_failed": "As ferramentas dos Scout já chegaram, mas não foi possível reiniciar a equipa com elas: corre jht down e depois jht up.",
   "wrapper.tools.chat_switched": "A equipa passa para as ferramentas completas dos Scout, por isso este chat fechou-se. Volta a abri-lo dentro de alguns minutos com jht team chat.",
+  "wrapper.tools.chat_update_closed": "O JHT está a atualizar-se, por isso este chat fechou-se. Volta a abri-lo dentro de alguns minutos com jht team chat.",
+  "wrapper.tools.chat_updating": "O JHT está a atualizar-se, por isso o chat para por um momento: volta sozinho dentro de um ou dois minutos.",
   "wrapper.tools.chat_reconnecting": "A equipa passa para as ferramentas completas dos Scout, por isso o chat para por um momento: volta sozinho assim que a equipa estiver a funcionar outra vez (alguns minutos).",
   "wrapper.tools.chat_resumed": "A equipa passou para as ferramentas completas: vamos continuar.",
   "wrapper.tools.switch_wait": "A equipa está a passar para as ferramentas completas dos Scout: espero que volte a arrancar (no máximo alguns minutos).",
