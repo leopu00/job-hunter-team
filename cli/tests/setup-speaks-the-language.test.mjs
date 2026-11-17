@@ -72,7 +72,8 @@ function sandbox(lang) {
     providers: { glm: { name: 'glm', auth_method: 'api_key', api_key_ref: { type: 'ref', source: 'file', path: join(deps, 'keys', 'glm.key') } } },
     channels: { telegram: { bots: { assistente: { bot_token: 'synthetic' } } } },
   }));
-  // the budget of the team was paused at the end of its period: `jht team start` says it
+  // the budget of the team was paused at the end of its period, BEFORE this setup saved a new budget: the pause of the old
+  // budget is not said after the setup (cli/src/lib/budget-pause.js), in no language
   mkdirSync(join(home, 'logs'), { recursive: true });
   writeFileSync(join(home, 'logs', 'daily-halt.flag'), JSON.stringify({ reason: 'pi_spend_cap',
     pi_spend_cap: { why: 'period', spent: 3.1, ceiling: 5, budget_usd: 5, ends_at: '2026-11-16T08:00:00+01:00' } }));
@@ -169,12 +170,12 @@ for (const [lang, confirm, sessions] of [['pt', true, RUNNING], ['de', false, ''
     assert.ok(seen.includes(own['wizard.summary.saved_title']), 'the summary at the end is shown');
     assert.ok(seen.includes(own[confirm ? 'wizard.telegram.pair_title' : 'wizard.telegram.skipped_title']), 'the Telegram step is shown');
     assert.ok(seen.includes(own['wizard.summary.models_by_role']), 'the models of each role are listed');
-    // the steps after the questions: pi checked, the team stopped (another service) and started, the budget pause said
+    // the steps after the questions: pi checked, the team stopped (another service) and started; the old pause not said
     const cliOwn = CATALOGS[lang];
     for (const key of ['pi.checking', sessions ? 'stop.stopping' : 'stop.none_active', 'team.mentor_waits', sessions ? 'team.already_running' : 'team.starting_container']) {
       assert.ok(seen.includes(cliOwn[key]), `${key} is said`);
     }
-    assert.match(seen, new RegExp(cliOwn['budget.paused_period'].slice(0, 20).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.doesNotMatch(seen, new RegExp(cliOwn['budget.paused_period'].slice(0, 20).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     const english = englishLines(lang).filter((line) => seen.includes(line));
     assert.deepEqual(english, [], `${lang}: lines left in English`);
     const written = WRITTEN_IN_THE_CODE.filter((re) => re.test(seen)).map(String);
