@@ -65,7 +65,7 @@ test('a team on the ChatGPT subscription (Codex) from 0.3.9: doctor, status and 
 
 test('jht doctor calls a team on a service this release does not offer not supported, with what is offered, and does not touch it', () => {
   const { text } = said({ active_provider: 'kimi', harness: 'codex', providers: { kimi: { name: 'kimi', auth_method: 'subscription', model: 'm' } } }, ['doctor', '--all']);
-  assert.match(text, /Provider kimi is not supported in this release \(offered: glm, kimi, openai, claude on Pi with an API key\)/, text);
+  assert.match(text, /Provider kimi is not supported in this release \(offered: glm, kimi, openai, claude on Pi with an API key; openai on Pi with the ChatGPT subscription\)/, text);
   assert.match(text, /jht setup \(choose glm and paste its API key/, text);
   assert.equal(offersSentence(), 'glm, kimi, openai, claude on Pi with an API key; openai on Pi with the ChatGPT subscription');
 });
