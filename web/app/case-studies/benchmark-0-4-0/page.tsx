@@ -2141,10 +2141,7 @@ export default async function BenchmarkPage() {
     return (
       <div className="space-y-0.5" title={note || undefined}>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-          <span
-            className="text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 whitespace-nowrap"
-            style={{ color: TARGET_COLOR[x.status], background: `color-mix(in srgb, ${TARGET_COLOR[x.status]} 16%, transparent)` }}
-          >
+          <span className="text-[11px] font-semibold whitespace-nowrap text-[var(--color-white)]">
             <span aria-hidden="true">{TARGET_MARK[x.status]}</span> {t.targetStatus[x.status]}
           </span>
           {x.build != null && (
@@ -2160,6 +2157,7 @@ export default async function BenchmarkPage() {
                 href={`#${id}`}
                 title={r ? `${OS_LABEL[r.os]} · ${t.profiles[r.profile]} · ${dayLabel(r)}` : id}
                 className="text-[11px] underline decoration-dotted hover:decoration-solid tabular-nums"
+                style={{ color: "var(--color-muted)" }}
               >
                 {id}
               </a>
@@ -2169,7 +2167,7 @@ export default async function BenchmarkPage() {
         {criteria.length > 0 && (
           <ul className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] tabular-nums">
             {criteria.map((c, i) => (
-              <li key={i} className="whitespace-nowrap" style={{ color: c.ok ? TARGET_COLOR.pass : TARGET_COLOR.fail }}>
+              <li key={i} className="whitespace-nowrap text-[var(--color-base)]">
                 <span aria-hidden="true">{c.ok ? "✅" : "❌"}</span> {criterion(c)}
               </li>
             ))}
@@ -2357,15 +2355,12 @@ export default async function BenchmarkPage() {
         <section className="space-y-3" id="targets">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="section-label">{t.targetsTitle}</h2>
-            <span
-              className="text-[12px] font-semibold tabular-nums"
-              style={{
-                color:
-                  green === data.targets.length
-                    ? TARGET_COLOR.pass
-                    : TARGET_COLOR.fail,
-              }}
-            >
+            <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold tabular-nums text-[var(--color-base)]">
+              <span
+                aria-hidden="true"
+                className="inline-block w-2 h-2 rounded-full"
+                style={{ background: green === data.targets.length ? TARGET_COLOR.pass : TARGET_COLOR.fail }}
+              />
               {t.targetsCount
                 .replace("{g}", String(green))
                 .replace("{n}", String(data.targets.length))}
@@ -2413,13 +2408,12 @@ export default async function BenchmarkPage() {
                         <span className="inline-flex items-center gap-2 text-[13px] font-bold">
                           <span aria-hidden="true">{emoji}</span>
                           {t.targetSections[section]}
-                          <span
-                            className="text-[11px] font-semibold tabular-nums rounded-full px-2 py-0.5"
-                            style={{
-                              color: ok === list.length ? TARGET_COLOR.pass : TARGET_COLOR.fail,
-                              background: `color-mix(in srgb, ${ok === list.length ? TARGET_COLOR.pass : TARGET_COLOR.fail} 14%, transparent)`,
-                            }}
-                          >
+                          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold tabular-nums text-[var(--color-muted)]">
+                            <span
+                              aria-hidden="true"
+                              className="inline-block w-2 h-2 rounded-full"
+                              style={{ background: ok === list.length ? TARGET_COLOR.pass : TARGET_COLOR.fail }}
+                            />
                             {`${ok}/${list.length}`}
                           </span>
                         </span>
