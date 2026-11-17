@@ -969,13 +969,10 @@ def test_the_same_budget_is_told_to_the_person_under_the_same_id_only_once_but_a
     assert bridge.flag.exists() and bridge.esc == 1
 
 
-def test_the_notice_of_the_brake_to_the_person_is_accepted_by_jht_notify_user_each_time(tmp_path):
+def test_the_notice_of_the_brake_to_the_person_is_accepted_by_jht_notify_user_each_time(tmp_path, monkeypatch):
     """Every notice of the brake went under the SAME source id with another text: the tool answered exit 2 (collision) from the second
     one on, and the person was told of the first pause only (giro Windows 16/11: «jht-notify-user failed with exit 2»)."""
     import sqlite3
-    import subprocess
-    import sys
-    tool = Path(__file__).resolve().parents[1] / "agents" / "_tools" / "jht-notify-user"
     db = tmp_path / "jobs.db"
     conn = sqlite3.connect(db)
     conn.execute("""CREATE TABLE pending_user_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, agent TEXT, body TEXT, kind TEXT,
@@ -983,15 +980,18 @@ def test_the_notice_of_the_brake_to_the_person_is_accepted_by_jht_notify_user_ea
         delivered_via TEXT DEFAULT 'web', delivered_at TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)""")
     conn.commit()
     conn.close()
+    import quota_data
+    monkeypatch.setenv("JHT_DB", str(db))
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
     seen = []
 
     def real(text, reason):
-        done = subprocess.run([sys.executable, str(tool), "--agent", "capitano", "--kind", "alert", "--no-telegram", "--source-id",
-                               "no-quota-mode-" + reason, "--source-action", "no_quota_mode_notice", text],
-                              env={**os.environ, "JHT_DB": str(db), "JHT_HOME": str(tmp_path)}, capture_output=True, text=True, timeout=60)
-        seen.append(done.returncode)
-        if done.returncode != 0:
-            raise RuntimeError("jht-notify-user failed with exit %d: %s" % (done.returncode, done.stderr.strip()))
+        # the very function of the product (it runs the tool by the repository path when /app is not there)
+        try:
+            quota_data._notify_user(text, reason)
+            seen.append(0)
+        except RuntimeError as error:
+            seen.append(str(error))
 
     bridge, state = _a_stop_that_looks_ahead(tmp_path)
     # the tick of the helper told through the test double; tell again through the real tool: a halt, then the resume of a new setup
