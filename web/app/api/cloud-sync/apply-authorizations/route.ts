@@ -64,22 +64,25 @@ export async function GET(req: NextRequest) {
     expires_at?: unknown;
     token_origin?: unknown;
   };
-  const readDevices = (columns: string) =>
-    fetchPostgrestRows<DeviceRow>(
+  // The columns are literal (the census of scripts/check-web-schema-coverage.mjs reads them).
+  let { data: deviceRows, error: deviceError } =
+    await fetchPostgrestRows<DeviceRow>(
       admin
         .from("cloud_sync_tokens")
-        .select(columns)
+        .select("pairing_session_id, revoked_at, expires_at, token_origin")
         .eq("user_id", userId)
         .order("id"),
     );
-  let { data: deviceRows, error: deviceError } = await readDevices(
-    "pairing_session_id, revoked_at, expires_at, token_origin",
-  );
   // 107 not applied yet: no origin is known, every token without a session counts as before 107.
   if (missingTokenOriginColumn(deviceError)) {
-    ({ data: deviceRows, error: deviceError } = await readDevices(
-      "pairing_session_id, revoked_at, expires_at",
-    ));
+    ({ data: deviceRows, error: deviceError } =
+      await fetchPostgrestRows<DeviceRow>(
+        admin
+          .from("cloud_sync_tokens")
+          .select("pairing_session_id, revoked_at, expires_at")
+          .eq("user_id", userId)
+          .order("id"),
+      ));
   }
   if (deviceError) {
     return sanitizedError(deviceError, {

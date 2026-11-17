@@ -516,3 +516,27 @@ def test_an_origin_outside_the_three_is_refused(cluster):
     done = cluster(f"INSERT INTO public.cloud_sync_tokens (user_id, token_hash, token_origin) "
                    f"VALUES ('{who.user}', 'x', 'browser')", check=False)
     assert done.returncode != 0 and "cloud_sync_tokens_token_origin_check" in (done.stderr + done.stdout)
+
+
+@pytest.mark.parametrize("left_behind, message", [
+    ("GRANT UPDATE ON public.cloud_sync_tokens TO authenticated", "can still INSERT, UPDATE or DELETE"),
+    ("GRANT UPDATE (token_origin) ON public.cloud_sync_tokens TO authenticated", "can still INSERT, UPDATE or DELETE"),
+    ("GRANT INSERT ON public.cloud_sync_tokens TO anon", "can still INSERT, UPDATE or DELETE"),
+    ('CREATE POLICY "Users can update own cloud sync tokens" ON public.cloud_sync_tokens FOR UPDATE USING (true)',
+     "still has an INSERT, UPDATE, DELETE or ALL policy"),
+])
+def test_107_stops_before_changing_anything_when_a_write_was_given_back_after_105(cluster, left_behind, message):
+    """token_origin opens the door: a box of before 105 holds the user's session and must not be able to set 'page' on
+    its own token. 107 repeats the check of 105 before it changes anything: a write given back by hand stops it."""
+    cluster(file=M107)
+    door_before = cluster("SELECT md5(prosrc) FROM pg_proc WHERE proname = 'ext_position'").stdout.strip()
+    cluster(left_behind)
+    try:
+        done = cluster(file=M107, check=False)
+        assert done.returncode != 0 and message in done.stderr, done.stderr
+        assert cluster("SELECT md5(prosrc) FROM pg_proc WHERE proname = 'ext_position'").stdout.strip() == door_before
+    finally:
+        cluster('DROP POLICY IF EXISTS "Users can update own cloud sync tokens" ON public.cloud_sync_tokens')
+        cluster("REVOKE INSERT, UPDATE ON public.cloud_sync_tokens FROM authenticated, anon")
+        cluster("REVOKE UPDATE (token_origin) ON public.cloud_sync_tokens FROM authenticated")
+        cluster(file=M107)
