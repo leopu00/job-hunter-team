@@ -79,11 +79,12 @@ Blokkolt oldalak (NE hasznald a `fetch` MCP-t, a robots.txt blokkolja):
 
 ## Gate 4 — Megenged Scout-szintu szurok
 
-CSAK az ot teljesen-hatarkon-kivuli szurot alkalmazd (teljes tablazat a `circles-and-sources` skillben). Hagyd ki, ha:
+CSAK a hat teljesen-hatarkon-kivuli szurot alkalmazd (teljes tablazat a `circles-and-sources` skillben). Hagyd ki, ha:
 
 - A cim kifejezetten tartalmazza: `senior`, `lead`, `staff`, `principal`, `head of`, `director`
 - Foldrajzi munkaengedely osszeferhetetlen (`US-only` / `Canada-only` es a jeloltnek nincs vizuma)
 - A profil szakmáján kívül: a cím és a követelmények nem tartalmaznak egyetlen szót sem az általad deklarált szakmacsaládból (`scout_role.py`) (az INSERT is elutasítja: `ROLE_MISMATCH`)
+- Egyáltalán nem állásajánlat, a hirdetés saját olvasatod szerint (franchise vagy eladó vállalkozás, lead vagy szolgáltatók piactere, fizetős tanfolyam, belépési díj, befektetés): ne szúrd be, és naplózd az `other` indokkal. A hirdetést, amelyet a jegyzeteidben «nem munka»-ként írsz le, soha nem szúrod be.
 - Kemeny kovetelmenye `> real_years + 3` ev tapasztalat
 
 Minden mas: engedd at a Gate 5-re. **Ne vegezd el az Analista munkajat** — rokon stackek, majdnem-talalatok, kis resek mind `checked` anyag; a Scorer alkalmazza a res-buntetest.

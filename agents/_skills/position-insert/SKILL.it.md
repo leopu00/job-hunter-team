@@ -79,11 +79,12 @@ Siti bloccati (NON usare `fetch` MCP, bloccato da robots.txt):
 
 ## Gate 4 — Filtri permissivi a livello Scout
 
-Applica SOLO i cinque filtri totalmente-fuori-scope (tabella completa nella skill `circles-and-sources`). Salta se:
+Applica SOLO i sei filtri totalmente-fuori-scope (tabella completa nella skill `circles-and-sources`). Salta se:
 
 - Il titolo contiene esplicitamente: `senior`, `lead`, `staff`, `principal`, `head of`, `director`
 - Work-auth geografica incompatibile (`US-only` / `Canada-only` e il candidato non ha visto)
 - Fuori dal mestiere del profilo: titolo e requisiti non hanno nessuna parola della famiglia del mestiere che hai dichiarato (`scout_role.py`) (anche l'INSERT lo rifiuta: `ROLE_MISMATCH`)
+- Non è affatto un'offerta di lavoro, per la tua stessa lettura dell'annuncio (un franchising o un'attività in vendita, un lead o un marketplace di fornitori, un corso a pagamento, una quota per iniziare, un investimento): non inserirla, e registrala con motivo `other`. Un annuncio che nelle tue note descrivi come «non un lavoro» non si inserisce mai.
 - Requisito rigido di `> anni_reali + 3` anni di esperienza
 
 Tutto il resto: passa al Gate 5. **Non fare il lavoro dell'Analista** — stack adiacenti, quasi-fit, lievi gap sono tutti materiale `checked`; lo Scorer applica la penalità di gap.
