@@ -7,6 +7,7 @@
 | 🟢 **Pi with GLM (Z.ai)** | an **API key**, billed per call by the provider | the Pi harness | ✅ offered |
 | 🟢 **Pi with Kimi (Moonshot)** | an **API key**, billed per call by the provider | the Pi harness | ✅ offered |
 | 🟢 **Pi with OpenAI** | an **API key**, billed per call by the provider | the Pi harness | ✅ offered |
+| 🟢 **Pi with OpenAI** | a **ChatGPT subscription**, signed in with Pi's own login (not Codex's) | the Pi harness | ✅ offered, new: not yet measured; JHT promises nothing about OpenAI's terms for this use or about what a given plan covers |
 | 🟢 **Pi with Claude (Anthropic)** | an **API key**, billed per call by the provider | the Pi harness | ✅ offered |
 | 🔵 Codex (OpenAI) with a ChatGPT subscription | subscription | Codex CLI | ⏳ not in 0.4.0 |
 
@@ -22,6 +23,10 @@ The services a release offers are one list in the code (`shared/runtime/release-
 Together they aim each window at **92%** without crossing 100% (which would rate-limit and freeze the team). Measured: a 30-day autonomous run on Codex Pro found 658 positions and scored 520, closing every week at 99–100% with no overshoot ([Case Study #4](RESULTS.md#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run)). Numbers in [`MONITORING.md`](MONITORING.md).
 
 The plan matters: the app asks which one you have (a card in the Assistant's chat) and sizes the team to it.
+
+## 🟢 Pi with OpenAI and a ChatGPT subscription
+
+Choose OpenAI in `jht setup` and answer that Pi signs in with the ChatGPT subscription: no key is asked, Pi is installed and opened for its own `/login` (the Codex CLI is not involved), and the team starts when the login is there. Without the guided setup: `jht setup --non-interactive --provider openai --harness pi --auth-method subscription`, then `jht setup` (keep the configuration) to sign in to Pi. This way is new in 0.4.0 and not yet measured; JHT promises nothing about OpenAI's terms for this use or about what a given plan covers. A team on Codex with the subscription from 0.3.9 is a different thing: it keeps running on Codex, as above.
 
 ## 🟢 Pi with an API key (GLM, Kimi, OpenAI, Claude)
 
