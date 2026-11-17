@@ -85,6 +85,28 @@ def test_never_against_a_brake_or_for_an_agent_held_back_or_over_the_capacity(wo
     assert len(rr.plan()["start"]) == 3, "never more workers than the machine carries"
 
 
+def test_a_brake_or_a_capacity_that_cannot_be_read_starts_nothing(world, monkeypatch):
+    mods = dict(rr._MODULES)
+    monkeypatch.setattr(rr, "_MODULES", {**mods, "queue_demand": None})
+    out = rr.plan()
+    assert out["start"] == [] and "brakes cannot be read" in out["why_not"]
+    monkeypatch.setattr(rr, "_MODULES", {**mods, "plan_registry": None})
+    assert rr.plan()["start"] == []
+
+    def boom():
+        raise RuntimeError("unreadable")
+
+    monkeypatch.setattr(rr, "_MODULES", {**mods, "plan_registry": type("R", (), {"_host_agent_cap": staticmethod(boom)})})
+    out = rr.plan()
+    assert out["start"] == [] and "capacity" in out["why_not"]
+    world["queue"].brake = staticmethod(lambda t, n: boom())
+    monkeypatch.setattr(rr, "_MODULES", mods)
+    assert rr.plan()["start"] == []
+    # a capacity that is not MEASURABLE (none) has no cap to exceed
+    world["queue"].brake = staticmethod(lambda t, n: None)
+    assert rr.plan()["start"] != []
+
+
 def test_one_run_per_boot(world):
     rr._write_marker(world["now"].timestamp())
     out = rr.plan()

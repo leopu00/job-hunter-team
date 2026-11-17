@@ -121,10 +121,14 @@ def plan(now: float | None = None) -> dict:
     if _done_recently(now):
         return {"start": [], "why_not": "the roster was restored less than an hour ago"}
     queue = _load("queue_demand")
-    if queue is not None:
+    if queue is None:
+        return {"start": [], "why_not": "the brakes cannot be read (queue_demand does not load): nothing is started"}
+    try:
         reason = queue.brake(now, 0)
-        if reason:
-            return {"start": [], "why_not": f"a brake holds the team: {reason}"}
+    except Exception:  # noqa: BLE001 — a brake that raises is a brake
+        reason = "brakes-unreadable"
+    if reason:
+        return {"start": [], "why_not": f"a brake holds the team: {reason}"}
     cutoff = datetime.now(timezone.utc) - timedelta(hours=WINDOW_H)
     found: dict = {role: [] for role in ROLES}
     for entry in entries:
@@ -135,7 +139,7 @@ def plan(now: float | None = None) -> dict:
         sign = _last_sign(session)
         if sign is None or sign.astimezone(timezone.utc) < cutoff:
             continue
-        if queue is not None and queue.held_back(session):
+        if queue.held_back(session):
             continue
         try:
             found[role].append(int(entry.get("instance")))
@@ -147,10 +151,12 @@ def plan(now: float | None = None) -> dict:
     burst = _load("burst_roster")
     sequence = burst.order(counts) if burst is not None else [r for r in ROLES for _ in range(counts[r])]
     registry = _load("plan_registry")
+    if registry is None:
+        return {"start": [], "why_not": "the capacity of the machine cannot be read: nothing is started"}
     try:
-        cap = registry._host_agent_cap() if registry is not None else None  # noqa: SLF001 — the one source of the RAM cap
+        cap = registry._host_agent_cap()  # noqa: SLF001 — the one source of the RAM cap; none = not measurable, no cap to exceed
     except Exception:  # noqa: BLE001
-        cap = None
+        return {"start": [], "why_not": "the capacity of the machine cannot be read: nothing is started"}
     chosen: list = []
     taken = {role: 0 for role in ROLES}
     for role in sequence:
