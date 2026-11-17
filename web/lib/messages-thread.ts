@@ -144,9 +144,30 @@ async function postOrThrow(url: string, payload: unknown): Promise<Response> {
 /**
  * Invia la risposta dell'utente a un messaggio. Se la route non la prende
  * rilancia un ThreadWriteError (status e, se noto, il codice).
+ *
+ * On the site the answer to a question of the CLOSER saves the answer only: the permission to apply is an L3
+ * action of the page of the position. Then the route names that position (`authorisation_required`), and the
+ * result carries its id so the drawer can send the person there; null in every other case.
  */
-export async function postReply(id: string, reply: string): Promise<void> {
-  await postOrThrow(`/api/pending-messages/${id}/reply`, { reply });
+export type PostReplyResult = { authorisePositionId: string | null };
+
+export async function postReply(
+  id: string,
+  reply: string,
+): Promise<PostReplyResult> {
+  const res = await postOrThrow(`/api/pending-messages/${id}/reply`, { reply });
+  let body: { authorisation_required?: { position_id?: unknown } } | null =
+    null;
+  try {
+    body = (await res.json()) as typeof body;
+  } catch {
+    body = null; // the reply is saved: an unreadable body only loses the hint
+  }
+  const positionId = body?.authorisation_required?.position_id;
+  return {
+    authorisePositionId:
+      typeof positionId === "string" && positionId !== "" ? positionId : null,
+  };
 }
 
 /**

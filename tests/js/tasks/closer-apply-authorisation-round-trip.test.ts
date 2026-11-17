@@ -502,10 +502,19 @@ describe("la risposta al form vale come nuova autorizzazione", () => {
     });
   });
 
-  it("il path cloud registra lo stesso permesso come user_web", () => {
+  it("il path cloud salva solo la risposta: il permesso passa dalla porta L3 della pagina della posizione", () => {
+    // With 098 the guard refused the write of apply_requested by the session (500, the CLOSER stuck); without
+    // it the route said «reauthorised» for a flag the broker never takes (no receipt in web_action_log).
     const src = leggi("web/app/api/pending-messages/[id]/reply/route.ts");
-    expect(src).toContain('apply_requested_by: "user_web"');
-    expect(src).toContain("application_reauthorisation_not_observed");
+    const code = src.replace(/^\s*\/\/.*$/gm, "");
+    expect(code).not.toMatch(/\.from\("positions"\)\s*\.update\(/);
+    expect(code).not.toContain("apply_requested");
+    expect(code).not.toContain("user_web");
+    expect(code).toContain("application_reauthorised: false");
+    expect(code).toContain("authorisation_required: { position_id: authorisePositionId }");
+    // the only writes left are the reply on its own row
+    expect(code.match(/\.update\(/g)).toHaveLength(1);
+    expect(code).toMatch(/\.from\("pending_user_messages"\)\s*\.update\(\{\s*user_reply: reply/);
   });
 
   it("una normale risposta in chat non autorizza candidature", async () => {

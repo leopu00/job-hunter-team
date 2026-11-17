@@ -20,7 +20,7 @@ const DEVICE = "00000000-0000-4000-8000-000000000099";
 // The tokens of the account, ALL of them (the revoked and the expired too): the route reads them without a filter.
 function cloud(rows: unknown[], deviceRows: unknown[] = [
   { pairing_session_id: DEVICE, revoked_at: null, expires_at: null },
-]) {
+], firstDeviceError: unknown = null) {
   const limit = vi.fn(async () => ({ data: rows, error: null }));
   const order = vi.fn(() => ({ limit }));
   const gte = vi.fn(() => ({ order }));
@@ -29,6 +29,7 @@ function cloud(rows: unknown[], deviceRows: unknown[] = [
   const user = vi.fn(() => ({ in: actions }));
   const select = vi.fn(() => ({ eq: user }));
   const range = vi.fn(async () => ({ data: deviceRows, error: null }));
+  if (firstDeviceError) range.mockResolvedValueOnce({ data: null, error: firstDeviceError } as never);
   const deviceOrder = vi.fn(() => ({ range }));
   const deviceUser = vi.fn(() => ({ order: deviceOrder }));
   const deviceSelect = vi.fn(() => ({ eq: deviceUser }));
@@ -107,7 +108,7 @@ describe("apply authorizations cloud route", () => {
     expect(fake.user).toHaveBeenCalledWith("user_id", "11111111-1111-4111-8111-111111111111");
     expect(fake.deviceUser).toHaveBeenCalledWith("user_id", "11111111-1111-4111-8111-111111111111");
     // every token of the account, none filtered out: a revoked or an expired one is still a device's session
-    expect(fake.deviceSelect).toHaveBeenCalledWith("pairing_session_id, revoked_at, expires_at");
+    expect(fake.deviceSelect).toHaveBeenCalledWith("pairing_session_id, revoked_at, expires_at, token_origin");
     expect(fake.deviceOrder).toHaveBeenCalledWith("id");
     expect(fake.actions).toHaveBeenCalledWith("action", ["position.apply_authorize", "position.apply_revoke"]);
     expect(fake.statuses).toHaveBeenCalledWith("status", ["queued", "done"]);
@@ -252,5 +253,57 @@ describe("apply authorizations cloud route", () => {
     expect((await response.json()).error).toBe("query_failed");
     expect(accountRead).not.toHaveBeenCalled();
     errors.mockRestore();
+  });
+
+  // 107: `jht cloud login` (device_code) and the page of the tokens (page) hand no user session to the box. Such a
+  // token without a pairing session asked a new pairing for ever; it has no session to tie and now asks nothing.
+  const closedRow = {
+    id: "00000000-0000-4000-8000-000000000301",
+    action: "position.apply_authorize",
+    status: "done",
+    created_at: "2026-10-23T18:00:00.000Z",
+    summary: "Synthetic role @ Synthetic company · example.com",
+    params: { legacy_id: 42, host: "example.com" },
+    session_id: "00000000-0000-4000-8000-0000000000ee",
+  };
+  const askWith = async (deviceRows: unknown[], firstDeviceError: unknown = null) => {
+    const fake = cloud([closedRow], deviceRows, firstDeviceError);
+    mocks.verifyBearerToken.mockResolvedValue({
+      ok: true,
+      data: { userId: "11111111-1111-4111-8111-111111111111", tokenId: "device", admin: fake.admin },
+    });
+    const { GET } = await import("@/app/api/cloud-sync/apply-authorizations/route");
+    return { fake, response: await GET(new Request("http://localhost/api/cloud-sync/apply-authorizations") as never) };
+  };
+
+  it.each(["device_code", "page"])("an active token of origin %s without a session hands the receipts over", async (origin) => {
+    const { response } = await askWith([{ pairing_session_id: null, revoked_at: null, expires_at: null, token_origin: origin }]);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ ok: true, authorizations: [{ legacy_id: 42 }] });
+  });
+
+  it.each([null, "device_register", "something_else"])(
+    "an active token of origin %s without a session still asks for a new pairing",
+    async (origin) => {
+      const { response } = await askWith([{ pairing_session_id: null, revoked_at: null, expires_at: null, token_origin: origin }]);
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toEqual({ ok: false, error: "re_pair_required" });
+    },
+  );
+
+  it("without migration 107 the tokens are read again without the origin, and one without a session asks a pairing as before", async () => {
+    const missing = { code: "42703", message: 'column cloud_sync_tokens.token_origin does not exist' };
+    const { fake, response } = await askWith([{ pairing_session_id: null, revoked_at: null, expires_at: null }], missing);
+    expect(fake.deviceSelect.mock.calls).toEqual([
+      ["pairing_session_id, revoked_at, expires_at, token_origin"],
+      ["pairing_session_id, revoked_at, expires_at"],
+    ]);
+    expect(response.status).toBe(409);
+  });
+
+  it("another failure of the read of the tokens is not retried without the origin", async () => {
+    const { fake, response } = await askWith([], { code: "42703", message: "column cloud_sync_tokens.other does not exist" });
+    expect(fake.deviceSelect).toHaveBeenCalledTimes(1);
+    expect(response.status).toBe(500);
   });
 });
