@@ -141,6 +141,7 @@ export const T: Record<Locale, Copy> = {
     },
     profiles: {
       bricklayer: "Bricklayer",
+      warehouseWorker: "Warehouse worker",
       officeClerk: "Office clerk, part time",
       dataAnalyst: "Data analyst",
       generic: "Generic test profile",
@@ -159,6 +160,7 @@ export const T: Record<Locale, Copy> = {
     },
     notes: {
       updateBuild10Portuguese: "Update on build 10, all in Portuguese: the saved key kept, the queue restarted by itself, 1 new position (74); the pace brake paused the team and told the person.",
+      updateWindowsBuild9to10: "Build 9 installed from scratch, all in German: 25 warehouse positions in a quarter of an hour; updated to build 10 with positions, profile and key kept, then the Analyst never started and 13 positions stayed waiting.",
       updateSwitchKept: "Update with the team running: data kept, old images removed, GLM → Claude without stopping the team. 3 relevant of 26 new in 10 minutes.",
       updateWelcomePaid: "Update and switch to Claude: 15 relevant of 18 in 12 minutes. The welcome was paid again at every restart.",
       cleanInstallWarehouse: "New user, guided onboarding: the brake stopped at 2.67 $. Mostly warehouse jobs: 2 relevant of 19.",
@@ -235,6 +237,7 @@ export const T: Record<Locale, Copy> = {
     },
     targetNotes: {
       "updateMacBuild10": "build 10: setup all in Portuguese, the saved key kept, 1 new position (score 74)",
+      "updateWindowsBuild10": "build 10: positions, profile and key kept, all in German; after the update the Analyst never started (13 positions waiting)",
       "languagePortugueseOk": "build 10: Portuguese all the way on the Mac",
       "codexBetaInUse": "in use every day by our beta tester (chart 6); not yet tried on builds 9 and 10",
       "updateLinuxBuild9": "build 9: passed (its round is not in the table below)",
@@ -426,6 +429,7 @@ export const T: Record<Locale, Copy> = {
     },
     profiles: {
       bricklayer: "Muratore",
+      warehouseWorker: "Magazziniere",
       officeClerk: "Impiegata amministrativa part time",
       dataAnalyst: "Data analyst",
       generic: "Profilo di prova generico",
@@ -444,6 +448,7 @@ export const T: Record<Locale, Copy> = {
     },
     notes: {
       updateBuild10Portuguese: "Aggiornamento sulla build 10, tutto in portoghese: chiave salvata tenuta, la coda ripartita da sola, 1 annuncio nuovo (74); il freno a ritmo ha messo in pausa la squadra e l'ha detto alla persona.",
+      updateWindowsBuild9to10: "Build 9 installata da zero, tutto in tedesco: 25 annunci di magazzino in un quarto d'ora; aggiornata alla build 10 con annunci, profilo e chiave tenuti, poi l'Analista non è mai partito e 13 annunci sono rimasti in attesa.",
       updateSwitchKept: "Aggiornamento a squadra accesa: dati tenuti, immagini vecchie tolte, GLM → Claude senza fermare la squadra. 3 pertinenti su 26 nuove in 10 minuti.",
       updateWelcomePaid: "Aggiornamento e passaggio a Claude: 15 pertinenti su 18 in 12 minuti. Il benvenuto è stato pagato di nuovo a ogni ripartenza.",
       cleanInstallWarehouse: "Utente nuovo, onboarding guidato: il freno ha fermato a 2,67 $. Quasi solo magazzino: 2 pertinenti su 19.",
@@ -520,6 +525,7 @@ export const T: Record<Locale, Copy> = {
     },
     targetNotes: {
       "updateMacBuild10": "build 10: setup tutto in portoghese, chiave salvata tenuta, 1 annuncio nuovo (punteggio 74)",
+      "updateWindowsBuild10": "build 10: annunci, profilo e chiave tenuti, tutto in tedesco; dopo l'aggiornamento l'Analista non è mai partito (13 annunci in attesa)",
       "languagePortugueseOk": "build 10: portoghese dall'inizio alla fine sul Mac",
       "codexBetaInUse": "in uso ogni giorno dalla nostra beta tester (grafico 6); non ancora provato sulle build 9 e 10",
       "updateLinuxBuild9": "build 9: superato (il giro non è nella tabella sotto)",
@@ -711,6 +717,7 @@ export const T: Record<Locale, Copy> = {
     },
     profiles: {
       bricklayer: "Maurer",
+      warehouseWorker: "Lagerarbeiter",
       officeClerk: "Bürokraft, Teilzeit",
       dataAnalyst: "Data Analyst",
       generic: "Allgemeines Testprofil",
@@ -729,6 +736,7 @@ export const T: Record<Locale, Copy> = {
     },
     notes: {
       updateBuild10Portuguese: "Update auf Build 10, ganz auf Portugiesisch: gespeicherter Schlüssel behalten, die Warteschlange lief von selbst weiter, 1 neue Stelle (74); die Tempobremse pausierte das Team und sagte es der Person.",
+      updateWindowsBuild9to10: "Build 9 neu installiert, alles auf Deutsch: 25 Lagerstellen in einer Viertelstunde; Update auf Build 10 mit behaltenen Stellen, Profil und Schlüssel, danach startete der Analyst nie und 13 Stellen blieben wartend.",
       updateSwitchKept: "Update bei laufendem Team: Daten behalten, alte Images entfernt, GLM → Claude ohne das Team anzuhalten. 3 passende von 26 neuen in 10 Minuten.",
       updateWelcomePaid: "Update und Wechsel zu Claude: 15 passende von 18 in 12 Minuten. Die Begrüßung wurde bei jedem Neustart wieder bezahlt.",
       cleanInstallWarehouse: "Neuer Nutzer, geführtes Onboarding: Die Bremse hielt bei 2,67 $. Fast nur Lagerjobs: 2 passende von 19.",
@@ -805,6 +813,7 @@ export const T: Record<Locale, Copy> = {
     },
     targetNotes: {
       "updateMacBuild10": "Build 10: Setup ganz auf Portugiesisch, gespeicherter Schlüssel behalten, 1 neue Stelle (Score 74)",
+      "updateWindowsBuild10": "Build 10: Stellen, Profil und Schlüssel behalten, alles auf Deutsch; nach dem Update startete der Analyst nie (13 Stellen warten)",
       "languagePortugueseOk": "Build 10: durchgehend Portugiesisch auf dem Mac",
       "codexBetaInUse": "täglich im Einsatz bei unserer Betatesterin (Diagramm 6); auf Build 9 und 10 noch nicht geprüft",
       "updateLinuxBuild9": "Build 9: bestanden (die Runde steht nicht in der Tabelle unten)",
@@ -996,6 +1005,7 @@ export const T: Record<Locale, Copy> = {
     },
     profiles: {
       bricklayer: "Albañil",
+      warehouseWorker: "Mozo de almacén",
       officeClerk: "Administrativa a tiempo parcial",
       dataAnalyst: "Analista de datos",
       generic: "Perfil de prueba genérico",
@@ -1014,6 +1024,7 @@ export const T: Record<Locale, Copy> = {
     },
     notes: {
       updateBuild10Portuguese: "Actualización en la build 10, todo en portugués: clave guardada conservada, la cola volvió a arrancar sola, 1 anuncio nuevo (74); el freno de ritmo pausó el equipo y se lo dijo a la persona.",
+      updateWindowsBuild9to10: "Build 9 instalada desde cero, todo en alemán: 25 anuncios de almacén en un cuarto de hora; actualizada a la build 10 con anuncios, perfil y clave conservados, luego el Analista nunca arrancó y 13 anuncios quedaron en espera.",
       updateSwitchKept: "Actualización con el equipo en marcha: datos conservados, imágenes viejas quitadas, GLM → Claude sin parar el equipo. 3 pertinentes de 26 nuevas en 10 minutos.",
       updateWelcomePaid: "Actualización y paso a Claude: 15 pertinentes de 18 en 12 minutos. La bienvenida se volvió a pagar en cada reinicio.",
       cleanInstallWarehouse: "Usuario nuevo, onboarding guiado: el freno paró en 2,67 $. Casi solo almacén: 2 pertinentes de 19.",
@@ -1091,6 +1102,7 @@ export const T: Record<Locale, Copy> = {
     },
     targetNotes: {
       "updateMacBuild10": "build 10: configuración toda en portugués, clave guardada conservada, 1 anuncio nuevo (puntuación 74)",
+      "updateWindowsBuild10": "build 10: anuncios, perfil y clave conservados, todo en alemán; tras la actualización el Analista nunca arrancó (13 anuncios en espera)",
       "languagePortugueseOk": "build 10: portugués de principio a fin en el Mac",
       "codexBetaInUse": "en uso cada día por nuestra beta tester (gráfico 6); aún no probado en las builds 9 y 10",
       "updateLinuxBuild9": "build 9: superada (su ronda no está en la tabla de abajo)",
@@ -1283,6 +1295,7 @@ export const T: Record<Locale, Copy> = {
     },
     profiles: {
       bricklayer: "Maçon",
+      warehouseWorker: "Magasinier",
       officeClerk: "Employée administrative à temps partiel",
       dataAnalyst: "Data analyst",
       generic: "Profil d'essai générique",
@@ -1301,6 +1314,7 @@ export const T: Record<Locale, Copy> = {
     },
     notes: {
       updateBuild10Portuguese: "Mise à jour sur la build 10, tout en portugais : clé enregistrée gardée, la file est repartie seule, 1 nouvelle annonce (74) ; le frein de rythme a mis l'équipe en pause et l'a dit à la personne.",
+      updateWindowsBuild9to10: "Build 9 installée de zéro, tout en allemand : 25 annonces d'entrepôt en un quart d'heure ; mise à jour vers la build 10 avec annonces, profil et clé gardés, puis l'Analyste n'a jamais démarré et 13 annonces sont restées en attente.",
       updateSwitchKept: "Mise à jour avec l'équipe en marche : données gardées, anciennes images retirées, GLM → Claude sans arrêter l'équipe. 3 pertinentes sur 26 nouvelles en 10 minutes.",
       updateWelcomePaid: "Mise à jour et passage à Claude : 15 pertinentes sur 18 en 12 minutes. L'accueil a été payé de nouveau à chaque redémarrage.",
       cleanInstallWarehouse: "Nouvel utilisateur, onboarding guidé : le frein s'est arrêté à 2,67 $. Presque que de l'entrepôt : 2 pertinentes sur 19.",
@@ -1378,6 +1392,7 @@ export const T: Record<Locale, Copy> = {
     },
     targetNotes: {
       "updateMacBuild10": "build 10 : configuration tout en portugais, clé enregistrée gardée, 1 nouvelle annonce (score 74)",
+      "updateWindowsBuild10": "build 10 : annonces, profil et clé gardés, tout en allemand ; après la mise à jour l'Analyste n'a jamais démarré (13 annonces en attente)",
       "languagePortugueseOk": "build 10 : portugais du début à la fin sur le Mac",
       "codexBetaInUse": "utilisé chaque jour par notre bêta-testeuse (graphique 6) ; pas encore essayé sur les builds 9 et 10",
       "updateLinuxBuild9": "build 9 : réussi (son tour n'est pas dans le tableau ci-dessous)",
@@ -1568,6 +1583,7 @@ export const T: Record<Locale, Copy> = {
     },
     profiles: {
       bricklayer: "Pedreiro",
+      warehouseWorker: "Operador de armazém",
       officeClerk: "Administrativa a tempo parcial",
       dataAnalyst: "Analista de dados",
       generic: "Perfil de teste genérico",
@@ -1586,6 +1602,7 @@ export const T: Record<Locale, Copy> = {
     },
     notes: {
       updateBuild10Portuguese: "Atualização na build 10, tudo em português: chave guardada mantida, a fila recomeçou sozinha, 1 anúncio novo (74); o travão de ritmo pôs a equipa em pausa e disse-o à pessoa.",
+      updateWindowsBuild9to10: "Build 9 instalada de raiz, tudo em alemão: 25 anúncios de armazém num quarto de hora; atualizada para a build 10 com anúncios, perfil e chave mantidos, depois o Analista nunca arrancou e 13 anúncios ficaram à espera.",
       updateSwitchKept: "Atualização com a equipa a correr: dados mantidos, imagens antigas retiradas, GLM → Claude sem parar a equipa. 3 pertinentes de 26 novas em 10 minutos.",
       updateWelcomePaid: "Atualização e passagem para o Claude: 15 pertinentes de 18 em 12 minutos. As boas-vindas foram pagas de novo a cada reinício.",
       cleanInstallWarehouse: "Utilizador novo, onboarding guiado: o travão parou em 2,67 $. Quase só armazém: 2 pertinentes de 19.",
@@ -1662,6 +1679,7 @@ export const T: Record<Locale, Copy> = {
     },
     targetNotes: {
       "updateMacBuild10": "build 10: configuração toda em português, chave guardada mantida, 1 anúncio novo (pontuação 74)",
+      "updateWindowsBuild10": "build 10: anúncios, perfil e chave mantidos, tudo em alemão; depois da atualização o Analista nunca arrancou (13 anúncios à espera)",
       "languagePortugueseOk": "build 10: português do início ao fim no Mac",
       "codexBetaInUse": "em uso todos os dias pela nossa beta tester (gráfico 6); ainda não testado nas builds 9 e 10",
       "updateLinuxBuild9": "build 9: aprovado (a rodada não está na tabela abaixo)",
@@ -1853,6 +1871,7 @@ export const T: Record<Locale, Copy> = {
     },
     profiles: {
       bricklayer: "Kőműves",
+      warehouseWorker: "Raktáros",
       officeClerk: "Irodai ügyintéző, részmunkaidő",
       dataAnalyst: "Adatelemző",
       generic: "Általános próbaprofil",
@@ -1871,6 +1890,7 @@ export const T: Record<Locale, Copy> = {
     },
     notes: {
       updateBuild10Portuguese: "Frissítés a 10. buildre, végig portugálul: a mentett kulcs megmaradt, a sor magától újraindult, 1 új hirdetés (74); az ütemfék szüneteltette a csapatot és szólt a felhasználónak.",
+      updateWindowsBuild9to10: "A 9. build nulláról telepítve, végig németül: negyedóra alatt 25 raktári hirdetés; frissítés a 10. buildre megtartott hirdetésekkel, profillal és kulccsal, utána az elemző sosem indult el, és 13 hirdetés várakozva maradt.",
       updateSwitchKept: "Frissítés futó csapattal: adatok megtartva, régi képfájlok törölve, GLM → Claude a csapat leállítása nélkül. 26 újból 3 releváns 10 perc alatt.",
       updateWelcomePaid: "Frissítés és váltás Claude-ra: 18-ból 15 releváns 12 perc alatt. Az üdvözlést minden újraindításkor újra kifizette.",
       cleanInstallWarehouse: "Új felhasználó, vezetett bevezetés: a fék 2,67 $-nál állt meg. Szinte csak raktári állás: 19-ből 2 releváns.",
@@ -1947,6 +1967,7 @@ export const T: Record<Locale, Copy> = {
     },
     targetNotes: {
       "updateMacBuild10": "10. build: a beállítás végig portugálul, a mentett kulcs megmaradt, 1 új hirdetés (pontszám 74)",
+      "updateWindowsBuild10": "10. build: hirdetések, profil és kulcs megmaradt, végig németül; a frissítés után az elemző sosem indult el (13 hirdetés vár)",
       "languagePortugueseOk": "10. build: végig portugálul a Macen",
       "codexBetaInUse": "a bétatesztelőnk minden nap használja (6. grafikon); a 9. és 10. buildön még nem próbálták",
       "updateLinuxBuild9": "9. build: sikeres (a köre nincs az alábbi táblázatban)",

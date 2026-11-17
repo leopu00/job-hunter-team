@@ -125,8 +125,8 @@ const AGENT_COLOR: Record<string, string> = {
   mentor: "#F5C518",
 };
 // Events that stop or hold the team are red, those that let it work again green, the rest (setup, start, notices) blue.
-const EVENT_STOP = new Set(["pace", "dailyHalt", "periodHalt", "periodOver", "periodEnd", "benchStop", "stop", "ceiling", "diskLow", "machineStopped", "creditGone", "creditExhausted", "inputHeld", "pause"]);
-const EVENT_GO = new Set(["resume", "resumeScouts", "cleared", "restart", "switch", "teamStart", "ready", "goalReached", "queueStart", "scoutStart", "setupClosed"]);
+const EVENT_STOP = new Set(["pace", "dailyHalt", "periodHalt", "periodOver", "periodEnd", "benchStop", "stop", "ceiling", "diskLow", "machineStopped", "creditGone", "creditExhausted", "inputHeld", "pause", "teamIdle"]);
+const EVENT_GO = new Set(["resume", "resumeScouts", "cleared", "restart", "switch", "teamStart", "ready", "goalReached", "queueStart", "scoutStart", "setupClosed", "teamRestart", "newPeriod"]);
 const OS_NAME: Record<string, string> = { windows: "Windows", linux: "Linux", macos: "macOS" };
 const colorOf = (key: string, i: number, map?: Record<string, string>) => map?.[key] ?? PALETTE[i % PALETTE.length];
 
