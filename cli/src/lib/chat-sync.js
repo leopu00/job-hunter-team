@@ -49,6 +49,7 @@ import { join, dirname } from "node:path";
 import { cloudSyncHeaders } from "./client-identity.js";
 import { boundedBackoffDelay } from "./bounded-backoff.js";
 import { replyColumnsForCloud } from "./local-only-replies.js";
+import { say } from "./texts.js";
 
 /**
  * Le tre figure con cui l'utente conversa. Il web mostra esattamente
@@ -70,6 +71,20 @@ export const CLOUD_CHAT_PULL_LIMIT = 50;
 /** Retry locale: rapido al primo inciampo, poi al massimo uno ogni 5 minuti. */
 export const CHAT_RETRY_MIN_MS = 5_000;
 export const CHAT_RETRY_MAX_MS = 300_000;
+
+/**
+ * When a user's turn stops being retried. A pane that refuses every delivery (a text left unsent in its composer:
+ * every try ends 130, for days) would keep the turn in the queue forever, and the person would see it «sent» and
+ * wait. After `CHAT_GIVE_UP_ATTEMPTS` failures that are not «the agent is busy» (rc 4, rc 8: alive, on a long turn),
+ * or past `CHAT_DELIVER_MAX_AGE_MS`, or when the agent already wrote after it and it is older than
+ * `CHAT_ANSWERED_STALE_MS`, the turn is given up: never delivered days late, out of context, and the person is told
+ * in their chat to write it again.
+ */
+export const CHAT_GIVE_UP_ATTEMPTS = Number(process.env.JHT_CHAT_GIVE_UP_ATTEMPTS || 12);
+export const CHAT_DELIVER_MAX_AGE_MS = Number(process.env.JHT_CHAT_DELIVER_MAX_AGE_MS || 24 * 3600 * 1000);
+export const CHAT_ANSWERED_STALE_MS = Number(process.env.JHT_CHAT_ANSWERED_STALE_MS || 2 * 3600 * 1000);
+/** The exits of `jht-tmux-send` that mean «alive and busy, try later»: they never count towards giving up. */
+const BUSY_CODES = new Set([4, 8]);
 
 /**
  * Quanto indietro può andare il mirror SQLite → `chat.jsonl`. Serve solo al
@@ -520,6 +535,16 @@ export function mirrorDbTurnsToJsonl(
  * La colonna esiste su QUESTO jobs.db? Un box può girare con uno schema più
  * vecchio del codice: il push e l'import devono degradare, non rompersi.
  */
+function hasTable(db, table) {
+  try {
+    return !!db
+      .prepare("SELECT 1 AS hit FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .get(table);
+  } catch {
+    return false;
+  }
+}
+
 function hasColumn(db, table, col) {
   try {
     return db
@@ -1018,7 +1043,149 @@ export function deliveredCloudUserTurnIds(
   return ids;
 }
 
+/**
+ * The cloud ids whose local twin was given up. They are not acknowledged as delivered (they were not), but the
+ * rendezvous may close over them: the person was told, and nothing more can happen to them.
+ */
+export function givenUpCloudUserTurnIds(db, rows, { agents = CHAT_AGENTS } = {}) {
+  if (!hasTable(db, "pending_user_message_delivery_given_up")) return [];
+  const given = db.prepare(
+    `SELECT 1 AS hit
+       FROM pending_user_messages m
+       JOIN pending_user_message_delivery_given_up g ON g.message_id = m.id
+      WHERE m.agent = ? AND m.chat_ts = ? AND m.delivered_at IS NULL
+      LIMIT 1`,
+  );
+  const ids = [];
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (row?.id == null || typeof row.body !== "string" || !row.body.trim()) continue;
+    const agent = String(row.agent || "").toLowerCase();
+    if (agents.includes(agent) && given.get(agent, chatTsOf(row))?.hit === 1) ids.push(row.id);
+  }
+  return ids;
+}
+
 // ── Passo 4: turni dell'utente → pane tmux dell'agente ──────────────────
+
+/**
+ * The local tables of the delivery: the durable claim, the retry and the turns given up. Local state only: no cloud
+ * column and no Supabase migration. `stuck_attempts` is added to a retry table made by an older bundle.
+ */
+export function ensureDeliveryTables(db) {
+  db.prepare(
+    `CREATE TABLE IF NOT EXISTS pending_user_message_delivery_claims (
+      message_id INTEGER PRIMARY KEY,
+      claimed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (message_id) REFERENCES pending_user_messages(id) ON DELETE CASCADE
+    )`,
+  ).run();
+  db.prepare(
+    `CREATE TABLE IF NOT EXISTS pending_user_message_delivery_retries (
+      message_id INTEGER PRIMARY KEY,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      next_attempt_at_ms INTEGER NOT NULL,
+      last_code INTEGER,
+      stuck_attempts INTEGER NOT NULL DEFAULT 0,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (message_id) REFERENCES pending_user_messages(id) ON DELETE CASCADE
+    )`,
+  ).run();
+  if (!hasColumn(db, "pending_user_message_delivery_retries", "stuck_attempts")) {
+    db.prepare(
+      "ALTER TABLE pending_user_message_delivery_retries ADD COLUMN stuck_attempts INTEGER NOT NULL DEFAULT 0",
+    ).run();
+  }
+  db.prepare(
+    `CREATE TABLE IF NOT EXISTS pending_user_message_delivery_given_up (
+      message_id INTEGER PRIMARY KEY,
+      reason TEXT NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      last_code INTEGER,
+      notice_id INTEGER,
+      given_up_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (message_id) REFERENCES pending_user_messages(id) ON DELETE CASCADE
+    )`,
+  ).run();
+}
+
+/** The start of a turn, on one line, for the notice that it was given up. */
+function turnStart(body, max = 80) {
+  const line = String(body || "").replace(/\s+/g, " ").trim();
+  return line.length > max ? `${line.slice(0, max - 1)}…` : line;
+}
+
+/** The words the person reads in their chat when one of their turns is given up. */
+export function givenUpNotice(reason, body, language) {
+  const start = turnStart(body);
+  if (reason === "too_old") return say('chat.delivery.given_up_too_old', { start }, language);
+  if (reason === "answered_later") return say('chat.delivery.given_up_answered_later', { start }, language);
+  return say('chat.delivery.given_up_refused', { start }, language);
+}
+
+/**
+ * Gives a user's turn up: it leaves the queue (not stamped delivered: it was not), and the person reads in the same
+ * chat that it did not arrive and why, in their language. One notice per turn, kept with the turn.
+ */
+function giveUpTurn(db, row, { reason, attempts = 0, lastCode = null, log, language }) {
+  let noticeId = null;
+  try {
+    const notice = db
+      .prepare(
+        "INSERT INTO pending_user_messages (agent, body, kind, author) VALUES (?, ?, 'alert', 'agent')",
+      )
+      .run(row.agent, givenUpNotice(reason, row.body, language));
+    noticeId = Number(notice.lastInsertRowid);
+  } catch (err) {
+    log("warn", `chat: the notice of a turn given up was not written: ${String(err?.message || err)}`);
+  }
+  db.prepare(
+    `INSERT OR IGNORE INTO pending_user_message_delivery_given_up
+       (message_id, reason, attempts, last_code, notice_id) VALUES (?, ?, ?, ?, ?)`,
+  ).run(row.id, reason, attempts, lastCode, noticeId);
+  db.prepare("DELETE FROM pending_user_message_delivery_retries WHERE message_id = ?").run(row.id);
+  log(
+    "warn",
+    `chat: gave up a user turn for ${tmuxSessionFor(row.agent)} (${reason}, ${attempts} failed deliveries` +
+      `${lastCode == null ? "" : `, last exit ${lastCode}`}): the user was told in the chat`,
+  );
+}
+
+/**
+ * The turns that must not be delivered any more, before any try: older than `maxAgeMs`, or older than `answeredMs`
+ * with a message of the same agent written after them (the conversation went on: delivering it now would be out of
+ * context). A turn with a durable claim is never touched here: its outcome is uncertain.
+ */
+function staleTurns(db, agents, { now, maxAgeMs, answeredMs }) {
+  const placeholders = agents.map(() => "?").join(", ");
+  const rows = db
+    .prepare(
+      `SELECT m.id, m.agent, m.body, m.created_at,
+              COALESCE(r.attempts, 0) AS retry_attempts, r.last_code,
+              EXISTS (
+                SELECT 1 FROM pending_user_messages later
+                 WHERE later.agent = m.agent AND later.author <> 'user' AND later.id > m.id
+                   AND later.created_at >= m.created_at
+                   AND later.id NOT IN (SELECT notice_id FROM pending_user_message_delivery_given_up
+                                         WHERE notice_id IS NOT NULL)
+              ) AS answered
+         FROM pending_user_messages m
+         LEFT JOIN pending_user_message_delivery_retries r ON r.message_id = m.id
+        WHERE m.author = 'user' AND m.delivered_at IS NULL AND m.agent IN (${placeholders})
+          AND NOT EXISTS (SELECT 1 FROM pending_user_message_delivery_claims c WHERE c.message_id = m.id)
+          AND NOT EXISTS (SELECT 1 FROM pending_user_message_delivery_given_up g WHERE g.message_id = m.id)`,
+    )
+    .all(...agents);
+  const out = [];
+  for (const row of rows) {
+    const created = parseStamp(row.created_at);
+    if (!Number.isFinite(created)) continue;
+    const age = now - created;
+    if (age > maxAgeMs) out.push({ row, reason: "too_old" });
+    else if (row.answered && age > answeredMs) out.push({ row, reason: "answered_later" });
+  }
+  return out;
+}
+
 
 /**
  * Consegna al pane i turni dell'utente non ancora consegnati, da qualunque
@@ -1044,32 +1211,20 @@ export async function deliverPendingUserTurns(
     random = Math.random,
     retryMinMs = CHAT_RETRY_MIN_MS,
     retryMaxMs = CHAT_RETRY_MAX_MS,
+    giveUpAttempts = CHAT_GIVE_UP_ATTEMPTS,
+    maxAgeMs = CHAT_DELIVER_MAX_AGE_MS,
+    answeredMs = CHAT_ANSWERED_STALE_MS,
+    language = undefined,
   } = {},
 ) {
   // L'effetto esterno (submit nel pane) non puo' stare nella stessa
   // transazione della SQLite. Il claim e' quindi un record DUREVOLE, non un
   // mutex in memoria: due processi (daemon + comando manuale) non possono
   // vincere la stessa riga e un crash non cancella l'incertezza sull'effetto.
-  db.prepare(
-    `CREATE TABLE IF NOT EXISTS pending_user_message_delivery_claims (
-      message_id INTEGER PRIMARY KEY,
-      claimed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (message_id) REFERENCES pending_user_messages(id) ON DELETE CASCADE
-    )`,
-  ).run();
   // Il retry e' stato locale durevole, separato dal messaggio: nessuna
   // colonna cloud e nessuna migrazione Supabase. Un restart conserva il
   // prossimo istante utile invece di ricominciare a martellare il pane.
-  db.prepare(
-    `CREATE TABLE IF NOT EXISTS pending_user_message_delivery_retries (
-      message_id INTEGER PRIMARY KEY,
-      attempts INTEGER NOT NULL DEFAULT 0,
-      next_attempt_at_ms INTEGER NOT NULL,
-      last_code INTEGER,
-      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (message_id) REFERENCES pending_user_messages(id) ON DELETE CASCADE
-    )`,
-  ).run();
+  ensureDeliveryTables(db);
   // Crash dopo il timbro ma prima del cleanup: qui l'esito e' certo e il
   // claim e' solo spazzatura. Il caso opposto (claim + delivered_at NULL) non
   // si elimina mai automaticamente: potrebbe aver gia' raggiunto il pane.
@@ -1088,6 +1243,20 @@ export async function deliverPendingUserTurns(
          OR message_id NOT IN (SELECT id FROM pending_user_messages)`,
   ).run();
 
+  // A turn too old, or overtaken by the agent's own later messages, is given up before any try.
+  const nowMs = Math.trunc(Number(now()) || Date.now());
+  let givenUp = 0;
+  for (const { row, reason } of staleTurns(db, agents, { now: nowMs, maxAgeMs, answeredMs })) {
+    giveUpTurn(db, row, {
+      reason,
+      attempts: Number(row.retry_attempts || 0),
+      lastCode: row.last_code ?? null,
+      log,
+      language,
+    });
+    givenUp += 1;
+  }
+
   const placeholders = agents.map(() => "?").join(", ");
   // A daemon can start once against a database created by the previous
   // bundle, before the additive schema migration has run. Keep ordinary chat
@@ -1101,7 +1270,8 @@ export async function deliverPendingUserTurns(
   const rows = db
     .prepare(
       `SELECT pending_user_messages.id, agent, body, delivered_via${directiveColumns},
-              COALESCE(r.attempts, 0) AS retry_attempts
+              COALESCE(r.attempts, 0) AS retry_attempts,
+              COALESCE(r.stuck_attempts, 0) AS stuck_attempts
         FROM pending_user_messages
         LEFT JOIN pending_user_message_delivery_retries r
           ON r.message_id = pending_user_messages.id
@@ -1111,11 +1281,15 @@ export async function deliverPendingUserTurns(
             SELECT 1 FROM pending_user_message_delivery_claims c
              WHERE c.message_id = pending_user_messages.id
           )
+          AND NOT EXISTS (
+            SELECT 1 FROM pending_user_message_delivery_given_up g
+             WHERE g.message_id = pending_user_messages.id
+          )
         ORDER BY id ASC
         LIMIT ?`,
     )
-    .all(...agents, Math.trunc(Number(now()) || Date.now()), max);
-  if (rows.length === 0) return { delivered: 0, failed: 0 };
+    .all(...agents, nowMs, max);
+  if (rows.length === 0) return givenUp > 0 ? { delivered: 0, failed: 0, givenUp } : { delivered: 0, failed: 0 };
 
   const stamp = db.prepare(
     "UPDATE pending_user_messages SET delivered_at = CURRENT_TIMESTAMP WHERE id = ?",
@@ -1127,16 +1301,33 @@ export async function deliverPendingUserTurns(
   const release = db.prepare(
     "DELETE FROM pending_user_message_delivery_claims WHERE message_id = ?",
   );
-  const scheduleRetry = db.prepare(
+  const upsertRetry = db.prepare(
     `INSERT INTO pending_user_message_delivery_retries
-       (message_id, attempts, next_attempt_at_ms, last_code, updated_at)
-     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+       (message_id, attempts, next_attempt_at_ms, last_code, stuck_attempts, updated_at)
+     VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
      ON CONFLICT(message_id) DO UPDATE SET
        attempts = excluded.attempts,
        next_attempt_at_ms = excluded.next_attempt_at_ms,
        last_code = excluded.last_code,
+       stuck_attempts = excluded.stuck_attempts,
        updated_at = CURRENT_TIMESTAMP`,
   );
+  // A failed try: the next one later, or, after `giveUpAttempts` failures that are not «busy», no next one at all.
+  const failedTry = (row, code) => {
+    const attempts = Math.min(31, Number(row.retry_attempts || 0) + 1);
+    const stuck = Number(row.stuck_attempts || 0) + (BUSY_CODES.has(code) ? 0 : 1);
+    if (stuck >= giveUpAttempts) {
+      giveUpTurn(db, row, { reason: "refused", attempts, lastCode: code, log, language });
+      givenUp += 1;
+      return;
+    }
+    const delay = boundedBackoffDelay(attempts - 1, {
+      minMs: retryMinMs,
+      maxMs: retryMaxMs,
+      random,
+    });
+    upsertRetry.run(row.id, attempts, Math.trunc(Number(now())) + delay, code, stuck);
+  };
   const clearRetry = db.prepare(
     "DELETE FROM pending_user_message_delivery_retries WHERE message_id = ?",
   );
@@ -1164,13 +1355,7 @@ export async function deliverPendingUserTurns(
       // Il sender non ha restituito un esito: per il contratto di sendToPane
       // questo e' un errore prima della consegna e resta ritentabile.
       release.run(row.id);
-      const attempts = Math.min(31, Number(row.retry_attempts || 0) + 1);
-      const delay = boundedBackoffDelay(attempts - 1, {
-        minMs: retryMinMs,
-        maxMs: retryMaxMs,
-        random,
-      });
-      scheduleRetry.run(row.id, attempts, Math.trunc(Number(now())) + delay, -1);
+      failedTry(row, -1);
       failed += 1;
       log(
         "warn",
@@ -1180,18 +1365,7 @@ export async function deliverPendingUserTurns(
     }
     if (!res.ok) {
       release.run(row.id);
-      const attempts = Math.min(31, Number(row.retry_attempts || 0) + 1);
-      const delay = boundedBackoffDelay(attempts - 1, {
-        minMs: retryMinMs,
-        maxMs: retryMaxMs,
-        random,
-      });
-      scheduleRetry.run(
-        row.id,
-        attempts,
-        Math.trunc(Number(now())) + delay,
-        Number.isFinite(Number(res.code)) ? Number(res.code) : null,
-      );
+      failedTry(row, Number.isFinite(Number(res.code)) ? Number(res.code) : null);
       failed += 1;
       log(
         "warn",
@@ -1209,7 +1383,7 @@ export async function deliverPendingUserTurns(
     delivered += 1;
   }
 
-  return { delivered, failed };
+  return givenUp > 0 ? { delivered, failed, givenUp } : { delivered, failed };
 }
 
 /**
@@ -1219,16 +1393,7 @@ export async function deliverPendingUserTurns(
  */
 export function deliveryRetryStatus(db, { now = Date.now() } = {}) {
   try {
-    db.prepare(
-      `CREATE TABLE IF NOT EXISTS pending_user_message_delivery_retries (
-        message_id INTEGER PRIMARY KEY,
-        attempts INTEGER NOT NULL DEFAULT 0,
-        next_attempt_at_ms INTEGER NOT NULL,
-        last_code INTEGER,
-        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (message_id) REFERENCES pending_user_messages(id) ON DELETE CASCADE
-      )`,
-    ).run();
+    ensureDeliveryTables(db);
     const row = db.prepare(
       `SELECT COUNT(*) AS queued,
               SUM(CASE WHEN r.next_attempt_at_ms IS NULL OR r.next_attempt_at_ms <= ?
@@ -1236,7 +1401,8 @@ export function deliveryRetryStatus(db, { now = Date.now() } = {}) {
               MIN(r.next_attempt_at_ms) AS next_attempt_at_ms
          FROM pending_user_messages m
          LEFT JOIN pending_user_message_delivery_retries r ON r.message_id = m.id
-        WHERE m.author = 'user' AND m.delivered_at IS NULL`,
+        WHERE m.author = 'user' AND m.delivered_at IS NULL
+          AND NOT EXISTS (SELECT 1 FROM pending_user_message_delivery_given_up g WHERE g.message_id = m.id)`,
     ).get(Math.trunc(Number(now) || Date.now()));
     return {
       queued: Number(row?.queued || 0),
@@ -1288,11 +1454,15 @@ export function formatWaited(ms) {
  */
 export function undeliveredUserTurns(db, { agents = CHAT_AGENTS } = {}) {
   const placeholders = agents.map(() => "?").join(", ");
+  // A turn given up is no longer waiting: the person was told, and the lane must not cry «stuck» about it forever.
+  const givenUp = hasTable(db, "pending_user_message_delivery_given_up")
+    ? "AND NOT EXISTS (SELECT 1 FROM pending_user_message_delivery_given_up g WHERE g.message_id = m.id)"
+    : "";
   const row = db
     .prepare(
       `SELECT COUNT(*) AS n, MIN(created_at) AS oldest
-         FROM pending_user_messages
-        WHERE author = 'user' AND delivered_at IS NULL AND agent IN (${placeholders})`,
+         FROM pending_user_messages m
+        WHERE author = 'user' AND delivered_at IS NULL AND agent IN (${placeholders}) ${givenUp}`,
     )
     .get(...agents);
   let uncertain = 0;
