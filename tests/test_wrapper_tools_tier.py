@@ -612,7 +612,8 @@ def _team_arm_chat(tmp_path, switching: bool, exec_flags: str = "-it", engine_li
     if switching:
         (tmp_path / ".tools-switching").write_text(f"{os.getpid()}\n", encoding="utf-8")
     line = engine_line or 'Error: no container with name or ID "jht" found: no such container'
-    docker = f'[ "$1" = exec ] || exit 0\necho REPL-LINE\necho \'{line}\' >&2\nexit {code}\n'
+    docker = (f'[ "$1" = exec ] || exit 0\ncase "$*" in *tmux*) exit 0;; esac\necho "$*" >> "{tmp_path}/exec-args"\n'
+              f'echo REPL-LINE\necho \'{line}\' >&2\nexit {code}\n')
     lines = (f'EXEC_FLAGS="{exec_flags}"\nJHT_HOST_TYPE=linux\nNODE_ENTRY=/app/cli.js\n'
              "require_compose_file() { :; }\nrequire_docker() { :; }\nensure_up_for_stop() { :; }\n"
              "docker_reachable() { return " + ("0" if engine_up else "1") + "; }\ncontainer_up() { return " + ("0" if engine_up else "3") + "; }\n")
@@ -1258,8 +1259,12 @@ def test_on_a_mac_the_room_is_measured_where_the_machines_disk_grows_too(box):
 RAW_ENGINE_LINE = 'Error: Get "http://d/v6.0.2/libpod/exec/0123abcd/json": EOF'
 
 
+RAW_EXEC_SESSION_LINE = ("Error: retrieving exec session 0123abcd from container 99ff00: no container with ID 99ff00 found in database: "
+                         "no such container")
+
+
 @pytest.mark.parametrize("line", [RAW_ENGINE_LINE, "Cannot connect to Podman. Please verify your connection to the Linux system",
-                                  "Error: unable to connect to Podman socket: dial unix: connection refused"])
+                                  "Error: unable to connect to Podman socket: dial unix: connection refused", RAW_EXEC_SESSION_LINE])
 def test_a_chat_the_engine_ended_says_it_is_updating_and_comes_back_without_the_raw_line(tmp_path, line):
     """Windows, build 9 to 10: the installer restarts the Podman machine and the chat died with «Error: Get "http://d/v6.0.2/libpod/exec/…/json": EOF»."""
     done = _team_arm_chat(tmp_path, switching=False, engine_line=line)
@@ -1268,6 +1273,25 @@ def test_a_chat_the_engine_ended_says_it_is_updating_and_comes_back_without_the_
     assert "JHT is updating, so the chat stops for a moment" in done.stderr
     assert (tmp_path / "calls").read_text(encoding="utf-8").splitlines()[-1] == "again team chat assistente resume=1"
     assert not list(tmp_path.glob("jht-chat-err.*"))
+
+
+def test_a_chat_that_comes_back_is_told_it_is_a_resumed_one_and_a_first_chat_is_not(tmp_path):
+    """Windows, build 13: the container created again under the chat ended it with the raw line «retrieving exec session … no such
+    container» and the question just asked stayed unanswered. The chat that comes back asks it again: the container side is told
+    (JHT_TEAM_CHAT_RESUMED=1) only when the wrapper resumes a chat."""
+    first = _team_arm_chat(tmp_path, switching=False, engine_line=RAW_EXEC_SESSION_LINE)
+    assert first.returncode == 0, first.stderr
+    assert "JHT_TEAM_CHAT_RESUMED" not in (tmp_path / "exec-args").read_text(encoding="utf-8")
+    resumed_dir = tmp_path / "resumed"
+    resumed_dir.mkdir()
+    again = _team_arm_chat(resumed_dir, switching=False, engine_line=RAW_EXEC_SESSION_LINE, JHT_TEAM_CHAT_RESUME="1")
+    assert again.returncode == 0, again.stderr
+    assert "-e JHT_TEAM_CHAT_RESUMED=1" in (resumed_dir / "exec-args").read_text(encoding="utf-8")
+
+
+def test_the_line_of_the_switch_is_not_taken_for_the_one_of_a_container_created_again(tmp_path):
+    done = _team_arm_chat(tmp_path, switching=False)
+    assert done.returncode == 125 and "updating" not in done.stderr
 
 
 def test_a_chat_the_engine_ended_that_does_not_come_back_says_to_open_it_again(tmp_path):

@@ -307,6 +307,8 @@ export default {
   "chat.repl.busy": "(still answering your previous message: yours goes out as soon as it is free)",
   "chat.repl.no_reply": "(no reply yet: /read shows it when it comes)",
   "chat.repl.closed": "Closed chat.",
+  "chat.repl.asked_again": "The team was restarting and your last question got no answer. Asking it again: «{text}»",
+  "chat.repl.asked_again_failed": "Your last question could not be asked again. Send it again: «{text}»",
   "agents.paused_of": "{running} of {total} paused (budget)",
   "agents.paused": "paused",
   'team.help.title_usage': 'Usage:',

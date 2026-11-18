@@ -55,8 +55,11 @@ test('a number that is not an option is told and the line is not sent', () => {
 test('team send and team chat ask before they send, and both stop on an answer', () => {
   const source = readFileSync(resolve(import.meta.dirname, '../src/commands/team/chat.js'), 'utf8');
   assert.equal((source.match(/answerTyped\(session, /g) || []).length, 2);
+  // the REPL sends through its `ask` (which waits for the agent to be free, sends and keeps the question until it is answered)
+  assert.ok(source.slice(source.indexOf('const ask = async')).includes('sendMessage(session'), 'ask is the send of the REPL');
   for (const call of source.split('answerTyped(session, ').slice(1)) {
-    assert.ok(call.indexOf('sendMessage(session') > 0, 'the send follows the question');
-    assert.ok(call.slice(0, call.indexOf('sendMessage(session')).includes("typed.result !== 'chat'"));
+    const send = Math.min(...['sendMessage(session', 'await ask(msg)'].map((word) => (call.indexOf(word) > 0 ? call.indexOf(word) : Infinity)));
+    assert.ok(send < Infinity, 'the send follows the question');
+    assert.ok(call.slice(0, send).includes("typed.result !== 'chat'"));
   }
 });

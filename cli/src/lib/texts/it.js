@@ -340,6 +340,8 @@ export default {
   "chat.repl.busy": "(sta ancora rispondendo al tuo messaggio di prima: il tuo parte appena è libero)",
   "chat.repl.no_reply": "(ancora nessuna risposta: /read la mostra quando arriva)",
   "chat.repl.closed": "Chat chiusa.",
+  "chat.repl.asked_again": "La squadra si stava riavviando e la tua ultima domanda non ha avuto risposta. La ripeto: «{text}»",
+  "chat.repl.asked_again_failed": "Non sono riuscito a ripetere la tua ultima domanda. Mandala di nuovo: «{text}»",
   "agents.paused_of": "{running} su {total} in pausa (budget)",
   "agents.paused": "in pausa",
   'team.help.title_usage': 'Uso:',

@@ -91,6 +91,8 @@ export default {
   "chat.repl.busy": "(még az előző üzenetedre válaszol: a tiéd megy, amint szabad)",
   "chat.repl.no_reply": "(még nincs válasz: a /read megmutatja, amikor megjön)",
   "chat.repl.closed": "Csevegés lezárva.",
+  "chat.repl.asked_again": "A csapat éppen újraindult, és az utolsó kérdésedre nem jött válasz. Újra felteszem: «{text}»",
+  "chat.repl.asked_again_failed": "Az utolsó kérdésedet nem sikerült újra feltenni. Küldd el újra: «{text}»",
   "agents.paused_of": "{running} / {total} szünetel (keret)",
   "agents.paused": "szünetel",
   "agents.ram_guard": "{at}-kor a számítógép memóriája majdnem megtelt ({free} GiB szabad {total}-ból): {n} munkást leállítottunk a védelme érdekében. A keresés kevesebb munkással folytatódik, amíg a memória vissza nem tér.",
