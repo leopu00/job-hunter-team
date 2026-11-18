@@ -10,7 +10,7 @@ Every look of the bridge, outside the window (the person's schedule, and no spen
 
   * each worker (SCOUT-n, ANALISTA-n, SCORER-n, SCRITTORE-n, CLOSER-n) is told once to finish the task it is on, save what it
     produced, start no other and stop: the message waits for the end of its turn, nothing is interrupted;
-  * a worker told at least IDLE_AFTER_SEC ago whose pane is idle is closed (its session; the roster keeps it `active`, so the
+  * a worker told at least IDLE_AFTER_SEC ago whose pane is idle and the same as at the look before is closed (its session; the roster keeps it `active`, so the
     restore of the watchdog brings it back at the opening: roster_restore.py, every five minutes, and the respawn of the roster);
   * a worker still busy RESEND_AFTER_SEC after is told again, once; it is never cut in the middle of a turn.
 
@@ -20,6 +20,7 @@ Never raises: a look that fails is a look lost.
 """
 from __future__ import annotations
 
+import hashlib
 import re
 import subprocess
 import time
@@ -41,9 +42,12 @@ def _sessions():
 
 
 def _idle(session):
-    """True only when the pane shows no sign of a turn running; any doubt is busy."""
+    """A token of the pane when it shows no sign of a turn running, else None; any doubt is None. The pane is compared with the one of
+    the look before (a harness whose busy line is not in BUSY still changes its pane while it works)."""
     done = subprocess.run(["tmux", "capture-pane", "-p", "-t", "=%s:" % session, "-S", "-20"], capture_output=True, text=True, timeout=10)
-    return done.returncode == 0 and bool(done.stdout.strip()) and BUSY.search(done.stdout) is None
+    if done.returncode != 0 or not done.stdout.strip() or BUSY.search(done.stdout):
+        return None
+    return hashlib.sha1(done.stdout.encode("utf-8", "replace")).hexdigest()
 
 
 def _kill(session):
@@ -90,10 +94,13 @@ def step(api, run, outside=None, sessions=None, idle=None, send=None, kill=None,
                     out["told"].append(name)
                 continue
             seen = told[name]
-            if now - seen["at"] >= IDLE_AFTER_SEC and idle(name):
+            token = idle(name) if now - seen["at"] >= IDLE_AFTER_SEC else None
+            if token and token == seen.get("pane"):     # idle, and the pane is the same as at the look before: nothing is working
                 if kill(name):
                     out["closed"].append(name)
                     told.pop(name)
+            elif token:
+                seen["pane"] = token
             elif now - seen["at"] >= RESEND_AFTER_SEC and not seen.get("again") and send(name, CLOSE_TEXT):
                 seen["again"] = True
         for name in [n for n in told if n not in live and n not in out["closed"]]:

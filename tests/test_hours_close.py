@@ -17,7 +17,8 @@ def _world(busy=()):
     world = SimpleNamespace(sent=sent, closed=closed, busy=set(busy), alive=list(TEAM))
     world.send = lambda s, t: sent.append((s, t)) or True
     world.kill = lambda s: closed.append(s) or world.alive.remove(s) or True
-    world.idle = lambda s: s not in world.busy
+    world.panes = {}
+    world.idle = lambda s: None if s in world.busy else world.panes.get(s, "same pane")
     return world
 
 
@@ -36,16 +37,28 @@ def test_the_close_tells_each_worker_once_and_touches_nobody_else():
     assert _look(world, run, 18 * 3600 + 120)["told"] == [] and world.sent == [], "once"
 
 
-def test_an_idle_worker_is_closed_at_the_next_look_a_busy_one_is_left_to_finish():
+def test_an_idle_worker_is_closed_when_its_pane_is_the_same_at_two_looks_a_busy_one_is_left_to_finish():
     world, run = _world(busy={"SCOUT-2"}), SimpleNamespace(state={})
     start = 18 * 3600
     _look(world, run, start)
     assert _look(world, run, start + 60)["closed"] == [], "not before IDLE_AFTER_SEC: the message has to be read"
-    out = _look(world, run, start + 300)
+    assert _look(world, run, start + 300)["closed"] == [], "the first look that sees it idle only takes note of the pane"
+    out = _look(world, run, start + 600)
     assert sorted(out["closed"]) == ["ANALISTA-1", "SCORER-1", "SCOUT-1"] and "SCOUT-2" in world.alive, "never cut in the middle of a turn"
     world.busy.clear()
-    assert _look(world, run, start + 600)["closed"] == ["SCOUT-2"]
+    assert _look(world, run, start + 900)["closed"] == []
+    assert _look(world, run, start + 1200)["closed"] == ["SCOUT-2"]
     assert [s for s in world.alive if hc.WORKER.match(s)] == []
+
+
+def test_a_pane_that_changes_between_two_looks_is_a_worker_at_work_even_with_no_busy_line():
+    world, run = _world(), SimpleNamespace(state={})
+    start = 18 * 3600
+    _look(world, run, start)
+    for step, pane in enumerate(("a", "b", "c", "d")):
+        world.panes = {w: pane for w in WORKERS}
+        assert _look(world, run, start + 300 * (step + 1))["closed"] == []
+    assert world.closed == []
 
 
 def test_a_worker_that_stays_busy_is_told_again_once_and_never_closed_busy():
@@ -65,6 +78,7 @@ def test_the_opening_tells_the_workers_still_alive_to_resume_and_forgets_the_res
     start = 18 * 3600
     _look(world, run, start)
     _look(world, run, start + 300)
+    _look(world, run, start + 600)
     world.sent.clear()
     out = _look(world, run, 8 * 3600 + 86400, outside=False)
     assert out["resumed"] == ["SCOUT-2"] and world.sent == [("SCOUT-2", hc.RESUME_TEXT)]
