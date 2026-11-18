@@ -5,7 +5,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [0.4.0] — 2026-11-15
+## [0.4.0] — 2026-11-21
 
 **The agent team runs in a Podman container on your computer (or a VPS), driven from the `jht` CLI, and the
 team runs on Pi with an API key, from GLM (Z.ai), Kimi (Moonshot), OpenAI or Claude (Anthropic).** The desktop app is not in 0.4.0. The release notes say which of
@@ -24,17 +24,53 @@ this was tested on real machines and which was not.
 
 ### Providers
 
-- **Pi with OpenAI and a ChatGPT subscription** is offered too, new in this release: `jht setup` asks how Pi signs in (a key or the subscription); with the subscription no key is asked and Pi is opened for its own `/login`; not yet measured; JHT promises nothing about OpenAI's terms for this use or about what a given plan covers.
 - Four ways to power the team: **Pi with GLM (Z.ai)**, **Pi with Kimi (Moonshot)**, **Pi with OpenAI** or **Pi with Claude (Anthropic)**, each with an **API key** that `jht setup` asks for (typed hidden)
-  or takes from a file or from standard input: its cost is yours: set a spending ceiling (`no_quota_cap`, see PROVIDERS) and the team pauses there; without one nothing stops the spending. The
+  or takes from a file or from standard input: its cost is yours: set a spending ceiling (`no_quota_cap`, see PROVIDERS) and the team pauses there. **JHT counts that ceiling itself, and it is not a safe boundary**: an agent that has been manipulated can spend past it, so the ceiling you can rely on is the one you set with the provider. Without a ceiling nothing stops the spending. The
   services a release offers are one list (`shared/runtime/release-providers.js`); `jht setup`,
   `jht providers use` and `jht providers harness` refuse the others, and `jht doctor` says a team configured on
-  one of them is not supported in this release. The ChatGPT subscription (Codex) is not offered to new users in
-  0.4.0, but **a team you set up with 0.3.9 on it keeps working**, with one warning (in `jht team start`, `jht doctor`,
+  one of them is not supported in this release. The ChatGPT subscription is not offered to new users in
+  0.4.0, on Pi or on Codex, but **a team you set up with 0.3.9 on it keeps working**, with one warning (in `jht team start`, `jht doctor`,
   `jht status` and `jht providers`) that says how to move to an API key; its code stays. `jht providers update` without an id no longer
   updates Kimi: name it (`jht providers update kimi`).
 - A key the provider refuses, a missing key or credit that has run out are reported by `jht team start`,
   `jht agents` and the chat, with the command that fixes it.
+
+### Web search, enrichments and spending
+
+- **Web search for the agents on Pi.** The Scout, the Analysts and the Mentor can search the web to find a company's
+  website or office. It works with Claude and OpenAI; with GLM it is off unless you turn it on (it is not verified on
+  the endpoint Pi uses for GLM); Kimi has none, and with GLM or Kimi the setup tells you the agents will have no web search.
+  **Every search is billed by the provider and counted in the spending**: about 0.01 USD a search plus the tokens it reads
+  (measured at about 0.02 USD on Claude Haiku), at most 3 searches a turn for the Scout and the Analysts and 5 for the
+  Mentor. The Analysts' search is off by default: in a measured run it cost about 0.26 USD more per position. A search
+  goes to the provider, which sees what is searched: the agents are told never to put your name, email or phone in one,
+  and for the agents on Pi every query is checked against those three fields of your profile in memory; only the outcome
+  is written, never the query. The check does not see other personal data. If the provider refuses the search, the
+  agent goes on without it; `JHT_PI_WEB_SEARCH=0` turns it off.
+- **A switch for each enrichment, with its cost.** `jht enrichment show` and `jht enrichment set` turn on or off the
+  logo, the office, the weekly recheck and the web search of each role, and say next to each switch what its dearer side
+  costs: estimates from measured runs, about 0.001 USD per position for the logo and for the office with the Analysts on
+  Haiku (about ten times that on Sonnet), about 0.26 USD per position for the Analysts' web search, about 0.02 USD per
+  search for the Scout and the Mentor; where nothing was measured it says so. Turning a switch to its dearer side asks
+  you to confirm (`--yes`; without a terminal the change is refused). The estimates are not a promise.
+- **The office, placed with OpenStreetMap.** When a checked position's ad gives an address (street and number, then the
+  city), the team places the office without a model by asking Nominatim, the geocoding service of OpenStreetMap:
+  **the OpenStreetMap Foundation sees the address from the ad, the city and the IP address of the machine that runs the
+  team**. Requests are kept to its usage policy (one a second, answers kept so none is sent twice) and an answer outside
+  the ad's city is discarded; with no address nothing is written. `JHT_NOMINATIM=0` or the geocoding switches turn it off.
+- **The logo, from the company's own website.** The team fetches it by code from the company's site (or from the ad's
+  domain when it is the company's: never from a job board), so that site sees a request from the machine that runs the
+  team. The logo switch turns it off.
+- **A budget, a period and a pace.** The setup asks how much the team may spend, for how long and when it works. The
+  team pauses at the budget, a little before it so that calls in flight are covered, at the end of the period, and when
+  it spends faster than the budget spread over the hours it works: it can pause before the whole amount is spent, and
+  the status says when it resumes. The spending is looked at every minute. As with any ceiling, JHT counts it: see above.
+- **A guard for the memory of the machine.** While the team runs, JHT watches the free memory; when it runs low it
+  retires the newest workers first (Scouts, then Scorers and Analysts), tells you, and `jht team status` shows the last
+  retirement; they come back when the memory allows. The agents are also the processes the system stops first, before
+  the program that keeps your session.
+- **Workers stop at the end of your working hours.** At the close of the working window each worker is asked to finish its
+  task, save and stop, and is never cut in the middle of a turn; at the opening they are started again.
 
 ### Install and integrations
 
