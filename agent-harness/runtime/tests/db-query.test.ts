@@ -552,8 +552,10 @@ const UPDATES: string[][] = [
 ];
 
 describe("db_update position against db_update.py", () => {
-  it.skipIf(skills === null).each(UPDATES.map((u) => [u.join(" "), u]))("%s", async (_label, args) => {
-    const { call, py, pyDb, ourDb } = twins();
+  // Against the Python of THIS tree: the script and the port gain options in the same commits (--salary-precise, JHT-T326), and an
+  // abbreviation such as `--s` is ambiguous among the options of the script that is next to the port, not of the pinned commit.
+  it.skipIf(TREE === null).each(UPDATES.map((u) => [u.join(" "), u]))("%s", async (_label, args) => {
+    const { call, py, pyDb, ourDb } = twins("scout-1", TREE);
     expectSame(await call("db_update", args as string[]), py("db_update.py", args as string[]));
     expect(snapshot(ourDb)).toEqual(snapshot(pyDb));
   });
