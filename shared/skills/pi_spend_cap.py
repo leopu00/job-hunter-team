@@ -163,7 +163,7 @@ def spend(home, now_ts, budget_start=None, split_at=None):
     return out
 
 
-PACE_SLACK = True              # the pace stops one margin before the line, like the budget, and says a resume time a margin later
+PACE_SLACK = True              # the pace stops one margin before the line, like the budget, and says the resume time the lift will really find (the same line: reserve + one margin)
 RESTART_RESERVE_SHARE = 0.10   # a team stopped by the pace comes back only with this share of the budget of room under the pace
 
 
@@ -201,7 +201,7 @@ def _budget_verdict(config, budget, spent, now, held_by_pace=False):
     ahead_pace = max(0.0, (spent.get("recent_cost") or 0.0) - (spent.get("restart_recent") or 0.0)) / RATE_WINDOW_SEC * CHECK_EVERY_SEC
     if used - before - restart + ahead_pace + reserve + slack >= allowance:
         return dict(common, why="pace", ceiling=round(before + allowance, 6),
-                    resumes=team_budget.resumes_at(config, period, used - before - restart + RESTART_RESERVE_SHARE * period["usd"] + 2 * slack) or budget["ends"])
+                    resumes=team_budget.resumes_at(config, period, used - before - restart + RESTART_RESERVE_SHARE * period["usd"] + slack) or budget["ends"])
     return None
 
 

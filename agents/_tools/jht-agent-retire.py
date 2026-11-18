@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 import unicodedata
 from datetime import datetime, timezone
 
@@ -112,6 +113,21 @@ def retirable_session(roster, raw: str) -> str:
     return session
 
 
+PROTECT_SEC = 900  # ram_guard.PROTECT_SEC: a worker the memory guard brought back is not stepped down for this long
+
+
+def restored_by_the_guard(session: str) -> int | None:
+    """Seconds left of the protection of a worker the memory guard brought back (state/ram-restored.json), or None. The guard and
+    the Captain contradicted each other: four Scouts retired by the stepped calibration 10-12 s after the guard started them
+    (giro Linux 18/11). The file is data in a folder the agents write in: only numbers count."""
+    try:
+        moment = json.loads((home() / "state" / "ram-restored.json").read_text(encoding="utf-8")).get(session)
+        left = PROTECT_SEC - (time.time() - float(moment))
+        return int(left) if 0 < left <= PROTECT_SEC and not isinstance(moment, bool) else None
+    except (OSError, ValueError, TypeError, AttributeError):
+        return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Mark a worker retired in the roster, then close its session.")
@@ -123,6 +139,11 @@ def main() -> int:
         roster = load_roster()
         session = retirable_session(roster, args.session)
         reason = clean_reason(args.reason)
+        left = None if reason.lower().startswith("ram:") else restored_by_the_guard(session)
+        if left is not None:
+            raise RuntimeError(
+                f"{session} was brought back by the memory guard a moment ago: it stays for {left // 60 + 1} more minutes "
+                "(the guard reopened the capacity; the stepped calibration does not apply). Ask again after that")
         entry = roster.load().get("agents", {}).get(session)
         holder = held_by(roster, session, entry)
         if holder is not None:

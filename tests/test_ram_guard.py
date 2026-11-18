@@ -172,3 +172,40 @@ def test_a_name_that_is_not_a_worker_in_the_memory_of_the_guard_is_left_out_and_
     started = []
     rg.step(api, run, probe={"ram_avail_gib": 2.5, "ram_total_gib": 7.7}, sessions={}, restart=lambda s, why: started.append(s) or True)
     assert started == ["SCOUT-2"]
+
+
+def test_the_workers_the_guard_brings_back_are_marked_and_the_captain_is_told_they_stay(tmp_path):
+    import json
+    api, run, sent = _run()
+    api._path = lambda name: str(tmp_path)
+    run.state["ram_guard"] = {"retired_by_guard": ["SCOUT-2", "SCOUT-3"], "last_retire_at": 0}
+    rg.step(api, run, probe={"ram_avail_gib": 2.5, "ram_total_gib": 7.7}, sessions={}, restart=lambda s, why: True)
+    marked = json.loads((tmp_path / "state" / "ram-restored.json").read_text())
+    assert sorted(marked) == ["SCOUT-2", "SCOUT-3"] and marked["SCOUT-2"] == 1000
+    assert "not a scale-up" in sent[0][1] and "C-02" in sent[0][1]
+
+
+def _retire_tool():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("jht_agent_retire", SKILLS.parent.parent / "agents" / "_tools" / "jht-agent-retire.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_the_retire_tool_refuses_a_worker_the_guard_brought_back_a_moment_ago(tmp_path, monkeypatch, capsys):
+    import json
+    import time
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    (tmp_path / "state").mkdir()
+    now = time.time()
+    (tmp_path / "state" / "ram-restored.json").write_text(json.dumps({"SCOUT-3": now - 10, "SCOUT-4": now - 5000, "SCOUT-5": "x"}))
+    tool = _retire_tool()
+    assert tool.restored_by_the_guard("SCOUT-3") is not None and tool.restored_by_the_guard("SCOUT-3") > 800
+    assert tool.restored_by_the_guard("SCOUT-4") is None and tool.restored_by_the_guard("SCOUT-5") is None
+    assert tool.restored_by_the_guard("SCOUT-9") is None
+    monkeypatch.setattr(sys, "argv", ["jht-agent-retire", "SCOUT-3", "--reason", "C-02 stepped calibration"])
+    assert tool.main() == 1
+    assert "brought back by the memory guard" in capsys.readouterr().err
+    (tmp_path / "state" / "ram-restored.json").write_text("not json")
+    assert tool.restored_by_the_guard("SCOUT-3") is None, "a file that cannot be read protects nothing"

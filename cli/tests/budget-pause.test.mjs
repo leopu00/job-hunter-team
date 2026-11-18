@@ -33,7 +33,7 @@ test('the budget spent and the period over: what was spent, and the way on is a 
 
 test('the pace: it resumes by itself at the hour the brake says, in the zone the brake wrote; or it does not before the end', () => {
   assert.equal(text(cap({ why: 'pace', spent: 2.4, ceiling: 2.1, resumes_at: '2026-11-15T23:10:00+01:00' })),
-    'The team is paused to spread its budget over the period ($2.40 spent, $2.10 allowed so far): it resumes by itself at 23:10.');
+    'The team is paused to spread its budget over the period ($2.40 spent, $2.10 planned so far): it resumes by itself at 23:10.');
   assert.match(text(cap({ why: 'pace', spent: 2.4, ceiling: 2.1, resumes_at: null })), /does not resume before the period ends at 16\/11 8:00\. To go on, set a new budget/);
   assert.equal(whenOf('2026-11-16T03:10:00+01:00', NOW), '16/11 3:10');
   assert.equal(whenOf('2026-11-15T23:59:00+01:00', NOW), '23:59');
