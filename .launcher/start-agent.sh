@@ -819,11 +819,24 @@ fi
 # --- cancello del Capitano
 # Capitano e Sentinella partono a onboarding chiuso (captain_gate.py: 1 = non ancora, altro = e' ora): a profilo vuoto
 # spendono e non possono fare niente. Ne' il watchdog ne' `jht team start` li accendono prima; una sessione viva non si tocca.
-if { [ "$ROLE" = "capitano" ] || [ "$ROLE" = "sentinella" ]; } && ! tmux has-session -t "=$SESSION" 2>/dev/null; then
+# The Sentinella watches the budget FOR the Capitano: with the Capitano already up (an update brings back the sessions of
+# before) it is due whatever the gate says, or the Capitano would spend unwatched.
+_captain_session=""
+if [ "$ROLE" = "sentinella" ]; then
+  _captain_session="$(get_agent_info capitano 2>/dev/null | cut -d'|' -f1)" || _captain_session=""
+fi
+if { [ "$ROLE" = "capitano" ] || [ "$ROLE" = "sentinella" ]; } && ! tmux has-session -t "=$SESSION" 2>/dev/null \
+  && ! { [ -n "$_captain_session" ] && tmux has-session -t "=$_captain_session" 2>/dev/null; }; then
   _captain_rc=0
-  python3 /app/shared/skills/captain_gate.py >/dev/null 2>&1 || _captain_rc=$?
+  _captain_answer="$(python3 /app/shared/skills/captain_gate.py 2>/dev/null)" || _captain_rc=$?
   if [ "$_captain_rc" -eq 1 ]; then
-    echo "$(echo "$ROLE" | tr a-z A-Z) not started: the onboarding with the Assistente is not done (it starts by itself when it is; JHT_CAPTAIN_BEFORE_ONBOARDING=1 starts it anyway)." >&2
+    # the reason picks the words: an onboarding that is over and waits for the tools of the full image is not an open one
+    case "$_captain_answer" in
+      *'"tools_pending"'*)
+        echo "$(echo "$ROLE" | tr a-z A-Z) not started yet: the onboarding is done and the tools of the full image are on their way (it starts by itself when they are ready)." >&2 ;;
+      *)
+        echo "$(echo "$ROLE" | tr a-z A-Z) not started: the onboarding with the Assistente is not done (it starts by itself when it is; JHT_CAPTAIN_BEFORE_ONBOARDING=1 starts it anyway)." >&2 ;;
+    esac
     exit 75
   fi
 fi

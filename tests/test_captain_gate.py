@@ -214,6 +214,68 @@ def test_start_agent_lets_the_start_go_on(tmp_path: Path, answer: int, alive: bo
     assert code == 0 and "went on" in out, out
 
 
+def _start_agent_gate_after_update(tmp_path: Path, *, role: str, alive: set[str], answer: str) -> tuple[int, str]:
+    """The gate of start-agent.sh after an update: the sessions of before come back, the gate answers with its JSON."""
+    source = START_AGENT.read_text(encoding="utf-8")
+    gate = source[source.index("# --- cancello del Capitano"):source.index("# --- fine cancello del Capitano")]
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    (bindir / "python3").write_text(f"#!/bin/sh\nprintf '%s\\n' '{answer}'\nexit 1\n", encoding="utf-8")
+    cases = "".join(f'  "has-session -t ={name}") exit 0 ;;\n' for name in sorted(alive))
+    (bindir / "tmux").write_text(f'#!/bin/sh\ncase "$1 $2 $3" in\n{cases}esac\nexit 1\n', encoding="utf-8")
+    for name in ("python3", "tmux"):
+        (bindir / name).chmod(0o755)
+    script = tmp_path / "gate.sh"
+    script.write_text("set -euo pipefail\n"
+                      "get_agent_info() { case \"$1\" in capitano) echo 'CAPITANO|high|x' ;; *) echo ;; esac; }\n"
+                      f"ROLE={role}\nSESSION={role.upper()}\n{gate}\necho went on\n", encoding="utf-8")
+    done = subprocess.run(["bash", str(script)], capture_output=True, text=True, timeout=60, check=False,
+                          env={"PATH": f"{bindir}:/usr/bin:/bin"})
+    return done.returncode, done.stdout + done.stderr
+
+
+TOOLS_PENDING = '{"captain_due": false, "reason": "tools_pending", "phase": "steady"}'
+ONBOARDING_OPEN = '{"captain_due": false, "reason": "onboarding_open", "phase": "awaiting_profile"}'
+
+
+def test_after_an_update_the_sentinella_starts_with_the_capitano_already_up(tmp_path: Path):
+    """Giro Mac build12b: the update brought the Capitano back, the full image was on its way, and the Sentinella was
+    refused as if the onboarding (closed two days before) were open; the setup then said the configuration had failed."""
+    code, out = _start_agent_gate_after_update(tmp_path, role="sentinella", alive={"CAPITANO"}, answer=TOOLS_PENDING)
+    assert code == 0 and "went on" in out, out
+
+
+def test_waiting_for_the_tools_of_the_full_image_is_not_called_an_open_onboarding(tmp_path: Path):
+    for role in ("capitano", "sentinella"):
+        work = tmp_path / role
+        work.mkdir()
+        code, out = _start_agent_gate_after_update(work, role=role, alive=set(), answer=TOOLS_PENDING)
+        assert code == 75 and "went on" not in out, out
+        assert "tools of the full image" in out and "onboarding with the Assistente is not done" not in out, out
+
+
+def test_an_open_onboarding_still_holds_both_and_says_so(tmp_path: Path):
+    code, out = _start_agent_gate_after_update(tmp_path, role="sentinella", alive=set(), answer=ONBOARDING_OPEN)
+    assert code == 75 and "onboarding with the Assistente is not done" in out, out
+
+
+def test_a_closed_onboarding_after_an_update_is_never_onboarding_open(tmp_path: Path):
+    """The home of an update: ready.flag of two days before, the first run steady. Whatever the tools, the gate never
+    answers that the onboarding is open."""
+    home = tmp_path / "jht"
+    (home / "state").mkdir(parents=True)
+    (home / "profile").mkdir(parents=True)
+    (home / "state" / "first-run.json").write_text('{"phase": "steady"}', encoding="utf-8")
+    flag = home / "profile" / "ready.flag"
+    flag.write_text("2026-11-16T08:37:34Z\n", encoding="utf-8")
+    moment = time.time() - 2 * 86400
+    os.utime(flag, (moment, moment))
+    done = subprocess.run([sys.executable, "-I", str(GATE)], capture_output=True, text=True, timeout=60, check=False,
+                          env={"PATH": os.environ.get("PATH", ""), "JHT_HOME": str(home), "JHT_DB": str(home / "no.db"),
+                               "PYTHONDONTWRITEBYTECODE": "1"})
+    assert json.loads(done.stdout)["reason"] != "onboarding_open", done.stdout
+
+
 # ── the Scorer waits for the whole profile (giro Windows 16/11: 19 calls during the onboarding, the budget started early) ─
 
 

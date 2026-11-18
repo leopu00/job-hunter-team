@@ -34,3 +34,23 @@ test('the reason of the wait is kept, so a closed onboarding that waits for the 
   assert.equal(ask(() => ({ ok: false, stdout: '{"captain_due": false, "reason": "tools_pending"}\n', stderr: '', code: 1 })), true);
   assert.equal(ask(() => ({ ok: false, stdout: 'not json', stderr: '', code: 1 })), true);
 });
+
+test('after an update, a Capitano or a Sentinella that start-agent.sh holds (exit 75) is a wait, not a failed agent', async () => {
+  const { heldByCaptainGate } = await import('../src/commands/team/start.js');
+  assert.equal(heldByCaptainGate('sentinella', 75), true);
+  assert.equal(heldByCaptainGate('capitano', 75), true);
+  // another role held for its own reason, or the gate's roles failing otherwise, stay what they are
+  assert.equal(heldByCaptainGate('scout', 75), false);
+  assert.equal(heldByCaptainGate('sentinella', 1), false);
+  assert.equal(heldByCaptainGate('sentinella', 0), false);
+});
+
+test('a held Capitano or Sentinella is counted as deferred and said with the gate\'s words, never as an error', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(new URL('../src/commands/team/start.js', import.meta.url), 'utf8');
+  const launch = source.slice(source.indexOf('function launchInContainer'), source.indexOf('// Cosa deve esserci perche'));
+  const held = launch.indexOf('heldByCaptainGate(role, r.code)');
+  assert.ok(held > 0 && held < launch.indexOf("c.red('✗')"), 'the wait is answered before the error line');
+  assert.match(launch, /captainWaiting\(\)[\s\S]*return 'deferred'/);
+  assert.equal((source.match(/else if \(result === 'deferred'\)/g) || []).length, 2, 'both callers count it as deferred');
+});
