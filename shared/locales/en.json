@@ -622,6 +622,8 @@
   "wizard.provider.install_cli": "Installing %s CLI...",
   "wizard.provider.install_failed_continue": "The provider's program could not be installed. Continue the setup anyway?\n  Yes: carry on, then install it with: jht providers update codex\n  No: stop here; your choices are kept and jht setup starts again",
   "wizard.provider.harness_prompt": "Program that runs the agents",
+  "wizard.provider.web_search_title": "Web search",
+  "wizard.provider.web_search_missing": "With %s the agents have no web search yet: the Scouts still read the job sites, but the Analysts find no company website, logo or office address on the web.",
   "wizard.provider.harness_codex": "Codex — recommended (the default)",
   "wizard.provider.harness_pi": "Pi — needs a ChatGPT Plus or Pro subscription",
   "wizard.provider.harness_pi_note": "Pi signs in to ChatGPT with its own login, separate from Codex's, and needs a ChatGPT Plus or Pro subscription. Every agent of the team runs in Pi's terminal interface, as it would in Codex's.\nYou can go back at any time with: jht providers harness codex",

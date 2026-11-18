@@ -89,6 +89,15 @@ test('without --provider and --harness the setup is GLM on pi', async () => {
   assert.equal(config().harness, 'pi');
 });
 
+test('the setup says when the agents on pi have no web search: GLM and Kimi, never Claude', async () => {
+  for (const provider of ['glm', 'kimi', 'claude']) {
+    if (!offeredInRelease(provider)) continue;
+    const { code, text } = await setup({ provider, harness: 'pi', secretMode: 'file', secretFile: '/dev/shm/jht-key' });
+    assert.equal(code, 0, text);
+    assert.equal(/the agents have no web search yet/.test(text), provider !== 'claude', `${provider}: ${text}`);
+  }
+});
+
 test.after(() => rmSync(HOME, { recursive: true, force: true }));
 
 // OpenAI with an API key, on pi (0.4.0): not pi-only (Codex is its other harness), the key by reference as for glm and kimi.

@@ -623,6 +623,8 @@
   "wizard.provider.install_cli": "%s CLI telepítése...",
   "wizard.provider.install_failed_continue": "CLI telepítés sikertelen. Mégis mentsem a konfigurációt, és kezeled kézzel?",
   "wizard.provider.harness_prompt": "Az ügynököket futtató program",
+  "wizard.provider.web_search_title": "Webes keresés",
+  "wizard.provider.web_search_missing": "A(z) %s mellett az ügynököknek még nincs webes keresésük: a Scoutok továbbra is olvassák az állásportálokat, de az elemzők nem találják meg a weben a cégek honlapját, logóját vagy irodájának címét.",
   "wizard.provider.harness_codex": "Codex: ajánlott (az alapértelmezett)",
   "wizard.provider.harness_pi": "Pi: ChatGPT Plus vagy Pro előfizetés kell hozzá",
   "wizard.provider.harness_pi_note": "A Pi saját belépéssel lép be a ChatGPT-be, a Codexétől külön, és ChatGPT Plus vagy Pro előfizetés kell hozzá. A csapat minden ügynöke a Pi terminálos felületén fut, ahogy a Codexén is futna.\nBármikor visszaválthatsz ezzel: jht providers harness codex",

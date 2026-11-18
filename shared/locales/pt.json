@@ -622,6 +622,8 @@
   "wizard.provider.install_cli": "A instalar CLI %s...",
   "wizard.provider.install_failed_continue": "Instalação do CLI falhou. Guardar a configuração mesmo assim e gerir manualmente?",
   "wizard.provider.harness_prompt": "Programa que corre os agentes",
+  "wizard.provider.web_search_title": "Pesquisa na web",
+  "wizard.provider.web_search_missing": "Com %s os agentes ainda não têm pesquisa na web: os Scouts continuam a ler os sites de anúncios, mas os Analistas não encontram na web o site, o logótipo nem a morada do escritório das empresas.",
   "wizard.provider.harness_codex": "Codex: recomendado (o predefinido)",
   "wizard.provider.harness_pi": "Pi: precisa de uma subscrição ChatGPT Plus ou Pro",
   "wizard.provider.harness_pi_note": "O Pi faz login no ChatGPT com um acesso próprio, separado do do Codex, e precisa de uma subscrição ChatGPT Plus ou Pro. Cada agente da equipa corre na interface de terminal do Pi, como correria na do Codex.\nPodes voltar atrás quando quiseres com: jht providers harness codex",
