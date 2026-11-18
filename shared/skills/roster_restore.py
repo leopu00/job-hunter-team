@@ -99,12 +99,26 @@ def _roster_entries():
         return None, None
 
 
-def _last_sign(session: str):
+def _spawned(entry):
+    """When the roster says the worker was last started (an `active` entry: nobody removed it since)."""
+    try:
+        moment = datetime.fromisoformat(str(entry.get("last_spawn")).replace("Z", "+00:00"))
+        return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
+def _last_sign(session: str, entry=None):
+    """The latest sign of life: a message or an artifact (the roster's last_activity) or, for a worker that is still `active` in
+    the roster, its own start. A Scout that was started minutes before the stop has sent no message and written no position yet
+    (giro Mac 18/11: SCOUT-6 started at 06:56, `jht down` at 07:00, not brought back, the Capitano started another one)."""
     roster = _load("team_roster")
     try:
-        return roster.last_activity(session, _home())
+        seen = roster.last_activity(session, _home())
     except Exception:  # noqa: BLE001
-        return None
+        seen = None
+    started = _spawned(entry or {})
+    return max((m for m in (seen, started) if m is not None), default=None)
 
 
 def plan(now: float | None = None) -> dict:
@@ -136,7 +150,7 @@ def plan(now: float | None = None) -> dict:
         session = str(entry.get("session") or "")
         if role not in ROLES or not session:
             continue
-        sign = _last_sign(session)
+        sign = _last_sign(session, entry)
         if sign is None or sign.astimezone(timezone.utc) < cutoff:
             continue
         if queue.held_back(session):
