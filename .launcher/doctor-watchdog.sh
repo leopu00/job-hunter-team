@@ -216,6 +216,10 @@ spawn_failed() {  # <role> <rc> <output of the spawner> | <role> ok
 
 TEAM_HALTED_FLAG="$JHT_HOME/.team-halted.flag"
 WEEKLY_HALT_FLAG="$JHT_HOME/.weekly-halt.flag"
+# The pause of the spending brake (the pace, the budget, the period) and of the daily quota: the gate of the agents holds the first
+# message of anyone born in it, so a Dottore started now takes no turn («no_turn») and the person reads a start that failed.
+DAILY_HALT_FLAGS=("$JHT_HOME/logs/daily-halt.flag" "$JHT_HOME/.daily-halt.flag")
+daily_halt_active() { local f; for f in "${DAILY_HALT_FLAGS[@]}"; do [ -e "$f" ] && return 0; done; return 1; }
 # `jht setup` open (see agent-watchdog.sh): no Dottore/Mantenitore on the configuration of before while the service is being chosen
 SETUP_OPEN_FLAG="$JHT_HOME/.setup-open.flag"
 setup_open() { [ -f "$SETUP_OPEN_FLAG" ] && [ -z "$(find "$SETUP_OPEN_FLAG" -mmin +120 2>/dev/null)" ]; }
@@ -364,12 +368,14 @@ while true; do
 
   # Team-halted gate: se l'utente ha cliccato Stop, weekly-halt è attivo o il
   # team è in standby a spesa zero, NON spawnare dottore/mantenitore.
-  if [ -e "$TEAM_HALTED_FLAG" ] || [ -e "$WEEKLY_HALT_FLAG" ] || setup_open || standby_active; then
+  if [ -e "$TEAM_HALTED_FLAG" ] || [ -e "$WEEKLY_HALT_FLAG" ] || daily_halt_active || setup_open || standby_active; then
     if [ $((halt_log_tick % 8)) -eq 0 ]; then
       if setup_open; then
         log "setup open — Dottore/Mantenitore spawn disabled until the setup ends"
       elif standby_active; then
         log "standby ACTIVE — Dottore/Mantenitore spawn disabled"
+      elif daily_halt_active; then
+        log "the team is paused by the spending brake or the quota — Dottore/Mantenitore spawn disabled until it lifts"
       else
         log "halt flag present — Dottore spawn disabled"
       fi
