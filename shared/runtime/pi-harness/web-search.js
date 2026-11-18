@@ -4,8 +4,9 @@
  *
  * Codex gets it with `--search` (scout, analista, mentor: .launcher/spawn-lib.sh, JHT_CODEX_WEB_SEARCH_ROLES). pi does
  * not expose the provider's hosted search, but lets an extension rewrite the request, so this adds the provider's own
- * hosted tool to the `tools` of the request. The search runs on the provider's side; nothing here talks to the network,
- * reads a file of the agent or runs a command. No dependency: Node's own modules only. Loaded for those roles with
+ * hosted tool to the `tools` of the request. The search runs on the provider's side; nothing here talks to the network
+ * or runs a command, and the only file read is the profile, for the check of the queries below. No dependency: Node's
+ * own modules only. Loaded for those roles with
  * `-e <this file>`.
  *
  * The providers (the table PROVIDERS below):
@@ -35,6 +36,16 @@
  * the search (`pi.sendUserMessage`), so the work goes on instead of stopping on the error. A rate limit or a server
  * error (429, 5xx) is not the tool's fault and withdraws nothing.
  *
+ * The person's data in a query: the agents are told never to put the person's name, email or phone in a web search. The
+ * query is read from the stream (Anthropic's `input_json_delta` of the search block, OpenAI's `action.query` of the
+ * search call; Z.ai's stream does not carry it) and checked, in memory, against the name, the email and the phone of
+ * the profile (`$JHT_HOME/profile/candidate_profile.yml`, read once, read only, at most PROFILE_MAX_BYTES, only those
+ * three fields). Only the outcome is written: a `jht-web-search-check` entry at the end of a turn that searched
+ * (`{queries, person_data, kinds}`, kinds from the closed list name / email / phone) and a `web_search_person_data`
+ * line with the kinds. Never the query, the value found, a piece or a hash of either. Without the profile, or when it
+ * cannot be read, the check is off and says `unavailable`; the search goes on either way (the query has already run
+ * on the provider's side: this finds the breach, it cannot stop it).
+ *
  * Counting: pi prices the tokens of a call but not the fee of a search call. The searches of a turn are written at its
  * end as a `jht-web-search` entry (`{searches: n, provider}`); pi_sessions.py adds the provider's fee, so the meter and
  * the spending brake see it.
@@ -50,6 +61,14 @@ const COUNT = "jht-web-search";
 const ROLE_MAX_USES = { scout: 3, analista: 3, mentor: 5 };
 const DEFAULT_MAX_USES = 3;
 const REFUSED = new Set([400, 403, 404, 422]);
+const CHECK = "jht-web-search-check";
+const PROFILE_MAX_BYTES = 256 * 1024;
+const KINDS = ["name", "email", "phone"];
+// Where the profile keeps the three fields (the same places shared/skills/profile_email.py and profile_facts.py read).
+const NAME_PATHS = ["name", "full_name", "candidate.name", "personal.name", "contacts.name"];
+const SPLIT_NAME_PARENTS = ["", "contacts.", "personal.", "candidate."];
+const EMAIL_PATHS = ["contacts.email", "email", "candidate.contacts.email", "personal.email", "positioning.contacts.email"];
+const PHONE_PATHS = ["contacts.phone", "phone", "candidate.contacts.phone", "personal.phone", "personal.contacts.phone"];
 
 function maxUses() {
   const n = Number.parseInt(process.env.JHT_PI_WEB_SEARCH_MAX_USES || "", 10);
@@ -109,6 +128,88 @@ function logLine(entry) {
   }
 }
 
+/** Lower case, no accents, single spaces: how a name and a query are compared. */
+function fold(text) {
+  return String(text).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+/**
+ * The scalar values of a YAML profile by their dotted path, for the keys of mappings only (a list item is not a
+ * place where the person's own name lives). Enough for the three fields; nothing of it leaves this module.
+ */
+function profileScalars(text) {
+  const out = {};
+  const stack = []; // [indent, key]
+  for (const raw of text.split(/\r?\n/)) {
+    if (!raw.trim() || raw.trimStart().startsWith("#")) continue;
+    const indent = raw.length - raw.trimStart().length;
+    while (stack.length && stack[stack.length - 1][0] >= indent) stack.pop();
+    const m = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:(?:\s+(.*))?$/.exec(raw);
+    if (!m) {
+      stack.push([indent, "[]"]); // a list item or anything else: what nests under it is not ours
+      continue;
+    }
+    let value = (m[2] || "").replace(/\s+#.*$/, "").trim();
+    if (/^(['"]).*\1$/.test(value)) value = value.slice(1, -1);
+    const pathKey = [...stack.map((e) => e[1]), m[1]].join(".");
+    if (value && !/^[|>&*!]/.test(value)) out[pathKey] = value;
+    stack.push([indent, m[1]]);
+  }
+  return out;
+}
+
+/** The person's name, email and phone as the check compares them, or null when the profile is missing or unreadable. */
+function loadPerson() {
+  const home = process.env.JHT_HOME;
+  if (!home) return null;
+  let fd = null;
+  try {
+    fd = fs.openSync(path.join(home, "profile", "candidate_profile.yml"), fs.constants.O_RDONLY);
+    const st = fs.fstatSync(fd);
+    if (!st.isFile() || st.size > PROFILE_MAX_BYTES) return null;
+    const buffer = Buffer.alloc(st.size);
+    const read = fs.readSync(fd, buffer, 0, st.size, 0);
+    const v = profileScalars(buffer.subarray(0, read).toString("utf8"));
+    const pick = (paths) => paths.map((p) => v[p]).find(Boolean) || "";
+    let name = pick(NAME_PATHS);
+    if (!name)
+      for (const parent of SPLIT_NAME_PARENTS)
+        if (v[`${parent}first_name`] && v[`${parent}last_name`]) {
+          name = `${v[`${parent}first_name`]} ${v[`${parent}last_name`]}`;
+          break;
+        }
+    const words = fold(name).split(/[^a-z]+/).filter((w) => w.length >= 3);
+    const email = fold(pick(EMAIL_PATHS)).trim();
+    const digits = pick(PHONE_PATHS).replace(/\D/g, "");
+    return {
+      words,
+      email: email.includes("@") ? email : "",
+      phone: digits.length >= 7 ? digits.slice(-7) : "", // the last seven: +39, 0039 and 0 in front do not hide it
+    };
+  } catch (_error) {
+    return null; // nothing of the error is kept: it could carry the path or a piece of the file
+  } finally {
+    if (fd !== null) {
+      try {
+        fs.closeSync(fd);
+      } catch (_error) {
+        /* closed or never opened */
+      }
+    }
+  }
+}
+
+/** Which kinds of the person's data a query carries (the closed list KINDS), never what was found. */
+function personKinds(person, query) {
+  const kinds = [];
+  const q = fold(query);
+  const words = new Set(q.split(/[^a-z]+/).filter(Boolean));
+  if (person.words.length && person.words.every((w) => words.has(w))) kinds.push("name");
+  if (person.email && q.includes(person.email)) kinds.push("email");
+  if (person.phone && q.replace(/\D/g, "").includes(person.phone)) kinds.push("phone");
+  return kinds;
+}
+
 function describe(model) {
   const m = model && typeof model === "object" ? model : {};
   return { provider: String(m.provider || ""), api: String(m.api || "") };
@@ -122,7 +223,29 @@ module.exports = function webSearch(pi) {
   let withdrawn = null; // the status that withdrew the search for this session
   let retryPending = false; // the failed step is to be asked again, without the search, when the agent settles
   // the request in flight: Anthropic's blocks and usage of the message, Z.ai's search seen in the response
-  let request = { blocks: 0, usage: null, seen: false };
+  let request = { blocks: 0, usage: null, seen: false, inputs: {} };
+  // the check of the queries: the person (loaded on the first query), and what the turn found
+  let person; // undefined = not loaded yet, null = unavailable
+  let check = { queries: 0, matches: 0, kinds: new Set() };
+
+  function checkQuery(query) {
+    try {
+      if (typeof query !== "string" || !query) return;
+      if (person === undefined) {
+        person = loadPerson();
+        if (person === null) logLine({ event: "web_search_check_unavailable" });
+      }
+      check.queries += 1;
+      if (!person) return;
+      const kinds = personKinds(person, query);
+      if (!kinds.length) return;
+      check.matches += 1;
+      for (const k of kinds) check.kinds.add(k);
+      logLine({ event: "web_search_person_data", kinds, role: String(process.env.JHT_AGENT_NAME || "") });
+    } catch (_error) {
+      /* the check must never break the stream, nor say what it read */
+    }
+  }
 
   function announce(enabled, model, reason) {
     if (announced) return;
@@ -145,7 +268,7 @@ module.exports = function webSearch(pi) {
 
   function closeRequest() {
     if (current === "anthropic") searches += request.usage !== null ? request.usage : request.blocks;
-    request = { blocks: 0, usage: null, seen: false };
+    request = { blocks: 0, usage: null, seen: false, inputs: {} };
   }
 
   pi.on("before_provider_request", (event, ctx) => {
@@ -220,11 +343,32 @@ module.exports = function webSearch(pi) {
       const data = event && event.data;
       if (!data || typeof data !== "object") return;
       if (current === "openai") {
-        if (data.type === "response.output_item.done" && data.item && data.item.type === "web_search_call") searches += 1;
+        if (data.type === "response.output_item.done" && data.item && data.item.type === "web_search_call") {
+          searches += 1;
+          const action = data.item.action || {};
+          checkQuery(action.query);
+          if (Array.isArray(action.queries)) for (const q of action.queries) if (q !== action.query) checkQuery(q);
+        }
       } else if (current === "anthropic") {
         const block = data.content_block;
-        if (data.type === "content_block_start" && block && block.type === "server_tool_use" && block.name === "web_search")
+        if (data.type === "content_block_start" && block && block.type === "server_tool_use" && block.name === "web_search") {
           request.blocks += 1;
+          const ready = block.input && typeof block.input.query === "string" ? block.input.query : null;
+          request.inputs[data.index] = { json: "", query: ready };
+        }
+        const open = request.inputs[data.index];
+        if (open && data.type === "content_block_delta" && data.delta && data.delta.type === "input_json_delta")
+          open.json += String(data.delta.partial_json || "");
+        if (open && data.type === "content_block_stop") {
+          delete request.inputs[data.index];
+          let query = open.query;
+          try {
+            if (open.json) query = JSON.parse(open.json).query;
+          } catch (_error) {
+            /* a broken input: no query to check */
+          }
+          checkQuery(query);
+        }
         const used = data.usage && data.usage.server_tool_use && data.usage.server_tool_use.web_search_requests;
         if (data.type === "message_delta" && Number.isInteger(used)) request.usage = used;
         if (data.type === "message_stop") closeRequest();
@@ -241,6 +385,17 @@ module.exports = function webSearch(pi) {
 
   pi.on("turn_end", () => {
     closeRequest();
+    if (check.queries > 0) {
+      const outcome = person
+        ? { queries: check.queries, person_data: check.matches, kinds: KINDS.filter((k) => check.kinds.has(k)) }
+        : { queries: check.queries, check: "unavailable" };
+      check = { queries: 0, matches: 0, kinds: new Set() };
+      try {
+        pi.appendEntry(CHECK, outcome);
+      } catch (_error) {
+        /* the log lines already say a breach */
+      }
+    }
     if (searches === 0) return;
     const n = searches;
     searches = 0;

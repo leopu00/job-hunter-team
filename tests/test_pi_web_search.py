@@ -329,3 +329,117 @@ def test_a_refusal_of_a_request_without_our_tool_is_not_ours_to_answer(tmp_path)
     assert got["results"][2] is None, "a tool the request already had is not added by us"
     assert got["results"][4]["tools"][-1]["name"] == "web_search", "no refusal of ours: the search stays"
     assert "web_search_withdrawn" not in [line["event"] for line in log_of(tmp_path)]
+
+
+# --- the person's data in a query: checked in memory, only the outcome written ------------------------------------
+
+# A made-up person: none of these values may reach the session, the log or the output.
+PERSON_PROFILE = """\
+# synthetic profile for the test
+candidate:
+  name: "Noemì Brambillone"
+  target_role: impiegata amministrativa
+contacts:
+  email: noemi.brambillone@example.com  # a comment
+  phone: "+39 345 123 4567"
+experience:
+  - name: Acme Ricambi
+    role: back office
+"""
+SECRETS = ("noemì", "noemi", "brambillone", "example.com", "1234567", "345 123")
+CHECKS = lambda got: [e[1] for e in got["entries"] if e[0] == "jht-web-search-check"]  # noqa: E731
+
+
+def with_profile(tmp_path: Path, text: str = PERSON_PROFILE) -> None:
+    profile = tmp_path / "home" / "profile"
+    profile.mkdir(parents=True, exist_ok=True)
+    (profile / "candidate_profile.yml").write_text(text, encoding="utf-8")
+
+
+def anthropic_search(query: str, index: int = 1, pieces: int = 3) -> list[dict]:
+    """A server search block whose query arrives in pieces of input_json_delta, as the Messages API streams it."""
+    payload = json.dumps({"query": query})
+    size = -(-len(payload) // pieces)
+    return ([anthropic_event({"type": "content_block_start", "index": index, "content_block": {
+                "type": "server_tool_use", "id": f"srvtoolu_{index}", "name": "web_search", "input": {}}})]
+            + [anthropic_event({"type": "content_block_delta", "index": index, "delta": {
+                "type": "input_json_delta", "partial_json": payload[i:i + size]}}) for i in range(0, len(payload), size)]
+            + [anthropic_event({"type": "content_block_stop", "index": index})])
+
+
+def everything_written(tmp_path: Path, got: dict) -> str:
+    path = tmp_path / "home" / "logs" / "pi-web-search.log"
+    return (json.dumps(got) + (path.read_text(encoding="utf-8") if path.exists() else "")).lower()
+
+
+def test_a_query_with_the_person_s_name_is_counted_by_kind_and_nothing_of_it_is_written(tmp_path):
+    with_profile(tmp_path)
+    query = "Noemi BRAMBILLONE impiegata Verona"
+    steps = [request({"tools": []}, ANTHROPIC), *anthropic_search(query), usage(1), STOP, TURN_END]
+    got = run(steps, tmp_path, {"JHT_AGENT_NAME": "analista-2"})
+    assert CHECKS(got) == [{"queries": 1, "person_data": 1, "kinds": ["name"]}]
+    breach = [e for e in log_of(tmp_path) if e["event"] == "web_search_person_data"]
+    assert breach == [{**breach[0], "kinds": ["name"], "role": "analista-2"}]
+    written = everything_written(tmp_path, got)
+    for secret in (*SECRETS, query.lower(), "impiegata verona"):
+        assert secret not in written, secret
+
+
+def test_the_phone_behind_any_prefix_and_the_email_in_any_case_are_found_a_clean_query_is_not(tmp_path):
+    with_profile(tmp_path)
+    steps = [request({"tools": []}, ANTHROPIC),
+             *anthropic_search("contatto 0039 345-123 4567", 1), *anthropic_search("noemi.brambillone@example.com cv".upper(), 2),
+             *anthropic_search("Synergie Italia Verona recensioni", 3), usage(3), STOP, TURN_END]
+    got = run(steps, tmp_path)
+    # the email carries the name too: both kinds are said, the breach counted once per query
+    assert CHECKS(got) == [{"queries": 3, "person_data": 2, "kinds": ["name", "email", "phone"]}]
+    assert COUNTS(got) == [["jht-web-search", {"searches": 3, "provider": "anthropic"}]]
+    for secret in SECRETS:
+        assert secret not in everything_written(tmp_path, got), secret
+
+
+def test_one_word_of_the_name_or_a_name_from_a_list_of_the_profile_is_not_the_person(tmp_path):
+    """The surname alone can be a company or a street; Acme Ricambi is a past employer, not the person."""
+    with_profile(tmp_path)
+    steps = [request({"tools": []}, ANTHROPIC), *anthropic_search("Brambillone srl Verona"),
+             *anthropic_search("Acme Ricambi sede", 2), STOP, TURN_END]
+    assert CHECKS(run(steps, tmp_path)) == [{"queries": 2, "person_data": 0, "kinds": []}]
+
+
+def test_openai_s_search_call_carries_its_query_and_it_is_checked_too(tmp_path):
+    with_profile(tmp_path)
+    call = {"event": "provider_stream_event", "event_data": {"data": {"type": "response.output_item.done", "item": {
+        "type": "web_search_call", "action": {"type": "search", "query": "noemi brambillone linkedin"}}}}}
+    got = run([OPENAI_ON, call, TURN_END], tmp_path)
+    assert CHECKS(got) == [{"queries": 1, "person_data": 1, "kinds": ["name"]}]
+    assert "brambillone" not in everything_written(tmp_path, got)
+
+
+@pytest.mark.parametrize("profile", [None, "too big", "a folder", "not yaml: [\x00"])
+def test_without_a_readable_profile_the_check_says_unavailable_and_the_search_goes_on(tmp_path, profile):
+    if profile == "too big":
+        with_profile(tmp_path, PERSON_PROFILE + "#" * (300 * 1024))
+    elif profile == "a folder":
+        (tmp_path / "home" / "profile" / "candidate_profile.yml").mkdir(parents=True)
+    elif profile is not None:
+        with_profile(tmp_path, profile)
+    steps = [request({"tools": []}, ANTHROPIC), *anthropic_search("noemi brambillone"), STOP, TURN_END,
+             request({"tools": []}, ANTHROPIC)]
+    got = run(steps, tmp_path)
+    expected = [{"queries": 1, "check": "unavailable"}] if profile in (None, "too big", "a folder") else \
+        [{"queries": 1, "person_data": 0, "kinds": []}]
+    assert CHECKS(got) == expected
+    assert got["results"][-1]["tools"][-1]["name"] == "web_search", "the search is still added"
+    if profile in (None, "too big", "a folder"):
+        assert [e["event"] for e in log_of(tmp_path)].count("web_search_check_unavailable") == 1
+
+
+def test_a_turn_without_queries_writes_no_check_and_a_broken_query_block_breaks_nothing(tmp_path):
+    with_profile(tmp_path)
+    broken = [anthropic_event({"type": "content_block_start", "index": 1, "content_block": {
+                  "type": "server_tool_use", "id": "s", "name": "web_search", "input": {}}}),
+              anthropic_event({"type": "content_block_delta", "index": 1, "delta": {
+                  "type": "input_json_delta", "partial_json": "{\"query\": \"noemi"}}),
+              anthropic_event({"type": "content_block_stop", "index": 1})]
+    got = run([request({"tools": []}, ANTHROPIC), STOP, TURN_END, *broken, STOP, TURN_END], tmp_path)
+    assert CHECKS(got) == []
