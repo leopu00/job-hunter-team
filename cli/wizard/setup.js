@@ -35,7 +35,7 @@ import { checkPrerequisites, runHealthCheck } from './setup-checks.js';
 import { t, tf } from './i18n.js';
 import { askLanguage } from './setup-language.js';
 import { runProviderLoginStep, findProviderLogin } from './provider-login.js';
-import { promptHarness, updateIdFor, loginCmdFor } from './setup-harness.js';
+import { promptHarness, updateIdFor, loginCmdFor, webSearchMissingOnPi } from './setup-harness.js';
 import { askPiApiKey, askCodexApiKey, runCodexApiKeyLogin } from './setup-api-key.js';
 import { WizardCancelledError } from './prompts.js';
 import { lstatSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
@@ -340,6 +340,11 @@ async function runSetupSteps(prompter, state, { diskRefusal = diskLowRefusal } =
     harness = await promptHarness(prompter, {
       t, provider: providerChoice, authMethod: 'subscription', current: baseConfig.harness,
     });
+  }
+
+  // Without web search the agents find no company site, logo or office: said here, never left to the log.
+  if (webSearchMissingOnPi(harness, providerChoice)) {
+    await prompter.note(tf('wizard.provider.web_search_missing', selectedProvider.label), t('wizard.provider.web_search_title'));
   }
 
   // --- Auth ---

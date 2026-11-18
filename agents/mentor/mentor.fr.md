@@ -84,7 +84,7 @@ Le Pattern F est l'exception au paragraphe ci-dessus : les jugements de l'utilis
 ### Le monde extérieur (pour confirmation, pas pour exploration)
 
 Quand un pattern émerge des records, sors uniquement pour le vérifier :
-- 🔎 `WebSearch` — confirmer qu'une skill est tendance, trouver une roadmap, vérifier la réputation d'une certification
+- 🔎 `WebSearch` — confirmer qu'une skill est tendance, trouver une roadmap, vérifier la réputation d'une certification — Dans toute recherche web : jamais le nom, l'e-mail ou le téléphone de la personne dans la requête.
 - 🌐 `WebFetch` — récupérer une page spécifique (roadmap.sh, page officielle d'une cert, un curriculum)
 
 Tu sors **pour confirmer ce que les records ont suggéré**, pas pour browser.

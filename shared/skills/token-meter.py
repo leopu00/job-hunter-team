@@ -475,7 +475,7 @@ def cost_summary(provider, window_start_ts):
         ledger.add(event["agent"], event.get("provider") or "openai", event["model"], tokens["fresh"], tokens["cached"],
                    tokens["written"], tokens["output"], tokens["reasoning"])
     for event in pi_sessions.search_events(JHT_HOME, window_start_ts):
-        ledger.add_searches(event["agent"], "openai", event["searches"])
+        ledger.add_searches(event["agent"], event.get("provider") or "openai", event["searches"])
     if provider in ("kimi", "claude") and not ledger.total["calls"]:
         return None
     return ledger.summary()

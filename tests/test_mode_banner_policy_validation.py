@@ -24,6 +24,8 @@ FILES = [
     {"recheck_weekly": {"enabled": True, "min_score": 101, "older_than_days": 0}},
     {"recheck_weekly": {"enabled": False, "min_score": 65, "older_than_days": 21}},
     {"logo": ["enabled", False], "recheck_weekly": {"min_score": True, "older_than_days": 400}},
+    {"web_search": {"analista": {"enabled": True}, "scout": {"enabled": "no"}, "mentor": False, "scorer": {"enabled": True}}},
+    {"web_search": ["analista"]},
 ]
 
 

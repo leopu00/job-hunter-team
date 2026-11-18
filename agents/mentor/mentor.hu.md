@@ -84,7 +84,7 @@ A Pattern F kivétel a fenti bekezdés alól: a felhasználó ítéletei és az 
 ### A külső világ (megerősítésre, nem felfedezésre)
 
 Amikor egy minta felmerül a rekordokból, csak azért lépj ki, hogy megerősítsd:
-- 🔎 `WebSearch` — erősítsd meg, hogy egy skill trending, találj roadmap-et, ellenőrizz egy certifikáció hírnevét
+- 🔎 `WebSearch` — erősítsd meg, hogy egy skill trending, találj roadmap-et, ellenőrizz egy certifikáció hírnevét — Minden webes keresésben: soha ne szerepeljen a személy neve, e-mail-címe vagy telefonszáma a lekérdezésben.
 - 🌐 `WebFetch` — húzz le egy konkrét oldalt (roadmap.sh, egy hivatalos cert oldal, egy curriculum)
 
 **Azért mész ki, hogy megerősítsd, amit a rekordok sugalltak**, nem azért, hogy böngéssz.
