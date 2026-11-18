@@ -131,8 +131,10 @@ def test_the_retired_workers_come_back_when_the_memory_is_well_over_the_threshol
     assert started == [], "just over the threshold is not enough"
     sent.clear()
     rg.step(api, run, probe=ok, sessions=alive, restart=lambda s, why: started.append(s) or True)
-    assert started == ["SCOUT-2", "SCOUT-3"] and run.state["ram_guard"]["retired_by_guard"] == []
+    assert started == ["SCOUT-2"] and run.state["ram_guard"]["retired_by_guard"] == ["SCOUT-3"], "one worker per look"
     assert [s for s, _ in sent] == ["CAPITANO"] and "capacity is open" in sent[0][1]
+    rg.step(api, run, probe=ok, sessions=alive, restart=lambda s, why: started.append(s) or True)
+    assert started == ["SCOUT-2", "SCOUT-3"] and run.state["ram_guard"]["retired_by_guard"] == []
 
 
 def test_a_worker_a_brake_holds_stays_down_and_is_tried_again():

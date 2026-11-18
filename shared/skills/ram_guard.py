@@ -142,6 +142,7 @@ def _tell_the_person(api, run, done, avail, total, now, notify_user):
 
 
 REOPEN_MARGIN = 1.5            # the memory must be this much over the threshold before the capacity comes back
+RESTART_PER_LOOK = 1
 REOPEN_AFTER_SEC = 300         # ... and stay there this long after the last retirement
 
 
@@ -179,7 +180,11 @@ def _reopen(api, run, state, avail, total, now, restart, names):
         return []
     if avail < threshold_gib(total) * REOPEN_MARGIN or now - float(state.get("last_retire_at") or 0.0) < REOPEN_AFTER_SEC:
         return []
-    back = [n for n in waiting if restart(n, "ram guard: memory back")]
+    # one worker per look: a start can take minutes and the tick of the Sentinella must not wait for all of them
+    back = []
+    for name in waiting[:RESTART_PER_LOOK]:
+        if restart(name, "ram guard: memory back"):
+            back.append(name)
     state["retired_by_guard"] = [n for n in waiting if n not in back]
     if back:
         print("[bridge V6] RAM-GUARD %.2f of %.1f GiB free: restarted %s" % (avail, total, ", ".join(back)))
