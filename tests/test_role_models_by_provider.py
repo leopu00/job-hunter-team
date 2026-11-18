@@ -71,16 +71,17 @@ def test_the_class_of_each_role_is_the_one_written_down_here():
 
 
 # Claude on pi: the Capitano (the voice that runs all the time, the biggest cost) is on Sonnet, not on the class «sol» (Opus);
-# Opus stays for the writing roles. The only row that is not a light role.
-CLAUDE_CAPITANO_ROW = ("claude", "capitano", "terra")
+# Opus stays for the writing roles. The Mentor too: a service role, its start cost 0.30 $ of a 1.97 $ run on Opus, half of that on
+# Sonnet (the measured price of Opus is exactly twice the one of Sonnet). The only rows that are not a light role.
+CLAUDE_TERRA_ROWS = [("claude", "capitano", "terra"), ("claude", "mentor", "terra")]
 
 
-def test_the_rows_for_a_role_are_the_three_light_roles_of_the_same_providers_and_the_capitano_of_claude():
+def test_the_rows_for_a_role_are_the_three_light_roles_of_the_same_providers_and_the_capitano_and_the_mentor_of_claude():
     rows = [line.split("|") for line in PROVIDER_LIST.read_text(encoding="utf-8").splitlines() if line.startswith("rolemodel|")]
-    light = [row for row in rows if tuple(row[1:4]) != CLAUDE_CAPITANO_ROW]
+    light = [row for row in rows if tuple(row[1:4]) not in CLAUDE_TERRA_ROWS]
     assert {(row[1], row[2]) for row in light} == {(p, role) for p in LIGHT_ROLE_PROVIDERS for role in LIGHT_ROLES_OF_GLM}, rows
     assert all(row[3] == "luna" for row in light), "the light class"
-    assert [tuple(row[1:4]) for row in rows if tuple(row[1:4]) == CLAUDE_CAPITANO_ROW] == [CLAUDE_CAPITANO_ROW]
+    assert [tuple(row[1:4]) for row in rows if tuple(row[1:4]) in CLAUDE_TERRA_ROWS] == CLAUDE_TERRA_ROWS
 
 
 # ── GLM ──────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -176,8 +177,15 @@ CLAUDE_MODEL = {"sol": "claude-opus-5-5", "terra": "claude-sonnet-5-5", "luna": 
 @pytest.mark.parametrize("provider", ["claude", "anthropic"])
 @pytest.mark.parametrize("role", ROLES)
 def test_claude_on_pi_gives_each_role_its_class_and_the_light_roles_haiku(tmp_path, provider, role):
-    expected = "luna" if role in LIGHT_ROLES_OF_GLM else "terra" if role == "capitano" else CLASS_OF[role]
+    expected = "luna" if role in LIGHT_ROLES_OF_GLM else "terra" if role in ("capitano", "mentor") else CLASS_OF[role]
     assert pi_model(tmp_path, provider, role) == CLAUDE_MODEL[expected]
+
+
+def test_the_mentor_of_claude_is_on_sonnet_and_a_pin_to_the_strong_class_brings_opus_back(tmp_path):
+    assert pi_model(tmp_path, "claude", "mentor") == CLAUDE_MODEL["terra"]
+    assert pi_model(tmp_path, "claude", "mentor", "sol") == CLAUDE_MODEL["sol"]
+    # the other providers keep the Mentor on its own class
+    assert pi_model(tmp_path, "glm", "mentor") == GLM_STRONG
 
 
 def test_a_pin_beats_the_light_role_of_claude(tmp_path):

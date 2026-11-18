@@ -102,4 +102,22 @@ export const T = {
     fr: "La réponse ne correspond pas exactement à l’une des options affichées.",
     pt: "A resposta não corresponde exatamente a uma das opções apresentadas.",
   },
+  answer_saved_authorise: {
+    it: "Risposta salvata. Per far ripartire la candidatura, autorizzala dalla pagina della posizione.",
+    en: "Answer saved. To let the application go on, authorise it on the page of the position.",
+    hu: "A válasz elmentve. Ahhoz, hogy a jelentkezés folytatódjon, engedélyezd a pozíció oldalán.",
+    es: "Respuesta guardada. Para que la candidatura siga adelante, autorízala en la página de la posición.",
+    de: "Antwort gespeichert. Damit die Bewerbung weitergeht, autorisiere sie auf der Seite der Stelle.",
+    fr: "Réponse enregistrée. Pour que la candidature reparte, autorise-la sur la page du poste.",
+    pt: "Resposta guardada. Para a candidatura avançar, autoriza-a na página da posição.",
+  },
+  authorise_on_position: {
+    it: "Apri la posizione →",
+    en: "Open the position →",
+    hu: "Pozíció megnyitása →",
+    es: "Abrir la posición →",
+    de: "Stelle öffnen →",
+    fr: "Ouvrir le poste →",
+    pt: "Abrir a posição →",
+  },
 } satisfies Dictionary;

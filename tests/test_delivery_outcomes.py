@@ -440,43 +440,27 @@ def test_kickoff_retries_three_times_without_marking_a_failed_send_as_done(home)
     assert len(calls) == 3 and delays == [12, 60, 120]
 
 
-def test_bridge_escalation_updates_cooldown_only_on_confirmed_delivery(home, monkeypatch):
+def test_bridge_escalation_updates_cooldown_only_when_the_alert_is_written(home, monkeypatch):
+    """The alert of a process that is not an agent goes to the log of the process alerts (the Capitano is not written to): the cooldown
+    moves only once the line is in the log."""
     from watchdog_delivery import bridge
 
     stamp = home / "bridge.ts"
     args = (stamp, 3600, "fixture bridge", 3, 600, "fixture-sender")
-    assert not bridge(*args, sender=lambda *a: False, now=10000)
+    sent = []
+    # a log that cannot be written: nothing is recorded, the cooldown does not move
+    (home / "logs").unlink() if (home / "logs").is_symlink() else None
+    blocker = home / "logs"
+    if blocker.is_dir():
+        import shutil
+        shutil.rmtree(blocker)
+    blocker.write_text("a file where the folder of the logs should be")
+    assert not bridge(*args, sender=lambda *a: sent.append(a) or True, now=10000)
     assert not stamp.exists()
-    assert bridge(*args, sender=lambda *a: True, now=10060)
-    assert stamp.read_text().strip() == "10060"
+    blocker.unlink()
+    assert bridge(*args, sender=lambda *a: sent.append(a) or True, now=10060)
+    assert stamp.read_text().strip() == "10060" and sent == [], "no agent is written to"
     assert not bridge(*args, sender=lambda *a: pytest.fail("cooldown ignored"), now=10061)
-
-
-def test_bridge_escalation_has_a_durable_limit_for_a_failed_notification(home):
-    from watchdog_delivery import bridge
-
-    calls = []
-    for now in (10000, 10001, 10060, 10180, 10300, 10500, 10800, 11100):
-        assert not bridge(
-            home / "bridge.ts",
-            3600,
-            "fixture bridge",
-            3,
-            600,
-            "fixture-sender",
-            sender=lambda *a: calls.append(a) or False,
-            now=now,
-        )
-    assert len(calls) == 3 and not (home / "bridge.ts").exists()
-
-
-def test_a_later_bridge_failure_episode_gets_a_fresh_budget(home):
-    from watchdog_delivery import bridge
-    args = (home / "bridge.ts", 3600, "fixture bridge", 3, 600, "fixture-sender")
-    for now in (10000, 10060, 10180, 10300):
-        assert not bridge(*args, sender=lambda *a: False, now=now)
-    assert bridge(*args, sender=lambda *a: True, now=11000)
-    assert (home / "bridge.ts").read_text().strip() == "11000"
 
 
 def test_a_missing_tmux_socket_is_empty_but_permission_failure_is_not(home):

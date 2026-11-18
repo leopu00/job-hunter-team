@@ -1,17 +1,23 @@
-# Logos of the 0.4.0 benchmark page
+# Marks of the 0.4.0 benchmark page
 
-The files are the unmodified SVGs of the libraries below (only renamed). The marks of the four services belong to their owners and are shown only to name the service a round used; no endorsement is implied.
+The marks name the service a test used; no endorsement is implied. They are trademarks of their owners.
 
-The systems (macOS, Windows, Linux) have **no brand logo**: they use generic icons (a laptop, a window, a terminal) with the name of the system written next to them. No mark of Apple, Microsoft or the Linux project is used.
+## Services, drawn inline (`app/case-studies/benchmark-0-4-0/providerMarks.tsx`)
 
-| File | What it shows | Source | License of the file |
-| --- | --- | --- | --- |
-| `openai.svg` | OpenAI (service) | simple-icons 14.15.0 (`icons/openai.svg`) | CC0 1.0 |
-| `claude.svg` | Claude, Anthropic (service) | simple-icons 14.15.0 (`icons/claude.svg`) | CC0 1.0 |
-| `zai.svg` | Z.ai, GLM (service) | @lobehub/icons-static-svg 1.60.0 (`icons/zai.svg`) | MIT, Copyright (c) 2023 LobeHub |
-| `kimi.svg` | Kimi, Moonshot AI (service) | @lobehub/icons-static-svg 1.60.0 (`icons/kimi.svg`) | MIT, Copyright (c) 2023 LobeHub |
-| `laptop.svg` | generic icon, macOS | lucide-static 0.468.0 (`icons/laptop.svg`) | ISC, Copyright (c) Lucide Contributors 2022 and Cole Bemis 2013-2022 (Feather, MIT) |
-| `app-window.svg` | generic icon, Windows | lucide-static 0.468.0 (`icons/app-window.svg`) | ISC, same |
-| `terminal.svg` | generic icon, Linux | lucide-static 0.468.0 (`icons/terminal.svg`) | ISC, same |
+As tall as the text, with no tile: Claude in its own colour, the others in the colour of the text, so they read on the
+light and the dark theme. The paths keep the numbers of their source; a space separates each number that starts with a dot,
+which draws the same shape.
 
-Official brand kits were not used: no logo here comes from a company press page. Checked 16/11/2026.
+| Mark | Source of the path | Licence |
+| --- | --- | --- |
+| Claude, Anthropic | Wikimedia Commons, `File:Claude AI symbol.svg` (from anthropic.com), colour `#D97757` | trademark of Anthropic |
+| OpenAI (the 2025 «blossom»), also for Codex | Wikimedia Commons, `File:OpenAI logo 2025 (symbol).svg` (author OpenAI) | trademark of OpenAI |
+| Z.ai (GLM) | `zai.svg` in this folder, from @lobehub/icons-static-svg 1.60.0 (`icons/zai.svg`) | MIT, Copyright (c) 2023 LobeHub |
+| Kimi (Moonshot) | `kimi.svg` in this folder, from @lobehub/icons-static-svg 1.60.0 (`icons/kimi.svg`) | MIT, Copyright (c) 2023 LobeHub |
+
+## Systems
+
+Windows, macOS and Linux use the icons the site already draws in its setup guide (`app/setup-guide/OsIcons.tsx`):
+monochrome SVG in the colour of the text, with the name of the system written next to them.
+
+Official brand kits were not used. Checked 17/11/2026.

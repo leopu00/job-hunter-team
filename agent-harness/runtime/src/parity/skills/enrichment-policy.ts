@@ -22,8 +22,8 @@ export function enrichmentPolicyCommand(policy: EnrichmentPolicy, argv: string[]
     exitCode: 2,
   });
   if (sub === undefined) return usage("the following arguments are required: cmd");
-  if (sub !== "show" && sub !== "set") return usage(`argument cmd: invalid choice: ${pyRepr(sub)} (choose from 'show', 'set')`);
-  if (sub === "set") return refused("enrichment_policy", sub, ["show"]);
+  if (sub !== "show" && sub !== "apply" && sub !== "set") return usage(`argument cmd: invalid choice: ${pyRepr(sub)} (choose from 'show', 'apply', 'set')`);
+  if (sub === "set" || sub === "apply") return refused("enrichment_policy", sub, ["show"]);
   if (argv.length > 1) return usage(`unrecognized arguments: ${argv.slice(1).join(" ")}`);
   const out = { ok: true, path: policy.policyPath, exists: existsSync(policy.policyPath), policy: policy.load(), mode: policy.currentMode() };
   return { stdout: `${pyJson(out, { ensureAscii: false })}\n`, exitCode: 0 };

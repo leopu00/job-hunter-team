@@ -5,6 +5,7 @@ from sentinel_delivery import notice, reset
 from delivery_status import checked, report
 import quota_data
 import pi_spend_cap
+import ram_guard
 
 
 def _before_tick(api, run):
@@ -31,6 +32,7 @@ def _before_tick(api, run):
     api._standby_step(run.parsed)
     api._agent_pause_step()
     pi_spend_cap.step(api, run)
+    ram_guard.step(api, run)
     if not run._bi_on:
         api._enforce_daily_halt()
 
@@ -358,6 +360,7 @@ def _sleep_watching_the_spending(api, run):
         if left > 0:
             run.now_h = api.datetime.now().strftime("%H:%M:%S")
             pi_spend_cap.step(api, run)
+            ram_guard.step(api, run)
 
 
 def _start(api):

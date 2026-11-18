@@ -298,11 +298,16 @@ describe("geocode-check against this tree's db_query.py, under the enrichment po
   });
 });
 
-describe("the care-mode queues against db_query.py, under the enrichment policy", () => {
-  it.skipIf(skills === null).each(CARE.map(([label, policy, mode, args]) => [`${label}: ${args.join(" ")}`, policy, mode, args]))(
+/**
+ * The care queues read the policy through load_policy(), which refuses a bool
+ * as a score in this tree (b787e232d) on both sides: they are judged against
+ * this tree's Python, not the pinned one.
+ */
+describe("the care-mode queues against this tree's db_query.py, under the enrichment policy", () => {
+  it.skipIf(TREE === null).each(CARE.map(([label, policy, mode, args]) => [`${label}: ${args.join(" ")}`, policy, mode, args]))(
     "%s",
     async (_label, policy, mode, args) => {
-      const { call, py, ourDb, pyDb } = twins("analista-1");
+      const { call, py, ourDb, pyDb } = twins("analista-1", TREE);
       mkdirSync(join(root, "profile"), { recursive: true });
       const write = (file: string, value: unknown) =>
         writeFileSync(join(root, "profile", file), typeof value === "string" ? value : JSON.stringify(value).replace(/:70(?=[,}])/, ":70.0"));
@@ -552,8 +557,10 @@ const UPDATES: string[][] = [
 ];
 
 describe("db_update position against db_update.py", () => {
-  it.skipIf(skills === null).each(UPDATES.map((u) => [u.join(" "), u]))("%s", async (_label, args) => {
-    const { call, py, pyDb, ourDb } = twins();
+  // Against the Python of THIS tree: the script and the port gain options in the same commits (--salary-precise, JHT-T326), and an
+  // abbreviation such as `--s` is ambiguous among the options of the script that is next to the port, not of the pinned commit.
+  it.skipIf(TREE === null).each(UPDATES.map((u) => [u.join(" "), u]))("%s", async (_label, args) => {
+    const { call, py, pyDb, ourDb } = twins("scout-1", TREE);
     expectSame(await call("db_update", args as string[]), py("db_update.py", args as string[]));
     expect(snapshot(ourDb)).toEqual(snapshot(pyDb));
   });

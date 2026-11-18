@@ -633,11 +633,13 @@ def geocode_check(position_id, as_json=False):
     posizione NUOVA che sta analizzando: dal 31/05 la geocodifica
     dell'ufficio era solo su richiesta o in modalità cura, e da quando il
     team lavora in «search» (26/08) nessuna posizione nuova ha più avuto
-    coordinate dell'ufficio. La decisione sta qui, nel codice, con
-    le stesse regole della coda next-for-geocode-missing: la policy di
-    arricchimento (interruttore dell'operatore, modalità risparmio), le
-    remote escluse, la soglia di score. L'arretrato NON passa da qui: si
-    recupera con le richieste dell'utente o con la cura.
+    coordinate dell'ufficio. La decisione sta qui, nel codice: l'interruttore
+    della PIPELINE (`geocode_pipeline.enabled`, distinto da quello della coda
+    di cura `geocode_missing.enabled`), `economy` e la modalità risparmio, le
+    remote escluse. La soglia di score NO: la posizione nuova non è ancora
+    stata valutata, e la soglia (`geocode_missing.min_score`) è della coda di
+    cura, che riprende le posizioni dopo lo Scorer. L'arretrato NON passa da
+    qui: si recupera con le richieste dell'utente o con la cura.
 
     Un «no» non è un errore: exit 0. Posizione inesistente: exit 1.
     """
@@ -651,25 +653,20 @@ def geocode_check(position_id, as_json=False):
         print(f"Position {position_id} not found.")
         conn.close()
         sys.exit(1)
-    best = conn.execute(
-        "SELECT MAX(total_score) FROM scores WHERE position_id = ?",
-        (position_id,)).fetchone()[0]
     conn.close()
 
     opts = geocode_options()
-    if pos['office_lat'] is not None and pos['office_geocoded']:
-        verdict, reason = False, "already geocoded (office_geocoded=1)"
+    if pos['office_geocoded']:
+        # office_geocoded=1 is «attempted» (db_update: true even when the search failed), like logo_fetched: a failed attempt
+        # does not come back to the queue by itself. A new request from the person (geocode_requested) is another queue.
+        verdict, reason = False, ("already geocoded (office_geocoded=1)" if pos['office_lat'] is not None
+                                  else "already attempted, no coordinates found (office_geocoded=1)")
     elif pos['status'] == 'excluded':
         verdict, reason = False, "excluded position"
-    elif not is_enabled('geocode_missing'):
-        verdict, reason = False, f"geocoding OFF — {disabled_reason('geocode_missing')}"
+    elif not is_enabled('geocode_pipeline'):
+        verdict, reason = False, f"geocoding OFF — {disabled_reason('geocode_pipeline')}"
     elif opts['non_remote_only'] and (pos['work_mode'] or '').lower() == 'remote':
         verdict, reason = False, "remote position (work_mode=remote): no office to geocode"
-    elif opts['min_score'] is not None and best is None:
-        verdict, reason = False, (f"score gate {opts['min_score']}: not scored yet — "
-                                  "next-for-geocode-missing takes it after scoring")
-    elif opts['min_score'] is not None and best < opts['min_score']:
-        verdict, reason = False, f"score gate {opts['min_score']}: best score {best}"
     else:
         verdict, reason = True, "live, not geocoded yet, geocoding policy on"
 
@@ -1029,12 +1026,12 @@ def recheck_due_scope(min_score, older_than_days):
 
 
 def geocode_missing_scope(min_score, non_remote_only):
-    """Geocoding autonomo: posizioni vive senza coordinate ufficio."""
+    """Geocoding autonomo: posizioni vive mai tentate (office_geocoded 0/NULL). Un tentativo fallito (1, senza coordinate) esce dalla coda,
+    come un logo tentato: la richiesta dell'utente (geocode_requested) e' un'altra coda."""
     sql = """
         FROM positions p
         WHERE p.status != 'excluded'
-          AND (p.office_lat IS NULL
-               OR p.office_geocoded IS NULL OR p.office_geocoded = 0)"""
+          AND (p.office_geocoded IS NULL OR p.office_geocoded = 0)"""
     params = []
     if min_score is not None:
         sql += """

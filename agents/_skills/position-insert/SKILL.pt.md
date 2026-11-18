@@ -79,11 +79,12 @@ Sites bloqueados (NÃO usar `fetch` MCP, bloqueado por robots.txt):
 
 ## Porta 4 — Filtros permissivos ao nível do Scout
 
-Aplicar APENAS os cinco filtros totalmente fora de escopo (tabela completa na skill `circles-and-sources`). Pular se:
+Aplicar APENAS os seis filtros totalmente fora de escopo (tabela completa na skill `circles-and-sources`). Pular se:
 
 - Título contém explicitamente: `senior`, `lead`, `staff`, `principal`, `head of`, `director`
 - Work-auth geográfico incompatível (`US-only` / `Canada-only` e candidato não tem visto)
 - Fora do ofício do perfil: o título e os requisitos não têm nenhuma palavra da família do ofício que declaraste (`scout_role.py`) (o INSERT também o recusa: `ROLE_MISMATCH`)
+- Não é de todo uma oferta de emprego, pela tua própria leitura do anúncio (uma franquia ou um negócio à venda, um lead ou um marketplace de fornecedores, um curso pago, uma taxa para começar, um investimento): não a insiras, e regista-a com o motivo `other`. Um anúncio que descreves nas tuas notas como «não é um trabalho» nunca se insere.
 - Requisito rígido de `> anos_reais + 3` anos de experiência
 
 Tudo o resto: passar para a Porta 5. **Não fazer o trabalho do Analista** — stacks adjacentes, quase-fits, lacunas ligeiras são todos material `checked`; o Scorer aplica a penalidade de lacuna.

@@ -53,7 +53,7 @@ STEP 3 — UMA POSIÇÃO CANDIDATA por iteração (SC-09) → position-insert
 
 STEP 4 — POST-BATCH                                 → tmux-send
          Após CADA insert (nunca esperar um lote), notifica os Analisti:
-         jht-tmux-send ANALISTA-1 "[@$MY_ID -> @analista-1] [INFO]
+         jht-tmux-send ANALISTA "[@$MY_ID -> @analista] [INFO]
          Position inserted (ID: X)"
 
 STEP 5 — THROTTLE                                   → throttle

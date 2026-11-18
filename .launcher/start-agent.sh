@@ -64,6 +64,12 @@ MODE="${3:-default}"
 # sola riga conclusiva per invocazione evita di dover ricostruire coppie
 # attempt/result fra processi concorrenti.
 JHT_SPAWN_TRACE="$(jht_daemon_log spawn-attempts.jsonl)"
+# The tmux server and every agent descend from this script: with the memory gone the kernel must pick THEM, not the person's
+# session manager (a 7.7 GB server lost dbus, systemd --user, conmon and the container to the OOM killer). Raising the score is
+# the one change a process may make to itself; any failure is ignored. Same as raiseOomScore() in the pid1.
+if [ -w /proc/self/oom_score_adj ] && [ "$(cat /proc/self/oom_score_adj 2>/dev/null || echo 1000)" -lt 500 ] 2>/dev/null; then
+  echo 500 > /proc/self/oom_score_adj 2>/dev/null || true
+fi
 # Le TUI esportano JHT_AGENT_NAME: una chiamata diretta del Capitano o di una
 # skill conserva quindi il proprio autore anche senza un wrapper intermedio.
 # I processi deterministici impostano invece JHT_SPAWN_SRC esplicitamente.
@@ -801,16 +807,36 @@ if [ "$ROLE" = "mentor" ] && [ "${JHT_MENTOR_NOW:-}" != "1" ] && ! tmux has-sess
     echo "MENTOR not started: it has nothing to read until the first positions have a score (the watchdog starts it then; JHT_MENTOR_NOW=1 starts it anyway)." >&2
     exit 75
   fi
+  # The service roles have used their share of the budget (service_budget.py: exit 3): the money goes to finding and scoring.
+  _mentor_rc=0
+  python3 /app/shared/skills/service_budget.py allow mentor >/dev/null 2>&1 || _mentor_rc=$?
+  if [ "$_mentor_rc" -eq 3 ]; then
+    echo "MENTOR not started: the service roles (Dottore, Mantenitore, Mentor) have used their share of the budget (JHT_MENTOR_NOW=1 starts it anyway)." >&2
+    exit 75
+  fi
 fi
 # --- fine cancello del Mentor
 # --- cancello del Capitano
 # Capitano e Sentinella partono a onboarding chiuso (captain_gate.py: 1 = non ancora, altro = e' ora): a profilo vuoto
 # spendono e non possono fare niente. Ne' il watchdog ne' `jht team start` li accendono prima; una sessione viva non si tocca.
-if { [ "$ROLE" = "capitano" ] || [ "$ROLE" = "sentinella" ]; } && ! tmux has-session -t "=$SESSION" 2>/dev/null; then
+# The Sentinella watches the budget FOR the Capitano: with the Capitano already up (an update brings back the sessions of
+# before) it is due whatever the gate says, or the Capitano would spend unwatched.
+_captain_session=""
+if [ "$ROLE" = "sentinella" ]; then
+  _captain_session="$(get_agent_info capitano 2>/dev/null | cut -d'|' -f1)" || _captain_session=""
+fi
+if { [ "$ROLE" = "capitano" ] || [ "$ROLE" = "sentinella" ]; } && ! tmux has-session -t "=$SESSION" 2>/dev/null \
+  && ! { [ -n "$_captain_session" ] && tmux has-session -t "=$_captain_session" 2>/dev/null; }; then
   _captain_rc=0
-  python3 /app/shared/skills/captain_gate.py >/dev/null 2>&1 || _captain_rc=$?
+  _captain_answer="$(python3 /app/shared/skills/captain_gate.py 2>/dev/null)" || _captain_rc=$?
   if [ "$_captain_rc" -eq 1 ]; then
-    echo "$(echo "$ROLE" | tr a-z A-Z) not started: the onboarding with the Assistente is not done (it starts by itself when it is; JHT_CAPTAIN_BEFORE_ONBOARDING=1 starts it anyway)." >&2
+    # the reason picks the words: an onboarding that is over and waits for the tools of the full image is not an open one
+    case "$_captain_answer" in
+      *'"tools_pending"'*)
+        echo "$(echo "$ROLE" | tr a-z A-Z) not started yet: the onboarding is done and the tools of the full image are on their way (it starts by itself when they are ready)." >&2 ;;
+      *)
+        echo "$(echo "$ROLE" | tr a-z A-Z) not started: the onboarding with the Assistente is not done (it starts by itself when it is; JHT_CAPTAIN_BEFORE_ONBOARDING=1 starts it anyway)." >&2 ;;
+    esac
     exit 75
   fi
 fi
@@ -846,7 +872,10 @@ case "$ROLE" in
   scout|analista|scorer)
     case "$(printf '%s' "${JHT_AGENT_NAME:-}" | tr 'A-Z' 'a-z')" in
       capitano|capitano-*)
-        if [ -z "${JHT_SPAWN_SRC:-}" ] && [ "${JHT_SPAWN_GATE:-}" != "off" ] && ! tmux has-session -t "=$SESSION" 2>/dev/null; then
+        # `jht team start <ruolo>` dato dal Capitano mette da solo JHT_SPAWN_SRC=cli-team-start: e' lo stesso spawn chiesto
+        # dall'agente, non quello dell'operatore (che non ha JHT_AGENT_NAME), e deve passare dal cancello. Sulla VPS da 7,7 GB
+        # il Capitano ne ha avviati 12 cosi', a 18 sessioni il kernel ha ucciso tutto.
+        if { [ -z "${JHT_SPAWN_SRC:-}" ] || [ "${JHT_SPAWN_SRC:-}" = "cli-team-start" ]; } && [ "${JHT_SPAWN_GATE:-}" != "off" ] && ! tmux has-session -t "=$SESSION" 2>/dev/null; then
           _gate_rc=0
           python3 /app/shared/skills/spawn_gate.py check --role "$ROLE" || _gate_rc=$?
           if [ "$_gate_rc" -eq 10 ]; then
@@ -1088,20 +1117,15 @@ jht_agent_identity() {
 
 # Override per ruolo dal config (team.role_models). L'effort lo cambia per ogni
 # CLI che lo riceve, ma non in modalita' fast, che e' una richiesta esplicita
-# di QUESTO avvio. La classe vale solo per Codex e pi: Claude e Kimi tengono la
-# mappa ruoli, e lo si dice invece di ignorarlo in silenzio.
+# di QUESTO avvio. La classe vale solo per Codex e pi: le CLI di Claude e Kimi
+# tengono la mappa ruoli, e lo si dice (più sotto, quando si sa l'harness)
+# invece di ignorarlo in silenzio.
 if ! _role_override="$(jht_role_model_override "$JHT_CONFIG_FILE" "$ROLE")"; then
   exit 1
 fi
 IFS='|' read -r role_model role_effort <<< "$_role_override"
 if [ -n "$role_effort" ] && [ "$MODE" != "fast" ]; then
   effort="$role_effort"
-fi
-if [ -n "$role_model" ]; then
-  case "$PROVIDER" in
-    openai|codex) ;;
-    *) echo "  Note: team.role_models.$ROLE.model applies to Codex and pi only; provider '$PROVIDER' keeps the role map." ;;
-  esac
 fi
 
 # Nessun default implicito: il provider e' configurazione utente. Se il file
@@ -1219,6 +1243,16 @@ esac
 # l'effort sono quelli che lo stesso ruolo avrebbe su Codex; gli argomenti si
 # compongono più sotto, quando la workdir con AGENTS.md e le skill esiste.
 AGENT_HARNESS="$(jht_role_harness "$ROLE" "$JHT_CONFIG_FILE")" || exit 1
+# Nota sul pin di classe ignorato: solo sulla CLI di Claude o Kimi. Sull'harness
+# pi il pin vale per ogni provider (blocco pi qui sotto: role_model vince), e dire
+# il contrario faceva credere che una prova con l'Analista su «terra» girasse sulla mappa.
+if [ -n "$role_model" ] && [ "$AGENT_HARNESS" != "pi" ]; then
+  case "$PROVIDER" in
+    openai|codex) ;;
+    *) echo "  Note: team.role_models.$ROLE.model applies to Codex and pi only; provider '$PROVIDER' keeps the role map." ;;
+  esac
+fi
+# Fine della nota sul pin di classe.
 if [ "$PROVIDER" = "glm" ] && [ "$AGENT_HARNESS" != "pi" ]; then
   echo "Error: GLM runs only on the pi harness (harness is '$AGENT_HARNESS'): jht setup --provider glm --harness pi, or jht providers harness pi." >&2
   exit 1
@@ -1994,6 +2028,22 @@ _kickoff() {
     . /app/.launcher/tui-helpers.sh
     echo "[$(date +%H:%M:%S)] waiting for ready..."
     if tui_wait_ready "$JHT_KICKOFF_SESS"; then
+      # While the spending brake holds the team the pi spend gate HOLDS every message (handled and dropped, the sender cannot
+      # tell): a brief sent now is lost and the worker stands at an empty prompt (banco build9, four Scouts). Wait for the pause to
+      # lift. The Assistente is the one the gate leaves out.
+      case "$JHT_KICKOFF_SESS" in
+        ASSISTENTE*) ;;
+        *)
+          if python3 /app/shared/skills/spend_gate_state.py paused; then
+            echo "[$(date +%H:%M:%S)] the spending brake holds the team: waiting for the pause to lift before sending"
+            if python3 /app/shared/skills/spend_gate_state.py wait --max "${JHT_KICKOFF_PAUSE_MAX_S:-21600}"; then
+              echo "[$(date +%H:%M:%S)] the pause is lifted"
+            else
+              echo "[$(date +%H:%M:%S)] SKIPPED: the pause still holds the team after ${JHT_KICKOFF_PAUSE_MAX_S:-21600} s, the message is not sent"
+              exit 0
+            fi
+          fi ;;
+      esac
       echo "[$(date +%H:%M:%S)] ready. sending message (${#JHT_KICKOFF_MSG} chars)..."
       tui_send_verified "$JHT_KICKOFF_SESS" "$JHT_KICKOFF_MSG"
       case $? in

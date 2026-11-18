@@ -26,6 +26,15 @@ import pi_spend_cap as cap  # noqa: E402
 import sentinel_loop as loop  # noqa: E402
 
 NOON = datetime(2026, 11, 9, 12, 0, 0, tzinfo=timezone.utc).timestamp()
+
+
+@pytest.fixture(autouse=True)
+def _pace_without_the_restart_reserve(request, monkeypatch):
+    """The pace mechanics are tried with no room kept for a restart; the reserve has its own tests below."""
+    if "reserve" not in request.node.name:
+        monkeypatch.setattr(cap, "RESTART_RESERVE_SHARE", 0.0)
+    if "slack" not in request.node.name and "reserve" not in request.node.name:
+        monkeypatch.setattr(cap, "PACE_SLACK", False)
 EUR = {"eur": 10}
 NO_QUOTA = {"reason": "api_key"}
 
@@ -1009,7 +1018,7 @@ def test_the_notice_of_the_brake_to_the_person_is_accepted_by_jht_notify_user_ea
     assert seen == [0, 0], seen
 
 
-# --- the agents the pause stopped are woken the moment it is lifted (giro vps-42: «allows work again» 18:31, the Scouts back at 18:46) ---
+# --- the agents the pause stopped are woken the moment it is lifted (a VPS round: «allows work again» 18:31, the Scouts back at 18:46) ---
 
 def _woken(bridge):
     return sorted(s for s, t in bridge.sent if t.startswith("[RIPRENDI]"))
@@ -1067,3 +1076,73 @@ def test_a_session_that_does_not_answer_does_not_stop_the_resume(tmp_path):
     bridge.config = budget(5, bridge.clock["now"], bridge.clock["now"] + 1800)
     bridge.tick(state=state)
     assert not bridge.flag.exists() and _woken(bridge) == ["scout-2"]
+
+
+def test_a_session_born_during_the_pause_is_woken_with_its_held_first_message_said(tmp_path):
+    """An update during the pause: the Analyst is born with the new container, its first message is held by the gate and never
+    comes again, and it is not in the list the ESC wrote. A new budget must wake it, and say that its first message never arrived."""
+    bridge, state = _a_stop_that_looks_ahead(tmp_path)
+    bridge.api.list_tmux_sessions = lambda: ["CAPITANO", "SENTINELLA", "ANALISTA-5", "MENTOR", "scout-1", "my shell", "notes"]
+    bridge.clock["now"] += 600
+    bridge.config = budget(5, bridge.clock["now"], bridge.clock["now"] + 1800)
+    bridge.tick(state=state)
+    assert not bridge.flag.exists()
+    assert _woken(bridge) == ["ANALISTA-5", "scout-1", "scout-2"], "the new worker too; not a fixed agent that was not in the list, nor a session that is not of the team"
+    newcomer = next(t for s, t in bridge.sent if s == "ANALISTA-5")
+    assert "held back" in newcomer and "never reached you" in newcomer
+    old = next(t for s, t in bridge.sent if s == "scout-1")
+    assert "pick up EXACTLY where you were" in old and "never reached you" not in old
+
+
+def test_the_newcomer_is_not_woken_when_the_team_is_stopped_by_the_person_or_paused_alone(tmp_path, monkeypatch):
+    import agent_pause
+    monkeypatch.setattr(agent_pause, "paused_sessions", lambda home=None: ["ANALISTA-5"])
+    bridge, state = _a_stop_that_looks_ahead(tmp_path)
+    bridge.api.list_tmux_sessions = lambda: ["ANALISTA-5"]
+    bridge.clock["now"] += 600
+    bridge.config = budget(5, bridge.clock["now"], bridge.clock["now"] + 1800)
+    bridge.tick(state=state)
+    assert "ANALISTA-5" not in _woken(bridge)
+
+
+def test_a_bridge_that_cannot_list_the_sessions_wakes_the_ones_the_esc_reached(tmp_path):
+    bridge, state = _a_stop_that_looks_ahead(tmp_path)
+
+    def broken():
+        raise OSError("tmux")
+    bridge.api.list_tmux_sessions = broken
+    bridge.clock["now"] += 600
+    bridge.config = budget(5, bridge.clock["now"], bridge.clock["now"] + 1800)
+    bridge.tick(state=state)
+    assert _woken(bridge) == ["scout-1", "scout-2"]
+
+
+def test_a_pause_of_the_pace_keeps_a_reserve_for_the_restart_and_says_the_later_time():
+    """5 $ over 10 hours from noon, 0.50 $ an hour, 1.25 $ ahead. 2.00 $ spent at 13:00 (1.75 allowed): without a reserve the pace
+    catches up at 13:30; the team that comes back spends in a minute what the cache costs, so the reserve (10 % of the budget =
+    0.50 $) and two margins of 0.10 $ move the resume to 14:54, and the pause is not lifted a minute before it."""
+    config = budget(5, NOON, NOON + 10 * HOUR)
+    base = {"budget_cost": 2.0, "recent_cost": 0.0, "before_start": 0.0}
+    verdict = cap.decide(config, base, False, NOON + HOUR, cap.team_budget.read(config))
+    assert verdict["why"] == "pace" and datetime.fromtimestamp(verdict["resumes"], timezone.utc).strftime("%H:%M") == "14:54", "the line 2.00 + the reserve 0.50 + two margins 0.20"
+    held = cap.decide(config, base, False, NOON + HOUR + 31 * 60, cap.team_budget.read(config), held_by_pace=True)
+    assert held and held["why"] == "pace", "13:31: the plain pace would be lifted, the room for the restart is not there yet"
+    assert cap.decide(config, base, False, NOON + 3 * HOUR, cap.team_budget.read(config), held_by_pace=True)["action"] == "none"
+    # a team that is NOT paused keeps working at the plain pace: the reserve is for the restart only
+    assert cap.decide(config, dict(base, budget_cost=1.6), False, NOON + HOUR, cap.team_budget.read(config))["action"] == "none"
+
+
+def test_the_pace_looks_ahead_at_the_rate_of_the_last_minutes():
+    config = budget(5, NOON, NOON + 10 * HOUR)
+    spent = {"budget_cost": 1.6, "recent_cost": 1.0, "before_start": 0.0}   # 1.0 $ in the last 5 minutes: 0.2 $ by the next look
+    assert cap.decide(config, spent, False, NOON + HOUR, cap.team_budget.read(config))["why"] == "pace"
+    assert cap.decide(config, dict(spent, recent_cost=0.0), False, NOON + HOUR, cap.team_budget.read(config))["action"] == "none"
+
+
+def test_the_pace_stops_one_slack_before_the_line_so_the_calls_in_flight_do_not_cross_it():
+    """Allowed 1.75 at 13:00: a team at 1.70 is stopped (0.10 $ of margin: the calls in flight are paid), one at 1.60 is not."""
+    config = budget(5, NOON, NOON + 10 * HOUR)
+    read = cap.team_budget.read(config)
+    mid = {"recent_cost": 0.0, "before_start": 0.0}
+    assert cap.decide(config, dict(mid, budget_cost=1.70), False, NOON + HOUR, read)["why"] == "pace"
+    assert cap.decide(config, dict(mid, budget_cost=1.60), False, NOON + HOUR, read)["action"] == "none"

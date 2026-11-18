@@ -107,11 +107,11 @@ elif [ "$(uname -s)" = "Darwin" ]; then
 else
   RUNTIME_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/job-hunter-team/host-runtime"
 fi
-IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht@sha256:4dd7f685c4cd7e664d5dead80ffed64e90e11d80f622d3ccb3dbf995bd5967af}"
+IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht@sha256:be2d8f2e06b9dfa6797e77912329b1c877876ba5e7ae1e8ff0350cb2e71114c8}"
 # The full image, also when the install starts from the core one: it follows by itself after the setup (the room for it counts).
 FULL_IMAGE="$IMAGE"
 # The core image (tools come later): empty while the release has none; with one, the install uses it unless JHT_IMAGE names another.
-CORE_IMAGE_DIGEST="${JHT_CORE_IMAGE_DIGEST:-sha256:4059519dd06b2b5cd2b3b83b9c48d06777beba153fd5698dfa71873a58a539b8}"
+CORE_IMAGE_DIGEST="${JHT_CORE_IMAGE_DIGEST:-sha256:5ab7c61d95fcc964e25f29ca0b4187095504201d6659af82e0d763a7d150f8eb}"
 # It becomes an image name, a file and a hash: only the exact shape of a digest goes through, whatever the environment says.
 [ -z "$CORE_IMAGE_DIGEST" ] || [[ "$CORE_IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { printf 'JHT_CORE_IMAGE_DIGEST is not a sha256 digest\n' >&2; exit 2; }
 RUNTIME_TIER="" TIER_STAGED="" TIER_STAGED_SHA=""
@@ -3316,17 +3316,17 @@ align_bind_ownership() {
   if podman_native_mode; then
     # Rootless Podman maps the host user onto the container's uid (keep-id):
     # the user stays the owner, and a chown to 1001 would take it away.
-    mkdir -p "$jht_user_dir" 2>/dev/null
+    mkdir -p "$jht_user_dir/allegati" 2>/dev/null   # the folder the welcome names for the CV
     ok "$(tsf installer.ownership_stays_user_rootless 'Ownership of %s and %s stays with this user (rootless Podman)' "$jht_home" "$jht_user_dir")"
   elif [ "${OS:-}" = "macos" ]; then
     # The Mac shares the two folders with the container's VM, which shows
     # them as this user's and lets the container write: nothing needs
     # aligning. A chown to 1001 cannot work for a normal user (EPERM, on every
     # Mac) and, under sudo, would hand ~/.jht to a uid that is nobody here.
-    mkdir -p "$jht_user_dir" 2>/dev/null
+    mkdir -p "$jht_user_dir/allegati" 2>/dev/null   # the folder the welcome names for the CV
     ok "$(tsf installer.ownership_stays_user_macos 'Ownership of %s and %s stays with this user (macOS)' "$jht_home" "$jht_user_dir")"
   elif command -v chown >/dev/null 2>&1; then
-    mkdir -p "$jht_user_dir" 2>/dev/null
+    mkdir -p "$jht_user_dir/allegati" 2>/dev/null   # the folder the welcome names for the CV
     if chown -R 1001:1001 "$jht_home" "$jht_user_dir" 2>/dev/null; then
       ok "$(tsf installer.ownership_1001_1001_container 'Ownership %s and %s → 1001:1001 (container UID)' "$jht_home" "$jht_user_dir")"
     elif repair_bind_ownership_in_container "$jht_home" "$jht_user_dir"; then

@@ -20,7 +20,7 @@ import { readFileSync } from 'node:fs';
 import { Command } from 'commander';
 import { execScriptInContainer } from '../utils/container-proxy.js';
 import { runProvider } from '../lib/provider-logout.js';
-import { applyResult, burstStartResult, burstStopResult, getResult, withBurst, withQuiet } from './team-settings.js';
+import { applyResult, burstStartResult, burstStopResult, getResult, withBurst, withEnrichment, withQuiet } from './team-settings.js';
 import {
   AGENT_CONTROL_SCRIPT, EXIT_INVALID, agentControlArgv, unansweredReply,
 } from '../lib/agent-control-args.js';
@@ -42,7 +42,7 @@ export function runSettings(args, { write, readStdin = () => readFileSync(0, 'ut
   }
   let result;
   if (op === 'get') {
-    result = withQuiet(withBurst(getResult(), exec), exec);
+    result = withEnrichment(withQuiet(withBurst(getResult(), exec), exec), exec);
   } else if (op === 'burst-stop') {
     result = burstStopResult(exec);
   } else {
@@ -52,7 +52,7 @@ export function runSettings(args, { write, readStdin = () => readFileSync(0, 'ut
     } catch {
       raw = '';
     }
-    result = op === 'apply' ? withBurst(applyResult(String(raw).trim()), exec) : burstStartResult(String(raw).trim(), exec);
+    result = op === 'apply' ? withBurst(applyResult(String(raw).trim(), undefined, exec), exec) : burstStartResult(String(raw).trim(), exec);
   }
   const out = result.out.ok ? result.out : { ok: false, error: result.out.code };
   write(`${JSON.stringify(out)}\n`);

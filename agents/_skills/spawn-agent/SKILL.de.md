@@ -73,7 +73,7 @@ jht-tmux-send SCOUT-1 "[@capitano -> @scout-1] [MSG] <Kick-off-Inhalt>"
 
 | Rolle       | Kick-off-Inhalt                                                                                              |
 |-------------|--------------------------------------------------------------------------------------------------------------|
-| `scout`     | "Starte die Hauptschleife. Lies deinen Prompt, das Kandidatenprofil (`$JHT_HOME/profile/candidate_profile.yml`), und beginne mit KREIS 1 (primaere Praeferenz). Benachrichtige die Analysten nach Batches von 3-5 Positionen." |
+| `scout`     | "Starte die Hauptschleife. Lies deinen Prompt, das Kandidatenprofil (`$JHT_HOME/profile/candidate_profile.yml`), und beginne mit KREIS 1 (primaere Praeferenz). Benachrichtige die Analysten nach jedem Insert (nie auf einen Batch warten)." |
 | `analista`  | "Starte die Hauptschleife. Warteschlange: `db_query.py next-for-analista`. Fuelle fuer jede Position die 5 Pflichtfelder aus und befoeordere zu `checked` oder `excluded`." |
 | `scorer`    | "Starte die Hauptschleife. Warteschlange: `db_query.py next-for-scorer`. Zuerst PRE-CHECK, dann Bewertung 0-100. Schwellen: <40 ausgeschlossen, 40-49 Parking, ≥50 Scrittori benachrichtigen." |
 | `scrittore` | "Starte die Hauptschleife. Warteschlange: `db_query.py next-for-scrittore`. Maximaler Aufwand, 3 Pflichtrunden mit dem Critico. Das PDF kommt unter `$JHT_USER_DIR/cv/`." |

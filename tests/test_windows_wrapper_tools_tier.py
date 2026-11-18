@@ -38,6 +38,7 @@ case "$1" in
     [ -e "$FAKE/full-present" ] && exit 0; exit 1 ;;
   exec) echo "$*" >> "$FAKE/exec-args"
     [ -e "$FAKE/exec-gone" ] && { echo REPL-LINE; echo 'Error: no container with name or ID "jht" found: no such container' >&2; exit 125; }
+    [ -e "$FAKE/exec-engine-gone" ] && { echo REPL-LINE; echo 'Error: Get "http://d/v6.0.2/libpod/exec/0123abcd/json": EOF' >&2; exit 125; }
     exit 0 ;;
   pull) echo "$*" >> "$FAKE/pulls"; n=0; while [ -e "$FAKE/pull-hold" ] && [ "$n" -lt 300 ]; do sleep 0.1; n=$((n+1)); done; [ -e "$FAKE/pull-fails" ] && exit 1; : > "$FAKE/full-present"; exit 0 ;;
 esac
@@ -681,7 +682,10 @@ def test_jht_team_chat_comes_back_by_itself_when_the_switch_ended_it():
     arm = arm[:arm.index("\n    break\n")]
     assert re.search(r"\$code = \$LASTEXITCODE\n\s+\}\n(?:\s*#.*\n)?\s+if \(\$Sub -ceq 'team' -and \$Rest\.Count -gt 0 -and \$Rest\[0\] -ceq 'chat' "
                      r"-and \(Test-JhtTeamChatEndedBySwitch\)\) \{\n\s+Complete-JhtTeamChatErrors -Drop\n\s+Invoke-JhtTeamChatThroughSwitch \$Rest\n"
-                     r"\s+exit \$script:JhtTeamChatCode\n\s+\}\n\s+Complete-JhtTeamChatErrors\n", arm)
+                     r"\s+exit \$script:JhtTeamChatCode\n\s+\}\n(?:\s*#.*\n)?(?:\s+if \(\$Sub -ceq 'team' .*Test-JhtTeamChatEngineGone \$code\)\) \{\n"
+                     r"\s+Complete-JhtTeamChatErrors -Drop\n\s+Invoke-JhtTeamChatThroughUpdate \$Rest\n\s+exit \$script:JhtTeamChatCode\n\s+\}\n)?"
+                     r"\s+Complete-JhtTeamChatErrors\n", arm)
+    assert "Invoke-JhtTeamChatThroughUpdate $Rest" in arm and "Test-JhtTeamChatEngineGone $code" in arm
     assert "$code = Invoke-JhtTeamChatOnConsole $hostFlags" in arm
     assert "exit $code" in arm
     body = text[text.index("function Invoke-JhtTeamChatThroughSwitch {"):]
@@ -814,7 +818,7 @@ def test_jht_up_setup_and_status_keep_the_tools_moving_and_say_where_they_stand(
     assert "catch { }" in body and "Invoke-ToolsKick" in body and "Get-ToolsPersonState" in body
 
 
-# --- the setup holds the switch as long as it runs (giro Mac m21, vps-42: the wizard of an update died with 137) -----------------
+# --- the setup holds the switch as long as it runs (a Mac round, a VPS round: the wizard of an update died with 137) -----------------
 
 def test_a_setup_holds_the_switch_past_the_cap_of_the_other_commands(box, tmp_path):
     tier = box.tier()
@@ -919,3 +923,39 @@ def test_jht_up_setup_and_status_say_the_disk_is_short():
     status = status[:status.index("\n}\n")]
     assert "if ($state -ceq 'disk_low') { [Console]::Out.WriteLine((Get-JhtToolsDiskLowText)); return }" in status
     assert "(Format-JhtText 'tools.disk_low' (Get-DiskGibText (Get-ToolsPullNeedKib)) (Get-DiskGibText $free))" in text
+
+
+# ── the engine goes away under the chat (an update restarts the Podman machine) ──────────────────────────────
+
+def _engine_gone_check(box, marker: str | None):
+    text = WRAPPER.read_text(encoding="utf-8").replace("\r\n", "\n")
+    gone = re.search(r"^function Test-JhtTeamChatEngineGone \{\n.*?^\}\n", text, re.S | re.M).group(0)
+    if marker:
+        (box.fake / marker).touch()
+    body = (_console_chat_functions() + gone
+            + "\n$ExecFlags = @('-it'); $Container = 'jht'; $NodeEntry = '/app/cli/bin/jht.js'; $Sub = 'team'; $Rest = @('chat', 'assistente')\n"
+            "$code = Invoke-JhtTeamChatOnConsole @('-e', 'JHT_HOST_TYPE=windows')\n"
+            "[Console]::Out.WriteLine('GONE ' + [string](Test-JhtTeamChatEngineGone $code))\n"
+            "Complete-JhtTeamChatErrors -Drop\n")
+    return box.run(body)
+
+
+def test_the_raw_line_of_an_engine_that_went_away_is_told_apart_from_any_other_end(box):
+    """Windows, build 9 to 10: the installer restarts the Podman machine and the chat died with
+    «Error: Get "http://d/v6.0.2/libpod/exec/…/json": EOF»; the chat now says it is updating and comes back."""
+    assert "GONE True" in _engine_gone_check(box, "exec-engine-gone").stdout
+    (box.fake / "exec-engine-gone").unlink()
+    assert "GONE False" in _engine_gone_check(box, "exec-gone").stdout          # the switch's line has its own path
+    (box.fake / "exec-gone").unlink()
+    assert "GONE False" in _engine_gone_check(box, None).stdout                 # a chat that ended well
+
+
+def test_the_chat_the_engine_ended_waits_for_the_engine_and_starts_a_fresh_wrapper_never_a_container():
+    text = WRAPPER.read_text(encoding="utf-8")
+    body = text[text.index("function Invoke-JhtTeamChatThroughUpdate {"):]
+    body = body[:body.index("\n}\n")]
+    for needed in ("(Test-DockerReachable) -and (Test-ContainerUp)", "'tools.chat_updating'", "'tools.chat_update_closed'",
+                   "JHT_CHAT_UPDATE_WAIT_MAX", "$env:JHT_TEAM_CHAT_RESUME = [string]($round + 1)", "-File $WrapperPath 'team' @ChatArgs"):
+        assert needed in body, needed
+    assert "Ensure-Up" not in body
+    assert "$round -ge 3" in body

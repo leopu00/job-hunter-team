@@ -41,6 +41,7 @@ M101 = MIGRATIONS / "101_web_action_exclusions_directives.sql"
 M102 = MIGRATIONS / "102_web_action_log_follows_emergency_stop.sql"
 M103 = MIGRATIONS / "103_web_door_action_switch.sql"
 M105 = MIGRATIONS / "105_web_apply_authorisations.sql"
+M107 = MIGRATIONS / "107_cloud_sync_token_origin.sql"
 SWITCHED_OFF = ("team.start", "team.stop", "team.restart")
 
 # What the cloud has and the door's bootstrap does not: the columns 101 and 102 sit on.
@@ -54,11 +55,15 @@ CREATE TABLE public.cloud_sync_tokens (
   revoked_at timestamptz,
   expires_at timestamptz
 );
+CREATE TABLE public.cloud_sync_pairing_sessions (
+  device_code text PRIMARY KEY,
+  approved_token_id uuid REFERENCES public.cloud_sync_tokens(id) ON DELETE SET NULL
+);
 """
 
 CHAINS = {
-    "first-deploy": (door.MIGRATION, door.MIGRATION_099, M100, M103, M101, M102, M105),
-    "then-101-102": (door.MIGRATION, door.MIGRATION_099, M100, M103, M101, M102, M105),
+    "first-deploy": (door.MIGRATION, door.MIGRATION_099, M100, M103, M101, M102, M105, M107),
+    "then-101-102": (door.MIGRATION, door.MIGRATION_099, M100, M103, M101, M102, M105, M107),
 }
 
 
@@ -447,3 +452,91 @@ def test_the_migration_stops_when_a_writing_policy_is_left(cluster):
         cluster('DROP POLICY IF EXISTS "other writer" ON public.cloud_sync_tokens; '
                 'ALTER TABLE public.cloud_sync_tokens DISABLE ROW LEVEL SECURITY;')
         cluster(file=M105)
+
+
+# -- 107, a token says where it was born --------------------------------------------------------------------------
+# `jht cloud login` (device_code) and the page of the tokens (page) hand no user session to a box: such a token,
+# active and without a pairing session, closed the L3 door of 105 for good (the website answered not_found). The
+# door now decides on token_origin; a token of unknown origin keeps the rule of 105.
+
+def _origin(db, who) -> str:
+    return db(f"SELECT coalesce(string_agg(coalesce(token_origin, '-'), ',' ORDER BY token_hash), '') "
+              f"FROM public.cloud_sync_tokens WHERE user_id = '{who.user}'").stdout.strip()
+
+
+@pytest.mark.parametrize("origin", ["device_code", "page"])
+def test_an_active_token_born_without_a_session_by_login_or_page_leaves_the_door_open(cluster, origin):
+    cluster(file=M107)  # a test above puts the function of 105 back: 107 applied again, as by hand
+    who = door.Browser(cluster)
+    door._position(cluster, who.user, 81)
+    _token(cluster, who, token_origin=f"'{origin}'")
+    first = _authorise(who)
+    assert first["ok"] and first["state"] == "awaiting_confirm", first
+    assert who.act("position.apply_authorize", confirm=first["id"])["state"] == "queued"
+
+
+@pytest.mark.parametrize("origin", [None, "device_register"])
+def test_an_active_token_without_a_session_that_may_hold_one_still_closes_the_door(cluster, origin):
+    cluster(file=M107)
+    who = door.Browser(cluster)
+    door._position(cluster, who.user, 81)
+    _token(cluster, who, **({"token_origin": f"'{origin}'"} if origin else {}))
+    assert _authorise(who) == {"ok": False, "error": "not_found"}
+    assert door._scalar(cluster, f"SELECT count(*) FROM public.web_action_log WHERE user_id = '{who.user}'") == "0"
+
+
+def test_the_session_of_a_box_stays_refused_whatever_origin_its_token_says(cluster):
+    cluster(file=M107)
+    who = door.Browser(cluster)
+    door._position(cluster, who.user, 81)
+    _token(cluster, who, pairing_session_id=f"'{who.session}'", token_origin="'page'")
+    assert _authorise(who) == {"ok": False, "error": "not_found"}
+
+
+def test_107_names_the_origin_only_where_it_is_certain_and_applied_again_changes_nothing(cluster):
+    cluster(file=M107)
+    who = door.Browser(cluster)
+    ids = {}
+    for name, columns in (("a-register", {"pairing_session_id": f"'{uuid.uuid4()}'"}),
+                          ("b-login", {}), ("c-unknown", {})):
+        ids[name] = cluster(f"INSERT INTO public.cloud_sync_tokens (user_id, token_hash{''.join(', ' + k for k in columns)}) "
+                            f"VALUES ('{who.user}', '{name}'{''.join(', ' + v for v in columns.values())}) RETURNING id").stdout.split()[0]
+    cluster(f"INSERT INTO public.cloud_sync_pairing_sessions (device_code, approved_token_id) "
+            f"VALUES ('{uuid.uuid4().hex}', '{ids['b-login']}')")
+    assert _origin(cluster, who) == "-,-,-"
+    cluster(file=M107)
+    # a token of the page and a device-register token of before 105 leave the same trace: nothing is guessed
+    assert _origin(cluster, who) == "device_register,device_code,-"
+    cluster(file=M107)
+    assert _origin(cluster, who) == "device_register,device_code,-"
+
+
+def test_an_origin_outside_the_three_is_refused(cluster):
+    who = door.Browser(cluster)
+    done = cluster(f"INSERT INTO public.cloud_sync_tokens (user_id, token_hash, token_origin) "
+                   f"VALUES ('{who.user}', 'x', 'browser')", check=False)
+    assert done.returncode != 0 and "cloud_sync_tokens_token_origin_check" in (done.stderr + done.stdout)
+
+
+@pytest.mark.parametrize("left_behind, message", [
+    ("GRANT UPDATE ON public.cloud_sync_tokens TO authenticated", "can still INSERT, UPDATE or DELETE"),
+    ("GRANT UPDATE (token_origin) ON public.cloud_sync_tokens TO authenticated", "can still INSERT, UPDATE or DELETE"),
+    ("GRANT INSERT ON public.cloud_sync_tokens TO anon", "can still INSERT, UPDATE or DELETE"),
+    ('CREATE POLICY "Users can update own cloud sync tokens" ON public.cloud_sync_tokens FOR UPDATE USING (true)',
+     "still has an INSERT, UPDATE, DELETE or ALL policy"),
+])
+def test_107_stops_before_changing_anything_when_a_write_was_given_back_after_105(cluster, left_behind, message):
+    """token_origin opens the door: a box of before 105 holds the user's session and must not be able to set 'page' on
+    its own token. 107 repeats the check of 105 before it changes anything: a write given back by hand stops it."""
+    cluster(file=M107)
+    door_before = cluster("SELECT md5(prosrc) FROM pg_proc WHERE proname = 'ext_position'").stdout.strip()
+    cluster(left_behind)
+    try:
+        done = cluster(file=M107, check=False)
+        assert done.returncode != 0 and message in done.stderr, done.stderr
+        assert cluster("SELECT md5(prosrc) FROM pg_proc WHERE proname = 'ext_position'").stdout.strip() == door_before
+    finally:
+        cluster('DROP POLICY IF EXISTS "Users can update own cloud sync tokens" ON public.cloud_sync_tokens')
+        cluster("REVOKE INSERT, UPDATE ON public.cloud_sync_tokens FROM authenticated, anon")
+        cluster("REVOKE UPDATE (token_origin) ON public.cloud_sync_tokens FROM authenticated")
+        cluster(file=M107)

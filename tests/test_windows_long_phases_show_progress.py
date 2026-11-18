@@ -5,8 +5,8 @@ Podman's `machine init` (a system image of several hundred MB), `machine start` 
 minutes, and the bridge captured their output: a person saw nothing until the end, and then Podman's stderr
 («Getting image source signatures», «your 131072x1 screen size is bogus») as the red error records of
 PowerShell, with CategoryInfo and FullyQualifiedErrorId. At a terminal (JHT_MACHINE_OUTPUT=0) the setup now
-says what it is doing, prints a line every few seconds while it waits, shows Podman's words as grey notes
-and leaves out the terminal-size noise. The desktop app (JHT_MACHINE_OUTPUT=1) keeps its own protocol:
+says what it is doing and prints a line every few seconds while it waits; Podman's own words (English, «This machine
+is currently configured in rootless mode…») reach a person only when the command fails (build8, German). The desktop app (JHT_MACHINE_OUTPUT=1) keeps its own protocol:
 no wait lines, JHT_PULL for the layers.
 
 The functions are read from the real scripts (the harness of test_windows_podman_wsl_branches) and run
@@ -99,10 +99,9 @@ def test_a_person_creating_the_machine_is_told_and_sees_the_wait_move(tmp_path):
     assert result.returncode == 0, out + result.stderr
     assert re.search(r"^  > Creating the Linux machine for Podman: .*several minutes\.\s*$", out, flags=re.MULTILINE), out
     assert len(_waits(out, "creating the Linux machine")) >= 2, out
-    # Podman's own words come as grey notes, indented, after the wait
-    assert "    Looking up Podman Machine image at quay.io/podman/machine-os:6.0 to create VM" in out
-    assert "    Getting image source signatures" in out
-    assert "    Machine init complete" in out
+    # Podman's own words, in English, are not for a person when the command succeeds
+    for words in ("Looking up Podman Machine image", "Getting image source signatures", "Machine init complete"):
+        assert words not in out + result.stderr, (words, out + result.stderr)
 
 
 def test_podmans_stderr_is_not_an_error_record_and_the_bogus_screen_size_is_gone(tmp_path):
@@ -112,7 +111,7 @@ def test_podmans_stderr_is_not_an_error_record_and_the_bogus_screen_size_is_gone
         result, _ = _case(folder, INIT_CALL, machine_output=output)
         everything = _words(result) + result.stderr
         assert result.returncode == 0, everything
-        assert "Getting image source signatures" in everything
+        assert ("Getting image source signatures" in everything) == (output == "1")
         assert "bogus" not in everything and "expect trouble" not in everything, everything
         for noise in RED_NOISE:
             assert noise not in everything, (output, everything)
@@ -135,7 +134,7 @@ def test_starting_the_machine_says_so_and_waits_visibly(tmp_path):
     assert result.returncode == 0, out + result.stderr
     assert "  > Starting the Linux machine (about a minute)." in out
     assert len(_waits(out, "starting the Linux machine")) >= 1, out
-    assert "    Machine \"jht-podman\" started successfully" in out
+    assert "started successfully" not in out + result.stderr and "Starting machine" not in out + result.stderr
     assert "bogus" not in out + result.stderr
 
 
@@ -145,6 +144,9 @@ def test_a_real_failure_keeps_podmans_reason_and_the_exit_code_in_plain_words(tm
     err = result.stderr.replace("\r\n", "\n")
     assert "CAUGHT Command failed (125):" in out, out + err
     assert "podman: Error: machine init failed" in err, err
+    # on a failure a person reads what Podman said too
+    assert "    Looking up Podman Machine image at quay.io/podman/machine-os:6.0 to create VM" in out
+    assert "podman: Getting image source signatures" in err
     for noise in RED_NOISE:
         assert noise not in out + err, (noise, out + err)
     assert "bogus" not in out + err
@@ -200,15 +202,15 @@ def test_the_wait_line_is_ascii_and_stops_with_the_command():
 SSH_CALL = "$out = @(Invoke-JhtPodmanMachine -FilePath $env:FAKE_PODMAN -Arguments @('machine', 'ssh', 'jht-podman', 'systemctl --user enable jht')); [Console]::Out.WriteLine('OUT ' + ($out -join '|'))"
 
 
-def test_what_a_command_in_the_machine_says_on_stderr_while_it_succeeds_is_a_grey_note_not_a_red_error(tmp_path):
-    # «Created symlink» and the «daemon-reload» reminder came out as two red error blocks during the enabler, then as grey noise
+def test_what_a_command_in_the_machine_says_on_stderr_while_it_succeeds_is_not_shown_to_a_person(tmp_path):
+    # «Created symlink» and the «daemon-reload» reminder came out as two red error blocks during the enabler, then as grey noise;
+    # build8: a person reads none of what the machine says while it succeeds
     result, _ = _case(tmp_path, SSH_CALL, machine_output="0")
     out = _words(result)
     assert result.returncode == 0, out + result.stderr
     assert "OUT unit enabled" in out, "the command's stdout is still handed back as data"
-    # systemd's routine words are not shown to a person; anything else the machine says is still a grey note
     assert "Created symlink" not in out and "changed on disk" not in out and "daemon-reload" not in out
-    assert "    some other note from the machine" in out
+    assert "some other note from the machine" not in out
     for noise in RED_NOISE:
         assert noise not in out + result.stderr, (noise, out + result.stderr)
     assert result.stderr.strip() == ""

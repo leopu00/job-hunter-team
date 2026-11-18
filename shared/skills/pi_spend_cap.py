@@ -126,8 +126,14 @@ def spend(home, now_ts, budget_start=None, split_at=None):
     return out
 
 
-def _budget_verdict(config, budget, spent, now):
-    """The pause the budget asks for, or None."""
+PACE_SLACK = True              # the pace stops one margin before the line, like the budget, and says a resume time a margin later
+RESTART_RESERVE_SHARE = 0.10   # a team stopped by the pace comes back only with this share of the budget of room under the pace
+
+
+def _budget_verdict(config, budget, spent, now, held_by_pace=False):
+    """The pause the budget asks for, or None. `held_by_pace`: the team is paused by the pace right now; it then stays paused until
+    the pace leaves the room a restart costs (seven sessions starting together rewrite their cache: 0.85 $ in 86 s, giro Linux
+    18/11, with the pace lifted at the very dollar it had stopped on)."""
     used = spent.get("budget_cost") or 0.0
     # What the team will have spent by the next look, at the pace of the last minutes: the brake stops BEFORE the budget, not
     # one look after it (with Claude ~0.5 $ a minute, a look a minute late is half a dollar over).
@@ -149,13 +155,17 @@ def _budget_verdict(config, budget, spent, now):
     if period["usd"] <= 0:
         return None
     allowance = team_budget.allowed(config, period, now)
-    if used - before >= allowance:
+    reserve = RESTART_RESERVE_SHARE * period["usd"] if held_by_pace else 0.0
+    # the calls in flight when the brake looks finish and are paid (the pace let 0.16 $ through, giro Mac 12b): one margin before the line
+    slack = team_budget.margin(period["usd"]) if PACE_SLACK else 0.0
+    # the pace looks AHEAD like the budget does: a team that restarts spends in the first minute what the next look would only see
+    if used - before + ahead + reserve + slack >= allowance:
         return dict(common, why="pace", ceiling=round(before + allowance, 6),
-                    resumes=team_budget.resumes_at(config, period, used - before) or budget["ends"])
+                    resumes=team_budget.resumes_at(config, period, used - before + RESTART_RESERVE_SHARE * period["usd"] + 2 * slack) or budget["ends"])
     return None
 
 
-def decide(config, spent, no_quota_mode, now=None, budget=None):
+def decide(config, spent, no_quota_mode, now=None, budget=None, held_by_pace=False):
     """{"action": "none" | "halt" | "warn", ...}. Pure: a config, a measure and a moment in, a verdict out. `budget` is
     the one team_budget.read gave with the start of a duration resolved; None reads it from the config alone."""
     # Before the mode: the bridge declares the no-quota mode at the END of its first tick, so a team that found the
@@ -169,7 +179,7 @@ def decide(config, spent, no_quota_mode, now=None, budget=None):
     # «cleared» at 2.05 $ of 2, then 2.81 $).
     budget = budget if budget is not None else team_budget.read(config)
     if budget is not None and now is not None:
-        verdict = _budget_verdict(config, budget, spent, now)
+        verdict = _budget_verdict(config, budget, spent, now, held_by_pace)
         if verdict:
             return verdict
     if not no_quota_mode:
@@ -422,11 +432,17 @@ def _held_by_the_budget(flag, budget):
             and record.get("budget_usd") == budget["usd"])
 
 
-def _wake_the_team(api, sessions, why):
+def _wake_the_team(api, sessions, why, seen=()):
     """[RIPRENDI] to every session the pause stopped, the moment the pause is lifted: they were ESC'd, and left to wait for the
-    Sentinella's next cycle they stayed silent for a quarter of an hour (giro vps-42: «allows work again» 18:31, the Scouts back at
+    Sentinella's next cycle they stayed silent for a quarter of an hour (a VPS round: «allows work again» 18:31, the Scouts back at
     18:46). The Captain and the Sentinella have their own notice; a team the person stopped, a standby, and an agent the person
-    paused alone are not woken here. Best effort: a session that does not answer is left to that next cycle, as before."""
+    paused alone are not woken here. Best effort: a session that does not answer is left to that next cycle, as before.
+
+    A session BORN during the pause is not in the list the ESC wrote: its first message was held by the gate (`input` handled,
+    nothing sent to the model, never delivered again), so it sat with nothing to do while the budget was back (an Analyst started
+    by an update during the pause: 14 minutes, 0 calls, 13 positions waiting). The live agent sessions are asked too (`seen`: the
+    sessions the bridge saw talking during the pause, and what tmux lists now), and those that were not in the list get a text
+    that says their first message never reached them."""
     home = api._path("JHT_HOME")
     try:
         if (Path(home) / ".team-halted.flag").exists() or (Path(home) / ".team-standby.flag").exists():
@@ -439,12 +455,23 @@ def _wake_the_team(api, sessions, why):
             pass
         text = ("[RIPRENDI] The pause is over (%s). Your session and context were never closed: pick up EXACTLY where you were, "
                 "with the step you had in hand, and do not start over." % why)
+        newcomer_text = ("[RIPRENDI] The pause is over (%s). The message that started you arrived DURING the pause and was held back: "
+                         "it never reached you. If you have not started your work yet, start it now from your role instructions; "
+                         "if you were in the middle of a step, pick up exactly there." % why)
+        known = list(sessions or [])
+        live = []
+        try:
+            lister = getattr(api, "list_tmux_sessions", None)
+            live = [s for s in (lister() if lister else []) if _AGENT_SESSION.match(s or "")]
+        except Exception:  # noqa: BLE001 - without the list only the sessions the ESC reached are woken, as before
+            live = []
+        extra = [s for s in list(seen or ()) + live if s not in known and _WORKER_SESSION.match(s or "")]
         woken = []
-        for session in sessions or []:
+        for session in known + list(dict.fromkeys(extra)):
             if session in (api.CAPITANO_SESSION, api.SENTINELLA_SESSION) or session in alone or session in NEVER_WAKE:
                 continue
             try:
-                if api.jht_tmux_send(session, text):
+                if api.jht_tmux_send(session, text if session in known else newcomer_text):
                     woken.append(session)
             except Exception as error:  # noqa: BLE001
                 print("[bridge V6] WARN pi spend cap wake of %s: %s" % (session, error))
@@ -455,6 +482,9 @@ def _wake_the_team(api, sessions, why):
 
 
 NEVER_WAKE = {"SENTINELLA-WORKER", "DOCTOR-WATCHDOG"}
+_AGENT_SESSION = re.compile(r"^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$")   # the sessions of the team: CAPITANO, SCOUT-1, ANALISTA-5
+# Born during the pause and not woken by the ESC list: only the workers (the fixed agents were there when it started)
+_WORKER_SESSION = re.compile(r"^(SCOUT|ANALISTA|SCORER|SCRITTORE|CRITICO|CLOSER)(-S?\d+)?$")
 
 
 def _resume(api, run, day, notify_user):
@@ -473,7 +503,8 @@ def _resume(api, run, day, notify_user):
         text = "[BRIDGE INFO] The pi spending ceiling allows work again: the team can resume; ticks are restarting."
         user = i18n.t("pi_cap.resume")
     # the gate is open (the flag is gone) BEFORE anyone is told to work: the order of the standby too
-    woken = _wake_the_team(api, flag.get("sessions"), "the budget allows work again" if was in ("budget", "period", "pace") else "spending is back under the ceiling")
+    woken = _wake_the_team(api, flag.get("sessions"), "the budget allows work again" if was in ("budget", "period", "pace") else "spending is back under the ceiling",
+                        seen=list((flag.get("pane_signatures") or {}).keys()))
     _tell(api, run, "resume:%s:%d" % (day, int(api.time.time())), text, user, notify_user)
     print("[bridge V6] %s PI-SPEND-CEILING cleared: spending back under the ceiling%s" % (run.now_h, " · [RIPRENDI] to %s" % ", ".join(woken) if woken else ""))
 
@@ -521,10 +552,11 @@ def step(api, run, notify_user=None):
         spent = spend(home, now, budget["counts_from"] if budget else None, budget["starts"] if budget else None)
         if budget is not None and budget["starts"] is None and spent["first_worker"] is not None:
             budget = _start(home, budget, spent["first_worker"], run, api, spent.get("before_start") or 0.0)
-        verdict = decide(config, spent, bool(run.state.get("no_quota_declared")), now, budget)
         day = datetime.fromtimestamp(now).strftime("%Y-%m-%d")
         flag = _flag(api)
         mine = bool(flag) and flag.get("reason") == REASON
+        held_by_pace = mine and (flag.get("pi_spend_cap") or {}).get("why") == "pace" and api._daily_halt_active()
+        verdict = decide(config, spent, bool(run.state.get("no_quota_declared")), now, budget, held_by_pace)
         if verdict["action"] == "halt":
             if run._bi_on:
                 print("[bridge V6] %s BURN-INTENT: pi spending ceiling reached, the team stays active (user override)"

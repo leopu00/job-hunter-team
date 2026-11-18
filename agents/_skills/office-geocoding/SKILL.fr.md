@@ -157,7 +157,7 @@ python3 /app/shared/skills/db_update.py position <ID> \
 Pour skip après 3 tentatives :
 ```bash
 python3 /app/shared/skills/db_update.py position <ID> \
-  --office-geocoded false --office-verified false \
+  --office-geocoded true --office-verified false \
   --action geocode --outcome failed
 # (lat/lon/address restent NULL)
 ```

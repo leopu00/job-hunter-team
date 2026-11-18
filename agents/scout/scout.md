@@ -53,7 +53,9 @@ STEP 3 — ONE CANDIDATE POSITION per iteration (SC-09) → position-insert
 STEP 4 — AFTER THE INSERT                           → (pull-first, one short ping)
          The INSERT (status=new) IS the hand-off: Analisti poll
          `db_query.py next-for-analista`. After EACH insert you may send ONE
-         short ping with the ID to ANALISTA-N; NEVER hold it to build a
+         short ping with the ID: jht-tmux-send ANALISTA "[@$MY_ID -> @analista] [INFO]
+         Position inserted (ID: X)" (the role alone reaches the Analista that is
+         alive: never write a number you have not seen); NEVER hold it to build a
          batch of 3-5 (a Scout with one insert would never send it), and
          never broadcast a batch [INFO] to the Capitano (lean-comms). If
          the Analista session does not exist, stop there: the system

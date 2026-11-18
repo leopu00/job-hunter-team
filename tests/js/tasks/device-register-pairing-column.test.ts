@@ -166,3 +166,29 @@ describe("device-register and the column of migration 105", () => {
     expect("client_version" in world.inserts[1]).toBe(false);
   });
 });
+describe("device-register and the origin of migration 107", () => {
+  const NAMES_ORIGIN = { code: "PGRST204", message: "Could not find the 'token_origin' column of 'cloud_sync_tokens' in the schema cache" };
+
+  it("the token says it was born from a box that holds a user session", async () => {
+    world.answers = [ROW];
+    expect((await post()).status).toBe(201);
+    expect(world.inserts).toHaveLength(1);
+    expect(world.inserts[0]).toMatchObject({ pairing_session_id: SESSION, token_origin: "device_register" });
+  });
+
+  it("107 missing: the same row without the origin, the session kept", async () => {
+    world.answers = [{ data: null, error: NAMES_ORIGIN }, ROW];
+    expect((await post()).status).toBe(201);
+    expect(world.inserts).toHaveLength(2);
+    expect("token_origin" in world.inserts[1]).toBe(false);
+    const { token_origin: _o, ...first } = world.inserts[0];
+    expect(world.inserts[1]).toEqual(first);
+  });
+
+  it("105 and 107 missing: the session and the origin are dropped and the device is paired", async () => {
+    world.answers = [{ data: null, error: NAMES_SESSION.Postgres }, { data: null, error: NAMES_ORIGIN }, ROW];
+    expect((await post()).status).toBe(201);
+    expect(world.inserts).toHaveLength(3);
+    expect("pairing_session_id" in world.inserts[2] || "token_origin" in world.inserts[2]).toBe(false);
+  });
+});

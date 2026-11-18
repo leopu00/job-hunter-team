@@ -6,10 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { replyPendingMessageLocal } from "@/lib/pending-message-reply-local";
 import { invalidJsonBody } from "@/app/api/_lib/error-body";
 import { sanitizedError } from "@/lib/error-response";
-import {
-  AUTHORISABLE_STATUS,
-  applyToggleVerdict,
-} from "@/lib/apply-request-rule";
+import { applyToggleVerdict } from "@/lib/apply-request-rule";
 import {
   assertCloudApplicationAnswerReply,
   isApplicationAnswerRequestBody,
@@ -116,12 +113,20 @@ export async function POST(
       { status: 404 },
     );
   }
-  const reauthorisesApplication =
+  // On the site an answer to the CLOSER does NOT renew the permission to apply: that is an L3 action and goes
+  // only through the door (`request_action('position.apply_authorize')`: recent sign-in, confirmation in two
+  // steps with the role and the company, the device sessions refused, the receipt in `web_action_log` that the
+  // broker wants). The route saves the answer and tells the page which position to authorise; the person
+  // confirms it on the page of the position, where the door is. Writing `positions.apply_requested` here with the
+  // session was refused by the guard of 098 (500, the CLOSER stuck) or, without 098, said «reauthorised» for a
+  // flag the broker never takes. On the box (SQLite) the local reply still renews the local flag.
+  let authorisePositionId: string | null = null;
+  const answersApplication =
     target.agent === "closer" &&
     target.kind === "question" &&
     !!target.related_position_id &&
     isApplicationAnswerRequestBody(target.body);
-  if (reauthorisesApplication) {
+  if (answersApplication) {
     try {
       assertCloudApplicationAnswerReply(target.body, reply);
     } catch (error) {
@@ -176,33 +181,10 @@ export async function POST(
         { status: 409 },
       );
     }
+    authorisePositionId = String(position.id);
   }
 
   const now = new Date().toISOString();
-  if (reauthorisesApplication) {
-    // Supabase exposes no transaction across these two tables in this route.
-    // Renew the permission first: if the reply write then fails, CLOSER sees
-    // no answer and remains blocked; the user can safely retry. The reverse
-    // order could strand a saved answer behind an old permission forever.
-    const { error: authoriseError } = await supabase
-      .from("positions")
-      .update({
-        apply_requested: true,
-        apply_requested_at: now,
-        apply_requested_by: "user_web",
-      })
-      .eq("id", target.related_position_id)
-      .eq("user_id", user.id)
-      .eq("status", AUTHORISABLE_STATUS);
-    if (authoriseError) {
-      return sanitizedError(authoriseError, {
-        status: 500,
-        scope: "pending-messages/[id]/reply",
-        publicMessage: "application_reauthorisation_failed",
-      });
-    }
-  }
-
   const { data, error } = await supabase
     .from("pending_user_messages")
     .update({
@@ -225,45 +207,12 @@ export async function POST(
     return NextResponse.json({ error: "reply_not_observed" }, { status: 500 });
   }
 
-  if (reauthorisesApplication) {
-    // Asking is not obtaining: success means both the reply and the newer
-    // per-position authorisation are observable before this route returns.
-    const [messageObservation, positionObservation] = await Promise.all([
-      supabase
-        .from("pending_user_messages")
-        .select("user_reply, user_reply_at")
-        .eq("id", id)
-        .eq("user_id", user.id)
-        .maybeSingle(),
-      supabase
-        .from("positions")
-        .select("apply_requested, apply_requested_at, apply_requested_by")
-        .eq("id", target.related_position_id)
-        .eq("user_id", user.id)
-        .maybeSingle(),
-    ]);
-    const observedMessage = messageObservation.data;
-    const observedPosition = positionObservation.data;
-    const sameInstant = (value: string | null | undefined) =>
-      typeof value === "string" && Date.parse(value) === Date.parse(now);
-    if (
-      messageObservation.error ||
-      positionObservation.error ||
-      observedMessage?.user_reply !== reply ||
-      !sameInstant(observedMessage?.user_reply_at) ||
-      observedPosition?.apply_requested !== true ||
-      !sameInstant(observedPosition?.apply_requested_at) ||
-      observedPosition?.apply_requested_by !== "user_web"
-    ) {
-      return NextResponse.json(
-        { error: "application_reauthorisation_not_observed" },
-        { status: 500 },
-      );
-    }
-  }
   return NextResponse.json({
     ok: true,
     changed: true,
-    application_reauthorised: reauthorisesApplication,
+    application_reauthorised: false,
+    ...(answersApplication
+      ? { authorisation_required: { position_id: authorisePositionId } }
+      : {}),
   });
 }

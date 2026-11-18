@@ -24,11 +24,13 @@ import { PY_SPACE_CLASS } from "./py-format.ts";
 export interface Policy {
   economy: boolean;
   logo: { enabled: boolean; min_score: number | boolean | null };
+  /** The Analista's pipeline step 6 (the new position); the care queue is geocode_missing. */
+  geocode_pipeline: { enabled: boolean };
   geocode_missing: { enabled: boolean; min_score: number | boolean | null; non_remote_only: boolean };
   recheck_weekly: { enabled: boolean; min_score: number | boolean; older_than_days: number | boolean };
 }
 
-export type EnrichmentKind = "logo" | "geocode_missing" | "recheck_weekly";
+export type EnrichmentKind = "logo" | "geocode_pipeline" | "geocode_missing" | "recheck_weekly";
 
 const MODES = ["search", "harvest", "care", "calibration", "saving"];
 export const MODE_UNKNOWN = "unknown";
@@ -50,9 +52,9 @@ function loadJson(path: string): unknown {
   });
 }
 
-/** `isinstance(v, int)`: an int, or a bool, which Python counts as one. */
-const isInt = (v: unknown): v is number | boolean => (typeof v === "number" && Number.isInteger(v)) || typeof v === "boolean";
 const asNumber = (v: number | boolean) => (typeof v === "boolean" ? Number(v) : v);
+/** An int that is not a bool: `true` is not a score or a number of days (enrichment_policy.load_policy, T327). */
+const isWholeNumber = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v);
 const isDict = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v) && !(v instanceof PyFloat);
 
 export class EnrichmentPolicy {
@@ -90,6 +92,7 @@ export class EnrichmentPolicy {
     const merged: Policy = {
       economy: false,
       logo: { enabled: true, min_score: null },
+      geocode_pipeline: { enabled: true },
       geocode_missing: { enabled: true, min_score: null, non_remote_only: true },
       recheck_weekly: { enabled: true, min_score: 70, older_than_days: 14 },
     };
@@ -109,16 +112,20 @@ export class EnrichmentPolicy {
         const ms = sec["min_score"];
         // `sec.get("min_score")`: a missing key is None too.
         if (ms === undefined || ms === null) merged[section].min_score = null;
-        else if (isInt(ms) && asNumber(ms) >= 0 && asNumber(ms) <= 100) merged[section].min_score = ms;
+        else if (isWholeNumber(ms) && ms >= 0 && ms <= 100) merged[section].min_score = ms;
       }
       if (section === "geocode_missing" && typeof sec["non_remote_only"] === "boolean") merged.geocode_missing.non_remote_only = sec["non_remote_only"];
       if (section === "recheck_weekly") {
         const score = sec["min_score"];
         const days = sec["older_than_days"];
-        if (isInt(score) && asNumber(score) >= 0 && asNumber(score) <= 100) merged.recheck_weekly.min_score = score;
-        if (isInt(days) && asNumber(days) >= 1 && asNumber(days) <= 365) merged.recheck_weekly.older_than_days = days;
+        if (isWholeNumber(score) && score >= 0 && score <= 100) merged.recheck_weekly.min_score = score;
+        if (isWholeNumber(days) && days >= 1 && days <= 365) merged.recheck_weekly.older_than_days = days;
       }
     }
+    const pipeline = data["geocode_pipeline"];
+    if (isDict(pipeline) && typeof pipeline["enabled"] === "boolean") merged.geocode_pipeline.enabled = pipeline["enabled"];
+    // A file from before the two switches: whoever had turned geocoding off finds it off still.
+    else if (!("geocode_pipeline" in data)) merged.geocode_pipeline.enabled = merged.geocode_missing.enabled;
     return merged;
   }
 

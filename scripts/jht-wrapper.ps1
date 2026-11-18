@@ -327,6 +327,8 @@ function Get-JhtTextTable {
     'en:ps.lifecycle.restarted' { return 'Job Hunter Team restarted.' }
     'en:ps.link_or_not_folder' { return 'a link or not a folder' }
     'en:ps.localappdata_unavailable' { return 'LOCALAPPDATA is not available: host runtime refused' }
+    'en:ps.machine_space_back_on_stop' { return 'About %s GB freed in the JHT machine come back to Windows when the machine stops: after jht down, with podman machine stop %s, or when the computer restarts.' }
+    'en:ps.machine_space_not_returned' { return 'JHT takes about %s GB in its virtual disk; they are freed completely with jht uninstall.' }
     'en:ps.machine_state_unreadable' { return 'the state of the machine cannot be read (podman and wsl do not answer)' }
     'en:ps.monitor_window_unavailable' { return 'monitor_window_unavailable: cannot open a terminal window here. Run ''jht monitor'' in the current terminal.' }
     'en:ps.mount_repair_failed_folders_not_writable' { return 'mount_repair_failed: the Job Hunter Team folders (%s, %s) are not writable by the container and could not be fixed.' }
@@ -408,6 +410,8 @@ function Get-JhtTextTable {
     'en:tools.chat_reconnecting' { return 'The team is moving onto the Scouts'' full tools, so the chat stops for a moment: it comes back by itself once the team is running again (a couple of minutes).' }
     'en:tools.chat_resumed' { return 'The team has moved onto the full tools: let''s pick up again.' }
     'en:tools.chat_switched' { return 'The team is moving onto the Scouts'' full tools, so this chat has closed. Open it again in a couple of minutes with jht team chat.' }
+    'en:tools.chat_update_closed' { return 'JHT is updating, so this chat has closed. Open it again in a couple of minutes with jht team chat.' }
+    'en:tools.chat_updating' { return 'JHT is updating, so the chat stops for a moment: it comes back by itself in a minute or two.' }
     'en:tools.disk_low' { return 'The Scouts'' tools were not downloaded: they need about %s GiB free on the disk and there are %s GiB, so the team cannot search for positions yet. Free some space (empty the Trash, delete large files you do not need), then run jht up: the download starts again by itself.' }
     'en:tools.engine_down' { return 'The state of the Scouts'' tools cannot be read: the container engine does not answer. Start it with jht up.' }
     'en:tools.failed' { return 'The download of the Scouts'' tools failed, so the team cannot search for positions yet. Run jht tools pull to try again (jht up tries again too).' }
@@ -598,6 +602,8 @@ function Get-JhtTextTable {
     'it:ps.lifecycle.restarted' { return 'Job Hunter Team riavviato.' }
     'it:ps.link_or_not_folder' { return 'collegamento o non cartella' }
     'it:ps.localappdata_unavailable' { return 'LOCALAPPDATA non disponibile: runtime host rifiutato' }
+    'it:ps.machine_space_back_on_stop' { return 'Circa %s GB liberati nella macchina di JHT tornano a Windows quando la macchina si ferma: dopo jht down, con podman machine stop %s, o al riavvio del computer.' }
+    'it:ps.machine_space_not_returned' { return 'JHT occupa circa %s GB nel suo disco virtuale; si liberano del tutto con jht uninstall.' }
     'it:ps.machine_state_unreadable' { return 'lo stato della macchina non si legge (podman e wsl non rispondono)' }
     'it:ps.monitor_window_unavailable' { return 'monitor_window_unavailable: impossibile aprire una finestra qui. Esegui ''jht monitor'' nel terminale corrente.' }
     'it:ps.mount_repair_failed_folders_not_writable' { return 'mount_repair_failed: le cartelle di Job Hunter Team (%s, %s) non sono scrivibili dal container e non si sono potute sistemare.' }
@@ -679,6 +685,8 @@ function Get-JhtTextTable {
     'it:tools.chat_reconnecting' { return 'La squadra passa agli strumenti completi degli Scout, quindi la chat si ferma un momento: riprende da sola appena la squadra e'' ripartita (un paio di minuti).' }
     'it:tools.chat_resumed' { return 'La squadra e'' passata agli strumenti completi: riprendiamo.' }
     'it:tools.chat_switched' { return 'La squadra passa agli strumenti completi degli Scout, quindi questa chat si e'' chiusa. Riaprila fra un paio di minuti con jht team chat.' }
+    'it:tools.chat_update_closed' { return ('JHT si sta aggiornando, quindi questa chat si ' + [char]0x00E8 + ' chiusa. Riaprila fra un paio di minuti con jht team chat.') }
+    'it:tools.chat_updating' { return 'JHT si sta aggiornando, quindi la chat si ferma un momento: riparte da sola fra poco.' }
     'it:tools.disk_low' { return 'Gli strumenti degli Scout non sono stati scaricati: servono circa %s GiB liberi sul disco e ce ne sono %s, quindi la squadra non puo'' ancora cercare posizioni. Libera spazio (svuota il Cestino, elimina i file grandi che non ti servono), poi esegui jht up: il download riparte da solo.' }
     'it:tools.engine_down' { return 'Lo stato degli strumenti degli Scout non si legge: il motore dei container non risponde. Avvialo con jht up.' }
     'it:tools.failed' { return 'Il download degli strumenti degli Scout non e'' riuscito: la squadra non puo'' ancora cercare posizioni. Esegui jht tools pull per riprovare (anche jht up riprova).' }
@@ -869,6 +877,8 @@ function Get-JhtTextTable {
     'hu:ps.lifecycle.restarted' { return ('A Job Hunter Team ' + [char]0x00FA + 'jraindult.') }
     'hu:ps.link_or_not_folder' { return 'link vagy nem mappa' }
     'hu:ps.localappdata_unavailable' { return ('a LOCALAPPDATA nem ' + [char]0x00E9 + 'rhet' + [char]0x0151 + ' el: a g' + [char]0x00E9 + 'pen fut' + [char]0x00F3 + ' futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezet elutas' + [char]0x00ED + 'tva') }
+    'hu:ps.machine_space_back_on_stop' { return ('A JHT g' + [char]0x00E9 + 'p' + [char]0x00E9 + 'n felszabad' + [char]0x00ED + 'tott kb. %s GB akkor ker' + [char]0x00FC + 'l vissza a Windowshoz, amikor a g' + [char]0x00E9 + 'p le' + [char]0x00E1 + 'll: a jht down ut' + [char]0x00E1 + 'n a podman machine stop %s paranccsal, vagy a sz' + [char]0x00E1 + 'm' + [char]0x00ED + 't' + [char]0x00F3 + 'g' + [char]0x00E9 + 'p ' + [char]0x00FA + 'jraind' + [char]0x00ED + 't' + [char]0x00E1 + 'sakor.') }
+    'hu:ps.machine_space_not_returned' { return ('A JHT kb. %s GB-ot foglal a virtu' + [char]0x00E1 + 'lis lemez' + [char]0x00E9 + 'n; ez a jht uninstall paranccsal teljesen felszabadul.') }
     'hu:ps.machine_state_unreadable' { return ('a g' + [char]0x00E9 + 'p ' + [char]0x00E1 + 'llapota nem olvashat' + [char]0x00F3 + ' (a podman ' + [char]0x00E9 + 's a wsl nem v' + [char]0x00E1 + 'laszol)') }
     'hu:ps.monitor_window_unavailable' { return ('monitor_window_unavailable: itt nem tudok termin' + [char]0x00E1 + 'lablakot nyitni. Futtasd a ''jht monitor'' parancsot a jelenlegi termin' + [char]0x00E1 + 'lban.') }
     'hu:ps.mount_repair_failed_folders_not_writable' { return ('mount_repair_failed: a Job Hunter Team mapp' + [char]0x00E1 + 'i (%s, %s) nem ' + [char]0x00ED + 'rhat' + [char]0x00F3 + 'k a kont' + [char]0x00E9 + 'ner sz' + [char]0x00E1 + 'm' + [char]0x00E1 + 'ra, ' + [char]0x00E9 + 's nem siker' + [char]0x00FC + 'lt rendbe hozni ' + [char]0x0151 + 'ket.') }
@@ -950,6 +960,8 @@ function Get-JhtTextTable {
     'hu:tools.chat_reconnecting' { return ('A csapat ' + [char]0x00E1 + 't' + [char]0x00E1 + 'll a felder' + [char]0x00ED + 't' + [char]0x0151 + 'k (Scout) teljes eszk' + [char]0x00F6 + 'zeire, ez' + [char]0x00E9 + 'rt a cseveg' + [char]0x00E9 + 's egy pillanatra meg' + [char]0x00E1 + 'll: mag' + [char]0x00E1 + 't' + [char]0x00F3 + 'l folytat' + [char]0x00F3 + 'dik, amint a csapat ' + [char]0x00FA + 'jra fut (p' + [char]0x00E1 + 'r perc).') }
     'hu:tools.chat_resumed' { return ('A csapat ' + [char]0x00E1 + 't' + [char]0x00E1 + 'llt a teljes eszk' + [char]0x00F6 + 'z' + [char]0x00F6 + 'kre: folytassuk.') }
     'hu:tools.chat_switched' { return ('A csapat ' + [char]0x00E1 + 't' + [char]0x00E1 + 'll a felder' + [char]0x00ED + 't' + [char]0x0151 + 'k (Scout) teljes eszk' + [char]0x00F6 + 'zeire, ez' + [char]0x00E9 + 'rt ez a cseveg' + [char]0x00E9 + 's bez' + [char]0x00E1 + 'rult. P' + [char]0x00E1 + 'r perc m' + [char]0x00FA + 'lva nyisd meg ' + [char]0x00FA + 'jra a jht team chat paranccsal.') }
+    'hu:tools.chat_update_closed' { return ('A JHT friss' + [char]0x00FC + 'l, ez' + [char]0x00E9 + 'rt ez a cseveg' + [char]0x00E9 + 's bez' + [char]0x00E1 + 'rult. P' + [char]0x00E1 + 'r perc m' + [char]0x00FA + 'lva nyisd meg ' + [char]0x00FA + 'jra a jht team chat paranccsal.') }
+    'hu:tools.chat_updating' { return ('A JHT friss' + [char]0x00FC + 'l, ez' + [char]0x00E9 + 'rt a cseveg' + [char]0x00E9 + 's egy pillanatra meg' + [char]0x00E1 + 'll: mag' + [char]0x00E1 + 't' + [char]0x00F3 + 'l ' + [char]0x00FA + 'jraindul egy-k' + [char]0x00E9 + 't percen bel' + [char]0x00FC + 'l.') }
     'hu:tools.disk_low' { return ('A felder' + [char]0x00ED + 't' + [char]0x0151 + 'k (Scout) eszk' + [char]0x00F6 + 'zei nem t' + [char]0x00F6 + 'lt' + [char]0x0151 + 'dtek le: kb. %s GiB szabad lemezter' + [char]0x00FC + 'let kell hozz' + [char]0x00E1 + 'juk, ' + [char]0x00E9 + 's %s GiB van, ' + [char]0x00ED + 'gy a csapat m' + [char]0x00E9 + 'g nem tud ' + [char]0x00E1 + 'll' + [char]0x00E1 + 'sokat keresni. Szabad' + [char]0x00ED + 'ts fel helyet (' + [char]0x00FC + 'r' + [char]0x00ED + 'tsd ki a Kuk' + [char]0x00E1 + 't, t' + [char]0x00F6 + 'r' + [char]0x00F6 + 'ld a nagy f' + [char]0x00E1 + 'jlokat, amelyekre nincs sz' + [char]0x00FC + 'ks' + [char]0x00E9 + 'ged), majd futtasd a jht up parancsot: a let' + [char]0x00F6 + 'lt' + [char]0x00E9 + 's mag' + [char]0x00E1 + 't' + [char]0x00F3 + 'l ' + [char]0x00FA + 'jraindul.') }
     'hu:tools.engine_down' { return ('A felder' + [char]0x00ED + 't' + [char]0x0151 + 'k (Scout) eszk' + [char]0x00F6 + 'zeinek ' + [char]0x00E1 + 'llapota nem olvashat' + [char]0x00F3 + ': a kont' + [char]0x00E9 + 'nermotor nem v' + [char]0x00E1 + 'laszol. Ind' + [char]0x00ED + 'tsd el a jht up paranccsal.') }
     'hu:tools.failed' { return ('A felder' + [char]0x00ED + 't' + [char]0x0151 + 'k (Scout) eszk' + [char]0x00F6 + 'zeinek let' + [char]0x00F6 + 'lt' + [char]0x00E9 + 'se nem siker' + [char]0x00FC + 'lt, ' + [char]0x00ED + 'gy a csapat m' + [char]0x00E9 + 'g nem tud ' + [char]0x00E1 + 'll' + [char]0x00E1 + 'sokat keresni. Futtasd a jht tools pull parancsot az ' + [char]0x00FA + 'jrapr' + [char]0x00F3 + 'b' + [char]0x00E1 + 'l' + [char]0x00E1 + 'shoz (a jht up is ' + [char]0x00FA + 'jrapr' + [char]0x00F3 + 'b' + [char]0x00E1 + 'lja).') }
@@ -1140,6 +1152,8 @@ function Get-JhtTextTable {
     'es:ps.lifecycle.restarted' { return 'Job Hunter Team reiniciado.' }
     'es:ps.link_or_not_folder' { return 'enlace o no es una carpeta' }
     'es:ps.localappdata_unavailable' { return 'LOCALAPPDATA no disponible: runtime del host rechazado' }
+    'es:ps.machine_space_back_on_stop' { return ('Unos %s GB liberados en la m' + [char]0x00E1 + 'quina de JHT vuelven a Windows cuando la m' + [char]0x00E1 + 'quina se detiene: tras jht down, con podman machine stop %s, o al reiniciar el ordenador.') }
+    'es:ps.machine_space_not_returned' { return 'JHT ocupa unos %s GB en su disco virtual; se liberan del todo con jht uninstall.' }
     'es:ps.machine_state_unreadable' { return ('el estado de la m' + [char]0x00E1 + 'quina no se puede leer (podman y wsl no responden)') }
     'es:ps.monitor_window_unavailable' { return ('monitor_window_unavailable: aqu' + [char]0x00ED + ' no se puede abrir una ventana de terminal. Ejecuta ''jht monitor'' en el terminal actual.') }
     'es:ps.mount_repair_failed_folders_not_writable' { return 'mount_repair_failed: las carpetas de Job Hunter Team (%s, %s) no son escribibles para el contenedor y no se han podido arreglar.' }
@@ -1221,6 +1235,8 @@ function Get-JhtTextTable {
     'es:tools.chat_reconnecting' { return ('El equipo pasa a las herramientas completas de los Scout, as' + [char]0x00ED + ' que el chat se detiene un momento: vuelve solo en cuanto el equipo est' + [char]0x00E9 + ' en marcha de nuevo (un par de minutos).') }
     'es:tools.chat_resumed' { return 'El equipo ya usa las herramientas completas: sigamos.' }
     'es:tools.chat_switched' { return ('El equipo pasa a las herramientas completas de los Scout, as' + [char]0x00ED + ' que este chat se ha cerrado. Vuelve a abrirlo en un par de minutos con jht team chat.') }
+    'es:tools.chat_update_closed' { return ('JHT se est' + [char]0x00E1 + ' actualizando, as' + [char]0x00ED + ' que este chat se ha cerrado. Vuelve a abrirlo en un par de minutos con jht team chat.') }
+    'es:tools.chat_updating' { return ('JHT se est' + [char]0x00E1 + ' actualizando, as' + [char]0x00ED + ' que el chat se detiene un momento: vuelve solo en un minuto o dos.') }
     'es:tools.disk_low' { return ('Las herramientas de los Scout no se han descargado: necesitan unos %s GiB libres en el disco y hay %s GiB, as' + [char]0x00ED + ' que el equipo a' + [char]0x00FA + 'n no puede buscar puestos. Libera espacio (vac' + [char]0x00ED + 'a la Papelera, borra los archivos grandes que no necesites) y luego ejecuta jht up: la descarga vuelve a empezar sola.') }
     'es:tools.engine_down' { return ('No se puede leer el estado de las herramientas de los Scout: el motor de contenedores no responde. Arr' + [char]0x00E1 + 'ncalo con jht up.') }
     'es:tools.failed' { return ('La descarga de las herramientas de los Scout ha fallado, as' + [char]0x00ED + ' que el equipo a' + [char]0x00FA + 'n no puede buscar puestos. Ejecuta jht tools pull para reintentarlo (jht up tambi' + [char]0x00E9 + 'n lo reintenta).') }
@@ -1411,6 +1427,8 @@ function Get-JhtTextTable {
     'de:ps.lifecycle.restarted' { return 'Job Hunter Team neu gestartet.' }
     'de:ps.link_or_not_folder' { return ('Verkn' + [char]0x00FC + 'pfung oder kein Ordner') }
     'de:ps.localappdata_unavailable' { return ('LOCALAPPDATA nicht verf' + [char]0x00FC + 'gbar: Host-Runtime abgelehnt') }
+    'de:ps.machine_space_back_on_stop' { return ('Etwa %s GB, die in der JHT-Maschine frei wurden, kommen zu Windows zur' + [char]0x00FC + 'ck, wenn die Maschine anh' + [char]0x00E4 + 'lt: nach jht down mit podman machine stop %s oder beim Neustart des Computers.') }
+    'de:ps.machine_space_not_returned' { return ('JHT belegt etwa %s GB in seinem virtuellen Datentr' + [char]0x00E4 + 'ger; sie werden mit jht uninstall vollst' + [char]0x00E4 + 'ndig freigegeben.') }
     'de:ps.machine_state_unreadable' { return ('der Zustand der Maschine l' + [char]0x00E4 + 'sst sich nicht lesen (podman und wsl antworten nicht)') }
     'de:ps.monitor_window_unavailable' { return ('monitor_window_unavailable: Hier l' + [char]0x00E4 + 'sst sich kein Terminalfenster ' + [char]0x00F6 + 'ffnen. F' + [char]0x00FC + 'hre ''jht monitor'' im aktuellen Terminal aus.') }
     'de:ps.mount_repair_failed_folders_not_writable' { return ('mount_repair_failed: Die Ordner von Job Hunter Team (%s, %s) sind f' + [char]0x00FC + 'r den Container nicht beschreibbar und lie' + [char]0x00DF + 'en sich nicht reparieren.') }
@@ -1492,6 +1510,8 @@ function Get-JhtTextTable {
     'de:tools.chat_reconnecting' { return ('Das Team wechselt auf die vollst' + [char]0x00E4 + 'ndigen Werkzeuge der Scouts, deshalb h' + [char]0x00E4 + 'lt der Chat kurz an: Er kommt von selbst zur' + [char]0x00FC + 'ck, sobald das Team wieder l' + [char]0x00E4 + 'uft (ein paar Minuten).') }
     'de:tools.chat_resumed' { return ('Das Team nutzt jetzt die vollst' + [char]0x00E4 + 'ndigen Werkzeuge: Machen wir weiter.') }
     'de:tools.chat_switched' { return ('Das Team wechselt auf die vollst' + [char]0x00E4 + 'ndigen Werkzeuge der Scouts, deshalb wurde dieser Chat geschlossen. ' + [char]0x00D6 + 'ffne ihn in ein paar Minuten wieder mit jht team chat.') }
+    'de:tools.chat_update_closed' { return ('JHT wird gerade aktualisiert, deshalb wurde dieser Chat geschlossen. ' + [char]0x00D6 + 'ffne ihn in ein paar Minuten wieder mit jht team chat.') }
+    'de:tools.chat_updating' { return ('JHT wird gerade aktualisiert, deshalb h' + [char]0x00E4 + 'lt der Chat kurz an: Er startet in ein bis zwei Minuten von selbst neu.') }
     'de:tools.disk_low' { return ('Die Werkzeuge der Scouts wurden nicht heruntergeladen: Sie brauchen etwa %s GiB freien Speicherplatz, verf' + [char]0x00FC + 'gbar sind %s GiB, daher kann das Team noch keine Stellen suchen. Gib Platz frei (leere den Papierkorb, l' + [char]0x00F6 + 'sche gro' + [char]0x00DF + 'e Dateien, die du nicht brauchst), dann f' + [char]0x00FC + 'hre jht up aus: Der Download startet von selbst neu.') }
     'de:tools.engine_down' { return ('Der Stand der Werkzeuge der Scouts l' + [char]0x00E4 + 'sst sich nicht lesen: Die Container-Engine antwortet nicht. Starte sie mit jht up.') }
     'de:tools.failed' { return ('Der Download der Werkzeuge der Scouts ist fehlgeschlagen, daher kann das Team noch keine Stellen suchen. F' + [char]0x00FC + 'hre jht tools pull aus, um es erneut zu versuchen (jht up versucht es auch).') }
@@ -1682,6 +1702,8 @@ function Get-JhtTextTable {
     'fr:ps.lifecycle.restarted' { return ('Job Hunter Team red' + [char]0x00E9 + 'marr' + [char]0x00E9 + '.') }
     'fr:ps.link_or_not_folder' { return 'lien ou pas un dossier' }
     'fr:ps.localappdata_unavailable' { return ('LOCALAPPDATA indisponible : runtime h' + [char]0x00F4 + 'te refus' + [char]0x00E9) }
+    'fr:ps.machine_space_back_on_stop' { return ('Environ %s Go lib' + [char]0x00E9 + 'r' + [char]0x00E9 + 's dans la machine de JHT reviennent ' + [char]0x00E0 + ' Windows quand la machine s''arr' + [char]0x00EA + 'te : apr' + [char]0x00E8 + 's jht down, avec podman machine stop %s, ou au red' + [char]0x00E9 + 'marrage de l''ordinateur.') }
+    'fr:ps.machine_space_not_returned' { return ('JHT occupe environ %s Go dans son disque virtuel ; ils sont enti' + [char]0x00E8 + 'rement lib' + [char]0x00E9 + 'r' + [char]0x00E9 + 's avec jht uninstall.') }
     'fr:ps.machine_state_unreadable' { return ('l''' + [char]0x00E9 + 'tat de la machine ne se lit pas (podman et wsl ne r' + [char]0x00E9 + 'pondent pas)') }
     'fr:ps.monitor_window_unavailable' { return ('monitor_window_unavailable : impossible d''ouvrir une fen' + [char]0x00EA + 'tre de terminal ici. Lance ''jht monitor'' dans le terminal actuel.') }
     'fr:ps.mount_repair_failed_folders_not_writable' { return ('mount_repair_failed: les dossiers de Job Hunter Team (%s, %s) ne sont pas accessibles en ' + [char]0x00E9 + 'criture au conteneur et n''ont pas pu ' + [char]0x00EA + 'tre r' + [char]0x00E9 + 'par' + [char]0x00E9 + 's.') }
@@ -1763,6 +1785,8 @@ function Get-JhtTextTable {
     'fr:tools.chat_reconnecting' { return ('L''' + [char]0x00E9 + 'quipe passe aux outils complets des Scout, donc le chat s''arr' + [char]0x00EA + 'te un instant : il revient tout seul d' + [char]0x00E8 + 's que l''' + [char]0x00E9 + 'quipe tourne ' + [char]0x00E0 + ' nouveau (quelques minutes).') }
     'fr:tools.chat_resumed' { return ('L''' + [char]0x00E9 + 'quipe est pass' + [char]0x00E9 + 'e aux outils complets : reprenons.') }
     'fr:tools.chat_switched' { return ('L''' + [char]0x00E9 + 'quipe passe aux outils complets des Scout, donc ce chat s''est ferm' + [char]0x00E9 + '. Rouvre-le dans quelques minutes avec jht team chat.') }
+    'fr:tools.chat_update_closed' { return ('JHT se met ' + [char]0x00E0 + ' jour, donc ce chat s''est ferm' + [char]0x00E9 + '. Rouvre-le dans quelques minutes avec jht team chat.') }
+    'fr:tools.chat_updating' { return ('JHT se met ' + [char]0x00E0 + ' jour, donc le chat s''arr' + [char]0x00EA + 'te un instant : il repart tout seul dans une minute ou deux.') }
     'fr:tools.disk_low' { return ('Les outils des Scout n''ont pas ' + [char]0x00E9 + 't' + [char]0x00E9 + ' t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charg' + [char]0x00E9 + 's : il leur faut environ %s Gio libres sur le disque et il y en a %s, l''' + [char]0x00E9 + 'quipe ne peut donc pas encore chercher d''offres. Lib' + [char]0x00E8 + 're de l''espace (vide la Corbeille, supprime les gros fichiers dont tu n''as pas besoin), puis lance jht up : le t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'chargement repart tout seul.') }
     'fr:tools.engine_down' { return ('L''' + [char]0x00E9 + 'tat des outils des Scout ne peut pas ' + [char]0x00EA + 'tre lu : le moteur de conteneurs ne r' + [char]0x00E9 + 'pond pas. D' + [char]0x00E9 + 'marre-le avec jht up.') }
     'fr:tools.failed' { return ('Le t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'chargement des outils des Scout a ' + [char]0x00E9 + 'chou' + [char]0x00E9 + ' : l''' + [char]0x00E9 + 'quipe ne peut pas encore chercher d''offres. Lance jht tools pull pour r' + [char]0x00E9 + 'essayer (jht up r' + [char]0x00E9 + 'essaie aussi).') }
@@ -1953,6 +1977,8 @@ function Get-JhtTextTable {
     'pt:ps.lifecycle.restarted' { return 'Job Hunter Team reiniciado.' }
     'pt:ps.link_or_not_folder' { return ('liga' + [char]0x00E7 + [char]0x00E3 + 'o ou n' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' uma pasta') }
     'pt:ps.localappdata_unavailable' { return ('LOCALAPPDATA n' + [char]0x00E3 + 'o dispon' + [char]0x00ED + 'vel: runtime do anfitri' + [char]0x00E3 + 'o recusado') }
+    'pt:ps.machine_space_back_on_stop' { return ('Cerca de %s GB libertados na m' + [char]0x00E1 + 'quina do JHT voltam ao Windows quando a m' + [char]0x00E1 + 'quina para: depois de jht down, com podman machine stop %s, ou ao reiniciar o computador.') }
+    'pt:ps.machine_space_not_returned' { return ('O JHT ocupa cerca de %s GB no seu disco virtual; s' + [char]0x00E3 + 'o libertados por completo com jht uninstall.') }
     'pt:ps.machine_state_unreadable' { return ('o estado da m' + [char]0x00E1 + 'quina n' + [char]0x00E3 + 'o se consegue ler (o podman e o wsl n' + [char]0x00E3 + 'o respondem)') }
     'pt:ps.monitor_window_unavailable' { return ('monitor_window_unavailable: n' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' poss' + [char]0x00ED + 'vel abrir uma janela de terminal aqui. Corre ''jht monitor'' no terminal atual.') }
     'pt:ps.mount_repair_failed_folders_not_writable' { return ('mount_repair_failed: as pastas do Job Hunter Team (%s, %s) n' + [char]0x00E3 + 'o s' + [char]0x00E3 + 'o grav' + [char]0x00E1 + 'veis pelo contentor e n' + [char]0x00E3 + 'o foi poss' + [char]0x00ED + 'vel arranj' + [char]0x00E1 + '-las.') }
@@ -2034,6 +2060,8 @@ function Get-JhtTextTable {
     'pt:tools.chat_reconnecting' { return 'A equipa passa para as ferramentas completas dos Scout, por isso o chat para por um momento: volta sozinho assim que a equipa estiver a funcionar outra vez (alguns minutos).' }
     'pt:tools.chat_resumed' { return 'A equipa passou para as ferramentas completas: vamos continuar.' }
     'pt:tools.chat_switched' { return 'A equipa passa para as ferramentas completas dos Scout, por isso este chat fechou-se. Volta a abri-lo dentro de alguns minutos com jht team chat.' }
+    'pt:tools.chat_update_closed' { return ('O JHT est' + [char]0x00E1 + ' a atualizar-se, por isso este chat fechou-se. Volta a abri-lo dentro de alguns minutos com jht team chat.') }
+    'pt:tools.chat_updating' { return ('O JHT est' + [char]0x00E1 + ' a atualizar-se, por isso o chat para por um momento: volta sozinho dentro de um ou dois minutos.') }
     'pt:tools.disk_low' { return ('As ferramentas dos Scout n' + [char]0x00E3 + 'o foram descarregadas: precisam de cerca de %s GiB livres no disco e h' + [char]0x00E1 + ' %s GiB, por isso a equipa ainda n' + [char]0x00E3 + 'o pode procurar vagas. Liberta espa' + [char]0x00E7 + 'o (esvazia o Lixo, apaga os ficheiros grandes de que n' + [char]0x00E3 + 'o precisas) e depois corre jht up: o descarregamento recome' + [char]0x00E7 + 'a sozinho.') }
     'pt:tools.engine_down' { return ('N' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' poss' + [char]0x00ED + 'vel ler o estado das ferramentas dos Scout: o motor de contentores n' + [char]0x00E3 + 'o responde. Inicia-o com jht up.') }
     'pt:tools.failed' { return ('O descarregamento das ferramentas dos Scout falhou, por isso a equipa ainda n' + [char]0x00E3 + 'o pode procurar vagas. Corre jht tools pull para tentar de novo (jht up tamb' + [char]0x00E9 + 'm tenta de novo).') }
@@ -2149,6 +2177,43 @@ function Invoke-JhtTeamChatThroughSwitch {
   if ($round -ge 3) { Write-Info (Get-JhtText 'tools.chat_switched'); $script:JhtTeamChatCode = 0; return }
   Write-Info (Get-JhtText 'tools.chat_reconnecting')
   Wait-JhtToolsSwitch -Quiet
+  $env:JHT_TEAM_CHAT_RESUME = [string]($round + 1)
+  & (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -File $WrapperPath 'team' @ChatArgs
+  $script:JhtTeamChatCode = $LASTEXITCODE
+}
+
+# `jht team chat` whose REPL the container engine ended from under it: an update changes the units of the Podman machine and restarts
+# it, and the client of the REPL then says its raw line on stderr («Error: Get "http://d/v6.0.2/libpod/exec/.../json": EOF», «Cannot
+# connect to Podman», a connection refused or reset). That line is not for the person: the chat says it is updating and comes back.
+# Only the stderr kept aside by Invoke-JhtTeamChatOnConsole is read, never the REPL's own lines.
+function Test-JhtTeamChatEngineGone {
+  param($Code)
+  $file = $script:JhtTeamChatErrFile
+  if ($null -eq $Code -or [int]$Code -eq 0 -or -not $file) { return $false }
+  try { $text = [IO.File]::ReadAllText($file) } catch { return $false }
+  return [bool]($text -match '(?i)libpod/.*(EOF|connection (refused|reset))|Cannot connect to Podman|unable to connect to Podman|error during connect|connection reset by peer|unexpected EOF')
+}
+
+# The chat the engine ended comes back by itself: wait (JHT_CHAT_UPDATE_WAIT_MAX seconds, 300 by default) for the engine to answer and
+# the container to run again, then a fresh wrapper resumes it as after the switch of the tools (it never starts a container: it waits
+# for the agent and attaches). Past the wait, or after three rounds, the person is told to open the chat again.
+# Called as a statement; the exit code is in $script:JhtTeamChatCode.
+function Invoke-JhtTeamChatThroughUpdate {
+  param([string[]]$ChatArgs)
+  $round = 0
+  if ($env:JHT_TEAM_CHAT_RESUME -match '^[0-9]{1,2}$') { $round = [int]$env:JHT_TEAM_CHAT_RESUME }
+  $left = 300
+  if ($env:JHT_CHAT_UPDATE_WAIT_MAX -match '^[0-9]{1,6}$') { $left = [int]$env:JHT_CHAT_UPDATE_WAIT_MAX }
+  if ($round -ge 3) { Write-Info (Get-JhtText 'tools.chat_update_closed'); $script:JhtTeamChatCode = 0; return }
+  Write-Info (Get-JhtText 'tools.chat_updating')
+  $back = $false
+  while ($true) {
+    if ((Test-DockerReachable) -and (Test-ContainerUp)) { $back = $true; break }
+    if ($left -le 0) { break }
+    Start-Sleep -Seconds 2
+    $left -= 2
+  }
+  if (-not $back) { Write-Info (Get-JhtText 'tools.chat_update_closed'); $script:JhtTeamChatCode = 0; return }
   $env:JHT_TEAM_CHAT_RESUME = [string]($round + 1)
   & (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -File $WrapperPath 'team' @ChatArgs
   $script:JhtTeamChatCode = $LASTEXITCODE
@@ -3035,9 +3100,9 @@ $BrokerMadeMarker = Join-Path $RuntimeDir '.broker-made'
 $NodeEntry   = if ($env:JHT_NODE_ENTRY)     { $env:JHT_NODE_ENTRY }     else { '/app/cli/bin/jht.js' }
 $RawBaseOverride = if ($env:JHT_RAW_BASE) { $env:JHT_RAW_BASE.TrimEnd('/') } else { '' }
 $ReleaseRef = if ($env:JHT_BRANCH) { $env:JHT_BRANCH } else { 'production' }
-$DefaultRuntimeImage = 'ghcr.io/leopu00/jht@sha256:4dd7f685c4cd7e664d5dead80ffed64e90e11d80f622d3ccb3dbf995bd5967af'
-$CoreImageDigest = 'sha256:4059519dd06b2b5cd2b3b83b9c48d06777beba153fd5698dfa71873a58a539b8'
-$ExtrasImageDigest = 'sha256:f41ec97d6fbd17b0a8730617e284fb0cf44aa0f2fc2dd66a96f24dd0ad761566'
+$DefaultRuntimeImage = 'ghcr.io/leopu00/jht@sha256:be2d8f2e06b9dfa6797e77912329b1c877876ba5e7ae1e8ff0350cb2e71114c8'
+$CoreImageDigest = 'sha256:5ab7c61d95fcc964e25f29ca0b4187095504201d6659af82e0d763a7d150f8eb'
+$ExtrasImageDigest = 'sha256:269f07972fc7dbab90c9a47354f8463b581a444553a97de9c18753ac50781a70'
 $DefaultRuntimeVersion = '0.4.0'
 $WindowsInstanceGuardSha256 = 'bb90ae8f9f1f0cff7d41ceedc3eec380f18b78d7b4f4b07921606afda8b8054b'
 $JhtHome = if ($env:JHT_HOME_HOST) { $env:JHT_HOME_HOST } else { Join-Path $env:USERPROFILE '.jht' }
@@ -5565,6 +5630,29 @@ function Set-JhtTeamStopped {
 function Clear-JhtTeamStopped {
   try { [void](Remove-JhtTeamStoppedEntry) } catch { }
 }
+# The setup that is about to open says so on the HOST, before the container starts (see setup_open_flag_write in the sh wrapper):
+# the watchdog of the container wakes the Assistant and the Mentor as soon as it is up, before the wizard writes its own flag.
+# Only for the wizard (no sub-command, no --non-interactive); never through a link; any failure is ignored (the wizard writes it too).
+function Test-JhtSetupWizardArgs([string[]]$Rest) {
+  if ($Rest -and $Rest.Count -gt 0 -and -not ([string]$Rest[0]).StartsWith('-')) { return $false }
+  return -not ($Rest -contains '--non-interactive')
+}
+function Get-JhtSetupOpenFlagPath {
+  $home_ = if ($env:JHT_HOME_HOST) { $env:JHT_HOME_HOST } else { Join-Path $env:USERPROFILE '.jht' }
+  return (Join-Path $home_ '.setup-open.flag')
+}
+function Write-JhtSetupOpenFlag {
+  try {
+    $flag = Get-JhtSetupOpenFlagPath
+    if (-not (Test-Path -LiteralPath (Split-Path -Parent $flag) -PathType Container)) { return }
+    if (Test-Path -LiteralPath $flag) { Remove-Item -LiteralPath $flag -Force -ErrorAction SilentlyContinue }
+    $stream = [IO.File]::Open($flag, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write)
+    try { $bytes = [Text.Encoding]::ASCII.GetBytes([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ') + "`n"); $stream.Write($bytes, 0, $bytes.Length) } finally { $stream.Dispose() }
+  } catch { }
+}
+function Remove-JhtSetupOpenFlag {
+  try { Remove-Item -LiteralPath (Get-JhtSetupOpenFlagPath) -Force -ErrorAction SilentlyContinue } catch { }
+}
 function Get-JhtTeamStoppedText {
   return (Get-JhtText 'team.stopped')
 }
@@ -7688,6 +7776,91 @@ function Remove-OldJhtImages {
   if ($busy -gt 0) { $note += (Format-JhtText 'ps.old_images_busy' $busy) }
   if ($refused -gt 0) { $note += (Format-JhtText 'ps.old_images_refused' $refused) }
   Write-UpgradeNote $note
+  if ($removed -gt 0) { try { Invoke-MachineSpaceReturn } catch {} }
+}
+
+# -- The space of the old images, back to Windows --------------------------
+# With Podman the images live in the machine of JHT, a WSL distro whose disk is one .vhdx file on the Windows disk. A removed
+# image frees its space INSIDE that disk; the file does not shrink by itself (collaudo of build 9 to 10: the old images went,
+# the .vhdx went from 9.89 to 16.48 GiB and C: lost 6.6 GiB). Measured with WSL 3.0.5 and Podman 6.0.2, which makes the .vhdx NOT
+# sparse: there fstrim gives back nothing. On a sparse .vhdx fstrim marks the free blocks, and WSL gives them back to Windows when it
+# lets the disk go, that is when the machine stops (3 GiB written, removed and trimmed came back only then, all of them). So: fstrim,
+# then one line. Sparse: how much comes back, and when. Not sparse: how much JHT takes in its disk, and that jht uninstall frees it
+# all. Making the disk sparse (wsl --manage <distro> --set-sparse true, with the machine and WSL stopped) is experimental in WSL:
+# it is never done here and never advised to the person; it is in docs for whoever knows how to undo it.
+# Nothing here needs an administrator, stops anything or changes the distro.
+
+# The .vhdx of a WSL distro of this user, from the user's own registry (where WSL itself keeps it), or ''.
+function Get-JhtMachineVhdx {
+  param([Parameter(Mandatory)][string]$Distro)
+  try {
+    foreach ($key in @(Get-ChildItem -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss' -ErrorAction Stop)) {
+      $props = Get-ItemProperty -LiteralPath $key.PSPath -ErrorAction Stop
+      if ([string]$props.DistributionName -cne $Distro) { continue }
+      $base = ([string]$props.BasePath) -replace '^\\\\\?\\', ''
+      $file = if ($props.VhdFileName) { [string]$props.VhdFileName } else { 'ext4.vhdx' }
+      if (-not $base) { return '' }
+      $path = Join-Path $base $file
+      if (Test-Path -LiteralPath $path -PathType Leaf) { return $path }
+      return ''
+    }
+  } catch {}
+  return ''
+}
+
+# The file is sparse: what it takes on the disk follows what it holds, and a trim inside gives the space back.
+function Test-JhtSparseFile {
+  param([Parameter(Mandatory)][string]$Path)
+  try { return ((Get-Item -LiteralPath $Path -Force).Attributes -band [IO.FileAttributes]::SparseFile) -ne 0 } catch { return $false }
+}
+
+# What the file takes on the disk (for a sparse file, less than its size), or its size when that cannot be read.
+function Get-JhtFileSizeOnDisk {
+  param([Parameter(Mandatory)][string]$Path)
+  $size = [long](Get-Item -LiteralPath $Path -Force).Length
+  try {
+    if (-not ('JhtDisk.Native' -as [type])) {
+      Add-Type -Namespace JhtDisk -Name Native -MemberDefinition '[DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] public static extern uint GetCompressedFileSizeW(string name, out uint high);'
+    }
+    $high = [uint32]0
+    $low = [JhtDisk.Native]::GetCompressedFileSizeW($Path, [ref]$high)
+    if ($low -ne [uint32]::MaxValue -or [Runtime.InteropServices.Marshal]::GetLastWin32Error() -eq 0) { return [long](([uint64]$high -shl 32) + [uint64]$low) }
+  } catch {}
+  return $size
+}
+
+# A command run as root in the distro: what it printed, or $null when it did not answer.
+function Invoke-JhtMachineRoot {
+  param([Parameter(Mandatory)][string]$Wsl, [Parameter(Mandatory)][string]$Distro, [Parameter(ValueFromRemainingArguments)][string[]]$Command)
+  $out = @(& { $ErrorActionPreference = 'Continue'; & $Wsl -d $Distro -u root -- @Command 2>$null })
+  if ($LASTEXITCODE -ne 0) { return $null }
+  return (($out | ForEach-Object { ([string]$_).Replace([string][char]0, '') }) -join [char]10)
+}
+
+function Invoke-MachineSpaceReturn {
+  if ($ContainerRuntime -ne 'podman' -or -not $script:UpgradePrune) { return }
+  $wsl = Get-Command wsl.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $wsl -or -not $env:CONTAINER_CONNECTION) { return }
+  $distro = Get-JhtPodmanDistroName $env:CONTAINER_CONNECTION
+  $vhdx = Get-JhtMachineVhdx $distro
+  if (-not $vhdx) { return }
+  $trimmed = $null -ne (Invoke-JhtMachineRoot $wsl.Source $distro 'fstrim' '-a')
+  $sparse = Test-JhtSparseFile $vhdx
+  # What the file can give back: what it takes on the disk less what the distro uses.
+  $onDisk = Get-JhtFileSizeOnDisk $vhdx
+  $used = Invoke-JhtMachineRoot $wsl.Source $distro 'df' '-B1' '--output=used' '/'
+  $usedBytes = if ($used) { ((@($used -split '\s+') | Where-Object { $_ -match '^\d+$' }) | Select-Object -Last 1) } else { $null }
+  $recoverable = if ($usedBytes) { [math]::Max([long]0, [long]$onDisk - [long]$usedBytes) } else { [long]0 }
+  $script:UpgradePrune['machineDisk'] = [ordered]@{ sparse = $sparse; trimmed = $trimmed; onDiskBytes = [long]$onDisk; recoverableBytes = [long]$recoverable }
+  if ($recoverable -lt 1GB) { return }
+  $gb = [long][math]::Floor($recoverable / 1GB)
+  if ($sparse) {
+    Write-UpgradeNote (Format-JhtText 'ps.machine_space_back_on_stop' $gb $env:CONTAINER_CONNECTION)
+  } else {
+    # No steps for the person (a sparse disk is experimental in WSL, and the switch wants the machine off): only how much JHT
+    # takes, and the one command that frees all of it.
+    Write-UpgradeNote (Format-JhtText 'ps.machine_space_not_returned' ([long][math]::Round($onDisk / 1GB)))
+  }
 }
 
 function Invoke-UpgradeCompose {
@@ -8436,6 +8609,7 @@ switch ($Sub) {
     Require-ComposeFile
     Require-Docker
     Clear-JhtTeamStopped
+    if (Test-JhtSetupWizardArgs $Rest) { Write-JhtSetupOpenFlag }
     Ensure-Up
     Write-JhtToolsNotice -Kick
     # The language and the timezone of host.env go to the setup with the run: a container made before host.env existed (the
@@ -8460,6 +8634,7 @@ switch ($Sub) {
     } else {
       & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @setupEnv $Container node $NodeEntry 'setup' @Rest }
     }
+    if (Test-JhtSetupWizardArgs $Rest) { Remove-JhtSetupOpenFlag }
     break
   }
 
@@ -8519,6 +8694,12 @@ switch ($Sub) {
     if ($Sub -ceq 'team' -and $Rest.Count -gt 0 -and $Rest[0] -ceq 'chat' -and (Test-JhtTeamChatEndedBySwitch)) {
       Complete-JhtTeamChatErrors -Drop
       Invoke-JhtTeamChatThroughSwitch $Rest
+      exit $script:JhtTeamChatCode
+    }
+    # the engine went away under the REPL (an update restarts the Podman machine): no raw line, the chat comes back by itself
+    if ($Sub -ceq 'team' -and $Rest.Count -gt 0 -and $Rest[0] -ceq 'chat' -and (Test-JhtTeamChatEngineGone $code)) {
+      Complete-JhtTeamChatErrors -Drop
+      Invoke-JhtTeamChatThroughUpdate $Rest
       exit $script:JhtTeamChatCode
     }
     Complete-JhtTeamChatErrors

@@ -109,6 +109,77 @@ def country_of(location, table: dict | None = None):
     return found[-1] if found else None
 
 
+def _names_table(table: dict | None = None):
+    table = table or _table()
+    names = {}
+    for code, listed in table["country_names"].items():
+        names[code] = code
+        for name in listed:
+            names[_plain(name)] = code
+    return names, set(table["country_names"]), table
+
+
+# Top-level domains whose country is not the two letters of the domain.
+_TLD_COUNTRY = {"uk": "gb"}
+_HOSTS_WITHOUT_COUNTRY = ("linkedin.", "indeed.", "glassdoor.", "greenhouse.", "lever.", "ashbyhq.", "workable.", "smartrecruiters.")
+
+
+def _country_of_source(source, url, codes) -> str | None:
+    """The country a portal speaks for: a country code at the end of its slug or of its host («talent-com-it», «randstad.it»,
+    «it.talent.com», «jobs.ch»), or the top-level domain of the URL. None for a portal of the world («linkedin»)."""
+    candidates = []
+    slug = str(source or "").strip().lower()
+    if slug:
+        parts = [part for part in re.split(r"[^a-z0-9]+", slug) if part]
+        if parts:
+            candidates += [parts[-1], parts[0]] if len(parts) > 1 else []
+    host = ""
+    if isinstance(url, str):
+        match = re.match(r"https?://([^/\s?#]+)", url.strip(), re.I)
+        host = match.group(1).lower() if match else ""
+    if host:
+        labels = host.split(".")
+        world = any(("." + label + ".") in ("." + host + ".") and (label + ".") in _HOSTS_WITHOUT_COUNTRY for label in labels)
+        if len(labels) > 2:
+            candidates.append(labels[0])           # «it.talent.com», «ch.indeed.com»: the country is the first label
+        if not world:
+            candidates.append(labels[-1])          # «randstad.it», «jobs.ch»: the top-level domain
+    for cand in candidates:
+        cand = _TLD_COUNTRY.get(cand, cand)
+        if len(cand) == 2 and cand in codes:
+            return cand
+    return None
+
+
+def derive_country(location, source=None, url=None, table: dict | None = None) -> str | None:
+    """The country code of a position, from what the Scout wrote and nothing else: the country its location names; an Italian
+    place written the Italian way («Bra (CN), Piemonte»); the country its portal speaks for. None when none of them says it
+    (a place with no country on a portal of the world): the Analista's own reading fills it. Never raises."""
+    try:
+        names, codes, table = _names_table(table)
+        found = country_of(location, table)
+        if found:
+            return found
+        if isinstance(location, str) and location.strip():
+            parts = re.split(r"[,;/|()\-–]+", location)
+            if _says_italy(parts, names) or any(
+                    len(part.strip()) == 2 and part.strip().isupper() and part.strip() in ITALIAN_PROVINCES
+                    for part in re.findall(r"\(\s*([A-Za-z]{2})\s*\)", location)):
+                return "it"
+        return _country_of_source(source, url, codes)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def country_name(code) -> str:
+    """The English name a country code stands for in the table («it» -> «Italy»), or the code."""
+    try:
+        listed = _table()["country_names"].get(str(code).lower()) or []
+        return str(listed[0]).title() if listed else str(code).upper()
+    except Exception:  # noqa: BLE001
+        return str(code).upper()
+
+
 def relocation_allowed(value) -> bool:
     """`preferences.relocation`: True, or a text that is not a no. Unset (None) is NOT willing: it is never assumed."""
     if value is True:

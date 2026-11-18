@@ -15,9 +15,12 @@ import { logoFetch } from "../src/parity/skills/logo-fetch.ts";
 import { roleRegistry } from "../src/parity/skills/role-registry.ts";
 import { salaryEstimate } from "../src/parity/skills/salary-estimate.ts";
 import { ticketCommand } from "../src/parity/skills/ticket.ts";
-import { pythonSkills, runPython } from "./helpers/python-skills.ts";
+import { pythonSkills, pythonSkillsOfThisTree, runPython } from "./helpers/python-skills.ts";
 
 const skills = pythonSkills();
+// enrichment_policy.py and logo_fetch.py changed with their ports (JHT-T324: the geocode_pipeline switch, `apply`, no score
+// gate in the pipeline): those two are judged against the Python next to them, not the pinned commit.
+const tree = pythonSkillsOfThisTree();
 
 /** 2026-09-19, the day the parity was checked: both sides are given it. */
 const TODAY = new Date(2026, 8, 19, 12, 0, 0);
@@ -392,13 +395,13 @@ const POLICIES: Array<[string, string | null, string | null, string[]]> = [
 ];
 
 describe("enrichment_policy show against enrichment_policy.py", () => {
-  it.skipIf(skills === null).each(POLICIES.map(([label, pol, mode, args]) => [label, pol, mode, args]))("%s", (_label, pol, mode, args) => {
+  it.skipIf(tree === null).each(POLICIES.map(([label, pol, mode, args]) => [label, pol, mode, args]))("%s", (_label, pol, mode, args) => {
     const profile = join(root, "profile");
     mkdirSync(profile, { recursive: true });
     if (pol !== null) writeFileSync(join(profile, "enrichment-policy.json"), pol as string);
     if (mode !== null) writeFileSync(join(profile, "capitano-maintenance.json"), mode as string);
     const ours = enrichmentPolicyCommand(new EnrichmentPolicy(profile), args as string[]);
-    const py = runPython(skills!, ["enrichment_policy.py", ...(args as string[])], { JHT_DB: join(root, "jobs.db") });
+    const py = runPython(tree!, ["enrichment_policy.py", ...(args as string[])], { JHT_DB: join(root, "jobs.db") });
     const last = (text: string | undefined) => (text ?? "").trim().split("\n").at(-1);
     expect([ours.exitCode, ours.stdout, last(ours.stderr)]).toEqual([py.status, py.stdout, last(py.stderr)]);
   });
@@ -624,7 +627,7 @@ describe("logo_fetch against logo_fetch.py, on the same web", () => {
   // The redirect's landing page answers with the home's own body.
   WEB["https://www.acme.example/home/"] = { status: 200, body: WEB["https://acme.example"]!.body };
 
-  it.skipIf(skills === null).each(LOGOS.map(([label, policy, args]) => [`${label} ${args.join(" ")}`.trim(), policy, args]))(
+  it.skipIf(tree === null).each(LOGOS.map(([label, policy, args]) => [`${label} ${args.join(" ")}`.trim(), policy, args]))(
     "%s",
     async (_label, policy, args) => {
       const pyDb = logoDb(join(root, "py", "jobs.db"));
@@ -652,7 +655,7 @@ describe("logo_fetch against logo_fetch.py, on the same web", () => {
         "sys.argv = ['logo_fetch.py'] + sys.argv[1:]",
         "lf.main()",
       ].join("\n");
-      const py = runPython(skills!, ["-c", script, ...(args as string[])], { JHT_DB: join(root, "py", "jobs.db") }, JSON.stringify([web, PRIVATE]));
+      const py = runPython(tree!, ["-c", script, ...(args as string[])], { JHT_DB: join(root, "py", "jobs.db") }, JSON.stringify([web, PRIVATE]));
       const ourJson = JSON.parse(ours.stdout) as Record<string, unknown>;
       const pyJsonOut = JSON.parse(py.stdout) as Record<string, unknown>;
       // A refusal's reason is the guard's own words, which differ; the verdict does not.

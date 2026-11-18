@@ -7,6 +7,7 @@ import { normalizeUserCode } from "@/lib/cloud-sync/pairing";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
 import { invalidJsonBody } from "@/app/api/_lib/error-body";
 import { sanitizedError } from "@/lib/error-response";
+import { missingTokenOriginColumn } from "@/lib/cloud-sync/pairing-session";
 
 export const dynamic = "force-dynamic";
 
@@ -157,19 +158,35 @@ export async function POST(req: NextRequest) {
 
   // Genera + inserisce il token effettivo.
   const { token, prefix, hash } = generateSyncToken();
-  const { data: tokenRow, error: tokenErr } = await admin
+  // `jht cloud login`: the box gets this bearer token only, no user session. Without a pairing session it does not
+  // close the L3 door of the website (107). Prima del riscatto il bearer condivide la TTL della sessione. La RPC lo
+  // rende no-expiry soltanto nello stesso commit che consuma il token.
+  let { data: tokenRow, error: tokenErr } = await admin
     .from("cloud_sync_tokens")
     .insert({
       user_id: user.id,
       name: tokenName,
       token_prefix: prefix,
       token_hash: hash,
-      // Prima del riscatto il bearer condivide la TTL della sessione. La RPC
-      // lo rende no-expiry soltanto nello stesso commit che consuma il token.
       expires_at: session.expires_at,
+      token_origin: "device_code",
     })
     .select("id, name, token_prefix, created_at")
     .single();
+  // 107 not applied yet: the token is born of unknown origin, as before 107.
+  if (missingTokenOriginColumn(tokenErr)) {
+    ({ data: tokenRow, error: tokenErr } = await admin
+      .from("cloud_sync_tokens")
+      .insert({
+        user_id: user.id,
+        name: tokenName,
+        token_prefix: prefix,
+        token_hash: hash,
+        expires_at: session.expires_at,
+      })
+      .select("id, name, token_prefix, created_at")
+      .single());
+  }
 
   if (tokenErr) {
     return sanitizedError(tokenErr, {

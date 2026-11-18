@@ -78,7 +78,11 @@ def first_run_line(gate: dict | None) -> str:
 
 
 def _start_roster(state: dict) -> str:
-    """Start the roster of an open burst in the background, when nothing of it is alive; the words for the block."""
+    """Start the roster of an open burst in the background, when nothing of it is alive; the words for the block.
+
+    Past the first run (`steady`) the same, for the workers that were running before an update or a stop: roster_restore.py."""
+    if state.get("phase") == "steady":
+        return _restore_roster()
     if state.get("phase") != "burst":
         return ""
     if not (_json(str(SKILLS / "burst_roster.py"), "plan", "--auto") or {}).get("start"):
@@ -90,6 +94,22 @@ def _start_roster(state: dict) -> str:
             "and do not run roll_worker_number.py for the roster in your first minutes (a second Scout would be a duplicate). "
             "Your first action is the rest of your wake; look at `first_run.py status` after about two minutes and start only "
             "what is still in roster_missing (`burst_roster.py start` does that in one command).")
+
+
+def _restore_roster() -> str:
+    """After an update or a stop no worker is alive: the system brings back the ones that were working, in the background."""
+    planned = (_json(str(SKILLS / "roster_restore.py"), "plan") or {}).get("start")
+    if not planned:
+        return ""  # nothing to bring back (a worker is up, a brake holds the team, nobody was working): say nothing
+    out = _json(str(SKILLS / "roster_restore.py"), "start", "--detach")
+    if not (out or {}).get("detached"):
+        return ""
+    names = ", ".join("%s-%s" % (role, number) for role, number in planned)
+    return (f" THE TEAM WAS RESTARTED (an update or a stop): THE SYSTEM IS BRINGING BACK THE WORKERS THAT WERE WORKING NOW ({names}), "
+            "each with its brief, in the order of the first run, under the brakes (the spending brake, the halts, the capacity of the "
+            "machine). Do NOT hold the search for a check of the spending and do NOT start these workers yourself in your first "
+            "minutes (a second one would be a duplicate): the search is already starting again. Look at the sessions after about "
+            "two minutes and complete only what is still missing.")
 
 
 def tools_line(gate: dict | None) -> str | None:

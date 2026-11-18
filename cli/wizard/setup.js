@@ -30,7 +30,7 @@ import {
   showSummary,
 } from './setup-steps.js';
 import { formatSecretForConfig } from './secret-ref.js';
-import { promptBudget, budgetSummary, stampedAt } from './setup-budget.js';
+import { promptBudget, budgetSummary, budgetPaceNote, stampedAt } from './setup-budget.js';
 import { checkPrerequisites, runHealthCheck } from './setup-checks.js';
 import { t, tf } from './i18n.js';
 import { askLanguage } from './setup-language.js';
@@ -405,7 +405,8 @@ async function runSetupSteps(prompter, state, { diskRefusal = diskLowRefusal } =
     t, tf, provider: providerChoice,
     askHours: () => promptWorkingHours(prompter, baseConfig.team?.working_hours),
   });
-  await prompter.note(budgetSummary(t, tf, { budget, workingHours, kind: budgetKind }), t('wizard.budget.title'));
+  const paceNote = budgetPaceNote(t, { budget });
+  await prompter.note(budgetSummary(t, tf, { budget, workingHours, kind: budgetKind }) + (paceNote ? `\n\n${paceNote}` : ''), t('wizard.budget.title'));
 
   // --- Salva e riepilogo ---
   await assembleAndSaveConfig(prompter, {

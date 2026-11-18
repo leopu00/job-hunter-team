@@ -2,7 +2,7 @@
 // the person, and the line that says it. A scripted prompter, a fixed clock; nothing is asked to a person or a provider.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { BUDGET_CONFIRM_ABOVE, budgetSummary, nextLocalHour, parseUsd, promptBudget } from '../wizard/setup-budget.js';
+import { BUDGET_CONFIRM_ABOVE, budgetPaceNote, budgetSummary, nextLocalHour, parseUsd, promptBudget } from '../wizard/setup-budget.js';
 
 const en = (await import('../../shared/locales/en.json', { with: { type: 'json' } })).default;
 const it = (await import('../../shared/locales/it.json', { with: { type: 'json' } })).default;
@@ -124,4 +124,12 @@ test('the budget is saved with the moment of the confirmation, not the one of th
   const over = budgetOf(5, new Date('2026-11-16T18:40:00Z'), asked, 'Europe/Rome');
   assert.equal(stampedAt(over, confirmed), over, 'a night already over is left as it is');
   assert.equal(stampedAt(null, confirmed), null);
+});
+
+test('a budget of more than an hour says it is spaced out; a trial of an hour or less does not', () => {
+  const t = (key) => (key === 'wizard.budget.pace_note' ? 'PACE' : key);
+  assert.equal(budgetPaceNote(t, { budget: { usd: 5, duration_minutes: 30 } }), null);
+  assert.equal(budgetPaceNote(t, { budget: { usd: 5, duration_minutes: 60 } }), null);
+  assert.equal(budgetPaceNote(t, { budget: { usd: 3, duration_minutes: 24 * 60 } }), 'PACE');
+  assert.equal(budgetPaceNote(t, { budget: null }), null, 'no limit, no pace');
 });

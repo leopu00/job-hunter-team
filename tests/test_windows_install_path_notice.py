@@ -3,13 +3,19 @@
 Podman (from winget or from its release) and the jht folder are put on the registry PATH of the user, and the
 PowerShell window the installer was started from keeps the PATH it had: «podman: not recognized as the name
 of a cmdlet». The installer adds to its own PATH what the registry has and it lacks, and says in plain words
-to open a new PowerShell window (no restart of the computer), with the line that brings the registry PATH
-into the current window.
+to open a new PowerShell window (no restart of the computer).
+
+Build8, German, a new user: the notice still ended with «Um sie sofort in diesem Fenster zu nutzen, füge ein:» and
+a `$env:Path = …` line to paste. A person who is not technical gets no command about the PATH, in no language:
+only the new window.
 
 The functions are read from the real install.ps1 (the harness of test_windows_podman_wsl_branches): off
 Windows under pwsh, on Windows under the shell JHT_TEST_SHELL names.
 """
 from __future__ import annotations
+
+import json
+from pathlib import Path
 
 import pytest
 
@@ -52,8 +58,9 @@ def test_the_end_of_the_install_says_to_open_a_new_window_and_that_no_restart_is
     assert "Open a NEW PowerShell window to use jht and podman." in out
     assert "No restart of the computer is needed." in out
     assert "THIS PowerShell window was open before the" in out
-    # and the line that makes it work in the window already open
-    assert PASTE_LINE in out
+    # and no command to paste
+    assert PASTE_LINE not in out and "$env:Path" not in out and "GetEnvironmentVariable" not in out
+    assert "paste" not in out.lower()
     assert out.index("Installation complete!") < out.index("Open a NEW PowerShell window") < out.index("Next steps:")
 
 
@@ -95,4 +102,27 @@ def test_a_window_that_already_has_jht_and_podman_gets_no_notice(tmp_path):
 def test_a_window_without_podman_still_gets_the_notice(tmp_path):
     result, out = _final(tmp_path, before=_start_window(tmp_path, with_podman=False))
     assert result.returncode == 0, out + result.stderr
-    assert "Open a NEW PowerShell window to use jht and podman." in out and PASTE_LINE in out
+    assert "Open a NEW PowerShell window to use jht and podman." in out and PASTE_LINE not in out
+
+
+# A word of each language for the PATH and for pasting: none of them comes to a person.
+PASTE_WORDS = {"en": "paste", "it": "incolla", "de": "ge ein", "fr": "colle", "es": "pega", "pt": "cola", "hu": "illeszd be"}
+NEW_WINDOW = {"en": "Open a NEW PowerShell window", "it": "PowerShell", "de": "NEUES PowerShell-Fenster", "fr": "PowerShell",
+              "es": "PowerShell", "pt": "PowerShell", "hu": "PowerShell"}
+
+
+@pytest.mark.parametrize("lang", sorted(PASTE_WORDS))
+def test_no_language_gets_a_command_about_the_path(tmp_path, lang):
+    result, out = _final(tmp_path, JHT_LANG=lang)
+    assert result.returncode == 0, out + result.stderr
+    notice = out[out.index("PowerShell"):]
+    notice = notice[: notice.index("\n\n")] if "\n\n" in notice else notice
+    assert NEW_WINDOW[lang] in out, out
+    assert "$env:Path" not in out and "GetEnvironmentVariable" not in out, out
+    assert PASTE_WORDS[lang] not in notice, notice
+
+
+def test_the_catalogs_and_the_installer_have_no_sentence_to_paste_the_path():
+    assert "use_them_window_right" not in INSTALLER.read_text(encoding="utf-8")
+    for catalog in sorted((Path(__file__).resolve().parents[1] / "shared" / "locales").glob("*.json")):
+        assert "installer.windows.use_them_window_right" not in json.loads(catalog.read_text(encoding="utf-8")), catalog

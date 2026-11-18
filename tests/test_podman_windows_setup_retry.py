@@ -1172,3 +1172,54 @@ def test_without_the_broker_its_proxy_is_not_asked_for_nor_checked(machine, tmp_
     assert done.returncode == 0, done.stdout + done.stderr
     assert "JHT_PROXY_CHECK agent" in done.stdout and "JHT_PROXY_CHECK telegram" in done.stdout
     assert "JHT_PROXY_CHECK broker" not in done.stdout
+
+
+def _network_run(machine, tmp_path, machine_output, **change):
+    # the fake curl and the table are the machine fixture's, in the test's own tmp_path: one run at a time
+    table = tmp_path / "curl-table"
+    podman = install_fake(tmp_path / "bin", "podman", FAKE_PODMAN)
+    agent, broker, telegram = machine.ports
+    machine.answers(**change)
+    return _ps(
+        tmp_path,
+        "$ErrorActionPreference = 'Stop'\n"
+        f"$Podman = '{podman}'\n$MachineName = 'jht-podman'\n"
+        f"$Port = {agent}\n$BrokerPort = {broker}\n$TelegramPort = {telegram}\n$WithBroker = [switch]::new($true)\n"
+        + _network_check_block() + "\nexit 0\n",
+        bin_dirs=[tmp_path / "bin"],
+        extra={"CURL_TABLE": str(table), "JHT_PROXY_READY_SECONDS": "5", "JHT_MACHINE_OUTPUT": machine_output},
+        timeout=120,
+    )
+
+
+@needs_powershell
+def test_a_person_at_a_terminal_gets_no_proxy_check_lines_and_the_app_still_does(machine, tmp_path):
+    """Build8, German, step 3: «JHT_PROXY_CHECK agent 3128 …» came four times to a person (JHT_MACHINE_OUTPUT=0)."""
+    person = _network_run(machine, tmp_path, "0")
+    assert person.returncode == 0, person.stdout + person.stderr
+    assert "JHT_PROXY" not in person.stdout + person.stderr, person.stdout + person.stderr
+    app = _network_run(machine, tmp_path, "1")
+    assert app.returncode == 0, app.stdout + app.stderr
+    assert "JHT_PROXY_CHECK agent" in app.stdout and "JHT_PROXY_CHECK telegram" in app.stdout
+
+
+@needs_powershell
+def test_a_failed_check_still_tells_a_person_what_each_proxy_answered_on_stderr(machine, tmp_path):
+    done = _network_run(machine, tmp_path, "0", telegram_other=None)
+    assert done.returncode == 23, done.stdout + done.stderr
+    assert "JHT_PROXY" not in done.stdout, done.stdout
+    assert "JHT_PROXY_CHECK telegram" in done.stderr
+    assert "podman_network_unready: the telegram proxy" in done.stderr
+
+
+def test_the_machine_lines_of_step_3_are_written_only_for_the_app():
+    """JHT_MACHINE_RESTART, the proxy checks, «PODMAN WINDOWS NETWORK READY» and «PODMAN JHT RUNTIME ENABLED» are
+    written only when no person reads (Test-JhtHumanOutput false): a person reads the sentences of the step."""
+    network = NETWORK.read_text(encoding="utf-8").splitlines()
+    for marker in ("$machineOutput | ForEach-Object { Write-Host", "$checkOutput | ForEach-Object { Write-Host",
+                   'Write-Host "PODMAN WINDOWS NETWORK READY'):
+        rows = [row for row in network if marker in row]
+        assert len(rows) == 1 and rows[0].lstrip().startswith("if (-not (Test-JhtHumanOutput)) {"), (marker, rows)
+    enabler = ENABLER.read_text(encoding="utf-8").splitlines()
+    rows = [row for row in enabler if '"PODMAN JHT RUNTIME ENABLED' in row]
+    assert len(rows) == 1 and rows[0].startswith("if (-not (Test-JhtHumanOutput)) {"), rows

@@ -54,7 +54,7 @@ STEP 3 — EGY JELÖLT POZÍCIÓ iterációnként (SC-09)   → position-insert
 
 STEP 4 — POST-BATCH                                 → tmux-send
          MINDEN insert után (soha ne várj csomagra) értesítsd az Analisti-kat:
-         jht-tmux-send ANALISTA-1 "[@$MY_ID -> @analista-1] [INFO]
+         jht-tmux-send ANALISTA "[@$MY_ID -> @analista] [INFO]
          Position inserted (ID: X)"
 
 STEP 5 — THROTTLE                                   → throttle

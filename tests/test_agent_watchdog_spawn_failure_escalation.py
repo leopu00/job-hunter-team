@@ -14,6 +14,7 @@ essere passato a ``bash -c``: il prelude supera i 32 KB e su Windows la riga
 di comando non lo regge.
 """
 
+import json
 import os
 import re
 import subprocess
@@ -525,10 +526,12 @@ def test_the_bridge_escalation_cooldown_is_per_key(wd):
     )
 
     assert result.returncode == 0, result.stderr
-    notices = wd.lines(wd.sender_calls)
+    # un processo non e' un agente: l'avviso va al log degli avvisi sui processi, mai al Capitano
+    assert wd.lines(wd.sender_calls) == [], "an alert about a process was written to an agent"
+    notices = [json.loads(line) for line in (wd.logs / "process-alerts.jsonl").read_text().splitlines()]
     assert len(notices) == 2, notices
-    assert "suite bridge" in notices[0]
-    assert "pid1-managed" in notices[1]
+    assert "suite bridge" in notices[0]["what"]
+    assert "pid1-managed" in notices[1]["what"]
     assert (wd.logs / "bridge-escalate-bridge.ts").exists()
     assert (wd.logs / "bridge-escalate-pid1-child.ts").exists()
     assert not (wd.logs / "bridge-escalate.ts").exists(), (

@@ -1,6 +1,6 @@
 ---
 name: team-modes
-description: "A csapat-módok kézikönyve — módonként egy kártya (search / harvest / care / calibration / saving). Akkor nyisd meg, amikor az órás [MODALITÀ CORRENTE] banner megnevez egy módot, és nem emlékszel, mit jelent operatívan; ébredéskor egy context-refresh után; vagy amikor a felhasználó a játékból módot vált. A mód MINDIG a felhasználó választása - ez a skill azt mondja meg, hogyan VIDD az aktuálisat, soha nem azt, hogyan változtasd meg."
+description: "A csapat-módok kézikönyve — módonként egy kártya (search / harvest / care / calibration / saving). Akkor nyisd meg, amikor az órás [MODALITÀ CORRENTE] banner megnevez egy módot, és nem emlékszel, mit jelent operatívan; ébredéskor egy context-refresh után; vagy amikor a felhasználó módot vált. A mód MINDIG a felhasználó választása - ez a skill azt mondja meg, hogyan VIDD az aktuálisat, soha nem azt, hogyan változtasd meg."
 allowed-tools: Bash(python3 /app/shared/skills/mode_banner.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/feedback_query.py *), Bash(python3 /app/shared/skills/team_directives.py *)
 ---
 <!-- @translation: hu, ai-translated 2026-08-03 -->
@@ -159,10 +159,7 @@ irányzékkal tovább sourcingolni.
    és ezt érdemes kimondani: a heti budget **ablak, nem egyenleg** — ami a
    resetig nincs elköltve, megsemmisül, tehát a tehetetlenségből ottfelejtett
    takarékosság nem megőrzi a ciklust, hanem eldobja. Mondd el a
-   felhasználónak, hogy adhat neki véghatáridőt, és hogy hol: a Konzolban ott a
-   «Meddig» mező (nap és óra, a módválasztó mellett), shellből pedig
-   `jht coordinator set-mode saving --until <iso>`. Ugyanazt a kulcsot írják
-   ugyanabba a fájlba.
+   felhasználónak, hogy adhat neki véghatáridőt, és hogy hol: shellből a `jht coordinator set-mode saving --until <iso>` paranccsal.
 
 **Mit csinálsz**: tartsd válaszkésznek a Capitanót/Assistentét/Mentort; ezen túl
 semmi nem mozdul közvetlen felhasználói kérés nélkül. **C-25-tel**: a
@@ -187,8 +184,7 @@ felhasználónak (ez a C-25 másik fele), nem költöd el. **NE tedd**: a
   HOVÁ megy az adagolt budget.
 - **Kilépés ≠ módváltás.** Amikor egy mód jelenti, hogy a munkája kimerült,
   értesítsd a felhasználót, és tartsd tovább a módot, amíg Ő meg nem
-  változtatja. A fájlt a felhasználó nevében írja valaki — a játék Konzolja
-  (a határidővel együtt) vagy a `jht coordinator`, ha ő kéri — és soha nem te,
+  változtatja. A fájlt a felhasználó nevében írja valaki — a `jht coordinator` (a határidővel együtt), ha ő kéri — és soha nem te,
   saját elhatározásból.
 
 ## Lásd még

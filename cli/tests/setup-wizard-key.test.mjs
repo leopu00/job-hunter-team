@@ -388,7 +388,7 @@ test('the budget in the wizard: «a few days» asks the amount, the days and the
   assert.equal(budget.duration_minutes, 72 * 60);
   assert.deepEqual(hours.windows, [{ days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'], start: '08:00', end: '18:00' }]);
   assert.ok(hours.timezone);
-  assert.ok(events.some((e) => e.kind === 'note' && e.message === `The team can spend $10 in all, for 3 days from when it starts working, 10 hours a day (8:00-18:00 ${hours.timezone}), then it stops by itself.`));
+  assert.ok(events.some((e) => e.kind === 'note' && e.message.startsWith(`The team can spend $10 in all, for 3 days from when it starts working, 10 hours a day (8:00-18:00 ${hours.timezone}), then it stops by itself.`) && e.message.includes('spread over the time')));
 });
 
 test('the budget in the wizard: «no limit» warns, saves no budget and asks the working hours as before', () => {
@@ -451,7 +451,7 @@ test('a setup that leaves without a sign-in does not leave the flag behind', () 
   assert.equal(existsSync(join(box.home, '.setup-open.flag')), false);
 });
 
-// «Update the values» with the same service and a key already kept (giro vps-42, build9): the key is not asked again, keeping it is the default
+// «Update the values» with the same service and a key already kept (the VPS round of build9): the key is not asked again, keeping it is the default
 const keptBefore = (provider) => JSON.stringify({ version: 4, active_provider: provider, harness: 'pi', providers: { [provider]: { name: provider, auth_method: 'api_key', model: 'm' } }, channels: {} });
 function withKeptKey(provider) {
   const box = sandbox({ existingConfig: keptBefore(provider) });

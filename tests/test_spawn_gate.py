@@ -173,6 +173,15 @@ def test_the_captains_new_spawn_is_stopped_with_75_when_the_gate_says_no_seat(tm
     assert rc == 75 and "went-on" not in out and "spawn_gate.py check --role scout" in calls
 
 
+def test_the_captains_team_start_command_is_gated_too_but_the_operators_is_not(tmp_path):
+    """`jht team start scout 7` run by the Captain sets JHT_SPAWN_SRC=cli-team-start by itself: it was let through the gate."""
+    rc, out, calls = _shell(tmp_path, gate_rc=10, spawn_src="cli-team-start")
+    assert rc == 75 and "went-on" not in out and "spawn_gate.py check --role scout" in calls
+    (tmp_path / "operator").mkdir()
+    rc, out, calls = _shell(tmp_path / "operator", gate_rc=10, spawn_src="cli-team-start", agent="")
+    assert rc == 0 and "went-on" in out and calls == ""
+
+
 @pytest.mark.parametrize("gate_rc", [0, 1, 2, 127])
 def test_any_other_answer_of_the_gate_goes_on_to_start_the_worker(tmp_path, gate_rc):
     rc, out, _ = _shell(tmp_path, gate_rc=gate_rc)

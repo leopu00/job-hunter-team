@@ -100,10 +100,6 @@ Possible answers from `logo_fetch.py`:
 
 - `POLICY_DISABLED` — saving mode is on (`economy=true`) or
   `logo.enabled=false`: do NOT extract, it is not an error. Move on.
-- `POLICY_SCORE_GATE` — the company has no live positions yet with a
-  score ≥ `logo.min_score`: do NOT insist. It does not mark
-  `logo_fetched`: when the Scorer crosses the threshold, the company
-  re-enters the queue on its own.
 
 `--force` overrides the policy: use it ONLY on an explicit request from
 the user, never on your own initiative.

@@ -73,7 +73,7 @@ jht-tmux-send SCOUT-1 "[@capitano -> @scout-1] [MSG] <corps du kick-off>"
 
 | Role        | Corps du kick-off                                                                                            |
 |-------------|--------------------------------------------------------------------------------------------------------------|
-| `scout`     | "Demarre la boucle principale. Lis ton prompt, le profil candidat (`$JHT_HOME/profile/candidate_profile.yml`), et commence par le CERCLE 1 (preference primaire). Notifie les Analystes apres des lots de 3-5 postes." |
+| `scout`     | "Demarre la boucle principale. Lis ton prompt, le profil candidat (`$JHT_HOME/profile/candidate_profile.yml`), et commence par le CERCLE 1 (preference primaire). Notifie les Analystes apres chaque insert (n'attends jamais un lot)." |
 | `analista`  | "Demarre la boucle principale. File : `db_query.py next-for-analista`. Pour chaque poste, remplis les 5 champs obligatoires et promouvois a `checked` ou `excluded`." |
 | `scorer`    | "Demarre la boucle principale. File : `db_query.py next-for-scorer`. PRE-CHECK d'abord, puis score 0-100. Seuils : <40 exclu, 40-49 parking, ≥50 notifier les Scrittori." |
 | `scrittore` | "Demarre la boucle principale. File : `db_query.py next-for-scrittore`. Effort maximum, 3 rounds obligatoires avec le Critico. Le PDF va sous `$JHT_USER_DIR/cv/`." |

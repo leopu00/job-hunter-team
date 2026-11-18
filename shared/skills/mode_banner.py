@@ -534,6 +534,7 @@ def _enrichment_policy() -> dict:
     out = {
         "economy": False,
         "logo": {"enabled": True, "min_score": None},
+        "geocode_pipeline": {"enabled": True},
         "geocode_missing": {"enabled": True, "min_score": None,
                             "non_remote_only": True},
         "recheck_weekly": {"enabled": True,
@@ -548,15 +549,35 @@ def _enrichment_policy() -> dict:
         return out
     if not isinstance(data, dict):
         return out
+    # Le stesse validazioni di `enrichment_policy.load_policy()`: un valore del tipo sbagliato o fuori
+    # intervallo resta al default. Prima qui passava qualunque valore (un "no" come `enabled`, uno score 500),
+    # e il banner contava le code con una policy diversa da quella che il codice applica.
     if isinstance(data.get("economy"), bool):
         out["economy"] = data["economy"]
     for kind in ("logo", "geocode_missing", "recheck_weekly"):
         sub = data.get(kind)
         if not isinstance(sub, dict):
             continue
-        for key, val in sub.items():
-            if key in out[kind]:
-                out[kind][key] = val
+        if isinstance(sub.get("enabled"), bool):
+            out[kind]["enabled"] = sub["enabled"]
+        if kind in ("logo", "geocode_missing"):
+            ms = sub.get("min_score")
+            if ms is None or (isinstance(ms, int) and not isinstance(ms, bool) and 0 <= ms <= 100):
+                out[kind]["min_score"] = ms
+        if kind == "geocode_missing" and isinstance(sub.get("non_remote_only"), bool):
+            out[kind]["non_remote_only"] = sub["non_remote_only"]
+        if kind == "recheck_weekly":
+            score, days = sub.get("min_score"), sub.get("older_than_days")
+            if isinstance(score, int) and not isinstance(score, bool) and 0 <= score <= 100:
+                out[kind]["min_score"] = score
+            if isinstance(days, int) and not isinstance(days, bool) and 1 <= days <= 365:
+                out[kind]["older_than_days"] = days
+    pipeline = data.get("geocode_pipeline")
+    if isinstance(pipeline, dict) and isinstance(pipeline.get("enabled"), bool):
+        out["geocode_pipeline"]["enabled"] = pipeline["enabled"]
+    elif "geocode_pipeline" not in data:
+        # Un file di prima dei due interruttori eredita la geocodifica da geocode_missing, come in load_policy().
+        out["geocode_pipeline"]["enabled"] = out["geocode_missing"]["enabled"]
     return out
 
 
@@ -610,8 +631,7 @@ def _care_queue_counts(conn) -> dict:
             SELECT COUNT(*)
             FROM positions p
             WHERE p.status != 'excluded'
-              AND (p.office_lat IS NULL
-                   OR p.office_geocoded IS NULL OR p.office_geocoded = 0)
+              AND (p.office_geocoded IS NULL OR p.office_geocoded = 0)
               {gate}
         """, tuple(params))
 

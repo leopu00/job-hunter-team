@@ -136,3 +136,21 @@ test('a flag REWRITTEN after the new budget was saved still names the old period
   const fresh = homeWithBudget(cap({ why: 'budget', starts_at: '2026-11-17T12:14:09+01:00', ends_at: '2026-11-18T12:14:09+01:00' }), '2026-11-17T12:30:00Z', '2026-11-17T11:10:00.000Z');
   assert.equal(budgetPause({ home: fresh })?.why, 'budget');
 });
+
+test('the RAM guard: the last retirement is said in the status for a day, from the file the guard writes', async () => {
+  const { ramGuardText } = awaitedModule;
+  const root = home();
+  mkdirSync(join(root, 'state'));
+  const at = Math.floor(NOW.getTime() / 1000) - 600;
+  const write = (body) => writeFileSync(join(root, 'state', 'ram-guard.json'), typeof body === 'string' ? body : JSON.stringify(body));
+  write({ at, retired: ['SCOUT-6', 'SCOUT-4'], avail_gib: 0.44, total_gib: 3.7 });
+  const text = show(ramGuardText({ home: root, now: NOW }));
+  assert.match(text, /2 workers were stopped/);
+  assert.match(text, /0\.44 GiB free of 3\.7/);
+  assert.equal(ramGuardText({ home: root, now: new Date(NOW.getTime() + 25 * 3600 * 1000) }), null, 'a day later it is no news');
+  write('not json');
+  assert.equal(ramGuardText({ home: root, now: NOW }), null);
+  write({ at, retired: [], avail_gib: 0.4, total_gib: 3.7 });
+  assert.equal(ramGuardText({ home: root, now: NOW }), null);
+  assert.equal(ramGuardText({ home: home(), now: NOW }), null, 'no file, nothing to say');
+});

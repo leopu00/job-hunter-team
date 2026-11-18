@@ -65,3 +65,21 @@ def test_failed_containment_notices_are_logged_and_do_not_block_release_or_reenf
     direct = subprocess.run([sys.executable, str(DELIVERY), "send", str(sender), "CAPITANO", "fixture"],
                             env={**os.environ, "JHT_HOME": str(tmp_path)}, capture_output=True, text=True, timeout=10)
     assert direct.returncode == 3 and "message_not_delivered" in direct.stderr
+
+
+def test_an_alert_about_a_process_is_written_to_the_log_and_not_sent_to_any_agent(tmp_path, monkeypatch):
+    """A bridge, a bot or a process of pid1 is not an agent: the Capitano spent turns answering that it does nothing (build10, Mac, the live screen)."""
+    import sys
+    sys.path.insert(0, str(Path(DELIVERY).parent))
+    import watchdog_delivery as delivery
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    sent = []
+    stamp = tmp_path / "bridge-escalate-pid1-child.ts"
+    done = delivery.bridge(stamp, 60, "process pid1-managed morti: live-screen", 3, 600, "jht-tmux-send",
+                           sender=lambda *a: sent.append(a) or True, now=10_000)
+    assert done is True and sent == [], "no agent is written to"
+    rows = [json.loads(line) for line in (tmp_path / "logs" / "process-alerts.jsonl").read_text().splitlines()]
+    assert len(rows) == 1 and rows[0]["what"] == "process pid1-managed morti: live-screen" and "STOPPED" in rows[0]["text"]
+    assert stamp.read_text().strip() == "10000"
+    again = delivery.bridge(stamp, 60, "process pid1-managed morti: live-screen", 3, 600, "jht-tmux-send", sender=lambda *a: True, now=10_030)
+    assert again is None, "the cooldown holds as before"

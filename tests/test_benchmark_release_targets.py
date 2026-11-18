@@ -1,6 +1,6 @@
 """The release targets of the 0.4.0 benchmark page: the data hold together and every word is there in the seven languages.
 
-The page (web/app/case-studies/benchmark-0-4-0/page.tsx) reads web/data/benchmark/benchmark-0-4-0.json: the targets, the
+The page (web/app/case-studies/benchmark-0-4-0/page.tsx, its words in benchmarkShared.tsx) reads web/data/benchmark/benchmark-0-4-0.json: the targets, the
 rounds of each build, the rounds themselves. The JSON is updated at every build, so a target that points at a round that is
 not there, a status the page cannot draw or a word missing in one language would only show on the live page.
 """
@@ -14,7 +14,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = json.loads((ROOT / "web" / "data" / "benchmark" / "benchmark-0-4-0.json").read_text(encoding="utf-8"))
-PAGE = (ROOT / "web" / "app" / "case-studies" / "benchmark-0-4-0" / "page.tsx").read_text(encoding="utf-8")
+HERE = ROOT / "web" / "app" / "case-studies" / "benchmark-0-4-0"
+# the words of the seven languages and the sections of the targets live in benchmarkShared.tsx; every file of the page is scanned
+PAGE = (HERE / "benchmarkShared.tsx").read_text(encoding="utf-8")
+ALL_FILES = "".join(p.read_text(encoding="utf-8") for p in sorted(HERE.rglob("*.ts*")))
 LANGUAGES = ("en", "it", "de", "es", "fr", "pt", "hu")
 STATUSES = {"pass", "fail", "pending", "blocked"}
 
@@ -38,10 +41,16 @@ def _has_key(block: str, key: str) -> bool:
 
 def test_every_target_has_a_status_the_page_draws_and_a_proof_that_exists():
     rounds = {r["id"] for r in DATA["rounds"]}
-    assert len(DATA["targets"]) == 17
-    assert len({t["id"] for t in DATA["targets"]}) == 17
+    assert len(DATA["targets"]) == 25
+    assert len({t["id"] for t in DATA["targets"]}) == 25
+    sections = re.findall(r'^  \["(\w+)", "', PAGE, re.M)
     for target in DATA["targets"]:
         assert target["status"] in STATUSES, target
+        # every target sits in a section the table draws; one that differs by system says which, once per row
+        assert target["section"] in sections, target
+        assert ("row" in target) == ("os" in target), target
+        if "os" in target:
+            assert target["os"] in {"windows", "linux", "macos"}, target
         assert set(target["proof"]) <= rounds, target
         # a target met says on which build
         if target["status"] in {"pass", "fail", "blocked"}:
@@ -63,11 +72,13 @@ def test_the_builds_list_their_rounds_and_a_build_without_rounds_says_so():
 def test_every_word_of_the_targets_and_of_the_rounds_is_there_in_the_seven_languages():
     keys = {t["id"] for t in DATA["targets"]}
     notes = {t["note"] for t in DATA["targets"] if t["note"]}
+    sections = {t["section"] for t in DATA["targets"]}
+    rows = {t["row"] for t in DATA["targets"] if "row" in t}
     profiles = {r["profile"] for r in DATA["rounds"]}
     round_notes = {r["note"] for r in DATA["rounds"]}
-    fields = ["targetsTitle", "targetsLead", "targetsCount", "targetsCols", "targetStatus", "buildsTitle", "buildLabel", "noRound"]
+    fields = ["targetsTitle", "targetsLead", "targetsCount", "targetsCols", "targetStatus", "targetSections", "targetRows", "buildsTitle", "buildLabel", "noRound"]
     for lang, block in BLOCKS.items():
-        missing = [k for k in sorted(keys | notes | profiles | round_notes | set(fields) | STATUSES) if not _has_key(block, k)]
+        missing = [k for k in sorted(keys | notes | sections | rows | profiles | round_notes | set(fields) | STATUSES) if not _has_key(block, k)]
         assert missing == [], f"{lang}: {missing}"
         assert "{g}" in re.search(r'targetsCount: "([^"]*)"', block).group(1), lang
         assert "{n}" in re.search(r'buildLabel: "([^"]*)"', block).group(1), lang
@@ -86,7 +97,7 @@ PRIVATE_FORMS = {
 
 
 def test_the_page_holds_no_name_of_a_test_person_and_no_machine():
-    text = json.dumps(DATA, ensure_ascii=False) + PAGE
+    text = json.dumps(DATA, ensure_ascii=False) + ALL_FILES
     for what, form in PRIVATE_FORMS.items():
         assert re.search(form, text, re.I) is None, what
     # a test person is a job, never a name: the profile of a round is a key the page translates

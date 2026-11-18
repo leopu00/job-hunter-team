@@ -13,6 +13,8 @@ location-enrichment
 office-geocoding
 logo-extraction
 recheck-liveness
+# Care mode (RULE-14): next-for-recheck-due runs as one bounded batch per turn.
+recheck-batch
 scam-signals
 
 # User chat (game / desktop app). A [CHAT] landing in your pane is answered

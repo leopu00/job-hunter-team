@@ -195,6 +195,10 @@ def _override_block(source: str) -> str:
     return _between(source, "# Override per ruolo dal config", "# Nessun default implicito")
 
 
+def _pin_note_block(source: str) -> str:
+    return _between(source, "# Nota sul pin di classe ignorato", "# Fine della nota sul pin di classe.")
+
+
 def _claude_branch(source: str) -> str:
     match = re.search(
         r"^  anthropic\|claude\)\n(.*?)^    ;;$",
@@ -221,6 +225,7 @@ def _spawn_command(
     provider: str = "openai",
     mode: str = "",
     spawn_src: str = "",
+    harness: str = "codex",
 ) -> subprocess.CompletedProcess[str]:
     """La catena vera fino al comando: mappa, override del config, ramo del provider.
 
@@ -242,6 +247,8 @@ def _spawn_command(
             f'<<< "$(get_agent_info {role})"',
             'if [ "$MODE" = "fast" ]; then effort="low"; fi',
             _override_block(source),
+            f"AGENT_HARNESS={harness}",
+            _pin_note_block(source),
             "AUTH_METHOD=subscription",
             "API_KEY=",
             branch,
@@ -322,6 +329,18 @@ def test_on_claude_the_class_is_declared_not_applied_and_the_effort_applies(
     assert "--model sonnet" in command
     assert "--effort medium" in command
     assert "applies to Codex and pi only" in result.stdout
+
+
+def test_on_the_pi_harness_the_class_pin_is_not_said_to_be_ignored(tmp_path: Path) -> None:
+    # On pi the pin applies to every provider (the pi block: role_model wins over the role map): the note said the
+    # opposite, and a round with the Analista pinned to «terra» on Claude looked like it ran on the map.
+    result = _spawn_command(
+        tmp_path, "analista", {"analista": {"model": "terra"}}, provider="claude", harness="pi"
+    )
+    assert "applies to Codex and pi only" not in result.stdout
+    source = START_AGENT.read_text(encoding="utf-8")
+    pi_block = source[source.index('if [ "$AGENT_HARNESS" = "pi" ]; then'):]
+    assert 'pi_model="$(jht_provider_model "$pi_api" "${role_model:-$model_override}"' in pi_block
 
 
 @pytest.mark.parametrize(

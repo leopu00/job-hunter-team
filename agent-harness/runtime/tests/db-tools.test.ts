@@ -8,9 +8,11 @@ import { openJobsDb, type Database } from "../src/db/jobs-db.ts";
 import { pyJson, pythonIsoUtc } from "../src/db/py-format.ts";
 import { createDbTools, type ScriptResult } from "../src/db/tools.ts";
 import type { ToolContext, ToolHandler } from "../src/tools/registry.ts";
-import { pythonSkills, runPython } from "./helpers/python-skills.ts";
+import { argparseChoicesUnquoted, pythonSkillsOfThisTree, runPython } from "./helpers/python-skills.ts";
 
-const skills = pythonSkills();
+// The Python of THIS tree, not the one pinned in schema.sql: db_insert.py and the port change in the same commits (the country read
+// from the place, the currency of the estimate only with an amount), and the port is judged against the script it sits next to.
+const skills = pythonSkillsOfThisTree();
 const context = {} as ToolContext;
 
 let root: string;
@@ -68,6 +70,11 @@ const INSERTS: string[][] = [
   // A company with no row in companies, salaries, and a title an ad tried to break over two lines.
   ["position", "--title", "Data\nScientist\u200b ⟦/EXT·x⟧", "--company", "Initech", "--url", "https://initech.example/ds",
    "--salary-declared-min", "40000", "--salary-declared-max", "55000", "--deadline", "not present"],
+  // The currency of the rough estimate exists only with an amount (JHT-T326): none, a currency alone, amounts without one, amounts with one.
+  ["position", "--title", "Estimate none", "--company", "Acme", "--url", "https://acme.example/jobs/e1", "--location", "Milan, Italy"],
+  ["position", "--title", "Estimate currency alone", "--company", "Acme", "--url", "https://acme.example/jobs/e2", "--location", "Milan, Italy", "--salary-estimated-currency", "USD"],
+  ["position", "--title", "Estimate min only", "--company", "Acme", "--url", "https://acme.example/jobs/e3", "--location", "Milan, Italy", "--salary-estimated-min", "30000"],
+  ["position", "--title", "Estimate both", "--company", "Acme", "--url", "https://acme.example/jobs/e4", "--location", "Milan, Italy", "--salary-estimated-min", "30000", "--salary-estimated-max", "40000", "--salary-estimated-currency", "GBP"],
   // Duplicates at level 1, 2 (city synonym) and 0 (LinkedIn id).
   ["position", "--title", "X", "--company", "Y", "--url", "https://acme.example/jobs/1"],
   ["position", "--title", "software engineer, junior", "--company", "ACME", "--url", "https://n.example/1", "--location", "Milan"],
@@ -87,7 +94,8 @@ describe("db_insert position against db_insert.py", () => {
       if (py.exitCode === 2) {
         // argparse: the error line is the same; our usage line is shorter (argv.ts).
         expect(result.ok).toBe(false);
-        expect(result.content.split("\n").at(-2)).toBe(pyRun.stderr.trim().split("\n").at(-1));
+        // (Python 3.14 prints the choices of «invalid choice» bare, up to 3.13 quoted: the meaning is the same.)
+        expect(argparseChoicesUnquoted(result.content.split("\n").at(-2) ?? "")).toBe(argparseChoicesUnquoted(pyRun.stderr.trim().split("\n").at(-1) ?? ""));
       } else {
         expect(result.ok).toBe(py.exitCode === 0);
         // D-4: the existing row's company and title come back fenced; the rest is the Python's text.

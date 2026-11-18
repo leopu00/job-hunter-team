@@ -38,6 +38,10 @@ GIB = 1024 ** 3
 # here is higher, 0.22, because the headless browser a Scout opens now and then is the largest process on the machine
 # (0.22-0.25 GiB) and a session has to make room for it.
 RAM_GIB_PER_AGENT = {"codex": 0.22, "claude": 0.6, "kimi": 0.6, "pi": 0.22}
+# A server (host_type "vps"), codex: 0.36 GiB per session, measured on a VPS that the kernel OOM killer took down (7.7 GB, no
+# swap: 18 codex processes held about 6.5 GB resident, ~360 MB each). The 0.22 above let the RAM allow 25 workers on that
+# machine. Only the server is changed: 0.22 is what a measured run on a local computer gave, and no local OOM was seen.
+RAM_GIB_PER_AGENT_VPS = {"codex": 0.36}
 MEASURED = frozenset({"codex", "pi"})
 UNKNOWN_HARNESS_GIB = 0.6
 # What the machine keeps for itself. A local computer: the system, the container runtime and the browser and desktop of
@@ -48,6 +52,14 @@ RAM_RESERVED_GIB = {"local": 2.0, "vps": 1.0}
 # that wait on the network most of the time are what can live partly in swap without slowing the team.
 SWAP_WEIGHT = 0.5
 FIXED_AGENTS = 5               # Capitano, Sentinella, Assistente, Mentor, Dottore are already running
+# A server on codex: the Mantenitore starts by itself too and nobody counted it (6 fixed sessions); the rest keeps the 5 it was
+# measured with.
+FIXED_AGENTS_VPS = {"codex": 6}
+# Only this share of the RAM is counted as the team's (a server on codex): the kernel needs room for the page cache, the container runtime
+# and the peaks of a session (a browser a Scout opens), and a team sized to the last byte is the one the OOM killer finds. At
+# 1.0 the 7.7 GB machine above was filled to 7.5 GB by its own 18 sessions plus the system. pi was measured holding with the
+# full team on a 4 GB server (1.3 GB available), so it keeps all of it.
+RAM_USABLE_SHARE_VPS = {"codex": 0.8}
 # Workers per core. codex: set from one measured run. pi: the same four runs peaked at a load of 2.6 on 8 cores with the
 # full team: a pi session waits on the model's answer most of the time. On 2 cores the 10 workers this gives were measured
 # too (a 4 GB VPS, 2 vCPU, full image, 5/3/2, 13 sessions): the CPU is saturated (load 13-15, CPU pressure ~95%) but the team
@@ -148,11 +160,14 @@ def capacity(probe, harness=None):
     total = probe.get("ram_total_gib")
     if total is None:
         return {"cap": None, "limit": "unknown", "message": "Host capacity could not be measured: no cap applied."}
-    per = RAM_GIB_PER_AGENT.get(harness, UNKNOWN_HARNESS_GIB)
+    vps = probe.get("host_type") == "vps"
+    per = (RAM_GIB_PER_AGENT_VPS if vps else {}).get(harness) or RAM_GIB_PER_AGENT.get(harness, UNKNOWN_HARNESS_GIB)
     measured = harness in MEASURED
-    reserved = RAM_RESERVED_GIB["vps" if probe.get("host_type") == "vps" else "local"]
+    reserved = RAM_RESERVED_GIB["vps" if vps else "local"]
     swap = probe.get("swap_total_gib") or 0.0
-    ram_cap = int(max(0.0, total + swap * SWAP_WEIGHT - reserved) / per + 1e-9) - FIXED_AGENTS
+    share = (RAM_USABLE_SHARE_VPS if vps else {}).get(harness, 1.0)
+    ram_cap = (int(max(0.0, total * share + swap * SWAP_WEIGHT - reserved) / per + 1e-9)
+               - (FIXED_AGENTS_VPS if vps else {}).get(harness, FIXED_AGENTS))
     cores = probe.get("cores")
     cpu_cap = int(cores * WORKERS_PER_CORE.get(harness, DEFAULT_WORKERS_PER_CORE)) if cores else None
     cap, limit = max(1, ram_cap), "ram"

@@ -73,7 +73,7 @@ jht-tmux-send SCOUT-1 "[@capitano -> @scout-1] [MSG] <corpo del kick-off>"
 
 | Ruolo       | Corpo del kick-off                                                                                           |
 |-------------|--------------------------------------------------------------------------------------------------------------|
-| `scout`     | "Avvia il loop principale. Leggi il tuo prompt, il profilo candidato (`$JHT_HOME/profile/candidate_profile.yml`), e inizia dal CERCHIO 1 (preferenza primaria). Notifica gli Analisti dopo batch di 3-5 posizioni." |
+| `scout`     | "Avvia il loop principale. Leggi il tuo prompt, il profilo candidato (`$JHT_HOME/profile/candidate_profile.yml`), e inizia dal CERCHIO 1 (preferenza primaria). Notifica gli Analisti dopo ogni insert (mai aspettare un batch)." |
 | `analista`  | "Avvia il loop principale. Coda: `db_query.py next-for-analista`. Per ogni posizione, compila i 5 campi obbligatori e promuovi a `checked` o `excluded`." |
 | `scorer`    | "Avvia il loop principale. Coda: `db_query.py next-for-scorer`. PRE-CHECK prima, poi punteggio 0-100. Gate: <40 escluso, 40-49 parcheggio, ≥50 notifica Scrittori." |
 | `scrittore` | "Avvia il loop principale. Coda: `db_query.py next-for-scrittore`. Massimo impegno, 3 round obbligatori con il Critico. Il PDF va sotto `$JHT_USER_DIR/cv/`." |

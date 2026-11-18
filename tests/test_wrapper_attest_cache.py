@@ -152,7 +152,7 @@ def test_a_cache_that_is_old_or_from_the_future_is_not_used(tmp_path: Path):
 
 @pytest.mark.parametrize(
     "variable",
-    ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "JHT_LIVE_SCREEN_PORT", "JHT_IMAGE"),
+    ("JHT_SCOUT_COORD_DB", "NEXT_PUBLIC_SUPABASE_URL", "JHT_LIVE_SCREEN_PORT", "JHT_IMAGE"),
 )
 def test_a_variable_of_the_callers_environment_that_changes_the_hash_changes_the_key(tmp_path: Path, variable: str):
     wrapper, env, log, _ = _panel(tmp_path)
@@ -407,7 +407,7 @@ def _key(tmp_path: Path, **env: str) -> str:
     script = (
         "set -u\n"
         f"HOST_KERNEL=\"$(uname -s)\"; HOST_UID=501; CONTAINER_RUNTIME=podman; PODMAN_RUNTIME_MODE=machine; PODMAN_MACHINE_NAME=jht-podman\n"
-        f'RUNTIME_MANIFEST="{manifest}"; PODMAN_CALLER_ENV="OPENAI_API_KEY"\n'
+        f'RUNTIME_MANIFEST="{manifest}"; PODMAN_CALLER_ENV="JHT_SCOUT_COORD_DB"\n'
         "podman_binary() { echo /bin/ls; }; podman_compose_binary() { echo /bin/cat; }; compose_project_name() { echo jht; }\n"
         + functions
         + "\nattest_cache_key jht\n"

@@ -171,6 +171,15 @@ def _service_home(tmp_path: Path, document: dict) -> Path:
     return home
 
 
+def _service_config(tmp_path: Path, provider: str = "openai", auth: str = "subscription", **extra) -> None:
+    """The configuration of the service agents' home: they follow its active provider, never a default."""
+    home = tmp_path / "home"
+    home.mkdir(exist_ok=True)
+    entry = {"auth_method": auth, **extra.pop("provider_fields", {})}
+    document = {"active_provider": provider, "harness": "pi", "providers": {provider: entry}, **extra}
+    (home / "jht.config.json").write_text(json.dumps(document), encoding="utf-8")
+
+
 def _active_cli(home: Path, role: str, **env: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [_bash(), "-c", f'source "{SPAWN_LIB}"; jht_spawn_active_cli {role}'],
@@ -207,7 +216,8 @@ def test_the_service_agents_get_the_pi_command_of_the_team(tmp_path: Path) -> No
     env["JHT_HOME"] = str(tmp_path / "home")
     login = tmp_path / "home" / ".pi" / "agent" / "auth.json"   # the pi login: without it the start is refused
     login.parent.mkdir(parents=True)
-    login.write_text("{}", encoding="utf-8")
+    login.write_text('{"openai": {"type": "oauth", "access": "x"}}', encoding="utf-8")   # a login for the provider of the config
+    _service_config(tmp_path)
     result = subprocess.run(
         [_bash(), "-c", f'source "{SPAWN_LIB}"; jht_spawn_repl_cmd pi "{workdir}"'],
         capture_output=True, text=True, check=False, env=env,
@@ -232,7 +242,9 @@ def _service_pi_command(tmp_path: Path, role: str, *after_lib: str) -> subproces
     env["JHT_HOME"] = str(tmp_path / "home")
     login = tmp_path / "home" / ".pi" / "agent" / "auth.json"
     login.parent.mkdir(parents=True, exist_ok=True)
-    login.write_text("{}", encoding="utf-8")
+    login.write_text('{"openai": {"type": "oauth", "access": "x"}}', encoding="utf-8")
+    if not (tmp_path / "home" / "jht.config.json").exists():
+        _service_config(tmp_path)
     lines = "".join(f"{line}; " for line in after_lib)
     return subprocess.run(
         [_bash(), "-c", f'source "{SPAWN_LIB}"; {lines}jht_spawn_repl_cmd pi "{workdir}" {role}'],
@@ -528,3 +540,113 @@ def test_the_watchdog_writes_through_its_bounded_helper() -> None:
                                     'spawn_failed dottore "$rc" "$out"', "spawn_failed dottore ok"])
 def test_the_watchdog_says_every_failed_and_every_good_start(branch: str) -> None:
     assert branch in (ROOT / ".launcher" / "doctor-watchdog.sh").read_text(encoding="utf-8")
+
+
+# ── Dottore and Mantenitore on pi run with the provider and the model of the ACTIVE configuration ──────────
+# Measured on Windows (build 9, Claude with a key): both were started on `--provider openai` with the Codex model and sat on
+# «No API key found for openai», in an empty session, while every other agent ran on Claude.
+
+# provider -> (name pi knows it by, model of the class luna, key variable): the class the service agents have when nothing is pinned
+SERVICE_PROVIDERS = {
+    "openai": ("openai", "gpt-5.6-luna", "OPENAI_API_KEY"),
+    "claude": ("anthropic", "claude-haiku-5-5", "ANTHROPIC_API_KEY"),
+    "glm": ("zai", "glm-5.3-flash", None),
+    "kimi": ("moonshotai", "kimi-k3.1-pro", "MOONSHOT_API_KEY"),
+}
+
+
+@pytest.mark.parametrize("role", ["dottore", "mantenitore"])
+@pytest.mark.parametrize("provider", sorted(SERVICE_PROVIDERS))
+def test_the_service_agents_on_pi_run_on_the_provider_and_the_light_model_of_the_active_config(tmp_path: Path, role: str, provider: str) -> None:
+    """The cost of the service roles against the search (build 11, Mac: 0.55 $ of 1.97 $ for Dottore and Mantenitore on Sonnet, one of
+    their rounds having done nothing): their class is luna (Haiku on Claude) unless the config pins another."""
+    pi_name, luna_model, key_var = SERVICE_PROVIDERS[provider]
+    _service_config(tmp_path, provider, "api_key", provider_fields={"api_key": "test-key-0123"})
+    result = _service_pi_command(tmp_path, role)
+    assert result.returncode == 0, result.stderr
+    env, argv = _argv(result.stdout.strip())
+    assert _after(argv, "--provider") == pi_name
+    assert _after(argv, "--model") == luna_model
+    if key_var:
+        assert env[key_var] == "test-key-0123"   # the key of the active provider, as start-agent.sh gives it to every agent
+    assert "openai" not in result.stdout.replace("gpt", "") or provider == "openai"
+
+
+@pytest.mark.parametrize("role", ["dottore", "mantenitore"])
+@pytest.mark.parametrize("provider", ["glm", "kimi", "claude", "openai"])
+@pytest.mark.parametrize("pin, expected", [("luna", {"openai": "gpt-5.6-luna", "claude": "claude-haiku-5-5", "glm": "glm-5.3-flash", "kimi": "kimi-k3.1-pro"}),
+                                           ("terra", {"openai": "gpt-5.6-terra", "claude": "claude-sonnet-5-5", "glm": "glm-5.3", "kimi": "kimi-k3.1-pro"})])
+def test_a_pin_of_the_config_for_a_service_agent_gives_its_model_on_every_provider(tmp_path: Path, role: str, provider: str, pin: str, expected: dict) -> None:
+    _service_config(tmp_path, provider, "api_key", provider_fields={"api_key": "test-key-0123"},
+                    team={"role_models": {role: {"model": pin}}})
+    result = _service_pi_command(tmp_path, role)
+    assert result.returncode == 0, result.stderr
+    _env, argv = _argv(result.stdout.strip())
+    assert _after(argv, "--model") == expected[provider]
+
+
+def test_a_model_given_for_a_retry_stays_and_the_provider_is_still_the_active_one(tmp_path: Path) -> None:
+    _service_config(tmp_path, "claude", "api_key", provider_fields={"api_key": "test-key-0123"})
+    workdir = _workdir(tmp_path)
+    pinned = subprocess.run([_bash(), "-c", f'source "{SPAWN_LIB}"; printf %s "$JHT_PI_VERSION"'],
+                            capture_output=True, text=True, check=True).stdout
+    env = _fake_pi(tmp_path, pinned)
+    env["JHT_HOME"] = str(tmp_path / "home")
+    result = subprocess.run(
+        [_bash(), "-c", f'source "{SPAWN_LIB}"; jht_spawn_pi_repl_cmd "{workdir}" claude-haiku-5-5 dottore'],
+        capture_output=True, text=True, check=False, env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    _env, argv = _argv(result.stdout.strip())
+    assert _after(argv, "--provider") == "anthropic" and _after(argv, "--model") == "claude-haiku-5-5"
+
+
+def test_a_service_agent_without_an_active_provider_is_not_started_on_a_default(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / "jht.config.json").write_text("{}", encoding="utf-8")
+    result = _service_pi_command(tmp_path, "dottore")
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "active_provider" in result.stderr
+
+
+# ── the CLIs of the providers (no pi): the service agents on the light model too ─────────────────────────────────
+
+def _cli_command(tmp_path: Path, provider: str, role: str, pin: str | None = None, **env: str) -> subprocess.CompletedProcess[str]:
+    home = tmp_path / "home"
+    home.mkdir(exist_ok=True)
+    team = {"role_models": {role: {"model": pin}}} if pin else {}
+    (home / "jht.config.json").write_text(json.dumps({"active_provider": provider, "team": team}), encoding="utf-8")
+    return subprocess.run([_bash(), "-c", f'source "{SPAWN_LIB}"; jht_spawn_repl_cmd {provider} "" {role}'],
+                          capture_output=True, text=True, check=False, env=_clean_env(JHT_HOME=str(home), **env))
+
+
+@pytest.mark.parametrize("role, alias", [("dottore", "haiku"), ("mantenitore", "haiku"), ("scout", "sonnet"), ("", "sonnet")])
+def test_the_claude_cli_gives_the_service_agents_haiku_and_keeps_sonnet_for_the_rest(tmp_path: Path, role: str, alias: str) -> None:
+    result = _cli_command(tmp_path, "claude", role)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().endswith(f"--model {alias}"), result.stdout
+
+
+@pytest.mark.parametrize("pin, alias", [("terra", "sonnet"), ("sol", "opus"), ("luna", "haiku")])
+def test_a_pin_of_the_config_beats_the_service_class_on_the_claude_cli(tmp_path: Path, pin: str, alias: str) -> None:
+    result = _cli_command(tmp_path, "claude", "dottore", pin)
+    assert result.stdout.strip().endswith(f"--model {alias}"), result.stdout
+
+
+def test_the_retry_model_beats_the_service_class_on_the_claude_cli(tmp_path: Path) -> None:
+    result = _cli_command(tmp_path, "claude", "dottore", JHT_SPAWN_MODEL_OVERRIDE="sonnet")
+    assert result.stdout.strip().endswith("--model sonnet"), result.stdout
+
+
+@pytest.mark.parametrize("role, model", [("dottore", "gpt-5.6-luna"), ("mantenitore", "gpt-5.6-luna")])
+def test_codex_gives_the_service_agents_the_light_model_instead_of_its_default(tmp_path: Path, role: str, model: str) -> None:
+    result = _cli_command(tmp_path, "openai", role)
+    assert result.returncode == 0, result.stderr
+    assert f"--model {model}" in result.stdout or f"-m {model}" in result.stdout, result.stdout
+
+
+def test_codex_without_a_role_keeps_its_default_model(tmp_path: Path) -> None:
+    result = _cli_command(tmp_path, "openai", "")
+    assert "gpt-5.6-luna" not in result.stdout, result.stdout

@@ -183,7 +183,7 @@ Care-mode jobs use the same write path but remain selected exclusively by
 Per skip dopo 3 tentativi:
 ```bash
 python3 /app/shared/skills/db_update.py position <ID> \
-  --office-geocoded false --office-verified false \
+  --office-geocoded true --office-verified false \
   --action geocode --outcome failed
 # (lat/lon/address restano NULL)
 ```

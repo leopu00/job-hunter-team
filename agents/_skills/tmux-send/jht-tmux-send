@@ -162,6 +162,32 @@ else
   message="$*"
 fi
 
+# A role without a number (ANALISTA, SCORER, SCOUT, SCRITTORE, CLOSER) names the role, not one session: when no session has that
+# exact name it goes to the lowest-numbered session of the role that is alive (ANALISTA -> ANALISTA-5), skipping a session the person
+# paused by itself (agent_pause: the person stopped that one on purpose while another of the role works). A Scout that wrote
+# ANALISTA-1 for a ping found «not present» while ANALISTA-5 was the one alive (Windows, build 9 to 10): the roles are numbered by the
+# system, so a prompt cannot know the number. A number written out (ANALISTA-1) is never rewritten: that message is for THAT session.
+case "$session" in
+  ANALISTA|SCORER|SCOUT|SCRITTORE|CLOSER)
+    if ! tmux has-session -t "=$session" 2>/dev/null; then
+      role_pause_lib="/app/shared/skills/agent_pause.py"
+      [ -f "$role_pause_lib" ] || role_pause_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../../shared/skills/agent_pause.py"
+      role_alive=""
+      for candidate in $(tmux list-sessions -F '#{session_name}' 2>/dev/null | sed -n "s/^\($session-\([0-9][0-9]*\)\)\$/\2 \1/p" | sort -n | sed 's/^[0-9]* //'); do
+        if [ -f "$role_pause_lib" ] && [ "$(python3 -I "$role_pause_lib" active "$candidate" 2>/dev/null)" = "paused" ]; then
+          continue
+        fi
+        role_alive="$candidate"
+        break
+      done
+      if [ -n "$role_alive" ]; then
+        echo "jht-tmux-send: '$session' names a role: delivering to $role_alive" >&2
+        session="$role_alive"
+      fi
+    fi
+    ;;
+esac
+
 if ! tmux has-session -t "$session" 2>/dev/null; then
   echo "jht-tmux-send: sessione '$session' non esiste" >&2
   exit 2

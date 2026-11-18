@@ -15,6 +15,18 @@ import { pySlice } from "./py-format.ts";
 import { cleanAbout } from "./company-about.ts";
 import type { ScriptResult } from "./tools.ts";
 
+/**
+ * `link_positions_to_company` (_db.py): the positions of the same name with no company yet (company_id NULL) get this one.
+ * A position links itself only when the company already exists as it is inserted; the SCOUT inserts it before the
+ * ANALISTA creates the company, and the position stayed unlinked for good. An existing link is never touched.
+ */
+export function linkPositionsToCompany(db: Database, companyId: number | null, name: string): number {
+  if (!companyId || !name) return 0;
+  return Number(
+    db.prepare("UPDATE positions SET company_id = ? WHERE company_id IS NULL AND LOWER(company) = LOWER(?)").run(companyId, name).changes,
+  );
+}
+
 export function insertCompany(db: Database, a: Parsed): ScriptResult {
   db.prepare(
       `
@@ -44,6 +56,8 @@ export function insertCompany(db: Database, a: Parsed): ScriptResult {
     );
   // lastInsertRowid says nothing after an update: the id is read.
   const row = db.prepare("SELECT id FROM companies WHERE name = ?").get(a["name"] as string) as { id: number };
+  // the positions inserted before the company (by the SCOUT) are linked now
+  linkPositionsToCompany(db, row.id, a["name"] as string);
   return { stdout: `Company inserted/updated: ${a["name"] as string} (ID: ${row.id})\n`, exitCode: 0 };
 }
 
