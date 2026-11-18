@@ -13,6 +13,8 @@ os.environ["LC_ALL"] = "C.UTF-8"
 # that writes must never reach a real session of the computer that runs it, nor start a process that outlives the
 # test: the wake is off for the whole suite (the tests of event_wake pass their own environment).
 os.environ["JHT_EVENT_WAKE"] = "0"
+# T325 A: no test starts the detached office/logo step of db_update (it would call Nominatim and company sites).
+os.environ["JHT_POSITION_ENRICH"] = "0"
 
 
 def pytest_configure(config):

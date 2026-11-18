@@ -252,8 +252,8 @@ try {
   $RawBaseOverride = 'https://clean-start.invalid/revision'
   $Branch = 'clean-start-fixture'
   $TestChannel = $false
-  $RuntimeImage = 'ghcr.io/leopu00/jht@sha256:b67c2e39953a0f88e268a928d4e65bf46a29c1981b9bba5431d17976245f07c4'
-  $RuntimeImageDigest = 'sha256:b67c2e39953a0f88e268a928d4e65bf46a29c1981b9bba5431d17976245f07c4'
+  $RuntimeImage = 'ghcr.io/leopu00/jht@sha256:98afa7ce6670fac36a0247fa750cbbc5ed7a9946fa7c4ce940e5885864118053'
+  $RuntimeImageDigest = 'sha256:98afa7ce6670fac36a0247fa750cbbc5ed7a9946fa7c4ce940e5885864118053'
   $DryRun = $false
   $env:USERPROFILE = $cleanProfile
   $env:JHT_USER_DIR_HOST = $cleanUserData

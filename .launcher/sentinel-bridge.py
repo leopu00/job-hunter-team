@@ -2885,6 +2885,7 @@ START_AGENT_SH = "/app/.launcher/start-agent.sh"
 #   • detect "Loading…" → return None → cascata su HTTP, e respawn
 #     worker prima del prossimo tick
 WORKER_RESTART_INTERVAL_MIN = 20     # restart worker ogni 20 min (igiene proattiva)
+WORKER_SPAWN_TIMEOUT_S = 40          # lo start del worker su un Mac impiega piu' di 10 s: il timeout lo uccideva a meta' (giro Mac 18/11)
 HTTP_CROSSCHECK_EVERY_N_TICKS = 5    # confronto TUI vs HTTP ogni 5 tick
 TUI_HTTP_DIVERGENCE_THRESHOLD = 5    # se diff > 5 punti = stale TUI
 
@@ -2972,13 +2973,16 @@ def _try_claude_tui_parser():
             spawn_result = subprocess.run(
                 ["bash", START_AGENT_SH, "worker"],
                 env={**os.environ, "JHT_SPAWN_SRC": "sentinel-bridge"},
-                capture_output=True, text=True, errors="replace", timeout=10,
+                capture_output=True, text=True, errors="replace", timeout=WORKER_SPAWN_TIMEOUT_S,
             )
             _log_worker_spawn_result(spawn_result)
             time.sleep(cu.WORKER_BOOT_WAIT_S)
         except subprocess.TimeoutExpired as exc:
             _log_worker_spawn_result(exc, status="timeout")
-            return None
+            # the launcher was cut short but the session may be up (the worker «worked anyway»): wait for it, do not give up the tick
+            if not cu.tmux_has_session(WORKER_SESSION):
+                return None
+            time.sleep(cu.WORKER_BOOT_WAIT_S)
         except OSError as exc:
             print(
                 f"[bridge V5] worker spawn rc=os-error type={type(exc).__name__}",

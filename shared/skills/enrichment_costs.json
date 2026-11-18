@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "positions_per_day": 50,
+  "switches": {
+    "economy": {
+      "costly": false,
+      "usd_per_position": 0.002,
+      "basis": "economy off = the logo and the office geocoding of the pipeline back on: ~0.001 $ each per position with the Analista on Haiku (T323, 18/11/2026); ~0.01 $ each on Sonnet"
+    },
+    "logo.enabled": {
+      "costly": true,
+      "usd_per_position": 0.001,
+      "basis": "the logo step of the Analista's pipeline, ~0.001 $ a call on Haiku, ~0.01 $ on Sonnet (T323, share of the turn: logo_fetch itself is a script, no model)"
+    },
+    "geocode_pipeline.enabled": {
+      "costly": true,
+      "usd_per_position": 0.001,
+      "basis": "geocode-check and the office geocoding of the Analista's pipeline, ~0.001 $ a call on Haiku, ~0.01 $ on Sonnet (T323)"
+    },
+    "geocode_missing.enabled": {
+      "costly": true,
+      "usd_per_position": 0.001,
+      "basis": "the same step as geocode_pipeline, done on the backlog by the care queue: not measured on its own, the T323 figure of the step"
+    },
+    "geocode_missing.non_remote_only": {
+      "costly": false,
+      "usd_per_position": 0.001,
+      "basis": "off = the remote positions too go through the geocoding step, ~0.001 $ a call on Haiku (T323)"
+    },
+    "recheck_weekly.enabled": {
+      "costly": true,
+      "usd_per_position": null,
+      "basis": "not measured: no recheck ran in the T323 rounds"
+    },
+    "web_search.analista.enabled": {
+      "costly": true,
+      "usd_per_position": 0.26,
+      "basis": "T323 bis (18/11/2026), Analista on Haiku: 0.27 $ per position with the search (39 searches on 3 positions, results beyond 100k tokens of context, billed 5x) against 0.008 $ without"
+    },
+    "web_search.scout.enabled": {
+      "costly": true,
+      "usd_per_position": null,
+      "usd_per_search": 0.02,
+      "basis": "a search on Haiku costs ~0.02 $ (0.01 $ fee + ~0.009 $ of tokens, T323 bis), at most 3 a turn; the Scouts of the round searched 0 times, so no figure per position"
+    },
+    "web_search.mentor.enabled": {
+      "costly": true,
+      "usd_per_position": null,
+      "usd_per_search": 0.02,
+      "basis": "a search on Haiku costs ~0.02 $ (T323 bis), at most 5 a turn; the Mentor does not work per position"
+    }
+  }
+}

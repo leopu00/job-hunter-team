@@ -29,6 +29,17 @@ const it = {
   modeUnknown: "La modalità di lavoro della squadra non si legge: nessun arricchimento parte finché qualcuno non la guarda.",
   invalidScore: "Uno score va da 0 a 100.",
   invalidDays: "I giorni vanno da 1 a 365.",
+  webSearch: "Ricerca web",
+  webAnalista: "Ricerca web degli Analisti",
+  webScout: "Ricerca web dello Scout",
+  webMentor: "Ricerca web del Mentor",
+  economyOff: "Spegnere il risparmio",
+  costPerPosition: "{name}: costa circa {usd} $ in più a posizione ({day} $ su {n} al giorno).",
+  costPerSearch: "{name}: costa circa {usd} $ a ricerca.",
+  costUnmeasured: "{name}: costa di più; quanto non è ancora misurato.",
+  confirmTitle: "Confermi il costo in più?",
+  confirm: "Conferma e salva",
+  cancel: "Annulla",
 };
 
 export type EnrichmentText = typeof it;
@@ -57,6 +68,17 @@ const en: EnrichmentText = {
   modeUnknown: "The team's working mode cannot be read: no enrichment runs until someone looks at it.",
   invalidScore: "A score goes from 0 to 100.",
   invalidDays: "Days go from 1 to 365.",
+  webSearch: "Web search",
+  webAnalista: "Web search of the Analisti",
+  webScout: "Web search of the Scout",
+  webMentor: "Web search of the Mentor",
+  economyOff: "Turning savings off",
+  costPerPosition: "{name}: costs about {usd} $ more per position ({day} $ on {n} a day).",
+  costPerSearch: "{name}: costs about {usd} $ per search.",
+  costUnmeasured: "{name}: costs more; how much is not measured yet.",
+  confirmTitle: "Confirm the extra cost?",
+  confirm: "Confirm and save",
+  cancel: "Cancel",
 };
 
 const de: EnrichmentText = {
@@ -83,6 +105,17 @@ const de: EnrichmentText = {
   modeUnknown: "Der Arbeitsmodus des Teams ist nicht lesbar: keine Anreicherung läuft, bis jemand nachsieht.",
   invalidScore: "Ein Score geht von 0 bis 100.",
   invalidDays: "Die Tage gehen von 1 bis 365.",
+  webSearch: "Websuche",
+  webAnalista: "Websuche der Analisti",
+  webScout: "Websuche des Scout",
+  webMentor: "Websuche des Mentor",
+  economyOff: "Sparen ausschalten",
+  costPerPosition: "{name}: kostet etwa {usd} $ mehr pro Stelle ({day} $ bei {n} pro Tag).",
+  costPerSearch: "{name}: kostet etwa {usd} $ pro Suche.",
+  costUnmeasured: "{name}: kostet mehr; wie viel, ist noch nicht gemessen.",
+  confirmTitle: "Die Mehrkosten bestätigen?",
+  confirm: "Bestätigen und speichern",
+  cancel: "Abbrechen",
 };
 
 const fr: EnrichmentText = {
@@ -109,6 +142,17 @@ const fr: EnrichmentText = {
   modeUnknown: "Le mode de travail de l'équipe ne se lit pas : aucun enrichissement ne tourne tant que quelqu'un ne l'a pas regardé.",
   invalidScore: "Un score va de 0 à 100.",
   invalidDays: "Les jours vont de 1 à 365.",
+  webSearch: "Recherche web",
+  webAnalista: "Recherche web des Analisti",
+  webScout: "Recherche web du Scout",
+  webMentor: "Recherche web du Mentor",
+  economyOff: "Couper l'économie",
+  costPerPosition: "{name} : coûte environ {usd} $ de plus par offre ({day} $ pour {n} par jour).",
+  costPerSearch: "{name} : coûte environ {usd} $ par recherche.",
+  costUnmeasured: "{name} : coûte plus ; combien n'est pas encore mesuré.",
+  confirmTitle: "Confirmer le coût en plus ?",
+  confirm: "Confirmer et enregistrer",
+  cancel: "Annuler",
 };
 
 const es: EnrichmentText = {
@@ -135,6 +179,17 @@ const es: EnrichmentText = {
   modeUnknown: "El modo de trabajo del equipo no se puede leer: ningún enriquecimiento se ejecuta hasta que alguien lo mire.",
   invalidScore: "Un score va de 0 a 100.",
   invalidDays: "Los días van de 1 a 365.",
+  webSearch: "Búsqueda web",
+  webAnalista: "Búsqueda web de los Analisti",
+  webScout: "Búsqueda web del Scout",
+  webMentor: "Búsqueda web del Mentor",
+  economyOff: "Apagar el ahorro",
+  costPerPosition: "{name}: cuesta unos {usd} $ más por puesto ({day} $ con {n} al día).",
+  costPerSearch: "{name}: cuesta unos {usd} $ por búsqueda.",
+  costUnmeasured: "{name}: cuesta más; cuánto aún no está medido.",
+  confirmTitle: "¿Confirmas el coste adicional?",
+  confirm: "Confirmar y guardar",
+  cancel: "Cancelar",
 };
 
 const pt: EnrichmentText = {
@@ -161,6 +216,17 @@ const pt: EnrichmentText = {
   modeUnknown: "O modo de trabalho da equipa não se consegue ler: nenhum enriquecimento corre até alguém o ver.",
   invalidScore: "Um score vai de 0 a 100.",
   invalidDays: "Os dias vão de 1 a 365.",
+  webSearch: "Pesquisa web",
+  webAnalista: "Pesquisa web dos Analisti",
+  webScout: "Pesquisa web do Scout",
+  webMentor: "Pesquisa web do Mentor",
+  economyOff: "Desligar a poupança",
+  costPerPosition: "{name}: custa cerca de {usd} $ a mais por vaga ({day} $ com {n} por dia).",
+  costPerSearch: "{name}: custa cerca de {usd} $ por pesquisa.",
+  costUnmeasured: "{name}: custa mais; quanto ainda não está medido.",
+  confirmTitle: "Confirmas o custo adicional?",
+  confirm: "Confirmar e guardar",
+  cancel: "Cancelar",
 };
 
 const hu: EnrichmentText = {
@@ -187,6 +253,17 @@ const hu: EnrichmentText = {
   modeUnknown: "A csapat munkamódja nem olvasható: egyetlen gazdagítás sem fut, amíg valaki meg nem nézi.",
   invalidScore: "A score 0 és 100 között van.",
   invalidDays: "A napok 1 és 365 között vannak.",
+  webSearch: "Webes keresés",
+  webAnalista: "Az Analisti webes keresése",
+  webScout: "A Scout webes keresése",
+  webMentor: "A Mentor webes keresése",
+  economyOff: "A takarékosság kikapcsolása",
+  costPerPosition: "{name}: állásonként kb. {usd} $-ral többe kerül (napi {n} állásnál {day} $).",
+  costPerSearch: "{name}: keresésenként kb. {usd} $.",
+  costUnmeasured: "{name}: többe kerül; hogy mennyivel, még nincs mérve.",
+  confirmTitle: "Megerősíted a többletköltséget?",
+  confirm: "Megerősítés és mentés",
+  cancel: "Mégse",
 };
 
 export const ENRICHMENT_TEXT: Record<Locale, EnrichmentText> = { it, en, de, fr, es, pt, hu };

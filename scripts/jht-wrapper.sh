@@ -147,9 +147,9 @@ if [ "$CONTAINER_RUNTIME" = "podman" ]; then
     export PODMAN_COMPOSE_PROVIDER="$(command -v podman-compose)"
   fi
 fi
-DEFAULT_RUNTIME_IMAGE="ghcr.io/leopu00/jht@sha256:b67c2e39953a0f88e268a928d4e65bf46a29c1981b9bba5431d17976245f07c4"
-CORE_IMAGE_DIGEST="sha256:db1f6e77796d13d3d14c7cca116b94ea01def3b4ec925e416c4dda6302a3c202"
-EXTRAS_IMAGE_DIGEST="sha256:0b57dbc04a99733c8ef87c7d51e2f31e3c63455299522d518e82226d82f0c59f"
+DEFAULT_RUNTIME_IMAGE="ghcr.io/leopu00/jht@sha256:98afa7ce6670fac36a0247fa750cbbc5ed7a9946fa7c4ce940e5885864118053"
+CORE_IMAGE_DIGEST="sha256:beb6d41fc24a1d37d756fedea516b004da2a9b9bfe6b5562de972888be013ee3"
+EXTRAS_IMAGE_DIGEST="sha256:74cea0c08d969bfd80a16649af4f76df98c0a84fef026c2057ef00280dbc5bf9"
 RUNTIME_TIER_FILE="$RUNTIME_DIR/runtime-tier"
 RUNTIME_TIER_INTEGRITY="$RUNTIME_DIR/.runtime-tier-integrity"
 DEFAULT_RUNTIME_VERSION="0.4.0"
@@ -9370,6 +9370,9 @@ status_human_running() {
 read_only_team_command() {
   local up=0
   require_confined_podman_machine
+  # The container changes image (the switch of the tools): between its down and its up the container cannot be attested and the person
+  # read «operation refused» as a security error (giro Mac 18/11, 16 s). It waits for the switch, as ensure_up does, and says so.
+  if jht_machine_output; then wait_for_tools_switch quiet; else wait_for_tools_switch; fi
   if docker_reachable >/dev/null 2>&1; then
     container_up >/dev/null 2>&1 || up=$?
   else

@@ -89,6 +89,7 @@ spirito del journal del Dottore e del logbook del Capitano). Ogni sweep appende
 5. **De-dup degli script** — script ricorrenti quasi identici → proponi una skill canonica.
 6. **Freshness delle dipendenze** — tool cruciali deprecati/rotti.
 7. **Locale UTF-8 dei pane** (`locale_health.py`) — locale del container + decodifica STRETTA di un `capture-pane`. Non UTF-8 con zero byte invalidi = **cosmetico** (dati intatti, rotto solo il rendering per chi si attacca da fuori) → segnala al Capitano; byte invalidi = **P1, escala**. A distinguere i due casi è la decodifica stretta, non `echo $LANG`.
+8. **Arretrato di uffici e loghi** (`position_enrich.py backlog`) — codice, niente modello: le posizioni `checked` con un indirizzo dell'ufficio nell'annuncio o un logo sul sito dell'azienda. Una volta, mai in un ciclo.
 
 La skill `maintainer-sweep` contiene la procedura deterministica completa (comandi, soglie, schema di
 output).

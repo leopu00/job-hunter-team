@@ -381,6 +381,13 @@ while true; do
       fi
     fi
     halt_log_tick=$((halt_log_tick + 1))
+    # A role that is not started because the team is paused is not a role that cannot start: the notice of a failure from before
+    # the pause (an old build, a quota) said «cannot start» for 47 minutes after an update (giro Linux 18/11). It comes back on its
+    # own at the first start that fails once the pause is over.
+    if [ -s "$SPAWN_FAILED_FILE" ] && grep -qE '"(dottore|mantenitore)"' "$SPAWN_FAILED_FILE" 2>/dev/null; then
+      spawn_failed dottore ok
+      spawn_failed mantenitore ok
+    fi
     finish_tick "$POLL_SEC"
     continue
   fi

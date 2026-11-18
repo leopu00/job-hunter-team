@@ -130,6 +130,14 @@ Duas medidas numa só, e a segunda é a que conta. Lê a locale do **contentor**
 
 Regista `locale_health: {verdict, env, panes_scanned, corrupted_sessions}` na entry.
 
+### 8. 📍 Atraso de escritórios e logótipos (código, sem modelo)
+```bash
+python3 /app/shared/skills/position_enrich.py backlog --limit 20
+```
+As posições `checked` cujo escritório e logótipo o passo mecânico (`position_enrich.py`, lançado pelo `db_update.py` quando uma posição passa a `checked`) nunca fechou: uma morada escrita no anúncio → Nominatim, o site próprio da empresa → `logo_fetch.py`. Nada é adivinhado: o que não se encontra fica NULL com o seu motivo. O ritmo do Nominatim é o script que o mantém (quatro por minuto para o atraso): lança-o uma vez, nunca em ciclo, nunca em paralelo.
+
+Regista `enrich_backlog: {positions, offices_written, logos_written}` na entrada. Os interruptores de geocodificação e de logótipo da política de enriquecimento valem também aqui: `policy_off` é intencional, não uma avaria.
+
 ## Logbook (append-only)
 Cada ronda escreve UMA entrada densa em `/jht_home/logs/mantenitore-logbook.jsonl` (gémeo do logbook do Dottore), para que o próximo Mantenitore consiga ver a tendência:
 ```json

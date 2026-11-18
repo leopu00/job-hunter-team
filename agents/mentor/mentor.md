@@ -83,7 +83,7 @@ Pattern F is the exception to the paragraph above: the user's judgements and the
 ### The world outside (for confirmation, not exploration)
 
 When a pattern surfaces from the records, step out only to verify it:
-- 🔎 `WebSearch` — confirm a skill is trending, find a roadmap, check a certification's reputation
+- 🔎 `WebSearch` — confirm a skill is trending, find a roadmap, check a certification's reputation — In every web search: never the person's name, email or phone number in the query.
 - 🌐 `WebFetch` — pull a specific page (roadmap.sh, an official cert page, a curriculum)
 
 You go out **to confirm what the records suggested**, not to browse.

@@ -29,7 +29,7 @@ import { t, tf, LANGUAGES, hasLanguageChoice, systemLanguage, saveLanguage } fro
 import { summarizeRoleModels } from './setup-models.js';
 import { AGENT_HARNESSES, DEFAULT_HARNESS } from '../../shared/runtime/agent-harness.js';
 import { piApiProvider } from '../../shared/runtime/provider-models.js';
-import { harnessRefusal } from './setup-harness.js';
+import { harnessRefusal, webSearchMissingOnPi } from './setup-harness.js';
 import { RELEASE_PROVIDERS, RELEASE_HARNESS, offeredInRelease, offeredWay, releaseOffersOf } from '../../shared/runtime/release-providers.js';
 import { migrateToLatest } from '../src/commands/migrate.js';
 import { KEY_REFUSED_EXIT_CODE } from '../src/commands/providers-key-check.js';
@@ -390,6 +390,7 @@ function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, 
   console.log(pc.green('\n  Config saved!\n'));
   console.log(`  Provider:   ${selectedProvider.label}`);
   if (harness === 'pi') console.log('  Harness:    Pi');
+  if (webSearchMissingOnPi(harness, providerName)) console.log(pc.yellow(`  ${t('wizard.provider.web_search_title')}: ${tf('wizard.provider.web_search_missing', selectedProvider.label)}`));
   if (authMethod === 'api_key') {
     console.log(`  Auth:       ${keptByTheSetup ? 'API key kept by the setup (not in the config)' : describeSecret(apiKeySecret)}`);
   } else {

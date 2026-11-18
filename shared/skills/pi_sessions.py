@@ -22,9 +22,10 @@ Read from pi 1.5.0 sessions (the format of its docs/session-format.md, version 3
 Pure reading: nothing is written, a missing or unreadable folder is "no usage", a half-written last line is skipped.
 The state of the agent (running, idle, blocked) is read elsewhere (agent_pi_log.py); this file is for the meters.
 
-Web search: pi does not price the fee of a search call (the hosted `web_search` tool of OpenAI, 10 USD per 1000 calls on
-its pricing page, read 09/11). The extension shared/runtime/pi-harness/web-search.js writes, at the end of a turn that
-searched, a custom entry `{"type":"custom","customType":"jht-web-search","data":{"searches":n}}` in the same session file,
+Web search: pi does not price the fee of a search call (the hosted search tool of the provider: OpenAI, Anthropic, Z.ai;
+the fee of each in shared/config/model-prices.json). The extension shared/runtime/pi-harness/web-search.js writes, at the
+end of a turn that searched, a custom entry `{"type":"custom","customType":"jht-web-search","data":{"searches":n,
+"provider":p}}` in the same session file,
 and once per session a `jht-web-search-status` entry saying whether the search is on for that provider (and why not).
 `search_events` reads the first, `web_search_status` the second. The tokens of the search results are already in the
 call's own `usage`.
@@ -41,6 +42,19 @@ from pathlib import Path
 
 SESSIONS = (".pi", "agent", "sessions")
 SEARCH_CALL_USD = 0.01  # OpenAI pricing page, 09/11: 10 USD / 1000 calls for the reasoning models
+
+
+def search_fee(provider) -> float:
+    """The fee of one web search of `provider` (pi's name: openai, anthropic, zai), from the one price list
+    (shared/config/model-prices.json, `web_search_per_call`). A provider without a fee there, or a list that cannot be
+    read, costs SEARCH_CALL_USD a search: the spending brake must never count a search as free."""
+    try:
+        import model_pricing  # same folder; imported here so a broken price list never stops reading the sessions
+        book = model_pricing.load_prices()
+        fee = (book.get(model_pricing.PROVIDER_OF.get(provider, provider)) or {}).get("web_search_per_call")
+        return float(fee) if fee is not None else SEARCH_CALL_USD
+    except Exception:  # noqa: BLE001 — the fallback is the point
+        return SEARCH_CALL_USD
 SEARCH_ENTRY = "jht-web-search"
 STATUS_ENTRY = "jht-web-search-status"
 TOKEN_FIELDS = ("input", "output", "cache_read", "cache_write", "reasoning")
@@ -176,14 +190,16 @@ def _custom(jht_home, since_ts, kind):
 
 
 def search_events(jht_home, since_ts=None) -> list[dict]:
-    """One event per turn that searched the web: `{ts, session, agent, searches, cost}`, the cost being the fee pi does not
-    price (`SEARCH_CALL_USD` each), oldest first."""
+    """One event per turn that searched the web: `{ts, session, agent, searches, provider, cost}`, the cost being the fee
+    pi does not price (`search_fee` of the provider each), oldest first."""
     events = []
     for moment, session, agent, data in _custom(jht_home, since_ts, SEARCH_ENTRY):
         count = int(_number(data.get("searches")))
         if count:
+            provider = str(data.get("provider") or "openai")  # an entry written before 18/11 is OpenAI's
+            fee = search_fee(provider)
             events.append({"ts": moment, "session": session, "agent": agent, "searches": count,
-                           "cost": round(count * SEARCH_CALL_USD, 6)})
+                           "provider": provider, "cost": round(count * fee, 6)})
     return sorted(events, key=lambda event: event["ts"])
 
 
