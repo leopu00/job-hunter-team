@@ -24,7 +24,7 @@ const __dirname = dirname(__filename);
 // Repo root: cli/src/commands → up 3 livelli
 const REPO_ROOT = resolve(__dirname, '..', '..', '..');
 // Tenuta dal gate di pin dell'immagine (scripts/runtime_image_pin.py): non cancellarla.
-const DEFAULT_RUNTIME_IMAGE = 'ghcr.io/leopu00/jht@sha256:98afa7ce6670fac36a0247fa750cbbc5ed7a9946fa7c4ce940e5885864118053';
+const DEFAULT_RUNTIME_IMAGE = 'ghcr.io/leopu00/jht@sha256:dd723873b6898717f94ac20fdb6fb049f52b4bb1d5d18cd13541878d78e4575d';
 
 function dockerCompose(args, { cwd = REPO_ROOT, inherit = true } = {}) {
   const r = spawnSync('docker', ['compose', ...args], {
