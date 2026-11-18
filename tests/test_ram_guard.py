@@ -143,3 +143,26 @@ def test_a_worker_a_brake_holds_stays_down_and_is_tried_again():
     api.time.time = lambda: 1000.0 + rg.REOPEN_AFTER_SEC + 1
     rg.step(api, run, probe={"ram_avail_gib": 2.5, "ram_total_gib": 7.7}, sessions={}, restart=lambda s, why: False)
     assert run.state["ram_guard"]["retired_by_guard"] == ["SCOUT-2", "SCOUT-3"]
+
+
+def test_the_scouts_come_back_first_then_the_analisti_then_the_scorer_each_by_its_number():
+    api, run, sent = _run()
+    run.state["ram_guard"] = {"retired_by_guard": ["SCORER-1", "ANALISTA-3", "SCOUT-4", "SCOUT-2"], "last_retire_at": 0}
+    started = []
+    rg.RESTART_PER_LOOK, was = 4, rg.RESTART_PER_LOOK
+    try:
+        rg.step(api, run, probe={"ram_avail_gib": 2.5, "ram_total_gib": 7.7}, sessions={}, restart=lambda s, why: started.append(s) or True)
+    finally:
+        rg.RESTART_PER_LOOK = was
+    assert started == ["SCOUT-2", "SCOUT-4", "ANALISTA-3", "SCORER-1"]
+
+
+def test_workers_retired_for_ram_by_an_older_guard_come_back_too(monkeypatch):
+    api, run, sent = _run()
+    roster = {"agents": {"SCOUT-2": {"status": "retired", "retire_reason": "ram: 0.40 of 7.7 GiB free"},
+                         "SCOUT-3": {"status": "retired", "retire_reason": "the person asked"},
+                         "SCOUT-4": {"status": "active"}}}
+    monkeypatch.setattr(rg, "_load", lambda name: type("R", (), {"load": staticmethod(lambda: roster)}))
+    started = []
+    rg.step(api, run, probe={"ram_avail_gib": 2.5, "ram_total_gib": 7.7}, sessions={}, restart=lambda s, why: started.append(s) or True)
+    assert started == ["SCOUT-2"]
