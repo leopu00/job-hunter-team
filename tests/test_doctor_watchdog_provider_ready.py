@@ -91,3 +91,11 @@ def test_the_doctor_is_not_started_while_the_spending_brake_or_the_quota_holds_t
     (tmp_path / ".daily-halt.flag").write_text("{}", encoding="utf-8")
     assert held() is True
     assert "|| daily_halt_active || setup_open || standby_active; then" in text, "the loop must stop on it before the spawn"
+
+
+def test_a_pause_takes_the_old_failure_of_the_roles_out_of_the_status():
+    """After an update the notice «cannot start» of a start that failed before the pause stayed 47 minutes (giro Linux 18/11)."""
+    text = Path(__file__).resolve().parents[1].joinpath(".launcher", "doctor-watchdog.sh").read_text(encoding="utf-8")
+    gate = text[text.index("|| daily_halt_active || setup_open || standby_active; then"):]
+    gate = gate[: gate.index("finish_tick")]
+    assert "spawn_failed dottore ok" in gate and "spawn_failed mantenitore ok" in gate

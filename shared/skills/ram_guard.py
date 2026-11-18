@@ -147,10 +147,38 @@ RESTART_SCOUTS_PER_LOOK = 2    # the Scouts, two a look: nothing enters without 
 REOPEN_AFTER_SEC = 300         # ... and stay there this long after the last retirement
 
 
+PROTECT_SEC = 900              # a worker the guard brought back is not stepped down by the Captain for this long
+RESTORED_FILE = Path("state") / "ram-restored.json"
+
+
 def reopen_text(back, avail_gib, total_gib):
     return ("[BRIDGE INFO] THE MEMORY IS BACK: %.2f GiB of %.1f GiB are free. The system started again the workers it had retired "
-            "to protect the machine: %s. The capacity is open: you may scale the team as usual."
-            % (avail_gib, total_gib, ", ".join(back)))
+            "to protect the machine: %s. This is the team as it was, not a scale-up: the capacity is open and these workers stay "
+            "(the stepped calibration C-02 does not apply to them, and jht-agent-retire refuses to retire them for %d minutes). "
+            "After that you decide as usual."
+            % (avail_gib, total_gib, ", ".join(back), PROTECT_SEC // 60))
+
+
+def _mark_restored(api, back, now):
+    """Write who came back and when, for jht-agent-retire: the guard and the Captain contradicted each other (giro Linux 18/11: four
+    Scouts retired by C-02 10-12 s after the guard brought them back). Best effort, atomic, 0600."""
+    try:
+        path = Path(api._path("JHT_HOME")) / RESTORED_FILE
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            data = data if isinstance(data, dict) else {}
+        except (OSError, ValueError):
+            data = {}
+        data = {k: v for k, v in data.items() if isinstance(v, (int, float)) and now - v < PROTECT_SEC}
+        data.update({name: int(now) for name in back})
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(".%s.%d.tmp" % (path.name, os.getpid()))
+        fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(data, handle)
+        os.replace(str(tmp), str(path))
+    except Exception as error:  # noqa: BLE001 - not a reason to stop the look
+        print("[bridge V6] WARN ram guard restored marker: %s" % error)
 
 
 def _restart(session, reason):
@@ -214,6 +242,7 @@ def _reopen(api, run, state, avail, total, now, restart, names):
     state["retired_by_guard"] = [n for n in waiting if n not in back]
     if back:
         print("[bridge V6] RAM-GUARD %.2f of %.1f GiB free: restarted %s" % (avail, total, ", ".join(back)))
+        _mark_restored(api, back, now)
         try:
             from sentinel_delivery import notice
             notice(api, run.state, "ram_guard_back:%d" % int(now), api.CAPITANO_SESSION, reopen_text(back, avail, total))

@@ -1120,11 +1120,16 @@ def test_a_bridge_that_cannot_list_the_sessions_wakes_the_ones_the_esc_reached(t
 def test_a_pause_of_the_pace_keeps_a_reserve_for_the_restart_and_says_the_later_time():
     """5 $ over 10 hours from noon, 0.50 $ an hour, 1.25 $ ahead. 2.00 $ spent at 13:00 (1.75 allowed): without a reserve the pace
     catches up at 13:30; the team that comes back spends in a minute what the cache costs, so the reserve (10 % of the budget =
-    0.50 $) and two margins of 0.10 $ move the resume to 14:54, and the pause is not lifted a minute before it."""
+    0.50 $) and a margin of 0.10 $ move the resume to 14:42, and the pause is not lifted a minute before it."""
     config = budget(5, NOON, NOON + 10 * HOUR)
     base = {"budget_cost": 2.0, "recent_cost": 0.0, "before_start": 0.0}
     verdict = cap.decide(config, base, False, NOON + HOUR, cap.team_budget.read(config))
-    assert verdict["why"] == "pace" and datetime.fromtimestamp(verdict["resumes"], timezone.utc).strftime("%H:%M") == "14:54", "the line 2.00 + the reserve 0.50 + two margins 0.20"
+    assert verdict["why"] == "pace" and datetime.fromtimestamp(verdict["resumes"], timezone.utc).strftime("%H:%M") == "14:42", "the line 2.00 + the reserve 0.50 + a margin 0.10"
+    # the time said is the time the lift finds (the Linux round said 17:10 and the pause was lifted at 16:50: the announcement
+    # counted a margin the lift does not ask for)
+    said = verdict["resumes"]
+    assert cap.decide(config, base, False, said - 30, cap.team_budget.read(config), held_by_pace=True)["why"] == "pace"
+    assert cap.decide(config, base, False, said + 1, cap.team_budget.read(config), held_by_pace=True)["action"] == "none"
     held = cap.decide(config, base, False, NOON + HOUR + 31 * 60, cap.team_budget.read(config), held_by_pace=True)
     assert held and held["why"] == "pace", "13:31: the plain pace would be lifted, the room for the restart is not there yet"
     assert cap.decide(config, base, False, NOON + 3 * HOUR, cap.team_budget.read(config), held_by_pace=True)["action"] == "none"
