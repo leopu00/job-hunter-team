@@ -4208,11 +4208,12 @@ team_chat_through_switch() {
 
 # `jht team chat` whose REPL the container engine ended from under it: an update changes the units of the Podman machine and restarts
 # it, and the client of the REPL then says its raw line on stderr («Error: Get "http://d/v6.0.2/libpod/exec/…/json": EOF», «Cannot
-# connect to Podman», a connection refused or reset). That line is not for the person: the chat says it is updating and comes back.
+# connect to Podman», a connection refused or reset; or, when the container is created again under the REPL, «Error: retrieving exec
+# session … no such container»). That line is not for the person: the chat says it is updating and comes back.
 # The stderr kept aside by the REPL (see the arm of `team` below) is read, never the REPL's own lines.
 team_chat_engine_gone() {
   [ -s "${1:-}" ] || return 1
-  grep -Eqi 'libpod/.*(EOF|connection (refused|reset))|Cannot connect to Podman|unable to connect to Podman|error during connect|connection reset by peer|unexpected EOF' "$1" 2>/dev/null
+  grep -Eqi 'libpod/.*(EOF|connection (refused|reset))|Cannot connect to Podman|unable to connect to Podman|error during connect|connection reset by peer|unexpected EOF|retrieving exec session' "$1" 2>/dev/null
 }
 
 # The chat the engine ended comes back by itself: wait (JHT_CHAT_UPDATE_WAIT_MAX seconds, 300 by default) for the engine to answer and
@@ -10738,13 +10739,16 @@ case "$SUB" in
     # Podman then says «Error: no container with name or ID "jht" found»: that line is not for the person, the chat says why
     # it stops and comes back. Any other end shows it as before.
     team_err=""
+    # A chat that comes back after an update or a switch is told so (the container side asks again the question that got no answer).
+    team_chat_flags=""
+    if [ "${2:-}" = chat ] && [ -n "${JHT_TEAM_CHAT_RESUME:-}" ]; then team_chat_flags="-e JHT_TEAM_CHAT_RESUMED=1"; fi
     if [ "${2:-}" = chat ] && [ "$EXEC_FLAGS" = "-it" ]; then
       team_err="$(mktemp "${TMPDIR:-/tmp}/jht-chat-err.XXXXXX" 2>/dev/null)" || team_err=""
     fi
     if [ -n "$team_err" ]; then
-      docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@" 2>"$team_err" || team_rc=$?
+      docker exec $EXEC_FLAGS $team_chat_flags -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@" 2>"$team_err" || team_rc=$?
     else
-      docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@" || team_rc=$?
+      docker exec $EXEC_FLAGS $team_chat_flags -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@" || team_rc=$?
     fi
     # the REPL ended because the team is moving onto the full image: it comes back by itself once the team runs again
     if [ "${2:-}" = chat ] && team_chat_ended_by_switch; then

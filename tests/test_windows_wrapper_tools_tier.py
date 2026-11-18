@@ -39,6 +39,7 @@ case "$1" in
   exec) echo "$*" >> "$FAKE/exec-args"
     [ -e "$FAKE/exec-gone" ] && { echo REPL-LINE; echo 'Error: no container with name or ID "jht" found: no such container' >&2; exit 125; }
     [ -e "$FAKE/exec-engine-gone" ] && { echo REPL-LINE; echo 'Error: Get "http://d/v6.0.2/libpod/exec/0123abcd/json": EOF' >&2; exit 125; }
+    [ -e "$FAKE/exec-session-gone" ] && { echo REPL-LINE; echo 'Error: retrieving exec session 0123abcd from container 99ff00: no container with ID 99ff00 found in database: no such container' >&2; exit 125; }
     exit 0 ;;
   pull) echo "$*" >> "$FAKE/pulls"; n=0; while [ -e "$FAKE/pull-hold" ] && [ "$n" -lt 300 ]; do sleep 0.1; n=$((n+1)); done; [ -e "$FAKE/pull-fails" ] && exit 1; : > "$FAKE/full-present"; exit 0 ;;
 esac
@@ -687,6 +688,9 @@ def test_jht_team_chat_comes_back_by_itself_when_the_switch_ended_it():
                      r"\s+Complete-JhtTeamChatErrors\n", arm)
     assert "Invoke-JhtTeamChatThroughUpdate $Rest" in arm and "Test-JhtTeamChatEngineGone $code" in arm
     assert "$code = Invoke-JhtTeamChatOnConsole $hostFlags" in arm
+    # a chat that comes back after an update or a switch tells the container side, which asks again the question left unanswered
+    assert "$hostFlags += @('-e', 'JHT_TEAM_CHAT_RESUMED=1')" in arm
+    assert arm.index("JHT_TEAM_CHAT_RESUMED=1") < arm.index("Invoke-JhtTeamChatOnConsole $hostFlags")
     assert "exit $code" in arm
     body = text[text.index("function Invoke-JhtTeamChatThroughSwitch {"):]
     body = body[:body.index("\n}\n")]
@@ -945,6 +949,9 @@ def test_the_raw_line_of_an_engine_that_went_away_is_told_apart_from_any_other_e
     «Error: Get "http://d/v6.0.2/libpod/exec/…/json": EOF»; the chat now says it is updating and comes back."""
     assert "GONE True" in _engine_gone_check(box, "exec-engine-gone").stdout
     (box.fake / "exec-engine-gone").unlink()
+    # build 13: the container created again under the chat, «Error: retrieving exec session … no such container»
+    assert "GONE True" in _engine_gone_check(box, "exec-session-gone").stdout
+    (box.fake / "exec-session-gone").unlink()
     assert "GONE False" in _engine_gone_check(box, "exec-gone").stdout          # the switch's line has its own path
     (box.fake / "exec-gone").unlink()
     assert "GONE False" in _engine_gone_check(box, None).stdout                 # a chat that ended well

@@ -2184,14 +2184,15 @@ function Invoke-JhtTeamChatThroughSwitch {
 
 # `jht team chat` whose REPL the container engine ended from under it: an update changes the units of the Podman machine and restarts
 # it, and the client of the REPL then says its raw line on stderr («Error: Get "http://d/v6.0.2/libpod/exec/.../json": EOF», «Cannot
-# connect to Podman», a connection refused or reset). That line is not for the person: the chat says it is updating and comes back.
+# connect to Podman», a connection refused or reset; or, when the container is created again under the REPL, «Error: retrieving exec
+# session … no such container»). That line is not for the person: the chat says it is updating and comes back.
 # Only the stderr kept aside by Invoke-JhtTeamChatOnConsole is read, never the REPL's own lines.
 function Test-JhtTeamChatEngineGone {
   param($Code)
   $file = $script:JhtTeamChatErrFile
   if ($null -eq $Code -or [int]$Code -eq 0 -or -not $file) { return $false }
   try { $text = [IO.File]::ReadAllText($file) } catch { return $false }
-  return [bool]($text -match '(?i)libpod/.*(EOF|connection (refused|reset))|Cannot connect to Podman|unable to connect to Podman|error during connect|connection reset by peer|unexpected EOF')
+  return [bool]($text -match '(?i)libpod/.*(EOF|connection (refused|reset))|Cannot connect to Podman|unable to connect to Podman|error during connect|connection reset by peer|unexpected EOF|retrieving exec session')
 }
 
 # The chat the engine ended comes back by itself: wait (JHT_CHAT_UPDATE_WAIT_MAX seconds, 300 by default) for the engine to answer and
@@ -8684,6 +8685,8 @@ switch ($Sub) {
     if ($Sub -ceq 'team' -and $Rest.Count -gt 1 -and $Rest[0] -ceq 'chat' -and $env:JHT_TEAM_CHAT_RESUME) { Invoke-JhtTeamChatResume $Rest[1] }
     else { Ensure-Up }
     $hostFlags = @('-e', "JHT_HOST_TYPE=$env:JHT_HOST_TYPE")
+    # a chat that comes back after an update or a switch is told so (the container side asks again the question that got no answer)
+    if ($Sub -ceq 'team' -and $Rest.Count -gt 0 -and $Rest[0] -ceq 'chat' -and $env:JHT_TEAM_CHAT_RESUME) { $hostFlags += @('-e', 'JHT_TEAM_CHAT_RESUMED=1') }
     $code = $null
     if ($Sub -ceq 'team' -and $Rest.Count -gt 0 -and $Rest[0] -ceq 'chat') { $code = Invoke-JhtTeamChatOnConsole $hostFlags }
     if ($null -eq $code) {

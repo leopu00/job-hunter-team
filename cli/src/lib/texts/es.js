@@ -91,6 +91,8 @@ export default {
   "chat.repl.busy": "(todavía responde a tu mensaje anterior: el tuyo sale en cuanto quede libre)",
   "chat.repl.no_reply": "(aún sin respuesta: /read la muestra cuando llegue)",
   "chat.repl.closed": "Chat cerrado.",
+  "chat.repl.asked_again": "El equipo se estaba reiniciando y tu última pregunta se quedó sin respuesta. La repito: «{text}»",
+  "chat.repl.asked_again_failed": "No he podido repetir tu última pregunta. Envíala de nuevo: «{text}»",
   "agents.paused_of": "{running} de {total} en pausa (presupuesto)",
   "agents.paused": "en pausa",
   "agents.ram_guard": "A las {at} la memoria del ordenador estaba casi llena ({free} GiB libres de {total}): se detuvieron {n} trabajadores para protegerla. La búsqueda sigue con menos trabajadores hasta que la memoria vuelva.",

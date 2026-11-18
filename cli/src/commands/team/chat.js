@@ -9,6 +9,7 @@
 // exec, altrimenti tmux host.
 
 import { execSync, spawnSync } from 'node:child_process';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { stdin as input, stdout as output } from 'node:process';
@@ -443,6 +444,60 @@ export function sendAction(agentArg, message) {
   if (credit) console.log(c.yellow(`⚠ ${credit}`));
 }
 
+// ── The question that got no answer ────────────────────────────────
+
+// An update or a switch of the tools removes the container under the REPL: the agent's terminal goes with it, and the question
+// asked a moment before is never answered. The REPL keeps the last text it sent, in the team's own folder (it outlives the
+// container), until something the agent wrote comes back. The chat that the wrapper brings back after the restart
+// (JHT_TEAM_CHAT_RESUMED=1) asks it again, once, when nothing came after it.
+const ASKED_MAX_AGE_S = 30 * 60;
+
+function askedFile(agent, home) {
+  return join(home, 'state', `chat-asked-${String(agent).replace(/[^a-z0-9-]/gi, '')}.json`);
+}
+
+/** Keeps `text` as the last question sent to `agent`. Never throws: a chat that cannot keep it works as before. */
+export function rememberAsked(agent, text, { home = JHT_HOME, now = () => Date.now() / 1000 } = {}) {
+  try {
+    mkdirSync(join(home, 'state'), { recursive: true });
+    writeFileSync(askedFile(agent, home), JSON.stringify({ text, at: now() }), { mode: 0o600 });
+  } catch {
+    /* nothing kept, nothing asked again */
+  }
+}
+
+/** The agent answered: there is nothing to ask again. */
+export function forgetAsked(agent, { home = JHT_HOME } = {}) {
+  try {
+    rmSync(askedFile(agent, home), { force: true });
+  } catch {
+    /* nothing to forget */
+  }
+}
+
+/** Whether a row of the chat is something the agent said (not the person's own turn, not a line of the system). */
+function isAgentRow(row) {
+  return Boolean(row) && !row.card && row.role !== 'user' && row.role !== 'system';
+}
+
+/**
+ * The text of the last question that nothing answered, or null: none kept, kept too long ago to still be the one, or an
+ * agent row came after it (the answer is there). `rows` are the latest rows of the chat.
+ */
+export function unansweredQuestion(agent, rows, { home = JHT_HOME, now = () => Date.now() / 1000 } = {}) {
+  let kept;
+  try {
+    kept = JSON.parse(readFileSync(askedFile(agent, home), 'utf8'));
+  } catch {
+    return null;
+  }
+  const at = Number(kept?.at);
+  const text = typeof kept?.text === 'string' ? kept.text.trim() : '';
+  if (!text || !(at > 0) || now() - at > ASKED_MAX_AGE_S) return null;
+  if ((rows || []).some((row) => isAgentRow(row) && Number(row.at) >= at - 1)) return null;
+  return text;
+}
+
 // ── chat: REPL interattivo ─────────────────────────────────────────
 
 export async function chatAction(agentArg, options = {}) {
@@ -482,10 +537,13 @@ export async function chatAction(agentArg, options = {}) {
   const notice = () => blockedNoticeFor(session, options.blockedNotice || {});
   const printNotice = (lines) => { for (const line of lines) console.log(c.yellow(line)); };
   const show = (rows) => { for (const row of rows) console.log(`${row.card ? formatCard(row.card) : formatChatMessage(row, agent)}\n`); };
+  let lost = null;
   if (feed) {
     const past = feed.history();
     if (past === null) console.log(c.dim(`  ${say('chat.repl.unreadable')}\n`));
     else if (past.length) show(past);
+    // the chat comes back after an update or a switch of the tools: the question that got no answer is asked again
+    if (past !== null && process.env.JHT_TEAM_CHAT_RESUMED === '1') lost = unansweredQuestion(agent, past);
   }
   printNotice(notice());
   // A message that arrives while the person is at the prompt is printed above it.
@@ -494,6 +552,7 @@ export async function chatAction(agentArg, options = {}) {
     poller = setInterval(() => {
       const rows = pump.tick();
       if (!rows.length) return;
+      if (rows.some(isAgentRow)) forgetAsked(agent);
       output.write('\r\x1b[K');
       show(rows);
       rl.prompt(true);
@@ -509,7 +568,46 @@ export async function chatAction(agentArg, options = {}) {
     console.log(c.dim('──────────────────────────────────────────────────'));
   };
 
+  // One question to the agent: wait for it to be free, send it, keep it until it is answered, wait for the answer.
+  // True when the message was sent.
+  const ask = async (msg, { again = false } = {}) => {
+    // Never paste into a turn in progress: the text can be lost without a word. Wait for the agent, say so.
+    const free = await waitForFreePane({
+      capture: () => capturePane(session, 12),
+      onWait: () => console.log(c.dim(`  ${say('chat.repl.busy')}`)),
+    });
+    if (!free) {
+      console.log(c.red('  Your message was NOT sent: the agent is still busy after 3 minutes.'));
+      console.log(c.dim(`  Send it again when it has answered (/read shows the answer). Your text: ${msg.length > 80 ? msg.slice(0, 80) + '…' : msg}`));
+      return false;
+    }
+    const r = sendMessage(session, msg);
+    if (!r.ok) {
+      console.log(c.red(`  : Failed sending: ${(r.error || '').split('\n')[0]}`));
+      return false;
+    }
+    if (agent) rememberAsked(agent, msg);
+    // The answer is in the chat: wait for it for a while; the terminal's screen only when the chat cannot be read.
+    if (!options.quiet) {
+      if (feed) {
+        const rows = await pump.awaitReply({ stop: again ? () => false : typedLines.pending });
+        if (rows.some(isAgentRow)) forgetAsked(agent);
+        if (rows.length) show(rows);
+        else if (!typedLines.pending()) { const why = notice(); if (why.length) printNotice(why); else console.log(c.dim(`  ${say('chat.repl.no_reply')}`)); }
+      } else {
+        await new Promise((res) => setTimeout(res, 3000));
+        showPane(8);
+      }
+    }
+    return true;
+  };
+
   try {
+    if (lost) {
+      console.log(c.dim(`  ${say('chat.repl.asked_again', { text: lost.length > 80 ? lost.slice(0, 80) + '…' : lost }, language)}`));
+      const sent = await ask(lost, { again: true });
+      if (!sent) console.log(c.yellow(`  ${say('chat.repl.asked_again_failed', { text: lost.length > 80 ? lost.slice(0, 80) + '…' : lost }, language)}`));
+    }
     while (true) {
       const line = await typedLines.next(c.bold('>') + ' ');
       if (line === null) break;
@@ -539,32 +637,7 @@ export async function chatAction(agentArg, options = {}) {
         console.log(said.failed ? c.red(`  ${said.text}`) : c.green(`  ✓ ${said.text}`));
         continue;
       }
-      // Never paste into a turn in progress: the text can be lost without a word. Wait for the agent, say so.
-      const free = await waitForFreePane({
-        capture: () => capturePane(session, 12),
-        onWait: () => console.log(c.dim(`  ${say('chat.repl.busy')}`)),
-      });
-      if (!free) {
-        console.log(c.red('  Your message was NOT sent: the agent is still busy after 3 minutes.'));
-        console.log(c.dim(`  Send it again when it has answered (/read shows the answer). Your text: ${msg.length > 80 ? msg.slice(0, 80) + '…' : msg}`));
-        continue;
-      }
-      const r = sendMessage(session, msg);
-      if (!r.ok) {
-        console.log(c.red(`  : Failed sending: ${(r.error || '').split('\n')[0]}`));
-        continue;
-      }
-      // The answer is in the chat: wait for it for a while; the terminal's screen only when the chat cannot be read.
-      if (!options.quiet) {
-        if (feed) {
-          const rows = await pump.awaitReply({ stop: typedLines.pending });
-          if (rows.length) show(rows);
-          else if (!typedLines.pending()) { const why = notice(); if (why.length) printNotice(why); else console.log(c.dim(`  ${say('chat.repl.no_reply')}`)); }
-        } else {
-          await new Promise((res) => setTimeout(res, 3000));
-          showPane(8);
-        }
-      }
+      await ask(msg);
     }
   } finally {
     if (poller) clearInterval(poller);
