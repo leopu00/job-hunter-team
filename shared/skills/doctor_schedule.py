@@ -215,6 +215,19 @@ def _due_window_slot(
     return None
 
 
+def _service_blocked(role: str) -> bool:
+    """True when the service roles have used their share of the budget (service_budget.py): the round is not claimed, and the
+    person is told once a day. A reading that fails is not a block."""
+    try:
+        if str(Path(__file__).resolve().parent) not in sys.path:
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import service_budget
+
+        return service_budget.blocked(role)
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def check() -> str:
     b = _bounds_now()
     if b is None:
@@ -258,6 +271,8 @@ def claim() -> str:
             )
             if now_s - last < FALLBACK_SEC:
                 return "WAIT"
+            if _service_blocked("dottore"):
+                return "WAIT"
             state["fallback_claimed_at"] = now_s
             _save_state(state)
             return _with_retry("FALLBACK", int(state.get("fallback_attempts") or 0))
@@ -267,6 +282,10 @@ def claim() -> str:
         mid_min = (end - start).total_seconds() / 120.0
         state, changed = _window_state(state, start)
         slot = _due_window_slot(state, elapsed_min, mid_min)
+        if slot and _service_blocked("dottore"):
+            if changed:
+                _save_state(state)
+            return "WAIT"
         if slot:
             state[WINDOW_SLOTS[slot][1]] = True
             _save_state(state)
@@ -463,6 +482,8 @@ def check_maintainer() -> str:
         return "WAIT"
     if not is_within_working_hours():
         return "OFF"
+    if _service_blocked("mantenitore"):
+        return "WAIT"
     return "MAINT"
 
 

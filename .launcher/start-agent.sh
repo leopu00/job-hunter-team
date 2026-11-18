@@ -807,6 +807,13 @@ if [ "$ROLE" = "mentor" ] && [ "${JHT_MENTOR_NOW:-}" != "1" ] && ! tmux has-sess
     echo "MENTOR not started: it has nothing to read until the first positions have a score (the watchdog starts it then; JHT_MENTOR_NOW=1 starts it anyway)." >&2
     exit 75
   fi
+  # The service roles have used their share of the budget (service_budget.py: exit 3): the money goes to finding and scoring.
+  _mentor_rc=0
+  python3 /app/shared/skills/service_budget.py allow mentor >/dev/null 2>&1 || _mentor_rc=$?
+  if [ "$_mentor_rc" -eq 3 ]; then
+    echo "MENTOR not started: the service roles (Dottore, Mantenitore, Mentor) have used their share of the budget (JHT_MENTOR_NOW=1 starts it anyway)." >&2
+    exit 75
+  fi
 fi
 # --- fine cancello del Mentor
 # --- cancello del Capitano

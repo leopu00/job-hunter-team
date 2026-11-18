@@ -1432,6 +1432,7 @@
   "pi_cap.halt_period": "⛔ The team is paused: the period you set ended at %s (%s spent of %s). Nothing is lost. To go on, set a new period with jht setup.",
   "pi_cap.halt_pace": "⏸️ The team is pausing for a while: it has spent %s of the %s budget, faster than your hours allow. Nothing is lost. It resumes by itself at %s.",
   "pi_cap.resume_budget": "▶️ The budget you set allows work again: the team is resuming.",
+  "service_budget.skipped": "ℹ️ %s skips its round this time: the agents that look after the team (Dottore, Mantenitore, Mentor) have already used %s of the %s budget you set, the %s share they may take, so the rest goes to finding and scoring positions. Nothing is lost: they are back with a new budget.",
   "integration.label.not_installed": "not installed",
   "integration.label.downloading": "downloading",
   "integration.label.ready": "added",

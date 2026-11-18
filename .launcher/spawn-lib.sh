@@ -568,6 +568,17 @@ jht_spawn_repl_cmd() {
   fi
   case "$provider" in
     openai|codex)
+      # Un ruolo di servizio parte sul modello della sua classe (senza modello Codex userebbe il suo predefinito, il piu' caro).
+      if [ -z "$override" ]; then
+        local codex_class
+        codex_class="$(jht_spawn_pi_role_pin "$role")"
+        [ -n "$codex_class" ] || codex_class="$(jht_spawn_service_class "$role")"
+        if [ -n "$codex_class" ]; then
+          # shellcheck source=/dev/null
+          . "$JHT_SPAWN_LIB_DIR/role-models.sh"
+          override="$(resolve_codex_model "$codex_class")" || return 2
+        fi
+      fi
       python3 "$JHT_SPAWN_LIB_DIR/../shared/skills/codex_launch_policy.py" --model "$override" --effort high --doc-max-bytes "$JHT_CODEX_PROJECT_DOC_MAX_BYTES" --command ;;
     kimi|moonshot) printf '%s\n' "kimi --yolo" ;;
     pi) jht_spawn_pi_repl_cmd "$pi_dir" "$override" "$role" ;;
@@ -584,7 +595,12 @@ d["bypassPermissionsModeAccepted"] = True
 os.makedirs(os.path.dirname(f), exist_ok=True)
 json.dump(d, open(f, "w"), indent=2)
 PYDOC
-      printf '%s\n' "IS_SANDBOX=1 claude --dangerously-skip-permissions --effort high --model ${override:-sonnet}" ;;
+      # Un ruolo di servizio (Dottore, Mantenitore) ha la sua classe (jht_spawn_service_class); gli altri restano su Sonnet.
+      local alias="sonnet" class
+      class="$(jht_spawn_pi_role_pin "$role")"
+      [ -n "$class" ] || class="$(jht_spawn_service_class "$role")"
+      case "$class" in sol) alias=opus ;; terra) alias=sonnet ;; luna) alias=haiku ;; esac
+      printf '%s\n' "IS_SANDBOX=1 claude --dangerously-skip-permissions --effort high --model ${override:-$alias}" ;;
     *)
       echo "[spawn-lib] ERROR: unsupported configured provider '$provider'" >&2
       return 2

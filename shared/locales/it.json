@@ -1432,6 +1432,7 @@
   "pi_cap.halt_period": "⛔ Il team è in pausa: il periodo che hai scelto è finito alle %s (spesi %s di %s). Non si perde niente. Per continuare, scegli un nuovo periodo con jht setup.",
   "pi_cap.halt_pace": "⏸️ Il team si ferma per un po': ha speso %s del budget di %s, più in fretta di quanto permettono i tuoi orari. Non si perde niente. Riprende da solo alle %s.",
   "pi_cap.resume_budget": "▶️ Il budget che hai scelto permette di nuovo di lavorare: il team riparte.",
+  "service_budget.skipped": "ℹ️ %s salta il suo giro questa volta: gli agenti che si occupano della squadra (Dottore, Mantenitore, Mentor) hanno già usato %s del budget di %s che hai scelto, la quota di %s che possono prendere, così il resto va a cercare e valutare posizioni. Non si perde niente: tornano con un nuovo budget.",
   "integration.label.not_installed": "non installato",
   "integration.label.downloading": "in scaricamento",
   "integration.label.ready": "aggiunto",

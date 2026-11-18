@@ -20,6 +20,8 @@ rolemodel|kimi|scout|luna
 rolemodel|kimi|analista|luna
 rolemodel|kimi|sentinella|luna
 rolemodel|claude|capitano|terra
+# The Mentor too: it reads and writes a digest, and on Opus (twice the price of Sonnet) one start cost 0.30 $ of a 1.97 $ run.
+rolemodel|claude|mentor|terra
 rolemodel|claude|scout|luna
 rolemodel|claude|analista|luna
 rolemodel|claude|sentinella|luna
