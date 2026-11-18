@@ -100,3 +100,44 @@ def test_a_notifier_that_fails_does_not_lose_the_retirement():
     def boom(text, reason):
         raise RuntimeError("down")
     assert rg.step(api, run, probe={"ram_avail_gib": 0.4, "ram_total_gib": 7.7}, sessions=TEAM, retire=lambda s, why: True, notify_user=boom) == ["SCOUT-3", "SCOUT-2"]
+
+
+def test_a_captain_notice_that_fails_silently_does_not_hide_the_notice_to_the_person(monkeypatch):
+    import sentinel_delivery
+    api, run, sent = _run()
+    told = []
+
+    def boom(*a, **k):
+        raise RuntimeError("bridge down")
+
+    monkeypatch.setattr(sentinel_delivery, "notice", boom)
+    done = rg.step(api, run, probe={"ram_avail_gib": 0.4, "ram_total_gib": 7.7}, sessions=TEAM, retire=lambda s, why: True,
+                   notify_user=lambda text, reason: told.append(reason))
+    assert done == ["SCOUT-3", "SCOUT-2"] and len(told) == 1
+
+
+def test_the_retired_workers_come_back_when_the_memory_is_well_over_the_threshold_and_the_captain_knows():
+    api, run, sent = _run()
+    rg.step(api, run, notify_user=lambda *a: None, probe={"ram_avail_gib": 0.4, "ram_total_gib": 7.7}, sessions=TEAM, retire=lambda s, why: True)
+    assert run.state["ram_guard"]["retired_by_guard"] == ["SCOUT-2", "SCOUT-3"]
+    started = []
+    alive = {"SCOUT-1": 1}
+    ok = {"ram_avail_gib": 2.5, "ram_total_gib": 7.7}
+    api.time.time = lambda: 1000.0 + rg.RETIRE_COOLDOWN_SEC + 1
+    assert rg.step(api, run, probe=ok, sessions=alive, restart=lambda s, why: started.append(s) or True) == []
+    assert started == [], "not for a while after the last retirement"
+    api.time.time = lambda: 1000.0 + rg.REOPEN_AFTER_SEC + 1
+    rg.step(api, run, probe={"ram_avail_gib": 0.6, "ram_total_gib": 7.7}, sessions=alive, restart=lambda s, why: started.append(s) or True)
+    assert started == [], "just over the threshold is not enough"
+    sent.clear()
+    rg.step(api, run, probe=ok, sessions=alive, restart=lambda s, why: started.append(s) or True)
+    assert started == ["SCOUT-2", "SCOUT-3"] and run.state["ram_guard"]["retired_by_guard"] == []
+    assert [s for s, _ in sent] == ["CAPITANO"] and "capacity is open" in sent[0][1]
+
+
+def test_a_worker_a_brake_holds_stays_down_and_is_tried_again():
+    api, run, sent = _run()
+    rg.step(api, run, notify_user=lambda *a: None, probe={"ram_avail_gib": 0.4, "ram_total_gib": 7.7}, sessions=TEAM, retire=lambda s, why: True)
+    api.time.time = lambda: 1000.0 + rg.REOPEN_AFTER_SEC + 1
+    rg.step(api, run, probe={"ram_avail_gib": 2.5, "ram_total_gib": 7.7}, sessions={}, restart=lambda s, why: False)
+    assert run.state["ram_guard"]["retired_by_guard"] == ["SCOUT-2", "SCOUT-3"]

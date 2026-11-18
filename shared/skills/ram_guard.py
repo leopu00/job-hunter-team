@@ -141,8 +141,58 @@ def _tell_the_person(api, run, done, avail, total, now, notify_user):
         print("[bridge V6] WARN ram guard status: %s" % error)
 
 
-def step(api, run, probe=None, sessions=None, retire=None, notify_user=None):
-    """One look. Never raises. `probe`, `sessions`, `retire` and `notify_user` are for the tests."""
+REOPEN_MARGIN = 1.5            # the memory must be this much over the threshold before the capacity comes back
+REOPEN_AFTER_SEC = 300         # ... and stay there this long after the last retirement
+
+
+def reopen_text(back, avail_gib, total_gib):
+    return ("[BRIDGE INFO] THE MEMORY IS BACK: %.2f GiB of %.1f GiB are free. The system started again the workers it had retired "
+            "to protect the machine: %s. The capacity is open: you may scale the team as usual."
+            % (avail_gib, total_gib, ", ".join(back)))
+
+
+def _restart(session, reason):
+    """Start a retired worker again through its launcher; a normal spawn turns `retired` back into `active`."""
+    m = WORKER.match(session or "")
+    if m is None:
+        return False
+    queue = _load("queue_demand")
+    try:
+        if queue is None or queue.brake(time.time(), 0) or queue.held_back(session):
+            return False    # a brake (budget, halt, standby, off hours) or a hold the person set: the worker stays down
+    except Exception:  # noqa: BLE001 - a brake that raises is a brake
+        return False
+    burst = _load("burst_roster")
+    if burst is None:
+        return False
+    done = subprocess.run(["bash", burst._launcher(), m.group(1).lower(), m.group(2)], capture_output=True, text=True,  # noqa: SLF001
+                          timeout=burst.SPAWN_TIMEOUT_S, check=False, stdin=subprocess.DEVNULL,
+                          env=dict(os.environ, JHT_WORKER_BRIEF="The memory guard retired you and the memory is back: resume the main loop."))
+    return done.returncode == 0
+
+
+def _reopen(api, run, state, avail, total, now, restart, names):
+    """Memory well above the threshold for a while: bring back the workers the guard retired, and tell the Captain."""
+    waiting = [n for n in state.get("retired_by_guard") or [] if n not in names]
+    if not waiting:
+        state["retired_by_guard"] = []
+        return []
+    if avail < threshold_gib(total) * REOPEN_MARGIN or now - float(state.get("last_retire_at") or 0.0) < REOPEN_AFTER_SEC:
+        return []
+    back = [n for n in waiting if restart(n, "ram guard: memory back")]
+    state["retired_by_guard"] = [n for n in waiting if n not in back]
+    if back:
+        print("[bridge V6] RAM-GUARD %.2f of %.1f GiB free: restarted %s" % (avail, total, ", ".join(back)))
+        try:
+            from sentinel_delivery import notice
+            notice(api, run.state, "ram_guard_back:%d" % int(now), api.CAPITANO_SESSION, reopen_text(back, avail, total))
+        except Exception as error:  # noqa: BLE001
+            print("[bridge V6] WARN ram guard reopen notice: %s" % error)
+    return back
+
+
+def step(api, run, probe=None, sessions=None, retire=None, notify_user=None, restart=None):
+    """One look. Never raises. `probe`, `sessions`, `retire`, `notify_user` and `restart` are for the tests."""
     try:
         state = run.state.setdefault("ram_guard", {})
         now = api.time.time()
@@ -151,9 +201,12 @@ def step(api, run, probe=None, sessions=None, retire=None, notify_user=None):
         if probe is None:
             probe = _load("host_capacity").read_probe()
         avail, total = probe.get("ram_avail_gib"), probe.get("ram_total_gib")
-        if avail is None or total is None or avail >= threshold_gib(total):
+        if avail is None or total is None:
             return []
         names = sessions if sessions is not None else _live_sessions()
+        if avail >= threshold_gib(total):
+            _reopen(api, run, state, avail, total, now, restart or _restart, names)
+            return []
         retire = retire or _retire
         done = []
         for session in decide(avail, total, names):
@@ -161,10 +214,15 @@ def step(api, run, probe=None, sessions=None, retire=None, notify_user=None):
                 done.append(session)
         if done:
             state["last_retire_at"] = now
+            state["retired_by_guard"] = sorted(set(state.get("retired_by_guard") or []) | set(done))
             print("[bridge V6] RAM-GUARD %.2f of %.1f GiB free: retired %s" % (avail, total, ", ".join(done)))
-            from sentinel_delivery import notice
-            notice(api, run.state, "ram_guard:%d" % int(now), api.CAPITANO_SESSION, captain_text(done, avail, total))
+            # the person first and on its own road: the notice to the Captain can fail without a word and must not hide this one
             _tell_the_person(api, run, done, avail, total, now, notify_user)
+            try:
+                from sentinel_delivery import notice
+                notice(api, run.state, "ram_guard:%d" % int(now), api.CAPITANO_SESSION, captain_text(done, avail, total))
+            except Exception as error:  # noqa: BLE001
+                print("[bridge V6] WARN ram guard captain notice: %s" % error)
         return done
     except Exception as error:  # noqa: BLE001 - a guard that fails must not stop the tick
         print("[bridge V6] WARN ram guard: %s" % error)

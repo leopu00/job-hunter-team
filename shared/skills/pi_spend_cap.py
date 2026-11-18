@@ -126,8 +126,13 @@ def spend(home, now_ts, budget_start=None, split_at=None):
     return out
 
 
-def _budget_verdict(config, budget, spent, now):
-    """The pause the budget asks for, or None."""
+RESTART_RESERVE_SHARE = 0.10   # a team stopped by the pace comes back only with this share of the budget of room under the pace
+
+
+def _budget_verdict(config, budget, spent, now, held_by_pace=False):
+    """The pause the budget asks for, or None. `held_by_pace`: the team is paused by the pace right now; it then stays paused until
+    the pace leaves the room a restart costs (seven sessions starting together rewrite their cache: 0.85 $ in 86 s, giro Linux
+    18/11, with the pace lifted at the very dollar it had stopped on)."""
     used = spent.get("budget_cost") or 0.0
     # What the team will have spent by the next look, at the pace of the last minutes: the brake stops BEFORE the budget, not
     # one look after it (with Claude ~0.5 $ a minute, a look a minute late is half a dollar over).
@@ -149,13 +154,15 @@ def _budget_verdict(config, budget, spent, now):
     if period["usd"] <= 0:
         return None
     allowance = team_budget.allowed(config, period, now)
-    if used - before >= allowance:
+    reserve = RESTART_RESERVE_SHARE * period["usd"] if held_by_pace else 0.0
+    # the pace looks AHEAD like the budget does: a team that restarts spends in the first minute what the next look would only see
+    if used - before + ahead + reserve >= allowance:
         return dict(common, why="pace", ceiling=round(before + allowance, 6),
-                    resumes=team_budget.resumes_at(config, period, used - before) or budget["ends"])
+                    resumes=team_budget.resumes_at(config, period, used - before + RESTART_RESERVE_SHARE * period["usd"]) or budget["ends"])
     return None
 
 
-def decide(config, spent, no_quota_mode, now=None, budget=None):
+def decide(config, spent, no_quota_mode, now=None, budget=None, held_by_pace=False):
     """{"action": "none" | "halt" | "warn", ...}. Pure: a config, a measure and a moment in, a verdict out. `budget` is
     the one team_budget.read gave with the start of a duration resolved; None reads it from the config alone."""
     # Before the mode: the bridge declares the no-quota mode at the END of its first tick, so a team that found the
@@ -169,7 +176,7 @@ def decide(config, spent, no_quota_mode, now=None, budget=None):
     # «cleared» at 2.05 $ of 2, then 2.81 $).
     budget = budget if budget is not None else team_budget.read(config)
     if budget is not None and now is not None:
-        verdict = _budget_verdict(config, budget, spent, now)
+        verdict = _budget_verdict(config, budget, spent, now, held_by_pace)
         if verdict:
             return verdict
     if not no_quota_mode:
@@ -542,10 +549,11 @@ def step(api, run, notify_user=None):
         spent = spend(home, now, budget["counts_from"] if budget else None, budget["starts"] if budget else None)
         if budget is not None and budget["starts"] is None and spent["first_worker"] is not None:
             budget = _start(home, budget, spent["first_worker"], run, api, spent.get("before_start") or 0.0)
-        verdict = decide(config, spent, bool(run.state.get("no_quota_declared")), now, budget)
         day = datetime.fromtimestamp(now).strftime("%Y-%m-%d")
         flag = _flag(api)
         mine = bool(flag) and flag.get("reason") == REASON
+        held_by_pace = mine and (flag.get("pi_spend_cap") or {}).get("why") == "pace" and api._daily_halt_active()
+        verdict = decide(config, spent, bool(run.state.get("no_quota_declared")), now, budget, held_by_pace)
         if verdict["action"] == "halt":
             if run._bi_on:
                 print("[bridge V6] %s BURN-INTENT: pi spending ceiling reached, the team stays active (user override)"
