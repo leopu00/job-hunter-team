@@ -220,8 +220,8 @@ def query_positions(args):
         print("No positions found.")
         return
 
-    print(f"\n{'ID':>4} {'Score':>5} {'Status':>10} {'Company':<20} {'Title':<35} {'Remote':<12} {'Source':<10}")
-    print("-" * 100)
+    print(f"\n{'ID':>4} {'Score':>5} {'Status':>10} {'Company':<20} {'Title':<35} {'Location':<18} {'Remote':<12} {'Source':<10}")
+    print("-" * 120)
     for r in rows:
         score = str(r['total_score']) if r['total_score'] else '-'
         remote = r['remote_type'] or '-'
@@ -229,7 +229,9 @@ def query_positions(args):
         status = r['status'] or '-'
         company = flatten_external_value(r['company'])[:20]
         title = flatten_external_value(r['title'])[:35]
-        print(f"{r['id']:>4} {score:>5} {status:>10} {company:<20} {title:<35} {remote:<12} {source:<10}")
+        # the place of the position as the position says it: the company's name can hold another city's name
+        place = flatten_external_value(r['location'] or r['loc_city'] or '-')[:18]
+        print(f"{r['id']:>4} {score:>5} {status:>10} {company:<20} {title:<35} {place:<18} {remote:<12} {source:<10}")
 
     print(f"\nTotal: {len(rows)} positions")
     conn.close()

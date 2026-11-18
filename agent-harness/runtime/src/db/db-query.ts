@@ -314,15 +314,17 @@ export function dbQuery(db: () => Database, argv: string[], options: DbQueryOpti
       return done();
     }
     print(
-      `\n${pyPad("ID", 4, ">")} ${pyPad("Score", 5, ">")} ${pyPad("Status", 10, ">")} ${pyPad("Company", 20, "<")} ${pyPad("Title", 35, "<")} ${pyPad("Remote", 12, "<")} ${pyPad("Source", 10, "<")}`,
+      `\n${pyPad("ID", 4, ">")} ${pyPad("Score", 5, ">")} ${pyPad("Status", 10, ">")} ${pyPad("Company", 20, "<")} ${pyPad("Title", 35, "<")} ${pyPad("Location", 18, "<")} ${pyPad("Remote", 12, "<")} ${pyPad("Source", 10, "<")}`,
     );
-    print("-".repeat(100));
+    print("-".repeat(120));
     for (const r of rows) {
       const or = (col: string) => (pyTruthy(r[col]) ? s(r, col) : "-");
       const company = pySlice(flattenExternalValue(r["company"]), 0, 20);
       const title = pySlice(flattenExternalValue(r["title"]), 0, 35);
+      // the place of the position as the position says it: the company's name can hold another city's name
+      const place = pySlice(flattenExternalValue(pyTruthy(r["location"]) ? r["location"] : pyTruthy(r["loc_city"]) ? r["loc_city"] : "-"), 0, 18);
       print(
-        `${pyPad(s(r, "id"), 4, ">")} ${pyPad(or("total_score"), 5, ">")} ${pyPad(or("status"), 10, ">")} ${pyPad(company, 20, "<")} ${pyPad(title, 35, "<")} ${pyPad(or("remote_type"), 12, "<")} ${pyPad(or("source"), 10, "<")}`,
+        `${pyPad(s(r, "id"), 4, ">")} ${pyPad(or("total_score"), 5, ">")} ${pyPad(or("status"), 10, ">")} ${pyPad(company, 20, "<")} ${pyPad(title, 35, "<")} ${pyPad(place, 18, "<")} ${pyPad(or("remote_type"), 12, "<")} ${pyPad(or("source"), 10, "<")}`,
       );
     }
     print(`\nTotal: ${rows.length} positions`);
