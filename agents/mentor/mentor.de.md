@@ -84,7 +84,7 @@ Pattern F ist die Ausnahme zum Absatz oben: die Urteile des Nutzers und die Grun
 ### Die Außenwelt (zur Bestätigung, nicht zur Exploration)
 
 Wenn ein Pattern aus den Records auftaucht, geh nur raus, um es zu verifizieren:
-- 🔎 `WebSearch` — bestätige, dass eine Skill trendet, finde eine Roadmap, prüfe den Ruf einer Zertifizierung
+- 🔎 `WebSearch` — bestätige, dass eine Skill trendet, finde eine Roadmap, prüfe den Ruf einer Zertifizierung — Bei jeder Websuche: nie Name, E-Mail oder Telefonnummer der Person in der Suchanfrage.
 - 🌐 `WebFetch` — eine spezifische Seite ziehen (roadmap.sh, offizielle Cert-Seite, ein Curriculum)
 
 Du gehst raus **um zu bestätigen, was die Records vorgeschlagen haben**, nicht zum Browsen.

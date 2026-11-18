@@ -232,6 +232,19 @@ def status(at, enabled, provider="openai", api="openai-responses", reason=None):
     return {"type": "custom", "id": "t%d" % at, "timestamp": stamp(at), "customType": "jht-web-search-status", "data": data}
 
 
+def test_each_provider_s_search_costs_its_own_fee_from_the_price_list(tmp_path, monkeypatch):
+    """The entry says the provider (since 18/11: Anthropic and Z.ai have their search too); the fee is the price list's.
+    An entry without a provider is OpenAI's; a provider with no fee in the list still costs the default, never zero."""
+    def by(at, n, provider):
+        entry = searched(at, n)
+        entry["data"]["provider"] = provider
+        return entry
+    session(tmp_path, "analista-1", [searched(-300, 1), by(-200, 2, "anthropic"), by(-150, 1, "zai"), by(-100, 4, "elsewhere")])
+    monkeypatch.setattr(pi_sessions, "SEARCH_CALL_USD", 0.05)  # the fallback, told apart from the listed fees
+    got = [(e["provider"], e["searches"], e["cost"]) for e in pi_sessions.search_events(tmp_path)]
+    assert got == [("openai", 1, 0.01), ("anthropic", 2, 0.02), ("zai", 1, 0.01), ("elsewhere", 4, 0.2)]
+
+
 def test_a_search_turn_costs_the_fee_pi_does_not_price(tmp_path):
     session(tmp_path, "scout-1", [call(-200, 5, 5, cost=0.014), searched(-190, 2), searched(-100, 1)])
     events = pi_sessions.search_events(tmp_path)

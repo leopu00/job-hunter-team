@@ -159,6 +159,7 @@ def test_apply_writes_every_switch_and_answers_with_what_the_file_holds(home):
         "economy": False, "logo": {"enabled": False, "min_score": 70}, "geocode_pipeline": {"enabled": False},
         "geocode_missing": {"enabled": True, "min_score": None, "non_remote_only": False},
         "recheck_weekly": {"enabled": False, "min_score": 65, "older_than_days": 21},
+        "web_search": {"analista": {"enabled": False}, "scout": {"enabled": True}, "mentor": {"enabled": True}},
     }
     assert _shown(home) == answer["policy"]
 
