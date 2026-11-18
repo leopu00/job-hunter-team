@@ -600,7 +600,12 @@ EOF
 mentor_due() {
   local rc=0
   python3 /app/shared/skills/first_run.py mentor-due >/dev/null 2>&1 || rc=$?
-  [ "$rc" -ne 1 ]
+  [ "$rc" -ne 1 ] || return 1
+  # Not when the service roles have used their share of the budget (service_budget.py: exit 3; the person is told once a day).
+  # Another answer (script missing, crash) is «allowed»: a reading that fails is no brake.
+  rc=0
+  python3 /app/shared/skills/service_budget.py allow mentor >/dev/null 2>&1 || rc=$?
+  [ "$rc" -ne 3 ]
 }
 
 # Capitano e Sentinella (guarda il budget PER lui) aspettano la fine dell'onboarding (captain_gate.py: 1 = non ancora).

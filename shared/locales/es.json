@@ -1410,6 +1410,7 @@
   "pi_cap.halt_period": "⛔ El equipo está en pausa: el periodo que elegiste terminó a las %s (gastados %s de %s). No se pierde nada. Para seguir, elige un nuevo periodo con jht setup.",
   "pi_cap.halt_pace": "⏸️ El equipo se detiene un rato: ha gastado %s de tu presupuesto de %s, más rápido de lo que permiten tus horarios. No se pierde nada. Se reanuda solo a las %s.",
   "pi_cap.resume_budget": "▶️ Tu presupuesto permite trabajar de nuevo: el equipo se reanuda.",
+  "service_budget.skipped": "ℹ️ %s se salta su ronda esta vez: los agentes que cuidan del equipo (Dottore, Mantenitore, Mentor) ya han gastado %s de tu presupuesto de %s, la parte de %s que pueden usar, así que el resto se dedica a buscar y valorar posiciones. No se pierde nada: vuelven con un nuevo presupuesto.",
   "integration.label.not_installed": "no instalado",
   "integration.label.downloading": "descargando",
   "integration.label.ready": "añadido",
