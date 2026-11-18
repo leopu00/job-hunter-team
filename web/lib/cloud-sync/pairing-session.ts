@@ -23,12 +23,11 @@ export function missingPairingSessionColumn(
 export type TokenOrigin = "device_register" | "device_code" | "page";
 
 /** The INSERT failed because 107 is not applied yet: the column `token_origin` is not there. Same rule as above. */
-export function missingTokenOriginColumn(
-  error: { code?: string | null; message?: string | null } | null | undefined,
-): boolean {
-  if (!error) return false;
-  if (error.code !== "PGRST204" && error.code !== "42703") return false;
-  return String(error.message ?? "").includes("token_origin");
+export function missingTokenOriginColumn(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const { code, message } = error as { code?: unknown; message?: unknown };
+  if (code !== "PGRST204" && code !== "42703") return false;
+  return String(message ?? "").includes("token_origin");
 }
 
 /** True for an origin that hands no user session to a box: such a token, without a session, closes no door. */

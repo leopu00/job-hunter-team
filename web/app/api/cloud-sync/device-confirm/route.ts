@@ -188,7 +188,7 @@ export async function POST(req: NextRequest) {
       .single());
   }
 
-  if (tokenErr) {
+  if (tokenErr || !tokenRow) {
     return sanitizedError(tokenErr, {
       status: 500,
       scope: "cloud-sync/device-confirm",
