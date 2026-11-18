@@ -608,6 +608,10 @@ function Require-ComposeFile { [IO.File]::AppendAllText($env:FAKE_LOG, "guard-co
 function Require-Docker { [IO.File]::AppendAllText($env:FAKE_LOG, "guard-docker`n") }
 function Ensure-Up { [IO.File]::AppendAllText($env:FAKE_LOG, "guard-up`n") }
 function Clear-JhtTeamStopped { }
+# the flag the wrapper opens on the host before the container (its own test: test_wrapper_opens_the_setup_flag_before_the_container.py)
+function Test-JhtSetupWizardArgs { param([string[]]$Rest) $false }
+function Write-JhtSetupOpenFlag { }
+function Remove-JhtSetupOpenFlag { }
 # the tools of a core install (jht-tools.ps1): not what this case is about
 function Write-JhtToolsNotice { param([switch]$Kick) }
 # the timezone question of a setup on a terminal (its own tests): not what this case is about
