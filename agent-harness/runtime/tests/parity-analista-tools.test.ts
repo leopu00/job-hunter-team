@@ -15,7 +15,7 @@ import { logoFetch } from "../src/parity/skills/logo-fetch.ts";
 import { roleRegistry } from "../src/parity/skills/role-registry.ts";
 import { salaryEstimate } from "../src/parity/skills/salary-estimate.ts";
 import { ticketCommand } from "../src/parity/skills/ticket.ts";
-import { pythonSkills, runPython } from "./helpers/python-skills.ts";
+import { pythonSkills, pythonSkillsOfThisTree, runPython } from "./helpers/python-skills.ts";
 
 const skills = pythonSkills();
 
@@ -391,14 +391,20 @@ const POLICIES: Array<[string, string | null, string | null, string[]]> = [
   ["bad command", null, null, ["reset"]],
 ];
 
-describe("enrichment_policy show against enrichment_policy.py", () => {
-  it.skipIf(skills === null).each(POLICIES.map(([label, pol, mode, args]) => [label, pol, mode, args]))("%s", (_label, pol, mode, args) => {
+/**
+ * load_policy() refuses a bool as a score or a number of days in this tree
+ * (b787e232d), on both sides: judged against this tree's Python.
+ */
+const TREE = pythonSkillsOfThisTree();
+
+describe("enrichment_policy show against this tree's enrichment_policy.py", () => {
+  it.skipIf(TREE === null).each(POLICIES.map(([label, pol, mode, args]) => [label, pol, mode, args]))("%s", (_label, pol, mode, args) => {
     const profile = join(root, "profile");
     mkdirSync(profile, { recursive: true });
     if (pol !== null) writeFileSync(join(profile, "enrichment-policy.json"), pol as string);
     if (mode !== null) writeFileSync(join(profile, "capitano-maintenance.json"), mode as string);
     const ours = enrichmentPolicyCommand(new EnrichmentPolicy(profile), args as string[]);
-    const py = runPython(skills!, ["enrichment_policy.py", ...(args as string[])], { JHT_DB: join(root, "jobs.db") });
+    const py = runPython(TREE!, ["enrichment_policy.py", ...(args as string[])], { JHT_DB: join(root, "jobs.db") });
     const last = (text: string | undefined) => (text ?? "").trim().split("\n").at(-1);
     expect([ours.exitCode, ours.stdout, last(ours.stderr)]).toEqual([py.status, py.stdout, last(py.stderr)]);
   });
