@@ -12,6 +12,7 @@ import json
 import os
 import re
 import select
+import signal
 import sys
 import time
 from pathlib import Path
@@ -50,7 +51,7 @@ def zoneinfo(tmp_path):
     return folder
 
 
-def _run(tmp_path, zoneinfo, answers, *, lang="en", detected="Europe/Rome", saved=None, host="1", extra=None, confirmed=False):
+def _run(tmp_path, zoneinfo, answers, *, lang="en", detected="Europe/Rome", saved=None, host="1", extra=None, confirmed=False, picker=True):
     pty = pytest.importorskip("pty")
     home = tmp_path / "home"
     (home / ".jht").mkdir(parents=True, exist_ok=True)
@@ -75,7 +76,8 @@ def _run(tmp_path, zoneinfo, answers, *, lang="en", detected="Europe/Rome", save
     if pid == 0:
         os.execve("/bin/bash", ["bash", str(HOST_SETUP)], env)
     # the picker (the language), the host type, then the answers of the timezone
-    pending = [f"{LANGUAGES.index(lang) + 1}\n".encode(), f"{host}\n".encode(), *[a.encode() + b"\n" for a in answers]]
+    pending = [*([f"{LANGUAGES.index(lang) + 1}\n".encode()] if picker else []), f"{host}\n".encode(),
+               *[a.encode() + b"\n" for a in answers]]
     out = b""
     deadline = time.time() + 60
     while time.time() < deadline:
@@ -91,6 +93,8 @@ def _run(tmp_path, zoneinfo, answers, *, lang="en", detected="Europe/Rome", save
         out += chunk
         if out.endswith(b": ") and pending:
             os.write(fd, pending.pop(0))
+    else:  # still waiting for an answer nobody gives: a red test, not a run that never ends
+        os.kill(pid, signal.SIGKILL)
     _, status = os.waitpid(pid, 0)
     text = ANSI.sub("", out.decode("utf-8", "replace"))
     saved_env = (home / ".jht" / "host.env").read_text(encoding="utf-8") if (home / ".jht" / "host.env").exists() else ""
@@ -178,6 +182,25 @@ def test_an_update_keeps_the_language_the_host_type_and_the_zone_saved_and_asks_
     prefs = json.loads((tmp_path / "home" / ".jht" / "i18n-prefs.json").read_text(encoding="utf-8"))
     # the wizard in the container does not ask the language either
     assert prefs["locale"] == "pt" and isinstance(prefs.get("asked_at"), int), prefs
+
+
+def test_a_language_the_installer_asked_is_not_asked_again(tmp_path, zoneinfo):
+    """Giro Linux build11: the installer now asks the language before its own lines (JHT_LANG and JHT_LANG_ASKED_BY_INSTALLER
+    for the setup it starts); the host preflight of that setup does not ask it a second time, the host type it still asks."""
+    code, out, saved, left = _run(tmp_path, zoneinfo, [""], lang="it", detected="Europe/Rome", saved="Europe/Rome", picker=False,
+                                  extra={"JHT_LANG_ASKED_BY_INSTALLER": "1"})
+    assert code == 0, out
+    assert "Choose your language" not in out, out
+    assert catalog("it")["host_setup.where_running"] in out, out   # the host type is still asked
+    assert left == [], out
+    assert saved.startswith("JHT_LANG=it\n"), saved
+    prefs = json.loads((tmp_path / "home" / ".jht" / "i18n-prefs.json").read_text(encoding="utf-8"))
+    assert prefs["locale"] == "it" and isinstance(prefs.get("asked_at"), int), prefs   # the wizard does not ask either
+
+
+def test_without_the_installer_the_first_setup_still_asks_the_language(tmp_path, zoneinfo):
+    code, out, saved, left = _run(tmp_path, zoneinfo, [""], lang="it", detected="Europe/Rome", saved="Europe/Rome", host="1")
+    assert code == 0 and "Choose your language" in out, out
 
 
 @pytest.mark.parametrize("lang", LANGUAGES)
