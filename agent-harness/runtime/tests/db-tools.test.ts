@@ -8,9 +8,11 @@ import { openJobsDb, type Database } from "../src/db/jobs-db.ts";
 import { pyJson, pythonIsoUtc } from "../src/db/py-format.ts";
 import { createDbTools, type ScriptResult } from "../src/db/tools.ts";
 import type { ToolContext, ToolHandler } from "../src/tools/registry.ts";
-import { pythonSkills, runPython } from "./helpers/python-skills.ts";
+import { pythonSkillsOfThisTree, runPython } from "./helpers/python-skills.ts";
 
-const skills = pythonSkills();
+// The Python of THIS tree, not the one pinned in schema.sql: db_insert.py and the port change in the same commits (the country read
+// from the place, the currency of the estimate only with an amount), and the port is judged against the script it sits next to.
+const skills = pythonSkillsOfThisTree();
 const context = {} as ToolContext;
 
 let root: string;
