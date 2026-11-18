@@ -10,6 +10,7 @@ import { LocalProfileLinkContext } from "../../lib/local-profile-link";
 import { BACKUP_TEXT } from "../backup/backup.i18n";
 import { EXPORT_TEXT } from "../export/export.i18n";
 import { TEAM_SETTINGS_TEXT } from "../team-settings/team-settings.i18n";
+import { ENRICHMENT_TEXT } from "../enrichment/enrichment.i18n";
 import { WORK_HOURS_TEXT } from "../work-hours/work-hours.i18n";
 import { SECTION_IDS } from "./sections";
 import { ProviderLoginProvider } from "../../provider-login/ProviderLoginProvider";
@@ -168,6 +169,7 @@ describe("the settings page", () => {
     const view = render(<SettingsPage {...inSection("team")} />);
     expect(screen.getByRole("heading", { name: WORK_HOURS_TEXT.en.title })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: TEAM_SETTINGS_TEXT.en.title })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: ENRICHMENT_TEXT.en.title })).toBeInTheDocument();
     expect(screen.getByTestId("settings-team")).toBeInTheDocument();
     view.unmount();
     enterExistingTeamReadOnly(false);
@@ -175,6 +177,7 @@ describe("the settings page", () => {
       render(<SettingsPage {...inSection("team")} />);
       expect(screen.queryByRole("heading", { name: WORK_HOURS_TEXT.en.title })).not.toBeInTheDocument();
       expect(screen.queryByRole("heading", { name: TEAM_SETTINGS_TEXT.en.title })).not.toBeInTheDocument();
+      expect(screen.queryByRole("heading", { name: ENRICHMENT_TEXT.en.title })).not.toBeInTheDocument();
       // the read-only view says why they do not open, and where to go
       expect(screen.getByTestId("linked-gate")).toBeInTheDocument();
     } finally {

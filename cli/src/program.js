@@ -48,6 +48,7 @@ import { registerApplyCommand } from './commands/apply.js';
 import { registerTicketCommand, registerDirectivesCommand, registerFeedbackCommand } from './commands/decisions.js';
 import { registerArtifactCommand } from './commands/artifacts.js';
 import { registerCoordinatorCommand } from './commands/coordinator.js';
+import { registerEnrichmentCommand } from './commands/enrichment.js';
 import { registerProfileCommand } from './commands/profile.js';
 import { registerPid1Command } from './commands/pid1.js';
 import { registerDownloadCommand } from './commands/download.js';
@@ -141,6 +142,7 @@ export function buildProgram() {
   registerArtifactCommand(program);
   registerFeedbackCommand(program);
   registerCoordinatorCommand(program);
+  registerEnrichmentCommand(program);
   registerProfileCommand(program);
   registerPid1Command(program);
   registerDownloadCommand(program);

@@ -2,7 +2,7 @@
  * `logo_fetch.py` as a native tool (T14, skill logo-extraction).
  *
  * The same search and verdict: the company row by exact name (NOCASE), the
- * enrichment policy's brake and score gate, then the home page's icons in
+ * enrichment policy's brake (logo.min_score is the care queue's), then the home page's icons in
  * the script's order (apple-touch-icon, a large icon, og:image, any icon,
  * then the four conventional paths), each downloaded and accepted only as a
  * PNG, JPEG, ICO or WebP between 200 bytes and 35 KB and at least 32 px a
@@ -24,7 +24,7 @@ import { SafeHttpsClient } from "../../../../../api-worker/src/safe-http.ts";
 import { parseArgv, pyRepr } from "../../db/argv.ts";
 import type { EnrichmentPolicy } from "../../db/enrichment-policy.ts";
 import type { Database } from "../../db/jobs-db.ts";
-import { pyJson, pyStr } from "../../db/py-format.ts";
+import { pyJson } from "../../db/py-format.ts";
 import type { ScriptResult } from "../../db/tools.ts";
 import type { ToolHandler } from "../../tools/registry.ts";
 import { argvTool } from "./argv-tool.ts";
@@ -194,22 +194,7 @@ export async function logoFetch(argv: string[], options: LogoFetchOptions): Prom
       const reason = policy ? policy.disabledReason("logo") : "the enrichment policy cannot be read here";
       return print({ ok: false, error: `Logo fetch blocked: ${reason}`, status_code: "POLICY_DISABLED" });
     }
-    const ms = policy.logoMinScore();
-    if (ms !== null) {
-      const best = (
-        db
-          .prepare("SELECT MAX(s.total_score) AS best FROM positions p JOIN scores s ON s.position_id = p.id WHERE p.company_id = ? AND p.status != 'excluded'")
-          .get(row.id) as { best: number | null }
-      ).best;
-      if (best === null || best < Number(ms)) {
-        const shown = typeof ms === "boolean" ? (ms ? "True" : "False") : String(ms);
-        return print({
-          ok: false,
-          error: `Below policy threshold (logo.min_score=${shown}, best company score=${pyStr(best)}): do not fetch now`,
-          status_code: "POLICY_SCORE_GATE",
-        });
-      }
-    }
+    // logo.min_score is the care queue's threshold (logo-missing applies it): at pipeline step 9b the new position has no score yet.
 
     let picked: [Buffer, string, string] | null = null;
     const fromUrl = a["from_url"] as string | null;

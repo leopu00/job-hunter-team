@@ -56,6 +56,45 @@ export interface QuietReading {
   providerReady?: boolean;
 }
 
+/**
+ * The switches of the Analisti's enrichments (enrichment-policy.json, JHT-T324): what the team does on its own to complete a
+ * position. The same closed list as team_settings.rs and the box's enrichment_policy.py, which writes the file. The score
+ * thresholds count for the care queues only.
+ */
+export interface EnrichmentPolicy {
+  economy: boolean;
+  logo: { enabled: boolean; min_score: number | null };
+  geocode_pipeline: { enabled: boolean };
+  geocode_missing: { enabled: boolean; min_score: number | null; non_remote_only: boolean };
+  recheck_weekly: { enabled: boolean; min_score: number; older_than_days: number };
+}
+export const WORK_MODES = ["search", "harvest", "care", "calibration", "saving", "unknown"] as const;
+export type WorkMode = (typeof WORK_MODES)[number];
+export interface EnrichmentReading { policy: EnrichmentPolicy; mode: WorkMode }
+export type EnrichmentSwitch =
+  | "economy" | "logo.enabled" | "logo.min_score" | "geocode_pipeline.enabled" | "geocode_missing.enabled"
+  | "geocode_missing.min_score" | "geocode_missing.non_remote_only" | "recheck_weekly.enabled" | "recheck_weekly.min_score"
+  | "recheck_weekly.older_than_days";
+/** A write of the switches: only the ones that change, each with a value of its kind. */
+export type EnrichmentPatch = Partial<Record<EnrichmentSwitch, boolean | number | null>>;
+
+type SwitchKind = "bool" | "score_or_null" | "score" | "days";
+export const ENRICHMENT_SWITCHES: ReadonlyArray<readonly [EnrichmentSwitch, SwitchKind]> = [
+  ["economy", "bool"], ["logo.enabled", "bool"], ["logo.min_score", "score_or_null"], ["geocode_pipeline.enabled", "bool"],
+  ["geocode_missing.enabled", "bool"], ["geocode_missing.min_score", "score_or_null"], ["geocode_missing.non_remote_only", "bool"],
+  ["recheck_weekly.enabled", "bool"], ["recheck_weekly.min_score", "score"], ["recheck_weekly.older_than_days", "days"],
+];
+
+/** Whether `value` is one the switch takes (the same check as the native command's). */
+export function switchValueIsValid(key: EnrichmentSwitch, value: unknown): boolean {
+  const kind = ENRICHMENT_SWITCHES.find(([name]) => name === key)?.[1];
+  if (kind === "bool") return typeof value === "boolean";
+  if (kind === undefined) return false;
+  if (value === null) return kind === "score_or_null";
+  if (typeof value !== "number" || !Number.isInteger(value)) return false;
+  return kind === "days" ? value >= 1 && value <= 365 : value >= 0 && value <= 100;
+}
+
 export interface TeamSettings {
   /** Where the team is: this computer, or a VPS. */
   target: "local" | "vps";
@@ -72,10 +111,12 @@ export interface TeamSettings {
   burst?: Burst;
   /** The facts that explain a silence; absent when the box does not say (an older one): never read as «nothing to explain». */
   quiet?: QuietReading;
+  /** The switches of the enrichments and the working mode; absent when the box does not say (an older one). */
+  enrichment?: EnrichmentReading;
 }
 
 /** What a write changes: a role is changed by sending its entry, and `{}` puts it back on the default. */
-export interface TeamSettingsPatch { workingHours?: WorkingHours | null; roleModels?: RoleModels }
+export interface TeamSettingsPatch { workingHours?: WorkingHours | null; roleModels?: RoleModels; enrichment?: EnrichmentPatch }
 
 export type TeamSettingsError =
   | "team_settings_request_invalid"
@@ -212,6 +253,35 @@ function pickBurst(value: unknown): Burst | null {
   return null;
 }
 
+/** The `enrichment` block of a read: every switch of its kind, a known mode; null («not known») for anything else. */
+function pickEnrichment(value: unknown): EnrichmentReading | null {
+  if (!isRecord(value) || Object.keys(value).length !== 2 || !within(WORK_MODES, value.mode) || !isRecord(value.policy)) return null;
+  const p = value.policy;
+  const section = (name: string): Record<string, unknown> | null => (isRecord(p[name]) ? (p[name] as Record<string, unknown>) : null);
+  for (const [key] of ENRICHMENT_SWITCHES) {
+    const [name, field] = key.split(".");
+    const raw = field ? section(name)?.[field] : p[name];
+    if (!switchValueIsValid(key, raw)) return null;
+  }
+  const logo = section("logo")!;
+  const missing = section("geocode_missing")!;
+  const recheck = section("recheck_weekly")!;
+  return {
+    mode: value.mode,
+    policy: {
+      economy: p.economy as boolean,
+      logo: { enabled: logo.enabled as boolean, min_score: logo.min_score as number | null },
+      geocode_pipeline: { enabled: section("geocode_pipeline")!.enabled as boolean },
+      geocode_missing: {
+        enabled: missing.enabled as boolean, min_score: missing.min_score as number | null, non_remote_only: missing.non_remote_only as boolean,
+      },
+      recheck_weekly: {
+        enabled: recheck.enabled as boolean, min_score: recheck.min_score as number, older_than_days: recheck.older_than_days as number,
+      },
+    },
+  };
+}
+
 /** Whether this is a time of day the native command accepts for a burst («03:00»; not «3:00», not «24:00»). */
 export function burstTimeIsValid(until: string): boolean {
   return TIME.test(until);
@@ -235,6 +305,7 @@ export function pickTeamSettings(reply: unknown): TeamSettingsResult {
   }
   const burst = pickBurst(reply.burst);
   const quiet = pickQuiet(reply.quiet);
+  const enrichment = pickEnrichment(reply.enrichment);
   const provider = reply.provider === "codex" || reply.provider === "claude" || reply.provider === "kimi" ? reply.provider : null;
   return {
     ok: true,
@@ -248,6 +319,7 @@ export function pickTeamSettings(reply: unknown): TeamSettingsResult {
       classApplies: typeof reply.classApplies === "boolean" ? reply.classApplies : null,
       ...(burst ? { burst } : {}),
       ...(quiet ? { quiet } : {}),
+      ...(enrichment ? { enrichment } : {}),
     },
   };
 }
@@ -268,6 +340,7 @@ export async function writeTeamSettings(patch: TeamSettingsPatch, connectionKey:
   const settings: Record<string, unknown> = {};
   if (patch.workingHours !== undefined) settings.working_hours = patch.workingHours;
   if (patch.roleModels !== undefined) settings.role_models = patch.roleModels;
+  if (patch.enrichment !== undefined) settings.enrichment = patch.enrichment;
   try {
     return pickTeamSettings(await call({ op: "write", settings, connectionKey }));
   } catch {

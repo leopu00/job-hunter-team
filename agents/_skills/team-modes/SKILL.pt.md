@@ -1,6 +1,6 @@
 ---
 name: team-modes
-description: "O manual dos modos da equipa — uma ficha por modo (search / harvest / care / calibration / saving). Abre-o sempre que o banner horário [MODALITÀ CORRENTE] nomear um modo e não te lembrares do que implica operacionalmente, ao acordar depois de um refresh de contexto, ou quando o utilizador mudar de modo a partir do jogo. O modo é SEMPRE uma escolha do utilizador - esta skill diz-te como CONDUZIR o atual, nunca como o mudar."
+description: "O manual dos modos da equipa — uma ficha por modo (search / harvest / care / calibration / saving). Abre-o sempre que o banner horário [MODALITÀ CORRENTE] nomear um modo e não te lembrares do que implica operacionalmente, ao acordar depois de um refresh de contexto, ou quando o utilizador mudar de modo. O modo é SEMPRE uma escolha do utilizador - esta skill diz-te como CONDUZIR o atual, nunca como o mudar."
 allowed-tools: Bash(python3 /app/shared/skills/mode_banner.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/feedback_query.py *), Bash(python3 /app/shared/skills/team_directives.py *)
 ---
 <!-- @translation: pt, ai-translated 2026-08-03 -->
@@ -160,10 +160,7 @@ continuar o sourcing com a mira antiga.
    Sem `mode_until` dura até o utilizador o levantar, e vale a pena dizê-lo: o
    budget semanal é uma **janela, não um saldo** — o que não se gasta no reset
    é destruído, portanto uma poupança deixada por inércia não conserva o ciclo,
-   deita-o fora. Diz ao utilizador que lhe pode dar um fim, e onde: a Consola tem o campo
-   «Até quando» (dias e horas, ao lado do seletor), e a partir de uma shell é
-   `jht coordinator set-mode saving --until <iso>`. Escrevem a mesma chave no
-   mesmo ficheiro.
+   deita-o fora. Diz ao utilizador que lhe pode dar um fim, e onde: a partir de uma shell é `jht coordinator set-mode saving --until <iso>`.
 
 **O que fazes**: mantém Capitano/Assistente/Mentor reativos; mais nada se mexe
 sem um pedido direto do utilizador. **Com C-25**: poupança É uma proibição
@@ -188,8 +185,7 @@ outra metade de C-25), não o gastas. **NÃO faças**: reinterpretar "mínimo" c
   doseado.
 - **Saída ≠ mudança.** Quando um modo reporta o seu trabalho esgotado, avisa o
   utilizador e continua a respeitar o modo até que seja ELE a mudá-lo. O
-  ficheiro é escrito em nome do utilizador — pela Consola do jogo (prazo
-  incluído) ou com `jht coordinator` se ele o pedir — e nunca por tua
+  ficheiro é escrito em nome do utilizador — com `jht coordinator` (prazo incluído) se ele o pedir — e nunca por tua
   iniciativa.
 
 ## Ver também

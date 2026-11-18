@@ -28,10 +28,11 @@ Content-Type del server.
 Enrichment-policy (risparmio, `enrichment_policy.py`): il fetch autonomo
 rispetta `$JHT_HOME/profile/enrichment-policy.json` A CODICE —
   - economy=true o logo.enabled=false → POLICY_DISABLED (nessun fetch,
-    nessuna scrittura);
-  - logo.min_score=N → POLICY_SCORE_GATE se l'azienda non ha alcuna
-    posizione viva con best score >= N. NON marca logo_fetched: quando
-    lo Scorer supera la soglia, l'azienda rientra in coda da sola.
+    nessuna scrittura).
+`logo.min_score` non si guarda qui: è la soglia della coda di cura
+logo-missing (db_query.py), che la applica nella sua query. Nel passo 9b
+della pipeline la posizione nuova non ha ancora uno score, e una soglia qui
+direbbe sempre di no.
 `--force` scavalca la policy (intervento manuale esplicito).
 
 Uso (Analista, skill `logo-extraction`):
@@ -48,7 +49,7 @@ Output (single JSON line su stdout, exit 0 ok / 1 failure):
    "written": true}
   {"ok": false, "error": "...", "status_code": "NOT_FOUND" | "NO_WEBSITE"
    | "NO_CANDIDATE" | "FETCH_ERROR" | "DB_ERROR" | "URL_REFUSED"
-   | "POLICY_DISABLED" | "POLICY_SCORE_GATE"}
+   | "POLICY_DISABLED"}
 
 Rete: ogni download passa da `safe_fetch.py` (guard `url_guard.py`). Il
 `website` viene dalla riga companies, cioe' da un annuncio scrapato: e' un
@@ -70,7 +71,7 @@ from urllib.parse import urljoin, urlparse
 from _db import get_db, ensure_schema
 from safe_fetch import walk as safe_walk
 from url_guard import UrlRejected, check_url
-from enrichment_policy import disabled_reason, is_enabled, logo_min_score
+from enrichment_policy import disabled_reason, is_enabled
 
 MAX_LOGO_BYTES = 35_000     # cap rigido: la riga companies resta piccola
 MIN_LOGO_BYTES = 200        # sotto: pixel-tracker / favicon vuota
@@ -296,32 +297,16 @@ def run(args: argparse.Namespace) -> dict:
 
     # Enrichment-policy (risparmio): enforcement A CODICE, prima di ogni
     # fetch. --force scavalca (intervento manuale esplicito, non autonomo).
-    if not args.force:
-        if not is_enabled("logo"):
-            return {
-                "ok": False,
-                "error": f"Logo fetch blocked: {disabled_reason('logo')}",
-                "status_code": "POLICY_DISABLED",
-            }
-        ms = logo_min_score()
-        if ms is not None:
-            best = conn.execute(
-                """
-                SELECT MAX(s.total_score) FROM positions p
-                JOIN scores s ON s.position_id = p.id
-                WHERE p.company_id = ? AND p.status != 'excluded'
-                """,
-                (row["id"],),
-            ).fetchone()[0]
-            if best is None or best < ms:
-                # NIENTE logo_fetched=1: quando lo Scorer supererà la
-                # soglia, l'azienda rientra nella coda logo-missing.
-                return {
-                    "ok": False,
-                    "error": (f"Below policy threshold (logo.min_score={ms}, "
-                              f"best company score={best}): do not fetch now"),
-                    "status_code": "POLICY_SCORE_GATE",
-                }
+    # `logo.min_score` NON si guarda qui: è la soglia della coda di cura
+    # logo-missing, che la applica nella sua query. Qui, nel passo 9b della
+    # pipeline, la posizione nuova non ha ancora uno score, e la soglia
+    # avrebbe detto sempre di no.
+    if not args.force and not is_enabled("logo"):
+        return {
+            "ok": False,
+            "error": f"Logo fetch blocked: {disabled_reason('logo')}",
+            "status_code": "POLICY_DISABLED",
+        }
 
     picked: tuple[bytes, str, str] | None = None
     if args.from_url:

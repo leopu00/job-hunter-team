@@ -24,11 +24,13 @@ import { PY_SPACE_CLASS } from "./py-format.ts";
 export interface Policy {
   economy: boolean;
   logo: { enabled: boolean; min_score: number | boolean | null };
+  /** The Analista's pipeline step 6 (the new position); the care queue is geocode_missing. */
+  geocode_pipeline: { enabled: boolean };
   geocode_missing: { enabled: boolean; min_score: number | boolean | null; non_remote_only: boolean };
   recheck_weekly: { enabled: boolean; min_score: number | boolean; older_than_days: number | boolean };
 }
 
-export type EnrichmentKind = "logo" | "geocode_missing" | "recheck_weekly";
+export type EnrichmentKind = "logo" | "geocode_pipeline" | "geocode_missing" | "recheck_weekly";
 
 const MODES = ["search", "harvest", "care", "calibration", "saving"];
 export const MODE_UNKNOWN = "unknown";
@@ -90,6 +92,7 @@ export class EnrichmentPolicy {
     const merged: Policy = {
       economy: false,
       logo: { enabled: true, min_score: null },
+      geocode_pipeline: { enabled: true },
       geocode_missing: { enabled: true, min_score: null, non_remote_only: true },
       recheck_weekly: { enabled: true, min_score: 70, older_than_days: 14 },
     };
@@ -119,6 +122,10 @@ export class EnrichmentPolicy {
         if (isWholeNumber(days) && days >= 1 && days <= 365) merged.recheck_weekly.older_than_days = days;
       }
     }
+    const pipeline = data["geocode_pipeline"];
+    if (isDict(pipeline) && typeof pipeline["enabled"] === "boolean") merged.geocode_pipeline.enabled = pipeline["enabled"];
+    // A file from before the two switches: whoever had turned geocoding off finds it off still.
+    else if (!("geocode_pipeline" in data)) merged.geocode_pipeline.enabled = merged.geocode_missing.enabled;
     return merged;
   }
 
