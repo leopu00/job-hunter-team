@@ -131,11 +131,14 @@ class Home:
         return self.sql("SELECT id FROM companies WHERE name = ?", (name,))[0]["id"]
 
     def position(self, *, company="Acme Robotics", jd=AD_ROMA, city="Roma", cc="IT", status="checked", work_mode="hybrid",
-                 url="linkedin", website=None) -> int:
+                 url="linkedin", website=None, row=True) -> int:
         if url == "linkedin":  # the default: an ad on a job board, a different one each time (positions.url is unique)
             url = f"https://www.linkedin.com/jobs/view/{len(self.sql('SELECT id FROM positions')) + 1}"
-        rows = self.sql("SELECT id FROM companies WHERE name = ?", (company,))
-        cid = rows[0]["id"] if rows else self.company(company, website)
+        if row is False:  # the ad names a company the database has no row for
+            cid = None
+        else:
+            rows = self.sql("SELECT id FROM companies WHERE name = ?", (company,))
+            cid = rows[0]["id"] if rows else self.company(company, website)
         self.sql("INSERT INTO positions (title, company, company_id, status, jd_text, loc_city, loc_country_code, work_mode, url) "
                  "VALUES ('Impiegata', ?, ?, ?, ?, ?, ?, ?, ?)", (company, cid, status, jd, city, cc, work_mode, url))
         return self.sql("SELECT MAX(id) AS id FROM positions")[0]["id"]
@@ -426,3 +429,155 @@ def test_an_unknown_position_is_an_error():
     done = subprocess.run([sys.executable, str(ENRICH), "position", "999"], capture_output=True, text=True, timeout=60,
                           env={**env, "JHT_DB": str(Path(os.environ.get("TMPDIR", "/tmp")) / f"pe-{os.getpid()}.db")})
     assert done.returncode == 1 and json.loads(done.stdout)["ok"] is False
+
+
+# ── the company of the ad: created, linked, the logo tried again (T325 B) ────────────────────────────────────────────
+def test_a_direct_employer_without_a_row_gets_one_from_the_ad_and_its_logo(home):
+    pid = home.position(company="Acme Robotics", row=False, jd="Acme Robotics cerca un manutentore a Roma.",
+                        url="https://careers.acme-robotics.it/jobs/7")
+    other = home.position(company="ACME ROBOTICS S.p.A.", row=False, jd="Manutentore.", status="new")
+    _site(home, "acme-robotics.it")
+    answer = home.run("position", str(pid))
+    cid = home.sql("SELECT id FROM companies WHERE name = 'Acme Robotics'")[0]["id"]
+    assert answer["logo"] == {"done": True, "site": "https://acme-robotics.it", "company_created": cid}
+    assert [r["company_id"] for r in home.sql("SELECT company_id FROM positions WHERE id IN (?, ?) ORDER BY id",
+                                               (pid, other))] == [cid, cid]
+    row = home.sql("SELECT logo, analyzed_by, verdict FROM companies WHERE id = ?", (cid,))[0]
+    assert row["logo"].startswith("data:image/png") and row["verdict"] is None, "the Analista still judges it"
+
+
+def test_a_direct_employer_on_a_board_gets_its_row_and_the_logo_stays_null_with_the_reason(home):
+    pid = home.position(company="Omega Trasporti", row=False, jd="Omega Trasporti, servizio tranviario di Roma.")
+    answer = home.run("position", str(pid))
+    assert answer["logo"]["reason"] == "portal_domain" and answer["logo"]["company_created"]
+    assert home.requests() == []
+
+
+@pytest.mark.parametrize(("company", "jd", "reason"), [
+    ("Alfa Lavoro S.p.A.", "Cerchiamo un elettricista.", "intermediary"),
+    ("Beta Impianti (azienda cliente non nominata)", "Cerchiamo un elettricista.", "intermediary"),
+    ("Servizi tecnici (tramite Gamma)", "Cerchiamo un elettricista.", "intermediary"),
+    ("Delta Srl", "Delta Srl - Agenzia per il Lavoro (Aut. Min. 0000) cerca un elettricista.", "intermediary"),
+    ("Epsilon", "Epsilon, per conto di azienda cliente del settore, ricerca un elettricista.", "intermediary"),
+    ("Zeta", "Zeta ricerca, per un\u2019importante realt\u00e0 operante nel settore, un elettricista.", "intermediary"),
+    ("Eta Search", "Our client, a leading manufacturer, is hiring an electrician.", "intermediary"),
+    ("Theta", "Im Auftrag unseres Kunden suchen wir einen Elektriker.", "intermediary"),
+    ("talent.com", "Cerchiamo un elettricista.", "portal_name"),
+    ("Indeed", "Cerchiamo un elettricista.", "portal_name"),
+    ("", "Cerchiamo un elettricista.", "no_company"),
+], ids=["agency-name", "unnamed-client", "through", "agency-text", "for-a-client", "for-a-firm", "our-client",
+        "im-auftrag", "board-domain", "board-name", "no-name"])
+def test_an_agency_an_unnamed_client_or_a_board_gets_no_row(home, company, jd, reason):
+    pid = home.position(company=company, row=False, jd=jd, url="https://careers.example.com/jobs/1")
+    answer = home.run("position", str(pid))
+    assert answer["logo"] == {"done": False, "reason": reason}
+    assert home.sql("SELECT COUNT(*) AS n FROM companies")[0]["n"] == 0
+    assert home.requests() == []
+    assert home.events("position", pid)[-1] == ("logo_fetch", "skipped", None), "settled: the backlog leaves it"
+    assert pid not in {r["position_id"] for r in home.run("backlog")["results"]}
+
+
+def test_the_dry_run_says_which_company_it_would_create_and_creates_none(home):
+    pid = home.position(company="Acme Robotics", row=False, jd="Lavoro a Roma.")
+    assert home.run("position", str(pid), "--dry-run")["logo"] == {"done": False, "reason": "no_company",
+                                                                  "would_create": "Acme Robotics"}
+    assert home.sql("SELECT COUNT(*) AS n FROM companies")[0]["n"] == 0
+
+
+def test_the_logo_switch_off_creates_no_row_either(home):
+    home.policy({"logo": {"enabled": False}})
+    pid = home.position(company="Acme Robotics", row=False, jd="Lavoro a Roma.")
+    assert home.run("position", str(pid))["logo"]["reason"] == "policy_off"
+    assert home.sql("SELECT COUNT(*) AS n FROM companies")[0]["n"] == 0
+
+
+def test_the_company_of_another_legal_form_is_the_position_s_company(home):
+    cid = home.company("Kappa Italia")
+    pid = home.position(company="Kappa Italia S.p.a.", row=False, jd="Lavoro a Roma.",
+                        url="https://lavora.kappa-italia.it/1")
+    _site(home, "kappa-italia.it")
+    assert home.run("position", str(pid))["logo"] == {"done": True, "site": "https://kappa-italia.it"}
+    assert home.sql("SELECT logo_fetched FROM companies WHERE id = ?", (cid,))[0]["logo_fetched"] == 1
+    assert home.sql("SELECT COUNT(*) AS n FROM companies")[0]["n"] == 1, "no second row"
+
+
+def test_a_company_created_after_the_step_gets_its_logo_from_the_company_command(home):
+    # the Analista creates the company in the same second as the step, which did not see it: the step said
+    # «intermediary» (the ad is through a client), then the company arrives and is linked
+    pid = home.position(company="Lambda Impianti", row=False, url="https://jobs.lambda-impianti.it/9",
+                        jd="Lambda Impianti, per conto di azienda cliente, cerca un elettricista.")
+    assert home.run("position", str(pid))["logo"]["reason"] == "intermediary"
+    done = subprocess.run([sys.executable, str(SKILLS / "db_insert.py"), "company", "--name", "Lambda Impianti"],
+                          env=home.env, capture_output=True, text=True, timeout=60)
+    assert done.returncode == 0, done.stdout + done.stderr
+    cid = home.sql("SELECT company_id FROM positions WHERE id = ?", (pid,))[0]["company_id"]
+    assert cid
+    _site(home, "lambda-impianti.it")
+    answer = home.run("company", str(cid))
+    assert answer["logo"] == {"done": True, "site": "https://lambda-impianti.it"}
+    row = json.loads((home.root / "logs" / "position-enrich.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+    assert row["company_id"] == cid and row["mode"] == "company" and row["logo"] == "written"
+
+
+def test_the_company_command_without_a_checked_position_fetches_nothing(home):
+    cid = home.company("Mu Servizi")
+    home.position(company="Mu Servizi", status="new", url="https://mu-servizi.it/jobs/1")
+    _site(home, "mu-servizi.it")
+    assert home.run("company", str(cid))["logo"] == {"done": False, "reason": "no_position"}
+    assert home.requests() == []
+
+
+@pytest.mark.parametrize("script", ["db_insert.py", "db_update.py"])
+def test_linking_positions_to_a_company_starts_the_company_step(home, script):
+    pid = home.position(company="Nu Elettrica S.r.l.", row=False, jd="Lavoro a Roma.")
+    if script == "db_update.py":
+        home.company("Nu Elettrica")
+        args = ["company", "Nu Elettrica", "--sector", "Impianti"]
+    else:
+        args = ["company", "--name", "Nu Elettrica"]
+    done = subprocess.run([sys.executable, str(SKILLS / script), *args], env={**home.env, "JHT_POSITION_ENRICH": "1"},
+                          capture_output=True, text=True, timeout=60)
+    assert done.returncode == 0, done.stdout + done.stderr
+    cid = home.sql("SELECT company_id FROM positions WHERE id = ?", (pid,))[0]["company_id"]
+    assert cid
+    log = home.root / "logs" / "position-enrich.jsonl"
+    deadline = time.monotonic() + 20
+    while not log.exists() and time.monotonic() < deadline:
+        time.sleep(0.2)
+    assert log.exists(), "the detached company step ran"
+    assert json.loads(log.read_text(encoding="utf-8").splitlines()[-1]) | {"at": 0} == {
+        "at": 0, "company_id": cid, "logo": "portal_domain", "mode": "company"}
+
+
+def test_the_company_step_starts_only_when_allowed_and_the_step_s_own_writes_start_nothing(monkeypatch):
+    sys.path.insert(0, str(SKILLS))
+    try:
+        import position_enrich
+    finally:
+        sys.path.remove(str(SKILLS))
+    started = []
+    monkeypatch.setattr(position_enrich.subprocess, "Popen", lambda *a, **k: started.append(a[0]))
+    assert position_enrich.spawn_company(3, environ={"JHT_POSITION_ENRICH": "0"}) is False
+    assert position_enrich.spawn_company(3, environ={}) is False
+    assert position_enrich.spawn_company(3, environ={"JHT_POSITION_ENRICH": "1"}) is True
+    assert started[-1][-2:] == ["company", "3"]
+    seen = {}
+    monkeypatch.setattr(position_enrich.subprocess, "run", lambda *a, **k: seen.update(k["env"]))
+    monkeypatch.setenv("JHT_POSITION_ENRICH", "1")
+    position_enrich._skill("db_insert.py", "company", "--name", "X")
+    assert seen["JHT_POSITION_ENRICH"] == "0", "a company the step creates does not start a second step for itself"
+
+
+@pytest.mark.parametrize(("company", "jd"), [
+    ("Allarmi Sicuri", "Manutentore - Roma (Allarmi Sicuri). Assistenza tecnica presso i clienti."),
+    ("Tram Dev", "Operatore di manutenzione impianti fissi (Tram Dev, Roma, servizio tranviario)."),
+    ("Humana Foods", "Humana Foods cerca un elettricista per lo stabilimento."),
+    ("Orientale Costruzioni", "Cerchiamo un elettricista per i nostri cantieri."),
+], ids=["clients-of-the-employer", "direct", "umana-inside-a-word", "orienta-inside-a-word"])
+def test_a_direct_employer_is_not_taken_for_an_agency(company, jd):
+    sys.path.insert(0, str(SKILLS))
+    try:
+        import position_enrich
+    finally:
+        sys.path.remove(str(SKILLS))
+    assert position_enrich.employer_in_ad(company, jd, None, portals=("linkedin.com",)) == (company, "")

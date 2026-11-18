@@ -512,10 +512,17 @@ def insert_company(args):
     # lastrowid non dice niente dopo un aggiornamento: l'id si legge.
     company_id = conn.execute("SELECT id FROM companies WHERE name = ?", (args.name,)).fetchone()[0]
     # le posizioni inserite prima dell'azienda (dallo SCOUT) si collegano adesso
-    link_positions_to_company(conn, company_id, args.name)
+    linked = link_positions_to_company(conn, company_id, args.name)
     conn.commit()
     print(f"Company inserted/updated: {args.name} (ID: {company_id})")
     conn.close()
+    if linked:
+        # T325 B: the logo step of those positions may have run before the company existed; it runs again for it
+        try:
+            import position_enrich
+            position_enrich.spawn_company(company_id)
+        except Exception:  # noqa: BLE001 - the write is done; this step must never fail it
+            pass
 
 
 def _validate_score_range(value, name, min_val, max_val):

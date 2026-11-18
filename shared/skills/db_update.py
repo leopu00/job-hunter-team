@@ -749,7 +749,7 @@ def update_company(args):
     params.append(args.name)
     conn.execute(f"UPDATE companies SET {', '.join(updates)} WHERE name = ?", params)
     # un'azienda già nota raccoglie le posizioni rimaste scollegate (inserite prima di lei)
-    link_positions_to_company(conn, company_id, args.name)
+    linked = link_positions_to_company(conn, company_id, args.name)
 
     if m_action and company_id:
         after_snapshot = _snapshot(conn, "companies", company_id,
@@ -764,6 +764,13 @@ def update_company(args):
     conn.commit()
     print(f"Company '{args.name}' updated: {', '.join(updates)}")
     conn.close()
+    if linked:
+        # T325 B: the logo step of the positions just linked ran without this company; it runs again for it
+        try:
+            import position_enrich
+            position_enrich.spawn_company(company_id)
+        except Exception:  # noqa: BLE001 - the write is done; this step must never fail it
+            pass
 
 
 def update_application(args):

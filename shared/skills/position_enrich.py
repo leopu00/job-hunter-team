@@ -11,7 +11,10 @@ be done without a model when the ad says enough, so they are done here, when a p
                `street`, not verified. Anything else, or two different addresses in the ad: nothing is written.
   logo         from the company's own site: the site already known in `companies.website`, or the domain of the ad
                when it is the company's (never a job board, an ATS or an agency whose domain does not carry the
-               company's name) -> logo_fetch.py, which checks the image and writes it.
+               company's name) -> logo_fetch.py, which checks the image and writes it. The company is the position's
+               row, or the one of the same name (_db.company_key: «Gamma Italia S.p.a.» is «Gamma Italia»). With
+               no row at all, one is created from the company name of the ad (db_insert.py company --name), only when
+               that name is the employer: not an agency, a head hunter, an unnamed client or a board (employer_in_ad).
 
 A value that cannot be found stays NULL, never estimated: no city pin, no site guessed from the name. The reason is a
 code from a closed list (REASONS), in the JSON answer, in `$JHT_HOME/logs/position-enrich.jsonl` and, for a step that
@@ -30,10 +33,14 @@ documented search API, used as its policy allows. The geocoding switches of the 
 Who calls it:
   db_update.py, after the commit that moves a position to `checked`: `position <ID>` in a detached process, never
   waited for (`spawn`). JHT_POSITION_ENRICH=0 turns it off, =1 forces it; unset, it runs only inside the image (/app).
+  db_insert.py / db_update.py company, after the commit that links positions to a company: `company <ID>` in a
+  detached process (`spawn_company`), the logo step again with the company that was missing when the position was
+  enriched (an Analista creating it in the same second).
   The Mantenitore, once a day: `backlog`, the checked positions the step never saw (at most --limit, default 20).
 
 Usage:
   python3 position_enrich.py position <ID> [--dry-run]
+  python3 position_enrich.py company <ID> [--dry-run]
   python3 position_enrich.py backlog [--limit N] [--dry-run]
 
 Output: one JSON line. Exit 0 (a value not found is not an error), 1 for a position that does not exist or a bad call.
@@ -81,7 +88,7 @@ REASONS = (
     "policy_off", "remote", "no_city", "no_ad_text", "no_address_in_ad", "several_addresses_in_ad",
     "not_found", "not_in_city", "rate_limited", "network_error", "nominatim_off", "already_done",
     "no_company", "no_company_site", "portal_domain", "site_not_the_company", "no_candidate", "url_refused",
-    "logo_error", "not_checked", "excluded",
+    "logo_error", "not_checked", "excluded", "intermediary", "portal_name", "no_position",
 )
 # Outcome of the maintenance history for each reason: `unreachable` is retried by the backlog, the others are not.
 OUTCOME = {
@@ -398,6 +405,52 @@ def company_site(website: str | None, ad_url: str | None, company: str, portals=
     return None, reason
 
 
+# ── the employer named in the ad ─────────────────────────────────────────────────────────────────────────────────
+# A position with no companies row gets one from the company name of the ad (T325 B: in a test round two direct
+# employers stayed without a row and without a logo), but only when that name is the employer. An agency, a head
+# hunter or a board is not: its logo next to the job would say the wrong thing. The ad (and the Scout's notes) give it
+# away: «Agenzia per il Lavoro», «per conto di azienda cliente», «our client»; so does the name: «(azienda cliente non
+# nominata)», «tramite <agenzia>», a known agency brand. Any of these and no row is created (reason `intermediary`).
+INTERMEDIARY_TEXT = re.compile(
+    r"agenzia (?:per il lavoro|di (?:somministrazione|selezione|ricerca|lavoro))|aut\.? ?min\b|autorizzazione ministeriale"
+    r"|societa di (?:ricerca e )?selezione|ricerca e selezione|head ?hunt|somministrazione di lavoro"
+    r"|per conto (?:di|del|della|dell) |(?:azienda|societa|realta|impresa) cliente|nostr[oa] client|per (?:una |un |un['\u2019] ?)?"
+    r"(?:(?:importante|primaria|nota|solida|storica|affermata|grande|prestigiosa|dinamica|rinomata|consolidata) )?"
+    r"(?:azienda|realta|societa|cliente|impresa)\b"
+    r"|on behalf of (?:our|a|an|the) client|our client|recruitment (?:agency|consultancy)|staffing (?:agency|firm)"
+    r"|employment agency|im auftrag (?:unseres|eines|unserer) (?:kunden|mandanten)|unser(?:e|en)? (?:kunde|mandant)"
+    r"|personaldienstleist|arbeitnehmeruberlassung|personalvermittlung|zeitarbeit"
+    r"|pour le compte d|notre client|agence d ?interim|cabinet de recrutement"
+    r"|empresa cliente|nuestro cliente|empresa de trabajo temporal|consultora de seleccion"
+    r"|nosso cliente|empresa de trabalho temporario|onze opdrachtgever|uitzendbureau|bemiddelingsbureau",
+    re.I)
+INTERMEDIARY_NAME = re.compile(
+    r"\(|\btramite\b|\bcliente?\b|\bclient\b|non nominat|riservat|confidential|undisclosed|anonim|anonym"
+    r"|agenzia|agency|\blavoro\b|lavoropiu|recruit|staffing|personnel|interim|selezione|selection|head ?hunt|zeitarbeit"
+    r"|uitzend|temporary|risorse umane|human resources"
+    r"|randstad|adecco|manpower|gi ?group|synergie|\bumana\b|openjobmetis|etjca|\borienta\b|kelly services|\bhays\b"
+    r"|michael page|page personnel|robert half|start people|tempo ?team|eurointerim|wyser|spring professional"
+    r"|\bhudson\b|\bakkodis\b|\badhr\b|\bmaw\b|\bquanta\b|\bduring\b",
+    re.I)
+
+
+def employer_in_ad(company: str | None, jd_text: str | None, notes: str | None, portals=None) -> tuple[str | None, str]:
+    """The employer's name to create a companies row with, or (None, reason). Never a guess: the name of the ad as is."""
+    name = re.sub(r"\s+", " ", (company or "")).strip()
+    if len(name) < 2 or not re.search(r"[A-Za-z0-9]", fold(name)):
+        return None, "no_company"
+    folded = fold(name)
+    if INTERMEDIARY_NAME.search(folded):
+        return None, "intermediary"
+    from _db import company_key
+    labels = {d.split(".")[0] for d in (portals or _portal_domains())}
+    if company_key(name).replace(" ", "") in labels or re.search(r"\.[a-z]{2,3}$", folded):
+        return None, "portal_name"
+    if INTERMEDIARY_TEXT.search(fold(jd_text or "")) or INTERMEDIARY_TEXT.search(fold(notes or "")):
+        return None, "intermediary"
+    return name, ""
+
+
 # ── the steps ────────────────────────────────────────────────────────────────────────────────────────────────────────
 def _log(row: dict) -> None:
     try:
@@ -424,7 +477,8 @@ def _record(target_type: str, target_id: int, action: str, outcome: str) -> None
 
 
 def _skill(script: str, *args: str) -> subprocess.CompletedProcess:
-    env = {**os.environ, "JHT_AGENT_NAME": ACTOR, "JHT_EVENT_WAKE": "0"}
+    # DISABLE_ENV: a company this step creates must not start another logo step for itself (spawn_company).
+    env = {**os.environ, "JHT_AGENT_NAME": ACTOR, "JHT_EVENT_WAKE": "0", DISABLE_ENV: "0"}
     return subprocess.run([sys.executable, str(HERE / script), *args], capture_output=True, text=True, env=env,
                           timeout=180)
 
@@ -477,17 +531,39 @@ def office_step(pos, pipeline: bool, dry_run: bool, gap: float) -> dict:
     return {"done": True, "precision": place["precision"]}
 
 
+def _company_row(conn, pos):
+    from _db import resolve_company_id
+    company_id = pos["company_id"] or resolve_company_id(conn, pos["company"])
+    if not company_id:
+        return None
+    return conn.execute("SELECT id, name, website, logo, logo_fetched FROM companies WHERE id = ?", (company_id,)).fetchone()
+
+
 def logo_step(pos, conn, dry_run: bool) -> dict:
     from enrichment_policy import is_enabled
-    company = conn.execute(
-        "SELECT id, name, website, logo, logo_fetched FROM companies WHERE id = ? OR (? IS NULL AND name = ? COLLATE NOCASE) "
-        "LIMIT 1", (pos["company_id"], pos["company_id"], pos["company"])).fetchone()
-    if company is None:
-        return {"done": False, "reason": "no_company"}
-    if company["logo"] or company["logo_fetched"]:
+    company = _company_row(conn, pos)
+    if company is not None and (company["logo"] or company["logo_fetched"]):
         return {"done": False, "reason": "already_done"}
     if not is_enabled("logo"):
         return {"done": False, "reason": "policy_off"}
+    if company is not None:
+        return _logo_of(company, pos, dry_run)
+    name, reason = employer_in_ad(pos["company"], pos["jd_text"], pos["notes"])
+    if name is None:
+        if not dry_run:
+            _record("position", pos["id"], "logo_fetch", "skipped")  # settled: the backlog does not ask again
+        return {"done": False, "reason": reason}
+    if dry_run:
+        return {"done": False, "reason": "no_company", "would_create": name}
+    # db_insert.py company: the Analista's upsert on the name, which links this position (and its namesakes) too
+    made = _skill("db_insert.py", "company", "--name", name)
+    company = _company_row(conn, pos) if made.returncode == 0 else None
+    if company is None:
+        return {"done": False, "reason": "no_company"}
+    return {**_logo_of(company, pos, dry_run), "company_created": company["id"]}
+
+
+def _logo_of(company, pos, dry_run: bool) -> dict:
     site, reason = company_site(company["website"], pos["url"], company["name"])
     if site is None:
         if not dry_run:
@@ -516,7 +592,7 @@ def logo_step(pos, conn, dry_run: bool) -> dict:
     return {"done": False, "reason": reason, "site": site}
 
 
-POSITION_COLUMNS = ("id, status, company, company_id, url, jd_text, loc_city, loc_country_code, work_mode, "
+POSITION_COLUMNS = ("id, status, company, company_id, url, jd_text, notes, loc_city, loc_country_code, work_mode, "
                     "office_geocoded")
 
 
@@ -543,7 +619,7 @@ def enrich(position_id: int, pipeline: bool = True, dry_run: bool = False, gap: 
 
 
 def backlog(limit: int, dry_run: bool = False) -> dict:
-    """The checked positions the step never settled: an office to place or a company without a logo."""
+    """The checked positions the step never settled: an office to place, a company without a logo, or no company yet."""
     from _db import ensure_schema, get_db
     conn = get_db()
     try:
@@ -558,12 +634,16 @@ def backlog(limit: int, dry_run: bool = False) -> dict:
                    SELECT 1 FROM maintenance_events e WHERE e.target_type = 'position' AND e.target_id = p.id
                      AND e.action = 'geocode' AND e.by_agent = ? AND e.outcome IN (?, ?, ?)))
                 OR
+                (p.company_id IS NULL AND NOT EXISTS (
+                   SELECT 1 FROM maintenance_events e WHERE e.target_type = 'position' AND e.target_id = p.id
+                     AND e.action = 'logo_fetch' AND e.by_agent = ? AND e.outcome IN (?, ?, ?)))
+                OR
                 (c.id IS NOT NULL AND c.logo IS NULL AND COALESCE(c.logo_fetched, 0) = 0 AND NOT EXISTS (
                    SELECT 1 FROM maintenance_events e WHERE e.target_type = 'company' AND e.target_id = c.id
                      AND e.action = 'logo_fetch' AND e.by_agent = ? AND e.outcome IN (?, ?, ?)))
               )
             ORDER BY p.id DESC LIMIT ?
-            """, (ACTOR, *SETTLED, ACTOR, *SETTLED, limit))]
+            """, (ACTOR, *SETTLED, ACTOR, *SETTLED, ACTOR, *SETTLED, limit))]
     finally:
         conn.close()
     done = [enrich(i, pipeline=False, dry_run=dry_run, gap=BACKLOG_GAP_S) for i in ids]
@@ -573,17 +653,53 @@ def backlog(limit: int, dry_run: bool = False) -> dict:
             "results": done}
 
 
-def spawn(position_id, environ=None) -> bool:
-    """Called by db_update.py after the commit that makes a position `checked`. Detached, never raises."""
+def company_logo(company_id: int, dry_run: bool = False) -> dict | None:
+    """The logo step again for a company that arrived after its positions were enriched (T325 B: in a test round one was
+    created in the same second as the step, which did not see it). Called when positions are linked to it (spawn_company); the
+    ad of its latest checked position gives the site when the company has none."""
+    from _db import ensure_schema, get_db
+    conn = get_db()
+    try:
+        ensure_schema(conn)
+        if conn.execute("SELECT 1 FROM companies WHERE id = ?", (company_id,)).fetchone() is None:
+            return None
+        pos = conn.execute(
+            f"SELECT {POSITION_COLUMNS} FROM positions WHERE company_id = ? AND status NOT IN ('new', 'excluded') "
+            "ORDER BY id DESC LIMIT 1", (company_id,)).fetchone()
+        logo = logo_step(pos, conn, dry_run) if pos is not None else {"done": False, "reason": "no_position"}
+    finally:
+        conn.close()
+    if not dry_run:
+        _log({"company_id": company_id, "logo": logo.get("reason") or "written", "mode": "company"})
+    return {"company_id": company_id, "logo": logo}
+
+
+def _detached(*args: str, environ=None) -> bool:
     try:
         env = os.environ if environ is None else environ
         flag = env.get(DISABLE_ENV)
         if flag == "0" or (flag != "1" and not str(HERE).startswith("/app/")):
             return False
-        subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "position", str(int(position_id))],
+        subprocess.Popen([sys.executable, str(Path(__file__).resolve()), *args],
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                          start_new_session=True, close_fds=True)
         return True
+    except Exception:  # noqa: BLE001 - a writer must never fail because of this step
+        return False
+
+
+def spawn_company(company_id, environ=None) -> bool:
+    """Called by db_insert.py / db_update.py after the commit that links positions to a company. Detached, never raises."""
+    try:
+        return _detached("company", str(int(company_id)), environ=environ)
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def spawn(position_id, environ=None) -> bool:
+    """Called by db_update.py after the commit that makes a position `checked`. Detached, never raises."""
+    try:
+        return _detached("position", str(int(position_id)), environ=environ)
     except Exception:  # noqa: BLE001 - a writer must never fail because of this step
         return False
 
@@ -594,6 +710,9 @@ def main(argv=None) -> int:
     one = sub.add_parser("position")
     one.add_argument("id", type=int)
     one.add_argument("--dry-run", action="store_true")
+    firm = sub.add_parser("company")
+    firm.add_argument("id", type=int)
+    firm.add_argument("--dry-run", action="store_true")
     many = sub.add_parser("backlog")
     many.add_argument("--limit", type=int, default=BACKLOG_DEFAULT)
     many.add_argument("--dry-run", action="store_true")
@@ -602,6 +721,13 @@ def main(argv=None) -> int:
         result = enrich(args.id, pipeline=True, dry_run=args.dry_run)
         if result is None:
             print(json.dumps({"ok": False, "error": f"position {args.id} not found"}))
+            return 1
+        print(json.dumps({"ok": True, **result}, ensure_ascii=False))
+        return 0
+    if args.cmd == "company":
+        result = company_logo(args.id, dry_run=args.dry_run)
+        if result is None:
+            print(json.dumps({"ok": False, "error": f"company {args.id} not found"}))
             return 1
         print(json.dumps({"ok": True, **result}, ensure_ascii=False))
         return 0

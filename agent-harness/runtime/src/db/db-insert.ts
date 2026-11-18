@@ -15,16 +15,65 @@ import { pySlice } from "./py-format.ts";
 import { cleanAbout } from "./company-about.ts";
 import type { ScriptResult } from "./tools.ts";
 
+/** `COMPANY_LEGAL_FORMS` (_db.py): the legal forms dropped from the end of a company name before comparing it. */
+const COMPANY_LEGAL_FORMS = new Set([
+  "spa", "srl", "srls", "sas", "snc", "sapa", "scarl", "scrl", "scpa", "soccoop", "coop", "onlus",
+  "gmbh", "ag", "kg", "ohg", "ug", "ev", "se", "sa", "sarl", "sl", "slu", "ltd", "limited", "inc", "llc", "plc",
+  "corp", "bv", "nv", "ab", "as", "asa", "oy", "oyj", "aps", "kft", "zrt", "nyrt", "bt", "sro", "ltda", "lda",
+]);
+
+/**
+ * `company_key` (_db.py): the name as it is compared, no accents, no case, no punctuation, no legal form at the end.
+ * «Gamma Italia S.p.a.» and «Gamma Italia» give the same key; anything else of the name stays.
+ */
+export function companyKey(name: string | null | undefined): string {
+  if (!name) return "";
+  const text = String(name).normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/[.'\u2019]/g, "");
+  const words = text.match(/[a-z0-9]+/g) ?? [];
+  while (words.length > 1 && COMPANY_LEGAL_FORMS.has(words[words.length - 1]!)) words.pop();
+  return words.join(" ");
+}
+
+function companiesByKey(db: Database, key: string): number[] {
+  const rows = db.prepare("SELECT id, name FROM companies").all() as { id: number; name: string }[];
+  return rows.filter((row) => companyKey(row.name) === key).map((row) => row.id);
+}
+
+/** `_db.resolve_company_id`: the company's id by case-insensitive name, then by companyKey when one company has it. */
+export function resolveCompanyId(db: Database, name: string | null): number | null {
+  if (!name) return null;
+  const row = db.prepare("SELECT id FROM companies WHERE LOWER(name) = LOWER(?)").get(name) as { id: number } | undefined;
+  if (row) return row.id;
+  const key = companyKey(name);
+  const found = key ? companiesByKey(db, key) : [];
+  return found.length === 1 ? found[0]! : null;
+}
+
 /**
  * `link_positions_to_company` (_db.py): the positions of the same name with no company yet (company_id NULL) get this one.
  * A position links itself only when the company already exists as it is inserted; the SCOUT inserts it before the
- * ANALISTA creates the company, and the position stayed unlinked for good. An existing link is never touched.
+ * ANALISTA creates the company, and the position stayed unlinked for good. An existing link is never touched. The
+ * same name first, then the same companyKey when this company is the only one with it.
  */
 export function linkPositionsToCompany(db: Database, companyId: number | null, name: string): number {
   if (!companyId || !name) return 0;
-  return Number(
+  let linked = Number(
     db.prepare("UPDATE positions SET company_id = ? WHERE company_id IS NULL AND LOWER(company) = LOWER(?)").run(companyId, name).changes,
   );
+  const key = companyKey(name);
+  const owners = key ? companiesByKey(db, key) : [];
+  if (owners.length !== 1 || owners[0] !== companyId) return linked;
+  const rows = db.prepare("SELECT id, company FROM positions WHERE company_id IS NULL AND company IS NOT NULL").all() as {
+    id: number;
+    company: string;
+  }[];
+  const link = db.prepare("UPDATE positions SET company_id = ? WHERE id = ? AND company_id IS NULL");
+  for (const row of rows) {
+    if (companyKey(row.company) !== key) continue;
+    link.run(companyId, row.id);
+    linked += 1;
+  }
+  return linked;
 }
 
 export function insertCompany(db: Database, a: Parsed): ScriptResult {

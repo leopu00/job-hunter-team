@@ -83,3 +83,47 @@ def test_updating_a_known_company_links_what_was_left_unlinked_and_keeps_other_l
     with sqlite3.connect(str(home / "jobs.db")) as c:
         rows = c.execute("SELECT company, company_id FROM positions ORDER BY id").fetchall()
     assert rows == [("Azienda Tre", tre), ("AZIENDA TRE", quattro)]
+
+
+def test_a_legal_form_at_the_end_of_the_name_does_not_keep_the_position_unlinked(home):
+    # «Gamma Italia S.p.a.» in the ad, «Gamma Italia» in the companies row: the same company (a test round left two
+    # agencies with their row and their positions unlinked). The legal form only: the rest of the name still counts.
+    _position(home, 1, "Gamma Italia S.p.a.")
+    _position(home, 2, "GAMMA ITALIA SPA")
+    _position(home, 3, "Gamma Italia (cliente non nominato)")
+
+    _script(home, "analista-1", "db_insert.py", "company", "--name", "Gamma Italia")
+
+    gamma = _company_id(home, "Gamma Italia")
+    assert _links(home) == {"Gamma Italia S.p.a.": gamma, "GAMMA ITALIA SPA": gamma,
+                            "Gamma Italia (cliente non nominato)": None}
+    # a position inserted after the company links itself at its insert the same way
+    _position(home, 4, "Gamma Italia s.r.l.")
+    assert _links(home)["Gamma Italia s.r.l."] == gamma
+
+
+def test_two_companies_of_the_same_name_but_the_legal_form_link_only_the_exact_name(home):
+    _script(home, "analista-1", "db_insert.py", "company", "--name", "Delta Lavoro")
+    _script(home, "analista-1", "db_insert.py", "company", "--name", "Delta Lavoro Spa")
+    spa = _company_id(home, "Delta Lavoro Spa")
+    _position(home, 1, "Delta Lavoro Spa")
+    _position(home, 2, "DELTA LAVORO s.p.a")
+    _position(home, 3, "Delta Lavoro S.r.l.")
+    _script(home, "analista-1", "db_update.py", "company", "Delta Lavoro", "--sector", "Servizi")
+    # two rows share the key: only the exact name decides, a guess between them would be a wrong link
+    assert _links(home) == {"Delta Lavoro Spa": spa, "DELTA LAVORO s.p.a": None, "Delta Lavoro S.r.l.": None}
+
+
+@pytest.mark.parametrize(("name", "key"), [
+    ("Gamma Italia S.p.a.", "gamma italia"), ("GAMMA ITALIA SpA", "gamma italia"),
+    ("Nuove Opere Lavoro S.p.A .", "nuove opere lavoro"), ("Lavorobello Srl", "lavorobello"),
+    ("L’Oréal S.A.", "loreal"), ("Acme GmbH & Co. KG", "acme gmbh co"), ("AG", "ag"), ("", ""),
+    ("Alfa Italia (azienda cliente non nominata)", "alfa italia azienda cliente non nominata"),
+])
+def test_company_key(name, key):
+    sys.path.insert(0, str(SKILLS))
+    try:
+        from _db import company_key
+    finally:
+        sys.path.remove(str(SKILLS))
+    assert company_key(name) == key
