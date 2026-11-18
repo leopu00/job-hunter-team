@@ -105,6 +105,7 @@ export default {
   "observation.waiting": "wartet auf dich",
   "observation.unknown": "Aktivität unbekannt",
   "observation.starting": "noch kein Durchgang aufgezeichnet",
+  "observation.no_turn_yet": "noch kein Durchgang",
   "observation.empty": "Keine laufenden Agenten und kein aufgezeichneter Verbrauch.",
   "observation.tokens": "Gewichtete Tokens, gleitende Stunde; von der Sentinella separat aktualisiert (normalerweise alle 5 Min.). Keine Euro, kein Restkontingent, keine Tokens/s.",
   "observation.updated": "Verbrauch aktualisiert: {at}; Alter: {age} s.",

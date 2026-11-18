@@ -105,6 +105,7 @@ export default {
   "observation.waiting": "rád vár",
   "observation.unknown": "ismeretlen tevékenység",
   "observation.starting": "még nincs rögzített kör",
+  "observation.no_turn_yet": "még nincs kör",
   "observation.empty": "Nincs futó ügynök és rögzített fogyasztás.",
   "observation.tokens": "Súlyozott tokenek, gördülő 1 órás ablak; a Sentinella külön frissíti (általában 5 percenként). Nem euró, nem maradék keret és nem token/s.",
   "observation.updated": "Fogyasztás frissítve: {at}; kora: {age} mp.",

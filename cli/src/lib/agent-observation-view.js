@@ -17,6 +17,7 @@ export function bar(percent) {
 
 function identity(row) {
   const model = row.identity?.model;
+  if (!model && !row.identity?.effort) return say('observation.no_turn_yet');  // nothing recorded yet: said once, not «N/D / N/D»
   return [model ? safe(MODEL_NAMES[model] || model) : nd(), value(row.identity?.effort)].join(' / ');
 }
 

@@ -13,6 +13,7 @@ export default {
   "observation.waiting": "waiting for you",
   "observation.unknown": "unknown activity",
   "observation.starting": "no turn recorded",
+  "observation.no_turn_yet": "no turn yet",
   "observation.empty": "No running agents or recorded usage.",
   "observation.tokens": "Weighted tokens, rolling 1h; refreshed by Sentinel separately (normally every 5 min). Not euros, remaining quota or tokens/s.",
   "observation.updated": "Usage updated: {at}; age: {age} s.",

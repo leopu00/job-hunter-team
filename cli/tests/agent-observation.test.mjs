@@ -152,3 +152,11 @@ test('control characters from data are not passed to the display', () => {
   data.agents[0].id = 'capitano\r\nINJECTED';
   assert.doesNotMatch(renderObservation(data, { width: 80 }), /\x1b|\r|capitano\n/);
 });
+
+test('an agent with no turn recorded yet says so in the model column, not N/D / N/D', () => {
+  const data = snapshot();
+  data.agents[0].identity = { provider: 'claude', model: null, effort: null, at: null, source: 'session_log', reason: 'identity_not_recorded' };
+  const text = renderObservation(data, { live: true, width: 100 });
+  assert.doesNotMatch(text, /N\/D \/ N\/D/);
+  assert.match(text, /nessun turno ancora|no turn yet/);
+});
