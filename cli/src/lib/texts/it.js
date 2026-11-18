@@ -35,6 +35,7 @@ export default {
   "observation.blocked_credit_fix": "Ricaricalo sul sito del fornitore: la squadra riprende da sola entro mezz'ora (se era spenta: jht team start).",
   "observation.blocked_network": "{id} è bloccato: il fornitore non è raggiungibile (rete o proxy). Controlla la connessione.",
   "observation.blocked_error": "{id} è bloccato: il fornitore ha risposto con un errore. Il messaggio è nel log della sessione dell'agente.",
+  "observation.blocked_paused": "{id} è in pausa: la squadra aspetta il budget, col fornitore non c'è nessun problema.",
   "observation.fix": "Controlla che il team sia avviato; riprova con jht agents --usage o jht monitor --once.",
   "error.observer_read_failed": "L'osservatore degli agenti non ha completato la lettura.",
   "error.observer_read_invalid": "L'osservatore degli agenti ha restituito una risposta non valida.",
@@ -367,4 +368,5 @@ export default {
   "enrichment.expect_days": "un numero di giorni da 1 a 365",
   "enrichment.write_failed": "Non è stato possibile salvare gli interruttori: non è cambiato niente.",
   "enrichment.unavailable": "Gli interruttori ora non si leggono. Il team è installato? Prova jht doctor.",
+  "agents.ram_guard": "Alle {at} la memoria del computer era quasi piena ({free} GiB liberi su {total}): {n} lavoratori sono stati fermati per proteggerla. La ricerca va avanti con meno lavoratori finché la memoria non torna.",
 };

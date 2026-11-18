@@ -35,6 +35,7 @@ export default {
   "observation.blocked_credit_fix": "Top it up on the provider's site: the team resumes by itself within half an hour (if it was off: jht team start).",
   "observation.blocked_network": "{id} is blocked: the provider could not be reached (network or proxy). Check the connection.",
   "observation.blocked_error": "{id} is blocked: the provider answered with an error. The session log of the agent has the message.",
+  "observation.blocked_paused": "{id} is paused: the team is waiting for its budget, nothing is wrong with the provider.",
   "observation.fix": "Check that the team is running; retry with jht agents --usage or jht monitor --once.",
   "error.observer_read_failed": "The agent observer could not complete its read.",
   "error.observer_read_invalid": "The agent observer returned an invalid answer.",
@@ -334,4 +335,5 @@ export default {
   "enrichment.expect_days": "a number of days from 1 to 365",
   "enrichment.write_failed": "The switches could not be saved: nothing was changed.",
   "enrichment.unavailable": "The switches cannot be read now. Is the team installed? Try jht doctor.",
+  "agents.ram_guard": "At {at} the computer's memory was nearly full ({free} GiB free of {total}): {n} workers were stopped to protect it. The search goes on with fewer until the memory is back.",
 };
