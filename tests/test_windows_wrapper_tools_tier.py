@@ -951,7 +951,8 @@ def test_tools_tidy_with_the_full_image_in_place_cleans_aloud_and_drops_an_old_n
     _disk(box, free_gib=30, running="sha256:fullid")
     (box.fake / "note").write_text("not_returned 16", encoding="utf-8")
     (box.runtime / ".machine-space-note").write_text("not_returned 12\n", encoding="utf-8")
-    done = box.run(_with_fakes("exit (Invoke-ToolsCommand @('tidy'))"))
+    # the wrapper starts with $script:UpgradeJson = $false (a person reads the notes): the cleaning must leave it so
+    done = box.run(_with_fakes("$script:UpgradeJson = $false\nexit (Invoke-ToolsCommand @('tidy'))"))
     assert done.returncode == 0, done.stdout + done.stderr
     assert _prunes(box) == ["fullid coreid json=False"], "the installer's cleaning is said to the person"
     assert not (box.runtime / ".machine-space-note").exists(), "the line said now is not said again later"
