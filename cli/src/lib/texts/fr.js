@@ -105,6 +105,7 @@ export default {
   "observation.waiting": "vous attend",
   "observation.unknown": "activité inconnue",
   "observation.starting": "aucun tour enregistré",
+  "observation.no_turn_yet": "aucun tour pour l'instant",
   "observation.empty": "Aucun agent démarré ni consommation enregistrée.",
   "observation.tokens": "Tokens pondérés, fenêtre glissante d'1h ; mis à jour à part par la Sentinella (normalement toutes les 5 min). Ni euros, ni quota restant, ni tokens/s.",
   "observation.updated": "Consommation mise à jour : {at} ; âge : {age} s.",
