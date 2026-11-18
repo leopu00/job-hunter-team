@@ -3619,7 +3619,7 @@ Esta ajuda não inicia nada nem descarrega nada.' ;;
     line.job_hunter_team_non_ancora) printf '%s' 'O Job Hunter Team ainda não foi iniciado: corre '\''jht up'\'' (da primeira vez, '\''jht setup'\'').' ;;
     line.job_hunter_team_non_installato) printf '%s' 'O Job Hunter Team não está totalmente instalado: na pasta do runtime falta o ficheiro de integridade (uma instalação interrompida?). Corre o instalador de novo.' ;;
     line.l_overlay_seccomp_dell_accesso) printf '%s' 'O overlay seccomp do início de sessão não é um ficheiro normal.' ;;
-    line.la_casella_di_posta_ora) printf '%s' 'A caixa de correio está agora no broker dos segredos. A sua palavra-passe podia ser lida pelos agentes:' ;;
+    line.la_casella_di_posta_ora) printf '%s' 'A caixa de correio está agora no broker dos segredos. A palavra-passe dela podia ser lida pelos agentes:' ;;
     line.la_connessione_podman_jht_non) printf '%s' 'A ligação Podman do JHT não suporta o dispatcher do Compose.' ;;
     line.la_macchina_e_pronta_ma) printf '%s' 'A máquina está pronta, mas não consegui ativar o trim semanal do disco.' ;;
     line.la_macchina_e_stata_ricreata) printf '%s' 'A máquina foi recriada, mas o estado do broker não passou na verificação/importação.' ;;
