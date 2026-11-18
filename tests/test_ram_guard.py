@@ -164,3 +164,11 @@ def test_workers_retired_for_ram_by_an_older_guard_come_back_too(monkeypatch):
     started = []
     rg.step(api, run, probe={"ram_avail_gib": 2.5, "ram_total_gib": 7.7}, sessions={}, restart=lambda s, why: started.append(s) or True)
     assert started == ["SCOUT-2"]
+
+
+def test_a_name_that_is_not_a_worker_in_the_memory_of_the_guard_is_left_out_and_the_look_goes_on():
+    api, run, sent = _run()
+    run.state["ram_guard"] = {"retired_by_guard": ["rm -rf", 7, "SCOUT-2"], "last_retire_at": 0}
+    started = []
+    rg.step(api, run, probe={"ram_avail_gib": 2.5, "ram_total_gib": 7.7}, sessions={}, restart=lambda s, why: started.append(s) or True)
+    assert started == ["SCOUT-2"]

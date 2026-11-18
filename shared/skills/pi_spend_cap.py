@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import sqlite3
 from pathlib import Path
@@ -56,6 +57,10 @@ REASON = "pi_spend_cap"
 CHECK_EVERY_SEC = 60
 # The spending of the last minutes, as a pace: what the team will have spent by the next look is that pace times CHECK_EVERY_SEC.
 RATE_WINDOW_SEC = 300
+# The first seconds after a resume: the sessions that wake rewrite their cache (0.45 $ in 31 s, Linux 12b) before they work. That
+# cost is the budget's (its hard stop counts it) and not the pace's: a pace that counts it stops the team again 80 s after every resume.
+RESTART_WINDOW_SEC = 120
+RESUMES_FILE = Path("state") / "pace-resumes.json"
 PROVIDER_NAMES = provider_credit.PROVIDER_NAMES
 
 
@@ -85,6 +90,28 @@ def _is_worker(agent):
     return isinstance(agent, str) and agent.split("-", 1)[0] in WORKER_ROLES
 
 
+def _read_resumes(home):
+    try:
+        data = json.loads((Path(home) / RESUMES_FILE).read_text(encoding="utf-8"))
+        return [float(x) for x in data if isinstance(x, (int, float)) and not isinstance(x, bool)]
+    except (OSError, ValueError, TypeError):
+        return []
+
+
+def note_resume(home, moment):
+    """The moment the pace let the team work again, for the pace to leave the restart out. Best effort, atomic, 0600."""
+    try:
+        path = Path(home) / RESUMES_FILE
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(".%s.%d.tmp" % (path.name, os.getpid()))
+        fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps((_read_resumes(home) + [float(moment)])[-50:]))
+        os.replace(str(tmp), str(path))
+    except OSError:
+        pass
+
+
 def spend(home, now_ts, budget_start=None, split_at=None):
     """What pi spent: `cost` today (dollars: pi's estimate plus the fee of the web searches), `hour_tokens` in the last hour,
     `calls` today, `budget_cost` since `budget_start` when a budget is declared (else None), and `first_worker`, the
@@ -93,7 +120,7 @@ def spend(home, now_ts, budget_start=None, split_at=None):
     start, hour = day_start(now_ts), now_ts - 3600
     out = {"cost": 0.0, "hour_tokens": 0, "calls": 0, "credit": provider_credit.exhausted(home, now_ts),
            "budget_cost": None if budget_start is None else 0.0, "first_worker": None,
-           "recent_cost": 0.0, "before_start": 0.0}
+           "recent_cost": 0.0, "before_start": 0.0, "restart_cost": 0.0, "restart_recent": 0.0}
     budget_events = []
     since = min(start, hour) if budget_start is None else min(start, hour, budget_start)
     for event in pi_sessions.usage_events(home, since):
@@ -120,6 +147,16 @@ def spend(home, now_ts, budget_start=None, split_at=None):
     split = split_at if split_at is not None else out["first_worker"]
     if split is not None:
         out["before_start"] = round(sum(cost for moment, cost in budget_events if moment < split), 6)
+    if budget_start is not None:
+        for resumed in _read_resumes(home):
+            if resumed < budget_start:
+                continue
+            for moment, cost in budget_events:
+                if resumed <= moment < resumed + RESTART_WINDOW_SEC:
+                    out["restart_cost"] += cost
+                    if moment >= now_ts - RATE_WINDOW_SEC:
+                        out["restart_recent"] += cost
+        out["restart_cost"] = round(out["restart_cost"], 6)
     out["cost"] = round(out["cost"], 6)
     if budget_start is not None:
         out["budget_cost"] = round(out["budget_cost"], 6)
@@ -159,9 +196,12 @@ def _budget_verdict(config, budget, spent, now, held_by_pace=False):
     # the calls in flight when the brake looks finish and are paid (the pace let 0.16 $ through, giro Mac 12b): one margin before the line
     slack = team_budget.margin(period["usd"]) if PACE_SLACK else 0.0
     # the pace looks AHEAD like the budget does: a team that restarts spends in the first minute what the next look would only see
-    if used - before + ahead + reserve + slack >= allowance:
+    # the restart of a resume is out of the pace, in what was spent and in the rate the pace looks ahead at
+    restart = min(spent.get("restart_cost") or 0.0, max(0.0, used - before))
+    ahead_pace = max(0.0, (spent.get("recent_cost") or 0.0) - (spent.get("restart_recent") or 0.0)) / RATE_WINDOW_SEC * CHECK_EVERY_SEC
+    if used - before - restart + ahead_pace + reserve + slack >= allowance:
         return dict(common, why="pace", ceiling=round(before + allowance, 6),
-                    resumes=team_budget.resumes_at(config, period, used - before + RESTART_RESERVE_SHARE * period["usd"] + 2 * slack) or budget["ends"])
+                    resumes=team_budget.resumes_at(config, period, used - before - restart + RESTART_RESERVE_SHARE * period["usd"] + 2 * slack) or budget["ends"])
     return None
 
 
@@ -470,6 +510,8 @@ def _wake_the_team(api, sessions, why, seen=()):
         for session in known + list(dict.fromkeys(extra)):
             if session in (api.CAPITANO_SESSION, api.SENTINELLA_SESSION) or session in alone or session in NEVER_WAKE:
                 continue
+            if session in WAKE_ONLY_IF_NEEDED and not (session == "ASSISTENTE" and _assistant_owes_an_answer(home)):
+                continue
             try:
                 if api.jht_tmux_send(session, text if session in known else newcomer_text):
                     woken.append(session)
@@ -482,9 +524,36 @@ def _wake_the_team(api, sessions, why, seen=()):
 
 
 NEVER_WAKE = {"SENTINELLA-WORKER", "DOCTOR-WATCHDOG"}
+# Idle at a resume: waking them rewrites their cache for nothing (0.15 $ the Assistente and 0.04 $ the Mentor, Linux 12b). The next
+# message wakes them, and the Assistente is woken when the person's last message in its chat has no answer.
+WAKE_ONLY_IF_NEEDED = {"ASSISTENTE", "MENTOR"}
+
+
+def _assistant_owes_an_answer(home):
+    """True when the last turn in the Assistente's chat is the person's: it was stopped half way through an answer."""
+    last = None
+    try:
+        path = Path(home) / "agents" / "assistente" / "chat.jsonl"
+        size = path.stat().st_size
+        with open(path, "rb") as handle:
+            handle.seek(max(0, size - 65536))
+            for raw in handle:
+                try:
+                    row = json.loads(raw.decode("utf-8"))
+                except ValueError:
+                    continue
+                if isinstance(row, dict) and row.get("role"):
+                    last = row.get("role")
+    except OSError:
+        return True     # not readable: waking it costs 0.15 $, a person left without an answer costs more
+    return last == "user"
 _AGENT_SESSION = re.compile(r"^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$")   # the sessions of the team: CAPITANO, SCOUT-1, ANALISTA-5
 # Born during the pause and not woken by the ESC list: only the workers (the fixed agents were there when it started)
 _WORKER_SESSION = re.compile(r"^(SCOUT|ANALISTA|SCORER|SCRITTORE|CRITICO|CLOSER)(-S?\d+)?$")
+
+
+def home_of(api):
+    return api._path("JHT_HOME")
 
 
 def _resume(api, run, day, notify_user):
@@ -496,6 +565,8 @@ def _resume(api, run, day, notify_user):
         api._path("DAILY_HALT_FLAG").unlink()
     except OSError:
         return
+    if was == "pace":
+        note_resume(home_of(api), api.time.time())
     if was in ("budget", "period", "pace"):
         text = "[BRIDGE INFO] The budget the person declared allows work again: the team can resume; ticks are restarting."
         user = i18n.t("pi_cap.resume_budget")

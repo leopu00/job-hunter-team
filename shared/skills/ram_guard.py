@@ -197,7 +197,7 @@ def _reopen(api, run, state, avail, total, now, restart, names):
     """Memory well above the threshold for a while: bring back the workers the guard retired, and tell the Captain."""
     if "retired_by_guard" not in state:
         state["retired_by_guard"] = _retired_for_ram_in_the_roster()   # the ones a version before this one retired
-    waiting = [n for n in state.get("retired_by_guard") or [] if n not in names]
+    waiting = [n for n in state.get("retired_by_guard") or [] if isinstance(n, str) and WORKER.match(n) and n not in names]
     waiting.sort(key=_comes_back_order)
     if not waiting:
         state["retired_by_guard"] = []
