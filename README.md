@@ -114,9 +114,8 @@ version.) Details:
 | **GLM** (Z.ai, on Pi) | API key | per call | Offered — measured in short runs |
 | **Kimi** (Moonshot, on Pi) | API key | per call | Offered |
 | **OpenAI** (on Pi) | API key | per call | Offered |
-| **OpenAI** (on Pi) | ChatGPT subscription, Pi's own login | by your plan | Offered, new: not yet measured; JHT promises nothing about OpenAI's terms for this use or about what a given plan covers |
 | **Claude** (Anthropic, on Pi) | API key | per call | Offered |
-| Claude subscription; Codex with the ChatGPT subscription | — | — | Not in this version |
+| Claude subscription; ChatGPT subscription (on Pi or on Codex) | — | — | Not in this version |
 
 **The desktop app is not in 0.4.0.** Install the CLI.
 

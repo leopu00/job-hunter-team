@@ -7,8 +7,8 @@
 | 🟢 **Pi with GLM (Z.ai)** | an **API key**, billed per call by the provider | the Pi harness | ✅ offered |
 | 🟢 **Pi with Kimi (Moonshot)** | an **API key**, billed per call by the provider | the Pi harness | ✅ offered |
 | 🟢 **Pi with OpenAI** | an **API key**, billed per call by the provider | the Pi harness | ✅ offered |
-| 🟢 **Pi with OpenAI** | a **ChatGPT subscription**, signed in with Pi's own login (not Codex's) | the Pi harness | ✅ offered, new: not yet measured; JHT promises nothing about OpenAI's terms for this use or about what a given plan covers |
 | 🟢 **Pi with Claude (Anthropic)** | an **API key**, billed per call by the provider | the Pi harness | ✅ offered |
+| 🔵 Pi with OpenAI and a ChatGPT subscription | subscription, Pi's own login | the Pi harness | ⏳ not offered in 0.4.0 |
 | 🔵 Codex (OpenAI) with a ChatGPT subscription | subscription | Codex CLI | ⏳ not in 0.4.0 |
 
 The services a release offers are one list in the code (`shared/runtime/release-providers.js`). A team set up with 0.3.9 on the ChatGPT subscription (Codex) keeps working in 0.4.0, with one warning that says the subscription is no longer offered to new users and how to move to an API key (`jht setup`, choose GLM, Kimi, OpenAI or Claude and paste its key). A team configured on any other service that is not offered keeps its configuration: `jht doctor` says it is not supported in this release and what to do.
@@ -24,9 +24,9 @@ Together they aim each window at **92%** without crossing 100% (which would rate
 
 The plan matters: the app asks which one you have (a card in the Assistant's chat) and sizes the team to it.
 
-## 🟢 Pi with OpenAI and a ChatGPT subscription
+## 🔵 Pi with OpenAI and a ChatGPT subscription (not offered in 0.4.0)
 
-Choose OpenAI in `jht setup` and answer that Pi signs in with the ChatGPT subscription: no key is asked, Pi is installed and opened for its own `/login` (the Codex CLI is not involved), and the team starts when the login is there. Without the guided setup: `jht setup --non-interactive --provider openai --harness pi --auth-method subscription`, then `jht setup` (keep the configuration) to sign in to Pi. This way is new in 0.4.0 and not yet measured; JHT promises nothing about OpenAI's terms for this use or about what a given plan covers. A team on Codex with the subscription from 0.3.9 is a different thing: it keeps running on Codex, as above.
+Pi can sign in with its own ChatGPT login (not Codex's), but 0.4.0 does not offer this way: it is not yet measured, and JHT promises nothing about OpenAI's terms for this use or about what a given plan covers. In 0.4.0, OpenAI runs on Pi with an API key. A team on Codex with the subscription from 0.3.9 is a different thing: it keeps running on Codex, as above.
 
 ## 🟢 Pi with an API key (GLM, Kimi, OpenAI, Claude)
 

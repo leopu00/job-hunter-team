@@ -15,8 +15,8 @@ JHT runs many agents in parallel, around the clock. In 0.4.0 you need:
 | 🟢  | **GLM (Z.ai)** on the Pi harness | API key, per call | ✅ Offered in 0.4.0 — measured in short runs (~0.10 USD per scored position); `jht setup` asks for the key (typed hidden) |
 | 🟢  | **Kimi (Moonshot)** on the Pi harness | API key, per call | ✅ Offered in 0.4.0; `jht setup` asks for the key (typed hidden) |
 | 🟢  | **OpenAI** on the Pi harness | API key, per call | ✅ Offered in 0.4.0; `jht setup` asks for the key (typed hidden) |
-| 🟢  | **OpenAI** on the Pi harness | ChatGPT subscription, Pi's own login | ✅ Offered in 0.4.0, new: `jht setup` asks how Pi signs in and opens Pi for its `/login` (not yet measured; JHT promises nothing about OpenAI's terms for this use or about what a given plan covers) |
 | 🟢  | **Claude (Anthropic)** on the Pi harness | API key, per call | ✅ Offered in 0.4.0; `jht setup` asks for the key (typed hidden) |
+| 🔵  | OpenAI on the Pi harness with a ChatGPT subscription | — | ⏳ Not offered in 0.4.0 |
 | 🔵  | Codex with a ChatGPT subscription | — | ⏳ Not in 0.4.0 for new users; a team set up on it with 0.3.9 keeps working, with a warning |
 
 Details and the spending ceiling of an API key: [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md).
@@ -331,7 +331,7 @@ Full CLI reference: [`docs/guides/CLI-INSTALL.md`](CLI-INSTALL.md).
 
 - 📘 [`README.md`](../../README.md) — project overview, story, manifesto
 - 📋 [`docs/about/STORY.md`](../about/STORY.md) — origin story (legacy team results)
-- 💳 [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md) — GLM, Kimi, OpenAI or Claude API key, or OpenAI with a ChatGPT subscription on Pi; Codex with the subscription is not in 0.4.0
+- 💳 [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md) — GLM, Kimi, OpenAI or Claude API key; the ChatGPT subscription (on Pi or on Codex) is not in 0.4.0
 - 🦞 [`docs/guides/AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) — let your AI assistant drive JHT
 - 🎯 [`docs/about/VISION.md`](../about/VISION.md) — design philosophy, anti-goals, the Mentor
 - 🧪 [`docs/guides/BETA.md`](BETA.md) — testing, feedback and case-study evidence
