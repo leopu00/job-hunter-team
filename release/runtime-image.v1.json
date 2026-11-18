@@ -1,9 +1,9 @@
 {
-  "core_digest": "sha256:e2be90f4fbc70fad636a1afd5a783ee51d2ff9105b9b59bc62fdfd8c42f59abe",
-  "digest": "sha256:4bdccef60c95204c180691256395a5d53b43fc9682784fec38769533a9331815",
-  "extras_digest": "sha256:87055573ad81e6fc20c132299add4d46fe5d57f6769d3ce728b5d89901c1c9c3",
+  "core_digest": "sha256:8ccd41dd4e1513f6371ad2e889a05190a6d555b529fb35e154e0fc71e79c4044",
+  "digest": "sha256:a1b2ce6e200be5858804eaabfbd50012cdc0364bdec87496580e0a3414ba13d0",
+  "extras_digest": "sha256:df1a10a32770e29cc89b9eb718e48adfd07420ce2cea70a9df99aa599602fd05",
   "release_version": "0.4.0",
   "repository": "ghcr.io/leopu00/jht",
   "schema_version": 3,
-  "source_revision": "9d9584e8deeffa7cf20521109aba2224662a2075"
+  "source_revision": "1130ab18c78227026ad7ff0881a720f4bc0cdca2"
 }
