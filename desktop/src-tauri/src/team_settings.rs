@@ -59,17 +59,20 @@ enum SwitchKind {
     Score,
     Days,
 }
-const SWITCHES: [(&str, &str, SwitchKind); 10] = [
-    ("economy", "", SwitchKind::Bool),
-    ("logo", "enabled", SwitchKind::Bool),
-    ("logo", "min_score", SwitchKind::ScoreOrNull),
-    ("geocode_pipeline", "enabled", SwitchKind::Bool),
-    ("geocode_missing", "enabled", SwitchKind::Bool),
-    ("geocode_missing", "min_score", SwitchKind::ScoreOrNull),
-    ("geocode_missing", "non_remote_only", SwitchKind::Bool),
-    ("recheck_weekly", "enabled", SwitchKind::Bool),
-    ("recheck_weekly", "min_score", SwitchKind::Score),
-    ("recheck_weekly", "older_than_days", SwitchKind::Days),
+const SWITCHES: [(&str, SwitchKind); 13] = [
+    ("economy", SwitchKind::Bool),
+    ("logo.enabled", SwitchKind::Bool),
+    ("logo.min_score", SwitchKind::ScoreOrNull),
+    ("geocode_pipeline.enabled", SwitchKind::Bool),
+    ("geocode_missing.enabled", SwitchKind::Bool),
+    ("geocode_missing.min_score", SwitchKind::ScoreOrNull),
+    ("geocode_missing.non_remote_only", SwitchKind::Bool),
+    ("recheck_weekly.enabled", SwitchKind::Bool),
+    ("recheck_weekly.min_score", SwitchKind::Score),
+    ("recheck_weekly.older_than_days", SwitchKind::Days),
+    ("web_search.analista.enabled", SwitchKind::Bool),
+    ("web_search.scout.enabled", SwitchKind::Bool),
+    ("web_search.mentor.enabled", SwitchKind::Bool),
 ];
 const ENRICHMENT_MODES: [&str; 6] = ["search", "harvest", "care", "calibration", "saving", "unknown"];
 
@@ -182,10 +185,6 @@ fn switch_value_ok(kind: SwitchKind, value: &Value) -> bool {
     }
 }
 
-fn switch_key(section: &str, field: &str) -> String {
-    if field.is_empty() { section.to_owned() } else { format!("{section}.{field}") }
-}
-
 /// A patch of switches: at least one, every key from the list, every value of its kind.
 fn valid_enrichment(value: &Value) -> bool {
     let Some(patch) = value.as_object() else { return false };
@@ -193,8 +192,8 @@ fn valid_enrichment(value: &Value) -> bool {
         && patch.iter().all(|(key, value)| {
             SWITCHES
                 .iter()
-                .find(|(section, field, _)| switch_key(section, field) == *key)
-                .is_some_and(|(_, _, kind)| switch_value_ok(*kind, value))
+                .find(|(name, _)| *name == key.as_str())
+                .is_some_and(|(_, kind)| switch_value_ok(*kind, value))
         })
 }
 
@@ -320,31 +319,67 @@ fn settings_of(out: &Map<String, Value>) -> Option<Value> {
 fn enrichment_of(out: &Map<String, Value>) -> Option<Value> {
     let enrichment = out.get("enrichment")?.as_object()?;
     let mode = enrichment.get("mode")?.as_str()?;
-    if enrichment.len() != 2 || !ENRICHMENT_MODES.contains(&mode) {
+    if !only_keys(enrichment, &["policy", "mode", "costs"]) || !ENRICHMENT_MODES.contains(&mode) {
         return None;
     }
-    let policy = enrichment.get("policy")?.as_object()?;
-    let mut kept = Map::new();
-    for (section, field, kind) in SWITCHES {
-        let value = if field.is_empty() { policy.get(section)? } else { policy.get(section)?.as_object()?.get(field)? };
+    let policy = enrichment.get("policy")?;
+    let mut kept = Value::Object(Map::new());
+    for (key, kind) in SWITCHES {
+        let value = key.split('.').try_fold(policy, |node, name| node.get(name))?;
         if !switch_value_ok(kind, value) {
             return None;
         }
-        if field.is_empty() {
-            kept.insert(section.into(), value.clone());
-        } else {
-            kept.entry(section).or_insert_with(|| Value::Object(Map::new())).as_object_mut()?.insert(field.into(), value.clone());
+        let mut node = &mut kept;
+        let mut names = key.split('.').peekable();
+        while let Some(name) = names.next() {
+            let object = node.as_object_mut()?;
+            if names.peek().is_none() {
+                object.insert(name.into(), value.clone());
+                break;
+            }
+            node = object.entry(name).or_insert_with(|| Value::Object(Map::new()));
         }
     }
-    // No key the list does not name: every section holds exactly its switches.
-    for (name, value) in policy {
-        let expected = SWITCHES.iter().filter(|(section, _, _)| *section == name.as_str()).count();
-        let has = if value.is_object() { value.as_object()?.len() } else { 1 };
-        if expected == 0 || has != expected {
-            return None;
-        }
+    // No key the list does not name: the policy rebuilt from the list is the whole policy.
+    if kept != *policy {
+        return None;
     }
-    Some(json!({ "policy": kept, "mode": mode }))
+    let mut reading = json!({ "policy": kept, "mode": mode });
+    // The costs are optional: a box older than them, or a table out of its shape, has none, and no switch warns.
+    if let Some(costs) = enrichment.get("costs").and_then(costs_of) {
+        reading["costs"] = costs;
+    }
+    Some(reading)
+}
+
+fn amount_ok(value: &Value) -> bool {
+    value.as_f64().is_some_and(|n| n.is_finite() && (0.0..=100.0).contains(&n))
+}
+
+/// The table of what the dearer side of each on/off switch costs more (shared/skills/enrichment_costs.json, sent by the box
+/// with the switches): {positions_per_day, switches: {key: {costly, usd_per_position, usd_per_search?}}}. Only switches of the
+/// list; an entry off its shape is left out, its text (`basis`) too.
+fn costs_of(value: &Value) -> Option<Value> {
+    let per_day = value.get("positions_per_day")?.as_u64().filter(|n| (1..=10_000).contains(n))?;
+    let table = value.get("switches")?.as_object()?;
+    let mut switches = Map::new();
+    for (key, kind) in SWITCHES {
+        let Some(entry) = table.get(key).and_then(Value::as_object) else { continue };
+        let (Some(costly), Some(per_position)) = (entry.get("costly").and_then(Value::as_bool), entry.get("usd_per_position")) else {
+            continue;
+        };
+        if !matches!(kind, SwitchKind::Bool) || !(per_position.is_null() || amount_ok(per_position)) {
+            continue;
+        }
+        let mut kept = json!({ "costly": costly, "usd_per_position": per_position });
+        match entry.get("usd_per_search") {
+            None => {}
+            Some(per_search) if amount_ok(per_search) => kept["usd_per_search"] = per_search.clone(),
+            Some(_) => continue,
+        }
+        switches.insert(key.into(), kept);
+    }
+    Some(json!({ "positions_per_day": per_day, "switches": switches }))
 }
 
 /// The most the provider's window can read (a share of it, in percent) and the latest time it can reopen at (year 2100).
@@ -635,7 +670,8 @@ mod tests {
             "logo": {"enabled": true, "min_score": null},
             "geocode_pipeline": {"enabled": false},
             "geocode_missing": {"enabled": true, "min_score": 70, "non_remote_only": true},
-            "recheck_weekly": {"enabled": true, "min_score": 70, "older_than_days": 14}
+            "recheck_weekly": {"enabled": true, "min_score": 70, "older_than_days": 14},
+            "web_search": {"analista": {"enabled": false}, "scout": {"enabled": true}, "mentor": {"enabled": true}}
         })
     }
 
@@ -665,10 +701,56 @@ mod tests {
         section["games"] = json!({"enabled": true});
         assert!(with(json!({"policy": section, "mode": "search"})).get("enrichment").is_none());
         assert!(with(json!({"policy": policy(), "mode": "party"})).get("enrichment").is_none());
+        let mut role = policy();
+        role["web_search"]["writer"] = json!({"enabled": true});
+        assert!(with(json!({"policy": role, "mode": "search"})).get("enrichment").is_none());
         // a box older than the switches: the settings are read as before
         let old = reply(done(&held(Value::Null, json!({}))), "local", KEY);
         assert_eq!(old["ok"], true);
         assert!(old.get("enrichment").is_none());
+    }
+
+    #[test]
+    fn the_costs_of_the_switches_come_in_their_closed_shape_and_a_doubtful_entry_is_left_out() {
+        let with = |costs: Value| {
+            let mut box_said: Value = serde_json::from_str(&held(Value::Null, json!({}))).unwrap();
+            box_said["enrichment"] = json!({"policy": policy(), "mode": "search", "costs": costs});
+            reply(done(&box_said.to_string()), "local", KEY)
+        };
+        let read = with(json!({
+            "version": 1,
+            "positions_per_day": 50,
+            "switches": {
+                "logo.enabled": {"costly": true, "usd_per_position": 0.004, "basis": "measured on Haiku"},
+                "economy": {"costly": false, "usd_per_position": 0.01},
+                "recheck_weekly.enabled": {"costly": true, "usd_per_position": null},
+                "web_search.scout.enabled": {"costly": true, "usd_per_position": null, "usd_per_search": 0.02},
+                "logo.min_score": {"costly": true, "usd_per_position": 0.5},
+                "web_search.writer.enabled": {"costly": true, "usd_per_position": 0.5},
+                "geocode_missing.enabled": {"costly": "yes", "usd_per_position": 0.5},
+                "geocode_pipeline.enabled": {"costly": true, "usd_per_position": -1},
+                "web_search.mentor.enabled": {"costly": true, "usd_per_position": null, "usd_per_search": "0.02"}
+            }
+        }));
+        assert_eq!(read["enrichment"]["policy"], policy());
+        assert_eq!(
+            read["enrichment"]["costs"],
+            json!({
+                "positions_per_day": 50,
+                "switches": {
+                    "logo.enabled": {"costly": true, "usd_per_position": 0.004},
+                    "economy": {"costly": false, "usd_per_position": 0.01},
+                    "recheck_weekly.enabled": {"costly": true, "usd_per_position": null},
+                    "web_search.scout.enabled": {"costly": true, "usd_per_position": null, "usd_per_search": 0.02}
+                }
+            })
+        );
+        // a table out of its shape is no table, and the switches are read all the same
+        for bad in [json!({"switches": {}}), json!({"positions_per_day": 0, "switches": {}}), json!({"positions_per_day": 50}), json!("cheap")] {
+            let read = with(bad);
+            assert_eq!(read["enrichment"]["policy"], policy());
+            assert!(read["enrichment"].get("costs").is_none());
+        }
     }
 
     #[test]
@@ -677,6 +759,7 @@ mod tests {
             json!({"enrichment": {"economy": true}}),
             json!({"enrichment": {"logo.min_score": null, "geocode_pipeline.enabled": false}}),
             json!({"enrichment": {"recheck_weekly.older_than_days": 365}, "working_hours": Value::Null}),
+            json!({"enrichment": {"web_search.analista.enabled": true}}),
         ] {
             assert!(valid_settings(&good), "{good}");
         }
@@ -690,6 +773,8 @@ mod tests {
             json!({"enrichment": {"recheck_weekly.older_than_days": 0}}),
             json!({"enrichment": {"logo": {"enabled": false}}}),
             json!({"enrichment": {"logo.size": 1}}),
+            json!({"enrichment": {"web_search.writer.enabled": true}}),
+            json!({"enrichment": {"web_search.analista.enabled": 1}}),
             json!({"enrichment": ["economy"]}),
         ] {
             let ran = Cell::new(0);

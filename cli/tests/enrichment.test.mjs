@@ -10,8 +10,8 @@ import test from 'node:test';
 // shapes, and the words. Synthetic homes only.
 const home = mkdtempSync(join(tmpdir(), 'jht-enrichment-'));
 process.env.JHT_HOME = home;
-const { SWITCH_KEYS, closedPolicy, closedRequest, describe, typedValue } = await import('../src/lib/enrichment.js');
-const { runPolicy } = await import('../src/commands/enrichment.js');
+const { SWITCH_KEYS, closedCosts, closedPolicy, closedRequest, costText, describe, extraCost, typedValue } = await import('../src/lib/enrichment.js');
+const { isYes, runPolicy, setSwitch } = await import('../src/commands/enrichment.js');
 const { applyResult, getResult, withEnrichment } = await import('../src/commands/team-settings.js');
 const { runSettings } = await import('../src/commands/agent-control.js');
 
@@ -22,6 +22,18 @@ const POLICY = {
   geocode_pipeline: { enabled: true },
   geocode_missing: { enabled: true, min_score: null, non_remote_only: true },
   recheck_weekly: { enabled: true, min_score: 70, older_than_days: 14 },
+  web_search: { analista: { enabled: false }, scout: { enabled: true }, mentor: { enabled: true } },
+};
+// a synthetic table of costs, in the shape of shared/skills/enrichment_costs.json
+const COSTS = {
+  positions_per_day: 50,
+  switches: {
+    economy: { costly: false, usd_per_position: 0.01 },
+    'logo.enabled': { costly: true, usd_per_position: 0.004 },
+    'recheck_weekly.enabled': { costly: true, usd_per_position: null },
+    'web_search.analista.enabled': { costly: true, usd_per_position: 0.27 },
+    'web_search.scout.enabled': { costly: true, usd_per_position: null, usd_per_search: 0.02 },
+  },
 };
 const answer = (policy = POLICY, mode = 'search') => ({ ok: true, path: '/home/x/profile/enrichment-policy.json', exists: true, policy, mode });
 
@@ -58,6 +70,96 @@ test('the answer of the skill is read in its closed shape, without the path; any
   assert.equal(closedPolicy(answer({ ...POLICY, logo: { enabled: 'yes', min_score: null } })), null);
   assert.equal(closedPolicy(answer({ ...POLICY, geocode_pipeline: undefined })), null);
   assert.equal(closedPolicy({ ok: false, code: 'value_invalid' }), null);
+  assert.equal(closedPolicy(answer({ ...POLICY, web_search: { ...POLICY.web_search, analista: { enabled: 'no' } } })), null);
+  assert.equal(closedPolicy(answer({ ...POLICY, web_search: undefined })), null);
+});
+
+test('the costs come in their closed shape: what is off it is left out, a doubtful table is none, and the policy is read all the same', () => {
+  const sent = { version: 1, ...COSTS, switches: { ...COSTS.switches,
+    'logo.enabled': { costly: true, usd_per_position: 0.004, basis: 'measured on Haiku' },
+    'logo.min_score': { costly: true, usd_per_position: 1 },
+    'geocode_pipeline.enabled': { costly: 'yes', usd_per_position: 1 },
+    'geocode_missing.enabled': { costly: true, usd_per_position: -1 },
+    'web_search.writer.enabled': { costly: true, usd_per_position: 1 } } };
+  assert.deepEqual(closedCosts(sent), COSTS);
+  assert.deepEqual(closedPolicy({ ...answer(), costs: sent }), { policy: POLICY, mode: 'search', costs: COSTS });
+  assert.equal(closedCosts({ switches: {} }), null);
+  assert.equal(closedCosts({ positions_per_day: 0, switches: {} }), null);
+  assert.equal(closedCosts('cheap'), null);
+  assert.deepEqual(closedPolicy({ ...answer(), costs: 'cheap' }), { policy: POLICY, mode: 'search' });
+});
+
+test('the extra cost is said only toward the dearer side, in the person’s language', () => {
+  assert.deepEqual(extraCost('web_search.analista.enabled', false, true, COSTS), { perPosition: 0.27, perDay: 13.5, positionsPerDay: 50 });
+  assert.equal(extraCost('web_search.analista.enabled', true, false, COSTS), null);
+  assert.equal(extraCost('web_search.analista.enabled', true, true, COSTS), null);
+  assert.equal(extraCost('economy', false, true, COSTS), null);
+  assert.deepEqual(extraCost('economy', true, false, COSTS), { perPosition: 0.01, perDay: 0.5, positionsPerDay: 50 });
+  assert.deepEqual(extraCost('web_search.scout.enabled', false, true, COSTS), { perSearch: 0.02 });
+  assert.deepEqual(extraCost('recheck_weekly.enabled', false, true, COSTS), { unmeasured: true });
+  assert.equal(extraCost('geocode_pipeline.enabled', false, true, COSTS), null);
+  assert.equal(extraCost('web_search.analista.enabled', false, true, undefined), null);
+  assert.equal(costText('web_search.analista.enabled', extraCost('web_search.analista.enabled', false, true, COSTS), 'it'),
+    'Ricerca web degli Analisti: costa circa 0,27 $ in più a posizione (13,50 $ su 50 al giorno).');
+  assert.equal(costText('logo.enabled', extraCost('logo.enabled', false, true, COSTS), 'en'),
+    'Company logo: costs about 0.004 $ more per position (0.20 $ on 50 a day).');
+  assert.equal(costText('economy', extraCost('economy', true, false, COSTS), 'de'),
+    'Sparen ausschalten: kostet etwa 0,01 $ mehr pro Stelle (0,50 $ bei 50 pro Tag).');
+  assert.equal(costText('web_search.scout.enabled', { perSearch: 0.02 }, 'fr'), 'Recherche web du Scout : coûte environ 0,02 $ par recherche.');
+  assert.equal(costText('recheck_weekly.enabled', { unmeasured: true }, 'it'),
+    'Ricontrollo delle posizioni vive (cura): costa di più; quanto non è ancora misurato.');
+  assert.equal(costText('logo.enabled', null, 'it'), '');
+});
+
+test('set toward a dearer side asks first: a yes writes, a no writes nothing, no terminal is a refusal with the sentence, --yes skips it', async () => {
+  process.env.JHT_LANG = 'it';
+  const skill = (policy = POLICY) => {
+    const asked = [];
+    const run = (name, args, opts) => {
+      asked.push(args[0]);
+      return { code: 0, stdout: JSON.stringify({ ...answer(policy), costs: COSTS }), opts };
+    };
+    return { run, asked };
+  };
+  let s = skill();
+  const refused = await setSwitch('web_search.analista.enabled', true, { run: s.run });
+  assert.equal(refused.refused, 'confirm_needed');
+  assert.equal(refused.exit, 1);
+  assert.equal(refused.sentence, 'Ricerca web degli Analisti: costa circa 0,27 $ in più a posizione (13,50 $ su 50 al giorno).');
+  assert.deepEqual(s.asked, ['show']);
+  s = skill();
+  let question = '';
+  const no = await setSwitch('web_search.analista.enabled', true, { run: s.run, ask: async (q) => { question = q; return false; } });
+  assert.deepEqual(no, { exit: 0, cancelled: true });
+  assert.match(question, /13,50 \$ su 50 al giorno\)\.\nConfermi\? \[s\/N\]/);
+  assert.deepEqual(s.asked, ['show']);
+  s = skill();
+  assert.equal((await setSwitch('web_search.analista.enabled', true, { run: s.run, ask: async () => true })).exit, 0);
+  assert.deepEqual(s.asked, ['show', 'apply']);
+  s = skill();
+  assert.equal((await setSwitch('web_search.analista.enabled', true, { run: s.run, yes: true })).exit, 0);
+  assert.deepEqual(s.asked, ['show', 'apply']);
+  // the cheaper side, a threshold, and a team without a table: no question
+  for (const [key, value] of [['web_search.scout.enabled', false], ['economy', true], ['recheck_weekly.min_score', 40]]) {
+    s = skill();
+    assert.equal((await setSwitch(key, value, { run: s.run })).exit, 0, key);
+    assert.deepEqual(s.asked, ['show', 'apply'], key);
+  }
+  const bare = [];
+  const plain = (name, args) => { bare.push(args[0]); return { code: 0, stdout: JSON.stringify(answer()) }; };
+  assert.equal((await setSwitch('web_search.analista.enabled', true, { run: plain })).exit, 0);
+  assert.deepEqual(bare, ['show', 'apply']);
+});
+
+test('a yes is a yes word of the person’s language, nothing else', () => {
+  assert.equal(isYes('sì', 'it'), true);
+  assert.equal(isYes(' S ', 'it'), true);
+  assert.equal(isYes('ja', 'de'), true);
+  assert.equal(isYes('igen', 'hu'), true);
+  assert.equal(isYes('y', 'fr'), true);
+  assert.equal(isYes('', 'it'), false);
+  assert.equal(isYes('no', 'it'), false);
+  assert.equal(isYes('sicuro', 'it'), false);
 });
 
 test('describe: one line per enrichment, the threshold shown only when there is one, and what the mode stops', () => {
@@ -103,6 +205,16 @@ test('the command on the real program: show, set, and every refusal said in the 
     assert.equal(unknown.status, 2);
     assert.deepEqual(JSON.parse(unknown.stdout), { ok: false, code: 'key_unknown' });
     assert.deepEqual(JSON.parse(readFileSync(join(root, 'profile', 'enrichment-policy.json'), 'utf-8')), file);
+    // toward the dearer side without a terminal: refused with the sentence, nothing written; --yes writes it
+    const dearer = jht('enrichment', 'set', 'web_search.analista.enabled', 'on');
+    assert.equal(dearer.status, 1);
+    assert.match(dearer.stderr, /Ricerca web degli Analisti: costa circa [\d,]+ \$ in più a posizione \([\d,]+ \$ su \d+ al giorno\)\.\nPer confermare, rilancia lo stesso comando con --yes\./);
+    assert.deepEqual(JSON.parse(readFileSync(join(root, 'profile', 'enrichment-policy.json'), 'utf-8')), file);
+    const refusedJson = JSON.parse(jht('enrichment', 'set', 'web_search.analista.enabled', 'on', '--json').stdout);
+    assert.equal(refusedJson.code, 'confirm_needed');
+    const yes = jht('enrichment', 'set', 'web_search.analista.enabled', 'on', '--yes', '--json');
+    assert.equal(yes.status, 0, yes.stderr);
+    assert.deepEqual(JSON.parse(yes.stdout).policy.web_search.analista, { enabled: true });
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -128,8 +240,9 @@ function box(state = { policy: structuredClone(POLICY) }, { refuse = null } = {}
     if (argv[0] === 'apply') {
       if (refuse) return { ok: true, code: 1, stdout: JSON.stringify({ ok: false, code: refuse }) };
       for (const [key, value] of Object.entries(JSON.parse(opts.input))) {
-        const [section, field] = key.split('.');
-        if (field) state.policy[section][field] = value; else state.policy[section] = value;
+        const names = key.split('.');
+        const last = names.pop();
+        names.reduce((node, name) => node[name], state.policy)[last] = value;
       }
     }
     return { ok: true, code: 0, stdout: JSON.stringify(answer(state.policy)) };
