@@ -372,6 +372,7 @@
   "wrapper.line.integration.not_installed": "não instalada",
   "wrapper.line.integration.not_installed_yet": "ainda não instalada",
   "wrapper.tools.arriving": "As ferramentas dos Scout estão a caminho: a imagem completa está a ser descarregada em segundo plano (cerca de 3 GB). A procura de vagas começa sozinha quando chegarem; não tens de fazer nada.",
+  "wrapper.tools.not_started": "A descarga das ferramentas dos Scouts não começou, por isso a equipa ainda não pode procurar posições. Corre jht tools pull para a iniciar (jht up também a inicia).",
   "wrapper.tools.waiting": "As ferramentas dos Scout já chegaram: a equipa passa para elas sozinha quando o onboarding estiver concluído.",
   "wrapper.tools.ready": "As ferramentas dos Scout já chegaram: a equipa procura com a imagem completa.",
   "wrapper.tools.engine_down": "Não é possível ler o estado das ferramentas dos Scout: o motor de contentores não responde. Inicia-o com jht up.",
