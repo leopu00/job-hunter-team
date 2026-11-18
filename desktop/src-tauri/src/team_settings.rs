@@ -50,6 +50,29 @@ const EFFORTS: [&str; 3] = ["low", "medium", "high"];
 const WEEKDAYS: [&str; 7] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const LIST_KEYS: [&str; 5] = ["roles", "models", "efforts", "weekdays", "min_window_hours"];
 
+/// The switches of the Analisti's enrichments (enrichment-policy.json, JHT-T324) and the kind of value each takes: the same
+/// closed list as cli/src/lib/enrichment.js and shared/skills/enrichment_policy.py, which writes the file.
+#[derive(Clone, Copy, PartialEq)]
+enum SwitchKind {
+    Bool,
+    ScoreOrNull,
+    Score,
+    Days,
+}
+const SWITCHES: [(&str, &str, SwitchKind); 10] = [
+    ("economy", "", SwitchKind::Bool),
+    ("logo", "enabled", SwitchKind::Bool),
+    ("logo", "min_score", SwitchKind::ScoreOrNull),
+    ("geocode_pipeline", "enabled", SwitchKind::Bool),
+    ("geocode_missing", "enabled", SwitchKind::Bool),
+    ("geocode_missing", "min_score", SwitchKind::ScoreOrNull),
+    ("geocode_missing", "non_remote_only", SwitchKind::Bool),
+    ("recheck_weekly", "enabled", SwitchKind::Bool),
+    ("recheck_weekly", "min_score", SwitchKind::Score),
+    ("recheck_weekly", "older_than_days", SwitchKind::Days),
+];
+const ENRICHMENT_MODES: [&str; 6] = ["search", "harvest", "care", "calibration", "saving", "unknown"];
+
 fn failure(code: &str) -> Value {
     json!({ "ok": false, "error": code })
 }
@@ -150,13 +173,39 @@ fn valid_role_models(value: &Value) -> bool {
         })
 }
 
+fn switch_value_ok(kind: SwitchKind, value: &Value) -> bool {
+    match kind {
+        SwitchKind::Bool => value.is_boolean(),
+        SwitchKind::ScoreOrNull => value.is_null() || value.as_u64().is_some_and(|n| n <= 100),
+        SwitchKind::Score => value.as_u64().is_some_and(|n| n <= 100),
+        SwitchKind::Days => value.as_u64().is_some_and(|n| (1..=365).contains(&n)),
+    }
+}
+
+fn switch_key(section: &str, field: &str) -> String {
+    if field.is_empty() { section.to_owned() } else { format!("{section}.{field}") }
+}
+
+/// A patch of switches: at least one, every key from the list, every value of its kind.
+fn valid_enrichment(value: &Value) -> bool {
+    let Some(patch) = value.as_object() else { return false };
+    !patch.is_empty()
+        && patch.iter().all(|(key, value)| {
+            SWITCHES
+                .iter()
+                .find(|(section, field, _)| switch_key(section, field) == *key)
+                .is_some_and(|(_, _, kind)| switch_value_ok(*kind, value))
+        })
+}
+
 /// The closed shape and lists; the box checks the rest (block length, the zone) again.
 fn valid_settings(settings: &Value) -> bool {
     let Some(object) = settings.as_object() else { return false };
     !object.is_empty()
-        && only_keys(object, &["working_hours", "role_models"])
+        && only_keys(object, &["working_hours", "role_models", "enrichment"])
         && object.get("working_hours").map_or(true, valid_working_hours)
         && object.get("role_models").map_or(true, valid_role_models)
+        && object.get("enrichment").map_or(true, valid_enrichment)
         && serde_json::to_vec(settings).is_ok_and(|bytes| bytes.len() <= REQUEST_MAX_BYTES - 64)
 }
 
@@ -259,7 +308,43 @@ fn settings_of(out: &Map<String, Value>) -> Option<Value> {
     if let Some(quiet) = quiet_of(out) {
         settings["quiet"] = quiet;
     }
+    // The switches of the enrichments too: a box older than them, or an answer out of their shape, has none.
+    if let Some(enrichment) = enrichment_of(out) {
+        settings["enrichment"] = enrichment;
+    }
     Some(settings)
+}
+
+/// {"policy": {five sections, every switch of its kind and no other key}, "mode": one of the modes}, rebuilt from the list;
+/// `None` for anything else (a doubtful reading is not a reading).
+fn enrichment_of(out: &Map<String, Value>) -> Option<Value> {
+    let enrichment = out.get("enrichment")?.as_object()?;
+    let mode = enrichment.get("mode")?.as_str()?;
+    if enrichment.len() != 2 || !ENRICHMENT_MODES.contains(&mode) {
+        return None;
+    }
+    let policy = enrichment.get("policy")?.as_object()?;
+    let mut kept = Map::new();
+    for (section, field, kind) in SWITCHES {
+        let value = if field.is_empty() { policy.get(section)? } else { policy.get(section)?.as_object()?.get(field)? };
+        if !switch_value_ok(kind, value) {
+            return None;
+        }
+        if field.is_empty() {
+            kept.insert(section.into(), value.clone());
+        } else {
+            kept.entry(section).or_insert_with(|| Value::Object(Map::new())).as_object_mut()?.insert(field.into(), value.clone());
+        }
+    }
+    // No key the list does not name: every section holds exactly its switches.
+    for (name, value) in policy {
+        let expected = SWITCHES.iter().filter(|(section, _, _)| *section == name.as_str()).count();
+        let has = if value.is_object() { value.as_object()?.len() } else { 1 };
+        if expected == 0 || has != expected {
+            return None;
+        }
+    }
+    Some(json!({ "policy": kept, "mode": mode }))
 }
 
 /// The most the provider's window can read (a share of it, in percent) and the latest time it can reopen at (year 2100).
@@ -542,6 +627,77 @@ mod tests {
             ran.set(ran.get() + 1);
             reply
         })
+    }
+
+    fn policy() -> Value {
+        json!({
+            "economy": false,
+            "logo": {"enabled": true, "min_score": null},
+            "geocode_pipeline": {"enabled": false},
+            "geocode_missing": {"enabled": true, "min_score": 70, "non_remote_only": true},
+            "recheck_weekly": {"enabled": true, "min_score": 70, "older_than_days": 14}
+        })
+    }
+
+    #[test]
+    fn a_read_carries_the_switches_of_the_enrichments_only_whole_and_in_their_shape() {
+        let with = |enrichment: Value| {
+            let mut box_said: Value = serde_json::from_str(&held(Value::Null, json!({}))).unwrap();
+            box_said["enrichment"] = enrichment;
+            reply(done(&box_said.to_string()), "local", KEY)
+        };
+        let read = with(json!({"policy": policy(), "mode": "care"}));
+        assert_eq!(read["enrichment"], json!({"policy": policy(), "mode": "care"}));
+        // the path the skill prints is never in it, and the policy is rebuilt from the list
+        let read = with(json!({"policy": policy(), "mode": "search", "path": "/home/someone/profile/enrichment-policy.json"}));
+        assert!(read.get("enrichment").is_none());
+        assert_eq!(read["ok"], true);
+        let mut extra = policy();
+        extra["logo"]["size"] = json!(3);
+        assert!(with(json!({"policy": extra, "mode": "search"})).get("enrichment").is_none());
+        let mut text = policy();
+        text["logo"]["enabled"] = json!("yes");
+        assert!(with(json!({"policy": text, "mode": "search"})).get("enrichment").is_none());
+        let mut high = policy();
+        high["recheck_weekly"]["older_than_days"] = json!(400);
+        assert!(with(json!({"policy": high, "mode": "search"})).get("enrichment").is_none());
+        let mut section = policy();
+        section["games"] = json!({"enabled": true});
+        assert!(with(json!({"policy": section, "mode": "search"})).get("enrichment").is_none());
+        assert!(with(json!({"policy": policy(), "mode": "party"})).get("enrichment").is_none());
+        // a box older than the switches: the settings are read as before
+        let old = reply(done(&held(Value::Null, json!({}))), "local", KEY);
+        assert_eq!(old["ok"], true);
+        assert!(old.get("enrichment").is_none());
+    }
+
+    #[test]
+    fn a_write_of_the_switches_is_checked_whole_before_anything_reaches_the_box() {
+        for good in [
+            json!({"enrichment": {"economy": true}}),
+            json!({"enrichment": {"logo.min_score": null, "geocode_pipeline.enabled": false}}),
+            json!({"enrichment": {"recheck_weekly.older_than_days": 365}, "working_hours": Value::Null}),
+        ] {
+            assert!(valid_settings(&good), "{good}");
+        }
+        for bad in [
+            json!({"enrichment": {}}),
+            json!({"enrichment": {"economy": "true"}}),
+            json!({"enrichment": {"logo.min_score": 101}}),
+            json!({"enrichment": {"logo.min_score": -1}}),
+            json!({"enrichment": {"logo.min_score": 7.5}}),
+            json!({"enrichment": {"recheck_weekly.min_score": null}}),
+            json!({"enrichment": {"recheck_weekly.older_than_days": 0}}),
+            json!({"enrichment": {"logo": {"enabled": false}}}),
+            json!({"enrichment": {"logo.size": 1}}),
+            json!({"enrichment": ["economy"]}),
+        ] {
+            let ran = Cell::new(0);
+            assert!(!valid_settings(&bad), "{bad}");
+            let out = drive(write(bad), None, done(&held(Value::Null, json!({}))), &ran);
+            assert_eq!(out["error"], "team_settings_value_invalid");
+            assert_eq!(ran.get(), 0);
+        }
     }
 
     #[test]

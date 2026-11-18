@@ -8,6 +8,7 @@ afterEach(() => localStorage.removeItem("jht-settings-section"));
 describe("the old addresses of the pages that are now sections of Settings", () => {
   it.each([
     ["/settings/hours", "", "/settings/team?at=hours"],
+    ["/settings/enrichment", "", "/settings/team?at=enrichment"],
     ["/settings/vps-connection", "", "/settings/where?at=vps"],
     ["/export", "", "/settings/data?at=export"],
     ["/backup", "", "/settings/data?at=backup"],
@@ -21,7 +22,7 @@ describe("the old addresses of the pages that are now sections of Settings", () 
   });
 
   it("is not a route any more: the shell sends it on before it draws anything", () => {
-    for (const path of ["/settings/hours", "/settings/vps-connection", "/export", "/backup", "/computer"]) {
+    for (const path of ["/settings/hours", "/settings/enrichment", "/settings/vps-connection", "/export", "/backup", "/computer"]) {
       expect(ROUTES.some((route) => route.path === path), path).toBe(false);
     }
     // the sections themselves are one route, and /settings/team (the models' old address) is the Team section
