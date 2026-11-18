@@ -697,7 +697,7 @@ def test_jht_team_chat_comes_back_by_itself_when_the_switch_ended_it():
     assert "Ensure-Up" not in body and "docker" not in body
     resume = text[text.index("function Invoke-JhtTeamChatResume {"):]
     resume = resume[:resume.index("\n}\n")]
-    for needed in ("Test-ContainerUp", "Test-JhtTeamChatAgentBack $Agent", "'tools.chat_resumed'", "'tools.chat_switched'"):
+    for needed in ("Test-JhtTeamChatContainerBack", "Test-JhtTeamChatAgentBack $Agent", "'tools.chat_resumed'", "'tools.chat_switched'"):
         assert needed in resume, needed
     assert "Ensure-Up" not in resume
     assert ("if ($Sub -ceq 'team' -and $Rest.Count -gt 1 -and $Rest[0] -ceq 'chat' -and $env:JHT_TEAM_CHAT_RESUME) "
@@ -749,6 +749,20 @@ def test_the_chat_waits_for_the_agent_of_its_own_name(box):
     body = (fn + "\n$Container = 'jht'\n$r = Test-JhtTeamChatAgentBack 'scout:2'\n[Console]::Out.WriteLine([string]$r)\n")
     done = box.run(body, JHT_TOOLS_CHAT_RECONNECT_MAX="0")
     assert done.stdout.strip() == "True", done.stdout + done.stderr   # the fake docker says yes to everything
+
+
+@pytest.mark.parametrize("ours_after,expected", [(3, "True"), (99, "False")])
+def test_the_chat_waits_for_the_container_the_switch_has_just_started(box, ours_after, expected):
+    """Giro Linux build11, the same in this wrapper: the full container was not ours yet for a second, and the chat said «it
+    comes back by itself» and at once «this chat has closed». The container is waited for, within the same tetto as the agent."""
+    text = WRAPPER.read_text(encoding="utf-8").replace("\r\n", "\n")
+    fn = re.search(r"^function Test-JhtTeamChatContainerBack \{\n.*?^\}\n", text, re.S | re.M).group(0)
+    body = (f"$script:tries = 0\nfunction Test-ContainerUp {{ $script:tries++; return ($script:tries -ge {ours_after}) }}\n"
+            + fn + "\n$r = Test-JhtTeamChatContainerBack\n[Console]::Out.WriteLine([string]$r + ' ' + [string]$script:tries)\n")
+    done = box.run(body, JHT_TOOLS_CHAT_RECONNECT_MAX="4")
+    word, tries = done.stdout.split()
+    assert word == expected, done.stdout + done.stderr
+    assert int(tries) == 3                                                  # 4 s of tetto: three looks, two seconds apart
 
 
 def test_the_switch_waits_for_the_end_of_the_onboarding_not_for_ready_flag(box):

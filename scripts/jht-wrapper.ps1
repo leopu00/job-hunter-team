@@ -2242,10 +2242,23 @@ function Complete-JhtTeamChatErrors {
 }
 
 # The fresh wrapper of a chat that the switch ended: the container the switch started must be running and ours, and the agent
-# back in it. Nothing is started here: if they are not there, the person is told to open the chat again.
+# back in it. Nothing is started here: if they are not there, the person is told to open the chat again. The container is
+# waited for as the agent is (JHT_TOOLS_CHAT_RECONNECT_MAX): the switch has just started it, and it is not ours yet for a few
+# seconds; asked once, the chat said «it comes back by itself» and at once «this chat has closed» (giro Linux build11).
+function Test-JhtTeamChatContainerBack {
+  $left = 180
+  if ($env:JHT_TOOLS_CHAT_RECONNECT_MAX -match '^[0-9]{1,6}$') { $left = [int]$env:JHT_TOOLS_CHAT_RECONNECT_MAX }
+  while (-not (Test-ContainerUp)) {
+    if ($left -le 0) { return $false }
+    Start-Sleep -Seconds 2
+    $left -= 2
+  }
+  return $true
+}
+
 function Invoke-JhtTeamChatResume {
   param([string]$Agent)
-  if (-not (Test-ContainerUp) -or -not (Test-JhtTeamChatAgentBack $Agent)) {
+  if (-not (Test-JhtTeamChatContainerBack) -or -not (Test-JhtTeamChatAgentBack $Agent)) {
     Write-Info (Get-JhtText 'tools.chat_switched')
     exit 0
   }

@@ -4233,9 +4233,21 @@ team_chat_through_update() {
 }
 
 # The fresh wrapper of a chat that the switch ended: the container the switch started must be running and ours, and the agent
-# back in it. Nothing is started here: if they are not there, the person is told to open the chat again.
+# back in it. Nothing is started here: if they are not there, the person is told to open the chat again. The container is
+# waited for as the agent is (JHT_TOOLS_CHAT_RECONNECT_MAX): the switch has just started it, and it is not ours yet for a few
+# seconds; asked once, the chat said «it comes back by itself» and at once «this chat has closed» (giro Linux build11).
+team_chat_container_back() {
+  local left="${JHT_TOOLS_CHAT_RECONNECT_MAX:-180}"
+  case "$left" in ''|*[!0-9]*) left=180 ;; esac
+  until container_up >/dev/null 2>&1; do
+    [ "$left" -gt 0 ] || return 1
+    sleep 2
+    left=$((left - 2))
+  done
+}
+
 team_chat_resume() {
-  if ! container_up >/dev/null 2>&1 || ! team_chat_agent_back "${3:-}"; then
+  if ! team_chat_container_back || ! team_chat_agent_back "${3:-}"; then
     info "$(jht_say tools.chat_switched)"
     exit 0
   fi
