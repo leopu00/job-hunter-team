@@ -22,8 +22,19 @@ Formato:
     "geocode_missing": {"enabled": true, "min_score": null,
                          "non_remote_only": true},
     "recheck_weekly":  {"enabled": true, "min_score": 70,
-                         "older_than_days": 14}
+                         "older_than_days": 14},
+    "web_search":      {"analista": {"enabled": false},
+                        "scout": {"enabled": true},
+                        "mentor": {"enabled": true}}
   }
+
+La ricerca web ospitata dal provider (T325) ha un interruttore per ruolo: il
+launcher la dà al ruolo solo se `web-search <ruolo>` dice sì (economy e la
+modalità risparmio la spengono come ogni arricchimento autonomo). Vale
+dall'avvio dell'agente con Codex (`--search` è un argomento di avvio); su pi
+l'estensione rilegge il file a ogni richiesta, quindi vale subito. Il costo di
+ogni interruttore sta in `enrichment_costs.json`, e `show` lo riporta in
+`costs` per l'avviso della CLI e del desktop.
 
 NB: la sezione si chiama ancora `recheck_weekly` (contratto su disco, già
 presente nei file delle installazioni — non rinominare senza migrarli), ma la
@@ -80,6 +91,8 @@ Uso CLI:
   python3 enrichment_policy.py set recheck_weekly.enabled false
   python3 enrichment_policy.py set recheck_weekly.min_score 65
   python3 enrichment_policy.py set recheck_weekly.older_than_days 21
+  python3 enrichment_policy.py set web_search.analista.enabled true    # also scout, mentor
+  python3 enrichment_policy.py web-search analista   # exit 0 = the role gets the web search, 1 = not (and why)
   echo '{"logo.enabled": false, "logo.min_score": 70}' | python3 enrichment_policy.py apply
 
 `apply` legge da stdin UN oggetto JSON {chiave: valore} con le chiavi di
@@ -110,7 +123,13 @@ DEFAULT_POLICY = {
         # Cadenza QUINDICINALE di default (14gg, 2026-07-30; era 7).
         "enabled": True, "min_score": 70, "older_than_days": 14,
     },
+    # The hosted web search of each role that has one (T325). The Analista's is off: on Haiku it cost ~0.26 $ more per
+    # position (T323 bis) and brought no logo nor office; the Scout and the Mentor keep it, with their cap per turn.
+    "web_search": {role: {"enabled": role != "analista"} for role in ("analista", "scout", "mentor")},
 }
+
+# The roles whose web search has a switch: the same three as JHT_CODEX_WEB_SEARCH_ROLES (.launcher/spawn-lib.sh).
+WEB_SEARCH_ROLES = ("analista", "scout", "mentor")
 
 # Chiavi settabili dalla CLI → (sezione, campo, parser)
 _SETTABLE = {
@@ -124,6 +143,9 @@ _SETTABLE = {
     "recheck_weekly.enabled": ("recheck_weekly", "enabled", "bool"),
     "recheck_weekly.min_score": ("recheck_weekly", "min_score", "score"),
     "recheck_weekly.older_than_days": ("recheck_weekly", "older_than_days", "days"),
+    "web_search.analista.enabled": (("web_search", "analista"), "enabled", "bool"),
+    "web_search.scout.enabled": (("web_search", "scout"), "enabled", "bool"),
+    "web_search.mentor.enabled": (("web_search", "mentor"), "enabled", "bool"),
 }
 
 
@@ -221,6 +243,12 @@ def load_policy() -> dict:
                 merged[section]["min_score"] = score
             if isinstance(days, int) and not isinstance(days, bool) and 1 <= days <= 365:
                 merged[section]["older_than_days"] = days
+    searches = data.get("web_search")
+    if isinstance(searches, dict):
+        for role in WEB_SEARCH_ROLES:
+            sec = searches.get(role)
+            if isinstance(sec, dict) and isinstance(sec.get("enabled"), bool):
+                merged["web_search"][role]["enabled"] = sec["enabled"]
     pipeline = data.get("geocode_pipeline")
     if isinstance(pipeline, dict) and isinstance(pipeline.get("enabled"), bool):
         merged["geocode_pipeline"]["enabled"] = pipeline["enabled"]
@@ -287,6 +315,88 @@ def disabled_reason(kind: str, policy: dict | None = None) -> str:
     if not p.get(kind, {}).get("enabled", True):
         return f"disabled by policy ({kind}.enabled=false)"
     return ""
+
+
+def _place(policy: dict, section) -> dict:
+    """The mapping a settable key writes into: the top level, a section, or a nested one (web_search.<role>)."""
+    if section is None:
+        return policy
+    if isinstance(section, tuple):
+        place = policy
+        for part in section:
+            place = place[part]
+        return place
+    return policy[section]
+
+
+def web_search_enabled(role: str, policy: dict | None = None) -> tuple[bool, str]:
+    """(on, reason) for the hosted web search of `role`: what the launcher asks before it gives the role the search.
+
+    The role's own switch, under the same brakes as every autonomous enrichment: the SAVING mode (or a mode file that
+    cannot be read) and `economy` turn it off. A role without a switch has no search.
+    """
+    if role not in WEB_SEARCH_ROLES:
+        return False, f"the {role or 'unknown'} role has no web search"
+    mode = current_mode()
+    if mode == "saving":
+        return False, "SAVING mode is active (mode=saving)"
+    if mode == MODE_UNKNOWN:
+        return False, ("capitano-maintenance.json exists but cannot be interpreted: "
+                       "autonomous enrichment is suspended until a person reviews it")
+    p = policy or load_policy()
+    if p.get("economy"):
+        return False, "SAVING policy is active (economy=true)"
+    if not p["web_search"][role]["enabled"]:
+        return False, f"disabled by policy (web_search.{role}.enabled=false)"
+    return True, "on"
+
+
+COSTS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "enrichment_costs.json")
+COSTS_MAX_BYTES = 64 * 1024
+
+
+def costs() -> dict | None:
+    """What each switch costs, from enrichment_costs.json (the one place the CLI and the desktop read it from).
+
+    Only the switches of this policy, each `{costly, usd_per_position}` with a number or null and, where it applies,
+    `usd_per_search`; anything else in the file is dropped. A file missing, too big or out of shape gives None, and the
+    warning about the cost is then shown without a figure: a made-up number is worse than none.
+    """
+    try:
+        with open(COSTS_PATH, "rb") as f:
+            raw = f.read(COSTS_MAX_BYTES + 1)
+        if len(raw) > COSTS_MAX_BYTES:
+            return None
+        data = json.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict) or data.get("version") != 1 or not isinstance(data.get("switches"), dict):
+        return None
+    per_day = data.get("positions_per_day")
+    if isinstance(per_day, bool) or not isinstance(per_day, int) or not 1 <= per_day <= 10000:
+        return None
+
+    def usd(value):
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 100:
+            raise ValueError
+        return value
+
+    switches = {}
+    for key, entry in data["switches"].items():
+        if key not in _SETTABLE or _SETTABLE[key][2] != "bool":
+            continue
+        if not isinstance(entry, dict) or not isinstance(entry.get("costly"), bool):
+            return None
+        try:
+            item = {"costly": entry["costly"], "usd_per_position": usd(entry.get("usd_per_position"))}
+            if "usd_per_search" in entry:
+                item["usd_per_search"] = usd(entry["usd_per_search"])
+        except ValueError:
+            return None
+        switches[key] = item
+    return {"version": 1, "positions_per_day": per_day, "switches": switches}
 
 
 def _save(policy: dict) -> None:
@@ -358,10 +468,7 @@ def apply_request(raw: str) -> tuple[int, dict]:
             typed = _typed_value(value, how)
         except ValueError:
             return 1, {"ok": False, "code": "value_invalid"}
-        if section is None:
-            pol[field] = typed
-        else:
-            pol[section][field] = typed
+        _place(pol, section)[field] = typed
     try:
         _save(pol)
     except OSError:
@@ -374,7 +481,9 @@ def show_payload() -> dict:
             "policy": load_policy(),
             # La modalità NON vive in questo file (fonte: mode_path()) ma decide se la policy si applica:
             # mostrarla qui evita il "perché la coda è OFF se enabled=true?".
-            "mode": current_mode()}
+            "mode": current_mode(),
+            # What each switch costs, for the warning of the CLI and the desktop when a costlier value is chosen.
+            "costs": costs()}
 
 
 def main() -> None:
@@ -384,6 +493,8 @@ def main() -> None:
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("show")
     sub.add_parser("apply")
+    ws = sub.add_parser("web-search")
+    ws.add_argument("role")
     st = sub.add_parser("set")
     st.add_argument("key", choices=sorted(_SETTABLE))
     st.add_argument("value")
@@ -392,6 +503,12 @@ def main() -> None:
     try:
         if args.cmd == "show":
             print(json.dumps(show_payload(), ensure_ascii=False))
+            return
+        if args.cmd == "web-search":
+            on, reason = web_search_enabled(args.role)
+            print(json.dumps({"role": args.role, "web_search": on, "reason": reason}, ensure_ascii=False))
+            if not on:
+                sys.exit(1)
             return
         if args.cmd == "apply":
             code, out = apply_request(sys.stdin.read().strip())
@@ -402,10 +519,7 @@ def main() -> None:
         section, field, how = _SETTABLE[args.key]
         value = _parse_value(args.value, how)
         pol = load_policy()
-        if section is None:
-            pol[field] = value
-        else:
-            pol[section][field] = value
+        _place(pol, section)[field] = value
         _save(pol)
         print(json.dumps(
             {"ok": True, "set": args.key, "value": value, "policy": pol},
