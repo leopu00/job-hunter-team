@@ -196,4 +196,9 @@ export default {
   "enrichment.confirm_needed": "A megerősítéshez futtasd újra ugyanazt a parancsot --yes kapcsolóval.",
   "enrichment.cancelled": "Nem változott semmi.",
   "enrichment.yes_option": "előre megerősíti a többletköltséget",
+  "enrichment.cost_cell_position": "{state}: pozíciónként kb. {usd} $",
+  "enrichment.cost_cell_search": "{state}: keresésenként kb. {usd} $",
+  "enrichment.cost_cell_unmeasured": "{state}: a költség még nincs mérve",
+  "enrichment.remote_too": "a távmunkás pozíciók is",
+  "enrichment.cost_note": "Becsült költségek, Haikun futó ügynökökkel mérve: nagyobb modellel többe kerülnek.",
 };

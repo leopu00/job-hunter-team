@@ -196,4 +196,9 @@ export default {
   "enrichment.confirm_needed": "Para confirmar, volta a correr o mesmo comando com --yes.",
   "enrichment.cancelled": "Nada mudou.",
   "enrichment.yes_option": "confirmar antes o custo adicional",
+  "enrichment.cost_cell_position": "{state}: cerca de {usd} $ por posição",
+  "enrichment.cost_cell_search": "{state}: cerca de {usd} $ por pesquisa",
+  "enrichment.cost_cell_unmeasured": "{state}: custo ainda não medido",
+  "enrichment.remote_too": "também as posições remotas",
+  "enrichment.cost_note": "Custos estimados, medidos com os agentes no Haiku: com um modelo maior custam mais.",
 };

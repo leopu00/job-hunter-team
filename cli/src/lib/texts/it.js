@@ -398,5 +398,10 @@ export default {
   "enrichment.confirm_needed": "Per confermare, rilancia lo stesso comando con --yes.",
   "enrichment.cancelled": "Non è cambiato niente.",
   "enrichment.yes_option": "conferma prima il costo in più",
+  "enrichment.cost_cell_position": "{state}: circa {usd} $ a posizione",
+  "enrichment.cost_cell_search": "{state}: circa {usd} $ a ricerca",
+  "enrichment.cost_cell_unmeasured": "{state}: costo non ancora misurato",
+  "enrichment.remote_too": "anche le posizioni remote",
+  "enrichment.cost_note": "Costi stimati, misurati con gli agenti su Haiku: con un modello più grande costano di più.",
   "agents.ram_guard": "Alle {at} la memoria del computer era quasi piena ({free} GiB liberi su {total}): {n} lavoratori sono stati fermati per proteggerla. La ricerca va avanti con meno lavoratori finché la memoria non torna.",
 };

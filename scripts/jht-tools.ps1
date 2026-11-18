@@ -186,7 +186,11 @@ function Get-ToolsDiskFreeKib {
 # JHT_KEEP_OLD_IMAGES=1 keeps them all). Kept: the image the container runs, the core image of this version and, while the tier
 # file is there, the full one. Only when the container runs on this version's core or full image, and never while an upgrade runs
 # or waits to be resumed. Returns the KiB it freed.
+# The cleaning is quiet (a detached job, or a pull short of room): the line of the space of the machine it gave (fstrim after the old
+# images, Invoke-MachineSpaceReturn in the wrapper) is kept for the person in .machine-space-note, and the next `jht up`, `jht setup`
+# or `jht status` says it once (Write-JhtMachineSpaceNote). -Say: the cleaning speaks itself, as at the end of the installer.
 function Remove-ToolsOldImages {
+  param([switch]$Say)
   try {
     if (-not ((Get-Command Remove-OldJhtImages -CommandType Function -ErrorAction SilentlyContinue) -and (Get-Command Get-UpgradeImage -CommandType Function -ErrorAction SilentlyContinue))) { return [long]0 }
     if ((Test-Path -LiteralPath (Join-Path $RuntimeDir '.upgrade.lock')) -or (Test-Path -LiteralPath (Join-Path $RuntimeDir '.upgrade-journal'))) { return [long]0 }
@@ -197,11 +201,35 @@ function Remove-ToolsOldImages {
     if ($running -ne $coreId -and $running -ne $fullId) { return [long]0 }
     $keep = if ($coreId) { $coreId } else { $running }
     $quiet = $script:UpgradeJson
-    $script:UpgradeJson = $true
+    if (-not $Say) { $script:UpgradeJson = $true }
     try { Remove-OldJhtImages $running $keep } finally { $script:UpgradeJson = $quiet }
+    if ($Say) { Remove-Item -LiteralPath (Join-Path $RuntimeDir '.machine-space-note') -Force -ErrorAction SilentlyContinue }
+    elseif ($script:MachineSpaceNote) { Save-ToolsMachineSpaceNote ([string]$script:MachineSpaceNote) }
     if ($script:UpgradePrune -and $script:UpgradePrune.freedBytes) { return [long][Math]::Floor([double]$script:UpgradePrune.freedBytes / 1024) }
   } catch { }
   return [long]0
+}
+
+# The note of the space for the person, in the host runtime (never a file the container can write). A link or a folder in its place is
+# left as it is and nothing is written.
+function Save-ToolsMachineSpaceNote {
+  param([string]$Note)
+  if ($Note -cnotmatch '^(back_on_stop|not_returned) [0-9]{1,6}$') { return }
+  $file = Join-Path $RuntimeDir '.machine-space-note'
+  try {
+    $there = Get-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
+    if ($there -and ($there.PSIsContainer -or ($there.Attributes -band [IO.FileAttributes]::ReparsePoint))) { return }
+    [IO.File]::WriteAllText($file, "$Note`n", [Text.UTF8Encoding]::new($false))
+  } catch { }
+}
+
+# `jht tools tidy`, at the end of the installer after its `jht up`: with the full image in place (no tier file), the old images go
+# and the fstrim of the machine runs, saying both lines to the person. With the tier file the switch to the full image is still to
+# come, and its job cleans after it. Never fails the setup.
+function Invoke-ToolsTidy {
+  if (Test-Path -LiteralPath $RuntimeTierFile) { return 0 }
+  $null = Remove-ToolsOldImages -Say
+  return 0
 }
 
 # $true when there is room for the pull, or it cannot be measured. The space the old images freed counts even when the disk does
@@ -509,6 +537,7 @@ function Invoke-ToolsCommand {
   if ($sub -eq 'status' -and $a.Count -eq 1 -and (Get-Command Write-JhtToolsStatus -CommandType Function -ErrorAction SilentlyContinue)) { Write-JhtToolsStatus; return 0 }
   if ($sub -eq 'pull' -and $a.Count -eq 1) { return (Start-ToolsPull) }
   if ($sub -eq 'switch' -and $a.Count -eq 1) { return (Invoke-ToolsSwitch) }
+  if ($sub -eq 'tidy' -and $a.Count -eq 1) { return (Invoke-ToolsTidy) }
   if ($sub -eq 'pull-job' -and $a.Count -eq 2) { return (Invoke-ToolsPullJob $a[1]) }
   if ($sub -eq 'pull-job' -and $a.Count -eq 3 -and $a[2] -eq 'auto') { return (Invoke-ToolsPullJob $a[1] 'auto') }
   Write-Err (Get-ToolsText 'integration.tools.usage' 'usage: jht tools status --json | pull | switch')
