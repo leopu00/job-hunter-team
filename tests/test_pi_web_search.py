@@ -1,9 +1,10 @@
-"""The web search of the agents on pi: the hosted `web_search` tool of OpenAI's Responses API, added by our extension.
+"""The web search of the agents on pi: the provider's hosted search tool, added by our extension.
 
 The extension (shared/runtime/pi-harness/web-search.js) is run by node against a fake `pi` that records its handlers and
-the entries it appends: it must add the tool only for provider `openai` on the Responses API, leave every other request
-exactly as pi built it while SAYING the search is missing (session entry and log), count the finished searches of the
-stream and write them at the end of the turn. Made-up payloads; nothing here reaches a network.
+the entries it appends: it must add the hosted search of OpenAI (Responses API), Anthropic (Messages API, with a cap per
+turn by role) and Z.ai (chat completions, only when turned on), leave every other request exactly as pi built it while
+SAYING the search is missing (session entry and log), count the searches of the stream and write them, with the
+provider, at the end of the turn. Made-up payloads; nothing here reaches a network.
 """
 
 from __future__ import annotations
@@ -95,21 +96,23 @@ def test_the_search_is_announced_on_once_per_session(tmp_path):
 
 # --- everywhere else the request is untouched and the lack is said ---------------------------------------------
 
-@pytest.mark.parametrize("model", [
-    {"provider": "openai", "api": "openai-completions"},
-    {"provider": "openai", "api": "openai-codex-responses"},
-    {"provider": "azure-openai-responses", "api": "azure-openai-responses"},
-    {"provider": "anthropic", "api": "anthropic-messages"},
-    {"provider": "someone-else", "api": "openai-responses"},
-    {"provider": "openai"},
-    {},
-    None,
+@pytest.mark.parametrize(("model", "why"), [
+    ({"provider": "openai", "api": "openai-completions"}, "only on its openai-responses API"),
+    ({"provider": "openai", "api": "openai-codex-responses"}, "only on its openai-responses API"),
+    ({"provider": "anthropic", "api": "openai-completions"}, "only on its anthropic-messages API"),
+    ({"provider": "azure-openai-responses", "api": "azure-openai-responses"}, "no hosted web search tool is known"),
+    ({"provider": "moonshotai", "api": "openai-completions"}, "Kimi has no hosted search tool"),
+    ({"provider": "zai", "api": "openai-completions"}, "JHT_PI_WEB_SEARCH_ZAI=1"),
+    ({"provider": "someone-else", "api": "openai-responses"}, "no hosted web search tool is known"),
+    ({"provider": "openai"}, "only on its openai-responses API"),
+    ({}, "no hosted web search tool is known"),
+    (None, "no hosted web search tool is known"),
 ])
-def test_any_other_provider_or_api_keeps_the_request_as_it_is_and_says_so(tmp_path, model):
+def test_any_other_provider_or_api_keeps_the_request_as_it_is_and_says_so(tmp_path, model, why):
     got = run([request({"tools": [FUNCTION]}, {"model": model}), request({"tools": [FUNCTION]}, {"model": model})], tmp_path)
     assert got["results"] == [None, None], "returning nothing keeps pi's own payload"
     [entry] = got["entries"]
-    assert entry[0] == "jht-web-search-status" and entry[1]["enabled"] is False and "Responses API of OpenAI" in entry[1]["reason"]
+    assert entry[0] == "jht-web-search-status" and entry[1]["enabled"] is False and why in entry[1]["reason"]
     assert [line["event"] for line in log_of(tmp_path)] == ["web_search_unavailable"], "once, not once per request"
     assert log_of(tmp_path)[0]["enabled"] is False
 
@@ -129,7 +132,7 @@ def test_an_unwritable_log_does_not_touch_the_request(tmp_path):
 
 
 def test_a_session_that_refuses_the_entry_still_leaves_the_log(tmp_path):
-    got = run([request({"tools": []}, {"model": {"provider": "anthropic", "api": "anthropic-messages"}})], tmp_path,
+    got = run([request({"tools": []}, {"model": {"provider": "moonshotai", "api": "openai-completions"}})], tmp_path,
               {"FAIL_APPEND": "1"})
     assert got["results"] == [None] and got["entries"] == []
     assert [line["event"] for line in log_of(tmp_path)] == ["web_search_unavailable"]
@@ -144,29 +147,42 @@ def stream(item_type, event_type="response.output_item.done"):
 TURN_END = {"event": "turn_end", "event_data": {}}
 
 
+OPENAI_ON = request({"tools": []})
+COUNTS = lambda got: [e for e in got["entries"] if e[0] == "jht-web-search"]  # noqa: E731
+
+
 def test_each_finished_search_call_is_counted_and_written_at_the_end_of_the_turn(tmp_path):
-    steps = [request({"tools": []}), stream("web_search_call"), stream("message"), stream("web_search_call"), TURN_END]
-    assert run(steps, tmp_path)["entries"][-1] == ["jht-web-search", {"searches": 2}]
+    steps = [OPENAI_ON, stream("web_search_call"), stream("message"), stream("web_search_call"), TURN_END]
+    assert run(steps, tmp_path)["entries"][-1] == ["jht-web-search", {"searches": 2, "provider": "openai"}]
 
 
 def test_only_a_finished_search_counts_not_one_that_is_starting(tmp_path):
-    steps = [stream("web_search_call", "response.output_item.added"), stream("web_search_call", "response.web_search_call.completed"), TURN_END]
-    assert run(steps, tmp_path)["entries"] == []
+    steps = [OPENAI_ON, stream("web_search_call", "response.output_item.added"),
+             stream("web_search_call", "response.web_search_call.completed"), TURN_END]
+    assert COUNTS(run(steps, tmp_path)) == []
 
 
 def test_a_turn_without_searches_writes_nothing_and_the_count_restarts_each_turn(tmp_path):
-    steps = [TURN_END, stream("web_search_call"), TURN_END, TURN_END, stream("web_search_call"), TURN_END]
-    assert run(steps, tmp_path)["entries"] == [["jht-web-search", {"searches": 1}], ["jht-web-search", {"searches": 1}]]
+    steps = [OPENAI_ON, TURN_END, stream("web_search_call"), TURN_END, TURN_END, stream("web_search_call"), TURN_END]
+    assert COUNTS(run(steps, tmp_path)) == [["jht-web-search", {"searches": 1, "provider": "openai"}]] * 2
+
+
+def test_a_stream_event_with_no_search_on_counts_nothing(tmp_path):
+    """Before any request, or on a provider without the search, an event that looks like a search is not one of ours."""
+    moon = request({"tools": []}, {"model": {"provider": "moonshotai", "api": "openai-completions"}})
+    steps = [stream("web_search_call"), TURN_END, moon, stream("web_search_call"), TURN_END]
+    assert COUNTS(run(steps, tmp_path)) == []
 
 
 def test_garbage_in_the_stream_is_ignored(tmp_path):
-    steps = [{"event": "provider_stream_event", "event_data": None}, {"event": "provider_stream_event", "event_data": {"data": 7}},
-             {"event": "provider_stream_event", "event_data": {"data": {"type": "response.output_item.done", "item": None}}}, TURN_END]
-    assert run(steps, tmp_path)["entries"] == []
+    steps = [OPENAI_ON, {"event": "provider_stream_event", "event_data": None}, {"event": "provider_stream_event", "event_data": {"data": 7}},
+             {"event": "provider_stream_event", "event_data": {"data": {"type": "response.output_item.done", "item": None}}},
+             {"event": "provider_stream_event", "event_data": {"data": {"type": "message_delta", "usage": "x"}}}, TURN_END]
+    assert COUNTS(run(steps, tmp_path)) == []
 
 
 def test_a_count_that_cannot_be_written_is_logged_not_lost_silently(tmp_path):
-    steps = [stream("web_search_call"), TURN_END]
+    steps = [OPENAI_ON, stream("web_search_call"), TURN_END]
     run(steps, tmp_path, {"FAIL_APPEND": "1"})
     assert log_of(tmp_path)[-1] == {**log_of(tmp_path)[-1], "event": "web_search_count_lost", "searches": 1}
 
@@ -177,3 +193,84 @@ def test_the_extension_has_no_dependency_and_no_network_in_it():
     assert requires <= {"node:fs", "node:path"}
     for word in ("http", "fetch(", "child_process", "XMLHttpRequest", "net."):
         assert word not in text.replace("https://", ""), word
+
+
+# --- Anthropic: the server tool of the Messages API ---------------------------------------------------------------
+
+ANTHROPIC = {"model": {"provider": "anthropic", "api": "anthropic-messages", "id": "claude-haiku-5-5"}}
+
+
+def anthropic_event(data):
+    return {"event": "provider_stream_event", "event_data": {"data": data}}
+
+
+def search_block(name="web_search"):
+    return anthropic_event({"type": "content_block_start", "index": 1,
+                            "content_block": {"type": "server_tool_use", "id": "srvtoolu_1", "name": name}})
+
+
+def usage(n):
+    return anthropic_event({"type": "message_delta", "delta": {"stop_reason": "end_turn"},
+                            "usage": {"output_tokens": 9, "server_tool_use": {"web_search_requests": n}}})
+
+
+STOP = anthropic_event({"type": "message_stop"})
+
+
+@pytest.mark.parametrize(("agent", "env", "cap"), [
+    ("analista-2", {}, 3), ("scout-1", {}, 3), ("mentor", {}, 5), ("capitano", {}, 3), ("", {}, 3),
+    ("analista-1", {"JHT_PI_WEB_SEARCH_MAX_USES": "7"}, 7), ("analista-1", {"JHT_PI_WEB_SEARCH_MAX_USES": "99"}, 3),
+])
+def test_anthropic_gets_its_server_search_with_a_cap_per_turn_by_role(tmp_path, agent, env, cap):
+    payload = {"model": "claude-haiku-5-5", "tools": [FUNCTION], "messages": []}
+    got = run([request(payload, ANTHROPIC)], tmp_path, {"JHT_AGENT_NAME": agent, **env})
+    assert got["results"][0]["tools"] == [FUNCTION, {"type": "web_search_20250305", "name": "web_search", "max_uses": cap}]
+    assert got["entries"] == [["jht-web-search-status", {"enabled": True, "provider": "anthropic", "api": "anthropic-messages"}]]
+
+
+def test_anthropic_without_tools_gets_just_the_search_and_a_search_already_there_is_kept(tmp_path):
+    got = run([request({"messages": []}, ANTHROPIC),
+               request({"tools": [{"type": "web_search_20260209", "name": "web_search"}]}, ANTHROPIC)], tmp_path)
+    assert got["results"][0]["tools"] == [{"type": "web_search_20250305", "name": "web_search", "max_uses": 3}]
+    assert got["results"][1] is None
+
+
+def test_anthropic_counts_the_searches_the_usage_bills(tmp_path):
+    """Two searches started, one failed: the usage says 1, and a failed search is not billed."""
+    steps = [request({}, ANTHROPIC), search_block(), search_block(), usage(1), STOP, TURN_END]
+    assert COUNTS(run(steps, tmp_path)) == [["jht-web-search", {"searches": 1, "provider": "anthropic"}]]
+
+
+def test_anthropic_without_the_usage_counts_the_search_blocks_and_each_request_of_the_turn(tmp_path):
+    steps = [request({}, ANTHROPIC), search_block(), search_block("code_execution"), STOP,
+             request({}, ANTHROPIC), search_block(), usage(2), STOP, TURN_END]
+    assert COUNTS(run(steps, tmp_path)) == [["jht-web-search", {"searches": 3, "provider": "anthropic"}]]
+
+
+def test_anthropic_a_request_cut_before_its_stop_still_counts_at_the_end_of_the_turn(tmp_path):
+    steps = [request({}, ANTHROPIC), search_block(), usage(1), TURN_END]
+    assert COUNTS(run(steps, tmp_path)) == [["jht-web-search", {"searches": 1, "provider": "anthropic"}]]
+
+
+def test_anthropic_a_reply_with_no_search_counts_nothing(tmp_path):
+    steps = [request({}, ANTHROPIC), anthropic_event({"type": "content_block_start", "index": 0,
+                                                      "content_block": {"type": "tool_use", "name": "bash"}}),
+             usage(0), STOP, TURN_END]
+    assert COUNTS(run(steps, tmp_path)) == []
+
+
+# --- Z.ai: on only when turned on ------------------------------------------------------------------------------
+
+ZAI = {"model": {"provider": "zai", "api": "openai-completions", "id": "glm-5.3"}}
+ZAI_TOOL = {"type": "web_search", "web_search": {"enable": True, "search_engine": "search-prime", "search_result": True, "count": 5}}
+
+
+def test_zai_gets_its_search_when_turned_on_and_counts_one_per_response(tmp_path):
+    chunk = lambda extra: {"event": "provider_stream_event", "event_data": {"data": {"choices": [], **extra}}}  # noqa: E731
+    steps = [request({"tools": [FUNCTION]}, ZAI), chunk({"web_search": [{"title": "t", "link": "l"}]}),
+             chunk({"web_search": [{"title": "t", "link": "l"}]}), chunk({}), TURN_END,
+             request({"tools": [FUNCTION]}, ZAI), chunk({"web_search": []}), TURN_END]
+    got = run(steps, tmp_path, {"JHT_PI_WEB_SEARCH_ZAI": "1"})
+    assert got["results"][0]["tools"] == [FUNCTION, ZAI_TOOL]
+    assert COUNTS(got) == [["jht-web-search", {"searches": 1, "provider": "zai"}]]
+    assert [line["event"] for line in log_of(tmp_path)] == ["web_search_on"]
