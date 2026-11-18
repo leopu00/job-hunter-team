@@ -131,10 +131,8 @@ def test_the_retired_workers_come_back_when_the_memory_is_well_over_the_threshol
     assert started == [], "just over the threshold is not enough"
     sent.clear()
     rg.step(api, run, probe=ok, sessions=alive, restart=lambda s, why: started.append(s) or True)
-    assert started == ["SCOUT-2"] and run.state["ram_guard"]["retired_by_guard"] == ["SCOUT-3"], "one worker per look"
+    assert started == ["SCOUT-2", "SCOUT-3"] and run.state["ram_guard"]["retired_by_guard"] == [], "two Scouts in one look"
     assert [s for s, _ in sent] == ["CAPITANO"] and "capacity is open" in sent[0][1]
-    rg.step(api, run, probe=ok, sessions=alive, restart=lambda s, why: started.append(s) or True)
-    assert started == ["SCOUT-2", "SCOUT-3"] and run.state["ram_guard"]["retired_by_guard"] == []
 
 
 def test_a_worker_a_brake_holds_stays_down_and_is_tried_again():
@@ -145,16 +143,16 @@ def test_a_worker_a_brake_holds_stays_down_and_is_tried_again():
     assert run.state["ram_guard"]["retired_by_guard"] == ["SCOUT-2", "SCOUT-3"]
 
 
-def test_the_scouts_come_back_first_then_the_analisti_then_the_scorer_each_by_its_number():
+def test_the_scouts_come_back_first_two_a_look_then_one_other_worker_a_look():
     api, run, sent = _run()
-    run.state["ram_guard"] = {"retired_by_guard": ["SCORER-1", "ANALISTA-3", "SCOUT-4", "SCOUT-2"], "last_retire_at": 0}
+    run.state["ram_guard"] = {"retired_by_guard": ["SCORER-1", "ANALISTA-3", "SCOUT-4", "SCOUT-2", "SCOUT-5"], "last_retire_at": 0}
     started = []
-    rg.RESTART_PER_LOOK, was = 4, rg.RESTART_PER_LOOK
-    try:
-        rg.step(api, run, probe={"ram_avail_gib": 2.5, "ram_total_gib": 7.7}, sessions={}, restart=lambda s, why: started.append(s) or True)
-    finally:
-        rg.RESTART_PER_LOOK = was
-    assert started == ["SCOUT-2", "SCOUT-4", "ANALISTA-3", "SCORER-1"]
+    ok = {"ram_avail_gib": 2.5, "ram_total_gib": 7.7}
+    for _ in range(5):
+        rg.step(api, run, probe=ok, sessions={}, restart=lambda s, why: started.append(s) or True)
+        api.time.time = lambda t=api.time.time(): t + 1
+    assert started == ["SCOUT-2", "SCOUT-4", "SCOUT-5", "ANALISTA-3", "SCORER-1"]
+    assert run.state["ram_guard"]["retired_by_guard"] == []
 
 
 def test_workers_retired_for_ram_by_an_older_guard_come_back_too(monkeypatch):

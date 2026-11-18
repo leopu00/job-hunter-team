@@ -142,7 +142,8 @@ def _tell_the_person(api, run, done, avail, total, now, notify_user):
 
 
 REOPEN_MARGIN = 1.5            # the memory must be this much over the threshold before the capacity comes back
-RESTART_PER_LOOK = 1
+RESTART_PER_LOOK = 1           # the others, one a look: a start can take minutes and the tick must not wait for all of them
+RESTART_SCOUTS_PER_LOOK = 2    # the Scouts, two a look: nothing enters without them, and a pause of the pace leaves short windows
 REOPEN_AFTER_SEC = 300         # ... and stay there this long after the last retirement
 
 
@@ -203,9 +204,11 @@ def _reopen(api, run, state, avail, total, now, restart, names):
         return []
     if avail < threshold_gib(total) * REOPEN_MARGIN or now - float(state.get("last_retire_at") or 0.0) < REOPEN_AFTER_SEC:
         return []
-    # one worker per look: a start can take minutes and the tick of the Sentinella must not wait for all of them
+    # two Scouts a look, else one worker; the order puts the Scouts first
+    first = WORKER.match(waiting[0])
+    take = RESTART_SCOUTS_PER_LOOK if first and first.group(1) == "SCOUT" else RESTART_PER_LOOK
     back = []
-    for name in waiting[:RESTART_PER_LOOK]:
+    for name in [n for n in waiting if (WORKER.match(n).group(1) == "SCOUT") == (take == RESTART_SCOUTS_PER_LOOK)][:take]:
         if restart(name, "ram guard: memory back"):
             back.append(name)
     state["retired_by_guard"] = [n for n in waiting if n not in back]
