@@ -8,7 +8,7 @@ import { openJobsDb, type Database } from "../src/db/jobs-db.ts";
 import { pyJson, pythonIsoUtc } from "../src/db/py-format.ts";
 import { createDbTools, type ScriptResult } from "../src/db/tools.ts";
 import type { ToolContext, ToolHandler } from "../src/tools/registry.ts";
-import { pythonSkillsOfThisTree, runPython } from "./helpers/python-skills.ts";
+import { argparseChoicesUnquoted, pythonSkillsOfThisTree, runPython } from "./helpers/python-skills.ts";
 
 // The Python of THIS tree, not the one pinned in schema.sql: db_insert.py and the port change in the same commits (the country read
 // from the place, the currency of the estimate only with an amount), and the port is judged against the script it sits next to.
@@ -94,7 +94,8 @@ describe("db_insert position against db_insert.py", () => {
       if (py.exitCode === 2) {
         // argparse: the error line is the same; our usage line is shorter (argv.ts).
         expect(result.ok).toBe(false);
-        expect(result.content.split("\n").at(-2)).toBe(pyRun.stderr.trim().split("\n").at(-1));
+        // (Python 3.14 prints the choices of «invalid choice» bare, up to 3.13 quoted: the meaning is the same.)
+        expect(argparseChoicesUnquoted(result.content.split("\n").at(-2) ?? "")).toBe(argparseChoicesUnquoted(pyRun.stderr.trim().split("\n").at(-1) ?? ""));
       } else {
         expect(result.ok).toBe(py.exitCode === 0);
         // D-4: the existing row's company and title come back fenced; the rest is the Python's text.
