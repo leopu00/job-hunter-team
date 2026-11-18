@@ -451,6 +451,7 @@ export function sendAction(agentArg, message) {
 // container), until something the agent wrote comes back. The chat that the wrapper brings back after the restart
 // (JHT_TEAM_CHAT_RESUMED=1) asks it again, once, when nothing came after it.
 const ASKED_MAX_AGE_S = 30 * 60;
+const ASKED_MAX_CHARS = 1000;   // the longest message the chat sends
 
 function askedFile(agent, home) {
   return join(home, 'state', `chat-asked-${String(agent).replace(/[^a-z0-9-]/gi, '')}.json`);
@@ -492,8 +493,11 @@ export function unansweredQuestion(agent, rows, { home = JHT_HOME, now = () => D
     return null;
   }
   const at = Number(kept?.at);
-  const text = typeof kept?.text === 'string' ? kept.text.trim() : '';
-  if (!text || !(at > 0) || now() - at > ASKED_MAX_AGE_S) return null;
+  // The file is in a folder the agents can write: what it holds is taken as text from outside. A text a terminal would obey (ESC, OSC,
+  // direction marks), one longer than a message can be, or an empty one is not a question the person asked: the file is discarded.
+  const raw = typeof kept?.text === 'string' ? kept.text.trim() : '';
+  const text = raw.replace(CONTROLS, '');
+  if (!text || text !== raw || text.length > ASKED_MAX_CHARS || !(at > 0) || now() - at > ASKED_MAX_AGE_S) return null;
   if ((rows || []).some((row) => isAgentRow(row) && Number(row.at) >= at - 1)) return null;
   return text;
 }

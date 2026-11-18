@@ -36,6 +36,30 @@ test('a question kept for too long is not asked again, and forgetting it leaves 
   assert.equal(unansweredQuestion('assistente', [], { home, now: () => 1001 }), null);
 });
 
+test('a file that an agent wrote is not a question the person asked: controls, an empty text or a long one discard it', () => {
+  const home = homeDir();
+  const write = (text) => {
+    mkdirSync(join(home, 'state'), { recursive: true });
+    writeFileSync(askedPath(home), JSON.stringify({ text, at: 1000 }));
+    return unansweredQuestion('assistente', [], { home, now: () => 1100 });
+  };
+  assert.equal(write('Any news?'), 'Any news?');
+  assert.equal(write('Any news?\u001b]0;pwned\u0007'), null, 'ESC and OSC for the terminal of the person');
+  assert.equal(write('\u001b[2JAny news?'), null);
+  assert.equal(write('Any\u202enews?'), null, 'a direction mark');
+  assert.equal(write('Any\u0000news?'), null);
+  assert.equal(write('   '), null);
+  assert.equal(write('x'.repeat(1001)), null);
+  assert.equal(write('x'.repeat(1000)), 'x'.repeat(1000));
+  assert.equal(write(42), null);
+});
+
+test('a chat that comes back does not show or send a question with controls', async () => {
+  const r = await runChat({ asked: { text: 'Any news?\u001b]0;pwned\u0007', at: NOW() - 60 } }, { resumed: true });
+  assert.deepEqual(r.sent, [], r.out);
+  assert.doesNotMatch(r.out, /pwned|\u001b\]0/);
+}, { timeout: 60_000 });
+
 test('a folder that cannot be written is no reason for the chat to fail', () => {
   const root = homeDir();
   writeFileSync(join(root, 'state'), 'a file where a folder should be');
