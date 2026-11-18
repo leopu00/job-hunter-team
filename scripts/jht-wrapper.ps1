@@ -327,6 +327,8 @@ function Get-JhtTextTable {
     'en:ps.lifecycle.restarted' { return 'Job Hunter Team restarted.' }
     'en:ps.link_or_not_folder' { return 'a link or not a folder' }
     'en:ps.localappdata_unavailable' { return 'LOCALAPPDATA is not available: host runtime refused' }
+    'en:ps.machine_space_back_on_stop' { return 'About %s GB freed in the JHT machine come back to Windows when the machine stops: after jht down, with podman machine stop %s, or when the computer restarts.' }
+    'en:ps.machine_space_not_returned' { return 'JHT takes about %s GB in its virtual disk; they are freed completely with jht uninstall.' }
     'en:ps.machine_state_unreadable' { return 'the state of the machine cannot be read (podman and wsl do not answer)' }
     'en:ps.monitor_window_unavailable' { return 'monitor_window_unavailable: cannot open a terminal window here. Run ''jht monitor'' in the current terminal.' }
     'en:ps.mount_repair_failed_folders_not_writable' { return 'mount_repair_failed: the Job Hunter Team folders (%s, %s) are not writable by the container and could not be fixed.' }
@@ -600,6 +602,8 @@ function Get-JhtTextTable {
     'it:ps.lifecycle.restarted' { return 'Job Hunter Team riavviato.' }
     'it:ps.link_or_not_folder' { return 'collegamento o non cartella' }
     'it:ps.localappdata_unavailable' { return 'LOCALAPPDATA non disponibile: runtime host rifiutato' }
+    'it:ps.machine_space_back_on_stop' { return 'Circa %s GB liberati nella macchina di JHT tornano a Windows quando la macchina si ferma: dopo jht down, con podman machine stop %s, o al riavvio del computer.' }
+    'it:ps.machine_space_not_returned' { return 'JHT occupa circa %s GB nel suo disco virtuale; si liberano del tutto con jht uninstall.' }
     'it:ps.machine_state_unreadable' { return 'lo stato della macchina non si legge (podman e wsl non rispondono)' }
     'it:ps.monitor_window_unavailable' { return 'monitor_window_unavailable: impossibile aprire una finestra qui. Esegui ''jht monitor'' nel terminale corrente.' }
     'it:ps.mount_repair_failed_folders_not_writable' { return 'mount_repair_failed: le cartelle di Job Hunter Team (%s, %s) non sono scrivibili dal container e non si sono potute sistemare.' }
@@ -873,6 +877,8 @@ function Get-JhtTextTable {
     'hu:ps.lifecycle.restarted' { return ('A Job Hunter Team ' + [char]0x00FA + 'jraindult.') }
     'hu:ps.link_or_not_folder' { return 'link vagy nem mappa' }
     'hu:ps.localappdata_unavailable' { return ('a LOCALAPPDATA nem ' + [char]0x00E9 + 'rhet' + [char]0x0151 + ' el: a g' + [char]0x00E9 + 'pen fut' + [char]0x00F3 + ' futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezet elutas' + [char]0x00ED + 'tva') }
+    'hu:ps.machine_space_back_on_stop' { return ('A JHT g' + [char]0x00E9 + 'p' + [char]0x00E9 + 'n felszabad' + [char]0x00ED + 'tott kb. %s GB akkor ker' + [char]0x00FC + 'l vissza a Windowshoz, amikor a g' + [char]0x00E9 + 'p le' + [char]0x00E1 + 'll: a jht down ut' + [char]0x00E1 + 'n a podman machine stop %s paranccsal, vagy a sz' + [char]0x00E1 + 'm' + [char]0x00ED + 't' + [char]0x00F3 + 'g' + [char]0x00E9 + 'p ' + [char]0x00FA + 'jraind' + [char]0x00ED + 't' + [char]0x00E1 + 'sakor.') }
+    'hu:ps.machine_space_not_returned' { return ('A JHT kb. %s GB-ot foglal a virtu' + [char]0x00E1 + 'lis lemez' + [char]0x00E9 + 'n; ez a jht uninstall paranccsal teljesen felszabadul.') }
     'hu:ps.machine_state_unreadable' { return ('a g' + [char]0x00E9 + 'p ' + [char]0x00E1 + 'llapota nem olvashat' + [char]0x00F3 + ' (a podman ' + [char]0x00E9 + 's a wsl nem v' + [char]0x00E1 + 'laszol)') }
     'hu:ps.monitor_window_unavailable' { return ('monitor_window_unavailable: itt nem tudok termin' + [char]0x00E1 + 'lablakot nyitni. Futtasd a ''jht monitor'' parancsot a jelenlegi termin' + [char]0x00E1 + 'lban.') }
     'hu:ps.mount_repair_failed_folders_not_writable' { return ('mount_repair_failed: a Job Hunter Team mapp' + [char]0x00E1 + 'i (%s, %s) nem ' + [char]0x00ED + 'rhat' + [char]0x00F3 + 'k a kont' + [char]0x00E9 + 'ner sz' + [char]0x00E1 + 'm' + [char]0x00E1 + 'ra, ' + [char]0x00E9 + 's nem siker' + [char]0x00FC + 'lt rendbe hozni ' + [char]0x0151 + 'ket.') }
@@ -1146,6 +1152,8 @@ function Get-JhtTextTable {
     'es:ps.lifecycle.restarted' { return 'Job Hunter Team reiniciado.' }
     'es:ps.link_or_not_folder' { return 'enlace o no es una carpeta' }
     'es:ps.localappdata_unavailable' { return 'LOCALAPPDATA no disponible: runtime del host rechazado' }
+    'es:ps.machine_space_back_on_stop' { return ('Unos %s GB liberados en la m' + [char]0x00E1 + 'quina de JHT vuelven a Windows cuando la m' + [char]0x00E1 + 'quina se detiene: tras jht down, con podman machine stop %s, o al reiniciar el ordenador.') }
+    'es:ps.machine_space_not_returned' { return 'JHT ocupa unos %s GB en su disco virtual; se liberan del todo con jht uninstall.' }
     'es:ps.machine_state_unreadable' { return ('el estado de la m' + [char]0x00E1 + 'quina no se puede leer (podman y wsl no responden)') }
     'es:ps.monitor_window_unavailable' { return ('monitor_window_unavailable: aqu' + [char]0x00ED + ' no se puede abrir una ventana de terminal. Ejecuta ''jht monitor'' en el terminal actual.') }
     'es:ps.mount_repair_failed_folders_not_writable' { return 'mount_repair_failed: las carpetas de Job Hunter Team (%s, %s) no son escribibles para el contenedor y no se han podido arreglar.' }
@@ -1419,6 +1427,8 @@ function Get-JhtTextTable {
     'de:ps.lifecycle.restarted' { return 'Job Hunter Team neu gestartet.' }
     'de:ps.link_or_not_folder' { return ('Verkn' + [char]0x00FC + 'pfung oder kein Ordner') }
     'de:ps.localappdata_unavailable' { return ('LOCALAPPDATA nicht verf' + [char]0x00FC + 'gbar: Host-Runtime abgelehnt') }
+    'de:ps.machine_space_back_on_stop' { return ('Etwa %s GB, die in der JHT-Maschine frei wurden, kommen zu Windows zur' + [char]0x00FC + 'ck, wenn die Maschine anh' + [char]0x00E4 + 'lt: nach jht down mit podman machine stop %s oder beim Neustart des Computers.') }
+    'de:ps.machine_space_not_returned' { return ('JHT belegt etwa %s GB in seinem virtuellen Datentr' + [char]0x00E4 + 'ger; sie werden mit jht uninstall vollst' + [char]0x00E4 + 'ndig freigegeben.') }
     'de:ps.machine_state_unreadable' { return ('der Zustand der Maschine l' + [char]0x00E4 + 'sst sich nicht lesen (podman und wsl antworten nicht)') }
     'de:ps.monitor_window_unavailable' { return ('monitor_window_unavailable: Hier l' + [char]0x00E4 + 'sst sich kein Terminalfenster ' + [char]0x00F6 + 'ffnen. F' + [char]0x00FC + 'hre ''jht monitor'' im aktuellen Terminal aus.') }
     'de:ps.mount_repair_failed_folders_not_writable' { return ('mount_repair_failed: Die Ordner von Job Hunter Team (%s, %s) sind f' + [char]0x00FC + 'r den Container nicht beschreibbar und lie' + [char]0x00DF + 'en sich nicht reparieren.') }
@@ -1692,6 +1702,8 @@ function Get-JhtTextTable {
     'fr:ps.lifecycle.restarted' { return ('Job Hunter Team red' + [char]0x00E9 + 'marr' + [char]0x00E9 + '.') }
     'fr:ps.link_or_not_folder' { return 'lien ou pas un dossier' }
     'fr:ps.localappdata_unavailable' { return ('LOCALAPPDATA indisponible : runtime h' + [char]0x00F4 + 'te refus' + [char]0x00E9) }
+    'fr:ps.machine_space_back_on_stop' { return ('Environ %s Go lib' + [char]0x00E9 + 'r' + [char]0x00E9 + 's dans la machine de JHT reviennent ' + [char]0x00E0 + ' Windows quand la machine s''arr' + [char]0x00EA + 'te : apr' + [char]0x00E8 + 's jht down, avec podman machine stop %s, ou au red' + [char]0x00E9 + 'marrage de l''ordinateur.') }
+    'fr:ps.machine_space_not_returned' { return ('JHT occupe environ %s Go dans son disque virtuel ; ils sont enti' + [char]0x00E8 + 'rement lib' + [char]0x00E9 + 'r' + [char]0x00E9 + 's avec jht uninstall.') }
     'fr:ps.machine_state_unreadable' { return ('l''' + [char]0x00E9 + 'tat de la machine ne se lit pas (podman et wsl ne r' + [char]0x00E9 + 'pondent pas)') }
     'fr:ps.monitor_window_unavailable' { return ('monitor_window_unavailable : impossible d''ouvrir une fen' + [char]0x00EA + 'tre de terminal ici. Lance ''jht monitor'' dans le terminal actuel.') }
     'fr:ps.mount_repair_failed_folders_not_writable' { return ('mount_repair_failed: les dossiers de Job Hunter Team (%s, %s) ne sont pas accessibles en ' + [char]0x00E9 + 'criture au conteneur et n''ont pas pu ' + [char]0x00EA + 'tre r' + [char]0x00E9 + 'par' + [char]0x00E9 + 's.') }
@@ -1965,6 +1977,8 @@ function Get-JhtTextTable {
     'pt:ps.lifecycle.restarted' { return 'Job Hunter Team reiniciado.' }
     'pt:ps.link_or_not_folder' { return ('liga' + [char]0x00E7 + [char]0x00E3 + 'o ou n' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' uma pasta') }
     'pt:ps.localappdata_unavailable' { return ('LOCALAPPDATA n' + [char]0x00E3 + 'o dispon' + [char]0x00ED + 'vel: runtime do anfitri' + [char]0x00E3 + 'o recusado') }
+    'pt:ps.machine_space_back_on_stop' { return ('Cerca de %s GB libertados na m' + [char]0x00E1 + 'quina do JHT voltam ao Windows quando a m' + [char]0x00E1 + 'quina para: depois de jht down, com podman machine stop %s, ou ao reiniciar o computador.') }
+    'pt:ps.machine_space_not_returned' { return ('O JHT ocupa cerca de %s GB no seu disco virtual; s' + [char]0x00E3 + 'o libertados por completo com jht uninstall.') }
     'pt:ps.machine_state_unreadable' { return ('o estado da m' + [char]0x00E1 + 'quina n' + [char]0x00E3 + 'o se consegue ler (o podman e o wsl n' + [char]0x00E3 + 'o respondem)') }
     'pt:ps.monitor_window_unavailable' { return ('monitor_window_unavailable: n' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' poss' + [char]0x00ED + 'vel abrir uma janela de terminal aqui. Corre ''jht monitor'' no terminal atual.') }
     'pt:ps.mount_repair_failed_folders_not_writable' { return ('mount_repair_failed: as pastas do Job Hunter Team (%s, %s) n' + [char]0x00E3 + 'o s' + [char]0x00E3 + 'o grav' + [char]0x00E1 + 'veis pelo contentor e n' + [char]0x00E3 + 'o foi poss' + [char]0x00ED + 'vel arranj' + [char]0x00E1 + '-las.') }
@@ -7762,6 +7776,91 @@ function Remove-OldJhtImages {
   if ($busy -gt 0) { $note += (Format-JhtText 'ps.old_images_busy' $busy) }
   if ($refused -gt 0) { $note += (Format-JhtText 'ps.old_images_refused' $refused) }
   Write-UpgradeNote $note
+  if ($removed -gt 0) { try { Invoke-MachineSpaceReturn } catch {} }
+}
+
+# -- The space of the old images, back to Windows --------------------------
+# With Podman the images live in the machine of JHT, a WSL distro whose disk is one .vhdx file on the Windows disk. A removed
+# image frees its space INSIDE that disk; the file does not shrink by itself (collaudo of build 9 to 10: the old images went,
+# the .vhdx went from 9.89 to 16.48 GiB and C: lost 6.6 GiB). Measured with WSL 3.0.5 and Podman 6.0.2, which makes the .vhdx NOT
+# sparse: there fstrim gives back nothing. On a sparse .vhdx fstrim marks the free blocks, and WSL gives them back to Windows when it
+# lets the disk go, that is when the machine stops (3 GiB written, removed and trimmed came back only then, all of them). So: fstrim,
+# then one line. Sparse: how much comes back, and when. Not sparse: how much JHT takes in its disk, and that jht uninstall frees it
+# all. Making the disk sparse (wsl --manage <distro> --set-sparse true, with the machine and WSL stopped) is experimental in WSL:
+# it is never done here and never advised to the person; it is in docs for whoever knows how to undo it.
+# Nothing here needs an administrator, stops anything or changes the distro.
+
+# The .vhdx of a WSL distro of this user, from the user's own registry (where WSL itself keeps it), or ''.
+function Get-JhtMachineVhdx {
+  param([Parameter(Mandatory)][string]$Distro)
+  try {
+    foreach ($key in @(Get-ChildItem -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss' -ErrorAction Stop)) {
+      $props = Get-ItemProperty -LiteralPath $key.PSPath -ErrorAction Stop
+      if ([string]$props.DistributionName -cne $Distro) { continue }
+      $base = ([string]$props.BasePath) -replace '^\\\\\?\\', ''
+      $file = if ($props.VhdFileName) { [string]$props.VhdFileName } else { 'ext4.vhdx' }
+      if (-not $base) { return '' }
+      $path = Join-Path $base $file
+      if (Test-Path -LiteralPath $path -PathType Leaf) { return $path }
+      return ''
+    }
+  } catch {}
+  return ''
+}
+
+# The file is sparse: what it takes on the disk follows what it holds, and a trim inside gives the space back.
+function Test-JhtSparseFile {
+  param([Parameter(Mandatory)][string]$Path)
+  try { return ((Get-Item -LiteralPath $Path -Force).Attributes -band [IO.FileAttributes]::SparseFile) -ne 0 } catch { return $false }
+}
+
+# What the file takes on the disk (for a sparse file, less than its size), or its size when that cannot be read.
+function Get-JhtFileSizeOnDisk {
+  param([Parameter(Mandatory)][string]$Path)
+  $size = [long](Get-Item -LiteralPath $Path -Force).Length
+  try {
+    if (-not ('JhtDisk.Native' -as [type])) {
+      Add-Type -Namespace JhtDisk -Name Native -MemberDefinition '[DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] public static extern uint GetCompressedFileSizeW(string name, out uint high);'
+    }
+    $high = [uint32]0
+    $low = [JhtDisk.Native]::GetCompressedFileSizeW($Path, [ref]$high)
+    if ($low -ne [uint32]::MaxValue -or [Runtime.InteropServices.Marshal]::GetLastWin32Error() -eq 0) { return [long](([uint64]$high -shl 32) + [uint64]$low) }
+  } catch {}
+  return $size
+}
+
+# A command run as root in the distro: what it printed, or $null when it did not answer.
+function Invoke-JhtMachineRoot {
+  param([Parameter(Mandatory)][string]$Wsl, [Parameter(Mandatory)][string]$Distro, [Parameter(ValueFromRemainingArguments)][string[]]$Command)
+  $out = @(& { $ErrorActionPreference = 'Continue'; & $Wsl -d $Distro -u root -- @Command 2>$null })
+  if ($LASTEXITCODE -ne 0) { return $null }
+  return (($out | ForEach-Object { ([string]$_).Replace([string][char]0, '') }) -join [char]10)
+}
+
+function Invoke-MachineSpaceReturn {
+  if ($ContainerRuntime -ne 'podman' -or -not $script:UpgradePrune) { return }
+  $wsl = Get-Command wsl.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $wsl -or -not $env:CONTAINER_CONNECTION) { return }
+  $distro = Get-JhtPodmanDistroName $env:CONTAINER_CONNECTION
+  $vhdx = Get-JhtMachineVhdx $distro
+  if (-not $vhdx) { return }
+  $trimmed = $null -ne (Invoke-JhtMachineRoot $wsl.Source $distro 'fstrim' '-a')
+  $sparse = Test-JhtSparseFile $vhdx
+  # What the file can give back: what it takes on the disk less what the distro uses.
+  $onDisk = Get-JhtFileSizeOnDisk $vhdx
+  $used = Invoke-JhtMachineRoot $wsl.Source $distro 'df' '-B1' '--output=used' '/'
+  $usedBytes = if ($used) { ((@($used -split '\s+') | Where-Object { $_ -match '^\d+$' }) | Select-Object -Last 1) } else { $null }
+  $recoverable = if ($usedBytes) { [math]::Max([long]0, [long]$onDisk - [long]$usedBytes) } else { [long]0 }
+  $script:UpgradePrune['machineDisk'] = [ordered]@{ sparse = $sparse; trimmed = $trimmed; onDiskBytes = [long]$onDisk; recoverableBytes = [long]$recoverable }
+  if ($recoverable -lt 1GB) { return }
+  $gb = [long][math]::Floor($recoverable / 1GB)
+  if ($sparse) {
+    Write-UpgradeNote (Format-JhtText 'ps.machine_space_back_on_stop' $gb $env:CONTAINER_CONNECTION)
+  } else {
+    # No steps for the person (a sparse disk is experimental in WSL, and the switch wants the machine off): only how much JHT
+    # takes, and the one command that frees all of it.
+    Write-UpgradeNote (Format-JhtText 'ps.machine_space_not_returned' ([long][math]::Round($onDisk / 1GB)))
+  }
 }
 
 function Invoke-UpgradeCompose {
