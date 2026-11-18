@@ -153,6 +153,9 @@ $env:JHT_HOST_TYPE = 'local'
 function Require-ComposeFile {{}}
 function Require-Docker {{}}
 function Clear-JhtTeamStopped {{}}
+function Test-JhtSetupWizardArgs {{ param([string[]]$Rest) $false }}
+function Write-JhtSetupOpenFlag {{}}
+function Remove-JhtSetupOpenFlag {{}}
 function Ensure-Up {{}}
 # the tools of a core install (jht-tools.ps1): not what this case is about
 function Write-JhtToolsNotice {{ param([switch]$Kick) }}
