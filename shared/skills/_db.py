@@ -2786,6 +2786,22 @@ def _migrate_v3_to_v4(conn: sqlite3.Connection) -> None:
         )
 
 
+def link_positions_to_company(conn: sqlite3.Connection, company_id: int, company_name: str) -> int:
+    """Collega all'azienda le posizioni con lo stesso nome che non ne hanno ancora una (company_id NULL).
+
+    La posizione si collega da sola solo se l'azienda esiste quando la posizione nasce (resolve_company_id
+    all'insert). Lo SCOUT inserisce la posizione prima che l'ANALISTA crei l'azienda: senza questo passaggio
+    restava company_id NULL per sempre (giri del 16-17/11, 19 posizioni su 26). Stesso confronto del nome
+    di resolve_company_id; un collegamento esistente non si tocca. Ritorna quante posizioni ha collegato.
+    """
+    if not company_id or not company_name:
+        return 0
+    cur = conn.execute(
+        "UPDATE positions SET company_id = ? WHERE company_id IS NULL AND LOWER(company) = LOWER(?)",
+        (company_id, company_name))
+    return cur.rowcount or 0
+
+
 def resolve_company_id(conn: sqlite3.Connection, company_name: str):
     """Cerca company_id per nome (case-insensitive). Ritorna ID o None."""
     if not company_name:

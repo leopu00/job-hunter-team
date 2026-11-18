@@ -186,16 +186,17 @@ def load_policy() -> dict:
             merged[section]["enabled"] = sec["enabled"]
         if section in ("logo", "geocode_missing"):
             ms = sec.get("min_score")
-            if ms is None or (isinstance(ms, int) and 0 <= ms <= 100):
+            # bool è un int in Python: `true` non è uno score
+            if ms is None or (isinstance(ms, int) and not isinstance(ms, bool) and 0 <= ms <= 100):
                 merged[section]["min_score"] = ms
         if section == "geocode_missing" and isinstance(sec.get("non_remote_only"), bool):
             merged[section]["non_remote_only"] = sec["non_remote_only"]
         if section == "recheck_weekly":
             score = sec.get("min_score")
             days = sec.get("older_than_days")
-            if isinstance(score, int) and 0 <= score <= 100:
+            if isinstance(score, int) and not isinstance(score, bool) and 0 <= score <= 100:
                 merged[section]["min_score"] = score
-            if isinstance(days, int) and 1 <= days <= 365:
+            if isinstance(days, int) and not isinstance(days, bool) and 1 <= days <= 365:
                 merged[section]["older_than_days"] = days
     return merged
 

@@ -33,7 +33,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _db import get_db, ensure_schema, resolve_company_id, _column_exists, LOCATION_PRECISIONS, SENIORITY_LEVELS
+from _db import get_db, ensure_schema, resolve_company_id, link_positions_to_company, _column_exists, LOCATION_PRECISIONS, SENIORITY_LEVELS
 from external_content import normalize_external_inline_fields
 import role_taxonomy
 import maintenance_log
@@ -741,6 +741,8 @@ def update_company(args):
 
     params.append(args.name)
     conn.execute(f"UPDATE companies SET {', '.join(updates)} WHERE name = ?", params)
+    # un'azienda già nota raccoglie le posizioni rimaste scollegate (inserite prima di lei)
+    link_positions_to_company(conn, company_id, args.name)
 
     if m_action and company_id:
         after_snapshot = _snapshot(conn, "companies", company_id,
