@@ -596,7 +596,8 @@ jobs:
     # Un job che si appende non e' un verdetto: senza questo tetto il blocco
     # resta in coda fino alle sei ore del runner e la CI non dice nulla — il
     # 21/09 e' successo per diciannove ore, con Lint e CI verdi accanto.
-    timeout-minutes: 40
+    # Il 18/11 la suite e' arrivata al 96 % a 40 minuti: tetto a 60.
+    timeout-minutes: 60
     if: github.event_name != 'schedule'
     # Migration 074 is exercised on PostgreSQL itself: parsing SQL or mocking
     # Supabase cannot prove composite FKs, RLS privileges, row locks or a full

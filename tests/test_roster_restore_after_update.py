@@ -151,3 +151,16 @@ def test_the_boot_block_tells_the_capitano_not_to_hold_the_search(monkeypatch):
     monkeypatch.setattr(captain_boot, "_json", lambda *a: {"start": []})
     assert captain_boot._start_roster({"phase": "steady"}) == ""
     assert captain_boot._start_roster({"phase": "awaiting_profile"}) == ""
+
+
+def test_a_worker_started_shortly_before_the_stop_comes_back_even_with_no_message_or_artifact_yet(world):
+    now = world["now"]
+    for entry in world["entries"]:
+        world["roster"].signs[entry["session"]] = None
+    by_name = {e["session"]: e for e in world["entries"]}
+    by_name["SCOUT-1"]["last_spawn"] = (now - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    by_name["SCOUT-2"]["last_spawn"] = (now - timedelta(hours=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    by_name["SCOUT-4"]["last_spawn"] = "not a date"
+    out = rr.plan()["start"]
+    assert ["scout", 1] in out
+    assert ["scout", 2] not in out and ["scout", 4] not in out

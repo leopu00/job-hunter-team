@@ -56,6 +56,59 @@ export interface QuietReading {
   providerReady?: boolean;
 }
 
+/**
+ * The switches of the Analisti's enrichments (enrichment-policy.json, JHT-T324): what the team does on its own to complete a
+ * position. The same closed list as team_settings.rs and the box's enrichment_policy.py, which writes the file. The score
+ * thresholds count for the care queues only.
+ */
+export interface EnrichmentPolicy {
+  economy: boolean;
+  logo: { enabled: boolean; min_score: number | null };
+  geocode_pipeline: { enabled: boolean };
+  geocode_missing: { enabled: boolean; min_score: number | null; non_remote_only: boolean };
+  recheck_weekly: { enabled: boolean; min_score: number; older_than_days: number };
+  web_search: { analista: { enabled: boolean }; scout: { enabled: boolean }; mentor: { enabled: boolean } };
+}
+export const WORK_MODES = ["search", "harvest", "care", "calibration", "saving", "unknown"] as const;
+export type WorkMode = (typeof WORK_MODES)[number];
+/**
+ * What the dearer side of an on/off switch costs more (shared/skills/enrichment_costs.json, sent by the box with the switches,
+ * JHT-T325): `costly` is the dearer value; `usd_per_position` null when not measured; `usd_per_search` for the roles that do not
+ * work per position (Scout, Mentor).
+ */
+export interface SwitchCost { costly: boolean; usd_per_position: number | null; usd_per_search?: number }
+export interface EnrichmentCosts { positions_per_day: number; switches: Partial<Record<EnrichmentSwitch, SwitchCost>> }
+export interface EnrichmentReading { policy: EnrichmentPolicy; mode: WorkMode; costs?: EnrichmentCosts }
+export type EnrichmentSwitch =
+  | "economy" | "logo.enabled" | "logo.min_score" | "geocode_pipeline.enabled" | "geocode_missing.enabled"
+  | "geocode_missing.min_score" | "geocode_missing.non_remote_only" | "recheck_weekly.enabled" | "recheck_weekly.min_score"
+  | "recheck_weekly.older_than_days" | "web_search.analista.enabled" | "web_search.scout.enabled" | "web_search.mentor.enabled";
+/** A write of the switches: only the ones that change, each with a value of its kind. */
+export type EnrichmentPatch = Partial<Record<EnrichmentSwitch, boolean | number | null>>;
+
+type SwitchKind = "bool" | "score_or_null" | "score" | "days";
+export const ENRICHMENT_SWITCHES: ReadonlyArray<readonly [EnrichmentSwitch, SwitchKind]> = [
+  ["economy", "bool"], ["logo.enabled", "bool"], ["logo.min_score", "score_or_null"], ["geocode_pipeline.enabled", "bool"],
+  ["geocode_missing.enabled", "bool"], ["geocode_missing.min_score", "score_or_null"], ["geocode_missing.non_remote_only", "bool"],
+  ["recheck_weekly.enabled", "bool"], ["recheck_weekly.min_score", "score"], ["recheck_weekly.older_than_days", "days"],
+  ["web_search.analista.enabled", "bool"], ["web_search.scout.enabled", "bool"], ["web_search.mentor.enabled", "bool"],
+];
+
+/** The value at a dotted key of a policy (`logo.enabled`, `web_search.scout.enabled`), or undefined. */
+export function valueAt(policy: unknown, key: string): unknown {
+  return key.split(".").reduce<unknown>((node, name) => (isRecord(node) ? node[name] : undefined), policy);
+}
+
+/** Whether `value` is one the switch takes (the same check as the native command's). */
+export function switchValueIsValid(key: EnrichmentSwitch, value: unknown): boolean {
+  const kind = ENRICHMENT_SWITCHES.find(([name]) => name === key)?.[1];
+  if (kind === "bool") return typeof value === "boolean";
+  if (kind === undefined) return false;
+  if (value === null) return kind === "score_or_null";
+  if (typeof value !== "number" || !Number.isInteger(value)) return false;
+  return kind === "days" ? value >= 1 && value <= 365 : value >= 0 && value <= 100;
+}
+
 export interface TeamSettings {
   /** Where the team is: this computer, or a VPS. */
   target: "local" | "vps";
@@ -72,10 +125,12 @@ export interface TeamSettings {
   burst?: Burst;
   /** The facts that explain a silence; absent when the box does not say (an older one): never read as «nothing to explain». */
   quiet?: QuietReading;
+  /** The switches of the enrichments and the working mode; absent when the box does not say (an older one). */
+  enrichment?: EnrichmentReading;
 }
 
 /** What a write changes: a role is changed by sending its entry, and `{}` puts it back on the default. */
-export interface TeamSettingsPatch { workingHours?: WorkingHours | null; roleModels?: RoleModels }
+export interface TeamSettingsPatch { workingHours?: WorkingHours | null; roleModels?: RoleModels; enrichment?: EnrichmentPatch }
 
 export type TeamSettingsError =
   | "team_settings_request_invalid"
@@ -212,6 +267,71 @@ function pickBurst(value: unknown): Burst | null {
   return null;
 }
 
+/** The `enrichment` block of a read: every switch of its kind, a known mode; null («not known») for anything else. */
+function pickEnrichment(value: unknown): EnrichmentReading | null {
+  if (!isRecord(value) || !within(WORK_MODES, value.mode) || !isRecord(value.policy)) return null;
+  if (!Object.keys(value).every((key) => key === "policy" || key === "mode" || key === "costs")) return null;
+  const policy: Record<string, unknown> = {};
+  for (const [key] of ENRICHMENT_SWITCHES) {
+    const raw = valueAt(value.policy, key);
+    if (!switchValueIsValid(key, raw)) return null;
+    const names = key.split(".");
+    const last = names.pop()!;
+    let node = policy;
+    for (const name of names) node = (node[name] ??= {}) as Record<string, unknown>;
+    node[last] = raw;
+  }
+  // no key the list does not name
+  if (JSON.stringify(sorted(policy)) !== JSON.stringify(sorted(value.policy))) return null;
+  const costs = pickCosts(value.costs);
+  return { mode: value.mode, policy: policy as unknown as EnrichmentPolicy, ...(costs ? { costs } : {}) };
+}
+
+function sorted(value: unknown): unknown {
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, sorted(value[key])]));
+}
+
+const isAmount = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 100;
+
+/** The table of costs in its closed shape (the native command has already left out what is off it); null for none. */
+function pickCosts(value: unknown): EnrichmentCosts | null {
+  if (!isRecord(value) || !isRecord(value.switches)) return null;
+  const perDay = value.positions_per_day;
+  if (typeof perDay !== "number" || !Number.isInteger(perDay) || perDay < 1 || perDay > 10000) return null;
+  const switches: EnrichmentCosts["switches"] = {};
+  for (const [key, kind] of ENRICHMENT_SWITCHES) {
+    const entry = value.switches[key];
+    if (kind !== "bool" || !isRecord(entry) || typeof entry.costly !== "boolean") continue;
+    const perPosition = entry.usd_per_position;
+    if (perPosition !== null && !isAmount(perPosition)) continue;
+    if (entry.usd_per_search !== undefined && !isAmount(entry.usd_per_search)) continue;
+    switches[key] = {
+      costly: entry.costly, usd_per_position: perPosition,
+      ...(entry.usd_per_search === undefined ? {} : { usd_per_search: entry.usd_per_search }),
+    };
+  }
+  return { positions_per_day: perDay, switches };
+}
+
+/**
+ * What turning `key` from `before` to `after` costs more, when it does; null when the change costs nothing more or the table
+ * does not name the switch.
+ */
+export type ExtraCost =
+  | { perPosition: number; perDay: number; positionsPerDay: number }
+  | { perSearch: number }
+  | { unmeasured: true };
+export function extraCost(key: EnrichmentSwitch, before: unknown, after: unknown, costs: EnrichmentCosts | undefined): ExtraCost | null {
+  const entry = costs?.switches[key];
+  if (!costs || !entry || before === after || after !== entry.costly) return null;
+  if (entry.usd_per_position !== null) {
+    return { perPosition: entry.usd_per_position, perDay: entry.usd_per_position * costs.positions_per_day, positionsPerDay: costs.positions_per_day };
+  }
+  if (entry.usd_per_search !== undefined) return { perSearch: entry.usd_per_search };
+  return { unmeasured: true };
+}
+
 /** Whether this is a time of day the native command accepts for a burst («03:00»; not «3:00», not «24:00»). */
 export function burstTimeIsValid(until: string): boolean {
   return TIME.test(until);
@@ -235,6 +355,7 @@ export function pickTeamSettings(reply: unknown): TeamSettingsResult {
   }
   const burst = pickBurst(reply.burst);
   const quiet = pickQuiet(reply.quiet);
+  const enrichment = pickEnrichment(reply.enrichment);
   const provider = reply.provider === "codex" || reply.provider === "claude" || reply.provider === "kimi" ? reply.provider : null;
   return {
     ok: true,
@@ -248,6 +369,7 @@ export function pickTeamSettings(reply: unknown): TeamSettingsResult {
       classApplies: typeof reply.classApplies === "boolean" ? reply.classApplies : null,
       ...(burst ? { burst } : {}),
       ...(quiet ? { quiet } : {}),
+      ...(enrichment ? { enrichment } : {}),
     },
   };
 }
@@ -268,6 +390,7 @@ export async function writeTeamSettings(patch: TeamSettingsPatch, connectionKey:
   const settings: Record<string, unknown> = {};
   if (patch.workingHours !== undefined) settings.working_hours = patch.workingHours;
   if (patch.roleModels !== undefined) settings.role_models = patch.roleModels;
+  if (patch.enrichment !== undefined) settings.enrichment = patch.enrichment;
   try {
     return pickTeamSettings(await call({ op: "write", settings, connectionKey }));
   } catch {

@@ -405,6 +405,23 @@ jht_codex_web_search_role() {
   return 1
 }
 
+# jht_web_search_switch_on <ruolo> → 0 se l'interruttore della ricerca web del ruolo è acceso (T325:
+# web_search.<ruolo>.enabled nella policy degli arricchimenti, sotto economy e la modalità risparmio;
+# `enrichment_policy.py web-search`). Lo chiede Codex all'avvio, perché `--search` è un argomento di avvio;
+# su pi l'estensione si carica sempre per questi ruoli e rilegge l'interruttore a ogni richiesta.
+# Una risposta che non arriva (python che non parte) vale «spenta», detto su stderr.
+jht_web_search_switch_on() {
+  local role="${1:-}" answer rc=0
+  jht_codex_web_search_role "$role" || return 1
+  answer="$(python3 "$JHT_SPAWN_LIB_DIR/../shared/skills/enrichment_policy.py" web-search "$role" 2>/dev/null)" || rc=$?
+  [ "$rc" -eq 0 ] && return 0
+  case "$answer" in
+    *'"web_search": false'*) ;;
+    *) echo "Warning: the web search switch of the $role could not be read: the $role starts without web search." >&2 ;;
+  esac
+  return 1
+}
+
 # ── Harness dell'agente: pi ──────────────────────────────────────────────────
 # L'harness è la CLI che guida l'agente; il provider resta `active_provider`.
 # Quale harness (codex o pi) lo decide `harness` nel config o la variabile
@@ -568,6 +585,17 @@ jht_spawn_repl_cmd() {
   fi
   case "$provider" in
     openai|codex)
+      # Un ruolo di servizio parte sul modello della sua classe (senza modello Codex userebbe il suo predefinito, il piu' caro).
+      if [ -z "$override" ]; then
+        local codex_class
+        codex_class="$(jht_spawn_pi_role_pin "$role")"
+        [ -n "$codex_class" ] || codex_class="$(jht_spawn_service_class "$role")"
+        if [ -n "$codex_class" ]; then
+          # shellcheck source=/dev/null
+          . "$JHT_SPAWN_LIB_DIR/role-models.sh"
+          override="$(resolve_codex_model "$codex_class")" || return 2
+        fi
+      fi
       python3 "$JHT_SPAWN_LIB_DIR/../shared/skills/codex_launch_policy.py" --model "$override" --effort high --doc-max-bytes "$JHT_CODEX_PROJECT_DOC_MAX_BYTES" --command ;;
     kimi|moonshot) printf '%s\n' "kimi --yolo" ;;
     pi) jht_spawn_pi_repl_cmd "$pi_dir" "$override" "$role" ;;
@@ -584,7 +612,12 @@ d["bypassPermissionsModeAccepted"] = True
 os.makedirs(os.path.dirname(f), exist_ok=True)
 json.dump(d, open(f, "w"), indent=2)
 PYDOC
-      printf '%s\n' "IS_SANDBOX=1 claude --dangerously-skip-permissions --effort high --model ${override:-sonnet}" ;;
+      # Un ruolo di servizio (Dottore, Mantenitore) ha la sua classe (jht_spawn_service_class); gli altri restano su Sonnet.
+      local alias="sonnet" class
+      class="$(jht_spawn_pi_role_pin "$role")"
+      [ -n "$class" ] || class="$(jht_spawn_service_class "$role")"
+      case "$class" in sol) alias=opus ;; terra) alias=sonnet ;; luna) alias=haiku ;; esac
+      printf '%s\n' "IS_SANDBOX=1 claude --dangerously-skip-permissions --effort high --model ${override:-$alias}" ;;
     *)
       echo "[spawn-lib] ERROR: unsupported configured provider '$provider'" >&2
       return 2

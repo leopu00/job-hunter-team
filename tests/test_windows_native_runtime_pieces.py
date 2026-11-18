@@ -113,7 +113,7 @@ def _shim(shell: str, tmp_path: Path) -> Path:
     dumper = tmp_path / "argv-dump.exe"
     shim = tmp_path / "bin" / "docker.exe"
     command = (
-        _import(ENABLE, "New-DockerShim")
+        _import(ENABLE, "New-DockerShim", "Set-JhtProgramInPlace", "Remove-JhtProgramsSetAside")
         + f"Add-Type -TypeDefinition ([IO.File]::ReadAllText('{dumper_source}')) "
         + f"-OutputAssembly '{dumper}' -OutputType ConsoleApplication; "
         + f"New-Item -ItemType Directory -Force -Path '{shim.parent}' | Out-Null; "

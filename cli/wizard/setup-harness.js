@@ -27,6 +27,17 @@ export function harnessNote(harness, t) {
   return harness === 'pi' ? t('wizard.provider.harness_pi_note') : null;
 }
 
+/**
+ * The services whose agents get no web search on Pi (shared/runtime/pi-harness/web-search.js): Kimi has no hosted
+ * search tool to add, and the search of Z.ai (GLM) is not verified yet on the endpoint Pi uses. OpenAI and Claude have
+ * theirs. Said in the setup, never silent: the Scout, the Analysts and the Mentor then work without it.
+ */
+const PI_WITHOUT_WEB_SEARCH = new Set(['glm', 'kimi']);
+
+export function webSearchMissingOnPi(harness, provider) {
+  return harness === 'pi' && PI_WITHOUT_WEB_SEARCH.has(provider);
+}
+
 /** The provider the person chose cannot run this harness: the reason, or null. */
 export function harnessRefusal(harness, provider, authMethod) {
   return harnessProblem(harness, provider, authMethod);

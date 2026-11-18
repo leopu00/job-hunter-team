@@ -686,6 +686,13 @@ def update_position(args):
     conn.close()
     if args.status and previous_status != args.status:
         event_wake.notify(args.status)  # JHT-T297: `new` wakes an idle Analista, `checked` an idle Scorer
+    if args.status == 'checked' and previous_status != 'checked':
+        # T325 A: office coordinates and logo by code, in a detached process (position_enrich.spawn never raises).
+        try:
+            import position_enrich
+            position_enrich.spawn(args.id)
+        except Exception:  # noqa: BLE001 - the write is done; this step must never fail it
+            pass
 
 
 def update_company(args):

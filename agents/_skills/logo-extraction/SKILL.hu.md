@@ -105,10 +105,6 @@ A `logo_fetch.py` lehetséges válaszai:
 
 - `POLICY_DISABLED` — takarékos mód aktív (`economy=true`) vagy
   `logo.enabled=false`: NE nyerd ki, nem hiba. Lépj tovább.
-- `POLICY_SCORE_GATE` — a cégnek még nincs élő pozíciója
-  `logo.min_score` ≥ score-ral: NE erőltesd. Nem jelöli a
-  `logo_fetched`-et: amikor a Scorer átlépi a küszöböt, a cég magától
-  visszakerül a sorba.
 
 A `--force` megkerüli a policy-t: CSAK a felhasználó kifejezett
 kérésére használd, soha önhatalmúlag.

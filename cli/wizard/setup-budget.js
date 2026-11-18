@@ -142,6 +142,16 @@ export function budgetSummary(t, tf, { budget, workingHours, kind }) {
 }
 
 /**
+ * What the one line above does not say: with a period over an hour the brake also spaces the spending (a first burst of about a
+ * quarter of what the onboarding left, the rest over the time), so the team can pause before the whole amount is spent.
+ * Null when there is no budget or the period is an hour or less (the whole amount is allowed at once then).
+ */
+export function budgetPaceNote(t, { budget }) {
+  if (!budget || budgetMinutes(budget) <= 60) return null;
+  return t('wizard.budget.pace_note');
+}
+
+/**
  * Asks the budget. Returns { kind, budget, workingHours } (kind = trial | night | days | none): budget null = no limit (nothing saved under team.budget);
  * workingHours null = 24/7, undefined = keep what the config has (the «no limit» answer asks the hours as before).
  * @param {{ t: Function, tf: Function, now?: Date, timeZone?: string, askHours?: Function }} params askHours = the hours step of

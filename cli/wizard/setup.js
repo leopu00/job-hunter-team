@@ -30,12 +30,12 @@ import {
   showSummary,
 } from './setup-steps.js';
 import { formatSecretForConfig } from './secret-ref.js';
-import { promptBudget, budgetSummary, stampedAt } from './setup-budget.js';
+import { promptBudget, budgetSummary, budgetPaceNote, stampedAt } from './setup-budget.js';
 import { checkPrerequisites, runHealthCheck } from './setup-checks.js';
 import { t, tf } from './i18n.js';
 import { askLanguage } from './setup-language.js';
 import { runProviderLoginStep, findProviderLogin } from './provider-login.js';
-import { promptHarness, updateIdFor, loginCmdFor } from './setup-harness.js';
+import { promptHarness, updateIdFor, loginCmdFor, webSearchMissingOnPi } from './setup-harness.js';
 import { askPiApiKey, askCodexApiKey, runCodexApiKeyLogin } from './setup-api-key.js';
 import { WizardCancelledError } from './prompts.js';
 import { lstatSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
@@ -342,6 +342,11 @@ async function runSetupSteps(prompter, state, { diskRefusal = diskLowRefusal } =
     });
   }
 
+  // Without web search the agents find no company site, logo or office: said here, never left to the log.
+  if (webSearchMissingOnPi(harness, providerChoice)) {
+    await prompter.note(tf('wizard.provider.web_search_missing', selectedProvider.label), t('wizard.provider.web_search_title'));
+  }
+
   // --- Auth ---
   // Codex: solo subscription (ADR-0004), nessun input: l'OAuth device flow lo fa il CLI provider in uno step successivo.
   // GLM / Kimi: la chiave API, scritta nascosta, controllata dal provider e tenuta nel key store del container; il config
@@ -400,7 +405,8 @@ async function runSetupSteps(prompter, state, { diskRefusal = diskLowRefusal } =
     t, tf, provider: providerChoice,
     askHours: () => promptWorkingHours(prompter, baseConfig.team?.working_hours),
   });
-  await prompter.note(budgetSummary(t, tf, { budget, workingHours, kind: budgetKind }), t('wizard.budget.title'));
+  const paceNote = budgetPaceNote(t, { budget });
+  await prompter.note(budgetSummary(t, tf, { budget, workingHours, kind: budgetKind }) + (paceNote ? `\n\n${paceNote}` : ''), t('wizard.budget.title'));
 
   // --- Salva e riepilogo ---
   await assembleAndSaveConfig(prompter, {

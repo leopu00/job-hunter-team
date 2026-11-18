@@ -1,6 +1,6 @@
 ---
 name: team-modes
-description: "Il manuale delle modalità del team — una scheda per modalità (search / harvest / care / calibration / saving). Aprilo ogni volta che il banner orario [MODALITÀ CORRENTE] nomina una modalità e non ricordi cosa implichi operativamente, al risveglio dopo un refresh del contesto, o quando l'utente cambia modalità dal gioco. La modalità è SEMPRE una scelta dell'utente - questa skill ti dice come CONDURRE quella corrente, mai come cambiarla."
+description: "Il manuale delle modalità del team — una scheda per modalità (search / harvest / care / calibration / saving). Aprilo ogni volta che il banner orario [MODALITÀ CORRENTE] nomina una modalità e non ricordi cosa implichi operativamente, al risveglio dopo un refresh del contesto, o quando l'utente cambia modalità. La modalità è SEMPRE una scelta dell'utente - questa skill ti dice come CONDURRE quella corrente, mai come cambiarla."
 allowed-tools: Bash(python3 /app/shared/skills/mode_banner.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/feedback_query.py *), Bash(python3 /app/shared/skills/team_directives.py *)
 ---
 <!-- @translation: it, ai-translated 2026-08-03 -->
@@ -157,9 +157,7 @@ continuare il sourcing con la mira vecchia.
    pena dirlo: il budget settimanale è una **finestra, non un saldo** — quello
    che non si spende al reset viene distrutto, quindi un risparmio lasciato
    per inerzia non conserva il ciclo, lo butta. Di' all'utente che può darle
-   una fine, e dove: la Console ha il campo «Fino a quando» (giorni e ore,
-   accanto al selettore), e da shell è `jht coordinator set-mode saving --until
-   <iso>`. Scrivono la stessa chiave nello stesso file.
+   una fine, e dove: da shell è `jht coordinator set-mode saving --until <iso>`.
 
 **Cosa fai**: tieni reattivi Capitano/Assistente/Mentor; nient'altro si muove
 senza una richiesta diretta dell'utente. **Con C-25**: risparmio È un divieto
@@ -184,8 +182,7 @@ sourcing non fa male".
   va il budget dosato.
 - **Uscita ≠ cambio.** Quando una modalità dichiara il proprio lavoro
   esaurito, avvisa l'utente e continua a rispettare la modalità finché è LUI a
-  cambiarla. Il file lo si scrive per conto dell'utente — dalla Console del
-  gioco (scadenza compresa) o con `jht coordinator` se lo chiede lui — e mai di
+  cambiarla. Il file lo si scrive per conto dell'utente — con `jht coordinator` (scadenza compresa) se lo chiede lui — e mai di
   tua iniziativa.
 
 ## Vedi anche

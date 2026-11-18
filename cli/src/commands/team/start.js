@@ -186,6 +186,14 @@ export function captainDeferred(run = execArgvInContainer) {
 let lastCaptainReason = null;
 const captainWaiting = () => (lastCaptainReason === 'tools_pending' ? say('team.captain_tools') : say('team.captain_waits'));
 
+// start-agent.sh holds the Capitano and the Sentinella with its own ask of captain_gate.py (exit 75), also when this
+// start did not ask (the Capitano already up after an update, the gate's answer changed in between): that is a wait, said
+// in the person's language with the gate's reason, not an agent that failed. Exported for the tests.
+export const CAPTAIN_GATED_ROLES = new Set(['capitano', 'sentinella']);
+export function heldByCaptainGate(role, code) {
+  return code === 75 && CAPTAIN_GATED_ROLES.has(role);
+}
+
 // Disco quasi pieno (< 3% libero): nessun NUOVO avvio. Si chiede PRIMA di far
 // nascere una sessione, dopo che il controllo «gia' attiva» ha lasciato stare
 // quelle vive: un agente in corso non viene toccato. Il codice e' chiuso
@@ -470,6 +478,7 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
       const result = launchInContainer({ role: item.role, instance: null, mode, env: item.env, notATmuxSession: item.notATmuxSession, sessionLabel: item.session, progress });
       if (result === 'started') started++;
       else if (result === 'skipped') skipped++;
+      else if (result === 'deferred') { deferred++; deferredCaptain = true; }
       else errored++;
       if (item.role === 'capitano') coordinatorReady = result !== 'error';
       previous = { ...item, started: result === 'started' };
@@ -491,6 +500,7 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
       const result = launchInContainer({ role: parsed.role, instance: parsed.instance, mode });
       if (result === 'started') started++;
       else if (result === 'skipped') skipped++;
+      else if (result === 'deferred') deferred++;
       else errored++;
     }
   }
@@ -575,6 +585,11 @@ function launchInContainer({ role, instance, mode, env, notATmuxSession, session
     const took = Math.round((Date.now() - launchedAt) / 1000);
     console.log(`  ${lead}${c.green('✓')} ${say('team.agent_started', { session: sName })}${took >= 2 ? c.dim(` (${took} s)`) : ''}`);
     return 'started';
+  }
+  if (heldByCaptainGate(role, r.code)) {
+    captainDeferred(); // the reason of the wait picks the words (tools on their way, or the onboarding still open)
+    console.log(`  ${lead}${c.yellow('⏭')} ${sName} — ${captainWaiting()}`);
+    return 'deferred';
   }
   const msg = spawnErrorTail(r.stderr || r.stdout);
   console.log(`  ${lead}${c.red('✗')} ${sName} — ${msg.replace(/\n/g, '\n      ')}`);

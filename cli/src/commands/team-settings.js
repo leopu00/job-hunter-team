@@ -7,6 +7,10 @@
 // them would refuse is refused here, whole: nothing is half applied. A config that cannot be
 // read, or holds a value out of the lists, is an error, never a default made up.
 //
+// The switches of the Analisti's enrichments travel with the settings as `enrichment` ({policy, mode} in a read, a patch of
+// switches in a write: lib/enrichment.js). Their one writer is shared/skills/enrichment_policy.py (`show`, `apply`), run in the
+// container like the burst skill; a read that cannot get them leaves them out, never made up.
+//
 // `burst-start` / `burst-stop` are the «work flat out until HH:MM» gesture (shared/skills/burst.py,
 // which runs in the container: it puts the usual hours back by itself when the time is up, app closed
 // or not). `get` and `apply` answer with the burst too, when it can be read.
@@ -18,6 +22,7 @@ import { join } from 'node:path';
 import { JHT_HOME } from '../jht-paths.js';
 import { writePrivateJson } from '../lib/secure-config-io.js';
 import { execScriptInContainer } from '../utils/container-proxy.js';
+import { closedPolicy, closedRequest, lastJson } from '../lib/enrichment.js';
 import {
   EFFORTS, MIN_WINDOW_HOURS, MODEL_CLASSES, ROLES, WEEKDAYS,
   applySettings, effectiveSettings, validRoleModels, validSettings, validWorkingHours,
@@ -27,6 +32,9 @@ const CONFIG_FILE = join(JHT_HOME, 'jht.config.json');
 const REQUEST_MAX_BYTES = 65536;
 const BURST_SCRIPT = '/app/shared/skills/burst.py';
 const QUIET_SCRIPT = '/app/shared/skills/team_quiet.py';
+const POLICY_SCRIPT = '/app/shared/skills/enrichment_policy.py';
+// What the policy skill may refuse a write with. Anything else is «enrichment_unavailable».
+const POLICY_CODES = Object.freeze(['value_invalid', 'write_failed']);
 const BURST_TIMEOUT_MS = 30_000;
 const UNTIL = /^([01]\d|2[0-3]):[0-5]\d$/;
 const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
@@ -71,8 +79,35 @@ export function getResult(path = CONFIG_FILE) {
   return { exit: 0, out: { ok: true, ...read.settings, ...shown(read.config, read.settings.role_models), lists: LISTS } };
 }
 
-/** `raw` is the one JSON line of stdin: {"settings": {...}}. */
-export function applyResult(raw, path = CONFIG_FILE) {
+/** {enrichment} when the policy skill answered in the closed shape; null otherwise. Read only. */
+function readEnrichment(exec) {
+  const r = exec(POLICY_SCRIPT, ['show'], { interpreter: 'python3', timeoutMs: BURST_TIMEOUT_MS });
+  if (!r || !r.ok || r.code !== 0) return null;
+  return closedPolicy(lastJson(r.stdout));
+}
+
+/** A `get` or `apply` result with the switches of the enrichments added when they can be read; without them, as it was. */
+export function withEnrichment(result, exec = execScriptInContainer) {
+  if (!result.out.ok) return result;
+  const enrichment = readEnrichment(exec);
+  return enrichment ? { exit: result.exit, out: { ...result.out, enrichment } } : result;
+}
+
+/** The patch of switches written by the policy skill, all or none: null when done, a closed refusal otherwise. */
+function writeEnrichment(patch, exec) {
+  const r = exec(POLICY_SCRIPT, ['apply'], { interpreter: 'python3', timeoutMs: BURST_TIMEOUT_MS, input: `${JSON.stringify(patch)}\n` });
+  const answer = r ? lastJson(r.stdout) : null;
+  if (r && r.ok && r.code === 0 && closedPolicy(answer)) return null;
+  if (answer && answer.ok === false && POLICY_CODES.includes(answer.code)) return refuse(answer.code);
+  return refuse('enrichment_unavailable');
+}
+
+/**
+ * `raw` is the one JSON line of stdin: {"settings": {...}}. `settings.enrichment`, when there, is a patch of switches: every
+ * value is checked with the rest before anything is written, then the switches go first (their skill writes all or none) and
+ * the config after.
+ */
+export function applyResult(raw, path = CONFIG_FILE, exec = execScriptInContainer) {
   let request;
   try {
     if (Buffer.byteLength(raw) > REQUEST_MAX_BYTES) return refuse('request_invalid', 2);
@@ -84,16 +119,29 @@ export function applyResult(raw, path = CONFIG_FILE) {
       Object.keys(request).length !== 1 || !('settings' in request)) {
     return refuse('request_invalid', 2);
   }
-  if (!validSettings(request.settings)) return refuse('value_invalid');
+  const settings = request.settings;
+  if (settings === null || typeof settings !== 'object' || Array.isArray(settings)) return refuse('value_invalid');
+  const { enrichment, ...config } = settings;
+  const patch = enrichment === undefined ? null : closedRequest(enrichment);
+  if (enrichment !== undefined && !patch) return refuse('value_invalid');
+  const configKeys = Object.keys(config).length > 0;
+  if (!configKeys && !patch) return refuse('value_invalid');
+  if (configKeys && !validSettings(config)) return refuse('value_invalid');
   const read = readSettings(path);
   if (read.error) return read.error;
-  try {
-    writePrivateJson(path, applySettings(read.config, request.settings));
-  } catch {
-    return refuse('write_failed');
+  if (patch) {
+    const refused = writeEnrichment(patch, exec);
+    if (refused) return refused;
+  }
+  if (configKeys) {
+    try {
+      writePrivateJson(path, applySettings(read.config, config));
+    } catch {
+      return refuse('write_failed');
+    }
   }
   // What the box holds now, read again: that is what the app shows, not what it sent.
-  return getResult(path);
+  return withEnrichment(getResult(path), exec);
 }
 
 /**
@@ -212,7 +260,7 @@ export function registerTeamSettingsCommand(program) {
   const cmd = program
     .command('team-settings')
     .description('Working hours and the model and effort of each role, as JSON (for the desktop app)');
-  cmd.command('get').description('Print the settings and the lists of allowed values').action(() => print(withQuiet(withBurst(getResult()))));
+  cmd.command('get').description('Print the settings and the lists of allowed values').action(() => print(withEnrichment(withQuiet(withBurst(getResult())))));
   cmd.command('apply')
     .description('Apply {"settings": {...}} read from stdin, whole or not at all, then print what the box holds')
     .action(() => {

@@ -139,6 +139,19 @@ except Exception:
 PYEOF
 }
 
+# jht_spawn_service_class <ruolo>
+#   La classe di un ruolo di servizio (Dottore, Mantenitore) quando il config non ne fissa una: luna (Haiku su Claude), non la
+#   classe di un ruolo del team. Sono ruoli che controllano, sbloccano e riavviano; un loro giro costa il contesto riletto a ogni
+#   chiamata, e su Sonnet con un giro che non faceva niente fu 0,27 $ + 0,15 $ di un'esecuzione da 1,97 $ (costo dei ruoli di
+#   servizio rispetto alla ricerca). Per tornare a Sonnet basta cambiare questa riga (o fissare team.role_models.<ruolo>.model).
+#   Nessun output per gli altri ruoli.
+JHT_SPAWN_SERVICE_CLASS="luna"
+jht_spawn_service_class() {
+  case "${1:-}" in
+    dottore|mantenitore) printf '%s\n' "$JHT_SPAWN_SERVICE_CLASS" ;;
+  esac
+}
+
 # jht_spawn_pi_key_env <provider>
 #   La chiave API scritta nel config, come variabile d'ambiente del comando di pi: la stessa che start-agent.sh mette davanti
 #   al comando di ogni agente (ANTHROPIC_API_KEY, OPENAI_API_KEY, MOONSHOT_API_KEY; GLM non ha un prefisso). Niente se la chiave non
@@ -180,8 +193,8 @@ PYEOF
 #   Mantenitore), con gli stessi argomenti di un ruolo del team: il provider e il modello sono quelli
 #   della configurazione attiva, come per ogni altro agente (provider di pi, classe del modello, chiave).
 #   Il modello e' quello dato (il modello di riserva di un tentativo dopo un errore di capacita') o, senza, quello
-#   della classe del ruolo: il pin di `team.role_models.<ruolo>.model`, altrimenti sol (terra su Claude, come la CLI
-#   di Claude, che per questi servizi usa Sonnet). Ferma lo spawn
+#   della classe del ruolo: il pin di `team.role_models.<ruolo>.model`, altrimenti la classe dei ruoli di servizio
+#   (jht_spawn_service_class: luna), altrimenti sol (terra su Claude). Ferma lo spawn
 #   (rc 2, perché su stderr) se manca il provider attivo, l'identità o le skill nella workdir,
 #   il pi del pin o le settings leggibili.
 #   Con il ruolo (dottore, mantenitore) parte anche con le estensioni che start-agent.sh dà a quel ruolo
@@ -203,6 +216,7 @@ jht_spawn_pi_repl_cmd() {
   provider="$(jht_spawn_active_provider)" || return 2
   if [ -z "$model" ]; then
     class="$(jht_spawn_pi_role_pin "$role")"
+    [ -n "$class" ] || class="$(jht_spawn_service_class "$role")"
     if api="$(jht_pi_api_provider "$provider")"; then
       if [ -z "$class" ]; then
         class=sol

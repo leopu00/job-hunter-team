@@ -26,6 +26,15 @@ import pi_spend_cap as cap  # noqa: E402
 import sentinel_loop as loop  # noqa: E402
 
 NOON = datetime(2026, 11, 9, 12, 0, 0, tzinfo=timezone.utc).timestamp()
+
+
+@pytest.fixture(autouse=True)
+def _pace_without_the_restart_reserve(request, monkeypatch):
+    """The pace mechanics are tried with no room kept for a restart; the reserve has its own tests below."""
+    if "reserve" not in request.node.name:
+        monkeypatch.setattr(cap, "RESTART_RESERVE_SHARE", 0.0)
+    if "slack" not in request.node.name and "reserve" not in request.node.name:
+        monkeypatch.setattr(cap, "PACE_SLACK", False)
 EUR = {"eur": 10}
 NO_QUOTA = {"reason": "api_key"}
 
@@ -1106,3 +1115,89 @@ def test_a_bridge_that_cannot_list_the_sessions_wakes_the_ones_the_esc_reached(t
     bridge.config = budget(5, bridge.clock["now"], bridge.clock["now"] + 1800)
     bridge.tick(state=state)
     assert _woken(bridge) == ["scout-1", "scout-2"]
+
+
+def test_a_pause_of_the_pace_keeps_a_reserve_for_the_restart_and_says_the_later_time():
+    """5 $ over 10 hours from noon, 0.50 $ an hour, 1.25 $ ahead. 2.00 $ spent at 13:00 (1.75 allowed): without a reserve the pace
+    catches up at 13:30; the team that comes back spends in a minute what the cache costs, so the reserve (10 % of the budget =
+    0.50 $) and a margin of 0.10 $ move the resume to 14:42, and the pause is not lifted a minute before it."""
+    config = budget(5, NOON, NOON + 10 * HOUR)
+    base = {"budget_cost": 2.0, "recent_cost": 0.0, "before_start": 0.0}
+    verdict = cap.decide(config, base, False, NOON + HOUR, cap.team_budget.read(config))
+    assert verdict["why"] == "pace" and datetime.fromtimestamp(verdict["resumes"], timezone.utc).strftime("%H:%M") == "14:42", "the line 2.00 + the reserve 0.50 + a margin 0.10"
+    # the time said is the time the lift finds (the Linux round said 17:10 and the pause was lifted at 16:50: the announcement
+    # counted a margin the lift does not ask for)
+    said = verdict["resumes"]
+    assert cap.decide(config, base, False, said - 30, cap.team_budget.read(config), held_by_pace=True)["why"] == "pace"
+    assert cap.decide(config, base, False, said + 1, cap.team_budget.read(config), held_by_pace=True)["action"] == "none"
+    held = cap.decide(config, base, False, NOON + HOUR + 31 * 60, cap.team_budget.read(config), held_by_pace=True)
+    assert held and held["why"] == "pace", "13:31: the plain pace would be lifted, the room for the restart is not there yet"
+    assert cap.decide(config, base, False, NOON + 3 * HOUR, cap.team_budget.read(config), held_by_pace=True)["action"] == "none"
+    # a team that is NOT paused keeps working at the plain pace: the reserve is for the restart only
+    assert cap.decide(config, dict(base, budget_cost=1.6), False, NOON + HOUR, cap.team_budget.read(config))["action"] == "none"
+
+
+def test_the_pace_looks_ahead_at_the_rate_of_the_last_minutes():
+    config = budget(5, NOON, NOON + 10 * HOUR)
+    spent = {"budget_cost": 1.6, "recent_cost": 1.0, "before_start": 0.0}   # 1.0 $ in the last 5 minutes: 0.2 $ by the next look
+    assert cap.decide(config, spent, False, NOON + HOUR, cap.team_budget.read(config))["why"] == "pace"
+    assert cap.decide(config, dict(spent, recent_cost=0.0), False, NOON + HOUR, cap.team_budget.read(config))["action"] == "none"
+
+
+def test_the_pace_stops_one_slack_before_the_line_so_the_calls_in_flight_do_not_cross_it():
+    """Allowed 1.75 at 13:00: a team at 1.70 is stopped (0.10 $ of margin: the calls in flight are paid), one at 1.60 is not."""
+    config = budget(5, NOON, NOON + 10 * HOUR)
+    read = cap.team_budget.read(config)
+    mid = {"recent_cost": 0.0, "before_start": 0.0}
+    assert cap.decide(config, dict(mid, budget_cost=1.70), False, NOON + HOUR, read)["why"] == "pace"
+    assert cap.decide(config, dict(mid, budget_cost=1.60), False, NOON + HOUR, read)["action"] == "none"
+
+
+def test_the_cache_rewritten_at_a_resume_is_not_counted_against_the_pace_slack_kept(tmp_path):
+    """Linux 12b: 0.454 $ in 31 s at every resume (Capitano 0.18, Assistente 0.15, Scorer 0.07, Mentor 0.05, others 0.03), and the pace
+    stopped the team again 80 s later. 3 $ over 10 hours: 1.35 $ allowed after two hours; 1.0 spent, resume at 14:00."""
+    config = budget(3, NOON, NOON + 10 * HOUR)
+    read = cap.team_budget.read(config)
+    resumed = NOON + 2 * HOUR
+    pi_calls(tmp_path, [(NOON + HOUR, 1.0, 100), (resumed + 5, 0.20, 100), (resumed + 20, 0.254, 100)])
+    at = resumed + 40
+    plain = cap.spend(tmp_path, at, NOON, NOON)
+    assert cap.decide(config, plain, False, at, read)["why"] == "pace", "without the exclusion the restart stops the team"
+    cap.note_resume(tmp_path, resumed)
+    kept = cap.spend(tmp_path, at, NOON, NOON)
+    assert kept["restart_cost"] == 0.454 and kept["budget_cost"] == 1.454
+    assert cap.decide(config, kept, False, at, read)["action"] == "none"
+    # after the window the work counts again: 0.40 $ of work at 14:03 on top of 1.0 + the restart
+    pi_calls(tmp_path, [(resumed + 180, 0.40, 100)], name="t.jsonl")
+    later = cap.spend(tmp_path, resumed + 190, NOON, NOON)
+    assert later["restart_cost"] == 0.454 and cap.decide(config, later, False, resumed + 190, read)["why"] == "pace"
+
+
+def test_the_restart_never_leaves_the_hard_stop_of_the_budget(tmp_path):
+    config = budget(3, NOON, NOON + 10 * HOUR)
+    read = cap.team_budget.read(config)
+    pi_calls(tmp_path, [(NOON + HOUR, 1.0, 100), (NOON + 2 * HOUR + 5, 1.95, 100)])
+    cap.note_resume(tmp_path, NOON + 2 * HOUR)
+    spent = cap.spend(tmp_path, NOON + 2 * HOUR + 40, NOON, NOON)
+    assert cap.decide(config, spent, False, NOON + 2 * HOUR + 40, read)["why"] == "budget"
+
+
+def _wake_api(tmp_path, sessions):
+    sent = []
+    api = SimpleNamespace(_path=lambda name: str(tmp_path), CAPITANO_SESSION="CAPITANO", SENTINELLA_SESSION="SENTINELLA",
+                          jht_tmux_send=lambda s, t: sent.append(s) or True, list_tmux_sessions=lambda: [])
+    return api, sent
+
+
+def test_the_assistant_and_the_mentor_are_not_woken_at_a_resume_unless_the_person_is_waiting(tmp_path):
+    api, sent = _wake_api(tmp_path, None)
+    team = ["SCOUT-1", "ASSISTENTE", "MENTOR", "SCORER-1", "CAPITANO"]
+    chat = tmp_path / "agents" / "assistente"
+    chat.mkdir(parents=True)
+    (chat / "chat.jsonl").write_text('{"role":"user","ts":1}\n{"role":"assistant","ts":2}\n', encoding="utf-8")
+    assert cap._wake_the_team(api, team, "x") == ["SCOUT-1", "SCORER-1"], "answered: asleep, like the Mentor"
+    (chat / "chat.jsonl").write_text('{"role":"assistant","ts":1}\n{"role":"user","ts":2}\n', encoding="utf-8")
+    sent.clear()
+    assert cap._wake_the_team(api, team, "x") == ["SCOUT-1", "ASSISTENTE", "SCORER-1"], "the person's last message has no answer"
+    (chat / "chat.jsonl").unlink()
+    assert "ASSISTENTE" in cap._wake_the_team(api, team, "x"), "a chat that cannot be read is woken: the person costs more than 0.15 $"

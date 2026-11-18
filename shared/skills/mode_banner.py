@@ -534,12 +534,16 @@ def _enrichment_policy() -> dict:
     out = {
         "economy": False,
         "logo": {"enabled": True, "min_score": None},
+        "geocode_pipeline": {"enabled": True},
         "geocode_missing": {"enabled": True, "min_score": None,
                             "non_remote_only": True},
         "recheck_weekly": {"enabled": True,
                            "min_score": CARE_RECHECK_DEFAULT_MIN_SCORE,
                            "older_than_days":
                                CARE_RECHECK_DEFAULT_OLDER_THAN_DAYS},
+        # T325: la ricerca web di ogni ruolo; quella dell'Analista spenta di default.
+        "web_search": {role: {"enabled": role != "analista"}
+                       for role in ("analista", "scout", "mentor")},
     }
     try:
         data = json.loads((_home() / "profile" / "enrichment-policy.json")
@@ -571,6 +575,18 @@ def _enrichment_policy() -> dict:
                 out[kind]["min_score"] = score
             if isinstance(days, int) and not isinstance(days, bool) and 1 <= days <= 365:
                 out[kind]["older_than_days"] = days
+    searches = data.get("web_search")
+    if isinstance(searches, dict):
+        for role, sub in out["web_search"].items():
+            given = searches.get(role)
+            if isinstance(given, dict) and isinstance(given.get("enabled"), bool):
+                sub["enabled"] = given["enabled"]
+    pipeline = data.get("geocode_pipeline")
+    if isinstance(pipeline, dict) and isinstance(pipeline.get("enabled"), bool):
+        out["geocode_pipeline"]["enabled"] = pipeline["enabled"]
+    elif "geocode_pipeline" not in data:
+        # Un file di prima dei due interruttori eredita la geocodifica da geocode_missing, come in load_policy().
+        out["geocode_pipeline"]["enabled"] = out["geocode_missing"]["enabled"]
     return out
 
 

@@ -147,9 +147,9 @@ if [ "$CONTAINER_RUNTIME" = "podman" ]; then
     export PODMAN_COMPOSE_PROVIDER="$(command -v podman-compose)"
   fi
 fi
-DEFAULT_RUNTIME_IMAGE="ghcr.io/leopu00/jht@sha256:646ab061c4b7cc6b42e32505a918176b6aa1543d089171ca2dbbf6886915f2e5"
-CORE_IMAGE_DIGEST="sha256:5da2fc7ddd7fce704af0d16781fee2854f32bf1d45f7eb79346c02ca24e8cafc"
-EXTRAS_IMAGE_DIGEST="sha256:a3928ee72bcb43b478264f98e7985b18b421a0fa17e3b17f6760752f0e6b532a"
+DEFAULT_RUNTIME_IMAGE="ghcr.io/leopu00/jht@sha256:98afa7ce6670fac36a0247fa750cbbc5ed7a9946fa7c4ce940e5885864118053"
+CORE_IMAGE_DIGEST="sha256:beb6d41fc24a1d37d756fedea516b004da2a9b9bfe6b5562de972888be013ee3"
+EXTRAS_IMAGE_DIGEST="sha256:74cea0c08d969bfd80a16649af4f76df98c0a84fef026c2057ef00280dbc5bf9"
 RUNTIME_TIER_FILE="$RUNTIME_DIR/runtime-tier"
 RUNTIME_TIER_INTEGRITY="$RUNTIME_DIR/.runtime-tier-integrity"
 DEFAULT_RUNTIME_VERSION="0.4.0"
@@ -817,6 +817,7 @@ This help starts nothing and downloads nothing.' ;;
     tools.disk_low) printf '%s' 'The Scouts'\'' tools were not downloaded: they need about %s GiB free on the disk and there are %s GiB, so the team cannot search for positions yet. Free some space (empty the Trash, delete large files you do not need), then run jht up: the download starts again by itself.' ;;
     tools.engine_down) printf '%s' 'The state of the Scouts'\'' tools cannot be read: the container engine does not answer. Start it with jht up.' ;;
     tools.failed) printf '%s' 'The download of the Scouts'\'' tools failed, so the team cannot search for positions yet. Run jht tools pull to try again (jht up tries again too).' ;;
+    tools.not_started) printf '%s' 'The download of the Scouts'\'' tools has not started, so the team cannot search for positions yet. Run jht tools pull to start it (jht up starts it too).' ;;
     tools.ready) printf '%s' 'The Scouts'\'' tools are here: the team searches with the full image.' ;;
     tools.switch_failed) printf '%s' 'The Scouts'\'' tools are here, but the team could not be restarted on them: run jht down, then jht up.' ;;
     tools.switch_wait) printf '%s' 'The team is moving onto the Scouts'\'' full tools: waiting for it to start again (a couple of minutes at most).' ;;
@@ -1318,6 +1319,7 @@ Questo aiuto non avvia niente e non scarica niente.' ;;
     tools.disk_low) printf '%s' 'Gli strumenti degli Scout non sono stati scaricati: servono circa %s GiB liberi sul disco e ce ne sono %s, quindi la squadra non puo'\'' ancora cercare posizioni. Libera spazio (svuota il Cestino, elimina i file grandi che non ti servono), poi esegui jht up: il download riparte da solo.' ;;
     tools.engine_down) printf '%s' 'Lo stato degli strumenti degli Scout non si legge: il motore dei container non risponde. Avvialo con jht up.' ;;
     tools.failed) printf '%s' 'Il download degli strumenti degli Scout non e'\'' riuscito: la squadra non puo'\'' ancora cercare posizioni. Esegui jht tools pull per riprovare (anche jht up riprova).' ;;
+    tools.not_started) printf '%s' 'Il download degli strumenti degli Scout non è partito, quindi la squadra non può ancora cercare posizioni. Lancia jht tools pull per avviarlo (lo avvia anche jht up).' ;;
     tools.ready) printf '%s' 'Gli strumenti degli Scout sono arrivati: la squadra cerca con l'\''immagine piena.' ;;
     tools.switch_failed) printf '%s' 'Gli strumenti degli Scout sono arrivati, ma la squadra non si e'\'' potuta riavviare con loro: esegui jht down, poi jht up.' ;;
     tools.switch_wait) printf '%s' 'La squadra sta passando agli strumenti completi degli Scout: aspetto che riparta (al massimo un paio di minuti).' ;;
@@ -1820,6 +1822,7 @@ Ez a súgó semmit nem indít el és semmit nem tölt le.' ;;
     tools.disk_low) printf '%s' 'A felderítők (Scout) eszközei nem töltődtek le: kb. %s GiB szabad lemezterület kell hozzájuk, és %s GiB van, így a csapat még nem tud állásokat keresni. Szabadíts fel helyet (ürítsd ki a Kukát, töröld a nagy fájlokat, amelyekre nincs szükséged), majd futtasd a jht up parancsot: a letöltés magától újraindul.' ;;
     tools.engine_down) printf '%s' 'A felderítők (Scout) eszközeinek állapota nem olvasható: a konténermotor nem válaszol. Indítsd el a jht up paranccsal.' ;;
     tools.failed) printf '%s' 'A felderítők (Scout) eszközeinek letöltése nem sikerült, így a csapat még nem tud állásokat keresni. Futtasd a jht tools pull parancsot az újrapróbáláshoz (a jht up is újrapróbálja).' ;;
+    tools.not_started) printf '%s' 'A Scoutok eszközeinek letöltése nem indult el, ezért a csapat még nem tud állásokat keresni. Indítsd el a jht tools pull paranccsal (a jht up is elindítja).' ;;
     tools.ready) printf '%s' 'A felderítők (Scout) eszközei megérkeztek: a csapat a teljes képpel keres.' ;;
     tools.switch_failed) printf '%s' 'A felderítők (Scout) eszközei megérkeztek, de a csapatot nem sikerült velük újraindítani: futtasd a jht down, majd a jht up parancsot.' ;;
     tools.switch_wait) printf '%s' 'A csapat átáll a felderítők (Scout) teljes eszközeire: megvárom, amíg újraindul (legfeljebb pár perc).' ;;
@@ -2326,6 +2329,7 @@ Esta ayuda no arranca nada ni descarga nada.' ;;
     tools.disk_low) printf '%s' 'Las herramientas de los Scout no se han descargado: necesitan unos %s GiB libres en el disco y hay %s GiB, así que el equipo aún no puede buscar puestos. Libera espacio (vacía la Papelera, borra los archivos grandes que no necesites) y luego ejecuta jht up: la descarga vuelve a empezar sola.' ;;
     tools.engine_down) printf '%s' 'No se puede leer el estado de las herramientas de los Scout: el motor de contenedores no responde. Arráncalo con jht up.' ;;
     tools.failed) printf '%s' 'La descarga de las herramientas de los Scout ha fallado, así que el equipo aún no puede buscar puestos. Ejecuta jht tools pull para reintentarlo (jht up también lo reintenta).' ;;
+    tools.not_started) printf '%s' 'La descarga de las herramientas de los Scouts no ha empezado, así que el equipo aún no puede buscar puestos. Lanza jht tools pull para iniciarla (jht up también la inicia).' ;;
     tools.ready) printf '%s' 'Las herramientas de los Scout ya están aquí: el equipo busca con la imagen completa.' ;;
     tools.switch_failed) printf '%s' 'Las herramientas de los Scout ya están aquí, pero el equipo no se ha podido reiniciar con ellas: ejecuta jht down y luego jht up.' ;;
     tools.switch_wait) printf '%s' 'El equipo está pasando a las herramientas completas de los Scout: espero a que vuelva a arrancar (un par de minutos como mucho).' ;;
@@ -2827,6 +2831,7 @@ Diese Hilfe startet nichts und lädt nichts herunter.' ;;
     tools.disk_low) printf '%s' 'Die Werkzeuge der Scouts wurden nicht heruntergeladen: Sie brauchen etwa %s GiB freien Speicherplatz, verfügbar sind %s GiB, daher kann das Team noch keine Stellen suchen. Gib Platz frei (leere den Papierkorb, lösche große Dateien, die du nicht brauchst), dann führe jht up aus: Der Download startet von selbst neu.' ;;
     tools.engine_down) printf '%s' 'Der Stand der Werkzeuge der Scouts lässt sich nicht lesen: Die Container-Engine antwortet nicht. Starte sie mit jht up.' ;;
     tools.failed) printf '%s' 'Der Download der Werkzeuge der Scouts ist fehlgeschlagen, daher kann das Team noch keine Stellen suchen. Führe jht tools pull aus, um es erneut zu versuchen (jht up versucht es auch).' ;;
+    tools.not_started) printf '%s' 'Der Download der Scout-Werkzeuge hat nicht begonnen, das Team kann also noch nicht nach Stellen suchen. Starte ihn mit jht tools pull (auch jht up startet ihn).' ;;
     tools.ready) printf '%s' 'Die Werkzeuge der Scouts sind da: Das Team sucht mit dem vollständigen Image.' ;;
     tools.switch_failed) printf '%s' 'Die Werkzeuge der Scouts sind da, aber das Team konnte damit nicht neu gestartet werden: Führe jht down und dann jht up aus.' ;;
     tools.switch_wait) printf '%s' 'Das Team wechselt gerade auf die vollständigen Werkzeuge der Scouts: Ich warte, bis es wieder läuft (höchstens ein paar Minuten).' ;;
@@ -3328,6 +3333,7 @@ Cette aide ne démarre rien et ne télécharge rien.' ;;
     tools.disk_low) printf '%s' 'Les outils des Scout n'\''ont pas été téléchargés : il leur faut environ %s Gio libres sur le disque et il y en a %s, l'\''équipe ne peut donc pas encore chercher d'\''offres. Libère de l'\''espace (vide la Corbeille, supprime les gros fichiers dont tu n'\''as pas besoin), puis lance jht up : le téléchargement repart tout seul.' ;;
     tools.engine_down) printf '%s' 'L'\''état des outils des Scout ne peut pas être lu : le moteur de conteneurs ne répond pas. Démarre-le avec jht up.' ;;
     tools.failed) printf '%s' 'Le téléchargement des outils des Scout a échoué : l'\''équipe ne peut pas encore chercher d'\''offres. Lance jht tools pull pour réessayer (jht up réessaie aussi).' ;;
+    tools.not_started) printf '%s' 'Le téléchargement des outils des Scouts n'\''a pas commencé, l'\''équipe ne peut donc pas encore chercher d'\''offres. Lance jht tools pull pour le démarrer (jht up le démarre aussi).' ;;
     tools.ready) printf '%s' 'Les outils des Scout sont là : l'\''équipe cherche avec l'\''image complète.' ;;
     tools.switch_failed) printf '%s' 'Les outils des Scout sont là, mais l'\''équipe n'\''a pas pu redémarrer avec eux : lance jht down, puis jht up.' ;;
     tools.switch_wait) printf '%s' 'L'\''équipe passe aux outils complets des Scout : j'\''attends qu'\''elle redémarre (quelques minutes au plus).' ;;
@@ -3829,6 +3835,7 @@ Esta ajuda não inicia nada nem descarrega nada.' ;;
     tools.disk_low) printf '%s' 'As ferramentas dos Scout não foram descarregadas: precisam de cerca de %s GiB livres no disco e há %s GiB, por isso a equipa ainda não pode procurar vagas. Liberta espaço (esvazia o Lixo, apaga os ficheiros grandes de que não precisas) e depois corre jht up: o descarregamento recomeça sozinho.' ;;
     tools.engine_down) printf '%s' 'Não é possível ler o estado das ferramentas dos Scout: o motor de contentores não responde. Inicia-o com jht up.' ;;
     tools.failed) printf '%s' 'O descarregamento das ferramentas dos Scout falhou, por isso a equipa ainda não pode procurar vagas. Corre jht tools pull para tentar de novo (jht up também tenta de novo).' ;;
+    tools.not_started) printf '%s' 'A descarga das ferramentas dos Scouts não começou, por isso a equipa ainda não pode procurar posições. Corre jht tools pull para a iniciar (jht up também a inicia).' ;;
     tools.ready) printf '%s' 'As ferramentas dos Scout já chegaram: a equipa procura com a imagem completa.' ;;
     tools.switch_failed) printf '%s' 'As ferramentas dos Scout já chegaram, mas não foi possível reiniciar a equipa com elas: corre jht down e depois jht up.' ;;
     tools.switch_wait) printf '%s' 'A equipa está a passar para as ferramentas completas dos Scout: espero que volte a arrancar (no máximo alguns minutos).' ;;
@@ -4096,6 +4103,7 @@ tools_tell_person() {
     [ "$kick" = kick ] && tools_kick
     case "$(tools_person_state)" in
       arriving) info "$(jht_say tools.arriving)" ;;
+      not_started) warn "$(jht_say tools.not_started)" ;;
       waiting) info "$(jht_say tools.waiting)" ;;
       failed) warn "$(jht_say tools.failed)" ;;
       disk_low) warn "$(tools_disk_low_text)" ;;
@@ -4138,6 +4146,7 @@ tools_disk_low_text() {
 tools_say_status() {
   case "$(tools_person_state)" in
     arriving) printf '%s\n' "$(jht_say tools.arriving)" ;;
+    not_started) printf '%s\n' "$(jht_say tools.not_started)" ;;
     waiting) printf '%s\n' "$(jht_say tools.waiting)" ;;
     failed) printf '%s\n' "$(jht_say tools.failed)" ;;
     disk_low) printf '%s\n' "$(tools_disk_low_text)" ;;
@@ -9386,6 +9395,9 @@ status_human_running() {
 read_only_team_command() {
   local up=0
   require_confined_podman_machine
+  # The container changes image (the switch of the tools): between its down and its up the container cannot be attested and the person
+  # read «operation refused» as a security error (giro Mac 18/11, 16 s). It waits for the switch, as ensure_up does, and says so.
+  if jht_machine_output; then wait_for_tools_switch quiet; else wait_for_tools_switch; fi
   if docker_reachable >/dev/null 2>&1; then
     container_up >/dev/null 2>&1 || up=$?
   else
@@ -10349,10 +10361,13 @@ case "$SUB" in
     compose_up_team
     container_postcheck_running || exit 1
     printf '%s\n' "$(jht_say up.done)"
-    telegram_lifecycle_if_available resume || exit $?
-    broker_after_up
+    # The pull of the full image starts HERE, with the container up, and not after telegram and the broker: an up that ends early
+    # on one of them (a broker or telegram left Exited by an earlier up) never reached the end, so nobody started the pull and the
+    # team stayed on the core image, refusing its Scouts, with nothing said (giro of a beta tester's server, 18/11).
     agents_room_cleanup
     tools_tell_person kick
+    telegram_lifecycle_if_available resume || exit $?
+    broker_after_up
     ;;
 
   start-container)

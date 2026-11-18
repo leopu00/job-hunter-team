@@ -66,3 +66,36 @@ def test_the_line_of_a_provider_not_set_up_does_not_say_authenticated():
     text = (ROOT / ".launcher" / "doctor-watchdog.sh").read_text(encoding="utf-8")
     assert "provider not authenticated yet" not in text
     assert "provider not set up yet (no sign-in, or no API key in the configuration)" in text
+
+
+def test_the_doctor_is_not_started_while_the_spending_brake_or_the_quota_holds_the_team(tmp_path):
+    """Pause of the pace (Linux 12b): the Dottore was started three times, the gate held its first message and the person read
+    «DOTTORE non riesce a partire». The loop waits for the flag to go."""
+    import re
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    text = (root / ".launcher" / "doctor-watchdog.sh").read_text(encoding="utf-8")
+    flags = re.search(r'^DAILY_HALT_FLAGS=.*$', text, re.M).group(0)
+    fn = re.search(r'^daily_halt_active\(\) \{.*\}$', text, re.M).group(0)
+    code = 'JHT_HOME="%s"\n%s\n%s\ndaily_halt_active && echo yes || echo no\n' % (tmp_path, flags, fn)
+
+    def held():
+        return subprocess.run(["bash", "-c", code], capture_output=True, text=True, timeout=30, check=True).stdout.strip() == "yes"
+
+    assert held() is False
+    (tmp_path / "logs").mkdir()
+    (tmp_path / "logs" / "daily-halt.flag").write_text("{}", encoding="utf-8")
+    assert held() is True
+    (tmp_path / "logs" / "daily-halt.flag").unlink()
+    (tmp_path / ".daily-halt.flag").write_text("{}", encoding="utf-8")
+    assert held() is True
+    assert "|| daily_halt_active || setup_open || standby_active; then" in text, "the loop must stop on it before the spawn"
+
+
+def test_a_pause_takes_the_old_failure_of_the_roles_out_of_the_status():
+    """After an update the notice «cannot start» of a start that failed before the pause stayed 47 minutes (giro Linux 18/11)."""
+    text = Path(__file__).resolve().parents[1].joinpath(".launcher", "doctor-watchdog.sh").read_text(encoding="utf-8")
+    gate = text[text.index("|| daily_halt_active || setup_open || standby_active; then"):]
+    gate = gate[: gate.index("finish_tick")]
+    assert "spawn_failed dottore ok" in gate and "spawn_failed mantenitore ok" in gate

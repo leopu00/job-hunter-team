@@ -794,10 +794,13 @@ def test_jht_up_setup_and_status_keep_the_tools_moving_and_say_where_they_stand(
     status = text[text.index("\n  status)\n"):]
     status = status[:status.index("\n    ;;\n")]
     assert "tools_tell_person kick" in up and "tools_tell_person kick" in setup
+    # the pull starts with the container up, BEFORE telegram and the broker: an up that ends early on one of them never started it
+    assert up.index("tools_tell_person kick") < up.index("telegram_lifecycle_if_available resume") < up.index("broker_after_up")
+    assert up.index("container_postcheck_running") < up.index("tools_tell_person kick")
     assert "tools_tell_person" in status and "tools_tell_person kick" not in status   # status is a probe: it starts nothing
     body = text[text.index("\ntools_tell_person() {"):]
     body = body[:body.index("\n}\n")]
-    for key in ("tools.arriving", "tools.waiting", "tools.failed", "tools.switch_failed"):
+    for key in ("tools.arriving", "tools.not_started", "tools.waiting", "tools.failed", "tools.switch_failed"):
         assert f"jht_say {key}" in body, key
     assert "|| true" in body   # the command it rides on is never failed by it
 
@@ -880,7 +883,7 @@ def _say_status(box):
 def test_tools_status_says_where_the_tools_stand_in_one_line(box):
     assert _say_status(box) == "tools.ready\n", "no tier file: the tools are here"
     box.tier()
-    assert _say_status(box) == "tools.arriving\n"
+    assert _say_status(box) == "tools.not_started\n", "a core install with nothing pulling and nothing failed: nobody started the pull, it is not «arriving»"
     (box.fake / "full-present").write_text("", encoding="utf-8")
     assert _say_status(box) == "tools.waiting\n"
     (box.fake / "engine-down").write_text("", encoding="utf-8")
@@ -1324,3 +1327,24 @@ def test_the_update_texts_say_the_chat_in_every_language():
         assert texts["wrapper.tools.chat_updating"] and "%" not in texts["wrapper.tools.chat_updating"], lang
         assert "jht team chat" in texts["wrapper.tools.chat_update_closed"], lang
         assert "libpod" not in texts["wrapper.tools.chat_updating"]
+
+
+def test_a_core_install_with_no_pull_under_way_and_no_failure_is_not_started_not_arriving(box):
+    box.tier()
+    assert box.run("tools_person_state", **KICK_ENV).stdout == "not_started\n"
+    (box.fake / "pull-hold").write_text("", encoding="utf-8")
+    box.run("tools_kick", **KICK_ENV)
+    assert box.run("tools_person_state", **KICK_ENV).stdout == "arriving\n"
+    (box.fake / "pull-hold").unlink()
+    box.wait_for("ready")
+
+
+def test_a_command_that_only_reads_the_team_waits_for_the_switch_instead_of_saying_it_cannot_attest():
+    """Giro Mac 18/11: `jht team status` during the change of image said «operation refused» (the container cannot be attested
+    between the down and the up of the switch). It waits for the switch first, as ensure_up does, and says so."""
+    text = WRAPPER.read_text(encoding="utf-8")
+    body = text[text.index("\nread_only_team_command() {\n"):]
+    body = body[: body.index("\n}\n")]
+    assert "wait_for_tools_switch" in body
+    assert body.index("wait_for_tools_switch") < body.index("container_up"), "before the check of the container"
+    assert "jht_machine_output; then wait_for_tools_switch quiet" in body, "a program reading the output gets no extra line"

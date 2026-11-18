@@ -33,7 +33,7 @@ test('the budget spent and the period over: what was spent, and the way on is a 
 
 test('the pace: it resumes by itself at the hour the brake says, in the zone the brake wrote; or it does not before the end', () => {
   assert.equal(text(cap({ why: 'pace', spent: 2.4, ceiling: 2.1, resumes_at: '2026-11-15T23:10:00+01:00' })),
-    'The team is paused to spread its budget over the period ($2.40 spent, $2.10 allowed so far): it resumes by itself at 23:10.');
+    'The team is paused to spread its budget over the period ($2.40 spent, $2.10 planned so far): it resumes by itself at 23:10.');
   assert.match(text(cap({ why: 'pace', spent: 2.4, ceiling: 2.1, resumes_at: null })), /does not resume before the period ends at 16\/11 8:00\. To go on, set a new budget/);
   assert.equal(whenOf('2026-11-16T03:10:00+01:00', NOW), '16/11 3:10');
   assert.equal(whenOf('2026-11-15T23:59:00+01:00', NOW), '23:59');
@@ -135,4 +135,22 @@ test('a flag REWRITTEN after the new budget was saved still names the old period
   // the period of the new budget starts after the save: said
   const fresh = homeWithBudget(cap({ why: 'budget', starts_at: '2026-11-17T12:14:09+01:00', ends_at: '2026-11-18T12:14:09+01:00' }), '2026-11-17T12:30:00Z', '2026-11-17T11:10:00.000Z');
   assert.equal(budgetPause({ home: fresh })?.why, 'budget');
+});
+
+test('the RAM guard: the last retirement is said in the status for a day, from the file the guard writes', async () => {
+  const { ramGuardText } = awaitedModule;
+  const root = home();
+  mkdirSync(join(root, 'state'));
+  const at = Math.floor(NOW.getTime() / 1000) - 600;
+  const write = (body) => writeFileSync(join(root, 'state', 'ram-guard.json'), typeof body === 'string' ? body : JSON.stringify(body));
+  write({ at, retired: ['SCOUT-6', 'SCOUT-4'], avail_gib: 0.44, total_gib: 3.7 });
+  const text = show(ramGuardText({ home: root, now: NOW }));
+  assert.match(text, /2 workers were stopped/);
+  assert.match(text, /0\.44 GiB free of 3\.7/);
+  assert.equal(ramGuardText({ home: root, now: new Date(NOW.getTime() + 25 * 3600 * 1000) }), null, 'a day later it is no news');
+  write('not json');
+  assert.equal(ramGuardText({ home: root, now: NOW }), null);
+  write({ at, retired: [], avail_gib: 0.4, total_gib: 3.7 });
+  assert.equal(ramGuardText({ home: root, now: NOW }), null);
+  assert.equal(ramGuardText({ home: home(), now: NOW }), null, 'no file, nothing to say');
 });

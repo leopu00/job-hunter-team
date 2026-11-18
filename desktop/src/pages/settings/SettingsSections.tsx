@@ -11,6 +11,7 @@ import { useProviderLogin } from "../../provider-login/ProviderLoginProvider";
 import ThemePicker from "../../shell/ThemePicker";
 import BackupPage from "../backup";
 import ComputerPage from "../computer";
+import EnrichmentPage from "../enrichment";
 import ExportPage from "../export";
 import TeamSettingsPage from "../team-settings";
 import type { PageProps } from "../types";
@@ -80,6 +81,7 @@ export function TeamSection(_props: PageProps) {
         <>
           <At name="hours"><WorkHoursPage {...NO_PROPS} /></At>
           <At name="models"><TeamSettingsPage {...NO_PROPS} /></At>
+          <At name="enrichment"><EnrichmentPage {...NO_PROPS} /></At>
         </>
       )}
       {!readOnly && <TeamLanguageCard />}

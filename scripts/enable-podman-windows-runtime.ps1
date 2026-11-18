@@ -7,7 +7,7 @@ param(
   [string]$MachineName = 'jht-podman',
   [switch]$InstallDependencies,
   [switch]$InitializeMachine,
-  [string]$RuntimeImage = 'ghcr.io/leopu00/jht@sha256:646ab061c4b7cc6b42e32505a918176b6aa1543d089171ca2dbbf6886915f2e5',
+  [string]$RuntimeImage = 'ghcr.io/leopu00/jht@sha256:98afa7ce6670fac36a0247fa750cbbc5ed7a9946fa7c4ce940e5885864118053',
   [string]$ExpectedImageDigest = '',
   [switch]$PersistImagePin,
   [string]$ExtrasImageDigest = '',
@@ -306,16 +306,114 @@ public static class JhtPodmanDockerShim {
 }
 
 "@
-  $sourcePath = [IO.Path]::ChangeExtension($Destination, '.cs')
+  # Compiled beside the shim, never onto it: a docker.exe that runs (the Assistente's chat holds a `docker exec` open, and reconnects
+  # on its own after a restart of the machine) cannot be written, and Add-Type stopped the update with "the file is used by another
+  # process". The new one then takes its place by renames (Set-JhtProgramInPlace).
+  Remove-JhtProgramsSetAside -Destination $Destination
+  $fresh = Join-Path ([IO.Path]::GetDirectoryName($Destination)) ('.jht-shim-{0}.exe' -f [guid]::NewGuid().ToString('N'))
+  $sourcePath = [IO.Path]::ChangeExtension($fresh, '.cs')
   try {
     [IO.File]::WriteAllText($sourcePath, $source, [Text.UTF8Encoding]::new($false))
     $windowsPowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $quotedSource = $sourcePath.Replace("'", "''")
-    $quotedDestination = $Destination.Replace("'", "''")
-    & $windowsPowerShell -NoProfile -NonInteractive -Command "Add-Type -Path '$quotedSource' -OutputAssembly '$quotedDestination' -OutputType ConsoleApplication"
+    $quotedFresh = $fresh.Replace("'", "''")
+    & $windowsPowerShell -NoProfile -NonInteractive -Command "Add-Type -Path '$quotedSource' -OutputAssembly '$quotedFresh' -OutputType ConsoleApplication"
     if ($LASTEXITCODE -ne 0) { throw "Native docker shim compiler exited with $LASTEXITCODE." }
-  } finally { Remove-Item -LiteralPath $sourcePath -Force -ErrorAction SilentlyContinue }
+    if (-not (Test-Path -LiteralPath $fresh -PathType Leaf)) { throw "docker.exe shim was not created: $fresh" }
+    Set-JhtProgramInPlace -Fresh $fresh -Destination $Destination
+  } finally {
+    Remove-Item -LiteralPath $sourcePath -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $fresh -Force -ErrorAction SilentlyContinue
+  }
   if (-not (Test-Path -LiteralPath $Destination -PathType Leaf)) { throw "docker.exe shim was not created: $Destination" }
+}
+
+# A program file that a running process holds: Windows refuses to write, replace or delete it, but lets it be renamed. The old one is
+# renamed aside, the new one takes its name, and the old one is deleted when nothing runs it any more: now, or at the next setup
+# (Remove-JhtProgramsSetAside). If the new one cannot take the name, the old one gets it back.
+function Set-JhtProgramInPlace {
+  param([Parameter(Mandatory)][string]$Fresh, [Parameter(Mandatory)][string]$Destination)
+  $aside = $null
+  if ([IO.File]::Exists($Destination)) {
+    $aside = '{0}.old-{1}' -f $Destination, [guid]::NewGuid().ToString('N')
+    [IO.File]::Move($Destination, $aside)
+  }
+  try { [IO.File]::Move($Fresh, $Destination) }
+  catch {
+    if ($aside) { [IO.File]::Move($aside, $Destination) }
+    throw
+  }
+  if ($aside) { try { [IO.File]::Delete($aside) } catch { } }
+}
+
+# The copies of a program an earlier swap set aside while it was running (<name>.old-<32 hex>): deleted when nothing runs them now.
+function Remove-JhtProgramsSetAside {
+  param([Parameter(Mandatory)][string]$Destination)
+  $folder = [IO.Path]::GetDirectoryName($Destination)
+  $leaf = [IO.Path]::GetFileName($Destination)
+  if (-not [IO.Directory]::Exists($folder)) { return }
+  $pattern = '^' + [regex]::Escape($leaf) + '\.old-[0-9a-f]{32}\z'
+  foreach ($old in @(Get-ChildItem -LiteralPath $folder -File -Force -ErrorAction SilentlyContinue)) {
+    if ($old.Name -cmatch $pattern -and ($old.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) {
+      try { [IO.File]::Delete($old.FullName) } catch { }
+    }
+  }
+}
+
+# The files of the runtime as they are before this setup changes them: their bytes, or $null for one that is not there. Read in
+# memory (a few small files and the shim), so nothing is left behind.
+function Save-JhtRuntimeFiles {
+  param([Parameter(Mandatory)][string[]]$Paths)
+  $saved = [ordered]@{}
+  foreach ($path in $Paths) {
+    if ($saved.Contains($path)) { continue }
+    # assigned straight from the call: a statement's output would unroll the bytes, and an empty file would read as none
+    $saved[$path] = $null
+    if ([IO.File]::Exists($path)) { $saved[$path] = [IO.File]::ReadAllBytes($path) }
+  }
+  return $saved
+}
+
+# Puts the runtime back as Save-JhtRuntimeFiles found it, when this setup stopped before the new manifest attested the new files:
+# new files under the old manifest are a runtime the wrapper refuses ("untrusted host runtime path, owner, reparse point or
+# SHA-256"), the old files under the old manifest are the runtime that worked. Every file is tried; the ones that could not be put
+# back are named on stderr.
+function Restore-JhtRuntimeFiles {
+  param([Parameter(Mandatory)]$Saved, [string[]]$Programs = @())
+  $failed = @()
+  foreach ($path in @($Saved.Keys)) {
+    $bytes = $Saved[$path]
+    try {
+      $isProgram = $Programs -contains $path
+      if ($null -eq $bytes) {
+        if (-not [IO.File]::Exists($path)) { continue }
+        if ($isProgram) {
+          $aside = '{0}.old-{1}' -f $path, [guid]::NewGuid().ToString('N')
+          [IO.File]::Move($path, $aside)
+          try { [IO.File]::Delete($aside) } catch { }
+        } else { [IO.File]::Delete($path) }
+        continue
+      }
+      if ([IO.File]::Exists($path)) {
+        $current = [IO.File]::ReadAllBytes($path)
+        if ($current.Length -eq $bytes.Length -and [Convert]::ToBase64String($current) -ceq [Convert]::ToBase64String($bytes)) { continue }
+      }
+      if ($isProgram) {
+        $fresh = Join-Path ([IO.Path]::GetDirectoryName($path)) ('.jht-restore-{0}.exe' -f [guid]::NewGuid().ToString('N'))
+        try {
+          [IO.File]::WriteAllBytes($fresh, $bytes)
+          Set-JhtProgramInPlace -Fresh $fresh -Destination $path
+        } finally { if ([IO.File]::Exists($fresh)) { try { [IO.File]::Delete($fresh) } catch { } } }
+      } elseif ($bytes.Length -eq 0) {
+        # an empty file (Publish-JhtFile takes no empty bytes): emptied, which is all a write in place could leave
+        [IO.File]::WriteAllBytes($path, [byte[]]@())
+      } else {
+        Publish-JhtFile -Destination $path -Bytes $bytes
+      }
+    } catch { $failed += $path }
+  }
+  if ($failed.Count) { [Console]::Error.WriteLine("runtime_restore_incomplete: $($failed -join '; ')") }
+  return ($failed.Count -eq 0)
 }
 
 function Test-AttestedLegacyDockerShim {
@@ -992,6 +1090,18 @@ $legacyShimOwned = Test-AttestedLegacyDockerShim `
   -ManifestPath (Join-Path $RuntimeDir '.runtime-integrity') -LegacyShimPath $legacyShim
 if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) { Protect-JhtHomeAcl -Path $JhtHome }
 
+# From the first file published to the owners set on the last one, a stop (a held file, the shim compiler, the unit of the machine)
+# puts every file back as it was: never the new files under the old manifest, which the wrapper refuses as untrusted.
+$shim = Join-Path $RuntimeShimDir 'docker.exe'
+$runtimeBefore = Save-JhtRuntimeFiles -Paths @(
+  (Join-Path $RuntimeDir 'docker-compose.yml'), (Join-Path $RuntimeDir 'docker-compose.podman.yml'), (Join-Path $BinDir 'jht.ps1'),
+  (Join-Path $BinDir 'windows-private-acl.ps1'), (Join-Path $BinDir 'podman-machine-bridge.ps1'), (Join-Path $RuntimeDir 'jht-integration.ps1'),
+  (Join-Path $RuntimeDir 'jht-tools.ps1'), (Join-Path $RuntimeDir 'configure-podman-windows-network.ps1'),
+  (Join-Path $RuntimeDir 'wsl-interop-connect-proxy.py'), (Join-Path $RuntimeDir 'container-runtime'), (Join-Path $RuntimeDir 'podman-machine'),
+  (Join-Path $RuntimeDir 'jht-container.service'), $shim, (Join-Path $RuntimeDir 'runtime-image'), (Join-Path $RuntimeDir 'runtime-tier'),
+  (Join-Path $RuntimeDir '.runtime-tier-integrity'), (Join-Path $RuntimeDir 'runtime-extras-image'),
+  (Join-Path $RuntimeDir '.runtime-extras-integrity'), (Join-Path $RuntimeDir '.runtime-integrity'), (Join-Path $RuntimeDir '.runtime-helpers'))
+try {
 $files = @{
   (Join-Path $RepoRoot 'docker-compose.yml') = (Join-Path $RuntimeDir 'docker-compose.yml')
   (Join-Path $RepoRoot 'docker-compose.podman.yml') = (Join-Path $RuntimeDir 'docker-compose.podman.yml')
@@ -1061,7 +1171,6 @@ WantedBy=multi-user.target
 # says why there and not after the team's start).
 [void](Invoke-JhtMachineDropCaches -PodmanPath $Podman -MachineName $MachineName)
 $containerUnitInstalled = Install-JhtContainerService -PodmanPath $Podman -UnitPath $containerUnitFile
-$shim = Join-Path $RuntimeShimDir 'docker.exe'
 New-DockerShim -Destination $shim -PodmanPath $Podman -MachineName $MachineName
 
 $composeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $RuntimeDir 'docker-compose.yml')).Hash.ToLowerInvariant()
@@ -1133,6 +1242,13 @@ if (Test-Path -LiteralPath $runtimeImageFile -PathType Leaf) { $bundleFiles += $
 if (Test-Path -LiteralPath $runtimeTierFile -PathType Leaf) { $bundleFiles += $runtimeTierFile, $runtimeTierIntegrity }
 if (Test-Path -LiteralPath $runtimeExtrasFile -PathType Leaf) { $bundleFiles += $runtimeExtrasFile, $runtimeExtrasIntegrity }
 foreach ($bundleFile in $bundleFiles) { Set-JhtOwnerToCurrentUser -Path $bundleFile }
+} catch {
+  $stopped = $_
+  if (Restore-JhtRuntimeFiles -Saved $runtimeBefore -Programs @($shim)) {
+    [Console]::Error.WriteLine('runtime_restored: the setup stopped before the new runtime was complete; the runtime that was installed before is back as it was.')
+  }
+  throw $stopped
+}
 if ($legacyShimOwned) {
   Remove-Item -LiteralPath $legacyShim -Force -ErrorAction Stop
 }

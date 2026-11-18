@@ -807,16 +807,36 @@ if [ "$ROLE" = "mentor" ] && [ "${JHT_MENTOR_NOW:-}" != "1" ] && ! tmux has-sess
     echo "MENTOR not started: it has nothing to read until the first positions have a score (the watchdog starts it then; JHT_MENTOR_NOW=1 starts it anyway)." >&2
     exit 75
   fi
+  # The service roles have used their share of the budget (service_budget.py: exit 3): the money goes to finding and scoring.
+  _mentor_rc=0
+  python3 /app/shared/skills/service_budget.py allow mentor >/dev/null 2>&1 || _mentor_rc=$?
+  if [ "$_mentor_rc" -eq 3 ]; then
+    echo "MENTOR not started: the service roles (Dottore, Mantenitore, Mentor) have used their share of the budget (JHT_MENTOR_NOW=1 starts it anyway)." >&2
+    exit 75
+  fi
 fi
 # --- fine cancello del Mentor
 # --- cancello del Capitano
 # Capitano e Sentinella partono a onboarding chiuso (captain_gate.py: 1 = non ancora, altro = e' ora): a profilo vuoto
 # spendono e non possono fare niente. Ne' il watchdog ne' `jht team start` li accendono prima; una sessione viva non si tocca.
-if { [ "$ROLE" = "capitano" ] || [ "$ROLE" = "sentinella" ]; } && ! tmux has-session -t "=$SESSION" 2>/dev/null; then
+# The Sentinella watches the budget FOR the Capitano: with the Capitano already up (an update brings back the sessions of
+# before) it is due whatever the gate says, or the Capitano would spend unwatched.
+_captain_session=""
+if [ "$ROLE" = "sentinella" ]; then
+  _captain_session="$(get_agent_info capitano 2>/dev/null | cut -d'|' -f1)" || _captain_session=""
+fi
+if { [ "$ROLE" = "capitano" ] || [ "$ROLE" = "sentinella" ]; } && ! tmux has-session -t "=$SESSION" 2>/dev/null \
+  && ! { [ -n "$_captain_session" ] && tmux has-session -t "=$_captain_session" 2>/dev/null; }; then
   _captain_rc=0
-  python3 /app/shared/skills/captain_gate.py >/dev/null 2>&1 || _captain_rc=$?
+  _captain_answer="$(python3 /app/shared/skills/captain_gate.py 2>/dev/null)" || _captain_rc=$?
   if [ "$_captain_rc" -eq 1 ]; then
-    echo "$(echo "$ROLE" | tr a-z A-Z) not started: the onboarding with the Assistente is not done (it starts by itself when it is; JHT_CAPTAIN_BEFORE_ONBOARDING=1 starts it anyway)." >&2
+    # the reason picks the words: an onboarding that is over and waits for the tools of the full image is not an open one
+    case "$_captain_answer" in
+      *'"tools_pending"'*)
+        echo "$(echo "$ROLE" | tr a-z A-Z) not started yet: the onboarding is done and the tools of the full image are on their way (it starts by itself when they are ready)." >&2 ;;
+      *)
+        echo "$(echo "$ROLE" | tr a-z A-Z) not started: the onboarding with the Assistente is not done (it starts by itself when it is; JHT_CAPTAIN_BEFORE_ONBOARDING=1 starts it anyway)." >&2 ;;
+    esac
     exit 75
   fi
 fi
@@ -1153,8 +1173,9 @@ case "$PROVIDER" in
     # JHT_CODEX_PROJECT_DOC_MAX_BYTES in spawn-lib.sh).
     CLI_ARGS="$(python3 "$JHT_SPAWN_LIB_DIR/../shared/skills/codex_launch_policy.py" --model "$codex_model" --effort "$effort" --doc-max-bytes "$JHT_CODEX_PROJECT_DOC_MAX_BYTES")" || exit $?
     # --search: ricerca web nativa per i ruoli che la usano (parita' con
-    # WebSearch di Claude; elenco in spawn-lib.sh).
-    if jht_codex_web_search_role "$ROLE"; then
+    # WebSearch di Claude; elenco in spawn-lib.sh), se il loro interruttore
+    # negli arricchimenti è acceso (T325: quello dell'Analista è spento di default).
+    if jht_web_search_switch_on "$ROLE"; then
       CLI_ARGS="$CLI_ARGS --search"
     fi
     if [ "$AUTH_METHOD" = "api_key" ] && [ -n "$API_KEY" ]; then

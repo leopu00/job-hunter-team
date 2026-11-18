@@ -18,17 +18,41 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-import { PY_SPACE_CLASS } from "./py-format.ts";
+import { type JsonCell, PY_SPACE_CLASS } from "./py-format.ts";
 
 export interface Policy {
   economy: boolean;
   logo: { enabled: boolean; min_score: number | boolean | null };
+  /** The Analista's pipeline step 6 (the new position); the care queue is geocode_missing. */
+  geocode_pipeline: { enabled: boolean };
   geocode_missing: { enabled: boolean; min_score: number | boolean | null; non_remote_only: boolean };
   recheck_weekly: { enabled: boolean; min_score: number | boolean; older_than_days: number | boolean };
+  /** T325: the hosted web search of each role that has one; the Analista's off by default. */
+  web_search: Record<WebSearchRole, { enabled: boolean }>;
 }
 
-export type EnrichmentKind = "logo" | "geocode_missing" | "recheck_weekly";
+export const WEB_SEARCH_ROLES = ["analista", "scout", "mentor"] as const;
+export type WebSearchRole = (typeof WEB_SEARCH_ROLES)[number];
+
+/** The switches `enrichment_costs.json` may price: the bool keys `set` takes (`_SETTABLE` with "bool"). */
+const PRICED_SWITCHES = [
+  "economy", "logo.enabled", "geocode_pipeline.enabled", "geocode_missing.enabled", "geocode_missing.non_remote_only",
+  "recheck_weekly.enabled", ...WEB_SEARCH_ROLES.map((role) => `web_search.${role}.enabled`),
+];
+const COSTS_MAX_BYTES = 64 * 1024;
+/** `COSTS_PATH`: next to enrichment_policy.py, in this repository's shared/skills. */
+export const COSTS_PATH = fileURLToPath(new URL("../../../../shared/skills/enrichment_costs.json", import.meta.url));
+
+type Usd = number | JsonCell | null;
+export interface Costs {
+  version: 1;
+  positions_per_day: number;
+  switches: Record<string, { costly: boolean; usd_per_position: Usd; usd_per_search?: Usd }>;
+}
+
+export type EnrichmentKind = "logo" | "geocode_pipeline" | "geocode_missing" | "recheck_weekly";
 
 const MODES = ["search", "harvest", "care", "calibration", "saving"];
 export const MODE_UNKNOWN = "unknown";
@@ -44,7 +68,11 @@ class PyFloat {
 
 /** `json.load`, keeping floats apart from ints. Throws on what JSON.parse refuses. */
 function loadJson(path: string): unknown {
-  return JSON.parse(readFileSync(path, "utf8"), function (_key, value, context?: { source?: string }) {
+  return parseJson(readFileSync(path, "utf8"));
+}
+
+function parseJson(text: string): unknown {
+  return JSON.parse(text, function (_key, value, context?: { source?: string }) {
     if (typeof value === "number" && context?.source && /[.eE]/.test(context.source)) return new PyFloat(value);
     return value;
   });
@@ -60,10 +88,47 @@ export class EnrichmentPolicy {
   readonly modePath: string;
   readonly now: () => Date;
 
-  constructor(profileDir: string, now: () => Date = () => new Date()) {
+  readonly costsPath: string;
+
+  constructor(profileDir: string, now: () => Date = () => new Date(), costsPath: string = COSTS_PATH) {
     this.policyPath = join(profileDir, "enrichment-policy.json");
     this.modePath = join(profileDir, "capitano-maintenance.json");
     this.now = now;
+    this.costsPath = costsPath;
+  }
+
+  /** `costs`: the price of each switch, checked whole; null when the file is missing, too big or out of shape. */
+  costs(): Costs | null {
+    let data: unknown;
+    try {
+      const raw = readFileSync(this.costsPath);
+      if (raw.length > COSTS_MAX_BYTES) return null;
+      data = parseJson(new TextDecoder("utf-8", { fatal: true }).decode(raw));
+    } catch {
+      return null;
+    }
+    if (!isDict(data) || data["version"] !== 1 || !isDict(data["switches"])) return null;
+    const perDay = data["positions_per_day"];
+    if (!isWholeNumber(perDay) || perDay < 1 || perDay > 10000) return null;
+    const usd = (value: unknown): Usd => {
+      if (value === null) return null;
+      const number = value instanceof PyFloat ? value.value : value;
+      if (typeof number !== "number" || number < 0 || number > 100) throw new Error("usd");
+      return value instanceof PyFloat ? { value: number, declared: "REAL" } : number;
+    };
+    const switches: Costs["switches"] = {};
+    for (const [key, entry] of Object.entries(data["switches"])) {
+      if (!PRICED_SWITCHES.includes(key)) continue;
+      if (!isDict(entry) || typeof entry["costly"] !== "boolean") return null;
+      try {
+        const item: Costs["switches"][string] = { costly: entry["costly"], usd_per_position: usd(entry["usd_per_position"] ?? null) };
+        if ("usd_per_search" in entry) item.usd_per_search = usd(entry["usd_per_search"]);
+        switches[key] = item;
+      } catch {
+        return null;
+      }
+    }
+    return { version: 1, positions_per_day: perDay, switches };
   }
 
   /** `current_mode`: missing file is `search`; unreadable or out of the enum is `unknown`; a passed `mode_until` is `search`. */
@@ -90,8 +155,10 @@ export class EnrichmentPolicy {
     const merged: Policy = {
       economy: false,
       logo: { enabled: true, min_score: null },
+      geocode_pipeline: { enabled: true },
       geocode_missing: { enabled: true, min_score: null, non_remote_only: true },
       recheck_weekly: { enabled: true, min_score: 70, older_than_days: 14 },
+      web_search: { analista: { enabled: false }, scout: { enabled: true }, mentor: { enabled: true } },
     };
     let data: unknown;
     try {
@@ -119,6 +186,17 @@ export class EnrichmentPolicy {
         if (isWholeNumber(days) && days >= 1 && days <= 365) merged.recheck_weekly.older_than_days = days;
       }
     }
+    const searches = data["web_search"];
+    if (isDict(searches)) {
+      for (const role of WEB_SEARCH_ROLES) {
+        const sec = searches[role];
+        if (isDict(sec) && typeof sec["enabled"] === "boolean") merged.web_search[role].enabled = sec["enabled"];
+      }
+    }
+    const pipeline = data["geocode_pipeline"];
+    if (isDict(pipeline) && typeof pipeline["enabled"] === "boolean") merged.geocode_pipeline.enabled = pipeline["enabled"];
+    // A file from before the two switches: whoever had turned geocoding off finds it off still.
+    else if (!("geocode_pipeline" in data)) merged.geocode_pipeline.enabled = merged.geocode_missing.enabled;
     return merged;
   }
 

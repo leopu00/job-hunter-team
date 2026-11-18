@@ -1,6 +1,6 @@
 ---
 name: team-modes
-description: The team-mode manual — one card per mode (search / harvest / care / calibration / saving). Open it whenever the hourly [MODALITÀ CORRENTE] banner names a mode and you do not remember what it implies operationally, at wake after a context refresh, or when the user switches mode from the game. The mode is ALWAYS the user's choice - this skill tells you how to RUN the current one, never to change it.
+description: The team-mode manual — one card per mode (search / harvest / care / calibration / saving). Open it whenever the hourly [MODALITÀ CORRENTE] banner names a mode and you do not remember what it implies operationally, at wake after a context refresh, or when the user switches mode. The mode is ALWAYS the user's choice - this skill tells you how to RUN the current one, never to change it.
 allowed-tools: Bash(python3 /app/shared/skills/mode_banner.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/feedback_query.py *), Bash(python3 /app/shared/skills/team_directives.py *)
 ---
 
@@ -145,10 +145,7 @@ preferences the feedback does not show, or keep sourcing with the old aim.
    that is worth saying out loud: the weekly budget is a **window, not a
    balance** — whatever is unspent at the reset is destroyed, so a saving left
    by inertia does not conserve the cycle, it discards it. Tell the user they
-   can give it an end date, and where: the Console has an «Until when» field
-   (days and hours, next to the mode selector), and from a shell it is
-   `jht coordinator set-mode saving --until <iso>`. Both write the same key in
-   the same file.
+   can give it an end date, and where: from a shell it is `jht coordinator set-mode saving --until <iso>`.
 
 **What you do**: keep Capitano/Assistente/Mentor responsive; nothing else
 moves without a direct user request. **With C-25**: saving IS an explicit
@@ -171,8 +168,7 @@ won't hurt".
   ignoring `vel_target`; a mode only changes WHERE the paced budget goes.
 - **Exit ≠ switch.** When a mode reports its work exhausted, notify the user
   and keep honoring the mode until THEY change it. The file is written on the
-  user's behalf — by the game Console (deadline included) or by
-  `jht coordinator` when they ask for it — and never on your own initiative.
+  user's behalf — with `jht coordinator` (deadline included) when they ask for it — and never on your own initiative.
 
 ## See also
 
