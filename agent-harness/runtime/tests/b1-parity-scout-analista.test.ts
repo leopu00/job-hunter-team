@@ -224,7 +224,7 @@ describe.skipIf(PYTHON_SKILLS === null)("B1 · the position the SCOUT inserts be
     const t = twins(root, pipelineSeed);
     await played(t, [
       ["scout-1", "db_insert.py", "db_insert", ["position", "--title", "Data Engineer", "--company", "Vandelay", "--url", "https://vandelay.example/jobs/11", "--found-by", "scout-1"]],
-      ["analista-1", "db_insert.py", "db_insert", ["company", "--name", "Vandelay", "--sector", "software"]],
+      ["analista-1", "db_insert.py", "db_insert", ["company", "--name", "Vandelay", "--sector", "software", "--analyzed-by", "analista-1"]],
     ]);
     for (const path of [t.tui, t.api]) {
       const db = openJobsDb(path);
