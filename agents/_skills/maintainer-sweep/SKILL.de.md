@@ -130,6 +130,14 @@ Zwei Messungen in einer, und die zweite ist die entscheidende. Er liest die Loca
 
 Protokolliere `locale_health: {verdict, env, panes_scanned, corrupted_sessions}` im Eintrag.
 
+### 8. 📍 Rückstand bei Büros und Logos (Code, kein Modell)
+```bash
+python3 /app/shared/skills/position_enrich.py backlog --limit 20
+```
+Die `checked`-Stellen, deren Büro und Logo der mechanische Schritt (`position_enrich.py`, von `db_update.py` gestartet, wenn eine Stelle `checked` wird) nie abgeschlossen hat: eine in der Anzeige geschriebene Adresse → Nominatim, die eigene Website des Unternehmens → `logo_fetch.py`. Nichts wird geraten: was nicht gefunden wird, bleibt NULL mit seinem Grund. Das Tempo von Nominatim hält das Skript (vier pro Minute für den Rückstand): einmal starten, nie in einer Schleife, nie parallel.
+
+Trage `enrich_backlog: {positions, offices_written, logos_written}` in den Eintrag ein. Die Schalter für Geokodierung und Logo der Anreicherungs-Policy gelten auch hier: `policy_off` ist gewollt, kein Fehler.
+
 ## Logbook (append-only)
 Jeder Durchgang schreibt EINEN dichten Eintrag nach `/jht_home/logs/mantenitore-logbook.jsonl` (Zwilling des Logbooks des Dottore), damit der nächste Mantenitore den Trend sehen kann:
 ```json

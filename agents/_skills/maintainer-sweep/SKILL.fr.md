@@ -130,6 +130,14 @@ Deux mesures en une, et c'est la seconde qui compte. Il lit la locale du **conte
 
 Journalise `locale_health: {verdict, env, panes_scanned, corrupted_sessions}` dans l'entrée.
 
+### 8. 📍 Arriéré des bureaux et des logos (code, sans modèle)
+```bash
+python3 /app/shared/skills/position_enrich.py backlog --limit 20
+```
+Les postes `checked` dont l'étape mécanique (`position_enrich.py`, lancée par `db_update.py` quand un poste devient `checked`) n'a jamais réglé le bureau et le logo : une adresse écrite dans l'annonce → Nominatim, le site propre de l'entreprise → `logo_fetch.py`. Rien n'est deviné : ce qui n'est pas trouvé reste NULL avec sa raison. Le rythme de Nominatim, c'est le script qui le tient (quatre par minute pour l'arriéré) : lance-le une fois, jamais en boucle, jamais en parallèle.
+
+Note `enrich_backlog: {positions, offices_written, logos_written}` dans l'entrée. Les interrupteurs de géocodage et de logo de la politique d'enrichissement valent ici aussi : `policy_off` est voulu, pas une panne.
+
 ## Logbook (append-only)
 Chaque tournée écrit UNE entrée dense dans `/jht_home/logs/mantenitore-logbook.jsonl` (jumeau du logbook du Dottore), afin que le prochain Mantenitore puisse voir la tendance :
 ```json

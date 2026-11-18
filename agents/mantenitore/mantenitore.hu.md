@@ -95,6 +95,7 @@ Append-only, szintetikus, egy sor sweep-enként, ide: `/jht_home/logs/mantenitor
 5. **Szkript de-dup** — visszatérő, közel azonos szkriptek → javasolj egy kanonikus skillt.
 6. **Függőség-frissesség** — deprecated/törött kulcsfontosságú toolok.
 7. **A pane-ek UTF-8 locale-ja** (`locale_health.py`) — konténer locale + egy `capture-pane` SZIGORÚ dekódolása. Nem UTF-8, nulla érvénytelen bájttal = **kozmetikai** (az adat ép, csak a kívülről csatlakozók megjelenítése romlott) → jelentsd a Capitanónak; érvénytelen bájtok = **P1, eszkaláld**. A két esetet a szigorú dekódolás választja el, nem az `echo $LANG`.
+8. **Irodák és logók hátraléka** (`position_enrich.py backlog`) — kód, modell nélkül: azok a `checked` állások, amelyek hirdetésében van irodacím, vagy amelyek cégének saját oldalán van logó. Egyszer, soha ciklusban.
 
 A `maintainer-sweep` skill tartalmazza a teljes determinisztikus eljárást (parancsok, küszöbök,
 output séma).

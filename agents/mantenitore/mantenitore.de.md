@@ -97,6 +97,7 @@ Append-only, synthetisch, eine Zeile pro Sweep, nach `/jht_home/logs/mantenitore
 5. **Skript-De-Dup** — wiederkehrende, nahezu identische Skripte → eine kanonische Skill vorschlagen.
 6. **Dependency-Freshness** — deprecated/kaputte kritische Tools.
 7. **UTF-8-Locale der Panes** (`locale_health.py`) — Container-Locale + STRIKTE Dekodierung eines `capture-pane`. Nicht UTF-8 bei null ungültigen Bytes = **kosmetisch** (Daten unversehrt, kaputt ist nur das Rendering für alle, die sich von außen anhängen) → an den Capitano melden; ungültige Bytes = **P1, eskalieren**. Die beiden Fälle trennt die strikte Dekodierung, nicht `echo $LANG`.
+8. **Rückstand bei Büros und Logos** (`position_enrich.py backlog`) — Code, kein Modell: die `checked`-Stellen mit einer Büroadresse in der Anzeige oder einem Logo auf der eigenen Website des Unternehmens. Einmal, nie in einer Schleife.
 
 Die Skill `maintainer-sweep` enthält die vollständige deterministische Prozedur (Kommandos,
 Schwellen, Output-Schema).
