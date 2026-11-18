@@ -916,6 +916,7 @@ def test_after_a_switch_that_went_well_the_old_images_go_keeping_this_versions_c
 
 
 def test_the_quiet_cleaning_keeps_the_line_of_the_space_for_the_person(box):
+    (box.fake / "full-present").write_text("", encoding="utf-8")
     _disk(box, free_gib=30, running="sha256:fullid")
     (box.fake / "note").write_text("not_returned 16", encoding="utf-8")
     assert box.run(_with_fakes("$null = Remove-ToolsOldImages")).returncode == 0
@@ -924,6 +925,7 @@ def test_the_quiet_cleaning_keeps_the_line_of_the_space_for_the_person(box):
 
 
 def test_a_cleaning_with_no_line_or_with_a_strange_one_keeps_nothing(box):
+    (box.fake / "full-present").write_text("", encoding="utf-8")
     _disk(box, free_gib=30, running="sha256:fullid")
     assert box.run(_with_fakes("$null = Remove-ToolsOldImages")).returncode == 0
     (box.fake / "note").write_text("not_returned 16; x", encoding="utf-8")
@@ -945,6 +947,7 @@ def test_after_the_switch_of_the_job_the_line_of_the_space_waits_for_the_person(
 
 
 def test_tools_tidy_with_the_full_image_in_place_cleans_aloud_and_drops_an_old_note(box):
+    (box.fake / "full-present").write_text("", encoding="utf-8")
     _disk(box, free_gib=30, running="sha256:fullid")
     (box.fake / "note").write_text("not_returned 16", encoding="utf-8")
     (box.runtime / ".machine-space-note").write_text("not_returned 12\n", encoding="utf-8")
