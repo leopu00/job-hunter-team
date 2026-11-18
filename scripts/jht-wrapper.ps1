@@ -2106,6 +2106,7 @@ function Get-JhtToolsDiskLowText {
 function Write-JhtToolsNotice {
   param([switch]$Kick)
   try {
+    Write-JhtMachineSpaceNote
     if (-not ((Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf) -or (Test-Path -LiteralPath (Join-Path $RuntimeDir '.tools-switch-failed') -PathType Leaf))) { return }
     if (-not (Test-RuntimeHelperDeclared 'jht-tools.ps1')) { return }
     Assert-TrustedRuntime
@@ -7669,6 +7670,8 @@ function Get-DiskLowPermille {
 # mai prune; il rifiuto del motore si conta; JHT_KEEP_OLD_IMAGES=1 tiene tutto.
 # Chiamata solo a upgrade riuscito, mai su check, fallimento o rollback.
 $script:UpgradePrune = $null
+# The line of the space of the machine the last cleaning gave (Invoke-MachineSpaceReturn), or $null.
+$script:MachineSpaceNote = $null
 $JhtImageRepositories = @('ghcr.io/leopu00/jht', 'jht', 'localhost/jht')
 
 function Get-PlainImageId { param([string]$Id) return (([string]$Id).Trim() -replace '^sha256:', '') }
@@ -7732,6 +7735,7 @@ function Get-UpgradeTierKeepIds {
 function Remove-OldJhtImages {
   param([string]$Current, [string]$Previous)
   $script:UpgradePrune = $null
+  $script:MachineSpaceNote = $null
   if ($env:JHT_KEEP_OLD_IMAGES -eq '1') {
     $script:UpgradePrune = New-UpgradePrune 'opt-out'
     Write-UpgradeNote (Get-JhtText 'ps.old_images_kept_all')
@@ -7852,15 +7856,55 @@ function Invoke-MachineSpaceReturn {
   $usedBytes = if ($used) { ((@($used -split '\s+') | Where-Object { $_ -match '^\d+$' }) | Select-Object -Last 1) } else { $null }
   $recoverable = if ($usedBytes) { [math]::Max([long]0, [long]$onDisk - [long]$usedBytes) } else { [long]0 }
   $script:UpgradePrune['machineDisk'] = [ordered]@{ sparse = $sparse; trimmed = $trimmed; onDiskBytes = [long]$onDisk; recoverableBytes = [long]$recoverable }
+  Write-JhtMachineSpaceLog ('fstrim trimmed=' + ([string]$trimmed).ToLowerInvariant() + ' sparse=' + ([string]$sparse).ToLowerInvariant() +
+    ' on_disk_bytes=' + [long]$onDisk + ' used_bytes=' + $(if ($usedBytes) { [long]$usedBytes } else { 'unknown' }) + ' recoverable_bytes=' + [long]$recoverable)
   if ($recoverable -lt 1GB) { return }
-  $gb = [long][math]::Floor($recoverable / 1GB)
-  if ($sparse) {
-    Write-UpgradeNote (Format-JhtText 'ps.machine_space_back_on_stop' $gb $env:CONTAINER_CONNECTION)
-  } else {
-    # No steps for the person (a sparse disk is experimental in WSL, and the switch wants the machine off): only how much JHT
-    # takes, and the one command that frees all of it.
-    Write-UpgradeNote (Format-JhtText 'ps.machine_space_not_returned' ([long][math]::Round($onDisk / 1GB)))
-  }
+  # No steps for the person (a sparse disk is experimental in WSL, and the switch wants the machine off): for a disk that is not
+  # sparse only how much JHT takes, and the one command that frees all of it.
+  $script:MachineSpaceNote = if ($sparse) { 'back_on_stop ' + [long][math]::Floor($recoverable / 1GB) } else { 'not_returned ' + [long][math]::Round($onDisk / 1GB) }
+  Write-UpgradeNote (Get-JhtMachineSpaceText $script:MachineSpaceNote)
+}
+
+# The line of the space, from its note: 'back_on_stop <GB>' or 'not_returned <GB>', in the language of the person; '' for a note
+# that is not one of the two.
+function Get-JhtMachineSpaceText {
+  param([string]$Note)
+  if ($Note -cmatch '^back_on_stop ([0-9]{1,6})$') { return (Format-JhtText 'ps.machine_space_back_on_stop' ([long]$Matches[1]) $env:CONTAINER_CONNECTION) }
+  if ($Note -cmatch '^not_returned ([0-9]{1,6})$') { return (Format-JhtText 'ps.machine_space_not_returned' ([long]$Matches[1])) }
+  return ''
+}
+
+# One line in logs\machine-space.log of the JHT home at every trim, with the numbers, whether the person is told or not (collaudo
+# of build 11 to 12c: nothing in the logs said if the trim had run). Never through a link, never failing the command it rides on.
+function Write-JhtMachineSpaceLog {
+  param([string]$Line)
+  try {
+    $dir = Get-Item -LiteralPath (Join-Path $JhtHome 'logs') -Force -ErrorAction Stop
+    if (-not $dir.PSIsContainer -or ($dir.Attributes -band [IO.FileAttributes]::ReparsePoint)) { return }
+    $file = Join-Path $dir.FullName 'machine-space.log'
+    $there = Get-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
+    if ($there -and ($there.PSIsContainer -or ($there.Attributes -band [IO.FileAttributes]::ReparsePoint))) { return }
+    $at = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ', [Globalization.CultureInfo]::InvariantCulture)
+    [IO.File]::AppendAllText($file, "$at $Line`n", [Text.UTF8Encoding]::new($false))
+  } catch {}
+}
+
+# The line the cleaning of `jht tools` could not say: that cleaning runs in a detached job after the switch to the full image, with
+# nobody reading it, and it leaves the note in .machine-space-note of the host runtime (Save-ToolsMachineSpaceNote in
+# jht-tools.ps1). The next `jht up`, `jht setup` or `jht status` says it, once: the file goes before the line is written.
+function Write-JhtMachineSpaceNote {
+  try {
+    $file = Join-Path $RuntimeDir '.machine-space-note'
+    $item = Get-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
+    if (-not $item) { return }
+    $note = ''
+    if (-not $item.PSIsContainer -and -not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -and $item.Length -le 64) {
+      $note = ([IO.File]::ReadAllText($item.FullName)).Trim()
+    }
+    Remove-Item -LiteralPath $file -Force -Recurse:$false -ErrorAction Stop
+    $text = Get-JhtMachineSpaceText $note
+    if ($text) { Write-Info $text }
+  } catch {}
 }
 
 function Invoke-UpgradeCompose {

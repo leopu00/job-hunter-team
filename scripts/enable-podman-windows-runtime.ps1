@@ -1242,6 +1242,13 @@ if ($unsettledContainers.Count -gt 0) { throw "runtime_containers_unhealthy: $($
 
 if ($containerUnitInstalled) { Start-JhtContainerServiceIfInactive -PodmanPath $Podman }
 
+# The team runs on the full image already (an install without the tier of the core image): the old images go now, and the machine
+# gives back what it can with fstrim, each with its line for the person. With the tier the full image is still to come, and the job
+# that switches to it cleans after it and keeps the line for the next jht up, jht setup or jht status. Never fails the setup.
+if (-not (Test-Path -LiteralPath $runtimeTierFile -PathType Leaf)) {
+  try { & { $ErrorActionPreference = 'Continue'; & (Join-Path $BinDir 'jht.ps1') tools tidy } } catch { }
+}
+
 # Compose has just created the team's containers from the image: the cache the first start filled goes back too.
 [void](Invoke-JhtMachineDropCaches -PodmanPath $Podman -MachineName $MachineName)
 

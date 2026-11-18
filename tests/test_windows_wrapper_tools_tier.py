@@ -102,6 +102,7 @@ function Get-UpgradeImage { $f = Join-Path $env:FAKE 'running'; if (Test-Path -L
 function Remove-OldJhtImages {
   param([string]$Current, [string]$Previous)
   Add-Content -LiteralPath (Join-Path $env:FAKE 'prune') -Value ("$Current $Previous json=" + $script:UpgradeJson)
+  $script:MachineSpaceNote = $null; $n = Join-Path $env:FAKE 'note'; if (Test-Path -LiteralPath $n) { $script:MachineSpaceNote = ([IO.File]::ReadAllText($n)).Trim() }
   $freed = [long]0; $f = Join-Path $env:FAKE 'freed'; if (Test-Path -LiteralPath $f) { $freed = [long]([IO.File]::ReadAllText($f).Trim()) }
   $script:UpgradePrune = [ordered]@{ removed = 2; freedBytes = $freed }
 }
@@ -912,6 +913,58 @@ def test_after_a_switch_that_went_well_the_old_images_go_keeping_this_versions_c
     _disk(box, free_gib=30, running="sha256:fullid")
     assert box.run("exit (Invoke-ToolsKick)", **KICK_ENV).returncode == 0
     _until(lambda: not tier.exists() and _prunes(box) == ["fullid coreid json=True"], f"no cleaning after the switch: {_prunes(box)}")
+
+
+def test_the_quiet_cleaning_keeps_the_line_of_the_space_for_the_person(box):
+    _disk(box, free_gib=30, running="sha256:fullid")
+    (box.fake / "note").write_text("not_returned 16", encoding="utf-8")
+    assert box.run(_with_fakes("$null = Remove-ToolsOldImages")).returncode == 0
+    assert _prunes(box) == ["fullid coreid json=True"]
+    assert (box.runtime / ".machine-space-note").read_text(encoding="utf-8") == "not_returned 16\n"
+
+
+def test_a_cleaning_with_no_line_or_with_a_strange_one_keeps_nothing(box):
+    _disk(box, free_gib=30, running="sha256:fullid")
+    assert box.run(_with_fakes("$null = Remove-ToolsOldImages")).returncode == 0
+    (box.fake / "note").write_text("not_returned 16; x", encoding="utf-8")
+    assert box.run(_with_fakes("$null = Remove-ToolsOldImages")).returncode == 0
+    assert _prunes(box) == ["fullid coreid json=True"] * 2
+    assert not (box.runtime / ".machine-space-note").exists()
+
+
+def test_after_the_switch_of_the_job_the_line_of_the_space_waits_for_the_person(box):
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
+    _disk(box, free_gib=30, running="sha256:fullid")
+    (box.fake / "note").write_text("back_on_stop 4", encoding="utf-8")
+    assert box.run("exit (Invoke-ToolsKick)", **KICK_ENV).returncode == 0
+    note = box.runtime / ".machine-space-note"
+    _until(lambda: not tier.exists() and note.exists(), f"no note after the switch: {_prunes(box)}")
+    assert note.read_text(encoding="utf-8") == "back_on_stop 4\n"
+
+
+def test_tools_tidy_with_the_full_image_in_place_cleans_aloud_and_drops_an_old_note(box):
+    _disk(box, free_gib=30, running="sha256:fullid")
+    (box.fake / "note").write_text("not_returned 16", encoding="utf-8")
+    (box.runtime / ".machine-space-note").write_text("not_returned 12\n", encoding="utf-8")
+    done = box.run(_with_fakes("exit (Invoke-ToolsCommand @('tidy'))"))
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert _prunes(box) == ["fullid coreid json=False"], "the installer's cleaning is said to the person"
+    assert not (box.runtime / ".machine-space-note").exists(), "the line said now is not said again later"
+
+
+def test_tools_tidy_waits_for_the_switch_while_the_core_tier_is_there(box):
+    box.tier()
+    _disk(box, free_gib=30, running="sha256:coreid")
+    done = box.run(_with_fakes("exit (Invoke-ToolsCommand @('tidy'))"))
+    assert done.returncode == 0 and _prunes(box) == []
+
+
+def test_tools_tidy_never_fails_even_when_the_container_is_not_on_this_version(box):
+    _disk(box, free_gib=30, running="sha256:someoldid")
+    assert box.run(_with_fakes("exit (Invoke-ToolsCommand @('tidy'))")).returncode == 0
+    assert _prunes(box) == []
 
 
 def test_jht_up_setup_and_status_say_the_disk_is_short():
