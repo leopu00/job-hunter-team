@@ -127,6 +127,24 @@ def _write_status(home, done, avail, total, now):
     os.replace(str(tmp), str(path))
 
 
+def _forget_in_status(home, back):
+    """The workers the guard brought back are no longer news: the status keeps only the ones still down (giro Linux build13: the
+    18:05 notice stayed in `jht team status` after the three were back at 20:52). Nothing left = nothing said. Best effort, 0600."""
+    path = Path(home) / STATUS_FILE
+    try:
+        seen = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    if not isinstance(seen, dict) or not isinstance(seen.get("retired"), list):
+        return
+    seen["retired"] = [n for n in seen["retired"] if n not in back]
+    tmp = path.with_name(".%s.%d.tmp" % (path.name, os.getpid()))
+    fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(json.dumps(seen) + "\n")
+    os.replace(str(tmp), str(path))
+
+
 def _tell_the_person(api, run, done, avail, total, now, notify_user):
     """The person straight, not through the Captain: a Captain held by the budget brake never reads its input."""
     try:
@@ -243,6 +261,10 @@ def _reopen(api, run, state, avail, total, now, restart, names):
     if back:
         print("[bridge V6] RAM-GUARD %.2f of %.1f GiB free: restarted %s" % (avail, total, ", ".join(back)))
         _mark_restored(api, back, now)
+        try:
+            _forget_in_status(api._path("JHT_HOME"), back)
+        except Exception as error:  # noqa: BLE001
+            print("[bridge V6] WARN ram guard status: %s" % error)
         try:
             from sentinel_delivery import notice
             notice(api, run.state, "ram_guard_back:%d" % int(now), api.CAPITANO_SESSION, reopen_text(back, avail, total))

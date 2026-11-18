@@ -1201,3 +1201,37 @@ def test_the_assistant_and_the_mentor_are_not_woken_at_a_resume_unless_the_perso
     assert cap._wake_the_team(api, team, "x") == ["SCOUT-1", "ASSISTENTE", "SCORER-1"], "the person's last message has no answer"
     (chat / "chat.jsonl").unlink()
     assert "ASSISTENTE" in cap._wake_the_team(api, team, "x"), "a chat that cannot be read is woken: the person costs more than 0.15 $"
+
+
+def test_right_after_a_resume_the_pace_looks_ahead_at_the_rate_of_the_work_not_at_the_pause_before(tmp_path):
+    """Linux build13: the team restarted and spent 0.86 $ in 282 s, 0.45 $ over the pace: the last five minutes were mostly the pause,
+    and a fifth of the real rate was what the brake looked ahead at."""
+    config = budget(3, NOON, NOON + 10 * HOUR)
+    read = cap.team_budget.read(config)
+    resumed = NOON + 2 * HOUR
+    now = resumed + 200   # 80 s after the restart window: 0.20 $ of work in those 80 s = 0.15 $ a minute
+    pi_calls(tmp_path, [(NOON + HOUR, 0.9, 100), (resumed + 10, 0.30, 100), (resumed + 130, 0.10, 100), (resumed + 170, 0.10, 100)])
+    cap.note_resume(tmp_path, resumed)
+    spent = cap.spend(tmp_path, now, NOON, NOON)
+    assert spent["since_resume"] == 200 and spent["restart_cost"] == 0.30 and spent["recent_cost"] == 0.5
+    allowance = cap.team_budget.allowed(config, dict(read, usd=3.0), now)
+    slack = cap.team_budget.margin(3.0)
+    worked = spent["budget_cost"] - spent["restart_cost"]
+    old_ahead = (0.5 - 0.30) / cap.RATE_WINDOW_SEC * cap.CHECK_EVERY_SEC     # the five-minute window
+    new_ahead = (0.5 - 0.30) / (200 - cap.RESTART_WINDOW_SEC) * cap.CHECK_EVERY_SEC
+    assert new_ahead > 3 * old_ahead
+    # a budget spent so that the old look-ahead lets it through and the new one stops it
+    spent["budget_cost"] = round(allowance - slack - old_ahead - 0.01 + spent["restart_cost"], 6)
+    assert worked <= spent["budget_cost"]
+    assert cap.decide(config, dict(spent, since_resume=None), False, now, read)["action"] == "none"
+    assert cap.decide(config, spent, False, now, read)["why"] == "pace"
+    # the pause before the resume is not in the rate: spending of a minute before it does not count as the work after
+    pi_calls(tmp_path, [(resumed - 30, 0.50, 100)], name="u.jsonl")
+    assert cap.spend(tmp_path, now, NOON, NOON)["recent_cost"] == 0.5
+
+
+def test_a_worker_retired_during_the_pause_has_no_window_and_is_not_written_to(tmp_path):
+    api, sent = _wake_api(tmp_path, None)
+    api.session_exists = lambda s: s != "SCOUT-2"
+    assert cap._wake_the_team(api, ["SCOUT-1", "SCOUT-2", "SCORER-1"], "x") == ["SCOUT-1", "SCORER-1"]
+    assert "SCOUT-2" not in sent

@@ -120,8 +120,11 @@ def spend(home, now_ts, budget_start=None, split_at=None):
     start, hour = day_start(now_ts), now_ts - 3600
     out = {"cost": 0.0, "hour_tokens": 0, "calls": 0, "credit": provider_credit.exhausted(home, now_ts),
            "budget_cost": None if budget_start is None else 0.0, "first_worker": None,
-           "recent_cost": 0.0, "before_start": 0.0, "restart_cost": 0.0, "restart_recent": 0.0}
+           "recent_cost": 0.0, "before_start": 0.0, "restart_cost": 0.0, "restart_recent": 0.0, "since_resume": None}
     budget_events = []
+    # the rate of the pace is the team's since the last resume, not the pause before it (see _budget_verdict)
+    resumed_at = [r for r in _read_resumes(home) if budget_start is not None and budget_start <= r <= now_ts]
+    recent_from = max(now_ts - RATE_WINDOW_SEC, max(resumed_at, default=0.0))
     since = min(start, hour) if budget_start is None else min(start, hour, budget_start)
     for event in pi_sessions.usage_events(home, since):
         if event["ts"] >= start:
@@ -132,7 +135,7 @@ def spend(home, now_ts, budget_start=None, split_at=None):
         if budget_start is not None and event["ts"] >= budget_start:
             out["budget_cost"] += event["cost"]
             budget_events.append((event["ts"], event["cost"]))
-            if event["ts"] >= now_ts - RATE_WINDOW_SEC:
+            if event["ts"] >= recent_from:
                 out["recent_cost"] += event["cost"]
             if out["first_worker"] is None and _is_worker(event.get("agent")):
                 out["first_worker"] = event["ts"]  # the events come oldest first
@@ -142,7 +145,7 @@ def spend(home, now_ts, budget_start=None, split_at=None):
         if budget_start is not None and event["ts"] >= budget_start:
             out["budget_cost"] += event["cost"]
             budget_events.append((event["ts"], event["cost"]))
-            if event["ts"] >= now_ts - RATE_WINDOW_SEC:
+            if event["ts"] >= recent_from:
                 out["recent_cost"] += event["cost"]
     split = split_at if split_at is not None else out["first_worker"]
     if split is not None:
@@ -151,10 +154,12 @@ def spend(home, now_ts, budget_start=None, split_at=None):
         for resumed in _read_resumes(home):
             if resumed < budget_start:
                 continue
+            if resumed <= now_ts and (out["since_resume"] is None or now_ts - resumed < out["since_resume"]):
+                out["since_resume"] = now_ts - resumed
             for moment, cost in budget_events:
                 if resumed <= moment < resumed + RESTART_WINDOW_SEC:
                     out["restart_cost"] += cost
-                    if moment >= now_ts - RATE_WINDOW_SEC:
+                    if moment >= recent_from:
                         out["restart_recent"] += cost
         out["restart_cost"] = round(out["restart_cost"], 6)
     out["cost"] = round(out["cost"], 6)
@@ -198,7 +203,14 @@ def _budget_verdict(config, budget, spent, now, held_by_pace=False):
     # the pace looks AHEAD like the budget does: a team that restarts spends in the first minute what the next look would only see
     # the restart of a resume is out of the pace, in what was spent and in the rate the pace looks ahead at
     restart = min(spent.get("restart_cost") or 0.0, max(0.0, used - before))
-    ahead_pace = max(0.0, (spent.get("recent_cost") or 0.0) - (spent.get("restart_recent") or 0.0)) / RATE_WINDOW_SEC * CHECK_EVERY_SEC
+    # right after a resume the last five minutes are mostly the pause: the work of the team is spread over all of them and the pace
+    # looks at a fifth of what it will spend (giro Linux build13: 0.86 $ in 282 s, 0.45 $ over the pace). So the window of the rate
+    # is the time the team has been working again, outside the restart, and never below half a look.
+    window = RATE_WINDOW_SEC
+    since = spent.get("since_resume")
+    if since is not None and since < RATE_WINDOW_SEC + RESTART_WINDOW_SEC:
+        window = max(CHECK_EVERY_SEC / 2.0, min(RATE_WINDOW_SEC, since - RESTART_WINDOW_SEC))
+    ahead_pace = max(0.0, (spent.get("recent_cost") or 0.0) - (spent.get("restart_recent") or 0.0)) / window * CHECK_EVERY_SEC
     if used - before - restart + ahead_pace + reserve + slack >= allowance:
         return dict(common, why="pace", ceiling=round(before + allowance, 6),
                     resumes=team_budget.resumes_at(config, period, used - before - restart + RESTART_RESERVE_SHARE * period["usd"] + slack) or budget["ends"])
@@ -513,6 +525,11 @@ def _wake_the_team(api, sessions, why, seen=()):
             if session in WAKE_ONLY_IF_NEEDED and not (session == "ASSISTENTE" and _assistant_owes_an_answer(home)):
                 continue
             try:
+                # a worker retired during the pause (the RAM guard, the Captain) has no window: nothing to wake, and the send
+                # would only log rc=2 (giro Linux build13: three WARN at every resume)
+                exists = getattr(api, "session_exists", None)
+                if exists is not None and not exists(session):
+                    continue
                 if api.jht_tmux_send(session, text if session in known else newcomer_text):
                     woken.append(session)
             except Exception as error:  # noqa: BLE001

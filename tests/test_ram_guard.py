@@ -209,3 +209,18 @@ def test_the_retire_tool_refuses_a_worker_the_guard_brought_back_a_moment_ago(tm
     assert "brought back by the memory guard" in capsys.readouterr().err
     (tmp_path / "state" / "ram-restored.json").write_text("not json")
     assert tool.restored_by_the_guard("SCOUT-3") is None, "a file that cannot be read protects nothing"
+
+
+def test_the_status_stops_saying_the_workers_that_came_back(tmp_path):
+    import json
+    api, run, sent = _run()
+    api._path = lambda name: str(tmp_path)
+    rg.step(api, run, probe={"ram_avail_gib": 0.44, "ram_total_gib": 3.7}, sessions=TEAM, retire=lambda s, why: True, notify_user=lambda *a: None)
+    path = tmp_path / "state" / "ram-guard.json"
+    assert json.loads(path.read_text())["retired"] == ["SCOUT-3", "SCOUT-2"]
+    api.time.time = lambda: 1000.0 + rg.REOPEN_AFTER_SEC + 1
+    started = []
+    ok = {"ram_avail_gib": 2.5, "ram_total_gib": 3.7}
+    rg.step(api, run, probe=ok, sessions={}, restart=lambda s, why: started.append(s) or True)
+    assert started == ["SCOUT-2", "SCOUT-3"]
+    assert json.loads(path.read_text())["retired"] == [] and path.stat().st_mode & 0o777 == 0o600
