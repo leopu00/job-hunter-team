@@ -7,7 +7,7 @@
  * number, none) becomes a typed value, and the answer becomes lines in the person's language. `jht enrichment` and the
  * desktop (through `jht team-settings`) use these same lists.
  */
-import { say } from './texts.js';
+import { say, textLanguage } from './texts.js';
 
 /** Every switch: [key of the policy, kind of value]. The order is the order they are shown in. */
 export const SWITCHES = Object.freeze([
@@ -186,26 +186,49 @@ export function lastJson(stdout) {
 const onOff = (value) => (value ? say('enrichment.on') : say('enrichment.off'));
 const threshold = (value) => (value === null ? '' : `, ${say('enrichment.min_score', { n: value })}`);
 
-/** What a person reads: the working mode, then one line per enrichment. */
-export function describe({ policy, mode }) {
+/** The estimated cost of the dearer side of a switch, for the column of `show`: '' with no figure in the table. */
+export function costCell(key, costs, language = textLanguage()) {
+  const entry = costs?.switches?.[key];
+  if (!entry) return '';
+  const state = key === 'geocode_missing.non_remote_only' ? say('enrichment.remote_too', {}, language)
+    : say(entry.costly ? 'enrichment.on' : 'enrichment.off', {}, language);
+  if (typeof entry.usd_per_position === 'number') {
+    return say('enrichment.cost_cell_position', { state, usd: money(entry.usd_per_position, language) }, language);
+  }
+  if (typeof entry.usd_per_search === 'number') {
+    return say('enrichment.cost_cell_search', { state, usd: money(entry.usd_per_search, language) }, language);
+  }
+  return say('enrichment.cost_cell_unmeasured', { state }, language);
+}
+
+/** What a person reads: the working mode, then one line per enrichment, with the estimated cost of its dearer side when the
+ * team sends the table of the costs (the same one the confirmation reads). */
+export function describe({ policy, mode, costs }) {
   const rows = [
-    [say('enrichment.economy'), onOff(policy.economy)],
-    [say('enrichment.logo'), onOff(policy.logo.enabled) + threshold(policy.logo.min_score)],
+    [say('enrichment.economy'), onOff(policy.economy), ['economy']],
+    [say('enrichment.logo'), onOff(policy.logo.enabled) + threshold(policy.logo.min_score), ['logo.enabled']],
     [say('enrichment.geocode_pipeline'),
-      onOff(policy.geocode_pipeline.enabled) + (policy.geocode_missing.non_remote_only ? `, ${say('enrichment.non_remote_only')}` : '')],
-    [say('enrichment.geocode_missing'), onOff(policy.geocode_missing.enabled) + threshold(policy.geocode_missing.min_score)],
+      onOff(policy.geocode_pipeline.enabled) + (policy.geocode_missing.non_remote_only ? `, ${say('enrichment.non_remote_only')}` : ''),
+      ['geocode_pipeline.enabled', 'geocode_missing.non_remote_only']],
+    [say('enrichment.geocode_missing'), onOff(policy.geocode_missing.enabled) + threshold(policy.geocode_missing.min_score),
+      ['geocode_missing.enabled']],
     [say('enrichment.recheck_weekly'),
       `${onOff(policy.recheck_weekly.enabled)}, ${say('enrichment.min_score', { n: policy.recheck_weekly.min_score })}, `
-      + say('enrichment.older_than', { days: policy.recheck_weekly.older_than_days })],
-    [say('enrichment.web_search_analista'), onOff(policy.web_search.analista.enabled)],
-    [say('enrichment.web_search_scout'), onOff(policy.web_search.scout.enabled)],
-    [say('enrichment.web_search_mentor'), onOff(policy.web_search.mentor.enabled)],
-  ];
+      + say('enrichment.older_than', { days: policy.recheck_weekly.older_than_days }), ['recheck_weekly.enabled']],
+    [say('enrichment.web_search_analista'), onOff(policy.web_search.analista.enabled), ['web_search.analista.enabled']],
+    [say('enrichment.web_search_scout'), onOff(policy.web_search.scout.enabled), ['web_search.scout.enabled']],
+    [say('enrichment.web_search_mentor'), onOff(policy.web_search.mentor.enabled), ['web_search.mentor.enabled']],
+  ].map(([label, text, keys]) => [label, text, keys.map((key) => costCell(key, costs)).filter(Boolean).join('; ')]);
   const width = Math.max(...rows.map(([label]) => label.length));
-  const lines = [say('enrichment.title', { mode }), ...rows.map(([label, text]) => `  ${label.padEnd(width)}  ${text}`)];
+  const priced = rows.some(([, , cost]) => cost);
+  const stateWidth = Math.max(...rows.map(([, text]) => text.length));
+  const line = ([label, text, cost]) => (priced && cost
+    ? `  ${label.padEnd(width)}  ${text.padEnd(stateWidth)}  ${cost}` : `  ${label.padEnd(width)}  ${text}`);
+  const lines = [say('enrichment.title', { mode }), ...rows.map(line)];
   if (mode === 'saving') lines.push('', say('enrichment.mode_saving'));
   else if (mode === 'unknown') lines.push('', say('enrichment.mode_unknown'));
   else if (policy.economy) lines.push('', say('enrichment.economy_on'));
+  if (priced) lines.push('', say('enrichment.cost_note'));
   lines.push('', say('enrichment.thresholds'), say('enrichment.set_hint'));
   return lines.join('\n');
 }

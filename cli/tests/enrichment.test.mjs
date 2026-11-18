@@ -10,7 +10,7 @@ import test from 'node:test';
 // shapes, and the words. Synthetic homes only.
 const home = mkdtempSync(join(tmpdir(), 'jht-enrichment-'));
 process.env.JHT_HOME = home;
-const { SWITCH_KEYS, closedCosts, closedPolicy, closedRequest, costText, describe, extraCost, typedValue } = await import('../src/lib/enrichment.js');
+const { SWITCH_KEYS, closedCosts, closedPolicy, closedRequest, costCell, costText, describe, extraCost, typedValue } = await import('../src/lib/enrichment.js');
 const { isYes, runPolicy, setSwitch } = await import('../src/commands/enrichment.js');
 const { applyResult, getResult, withEnrichment } = await import('../src/commands/team-settings.js');
 const { runSettings } = await import('../src/commands/agent-control.js');
@@ -174,6 +174,40 @@ test('describe: one line per enrichment, the threshold shown only when there is 
   assert.match(describe({ policy: { ...POLICY, economy: true }, mode: 'search' }), /Savings is on/);
 });
 
+test('show: next to each switch the estimated cost of its dearer side, from the table the confirmation reads', () => {
+  process.env.JHT_LANG = 'en';
+  const text = describe({ policy: POLICY, mode: 'search', costs: COSTS });
+  const row = (label) => text.split('\n').find((line) => line.trimStart().startsWith(label));
+  assert.match(row('Savings'), /off +off: about 0\.01 \$ per position$/);
+  assert.match(row('Company logo'), /on +on: about 0\.004 \$ per position$/);
+  assert.match(row('Recheck of the live positions'), /on: cost not measured yet$/);
+  assert.match(row('Web search of the Analisti'), /off +on: about 0\.27 \$ per position$/);
+  assert.match(row('Web search of the Scout'), /on: about 0\.02 \$ per search$/);
+  // a switch the table does not price has no column, and the note says what the figures are
+  assert.match(row('Office on the map, new positions'), /on, not for remote positions$/);
+  assert.match(text, /Estimated costs, measured with the agents on Haiku/);
+});
+
+test('show: both switches of a row are priced, the remote positions said as such, in the person’s language', () => {
+  const costs = { positions_per_day: 50, switches: {
+    'geocode_pipeline.enabled': { costly: true, usd_per_position: 0.001 },
+    'geocode_missing.non_remote_only': { costly: false, usd_per_position: 0.001 } } };
+  process.env.JHT_LANG = 'it';
+  const row = describe({ policy: POLICY, mode: 'search', costs }).split('\n').find((line) => line.includes('Ufficio sulla mappa, posizioni nuove'));
+  assert.match(row, /acceso: circa 0,001 \$ a posizione; anche le posizioni remote: circa 0,001 \$ a posizione$/);
+  assert.equal(costCell('logo.enabled', COSTS, 'fr'), 'allumé : environ 0,004 $ par offre');
+  assert.equal(costCell('geocode_pipeline.enabled', COSTS, 'fr'), '');
+  assert.equal(costCell('logo.enabled', undefined, 'fr'), '');
+  process.env.JHT_LANG = 'en';
+});
+
+test('show: with no table of the costs it reads as before, with no cost column and no note', () => {
+  process.env.JHT_LANG = 'en';
+  const text = describe({ policy: POLICY, mode: 'search' });
+  assert.match(text, /Company logo +on$/m);
+  assert.doesNotMatch(text, /per position|Estimated costs/);
+});
+
 test('runPolicy: the skill’s refusals come through as closed codes, anything else is policy_unavailable', () => {
   const said = (stdout, code = 0) => () => ({ code, stdout, stderr: '' });
   assert.deepEqual(runPolicy(['show'], null, said(JSON.stringify(answer()))), { exit: 0, policy: POLICY, mode: 'search' });
@@ -193,6 +227,10 @@ test('the command on the real program: show, set, and every refusal said in the 
     const shown = jht('enrichment', 'show');
     assert.equal(shown.status, 0, shown.stderr);
     assert.match(shown.stdout, /Arricchimenti degli Analisti \(modalità di lavoro: search\)/);
+    // the costs of the repo's own table, next to each switch
+    assert.match(shown.stdout, /Ricerca web degli Analisti +spento +acceso: circa [\d,]+ \$ a posizione/);
+    assert.match(shown.stdout, /Ricerca web dello Scout +acceso +acceso: circa [\d,]+ \$ a ricerca/);
+    assert.match(shown.stdout, /Costi stimati, misurati con gli agenti su Haiku/);
     const set = jht('enrichment', 'set', 'geocode_pipeline.enabled', 'off', '--json');
     assert.equal(set.status, 0, set.stderr);
     assert.deepEqual(JSON.parse(set.stdout).policy.geocode_pipeline, { enabled: false });
