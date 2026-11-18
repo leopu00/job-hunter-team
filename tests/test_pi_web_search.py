@@ -443,3 +443,11 @@ def test_a_turn_without_queries_writes_no_check_and_a_broken_query_block_breaks_
               anthropic_event({"type": "content_block_stop", "index": 1})]
     got = run([request({"tools": []}, ANTHROPIC), STOP, TURN_END, *broken, STOP, TURN_END], tmp_path)
     assert CHECKS(got) == []
+
+
+def test_a_search_input_longer_than_the_cap_is_dropped_not_kept_growing(tmp_path):
+    """The streamed input of a block is kept up to 4096 characters; beyond, it is let go and its query not checked."""
+    with_profile(tmp_path)
+    steps = [request({"tools": []}, ANTHROPIC), *anthropic_search("noemi brambillone " + "x" * 5000, pieces=8),
+             *anthropic_search("noemi brambillone", 2), STOP, TURN_END]
+    assert CHECKS(run(steps, tmp_path)) == [{"queries": 1, "person_data": 1, "kinds": ["name"]}]

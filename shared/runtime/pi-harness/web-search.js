@@ -63,6 +63,9 @@ const DEFAULT_MAX_USES = 3;
 const REFUSED = new Set([400, 403, 404, 422]);
 const CHECK = "jht-web-search-check";
 const PROFILE_MAX_BYTES = 256 * 1024;
+// The most of a search block's input kept while it streams: a query is a line, this is many; beyond it the block's
+// query is not checked (and not kept).
+const QUERY_INPUT_MAX_CHARS = 4096;
 const KINDS = ["name", "email", "phone"];
 // Where the profile keeps the three fields (the same places shared/skills/profile_email.py and profile_facts.py read).
 const NAME_PATHS = ["name", "full_name", "candidate.name", "personal.name", "contacts.name"];
@@ -358,7 +361,14 @@ module.exports = function webSearch(pi) {
         }
         const open = request.inputs[data.index];
         if (open && data.type === "content_block_delta" && data.delta && data.delta.type === "input_json_delta")
-          open.json += String(data.delta.partial_json || "");
+          if (!open.over) {
+            open.json += String(data.delta.partial_json || "");
+            if (open.json.length > QUERY_INPUT_MAX_CHARS) {
+              open.over = true;
+              open.json = "";
+              open.query = null;
+            }
+          }
         if (open && data.type === "content_block_stop") {
           delete request.inputs[data.index];
           let query = open.query;
