@@ -404,6 +404,9 @@ function Restore-JhtRuntimeFiles {
           [IO.File]::WriteAllBytes($fresh, $bytes)
           Set-JhtProgramInPlace -Fresh $fresh -Destination $path
         } finally { if ([IO.File]::Exists($fresh)) { try { [IO.File]::Delete($fresh) } catch { } } }
+      } elseif ($bytes.Length -eq 0) {
+        # an empty file (Publish-JhtFile takes no empty bytes): emptied, which is all a write in place could leave
+        [IO.File]::WriteAllBytes($path, [byte[]]@())
       } else {
         Publish-JhtFile -Destination $path -Bytes $bytes
       }
