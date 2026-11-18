@@ -405,6 +405,23 @@ jht_codex_web_search_role() {
   return 1
 }
 
+# jht_web_search_switch_on <ruolo> → 0 se l'interruttore della ricerca web del ruolo è acceso (T325:
+# web_search.<ruolo>.enabled nella policy degli arricchimenti, sotto economy e la modalità risparmio;
+# `enrichment_policy.py web-search`). Lo chiede Codex all'avvio, perché `--search` è un argomento di avvio;
+# su pi l'estensione si carica sempre per questi ruoli e rilegge l'interruttore a ogni richiesta.
+# Una risposta che non arriva (python che non parte) vale «spenta», detto su stderr.
+jht_web_search_switch_on() {
+  local role="${1:-}" answer rc=0
+  jht_codex_web_search_role "$role" || return 1
+  answer="$(python3 "$JHT_SPAWN_LIB_DIR/../shared/skills/enrichment_policy.py" web-search "$role" 2>/dev/null)" || rc=$?
+  [ "$rc" -eq 0 ] && return 0
+  case "$answer" in
+    *'"web_search": false'*) ;;
+    *) echo "Warning: the web search switch of the $role could not be read: the $role starts without web search." >&2 ;;
+  esac
+  return 1
+}
+
 # ── Harness dell'agente: pi ──────────────────────────────────────────────────
 # L'harness è la CLI che guida l'agente; il provider resta `active_provider`.
 # Quale harness (codex o pi) lo decide `harness` nel config o la variabile

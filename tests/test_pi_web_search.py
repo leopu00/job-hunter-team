@@ -33,6 +33,7 @@ require(process.argv[2])({
 });
 const results = [];
 for (const step of JSON.parse(fs.readFileSync(0, "utf8"))) {
+  if (step.write) { fs.writeFileSync(step.write, step.text); results.push(null); continue; }
   const out = [];
   for (const fn of handlers[step.event] || []) out.push(fn(step.event_data, step.ctx));
   results.push(out.length === 1 ? (out[0] === undefined ? null : out[0]) : out);
@@ -55,6 +56,15 @@ def run(steps, tmp_path: Path, env_extra=None):
                           text=True, env=env, timeout=30)
     assert done.returncode == 0, done.stderr
     return json.loads(done.stdout)
+
+
+def switches(tmp_path: Path, policy=None, mode=None):
+    """The enrichment policy and the working mode of the profile, as `jht enrichment set` and the Capitano write them."""
+    profile = tmp_path / "home" / "profile"
+    profile.mkdir(parents=True, exist_ok=True)
+    for name, data in (("enrichment-policy.json", policy), ("capitano-maintenance.json", mode)):
+        if data is not None:
+            (profile / name).write_text(data if isinstance(data, str) else json.dumps(data), encoding="utf-8")
 
 
 def request(payload, ctx=OPENAI):
@@ -223,6 +233,7 @@ STOP = anthropic_event({"type": "message_stop"})
     ("analista-1", {"JHT_PI_WEB_SEARCH_MAX_USES": "7"}, 7), ("analista-1", {"JHT_PI_WEB_SEARCH_MAX_USES": "99"}, 3),
 ])
 def test_anthropic_gets_its_server_search_with_a_cap_per_turn_by_role(tmp_path, agent, env, cap):
+    switches(tmp_path, {"web_search": {"analista": {"enabled": True}}})
     payload = {"model": "claude-haiku-5-5", "tools": [FUNCTION], "messages": []}
     got = run([request(payload, ANTHROPIC)], tmp_path, {"JHT_AGENT_NAME": agent, **env})
     assert got["results"][0]["tools"] == [FUNCTION, {"type": "web_search_20250305", "name": "web_search", "max_uses": cap}]
@@ -374,6 +385,7 @@ def everything_written(tmp_path: Path, got: dict) -> str:
 
 def test_a_query_with_the_person_s_name_is_counted_by_kind_and_nothing_of_it_is_written(tmp_path):
     with_profile(tmp_path)
+    switches(tmp_path, {"web_search": {"analista": {"enabled": True}}})
     query = "Noemi BRAMBILLONE impiegata Verona"
     steps = [request({"tools": []}, ANTHROPIC), *anthropic_search(query), usage(1), STOP, TURN_END]
     got = run(steps, tmp_path, {"JHT_AGENT_NAME": "analista-2"})
@@ -451,3 +463,74 @@ def test_a_search_input_longer_than_the_cap_is_dropped_not_kept_growing(tmp_path
     steps = [request({"tools": []}, ANTHROPIC), *anthropic_search("noemi brambillone " + "x" * 5000, pieces=8),
              *anthropic_search("noemi brambillone", 2), STOP, TURN_END]
     assert CHECKS(run(steps, tmp_path)) == [{"queries": 1, "person_data": 1, "kinds": ["name"]}]
+
+
+# --- the switch of each role (T325) --------------------------------------------------------------------------------
+
+def _status_of(got):
+    return [data for kind, data in got["entries"] if kind == "jht-web-search-status"]
+
+
+@pytest.mark.parametrize(("agent", "policy", "mode", "on", "reason"), [
+    ("analista-1", None, None, False, "disabled by policy (web_search.analista.enabled=false)"),
+    ("scout-2", None, None, True, None),
+    ("mentor", None, None, True, None),
+    ("analista-1", {"web_search": {"analista": {"enabled": True}}}, None, True, None),
+    ("scout-1", {"web_search": {"scout": {"enabled": False}}}, None, False, "disabled by policy (web_search.scout.enabled=false)"),
+    ("analista-1", {"web_search": {"analista": {"enabled": "yes"}}}, None, False, "disabled by policy (web_search.analista.enabled=false)"),
+    ("mentor", {"economy": True}, None, False, "SAVING policy is active (economy=true)"),
+    ("scout-1", None, {"mode": "saving"}, False, "SAVING mode is active (mode=saving)"),
+    ("scout-1", None, {"mode": "saving", "mode_until": "2020-01-01T00:00:00Z"}, True, None),
+    ("scout-1", None, {"mode": "saving", "mode_until": "not a date"}, False, "SAVING mode is active (mode=saving)"),
+    ("scout-1", None, {"mode": "care"}, True, None),
+    ("scout-1", None, "{broken", False,
+     "capitano-maintenance.json exists but cannot be interpreted: autonomous enrichment is suspended until a person reviews it"),
+    ("scout-1", "{broken", None, True, None),
+    ("capitano", {"web_search": {"scout": {"enabled": False}}}, None, True, None),
+])
+def test_the_role_s_switch_decides_the_search_as_the_policy_answers(tmp_path, agent, policy, mode, on, reason):
+    switches(tmp_path, policy, mode)
+    payload = {"tools": [FUNCTION], "messages": []}
+    got = run([request(payload, ANTHROPIC)], tmp_path, {"JHT_AGENT_NAME": agent})
+    if on:
+        assert [t.get("name") for t in got["results"][0]["tools"]] == ["read", "web_search"]
+        assert _status_of(got) == [{"enabled": True, "provider": "anthropic", "api": "anthropic-messages"}]
+    else:
+        assert got["results"][0] is None, "the request goes as pi built it"
+        assert _status_of(got) == [{"enabled": False, "provider": "anthropic", "api": "anthropic-messages", "reason": reason}]
+        assert [e["event"] for e in log_of(tmp_path)] == ["web_search_unavailable"]
+
+
+@pytest.mark.parametrize("agent", ["analista-1", "scout-1", "mentor"])
+def test_the_extension_answers_as_enrichment_policy_py_for_every_role(tmp_path, agent):
+    role = agent.split("-")[0]
+    cases = [(None, None), ({"web_search": {role: {"enabled": True}}}, None), ({"web_search": {role: {"enabled": False}}}, None),
+             ({"economy": True, "web_search": {role: {"enabled": True}}}, None), (None, {"mode": "saving"}),
+             (None, {"mode": "harvest", "mode_until": "2099-01-01"}), (None, {"mode": "nope"})]
+    import os
+    for i, (policy, mode) in enumerate(cases):
+        home = tmp_path / f"case{i}"
+        switches(home, policy, mode)
+        got = run([request({"tools": []}, ANTHROPIC)], home, {"JHT_AGENT_NAME": agent})
+        py = subprocess.run(["python3", str(ROOT / "shared" / "skills" / "enrichment_policy.py"), "web-search", role],
+                            capture_output=True, text=True, timeout=30,
+                            env={**os.environ, "JHT_DB": str(home / "home" / "jobs.db")})
+        answer = json.loads(py.stdout)
+        assert (py.returncode == 0) == answer["web_search"]
+        status = _status_of(got)[0]
+        assert status["enabled"] == answer["web_search"], (policy, mode)
+        assert status.get("reason", "on") == answer["reason"], (policy, mode)
+
+
+def test_turning_the_switch_on_or_off_counts_from_the_next_request_and_is_said_again(tmp_path):
+    switches(tmp_path, {})
+    policy = str(tmp_path / "home" / "profile" / "enrichment-policy.json")
+
+    def turn(on):
+        return {"write": policy, "text": json.dumps({"web_search": {"analista": {"enabled": on}}})}
+
+    asked = request({"tools": []}, ANTHROPIC)
+    got = run([asked, turn(True), asked, asked, turn(False), asked], tmp_path, {"JHT_AGENT_NAME": "analista-3"})
+    searched = [r is not None for i, r in enumerate(got["results"]) if i in (0, 2, 3, 5)]
+    assert searched == [False, True, True, False]
+    assert [s["enabled"] for s in _status_of(got)] == [False, True, False], "said once per state, again when it changes"

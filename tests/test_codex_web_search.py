@@ -14,6 +14,7 @@ that stops doing it, turns this red instead of drifting.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -66,7 +67,12 @@ def _configured_roles() -> set[str]:
     return set(result.stdout.split())
 
 
-def _codex_command(role: str) -> str:
+def _codex_command(role: str, home: Path | None = None) -> str:
+    """The Codex command line of `role`, with the enrichment policy of `home` (None: a home with no policy file)."""
+    if home is None:
+        import tempfile
+        with tempfile.TemporaryDirectory() as empty:
+            return _codex_command(role, Path(empty))
     source = START_AGENT.read_text(encoding="utf-8")
     script = "\n".join([
         f'source "{SPAWN_LIB}"',
@@ -79,7 +85,9 @@ def _codex_command(role: str) -> str:
         _codex_branch(source),
         'printf "%s %s\\n" "$CLI_BIN" "$CLI_ARGS"',
     ])
-    result = subprocess.run([_bash(), "-c", script], capture_output=True, text=True, check=False)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("JHT_")}
+    env["JHT_HOME"] = str(home)
+    result = subprocess.run([_bash(), "-c", script], capture_output=True, text=True, check=False, env=env)
     assert result.returncode == 0, result.stderr
     assert result.stderr == "", result.stderr
     return result.stdout.strip()
@@ -93,11 +101,42 @@ def test_the_list_matches_the_roles_that_name_websearch() -> None:
 
 
 @pytest.mark.parametrize("role", ROLES)
-def test_only_those_roles_start_codex_with_search(role: str) -> None:
-    command = _codex_command(role)
+def test_only_those_roles_start_codex_with_search(role: str, tmp_path: Path) -> None:
+    # Every switch on: the list alone decides.
+    (tmp_path / "profile").mkdir()
+    on = {r: {"enabled": True} for r in ("analista", "scout", "mentor")}
+    (tmp_path / "profile" / "enrichment-policy.json").write_text(json.dumps({"web_search": on}), encoding="utf-8")
+    command = _codex_command(role, tmp_path)
 
     assert command.startswith("codex ")
     assert ("--search" in command.split()) == (role in _configured_roles())
+
+
+@pytest.mark.parametrize(("policy", "mode", "searching"), [
+    (None, None, {"scout", "mentor"}),  # the defaults (T325): the Analista's search is off
+    ({"web_search": {"analista": {"enabled": True}}}, None, {"scout", "analista", "mentor"}),
+    ({"web_search": {"scout": {"enabled": False}, "mentor": {"enabled": False}}}, None, set()),
+    ({"economy": True, "web_search": {"analista": {"enabled": True}}}, None, set()),
+    (None, {"mode": "saving"}, set()),
+])
+def test_codex_gets_search_only_where_the_role_s_switch_is_on(tmp_path: Path, policy, mode, searching) -> None:
+    (tmp_path / "profile").mkdir()
+    if policy is not None:
+        (tmp_path / "profile" / "enrichment-policy.json").write_text(json.dumps(policy), encoding="utf-8")
+    if mode is not None:
+        (tmp_path / "profile" / "capitano-maintenance.json").write_text(json.dumps(mode), encoding="utf-8")
+    got = {role for role in ("scout", "analista", "mentor") if "--search" in _codex_command(role, tmp_path).split()}
+    assert got == searching
+
+
+def test_a_switch_that_cannot_be_read_starts_the_role_without_search_and_says_so(tmp_path: Path) -> None:
+    source = START_AGENT.read_text(encoding="utf-8")
+    env = {k: v for k, v in os.environ.items() if not k.startswith("JHT_")}  # no home: the policy cannot be found
+    result = subprocess.run([_bash(), "-c", f'source "{SPAWN_LIB}"; jht_web_search_switch_on scout; echo "rc=$?"'],
+                            capture_output=True, text=True, check=False, env=env)
+    assert result.stdout.strip() == "rc=1"
+    assert "the web search switch of the scout could not be read" in result.stderr
+    assert "jht_web_search_switch_on" in source
 
 
 @pytest.mark.skipif(shutil.which("codex") is None, reason="codex CLI non installata (non c'e' in CI)")

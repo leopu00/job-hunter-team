@@ -5,7 +5,8 @@
  * Codex gets it with `--search` (scout, analista, mentor: .launcher/spawn-lib.sh, JHT_CODEX_WEB_SEARCH_ROLES). pi does
  * not expose the provider's hosted search, but lets an extension rewrite the request, so this adds the provider's own
  * hosted tool to the `tools` of the request. The search runs on the provider's side; nothing here talks to the network
- * or runs a command, and the only file read is the profile, for the check of the queries below. No dependency: Node's
+ * or runs a command, and the only files read are the profile, for the check of the queries below, and the two
+ * settings files of the role's switch (enrichment-policy.json and capitano-maintenance.json, next to the profile). No dependency: Node's
  * own modules only. Loaded for those roles with
  * `-e <this file>`.
  *
@@ -28,7 +29,11 @@
  * next request does not carry the raw results again. A turn the server pauses (`pause_turn`) ends as a stop: max_uses
  * keeps the server loop short.
  *
- * Off switch and withdrawal: JHT_PI_WEB_SEARCH=0 adds no search for any provider (said, with that reason). And a request
+ * The switch of each role (T325): the enrichment policy of the profile (`web_search.<role>.enabled`, under `economy` and the
+ * SAVING mode, as `enrichment_policy.py web-search <role>` answers; the Analista's is off by default) is read again
+ * before every request, so a change from the CLI or the desktop counts from the next request; the status is said again
+ * when it changes. Off switch and withdrawal: JHT_PI_WEB_SEARCH=0 adds no search for any provider (said, with that
+ * reason). And a request
  * that carried our tool and came back refused (HTTP 400, 403, 404 or 422: the organization has the search off, the model
  * does not take it, the endpoint does not know it) withdraws the search for the rest of the session: the next requests
  * go as pi built them, the withdrawal is written (`web_search_withdrawn`, with the status) in the log and as a status
@@ -73,11 +78,90 @@ const SPLIT_NAME_PARENTS = ["", "contacts.", "personal.", "candidate."];
 const EMAIL_PATHS = ["contacts.email", "email", "candidate.contacts.email", "personal.email", "positioning.contacts.email"];
 const PHONE_PATHS = ["contacts.phone", "phone", "candidate.contacts.phone", "personal.phone", "personal.contacts.phone"];
 
+/** The agent's role: its name without the number (analista-2 -> analista). */
+function agentRole() {
+  return String(process.env.JHT_AGENT_NAME || "").trim().toLowerCase().replace(/-s?\d+$/, "");
+}
+
 function maxUses() {
   const n = Number.parseInt(process.env.JHT_PI_WEB_SEARCH_MAX_USES || "", 10);
   if (Number.isInteger(n) && n >= 1 && n <= 20) return n;
-  const role = String(process.env.JHT_AGENT_NAME || "").trim().toLowerCase().replace(/-s?\d+$/, "");
-  return ROLE_MAX_USES[role] || DEFAULT_MAX_USES;
+  return ROLE_MAX_USES[agentRole()] || DEFAULT_MAX_USES;
+}
+
+// The switch of each role's search in the enrichment policy (T325, shared/skills/enrichment_policy.py: web_search.<role>.enabled),
+// read again before every request, so turning it on or off from the CLI or the desktop counts from the next request.
+const SWITCH_DEFAULTS = { analista: false, scout: true, mentor: true };
+const SETTINGS_MAX_BYTES = 64 * 1024;
+const MODES = ["search", "harvest", "care", "calibration", "saving"];
+const UNREADABLE = Symbol("unreadable");
+
+/** A small JSON file of the profile folder: undefined when missing, UNREADABLE when it cannot be read or parsed. */
+function readSettings(file) {
+  let fd;
+  try {
+    fd = fs.openSync(file, fs.constants.O_RDONLY);
+  } catch (error) {
+    return error && error.code === "ENOENT" ? undefined : UNREADABLE;
+  }
+  try {
+    const stat = fs.fstatSync(fd);
+    if (!stat.isFile() || stat.size > SETTINGS_MAX_BYTES) return UNREADABLE;
+    return JSON.parse(fs.readFileSync(fd, "utf8"));
+  } catch (_error) {
+    return UNREADABLE;
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/** mode_deadline.parse_deadline: epoch ms, UTC when no zone is written; null when missing or unreadable (never expires). */
+function deadline(value) {
+  if (typeof value !== "string") return null;
+  let raw = value.trim();
+  if (/[Zz]$/.test(raw)) raw = `${raw.slice(0, -1)}+00:00`;
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2})(?::(\d{2})(?::(\d{2})(?:[.,]\d{1,6})?)?)?([+-]\d{2}:?\d{2})?)?$/.exec(raw);
+  if (!m) return null;
+  const [, y, mo, d, h = "0", mi = "0", sec = "0", zone] = m;
+  const date = new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi, +sec));
+  if (date.getUTCMonth() !== +mo - 1 || date.getUTCDate() !== +d || +h > 23 || +mi > 59 || +sec > 59) return null;
+  let offset = 0;
+  if (zone) {
+    const z = /^([+-])(\d{2}):?(\d{2})$/.exec(zone);
+    offset = (z[1] === "-" ? -1 : 1) * (+z[2] * 60 + +z[3]) * 60000;
+  }
+  return date.getTime() - offset;
+}
+
+/**
+ * Why the search of this agent's role is off by its switch, or "" when it is on. The same answer as
+ * `enrichment_policy.py web-search <role>`: the SAVING mode or a mode file that cannot be read, then `economy`, then the
+ * role's switch (default: the Analista's off). A role without a switch, or an agent whose home is not known, is not
+ * held by it.
+ */
+function switchedOff() {
+  const role = agentRole();
+  if (!(role in SWITCH_DEFAULTS)) return "";
+  const db = process.env.JHT_DB;
+  const base = db ? path.dirname(db) : process.env.JHT_HOME;
+  if (!base) return "";
+  const profile = path.join(base, "profile");
+  const modeFile = readSettings(path.join(profile, "capitano-maintenance.json"));
+  if (modeFile !== undefined) {
+    const raw = modeFile !== UNREADABLE && modeFile && typeof modeFile === "object" && !Array.isArray(modeFile) ? modeFile.mode : undefined;
+    let mode = typeof raw === "string" ? raw.trim() : "";
+    if (mode === "maintenance") mode = "care";
+    if (!MODES.includes(mode))
+      return "capitano-maintenance.json exists but cannot be interpreted: autonomous enrichment is suspended until a person reviews it";
+    const until = deadline(modeFile.mode_until);
+    if (mode === "saving" && !(until !== null && Date.now() >= until)) return "SAVING mode is active (mode=saving)";
+  }
+  const policy = readSettings(path.join(profile, "enrichment-policy.json"));
+  const data = policy && policy !== UNREADABLE && typeof policy === "object" && !Array.isArray(policy) ? policy : {};
+  if (data.economy === true) return "SAVING policy is active (economy=true)";
+  const section = data.web_search && typeof data.web_search === "object" ? data.web_search[role] : undefined;
+  const enabled = section && typeof section === "object" && typeof section.enabled === "boolean" ? section.enabled : SWITCH_DEFAULTS[role];
+  return enabled ? "" : `disabled by policy (web_search.${role}.enabled=false)`;
 }
 
 /** Each provider whose hosted search we add: the API it must come on, the tool, and how a request already has it. */
@@ -251,8 +335,10 @@ module.exports = function webSearch(pi) {
   }
 
   function announce(enabled, model, reason) {
-    if (announced) return;
-    announced = true;
+    // Said once for each state: the switch can change during the session, and the latest status is what counts.
+    const key = JSON.stringify([enabled, reason || ""]);
+    if (announced === key) return;
+    announced = key;
     const status = {
       enabled,
       ...describe(model),
@@ -286,6 +372,11 @@ module.exports = function webSearch(pi) {
       if (withdrawn !== null) return undefined; // said once, when it happened
       if (process.env.JHT_PI_WEB_SEARCH === "0") {
         announce(false, model, "web search turned off for the agents (JHT_PI_WEB_SEARCH=0)");
+        return undefined;
+      }
+      const off = switchedOff();
+      if (off) {
+        announce(false, model, off);
         return undefined;
       }
       if (!known || known.api !== api || !payload || typeof payload !== "object") {

@@ -1173,8 +1173,9 @@ case "$PROVIDER" in
     # JHT_CODEX_PROJECT_DOC_MAX_BYTES in spawn-lib.sh).
     CLI_ARGS="$(python3 "$JHT_SPAWN_LIB_DIR/../shared/skills/codex_launch_policy.py" --model "$codex_model" --effort "$effort" --doc-max-bytes "$JHT_CODEX_PROJECT_DOC_MAX_BYTES")" || exit $?
     # --search: ricerca web nativa per i ruoli che la usano (parita' con
-    # WebSearch di Claude; elenco in spawn-lib.sh).
-    if jht_codex_web_search_role "$ROLE"; then
+    # WebSearch di Claude; elenco in spawn-lib.sh), se il loro interruttore
+    # negli arricchimenti è acceso (T325: quello dell'Analista è spento di default).
+    if jht_web_search_switch_on "$ROLE"; then
       CLI_ARGS="$CLI_ARGS --search"
     fi
     if [ "$AUTH_METHOD" = "api_key" ] && [ -n "$API_KEY" ]; then
