@@ -765,6 +765,28 @@ def test_the_chat_waits_for_the_container_the_switch_has_just_started(box, ours_
     assert int(tries) == 3                                                  # 4 s of tetto: three looks, two seconds apart
 
 
+@pytest.mark.parametrize("after,back,said", [("update", "$true", "tools.chat_update_resumed"), ("update", "$false", "tools.chat_update_closed"),
+                                              ("switch", "$true", "tools.chat_resumed"), ("switch", "$false", "tools.chat_switched")])
+def test_the_chat_back_after_an_update_says_the_update_not_the_full_tools(box, after, back, said):
+    """Retest Windows build13: after the restart of the machine the chat came back with «the team has moved onto the full tools»,
+    the sentence of the switch. The fresh wrapper is told why it resumes (JHT_TEAM_CHAT_RESUME_AFTER) and says that."""
+    text = WRAPPER.read_text(encoding="utf-8").replace("\r\n", "\n")
+    fn = re.search(r"^function Invoke-JhtTeamChatResume \{\n.*?^\}\n", text, re.S | re.M).group(0)
+    body = ("function Get-JhtText { param($Key) return $Key }\nfunction Write-Info { param($T) [Console]::Out.WriteLine('SAID ' + $T) }\n"
+            f"function Test-JhtTeamChatContainerBack {{ return {back} }}\nfunction Test-JhtTeamChatAgentBack {{ param($A) return $true }}\n"
+            + fn + "\nInvoke-JhtTeamChatResume assistente\n")
+    done = box.run(body, JHT_TEAM_CHAT_RESUME_AFTER=after)
+    assert [line for line in done.stdout.splitlines() if line.startswith("SAID ")] == [f"SAID {said}"], done.stdout + done.stderr
+
+
+def test_the_wrapper_tells_the_fresh_one_why_the_chat_resumes():
+    text = WRAPPER.read_text(encoding="utf-8").replace("\r\n", "\n")
+    for name, why in (("Invoke-JhtTeamChatThroughUpdate", "update"), ("Invoke-JhtTeamChatThroughSwitch", "switch")):
+        body = text[text.index(f"function {name} {{"):]
+        body = body[:body.index("\n}\n")]
+        assert body.index(f"$env:JHT_TEAM_CHAT_RESUME_AFTER = '{why}'") < body.index("-File $WrapperPath 'team' @ChatArgs"), name
+
+
 def test_the_switch_waits_for_the_end_of_the_onboarding_not_for_ready_flag(box):
     tier = box.tier()
     (box.fake / "full-present").write_text("", encoding="utf-8")

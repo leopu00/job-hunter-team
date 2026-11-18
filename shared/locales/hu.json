@@ -381,6 +381,7 @@
   "wrapper.tools.switch_failed": "A felderítők (Scout) eszközei megérkeztek, de a csapatot nem sikerült velük újraindítani: futtasd a jht down, majd a jht up parancsot.",
   "wrapper.tools.chat_switched": "A csapat átáll a felderítők (Scout) teljes eszközeire, ezért ez a csevegés bezárult. Pár perc múlva nyisd meg újra a jht team chat paranccsal.",
   "wrapper.tools.chat_update_closed": "A JHT frissül, ezért ez a csevegés bezárult. Pár perc múlva nyisd meg újra a jht team chat paranccsal.",
+  "wrapper.tools.chat_update_resumed": "A JHT frissült: folytassuk.",
   "wrapper.tools.chat_updating": "A JHT frissül, ezért a csevegés egy pillanatra megáll: magától újraindul egy-két percen belül.",
   "wrapper.tools.chat_reconnecting": "A csapat átáll a felderítők (Scout) teljes eszközeire, ezért a csevegés egy pillanatra megáll: magától folytatódik, amint a csapat újra fut (pár perc).",
   "wrapper.tools.chat_resumed": "A csapat átállt a teljes eszközökre: folytassuk.",

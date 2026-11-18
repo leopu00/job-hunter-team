@@ -380,6 +380,7 @@
   "wrapper.tools.switch_failed": "Les outils des Scout sont là, mais l'équipe n'a pas pu redémarrer avec eux : lance jht down, puis jht up.",
   "wrapper.tools.chat_switched": "L'équipe passe aux outils complets des Scout, donc ce chat s'est fermé. Rouvre-le dans quelques minutes avec jht team chat.",
   "wrapper.tools.chat_update_closed": "JHT se met à jour, donc ce chat s'est fermé. Rouvre-le dans quelques minutes avec jht team chat.",
+  "wrapper.tools.chat_update_resumed": "JHT est à jour : reprenons.",
   "wrapper.tools.chat_updating": "JHT se met à jour, donc le chat s'arrête un instant : il repart tout seul dans une minute ou deux.",
   "wrapper.tools.chat_reconnecting": "L'équipe passe aux outils complets des Scout, donc le chat s'arrête un instant : il revient tout seul dès que l'équipe tourne à nouveau (quelques minutes).",
   "wrapper.tools.chat_resumed": "L'équipe est passée aux outils complets : reprenons.",

@@ -409,6 +409,7 @@ function Get-JhtTextTable {
     'en:tools.chat_resumed' { return 'The team has moved onto the full tools: let''s pick up again.' }
     'en:tools.chat_switched' { return 'The team is moving onto the Scouts'' full tools, so this chat has closed. Open it again in a couple of minutes with jht team chat.' }
     'en:tools.chat_update_closed' { return 'JHT is updating, so this chat has closed. Open it again in a couple of minutes with jht team chat.' }
+    'en:tools.chat_update_resumed' { return 'JHT is up to date: let''s pick up again.' }
     'en:tools.chat_updating' { return 'JHT is updating, so the chat stops for a moment: it comes back by itself in a minute or two.' }
     'en:tools.disk_low' { return 'The Scouts'' tools were not downloaded: they need about %s GiB free on the disk and there are %s GiB, so the team cannot search for positions yet. Free some space (empty the Trash, delete large files you do not need), then run jht up: the download starts again by itself.' }
     'en:tools.engine_down' { return 'The state of the Scouts'' tools cannot be read: the container engine does not answer. Start it with jht up.' }
@@ -682,6 +683,7 @@ function Get-JhtTextTable {
     'it:tools.chat_resumed' { return 'La squadra e'' passata agli strumenti completi: riprendiamo.' }
     'it:tools.chat_switched' { return 'La squadra passa agli strumenti completi degli Scout, quindi questa chat si e'' chiusa. Riaprila fra un paio di minuti con jht team chat.' }
     'it:tools.chat_update_closed' { return ('JHT si sta aggiornando, quindi questa chat si ' + [char]0x00E8 + ' chiusa. Riaprila fra un paio di minuti con jht team chat.') }
+    'it:tools.chat_update_resumed' { return ('JHT ' + [char]0x00E8 + ' aggiornato: riprendiamo.') }
     'it:tools.chat_updating' { return 'JHT si sta aggiornando, quindi la chat si ferma un momento: riparte da sola fra poco.' }
     'it:tools.disk_low' { return 'Gli strumenti degli Scout non sono stati scaricati: servono circa %s GiB liberi sul disco e ce ne sono %s, quindi la squadra non puo'' ancora cercare posizioni. Libera spazio (svuota il Cestino, elimina i file grandi che non ti servono), poi esegui jht up: il download riparte da solo.' }
     'it:tools.engine_down' { return 'Lo stato degli strumenti degli Scout non si legge: il motore dei container non risponde. Avvialo con jht up.' }
@@ -955,6 +957,7 @@ function Get-JhtTextTable {
     'hu:tools.chat_resumed' { return ('A csapat ' + [char]0x00E1 + 't' + [char]0x00E1 + 'llt a teljes eszk' + [char]0x00F6 + 'z' + [char]0x00F6 + 'kre: folytassuk.') }
     'hu:tools.chat_switched' { return ('A csapat ' + [char]0x00E1 + 't' + [char]0x00E1 + 'll a felder' + [char]0x00ED + 't' + [char]0x0151 + 'k (Scout) teljes eszk' + [char]0x00F6 + 'zeire, ez' + [char]0x00E9 + 'rt ez a cseveg' + [char]0x00E9 + 's bez' + [char]0x00E1 + 'rult. P' + [char]0x00E1 + 'r perc m' + [char]0x00FA + 'lva nyisd meg ' + [char]0x00FA + 'jra a jht team chat paranccsal.') }
     'hu:tools.chat_update_closed' { return ('A JHT friss' + [char]0x00FC + 'l, ez' + [char]0x00E9 + 'rt ez a cseveg' + [char]0x00E9 + 's bez' + [char]0x00E1 + 'rult. P' + [char]0x00E1 + 'r perc m' + [char]0x00FA + 'lva nyisd meg ' + [char]0x00FA + 'jra a jht team chat paranccsal.') }
+    'hu:tools.chat_update_resumed' { return ('A JHT friss' + [char]0x00FC + 'lt: folytassuk.') }
     'hu:tools.chat_updating' { return ('A JHT friss' + [char]0x00FC + 'l, ez' + [char]0x00E9 + 'rt a cseveg' + [char]0x00E9 + 's egy pillanatra meg' + [char]0x00E1 + 'll: mag' + [char]0x00E1 + 't' + [char]0x00F3 + 'l ' + [char]0x00FA + 'jraindul egy-k' + [char]0x00E9 + 't percen bel' + [char]0x00FC + 'l.') }
     'hu:tools.disk_low' { return ('A felder' + [char]0x00ED + 't' + [char]0x0151 + 'k (Scout) eszk' + [char]0x00F6 + 'zei nem t' + [char]0x00F6 + 'lt' + [char]0x0151 + 'dtek le: kb. %s GiB szabad lemezter' + [char]0x00FC + 'let kell hozz' + [char]0x00E1 + 'juk, ' + [char]0x00E9 + 's %s GiB van, ' + [char]0x00ED + 'gy a csapat m' + [char]0x00E9 + 'g nem tud ' + [char]0x00E1 + 'll' + [char]0x00E1 + 'sokat keresni. Szabad' + [char]0x00ED + 'ts fel helyet (' + [char]0x00FC + 'r' + [char]0x00ED + 'tsd ki a Kuk' + [char]0x00E1 + 't, t' + [char]0x00F6 + 'r' + [char]0x00F6 + 'ld a nagy f' + [char]0x00E1 + 'jlokat, amelyekre nincs sz' + [char]0x00FC + 'ks' + [char]0x00E9 + 'ged), majd futtasd a jht up parancsot: a let' + [char]0x00F6 + 'lt' + [char]0x00E9 + 's mag' + [char]0x00E1 + 't' + [char]0x00F3 + 'l ' + [char]0x00FA + 'jraindul.') }
     'hu:tools.engine_down' { return ('A felder' + [char]0x00ED + 't' + [char]0x0151 + 'k (Scout) eszk' + [char]0x00F6 + 'zeinek ' + [char]0x00E1 + 'llapota nem olvashat' + [char]0x00F3 + ': a kont' + [char]0x00E9 + 'nermotor nem v' + [char]0x00E1 + 'laszol. Ind' + [char]0x00ED + 'tsd el a jht up paranccsal.') }
@@ -1228,6 +1231,7 @@ function Get-JhtTextTable {
     'es:tools.chat_resumed' { return 'El equipo ya usa las herramientas completas: sigamos.' }
     'es:tools.chat_switched' { return ('El equipo pasa a las herramientas completas de los Scout, as' + [char]0x00ED + ' que este chat se ha cerrado. Vuelve a abrirlo en un par de minutos con jht team chat.') }
     'es:tools.chat_update_closed' { return ('JHT se est' + [char]0x00E1 + ' actualizando, as' + [char]0x00ED + ' que este chat se ha cerrado. Vuelve a abrirlo en un par de minutos con jht team chat.') }
+    'es:tools.chat_update_resumed' { return ('JHT ya est' + [char]0x00E1 + ' actualizado: sigamos.') }
     'es:tools.chat_updating' { return ('JHT se est' + [char]0x00E1 + ' actualizando, as' + [char]0x00ED + ' que el chat se detiene un momento: vuelve solo en un minuto o dos.') }
     'es:tools.disk_low' { return ('Las herramientas de los Scout no se han descargado: necesitan unos %s GiB libres en el disco y hay %s GiB, as' + [char]0x00ED + ' que el equipo a' + [char]0x00FA + 'n no puede buscar puestos. Libera espacio (vac' + [char]0x00ED + 'a la Papelera, borra los archivos grandes que no necesites) y luego ejecuta jht up: la descarga vuelve a empezar sola.') }
     'es:tools.engine_down' { return ('No se puede leer el estado de las herramientas de los Scout: el motor de contenedores no responde. Arr' + [char]0x00E1 + 'ncalo con jht up.') }
@@ -1501,6 +1505,7 @@ function Get-JhtTextTable {
     'de:tools.chat_resumed' { return ('Das Team nutzt jetzt die vollst' + [char]0x00E4 + 'ndigen Werkzeuge: Machen wir weiter.') }
     'de:tools.chat_switched' { return ('Das Team wechselt auf die vollst' + [char]0x00E4 + 'ndigen Werkzeuge der Scouts, deshalb wurde dieser Chat geschlossen. ' + [char]0x00D6 + 'ffne ihn in ein paar Minuten wieder mit jht team chat.') }
     'de:tools.chat_update_closed' { return ('JHT wird gerade aktualisiert, deshalb wurde dieser Chat geschlossen. ' + [char]0x00D6 + 'ffne ihn in ein paar Minuten wieder mit jht team chat.') }
+    'de:tools.chat_update_resumed' { return 'JHT ist aktualisiert: Machen wir weiter.' }
     'de:tools.chat_updating' { return ('JHT wird gerade aktualisiert, deshalb h' + [char]0x00E4 + 'lt der Chat kurz an: Er startet in ein bis zwei Minuten von selbst neu.') }
     'de:tools.disk_low' { return ('Die Werkzeuge der Scouts wurden nicht heruntergeladen: Sie brauchen etwa %s GiB freien Speicherplatz, verf' + [char]0x00FC + 'gbar sind %s GiB, daher kann das Team noch keine Stellen suchen. Gib Platz frei (leere den Papierkorb, l' + [char]0x00F6 + 'sche gro' + [char]0x00DF + 'e Dateien, die du nicht brauchst), dann f' + [char]0x00FC + 'hre jht up aus: Der Download startet von selbst neu.') }
     'de:tools.engine_down' { return ('Der Stand der Werkzeuge der Scouts l' + [char]0x00E4 + 'sst sich nicht lesen: Die Container-Engine antwortet nicht. Starte sie mit jht up.') }
@@ -1774,6 +1779,7 @@ function Get-JhtTextTable {
     'fr:tools.chat_resumed' { return ('L''' + [char]0x00E9 + 'quipe est pass' + [char]0x00E9 + 'e aux outils complets : reprenons.') }
     'fr:tools.chat_switched' { return ('L''' + [char]0x00E9 + 'quipe passe aux outils complets des Scout, donc ce chat s''est ferm' + [char]0x00E9 + '. Rouvre-le dans quelques minutes avec jht team chat.') }
     'fr:tools.chat_update_closed' { return ('JHT se met ' + [char]0x00E0 + ' jour, donc ce chat s''est ferm' + [char]0x00E9 + '. Rouvre-le dans quelques minutes avec jht team chat.') }
+    'fr:tools.chat_update_resumed' { return ('JHT est ' + [char]0x00E0 + ' jour : reprenons.') }
     'fr:tools.chat_updating' { return ('JHT se met ' + [char]0x00E0 + ' jour, donc le chat s''arr' + [char]0x00EA + 'te un instant : il repart tout seul dans une minute ou deux.') }
     'fr:tools.disk_low' { return ('Les outils des Scout n''ont pas ' + [char]0x00E9 + 't' + [char]0x00E9 + ' t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charg' + [char]0x00E9 + 's : il leur faut environ %s Gio libres sur le disque et il y en a %s, l''' + [char]0x00E9 + 'quipe ne peut donc pas encore chercher d''offres. Lib' + [char]0x00E8 + 're de l''espace (vide la Corbeille, supprime les gros fichiers dont tu n''as pas besoin), puis lance jht up : le t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'chargement repart tout seul.') }
     'fr:tools.engine_down' { return ('L''' + [char]0x00E9 + 'tat des outils des Scout ne peut pas ' + [char]0x00EA + 'tre lu : le moteur de conteneurs ne r' + [char]0x00E9 + 'pond pas. D' + [char]0x00E9 + 'marre-le avec jht up.') }
@@ -2047,6 +2053,7 @@ function Get-JhtTextTable {
     'pt:tools.chat_resumed' { return 'A equipa passou para as ferramentas completas: vamos continuar.' }
     'pt:tools.chat_switched' { return 'A equipa passa para as ferramentas completas dos Scout, por isso este chat fechou-se. Volta a abri-lo dentro de alguns minutos com jht team chat.' }
     'pt:tools.chat_update_closed' { return ('O JHT est' + [char]0x00E1 + ' a atualizar-se, por isso este chat fechou-se. Volta a abri-lo dentro de alguns minutos com jht team chat.') }
+    'pt:tools.chat_update_resumed' { return ('O JHT est' + [char]0x00E1 + ' atualizado: vamos continuar.') }
     'pt:tools.chat_updating' { return ('O JHT est' + [char]0x00E1 + ' a atualizar-se, por isso o chat para por um momento: volta sozinho dentro de um ou dois minutos.') }
     'pt:tools.disk_low' { return ('As ferramentas dos Scout n' + [char]0x00E3 + 'o foram descarregadas: precisam de cerca de %s GiB livres no disco e h' + [char]0x00E1 + ' %s GiB, por isso a equipa ainda n' + [char]0x00E3 + 'o pode procurar vagas. Liberta espa' + [char]0x00E7 + 'o (esvazia o Lixo, apaga os ficheiros grandes de que n' + [char]0x00E3 + 'o precisas) e depois corre jht up: o descarregamento recome' + [char]0x00E7 + 'a sozinho.') }
     'pt:tools.engine_down' { return ('N' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' poss' + [char]0x00ED + 'vel ler o estado das ferramentas dos Scout: o motor de contentores n' + [char]0x00E3 + 'o responde. Inicia-o com jht up.') }
@@ -2164,6 +2171,7 @@ function Invoke-JhtTeamChatThroughSwitch {
   Write-Info (Get-JhtText 'tools.chat_reconnecting')
   Wait-JhtToolsSwitch -Quiet
   $env:JHT_TEAM_CHAT_RESUME = [string]($round + 1)
+  $env:JHT_TEAM_CHAT_RESUME_AFTER = 'switch'
   & (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -File $WrapperPath 'team' @ChatArgs
   $script:JhtTeamChatCode = $LASTEXITCODE
 }
@@ -2201,6 +2209,7 @@ function Invoke-JhtTeamChatThroughUpdate {
   }
   if (-not $back) { Write-Info (Get-JhtText 'tools.chat_update_closed'); $script:JhtTeamChatCode = 0; return }
   $env:JHT_TEAM_CHAT_RESUME = [string]($round + 1)
+  $env:JHT_TEAM_CHAT_RESUME_AFTER = 'update'
   & (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -File $WrapperPath 'team' @ChatArgs
   $script:JhtTeamChatCode = $LASTEXITCODE
 }
@@ -2256,13 +2265,16 @@ function Test-JhtTeamChatContainerBack {
   return $true
 }
 
+# After an update (a restart of the machine too) it says the update, not the switch of the tools: it said «the team has moved onto
+# the full tools» after a restart (retest Windows build13).
 function Invoke-JhtTeamChatResume {
   param([string]$Agent)
+  $afterUpdate = ($env:JHT_TEAM_CHAT_RESUME_AFTER -ceq 'update')
   if (-not (Test-JhtTeamChatContainerBack) -or -not (Test-JhtTeamChatAgentBack $Agent)) {
-    Write-Info (Get-JhtText 'tools.chat_switched')
+    if ($afterUpdate) { Write-Info (Get-JhtText 'tools.chat_update_closed') } else { Write-Info (Get-JhtText 'tools.chat_switched') }
     exit 0
   }
-  Write-Info (Get-JhtText 'tools.chat_resumed')
+  if ($afterUpdate) { Write-Info (Get-JhtText 'tools.chat_update_resumed') } else { Write-Info (Get-JhtText 'tools.chat_resumed') }
 }
 
 # Every `jht` command says it is running, in a file of the runtime folder named by its PID: "<pid> <start ticks> <command>

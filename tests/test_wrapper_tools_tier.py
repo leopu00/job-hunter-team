@@ -1282,6 +1282,29 @@ def test_after_three_rounds_the_engine_chat_says_to_open_it_again(tmp_path):
     assert not (tmp_path / "calls").exists()
 
 
+def test_the_chat_back_after_an_update_says_the_update_not_the_full_tools(tmp_path):
+    """Retest Windows build13: after the restart of the machine the chat came back with «the team has moved onto the full tools»,
+    the sentence of the switch of the tools. The fresh wrapper is told it comes back after an update, and says that."""
+    again = tmp_path / "again-after.sh"
+    again.write_text(f'echo "after=$JHT_TEAM_CHAT_RESUME_AFTER" >> "{tmp_path}/after"\n', encoding="utf-8")
+    done = _chat_functions(tmp_path, "exit 0\n", f'docker_reachable() {{ return 0; }}\ncontainer_up() {{ return 0; }}\nWRAPPER_PATH="{again}"\n',
+                           "team_chat_through_update team chat assistente\n", JHT_TEAM_CHAT_RESUME_AFTER="switch")
+    assert done.returncode == 0, done.stderr
+    assert (tmp_path / "after").read_text(encoding="utf-8").splitlines() == ["after=update"]
+    resumed = _chat_functions(tmp_path, "exit 0\n", "container_up() { :; }\n", "team_chat_resume team chat assistente\necho ATTACH\n",
+                              JHT_TEAM_CHAT_RESUME_AFTER="update")
+    assert resumed.stdout.strip() == "ATTACH", resumed.stderr
+    assert "JHT is up to date: let's pick up again." in resumed.stderr and "full tools" not in resumed.stderr
+
+
+def test_the_chat_that_does_not_come_back_after_an_update_says_the_update(tmp_path):
+    done = _chat_functions(tmp_path, '[ "$3" = tmux ] && exit 1\nexit 0\n', "container_up() { :; }\n",
+                           "team_chat_resume team chat assistente\necho ATTACH\n", JHT_TEAM_CHAT_RESUME_AFTER="update",
+                           JHT_TOOLS_CHAT_RECONNECT_MAX="2")
+    assert done.returncode == 0 and "ATTACH" not in done.stdout
+    assert "JHT is updating, so this chat has closed." in done.stderr and "full tools" not in done.stderr
+
+
 def test_the_engine_line_of_a_chat_that_ended_well_is_left_alone(tmp_path):
     done = _team_arm_chat(tmp_path, switching=False, engine_line=RAW_ENGINE_LINE, code=0)
     assert done.returncode == 0 and RAW_ENGINE_LINE in done.stderr and "updating" not in done.stderr

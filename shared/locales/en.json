@@ -380,6 +380,7 @@
   "wrapper.tools.switch_failed": "The Scouts' tools are here, but the team could not be restarted on them: run jht down, then jht up.",
   "wrapper.tools.chat_switched": "The team is moving onto the Scouts' full tools, so this chat has closed. Open it again in a couple of minutes with jht team chat.",
   "wrapper.tools.chat_update_closed": "JHT is updating, so this chat has closed. Open it again in a couple of minutes with jht team chat.",
+  "wrapper.tools.chat_update_resumed": "JHT is up to date: let's pick up again.",
   "wrapper.tools.chat_updating": "JHT is updating, so the chat stops for a moment: it comes back by itself in a minute or two.",
   "wrapper.tools.chat_reconnecting": "The team is moving onto the Scouts' full tools, so the chat stops for a moment: it comes back by itself once the team is running again (a couple of minutes).",
   "wrapper.tools.chat_resumed": "The team has moved onto the full tools: let's pick up again.",
