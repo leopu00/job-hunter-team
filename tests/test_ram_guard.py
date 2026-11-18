@@ -45,19 +45,19 @@ def test_a_look_retires_tells_the_captain_and_waits_before_the_next():
     api, run, sent = _run()
     gone = []
     probe = {"ram_avail_gib": 0.4, "ram_total_gib": 7.7}
-    done = rg.step(api, run, probe=probe, sessions=TEAM, retire=lambda s, why: gone.append(s) or True)
+    done = rg.step(api, run, notify_user=lambda *a: None, probe=probe, sessions=TEAM, retire=lambda s, why: gone.append(s) or True)
     assert done == gone == ["SCOUT-3", "SCOUT-2"]
     assert [s for s, _ in sent] == ["CAPITANO"] and "in their language" in sent[0][1] and "SCOUT-3, SCOUT-2" in sent[0][1]
-    assert rg.step(api, run, probe=probe, sessions=TEAM, retire=lambda s, why: gone.append(s) or True) == [], "cooldown"
+    assert rg.step(api, run, notify_user=lambda *a: None, probe=probe, sessions=TEAM, retire=lambda s, why: gone.append(s) or True) == [], "cooldown"
     api.time.time = lambda: 1000.0 + rg.RETIRE_COOLDOWN_SEC + 1
-    assert rg.step(api, run, probe=probe, sessions=TEAM, retire=lambda s, why: True) != []
+    assert rg.step(api, run, notify_user=lambda *a: None, probe=probe, sessions=TEAM, retire=lambda s, why: True) != []
 
 
 def test_a_retire_that_fails_is_not_reported_and_a_broken_look_never_raises():
     api, run, sent = _run()
-    assert rg.step(api, run, probe={"ram_avail_gib": 0.4, "ram_total_gib": 7.7}, sessions=TEAM, retire=lambda s, why: False) == []
+    assert rg.step(api, run, notify_user=lambda *a: None, probe={"ram_avail_gib": 0.4, "ram_total_gib": 7.7}, sessions=TEAM, retire=lambda s, why: False) == []
     assert sent == []
-    assert rg.step(api, SimpleNamespace(), probe={"ram_avail_gib": 0.4, "ram_total_gib": 7.7}) == []
+    assert rg.step(api, SimpleNamespace(), notify_user=lambda *a: None, probe={"ram_avail_gib": 0.4, "ram_total_gib": 7.7}) == []
 
 
 def test_the_launcher_raises_the_oom_score_of_the_agents_on_linux():
@@ -71,3 +71,32 @@ def test_the_launcher_raises_the_oom_score_of_the_agents_on_linux():
     block = text[start: text.index("\nfi\n", start) + 4]
     done = subprocess.run(["bash", "-c", block + "\ncat /proc/self/oom_score_adj"], capture_output=True, text=True, timeout=30)
     assert done.returncode == 0 and int(done.stdout.strip()) >= 500, done.stdout + done.stderr
+
+
+def test_the_newest_session_goes_first_by_its_date_not_by_its_number():
+    # SCOUT-3 was born after SCOUT-6 (a session retired and made again takes a low number)
+    born = {"SCOUT-1": 100, "SCOUT-6": 200, "SCOUT-4": 300, "SCOUT-2": 400, "SCOUT-3": 500, "SCORER-1": 50, "ANALISTA-1": 60}
+    assert rg.decide(0.4, 7.7, born) == ["SCOUT-3", "SCOUT-2"]
+    assert rg.decide(0.4, 7.7, list(born)) == ["SCOUT-6", "SCOUT-4"], "with no dates it falls back to the number"
+    assert rg.decide(0.4, 7.7, dict(born, **{"SCOUT-5": None})) [0] == "SCOUT-3", "a name with no date counts as the oldest"
+
+
+def test_the_person_is_told_straight_and_the_last_retirement_is_written_for_the_status(tmp_path):
+    api, run, sent = _run()
+    api._path = lambda name: str(tmp_path)
+    told = []
+    done = rg.step(api, run, probe={"ram_avail_gib": 0.44, "ram_total_gib": 3.7}, sessions=TEAM, retire=lambda s, why: True,
+                   notify_user=lambda text, reason: told.append((text, reason)))
+    assert done == ["SCOUT-3", "SCOUT-2"]
+    assert len(told) == 1 and "0.44" in told[0][0] and told[0][1].startswith("ram-guard-")
+    import json
+    status = json.loads((tmp_path / "state" / "ram-guard.json").read_text())
+    assert status["retired"] == done and status["at"] == 1000 and status["avail_gib"] == 0.44
+    assert (tmp_path / "state" / "ram-guard.json").stat().st_mode & 0o777 == 0o600
+
+
+def test_a_notifier_that_fails_does_not_lose_the_retirement():
+    api, run, sent = _run()
+    def boom(text, reason):
+        raise RuntimeError("down")
+    assert rg.step(api, run, probe={"ram_avail_gib": 0.4, "ram_total_gib": 7.7}, sessions=TEAM, retire=lambda s, why: True, notify_user=boom) == ["SCOUT-3", "SCOUT-2"]

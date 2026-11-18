@@ -35,6 +35,7 @@ export default {
   "observation.blocked_credit_fix": "Ricaricalo sul sito del fornitore: la squadra riprende da sola entro mezz'ora (se era spenta: jht team start).",
   "observation.blocked_network": "{id} è bloccato: il fornitore non è raggiungibile (rete o proxy). Controlla la connessione.",
   "observation.blocked_error": "{id} è bloccato: il fornitore ha risposto con un errore. Il messaggio è nel log della sessione dell'agente.",
+  "observation.blocked_paused": "{id} è in pausa: la squadra aspetta il budget, col fornitore non c'è nessun problema.",
   "observation.fix": "Controlla che il team sia avviato; riprova con jht agents --usage o jht monitor --once.",
   "error.observer_read_failed": "L'osservatore degli agenti non ha completato la lettura.",
   "error.observer_read_invalid": "L'osservatore degli agenti ha restituito una risposta non valida.",
@@ -340,4 +341,5 @@ export default {
   "chat.repl.closed": "Chat chiusa.",
   "agents.paused_of": "{running} su {total} in pausa (budget)",
   "agents.paused": "in pausa",
+  "agents.ram_guard": "Alle {at} la memoria del computer era quasi piena ({free} GiB liberi su {total}): {n} lavoratori sono stati fermati per proteggerla. La ricerca va avanti con meno lavoratori finché la memoria non torna.",
 };

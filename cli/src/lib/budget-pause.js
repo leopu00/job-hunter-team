@@ -99,3 +99,21 @@ export function onboardingSpendText({ home = JHT_HOME } = {}) {
     return null;
   }
 }
+
+/**
+ * «The memory was nearly full and some workers were stopped»: the RAM guard (shared/skills/ram_guard.py) writes
+ * $JHT_HOME/state/ram-guard.json = { at (epoch s), retired[], avail_gib, total_gib } at each retirement. Said in `jht team status`
+ * for a day after it, because the Captain, who is told too, may be held by the budget brake and never read it. Null otherwise.
+ */
+export function ramGuardText({ home = JHT_HOME, now = new Date() } = {}) {
+  try {
+    const seen = JSON.parse(readFileSync(join(home, 'state', 'ram-guard.json'), 'utf8'));
+    const at = Number(seen?.at) * 1000;
+    const n = Array.isArray(seen?.retired) ? seen.retired.length : 0;
+    if (!Number.isFinite(at) || n < 1 || now.getTime() - at > 24 * 3600 * 1000 || at > now.getTime() + 3600 * 1000) return null;
+    const clock = new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    return later('agents.ram_guard', { at: clock, n: String(n), free: Number(seen.avail_gib).toFixed(2), total: Number(seen.total_gib).toFixed(1) });
+  } catch {
+    return null;
+  }
+}

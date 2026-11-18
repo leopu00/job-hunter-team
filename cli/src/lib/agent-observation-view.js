@@ -36,9 +36,10 @@ const LIMIT_REASONS = new Set(['limite_5h', 'limite_settimanale', 'limite_spesa_
 
 /**
  * Why each blocked agent is blocked, in a line a person can act on, and for a key the provider refused the command
- * that puts it right. `provider` is what readActiveProvider says (null when unknown).
+ * that puts it right. `provider` is what readActiveProvider says (null when unknown). `paused`: the team is paused on its budget,
+ * so a block with no reason of its own is the call the brake stopped.
  */
-export function blockedLines(snapshot, provider = null, width = terminalWidth()) {
+export function blockedLines(snapshot, provider = null, width = terminalWidth(), paused = false) {
   const out = [];
   const sentence = (text) => `  ${text}`;
   for (const row of snapshot.agents) {
@@ -59,6 +60,9 @@ export function blockedLines(snapshot, provider = null, width = terminalWidth())
       out.push(sentence(say('observation.blocked_limit', { id })));
     } else if (why === 'rete') {
       out.push(sentence(say('observation.blocked_network', { id })));
+    } else if (paused) {
+      // the brake of the budget stopped the call in flight («operation aborted»): not an error of the provider
+      out.push(sentence(say('observation.blocked_paused', { id })));
     } else {
       out.push(sentence(say('observation.blocked_error', { id })));
     }
@@ -88,7 +92,7 @@ export function renderObservation(snapshot, { usage = true, live = false, width 
     rows.forEach((cells, i) => cells.push(value(snapshot.agents[i].usage.tokens)));
   }
   out.push(table(columns, rows));
-  out.push(...blockedLines(snapshot, provider, width));
+  out.push(...blockedLines(snapshot, provider, width, paused));
   if (!snapshot.agents.length && snapshot.ok) out.push(say('observation.empty'), hint(say('team.next_start')));
   if (live) {
     for (const row of snapshot.agents) {

@@ -5,10 +5,13 @@ running was looked at by nobody: on a 7.7 GB server with no swap, 18 Codex sessi
 kernel OOM killer took the user's manager and everything under it, and the team, the container and tmux went down with it.
 
 This runs on every look of the Sentinella's brake (about once a minute). When MemAvailable is under a threshold it retires
-workers, the ones the machine can carry least: the newest Scouts first, then the Scorers, then the Analisti. It keeps one worker
+workers, the ones the machine can carry least: the newest Scouts first (by the moment the session was created, not by its
+number: a lower number can be the younger session), then the Scorers, then the Analisti. It keeps one worker
 for each of the Analista and the Scorer, until the memory is under HALF the threshold (then it keeps nothing: the kernel's
 choice is worse). At most TWO per look, then it waits RETIRE_COOLDOWN_SEC for the memory to come back. The Captain is told, to
-tell the person in their language; nothing else is stopped, and the five fixed agents never are.
+tell the person in their language; nothing else is stopped, and the five fixed agents never are. A Captain held by the brake of
+the budget never reads what is sent to it, so the person is also told straight (the notifier of the panel) and the last
+retirement is written to $JHT_HOME/state/ram-guard.json, which `jht team status` says.
 
 The retirement is `jht-agent-retire` (the roster first, then the session), so the watchdog does not bring the worker back.
 `decide()` is pure (what is read in, what to do out): the tests drive it with made-up machines.
@@ -16,6 +19,7 @@ The retirement is `jht-agent-retire` (the roster first, then the session), so th
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import re
 import subprocess
@@ -39,22 +43,26 @@ def threshold_gib(total_gib):
 
 
 def decide(avail_gib, total_gib, sessions):
-    """The sessions to retire now, in order. [] when the memory is fine or unknown. Pure."""
+    """The sessions to retire now, in order. [] when the memory is fine or unknown. Pure.
+    `sessions` is the list of names, or a {name: created} map (epoch seconds): with it the newest session of a role goes first;
+    a name with no date counts as the oldest, and equal dates go by the higher number."""
     if avail_gib is None or total_gib is None:
         return []
     limit = threshold_gib(total_gib)
     if avail_gib >= limit:
         return []
     critical = avail_gib < limit / 2
+    created = sessions if isinstance(sessions, dict) else {}
     workers = []
     for name in sessions:
         m = WORKER.match(name or "")
         if m:
-            workers.append((ORDER[m.group(1)], -int(m.group(2)), name, m.group(1)))
-    workers.sort()          # Scouts first, the newest (highest number) first; then Scorers; then Analisti
-    left = {role: sum(1 for w in workers if w[3] == role) for role in KEEP_ONE}
+            born = created.get(name)
+            workers.append((ORDER[m.group(1)], -(born if isinstance(born, (int, float)) else 0), -int(m.group(2)), name, m.group(1)))
+    workers.sort()          # Scouts first, the newest (latest created) first; then Scorers; then Analisti
+    left = {role: sum(1 for w in workers if w[4] == role) for role in KEEP_ONE}
     out = []
-    for _, _, name, role in workers:
+    for _, _, _, name, role in workers:
         if len(out) >= RETIRE_PER_LOOK:
             break
         if role in KEEP_ONE and not critical and left[role] <= 1:
@@ -76,8 +84,14 @@ def _load(name):
 
 
 def _live_sessions():
-    out = subprocess.run(["tmux", "ls", "-F", "#{session_name}"], capture_output=True, text=True, timeout=10).stdout
-    return [line.strip() for line in out.splitlines() if line.strip()]
+    """{name: created} of the tmux sessions (created in epoch seconds, None when tmux does not say)."""
+    out = subprocess.run(["tmux", "ls", "-F", "#{session_name}\t#{session_created}"], capture_output=True, text=True, timeout=10).stdout
+    found = {}
+    for line in out.splitlines():
+        name, _, born = line.strip().partition("\t")
+        if name:
+            found[name] = int(born) if born.isdigit() else None
+    return found
 
 
 def _retire(session, reason):
@@ -97,8 +111,38 @@ def captain_text(retired, avail_gib, total_gib):
             % (avail_gib, total_gib, ", ".join(retired)))
 
 
-def step(api, run, probe=None, sessions=None, retire=None):
-    """One look. Never raises. `probe`, `sessions` and `retire` are for the tests."""
+STATUS_FILE = Path("state") / "ram-guard.json"
+
+
+def _write_status(home, done, avail, total, now):
+    """The last retirement, for `jht team status`: replaced in one step, 0600. A failure is not a reason to stop the look."""
+    path = Path(home) / STATUS_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(".%s.%d.tmp" % (path.name, os.getpid()))
+    body = '{"at": %d, "retired": %s, "avail_gib": %.2f, "total_gib": %.1f}\n' % (
+        int(now), json.dumps(list(done)), avail, total)
+    fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(body)
+    os.replace(str(tmp), str(path))
+
+
+def _tell_the_person(api, run, done, avail, total, now, notify_user):
+    """The person straight, not through the Captain: a Captain held by the budget brake never reads its input."""
+    try:
+        import quota_data as quota
+        text = quota.shared_i18n().tf("ram_guard.user_notice", "%.2f" % avail, "%.1f" % total, "%d" % len(done))
+        (notify_user or quota._notify_user)(text, "ram-guard-%d" % int(now))
+    except Exception as error:  # noqa: BLE001 - not a reason to stop the look
+        print("[bridge V6] WARN ram guard user notice: %s" % error)
+    try:
+        _write_status(api._path("JHT_HOME"), done, avail, total, now)
+    except Exception as error:  # noqa: BLE001
+        print("[bridge V6] WARN ram guard status: %s" % error)
+
+
+def step(api, run, probe=None, sessions=None, retire=None, notify_user=None):
+    """One look. Never raises. `probe`, `sessions`, `retire` and `notify_user` are for the tests."""
     try:
         state = run.state.setdefault("ram_guard", {})
         now = api.time.time()
@@ -120,6 +164,7 @@ def step(api, run, probe=None, sessions=None, retire=None):
             print("[bridge V6] RAM-GUARD %.2f of %.1f GiB free: retired %s" % (avail, total, ", ".join(done)))
             from sentinel_delivery import notice
             notice(api, run.state, "ram_guard:%d" % int(now), api.CAPITANO_SESSION, captain_text(done, avail, total))
+            _tell_the_person(api, run, done, avail, total, now, notify_user)
         return done
     except Exception as error:  # noqa: BLE001 - a guard that fails must not stop the tick
         print("[bridge V6] WARN ram guard: %s" % error)

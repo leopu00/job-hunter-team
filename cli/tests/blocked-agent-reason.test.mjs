@@ -79,3 +79,14 @@ test('the provider of a configuration that says glm without a key or without pi 
   assert.equal(activeProviderOf({}), null);
   assert.equal(activeProviderOf(null), null);
 });
+
+test('a team paused on its budget: the call the brake stopped is not «the provider answered with an error»', () => {
+  const stopped = row({ reason: 'errore_fornitore' });
+  const paused = strip(renderObservation(snapshot(stopped), { usage: false, width: 200, paused: true }));
+  assert.match(paused, /assistente is paused: the team is waiting for its budget/);
+  assert.doesNotMatch(paused, /answered with an error/);
+  const open = strip(renderObservation(snapshot(stopped), { usage: false, width: 200 }));
+  assert.match(open, /answered with an error/, 'with no pause the line stays as it was');
+  const key = strip(renderObservation(snapshot(row()), { usage: false, width: 200, paused: true, provider: activeProviderOf(glmOnPi) }));
+  assert.match(key, /rejected the API key/, 'a refused key is still said while the team is paused');
+});

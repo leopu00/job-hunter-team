@@ -35,6 +35,7 @@ export default {
   "observation.blocked_credit_fix": "Top it up on the provider's site: the team resumes by itself within half an hour (if it was off: jht team start).",
   "observation.blocked_network": "{id} is blocked: the provider could not be reached (network or proxy). Check the connection.",
   "observation.blocked_error": "{id} is blocked: the provider answered with an error. The session log of the agent has the message.",
+  "observation.blocked_paused": "{id} is paused: the team is waiting for its budget, nothing is wrong with the provider.",
   "observation.fix": "Check that the team is running; retry with jht agents --usage or jht monitor --once.",
   "error.observer_read_failed": "The agent observer could not complete its read.",
   "error.observer_read_invalid": "The agent observer returned an invalid answer.",
@@ -307,4 +308,5 @@ export default {
   "chat.repl.closed": "Closed chat.",
   "agents.paused_of": "{running} of {total} paused (budget)",
   "agents.paused": "paused",
+  "agents.ram_guard": "At {at} the computer's memory was nearly full ({free} GiB free of {total}): {n} workers were stopped to protect it. The search goes on with fewer until the memory is back.",
 };
