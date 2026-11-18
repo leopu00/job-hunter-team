@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EFFORTS, MODEL_CLASSES, ROLES, WEEKDAYS, pickTeamSettings } from "../../lib/team-settings-native";
-import EnrichmentPage, { costsOf, money, patchOf } from "./index";
+import EnrichmentPage, { costsOf, dayMoney, money, patchOf } from "./index";
 import { ENRICHMENT_TEXT } from "./enrichment.i18n";
 
 // Settings › Team › Enrichments (JHT-T324) against a stand-in native side (team_settings). Synthetic data only.
@@ -96,7 +96,7 @@ describe("the reading of the switches", () => {
 
   it("says what turning a switch to its dearer side costs, and nothing for the cheaper side or a switch the table does not name", () => {
     const say = (patch: Record<string, unknown>) => costsOf(patch as never, POLICY, COSTS, t, "en");
-    expect(say({ "web_search.analista.enabled": true })).toEqual(["Web search of the Analysts: costs about 0.27 $ more per position (13.50 $ on 50 a day)."]);
+    expect(say({ "web_search.analista.enabled": true })).toEqual(["Web search of the Analysts: about 0.27 $ more per position: with 50 positions a day that is about 14 $ a day."]);
     expect(say({ "logo.enabled": false })).toEqual([]);
     expect(say({ economy: true })).toEqual([]);
     expect(say({ "web_search.scout.enabled": false })).toEqual([]);
@@ -106,14 +106,18 @@ describe("the reading of the switches", () => {
       web_search: { ...POLICY.web_search, scout: { enabled: false } } };
     const itText = ENRICHMENT_TEXT.it;
     expect(costsOf({ economy: false, "logo.enabled": true, "recheck_weekly.enabled": true, "web_search.scout.enabled": true }, saving, COSTS, itText, "it")).toEqual([
-      "Spegnere il risparmio: costa circa 0,01 $ in più a posizione (0,50 $ su 50 al giorno).",
-      "Logo dell'azienda: costa circa 0,004 $ in più a posizione (0,20 $ su 50 al giorno).",
+      "Spegnere il risparmio: circa 0,01 $ in più a posizione: con 50 posizioni al giorno sono circa 0,50 $ al giorno.",
+      "Logo dell'azienda: circa 0,004 $ in più a posizione: con 50 posizioni al giorno sono circa 0,20 $ al giorno.",
       "Ricontrollo delle posizioni vive (modalità cura): costa di più; quanto non è ancora misurato.",
       "Ricerca web dello Scout: costa circa 0,02 $ a ricerca.",
     ]);
     expect(costsOf({ "web_search.analista.enabled": true }, POLICY, undefined, t, "en")).toEqual([]);
     expect(money(0.008, "de")).toBe("0,008");
     expect(money(13.5, "en")).toBe("13.50");
+    // a day's cost is an estimate: whole dollars from 10 $ up, never «13,00 $ su 50» read as a budget of 50 $
+    expect(dayMoney(13, "it")).toBe("13");
+    expect(dayMoney(13.5, "en")).toBe("14");
+    expect(dayMoney(0.5, "it")).toBe("0,50");
   });
 });
 
@@ -171,7 +175,7 @@ describe("the card", () => {
     render(<EnrichmentPage {...props} />);
     await screen.findByTestId("enrichment-card");
     await user.click(screen.getByTestId("enrichment-web-analista"));
-    const sentence = "Web search of the Analysts: costs about 0.27 $ more per position (13.50 $ on 50 a day).";
+    const sentence = "Web search of the Analysts: about 0.27 $ more per position: with 50 positions a day that is about 14 $ a day.";
     expect(screen.getByTestId("enrichment-cost")).toHaveTextContent(sentence);
     await user.click(screen.getByTestId("enrichment-save"));
     expect(screen.getByTestId("enrichment-confirm")).toHaveTextContent(sentence);

@@ -100,11 +100,11 @@ test('the extra cost is said only toward the dearer side, in the person’s lang
   assert.equal(extraCost('geocode_pipeline.enabled', false, true, COSTS), null);
   assert.equal(extraCost('web_search.analista.enabled', false, true, undefined), null);
   assert.equal(costText('web_search.analista.enabled', extraCost('web_search.analista.enabled', false, true, COSTS), 'it'),
-    'Ricerca web degli Analisti: costa circa 0,27 $ in più a posizione (13,50 $ su 50 al giorno).');
+    'Ricerca web degli Analisti: circa 0,27 $ in più a posizione: con 50 posizioni al giorno sono circa 14 $ al giorno.');
   assert.equal(costText('logo.enabled', extraCost('logo.enabled', false, true, COSTS), 'en'),
-    'Company logo: costs about 0.004 $ more per position (0.20 $ on 50 a day).');
+    'Company logo: about 0.004 $ more per position: with 50 positions a day that is about 0.20 $ a day.');
   assert.equal(costText('economy', extraCost('economy', true, false, COSTS), 'de'),
-    'Sparen ausschalten: kostet etwa 0,01 $ mehr pro Stelle (0,50 $ bei 50 pro Tag).');
+    'Sparen ausschalten: etwa 0,01 $ mehr pro Stelle: bei 50 Stellen am Tag sind das etwa 0,50 $ am Tag.');
   assert.equal(costText('web_search.scout.enabled', { perSearch: 0.02 }, 'fr'), 'Recherche web du Scout : coûte environ 0,02 $ par recherche.');
   assert.equal(costText('recheck_weekly.enabled', { unmeasured: true }, 'it'),
     'Ricontrollo delle posizioni vive (cura): costa di più; quanto non è ancora misurato.');
@@ -125,13 +125,13 @@ test('set toward a dearer side asks first: a yes writes, a no writes nothing, no
   const refused = await setSwitch('web_search.analista.enabled', true, { run: s.run });
   assert.equal(refused.refused, 'confirm_needed');
   assert.equal(refused.exit, 1);
-  assert.equal(refused.sentence, 'Ricerca web degli Analisti: costa circa 0,27 $ in più a posizione (13,50 $ su 50 al giorno).');
+  assert.equal(refused.sentence, 'Ricerca web degli Analisti: circa 0,27 $ in più a posizione: con 50 posizioni al giorno sono circa 14 $ al giorno.');
   assert.deepEqual(s.asked, ['show']);
   s = skill();
   let question = '';
   const no = await setSwitch('web_search.analista.enabled', true, { run: s.run, ask: async (q) => { question = q; return false; } });
   assert.deepEqual(no, { exit: 0, cancelled: true });
-  assert.match(question, /13,50 \$ su 50 al giorno\)\.\nConfermi\? \[s\/N\]/);
+  assert.match(question, /sono circa 14 \$ al giorno\.\nConfermi\? \[s\/N\]/);
   assert.deepEqual(s.asked, ['show']);
   s = skill();
   assert.equal((await setSwitch('web_search.analista.enabled', true, { run: s.run, ask: async () => true })).exit, 0);
@@ -181,7 +181,7 @@ test('show: next to each switch the estimated cost of its dearer side, from the 
   assert.match(row('Savings'), /off +off: about 0\.01 \$ per position$/);
   assert.match(row('Company logo'), /on +on: about 0\.004 \$ per position$/);
   assert.match(row('Recheck of the live positions'), /on: cost not measured yet$/);
-  assert.match(row('Web search of the Analisti'), /off +on: about 0\.27 \$ per position$/);
+  assert.match(row('Web search of the Analysts'), /off +on: about 0\.27 \$ per position$/);
   assert.match(row('Web search of the Scout'), /on: about 0\.02 \$ per search$/);
   // a switch the table does not price has no column, and the note says what the figures are
   assert.match(row('Office on the map, new positions'), /on, not for remote positions$/);
@@ -246,7 +246,7 @@ test('the command on the real program: show, set, and every refusal said in the 
     // toward the dearer side without a terminal: refused with the sentence, nothing written; --yes writes it
     const dearer = jht('enrichment', 'set', 'web_search.analista.enabled', 'on');
     assert.equal(dearer.status, 1);
-    assert.match(dearer.stderr, /Ricerca web degli Analisti: costa circa [\d,]+ \$ in più a posizione \([\d,]+ \$ su \d+ al giorno\)\.\nPer confermare, rilancia lo stesso comando con --yes\./);
+    assert.match(dearer.stderr, /Ricerca web degli Analisti: circa [\d,]+ \$ in più a posizione: con \d+ posizioni al giorno sono circa [\d,]+ \$ al giorno\.\nPer confermare, rilancia lo stesso comando con --yes\./);
     assert.deepEqual(JSON.parse(readFileSync(join(root, 'profile', 'enrichment-policy.json'), 'utf-8')), file);
     const refusedJson = JSON.parse(jht('enrichment', 'set', 'web_search.analista.enabled', 'on', '--json').stdout);
     assert.equal(refusedJson.code, 'confirm_needed');
