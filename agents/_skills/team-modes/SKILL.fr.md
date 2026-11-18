@@ -1,6 +1,6 @@
 ---
 name: team-modes
-description: "Le manuel des modes d'équipe — une fiche par mode (search / harvest / care / calibration / saving). Ouvre-le chaque fois que le banner horaire [MODALITÀ CORRENTE] nomme un mode et que tu ne te souviens pas de ce qu'il implique opérationnellement, au réveil après un refresh de contexte, ou quand l'utilisateur change de mode depuis le jeu. Le mode est TOUJOURS un choix de l'utilisateur - cette skill te dit comment MENER celui qui est en cours, jamais comment en changer."
+description: "Le manuel des modes d'équipe — une fiche par mode (search / harvest / care / calibration / saving). Ouvre-le chaque fois que le banner horaire [MODALITÀ CORRENTE] nomme un mode et que tu ne te souviens pas de ce qu'il implique opérationnellement, au réveil après un refresh de contexte, ou quand l'utilisateur change de mode. Le mode est TOUJOURS un choix de l'utilisateur - cette skill te dit comment MENER celui qui est en cours, jamais comment en changer."
 allowed-tools: Bash(python3 /app/shared/skills/mode_banner.py *), Bash(python3 /app/shared/skills/db_query.py *), Bash(python3 /app/shared/skills/feedback_query.py *), Bash(python3 /app/shared/skills/team_directives.py *)
 ---
 <!-- @translation: fr, ai-translated 2026-08-03 -->
@@ -162,10 +162,7 @@ que le feedback ne montre pas, ou continuer à sourcer avec l'ancienne visée.
    et cela mérite d'être dit : le budget hebdomadaire est une **fenêtre, pas un
    solde** — ce qui n'est pas dépensé au reset est détruit, donc une économie
    laissée par inertie ne conserve pas le cycle, elle le jette. Dis à
-   l'utilisateur qu'il peut lui donner une fin, et où : la Console a le champ
-   «Jusqu'à quand» (jours et heures, à côté du sélecteur), et depuis un shell
-   c'est `jht coordinator set-mode saving --until <iso>`. Les deux écrivent la
-   même clé dans le même fichier.
+   l'utilisateur qu'il peut lui donner une fin, et où : depuis un shell c'est `jht coordinator set-mode saving --until <iso>`.
 
 **Ce que tu fais** : garde Capitano/Assistente/Mentor réactifs ; rien d'autre
 ne bouge sans une demande directe de l'utilisateur. **Avec C-25** : l'économie
@@ -190,8 +187,7 @@ PAS** : réinterpréter « minimum » en « un peu de sourcing ne fera pas de ma
   dosé.
 - **Sortie ≠ changement.** Quand un mode rapporte son travail épuisé, préviens
   l'utilisateur et continue d'honorer le mode jusqu'à ce que ce soit LUI qui en
-  change. Le fichier est écrit au nom de l'utilisateur — par la Console du
-  jeu (échéance comprise) ou avec `jht coordinator` s'il le demande — et jamais
+  change. Le fichier est écrit au nom de l'utilisateur — avec `jht coordinator` (échéance comprise) s'il le demande — et jamais
   de ta propre initiative.
 
 ## Voir aussi

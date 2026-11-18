@@ -6,13 +6,14 @@ coordinator_settings.py — leggere e scrivere le impostazioni del Capitano.
 
 La regola del progetto è una sola superficie: «se per configurare una feature
 devi aprire la dashboard o l'app desktop, è un bug». Le impostazioni del
-Capitano — la MODALITÀ di lavoro e i suoi ordini — si potevano cambiare solo
-dalla Console del gioco. Chi guida JHT da uno script, o l'agente LLM che è il
-pubblico dichiarato di `docs/guides/AI-AGENT-INTEGRATION.md`, restava fuori.
+Capitano — la MODALITÀ di lavoro e i suoi ordini — devono essere raggiungibili
+anche da chi guida JHT da uno script, o dall'agente LLM che è il pubblico
+dichiarato di `docs/guides/AI-AGENT-INTEGRATION.md`. Questo modulo è l'unico
+scrittore del file.
 
 Qui vive la regola; `jht coordinator` è solo un proxy che eredita l'exit code.
 
-## Il contratto del file (identico a quello della Console)
+## Il contratto del file
 
 `$JHT_HOME/profile/capitano-maintenance.json`, enum chiuso 2026-08:
 
@@ -22,19 +23,16 @@ Qui vive la regola; `jht coordinator` è solo un proxy che eredita l'exit code.
     vive nel manuale `team-modes` e nell'enforcement a codice, non in flag
     duplicati.
 
-Due differenze deliberate rispetto alla Console, entrambe conservative:
+Due regole conservative:
 
-1. **si preserva ciò che non si sta cambiando.** La Console riscrive il file da
-   zero, e così facendo cancella `mode_until` (la scadenza di
-   [SAVING-MODE-HAS-NO-DEADLINE]) ogni volta che si tocca una impostazione. Qui
-   una chiave non nominata resta dov'è: un comando che non parla di scadenze
-   non ha motivo di cancellarne una.
-2. **si può dare e togliere la scadenza** (`--until` / `clear-until`), che dalla
-   Console oggi non si scrive affatto.
+1. **si preserva ciò che non si sta cambiando.** Una chiave non nominata resta
+   dov'è: un comando che non parla di scadenze non ha motivo di cancellare
+   `mode_until` (la scadenza di [SAVING-MODE-HAS-NO-DEADLINE]).
+2. **si può dare e togliere la scadenza** (`--until` / `clear-until`).
 
-La policy di enrichment ha già il suo scrittore (`enrichment_policy.py`): qui
-si LEGGE per mostrarla accanto alla modalità, e non si duplica la sua
-validazione.
+La policy di enrichment ha già il suo scrittore (`enrichment_policy.py`, che
+`jht enrichment` e il desktop usano): qui si LEGGE per mostrarla accanto alla
+modalità, e non si duplica la sua validazione.
 
 Uso:
   python3 coordinator_settings.py show [--json]
@@ -60,8 +58,8 @@ from _db import DB_PATH  # noqa: E402
 
 MODES = ("search", "harvest", "care", "calibration", "saving")
 
-# I default della cura, gli stessi che scrive la Console: un client che non
-# manda un ordine non deve ottenerne uno diverso a seconda di chi ha scritto.
+# I default della cura: un client che non manda un ordine non deve ottenerne
+# uno diverso a seconda di chi ha scritto.
 CARE_DEFAULTS = {
     "stop_search": True,
     "discard_expired_rotating": True,
@@ -165,9 +163,8 @@ def write_mode(mode: str, orders_overrides: dict, until=None,
                clear_until=False) -> dict:
     """Scrive la modalità rispettando il contratto del file.
 
-    Le chiavi che non si stanno cambiando restano: è la differenza con la
-    Console, che riscrive da zero e porta via `mode_until` per effetto
-    collaterale.
+    Le chiavi che non si stanno cambiando restano: riscrivere da zero
+    porterebbe via `mode_until` per effetto collaterale.
     """
     if mode not in MODES:
         raise ValueError(f"unknown mode: {mode} (expected one of {', '.join(MODES)})")

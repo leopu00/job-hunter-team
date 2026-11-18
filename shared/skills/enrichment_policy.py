@@ -4,9 +4,10 @@ File: `$JHT_HOME/profile/enrichment-policy.json` (accanto a
 `capitano-maintenance.json`; risolto come dirname(jobs.db)/profile/).
 File ASSENTE = tutto abilitato (comportamento storico, zero migrazioni).
 
-Governa SOLO l'enrichment autonomo della MODALITÀ CURA (ex "maintenance",
-rinominata 2026-07-30 — spesa decisa dalla macchina): coda logo,
-geocode-missing, recheck-due. Le richieste
+Governa l'enrichment AUTONOMO, cioè la spesa decisa dalla macchina: le code
+della MODALITÀ CURA (ex "maintenance", rinominata 2026-07-30: logo-missing,
+geocode-missing, recheck-due) e i due passi economici della pipeline
+dell'Analista (geocodifica dell'ufficio al passo 6, logo al passo 9b). Le richieste
 ESPLICITE dell'utente (geocode_requested, recheck_requested,
 salary_precise_requested, write_requested) NON passano di qui — se
 l'utente chiede, si fa.
@@ -17,26 +18,37 @@ Formato:
                                      # spegne TUTTO l'enrichment autonomo,
                                      # qualunque cosa dicano i flag fini
     "logo":            {"enabled": true, "min_score": null},
+    "geocode_pipeline": {"enabled": true},
     "geocode_missing": {"enabled": true, "min_score": null,
                          "non_remote_only": true},
     "recheck_weekly":  {"enabled": true, "min_score": 70,
                          "older_than_days": 14}
   }
 
-NB: la sezione si chiama ancora `recheck_weekly` (contratto su disco,
-scritto anche dalla Console del gioco — non rinominare senza migrare i
-file live), ma la cadenza di DEFAULT è QUINDICINALE (14gg, 2026-07-30):
-si ricontrollano le posizioni trovate/verificate 2 settimane prima.
+NB: la sezione si chiama ancora `recheck_weekly` (contratto su disco, già
+presente nei file delle installazioni — non rinominare senza migrarli), ma la
+cadenza di DEFAULT è QUINDICINALE (14gg, 2026-07-30): si ricontrollano le
+posizioni trovate/verificate 2 settimane prima.
 
-`logo.min_score` (es. 70): estrai il logo solo per aziende con ALMENO
-una posizione viva con best score >= soglia. Il gate NON marca
-`logo_fetched` → quando lo Scorer supera la soglia, l'azienda rientra
-in coda da sola.
+Due interruttori per la geocodifica, perché sono due spese diverse:
+`geocode_pipeline.enabled` è il passo 6 della pipeline (la posizione NUOVA
+che l'Analista sta analizzando), `geocode_missing.enabled` è la coda di cura
+(l'arretrato). Un file scritto prima del 18/11/2026, senza
+`geocode_pipeline`, lo eredita da `geocode_missing.enabled`: chi aveva spento
+la geocodifica la trova ancora spenta. `geocode_missing.non_remote_only` vale
+per tutti e due.
+
+Le soglie di score (`logo.min_score`, `geocode_missing.min_score`,
+`recheck_weekly.min_score`) valgono SOLO per le code di cura: nella pipeline
+la posizione nuova non ha ancora uno score, e una soglia lì direbbe sempre di
+no. `logo.min_score` (es. 70): la coda logo-missing prende solo le aziende con
+ALMENO una posizione viva con best score >= soglia; quando lo Scorer supera
+la soglia, l'azienda rientra in coda da sola.
 
 Enforcement A CODICE (filosofia modalità-cura di C-18): le code in
-`db_query.py` tornano vuote col motivo, e `logo_fetch.py` rifiuta con
-POLICY_DISABLED / POLICY_SCORE_GATE. I prompt spiegano solo che una
-coda vuota per policy è stato VOLUTO, non un bug.
+`db_query.py` tornano vuote col motivo, `geocode-check` risponde NO col
+motivo, e `logo_fetch.py` rifiuta con POLICY_DISABLED. I prompt spiegano solo
+che una coda vuota per policy è stato VOLUTO, non un bug.
 
 MODALITÀ DI LAVORO (2026-08, enum chiuso in `capitano-maintenance.json`,
 chiave `"mode"`): search | harvest | care | calibration | saving. La
@@ -51,21 +63,29 @@ modalità (il file mode), una sola per i flag fini (questo JSON): uscire
 da `saving` ripristina da solo la policy che c'era prima, perché la
 policy non è mai stata toccata.
 
-Chi scrive il file: la Console del Coordinatore nel videogioco o il
-Capitano SU ORDINE dell'utente («vai su risparmio» →
-`enrichment_policy.py set economy true`). Mai di iniziativa propria.
+Chi scrive il file: l'utente, con `jht enrichment set` o dal desktop
+(Impostazioni › Arricchimenti, che passa da `apply`), oppure il Capitano SU
+ORDINE dell'utente («vai su risparmio» → `enrichment_policy.py set economy
+true`). Mai di iniziativa propria. Questo modulo è l'unico che lo scrive.
 
 Uso CLI:
   python3 enrichment_policy.py show
   python3 enrichment_policy.py set economy true|false
   python3 enrichment_policy.py set logo.enabled false
   python3 enrichment_policy.py set logo.min_score 70   # "" o null per togliere
+  python3 enrichment_policy.py set geocode_pipeline.enabled false
   python3 enrichment_policy.py set geocode_missing.enabled false
   python3 enrichment_policy.py set geocode_missing.min_score 65
   python3 enrichment_policy.py set geocode_missing.non_remote_only true
   python3 enrichment_policy.py set recheck_weekly.enabled false
   python3 enrichment_policy.py set recheck_weekly.min_score 65
   python3 enrichment_policy.py set recheck_weekly.older_than_days 21
+  echo '{"logo.enabled": false, "logo.min_score": 70}' | python3 enrichment_policy.py apply
+
+`apply` legge da stdin UN oggetto JSON {chiave: valore} con le chiavi di
+`set` e i valori già tipati (true/false, interi, null): o vale tutto o non si
+scrive niente, e risponde con la policy riletta. Rifiuti chiusi in `code`:
+request_invalid, key_unknown, value_invalid, write_failed.
 
 Output: una riga JSON su stdout (exit 0 ok / 1 errore).
 """
@@ -81,6 +101,8 @@ from _db import DB_PATH
 DEFAULT_POLICY = {
     "economy": False,
     "logo": {"enabled": True, "min_score": None},
+    # Il passo 6 della pipeline dell'Analista (la posizione nuova); la coda di cura è geocode_missing.
+    "geocode_pipeline": {"enabled": True},
     "geocode_missing": {
         "enabled": True, "min_score": None, "non_remote_only": True,
     },
@@ -94,9 +116,10 @@ DEFAULT_POLICY = {
 _SETTABLE = {
     "economy": (None, "economy", "bool"),
     "logo.enabled": ("logo", "enabled", "bool"),
-    "logo.min_score": ("logo", "min_score", "int_or_null"),
+    "logo.min_score": ("logo", "min_score", "score_or_null"),
+    "geocode_pipeline.enabled": ("geocode_pipeline", "enabled", "bool"),
     "geocode_missing.enabled": ("geocode_missing", "enabled", "bool"),
-    "geocode_missing.min_score": ("geocode_missing", "min_score", "int_or_null"),
+    "geocode_missing.min_score": ("geocode_missing", "min_score", "score_or_null"),
     "geocode_missing.non_remote_only": ("geocode_missing", "non_remote_only", "bool"),
     "recheck_weekly.enabled": ("recheck_weekly", "enabled", "bool"),
     "recheck_weekly.min_score": ("recheck_weekly", "min_score", "score"),
@@ -197,13 +220,19 @@ def load_policy() -> dict:
                 merged[section]["min_score"] = score
             if isinstance(days, int) and 1 <= days <= 365:
                 merged[section]["older_than_days"] = days
+    pipeline = data.get("geocode_pipeline")
+    if isinstance(pipeline, dict) and isinstance(pipeline.get("enabled"), bool):
+        merged["geocode_pipeline"]["enabled"] = pipeline["enabled"]
+    elif "geocode_pipeline" not in data:
+        # Un file di prima dei due interruttori: chi aveva spento la geocodifica la ritrova spenta.
+        merged["geocode_pipeline"]["enabled"] = merged["geocode_missing"]["enabled"]
     return merged
 
 
 def is_enabled(kind: str, policy: dict | None = None) -> bool:
     """True se l'enrichment autonomo `kind` è consentito ORA.
 
-    kind ∈ {"logo", "geocode_missing", "recheck_weekly"}.
+    kind ∈ {"logo", "geocode_pipeline", "geocode_missing", "recheck_weekly"}.
     Precedenza: modalità `saving` (o mode illeggibile) > `economy` > flag
     fine. La modalità NON riscrive la policy: la sovrasta finché dura, e
     quando l'utente esce da `saving` i flag fini tornano a valere da soli.
@@ -279,14 +308,72 @@ def _parse_value(raw: str, how: str):
         raise ValueError(f"invalid boolean value: {raw!r}")
     # int_or_null / interi con range applicativo
     low = raw.strip().lower()
-    if how == "int_or_null" and low in ("", "null", "none", "off"):
+    if how == "score_or_null" and low in ("", "null", "none", "off"):
         return None
     value = int(raw)
-    if how == "score" and not 0 <= value <= 100:
+    if how in ("score", "score_or_null") and not 0 <= value <= 100:
         raise ValueError("score must be between 0 and 100")
     if how == "days" and not 1 <= value <= 365:
         raise ValueError("days must be between 1 and 365")
     return value
+
+
+def _typed_value(value, how: str):
+    """Il valore di `apply`, già tipato nel JSON: lo stesso dominio di `_parse_value`, senza conversioni."""
+    if how == "bool":
+        if isinstance(value, bool):
+            return value
+        raise ValueError("value_invalid")
+    if how == "score_or_null" and value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError("value_invalid")
+    if how in ("score", "score_or_null") and not 0 <= value <= 100:
+        raise ValueError("value_invalid")
+    if how == "days" and not 1 <= value <= 365:
+        raise ValueError("value_invalid")
+    return value
+
+
+REQUEST_MAX_BYTES = 4096
+
+
+def apply_request(raw: str) -> tuple[int, dict]:
+    """`apply`: tutto o niente. (exit, risposta JSON)."""
+    if len(raw.encode("utf-8")) > REQUEST_MAX_BYTES:
+        return 1, {"ok": False, "code": "request_invalid"}
+    try:
+        request = json.loads(raw)
+    except json.JSONDecodeError:
+        return 1, {"ok": False, "code": "request_invalid"}
+    if not isinstance(request, dict) or not request:
+        return 1, {"ok": False, "code": "request_invalid"}
+    pol = load_policy()
+    for key, value in request.items():
+        if key not in _SETTABLE:
+            return 1, {"ok": False, "code": "key_unknown"}
+        section, field, how = _SETTABLE[key]
+        try:
+            typed = _typed_value(value, how)
+        except ValueError:
+            return 1, {"ok": False, "code": "value_invalid"}
+        if section is None:
+            pol[field] = typed
+        else:
+            pol[section][field] = typed
+    try:
+        _save(pol)
+    except OSError:
+        return 1, {"ok": False, "code": "write_failed"}
+    return 0, show_payload()
+
+
+def show_payload() -> dict:
+    return {"ok": True, "path": policy_path(), "exists": os.path.exists(policy_path()),
+            "policy": load_policy(),
+            # La modalità NON vive in questo file (fonte: mode_path()) ma decide se la policy si applica:
+            # mostrarla qui evita il "perché la coda è OFF se enabled=true?".
+            "mode": current_mode()}
 
 
 def main() -> None:
@@ -295,6 +382,7 @@ def main() -> None:
     )
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("show")
+    sub.add_parser("apply")
     st = sub.add_parser("set")
     st.add_argument("key", choices=sorted(_SETTABLE))
     st.add_argument("value")
@@ -302,15 +390,13 @@ def main() -> None:
 
     try:
         if args.cmd == "show":
-            pol = load_policy()
-            print(json.dumps(
-                {"ok": True, "path": policy_path(),
-                 "exists": os.path.exists(policy_path()), "policy": pol,
-                 # La modalità NON vive in questo file (fonte: mode_path())
-                 # ma decide se la policy si applica: mostrarla qui evita
-                 # il "perché la coda è OFF se enabled=true?".
-                 "mode": current_mode()},
-                ensure_ascii=False))
+            print(json.dumps(show_payload(), ensure_ascii=False))
+            return
+        if args.cmd == "apply":
+            code, out = apply_request(sys.stdin.read().strip())
+            print(json.dumps(out, ensure_ascii=False))
+            if code:
+                sys.exit(code)
             return
         section, field, how = _SETTABLE[args.key]
         value = _parse_value(args.value, how)

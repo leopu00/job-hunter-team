@@ -700,8 +700,10 @@ export function dbQuery(db: () => Database, argv: string[], options: DbQueryOpti
 
   if (name === "geocode-check") {
     // `geocode_check`: whether the office of THIS position is to be geocoded
-    // now (the ANALISTA's pipeline step 6), and why. The same gates as the
-    // care queue next-for-geocode-missing; no policy to read is no permission.
+    // now (the ANALISTA's pipeline step 6), and why: the pipeline's own switch
+    // (geocode_pipeline), economy and the saving mode, the remote ones left out.
+    // No score gate: the new position is not scored yet, and the threshold is
+    // the care queue's. No policy to read is no permission.
     const id = a["id"] as number;
     const pos = select(db(), "SELECT status, work_mode, office_lat, office_geocoded FROM positions WHERE id = ?", [id]);
     const p = pos.rows[0];
@@ -709,25 +711,18 @@ export function dbQuery(db: () => Database, argv: string[], options: DbQueryOpti
       print(`Position ${id} not found.`);
       return done(1);
     }
-    const scored = select(db(), "SELECT MAX(total_score) AS best FROM scores WHERE position_id = ?", [id]);
-    const best = scored.rows[0]?.["best"] ?? null;
     const policy = options.policy;
     const opts = policy?.geocodeOptions() ?? { min_score: null, non_remote_only: true };
-    const minScore = typeof opts.min_score === "boolean" ? (opts.min_score ? "True" : "False") : String(opts.min_score);
     let verdict: boolean;
     let reason: string;
     if (p["office_lat"] !== null && pyTruthy(p["office_geocoded"])) {
       [verdict, reason] = [false, "already geocoded (office_geocoded=1)"];
     } else if (p["status"] === "excluded") {
       [verdict, reason] = [false, "excluded position"];
-    } else if (!policy || !policy.isEnabled("geocode_missing")) {
-      [verdict, reason] = [false, `geocoding OFF — ${policy ? policy.disabledReason("geocode_missing") : "the enrichment policy cannot be read here"}`];
+    } else if (!policy || !policy.isEnabled("geocode_pipeline")) {
+      [verdict, reason] = [false, `geocoding OFF — ${policy ? policy.disabledReason("geocode_pipeline") : "the enrichment policy cannot be read here"}`];
     } else if (opts.non_remote_only && String(p["work_mode"] ?? "").toLowerCase() === "remote") {
       [verdict, reason] = [false, "remote position (work_mode=remote): no office to geocode"];
-    } else if (opts.min_score !== null && best === null) {
-      [verdict, reason] = [false, `score gate ${minScore}: not scored yet — next-for-geocode-missing takes it after scoring`];
-    } else if (opts.min_score !== null && Number(best) < Number(opts.min_score)) {
-      [verdict, reason] = [false, `score gate ${minScore}: best score ${scored.s(scored.rows[0]!, "best")}`];
     } else {
       [verdict, reason] = [true, "live, not geocoded yet, geocoding policy on"];
     }

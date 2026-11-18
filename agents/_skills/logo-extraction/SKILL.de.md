@@ -106,10 +106,6 @@ Mögliche Antworten von `logo_fetch.py`:
 
 - `POLICY_DISABLED` — Sparmodus aktiv (`economy=true`) oder
   `logo.enabled=false`: NICHT extrahieren, kein Fehler. Weitermachen.
-- `POLICY_SCORE_GATE` — die Firma hat noch keine lebende Position mit
-  Score ≥ `logo.min_score`: NICHT insistieren. Markiert `logo_fetched`
-  nicht: überschreitet der Scorer die Schwelle, kehrt die Firma von
-  selbst in die Queue zurück.
 
 `--force` umgeht die Policy: NUR auf explizite Anfrage des Nutzers
 verwenden, nie eigenmächtig.

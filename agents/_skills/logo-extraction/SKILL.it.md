@@ -101,9 +101,6 @@ Risposte possibili di `logo_fetch.py`:
 
 - `POLICY_DISABLED` — risparmio attivo (`economy=true`) o
   `logo.enabled=false`: NON estrarre, non è un errore. Vai avanti.
-- `POLICY_SCORE_GATE` — l'azienda non ha ancora posizioni vive con
-  score ≥ `logo.min_score`: NON insistere. Non marca `logo_fetched`:
-  quando lo Scorer supera la soglia, l'azienda rientra in coda da sola.
 
 `--force` scavalca la policy: usalo SOLO su richiesta esplicita
 dell'utente, mai in autonomia.
