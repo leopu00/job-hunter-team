@@ -5767,10 +5767,12 @@ function Write-LocalHelp {
   Write-Host (Get-JhtText 'ps.help.main')
 }
 
+# A help asks nothing and needs no terminal: the container's CLI is run without -i/-t. With -t Podman on Windows tried to size a
+# terminal of a help already over: two «Failed to obtain TTY size» and no help at all (`jht enrichment --help`, retest build13).
 function Invoke-HelpWithoutDocker {
   param([Parameter(ValueFromRemainingArguments)] $HelpArgs)
   if ((Test-DockerReachable) -and (Test-ContainerUp)) {
-    & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry @HelpArgs }
+    & { $ErrorActionPreference = 'Continue'; & docker exec -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry @HelpArgs }
     return $LASTEXITCODE
   }
   Write-LocalHelp

@@ -7640,9 +7640,11 @@ tools_help() {
 
 # Richiesta di sola informazione: se il container e' gia' in piedi si serve
 # l'aiuto vero, altrimenti quello locale. In nessun caso si avvia qualcosa.
+# A help asks nothing and needs no terminal: the container's CLI is run without -i/-t, as in jht-wrapper.ps1 (there, with -t,
+# Podman tried to size the terminal of a help already over and the help came out empty).
 serve_help_without_docker() {
   if docker_reachable && container_up; then
-    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
+    docker exec -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
     return $?
   fi
   local_help

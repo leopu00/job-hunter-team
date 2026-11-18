@@ -34,3 +34,23 @@ def test_the_cli_answers_help_with_the_long_list_and_the_flag_with_the_short_one
     # the long list is the grouped one: the groups, the commands, and the ones that live on the computer
     assert "Essential commands" not in long and "Every day:" in long and "Maintenance:" in long and "doctor" in long
     assert "up" in long.split("On your computer, outside the container:")[1]
+
+
+def test_the_help_of_a_command_of_the_container_runs_without_a_terminal(tmp_path):
+    """Retest Windows build13: `jht enrichment --help` came out empty with two «Failed to obtain TTY size» of Podman: the help
+    went to the container with -it, and Podman sized the terminal of a help already over. A help needs no terminal."""
+    body = re.search(r"^serve_help_without_docker\(\) \{\n.*?^\}\n", SH, re.S | re.M).group(0)
+    fake = tmp_path / "bin"
+    fake.mkdir()
+    (fake / "docker").write_text(f'#!/bin/sh\necho "$*" >> "{tmp_path}/calls"\necho "Usage: jht enrichment"\n', encoding="utf-8")
+    (fake / "docker").chmod(0o755)
+    script = (f'export PATH="{fake}:$PATH"\nEXEC_FLAGS=-it\nJHT_HOST_TYPE=local\nATTESTED_CONTAINER_ID=jht\nNODE_ENTRY=/app/cli/bin/jht.js\n'
+              "docker_reachable() { :; }\ncontainer_up() { :; }\n" + body + "serve_help_without_docker enrichment --help\n")
+    done = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30)
+    assert done.returncode == 0 and "Usage: jht enrichment" in done.stdout, done.stderr
+    assert (tmp_path / "calls").read_text(encoding="utf-8").splitlines() == [
+        "exec -e JHT_HOST_TYPE=local jht node /app/cli/bin/jht.js enrichment --help"]
+    ps = PS1.replace("\r\n", "\n")
+    fn = re.search(r"^function Invoke-HelpWithoutDocker \{\n.*?^\}\n", ps, re.S | re.M).group(0)
+    assert "& docker exec -e \"JHT_HOST_TYPE=$env:JHT_HOST_TYPE\" $Container node $NodeEntry @HelpArgs" in fn
+    assert "ExecFlags" not in fn
