@@ -600,6 +600,9 @@ JHT_LANG_ASKED_AT=""
 if [ "$HOST_SETUP_ASKS" -eq 1 ] && [ "$HOST_VALUES_SAVED" -eq 1 ] && [ "$JHT_LANG_CHOSEN" -eq 1 ]; then
   # the language chosen before stays, with no question: the wizard in the container reads `asked_at` and does not ask either
   JHT_LANG_ASKED_AT="$(date +%s)"
+elif [ "$HOST_SETUP_ASKS" -eq 1 ] && [ "$JHT_LANG_CHOSEN" -eq 1 ] && [ "${JHT_LANG_ASKED_BY_INSTALLER:-0}" = 1 ]; then
+  # the installer asked it before its own lines (install.sh, installer_ask_language): the setup it starts does not ask again
+  JHT_LANG_ASKED_AT="$(date +%s)"
 elif [ "$HOST_SETUP_ASKS" -eq 1 ]; then
   # the person answers here: the wizard in the container reads `asked_at` and does not ask a second time
   JHT_LANG_ASKED_AT="$(date +%s)"

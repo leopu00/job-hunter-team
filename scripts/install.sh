@@ -1600,12 +1600,10 @@ detect_os() {
 # folders) and this installer again, then `jht setup` with the key. A line `JHT_ERROR runtime_change_requires_migration` on stderr,
 # then exit 85 (the Linux Podman codes are 88-97).
 RUNTIME_CHANGE_REQUIRES_MIGRATION_EXIT=85
-# The person's language for the lines of the installer, by the rule of the CLI: the choice saved by an earlier setup or the picker
-# (~/.jht/i18n-prefs.json), then JHT_LANG as set in this terminal, then the one in ~/.jht/host.env, then the system's (the first of
-# LC_ALL, LC_MESSAGES, LANG that is set decides). Files are read as data, only a known value: one of the 7 languages of JHT (en it
-# hu es de fr pt); any other is English.
-installer_person_lang() {
-  local prefs="$HOME/.jht/i18n-prefs.json" env_file="$HOME/.jht/host.env" value="" locale name
+# The language the person already chose: the choice saved by an earlier setup or the picker (~/.jht/i18n-prefs.json), then JHT_LANG
+# as set in this terminal, then the one in ~/.jht/host.env. Nothing printed and 1 when there is none (or it is not one of the 7).
+installer_chosen_lang() {
+  local prefs="$HOME/.jht/i18n-prefs.json" env_file="$HOME/.jht/host.env" value=""
   if [ -f "$prefs" ] && [ ! -L "$prefs" ] && [ "$(wc -c < "$prefs" 2>/dev/null || echo 9999)" -le 4096 ]; then
     value="$(tr -d '\r\n' < "$prefs" 2>/dev/null | sed -n 's/.*"locale"[[:space:]]*:[[:space:]]*"\([a-z][a-z]\)".*/\1/p' | head -n 1)"
   fi
@@ -1615,6 +1613,16 @@ installer_person_lang() {
   if [ -z "$value" ] && [ -f "$env_file" ] && [ ! -L "$env_file" ]; then
     value="$(grep -E '^JHT_LANG=[a-z]{2}$' "$env_file" 2>/dev/null | tail -n 1 | cut -d= -f2)"
   fi
+  case "$value" in en|it|hu|es|de|fr|pt) printf '%s\n' "$value" ;; *) return 1 ;; esac
+}
+
+# The person's language for the lines of the installer, by the rule of the CLI: the choice saved by an earlier setup or the picker
+# (~/.jht/i18n-prefs.json), then JHT_LANG as set in this terminal, then the one in ~/.jht/host.env, then the system's (the first of
+# LC_ALL, LC_MESSAGES, LANG that is set decides). Files are read as data, only a known value: one of the 7 languages of JHT (en it
+# hu es de fr pt); any other is English.
+installer_person_lang() {
+  local value="" locale name
+  value="$(installer_chosen_lang)" || value=""
   if [ -z "$value" ]; then
     for name in LC_ALL LC_MESSAGES LANG; do
       locale="${!name:-}"
@@ -3143,6 +3151,40 @@ will_auto_onboard() {
   return 1
 }
 
+# One line the person types: from the terminal of the installer, or from /dev/tty under `curl … | bash` (that one read only).
+installer_read_answer() {
+  local answer=""
+  if [ -t 0 ]; then read -r answer || answer=""; else read -r answer </dev/tty || answer=""; fi
+  printf '%s\n' "$answer"
+}
+
+# The language is asked FIRST, before the lines of the installer, when the setup runs right after it in this terminal and no
+# choice exists yet: the person used to read the whole installer, «Installation complete!» and «Setup host (preflight)» in the
+# language of the system (English on a new Linux user) and was asked only then. The answer goes on in JHT_LANG: the lines of
+# the installer, host.env (host-setup.sh) and the setup all speak it, and host-setup.sh does not ask a second time
+# (JHT_LANG_ASKED_BY_INSTALLER). An empty answer is the language of the system; with no terminal nothing is asked.
+installer_ask_language() {
+  local default choice label
+  will_auto_onboard || return 0
+  [ -z "${PAIRING_TOKEN:-}" ] || return 0
+  installer_chosen_lang >/dev/null && return 0
+  default="$(installer_person_lang)"
+  case "$default" in
+    it) label="[2]" ;; hu) label="[3]" ;; es) label="[4]" ;; de) label="[5]" ;; fr) label="[6]" ;; pt) label="[7]" ;; *) label="[1]" ;;
+  esac
+  printf "\n"
+  printf "Choose your language / Scegli la lingua / Válassz nyelvet / Elige tu idioma / Wähle deine Sprache / Choisis ta langue / Escolha seu idioma:\n\n"
+  printf "  1) ${BOLD}English${RESET}\n  2) ${BOLD}Italiano${RESET}\n  3) ${BOLD}Magyar${RESET}\n  4) ${BOLD}Español${RESET}\n"
+  printf "  5) ${BOLD}Deutsch${RESET}\n  6) ${BOLD}Français${RESET}\n  7) ${BOLD}Português${RESET}\n\n"
+  printf "Choice / Scelta / Választás / Elección / Auswahl / Choix / Escolha %s: " "$label"
+  choice="$(installer_read_answer)" || choice=""
+  case "$choice" in
+    1) JHT_LANG=en ;; 2) JHT_LANG=it ;; 3) JHT_LANG=hu ;; 4) JHT_LANG=es ;; 5) JHT_LANG=de ;; 6) JHT_LANG=fr ;; 7) JHT_LANG=pt ;;
+    *) JHT_LANG="$default" ;;
+  esac
+  export JHT_LANG JHT_LANG_ASKED_BY_INSTALLER=1
+}
+
 final_message() {
   printf "\n"
   printf "${GREEN}${BOLD}══════════════════════════════════════════${RESET}\n"
@@ -3857,6 +3899,7 @@ main() {
   # works there and the last line has nothing to say.
   local path_had_bin=0
   case ":$PATH:" in *":$BIN_DIR:"*) path_had_bin=1 ;; esac
+  installer_ask_language
   [ "$USE_DOCKER" -eq 1 ] && keep_chosen_runtime
   header
   if [ "$USE_DOCKER" -eq 1 ]; then

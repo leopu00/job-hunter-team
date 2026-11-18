@@ -589,7 +589,7 @@ def _chat_functions(tmp_path, docker_body: str, env_lines: str, call: str, **env
     text = WRAPPER.read_text(encoding="utf-8")
     parts = [re.search(rf"^{name}\(\) \{{\n.*?^\}}\n", text, re.S | re.M).group(0)
              for name in ("team_chat_ended_by_switch", "wait_for_tools_switch", "team_chat_agent_back", "team_chat_through_switch",
-                          "team_chat_engine_gone", "team_chat_through_update", "team_chat_resume")]
+                          "team_chat_engine_gone", "team_chat_through_update", "team_chat_container_back", "team_chat_resume")]
     fake = tmp_path / "bin"
     fake.mkdir(exist_ok=True)
     (fake / "docker").write_text("#!/bin/sh\n" + docker_body, encoding="utf-8")
@@ -667,10 +667,25 @@ def test_the_fresh_wrapper_attaches_to_the_running_agent_and_starts_nothing(tmp_
 
 def test_the_fresh_wrapper_never_starts_a_container_that_is_not_there(tmp_path):
     done = _chat_functions(tmp_path, f'echo "docker $*" >> "{tmp_path}/calls"\nexit 0\n',
-                           'container_up() { return 3; }\n', "team_chat_resume team chat assistente\necho ATTACH\n")
+                           'container_up() { return 3; }\n', "team_chat_resume team chat assistente\necho ATTACH\n",
+                           JHT_TOOLS_CHAT_RECONNECT_MAX="2")
     assert done.returncode == 0 and "ATTACH" not in done.stdout
     assert "Open it again in a couple of minutes with jht team chat." in done.stderr
     assert not (tmp_path / "calls").exists()                                 # no ensure_up, no docker at all
+
+
+def test_the_fresh_wrapper_waits_for_the_container_the_switch_has_just_started(tmp_path):
+    """Giro Linux build11: the full container was up, not yet ours for a second, and the chat said «it comes back by itself»
+    and at once «this chat has closed» (the Assistente was back one second before). The container is waited for, as the agent."""
+    tries = tmp_path / "tries"
+    done = _chat_functions(tmp_path, f'echo "docker $*" >> "{tmp_path}/calls"\nexit 0\n',
+                           f'container_up() {{ echo x >> "{tries}"; [ "$(wc -l < "{tries}")" -ge 3 ] || return 1; ATTESTED_CONTAINER_ID=full; }}\n',
+                           "team_chat_resume team chat assistente\necho ATTACH\n", JHT_TOOLS_CHAT_RECONNECT_MAX="10")
+    assert done.returncode == 0 and done.stdout.strip() == "ATTACH", done.stderr
+    assert len(tries.read_text(encoding="utf-8").splitlines()) == 3
+    assert "this chat has closed" not in done.stderr and "let's pick up again" in done.stderr
+    calls = (tmp_path / "calls").read_text(encoding="utf-8").splitlines()
+    assert calls == ["docker exec full tmux has-session -t =ASSISTENTE"], calls   # still nothing started
 
 
 def test_an_agent_that_does_not_come_back_in_time_leaves_the_line_to_open_it_again(tmp_path):
@@ -1268,6 +1283,29 @@ def test_after_three_rounds_the_engine_chat_says_to_open_it_again(tmp_path):
                            "team_chat_through_update team chat assistente\n", JHT_TEAM_CHAT_RESUME="3")
     assert done.returncode == 0 and "so this chat has closed" in done.stderr
     assert not (tmp_path / "calls").exists()
+
+
+def test_the_chat_back_after_an_update_says_the_update_not_the_full_tools(tmp_path):
+    """Retest Windows build13: after the restart of the machine the chat came back with «the team has moved onto the full tools»,
+    the sentence of the switch of the tools. The fresh wrapper is told it comes back after an update, and says that."""
+    again = tmp_path / "again-after.sh"
+    again.write_text(f'echo "after=$JHT_TEAM_CHAT_RESUME_AFTER" >> "{tmp_path}/after"\n', encoding="utf-8")
+    done = _chat_functions(tmp_path, "exit 0\n", f'docker_reachable() {{ return 0; }}\ncontainer_up() {{ return 0; }}\nWRAPPER_PATH="{again}"\n',
+                           "team_chat_through_update team chat assistente\n", JHT_TEAM_CHAT_RESUME_AFTER="switch")
+    assert done.returncode == 0, done.stderr
+    assert (tmp_path / "after").read_text(encoding="utf-8").splitlines() == ["after=update"]
+    resumed = _chat_functions(tmp_path, "exit 0\n", "container_up() { :; }\n", "team_chat_resume team chat assistente\necho ATTACH\n",
+                              JHT_TEAM_CHAT_RESUME_AFTER="update")
+    assert resumed.stdout.strip() == "ATTACH", resumed.stderr
+    assert "JHT is up to date: let's pick up again." in resumed.stderr and "full tools" not in resumed.stderr
+
+
+def test_the_chat_that_does_not_come_back_after_an_update_says_the_update(tmp_path):
+    done = _chat_functions(tmp_path, '[ "$3" = tmux ] && exit 1\nexit 0\n', "container_up() { :; }\n",
+                           "team_chat_resume team chat assistente\necho ATTACH\n", JHT_TEAM_CHAT_RESUME_AFTER="update",
+                           JHT_TOOLS_CHAT_RECONNECT_MAX="2")
+    assert done.returncode == 0 and "ATTACH" not in done.stdout
+    assert "JHT is updating, so this chat has closed." in done.stderr and "full tools" not in done.stderr
 
 
 def test_the_engine_line_of_a_chat_that_ended_well_is_left_alone(tmp_path):

@@ -308,3 +308,13 @@ test('the panel door: `agent-control settings get|apply` carries the switches to
   assert.equal(JSON.parse(written).enrichment.policy.recheck_weekly.older_than_days, 21);
   assert.equal(existsSync(CONFIG), true);
 });
+
+test('the Analisti are named in the language of the person, not with the Italian plural (retest Windows build13, French)', async () => {
+  const { say } = await import('../src/lib/texts.js');
+  for (const lang of ['en', 'hu', 'es', 'de', 'fr', 'pt']) {
+    for (const key of ['enrichment.description', 'enrichment.title', 'enrichment.web_search_analista']) {
+      assert.doesNotMatch(say(key, { mode: 'search' }, lang), /Analisti/, `${lang} ${key}`);
+    }
+  }
+  assert.equal(say('enrichment.web_search_analista', {}, 'fr'), 'Recherche web des Analystes');
+});

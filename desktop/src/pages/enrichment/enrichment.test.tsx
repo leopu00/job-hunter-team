@@ -96,7 +96,7 @@ describe("the reading of the switches", () => {
 
   it("says what turning a switch to its dearer side costs, and nothing for the cheaper side or a switch the table does not name", () => {
     const say = (patch: Record<string, unknown>) => costsOf(patch as never, POLICY, COSTS, t, "en");
-    expect(say({ "web_search.analista.enabled": true })).toEqual(["Web search of the Analisti: costs about 0.27 $ more per position (13.50 $ on 50 a day)."]);
+    expect(say({ "web_search.analista.enabled": true })).toEqual(["Web search of the Analysts: costs about 0.27 $ more per position (13.50 $ on 50 a day)."]);
     expect(say({ "logo.enabled": false })).toEqual([]);
     expect(say({ economy: true })).toEqual([]);
     expect(say({ "web_search.scout.enabled": false })).toEqual([]);
@@ -171,7 +171,7 @@ describe("the card", () => {
     render(<EnrichmentPage {...props} />);
     await screen.findByTestId("enrichment-card");
     await user.click(screen.getByTestId("enrichment-web-analista"));
-    const sentence = "Web search of the Analisti: costs about 0.27 $ more per position (13.50 $ on 50 a day).";
+    const sentence = "Web search of the Analysts: costs about 0.27 $ more per position (13.50 $ on 50 a day).";
     expect(screen.getByTestId("enrichment-cost")).toHaveTextContent(sentence);
     await user.click(screen.getByTestId("enrichment-save"));
     expect(screen.getByTestId("enrichment-confirm")).toHaveTextContent(sentence);
@@ -224,5 +224,13 @@ describe("the words", () => {
       expect(Object.keys(text).sort(), locale).toEqual(keys);
       for (const value of Object.values(text)) expect(value.trim().length, locale).toBeGreaterThan(0);
     }
+  });
+
+  it("name the Analisti in the language of the person, not with the Italian plural (retest Windows build13, French)", () => {
+    for (const [locale, text] of Object.entries(ENRICHMENT_TEXT)) {
+      if (locale === "it") continue;
+      for (const value of Object.values(text)) expect(String(value), locale).not.toMatch(/Analisti/);
+    }
+    expect(ENRICHMENT_TEXT.fr.webAnalista).toBe("Recherche web des Analystes");
   });
 });

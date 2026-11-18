@@ -45,7 +45,7 @@ const it = {
 export type EnrichmentText = typeof it;
 
 const en: EnrichmentText = {
-  title: "Enrichments of the Analisti",
+  title: "Enrichments of the Analysts",
   intro: "What the team does on its own to complete a position. A request of yours on a position is always done, even with a switch off.",
   loading: "Reading the team's switches…",
   retry: "Retry",
@@ -69,7 +69,7 @@ const en: EnrichmentText = {
   invalidScore: "A score goes from 0 to 100.",
   invalidDays: "Days go from 1 to 365.",
   webSearch: "Web search",
-  webAnalista: "Web search of the Analisti",
+  webAnalista: "Web search of the Analysts",
   webScout: "Web search of the Scout",
   webMentor: "Web search of the Mentor",
   economyOff: "Turning savings off",
@@ -82,7 +82,7 @@ const en: EnrichmentText = {
 };
 
 const de: EnrichmentText = {
-  title: "Anreicherungen der Analisti",
+  title: "Anreicherungen der Analysten",
   intro: "Was das Team von selbst tut, um eine Position zu vervollständigen. Eine Anfrage von dir zu einer Position wird immer erledigt, auch mit einem ausgeschalteten Schalter.",
   loading: "Ich lese die Schalter des Teams…",
   retry: "Erneut versuchen",
@@ -106,7 +106,7 @@ const de: EnrichmentText = {
   invalidScore: "Ein Score geht von 0 bis 100.",
   invalidDays: "Die Tage gehen von 1 bis 365.",
   webSearch: "Websuche",
-  webAnalista: "Websuche der Analisti",
+  webAnalista: "Websuche der Analysten",
   webScout: "Websuche des Scout",
   webMentor: "Websuche des Mentor",
   economyOff: "Sparen ausschalten",
@@ -119,7 +119,7 @@ const de: EnrichmentText = {
 };
 
 const fr: EnrichmentText = {
-  title: "Enrichissements des Analisti",
+  title: "Enrichissements des Analystes",
   intro: "Ce que l'équipe fait d'elle-même pour compléter une position. Une demande de ta part sur une position est toujours faite, même avec un interrupteur éteint.",
   loading: "Je lis les interrupteurs de l'équipe…",
   retry: "Réessayer",
@@ -143,7 +143,7 @@ const fr: EnrichmentText = {
   invalidScore: "Un score va de 0 à 100.",
   invalidDays: "Les jours vont de 1 à 365.",
   webSearch: "Recherche web",
-  webAnalista: "Recherche web des Analisti",
+  webAnalista: "Recherche web des Analystes",
   webScout: "Recherche web du Scout",
   webMentor: "Recherche web du Mentor",
   economyOff: "Couper l'économie",
@@ -156,7 +156,7 @@ const fr: EnrichmentText = {
 };
 
 const es: EnrichmentText = {
-  title: "Enriquecimientos de los Analisti",
+  title: "Enriquecimientos de los Analistas",
   intro: "Lo que el equipo hace por su cuenta para completar una posición. Una petición tuya sobre una posición se hace siempre, aunque un interruptor esté apagado.",
   loading: "Leo los interruptores del equipo…",
   retry: "Reintentar",
@@ -180,7 +180,7 @@ const es: EnrichmentText = {
   invalidScore: "Un score va de 0 a 100.",
   invalidDays: "Los días van de 1 a 365.",
   webSearch: "Búsqueda web",
-  webAnalista: "Búsqueda web de los Analisti",
+  webAnalista: "Búsqueda web de los Analistas",
   webScout: "Búsqueda web del Scout",
   webMentor: "Búsqueda web del Mentor",
   economyOff: "Apagar el ahorro",
@@ -193,7 +193,7 @@ const es: EnrichmentText = {
 };
 
 const pt: EnrichmentText = {
-  title: "Enriquecimentos dos Analisti",
+  title: "Enriquecimentos dos Analistas",
   intro: "O que a equipa faz sozinha para completar uma posição. Um pedido teu sobre uma posição faz-se sempre, mesmo com um interruptor desligado.",
   loading: "A ler os interruptores da equipa…",
   retry: "Tentar de novo",
@@ -217,7 +217,7 @@ const pt: EnrichmentText = {
   invalidScore: "Um score vai de 0 a 100.",
   invalidDays: "Os dias vão de 1 a 365.",
   webSearch: "Pesquisa web",
-  webAnalista: "Pesquisa web dos Analisti",
+  webAnalista: "Pesquisa web dos Analistas",
   webScout: "Pesquisa web do Scout",
   webMentor: "Pesquisa web do Mentor",
   economyOff: "Desligar a poupança",
@@ -230,7 +230,7 @@ const pt: EnrichmentText = {
 };
 
 const hu: EnrichmentText = {
-  title: "Az Analisti gazdagításai",
+  title: "Az Elemzők gazdagításai",
   intro: "Amit a csapat magától tesz egy pozíció kiegészítésére. Egy pozícióra vonatkozó saját kérésed mindig teljesül, kikapcsolt kapcsolóval is.",
   loading: "Olvasom a csapat kapcsolóit…",
   retry: "Újra",
@@ -254,7 +254,7 @@ const hu: EnrichmentText = {
   invalidScore: "A score 0 és 100 között van.",
   invalidDays: "A napok 1 és 365 között vannak.",
   webSearch: "Webes keresés",
-  webAnalista: "Az Analisti webes keresése",
+  webAnalista: "Az Elemzők webes keresése",
   webScout: "A Scout webes keresése",
   webMentor: "A Mentor webes keresése",
   economyOff: "A takarékosság kikapcsolása",

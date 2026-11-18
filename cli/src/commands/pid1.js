@@ -35,6 +35,7 @@ import { watch } from 'node:fs';
 import { dirname } from 'node:path';
 import { providerSignedIn } from '../lib/provider-signin.js';
 import { setupOpen } from '../lib/setup-open.js';
+import { forgetSpawnFailures } from '../lib/spawn-failed.js';
 
 const JHT_ENTRY = '/app/cli/bin/jht.js';
 const JHT_HOME = '/jht_home';
@@ -1017,6 +1018,8 @@ async function dispatch() {
       void exited;
     });
   };
+  // the roles that could not start in the container before are not this one's (cli/src/lib/spawn-failed.js)
+  if (forgetSpawnFailures()) pid1Log('spawn-failed.json of the container before removed: a new start gets a new verdict');
   startDoctorWatchdog();
 
   // ── Step-cap watchdog: l'unico che guarda se un agente PROGREDISCE, non

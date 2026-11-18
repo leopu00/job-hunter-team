@@ -206,6 +206,27 @@ def test_the_fields_of_the_windows_round_are_said_in_italian_and_a_yes_or_no_is_
 
 
 @pytest.mark.parametrize("lang", LANGS)
+def test_a_contract_preference_is_said_with_the_word_of_the_language_not_contract(box, lang):
+    # giro Linux build11: an Italian card said «Preferenze: Contract: posto fisso, Modalità di lavoro: in sede»
+    stage(box, patch(preferences={"contract": "posto fisso", "work_mode": "in sede"}))
+    ask(box, "preferences", lang=lang)
+    catalog = json.loads((LOCALES / f"{lang}.json").read_text(encoding="utf-8"))
+    text = cards(box)[0]["payload"]["testo"]
+    expected = (f"- {catalog['profile_confirm.field.preferences']}: {catalog['profile_confirm.field.contract_type']}: posto fisso, "
+                f"{catalog['profile_confirm.field.work_mode']}: in sede ({catalog['profile_confirm.deduced']})")
+    assert expected in text.splitlines(), text
+    if lang != "en":
+        assert "Contract" not in text, text
+
+
+@pytest.mark.parametrize("name", ["employment_type", "job_type"])
+def test_the_other_names_of_the_contract_have_its_label_too(box, name):
+    stage(box, patch(preferences={name: "permanent"}))
+    ask(box, "preferences", lang="it")
+    assert "- Preferenze: Contratto: permanent (dedotto" in cards(box)[0]["payload"]["testo"]
+
+
+@pytest.mark.parametrize("lang", LANGS)
 def test_every_language_has_the_labels_of_the_profile_fields(lang: str):
     catalog = json.loads((LOCALES / f"{lang}.json").read_text(encoding="utf-8"))
     english = json.loads((LOCALES / "en.json").read_text(encoding="utf-8"))

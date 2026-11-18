@@ -564,10 +564,18 @@ def _flat_records(value: Any) -> list[dict[str, Any]] | None:
     return None if any(record is None for record in records) else records  # type: ignore[return-value]
 
 
+# Names the Assistant gives a field in place of the one the catalog has words for: «Preferenze: Contract: posto fisso» was an
+# English word in an Italian card (giro Linux build11), the preference held as {"contract": "posto fisso"}.
+_FIELD_ALIASES = {"contract": "contract_type", "employment_type": "contract_type", "job_type": "contract_type"}
+
+
 def _field_label(t: Any, name: str) -> str:
-    """A profile field named for the person: the catalog's words for the ones it has (a nested name by its last part),
-    else the name without underscores."""
-    for candidate in (name, name.rsplit(".", 1)[-1]):
+    """A profile field named for the person: the catalog's words for the ones it has (a nested name by its last part, a
+    name of _FIELD_ALIASES by the field it stands for), else the name without underscores."""
+    last = name.rsplit(".", 1)[-1]
+    for candidate in (name, last, _FIELD_ALIASES.get(last, "")):
+        if not candidate:
+            continue
         key = f"profile_confirm.field.{candidate}"
         label = t(key)
         if label and label != key:
