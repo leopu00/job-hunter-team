@@ -73,3 +73,24 @@ test('jht doctor counts it as a problem, with the way to the details', () => {
   assert.equal(failing.status, 1);
   assert.doesNotMatch(run(home()).stdout, /cannot start/);
 });
+
+test('a new start of the container forgets the roles that could not start in the one before', async () => {
+  const { forgetSpawnFailures } = await import('../src/lib/spawn-failed.js');
+  const root = home({ dottore: { at: '2026-11-17T21:20:00+01:00', rc: 77, why: 'ERROR: dottore took no first turn (no_turn), no attempts left' } });
+  assert.equal(spawnFailures({ home: root, now: NOW }).length, 1);
+  assert.equal(forgetSpawnFailures({ home: root }), true);
+  assert.deepEqual(spawnFailures({ home: root }), []);
+  assert.equal(forgetSpawnFailures({ home: root }), false, 'nothing to forget is not an error');
+  assert.equal(forgetSpawnFailures({ home: join(root, 'missing') }), false);
+});
+
+test('pid1 forgets them once, before the first start of the watchdog, not when it starts it again after a crash', async () => {
+  const { readFileSync } = await import('node:fs');
+  const pid1 = readFileSync(fileURLToPath(new URL('../src/commands/pid1.js', import.meta.url)), 'utf8');
+  const forget = pid1.indexOf('if (forgetSpawnFailures())');
+  const first = pid1.indexOf('\n  startDoctorWatchdog();\n');
+  const respawn = pid1.indexOf("pid1Log('doctor-watchdog respawn after crash');");
+  assert.ok(forget > 0 && first > 0 && respawn > 0);
+  assert.ok(respawn < forget && forget < first, 'between the respawn of the watchdog and its first start');
+  assert.equal(pid1.split('forgetSpawnFailures(').length - 1, 1);
+});

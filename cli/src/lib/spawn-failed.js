@@ -6,7 +6,7 @@
  * counted its empty session as running. `jht team status` and `jht doctor` say it now. The file is in a folder the agents
  * write in: it is read as data, every value cut short and cleaned of control characters.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { JHT_HOME } from '../jht-paths.js';
 import { later } from './texts.js';
@@ -37,4 +37,16 @@ export function spawnFailureTexts(options = {}) {
     // each key written whole: the test of the catalog finds the texts a screen asks for by their name
     return f.why ? later('agents.cannot_start', vars) : later('agents.cannot_start_no_reason', vars);
   });
+}
+
+/**
+ * A new start of the container (`jht up`, an update) gets a new verdict: the failures written in the life before (another
+ * image, another configuration) are not said as today's. Giro Mac build11: after the update `jht team status` still said the
+ * Dottore of build10 «cannot start (last attempt 17/11 21:20)», and the Dottore of build11 was working. pid1 calls it once,
+ * before the first start of the watchdog (not when it starts it again after a crash): a role that still cannot start is
+ * written again at its next attempt.
+ * @returns {boolean} whether there was a file to forget
+ */
+export function forgetSpawnFailures({ home = JHT_HOME } = {}) {
+  try { unlinkSync(join(home, 'logs', 'spawn-failed.json')); return true; } catch { return false; }
 }
