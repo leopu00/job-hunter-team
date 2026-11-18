@@ -3316,17 +3316,17 @@ align_bind_ownership() {
   if podman_native_mode; then
     # Rootless Podman maps the host user onto the container's uid (keep-id):
     # the user stays the owner, and a chown to 1001 would take it away.
-    mkdir -p "$jht_user_dir" 2>/dev/null
+    mkdir -p "$jht_user_dir/allegati" 2>/dev/null   # the folder the welcome names for the CV
     ok "$(tsf installer.ownership_stays_user_rootless 'Ownership of %s and %s stays with this user (rootless Podman)' "$jht_home" "$jht_user_dir")"
   elif [ "${OS:-}" = "macos" ]; then
     # The Mac shares the two folders with the container's VM, which shows
     # them as this user's and lets the container write: nothing needs
     # aligning. A chown to 1001 cannot work for a normal user (EPERM, on every
     # Mac) and, under sudo, would hand ~/.jht to a uid that is nobody here.
-    mkdir -p "$jht_user_dir" 2>/dev/null
+    mkdir -p "$jht_user_dir/allegati" 2>/dev/null   # the folder the welcome names for the CV
     ok "$(tsf installer.ownership_stays_user_macos 'Ownership of %s and %s stays with this user (macOS)' "$jht_home" "$jht_user_dir")"
   elif command -v chown >/dev/null 2>&1; then
-    mkdir -p "$jht_user_dir" 2>/dev/null
+    mkdir -p "$jht_user_dir/allegati" 2>/dev/null   # the folder the welcome names for the CV
     if chown -R 1001:1001 "$jht_home" "$jht_user_dir" 2>/dev/null; then
       ok "$(tsf installer.ownership_1001_1001_container 'Ownership %s and %s → 1001:1001 (container UID)' "$jht_home" "$jht_user_dir")"
     elif repair_bind_ownership_in_container "$jht_home" "$jht_user_dir"; then

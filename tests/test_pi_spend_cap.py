@@ -26,6 +26,13 @@ import pi_spend_cap as cap  # noqa: E402
 import sentinel_loop as loop  # noqa: E402
 
 NOON = datetime(2026, 11, 9, 12, 0, 0, tzinfo=timezone.utc).timestamp()
+
+
+@pytest.fixture(autouse=True)
+def _pace_without_the_restart_reserve(request, monkeypatch):
+    """The pace mechanics are tried with no room kept for a restart; the reserve has its own tests below."""
+    if "reserve" not in request.node.name:
+        monkeypatch.setattr(cap, "RESTART_RESERVE_SHARE", 0.0)
 EUR = {"eur": 10}
 NO_QUOTA = {"reason": "api_key"}
 
@@ -1106,3 +1113,25 @@ def test_a_bridge_that_cannot_list_the_sessions_wakes_the_ones_the_esc_reached(t
     bridge.config = budget(5, bridge.clock["now"], bridge.clock["now"] + 1800)
     bridge.tick(state=state)
     assert _woken(bridge) == ["scout-1", "scout-2"]
+
+
+def test_a_pause_of_the_pace_keeps_a_reserve_for_the_restart_and_says_the_later_time():
+    """5 $ over 10 hours from noon, 0.50 $ an hour, 1.25 $ ahead. 2.00 $ spent at 13:00 (1.75 allowed): without a reserve the pace
+    catches up at 13:30; the team that comes back spends in a minute what the cache costs, so the reserve (10 % of the budget =
+    0.50 $) moves the resume to 14:30, and the pause is not lifted a minute before it."""
+    config = budget(5, NOON, NOON + 10 * HOUR)
+    base = {"budget_cost": 2.0, "recent_cost": 0.0, "before_start": 0.0}
+    verdict = cap.decide(config, base, False, NOON + HOUR, cap.team_budget.read(config))
+    assert verdict["why"] == "pace" and datetime.fromtimestamp(verdict["resumes"], timezone.utc).strftime("%H:%M") == "14:30"
+    held = cap.decide(config, base, False, NOON + HOUR + 31 * 60, cap.team_budget.read(config), held_by_pace=True)
+    assert held and held["why"] == "pace", "13:31: the plain pace would be lifted, the room for the restart is not there yet"
+    assert cap.decide(config, base, False, NOON + 2 * HOUR + 31 * 60, cap.team_budget.read(config), held_by_pace=True)["action"] == "none"
+    # a team that is NOT paused keeps working at the plain pace: the reserve is for the restart only
+    assert cap.decide(config, dict(base, budget_cost=1.7), False, NOON + HOUR, cap.team_budget.read(config))["action"] == "none"
+
+
+def test_the_pace_looks_ahead_at_the_rate_of_the_last_minutes():
+    config = budget(5, NOON, NOON + 10 * HOUR)
+    spent = {"budget_cost": 1.6, "recent_cost": 1.0, "before_start": 0.0}   # 1.0 $ in the last 5 minutes: 0.2 $ by the next look
+    assert cap.decide(config, spent, False, NOON + HOUR, cap.team_budget.read(config))["why"] == "pace"
+    assert cap.decide(config, dict(spent, recent_cost=0.0), False, NOON + HOUR, cap.team_budget.read(config))["action"] == "none"
