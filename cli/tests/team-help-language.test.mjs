@@ -30,7 +30,8 @@ for (const lang of ['pt', 'it', 'de', 'fr', 'es', 'hu']) {
     }
     for (const word of ENGLISH) assert.ok(!out.includes(word), `${word} in: ${out}`);
     const start = help(['team', 'start', '--help'], lang);
-    assert.ok(start.includes(say('team.help.start_mode')) && start.includes(say('team.help.title_arguments') ?? ''), start);
+    // commander lists the arguments only when they have a description: no «Arguments:» title here
+    assert.ok(start.includes(say('team.help.start_mode')) && start.includes(say('team.help.title_options')), start);
     for (const word of ENGLISH) assert.ok(!start.includes(word), `${word} in: ${start}`);
   });
 }

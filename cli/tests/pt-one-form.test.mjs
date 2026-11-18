@@ -10,7 +10,7 @@ const shared = JSON.parse(readFileSync(new URL('../../shared/locales/pt.json', i
 
 // an order to the person in the form of «você», at the start of a sentence or after «depois»/«e»/«ou»
 const ORDERS = ['Aumente', 'Atualize', 'Carregue', 'Cole', 'Corrija', 'Crie', 'Defina', 'Dê', 'Escreva', 'Execute', 'Faça',
-  'Ligue', 'Obtenha', 'Passe', 'Reinicie', 'Responda', 'Tente', 'Veja', 'Verifique', 'Volte', 'Arranque'];
+  'Ligue', 'Obtenha', 'Passe', 'Reinicie', 'Responda', 'Tente', 'Veja', 'Verifique', 'Volte'];
 const ORDER = new RegExp(`(?:^|[.:;!?(]\\s*|\\b(?:depois|e|ou)\\s+)(?:${ORDERS.join('|')})(?![\\p{L}])`, 'iu');
 // «você» itself, and «seu/sua» when it is the person's (their budget, team, key, message, CLI, Telegram)
 const YOU = /\b(?:você|vocês)\b|\b(?:seu|sua)\s+(?:orçamento|equipa|chave|mensagem|CLI|Telegram|variável)\b|à sua espera|a sua segue/iu;
