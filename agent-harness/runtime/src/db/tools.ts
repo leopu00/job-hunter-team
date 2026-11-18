@@ -21,7 +21,7 @@ import { z } from "zod";
 
 import type { ToolExecution, ToolHandler } from "../tools/registry.ts";
 import { ArgvError, destOf, parseArgv, pyRepr, type CommandSpec, type Parsed } from "./argv.ts";
-import { insertApplication, insertCompany, insertHighlight } from "./db-insert.ts";
+import { insertApplication, insertCompany, insertHighlight, resolveCompanyId } from "./db-insert.ts";
 import { dbQuery } from "./db-query.ts";
 import { exclusionBreakdownLine, exclusionPenalty } from "./profile-exclusions.ts";
 import type { EnrichmentPolicy } from "./enrichment-policy.ts";
@@ -829,13 +829,6 @@ const DEDUP_CHECK: CommandSpec = {
 
 function argparseError(prog: string, message: string): ScriptResult {
   return { stdout: "", stderr: `usage: ${prog} [-h] ...\n${prog}: error: ${message}\n`, exitCode: 2 };
-}
-
-/** `_db.resolve_company_id`: the company's id by case-insensitive name, or null. */
-function resolveCompanyId(db: Database, name: string | null): number | null {
-  if (!name) return null;
-  const row = db.prepare("SELECT id FROM companies WHERE LOWER(name) = LOWER(?)").get(name) as { id: number } | undefined;
-  return row ? row.id : null;
 }
 
 function rollbackQuietly(db: Database): void {

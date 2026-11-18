@@ -248,6 +248,27 @@ describe.skipIf(PYTHON_SKILLS === null)("B1 · the position the SCOUT inserts be
   });
 });
 
+describe.skipIf(PYTHON_SKILLS === null)("B1 · a legal form at the end of the name does not keep the position unlinked", () => {
+  it("links «Initrode S.p.a.» to «Initrode» on both sides, at the company's insert and at the position's", async () => {
+    // A test round left two agencies with their companies row and their positions unlinked: the ad said «S.p.a.».
+    const t = twins(root, pipelineSeed);
+    await played(t, [
+      ["scout-1", "db_insert.py", "db_insert", ["position", "--title", "Data Engineer", "--company", "Initrode S.p.a.", "--url", "https://initrode.example/jobs/1", "--found-by", "scout-1"]],
+      ["analista-1", "db_insert.py", "db_insert", ["company", "--name", "Initrode", "--sector", "software", "--analyzed-by", "analista-1"]],
+      ["scout-1", "db_insert.py", "db_insert", ["position", "--title", "Site Reliability Engineer", "--company", "INITRODE SRL", "--url", "https://initrode.example/jobs/2", "--found-by", "scout-1"]],
+    ]);
+    for (const path of [t.tui, t.api]) {
+      const db = openJobsDb(path);
+      try {
+        expect(db.prepare("SELECT COUNT(*) AS n FROM positions p JOIN companies c ON c.id = p.company_id WHERE c.name = 'Initrode'").get()).toEqual({ n: 2 });
+      } finally {
+        db.close();
+      }
+    }
+    expect(strictDiff(t)).toEqual([]);
+  });
+});
+
 describe.skipIf(PYTHON_SKILLS === null)("B1 · ANALISTA: the same check, geocoding, company and highlights, the same rows", () => {
   it("writes positions, companies, highlights, transitions and maintenance events as the TUI scripts do", async () => {
     const t = twins(root, pipelineSeed);

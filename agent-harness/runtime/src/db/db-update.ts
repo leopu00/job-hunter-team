@@ -15,7 +15,7 @@ import { readFileSync } from "node:fs";
 
 import type { Parsed } from "./argv.ts";
 import { cleanAbout } from "./company-about.ts";
-import { linkPositionsToCompany } from "./db-insert.ts";
+import { linkPositionsToCompany, resolveCompanyId } from "./db-insert.ts";
 import { flattenExternalValue, EXTERNAL_INLINE_FIELDS } from "./external-content.ts";
 import type { Database } from "./jobs-db.ts";
 import { interpretEscapes, pyFloatRepr, pySlice, pyStr, pyTruthy, PY_SPACE_CLASS } from "./py-format.ts";
@@ -308,7 +308,7 @@ export function updatePosition(db: Database, a: Parsed, actor: string, userId: s
     if (pyTruthy(a["company"])) {
       set("company = ?", str("company"));
       changed.push(`company=${str("company")}`);
-      const cid = (db.prepare("SELECT id FROM companies WHERE LOWER(name) = LOWER(?)").get(str("company")) as { id: number } | undefined)?.id;
+      const cid = resolveCompanyId(db, str("company"));
       if (cid) {
         set("company_id = ?", cid);
         changed.push(`company_id=${cid}`);

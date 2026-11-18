@@ -2786,6 +2786,36 @@ def _migrate_v3_to_v4(conn: sqlite3.Connection) -> None:
         )
 
 
+# Legal forms at the end of a company name: «Gamma Italia S.p.a.» and «Gamma Italia» are the same company. Only at
+# the end, only these words, and never the whole name (a company called «AG» keeps its name).
+COMPANY_LEGAL_FORMS = frozenset((
+    "spa", "srl", "srls", "sas", "snc", "sapa", "scarl", "scrl", "scpa", "soccoop", "coop", "onlus",
+    "gmbh", "ag", "kg", "ohg", "ug", "ev", "se", "sa", "sarl", "sl", "slu", "ltd", "limited", "inc", "llc", "plc",
+    "corp", "bv", "nv", "ab", "as", "asa", "oy", "oyj", "aps", "kft", "zrt", "nyrt", "bt", "sro", "ltda", "lda",
+))
+
+
+def company_key(name) -> str:
+    """The name of a company as it is compared: no accents, no case, no punctuation, no legal form at the end.
+
+    «Gamma Italia S.p.a.», «GAMMA ITALIA SpA» and «Gamma Italia» give «gamma italia». Anything else of the
+    name stays: «Alfa Italia (azienda cliente non nominata)» is not «Alfa Italia». The agent harness has the same
+    function (`companyKey`, db/tools.ts): both sides must link the same rows.
+    """
+    import unicodedata
+    if not name:
+        return ""
+    text = "".join(c for c in unicodedata.normalize("NFKD", str(name)) if not unicodedata.combining(c)).lower()
+    words = re.findall(r"[a-z0-9]+", re.sub(r"[.'’]", "", text))
+    while len(words) > 1 and words[-1] in COMPANY_LEGAL_FORMS:
+        words.pop()
+    return " ".join(words)
+
+
+def _companies_by_key(conn: sqlite3.Connection, key: str) -> list:
+    return [row[0] for row in conn.execute("SELECT id, name FROM companies") if company_key(row[1]) == key]
+
+
 def link_positions_to_company(conn: sqlite3.Connection, company_id: int, company_name: str) -> int:
     """Collega all'azienda le posizioni con lo stesso nome che non ne hanno ancora una (company_id NULL).
 
@@ -2793,20 +2823,38 @@ def link_positions_to_company(conn: sqlite3.Connection, company_id: int, company
     all'insert). Lo SCOUT inserisce la posizione prima che l'ANALISTA crei l'azienda: senza questo passaggio
     restava company_id NULL per sempre (giri del 16-17/11, 19 posizioni su 26). Stesso confronto del nome
     di resolve_company_id; un collegamento esistente non si tocca. Ritorna quante posizioni ha collegato.
+
+    Il nome si confronta prima uguale (senza maiuscole), poi con company_key: la posizione «Gamma Italia S.p.a.»
+    va all'azienda «Gamma Italia» (in un giro di prova due agenzie avevano la riga azienda e le posizioni scollegate). Con
+    due aziende della stessa chiave («Delta» e «Delta Spa») la chiave non decide: resta solo il nome uguale.
     """
     if not company_id or not company_name:
         return 0
     cur = conn.execute(
         "UPDATE positions SET company_id = ? WHERE company_id IS NULL AND LOWER(company) = LOWER(?)",
         (company_id, company_name))
-    return cur.rowcount or 0
+    linked = cur.rowcount or 0
+    key = company_key(company_name)
+    if not key or _companies_by_key(conn, key) != [company_id]:
+        return linked
+    ids = [row[0] for row in conn.execute(
+        "SELECT id, company FROM positions WHERE company_id IS NULL AND company IS NOT NULL")
+        if company_key(row[1]) == key]
+    for position_id in ids:
+        conn.execute("UPDATE positions SET company_id = ? WHERE id = ? AND company_id IS NULL",
+                     (company_id, position_id))
+    return linked + len(ids)
 
 
 def resolve_company_id(conn: sqlite3.Connection, company_name: str):
-    """Cerca company_id per nome (case-insensitive). Ritorna ID o None."""
+    """Cerca company_id per nome (case-insensitive), poi per company_key se una sola azienda ce l'ha. ID o None."""
     if not company_name:
         return None
     row = conn.execute(
         "SELECT id FROM companies WHERE LOWER(name) = LOWER(?)", (company_name,)
     ).fetchone()
-    return row['id'] if row else None
+    if row:
+        return row['id'] if isinstance(row, sqlite3.Row) else row[0]
+    key = company_key(company_name)
+    found = _companies_by_key(conn, key) if key else []
+    return found[0] if len(found) == 1 else None
