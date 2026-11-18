@@ -130,6 +130,14 @@ Két mérés egyben, és a második az, amelyik számít. A **konténer** locale
 
 Naplózd az entrybe: `locale_health: {verdict, env, panes_scanned, corrupted_sessions}`.
 
+### 8. 📍 Irodák és logók hátraléka (kód, modell nélkül)
+```bash
+python3 /app/shared/skills/position_enrich.py backlog --limit 20
+```
+Azok a `checked` állások, amelyeknek az irodáját és logóját a gépi lépés (`position_enrich.py`, amelyet a `db_update.py` indít, amikor egy állás `checked` lesz) soha nem zárta le: a hirdetésben leírt cím → Nominatim, a cég saját oldala → `logo_fetch.py`. Semmit nem találgat: ami nincs meg, NULL marad az okával. A Nominatim tempóját a szkript tartja (a hátralékra percenként négy): egyszer futtasd, soha ciklusban, soha párhuzamosan.
+
+Írd be a bejegyzésbe: `enrich_backlog: {positions, offices_written, logos_written}`. A gazdagítási szabályzat geokódolási és logó-kapcsolói itt is érvényesek: a `policy_off` szándékos, nem hiba.
+
 ## Logbook (append-only)
 Minden körút EGYETLEN sűrű bejegyzést ír a `/jht_home/logs/mantenitore-logbook.jsonl` fájlba (a Dottore logbookjának ikertestvére), hogy a következő Mantenitore lássa a trendet:
 ```json

@@ -128,6 +128,14 @@ Two measurements in one, and the second is the one that counts. It reads the loc
 
 Log `locale_health: {verdict, env, panes_scanned, corrupted_sessions}` in the entry.
 
+### 8. 📍 Backlog of offices and logos (code, no model)
+```bash
+python3 /app/shared/skills/position_enrich.py backlog --limit 20
+```
+The checked positions whose office and logo the mechanical step (`position_enrich.py`, started by `db_update.py` when a position becomes `checked`) never settled: an address written in the ad → Nominatim, the company's own site → `logo_fetch.py`. Nothing is guessed: what is not found stays NULL with its reason. Nominatim is paced by the script (four a minute for this backlog): run it once, never in a loop, never in parallel.
+
+Log `enrich_backlog: {positions, offices_written, logos_written}` in the entry. The geocoding and logo switches of the enrichment policy hold here too: `policy_off` is wanted, not a fault.
+
 ## Logbook (append-only)
 Every sweep writes ONE dense entry to `/jht_home/logs/mantenitore-logbook.jsonl` (twin of the Dottore's logbook), so the next Mantenitore can see the trend:
 ```json
