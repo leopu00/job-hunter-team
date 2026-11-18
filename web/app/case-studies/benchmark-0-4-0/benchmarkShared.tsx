@@ -46,6 +46,7 @@ export type Copy = {
   need: string;
   back: string;
   footer: string;
+  marks: string;
   outcome: Record<string, string>;
   system: Record<string, string>;
   profiles: Record<string, string>;
@@ -128,6 +129,8 @@ export const T: Record<Locale, Copy> = {
     back: "← All case studies",
     footer:
       "Synthetic profiles, no personal data · numbers from the test reports of 14-17/11/2026.",
+    marks:
+      "The logos only name the service a test used and imply no endorsement. Trademarks and logos belong to their owners.",
     outcome: {
       pass: "pass",
       reservations: "with reservations",
@@ -230,7 +233,7 @@ export const T: Record<Locale, Copy> = {
       "serviceOpenai": "OpenAI · API key",
       "serviceGlm": "Z.ai (GLM) · API key",
       "serviceKimi": "Kimi (Moonshot) · API key",
-      "codexSubscription": "OpenAI Codex · subscription (only for those who already have 0.3.x, like our beta tester)",
+      "codexSubscription": "OpenAI Codex · subscription (only for those who already have 0.3.x, as in our beta test)",
       "openaiSubscription": "OpenAI · ChatGPT subscription on Pi",
       "noKeyOnDisk": "No API key is left written on the disk",
       "betaTester": "Beta test: version updated and team at work"
@@ -239,7 +242,7 @@ export const T: Record<Locale, Copy> = {
       "updateMacBuild10": "build 10: setup all in Portuguese, the saved key kept, 1 new position (score 74)",
       "updateWindowsBuild10": "build 10: positions, profile and key kept, all in German; after the update the Analyst never started (13 positions waiting)",
       "languagePortugueseOk": "build 10: Portuguese all the way on the Mac",
-      "codexBetaInUse": "in use every day by our beta tester (chart 6); not yet tried on builds 9 and 10",
+      "codexBetaInUse": "in use in our beta test (chart 6); not yet tried on builds 9 and 10",
       "updateLinuxBuild9": "build 9: passed (its round is not in the table below)",
       "installerBlockedBuild9": "build 9: stopped by the installer (fix in build 10, round under way)",
       "benchCook": "79% relevant",
@@ -249,7 +252,7 @@ export const T: Record<Locale, Copy> = {
       "brakeFixedRetry": "fixed in builds 9 and 10: to try again",
       "languageGermanOk": "build 9: German all the way on Linux",
       "chatgptFreeRefused": "sign-in refused (Free plan)",
-      "securityPreTag": "review before the tag: no P0 or P1; the key-on-disk case is closed",
+      "securityPreTag": "review before the tag: the verdict comes on the exact version of the tag; the key-on-disk case is closed",
       "cleanLinuxRoundMissing": "clean install on build 6: its round is not in the table below",
       "openaiRoundMissing": "proved on build 6: its round is not in the table below",
       "redoOnBuild9": "to redo on build 9",
@@ -284,7 +287,7 @@ export const T: Record<Locale, Copy> = {
       "doctor": "Doctor and Maintainer",
       "services": "Services",
       "security": "Security",
-      "beta": "Beta tester",
+      "beta": "Beta test",
       "realUser": "Full round as a real user, with a trade outside IT",
     },
     targetCriteria: {
@@ -416,6 +419,8 @@ export const T: Record<Locale, Copy> = {
     back: "← Tutti i case study",
     footer:
       "Profili finti, nessun dato personale · numeri dai verbali dei collaudi del 14-17/11/2026.",
+    marks:
+      "I loghi indicano solo il servizio usato da una prova e non implicano alcuna approvazione. Marchi e loghi appartengono ai rispettivi proprietari.",
     outcome: {
       pass: "passa",
       reservations: "con riserva",
@@ -518,7 +523,7 @@ export const T: Record<Locale, Copy> = {
       "serviceOpenai": "OpenAI · chiave API",
       "serviceGlm": "Z.ai (GLM) · chiave API",
       "serviceKimi": "Kimi (Moonshot) · chiave API",
-      "codexSubscription": "OpenAI Codex · abbonamento (solo chi ha già la 0.3.x, come la nostra beta tester)",
+      "codexSubscription": "OpenAI Codex · abbonamento (solo chi ha già la 0.3.x, come nel nostro beta test)",
       "openaiSubscription": "OpenAI · abbonamento ChatGPT su Pi",
       "noKeyOnDisk": "Nessuna chiave API resta scritta sul disco",
       "betaTester": "Beta test: versione aggiornata e squadra al lavoro"
@@ -527,7 +532,7 @@ export const T: Record<Locale, Copy> = {
       "updateMacBuild10": "build 10: setup tutto in portoghese, chiave salvata tenuta, 1 annuncio nuovo (punteggio 74)",
       "updateWindowsBuild10": "build 10: annunci, profilo e chiave tenuti, tutto in tedesco; dopo l'aggiornamento l'Analista non è mai partito (13 annunci in attesa)",
       "languagePortugueseOk": "build 10: portoghese dall'inizio alla fine sul Mac",
-      "codexBetaInUse": "in uso ogni giorno dalla nostra beta tester (grafico 6); non ancora provato sulle build 9 e 10",
+      "codexBetaInUse": "in uso nel nostro beta test (grafico 6); non ancora provato sulle build 9 e 10",
       "updateLinuxBuild9": "build 9: superato (il giro non è nella tabella sotto)",
       "installerBlockedBuild9": "build 9: fermato dall'installer (correzione in build 10, giro in corso)",
       "benchCook": "79% pertinenti",
@@ -537,7 +542,7 @@ export const T: Record<Locale, Copy> = {
       "brakeFixedRetry": "corretto nelle build 9 e 10: da riprovare",
       "languageGermanOk": "build 9: tedesco dall'inizio alla fine su Linux",
       "chatgptFreeRefused": "accesso rifiutato (piano Free)",
-      "securityPreTag": "controllo prima del tag: nessun P0 o P1; il caso della chiave su disco è chiuso",
+      "securityPreTag": "controllo prima del tag: il verdetto arriva sulla versione esatta del tag; il caso della chiave su disco è chiuso",
       "cleanLinuxRoundMissing": "installazione vergine sulla build 6: il suo giro non è nella tabella qui sotto",
       "openaiRoundMissing": "provato sulla build 6: il suo giro non è nella tabella qui sotto",
       "redoOnBuild9": "da rifare sulla build 9",
@@ -572,7 +577,7 @@ export const T: Record<Locale, Copy> = {
       "doctor": "Dottore e Mantenitore",
       "services": "Servizi",
       "security": "Sicurezza",
-      "beta": "Beta tester",
+      "beta": "Beta test",
       "realUser": "Giro completo da utente vero, con un mestiere non IT",
     },
     targetCriteria: {
@@ -704,6 +709,8 @@ export const T: Record<Locale, Copy> = {
     back: "← Alle Fallstudien",
     footer:
       "Synthetische Profile, keine personenbezogenen Daten · Zahlen aus den Testprotokollen vom 14.-17.11.2026.",
+    marks:
+      "Die Logos nennen nur den Dienst, den ein Test genutzt hat, und bedeuten keine Billigung. Marken und Logos gehören ihren jeweiligen Inhabern.",
     outcome: {
       pass: "bestanden",
       reservations: "mit Vorbehalt",
@@ -806,7 +813,7 @@ export const T: Record<Locale, Copy> = {
       "serviceOpenai": "OpenAI · API-Schlüssel",
       "serviceGlm": "Z.ai (GLM) · API-Schlüssel",
       "serviceKimi": "Kimi (Moonshot) · API-Schlüssel",
-      "codexSubscription": "OpenAI Codex · Abo (nur wer schon 0.3.x hat, wie unsere Betatesterin)",
+      "codexSubscription": "OpenAI Codex · Abo (nur wer schon 0.3.x hat, wie in unserem Betatest)",
       "openaiSubscription": "OpenAI · ChatGPT-Abo auf Pi",
       "noKeyOnDisk": "Kein API-Schlüssel bleibt auf der Festplatte gespeichert",
       "betaTester": "Betatest: Version aktualisiert und Team bei der Arbeit"
@@ -815,7 +822,7 @@ export const T: Record<Locale, Copy> = {
       "updateMacBuild10": "Build 10: Setup ganz auf Portugiesisch, gespeicherter Schlüssel behalten, 1 neue Stelle (Score 74)",
       "updateWindowsBuild10": "Build 10: Stellen, Profil und Schlüssel behalten, alles auf Deutsch; nach dem Update startete der Analyst nie (13 Stellen warten)",
       "languagePortugueseOk": "Build 10: durchgehend Portugiesisch auf dem Mac",
-      "codexBetaInUse": "täglich im Einsatz bei unserer Betatesterin (Diagramm 6); auf Build 9 und 10 noch nicht geprüft",
+      "codexBetaInUse": "im Einsatz in unserem Betatest (Diagramm 6); auf Build 9 und 10 noch nicht geprüft",
       "updateLinuxBuild9": "Build 9: bestanden (die Runde steht nicht in der Tabelle unten)",
       "installerBlockedBuild9": "Build 9: vom Installer gestoppt (Korrektur in Build 10, Runde läuft)",
       "benchCook": "79 % passend",
@@ -825,7 +832,7 @@ export const T: Record<Locale, Copy> = {
       "brakeFixedRetry": "in Build 9 und 10 korrigiert: erneut zu prüfen",
       "languageGermanOk": "Build 9: durchgehend Deutsch auf Linux",
       "chatgptFreeRefused": "Anmeldung abgelehnt (Free-Tarif)",
-      "securityPreTag": "Prüfung vor dem Tag: kein P0 oder P1; der Fall des Schlüssels auf der Festplatte ist geschlossen",
+      "securityPreTag": "Prüfung vor dem Tag: das Urteil kommt auf die genaue Version des Tags; der Fall des Schlüssels auf der Festplatte ist geschlossen",
       "cleanLinuxRoundMissing": "Neuinstallation auf Build 6: ihr Lauf fehlt in der Tabelle unten",
       "openaiRoundMissing": "auf Build 6 geprüft: der Lauf fehlt in der Tabelle unten",
       "redoOnBuild9": "auf Build 9 zu wiederholen",
@@ -860,7 +867,7 @@ export const T: Record<Locale, Copy> = {
       "doctor": "Doktor und Wartung",
       "services": "Dienste",
       "security": "Sicherheit",
-      "beta": "Betatester",
+      "beta": "Betatest",
       "realUser": "Ganze Runde als echter Nutzer, mit einem Beruf außerhalb der IT",
     },
     targetCriteria: {
@@ -992,6 +999,8 @@ export const T: Record<Locale, Copy> = {
     back: "← Todos los casos de estudio",
     footer:
       "Perfiles ficticios, sin datos personales · cifras de los informes de prueba del 14-17/11/2026.",
+    marks:
+      "Los logotipos solo indican el servicio que usó una prueba y no implican ningún respaldo. Las marcas y los logotipos pertenecen a sus respectivos propietarios.",
     outcome: {
       pass: "pasa",
       reservations: "con reservas",
@@ -1095,7 +1104,7 @@ export const T: Record<Locale, Copy> = {
       "serviceOpenai": "OpenAI · clave API",
       "serviceGlm": "Z.ai (GLM) · clave API",
       "serviceKimi": "Kimi (Moonshot) · clave API",
-      "codexSubscription": "OpenAI Codex · suscripción (solo quien ya tiene la 0.3.x, como nuestra beta tester)",
+      "codexSubscription": "OpenAI Codex · suscripción (solo quien ya tiene la 0.3.x, como en nuestra prueba beta)",
       "openaiSubscription": "OpenAI · suscripción ChatGPT en Pi",
       "noKeyOnDisk": "Ninguna clave API queda escrita en el disco",
       "betaTester": "Beta test: versión actualizada y equipo trabajando"
@@ -1104,7 +1113,7 @@ export const T: Record<Locale, Copy> = {
       "updateMacBuild10": "build 10: configuración toda en portugués, clave guardada conservada, 1 anuncio nuevo (puntuación 74)",
       "updateWindowsBuild10": "build 10: anuncios, perfil y clave conservados, todo en alemán; tras la actualización el Analista nunca arrancó (13 anuncios en espera)",
       "languagePortugueseOk": "build 10: portugués de principio a fin en el Mac",
-      "codexBetaInUse": "en uso cada día por nuestra beta tester (gráfico 6); aún no probado en las builds 9 y 10",
+      "codexBetaInUse": "en uso en nuestra prueba beta (gráfico 6); aún no probado en las builds 9 y 10",
       "updateLinuxBuild9": "build 9: superada (su ronda no está en la tabla de abajo)",
       "installerBlockedBuild9": "build 9: parada por el instalador (corrección en la build 10, ronda en curso)",
       "benchCook": "79 % pertinentes",
@@ -1114,7 +1123,7 @@ export const T: Record<Locale, Copy> = {
       "brakeFixedRetry": "corregido en las builds 9 y 10: por volver a probar",
       "languageGermanOk": "build 9: alemán de principio a fin en Linux",
       "chatgptFreeRefused": "acceso rechazado (plan Free)",
-      "securityPreTag": "revisión antes del tag: ningún P0 ni P1; el caso de la clave en disco está cerrado",
+      "securityPreTag": "revisión antes del tag: el veredicto llega sobre la versión exacta del tag; el caso de la clave en disco está cerrado",
       "cleanLinuxRoundMissing": "instalación desde cero en la build 6: su ronda no está en la tabla de abajo",
       "openaiRoundMissing": "probado en la build 6: su ronda no está en la tabla de abajo",
       "redoOnBuild9": "por repetir en la build 9",
@@ -1149,7 +1158,7 @@ export const T: Record<Locale, Copy> = {
       "doctor": "Doctor y Mantenedor",
       "services": "Servicios",
       "security": "Seguridad",
-      "beta": "Beta tester",
+      "beta": "Prueba beta",
       "realUser": "Ronda completa como usuario real, con un oficio fuera de la informática",
     },
     targetCriteria: {
@@ -1282,6 +1291,8 @@ export const T: Record<Locale, Copy> = {
     back: "← Toutes les études de cas",
     footer:
       "Profils fictifs, aucune donnée personnelle · chiffres des procès-verbaux d'essai du 14-17/11/2026.",
+    marks:
+      "Les logos indiquent seulement le service utilisé par un essai et n'impliquent aucune approbation. Les marques et les logos appartiennent à leurs propriétaires respectifs.",
     outcome: {
       pass: "réussi",
       reservations: "avec réserves",
@@ -1385,7 +1396,7 @@ export const T: Record<Locale, Copy> = {
       "serviceOpenai": "OpenAI · clé API",
       "serviceGlm": "Z.ai (GLM) · clé API",
       "serviceKimi": "Kimi (Moonshot) · clé API",
-      "codexSubscription": "OpenAI Codex · abonnement (seulement pour qui a déjà la 0.3.x, comme notre bêta-testeuse)",
+      "codexSubscription": "OpenAI Codex · abonnement (seulement pour qui a déjà la 0.3.x, comme dans notre test bêta)",
       "openaiSubscription": "OpenAI · abonnement ChatGPT sur Pi",
       "noKeyOnDisk": "Aucune clé API ne reste écrite sur le disque",
       "betaTester": "Bêta-test : version mise à jour et équipe au travail"
@@ -1394,7 +1405,7 @@ export const T: Record<Locale, Copy> = {
       "updateMacBuild10": "build 10 : configuration tout en portugais, clé enregistrée gardée, 1 nouvelle annonce (score 74)",
       "updateWindowsBuild10": "build 10 : annonces, profil et clé gardés, tout en allemand ; après la mise à jour l'Analyste n'a jamais démarré (13 annonces en attente)",
       "languagePortugueseOk": "build 10 : portugais du début à la fin sur le Mac",
-      "codexBetaInUse": "utilisé chaque jour par notre bêta-testeuse (graphique 6) ; pas encore essayé sur les builds 9 et 10",
+      "codexBetaInUse": "utilisé dans notre test bêta (graphique 6) ; pas encore essayé sur les builds 9 et 10",
       "updateLinuxBuild9": "build 9 : réussi (son tour n'est pas dans le tableau ci-dessous)",
       "installerBlockedBuild9": "build 9 : arrêté par l'installeur (correction dans la build 10, tour en cours)",
       "benchCook": "79 % pertinents",
@@ -1404,7 +1415,7 @@ export const T: Record<Locale, Copy> = {
       "brakeFixedRetry": "corrigé dans les builds 9 et 10 : à réessayer",
       "languageGermanOk": "build 9 : allemand du début à la fin sous Linux",
       "chatgptFreeRefused": "connexion refusée (forfait Free)",
-      "securityPreTag": "revue avant le tag : aucun P0 ni P1 ; le cas de la clé sur disque est clos",
+      "securityPreTag": "revue avant le tag : le verdict porte sur la version exacte du tag ; le cas de la clé sur disque est clos",
       "cleanLinuxRoundMissing": "installation vierge sur la build 6 : son tour n'est pas dans le tableau ci-dessous",
       "openaiRoundMissing": "vérifié sur la build 6 : son tour n'est pas dans le tableau ci-dessous",
       "redoOnBuild9": "à refaire sur la build 9",
@@ -1439,7 +1450,7 @@ export const T: Record<Locale, Copy> = {
       "doctor": "Docteur et Mainteneur",
       "services": "Services",
       "security": "Sécurité",
-      "beta": "Bêta-testeur",
+      "beta": "Test bêta",
       "realUser": "Tour complet en vrai utilisateur, avec un métier hors informatique",
     },
     targetCriteria: {
@@ -1570,6 +1581,8 @@ export const T: Record<Locale, Copy> = {
     back: "← Todos os estudos de caso",
     footer:
       "Perfis fictícios, sem dados pessoais · números dos relatórios de teste de 14-17/11/2026.",
+    marks:
+      "Os logótipos indicam só o serviço usado num teste e não implicam qualquer aprovação. As marcas e os logótipos pertencem aos respetivos proprietários.",
     outcome: {
       pass: "passa",
       reservations: "com reservas",
@@ -1672,7 +1685,7 @@ export const T: Record<Locale, Copy> = {
       "serviceOpenai": "OpenAI · chave API",
       "serviceGlm": "Z.ai (GLM) · chave API",
       "serviceKimi": "Kimi (Moonshot) · chave API",
-      "codexSubscription": "OpenAI Codex · assinatura (só quem já tem a 0.3.x, como a nossa beta tester)",
+      "codexSubscription": "OpenAI Codex · assinatura (só quem já tem a 0.3.x, como no nosso teste beta)",
       "openaiSubscription": "OpenAI · assinatura ChatGPT no Pi",
       "noKeyOnDisk": "Nenhuma chave API fica escrita no disco",
       "betaTester": "Beta teste: versão atualizada e equipa a trabalhar"
@@ -1681,7 +1694,7 @@ export const T: Record<Locale, Copy> = {
       "updateMacBuild10": "build 10: configuração toda em português, chave guardada mantida, 1 anúncio novo (pontuação 74)",
       "updateWindowsBuild10": "build 10: anúncios, perfil e chave mantidos, tudo em alemão; depois da atualização o Analista nunca arrancou (13 anúncios à espera)",
       "languagePortugueseOk": "build 10: português do início ao fim no Mac",
-      "codexBetaInUse": "em uso todos os dias pela nossa beta tester (gráfico 6); ainda não testado nas builds 9 e 10",
+      "codexBetaInUse": "em uso no nosso teste beta (gráfico 6); ainda não testado nas builds 9 e 10",
       "updateLinuxBuild9": "build 9: aprovado (a rodada não está na tabela abaixo)",
       "installerBlockedBuild9": "build 9: parado pelo instalador (correção na build 10, rodada em curso)",
       "benchCook": "79% pertinentes",
@@ -1691,7 +1704,7 @@ export const T: Record<Locale, Copy> = {
       "brakeFixedRetry": "corrigido nas builds 9 e 10: a voltar a testar",
       "languageGermanOk": "build 9: alemão do início ao fim no Linux",
       "chatgptFreeRefused": "acesso recusado (plano Free)",
-      "securityPreTag": "revisão antes da tag: nenhum P0 ou P1; o caso da chave no disco está fechado",
+      "securityPreTag": "revisão antes da tag: o veredicto chega sobre a versão exata da tag; o caso da chave no disco está fechado",
       "cleanLinuxRoundMissing": "instalação de raiz na build 6: a sua ronda não está na tabela abaixo",
       "openaiRoundMissing": "provado na build 6: a sua ronda não está na tabela abaixo",
       "redoOnBuild9": "a repetir na build 9",
@@ -1726,7 +1739,7 @@ export const T: Record<Locale, Copy> = {
       "doctor": "Doutor e Mantenedor",
       "services": "Serviços",
       "security": "Segurança",
-      "beta": "Beta tester",
+      "beta": "Teste beta",
       "realUser": "Rodada completa como utilizador real, com um ofício fora da informática",
     },
     targetCriteria: {
@@ -1858,6 +1871,8 @@ export const T: Record<Locale, Copy> = {
     back: "← Minden esettanulmány",
     footer:
       "Kitalált profilok, személyes adat nélkül · számok a 2026.11.14–17-i próbák jegyzőkönyveiből.",
+    marks:
+      "A logók csak azt a szolgáltatást jelzik, amelyet egy próba használt, és nem jelentenek támogatást. A védjegyek és a logók a tulajdonosaiké.",
     outcome: {
       pass: "megfelelt",
       reservations: "fenntartással",
@@ -1960,7 +1975,7 @@ export const T: Record<Locale, Copy> = {
       "serviceOpenai": "OpenAI · API-kulcs",
       "serviceGlm": "Z.ai (GLM) · API-kulcs",
       "serviceKimi": "Kimi (Moonshot) · API-kulcs",
-      "codexSubscription": "OpenAI Codex · előfizetés (csak akinek már megvan a 0.3.x, mint a bétatesztelőnknek)",
+      "codexSubscription": "OpenAI Codex · előfizetés (csak akinek már megvan a 0.3.x, mint a bétatesztünkben)",
       "openaiSubscription": "OpenAI · ChatGPT-előfizetés Pi-n",
       "noKeyOnDisk": "Egyetlen API-kulcs sem marad a lemezre írva",
       "betaTester": "Béta teszt: a verzió frissítve, a csapat munkában"
@@ -1969,7 +1984,7 @@ export const T: Record<Locale, Copy> = {
       "updateMacBuild10": "10. build: a beállítás végig portugálul, a mentett kulcs megmaradt, 1 új hirdetés (pontszám 74)",
       "updateWindowsBuild10": "10. build: hirdetések, profil és kulcs megmaradt, végig németül; a frissítés után az elemző sosem indult el (13 hirdetés vár)",
       "languagePortugueseOk": "10. build: végig portugálul a Macen",
-      "codexBetaInUse": "a bétatesztelőnk minden nap használja (6. grafikon); a 9. és 10. buildön még nem próbálták",
+      "codexBetaInUse": "a bétatesztünkben használatban (6. grafikon); a 9. és 10. buildön még nem próbálták",
       "updateLinuxBuild9": "9. build: sikeres (a köre nincs az alábbi táblázatban)",
       "installerBlockedBuild9": "9. build: a telepítő megállította (javítás a 10. buildben, a kör folyamatban)",
       "benchCook": "79% releváns",
@@ -1979,7 +1994,7 @@ export const T: Record<Locale, Copy> = {
       "brakeFixedRetry": "javítva a 9. és 10. buildben: újra kipróbálandó",
       "languageGermanOk": "9. build: végig németül Linuxon",
       "chatgptFreeRefused": "bejelentkezés elutasítva (Free csomag)",
-      "securityPreTag": "átnézés a tag előtt: nincs P0 vagy P1; a lemezen maradt kulcs ügye lezárva",
+      "securityPreTag": "átnézés a tag előtt: az ítélet a tag pontos verziójára születik; a lemezen maradt kulcs ügye lezárva",
       "cleanLinuxRoundMissing": "tiszta telepítés a 6. buildön: a futása nincs a lenti táblázatban",
       "openaiRoundMissing": "a 6. buildön igazolva: a futása nincs a lenti táblázatban",
       "redoOnBuild9": "a 9. buildön megismétlendő",
@@ -2014,7 +2029,7 @@ export const T: Record<Locale, Copy> = {
       "doctor": "Doktor és Karbantartó",
       "services": "Szolgáltatások",
       "security": "Biztonság",
-      "beta": "Bétatesztelő",
+      "beta": "Bétateszt",
       "realUser": "Teljes kör valódi felhasználóként, nem IT szakmával",
     },
     targetCriteria: {
