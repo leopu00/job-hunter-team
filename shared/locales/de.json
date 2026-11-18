@@ -372,6 +372,7 @@
   "wrapper.line.integration.not_installed": "nicht vorhanden",
   "wrapper.line.integration.not_installed_yet": "noch nicht installiert",
   "wrapper.tools.arriving": "Die Werkzeuge der Scouts sind unterwegs: Das vollständige Image wird im Hintergrund heruntergeladen (etwa 3 GB). Die Stellensuche startet von selbst, sobald sie da sind; du musst nichts tun.",
+  "wrapper.tools.not_started": "Der Download der Scout-Werkzeuge hat nicht begonnen, das Team kann also noch nicht nach Stellen suchen. Starte ihn mit jht tools pull (auch jht up startet ihn).",
   "wrapper.tools.waiting": "Die Werkzeuge der Scouts sind da: Das Team wechselt von selbst darauf, sobald das Onboarding abgeschlossen ist.",
   "wrapper.tools.ready": "Die Werkzeuge der Scouts sind da: Das Team sucht mit dem vollständigen Image.",
   "wrapper.tools.engine_down": "Der Stand der Werkzeuge der Scouts lässt sich nicht lesen: Die Container-Engine antwortet nicht. Starte sie mit jht up.",

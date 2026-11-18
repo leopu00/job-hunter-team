@@ -372,6 +372,7 @@
   "wrapper.line.integration.not_installed": "non installé",
   "wrapper.line.integration.not_installed_yet": "pas encore installé",
   "wrapper.tools.arriving": "Les outils des Scout arrivent : l'image complète se télécharge en arrière-plan (environ 3 Go). La recherche d'offres démarre toute seule dès qu'ils sont là ; tu n'as rien à faire.",
+  "wrapper.tools.not_started": "Le téléchargement des outils des Scouts n'a pas commencé, l'équipe ne peut donc pas encore chercher d'offres. Lance jht tools pull pour le démarrer (jht up le démarre aussi).",
   "wrapper.tools.waiting": "Les outils des Scout sont là : l'équipe passe dessus toute seule dès que l'onboarding est terminé.",
   "wrapper.tools.ready": "Les outils des Scout sont là : l'équipe cherche avec l'image complète.",
   "wrapper.tools.engine_down": "L'état des outils des Scout ne peut pas être lu : le moteur de conteneurs ne répond pas. Démarre-le avec jht up.",

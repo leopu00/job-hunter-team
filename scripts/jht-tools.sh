@@ -336,7 +336,7 @@ tools_switch_auto() {
   [ "$up" -eq 0 ] || tools_clean_old_images
 }
 
-# What the wrapper tells the person, one word: arriving (pulling or waiting), failed (the pull), disk_low (no room for the pull),
+# What the wrapper tells the person, one word: arriving (pulling), not_started (no pull under way and none failed), failed (the pull), disk_low (no room for the pull),
 # switch_failed, or nothing.
 tools_person_state() {
   if [ -s "$TOOLS_SWITCH_FAILED_FILE" ] && [ ! -f "$RUNTIME_TIER_FILE" ]; then printf 'switch_failed\n'; return 0; fi
@@ -346,7 +346,7 @@ tools_person_state() {
   elif tools_pulling; then printf 'arriving\n'
   elif [ "$(head -c 40 "$TOOLS_FAILED_FILE" 2>/dev/null | tr -cd 'a-z_')" = disk_low ]; then printf 'disk_low\n'
   elif [ -s "$TOOLS_FAILED_FILE" ]; then printf 'failed\n'
-  else printf 'arriving\n'
+  else printf 'not_started\n'  # no pull under way, none failed: nobody started it (an `up` that ended early); it is not «arriving»
   fi
 }
 

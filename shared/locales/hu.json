@@ -373,6 +373,7 @@
   "wrapper.line.integration.not_installed": "nincs telepítve",
   "wrapper.line.integration.not_installed_yet": "még nincs telepítve",
   "wrapper.tools.arriving": "A felderítők (Scout) eszközei úton vannak: a teljes kép a háttérben töltődik le (kb. 3 GB). Az állások keresése magától elindul, amint megérkeztek; nincs teendőd.",
+  "wrapper.tools.not_started": "A Scoutok eszközeinek letöltése nem indult el, ezért a csapat még nem tud állásokat keresni. Indítsd el a jht tools pull paranccsal (a jht up is elindítja).",
   "wrapper.tools.waiting": "A felderítők (Scout) eszközei megérkeztek: a csapat magától átvált rájuk, amint a bevezetés lezárult.",
   "wrapper.tools.ready": "A felderítők (Scout) eszközei megérkeztek: a csapat a teljes képpel keres.",
   "wrapper.tools.engine_down": "A felderítők (Scout) eszközeinek állapota nem olvasható: a konténermotor nem válaszol. Indítsd el a jht up paranccsal.",
