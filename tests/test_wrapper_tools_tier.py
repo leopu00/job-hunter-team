@@ -1299,3 +1299,14 @@ def test_a_core_install_with_no_pull_under_way_and_no_failure_is_not_started_not
     assert box.run("tools_person_state", **KICK_ENV).stdout == "arriving\n"
     (box.fake / "pull-hold").unlink()
     box.wait_for("ready")
+
+
+def test_a_command_that_only_reads_the_team_waits_for_the_switch_instead_of_saying_it_cannot_attest():
+    """Giro Mac 18/11: `jht team status` during the change of image said «operation refused» (the container cannot be attested
+    between the down and the up of the switch). It waits for the switch first, as ensure_up does, and says so."""
+    text = WRAPPER.read_text(encoding="utf-8")
+    body = text[text.index("\nread_only_team_command() {\n"):]
+    body = body[: body.index("\n}\n")]
+    assert "wait_for_tools_switch" in body
+    assert body.index("wait_for_tools_switch") < body.index("container_up"), "before the check of the container"
+    assert "jht_machine_output; then wait_for_tools_switch quiet" in body, "a program reading the output gets no extra line"
