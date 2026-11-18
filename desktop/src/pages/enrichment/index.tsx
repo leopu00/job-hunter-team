@@ -4,12 +4,16 @@ import { ToastProvider, useToast } from "@/app/components/Toast";
 import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
 import {
+  extraCost,
   readTeamSettings,
   switchValueIsValid,
+  valueAt,
   writeTeamSettings,
+  type EnrichmentCosts,
   type EnrichmentPatch,
   type EnrichmentPolicy,
   type EnrichmentSwitch,
+  type ExtraCost,
   type TeamSettings,
 } from "../../lib/team-settings-native";
 import type { PageProps } from "../types";
@@ -29,6 +33,9 @@ interface Draft {
   recheck: boolean;
   recheckMin: string;
   recheckDays: string;
+  webAnalista: boolean;
+  webScout: boolean;
+  webMentor: boolean;
 }
 
 function draftOf(p: EnrichmentPolicy): Draft {
@@ -37,6 +44,7 @@ function draftOf(p: EnrichmentPolicy): Draft {
     economy: p.economy, logo: p.logo.enabled, logoMin: text(p.logo.min_score), geocodePipeline: p.geocode_pipeline.enabled,
     geocodeMissing: p.geocode_missing.enabled, geocodeMin: text(p.geocode_missing.min_score), nonRemoteOnly: p.geocode_missing.non_remote_only,
     recheck: p.recheck_weekly.enabled, recheckMin: text(p.recheck_weekly.min_score), recheckDays: text(p.recheck_weekly.older_than_days),
+    webAnalista: p.web_search.analista.enabled, webScout: p.web_search.scout.enabled, webMentor: p.web_search.mentor.enabled,
   };
 }
 
@@ -60,6 +68,9 @@ export function patchOf(saved: EnrichmentPolicy, draft: Draft, t: EnrichmentText
     ["recheck_weekly.enabled", draft.recheck, saved.recheck_weekly.enabled],
     ["recheck_weekly.min_score", numberOf(draft.recheckMin), saved.recheck_weekly.min_score],
     ["recheck_weekly.older_than_days", numberOf(draft.recheckDays), saved.recheck_weekly.older_than_days],
+    ["web_search.analista.enabled", draft.webAnalista, saved.web_search.analista.enabled],
+    ["web_search.scout.enabled", draft.webScout, saved.web_search.scout.enabled],
+    ["web_search.mentor.enabled", draft.webMentor, saved.web_search.mentor.enabled],
   ];
   const patch: EnrichmentPatch = {};
   for (const [key, value, before] of values) {
@@ -67,6 +78,47 @@ export function patchOf(saved: EnrichmentPolicy, draft: Draft, t: EnrichmentText
     if (value !== before) patch[key] = value;
   }
   return { patch };
+}
+
+function nameOf(key: EnrichmentSwitch, t: EnrichmentText): string {
+  switch (key) {
+    case "economy": return t.economyOff;
+    case "logo.enabled": return t.logo;
+    case "geocode_pipeline.enabled": return t.geocodePipeline;
+    case "geocode_missing.enabled": return t.geocodeMissing;
+    case "geocode_missing.non_remote_only": return t.nonRemoteOnly;
+    case "recheck_weekly.enabled": return t.recheck;
+    case "web_search.analista.enabled": return t.webAnalista;
+    case "web_search.scout.enabled": return t.webScout;
+    case "web_search.mentor.enabled": return t.webMentor;
+    default: return key;
+  }
+}
+
+/** Dollars in the person's language: 0,008 · 0,40. */
+export function money(value: number, locale: string): string {
+  const digits = value !== 0 && value < 0.01 ? 3 : 2;
+  return new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: digits }).format(value);
+}
+
+/** The sentence of what a change costs more, in the person's language (the same words as `jht enrichment set`). */
+export function costSentence(key: EnrichmentSwitch, cost: ExtraCost, t: EnrichmentText, locale: string): string {
+  const fill = (template: string, vars: Record<string, string | number>) =>
+    template.replace(/\{(\w+)\}/g, (whole, name: string) => (name in vars ? String(vars[name]) : whole));
+  const name = nameOf(key, t);
+  if ("unmeasured" in cost) return fill(t.costUnmeasured, { name });
+  if ("perSearch" in cost) return fill(t.costPerSearch, { name, usd: money(cost.perSearch, locale) });
+  return fill(t.costPerPosition, { name, usd: money(cost.perPosition, locale), day: money(cost.perDay, locale), n: cost.positionsPerDay });
+}
+
+/** The sentences of the changes of `patch` that cost more, in the order of the list; empty when none does. */
+export function costsOf(patch: EnrichmentPatch, saved: EnrichmentPolicy, costs: EnrichmentCosts | undefined, t: EnrichmentText, locale: string): string[] {
+  const out: string[] = [];
+  for (const [key, after] of Object.entries(patch) as Array<[EnrichmentSwitch, boolean | number | null]>) {
+    const cost = extraCost(key, valueAt(saved, key), after, costs);
+    if (cost) out.push(costSentence(key, cost, t, locale));
+  }
+  return out;
 }
 
 function failureText(code: string): string {
@@ -105,18 +157,32 @@ function EnrichmentCard({ settings, onSaved }: { settings: TeamSettings; onSaved
   const [draft, setDraft] = useState<Draft>(initial);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // the sentences of the extra cost the person is asked to confirm; null while nothing waits for a yes
+  const [asking, setAsking] = useState<string[] | null>(null);
   useEffect(() => setDraft(initial), [initial]);
-  const set = <K extends keyof Draft>(key: K) => (value: Draft[K]) => setDraft((d) => ({ ...d, [key]: value }));
+  // a change to the form takes back a question already asked: what is confirmed is what is on screen
+  const set = <K extends keyof Draft>(key: K) => (value: Draft[K]) => {
+    setAsking(null);
+    setDraft((d) => ({ ...d, [key]: value }));
+  };
 
   const planned = patchOf(reading.policy, draft, t);
   // a form that cannot be sent is still a change: Save says why instead of staying grey
   const changed = "error" in planned || Object.keys(planned.patch).length > 0;
 
-  const save = async () => {
+  const locale = appLocale();
+  const dearer = "error" in planned ? [] : costsOf(planned.patch, reading.policy, reading.costs, t, locale);
+
+  const save = async (confirmed = false) => {
     if ("error" in planned) {
       setError(planned.error);
       return;
     }
+    if (dearer.length > 0 && !confirmed) {
+      setAsking(dearer);
+      return;
+    }
+    setAsking(null);
     setBusy(true);
     setError(null);
     const done = await writeTeamSettings({ enrichment: planned.patch }, settings.connectionKey);
@@ -147,12 +213,37 @@ function EnrichmentCard({ settings, onSaved }: { settings: TeamSettings; onSaved
       <NumberField id="enrichment-recheck-min" label={t.minScore} value={draft.recheckMin} onChange={set("recheckMin")} />
       <NumberField id="enrichment-recheck-days" label={t.olderThan} value={draft.recheckDays} onChange={set("recheckDays")} />
       <p className="m-0 text-[11px] text-[var(--color-muted)]">{t.thresholds}</p>
+      <p className="m-0 mt-1 text-[12px] font-semibold text-[var(--color-bright)]">{t.webSearch}</p>
+      <Toggle id="enrichment-web-analista" label={t.webAnalista} checked={draft.webAnalista} onChange={set("webAnalista")} />
+      <Toggle id="enrichment-web-scout" label={t.webScout} checked={draft.webScout} onChange={set("webScout")} />
+      <Toggle id="enrichment-web-mentor" label={t.webMentor} checked={draft.webMentor} onChange={set("webMentor")} />
+      {dearer.length > 0 && !asking && (
+        <ul data-testid="enrichment-cost" className="m-0 pl-4 text-[11px] text-[var(--color-yellow)]">
+          {dearer.map((line) => <li key={line}>{line}</li>)}
+        </ul>
+      )}
+      {asking && (
+        <div role="alertdialog" aria-labelledby="enrichment-confirm-title" data-testid="enrichment-confirm" className="rounded border border-[var(--color-yellow)] p-2 flex flex-col gap-1">
+          <p id="enrichment-confirm-title" className="m-0 text-[12px] font-semibold text-[var(--color-bright)]">{t.confirmTitle}</p>
+          <ul className="m-0 pl-4 text-[12px] text-[var(--color-yellow)]">
+            {asking.map((line) => <li key={line}>{line}</li>)}
+          </ul>
+          <div className="flex gap-2">
+            <button type="button" data-testid="enrichment-confirm-yes" onClick={() => void save(true)} className="text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border border-[var(--color-border)] text-[var(--color-bright)]">
+              {t.confirm}
+            </button>
+            <button type="button" data-testid="enrichment-confirm-no" onClick={() => setAsking(null)} className="text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border border-[var(--color-border)] text-[var(--color-muted)]">
+              {t.cancel}
+            </button>
+          </div>
+        </div>
+      )}
       {error && <p role="alert" data-testid="enrichment-error" className="m-0 text-[12px] text-[var(--color-yellow)]">{error}</p>}
       <div>
         <button
           type="button"
           data-testid="enrichment-save"
-          disabled={!changed || busy}
+          disabled={!changed || busy || asking !== null}
           onClick={() => void save()}
           className="text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border border-[var(--color-border)] text-[var(--color-bright)] disabled:opacity-40"
         >
