@@ -256,7 +256,10 @@ def _notify_user(text, reason):
          "--source-action", "no_quota_mode_notice", "--source-payload", json.dumps({"reason": reason}), text],
         check=False, capture_output=True, text=True, timeout=60)
     if done.returncode != 0:
-        raise RuntimeError("jht-notify-user failed with exit %d" % done.returncode)
+        said = " ".join((done.stderr or done.stdout or "").split())[-200:]
+        if "source-id collision" in said:
+            return  # this reason was already told, in other words (another language, another ceiling): the person has it, once
+        raise RuntimeError("jht-notify-user failed with exit %d: %s" % (done.returncode, said or "no output"))
 
 
 def declare(api, run, notify_user=None):

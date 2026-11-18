@@ -9370,6 +9370,9 @@ status_human_running() {
 read_only_team_command() {
   local up=0
   require_confined_podman_machine
+  # The container changes image (the switch of the tools): between its down and its up the container cannot be attested and the person
+  # read «operation refused» as a security error (giro Mac 18/11, 16 s). It waits for the switch, as ensure_up does, and says so.
+  if jht_machine_output; then wait_for_tools_switch quiet; else wait_for_tools_switch; fi
   if docker_reachable >/dev/null 2>&1; then
     container_up >/dev/null 2>&1 || up=$?
   else
