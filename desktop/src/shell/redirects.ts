@@ -9,6 +9,7 @@ import { chatIdOfSession } from "../pages/messages/chat-agents";
  */
 const MOVED: Record<string, string> = {
   "/settings/hours": "/settings/team?at=hours",
+  "/settings/enrichment": "/settings/team?at=enrichment",
   "/settings/vps-connection": "/settings/where?at=vps",
   "/export": "/settings/data?at=export",
   "/backup": "/settings/data?at=backup",
