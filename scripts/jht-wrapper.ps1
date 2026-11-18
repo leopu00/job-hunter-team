@@ -7896,12 +7896,13 @@ function Write-JhtMachineSpaceNote {
   try {
     $file = Join-Path $RuntimeDir '.machine-space-note'
     $item = Get-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
-    if (-not $item) { return }
+    # a folder in its place is not a note: left as it is, and nothing asks the person to confirm its removal
+    if (-not $item -or $item.PSIsContainer) { return }
     $note = ''
-    if (-not $item.PSIsContainer -and -not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -and $item.Length -le 64) {
+    if (-not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -and $item.Length -le 64) {
       $note = ([IO.File]::ReadAllText($item.FullName)).Trim()
     }
-    Remove-Item -LiteralPath $file -Force -Recurse:$false -ErrorAction Stop
+    Remove-Item -LiteralPath $file -Force -ErrorAction Stop
     $text = Get-JhtMachineSpaceText $note
     if ($text) { Write-Info $text }
   } catch {}

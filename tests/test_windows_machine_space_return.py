@@ -319,3 +319,12 @@ def test_the_installer_cleans_and_trims_after_its_jht_up_when_the_full_image_is_
     guard = enabler.rindex("\n", 0, tidy)
     assert "if (-not (Test-Path -LiteralPath $runtimeTierFile -PathType Leaf)) {" in enabler[enabler.rindex("\nif ", 0, tidy):tidy]
     assert "try { & { $ErrorActionPreference = 'Continue';" in enabler[guard:tidy]
+
+
+def test_a_folder_in_place_of_the_note_is_left_as_it_is_and_says_nothing(box):
+    folder = box.runtime / ".machine-space-note"
+    folder.mkdir()
+    (folder / "inside").write_text("not_returned 17\n", encoding="utf-8")
+    done = box.run(say_note=True)
+    assert "INFO:" not in done.stdout
+    assert (folder / "inside").exists()
