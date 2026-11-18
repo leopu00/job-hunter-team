@@ -172,9 +172,32 @@ def _restart(session, reason):
     return done.returncode == 0
 
 
+def _retired_for_ram_in_the_roster():
+    """The workers the roster says were retired by the guard (its reason starts with «ram:»): a guard that has just been updated
+    has not seen them retire, and they would stay down for good."""
+    try:
+        agents = (_load("team_roster").load() or {}).get("agents") or {}
+        return sorted(name for name, entry in agents.items()
+                      if entry.get("status") == "retired" and str(entry.get("retire_reason") or "").startswith("ram:") and WORKER.match(name))
+    except Exception:  # noqa: BLE001 - not a reason to stop the look
+        return []
+
+
+BACK = {"SCOUT": 0, "ANALISTA": 1, "SCORER": 2}
+
+
+def _comes_back_order(name):
+    """The Scouts first (nothing enters without them), then the Analisti, then the Scorer; each by its number."""
+    m = WORKER.match(name or "")
+    return (BACK.get(m.group(1), 9), int(m.group(2))) if m else (9, 0)
+
+
 def _reopen(api, run, state, avail, total, now, restart, names):
     """Memory well above the threshold for a while: bring back the workers the guard retired, and tell the Captain."""
+    if "retired_by_guard" not in state:
+        state["retired_by_guard"] = _retired_for_ram_in_the_roster()   # the ones a version before this one retired
     waiting = [n for n in state.get("retired_by_guard") or [] if n not in names]
+    waiting.sort(key=_comes_back_order)
     if not waiting:
         state["retired_by_guard"] = []
         return []

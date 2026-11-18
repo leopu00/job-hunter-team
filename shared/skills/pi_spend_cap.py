@@ -126,6 +126,7 @@ def spend(home, now_ts, budget_start=None, split_at=None):
     return out
 
 
+PACE_SLACK = True              # the pace stops one margin before the line, like the budget, and says a resume time a margin later
 RESTART_RESERVE_SHARE = 0.10   # a team stopped by the pace comes back only with this share of the budget of room under the pace
 
 
@@ -155,10 +156,12 @@ def _budget_verdict(config, budget, spent, now, held_by_pace=False):
         return None
     allowance = team_budget.allowed(config, period, now)
     reserve = RESTART_RESERVE_SHARE * period["usd"] if held_by_pace else 0.0
+    # the calls in flight when the brake looks finish and are paid (the pace let 0.16 $ through, giro Mac 12b): one margin before the line
+    slack = team_budget.margin(period["usd"]) if PACE_SLACK else 0.0
     # the pace looks AHEAD like the budget does: a team that restarts spends in the first minute what the next look would only see
-    if used - before + ahead + reserve >= allowance:
+    if used - before + ahead + reserve + slack >= allowance:
         return dict(common, why="pace", ceiling=round(before + allowance, 6),
-                    resumes=team_budget.resumes_at(config, period, used - before + RESTART_RESERVE_SHARE * period["usd"]) or budget["ends"])
+                    resumes=team_budget.resumes_at(config, period, used - before + RESTART_RESERVE_SHARE * period["usd"] + 2 * slack) or budget["ends"])
     return None
 
 
