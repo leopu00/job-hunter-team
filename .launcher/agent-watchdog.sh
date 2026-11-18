@@ -95,6 +95,11 @@ WORKING_HOURS_ROOT="${JHT_APP_ROOT:-$_AGENT_WATCHDOG_DIR/..}"
 # container restano quelli dell'immagine.
 ROSTER_TOOL="${JHT_ROSTER_TOOL:-/app/shared/skills/team_roster.py}"
 DEMAND_TOOL="${JHT_QUEUE_DEMAND_TOOL:-/app/shared/skills/queue_demand.py}"
+RESTORE_TOOL="${JHT_ROSTER_RESTORE_TOOL:-/app/shared/skills/roster_restore.py}"
+RESTORE_CHECK_EVERY_SEC="${JHT_ROSTER_RESTORE_CHECK_EVERY_SEC:-300}"
+# A team stopped at night or over a weekend has its last sign of life up to ~60 h old when the window opens: the watchdog
+# looks that far back (the roster_restore default, 6 h, is for the start of the Capitano, which runs at once after a stop).
+RESTORE_SIGN_WINDOW_H="${JHT_ROSTER_RESTORE_SIGN_WINDOW_H:-72}"
 FIRST_RUN_TOOL="${JHT_FIRST_RUN_TOOL:-/app/shared/skills/first_run.py}"
 START_AGENT="${JHT_START_AGENT:-/app/.launcher/start-agent.sh}"
 PROCESS_HEALTH_TOOL="${JHT_PROCESS_HEALTH_TOOL:-/app/shared/skills/process_health.py}"
@@ -1003,6 +1008,26 @@ EOF
   respawn_worker "$role" "$inst" "$session"
 }
 
+maybe_restore_roster() {
+  # The whole team is down when the working window opens: a `jht up` at night, or with the window closed, leaves the workers
+  # stopped and nobody brings them back (the roster respawn asks for a sign of life of 90 min, and the restore of the Capitano
+  # runs once, at its boot, when the window was closed). Every RESTORE_CHECK_EVERY_SEC this asks roster_restore.py: its plan
+  # already refuses outside the window, with a standby, a halt, a pause or a containment, with a worker alive, outside the steady
+  # phase, and inside the hour of its own marker.
+  [ -f "$RESTORE_TOOL" ] || return 0
+  local stamp="$JHT_HOME/state/.roster-restore-check" now last plan
+  now=$(date -u +%s)
+  last=$(cat "$stamp" 2>/dev/null || echo 0)
+  case "$last" in ''|*[!0-9]*) last=0 ;; esac
+  [ $((now - last)) -ge "$RESTORE_CHECK_EVERY_SEC" ] || return 0
+  mkdir -p "$JHT_HOME/state" 2>/dev/null && printf '%s\n' "$now" > "$stamp" 2>/dev/null || true
+  plan=$(JHT_HOME="$JHT_HOME" JHT_ROSTER_RESTORE_WINDOW_H="$RESTORE_SIGN_WINDOW_H" timeout 60 python3 "$RESTORE_TOOL" plan 2>/dev/null) || return 0
+  printf '%s' "$plan" | python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("start") else 1)' 2>/dev/null || return 0
+  log "roster restore: no worker is alive and the roster expected some — bringing them back"
+  JHT_HOME="$JHT_HOME" JHT_SPAWN_SRC=agent-watchdog JHT_ROSTER_RESTORE_WINDOW_H="$RESTORE_SIGN_WINDOW_H" \
+    timeout 60 python3 "$RESTORE_TOOL" start --detach >/dev/null 2>&1 || true
+}
+
 maybe_start_queued_roles() {
   # Una coda di posizioni che nessuno lavora: se in steady l'Analista (o lo Scorer) non e' mai stato avviato, le
   # posizioni restano ferme per sempre (banco 17/11: 4 posizioni `new`, 0 Analisti). Dopo l'attesa del Capitano il
@@ -1365,6 +1390,8 @@ while true; do
     # Worker numerati: respawn guidato dal roster atteso (gate orario +
     # cancello di attività + sonda a colpo singolo dentro team_roster.py).
     maybe_respawn_workers
+    # Squadra intera ferma (notte, aggiornamento a finestra chiusa): riportata all'apertura della finestra.
+    maybe_restore_roster
     # Code ferme: nessun Analista (o Scorer) vivo e posizioni in attesa da piu' dell'attesa del Capitano.
     maybe_start_queued_roles
     maybe_nudge_stalled_queues
