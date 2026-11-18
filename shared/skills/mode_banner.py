@@ -534,6 +534,7 @@ def _enrichment_policy() -> dict:
     out = {
         "economy": False,
         "logo": {"enabled": True, "min_score": None},
+        "geocode_pipeline": {"enabled": True},
         "geocode_missing": {"enabled": True, "min_score": None,
                             "non_remote_only": True},
         "recheck_weekly": {"enabled": True,
@@ -571,6 +572,12 @@ def _enrichment_policy() -> dict:
                 out[kind]["min_score"] = score
             if isinstance(days, int) and not isinstance(days, bool) and 1 <= days <= 365:
                 out[kind]["older_than_days"] = days
+    pipeline = data.get("geocode_pipeline")
+    if isinstance(pipeline, dict) and isinstance(pipeline.get("enabled"), bool):
+        out["geocode_pipeline"]["enabled"] = pipeline["enabled"]
+    elif "geocode_pipeline" not in data:
+        # Un file di prima dei due interruttori eredita la geocodifica da geocode_missing, come in load_policy().
+        out["geocode_pipeline"]["enabled"] = out["geocode_missing"]["enabled"]
     return out
 
 
