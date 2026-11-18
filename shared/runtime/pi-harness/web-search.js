@@ -27,6 +27,14 @@
  * next request does not carry the raw results again. A turn the server pauses (`pause_turn`) ends as a stop: max_uses
  * keeps the server loop short.
  *
+ * Off switch and withdrawal: JHT_PI_WEB_SEARCH=0 adds no search for any provider (said, with that reason). And a request
+ * that carried our tool and came back refused (HTTP 400, 403, 404 or 422: the organization has the search off, the model
+ * does not take it, the endpoint does not know it) withdraws the search for the rest of the session: the next requests
+ * go as pi built them, the withdrawal is written (`web_search_withdrawn`, with the status) in the log and as a status
+ * entry, and once the agent has settled after the failed request it is asked, once, to repeat its last step without
+ * the search (`pi.sendUserMessage`), so the work goes on instead of stopping on the error. A rate limit or a server
+ * error (429, 5xx) is not the tool's fault and withdraws nothing.
+ *
  * Counting: pi prices the tokens of a call but not the fee of a search call. The searches of a turn are written at its
  * end as a `jht-web-search` entry (`{searches: n, provider}`); pi_sessions.py adds the provider's fee, so the meter and
  * the spending brake see it.
@@ -41,6 +49,7 @@ const COUNT = "jht-web-search";
 // provider takes a per-turn cap (Anthropic's max_uses); the fee of every search goes to the spending brake anyway.
 const ROLE_MAX_USES = { scout: 3, analista: 3, mentor: 5 };
 const DEFAULT_MAX_USES = 3;
+const REFUSED = new Set([400, 403, 404, 422]);
 
 function maxUses() {
   const n = Number.parseInt(process.env.JHT_PI_WEB_SEARCH_MAX_USES || "", 10);
@@ -109,6 +118,9 @@ module.exports = function webSearch(pi) {
   let searches = 0;
   let announced = false;
   let current = "";
+  let added = false; // our tool is in the request in flight
+  let withdrawn = null; // the status that withdrew the search for this session
+  let retryPending = false; // the failed step is to be asked again, without the search, when the agent settles
   // the request in flight: Anthropic's blocks and usage of the message, Z.ai's search seen in the response
   let request = { blocks: 0, usage: null, seen: false };
 
@@ -144,6 +156,12 @@ module.exports = function webSearch(pi) {
       const known = PROVIDERS[provider];
       closeRequest(); // a request that ended without its stop still counts what it searched
       current = "";
+      added = false;
+      if (withdrawn !== null) return undefined; // said once, when it happened
+      if (process.env.JHT_PI_WEB_SEARCH === "0") {
+        announce(false, model, "web search turned off for the agents (JHT_PI_WEB_SEARCH=0)");
+        return undefined;
+      }
       if (!known || known.api !== api || !payload || typeof payload !== "object") {
         announce(false, model, missingReason(provider, api));
         return undefined;
@@ -156,9 +174,44 @@ module.exports = function webSearch(pi) {
       current = provider;
       const tools = Array.isArray(payload.tools) ? payload.tools : [];
       if (tools.some(known.present)) return undefined;
+      added = true;
       return { ...payload, tools: [...tools, known.tool()] };
     } catch (_error) {
       return undefined; // never break the request of the agent
+    }
+  });
+
+  pi.on("after_provider_response", (event, ctx) => {
+    try {
+      const status = event && Number(event.status);
+      if (!added || !REFUSED.has(status)) return;
+      withdrawn = status;
+      added = false;
+      retryPending = true;
+      const model = ctx && ctx.model;
+      const reason = `the provider refused a request that carried the web search (HTTP ${status}): withdrawn for this session`;
+      try {
+        pi.appendEntry(STATUS, { enabled: false, ...describe(model), reason });
+      } catch (_error) {
+        /* the log below still says it */
+      }
+      logLine({ event: "web_search_withdrawn", status, ...describe(model), current });
+    } catch (_error) {
+      /* never break the agent */
+    }
+  });
+
+  pi.on("agent_settled", () => {
+    if (!retryPending) return;
+    retryPending = false;
+    try {
+      pi.sendUserMessage(
+        `[WEB-SEARCH-OFF] The provider refused the web search tool (HTTP ${withdrawn}): it is off for the rest of this ` +
+          "session. Repeat your last step without searching the web.",
+      );
+      logLine({ event: "web_search_retry_asked", status: withdrawn });
+    } catch (_error) {
+      logLine({ event: "web_search_retry_lost", status: withdrawn });
     }
   });
 

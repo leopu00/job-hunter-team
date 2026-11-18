@@ -29,6 +29,7 @@ const entries = [];
 require(process.argv[2])({
   on: (name, fn) => { (handlers[name] ||= []).push(fn); },
   appendEntry: (type, data) => { if (process.env.FAIL_APPEND) throw new Error("disk full"); entries.push([type, data]); },
+  sendUserMessage: (text) => { entries.push(["user-message", text]); },
 });
 const results = [];
 for (const step of JSON.parse(fs.readFileSync(0, "utf8"))) {
@@ -274,3 +275,57 @@ def test_zai_gets_its_search_when_turned_on_and_counts_one_per_response(tmp_path
     assert got["results"][0]["tools"] == [FUNCTION, ZAI_TOOL]
     assert COUNTS(got) == [["jht-web-search", {"searches": 1, "provider": "zai"}]]
     assert [line["event"] for line in log_of(tmp_path)] == ["web_search_on"]
+
+
+# --- the off switch, and the withdrawal after a refusal -----------------------------------------------------------
+
+def response(status):
+    return {"event": "after_provider_response", "event_data": {"status": status, "headers": {}}, "ctx": ANTHROPIC}
+
+
+def test_the_off_switch_adds_no_search_for_any_provider_and_says_why(tmp_path):
+    got = run([request({"tools": []}), request({"tools": []}, ANTHROPIC)], tmp_path, {"JHT_PI_WEB_SEARCH": "0"})
+    assert got["results"] == [None, None]
+    [entry] = got["entries"]
+    assert entry[1]["enabled"] is False and "JHT_PI_WEB_SEARCH=0" in entry[1]["reason"]
+
+
+@pytest.mark.parametrize("status", [400, 403, 404, 422])
+def test_a_refused_request_that_carried_the_search_withdraws_it_for_the_session(tmp_path, status):
+    """The organization has the search off, or the model does not take it: one request fails, the next go as pi built them."""
+    steps = [request({"tools": [FUNCTION]}, ANTHROPIC), response(status),
+             request({"tools": [FUNCTION]}, ANTHROPIC), request({"tools": [FUNCTION]}, ANTHROPIC)]
+    got = run(steps, tmp_path)
+    assert got["results"][0]["tools"][-1]["name"] == "web_search"
+    assert got["results"][2:] == [None, None]
+    assert got["entries"][-1][1]["enabled"] is False and f"HTTP {status}" in got["entries"][-1][1]["reason"]
+    assert [line["event"] for line in log_of(tmp_path)] == ["web_search_on", "web_search_withdrawn"]
+    assert log_of(tmp_path)[-1]["status"] == status
+
+
+def test_after_a_refusal_the_agent_is_asked_once_to_repeat_its_step_without_the_search(tmp_path):
+    settled = {"event": "agent_settled", "event_data": {}}
+    steps = [settled, request({"tools": []}, ANTHROPIC), response(400), settled, request({"tools": []}, ANTHROPIC), settled]
+    got = run(steps, tmp_path)
+    asked = [e for e in got["entries"] if e[0] == "user-message"]
+    assert len(asked) == 1 and "HTTP 400" in asked[0][1] and "without searching the web" in asked[0][1]
+    assert got["results"][4] is None, "the step asked again goes without the tool"
+    assert [line["event"] for line in log_of(tmp_path)][-1] == "web_search_retry_asked"
+
+
+@pytest.mark.parametrize("status", [200, 429, 500, 529])
+def test_a_rate_limit_or_a_server_error_withdraws_nothing(tmp_path, status):
+    steps = [request({"tools": []}, ANTHROPIC), response(status), request({"tools": []}, ANTHROPIC)]
+    got = run(steps, tmp_path)
+    assert got["results"][2]["tools"][-1]["name"] == "web_search"
+    assert "web_search_withdrawn" not in [line["event"] for line in log_of(tmp_path)]
+
+
+def test_a_refusal_of_a_request_without_our_tool_is_not_ours_to_answer(tmp_path):
+    moon = request({"tools": []}, {"model": {"provider": "moonshotai", "api": "openai-completions"}})
+    steps = [moon, response(400), request({"tools": [{"type": "web_search_20250305", "name": "web_search"}]}, ANTHROPIC),
+             response(400), request({"tools": []}, ANTHROPIC)]
+    got = run(steps, tmp_path)
+    assert got["results"][2] is None, "a tool the request already had is not added by us"
+    assert got["results"][4]["tools"][-1]["name"] == "web_search", "no refusal of ours: the search stays"
+    assert "web_search_withdrawn" not in [line["event"] for line in log_of(tmp_path)]
