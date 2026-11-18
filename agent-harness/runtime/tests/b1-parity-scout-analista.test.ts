@@ -223,23 +223,23 @@ describe.skipIf(PYTHON_SKILLS === null)("B1 · the position the SCOUT inserts be
     // company_id NULL for good (rounds of 16-17/11). Now the company's insert and update link the positions of its name.
     const t = twins(root, pipelineSeed);
     await played(t, [
-      ["scout-1", "db_insert.py", "db_insert", ["position", "--title", "Data Engineer", "--company", "Initech", "--url", "https://initech.example/jobs/7", "--found-by", "scout-1"]],
-      ["analista-1", "db_insert.py", "db_insert", ["company", "--name", "Initech", "--sector", "software"]],
+      ["scout-1", "db_insert.py", "db_insert", ["position", "--title", "Data Engineer", "--company", "Vandelay", "--url", "https://vandelay.example/jobs/11", "--found-by", "scout-1"]],
+      ["analista-1", "db_insert.py", "db_insert", ["company", "--name", "Vandelay", "--sector", "software"]],
     ]);
     for (const path of [t.tui, t.api]) {
       const db = openJobsDb(path);
       try {
-        expect(db.prepare("SELECT p.company_id = c.id AS linked FROM positions p JOIN companies c ON c.name = 'Initech' WHERE p.company = 'Initech'").all()).toEqual([{ linked: 1 }]);
-        db.prepare("UPDATE positions SET company_id = NULL WHERE company = 'Initech'").run();
+        expect(db.prepare("SELECT p.company_id = c.id AS linked FROM positions p JOIN companies c ON c.name = 'Vandelay' WHERE p.company = 'Vandelay'").all()).toEqual([{ linked: 1 }]);
+        db.prepare("UPDATE positions SET company_id = NULL WHERE company = 'Vandelay'").run();
       } finally {
         db.close();
       }
     }
-    await played(t, [["analista-1", "db_update.py", "db_update", ["company", "Initech", "--size", "50-200"]]]);
+    await played(t, [["analista-1", "db_update.py", "db_update", ["company", "Vandelay", "--size", "50-200"]]]);
     for (const path of [t.tui, t.api]) {
       const db = openJobsDb(path);
       try {
-        expect(db.prepare("SELECT COUNT(*) AS n FROM positions WHERE company = 'Initech' AND company_id IS NOT NULL").get()).toEqual({ n: 1 });
+        expect(db.prepare("SELECT COUNT(*) AS n FROM positions WHERE company = 'Vandelay' AND company_id IS NOT NULL").get()).toEqual({ n: 1 });
       } finally {
         db.close();
       }
