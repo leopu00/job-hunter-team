@@ -170,7 +170,7 @@ export default {
   "enrichment.web_search_analista": "Pesquisa web dos Analisti",
   "enrichment.web_search_scout": "Pesquisa web do Scout",
   "enrichment.web_search_mentor": "Pesquisa web do Mentor",
-  "enrichment.cost_per_position": "{name}: custa cerca de {usd} $ a mais por vaga ({day} $ com {n} por dia).",
+  "enrichment.cost_per_position": "{name}: cerca de {usd} $ a mais por vaga: com {n} vagas por dia são cerca de {day} $ por dia.",
   "enrichment.cost_per_search": "{name}: custa cerca de {usd} $ por pesquisa.",
   "enrichment.cost_unmeasured": "{name}: custa mais; quanto ainda não está medido.",
   "enrichment.confirm_question": "Confirmas? [s/N]",

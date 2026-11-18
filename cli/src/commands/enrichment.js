@@ -5,7 +5,7 @@
 // words a person types become typed values (lib/enrichment.js), the write is the skill's `apply` (all or nothing), and the
 // answer, read again from the file, is said in the person's language. `--json` prints the skill's closed answer instead.
 //
-// Turning a switch toward the dearer side first says what it costs more («about X $ more per position (Y $ on 50 a day)»,
+// Turning a switch toward the dearer side first says what it costs more («about X $ more per position: with 50 positions a day that is about Y $ a day»,
 // from the costs the team sends with `show`) and asks to confirm; `--yes` confirms beforehand, and without a terminal to ask
 // on the change is refused with that same sentence (code confirm_needed), never made unasked.
 //

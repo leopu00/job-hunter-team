@@ -170,7 +170,7 @@ export default {
   "enrichment.web_search_analista": "Az Analisti webes keresése",
   "enrichment.web_search_scout": "A Scout webes keresése",
   "enrichment.web_search_mentor": "A Mentor webes keresése",
-  "enrichment.cost_per_position": "{name}: állásonként kb. {usd} $-ral többe kerül (napi {n} állásnál {day} $).",
+  "enrichment.cost_per_position": "{name}: állásonként kb. {usd} $-ral több: napi {n} állással ez naponta kb. {day} $.",
   "enrichment.cost_per_search": "{name}: keresésenként kb. {usd} $.",
   "enrichment.cost_unmeasured": "{name}: többe kerül; hogy mennyivel, még nincs mérve.",
   "enrichment.confirm_question": "Megerősíted? [i/N]",

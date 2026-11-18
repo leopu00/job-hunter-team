@@ -101,6 +101,12 @@ export function money(value: number, locale: string): string {
   return new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: digits }).format(value);
 }
 
+/** A day's cost, which is an estimate: from 10 $ up in whole dollars («about 13 $ a day»), below that as money(). */
+export function dayMoney(value: number, locale: string): string {
+  if (value >= 10) return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(value);
+  return money(value, locale);
+}
+
 /** The sentence of what a change costs more, in the person's language (the same words as `jht enrichment set`). */
 export function costSentence(key: EnrichmentSwitch, cost: ExtraCost, t: EnrichmentText, locale: string): string {
   const fill = (template: string, vars: Record<string, string | number>) =>
@@ -108,7 +114,7 @@ export function costSentence(key: EnrichmentSwitch, cost: ExtraCost, t: Enrichme
   const name = nameOf(key, t);
   if ("unmeasured" in cost) return fill(t.costUnmeasured, { name });
   if ("perSearch" in cost) return fill(t.costPerSearch, { name, usd: money(cost.perSearch, locale) });
-  return fill(t.costPerPosition, { name, usd: money(cost.perPosition, locale), day: money(cost.perDay, locale), n: cost.positionsPerDay });
+  return fill(t.costPerPosition, { name, usd: money(cost.perPosition, locale), day: dayMoney(cost.perDay, locale), n: cost.positionsPerDay });
 }
 
 /** The sentences of the changes of `patch` that cost more, in the order of the list; empty when none does. */

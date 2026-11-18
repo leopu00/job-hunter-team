@@ -372,7 +372,7 @@ export default {
   "enrichment.web_search_analista": "Ricerca web degli Analisti",
   "enrichment.web_search_scout": "Ricerca web dello Scout",
   "enrichment.web_search_mentor": "Ricerca web del Mentor",
-  "enrichment.cost_per_position": "{name}: costa circa {usd} $ in più a posizione ({day} $ su {n} al giorno).",
+  "enrichment.cost_per_position": "{name}: circa {usd} $ in più a posizione: con {n} posizioni al giorno sono circa {day} $ al giorno.",
   "enrichment.cost_per_search": "{name}: costa circa {usd} $ a ricerca.",
   "enrichment.cost_unmeasured": "{name}: costa di più; quanto non è ancora misurato.",
   "enrichment.confirm_question": "Confermi? [s/N]",

@@ -147,6 +147,12 @@ export function money(value, language) {
   return new Intl.NumberFormat(language, { minimumFractionDigits: 2, maximumFractionDigits: digits }).format(value);
 }
 
+/** A day's cost, which is an estimate: from 10 $ up in whole dollars («about 13 $ a day»), below that as money(). */
+export function dayMoney(value, language) {
+  if (value >= 10) return new Intl.NumberFormat(language, { maximumFractionDigits: 0 }).format(value);
+  return money(value, language);
+}
+
 /** The sentence that says what `key` costs more, in the person's language; '' when it costs nothing more. */
 export function costText(key, cost, language) {
   if (!cost) return '';
@@ -154,7 +160,7 @@ export function costText(key, cost, language) {
   if (cost.unmeasured) return say('enrichment.cost_unmeasured', { name }, language);
   if (cost.perSearch !== undefined) return say('enrichment.cost_per_search', { name, usd: money(cost.perSearch, language) }, language);
   return say('enrichment.cost_per_position',
-    { name, usd: money(cost.perPosition, language), day: money(cost.perDay, language), n: cost.positionsPerDay }, language);
+    { name, usd: money(cost.perPosition, language), day: dayMoney(cost.perDay, language), n: cost.positionsPerDay }, language);
 }
 
 /** The name of a switch in a warning (literal keys: the catalog test reads them). */
