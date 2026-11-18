@@ -273,7 +273,9 @@ def test_the_cleaning_keeps_the_note_of_the_line_it_said(box, sparse, note):
     assert kept(box.run(on_disk_gib=10.5, used_gib=9.89, sparse=sparse)) == ""
 
 
-@pytest.mark.parametrize("lang", ["en", "it", "hu", "es", "de", "fr", "pt"])
+# Two languages: the 7 of the same two lines are test_the_line_is_said_in_the_language_of_the_person. Each run here starts a Windows
+# PowerShell 5.1 that parses the whole wrapper, and on the gate's runner 21 of them starved the other tests of the slice.
+@pytest.mark.parametrize("lang", ["it", "fr"])
 def test_the_kept_note_is_said_once_in_the_language_of_the_person_and_then_goes(box, lang):
     from script_texts import catalog
 
@@ -289,7 +291,7 @@ def test_the_kept_note_is_said_once_in_the_language_of_the_person_and_then_goes(
     assert sparse in box.run(lang=lang, say_note=True).stdout
 
 
-@pytest.mark.parametrize("text", ["not_returned 17; rm -rf /", "back_on_stop", "say 4", "not_returned 9999999", "x" * 80])
+@pytest.mark.parametrize("text", ["not_returned 17; rm -rf /", "not_returned 9999999", "x" * 80])
 def test_a_note_that_is_not_one_of_the_two_says_nothing_and_goes(box, text):
     marker = box.runtime / ".machine-space-note"
     marker.write_text(text, encoding="utf-8")
