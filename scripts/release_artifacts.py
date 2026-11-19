@@ -327,7 +327,7 @@ def render_release_notes(
 
 ### Windows
 
-Windows is not part of 0.4.0: there is no Windows installer in this release.
+Windows is a preview in this version, command line only: install it with the PowerShell installer (`install.ps1`, its SHA-256 is published) and the team runs in Podman inside WSL. Tested on Windows 10, not yet on Windows 11. There is no Windows desktop app.
 
 ### macOS
 
