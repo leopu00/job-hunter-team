@@ -280,6 +280,10 @@ LOOK_AFTER_RESUME_SEC = 15
 WORK_MULTIPLE = 3.0     # a session is woken, and the pause lifted, when the room covers its reload AND as much work again twice over: the team works some minutes before the next pause (retest 8d5f09a2b: Captain + Scout, 0.30 $ of reload, ate the whole room and the team stopped 33 s after every resume)
 RELOAD_GAP_SEC = 300    # a session silent for this long has lost its cache: its next turn is a reload
 MIN_RELOAD_COST = 0.01
+# what the first turn of a session costs after a stop, by role, from the retest data (Scout ~0.11 $, Captain ~0.19 $, Scorer 0.197 $ on Sonnet):
+# the least a session is expected to cost, whatever its history says (a turn whose cache was still warm measured 0.01 $ and the room of the
+# stage was too little) and what a session with no history costs
+ROLE_RELOAD_COST = {"SCOUT": 0.11, "CAPITANO": 0.19, "SCORER": 0.20}
 ALWAYS_WOKEN = ("CAPITANO", "SENTINELLA")   # told by their own notice at a resume: their reload is reserved, they are not staged
 
 
@@ -308,13 +312,33 @@ def session_costs(home, now, sessions):
     for name in names:
         event = last.get(name.upper())
         cost = 0.0
+        floor = max(MIN_RELOAD_COST, ROLE_RELOAD_COST.get(name.upper().split("-", 1)[0], 0.0))
         if name.upper() in reload:
-            costs[name] = round(max(MIN_RELOAD_COST, reload[name.upper()]), 6)
+            costs[name] = round(max(floor, reload[name.upper()]), 6)
             continue
         if event and event.get("model") in rate:
             cost = ((event.get("input") or 0) + (event.get("cache_read") or 0) + (event.get("cache_write") or 0)) * rate[event["model"]]
-        costs[name] = round(max(RESTART_COST_PER_SESSION, cost), 6)
+        costs[name] = round(max(RESTART_COST_PER_SESSION, floor, cost), 6)
     return costs
+
+
+def _known_sessions(home, now):
+    """The sessions of the team that spent in the last day: the ones a lift of the pace would wake."""
+    try:
+        names = {(event.get("agent") or "").upper() for event in pi_sessions.usage_events(home, now - 86400)}
+    except Exception:  # noqa: BLE001
+        return []
+    return sorted(x for x in names if _AGENT_SESSION.match(x) and x not in NEVER_WAKE and x not in WAKE_ONLY_IF_NEEDED)
+
+
+def _team_sessions(api, home, now, flag):
+    names = set((flag or {}).get("sessions") or []) | set(_known_sessions(home, now))
+    try:
+        lister = getattr(api, "list_tmux_sessions", None)
+        names |= {x for x in (lister() if lister else []) if isinstance(x, str) and _AGENT_SESSION.match(x)}
+    except Exception:  # noqa: BLE001
+        pass
+    return sorted(names)
 
 
 def restart_estimate(home, now, sessions):
@@ -1043,6 +1067,12 @@ def step(api, run, notify_user=None):
         estimate = first_stage_cost(home, now, (flag or {}).get("sessions")) if held_by_pace else 0.0
         ctx = {"config": config, "budget": budget, "spent": spent, "now": now}
         verdict = decide(config, spent, bool(run.state.get("no_quota_declared")), now, budget, held_by_pace, estimate)
+        if held_by_pace or (verdict["action"] == "halt" and verdict.get("why") == "pace"):
+            # the hour told at the first pause is the hour the lift will find, and the hour of a later look is the same: both reckon the reload
+            # of the sessions of the team (the flag's, the ones that spent in the last day, the live ones) and the work after it. The hour moved
+            # after every pause when the first one reckoned the tenth of the budget (retest 8d5f09a2b)
+            estimate = first_stage_cost(home, now, _team_sessions(api, home, now, flag))
+            verdict = decide(config, spent, bool(run.state.get("no_quota_declared")), now, budget, held_by_pace, estimate)
         if verdict["action"] == "halt":
             if run._bi_on:
                 print("[bridge V6] %s BURN-INTENT: pi spending ceiling reached, the team stays active (user override)"
