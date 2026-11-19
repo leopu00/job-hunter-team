@@ -227,7 +227,9 @@ def test_release_notes_render_every_verified_asset_without_a_second_list(
     assert output.read_text(encoding="utf-8") == body
     assert "### SHA-256 checksums" in body
     # D13: the notes say what the release really holds
-    assert "Windows is not part of 0.4.0" in body and "coming soon" not in body
+    # Windows as the CHANGELOG says it: a preview, command line only, with the PowerShell installer
+    assert "Windows is a preview in this version, command line only" in body and "install.ps1" in body
+    assert "Windows is not part of 0.4.0" not in body and "coming soon" not in body
     assert "Windows protected your PC" not in body and "windows-x64-setup" not in body
     assert "There is no desktop app for Linux in this version: use the command-line install" in body
     assert "experimental" not in body and "AppImage" not in body and ".deb" not in body
