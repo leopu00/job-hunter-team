@@ -102,6 +102,7 @@ from city_names import (
     normalize_city as _normalize_city,
     canonical_city as _normalize_city_canonical,
     same_place as _same_place,
+    share_a_place as _share_a_place,
     CITY_SYNONYMS as _CITY_SYNONYMS,
 )
 
@@ -131,6 +132,36 @@ def _log_dedup_skip(level, existing_id, skipped_url, company, title):
             f.write(json.dumps(entry) + "\n")
     except (OSError, ValueError):
         pass
+
+
+SKIP_LOG_READ_BYTES = 256 * 1024   # tetto alla lettura di scout-dedup.log: la coda, mai il file intero
+
+
+def _urls_refused_before(url):
+    """[(existing_id, "YYYY-MM-DD HH:MM:SS"), ...] dei rifiuti di questo URL per nome (livelli 2 e 3) nella coda di scout-dedup.log, dal piu'
+    recente. Il log e' un'audit, non una fonte: mancante, illeggibile, righe rotte o file enorme = lista vuota o parziale, mai un errore."""
+    import json
+    found = []
+    try:
+        path = os.path.join(os.environ.get('JHT_HOME', '/jht_home'), 'logs', 'scout-dedup.log')
+        with open(path, 'rb') as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            f.seek(max(0, size - SKIP_LOG_READ_BYTES))
+            tail = f.read(SKIP_LOG_READ_BYTES)
+        lines = tail.decode('utf-8', errors='replace').splitlines()
+        if size > SKIP_LOG_READ_BYTES:
+            lines = lines[1:]   # la prima riga della coda e' tagliata a meta'
+        for line in reversed(lines):
+            try:
+                entry = json.loads(line)
+                if entry.get('skipped_url') == url and entry.get('level') in (2, 3):
+                    found.append((int(entry['existing_id']), str(entry['ts']).replace('T', ' ')[:19]))
+            except (ValueError, TypeError, KeyError, AttributeError):
+                continue
+    except (OSError, ValueError):
+        return []
+    return found
 
 
 def check_duplicate(conn, url, company, title, location=None):
@@ -195,6 +226,24 @@ def check_duplicate(conn, url, company, title, location=None):
         if existing:
             _log_dedup_skip(1, existing['id'], url, company, title)
             return existing, "URL esatto"
+
+    # Un URL gia' rifiutato come doppione per NOME (livelli 2 e 3) resta rifiutato: ripresentato con altri nomi (un'altra grafia
+    # dell'azienda, un titolo allungato) e' lo stesso annuncio. Misurato 19/11 (banco magazziniere): l'URL rifiutato al livello 2 alle
+    # 17:10:38 e' entrato alle 17:11:04 con un'azienda e un titolo diversi. Non i rifiuti per TESTO (livello 4): il testo di un'agenzia
+    # e' in gran parte lo stesso modulo (un OSS rifiutato come l'infermiere dello stesso hospice, stesso banco) e rinominarlo e' la
+    # via d'uscita di un falso positivo. Lo legge dal log degli skip; un log mancante, illeggibile o troppo grande non cambia niente
+    # (mai bloccare un INSERT per un log rotto).
+    if url:
+        for existing_id, refused_at in _urls_refused_before(url):
+            try:
+                cand = conn.execute("SELECT id, title, company, location, created_at FROM positions WHERE id = ?",
+                                    (existing_id,)).fetchone()
+            except sqlite3.Error:
+                cand = None
+            # la riga deve esistere ed essere piu' vecchia del rifiuto: un log di un db precedente (stessi numeri di id) non conta
+            if cand and str(cand['created_at'] or '')[:19] <= refused_at:
+                _log_dedup_skip(1, cand['id'], url, company, title)
+                return cand, "URL gia' rifiutato come doppione"
 
     # Livello 2 — azienda + titolo + city normalizzata (primo token + synonym map)
     # Address vps1-postmortem anomalia #3: 'Milan, Italy' vs 'Milan, Lombardy, IT'
@@ -273,22 +322,37 @@ def _jd_shingles(text):
     return {tuple(words[i:i + JD_SHINGLE_WORDS]) for i in range(len(words) - JD_SHINGLE_WORDS + 1)}
 
 
-def check_duplicate_text(conn, jd_text, location=None):
+JD_OVERLAP_SAME_TITLE = 0.6  # con lo stesso titolo basta meno testo in comune: lo Scout a volte salva un riassunto, non il testo intero
+
+
+def _title_words(title):
+    """Il titolo come parole: senza maiuscole, accenti, parentesi («(m/f/nb)») e punteggiatura."""
+    from city_names import _folded_words
+    return tuple(_folded_words(re.sub(r"\([^)]*\)", " ", str(title or ""))))
+
+
+def check_duplicate_text(conn, jd_text, location=None, title=None):
     """Livello 4: stesso TESTO dell'annuncio (impronte di sei parole, almeno il 70% in comune) e stessa citta'.
 
     Lo stesso testo in citta' diverse e' un'offerta diversa (il modulo di una filiale), per questo la citta' conta come per i
-    livelli 2 e 3. Ritorna (riga, tipo di match) o (None, None); senza testo, o troppo corto, non decide niente."""
+    livelli 2 e 3, ma qui e' lo stesso luogo anche quando un nome dell'uno sta intero nell'altro («Torino» in «Rivalta di Torino»,
+    «Rimini» in «Coriano (Rimini)»): le fonti scrivono il luogo come vogliono, il testo e' lo stesso. Con lo stesso titolo il testo in
+    comune puo' essere il 60%. Ritorna (riga, tipo di match) o (None, None); senza testo, o troppo corto, non decide niente."""
     mine = _jd_shingles(jd_text)
     if not mine:
         return None, None
+    mine_title = _title_words(title)
     rows = conn.execute(
         "SELECT id, title, company, location, SUBSTR(jd_text, 1, 6000) AS jd FROM positions "
         "WHERE jd_text IS NOT NULL AND LENGTH(jd_text) >= 200").fetchall()
     for cand in rows:
-        if not _same_place(cand['location'], location):
+        if not (_same_place(cand['location'], location) or _share_a_place(cand['location'], location)):
             continue
         theirs = _jd_shingles(cand['jd'])
-        if theirs and len(mine & theirs) >= JD_OVERLAP * min(len(mine), len(theirs)):
+        if not theirs:
+            continue
+        need = JD_OVERLAP_SAME_TITLE if (mine_title and mine_title == _title_words(cand['title'])) else JD_OVERLAP
+        if len(mine & theirs) >= need * min(len(mine), len(theirs)):
             return cand, "testo dell'annuncio+city-norm"
     return None, None
 
@@ -401,7 +465,8 @@ def insert_position(args):
             conn, args.url, args.company, args.title, getattr(args, 'location', None),
         )
         if not existing:
-            existing, match_type = check_duplicate_text(conn, getattr(args, 'jd_text', None), getattr(args, 'location', None))
+            existing, match_type = check_duplicate_text(conn, getattr(args, 'jd_text', None), getattr(args, 'location', None),
+                                                        args.title)
             if existing:
                 _log_dedup_skip(4, existing['id'], args.url, args.company, args.title)
         if existing:

@@ -22,7 +22,7 @@ Exit code (per gateare anche in bash: `scout_dedup.py check … && db_insert.py 
   2  → errore di uso/DB
 
 Livelli (gerarchia di check_duplicate):
-  0 = LinkedIn job ID · 1 = URL esatto · 2 = azienda+titolo+city-norm
+  0 = LinkedIn job ID · 1 = URL esatto (o un URL gia' rifiutato come doppione) · 2 = azienda+titolo+city-norm
   3 = azienda+titolo simile (>0.85)+city-norm
   4 = stesso testo dell'annuncio + city-norm (solo all'INSERT, che ha il testo: db_insert.check_duplicate_text)
 """
@@ -41,6 +41,7 @@ from db_insert import check_duplicate  # noqa: E402
 _LEVEL_BY_PREFIX = (
     ("LinkedIn job ID", 0),
     ("URL esatto", 1),
+    ("URL gia' rifiutato", 1),
     ("azienda+titolo+city", 2),
     ("azienda+titolo simile", 3),
     ("testo dell'annuncio", 4),
