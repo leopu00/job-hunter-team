@@ -68,21 +68,29 @@ test.describe("shell pubblico tutorial e trailer", () => {
       "redirect /tutorials non arriva alla guida",
     ).toBe(200);
     expect(response?.request().redirectedFrom()?.url()).toMatch(/\/tutorials$/);
-    expect(new URL(page.url()).pathname).toBe("/setup-guide");
-    await expect(page.locator("[data-setup-guide]")).toBeVisible();
+    // 0.4.0 has no desktop app: the old guide of the app is gone, the way in is the CLI guide of the site
+    expect(new URL(page.url()).pathname).toBe("/docs/guides/getting-started");
     expect(await page.locator("#game, #web").count()).toBe(0);
     expect(await page.locator('a[href="/tutorials"]').count()).toBe(0);
-    await expect(
-      page.locator('nav a[href="/setup-guide"]').first(),
-    ).toBeVisible();
-    await expect(page.locator('footer a[href="/setup-guide"]')).toBeVisible();
+    expect(await page.locator('a[href="/setup-guide"]').count()).toBe(0);
     expect(mediaRequests, "media richiesti durante il redirect").toEqual([]);
+
+    const guide = await page.goto("/setup-guide", {
+      waitUntil: "domcontentloaded",
+    });
+    expect(guide?.status(), "redirect /setup-guide non arriva alla guida CLI").toBe(200);
+    expect(new URL(page.url()).pathname).toBe("/docs/guides/getting-started");
+
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(
+      page.locator('footer a[href="/docs/guides/getting-started"]'),
+    ).toBeVisible();
 
     const sitemap = await page.request.get("/sitemap.xml");
     expect(sitemap.status()).toBe(200);
     const sitemapBody = await sitemap.text();
     expect(sitemapBody).not.toContain("/tutorials");
-    expect(sitemapBody).toContain("/setup-guide");
+    expect(sitemapBody).not.toContain("/setup-guide");
   });
 
   test("/trailer reindirizza al player sulla home e non resta nella sitemap", async ({
@@ -123,8 +131,10 @@ test.describe("shell pubblico tutorial e trailer", () => {
       viewport: { width: 375, height: 812 },
     });
     const page = await context.newPage();
-    await page.goto("/setup-guide", { waitUntil: "domcontentloaded" });
-    await expect(page.locator("[data-setup-guide]")).toBeVisible();
+    await page.goto("/docs/guides/getting-started", {
+      waitUntil: "domcontentloaded",
+    });
+    await expect(page.locator("h1").first()).toBeVisible();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth,

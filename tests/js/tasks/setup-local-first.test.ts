@@ -42,7 +42,6 @@ const landing = [
 ].join("\n");
 const vpsRoute = read("web/app/docs/guides/run-on-a-vps/page.tsx");
 const privacyRoute = read("web/app/privacy/page.tsx");
-const setupGuide = read("web/app/setup-guide/guide-content.ts");
 const chooseWhere = read("docs/guides/CHOOSE-WHERE-TO-RUN.md");
 const nativeOfficeGuides = [
   read("README.md"),
@@ -259,14 +258,6 @@ describe("route pubbliche — il locale non e' una demo e il cloud non e' un hos
     expect(privacyRoute).not.toMatch(/modalita locale e cloud/i);
     expect(privacyRoute).not.toMatch(/the two modes are alternatives/i);
     expect(privacyRoute).toContain("optional cloud sync");
-  });
-
-  it("la guida setup resta locale completa con VPS separata", () => {
-    // the local path of 0.4: Homebrew first, then the app installs Podman on the Mac (no Docker step any more)
-    expect(setupGuide).toContain("Job Hunter Team uses Homebrew to install Podman");
-    expect(setupGuide).not.toContain("runs the local team in Docker");
-    expect(setupGuide).toContain('href: DOCS_VPS');
-    expect(setupGuide).not.toContain("local / guest mode");
   });
 
   it("la guida comparativa mantiene il decision tree canonico", () => {

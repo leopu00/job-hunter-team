@@ -1,5 +1,5 @@
 // 0.4.0 is installed from the command line: the desktop app is not in this version. One note, the same key in the
-// seven languages, at the top of the pages that still describe the app (/run, /welcome, /setup-guide); the rest of
+// seven languages, at the top of the pages that still describe the app (/run, /welcome); the rest of
 // each page stays as it is.
 import type { Locale } from "@/i18n/config";
 

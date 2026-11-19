@@ -54,7 +54,6 @@ def test_the_first_page_of_the_site_says_glm_in_0_4_0_and_codex_not_in_this_vers
 
 
 @pytest.mark.parametrize("path", [
-    "web/app/setup-guide/guide-screens.ts",
     "web/app/privacy/page.tsx",
     "web/app/terms/page.tsx",
 ])
@@ -64,7 +63,6 @@ def test_the_pages_that_do_not_list_the_providers_do_not_name_kimi_or_claude(pat
 
 
 @pytest.mark.parametrize("path", [
-    "web/app/setup-guide/guide-content.ts",
     "web/app/docs/guides/faq/page.i18n.ts",
     "web/app/pricing/page.tsx",
     "web/app/download/DownloadClient.tsx",
@@ -83,10 +81,9 @@ def test_the_guide_of_the_provider_says_glm_and_codex_later_in_every_language():
     assert len(re.findall(r'\n    coming:\s*"Codex — ', source)) == 7
 
 
-def test_the_setup_guide_and_faq_name_codex_as_the_provider():
-    # the FAQ: in 0.4.0, GLM; Codex comes later (said in every language). The setup guide is the desktop app's, which 0.4.0 does not ship
+def test_the_faq_names_codex_as_the_provider_that_comes_later():
+    # the FAQ: in 0.4.0, GLM; Codex comes later (said in every language)
     assert len(re.findall(r"\n    a1: \"[^\"]*— [^\"]*GLM[^\"]*Codex", text("web/app/docs/guides/faq/page.i18n.ts"))) == 7
-    assert text("web/app/setup-guide/guide-content.ts").count("Codex") >= 7
 
 
 def test_the_pricing_page_shows_the_one_provider_of_0_4_0_and_says_the_others_come_later():

@@ -1,5 +1,5 @@
 import { permanentRedirect } from "next/navigation";
 
 export default function TutorialsPage() {
-  permanentRedirect("/setup-guide");
+  permanentRedirect("/docs/guides/getting-started");
 }

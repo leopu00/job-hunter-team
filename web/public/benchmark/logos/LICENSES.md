@@ -17,7 +17,7 @@ which draws the same shape.
 
 ## Systems
 
-Windows, macOS and Linux use the icons the site already draws in its setup guide (`app/setup-guide/OsIcons.tsx`):
+Windows, macOS and Linux use the icons the site already draws (`app/components/OsIcons.tsx`):
 monochrome SVG in the colour of the text, with the name of the system written next to them.
 
 Official brand kits were not used. Checked 17/11/2026.

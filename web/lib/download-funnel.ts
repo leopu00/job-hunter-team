@@ -1,65 +1,16 @@
-const RELEASE_REPO = "leopu00/job-hunter-team";
+// The release the site speaks of: tests tie it to release/runtime-image.v1.json, and
+// scripts/ci/check_public_release.py checks it is public and downloadable without logging in.
 export const DOWNLOAD_RELEASE_TAG = "v0.4.0";
-export const DOWNLOAD_RELEASE_API = `https://api.github.com/repos/${RELEASE_REPO}/releases/tags/${DOWNLOAD_RELEASE_TAG}`;
-const RELEASE_BASE = `https://github.com/${RELEASE_REPO}/releases/download/${DOWNLOAD_RELEASE_TAG}`;
 
-// Windows is not part of 0.4.0: no slug, no link. The page shows it as "not in this version".
-// Linux has no desktop app in this version either (the CLI install.sh is the way in): no slug, no card.
+// 0.4.0 has no desktop app: the release attaches no installer of the app for any system (release.yml builds the app
+// only with JHT_RELEASE_DESKTOP), so the site links no file of the release. The one slug already out there, /go/mac of
+// the launch campaign, leads to the install from the terminal on /download: install.sh for macOS and Linux, and the
+// way for Windows. Windows and Linux never had a slug: an unknown slug is a 404.
 export const DOWNLOAD_TARGETS = {
-  mac: `${RELEASE_BASE}/job-hunter-team-macos-universal.dmg`,
+  mac: "/download",
 } as const;
 
 export type DownloadSlug = keyof typeof DOWNLOAD_TARGETS;
-
-const DOWNLOAD_ASSET_CANDIDATES: Record<DownloadSlug, readonly string[]> = {
-  mac: ["job-hunter-team-macos-universal.dmg", "job-hunter-team.zip"],
-};
-
-/**
- * Resolve only assets published inside the Tauri 0.4.0 release. The legacy
- * filenames are temporary aliases for a mixed-name 0.4.0 publication; they
- * must never fall through to the 0.3.9 release, whose bytes are Godot.
- */
-export function resolveDownloadTarget(
-  slug: string,
-  release: unknown,
-): string | null {
-  if (!isDownloadSlug(slug) || !release || typeof release !== "object") {
-    return null;
-  }
-  const payload = release as Record<string, unknown>;
-  if (
-    payload.tag_name !== DOWNLOAD_RELEASE_TAG ||
-    payload.draft !== false ||
-    payload.prerelease !== false ||
-    !Array.isArray(payload.assets)
-  ) {
-    return null;
-  }
-
-  const uploaded = new Map(
-    payload.assets.flatMap((asset) => {
-      if (!asset || typeof asset !== "object") return [];
-      const row = asset as Record<string, unknown>;
-      if (
-        typeof row.name !== "string" ||
-        row.state !== "uploaded" ||
-        typeof row.size !== "number" ||
-        row.size <= 0
-      ) {
-        return [];
-      }
-      const expectedUrl = `${RELEASE_BASE}/${row.name}`;
-      return row.browser_download_url === expectedUrl
-        ? [[row.name, expectedUrl] as const]
-        : [];
-    }),
-  );
-  const selected = DOWNLOAD_ASSET_CANDIDATES[slug].find((name) =>
-    uploaded.has(name),
-  );
-  return selected ? uploaded.get(selected)! : null;
-}
 
 export type DownloadAttribution = {
   utm_source: string;
