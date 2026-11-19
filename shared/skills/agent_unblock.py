@@ -428,6 +428,19 @@ def waiting_for_the_pace(home: Path | None = None) -> list:
         return []
 
 
+def held_by_the_pace(home: Path | None = None) -> bool:
+    """The team is held by the spending pace: its stage queue is open, the brake holds it paused, or it was just woken and has
+    not had the time to speak. Its silence is then the pace, not a block: an [UNBLOCK] sent to the Assistente on a pause costs
+    a turn that the gate does not stop (retest 22b3c6eab: 0,19 $ over the line). Unreadable = not held, the scan as it was."""
+    try:
+        import pi_spend_cap
+        home = home or jht_home()
+        return bool(pi_spend_cap.waiting(home, _now().timestamp())) or pi_spend_cap.paused(home) \
+            or pi_spend_cap.settling(home, _now().timestamp())
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def build_scan(pane_states: dict, messages: list, now=None,
                mute_after_min: int = 45, started: bool = True, paced: bool = False) -> dict:
     """Funzione PURA: dai pane + messages.jsonl, l'elenco dei blocchi.
@@ -500,7 +513,7 @@ def scan() -> dict:
     states = {}
     for s in agent_sessions():
         states[s] = classify_pane(capture(s))
-    return build_scan(states, read_messages(), started=team_started(), paced=bool(waiting_for_the_pace()))
+    return build_scan(states, read_messages(), started=team_started(), paced=held_by_the_pace())
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────────

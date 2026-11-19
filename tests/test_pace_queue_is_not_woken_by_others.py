@@ -110,3 +110,19 @@ def test_the_hour_the_person_reads_is_human_and_has_no_date_or_zone_in_it():
     tomorrow = pi_spend_cap.person_clock(late + 4 * 3600 + 3000, config, late, i18n)
     assert "03:50" in tomorrow and "2026" not in tomorrow and "Europe/Rome" not in tomorrow and tomorrow != "03:50"
     assert pi_spend_cap.person_clock(late + 3 * 86400, config, late, i18n).startswith("2026-11-22")
+
+
+def test_the_scan_is_held_while_the_brake_pauses_or_just_woke_the_team(tmp_path, monkeypatch):
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    assert agent_unblock.held_by_the_pace(tmp_path) is False
+    (tmp_path / "logs").mkdir()
+    flag = tmp_path / "logs" / "daily-halt.flag"
+    flag.write_text('{"reason": "other"}', encoding="utf-8")
+    assert agent_unblock.held_by_the_pace(tmp_path) is False
+    flag.write_text('{"reason": "pi_spend_cap"}', encoding="utf-8")
+    assert agent_unblock.held_by_the_pace(tmp_path) is True, "on a pause nothing is to be unblocked: the message to the Assistente costs a turn"
+    flag.unlink()
+    pi_spend_cap.note_resume(tmp_path, time.time() - 60)
+    assert agent_unblock.held_by_the_pace(tmp_path) is True, "just woken: the silence from before the pause is not a block"
+    (tmp_path / "state" / "pace-resumes.json").write_text("[1.0]", encoding="utf-8")
+    assert agent_unblock.held_by_the_pace(tmp_path) is False

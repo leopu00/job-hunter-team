@@ -727,7 +727,8 @@ def test_a_team_on_claude_stops_within_the_budget_looking_every_minute(tmp_path)
         if bridge.esc:
             break
     record = flag_record(bridge)
-    assert record["why"] == "budget" and record["spent"] <= 5.0 - 0.10
+    # the look ahead stops it, as the pace's pause when it has an hour to give (the team resumes later), else as the budget's
+    assert record["why"] in ("budget", "pace") and record["spent"] <= 5.0 - 0.10
     # the calls already in flight at the pause: one more minute at most, still within the 5 $
     assert record["spent"] + 0.5 <= 5.0
 
@@ -1306,7 +1307,8 @@ def test_reserve_after_a_resume_the_hard_stop_looks_ahead_at_the_rate_since_the_
     spent = {"budget_cost": 0.55, "recent_cost": 0.52, "before_start": 0.0, "since_resume": 40.0}
     assert cap.decide(config, dict(spent, since_resume=None), False, now, read)["action"] != "halt", "the old window: 0.10 $ ahead"
     verdict = cap.decide(config, spent, False, now, read)
-    assert verdict["action"] == "halt" and verdict["why"] == "budget"
+    assert verdict["action"] == "halt" and verdict["why"] == "pace" and not verdict.get("stays"), "the pace's pause, with its hour: 0.55 of 1.0 is not the budget spent"
+    assert cap.decide(config, dict(spent, budget_cost=0.97), False, now, read)["why"] == "budget", "the budget spent stays the budget's stop"
 
 
 def test_reserve_the_brake_looks_every_15_seconds_for_five_minutes_after_a_resume(tmp_path):
@@ -1663,3 +1665,29 @@ def test_reserve_a_stage_leaves_room_to_work_so_the_seven_never_start_together(t
     assert 0 < len(taken) < len(order) and stage.pending == order[len(taken):], "some wait in the queue"
     assert stage.estimate * cap.WORK_MULTIPLE <= 1.0 + 1e-9, "what was woken leaves room to work after the reload"
     assert taken[0] == "SCOUT-1"
+
+
+# --- a stop only the look ahead asked for is the pace's pause, with its hour (retest 22b3c6eab) -------------------------------------
+# 2.54 of 3.0 «⛔ choose a new budget», 37 s later «⏸️ resumes at 17:41»: two opposite words for one pause.
+
+def test_a_stop_that_only_the_look_ahead_asked_for_is_the_pause_of_the_pace_with_an_hour(tmp_path):
+    config = budget(3, NOON, NOON + 10 * HOUR)
+    read = cap.team_budget.read(config)
+    spent = {"budget_cost": 1.2, "recent_cost": 1.0, "before_start": 0.0, "since_resume": 40.0}
+    verdict = cap.decide(config, spent, False, NOON + 9 * HOUR, read)
+    assert verdict["action"] == "halt" and verdict["why"] == "pace" and verdict["resumes"], "1.2 of 3.0 is not the budget spent: the pace pauses and says when"
+
+
+def test_the_stop_of_the_budget_spent_stays_the_budgets(tmp_path):
+    pi_calls(tmp_path, [(NOON - 1500, 3.8, 100), (NOON - 120, 1.15, 100)])
+    bridge = Bridge(tmp_path, budget(5, NOON - 1800, NOON + 10 * HOUR))
+    bridge.tick(state={})
+    assert flag_record(bridge)["why"] == "budget"
+
+
+def test_the_notice_key_of_a_stop_changes_after_a_resume(tmp_path):
+    verdict = {"why": "budget", "counts_from": 1000.0}
+    first = cap._halt_key(verdict, "d", tmp_path)
+    cap.note_resume(tmp_path, 5000.0)
+    second = cap._halt_key(verdict, "d", tmp_path)
+    assert first != second, "the team woken in between and stopped again is a new pause for the person"
