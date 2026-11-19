@@ -54,7 +54,8 @@ Three separate things, only one of which JHT influences:
 
 1. **The AI provider**, which JHT does not include or resell: in 0.4.0, an API key for GLM,
    Kimi, OpenAI or Claude billed per call; set a daily ceiling and the team pauses there, without one nothing stops
-   the spending (the ChatGPT subscription is not in this version). Plans, measured costs and the ceiling:
+   the spending (the ChatGPT subscription is not in this version). JHT counts that ceiling itself, so
+   it is not a hard limit: the safe one is the limit you set with the provider. Plans, measured costs and the ceiling:
    [`PROVIDERS.md`](PROVIDERS.md).
 2. **A host**: your own PC costs you power, a VPS costs its monthly fee. The
    trade-offs, without price quotes that go stale:

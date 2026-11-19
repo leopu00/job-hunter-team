@@ -104,7 +104,7 @@ Not sure where the team should live? Compare a
 [local PC, dedicated Linux PC on the LAN and VPS](docs/guides/CHOOSE-WHERE-TO-RUN.md).
 
 **What it costs** — with an API key (GLM, Kimi, OpenAI or Claude) you pay per call: measured on GLM only, about 0.10 USD per
-scored position. Set a daily ceiling and the team pauses there; without one nothing stops the spending. (The month-long run we measured used a
+scored position. Set a daily ceiling and the team pauses there; without one nothing stops the spending. JHT counts that ceiling itself, so it is not a hard limit: the safe one is the limit you set with the provider. (The month-long run we measured used a
 Codex Pro subscription, about €100/month — [results](docs/about/RESULTS.md); Codex is not in this
 version.) Details:
 [`docs/about/PROVIDERS.md`](docs/about/PROVIDERS.md).
