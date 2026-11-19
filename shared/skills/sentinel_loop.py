@@ -356,7 +356,11 @@ def _sleep_watching_the_spending(api, run):
     The brake only reads local files; between the ticks it is the only thing that runs."""
     left = float(run.sleep_sec)
     while left > 0:
-        step = min(float(pi_spend_cap.CHECK_EVERY_SEC), left)
+        try:
+            every = pi_spend_cap.look_every(api._path("JHT_HOME"), api.time.time())
+        except Exception:  # noqa: BLE001 - without it the look is the usual one
+            every = float(pi_spend_cap.CHECK_EVERY_SEC)
+        step = min(every, left)
         api.time.sleep(step)
         left -= step
         if left > 0:

@@ -33,6 +33,7 @@ def _pace_without_the_restart_reserve(request, monkeypatch):
     """The pace mechanics are tried with no room kept for a restart; the reserve has its own tests below."""
     if "reserve" not in request.node.name:
         monkeypatch.setattr(cap, "RESTART_RESERVE_SHARE", 0.0)
+        monkeypatch.setattr(cap, "RESTART_COST_PER_SESSION", 0.0)
     if "slack" not in request.node.name and "reserve" not in request.node.name:
         monkeypatch.setattr(cap, "PACE_SLACK", False)
 EUR = {"eur": 10}
@@ -1235,3 +1236,66 @@ def test_a_worker_retired_during_the_pause_has_no_window_and_is_not_written_to(t
     api.session_exists = lambda s: s != "SCOUT-2"
     assert cap._wake_the_team(api, ["SCOUT-1", "SCOUT-2", "SCORER-1"], "x") == ["SCOUT-1", "SCORER-1"]
     assert "SCOUT-2" not in sent
+
+
+def _context_call(home, agent, ts, model, input_tokens, cache_write, cache_read, cost):
+    """A call with its context, as pi writes it: for the estimate of what a session costs to start again."""
+    folder = home / ".pi" / "agent" / "sessions" / f"--jht_home-agents-{agent}--"
+    folder.mkdir(parents=True, exist_ok=True)
+    rows = [{"type": "session", "version": 3, "id": agent, "cwd": f"/jht_home/agents/{agent}"},
+            {"type": "message", "timestamp": stamp(ts), "message": {"role": "assistant", "model": model, "usage": {
+                "input": input_tokens, "output": 100, "cacheRead": cache_read, "cacheWrite": cache_write, "reasoning": 0,
+                "cost": {"total": cost, "totalFromProvider": False}}}}]
+    path = folder / (agent + ".jsonl")
+    path.write_text("".join(json.dumps(r, separators=(",", ":")) + "\n" for r in rows), encoding="utf-8")
+    os.utime(path, (NOON - 5, NOON - 5))
+
+
+EIGHT = ["ANALISTA-5", "ANALISTA-6", "DOTTORE", "MANTENITORE", "SCORER-2", "SCOUT-1", "SCOUT-2", "SCOUT-3"]
+
+
+def test_reserve_the_restart_estimate_is_session_by_session_from_the_last_context_and_the_price_of_its_model(tmp_path):
+    """Linux build15: 8 sessions woken at once, 0.52 $ in 40 s, of which 0.197 $ the Scorer on Sonnet with 75k of context."""
+    _context_call(tmp_path, "scorer-2", NOON, "sonnet", 1000, 74000, 0, 0.28)            # 75k tokens, 3.7 $ per million
+    _context_call(tmp_path, "scout-1", NOON, "haiku", 500, 3000, 20000, 0.004)           # a small context on a cheap model
+    now = NOON + 100
+    estimate = cap.restart_estimate(tmp_path, now, EIGHT)
+    floor = cap.RESTART_COST_PER_SESSION
+    assert abs(estimate - (0.28 + 7 * floor)) < 0.001, estimate   # the Scorer 75k tokens at 3.7 $ per million, the others the minimum
+    assert estimate > 8 * floor + 0.15, "the Sonnet with a big context weighs more than the average"
+    assert cap.restart_estimate(tmp_path, now, ["SCOUT-9"]) == floor, "no history: the minimum"
+    assert cap.restart_estimate(tmp_path, now, ["SENTINELLA-WORKER", "ASSISTENTE"]) == 0.0, "the ones that are not woken are not counted"
+    assert cap.restart_estimate(tmp_path, now, None) == 0.0
+
+
+def test_reserve_a_pause_of_the_pace_is_not_lifted_when_the_restart_of_all_does_not_fit_under_the_line(tmp_path):
+    """The sequence of build15: budget 1 $, pace pause at 0.598 $; with the ten per cent of room the team came back and the restart
+    took it to 1.13 $. With the restart estimated the team stays paused: never past the ceiling."""
+    config = budget(1, NOON, NOON + 10 * HOUR)
+    read = cap.team_budget.read(config)
+    _context_call(tmp_path, "scorer-2", NOON, "sonnet", 1000, 74000, 0, 0.28)
+    now = NOON + 9 * HOUR
+    estimate = cap.restart_estimate(tmp_path, now, EIGHT)
+    base = {"budget_cost": 0.598, "recent_cost": 0.0, "before_start": 0.0}
+    assert cap.decide(config, base, False, now, read, held_by_pace=True)["action"] == "none", "with only the share the team would come back"
+    held = cap.decide(config, base, False, now, read, held_by_pace=True, restart_estimate=estimate)
+    assert held["action"] == "halt" and held["why"] == "pace" and 0.598 + estimate + cap.team_budget.margin(1.0) > 1.0
+
+
+def test_reserve_after_a_resume_the_hard_stop_looks_ahead_at_the_rate_since_the_resume_restart_included(tmp_path):
+    """00:23:49: 1.105 $ of 1.0 and no stop: 0.52 $ in 40 s was read as a fifth of it. Now 0.78 $ a minute, and the stop is there."""
+    config = budget(1, NOON, NOON + 10 * HOUR)
+    read = cap.team_budget.read(config)
+    now = NOON + 9 * HOUR
+    spent = {"budget_cost": 0.55, "recent_cost": 0.52, "before_start": 0.0, "since_resume": 40.0}
+    assert cap.decide(config, dict(spent, since_resume=None), False, now, read)["action"] != "halt", "the old window: 0.10 $ ahead"
+    verdict = cap.decide(config, spent, False, now, read)
+    assert verdict["action"] == "halt" and verdict["why"] == "budget"
+
+
+def test_reserve_the_brake_looks_every_15_seconds_for_five_minutes_after_a_resume(tmp_path):
+    assert cap.look_every(tmp_path, NOON) == cap.CHECK_EVERY_SEC
+    cap.note_resume(tmp_path, NOON)
+    assert cap.look_every(tmp_path, NOON + 10) == cap.LOOK_AFTER_RESUME_SEC == 15.0
+    assert cap.look_every(tmp_path, NOON + cap.WATCH_AFTER_RESUME_SEC - 1) == 15.0
+    assert cap.look_every(tmp_path, NOON + cap.WATCH_AFTER_RESUME_SEC + 1) == cap.CHECK_EVERY_SEC

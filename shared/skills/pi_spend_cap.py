@@ -170,16 +170,65 @@ def spend(home, now_ts, budget_start=None, split_at=None):
 
 PACE_SLACK = True              # the pace stops one margin before the line, like the budget, and says the resume time the lift will really find (the same line: reserve + one margin)
 RESTART_RESERVE_SHARE = 0.10   # a team stopped by the pace comes back only with this share of the budget of room under the pace
+RESTART_COST_PER_SESSION = 0.07  # what a session costs to start again: it reloads its context (0.52 $ for 8 sessions, giro Linux build15; 0.454 $ in 12b)
+WATCH_AFTER_RESUME_SEC = 300   # for this long after a resume the brake looks every LOOK_AFTER_RESUME_SEC: the restart is the fast part
+LOOK_AFTER_RESUME_SEC = 15
 
 
-def _budget_verdict(config, budget, spent, now, held_by_pace=False):
+def restart_estimate(home, now, sessions):
+    """What waking these sessions together will cost: the room a lift of the pace must leave, or the team spends it past the line
+    (giro Linux build15: 8 sessions woken at once, 0.52 $ in 40 s, 1.13 $ of a budget of 1, of which 0.197 $ the Scorer on Sonnet
+    reloading 75k tokens). Session by session: the context of its last call times the price of its model, which is read from what
+    the team paid (the dearest cost per token of a call of that model that wrote its cache); RESTART_COST_PER_SESSION at least,
+    and for a session with no history."""
+    names = [x for x in (sessions or []) if isinstance(x, str) and x not in NEVER_WAKE and x not in WAKE_ONLY_IF_NEEDED]
+    if not names:
+        return 0.0
+    last, rate = {}, {}
+    try:
+        for event in pi_sessions.usage_events(home, now - 86400):
+            who = (event.get("agent") or "").upper()
+            if who:
+                last[who] = event
+            tokens = (event.get("input") or 0) + (event.get("cache_write") or 0)
+            if event.get("model") and tokens >= 2000 and event.get("cache_write"):
+                rate[event["model"]] = max(rate.get(event["model"], 0.0), event["cost"] / tokens)
+    except Exception:  # noqa: BLE001 - without the history every session costs the minimum
+        pass
+    total = 0.0
+    for name in names:
+        event = last.get(name.upper())
+        cost = 0.0
+        if event and event.get("model") in rate:
+            cost = ((event.get("input") or 0) + (event.get("cache_read") or 0) + (event.get("cache_write") or 0)) * rate[event["model"]]
+        total += max(RESTART_COST_PER_SESSION, cost)
+    return round(total, 6)
+
+
+def look_every(home, now):
+    """Seconds between two looks of the brake: short in the minutes after a resume, when the team spends the most."""
+    try:
+        last = max([r for r in _read_resumes(home) if r <= now], default=None)
+    except Exception:  # noqa: BLE001
+        last = None
+    if last is not None and now - last < WATCH_AFTER_RESUME_SEC:
+        return float(LOOK_AFTER_RESUME_SEC)
+    return float(CHECK_EVERY_SEC)
+
+
+def _budget_verdict(config, budget, spent, now, held_by_pace=False, restart_estimate=0.0):
     """The pause the budget asks for, or None. `held_by_pace`: the team is paused by the pace right now; it then stays paused until
     the pace leaves the room a restart costs (seven sessions starting together rewrite their cache: 0.85 $ in 86 s, giro Linux
     18/11, with the pace lifted at the very dollar it had stopped on)."""
     used = spent.get("budget_cost") or 0.0
     # What the team will have spent by the next look, at the pace of the last minutes: the brake stops BEFORE the budget, not
     # one look after it (with Claude ~0.5 $ a minute, a look a minute late is half a dollar over).
-    ahead = (spent.get("recent_cost") or 0.0) / RATE_WINDOW_SEC * CHECK_EVERY_SEC
+    # after a resume the rate is the team's since then, restart included (the hard stop pays it): not a fifth of it spread over the pause
+    hard_window = RATE_WINDOW_SEC
+    since_resume = spent.get("since_resume")
+    if since_resume is not None and since_resume < RATE_WINDOW_SEC:
+        hard_window = max(CHECK_EVERY_SEC / 2.0, since_resume)
+    ahead = (spent.get("recent_cost") or 0.0) / hard_window * CHECK_EVERY_SEC
     common = {"action": "halt", "spent": used, "usd": budget["usd"], "ends": budget["ends"], "starts": budget["starts"],
               "counts_from": budget["counts_from"]}
     if used + ahead >= budget["usd"] - team_budget.margin(budget["usd"]):
@@ -197,7 +246,8 @@ def _budget_verdict(config, budget, spent, now, held_by_pace=False):
     if period["usd"] <= 0:
         return None
     allowance = team_budget.allowed(config, period, now)
-    reserve = RESTART_RESERVE_SHARE * period["usd"] if held_by_pace else 0.0
+    room = max(RESTART_RESERVE_SHARE * period["usd"], restart_estimate)   # what a restart needs under the line
+    reserve = room if held_by_pace else 0.0
     # the calls in flight when the brake looks finish and are paid (the pace let 0.16 $ through, giro Mac 12b): one margin before the line
     slack = team_budget.margin(period["usd"]) if PACE_SLACK else 0.0
     # the pace looks AHEAD like the budget does: a team that restarts spends in the first minute what the next look would only see
@@ -213,11 +263,11 @@ def _budget_verdict(config, budget, spent, now, held_by_pace=False):
     ahead_pace = max(0.0, (spent.get("recent_cost") or 0.0) - (spent.get("restart_recent") or 0.0)) / window * CHECK_EVERY_SEC
     if used - before - restart + ahead_pace + reserve + slack >= allowance:
         return dict(common, why="pace", ceiling=round(before + allowance, 6),
-                    resumes=team_budget.resumes_at(config, period, used - before - restart + RESTART_RESERVE_SHARE * period["usd"] + slack) or budget["ends"])
+                    resumes=team_budget.resumes_at(config, period, used - before - restart + room + slack) or budget["ends"])
     return None
 
 
-def decide(config, spent, no_quota_mode, now=None, budget=None, held_by_pace=False):
+def decide(config, spent, no_quota_mode, now=None, budget=None, held_by_pace=False, restart_estimate=0.0):
     """{"action": "none" | "halt" | "warn", ...}. Pure: a config, a measure and a moment in, a verdict out. `budget` is
     the one team_budget.read gave with the start of a duration resolved; None reads it from the config alone."""
     # Before the mode: the bridge declares the no-quota mode at the END of its first tick, so a team that found the
@@ -231,7 +281,7 @@ def decide(config, spent, no_quota_mode, now=None, budget=None, held_by_pace=Fal
     # «cleared» at 2.05 $ of 2, then 2.81 $).
     budget = budget if budget is not None else team_budget.read(config)
     if budget is not None and now is not None:
-        verdict = _budget_verdict(config, budget, spent, now, held_by_pace)
+        verdict = _budget_verdict(config, budget, spent, now, held_by_pace, restart_estimate)
         if verdict:
             return verdict
     if not no_quota_mode:
@@ -644,7 +694,8 @@ def step(api, run, notify_user=None):
         flag = _flag(api)
         mine = bool(flag) and flag.get("reason") == REASON
         held_by_pace = mine and (flag.get("pi_spend_cap") or {}).get("why") == "pace" and api._daily_halt_active()
-        verdict = decide(config, spent, bool(run.state.get("no_quota_declared")), now, budget, held_by_pace)
+        estimate = restart_estimate(home, now, (flag or {}).get("sessions")) if held_by_pace else 0.0
+        verdict = decide(config, spent, bool(run.state.get("no_quota_declared")), now, budget, held_by_pace, estimate)
         if verdict["action"] == "halt":
             if run._bi_on:
                 print("[bridge V6] %s BURN-INTENT: pi spending ceiling reached, the team stays active (user override)"
