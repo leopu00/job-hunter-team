@@ -5,16 +5,17 @@ The Actions artifacts of a run ask for a GitHub login; the download button of
 the site must not. This asks the way a person who is not logged in asks, with
 no token at all:
 
- 1. the release is public: not a draft, not a pre-release (what the site's
-    /go/<slug> route also requires before it redirects);
- 2. every asset the site links is listed, uploaded, not empty, and at the very
-    address the site builds for it;
+ 1. the release is public: not a draft, not a pre-release;
+ 2. SHA256SUMS and every asset the site links are listed, uploaded, not empty,
+    and at the very address the site builds for them;
  3. each of those addresses answers with the file (the redirect to GitHub's
     storage is followed), the size the API announced, and, unless --no-bytes,
     the SHA-256 that SHA256SUMS of the same release carries.
 
 The file names are the ones of web/lib/download-funnel.ts, read from there: the
-site and this check cannot disagree on what the release must hold.
+site and this check cannot disagree on what the release must hold. 0.4.0 has no
+desktop app and the site links no file of the release: then the check asks only
+that the release is public and that its SHA256SUMS can be downloaded.
 
 Usage: check_public_release.py [--tag v0.4.0] [--repository owner/name] [--no-bytes]
 Exit: 0 ok, 1 something a person could not download, 2 the check could not run.
@@ -50,9 +51,8 @@ def site_targets(source: str) -> tuple:
     block = re.search(r"export const DOWNLOAD_TARGETS = \{(.*?)\} as const", source, re.S)
     if not tag or not block:
         raise CannotRun("web/lib/download-funnel.ts no longer declares DOWNLOAD_RELEASE_TAG / DOWNLOAD_TARGETS")
+    # a file of the release is linked as `${RELEASE_BASE}/<name>`; a target that is a page of the site is not one
     names = re.findall(r"RELEASE_BASE\}/([^`]+)`", block.group(1))
-    if not names:
-        raise CannotRun("no download target found in web/lib/download-funnel.ts")
     return tag.group(1), names
 
 
@@ -152,8 +152,9 @@ def main() -> int:
             raise Fail(f"the site links {site_tag}, not {tag}: a button that leads to another release")
         listed = check_release(read_release(args.repository, tag), args.repository, tag, names)
         base = f"https://github.com/{args.repository}/releases/download/{tag}"
-        lines = []
+        lines = [] if names else ["the site links no file of this release (no desktop app): SHA256SUMS only"]
         if args.no_bytes:
+            probe(f"{base}/SHA256SUMS")
             for name in names:
                 probe(f"{base}/{name}")
                 lines.append(f"{name}: answers, {listed[name]} bytes announced")

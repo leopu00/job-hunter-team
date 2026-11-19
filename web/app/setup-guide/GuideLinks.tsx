@@ -12,7 +12,7 @@ import { useState } from "react";
 import Link from "next/link";
 
 import { GUIDE_UI } from "./guide-ui.i18n";
-import { downloadUrlFor, resolveExternalHref } from "./guide-config";
+import { resolveExternalHref } from "./guide-config";
 import { linkAppliesTo, type GuideLink, type OsId } from "./guide-types";
 import type { Lang } from "../components/landing/LandingI18n";
 
@@ -98,8 +98,8 @@ export default function GuideLinks({
   os: OsId;
   lang: Lang;
 }) {
-  // Un link può valere solo per certi sistemi: su Windows i download
-  // ufficiali sono due (installer e portable), e non esistono altrove.
+  // Un link può valere solo per certi sistemi: il comando di install.sh,
+  // per esempio, vale per macOS e Linux e non per Windows.
   const forThisOs = links.filter((link) => linkAppliesTo(link, os));
 
   // I comandi stanno su una riga propria a piena larghezza, i bottoni si
@@ -119,10 +119,7 @@ export default function GuideLinks({
       );
     }
 
-    const href =
-      link.kind === "download"
-        ? downloadUrlFor(os, link.asset)
-        : resolveExternalHref(link.href, os);
+    const href = resolveExternalHref(link.href, os);
     // Un link esterno senza indirizzo per questo sistema non si mostra
     // spento: si omette. Un bottone che non porta da nessuna parte è peggio
     // di un bottone che non c'è.
