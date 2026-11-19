@@ -116,7 +116,7 @@ export function LandingFooter() {
             <Link href="/project" className={linkClass}>
               {t("footer_stats")}
             </Link>
-            <Link href="/setup-guide" className={linkClass}>
+            <Link href="/docs/guides/getting-started" className={linkClass}>
               {t("nav_get_started")}
             </Link>
             <a

@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Locale } from "@/i18n/config";
 import { CHART_COPY, type ChartCopy } from "./chartsCopy";
-import { OsIcon } from "../../setup-guide/OsIcons";
+import { OsIcon } from "../../components/OsIcons";
 
 // ---- data shapes (all optional in the JSON: the page grows as the rounds are read) ----
 

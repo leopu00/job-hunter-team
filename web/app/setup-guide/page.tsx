@@ -1,15 +1,7 @@
-import type { Metadata } from "next";
+import { permanentRedirect } from "next/navigation";
 
-import SetupGuideClient from "./SetupGuideClient";
-
-export const metadata: Metadata = {
-  title: "Setup guide",
-  description:
-    "Set up Job Hunter Team step by step on macOS, Windows, or Linux.",
-  robots: { index: true, follow: true },
-  alternates: { canonical: "/setup-guide" },
-};
-
+// 0.4.0 is installed and set up from the terminal, and the desktop app this guide followed is not in it. The site's
+// guide of the command-line path is Getting Started, in the seven languages: the old address leads there for good.
 export default function SetupGuidePage() {
-  return <SetupGuideClient />;
+  permanentRedirect("/docs/guides/getting-started");
 }

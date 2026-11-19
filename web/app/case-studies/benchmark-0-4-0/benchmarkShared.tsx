@@ -1,7 +1,7 @@
 // What the benchmark page and the page of each round share: the words in the seven languages, the marks of the systems
 // and the services, the colours of the states. Static data in web/data/benchmark/benchmark-0-4-0.json (synthetic profiles only).
 
-import { OsIcon } from "../../setup-guide/OsIcons";
+import { OsIcon } from "../../components/OsIcons";
 import type { Locale } from "@/i18n/config";
 import data from "@/data/benchmark/benchmark-0-4-0.json";
 import type { FinderCopy } from "./BenchmarkFinder";
