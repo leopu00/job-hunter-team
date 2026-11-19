@@ -262,8 +262,9 @@ def _budget_verdict(config, budget, spent, now, held_by_pace=False, restart_esti
         window = max(CHECK_EVERY_SEC / 2.0, min(RATE_WINDOW_SEC, since - RESTART_WINDOW_SEC))
     ahead_pace = max(0.0, (spent.get("recent_cost") or 0.0) - (spent.get("restart_recent") or 0.0)) / window * CHECK_EVERY_SEC
     if used - before - restart + ahead_pace + reserve + slack >= allowance:
-        return dict(common, why="pace", ceiling=round(before + allowance, 6),
-                    resumes=team_budget.resumes_at(config, period, used - before - restart + room + slack) or budget["ends"])
+        lift = team_budget.resumes_at(config, period, used - before - restart + room + slack)
+        # no lift inside the period: the team stays paused until it ends (or the person raises the budget), and no hour is promised
+        return dict(common, why="pace", ceiling=round(before + allowance, 6), resumes=lift or budget["ends"], stays=lift is None)
     return None
 
 
@@ -321,6 +322,9 @@ def user_text(verdict, spent, config=None, now=None):
     if verdict["why"] == "period":
         return i18n.tf("pi_cap.halt_period", clock(verdict["ends"], config, now), "%s USD" % _money(verdict["spent"]),
                        "%s USD" % _money(verdict["usd"]))
+    if verdict["why"] == "pace" and verdict.get("stays"):
+        return i18n.tf("pi_cap.halt_pace_stays", "%s USD" % _money(verdict["spent"]), "%s USD" % _money(verdict["usd"]),
+                       clock(verdict["ends"], config, now))
     if verdict["why"] == "pace":
         return i18n.tf("pi_cap.halt_pace", "%s USD" % _money(verdict["spent"]), "%s USD" % _money(verdict["usd"]),
                        clock(verdict["resumes"], config, now))
@@ -362,7 +366,10 @@ def _budget_captain_text(verdict, config, now):
         what = ("%s USD spent of %s USD, ahead of the pace (the share of the budget of the worked time gone by, one working "
                 "hour ahead, allows %s USD by now)" % (_money(verdict["spent"]), _money(verdict["usd"]),
                                                         _money(verdict["ceiling"])))
-        lift = "It lifts by itself at %s, when the worked time catches up." % clock(verdict["resumes"], config, now)
+        lift = ("It lifts by itself at %s, when the worked time catches up." % clock(verdict["resumes"], config, now))
+        if verdict.get("stays"):
+            lift = ("It does NOT lift by itself before the period ends (%s): what is left of the budget does not cover the reload of the "
+                    "contexts of the sessions. It lifts when the person raises the budget (jht setup)." % clock(verdict["ends"], config, now))
     return head, what, lift
 
 
@@ -438,8 +445,11 @@ def _record(verdict, config):
     record = {"why": verdict["why"], "spent": verdict["spent"], "ceiling": verdict["ceiling"]}
     if verdict["why"] in ("budget", "period", "pace"):
         record.update(budget_usd=verdict["usd"], starts_at=_iso(verdict["starts"], config),
-                      ends_at=_iso(verdict["ends"], config), resumes_at=_iso(verdict["resumes"], config),
+                      ends_at=_iso(verdict["ends"], config),
+                      resumes_at=None if verdict.get("stays") else _iso(verdict["resumes"], config),
                       counts_from=int(verdict["counts_from"]))
+        if verdict.get("stays"):
+            record["stays"] = True
         if verdict.get("before"):
             record["before_work"] = {"spent": verdict["before"], "budget_usd": verdict["usd"]}
     return record
@@ -498,6 +508,8 @@ def _resume_moved(api, run, verdict, spent, day, notify_user, config, now, flag)
     new = verdict.get("resumes")
     if new is None:
         return
+    if verdict.get("stays") and record.get("stays"):
+        return  # said once: no hour to move
     written = moment(record.get("resumes_at"))
     told = moment(record.get("resumes_told_at") or record.get("resumes_at"))
     tell = told is None or abs(new - told) >= RESUME_MOVED_SEC or (told <= now and int(told // 60) != int(new // 60))
