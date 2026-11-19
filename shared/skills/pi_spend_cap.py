@@ -118,6 +118,10 @@ def note_resume(home, moment):
     _write_state(Path(home) / RESUMES_FILE, (_read_resumes(home) + [float(moment)])[-50:])
 
 
+def _sound(x):
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) and x >= 0
+
+
 def _read_wakes(home):
     try:
         data = json.loads((Path(home) / WAKES_FILE).read_text(encoding="utf-8"))
@@ -125,8 +129,9 @@ def _read_wakes(home):
         for row in data:
             m, e = row[0], row[1]
             per = row[2] if len(row) > 2 and isinstance(row[2], dict) else None
-            if isinstance(m, (int, float)) and isinstance(e, (int, float)):
-                out.append((float(m), float(e), {str(k).upper(): float(v) for k, v in per.items() if isinstance(v, (int, float))} if per is not None else None))
+            # a file the agents can write: only finite, non-negative numbers (json.loads lets NaN and -Infinity through)
+            if _sound(m) and _sound(e):
+                out.append((float(m), float(e), {str(k).upper(): float(v) for k, v in per.items() if _sound(v)} if per is not None else None))
         return out
     except (OSError, ValueError, TypeError, IndexError):
         return []

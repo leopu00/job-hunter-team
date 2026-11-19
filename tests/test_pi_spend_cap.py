@@ -1540,3 +1540,11 @@ def test_reserve_a_pause_is_told_once_while_its_hour_moves(tmp_path):
     cap._resume_moved(bridge.api, run, moved, {"cost": 0.4}, "d", lambda *a: told.append(a), config, NOON + 600, flag)
     assert told == [] and not bridge.sent, "moved by 20 minutes before the told hour: written, not told again"
     assert flag["pi_spend_cap"]["resumes_at"] == cap._record(moved, config)["resumes_at"], "the flag has the new hour"
+
+
+def test_reserve_the_wakes_file_written_by_an_agent_cannot_open_or_poison_the_line(tmp_path):
+    (tmp_path / "state").mkdir()
+    (tmp_path / "state" / "pace-wakes.json").write_text('[[%d, 1.0, {"SCOUT-1": NaN, "CAPITANO": -5, "X": 0.2}], [NaN, 1.0], [%d, -1.0]]' % (NOON, NOON))
+    wakes = cap._read_wakes(tmp_path)
+    assert wakes == [(float(NOON), 1.0, {"X": 0.2})]
+
