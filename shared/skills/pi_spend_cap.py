@@ -1092,6 +1092,31 @@ def _tell_onboarding(api, run, budget, spent_before):
         done[key] = bool(notice(api, run.state, "pi_cap:%s" % key, api.CAPITANO_SESSION, text))
 
 
+def _tell_budget_changed(api, run, budget, config, now):
+    """The person saved another budget (jht setup) while the team was running: the Capitano is told the new figures once. Its memory
+    still holds the old ones and it decided on them (retest 25395266b: «Scout: per ora nessuno, il tetto è 3 USD» with 2 USD set an
+    hour before). The first budget the bridge sees is not a change."""
+    from sentinel_delivery import notice
+
+    done = run.state.setdefault("pi_spend_cap", {})
+    saved = budget.get("saved_at") or "%s:%s:%s" % (budget["usd"], budget.get("starts"), budget.get("ends"))   # a fixed period has no stamp
+    seen = done.get("budget_seen")
+    if seen == saved:
+        return
+    done["budget_seen"] = saved
+    if seen is None:
+        return
+    period = ("from %s to %s" % (clock(budget["starts"], config, now), clock(budget["ends"], config, now))
+              if budget.get("starts") is not None else
+              ("for %g minutes from the first work of the team" % (budget["duration"] / 60) if budget.get("duration") else "open"))
+    text = ("[BRIDGE INFO] THE BUDGET CHANGED: the person saved a new one. It is now %s USD %s%s. Every figure of the old budget you "
+            "remember or wrote in your diary is void: decide the roster and the throttle on this one (read it again with "
+            "`jht team status`, never from memory)."
+            % (_money(budget["usd"]), period, ", with the pace on" if budget.get("pace") else ""))
+    if not notice(api, run.state, "pi_cap:budget_changed:%s" % saved, api.CAPITANO_SESSION, text):
+        done["budget_seen"] = seen    # not delivered: the next tick tries again
+
+
 def step(api, run, notify_user=None):
     """One tick of the brake. Never raises."""
     try:
@@ -1100,6 +1125,11 @@ def step(api, run, notify_user=None):
         home = api._path("JHT_HOME")
         config = api._read_config_json()
         budget = team_budget.read(config, home)
+        if budget is not None:
+            try:    # a notice that fails is a notice lost, never a look of the brake lost
+                _tell_budget_changed(api, run, budget, config, now)
+            except Exception as error:  # noqa: BLE001
+                print("[bridge V6] WARN pi spend cap budget notice: %s" % error)
         spent = spend(home, now, budget["counts_from"] if budget else None, budget["starts"] if budget else None)
         if budget is not None and budget["starts"] is None and spent["first_worker"] is not None:
             budget = _start(home, budget, spent["first_worker"], run, api, spent.get("before_start") or 0.0)

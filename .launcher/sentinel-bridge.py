@@ -262,6 +262,16 @@ def _read_dynamic_target():
         return None, None
     tgt = st.get("current_window_target_pct")
     phase = st.get("work_phase")
+    # the phase was written by the pacing-bridge from the hours of that moment: a setup that changed the hours after it (retest 25395266b:
+    # «OUT OF HOURS» at 19:35 with the hours taken off at 19:30) made it stale for up to a quarter of an hour. Older than the config,
+    # it says nothing: the phase is read from the hours of the config itself (working_hours.py).
+    try:
+        if _path("CONFIG_PATH").stat().st_mtime > _path("PACING_STATE_FILE").stat().st_mtime:
+            mod = _load_skill_module("working_hours", "working_hours.py")
+            inside = mod.is_within_working_hours() if mod else True
+            return None, ("ON" if inside else "OFF")
+    except (OSError, AttributeError, ValueError):
+        pass
     if not isinstance(tgt, (int, float)) or tgt <= 0:
         return None, phase if isinstance(phase, str) else None
     return float(tgt), (phase if isinstance(phase, str) else None)
