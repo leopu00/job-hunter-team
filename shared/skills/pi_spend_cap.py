@@ -61,6 +61,8 @@ RATE_WINDOW_SEC = 300
 # cost is the budget's (its hard stop counts it) and not the pace's: a pace that counts it stops the team again 80 s after every resume.
 RESTART_WINDOW_SEC = 120
 RESUMES_FILE = Path("state") / "pace-resumes.json"
+WAKES_FILE = Path("state") / "pace-wakes.json"            # [[moment, estimate]]: what the sessions woken at that moment were expected to cost
+QUEUE_FILE = Path("state") / "pace-wake-queue.json"       # {"pending": [...], "at": moment}: the sessions the pace has not woken yet
 PROVIDER_NAMES = provider_credit.PROVIDER_NAMES
 
 
@@ -98,18 +100,49 @@ def _read_resumes(home):
         return []
 
 
-def note_resume(home, moment):
-    """The moment the pace let the team work again, for the pace to leave the restart out. Best effort, atomic, 0600."""
+def _write_state(path, data):
+    """Atomic, 0600. Best effort: the brake goes on without it."""
     try:
-        path = Path(home) / RESUMES_FILE
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_name(".%s.%d.tmp" % (path.name, os.getpid()))
         fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(json.dumps((_read_resumes(home) + [float(moment)])[-50:]))
+            handle.write(json.dumps(data))
         os.replace(str(tmp), str(path))
     except OSError:
         pass
+
+
+def note_resume(home, moment):
+    """The moment the pace let the team work again, for the pace to leave the restart out of its rate. Best effort, atomic, 0600."""
+    _write_state(Path(home) / RESUMES_FILE, (_read_resumes(home) + [float(moment)])[-50:])
+
+
+def _read_wakes(home):
+    try:
+        data = json.loads((Path(home) / WAKES_FILE).read_text(encoding="utf-8"))
+        return [(float(m), float(e)) for m, e in data if isinstance(m, (int, float)) and isinstance(e, (int, float))]
+    except (OSError, ValueError, TypeError):
+        return []
+
+
+def note_wake(home, moment, estimate):
+    """A stage of the wake: the moment (a resume, for the rate and the look) and what its sessions are expected to cost, which the
+    pace keeps under the line for the next two minutes whatever they have spent so far."""
+    note_resume(home, moment)
+    _write_state(Path(home) / WAKES_FILE, (_read_wakes(home) + [(float(moment), round(float(estimate), 6))])[-50:])
+
+
+def pending_wakes(home):
+    try:
+        data = json.loads((Path(home) / QUEUE_FILE).read_text(encoding="utf-8"))
+        return [x for x in (data.get("pending") or []) if isinstance(x, str)]
+    except (OSError, ValueError, AttributeError):
+        return []
+
+
+def set_pending(home, names, moment):
+    _write_state(Path(home) / QUEUE_FILE, {"pending": list(names), "at": float(moment)})
 
 
 def spend(home, now_ts, budget_start=None, split_at=None):
@@ -120,7 +153,7 @@ def spend(home, now_ts, budget_start=None, split_at=None):
     start, hour = day_start(now_ts), now_ts - 3600
     out = {"cost": 0.0, "hour_tokens": 0, "calls": 0, "credit": provider_credit.exhausted(home, now_ts),
            "budget_cost": None if budget_start is None else 0.0, "first_worker": None,
-           "recent_cost": 0.0, "before_start": 0.0, "restart_cost": 0.0, "restart_recent": 0.0, "since_resume": None}
+           "recent_cost": 0.0, "before_start": 0.0, "restart_cost": 0.0, "restart_recent": 0.0, "since_resume": None, "reserve_open": 0.0}
     budget_events = []
     # the rate of the pace is the team's since the last resume, not the pause before it (see _budget_verdict)
     resumed_at = [r for r in _read_resumes(home) if budget_start is not None and budget_start <= r <= now_ts]
@@ -162,6 +195,12 @@ def spend(home, now_ts, budget_start=None, split_at=None):
                     if moment >= recent_from:
                         out["restart_recent"] += cost
         out["restart_cost"] = round(out["restart_cost"], 6)
+        # the stages woken in the last two minutes: what they were expected to cost and has not been spent yet stays under the line
+        open_wakes = [(m, e) for m, e in _read_wakes(home) if m >= budget_start and 0 <= now_ts - m < RESTART_WINDOW_SEC]
+        if open_wakes:
+            first = min(m for m, _ in open_wakes)
+            paid = sum(cost for moment, cost in budget_events if moment >= first)
+            out["reserve_open"] = round(max(0.0, sum(e for _, e in open_wakes) - paid), 6)
     out["cost"] = round(out["cost"], 6)
     if budget_start is not None:
         out["budget_cost"] = round(out["budget_cost"], 6)
@@ -175,15 +214,16 @@ WATCH_AFTER_RESUME_SEC = 300   # for this long after a resume the brake looks ev
 LOOK_AFTER_RESUME_SEC = 15
 
 
-def restart_estimate(home, now, sessions):
-    """What waking these sessions together will cost: the room a lift of the pace must leave, or the team spends it past the line
-    (giro Linux build15: 8 sessions woken at once, 0.52 $ in 40 s, 1.13 $ of a budget of 1, of which 0.197 $ the Scorer on Sonnet
-    reloading 75k tokens). Session by session: the context of its last call times the price of its model, which is read from what
-    the team paid (the dearest cost per token of a call of that model that wrote its cache); RESTART_COST_PER_SESSION at least,
-    and for a session with no history."""
+ALWAYS_WOKEN = ("CAPITANO", "SENTINELLA")   # told by their own notice at a resume: their reload is reserved, they are not staged
+
+
+def session_costs(home, now, sessions):
+    """{session: what it costs to start again}: the context of its last call times the price its model was paid, the dearest cost per
+    token of a call of that model that wrote its cache (RESTART_COST_PER_SESSION at least, and for a session with no history).
+    The Scorer on Sonnet reloaded 75k tokens for 0.197 $ of the 0.52 $ that eight sessions cost (giro Linux build15)."""
     names = [x for x in (sessions or []) if isinstance(x, str) and x not in NEVER_WAKE and x not in WAKE_ONLY_IF_NEEDED]
     if not names:
-        return 0.0
+        return {}
     last, rate = {}, {}
     try:
         for event in pi_sessions.usage_events(home, now - 86400):
@@ -195,14 +235,79 @@ def restart_estimate(home, now, sessions):
                 rate[event["model"]] = max(rate.get(event["model"], 0.0), event["cost"] / tokens)
     except Exception:  # noqa: BLE001 - without the history every session costs the minimum
         pass
-    total = 0.0
+    costs = {}
     for name in names:
         event = last.get(name.upper())
         cost = 0.0
         if event and event.get("model") in rate:
             cost = ((event.get("input") or 0) + (event.get("cache_read") or 0) + (event.get("cache_write") or 0)) * rate[event["model"]]
-        total += max(RESTART_COST_PER_SESSION, cost)
-    return round(total, 6)
+        costs[name] = round(max(RESTART_COST_PER_SESSION, cost), 6)
+    return costs
+
+
+def restart_estimate(home, now, sessions):
+    """What waking all these sessions together would cost."""
+    return round(sum(session_costs(home, now, sessions).values()), 6)
+
+
+def first_stage_cost(home, now, sessions):
+    """What a lift of the pace needs under the line: the sessions that are always woken and the cheapest of the others. The rest is
+    woken by stages as the line rises (a team stopped for 24 h with 1.08 $ unspent, retest of the brake)."""
+    costs = session_costs(home, now, sessions)
+    fixed = sum(c for n, c in costs.items() if n in ALWAYS_WOKEN)
+    others = [c for n, c in costs.items() if n not in ALWAYS_WOKEN]
+    return round(fixed + (min(others) if others else 0.0), 6)
+
+
+def _wake_rank(session):
+    """Who comes first: the Scouts (nothing enters without them), then the Scorer and the Analysts, the other workers, the Dottore,
+    the Mantenitore, the rest; by number inside a group."""
+    match = re.match(r"^([A-Z]+)(?:-S?(\d+))?$", session or "")
+    kind, number = (match.group(1), int(match.group(2) or 0)) if match else (session or "", 0)
+    order = {"SCOUT": 0, "SCORER": 1, "ANALISTA": 2}
+    if kind in order:
+        group = order[kind]
+    elif _WORKER_SESSION.match(session or ""):
+        group = 3
+    else:
+        group = {"DOTTORE": 4, "MANTENITORE": 5}.get(kind, 6)
+    return (group, number, session or "")
+
+
+def _stage_room(config, budget, spent, now):
+    """What the line leaves for sessions that start now: the pace allowance, less one margin, less what was spent and what the stages
+    of the last two minutes are still expected to spend. Infinite without a budget that has started: there is no line."""
+    if budget is None or budget.get("starts") is None:
+        return float("inf")
+    used = spent.get("budget_cost") or 0.0
+    before = min(spent.get("before_start") or 0.0, used)
+    period = dict(budget, usd=budget["usd"] - before)
+    if period["usd"] <= 0:
+        return float("inf")
+    allowance = team_budget.allowed(config, period, now)
+    slack = team_budget.margin(period["usd"]) if PACE_SLACK else 0.0
+    return max(0.0, allowance - slack - (used - before) - (spent.get("reserve_open") or 0.0))
+
+
+class Stage:
+    """The room of one look: a session is woken when its estimated reload fits, in the order given; the others wait."""
+
+    def __init__(self, room, costs):
+        self.room, self.costs, self.estimate, self.pending = room, costs, 0.0, []
+
+    def reserve(self, name):
+        cost = self.costs.get(name, 0.0)
+        self.room -= cost
+        self.estimate += cost
+
+    def take(self, name):
+        cost = self.costs.get(name, RESTART_COST_PER_SESSION)
+        if cost <= self.room + 1e-9:
+            self.room -= cost
+            self.estimate += cost
+            return True
+        self.pending.append(name)
+        return False
 
 
 def look_every(home, now):
@@ -251,8 +356,10 @@ def _budget_verdict(config, budget, spent, now, held_by_pace=False, restart_esti
     # the calls in flight when the brake looks finish and are paid (the pace let 0.16 $ through, giro Mac 12b): one margin before the line
     slack = team_budget.margin(period["usd"]) if PACE_SLACK else 0.0
     # the pace looks AHEAD like the budget does: a team that restarts spends in the first minute what the next look would only see
-    # the restart of a resume is out of the pace, in what was spent and in the rate the pace looks ahead at
-    restart = min(spent.get("restart_cost") or 0.0, max(0.0, used - before))
+    # the restart is NOT out of what was spent any more (giro Linux, retest of the brake: 1.90 $ against a line of 1.04, the restart
+    # left out was the whole overshoot): the lift and the stages keep its room under the line (`reserve_open`) and the rate leaves out
+    # only its burst, which is already reserved
+    opened = spent.get("reserve_open") or 0.0
     # right after a resume the last five minutes are mostly the pause: the work of the team is spread over all of them and the pace
     # looks at a fifth of what it will spend (giro Linux build13: 0.86 $ in 282 s, 0.45 $ over the pace). So the window of the rate
     # is the time the team has been working again, outside the restart, and never below half a look.
@@ -261,8 +368,8 @@ def _budget_verdict(config, budget, spent, now, held_by_pace=False, restart_esti
     if since is not None and since < RATE_WINDOW_SEC + RESTART_WINDOW_SEC:
         window = max(CHECK_EVERY_SEC / 2.0, min(RATE_WINDOW_SEC, since - RESTART_WINDOW_SEC))
     ahead_pace = max(0.0, (spent.get("recent_cost") or 0.0) - (spent.get("restart_recent") or 0.0)) / window * CHECK_EVERY_SEC
-    if used - before - restart + ahead_pace + reserve + slack >= allowance:
-        lift = team_budget.resumes_at(config, period, used - before - restart + room + slack)
+    if used - before + opened + ahead_pace + reserve + slack >= allowance:
+        lift = team_budget.resumes_at(config, period, used - before + opened + room + slack)
         # no lift inside the period: the team stays paused until it ends (or the person raises the budget), and no hour is promised
         return dict(common, why="pace", ceiling=round(before + allowance, 6), resumes=lift or budget["ends"], stays=lift is None)
     return None
@@ -471,6 +578,8 @@ def _halt(api, run, verdict, spent, day, notify_user, config=None, now=None, esc
     «reached» line, and the Captain made four more calls in between (giro Windows 16/11: 0.16 $). A Captain held by the gate
     does not read its notice; the person is told by the notifier, and the Captain by the notice of the resume."""
     record = _record(verdict, config)
+    if pending_wakes(api._path("JHT_HOME")):
+        set_pending(api._path("JHT_HOME"), [], api.time.time())   # everyone is stopped again: the next lift stages from the start
     if escape:
         api._activate_daily_halt(100.0 * verdict["spent"] / verdict["ceiling"] if verdict["ceiling"] else 100.0, 100.0,
                                  100.0, extra={"reason": REASON, "pi_spend_cap": record})
@@ -546,7 +655,7 @@ def _held_by_the_budget(flag, budget):
             and record.get("budget_usd") == budget["usd"])
 
 
-def _wake_the_team(api, sessions, why, seen=()):
+def _wake_the_team(api, sessions, why, seen=(), stage=None):
     """[RIPRENDI] to every session the pause stopped, the moment the pause is lifted: they were ESC'd, and left to wait for the
     Sentinella's next cycle they stayed silent for a quarter of an hour (a VPS round: «allows work again» 18:31, the Scouts back at
     18:46). The Captain and the Sentinella have their own notice; a team the person stopped, a standby, and an agent the person
@@ -581,7 +690,10 @@ def _wake_the_team(api, sessions, why, seen=()):
             live = []
         extra = [s for s in list(seen or ()) + live if s not in known and _WORKER_SESSION.match(s or "")]
         woken = []
-        for session in known + list(dict.fromkeys(extra)):
+        order = known + list(dict.fromkeys(extra))
+        if stage is not None:
+            order = sorted(order, key=_wake_rank)   # the Scouts first: the ones the line holds are the last of the list
+        for session in order:
             if session in (api.CAPITANO_SESSION, api.SENTINELLA_SESSION) or session in alone or session in NEVER_WAKE:
                 continue
             if session in WAKE_ONLY_IF_NEEDED and not (session == "ASSISTENTE" and _assistant_owes_an_answer(home)):
@@ -592,6 +704,8 @@ def _wake_the_team(api, sessions, why, seen=()):
                 exists = getattr(api, "session_exists", None)
                 if exists is not None and not exists(session):
                     continue
+                if stage is not None and not stage.take(session):
+                    continue   # the line does not hold its reload yet: it waits in the queue and the next look wakes it
                 if api.jht_tmux_send(session, text if session in known else newcomer_text):
                     woken.append(session)
             except Exception as error:  # noqa: BLE001
@@ -635,7 +749,7 @@ def home_of(api):
     return api._path("JHT_HOME")
 
 
-def _resume(api, run, day, notify_user):
+def _resume(api, run, day, notify_user, ctx=None):
     i18n = quota_data.shared_i18n()
 
     flag = _flag(api) or {}
@@ -644,7 +758,7 @@ def _resume(api, run, day, notify_user):
         api._path("DAILY_HALT_FLAG").unlink()
     except OSError:
         return
-    if was == "pace":
+    if was == "pace" and ctx is None:
         note_resume(home_of(api), api.time.time())
     if was in ("budget", "period", "pace"):
         text = "[BRIDGE INFO] The budget the person declared allows work again: the team can resume; ticks are restarting."
@@ -653,10 +767,83 @@ def _resume(api, run, day, notify_user):
         text = "[BRIDGE INFO] The pi spending ceiling allows work again: the team can resume; ticks are restarting."
         user = i18n.t("pi_cap.resume")
     # the gate is open (the flag is gone) BEFORE anyone is told to work: the order of the standby too
+    stage, names = None, list(flag.get("sessions") or [])
+    home, moment = home_of(api), api.time.time()
+    if ctx is not None and was in ("budget", "period", "pace") and ctx.get("budget") is not None:
+        # by stages, the same for the lift of the pace and the unblock of a new budget (giro Linux, retest of the brake: seven Sonnet
+        # sessions woken together spent 1.90 $ against a line of 1.04): the ones whose reload fits under the line, the Scouts first
+        live = []
+        try:
+            lister = getattr(api, "list_tmux_sessions", None)
+            live = [x for x in (lister() if lister else []) if _AGENT_SESSION.match(x or "")]
+        except Exception:  # noqa: BLE001
+            live = []
+        costs = session_costs(home, moment, names + [x for x in live if x not in names])
+        stage = Stage(_stage_room(ctx["config"], ctx["budget"], ctx["spent"], moment), costs)
+        for fixed in ALWAYS_WOKEN:
+            if fixed in costs:
+                stage.reserve(fixed)
     woken = _wake_the_team(api, flag.get("sessions"), "the budget allows work again" if was in ("budget", "period", "pace") else "spending is back under the ceiling",
-                        seen=list((flag.get("pane_signatures") or {}).keys()))
+                        seen=list((flag.get("pane_signatures") or {}).keys()), stage=stage)
+    if stage is not None:
+        note_wake(home, moment, stage.estimate)
+        set_pending(home, stage.pending, moment)
+        _tell_the_captain_the_queue(api, run, "stage:%s:%d" % (day, int(moment)), woken, stage.pending)
     _tell(api, run, "resume:%s:%d" % (day, int(api.time.time())), text, user, notify_user)
     print("[bridge V6] %s PI-SPEND-CEILING cleared: spending back under the ceiling%s" % (run.now_h, " · [RIPRENDI] to %s" % ", ".join(woken) if woken else ""))
+
+
+def _tell_the_captain_the_queue(api, run, key, woken, pending):
+    """The Captain is told which workers wait for the pace and that it is not for him to wake them: the line of the budget does not
+    hold their reload yet, and a worker started by hand is stopped by the pace like any other."""
+    if not pending:
+        return
+    try:
+        from sentinel_delivery import notice
+        text = ("[BRIDGE INFO] THE PACE WAKES THE TEAM BY STAGES: the budget line holds the reload of part of the sessions now, not of all "
+                "of them. Woken: %s. Waiting for the pace: %s. Do NOT wake them yourself (no message to them, no scale-up to replace "
+                "them): the brake wakes each one as the line rises, the Scouts first. A worker that starts anyway is stopped by the "
+                "pace like any other." % (", ".join(woken) or "none yet", ", ".join(pending)))
+        done = run.state.setdefault("pi_spend_cap", {})
+        if not done.get(key):
+            done[key] = bool(notice(api, run.state, "pi_cap:%s" % key, api.CAPITANO_SESSION, text))
+    except Exception as error:  # noqa: BLE001 - a notice that fails must not stop the tick
+        print("[bridge V6] WARN pi spend cap stage notice: %s" % error)
+
+
+PENDING_TEXT = "[RIPRENDI] The pace allows your work again: pick up EXACTLY where you were, with the step you had in hand, and do not start over."
+
+
+def _wake_pending(api, run, ctx):
+    """The sessions the pace has not woken yet: each look wakes the ones whose reload fits under the line now. Best effort."""
+    home = home_of(api)
+    pending = pending_wakes(home)
+    if not pending:
+        return []
+    try:
+        exists = getattr(api, "session_exists", None)
+        alive = [x for x in pending if exists is None or exists(x)]
+        if not alive:
+            set_pending(home, [], ctx["now"])
+            return []
+        stage = Stage(_stage_room(ctx["config"], ctx["budget"], ctx["spent"], ctx["now"]), session_costs(home, ctx["now"], alive))
+        woken = []
+        for session in sorted(alive, key=_wake_rank):
+            if stage.take(session):
+                try:
+                    if api.jht_tmux_send(session, PENDING_TEXT):
+                        woken.append(session)
+                except Exception as error:  # noqa: BLE001
+                    print("[bridge V6] WARN pi spend cap wake of %s: %s" % (session, error))
+        if woken:
+            note_wake(home, ctx["now"], stage.estimate)
+            print("[bridge V6] %s PI-SPEND-CEILING stage: [RIPRENDI] to %s, waiting for the pace: %s"
+                  % (run.now_h, ", ".join(woken), ", ".join(stage.pending) or "none"))
+        set_pending(home, stage.pending, ctx["now"])
+        return woken
+    except Exception as error:  # noqa: BLE001 - a stage that fails must not stop the tick
+        print("[bridge V6] WARN pi spend cap stage: %s" % error)
+        return []
 
 
 def _start(home, budget, moment, run, api=None, spent_before=0.0):
@@ -706,14 +893,15 @@ def step(api, run, notify_user=None):
         flag = _flag(api)
         mine = bool(flag) and flag.get("reason") == REASON
         held_by_pace = mine and (flag.get("pi_spend_cap") or {}).get("why") == "pace" and api._daily_halt_active()
-        estimate = restart_estimate(home, now, (flag or {}).get("sessions")) if held_by_pace else 0.0
+        estimate = first_stage_cost(home, now, (flag or {}).get("sessions")) if held_by_pace else 0.0
+        ctx = {"config": config, "budget": budget, "spent": spent, "now": now}
         verdict = decide(config, spent, bool(run.state.get("no_quota_declared")), now, budget, held_by_pace, estimate)
         if verdict["action"] == "halt":
             if run._bi_on:
                 print("[bridge V6] %s BURN-INTENT: pi spending ceiling reached, the team stays active (user override)"
                       % run.now_h)
                 if mine:  # the gate of the agents (spend-gate.js) reads this flag: the person's override opens it
-                    _resume(api, run, day, notify_user)
+                    _resume(api, run, day, notify_user)   # no stages: the person asked for it
             elif not api._daily_halt_active():
                 _halt(api, run, verdict, spent, day, notify_user, config, now)
             elif mine and (flag.get("pi_spend_cap") or {}).get("why") != verdict["why"]:
@@ -725,7 +913,9 @@ def step(api, run, notify_user=None):
         elif mine and (budget is not None or run.state.get("no_quota_declared")) and not _held_by_the_budget(flag, budget):
             # Lifted only by a tick that looked: without a budget and before the no-quota mode is declared (the first tick
             # of a bridge started again) the ceilings were not read, and «nothing to stop» is not «back under».
-            _resume(api, run, day, notify_user)
+            _resume(api, run, day, notify_user, ctx)
+        elif verdict["action"] != "halt" and not api._daily_halt_active():
+            _wake_pending(api, run, ctx)
         if verdict["action"] == "warn":
             _tell(api, run, "warn:%s" % day, captain_text(verdict, spent), user_text(verdict, spent), notify_user)
     except Exception as error:  # noqa: BLE001 - a brake that fails to read must not stop the Sentinella
