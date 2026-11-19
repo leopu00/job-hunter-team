@@ -103,7 +103,7 @@ def test_the_hour_the_person_reads_is_human_and_has_no_date_or_zone_in_it():
     from zoneinfo import ZoneInfo
     import quota_data
     i18n = quota_data.shared_i18n()
-    config = {"working_hours": {"timezone": "Europe/Rome"}}
+    config = {"team": {"working_hours": {"timezone": "Europe/Rome"}}}
     late = datetime(2026, 11, 19, 23, 0, tzinfo=ZoneInfo("Europe/Rome")).timestamp()
     today = pi_spend_cap.person_clock(late + 600, config, late, i18n)
     assert today == "23:10"
