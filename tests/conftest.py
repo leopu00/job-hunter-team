@@ -442,6 +442,19 @@ def fresh_source_rate_state():
     yield
 
 
+@pytest.fixture(autouse=True)
+def fresh_dedup_skip_log():
+    """db_insert remembers the URLs it refused as duplicates in `$JHT_HOME/logs/scout-dedup.log`, and that directory lasts the whole
+    session: a test that refuses a URL would otherwise refuse it again in the test after, which builds the same rows from scratch."""
+    home = os.environ.get("JHT_HOME")
+    if home:
+        try:
+            os.remove(os.path.join(home, "logs", "scout-dedup.log"))
+        except OSError:
+            pass
+    yield
+
+
 # ── Un disco sano e FINTO per i test che lanciano launcher, wrapper o CLI ─────
 #
 # `start-agent.sh`, `jht team start` e `jht upgrade` rifiutano con `disk_low`
