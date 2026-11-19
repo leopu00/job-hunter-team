@@ -1547,3 +1547,30 @@ def test_reserve_the_wakes_file_written_by_an_agent_cannot_open_or_poison_the_li
     (tmp_path / "state" / "pace-wakes.json").write_text('[[%d, 1.0, {"SCOUT-1": NaN, "CAPITANO": -5, "X": 0.2}], [NaN, 1.0], [%d, -1.0]]' % (NOON, NOON))
     wakes = cap._read_wakes(tmp_path)
     assert wakes == [(float(NOON), 1.0, {"X": 0.2})]
+
+
+def _broken_files(home):
+    state = home / "state"
+    state.mkdir(exist_ok=True)
+    return {"huge": "[%s]" % ("9" * 400), "deep": "[" * 100000 + "]" * 100000, "big": "[" + "1," * 40000 + "1]",
+            "text": "not json", "nan": "[NaN, -Infinity]", "dict": '{"a": 1}'}
+
+
+@pytest.mark.parametrize("kind", ["huge", "deep", "big", "text", "nan", "dict"])
+def test_reserve_a_broken_state_file_of_the_pace_is_an_empty_one_and_never_stops_the_look_or_the_hard_cap(tmp_path, kind):
+    """A file the agents can write (an integer of 400 digits, 100000 brackets deep, over 64 KiB) raised out of spend() and the whole look
+    of the brake was skipped, the hard cap with it."""
+    text = _broken_files(tmp_path)[kind]
+    for name in ("pace-resumes.json", "pace-wakes.json", "pace-wake-queue.json"):
+        (tmp_path / "state" / name).write_text(text, encoding="utf-8")
+    assert cap._read_resumes(tmp_path) == [] and cap._read_wakes(tmp_path) == []
+    assert cap.pending_wakes(tmp_path) == [] and cap.waiting(tmp_path, NOON) == []
+    config = budget(3, NOON, NOON + 10 * HOUR)
+    read = cap.team_budget.read(config)
+    pi_calls(tmp_path, [(NOON + 60, 2.95, 100)])
+    spent = cap.spend(tmp_path, NOON + 120, NOON, NOON)
+    assert spent["budget_cost"] == 2.95 and spent["reserve_open"] == 0.0
+    assert cap.decide(config, spent, False, NOON + 120, read)["action"] == "halt", "the hard cap holds"
+    cap.note_wake(tmp_path, NOON + 130, 0.3, {"SCOUT-1": 0.3})
+    assert cap._read_wakes(tmp_path) == [(float(NOON + 130), 0.3, {"SCOUT-1": 0.3})], "the next write of the brake mends the file"
+
