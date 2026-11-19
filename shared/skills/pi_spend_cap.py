@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import json
 import math
+import stat
 import os
 import re
 import sqlite3
@@ -101,8 +102,15 @@ def _read_state(path, limit=STATE_MAX_BYTES):
     brackets deep. The agents can write these files, and a file that cannot be read is an empty one: it never stops a look of the
     brake (the hard cap included), and the next write of the brake replaces it."""
     try:
-        with open(str(path), "rb") as handle:
-            raw = handle.read(limit + 1)
+        # a plain file only: opened without waiting (a pipe with no writer would hold the look of the brake for ever) and without
+        # following a link; a pipe, a link, a folder or a device is an empty file
+        fd = os.open(str(path), os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0))
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                return None
+            raw = os.read(fd, limit + 1)
+        finally:
+            os.close(fd)
         if len(raw) > limit:
             return None
         return json.loads(raw.decode("utf-8"))

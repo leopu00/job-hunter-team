@@ -1573,3 +1573,34 @@ def test_reserve_a_broken_state_file_of_the_pace_is_an_empty_one_and_never_stops
     assert cap.decide(config, spent, False, NOON + 120, read)["action"] == "halt", "the hard cap holds"
     cap.note_wake(tmp_path, NOON + 130, 0.3, {"SCOUT-1": 0.3})
     assert cap._read_wakes(tmp_path) == [(float(NOON + 130), 0.3, {"SCOUT-1": 0.3})], "the next write of the brake mends the file"
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="no pipes with a name on this system")
+@pytest.mark.parametrize("kind", ["fifo", "link", "folder"])
+def test_reserve_a_state_file_of_the_pace_that_is_not_a_plain_file_is_empty_and_returns_at_once(tmp_path, kind):
+    """A pipe with no writer in the place of a file of the pace held open() for ever, and with it the look of the brake and the hard cap."""
+    import signal
+
+    state = tmp_path / "state"
+    state.mkdir()
+    target = tmp_path / "real.json"
+    target.write_text("[1.0]", encoding="utf-8")
+    for name in ("pace-resumes.json", "pace-wakes.json", "pace-wake-queue.json"):
+        place = state / name
+        if kind == "fifo":
+            os.mkfifo(str(place))
+        elif kind == "link":
+            place.symlink_to(target)
+        else:
+            place.mkdir()
+
+    def stuck(*_):
+        raise AssertionError("the reader waited for a pipe")
+
+    signal.signal(signal.SIGALRM, stuck)
+    signal.alarm(5)
+    try:
+        assert cap._read_resumes(tmp_path) == [] and cap._read_wakes(tmp_path) == []
+        assert cap.pending_wakes(tmp_path) == [] and cap.waiting(tmp_path, NOON) == []
+    finally:
+        signal.alarm(0)
