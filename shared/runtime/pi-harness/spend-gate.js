@@ -65,11 +65,18 @@ function queued() {
     if (!home || !name) return false;
     const file = path.join(home, "state", "pace-wake-queue.json");
     const info = fs.lstatSync(file);
-    if (!info.isFile() || info.size <= 0 || info.size > FLAG_MAX_BYTES) return false;
+    if (!info.isFile() || info.size <= 0 || info.size > FLAG_MAX_BYTES)
+      return false;
     const data = JSON.parse(fs.readFileSync(file, "utf8"));
-    if (!data || typeof data !== "object" || !Array.isArray(data.pending)) return false;
+    if (!data || typeof data !== "object" || !Array.isArray(data.pending))
+      return false;
     const at = Number(data.at);
-    if (!Number.isFinite(at) || Date.now() - at * 1000 > QUEUE_STALE_MS || at * 1000 - Date.now() > QUEUE_STALE_MS) return false;
+    if (
+      !Number.isFinite(at) ||
+      Date.now() - at * 1000 > QUEUE_STALE_MS ||
+      at * 1000 - Date.now() > QUEUE_STALE_MS
+    )
+      return false;
     return data.pending.includes(name);
   } catch (_error) {
     return false;
@@ -87,7 +94,10 @@ function heldSummary() {
       lines.push("- " + one);
     }
   }
-  return lines.length ? "\n\n[HELD WHILE YOU WAITED FOR THE PACE: messages that reached you before your turn, once each]\n" + lines.join("\n") : "";
+  return lines.length
+    ? "\n\n[HELD WHILE YOU WAITED FOR THE PACE: messages that reached you before your turn, once each]\n" +
+        lines.join("\n")
+    : "";
 }
 
 function logLine(entry) {
