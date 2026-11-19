@@ -83,12 +83,14 @@ def test_jht_download_downloads_nothing_and_says_jht_is_used_from_the_terminal(s
 @pytest.mark.parametrize("shell", SHELLS)
 @pytest.mark.parametrize("lang", LANGS)
 def test_it_is_said_in_the_language_of_the_person(shell: str, lang: str, tmp_path: Path):
-    # what Write-Host says is taken from its stream and written as UTF-8: the console of Windows PowerShell 5.1 is not UTF-8
+    # what Write-Host says is taken from its stream and written as UTF-8: the console of Windows PowerShell 5.1 is not UTF-8;
+    # Out-String may still wrap a long line at the width of the console, so the spaces are compared as one
     said = tmp_path / "said.txt"
     script = ("function Write-Err { param([string]$Msg) Write-Host \"error: $Msg\" }\n" + say_functions(lang) + _function()
-              + "\n$out = (Invoke-HostDownload -DownloadArgs @('--os', 'macos', '--version', '0.4.0') 6>&1 | Out-String)\n"
+              + "\n$out = (Invoke-HostDownload -DownloadArgs @('--os', 'macos', '--version', '0.4.0') 6>&1 | Out-String -Width 4096)\n"
               + f"[IO.File]::WriteAllText('{said}', $out, (New-Object Text.UTF8Encoding $false))\n"
               + "Write-Host \"RC=$script:HostDownloadExitCode\"\n")
     done = _run(shell, script, tmp_path, TEMP=str(tmp_path), TMP=str(tmp_path))
     assert "RC=1" in done.stdout, done.stdout + done.stderr
-    assert SAID[lang] in said.read_text(encoding="utf-8"), said.read_text(encoding="utf-8")
+    text = " ".join(said.read_text(encoding="utf-8").split())
+    assert SAID[lang] in text, text
