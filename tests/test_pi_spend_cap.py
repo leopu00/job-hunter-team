@@ -81,12 +81,15 @@ class Bridge:
             _read_config_json=lambda: self.config,
             _path=lambda name: self.flag if name == "DAILY_HALT_FLAG" else self.home,
             _daily_halt_active=lambda: self.flag.exists(),
-            _activate_daily_halt=self.activate, _write_daily_halt_payload=self.write)
+            _activate_daily_halt=self.activate, _write_daily_halt_payload=self.write, list_tmux_sessions=lambda: self.live())
 
     def write(self, payload):
         self.flag.parent.mkdir(parents=True, exist_ok=True)
         self.flag.write_text(json.dumps(payload), encoding="utf-8")
         return True
+
+    def live(self):
+        return getattr(self, "team", None) or ["CAPITANO", "SENTINELLA", "scout-1", "scout-2", "DOCTOR-WATCHDOG"]
 
     def activate(self, consumed, cap_pct, budget, extra=None):
         # as the bridge: the flag (with what the brake adds) is written before the ESC
@@ -94,7 +97,7 @@ class Bridge:
         self.write({"consumed_pct": consumed, "cap_pct": cap_pct, "budget_pct": budget, "sessions": [], **(extra or {})})
         self.gate_at_esc = json.loads(self.flag.read_text(encoding="utf-8"))
         self.told_at_esc = len(self.sent) + len(self.users)
-        self.paused = getattr(self, "team", None) or ["CAPITANO", "SENTINELLA", "scout-1", "scout-2", "DOCTOR-WATCHDOG"]
+        self.paused = self.live()
         payload = json.loads(self.flag.read_text(encoding="utf-8"))
         payload["sessions"] = self.paused  # what the bridge writes after the ESC
         self.flag.write_text(json.dumps(payload), encoding="utf-8")
@@ -457,13 +460,15 @@ def test_one_night_of_5_dollars_goes_at_its_pace_and_says_when_it_resumes(tmp_pa
     bridge.tick(state=state)
     assert bridge.esc == 1
     record = flag_record(bridge)
-    assert record["why"] == "pace" and record["ceiling"] == 1.75 and record["resumes_at"] == "2026-11-09T13:30:00+00:00"
-    assert all("BUDGET PACE" in t and "lifts by itself at 13:30" in t for t in bridge.texts())
-    assert "13:30" in bridge.users[0][0] and "⏸️" in bridge.users[0][0]
-    bridge.clock["now"] = NOON + HOUR + 29 * 60
+    # the hour told is the one of the lift: 13:30 for the line to reach 2.00 $, plus the room of the reload of the team (Captain, Sentinella, a
+    # Scout) and the work after it, three times, at 0.50 $ an hour: 15:21
+    assert record["why"] == "pace" and record["ceiling"] == 1.75 and record["resumes_at"] == "2026-11-09T15:21:36+00:00"
+    assert all("BUDGET PACE" in t and "lifts by itself at 15:21" in t for t in bridge.texts())
+    assert "15:21" in bridge.users[0][0] and "⏸️" in bridge.users[0][0]
+    bridge.clock["now"] = NOON + 3 * HOUR + 20 * 60
     bridge.tick(state=state)
-    assert bridge.flag.exists(), "13:29: not yet"
-    bridge.clock["now"] = NOON + HOUR + 31 * 60
+    assert bridge.flag.exists(), "15:20: not yet"
+    bridge.clock["now"] = NOON + 3 * HOUR + 23 * 60
     bridge.tick(state=state)
     assert not bridge.flag.exists() and bridge.esc == 1
 
@@ -483,10 +488,10 @@ def test_the_pace_follows_the_working_hours_over_three_days(tmp_path):
     bridge.tick()
     record = flag_record(bridge)
     # 4.5 $ less the 2.5 ahead is 6 worked hours: 5 on Monday, 1 on Tuesday from 08:00
-    assert record["why"] == "pace" and record["resumes_at"] == "2026-11-10T09:00:00+01:00"
+    assert record["why"] == "pace" and record["resumes_at"] == "2026-11-10T11:47:24+01:00"
     text = bridge.users[0][0]
-    assert "09:00" in text and "2026-11-10" not in text and "Europe/Rome" not in text, "the day after: the hour and the word, no date, no zone"
-    assert "09:00 tomorrow" in text or "09:00 di domani" in text
+    assert "11:47" in text and "2026-11-10" not in text and "Europe/Rome" not in text, "the day after: the hour and the word, no date, no zone"
+    assert "11:47 tomorrow" in text or "11:47 di domani" in text
 
 
 def test_the_budget_zone_is_the_one_the_person_lives_in(tmp_path):
@@ -495,7 +500,7 @@ def test_the_budget_zone_is_the_one_the_person_lives_in(tmp_path):
     bridge = Bridge(tmp_path, config)
     bridge.clock["now"] = NOON + HOUR
     bridge.tick()
-    assert flag_record(bridge)["resumes_at"] == "2026-11-09T14:30:00+01:00" and "14:30" in bridge.users[0][0]
+    assert flag_record(bridge)["resumes_at"] == "2026-11-09T16:21:36+01:00" and "16:21" in bridge.users[0][0]
 
 
 def test_raising_the_budget_lifts_a_pause_of_the_pace(tmp_path):
@@ -681,7 +686,7 @@ def test_a_few_days_start_at_the_first_work_and_go_at_their_pace_over_the_hours(
     bridge.clock["now"] = NOON + 4 * HOUR
     bridge.tick()
     record = flag_record(bridge)
-    assert record["why"] == "pace" and record["resumes_at"] == "2026-11-10T09:00:00+01:00"
+    assert record["why"] == "pace" and record["resumes_at"] == "2026-11-11T12:48:00+01:00"
     assert record["starts_at"] == "2026-11-09T13:00:00+01:00"
 
 
@@ -893,7 +898,7 @@ def _paused_at_13_30(tmp_path):
     bridge.clock["now"] = NOON + HOUR
     state: dict = {}
     bridge.tick(state=state)
-    assert flag_record(bridge)["resumes_at"] == "2026-11-09T13:30:00+00:00" and len(bridge.users) == 1
+    assert flag_record(bridge)["resumes_at"] == "2026-11-09T15:21:36+00:00" and len(bridge.users) == 1
     return bridge, state
 
 
@@ -906,14 +911,14 @@ def test_spending_after_the_pause_moves_the_resume_time_in_the_flag_and_the_pers
     bridge.clock["now"] = NOON + HOUR + 120
     bridge.tick(state=state)
     record = flag_record(bridge)
-    assert record["resumes_at"] == "2026-11-09T14:30:00+00:00" and record["resumes_told_at"] == "2026-11-09T13:30:00+00:00"
+    assert record["resumes_at"] == "2026-11-09T16:21:36+00:00" and record["resumes_told_at"] == "2026-11-09T15:21:36+00:00"
     assert bridge.esc == 1, "no second ESC"
-    assert len(bridge.users) == 1, "13:30 is still to come: the hour moved, the person is not told a second time"
-    bridge.clock["now"] = NOON + HOUR + 31 * 60   # 13:31: the hour the person was given is gone
+    assert len(bridge.users) == 1, "15:21 is still to come: the hour moved, the person is not told a second time"
+    bridge.clock["now"] = NOON + 3 * HOUR + 22 * 60   # 15:22: the hour the person was given is gone
     bridge.tick(state=state)
-    assert len(bridge.users) == 2 and "14:30" in bridge.users[-1][0], "a promise that was broken is told"
-    assert any("lifts by itself at 14:30" in t for t in bridge.texts())
-    bridge.clock["now"] = NOON + HOUR + 32 * 60
+    assert len(bridge.users) == 2 and "16:21" in bridge.users[-1][0], "a promise that was broken is told"
+    assert any("lifts by itself at 16:21" in t for t in bridge.texts())
+    bridge.clock["now"] = NOON + 3 * HOUR + 23 * 60
     bridge.tick(state=state)
     assert len(bridge.users) == 2, "the same time is not said again"
 
@@ -924,13 +929,13 @@ def test_a_move_is_written_in_the_flag_and_never_said_while_the_hour_told_is_to_
     bridge.clock["now"] = NOON + HOUR + 120
     bridge.tick(state=state)
     record = flag_record(bridge)
-    assert record["resumes_at"] == "2026-11-09T13:32:24+00:00" and record["resumes_told_at"] == "2026-11-09T13:30:00+00:00"
+    assert record["resumes_at"] == "2026-11-09T15:24:00+00:00" and record["resumes_told_at"] == "2026-11-09T15:21:36+00:00"
     assert len(bridge.users) == 1, "a move of two minutes is not a new message"
     pi_calls(tmp_path, [(NOON + HOUR + 150, 0.03, 100)], name="b.jsonl", agent="capitano")    # 6 minutes in all
     bridge.clock["now"] = NOON + HOUR + 240
     bridge.tick(state=state)
-    assert flag_record(bridge)["resumes_at"] == "2026-11-09T13:36:00+00:00" and len(bridge.users) == 1, "six minutes in all: still one message"
-    assert flag_record(bridge)["resumes_told_at"] == "2026-11-09T13:30:00+00:00"
+    assert flag_record(bridge)["resumes_at"] == "2026-11-09T15:27:36+00:00" and len(bridge.users) == 1, "six minutes in all: still one message"
+    assert flag_record(bridge)["resumes_told_at"] == "2026-11-09T15:21:36+00:00"
 
 
 def test_a_pause_that_does_not_move_is_left_alone(tmp_path):
@@ -1270,9 +1275,11 @@ def test_reserve_the_restart_estimate_is_session_by_session_from_the_last_contex
     now = NOON + 100
     estimate = cap.restart_estimate(tmp_path, now, EIGHT)
     floor = cap.RESTART_COST_PER_SESSION
-    assert abs(estimate - (0.28 + 7 * floor)) < 0.001, estimate   # the Scorer 75k tokens at 3.7 $ per million, the others the minimum
+    scout = cap.ROLE_RELOAD_COST["SCOUT"]
+    assert abs(estimate - (0.28 + 3 * scout + 4 * floor)) < 0.001, estimate   # the Scorer 75k tokens at 3.7 $ per million, a Scout at least what the data say, the others the minimum
     assert estimate > 8 * floor + 0.15, "the Sonnet with a big context weighs more than the average"
-    assert cap.restart_estimate(tmp_path, now, ["SCOUT-9"]) == floor, "no history: the minimum"
+    assert cap.restart_estimate(tmp_path, now, ["SCOUT-9"]) == scout, "no history: what a Scout costs by the data of the retest, not the minimum"
+    assert cap.restart_estimate(tmp_path, now, ["ANALISTA-9"]) == floor, "no history and no role in the data: the minimum"
     assert cap.restart_estimate(tmp_path, now, ["SENTINELLA-WORKER", "ASSISTENTE"]) == 0.0, "the ones that are not woken are not counted"
     assert cap.restart_estimate(tmp_path, now, None) == 0.0
 
@@ -1311,8 +1318,8 @@ def test_reserve_the_brake_looks_every_15_seconds_for_five_minutes_after_a_resum
 
 
 def test_reserve_when_the_restart_does_not_fit_the_person_is_told_the_pause_lasts_to_the_end_of_the_period_not_an_hour(tmp_path):
-    """The hour said at the first pause (the lift with the tenth of room) is false once the reload of the sessions is counted: the
-    person reads that the team stays paused until the period ends, or until the budget is raised."""
+    """The first pause already counts the reload of the sessions of the team: with a residue that does not cover it the person reads at once
+    that the team stays paused until the period ends, or until the budget is raised, and is told once."""
     config = budget(1, NOON, NOON + 10 * HOUR)
     pi_calls(tmp_path, [(NOON + 3600, 0.75, 100)])
     bridge = Bridge(tmp_path, config)
@@ -1320,19 +1327,19 @@ def test_reserve_when_the_restart_does_not_fit_the_person_is_told_the_pause_last
     state: dict = {}
     bridge.tick(state=state)
     first = flag_record(bridge)
-    assert first["why"] == "pace" and first["resumes_at"] and "resumes by itself at" in bridge.users[0][0]
+    assert first["why"] == "pace" and first.get("stays") is True and first["resumes_at"] is None
     bridge.clock["now"] = NOON + 2 * HOUR + 60
     bridge.tick(state=state)
     record = flag_record(bridge)
     assert record.get("stays") is True and record["resumes_at"] is None and bridge.esc == 1, "no second ESC"
-    assert len(bridge.users) == 2
+    assert len(bridge.users) == 1, "told once"
     said = bridge.users[-1][0]
     assert "stays paused until the end of the period" in said and "22:00" in said and "jht setup" in said
     assert "resumes by itself" not in said
     assert any("does NOT lift by itself before the period ends" in t for t in bridge.texts())
     bridge.clock["now"] = NOON + 2 * HOUR + 120
     bridge.tick(state=state)
-    assert len(bridge.users) == 2, "said once"
+    assert len(bridge.users) == 1, "said once"
     # the status of the CLI reads resumes_at: none, so it says the pause lasts to the end of the period
     for language in ("it", "en", "de", "es", "fr", "hu", "pt"):
         text = json.loads((Path(__file__).resolve().parent.parent / "shared" / "locales" / (language + ".json")).read_text(encoding="utf-8"))["pi_cap.halt_pace_stays"]
@@ -1372,7 +1379,7 @@ def test_reserve_an_unblock_wakes_by_stages_the_scouts_first_and_the_captain_is_
     run, spent = _resume_now(bridge, tmp_path, at)
     woken = [s for s, t in bridge.sent if t.startswith("[RIPRENDI]")]
     pending = cap.pending_wakes(tmp_path)
-    assert woken[:2] == ["SCOUT-1", "SCOUT-2"] and "SCOUT-3" in pending, "the Scouts first, as many as leave room to work after their reload"
+    assert woken[:1] == ["SCOUT-1"] and "SCOUT-2" in pending, "the Scouts first, as many as leave room to work after their reload"
     assert pending and set(pending) | set(woken) == set(SEVEN_AND_THE_CAPTAIN) - {"CAPITANO", "SENTINELLA"}
     assert "MANTENITORE" in pending and "SCOUT-1" not in pending, "the last of the list waits"
     reserved = cap._read_wakes(tmp_path)[-1]
@@ -1507,10 +1514,13 @@ def test_reserve_closes_per_session_at_its_first_turn_and_never_counts_a_reload_
 
 
 def test_reserve_the_estimate_of_a_session_is_its_last_real_reload_not_the_whole_context_at_the_write_price(tmp_path):
-    pi_calls(tmp_path, [(NOON, 0.30, 100), (NOON + 20, 0.01, 100), (NOON + 4000, 0.02, 100)], agent="scout-1")
-    costs = cap.session_costs(tmp_path, NOON + 5000, ["SCOUT-1", "SCOUT-9"])
-    assert costs["SCOUT-1"] == 0.02, "its first turn after the stop cost 0.02 $"
-    assert costs["SCOUT-9"] == cap.RESTART_COST_PER_SESSION, "no history: the minimum"
+    pi_calls(tmp_path, [(NOON, 0.30, 100), (NOON + 20, 0.01, 100), (NOON + 4000, 0.02, 100)], agent="analista-1")
+    pi_calls(tmp_path, [(NOON, 0.30, 100), (NOON + 4000, 0.003, 100)], name="t.jsonl", agent="scout-1")
+    costs = cap.session_costs(tmp_path, NOON + 5000, ["ANALISTA-1", "ANALISTA-9", "SCOUT-1", "SCOUT-9", "CAPITANO"])
+    assert costs["ANALISTA-1"] == 0.02, "its first turn after the stop cost 0.02 $"
+    assert costs["ANALISTA-9"] == cap.RESTART_COST_PER_SESSION, "no history: the minimum"
+    assert costs["SCOUT-1"] == costs["SCOUT-9"] == 0.11, "a turn of 0.003 $ (a warm cache) and no history are both what a Scout costs by the data"
+    assert costs["CAPITANO"] == 0.19
 
 
 def test_reserve_a_pause_with_budget_left_never_says_it_stays_until_the_period_ends(tmp_path):
