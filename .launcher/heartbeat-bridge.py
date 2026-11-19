@@ -590,7 +590,67 @@ def tick(now, send):
         ok = _send(msg)
         _log(f"send → {'ok' if ok else 'FAIL'}")
         if ok:
-            _write_state({"last_theme": theme, "last_ts": now.isoformat()})
+            kept = dict(persisted)
+            kept.update({"last_theme": theme, "last_ts": now.isoformat()})
+            if theme == "sourcing-fermo":
+                kept["fermo_sent"] = now.isoformat()
+            _write_state(kept)
+
+
+FAST_EVERY_MIN = 10          # the look between the hourly beats: only the order of the sourcing stopped
+FAST_AFTER_SEC = 540         # the condition true at two looks in a row (a look is ten minutes): ~10 minutes of no Scout
+FAST_REPEAT_SEC = 1800       # the same order again at the soonest 30 minutes after the last one (hourly beat included)
+
+
+def _seconds_since(stamp, now):
+    try:
+        then = datetime.fromisoformat(stamp)
+        if then.tzinfo is None:
+            then = then.replace(tzinfo=timezone.utc)
+        return (now - then).total_seconds()
+    except (TypeError, ValueError):
+        return None
+
+
+def fast_tick(now, send):
+    """The look between the beats. The order «no Scout is active: spawn one» is the Capitano's only wake on empty queues, and it came at
+    the full hour: the queues were empty at 20:17 and the order at 21:00, 88 minutes without a Scout (retest 25395266b). It goes
+    out here once the condition has held ~10 minutes, under the same gates as the beat (standby, the pause of the budget, off hours) and
+    the same exceptions of choose_nudge (stop_search, a quiet after SCOUT-ESAUSTO, a deep backlog), and again no sooner than 30 minutes.
+    Nothing else is sent from here."""
+    if _standby_active():
+        return
+    burn_intent_on = _burn_intent_active()
+    if DAILY_HALT_FLAG.exists() and not burn_intent_on:
+        return
+    if _work_phase() == "OFF" and not burn_intent_on:
+        return
+    st = gather_state()
+    persisted = _read_state()
+    mode_section, _orders, sourcing_stopped = _mode_section()
+    st["sourcing_stopped"] = sourcing_stopped
+    theme, msg = choose_nudge(st, now, persisted.get("last_theme"))
+    kept = dict(persisted)
+    if theme != "sourcing-fermo":
+        if "fermo_since" in kept:
+            kept.pop("fermo_since")
+            _write_state(kept)
+        return
+    since = kept.get("fermo_since")
+    if since is None:
+        kept["fermo_since"] = now.isoformat()
+        _write_state(kept)
+        return
+    held, last = _seconds_since(since, now), kept.get("fermo_sent")
+    ago = _seconds_since(last, now) if last else None
+    if held is None or held < FAST_AFTER_SEC or (ago is not None and ago < FAST_REPEAT_SEC):
+        return
+    if mode_section:
+        msg = f"{msg} {mode_section}"
+    _log(f"{now:%H:%M} fast nudge[{theme}] after {held / 60:.0f} min with no Scout: {msg}")
+    if send and _send(msg):
+        kept["fermo_sent"] = now.isoformat()
+        _write_state(kept)
 
 
 def main():
@@ -605,10 +665,15 @@ def main():
     _log(f"up — hourly heartbeat to {TARGET}, jht_home={JHT_HOME}")
     while True:
         now = datetime.now(timezone.utc)
-        nxt = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+        nxt = (now + timedelta(minutes=FAST_EVERY_MIN)).replace(second=0, microsecond=0)
+        nxt = nxt.replace(minute=nxt.minute - nxt.minute % FAST_EVERY_MIN)
         time.sleep(max(1, (nxt - now).total_seconds()))
         try:
-            tick(datetime.now(timezone.utc), send=True)
+            woke = datetime.now(timezone.utc)
+            if woke.minute < FAST_EVERY_MIN:
+                tick(woke, send=True)    # the full hour: the beat
+            else:
+                fast_tick(woke, send=True)
         except Exception as e:
             _log(f"tick error: {e}")
 
