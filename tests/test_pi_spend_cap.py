@@ -94,7 +94,7 @@ class Bridge:
         self.write({"consumed_pct": consumed, "cap_pct": cap_pct, "budget_pct": budget, "sessions": [], **(extra or {})})
         self.gate_at_esc = json.loads(self.flag.read_text(encoding="utf-8"))
         self.told_at_esc = len(self.sent) + len(self.users)
-        self.paused = ["CAPITANO", "SENTINELLA", "scout-1", "scout-2", "DOCTOR-WATCHDOG"]
+        self.paused = getattr(self, "team", None) or ["CAPITANO", "SENTINELLA", "scout-1", "scout-2", "DOCTOR-WATCHDOG"]
         payload = json.loads(self.flag.read_text(encoding="utf-8"))
         payload["sessions"] = self.paused  # what the bridge writes after the ESC
         self.flag.write_text(json.dumps(payload), encoding="utf-8")
@@ -1154,24 +1154,29 @@ def test_the_pace_stops_one_slack_before_the_line_so_the_calls_in_flight_do_not_
     assert cap.decide(config, dict(mid, budget_cost=1.60), False, NOON + HOUR, read)["action"] == "none"
 
 
-def test_the_cache_rewritten_at_a_resume_is_not_counted_against_the_pace_slack_kept(tmp_path):
-    """Linux 12b: 0.454 $ in 31 s at every resume (Capitano 0.18, Assistente 0.15, Scorer 0.07, Mentor 0.05, others 0.03), and the pace
-    stopped the team again 80 s later. 3 $ over 10 hours: 1.35 $ allowed after two hours; 1.0 spent, resume at 14:00."""
+def test_reserve_the_restart_counts_but_its_estimate_stays_under_the_line_so_no_stop_within_80_seconds_slack_kept(tmp_path):
+    """Linux 12b: 0.454 $ in 31 s at a resume, and the pace stopped the team again 80 s later. Linux retest: the restart left out of the
+    pace was the whole overshoot (1.90 $ against 1.04). Now the restart is in what was spent, and the stage that woke the sessions
+    kept the estimate of their reload under the line: they fit when they were woken, so there is no stop while they reload."""
     config = budget(3, NOON, NOON + 10 * HOUR)
     read = cap.team_budget.read(config)
-    resumed = NOON + 2 * HOUR
-    pi_calls(tmp_path, [(NOON + HOUR, 1.0, 100), (resumed + 5, 0.20, 100), (resumed + 20, 0.254, 100)])
-    at = resumed + 40
-    plain = cap.spend(tmp_path, at, NOON, NOON)
-    assert cap.decide(config, plain, False, at, read)["why"] == "pace", "without the exclusion the restart stops the team"
-    cap.note_resume(tmp_path, resumed)
-    kept = cap.spend(tmp_path, at, NOON, NOON)
-    assert kept["restart_cost"] == 0.454 and kept["budget_cost"] == 1.454
-    assert cap.decide(config, kept, False, at, read)["action"] == "none"
-    # after the window the work counts again: 0.40 $ of work at 14:03 on top of 1.0 + the restart
-    pi_calls(tmp_path, [(resumed + 180, 0.40, 100)], name="t.jsonl")
-    later = cap.spend(tmp_path, resumed + 190, NOON, NOON)
-    assert later["restart_cost"] == 0.454 and cap.decide(config, later, False, resumed + 190, read)["why"] == "pace"
+    resumed = NOON + 4 * HOUR
+    pi_calls(tmp_path, [(NOON + HOUR, 0.5, 100)])
+    room = cap._stage_room(config, read, cap.spend(tmp_path, resumed, NOON, NOON), resumed)
+    assert room > 0.5, room    # the line holds the estimated reload: the stage wakes them
+    cap.note_wake(tmp_path, resumed, 0.5)
+    pi_calls(tmp_path, [(resumed + 5, 0.20, 100), (resumed + 20, 0.254, 100)], name="t.jsonl")
+    for at in (resumed + 40, resumed + 80, resumed + 119):
+        kept = cap.spend(tmp_path, at, NOON, NOON)
+        assert kept["budget_cost"] == 0.954, "the restart is in what was spent"
+        assert kept["reserve_open"] == 0.046, "and the estimate not yet spent stays under the line"
+        assert cap.decide(config, kept, False, at, read)["action"] == "none", "no stop while the sessions reload"
+    after = cap.spend(tmp_path, resumed + 125, NOON, NOON)
+    assert after["reserve_open"] == 0.0 and after["budget_cost"] == 0.954
+    # the estimate is a reserve, not a licence: more than it, and the pace stops
+    pi_calls(tmp_path, [(resumed + 100, 1.2, 100)], name="u.jsonl")
+    over = cap.spend(tmp_path, resumed + 110, NOON, NOON)
+    assert cap.decide(config, over, False, resumed + 110, read)["action"] == "halt"
 
 
 def test_the_restart_never_leaves_the_hard_stop_of_the_budget(tmp_path):
@@ -1217,13 +1222,11 @@ def test_right_after_a_resume_the_pace_looks_ahead_at_the_rate_of_the_work_not_a
     assert spent["since_resume"] == 200 and spent["restart_cost"] == 0.30 and spent["recent_cost"] == 0.5
     allowance = cap.team_budget.allowed(config, dict(read, usd=3.0), now)
     slack = cap.team_budget.margin(3.0)
-    worked = spent["budget_cost"] - spent["restart_cost"]
     old_ahead = (0.5 - 0.30) / cap.RATE_WINDOW_SEC * cap.CHECK_EVERY_SEC     # the five-minute window
     new_ahead = (0.5 - 0.30) / (200 - cap.RESTART_WINDOW_SEC) * cap.CHECK_EVERY_SEC
     assert new_ahead > 3 * old_ahead
     # a budget spent so that the old look-ahead lets it through and the new one stops it
-    spent["budget_cost"] = round(allowance - slack - old_ahead - 0.01 + spent["restart_cost"], 6)
-    assert worked <= spent["budget_cost"]
+    spent["budget_cost"] = round(allowance - slack - old_ahead - 0.01, 6)
     assert cap.decide(config, dict(spent, since_resume=None), False, now, read)["action"] == "none"
     assert cap.decide(config, spent, False, now, read)["why"] == "pace"
     # the pause before the resume is not in the rate: spending of a minute before it does not count as the work after
@@ -1328,3 +1331,89 @@ def test_reserve_when_the_restart_does_not_fit_the_person_is_told_the_pause_last
     for language in ("it", "en", "de", "es", "fr", "hu", "pt"):
         text = json.loads((Path(__file__).resolve().parent.parent / "shared" / "locales" / (language + ".json")).read_text(encoding="utf-8"))["pi_cap.halt_pace_stays"]
         assert text.count("%s") == 3 and "jht setup" in text
+
+
+SEVEN_AND_THE_CAPTAIN = ["CAPITANO", "SENTINELLA", "SCOUT-1", "SCOUT-2", "SCOUT-3", "SCORER-2", "ANALISTA-5", "ANALISTA-6", "DOTTORE", "MANTENITORE"]
+
+
+def _unblocked_team(tmp_path, spent_before=0.0):
+    """The retest of the brake: a budget of 3 $ unblocked, the Scorer and the Captain on Sonnet with big contexts, the rest small."""
+    config = budget(3, NOON, NOON + 24 * HOUR)
+    bridge = Bridge(tmp_path, config)
+    _context_call(tmp_path, "scorer-2", NOON - 600, "sonnet", 1000, 74000, 0, 0.28)
+    _context_call(tmp_path, "capitano", NOON - 600, "sonnet", 1000, 40000, 0, 0.15)
+    if spent_before:
+        pi_calls(tmp_path, [(NOON + 20, spent_before, 100)], name="before.jsonl", agent="scout-9")
+    bridge.flag.parent.mkdir(parents=True, exist_ok=True)
+    bridge.flag.write_text(json.dumps({"reason": "pi_spend_cap", "sessions": list(SEVEN_AND_THE_CAPTAIN),
+                                       "pi_spend_cap": {"why": "budget", "spent": 3.0, "ceiling": 3.0}}), encoding="utf-8")
+    return bridge
+
+
+def _resume_now(bridge, tmp_path, at):
+    bridge.clock["now"] = at
+    budget_read = cap.team_budget.read(bridge.config, tmp_path)
+    spent = cap.spend(tmp_path, at, budget_read["counts_from"], budget_read["starts"])
+    run = SimpleNamespace(state={"no_quota_declared": dict(NO_QUOTA)}, now_h="12:00:00", _bi_on=False)
+    cap._resume(bridge.api, run, "2026-11-09", lambda *a: None, {"config": bridge.config, "budget": budget_read, "spent": spent, "now": at})
+    return run, spent
+
+
+def test_reserve_an_unblock_wakes_by_stages_the_scouts_first_and_the_captain_is_told_who_waits(tmp_path):
+    """Retest of the brake: seven workers woken together after the unblock spent 1.90 $ against a line of 1.04 $."""
+    bridge = _unblocked_team(tmp_path)
+    at = NOON + 400
+    run, spent = _resume_now(bridge, tmp_path, at)
+    woken = [s for s, t in bridge.sent if t.startswith("[RIPRENDI]")]
+    pending = cap.pending_wakes(tmp_path)
+    assert woken[:3] == ["SCOUT-1", "SCOUT-2", "SCOUT-3"], "the Scouts first"
+    assert pending and set(pending) | set(woken) == set(SEVEN_AND_THE_CAPTAIN) - {"CAPITANO", "SENTINELLA"}
+    assert "MANTENITORE" in pending and "SCOUT-1" not in pending, "the last of the list waits"
+    reserved = cap._read_wakes(tmp_path)[-1]
+    assert reserved[0] == at and reserved[1] <= cap._stage_room(bridge.config, cap.team_budget.read(bridge.config, tmp_path), spent, at) + 1e-6, \
+        "what was woken fits under the line"
+    notes = [t for s, t in bridge.sent if s == "CAPITANO" and "BY STAGES" in t]
+    assert len(notes) == 1 and all(name in notes[0] for name in pending) and "Do NOT wake them yourself" in notes[0]
+    # a later look: the line has risen, the next sessions fit
+    bridge.clock["now"] = at + 3 * HOUR
+    bridge.sent.clear()
+    bridge.tick(state=run.state)
+    later = [s for s, t in bridge.sent if t.startswith("[RIPRENDI]")]
+    assert later and set(later) <= set(pending) and set(cap.pending_wakes(tmp_path)) == set(pending) - set(later)
+    bridge.clock["now"] = at + 20 * HOUR
+    bridge.tick(state=run.state)
+    assert cap.pending_wakes(tmp_path) == [], "all woken when the line holds them"
+
+
+def test_reserve_a_worker_that_starts_without_being_woken_is_stopped_by_the_pace_and_the_ceiling_holds(tmp_path):
+    bridge = _unblocked_team(tmp_path)
+    bridge.team = list(SEVEN_AND_THE_CAPTAIN)
+    at = NOON + 400
+    run, _ = _resume_now(bridge, tmp_path, at)
+    assert cap.pending_wakes(tmp_path) and not bridge.flag.exists()
+    # the Captain or a message wakes a waiting Analyst anyway, and it reloads a big context
+    pi_calls(tmp_path, [(at + 20, 1.6, 100)], name="rogue.jsonl", agent="analista-6")
+    bridge.clock["now"] = at + 30
+    bridge.tick(state=run.state)
+    assert bridge.flag.exists() and flag_record(bridge)["why"] in ("pace", "budget"), "the pace stops it"
+    assert cap.pending_wakes(tmp_path) == [], "everyone is stopped: the next lift stages from the start"
+    assert bridge.esc == 1
+    # and the ceiling: what is spent never goes through the budget while the brake looks every 15 s
+    spent = cap.spend(tmp_path, at + 30, bridge.clock["now"] - 1000, NOON)
+    assert spent["budget_cost"] < 3.0
+
+
+def test_reserve_a_lift_needs_room_for_the_first_stage_not_for_the_whole_team(tmp_path):
+    """Retest of the brake, budget of 1 $: 0.36 spent and the pause lasted 24 hours, the reload of the whole team never fitting."""
+    config = budget(1, NOON, NOON + 24 * HOUR)
+    read = cap.team_budget.read(config)
+    _context_call(tmp_path, "scorer-2", NOON - 600, "sonnet", 1000, 74000, 0, 0.28)
+    _context_call(tmp_path, "capitano", NOON - 600, "sonnet", 1000, 40000, 0, 0.15)
+    base = {"budget_cost": 0.36, "recent_cost": 0.0, "before_start": 0.0}
+    whole = cap.restart_estimate(tmp_path, NOON, SEVEN_AND_THE_CAPTAIN)
+    first = cap.first_stage_cost(tmp_path, NOON, SEVEN_AND_THE_CAPTAIN)
+    assert first < whole / 2
+    held_whole = [cap.decide(config, base, False, NOON + h * 3600, read, held_by_pace=True, restart_estimate=whole)["action"] for h in (6, 12, 20)]
+    assert held_whole == ["halt"] * 3, "all or nothing: the line does not hold the whole reload before the period ends"
+    lifted = [cap.decide(config, base, False, NOON + h * 3600, read, held_by_pace=True, restart_estimate=first)["action"] for h in (6, 12, 20)]
+    assert "none" in lifted, "the first stage fits and the team works at the pace"
