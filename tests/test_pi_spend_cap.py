@@ -1299,3 +1299,32 @@ def test_reserve_the_brake_looks_every_15_seconds_for_five_minutes_after_a_resum
     assert cap.look_every(tmp_path, NOON + 10) == cap.LOOK_AFTER_RESUME_SEC == 15.0
     assert cap.look_every(tmp_path, NOON + cap.WATCH_AFTER_RESUME_SEC - 1) == 15.0
     assert cap.look_every(tmp_path, NOON + cap.WATCH_AFTER_RESUME_SEC + 1) == cap.CHECK_EVERY_SEC
+
+
+def test_reserve_when_the_restart_does_not_fit_the_person_is_told_the_pause_lasts_to_the_end_of_the_period_not_an_hour(tmp_path):
+    """The hour said at the first pause (the lift with the tenth of room) is false once the reload of the sessions is counted: the
+    person reads that the team stays paused until the period ends, or until the budget is raised."""
+    config = budget(1, NOON, NOON + 10 * HOUR)
+    pi_calls(tmp_path, [(NOON + 3600, 0.75, 100)])
+    bridge = Bridge(tmp_path, config)
+    bridge.clock["now"] = NOON + 2 * HOUR
+    state: dict = {}
+    bridge.tick(state=state)
+    first = flag_record(bridge)
+    assert first["why"] == "pace" and first["resumes_at"] and "resumes by itself at" in bridge.users[0][0]
+    bridge.clock["now"] = NOON + 2 * HOUR + 60
+    bridge.tick(state=state)
+    record = flag_record(bridge)
+    assert record.get("stays") is True and record["resumes_at"] is None and bridge.esc == 1, "no second ESC"
+    assert len(bridge.users) == 2
+    said = bridge.users[-1][0]
+    assert "stays paused until the end of the period" in said and "22:00" in said and "jht setup" in said
+    assert "resumes by itself" not in said
+    assert any("does NOT lift by itself before the period ends" in t for t in bridge.texts())
+    bridge.clock["now"] = NOON + 2 * HOUR + 120
+    bridge.tick(state=state)
+    assert len(bridge.users) == 2, "said once"
+    # the status of the CLI reads resumes_at: none, so it says the pause lasts to the end of the period
+    for language in ("it", "en", "de", "es", "fr", "hu", "pt"):
+        text = json.loads((Path(__file__).resolve().parent.parent / "shared" / "locales" / (language + ".json")).read_text(encoding="utf-8"))["pi_cap.halt_pace_stays"]
+        assert text.count("%s") == 3 and "jht setup" in text
