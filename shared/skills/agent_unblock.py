@@ -419,12 +419,23 @@ def team_started(home: Path | None = None) -> bool:
     return phase != "awaiting_profile"
 
 
+def waiting_for_the_pace(home: Path | None = None) -> list:
+    """The sessions that still wait for their stage of the spending pace, or [] (also when it cannot be read)."""
+    try:
+        import pi_spend_cap
+        return pi_spend_cap.waiting(home or jht_home(), _now().timestamp())
+    except Exception:  # noqa: BLE001 - without the reading the scan is what it always was
+        return []
+
+
 def build_scan(pane_states: dict, messages: list, now=None,
-               mute_after_min: int = 45, started: bool = True) -> dict:
+               mute_after_min: int = 45, started: bool = True, paced: bool = False) -> dict:
     """Funzione PURA: dai pane + messages.jsonl, l'elenco dei blocchi.
 
     `pane_states` = {SESSION: classify_pane(...)}. `started` e' `team_started()`: con il team non ancora partito
     il silenzio del Capitano e gli operativi fermi non sono blocchi (restano quelli di un pane con una riga appesa).
+    `paced` = la coda del ritmo e' aperta: chi aspetta il suo scaglione e' fermo apposta, e un Capitano che ha taciuto durante la
+    pausa non e' muto. Ne' l'uno ne' l'altro e' un blocco: dire «riprendi il loop» sveglierebbe la squadra prima del suo turno.
     """
     now = now or _now()
     blocks = []
@@ -457,7 +468,7 @@ def build_scan(pane_states: dict, messages: list, now=None,
     operatives = [s for s in pane_states
                   if any(s == p or s.startswith(p + "-") for p in OPERATIVE_PREFIXES)]
     idle_ops = [s for s in operatives if pane_states[s].get("state") == "idle"]
-    if started and operatives and len(idle_ops) == len(operatives):
+    if started and not paced and operatives and len(idle_ops) == len(operatives):
         blocks.append({
             "kind": "all_operatives_idle", "session": ",".join(sorted(idle_ops)),
             "cure": "kick off operational roles WITHOUT waiting for the coordinator",
@@ -472,7 +483,7 @@ def build_scan(pane_states: dict, messages: list, now=None,
         ts = _parse_iso(d.get("ts"))
         if ts and (last_captain is None or ts > last_captain):
             last_captain = ts
-    if started and (last_captain is None or (now - last_captain) > timedelta(minutes=mute_after_min)):
+    if started and not paced and (last_captain is None or (now - last_captain) > timedelta(minutes=mute_after_min)):
         if "CAPITANO" in pane_states:
             blocks.append({
                 "kind": "mute_coordinator", "session": "CAPITANO",
@@ -489,7 +500,7 @@ def scan() -> dict:
     states = {}
     for s in agent_sessions():
         states[s] = classify_pane(capture(s))
-    return build_scan(states, read_messages(), started=team_started())
+    return build_scan(states, read_messages(), started=team_started(), paced=bool(waiting_for_the_pace()))
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────────

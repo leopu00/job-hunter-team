@@ -1418,6 +1418,7 @@
   "pi_cap.halt_period": "⛔ A equipa está em pausa: o período que escolheste terminou às %s (gastos %s de %s). Não se perde nada. Para continuar, escolhe um novo período com jht setup.",
   "pi_cap.halt_pace": "⏸️ A equipa para durante um bocado: gastou %s do teu orçamento de %s, mais depressa do que os teus horários permitem. Não se perde nada. Retoma sozinha às %s.",
   "pi_cap.halt_pace_stays": "⏸️ A equipa pára: gastou %s do orçamento de %s, mais depressa do que os teus horários permitem, e o que resta do orçamento não chega para a voltar a arrancar sem o ultrapassar. Não se perde nada. Fica em pausa até ao fim do período (às %s) ou até aumentares o orçamento com jht setup.",
+  "pi_cap.tomorrow": "%s de amanhã",
   "pi_cap.resume_budget": "▶️ O teu orçamento permite trabalhar de novo: a equipa retoma.",
   "service_budget.skipped": "ℹ️ %s salta a sua ronda desta vez: os agentes que cuidam da equipa (Dottore, Mantenitore, Mentor) já gastaram %s do teu orçamento de %s, a parte de %s que podem usar, e o resto serve para procurar e avaliar posições. Não se perde nada: voltam com um novo orçamento.",
   "integration.label.not_installed": "não instalada",

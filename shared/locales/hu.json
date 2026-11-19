@@ -1419,6 +1419,7 @@
   "pi_cap.halt_period": "⛔ A csapat szünetel: a megadott időszak véget ért ekkor: %s (elköltve: %s, keret: %s). Nem vész el semmi. A folytatáshoz adj meg új időszakot a jht setup paranccsal.",
   "pi_cap.halt_pace": "⏸️ A csapat egy időre megáll: elköltött %s összeget a(z) %s keretedből, gyorsabban, mint ahogy a munkaidőd engedi. Nem vész el semmi. Magától folytatja ekkor: %s.",
   "pi_cap.halt_pace_stays": "⏸️ A csapat leáll: elköltött %s-t a(z) %s költségkeretből, gyorsabban, mint amit az időbeosztásod megenged, és a keret maradéka nem elég az újraindításhoz anélkül, hogy túllépné. Semmi nem vész el. Az időszak végéig (%s) szünetel, vagy amíg a jht setup paranccsal nem emeled a keretet.",
+  "pi_cap.tomorrow": "holnap %s",
   "pi_cap.resume_budget": "▶️ A megadott kereted újra engedi a munkát: a csapat folytatja.",
   "service_budget.skipped": "ℹ️ %s most kihagyja a körét: a csapatot gondozó ügynökök (Dottore, Mantenitore, Mentor) már elköltöttek %s összeget a(z) %s keretedből, ami a rájuk eső %s rész, így a többi az állások keresésére és értékelésére megy. Nem vész el semmi: új kerettel visszatérnek.",
   "integration.label.not_installed": "nincs telepítve",

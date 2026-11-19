@@ -484,7 +484,9 @@ def test_the_pace_follows_the_working_hours_over_three_days(tmp_path):
     record = flag_record(bridge)
     # 4.5 $ less the 2.5 ahead is 6 worked hours: 5 on Monday, 1 on Tuesday from 08:00
     assert record["why"] == "pace" and record["resumes_at"] == "2026-11-10T09:00:00+01:00"
-    assert "2026-11-10 09:00" in bridge.users[0][0], "another day: the date in front"
+    text = bridge.users[0][0]
+    assert "09:00" in text and "2026-11-10" not in text and "Europe/Rome" not in text, "the day after: the hour and the word, no date, no zone"
+    assert "09:00 tomorrow" in text or "09:00 di domani" in text
 
 
 def test_the_budget_zone_is_the_one_the_person_lives_in(tmp_path):
