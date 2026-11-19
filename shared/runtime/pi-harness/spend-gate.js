@@ -33,9 +33,14 @@ function paused() {
   if (!file) return false;
   try {
     const info = fs.lstatSync(file);
-    if (!info.isFile() || info.size <= 0 || info.size > FLAG_MAX_BYTES) return false;
+    if (!info.isFile() || info.size <= 0 || info.size > FLAG_MAX_BYTES)
+      return false;
     const payload = JSON.parse(fs.readFileSync(file, "utf8"));
-    return Boolean(payload) && typeof payload === "object" && payload.reason === REASON;
+    return (
+      Boolean(payload) &&
+      typeof payload === "object" &&
+      payload.reason === REASON
+    );
   } catch (_error) {
     return false;
   }
@@ -49,7 +54,11 @@ function logLine(entry) {
     fs.mkdirSync(dir, { recursive: true });
     fs.appendFileSync(
       path.join(dir, "pi-spend-gate.log"),
-      JSON.stringify({ at: new Date().toISOString(), agent: agentName(), ...entry }) + "\n",
+      JSON.stringify({
+        at: new Date().toISOString(),
+        agent: agentName(),
+        ...entry,
+      }) + "\n",
     );
   } catch (_error) {
     /* a log that cannot be written changes nothing */

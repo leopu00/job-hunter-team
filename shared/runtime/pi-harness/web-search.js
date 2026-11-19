@@ -73,14 +73,35 @@ const PROFILE_MAX_BYTES = 256 * 1024;
 const QUERY_INPUT_MAX_CHARS = 4096;
 const KINDS = ["name", "email", "phone"];
 // Where the profile keeps the three fields (the same places shared/skills/profile_email.py and profile_facts.py read).
-const NAME_PATHS = ["name", "full_name", "candidate.name", "personal.name", "contacts.name"];
+const NAME_PATHS = [
+  "name",
+  "full_name",
+  "candidate.name",
+  "personal.name",
+  "contacts.name",
+];
 const SPLIT_NAME_PARENTS = ["", "contacts.", "personal.", "candidate."];
-const EMAIL_PATHS = ["contacts.email", "email", "candidate.contacts.email", "personal.email", "positioning.contacts.email"];
-const PHONE_PATHS = ["contacts.phone", "phone", "candidate.contacts.phone", "personal.phone", "personal.contacts.phone"];
+const EMAIL_PATHS = [
+  "contacts.email",
+  "email",
+  "candidate.contacts.email",
+  "personal.email",
+  "positioning.contacts.email",
+];
+const PHONE_PATHS = [
+  "contacts.phone",
+  "phone",
+  "candidate.contacts.phone",
+  "personal.phone",
+  "personal.contacts.phone",
+];
 
 /** The agent's role: its name without the number (analista-2 -> analista). */
 function agentRole() {
-  return String(process.env.JHT_AGENT_NAME || "").trim().toLowerCase().replace(/-s?\d+$/, "");
+  return String(process.env.JHT_AGENT_NAME || "")
+    .trim()
+    .toLowerCase()
+    .replace(/-s?\d+$/, "");
 }
 
 function maxUses() {
@@ -120,11 +141,21 @@ function deadline(value) {
   if (typeof value !== "string") return null;
   let raw = value.trim();
   if (/[Zz]$/.test(raw)) raw = `${raw.slice(0, -1)}+00:00`;
-  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2})(?::(\d{2})(?::(\d{2})(?:[.,]\d{1,6})?)?)?([+-]\d{2}:?\d{2})?)?$/.exec(raw);
+  const m =
+    /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2})(?::(\d{2})(?::(\d{2})(?:[.,]\d{1,6})?)?)?([+-]\d{2}:?\d{2})?)?$/.exec(
+      raw,
+    );
   if (!m) return null;
   const [, y, mo, d, h = "0", mi = "0", sec = "0", zone] = m;
   const date = new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi, +sec));
-  if (date.getUTCMonth() !== +mo - 1 || date.getUTCDate() !== +d || +h > 23 || +mi > 59 || +sec > 59) return null;
+  if (
+    date.getUTCMonth() !== +mo - 1 ||
+    date.getUTCDate() !== +d ||
+    +h > 23 ||
+    +mi > 59 ||
+    +sec > 59
+  )
+    return null;
   let offset = 0;
   if (zone) {
     const z = /^([+-])(\d{2}):?(\d{2})$/.exec(zone);
@@ -146,21 +177,44 @@ function switchedOff() {
   const base = db ? path.dirname(db) : process.env.JHT_HOME;
   if (!base) return "";
   const profile = path.join(base, "profile");
-  const modeFile = readSettings(path.join(profile, "capitano-maintenance.json"));
+  const modeFile = readSettings(
+    path.join(profile, "capitano-maintenance.json"),
+  );
   if (modeFile !== undefined) {
-    const raw = modeFile !== UNREADABLE && modeFile && typeof modeFile === "object" && !Array.isArray(modeFile) ? modeFile.mode : undefined;
+    const raw =
+      modeFile !== UNREADABLE &&
+      modeFile &&
+      typeof modeFile === "object" &&
+      !Array.isArray(modeFile)
+        ? modeFile.mode
+        : undefined;
     let mode = typeof raw === "string" ? raw.trim() : "";
     if (mode === "maintenance") mode = "care";
     if (!MODES.includes(mode))
       return "capitano-maintenance.json exists but cannot be interpreted: autonomous enrichment is suspended until a person reviews it";
     const until = deadline(modeFile.mode_until);
-    if (mode === "saving" && !(until !== null && Date.now() >= until)) return "SAVING mode is active (mode=saving)";
+    if (mode === "saving" && !(until !== null && Date.now() >= until))
+      return "SAVING mode is active (mode=saving)";
   }
   const policy = readSettings(path.join(profile, "enrichment-policy.json"));
-  const data = policy && policy !== UNREADABLE && typeof policy === "object" && !Array.isArray(policy) ? policy : {};
+  const data =
+    policy &&
+    policy !== UNREADABLE &&
+    typeof policy === "object" &&
+    !Array.isArray(policy)
+      ? policy
+      : {};
   if (data.economy === true) return "SAVING policy is active (economy=true)";
-  const section = data.web_search && typeof data.web_search === "object" ? data.web_search[role] : undefined;
-  const enabled = section && typeof section === "object" && typeof section.enabled === "boolean" ? section.enabled : SWITCH_DEFAULTS[role];
+  const section =
+    data.web_search && typeof data.web_search === "object"
+      ? data.web_search[role]
+      : undefined;
+  const enabled =
+    section &&
+    typeof section === "object" &&
+    typeof section.enabled === "boolean"
+      ? section.enabled
+      : SWITCH_DEFAULTS[role];
   return enabled ? "" : `disabled by policy (web_search.${role}.enabled=false)`;
 }
 
@@ -173,7 +227,11 @@ const PROVIDERS = {
   },
   anthropic: {
     api: "anthropic-messages",
-    tool: () => ({ type: "web_search_20250305", name: "web_search", max_uses: maxUses() }),
+    tool: () => ({
+      type: "web_search_20250305",
+      name: "web_search",
+      max_uses: maxUses(),
+    }),
     present: (tool) => tool && tool.name === "web_search",
   },
   zai: {
@@ -183,7 +241,12 @@ const PROVIDERS = {
       "the web search of Z.ai is not verified yet on the coding endpoint pi uses for GLM: JHT_PI_WEB_SEARCH_ZAI=1 turns it on",
     tool: () => ({
       type: "web_search",
-      web_search: { enable: true, search_engine: "search-prime", search_result: true, count: 5 },
+      web_search: {
+        enable: true,
+        search_engine: "search-prime",
+        search_result: true,
+        count: 5,
+      },
     }),
     present: (tool) => tool && tool.type === "web_search",
   },
@@ -192,7 +255,8 @@ const PROVIDERS = {
 /** Why a provider gets no search, for the status entry and the log line. */
 function missingReason(provider, api) {
   const known = PROVIDERS[provider];
-  if (known && known.api !== api) return `the hosted search of ${provider} is added only on its ${known.api} API, not on ${api || "an unknown API"}`;
+  if (known && known.api !== api)
+    return `the hosted search of ${provider} is added only on its ${known.api} API, not on ${api || "an unknown API"}`;
   if (provider === "moonshotai")
     return "Kimi has no hosted search tool to add to the request: its $web_search was retired and its search is a separate endpoint";
   return `no hosted web search tool is known for provider ${provider || "unknown"}`;
@@ -217,7 +281,10 @@ function logLine(entry) {
 
 /** Lower case, no accents, single spaces: how a name and a query are compared. */
 function fold(text) {
-  return String(text).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return String(text)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
 /**
@@ -251,7 +318,10 @@ function loadPerson() {
   if (!home) return null;
   let fd = null;
   try {
-    fd = fs.openSync(path.join(home, "profile", "candidate_profile.yml"), fs.constants.O_RDONLY);
+    fd = fs.openSync(
+      path.join(home, "profile", "candidate_profile.yml"),
+      fs.constants.O_RDONLY,
+    );
     const st = fs.fstatSync(fd);
     if (!st.isFile() || st.size > PROFILE_MAX_BYTES) return null;
     const buffer = Buffer.alloc(st.size);
@@ -265,7 +335,9 @@ function loadPerson() {
           name = `${v[`${parent}first_name`]} ${v[`${parent}last_name`]}`;
           break;
         }
-    const words = fold(name).split(/[^a-z]+/).filter((w) => w.length >= 3);
+    const words = fold(name)
+      .split(/[^a-z]+/)
+      .filter((w) => w.length >= 3);
     const email = fold(pick(EMAIL_PATHS)).trim();
     const digits = pick(PHONE_PATHS).replace(/\D/g, "");
     return {
@@ -291,9 +363,11 @@ function personKinds(person, query) {
   const kinds = [];
   const q = fold(query);
   const words = new Set(q.split(/[^a-z]+/).filter(Boolean));
-  if (person.words.length && person.words.every((w) => words.has(w))) kinds.push("name");
+  if (person.words.length && person.words.every((w) => words.has(w)))
+    kinds.push("name");
   if (person.email && q.includes(person.email)) kinds.push("email");
-  if (person.phone && q.replace(/\D/g, "").includes(person.phone)) kinds.push("phone");
+  if (person.phone && q.replace(/\D/g, "").includes(person.phone))
+    kinds.push("phone");
   return kinds;
 }
 
@@ -328,7 +402,11 @@ module.exports = function webSearch(pi) {
       if (!kinds.length) return;
       check.matches += 1;
       for (const k of kinds) check.kinds.add(k);
-      logLine({ event: "web_search_person_data", kinds, role: String(process.env.JHT_AGENT_NAME || "") });
+      logLine({
+        event: "web_search_person_data",
+        kinds,
+        role: String(process.env.JHT_AGENT_NAME || ""),
+      });
     } catch (_error) {
       /* the check must never break the stream, nor say what it read */
     }
@@ -356,7 +434,8 @@ module.exports = function webSearch(pi) {
   }
 
   function closeRequest() {
-    if (current === "anthropic") searches += request.usage !== null ? request.usage : request.blocks;
+    if (current === "anthropic")
+      searches += request.usage !== null ? request.usage : request.blocks;
     request = { blocks: 0, usage: null, seen: false, inputs: {} };
   }
 
@@ -371,7 +450,11 @@ module.exports = function webSearch(pi) {
       added = false;
       if (withdrawn !== null) return undefined; // said once, when it happened
       if (process.env.JHT_PI_WEB_SEARCH === "0") {
-        announce(false, model, "web search turned off for the agents (JHT_PI_WEB_SEARCH=0)");
+        announce(
+          false,
+          model,
+          "web search turned off for the agents (JHT_PI_WEB_SEARCH=0)",
+        );
         return undefined;
       }
       const off = switchedOff();
@@ -379,7 +462,12 @@ module.exports = function webSearch(pi) {
         announce(false, model, off);
         return undefined;
       }
-      if (!known || known.api !== api || !payload || typeof payload !== "object") {
+      if (
+        !known ||
+        known.api !== api ||
+        !payload ||
+        typeof payload !== "object"
+      ) {
         announce(false, model, missingReason(provider, api));
         return undefined;
       }
@@ -412,7 +500,12 @@ module.exports = function webSearch(pi) {
       } catch (_error) {
         /* the log below still says it */
       }
-      logLine({ event: "web_search_withdrawn", status, ...describe(model), current });
+      logLine({
+        event: "web_search_withdrawn",
+        status,
+        ...describe(model),
+        current,
+      });
     } catch (_error) {
       /* never break the agent */
     }
@@ -437,21 +530,40 @@ module.exports = function webSearch(pi) {
       const data = event && event.data;
       if (!data || typeof data !== "object") return;
       if (current === "openai") {
-        if (data.type === "response.output_item.done" && data.item && data.item.type === "web_search_call") {
+        if (
+          data.type === "response.output_item.done" &&
+          data.item &&
+          data.item.type === "web_search_call"
+        ) {
           searches += 1;
           const action = data.item.action || {};
           checkQuery(action.query);
-          if (Array.isArray(action.queries)) for (const q of action.queries) if (q !== action.query) checkQuery(q);
+          if (Array.isArray(action.queries))
+            for (const q of action.queries)
+              if (q !== action.query) checkQuery(q);
         }
       } else if (current === "anthropic") {
         const block = data.content_block;
-        if (data.type === "content_block_start" && block && block.type === "server_tool_use" && block.name === "web_search") {
+        if (
+          data.type === "content_block_start" &&
+          block &&
+          block.type === "server_tool_use" &&
+          block.name === "web_search"
+        ) {
           request.blocks += 1;
-          const ready = block.input && typeof block.input.query === "string" ? block.input.query : null;
+          const ready =
+            block.input && typeof block.input.query === "string"
+              ? block.input.query
+              : null;
           request.inputs[data.index] = { json: "", query: ready };
         }
         const open = request.inputs[data.index];
-        if (open && data.type === "content_block_delta" && data.delta && data.delta.type === "input_json_delta")
+        if (
+          open &&
+          data.type === "content_block_delta" &&
+          data.delta &&
+          data.delta.type === "input_json_delta"
+        )
           if (!open.over) {
             open.json += String(data.delta.partial_json || "");
             if (open.json.length > QUERY_INPUT_MAX_CHARS) {
@@ -470,11 +582,19 @@ module.exports = function webSearch(pi) {
           }
           checkQuery(query);
         }
-        const used = data.usage && data.usage.server_tool_use && data.usage.server_tool_use.web_search_requests;
-        if (data.type === "message_delta" && Number.isInteger(used)) request.usage = used;
+        const used =
+          data.usage &&
+          data.usage.server_tool_use &&
+          data.usage.server_tool_use.web_search_requests;
+        if (data.type === "message_delta" && Number.isInteger(used))
+          request.usage = used;
         if (data.type === "message_stop") closeRequest();
       } else if (current === "zai") {
-        if (!request.seen && Array.isArray(data.web_search) && data.web_search.length > 0) {
+        if (
+          !request.seen &&
+          Array.isArray(data.web_search) &&
+          data.web_search.length > 0
+        ) {
           request.seen = true;
           searches += 1;
         }
@@ -488,7 +608,11 @@ module.exports = function webSearch(pi) {
     closeRequest();
     if (check.queries > 0) {
       const outcome = person
-        ? { queries: check.queries, person_data: check.matches, kinds: KINDS.filter((k) => check.kinds.has(k)) }
+        ? {
+            queries: check.queries,
+            person_data: check.matches,
+            kinds: KINDS.filter((k) => check.kinds.has(k)),
+          }
         : { queries: check.queries, check: "unavailable" };
       check = { queries: 0, matches: 0, kinds: new Set() };
       try {
@@ -503,7 +627,11 @@ module.exports = function webSearch(pi) {
     try {
       pi.appendEntry(COUNT, { searches: n, provider: current });
     } catch (_error) {
-      logLine({ event: "web_search_count_lost", searches: n, provider: current });
+      logLine({
+        event: "web_search_count_lost",
+        searches: n,
+        provider: current,
+      });
     }
   });
 };
