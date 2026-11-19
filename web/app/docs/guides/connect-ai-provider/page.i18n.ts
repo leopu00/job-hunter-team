@@ -51,7 +51,7 @@ export const T: Record<Locale, Copy> = {
     apiKeyP1:
       "The agents run on the Pi harness. Give the key from a file or from stdin, never on the command line (it would stay in your shell history):",
     apiKeyP2:
-      "An API key has no usage window: only a daily ceiling stops the spending. Set it in the configuration as no_quota_cap (for example eur: 10) or ask the Captain; at the ceiling the team pauses and nothing is lost. Measured so far on GLM only: about 0.10 USD per scored position.",
+      "An API key has no usage window: only a daily ceiling stops the spending. Set it in the configuration as no_quota_cap (for example eur: 10) or ask the Captain; at the ceiling the team pauses and nothing is lost. JHT counts that ceiling itself, so it is not a hard limit: the safe one is the limit you set with the provider. Measured so far on GLM only: about 0.10 USD per scored position.",
     coming: "Codex — not in this version.",
     apiKeyKimi:
       "(Moonshot) — with an API key, paid per call; jht setup asks for it (typed hidden) and checks it with Moonshot.",
@@ -81,7 +81,7 @@ export const T: Record<Locale, Copy> = {
     apiKeyP1:
       "Gli agenti girano sull'harness Pi. Dai la chiave da un file o da stdin, mai sulla riga di comando (resterebbe nella cronologia della shell):",
     apiKeyP2:
-      "Una chiave API non ha una finestra d'uso: la spesa la ferma solo un tetto giornaliero. Impostalo nella configurazione come no_quota_cap (per esempio eur: 10) o chiedilo al Capitano; al tetto la squadra si mette in pausa e non si perde niente. Misurato finora solo su GLM: circa 0,10 USD per posizione valutata.",
+      "Una chiave API non ha una finestra d'uso: la spesa la ferma solo un tetto giornaliero. Impostalo nella configurazione come no_quota_cap (per esempio eur: 10) o chiedilo al Capitano; al tetto la squadra si mette in pausa e non si perde niente. Quel tetto lo conta JHT e non è un limite sicuro: quello sicuro è il limite che imposti presso il provider. Misurato finora solo su GLM: circa 0,10 USD per posizione valutata.",
     coming: "Codex — non in questa versione.",
     apiKeyKimi:
       "(Moonshot) — con una chiave API, a consumo; jht setup la chiede (scritta nascosta) e la controlla con Moonshot.",
@@ -111,7 +111,7 @@ export const T: Record<Locale, Copy> = {
     apiKeyP1:
       "Los agentes funcionan en el harness Pi. Da la clave desde un archivo o desde stdin, nunca en la línea de comandos (quedaría en el historial de la shell):",
     apiKeyP2:
-      "Una clave de API no tiene ventana de uso: solo un tope diario detiene el gasto. Configúralo como no_quota_cap (por ejemplo eur: 10) o pídeselo al Capitán; al llegar al tope el equipo se pausa y no se pierde nada. Medido por ahora solo con GLM: unos 0,10 USD por posición puntuada.",
+      "Una clave de API no tiene ventana de uso: solo un tope diario detiene el gasto. Configúralo como no_quota_cap (por ejemplo eur: 10) o pídeselo al Capitán; al llegar al tope el equipo se pausa y no se pierde nada. Ese tope lo cuenta JHT y no es un límite seguro: el seguro es el límite que fijas en el proveedor. Medido por ahora solo con GLM: unos 0,10 USD por posición puntuada.",
     coming: "Codex — no está en esta versión.",
     apiKeyKimi:
       "(Moonshot) — con una clave de API, de pago por uso; jht setup la pide (escrita oculta) y la comprueba con Moonshot.",
@@ -142,7 +142,7 @@ export const T: Record<Locale, Copy> = {
     apiKeyP1:
       "Les agents tournent sur le harness Pi. Donnez la clé depuis un fichier ou depuis stdin, jamais sur la ligne de commande (elle resterait dans l'historique du shell) :",
     apiKeyP2:
-      "Une clé d'API n'a pas de fenêtre d'usage : seul un plafond journalier arrête la dépense. Réglez-le dans la configuration avec no_quota_cap (par exemple eur: 10) ou demandez-le au Capitaine ; au plafond l'équipe se met en pause et rien n'est perdu. Mesuré pour l'instant avec GLM seulement : environ 0,10 USD par poste évalué.",
+      "Une clé d'API n'a pas de fenêtre d'usage : seul un plafond journalier arrête la dépense. Réglez-le dans la configuration avec no_quota_cap (par exemple eur: 10) ou demandez-le au Capitaine ; au plafond l'équipe se met en pause et rien n'est perdu. Ce plafond, c'est JHT qui le compte : ce n'est pas une limite sûre, la limite sûre est celle que vous fixez chez le fournisseur. Mesuré pour l'instant avec GLM seulement : environ 0,10 USD par poste évalué.",
     coming: "Codex — pas dans cette version.",
     apiKeyKimi:
       "(Moonshot) — avec une clé d'API, payée à l'usage ; jht setup la demande (saisie masquée) et la vérifie auprès de Moonshot.",
@@ -174,7 +174,7 @@ export const T: Record<Locale, Copy> = {
     apiKeyP1:
       "Die Agenten laufen auf dem Pi-Harness. Gib den Key aus einer Datei oder über stdin, nie auf der Kommandozeile (er bliebe im Shell-Verlauf):",
     apiKeyP2:
-      "Ein API-Key hat kein Nutzungsfenster: nur ein Tageslimit stoppt die Ausgaben. Setze es in der Konfiguration als no_quota_cap (zum Beispiel eur: 10) oder bitte den Kapitän darum; am Limit pausiert das Team, nichts geht verloren. Bisher nur mit GLM gemessen: etwa 0,10 USD pro bewerteter Stelle.",
+      "Ein API-Key hat kein Nutzungsfenster: nur ein Tageslimit stoppt die Ausgaben. Setze es in der Konfiguration als no_quota_cap (zum Beispiel eur: 10) oder bitte den Kapitän darum; am Limit pausiert das Team, nichts geht verloren. Dieses Limit zählt JHT selbst, es ist keine sichere Grenze: Sicher ist das Limit, das du beim Anbieter festlegst. Bisher nur mit GLM gemessen: etwa 0,10 USD pro bewerteter Stelle.",
     coming: "Codex — nicht in dieser Version.",
     apiKeyKimi:
       "(Moonshot) — mit einem API-Key, pro Aufruf bezahlt; jht setup fragt danach (verdeckt eingegeben) und prüft ihn bei Moonshot.",
@@ -205,7 +205,7 @@ export const T: Record<Locale, Copy> = {
     apiKeyP1:
       "Az ügynökök a Pi harnessen futnak. A kulcsot fájlból vagy stdinről add meg, soha ne a parancssorban (ott maradna a shell előzményeiben):",
     apiKeyP2:
-      "Egy API-kulcsnak nincs használati ablaka: a költést csak egy napi plafon állítja meg. Állítsd be a konfigurációban no_quota_cap néven (például eur: 10), vagy kérd a Kapitánytól; a plafonnál a csapat szünetel, semmi sem vész el. Eddig csak GLM-mel mérve: kb. 0,10 USD egy értékelt pozícióra.",
+      "Egy API-kulcsnak nincs használati ablaka: a költést csak egy napi plafon állítja meg. Állítsd be a konfigurációban no_quota_cap néven (például eur: 10), vagy kérd a Kapitánytól; a plafonnál a csapat szünetel, semmi sem vész el. Ezt a plafont a JHT számolja, nem biztos határ: a biztos határ az, amit a szolgáltatónál állítasz be. Eddig csak GLM-mel mérve: kb. 0,10 USD egy értékelt pozícióra.",
     coming: "Codex — nincs benne ebben a verzióban.",
     apiKeyKimi:
       "(Moonshot) — API-kulccsal, hívásonként fizetve; a jht setup elkéri (rejtett beírással) és ellenőrzi a Moonshotnál.",
@@ -235,7 +235,7 @@ export const T: Record<Locale, Copy> = {
     apiKeyP1:
       "Os agentes rodam no harness Pi. Passe a chave por um arquivo ou por stdin, nunca na linha de comando (ficaria no histórico do shell):",
     apiKeyP2:
-      "Uma chave de API não tem janela de uso: só um teto diário para o gasto. Defina-o na configuração como no_quota_cap (por exemplo eur: 10) ou peça ao Capitão; no teto a equipe pausa e nada se perde. Medido até agora só com o GLM: cerca de 0,10 USD por vaga avaliada.",
+      "Uma chave de API não tem janela de uso: só um teto diário para o gasto. Defina-o na configuração como no_quota_cap (por exemplo eur: 10) ou peça ao Capitão; no teto a equipe pausa e nada se perde. Esse teto é contado pelo JHT e não é um limite seguro: o seguro é o limite que defines no fornecedor. Medido até agora só com o GLM: cerca de 0,10 USD por vaga avaliada.",
     coming: "Codex — não está nesta versão.",
     apiKeyKimi:
       "(Moonshot) — com uma chave de API, paga por uso; o jht setup pede-a (escrita oculta) e verifica-a com a Moonshot.",

@@ -104,7 +104,7 @@ Not sure where the team should live? Compare a
 [local PC, dedicated Linux PC on the LAN and VPS](docs/guides/CHOOSE-WHERE-TO-RUN.md).
 
 **What it costs** — with an API key (GLM, Kimi, OpenAI or Claude) you pay per call: measured on GLM only, about 0.10 USD per
-scored position. Set a daily ceiling and the team pauses there; without one nothing stops the spending. (The month-long run we measured used a
+scored position. Set a daily ceiling and the team pauses there; without one nothing stops the spending. JHT counts that ceiling itself, so it is not a hard limit: the safe one is the limit you set with the provider. (The month-long run we measured used a
 Codex Pro subscription, about €100/month — [results](docs/about/RESULTS.md); Codex is not in this
 version.) Details:
 [`docs/about/PROVIDERS.md`](docs/about/PROVIDERS.md).
@@ -114,9 +114,8 @@ version.) Details:
 | **GLM** (Z.ai, on Pi) | API key | per call | Offered — measured in short runs |
 | **Kimi** (Moonshot, on Pi) | API key | per call | Offered |
 | **OpenAI** (on Pi) | API key | per call | Offered |
-| **OpenAI** (on Pi) | ChatGPT subscription, Pi's own login | by your plan | Offered, new: not yet measured; JHT promises nothing about OpenAI's terms for this use or about what a given plan covers |
 | **Claude** (Anthropic, on Pi) | API key | per call | Offered |
-| Claude subscription; Codex with the ChatGPT subscription | — | — | Not in this version |
+| Claude subscription; ChatGPT subscription (on Pi or on Codex) | — | — | Not in this version |
 
 **The desktop app is not in 0.4.0.** Install the CLI.
 

@@ -26,7 +26,7 @@ with your infrastructure provider before you start.
   account during the preparation; a local profile has no account to pair it
   with.
 - An API key for GLM (Z.ai), Kimi (Moonshot), OpenAI or Claude (Anthropic): 0.4.0 runs the team only on Pi with one of them. The
-  ChatGPT subscription with Codex and the other services are not in 0.4.0 (OpenAI on Pi with the subscription is: `jht setup` asks how Pi signs in).
+  ChatGPT subscription (with Codex or on Pi) and the other services are not in 0.4.0.
 
 ## Guided path
 
