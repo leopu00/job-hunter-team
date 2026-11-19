@@ -897,24 +897,28 @@ def _paused_at_13_30(tmp_path):
     return bridge, state
 
 
-def test_spending_after_the_pause_moves_the_resume_time_in_the_flag_and_the_person_is_told(tmp_path):
+def test_spending_after_the_pause_moves_the_resume_time_in_the_flag_and_the_person_is_told_once_per_pause(tmp_path):
     """A turn already running and a welcome at `jht up` spent after the pause: the brake reckoned 16:53, the flag and the chat
-    still said 14:58, and at 16:11 the team was still paused past the time the person was given."""
+    still said 14:58, and at 16:11 the team was still paused past the time the person was given. One message per pause (retest
+    19/11: four or five with changing hours): the flag has the new hour, the person is told again only when the hour told is gone."""
     bridge, state = _paused_at_13_30(tmp_path)
     pi_calls(tmp_path, [(NOON + HOUR + 30, 0.5, 100)], name="after.jsonl", agent="capitano")   # 0.50 $ more: one hour later
     bridge.clock["now"] = NOON + HOUR + 120
     bridge.tick(state=state)
     record = flag_record(bridge)
-    assert record["resumes_at"] == "2026-11-09T14:30:00+00:00" and record["resumes_told_at"] == record["resumes_at"]
+    assert record["resumes_at"] == "2026-11-09T14:30:00+00:00" and record["resumes_told_at"] == "2026-11-09T13:30:00+00:00"
     assert bridge.esc == 1, "no second ESC"
-    assert len(bridge.users) == 2 and "14:30" in bridge.users[-1][0]
+    assert len(bridge.users) == 1, "13:30 is still to come: the hour moved, the person is not told a second time"
+    bridge.clock["now"] = NOON + HOUR + 31 * 60   # 13:31: the hour the person was given is gone
+    bridge.tick(state=state)
+    assert len(bridge.users) == 2 and "14:30" in bridge.users[-1][0], "a promise that was broken is told"
     assert any("lifts by itself at 14:30" in t for t in bridge.texts())
-    bridge.clock["now"] = NOON + HOUR + 180
+    bridge.clock["now"] = NOON + HOUR + 32 * 60
     bridge.tick(state=state)
     assert len(bridge.users) == 2, "the same time is not said again"
 
 
-def test_a_small_move_is_written_in_the_flag_and_said_once_the_moves_add_up(tmp_path):
+def test_a_move_is_written_in_the_flag_and_never_said_while_the_hour_told_is_to_come(tmp_path):
     bridge, state = _paused_at_13_30(tmp_path)
     pi_calls(tmp_path, [(NOON + HOUR + 30, 0.02, 100)], name="a.jsonl", agent="capitano")     # 2.4 minutes later
     bridge.clock["now"] = NOON + HOUR + 120
@@ -925,8 +929,8 @@ def test_a_small_move_is_written_in_the_flag_and_said_once_the_moves_add_up(tmp_
     pi_calls(tmp_path, [(NOON + HOUR + 150, 0.03, 100)], name="b.jsonl", agent="capitano")    # 6 minutes in all
     bridge.clock["now"] = NOON + HOUR + 240
     bridge.tick(state=state)
-    assert flag_record(bridge)["resumes_at"] == "2026-11-09T13:36:00+00:00" and len(bridge.users) == 2
-    assert flag_record(bridge)["resumes_told_at"] == "2026-11-09T13:36:00+00:00"
+    assert flag_record(bridge)["resumes_at"] == "2026-11-09T13:36:00+00:00" and len(bridge.users) == 1, "six minutes in all: still one message"
+    assert flag_record(bridge)["resumes_told_at"] == "2026-11-09T13:30:00+00:00"
 
 
 def test_a_pause_that_does_not_move_is_left_alone(tmp_path):
@@ -1480,3 +1484,59 @@ def test_reserve_the_queue_is_written_before_the_first_send_and_the_name_woken_i
     bridge.clock["now"] = at + 3 * HOUR
     bridge.tick(state={})
     assert all(session not in waiting for session, waiting in seen)
+
+
+def test_reserve_closes_per_session_at_its_first_turn_and_never_counts_a_reload_twice(tmp_path):
+    """Retest 19/11: a resume of 0.18 $ real (Captain 0.16, Scout 0.02) was reserved at 1.86 $ of estimates for two minutes, and the pace
+    paused the team 10-47 s after every resume. The reserve of a session closes at its first turn: its real reload is in the spend."""
+    config = budget(3, NOON, NOON + 10 * HOUR)
+    read = cap.team_budget.read(config)
+    resumed = NOON + 4 * HOUR
+    pi_calls(tmp_path, [(NOON + HOUR, 0.41, 100)], agent="analista-1")
+    cap.note_wake(tmp_path, resumed, 1.858, {"SCOUT-1": 0.978, "CAPITANO": 0.88})
+    waiting = cap.spend(tmp_path, resumed + 5, NOON, NOON)
+    assert waiting["reserve_open"] == 1.858, "nobody has made a turn yet: all of it is reserved"
+    pi_calls(tmp_path, [(resumed + 8, 0.02, 100)], name="a.jsonl", agent="scout-1")
+    one = cap.spend(tmp_path, resumed + 10, NOON, NOON)
+    assert one["reserve_open"] == 0.88, "the Scout has made its turn: its estimate is closed"
+    pi_calls(tmp_path, [(resumed + 12, 0.16, 100)], name="b.jsonl", agent="capitano")
+    for at in (resumed + 15, resumed + 42, resumed + 90):
+        done = cap.spend(tmp_path, at, NOON, NOON)
+        assert done["reserve_open"] == 0.0 and done["budget_cost"] == 0.59
+        assert cap.decide(config, done, False, at, read)["action"] == "none", "the real spend is far under the line: no pause"
+
+
+def test_reserve_the_estimate_of_a_session_is_its_last_real_reload_not_the_whole_context_at_the_write_price(tmp_path):
+    pi_calls(tmp_path, [(NOON, 0.30, 100), (NOON + 20, 0.01, 100), (NOON + 4000, 0.02, 100)], agent="scout-1")
+    costs = cap.session_costs(tmp_path, NOON + 5000, ["SCOUT-1", "SCOUT-9"])
+    assert costs["SCOUT-1"] == 0.02, "its first turn after the stop cost 0.02 $"
+    assert costs["SCOUT-9"] == cap.RESTART_COST_PER_SESSION, "no history: the minimum"
+
+
+def test_reserve_a_pause_with_budget_left_never_says_it_stays_until_the_period_ends(tmp_path):
+    """Retest 19/11: «stays paused until the end of the period» with 2.59 $ still to spend, the reload estimate (2.7 $, five times the
+    real one) being what did not fit. With the estimate of a reload as it is (0.3 $) the pause has an hour; only a reload that does not
+    fit in what is left says «stays»."""
+    config = budget(3, NOON, NOON + 10 * HOUR)
+    read = cap.team_budget.read(config)
+    at = NOON + 2 * HOUR
+    spent = {"budget_cost": 1.0, "before_start": 0.0, "recent_cost": 0.0, "restart_recent": 0.0, "reserve_open": 0.0}
+    verdict = cap.decide(config, spent, False, at, read, True, 0.3)
+    assert verdict["action"] == "halt" and not verdict.get("stays") and verdict["resumes"] < read["ends"]
+    assert cap.decide(config, spent, False, at, read, True, 2.7).get("stays") is True, "a reload that really does not fit"
+
+
+def test_reserve_a_pause_is_told_once_while_its_hour_moves(tmp_path):
+    config = budget(3, NOON, NOON + 10 * HOUR)
+    bridge = Bridge(tmp_path, config)
+    run = SimpleNamespace(state={}, now_h="x", _bi_on=False)
+    told = []
+    verdict = {"action": "halt", "why": "pace", "spent": 0.4, "usd": 3, "ends": NOON + 10 * HOUR, "starts": NOON, "counts_from": NOON,
+               "ceiling": 0.4, "resumes": NOON + 2 * HOUR, "before": 0.0}
+    record = cap._record(verdict, config)
+    record["resumes_told_at"] = record["resumes_at"]
+    flag = {"reason": cap.REASON, "pi_spend_cap": record}
+    moved = dict(verdict, resumes=NOON + 2 * HOUR + 1200)
+    cap._resume_moved(bridge.api, run, moved, {"cost": 0.4}, "d", lambda *a: told.append(a), config, NOON + 600, flag)
+    assert told == [] and not bridge.sent, "moved by 20 minutes before the told hour: written, not told again"
+    assert flag["pi_spend_cap"]["resumes_at"] == cap._record(moved, config)["resumes_at"], "the flag has the new hour"

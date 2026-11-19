@@ -61,7 +61,7 @@ RATE_WINDOW_SEC = 300
 # cost is the budget's (its hard stop counts it) and not the pace's: a pace that counts it stops the team again 80 s after every resume.
 RESTART_WINDOW_SEC = 120
 RESUMES_FILE = Path("state") / "pace-resumes.json"
-WAKES_FILE = Path("state") / "pace-wakes.json"            # [[moment, estimate]]: what the sessions woken at that moment were expected to cost
+WAKES_FILE = Path("state") / "pace-wakes.json"            # [[moment, estimate, {session: estimate}]]: what the sessions woken at that moment were expected to cost
 QUEUE_FILE = Path("state") / "pace-wake-queue.json"       # {"pending": [...], "at": moment}: the sessions the pace has not woken yet
 PROVIDER_NAMES = provider_credit.PROVIDER_NAMES
 
@@ -121,16 +121,25 @@ def note_resume(home, moment):
 def _read_wakes(home):
     try:
         data = json.loads((Path(home) / WAKES_FILE).read_text(encoding="utf-8"))
-        return [(float(m), float(e)) for m, e in data if isinstance(m, (int, float)) and isinstance(e, (int, float))]
-    except (OSError, ValueError, TypeError):
+        out = []
+        for row in data:
+            m, e = row[0], row[1]
+            per = row[2] if len(row) > 2 and isinstance(row[2], dict) else None
+            if isinstance(m, (int, float)) and isinstance(e, (int, float)):
+                out.append((float(m), float(e), {str(k).upper(): float(v) for k, v in per.items() if isinstance(v, (int, float))} if per is not None else None))
+        return out
+    except (OSError, ValueError, TypeError, IndexError):
         return []
 
 
-def note_wake(home, moment, estimate):
+def note_wake(home, moment, estimate, per_session=None):
     """A stage of the wake: the moment (a resume, for the rate and the look) and what its sessions are expected to cost, which the
-    pace keeps under the line for the next two minutes whatever they have spent so far."""
+    pace keeps under the line for the next two minutes, session by session: the reserve of one closes with its first turn after the
+    wake, when what it really cost is in the spend (`per_session`: {name: estimate})."""
     note_resume(home, moment)
-    _write_state(Path(home) / WAKES_FILE, (_read_wakes(home) + [(float(moment), round(float(estimate), 6))])[-50:])
+    row = [float(moment), round(float(estimate), 6)] + ([{k: round(float(v), 6) for k, v in per_session.items()}] if per_session else [])
+    kept = [[m, e] + ([per] if per is not None else []) for m, e, per in _read_wakes(home)]
+    _write_state(Path(home) / WAKES_FILE, (kept + [row])[-50:])
 
 
 def pending_wakes(home):
@@ -170,6 +179,7 @@ def spend(home, now_ts, budget_start=None, split_at=None):
            "budget_cost": None if budget_start is None else 0.0, "first_worker": None,
            "recent_cost": 0.0, "before_start": 0.0, "restart_cost": 0.0, "restart_recent": 0.0, "since_resume": None, "reserve_open": 0.0}
     budget_events = []
+    calls = {}    # {SESSION: [moment of each of its calls since the budget started]}
     # the rate of the pace is the team's since the last resume, not the pause before it (see _budget_verdict)
     resumed_at = [r for r in _read_resumes(home) if budget_start is not None and budget_start <= r <= now_ts]
     recent_from = max(now_ts - RATE_WINDOW_SEC, max(resumed_at, default=0.0))
@@ -183,6 +193,7 @@ def spend(home, now_ts, budget_start=None, split_at=None):
         if budget_start is not None and event["ts"] >= budget_start:
             out["budget_cost"] += event["cost"]
             budget_events.append((event["ts"], event["cost"]))
+            calls.setdefault((event.get("agent") or "").upper(), []).append(event["ts"])
             if event["ts"] >= recent_from:
                 out["recent_cost"] += event["cost"]
             if out["first_worker"] is None and _is_worker(event.get("agent")):
@@ -211,11 +222,17 @@ def spend(home, now_ts, budget_start=None, split_at=None):
                         out["restart_recent"] += cost
         out["restart_cost"] = round(out["restart_cost"], 6)
         # the stages woken in the last two minutes: what they were expected to cost and has not been spent yet stays under the line
-        open_wakes = [(m, e) for m, e in _read_wakes(home) if m >= budget_start and 0 <= now_ts - m < RESTART_WINDOW_SEC]
-        if open_wakes:
-            first = min(m for m, _ in open_wakes)
-            paid = sum(cost for moment, cost in budget_events if moment >= first)
-            out["reserve_open"] = round(max(0.0, sum(e for _, e in open_wakes) - paid), 6)
+        # a session that has made its first turn after the wake has its real reload in the spend: its reserve is closed, and never
+        # counted a second time (retest 19/11: every resume paused within 10-47 s, the estimate 5 times the real cost kept under the line)
+        open_wakes = [w for w in _read_wakes(home) if w[0] >= budget_start and 0 <= now_ts - w[0] < RESTART_WINDOW_SEC]
+        reserve = 0.0
+        for moment, estimate, per in open_wakes:
+            if per is None:   # a wake written before the per-session estimates: the whole estimate less what the team has spent since
+                paid = sum(cost for when, cost in budget_events if when >= moment)
+                reserve += max(0.0, estimate - paid)
+            else:
+                reserve += sum(cost for name, cost in per.items() if not any(t >= moment for t in calls.get(name, ())))
+        out["reserve_open"] = round(reserve, 6)
     out["cost"] = round(out["cost"], 6)
     if budget_start is not None:
         out["budget_cost"] = round(out["budget_cost"], 6)
@@ -229,6 +246,8 @@ WATCH_AFTER_RESUME_SEC = 300   # for this long after a resume the brake looks ev
 LOOK_AFTER_RESUME_SEC = 15
 
 
+RELOAD_GAP_SEC = 300    # a session silent for this long has lost its cache: its next turn is a reload
+MIN_RELOAD_COST = 0.01
 ALWAYS_WOKEN = ("CAPITANO", "SENTINELLA")   # told by their own notice at a resume: their reload is reserved, they are not staged
 
 
@@ -239,12 +258,15 @@ def session_costs(home, now, sessions):
     names = [x for x in (sessions or []) if isinstance(x, str) and x not in NEVER_WAKE and x not in WAKE_ONLY_IF_NEEDED]
     if not names:
         return {}
-    last, rate = {}, {}
+    last, rate, reload, before = {}, {}, {}, {}
     try:
         for event in pi_sessions.usage_events(home, now - 86400):
             who = (event.get("agent") or "").upper()
             if who:
                 last[who] = event
+                if who in before and event["ts"] - before[who] >= RELOAD_GAP_SEC and event.get("cost"):
+                    reload[who] = event["cost"]   # its first turn after a stop: what the restart really cost it
+                before[who] = event["ts"]
             tokens = (event.get("input") or 0) + (event.get("cache_write") or 0)
             if event.get("model") and tokens >= 2000 and event.get("cache_write"):
                 rate[event["model"]] = max(rate.get(event["model"], 0.0), event["cost"] / tokens)
@@ -254,6 +276,9 @@ def session_costs(home, now, sessions):
     for name in names:
         event = last.get(name.upper())
         cost = 0.0
+        if name.upper() in reload:
+            costs[name] = round(max(MIN_RELOAD_COST, reload[name.upper()]), 6)
+            continue
         if event and event.get("model") in rate:
             cost = ((event.get("input") or 0) + (event.get("cache_read") or 0) + (event.get("cache_write") or 0)) * rate[event["model"]]
         costs[name] = round(max(RESTART_COST_PER_SESSION, cost), 6)
@@ -317,12 +342,13 @@ class Stage:
     """The room of one look: a session is woken when its estimated reload fits, in the order given; the others wait."""
 
     def __init__(self, room, costs):
-        self.room, self.costs, self.estimate, self.pending, self.taken = room, costs, 0.0, [], 0
+        self.room, self.costs, self.estimate, self.pending, self.taken, self.woken = room, costs, 0.0, [], 0, {}
 
     def reserve(self, name):
         cost = self.costs.get(name, 0.0)
         self.room -= cost
         self.estimate += cost
+        self.woken[name] = cost
 
     def take(self, name):
         """The sessions go in the order given and nobody overtakes: one whose reload does not fit holds the ones behind it (the Scouts
@@ -334,6 +360,7 @@ class Stage:
         if not self.pending and (cost <= self.room + 1e-9 or (first and self.room > 1e-9)):
             self.room -= cost
             self.estimate += cost
+            self.woken[name] = cost
             self.taken += 1
             return True
         self.pending.append(name)
@@ -667,7 +694,9 @@ def _resume_moved(api, run, verdict, spent, day, notify_user, config, now, flag)
         return  # said once: no hour to move
     written = moment(record.get("resumes_at"))
     told = moment(record.get("resumes_told_at") or record.get("resumes_at"))
-    tell = told is None or abs(new - told) >= RESUME_MOVED_SEC or (told <= now and int(told // 60) != int(new // 60))
+    # one message per pause: a time that moves is written in the flag, and told again only when the time the person was given is gone
+    # or is no longer a time at all (the pause now lasts to the end of the period)
+    tell = told is None or (told <= now and int(told // 60) != int(new // 60)) or bool(verdict.get("stays") and not record.get("stays"))
     if written is not None and int(written // 60) == int(new // 60) and not tell:
         return
     fresh = _record(verdict, config)
@@ -842,7 +871,7 @@ def _resume(api, run, day, notify_user, ctx=None):
     woken = _wake_the_team(api, flag.get("sessions"), "the budget allows work again" if was in ("budget", "period", "pace") else "spending is back under the ceiling",
                         seen=list((flag.get("pane_signatures") or {}).keys()), stage=stage, queue_at=moment)
     if stage is not None:
-        note_wake(home, moment, stage.estimate)
+        note_wake(home, moment, stage.estimate, stage.woken)
         set_pending(home, stage.pending, moment)
         _tell_the_captain_the_queue(api, run, "stage:%s:%d" % (day, int(moment)), woken, stage.pending)
     _tell(api, run, "resume:%s:%d" % (day, int(api.time.time())), text, user, notify_user)
@@ -893,7 +922,7 @@ def _wake_pending(api, run, ctx):
             except Exception as error:  # noqa: BLE001
                 print("[bridge V6] WARN pi spend cap wake of %s: %s" % (session, error))
         if woken:
-            note_wake(home, ctx["now"], stage.estimate)
+            note_wake(home, ctx["now"], stage.estimate, {n: stage.costs.get(n, RESTART_COST_PER_SESSION) for n in woken})
             print("[bridge V6] %s PI-SPEND-CEILING stage: [RIPRENDI] to %s, waiting for the pace: %s"
                   % (run.now_h, ", ".join(woken), ", ".join(stage.pending) or "none"))
         return woken
