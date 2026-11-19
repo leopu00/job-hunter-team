@@ -375,33 +375,7 @@ jht_text_en() {
     doctor.host_title) printf '%s' 'Job Hunter Team: the team is off (its container is not running). Checks made from this computer:' ;;
     down.done) printf '%s' 'Job Hunter Team stopped.' ;;
     down.still_running) printf '%s' 'The team did not stop: a container of the project was running again after two tries (it can restart by itself in its first minute). Run '\''jht down'\'' once more; if it stays, '\''jht doctor'\''.' ;;
-    download.asset_failed) printf '%s' 'download failed: %s' ;;
-    download.bad_version) printf '%s' 'invalid version: %s. Example: 0.3.5.' ;;
-    download.copy_failed) printf '%s' 'copying the verified download to the destination failed' ;;
-    download.deb_only_linux) printf '%s' '--deb is only for Linux.' ;;
-    download.dest_appeared) printf '%s' 'the destination appeared during the download; it was not overwritten' ;;
-    download.dest_is_link) printf '%s' 'the destination is a link: %s' ;;
-    download.dest_not_file) printf '%s' 'the destination exists and is not a file: %s' ;;
-    download.fetching) printf '%s' 'Downloading %s...' ;;
-    download.hash_invalid) printf '%s' 'invalid SHA-256 for %s: expected %s, got %s.' ;;
-    download.intel_mac) printf '%s' 'The 0.4 macOS app only runs on Macs with Apple silicon (M1 and later); this is an Intel Mac, which 0.4 does not support. Nothing was downloaded.' ;;
-    download.linux_no_app) printf '%s' 'In this version there is no desktop app for Linux: use install.sh. Nothing was downloaded.' ;;
-    download.mismatch_existing) printf '%s' 'the file %s exists but its SHA-256 does not match: it was not overwritten.' ;;
-    download.mkdir_failed) printf '%s' 'cannot create the destination folder: %s' ;;
-    download.no_curl) printf '%s' 'curl not found: it is needed to download the release.' ;;
-    download.no_tmp) printf '%s' 'the temporary folder could not be created' ;;
-    download.parent_unreachable) printf '%s' 'the destination folder cannot be reached: %s' ;;
-    download.present_verified) printf '%s' 'File already present and verified: %s' ;;
-    download.release_no_app) printf '%s' 'This release (v%s) has no app for macOS: use 0.4.0 or later. Nothing was downloaded.' ;;
-    download.saved_in) printf '%s' 'Saved in: %s' ;;
-    download.sha_verified) printf '%s' 'SHA-256 verified: %s' ;;
-    download.shared_folder) printf '%s' 'the destination is inside a folder shared with the team (%s): choose one outside it, like ~/Downloads.' ;;
-    download.sum_missing) printf '%s' 'no SHA-256 declared for %s.' ;;
-    download.sums_failed) printf '%s' 'download failed: SHA256SUMS of v%s' ;;
-    download.unsupported_os) printf '%s' 'unsupported system: %s. Use windows or macos.' ;;
-    download.windows_missing) printf '%s' 'Windows is not part of 0.4.0: the release has no installer for Windows. Nothing was downloaded.' ;;
-    help.download) printf '%s' 'usage: jht download --os windows|macos --version X.Y.Z [--output FILE]
-  The desktop app is not part of 0.4.0: for a release that has it, downloads it, checks its SHA-256 and saves it (by default in ~/Downloads).' ;;
+    download.no_desktop_app) printf '%s' 'The desktop app is not part of 0.4.0, so there is nothing to download: JHT is used from the terminal, with jht setup and jht up.' ;;
     help.integration) printf '%s' 'Usage: jht integration <command>
 
   list [--json]                   the integrations and their status
@@ -669,7 +643,6 @@ This help starts nothing and downloads nothing.' ;;
     line.opzione_non_riconosciuta_s) printf '%s' 'unrecognized option: %s' ;;
     line.opzione_non_riconosciuta_s_2) printf '%s' 'unrecognized option: %s' ;;
     line.opzione_non_riconosciuta_s_3) printf '%s' 'unrecognized option: %s' ;;
-    line.os_and_version_are_required) printf '%s' '--os and --version are required' ;;
     line.override_compose_per_podman_rootless) printf '%s' 'Compose override for rootless Podman cannot be written in %s.' ;;
     line.per_l_aiuto_di_s) printf '%s' 'The help for '\''%s'\'' needs the container running: '\''jht up'\''.' ;;
     line.per_procedere_jht_podman_machine) printf '%s' 'To go ahead: jht podman-machine-recreate --confirm' ;;
@@ -723,7 +696,6 @@ This help starts nothing and downloads nothing.' ;;
     line.ruoli_da_abbinare_in_questa) printf '%s' 'Roles to pair in this session: %s' ;;
     line.s_e_un_collegamento_non) printf '%s' '%s is a link: not following it and not deleting it.' ;;
     line.s_ha_gi_un_bot) printf '%s' '%s already has a paired bot: removing only its legacy copy.' ;;
-    line.s_needs_a_value) printf '%s' '%s needs a value' ;;
     line.s_non_e_una_cartella) printf '%s' '%s is not a folder: not deleting it.' ;;
     line.saltato_non_trovato_volume_broker) printf '%s' 'Skipped (not found): broker volume %s' ;;
     line.script_s_non_ancora_installato) printf '%s' 'script %s is not installed yet: run '\''jht upgrade'\'' (or a '\''jht integration add/remove'\'') and try again' ;;
@@ -749,7 +721,6 @@ This help starts nothing and downloads nothing.' ;;
     line.unattestable.recreate) printf '%s' 'JHT container cannot be verified as ours; recreation refused.' ;;
     line.unattestable.restart) printf '%s' 'JHT container cannot be verified as ours; restart refused.' ;;
     line.unattestable.stop) printf '%s' 'JHT container cannot be verified as ours; stop refused.' ;;
-    line.unknown_argument_s) printf '%s' 'unknown argument: %s' ;;
     line.upgrade.activate) printf '%s' 'Activating the new runtime...' ;;
     line.upgrade.broker_restart_failed) printf '%s' 'the secrets broker did not start again. What to do: jht up' ;;
     line.upgrade.check_available) printf '%s' 'Check: there is an update, %s (%s) -> %s. %s. To apply it: jht upgrade' ;;
@@ -877,33 +848,7 @@ jht_text_it() {
     doctor.host_title) printf '%s' 'Job Hunter Team: squadra spenta (il suo container non gira). Controlli fatti da questo computer:' ;;
     down.done) printf '%s' 'Job Hunter Team fermato.' ;;
     down.still_running) printf '%s' 'Il team non si e'\'' fermato: un container del progetto era di nuovo acceso dopo due tentativi (nel suo primo minuto puo'\'' ripartire da solo). Rilancia '\''jht down'\''; se resta, '\''jht doctor'\''.' ;;
-    download.asset_failed) printf '%s' 'download non riuscito: %s' ;;
-    download.bad_version) printf '%s' 'versione non valida: %s. Esempio: 0.3.5.' ;;
-    download.copy_failed) printf '%s' 'copia del download verificato verso la destinazione non riuscita' ;;
-    download.deb_only_linux) printf '%s' '--deb vale solo per Linux.' ;;
-    download.dest_appeared) printf '%s' 'la destinazione e'\'' comparsa durante il download; non e'\'' stata sovrascritta' ;;
-    download.dest_is_link) printf '%s' 'la destinazione e'\'' un link: %s' ;;
-    download.dest_not_file) printf '%s' 'la destinazione esiste e non e'\'' un file: %s' ;;
-    download.fetching) printf '%s' 'Scarico %s...' ;;
-    download.hash_invalid) printf '%s' 'SHA-256 non valido per %s: atteso %s, ottenuto %s.' ;;
-    download.intel_mac) printf '%s' 'L'\''app per macOS della 0.4 gira solo su Mac con Apple silicon (M1 e successivi); questo e'\'' un Mac Intel, non supportato nella 0.4. Non e'\'' stato scaricato niente.' ;;
-    download.linux_no_app) printf '%s' 'In questa versione non c'\''e'\'' l'\''app desktop per Linux: usa install.sh. Non e'\'' stato scaricato niente.' ;;
-    download.mismatch_existing) printf '%s' 'il file %s esiste ma il suo SHA-256 non corrisponde: non e'\'' stato sovrascritto.' ;;
-    download.mkdir_failed) printf '%s' 'impossibile creare la directory di destinazione: %s' ;;
-    download.no_curl) printf '%s' 'curl non trovato: serve per scaricare la release.' ;;
-    download.no_tmp) printf '%s' 'cartella temporanea non creata' ;;
-    download.parent_unreachable) printf '%s' 'directory di destinazione non raggiungibile: %s' ;;
-    download.present_verified) printf '%s' 'File gia'\'' presente e verificato: %s' ;;
-    download.release_no_app) printf '%s' 'Questa release (v%s) non ha l'\''app per macOS: usa la 0.4.0 o successive. Non e'\'' stato scaricato niente.' ;;
-    download.saved_in) printf '%s' 'Salvato in: %s' ;;
-    download.sha_verified) printf '%s' 'SHA-256 verificato: %s' ;;
-    download.shared_folder) printf '%s' 'la destinazione sta in una cartella condivisa con il team (%s): scegline una fuori, come ~/Downloads.' ;;
-    download.sum_missing) printf '%s' 'SHA-256 dichiarato non trovato per %s.' ;;
-    download.sums_failed) printf '%s' 'download non riuscito: SHA256SUMS di v%s' ;;
-    download.unsupported_os) printf '%s' 'sistema non supportato: %s. Usa windows o macos.' ;;
-    download.windows_missing) printf '%s' 'Windows non fa parte della 0.4.0: la release non ha un installer per Windows. Non e'\'' stato scaricato niente.' ;;
-    help.download) printf '%s' 'uso: jht download --os windows|macos --version X.Y.Z [--output FILE]
-  L'\''app desktop non fa parte della 0.4.0: per una release che la contiene, la scarica, ne controlla lo SHA-256 e la salva (di norma in ~/Downloads).' ;;
+    download.no_desktop_app) printf '%s' 'L'\''app desktop non è nella 0.4.0, quindi non c'\''è niente da scaricare: JHT si usa dal terminale, con jht setup e jht up.' ;;
     help.integration) printf '%s' 'Uso: jht integration <comando>
 
   list [--json]                   le integrazioni e il loro stato
@@ -1171,7 +1116,6 @@ Questo aiuto non avvia niente e non scarica niente.' ;;
     line.opzione_non_riconosciuta_s) printf '%s' 'opzione non riconosciuta: %s' ;;
     line.opzione_non_riconosciuta_s_2) printf '%s' 'opzione non riconosciuta: %s' ;;
     line.opzione_non_riconosciuta_s_3) printf '%s' 'opzione non riconosciuta: %s' ;;
-    line.os_and_version_are_required) printf '%s' '--os e --version sono obbligatori' ;;
     line.override_compose_per_podman_rootless) printf '%s' 'Override Compose per Podman rootless non scrivibile in %s.' ;;
     line.per_l_aiuto_di_s) printf '%s' 'Per l'\''aiuto di '\''%s'\'' serve il container attivo: '\''jht up'\''.' ;;
     line.per_procedere_jht_podman_machine) printf '%s' 'Per procedere: jht podman-machine-recreate --confirm' ;;
@@ -1225,7 +1169,6 @@ Questo aiuto non avvia niente e non scarica niente.' ;;
     line.ruoli_da_abbinare_in_questa) printf '%s' 'Ruoli da abbinare in questa seduta: %s' ;;
     line.s_e_un_collegamento_non) printf '%s' '%s e'\'' un collegamento: non lo seguo e non lo cancello.' ;;
     line.s_ha_gi_un_bot) printf '%s' '%s ha già un bot abbinato: tolgo solo la sua copia legacy.' ;;
-    line.s_needs_a_value) printf '%s' '%s richiede un valore' ;;
     line.s_non_e_una_cartella) printf '%s' '%s non e'\'' una cartella: non la cancello.' ;;
     line.saltato_non_trovato_volume_broker) printf '%s' 'Saltato (non trovato): volume broker %s' ;;
     line.script_s_non_ancora_installato) printf '%s' 'script %s non ancora installato: '\''jht upgrade'\'' (o un '\''jht integration add/remove'\'') e riprova' ;;
@@ -1251,7 +1194,6 @@ Questo aiuto non avvia niente e non scarica niente.' ;;
     line.unattestable.recreate) printf '%s' 'Container JHT non attestabile; ricreazione negata.' ;;
     line.unattestable.restart) printf '%s' 'Container JHT non attestabile; riavvio negato.' ;;
     line.unattestable.stop) printf '%s' 'Container JHT non attestabile; arresto negato.' ;;
-    line.unknown_argument_s) printf '%s' 'argomento sconosciuto: %s' ;;
     line.upgrade.activate) printf '%s' 'Attivo il nuovo runtime...' ;;
     line.upgrade.broker_restart_failed) printf '%s' 'il broker dei segreti non e'\'' ripartito. Cosa fare: jht up' ;;
     line.upgrade.check_available) printf '%s' 'Controllo: c'\''e'\'' un aggiornamento, %s (%s) -> %s. %s. Per applicarlo: jht upgrade' ;;
@@ -1379,33 +1321,7 @@ jht_text_hu() {
     doctor.host_title) printf '%s' 'Job Hunter Team: a csapat le van állítva (a konténere nem fut). Erről a gépről végzett ellenőrzések:' ;;
     down.done) printf '%s' 'A Job Hunter Team leállt.' ;;
     down.still_running) printf '%s' 'A csapat nem állt le: a projekt egyik konténere két próbálkozás után újra futott (az első percében magától újraindulhat). Futtasd újra a '\''jht down'\'' parancsot; ha így marad, '\''jht doctor'\''.' ;;
-    download.asset_failed) printf '%s' 'sikertelen letöltés: %s' ;;
-    download.bad_version) printf '%s' 'érvénytelen verzió: %s. Példa: 0.3.5.' ;;
-    download.copy_failed) printf '%s' 'az ellenőrzött letöltés célhelyre másolása nem sikerült' ;;
-    download.deb_only_linux) printf '%s' 'a --deb csak Linuxra való.' ;;
-    download.dest_appeared) printf '%s' 'a célhely a letöltés közben jelent meg; nem írtam felül' ;;
-    download.dest_is_link) printf '%s' 'a célhely egy link: %s' ;;
-    download.dest_not_file) printf '%s' 'a célhely létezik, és nem fájl: %s' ;;
-    download.fetching) printf '%s' 'Letöltés: %s...' ;;
-    download.hash_invalid) printf '%s' 'érvénytelen SHA-256 ehhez: %s: várt %s, kapott %s.' ;;
-    download.intel_mac) printf '%s' 'A 0.4-es macOS-alkalmazás csak Apple siliconos Maceken fut (M1 és újabb); ez egy Intel Mac, amelyet a 0.4 nem támogat. Semmi sem lett letöltve.' ;;
-    download.linux_no_app) printf '%s' 'Ebben a verzióban nincs asztali alkalmazás Linuxra: használd az install.sh-t. Semmi sem lett letöltve.' ;;
-    download.mismatch_existing) printf '%s' 'a(z) %s fájl létezik, de az SHA-256-ja nem egyezik: nem írtam felül.' ;;
-    download.mkdir_failed) printf '%s' 'nem tudom létrehozni a célmappát: %s' ;;
-    download.no_curl) printf '%s' 'a curl nem található: kell a kiadás letöltéséhez.' ;;
-    download.no_tmp) printf '%s' 'nem sikerült létrehozni az ideiglenes mappát' ;;
-    download.parent_unreachable) printf '%s' 'a célmappa nem érhető el: %s' ;;
-    download.present_verified) printf '%s' 'A fájl már megvan és ellenőrizve: %s' ;;
-    download.release_no_app) printf '%s' 'Ehhez a kiadáshoz (v%s) nincs macOS-alkalmazás: használd a 0.4.0-s vagy újabb verziót. Semmi sem lett letöltve.' ;;
-    download.saved_in) printf '%s' 'Mentve ide: %s' ;;
-    download.sha_verified) printf '%s' 'SHA-256 ellenőrizve: %s' ;;
-    download.shared_folder) printf '%s' 'a célhely egy, a csapattal megosztott mappában van (%s): válassz azon kívüli helyet, például a ~/Downloads mappát.' ;;
-    download.sum_missing) printf '%s' 'nincs megadott SHA-256 ehhez: %s.' ;;
-    download.sums_failed) printf '%s' 'sikertelen letöltés: a v%s SHA256SUMS fájlja' ;;
-    download.unsupported_os) printf '%s' 'nem támogatott rendszer: %s. Használd a windows vagy a macos értéket.' ;;
-    download.windows_missing) printf '%s' 'A Windows nem része a 0.4.0-nak: a kiadásban nincs Windows-telepítő. Semmi sem lett letöltve.' ;;
-    help.download) printf '%s' 'használat: jht download --os windows|macos --version X.Y.Z [--output FILE]
-  Az asztali alkalmazás nem része a 0.4.0-nak: egy olyan kiadásnál, amelyben benne van, letölti, ellenőrzi az SHA-256-ját, és elmenti (alapból a ~/Downloads-ba).' ;;
+    download.no_desktop_app) printf '%s' 'Az asztali alkalmazás nincs a 0.4.0-ban, így nincs mit letölteni: a JHT a terminálból használható, a jht setup és a jht up paranccsal.' ;;
     help.integration) printf '%s' 'Használat: jht integration <parancs>
 
   list [--json]                   az integrációk és az állapotuk
@@ -1674,7 +1590,6 @@ Ez a súgó semmit nem indít el és semmit nem tölt le.' ;;
     line.opzione_non_riconosciuta_s) printf '%s' 'ismeretlen kapcsoló: %s' ;;
     line.opzione_non_riconosciuta_s_2) printf '%s' 'ismeretlen kapcsoló: %s' ;;
     line.opzione_non_riconosciuta_s_3) printf '%s' 'ismeretlen kapcsoló: %s' ;;
-    line.os_and_version_are_required) printf '%s' 'a --os és a --version kötelező' ;;
     line.override_compose_per_podman_rootless) printf '%s' 'A rootless Podmanhez tartozó Compose-felülírás nem írható ide: %s.' ;;
     line.per_l_aiuto_di_s) printf '%s' 'A(z) '\''%s'\'' súgójához futó konténer kell: '\''jht up'\''.' ;;
     line.per_procedere_jht_podman_machine) printf '%s' 'A folytatáshoz: jht podman-machine-recreate --confirm' ;;
@@ -1728,7 +1643,6 @@ Ez a súgó semmit nem indít el és semmit nem tölt le.' ;;
     line.ruoli_da_abbinare_in_questa) printf '%s' 'Ebben a menetben párosítandó szerepek: %s' ;;
     line.s_e_un_collegamento_non) printf '%s' '%s egy link: nem követem és nem törlöm.' ;;
     line.s_ha_gi_un_bot) printf '%s' '%s: már van párosított bot: csak a régi másolatát távolítom el.' ;;
-    line.s_needs_a_value) printf '%s' '%s: érték kell hozzá' ;;
     line.s_non_e_una_cartella) printf '%s' '%s nem mappa: nem törlöm.' ;;
     line.saltato_non_trovato_volume_broker) printf '%s' 'Kihagyva (nem található): %s brokerkötet' ;;
     line.script_s_non_ancora_installato) printf '%s' 'a(z) %s szkript még nincs telepítve: '\''jht upgrade'\'' (vagy egy '\''jht integration add/remove'\''), majd próbáld újra' ;;
@@ -1754,7 +1668,6 @@ Ez a súgó semmit nem indít el és semmit nem tölt le.' ;;
     line.unattestable.recreate) printf '%s' 'A JHT-konténerről nem igazolható, hogy a miénk; az újralétrehozás megtagadva.' ;;
     line.unattestable.restart) printf '%s' 'A JHT-konténerről nem igazolható, hogy a miénk; az újraindítás megtagadva.' ;;
     line.unattestable.stop) printf '%s' 'A JHT-konténerről nem igazolható, hogy a miénk; a leállítás megtagadva.' ;;
-    line.unknown_argument_s) printf '%s' 'ismeretlen argumentum: %s' ;;
     line.upgrade.activate) printf '%s' 'Aktiválom az új futtatókörnyezetet...' ;;
     line.upgrade.broker_restart_failed) printf '%s' 'a titokbroker nem indult újra. Teendő: jht up' ;;
     line.upgrade.check_available) printf '%s' 'Ellenőrzés: van frissítés, %s (%s) -> %s. %s. Az alkalmazásához: jht upgrade' ;;
@@ -1882,34 +1795,7 @@ jht_text_es() {
     doctor.host_title) printf '%s' 'Job Hunter Team: el equipo está apagado (su contenedor no está en marcha). Comprobaciones hechas desde este ordenador:' ;;
     down.done) printf '%s' 'Job Hunter Team detenido.' ;;
     down.still_running) printf '%s' 'El equipo no se ha detenido: un contenedor del proyecto volvía a estar en marcha tras dos intentos (en su primer minuto puede reiniciarse solo). Vuelve a ejecutar '\''jht down'\''; si sigue, '\''jht doctor'\''.' ;;
-    download.asset_failed) printf '%s' 'la descarga ha fallado: %s' ;;
-    download.bad_version) printf '%s' 'versión no válida: %s. Ejemplo: 0.3.5.' ;;
-    download.copy_failed) printf '%s' 'no se ha podido copiar la descarga verificada al destino' ;;
-    download.deb_only_linux) printf '%s' '--deb solo es para Linux.' ;;
-    download.dest_appeared) printf '%s' 'el destino ha aparecido durante la descarga; no se ha sobrescrito' ;;
-    download.dest_is_link) printf '%s' 'el destino es un enlace: %s' ;;
-    download.dest_not_file) printf '%s' 'el destino existe y no es un archivo: %s' ;;
-    download.fetching) printf '%s' 'Descargando %s...' ;;
-    download.hash_invalid) printf '%s' 'SHA-256 no válido para %s: se esperaba %s, se ha obtenido %s.' ;;
-    download.intel_mac) printf '%s' 'La app de macOS de la 0.4 solo funciona en Mac con Apple silicon (M1 y posteriores); este es un Mac Intel, que la 0.4 no admite. No se ha descargado nada.' ;;
-    download.linux_no_app) printf '%s' 'En esta versión no hay app de escritorio para Linux: usa install.sh. No se ha descargado nada.' ;;
-    download.mismatch_existing) printf '%s' 'el archivo %s existe, pero su SHA-256 no coincide: no se ha sobrescrito.' ;;
-    download.mkdir_failed) printf '%s' 'no se puede crear la carpeta de destino: %s' ;;
-    download.no_curl) printf '%s' 'no se encuentra curl: hace falta para descargar la versión.' ;;
-    download.no_tmp) printf '%s' 'no se ha podido crear la carpeta temporal' ;;
-    download.parent_unreachable) printf '%s' 'no se puede acceder a la carpeta de destino: %s' ;;
-    download.present_verified) printf '%s' 'Archivo ya presente y verificado: %s' ;;
-    download.release_no_app) printf '%s' 'Esta versión (v%s) no tiene app para macOS: usa la 0.4.0 o posterior. No se ha descargado nada.' ;;
-    download.saved_in) printf '%s' 'Guardado en: %s' ;;
-    download.sha_verified) printf '%s' 'SHA-256 verificado: %s' ;;
-    download.shared_folder) printf '%s' 'el destino está dentro de una carpeta compartida con el equipo (%s): elige una fuera de ella, como ~/Downloads.' ;;
-    download.sum_missing) printf '%s' 'no hay SHA-256 declarado para %s.' ;;
-    download.sums_failed) printf '%s' 'la descarga ha fallado: SHA256SUMS de v%s' ;;
-    download.unsupported_os) printf '%s' 'sistema no compatible: %s. Usa windows o macos.' ;;
-    download.windows_missing) printf '%s' 'Windows no forma parte de la 0.4.0: la versión no tiene instalador para Windows. No se ha descargado nada.' ;;
-    help.download) printf '%s' 'uso: jht download --os windows|macos --version X.Y.Z [--output FILE]
-  La app de escritorio no forma parte de la 0.4.0: para una versión que la incluya, la descarga, comprueba su SHA-256 y la guarda
-  (por defecto en ~/Downloads).' ;;
+    download.no_desktop_app) printf '%s' 'La app de escritorio no está en la 0.4.0, así que no hay nada que descargar: JHT se usa desde la terminal, con jht setup y jht up.' ;;
     help.integration) printf '%s' 'Uso: jht integration <command>
 
   list [--json]                   las integraciones y su estado
@@ -2181,7 +2067,6 @@ Esta ayuda no arranca nada ni descarga nada.' ;;
     line.opzione_non_riconosciuta_s) printf '%s' 'opción no reconocida: %s' ;;
     line.opzione_non_riconosciuta_s_2) printf '%s' 'opción no reconocida: %s' ;;
     line.opzione_non_riconosciuta_s_3) printf '%s' 'opción no reconocida: %s' ;;
-    line.os_and_version_are_required) printf '%s' '--os y --version son obligatorios' ;;
     line.override_compose_per_podman_rootless) printf '%s' 'No se puede escribir el override de Compose para Podman rootless en %s.' ;;
     line.per_l_aiuto_di_s) printf '%s' 'Para la ayuda de '\''%s'\'' hace falta el contenedor en marcha: '\''jht up'\''.' ;;
     line.per_procedere_jht_podman_machine) printf '%s' 'Para continuar: jht podman-machine-recreate --confirm' ;;
@@ -2235,7 +2120,6 @@ Esta ayuda no arranca nada ni descarga nada.' ;;
     line.ruoli_da_abbinare_in_questa) printf '%s' 'Roles que vincular en esta sesión: %s' ;;
     line.s_e_un_collegamento_non) printf '%s' '%s es un enlace: no lo sigo y no lo borro.' ;;
     line.s_ha_gi_un_bot) printf '%s' '%s ya tiene un bot vinculado: solo quito su copia antigua.' ;;
-    line.s_needs_a_value) printf '%s' '%s necesita un valor' ;;
     line.s_non_e_una_cartella) printf '%s' '%s no es una carpeta: no la borro.' ;;
     line.saltato_non_trovato_volume_broker) printf '%s' 'Omitido (no encontrado): volumen del broker %s' ;;
     line.script_s_non_ancora_installato) printf '%s' 'el script %s aún no está instalado: '\''jht upgrade'\'' (o un '\''jht integration add/remove'\'') y vuelve a intentarlo' ;;
@@ -2261,7 +2145,6 @@ Esta ayuda no arranca nada ni descarga nada.' ;;
     line.unattestable.recreate) printf '%s' 'No se puede verificar que el contenedor JHT sea nuestro; recreación denegada.' ;;
     line.unattestable.restart) printf '%s' 'No se puede verificar que el contenedor JHT sea nuestro; reinicio denegado.' ;;
     line.unattestable.stop) printf '%s' 'No se puede verificar que el contenedor JHT sea nuestro; parada denegada.' ;;
-    line.unknown_argument_s) printf '%s' 'argumento desconocido: %s' ;;
     line.upgrade.activate) printf '%s' 'Activando el nuevo runtime...' ;;
     line.upgrade.broker_restart_failed) printf '%s' 'el broker de secretos no ha vuelto a arrancar. Qué hacer: jht up' ;;
     line.upgrade.check_available) printf '%s' 'Comprobación: hay una actualización, %s (%s) -> %s. %s. Para aplicarla: jht upgrade' ;;
@@ -2389,33 +2272,7 @@ jht_text_de() {
     doctor.host_title) printf '%s' 'Job Hunter Team: Das Team ist aus (sein Container läuft nicht). Prüfungen von diesem Computer aus:' ;;
     down.done) printf '%s' 'Job Hunter Team gestoppt.' ;;
     down.still_running) printf '%s' 'Das Team hat nicht gestoppt: Ein Container des Projekts lief nach zwei Versuchen wieder (in seiner ersten Minute kann er von selbst neu starten). Führe '\''jht down'\'' noch einmal aus; wenn er bleibt, '\''jht doctor'\''.' ;;
-    download.asset_failed) printf '%s' 'Download fehlgeschlagen: %s' ;;
-    download.bad_version) printf '%s' 'Ungültige Version: %s. Beispiel: 0.3.5.' ;;
-    download.copy_failed) printf '%s' 'Das Kopieren des geprüften Downloads ans Ziel ist fehlgeschlagen' ;;
-    download.deb_only_linux) printf '%s' '--deb gibt es nur für Linux.' ;;
-    download.dest_appeared) printf '%s' 'Das Ziel ist während des Downloads aufgetaucht; es wurde nicht überschrieben' ;;
-    download.dest_is_link) printf '%s' 'Das Ziel ist ein Link: %s' ;;
-    download.dest_not_file) printf '%s' 'Das Ziel existiert und ist keine Datei: %s' ;;
-    download.fetching) printf '%s' 'Lade %s herunter...' ;;
-    download.hash_invalid) printf '%s' 'Ungültige SHA-256 für %s: erwartet %s, erhalten %s.' ;;
-    download.intel_mac) printf '%s' 'Die macOS-App von 0.4 läuft nur auf Macs mit Apple silicon (M1 und neuer); das hier ist ein Intel-Mac, den 0.4 nicht unterstützt. Nichts wurde heruntergeladen.' ;;
-    download.linux_no_app) printf '%s' 'In dieser Version gibt es keine Desktop-App für Linux: Nutze install.sh. Nichts wurde heruntergeladen.' ;;
-    download.mismatch_existing) printf '%s' 'Die Datei %s existiert, aber ihre SHA-256 stimmt nicht: Sie wurde nicht überschrieben.' ;;
-    download.mkdir_failed) printf '%s' 'Der Zielordner lässt sich nicht erstellen: %s' ;;
-    download.no_curl) printf '%s' 'curl nicht gefunden: Es wird zum Herunterladen des Release gebraucht.' ;;
-    download.no_tmp) printf '%s' 'Der temporäre Ordner konnte nicht erstellt werden' ;;
-    download.parent_unreachable) printf '%s' 'Der Zielordner ist nicht erreichbar: %s' ;;
-    download.present_verified) printf '%s' 'Datei schon vorhanden und geprüft: %s' ;;
-    download.release_no_app) printf '%s' 'Dieses Release (v%s) hat keine App für macOS: Nutze 0.4.0 oder neuer. Nichts wurde heruntergeladen.' ;;
-    download.saved_in) printf '%s' 'Gespeichert in: %s' ;;
-    download.sha_verified) printf '%s' 'SHA-256 geprüft: %s' ;;
-    download.shared_folder) printf '%s' 'Das Ziel liegt in einem Ordner, den du mit dem Team teilst (%s): Wähle einen außerhalb, z. B. ~/Downloads.' ;;
-    download.sum_missing) printf '%s' 'Keine SHA-256 angegeben für %s.' ;;
-    download.sums_failed) printf '%s' 'Download fehlgeschlagen: SHA256SUMS von v%s' ;;
-    download.unsupported_os) printf '%s' 'Nicht unterstütztes System: %s. Nutze windows oder macos.' ;;
-    download.windows_missing) printf '%s' 'Windows ist nicht Teil von 0.4.0: Das Release hat keinen Installer für Windows. Nichts wurde heruntergeladen.' ;;
-    help.download) printf '%s' 'Verwendung: jht download --os windows|macos --version X.Y.Z [--output FILE]
-  Die Desktop-App ist nicht Teil von 0.4.0: Für ein Release, das sie enthält, lädt der Befehl sie herunter, prüft ihre SHA-256 und speichert sie (standardmäßig in ~/Downloads).' ;;
+    download.no_desktop_app) printf '%s' 'Die Desktop-App ist nicht in 0.4.0, es gibt also nichts herunterzuladen: JHT wird im Terminal genutzt, mit jht setup und jht up.' ;;
     help.integration) printf '%s' 'Verwendung: jht integration <command>
 
   list [--json]                   die Integrationen und ihr Zustand
@@ -2683,7 +2540,6 @@ Diese Hilfe startet nichts und lädt nichts herunter.' ;;
     line.opzione_non_riconosciuta_s) printf '%s' 'Option nicht erkannt: %s' ;;
     line.opzione_non_riconosciuta_s_2) printf '%s' 'Option nicht erkannt: %s' ;;
     line.opzione_non_riconosciuta_s_3) printf '%s' 'Option nicht erkannt: %s' ;;
-    line.os_and_version_are_required) printf '%s' '--os und --version sind erforderlich' ;;
     line.override_compose_per_podman_rootless) printf '%s' 'Compose-Override für rootless Podman in %s nicht schreibbar.' ;;
     line.per_l_aiuto_di_s) printf '%s' 'Für die Hilfe zu '\''%s'\'' muss der Container laufen: '\''jht up'\''.' ;;
     line.per_procedere_jht_podman_machine) printf '%s' 'Zum Fortfahren: jht podman-machine-recreate --confirm' ;;
@@ -2737,7 +2593,6 @@ Diese Hilfe startet nichts und lädt nichts herunter.' ;;
     line.ruoli_da_abbinare_in_questa) printf '%s' 'Zu koppelnde Rollen in dieser Sitzung: %s' ;;
     line.s_e_un_collegamento_non) printf '%s' '%s ist eine Verknüpfung: Ich folge ihr nicht und lösche sie nicht.' ;;
     line.s_ha_gi_un_bot) printf '%s' '%s hat schon einen gekoppelten Bot: Ich entferne nur seine alte Kopie.' ;;
-    line.s_needs_a_value) printf '%s' '%s braucht einen Wert' ;;
     line.s_non_e_una_cartella) printf '%s' '%s ist kein Ordner: Ich lösche ihn nicht.' ;;
     line.saltato_non_trovato_volume_broker) printf '%s' 'Übersprungen (nicht gefunden): Broker-Volume %s' ;;
     line.script_s_non_ancora_installato) printf '%s' 'Skript %s noch nicht installiert: '\''jht upgrade'\'' (oder ein '\''jht integration add/remove'\'') und versuch es erneut' ;;
@@ -2763,7 +2618,6 @@ Diese Hilfe startet nichts und lädt nichts herunter.' ;;
     line.unattestable.recreate) printf '%s' 'JHT-Container lässt sich nicht als unserer bestätigen; Neuerstellung verweigert.' ;;
     line.unattestable.restart) printf '%s' 'JHT-Container lässt sich nicht als unserer bestätigen; Neustart verweigert.' ;;
     line.unattestable.stop) printf '%s' 'JHT-Container lässt sich nicht als unserer bestätigen; Stoppen verweigert.' ;;
-    line.unknown_argument_s) printf '%s' 'Unbekanntes Argument: %s' ;;
     line.upgrade.activate) printf '%s' 'Aktiviere die neue Runtime...' ;;
     line.upgrade.broker_restart_failed) printf '%s' 'der Secrets-Broker ist nicht wieder gestartet. Was tun: jht up' ;;
     line.upgrade.check_available) printf '%s' 'Prüfung: Es gibt ein Update, %s (%s) -> %s. %s. Zum Anwenden: jht upgrade' ;;
@@ -2891,33 +2745,7 @@ jht_text_fr() {
     doctor.host_title) printf '%s' 'Job Hunter Team : l'\''équipe est éteinte (son conteneur ne tourne pas). Vérifications faites depuis cet ordinateur :' ;;
     down.done) printf '%s' 'Job Hunter Team arrêté.' ;;
     down.still_running) printf '%s' 'L'\''équipe ne s'\''est pas arrêtée : un conteneur du projet tournait de nouveau après deux essais (il peut redémarrer tout seul pendant sa première minute). Relance '\''jht down'\'' ; si ça reste, '\''jht doctor'\''.' ;;
-    download.asset_failed) printf '%s' 'échec du téléchargement : %s' ;;
-    download.bad_version) printf '%s' 'version non valide : %s. Exemple : 0.3.5.' ;;
-    download.copy_failed) printf '%s' 'la copie du téléchargement vérifié vers la destination a échoué' ;;
-    download.deb_only_linux) printf '%s' '--deb est seulement pour Linux.' ;;
-    download.dest_appeared) printf '%s' 'la destination est apparue pendant le téléchargement ; elle n'\''a pas été écrasée' ;;
-    download.dest_is_link) printf '%s' 'la destination est un lien : %s' ;;
-    download.dest_not_file) printf '%s' 'la destination existe et n'\''est pas un fichier : %s' ;;
-    download.fetching) printf '%s' 'Téléchargement de %s...' ;;
-    download.hash_invalid) printf '%s' 'SHA-256 non valide pour %s : attendu %s, obtenu %s.' ;;
-    download.intel_mac) printf '%s' 'L'\''app macOS 0.4 ne tourne que sur les Mac avec puce Apple (M1 et suivants) ; ce Mac est un Mac Intel, que la 0.4 ne prend pas en charge. Rien n'\''a été téléchargé.' ;;
-    download.linux_no_app) printf '%s' 'Dans cette version il n'\''y a pas d'\''app de bureau pour Linux : utilise install.sh. Rien n'\''a été téléchargé.' ;;
-    download.mismatch_existing) printf '%s' 'le fichier %s existe mais son SHA-256 ne correspond pas : il n'\''a pas été écrasé.' ;;
-    download.mkdir_failed) printf '%s' 'impossible de créer le dossier de destination : %s' ;;
-    download.no_curl) printf '%s' 'curl introuvable : il sert à télécharger la version.' ;;
-    download.no_tmp) printf '%s' 'le dossier temporaire n'\''a pas pu être créé' ;;
-    download.parent_unreachable) printf '%s' 'le dossier de destination est injoignable : %s' ;;
-    download.present_verified) printf '%s' 'Fichier déjà présent et vérifié : %s' ;;
-    download.release_no_app) printf '%s' 'Cette version (v%s) n'\''a pas d'\''app pour macOS : utilise la 0.4.0 ou une plus récente. Rien n'\''a été téléchargé.' ;;
-    download.saved_in) printf '%s' 'Enregistré dans : %s' ;;
-    download.sha_verified) printf '%s' 'SHA-256 vérifié : %s' ;;
-    download.shared_folder) printf '%s' 'la destination est dans un dossier partagé avec l'\''équipe (%s) : choisis-en un en dehors, comme ~/Downloads.' ;;
-    download.sum_missing) printf '%s' 'aucun SHA-256 déclaré pour %s.' ;;
-    download.sums_failed) printf '%s' 'échec du téléchargement : SHA256SUMS de v%s' ;;
-    download.unsupported_os) printf '%s' 'système non pris en charge : %s. Utilise windows ou macos.' ;;
-    download.windows_missing) printf '%s' 'Windows ne fait pas partie de la 0.4.0 : la version n'\''a pas d'\''installeur pour Windows. Rien n'\''a été téléchargé.' ;;
-    help.download) printf '%s' 'usage : jht download --os windows|macos --version X.Y.Z [--output FILE]
-  L'\''app de bureau ne fait pas partie de la 0.4.0 : pour une version qui la contient, la télécharge, vérifie son SHA-256 et l'\''enregistre (par défaut dans ~/Downloads).' ;;
+    download.no_desktop_app) printf '%s' 'L'\''application de bureau n'\''est pas dans la 0.4.0, il n'\''y a donc rien à télécharger : JHT s'\''utilise depuis le terminal, avec jht setup et jht up.' ;;
     help.integration) printf '%s' 'Usage : jht integration <commande>
 
   list [--json]                   les intégrations et leur état
@@ -3185,7 +3013,6 @@ Cette aide ne démarre rien et ne télécharge rien.' ;;
     line.opzione_non_riconosciuta_s) printf '%s' 'option non reconnue : %s' ;;
     line.opzione_non_riconosciuta_s_2) printf '%s' 'option non reconnue : %s' ;;
     line.opzione_non_riconosciuta_s_3) printf '%s' 'option non reconnue : %s' ;;
-    line.os_and_version_are_required) printf '%s' '--os et --version sont obligatoires' ;;
     line.override_compose_per_podman_rootless) printf '%s' 'Override Compose pour Podman rootless impossible à écrire dans %s.' ;;
     line.per_l_aiuto_di_s) printf '%s' 'L'\''aide de '\''%s'\'' demande le conteneur actif : '\''jht up'\''.' ;;
     line.per_procedere_jht_podman_machine) printf '%s' 'Pour continuer : jht podman-machine-recreate --confirm' ;;
@@ -3239,7 +3066,6 @@ Cette aide ne démarre rien et ne télécharge rien.' ;;
     line.ruoli_da_abbinare_in_questa) printf '%s' 'Rôles à associer dans cette session : %s' ;;
     line.s_e_un_collegamento_non) printf '%s' '%s est un lien : je ne le suis pas et je ne l'\''efface pas.' ;;
     line.s_ha_gi_un_bot) printf '%s' '%s a déjà un bot associé : je supprime seulement son ancienne copie.' ;;
-    line.s_needs_a_value) printf '%s' '%s demande une valeur' ;;
     line.s_non_e_una_cartella) printf '%s' '%s n'\''est pas un dossier : je ne l'\''efface pas.' ;;
     line.saltato_non_trovato_volume_broker) printf '%s' 'Ignoré (introuvable) : volume broker %s' ;;
     line.script_s_non_ancora_installato) printf '%s' 'script %s pas encore installé : '\''jht upgrade'\'' (ou un '\''jht integration add/remove'\'') et réessaie' ;;
@@ -3265,7 +3091,6 @@ Cette aide ne démarre rien et ne télécharge rien.' ;;
     line.unattestable.recreate) printf '%s' 'Conteneur JHT non attestable ; recréation refusée.' ;;
     line.unattestable.restart) printf '%s' 'Conteneur JHT non attestable ; redémarrage refusé.' ;;
     line.unattestable.stop) printf '%s' 'Conteneur JHT non attestable ; arrêt refusé.' ;;
-    line.unknown_argument_s) printf '%s' 'argument inconnu : %s' ;;
     line.upgrade.activate) printf '%s' 'J'\''active le nouveau runtime...' ;;
     line.upgrade.broker_restart_failed) printf '%s' 'le broker des secrets n'\''a pas redémarré. Que faire : jht up' ;;
     line.upgrade.check_available) printf '%s' 'Vérification : il y a une mise à jour, %s (%s) -> %s. %s. Pour l'\''appliquer : jht upgrade' ;;
@@ -3393,33 +3218,7 @@ jht_text_pt() {
     doctor.host_title) printf '%s' 'Job Hunter Team: a equipa está desligada (o seu contentor não está a correr). Verificações feitas a partir deste computador:' ;;
     down.done) printf '%s' 'Job Hunter Team parado.' ;;
     down.still_running) printf '%s' 'A equipa não parou: um contentor do projeto estava de novo a correr após duas tentativas (no seu primeiro minuto pode reiniciar sozinho). Corre '\''jht down'\'' mais uma vez; se continuar, '\''jht doctor'\''.' ;;
-    download.asset_failed) printf '%s' 'o descarregamento falhou: %s' ;;
-    download.bad_version) printf '%s' 'versão inválida: %s. Exemplo: 0.3.5.' ;;
-    download.copy_failed) printf '%s' 'a cópia do descarregamento verificado para o destino falhou' ;;
-    download.deb_only_linux) printf '%s' '--deb é só para Linux.' ;;
-    download.dest_appeared) printf '%s' 'o destino apareceu durante o descarregamento; não foi substituído' ;;
-    download.dest_is_link) printf '%s' 'o destino é uma ligação: %s' ;;
-    download.dest_not_file) printf '%s' 'o destino existe e não é um ficheiro: %s' ;;
-    download.fetching) printf '%s' 'A descarregar %s...' ;;
-    download.hash_invalid) printf '%s' 'SHA-256 inválido para %s: esperado %s, obtido %s.' ;;
-    download.intel_mac) printf '%s' 'A app para macOS da 0.4 só corre em Macs com Apple silicon (M1 e posteriores); este é um Mac Intel, que a 0.4 não suporta. Não foi descarregado nada.' ;;
-    download.linux_no_app) printf '%s' 'Nesta versão não há app de ambiente de trabalho para Linux: usa install.sh. Não foi descarregado nada.' ;;
-    download.mismatch_existing) printf '%s' 'o ficheiro %s existe, mas o seu SHA-256 não corresponde: não foi substituído.' ;;
-    download.mkdir_failed) printf '%s' 'não é possível criar a pasta de destino: %s' ;;
-    download.no_curl) printf '%s' 'curl não encontrado: é necessário para descarregar a versão.' ;;
-    download.no_tmp) printf '%s' 'não foi possível criar a pasta temporária' ;;
-    download.parent_unreachable) printf '%s' 'a pasta de destino não está acessível: %s' ;;
-    download.present_verified) printf '%s' 'Ficheiro já presente e verificado: %s' ;;
-    download.release_no_app) printf '%s' 'Esta versão (v%s) não tem app para macOS: usa a 0.4.0 ou posterior. Não foi descarregado nada.' ;;
-    download.saved_in) printf '%s' 'Guardado em: %s' ;;
-    download.sha_verified) printf '%s' 'SHA-256 verificado: %s' ;;
-    download.shared_folder) printf '%s' 'o destino está dentro de uma pasta partilhada com a equipa (%s): escolhe uma fora dela, como ~/Downloads.' ;;
-    download.sum_missing) printf '%s' 'nenhum SHA-256 declarado para %s.' ;;
-    download.sums_failed) printf '%s' 'o descarregamento falhou: SHA256SUMS de v%s' ;;
-    download.unsupported_os) printf '%s' 'sistema não suportado: %s. Usa windows ou macos.' ;;
-    download.windows_missing) printf '%s' 'O Windows não faz parte da 0.4.0: a versão não tem instalador para Windows. Não foi descarregado nada.' ;;
-    help.download) printf '%s' 'uso: jht download --os windows|macos --version X.Y.Z [--output FILE]
-  A app de ambiente de trabalho não faz parte da 0.4.0: para uma versão que a inclua, descarrega-a, verifica o SHA-256 e guarda-a (por omissão em ~/Downloads).' ;;
+    download.no_desktop_app) printf '%s' 'A app de ambiente de trabalho não está na 0.4.0, por isso não há nada para transferir: o JHT usa-se no terminal, com jht setup e jht up.' ;;
     help.integration) printf '%s' 'Uso: jht integration <command>
 
   list [--json]                   as integrações e o seu estado
@@ -3687,7 +3486,6 @@ Esta ajuda não inicia nada nem descarrega nada.' ;;
     line.opzione_non_riconosciuta_s) printf '%s' 'opção não reconhecida: %s' ;;
     line.opzione_non_riconosciuta_s_2) printf '%s' 'opção não reconhecida: %s' ;;
     line.opzione_non_riconosciuta_s_3) printf '%s' 'opção não reconhecida: %s' ;;
-    line.os_and_version_are_required) printf '%s' '--os e --version são obrigatórios' ;;
     line.override_compose_per_podman_rootless) printf '%s' 'Não é possível escrever o override do Compose para Podman rootless em %s.' ;;
     line.per_l_aiuto_di_s) printf '%s' 'Para a ajuda de '\''%s'\'' é preciso o contentor ativo: '\''jht up'\''.' ;;
     line.per_procedere_jht_podman_machine) printf '%s' 'Para avançar: jht podman-machine-recreate --confirm' ;;
@@ -3741,7 +3539,6 @@ Esta ajuda não inicia nada nem descarrega nada.' ;;
     line.ruoli_da_abbinare_in_questa) printf '%s' 'Funções a emparelhar nesta sessão: %s' ;;
     line.s_e_un_collegamento_non) printf '%s' '%s é uma ligação: não a sigo e não a apago.' ;;
     line.s_ha_gi_un_bot) printf '%s' '%s já tem um bot emparelhado: só removo a sua cópia antiga.' ;;
-    line.s_needs_a_value) printf '%s' '%s precisa de um valor' ;;
     line.s_non_e_una_cartella) printf '%s' '%s não é uma pasta: não a apago.' ;;
     line.saltato_non_trovato_volume_broker) printf '%s' 'Saltado (não encontrado): volume do broker %s' ;;
     line.script_s_non_ancora_installato) printf '%s' 'o script %s ainda não está instalado: '\''jht upgrade'\'' (ou um '\''jht integration add/remove'\'') e tenta de novo' ;;
@@ -3767,7 +3564,6 @@ Esta ajuda não inicia nada nem descarrega nada.' ;;
     line.unattestable.recreate) printf '%s' 'Não é possível atestar o contentor JHT; recriação recusada.' ;;
     line.unattestable.restart) printf '%s' 'Não é possível atestar o contentor JHT; reinício recusado.' ;;
     line.unattestable.stop) printf '%s' 'Não é possível atestar o contentor JHT; paragem recusada.' ;;
-    line.unknown_argument_s) printf '%s' 'argumento desconhecido: %s' ;;
     line.upgrade.activate) printf '%s' 'A ativar o novo runtime...' ;;
     line.upgrade.broker_restart_failed) printf '%s' 'o broker dos segredos não voltou a arrancar. O que fazer: jht up' ;;
     line.upgrade.check_available) printf '%s' 'Verificação: há uma atualização, %s (%s) -> %s. %s. Para a aplicar: jht upgrade' ;;
@@ -7974,171 +7770,12 @@ ensure_up() {
   telegram_lifecycle_if_available resume || exit $?
 }
 
-# `jht download`: scarica l'app desktop e la verifica SULL'HOST. Prima il download e lo SHA-256 stavano dentro il container, e
-# i byte verificati venivano poi copiati sull'host senza altra verifica (o lasciati in /jht_user/downloads, che gli agenti
-# scrivono): un agente poteva far arrivare alla persona un installer diverso da quello verificato. Ora l'host prende da solo
-# SHA256SUMS e l'installer dalla release (HTTPS), li tiene in una cartella privata fuori dai mount, confronta l'hash e pubblica
-# il file solo dopo, verso una cartella che gli agenti non scrivono. Il container non entra piu' nel comando.
-# JHT_RELEASE_BASE_URL e' la seam per mirror e test: viene dall'ambiente di chi lancia il comando, mai da host.env.
-download_usage() {
-  printf '%s\n' "$(jht_say help.download)"
-}
-
-# Il Mac di 0.4 e' solo Apple silicon: su un Intel il download non si apre, e si rifiuta prima di scaricare.
-# JHT_DOWNLOAD_HOST ("<piattaforma>-<arch>") fa le veci della macchina, per i test.
-download_host_is_intel_mac() {
-  if [ -n "${JHT_DOWNLOAD_HOST:-}" ]; then
-    [ "$JHT_DOWNLOAD_HOST" = "darwin-x64" ]
-    return $?
-  fi
-  [ "$(uname -s)" = Darwin ] && [ "$(uname -m)" = x86_64 ] || return 1
-  # Sotto Rosetta uname dice x86_64 anche su Apple silicon: il kernel dice che il processo e' tradotto.
-  [ "$(/usr/sbin/sysctl -in sysctl.proc_translated 2>/dev/null || echo 0)" != 1 ]
-}
-
-# 0 se $1 sta dentro la cartella $2 (o e' la cartella stessa); i percorsi sono gia' risolti.
-download_path_inside() {
-  case "$1/" in "$2"/*) return 0 ;; esac
-  return 1
-}
-
+# `jht download`: la 0.4.0 non ha l'app desktop e la release non allega nessun installer, per nessun sistema: un download
+# sarebbe un 404. Il comando non scarica niente, qualunque cosa gli si chieda: dice, nella lingua della persona, che JHT si usa
+# dal terminale, ed esce con 1. `jht download --help` non arriva qui: lo serve l'aiuto locale dei comandi dell'host.
 handle_host_download() {
-  local os="" version="" output="" deb=0 arg
-  while [ "$#" -gt 0 ]; do
-    arg="$1"
-    case "$arg" in
-      --help|-h) download_usage; return 0 ;;
-      --deb) deb=1; shift ;;
-      --os|--version|--output|-o)
-        if [ "$#" -lt 2 ] || [ -z "$2" ]; then err "$(jht_say line.s_needs_a_value "$arg")"; return 2; fi
-        case "$arg" in --os) os="$2" ;; --version) version="$2" ;; *) output="$2" ;; esac
-        shift 2 ;;
-      --os=*) os="${arg#--os=}"; shift ;;
-      --version=*) version="${arg#--version=}"; shift ;;
-      --output=*) output="${arg#--output=}"; shift ;;
-      *) err "$(jht_say line.unknown_argument_s "$arg")"; download_usage >&2; return 2 ;;
-    esac
-  done
-  if [ -z "$os" ] || [ -z "$version" ]; then err "$(jht_say line.os_and_version_are_required)"; download_usage >&2; return 2; fi
-
-  local platform asset
-  case "$(printf '%s' "$os" | tr '[:upper:]' '[:lower:]')" in
-    win|win32|windows) platform=windows ;;
-    darwin|mac|macos|osx) platform=macos ;;
-    linux) platform=linux ;;
-    *) err "$(jht_say download.unsupported_os "$os")"; return 2 ;;
-  esac
-  version="${version#v}"
-  if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-    err "$(jht_say download.bad_version "$version")"
-    return 2
-  fi
-  if [ "$deb" -eq 1 ] && [ "$platform" != linux ]; then err "$(jht_say download.deb_only_linux)"; return 2; fi
-  if [ "$platform" = linux ]; then err "$(jht_say download.linux_no_app)"; return 1; fi
-  local major minor
-  major="${version%%.*}"; minor="${version#*.}"; minor="${minor%%.*}"
-  if [ "$platform" = windows ] && { [ "$major" -gt 0 ] || [ "$minor" -ge 4 ]; }; then
-    err "$(jht_say download.windows_missing)"
-    return 1
-  fi
-  # Le release 0.3.x hanno altri file (tar.gz, setup.exe, zip): l'app per macOS e' dalla 0.4.0.
-  if [ "$platform" != windows ] && [ "$major" -eq 0 ] && [ "$minor" -lt 4 ]; then
-    err "$(jht_say download.release_no_app "$version")"
-    return 1
-  fi
-  if [ "$platform" = macos ] && download_host_is_intel_mac; then
-    err "$(jht_say download.intel_mac)"
-    return 1
-  fi
-  case "$platform:$deb" in
-    windows:*) asset="job-hunter-team-windows-x64-setup.exe" ;;
-    macos:*) asset="job-hunter-team-macos-universal.dmg" ;;
-  esac
-  command -v curl >/dev/null 2>&1 || { err "$(jht_say download.no_curl)"; return 1; }
-
-  # Destinazione: di base ~/Downloads, mai una cartella condivisa con il team; un --output li dentro si rifiuta.
-  local dest parent real_parent
-  dest="${output:-$HOME/Downloads/$asset}"
-  case "$dest" in /*) ;; *) dest="$PWD/$dest" ;; esac
-  parent="$(dirname -- "$dest")"
-  mkdir -p -- "$parent" || { err "$(jht_say download.mkdir_failed "$parent")"; return 1; }
-  real_parent="$(cd -P -- "$parent" 2>/dev/null && pwd -P)" || { err "$(jht_say download.parent_unreachable "$parent")"; return 1; }
-  local shared real_shared
-  for shared in "$HOME/.jht" "${JHT_USER_DIR_HOST:-$HOME/Documents/Job Hunter Team}"; do
-    real_shared="$(cd -P -- "$shared" 2>/dev/null && pwd -P)" || real_shared="$shared"
-    if download_path_inside "$real_parent" "$real_shared" || download_path_inside "$real_parent" "$shared"; then
-      err "$(jht_say download.shared_folder "$shared")"
-      return 1
-    fi
-  done
-  dest="$real_parent/$(basename -- "$dest")"
-  if [ -L "$dest" ]; then err "$(jht_say download.dest_is_link "$dest")"; return 1; fi
-  if [ -e "$dest" ] && [ ! -f "$dest" ]; then err "$(jht_say download.dest_not_file "$dest")"; return 1; fi
-
-  local base tag work expected code=0 proto
-  base="${JHT_RELEASE_BASE_URL:-https://github.com/leopu00/job-hunter-team/releases/download}"
-  base="${base%/}/v$version"
-  proto="=https"
-  [ -z "${JHT_RELEASE_BASE_URL:-}" ] || proto="=https,http"
-  work="$(mktemp -d "${TMPDIR:-/tmp}/jht-download.XXXXXX")" || { err "$(jht_say download.no_tmp)"; return 1; }
-  chmod 700 "$work" 2>/dev/null || true
-
-  download_fetch() {
-    curl --fail --silent --show-error --location --proto "$proto" --proto-redir "$proto" --retry 2 \
-      --user-agent job-hunter-team-cli --output "$2" -- "$1"
-  }
-  download_cleanup() { rm -f -- "$work/SHA256SUMS" "$work/asset"; rmdir -- "$work" 2>/dev/null || true; }
-
-  if ! download_fetch "$base/SHA256SUMS" "$work/SHA256SUMS"; then
-    err "$(jht_say download.sums_failed "$version")"; download_cleanup; return 1
-  fi
-  local line sum rest
-  expected=""
-  while IFS= read -r line || [ -n "$line" ]; do
-    line="${line%$'\r'}"
-    sum="${line%%[[:space:]]*}"
-    rest="${line#"$sum"}"
-    rest="${rest#"${rest%%[![:space:]]*}"}"
-    rest="${rest#\*}"
-    if [[ "$sum" =~ ^[0-9a-fA-F]{64}$ ]] && [ "$rest" = "$asset" ]; then
-      expected="$(printf '%s' "$sum" | tr '[:upper:]' '[:lower:]')"
-      break
-    fi
-  done < "$work/SHA256SUMS"
-  if [ -z "$expected" ]; then err "$(jht_say download.sum_missing "$asset")"; download_cleanup; return 1; fi
-
-  if [ -f "$dest" ]; then
-    if [ "$(runtime_sha256 "$dest")" = "$expected" ]; then
-      printf "\n  %s\n  %s\n\n" "$(jht_say download.present_verified "$dest")" "$(jht_say download.sha_verified "$expected")"
-      download_cleanup; return 0
-    fi
-    err "$(jht_say download.mismatch_existing "$dest")"
-    download_cleanup; return 1
-  fi
-
-  printf "\n  %s\n" "$(jht_say download.fetching "$asset")"
-  if ! download_fetch "$base/$asset" "$work/asset"; then
-    err "$(jht_say download.asset_failed "$asset")"; download_cleanup; return 1
-  fi
-  local actual
-  actual="$(runtime_sha256 "$work/asset")"
-  if [ "$actual" != "$expected" ]; then
-    err "$(jht_say download.hash_invalid "$asset" "$expected" "$actual")"
-    download_cleanup; return 1
-  fi
-
-  # Pubblicazione: copia in un nome nuovo accanto alla destinazione (esclusiva) e rinomina senza sostituire.
-  local part="$dest.part-$$-${RANDOM:-0}"
-  if ! ( set -C; cat -- "$work/asset" > "$part" ); then
-    err "$(jht_say download.copy_failed)"; rm -f -- "$part"; download_cleanup; return 1
-  fi
-  if ! mv -n -- "$part" "$dest" || [ -e "$part" ]; then
-    err "$(jht_say download.dest_appeared)"
-    rm -f -- "$part"; download_cleanup; return 1
-  fi
-  download_cleanup
-  printf "  %s\n  %s\n\n" "$(jht_say download.sha_verified "$actual")" "$(jht_say download.saved_in "$dest")"
-  return "$code"
+  err "$(jht_say download.no_desktop_app)"
+  return 1
 }
 
 # ── Upgrade runtime, transazionale e host-side ────────────────────────────
@@ -10686,7 +10323,7 @@ case "$SUB" in
     exit "$rc"
     ;;
 
-  # Download e verifica SHA-256 sull'host (il container non c'entra): vedi handle_host_download.
+  # Nessuna app desktop nella 0.4.0: il comando lo dice e non scarica niente (vedi handle_host_download).
   download)
     handle_host_download "${@:2}"
     exit $?

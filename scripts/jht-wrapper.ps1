@@ -158,23 +158,7 @@ function Get-JhtTextTable {
     'en:doctor.host_team_unattestable' { return 'a container of the team is there but cannot be verified as ours: nothing was touched (''jht status'' says more)' }
     'en:doctor.host_title' { return 'Job Hunter Team: the team is off (its container is not running). Checks made from this computer:' }
     'en:down.done' { return 'Job Hunter Team stopped.' }
-    'en:download.bad_version' { return 'invalid version: %s. Example: 0.3.5.' }
-    'en:download.deb_only_linux' { return '--deb is only for Linux.' }
-    'en:download.dest_is_link' { return 'the destination is a link: %s' }
-    'en:download.dest_not_file' { return 'the destination exists and is not a file: %s' }
-    'en:download.fetching' { return 'Downloading %s...' }
-    'en:download.hash_invalid' { return 'invalid SHA-256 for %s: expected %s, got %s.' }
-    'en:download.intel_mac' { return 'The 0.4 macOS app only runs on Macs with Apple silicon (M1 and later); this is an Intel Mac, which 0.4 does not support. Nothing was downloaded.' }
-    'en:download.linux_no_app' { return 'In this version there is no desktop app for Linux: use install.sh. Nothing was downloaded.' }
-    'en:download.mismatch_existing' { return 'the file %s exists but its SHA-256 does not match: it was not overwritten.' }
-    'en:download.mkdir_failed' { return 'cannot create the destination folder: %s' }
-    'en:download.present_verified' { return 'File already present and verified: %s' }
-    'en:download.release_no_app' { return 'This release (v%s) has no app for macOS: use 0.4.0 or later. Nothing was downloaded.' }
-    'en:download.saved_in' { return 'Saved in: %s' }
-    'en:download.sha_verified' { return 'SHA-256 verified: %s' }
-    'en:download.sum_missing' { return 'no SHA-256 declared for %s.' }
-    'en:download.unsupported_os' { return 'unsupported system: %s. Use windows or macos.' }
-    'en:download.windows_missing' { return 'Windows is not part of 0.4.0: the release has no installer for Windows. Nothing was downloaded.' }
+    'en:download.no_desktop_app' { return 'The desktop app is not part of 0.4.0, so there is nothing to download: JHT is used from the terminal, with jht setup and jht up.' }
     'en:help.integration' { return (('Usage: jht integration <command>', '', '  list [--json]                   the integrations and their status', '  status [ID] [--json]            the status of one, or of all', '  add ID [--json]                 adds an integration', '  remove ID [--purge --yes] [--remove-image] [--json]', '                                  removes it; --purge also deletes its data (needs --yes);', '                                  --remove-image (screen and media only) also removes the tools image', '', 'The allowed IDs are the ones `jht integration list` shows. Nothing is downloaded or turned on', 'until you ask for it with `add`.') -join [char]10) }
     'en:help.linkedin' { return (('Usage: jht linkedin <command>', '', '  login [--stop]    the manual sign-in to LinkedIn (with Google): a browser in a separate container, with no network,', '                    whose window you see and use from the app; --stop closes everything', '  status --json     says whether the sign-in is in progress and whether the LinkedIn session is saved', '', 'Nothing is downloaded or turned on until you ask for it with `login`.') -join [char]10) }
     'en:help.screen' { return (('Usage: jht screen <command>', '', '  on [--json]       turns on the closer''s live screen: a separate container, with the stream only on 127.0.0.1', '  off [--remove-image] [--json]', '                    turns it off and removes the container; the tools image stays on disk, to turn it on again', '                    without downloading it again: --remove-image removes it and frees the space', '  status [--json]   says whether it is on', '', 'Nothing is downloaded or turned on until you ask for it with `on`. The stream is view-only.') -join [char]10) }
@@ -251,7 +235,6 @@ function Get-JhtTextTable {
     'en:line.nessun_ruolo_ha_un_token' { return 'No role has a legacy token: for a new bot use jht telegram pair <role>.' }
     'en:line.non_autorizzabile_s' { return 'Cannot be authorized: %s.' }
     'en:line.non_autorizzata_s' { return 'Not authorized: %s.' }
-    'en:line.os_and_version_are_required' { return '--os and --version are required' }
     'en:line.podman_non_trovato_reinstalla_il' { return 'Podman not found: reinstall the JHT runtime.' }
     'en:line.preparo_il_servizio_della_posta' { return ('Preparing the mail service (it is created only the first time it is needed)' + [char]0x2026) }
     'en:line.provider_attivo_non_riconosciuto_s' { return 'active provider not recognized: %s' }
@@ -274,7 +257,6 @@ function Get-JhtTextTable {
     'en:line.runtime_o_container_jht_non' { return 'JHT runtime or container not available' }
     'en:line.ruoli_da_abbinare_in_questa' { return 'Roles to pair in this session: %s' }
     'en:line.s_ha_gi_un_bot' { return '%s already has a paired bot: removing only its legacy copy.' }
-    'en:line.s_needs_a_value' { return '%s needs a value' }
     'en:line.saltato_non_trovato_volume_broker' { return 'Skipped (not found): broker volume %s' }
     'en:line.serve_un_terminale_l_autorizzazione' { return 'A terminal is needed: the authorization is confirmed by hand.' }
     'en:line.telegram_isolato_attivo_il_bridge' { return 'Isolated Telegram is active; the agents can no longer turn the legacy bridge back on.' }
@@ -310,13 +292,9 @@ function Get-JhtTextTable {
     'en:ps.docker_desktop_file_sharing_hint' { return '  What to do: open Docker Desktop > Settings > Resources > File sharing, check that the user''s folder is shared, then run ''jht up'' again.' }
     'en:ps.docker_podman_verified_future_removal' { return 'Docker -> Podman migration verified. The Docker volumes stay intact and still hold the mail passwords, the portal logins and the Telegram tokens: removing them will require an explicit confirmation in the future.' }
     'en:ps.doctor.wsl_memory' { return 'WSL has no memory limit (other WSL distributions are registered): in %s, under [wsl2], add memory=%s' }
-    'en:ps.download_asset_failed_detail' { return 'download failed: %s (%s)' }
-    'en:ps.download_shared_folder_no_path' { return 'the destination is inside a folder shared with the team: choose one outside it, like Downloads.' }
-    'en:ps.download_sums_failed_detail' { return 'download failed: SHA256SUMS of v%s (%s)' }
     'en:ps.full_pull_failed_keep_old' { return 'full_pull_failed: the new full image did not arrive, the old one stays. What to do: jht tools pull' }
     'en:ps.help.main' { return (('jht - Job Hunter Team', '', '  Host commands (they work from here):', '    jht up                 starts the team''s container', '    jht down               stops it', '                           (with --verbose you also see the engine''s lines)', '    jht restart            restarts it', '    jht status             status of the container and the team', '    jht logs [-f]          container log', '    jht upgrade            updates to the latest image', '    jht setup              guided installation', '    jht shell              shell inside the container', '    jht mail setup         saves the mailbox in the secrets broker', '    jht mail drafts        emails written by the agents, waiting for your ok', '    jht mail approve <id>  sends them; jht mail discard <id> discards them', '    jht integration list|status [ID]|add ID|remove ID [--purge --yes] [--remove-image] [--json]', '                           the integrations you add after setup', '                           (google, telegram, mail): status read from the engine', '    jht telegram status    status of the isolated Telegram service', '    jht telegram pair ROLE asks for the token without echo on the host computer, then', '                           shows a code to send to the bot from your Telegram.', '                           For automation: JSON on stdin. Do not save the token', '                           in ~/.jht; delete right away any file used outside it.', '    jht telegram pair --all pairs all the legacy roles in one session', '    jht telegram chat-id ROLE moves the bot to another chat, with the same code', '    jht reset              deletes the broker''s configuration and volumes', '    jht migrate-runtime podman', '                           copies and checks the Docker volumes into Podman;', '                           it does not select the new runtime and does not delete Docker', '    jht uninstall --confirm removes the local Windows runtime, but keeps data,', '                           documents, Podman and Compose', '', '  All the other commands (positions, stats, team, providers, cron,', '  working-hours, cloud...) run INSIDE the container: for their help', '  the container must be running.', '', '      jht up ; jht --help') -join [char]10) }
     'en:ps.home_unavailable_bind_mount' { return 'HOME/USERPROFILE is not available: JHT bind mount refused' }
-    'en:ps.host_download_failed' { return 'download on the host failed: %s' }
     'en:ps.input_not_json_bot_token_stdin' { return 'input_not_json: pass bot_token as JSON on stdin.' }
     'en:ps.integration_not_installed' { return 'not installed' }
     'en:ps.integration_not_installed_yet' { return 'not installed yet' }
@@ -339,7 +317,6 @@ function Get-JhtTextTable {
     'en:ps.pair_role_now_prompt' { return 'Pair %s now? [s/N]' }
     'en:ps.podman_exe_not_found' { return 'podman.exe not found' }
     'en:ps.podman_machine_not_responding' { return 'The JHT Podman machine is not responding. Run ''jht up''.' }
-    'en:ps.release_arrived_without_https' { return 'the release arrived without HTTPS: %s' }
     'en:ps.relink_account_container_not_running' { return 'apply relink-account: container not running.' }
     'en:ps.script_integration_not_installed' { return 'script jht-integration.ps1 is not installed yet: run ''jht upgrade'' (or a ''jht integration add/remove'') and try again' }
     'en:ps.script_tools_not_installed' { return 'script jht-tools.ps1 is not installed yet: run ''jht upgrade'' and try again' }
@@ -370,7 +347,6 @@ function Get-JhtTextTable {
     'en:ps.uninstall.wslconfig.done' { return 'Removed from {0} the lines the installer added (WSL memory).' }
     'en:ps.uninstall.wslconfig.kept' { return 'Left in {0} the lines you changed: they are yours.' }
     'en:ps.uninstall.wslconfig.left' { return 'Not touched: {0} ({1}). The lines the installer added (WSL memory) stay. Remove them by hand: each has a comment line above it.' }
-    'en:ps.unknown_argument' { return 'unknown argument: %s' }
     'en:ps.upgrade_already_running' { return 'An update is already in progress' }
     'en:ps.upgrade_broker_restart_failed' { return 'broker_restart_failed: the secrets broker did not restart. What to do: jht up' }
     'en:ps.upgrade_disk_low' { return ('disk_low: The agents need at least %s GiB of disk ' + [char]0x2014 + ' available: %s GiB. To free space, empty the Trash, delete the large files you do not need and the unused Docker images, then try again: nothing was downloaded or changed.') }
@@ -434,23 +410,7 @@ function Get-JhtTextTable {
     'it:doctor.host_team_unattestable' { return 'c''e'' un container della squadra ma non si puo'' verificare che sia nostro: non ho toccato niente (''jht status'' dice di piu'')' }
     'it:doctor.host_title' { return 'Job Hunter Team: squadra spenta (il suo container non gira). Controlli fatti da questo computer:' }
     'it:down.done' { return 'Job Hunter Team fermato.' }
-    'it:download.bad_version' { return 'versione non valida: %s. Esempio: 0.3.5.' }
-    'it:download.deb_only_linux' { return '--deb vale solo per Linux.' }
-    'it:download.dest_is_link' { return 'la destinazione e'' un link: %s' }
-    'it:download.dest_not_file' { return 'la destinazione esiste e non e'' un file: %s' }
-    'it:download.fetching' { return 'Scarico %s...' }
-    'it:download.hash_invalid' { return 'SHA-256 non valido per %s: atteso %s, ottenuto %s.' }
-    'it:download.intel_mac' { return 'L''app per macOS della 0.4 gira solo su Mac con Apple silicon (M1 e successivi); questo e'' un Mac Intel, non supportato nella 0.4. Non e'' stato scaricato niente.' }
-    'it:download.linux_no_app' { return 'In questa versione non c''e'' l''app desktop per Linux: usa install.sh. Non e'' stato scaricato niente.' }
-    'it:download.mismatch_existing' { return 'il file %s esiste ma il suo SHA-256 non corrisponde: non e'' stato sovrascritto.' }
-    'it:download.mkdir_failed' { return 'impossibile creare la directory di destinazione: %s' }
-    'it:download.present_verified' { return 'File gia'' presente e verificato: %s' }
-    'it:download.release_no_app' { return 'Questa release (v%s) non ha l''app per macOS: usa la 0.4.0 o successive. Non e'' stato scaricato niente.' }
-    'it:download.saved_in' { return 'Salvato in: %s' }
-    'it:download.sha_verified' { return 'SHA-256 verificato: %s' }
-    'it:download.sum_missing' { return 'SHA-256 dichiarato non trovato per %s.' }
-    'it:download.unsupported_os' { return 'sistema non supportato: %s. Usa windows o macos.' }
-    'it:download.windows_missing' { return 'Windows non fa parte della 0.4.0: la release non ha un installer per Windows. Non e'' stato scaricato niente.' }
+    'it:download.no_desktop_app' { return ('L''app desktop non ' + [char]0x00E8 + ' nella 0.4.0, quindi non c''' + [char]0x00E8 + ' niente da scaricare: JHT si usa dal terminale, con jht setup e jht up.') }
     'it:help.integration' { return (('Uso: jht integration <comando>', '', '  list [--json]                   le integrazioni e il loro stato', '  status [ID] [--json]            lo stato di una, o di tutte', '  add ID [--json]                 aggiunge un''integrazione', '  remove ID [--purge --yes] [--remove-image] [--json]', '                                  la toglie; --purge cancella anche i suoi dati (serve --yes);', '                                  --remove-image (solo screen e media) toglie anche l''immagine degli strumenti', '', 'Gli ID ammessi sono quelli che mostra `jht integration list`. Niente si scarica o si accende', 'finche'' non lo chiedi con `add`.') -join [char]10) }
     'it:help.linkedin' { return (('Uso: jht linkedin <comando>', '', '  login [--stop]    l''accesso a mano a LinkedIn (con Google): un browser in un container a parte, senza rete, di cui vedi', '                    e usi la finestra dall''app; --stop chiude tutto', '  status --json     dice se l''accesso e'' in corso e se la sessione di LinkedIn e'' salvata', '', 'Niente si scarica o si accende finche'' non lo chiedi con `login`.') -join [char]10) }
     'it:help.screen' { return (('Uso: jht screen <comando>', '', '  on [--json]       accende lo schermo dal vivo del closer: un container a parte, con lo stream solo su 127.0.0.1', '  off [--remove-image] [--json]', '                    lo spegne e toglie il container; l''immagine degli strumenti resta sul disco, per riaccenderlo', '                    senza riscaricarla: --remove-image la toglie e libera lo spazio', '  status [--json]   dice se e'' acceso', '', 'Niente si scarica o si accende finche'' non lo chiedi con `on`. Lo stream e'' in sola visione.') -join [char]10) }
@@ -527,7 +487,6 @@ function Get-JhtTextTable {
     'it:line.nessun_ruolo_ha_un_token' { return 'Nessun ruolo ha un token legacy: per un bot nuovo usa jht telegram pair <ruolo>.' }
     'it:line.non_autorizzabile_s' { return 'Non autorizzabile: %s.' }
     'it:line.non_autorizzata_s' { return 'Non autorizzata: %s.' }
-    'it:line.os_and_version_are_required' { return '--os e --version sono obbligatori' }
     'it:line.podman_non_trovato_reinstalla_il' { return 'Podman non trovato: reinstalla il runtime JHT.' }
     'it:line.preparo_il_servizio_della_posta' { return ('Preparo il servizio della posta (si crea solo la prima volta che serve)' + [char]0x2026) }
     'it:line.provider_attivo_non_riconosciuto_s' { return 'provider attivo non riconosciuto: %s' }
@@ -550,7 +509,6 @@ function Get-JhtTextTable {
     'it:line.runtime_o_container_jht_non' { return 'runtime o container JHT non disponibile' }
     'it:line.ruoli_da_abbinare_in_questa' { return 'Ruoli da abbinare in questa seduta: %s' }
     'it:line.s_ha_gi_un_bot' { return ('%s ha gi' + [char]0x00E0 + ' un bot abbinato: tolgo solo la sua copia legacy.') }
-    'it:line.s_needs_a_value' { return '%s richiede un valore' }
     'it:line.saltato_non_trovato_volume_broker' { return 'Saltato (non trovato): volume broker %s' }
     'it:line.serve_un_terminale_l_autorizzazione' { return 'Serve un terminale: l''autorizzazione si conferma a mano.' }
     'it:line.telegram_isolato_attivo_il_bridge' { return ('Telegram isolato attivo; il bridge legacy non pu' + [char]0x00F2 + ' pi' + [char]0x00F9 + ' essere riabilitato dagli agenti.') }
@@ -586,13 +544,9 @@ function Get-JhtTextTable {
     'it:ps.docker_desktop_file_sharing_hint' { return '  Cosa fare: apri Docker Desktop > Settings > Resources > File sharing, controlla che la cartella dell''utente sia condivisa, poi rilancia ''jht up''.' }
     'it:ps.docker_podman_verified_future_removal' { return 'Migrazione Docker -> Podman verificata. I volumi Docker restano intatti e contengono ancora le password della posta, gli accessi ai portali e i token di Telegram: richiedono una futura conferma esplicita per la rimozione.' }
     'it:ps.doctor.wsl_memory' { return 'WSL non ha un limite di memoria (sono registrate altre distribuzioni WSL): in %s, sotto [wsl2], aggiungi memory=%s' }
-    'it:ps.download_asset_failed_detail' { return 'download non riuscito: %s (%s)' }
-    'it:ps.download_shared_folder_no_path' { return 'la destinazione sta in una cartella condivisa con il team: scegline una fuori, come Downloads.' }
-    'it:ps.download_sums_failed_detail' { return 'download non riuscito: SHA256SUMS di v%s (%s)' }
     'it:ps.full_pull_failed_keep_old' { return ('full_pull_failed: l''immagine piena nuova non ' + [char]0x00E8 + ' arrivata, resta la vecchia. Cosa fare: jht tools pull') }
     'it:ps.help.main' { return (('jht - Job Hunter Team', '', '  Comandi dell''host (funzionano da qui):', '    jht up                 avvia il container del team', '    jht down               lo ferma', '                           (con --verbose si vedono anche le righe del motore)', '    jht restart            lo riavvia', '    jht status             stato di container e team', '    jht logs [-f]          log del container', ('    jht upgrade            aggiorna all''immagine pi' + [char]0x00F9 + ' recente'), '    jht setup              installazione guidata', '    jht shell              shell dentro il container', '    jht mail setup         salva la casella di posta nel broker dei segreti', '    jht mail drafts        email scritte dagli agenti in attesa del tuo ok', '    jht mail approve <id>  le manda; jht mail discard <id> le scarta', '    jht integration list|status [ID]|add ID|remove ID [--purge --yes] [--remove-image] [--json]', '                           le integrazioni che si aggiungono dopo il setup', '                           (google, telegram, mail): stato letto dal motore', '    jht telegram status    stato del servizio Telegram isolato', '    jht telegram pair ROLE chiede il token senza eco sul computer host, poi', '                           mostra un codice da mandare al bot dal tuo Telegram', '                           Per automazioni: JSON su stdin. Non salvare il token', ('                           in ~/.jht; cancella subito file usati fuori da l' + [char]0x00EC + '.'), '    jht telegram pair --all abbina in una seduta tutti i ruoli legacy', '    jht telegram chat-id ROLE sposta il bot su un''altra chat, con lo stesso codice', '    jht reset              cancella configurazione e volumi del broker', '    jht migrate-runtime podman', '                           copia e verifica i volumi Docker in Podman;', '                           non seleziona il nuovo runtime e non cancella Docker', '    jht uninstall --confirm rimuove il runtime locale Windows, ma conserva dati,', '                           documenti, Podman e Compose', '', '  Tutti gli altri comandi (positions, stats, team, providers, cron,', '  working-hours, cloud...) girano DENTRO il container: per il loro aiuto', '  serve il container attivo.', '', '      jht up ; jht --help') -join [char]10) }
     'it:ps.home_unavailable_bind_mount' { return 'HOME/USERPROFILE non disponibile: bind mount JHT rifiutato' }
-    'it:ps.host_download_failed' { return 'download sull''host non riuscito: %s' }
     'it:ps.input_not_json_bot_token_stdin' { return 'input_not_json: passa bot_token come JSON su stdin.' }
     'it:ps.integration_not_installed' { return 'non installato' }
     'it:ps.integration_not_installed_yet' { return 'non ancora installato' }
@@ -615,7 +569,6 @@ function Get-JhtTextTable {
     'it:ps.pair_role_now_prompt' { return 'Abbinare %s adesso? [s/N]' }
     'it:ps.podman_exe_not_found' { return 'podman.exe non trovato' }
     'it:ps.podman_machine_not_responding' { return 'La macchina Podman JHT non risponde. Esegui ''jht up''.' }
-    'it:ps.release_arrived_without_https' { return ('la release ' + [char]0x00E8 + ' arrivata senza HTTPS: %s') }
     'it:ps.relink_account_container_not_running' { return 'apply relink-account: container non attivo.' }
     'it:ps.script_integration_not_installed' { return 'script jht-integration.ps1 non ancora installato: ''jht upgrade'' (o un ''jht integration add/remove'') e riprova' }
     'it:ps.script_tools_not_installed' { return 'script jht-tools.ps1 non ancora installato: ''jht upgrade'' e riprova' }
@@ -646,7 +599,6 @@ function Get-JhtTextTable {
     'it:ps.uninstall.wslconfig.done' { return 'Tolte da {0} le righe aggiunte dall''installer (memoria di WSL).' }
     'it:ps.uninstall.wslconfig.kept' { return 'Lasciate in {0} le righe che hai cambiato tu: sono tue.' }
     'it:ps.uninstall.wslconfig.left' { return 'Non toccato {0} ({1}): le righe aggiunte dall''installer (memoria di WSL) restano. Toglile a mano: hanno una riga di commento sopra.' }
-    'it:ps.unknown_argument' { return 'argomento sconosciuto: %s' }
     'it:ps.upgrade_already_running' { return ('Un aggiornamento ' + [char]0x00E8 + ' gi' + [char]0x00E0 + ' in corso') }
     'it:ps.upgrade_broker_restart_failed' { return ('broker_restart_failed: il broker dei segreti non ' + [char]0x00E8 + ' ripartito. Cosa fare: jht up') }
     'it:ps.upgrade_disk_low' { return ('disk_low: Gli agenti richiedono almeno %s GiB di disco ' + [char]0x2014 + ' disponibili: %s GiB. Per liberare spazio svuota il Cestino ed elimina i file grandi che non ti servono e le immagini Docker inutilizzate, poi riprova: non ' + [char]0x00E8 + ' stato scaricato n' + [char]0x00E9 + ' modificato niente.') }
@@ -710,23 +662,7 @@ function Get-JhtTextTable {
     'hu:doctor.host_team_unattestable' { return ('van egy kont' + [char]0x00E9 + 'ner a csapatb' + [char]0x00F3 + 'l, de nem ellen' + [char]0x0151 + 'rizhet' + [char]0x0151 + ', hogy a mi' + [char]0x00E9 + 'nk-e: semmihez nem ny' + [char]0x00FA + 'ltam (a ''jht status'' t' + [char]0x00F6 + 'bbet mond)') }
     'hu:doctor.host_title' { return ('Job Hunter Team: a csapat le van ' + [char]0x00E1 + 'll' + [char]0x00ED + 'tva (a kont' + [char]0x00E9 + 'nere nem fut). Err' + [char]0x0151 + 'l a g' + [char]0x00E9 + 'pr' + [char]0x0151 + 'l v' + [char]0x00E9 + 'gzett ellen' + [char]0x0151 + 'rz' + [char]0x00E9 + 'sek:') }
     'hu:down.done' { return ('A Job Hunter Team le' + [char]0x00E1 + 'llt.') }
-    'hu:download.bad_version' { return ('' + [char]0x00E9 + 'rv' + [char]0x00E9 + 'nytelen verzi' + [char]0x00F3 + ': %s. P' + [char]0x00E9 + 'lda: 0.3.5.') }
-    'hu:download.deb_only_linux' { return ('a --deb csak Linuxra val' + [char]0x00F3 + '.') }
-    'hu:download.dest_is_link' { return ('a c' + [char]0x00E9 + 'lhely egy link: %s') }
-    'hu:download.dest_not_file' { return ('a c' + [char]0x00E9 + 'lhely l' + [char]0x00E9 + 'tezik, ' + [char]0x00E9 + 's nem f' + [char]0x00E1 + 'jl: %s') }
-    'hu:download.fetching' { return ('Let' + [char]0x00F6 + 'lt' + [char]0x00E9 + 's: %s...') }
-    'hu:download.hash_invalid' { return ('' + [char]0x00E9 + 'rv' + [char]0x00E9 + 'nytelen SHA-256 ehhez: %s: v' + [char]0x00E1 + 'rt %s, kapott %s.') }
-    'hu:download.intel_mac' { return ('A 0.4-es macOS-alkalmaz' + [char]0x00E1 + 's csak Apple siliconos Maceken fut (M1 ' + [char]0x00E9 + 's ' + [char]0x00FA + 'jabb); ez egy Intel Mac, amelyet a 0.4 nem t' + [char]0x00E1 + 'mogat. Semmi sem lett let' + [char]0x00F6 + 'ltve.') }
-    'hu:download.linux_no_app' { return ('Ebben a verzi' + [char]0x00F3 + 'ban nincs asztali alkalmaz' + [char]0x00E1 + 's Linuxra: haszn' + [char]0x00E1 + 'ld az install.sh-t. Semmi sem lett let' + [char]0x00F6 + 'ltve.') }
-    'hu:download.mismatch_existing' { return ('a(z) %s f' + [char]0x00E1 + 'jl l' + [char]0x00E9 + 'tezik, de az SHA-256-ja nem egyezik: nem ' + [char]0x00ED + 'rtam fel' + [char]0x00FC + 'l.') }
-    'hu:download.mkdir_failed' { return ('nem tudom l' + [char]0x00E9 + 'trehozni a c' + [char]0x00E9 + 'lmapp' + [char]0x00E1 + 't: %s') }
-    'hu:download.present_verified' { return ('A f' + [char]0x00E1 + 'jl m' + [char]0x00E1 + 'r megvan ' + [char]0x00E9 + 's ellen' + [char]0x0151 + 'rizve: %s') }
-    'hu:download.release_no_app' { return ('Ehhez a kiad' + [char]0x00E1 + 'shoz (v%s) nincs macOS-alkalmaz' + [char]0x00E1 + 's: haszn' + [char]0x00E1 + 'ld a 0.4.0-s vagy ' + [char]0x00FA + 'jabb verzi' + [char]0x00F3 + 't. Semmi sem lett let' + [char]0x00F6 + 'ltve.') }
-    'hu:download.saved_in' { return 'Mentve ide: %s' }
-    'hu:download.sha_verified' { return ('SHA-256 ellen' + [char]0x0151 + 'rizve: %s') }
-    'hu:download.sum_missing' { return 'nincs megadott SHA-256 ehhez: %s.' }
-    'hu:download.unsupported_os' { return ('nem t' + [char]0x00E1 + 'mogatott rendszer: %s. Haszn' + [char]0x00E1 + 'ld a windows vagy a macos ' + [char]0x00E9 + 'rt' + [char]0x00E9 + 'ket.') }
-    'hu:download.windows_missing' { return ('A Windows nem r' + [char]0x00E9 + 'sze a 0.4.0-nak: a kiad' + [char]0x00E1 + 'sban nincs Windows-telep' + [char]0x00ED + 't' + [char]0x0151 + '. Semmi sem lett let' + [char]0x00F6 + 'ltve.') }
+    'hu:download.no_desktop_app' { return ('Az asztali alkalmaz' + [char]0x00E1 + 's nincs a 0.4.0-ban, ' + [char]0x00ED + 'gy nincs mit let' + [char]0x00F6 + 'lteni: a JHT a termin' + [char]0x00E1 + 'lb' + [char]0x00F3 + 'l haszn' + [char]0x00E1 + 'lhat' + [char]0x00F3 + ', a jht setup ' + [char]0x00E9 + 's a jht up paranccsal.') }
     'hu:help.integration' { return ((('Haszn' + [char]0x00E1 + 'lat: jht integration <parancs>'), '', ('  list [--json]                   az integr' + [char]0x00E1 + 'ci' + [char]0x00F3 + 'k ' + [char]0x00E9 + 's az ' + [char]0x00E1 + 'llapotuk'), ('  status [ID] [--json]            egynek vagy mindnek az ' + [char]0x00E1 + 'llapota'), ('  add ID [--json]                 hozz' + [char]0x00E1 + 'ad egy integr' + [char]0x00E1 + 'ci' + [char]0x00F3 + 't'), '  remove ID [--purge --yes] [--remove-image] [--json]', ('                                  elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tja; a --purge az adatait is t' + [char]0x00F6 + 'rli (--yes kell hozz' + [char]0x00E1 + ');'), ('                                  a --remove-image (csak screen ' + [char]0x00E9 + 's media) az eszk' + [char]0x00F6 + 'z' + [char]0x00F6 + 'k k' + [char]0x00E9 + 'p' + [char]0x00E9 + 't is elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tja'), '', ('Az enged' + [char]0x00E9 + 'lyezett ID-k azok, amelyeket a `jht integration list` mutat. Semmi sem t' + [char]0x00F6 + 'lt' + [char]0x0151 + 'dik le ' + [char]0x00E9 + 's nem'), ('kapcsol be, am' + [char]0x00ED + 'g az `add` paranccsal nem k' + [char]0x00E9 + 'red.')) -join [char]10) }
     'hu:help.linkedin' { return ((('Haszn' + [char]0x00E1 + 'lat: jht linkedin <parancs>'), '', ('  login [--stop]    k' + [char]0x00E9 + 'zi bejelentkez' + [char]0x00E9 + 's a LinkedInre (Google-lel): b' + [char]0x00F6 + 'ng' + [char]0x00E9 + 'sz' + [char]0x0151 + ' egy k' + [char]0x00FC + 'l' + [char]0x00F6 + 'n, h' + [char]0x00E1 + 'l' + [char]0x00F3 + 'zat n' + [char]0x00E9 + 'lk' + [char]0x00FC + 'li'), ('                    kont' + [char]0x00E9 + 'nerben, amelynek ablak' + [char]0x00E1 + 't az alkalmaz' + [char]0x00E1 + 'sb' + [char]0x00F3 + 'l l' + [char]0x00E1 + 'tod ' + [char]0x00E9 + 's haszn' + [char]0x00E1 + 'lod; a --stop mindent bez' + [char]0x00E1 + 'r'), ('  status --json     megmondja, folyamatban van-e a bejelentkez' + [char]0x00E9 + 's, ' + [char]0x00E9 + 's el van-e mentve'), '                    a LinkedIn-munkamenet', '', ('Semmi sem t' + [char]0x00F6 + 'lt' + [char]0x0151 + 'dik le ' + [char]0x00E9 + 's nem kapcsol be, am' + [char]0x00ED + 'g a `login` paranccsal nem k' + [char]0x00E9 + 'red.')) -join [char]10) }
     'hu:help.screen' { return ((('Haszn' + [char]0x00E1 + 'lat: jht screen <parancs>'), '', ('  on [--json]       bekapcsolja a closer ' + [char]0x00E9 + 'l' + [char]0x0151 + ' k' + [char]0x00E9 + 'perny' + [char]0x0151 + 'j' + [char]0x00E9 + 't: k' + [char]0x00FC + 'l' + [char]0x00F6 + 'n kont' + [char]0x00E9 + 'ner, a stream csak a 127.0.0.1-en'), '  off [--remove-image] [--json]', ('                    kikapcsolja ' + [char]0x00E9 + 's elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tja a kont' + [char]0x00E9 + 'nert; az eszk' + [char]0x00F6 + 'z' + [char]0x00F6 + 'k k' + [char]0x00E9 + 'pe a lemezen marad, hogy ' + [char]0x00FA + 'jralet' + [char]0x00F6 + 'lt' + [char]0x00E9 + 's'), ('                    n' + [char]0x00E9 + 'lk' + [char]0x00FC + 'l kapcsolhasd vissza: a --remove-image elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tja, ' + [char]0x00E9 + 's felszabad' + [char]0x00ED + 'tja a helyet'), '  status [--json]   megmondja, be van-e kapcsolva', '', ('Semmi sem t' + [char]0x00F6 + 'lt' + [char]0x0151 + 'dik le ' + [char]0x00E9 + 's nem kapcsol be, am' + [char]0x00ED + 'g az `on` paranccsal nem k' + [char]0x00E9 + 'red. A stream csak megtekinthet' + [char]0x0151 + '.')) -join [char]10) }
@@ -803,7 +739,6 @@ function Get-JhtTextTable {
     'hu:line.nessun_ruolo_ha_un_token' { return ('Egyik szerepnek sincs r' + [char]0x00E9 + 'gi tokenje: ' + [char]0x00FA + 'j bothoz haszn' + [char]0x00E1 + 'ld a jht telegram pair <szerep> parancsot.') }
     'hu:line.non_autorizzabile_s' { return ('Nem enged' + [char]0x00E9 + 'lyezhet' + [char]0x0151 + ': %s.') }
     'hu:line.non_autorizzata_s' { return ('Nincs enged' + [char]0x00E9 + 'lyezve: %s.') }
-    'hu:line.os_and_version_are_required' { return ('a --os ' + [char]0x00E9 + 's a --version k' + [char]0x00F6 + 'telez' + [char]0x0151) }
     'hu:line.podman_non_trovato_reinstalla_il' { return ('A Podman nem tal' + [char]0x00E1 + 'lhat' + [char]0x00F3 + ': telep' + [char]0x00ED + 'tsd ' + [char]0x00FA + 'jra a JHT futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezet' + [char]0x00E9 + 't.') }
     'hu:line.preparo_il_servizio_della_posta' { return ('El' + [char]0x0151 + 'k' + [char]0x00E9 + 'sz' + [char]0x00ED + 'tem a levelez' + [char]0x00E9 + 'si szolg' + [char]0x00E1 + 'ltat' + [char]0x00E1 + 'st (csak az els' + [char]0x0151 + ' alkalommal j' + [char]0x00F6 + 'n l' + [char]0x00E9 + 'tre, amikor sz' + [char]0x00FC + 'ks' + [char]0x00E9 + 'g van r' + [char]0x00E1 + ')' + [char]0x2026) }
     'hu:line.provider_attivo_non_riconosciuto_s' { return ('ismeretlen akt' + [char]0x00ED + 'v szolg' + [char]0x00E1 + 'ltat' + [char]0x00F3 + ': %s') }
@@ -826,7 +761,6 @@ function Get-JhtTextTable {
     'hu:line.runtime_o_container_jht_non' { return ('a JHT futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezete vagy kont' + [char]0x00E9 + 'nere nem ' + [char]0x00E9 + 'rhet' + [char]0x0151 + ' el') }
     'hu:line.ruoli_da_abbinare_in_questa' { return ('Ebben a menetben p' + [char]0x00E1 + 'ros' + [char]0x00ED + 'tand' + [char]0x00F3 + ' szerepek: %s') }
     'hu:line.s_ha_gi_un_bot' { return ('%s: m' + [char]0x00E1 + 'r van p' + [char]0x00E1 + 'ros' + [char]0x00ED + 'tott bot: csak a r' + [char]0x00E9 + 'gi m' + [char]0x00E1 + 'solat' + [char]0x00E1 + 't t' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tom el.') }
-    'hu:line.s_needs_a_value' { return ('%s: ' + [char]0x00E9 + 'rt' + [char]0x00E9 + 'k kell hozz' + [char]0x00E1) }
     'hu:line.saltato_non_trovato_volume_broker' { return ('Kihagyva (nem tal' + [char]0x00E1 + 'lhat' + [char]0x00F3 + '): %s brokerk' + [char]0x00F6 + 'tet') }
     'hu:line.serve_un_terminale_l_autorizzazione' { return ('Termin' + [char]0x00E1 + 'l kell: az enged' + [char]0x00E9 + 'lyt k' + [char]0x00E9 + 'zzel kell meger' + [char]0x0151 + 's' + [char]0x00ED + 'teni.') }
     'hu:line.telegram_isolato_attivo_il_bridge' { return ('Az elk' + [char]0x00FC + 'l' + [char]0x00F6 + 'n' + [char]0x00ED + 'tett Telegram akt' + [char]0x00ED + 'v; a r' + [char]0x00E9 + 'gi bridge-et az ' + [char]0x00FC + 'gyn' + [char]0x00F6 + 'k' + [char]0x00F6 + 'k m' + [char]0x00E1 + 'r nem kapcsolhatj' + [char]0x00E1 + 'k vissza.') }
@@ -862,13 +796,9 @@ function Get-JhtTextTable {
     'hu:ps.docker_desktop_file_sharing_hint' { return ('  Teend' + [char]0x0151 + ': nyisd meg a Docker Desktop > Settings > Resources > File sharing r' + [char]0x00E9 + 'szt, ellen' + [char]0x0151 + 'rizd, hogy a felhaszn' + [char]0x00E1 + 'l' + [char]0x00F3 + ' mapp' + [char]0x00E1 + 'ja meg van osztva, majd futtasd ' + [char]0x00FA + 'jra a ''jht up'' parancsot.') }
     'hu:ps.docker_podman_verified_future_removal' { return ('A Docker -> Podman migr' + [char]0x00E1 + 'ci' + [char]0x00F3 + ' ellen' + [char]0x0151 + 'rizve. A Docker-k' + [char]0x00F6 + 'tetek ' + [char]0x00E9 + 'rintetlenek maradnak, ' + [char]0x00E9 + 's m' + [char]0x00E9 + 'g tartalmazz' + [char]0x00E1 + 'k a levelez' + [char]0x00E9 + 'si jelszavakat, a port' + [char]0x00E1 + 'lok hozz' + [char]0x00E1 + 'f' + [char]0x00E9 + 'r' + [char]0x00E9 + 'seit ' + [char]0x00E9 + 's a Telegram-tokeneket: az elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 't' + [char]0x00E1 + 'sukhoz a j' + [char]0x00F6 + 'v' + [char]0x0151 + 'ben kifejezett meger' + [char]0x0151 + 's' + [char]0x00ED + 't' + [char]0x00E9 + 's kell.') }
     'hu:ps.doctor.wsl_memory' { return ('A WSL-nek nincs mem' + [char]0x00F3 + 'riakorl' + [char]0x00E1 + 'tja (m' + [char]0x00E1 + 's WSL-disztrib' + [char]0x00FA + 'ci' + [char]0x00F3 + 'k is regisztr' + [char]0x00E1 + 'lva vannak): add hozz' + [char]0x00E1 + ' a(z) %s f' + [char]0x00E1 + 'jlban a [wsl2] alatt: memory=%s') }
-    'hu:ps.download_asset_failed_detail' { return ('sikertelen let' + [char]0x00F6 + 'lt' + [char]0x00E9 + 's: %s (%s)') }
-    'hu:ps.download_shared_folder_no_path' { return ('a c' + [char]0x00E9 + 'lhely egy, a csapattal megosztott mapp' + [char]0x00E1 + 'ban van: v' + [char]0x00E1 + 'lassz azon k' + [char]0x00ED + 'v' + [char]0x00FC + 'li helyet, p' + [char]0x00E9 + 'ld' + [char]0x00E1 + 'ul a Downloads mapp' + [char]0x00E1 + 't.') }
-    'hu:ps.download_sums_failed_detail' { return ('sikertelen let' + [char]0x00F6 + 'lt' + [char]0x00E9 + 's: a v%s SHA256SUMS f' + [char]0x00E1 + 'jlja (%s)') }
     'hu:ps.full_pull_failed_keep_old' { return ('full_pull_failed: az ' + [char]0x00FA + 'j teljes k' + [char]0x00E9 + 'p nem ' + [char]0x00E9 + 'rkezett meg, a r' + [char]0x00E9 + 'gi marad. Teend' + [char]0x0151 + ': jht tools pull') }
     'hu:ps.help.main' { return (('jht - Job Hunter Team', '', ('  Gazdag' + [char]0x00E9 + 'p-parancsok (innen m' + [char]0x0171 + 'k' + [char]0x00F6 + 'dnek):'), ('    jht up                 elind' + [char]0x00ED + 'tja a csapat kont' + [char]0x00E9 + 'ner' + [char]0x00E9 + 't'), ('    jht down               le' + [char]0x00E1 + 'll' + [char]0x00ED + 'tja'), ('                           (a --verbose kapcsol' + [char]0x00F3 + 'val a motor sorai is l' + [char]0x00E1 + 'tszanak)'), ('    jht restart            ' + [char]0x00FA + 'jraind' + [char]0x00ED + 'tja'), ('    jht status             a kont' + [char]0x00E9 + 'ner ' + [char]0x00E9 + 's a csapat ' + [char]0x00E1 + 'llapota'), ('    jht logs [-f]          a kont' + [char]0x00E9 + 'ner napl' + [char]0x00F3 + 'ja'), ('    jht upgrade            friss' + [char]0x00ED + 't a leg' + [char]0x00FA + 'jabb k' + [char]0x00E9 + 'pre'), ('    jht setup              ir' + [char]0x00E1 + 'ny' + [char]0x00ED + 'tott telep' + [char]0x00ED + 't' + [char]0x00E9 + 's'), ('    jht shell              shell a kont' + [char]0x00E9 + 'neren bel' + [char]0x00FC + 'l'), ('    jht mail setup         elmenti a postafi' + [char]0x00F3 + 'kot a titokbrokerbe'), ('    jht mail drafts        az ' + [char]0x00FC + 'gyn' + [char]0x00F6 + 'k' + [char]0x00F6 + 'k ' + [char]0x00E1 + 'ltal ' + [char]0x00ED + 'rt e-mailek, amelyek a j' + [char]0x00F3 + 'v' + [char]0x00E1 + 'hagy' + [char]0x00E1 + 'sodra v' + [char]0x00E1 + 'rnak'), ('    jht mail approve <id>  elk' + [char]0x00FC + 'ldi ' + [char]0x0151 + 'ket; a jht mail discard <id> elveti ' + [char]0x0151 + 'ket'), '    jht integration list|status [ID]|add ID|remove ID [--purge --yes] [--remove-image] [--json]', ('                           a be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 's ut' + [char]0x00E1 + 'n hozz' + [char]0x00E1 + 'adhat' + [char]0x00F3 + ' integr' + [char]0x00E1 + 'ci' + [char]0x00F3 + 'k'), ('                           (google, telegram, mail): az ' + [char]0x00E1 + 'llapotot a motorb' + [char]0x00F3 + 'l olvassa'), ('    jht telegram status    az elk' + [char]0x00FC + 'l' + [char]0x00F6 + 'n' + [char]0x00ED + 'tett Telegram-szolg' + [char]0x00E1 + 'ltat' + [char]0x00E1 + 's ' + [char]0x00E1 + 'llapota'), ('    jht telegram pair ROLE kijelz' + [char]0x00E9 + 's n' + [char]0x00E9 + 'lk' + [char]0x00FC + 'l k' + [char]0x00E9 + 'ri a tokent a gazdag' + [char]0x00E9 + 'pen, majd'), ('                           mutat egy k' + [char]0x00F3 + 'dot, amelyet a Telegramodr' + [char]0x00F3 + 'l k' + [char]0x00FC + 'ldj el a botnak'), ('                           Automatiz' + [char]0x00E1 + 'l' + [char]0x00E1 + 'shoz: JSON a stdin-en. Ne mentsd a tokent'), ('                           a ~/.jht-be; az onnan k' + [char]0x00ED + 'v' + [char]0x00FC + 'l haszn' + [char]0x00E1 + 'lt f' + [char]0x00E1 + 'jlokat azonnal t' + [char]0x00F6 + 'r' + [char]0x00F6 + 'ld.'), ('    jht telegram pair --all egy menetben p' + [char]0x00E1 + 'ros' + [char]0x00ED + 'tja az ' + [char]0x00F6 + 'sszes r' + [char]0x00E9 + 'gi szerepet'), ('    jht telegram chat-id ROLE ugyanazzal a k' + [char]0x00F3 + 'ddal m' + [char]0x00E1 + 'sik chatre k' + [char]0x00F6 + 'lt' + [char]0x00F6 + 'zteti a botot'), ('    jht reset              t' + [char]0x00F6 + 'rli a be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00E1 + 'st ' + [char]0x00E9 + 's a broker k' + [char]0x00F6 + 'teteit'), '    jht migrate-runtime podman', ('                           ' + [char]0x00E1 + 'tm' + [char]0x00E1 + 'solja ' + [char]0x00E9 + 's ellen' + [char]0x0151 + 'rzi a Docker-k' + [char]0x00F6 + 'teteket a Podmanbe; nem'), ('                           v' + [char]0x00E1 + 'lasztja ki az ' + [char]0x00FA + 'j futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezetet, ' + [char]0x00E9 + 's nem t' + [char]0x00F6 + 'rli a Dockert'), ('    jht uninstall --confirm elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tja a helyi Windows-futtat' + [char]0x00F3 + 'k' + [char]0x00F6 + 'rnyezetet, de megtartja az'), ('                           adatokat, a dokumentumokat, a Podmant ' + [char]0x00E9 + 's a Composet'), '', ('  Az ' + [char]0x00F6 + 'sszes t' + [char]0x00F6 + 'bbi parancs (positions, stats, team, providers, cron,'), ('  working-hours, cloud...) a kont' + [char]0x00E9 + 'neren BEL' + [char]0x00DC + 'L fut: a s' + [char]0x00FA + 'g' + [char]0x00F3 + 'jukhoz'), ('  fut' + [char]0x00F3 + ' kont' + [char]0x00E9 + 'ner kell.'), '', '      jht up ; jht --help') -join [char]10) }
     'hu:ps.home_unavailable_bind_mount' { return ('a HOME/USERPROFILE nem ' + [char]0x00E9 + 'rhet' + [char]0x0151 + ' el: a JHT bind mount elutas' + [char]0x00ED + 'tva') }
-    'hu:ps.host_download_failed' { return ('a g' + [char]0x00E9 + 'pen v' + [char]0x00E9 + 'gzett let' + [char]0x00F6 + 'lt' + [char]0x00E9 + 's sikertelen: %s') }
     'hu:ps.input_not_json_bot_token_stdin' { return ('input_not_json: add meg a bot_token ' + [char]0x00E9 + 'rt' + [char]0x00E9 + 'k' + [char]0x00E9 + 't JSON-k' + [char]0x00E9 + 'nt a stdin-en.') }
     'hu:ps.integration_not_installed' { return ('nincs telep' + [char]0x00ED + 'tve') }
     'hu:ps.integration_not_installed_yet' { return ('m' + [char]0x00E9 + 'g nincs telep' + [char]0x00ED + 'tve') }
@@ -891,7 +821,6 @@ function Get-JhtTextTable {
     'hu:ps.pair_role_now_prompt' { return ('P' + [char]0x00E1 + 'ros' + [char]0x00ED + 'tod most a(z) %s szerepk' + [char]0x00F6 + 'rt? [s/N]') }
     'hu:ps.podman_exe_not_found' { return ('a podman.exe nem tal' + [char]0x00E1 + 'lhat' + [char]0x00F3) }
     'hu:ps.podman_machine_not_responding' { return ('A JHT Podman-g' + [char]0x00E9 + 'pe nem v' + [char]0x00E1 + 'laszol. Futtasd a ''jht up'' parancsot.') }
-    'hu:ps.release_arrived_without_https' { return ('a kiad' + [char]0x00E1 + 's HTTPS n' + [char]0x00E9 + 'lk' + [char]0x00FC + 'l ' + [char]0x00E9 + 'rkezett: %s') }
     'hu:ps.relink_account_container_not_running' { return ('apply relink-account: a kont' + [char]0x00E9 + 'ner nem fut.') }
     'hu:ps.script_integration_not_installed' { return ('a(z) jht-integration.ps1 szkript m' + [char]0x00E9 + 'g nincs telep' + [char]0x00ED + 'tve: ''jht upgrade'' (vagy egy ''jht integration add/remove''), majd pr' + [char]0x00F3 + 'b' + [char]0x00E1 + 'ld ' + [char]0x00FA + 'jra') }
     'hu:ps.script_tools_not_installed' { return ('a(z) jht-tools.ps1 szkript m' + [char]0x00E9 + 'g nincs telep' + [char]0x00ED + 'tve: ''jht upgrade'', majd pr' + [char]0x00F3 + 'b' + [char]0x00E1 + 'ld ' + [char]0x00FA + 'jra') }
@@ -922,7 +851,6 @@ function Get-JhtTextTable {
     'hu:ps.uninstall.wslconfig.done' { return ('Elt' + [char]0x00E1 + 'vol' + [char]0x00ED + 'tva a(z) {0} f' + [char]0x00E1 + 'jlb' + [char]0x00F3 + 'l a telep' + [char]0x00ED + 't' + [char]0x0151 + ' ' + [char]0x00E1 + 'ltal hozz' + [char]0x00E1 + 'adott sorok (WSL-mem' + [char]0x00F3 + 'ria).') }
     'hu:ps.uninstall.wslconfig.kept' { return ('A(z) {0} f' + [char]0x00E1 + 'jlban meghagytam a te ' + [char]0x00E1 + 'ltalad m' + [char]0x00F3 + 'dos' + [char]0x00ED + 'tott sorokat: azok a tieid.') }
     'hu:ps.uninstall.wslconfig.left' { return ('Nem m' + [char]0x00F3 + 'dos' + [char]0x00ED + 'tottam: {0} ({1}). A telep' + [char]0x00ED + 't' + [char]0x0151 + ' ' + [char]0x00E1 + 'ltal hozz' + [char]0x00E1 + 'adott sorok (WSL-mem' + [char]0x00F3 + 'ria) megmaradnak. T' + [char]0x00F6 + 'r' + [char]0x00F6 + 'ld ' + [char]0x0151 + 'ket k' + [char]0x00E9 + 'zzel: mindegyik felett van egy megjegyz' + [char]0x00E9 + 'ssor.') }
-    'hu:ps.unknown_argument' { return 'ismeretlen argumentum: %s' }
     'hu:ps.upgrade_already_running' { return ('M' + [char]0x00E1 + 'r folyamatban van egy friss' + [char]0x00ED + 't' + [char]0x00E9 + 's') }
     'hu:ps.upgrade_broker_restart_failed' { return ('broker_restart_failed: a titokbroker nem indult ' + [char]0x00FA + 'jra. Teend' + [char]0x0151 + ': jht up') }
     'hu:ps.upgrade_disk_low' { return ('disk_low: Az ' + [char]0x00FC + 'gyn' + [char]0x00F6 + 'k' + [char]0x00F6 + 'knek legal' + [char]0x00E1 + 'bb %s GiB lemezter' + [char]0x00FC + 'let kell ' + [char]0x2014 + ' szabad: %s GiB. Hely felszabad' + [char]0x00ED + 't' + [char]0x00E1 + 's' + [char]0x00E1 + 'hoz ' + [char]0x00FC + 'r' + [char]0x00ED + 'tsd ki a Kuk' + [char]0x00E1 + 't, t' + [char]0x00F6 + 'r' + [char]0x00F6 + 'ld a nagy f' + [char]0x00E1 + 'jlokat, amelyekre nincs sz' + [char]0x00FC + 'ks' + [char]0x00E9 + 'ged, ' + [char]0x00E9 + 's a nem haszn' + [char]0x00E1 + 'lt Docker-k' + [char]0x00E9 + 'peket, majd pr' + [char]0x00F3 + 'b' + [char]0x00E1 + 'ld ' + [char]0x00FA + 'jra: semmi nem lett let' + [char]0x00F6 + 'ltve vagy m' + [char]0x00F3 + 'dos' + [char]0x00ED + 'tva.') }
@@ -986,23 +914,7 @@ function Get-JhtTextTable {
     'es:doctor.host_team_unattestable' { return ('hay un contenedor del equipo, pero no se puede verificar que sea nuestro: no he tocado nada (''jht status'' te dice m' + [char]0x00E1 + 's)') }
     'es:doctor.host_title' { return ('Job Hunter Team: el equipo est' + [char]0x00E1 + ' apagado (su contenedor no est' + [char]0x00E1 + ' en marcha). Comprobaciones hechas desde este ordenador:') }
     'es:down.done' { return 'Job Hunter Team detenido.' }
-    'es:download.bad_version' { return ('versi' + [char]0x00F3 + 'n no v' + [char]0x00E1 + 'lida: %s. Ejemplo: 0.3.5.') }
-    'es:download.deb_only_linux' { return '--deb solo es para Linux.' }
-    'es:download.dest_is_link' { return 'el destino es un enlace: %s' }
-    'es:download.dest_not_file' { return 'el destino existe y no es un archivo: %s' }
-    'es:download.fetching' { return 'Descargando %s...' }
-    'es:download.hash_invalid' { return ('SHA-256 no v' + [char]0x00E1 + 'lido para %s: se esperaba %s, se ha obtenido %s.') }
-    'es:download.intel_mac' { return 'La app de macOS de la 0.4 solo funciona en Mac con Apple silicon (M1 y posteriores); este es un Mac Intel, que la 0.4 no admite. No se ha descargado nada.' }
-    'es:download.linux_no_app' { return ('En esta versi' + [char]0x00F3 + 'n no hay app de escritorio para Linux: usa install.sh. No se ha descargado nada.') }
-    'es:download.mismatch_existing' { return 'el archivo %s existe, pero su SHA-256 no coincide: no se ha sobrescrito.' }
-    'es:download.mkdir_failed' { return 'no se puede crear la carpeta de destino: %s' }
-    'es:download.present_verified' { return 'Archivo ya presente y verificado: %s' }
-    'es:download.release_no_app' { return ('Esta versi' + [char]0x00F3 + 'n (v%s) no tiene app para macOS: usa la 0.4.0 o posterior. No se ha descargado nada.') }
-    'es:download.saved_in' { return 'Guardado en: %s' }
-    'es:download.sha_verified' { return 'SHA-256 verificado: %s' }
-    'es:download.sum_missing' { return 'no hay SHA-256 declarado para %s.' }
-    'es:download.unsupported_os' { return 'sistema no compatible: %s. Usa windows o macos.' }
-    'es:download.windows_missing' { return ('Windows no forma parte de la 0.4.0: la versi' + [char]0x00F3 + 'n no tiene instalador para Windows. No se ha descargado nada.') }
+    'es:download.no_desktop_app' { return ('La app de escritorio no est' + [char]0x00E1 + ' en la 0.4.0, as' + [char]0x00ED + ' que no hay nada que descargar: JHT se usa desde la terminal, con jht setup y jht up.') }
     'es:help.integration' { return (('Uso: jht integration <command>', '', '  list [--json]                   las integraciones y su estado', '  status [ID] [--json]            el estado de una, o de todas', ('  add ID [--json]                 a' + [char]0x00F1 + 'ade una integraci' + [char]0x00F3 + 'n'), '  remove ID [--purge --yes] [--remove-image] [--json]', ('                                  la quita; --purge borra tambi' + [char]0x00E9 + 'n sus datos (hace falta --yes);'), ('                                  --remove-image (solo screen y media) quita tambi' + [char]0x00E9 + 'n la imagen de las'), '                                  herramientas', '', 'Los ID admitidos son los que muestra `jht integration list`. No se descarga ni se enciende nada', 'hasta que lo pidas con `add`.') -join [char]10) }
     'es:help.linkedin' { return (('Uso: jht linkedin <command>', '', '  login [--stop]    el acceso a mano a LinkedIn (con Google): un navegador en un contenedor aparte,', '                    sin red, cuya ventana ves y usas desde la app; --stop lo cierra todo', ('  status --json     dice si el acceso est' + [char]0x00E1 + ' en curso y si la sesi' + [char]0x00F3 + 'n de LinkedIn est' + [char]0x00E1 + ' guardada'), '', 'No se descarga ni se enciende nada hasta que lo pidas con `login`.') -join [char]10) }
     'es:help.screen' { return (('Uso: jht screen <command>', '', '  on [--json]       enciende la pantalla en directo del closer: un contenedor aparte,', '                    con el stream solo en 127.0.0.1', '  off [--remove-image] [--json]', '                    la apaga y quita el contenedor; la imagen de las herramientas se queda en el disco,', '                    para volver a encenderla sin descargarla otra vez: --remove-image la quita y libera', '                    el espacio', ('  status [--json]   dice si est' + [char]0x00E1 + ' encendida'), '', 'No se descarga ni se enciende nada hasta que lo pidas con `on`. El stream es solo para ver.') -join [char]10) }
@@ -1079,7 +991,6 @@ function Get-JhtTextTable {
     'es:line.nessun_ruolo_ha_un_token' { return ('Ning' + [char]0x00FA + 'n rol tiene un token antiguo: para un bot nuevo usa jht telegram pair <rol>.') }
     'es:line.non_autorizzabile_s' { return 'No se puede autorizar: %s.' }
     'es:line.non_autorizzata_s' { return 'No autorizada: %s.' }
-    'es:line.os_and_version_are_required' { return '--os y --version son obligatorios' }
     'es:line.podman_non_trovato_reinstalla_il' { return 'No se encuentra Podman: vuelve a instalar el runtime de JHT.' }
     'es:line.preparo_il_servizio_della_posta' { return ('Preparando el servicio de correo (solo se crea la primera vez que hace falta)' + [char]0x2026) }
     'es:line.provider_attivo_non_riconosciuto_s' { return 'proveedor activo no reconocido: %s' }
@@ -1102,7 +1013,6 @@ function Get-JhtTextTable {
     'es:line.runtime_o_container_jht_non' { return 'runtime o contenedor de JHT no disponible' }
     'es:line.ruoli_da_abbinare_in_questa' { return ('Roles que vincular en esta sesi' + [char]0x00F3 + 'n: %s') }
     'es:line.s_ha_gi_un_bot' { return '%s ya tiene un bot vinculado: solo quito su copia antigua.' }
-    'es:line.s_needs_a_value' { return '%s necesita un valor' }
     'es:line.saltato_non_trovato_volume_broker' { return 'Omitido (no encontrado): volumen del broker %s' }
     'es:line.serve_un_terminale_l_autorizzazione' { return ('Hace falta un terminal: la autorizaci' + [char]0x00F3 + 'n se confirma a mano.') }
     'es:line.telegram_isolato_attivo_il_bridge' { return 'Telegram aislado activo; los agentes ya no pueden volver a activar el bridge antiguo.' }
@@ -1138,13 +1048,9 @@ function Get-JhtTextTable {
     'es:ps.docker_desktop_file_sharing_hint' { return ('  Qu' + [char]0x00E9 + ' hacer: abre Docker Desktop > Settings > Resources > File sharing, comprueba que la carpeta del usuario est' + [char]0x00E9 + ' compartida y vuelve a ejecutar ''jht up''.') }
     'es:ps.docker_podman_verified_future_removal' { return ('Migraci' + [char]0x00F3 + 'n Docker -> Podman verificada. Los vol' + [char]0x00FA + 'menes de Docker siguen intactos y a' + [char]0x00FA + 'n contienen las contrase' + [char]0x00F1 + 'as del correo, los accesos a los portales y los tokens de Telegram: para eliminarlos har' + [char]0x00E1 + ' falta en el futuro una confirmaci' + [char]0x00F3 + 'n expl' + [char]0x00ED + 'cita.') }
     'es:ps.doctor.wsl_memory' { return ('WSL no tiene l' + [char]0x00ED + 'mite de memoria (hay otras distribuciones de WSL registradas): en %s, bajo [wsl2], a' + [char]0x00F1 + 'ade memory=%s') }
-    'es:ps.download_asset_failed_detail' { return 'la descarga ha fallado: %s (%s)' }
-    'es:ps.download_shared_folder_no_path' { return ('el destino est' + [char]0x00E1 + ' dentro de una carpeta compartida con el equipo: elige una fuera de ella, como Downloads.') }
-    'es:ps.download_sums_failed_detail' { return 'la descarga ha fallado: SHA256SUMS de v%s (%s)' }
     'es:ps.full_pull_failed_keep_old' { return ('full_pull_failed: no ha llegado la imagen completa nueva, se queda la anterior. Qu' + [char]0x00E9 + ' hacer: jht tools pull') }
     'es:ps.help.main' { return (('jht - Job Hunter Team', '', ('  Comandos del host (funcionan desde aqu' + [char]0x00ED + '):'), '    jht up                 arranca el contenedor del equipo', '    jht down               lo detiene', ('                           (con --verbose se ven tambi' + [char]0x00E9 + 'n las l' + [char]0x00ED + 'neas del motor)'), '    jht restart            lo reinicia', '    jht status             estado del contenedor y del equipo', '    jht logs [-f]          logs del contenedor', ('    jht upgrade            actualiza a la imagen m' + [char]0x00E1 + 's reciente'), ('    jht setup              instalaci' + [char]0x00F3 + 'n guiada'), '    jht shell              shell dentro del contenedor', ('    jht mail setup         guarda el buz' + [char]0x00F3 + 'n de correo en el broker de secretos'), '    jht mail drafts        correos escritos por los agentes que esperan tu ok', ('    jht mail approve <id>  los env' + [char]0x00ED + 'a; jht mail discard <id> los descarta'), '    jht integration list|status [ID]|add ID|remove ID [--purge --yes] [--remove-image] [--json]', ('                           las integraciones que se a' + [char]0x00F1 + 'aden despu' + [char]0x00E9 + 's del setup'), ('                           (google, telegram, mail): estado le' + [char]0x00ED + 'do del motor'), '    jht telegram status    estado del servicio de Telegram aislado', '    jht telegram pair ROLE pide el token sin eco en el ordenador host, luego', ('                           muestra un c' + [char]0x00F3 + 'digo que mandar al bot desde tu Telegram'), '                           Para automatizaciones: JSON por stdin. No guardes el token', ('                           en ~/.jht; borra enseguida los archivos usados fuera de ah' + [char]0x00ED + '.'), ('    jht telegram pair --all empareja en una sola sesi' + [char]0x00F3 + 'n todos los roles legacy'), ('    jht telegram chat-id ROLE mueve el bot a otro chat, con el mismo c' + [char]0x00F3 + 'digo'), ('    jht reset              borra la configuraci' + [char]0x00F3 + 'n y los vol' + [char]0x00FA + 'menes del broker'), '    jht migrate-runtime podman', ('                           copia y verifica los vol' + [char]0x00FA + 'menes de Docker en Podman;'), '                           no selecciona el nuevo runtime y no borra Docker', '    jht uninstall --confirm elimina el runtime local de Windows, pero conserva datos,', '                           documentos, Podman y Compose', '', ('  Todos los dem' + [char]0x00E1 + 's comandos (positions, stats, team, providers, cron,'), '  working-hours, cloud...) se ejecutan DENTRO del contenedor: para su ayuda', '  hace falta el contenedor en marcha.', '', '      jht up ; jht --help') -join [char]10) }
     'es:ps.home_unavailable_bind_mount' { return 'HOME/USERPROFILE no disponible: bind mount de JHT rechazado' }
-    'es:ps.host_download_failed' { return 'la descarga en el host ha fallado: %s' }
     'es:ps.input_not_json_bot_token_stdin' { return 'input_not_json: pasa bot_token como JSON por stdin.' }
     'es:ps.integration_not_installed' { return 'no instalado' }
     'es:ps.integration_not_installed_yet' { return ('a' + [char]0x00FA + 'n no instalado') }
@@ -1167,7 +1073,6 @@ function Get-JhtTextTable {
     'es:ps.pair_role_now_prompt' { return ('' + [char]0x00BF + 'Emparejar %s ahora? [s/N]') }
     'es:ps.podman_exe_not_found' { return 'no se encuentra podman.exe' }
     'es:ps.podman_machine_not_responding' { return ('La m' + [char]0x00E1 + 'quina Podman de JHT no responde. Ejecuta ''jht up''.') }
-    'es:ps.release_arrived_without_https' { return 'la release ha llegado sin HTTPS: %s' }
     'es:ps.relink_account_container_not_running' { return ('apply relink-account: el contenedor no est' + [char]0x00E1 + ' en marcha.') }
     'es:ps.script_integration_not_installed' { return ('el script jht-integration.ps1 a' + [char]0x00FA + 'n no est' + [char]0x00E1 + ' instalado: ''jht upgrade'' (o un ''jht integration add/remove'') y vuelve a intentarlo') }
     'es:ps.script_tools_not_installed' { return ('el script jht-tools.ps1 a' + [char]0x00FA + 'n no est' + [char]0x00E1 + ' instalado: ''jht upgrade'' y vuelve a intentarlo') }
@@ -1198,7 +1103,6 @@ function Get-JhtTextTable {
     'es:ps.uninstall.wslconfig.done' { return ('Se han quitado de {0} las l' + [char]0x00ED + 'neas que a' + [char]0x00F1 + 'adi' + [char]0x00F3 + ' el instalador (memoria de WSL).') }
     'es:ps.uninstall.wslconfig.kept' { return ('Se han dejado en {0} las l' + [char]0x00ED + 'neas que cambiaste t' + [char]0x00FA + ': son tuyas.') }
     'es:ps.uninstall.wslconfig.left' { return ('No se ha tocado {0} ({1}): las l' + [char]0x00ED + 'neas que a' + [char]0x00F1 + 'adi' + [char]0x00F3 + ' el instalador (memoria de WSL) se quedan. Qu' + [char]0x00ED + 'talas a mano: cada una tiene una l' + [char]0x00ED + 'nea de comentario encima.') }
-    'es:ps.unknown_argument' { return 'argumento desconocido: %s' }
     'es:ps.upgrade_already_running' { return ('Ya hay una actualizaci' + [char]0x00F3 + 'n en curso') }
     'es:ps.upgrade_broker_restart_failed' { return ('broker_restart_failed: el broker de secretos no se ha reiniciado. Qu' + [char]0x00E9 + ' hacer: jht up') }
     'es:ps.upgrade_disk_low' { return ('disk_low: Los agentes necesitan al menos %s GiB de disco ' + [char]0x2014 + ' disponibles: %s GiB. Para liberar espacio vac' + [char]0x00ED + 'a la Papelera y borra los archivos grandes que no necesites y las im' + [char]0x00E1 + 'genes de Docker sin usar; luego vuelve a intentarlo: no se ha descargado ni cambiado nada.') }
@@ -1262,23 +1166,7 @@ function Get-JhtTextTable {
     'de:doctor.host_team_unattestable' { return ('Ein Container des Teams ist da, l' + [char]0x00E4 + 'sst sich aber nicht als unserer best' + [char]0x00E4 + 'tigen: Nichts wurde angefasst (''jht status'' sagt mehr)') }
     'de:doctor.host_title' { return ('Job Hunter Team: Das Team ist aus (sein Container l' + [char]0x00E4 + 'uft nicht). Pr' + [char]0x00FC + 'fungen von diesem Computer aus:') }
     'de:down.done' { return 'Job Hunter Team gestoppt.' }
-    'de:download.bad_version' { return ('Ung' + [char]0x00FC + 'ltige Version: %s. Beispiel: 0.3.5.') }
-    'de:download.deb_only_linux' { return ('--deb gibt es nur f' + [char]0x00FC + 'r Linux.') }
-    'de:download.dest_is_link' { return 'Das Ziel ist ein Link: %s' }
-    'de:download.dest_not_file' { return 'Das Ziel existiert und ist keine Datei: %s' }
-    'de:download.fetching' { return 'Lade %s herunter...' }
-    'de:download.hash_invalid' { return ('Ung' + [char]0x00FC + 'ltige SHA-256 f' + [char]0x00FC + 'r %s: erwartet %s, erhalten %s.') }
-    'de:download.intel_mac' { return ('Die macOS-App von 0.4 l' + [char]0x00E4 + 'uft nur auf Macs mit Apple silicon (M1 und neuer); das hier ist ein Intel-Mac, den 0.4 nicht unterst' + [char]0x00FC + 'tzt. Nichts wurde heruntergeladen.') }
-    'de:download.linux_no_app' { return ('In dieser Version gibt es keine Desktop-App f' + [char]0x00FC + 'r Linux: Nutze install.sh. Nichts wurde heruntergeladen.') }
-    'de:download.mismatch_existing' { return ('Die Datei %s existiert, aber ihre SHA-256 stimmt nicht: Sie wurde nicht ' + [char]0x00FC + 'berschrieben.') }
-    'de:download.mkdir_failed' { return ('Der Zielordner l' + [char]0x00E4 + 'sst sich nicht erstellen: %s') }
-    'de:download.present_verified' { return ('Datei schon vorhanden und gepr' + [char]0x00FC + 'ft: %s') }
-    'de:download.release_no_app' { return ('Dieses Release (v%s) hat keine App f' + [char]0x00FC + 'r macOS: Nutze 0.4.0 oder neuer. Nichts wurde heruntergeladen.') }
-    'de:download.saved_in' { return 'Gespeichert in: %s' }
-    'de:download.sha_verified' { return ('SHA-256 gepr' + [char]0x00FC + 'ft: %s') }
-    'de:download.sum_missing' { return ('Keine SHA-256 angegeben f' + [char]0x00FC + 'r %s.') }
-    'de:download.unsupported_os' { return ('Nicht unterst' + [char]0x00FC + 'tztes System: %s. Nutze windows oder macos.') }
-    'de:download.windows_missing' { return ('Windows ist nicht Teil von 0.4.0: Das Release hat keinen Installer f' + [char]0x00FC + 'r Windows. Nichts wurde heruntergeladen.') }
+    'de:download.no_desktop_app' { return 'Die Desktop-App ist nicht in 0.4.0, es gibt also nichts herunterzuladen: JHT wird im Terminal genutzt, mit jht setup und jht up.' }
     'de:help.integration' { return (('Verwendung: jht integration <command>', '', '  list [--json]                   die Integrationen und ihr Zustand', '  status [ID] [--json]            der Zustand einer oder aller', ('  add ID [--json]                 f' + [char]0x00FC + 'gt eine Integration hinzu'), '  remove ID [--purge --yes] [--remove-image] [--json]', ('                                  entfernt sie; --purge l' + [char]0x00F6 + 'scht auch ihre Daten (braucht --yes);'), '                                  --remove-image (nur screen und media) entfernt auch das Tool-Image', '', 'Erlaubt sind die IDs, die `jht integration list` zeigt. Nichts wird heruntergeladen oder gestartet,', 'bevor du es mit `add` verlangst.') -join [char]10) }
     'de:help.linkedin' { return (('Verwendung: jht linkedin <command>', '', '  login [--stop]    die Anmeldung von Hand bei LinkedIn (mit Google): ein Browser in einem eigenen Container, ohne', ('                    Netzwerk, dessen Fenster du in der App siehst und bedienst; --stop schlie' + [char]0x00DF + 't alles'), ('  status --json     sagt, ob die Anmeldung l' + [char]0x00E4 + 'uft und ob die LinkedIn-Sitzung gespeichert ist'), '', 'Nichts wird heruntergeladen oder gestartet, bevor du es mit `login` verlangst.') -join [char]10) }
     'de:help.screen' { return (('Verwendung: jht screen <command>', '', '  on [--json]       startet den Live-Bildschirm des Closers: ein eigener Container, mit dem Stream nur auf 127.0.0.1', '  off [--remove-image] [--json]', '                    stoppt ihn und entfernt den Container; das Tool-Image bleibt auf der Festplatte, damit du ihn', '                    ohne neuen Download wieder starten kannst: --remove-image entfernt es und gibt den Platz frei', ('  status [--json]   sagt, ob er l' + [char]0x00E4 + 'uft'), '', 'Nichts wird heruntergeladen oder gestartet, bevor du es mit `on` verlangst. Der Stream ist nur zum Ansehen.') -join [char]10) }
@@ -1355,7 +1243,6 @@ function Get-JhtTextTable {
     'de:line.nessun_ruolo_ha_un_token' { return ('Keine Rolle hat einen alten Token: F' + [char]0x00FC + 'r einen neuen Bot nutze jht telegram pair <Rolle>.') }
     'de:line.non_autorizzabile_s' { return 'Nicht autorisierbar: %s.' }
     'de:line.non_autorizzata_s' { return 'Nicht autorisiert: %s.' }
-    'de:line.os_and_version_are_required' { return '--os und --version sind erforderlich' }
     'de:line.podman_non_trovato_reinstalla_il' { return 'Podman nicht gefunden: Installiere die JHT-Runtime neu.' }
     'de:line.preparo_il_servizio_della_posta' { return ('Bereite den Mail-Dienst vor (er wird nur beim ersten Bedarf erstellt)' + [char]0x2026) }
     'de:line.provider_attivo_non_riconosciuto_s' { return 'Aktiver Anbieter nicht erkannt: %s' }
@@ -1378,7 +1265,6 @@ function Get-JhtTextTable {
     'de:line.runtime_o_container_jht_non' { return ('JHT-Runtime oder -Container nicht verf' + [char]0x00FC + 'gbar') }
     'de:line.ruoli_da_abbinare_in_questa' { return 'Zu koppelnde Rollen in dieser Sitzung: %s' }
     'de:line.s_ha_gi_un_bot' { return '%s hat schon einen gekoppelten Bot: Ich entferne nur seine alte Kopie.' }
-    'de:line.s_needs_a_value' { return '%s braucht einen Wert' }
     'de:line.saltato_non_trovato_volume_broker' { return ('' + [char]0x00DC + 'bersprungen (nicht gefunden): Broker-Volume %s') }
     'de:line.serve_un_terminale_l_autorizzazione' { return ('Ein Terminal ist n' + [char]0x00F6 + 'tig: Die Autorisierung wird von Hand best' + [char]0x00E4 + 'tigt.') }
     'de:line.telegram_isolato_attivo_il_bridge' { return 'Isoliertes Telegram aktiv; die alte Bridge kann von den Agenten nicht mehr reaktiviert werden.' }
@@ -1414,13 +1300,9 @@ function Get-JhtTextTable {
     'de:ps.docker_desktop_file_sharing_hint' { return ('  Was tun: ' + [char]0x00D6 + 'ffne Docker Desktop > Settings > Resources > File sharing, pr' + [char]0x00FC + 'fe, ob der Ordner des Benutzers freigegeben ist, und f' + [char]0x00FC + 'hre dann ''jht up'' erneut aus.') }
     'de:ps.docker_podman_verified_future_removal' { return ('Migration Docker -> Podman gepr' + [char]0x00FC + 'ft. Die Docker-Volumes bleiben unver' + [char]0x00E4 + 'ndert und enthalten noch die Mail-Passw' + [char]0x00F6 + 'rter, die Portal-Zug' + [char]0x00E4 + 'nge und die Telegram-Tokens: Zum Entfernen ist k' + [char]0x00FC + 'nftig eine ausdr' + [char]0x00FC + 'ckliche Best' + [char]0x00E4 + 'tigung n' + [char]0x00F6 + 'tig.') }
     'de:ps.doctor.wsl_memory' { return 'WSL hat kein Speicherlimit (andere WSL-Distributionen sind registriert): trage in %s unter [wsl2] memory=%s ein' }
-    'de:ps.download_asset_failed_detail' { return 'Download fehlgeschlagen: %s (%s)' }
-    'de:ps.download_shared_folder_no_path' { return ('Das Ziel liegt in einem Ordner, den du mit dem Team teilst: W' + [char]0x00E4 + 'hle einen au' + [char]0x00DF + 'erhalb, z. B. Downloads.') }
-    'de:ps.download_sums_failed_detail' { return 'Download fehlgeschlagen: SHA256SUMS von v%s (%s)' }
     'de:ps.full_pull_failed_keep_old' { return ('full_pull_failed: Das neue vollst' + [char]0x00E4 + 'ndige Image ist nicht angekommen, das alte bleibt. Was tun: jht tools pull') }
     'de:ps.help.main' { return (('jht - Job Hunter Team', '', '  Host-Befehle (funktionieren von hier aus):', '    jht up                 startet den Container des Teams', '    jht down               stoppt ihn', '                           (mit --verbose siehst du auch die Zeilen der Engine)', '    jht restart            startet ihn neu', '    jht status             Zustand von Container und Team', '    jht logs [-f]          Logs des Containers', '    jht upgrade            aktualisiert auf das neueste Image', ('    jht setup              gef' + [char]0x00FC + 'hrte Installation'), '    jht shell              Shell im Container', '    jht mail setup         speichert das Postfach im Secrets-Broker', '    jht mail drafts        von den Agenten geschriebene Mails, die auf dein Okay warten', '    jht mail approve <id>  sendet sie; jht mail discard <id> verwirft sie', '    jht integration list|status [ID]|add ID|remove ID [--purge --yes] [--remove-image] [--json]', '                           die Integrationen, die nach dem Setup dazukommen', '                           (google, telegram, mail): Zustand von der Engine gelesen', '    jht telegram status    Zustand des isolierten Telegram-Dienstes', '    jht telegram pair ROLE fragt den Token ohne Echo auf dem Host-Computer ab, dann', '                           zeigt es einen Code, den du dem Bot von deinem Telegram schickst', ('                           F' + [char]0x00FC + 'r Automatisierungen: JSON auf stdin. Speichere den Token nicht'), ('                           in ~/.jht; l' + [char]0x00F6 + 'sche au' + [char]0x00DF + 'erhalb davon verwendete Dateien sofort.'), '    jht telegram pair --all koppelt alle alten Rollen in einer Sitzung', '    jht telegram chat-id ROLE verlegt den Bot in einen anderen Chat, mit demselben Code', ('    jht reset              l' + [char]0x00F6 + 'scht Konfiguration und Volumes des Brokers'), '    jht migrate-runtime podman', ('                           kopiert und pr' + [char]0x00FC + 'ft die Docker-Volumes in Podman;'), ('                           w' + [char]0x00E4 + 'hlt die neue Runtime nicht und l' + [char]0x00F6 + 'scht Docker nicht'), ('    jht uninstall --confirm entfernt die lokale Windows-Runtime, beh' + [char]0x00E4 + 'lt aber Daten,'), '                           Dokumente, Podman und Compose', '', '  Alle anderen Befehle (positions, stats, team, providers, cron,', ('  working-hours, cloud...) laufen IM Container: F' + [char]0x00FC + 'r ihre Hilfe'), '  muss der Container laufen.', '', '      jht up ; jht --help') -join [char]10) }
     'de:ps.home_unavailable_bind_mount' { return ('HOME/USERPROFILE nicht verf' + [char]0x00FC + 'gbar: JHT-Bind-Mount abgelehnt') }
-    'de:ps.host_download_failed' { return 'Download auf dem Host fehlgeschlagen: %s' }
     'de:ps.input_not_json_bot_token_stdin' { return ('input_not_json: ' + [char]0x00DC + 'bergib bot_token als JSON ' + [char]0x00FC + 'ber stdin.') }
     'de:ps.integration_not_installed' { return 'nicht installiert' }
     'de:ps.integration_not_installed_yet' { return 'noch nicht installiert' }
@@ -1443,7 +1325,6 @@ function Get-JhtTextTable {
     'de:ps.pair_role_now_prompt' { return '%s jetzt koppeln? [s/N]' }
     'de:ps.podman_exe_not_found' { return 'podman.exe nicht gefunden' }
     'de:ps.podman_machine_not_responding' { return ('Die JHT-Podman-Maschine antwortet nicht. F' + [char]0x00FC + 'hre ''jht up'' aus.') }
-    'de:ps.release_arrived_without_https' { return 'Das Release kam ohne HTTPS an: %s' }
     'de:ps.relink_account_container_not_running' { return ('apply relink-account: Container l' + [char]0x00E4 + 'uft nicht.') }
     'de:ps.script_integration_not_installed' { return 'Skript jht-integration.ps1 noch nicht installiert: ''jht upgrade'' (oder ein ''jht integration add/remove'') und versuch es erneut' }
     'de:ps.script_tools_not_installed' { return 'Skript jht-tools.ps1 noch nicht installiert: ''jht upgrade'' und versuch es erneut' }
@@ -1474,7 +1355,6 @@ function Get-JhtTextTable {
     'de:ps.uninstall.wslconfig.done' { return ('Aus {0} wurden die vom Installer hinzugef' + [char]0x00FC + 'gten Zeilen entfernt (WSL-Speicher).') }
     'de:ps.uninstall.wslconfig.kept' { return ('In {0} wurden die Zeilen belassen, die du ge' + [char]0x00E4 + 'ndert hast: Sie sind deine.') }
     'de:ps.uninstall.wslconfig.left' { return ('Nicht angefasst: {0} ({1}). Die vom Installer hinzugef' + [char]0x00FC + 'gten Zeilen (WSL-Speicher) bleiben. Entferne sie von Hand: ' + [char]0x00DC + 'ber jeder steht eine Kommentarzeile.') }
-    'de:ps.unknown_argument' { return 'Unbekanntes Argument: %s' }
     'de:ps.upgrade_already_running' { return ('Ein Update l' + [char]0x00E4 + 'uft bereits') }
     'de:ps.upgrade_broker_restart_failed' { return 'broker_restart_failed: Der Secrets-Broker ist nicht neu gestartet. Was tun: jht up' }
     'de:ps.upgrade_disk_low' { return ('disk_low: Die Agenten brauchen mindestens %s GiB Speicherplatz ' + [char]0x2014 + ' verf' + [char]0x00FC + 'gbar: %s GiB. Um Platz freizugeben, leere den Papierkorb und l' + [char]0x00F6 + 'sche gro' + [char]0x00DF + 'e Dateien, die du nicht brauchst, sowie nicht genutzte Docker-Images, dann versuch es erneut: Es wurde nichts heruntergeladen oder ge' + [char]0x00E4 + 'ndert.') }
@@ -1538,23 +1418,7 @@ function Get-JhtTextTable {
     'fr:doctor.host_team_unattestable' { return ('un conteneur de l''' + [char]0x00E9 + 'quipe est l' + [char]0x00E0 + ' mais on ne peut pas v' + [char]0x00E9 + 'rifier qu''il est le n' + [char]0x00F4 + 'tre : rien n''a ' + [char]0x00E9 + 't' + [char]0x00E9 + ' touch' + [char]0x00E9 + ' (''jht status'' en dit plus)') }
     'fr:doctor.host_title' { return ('Job Hunter Team : l''' + [char]0x00E9 + 'quipe est ' + [char]0x00E9 + 'teinte (son conteneur ne tourne pas). V' + [char]0x00E9 + 'rifications faites depuis cet ordinateur :') }
     'fr:down.done' { return ('Job Hunter Team arr' + [char]0x00EA + 't' + [char]0x00E9 + '.') }
-    'fr:download.bad_version' { return 'version non valide : %s. Exemple : 0.3.5.' }
-    'fr:download.deb_only_linux' { return '--deb est seulement pour Linux.' }
-    'fr:download.dest_is_link' { return 'la destination est un lien : %s' }
-    'fr:download.dest_not_file' { return 'la destination existe et n''est pas un fichier : %s' }
-    'fr:download.fetching' { return ('T' + [char]0x00E9 + 'l' + [char]0x00E9 + 'chargement de %s...') }
-    'fr:download.hash_invalid' { return 'SHA-256 non valide pour %s : attendu %s, obtenu %s.' }
-    'fr:download.intel_mac' { return ('L''app macOS 0.4 ne tourne que sur les Mac avec puce Apple (M1 et suivants) ; ce Mac est un Mac Intel, que la 0.4 ne prend pas en charge. Rien n''a ' + [char]0x00E9 + 't' + [char]0x00E9 + ' t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charg' + [char]0x00E9 + '.') }
-    'fr:download.linux_no_app' { return ('Dans cette version il n''y a pas d''app de bureau pour Linux : utilise install.sh. Rien n''a ' + [char]0x00E9 + 't' + [char]0x00E9 + ' t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charg' + [char]0x00E9 + '.') }
-    'fr:download.mismatch_existing' { return ('le fichier %s existe mais son SHA-256 ne correspond pas : il n''a pas ' + [char]0x00E9 + 't' + [char]0x00E9 + ' ' + [char]0x00E9 + 'cras' + [char]0x00E9 + '.') }
-    'fr:download.mkdir_failed' { return ('impossible de cr' + [char]0x00E9 + 'er le dossier de destination : %s') }
-    'fr:download.present_verified' { return ('Fichier d' + [char]0x00E9 + 'j' + [char]0x00E0 + ' pr' + [char]0x00E9 + 'sent et v' + [char]0x00E9 + 'rifi' + [char]0x00E9 + ' : %s') }
-    'fr:download.release_no_app' { return ('Cette version (v%s) n''a pas d''app pour macOS : utilise la 0.4.0 ou une plus r' + [char]0x00E9 + 'cente. Rien n''a ' + [char]0x00E9 + 't' + [char]0x00E9 + ' t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charg' + [char]0x00E9 + '.') }
-    'fr:download.saved_in' { return ('Enregistr' + [char]0x00E9 + ' dans : %s') }
-    'fr:download.sha_verified' { return ('SHA-256 v' + [char]0x00E9 + 'rifi' + [char]0x00E9 + ' : %s') }
-    'fr:download.sum_missing' { return ('aucun SHA-256 d' + [char]0x00E9 + 'clar' + [char]0x00E9 + ' pour %s.') }
-    'fr:download.unsupported_os' { return ('syst' + [char]0x00E8 + 'me non pris en charge : %s. Utilise windows ou macos.') }
-    'fr:download.windows_missing' { return ('Windows ne fait pas partie de la 0.4.0 : la version n''a pas d''installeur pour Windows. Rien n''a ' + [char]0x00E9 + 't' + [char]0x00E9 + ' t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charg' + [char]0x00E9 + '.') }
+    'fr:download.no_desktop_app' { return ('L''application de bureau n''est pas dans la 0.4.0, il n''y a donc rien ' + [char]0x00E0 + ' t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charger : JHT s''utilise depuis le terminal, avec jht setup et jht up.') }
     'fr:help.integration' { return (('Usage : jht integration <commande>', '', ('  list [--json]                   les int' + [char]0x00E9 + 'grations et leur ' + [char]0x00E9 + 'tat'), ('  status [ID] [--json]            l''' + [char]0x00E9 + 'tat d''une seule, ou de toutes'), ('  add ID [--json]                 ajoute une int' + [char]0x00E9 + 'gration'), '  remove ID [--purge --yes] [--remove-image] [--json]', ('                                  la retire ; --purge efface aussi ses donn' + [char]0x00E9 + 'es (il faut --yes) ;'), '                                  --remove-image (seulement screen et media) retire aussi l''image des outils', '', ('Les ID admis sont ceux qu''affiche `jht integration list`. Rien ne se t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charge ni ne s''allume'), 'tant que tu ne le demandes pas avec `add`.') -join [char]10) }
     'fr:help.linkedin' { return (('Usage : jht linkedin <commande>', '', ('  login [--stop]    la connexion manuelle ' + [char]0x00E0 + ' LinkedIn (avec Google) : un navigateur dans un conteneur ' + [char]0x00E0 + ' part, sans r' + [char]0x00E9 + 'seau,'), ('                    dont tu vois et utilises la fen' + [char]0x00EA + 'tre depuis l''app ; --stop ferme tout'), ('  status --json     dit si la connexion est en cours et si la session LinkedIn est enregistr' + [char]0x00E9 + 'e'), '', ('Rien ne se t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charge ni ne s''allume tant que tu ne le demandes pas avec `login`.')) -join [char]10) }
     'fr:help.screen' { return (('Usage : jht screen <commande>', '', ('  on [--json]       allume l''' + [char]0x00E9 + 'cran en direct du closer : un conteneur ' + [char]0x00E0 + ' part, avec le stream seulement sur 127.0.0.1'), '  off [--remove-image] [--json]', ('                    l''' + [char]0x00E9 + 'teint et retire le conteneur ; l''image des outils reste sur le disque, pour le rallumer'), ('                    sans la ret' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charger : --remove-image la retire et lib' + [char]0x00E8 + 're l''espace'), ('  status [--json]   dit s''il est allum' + [char]0x00E9), '', ('Rien ne se t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charge ni ne s''allume tant que tu ne le demandes pas avec `on`. Le stream se regarde seulement.')) -join [char]10) }
@@ -1631,7 +1495,6 @@ function Get-JhtTextTable {
     'fr:line.nessun_ruolo_ha_un_token' { return ('Aucun r' + [char]0x00F4 + 'le n''a d''ancien token : pour un nouveau bot, utilise jht telegram pair <r' + [char]0x00F4 + 'le>.') }
     'fr:line.non_autorizzabile_s' { return ('Impossible ' + [char]0x00E0 + ' autoriser : %s.') }
     'fr:line.non_autorizzata_s' { return ('Non autoris' + [char]0x00E9 + 'e : %s.') }
-    'fr:line.os_and_version_are_required' { return '--os et --version sont obligatoires' }
     'fr:line.podman_non_trovato_reinstalla_il' { return ('Podman introuvable : r' + [char]0x00E9 + 'installe le runtime JHT.') }
     'fr:line.preparo_il_servizio_della_posta' { return ('Je pr' + [char]0x00E9 + 'pare le service mail (il n''est cr' + [char]0x00E9 + [char]0x00E9 + ' que la premi' + [char]0x00E8 + 're fois qu''on en a besoin)' + [char]0x2026) }
     'fr:line.provider_attivo_non_riconosciuto_s' { return 'fournisseur actif non reconnu : %s' }
@@ -1654,7 +1517,6 @@ function Get-JhtTextTable {
     'fr:line.runtime_o_container_jht_non' { return 'runtime ou conteneur JHT non disponible' }
     'fr:line.ruoli_da_abbinare_in_questa' { return ('R' + [char]0x00F4 + 'les ' + [char]0x00E0 + ' associer dans cette session : %s') }
     'fr:line.s_ha_gi_un_bot' { return ('%s a d' + [char]0x00E9 + 'j' + [char]0x00E0 + ' un bot associ' + [char]0x00E9 + ' : je supprime seulement son ancienne copie.') }
-    'fr:line.s_needs_a_value' { return '%s demande une valeur' }
     'fr:line.saltato_non_trovato_volume_broker' { return ('Ignor' + [char]0x00E9 + ' (introuvable) : volume broker %s') }
     'fr:line.serve_un_terminale_l_autorizzazione' { return ('Il faut un terminal : l''autorisation se confirme ' + [char]0x00E0 + ' la main.') }
     'fr:line.telegram_isolato_attivo_il_bridge' { return ('Telegram isol' + [char]0x00E9 + ' actif ; les agents ne peuvent plus r' + [char]0x00E9 + 'activer l''ancien bridge.') }
@@ -1690,13 +1552,9 @@ function Get-JhtTextTable {
     'fr:ps.docker_desktop_file_sharing_hint' { return ('  Que faire : ouvre Docker Desktop > Settings > Resources > File sharing, v' + [char]0x00E9 + 'rifie que le dossier de l''utilisateur est partag' + [char]0x00E9 + ', puis relance ''jht up''.') }
     'fr:ps.docker_podman_verified_future_removal' { return ('Migration Docker -> Podman v' + [char]0x00E9 + 'rifi' + [char]0x00E9 + 'e. Les volumes Docker restent intacts et contiennent encore les mots de passe mail, les acc' + [char]0x00E8 + 's aux portails et les tokens Telegram : leur suppression demandera ' + [char]0x00E0 + ' l''avenir une confirmation explicite.') }
     'fr:ps.doctor.wsl_memory' { return ('WSL n''a pas de limite de m' + [char]0x00E9 + 'moire (d''autres distributions WSL sont enregistr' + [char]0x00E9 + 'es) : dans %s, sous [wsl2], ajoute memory=%s') }
-    'fr:ps.download_asset_failed_detail' { return ('' + [char]0x00E9 + 'chec du t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'chargement : %s (%s)') }
-    'fr:ps.download_shared_folder_no_path' { return ('la destination est dans un dossier partag' + [char]0x00E9 + ' avec l''' + [char]0x00E9 + 'quipe : choisis-en un en dehors, comme Downloads.') }
-    'fr:ps.download_sums_failed_detail' { return ('' + [char]0x00E9 + 'chec du t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'chargement : SHA256SUMS de v%s (%s)') }
     'fr:ps.full_pull_failed_keep_old' { return ('full_pull_failed: la nouvelle image compl' + [char]0x00E8 + 'te n''est pas arriv' + [char]0x00E9 + 'e, l''ancienne reste. Que faire : jht tools pull') }
     'fr:ps.help.main' { return (('jht - Job Hunter Team', '', ('  Commandes de l''h' + [char]0x00F4 + 'te (elles marchent d''ici) :'), ('    jht up                 d' + [char]0x00E9 + 'marre le conteneur de l''' + [char]0x00E9 + 'quipe'), ('    jht down               l''arr' + [char]0x00EA + 'te'), '                           (avec --verbose on voit aussi les lignes du moteur)', ('    jht restart            le red' + [char]0x00E9 + 'marre'), ('    jht status             ' + [char]0x00E9 + 'tat du conteneur et de l''' + [char]0x00E9 + 'quipe'), '    jht logs [-f]          logs du conteneur', ('    jht upgrade            met ' + [char]0x00E0 + ' jour vers l''image la plus r' + [char]0x00E9 + 'cente'), ('    jht setup              installation guid' + [char]0x00E9 + 'e'), '    jht shell              shell dans le conteneur', ('    jht mail setup         enregistre la bo' + [char]0x00EE + 'te mail dans le broker des secrets'), ('    jht mail drafts        mails ' + [char]0x00E9 + 'crits par les agents qui attendent ton accord'), ('    jht mail approve <id>  les envoie ; jht mail discard <id> les ' + [char]0x00E9 + 'carte'), '    jht integration list|status [ID]|add ID|remove ID [--purge --yes] [--remove-image] [--json]', ('                           les int' + [char]0x00E9 + 'grations qu''on ajoute apr' + [char]0x00E8 + 's le setup'), ('                           (google, telegram, mail) : ' + [char]0x00E9 + 'tat lu par le moteur'), ('    jht telegram status    ' + [char]0x00E9 + 'tat du service Telegram isol' + [char]0x00E9), ('    jht telegram pair ROLE demande le token sans ' + [char]0x00E9 + 'cho sur l''ordinateur h' + [char]0x00F4 + 'te, puis'), ('                           affiche un code ' + [char]0x00E0 + ' envoyer au bot depuis ton Telegram'), '                           Pour les automatisations : JSON sur stdin. N''enregistre pas le token', ('                           dans ~/.jht ; efface tout de suite les fichiers utilis' + [char]0x00E9 + 's hors de l' + [char]0x00E0 + '.'), ('    jht telegram pair --all associe en une session tous les r' + [char]0x00F4 + 'les aux anciens tokens'), ('    jht telegram chat-id ROLE d' + [char]0x00E9 + 'place le bot vers un autre chat, avec le m' + [char]0x00EA + 'me code'), '    jht reset              efface la configuration et les volumes du broker', '    jht migrate-runtime podman', ('                           copie et v' + [char]0x00E9 + 'rifie les volumes Docker dans Podman ;'), ('                           ne s' + [char]0x00E9 + 'lectionne pas le nouveau runtime et n''efface pas Docker'), ('    jht uninstall --confirm supprime le runtime local Windows, mais conserve les donn' + [char]0x00E9 + 'es,'), '                           les documents, Podman et Compose', '', '  Toutes les autres commandes (positions, stats, team, providers, cron,', '  working-hours, cloud...) tournent DANS le conteneur : pour leur aide', '  il faut le conteneur actif.', '', '      jht up ; jht --help') -join [char]10) }
     'fr:ps.home_unavailable_bind_mount' { return ('HOME/USERPROFILE indisponible : bind mount JHT refus' + [char]0x00E9) }
-    'fr:ps.host_download_failed' { return ('' + [char]0x00E9 + 'chec du t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'chargement sur l''h' + [char]0x00F4 + 'te : %s') }
     'fr:ps.input_not_json_bot_token_stdin' { return 'input_not_json: passe bot_token en JSON sur stdin.' }
     'fr:ps.integration_not_installed' { return ('non install' + [char]0x00E9) }
     'fr:ps.integration_not_installed_yet' { return ('pas encore install' + [char]0x00E9) }
@@ -1719,7 +1577,6 @@ function Get-JhtTextTable {
     'fr:ps.pair_role_now_prompt' { return 'Associer %s maintenant ? [s/N]' }
     'fr:ps.podman_exe_not_found' { return 'podman.exe introuvable' }
     'fr:ps.podman_machine_not_responding' { return ('La machine Podman JHT ne r' + [char]0x00E9 + 'pond pas. Lance ''jht up''.') }
-    'fr:ps.release_arrived_without_https' { return ('la release est arriv' + [char]0x00E9 + 'e sans HTTPS : %s') }
     'fr:ps.relink_account_container_not_running' { return 'apply relink-account: le conteneur n''est pas actif.' }
     'fr:ps.script_integration_not_installed' { return ('script jht-integration.ps1 pas encore install' + [char]0x00E9 + ' : ''jht upgrade'' (ou un ''jht integration add/remove'') et r' + [char]0x00E9 + 'essaie') }
     'fr:ps.script_tools_not_installed' { return ('script jht-tools.ps1 pas encore install' + [char]0x00E9 + ' : ''jht upgrade'' et r' + [char]0x00E9 + 'essaie') }
@@ -1750,7 +1607,6 @@ function Get-JhtTextTable {
     'fr:ps.uninstall.wslconfig.done' { return ('Retir' + [char]0x00E9 + 'es de {0} : les lignes ajout' + [char]0x00E9 + 'es par l''installeur (m' + [char]0x00E9 + 'moire de WSL).') }
     'fr:ps.uninstall.wslconfig.kept' { return ('Laiss' + [char]0x00E9 + 'es dans {0} : les lignes que tu as modifi' + [char]0x00E9 + 'es, elles sont ' + [char]0x00E0 + ' toi.') }
     'fr:ps.uninstall.wslconfig.left' { return ('Non touch' + [char]0x00E9 + ' : {0} ({1}). Les lignes ajout' + [char]0x00E9 + 'es par l''installeur (m' + [char]0x00E9 + 'moire de WSL) restent. Retire-les ' + [char]0x00E0 + ' la main : chacune a une ligne de commentaire au-dessus.') }
-    'fr:ps.unknown_argument' { return 'argument inconnu : %s' }
     'fr:ps.upgrade_already_running' { return ('Une mise ' + [char]0x00E0 + ' jour est d' + [char]0x00E9 + 'j' + [char]0x00E0 + ' en cours') }
     'fr:ps.upgrade_broker_restart_failed' { return ('broker_restart_failed: le broker des secrets n''a pas red' + [char]0x00E9 + 'marr' + [char]0x00E9 + '. Que faire : jht up') }
     'fr:ps.upgrade_disk_low' { return ('disk_low: Les agents ont besoin d''au moins %s Gio de disque ' + [char]0x2014 + ' disponibles : %s Gio. Pour lib' + [char]0x00E9 + 'rer de l''espace, vide la Corbeille et supprime les gros fichiers dont tu n''as pas besoin ainsi que les images Docker inutilis' + [char]0x00E9 + 'es, puis r' + [char]0x00E9 + 'essaie : rien n''a ' + [char]0x00E9 + 't' + [char]0x00E9 + ' t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charg' + [char]0x00E9 + ' ni modifi' + [char]0x00E9 + '.') }
@@ -1814,23 +1670,7 @@ function Get-JhtTextTable {
     'pt:doctor.host_team_unattestable' { return ('h' + [char]0x00E1 + ' um contentor da equipa, mas n' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' poss' + [char]0x00ED + 'vel verificar que ' + [char]0x00E9 + ' nosso: n' + [char]0x00E3 + 'o toquei em nada (''jht status'' diz mais)') }
     'pt:doctor.host_title' { return ('Job Hunter Team: a equipa est' + [char]0x00E1 + ' desligada (o seu contentor n' + [char]0x00E3 + 'o est' + [char]0x00E1 + ' a correr). Verifica' + [char]0x00E7 + [char]0x00F5 + 'es feitas a partir deste computador:') }
     'pt:down.done' { return 'Job Hunter Team parado.' }
-    'pt:download.bad_version' { return ('vers' + [char]0x00E3 + 'o inv' + [char]0x00E1 + 'lida: %s. Exemplo: 0.3.5.') }
-    'pt:download.deb_only_linux' { return ('--deb ' + [char]0x00E9 + ' s' + [char]0x00F3 + ' para Linux.') }
-    'pt:download.dest_is_link' { return ('o destino ' + [char]0x00E9 + ' uma liga' + [char]0x00E7 + [char]0x00E3 + 'o: %s') }
-    'pt:download.dest_not_file' { return ('o destino existe e n' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' um ficheiro: %s') }
-    'pt:download.fetching' { return 'A descarregar %s...' }
-    'pt:download.hash_invalid' { return ('SHA-256 inv' + [char]0x00E1 + 'lido para %s: esperado %s, obtido %s.') }
-    'pt:download.intel_mac' { return ('A app para macOS da 0.4 s' + [char]0x00F3 + ' corre em Macs com Apple silicon (M1 e posteriores); este ' + [char]0x00E9 + ' um Mac Intel, que a 0.4 n' + [char]0x00E3 + 'o suporta. N' + [char]0x00E3 + 'o foi descarregado nada.') }
-    'pt:download.linux_no_app' { return ('Nesta vers' + [char]0x00E3 + 'o n' + [char]0x00E3 + 'o h' + [char]0x00E1 + ' app de ambiente de trabalho para Linux: usa install.sh. N' + [char]0x00E3 + 'o foi descarregado nada.') }
-    'pt:download.mismatch_existing' { return ('o ficheiro %s existe, mas o seu SHA-256 n' + [char]0x00E3 + 'o corresponde: n' + [char]0x00E3 + 'o foi substitu' + [char]0x00ED + 'do.') }
-    'pt:download.mkdir_failed' { return ('n' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' poss' + [char]0x00ED + 'vel criar a pasta de destino: %s') }
-    'pt:download.present_verified' { return ('Ficheiro j' + [char]0x00E1 + ' presente e verificado: %s') }
-    'pt:download.release_no_app' { return ('Esta vers' + [char]0x00E3 + 'o (v%s) n' + [char]0x00E3 + 'o tem app para macOS: usa a 0.4.0 ou posterior. N' + [char]0x00E3 + 'o foi descarregado nada.') }
-    'pt:download.saved_in' { return 'Guardado em: %s' }
-    'pt:download.sha_verified' { return 'SHA-256 verificado: %s' }
-    'pt:download.sum_missing' { return 'nenhum SHA-256 declarado para %s.' }
-    'pt:download.unsupported_os' { return ('sistema n' + [char]0x00E3 + 'o suportado: %s. Usa windows ou macos.') }
-    'pt:download.windows_missing' { return ('O Windows n' + [char]0x00E3 + 'o faz parte da 0.4.0: a vers' + [char]0x00E3 + 'o n' + [char]0x00E3 + 'o tem instalador para Windows. N' + [char]0x00E3 + 'o foi descarregado nada.') }
+    'pt:download.no_desktop_app' { return ('A app de ambiente de trabalho n' + [char]0x00E3 + 'o est' + [char]0x00E1 + ' na 0.4.0, por isso n' + [char]0x00E3 + 'o h' + [char]0x00E1 + ' nada para transferir: o JHT usa-se no terminal, com jht setup e jht up.') }
     'pt:help.integration' { return (('Uso: jht integration <command>', '', ('  list [--json]                   as integra' + [char]0x00E7 + [char]0x00F5 + 'es e o seu estado'), '  status [ID] [--json]            o estado de uma, ou de todas', ('  add ID [--json]                 acrescenta uma integra' + [char]0x00E7 + [char]0x00E3 + 'o'), '  remove ID [--purge --yes] [--remove-image] [--json]', ('                                  remove-a; --purge apaga tamb' + [char]0x00E9 + 'm os seus dados (precisa de --yes);'), ('                                  --remove-image (s' + [char]0x00F3 + ' screen e media) remove tamb' + [char]0x00E9 + 'm a imagem das ferramentas'), '', ('Os ID admitidos s' + [char]0x00E3 + 'o os que `jht integration list` mostra. Nada ' + [char]0x00E9 + ' descarregado nem ligado'), ('at' + [char]0x00E9 + ' o pedires com `add`.')) -join [char]10) }
     'pt:help.linkedin' { return (('Uso: jht linkedin <command>', '', ('  login [--stop]    o acesso manual ao LinkedIn (com o Google): um browser num contentor ' + [char]0x00E0 + ' parte, sem rede, cuja'), ('                    janela v' + [char]0x00EA + 's e usas a partir da app; --stop fecha tudo'), ('  status --json     diz se o acesso est' + [char]0x00E1 + ' em curso e se a sess' + [char]0x00E3 + 'o do LinkedIn est' + [char]0x00E1 + ' guardada'), '', ('Nada ' + [char]0x00E9 + ' descarregado nem ligado at' + [char]0x00E9 + ' o pedires com `login`.')) -join [char]10) }
     'pt:help.screen' { return (('Uso: jht screen <command>', '', ('  on [--json]       liga o ecr' + [char]0x00E3 + ' ao vivo do closer: um contentor ' + [char]0x00E0 + ' parte, com o stream s' + [char]0x00F3 + ' em 127.0.0.1'), '  off [--remove-image] [--json]', '                    desliga-o e remove o contentor; a imagem das ferramentas fica no disco, para o voltares', ('                    a ligar sem a descarregar de novo: --remove-image remove-a e liberta o espa' + [char]0x00E7 + 'o'), ('  status [--json]   diz se est' + [char]0x00E1 + ' ligado'), '', ('Nada ' + [char]0x00E9 + ' descarregado nem ligado at' + [char]0x00E9 + ' o pedires com `on`. O stream ' + [char]0x00E9 + ' s' + [char]0x00F3 + ' de visualiza' + [char]0x00E7 + [char]0x00E3 + 'o.')) -join [char]10) }
@@ -1907,7 +1747,6 @@ function Get-JhtTextTable {
     'pt:line.nessun_ruolo_ha_un_token' { return ('Nenhuma fun' + [char]0x00E7 + [char]0x00E3 + 'o tem um token antigo: para um bot novo usa jht telegram pair <fun' + [char]0x00E7 + [char]0x00E3 + 'o>.') }
     'pt:line.non_autorizzabile_s' { return ('N' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' poss' + [char]0x00ED + 'vel autorizar: %s.') }
     'pt:line.non_autorizzata_s' { return ('N' + [char]0x00E3 + 'o autorizada: %s.') }
-    'pt:line.os_and_version_are_required' { return ('--os e --version s' + [char]0x00E3 + 'o obrigat' + [char]0x00F3 + 'rios') }
     'pt:line.podman_non_trovato_reinstalla_il' { return ('Podman n' + [char]0x00E3 + 'o encontrado: reinstala o runtime do JHT.') }
     'pt:line.preparo_il_servizio_della_posta' { return ('A preparar o servi' + [char]0x00E7 + 'o de correio (s' + [char]0x00F3 + ' ' + [char]0x00E9 + ' criado na primeira vez que for preciso)' + [char]0x2026) }
     'pt:line.provider_attivo_non_riconosciuto_s' { return ('fornecedor ativo n' + [char]0x00E3 + 'o reconhecido: %s') }
@@ -1930,7 +1769,6 @@ function Get-JhtTextTable {
     'pt:line.runtime_o_container_jht_non' { return ('runtime ou contentor do JHT n' + [char]0x00E3 + 'o dispon' + [char]0x00ED + 'vel') }
     'pt:line.ruoli_da_abbinare_in_questa' { return ('Fun' + [char]0x00E7 + [char]0x00F5 + 'es a emparelhar nesta sess' + [char]0x00E3 + 'o: %s') }
     'pt:line.s_ha_gi_un_bot' { return ('%s j' + [char]0x00E1 + ' tem um bot emparelhado: s' + [char]0x00F3 + ' removo a sua c' + [char]0x00F3 + 'pia antiga.') }
-    'pt:line.s_needs_a_value' { return '%s precisa de um valor' }
     'pt:line.saltato_non_trovato_volume_broker' { return ('Saltado (n' + [char]0x00E3 + 'o encontrado): volume do broker %s') }
     'pt:line.serve_un_terminale_l_autorizzazione' { return ('' + [char]0x00C9 + ' preciso um terminal: a autoriza' + [char]0x00E7 + [char]0x00E3 + 'o confirma-se ' + [char]0x00E0 + ' m' + [char]0x00E3 + 'o.') }
     'pt:line.telegram_isolato_attivo_il_bridge' { return ('Telegram isolado ativo; a bridge antiga j' + [char]0x00E1 + ' n' + [char]0x00E3 + 'o pode ser reativada pelos agentes.') }
@@ -1966,13 +1804,9 @@ function Get-JhtTextTable {
     'pt:ps.docker_desktop_file_sharing_hint' { return ('  O que fazer: abre o Docker Desktop > Settings > Resources > File sharing, verifica se a pasta do utilizador est' + [char]0x00E1 + ' partilhada e corre ''jht up'' de novo.') }
     'pt:ps.docker_podman_verified_future_removal' { return ('Migra' + [char]0x00E7 + [char]0x00E3 + 'o Docker -> Podman verificada. Os volumes do Docker ficam intactos e ainda cont' + [char]0x00EA + 'm as palavras-passe do correio, os acessos aos portais e os tokens do Telegram: a remo' + [char]0x00E7 + [char]0x00E3 + 'o exigir' + [char]0x00E1 + ' no futuro uma confirma' + [char]0x00E7 + [char]0x00E3 + 'o expl' + [char]0x00ED + 'cita.') }
     'pt:ps.doctor.wsl_memory' { return ('O WSL n' + [char]0x00E3 + 'o tem limite de mem' + [char]0x00F3 + 'ria (h' + [char]0x00E1 + ' outras distribui' + [char]0x00E7 + [char]0x00F5 + 'es WSL registadas): em %s, em [wsl2], acrescenta memory=%s') }
-    'pt:ps.download_asset_failed_detail' { return 'o descarregamento falhou: %s (%s)' }
-    'pt:ps.download_shared_folder_no_path' { return ('o destino est' + [char]0x00E1 + ' dentro de uma pasta partilhada com a equipa: escolhe uma fora dela, como Downloads.') }
-    'pt:ps.download_sums_failed_detail' { return 'o descarregamento falhou: SHA256SUMS de v%s (%s)' }
     'pt:ps.full_pull_failed_keep_old' { return ('full_pull_failed: a imagem completa nova n' + [char]0x00E3 + 'o chegou, fica a antiga. O que fazer: jht tools pull') }
     'pt:ps.help.main' { return (('jht - Job Hunter Team', '', ('  Comandos do anfitri' + [char]0x00E3 + 'o (funcionam a partir daqui):'), '    jht up                 inicia o contentor da equipa', '    jht down               para-o', ('                           (com --verbose v' + [char]0x00EA + 's tamb' + [char]0x00E9 + 'm as linhas do motor)'), '    jht restart            reinicia-o', '    jht status             estado do contentor e da equipa', '    jht logs [-f]          registos do contentor', '    jht upgrade            atualiza para a imagem mais recente', ('    jht setup              instala' + [char]0x00E7 + [char]0x00E3 + 'o guiada'), '    jht shell              shell dentro do contentor', '    jht mail setup         guarda a caixa de correio no broker dos segredos', ('    jht mail drafts        emails escritos pelos agentes ' + [char]0x00E0 + ' espera do teu ok'), '    jht mail approve <id>  envia-os; jht mail discard <id> descarta-os', '    jht integration list|status [ID]|add ID|remove ID [--purge --yes] [--remove-image] [--json]', ('                           as integra' + [char]0x00E7 + [char]0x00F5 + 'es que se acrescentam depois do setup'), '                           (google, telegram, mail): estado lido no motor', ('    jht telegram status    estado do servi' + [char]0x00E7 + 'o Telegram isolado'), ('    jht telegram pair ROLE pede o token sem eco no computador anfitri' + [char]0x00E3 + 'o, depois'), ('                           mostra um c' + [char]0x00F3 + 'digo para enviares ao bot a partir do teu Telegram'), ('                           Para automa' + [char]0x00E7 + [char]0x00F5 + 'es: JSON no stdin. N' + [char]0x00E3 + 'o guardes o token'), ('                           em ~/.jht; apaga logo os ficheiros usados fora de l' + [char]0x00E1 + '.'), ('    jht telegram pair --all associa numa s' + [char]0x00F3 + ' sess' + [char]0x00E3 + 'o todas as fun' + [char]0x00E7 + [char]0x00F5 + 'es legacy'), ('    jht telegram chat-id ROLE muda o bot para outro chat, com o mesmo c' + [char]0x00F3 + 'digo'), ('    jht reset              apaga a configura' + [char]0x00E7 + [char]0x00E3 + 'o e os volumes do broker'), '    jht migrate-runtime podman', '                           copia e verifica os volumes do Docker no Podman;', ('                           n' + [char]0x00E3 + 'o seleciona o novo runtime e n' + [char]0x00E3 + 'o apaga o Docker'), ('    jht uninstall --confirm remove o runtime local do Windows, mas mant' + [char]0x00E9 + 'm dados,'), '                           documentos, Podman e Compose', '', '  Todos os outros comandos (positions, stats, team, providers, cron,', '  working-hours, cloud...) correm DENTRO do contentor: para a sua ajuda', ('  ' + [char]0x00E9 + ' preciso o contentor ativo.'), '', '      jht up ; jht --help') -join [char]10) }
     'pt:ps.home_unavailable_bind_mount' { return ('HOME/USERPROFILE n' + [char]0x00E3 + 'o dispon' + [char]0x00ED + 'vel: bind mount do JHT recusado') }
-    'pt:ps.host_download_failed' { return ('o descarregamento no anfitri' + [char]0x00E3 + 'o falhou: %s') }
     'pt:ps.input_not_json_bot_token_stdin' { return 'input_not_json: passa bot_token como JSON no stdin.' }
     'pt:ps.integration_not_installed' { return ('n' + [char]0x00E3 + 'o instalado') }
     'pt:ps.integration_not_installed_yet' { return ('ainda n' + [char]0x00E3 + 'o instalado') }
@@ -1995,7 +1829,6 @@ function Get-JhtTextTable {
     'pt:ps.pair_role_now_prompt' { return 'Emparelhar %s agora? [s/N]' }
     'pt:ps.podman_exe_not_found' { return ('podman.exe n' + [char]0x00E3 + 'o encontrado') }
     'pt:ps.podman_machine_not_responding' { return ('A m' + [char]0x00E1 + 'quina Podman do JHT n' + [char]0x00E3 + 'o responde. Corre ''jht up''.') }
-    'pt:ps.release_arrived_without_https' { return 'a release chegou sem HTTPS: %s' }
     'pt:ps.relink_account_container_not_running' { return ('apply relink-account: o contentor n' + [char]0x00E3 + 'o est' + [char]0x00E1 + ' a correr.') }
     'pt:ps.script_integration_not_installed' { return ('o script jht-integration.ps1 ainda n' + [char]0x00E3 + 'o est' + [char]0x00E1 + ' instalado: ''jht upgrade'' (ou um ''jht integration add/remove'') e tenta de novo') }
     'pt:ps.script_tools_not_installed' { return ('o script jht-tools.ps1 ainda n' + [char]0x00E3 + 'o est' + [char]0x00E1 + ' instalado: ''jht upgrade'' e tenta de novo') }
@@ -2026,7 +1859,6 @@ function Get-JhtTextTable {
     'pt:ps.uninstall.wslconfig.done' { return ('Removidas de {0} as linhas adicionadas pelo instalador (mem' + [char]0x00F3 + 'ria do WSL).') }
     'pt:ps.uninstall.wslconfig.kept' { return ('Deixadas em {0} as linhas que alteraste tu: s' + [char]0x00E3 + 'o tuas.') }
     'pt:ps.uninstall.wslconfig.left' { return ('N' + [char]0x00E3 + 'o tocado: {0} ({1}). As linhas adicionadas pelo instalador (mem' + [char]0x00F3 + 'ria do WSL) ficam. Remove-as ' + [char]0x00E0 + ' m' + [char]0x00E3 + 'o: cada uma tem uma linha de coment' + [char]0x00E1 + 'rio por cima.') }
-    'pt:ps.unknown_argument' { return 'argumento desconhecido: %s' }
     'pt:ps.upgrade_already_running' { return ('J' + [char]0x00E1 + ' h' + [char]0x00E1 + ' uma atualiza' + [char]0x00E7 + [char]0x00E3 + 'o em curso') }
     'pt:ps.upgrade_broker_restart_failed' { return ('broker_restart_failed: o broker dos segredos n' + [char]0x00E3 + 'o voltou a arrancar. O que fazer: jht up') }
     'pt:ps.upgrade_disk_low' { return ('disk_low: Os agentes precisam de pelo menos %s GiB de disco ' + [char]0x2014 + ' dispon' + [char]0x00ED + 'veis: %s GiB. Para libertar espa' + [char]0x00E7 + 'o esvazia o Lixo e apaga os ficheiros grandes de que n' + [char]0x00E3 + 'o precisas e as imagens Docker n' + [char]0x00E3 + 'o utilizadas; depois tenta de novo: nada foi descarregado nem alterado.') }
@@ -7391,183 +7223,14 @@ function Ensure-Up {
   }
 }
 
-# `jht download`: scarica l'app desktop e la verifica SULL'HOST. Prima il download e lo SHA-256 stavano dentro il container, e i
-# byte verificati venivano poi copiati sull'host con docker cp senza altra verifica (o lasciati in /jht_user/downloads, che gli
-# agenti scrivono): un agente poteva far arrivare alla persona un installer diverso da quello verificato. Ora l'host prende da
-# solo SHA256SUMS e l'installer dalla release (HTTPS), li tiene in una cartella privata fuori dai mount, confronta l'hash e
-# pubblica il file solo dopo, verso una cartella che gli agenti non scrivono. Il container non entra piu' nel comando.
-# JHT_RELEASE_BASE_URL e' la seam per mirror e test: viene dall'ambiente di chi lancia il comando, mai da host.env.
-function Test-DownloadInsideShared {
-  param([string]$Directory, [string[]]$Shared)
-  # Una cartella e' "dentro" se lei o un suo antenato e' una cartella condivisa; un antenato che e' un link (giunzione o
-  # collegamento simbolico) vale per quello che indica.
-  $current = [IO.Path]::GetFullPath($Directory).TrimEnd('\')
-  for ($depth = 0; $current -and $depth -lt 64; $depth++) {
-    foreach ($folder in $Shared) {
-      $root = [IO.Path]::GetFullPath($folder).TrimEnd('\')
-      if ($current -ieq $root) { return $true }
-    }
-    $item = Get-Item -LiteralPath $current -Force -ErrorAction SilentlyContinue
-    if ($item -and (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) -and $item.Target) {
-      $target = @($item.Target)[0]
-      if (-not [IO.Path]::IsPathRooted($target)) { $target = Join-Path (Split-Path -Parent $current) $target }
-      if (($depth -lt 8) -and (Test-DownloadInsideShared -Directory $target -Shared $Shared)) { return $true }
-    }
-    $parent = Split-Path -Parent $current
-    if (-not $parent -or $parent -eq $current) { break }
-    $current = $parent
-  }
-  return $false
-}
-
-# L'hash con .NET e non con Get-FileHash: il cmdlet viene dal modulo Microsoft.PowerShell.Utility, che un ambiente ridotto o un
-# PSModulePath rotto puo' non far trovare, e la verifica non deve dipendere da un modulo.
-function Get-DownloadSha256 {
-  param([string]$Path)
-  $stream = [IO.File]::OpenRead($Path)
-  try {
-    $sha = [Security.Cryptography.SHA256]::Create()
-    try { return (($sha.ComputeHash($stream) | ForEach-Object { $_.ToString('x2') }) -join '') }
-    finally { $sha.Dispose() }
-  } finally { $stream.Dispose() }
-}
-
+# `jht download`: la 0.4.0 non ha l'app desktop e la release non allega nessun installer, per nessun sistema: un download
+# sarebbe un 404. Il comando non scarica niente, qualunque cosa gli si chieda: dice, nella lingua della persona, che JHT si usa
+# dal terminale, ed esce con 1. `jht download --help` non arriva qui: lo serve l'aiuto locale dei comandi dell'host. Il codice di
+# uscita viaggia in $script:HostDownloadExitCode, non sullo stdout.
 function Invoke-HostDownload {
   param([string[]]$DownloadArgs)
-
-  # Un numero restituito da una funzione PowerShell viaggia sullo stesso success stream di stdout: il codice di uscita vive in
-  # un canale scalare dedicato e parte fail-closed; stdout/stderr restano liberi di arrivare al terminale.
+  Write-Err (Get-JhtText 'download.no_desktop_app')
   $script:HostDownloadExitCode = 1
-  $usage = "usage: jht download --os windows|macos --version X.Y.Z [--output FILE]"
-  $os = ''; $version = ''; $output = ''; $deb = $false
-  for ($i = 0; $i -lt $DownloadArgs.Count; $i++) {
-    $arg = $DownloadArgs[$i]
-    if ($arg -eq '--help' -or $arg -eq '-h') { Write-Host $usage; $script:HostDownloadExitCode = 0; return }
-    elseif ($arg -eq '--deb') { $deb = $true }
-    elseif ($arg -in @('--os', '--version', '--output', '-o')) {
-      if ($i + 1 -ge $DownloadArgs.Count -or -not $DownloadArgs[$i + 1]) { Write-Err (Format-JhtText 'line.s_needs_a_value' $arg); $script:HostDownloadExitCode = 2; return }
-      $i += 1
-      if ($arg -eq '--os') { $os = $DownloadArgs[$i] } elseif ($arg -eq '--version') { $version = $DownloadArgs[$i] } else { $output = $DownloadArgs[$i] }
-    }
-    elseif ($arg.StartsWith('--os=')) { $os = $arg.Substring(5) }
-    elseif ($arg.StartsWith('--version=')) { $version = $arg.Substring(10) }
-    elseif ($arg.StartsWith('--output=')) { $output = $arg.Substring(9) }
-    else { Write-Err (Format-JhtText 'ps.unknown_argument' $arg); Write-Host $usage; $script:HostDownloadExitCode = 2; return }
-  }
-  if (-not $os -or -not $version) { Write-Err (Get-JhtText 'line.os_and_version_are_required'); Write-Host $usage; $script:HostDownloadExitCode = 2; return }
-
-  $platform = switch ($os.ToLowerInvariant()) {
-    { $_ -in @('win', 'win32', 'windows') } { 'windows' }
-    { $_ -in @('darwin', 'mac', 'macos', 'osx') } { 'macos' }
-    'linux' { 'linux' }
-    default { $null }
-  }
-  if (-not $platform) { Write-Err (Format-JhtText 'download.unsupported_os' $os); $script:HostDownloadExitCode = 2; return }
-  $version = $version -replace '^v', ''
-  if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') { Write-Err (Format-JhtText 'download.bad_version' $version); $script:HostDownloadExitCode = 2; return }
-  if ($deb -and $platform -ne 'linux') { Write-Err (Get-JhtText 'download.deb_only_linux'); $script:HostDownloadExitCode = 2; return }
-  if ($platform -eq 'linux') {
-    Write-Err (Get-JhtText 'download.linux_no_app')
-    $script:HostDownloadExitCode = 1
-    return
-  }
-  $parts = $version.Split('-')[0].Split('.')
-  if ($platform -eq 'windows' -and (([int]$parts[0] -gt 0) -or ([int]$parts[1] -ge 4))) {
-    Write-Err (Get-JhtText 'download.windows_missing')
-    $script:HostDownloadExitCode = 1
-    return
-  }
-  # Le release 0.3.x hanno altri file (tar.gz, setup.exe, zip): l'app per macOS e' dalla 0.4.0.
-  if ($platform -ne 'windows' -and [int]$parts[0] -eq 0 -and [int]$parts[1] -lt 4) {
-    Write-Err (Format-JhtText 'download.release_no_app' $version)
-    $script:HostDownloadExitCode = 1
-    return
-  }
-  if ($platform -eq 'macos' -and $env:JHT_DOWNLOAD_HOST -eq 'darwin-x64') {
-    Write-Err (Get-JhtText 'download.intel_mac')
-    $script:HostDownloadExitCode = 1
-    return
-  }
-  $asset = if ($platform -eq 'windows') { 'job-hunter-team-windows-x64-setup.exe' }
-           else { 'job-hunter-team-macos-universal.dmg' }
-
-  # Destinazione: di base Downloads del profilo, mai una cartella condivisa con il team; un --output li' dentro si rifiuta.
-  $destination = if ($output) { [IO.Path]::GetFullPath($output) } else { Join-Path (Join-Path $env:USERPROFILE 'Downloads') $asset }
-  $parent = Split-Path -Parent $destination
-  try { New-Item -ItemType Directory -Force -Path $parent -ErrorAction Stop | Out-Null }
-  catch { Write-Err (Format-JhtText 'download.mkdir_failed' $parent); return }
-  $userData = if ($env:JHT_USER_DIR_HOST) { $env:JHT_USER_DIR_HOST } else { Join-Path $env:USERPROFILE 'Documents\Job Hunter Team' }
-  $jhtHome = if ($env:JHT_HOME_HOST) { $env:JHT_HOME_HOST } else { Join-Path $env:USERPROFILE '.jht' }
-  if (Test-DownloadInsideShared -Directory $parent -Shared @($jhtHome, $userData)) {
-    Write-Err (Get-JhtText 'ps.download_shared_folder_no_path')
-    return
-  }
-  $existing = Get-Item -LiteralPath $destination -Force -ErrorAction SilentlyContinue
-  if ($existing) {
-    if (($existing.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { Write-Err (Format-JhtText 'download.dest_is_link' $destination); return }
-    if ($existing.PSIsContainer) { Write-Err (Format-JhtText 'download.dest_not_file' $destination); return }
-  }
-
-  $base = if ($env:JHT_RELEASE_BASE_URL) { $env:JHT_RELEASE_BASE_URL } else { 'https://github.com/leopu00/job-hunter-team/releases/download' }
-  $base = $base.TrimEnd('/') + "/v$version"
-  $seam = [bool]$env:JHT_RELEASE_BASE_URL
-  $work = Join-Path ([IO.Path]::GetTempPath()) ('jht-download-' + [guid]::NewGuid().ToString('N'))
-  $part = Join-Path $parent ('.' + (Split-Path -Leaf $destination) + '.part-' + [guid]::NewGuid().ToString('N'))
-  $previousProgress = $ProgressPreference
-  $ProgressPreference = 'SilentlyContinue'
-  try {
-    try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { }
-    New-Item -ItemType Directory -Path $work -ErrorAction Stop | Out-Null
-    $fetch = {
-      param($url, $file)
-      $response = Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $file -PassThru -UserAgent 'job-hunter-team-cli' -ErrorAction Stop
-      # L'indirizzo finale dopo i reindirizzamenti: ResponseUri in Windows PowerShell 5.1, RequestMessage.RequestUri in PowerShell 7.
-      $final = if ($response.BaseResponse.ResponseUri) { $response.BaseResponse.ResponseUri }
-               elseif ($response.BaseResponse.RequestMessage) { $response.BaseResponse.RequestMessage.RequestUri }
-               else { $null }
-      if (-not $seam -and $final -and $final.Scheme -ne 'https') { throw (Format-JhtText 'ps.release_arrived_without_https' $url) }
-    }
-    try { & $fetch "$base/SHA256SUMS" (Join-Path $work 'SHA256SUMS') }
-    catch { Write-Err (Format-JhtText 'ps.download_sums_failed_detail' $version ($_.Exception.Message)); return }
-    $expected = ''
-    foreach ($line in (Get-Content -LiteralPath (Join-Path $work 'SHA256SUMS'))) {
-      if ($line -match '^([0-9a-fA-F]{64})\s+\*?(.+?)\s*$' -and $Matches[2] -ceq $asset) { $expected = $Matches[1].ToLowerInvariant(); break }
-    }
-    if (-not $expected) { Write-Err (Format-JhtText 'download.sum_missing' $asset); return }
-
-    if ($existing) {
-      if ((Get-DownloadSha256 -Path $destination) -eq $expected) {
-        Write-Host ''
-        Write-Host (Format-JhtText 'download.present_verified' $destination)
-        Write-Host (Format-JhtText 'download.sha_verified' $expected)
-        $script:HostDownloadExitCode = 0
-        return
-      }
-      Write-Err (Format-JhtText 'download.mismatch_existing' $destination)
-      return
-    }
-
-    Write-Host (Format-JhtText 'download.fetching' $asset)
-    try { & $fetch "$base/$asset" (Join-Path $work 'asset') }
-    catch { Write-Err (Format-JhtText 'ps.download_asset_failed_detail' $asset ($_.Exception.Message)); return }
-    $actual = (Get-DownloadSha256 -Path (Join-Path $work 'asset'))
-    if ($actual -ne $expected) { Write-Err (Format-JhtText 'download.hash_invalid' $asset $expected $actual); return }
-
-    # Pubblicazione: copia in un nome nuovo accanto alla destinazione e rinomina senza sostituire (File.Move a due
-    # argomenti e' no-clobber anche su Windows PowerShell 5.1: se il target compare durante il download fallisce).
-    [IO.File]::Copy((Join-Path $work 'asset'), $part, $false)
-    [IO.File]::Move($part, $destination)
-    Write-Host (Format-JhtText 'download.sha_verified' $actual)
-    Write-Host (Format-JhtText 'download.saved_in' $destination)
-    $script:HostDownloadExitCode = 0
-  } catch {
-    Write-Err (Format-JhtText 'ps.host_download_failed' ($_.Exception.Message))
-  } finally {
-    $ProgressPreference = $previousProgress
-    if (Test-Path -LiteralPath $part) { Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue }
-    foreach ($name in 'SHA256SUMS', 'asset') { Remove-Item -LiteralPath (Join-Path $work $name) -Force -ErrorAction SilentlyContinue }
-    if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Force -ErrorAction SilentlyContinue }
-  }
 }
 
 # ── Upgrade runtime, transazionale e host-side ────────────────────────────
@@ -8711,7 +8374,7 @@ switch ($Sub) {
     break
   }
 
-  # Download e verifica SHA-256 sull'host (il container non c'entra): vedi Invoke-HostDownload.
+  # Nessuna app desktop nella 0.4.0: il comando lo dice e non scarica niente (vedi Invoke-HostDownload).
   'download' {
     Invoke-HostDownload $Rest
     exit $script:HostDownloadExitCode
