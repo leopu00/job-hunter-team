@@ -1372,7 +1372,7 @@ def test_reserve_an_unblock_wakes_by_stages_the_scouts_first_and_the_captain_is_
     run, spent = _resume_now(bridge, tmp_path, at)
     woken = [s for s, t in bridge.sent if t.startswith("[RIPRENDI]")]
     pending = cap.pending_wakes(tmp_path)
-    assert woken[:3] == ["SCOUT-1", "SCOUT-2", "SCOUT-3"], "the Scouts first"
+    assert woken[:2] == ["SCOUT-1", "SCOUT-2"] and "SCOUT-3" in pending, "the Scouts first, as many as leave room to work after their reload"
     assert pending and set(pending) | set(woken) == set(SEVEN_AND_THE_CAPTAIN) - {"CAPITANO", "SENTINELLA"}
     assert "MANTENITORE" in pending and "SCOUT-1" not in pending, "the last of the list waits"
     reserved = cap._read_wakes(tmp_path)[-1]
@@ -1457,7 +1457,7 @@ def test_the_scout_goes_first_even_when_its_reload_does_not_fit_and_nobody_overt
     stage = cap.Stage(0.0, costs)
     assert [x for x in order if stage.take(x)] == []
     # when they all fit, they all go
-    stage = cap.Stage(1.0, costs)
+    stage = cap.Stage(2.0, costs)
     assert [x for x in order if stage.take(x)] == order
 
 
@@ -1604,3 +1604,52 @@ def test_reserve_a_state_file_of_the_pace_that_is_not_a_plain_file_is_empty_and_
         assert cap.pending_wakes(tmp_path) == [] and cap.waiting(tmp_path, NOON) == []
     finally:
         signal.alarm(0)
+
+
+def test_reserve_a_resume_waits_for_the_room_of_the_reload_and_of_the_work_after_it(tmp_path):
+    """Retest 8d5f09a2b: the pace lifted as soon as the line passed the reload alone (Captain + Scout, 0.30 $), the reload ate the whole room
+    and the team stopped 33-35 s after the resume, twice. It lifts now with the room of the reload and of the work after it."""
+    config = budget(3, NOON, NOON + 10 * HOUR)
+    read = cap.team_budget.read(config)
+    at = NOON + 2 * HOUR
+    stopped = {"budget_cost": 1.0, "before_start": 0.0, "recent_cost": 0.0, "restart_recent": 0.0, "reserve_open": 0.0}
+    paused = cap.decide(config, stopped, False, at, read, True, 0.30)
+    assert paused["action"] == "halt" and paused["why"] == "pace" and not paused.get("stays")
+    lift = paused["resumes"]
+    assert cap.decide(config, stopped, False, lift - 30, read, True, 0.30)["action"] == "halt"
+    assert cap.decide(config, stopped, False, lift + 1, read, True, 0.30)["action"] == "none", "lifted"
+    # the line at the lift leaves the reload and then room to work: the reload of 0.30 $ in 35 s does not stop the team
+    after = {"budget_cost": 1.30, "before_start": 0.0, "recent_cost": 0.30, "restart_recent": 0.30, "reserve_open": 0.0, "since_resume": 35}
+    assert cap.decide(config, after, False, lift + 35, read)["action"] == "none", "it works some minutes before the next pause"
+    worked = dict(after, budget_cost=1.30 + 0.30, recent_cost=0.60)
+    assert cap.decide(config, worked, False, lift + 35 + 240, read)["action"] == "halt", "and the line is still the line"
+    # the room of the lift is the one of the reload and the work: three times the estimate under the line
+    assert cap.team_budget.allowed(config, dict(read, usd=read["usd"]), lift) >= 1.0 + 3 * 0.30 - 1e-6
+
+
+def test_reserve_a_budget_too_small_for_the_whole_room_lowers_the_multiple_and_never_locks_the_rest(tmp_path):
+    """Small budget or end of the period: the room never reaches three times the reload. If what is left covers the reload and the work
+    once more, it resumes at a true hour; only a left that does not cover that says the pause stays."""
+    config = budget(1, NOON, NOON + 10 * HOUR)
+    read = cap.team_budget.read(config)
+    at = NOON + HOUR
+    slack = cap.team_budget.margin(1.0)
+    est = 0.10
+    for used, stays in ((1.0 - slack - 2.5 * est, False), (1.0 - slack - 2.05 * est, False), (1.0 - slack - 1.2 * est, False), (1.0 - slack - 0.5 * est, True)):
+        spent = {"budget_cost": used, "before_start": 0.0, "recent_cost": 0.0, "restart_recent": 0.0, "reserve_open": 0.0}
+        paused = cap.decide(config, spent, False, at, read, True, est)
+        assert paused["action"] == "halt", (used, paused)
+        assert bool(paused.get("stays")) is stays, (used, paused)
+        if not stays:
+            assert paused["resumes"] is not None and paused["resumes"] <= read["ends"], "a true hour, not «until the end of the period»"
+
+
+def test_reserve_a_stage_leaves_room_to_work_so_the_seven_never_start_together(tmp_path):
+    """Retest 8d5f09a2b, resume 1: [RIPRENDI] to all seven at once and the pause 0.06 $ over the line."""
+    costs = {"SCOUT-1": 0.12, "SCOUT-2": 0.12, "SCORER-1": 0.20, "ANALISTA-1": 0.12, "ANALISTA-2": 0.12, "DOTTORE": 0.12, "MANTENITORE": 0.12}
+    order = sorted(costs, key=cap._wake_rank)
+    stage = cap.Stage(1.0, costs)
+    taken = [x for x in order if stage.take(x)]
+    assert 0 < len(taken) < len(order) and stage.pending == order[len(taken):], "some wait in the queue"
+    assert stage.estimate * cap.WORK_MULTIPLE <= 1.0 + 1e-9, "what was woken leaves room to work after the reload"
+    assert taken[0] == "SCOUT-1"
