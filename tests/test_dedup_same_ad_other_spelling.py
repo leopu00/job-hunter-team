@@ -228,3 +228,30 @@ def test_a_refusal_of_another_database_does_not_count(home, monkeypatch):
                    + _skip_line("https://x.example/d", 1, level=4))                         # a refusal by text: a shared form, can be a false positive
     for url in ("https://x.example/a", "https://x.example/b", "https://x.example/c", "https://x.example/d"):
         assert db_insert.check_duplicate(conn, url, "Other", "Other", "Roma") == (None, None), url
+
+
+@pytest.mark.parametrize("line", [
+    '{"ts": "2999-01-01T00:00:00+00:00", "level": 2, "existing_id": 1e999, "skipped_url": "URL"}\n',          # int(inf): OverflowError
+    '{"ts": "2999-01-01T00:00:00+00:00", "level": 2, "existing_id": %d, "skipped_url": "URL"}\n' % 2 ** 70,  # the SELECT: OverflowError
+    "[" * 100000 + "]" * 100000 + "\n",                                                                         # json.loads: RecursionError
+    '{"ts": "2999-01-01T00:00:00+00:00", "level": 2, "existing_id": -5, "skipped_url": "URL"}\n',
+    '{"ts": {"a": 1}, "level": 2, "existing_id": 1, "skipped_url": "URL"}\n',                                  # a moment that is not text
+], ids=["infinite-id", "enormous-id", "nested-line", "negative-id", "moment-not-text"])
+def test_a_log_written_by_hand_never_raises_and_never_refuses(home, monkeypatch, line):
+    """Lines no product writes: no exception out of the reader or of check_duplicate, and no refusal either."""
+    log = _seed(home)
+    monkeypatch.setenv("JHT_HOME", str(home))
+    conn = sqlite3.connect(str(home / "jobs.db")); conn.row_factory = sqlite3.Row
+    url = "https://x.example/a"
+    log.write_text(line.replace("URL", url))
+    assert db_insert._urls_refused_before(url) == []
+    assert db_insert.check_duplicate(conn, url, "Other", "Other", "Roma") == (None, None)
+    ok = _insert(home, 2, "Theta", "Cuoco", "Roma", None, url=url)
+    assert ok.returncode == 0, ok.stdout + ok.stderr
+
+
+def test_a_nested_line_does_not_hide_the_good_lines_after_it(home, monkeypatch):
+    log = _seed(home)
+    monkeypatch.setenv("JHT_HOME", str(home))
+    log.write_text(_skip_line("https://x.example/a", 1) + "[" * 100000 + "]" * 100000 + "\n")
+    assert [i for i, _ in db_insert._urls_refused_before("https://x.example/a")] == [1]

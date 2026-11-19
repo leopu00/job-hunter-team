@@ -156,10 +156,13 @@ def _urls_refused_before(url):
             try:
                 entry = json.loads(line)
                 if entry.get('skipped_url') == url and entry.get('level') in (2, 3):
-                    found.append((int(entry['existing_id']), str(entry['ts']).replace('T', ' ')[:19]))
-            except (ValueError, TypeError, KeyError, AttributeError):
+                    existing_id, moment = int(entry['existing_id']), entry['ts']
+                    # un id di SQLite (oltre non e' una riga, e la SELECT darebbe OverflowError) e un momento scritto come i nostri
+                    if 0 < existing_id < 2 ** 63 and isinstance(moment, str) and re.match(r'\d{4}-\d\d-\d\d[T ]\d\d:\d\d:\d\d', moment):
+                        found.append((existing_id, moment.replace('T', ' ')[:19]))
+            except Exception:  # noqa: BLE001 — una riga scritta a mano (inf, un numero enorme, annidata a mille livelli) e' una riga persa
                 continue
-    except (OSError, ValueError):
+    except Exception:  # noqa: BLE001 — l'audit non e' una fonte: qualunque guasto della lettura e' «niente da ricordare»
         return []
     return found
 
@@ -238,7 +241,7 @@ def check_duplicate(conn, url, company, title, location=None):
             try:
                 cand = conn.execute("SELECT id, title, company, location, created_at FROM positions WHERE id = ?",
                                     (existing_id,)).fetchone()
-            except sqlite3.Error:
+            except (sqlite3.Error, OverflowError):
                 cand = None
             # la riga deve esistere ed essere piu' vecchia del rifiuto: un log di un db precedente (stessi numeri di id) non conta
             if cand and str(cand['created_at'] or '')[:19] <= refused_at:
