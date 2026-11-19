@@ -234,7 +234,10 @@ describe("richiesta risposta CLOSER", () => {
     expect(await postReply("request-uuid", "Remote")).toEqual({
       authorisePositionId: null,
     });
-    vi.stubGlobal("fetch", answer({ authorisation_required: { position_id: 7 } }));
+    vi.stubGlobal(
+      "fetch",
+      answer({ authorisation_required: { position_id: 7 } }),
+    );
     expect(await postReply("request-uuid", "Remote")).toEqual({
       authorisePositionId: null,
     });

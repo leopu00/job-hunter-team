@@ -156,10 +156,10 @@ export async function postReply(
   reply: string,
 ): Promise<PostReplyResult> {
   const res = await postOrThrow(`/api/pending-messages/${id}/reply`, { reply });
-  let body: { authorisation_required?: { position_id?: unknown } } | null =
-    null;
+  type ReplyBody = { authorisation_required?: { position_id?: unknown } };
+  let body: ReplyBody | null = null;
   try {
-    body = (await res.json()) as typeof body;
+    body = (await res.json()) as ReplyBody | null;
   } catch {
     body = null; // the reply is saved: an unreadable body only loses the hint
   }

@@ -130,9 +130,9 @@ export default function MessagesDrawer() {
   const [sendingAnswerId, setSendingAnswerId] = useState<string | null>(null);
   // On the site an answer saved for the CLOSER still needs the permission to apply, given on the page of the
   // position (the L3 door): the id of that position, until another answer goes.
-  const [authorisePositionId, setAuthorisePositionId] = useState<
-    string | null
-  >(null);
+  const [authorisePositionId, setAuthorisePositionId] = useState<string | null>(
+    null,
+  );
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retryState, setRetryState] = useState<
