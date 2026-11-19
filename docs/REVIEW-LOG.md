@@ -28,9 +28,9 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [README.md](../README.md) | Entry point pubblico: prodotto, requisiti, installazione nativa e CLI, primo orientamento | — | 2026-11-12 | ✅ |
+| [README.md](../README.md) | Entry point pubblico: prodotto, requisiti, installazione nativa e CLI, primo orientamento | — | 2026-11-17 | ✅ |
 | [BACKLOG.md](../BACKLOG.md) | Roadmap completa con priorità e fasi 1-6, blocker pre-launch | — | 2026-11-12 | ✅ |
-| [CHANGELOG.md](../CHANGELOG.md) | Changelog formato Keep-a-Changelog, cronologia rilasci | — | 2026-11-12 | ✅ |
+| [CHANGELOG.md](../CHANGELOG.md) | Changelog formato Keep-a-Changelog, cronologia rilasci | — | 2026-11-17 | ✅ |
 | [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | Contributor Covenant 2.1, contatto `support@jobhunterteam.ai` | — | 2026-07-26 | ✅ |
 | [SECURITY.md](../SECURITY.md) | Policy di disclosure, trust model corrente, copertura e stato hardening | — | 2026-09-30 | ✅ |
 
@@ -50,18 +50,18 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [agents/capitano/capitano.md](../agents/capitano/capitano.md) | 🎖️ Capitano — orchestrator del team, distribuisce ordini | — | 2026-11-11 | ✅ |
+| [agents/capitano/capitano.md](../agents/capitano/capitano.md) | 🎖️ Capitano — orchestrator del team, distribuisce ordini | — | 2026-11-18 | ✅ |
 | [agents/sentinella/sentinella.md](../agents/sentinella/sentinella.md) | 💂 Sentinella — watchdog rate-limit, fallback del bridge | — | 2026-11-02 | ✅ |
-| [agents/scout/scout.md](../agents/scout/scout.md) | 🔭 Scout — ricerca offerte (LinkedIn → ATS → niche → web) | — | 2026-11-11 | ✅ |
-| [agents/analista/analista.md](../agents/analista/analista.md) | 🔍 Analista — filtra JD vs profilo, popola companies/highlights | — | 2026-11-11 | ✅ |
+| [agents/scout/scout.md](../agents/scout/scout.md) | 🔭 Scout — ricerca offerte (LinkedIn → ATS → niche → web) | — | 2026-11-18 | ✅ |
+| [agents/analista/analista.md](../agents/analista/analista.md) | 🔍 Analista — filtra JD vs profilo, popola companies/highlights | — | 2026-11-18 | ✅ |
 | [agents/scorer/scorer.md](../agents/scorer/scorer.md) | 🎯 Scorer — assegna score 0-100 alle posizioni filtrate | — | 2026-11-09 | ✅ |
 | [agents/scrittore/scrittore.md](../agents/scrittore/scrittore.md) | ✍️ Scrittore — genera CV + cover letter per posizione | — | 2026-11-12 | ✅ |
 | [agents/critico/critico.md](../agents/critico/critico.md) | 🧐 Critico — review qualità CV/cover prima dell'invio | — | 2026-11-12 | ✅ |
-| [agents/assistente/assistente.md](../agents/assistente/assistente.md) | 🤝 Assistente — config profilo utente, supporto setup | — | 2026-11-12 | ✅ |
+| [agents/assistente/assistente.md](../agents/assistente/assistente.md) | 🤝 Assistente — config profilo utente, supporto setup | — | 2026-11-18 | ✅ |
 | [agents/capitano/missions/thermostat-test.md](../agents/capitano/missions/thermostat-test.md) | 🌡️ Missione opt-in test termostato senza Sentinella | — | 2026-05-05 | ✅ |
 | [agents/dottore/dottore.md](../agents/dottore/dottore.md) | 👨‍⚕️ Dottore — health-check + manutenzione one-shot (~30 min, watchdog) | — | 2026-11-06 | ✅ |
-| [agents/mantenitore/mantenitore.md](../agents/mantenitore/mantenitore.md) | 👷‍♂️ MANTENITORE — infra health + standardization — You are the Mantenitore (Maintainer) of the JHT team. | — | 2026-11-06 | ✅ |
-| [agents/mentor/mentor.md](../agents/mentor/mentor.md) | 🧙‍♂️ MENTOR — career mentor — You are Mentor — career mentor to the user (the human owner of the profile, not an agent). | — | 2026-10-26 | ✅ |
+| [agents/mantenitore/mantenitore.md](../agents/mantenitore/mantenitore.md) | 👷‍♂️ MANTENITORE — infra health + standardization — You are the Mantenitore (Maintainer) of the JHT team. | — | 2026-11-18 | ✅ |
+| [agents/mentor/mentor.md](../agents/mentor/mentor.md) | 🧙‍♂️ MENTOR — career mentor — You are Mentor — career mentor to the user (the human owner of the profile, not an agent). | — | 2026-11-18 | ✅ |
 | [agents/closer/closer.md](../agents/closer/closer.md) | 📮 CLOSER — invia solo le candidature autorizzate dall'utente, con ricevuta; tre invarianti in cima | — | 2026-10-27 | ✅ |
 
 
@@ -100,14 +100,14 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/_skills/onboarding-flow/SKILL.md](../agents/_skills/onboarding-flow/SKILL.md) | Protocollo conversazionale onboarding + checklist blocco/ricca + upload file | — | 2026-11-12 | ✅ |
 | [agents/_skills/pipeline-triage/SKILL.md](../agents/_skills/pipeline-triage/SKILL.md) | Scaling data-driven via db_query stats — chi spawnare/spegnere | — | 2026-08-13 | ✅ |
 | [agents/_skills/profile-summaries/SKILL.md](../agents/_skills/profile-summaries/SKILL.md) | I 4 MD discorsivi about/preferences/goals/strengths in prima persona | — | 2026-11-12 | ✅ |
-| [agents/_skills/profile-yaml/SKILL.md](../agents/_skills/profile-yaml/SKILL.md) | Gestione candidate_profile.yml live + validazione + ready.flag | — | 2026-11-12 | ✅ |
+| [agents/_skills/profile-yaml/SKILL.md](../agents/_skills/profile-yaml/SKILL.md) | Gestione candidate_profile.yml live + validazione + ready.flag | — | 2026-11-16 | ✅ |
 | [agents/_skills/py-tools-audit/SKILL.md](../agents/_skills/py-tools-audit/SKILL.md) | Audit ~weekly pacchetti Python in 2 round Dottore con state file | — | 2026-06-04 | ✅ |
 | [agents/_skills/sentinel-orders/SKILL.md](../agents/_skills/sentinel-orders/SKILL.md) | Tabella throttle 0-4 + tutti i tipi ordine Sentinella + warning timeout N+30 | — | 2026-10-09 | ✅ |
-| [agents/_skills/spawn-agent/SKILL.md](../agents/_skills/spawn-agent/SKILL.md) | Spawn agente via start-agent.sh + kick-off + verifica boot (Capitano-only) | — | 2026-11-02 | ✅ |
+| [agents/_skills/spawn-agent/SKILL.md](../agents/_skills/spawn-agent/SKILL.md) | Spawn agente via start-agent.sh + kick-off + verifica boot (Capitano-only) | — | 2026-11-17 | ✅ |
 | [agents/_skills/agent-emergency/SKILL.md](../agents/_skills/agent-emergency/SKILL.md) | Capitano — gestisce un agente sospettato BLOCCATO IN UN LOOP ATTIVO (vivo e che genera turni, ma ripete lo stesso… | — | 2026-10-08 | ✅ |
 | [agents/_skills/blind-review/SKILL.md](../agents/_skills/blind-review/SKILL.md) | The Critic's full review protocol — receive PDF + JD, run a blind review (no profile access), produce a… | — | 2026-11-12 | ✅ |
 | [agents/_skills/captain-diary/SKILL.md](../agents/_skills/captain-diary/SKILL.md) | Daily handoff diary for the Captain. | — | 2026-10-27 | ✅ |
-| [agents/_skills/circles-and-sources/SKILL.md](../agents/_skills/circles-and-sources/SKILL.md) | Strategy map for what to search WHERE, derived entirely from the candidate profile. | — | 2026-11-10 | ✅ |
+| [agents/_skills/circles-and-sources/SKILL.md](../agents/_skills/circles-and-sources/SKILL.md) | Strategy map for what to search WHERE, derived entirely from the candidate profile. | — | 2026-11-17 | ✅ |
 | [agents/_skills/cv-disk-audit/SKILL.md](../agents/_skills/cv-disk-audit/SKILL.md) | Healthcheck periodico (Dottore) per riconciliare CV su disk e cv_pdf_path nel DB. | — | 2026-05-17 | ✅ |
 | [agents/_skills/daily-restart-wave/SKILL.md](../agents/_skills/daily-restart-wave/SKILL.md) | Pre-emptive mass-restart of every team agent once per 24h for context freshness. | — | 2026-10-21 | ✅ |
 | [agents/_skills/email-monitor/SKILL.md](../agents/_skills/email-monitor/SKILL.md) | Day-start sourcing dalla casella email DEDICATA del team (l'utente vi inoltra i propri job alert). | — | 2026-10-08 | ✅ |
@@ -116,14 +116,14 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/_skills/format-time/SKILL.md](../agents/_skills/format-time/SKILL.md) | Convert UTC timestamps to the user's timezone before showing them in chat, charts, Telegram, or any user-facing… | — | 2026-07-03 | ✅ |
 | [agents/_skills/game-reply-options/SKILL.md](../agents/_skills/game-reply-options/SKILL.md) | Offer 2-5 context-specific clickable reply buttons in the JHT game chat when they genuinely make the user's next… | — | 2026-10-28 | ✅ |
 | [agents/_skills/location-enrichment/SKILL.md](../agents/_skills/location-enrichment/SKILL.md) | Standardize positions.location free-text into structured loc_/work_/role_family columns BEFORE marking any… | — | 2026-10-22 | ✅ |
-| [agents/_skills/logo-extraction/SKILL.md](../agents/_skills/logo-extraction/SKILL.md) | Extract the company logo for a company in the companies table and store it as a small base64 data-URI (max ~35KB,… | — | 2026-08-16 | ✅ |
-| [agents/_skills/maintainer-sweep/SKILL.md](../agents/_skills/maintainer-sweep/SKILL.md) | Lo sweep di manutenzione INFRA del Mantenitore 👷‍♂️ (gemello del Dottore, scope infrastruttura non agenti). | — | 2026-11-09 | ✅ |
+| [agents/_skills/logo-extraction/SKILL.md](../agents/_skills/logo-extraction/SKILL.md) | Extract the company logo for a company in the companies table and store it as a small base64 data-URI (max ~35KB,… | — | 2026-11-18 | ✅ |
+| [agents/_skills/maintainer-sweep/SKILL.md](../agents/_skills/maintainer-sweep/SKILL.md) | Lo sweep di manutenzione INFRA del Mantenitore 👷‍♂️ (gemello del Dottore, scope infrastruttura non agenti). | — | 2026-11-18 | ✅ |
 | [agents/_skills/mentor-output/SKILL.md](../agents/_skills/mentor-output/SKILL.md) | How the Mentor speaks once a pattern from mentor-patterns has crossed the threshold. | — | 2026-05-13 | ✅ |
 | [agents/_skills/mentor-patterns/SKILL.md](../agents/_skills/mentor-patterns/SKILL.md) | The five patterns the Mentor hunts in the records to decide WHEN to speak. | — | 2026-10-19 | ✅ |
 | [agents/_skills/notify-user/SKILL.md](../agents/_skills/notify-user/SKILL.md) | Notify the user with automatic fallback. | — | 2026-10-29 | ✅ |
-| [agents/_skills/office-geocoding/SKILL.md](../agents/_skills/office-geocoding/SKILL.md) | Geocode the precise office building (lat/lon/address) for a position AFTER location-enrichment has populated… | — | 2026-10-22 | ✅ |
+| [agents/_skills/office-geocoding/SKILL.md](../agents/_skills/office-geocoding/SKILL.md) | Geocode the precise office building (lat/lon/address) for a position AFTER location-enrichment has populated… | — | 2026-11-18 | ✅ |
 | [agents/_skills/parse-cv/SKILL.md](../agents/_skills/parse-cv/SKILL.md) | Pre-process a CV/profile file (PDF, DOCX, ODT, RTF) into plain text BEFORE feeding it to the LLM context. | — | 2026-10-09 | ✅ |
-| [agents/_skills/position-insert/SKILL.md](../agents/_skills/position-insert/SKILL.md) | The 5-gate sequence the Scout runs for EACH candidate position before INSERTing into positions: dedup → link… | — | 2026-10-24 | ✅ |
+| [agents/_skills/position-insert/SKILL.md](../agents/_skills/position-insert/SKILL.md) | The 5-gate sequence the Scout runs for EACH candidate position before INSERTing into positions: dedup → link… | — | 2026-11-17 | ✅ |
 | [agents/_skills/profile-schema/SKILL.md](../agents/_skills/profile-schema/SKILL.md) | Single source of truth dello SCHEMA del candidate_profile.yml — il formato canonico che TUTTO il team produce e… | — | 2026-11-08 | ✅ |
 | [agents/_skills/recheck-liveness/SKILL.md](../agents/_skills/recheck-liveness/SKILL.md) | Verifica se un annuncio di lavoro è ANCORA APERTO senza falsi-aperti. | — | 2026-08-03 | ✅ |
 | [agents/_skills/resilience/SKILL.md](../agents/_skills/resilience/SKILL.md) | Resilience — never give up silently on a broken tool — When a mission-critical tool fails, NEVER degrade silently or report "queue exhausted"/new=0. | — | 2026-10-24 | ✅ |
@@ -140,8 +140,8 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/_skills/first-run-burst/SKILL.md](../agents/_skills/first-run-burst/SKILL.md) | Skill Capitano: la prima mezz'ora di un utente nuovo — deroga a C-02 per la sola prima finestra, successo = posizioni SCORATE a schermo | — | 2026-11-11 | ✅ |
 | [agents/_skills/graceful-shutdown/SKILL.md](../agents/_skills/graceful-shutdown/SKILL.md) | Skill Capitano: chiusura giornata su `[SHUTDOWN]` dell'utente — ogni agente registra dov'era, poi il flag che libera l'uscita dell'app | — | 2026-07-30 | ✅ |
 | [agents/_skills/throttle-distribution/SKILL.md](../agents/_skills/throttle-distribution/SKILL.md) | Skill Capitano: convertire un segnale di pacing team-level nella ripartizione per-agente del throttle (un numero unico non significa stesso valore a tutti) | — | 2026-11-06 | ✅ |
-| [agents/_skills/recheck-batch/SKILL.md](../agents/_skills/recheck-batch/SKILL.md) | Ricontrollo a lotti delle posizioni: quali sono dovute e in che ordine | — | 2026-07-30 | ✅ |
-| [agents/_skills/team-modes/SKILL.md](../agents/_skills/team-modes/SKILL.md) | Le modalita' operative del team e cosa cambia in ciascuna | — | 2026-08-12 | ✅ |
+| [agents/_skills/recheck-batch/SKILL.md](../agents/_skills/recheck-batch/SKILL.md) | Ricontrollo a lotti delle posizioni: quali sono dovute e in che ordine | — | 2026-11-18 | ✅ |
+| [agents/_skills/team-modes/SKILL.md](../agents/_skills/team-modes/SKILL.md) | Le modalita' operative del team e cosa cambia in ciascuna | — | 2026-11-18 | ✅ |
 | [agents/_skills/throttle-ack/SKILL.md](../agents/_skills/throttle-ack/SKILL.md) | L'agente firma la propria sveglia: un risveglio non firmato e' prova di stallo | — | 2026-08-03 | ✅ |
 | [agents/_skills/throttle-set/SKILL.md](../agents/_skills/throttle-set/SKILL.md) | L'agente registra la pausa nel motore esterno, non nel proprio processo | — | 2026-07-30 | ✅ |
 | [agents/_skills/cloud-push-quarantine/SKILL.md](../agents/_skills/cloud-push-quarantine/SKILL.md) | Il Mantenitore diagnostica e risolve gli elementi che il cloud ha messo in quarantena senza fermare il resto del convoglio, preservando identita', motivi sanificati e retry espliciti. | — | 2026-08-13 | ✅ |
@@ -173,15 +173,15 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/about/STORY.md](./about/STORY.md) | Origin story (legacy 200 offerte/5 colloqui in 2 settimane) | — | 2026-11-12 | ✅ |
+| [docs/about/STORY.md](./about/STORY.md) | Origin story (legacy 200 offerte/5 colloqui in 2 settimane) | — | 2026-11-15 | ✅ |
 | [docs/about/VISION.md](./about/VISION.md) | Vision long-term, Maestro 🧙‍♂️, "AI on the side of workers | — | 2026-07-01 | ✅ |
-| [docs/about/ROADMAP.md](./about/ROADMAP.md) | Roadmap pubblica: stato verificato, orizzonti e direzioni di prodotto | — | 2026-11-12 | ✅ |
-| [docs/about/PROVIDERS.md](./about/PROVIDERS.md) | Matrice provider Claude/Codex/Kimi con costi e tier | — | 2026-11-12 | ✅ |
+| [docs/about/ROADMAP.md](./about/ROADMAP.md) | Roadmap pubblica: stato verificato, orizzonti e direzioni di prodotto | — | 2026-11-15 | ✅ |
+| [docs/about/PROVIDERS.md](./about/PROVIDERS.md) | Matrice provider Claude/Codex/Kimi con costi e tier | — | 2026-11-17 | ✅ |
 | [docs/about/MONITORING.md](./about/MONITORING.md) | Stack monitoring V5 (Bridge + Sentinella event-driven) | — | 2026-11-12 | ✅ |
 | [docs/about/RESULTS.md](./about/RESULTS.md) | Risultati reali utenti beta (matrice persona × provider) | — | 2026-10-26 | ✅ |
 | [docs/about/README.md](./about/README.md) | 🎯 docs/about — what JHT is, and whether it works — Public-facing documentation for anyone evaluating Job Hunter Team. | — | 2026-10-26 | ✅ |
 | [docs/about/TUTORIAL-GAME-SCREENSHOTS.md](./about/TUTORIAL-GAME-SCREENSHOTS.md) | Provenance, privacy attestation, and hashes for the public game tutorial screenshots | — | 2026-08-05 | ✅ |
-| [docs/about/FAQ.md](./about/FAQ.md) | Sei domande di valutazione con risposte verificate nel codice: cos'e' e cosa NON e' (nessun invio automatico di candidature), Docker come confine di runtime, struttura del costo e chi lo guida, cosa esce dalla macchina e quando, differenza da un framework generico, uso senza VPS. | — | 2026-11-12 | ✅ |
+| [docs/about/FAQ.md](./about/FAQ.md) | Sei domande di valutazione con risposte verificate nel codice: cos'e' e cosa NON e' (nessun invio automatico di candidature), Docker come confine di runtime, struttura del costo e chi lo guida, cosa esce dalla macchina e quando, differenza da un framework generico, uso senza VPS. | — | 2026-11-15 | ✅ |
 
 
 ## 📜 docs/adr (Architecture Decision Records)
@@ -209,26 +209,26 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/guides/AI-AGENT-INTEGRATION.md](./guides/AI-AGENT-INTEGRATION.md) | Runbook sicuro per assistenti AI che installano, configurano e verificano la CLI | — | 2026-11-03 | ✅ |
-| [docs/guides/BETA.md](./guides/BETA.md) | Canali pubblici per test, feedback ed evidenze riproducibili senza dati personali | — | 2026-10-26 | ✅ |
-| [docs/guides/VPS-SETUP.md](./guides/VPS-SETUP.md) | Setup CLI manuale su VPS Linux esistente, senza credenziali o infrastruttura reale negli esempi | — | 2026-10-22 | ✅ |
-| [docs/guides/CLI-INSTALL.md](./guides/CLI-INSTALL.md) | Installazione CLI: comportamento verificato di install.sh/install.ps1, file creati e limiti | — | 2026-11-12 | ✅ |
-| [docs/guides/CLI-REFERENCE.md](./guides/CLI-REFERENCE.md) | ⌨️ CLI Reference — jht — Systematic reference of every jht command. | 2026-07-30 | 2026-11-12 | ✅ |
-| [docs/guides/EMAIL-FORWARDING.md](./guides/EMAIL-FORWARDING.md) | 📧 Email Forwarding — feed the team your job alerts — Give the team a dedicated email address and auto-forward your job-alert | — | 2026-11-02 | ✅ |
+| [docs/guides/AI-AGENT-INTEGRATION.md](./guides/AI-AGENT-INTEGRATION.md) | Runbook sicuro per assistenti AI che installano, configurano e verificano la CLI | — | 2026-11-14 | ✅ |
+| [docs/guides/BETA.md](./guides/BETA.md) | Canali pubblici per test, feedback ed evidenze riproducibili senza dati personali | — | 2026-11-15 | ✅ |
+| [docs/guides/VPS-SETUP.md](./guides/VPS-SETUP.md) | Setup CLI manuale su VPS Linux esistente, senza credenziali o infrastruttura reale negli esempi | — | 2026-11-14 | ✅ |
+| [docs/guides/CLI-INSTALL.md](./guides/CLI-INSTALL.md) | Installazione CLI: comportamento verificato di install.sh/install.ps1, file creati e limiti | — | 2026-11-18 | ✅ |
+| [docs/guides/CLI-REFERENCE.md](./guides/CLI-REFERENCE.md) | ⌨️ CLI Reference — jht — Systematic reference of every jht command. | 2026-07-30 | 2026-11-15 | ✅ |
+| [docs/guides/EMAIL-FORWARDING.md](./guides/EMAIL-FORWARDING.md) | 📧 Email Forwarding — feed the team your job alerts — Give the team a dedicated email address and auto-forward your job-alert | — | 2026-11-14 | ✅ |
 | [docs/guides/FEEDBACK-TICKETING.md](./guides/FEEDBACK-TICKETING.md) | Runbook delle superfici correnti e dell'endpoint /api/feedback | — | 2026-11-12 | ✅ |
-| [docs/guides/QUICKSTART.md](./guides/QUICKSTART.md) | Quickstart pubblico: requisiti, app nativa, CLI, setup da agente e sorgenti | — | 2026-11-12 | ✅ |
+| [docs/guides/QUICKSTART.md](./guides/QUICKSTART.md) | Quickstart pubblico: requisiti, app nativa, CLI, setup da agente e sorgenti | — | 2026-11-17 | ✅ |
 | [docs/guides/README.md](./guides/README.md) | 📘 docs/guides — user & operator guides — How to install, run, and operate Job Hunter Team. | — | 2026-10-22 | ✅ |
-| [docs/guides/VPS-SETUP-WIZARD.md](./guides/VPS-SETUP-WIZARD.md) | VPS setup from the native office — This is the current non-terminal path for running Job Hunter Team on an | — | 2026-11-12 | ✅ |
-| [docs/guides/ADDING-A-PROVIDER.md](./guides/ADDING-A-PROVIDER.md) | Guida contributor: gate ADR-0002, touchpoint runtime/provider, evidenza live richiesta e check anti-drift | — | 2026-11-12 | ✅ |
+| [docs/guides/VPS-SETUP-WIZARD.md](./guides/VPS-SETUP-WIZARD.md) | VPS setup from the native office — This is the current non-terminal path for running Job Hunter Team on an | — | 2026-11-17 | ✅ |
+| [docs/guides/ADDING-A-PROVIDER.md](./guides/ADDING-A-PROVIDER.md) | Guida contributor: gate ADR-0002, touchpoint runtime/provider, evidenza live richiesta e check anti-drift | — | 2026-11-15 | ✅ |
 | [docs/guides/LOCAL-SCORER.md](./guides/LOCAL-SCORER.md) | Experimental role-scoped Local Scorer setup, quality harness, hardware evidence requirements, and explicit zero-cloud limits | 2026-08-03 | 2026-10-26 | ✅ |
 | [docs/guides/M4-EVIDENCE-BUNDLES.md](./guides/M4-EVIDENCE-BUNDLES.md) | Versioned M4 evidence-bundle operator guide: scrubbed export boundary, hashes, provenance classes, fixture/live fail-closed rules, and external-validation limits | — | 2026-08-03 | ✅ |
-| [docs/guides/TUTORIALS.md](./guides/TUTORIALS.md) | Text-first game and web tutorials: prerequisites, ordered actions, expected results, and optional video alternatives | — | 2026-11-04 | ✅ |
-| [docs/guides/TUTORIALS-LOCALIZATIONS.md](./guides/TUTORIALS-LOCALIZATIONS.md) | Localized source copy for the public text-first game and web tutorials in Italian, Spanish, French, German, Portuguese and Hungarian | — | 2026-11-04 | ✅ |
-| [docs/guides/CHOOSE-WHERE-TO-RUN.md](./guides/CHOOSE-WHERE-TO-RUN.md) | Guida pubblica per scegliere fra runtime sul PC locale, PC Linux dedicato in LAN via SSH e VPS, con requisiti, confini dati, disponibilità, costi operativi e limiti correnti | — | 2026-11-04 | ✅ |
-| [docs/guides/DESKTOP.md](./guides/DESKTOP.md) | Guida dell'app desktop: ogni pagina, l'ufficio e cosa vuol dire ogni oggetto, come ci si muove (anche da tastiera), cosa l'app non puo' fare e perche'. | — | 2026-10-27 | ✅ |
+| [docs/guides/TUTORIALS.md](./guides/TUTORIALS.md) | Text-first game and web tutorials: prerequisites, ordered actions, expected results, and optional video alternatives | — | 2026-11-14 | ✅ |
+| [docs/guides/TUTORIALS-LOCALIZATIONS.md](./guides/TUTORIALS-LOCALIZATIONS.md) | Localized source copy for the public text-first game and web tutorials in Italian, Spanish, French, German, Portuguese and Hungarian | — | 2026-11-14 | ✅ |
+| [docs/guides/CHOOSE-WHERE-TO-RUN.md](./guides/CHOOSE-WHERE-TO-RUN.md) | Guida pubblica per scegliere fra runtime sul PC locale, PC Linux dedicato in LAN via SSH e VPS, con requisiti, confini dati, disponibilità, costi operativi e limiti correnti | — | 2026-11-14 | ✅ |
+| [docs/guides/DESKTOP.md](./guides/DESKTOP.md) | Guida dell'app desktop: ogni pagina, l'ufficio e cosa vuol dire ogni oggetto, come ci si muove (anche da tastiera), cosa l'app non puo' fare e perche'. | — | 2026-11-14 | ✅ |
 | [docs/guides/API-TEAM.md](./guides/API-TEAM.md) | Guida pubblica del team API: i pezzi (esecuzione del ruolo, hub, lanciatore, esecutore, keyproxy), i quattro tetti di spesa (per run, per avvio, per sessione, keyproxy), le partenze scaglionate e le differenze volute col team TUI. | — | 2026-10-26 | ✅ |
 | [docs/guides/PARITY-ROUND.md](./guides/PARITY-ROUND.md) | Guida pubblica del giro di parita' TUI contro API: cosa lo rende pulito, configurazione fuori da git, check / start / --yes, lettura del REPORT e cosa il giro non fa mai. | — | 2026-09-28 | ✅ |
-| [docs/guides/WINDOWS-PODMAN-DISK.md](./guides/WINDOWS-PODMAN-DISK.md) | Limite del disco Podman Windows, crescita del VHDX e compattazione non automatica | — | 2026-11-07 | ✅ |
+| [docs/guides/WINDOWS-PODMAN-DISK.md](./guides/WINDOWS-PODMAN-DISK.md) | Limite del disco Podman Windows, crescita del VHDX e compattazione non automatica | — | 2026-11-18 | ✅ |
 
 
 ## 🛰️ docs/internal
@@ -445,7 +445,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 |---|---|---|---|---|
 | [assets/README.md](../assets/README.md) | 🖼️ assets — repo-level static assets — Shared static assets used in repo-level docs and the project landing. | — | 2026-11-12 | ✅ |
 | [cli/README.md](../cli/README.md) | ⌨️ cli — the jht command-line interface — The jht CLI is the primary control surface for Job Hunter Team. | 2026-07-30 | 2026-10-14 | ✅ |
-| [docs/README.md](./README.md) | 📚 Documentation — Job Hunter Team — Top-level index of the documentation. | — | 2026-11-12 | ✅ |
+| [docs/README.md](./README.md) | 📚 Documentation — Job Hunter Team — Top-level index of the documentation. | — | 2026-11-14 | ✅ |
 | [e2e/README.md](../e2e/README.md) | 🧪 e2e — end-to-end tests (Playwright) — Browser-driven end-to-end tests for the Job Hunter Team web dashboard. | — | 2026-10-08 | ✅ |
 | [scripts/README.md](../scripts/README.md) | 🐚 scripts — setup, install & dev tooling — Bash/PowerShell scripts for installing, developing, releasing, and simulating | — | 2026-11-12 | ✅ |
 | [scripts/case-study-extract/README.md](../scripts/case-study-extract/README.md) | Case study VPS extraction toolkit — Read-only dump of an entire JHT VPS run for offline analysis. | — | 2026-07-03 | ✅ |
@@ -466,6 +466,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [desktop/public/assistant/SOURCES.md](../desktop/public/assistant/SOURCES.md) | Sources and conversion settings of the Assistant portrait assets | — | 2026-10-29 | ✅ |
 | [web/app/fonts/SOURCE.md](../web/app/fonts/SOURCE.md) | Source, license and checksums of the bundled JetBrains Mono font | — | 2026-10-29 | ✅ |
 | [shared/login/seccomp/NOTICE.md](../shared/login/seccomp/NOTICE.md) | _(da compilare nel JSON)_ | — | 2026-11-11 | ✅ |
+| [web/public/benchmark/logos/LICENSES.md](../web/public/benchmark/logos/LICENSES.md) | Marchi della pagina benchmark 0.4.0: fonte e licenza di ogni logo, nessun endorsement | — | 2026-11-17 | ✅ |
 
 
 ---

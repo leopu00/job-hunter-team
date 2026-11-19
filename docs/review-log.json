@@ -1799,6 +1799,11 @@
       "path": "docs/adr/0014-podman-only-runtime.md",
       "description": "",
       "last_review": null
+    },
+    {
+      "path": "web/public/benchmark/logos/LICENSES.md",
+      "description": "Marchi della pagina benchmark 0.4.0: fonte e licenza di ogni logo, nessun endorsement",
+      "last_review": null
     }
   ]
 }

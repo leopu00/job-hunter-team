@@ -103,3 +103,27 @@ description = "Fake PKCE auth_code of the desktop's Supabase test mock (a made-u
 condition = "AND"
 commits = ["ddc16b560aa3fac0db4b11214aa0e75d113b7ca1"]
 paths = ['''^desktop/src/lib/supabase\.test\.ts$''']
+
+[[rules.allowlists]]
+description = "Sign-in window token spelled as the alphabet (AbCdEf…0123456789-_) in the stdin-without-BOM and LinkedIn login tests, synthetic, verified 19/11/2026"
+condition = "AND"
+commits = ["ee88b0976e239bb9e78b9d7388fdc0bf9639b542", "92202778fa8ee0476ffaedf972f6374156f43540"]
+paths = ['''^tests/test_windows_stdin_without_bom\.py$''', '''^tests/test_linkedin_login_command(_windows)?\.py$''']
+
+[[rules.allowlists]]
+description = "Backup tokens 0123456789abcdef… in the tests of the desktop backup, synthetic, verified 19/11/2026"
+condition = "AND"
+commits = ["f3816a754837923fc21feb76ff31a7d85cb813c6"]
+paths = ['''^desktop/src-tauri/src/team_backup\.rs$''']
+
+[[rules.allowlists]]
+description = "Key spelled as the alphabet (sk-proj-abcdef…) in a rate-limit header of the AI SDK adapter test, synthetic, verified 19/11/2026"
+condition = "AND"
+commits = ["c7a2de99005c33bf1ba4a92d499c275971a4e7d7"]
+paths = ['''^agent-harness/runtime/tests/ai-sdk-adapter\.test\.ts$''']
+
+[[rules.allowlists]]
+description = "Fake ssh public key «attackerkey…» in the VPS provisioning test, synthetic, verified 19/11/2026"
+condition = "AND"
+commits = ["e9cd3f740de1b522bb3312e78ad77ef99144ab7f"]
+paths = ['''^tests/test_vps_provisioning_sequence\.py$''']
