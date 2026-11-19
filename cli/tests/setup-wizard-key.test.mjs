@@ -388,7 +388,7 @@ test('the budget in the wizard: «a few days» asks the amount, the days and the
   assert.equal(budget.duration_minutes, 72 * 60);
   assert.deepEqual(hours.windows, [{ days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'], start: '08:00', end: '18:00' }]);
   assert.ok(hours.timezone);
-  assert.ok(events.some((e) => e.kind === 'note' && e.message.startsWith(`The team can spend $10 in all, for 3 days from when it starts working, 10 hours a day (8:00-18:00 ${hours.timezone}), then it stops by itself.`) && e.message.includes('works until the budget of the period is spent')));
+  assert.ok(events.some((e) => e.kind === 'note' && e.message.startsWith(`The team can spend $10 in all, for 3 days from when it starts working, 10 hours a day (8:00-18:00 ${hours.timezone}), then it stops by itself.`) && e.message.includes('the budget is divided by day')));
   assert.equal(budget.pace, undefined, 'the pace is off unless the person says yes');
 });
 

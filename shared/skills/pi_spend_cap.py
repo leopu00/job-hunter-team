@@ -456,6 +456,37 @@ def look_every(home, now):
     return float(CHECK_EVERY_SEC)
 
 
+DAY_SEC = 86400.0
+
+
+def _day_share(common, budget, spent, now):
+    """A budget of several days (pace off) is spent by days: the day k of the period has (k+1) shares of budget/days, what a day did not
+    spend passes to the next one, and the last day has what is left. The team stops when what it spent (the onboarding is the budget's, not
+    the day's) reaches the shares of the day, and resumes by itself at the first midnight of the period whose shares are above what it
+    spent. None for a period of a day or less, on the last day, or under the shares. The hour is the beginning of that day of the period."""
+    days = int(round((budget["ends"] - budget["starts"]) / DAY_SEC))
+    if days < 2:
+        return None
+    used = spent.get("budget_cost") or 0.0
+    before = min(spent.get("before_start") or 0.0, used)
+    period_usd = budget["usd"] - before
+    if period_usd <= 0:
+        return None
+    day = int(max(0.0, now - budget["starts"]) // DAY_SEC)
+    if day >= days - 1:
+        return None
+    margin = team_budget.margin(period_usd)
+    worked = used - before
+    share = period_usd / days
+    if worked < (day + 1) * share - margin:
+        return None
+    lift = day + 1
+    while lift < days - 1 and (lift + 1) * share - margin <= worked:
+        lift += 1
+    return dict(common, why="pace", day=True, before=before, ceiling=round(before + (day + 1) * share, 6),
+                resumes=budget["starts"] + lift * DAY_SEC, stays=False)
+
+
 def _budget_verdict(config, budget, spent, now, held_by_pace=False, restart_estimate=0.0):
     """The pause the budget asks for, or None. `held_by_pace`: the team is paused by the pace right now; it then stays paused until
     the pace leaves the room a restart costs (seven sessions starting together rewrite their cache: 0.85 $ in 86 s, giro Linux
@@ -484,7 +515,9 @@ def _budget_verdict(config, budget, spent, now, held_by_pace=False, restart_esti
     if now + CHECK_EVERY_SEC > budget["ends"]:  # the end falls before the next look: now, not a look late
         return dict(common, why="period", ceiling=budget["usd"], resumes=None)
     if not budget.get("pace"):
-        return stop if over else None   # the pace is the person's to ask for: off, the budget and the end of the period are all that stop the team
+        # the pace is the person's to ask for: off, the budget and the end of the period stop the team, and a period of several days
+        # gives each day its share (the retest 25395266b: 2 $ spent in the first hour of three days, and the team still for the rest)
+        return _day_share(common, budget, spent, now) or (stop if over else None)
     # The pace is the period's: what the onboarding spent before the first worker counts against the budget (above), not
     # against the pace, which spreads what was LEFT at the start over the period (giro Mac 21: 2 $ for a day on Claude, 1.71 $
     # of onboarding, and the pace paused the team the minute the Scouts started).
@@ -604,6 +637,9 @@ def user_text(verdict, spent, config=None, now=None):
     if verdict["why"] == "pace" and verdict.get("stays"):
         return i18n.tf("pi_cap.halt_pace_stays", "%s USD" % _money(verdict["spent"]), "%s USD" % _money(verdict["usd"]),
                        clock(verdict["ends"], config, now))
+    if verdict["why"] == "pace" and verdict.get("day"):
+        return i18n.tf("pi_cap.halt_day", "%s USD" % _money(verdict["spent"]), "%s USD" % _money(verdict["usd"]),
+                       clock(verdict["resumes"], config, now))
     if verdict["why"] == "pace":
         return i18n.tf("pi_cap.halt_pace", "%s USD" % _money(verdict["spent"]), "%s USD" % _money(verdict["usd"]),
                        clock(verdict["resumes"], config, now))
@@ -640,6 +676,11 @@ def _budget_captain_text(verdict, config, now):
         head, what, lift = ("BUDGET PERIOD OVER", "the period the person declared ended at %s (%s USD spent of %s USD)"
                             % (clock(verdict["ends"], config, now), _money(verdict["spent"]), _money(verdict["usd"])),
                             "It does NOT lift by itself: it lifts when the person sets a new period (jht setup).")
+    elif verdict.get("day"):
+        head = "BUDGET OF THE DAY SPENT"
+        what = ("%s USD spent of %s USD: the budget is shared by the days of the period and today's share (with what the days before did not "
+                "spend) allows %s USD" % (_money(verdict["spent"]), _money(verdict["usd"]), _money(verdict["ceiling"])))
+        lift = "It lifts by itself at %s, when the next day of the period begins." % clock(verdict["resumes"], config, now)
     else:
         head = "BUDGET PACE"
         what = ("%s USD spent of %s USD, ahead of the pace (the share of the budget of the worked time gone by, one working "
@@ -961,7 +1002,8 @@ def _resume(api, run, day, notify_user, ctx=None):
     # the gate is open (the flag is gone) BEFORE anyone is told to work: the order of the standby too
     stage, names = None, list(flag.get("sessions") or [])
     home, moment = home_of(api), api.time.time()
-    if ctx is not None and was in ("budget", "period", "pace") and ctx.get("budget") is not None:
+    if ctx is not None and was in ("budget", "period", "pace") and ctx.get("budget") is not None and (
+            was != "pace" or ctx["budget"].get("pace")):
         # by stages, the same for the lift of the pace and the unblock of a new budget (giro Linux, retest of the brake: seven Sonnet
         # sessions woken together spent 1.90 $ against a line of 1.04): the ones whose reload fits under the line, the Scouts first
         live = []

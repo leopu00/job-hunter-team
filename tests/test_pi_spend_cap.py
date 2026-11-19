@@ -1763,3 +1763,59 @@ def test_with_the_pace_off_a_team_ahead_of_the_line_goes_on_until_the_budget_or_
     assert cap.decide(off, spent, False, at, cap.team_budget.read(off))["why"] == "budget", "the budget spent stops it"
     spent["budget_cost"] = 1.0
     assert cap.decide(off, spent, False, NOON + 10 * HOUR - 10, cap.team_budget.read(off))["why"] == "period", "and so does the end of the period"
+
+
+def _days(usd, days, **extra):
+    return budget(usd, NOON, NOON + days * 86400, pace=False, **extra)
+
+
+def _spent(used, before=0.0):
+    return {"budget_cost": used, "before_start": before, "recent_cost": 0.0, "restart_recent": 0.0, "reserve_open": 0.0}
+
+
+def test_with_the_pace_off_a_budget_of_three_days_gives_each_day_its_share():
+    """Retest 25395266b: 2 $ for three days spent in the first hour and the team still until the third day. Each day has a third (the
+    shares of the days before count), the team stops when it reaches them and resumes at the beginning of the next day of the period."""
+    config = _days(3, 3)
+    read = cap.team_budget.read(config)
+    assert cap.decide(config, _spent(0.5), False, NOON + HOUR, read)["action"] == "none", "under the share of the day"
+    verdict = cap.decide(config, _spent(0.95), False, NOON + HOUR, read)
+    assert verdict["why"] == "pace" and verdict["day"] is True and verdict["resumes"] == NOON + 86400 and not verdict["stays"]
+    assert cap.decide(config, _spent(0.95), False, NOON + 86400 + 5, read)["action"] == "none", "the next day brings another share"
+    assert cap.decide(config, _spent(1.95), False, NOON + 86400 + 5, read)["resumes"] == NOON + 2 * 86400
+
+
+def test_a_day_that_spent_more_than_the_next_share_waits_for_the_one_that_covers_it():
+    config = _days(3, 3)
+    verdict = cap.decide(config, _spent(2.2), False, NOON + HOUR, cap.team_budget.read(config))
+    assert verdict["day"] is True and verdict["resumes"] == NOON + 2 * 86400, "the hour told is a true one"
+
+
+def test_the_last_day_and_a_period_of_one_day_are_left_to_the_budget():
+    config = _days(3, 3)
+    read = cap.team_budget.read(config)
+    assert cap.decide(config, _spent(2.0), False, NOON + 2 * 86400 + 60, read)["action"] == "none", "the last day: what is left"
+    one = _days(3, 1)
+    assert cap.decide(one, _spent(2.0), False, NOON + HOUR, cap.team_budget.read(one))["action"] == "none"
+    assert cap.decide(config, _spent(2.95), False, NOON + 2 * 86400 + 60, read)["why"] == "budget"
+
+
+def test_the_onboarding_is_the_budgets_not_the_days():
+    config = _days(3, 3)
+    read = cap.team_budget.read(config)
+    assert cap.decide(config, _spent(1.4, before=0.9), False, NOON + HOUR, read)["action"] == "none", "0.5 of the day's 0.7"
+    assert cap.decide(config, _spent(1.7, before=0.9), False, NOON + HOUR, read)["day"] is True
+
+
+def test_a_team_stopped_for_the_day_is_told_so_and_resumes_the_next_day_without_stages(tmp_path):
+    pi_calls(tmp_path, [(NOON + 600, 0.97, 100)])
+    bridge = Bridge(tmp_path, _days(3, 3))
+    bridge.clock["now"] = NOON + HOUR
+    state: dict = {}
+    bridge.tick(state=state)
+    assert bridge.esc == 1 and flag_record(bridge)["why"] == "pace"
+    assert any("fino a domani" in text for text, _ in bridge.users) or any("until tomorrow" in text for text, _ in bridge.users)
+    assert any("BUDGET OF THE DAY SPENT" in text for text in bridge.texts())
+    bridge.clock["now"] += 86400 + 120
+    bridge.tick(state=state)
+    assert not bridge.flag.exists(), "the next day of the period lifts it by itself"
