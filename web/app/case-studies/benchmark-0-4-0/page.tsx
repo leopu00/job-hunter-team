@@ -7,7 +7,12 @@ import { LandingI18nProvider } from "../../components/landing/LandingI18n";
 import LandingNav from "../../components/landing/LandingNav";
 import { getRequestLocale } from "@/lib/request-locale";
 import data from "@/data/benchmark/benchmark-0-4-0.json";
-import BenchmarkCharts, { type BenchProfile, type BetaDay, type BuildPoint, type ChartRound } from "./BenchmarkCharts";
+import BenchmarkCharts, {
+  type BenchProfile,
+  type BetaDay,
+  type BuildPoint,
+  type ChartRound,
+} from "./BenchmarkCharts";
 import { CHART_COPY } from "./chartsCopy";
 import {
   type Round,
@@ -29,9 +34,7 @@ import {
 
 import ProviderMark from "./providerMarks";
 import { testHref } from "./roundsData";
-import BenchmarkFinder, {
-  type CandidateView,
-} from "./BenchmarkFinder";
+import BenchmarkFinder, { type CandidateView } from "./BenchmarkFinder";
 import { CASE_STUDIES, localizeCaseStudy } from "@/lib/case-studies";
 
 export const dynamic = "force-dynamic";
@@ -79,14 +82,35 @@ export default async function BenchmarkPage() {
     );
   };
   // A criterion of a target with its real number, e.g. «relevant 79% (≥70%)»; the trade is named with its emoji.
-  type Criterion = { k: string; ok: boolean; v?: number; min?: number; max?: number; of?: number; trade?: string; round?: string };
+  type Criterion = {
+    k: string;
+    ok: boolean;
+    v?: number;
+    min?: number;
+    max?: number;
+    of?: number;
+    trade?: string;
+    round?: string;
+  };
   const criterion = (c: Criterion) =>
     (t.targetCriteria[c.k] ?? c.k)
-      .replace("{v}", c.v == null ? "" : c.k === "underCeiling" ? nf.format(c.v) : String(c.v))
+      .replace(
+        "{v}",
+        c.v == null
+          ? ""
+          : c.k === "underCeiling"
+            ? nf.format(c.v)
+            : String(c.v),
+      )
       .replace("{min}", String(c.min ?? ""))
       .replace("{max}", String(c.max ?? ""))
       .replace("{of}", String(c.of ?? ""))
-      .replace("{trade}", c.trade ? `${TRADE_EMOJI[c.trade] ?? ""} ${t.profiles[c.trade] ?? c.trade}`.trim() : "");
+      .replace(
+        "{trade}",
+        c.trade
+          ? `${TRADE_EMOJI[c.trade] ?? ""} ${t.profiles[c.trade] ?? c.trade}`.trim()
+          : "",
+      );
   // the test of the Scout bench that proves each bench row of the targets
   const BENCH_TEST: Record<string, string> = {
     scoutBenchCook: "b9-cook",
@@ -97,18 +121,25 @@ export default async function BenchmarkPage() {
   // One cell of the targets table: the status, the build, the rounds that prove it; the note small below and whole in the tooltip.
   const targetCell = (x: Target) => {
     const note = x.note ? t.targetNotes[x.note] : "";
-    const criteria = ((x as { criteria?: Criterion[] }).criteria ?? []) as Criterion[];
+    const criteria = ((x as { criteria?: Criterion[] }).criteria ??
+      []) as Criterion[];
     return (
       <div className="space-y-0.5" title={note || undefined}>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
           {/* a row of the Scout bench opens the page of its test from its state */}
           {BENCH_TEST[x.id] ? (
-            <Link href={testHref(BENCH_TEST[x.id])} className="text-[11px] font-semibold whitespace-nowrap underline decoration-dotted hover:decoration-solid" style={{ color: "var(--color-white)" }}>
-              <span aria-hidden="true">{TARGET_MARK[x.status]}</span> {t.targetStatus[x.status]}
+            <Link
+              href={testHref(BENCH_TEST[x.id])}
+              className="text-[11px] font-semibold whitespace-nowrap underline decoration-dotted hover:decoration-solid"
+              style={{ color: "var(--color-white)" }}
+            >
+              <span aria-hidden="true">{TARGET_MARK[x.status]}</span>{" "}
+              {t.targetStatus[x.status]}
             </Link>
           ) : (
             <span className="text-[11px] font-semibold whitespace-nowrap text-[var(--color-white)]">
-              <span aria-hidden="true">{TARGET_MARK[x.status]}</span> {t.targetStatus[x.status]}
+              <span aria-hidden="true">{TARGET_MARK[x.status]}</span>{" "}
+              {t.targetStatus[x.status]}
             </span>
           )}
           {x.build != null && (
@@ -118,26 +149,36 @@ export default async function BenchmarkPage() {
           )}
         </div>
         {/* each round that proves it says itself, on its own line: system · profile · day; with criteria, the criteria link to it */}
-        {criteria.length === 0 && x.proof.map((id: string) => {
-          const r = roundById.get(id);
-          return (
-            <a
-              key={id}
-              href={testHref(id)}
-              className="block w-fit text-[11px] underline decoration-dotted hover:decoration-solid"
-              style={{ color: "var(--color-muted)" }}
-            >
-              {r ? `↳ ${OS_LABEL[r.os]} · ${t.profiles[r.profile]} · ${dayLabel(r)}` : id}
-            </a>
-          );
-        })}
+        {criteria.length === 0 &&
+          x.proof.map((id: string) => {
+            const r = roundById.get(id);
+            return (
+              <a
+                key={id}
+                href={testHref(id)}
+                className="block w-fit text-[11px] underline decoration-dotted hover:decoration-solid"
+                style={{ color: "var(--color-muted)" }}
+              >
+                {r
+                  ? `↳ ${OS_LABEL[r.os]} · ${t.profiles[r.profile]} · ${dayLabel(r)}`
+                  : id}
+              </a>
+            );
+          })}
         {criteria.length > 0 && (
           <ul className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] tabular-nums">
             {criteria.map((c, i) => (
-              <li key={i} className="whitespace-nowrap text-[var(--color-base)]">
+              <li
+                key={i}
+                className="whitespace-nowrap text-[var(--color-base)]"
+              >
                 <span aria-hidden="true">{c.ok ? "✅" : "❌"}</span>{" "}
                 {c.round ? (
-                  <Link href={testHref(c.round)} className="underline decoration-dotted hover:decoration-solid" style={{ color: "inherit" }}>
+                  <Link
+                    href={testHref(c.round)}
+                    className="underline decoration-dotted hover:decoration-solid"
+                    style={{ color: "inherit" }}
+                  >
                     {criterion(c)}
                   </Link>
                 ) : (
@@ -148,7 +189,11 @@ export default async function BenchmarkPage() {
           </ul>
         )}
         {/* with criteria the numbers say it already: the note stays in the tooltip */}
-        {note && criteria.length === 0 && <div className="text-[10px] leading-snug text-[var(--color-dim)] line-clamp-2">{note}</div>}
+        {note && criteria.length === 0 && (
+          <div className="text-[10px] leading-snug text-[var(--color-dim)] line-clamp-2">
+            {note}
+          </div>
+        )}
       </div>
     );
   };
@@ -213,8 +258,21 @@ export default async function BenchmarkPage() {
     bySource?: Record<string, number> | null;
   };
   const cc = CHART_COPY[locale];
-  const roundSeries = ((data as unknown as { roundSeries?: Record<string, Extra> }).roundSeries ?? {}) as Record<string, Extra>;
-  const benchRaw = ((data as unknown as { bench?: (Extra & { id: string; profile: string; os: string; service: string; buildNo: number })[] }).bench ?? []);
+  const roundSeries = ((
+    data as unknown as { roundSeries?: Record<string, Extra> }
+  ).roundSeries ?? {}) as Record<string, Extra>;
+  const benchRaw =
+    (
+      data as unknown as {
+        bench?: (Extra & {
+          id: string;
+          profile: string;
+          os: string;
+          service: string;
+          buildNo: number;
+        })[];
+      }
+    ).bench ?? [];
   const chartRounds: ChartRound[] = [
     ...validRounds.map((r) => {
       const x = roundSeries[r.id] ?? {};
@@ -269,7 +327,9 @@ export default async function BenchmarkPage() {
     relevance: b.relevance ?? null,
     discarded: b.discarded ?? null,
     bySource: b.bySource
-      ? Object.fromEntries(Object.entries(b.bySource).map(([k, v]) => [cc.sources[k] ?? k, v]))
+      ? Object.fromEntries(
+          Object.entries(b.bySource).map(([k, v]) => [cc.sources[k] ?? k, v]),
+        )
       : null,
   }));
   type BetaRaw = {
@@ -280,23 +340,58 @@ export default async function BenchmarkPage() {
   };
   const betaRaw = (data as unknown as { betaDay?: BetaRaw }).betaDay;
   const chartBeta: BetaDay = betaRaw
-    ? { ...betaRaw, experiments: betaRaw.experiments.map((e) => ({ t: e.t, label: cc.experimentKinds[e.kind] ?? e.kind })) }
+    ? {
+        ...betaRaw,
+        experiments: betaRaw.experiments.map((e) => ({
+          t: e.t,
+          label: cc.experimentKinds[e.kind] ?? e.kind,
+        })),
+      }
     : null;
-  const buildNos = Array.from(new Set([5, 6, 7, 8, 9, 10, ...data.builds.map((b: Build) => b.n)])).sort((a, b) => a - b);
+  const buildNos = Array.from(
+    new Set([5, 6, 7, 8, 9, 10, ...data.builds.map((b: Build) => b.n)]),
+  ).sort((a, b) => a - b);
   const chartBuilds: BuildPoint[] = buildNos.map((n) => {
-    const snap = data.builds.find((b: Build) => b.n === n) as (Build & { targetsSnapshot?: Record<string, number>; defects?: { found: number; closed: number } }) | undefined;
+    const snap = data.builds.find((b: Build) => b.n === n) as
+      | (Build & {
+          targetsSnapshot?: Record<string, number>;
+          defects?: { found: number; closed: number };
+        })
+      | undefined;
     const counted: Record<string, number> = {};
-    for (const x of data.targets as Target[]) if (x.build === n) counted[x.status] = (counted[x.status] ?? 0) + 1;
+    for (const x of data.targets as Target[])
+      if (x.build === n) counted[x.status] = (counted[x.status] ?? 0) + 1;
     return {
       n,
-      targets: snap?.targetsSnapshot ?? (Object.keys(counted).length ? counted : null),
-      defects: snap?.defects ?? ((data as unknown as { defects?: Record<string, { found: number | null; closed: number | null }> }).defects?.[String(n)] ?? null),
+      targets:
+        snap?.targetsSnapshot ?? (Object.keys(counted).length ? counted : null),
+      defects:
+        snap?.defects ??
+        (
+          data as unknown as {
+            defects?: Record<
+              string,
+              { found: number | null; closed: number | null }
+            >;
+          }
+        ).defects?.[String(n)] ??
+        null,
       fromCurrent: !snap?.targetsSnapshot,
     };
   });
 
-  const invalidBench = ((data as unknown as { invalidBench?: { profile: string; reason: string }[] }).invalidBench ?? []);
-  const BENCH_TARGET_OF: Record<string, string> = { cook: "scoutBenchCook", warehouseWorker: "scoutBenchWarehouse", nurse: "scoutBenchNurse", bricklayer: "scoutBenchBricklayer" };
+  const invalidBench =
+    (
+      data as unknown as {
+        invalidBench?: { profile: string; reason: string }[];
+      }
+    ).invalidBench ?? [];
+  const BENCH_TARGET_OF: Record<string, string> = {
+    cook: "scoutBenchCook",
+    warehouseWorker: "scoutBenchWarehouse",
+    nurse: "scoutBenchNurse",
+    bricklayer: "scoutBenchBricklayer",
+  };
   const serviceOptions = ["glm", "kimi", "openai", "claude"].map((v) => ({
     value: v,
     label: t.services[v],
@@ -343,7 +438,12 @@ export default async function BenchmarkPage() {
               <span
                 aria-hidden="true"
                 className="inline-block w-2 h-2 rounded-full"
-                style={{ background: green === data.targets.length ? TARGET_COLOR.pass : TARGET_COLOR.fail }}
+                style={{
+                  background:
+                    green === data.targets.length
+                      ? TARGET_COLOR.pass
+                      : TARGET_COLOR.fail,
+                }}
               />
               {t.targetsCount
                 .replace("{g}", String(green))
@@ -357,9 +457,14 @@ export default async function BenchmarkPage() {
             <table className="w-full min-w-[620px] text-[12px] border-collapse">
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-wide text-[var(--color-muted)]">
-                  <th className="px-3 py-2 font-semibold">{t.targetsCols.target}</th>
+                  <th className="px-3 py-2 font-semibold">
+                    {t.targetsCols.target}
+                  </th>
                   {TARGET_OS.map((os) => (
-                    <th key={os} className="px-3 py-2 font-semibold w-[22%] border-l border-[var(--color-border)]">
+                    <th
+                      key={os}
+                      className="px-3 py-2 font-semibold w-[22%] border-l border-[var(--color-border)]"
+                    >
                       <span className="inline-flex items-center gap-1.5 normal-case text-[12px] text-[var(--color-white)]">
                         <Mark id={os} label={OS_LABEL[os]} />
                         {OS_LABEL[os]}
@@ -369,26 +474,50 @@ export default async function BenchmarkPage() {
                 </tr>
               </thead>
               {TARGET_SECTIONS.map(([section, emoji]) => {
-                const list = (data.targets as Target[]).filter((x) => x.section === section);
+                const list = (data.targets as Target[]).filter(
+                  (x) => x.section === section,
+                );
                 if (list.length === 0) return null;
                 const ok = list.filter((x) => x.status === "pass").length;
-                const rows: { key: string; label: string; byOs: Record<string, Target> | null; one: Target | null; provider?: string }[] = [];
+                const rows: {
+                  key: string;
+                  label: string;
+                  byOs: Record<string, Target> | null;
+                  one: Target | null;
+                  provider?: string;
+                }[] = [];
                 for (const x of list) {
                   const row = (x as { row?: string }).row;
                   const os = (x as { os?: string }).os;
                   if (row && os) {
                     const r = rows.find((y) => y.key === row);
                     if (r?.byOs) r.byOs[os] = x;
-                    else rows.push({ key: row, label: t.targetRows[row], byOs: { [os]: x }, one: null });
+                    else
+                      rows.push({
+                        key: row,
+                        label: t.targetRows[row],
+                        byOs: { [os]: x },
+                        one: null,
+                      });
                   } else {
                     const emoji = (x as { emoji?: string }).emoji;
-                    rows.push({ key: x.id, label: `${emoji ? `${emoji} ` : ""}${t.targets[x.id]}`, byOs: null, one: x, provider: (x as { provider?: string }).provider });
+                    rows.push({
+                      key: x.id,
+                      label: `${emoji ? `${emoji} ` : ""}${t.targets[x.id]}`,
+                      byOs: null,
+                      one: x,
+                      provider: (x as { provider?: string }).provider,
+                    });
                   }
                 }
                 return (
                   <tbody key={section}>
                     <tr className="border-t-2 border-[var(--color-border-glow)] bg-[var(--color-row)]">
-                      <th colSpan={4} scope="colgroup" className="px-3 py-2 text-left">
+                      <th
+                        colSpan={4}
+                        scope="colgroup"
+                        className="px-3 py-2 text-left"
+                      >
                         <span className="inline-flex items-center gap-2 text-[13px] font-bold">
                           <span aria-hidden="true">{emoji}</span>
                           {t.targetSections[section]}
@@ -396,23 +525,39 @@ export default async function BenchmarkPage() {
                             <span
                               aria-hidden="true"
                               className="inline-block w-2 h-2 rounded-full"
-                              style={{ background: ok === list.length ? TARGET_COLOR.pass : TARGET_COLOR.fail }}
+                              style={{
+                                background:
+                                  ok === list.length
+                                    ? TARGET_COLOR.pass
+                                    : TARGET_COLOR.fail,
+                              }}
                             />
                             {`${ok}/${list.length}`}
                           </span>
                         </span>
                         {t.targetRules[section] && (
-                          <span className="block mt-1 text-[11px] font-normal text-[var(--color-muted)]">{t.targetRules[section]}</span>
+                          <span className="block mt-1 text-[11px] font-normal text-[var(--color-muted)]">
+                            {t.targetRules[section]}
+                          </span>
                         )}
                       </th>
                     </tr>
                     {rows.map((r) => (
-                      <tr key={r.key} className="border-t border-[var(--color-border)] align-top">
-                        <th scope="row" className="px-3 py-2 text-left font-normal min-w-[180px]">
+                      <tr
+                        key={r.key}
+                        className="border-t border-[var(--color-border)] align-top"
+                      >
+                        <th
+                          scope="row"
+                          className="px-3 py-2 text-left font-normal min-w-[180px]"
+                        >
                           {r.provider ? (
                             <span className="inline-flex items-start gap-2">
                               <span className="mt-[2px]">
-                                <ProviderMark id={r.provider} label={t.services[r.provider] ?? r.provider} />
+                                <ProviderMark
+                                  id={r.provider}
+                                  label={t.services[r.provider] ?? r.provider}
+                                />
                               </span>
                               <span>{r.label}</span>
                             </span>
@@ -422,12 +567,24 @@ export default async function BenchmarkPage() {
                         </th>
                         {r.byOs ? (
                           TARGET_OS.map((os) => (
-                            <td key={os} className="px-3 py-2 border-l border-[var(--color-border)]">
-                              {r.byOs![os] ? targetCell(r.byOs![os]) : <span className="text-[var(--color-dim)]">{t.none}</span>}
+                            <td
+                              key={os}
+                              className="px-3 py-2 border-l border-[var(--color-border)]"
+                            >
+                              {r.byOs![os] ? (
+                                targetCell(r.byOs![os])
+                              ) : (
+                                <span className="text-[var(--color-dim)]">
+                                  {t.none}
+                                </span>
+                              )}
                             </td>
                           ))
                         ) : (
-                          <td colSpan={3} className="px-3 py-2 border-l border-[var(--color-border)]">
+                          <td
+                            colSpan={3}
+                            className="px-3 py-2 border-l border-[var(--color-border)]"
+                          >
                             {targetCell(r.one!)}
                           </td>
                         )}
@@ -517,7 +674,10 @@ export default async function BenchmarkPage() {
                         <Mark id={r.service} label={t.services[r.service]} />
                         <span>
                           {/* every round opens its own page */}
-                          <Link href={testHref(r.id)} className="font-semibold underline decoration-dotted hover:decoration-solid">
+                          <Link
+                            href={testHref(r.id)}
+                            className="font-semibold underline decoration-dotted hover:decoration-solid"
+                          >
                             {t.services[r.service]}
                           </Link>
                           <br />
@@ -579,7 +739,11 @@ export default async function BenchmarkPage() {
           bench={chartBench}
           builds={chartBuilds}
           beta={chartBeta}
-          labels={{ services: t.services, os: OS_LABEL, targetStatus: t.targetStatus }}
+          labels={{
+            services: t.services,
+            os: OS_LABEL,
+            targetStatus: t.targetStatus,
+          }}
         />
 
         <section className="space-y-3">
@@ -733,20 +897,37 @@ export default async function BenchmarkPage() {
             {`${t.invalidTitle} (${invalidRounds.length + invalidBench.length})`}
           </summary>
           <div className="px-4 pb-4 space-y-2 text-[12px]">
-            <p className="text-[var(--color-muted)] max-w-3xl">{t.invalidLead}</p>
+            <p className="text-[var(--color-muted)] max-w-3xl">
+              {t.invalidLead}
+            </p>
             <ul className="space-y-1.5">
               {invalidRounds.map((r) => (
                 <li key={r.id} className="flex flex-col sm:flex-row sm:gap-3">
-                  <Link href={testHref(r.id)} className="shrink-0 font-semibold underline decoration-dotted hover:decoration-solid" style={{ color: "inherit" }}>
+                  <Link
+                    href={testHref(r.id)}
+                    className="shrink-0 font-semibold underline decoration-dotted hover:decoration-solid"
+                    style={{ color: "inherit" }}
+                  >
                     {`${OS_LABEL[r.os]} · ${t.profiles[r.profile]} · ${dayLabel(r)} · ${t.services[r.service]}`}
                   </Link>
-                  <span className="text-[var(--color-muted)]">{t.invalidReasons[(r as { invalid?: string }).invalid ?? ""]}</span>
+                  <span className="text-[var(--color-muted)]">
+                    {
+                      t.invalidReasons[
+                        (r as { invalid?: string }).invalid ?? ""
+                      ]
+                    }
+                  </span>
                 </li>
               ))}
               {invalidBench.map((b) => (
-                <li key={b.profile} className="flex flex-col sm:flex-row sm:gap-3">
+                <li
+                  key={b.profile}
+                  className="flex flex-col sm:flex-row sm:gap-3"
+                >
                   <span className="shrink-0 font-semibold">{`🔍 ${t.targets[BENCH_TARGET_OF[b.profile]] ?? b.profile}`}</span>
-                  <span className="text-[var(--color-muted)]">{t.invalidReasons[b.reason]}</span>
+                  <span className="text-[var(--color-muted)]">
+                    {t.invalidReasons[b.reason]}
+                  </span>
                 </li>
               ))}
             </ul>

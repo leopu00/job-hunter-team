@@ -62,7 +62,8 @@ const en: RoundPageCopy = {
   story: "What happened",
   storyFromEvents: "From the events recorded during the test:",
   storyMinute: "minute {m}: {e}",
-  storyTotals: "At the end: {spend}, {found} positions found, {scored} with a score.",
+  storyTotals:
+    "At the end: {spend}, {found} positions found, {scored} with a score.",
   defects: "Defects found in this test",
   defectsMissing: "The defects of this test are not written here yet.",
   fixedIn: "fixed in build {n}, verified",
@@ -72,7 +73,8 @@ const en: RoundPageCopy = {
   next: "Next on {os} →",
   sameSystem: "Other tests on the same system",
   synthetic: "Synthetic profile: an invented person and trade, no real data.",
-  spendDiffers: "The chart counts {a} spent in the window the sampler recorded; the overview counts {b} for the whole round, setup included.",
+  spendDiffers:
+    "The chart counts {a} spent in the window the sampler recorded; the overview counts {b} for the whole round, setup included.",
   criteria: {
     tooFew: "too few positions to judge relevance ({v})",
     stalled: "the team stopped with {v} positions waiting for the Analyst",
@@ -89,7 +91,8 @@ const en: RoundPageCopy = {
     brakeNotReached: "brake: ceiling not reached in the test",
   },
   why: "Why:",
-  criteriaRule: "The path of a person: the team starts and works without manual steps, finds positions, finds them in the trade, and the brake holds the budget. — = not measured in this test.",
+  criteriaRule:
+    "The path of a person: the team starts and works without manual steps, finds positions, finds them in the trade, and the brake holds the budget. — = not measured in this test.",
 };
 
 const it: RoundPageCopy = {
@@ -114,7 +117,8 @@ const it: RoundPageCopy = {
   story: "Cosa è successo",
   storyFromEvents: "Dagli eventi registrati durante il test:",
   storyMinute: "minuto {m}: {e}",
-  storyTotals: "Alla fine: {spend}, {found} annunci trovati, {scored} con punteggio.",
+  storyTotals:
+    "Alla fine: {spend}, {found} annunci trovati, {scored} con punteggio.",
   defects: "Difetti trovati in questo test",
   defectsMissing: "I difetti di questo test non sono ancora scritti qui.",
   fixedIn: "corretto nella build {n}, verificato",
@@ -123,8 +127,10 @@ const it: RoundPageCopy = {
   prev: "← Precedente su {os}",
   next: "Successivo su {os} →",
   sameSystem: "Altri test sullo stesso sistema",
-  synthetic: "Profilo sintetico: persona e mestiere inventati, nessun dato vero.",
-  spendDiffers: "Il grafico conta {a} spesi nella finestra registrata dal campionatore; la panoramica conta {b} per tutto il giro, setup compreso.",
+  synthetic:
+    "Profilo sintetico: persona e mestiere inventati, nessun dato vero.",
+  spendDiffers:
+    "Il grafico conta {a} spesi nella finestra registrata dal campionatore; la panoramica conta {b} per tutto il giro, setup compreso.",
   criteria: {
     tooFew: "troppo pochi annunci per giudicare la pertinenza ({v})",
     stalled: "la squadra si è fermata con {v} annunci in attesa dell'Analista",
@@ -141,7 +147,8 @@ const it: RoundPageCopy = {
     brakeNotReached: "freno: tetto non raggiunto nel test",
   },
   why: "Perché:",
-  criteriaRule: "Il percorso di una persona: la squadra parte e lavora senza interventi a mano, trova annunci, li trova nel mestiere giusto, e il freno tiene il budget. — = non misurato in questo test.",
+  criteriaRule:
+    "Il percorso di una persona: la squadra parte e lavora senza interventi a mano, trova annunci, li trova nel mestiere giusto, e il freno tiene il budget. — = non misurato in questo test.",
 };
 
 const de: RoundPageCopy = {
@@ -175,8 +182,10 @@ const de: RoundPageCopy = {
   prev: "← Vorheriger auf {os}",
   next: "Nächster auf {os} →",
   sameSystem: "Andere Tests auf demselben System",
-  synthetic: "Synthetisches Profil: erfundene Person und erfundener Beruf, keine echten Daten.",
-  spendDiffers: "Das Diagramm zählt {a} im vom Sampler erfassten Zeitraum; der Überblick zählt {b} für die ganze Runde, Setup eingeschlossen.",
+  synthetic:
+    "Synthetisches Profil: erfundene Person und erfundener Beruf, keine echten Daten.",
+  spendDiffers:
+    "Das Diagramm zählt {a} im vom Sampler erfassten Zeitraum; der Überblick zählt {b} für die ganze Runde, Setup eingeschlossen.",
   criteria: {
     tooFew: "zu wenige Stellen, um die Passung zu beurteilen ({v})",
     stalled: "das Team blieb stehen, {v} Stellen warten auf den Analysten",
@@ -193,7 +202,8 @@ const de: RoundPageCopy = {
     brakeNotReached: "Bremse: Obergrenze im Test nicht erreicht",
   },
   why: "Warum:",
-  criteriaRule: "Der Weg einer Person: das Team startet und arbeitet ohne Handgriffe, findet Stellen, findet sie im richtigen Beruf, und die Bremse hält das Budget. — = in diesem Test nicht gemessen.",
+  criteriaRule:
+    "Der Weg einer Person: das Team startet und arbeitet ohne Handgriffe, findet Stellen, findet sie im richtigen Beruf, und die Bremse hält das Budget. — = in diesem Test nicht gemessen.",
 };
 
 const es: RoundPageCopy = {
@@ -218,7 +228,8 @@ const es: RoundPageCopy = {
   story: "Qué pasó",
   storyFromEvents: "De los eventos registrados durante la prueba:",
   storyMinute: "minuto {m}: {e}",
-  storyTotals: "Al final: {spend}, {found} anuncios encontrados, {scored} puntuados.",
+  storyTotals:
+    "Al final: {spend}, {found} anuncios encontrados, {scored} puntuados.",
   defects: "Defectos encontrados en esta prueba",
   defectsMissing: "Los defectos de esta prueba aún no están escritos aquí.",
   fixedIn: "corregido en la build {n}",
@@ -228,7 +239,8 @@ const es: RoundPageCopy = {
   next: "Siguiente en {os} →",
   sameSystem: "Otras pruebas en el mismo sistema",
   synthetic: "Perfil sintético: persona y oficio inventados, ningún dato real.",
-  spendDiffers: "El gráfico cuenta {a} gastados en la ventana registrada por el muestreador; el resumen cuenta {b} de toda la ronda, configuración incluida.",
+  spendDiffers:
+    "El gráfico cuenta {a} gastados en la ventana registrada por el muestreador; el resumen cuenta {b} de toda la ronda, configuración incluida.",
   criteria: {
     tooFew: "demasiado pocos anuncios para juzgar la pertinencia ({v})",
     stalled: "el equipo se paró con {v} anuncios esperando al Analista",
@@ -245,7 +257,8 @@ const es: RoundPageCopy = {
     brakeNotReached: "freno: tope no alcanzado en la prueba",
   },
   why: "Por qué:",
-  criteriaRule: "El recorrido de una persona: el equipo arranca y trabaja sin pasos a mano, encuentra anuncios, los encuentra en su oficio, y el freno sostiene el presupuesto. — = no medido en esta prueba.",
+  criteriaRule:
+    "El recorrido de una persona: el equipo arranca y trabaja sin pasos a mano, encuentra anuncios, los encuentra en su oficio, y el freno sostiene el presupuesto. — = no medido en esta prueba.",
 };
 
 const fr: RoundPageCopy = {
@@ -270,7 +283,8 @@ const fr: RoundPageCopy = {
   story: "Ce qui s'est passé",
   storyFromEvents: "D'après les événements enregistrés pendant le test :",
   storyMinute: "minute {m} : {e}",
-  storyTotals: "À la fin : {spend}, {found} annonces trouvées, {scored} notées.",
+  storyTotals:
+    "À la fin : {spend}, {found} annonces trouvées, {scored} notées.",
   defects: "Défauts trouvés dans ce test",
   defectsMissing: "Les défauts de ce test ne sont pas encore écrits ici.",
   fixedIn: "corrigé dans la build {n}",
@@ -279,11 +293,14 @@ const fr: RoundPageCopy = {
   prev: "← Précédent sur {os}",
   next: "Suivant sur {os} →",
   sameSystem: "Autres tests sur le même système",
-  synthetic: "Profil synthétique : personne et métier inventés, aucune donnée réelle.",
-  spendDiffers: "Le graphique compte {a} dépensés dans la fenêtre enregistrée par l'échantillonneur ; l'aperçu compte {b} pour tout le tour, configuration comprise.",
+  synthetic:
+    "Profil synthétique : personne et métier inventés, aucune donnée réelle.",
+  spendDiffers:
+    "Le graphique compte {a} dépensés dans la fenêtre enregistrée par l'échantillonneur ; l'aperçu compte {b} pour tout le tour, configuration comprise.",
   criteria: {
     tooFew: "trop peu d'annonces pour juger la pertinence ({v})",
-    stalled: "l'équipe s'est arrêtée avec {v} annonces en attente de l'Analyste",
+    stalled:
+      "l'équipe s'est arrêtée avec {v} annonces en attente de l'Analyste",
     alone_ok: "démarre et travaille sans intervention à la main",
     alone_bad: "{v} interventions à la main (minute {at})",
     notStarted: "les agents n'ont pas démarré",
@@ -297,7 +314,8 @@ const fr: RoundPageCopy = {
     brakeNotReached: "frein : plafond non atteint pendant le test",
   },
   why: "Pourquoi :",
-  criteriaRule: "Le parcours d'une personne : l'équipe démarre et travaille sans intervention à la main, trouve des annonces, les trouve dans le bon métier, et le frein tient le budget. — = non mesuré dans ce test.",
+  criteriaRule:
+    "Le parcours d'une personne : l'équipe démarre et travaille sans intervention à la main, trouve des annonces, les trouve dans le bon métier, et le frein tient le budget. — = non mesuré dans ce test.",
 };
 
 const hu: RoundPageCopy = {
@@ -331,8 +349,10 @@ const hu: RoundPageCopy = {
   prev: "← Előző ezen: {os}",
   next: "Következő ezen: {os} →",
   sameSystem: "További tesztek ugyanazon a rendszeren",
-  synthetic: "Szintetikus profil: kitalált személy és szakma, valódi adat nélkül.",
-  spendDiffers: "A grafikon a mintavevő által rögzített ablakban elköltött {a} összeget mutatja; az áttekintés a teljes kört, a beállítással együtt: {b}.",
+  synthetic:
+    "Szintetikus profil: kitalált személy és szakma, valódi adat nélkül.",
+  spendDiffers:
+    "A grafikon a mintavevő által rögzített ablakban elköltött {a} összeget mutatja; az áttekintés a teljes kört, a beállítással együtt: {b}.",
   criteria: {
     tooFew: "túl kevés hirdetés a relevancia megítéléséhez ({v})",
     stalled: "a csapat megállt, {v} hirdetés vár az elemzőre",
@@ -349,7 +369,8 @@ const hu: RoundPageCopy = {
     brakeNotReached: "fék: a plafont a teszt nem érte el",
   },
   why: "Miért:",
-  criteriaRule: "Egy felhasználó útja: a csapat kézi beavatkozás nélkül indul és dolgozik, hirdetéseket talál, a megfelelő szakmában, és a fék tartja a keretet. — = ebben a tesztben nem mérték.",
+  criteriaRule:
+    "Egy felhasználó útja: a csapat kézi beavatkozás nélkül indul és dolgozik, hirdetéseket talál, a megfelelő szakmában, és a fék tartja a keretet. — = ebben a tesztben nem mérték.",
 };
 
 const pt: RoundPageCopy = {
@@ -374,7 +395,8 @@ const pt: RoundPageCopy = {
   story: "O que aconteceu",
   storyFromEvents: "A partir dos eventos registados durante o teste:",
   storyMinute: "minuto {m}: {e}",
-  storyTotals: "No fim: {spend}, {found} anúncios encontrados, {scored} pontuados.",
+  storyTotals:
+    "No fim: {spend}, {found} anúncios encontrados, {scored} pontuados.",
   defects: "Defeitos encontrados neste teste",
   defectsMissing: "Os defeitos deste teste ainda não estão escritos aqui.",
   fixedIn: "corrigido na build {n}",
@@ -384,7 +406,8 @@ const pt: RoundPageCopy = {
   next: "Seguinte em {os} →",
   sameSystem: "Outros testes no mesmo sistema",
   synthetic: "Perfil sintético: pessoa e ofício inventados, nenhum dado real.",
-  spendDiffers: "O gráfico conta {a} gastos na janela registada pelo amostrador; a visão geral conta {b} da rodada inteira, configuração incluída.",
+  spendDiffers:
+    "O gráfico conta {a} gastos na janela registada pelo amostrador; a visão geral conta {b} da rodada inteira, configuração incluída.",
   criteria: {
     tooFew: "anúncios a menos para julgar a pertinência ({v})",
     stalled: "a equipa parou com {v} anúncios à espera do Analista",
@@ -401,7 +424,16 @@ const pt: RoundPageCopy = {
     brakeNotReached: "travão: teto não atingido no teste",
   },
   why: "Porquê:",
-  criteriaRule: "O percurso de uma pessoa: a equipa arranca e trabalha sem intervenções à mão, encontra anúncios, encontra-os no ofício certo, e o travão mantém o orçamento. — = não medido neste teste.",
+  criteriaRule:
+    "O percurso de uma pessoa: a equipa arranca e trabalha sem intervenções à mão, encontra anúncios, encontra-os no ofício certo, e o travão mantém o orçamento. — = não medido neste teste.",
 };
 
-export const ROUND_PAGE_COPY: Record<Locale, RoundPageCopy> = { en, it, de, es, fr, hu, pt };
+export const ROUND_PAGE_COPY: Record<Locale, RoundPageCopy> = {
+  en,
+  it,
+  de,
+  es,
+  fr,
+  hu,
+  pt,
+};

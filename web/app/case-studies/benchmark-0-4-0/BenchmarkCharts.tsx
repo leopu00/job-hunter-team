@@ -109,8 +109,22 @@ const STATUS_COLOR: Record<string, string> = {
   pending: "#F59E0B",
   blocked: "#A855F7",
 };
-const REL_COLOR: Record<string, string> = { P: "#22C55E", A: "#F59E0B", X: "#EF4444" };
-const PALETTE = ["#4D9FFF", "#FF8C42", "#A855F7", "#22C55E", "#F5C518", "#EF4444", "#0EA5A4", "#EC4899", "#94A3B8"];
+const REL_COLOR: Record<string, string> = {
+  P: "#22C55E",
+  A: "#F59E0B",
+  X: "#EF4444",
+};
+const PALETTE = [
+  "#4D9FFF",
+  "#FF8C42",
+  "#A855F7",
+  "#22C55E",
+  "#F5C518",
+  "#EF4444",
+  "#0EA5A4",
+  "#EC4899",
+  "#94A3B8",
+];
 const AGENT_COLOR: Record<string, string> = {
   captain: "#F59E0B",
   scout: "#4D9FFF",
@@ -125,26 +139,75 @@ const AGENT_COLOR: Record<string, string> = {
   mentor: "#F5C518",
 };
 // Events that stop or hold the team are red, those that let it work again green, the rest (setup, start, notices) blue.
-const EVENT_STOP = new Set(["pace", "dailyHalt", "periodHalt", "periodOver", "periodEnd", "benchStop", "stop", "ceiling", "diskLow", "machineStopped", "creditGone", "creditExhausted", "inputHeld", "pause", "teamIdle"]);
-const EVENT_GO = new Set(["resume", "resumeScouts", "cleared", "restart", "switch", "teamStart", "ready", "goalReached", "queueStart", "scoutStart", "setupClosed", "teamRestart", "newPeriod"]);
-const OS_NAME: Record<string, string> = { windows: "Windows", linux: "Linux", macos: "macOS" };
-const colorOf = (key: string, i: number, map?: Record<string, string>) => map?.[key] ?? PALETTE[i % PALETTE.length];
+const EVENT_STOP = new Set([
+  "pace",
+  "dailyHalt",
+  "periodHalt",
+  "periodOver",
+  "periodEnd",
+  "benchStop",
+  "stop",
+  "ceiling",
+  "diskLow",
+  "machineStopped",
+  "creditGone",
+  "creditExhausted",
+  "inputHeld",
+  "pause",
+  "teamIdle",
+]);
+const EVENT_GO = new Set([
+  "resume",
+  "resumeScouts",
+  "cleared",
+  "restart",
+  "switch",
+  "teamStart",
+  "ready",
+  "goalReached",
+  "queueStart",
+  "scoutStart",
+  "setupClosed",
+  "teamRestart",
+  "newPeriod",
+]);
+const OS_NAME: Record<string, string> = {
+  windows: "Windows",
+  linux: "Linux",
+  macos: "macOS",
+};
+const colorOf = (key: string, i: number, map?: Record<string, string>) =>
+  map?.[key] ?? PALETTE[i % PALETTE.length];
 
 // ---- small building blocks ----
 
-function Panel({ title, lead, children }: { title: string; lead?: string; children: ReactNode }) {
+function Panel({
+  title,
+  lead,
+  children,
+}: {
+  title: string;
+  lead?: string;
+  children: ReactNode;
+}) {
   return (
     <div className="bg-[var(--color-card)] border border-[var(--color-border)] p-4 sm:p-5 space-y-3 min-w-0">
       <div className="space-y-1">
         <h3 className="text-[13px] font-bold">{title}</h3>
-        {lead && <p className="text-[11px] text-[var(--color-muted)]">{lead}</p>}
+        {lead && (
+          <p className="text-[11px] text-[var(--color-muted)]">{lead}</p>
+        )}
       </div>
       {children}
     </div>
   );
 }
 
-function Legend({ items }: { items: { label: string; color: string; dashed?: boolean }[] }) {
+function Legend({
+  items,
+}: {
+  items: { label: string; color: string; dashed?: boolean }[];
+}) {
   return (
     <ul className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[var(--color-muted)]">
       {items.map((it) => (
@@ -152,7 +215,9 @@ function Legend({ items }: { items: { label: string; color: string; dashed?: boo
           <span
             aria-hidden="true"
             className="inline-block w-4"
-            style={{ borderTop: `${it.dashed ? "2px dashed" : "3px solid"} ${it.color}` }}
+            style={{
+              borderTop: `${it.dashed ? "2px dashed" : "3px solid"} ${it.color}`,
+            }}
           />
           {it.label}
         </li>
@@ -173,7 +238,11 @@ function Chips<T extends string>({
   label: string;
 }) {
   return (
-    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-1.5">
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className="flex flex-wrap gap-1.5"
+    >
       {options.map((o) => (
         <button
           key={o.value}
@@ -202,7 +271,17 @@ function Missing({ text }: { text: string }) {
   );
 }
 
-function Tip({ x, y, width, children }: { x: number; y: number; width: number; children: ReactNode }) {
+function Tip({
+  x,
+  y,
+  width,
+  children,
+}: {
+  x: number;
+  y: number;
+  width: number;
+  children: ReactNode;
+}) {
   // Kept inside the chart box: flips to the left of the pointer on the right half.
   const left = x > width / 2;
   return (
@@ -233,7 +312,14 @@ const ticks = (max: number, n?: number) => {
 
 // ---- line chart over minutes ----
 
-type LineSeries = { key: string; label: string; color: string; points: { x: number; y: number }[]; dashed?: boolean; dots?: boolean };
+type LineSeries = {
+  key: string;
+  label: string;
+  color: string;
+  points: { x: number; y: number }[];
+  dashed?: boolean;
+  dots?: boolean;
+};
 
 function LineChart({
   series,
@@ -268,22 +354,38 @@ function LineChart({
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setW(Math.max(280, Math.round(e.contentRect.width))));
+    const ro = new ResizeObserver(([e]) =>
+      setW(Math.max(280, Math.round(e.contentRect.width))),
+    );
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
   const H = W < 420 ? Math.round(height * 0.9) : height;
   const pad = { l: 52, r: 14, t: 12, b: 30 };
-  const [hover, setHover] = useState<{ x: number; px: number; py: number; w: number } | null>(null);
+  const [hover, setHover] = useState<{
+    x: number;
+    px: number;
+    py: number;
+    w: number;
+  } | null>(null);
   const all = series.flatMap((s) => s.points.map((p) => p.y));
-  const yMax = niceMax(Math.max(yMaxHint, (refY?.y ?? 0) * 1.05, ...all.map((v) => v * 1.05), 0));
+  const yMax = niceMax(
+    Math.max(yMaxHint, (refY?.y ?? 0) * 1.05, ...all.map((v) => v * 1.05), 0),
+  );
   // A round step (1, 2, 5, 10, 15, 20, 30, 60 minutes) with at most 8 ticks, 6 on a phone.
   const maxTicks = W < 420 ? 6 : 8;
-  const step = xStep ?? [1, 2, 5, 10, 15, 20, 30, 60, 120].find((st) => Math.ceil(xMax / st) <= maxTicks) ?? 240;
+  const step =
+    xStep ??
+    [1, 2, 5, 10, 15, 20, 30, 60, 120].find(
+      (st) => Math.ceil(xMax / st) <= maxTicks,
+    ) ??
+    240;
   const xM = Math.max(step, Math.ceil(xMax / step) * step);
   const sx = (x: number) => pad.l + (x / xM) * (W - pad.l - pad.r);
   const sy = (y: number) => H - pad.b - (y / yMax) * (H - pad.t - pad.b);
-  const xs = Array.from(new Set(series.flatMap((s) => s.points.map((p) => p.x)))).sort((a, b) => a - b);
+  const xs = Array.from(
+    new Set(series.flatMap((s) => s.points.map((p) => p.x))),
+  ).sort((a, b) => a - b);
 
   const onMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const box = ref.current?.getBoundingClientRect();
@@ -292,7 +394,12 @@ function LineChart({
     const xv = ((rel - pad.l) / (W - pad.l - pad.r)) * xM;
     let best = xs[0];
     for (const x of xs) if (Math.abs(x - xv) < Math.abs(best - xv)) best = x;
-    setHover({ x: best, px: (sx(best) / W) * box.width, py: e.clientY - box.top, w: box.width });
+    setHover({
+      x: best,
+      px: (sx(best) / W) * box.width,
+      py: e.clientY - box.top,
+      w: box.width,
+    });
   };
   const valueAt = (s: LineSeries, x: number) => {
     // last known value at or before x (the series are cumulative)
@@ -309,35 +416,92 @@ function LineChart({
       onPointerDown={onMove}
       onPointerLeave={() => setHover(null)}
     >
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block" role="img" aria-label={series.map((s) => s.label).join(", ")}>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="w-full h-auto block"
+        role="img"
+        aria-label={series.map((s) => s.label).join(", ")}
+      >
         {ticks(yMax).map((v) => (
           <g key={`y${v}`}>
-            <line x1={pad.l} x2={W - pad.r} y1={sy(v)} y2={sy(v)} stroke="var(--color-border)" strokeWidth={1} />
-            <text x={pad.l - 6} y={sy(v) + 4} textAnchor="end" fontSize={11} fill="var(--color-muted)">
+            <line
+              x1={pad.l}
+              x2={W - pad.r}
+              y1={sy(v)}
+              y2={sy(v)}
+              stroke="var(--color-border)"
+              strokeWidth={1}
+            />
+            <text
+              x={pad.l - 6}
+              y={sy(v) + 4}
+              textAnchor="end"
+              fontSize={11}
+              fill="var(--color-muted)"
+            >
               {yFormat(v)}
             </text>
           </g>
         ))}
         {ticks(xM, Math.round(xM / step)).map((v) => (
-          <text key={`x${v}`} x={sx(v)} y={H - pad.b + 16} textAnchor="middle" fontSize={11} fill="var(--color-muted)">
+          <text
+            key={`x${v}`}
+            x={sx(v)}
+            y={H - pad.b + 16}
+            textAnchor="middle"
+            fontSize={11}
+            fill="var(--color-muted)"
+          >
             {xTick(v)}
           </text>
         ))}
-        <text x={W - pad.r} y={H - 2} textAnchor="end" fontSize={10} fill="var(--color-dim)">
+        <text
+          x={W - pad.r}
+          y={H - 2}
+          textAnchor="end"
+          fontSize={10}
+          fill="var(--color-dim)"
+        >
           {xLabel}
         </text>
         {band && (
           <g>
-            <rect x={pad.l} width={W - pad.l - pad.r} y={sy(Math.min(band.to, yMax))} height={sy(band.from) - sy(Math.min(band.to, yMax))} fill="var(--color-green)" opacity={0.1} />
-            <text x={pad.l + 4} y={sy(Math.min(band.to, yMax)) + 12} fontSize={10} fill="var(--color-muted)">
+            <rect
+              x={pad.l}
+              width={W - pad.l - pad.r}
+              y={sy(Math.min(band.to, yMax))}
+              height={sy(band.from) - sy(Math.min(band.to, yMax))}
+              fill="var(--color-green)"
+              opacity={0.1}
+            />
+            <text
+              x={pad.l + 4}
+              y={sy(Math.min(band.to, yMax)) + 12}
+              fontSize={10}
+              fill="var(--color-muted)"
+            >
               {band.label}
             </text>
           </g>
         )}
         {refY && (
           <g>
-            <line x1={pad.l} x2={W - pad.r} y1={sy(refY.y)} y2={sy(refY.y)} stroke={refY.color} strokeWidth={1.5} strokeDasharray="6 4" />
-            <text x={W - pad.r} y={sy(refY.y) - 4} textAnchor="end" fontSize={11} fill={refY.color}>
+            <line
+              x1={pad.l}
+              x2={W - pad.r}
+              y1={sy(refY.y)}
+              y2={sy(refY.y)}
+              stroke={refY.color}
+              strokeWidth={1.5}
+              strokeDasharray="6 4"
+            />
+            <text
+              x={W - pad.r}
+              y={sy(refY.y) - 4}
+              textAnchor="end"
+              fontSize={11}
+              fill={refY.color}
+            >
               {refY.label}
             </text>
           </g>
@@ -345,31 +509,69 @@ function LineChart({
         {(refX ?? []).map((m0, i) => {
           const m = { ...m0, x: Math.min(Math.max(m0.x, 0), xM) }; // an event before the start sits on the axis; its minute is in the list
           return (
-          <g key={`b${i}`}>
-            <line x1={sx(m.x)} x2={sx(m.x)} y1={pad.t} y2={H - pad.b} stroke={m.color} strokeWidth={1.5} strokeDasharray="3 3" />
-            <circle cx={sx(m.x)} cy={pad.t + 7 + (i % 3) * 15} r={7} fill={m.color} />
-            <text x={sx(m.x)} y={pad.t + 11 + (i % 3) * 15} textAnchor="middle" fontSize={10} fontWeight={700} fill="var(--color-card)">
-              {i + 1}
-            </text>
-          </g>
+            <g key={`b${i}`}>
+              <line
+                x1={sx(m.x)}
+                x2={sx(m.x)}
+                y1={pad.t}
+                y2={H - pad.b}
+                stroke={m.color}
+                strokeWidth={1.5}
+                strokeDasharray="3 3"
+              />
+              <circle
+                cx={sx(m.x)}
+                cy={pad.t + 7 + (i % 3) * 15}
+                r={7}
+                fill={m.color}
+              />
+              <text
+                x={sx(m.x)}
+                y={pad.t + 11 + (i % 3) * 15}
+                textAnchor="middle"
+                fontSize={10}
+                fontWeight={700}
+                fill="var(--color-card)"
+              >
+                {i + 1}
+              </text>
+            </g>
           );
         })}
         {series.map((s) => (
           <g key={s.key}>
-            {!s.dots && <polyline
-              fill="none"
-              stroke={s.color}
-              strokeWidth={2.25}
-              strokeDasharray={s.dashed ? "5 4" : undefined}
-              strokeLinejoin="round"
-              points={s.points.map((p) => `${sx(p.x)},${sy(p.y)}`).join(" ")}
-            />}
+            {!s.dots && (
+              <polyline
+                fill="none"
+                stroke={s.color}
+                strokeWidth={2.25}
+                strokeDasharray={s.dashed ? "5 4" : undefined}
+                strokeLinejoin="round"
+                points={s.points.map((p) => `${sx(p.x)},${sy(p.y)}`).join(" ")}
+              />
+            )}
             {(s.dots || s.points.length <= 40) &&
-              s.points.map((p, i) => <circle key={`${p.x}-${i}`} cx={sx(p.x)} cy={sy(p.y)} r={s.dots ? 4 : 2.6} fill={s.color} opacity={s.dots ? 0.75 : 1} />)}
+              s.points.map((p, i) => (
+                <circle
+                  key={`${p.x}-${i}`}
+                  cx={sx(p.x)}
+                  cy={sy(p.y)}
+                  r={s.dots ? 4 : 2.6}
+                  fill={s.color}
+                  opacity={s.dots ? 0.75 : 1}
+                />
+              ))}
           </g>
         ))}
         {hover && (
-          <line x1={sx(hover.x)} x2={sx(hover.x)} y1={pad.t} y2={H - pad.b} stroke="var(--color-dim)" strokeWidth={1} />
+          <line
+            x1={sx(hover.x)}
+            x2={sx(hover.x)}
+            y1={pad.t}
+            y2={H - pad.b}
+            stroke="var(--color-dim)"
+            strokeWidth={1}
+          />
         )}
       </svg>
       {hover && (
@@ -380,15 +582,23 @@ function LineChart({
             .filter((m) => m.x <= hover.x)
             .slice(-1)
             .map((m) => (
-              <div key="ev" style={{ color: m.color }}>{`${m.i + 1} · ${m.label}`}</div>
+              <div
+                key="ev"
+                style={{ color: m.color }}
+              >{`${m.i + 1} · ${m.label}`}</div>
             ))}
           {series.map((s) => {
             const v = valueAt(s, hover.x);
             return (
               <div key={s.key} className="flex items-center gap-1.5">
-                <span className="inline-block w-2 h-2 rounded-full" style={{ background: s.color }} />
+                <span
+                  className="inline-block w-2 h-2 rounded-full"
+                  style={{ background: s.color }}
+                />
                 <span className="text-[var(--color-muted)]">{s.label}</span>
-                <span className="ml-auto pl-3 font-semibold">{v == null ? "—" : yFormat(v)}</span>
+                <span className="ml-auto pl-3 font-semibold">
+                  {v == null ? "—" : yFormat(v)}
+                </span>
               </div>
             );
           })}
@@ -400,7 +610,14 @@ function LineChart({
 
 // ---- horizontal bars (stacked or single), HTML so they wrap well on a phone ----
 
-type BarRow = { key: string; label: ReactNode; segments: { key: string; label: string; value: number; color: string }[]; note?: string; sub?: string; dim?: boolean };
+type BarRow = {
+  key: string;
+  label: ReactNode;
+  segments: { key: string; label: string; value: number; color: string }[];
+  note?: string;
+  sub?: string;
+  dim?: boolean;
+};
 
 function HBars({
   rows,
@@ -415,24 +632,48 @@ function HBars({
   stacked?: boolean;
   compact?: boolean; // label and number above the bar: for the narrow panels
 }) {
-  const [tip, setTip] = useState<{ row: string; x: number; y: number; w: number } | null>(null);
+  const [tip, setTip] = useState<{
+    row: string;
+    x: number;
+    y: number;
+    w: number;
+  } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const totals = rows.map((r) => r.segments.reduce((a, s) => a + s.value, 0));
   // the scale follows the rows that count: a sample too small does not stretch it (its bar stops at the edge)
   const counted = rows.filter((r) => !r.dim);
   const max =
-    Math.max(...(stacked ? totals : (counted.length ? counted : rows).flatMap((r) => r.segments.map((s) => s.value))), 0) || 1;
+    Math.max(
+      ...(stacked
+        ? totals
+        : (counted.length ? counted : rows).flatMap((r) =>
+            r.segments.map((s) => s.value),
+          )),
+      0,
+    ) || 1;
   const show = (row: string, e: React.PointerEvent) => {
     const box = ref.current?.getBoundingClientRect();
-    if (box) setTip({ row, x: e.clientX - box.left, y: e.clientY - box.top, w: box.width });
+    if (box)
+      setTip({
+        row,
+        x: e.clientX - box.left,
+        y: e.clientY - box.top,
+        w: box.width,
+      });
   };
   const tipRow = rows.find((r) => r.key === tip?.row);
   return (
-    <div ref={ref} className="relative space-y-2" onPointerLeave={() => setTip(null)}>
+    <div
+      ref={ref}
+      className="relative space-y-2"
+      onPointerLeave={() => setTip(null)}
+    >
       {rows.map((r, i) => {
         const total = totals[i];
         const has = r.segments.some((s) => s.value > 0);
-        const value = has ? format(stacked ? total : r.segments[0]?.value ?? 0) : "—";
+        const value = has
+          ? format(stacked ? total : (r.segments[0]?.value ?? 0))
+          : "—";
         const bar = (
           <div className={`min-w-0 ${stacked ? "flex h-4" : "space-y-0.5"}`}>
             {has ? (
@@ -441,7 +682,10 @@ function HBars({
                   <span
                     key={s.key}
                     className="block h-full first:rounded-l-sm last:rounded-r-sm"
-                    style={{ width: `${(s.value / max) * 100}%`, background: s.color }}
+                    style={{
+                      width: `${(s.value / max) * 100}%`,
+                      background: s.color,
+                    }}
                   />
                 ) : (
                   <span
@@ -450,7 +694,9 @@ function HBars({
                     style={{
                       width: `${Math.min(100, (s.value / max) * 100)}%`,
                       // a sample too small: hatched and faded, so it does not read like the others
-                      background: r.dim ? `repeating-linear-gradient(45deg, ${s.color} 0 3px, transparent 3px 6px)` : s.color,
+                      background: r.dim
+                        ? `repeating-linear-gradient(45deg, ${s.color} 0 3px, transparent 3px 6px)`
+                        : s.color,
                       opacity: r.dim ? 0.6 : 1,
                       minWidth: s.value > 0 ? 2 : 0,
                     }}
@@ -458,13 +704,20 @@ function HBars({
                 ),
               )
             ) : (
-              <span className="text-[11px] text-[var(--color-dim)]">{emptyLabel}</span>
+              <span className="text-[11px] text-[var(--color-dim)]">
+                {emptyLabel}
+              </span>
             )}
           </div>
         );
         if (compact)
           return (
-            <div key={r.key} className="space-y-1 text-[12px]" onPointerMove={(e) => show(r.key, e)} onPointerDown={(e) => show(r.key, e)}>
+            <div
+              key={r.key}
+              className="space-y-1 text-[12px]"
+              onPointerMove={(e) => show(r.key, e)}
+              onPointerDown={(e) => show(r.key, e)}
+            >
               <div className="flex justify-between gap-2">
                 <span className="truncate">{r.label}</span>
                 <span className="tabular-nums font-semibold">{value}</span>
@@ -480,12 +733,22 @@ function HBars({
             onPointerDown={(e) => show(r.key, e)}
           >
             <span className="min-w-0">
-              <span className={`block truncate ${r.dim ? "text-[var(--color-muted)]" : ""}`}>{r.label}</span>
-              {r.sub && <span className="block text-[10px] text-[var(--color-dim)]">{r.sub}</span>}
+              <span
+                className={`block truncate ${r.dim ? "text-[var(--color-muted)]" : ""}`}
+              >
+                {r.label}
+              </span>
+              {r.sub && (
+                <span className="block text-[10px] text-[var(--color-dim)]">
+                  {r.sub}
+                </span>
+              )}
             </span>
             <div className="flex items-center gap-2 min-w-0">
               <div className="flex-1 min-w-0">{bar}</div>
-              <span className="sm:hidden tabular-nums font-semibold">{has ? value : ""}</span>
+              <span className="sm:hidden tabular-nums font-semibold">
+                {has ? value : ""}
+              </span>
             </div>
             <span className="hidden sm:block text-right tabular-nums font-semibold min-w-[64px]">
               {value}
@@ -498,12 +761,19 @@ function HBars({
           <div className="font-semibold mb-0.5">{tipRow.label}</div>
           {tipRow.segments.map((s) => (
             <div key={s.key} className="flex items-center gap-1.5">
-              <span className="inline-block w-2 h-2 rounded-full" style={{ background: s.color }} />
+              <span
+                className="inline-block w-2 h-2 rounded-full"
+                style={{ background: s.color }}
+              />
               <span className="text-[var(--color-muted)]">{s.label}</span>
-              <span className="ml-auto pl-3 font-semibold">{format(s.value)}</span>
+              <span className="ml-auto pl-3 font-semibold">
+                {format(s.value)}
+              </span>
             </div>
           ))}
-          {tipRow.note && <div className="text-[var(--color-dim)] mt-0.5">{tipRow.note}</div>}
+          {tipRow.note && (
+            <div className="text-[var(--color-dim)] mt-0.5">{tipRow.note}</div>
+          )}
         </Tip>
       )}
     </div>
@@ -512,33 +782,97 @@ function HBars({
 
 // ---- the sections ----
 
-function RoundTimelines({ rounds, t, money, fixed = false }: { rounds: ChartRound[]; t: ChartCopy; money: (v: number) => string; fixed?: boolean }) {
-  const usable = rounds.filter((r) => r.minutes != null || r.timeline.length > 0);
+function RoundTimelines({
+  rounds,
+  t,
+  money,
+  fixed = false,
+}: {
+  rounds: ChartRound[];
+  t: ChartCopy;
+  money: (v: number) => string;
+  fixed?: boolean;
+}) {
+  const usable = rounds.filter(
+    (r) => r.minutes != null || r.timeline.length > 0,
+  );
   // Opens on the latest round that has a real minute-by-minute series.
-  const withSeries = usable.filter((x) => x.group === "round" && x.timeline.length >= 2);
-  const [sel, setSel] = useState(withSeries[withSeries.length - 1]?.id ?? usable[0]?.id ?? "");
+  const withSeries = usable.filter(
+    (x) => x.group === "round" && x.timeline.length >= 2,
+  );
+  const [sel, setSel] = useState(
+    withSeries[withSeries.length - 1]?.id ?? usable[0]?.id ?? "",
+  );
   const r = usable.find((x) => x.id === sel) ?? usable[0];
   if (!r) return <Missing text={t.noData} />;
   const real = r.timeline.length >= 2;
-  const xMax = Math.max(r.minutes ?? 0, ...r.timeline.map((p) => p.m), ...r.brake.map((b) => b.m), 1);
+  const xMax = Math.max(
+    r.minutes ?? 0,
+    ...r.timeline.map((p) => p.m),
+    ...r.brake.map((b) => b.m),
+    1,
+  );
   const pick = (k: keyof TimelinePoint) =>
-    r.timeline.filter((p) => p[k] != null).map((p) => ({ x: p.m, y: p[k] as number }));
+    r.timeline
+      .filter((p) => p[k] != null)
+      .map((p) => ({ x: p.m, y: p[k] as number }));
   // Without a timeline only the two ends are known: drawn dashed and called an average pace, never a curve.
   const ends = (v: number | null) =>
-    v == null || r.minutes == null ? [] : [{ x: 0, y: 0 }, { x: r.minutes, y: v }];
+    v == null || r.minutes == null
+      ? []
+      : [
+          { x: 0, y: 0 },
+          { x: r.minutes, y: v },
+        ];
   const costS: LineSeries[] = real
     ? [{ key: "cost", label: t.spend, color: C.cost, points: pick("cost") }]
-    : [{ key: "cost", label: t.avgPace, color: C.cost, points: ends(r.cost), dashed: true }];
+    : [
+        {
+          key: "cost",
+          label: t.avgPace,
+          color: C.cost,
+          points: ends(r.cost),
+          dashed: true,
+        },
+      ];
   const posS: LineSeries[] = real
     ? [
         { key: "found", label: t.found, color: C.found, points: pick("found") },
-        { key: "scored", label: t.scored, color: C.scored, points: pick("scored") },
-        { key: "relevant", label: t.relevant, color: C.relevant, points: pick("relevant") },
+        {
+          key: "scored",
+          label: t.scored,
+          color: C.scored,
+          points: pick("scored"),
+        },
+        {
+          key: "relevant",
+          label: t.relevant,
+          color: C.relevant,
+          points: pick("relevant"),
+        },
       ].filter((s) => s.points.length > 0)
     : [
-        { key: "found", label: t.found, color: C.found, points: ends(r.found), dashed: true },
-        { key: "scored", label: t.scored, color: C.scored, points: ends(r.scored), dashed: true },
-        { key: "relevant", label: t.relevant, color: C.relevant, points: ends(r.relevant), dashed: true },
+        {
+          key: "found",
+          label: t.found,
+          color: C.found,
+          points: ends(r.found),
+          dashed: true,
+        },
+        {
+          key: "scored",
+          label: t.scored,
+          color: C.scored,
+          points: ends(r.scored),
+          dashed: true,
+        },
+        {
+          key: "relevant",
+          label: t.relevant,
+          color: C.relevant,
+          points: ends(r.relevant),
+          dashed: true,
+        },
       ].filter((s) => s.points.length > 0);
   // every score as a dot at the minute it was given, and the best one so far as a line
   const pts = r.scorePoints.filter((p) => p.m >= 0).sort((a, b) => a.m - b.m);
@@ -546,17 +880,41 @@ function RoundTimelines({ rounds, t, money, fixed = false }: { rounds: ChartRoun
   const bestLine = pts.map((p) => ({ x: p.m, y: (top = Math.max(top, p.s)) }));
   const scoreS: LineSeries[] = pts.length
     ? [
-        { key: "pts", label: t.eachScore, color: C.scored, points: pts.map((p) => ({ x: p.m, y: p.s })), dots: true },
+        {
+          key: "pts",
+          label: t.eachScore,
+          color: C.scored,
+          points: pts.map((p) => ({ x: p.m, y: p.s })),
+          dots: true,
+        },
         { key: "best", label: t.bestScore, color: C.best, points: bestLine },
       ]
     : [];
-  const BANDS: [number, number][] = [[0, 49], [50, 69], [70, 84], [85, 100]];
-  const dist = BANDS.map(([a, b]) => r.scoreValues.filter((v) => v >= a && v <= b).length);
-  const refY = r.ceiling != null ? { y: r.ceiling, label: `${t.ceiling} ${money(r.ceiling)}`, color: C.ceiling } : null;
+  const BANDS: [number, number][] = [
+    [0, 49],
+    [50, 69],
+    [70, 84],
+    [85, 100],
+  ];
+  const dist = BANDS.map(
+    ([a, b]) => r.scoreValues.filter((v) => v >= a && v <= b).length,
+  );
+  const refY =
+    r.ceiling != null
+      ? {
+          y: r.ceiling,
+          label: `${t.ceiling} ${money(r.ceiling)}`,
+          color: C.ceiling,
+        }
+      : null;
   const refX = r.brake.map((b) => ({
     x: b.m,
     label: t.brakeKinds[b.kind] ?? b.kind,
-    color: EVENT_GO.has(b.kind) ? "var(--color-green)" : EVENT_STOP.has(b.kind) ? C.brake : "var(--color-blue)",
+    color: EVENT_GO.has(b.kind)
+      ? "var(--color-green)"
+      : EVENT_STOP.has(b.kind)
+        ? C.brake
+        : "var(--color-blue)",
   }));
   return (
     <div className="space-y-4">
@@ -576,13 +934,25 @@ function RoundTimelines({ rounds, t, money, fixed = false }: { rounds: ChartRoun
               ),
               items: usable.filter((x) => x.group === "round" && x.os === os),
             })),
-            { key: "bench", head: <span>🔍 {t.benchRounds}</span>, items: usable.filter((x) => x.group === "bench") },
+            {
+              key: "bench",
+              head: <span>🔍 {t.benchRounds}</span>,
+              items: usable.filter((x) => x.group === "bench"),
+            },
           ]
             .filter((g) => g.items.length > 0)
             .map((g) => (
-              <div key={g.key} className="border border-[var(--color-border)] bg-[var(--color-deep)]">
-                <div className="px-3 py-1.5 text-[12px] font-semibold border-b border-[var(--color-border)]">{g.head}</div>
-                <ul role="radiogroup" aria-label={typeof g.key === "string" ? g.key : ""}>
+              <div
+                key={g.key}
+                className="border border-[var(--color-border)] bg-[var(--color-deep)]"
+              >
+                <div className="px-3 py-1.5 text-[12px] font-semibold border-b border-[var(--color-border)]">
+                  {g.head}
+                </div>
+                <ul
+                  role="radiogroup"
+                  aria-label={typeof g.key === "string" ? g.key : ""}
+                >
                   {g.items.map((x) => {
                     const on = x.id === sel;
                     // «Office clerk, part time · 17/11»: the system is the column, so it is not repeated
@@ -601,7 +971,9 @@ function RoundTimelines({ rounds, t, money, fixed = false }: { rounds: ChartRoun
                           }`}
                         >
                           <span className="truncate">{short}</span>
-                          {x.buildNo != null && <span className="shrink-0 text-[10px] text-[var(--color-dim)] tabular-nums">{`${t.build} ${x.buildNo}`}</span>}
+                          {x.buildNo != null && (
+                            <span className="shrink-0 text-[10px] text-[var(--color-dim)] tabular-nums">{`${t.build} ${x.buildNo}`}</span>
+                          )}
                         </button>
                       </li>
                     );
@@ -611,14 +983,18 @@ function RoundTimelines({ rounds, t, money, fixed = false }: { rounds: ChartRoun
             ))}
         </div>
       )}
-      {!fixed && <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] tabular-nums">
-        <span className="font-semibold">{r.label}</span>
-        <span>{`${t.minutes}: ${r.minutes ?? "—"}`}</span>
-        <span>{`${t.spend}: ${r.cost == null ? "—" : money(r.cost)}`}</span>
-        <span>{`${t.found}/${t.scored}/${t.relevant}: ${r.found ?? "—"}/${r.scored ?? "—"}/${r.relevant ?? "—"}`}</span>
-        <span>{`${t.bestScore}: ${r.bestScore ?? "—"}`}</span>
-      </div>}
-      {!real && <p className="text-[11px] text-[var(--color-yellow)]">{t.onlyTotals}</p>}
+      {!fixed && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] tabular-nums">
+          <span className="font-semibold">{r.label}</span>
+          <span>{`${t.minutes}: ${r.minutes ?? "—"}`}</span>
+          <span>{`${t.spend}: ${r.cost == null ? "—" : money(r.cost)}`}</span>
+          <span>{`${t.found}/${t.scored}/${t.relevant}: ${r.found ?? "—"}/${r.scored ?? "—"}/${r.relevant ?? "—"}`}</span>
+          <span>{`${t.bestScore}: ${r.bestScore ?? "—"}`}</span>
+        </div>
+      )}
+      {!real && (
+        <p className="text-[11px] text-[var(--color-yellow)]">{t.onlyTotals}</p>
+      )}
       {r.scoreValues.length === 0 && (
         <p className="text-[11px] text-[var(--color-dim)]">
           {r.bestScore != null ? `${t.bestScore}: ${r.bestScore} · ` : ""}
@@ -635,22 +1011,48 @@ function RoundTimelines({ rounds, t, money, fixed = false }: { rounds: ChartRoun
         <Panel title={t.spendOverTime}>
           <Legend
             items={[
-              ...costS.map((s) => ({ label: s.label, color: s.color, dashed: s.dashed })),
-              ...(refY ? [{ label: t.ceiling, color: C.ceiling, dashed: true }] : []),
-              ...(refX.length ? [{ label: t.brake, color: C.brake, dashed: true }, { label: t.events, color: "var(--color-blue)", dashed: true }] : []),
+              ...costS.map((s) => ({
+                label: s.label,
+                color: s.color,
+                dashed: s.dashed,
+              })),
+              ...(refY
+                ? [{ label: t.ceiling, color: C.ceiling, dashed: true }]
+                : []),
+              ...(refX.length
+                ? [
+                    { label: t.brake, color: C.brake, dashed: true },
+                    {
+                      label: t.events,
+                      color: "var(--color-blue)",
+                      dashed: true,
+                    },
+                  ]
+                : []),
             ]}
           />
           {costS[0].points.length > 0 ? (
-            <LineChart series={costS} xMax={xMax} yFormat={money} xLabel={t.minutesAxis} refY={refY} refX={refX} />
+            <LineChart
+              series={costS}
+              xMax={xMax}
+              yFormat={money}
+              xLabel={t.minutesAxis}
+              refY={refY}
+              refX={refX}
+            />
           ) : (
             <Missing text={t.noData} />
           )}
-          {r.ceiling == null && <p className="text-[11px] text-[var(--color-dim)]">{t.noCeiling}</p>}
+          {r.ceiling == null && (
+            <p className="text-[11px] text-[var(--color-dim)]">{t.noCeiling}</p>
+          )}
           {refX.length > 0 && (
             <ol className="text-[11px] text-[var(--color-muted)] space-y-0.5 tabular-nums">
               {refX.map((m, i) => (
                 <li key={i} className="flex gap-2">
-                  <span className="font-bold" style={{ color: m.color }}>{i + 1}</span>
+                  <span className="font-bold" style={{ color: m.color }}>
+                    {i + 1}
+                  </span>
                   <span>{`${m.x.toFixed(1)} min`}</span>
                   <span>{m.label}</span>
                 </li>
@@ -659,16 +1061,30 @@ function RoundTimelines({ rounds, t, money, fixed = false }: { rounds: ChartRoun
           )}
         </Panel>
         <Panel title={t.positionsOverTime}>
-          <Legend items={posS.map((s) => ({ label: s.label, color: s.color, dashed: s.dashed }))} />
+          <Legend
+            items={posS.map((s) => ({
+              label: s.label,
+              color: s.color,
+              dashed: s.dashed,
+            }))}
+          />
           {posS.length > 0 ? (
-            <LineChart series={posS} xMax={xMax} yFormat={(v) => String(Math.round(v))} xLabel={t.minutesAxis} refX={refX} />
+            <LineChart
+              series={posS}
+              xMax={xMax}
+              yFormat={(v) => String(Math.round(v))}
+              xLabel={t.minutesAxis}
+              refX={refX}
+            />
           ) : (
             <Missing text={t.noData} />
           )}
         </Panel>
         {scoreS.length > 0 && (
           <Panel title={t.scoresOverTime}>
-            <Legend items={scoreS.map((s) => ({ label: s.label, color: s.color }))} />
+            <Legend
+              items={scoreS.map((s) => ({ label: s.label, color: s.color }))}
+            />
             <LineChart
               series={scoreS}
               xMax={xMax}
@@ -681,7 +1097,10 @@ function RoundTimelines({ rounds, t, money, fixed = false }: { rounds: ChartRoun
           </Panel>
         )}
         {r.scoreValues.length > 0 && (
-          <Panel title={t.scoreDistribution} lead={`${r.scoreValues.length} ${t.scoresCount}`}>
+          <Panel
+            title={t.scoreDistribution}
+            lead={`${r.scoreValues.length} ${t.scoresCount}`}
+          >
             <HBars
               format={(v) => String(v)}
               emptyLabel="0"
@@ -690,7 +1109,15 @@ function RoundTimelines({ rounds, t, money, fixed = false }: { rounds: ChartRoun
               rows={BANDS.map(([a, b], k) => ({
                 key: `${a}`,
                 label: `${a}–${b}`,
-                segments: [{ key: "n", label: t.scoresCount, value: dist[k], color: a >= 70 ? "var(--color-green)" : "var(--color-muted)" }],
+                segments: [
+                  {
+                    key: "n",
+                    label: t.scoresCount,
+                    value: dist[k],
+                    color:
+                      a >= 70 ? "var(--color-green)" : "var(--color-muted)",
+                  },
+                ],
               }))}
             />
           </Panel>
@@ -705,7 +1132,14 @@ function RoundTimelines({ rounds, t, money, fixed = false }: { rounds: ChartRoun
                 {
                   key: "rate",
                   label: t.dollarsPerMinute,
-                  segments: [{ key: "rate", label: t.dollarsPerMinute, value: r.cost / r.minutes, color: C.cost }],
+                  segments: [
+                    {
+                      key: "rate",
+                      label: t.dollarsPerMinute,
+                      value: r.cost / r.minutes,
+                      color: C.cost,
+                    },
+                  ],
                 },
               ]}
             />
@@ -722,18 +1156,36 @@ function RoundTimelines({ rounds, t, money, fixed = false }: { rounds: ChartRoun
 type Metric = "perFound" | "perRelevant" | "perHour" | "perMinute";
 type GroupBy = "round" | "service" | "os" | "build";
 
-function Comparison({ rounds, t, money, labels }: { rounds: ChartRound[]; t: ChartCopy; money: (v: number) => string; labels: ChartsProps["labels"] }) {
+function Comparison({
+  rounds,
+  t,
+  money,
+  labels,
+}: {
+  rounds: ChartRound[];
+  t: ChartCopy;
+  money: (v: number) => string;
+  labels: ChartsProps["labels"];
+}) {
   const [metric, setMetric] = useState<Metric>("perFound");
   const [by, setBy] = useState<GroupBy>("round");
-  const metricOf = (cost: number, minutes: number, found: number, relevant: number): number | null => {
+  const metricOf = (
+    cost: number,
+    minutes: number,
+    found: number,
+    relevant: number,
+  ): number | null => {
     if (metric === "perFound") return found > 0 ? cost / found : null;
     if (metric === "perRelevant") return relevant > 0 ? cost / relevant : null;
-    if (metric === "perHour") return minutes > 0 ? (found / minutes) * 60 : null;
+    if (metric === "perHour")
+      return minutes > 0 ? (found / minutes) * 60 : null;
     return minutes > 0 ? cost / minutes : null;
   };
   const fmt = metric === "perHour" ? (v: number) => v.toFixed(1) : money;
   const rows: BarRow[] = useMemo(() => {
-    const valid = rounds.filter((r) => r.cost != null && r.minutes != null && r.found != null);
+    const valid = rounds.filter(
+      (r) => r.cost != null && r.minutes != null && r.found != null,
+    );
     if (by === "round") {
       return valid.map((r) => {
         const v = metricOf(r.cost!, r.minutes!, r.found!, r.relevant ?? 0);
@@ -741,21 +1193,55 @@ function Comparison({ rounds, t, money, labels }: { rounds: ChartRound[]; t: Cha
           key: r.id,
           label: r.group === "round" ? r.label : `${t.bench} · ${r.label}`,
           note: `${labels.services[r.service] ?? r.service} · ${money(r.cost!)} · ${r.minutes} min · ${r.found}/${r.relevant ?? "—"}`,
-          segments: [{ key: "v", label: t.metrics[metric], value: v ?? 0, color: SERVICE_COLOR[r.service] ?? C.found }],
+          segments: [
+            {
+              key: "v",
+              label: t.metrics[metric],
+              value: v ?? 0,
+              color: SERVICE_COLOR[r.service] ?? C.found,
+            },
+          ],
         };
       });
     }
-    const keyOf = (r: ChartRound) => (by === "service" ? r.service : by === "os" ? r.os : r.buildNo == null ? "?" : String(r.buildNo));
+    const keyOf = (r: ChartRound) =>
+      by === "service"
+        ? r.service
+        : by === "os"
+          ? r.os
+          : r.buildNo == null
+            ? "?"
+            : String(r.buildNo);
     const groups = new Map<string, ChartRound[]>();
-    for (const r of valid) groups.set(keyOf(r), [...(groups.get(keyOf(r)) ?? []), r]);
-    const ordered = Array.from(groups.entries()).sort(([a], [b]) => (by === "build" ? Number(a) - Number(b) : a.localeCompare(b)));
+    for (const r of valid)
+      groups.set(keyOf(r), [...(groups.get(keyOf(r)) ?? []), r]);
+    const ordered = Array.from(groups.entries()).sort(([a], [b]) =>
+      by === "build" ? Number(a) - Number(b) : a.localeCompare(b),
+    );
     return ordered.map(([k, list], i) => {
       // Pooled: total spend over total positions, so a long round weighs more than a short one.
-      const sum = (f: (r: ChartRound) => number) => list.reduce((a, r) => a + f(r), 0);
-      const v = metricOf(sum((r) => r.cost!), sum((r) => r.minutes!), sum((r) => r.found!), sum((r) => r.relevant ?? 0));
+      const sum = (f: (r: ChartRound) => number) =>
+        list.reduce((a, r) => a + f(r), 0);
+      const v = metricOf(
+        sum((r) => r.cost!),
+        sum((r) => r.minutes!),
+        sum((r) => r.found!),
+        sum((r) => r.relevant ?? 0),
+      );
       const name =
-        by === "service" ? labels.services[k] ?? k : by === "os" ? labels.os[k] ?? k : k === "?" ? t.buildUnknown : `${t.build} ${k}`;
-      const color = by === "service" ? SERVICE_COLOR[k] : by === "os" ? OS_COLOR[k] : PALETTE[i % PALETTE.length];
+        by === "service"
+          ? (labels.services[k] ?? k)
+          : by === "os"
+            ? (labels.os[k] ?? k)
+            : k === "?"
+              ? t.buildUnknown
+              : `${t.build} ${k}`;
+      const color =
+        by === "service"
+          ? SERVICE_COLOR[k]
+          : by === "os"
+            ? OS_COLOR[k]
+            : PALETTE[i % PALETTE.length];
       const found = sum((r) => r.found!);
       const small = list.length < 2 || found < 10;
       return {
@@ -763,28 +1249,55 @@ function Comparison({ rounds, t, money, labels }: { rounds: ChartRound[]; t: Cha
         label: name,
         sub: `${(list.length === 1 ? t.oneRound : t.manyRounds).replace("{n}", String(list.length))} · ${(found === 1 ? t.onePosition : t.manyPositions).replace("{n}", String(found))}${small ? ` · ${t.tooSmall}` : ""}`,
         dim: small,
-        segments: [{ key: "v", label: t.metrics[metric], value: v ?? 0, color: color ?? C.found }],
+        segments: [
+          {
+            key: "v",
+            label: t.metrics[metric],
+            value: v ?? 0,
+            color: color ?? C.found,
+          },
+        ],
       };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rounds, metric, by]);
   return (
     <div className="space-y-3">
-      <Chips label={t.metric} value={metric} onChange={setMetric} options={(Object.keys(t.metrics) as Metric[]).map((m) => ({ value: m, label: t.metrics[m] }))} />
+      <Chips
+        label={t.metric}
+        value={metric}
+        onChange={setMetric}
+        options={(Object.keys(t.metrics) as Metric[]).map((m) => ({
+          value: m,
+          label: t.metrics[m],
+        }))}
+      />
       <Chips
         label={t.groupBy}
         value={by}
         onChange={setBy}
-        options={(["round", "service", "os", "build"] as GroupBy[]).map((g) => ({ value: g, label: t.groups[g] }))}
+        options={(["round", "service", "os", "build"] as GroupBy[]).map(
+          (g) => ({ value: g, label: t.groups[g] }),
+        )}
       />
       {by === "round" && (
         <Legend
-          items={Array.from(new Set(rounds.map((r) => r.service))).map((s) => ({ label: labels.services[s] ?? s, color: SERVICE_COLOR[s] ?? C.found }))}
+          items={Array.from(new Set(rounds.map((r) => r.service))).map((s) => ({
+            label: labels.services[s] ?? s,
+            color: SERVICE_COLOR[s] ?? C.found,
+          }))}
         />
       )}
-      <HBars rows={rows} format={fmt} emptyLabel={t.notComputable} stacked={false} />
+      <HBars
+        rows={rows}
+        format={fmt}
+        emptyLabel={t.notComputable}
+        stacked={false}
+      />
       <p className="text-[11px] text-[var(--color-dim)]">{t.comparisonHint}</p>
-      {by !== "round" && <p className="text-[11px] text-[var(--color-dim)]">{t.tooSmallHint}</p>}
+      {by !== "round" && (
+        <p className="text-[11px] text-[var(--color-dim)]">{t.tooSmallHint}</p>
+      )}
     </div>
   );
 }
@@ -794,22 +1307,42 @@ function Bench({ bench, t }: { bench: BenchProfile[]; t: ChartCopy }) {
   const n = (v: number) => String(v);
   const keysOf = (pick: (b: BenchProfile) => Record<string, number> | null) =>
     Array.from(new Set(bench.flatMap((b) => Object.keys(pick(b) ?? {}))));
-  const rowsFor = (pick: (b: BenchProfile) => Record<string, number> | null, names: Record<string, string>, colors?: Record<string, string>) => {
+  const rowsFor = (
+    pick: (b: BenchProfile) => Record<string, number> | null,
+    names: Record<string, string>,
+    colors?: Record<string, string>,
+  ) => {
     const keys = keysOf(pick);
     return {
       keys,
       rows: bench.map((b) => ({
         key: b.id,
         label: b.label,
-        segments: keys.map((k, i) => ({ key: k, label: names[k] ?? k, value: pick(b)?.[k] ?? 0, color: colorOf(k, i, colors) })),
+        segments: keys.map((k, i) => ({
+          key: k,
+          label: names[k] ?? k,
+          value: pick(b)?.[k] ?? 0,
+          color: colorOf(k, i, colors),
+        })),
       })),
     };
   };
-  const rel = rowsFor((b) => (b.relevance as Record<string, number> | null) ?? null, t.relevance, REL_COLOR);
+  const rel = rowsFor(
+    (b) => (b.relevance as Record<string, number> | null) ?? null,
+    t.relevance,
+    REL_COLOR,
+  );
   const dis = rowsFor((b) => b.discarded, t.discardReasons);
   const src = rowsFor((b) => b.bySource, {});
-  const legendOf = (keys: string[], names: Record<string, string>, colors?: Record<string, string>) =>
-    keys.map((k, i) => ({ label: names[k] ?? k, color: colorOf(k, i, colors) }));
+  const legendOf = (
+    keys: string[],
+    names: Record<string, string>,
+    colors?: Record<string, string>,
+  ) =>
+    keys.map((k, i) => ({
+      label: names[k] ?? k,
+      color: colorOf(k, i, colors),
+    }));
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <Panel title={t.benchRelevance} lead={t.benchRelevanceLead}>
@@ -828,41 +1361,95 @@ function Bench({ bench, t }: { bench: BenchProfile[]; t: ChartCopy }) {
   );
 }
 
-function Builds({ builds, t, labels }: { builds: BuildPoint[]; t: ChartCopy; labels: ChartsProps["labels"] }) {
+function Builds({
+  builds,
+  t,
+  labels,
+}: {
+  builds: BuildPoint[];
+  t: ChartCopy;
+  labels: ChartsProps["labels"];
+}) {
   const statuses = ["pass", "fail", "blocked", "pending"];
   const tRows: BarRow[] = builds.map((b) => ({
     key: String(b.n),
     label: `${t.build} ${b.n}`,
     note: b.fromCurrent ? t.buildsFromCurrent : undefined,
-    segments: statuses.map((s) => ({ key: s, label: labels.targetStatus[s] ?? s, value: b.targets?.[s] ?? 0, color: STATUS_COLOR[s] })),
+    segments: statuses.map((s) => ({
+      key: s,
+      label: labels.targetStatus[s] ?? s,
+      value: b.targets?.[s] ?? 0,
+      color: STATUS_COLOR[s],
+    })),
   }));
   const anyFound = builds.some((b) => b.defects?.found != null);
   const dRows: BarRow[] = builds.map((b) => ({
     key: String(b.n),
     label: `${t.build} ${b.n}`,
     segments: [
-      ...(anyFound ? [{ key: "found", label: t.defectsFound, value: b.defects?.found ?? 0, color: "#EF4444" }] : []),
-      { key: "closed", label: t.defectsClosed, value: b.defects?.closed ?? 0, color: "#22C55E" },
+      ...(anyFound
+        ? [
+            {
+              key: "found",
+              label: t.defectsFound,
+              value: b.defects?.found ?? 0,
+              color: "#EF4444",
+            },
+          ]
+        : []),
+      {
+        key: "closed",
+        label: t.defectsClosed,
+        value: b.defects?.closed ?? 0,
+        color: "#22C55E",
+      },
     ],
   }));
   const anyDefects = builds.some((b) => b.defects != null);
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <Panel title={t.buildsTargets} lead={builds.some((b) => b.fromCurrent) ? t.buildsFromCurrent : undefined}>
-        <Legend items={statuses.map((s) => ({ label: labels.targetStatus[s] ?? s, color: STATUS_COLOR[s] }))} />
-        <HBars rows={tRows} format={(v) => String(v)} emptyLabel={t.noRoundOnBuild} compact />
+      <Panel
+        title={t.buildsTargets}
+        lead={
+          builds.some((b) => b.fromCurrent) ? t.buildsFromCurrent : undefined
+        }
+      >
+        <Legend
+          items={statuses.map((s) => ({
+            label: labels.targetStatus[s] ?? s,
+            color: STATUS_COLOR[s],
+          }))}
+        />
+        <HBars
+          rows={tRows}
+          format={(v) => String(v)}
+          emptyLabel={t.noRoundOnBuild}
+          compact
+        />
       </Panel>
       <Panel title={t.buildsDefects}>
         {anyDefects ? (
           <>
             <Legend
               items={[
-                ...(anyFound ? [{ label: t.defectsFound, color: "#EF4444" }] : []),
+                ...(anyFound
+                  ? [{ label: t.defectsFound, color: "#EF4444" }]
+                  : []),
                 { label: t.defectsClosed, color: "#22C55E" },
               ]}
             />
-            <HBars rows={dRows} format={(v) => String(v)} emptyLabel={t.noData} stacked={false} compact />
-            <p className="text-[11px] text-[var(--color-dim)]">{anyFound ? t.defectsHint : `${t.defectsHint} ${t.defectsFoundMissing}`}</p>
+            <HBars
+              rows={dRows}
+              format={(v) => String(v)}
+              emptyLabel={t.noData}
+              stacked={false}
+              compact
+            />
+            <p className="text-[11px] text-[var(--color-dim)]">
+              {anyFound
+                ? t.defectsHint
+                : `${t.defectsHint} ${t.defectsFoundMissing}`}
+            </p>
           </>
         ) : (
           <Missing text={t.defectsMissing} />
@@ -872,23 +1459,44 @@ function Builds({ builds, t, labels }: { builds: BuildPoint[]; t: ChartCopy; lab
   );
 }
 
-function Agents({ rounds, t, money }: { rounds: ChartRound[]; t: ChartCopy; money: (v: number) => string }) {
-  const withAgents = rounds.filter((r) => r.agents && Object.keys(r.agents).length > 0);
+function Agents({
+  rounds,
+  t,
+  money,
+}: {
+  rounds: ChartRound[];
+  t: ChartCopy;
+  money: (v: number) => string;
+}) {
+  const withAgents = rounds.filter(
+    (r) => r.agents && Object.keys(r.agents).length > 0,
+  );
   if (withAgents.length === 0) return <Missing text={t.agentsMissing} />;
-  const keys = Array.from(new Set(withAgents.flatMap((r) => Object.keys(r.agents!))));
+  const keys = Array.from(
+    new Set(withAgents.flatMap((r) => Object.keys(r.agents!))),
+  );
   const rows: BarRow[] = withAgents.map((r) => ({
     key: r.id,
     label: r.group === "round" ? r.label : `${t.bench} · ${r.label}`,
-    segments: keys.map((k, i) => ({ key: k, label: t.agents[k] ?? k, value: r.agents![k] ?? 0, color: colorOf(k, i, AGENT_COLOR) })),
+    segments: keys.map((k, i) => ({
+      key: k,
+      label: t.agents[k] ?? k,
+      value: r.agents![k] ?? 0,
+      color: colorOf(k, i, AGENT_COLOR),
+    })),
   }));
   return (
     <div className="space-y-3">
-      <Legend items={keys.map((k, i) => ({ label: t.agents[k] ?? k, color: colorOf(k, i, AGENT_COLOR) }))} />
+      <Legend
+        items={keys.map((k, i) => ({
+          label: t.agents[k] ?? k,
+          color: colorOf(k, i, AGENT_COLOR),
+        }))}
+      />
       <HBars rows={rows} format={money} emptyLabel={t.noData} />
     </div>
   );
 }
-
 
 // ---- vertical grouped bars, one group per hour ----
 
@@ -901,17 +1509,26 @@ function VBars({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [W, setW] = useState(600);
-  const [tip, setTip] = useState<{ i: number; x: number; y: number; w: number } | null>(null);
+  const [tip, setTip] = useState<{
+    i: number;
+    x: number;
+    y: number;
+    w: number;
+  } | null>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setW(Math.max(280, Math.round(e.contentRect.width))));
+    const ro = new ResizeObserver(([e]) =>
+      setW(Math.max(280, Math.round(e.contentRect.width))),
+    );
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
   const H = 220;
   const pad = { l: 36, r: 8, t: 10, b: 26 };
-  const max = niceMax(Math.max(1, ...groups.flatMap((g) => g.values.map((v) => v ?? 0))) * 1.05);
+  const max = niceMax(
+    Math.max(1, ...groups.flatMap((g) => g.values.map((v) => v ?? 0))) * 1.05,
+  );
   const gw = (W - pad.l - pad.r) / Math.max(groups.length, 1);
   const bw = Math.max(3, (gw * 0.75) / series.length);
   const sy = (v: number) => H - pad.b - (v / max) * (H - pad.t - pad.b);
@@ -924,14 +1541,37 @@ function VBars({
         const box = ref.current?.getBoundingClientRect();
         if (!box) return;
         const i = Math.floor((e.clientX - box.left - pad.l) / gw);
-        if (i >= 0 && i < groups.length) setTip({ i, x: e.clientX - box.left, y: e.clientY - box.top, w: box.width });
+        if (i >= 0 && i < groups.length)
+          setTip({
+            i,
+            x: e.clientX - box.left,
+            y: e.clientY - box.top,
+            w: box.width,
+          });
       }}
     >
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block" role="img" aria-label={series.map((s) => s.label).join(", ")}>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="w-full h-auto block"
+        role="img"
+        aria-label={series.map((s) => s.label).join(", ")}
+      >
         {ticks(max).map((v) => (
           <g key={v}>
-            <line x1={pad.l} x2={W - pad.r} y1={sy(v)} y2={sy(v)} stroke="var(--color-border)" />
-            <text x={pad.l - 6} y={sy(v) + 4} textAnchor="end" fontSize={11} fill="var(--color-muted)">
+            <line
+              x1={pad.l}
+              x2={W - pad.r}
+              y1={sy(v)}
+              y2={sy(v)}
+              stroke="var(--color-border)"
+            />
+            <text
+              x={pad.l - 6}
+              y={sy(v) + 4}
+              textAnchor="end"
+              fontSize={11}
+              fill="var(--color-muted)"
+            >
               {Math.round(v)}
             </text>
           </g>
@@ -952,7 +1592,13 @@ function VBars({
               ),
             )}
             {(groups.length <= 12 || i % 2 === 0) && (
-              <text x={pad.l + i * gw + gw / 2} y={H - pad.b + 16} textAnchor="middle" fontSize={11} fill="var(--color-muted)">
+              <text
+                x={pad.l + i * gw + gw / 2}
+                y={H - pad.b + 16}
+                textAnchor="middle"
+                fontSize={11}
+                fill="var(--color-muted)"
+              >
                 {g.label}
               </text>
             )}
@@ -964,9 +1610,14 @@ function VBars({
           <div className="font-semibold mb-0.5">{groups[tip.i].label}</div>
           {series.map((s, j) => (
             <div key={s.label} className="flex items-center gap-1.5">
-              <span className="inline-block w-2 h-2 rounded-full" style={{ background: s.color }} />
+              <span
+                className="inline-block w-2 h-2 rounded-full"
+                style={{ background: s.color }}
+              />
               <span className="text-[var(--color-muted)]">{s.label}</span>
-              <span className="ml-auto pl-3 font-semibold">{groups[tip.i].values[j] ?? "—"}</span>
+              <span className="ml-auto pl-3 font-semibold">
+                {groups[tip.i].values[j] ?? "—"}
+              </span>
             </div>
           ))}
         </Tip>
@@ -977,25 +1628,71 @@ function VBars({
 
 function Beta({ beta, t }: { beta: BetaDay; t: ChartCopy }) {
   if (!beta) return <Missing text={t.betaMissing} />;
-  const hh = (v: number) => `${String(Math.floor(v)).padStart(2, "0")}:${String(Math.round((v % 1) * 60)).padStart(2, "0")}`;
-  const start = Math.floor(Math.min(...beta.hours.map((h) => h.h), ...beta.codex.map((c) => c.t), ...beta.experiments.map((e) => e.t)));
-  const marks = beta.experiments.map((e) => ({ x: e.t - start, label: e.label, color: "var(--color-purple)" }));
-  const xMax = Math.max(...beta.codex.map((c) => c.t - start), ...marks.map((m) => m.x), 1);
+  const hh = (v: number) =>
+    `${String(Math.floor(v)).padStart(2, "0")}:${String(Math.round((v % 1) * 60)).padStart(2, "0")}`;
+  const start = Math.floor(
+    Math.min(
+      ...beta.hours.map((h) => h.h),
+      ...beta.codex.map((c) => c.t),
+      ...beta.experiments.map((e) => e.t),
+    ),
+  );
+  const marks = beta.experiments.map((e) => ({
+    x: e.t - start,
+    label: e.label,
+    color: "var(--color-purple)",
+  }));
+  const xMax = Math.max(
+    ...beta.codex.map((c) => c.t - start),
+    ...marks.map((m) => m.x),
+    1,
+  );
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Panel title={t.betaPositions}>
-        <Legend items={[{ label: t.found, color: C.found }, { label: t.atLeast70, color: C.relevant }]} />
+        <Legend
+          items={[
+            { label: t.found, color: C.found },
+            { label: t.atLeast70, color: C.relevant },
+          ]}
+        />
         <VBars
-          series={[{ label: t.found, color: C.found }, { label: t.atLeast70, color: C.relevant }]}
-          groups={beta.hours.map((h) => ({ key: String(h.h), label: `${String(h.h).padStart(2, "0")}`, values: [h.positions, h.atLeast70] }))}
+          series={[
+            { label: t.found, color: C.found },
+            { label: t.atLeast70, color: C.relevant },
+          ]}
+          groups={beta.hours.map((h) => ({
+            key: String(h.h),
+            label: `${String(h.h).padStart(2, "0")}`,
+            values: [h.positions, h.atLeast70],
+          }))}
         />
         <p className="text-[11px] text-[var(--color-dim)]">{t.betaHoursHint}</p>
       </Panel>
       <Panel title={t.betaCodex}>
-        <Legend items={[{ label: t.betaCodexUsed, color: C.cost }, { label: t.betaExperiments, color: "var(--color-purple)", dashed: true }]} />
+        <Legend
+          items={[
+            { label: t.betaCodexUsed, color: C.cost },
+            {
+              label: t.betaExperiments,
+              color: "var(--color-purple)",
+              dashed: true,
+            },
+          ]}
+        />
         {beta.codex.length > 0 ? (
           <LineChart
-            series={[{ key: "codex", label: t.betaCodexUsed, color: C.cost, points: beta.codex.map((c) => ({ x: c.t - start, y: c.usedPct })) }]}
+            series={[
+              {
+                key: "codex",
+                label: t.betaCodexUsed,
+                color: C.cost,
+                points: beta.codex.map((c) => ({
+                  x: c.t - start,
+                  y: c.usedPct,
+                })),
+              },
+            ]}
             xMax={xMax}
             yFormat={(v) => `${Math.round(v)}%`}
             xLabel={t.betaHour}
@@ -1012,7 +1709,9 @@ function Beta({ beta, t }: { beta: BetaDay; t: ChartCopy }) {
           <ol className="text-[11px] text-[var(--color-muted)] space-y-0.5 tabular-nums">
             {beta.experiments.map((e, i) => (
               <li key={i} className="flex gap-2">
-                <span className="font-bold text-[var(--color-purple)]">{i + 1}</span>
+                <span className="font-bold text-[var(--color-purple)]">
+                  {i + 1}
+                </span>
                 <span>{hh(e.t)}</span>
                 <span>{e.label}</span>
               </li>
@@ -1024,18 +1723,24 @@ function Beta({ beta, t }: { beta: BetaDay; t: ChartCopy }) {
   );
 }
 
-const beta = (b: BetaDay, t: ChartCopy) => (b ? `${t.s6Lead} ${b.day}.` : t.s6Lead);
+const beta = (b: BetaDay, t: ChartCopy) =>
+  b ? `${t.s6Lead} ${b.day}.` : t.s6Lead;
 
 export default function BenchmarkCharts(props: ChartsProps) {
   const t = CHART_COPY[props.locale] ?? CHART_COPY.en;
-  const nf = new Intl.NumberFormat(props.locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const nf = new Intl.NumberFormat(props.locale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
   const money = (v: number) => `${nf.format(v)} $`;
   const all = [...props.rounds];
   return (
     <section className="space-y-6" id="charts">
       <div className="space-y-1">
         <h2 className="section-label">{t.title}</h2>
-        <p className="text-[12px] text-[var(--color-muted)] max-w-3xl">{t.lead}</p>
+        <p className="text-[12px] text-[var(--color-muted)] max-w-3xl">
+          {t.lead}
+        </p>
       </div>
       <Panel title={`1 · ${t.s1}`} lead={t.s1Lead}>
         <RoundTimelines rounds={all} t={t} money={money} />
@@ -1061,9 +1766,18 @@ export default function BenchmarkCharts(props: ChartsProps) {
 
 /** The charts of one test, for its own page: spend, positions and scores over time with the ceiling and the events of the
  *  brake, and the spend of each role where the sampler recorded it. */
-export function RoundDetailCharts({ locale, round }: { locale: Locale; round: ChartRound }) {
+export function RoundDetailCharts({
+  locale,
+  round,
+}: {
+  locale: Locale;
+  round: ChartRound;
+}) {
   const t = CHART_COPY[locale] ?? CHART_COPY.en;
-  const nf = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const nf = new Intl.NumberFormat(locale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
   const money = (v: number) => `${nf.format(v)} $`;
   return (
     <div className="space-y-4">

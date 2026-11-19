@@ -162,14 +162,22 @@ export const T: Record<Locale, Copy> = {
       "openai-glm": "OpenAI (credit ended), then GLM",
     },
     notes: {
-      updateBuild10Portuguese: "Update on build 10, all in Portuguese: the saved key kept, the queue restarted by itself, 1 new position (74); the pace brake paused the team and told the person.",
-      updateWindowsBuild9to10: "Build 9 installed from scratch, all in German: 25 warehouse positions in a quarter of an hour; updated to build 10 with positions, profile and key kept, then the Analyst never started and 13 positions stayed waiting.",
-      updateSwitchKept: "Update with the team running: data kept, old images removed, GLM → Claude without stopping the team. 3 relevant of 26 new in 10 minutes.",
-      updateWelcomePaid: "Update and switch to Claude: 15 relevant of 18 in 12 minutes. The welcome was paid again at every restart.",
-      cleanInstallWarehouse: "New user, guided onboarding: the brake stopped at 2.67 $. Mostly warehouse jobs: 2 relevant of 19.",
-      updateNoNewPositions: "Update fine and no key file left on disk, but 0 new positions in 30 minutes: only 2 Scouts woken.",
-      diskLowAfterUpdate: "Update fine, team never started: 4 GiB free of the 8 needed, with no warning before the download.",
-      cleanInstallGerman: "New user in German: 10 relevant of 26. The brake stopped at 4.77 $, then a false unlock (4.95 $ at the end); Doctor and Maintainer did no turn.",
+      updateBuild10Portuguese:
+        "Update on build 10, all in Portuguese: the saved key kept, the queue restarted by itself, 1 new position (74); the pace brake paused the team and told the person.",
+      updateWindowsBuild9to10:
+        "Build 9 installed from scratch, all in German: 25 warehouse positions in a quarter of an hour; updated to build 10 with positions, profile and key kept, then the Analyst never started and 13 positions stayed waiting.",
+      updateSwitchKept:
+        "Update with the team running: data kept, old images removed, GLM → Claude without stopping the team. 3 relevant of 26 new in 10 minutes.",
+      updateWelcomePaid:
+        "Update and switch to Claude: 15 relevant of 18 in 12 minutes. The welcome was paid again at every restart.",
+      cleanInstallWarehouse:
+        "New user, guided onboarding: the brake stopped at 2.67 $. Mostly warehouse jobs: 2 relevant of 19.",
+      updateNoNewPositions:
+        "Update fine and no key file left on disk, but 0 new positions in 30 minutes: only 2 Scouts woken.",
+      diskLowAfterUpdate:
+        "Update fine, team never started: 4 GiB free of the 8 needed, with no warning before the download.",
+      cleanInstallGerman:
+        "New user in German: 10 relevant of 26. The brake stopped at 4.77 $, then a false unlock (4.95 $ at the end); Doctor and Maintainer did no turn.",
       scoutsNoTools:
         "Scouts had no tools from the CLI (fixed); CPU saturated on 2 vCPU.",
       creditEnded: "Same defect; the GLM credit ran out.",
@@ -195,120 +203,144 @@ export const T: Record<Locale, Copy> = {
     night: "night",
     day: "",
     targetsTitle: "Release targets",
-    targetsLead: "0.4.0 is released only when every row is green. Updated at every build; the proof links to the round below.",
+    targetsLead:
+      "0.4.0 is released only when every row is green. Updated at every build; the proof links to the round below.",
     targetsCount: "{g} of {n} green",
     targetsCols: {
-      "target": "Target",
-      "status": "Status",
-      "build": "Build",
-      "proof": "Proof"
+      target: "Target",
+      status: "Status",
+      build: "Build",
+      proof: "Proof",
     },
     targetStatus: {
-      "pass": "met",
-      "fail": "not met",
-      "pending": "to try",
-      "blocked": "blocked"
+      pass: "met",
+      fail: "not met",
+      pending: "to try",
+      blocked: "blocked",
     },
     targets: {
-      "scoutBenchCook": "Cook",
-      "scoutBenchWarehouse": "Warehouse worker",
-      "scoutBenchNurse": "Nurse",
-      "scoutBenchBricklayer": "Bricklayer",
-      "languageWindows": "Setup and onboarding in the chosen language · Windows",
-      "languageLinux": "Setup and onboarding in the chosen language · Linux",
-      "languageMac": "Setup and onboarding in the chosen language · Mac",
-      "preTagReview": "Security review before the tag",
-      "installWindows": "Install by a new user · Windows",
-      "installLinux": "Install by a new user · Linux",
-      "installMac": "Install by a new user · Mac",
-      "updateLinux": "Update with a team and data already there · Linux",
-      "updateMac": "Update with a team and data already there · Mac",
-      "updateWindows": "Update with a team and data already there · Windows",
-      "nonItRelevant": "Positions of the person's trade (at least 70%)",
-      "scoutBench": "Scout bench, 4 trades outside IT (≥70% relevant, 0 duplicates, ≥15 positions)",
-      "budgetBrake": "Budget brake: never over the ceiling, no false unlock, the person is told",
-      "language": "Setup and onboarding in the chosen language",
-      "doctorMaintainer": "The Doctor and the Maintainer, the agents that look after the team, really work",
-      "serviceClaude": "Claude (Anthropic) · API key",
-      "serviceOpenai": "OpenAI · API key",
-      "serviceGlm": "Z.ai (GLM) · API key",
-      "serviceKimi": "Kimi (Moonshot) · API key",
-      "codexSubscription": "OpenAI Codex · subscription (only for those who already have 0.3.x, as in our beta test)",
-      "openaiSubscription": "OpenAI · ChatGPT subscription on Pi",
-      "noKeyOnDisk": "No API key is left written on the disk",
-      "betaTester": "Beta test: version updated and team at work"
+      scoutBenchCook: "Cook",
+      scoutBenchWarehouse: "Warehouse worker",
+      scoutBenchNurse: "Nurse",
+      scoutBenchBricklayer: "Bricklayer",
+      languageWindows: "Setup and onboarding in the chosen language · Windows",
+      languageLinux: "Setup and onboarding in the chosen language · Linux",
+      languageMac: "Setup and onboarding in the chosen language · Mac",
+      preTagReview: "Security review before the tag",
+      installWindows: "Install by a new user · Windows",
+      installLinux: "Install by a new user · Linux",
+      installMac: "Install by a new user · Mac",
+      updateLinux: "Update with a team and data already there · Linux",
+      updateMac: "Update with a team and data already there · Mac",
+      updateWindows: "Update with a team and data already there · Windows",
+      nonItRelevant: "Positions of the person's trade (at least 70%)",
+      scoutBench:
+        "Scout bench, 4 trades outside IT (≥70% relevant, 0 duplicates, ≥15 positions)",
+      budgetBrake:
+        "Budget brake: never over the ceiling, no false unlock, the person is told",
+      language: "Setup and onboarding in the chosen language",
+      doctorMaintainer:
+        "The Doctor and the Maintainer, the agents that look after the team, really work",
+      serviceClaude: "Claude (Anthropic) · API key",
+      serviceOpenai: "OpenAI · API key",
+      serviceGlm: "Z.ai (GLM) · API key",
+      serviceKimi: "Kimi (Moonshot) · API key",
+      codexSubscription:
+        "OpenAI Codex · subscription (only for those who already have 0.3.x, as in our beta test)",
+      openaiSubscription: "OpenAI · ChatGPT subscription on Pi",
+      noKeyOnDisk: "No API key is left written on the disk",
+      betaTester: "Beta test: version updated and team at work",
     },
     targetNotes: {
-      "updateMacBuild10": "build 10: setup all in Portuguese, the saved key kept, 1 new position (score 74)",
-      "updateWindowsBuild10": "build 10: positions, profile and key kept, all in German; after the update the Analyst never started (13 positions waiting)",
-      "languagePortugueseOk": "build 10: Portuguese all the way on the Mac",
-      "codexBetaInUse": "in use in our beta test (chart 6); not yet tried on builds 9 and 10",
-      "updateLinuxBuild9": "build 9: passed (its round is not in the table below)",
-      "installerBlockedBuild9": "build 9: stopped by the installer (fix in build 10, round under way)",
-      "benchCook": "79% relevant",
-      "benchWarehouse": "90% relevant",
-      "benchNurse": "1 duplicate (94% relevant)",
-      "benchBricklayer": "6 positions, fewer than 15 (83% relevant)",
-      "brakeFixedRetry": "fixed in builds 9 and 10: to try again",
-      "languageGermanOk": "build 9: German all the way on Linux",
-      "chatgptFreeRefused": "sign-in refused (Free plan)",
-      "securityPreTag": "review before the tag: the verdict comes on the exact version of the tag; the key-on-disk case is closed",
-      "cleanLinuxRoundMissing": "clean install on build 6: its round is not in the table below",
-      "openaiRoundMissing": "proved on build 6: its round is not in the table below",
-      "redoOnBuild9": "to redo on build 9",
-      "diskFull": "disk full after the update (fix in progress)",
-      "neverTried": "never tried",
-      "relevantBelow": "0 new for the bricklayer, 10 of 26 for the receptionist",
-      "benchPaused": "paused until build 9",
-      "brakeFalseClear": "false unlock after the stop, the warning to the person failed",
-      "languageEnglish": "API key step, team start and status in English (fixed after build 8)",
-      "zeroTurns": "0 turns (fixed in build 9)",
-      "noCredit": "no credit to try them",
-      "loginNeverTried": "real sign-in never tried",
-      "keysChecked": "0 files with a key outside their place, on 20,927 file events",
-      "updateOnBuild9": "update on build 9"
+      updateMacBuild10:
+        "build 10: setup all in Portuguese, the saved key kept, 1 new position (score 74)",
+      updateWindowsBuild10:
+        "build 10: positions, profile and key kept, all in German; after the update the Analyst never started (13 positions waiting)",
+      languagePortugueseOk: "build 10: Portuguese all the way on the Mac",
+      codexBetaInUse:
+        "in use in our beta test (chart 6); not yet tried on builds 9 and 10",
+      updateLinuxBuild9:
+        "build 9: passed (its round is not in the table below)",
+      installerBlockedBuild9:
+        "build 9: stopped by the installer (fix in build 10, round under way)",
+      benchCook: "79% relevant",
+      benchWarehouse: "90% relevant",
+      benchNurse: "1 duplicate (94% relevant)",
+      benchBricklayer: "6 positions, fewer than 15 (83% relevant)",
+      brakeFixedRetry: "fixed in builds 9 and 10: to try again",
+      languageGermanOk: "build 9: German all the way on Linux",
+      chatgptFreeRefused: "sign-in refused (Free plan)",
+      securityPreTag:
+        "review before the tag: the verdict comes on the exact version of the tag; the key-on-disk case is closed",
+      cleanLinuxRoundMissing:
+        "clean install on build 6: its round is not in the table below",
+      openaiRoundMissing:
+        "proved on build 6: its round is not in the table below",
+      redoOnBuild9: "to redo on build 9",
+      diskFull: "disk full after the update (fix in progress)",
+      neverTried: "never tried",
+      relevantBelow: "0 new for the bricklayer, 10 of 26 for the receptionist",
+      benchPaused: "paused until build 9",
+      brakeFalseClear:
+        "false unlock after the stop, the warning to the person failed",
+      languageEnglish:
+        "API key step, team start and status in English (fixed after build 8)",
+      zeroTurns: "0 turns (fixed in build 9)",
+      noCredit: "no credit to try them",
+      loginNeverTried: "real sign-in never tried",
+      keysChecked:
+        "0 files with a key outside their place, on 20,927 file events",
+      updateOnBuild9: "update on build 9",
     },
     invalidTitle: "Rounds that do not count",
-    invalidLead: "Rounds broken by causes of ours (credit run out, a test machine that switched itself off, a measurement mistake, cancelled bench attempts), not by defects of the product. They are left out of the table and of the charts; the defects they found stay in the chart of the defects.",
+    invalidLead:
+      "Rounds broken by causes of ours (credit run out, a test machine that switched itself off, a measurement mistake, cancelled bench attempts), not by defects of the product. They are left out of the table and of the charts; the defects they found stay in the chart of the defects.",
     invalidReasons: {
-      noCreditMachineOff: "OpenAI had no credit and the test machine switched itself off: no Scout started. The service was changed to GLM halfway through the round.",
-      cumulativeCap: "Our test ceiling of 3 $ was too low and was read on a counter that also held the round before: stopped after 6 minutes, before any new position.",
-      benchDailyBudget: "Cancelled bench attempt: it started with a high daily budget left from before, and the pace brake stopped it after 70 seconds.",
-      benchOpenRun: "Cancelled bench attempt: the first search of the previous build was still open.",
-      creditEndedNoPositions: "The GLM credit of the test account ran out before any position: 0 positions.",
+      noCreditMachineOff:
+        "OpenAI had no credit and the test machine switched itself off: no Scout started. The service was changed to GLM halfway through the round.",
+      cumulativeCap:
+        "Our test ceiling of 3 $ was too low and was read on a counter that also held the round before: stopped after 6 minutes, before any new position.",
+      benchDailyBudget:
+        "Cancelled bench attempt: it started with a high daily budget left from before, and the pace brake stopped it after 70 seconds.",
+      benchOpenRun:
+        "Cancelled bench attempt: the first search of the previous build was still open.",
+      creditEndedNoPositions:
+        "The GLM credit of the test account ran out before any position: 0 positions.",
       benchCancelled: "Cancelled bench attempt, started again from zero.",
     },
     targetSections: {
-      "install": "Install by a new user",
-      "update": "Update with a team and data",
-      "scout": "Scout bench: does the Scout find ads of the right trade?",
-      "brake": "Spending brake",
-      "language": "Language",
-      "doctor": "Doctor and Maintainer",
-      "services": "Services",
-      "security": "Security",
-      "beta": "Beta test",
-      "realUser": "Full round as a real user, with a trade outside IT",
+      install: "Install by a new user",
+      update: "Update with a team and data",
+      scout: "Scout bench: does the Scout find ads of the right trade?",
+      brake: "Spending brake",
+      language: "Language",
+      doctor: "Doctor and Maintainer",
+      services: "Services",
+      security: "Security",
+      beta: "Beta test",
+      realUser: "Full round as a real user, with a trade outside IT",
     },
     targetCriteria: {
-      "relevant": "relevant {v}% (≥{min}%)",
-      "duplicates": "duplicates {v}",
-      "positions": "positions {v} (≥{min})",
-      "newPositions": "{trade}: {v} new",
-      "relevantOf": "{trade}: {v} relevant of {of}",
-      "underCeiling": "spent {v} of {max} $",
-      "noFalseUnlock": "no false unlock",
+      relevant: "relevant {v}% (≥{min}%)",
+      duplicates: "duplicates {v}",
+      positions: "positions {v} (≥{min})",
+      newPositions: "{trade}: {v} new",
+      relevantOf: "{trade}: {v} relevant of {of}",
+      underCeiling: "spent {v} of {max} $",
+      noFalseUnlock: "no false unlock",
     },
     targetRules: {
-      "scout": "Only the search of the Scouts, on a server already set up, with four trades outside IT. A trade passes when all 3 criteria are green: at least 70% relevant, 0 duplicates, at least 15 positions.",
-      "brake": "Criteria of the last try (build 8); fixed since, to try again.",
-      "realUser": "A person installs the program from zero, answers the setup and lets the team work alone for 30 minutes. It passes when at least 70% of the positions found are of the person's trade.",
+      scout:
+        "Only the search of the Scouts, on a server already set up, with four trades outside IT. A trade passes when all 3 criteria are green: at least 70% relevant, 0 duplicates, at least 15 positions.",
+      brake: "Criteria of the last try (build 8); fixed since, to try again.",
+      realUser:
+        "A person installs the program from zero, answers the setup and lets the team work alone for 30 minutes. It passes when at least 70% of the positions found are of the person's trade.",
     },
     targetTried: "tried on build {n}",
     targetRows: {
-      "install": "First install on a computer without the program",
-      "update": "Update of a computer that already has a team and its data",
-      "language": "Setup and onboarding in the chosen language",
+      install: "First install on a computer without the program",
+      update: "Update of a computer that already has a team and its data",
+      language: "Setup and onboarding in the chosen language",
     },
     buildsTitle: "Rounds of each build",
     buildLabel: "Build {n}",
@@ -452,14 +484,22 @@ export const T: Record<Locale, Copy> = {
       "openai-glm": "OpenAI (credito finito), poi GLM",
     },
     notes: {
-      updateBuild10Portuguese: "Aggiornamento sulla build 10, tutto in portoghese: chiave salvata tenuta, la coda ripartita da sola, 1 annuncio nuovo (74); il freno a ritmo ha messo in pausa la squadra e l'ha detto alla persona.",
-      updateWindowsBuild9to10: "Build 9 installata da zero, tutto in tedesco: 25 annunci di magazzino in un quarto d'ora; aggiornata alla build 10 con annunci, profilo e chiave tenuti, poi l'Analista non è mai partito e 13 annunci sono rimasti in attesa.",
-      updateSwitchKept: "Aggiornamento a squadra accesa: dati tenuti, immagini vecchie tolte, GLM → Claude senza fermare la squadra. 3 pertinenti su 26 nuove in 10 minuti.",
-      updateWelcomePaid: "Aggiornamento e passaggio a Claude: 15 pertinenti su 18 in 12 minuti. Il benvenuto è stato pagato di nuovo a ogni ripartenza.",
-      cleanInstallWarehouse: "Utente nuovo, onboarding guidato: il freno ha fermato a 2,67 $. Quasi solo magazzino: 2 pertinenti su 19.",
-      updateNoNewPositions: "Aggiornamento riuscito e nessun file con chiave su disco, ma 0 posizioni nuove in 30 minuti: svegliati solo 2 Scout.",
-      diskLowAfterUpdate: "Aggiornamento riuscito, squadra mai partita: 4 GiB liberi degli 8 necessari, senza avviso prima dello scaricamento.",
-      cleanInstallGerman: "Utente nuovo in tedesco: 10 pertinenti su 26. Il freno ha fermato a 4,77 $, poi uno sblocco falso (4,95 $ alla fine); Dottore e Mantenitore senza turni.",
+      updateBuild10Portuguese:
+        "Aggiornamento sulla build 10, tutto in portoghese: chiave salvata tenuta, la coda ripartita da sola, 1 annuncio nuovo (74); il freno a ritmo ha messo in pausa la squadra e l'ha detto alla persona.",
+      updateWindowsBuild9to10:
+        "Build 9 installata da zero, tutto in tedesco: 25 annunci di magazzino in un quarto d'ora; aggiornata alla build 10 con annunci, profilo e chiave tenuti, poi l'Analista non è mai partito e 13 annunci sono rimasti in attesa.",
+      updateSwitchKept:
+        "Aggiornamento a squadra accesa: dati tenuti, immagini vecchie tolte, GLM → Claude senza fermare la squadra. 3 pertinenti su 26 nuove in 10 minuti.",
+      updateWelcomePaid:
+        "Aggiornamento e passaggio a Claude: 15 pertinenti su 18 in 12 minuti. Il benvenuto è stato pagato di nuovo a ogni ripartenza.",
+      cleanInstallWarehouse:
+        "Utente nuovo, onboarding guidato: il freno ha fermato a 2,67 $. Quasi solo magazzino: 2 pertinenti su 19.",
+      updateNoNewPositions:
+        "Aggiornamento riuscito e nessun file con chiave su disco, ma 0 posizioni nuove in 30 minuti: svegliati solo 2 Scout.",
+      diskLowAfterUpdate:
+        "Aggiornamento riuscito, squadra mai partita: 4 GiB liberi degli 8 necessari, senza avviso prima dello scaricamento.",
+      cleanInstallGerman:
+        "Utente nuovo in tedesco: 10 pertinenti su 26. Il freno ha fermato a 4,77 $, poi uno sblocco falso (4,95 $ alla fine); Dottore e Mantenitore senza turni.",
       scoutsNoTools:
         "Gli Scout senza strumenti dalla CLI (corretto); CPU satura su 2 vCPU.",
       creditEnded: "Stesso difetto; credito GLM finito.",
@@ -485,120 +525,145 @@ export const T: Record<Locale, Copy> = {
     night: "notte",
     day: "",
     targetsTitle: "Target di rilascio",
-    targetsLead: "La 0.4.0 si rilascia solo con tutte le righe verdi. Aggiornata a ogni build; la prova porta al giro qui sotto.",
+    targetsLead:
+      "La 0.4.0 si rilascia solo con tutte le righe verdi. Aggiornata a ogni build; la prova porta al giro qui sotto.",
     targetsCount: "{g} di {n} verdi",
     targetsCols: {
-      "target": "Target",
-      "status": "Stato",
-      "build": "Build",
-      "proof": "Prova"
+      target: "Target",
+      status: "Stato",
+      build: "Build",
+      proof: "Prova",
     },
     targetStatus: {
-      "pass": "raggiunto",
-      "fail": "non raggiunto",
-      "pending": "da provare",
-      "blocked": "bloccato"
+      pass: "raggiunto",
+      fail: "non raggiunto",
+      pending: "da provare",
+      blocked: "bloccato",
     },
     targets: {
-      "scoutBenchCook": "Cuoco",
-      "scoutBenchWarehouse": "Magazziniere",
-      "scoutBenchNurse": "Infermiera",
-      "scoutBenchBricklayer": "Muratore",
-      "languageWindows": "Setup e onboarding nella lingua scelta · Windows",
-      "languageLinux": "Setup e onboarding nella lingua scelta · Linux",
-      "languageMac": "Setup e onboarding nella lingua scelta · Mac",
-      "preTagReview": "Controllo di sicurezza prima del tag",
-      "installWindows": "Installazione da utente vergine · Windows",
-      "installLinux": "Installazione da utente vergine · Linux",
-      "installMac": "Installazione da utente vergine · Mac",
-      "updateLinux": "Aggiornamento con squadra e dati esistenti · Linux",
-      "updateMac": "Aggiornamento con squadra e dati esistenti · Mac",
-      "updateWindows": "Aggiornamento con squadra e dati esistenti · Windows",
-      "nonItRelevant": "Annunci del mestiere della persona (almeno 70%)",
-      "scoutBench": "Banco degli Scout, 4 mestieri non IT (≥70% pertinenti, 0 doppioni, ≥15 posizioni)",
-      "budgetBrake": "Freno del budget: mai oltre il tetto, nessuno sblocco falso, avviso all'utente",
-      "language": "Setup e onboarding nella lingua scelta",
-      "doctorMaintainer": "Il Dottore e il Mantenitore, gli agenti che curano la squadra, lavorano davvero",
-      "serviceClaude": "Claude (Anthropic) · chiave API",
-      "serviceOpenai": "OpenAI · chiave API",
-      "serviceGlm": "Z.ai (GLM) · chiave API",
-      "serviceKimi": "Kimi (Moonshot) · chiave API",
-      "codexSubscription": "OpenAI Codex · abbonamento (solo chi ha già la 0.3.x, come nel nostro beta test)",
-      "openaiSubscription": "OpenAI · abbonamento ChatGPT su Pi",
-      "noKeyOnDisk": "Nessuna chiave API resta scritta sul disco",
-      "betaTester": "Beta test: versione aggiornata e squadra al lavoro"
+      scoutBenchCook: "Cuoco",
+      scoutBenchWarehouse: "Magazziniere",
+      scoutBenchNurse: "Infermiera",
+      scoutBenchBricklayer: "Muratore",
+      languageWindows: "Setup e onboarding nella lingua scelta · Windows",
+      languageLinux: "Setup e onboarding nella lingua scelta · Linux",
+      languageMac: "Setup e onboarding nella lingua scelta · Mac",
+      preTagReview: "Controllo di sicurezza prima del tag",
+      installWindows: "Installazione da utente vergine · Windows",
+      installLinux: "Installazione da utente vergine · Linux",
+      installMac: "Installazione da utente vergine · Mac",
+      updateLinux: "Aggiornamento con squadra e dati esistenti · Linux",
+      updateMac: "Aggiornamento con squadra e dati esistenti · Mac",
+      updateWindows: "Aggiornamento con squadra e dati esistenti · Windows",
+      nonItRelevant: "Annunci del mestiere della persona (almeno 70%)",
+      scoutBench:
+        "Banco degli Scout, 4 mestieri non IT (≥70% pertinenti, 0 doppioni, ≥15 posizioni)",
+      budgetBrake:
+        "Freno del budget: mai oltre il tetto, nessuno sblocco falso, avviso all'utente",
+      language: "Setup e onboarding nella lingua scelta",
+      doctorMaintainer:
+        "Il Dottore e il Mantenitore, gli agenti che curano la squadra, lavorano davvero",
+      serviceClaude: "Claude (Anthropic) · chiave API",
+      serviceOpenai: "OpenAI · chiave API",
+      serviceGlm: "Z.ai (GLM) · chiave API",
+      serviceKimi: "Kimi (Moonshot) · chiave API",
+      codexSubscription:
+        "OpenAI Codex · abbonamento (solo chi ha già la 0.3.x, come nel nostro beta test)",
+      openaiSubscription: "OpenAI · abbonamento ChatGPT su Pi",
+      noKeyOnDisk: "Nessuna chiave API resta scritta sul disco",
+      betaTester: "Beta test: versione aggiornata e squadra al lavoro",
     },
     targetNotes: {
-      "updateMacBuild10": "build 10: setup tutto in portoghese, chiave salvata tenuta, 1 annuncio nuovo (punteggio 74)",
-      "updateWindowsBuild10": "build 10: annunci, profilo e chiave tenuti, tutto in tedesco; dopo l'aggiornamento l'Analista non è mai partito (13 annunci in attesa)",
-      "languagePortugueseOk": "build 10: portoghese dall'inizio alla fine sul Mac",
-      "codexBetaInUse": "in uso nel nostro beta test (grafico 6); non ancora provato sulle build 9 e 10",
-      "updateLinuxBuild9": "build 9: superato (il giro non è nella tabella sotto)",
-      "installerBlockedBuild9": "build 9: fermato dall'installer (correzione in build 10, giro in corso)",
-      "benchCook": "79% pertinenti",
-      "benchWarehouse": "90% pertinenti",
-      "benchNurse": "1 doppione (94% pertinenti)",
-      "benchBricklayer": "6 posizioni, meno di 15 (83% pertinenti)",
-      "brakeFixedRetry": "corretto nelle build 9 e 10: da riprovare",
-      "languageGermanOk": "build 9: tedesco dall'inizio alla fine su Linux",
-      "chatgptFreeRefused": "accesso rifiutato (piano Free)",
-      "securityPreTag": "controllo prima del tag: il verdetto arriva sulla versione esatta del tag; il caso della chiave su disco è chiuso",
-      "cleanLinuxRoundMissing": "installazione vergine sulla build 6: il suo giro non è nella tabella qui sotto",
-      "openaiRoundMissing": "provato sulla build 6: il suo giro non è nella tabella qui sotto",
-      "redoOnBuild9": "da rifare sulla build 9",
-      "diskFull": "disco pieno dopo l'aggiornamento (correzione in corso)",
-      "neverTried": "mai provato",
-      "relevantBelow": "0 nuove per il muratore, 10 su 26 per la receptionist",
-      "benchPaused": "in pausa fino alla build 9",
-      "brakeFalseClear": "sblocco falso dopo lo stop, avviso all'utente fallito",
-      "languageEnglish": "passo della chiave API, avvio della squadra e status in inglese (corretti dopo la build 8)",
-      "zeroTurns": "0 turni (corretto nella build 9)",
-      "noCredit": "senza credito per provarli",
-      "loginNeverTried": "accesso vero mai provato",
-      "keysChecked": "0 file con chiave fuori posto, su 20.927 eventi sui file",
-      "updateOnBuild9": "aggiornamento sulla build 9"
+      updateMacBuild10:
+        "build 10: setup tutto in portoghese, chiave salvata tenuta, 1 annuncio nuovo (punteggio 74)",
+      updateWindowsBuild10:
+        "build 10: annunci, profilo e chiave tenuti, tutto in tedesco; dopo l'aggiornamento l'Analista non è mai partito (13 annunci in attesa)",
+      languagePortugueseOk:
+        "build 10: portoghese dall'inizio alla fine sul Mac",
+      codexBetaInUse:
+        "in uso nel nostro beta test (grafico 6); non ancora provato sulle build 9 e 10",
+      updateLinuxBuild9:
+        "build 9: superato (il giro non è nella tabella sotto)",
+      installerBlockedBuild9:
+        "build 9: fermato dall'installer (correzione in build 10, giro in corso)",
+      benchCook: "79% pertinenti",
+      benchWarehouse: "90% pertinenti",
+      benchNurse: "1 doppione (94% pertinenti)",
+      benchBricklayer: "6 posizioni, meno di 15 (83% pertinenti)",
+      brakeFixedRetry: "corretto nelle build 9 e 10: da riprovare",
+      languageGermanOk: "build 9: tedesco dall'inizio alla fine su Linux",
+      chatgptFreeRefused: "accesso rifiutato (piano Free)",
+      securityPreTag:
+        "controllo prima del tag: il verdetto arriva sulla versione esatta del tag; il caso della chiave su disco è chiuso",
+      cleanLinuxRoundMissing:
+        "installazione vergine sulla build 6: il suo giro non è nella tabella qui sotto",
+      openaiRoundMissing:
+        "provato sulla build 6: il suo giro non è nella tabella qui sotto",
+      redoOnBuild9: "da rifare sulla build 9",
+      diskFull: "disco pieno dopo l'aggiornamento (correzione in corso)",
+      neverTried: "mai provato",
+      relevantBelow: "0 nuove per il muratore, 10 su 26 per la receptionist",
+      benchPaused: "in pausa fino alla build 9",
+      brakeFalseClear: "sblocco falso dopo lo stop, avviso all'utente fallito",
+      languageEnglish:
+        "passo della chiave API, avvio della squadra e status in inglese (corretti dopo la build 8)",
+      zeroTurns: "0 turni (corretto nella build 9)",
+      noCredit: "senza credito per provarli",
+      loginNeverTried: "accesso vero mai provato",
+      keysChecked: "0 file con chiave fuori posto, su 20.927 eventi sui file",
+      updateOnBuild9: "aggiornamento sulla build 9",
     },
     invalidTitle: "Giri che non contano",
-    invalidLead: "Giri rotti da cause nostre (credito finito, una macchina di prova che si è spenta da sola, un errore di misura, tentativi annullati del banco), non da difetti del prodotto. Restano fuori dalla tabella e dai grafici; i difetti trovati restano nel grafico dei difetti.",
+    invalidLead:
+      "Giri rotti da cause nostre (credito finito, una macchina di prova che si è spenta da sola, un errore di misura, tentativi annullati del banco), non da difetti del prodotto. Restano fuori dalla tabella e dai grafici; i difetti trovati restano nel grafico dei difetti.",
     invalidReasons: {
-      noCreditMachineOff: "OpenAI senza credito e la macchina di prova si è spenta da sola: nessuno Scout è partito. A metà giro il servizio è stato cambiato in GLM.",
-      cumulativeCap: "Il nostro tetto di prova di 3 $ era troppo basso ed è stato letto su un contatore che conteneva anche il giro prima: fermato dopo 6 minuti, prima di qualsiasi annuncio nuovo.",
-      benchDailyBudget: "Tentativo del banco annullato: è partito con un budget giornaliero alto rimasto da prima, e il freno a ritmo l'ha fermato dopo 70 secondi.",
-      benchOpenRun: "Tentativo del banco annullato: la prima ricerca della build precedente era ancora aperta.",
-      creditEndedNoPositions: "Il credito GLM dell'account di prova è finito prima di qualsiasi annuncio: 0 annunci.",
+      noCreditMachineOff:
+        "OpenAI senza credito e la macchina di prova si è spenta da sola: nessuno Scout è partito. A metà giro il servizio è stato cambiato in GLM.",
+      cumulativeCap:
+        "Il nostro tetto di prova di 3 $ era troppo basso ed è stato letto su un contatore che conteneva anche il giro prima: fermato dopo 6 minuti, prima di qualsiasi annuncio nuovo.",
+      benchDailyBudget:
+        "Tentativo del banco annullato: è partito con un budget giornaliero alto rimasto da prima, e il freno a ritmo l'ha fermato dopo 70 secondi.",
+      benchOpenRun:
+        "Tentativo del banco annullato: la prima ricerca della build precedente era ancora aperta.",
+      creditEndedNoPositions:
+        "Il credito GLM dell'account di prova è finito prima di qualsiasi annuncio: 0 annunci.",
       benchCancelled: "Tentativo del banco annullato e ripartito da zero.",
     },
     targetSections: {
-      "install": "Installazione da utente nuovo",
-      "update": "Aggiornamento con squadra e dati",
-      "scout": "Banco Scout: lo Scout trova annunci del mestiere giusto?",
-      "brake": "Freno della spesa",
-      "language": "Lingua",
-      "doctor": "Dottore e Mantenitore",
-      "services": "Servizi",
-      "security": "Sicurezza",
-      "beta": "Beta test",
-      "realUser": "Giro completo da utente vero, con un mestiere non IT",
+      install: "Installazione da utente nuovo",
+      update: "Aggiornamento con squadra e dati",
+      scout: "Banco Scout: lo Scout trova annunci del mestiere giusto?",
+      brake: "Freno della spesa",
+      language: "Lingua",
+      doctor: "Dottore e Mantenitore",
+      services: "Servizi",
+      security: "Sicurezza",
+      beta: "Beta test",
+      realUser: "Giro completo da utente vero, con un mestiere non IT",
     },
     targetCriteria: {
-      "relevant": "pertinenti {v}% (≥{min}%)",
-      "duplicates": "doppioni {v}",
-      "positions": "annunci {v} (≥{min})",
-      "newPositions": "{trade}: {v} nuovi",
-      "relevantOf": "{trade}: {v} pertinenti su {of}",
-      "underCeiling": "spesi {v} di {max} $",
-      "noFalseUnlock": "nessuno sblocco falso",
+      relevant: "pertinenti {v}% (≥{min}%)",
+      duplicates: "doppioni {v}",
+      positions: "annunci {v} (≥{min})",
+      newPositions: "{trade}: {v} nuovi",
+      relevantOf: "{trade}: {v} pertinenti su {of}",
+      underCeiling: "spesi {v} di {max} $",
+      noFalseUnlock: "nessuno sblocco falso",
     },
     targetRules: {
-      "scout": "Solo la ricerca degli Scout, su un server già configurato, con quattro mestieri non IT. Un mestiere passa se tutti e 3 i criteri sono verdi: almeno 70% pertinenti, 0 doppioni, almeno 15 annunci.",
-      "brake": "Criteri dell'ultima prova (build 8); corretto dopo, da riprovare.",
-      "realUser": "Una persona installa il programma da zero, risponde al setup e lascia lavorare la squadra da sola per 30 minuti. Passa se almeno il 70% degli annunci trovati è del suo mestiere.",
+      scout:
+        "Solo la ricerca degli Scout, su un server già configurato, con quattro mestieri non IT. Un mestiere passa se tutti e 3 i criteri sono verdi: almeno 70% pertinenti, 0 doppioni, almeno 15 annunci.",
+      brake:
+        "Criteri dell'ultima prova (build 8); corretto dopo, da riprovare.",
+      realUser:
+        "Una persona installa il programma da zero, risponde al setup e lascia lavorare la squadra da sola per 30 minuti. Passa se almeno il 70% degli annunci trovati è del suo mestiere.",
     },
     targetTried: "provato sulla build {n}",
     targetRows: {
-      "install": "Prima installazione su un computer senza il programma",
-      "update": "Aggiornamento di un computer che ha già una squadra e i suoi dati",
-      "language": "Setup e onboarding nella lingua scelta",
+      install: "Prima installazione su un computer senza il programma",
+      update:
+        "Aggiornamento di un computer che ha già una squadra e i suoi dati",
+      language: "Setup e onboarding nella lingua scelta",
     },
     buildsTitle: "Giri di ogni build",
     buildLabel: "Build {n}",
@@ -742,14 +807,22 @@ export const T: Record<Locale, Copy> = {
       "openai-glm": "OpenAI (Guthaben aufgebraucht), dann GLM",
     },
     notes: {
-      updateBuild10Portuguese: "Update auf Build 10, ganz auf Portugiesisch: gespeicherter Schlüssel behalten, die Warteschlange lief von selbst weiter, 1 neue Stelle (74); die Tempobremse pausierte das Team und sagte es der Person.",
-      updateWindowsBuild9to10: "Build 9 neu installiert, alles auf Deutsch: 25 Lagerstellen in einer Viertelstunde; Update auf Build 10 mit behaltenen Stellen, Profil und Schlüssel, danach startete der Analyst nie und 13 Stellen blieben wartend.",
-      updateSwitchKept: "Update bei laufendem Team: Daten behalten, alte Images entfernt, GLM → Claude ohne das Team anzuhalten. 3 passende von 26 neuen in 10 Minuten.",
-      updateWelcomePaid: "Update und Wechsel zu Claude: 15 passende von 18 in 12 Minuten. Die Begrüßung wurde bei jedem Neustart wieder bezahlt.",
-      cleanInstallWarehouse: "Neuer Nutzer, geführtes Onboarding: Die Bremse hielt bei 2,67 $. Fast nur Lagerjobs: 2 passende von 19.",
-      updateNoNewPositions: "Update gelungen und keine Schlüsseldatei auf der Platte, aber 0 neue Stellen in 30 Minuten: nur 2 Scouts geweckt.",
-      diskLowAfterUpdate: "Update gelungen, Team nie gestartet: 4 GiB frei von 8 nötigen, ohne Warnung vor dem Download.",
-      cleanInstallGerman: "Neuer Nutzer auf Deutsch: 10 passende von 26. Die Bremse hielt bei 4,77 $, dann eine falsche Freigabe (4,95 $ am Ende); Doktor und Wartung ohne Durchgang.",
+      updateBuild10Portuguese:
+        "Update auf Build 10, ganz auf Portugiesisch: gespeicherter Schlüssel behalten, die Warteschlange lief von selbst weiter, 1 neue Stelle (74); die Tempobremse pausierte das Team und sagte es der Person.",
+      updateWindowsBuild9to10:
+        "Build 9 neu installiert, alles auf Deutsch: 25 Lagerstellen in einer Viertelstunde; Update auf Build 10 mit behaltenen Stellen, Profil und Schlüssel, danach startete der Analyst nie und 13 Stellen blieben wartend.",
+      updateSwitchKept:
+        "Update bei laufendem Team: Daten behalten, alte Images entfernt, GLM → Claude ohne das Team anzuhalten. 3 passende von 26 neuen in 10 Minuten.",
+      updateWelcomePaid:
+        "Update und Wechsel zu Claude: 15 passende von 18 in 12 Minuten. Die Begrüßung wurde bei jedem Neustart wieder bezahlt.",
+      cleanInstallWarehouse:
+        "Neuer Nutzer, geführtes Onboarding: Die Bremse hielt bei 2,67 $. Fast nur Lagerjobs: 2 passende von 19.",
+      updateNoNewPositions:
+        "Update gelungen und keine Schlüsseldatei auf der Platte, aber 0 neue Stellen in 30 Minuten: nur 2 Scouts geweckt.",
+      diskLowAfterUpdate:
+        "Update gelungen, Team nie gestartet: 4 GiB frei von 8 nötigen, ohne Warnung vor dem Download.",
+      cleanInstallGerman:
+        "Neuer Nutzer auf Deutsch: 10 passende von 26. Die Bremse hielt bei 4,77 $, dann eine falsche Freigabe (4,95 $ am Ende); Doktor und Wartung ohne Durchgang.",
       scoutsNoTools:
         "Scouts ohne Werkzeuge aus der CLI (behoben); CPU auf 2 vCPU ausgelastet.",
       creditEnded: "Derselbe Fehler; das GLM-Guthaben war aufgebraucht.",
@@ -775,120 +848,147 @@ export const T: Record<Locale, Copy> = {
     night: "Nacht",
     day: "",
     targetsTitle: "Release-Ziele",
-    targetsLead: "0.4.0 wird nur veröffentlicht, wenn jede Zeile grün ist. Bei jedem Build aktualisiert; der Nachweis führt zum Lauf weiter unten.",
+    targetsLead:
+      "0.4.0 wird nur veröffentlicht, wenn jede Zeile grün ist. Bei jedem Build aktualisiert; der Nachweis führt zum Lauf weiter unten.",
     targetsCount: "{g} von {n} grün",
     targetsCols: {
-      "target": "Ziel",
-      "status": "Stand",
-      "build": "Build",
-      "proof": "Nachweis"
+      target: "Ziel",
+      status: "Stand",
+      build: "Build",
+      proof: "Nachweis",
     },
     targetStatus: {
-      "pass": "erreicht",
-      "fail": "nicht erreicht",
-      "pending": "zu prüfen",
-      "blocked": "blockiert"
+      pass: "erreicht",
+      fail: "nicht erreicht",
+      pending: "zu prüfen",
+      blocked: "blockiert",
     },
     targets: {
-      "scoutBenchCook": "Koch",
-      "scoutBenchWarehouse": "Lagerarbeiter",
-      "scoutBenchNurse": "Krankenpflegerin",
-      "scoutBenchBricklayer": "Maurer",
-      "languageWindows": "Setup und Onboarding in der gewählten Sprache · Windows",
-      "languageLinux": "Setup und Onboarding in der gewählten Sprache · Linux",
-      "languageMac": "Setup und Onboarding in der gewählten Sprache · Mac",
-      "preTagReview": "Sicherheitsprüfung vor dem Tag",
-      "installWindows": "Installation durch neuen Nutzer · Windows",
-      "installLinux": "Installation durch neuen Nutzer · Linux",
-      "installMac": "Installation durch neuen Nutzer · Mac",
-      "updateLinux": "Update mit vorhandenem Team und Daten · Linux",
-      "updateMac": "Update mit vorhandenem Team und Daten · Mac",
-      "updateWindows": "Update mit vorhandenem Team und Daten · Windows",
-      "nonItRelevant": "Stellen im Beruf der Person (mindestens 70 %)",
-      "scoutBench": "Scout-Prüfstand, 4 Berufe außerhalb der IT (≥70% passend, 0 Doppelte, ≥15 Stellen)",
-      "budgetBrake": "Budgetbremse: nie über der Obergrenze, keine falsche Freigabe, die Person wird informiert",
-      "language": "Setup und Onboarding in der gewählten Sprache",
-      "doctorMaintainer": "Der Doktor und die Wartung, die Agenten, die sich um das Team kümmern, arbeiten wirklich",
-      "serviceClaude": "Claude (Anthropic) · API-Schlüssel",
-      "serviceOpenai": "OpenAI · API-Schlüssel",
-      "serviceGlm": "Z.ai (GLM) · API-Schlüssel",
-      "serviceKimi": "Kimi (Moonshot) · API-Schlüssel",
-      "codexSubscription": "OpenAI Codex · Abo (nur wer schon 0.3.x hat, wie in unserem Betatest)",
-      "openaiSubscription": "OpenAI · ChatGPT-Abo auf Pi",
-      "noKeyOnDisk": "Kein API-Schlüssel bleibt auf der Festplatte gespeichert",
-      "betaTester": "Betatest: Version aktualisiert und Team bei der Arbeit"
+      scoutBenchCook: "Koch",
+      scoutBenchWarehouse: "Lagerarbeiter",
+      scoutBenchNurse: "Krankenpflegerin",
+      scoutBenchBricklayer: "Maurer",
+      languageWindows:
+        "Setup und Onboarding in der gewählten Sprache · Windows",
+      languageLinux: "Setup und Onboarding in der gewählten Sprache · Linux",
+      languageMac: "Setup und Onboarding in der gewählten Sprache · Mac",
+      preTagReview: "Sicherheitsprüfung vor dem Tag",
+      installWindows: "Installation durch neuen Nutzer · Windows",
+      installLinux: "Installation durch neuen Nutzer · Linux",
+      installMac: "Installation durch neuen Nutzer · Mac",
+      updateLinux: "Update mit vorhandenem Team und Daten · Linux",
+      updateMac: "Update mit vorhandenem Team und Daten · Mac",
+      updateWindows: "Update mit vorhandenem Team und Daten · Windows",
+      nonItRelevant: "Stellen im Beruf der Person (mindestens 70 %)",
+      scoutBench:
+        "Scout-Prüfstand, 4 Berufe außerhalb der IT (≥70% passend, 0 Doppelte, ≥15 Stellen)",
+      budgetBrake:
+        "Budgetbremse: nie über der Obergrenze, keine falsche Freigabe, die Person wird informiert",
+      language: "Setup und Onboarding in der gewählten Sprache",
+      doctorMaintainer:
+        "Der Doktor und die Wartung, die Agenten, die sich um das Team kümmern, arbeiten wirklich",
+      serviceClaude: "Claude (Anthropic) · API-Schlüssel",
+      serviceOpenai: "OpenAI · API-Schlüssel",
+      serviceGlm: "Z.ai (GLM) · API-Schlüssel",
+      serviceKimi: "Kimi (Moonshot) · API-Schlüssel",
+      codexSubscription:
+        "OpenAI Codex · Abo (nur wer schon 0.3.x hat, wie in unserem Betatest)",
+      openaiSubscription: "OpenAI · ChatGPT-Abo auf Pi",
+      noKeyOnDisk: "Kein API-Schlüssel bleibt auf der Festplatte gespeichert",
+      betaTester: "Betatest: Version aktualisiert und Team bei der Arbeit",
     },
     targetNotes: {
-      "updateMacBuild10": "Build 10: Setup ganz auf Portugiesisch, gespeicherter Schlüssel behalten, 1 neue Stelle (Score 74)",
-      "updateWindowsBuild10": "Build 10: Stellen, Profil und Schlüssel behalten, alles auf Deutsch; nach dem Update startete der Analyst nie (13 Stellen warten)",
-      "languagePortugueseOk": "Build 10: durchgehend Portugiesisch auf dem Mac",
-      "codexBetaInUse": "im Einsatz in unserem Betatest (Diagramm 6); auf Build 9 und 10 noch nicht geprüft",
-      "updateLinuxBuild9": "Build 9: bestanden (die Runde steht nicht in der Tabelle unten)",
-      "installerBlockedBuild9": "Build 9: vom Installer gestoppt (Korrektur in Build 10, Runde läuft)",
-      "benchCook": "79 % passend",
-      "benchWarehouse": "90 % passend",
-      "benchNurse": "1 Duplikat (94 % passend)",
-      "benchBricklayer": "6 Stellen, weniger als 15 (83 % passend)",
-      "brakeFixedRetry": "in Build 9 und 10 korrigiert: erneut zu prüfen",
-      "languageGermanOk": "Build 9: durchgehend Deutsch auf Linux",
-      "chatgptFreeRefused": "Anmeldung abgelehnt (Free-Tarif)",
-      "securityPreTag": "Prüfung vor dem Tag: das Urteil kommt auf die genaue Version des Tags; der Fall des Schlüssels auf der Festplatte ist geschlossen",
-      "cleanLinuxRoundMissing": "Neuinstallation auf Build 6: ihr Lauf fehlt in der Tabelle unten",
-      "openaiRoundMissing": "auf Build 6 geprüft: der Lauf fehlt in der Tabelle unten",
-      "redoOnBuild9": "auf Build 9 zu wiederholen",
-      "diskFull": "Platte voll nach dem Update (Korrektur in Arbeit)",
-      "neverTried": "nie geprüft",
-      "relevantBelow": "0 neue für den Maurer, 10 von 26 für die Rezeptionistin",
-      "benchPaused": "pausiert bis Build 9",
-      "brakeFalseClear": "falsche Freigabe nach dem Stopp, Hinweis an die Person fehlgeschlagen",
-      "languageEnglish": "API-Schlüssel, Teamstart und Status auf Englisch (nach Build 8 behoben)",
-      "zeroTurns": "0 Durchgänge (in Build 9 behoben)",
-      "noCredit": "kein Guthaben zum Prüfen",
-      "loginNeverTried": "echte Anmeldung nie geprüft",
-      "keysChecked": "0 Dateien mit Schlüssel am falschen Ort, bei 20.927 Dateiereignissen",
-      "updateOnBuild9": "Update auf Build 9"
+      updateMacBuild10:
+        "Build 10: Setup ganz auf Portugiesisch, gespeicherter Schlüssel behalten, 1 neue Stelle (Score 74)",
+      updateWindowsBuild10:
+        "Build 10: Stellen, Profil und Schlüssel behalten, alles auf Deutsch; nach dem Update startete der Analyst nie (13 Stellen warten)",
+      languagePortugueseOk: "Build 10: durchgehend Portugiesisch auf dem Mac",
+      codexBetaInUse:
+        "im Einsatz in unserem Betatest (Diagramm 6); auf Build 9 und 10 noch nicht geprüft",
+      updateLinuxBuild9:
+        "Build 9: bestanden (die Runde steht nicht in der Tabelle unten)",
+      installerBlockedBuild9:
+        "Build 9: vom Installer gestoppt (Korrektur in Build 10, Runde läuft)",
+      benchCook: "79 % passend",
+      benchWarehouse: "90 % passend",
+      benchNurse: "1 Duplikat (94 % passend)",
+      benchBricklayer: "6 Stellen, weniger als 15 (83 % passend)",
+      brakeFixedRetry: "in Build 9 und 10 korrigiert: erneut zu prüfen",
+      languageGermanOk: "Build 9: durchgehend Deutsch auf Linux",
+      chatgptFreeRefused: "Anmeldung abgelehnt (Free-Tarif)",
+      securityPreTag:
+        "Prüfung vor dem Tag: das Urteil kommt auf die genaue Version des Tags; der Fall des Schlüssels auf der Festplatte ist geschlossen",
+      cleanLinuxRoundMissing:
+        "Neuinstallation auf Build 6: ihr Lauf fehlt in der Tabelle unten",
+      openaiRoundMissing:
+        "auf Build 6 geprüft: der Lauf fehlt in der Tabelle unten",
+      redoOnBuild9: "auf Build 9 zu wiederholen",
+      diskFull: "Platte voll nach dem Update (Korrektur in Arbeit)",
+      neverTried: "nie geprüft",
+      relevantBelow: "0 neue für den Maurer, 10 von 26 für die Rezeptionistin",
+      benchPaused: "pausiert bis Build 9",
+      brakeFalseClear:
+        "falsche Freigabe nach dem Stopp, Hinweis an die Person fehlgeschlagen",
+      languageEnglish:
+        "API-Schlüssel, Teamstart und Status auf Englisch (nach Build 8 behoben)",
+      zeroTurns: "0 Durchgänge (in Build 9 behoben)",
+      noCredit: "kein Guthaben zum Prüfen",
+      loginNeverTried: "echte Anmeldung nie geprüft",
+      keysChecked:
+        "0 Dateien mit Schlüssel am falschen Ort, bei 20.927 Dateiereignissen",
+      updateOnBuild9: "Update auf Build 9",
     },
     invalidTitle: "Runden, die nicht zählen",
-    invalidLead: "Runden, die an Ursachen auf unserer Seite gescheitert sind (Guthaben aufgebraucht, eine Testmaschine, die sich selbst abgeschaltet hat, ein Messfehler, abgebrochene Versuche der Bank), nicht an Fehlern des Produkts. Sie fehlen in der Tabelle und in den Diagrammen; ihre Fehler bleiben im Fehlerdiagramm.",
+    invalidLead:
+      "Runden, die an Ursachen auf unserer Seite gescheitert sind (Guthaben aufgebraucht, eine Testmaschine, die sich selbst abgeschaltet hat, ein Messfehler, abgebrochene Versuche der Bank), nicht an Fehlern des Produkts. Sie fehlen in der Tabelle und in den Diagrammen; ihre Fehler bleiben im Fehlerdiagramm.",
     invalidReasons: {
-      noCreditMachineOff: "OpenAI ohne Guthaben, und die Testmaschine hat sich selbst abgeschaltet: kein Scout ist gestartet. Mitten in der Runde wurde der Dienst auf GLM gewechselt.",
-      cumulativeCap: "Unsere Testgrenze von 3 $ war zu niedrig und wurde an einem Zähler abgelesen, der auch die Runde davor enthielt: nach 6 Minuten gestoppt, vor jeder neuen Stelle.",
-      benchDailyBudget: "Abgebrochener Versuch der Bank: er startete mit einem hohen Tagesbudget von vorher, und die Tempobremse stoppte ihn nach 70 Sekunden.",
-      benchOpenRun: "Abgebrochener Versuch der Bank: die erste Suche des vorherigen Builds war noch offen.",
-      creditEndedNoPositions: "Das GLM-Guthaben des Testkontos war vor jeder Stelle aufgebraucht: 0 Stellen.",
+      noCreditMachineOff:
+        "OpenAI ohne Guthaben, und die Testmaschine hat sich selbst abgeschaltet: kein Scout ist gestartet. Mitten in der Runde wurde der Dienst auf GLM gewechselt.",
+      cumulativeCap:
+        "Unsere Testgrenze von 3 $ war zu niedrig und wurde an einem Zähler abgelesen, der auch die Runde davor enthielt: nach 6 Minuten gestoppt, vor jeder neuen Stelle.",
+      benchDailyBudget:
+        "Abgebrochener Versuch der Bank: er startete mit einem hohen Tagesbudget von vorher, und die Tempobremse stoppte ihn nach 70 Sekunden.",
+      benchOpenRun:
+        "Abgebrochener Versuch der Bank: die erste Suche des vorherigen Builds war noch offen.",
+      creditEndedNoPositions:
+        "Das GLM-Guthaben des Testkontos war vor jeder Stelle aufgebraucht: 0 Stellen.",
       benchCancelled: "Abgebrochener Versuch der Bank, von null neu gestartet.",
     },
     targetSections: {
-      "install": "Installation durch neue Nutzer",
-      "update": "Update mit Team und Daten",
-      "scout": "Scout-Bank: findet der Scout Anzeigen des richtigen Berufs?",
-      "brake": "Ausgabenbremse",
-      "language": "Sprache",
-      "doctor": "Doktor und Wartung",
-      "services": "Dienste",
-      "security": "Sicherheit",
-      "beta": "Betatest",
-      "realUser": "Ganze Runde als echter Nutzer, mit einem Beruf außerhalb der IT",
+      install: "Installation durch neue Nutzer",
+      update: "Update mit Team und Daten",
+      scout: "Scout-Bank: findet der Scout Anzeigen des richtigen Berufs?",
+      brake: "Ausgabenbremse",
+      language: "Sprache",
+      doctor: "Doktor und Wartung",
+      services: "Dienste",
+      security: "Sicherheit",
+      beta: "Betatest",
+      realUser:
+        "Ganze Runde als echter Nutzer, mit einem Beruf außerhalb der IT",
     },
     targetCriteria: {
-      "relevant": "passend {v} % (≥{min} %)",
-      "duplicates": "Duplikate {v}",
-      "positions": "Anzeigen {v} (≥{min})",
-      "newPositions": "{trade}: {v} neu",
-      "relevantOf": "{trade}: {v} passend von {of}",
-      "underCeiling": "{v} von {max} $ ausgegeben",
-      "noFalseUnlock": "keine falsche Freigabe",
+      relevant: "passend {v} % (≥{min} %)",
+      duplicates: "Duplikate {v}",
+      positions: "Anzeigen {v} (≥{min})",
+      newPositions: "{trade}: {v} neu",
+      relevantOf: "{trade}: {v} passend von {of}",
+      underCeiling: "{v} von {max} $ ausgegeben",
+      noFalseUnlock: "keine falsche Freigabe",
     },
     targetRules: {
-      "scout": "Nur die Suche der Scouts, auf einem schon eingerichteten Server, mit vier Berufen außerhalb der IT. Ein Beruf besteht, wenn alle 3 Kriterien grün sind: mindestens 70 % passend, 0 Duplikate, mindestens 15 Anzeigen.",
-      "brake": "Kriterien des letzten Versuchs (Build 8); seitdem korrigiert, erneut zu prüfen.",
-      "realUser": "Eine Person installiert das Programm von null, beantwortet das Setup und lässt das Team 30 Minuten allein arbeiten. Bestanden, wenn mindestens 70 % der gefundenen Stellen zum Beruf der Person passen.",
+      scout:
+        "Nur die Suche der Scouts, auf einem schon eingerichteten Server, mit vier Berufen außerhalb der IT. Ein Beruf besteht, wenn alle 3 Kriterien grün sind: mindestens 70 % passend, 0 Duplikate, mindestens 15 Anzeigen.",
+      brake:
+        "Kriterien des letzten Versuchs (Build 8); seitdem korrigiert, erneut zu prüfen.",
+      realUser:
+        "Eine Person installiert das Programm von null, beantwortet das Setup und lässt das Team 30 Minuten allein arbeiten. Bestanden, wenn mindestens 70 % der gefundenen Stellen zum Beruf der Person passen.",
     },
     targetTried: "geprüft auf Build {n}",
     targetRows: {
-      "install": "Erstinstallation auf einem Computer ohne das Programm",
-      "update": "Update eines Computers, der schon ein Team und seine Daten hat",
-      "language": "Setup und Onboarding in der gewählten Sprache",
+      install: "Erstinstallation auf einem Computer ohne das Programm",
+      update: "Update eines Computers, der schon ein Team und seine Daten hat",
+      language: "Setup und Onboarding in der gewählten Sprache",
     },
     buildsTitle: "Läufe jedes Builds",
     buildLabel: "Build {n}",
@@ -1032,14 +1132,22 @@ export const T: Record<Locale, Copy> = {
       "openai-glm": "OpenAI (crédito agotado), luego GLM",
     },
     notes: {
-      updateBuild10Portuguese: "Actualización en la build 10, todo en portugués: clave guardada conservada, la cola volvió a arrancar sola, 1 anuncio nuevo (74); el freno de ritmo pausó el equipo y se lo dijo a la persona.",
-      updateWindowsBuild9to10: "Build 9 instalada desde cero, todo en alemán: 25 anuncios de almacén en un cuarto de hora; actualizada a la build 10 con anuncios, perfil y clave conservados, luego el Analista nunca arrancó y 13 anuncios quedaron en espera.",
-      updateSwitchKept: "Actualización con el equipo en marcha: datos conservados, imágenes viejas quitadas, GLM → Claude sin parar el equipo. 3 pertinentes de 26 nuevas en 10 minutos.",
-      updateWelcomePaid: "Actualización y paso a Claude: 15 pertinentes de 18 en 12 minutos. La bienvenida se volvió a pagar en cada reinicio.",
-      cleanInstallWarehouse: "Usuario nuevo, onboarding guiado: el freno paró en 2,67 $. Casi solo almacén: 2 pertinentes de 19.",
-      updateNoNewPositions: "Actualización correcta y ningún archivo con clave en disco, pero 0 ofertas nuevas en 30 minutos: solo 2 Scouts despertados.",
-      diskLowAfterUpdate: "Actualización correcta, el equipo nunca arrancó: 4 GiB libres de los 8 necesarios, sin aviso antes de la descarga.",
-      cleanInstallGerman: "Usuario nuevo en alemán: 10 pertinentes de 26. El freno paró en 4,77 $ y luego un desbloqueo falso (4,95 $ al final); Doctor y Mantenedor sin turnos.",
+      updateBuild10Portuguese:
+        "Actualización en la build 10, todo en portugués: clave guardada conservada, la cola volvió a arrancar sola, 1 anuncio nuevo (74); el freno de ritmo pausó el equipo y se lo dijo a la persona.",
+      updateWindowsBuild9to10:
+        "Build 9 instalada desde cero, todo en alemán: 25 anuncios de almacén en un cuarto de hora; actualizada a la build 10 con anuncios, perfil y clave conservados, luego el Analista nunca arrancó y 13 anuncios quedaron en espera.",
+      updateSwitchKept:
+        "Actualización con el equipo en marcha: datos conservados, imágenes viejas quitadas, GLM → Claude sin parar el equipo. 3 pertinentes de 26 nuevas en 10 minutos.",
+      updateWelcomePaid:
+        "Actualización y paso a Claude: 15 pertinentes de 18 en 12 minutos. La bienvenida se volvió a pagar en cada reinicio.",
+      cleanInstallWarehouse:
+        "Usuario nuevo, onboarding guiado: el freno paró en 2,67 $. Casi solo almacén: 2 pertinentes de 19.",
+      updateNoNewPositions:
+        "Actualización correcta y ningún archivo con clave en disco, pero 0 ofertas nuevas en 30 minutos: solo 2 Scouts despertados.",
+      diskLowAfterUpdate:
+        "Actualización correcta, el equipo nunca arrancó: 4 GiB libres de los 8 necesarios, sin aviso antes de la descarga.",
+      cleanInstallGerman:
+        "Usuario nuevo en alemán: 10 pertinentes de 26. El freno paró en 4,77 $ y luego un desbloqueo falso (4,95 $ al final); Doctor y Mantenedor sin turnos.",
       scoutsNoTools:
         "Scouts sin herramientas desde la CLI (corregido); CPU saturada en 2 vCPU.",
       creditEnded: "Mismo defecto; se agotó el crédito de GLM.",
@@ -1066,120 +1174,149 @@ export const T: Record<Locale, Copy> = {
     night: "noche",
     day: "",
     targetsTitle: "Objetivos de lanzamiento",
-    targetsLead: "La 0.4.0 se publica solo con todas las filas en verde. Se actualiza en cada build; la prueba lleva a la ronda de abajo.",
+    targetsLead:
+      "La 0.4.0 se publica solo con todas las filas en verde. Se actualiza en cada build; la prueba lleva a la ronda de abajo.",
     targetsCount: "{g} de {n} en verde",
     targetsCols: {
-      "target": "Objetivo",
-      "status": "Estado",
-      "build": "Build",
-      "proof": "Prueba"
+      target: "Objetivo",
+      status: "Estado",
+      build: "Build",
+      proof: "Prueba",
     },
     targetStatus: {
-      "pass": "cumplido",
-      "fail": "no cumplido",
-      "pending": "por probar",
-      "blocked": "bloqueado"
+      pass: "cumplido",
+      fail: "no cumplido",
+      pending: "por probar",
+      blocked: "bloqueado",
     },
     targets: {
-      "scoutBenchCook": "Cocinero",
-      "scoutBenchWarehouse": "Mozo de almacén",
-      "scoutBenchNurse": "Enfermera",
-      "scoutBenchBricklayer": "Albañil",
-      "languageWindows": "Configuración y onboarding en el idioma elegido · Windows",
-      "languageLinux": "Configuración y onboarding en el idioma elegido · Linux",
-      "languageMac": "Configuración y onboarding en el idioma elegido · Mac",
-      "preTagReview": "Revisión de seguridad antes del tag",
-      "installWindows": "Instalación por un usuario nuevo · Windows",
-      "installLinux": "Instalación por un usuario nuevo · Linux",
-      "installMac": "Instalación por un usuario nuevo · Mac",
-      "updateLinux": "Actualización con equipo y datos existentes · Linux",
-      "updateMac": "Actualización con equipo y datos existentes · Mac",
-      "updateWindows": "Actualización con equipo y datos existentes · Windows",
-      "nonItRelevant": "Anuncios del oficio de la persona (al menos 70 %)",
-      "scoutBench": "Banco de los Scouts, 4 oficios fuera de la informática (≥70% pertinentes, 0 duplicados, ≥15 ofertas)",
-      "budgetBrake": "Freno del presupuesto: nunca por encima del tope, ningún desbloqueo falso, aviso a la persona",
-      "language": "Setup y onboarding en el idioma elegido",
-      "doctorMaintainer": "El Doctor y el Mantenedor, los agentes que cuidan del equipo, funcionan de verdad",
-      "serviceClaude": "Claude (Anthropic) · clave API",
-      "serviceOpenai": "OpenAI · clave API",
-      "serviceGlm": "Z.ai (GLM) · clave API",
-      "serviceKimi": "Kimi (Moonshot) · clave API",
-      "codexSubscription": "OpenAI Codex · suscripción (solo quien ya tiene la 0.3.x, como en nuestra prueba beta)",
-      "openaiSubscription": "OpenAI · suscripción ChatGPT en Pi",
-      "noKeyOnDisk": "Ninguna clave API queda escrita en el disco",
-      "betaTester": "Beta test: versión actualizada y equipo trabajando"
+      scoutBenchCook: "Cocinero",
+      scoutBenchWarehouse: "Mozo de almacén",
+      scoutBenchNurse: "Enfermera",
+      scoutBenchBricklayer: "Albañil",
+      languageWindows:
+        "Configuración y onboarding en el idioma elegido · Windows",
+      languageLinux: "Configuración y onboarding en el idioma elegido · Linux",
+      languageMac: "Configuración y onboarding en el idioma elegido · Mac",
+      preTagReview: "Revisión de seguridad antes del tag",
+      installWindows: "Instalación por un usuario nuevo · Windows",
+      installLinux: "Instalación por un usuario nuevo · Linux",
+      installMac: "Instalación por un usuario nuevo · Mac",
+      updateLinux: "Actualización con equipo y datos existentes · Linux",
+      updateMac: "Actualización con equipo y datos existentes · Mac",
+      updateWindows: "Actualización con equipo y datos existentes · Windows",
+      nonItRelevant: "Anuncios del oficio de la persona (al menos 70 %)",
+      scoutBench:
+        "Banco de los Scouts, 4 oficios fuera de la informática (≥70% pertinentes, 0 duplicados, ≥15 ofertas)",
+      budgetBrake:
+        "Freno del presupuesto: nunca por encima del tope, ningún desbloqueo falso, aviso a la persona",
+      language: "Setup y onboarding en el idioma elegido",
+      doctorMaintainer:
+        "El Doctor y el Mantenedor, los agentes que cuidan del equipo, funcionan de verdad",
+      serviceClaude: "Claude (Anthropic) · clave API",
+      serviceOpenai: "OpenAI · clave API",
+      serviceGlm: "Z.ai (GLM) · clave API",
+      serviceKimi: "Kimi (Moonshot) · clave API",
+      codexSubscription:
+        "OpenAI Codex · suscripción (solo quien ya tiene la 0.3.x, como en nuestra prueba beta)",
+      openaiSubscription: "OpenAI · suscripción ChatGPT en Pi",
+      noKeyOnDisk: "Ninguna clave API queda escrita en el disco",
+      betaTester: "Beta test: versión actualizada y equipo trabajando",
     },
     targetNotes: {
-      "updateMacBuild10": "build 10: configuración toda en portugués, clave guardada conservada, 1 anuncio nuevo (puntuación 74)",
-      "updateWindowsBuild10": "build 10: anuncios, perfil y clave conservados, todo en alemán; tras la actualización el Analista nunca arrancó (13 anuncios en espera)",
-      "languagePortugueseOk": "build 10: portugués de principio a fin en el Mac",
-      "codexBetaInUse": "en uso en nuestra prueba beta (gráfico 6); aún no probado en las builds 9 y 10",
-      "updateLinuxBuild9": "build 9: superada (su ronda no está en la tabla de abajo)",
-      "installerBlockedBuild9": "build 9: parada por el instalador (corrección en la build 10, ronda en curso)",
-      "benchCook": "79 % pertinentes",
-      "benchWarehouse": "90 % pertinentes",
-      "benchNurse": "1 duplicado (94 % pertinentes)",
-      "benchBricklayer": "6 puestos, menos de 15 (83 % pertinentes)",
-      "brakeFixedRetry": "corregido en las builds 9 y 10: por volver a probar",
-      "languageGermanOk": "build 9: alemán de principio a fin en Linux",
-      "chatgptFreeRefused": "acceso rechazado (plan Free)",
-      "securityPreTag": "revisión antes del tag: el veredicto llega sobre la versión exacta del tag; el caso de la clave en disco está cerrado",
-      "cleanLinuxRoundMissing": "instalación desde cero en la build 6: su ronda no está en la tabla de abajo",
-      "openaiRoundMissing": "probado en la build 6: su ronda no está en la tabla de abajo",
-      "redoOnBuild9": "por repetir en la build 9",
-      "diskFull": "disco lleno tras la actualización (corrección en curso)",
-      "neverTried": "nunca probado",
-      "relevantBelow": "0 nuevas para el albañil, 10 de 26 para la recepcionista",
-      "benchPaused": "en pausa hasta la build 9",
-      "brakeFalseClear": "desbloqueo falso tras la parada, el aviso a la persona falló",
-      "languageEnglish": "paso de la clave de API, arranque del equipo y estado en inglés (corregidos tras la build 8)",
-      "zeroTurns": "0 turnos (corregido en la build 9)",
-      "noCredit": "sin crédito para probarlos",
-      "loginNeverTried": "inicio de sesión real nunca probado",
-      "keysChecked": "0 archivos con clave fuera de su sitio, en 20.927 eventos de archivos",
-      "updateOnBuild9": "actualización en la build 9"
+      updateMacBuild10:
+        "build 10: configuración toda en portugués, clave guardada conservada, 1 anuncio nuevo (puntuación 74)",
+      updateWindowsBuild10:
+        "build 10: anuncios, perfil y clave conservados, todo en alemán; tras la actualización el Analista nunca arrancó (13 anuncios en espera)",
+      languagePortugueseOk: "build 10: portugués de principio a fin en el Mac",
+      codexBetaInUse:
+        "en uso en nuestra prueba beta (gráfico 6); aún no probado en las builds 9 y 10",
+      updateLinuxBuild9:
+        "build 9: superada (su ronda no está en la tabla de abajo)",
+      installerBlockedBuild9:
+        "build 9: parada por el instalador (corrección en la build 10, ronda en curso)",
+      benchCook: "79 % pertinentes",
+      benchWarehouse: "90 % pertinentes",
+      benchNurse: "1 duplicado (94 % pertinentes)",
+      benchBricklayer: "6 puestos, menos de 15 (83 % pertinentes)",
+      brakeFixedRetry: "corregido en las builds 9 y 10: por volver a probar",
+      languageGermanOk: "build 9: alemán de principio a fin en Linux",
+      chatgptFreeRefused: "acceso rechazado (plan Free)",
+      securityPreTag:
+        "revisión antes del tag: el veredicto llega sobre la versión exacta del tag; el caso de la clave en disco está cerrado",
+      cleanLinuxRoundMissing:
+        "instalación desde cero en la build 6: su ronda no está en la tabla de abajo",
+      openaiRoundMissing:
+        "probado en la build 6: su ronda no está en la tabla de abajo",
+      redoOnBuild9: "por repetir en la build 9",
+      diskFull: "disco lleno tras la actualización (corrección en curso)",
+      neverTried: "nunca probado",
+      relevantBelow: "0 nuevas para el albañil, 10 de 26 para la recepcionista",
+      benchPaused: "en pausa hasta la build 9",
+      brakeFalseClear:
+        "desbloqueo falso tras la parada, el aviso a la persona falló",
+      languageEnglish:
+        "paso de la clave de API, arranque del equipo y estado en inglés (corregidos tras la build 8)",
+      zeroTurns: "0 turnos (corregido en la build 9)",
+      noCredit: "sin crédito para probarlos",
+      loginNeverTried: "inicio de sesión real nunca probado",
+      keysChecked:
+        "0 archivos con clave fuera de su sitio, en 20.927 eventos de archivos",
+      updateOnBuild9: "actualización en la build 9",
     },
     invalidTitle: "Rondas que no cuentan",
-    invalidLead: "Rondas rotas por causas nuestras (crédito agotado, una máquina de prueba que se apagó sola, un error de medida, intentos anulados del banco), no por defectos del producto. Quedan fuera de la tabla y de los gráficos; los defectos encontrados siguen en el gráfico de defectos.",
+    invalidLead:
+      "Rondas rotas por causas nuestras (crédito agotado, una máquina de prueba que se apagó sola, un error de medida, intentos anulados del banco), no por defectos del producto. Quedan fuera de la tabla y de los gráficos; los defectos encontrados siguen en el gráfico de defectos.",
     invalidReasons: {
-      noCreditMachineOff: "OpenAI sin crédito y la máquina de prueba se apagó sola: ningún Scout arrancó. A mitad de ronda se cambió el servicio a GLM.",
-      cumulativeCap: "Nuestro tope de prueba de 3 $ era demasiado bajo y se leyó en un contador que incluía también la ronda anterior: parada a los 6 minutos, antes de ningún anuncio nuevo.",
-      benchDailyBudget: "Intento del banco anulado: arrancó con un presupuesto diario alto que quedaba de antes, y el freno de ritmo lo paró a los 70 segundos.",
-      benchOpenRun: "Intento del banco anulado: la primera búsqueda de la build anterior seguía abierta.",
-      creditEndedNoPositions: "El crédito GLM de la cuenta de prueba se agotó antes de cualquier anuncio: 0 anuncios.",
+      noCreditMachineOff:
+        "OpenAI sin crédito y la máquina de prueba se apagó sola: ningún Scout arrancó. A mitad de ronda se cambió el servicio a GLM.",
+      cumulativeCap:
+        "Nuestro tope de prueba de 3 $ era demasiado bajo y se leyó en un contador que incluía también la ronda anterior: parada a los 6 minutos, antes de ningún anuncio nuevo.",
+      benchDailyBudget:
+        "Intento del banco anulado: arrancó con un presupuesto diario alto que quedaba de antes, y el freno de ritmo lo paró a los 70 segundos.",
+      benchOpenRun:
+        "Intento del banco anulado: la primera búsqueda de la build anterior seguía abierta.",
+      creditEndedNoPositions:
+        "El crédito GLM de la cuenta de prueba se agotó antes de cualquier anuncio: 0 anuncios.",
       benchCancelled: "Intento del banco anulado y reiniciado desde cero.",
     },
     targetSections: {
-      "install": "Instalación por un usuario nuevo",
-      "update": "Actualización con equipo y datos",
-      "scout": "Banco de Scouts: ¿encuentra el Scout anuncios del oficio correcto?",
-      "brake": "Freno del gasto",
-      "language": "Idioma",
-      "doctor": "Doctor y Mantenedor",
-      "services": "Servicios",
-      "security": "Seguridad",
-      "beta": "Prueba beta",
-      "realUser": "Ronda completa como usuario real, con un oficio fuera de la informática",
+      install: "Instalación por un usuario nuevo",
+      update: "Actualización con equipo y datos",
+      scout:
+        "Banco de Scouts: ¿encuentra el Scout anuncios del oficio correcto?",
+      brake: "Freno del gasto",
+      language: "Idioma",
+      doctor: "Doctor y Mantenedor",
+      services: "Servicios",
+      security: "Seguridad",
+      beta: "Prueba beta",
+      realUser:
+        "Ronda completa como usuario real, con un oficio fuera de la informática",
     },
     targetCriteria: {
-      "relevant": "pertinentes {v} % (≥{min} %)",
-      "duplicates": "duplicados {v}",
-      "positions": "anuncios {v} (≥{min})",
-      "newPositions": "{trade}: {v} nuevos",
-      "relevantOf": "{trade}: {v} pertinentes de {of}",
-      "underCeiling": "gastados {v} de {max} $",
-      "noFalseUnlock": "ningún desbloqueo falso",
+      relevant: "pertinentes {v} % (≥{min} %)",
+      duplicates: "duplicados {v}",
+      positions: "anuncios {v} (≥{min})",
+      newPositions: "{trade}: {v} nuevos",
+      relevantOf: "{trade}: {v} pertinentes de {of}",
+      underCeiling: "gastados {v} de {max} $",
+      noFalseUnlock: "ningún desbloqueo falso",
     },
     targetRules: {
-      "scout": "Solo la búsqueda de los Scouts, en un servidor ya configurado, con cuatro oficios fuera de la informática. Un oficio pasa si los 3 criterios están en verde: al menos 70 % pertinentes, 0 duplicados, al menos 15 anuncios.",
-      "brake": "Criterios de la última prueba (build 8); corregido después, por volver a probar.",
-      "realUser": "Una persona instala el programa desde cero, responde a la configuración y deja trabajar al equipo solo durante 30 minutos. Pasa si al menos el 70 % de los anuncios encontrados son de su oficio.",
+      scout:
+        "Solo la búsqueda de los Scouts, en un servidor ya configurado, con cuatro oficios fuera de la informática. Un oficio pasa si los 3 criterios están en verde: al menos 70 % pertinentes, 0 duplicados, al menos 15 anuncios.",
+      brake:
+        "Criterios de la última prueba (build 8); corregido después, por volver a probar.",
+      realUser:
+        "Una persona instala el programa desde cero, responde a la configuración y deja trabajar al equipo solo durante 30 minutos. Pasa si al menos el 70 % de los anuncios encontrados son de su oficio.",
     },
     targetTried: "probado en la build {n}",
     targetRows: {
-      "install": "Primera instalación en un ordenador sin el programa",
-      "update": "Actualización de un ordenador que ya tiene un equipo y sus datos",
-      "language": "Configuración y onboarding en el idioma elegido",
+      install: "Primera instalación en un ordenador sin el programa",
+      update:
+        "Actualización de un ordenador que ya tiene un equipo y sus datos",
+      language: "Configuración y onboarding en el idioma elegido",
     },
     buildsTitle: "Rondas de cada build",
     buildLabel: "Build {n}",
@@ -1324,14 +1461,22 @@ export const T: Record<Locale, Copy> = {
       "openai-glm": "OpenAI (crédit épuisé), puis GLM",
     },
     notes: {
-      updateBuild10Portuguese: "Mise à jour sur la build 10, tout en portugais : clé enregistrée gardée, la file est repartie seule, 1 nouvelle annonce (74) ; le frein de rythme a mis l'équipe en pause et l'a dit à la personne.",
-      updateWindowsBuild9to10: "Build 9 installée de zéro, tout en allemand : 25 annonces d'entrepôt en un quart d'heure ; mise à jour vers la build 10 avec annonces, profil et clé gardés, puis l'Analyste n'a jamais démarré et 13 annonces sont restées en attente.",
-      updateSwitchKept: "Mise à jour avec l'équipe en marche : données gardées, anciennes images retirées, GLM → Claude sans arrêter l'équipe. 3 pertinentes sur 26 nouvelles en 10 minutes.",
-      updateWelcomePaid: "Mise à jour et passage à Claude : 15 pertinentes sur 18 en 12 minutes. L'accueil a été payé de nouveau à chaque redémarrage.",
-      cleanInstallWarehouse: "Nouvel utilisateur, onboarding guidé : le frein s'est arrêté à 2,67 $. Presque que de l'entrepôt : 2 pertinentes sur 19.",
-      updateNoNewPositions: "Mise à jour réussie et aucun fichier avec clé sur le disque, mais 0 offre nouvelle en 30 minutes : seuls 2 Scouts réveillés.",
-      diskLowAfterUpdate: "Mise à jour réussie, équipe jamais démarrée : 4 Gio libres sur les 8 nécessaires, sans avertissement avant le téléchargement.",
-      cleanInstallGerman: "Nouvel utilisateur en allemand : 10 pertinentes sur 26. Le frein s'est arrêté à 4,77 $, puis un faux déblocage (4,95 $ à la fin) ; Docteur et Mainteneur sans tour.",
+      updateBuild10Portuguese:
+        "Mise à jour sur la build 10, tout en portugais : clé enregistrée gardée, la file est repartie seule, 1 nouvelle annonce (74) ; le frein de rythme a mis l'équipe en pause et l'a dit à la personne.",
+      updateWindowsBuild9to10:
+        "Build 9 installée de zéro, tout en allemand : 25 annonces d'entrepôt en un quart d'heure ; mise à jour vers la build 10 avec annonces, profil et clé gardés, puis l'Analyste n'a jamais démarré et 13 annonces sont restées en attente.",
+      updateSwitchKept:
+        "Mise à jour avec l'équipe en marche : données gardées, anciennes images retirées, GLM → Claude sans arrêter l'équipe. 3 pertinentes sur 26 nouvelles en 10 minutes.",
+      updateWelcomePaid:
+        "Mise à jour et passage à Claude : 15 pertinentes sur 18 en 12 minutes. L'accueil a été payé de nouveau à chaque redémarrage.",
+      cleanInstallWarehouse:
+        "Nouvel utilisateur, onboarding guidé : le frein s'est arrêté à 2,67 $. Presque que de l'entrepôt : 2 pertinentes sur 19.",
+      updateNoNewPositions:
+        "Mise à jour réussie et aucun fichier avec clé sur le disque, mais 0 offre nouvelle en 30 minutes : seuls 2 Scouts réveillés.",
+      diskLowAfterUpdate:
+        "Mise à jour réussie, équipe jamais démarrée : 4 Gio libres sur les 8 nécessaires, sans avertissement avant le téléchargement.",
+      cleanInstallGerman:
+        "Nouvel utilisateur en allemand : 10 pertinentes sur 26. Le frein s'est arrêté à 4,77 $, puis un faux déblocage (4,95 $ à la fin) ; Docteur et Mainteneur sans tour.",
       scoutsNoTools:
         "Scouts sans outils depuis la CLI (corrigé) ; CPU saturé sur 2 vCPU.",
       creditEnded: "Même défaut ; le crédit GLM s'est épuisé.",
@@ -1358,120 +1503,151 @@ export const T: Record<Locale, Copy> = {
     night: "nuit",
     day: "",
     targetsTitle: "Objectifs de version",
-    targetsLead: "La 0.4.0 ne sort que si toutes les lignes sont vertes. Mis à jour à chaque build ; la preuve mène au tour ci-dessous.",
+    targetsLead:
+      "La 0.4.0 ne sort que si toutes les lignes sont vertes. Mis à jour à chaque build ; la preuve mène au tour ci-dessous.",
     targetsCount: "{g} sur {n} au vert",
     targetsCols: {
-      "target": "Objectif",
-      "status": "État",
-      "build": "Build",
-      "proof": "Preuve"
+      target: "Objectif",
+      status: "État",
+      build: "Build",
+      proof: "Preuve",
     },
     targetStatus: {
-      "pass": "atteint",
-      "fail": "non atteint",
-      "pending": "à essayer",
-      "blocked": "bloqué"
+      pass: "atteint",
+      fail: "non atteint",
+      pending: "à essayer",
+      blocked: "bloqué",
     },
     targets: {
-      "scoutBenchCook": "Cuisinier",
-      "scoutBenchWarehouse": "Magasinier",
-      "scoutBenchNurse": "Infirmière",
-      "scoutBenchBricklayer": "Maçon",
-      "languageWindows": "Configuration et onboarding dans la langue choisie · Windows",
-      "languageLinux": "Configuration et onboarding dans la langue choisie · Linux",
-      "languageMac": "Configuration et onboarding dans la langue choisie · Mac",
-      "preTagReview": "Revue de sécurité avant le tag",
-      "installWindows": "Installation par un nouvel utilisateur · Windows",
-      "installLinux": "Installation par un nouvel utilisateur · Linux",
-      "installMac": "Installation par un nouvel utilisateur · Mac",
-      "updateLinux": "Mise à jour avec équipe et données existantes · Linux",
-      "updateMac": "Mise à jour avec équipe et données existantes · Mac",
-      "updateWindows": "Mise à jour avec équipe et données existantes · Windows",
-      "nonItRelevant": "Annonces du métier de la personne (au moins 70 %)",
-      "scoutBench": "Banc des Scouts, 4 métiers hors informatique (≥70 % pertinentes, 0 doublon, ≥15 offres)",
-      "budgetBrake": "Frein du budget : jamais au-dessus du plafond, aucun faux déblocage, la personne est prévenue",
-      "language": "Setup et onboarding dans la langue choisie",
-      "doctorMaintainer": "Le Docteur et le Mainteneur, les agents qui veillent sur l'équipe, fonctionnent vraiment",
-      "serviceClaude": "Claude (Anthropic) · clé API",
-      "serviceOpenai": "OpenAI · clé API",
-      "serviceGlm": "Z.ai (GLM) · clé API",
-      "serviceKimi": "Kimi (Moonshot) · clé API",
-      "codexSubscription": "OpenAI Codex · abonnement (seulement pour qui a déjà la 0.3.x, comme dans notre test bêta)",
-      "openaiSubscription": "OpenAI · abonnement ChatGPT sur Pi",
-      "noKeyOnDisk": "Aucune clé API ne reste écrite sur le disque",
-      "betaTester": "Bêta-test : version mise à jour et équipe au travail"
+      scoutBenchCook: "Cuisinier",
+      scoutBenchWarehouse: "Magasinier",
+      scoutBenchNurse: "Infirmière",
+      scoutBenchBricklayer: "Maçon",
+      languageWindows:
+        "Configuration et onboarding dans la langue choisie · Windows",
+      languageLinux:
+        "Configuration et onboarding dans la langue choisie · Linux",
+      languageMac: "Configuration et onboarding dans la langue choisie · Mac",
+      preTagReview: "Revue de sécurité avant le tag",
+      installWindows: "Installation par un nouvel utilisateur · Windows",
+      installLinux: "Installation par un nouvel utilisateur · Linux",
+      installMac: "Installation par un nouvel utilisateur · Mac",
+      updateLinux: "Mise à jour avec équipe et données existantes · Linux",
+      updateMac: "Mise à jour avec équipe et données existantes · Mac",
+      updateWindows: "Mise à jour avec équipe et données existantes · Windows",
+      nonItRelevant: "Annonces du métier de la personne (au moins 70 %)",
+      scoutBench:
+        "Banc des Scouts, 4 métiers hors informatique (≥70 % pertinentes, 0 doublon, ≥15 offres)",
+      budgetBrake:
+        "Frein du budget : jamais au-dessus du plafond, aucun faux déblocage, la personne est prévenue",
+      language: "Setup et onboarding dans la langue choisie",
+      doctorMaintainer:
+        "Le Docteur et le Mainteneur, les agents qui veillent sur l'équipe, fonctionnent vraiment",
+      serviceClaude: "Claude (Anthropic) · clé API",
+      serviceOpenai: "OpenAI · clé API",
+      serviceGlm: "Z.ai (GLM) · clé API",
+      serviceKimi: "Kimi (Moonshot) · clé API",
+      codexSubscription:
+        "OpenAI Codex · abonnement (seulement pour qui a déjà la 0.3.x, comme dans notre test bêta)",
+      openaiSubscription: "OpenAI · abonnement ChatGPT sur Pi",
+      noKeyOnDisk: "Aucune clé API ne reste écrite sur le disque",
+      betaTester: "Bêta-test : version mise à jour et équipe au travail",
     },
     targetNotes: {
-      "updateMacBuild10": "build 10 : configuration tout en portugais, clé enregistrée gardée, 1 nouvelle annonce (score 74)",
-      "updateWindowsBuild10": "build 10 : annonces, profil et clé gardés, tout en allemand ; après la mise à jour l'Analyste n'a jamais démarré (13 annonces en attente)",
-      "languagePortugueseOk": "build 10 : portugais du début à la fin sur le Mac",
-      "codexBetaInUse": "utilisé dans notre test bêta (graphique 6) ; pas encore essayé sur les builds 9 et 10",
-      "updateLinuxBuild9": "build 9 : réussi (son tour n'est pas dans le tableau ci-dessous)",
-      "installerBlockedBuild9": "build 9 : arrêté par l'installeur (correction dans la build 10, tour en cours)",
-      "benchCook": "79 % pertinents",
-      "benchWarehouse": "90 % pertinents",
-      "benchNurse": "1 doublon (94 % pertinents)",
-      "benchBricklayer": "6 postes, moins de 15 (83 % pertinents)",
-      "brakeFixedRetry": "corrigé dans les builds 9 et 10 : à réessayer",
-      "languageGermanOk": "build 9 : allemand du début à la fin sous Linux",
-      "chatgptFreeRefused": "connexion refusée (forfait Free)",
-      "securityPreTag": "revue avant le tag : le verdict porte sur la version exacte du tag ; le cas de la clé sur disque est clos",
-      "cleanLinuxRoundMissing": "installation vierge sur la build 6 : son tour n'est pas dans le tableau ci-dessous",
-      "openaiRoundMissing": "vérifié sur la build 6 : son tour n'est pas dans le tableau ci-dessous",
-      "redoOnBuild9": "à refaire sur la build 9",
-      "diskFull": "disque plein après la mise à jour (correction en cours)",
-      "neverTried": "jamais essayé",
-      "relevantBelow": "0 nouvelle pour le maçon, 10 sur 26 pour la réceptionniste",
-      "benchPaused": "en pause jusqu'à la build 9",
-      "brakeFalseClear": "faux déblocage après l'arrêt, l'avertissement à la personne a échoué",
-      "languageEnglish": "étape de la clé API, démarrage de l'équipe et état en anglais (corrigés après la build 8)",
-      "zeroTurns": "0 tour (corrigé dans la build 9)",
-      "noCredit": "pas de crédit pour les essayer",
-      "loginNeverTried": "vraie connexion jamais essayée",
-      "keysChecked": "0 fichier avec clé hors de sa place, sur 20 927 événements de fichiers",
-      "updateOnBuild9": "mise à jour sur la build 9"
+      updateMacBuild10:
+        "build 10 : configuration tout en portugais, clé enregistrée gardée, 1 nouvelle annonce (score 74)",
+      updateWindowsBuild10:
+        "build 10 : annonces, profil et clé gardés, tout en allemand ; après la mise à jour l'Analyste n'a jamais démarré (13 annonces en attente)",
+      languagePortugueseOk: "build 10 : portugais du début à la fin sur le Mac",
+      codexBetaInUse:
+        "utilisé dans notre test bêta (graphique 6) ; pas encore essayé sur les builds 9 et 10",
+      updateLinuxBuild9:
+        "build 9 : réussi (son tour n'est pas dans le tableau ci-dessous)",
+      installerBlockedBuild9:
+        "build 9 : arrêté par l'installeur (correction dans la build 10, tour en cours)",
+      benchCook: "79 % pertinents",
+      benchWarehouse: "90 % pertinents",
+      benchNurse: "1 doublon (94 % pertinents)",
+      benchBricklayer: "6 postes, moins de 15 (83 % pertinents)",
+      brakeFixedRetry: "corrigé dans les builds 9 et 10 : à réessayer",
+      languageGermanOk: "build 9 : allemand du début à la fin sous Linux",
+      chatgptFreeRefused: "connexion refusée (forfait Free)",
+      securityPreTag:
+        "revue avant le tag : le verdict porte sur la version exacte du tag ; le cas de la clé sur disque est clos",
+      cleanLinuxRoundMissing:
+        "installation vierge sur la build 6 : son tour n'est pas dans le tableau ci-dessous",
+      openaiRoundMissing:
+        "vérifié sur la build 6 : son tour n'est pas dans le tableau ci-dessous",
+      redoOnBuild9: "à refaire sur la build 9",
+      diskFull: "disque plein après la mise à jour (correction en cours)",
+      neverTried: "jamais essayé",
+      relevantBelow:
+        "0 nouvelle pour le maçon, 10 sur 26 pour la réceptionniste",
+      benchPaused: "en pause jusqu'à la build 9",
+      brakeFalseClear:
+        "faux déblocage après l'arrêt, l'avertissement à la personne a échoué",
+      languageEnglish:
+        "étape de la clé API, démarrage de l'équipe et état en anglais (corrigés après la build 8)",
+      zeroTurns: "0 tour (corrigé dans la build 9)",
+      noCredit: "pas de crédit pour les essayer",
+      loginNeverTried: "vraie connexion jamais essayée",
+      keysChecked:
+        "0 fichier avec clé hors de sa place, sur 20 927 événements de fichiers",
+      updateOnBuild9: "mise à jour sur la build 9",
     },
     invalidTitle: "Tours qui ne comptent pas",
-    invalidLead: "Tours cassés par des causes de notre côté (crédit épuisé, une machine de test qui s'est éteinte seule, une erreur de mesure, essais annulés du banc), pas par des défauts du produit. Ils sont exclus du tableau et des graphiques ; leurs défauts restent dans le graphique des défauts.",
+    invalidLead:
+      "Tours cassés par des causes de notre côté (crédit épuisé, une machine de test qui s'est éteinte seule, une erreur de mesure, essais annulés du banc), pas par des défauts du produit. Ils sont exclus du tableau et des graphiques ; leurs défauts restent dans le graphique des défauts.",
     invalidReasons: {
-      noCreditMachineOff: "OpenAI sans crédit et la machine de test s'est éteinte seule : aucun Scout n'a démarré. Le service a été changé pour GLM au milieu du tour.",
-      cumulativeCap: "Notre plafond de test de 3 $ était trop bas et a été lu sur un compteur qui contenait aussi le tour précédent : arrêté après 6 minutes, avant toute nouvelle annonce.",
-      benchDailyBudget: "Essai du banc annulé : il a démarré avec un budget quotidien élevé resté d'avant, et le frein de rythme l'a arrêté après 70 secondes.",
-      benchOpenRun: "Essai du banc annulé : la première recherche de la build précédente était encore ouverte.",
-      creditEndedNoPositions: "Le crédit GLM du compte de test s'est épuisé avant toute annonce : 0 annonce.",
+      noCreditMachineOff:
+        "OpenAI sans crédit et la machine de test s'est éteinte seule : aucun Scout n'a démarré. Le service a été changé pour GLM au milieu du tour.",
+      cumulativeCap:
+        "Notre plafond de test de 3 $ était trop bas et a été lu sur un compteur qui contenait aussi le tour précédent : arrêté après 6 minutes, avant toute nouvelle annonce.",
+      benchDailyBudget:
+        "Essai du banc annulé : il a démarré avec un budget quotidien élevé resté d'avant, et le frein de rythme l'a arrêté après 70 secondes.",
+      benchOpenRun:
+        "Essai du banc annulé : la première recherche de la build précédente était encore ouverte.",
+      creditEndedNoPositions:
+        "Le crédit GLM du compte de test s'est épuisé avant toute annonce : 0 annonce.",
       benchCancelled: "Essai du banc annulé et repris de zéro.",
     },
     targetSections: {
-      "install": "Installation par un nouvel utilisateur",
-      "update": "Mise à jour avec équipe et données",
-      "scout": "Banc des Scouts : le Scout trouve-t-il des annonces du bon métier ?",
-      "brake": "Frein des dépenses",
-      "language": "Langue",
-      "doctor": "Docteur et Mainteneur",
-      "services": "Services",
-      "security": "Sécurité",
-      "beta": "Test bêta",
-      "realUser": "Tour complet en vrai utilisateur, avec un métier hors informatique",
+      install: "Installation par un nouvel utilisateur",
+      update: "Mise à jour avec équipe et données",
+      scout:
+        "Banc des Scouts : le Scout trouve-t-il des annonces du bon métier ?",
+      brake: "Frein des dépenses",
+      language: "Langue",
+      doctor: "Docteur et Mainteneur",
+      services: "Services",
+      security: "Sécurité",
+      beta: "Test bêta",
+      realUser:
+        "Tour complet en vrai utilisateur, avec un métier hors informatique",
     },
     targetCriteria: {
-      "relevant": "pertinents {v} % (≥{min} %)",
-      "duplicates": "doublons {v}",
-      "positions": "annonces {v} (≥{min})",
-      "newPositions": "{trade} : {v} nouveaux",
-      "relevantOf": "{trade} : {v} pertinents sur {of}",
-      "underCeiling": "dépensé {v} sur {max} $",
-      "noFalseUnlock": "aucun faux déblocage",
+      relevant: "pertinents {v} % (≥{min} %)",
+      duplicates: "doublons {v}",
+      positions: "annonces {v} (≥{min})",
+      newPositions: "{trade} : {v} nouveaux",
+      relevantOf: "{trade} : {v} pertinents sur {of}",
+      underCeiling: "dépensé {v} sur {max} $",
+      noFalseUnlock: "aucun faux déblocage",
     },
     targetRules: {
-      "scout": "Seulement la recherche des Scouts, sur un serveur déjà configuré, avec quatre métiers hors informatique. Un métier passe si les 3 critères sont verts : au moins 70 % pertinents, 0 doublon, au moins 15 annonces.",
-      "brake": "Critères du dernier essai (build 8) ; corrigé depuis, à réessayer.",
-      "realUser": "Une personne installe le programme à partir de zéro, répond à la configuration et laisse l'équipe travailler seule pendant 30 minutes. C'est réussi si au moins 70 % des annonces trouvées sont de son métier.",
+      scout:
+        "Seulement la recherche des Scouts, sur un serveur déjà configuré, avec quatre métiers hors informatique. Un métier passe si les 3 critères sont verts : au moins 70 % pertinents, 0 doublon, au moins 15 annonces.",
+      brake:
+        "Critères du dernier essai (build 8) ; corrigé depuis, à réessayer.",
+      realUser:
+        "Une personne installe le programme à partir de zéro, répond à la configuration et laisse l'équipe travailler seule pendant 30 minutes. C'est réussi si au moins 70 % des annonces trouvées sont de son métier.",
     },
     targetTried: "essayé sur la build {n}",
     targetRows: {
-      "install": "Première installation sur un ordinateur sans le programme",
-      "update": "Mise à jour d'un ordinateur qui a déjà une équipe et ses données",
-      "language": "Configuration et onboarding dans la langue choisie",
+      install: "Première installation sur un ordinateur sans le programme",
+      update:
+        "Mise à jour d'un ordinateur qui a déjà une équipe et ses données",
+      language: "Configuration et onboarding dans la langue choisie",
     },
     buildsTitle: "Tours de chaque build",
     buildLabel: "Build {n}",
@@ -1614,14 +1790,22 @@ export const T: Record<Locale, Copy> = {
       "openai-glm": "OpenAI (crédito esgotado), depois GLM",
     },
     notes: {
-      updateBuild10Portuguese: "Atualização na build 10, tudo em português: chave guardada mantida, a fila recomeçou sozinha, 1 anúncio novo (74); o travão de ritmo pôs a equipa em pausa e disse-o à pessoa.",
-      updateWindowsBuild9to10: "Build 9 instalada de raiz, tudo em alemão: 25 anúncios de armazém num quarto de hora; atualizada para a build 10 com anúncios, perfil e chave mantidos, depois o Analista nunca arrancou e 13 anúncios ficaram à espera.",
-      updateSwitchKept: "Atualização com a equipa a correr: dados mantidos, imagens antigas retiradas, GLM → Claude sem parar a equipa. 3 pertinentes de 26 novas em 10 minutos.",
-      updateWelcomePaid: "Atualização e passagem para o Claude: 15 pertinentes de 18 em 12 minutos. As boas-vindas foram pagas de novo a cada reinício.",
-      cleanInstallWarehouse: "Utilizador novo, onboarding guiado: o travão parou em 2,67 $. Quase só armazém: 2 pertinentes de 19.",
-      updateNoNewPositions: "Atualização bem-sucedida e nenhum ficheiro com chave no disco, mas 0 vagas novas em 30 minutos: só 2 Scouts acordados.",
-      diskLowAfterUpdate: "Atualização bem-sucedida, a equipa nunca arrancou: 4 GiB livres dos 8 necessários, sem aviso antes da transferência.",
-      cleanInstallGerman: "Utilizador novo em alemão: 10 pertinentes de 26. O travão parou em 4,77 $, depois um falso desbloqueio (4,95 $ no fim); Doutor e Mantenedor sem turnos.",
+      updateBuild10Portuguese:
+        "Atualização na build 10, tudo em português: chave guardada mantida, a fila recomeçou sozinha, 1 anúncio novo (74); o travão de ritmo pôs a equipa em pausa e disse-o à pessoa.",
+      updateWindowsBuild9to10:
+        "Build 9 instalada de raiz, tudo em alemão: 25 anúncios de armazém num quarto de hora; atualizada para a build 10 com anúncios, perfil e chave mantidos, depois o Analista nunca arrancou e 13 anúncios ficaram à espera.",
+      updateSwitchKept:
+        "Atualização com a equipa a correr: dados mantidos, imagens antigas retiradas, GLM → Claude sem parar a equipa. 3 pertinentes de 26 novas em 10 minutos.",
+      updateWelcomePaid:
+        "Atualização e passagem para o Claude: 15 pertinentes de 18 em 12 minutos. As boas-vindas foram pagas de novo a cada reinício.",
+      cleanInstallWarehouse:
+        "Utilizador novo, onboarding guiado: o travão parou em 2,67 $. Quase só armazém: 2 pertinentes de 19.",
+      updateNoNewPositions:
+        "Atualização bem-sucedida e nenhum ficheiro com chave no disco, mas 0 vagas novas em 30 minutos: só 2 Scouts acordados.",
+      diskLowAfterUpdate:
+        "Atualização bem-sucedida, a equipa nunca arrancou: 4 GiB livres dos 8 necessários, sem aviso antes da transferência.",
+      cleanInstallGerman:
+        "Utilizador novo em alemão: 10 pertinentes de 26. O travão parou em 4,77 $, depois um falso desbloqueio (4,95 $ no fim); Doutor e Mantenedor sem turnos.",
       scoutsNoTools:
         "Scouts sem ferramentas a partir da CLI (corrigido); CPU saturado em 2 vCPU.",
       creditEnded: "Mesmo defeito; o crédito GLM esgotou-se.",
@@ -1647,120 +1831,148 @@ export const T: Record<Locale, Copy> = {
     night: "noite",
     day: "",
     targetsTitle: "Objetivos de lançamento",
-    targetsLead: "A 0.4.0 só é lançada com todas as linhas a verde. Atualizado a cada build; a prova leva à ronda mais abaixo.",
+    targetsLead:
+      "A 0.4.0 só é lançada com todas as linhas a verde. Atualizado a cada build; a prova leva à ronda mais abaixo.",
     targetsCount: "{g} de {n} a verde",
     targetsCols: {
-      "target": "Objetivo",
-      "status": "Estado",
-      "build": "Build",
-      "proof": "Prova"
+      target: "Objetivo",
+      status: "Estado",
+      build: "Build",
+      proof: "Prova",
     },
     targetStatus: {
-      "pass": "cumprido",
-      "fail": "não cumprido",
-      "pending": "por testar",
-      "blocked": "bloqueado"
+      pass: "cumprido",
+      fail: "não cumprido",
+      pending: "por testar",
+      blocked: "bloqueado",
     },
     targets: {
-      "scoutBenchCook": "Cozinheiro",
-      "scoutBenchWarehouse": "Operador de armazém",
-      "scoutBenchNurse": "Enfermeira",
-      "scoutBenchBricklayer": "Pedreiro",
-      "languageWindows": "Configuração e onboarding na língua escolhida · Windows",
-      "languageLinux": "Configuração e onboarding na língua escolhida · Linux",
-      "languageMac": "Configuração e onboarding na língua escolhida · Mac",
-      "preTagReview": "Revisão de segurança antes da tag",
-      "installWindows": "Instalação por um utilizador novo · Windows",
-      "installLinux": "Instalação por um utilizador novo · Linux",
-      "installMac": "Instalação por um utilizador novo · Mac",
-      "updateLinux": "Atualização com equipa e dados existentes · Linux",
-      "updateMac": "Atualização com equipa e dados existentes · Mac",
-      "updateWindows": "Atualização com equipa e dados existentes · Windows",
-      "nonItRelevant": "Anúncios do ofício da pessoa (pelo menos 70%)",
-      "scoutBench": "Banco dos Scouts, 4 profissões fora da informática (≥70% pertinentes, 0 duplicados, ≥15 vagas)",
-      "budgetBrake": "Travão do orçamento: nunca acima do teto, nenhum falso desbloqueio, aviso à pessoa",
-      "language": "Setup e onboarding na língua escolhida",
-      "doctorMaintainer": "O Doutor e o Mantenedor, os agentes que cuidam da equipa, funcionam mesmo",
-      "serviceClaude": "Claude (Anthropic) · chave API",
-      "serviceOpenai": "OpenAI · chave API",
-      "serviceGlm": "Z.ai (GLM) · chave API",
-      "serviceKimi": "Kimi (Moonshot) · chave API",
-      "codexSubscription": "OpenAI Codex · assinatura (só quem já tem a 0.3.x, como no nosso teste beta)",
-      "openaiSubscription": "OpenAI · assinatura ChatGPT no Pi",
-      "noKeyOnDisk": "Nenhuma chave API fica escrita no disco",
-      "betaTester": "Beta teste: versão atualizada e equipa a trabalhar"
+      scoutBenchCook: "Cozinheiro",
+      scoutBenchWarehouse: "Operador de armazém",
+      scoutBenchNurse: "Enfermeira",
+      scoutBenchBricklayer: "Pedreiro",
+      languageWindows:
+        "Configuração e onboarding na língua escolhida · Windows",
+      languageLinux: "Configuração e onboarding na língua escolhida · Linux",
+      languageMac: "Configuração e onboarding na língua escolhida · Mac",
+      preTagReview: "Revisão de segurança antes da tag",
+      installWindows: "Instalação por um utilizador novo · Windows",
+      installLinux: "Instalação por um utilizador novo · Linux",
+      installMac: "Instalação por um utilizador novo · Mac",
+      updateLinux: "Atualização com equipa e dados existentes · Linux",
+      updateMac: "Atualização com equipa e dados existentes · Mac",
+      updateWindows: "Atualização com equipa e dados existentes · Windows",
+      nonItRelevant: "Anúncios do ofício da pessoa (pelo menos 70%)",
+      scoutBench:
+        "Banco dos Scouts, 4 profissões fora da informática (≥70% pertinentes, 0 duplicados, ≥15 vagas)",
+      budgetBrake:
+        "Travão do orçamento: nunca acima do teto, nenhum falso desbloqueio, aviso à pessoa",
+      language: "Setup e onboarding na língua escolhida",
+      doctorMaintainer:
+        "O Doutor e o Mantenedor, os agentes que cuidam da equipa, funcionam mesmo",
+      serviceClaude: "Claude (Anthropic) · chave API",
+      serviceOpenai: "OpenAI · chave API",
+      serviceGlm: "Z.ai (GLM) · chave API",
+      serviceKimi: "Kimi (Moonshot) · chave API",
+      codexSubscription:
+        "OpenAI Codex · assinatura (só quem já tem a 0.3.x, como no nosso teste beta)",
+      openaiSubscription: "OpenAI · assinatura ChatGPT no Pi",
+      noKeyOnDisk: "Nenhuma chave API fica escrita no disco",
+      betaTester: "Beta teste: versão atualizada e equipa a trabalhar",
     },
     targetNotes: {
-      "updateMacBuild10": "build 10: configuração toda em português, chave guardada mantida, 1 anúncio novo (pontuação 74)",
-      "updateWindowsBuild10": "build 10: anúncios, perfil e chave mantidos, tudo em alemão; depois da atualização o Analista nunca arrancou (13 anúncios à espera)",
-      "languagePortugueseOk": "build 10: português do início ao fim no Mac",
-      "codexBetaInUse": "em uso no nosso teste beta (gráfico 6); ainda não testado nas builds 9 e 10",
-      "updateLinuxBuild9": "build 9: aprovado (a rodada não está na tabela abaixo)",
-      "installerBlockedBuild9": "build 9: parado pelo instalador (correção na build 10, rodada em curso)",
-      "benchCook": "79% pertinentes",
-      "benchWarehouse": "90% pertinentes",
-      "benchNurse": "1 duplicado (94% pertinentes)",
-      "benchBricklayer": "6 vagas, menos de 15 (83% pertinentes)",
-      "brakeFixedRetry": "corrigido nas builds 9 e 10: a voltar a testar",
-      "languageGermanOk": "build 9: alemão do início ao fim no Linux",
-      "chatgptFreeRefused": "acesso recusado (plano Free)",
-      "securityPreTag": "revisão antes da tag: o veredicto chega sobre a versão exata da tag; o caso da chave no disco está fechado",
-      "cleanLinuxRoundMissing": "instalação de raiz na build 6: a sua ronda não está na tabela abaixo",
-      "openaiRoundMissing": "provado na build 6: a sua ronda não está na tabela abaixo",
-      "redoOnBuild9": "a repetir na build 9",
-      "diskFull": "disco cheio após a atualização (correção em curso)",
-      "neverTried": "nunca testado",
-      "relevantBelow": "0 novas para o pedreiro, 10 de 26 para a rececionista",
-      "benchPaused": "em pausa até à build 9",
-      "brakeFalseClear": "falso desbloqueio após a paragem, o aviso à pessoa falhou",
-      "languageEnglish": "passo da chave de API, arranque da equipa e estado em inglês (corrigidos após a build 8)",
-      "zeroTurns": "0 turnos (corrigido na build 9)",
-      "noCredit": "sem crédito para os testar",
-      "loginNeverTried": "início de sessão real nunca testado",
-      "keysChecked": "0 ficheiros com chave fora do lugar, em 20 927 eventos de ficheiros",
-      "updateOnBuild9": "atualização na build 9"
+      updateMacBuild10:
+        "build 10: configuração toda em português, chave guardada mantida, 1 anúncio novo (pontuação 74)",
+      updateWindowsBuild10:
+        "build 10: anúncios, perfil e chave mantidos, tudo em alemão; depois da atualização o Analista nunca arrancou (13 anúncios à espera)",
+      languagePortugueseOk: "build 10: português do início ao fim no Mac",
+      codexBetaInUse:
+        "em uso no nosso teste beta (gráfico 6); ainda não testado nas builds 9 e 10",
+      updateLinuxBuild9:
+        "build 9: aprovado (a rodada não está na tabela abaixo)",
+      installerBlockedBuild9:
+        "build 9: parado pelo instalador (correção na build 10, rodada em curso)",
+      benchCook: "79% pertinentes",
+      benchWarehouse: "90% pertinentes",
+      benchNurse: "1 duplicado (94% pertinentes)",
+      benchBricklayer: "6 vagas, menos de 15 (83% pertinentes)",
+      brakeFixedRetry: "corrigido nas builds 9 e 10: a voltar a testar",
+      languageGermanOk: "build 9: alemão do início ao fim no Linux",
+      chatgptFreeRefused: "acesso recusado (plano Free)",
+      securityPreTag:
+        "revisão antes da tag: o veredicto chega sobre a versão exata da tag; o caso da chave no disco está fechado",
+      cleanLinuxRoundMissing:
+        "instalação de raiz na build 6: a sua ronda não está na tabela abaixo",
+      openaiRoundMissing:
+        "provado na build 6: a sua ronda não está na tabela abaixo",
+      redoOnBuild9: "a repetir na build 9",
+      diskFull: "disco cheio após a atualização (correção em curso)",
+      neverTried: "nunca testado",
+      relevantBelow: "0 novas para o pedreiro, 10 de 26 para a rececionista",
+      benchPaused: "em pausa até à build 9",
+      brakeFalseClear:
+        "falso desbloqueio após a paragem, o aviso à pessoa falhou",
+      languageEnglish:
+        "passo da chave de API, arranque da equipa e estado em inglês (corrigidos após a build 8)",
+      zeroTurns: "0 turnos (corrigido na build 9)",
+      noCredit: "sem crédito para os testar",
+      loginNeverTried: "início de sessão real nunca testado",
+      keysChecked:
+        "0 ficheiros com chave fora do lugar, em 20 927 eventos de ficheiros",
+      updateOnBuild9: "atualização na build 9",
     },
     invalidTitle: "Rodadas que não contam",
-    invalidLead: "Rodadas partidas por causas nossas (crédito esgotado, uma máquina de teste que se desligou sozinha, um erro de medição, tentativas anuladas da bancada), não por defeitos do produto. Ficam fora da tabela e dos gráficos; os defeitos encontrados ficam no gráfico dos defeitos.",
+    invalidLead:
+      "Rodadas partidas por causas nossas (crédito esgotado, uma máquina de teste que se desligou sozinha, um erro de medição, tentativas anuladas da bancada), não por defeitos do produto. Ficam fora da tabela e dos gráficos; os defeitos encontrados ficam no gráfico dos defeitos.",
     invalidReasons: {
-      noCreditMachineOff: "OpenAI sem crédito e a máquina de teste desligou-se sozinha: nenhum Scout arrancou. A meio da rodada o serviço foi mudado para GLM.",
-      cumulativeCap: "O nosso teto de teste de 3 $ era baixo demais e foi lido num contador que incluía também a rodada anterior: parada aos 6 minutos, antes de qualquer anúncio novo.",
-      benchDailyBudget: "Tentativa da bancada anulada: arrancou com um orçamento diário alto que vinha de antes, e o travão de ritmo parou-a aos 70 segundos.",
-      benchOpenRun: "Tentativa da bancada anulada: a primeira pesquisa da build anterior ainda estava aberta.",
-      creditEndedNoPositions: "O crédito GLM da conta de teste esgotou-se antes de qualquer anúncio: 0 anúncios.",
+      noCreditMachineOff:
+        "OpenAI sem crédito e a máquina de teste desligou-se sozinha: nenhum Scout arrancou. A meio da rodada o serviço foi mudado para GLM.",
+      cumulativeCap:
+        "O nosso teto de teste de 3 $ era baixo demais e foi lido num contador que incluía também a rodada anterior: parada aos 6 minutos, antes de qualquer anúncio novo.",
+      benchDailyBudget:
+        "Tentativa da bancada anulada: arrancou com um orçamento diário alto que vinha de antes, e o travão de ritmo parou-a aos 70 segundos.",
+      benchOpenRun:
+        "Tentativa da bancada anulada: a primeira pesquisa da build anterior ainda estava aberta.",
+      creditEndedNoPositions:
+        "O crédito GLM da conta de teste esgotou-se antes de qualquer anúncio: 0 anúncios.",
       benchCancelled: "Tentativa da bancada anulada e recomeçada do zero.",
     },
     targetSections: {
-      "install": "Instalação por um utilizador novo",
-      "update": "Atualização com equipa e dados",
-      "scout": "Bancada de Scouts: o Scout encontra anúncios do ofício certo?",
-      "brake": "Travão da despesa",
-      "language": "Língua",
-      "doctor": "Doutor e Mantenedor",
-      "services": "Serviços",
-      "security": "Segurança",
-      "beta": "Teste beta",
-      "realUser": "Rodada completa como utilizador real, com um ofício fora da informática",
+      install: "Instalação por um utilizador novo",
+      update: "Atualização com equipa e dados",
+      scout: "Bancada de Scouts: o Scout encontra anúncios do ofício certo?",
+      brake: "Travão da despesa",
+      language: "Língua",
+      doctor: "Doutor e Mantenedor",
+      services: "Serviços",
+      security: "Segurança",
+      beta: "Teste beta",
+      realUser:
+        "Rodada completa como utilizador real, com um ofício fora da informática",
     },
     targetCriteria: {
-      "relevant": "pertinentes {v}% (≥{min}%)",
-      "duplicates": "duplicados {v}",
-      "positions": "anúncios {v} (≥{min})",
-      "newPositions": "{trade}: {v} novos",
-      "relevantOf": "{trade}: {v} pertinentes de {of}",
-      "underCeiling": "gastos {v} de {max} $",
-      "noFalseUnlock": "nenhum desbloqueio falso",
+      relevant: "pertinentes {v}% (≥{min}%)",
+      duplicates: "duplicados {v}",
+      positions: "anúncios {v} (≥{min})",
+      newPositions: "{trade}: {v} novos",
+      relevantOf: "{trade}: {v} pertinentes de {of}",
+      underCeiling: "gastos {v} de {max} $",
+      noFalseUnlock: "nenhum desbloqueio falso",
     },
     targetRules: {
-      "scout": "Só a pesquisa dos Scouts, num servidor já configurado, com quatro ofícios fora da informática. Um ofício passa se os 3 critérios estiverem verdes: pelo menos 70% pertinentes, 0 duplicados, pelo menos 15 anúncios.",
-      "brake": "Critérios da última tentativa (build 8); corrigido depois, a voltar a testar.",
-      "realUser": "Uma pessoa instala o programa do zero, responde à configuração e deixa a equipa trabalhar sozinha durante 30 minutos. Passa se pelo menos 70% dos anúncios encontrados forem do seu ofício.",
+      scout:
+        "Só a pesquisa dos Scouts, num servidor já configurado, com quatro ofícios fora da informática. Um ofício passa se os 3 critérios estiverem verdes: pelo menos 70% pertinentes, 0 duplicados, pelo menos 15 anúncios.",
+      brake:
+        "Critérios da última tentativa (build 8); corrigido depois, a voltar a testar.",
+      realUser:
+        "Uma pessoa instala o programa do zero, responde à configuração e deixa a equipa trabalhar sozinha durante 30 minutos. Passa se pelo menos 70% dos anúncios encontrados forem do seu ofício.",
     },
     targetTried: "testado na build {n}",
     targetRows: {
-      "install": "Primeira instalação num computador sem o programa",
-      "update": "Atualização de um computador que já tem uma equipa e os seus dados",
-      "language": "Configuração e onboarding na língua escolhida",
+      install: "Primeira instalação num computador sem o programa",
+      update:
+        "Atualização de um computador que já tem uma equipa e os seus dados",
+      language: "Configuração e onboarding na língua escolhida",
     },
     buildsTitle: "Rondas de cada build",
     buildLabel: "Build {n}",
@@ -1904,14 +2116,22 @@ export const T: Record<Locale, Copy> = {
       "openai-glm": "OpenAI (elfogyott a kredit), majd GLM",
     },
     notes: {
-      updateBuild10Portuguese: "Frissítés a 10. buildre, végig portugálul: a mentett kulcs megmaradt, a sor magától újraindult, 1 új hirdetés (74); az ütemfék szüneteltette a csapatot és szólt a felhasználónak.",
-      updateWindowsBuild9to10: "A 9. build nulláról telepítve, végig németül: negyedóra alatt 25 raktári hirdetés; frissítés a 10. buildre megtartott hirdetésekkel, profillal és kulccsal, utána az elemző sosem indult el, és 13 hirdetés várakozva maradt.",
-      updateSwitchKept: "Frissítés futó csapattal: adatok megtartva, régi képfájlok törölve, GLM → Claude a csapat leállítása nélkül. 26 újból 3 releváns 10 perc alatt.",
-      updateWelcomePaid: "Frissítés és váltás Claude-ra: 18-ból 15 releváns 12 perc alatt. Az üdvözlést minden újraindításkor újra kifizette.",
-      cleanInstallWarehouse: "Új felhasználó, vezetett bevezetés: a fék 2,67 $-nál állt meg. Szinte csak raktári állás: 19-ből 2 releváns.",
-      updateNoNewPositions: "A frissítés sikerült, és nem maradt kulcsos fájl a lemezen, de 30 perc alatt 0 új állás: csak 2 Scoutot ébresztett fel.",
-      diskLowAfterUpdate: "A frissítés sikerült, a csapat sosem indult el: 4 GiB szabad a szükséges 8-ból, figyelmeztetés nélkül a letöltés előtt.",
-      cleanInstallGerman: "Új felhasználó németül: 26-ból 10 releváns. A fék 4,77 $-nál megállt, aztán hamis feloldás (a végén 4,95 $); a Doktor és a Karbantartó egy kört sem futott.",
+      updateBuild10Portuguese:
+        "Frissítés a 10. buildre, végig portugálul: a mentett kulcs megmaradt, a sor magától újraindult, 1 új hirdetés (74); az ütemfék szüneteltette a csapatot és szólt a felhasználónak.",
+      updateWindowsBuild9to10:
+        "A 9. build nulláról telepítve, végig németül: negyedóra alatt 25 raktári hirdetés; frissítés a 10. buildre megtartott hirdetésekkel, profillal és kulccsal, utána az elemző sosem indult el, és 13 hirdetés várakozva maradt.",
+      updateSwitchKept:
+        "Frissítés futó csapattal: adatok megtartva, régi képfájlok törölve, GLM → Claude a csapat leállítása nélkül. 26 újból 3 releváns 10 perc alatt.",
+      updateWelcomePaid:
+        "Frissítés és váltás Claude-ra: 18-ból 15 releváns 12 perc alatt. Az üdvözlést minden újraindításkor újra kifizette.",
+      cleanInstallWarehouse:
+        "Új felhasználó, vezetett bevezetés: a fék 2,67 $-nál állt meg. Szinte csak raktári állás: 19-ből 2 releváns.",
+      updateNoNewPositions:
+        "A frissítés sikerült, és nem maradt kulcsos fájl a lemezen, de 30 perc alatt 0 új állás: csak 2 Scoutot ébresztett fel.",
+      diskLowAfterUpdate:
+        "A frissítés sikerült, a csapat sosem indult el: 4 GiB szabad a szükséges 8-ból, figyelmeztetés nélkül a letöltés előtt.",
+      cleanInstallGerman:
+        "Új felhasználó németül: 26-ból 10 releváns. A fék 4,77 $-nál megállt, aztán hamis feloldás (a végén 4,95 $); a Doktor és a Karbantartó egy kört sem futott.",
       scoutsNoTools:
         "A Scoutok eszközök nélkül a CLI-ből (javítva); a CPU 2 vCPU-n telített.",
       creditEnded: "Ugyanaz a hiba; a GLM-egyenleg elfogyott.",
@@ -1937,120 +2157,144 @@ export const T: Record<Locale, Copy> = {
     night: "éjszaka",
     day: "",
     targetsTitle: "Kiadási célok",
-    targetsLead: "A 0.4.0 csak akkor jelenik meg, ha minden sor zöld. Minden buildnél frissül; a bizonyíték a lenti futáshoz visz.",
+    targetsLead:
+      "A 0.4.0 csak akkor jelenik meg, ha minden sor zöld. Minden buildnél frissül; a bizonyíték a lenti futáshoz visz.",
     targetsCount: "{n}-ből {g} zöld",
     targetsCols: {
-      "target": "Cél",
-      "status": "Állapot",
-      "build": "Build",
-      "proof": "Bizonyíték"
+      target: "Cél",
+      status: "Állapot",
+      build: "Build",
+      proof: "Bizonyíték",
     },
     targetStatus: {
-      "pass": "teljesült",
-      "fail": "nem teljesült",
-      "pending": "kipróbálandó",
-      "blocked": "elakadt"
+      pass: "teljesült",
+      fail: "nem teljesült",
+      pending: "kipróbálandó",
+      blocked: "elakadt",
     },
     targets: {
-      "scoutBenchCook": "Szakács",
-      "scoutBenchWarehouse": "Raktáros",
-      "scoutBenchNurse": "Ápolónő",
-      "scoutBenchBricklayer": "Kőműves",
-      "languageWindows": "Beállítás és onboarding a választott nyelven · Windows",
-      "languageLinux": "Beállítás és onboarding a választott nyelven · Linux",
-      "languageMac": "Beállítás és onboarding a választott nyelven · Mac",
-      "preTagReview": "Biztonsági átnézés a tag előtt",
-      "installWindows": "Telepítés új felhasználóként · Windows",
-      "installLinux": "Telepítés új felhasználóként · Linux",
-      "installMac": "Telepítés új felhasználóként · Mac",
-      "updateLinux": "Frissítés meglévő csapattal és adatokkal · Linux",
-      "updateMac": "Frissítés meglévő csapattal és adatokkal · Mac",
-      "updateWindows": "Frissítés meglévő csapattal és adatokkal · Windows",
-      "nonItRelevant": "A személy szakmájába tartozó hirdetések (legalább 70%)",
-      "scoutBench": "Scout-próbapad, 4 IT-n kívüli szakma (≥70% releváns, 0 ismétlődés, ≥15 állás)",
-      "budgetBrake": "Keretfék: soha a plafon fölött, nincs hamis feloldás, a felhasználó értesül",
-      "language": "Beállítás és bevezetés a választott nyelven",
-      "doctorMaintainer": "A Doktor és a Karbantartó, a csapatra vigyázó ügynökök, tényleg működnek",
-      "serviceClaude": "Claude (Anthropic) · API-kulcs",
-      "serviceOpenai": "OpenAI · API-kulcs",
-      "serviceGlm": "Z.ai (GLM) · API-kulcs",
-      "serviceKimi": "Kimi (Moonshot) · API-kulcs",
-      "codexSubscription": "OpenAI Codex · előfizetés (csak akinek már megvan a 0.3.x, mint a bétatesztünkben)",
-      "openaiSubscription": "OpenAI · ChatGPT-előfizetés Pi-n",
-      "noKeyOnDisk": "Egyetlen API-kulcs sem marad a lemezre írva",
-      "betaTester": "Béta teszt: a verzió frissítve, a csapat munkában"
+      scoutBenchCook: "Szakács",
+      scoutBenchWarehouse: "Raktáros",
+      scoutBenchNurse: "Ápolónő",
+      scoutBenchBricklayer: "Kőműves",
+      languageWindows: "Beállítás és onboarding a választott nyelven · Windows",
+      languageLinux: "Beállítás és onboarding a választott nyelven · Linux",
+      languageMac: "Beállítás és onboarding a választott nyelven · Mac",
+      preTagReview: "Biztonsági átnézés a tag előtt",
+      installWindows: "Telepítés új felhasználóként · Windows",
+      installLinux: "Telepítés új felhasználóként · Linux",
+      installMac: "Telepítés új felhasználóként · Mac",
+      updateLinux: "Frissítés meglévő csapattal és adatokkal · Linux",
+      updateMac: "Frissítés meglévő csapattal és adatokkal · Mac",
+      updateWindows: "Frissítés meglévő csapattal és adatokkal · Windows",
+      nonItRelevant: "A személy szakmájába tartozó hirdetések (legalább 70%)",
+      scoutBench:
+        "Scout-próbapad, 4 IT-n kívüli szakma (≥70% releváns, 0 ismétlődés, ≥15 állás)",
+      budgetBrake:
+        "Keretfék: soha a plafon fölött, nincs hamis feloldás, a felhasználó értesül",
+      language: "Beállítás és bevezetés a választott nyelven",
+      doctorMaintainer:
+        "A Doktor és a Karbantartó, a csapatra vigyázó ügynökök, tényleg működnek",
+      serviceClaude: "Claude (Anthropic) · API-kulcs",
+      serviceOpenai: "OpenAI · API-kulcs",
+      serviceGlm: "Z.ai (GLM) · API-kulcs",
+      serviceKimi: "Kimi (Moonshot) · API-kulcs",
+      codexSubscription:
+        "OpenAI Codex · előfizetés (csak akinek már megvan a 0.3.x, mint a bétatesztünkben)",
+      openaiSubscription: "OpenAI · ChatGPT-előfizetés Pi-n",
+      noKeyOnDisk: "Egyetlen API-kulcs sem marad a lemezre írva",
+      betaTester: "Béta teszt: a verzió frissítve, a csapat munkában",
     },
     targetNotes: {
-      "updateMacBuild10": "10. build: a beállítás végig portugálul, a mentett kulcs megmaradt, 1 új hirdetés (pontszám 74)",
-      "updateWindowsBuild10": "10. build: hirdetések, profil és kulcs megmaradt, végig németül; a frissítés után az elemző sosem indult el (13 hirdetés vár)",
-      "languagePortugueseOk": "10. build: végig portugálul a Macen",
-      "codexBetaInUse": "a bétatesztünkben használatban (6. grafikon); a 9. és 10. buildön még nem próbálták",
-      "updateLinuxBuild9": "9. build: sikeres (a köre nincs az alábbi táblázatban)",
-      "installerBlockedBuild9": "9. build: a telepítő megállította (javítás a 10. buildben, a kör folyamatban)",
-      "benchCook": "79% releváns",
-      "benchWarehouse": "90% releváns",
-      "benchNurse": "1 ismétlődés (94% releváns)",
-      "benchBricklayer": "6 állás, kevesebb mint 15 (83% releváns)",
-      "brakeFixedRetry": "javítva a 9. és 10. buildben: újra kipróbálandó",
-      "languageGermanOk": "9. build: végig németül Linuxon",
-      "chatgptFreeRefused": "bejelentkezés elutasítva (Free csomag)",
-      "securityPreTag": "átnézés a tag előtt: az ítélet a tag pontos verziójára születik; a lemezen maradt kulcs ügye lezárva",
-      "cleanLinuxRoundMissing": "tiszta telepítés a 6. buildön: a futása nincs a lenti táblázatban",
-      "openaiRoundMissing": "a 6. buildön igazolva: a futása nincs a lenti táblázatban",
-      "redoOnBuild9": "a 9. buildön megismétlendő",
-      "diskFull": "megtelt lemez a frissítés után (javítás folyamatban)",
-      "neverTried": "sosem próbálták",
-      "relevantBelow": "0 új a kőművesnek, 26-ból 10 a recepciósnak",
-      "benchPaused": "szünetel a 9. buildig",
-      "brakeFalseClear": "hamis feloldás a leállás után, a felhasználó értesítése nem sikerült",
-      "languageEnglish": "API-kulcs lépés, csapatindítás és állapot angolul (a 8. build után javítva)",
-      "zeroTurns": "0 kör (a 9. buildben javítva)",
-      "noCredit": "nincs egyenleg a kipróbálásukhoz",
-      "loginNeverTried": "valódi bejelentkezés sosem próbálva",
-      "keysChecked": "0 kulcsos fájl a helyén kívül, 20 927 fájleseményből",
-      "updateOnBuild9": "frissítés a 9. buildön"
+      updateMacBuild10:
+        "10. build: a beállítás végig portugálul, a mentett kulcs megmaradt, 1 új hirdetés (pontszám 74)",
+      updateWindowsBuild10:
+        "10. build: hirdetések, profil és kulcs megmaradt, végig németül; a frissítés után az elemző sosem indult el (13 hirdetés vár)",
+      languagePortugueseOk: "10. build: végig portugálul a Macen",
+      codexBetaInUse:
+        "a bétatesztünkben használatban (6. grafikon); a 9. és 10. buildön még nem próbálták",
+      updateLinuxBuild9:
+        "9. build: sikeres (a köre nincs az alábbi táblázatban)",
+      installerBlockedBuild9:
+        "9. build: a telepítő megállította (javítás a 10. buildben, a kör folyamatban)",
+      benchCook: "79% releváns",
+      benchWarehouse: "90% releváns",
+      benchNurse: "1 ismétlődés (94% releváns)",
+      benchBricklayer: "6 állás, kevesebb mint 15 (83% releváns)",
+      brakeFixedRetry: "javítva a 9. és 10. buildben: újra kipróbálandó",
+      languageGermanOk: "9. build: végig németül Linuxon",
+      chatgptFreeRefused: "bejelentkezés elutasítva (Free csomag)",
+      securityPreTag:
+        "átnézés a tag előtt: az ítélet a tag pontos verziójára születik; a lemezen maradt kulcs ügye lezárva",
+      cleanLinuxRoundMissing:
+        "tiszta telepítés a 6. buildön: a futása nincs a lenti táblázatban",
+      openaiRoundMissing:
+        "a 6. buildön igazolva: a futása nincs a lenti táblázatban",
+      redoOnBuild9: "a 9. buildön megismétlendő",
+      diskFull: "megtelt lemez a frissítés után (javítás folyamatban)",
+      neverTried: "sosem próbálták",
+      relevantBelow: "0 új a kőművesnek, 26-ból 10 a recepciósnak",
+      benchPaused: "szünetel a 9. buildig",
+      brakeFalseClear:
+        "hamis feloldás a leállás után, a felhasználó értesítése nem sikerült",
+      languageEnglish:
+        "API-kulcs lépés, csapatindítás és állapot angolul (a 8. build után javítva)",
+      zeroTurns: "0 kör (a 9. buildben javítva)",
+      noCredit: "nincs egyenleg a kipróbálásukhoz",
+      loginNeverTried: "valódi bejelentkezés sosem próbálva",
+      keysChecked: "0 kulcsos fájl a helyén kívül, 20 927 fájleseményből",
+      updateOnBuild9: "frissítés a 9. buildön",
     },
     invalidTitle: "Nem számító körök",
-    invalidLead: "A mi oldalunkon keletkezett okok miatt megszakadt körök (elfogyott kredit, magától leállt tesztgép, mérési hiba, a pad törölt próbái), nem a termék hibái miatt. Kimaradnak a táblázatból és a grafikonokból; a bennük talált hibák a hibagrafikonon maradnak.",
+    invalidLead:
+      "A mi oldalunkon keletkezett okok miatt megszakadt körök (elfogyott kredit, magától leállt tesztgép, mérési hiba, a pad törölt próbái), nem a termék hibái miatt. Kimaradnak a táblázatból és a grafikonokból; a bennük talált hibák a hibagrafikonon maradnak.",
     invalidReasons: {
-      noCreditMachineOff: "Az OpenAI-nak nem volt kreditje, és a tesztgép magától leállt: egy Scout sem indult el. A kör közepén a szolgáltatást GLM-re cserélték.",
-      cumulativeCap: "A 3 $-os tesztplafonunk túl alacsony volt, és egy olyan számlálón olvastuk le, amely az előző kört is tartalmazta: 6 perc után leállt, még egyetlen új hirdetés előtt.",
-      benchDailyBudget: "Törölt próba a padon: korábbról maradt magas napi kerettel indult, és az ütemfék 70 másodperc után megállította.",
-      benchOpenRun: "Törölt próba a padon: az előző build első keresése még nyitva volt.",
-      creditEndedNoPositions: "A tesztfiók GLM-kreditje bármely hirdetés előtt elfogyott: 0 hirdetés.",
+      noCreditMachineOff:
+        "Az OpenAI-nak nem volt kreditje, és a tesztgép magától leállt: egy Scout sem indult el. A kör közepén a szolgáltatást GLM-re cserélték.",
+      cumulativeCap:
+        "A 3 $-os tesztplafonunk túl alacsony volt, és egy olyan számlálón olvastuk le, amely az előző kört is tartalmazta: 6 perc után leállt, még egyetlen új hirdetés előtt.",
+      benchDailyBudget:
+        "Törölt próba a padon: korábbról maradt magas napi kerettel indult, és az ütemfék 70 másodperc után megállította.",
+      benchOpenRun:
+        "Törölt próba a padon: az előző build első keresése még nyitva volt.",
+      creditEndedNoPositions:
+        "A tesztfiók GLM-kreditje bármely hirdetés előtt elfogyott: 0 hirdetés.",
       benchCancelled: "Törölt próba a padon, a nulláról újraindítva.",
     },
     targetSections: {
-      "install": "Telepítés új felhasználóként",
-      "update": "Frissítés csapattal és adatokkal",
-      "scout": "Scout-pad: a Scout a megfelelő szakma hirdetéseit találja?",
-      "brake": "Költségfék",
-      "language": "Nyelv",
-      "doctor": "Doktor és Karbantartó",
-      "services": "Szolgáltatások",
-      "security": "Biztonság",
-      "beta": "Bétateszt",
-      "realUser": "Teljes kör valódi felhasználóként, nem IT szakmával",
+      install: "Telepítés új felhasználóként",
+      update: "Frissítés csapattal és adatokkal",
+      scout: "Scout-pad: a Scout a megfelelő szakma hirdetéseit találja?",
+      brake: "Költségfék",
+      language: "Nyelv",
+      doctor: "Doktor és Karbantartó",
+      services: "Szolgáltatások",
+      security: "Biztonság",
+      beta: "Bétateszt",
+      realUser: "Teljes kör valódi felhasználóként, nem IT szakmával",
     },
     targetCriteria: {
-      "relevant": "releváns {v}% (≥{min}%)",
-      "duplicates": "ismétlődés {v}",
-      "positions": "hirdetés {v} (≥{min})",
-      "newPositions": "{trade}: {v} új",
-      "relevantOf": "{trade}: {v} releváns / {of}",
-      "underCeiling": "{v} / {max} $ elköltve",
-      "noFalseUnlock": "nincs hamis feloldás",
+      relevant: "releváns {v}% (≥{min}%)",
+      duplicates: "ismétlődés {v}",
+      positions: "hirdetés {v} (≥{min})",
+      newPositions: "{trade}: {v} új",
+      relevantOf: "{trade}: {v} releváns / {of}",
+      underCeiling: "{v} / {max} $ elköltve",
+      noFalseUnlock: "nincs hamis feloldás",
     },
     targetRules: {
-      "scout": "Csak a Scoutok keresése, egy már beállított szerveren, négy nem IT szakmával. Egy szakma sikeres, ha mind a 3 feltétel zöld: legalább 70% releváns, 0 ismétlődés, legalább 15 hirdetés.",
-      "brake": "Az utolsó próba feltételei (8. build); azóta javítva, újra kipróbálandó.",
-      "realUser": "Valaki a nulláról telepíti a programot, kitölti a beállítást, és 30 percig hagyja egyedül dolgozni a csapatot. Sikeres, ha a talált hirdetések legalább 70%-a az ő szakmájába tartozik.",
+      scout:
+        "Csak a Scoutok keresése, egy már beállított szerveren, négy nem IT szakmával. Egy szakma sikeres, ha mind a 3 feltétel zöld: legalább 70% releváns, 0 ismétlődés, legalább 15 hirdetés.",
+      brake:
+        "Az utolsó próba feltételei (8. build); azóta javítva, újra kipróbálandó.",
+      realUser:
+        "Valaki a nulláról telepíti a programot, kitölti a beállítást, és 30 percig hagyja egyedül dolgozni a csapatot. Sikeres, ha a talált hirdetések legalább 70%-a az ő szakmájába tartozik.",
     },
     targetTried: "kipróbálva a(z) {n}. buildön",
     targetRows: {
-      "install": "Első telepítés a programot még nem ismerő gépre",
-      "update": "Olyan gép frissítése, amelyen már van csapat és adat",
-      "language": "Beállítás és onboarding a választott nyelven",
+      install: "Első telepítés a programot még nem ismerő gépre",
+      update: "Olyan gép frissítése, amelyen már van csapat és adat",
+      language: "Beállítás és onboarding a választott nyelven",
     },
     buildsTitle: "Az egyes buildek futásai",
     buildLabel: "{n}. build",
@@ -2113,12 +2357,13 @@ export const T: Record<Locale, Copy> = {
   },
 };
 
-
-
-
 // The three icons fill their boxes differently (the panes fill it all, the apple and the penguin less): these sizes make
 // them look the same height next to each other.
-const OS_ICON_PX: Record<string, number> = { windows: 14, linux: 17, macos: 18 };
+const OS_ICON_PX: Record<string, number> = {
+  windows: 14,
+  linux: 17,
+  macos: 18,
+};
 
 export function Mark({ id, label }: { id: string; label: string }) {
   // a service (or two, «openai-glm»): its marks as inline SVG, as tall as the text, no tile
@@ -2136,7 +2381,11 @@ export function Mark({ id, label }: { id: string; label: string }) {
     return (
       <span
         className="inline-flex items-center justify-center shrink-0 [&>svg]:w-[var(--os-icon)] [&>svg]:h-[var(--os-icon)]"
-        style={{ width: 22, height: 22, ["--os-icon" as string]: `${OS_ICON_PX[id]}px` }}
+        style={{
+          width: 22,
+          height: 22,
+          ["--os-icon" as string]: `${OS_ICON_PX[id]}px`,
+        }}
         title={label}
       >
         <OsIcon os={id} />
@@ -2207,4 +2456,6 @@ export const PROFILE_SECTOR: Record<string, Sector | ""> = {
   bricklayer: "trades",
   officeClerk: "office",
 };
-export const CATEGORY_SECTOR: Record<string, Sector | ""> = { finance: "office" };
+export const CATEGORY_SECTOR: Record<string, Sector | ""> = {
+  finance: "office",
+};
