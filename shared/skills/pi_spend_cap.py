@@ -292,10 +292,19 @@ def _wake_rank(session):
 def _stage_room(config, budget, spent, now):
     """What the line leaves for sessions that start now: the pace allowance, less one margin, less what was spent and what the stages
     of the last two minutes are still expected to spend. Infinite without a budget that has started: there is no line."""
-    if budget is None or budget.get("starts") is None:
+    if budget is None:
         return float("inf")
     used = spent.get("budget_cost") or 0.0
-    before = min(spent.get("before_start") or 0.0, used)
+    if budget.get("starts") is None:
+        # a budget of a duration that has not started (the unblock after a new one): the period starts with the first work, which is
+        # the one these sessions are about to do. The line at that first instant is the lead, not «no line» (retest 19/11: eight
+        # sessions started together on a budget of 0.91 $ and the pause came 48 s later)
+        if not budget.get("duration"):
+            return float("inf")
+        budget = dict(budget, starts=now, ends=now + budget["duration"])
+        before = used
+    else:
+        before = min(spent.get("before_start") or 0.0, used)
     period = dict(budget, usd=budget["usd"] - before)
     if period["usd"] <= 0:
         return float("inf")
@@ -308,7 +317,7 @@ class Stage:
     """The room of one look: a session is woken when its estimated reload fits, in the order given; the others wait."""
 
     def __init__(self, room, costs):
-        self.room, self.costs, self.estimate, self.pending = room, costs, 0.0, []
+        self.room, self.costs, self.estimate, self.pending, self.taken = room, costs, 0.0, [], 0
 
     def reserve(self, name):
         cost = self.costs.get(name, 0.0)
@@ -316,10 +325,16 @@ class Stage:
         self.estimate += cost
 
     def take(self, name):
+        """The sessions go in the order given and nobody overtakes: one whose reload does not fit holds the ones behind it (the Scouts
+        have the dearest reload, and the cheaper sessions behind them were taking the room, retest 19/11). The first of a stage goes
+        alone even when its reload is more than the room, as long as there is room at all: the hard stop of the brake is behind it,
+        and otherwise the first in the order would never start."""
         cost = self.costs.get(name, RESTART_COST_PER_SESSION)
-        if cost <= self.room + 1e-9:
+        first = self.taken == 0 and not self.pending
+        if not self.pending and (cost <= self.room + 1e-9 or (first and self.room > 1e-9)):
             self.room -= cost
             self.estimate += cost
+            self.taken += 1
             return True
         self.pending.append(name)
         return False
@@ -686,7 +701,7 @@ def _held_by_the_budget(flag, budget):
             and record.get("budget_usd") == budget["usd"])
 
 
-def _wake_the_team(api, sessions, why, seen=(), stage=None):
+def _wake_the_team(api, sessions, why, seen=(), stage=None, queue_at=None):
     """[RIPRENDI] to every session the pause stopped, the moment the pause is lifted: they were ESC'd, and left to wait for the
     Sentinella's next cycle they stayed silent for a quarter of an hour (a VPS round: «allows work again» 18:31, the Scouts back at
     18:46). The Captain and the Sentinella have their own notice; a team the person stopped, a standby, and an agent the person
@@ -724,6 +739,7 @@ def _wake_the_team(api, sessions, why, seen=(), stage=None):
         order = known + list(dict.fromkeys(extra))
         if stage is not None:
             order = sorted(order, key=_wake_rank)   # the Scouts first: the ones the line holds are the last of the list
+        chosen = []
         for session in order:
             if session in (api.CAPITANO_SESSION, api.SENTINELLA_SESSION) or session in alone or session in NEVER_WAKE:
                 continue
@@ -737,6 +753,15 @@ def _wake_the_team(api, sessions, why, seen=(), stage=None):
                     continue
                 if stage is not None and not stage.take(session):
                     continue   # the line does not hold its reload yet: it waits in the queue and the next look wakes it
+                chosen.append(session)
+            except Exception as error:  # noqa: BLE001
+                print("[bridge V6] WARN pi spend cap wake of %s: %s" % (session, error))
+        if stage is not None and queue_at is not None:
+            # the queue is written BEFORE the first send: the gate of the session holds every message for a name in it, and the
+            # [RIPRENDI] of the stage must be the one that gets through (the names it wakes are already out)
+            set_pending(home, stage.pending, queue_at)
+        for session in chosen:
+            try:
                 if api.jht_tmux_send(session, text if session in known else newcomer_text):
                     woken.append(session)
             except Exception as error:  # noqa: BLE001
@@ -815,7 +840,7 @@ def _resume(api, run, day, notify_user, ctx=None):
             if fixed in costs:
                 stage.reserve(fixed)
     woken = _wake_the_team(api, flag.get("sessions"), "the budget allows work again" if was in ("budget", "period", "pace") else "spending is back under the ceiling",
-                        seen=list((flag.get("pane_signatures") or {}).keys()), stage=stage)
+                        seen=list((flag.get("pane_signatures") or {}).keys()), stage=stage, queue_at=moment)
     if stage is not None:
         note_wake(home, moment, stage.estimate)
         set_pending(home, stage.pending, moment)
@@ -858,19 +883,19 @@ def _wake_pending(api, run, ctx):
             set_pending(home, [], ctx["now"])
             return []
         stage = Stage(_stage_room(ctx["config"], ctx["budget"], ctx["spent"], ctx["now"]), session_costs(home, ctx["now"], alive))
+        chosen = [x for x in sorted(alive, key=_wake_rank) if stage.take(x)]
+        set_pending(home, stage.pending, ctx["now"])   # before the sends: the names it wakes are out of the queue the gate reads
         woken = []
-        for session in sorted(alive, key=_wake_rank):
-            if stage.take(session):
-                try:
-                    if api.jht_tmux_send(session, PENDING_TEXT):
-                        woken.append(session)
-                except Exception as error:  # noqa: BLE001
-                    print("[bridge V6] WARN pi spend cap wake of %s: %s" % (session, error))
+        for session in chosen:
+            try:
+                if api.jht_tmux_send(session, PENDING_TEXT):
+                    woken.append(session)
+            except Exception as error:  # noqa: BLE001
+                print("[bridge V6] WARN pi spend cap wake of %s: %s" % (session, error))
         if woken:
             note_wake(home, ctx["now"], stage.estimate)
             print("[bridge V6] %s PI-SPEND-CEILING stage: [RIPRENDI] to %s, waiting for the pace: %s"
                   % (run.now_h, ", ".join(woken), ", ".join(stage.pending) or "none"))
-        set_pending(home, stage.pending, ctx["now"])
         return woken
     except Exception as error:  # noqa: BLE001 - a stage that fails must not stop the tick
         print("[bridge V6] WARN pi spend cap stage: %s" % error)

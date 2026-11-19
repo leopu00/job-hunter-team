@@ -1424,3 +1424,59 @@ def test_reserve_a_lift_needs_room_for_the_first_stage_not_for_the_whole_team(tm
 def test_the_queue_of_the_pace_keeps_only_names_of_sessions_that_a_resume_wakes(tmp_path):
     cap.set_pending(tmp_path, ["SCOUT-1", "ASSISTENTE", "MENTOR", "DOCTOR-WATCHDOG", "CAPITANO", "../x", "scout-2", "SCORER-2"], NOON)
     assert cap.pending_wakes(tmp_path) == ["SCOUT-1", "SCORER-2"]
+
+
+def test_the_first_instant_of_a_new_budget_has_a_line_and_not_an_infinite_room():
+    """Retest 19/11: after the unblock the period had not started, the room was infinite, eight sessions started together on 0.91 $ and
+    the pause came 48 s later. The line at the first instant is the lead of the pace."""
+    config = {"team": {"budget": {"usd": 0.91, "duration_minutes": 120, "saved_at": iso(NOON), "set_by": "setup"}}}
+    read = cap.team_budget.read(config)
+    assert read["starts"] is None and read["duration"] == 7200.0
+    room = cap._stage_room(config, read, {"budget_cost": 0.0, "before_start": 0.0}, NOON + 60)
+    assert 0 < room < 0.91, room
+    assert room < cap.team_budget.allowed(config, dict(read, starts=NOON + 60, ends=NOON + 60 + 7200.0), NOON + 60) + 1e-9
+    # what was spent before counts against the same line
+    assert cap._stage_room(config, read, {"budget_cost": 0.5, "before_start": 0.0}, NOON + 60) < room
+
+
+def test_the_scout_goes_first_even_when_its_reload_does_not_fit_and_nobody_overtakes_it():
+    """Retest 19/11: the Scouts, with the dearest reload, were skipped and a cheaper Scorer took the room; they stayed in the queue for
+    sixteen minutes."""
+    costs = {"SCOUT-1": 0.40, "SCORER-1": 0.10, "ANALISTA-3": 0.10}
+    stage = cap.Stage(0.25, costs)
+    order = sorted(costs, key=cap._wake_rank)
+    assert order[0] == "SCOUT-1"
+    taken = [x for x in order if stage.take(x)]
+    assert taken == ["SCOUT-1"], "the Scout alone, and the cheaper ones wait behind it"
+    assert stage.pending == ["SCORER-1", "ANALISTA-3"]
+    # no room at all: nobody, not even the first
+    stage = cap.Stage(0.0, costs)
+    assert [x for x in order if stage.take(x)] == []
+    # when they all fit, they all go
+    stage = cap.Stage(1.0, costs)
+    assert [x for x in order if stage.take(x)] == order
+
+
+def test_reserve_the_queue_is_written_before_the_first_send_and_the_name_woken_is_already_out_of_it(tmp_path):
+    """P2-1: the gate of a session holds every message for a name in the queue, so the [RIPRENDI] of its stage must find it out, and the ones
+    still waiting must already be in: there is no moment of the stage in which a session that waits can be reached."""
+    bridge = _unblocked_team(tmp_path)
+    seen = []
+    plain = bridge.api.jht_tmux_send
+
+    def watch(session, text):
+        if text.startswith("[RIPRENDI]"):
+            seen.append((session, list(cap.pending_wakes(tmp_path))))
+        return plain(session, text)
+
+    bridge.api.jht_tmux_send = watch
+    at = NOON + 400
+    _resume_now(bridge, tmp_path, at)
+    assert seen and all(session not in waiting for session, waiting in seen), "the name that is woken is out of the queue"
+    final = cap.pending_wakes(tmp_path)
+    assert final and all(waiting == final for _, waiting in seen), "the ones that wait were in it before the first send"
+    # the same at a later look
+    seen.clear()
+    bridge.clock["now"] = at + 3 * HOUR
+    bridge.tick(state={})
+    assert all(session not in waiting for session, waiting in seen)
