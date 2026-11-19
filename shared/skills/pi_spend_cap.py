@@ -301,10 +301,10 @@ LOOK_AFTER_RESUME_SEC = 15
 WORK_MULTIPLE = 3.0     # a session is woken, and the pause lifted, when the room covers its reload AND as much work again twice over: the team works some minutes before the next pause (retest 8d5f09a2b: Captain + Scout, 0.30 $ of reload, ate the whole room and the team stopped 33 s after every resume)
 RELOAD_GAP_SEC = 300    # a session silent for this long has lost its cache: its next turn is a reload
 MIN_RELOAD_COST = 0.01
-# what the first turn of a session costs after a stop, by role, from the retest data (Scout ~0.11 $, Captain ~0.19 $, Scorer 0.197 $ on Sonnet):
+# what the first turn of a session costs after a stop, by role, from the retest data (Scout 0.16-0.24 $, Captain ~0.17-0.19 $, Scorer 0.15-0.16 $, retest 22b3c6eab):
 # the least a session is expected to cost, whatever its history says (a turn whose cache was still warm measured 0.01 $ and the room of the
 # stage was too little) and what a session with no history costs
-ROLE_RELOAD_COST = {"SCOUT": 0.11, "CAPITANO": 0.19, "SCORER": 0.20}
+ROLE_RELOAD_COST = {"SCOUT": 0.22, "CAPITANO": 0.19, "SCORER": 0.16}
 ALWAYS_WOKEN = ("CAPITANO", "SENTINELLA")   # told by their own notice at a resume: their reload is reserved, they are not staged
 
 
@@ -483,6 +483,8 @@ def _budget_verdict(config, budget, spent, now, held_by_pace=False, restart_esti
         return stop if over else None  # a budget of a duration that has not started: no period and no pace yet, only the dollars
     if now + CHECK_EVERY_SEC > budget["ends"]:  # the end falls before the next look: now, not a look late
         return dict(common, why="period", ceiling=budget["usd"], resumes=None)
+    if not budget.get("pace"):
+        return stop if over else None   # the pace is the person's to ask for: off, the budget and the end of the period are all that stop the team
     # The pace is the period's: what the onboarding spent before the first worker counts against the budget (above), not
     # against the pace, which spreads what was LEFT at the start over the period (giro Mac 21: 2 $ for a day on Claude, 1.71 $
     # of onboarding, and the pace paused the team the minute the Scouts started).
@@ -496,9 +498,13 @@ def _budget_verdict(config, budget, spent, now, held_by_pace=False, restart_esti
     # the multiple (never below the reload and as much work again) and, at the end, asks only for what is left: the hour told is a true
     # one, and the budget is not left locked with a message that says «until the end of the period»
     left = period["usd"] - (used - before) - (spent.get("reserve_open") or 0.0) - (team_budget.margin(period["usd"]) if PACE_SLACK else 0.0)
-    multiple = WORK_MULTIPLE if left >= restart_estimate * WORK_MULTIPLE else (2.0 if left >= restart_estimate * 2.0 else 1.0)
+    # the lower multiples only for a period that could never give 3 times the reload (a small budget, the end of the period): in the middle
+    # of a period that could, the team waits for the room (retest 22b3c6eab: lifted at 2 times, it worked 59 s)
+    can_ever = period["usd"] - (team_budget.margin(period["usd"]) if PACE_SLACK else 0.0) >= restart_estimate * WORK_MULTIPLE
+    multiple = WORK_MULTIPLE if left >= restart_estimate * WORK_MULTIPLE else (
+        WORK_MULTIPLE if can_ever else (2.0 if left >= restart_estimate * 2.0 else 1.0))
     room = max(RESTART_RESERVE_SHARE * period["usd"], restart_estimate * multiple)
-    if restart_estimate > 0 and left >= restart_estimate * 2.0:
+    if restart_estimate > 0 and left >= restart_estimate * 2.0 and not can_ever:
         room = min(room, left - 1e-6)
     reserve = room if held_by_pace else 0.0
     # the calls in flight when the brake looks finish and are paid (the pace let 0.16 $ through, giro Mac 12b): one margin before the line
@@ -1043,7 +1049,7 @@ def stage_fit(home, now, sessions):
         budget = team_budget.read(config, home) if isinstance(config, dict) else None
     except Exception:  # noqa: BLE001
         return {"taken": [], "waiting": names, "estimate": 0.0, "costs": {}}
-    if budget is None:
+    if budget is None or not budget.get("pace"):
         return None
     try:
         spent = spend(home, now, budget["counts_from"], budget["starts"])

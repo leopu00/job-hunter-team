@@ -5,6 +5,7 @@
  * Il wizard e' sugar sui flag — stessa logica, due interfacce.
  */
 import pc from 'picocolors';
+import { Option } from 'commander';
 import { createClackPrompter } from '../../wizard/clack-prompter.js';
 import { WizardCancelledError } from '../../wizard/prompts.js';
 import { runSetupWizard, setupExitCode } from '../../wizard/setup.js';
@@ -49,6 +50,7 @@ export function registerSetupCommand(program) {
     .option('--skip-health', t('wizard.cli.skip_health'))
     .option('--budget-usd <dollars>', t('wizard.cli.budget_usd'))
     .option('--budget-minutes <n>', t('wizard.cli.budget_minutes'))
+    .addOption(new Option('--budget-pace', t('wizard.cli.budget_pace')).hideHelp())
     .option('--budget-days <n>', t('wizard.cli.budget_days'))
     .option('--budget-until <hour>', t('wizard.cli.budget_until'))
     .option('--no-budget', t('wizard.cli.no_budget'))

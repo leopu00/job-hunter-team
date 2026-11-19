@@ -142,13 +142,21 @@ export function budgetSummary(t, tf, { budget, workingHours, kind }) {
 }
 
 /**
- * What the one line above does not say: with a period over an hour the brake also spaces the spending (a first burst of about a
- * quarter of what the onboarding left, the rest over the time), so the team can pause before the whole amount is spent.
- * Null when there is no budget or the period is an hour or less (the whole amount is allowed at once then).
+ * What the one line above does not say. With the pace ASKED FOR (`budget.pace`) and a period over an hour the brake spaces the
+ * spending (a first burst of about a quarter of what the onboarding left, the rest over the time), so the team can pause before the
+ * whole amount is spent. Without it (the default) the team works until the budget of the period is spent and stops until the period
+ * ends: the note says so. Null when there is no budget or the period is an hour or less (the whole amount is allowed at once then).
  */
 export function budgetPaceNote(t, { budget }) {
   if (!budget || budgetMinutes(budget) <= 60) return null;
-  return t('wizard.budget.pace_note');
+  return t(budget.pace === true ? 'wizard.budget.pace_note' : 'wizard.budget.pace_off_note');
+}
+
+/** The question of the pace, asked after the budget when its period is over an hour: yes = team.budget.pace true. Default no. */
+export async function askPace(prompter, { t, budget }) {
+  if (!budget || budgetMinutes(budget) <= 60) return budget;
+  const on = await prompter.confirm({ message: t('wizard.budget.pace_ask'), initialValue: false });
+  return on === true ? { ...budget, pace: true } : budget;
 }
 
 /**
@@ -229,9 +237,11 @@ export function budgetFromOptions(opts, { now = new Date(), timeZone = localTime
   const n = Number(given[0] === 'budgetUntil' ? String(opts.budgetUntil).trim().replace(/^(\d{1,2}):00$/, '$1') : opts[given[0]]);
   if (given[0] === 'budgetUntil') {
     if (!Number.isInteger(n) || n < 0 || n > 23) return { error: '--budget-until is a whole hour of the day, 0 to 23 (8 or 08:00).' };
-    return { kind: 'until', budget: budgetOf(usd, nextLocalHour(now, n, timeZone), now, timeZone) };
+    const fixed = budgetOf(usd, nextLocalHour(now, n, timeZone), now, timeZone);
+    return { kind: 'until', budget: opts.budgetPace === true ? { ...fixed, pace: true } : fixed };
   }
   if (!Number.isFinite(n) || n <= 0) return { error: `--${given[0] === 'budgetDays' ? 'budget-days' : 'budget-minutes'} must be a positive number.` };
   const minutes = given[0] === 'budgetDays' ? n * 24 * 60 : n;
-  return { kind: given[0] === 'budgetDays' ? 'days' : 'trial', budget: durationBudget(usd, minutes, now, timeZone) };
+  const duration = durationBudget(usd, minutes, now, timeZone);
+  return { kind: given[0] === 'budgetDays' ? 'days' : 'trial', budget: opts.budgetPace === true ? { ...duration, pace: true } : duration };
 }

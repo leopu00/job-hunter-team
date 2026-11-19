@@ -126,10 +126,33 @@ test('the budget is saved with the moment of the confirmation, not the one of th
   assert.equal(stampedAt(null, confirmed), null);
 });
 
-test('a budget of more than an hour says it is spaced out; a trial of an hour or less does not', () => {
-  const t = (key) => (key === 'wizard.budget.pace_note' ? 'PACE' : key);
-  assert.equal(budgetPaceNote(t, { budget: { usd: 5, duration_minutes: 30 } }), null);
+test('with the pace asked for a budget of more than an hour says it is spaced out; off it says it works until the budget is spent', () => {
+  const t = (key) => ({ 'wizard.budget.pace_note': 'PACE', 'wizard.budget.pace_off_note': 'UNTIL SPENT' }[key] ?? key);
+  assert.equal(budgetPaceNote(t, { budget: { usd: 5, duration_minutes: 30, pace: true } }), null);
   assert.equal(budgetPaceNote(t, { budget: { usd: 5, duration_minutes: 60 } }), null);
-  assert.equal(budgetPaceNote(t, { budget: { usd: 3, duration_minutes: 24 * 60 } }), 'PACE');
+  assert.equal(budgetPaceNote(t, { budget: { usd: 3, duration_minutes: 24 * 60, pace: true } }), 'PACE');
+  assert.equal(budgetPaceNote(t, { budget: { usd: 3, duration_minutes: 24 * 60 } }), 'UNTIL SPENT', 'the default is off');
   assert.equal(budgetPaceNote(t, { budget: null }), null, 'no limit, no pace');
+});
+
+test('the pace is asked only for a period over an hour, and only a yes turns it on', async () => {
+  const { askPace } = await import('../wizard/setup-budget.js');
+  const t = (key) => key;
+  const ask = (answer) => { const seen = []; return { seen, confirm: async (o) => { seen.push(o); return answer; } }; };
+  const day = { usd: 3, duration_minutes: 24 * 60 };
+  const no = ask(false);
+  assert.deepEqual(await askPace(no, { t, budget: day }), day);
+  assert.equal(no.seen[0].initialValue, false, 'the default is no');
+  assert.deepEqual(await askPace(ask(true), { t, budget: day }), { ...day, pace: true });
+  const trial = ask(true);
+  assert.deepEqual(await askPace(trial, { t, budget: { usd: 5, duration_minutes: 30 } }), { usd: 5, duration_minutes: 30 });
+  assert.equal(trial.seen.length, 0, 'a trial of 30 minutes is not asked');
+  assert.equal(await askPace(trial, { t, budget: null }), null);
+});
+
+test('--budget-pace turns the pace on in the budget of the options, and without it the budget has no pace', async () => {
+  const { budgetFromOptions } = await import('../wizard/setup-budget.js');
+  assert.equal(budgetFromOptions({ budgetUsd: '3', budgetDays: '1' }, { now: NOW, timeZone: 'UTC' }).budget.pace, undefined);
+  assert.equal(budgetFromOptions({ budgetUsd: '3', budgetDays: '1', budgetPace: true }, { now: NOW, timeZone: 'UTC' }).budget.pace, true);
+  assert.equal(budgetFromOptions({ budgetUsd: '5', budgetUntil: '8', budgetPace: true }, { now: NOW, timeZone: 'UTC' }).budget.pace, true);
 });

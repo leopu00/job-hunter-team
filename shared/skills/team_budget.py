@@ -99,7 +99,7 @@ def recorded_start(home, saved_at):
 def read(config, home=None):
     """The budget of `team.budget`, or None when there is none or it is not readable:
 
-    {"usd", "counts_from", "starts", "ends", "duration", "saved_at"} in epoch seconds. `counts_from` is where the dollars
+    {"usd", "counts_from", "starts", "ends", "duration", "saved_at"} in epoch seconds, and `pace`: True only when the person asked for the pace (`team.budget.pace` true: the brake spreads the budget over the period and pauses a team that runs ahead of it; off, only the budget and the end of the period stop the team). `counts_from` is where the dollars
     count from; `starts`/`ends` the period, None while a budget of a duration has not started (`duration` is its length
     in seconds then, None for a budget with dates). The start of a duration is read from `home` (JHT_HOME)."""
     team = config.get("team") if isinstance(config, dict) else None
@@ -117,11 +117,12 @@ def read(config, home=None):
         started = recorded_start(home, raw.get("saved_at"))
         starts, ends = started if started else (None, None)
         return {"usd": usd, "counts_from": saved, "starts": starts, "ends": ends, "duration": minutes * 60.0,
-                "saved_at": raw.get("saved_at")}
+                "saved_at": raw.get("saved_at"), "pace": raw.get("pace") is True}
     starts, ends = _moment(raw.get("starts_at")), _moment(raw.get("ends_at"))
     if starts is None or ends is None or ends <= starts:
         return None
-    return {"usd": usd, "counts_from": starts, "starts": starts, "ends": ends, "duration": None, "saved_at": None}
+    return {"usd": usd, "counts_from": starts, "starts": starts, "ends": ends, "duration": None, "saved_at": None,
+            "pace": raw.get("pace") is True}
 
 
 def record_start(home, budget, starts, spent_before=0.0):
