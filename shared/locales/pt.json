@@ -22,7 +22,7 @@
   "wrapper.doctor.host_title": "Job Hunter Team: a equipa está desligada (o seu contentor não está a correr). Verificações feitas a partir deste computador:",
   "wrapper.down.done": "Job Hunter Team parado.",
   "wrapper.down.still_running": "A equipa não parou: um contentor do projeto estava de novo a correr após duas tentativas (no seu primeiro minuto pode reiniciar sozinho). Corre 'jht down' mais uma vez; se continuar, 'jht doctor'.",
-  "wrapper.download.no_desktop_app": "A app de ambiente de trabalho não está na 0.4.0, por isso não há nada para transferir: o JHT usa-se no terminal, com jht setup e jht up.",
+  "wrapper.download.no_desktop_app": "A app de ambiente de trabalho não está na 0.4.0, por isso não há nada para descarregar: o JHT usa-se no terminal, com jht setup e jht up.",
   "wrapper.host_setup.skip_done": "host.env está numa pasta do contentor (uid 1001): a verificação prévia do anfitrião já está feita, vou saltá-la.",
   "wrapper.host_setup.skip_unknown": "host.env está numa pasta do contentor (uid 1001) e este utilizador não pode escrever nela: vou saltar a verificação prévia do anfitrião, mas host.env não pode ser lido ou não diz o tipo de anfitrião (local ou VPS): o tipo fica 'unknown'.",
   "wrapper.keyfile.both": "usa --api-key-file ou --api-key-stdin, não os dois",

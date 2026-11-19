@@ -3218,7 +3218,7 @@ jht_text_pt() {
     doctor.host_title) printf '%s' 'Job Hunter Team: a equipa está desligada (o seu contentor não está a correr). Verificações feitas a partir deste computador:' ;;
     down.done) printf '%s' 'Job Hunter Team parado.' ;;
     down.still_running) printf '%s' 'A equipa não parou: um contentor do projeto estava de novo a correr após duas tentativas (no seu primeiro minuto pode reiniciar sozinho). Corre '\''jht down'\'' mais uma vez; se continuar, '\''jht doctor'\''.' ;;
-    download.no_desktop_app) printf '%s' 'A app de ambiente de trabalho não está na 0.4.0, por isso não há nada para transferir: o JHT usa-se no terminal, com jht setup e jht up.' ;;
+    download.no_desktop_app) printf '%s' 'A app de ambiente de trabalho não está na 0.4.0, por isso não há nada para descarregar: o JHT usa-se no terminal, com jht setup e jht up.' ;;
     help.integration) printf '%s' 'Uso: jht integration <command>
 
   list [--json]                   as integrações e o seu estado
