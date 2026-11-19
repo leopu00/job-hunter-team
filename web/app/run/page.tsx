@@ -407,7 +407,7 @@ function SetupContent() {
               {p.setupNote}
             </p>
             <Link
-              href="/setup-guide"
+              href="/docs/guides/getting-started"
               className="mt-3 inline-flex min-h-11 items-center text-[12px] font-semibold text-[var(--color-green)] no-underline"
             >
               {p.setupGuideLink}

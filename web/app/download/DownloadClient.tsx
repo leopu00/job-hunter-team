@@ -66,7 +66,7 @@ const ASSISTANT_PROMPT: Record<Lang, string> = {
 
 Repository: https://github.com/leopu00/job-hunter-team
 Sito: https://jobhunterteam.ai
-Guida all'installazione: https://jobhunterteam.ai/setup-guide
+Guida all'installazione: https://jobhunterteam.ai/docs/guides/getting-started
 
 Leggi prima il repository e la guida, poi guidami nell'installazione e nell'avvio su questo computer, occupandoti tu dei passaggi tecnici.
 
@@ -77,7 +77,7 @@ Due cose da verificare con me lungo la strada: che sul Mac Homebrew sia già ins
 
 Repository: https://github.com/leopu00/job-hunter-team
 Website: https://jobhunterteam.ai
-Setup guide: https://jobhunterteam.ai/setup-guide
+Setup guide: https://jobhunterteam.ai/docs/guides/getting-started
 
 Read the repository and the setup guide first, then walk me through installing and starting it on this computer, handling the technical steps yourself.
 
@@ -88,7 +88,7 @@ Two things you will need to check with me along the way: that on a Mac Homebrew 
 
 Repositorio: https://github.com/leopu00/job-hunter-team
 Sitio web: https://jobhunterteam.ai
-Guía de instalación: https://jobhunterteam.ai/setup-guide
+Guía de instalación: https://jobhunterteam.ai/docs/guides/getting-started
 
 Lee primero el repositorio y la guía, y después acompáñame en la instalación y el arranque en este ordenador, ocupándote tú de los pasos técnicos.
 
@@ -99,7 +99,7 @@ Dos cosas que tendrás que comprobar conmigo por el camino: que en Mac Homebrew 
 
 Dépôt : https://github.com/leopu00/job-hunter-team
 Site : https://jobhunterteam.ai
-Guide d'installation : https://jobhunterteam.ai/setup-guide
+Guide d'installation : https://jobhunterteam.ai/docs/guides/getting-started
 
 Lis d'abord le dépôt et le guide, puis accompagne-moi pour l'installer et le démarrer sur cet ordinateur, en te chargeant toi-même des étapes techniques.
 
@@ -110,7 +110,7 @@ Deux choses à vérifier avec moi en chemin : que sur Mac Homebrew soit déjà i
 
 Repository: https://github.com/leopu00/job-hunter-team
 Website: https://jobhunterteam.ai
-Einrichtungsanleitung: https://jobhunterteam.ai/setup-guide
+Einrichtungsanleitung: https://jobhunterteam.ai/docs/guides/getting-started
 
 Lies zuerst das Repository und die Anleitung, und führe mich dann durch Installation und Start auf diesem Rechner, wobei du die technischen Schritte selbst übernimmst.
 
@@ -121,7 +121,7 @@ Zwei Dinge, die du unterwegs mit mir klären musst: dass auf einem Mac Homebrew 
 
 Repositório: https://github.com/leopu00/job-hunter-team
 Site: https://jobhunterteam.ai
-Guia de instalação: https://jobhunterteam.ai/setup-guide
+Guia de instalação: https://jobhunterteam.ai/docs/guides/getting-started
 
 Lê primeiro o repositório e o guia, e depois acompanha-me na instalação e no arranque neste computador, tratando tu dos passos técnicos.
 
@@ -132,7 +132,7 @@ Duas coisas que terás de verificar comigo pelo caminho: que no Mac o Homebrew e
 
 Repository: https://github.com/leopu00/job-hunter-team
 Weboldal: https://jobhunterteam.ai
-Telepítési útmutató: https://jobhunterteam.ai/setup-guide
+Telepítési útmutató: https://jobhunterteam.ai/docs/guides/getting-started
 
 Először olvasd el a repositoryt és az útmutatót, majd vezess végig a telepítésen és az indításon ezen a gépen, a technikai lépéseket te intézve.
 
@@ -397,7 +397,7 @@ function DownloadContent() {
               {t("dl_help_text")}{" "}
             </span>
             <Link
-              href="/setup-guide"
+              href="/docs/guides/getting-started"
               className="text-[12px] font-semibold text-[var(--color-green)] no-underline"
             >
               {t("dl_help_link")} →

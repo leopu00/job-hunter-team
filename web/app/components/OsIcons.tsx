@@ -4,7 +4,8 @@
 // (selezionata verde, non selezionata smorzata) senza una seconda regola di
 // colore. Sono `aria-hidden`: il nome del sistema è già scritto accanto.
 
-import type { OsId } from "./guide-types";
+/** The three systems the site names. */
+export type OsId = "macos" | "windows" | "linux";
 
 const BASE = {
   width: 18,
