@@ -1392,6 +1392,8 @@
   "pi_cap.halt_budget": "⛔ L'équipe est en pause : elle a dépensé %s sur ton budget de %s. Rien n'est perdu. Pour continuer, choisis un nouveau budget avec jht setup.",
   "pi_cap.halt_period": "⛔ L'équipe est en pause : la période que tu as choisie s'est terminée à %s (%s dépensés sur %s). Rien n'est perdu. Pour continuer, choisis une nouvelle période avec jht setup.",
   "pi_cap.halt_pace": "⏸️ L'équipe fait une pause : elle a dépensé %s sur ton budget de %s, plus vite que tes horaires ne le permettent. Rien n'est perdu. Elle reprend toute seule à %s.",
+  "pi_cap.halt_pace_stays": "⏸️ L'équipe s'arrête : elle a dépensé %s du budget de %s, plus vite que tes horaires ne le permettent, et ce qui reste du budget ne suffit pas à la relancer sans le dépasser. Rien n'est perdu. Elle reste en pause jusqu'à la fin de la période (à %s) ou jusqu'à ce que tu augmentes le budget avec jht setup.",
+  "pi_cap.tomorrow": "%s demain",
   "pi_cap.resume_budget": "▶️ Ton budget permet de nouveau de travailler : l'équipe reprend.",
   "service_budget.skipped": "ℹ️ %s saute son tour cette fois : les agents qui s'occupent de l'équipe (Dottore, Mantenitore, Mentor) ont déjà dépensé %s de ton budget de %s, la part de %s qu'ils peuvent prendre, et le reste sert à chercher et à évaluer des postes. Rien n'est perdu : ils reviennent avec un nouveau budget.",
   "integration.label.not_installed": "non installé",

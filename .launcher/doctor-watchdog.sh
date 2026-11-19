@@ -221,6 +221,18 @@ WEEKLY_HALT_FLAG="$JHT_HOME/.weekly-halt.flag"
 DAILY_HALT_FLAGS=("$JHT_HOME/logs/daily-halt.flag" "$JHT_HOME/.daily-halt.flag")
 daily_halt_active() { local f; for f in "${DAILY_HALT_FLAGS[@]}"; do [ -e "$f" ] && return 0; done; return 1; }
 # `jht setup` open (see agent-watchdog.sh): no Dottore/Mantenitore on the configuration of before while the service is being chosen
+# The Dottore and the Mantenitore are two of the sessions the pace wakes by stages after a pause: started before their stage they spend
+# while the team should still wait (retest 19/11: the Dottore 18 s early, and it told the Captain to resume the loop).
+PACE_PY="$(dirname "$SCHED")/pace_waits.py"
+pace_waits_roles() {
+  local state=""
+  if jht_doctor_bounded "$HELPER_TIMEOUT_SEC" "$RUN_PREFIX.pace" \
+       env JHT_HOME="$JHT_HOME" python3 "$PACE_PY" DOTTORE MANTENITORE; then
+    state="$(cat "$RUN_PREFIX.pace" 2>/dev/null || true)"
+  fi
+  [ "$state" = yes ]   # what cannot be read is «no»: the start of always
+}
+
 SETUP_OPEN_FLAG="$JHT_HOME/.setup-open.flag"
 setup_open() { [ -f "$SETUP_OPEN_FLAG" ] && [ -z "$(find "$SETUP_OPEN_FLAG" -mmin +120 2>/dev/null)" ]; }
 # Standby a spesa zero ([TEAM-STANDBY-ZERO-SPEND]): un Dottore/Mantenitore
@@ -368,7 +380,7 @@ while true; do
 
   # Team-halted gate: se l'utente ha cliccato Stop, weekly-halt è attivo o il
   # team è in standby a spesa zero, NON spawnare dottore/mantenitore.
-  if [ -e "$TEAM_HALTED_FLAG" ] || [ -e "$WEEKLY_HALT_FLAG" ] || daily_halt_active || setup_open || standby_active; then
+  if [ -e "$TEAM_HALTED_FLAG" ] || [ -e "$WEEKLY_HALT_FLAG" ] || pace_waits_roles || daily_halt_active || setup_open || standby_active; then
     if [ $((halt_log_tick % 8)) -eq 0 ]; then
       if setup_open; then
         log "setup open — Dottore/Mantenitore spawn disabled until the setup ends"
@@ -376,6 +388,8 @@ while true; do
         log "standby ACTIVE — Dottore/Mantenitore spawn disabled"
       elif daily_halt_active; then
         log "the team is paused by the spending brake or the quota — Dottore/Mantenitore spawn disabled until it lifts"
+      elif pace_waits_roles; then
+        log "the pace has not woken the Dottore or the Mantenitore yet — spawn waits for its stage"
       else
         log "halt flag present — Dottore spawn disabled"
       fi

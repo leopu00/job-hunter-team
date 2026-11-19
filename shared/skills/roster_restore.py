@@ -180,7 +180,23 @@ def plan(now: float | None = None) -> dict:
         if taken[role] < len(numbers):
             chosen.append([role, numbers[taken[role]]])
             taken[role] += 1
-    return {"start": chosen, "why_not": "" if chosen else "the machine carries no worker more"}
+    out = {"start": chosen, "why_not": "" if chosen else "the machine carries no worker more"}
+    # the pace's line: the workers come back by stages like after a lift of the pace (the Scouts first; a worker whose reload and work do not
+    # fit waits: the watchdog roster brings it back later). Seven workers started together spent 0.06 $ over the line (retest 8d5f09a2b).
+    pace = _load("pi_spend_cap")
+    fit = None
+    if chosen and pace is not None:
+        try:
+            fit = pace.stage_fit(_home(), now, ["%s-%s" % (role.upper(), number) for role, number in chosen])
+        except Exception:  # noqa: BLE001
+            fit = {"taken": [], "waiting": ["?"], "estimate": 0.0, "costs": {}}
+    if fit is not None:
+        allowed = set(fit["taken"])
+        out["start"] = [[role, number] for role, number in chosen if "%s-%s" % (role.upper(), number) in allowed]
+        out["pace"] = {"estimate": fit["estimate"], "costs": fit["costs"], "waiting": fit["waiting"]}
+        if not out["start"]:
+            out["why_not"] = "the pace leaves no room to work after a reload: the watchdog brings the workers back as the line rises"
+    return out
 
 
 def _is_worker(session: str) -> bool:
@@ -206,6 +222,12 @@ def start(detach_ok: bool = True) -> dict:
         if not free:
             return {"started": [], "note": "another run is starting workers right now"}
         _write_marker(now)
+        pace = decision.get("pace")
+        if pace and pace.get("costs"):
+            try:   # what the workers started are expected to cost stays under the line for two minutes, like the stages of a lift
+                _load("pi_spend_cap").note_wake(_home(), now, pace["estimate"], pace["costs"])
+            except Exception:  # noqa: BLE001
+                pass
         done = []
         for role, number in decision["start"]:
             env = dict(os.environ, JHT_WORKER_BRIEF=_brief(role, number))

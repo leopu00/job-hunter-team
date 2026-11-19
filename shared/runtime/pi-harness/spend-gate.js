@@ -14,6 +14,12 @@
  * loads this file for every other role on pi (`-e`, .launcher/spawn-harness.sh). Nothing here writes the flag, talks
  * to the network or reads the agent's files: one small file of the team's logs, read as a plain file. A reading that
  * fails is no pause (the brake's ESC still stands behind it), and a handler never throws into pi.
+ *
+ * The same gate holds a session that WAITS FOR ITS STAGE of the pace after a pause (its name in state/pace-wake-queue.json, put there by
+ * the brake and taken out BEFORE the [RIPRENDI] that wakes it): every channel that writes into a session (the watchdogs, the language
+ * line, the notices, the Dottore) reaches it as an input, so one place covers them all. What was held is not lost: it goes to the
+ * session, summarised, inside the message that wakes it. A queue that cannot be read, or that nobody has touched for two hours, holds
+ * nobody: a broken file never stops a team.
  */
 const fs = require("node:fs");
 const path = require("node:path");
@@ -46,6 +52,44 @@ function paused() {
   }
 }
 
+const QUEUE_STALE_MS = 2 * 3600 * 1000;
+const HELD_MAX = 20;
+const HELD_CHARS = 400;
+const held = [];
+
+/** True while this session waits for its stage of the pace: the queue is a plain file of the brake's, read the way the flag is. */
+function queued() {
+  try {
+    const home = process.env.JHT_HOME;
+    const name = agentName().toUpperCase();
+    if (!home || !name) return false;
+    const file = path.join(home, "state", "pace-wake-queue.json");
+    const info = fs.lstatSync(file);
+    if (!info.isFile() || info.size <= 0 || info.size > FLAG_MAX_BYTES) return false;
+    const data = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (!data || typeof data !== "object" || !Array.isArray(data.pending)) return false;
+    const at = Number(data.at);
+    if (!Number.isFinite(at) || Date.now() - at * 1000 > QUEUE_STALE_MS || at * 1000 - Date.now() > QUEUE_STALE_MS) return false;
+    return data.pending.includes(name);
+  } catch (_error) {
+    return false;
+  }
+}
+
+/** What was held while the session waited, in one block for the message that wakes it. */
+function heldSummary() {
+  const seen = new Set();
+  const lines = [];
+  for (const text of held.splice(0)) {
+    const one = text.replace(/\s+/g, " ").trim().slice(0, HELD_CHARS);
+    if (one && !seen.has(one)) {
+      seen.add(one);
+      lines.push("- " + one);
+    }
+  }
+  return lines.length ? "\n\n[HELD WHILE YOU WAITED FOR THE PACE: messages that reached you before your turn, once each]\n" + lines.join("\n") : "";
+}
+
 function logLine(entry) {
   try {
     const home = process.env.JHT_HOME;
@@ -74,11 +118,22 @@ module.exports = function spendGate(pi) {
 
   pi.on("input", (event) => {
     try {
-      if (!paused()) return { action: "continue" };
-      // never the text of the message in the log: only that one was held, and how long it was
       const text = event && typeof event.text === "string" ? event.text : "";
-      logLine({ event: "input_held", length: text.length });
-      return { action: "handled" };
+      if (paused()) {
+        // never the text of the message in the log: only that one was held, and how long it was
+        logLine({ event: "input_held", length: text.length });
+        return { action: "handled" };
+      }
+      if (queued()) {
+        if (held.length < HELD_MAX) held.push(text);
+        logLine({ event: "input_held_for_the_pace", length: text.length });
+        return { action: "handled" };
+      }
+      if (held.length) {
+        logLine({ event: "held_inputs_delivered", count: held.length });
+        return { action: "transform", text: text + heldSummary() };
+      }
+      return { action: "continue" };
     } catch (_error) {
       return { action: "continue" };
     }
@@ -86,7 +141,7 @@ module.exports = function spendGate(pi) {
 
   pi.on("before_provider_request", (_event, ctx) => {
     try {
-      if (paused() && ctx && typeof ctx.abort === "function") {
+      if ((paused() || queued()) && ctx && typeof ctx.abort === "function") {
         logLine({ event: "request_stopped" });
         ctx.abort();
       }

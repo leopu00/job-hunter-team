@@ -1062,7 +1062,19 @@ def _agent_paused(session: str, now=None) -> bool:
     return False
 
 
-def wake_gate(now: float):
+def _waits_for_the_pace(session: str, now: float) -> bool:
+    """La sessione e' in coda per il suo scaglione del ritmo: il freno della spesa la sveglia, nessun altro prima. Mai solleva."""
+    try:
+        here = str(Path(__file__).resolve().parent)
+        if here not in sys.path:
+            sys.path.insert(0, here)
+        import pi_spend_cap
+        return session.upper() in pi_spend_cap.waiting(_home(), now)
+    except Exception:  # noqa: BLE001 - senza la lettura vale la sveglia di sempre
+        return False
+
+
+def wake_gate(now: float, session=None):
     """None se si può svegliare, altrimenti il MOTIVO del blocco.
 
     Nessuna deroga, nemmeno con `.burn-intent.flag` attivo: la deroga
@@ -1077,6 +1089,8 @@ def wake_gate(now: float):
             continue
     if not _within_working_hours(now):
         return "off-hours"
+    if session and _waits_for_the_pace(session, now):
+        return "pace-queue"
     return None
 
 
@@ -1205,7 +1219,7 @@ def _handle_entry(agent, entry, now, sessions) -> bool:
              flag=IN_THROTTLE)
         return True
 
-    gate = "agent-paused" if _agent_paused(session, now) else wake_gate(now)
+    gate = "agent-paused" if _agent_paused(session, now) else wake_gate(now, session)
     if gate:
         emit("gated", agent=agent, ts=now, session=session, gate=gate)
         entry["until"] = int(now + GATE_RETRY_SEC)

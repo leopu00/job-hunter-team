@@ -10,7 +10,8 @@ This is the one way to read it:
 
   1. From the logs the CLI writes (agent_state.py): Codex and Kimi say the window and the tokens of their last call,
      so the percentage is read with NO key sent and nothing on the screen to close.
-  2. Only for Claude, whose logs do not say the window, the panel: `/context`, read, then closed with Escape
+  2. Only for Claude, whose logs do not say the window, and only with `--panel` (a round of the Dottore never passes it: in a session
+     of the harness `/context` is a message, the model answers it and spends the budget while the team should wait), the panel: `/context`, read, then closed with Escape
      UNTIL THE SCREEN SHOWS AN EMPTY COMPOSER AGAIN (three presses at most). If it does not, the answer says
      `closed: false` and the exit code is 4: the Dottore must say so and leave the session to the Capitano, not
      go on as if nothing was open.
@@ -167,12 +168,12 @@ def pct_from_panel(session: str, command: str, render_wait: float = RENDER_WAIT_
             "reason": "read" if pct is not None and closed else (why if not closed else "unparsed")}
 
 
-def read(session: str, provider: str = "", home: Optional[Path] = None) -> dict:
+def read(session: str, provider: str = "", home: Optional[Path] = None, panel: bool = False) -> dict:
     out = {"session": session.strip().lower()}
     pct = pct_from_log(session, home)
     if pct is not None:
         return {**out, "pct": pct, "source": "log", "closed": True, "reason": "read"}
-    command = PANEL_COMMANDS.get(provider.strip().lower())
+    command = PANEL_COMMANDS.get(provider.strip().lower()) if panel else None
     if command is None:
         return {**out, "pct": None, "source": "none", "closed": True, "reason": "no_log_no_key_sent"}
     return {**out, **pct_from_panel(session, command)}
@@ -182,10 +183,13 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("session")
     ap.add_argument("--provider", default="")
+    ap.add_argument("--panel", action="store_true",
+                    help="for Claude, whose logs do not say the window: type /context into the pane. Never in a round of the Dottore: "
+                         "a session that is not a Claude Code CLI takes it as a message and answers it, with money")
     ap.add_argument("--age-h", type=float, default=None,
                     help="the session's age in hours: adds the decision (refresh or skip, and why)")
     args = ap.parse_args(argv)
-    result = read(args.session, args.provider)
+    result = read(args.session, args.provider, panel=args.panel)
     if args.age_h is not None:
         try:
             ttl_h = float(os.environ.get("JHT_AGENT_HARD_CAP_H", DEFAULT_TTL_H))
