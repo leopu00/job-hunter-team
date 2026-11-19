@@ -32,6 +32,13 @@ for (const step of JSON.parse(fs.readFileSync(0, "utf8"))) {
     else { fs.mkdirSync(process.env.JHT_HOME + "/logs", { recursive: true }); fs.writeFileSync(file, step.flag); }
     continue;
   }
+  if (step.queue !== undefined) {
+    const file = process.env.JHT_HOME + "/state/pace-wake-queue.json";
+    fs.mkdirSync(process.env.JHT_HOME + "/state", { recursive: true });
+    if (step.queue === null) { try { fs.unlinkSync(file); } catch (e) {} }
+    else fs.writeFileSync(file, typeof step.queue === "string" ? step.queue : JSON.stringify(step.queue));
+    continue;
+  }
   let aborted = 0;
   const ctx = { abort: () => { aborted += 1; } };
   const out = (handlers[step.event] || []).map((fn) => fn({ text: step.text || "", payload: {} }, ctx));
@@ -99,3 +106,52 @@ def test_a_link_or_a_pipe_in_place_of_the_flag_is_no_pause_and_does_not_hold_the
     os.mkfifo(home / "logs" / "daily-halt.flag")
     results, _ = run(tmp_path, "capitano", [MESSAGE])
     assert results[0]["out"] == {"action": "continue"}
+
+
+def _queue(names, age_s=0):
+    import time
+    return {"queue": {"pending": names, "at": time.time() - age_s}}
+
+
+def test_a_session_in_the_queue_of_the_pace_holds_every_message_and_its_turn_stops(tmp_path):
+    results, home = run(tmp_path, "scorer-1", [_queue(["SCORER-1", "DOTTORE"]), MESSAGE, REQUEST])
+    assert results[0]["out"] == {"action": "handled"} and results[1]["aborted"] == 1
+    assert "input_held_for_the_pace" in (home / "logs" / "pi-spend-gate.log").read_text(encoding="utf-8")
+
+
+def test_what_was_held_for_the_pace_reaches_the_session_in_the_message_that_wakes_it(tmp_path):
+    steps = [_queue(["SCORER-1"]),
+             {"event": "input", "text": "[TEAM-LANGUAGE] answer in Italian"},
+             {"event": "input", "text": "[WAKE] positions waiting"},
+             {"event": "input", "text": "[TEAM-LANGUAGE] answer in Italian"},
+             _queue([]),                                       # its stage: the brake took the name out BEFORE the message
+             {"event": "input", "text": "[RIPRENDI] The pace allows your work again"},
+             {"event": "input", "text": "next"}]
+    results, _ = run(tmp_path, "scorer-1", steps)
+    assert [r["out"]["action"] for r in results[:3]] == ["handled"] * 3
+    woken = results[3]["out"]
+    assert woken["action"] == "transform" and woken["text"].startswith("[RIPRENDI] The pace allows your work again")
+    assert woken["text"].count("[TEAM-LANGUAGE] answer in Italian") == 1, "once each"
+    assert "[WAKE] positions waiting" in woken["text"]
+    assert results[4]["out"] == {"action": "continue"}, "delivered once"
+
+
+def test_a_session_not_in_the_queue_is_not_held(tmp_path):
+    results, _ = run(tmp_path, "scout-1", [_queue(["SCORER-1"]), MESSAGE, REQUEST])
+    assert results[0]["out"] == {"action": "continue"} and results[1]["aborted"] == 0
+
+
+@pytest.mark.parametrize("queue", ["not json", "[]", '{"pending": "SCORER-1", "at": 1}', "", '{"pending": ["SCORER-1"]}'])
+def test_a_queue_that_cannot_be_read_holds_nobody(tmp_path, queue):
+    results, _ = run(tmp_path, "scorer-1", [{"queue": queue}, MESSAGE, REQUEST])
+    assert results[0]["out"] == {"action": "continue"} and results[1]["aborted"] == 0
+
+
+def test_a_queue_nobody_touched_for_two_hours_holds_nobody(tmp_path):
+    results, _ = run(tmp_path, "scorer-1", [_queue(["SCORER-1"], age_s=2 * 3600 + 60), MESSAGE, REQUEST])
+    assert results[0]["out"] == {"action": "continue"} and results[1]["aborted"] == 0
+
+
+def test_the_assistente_is_not_held_by_the_queue_either(tmp_path):
+    results, _ = run(tmp_path, "assistente", [_queue(["ASSISTENTE"]), MESSAGE, REQUEST])
+    assert results[0]["handlers"] == 0 and results[1]["aborted"] == 0, "no handler at all: it is the person's voice"
