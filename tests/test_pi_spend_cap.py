@@ -825,6 +825,25 @@ def test_an_onboarding_that_ate_more_than_half_the_budget_is_said(tmp_path):
     assert len([t for s, t in bridge.sent if "ONBOARDING" in t]) == 1, "once"
 
 
+def test_the_captain_is_told_when_the_person_saves_another_budget_and_not_for_the_first(tmp_path):
+    """Retest 25395266b: the Capitano kept deciding on the 3 USD of the budget before the setup. The first budget it sees is no change;
+    another one saved while it runs is said once, with the new figures."""
+    saved = NOON - 2 * HOUR
+    pi_calls(tmp_path, [(NOON - 900, 0.02, 100)], name="s.jsonl", agent="scout-1")
+    bridge = Bridge(tmp_path, duration_budget(3, 1440, saved))
+    state: dict = {}
+    bridge.tick(state=state)
+    assert not [t for _, t in bridge.sent if "BUDGET CHANGED" in t], "the first one is not a change"
+    bridge.config = duration_budget(2, 4320, NOON - 600)
+    bridge.clock["now"] += 60
+    bridge.tick(state=state)
+    told = [t for s, t in bridge.sent if s == "CAPITANO" and "BUDGET CHANGED" in t]
+    assert len(told) == 1 and "2 USD for 4320 minutes" in told[0] and "3 USD" not in told[0]
+    bridge.clock["now"] += 60
+    bridge.tick(state=state)
+    assert len([t for _, t in bridge.sent if "BUDGET CHANGED" in t]) == 1, "once"
+
+
 def test_a_cheap_onboarding_says_nothing(tmp_path):
     saved = NOON - 2 * HOUR
     pi_calls(tmp_path, [(saved + 600, 0.30, 100)], name="a.jsonl", agent="assistente")
