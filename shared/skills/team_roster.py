@@ -260,6 +260,7 @@ def record(role: str, instance=None, src: str = "", path: Path | None = None) ->
     # `_last_respawn_failed`): da qui una nuova sparizione torna a essere una
     # sparizione, non un avvio che non riesce.
     entry.pop("respawn_failed_at", None)
+    entry.pop("owed_respawn_at", None)
     if not contained:
         entry.pop("retired_at", None)
         entry.pop("retire_reason", None)
@@ -716,8 +717,15 @@ def decide_respawn(state: dict, alive: set, now: datetime, activity: dict,
                    activity_window_min: int = 90,
                    cooldown_h: int = 6,
                    cap: int = 3,
-                   cap_window_sec: int = 3600):
+                   cap_window_sec: int = 3600,
+                   container_started: datetime | None = None,
+                   tools_missing: tuple = ()):
     """Funzione PURA (testabile senza tmux): quale worker respawnare, se uno.
+
+    `container_started`: quando e' partito QUESTO container. Un respawn di una vita precedente non e' una sonda spesa: la sessione
+    assente e' colpa del riavvio, non di un secondo crash (giro Linux, aggiornamento: tutti i worker ritirati come «rimozione voluta»).
+    `tools_missing`: i ruoli che l'immagine di adesso non puo' avviare (il nucleo non ha browser ne' pandoc): non si ricreano e non si
+    ritirano, restano nel roster e tornano alla piena.
 
     Ritorna `(entry|None, reason, mutations)` dove `mutations` e' la lista di
     sessioni da auto-ritirare (sonda gia' spesa e sparite di nuovo).
@@ -747,6 +755,8 @@ def decide_respawn(state: dict, alive: set, now: datetime, activity: dict,
             continue
         for ts in entry.get("respawns", []) or []:
             dt = _parse_iso(ts)
+            if dt and container_started is not None and dt < container_started:
+                continue      # di una vita precedente del container: non e' un team smontato adesso
             if dt and (now - dt).total_seconds() <= cap_window_sec:
                 recent += 1
     if recent >= cap:
@@ -760,14 +770,21 @@ def decide_respawn(state: dict, alive: set, now: datetime, activity: dict,
             continue          # i core li ricrea ensure_agent
         if sess in alive:
             continue
+        if (entry.get("role") or "").strip().lower() in tools_missing:
+            continue          # aspetta l'immagine piena: non e' ne' un crash ne' una rimozione
 
         failed = _last_respawn_failed(entry)
         if failed is not None:
             candidates.append((failed, entry))
             continue
+        owed = _parse_iso(entry.get("owed_respawn_at"))
+        if owed is not None:
+            candidates.append((owed, entry))   # ritirato per errore e rimesso nel roster: torna, senza cancello di attivita'
+            continue
 
         last_resp = _last_respawn(entry)
-        if last_resp is not None and (now - last_resp) <= timedelta(hours=cooldown_h):
+        if last_resp is not None and (now - last_resp) <= timedelta(hours=cooldown_h) \
+                and (container_started is None or last_resp >= container_started):
             # Sonda gia' spesa: l'abbiamo ricreata e e' sparita di nuovo. La
             # lettura "morta" era sbagliata → si ritira da sola, niente loop.
             retire_now.append(sess)
@@ -783,8 +800,59 @@ def decide_respawn(state: dict, alive: set, now: datetime, activity: dict,
     if not candidates:
         return None, "no-candidate", retire_now
     # Piu' recente prima: il crash appena avvenuto ha la precedenza.
+    # Piu' recente prima (anche per i ruoli): gli Scout prima degli altri, senza di loro non entra niente
     candidates.sort(key=lambda c: c[0], reverse=True)
+    candidates.sort(key=lambda c: 0 if (c[1].get("role") or "").lower() == "scout" else 1)
     return candidates[0][1], "respawn", retire_now
+
+
+REMOVED_BY_MISTAKE = "respawn already attempted and session disappeared again"
+REINSTATE_WINDOW_H = 24
+
+
+def reinstate_removed_by_mistake(state: dict, now: datetime, window_h: float = REINSTATE_WINDOW_H) -> list:
+    """I worker che la regola «sonda spesa» ha ritirato nelle ultime `window_h` ore tornano nel roster e si deve loro un respawn:
+    quella regola ritirava anche chi spariva per un cambio di immagine o un riavvio del container (giro Linux, aggiornamento: nessuno
+    Scout alla piena). Una volta sola per worker (`reinstated_at`): se sparisce di nuovo dopo il respawn, la regola corretta lo ritira."""
+    back = []
+    cutoff = now - timedelta(hours=window_h)
+    for sess, entry in (state.get("agents") or {}).items():
+        if entry.get("status") != "retired" or (entry.get("role") or "").strip().lower() not in WORKER_ROLES:
+            continue
+        if entry.get("reinstated_at") or not str(entry.get("retire_reason") or "").startswith(REMOVED_BY_MISTAKE):
+            continue
+        retired = _parse_iso(entry.get("retired_at"))
+        if retired is None or retired < cutoff:
+            continue
+        entry["status"] = "active"
+        entry.pop("retired_at", None)
+        entry.pop("retire_reason", None)
+        entry["reinstated_at"] = _iso(now)
+        entry["owed_respawn_at"] = _iso(now)
+        back.append(sess)
+    return back
+
+
+def _container_started() -> datetime | None:
+    """Quando e' partito il container (il PID 1 di questo namespace), None se non si legge."""
+    try:
+        with open("/proc/1/stat", encoding="utf-8") as handle:
+            ticks = int(handle.read().rsplit(")", 1)[1].split()[19])
+        with open("/proc/stat", encoding="utf-8") as handle:
+            boot = next(int(line.split()[1]) for line in handle if line.startswith("btime "))
+        return datetime.fromtimestamp(boot + ticks / os.sysconf("SC_CLK_TCK"), timezone.utc)
+    except (OSError, ValueError, IndexError, StopIteration):
+        return None
+
+
+def _tools_missing() -> tuple:
+    """I ruoli che servono gli strumenti dell'immagine piena, finche' questa e' il nucleo."""
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import tools_tier
+        return tuple(tools_tier.ROLES_NEEDING_TOOLS) if tools_tier.image_tier() == "core" else ()
+    except Exception:  # noqa: BLE001 - senza la lettura valgono le regole di sempre
+        return ()
 
 
 def next_respawn(path: Path | None = None):
@@ -792,6 +860,8 @@ def next_respawn(path: Path | None = None):
     state = load(path)
     alive = live_sessions()
     now = _now()
+    if reinstate_removed_by_mistake(state, now):
+        save(state, path)
     activity = {}
     for sess, entry in state.get("agents", {}).items():
         if entry.get("status") == "active" and (entry.get("role") or "") in WORKER_ROLES and sess not in alive:
@@ -804,6 +874,8 @@ def next_respawn(path: Path | None = None):
         cooldown_h=_env_int("JHT_ROSTER_RESPAWN_COOLDOWN_H", 6),
         cap=_env_int("JHT_ROSTER_RESPAWN_CAP", 3),
         cap_window_sec=_env_int("JHT_ROSTER_RESPAWN_WINDOW_SEC", 3600),
+        container_started=_container_started(),
+        tools_missing=_tools_missing(),
     )
     if retire_now:
         for sess in retire_now:
@@ -812,7 +884,7 @@ def next_respawn(path: Path | None = None):
                 e["status"] = "retired"
                 e["retired_at"] = _iso(now)
                 e["retire_reason"] = (
-                    "respawn already attempted and session disappeared again — "
+                    REMOVED_BY_MISTAKE + " — "
                     "treating it as an intentional removal"
                 )
         save(state, path)
