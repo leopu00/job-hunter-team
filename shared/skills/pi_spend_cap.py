@@ -196,6 +196,27 @@ def waiting(home, now_ts):
     return pending_wakes(home) if 0 <= now_ts - at <= QUEUE_STALE_SEC else []
 
 
+SETTLE_SEC = 20 * 60    # after a wake the team needs this long to speak again before its silence counts as a block
+
+
+def settling(home, now_ts):
+    """True for SETTLE_SEC after the pace woke the team: its silence from before the pause is not a block yet."""
+    try:
+        last = max(_read_resumes(home) or [0.0])
+    except Exception:  # noqa: BLE001
+        return False
+    return 0 <= now_ts - last <= SETTLE_SEC
+
+
+def paused(home):
+    """True while the flag of the brake holds the team (a plain file with its reason)."""
+    try:
+        payload = _read_state(Path(home) / "logs" / "daily-halt.flag", FLAG_MAX_BYTES)
+        return isinstance(payload, dict) and payload.get("reason") == "pi_spend_cap"
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def set_pending(home, names, moment):
     _write_state(Path(home) / QUEUE_FILE, {"pending": list(names), "at": float(moment)})
 
@@ -450,10 +471,16 @@ def _budget_verdict(config, budget, spent, now, held_by_pace=False, restart_esti
     ahead = (spent.get("recent_cost") or 0.0) / hard_window * CHECK_EVERY_SEC
     common = {"action": "halt", "spent": used, "usd": budget["usd"], "ends": budget["ends"], "starts": budget["starts"],
               "counts_from": budget["counts_from"]}
-    if used + ahead >= budget["usd"] - team_budget.margin(budget["usd"]):
-        return dict(common, why="budget", ceiling=budget["usd"], resumes=None)
+    stop = dict(common, why="budget", ceiling=budget["usd"], resumes=None)
+    # the budget is reached when it is SPENT (to the margin). Reached only by the look ahead (a burst of a minute spread to the next
+    # look: 2.54 of 3.0 in the retest 22b3c6eab) it is the pace's pause that comes next, with its hour: «scegli un nuovo budget»
+    # with 0.46 $ left, and then «riprende alle 17:41» 37 s later, were two opposite words for one pause. The stop stays the
+    # budget's only when the pace has no pause to give.
+    over = used + ahead >= budget["usd"] - team_budget.margin(budget["usd"])
+    if over and used >= budget["usd"] - team_budget.margin(budget["usd"]):
+        return stop
     if budget["starts"] is None:
-        return None  # a budget of a duration that has not started: no period and no pace yet, only the dollars
+        return stop if over else None  # a budget of a duration that has not started: no period and no pace yet, only the dollars
     if now + CHECK_EVERY_SEC > budget["ends"]:  # the end falls before the next look: now, not a look late
         return dict(common, why="period", ceiling=budget["usd"], resumes=None)
     # The pace is the period's: what the onboarding spent before the first worker counts against the budget (above), not
@@ -463,7 +490,7 @@ def _budget_verdict(config, budget, spent, now, held_by_pace=False, restart_esti
     common["before"] = before
     period = dict(budget, usd=budget["usd"] - before)
     if period["usd"] <= 0:
-        return None
+        return stop if over else None
     allowance = team_budget.allowed(config, period, now)
     # what a restart needs under the line: the reload and the work after it. A budget or a period too small to ever give that room lowers
     # the multiple (never below the reload and as much work again) and, at the end, asks only for what is left: the hour told is a true
@@ -491,9 +518,11 @@ def _budget_verdict(config, budget, spent, now, held_by_pace=False, restart_esti
     ahead_pace = max(0.0, (spent.get("recent_cost") or 0.0) - (spent.get("restart_recent") or 0.0)) / window * CHECK_EVERY_SEC
     if used - before + opened + ahead_pace + reserve + slack >= allowance:
         lift = team_budget.resumes_at(config, period, used - before + opened + room + slack)
+        if over and lift is None:
+            return stop    # the look ahead says the budget ends and the pace has no hour to give: the budget's stop, as ever
         # no lift inside the period: the team stays paused until it ends (or the person raises the budget), and no hour is promised
         return dict(common, why="pace", ceiling=round(before + allowance, 6), resumes=lift or budget["ends"], stays=lift is None)
-    return None
+    return stop if over else None
 
 
 def decide(config, spent, no_quota_mode, now=None, budget=None, held_by_pace=False, restart_estimate=0.0):
@@ -699,11 +728,19 @@ def _record(verdict, config):
     return record
 
 
-def _halt_key(verdict, day):
+def _halt_key(verdict, day, home=None):
+    """One notice per pause. The stop of the budget or of the period is the same for the whole budget, but the team that was woken
+    in between and stops again is a new pause for the person (retest 22b3c6eab: the last stop, at 2.84 of 3.0 after a resume,
+    came with no word: the key was the one already told)."""
+    try:
+        woken = max(_read_resumes(home) or [0.0]) if home is not None else 0.0
+    except Exception:  # noqa: BLE001
+        woken = 0.0
+    again = ":%d" % int(woken // 60) if woken > verdict.get("counts_from", 0) else ""
     if verdict["why"] == "budget":
-        return "halt:budget:%d" % int(verdict["counts_from"])
+        return "halt:budget:%d%s" % (int(verdict["counts_from"]), again)
     if verdict["why"] == "period":
-        return "halt:period:%d" % int(verdict["ends"])
+        return "halt:period:%d%s" % (int(verdict["ends"]), again)
     if verdict["why"] == "pace":
         return "halt:pace:%d" % int(verdict["resumes"] // 60)
     return "halt:%s:%s" % (day, verdict["why"])
@@ -730,7 +767,7 @@ def _halt(api, run, verdict, spent, day, notify_user, config=None, now=None, esc
     print("[bridge V6] %s PI-SPEND-CEILING reached (%s: %s of %s): team paused"
           % (run.now_h, verdict["why"], verdict["spent"], verdict["ceiling"]))
     burst = first_burst_progress(api._path("JHT_HOME"))
-    _tell(api, run, _halt_key(verdict, day), captain_text(verdict, spent, burst, config, now),
+    _tell(api, run, _halt_key(verdict, day, api._path("JHT_HOME")), captain_text(verdict, spent, burst, config, now),
           user_text(verdict, spent, config, now), notify_user)
 
 
