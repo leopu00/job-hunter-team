@@ -15,8 +15,12 @@ def test_public_downloads_are_verified_release_assets() -> None:
         "} as const", 1
     )[0]
     targets = set(re.findall(r"RELEASE_BASE}/([^`]+)`", primary_targets))
-    assert targets == {"job-hunter-team-macos-universal.dmg"}
+    # 0.4.0 has no desktop app: the site links no file of the release (the dmg would be a 404), and /go/mac leads
+    # to the install from the terminal
+    assert targets == set()
     assert targets <= expected
+    assert 'mac: "/download"' in primary_targets
+    assert ".dmg" not in DOWNLOADS
     assert 'DOWNLOAD_RELEASE_TAG = "v0.4.0"' in DOWNLOADS
     assert "releases/latest/download" not in DOWNLOADS
 

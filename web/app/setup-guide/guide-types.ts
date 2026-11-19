@@ -104,8 +104,8 @@ export interface ScreenRef {
 }
 
 /** Quello che ogni link ha in comune. `os` limita il link a certi sistemi:
- *  su Windows ci sono due download ufficiali (installer e portable) che non
- *  esistono altrove, e mostrarli a chi sta su Linux confonde e basta. */
+ *  il comando di install.sh vale per macOS e Linux, e mostrarlo a chi sta su
+ *  Windows confonde e basta. */
 interface LinkBase {
   label: GuideText;
   os?: OsId[];
@@ -113,8 +113,6 @@ interface LinkBase {
 
 /** Un link operativo dentro una fase. */
 export type GuideLink =
-  /** Scarica l'app per l'OS selezionato: l'href lo risolve `guide-config`. */
-  | (LinkBase & { kind: "download"; asset?: string })
   /** Risorsa esterna (Docker, provider…). L'href può variare per OS. */
   | (LinkBase & {
       kind: "external";

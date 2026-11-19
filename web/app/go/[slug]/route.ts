@@ -1,9 +1,8 @@
 import { after } from "next/server";
 import {
   createDownloadClick,
-  DOWNLOAD_RELEASE_API,
+  DOWNLOAD_TARGETS,
   isDownloadSlug,
-  resolveDownloadTarget,
   type DownloadClick,
 } from "@/lib/download-funnel";
 import { recordDownloadClick } from "@/lib/download-clicks";
@@ -12,7 +11,6 @@ export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ slug: string }> };
 type RedirectDependencies = {
-  release: unknown;
   schedule: (task: () => void | Promise<void>) => void;
   record: (event: DownloadClick) => Promise<void>;
   now: () => Date;
@@ -20,7 +18,6 @@ type RedirectDependencies = {
 };
 
 const DEFAULT_DEPENDENCIES: RedirectDependencies = {
-  release: null,
   schedule: after,
   record: recordDownloadClick,
   now: () => new Date(),
@@ -30,27 +27,6 @@ const DEFAULT_DEPENDENCIES: RedirectDependencies = {
 };
 
 const RESPONSE_HEADERS = { "Cache-Control": "no-store" } as const;
-const RELEASE_CACHE_SECONDS = 60;
-
-async function readDownloadRelease(): Promise<unknown> {
-  try {
-    const response = await fetch(DOWNLOAD_RELEASE_API, {
-      headers: { Accept: "application/vnd.github+json" },
-      signal: AbortSignal.timeout(5000),
-      next: { revalidate: RELEASE_CACHE_SECONDS },
-    });
-    if (!response.ok) {
-      console.error(
-        `[download-funnel] release assets unavailable (${response.status})`,
-      );
-      return null;
-    }
-    return response.json();
-  } catch {
-    console.error("[download-funnel] release assets unavailable");
-    return null;
-  }
-}
 
 export function handleDownloadRedirect(
   request: Request,
@@ -64,20 +40,8 @@ export function handleDownloadRedirect(
     });
   }
 
-  const target = resolveDownloadTarget(slug, dependencies.release);
-  if (!target) {
-    return new Response(
-      request.method === "HEAD" ? null : "Download unavailable",
-      {
-        status: 503,
-        headers: {
-          ...RESPONSE_HEADERS,
-          "Retry-After": String(RELEASE_CACHE_SECONDS),
-        },
-      },
-    );
-  }
-
+  // 0.4.0 links no file of the release: the slug leads to the install from the terminal.
+  const target = DOWNLOAD_TARGETS[slug];
   const event = createDownloadClick(
     slug,
     new URL(request.url).searchParams,
@@ -110,11 +74,7 @@ export function handleDownloadRedirect(
 
 async function handleRoute(request: Request, context: RouteContext) {
   const { slug } = await context.params;
-  const release = isDownloadSlug(slug) ? await readDownloadRelease() : null;
-  return handleDownloadRedirect(request, slug, {
-    ...DEFAULT_DEPENDENCIES,
-    release,
-  });
+  return handleDownloadRedirect(request, slug);
 }
 
 export async function GET(request: Request, context: RouteContext) {

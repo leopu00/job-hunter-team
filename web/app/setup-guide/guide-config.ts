@@ -17,27 +17,6 @@ import type { OsId } from "./guide-types";
  *  route, tutti i riferimenti interni seguono. */
 export const GUIDE_PATH = "/setup-guide";
 
-/** Base delle release GitHub: risolve sempre l'ultima pubblicata, così il
- *  link non va aggiornato a ogni versione (stesso meccanismo di /download,
- *  W04 — qualunque modifica qui si verifica contro una release reale). */
-const RELEASE_BASE =
-  "https://github.com/leopu00/job-hunter-team/releases/latest/download";
-
-/** Nome dell'asset di release per sistema operativo. Allineato a
- *  `app/download/DownloadClient.tsx`: se cambia lì, cambia qui. */
-const DESKTOP_ASSET: Partial<Record<OsId, string>> = {
-  macos: "job-hunter-team-macos-universal.dmg",
-  // Windows and Linux have no desktop app in 0.4.0: no asset, so no download link for them
-  // (on Linux the way in is the CLI, `CLI_INSTALL_CMD`).
-};
-
-/** URL di download diretto. Senza `asset` prende quello predefinito del
- *  sistema; con `asset` scarica quel file preciso dalla stessa release. */
-export function downloadUrlFor(os: OsId, asset?: string): string | null {
-  const name = asset ?? DESKTOP_ASSET[os];
-  return name ? `${RELEASE_BASE}/${name}` : null;
-}
-
 /** La pagina Download del sito, per chi arriva qui da un link diretto. */
 export const DOWNLOAD_PAGE = "/download";
 
