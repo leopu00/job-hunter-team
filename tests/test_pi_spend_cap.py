@@ -1417,3 +1417,8 @@ def test_reserve_a_lift_needs_room_for_the_first_stage_not_for_the_whole_team(tm
     assert held_whole == ["halt"] * 3, "all or nothing: the line does not hold the whole reload before the period ends"
     lifted = [cap.decide(config, base, False, NOON + h * 3600, read, held_by_pace=True, restart_estimate=first)["action"] for h in (6, 12, 20)]
     assert "none" in lifted, "the first stage fits and the team works at the pace"
+
+
+def test_the_queue_of_the_pace_keeps_only_names_of_sessions_that_a_resume_wakes(tmp_path):
+    cap.set_pending(tmp_path, ["SCOUT-1", "ASSISTENTE", "MENTOR", "DOCTOR-WATCHDOG", "CAPITANO", "../x", "scout-2", "SCORER-2"], NOON)
+    assert cap.pending_wakes(tmp_path) == ["SCOUT-1", "SCORER-2"]
