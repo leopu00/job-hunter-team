@@ -231,12 +231,25 @@ def test_release_notes_render_every_verified_asset_without_a_second_list(
     assert "Windows protected your PC" not in body and "windows-x64-setup" not in body
     assert "There is no desktop app for Linux in this version: use the command-line install" in body
     assert "experimental" not in body and "AppImage" not in body and ".deb" not in body
-    assert "holds only the Apple silicon build" in body
+    # no dmg among the assets (0.4.0 builds no desktop app): the notes do not promise one
+    assert "holds only the Apple silicon build" not in body
+    assert "There is no desktop app in this version: on a Mac use the command-line install" in body
     assert "at least 16 GB of RAM is recommended" in body and "4 GiB of memory" in body
     assert "- Curated change" in body
     for asset in assets:
         line = f'{asset["sha256"]}  {asset["asset"]}'
         assert body.count(line) == 1
+
+    # a release that does attach the dmg says what it is
+    assets = sorted([*assets, {"asset": release_artifacts.MACOS_DMG, "size": 33, "sha256": "d" * 64}], key=lambda a: a["asset"])
+    provenance.write_text(
+        json.dumps({"schema_version": 1, "repository": REPOSITORY, "tag": TAG, "commit": "c" * 40, "assets": assets})
+    )
+    body = release_artifacts.render_release_notes(
+        notes="- Curated change", provenance=provenance, output=output, tag=TAG, repository=REPOSITORY
+    )
+    assert "holds only the Apple silicon build" in body
+    assert "There is no desktop app in this version" not in body
 
 
 def test_release_notes_reject_invalid_provenance_instead_of_publishing_it(

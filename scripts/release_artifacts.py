@@ -25,6 +25,10 @@ class ReleaseArtifactError(RuntimeError):
     """Raised when an asset cannot be tied to the requested release."""
 
 
+# The desktop app of macOS, attached only by a release that builds it (0.4.0 does not).
+MACOS_DMG = "job-hunter-team-macos-universal.dmg"
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -310,6 +314,13 @@ def render_release_notes(
 
     curated = notes.strip() or "- Release prepared without curated notes."
     checksums = "\n".join(checksum_lines)
+    if MACOS_DMG in names:
+        macos_app = (
+            f"`{MACOS_DMG}` is a Tauri 2 build for Apple silicon (M1 and later) signed with Developer ID, notarized by "
+            "Apple and stapled. The file name says \"universal\" but it holds only the Apple silicon build."
+        )
+    else:
+        macos_app = "There is no desktop app in this version: on a Mac use the command-line install (`install.sh`)."
     body = f"""## What's new in {tag}
 
 {curated}
@@ -320,7 +331,7 @@ Windows is not part of 0.4.0: there is no Windows installer in this release.
 
 ### macOS
 
-`job-hunter-team-macos-universal.dmg` is a Tauri 2 build for Apple silicon (M1 and later) signed with Developer ID, notarized by Apple and stapled. The file name says "universal" but it holds only the Apple silicon build.
+{macos_app}
 
 On a Mac the team runs in a Podman machine of 4 GiB of memory: a Mac with at least 16 GB of RAM is recommended.
 

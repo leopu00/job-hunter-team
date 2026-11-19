@@ -37,6 +37,10 @@ jobs:
     name: Build Desktop App (Tauri 2) — ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
     needs: check-version
+    # 0.4.0 ships no desktop app (CHANGELOG, privacy page): the job is kept as it is and runs only when the repository
+    # variable JHT_RELEASE_DESKTOP is "true". Turning it back on means putting it back in the `needs` of
+    # publish-runtime and release, and the dmg back among the expected assets below.
+    if: vars.JHT_RELEASE_DESKTOP == 'true'
     permissions:
       contents: read
     timeout-minutes: 360
@@ -219,7 +223,6 @@ jobs:
     runs-on: ubuntu-24.04
     needs:
       - check-version
-      - build-desktop
     permissions:
       contents: read
       packages: write
@@ -259,7 +262,6 @@ jobs:
     runs-on: ubuntu-24.04
     needs:
       - check-version
-      - build-desktop
       - publish-runtime
     permissions:
       contents: write
@@ -349,6 +351,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Download desktop app artifacts
+        if: vars.JHT_RELEASE_DESKTOP == 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: app-*-release
@@ -359,6 +362,7 @@ jobs:
         env:
           TAG_SHA: ${{ steps.source.outputs.tag_sha }}
         run: |
+          mkdir -p release-assets   # with no desktop app, nothing was downloaded into it
           cp release/runtime-image.v1.json release-assets/RUNTIME-IMAGE.json
           python scripts/release_artifacts.py record \
             --asset release-assets/RUNTIME-IMAGE.json \
@@ -371,10 +375,17 @@ jobs:
       - name: Verify tagged artifact provenance and write SHA-256 checksums
         env:
           TAG_SHA: ${{ steps.source.outputs.tag_sha }}
+          RELEASE_DESKTOP: ${{ vars.JHT_RELEASE_DESKTOP }}
         run: |
+          desktop=()
+          if [ "$RELEASE_DESKTOP" = "true" ]; then
+            desktop=(
+              --expected-asset job-hunter-team-macos-universal.dmg
+            )
+          fi
           python scripts/release_artifacts.py verify \
             --directory release-assets \
-            --expected-asset job-hunter-team-macos-universal.dmg \
+            "${desktop[@]}" \
             --expected-asset RUNTIME-IMAGE.json \
             --tag "$GITHUB_REF_NAME" \
             --commit "$TAG_SHA" \

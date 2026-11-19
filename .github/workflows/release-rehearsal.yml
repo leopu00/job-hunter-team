@@ -33,6 +33,8 @@ jobs:
   build-desktop:
     name: Rehearse the Tauri 2 build — ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
+    # Runs when the release builds the desktop app (release.yml, repository variable JHT_RELEASE_DESKTOP): 0.4.0 does not.
+    if: vars.JHT_RELEASE_DESKTOP == 'true'
     permissions:
       contents: read
     timeout-minutes: 120
