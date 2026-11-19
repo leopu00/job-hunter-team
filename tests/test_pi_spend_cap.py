@@ -1573,4 +1573,3 @@ def test_reserve_a_broken_state_file_of_the_pace_is_an_empty_one_and_never_stops
     assert cap.decide(config, spent, False, NOON + 120, read)["action"] == "halt", "the hard cap holds"
     cap.note_wake(tmp_path, NOON + 130, 0.3, {"SCOUT-1": 0.3})
     assert cap._read_wakes(tmp_path) == [(float(NOON + 130), 0.3, {"SCOUT-1": 0.3})], "the next write of the brake mends the file"
-
