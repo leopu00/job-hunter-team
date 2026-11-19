@@ -79,7 +79,10 @@ def test_the_workers_retired_by_the_old_rule_in_the_last_24_hours_come_back_once
                                   "retired_at": _iso(T0 - timedelta(hours=1)), "retire_reason": "removed by the Captain: C-02"}
     state["agents"]["ANALISTA-6"] = {"session": "ANALISTA-6", "role": "analista", "instance": 6, "status": "retired", "respawns": [],
                                      "retired_at": _iso(T0 - timedelta(hours=1)), "retire_reason": reason, "reinstated_at": _iso(T0 - timedelta(hours=20))}
+    state["agents"]["SCORER-3"] = {"session": "SCORER-3", "role": "scorer", "instance": 3, "status": "retired", "respawns": [],
+                                   "retired_at": _iso(T0 - timedelta(hours=1)), "retire_reason": reason, "retire_rule": 2}
     assert sorted(tr.reinstate_removed_by_mistake(state, T0)) == ["ANALISTA-5", "SCOUT-1", "SCOUT-2"]
+    assert state["agents"]["SCORER-3"]["status"] == "retired", "retired by the corrected rule (recreated, then removed again): stays"
     assert state["agents"]["SCORER-2"]["status"] == "retired", "older than a day: left as it was"
     assert state["agents"]["SCOUT-3"]["status"] == "retired", "another reason: left"
     assert state["agents"]["ANALISTA-6"]["status"] == "retired", "once only"
