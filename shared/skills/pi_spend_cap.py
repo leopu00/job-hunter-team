@@ -1115,6 +1115,14 @@ def _tell_budget_changed(api, run, budget, config, now):
             % (_money(budget["usd"]), period, ", with the pace on" if budget.get("pace") else ""))
     if not notice(api, run.state, "pi_cap:budget_changed:%s" % saved, api.CAPITANO_SESSION, text):
         done["budget_seen"] = seen    # not delivered: the next tick tries again
+        return
+    # the Assistente answers the person about the budget from what it remembers (retest 25395266b: «il budget dichiarato è di 3 dollari»
+    # two hours after the person set 2): it hears the new figures too, once, and answers from them. A session that is not there reads
+    # the budget fresh when it starts: nothing to retry.
+    notice(api, run.state, "pi_cap:budget_changed_assistant:%s" % saved, "ASSISTENTE",
+           "[BRIDGE INFO] THE BUDGET CHANGED: the person saved a new one: %s USD %s%s. Every other figure you remember is void: when the "
+           "person asks about the budget, answer from this one (or from `jht team status`), not from memory. Do not answer this message."
+           % (_money(budget["usd"]), period, ", with the pace on" if budget.get("pace") else ""))
 
 
 def step(api, run, notify_user=None):

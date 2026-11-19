@@ -839,9 +839,11 @@ def test_the_captain_is_told_when_the_person_saves_another_budget_and_not_for_th
     bridge.tick(state=state)
     told = [t for s, t in bridge.sent if s == "CAPITANO" and "BUDGET CHANGED" in t]
     assert len(told) == 1 and "2 USD for 4320 minutes" in told[0] and "3 USD" not in told[0]
+    assistant = [t for s, t in bridge.sent if s == "ASSISTENTE" and "BUDGET CHANGED" in t]
+    assert len(assistant) == 1 and "2 USD for 4320 minutes" in assistant[0], "the Assistente hears it too"
     bridge.clock["now"] += 60
     bridge.tick(state=state)
-    assert len([t for _, t in bridge.sent if "BUDGET CHANGED" in t]) == 1, "once"
+    assert len([t for _, t in bridge.sent if "BUDGET CHANGED" in t]) == 2, "once each"
 
 
 def test_a_budget_notice_that_raises_does_not_cost_the_look_of_the_brake(tmp_path, monkeypatch, capsys):
