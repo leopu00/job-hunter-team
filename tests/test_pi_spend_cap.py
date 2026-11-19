@@ -1547,4 +1547,3 @@ def test_reserve_the_wakes_file_written_by_an_agent_cannot_open_or_poison_the_li
     (tmp_path / "state" / "pace-wakes.json").write_text('[[%d, 1.0, {"SCOUT-1": NaN, "CAPITANO": -5, "X": 0.2}], [NaN, 1.0], [%d, -1.0]]' % (NOON, NOON))
     wakes = cap._read_wakes(tmp_path)
     assert wakes == [(float(NOON), 1.0, {"X": 0.2})]
-
