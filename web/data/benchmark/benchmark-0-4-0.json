@@ -354,8 +354,8 @@
     {
       "id": "preTagReview",
       "section": "security",
-      "status": "pass",
-      "build": 10,
+      "status": "pending",
+      "build": null,
       "proof": [],
       "note": "securityPreTag"
     },

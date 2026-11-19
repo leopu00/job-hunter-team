@@ -23,7 +23,15 @@ type Series = {
   bySource?: Record<string, number> | null;
 };
 
-export type RoundCriterion = { k: string; ok: boolean | null; v?: number; of?: number; min?: number; max?: number; at?: number[] };
+export type RoundCriterion = {
+  k: string;
+  ok: boolean | null;
+  v?: number;
+  of?: number;
+  min?: number;
+  max?: number;
+  at?: number[];
+};
 
 export type TestEntry = {
   id: string;
@@ -50,15 +58,27 @@ export type TestEntry = {
 };
 
 const YEAR = 2026;
-const kebab = (s: string) => s.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
+const kebab = (s: string) =>
+  s.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
 const isoDay = (day: string) => {
   const m = /(\d{1,2})(?:-\d{1,2})?\/(\d{1,2})/.exec(day);
-  return m ? `${YEAR}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` : `${YEAR}-00-00`;
+  return m
+    ? `${YEAR}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`
+    : `${YEAR}-00-00`;
 };
 
-const roundSeries = ((data as unknown as { roundSeries?: Record<string, Series> }).roundSeries ?? {}) as Record<string, Series>;
-type BenchRaw = Series & { id: string; profile: string; os: string; service: string; buildNo: number };
-const benchRaw = ((data as unknown as { bench?: BenchRaw[] }).bench ?? []) as BenchRaw[];
+const roundSeries = ((
+  data as unknown as { roundSeries?: Record<string, Series> }
+).roundSeries ?? {}) as Record<string, Series>;
+type BenchRaw = Series & {
+  id: string;
+  profile: string;
+  os: string;
+  service: string;
+  buildNo: number;
+};
+const benchRaw = ((data as unknown as { bench?: BenchRaw[] }).bench ??
+  []) as BenchRaw[];
 // the day of the Scout bench of build 9
 const BENCH_DAY = "17/11";
 const BENCH_TARGET: Record<string, string> = {
@@ -91,7 +111,8 @@ export const TESTS: TestEntry[] = [
       note: r.note,
       target: null,
       invalid: (r as { invalid?: string }).invalid ?? null,
-      criteria: ((r as { criteria?: RoundCriterion[] }).criteria ?? []) as RoundCriterion[],
+      criteria: ((r as { criteria?: RoundCriterion[] }).criteria ??
+        []) as RoundCriterion[],
       series: s,
     };
   }),
@@ -120,18 +141,32 @@ export const TESTS: TestEntry[] = [
   })),
 ];
 
-export const testBySlug = (slug: string) => TESTS.find((x) => x.slug === slug) ?? null;
+export const testBySlug = (slug: string) =>
+  TESTS.find((x) => x.slug === slug) ?? null;
 export const testById = (id: string) => TESTS.find((x) => x.id === id) ?? null;
 export const testHref = (id: string) => {
   const x = testById(id);
-  return x ? `/case-studies/benchmark-0-4-0/${x.slug}` : `/case-studies/benchmark-0-4-0#${id}`;
+  return x
+    ? `/case-studies/benchmark-0-4-0/${x.slug}`
+    : `/case-studies/benchmark-0-4-0#${id}`;
 };
 
 /** The test before and after this one on the same system, in the order they ran. */
 export function neighbours(x: TestEntry) {
-  const same = TESTS.filter((y) => y.os === x.os && (!y.invalid || y.id === x.id)).sort((a, b) => (a.date === b.date ? TESTS.indexOf(a) - TESTS.indexOf(b) : a.date < b.date ? -1 : 1));
+  const same = TESTS.filter(
+    (y) => y.os === x.os && (!y.invalid || y.id === x.id),
+  ).sort((a, b) =>
+    a.date === b.date
+      ? TESTS.indexOf(a) - TESTS.indexOf(b)
+      : a.date < b.date
+        ? -1
+        : 1,
+  );
   const i = same.indexOf(x);
-  return { prev: i > 0 ? same[i - 1] : null, next: i >= 0 && i < same.length - 1 ? same[i + 1] : null };
+  return {
+    prev: i > 0 ? same[i - 1] : null,
+    next: i >= 0 && i < same.length - 1 ? same[i + 1] : null,
+  };
 }
 
 /** The test as the charts draw it. */
