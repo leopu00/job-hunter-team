@@ -164,3 +164,30 @@ def test_a_worker_started_shortly_before_the_stop_comes_back_even_with_no_messag
     out = rr.plan()["start"]
     assert ["scout", 1] in out
     assert ["scout", 2] not in out and ["scout", 4] not in out
+
+
+def _budget_in_config(home, now, usd, hours_gone=1, hours_left=23):
+    start, end = now - timedelta(hours=hours_gone), now + timedelta(hours=hours_left)
+    (home / "jht.config.json").write_text(json.dumps({"team": {"budget": {"usd": usd, "starts_at": start.isoformat(), "ends_at": end.isoformat()}}}),
+                                          encoding="utf-8")
+
+
+def test_the_restore_after_a_restart_comes_back_by_stages_of_the_pace_not_all_together(world, tmp_path):
+    """Retest 8d5f09a2b: at the restart of the container «the team was restarted» went to seven workers at once, past the line."""
+    _budget_in_config(tmp_path, world["now"], 3.0)
+    out = rr.plan()
+    assert out["start"] and out["start"][0] == ["scout", 1], "the Scouts first"
+    assert len(out["start"]) < 5, "the rest waits for the line to rise: %s" % out["start"]
+    assert out["pace"]["waiting"], "who waits is said"
+
+
+def test_the_restore_with_room_to_work_brings_everyone_and_without_a_budget_nothing_changes(world, tmp_path):
+    _budget_in_config(tmp_path, world["now"], 300.0)
+    assert len(rr.plan()["start"]) == 5
+    (tmp_path / "jht.config.json").write_text("{}", encoding="utf-8")
+    assert len(rr.plan()["start"]) == 5
+
+
+def test_a_config_that_is_not_json_is_no_budget_and_holds_nothing(world, tmp_path):
+    (tmp_path / "jht.config.json").write_text("[" * 100000, encoding="utf-8")
+    assert len(rr.plan()["start"]) == 5

@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import json
 import math
+import stat
 import os
 import re
 import sqlite3
@@ -92,11 +93,36 @@ def _is_worker(agent):
     return isinstance(agent, str) and agent.split("-", 1)[0] in WORKER_ROLES
 
 
-def _read_resumes(home):
+FLAG_MAX_BYTES = 1024 * 1024   # the flag of the halt carries the signatures of the panes: the bridge writes it, a few KiB
+STATE_MAX_BYTES = 64 * 1024   # like the gate in the session (spend-gate.js): a state file of the pace is a few lines
+
+
+def _read_state(path, limit=STATE_MAX_BYTES):
+    """The JSON of a state file of the brake, or None for anything else: absent, too big, not JSON, an integer of 400 digits, 100000
+    brackets deep. The agents can write these files, and a file that cannot be read is an empty one: it never stops a look of the
+    brake (the hard cap included), and the next write of the brake replaces it."""
     try:
-        data = json.loads((Path(home) / RESUMES_FILE).read_text(encoding="utf-8"))
-        return [float(x) for x in data if isinstance(x, (int, float)) and not isinstance(x, bool)]
-    except (OSError, ValueError, TypeError):
+        # a plain file only: opened without waiting (a pipe with no writer would hold the look of the brake for ever) and without
+        # following a link; a pipe, a link, a folder or a device is an empty file
+        fd = os.open(str(path), os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0))
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                return None
+            raw = os.read(fd, limit + 1)
+        finally:
+            os.close(fd)
+        if len(raw) > limit:
+            return None
+        return json.loads(raw.decode("utf-8"))
+    except Exception:  # noqa: BLE001 - OverflowError and RecursionError among them
+        return None
+
+
+def _read_resumes(home):
+    data = _read_state(Path(home) / RESUMES_FILE)
+    try:
+        return [float(x) for x in data if _sound(x)] if isinstance(data, list) else []
+    except Exception:  # noqa: BLE001
         return []
 
 
@@ -118,17 +144,22 @@ def note_resume(home, moment):
     _write_state(Path(home) / RESUMES_FILE, (_read_resumes(home) + [float(moment)])[-50:])
 
 
+def _sound(x):
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) and x >= 0
+
+
 def _read_wakes(home):
+    data = _read_state(Path(home) / WAKES_FILE)
     try:
-        data = json.loads((Path(home) / WAKES_FILE).read_text(encoding="utf-8"))
         out = []
         for row in data:
             m, e = row[0], row[1]
             per = row[2] if len(row) > 2 and isinstance(row[2], dict) else None
-            if isinstance(m, (int, float)) and isinstance(e, (int, float)):
-                out.append((float(m), float(e), {str(k).upper(): float(v) for k, v in per.items() if isinstance(v, (int, float))} if per is not None else None))
+            # a file the agents can write: only finite, non-negative numbers (json.loads lets NaN and -Infinity through)
+            if _sound(m) and _sound(e):
+                out.append((float(m), float(e), {str(k).upper(): float(v) for k, v in per.items() if _sound(v)} if per is not None else None))
         return out
-    except (OSError, ValueError, TypeError, IndexError):
+    except Exception:  # noqa: BLE001
         return []
 
 
@@ -143,12 +174,12 @@ def note_wake(home, moment, estimate, per_session=None):
 
 
 def pending_wakes(home):
+    data = _read_state(Path(home) / QUEUE_FILE)
     try:
-        data = json.loads((Path(home) / QUEUE_FILE).read_text(encoding="utf-8"))
         # a file the agents can write: only names of sessions of the team that a resume wakes, never the ones kept still on purpose
         return [x for x in (data.get("pending") or []) if isinstance(x, str) and _AGENT_SESSION.match(x)
                 and x not in NEVER_WAKE and x not in WAKE_ONLY_IF_NEEDED and x not in ALWAYS_WOKEN]
-    except (OSError, ValueError, AttributeError):
+    except Exception:  # noqa: BLE001
         return []
 
 
@@ -159,8 +190,8 @@ def waiting(home, now_ts):
     """The sessions that still wait for their stage of the pace: nobody else wakes them before it (the throttle, the Dottore's
     unblock, the Dottore itself). A queue that is old is a queue left behind, not a wait."""
     try:
-        at = float(json.loads((Path(home) / QUEUE_FILE).read_text(encoding="utf-8")).get("at") or 0)
-    except (OSError, ValueError, AttributeError, TypeError):
+        at = float(_read_state(Path(home) / QUEUE_FILE).get("at") or 0)
+    except Exception:  # noqa: BLE001
         return []
     return pending_wakes(home) if 0 <= now_ts - at <= QUEUE_STALE_SEC else []
 
@@ -246,6 +277,7 @@ WATCH_AFTER_RESUME_SEC = 300   # for this long after a resume the brake looks ev
 LOOK_AFTER_RESUME_SEC = 15
 
 
+WORK_MULTIPLE = 3.0     # a session is woken, and the pause lifted, when the room covers its reload AND as much work again twice over: the team works some minutes before the next pause (retest 8d5f09a2b: Captain + Scout, 0.30 $ of reload, ate the whole room and the team stopped 33 s after every resume)
 RELOAD_GAP_SEC = 300    # a session silent for this long has lost its cache: its next turn is a reload
 MIN_RELOAD_COST = 0.01
 ALWAYS_WOKEN = ("CAPITANO", "SENTINELLA")   # told by their own notice at a resume: their reload is reserved, they are not staged
@@ -346,7 +378,7 @@ class Stage:
 
     def reserve(self, name):
         cost = self.costs.get(name, 0.0)
-        self.room -= cost
+        self.room -= cost   # the Captain and the Sentinella are told by their own notice whatever the room: their reload only, the work is theirs to ask
         self.estimate += cost
         self.woken[name] = cost
 
@@ -356,9 +388,10 @@ class Stage:
         alone even when its reload is more than the room, as long as there is room at all: the hard stop of the brake is behind it,
         and otherwise the first in the order would never start."""
         cost = self.costs.get(name, RESTART_COST_PER_SESSION)
+        need = cost * WORK_MULTIPLE   # the reload and the work after it: the room is for the team to work, not only to start
         first = self.taken == 0 and not self.pending
-        if not self.pending and (cost <= self.room + 1e-9 or (first and self.room > 1e-9)):
-            self.room -= cost
+        if not self.pending and (need <= self.room + 1e-9 or (first and self.room > 1e-9)):
+            self.room -= need
             self.estimate += cost
             self.woken[name] = cost
             self.taken += 1
@@ -408,7 +441,14 @@ def _budget_verdict(config, budget, spent, now, held_by_pace=False, restart_esti
     if period["usd"] <= 0:
         return None
     allowance = team_budget.allowed(config, period, now)
-    room = max(RESTART_RESERVE_SHARE * period["usd"], restart_estimate)   # what a restart needs under the line
+    # what a restart needs under the line: the reload and the work after it. A budget or a period too small to ever give that room lowers
+    # the multiple (never below the reload and as much work again) and, at the end, asks only for what is left: the hour told is a true
+    # one, and the budget is not left locked with a message that says «until the end of the period»
+    left = period["usd"] - (used - before) - (spent.get("reserve_open") or 0.0) - (team_budget.margin(period["usd"]) if PACE_SLACK else 0.0)
+    multiple = WORK_MULTIPLE if left >= restart_estimate * WORK_MULTIPLE else (2.0 if left >= restart_estimate * 2.0 else 1.0)
+    room = max(RESTART_RESERVE_SHARE * period["usd"], restart_estimate * multiple)
+    if restart_estimate > 0 and left >= restart_estimate * 2.0:
+        room = min(room, left - 1e-6)
     reserve = room if held_by_pace else 0.0
     # the calls in flight when the brake looks finish and are paid (the pace let 0.16 $ through, giro Mac 12b): one margin before the line
     slack = team_budget.margin(period["usd"]) if PACE_SLACK else 0.0
@@ -582,8 +622,8 @@ def captain_text(verdict, spent, burst=None, config=None, now=None):
 
 def _flag(api):
     try:
-        payload = json.loads(api._path("DAILY_HALT_FLAG").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        payload = _read_state(api._path("DAILY_HALT_FLAG"), FLAG_MAX_BYTES)
+    except Exception:  # noqa: BLE001
         return None
     return payload if isinstance(payload, dict) else None
 
@@ -657,11 +697,11 @@ def _halt(api, run, verdict, spent, day, notify_user, config=None, now=None, esc
         api._activate_daily_halt(100.0 * verdict["spent"] / verdict["ceiling"] if verdict["ceiling"] else 100.0, 100.0,
                                  100.0, extra={"reason": REASON, "pi_spend_cap": record})
     try:
-        payload = json.loads(api._path("DAILY_HALT_FLAG").read_text(encoding="utf-8"))
+        payload = _read_state(api._path("DAILY_HALT_FLAG"), FLAG_MAX_BYTES)
         payload["reason"] = REASON
         payload["pi_spend_cap"] = record
         api._write_daily_halt_payload(payload)
-    except (OSError, ValueError):
+    except Exception:  # noqa: BLE001 - a flag that cannot be read stays as the gate wrote it
         pass
     print("[bridge V6] %s PI-SPEND-CEILING reached (%s: %s of %s): team paused"
           % (run.now_h, verdict["why"], verdict["spent"], verdict["ceiling"]))
@@ -929,6 +969,28 @@ def _wake_pending(api, run, ctx):
     except Exception as error:  # noqa: BLE001 - a stage that fails must not stop the tick
         print("[bridge V6] WARN pi spend cap stage: %s" % error)
         return []
+
+
+def stage_fit(home, now, sessions):
+    """The sessions of `sessions` that the pace has room for now, in the order of the wake (the Scouts first, nobody overtaking), for a start
+    of the team that is not a lift of the pace (the restore of the roster after a restart of the container, retest 8d5f09a2b: «the team was
+    restarted» to seven workers at once). None when no budget line applies: nothing to hold them for. A line that cannot be read holds all
+    but nobody is lost: the watchdog brings them back one by one. {"taken": [...], "waiting": [...], "estimate": x, "costs": {...}}."""
+    names = [x for x in (sessions or []) if isinstance(x, str)]
+    try:
+        config = _read_state(Path(home) / "jht.config.json", FLAG_MAX_BYTES)
+        budget = team_budget.read(config, home) if isinstance(config, dict) else None
+    except Exception:  # noqa: BLE001
+        return {"taken": [], "waiting": names, "estimate": 0.0, "costs": {}}
+    if budget is None:
+        return None
+    try:
+        spent = spend(home, now, budget["counts_from"], budget["starts"])
+        stage = Stage(_stage_room(config, budget, spent, now), session_costs(home, now, names))
+        taken = [x for x in sorted(names, key=_wake_rank) if stage.take(x)]
+        return {"taken": taken, "waiting": list(stage.pending), "estimate": stage.estimate, "costs": dict(stage.woken)}
+    except Exception:  # noqa: BLE001 - a line that cannot be read holds the restore, never the hard cap
+        return {"taken": [], "waiting": names, "estimate": 0.0, "costs": {}}
 
 
 def _start(home, budget, moment, run, api=None, spent_before=0.0):
