@@ -813,13 +813,13 @@ REINSTATE_WINDOW_H = 24
 def reinstate_removed_by_mistake(state: dict, now: datetime, window_h: float = REINSTATE_WINDOW_H) -> list:
     """I worker che la regola «sonda spesa» ha ritirato nelle ultime `window_h` ore tornano nel roster e si deve loro un respawn:
     quella regola ritirava anche chi spariva per un cambio di immagine o un riavvio del container (giro Linux, aggiornamento: nessuno
-    Scout alla piena). Una volta sola per worker (`reinstated_at`): se sparisce di nuovo dopo il respawn, la regola corretta lo ritira."""
+    Scout alla piena). Solo i ritiri di prima della regola corretta (senza `retire_rule`), e una volta sola per worker (`reinstated_at`): se sparisce di nuovo dopo il respawn, la regola corretta lo ritira."""
     back = []
     cutoff = now - timedelta(hours=window_h)
     for sess, entry in (state.get("agents") or {}).items():
         if entry.get("status") != "retired" or (entry.get("role") or "").strip().lower() not in WORKER_ROLES:
             continue
-        if entry.get("reinstated_at") or not str(entry.get("retire_reason") or "").startswith(REMOVED_BY_MISTAKE):
+        if entry.get("reinstated_at") or entry.get("retire_rule") or not str(entry.get("retire_reason") or "").startswith(REMOVED_BY_MISTAKE):
             continue
         retired = _parse_iso(entry.get("retired_at"))
         if retired is None or retired < cutoff:
@@ -883,6 +883,7 @@ def next_respawn(path: Path | None = None):
             if e:
                 e["status"] = "retired"
                 e["retired_at"] = _iso(now)
+                e["retire_rule"] = 2  # decisa con la regola corretta: non si reinserisce
                 e["retire_reason"] = (
                     REMOVED_BY_MISTAKE + " — "
                     "treating it as an intentional removal"
