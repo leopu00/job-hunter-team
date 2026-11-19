@@ -7,7 +7,7 @@ param(
   [string]$MachineName = 'jht-podman',
   [switch]$InstallDependencies,
   [switch]$InitializeMachine,
-  [string]$RuntimeImage = 'ghcr.io/leopu00/jht@sha256:f08c52a31ec6155b5147d75cc0713290eb9e6ea5b244abfac00cda1d3b45a9a4',
+  [string]$RuntimeImage = 'ghcr.io/leopu00/jht@sha256:d738634ba3b9de0487d120a386b5e412d2c5d112101ff3af1d664e49a84975fe',
   [string]$ExpectedImageDigest = '',
   [switch]$PersistImagePin,
   [string]$ExtrasImageDigest = '',
