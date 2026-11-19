@@ -1,10 +1,10 @@
-"""`jht download` asks for the file names the release workflow really publishes.
+"""`jht download` asks for no file the release workflow does not publish.
 
-The names are written in four places that nothing tied together: the workflow that copies each installer into
+The names were written in four places that nothing tied together: the workflow that copies each installer into
 `release-assets/` and tells `release_artifacts.py verify` which ones to expect, the bash wrapper, the PowerShell
 wrapper and the Node CLI. A name that drifts in one of them is a download that looks for a file the release does
 not have (the checksum line is missing, or the asset is a 404). This reads the names from the workflow, not from a
-list kept here, and fails when any of the other three asks for a different set.
+list kept here. In 0.4.0 the two wrappers download nothing (no desktop app in the release): they ask for no name.
 """
 
 import re
@@ -18,7 +18,7 @@ CLI_DOWNLOAD = (ROOT / "cli/src/commands/download.js").read_text(encoding="utf-8
 
 NAME = r"job-hunter-team-[A-Za-z0-9_-]+(?:\.[A-Za-z0-9]+)+"  # a file name with an extension (not the CLI user agent)
 # 0.4.0 ships no Windows installer (tests/test_update_release_assets.py); the Windows name below is the one of the
-# 0.3.x releases, which the wrapper still serves for those versions and refuses from 0.4.
+# 0.3.x releases, which the Node CLI still serves for those versions and refuses from 0.4.
 WINDOWS_OF_THE_OLD_RELEASES = "job-hunter-team-windows-x64-setup.exe"
 
 
@@ -47,14 +47,14 @@ def test_the_workflow_publishes_the_one_installer_of_0_4_0() -> None:
     assert "linux" not in " ".join(_published()).lower()
 
 
-def test_the_bash_wrapper_asks_for_the_published_names() -> None:
+def test_the_bash_wrapper_asks_for_no_file_of_the_release() -> None:
     body = _between(WRAPPER_SH, "handle_host_download() {", "# ── Upgrade runtime")
-    assert _names(body) == _published()
+    assert _names(body) == set() and WINDOWS_OF_THE_OLD_RELEASES not in body
 
 
-def test_the_powershell_wrapper_asks_for_the_published_names() -> None:
+def test_the_powershell_wrapper_asks_for_no_file_of_the_release() -> None:
     body = _between(WRAPPER_PS1, "function Invoke-HostDownload {", "# ── Upgrade runtime")
-    assert _names(body) == _published()
+    assert _names(body) == set() and WINDOWS_OF_THE_OLD_RELEASES not in body
 
 
 def test_the_node_cli_asks_for_the_published_names() -> None:
@@ -62,10 +62,11 @@ def test_the_node_cli_asks_for_the_published_names() -> None:
 
 
 def test_the_windows_name_is_only_for_the_old_releases() -> None:
-    # the name is in the wrappers and the CLI for 0.3.x; the release of 0.4.0 neither builds nor expects it
+    # the name is in the Node CLI for 0.3.x; the release of 0.4.0 neither builds nor expects it, and the wrappers do not ask it
     assert WINDOWS_OF_THE_OLD_RELEASES not in RELEASE
-    for text in (WRAPPER_SH, WRAPPER_PS1, CLI_DOWNLOAD):
-        assert WINDOWS_OF_THE_OLD_RELEASES in text
+    assert WINDOWS_OF_THE_OLD_RELEASES in CLI_DOWNLOAD
+    for text in (WRAPPER_SH, WRAPPER_PS1):
+        assert WINDOWS_OF_THE_OLD_RELEASES not in text
 
 
 def test_no_linux_installer_is_built_expected_attached_or_asked_for() -> None:

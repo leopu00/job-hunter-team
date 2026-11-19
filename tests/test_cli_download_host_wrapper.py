@@ -1,4 +1,4 @@
-"""Il wrapper PowerShell scarica sull'host (vedi anche test_download_is_verified_on_the_host.py) e il resto del suo contratto."""
+"""Il wrapper PowerShell: `jht download` non scarica niente nella 0.4.0 (vedi test_windows_download_is_verified_on_the_host.py) e il resto del suo contratto."""
 
 from pathlib import Path
 
@@ -11,16 +11,12 @@ WINDOWS_ACL_SELFTEST = ROOT / "scripts" / "windows-config-acl-selftest.ps1"
 WINDOWS_ACL_WORKFLOW = ROOT / ".github" / "workflows" / "windows-config-acl.yml"
 
 
-def test_powershell_wrapper_downloads_on_the_host_and_publishes_without_clobbering():
+def test_powershell_wrapper_download_says_there_is_no_desktop_app_and_fetches_nothing():
     source = POWERSHELL_WRAPPER.read_text(encoding="utf-8")
-    for seam in (
-        "function Invoke-HostDownload",
-        "[IO.File]::Move($part, $destination)",
-        "Get-DownloadSha256",
-        "'download' {",
-        "$env:JHT_RELEASE_BASE_URL",
-    ):
+    for seam in ("function Invoke-HostDownload", "'download' {", "Get-JhtText 'download.no_desktop_app'"):
         assert seam in source
+    for gone in ("Get-DownloadSha256", "[IO.File]::Move($part, $destination)", "$env:JHT_RELEASE_BASE_URL"):
+        assert gone not in source, gone
 
 
 def test_powershell_wrapper_forwards_detached_compose_flag_as_a_literal():
@@ -44,11 +40,10 @@ def test_powershell_download_exit_code_cannot_degrade_to_zero():
     # dispatcher therefore consumes a dedicated scalar, initialized nonzero,
     # instead of assigning the output plus the return value to `$code`.
     assert "$script:HostDownloadExitCode = 1" in function
-    assert "$script:HostDownloadExitCode = 0" in function
+    # there is nothing to download in 0.4.0: the command never ends with 0
+    assert "$script:HostDownloadExitCode = 0" not in function
     assert "Invoke-HostDownload $Rest\n    exit $script:HostDownloadExitCode" in dispatcher
     assert "$code = Invoke-HostDownload" not in dispatcher
-    # the progress of the download cannot become an error either: it is switched off for the call
-    assert "$ProgressPreference = 'SilentlyContinue'" in function and "$ProgressPreference = $previousProgress" in function
 
 
 def test_windows_cmd_shim_propagates_powershell_exit_code_on_both_paths():

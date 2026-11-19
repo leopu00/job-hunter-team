@@ -62,65 +62,23 @@ def test_runtime_operations_use_only_the_attested_container_id(
 
 
 
-def test_host_download_is_checked_on_the_host_and_never_calls_the_container(
+def test_host_download_downloads_nothing_and_never_calls_the_container(
     tmp_path: Path,
 ):
-    # The download used to be copied from the attested container (docker cp, cleaned up there): it is now fetched and checked
-    # by the host from the release, in a private folder, and the container is no longer part of the command.
-    import threading
-    from functools import partial
-    from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+    # The download used to be copied from the attested container (docker cp), then fetched and checked by the host: in 0.4.0
+    # the release has no desktop app, and the command downloads nothing and calls no container engine.
+    wrapper, env, _, _ = _runtime(tmp_path)
+    env["JHT_CONTAINER_NAME"] = "same-name-decoy"
+    env["JHT_RELEASE_BASE_URL"] = "http://127.0.0.1:9"
+    destination = tmp_path / "downloads" / "desktop.dmg"
 
-    asset = b"verified release bytes\n"
-    release = tmp_path / "site" / "v0.4.0"
-    release.mkdir(parents=True)
-    (release / "job-hunter-team-macos-universal.dmg").write_bytes(asset)
-    (release / "SHA256SUMS").write_text(
-        f"{hashlib.sha256(asset).hexdigest()}  job-hunter-team-macos-universal.dmg\n", encoding="utf-8"
-    )
+    result = _run(wrapper, env, "download", "--os", "macos", "--version", "0.4.0", "--output", str(destination))
 
-    class Quiet(SimpleHTTPRequestHandler):
-        def log_message(self, *args):
-            pass
-
-    server = ThreadingHTTPServer(("127.0.0.1", 0), partial(Quiet, directory=str(tmp_path / "site")))
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    try:
-        wrapper, env, _, _ = _runtime(tmp_path)
-        env["JHT_CONTAINER_NAME"] = "same-name-decoy"
-        env["JHT_RELEASE_BASE_URL"] = f"http://127.0.0.1:{server.server_port}"
-        env["JHT_DOWNLOAD_HOST"] = "darwin-arm64"
-        # the fixture's curl only knows the runtime files of the upgrade: the download needs the real one
-        real_curl = shutil.which("curl", path=os.environ["PATH"])
-        assert real_curl, "curl is needed to download"
-        real_bin = tmp_path / "real-curl-bin"
-        real_bin.mkdir()
-        (real_bin / "curl").symlink_to(real_curl)
-        env["PATH"] = f"{real_bin}{os.pathsep}{env['PATH']}"
-        destination = tmp_path / "downloads" / "desktop.dmg"
-
-        result = _run(
-            wrapper,
-            env,
-            "download",
-            "--os",
-            "macos",
-            "--version",
-            "0.4.0",
-            "--output",
-            str(destination),
-        )
-    finally:
-        server.shutdown()
-        server.server_close()
-
-    assert result.returncode == 0, result.stderr
-    assert destination.read_bytes() == asset
-    assert hashlib.sha256(asset).hexdigest() in result.stdout
-    # no call to any container engine for the download: not an exec, not a cp, not an inspect of the attested id or of a name
+    assert result.returncode == 1, result.stderr
+    assert "The desktop app is not part of 0.4.0" in result.stderr
+    assert not destination.parent.exists()
+    # no call to any container engine: not an exec, not a cp, not an inspect of the attested id or of a name
     assert _docker_calls(env) == []
-    assert not [p for p in destination.parent.iterdir() if ".part" in p.name]
-
 
 
 @pytest.mark.parametrize("operation", OPERATIONS)
