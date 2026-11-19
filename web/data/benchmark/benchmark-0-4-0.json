@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-17",
+  "updated": "2026-11-19",
   "kind": "first-comparison-not-a-clean-benchmark",
   "privacy": "Synthetic profiles only: invented people, generic names, no real names, hosts, addresses or keys.",
   "targets": [
@@ -22,9 +22,11 @@
       "row": "install",
       "os": "linux",
       "status": "pass",
-      "build": 6,
-      "proof": [],
-      "note": "cleanLinuxRoundMissing"
+      "build": 11,
+      "proof": [
+        "r18"
+      ],
+      "note": null
     },
     {
       "id": "installMac",
@@ -41,12 +43,12 @@
       "section": "update",
       "row": "update",
       "os": "windows",
-      "status": "fail",
-      "build": 10,
+      "status": "pass",
+      "build": 13,
       "proof": [
-        "r16"
+        "r26"
       ],
-      "note": "updateWindowsBuild10"
+      "note": "updateWindowsBuild13"
     },
     {
       "id": "updateLinux",
@@ -64,38 +66,40 @@
       "row": "update",
       "os": "macos",
       "status": "pass",
-      "build": 10,
+      "build": 11,
       "proof": [
-        "r15"
+        "r19"
       ],
-      "note": "updateMacBuild10"
+      "note": "updateMacBuild11"
     },
     {
       "id": "nonItRelevant",
       "section": "realUser",
       "status": "fail",
-      "build": 8,
+      "build": 15,
       "proof": [
-        "r12",
-        "r14"
+        "r27",
+        "r30"
       ],
-      "note": "relevantBelow",
+      "note": "relevantCandidate",
       "criteria": [
         {
-          "k": "newPositions",
-          "trade": "bricklayer",
-          "v": 0,
-          "ok": false,
-          "round": "r12"
+          "k": "relevantOf",
+          "trade": "electrician",
+          "v": 14,
+          "of": 18,
+          "min": 70,
+          "ok": true,
+          "round": "r18"
         },
         {
           "k": "relevantOf",
-          "trade": "receptionist",
-          "v": 10,
-          "of": 26,
+          "trade": "electrician",
+          "v": 20,
+          "of": 33,
           "min": 70,
           "ok": false,
-          "round": "r14"
+          "round": "r27"
         }
       ]
     },
@@ -218,24 +222,28 @@
     {
       "id": "budgetBrake",
       "section": "brake",
-      "status": "pending",
-      "build": 10,
+      "status": "fail",
+      "build": 15,
       "proof": [
-        "r14"
+        "r27",
+        "r28",
+        "r30"
       ],
-      "note": "brakeFixedRetry",
+      "note": "brakeCandidate",
       "criteria": [
         {
           "k": "underCeiling",
-          "v": 4.95,
-          "max": 5,
-          "ok": true,
-          "round": "r14"
+          "v": 1.13,
+          "max": 1,
+          "ok": false,
+          "round": "r27"
         },
         {
-          "k": "noFalseUnlock",
-          "ok": false,
-          "round": "r14"
+          "k": "underCeiling",
+          "v": 2.55,
+          "max": 3,
+          "ok": true,
+          "round": "r30"
         }
       ]
     },
@@ -244,12 +252,13 @@
       "section": "language",
       "row": "language",
       "os": "windows",
-      "status": "fail",
-      "build": 8,
+      "status": "pass",
+      "build": 12,
       "proof": [
-        "r14"
+        "r17",
+        "r22"
       ],
-      "note": "languageEnglish"
+      "note": "languageFrenchGermanOk"
     },
     {
       "id": "languageLinux",
@@ -257,9 +266,11 @@
       "row": "language",
       "os": "linux",
       "status": "pass",
-      "build": 9,
-      "proof": [],
-      "note": "languageGermanOk"
+      "build": 11,
+      "proof": [
+        "r18"
+      ],
+      "note": "languageItalianOk"
     },
     {
       "id": "languageMac",
@@ -276,12 +287,14 @@
     {
       "id": "doctorMaintainer",
       "section": "doctor",
-      "status": "fail",
-      "build": 8,
+      "status": "pass",
+      "build": 12,
       "proof": [
-        "r14"
+        "r17",
+        "r20",
+        "r21"
       ],
-      "note": "zeroTurns",
+      "note": "doctorWorks",
       "emoji": "🩺"
     },
     {
@@ -408,6 +421,50 @@
       "rounds": [
         "r15",
         "r16"
+      ]
+    },
+    {
+      "n": 11,
+      "commit": "0f832351b",
+      "day": "18/11",
+      "rounds": [
+        "r17",
+        "r18",
+        "r19"
+      ]
+    },
+    {
+      "n": 12,
+      "commit": "250d6a170, 0d6b27c09, 5d92891f8",
+      "day": "18/11",
+      "rounds": [
+        "r20",
+        "r21",
+        "r22",
+        "r23",
+        "r24"
+      ]
+    },
+    {
+      "n": 13,
+      "commit": "6fd4caeda",
+      "day": "18/11",
+      "rounds": [
+        "r25",
+        "r26"
+      ]
+    },
+    {
+      "n": 15,
+      "commit": "e498085c7",
+      "day": "18-19/11",
+      "rounds": [
+        "r27",
+        "r28",
+        "r29",
+        "r30",
+        "r31",
+        "r32"
       ]
     }
   ],
@@ -1113,6 +1170,342 @@
           "ok": true
         }
       ]
+    },
+    {
+      "id": "r17",
+      "os": "windows",
+      "service": "claude",
+      "day": "18/11",
+      "profile": "warehouseWorker",
+      "mode": "onsite",
+      "build": "0f832351b",
+      "buildNo": 11,
+      "minutes": 92.0,
+      "cost": 2.36,
+      "calls": 309,
+      "found": 7,
+      "scored": 6,
+      "relevant": 5,
+      "bestScore": 90,
+      "roster": null,
+      "outcome": "reservations",
+      "note": "updateWindowsBuild11",
+      "lang": "de"
+    },
+    {
+      "id": "r18",
+      "os": "linux",
+      "service": "claude",
+      "day": "18/11",
+      "profile": "electrician",
+      "mode": "onsite",
+      "build": "0f832351b",
+      "buildNo": 11,
+      "minutes": 238.6,
+      "cost": 2.65,
+      "calls": 497,
+      "found": 18,
+      "scored": 15,
+      "relevant": 14,
+      "bestScore": 91,
+      "roster": "5/3/2",
+      "outcome": "reservations",
+      "note": "installLinuxBuild11",
+      "lang": "it"
+    },
+    {
+      "id": "r19",
+      "os": "macos",
+      "service": "claude",
+      "day": "18/11",
+      "profile": "officeClerk",
+      "mode": "onsite",
+      "build": "0f832351b",
+      "buildNo": 11,
+      "minutes": 47.6,
+      "cost": 1.97,
+      "calls": 183,
+      "found": 6,
+      "scored": 0,
+      "relevant": 5,
+      "bestScore": null,
+      "roster": null,
+      "outcome": "reservations",
+      "note": "updateMacBuild11",
+      "lang": "pt"
+    },
+    {
+      "id": "r20",
+      "os": "linux",
+      "service": "claude",
+      "day": "18/11",
+      "profile": "electrician",
+      "mode": "onsite",
+      "build": "250d6a170",
+      "buildNo": 12,
+      "minutes": 150.2,
+      "cost": 1.76,
+      "calls": 209,
+      "found": 4,
+      "scored": 7,
+      "relevant": 2,
+      "bestScore": 74,
+      "roster": null,
+      "outcome": "reservations",
+      "note": "updateLinuxBuild12b",
+      "lang": "it"
+    },
+    {
+      "id": "r21",
+      "os": "macos",
+      "service": "claude",
+      "day": "18/11",
+      "profile": "officeClerk",
+      "mode": "onsite",
+      "build": "250d6a170",
+      "buildNo": 12,
+      "minutes": 20.1,
+      "cost": 1.16,
+      "calls": 224,
+      "found": 11,
+      "scored": 13,
+      "relevant": 6,
+      "bestScore": 89,
+      "roster": null,
+      "outcome": "reservations",
+      "note": "updateMacBuild12b",
+      "lang": "pt"
+    },
+    {
+      "id": "r22",
+      "os": "windows",
+      "service": "claude",
+      "day": "18/11",
+      "profile": "careAssistant",
+      "mode": "onsite",
+      "build": "0d6b27c09",
+      "buildNo": 12,
+      "minutes": 239.1,
+      "cost": 3.32,
+      "calls": 594,
+      "found": 23,
+      "scored": 17,
+      "relevant": 14,
+      "bestScore": 96,
+      "roster": null,
+      "outcome": "fail",
+      "note": "updateWindowsBuild12c",
+      "lang": "fr"
+    },
+    {
+      "id": "r23",
+      "os": "linux",
+      "service": "claude",
+      "day": "18/11",
+      "profile": "electrician",
+      "mode": "onsite",
+      "build": "5d92891f8",
+      "buildNo": 12,
+      "minutes": 74.5,
+      "cost": 0.58,
+      "calls": 132,
+      "found": 7,
+      "scored": 1,
+      "relevant": 6,
+      "bestScore": 89,
+      "roster": null,
+      "outcome": "reservations",
+      "note": "updateLinuxBuild12d",
+      "lang": "it"
+    },
+    {
+      "id": "r24",
+      "os": "macos",
+      "service": "claude",
+      "day": "18/11",
+      "profile": "officeClerk",
+      "mode": "onsite",
+      "build": "5d92891f8",
+      "buildNo": 12,
+      "minutes": 32.5,
+      "cost": 0.76,
+      "calls": 97,
+      "found": 12,
+      "scored": 0,
+      "relevant": 4,
+      "bestScore": null,
+      "roster": null,
+      "outcome": "reservations",
+      "note": "updateMacBuild12d",
+      "lang": "pt"
+    },
+    {
+      "id": "r25",
+      "os": "linux",
+      "service": "claude",
+      "day": "18/11",
+      "profile": "electrician",
+      "mode": "onsite",
+      "build": "6fd4caeda",
+      "buildNo": 13,
+      "minutes": 197.1,
+      "cost": 1.59,
+      "calls": 361,
+      "found": 8,
+      "scored": 13,
+      "relevant": 6,
+      "bestScore": 90,
+      "roster": null,
+      "outcome": "reservations",
+      "note": "updateLinuxBuild13",
+      "lang": "it"
+    },
+    {
+      "id": "r26",
+      "os": "windows",
+      "service": "claude",
+      "day": "18/11",
+      "profile": "careAssistant",
+      "mode": "onsite",
+      "build": "6fd4caeda",
+      "buildNo": 13,
+      "minutes": 28.4,
+      "cost": 1.63,
+      "calls": 221,
+      "found": 0,
+      "scored": 5,
+      "relevant": 0,
+      "bestScore": 87,
+      "roster": null,
+      "outcome": "reservations",
+      "note": "updateWindowsBuild13",
+      "lang": "fr"
+    },
+    {
+      "id": "r27",
+      "os": "linux",
+      "service": "claude",
+      "day": "18-19/11 night",
+      "profile": "electrician",
+      "mode": "onsite",
+      "build": "e498085c7",
+      "buildNo": 15,
+      "minutes": 115.0,
+      "cost": 2.89,
+      "calls": 559,
+      "found": 33,
+      "scored": 18,
+      "relevant": 20,
+      "bestScore": 85,
+      "roster": null,
+      "outcome": "fail",
+      "note": "candidateLinux",
+      "lang": "it"
+    },
+    {
+      "id": "r28",
+      "os": "linux",
+      "service": "claude",
+      "day": "19/11",
+      "profile": "electrician",
+      "mode": "onsite",
+      "build": "48f232dbc",
+      "buildNo": 15,
+      "minutes": 67.4,
+      "cost": 2.28,
+      "calls": 372,
+      "found": 14,
+      "scored": 23,
+      "relevant": 9,
+      "bestScore": 91,
+      "roster": null,
+      "outcome": "reservations",
+      "note": "retestBrake",
+      "lang": "it"
+    },
+    {
+      "id": "r29",
+      "os": "linux",
+      "service": "claude",
+      "day": "19/11",
+      "profile": "electrician",
+      "mode": "onsite",
+      "build": "dacf07805",
+      "buildNo": 15,
+      "minutes": 117.8,
+      "cost": 2.55,
+      "calls": 302,
+      "found": 6,
+      "scored": 10,
+      "relevant": 2,
+      "bestScore": 85,
+      "roster": null,
+      "outcome": "reservations",
+      "note": "retestPace",
+      "lang": "it"
+    },
+    {
+      "id": "r30",
+      "os": "linux",
+      "service": "claude",
+      "day": "19/11",
+      "profile": "electrician",
+      "mode": "onsite",
+      "build": "99171d06d",
+      "buildNo": 15,
+      "minutes": 146.7,
+      "cost": 2.55,
+      "calls": 357,
+      "found": 15,
+      "scored": 7,
+      "relevant": 1,
+      "bestScore": 78,
+      "roster": null,
+      "outcome": "fail",
+      "note": "retestFull",
+      "lang": "it"
+    },
+    {
+      "id": "r31",
+      "os": "linux",
+      "service": "claude",
+      "day": "19/11",
+      "profile": "electrician",
+      "mode": "onsite",
+      "build": "a7d7dde18",
+      "buildNo": 15,
+      "minutes": 66.3,
+      "cost": 0.78,
+      "calls": 72,
+      "found": 0,
+      "scored": 0,
+      "relevant": 0,
+      "bestScore": null,
+      "roster": null,
+      "outcome": "fail",
+      "note": "retestReserve",
+      "lang": "it"
+    },
+    {
+      "id": "r32",
+      "os": "linux",
+      "service": "claude",
+      "day": "19/11",
+      "profile": "electrician",
+      "mode": "onsite",
+      "build": "8d5f09a2b",
+      "buildNo": 15,
+      "minutes": 76.5,
+      "cost": 1.65,
+      "calls": 251,
+      "found": 2,
+      "scored": 1,
+      "relevant": 2,
+      "bestScore": 86,
+      "roster": null,
+      "outcome": "fail",
+      "note": "retestResumes",
+      "lang": "it"
     }
   ],
   "services": [

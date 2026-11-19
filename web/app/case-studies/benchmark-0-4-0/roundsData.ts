@@ -88,12 +88,23 @@ const BENCH_TARGET: Record<string, string> = {
   bricklayer: "scoutBenchBricklayer",
 };
 
+// Two rounds of the same day, system, trade and service (an update and its retests) would share an address: the first
+// keeps the plain one, each later one adds the commit it tried.
+const roundSlugs = new Map<string, string>();
+const taken = new Set<string>();
+for (const r of data.rounds) {
+  const plain = `${isoDay(r.day)}-${r.os}-${kebab(r.profile)}-${r.service}`;
+  const slug = taken.has(plain) ? `${plain}-${r.build}` : plain;
+  taken.add(slug);
+  roundSlugs.set(r.id, slug);
+}
+
 export const TESTS: TestEntry[] = [
   ...data.rounds.map((r) => {
     const s = roundSeries[r.id] ?? {};
     return {
       id: r.id,
-      slug: `${isoDay(r.day)}-${r.os}-${kebab(r.profile)}-${r.service}`,
+      slug: roundSlugs.get(r.id) as string,
       kind: "round" as const,
       os: r.os,
       service: r.service,
