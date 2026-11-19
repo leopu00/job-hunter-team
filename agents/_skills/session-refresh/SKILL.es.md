@@ -56,7 +56,7 @@ Solo para las sesiones que **no** dispararon el TTL en el Paso 1.4.
 
 Dos requisitos tajantes — ignóralos y *quemas* presupuesto en vez de ahorrarlo:
 - La sesión DEBE estar **inactiva** (sin turno activo). Si se ve un spinner / `esc to interrupt`, está trabajando → SALTA esta ronda (la coge el siguiente Doctor). Nunca envíes teclas a mitad de turno.
-- **No teclees nunca `/status` ni `/context` a mano y no pulses `Escape` en un pane sin mirarlo.** Usa `session_context.py`: lee el porcentaje de los logs de la CLI (Codex, Kimi: ninguna tecla); solo en Claude abre `/context`, y cierra el panel con `Escape` hasta que la pantalla vuelva a mostrar el composer vacío (tres pulsaciones como máximo). No envía nada a un pane que no esté idle con el composer vacío. Salida `4` / `closed: false` = un panel sigue abierto: díselo al Capitano y NO pases a la sesión siguiente como si nada (un panel abierto hace fallar cada despertar de esa sesión).
+- **No teclees nunca `/status` ni `/context` a mano y no pulses `Escape` en un pane sin mirarlo.** Usa `session_context.py`: lee el porcentaje de los logs de la CLI (Codex, Kimi: ninguna tecla); en Claude, cuyos logs no dicen la ventana, no lee nada y no envía teclas (un contexto no medido es un salto; el TTL vale igualmente). El panel `/context` solo existe con `--panel`, que una ronda NUNCA pasa: en una sesión del harness llega como mensaje y el modelo lo responde, con el presupuesto. No envía nada a un pane que no esté idle con el composer vacío. Salida `4` / `closed: false` = un panel sigue abierto: díselo al Capitano y NO pases a la sesión siguiente como si nada (un panel abierto hace fallar cada despertar de esa sesión).
 
 ```bash
 S=<session>      # the provider is the one of the session (claude, codex, kimi)

@@ -80,7 +80,7 @@ def pane(tmp_path, monkeypatch):
 def test_a_claude_context_is_read_and_the_panel_is_closed_with_the_screen_checked(pane):
     make, seen, keys = pane
     make()
-    out = session_context.read("SCORER-2", "claude")
+    out = session_context.read("SCORER-2", "claude", panel=True)
     assert out["pct"] == 2.0 and out["source"] == "panel" and out["closed"] is True
     assert keys() == ["/context", "Enter", "Escape"] and seen()["mode"] == "idle"
 
@@ -88,37 +88,37 @@ def test_a_claude_context_is_read_and_the_panel_is_closed_with_the_screen_checke
 def test_a_panel_that_needs_two_escapes_gets_two_and_one_that_never_closes_is_reported_not_forgotten(pane):
     make, seen, keys = pane
     make(esc_needed=2)
-    out = session_context.read("SCORER-2", "claude")
+    out = session_context.read("SCORER-2", "claude", panel=True)
     assert out["closed"] is True and keys().count("Escape") == 2
 
     make(esc_needed=99)
-    out = session_context.read("SCORER-2", "claude")
+    out = session_context.read("SCORER-2", "claude", panel=True)
     assert out["closed"] is False and out["reason"] == "panel_still_open" and out["pct"] == 2.0
     assert keys().count("Escape") == session_context.CLOSE_PRESSES, "never an unlimited number of keys"
     make(esc_needed=99)
-    assert session_context.main(["SCORER-2", "--provider", "claude"]) == 4, "the Dottore sees a non-zero exit"
+    assert session_context.main(["SCORER-2", "--provider", "claude", "--panel"]) == 4, "the Dottore sees a non-zero exit"
 
 
 def test_nothing_is_typed_into_a_session_that_is_not_idle_with_an_empty_composer(pane):
     make, seen, keys = pane
     make(draft=True)                      # the person's text is in the composer
-    out = session_context.read("SCORER-2", "claude")
+    out = session_context.read("SCORER-2", "claude", panel=True)
     assert out["reason"] == "not_idle" and out["closed"] is True and keys() == []
     make(mode="busy")                     # a turn is running
-    assert session_context.read("SCORER-2", "claude")["reason"] == "not_idle" and keys() == []
+    assert session_context.read("SCORER-2", "claude", panel=True)["reason"] == "not_idle" and keys() == []
 
 
 def test_escape_is_never_pressed_on_a_draft_that_appeared_while_the_panel_was_open(pane):
     make, seen, keys = pane
     make(after_enter="panel_draft")       # the panel is open and somebody's text is in the composer
-    out = session_context.read("SCORER-2", "claude")
+    out = session_context.read("SCORER-2", "claude", panel=True)
     assert "Escape" not in keys() and out["closed"] is False and out["reason"] == "draft"
 
 
 def test_escape_is_never_pressed_on_a_turn_that_started(pane):
     make, seen, keys = pane
     make(after_enter="busy")              # the command started a turn: Escape would interrupt it
-    out = session_context.read("SCORER-2", "claude")
+    out = session_context.read("SCORER-2", "claude", panel=True)
     assert "Escape" not in keys() and out["closed"] is False and out["reason"] == "turn_started"
 
 
@@ -267,3 +267,12 @@ def test_the_skill_says_the_decision_comes_from_the_script_in_every_language():
         assert "--age-h" in text and "decision.used_pct" in text and "decision.action" in text, skill.name
         assert "skipped_unmeasured" in text, skill.name
         assert "ctx=unparsed" not in text, skill.name
+
+
+def test_a_round_of_the_dottore_types_nothing_into_a_claude_session(pane):
+    make, seen, keys = pane
+    """P2-3: `/context` reached the Assistente and the Mentor of the harness as a message, and they answered it with the budget."""
+    make(mode="idle")
+    out = session_context.read("ASSISTENTE", "claude")
+    assert out["source"] == "none" and out["reason"] == "no_log_no_key_sent" and out["closed"] is True
+    assert keys() == [], "no key may reach the composer without --panel"

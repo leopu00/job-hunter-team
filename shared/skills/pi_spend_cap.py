@@ -143,6 +143,19 @@ def pending_wakes(home):
         return []
 
 
+QUEUE_STALE_SEC = 2 * 3600    # a queue nobody has touched for this long is not one the pace is still working through
+
+
+def waiting(home, now_ts):
+    """The sessions that still wait for their stage of the pace: nobody else wakes them before it (the throttle, the Dottore's
+    unblock, the Dottore itself). A queue that is old is a queue left behind, not a wait."""
+    try:
+        at = float(json.loads((Path(home) / QUEUE_FILE).read_text(encoding="utf-8")).get("at") or 0)
+    except (OSError, ValueError, AttributeError, TypeError):
+        return []
+    return pending_wakes(home) if 0 <= now_ts - at <= QUEUE_STALE_SEC else []
+
+
 def set_pending(home, names, moment):
     _write_state(Path(home) / QUEUE_FILE, {"pending": list(names), "at": float(moment)})
 
@@ -419,8 +432,24 @@ def clock(moment, config, today=None):
     return "%s (%s)" % (when, getattr(zone, "key", None) or local.tzname() or "UTC") if zone is not None else when
 
 
+def person_clock(moment, config, today, i18n):
+    """The hour as the person reads it: «03:50» today, «03:50 tomorrow» the day after, the date only further away. No zone name:
+    it is their own."""
+    zone = team_budget.timezone_of(config)
+    local = datetime.fromtimestamp(moment, zone)
+    day = datetime.fromtimestamp(today, zone).date() if today is not None else local.date()
+    hour = local.strftime("%H:%M")
+    days = (local.date() - day).days
+    if days == 0:
+        return hour
+    if days == 1:
+        return i18n.tf("pi_cap.tomorrow", hour)
+    return local.strftime("%Y-%m-%d ") + hour
+
+
 def user_text(verdict, spent, config=None, now=None):
     i18n = quota_data.shared_i18n()  # shared/i18n.py, found from the skills folder too
+    clock = lambda moment, cfg, today: person_clock(moment, cfg, today, i18n)  # noqa: E731 - here the hour is the person's, not the Captain's
 
     if verdict["action"] == "warn":
         return i18n.tf("pi_cap.no_ceiling", "%s USD" % _money(spent["cost"]))
