@@ -82,7 +82,7 @@ export const T: Record<Locale, Copy> = {
   en: {
     metaTitle: "0.4.0 benchmark · Job Hunter Team",
     title: "0.4.0 benchmark: four services, three systems",
-    lead: "What the team spent and found in the test rounds of 14-17 November 2026, with the API-key services the 0.4.0 harness offers. Numbers come from the test reports and the cost samplers.",
+    lead: "What the team spent and found in the test rounds of 14-19 November 2026, with the API-key services the 0.4.0 harness offers. Numbers come from the test reports and the cost samplers.",
     banner:
       "A first comparison, not a clean benchmark. Machines, profiles, builds, budgets and team sizes differ between rounds, and there is one round per service: read the limits below before comparing.",
     roundsTitle: "Every round",
@@ -128,7 +128,7 @@ export const T: Record<Locale, Copy> = {
     need: "Four identical VPSs started together, the same profile for everyone, 30 minutes of work after onboarding, the same build with the budget brake fixed, and credit on all four services.",
     back: "← All case studies",
     footer:
-      "Synthetic profiles, no personal data · numbers from the test reports of 14-17/11/2026.",
+      "Synthetic profiles, no personal data · numbers from the test reports of 14-19/11/2026.",
     marks:
       "The logos only name the service a test used and imply no endorsement. Trademarks and logos belong to their owners.",
     outcome: {
@@ -152,6 +152,8 @@ export const T: Record<Locale, Copy> = {
       waiter: "Waiter",
       receptionist: "Receptionist",
       truckDriver: "Truck driver",
+      electrician: "Electrician",
+      careAssistant: "Care assistant",
     },
     modes: { onsite: "on site", unspecified: "" },
     services: {
@@ -191,6 +193,38 @@ export const T: Record<Locale, Copy> = {
         "The budget brake did not trigger: stopped by the test at 5.28 $.",
       noCredit:
         "OpenAI had no credit and the machine shut down with the terminal: no Scout started, 0 positions in 30 minutes; only the Assistant (on GLM) spent 0.23 $.",
+      updateWindowsBuild11:
+        "Update from build 10 to 11, all in German: team and data kept, the Analyst starts again by itself; 5 relevant of 7 new.",
+      installLinuxBuild11:
+        "Install from scratch and guided onboarding all in Italian, the key kept: 14 relevant of 18. The memory guard retires the Scouts without telling the person, and they do not come back.",
+      updateMacBuild11:
+        "Update from build 10 to 11 in Portuguese: positions, scores and key kept, disk space back; the budget of the period is spent before the 6 new positions are scored.",
+      updateLinuxBuild12b:
+        "Update to the first version of build 12: team and data kept; the Doctor is started during the pace pause, and the resume after it spends the margin in seconds.",
+      updateMacBuild12b:
+        "Update to the first version of build 12: 6 relevant of 11 new, best score 89; the setup says the configuration failed while the team starts by itself.",
+      updateWindowsBuild12c:
+        "Update to build 12 with the Assistant chat open, all in French: it stops halfway and the jht command does not work until the installer is run again.",
+      updateLinuxBuild12d:
+        "Update to the last version of build 12: team and data kept; the resume after the pace pause works 275 seconds instead of about 80, and the service roles are not woken.",
+      updateMacBuild12d:
+        "Update to the last version of build 12: team and data kept, the false notice of a failed setup is gone; 12 new positions, not scored yet in the window.",
+      updateLinuxBuild13:
+        "Update to build 13: team and data kept; the enrichments run on every checked position but add no coordinates and no logos; 0.0085 $ per analysed position.",
+      updateWindowsBuild13:
+        "Retest of the update with the chat open: it ends and the jht command works; the chat itself still closes with a raw line.",
+      candidateLinux:
+        "Update to the release candidate, team and data kept: the first spending ceiling holds, the second is passed by 13% after a resume; 20 relevant of 33 new (61%, 70% needed).",
+      retestBrake:
+        "Brake retest on a test image built on the candidate: the ceiling holds both times (0.36 of 1 $ and 1.92 of 3 $); after the unlock of a new budget the pace lets 0.86 $ pass over its line.",
+      retestPace:
+        "Retest of the staged wake-up after the pace pause: the stages work and the period never passes its line or ceiling (2.55 of 3 $); two other channels still wake the workers that wait.",
+      retestFull:
+        "Full retest: line and ceiling never passed (2.55 of 3 $), but the workers waiting for their stage still work and the first pause comes 48 seconds after the unlock; 1 relevant of 15, all from one agency portal.",
+      retestReserve:
+        "Full retest, closed early: the stages work, but the estimated reserve of the restart stops the team 10 to 20 seconds after every stage; no new position.",
+      retestResumes:
+        "Retest, closed early: the unlock now works ten minutes before the first pause, but both resumes stop within the first minute, and after the update the Captain wakes all seven workers outside the stages.",
     },
     osNotes: {
       linux:
@@ -291,6 +325,20 @@ export const T: Record<Locale, Copy> = {
       keysChecked:
         "0 files with a key outside their place, on 20,927 file events",
       updateOnBuild9: "update on build 9",
+      updateMacBuild11:
+        "build 11: positions, scores and key kept, disk space back, all in Portuguese",
+      updateWindowsBuild13:
+        "build 13: the update with the chat open ends and the jht command works, all in French",
+      relevantCandidate:
+        "release candidate: 20 relevant of 33 for the electrician (61%); 14 of 18 on build 11. To be proven again on a new install",
+      brakeCandidate:
+        "release candidate: the second ceiling passed by 13%; on the test images after it the ceiling always holds, three defects of the pace still open",
+      languageFrenchGermanOk:
+        "builds 11-13: German and French all through the flow; a few lines still in English (help of the command)",
+      languageItalianOk:
+        "build 11: install and onboarding all in Italian on Linux",
+      doctorWorks:
+        "builds 11-12: Doctor and Maintainer do their turns with no error and unlock the right agents",
     },
     invalidTitle: "Rounds that do not count",
     invalidLead:
@@ -404,7 +452,7 @@ export const T: Record<Locale, Copy> = {
   it: {
     metaTitle: "Benchmark 0.4.0 · Job Hunter Team",
     title: "Benchmark 0.4.0: quattro servizi, tre sistemi",
-    lead: "Quanto ha speso e trovato la squadra nei giri di prova del 14-17 novembre 2026, con i servizi a chiave API che l'harness 0.4.0 offre. I numeri vengono dai verbali dei collaudi e dai campionatori dei costi.",
+    lead: "Quanto ha speso e trovato la squadra nei giri di prova del 14-19 novembre 2026, con i servizi a chiave API che l'harness 0.4.0 offre. I numeri vengono dai verbali dei collaudi e dai campionatori dei costi.",
     banner:
       "Un primo confronto, non un benchmark pulito. Macchine, profili, build, budget e dimensioni della squadra cambiano da un giro all'altro, e c'è un giro per servizio: leggi i limiti qui sotto prima di confrontare.",
     roundsTitle: "Ogni giro",
@@ -450,7 +498,7 @@ export const T: Record<Locale, Copy> = {
     need: "Quattro VPS uguali accese insieme, lo stesso profilo per tutti, 30 minuti di lavoro dopo l'onboarding, la stessa build con il freno del budget corretto e credito su tutti e quattro i servizi.",
     back: "← Tutti i case study",
     footer:
-      "Profili finti, nessun dato personale · numeri dai verbali dei collaudi del 14-17/11/2026.",
+      "Profili finti, nessun dato personale · numeri dai verbali dei collaudi del 14-19/11/2026.",
     marks:
       "I loghi indicano solo il servizio usato da una prova e non implicano alcuna approvazione. Marchi e loghi appartengono ai rispettivi proprietari.",
     outcome: {
@@ -474,6 +522,8 @@ export const T: Record<Locale, Copy> = {
       waiter: "Cameriere",
       receptionist: "Receptionist",
       truckDriver: "Autista C+E",
+      electrician: "Elettricista",
+      careAssistant: "Operatrice socio-sanitaria",
     },
     modes: { onsite: "in sede", unspecified: "" },
     services: {
@@ -513,6 +563,38 @@ export const T: Record<Locale, Copy> = {
         "Il freno del budget non è scattato: fermato dal collaudo a 5,28 $.",
       noCredit:
         "OpenAI senza credito e macchina spenta con il terminale: nessuno Scout è partito, 0 posizioni in 30 minuti; ha speso solo l'Assistente (su GLM), 0,23 $.",
+      updateWindowsBuild11:
+        "Aggiornamento dalla build 10 alla 11, tutto in tedesco: squadra e dati tenuti, l'Analista riparte da solo; 5 pertinenti su 7 nuove.",
+      installLinuxBuild11:
+        "Installazione da zero e onboarding guidato tutto in italiano, chiave tenuta: 14 pertinenti su 18. La guardia della memoria ritira gli Scout senza dirlo alla persona, e non tornano.",
+      updateMacBuild11:
+        "Aggiornamento dalla build 10 alla 11 in portoghese: annunci, punteggi e chiave tenuti, spazio su disco tornato; il budget del periodo finisce prima che le 6 nuove abbiano un punteggio.",
+      updateLinuxBuild12b:
+        "Aggiornamento alla prima versione della build 12: squadra e dati tenuti; il Dottore viene avviato durante la pausa del ritmo, e la ripresa dopo spende il margine in pochi secondi.",
+      updateMacBuild12b:
+        "Aggiornamento alla prima versione della build 12: 6 pertinenti su 11 nuove, miglior punteggio 89; il setup dice che la configurazione è fallita mentre la squadra parte da sola.",
+      updateWindowsBuild12c:
+        "Aggiornamento alla build 12 con la chat dell'Assistente aperta, tutto in francese: si ferma a metà e il comando jht non funziona finché non si rilancia l'installer.",
+      updateLinuxBuild12d:
+        "Aggiornamento all'ultima versione della build 12: squadra e dati tenuti; la ripresa dopo la pausa del ritmo lavora 275 secondi invece di circa 80, e i ruoli di servizio non vengono svegliati.",
+      updateMacBuild12d:
+        "Aggiornamento all'ultima versione della build 12: squadra e dati tenuti, sparito il falso avviso di setup fallito; 12 annunci nuovi, ancora senza punteggio nella finestra.",
+      updateLinuxBuild13:
+        "Aggiornamento alla build 13: squadra e dati tenuti; gli arricchimenti girano su ogni annuncio controllato ma non danno né coordinate né loghi; 0,0085 $ per annuncio analizzato.",
+      updateWindowsBuild13:
+        "Riprova dell'aggiornamento con la chat aperta: arriva in fondo e il comando jht funziona; la chat però si chiude ancora con una riga grezza.",
+      candidateLinux:
+        "Aggiornamento alla candidata del rilascio, squadra e dati tenuti: il primo tetto di spesa tiene, il secondo è superato del 13% dopo una ripresa; 20 pertinenti su 33 nuove (61%, ne serve il 70%).",
+      retestBrake:
+        "Riprova del freno su un'immagine di prova costruita sulla candidata: il tetto tiene entrambe le volte (0,36 di 1 $ e 1,92 di 3 $); dopo lo sblocco di un budget nuovo il ritmo lascia passare 0,86 $ oltre la sua linea.",
+      retestPace:
+        "Riprova del risveglio a scaglioni dopo la pausa del ritmo: gli scaglioni funzionano e il periodo non supera mai la linea né il tetto (2,55 di 3 $); altri due canali svegliano ancora chi è in attesa.",
+      retestFull:
+        "Riprova completa: linea e tetto mai superati (2,55 di 3 $), ma chi aspetta il suo scaglione lavora lo stesso e la prima pausa arriva 48 secondi dopo lo sblocco; 1 pertinente su 15, tutte da un solo portale di agenzia.",
+      retestReserve:
+        "Riprova completa, chiusa prima: gli scaglioni funzionano, ma la riserva stimata della ripartenza ferma la squadra 10-20 secondi dopo ogni scaglione; nessun annuncio nuovo.",
+      retestResumes:
+        "Riprova, chiusa prima: lo sblocco ora lavora dieci minuti prima della prima pausa, ma entrambe le riprese si fermano entro il primo minuto, e dopo l'aggiornamento il Capitano sveglia tutti e sette i lavoratori fuori dagli scaglioni.",
     },
     osNotes: {
       linux:
@@ -612,6 +694,20 @@ export const T: Record<Locale, Copy> = {
       loginNeverTried: "accesso vero mai provato",
       keysChecked: "0 file con chiave fuori posto, su 20.927 eventi sui file",
       updateOnBuild9: "aggiornamento sulla build 9",
+      updateMacBuild11:
+        "build 11: annunci, punteggi e chiave tenuti, spazio su disco tornato, tutto in portoghese",
+      updateWindowsBuild13:
+        "build 13: l'aggiornamento con la chat aperta arriva in fondo e il comando jht funziona, tutto in francese",
+      relevantCandidate:
+        "candidata del rilascio: 20 pertinenti su 33 per l'elettricista (61%); 14 su 18 sulla build 11. Da riprovare con un'installazione nuova",
+      brakeCandidate:
+        "candidata del rilascio: secondo tetto superato del 13%; sulle immagini di prova dopo il tetto tiene sempre, aperti ancora tre difetti del ritmo",
+      languageFrenchGermanOk:
+        "build 11-13: tedesco e francese in tutto il flusso; restano poche righe in inglese (aiuto del comando)",
+      languageItalianOk:
+        "build 11: installazione e onboarding tutto in italiano su Linux",
+      doctorWorks:
+        "build 11-12: Dottore e Mantenitore fanno i loro turni senza errori e sbloccano gli agenti giusti",
     },
     invalidTitle: "Giri che non contano",
     invalidLead:
@@ -727,7 +823,7 @@ export const T: Record<Locale, Copy> = {
   de: {
     metaTitle: "Benchmark 0.4.0 · Job Hunter Team",
     title: "Benchmark 0.4.0: vier Dienste, drei Systeme",
-    lead: "Was das Team in den Testläufen vom 14. bis 17. November 2026 ausgegeben und gefunden hat, mit den API-Schlüssel-Diensten des 0.4.0-Harness. Die Zahlen stammen aus den Testprotokollen und den Kostenmessungen.",
+    lead: "Was das Team in den Testläufen vom 14. bis 19. November 2026 ausgegeben und gefunden hat, mit den API-Schlüssel-Diensten des 0.4.0-Harness. Die Zahlen stammen aus den Testprotokollen und den Kostenmessungen.",
     banner:
       "Ein erster Vergleich, kein sauberer Benchmark. Maschinen, Profile, Builds, Budgets und Teamgrößen unterscheiden sich von Lauf zu Lauf, und es gibt einen Lauf pro Dienst: lies die Grenzen unten, bevor du vergleichst.",
     roundsTitle: "Jeder Lauf",
@@ -773,7 +869,7 @@ export const T: Record<Locale, Copy> = {
     need: "Vier identische VPS gleichzeitig gestartet, dasselbe Profil für alle, 30 Minuten Arbeit nach dem Onboarding, derselbe Build mit korrigierter Budgetbremse und Guthaben bei allen vier Diensten.",
     back: "← Alle Fallstudien",
     footer:
-      "Synthetische Profile, keine personenbezogenen Daten · Zahlen aus den Testprotokollen vom 14.-17.11.2026.",
+      "Synthetische Profile, keine personenbezogenen Daten · Zahlen aus den Testprotokollen vom 14.-19.11.2026.",
     marks:
       "Die Logos nennen nur den Dienst, den ein Test genutzt hat, und bedeuten keine Billigung. Marken und Logos gehören ihren jeweiligen Inhabern.",
     outcome: {
@@ -797,6 +893,8 @@ export const T: Record<Locale, Copy> = {
       waiter: "Kellner",
       receptionist: "Rezeptionist",
       truckDriver: "Lkw-Fahrer",
+      electrician: "Elektriker",
+      careAssistant: "Pflegehelferin",
     },
     modes: { onsite: "vor Ort", unspecified: "" },
     services: {
@@ -836,6 +934,38 @@ export const T: Record<Locale, Copy> = {
         "Die Budgetbremse griff nicht: vom Test bei 5,28 $ gestoppt.",
       noCredit:
         "OpenAI ohne Guthaben und die Maschine schaltete sich mit dem Terminal aus: kein Scout startete, 0 Stellen in 30 Minuten; nur der Assistent (auf GLM) gab 0,23 $ aus.",
+      updateWindowsBuild11:
+        "Update von Build 10 auf 11, alles auf Deutsch: Team und Daten behalten, der Analyst startet von selbst wieder; 5 passende von 7 neuen.",
+      installLinuxBuild11:
+        "Neuinstallation und geführtes Onboarding ganz auf Italienisch, Schlüssel behalten: 14 passende von 18. Der Speicherschutz zieht die Scouts zurück, ohne es der Person zu sagen, und sie kommen nicht wieder.",
+      updateMacBuild11:
+        "Update von Build 10 auf 11 auf Portugiesisch: Stellen, Scores und Schlüssel behalten, Speicherplatz zurück; das Budget des Zeitraums ist verbraucht, bevor die 6 neuen bewertet sind.",
+      updateLinuxBuild12b:
+        "Update auf die erste Fassung von Build 12: Team und Daten behalten; der Doktor wird während der Tempopause gestartet, und die Wiederaufnahme danach verbraucht den Spielraum in Sekunden.",
+      updateMacBuild12b:
+        "Update auf die erste Fassung von Build 12: 6 passende von 11 neuen, bester Score 89; das Setup meldet eine fehlgeschlagene Konfiguration, während das Team von selbst startet.",
+      updateWindowsBuild12c:
+        "Update auf Build 12 bei offenem Chat des Assistenten, alles auf Französisch: es bricht mittendrin ab, und der Befehl jht geht erst wieder, wenn der Installer neu läuft.",
+      updateLinuxBuild12d:
+        "Update auf die letzte Fassung von Build 12: Team und Daten behalten; die Wiederaufnahme nach der Tempopause arbeitet 275 Sekunden statt etwa 80, und die Dienstrollen werden nicht geweckt.",
+      updateMacBuild12d:
+        "Update auf die letzte Fassung von Build 12: Team und Daten behalten, der falsche Hinweis auf ein fehlgeschlagenes Setup ist weg; 12 neue Stellen, im Zeitfenster noch nicht bewertet.",
+      updateLinuxBuild13:
+        "Update auf Build 13: Team und Daten behalten; die Anreicherungen laufen für jede geprüfte Stelle, liefern aber weder Koordinaten noch Logos; 0,0085 $ pro analysierter Stelle.",
+      updateWindowsBuild13:
+        "Erneuter Test des Updates bei offenem Chat: es läuft durch und der Befehl jht funktioniert; der Chat selbst schließt aber noch mit einer rohen Zeile.",
+      candidateLinux:
+        "Update auf den Release-Kandidaten, Team und Daten behalten: das erste Ausgabenlimit hält, das zweite wird nach einer Wiederaufnahme um 13% überschritten; 20 passende von 33 neuen (61%, nötig sind 70%).",
+      retestBrake:
+        "Erneuter Bremstest auf einem Test-Image auf Basis des Kandidaten: das Limit hält beide Male (0,36 von 1 $ und 1,92 von 3 $); nach der Freigabe eines neuen Budgets lässt das Tempo 0,86 $ über seine Linie.",
+      retestPace:
+        "Erneuter Test des gestaffelten Weckens nach der Tempopause: die Staffeln funktionieren, und der Zeitraum überschreitet nie Linie oder Limit (2,55 von 3 $); zwei andere Kanäle wecken die Wartenden trotzdem.",
+      retestFull:
+        "Vollständiger erneuter Test: Linie und Limit nie überschritten (2,55 von 3 $), aber wer auf seine Staffel wartet, arbeitet trotzdem, und die erste Pause kommt 48 Sekunden nach der Freigabe; 1 passende von 15, alle von einem einzigen Agenturportal.",
+      retestReserve:
+        "Vollständiger erneuter Test, vorzeitig beendet: die Staffeln funktionieren, aber die geschätzte Reserve des Neustarts stoppt das Team 10 bis 20 Sekunden nach jeder Staffel; keine neue Stelle.",
+      retestResumes:
+        "Erneuter Test, vorzeitig beendet: die Freigabe arbeitet jetzt zehn Minuten bis zur ersten Pause, aber beide Wiederaufnahmen stoppen in der ersten Minute, und nach dem Update weckt der Kapitän alle sieben Arbeiter außerhalb der Staffeln.",
     },
     osNotes: {
       linux:
@@ -937,6 +1067,20 @@ export const T: Record<Locale, Copy> = {
       keysChecked:
         "0 Dateien mit Schlüssel am falschen Ort, bei 20.927 Dateiereignissen",
       updateOnBuild9: "Update auf Build 9",
+      updateMacBuild11:
+        "Build 11: Stellen, Scores und Schlüssel behalten, Speicherplatz zurück, alles auf Portugiesisch",
+      updateWindowsBuild13:
+        "Build 13: das Update bei offenem Chat läuft durch und der Befehl jht funktioniert, alles auf Französisch",
+      relevantCandidate:
+        "Release-Kandidat: 20 passende von 33 für den Elektriker (61%); 14 von 18 auf Build 11. Mit einer neuen Installation erneut zu prüfen",
+      brakeCandidate:
+        "Release-Kandidat: zweites Limit um 13% überschritten; auf den Test-Images danach hält das Limit immer, drei Mängel des Tempos noch offen",
+      languageFrenchGermanOk:
+        "Builds 11-13: Deutsch und Französisch im ganzen Ablauf; ein paar Zeilen noch auf Englisch (Hilfe des Befehls)",
+      languageItalianOk:
+        "Build 11: Installation und Onboarding ganz auf Italienisch unter Linux",
+      doctorWorks:
+        "Builds 11-12: Doktor und Wartung machen ihre Durchgänge ohne Fehler und geben die richtigen Agenten frei",
     },
     invalidTitle: "Runden, die nicht zählen",
     invalidLead:
@@ -1052,7 +1196,7 @@ export const T: Record<Locale, Copy> = {
   es: {
     metaTitle: "Benchmark 0.4.0 · Job Hunter Team",
     title: "Benchmark 0.4.0: cuatro servicios, tres sistemas",
-    lead: "Lo que el equipo gastó y encontró en las rondas de prueba del 14 al 17 de noviembre de 2026, con los servicios de clave API que ofrece el harness 0.4.0. Las cifras salen de los informes de las pruebas y de los muestreadores de coste.",
+    lead: "Lo que el equipo gastó y encontró en las rondas de prueba del 14 al 19 de noviembre de 2026, con los servicios de clave API que ofrece el harness 0.4.0. Las cifras salen de los informes de las pruebas y de los muestreadores de coste.",
     banner:
       "Una primera comparación, no un benchmark limpio. Máquinas, perfiles, builds, presupuestos y tamaños del equipo cambian de una ronda a otra, y hay una ronda por servicio: lee los límites de abajo antes de comparar.",
     roundsTitle: "Cada ronda",
@@ -1098,7 +1242,7 @@ export const T: Record<Locale, Copy> = {
     need: "Cuatro VPS iguales encendidas a la vez, el mismo perfil para todos, 30 minutos de trabajo después del onboarding, la misma build con el freno del presupuesto corregido y crédito en los cuatro servicios.",
     back: "← Todos los casos de estudio",
     footer:
-      "Perfiles ficticios, sin datos personales · cifras de los informes de prueba del 14-17/11/2026.",
+      "Perfiles ficticios, sin datos personales · cifras de los informes de prueba del 14-19/11/2026.",
     marks:
       "Los logotipos solo indican el servicio que usó una prueba y no implican ningún respaldo. Las marcas y los logotipos pertenecen a sus respectivos propietarios.",
     outcome: {
@@ -1122,6 +1266,8 @@ export const T: Record<Locale, Copy> = {
       waiter: "Camarero",
       receptionist: "Recepcionista",
       truckDriver: "Conductor de camión",
+      electrician: "Electricista",
+      careAssistant: "Auxiliar de enfermería",
     },
     modes: { onsite: "presencial", unspecified: "" },
     services: {
@@ -1162,6 +1308,38 @@ export const T: Record<Locale, Copy> = {
         "El freno del presupuesto no saltó: detenido por la prueba a 5,28 $.",
       noCredit:
         "OpenAI sin crédito y la máquina se apagó con el terminal: ningún Scout arrancó, 0 puestos en 30 minutos; solo gastó el Asistente (en GLM), 0,23 $.",
+      updateWindowsBuild11:
+        "Actualización de la build 10 a la 11, todo en alemán: equipo y datos conservados, el Analista vuelve a arrancar solo; 5 pertinentes de 7 nuevas.",
+      installLinuxBuild11:
+        "Instalación desde cero y onboarding guiado todo en italiano, clave conservada: 14 pertinentes de 18. La guarda de memoria retira a los Scouts sin decírselo a la persona, y no vuelven.",
+      updateMacBuild11:
+        "Actualización de la build 10 a la 11 en portugués: anuncios, puntuaciones y clave conservados, espacio en disco recuperado; el presupuesto del periodo se acaba antes de puntuar las 6 nuevas.",
+      updateLinuxBuild12b:
+        "Actualización a la primera versión de la build 12: equipo y datos conservados; el Doctor arranca durante la pausa de ritmo, y la reanudación posterior gasta el margen en segundos.",
+      updateMacBuild12b:
+        "Actualización a la primera versión de la build 12: 6 pertinentes de 11 nuevas, mejor puntuación 89; el setup dice que la configuración ha fallado mientras el equipo arranca solo.",
+      updateWindowsBuild12c:
+        "Actualización a la build 12 con el chat del Asistente abierto, todo en francés: se para a mitad y el comando jht no funciona hasta volver a lanzar el instalador.",
+      updateLinuxBuild12d:
+        "Actualización a la última versión de la build 12: equipo y datos conservados; la reanudación tras la pausa de ritmo trabaja 275 segundos en vez de unos 80, y los roles de servicio no se despiertan.",
+      updateMacBuild12d:
+        "Actualización a la última versión de la build 12: equipo y datos conservados, desaparece el falso aviso de setup fallido; 12 anuncios nuevos, aún sin puntuar en la ventana.",
+      updateLinuxBuild13:
+        "Actualización a la build 13: equipo y datos conservados; los enriquecimientos se ejecutan en cada anuncio revisado pero no dan ni coordenadas ni logos; 0,0085 $ por anuncio analizado.",
+      updateWindowsBuild13:
+        "Nueva prueba de la actualización con el chat abierto: llega al final y el comando jht funciona; el chat, eso sí, aún se cierra con una línea en bruto.",
+      candidateLinux:
+        "Actualización a la candidata de la versión, equipo y datos conservados: el primer tope de gasto aguanta, el segundo se supera un 13% tras una reanudación; 20 pertinentes de 33 nuevas (61%, hace falta el 70%).",
+      retestBrake:
+        "Nueva prueba del freno en una imagen de prueba construida sobre la candidata: el tope aguanta las dos veces (0,36 de 1 $ y 1,92 de 3 $); tras desbloquear un presupuesto nuevo, el ritmo deja pasar 0,86 $ por encima de su línea.",
+      retestPace:
+        "Nueva prueba del despertar escalonado tras la pausa de ritmo: los escalones funcionan y el periodo nunca supera la línea ni el tope (2,55 de 3 $); otros dos canales siguen despertando a quien espera.",
+      retestFull:
+        "Nueva prueba completa: línea y tope nunca superados (2,55 de 3 $), pero quien espera su escalón trabaja igual y la primera pausa llega 48 segundos después del desbloqueo; 1 pertinente de 15, todas de un solo portal de agencia.",
+      retestReserve:
+        "Nueva prueba completa, cerrada antes: los escalones funcionan, pero la reserva estimada del reinicio para el equipo 10-20 segundos después de cada escalón; ningún anuncio nuevo.",
+      retestResumes:
+        "Nueva prueba, cerrada antes: el desbloqueo ya trabaja diez minutos antes de la primera pausa, pero las dos reanudaciones se paran en el primer minuto, y tras la actualización el Capitán despierta a los siete trabajadores fuera de los escalones.",
     },
     osNotes: {
       linux:
@@ -1263,6 +1441,20 @@ export const T: Record<Locale, Copy> = {
       keysChecked:
         "0 archivos con clave fuera de su sitio, en 20.927 eventos de archivos",
       updateOnBuild9: "actualización en la build 9",
+      updateMacBuild11:
+        "build 11: anuncios, puntuaciones y clave conservados, espacio en disco recuperado, todo en portugués",
+      updateWindowsBuild13:
+        "build 13: la actualización con el chat abierto llega al final y el comando jht funciona, todo en francés",
+      relevantCandidate:
+        "candidata de la versión: 20 pertinentes de 33 para el electricista (61%); 14 de 18 en la build 11. Por volver a probar con una instalación nueva",
+      brakeCandidate:
+        "candidata de la versión: segundo tope superado un 13%; en las imágenes de prueba posteriores el tope aguanta siempre, aún abiertos tres defectos del ritmo",
+      languageFrenchGermanOk:
+        "builds 11-13: alemán y francés en todo el flujo; quedan pocas líneas en inglés (ayuda del comando)",
+      languageItalianOk:
+        "build 11: instalación y onboarding todo en italiano en Linux",
+      doctorWorks:
+        "builds 11-12: Doctor y Mantenedor hacen sus turnos sin errores y desbloquean a los agentes correctos",
     },
     invalidTitle: "Rondas que no cuentan",
     invalidLead:
@@ -1381,7 +1573,7 @@ export const T: Record<Locale, Copy> = {
   fr: {
     metaTitle: "Benchmark 0.4.0 · Job Hunter Team",
     title: "Benchmark 0.4.0 : quatre services, trois systèmes",
-    lead: "Ce que l'équipe a dépensé et trouvé lors des tours d'essai du 14 au 17 novembre 2026, avec les services à clé API que propose le harness 0.4.0. Les chiffres viennent des procès-verbaux d'essai et des échantillonneurs de coûts.",
+    lead: "Ce que l'équipe a dépensé et trouvé lors des tours d'essai du 14 au 19 novembre 2026, avec les services à clé API que propose le harness 0.4.0. Les chiffres viennent des procès-verbaux d'essai et des échantillonneurs de coûts.",
     banner:
       "Une première comparaison, pas un benchmark propre. Machines, profils, builds, budgets et tailles d'équipe changent d'un tour à l'autre, et il y a un tour par service : lis les limites ci-dessous avant de comparer.",
     roundsTitle: "Chaque tour",
@@ -1427,7 +1619,7 @@ export const T: Record<Locale, Copy> = {
     need: "Quatre VPS identiques allumés ensemble, le même profil pour tous, 30 minutes de travail après l'onboarding, la même build avec le frein du budget corrigé et du crédit sur les quatre services.",
     back: "← Toutes les études de cas",
     footer:
-      "Profils fictifs, aucune donnée personnelle · chiffres des procès-verbaux d'essai du 14-17/11/2026.",
+      "Profils fictifs, aucune donnée personnelle · chiffres des procès-verbaux d'essai du 14-19/11/2026.",
     marks:
       "Les logos indiquent seulement le service utilisé par un essai et n'impliquent aucune approbation. Les marques et les logos appartiennent à leurs propriétaires respectifs.",
     outcome: {
@@ -1451,6 +1643,8 @@ export const T: Record<Locale, Copy> = {
       waiter: "Serveur",
       receptionist: "Réceptionniste",
       truckDriver: "Chauffeur routier",
+      electrician: "Électricien",
+      careAssistant: "Aide-soignante",
     },
     modes: { onsite: "sur site", unspecified: "" },
     services: {
@@ -1491,6 +1685,38 @@ export const T: Record<Locale, Copy> = {
         "Le frein du budget ne s'est pas déclenché : arrêté par l'essai à 5,28 $.",
       noCredit:
         "OpenAI sans crédit et la machine s'est éteinte avec le terminal : aucun Scout n'a démarré, 0 poste en 30 minutes ; seul l'Assistant (sur GLM) a dépensé 0,23 $.",
+      updateWindowsBuild11:
+        "Mise à jour de la build 10 à la 11, tout en allemand : équipe et données gardées, l'Analyste redémarre seul ; 5 pertinentes sur 7 nouvelles.",
+      installLinuxBuild11:
+        "Installation de zéro et onboarding guidé tout en italien, clé gardée : 14 pertinentes sur 18. La garde mémoire retire les Scouts sans le dire à la personne, et ils ne reviennent pas.",
+      updateMacBuild11:
+        "Mise à jour de la build 10 à la 11 en portugais : annonces, scores et clé gardés, espace disque revenu ; le budget de la période est épuisé avant que les 6 nouvelles soient notées.",
+      updateLinuxBuild12b:
+        "Mise à jour vers la première version de la build 12 : équipe et données gardées ; le Docteur est lancé pendant la pause de rythme, et la reprise ensuite dépense la marge en quelques secondes.",
+      updateMacBuild12b:
+        "Mise à jour vers la première version de la build 12 : 6 pertinentes sur 11 nouvelles, meilleur score 89 ; le setup dit que la configuration a échoué alors que l'équipe démarre seule.",
+      updateWindowsBuild12c:
+        "Mise à jour vers la build 12 avec le chat de l'Assistant ouvert, tout en français : elle s'arrête à mi-chemin et la commande jht ne marche plus tant qu'on ne relance pas l'installateur.",
+      updateLinuxBuild12d:
+        "Mise à jour vers la dernière version de la build 12 : équipe et données gardées ; la reprise après la pause de rythme travaille 275 secondes au lieu d'environ 80, et les rôles de service ne sont pas réveillés.",
+      updateMacBuild12d:
+        "Mise à jour vers la dernière version de la build 12 : équipe et données gardées, le faux avis de setup échoué a disparu ; 12 nouvelles annonces, pas encore notées dans la fenêtre.",
+      updateLinuxBuild13:
+        "Mise à jour vers la build 13 : équipe et données gardées ; les enrichissements tournent sur chaque annonce vérifiée mais ne donnent ni coordonnées ni logos ; 0,0085 $ par annonce analysée.",
+      updateWindowsBuild13:
+        "Nouvel essai de la mise à jour avec le chat ouvert : elle va au bout et la commande jht marche ; le chat se ferme toutefois encore sur une ligne brute.",
+      candidateLinux:
+        "Mise à jour vers la candidate de la version, équipe et données gardées : le premier plafond de dépense tient, le second est dépassé de 13 % après une reprise ; 20 pertinentes sur 33 nouvelles (61 %, il en faut 70 %).",
+      retestBrake:
+        "Nouvel essai du frein sur une image de test construite sur la candidate : le plafond tient les deux fois (0,36 sur 1 $ et 1,92 sur 3 $) ; après le déblocage d'un nouveau budget, le rythme laisse passer 0,86 $ au-dessus de sa ligne.",
+      retestPace:
+        "Nouvel essai du réveil par paliers après la pause de rythme : les paliers marchent et la période ne dépasse jamais sa ligne ni son plafond (2,55 sur 3 $) ; deux autres canaux réveillent encore ceux qui attendent.",
+      retestFull:
+        "Nouvel essai complet : ligne et plafond jamais dépassés (2,55 sur 3 $), mais ceux qui attendent leur palier travaillent quand même et la première pause arrive 48 secondes après le déblocage ; 1 pertinente sur 15, toutes d'un seul portail d'agence.",
+      retestReserve:
+        "Nouvel essai complet, arrêté plus tôt : les paliers marchent, mais la réserve estimée du redémarrage arrête l'équipe 10 à 20 secondes après chaque palier ; aucune nouvelle annonce.",
+      retestResumes:
+        "Nouvel essai, arrêté plus tôt : le déblocage travaille maintenant dix minutes avant la première pause, mais les deux reprises s'arrêtent dans la première minute, et après la mise à jour le Capitaine réveille les sept travailleurs hors des paliers.",
     },
     osNotes: {
       linux:
@@ -1594,6 +1820,20 @@ export const T: Record<Locale, Copy> = {
       keysChecked:
         "0 fichier avec clé hors de sa place, sur 20 927 événements de fichiers",
       updateOnBuild9: "mise à jour sur la build 9",
+      updateMacBuild11:
+        "build 11 : annonces, scores et clé gardés, espace disque revenu, tout en portugais",
+      updateWindowsBuild13:
+        "build 13 : la mise à jour avec le chat ouvert va au bout et la commande jht marche, tout en français",
+      relevantCandidate:
+        "candidate de la version : 20 pertinentes sur 33 pour l'électricien (61 %) ; 14 sur 18 sur la build 11. À refaire sur une nouvelle installation",
+      brakeCandidate:
+        "candidate de la version : second plafond dépassé de 13 % ; sur les images de test suivantes le plafond tient toujours, trois défauts du rythme encore ouverts",
+      languageFrenchGermanOk:
+        "builds 11-13 : allemand et français dans tout le parcours ; quelques lignes encore en anglais (aide de la commande)",
+      languageItalianOk:
+        "build 11 : installation et onboarding tout en italien sous Linux",
+      doctorWorks:
+        "builds 11-12 : Docteur et Mainteneur font leurs tours sans erreur et débloquent les bons agents",
     },
     invalidTitle: "Tours qui ne comptent pas",
     invalidLead:
@@ -1711,7 +1951,7 @@ export const T: Record<Locale, Copy> = {
   pt: {
     metaTitle: "Benchmark 0.4.0 · Job Hunter Team",
     title: "Benchmark 0.4.0: quatro serviços, três sistemas",
-    lead: "O que a equipa gastou e encontrou nas rondas de teste de 14 a 17 de novembro de 2026, com os serviços de chave API que o harness 0.4.0 oferece. Os números vêm dos relatórios dos testes e dos amostradores de custo.",
+    lead: "O que a equipa gastou e encontrou nas rondas de teste de 14 a 19 de novembro de 2026, com os serviços de chave API que o harness 0.4.0 oferece. Os números vêm dos relatórios dos testes e dos amostradores de custo.",
     banner:
       "Uma primeira comparação, não um benchmark limpo. Máquinas, perfis, builds, orçamentos e tamanhos da equipa mudam de ronda para ronda, e há uma ronda por serviço: lê os limites abaixo antes de comparar.",
     roundsTitle: "Cada ronda",
@@ -1756,7 +1996,7 @@ export const T: Record<Locale, Copy> = {
     need: "Quatro VPS iguais ligadas ao mesmo tempo, o mesmo perfil para todos, 30 minutos de trabalho depois do onboarding, a mesma build com o travão do orçamento corrigido e crédito nos quatro serviços.",
     back: "← Todos os estudos de caso",
     footer:
-      "Perfis fictícios, sem dados pessoais · números dos relatórios de teste de 14-17/11/2026.",
+      "Perfis fictícios, sem dados pessoais · números dos relatórios de teste de 14-19/11/2026.",
     marks:
       "Os logótipos indicam só o serviço usado num teste e não implicam qualquer aprovação. As marcas e os logótipos pertencem aos respetivos proprietários.",
     outcome: {
@@ -1780,6 +2020,8 @@ export const T: Record<Locale, Copy> = {
       waiter: "Empregado de mesa",
       receptionist: "Rececionista",
       truckDriver: "Motorista de pesados",
+      electrician: "Eletricista",
+      careAssistant: "Auxiliar de saúde",
     },
     modes: { onsite: "presencial", unspecified: "" },
     services: {
@@ -1819,6 +2061,38 @@ export const T: Record<Locale, Copy> = {
         "O travão do orçamento não disparou: parado pelo teste a 5,28 $.",
       noCredit:
         "OpenAI sem crédito e a máquina desligou com o terminal: nenhum Scout arrancou, 0 posições em 30 minutos; só o Assistente (em GLM) gastou 0,23 $.",
+      updateWindowsBuild11:
+        "Atualização da build 10 para a 11, tudo em alemão: equipa e dados mantidos, o Analista volta a arrancar sozinho; 5 pertinentes de 7 novas.",
+      installLinuxBuild11:
+        "Instalação de raiz e onboarding guiado tudo em italiano, chave mantida: 14 pertinentes de 18. A guarda da memória retira os Scouts sem o dizer à pessoa, e eles não voltam.",
+      updateMacBuild11:
+        "Atualização da build 10 para a 11 em português: anúncios, pontuações e chave mantidos, espaço em disco de volta; o orçamento do período acaba antes de as 6 novas terem pontuação.",
+      updateLinuxBuild12b:
+        "Atualização para a primeira versão da build 12: equipa e dados mantidos; o Doutor é iniciado durante a pausa de ritmo, e a retoma a seguir gasta a margem em segundos.",
+      updateMacBuild12b:
+        "Atualização para a primeira versão da build 12: 6 pertinentes de 11 novas, melhor pontuação 89; o setup diz que a configuração falhou enquanto a equipa arranca sozinha.",
+      updateWindowsBuild12c:
+        "Atualização para a build 12 com o chat do Assistente aberto, tudo em francês: para a meio e o comando jht não funciona até se voltar a correr o instalador.",
+      updateLinuxBuild12d:
+        "Atualização para a última versão da build 12: equipa e dados mantidos; a retoma depois da pausa de ritmo trabalha 275 segundos em vez de cerca de 80, e os papéis de serviço não são acordados.",
+      updateMacBuild12d:
+        "Atualização para a última versão da build 12: equipa e dados mantidos, desapareceu o falso aviso de setup falhado; 12 anúncios novos, ainda sem pontuação na janela.",
+      updateLinuxBuild13:
+        "Atualização para a build 13: equipa e dados mantidos; os enriquecimentos correm em cada anúncio verificado mas não dão coordenadas nem logótipos; 0,0085 $ por anúncio analisado.",
+      updateWindowsBuild13:
+        "Novo teste da atualização com o chat aberto: chega ao fim e o comando jht funciona; o chat, porém, ainda fecha com uma linha em bruto.",
+      candidateLinux:
+        "Atualização para a candidata da versão, equipa e dados mantidos: o primeiro teto de gasto aguenta, o segundo é ultrapassado em 13% depois de uma retoma; 20 pertinentes de 33 novas (61%, são precisos 70%).",
+      retestBrake:
+        "Novo teste do travão numa imagem de teste construída sobre a candidata: o teto aguenta as duas vezes (0,36 de 1 $ e 1,92 de 3 $); depois do desbloqueio de um orçamento novo, o ritmo deixa passar 0,86 $ acima da sua linha.",
+      retestPace:
+        "Novo teste do despertar por escalões depois da pausa de ritmo: os escalões funcionam e o período nunca passa a linha nem o teto (2,55 de 3 $); outros dois canais ainda acordam quem está à espera.",
+      retestFull:
+        "Novo teste completo: linha e teto nunca ultrapassados (2,55 de 3 $), mas quem espera o seu escalão trabalha na mesma e a primeira pausa chega 48 segundos depois do desbloqueio; 1 pertinente de 15, todas de um só portal de agência.",
+      retestReserve:
+        "Novo teste completo, fechado mais cedo: os escalões funcionam, mas a reserva estimada do reinício para a equipa 10-20 segundos depois de cada escalão; nenhum anúncio novo.",
+      retestResumes:
+        "Novo teste, fechado mais cedo: o desbloqueio já trabalha dez minutos antes da primeira pausa, mas as duas retomas param no primeiro minuto, e depois da atualização o Capitão acorda os sete trabalhadores fora dos escalões.",
     },
     osNotes: {
       linux:
@@ -1920,6 +2194,20 @@ export const T: Record<Locale, Copy> = {
       keysChecked:
         "0 ficheiros com chave fora do lugar, em 20 927 eventos de ficheiros",
       updateOnBuild9: "atualização na build 9",
+      updateMacBuild11:
+        "build 11: anúncios, pontuações e chave mantidos, espaço em disco de volta, tudo em português",
+      updateWindowsBuild13:
+        "build 13: a atualização com o chat aberto chega ao fim e o comando jht funciona, tudo em francês",
+      relevantCandidate:
+        "candidata da versão: 20 pertinentes de 33 para o eletricista (61%); 14 de 18 na build 11. A testar de novo numa instalação nova",
+      brakeCandidate:
+        "candidata da versão: segundo teto ultrapassado em 13%; nas imagens de teste seguintes o teto aguenta sempre, ainda abertos três defeitos do ritmo",
+      languageFrenchGermanOk:
+        "builds 11-13: alemão e francês em todo o fluxo; ficam poucas linhas em inglês (ajuda do comando)",
+      languageItalianOk:
+        "build 11: instalação e onboarding tudo em italiano no Linux",
+      doctorWorks:
+        "builds 11-12: Doutor e Mantenedor fazem os seus turnos sem erros e desbloqueiam os agentes certos",
     },
     invalidTitle: "Rodadas que não contam",
     invalidLead:
@@ -2036,7 +2324,7 @@ export const T: Record<Locale, Copy> = {
   hu: {
     metaTitle: "0.4.0 benchmark · Job Hunter Team",
     title: "0.4.0 benchmark: négy szolgáltatás, három rendszer",
-    lead: "Amit a csapat 2026. november 14–17. próbafutásaiban elköltött és megtalált, a 0.4.0 harness API-kulcsos szolgáltatásaival. A számok a próbák jegyzőkönyveiből és a költségmintavevőkből származnak.",
+    lead: "Amit a csapat 2026. november 14–19. próbafutásaiban elköltött és megtalált, a 0.4.0 harness API-kulcsos szolgáltatásaival. A számok a próbák jegyzőkönyveiből és a költségmintavevőkből származnak.",
     banner:
       "Első összevetés, nem tiszta benchmark. A gépek, profilok, buildek, költségkeretek és csapatméretek futásonként eltérnek, és szolgáltatásonként egy futás van: összehasonlítás előtt olvasd el az alábbi korlátokat.",
     roundsTitle: "Minden futás",
@@ -2082,7 +2370,7 @@ export const T: Record<Locale, Copy> = {
     need: "Négy egyforma VPS egyszerre elindítva, mindenkinek ugyanaz a profil, az onboarding után 30 perc munka, ugyanaz a build javított költségfékkel, és egyenleg mind a négy szolgáltatáson.",
     back: "← Minden esettanulmány",
     footer:
-      "Kitalált profilok, személyes adat nélkül · számok a 2026.11.14–17-i próbák jegyzőkönyveiből.",
+      "Kitalált profilok, személyes adat nélkül · számok a 2026.11.14–19-i próbák jegyzőkönyveiből.",
     marks:
       "A logók csak azt a szolgáltatást jelzik, amelyet egy próba használt, és nem jelentenek támogatást. A védjegyek és a logók a tulajdonosaiké.",
     outcome: {
@@ -2106,6 +2394,8 @@ export const T: Record<Locale, Copy> = {
       waiter: "Pincér",
       receptionist: "Recepciós",
       truckDriver: "Kamionsofőr",
+      electrician: "Villanyszerelő",
+      careAssistant: "Ápolási asszisztens",
     },
     modes: { onsite: "helyszínen", unspecified: "" },
     services: {
@@ -2145,6 +2435,38 @@ export const T: Record<Locale, Copy> = {
         "A költségfék nem lépett működésbe: a próba 5,28 $-nál leállította.",
       noCredit:
         "Az OpenAI egyenlege elfogyott, és a gép a terminállal együtt kikapcsolt: egy Scout sem indult el, 0 pozíció 30 perc alatt; csak az Asszisztens (GLM-en) költött 0,23 $-t.",
+      updateWindowsBuild11:
+        "Frissítés a 10. buildről a 11.-re, végig németül: a csapat és az adatok megmaradnak, az elemző magától újraindul; 7 új hirdetésből 5 releváns.",
+      installLinuxBuild11:
+        "Telepítés nulláról és vezetett bevezetés végig olaszul, a kulcs megmarad: 18-ból 14 releváns. A memóriaőr szó nélkül visszavonja a Scoutokat, és azok nem térnek vissza.",
+      updateMacBuild11:
+        "Frissítés a 10. buildről a 11.-re portugálul: hirdetések, pontszámok és kulcs megmaradnak, a lemezhely visszajön; az időszak kerete elfogy, mielőtt a 6 új hirdetés pontszámot kapna.",
+      updateLinuxBuild12b:
+        "Frissítés a 12. build első változatára: a csapat és az adatok megmaradnak; a Doktor a tempószünet alatt indul el, és az utána következő folytatás másodpercek alatt elkölti a tartalékot.",
+      updateMacBuild12b:
+        "Frissítés a 12. build első változatára: 11 új hirdetésből 6 releváns, legjobb pontszám 89; a beállítás sikertelen konfigurációt jelez, miközben a csapat magától elindul.",
+      updateWindowsBuild12c:
+        "Frissítés a 12. buildre nyitott asszisztens-csevegéssel, végig franciául: félúton megáll, és a jht parancs addig nem működik, amíg a telepítőt újra nem futtatják.",
+      updateLinuxBuild12d:
+        "Frissítés a 12. build utolsó változatára: a csapat és az adatok megmaradnak; a tempószünet utáni folytatás kb. 80 helyett 275 másodpercig dolgozik, és a kiszolgáló szerepeket nem ébreszti fel.",
+      updateMacBuild12d:
+        "Frissítés a 12. build utolsó változatára: a csapat és az adatok megmaradnak, eltűnt a hamis „sikertelen beállítás” jelzés; 12 új hirdetés, az ablakban még pontszám nélkül.",
+      updateLinuxBuild13:
+        "Frissítés a 13. buildre: a csapat és az adatok megmaradnak; a dúsítások minden ellenőrzött hirdetésen lefutnak, de sem koordinátát, sem logót nem adnak; elemzett hirdetésenként 0,0085 $.",
+      updateWindowsBuild13:
+        "A frissítés újrapróbája nyitott csevegéssel: végigfut, és a jht parancs működik; a csevegés viszont még mindig egy nyers sorral zárul.",
+      candidateLinux:
+        "Frissítés a kiadásjelöltre, a csapat és az adatok megmaradnak: az első költési plafon tart, a másodikat egy folytatás után 13%-kal túllépi; 33 új hirdetésből 20 releváns (61%, 70% kell).",
+      retestBrake:
+        "A fék újrapróbája a jelöltre épített tesztképen: a plafon mindkétszer tart (1 $-ból 0,36 és 3 $-ból 1,92); egy új keret feloldása után a tempó 0,86 $-t enged át a vonala fölött.",
+      retestPace:
+        "A tempószünet utáni lépcsőzetes ébresztés újrapróbája: a lépcsők működnek, és az időszak sosem lépi túl a vonalat vagy a plafont (3 $-ból 2,55); két másik csatorna még mindig felébreszti a várakozókat.",
+      retestFull:
+        "Teljes újrapróba: a vonalat és a plafont sosem lépi túl (3 $-ból 2,55), de aki a lépcsőjére vár, mégis dolgozik, és az első szünet 48 másodperccel a feloldás után jön; 15-ből 1 releváns, mind egyetlen ügynökségi portálról.",
+      retestReserve:
+        "Teljes újrapróba, korán lezárva: a lépcsők működnek, de az újraindítás becsült tartaléka minden lépcső után 10–20 másodperccel leállítja a csapatot; nincs új hirdetés.",
+      retestResumes:
+        "Újrapróba, korán lezárva: a feloldás most tíz percig dolgozik az első szünetig, de mindkét folytatás az első percen belül leáll, és a frissítés után a Kapitány a lépcsőkön kívül mind a hét dolgozót felébreszti.",
     },
     osNotes: {
       linux:
@@ -2244,6 +2566,20 @@ export const T: Record<Locale, Copy> = {
       loginNeverTried: "valódi bejelentkezés sosem próbálva",
       keysChecked: "0 kulcsos fájl a helyén kívül, 20 927 fájleseményből",
       updateOnBuild9: "frissítés a 9. buildön",
+      updateMacBuild11:
+        "11. build: hirdetések, pontszámok és kulcs megmaradnak, a lemezhely visszajön, végig portugálul",
+      updateWindowsBuild13:
+        "13. build: a frissítés nyitott csevegéssel végigfut, és a jht parancs működik, végig franciául",
+      relevantCandidate:
+        "kiadásjelölt: a villanyszerelőnél 33-ból 20 releváns (61%); a 11. buildön 18-ból 14. Új telepítésen újra bizonyítandó",
+      brakeCandidate:
+        "kiadásjelölt: a második plafont 13%-kal túllépi; az utána következő tesztképeken a plafon mindig tart, a tempó három hibája még nyitott",
+      languageFrenchGermanOk:
+        "11–13. build: a német és a francia végig a folyamatban; néhány sor még angolul (a parancs súgója)",
+      languageItalianOk:
+        "11. build: telepítés és bevezetés végig olaszul Linuxon",
+      doctorWorks:
+        "11–12. build: a Doktor és a Karbantartó hiba nélkül lefutja a köreit, és a megfelelő ágenseket oldja fel",
     },
     invalidTitle: "Nem számító körök",
     invalidLead:
@@ -2435,6 +2771,8 @@ export const TRADE_EMOJI: Record<string, string> = {
   nurse: "🩺",
   receptionist: "🛎️",
   truckDriver: "🚚",
+  electrician: "⚡",
+  careAssistant: "🩹",
 };
 export type Build = (typeof data.builds)[number];
 
@@ -2455,6 +2793,8 @@ export const PROFILE_SECTOR: Record<string, Sector | ""> = {
   truckDriver: "transport",
   bricklayer: "trades",
   officeClerk: "office",
+  electrician: "trades",
+  careAssistant: "health",
 };
 export const CATEGORY_SECTOR: Record<string, Sector | ""> = {
   finance: "office",
