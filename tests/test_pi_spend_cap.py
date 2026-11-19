@@ -369,7 +369,7 @@ def iso(ts: float) -> str:
 
 
 def budget(usd, starts, ends, hours=None, **extra):
-    team = {"budget": dict({"usd": usd, "starts_at": iso(starts), "ends_at": iso(ends), "set_by": "setup"}, **extra)}
+    team = {"budget": dict({"usd": usd, "starts_at": iso(starts), "ends_at": iso(ends), "set_by": "setup", "pace": True}, **extra)}
     if hours is not None:
         team["working_hours"] = hours
     return {"team": team}
@@ -461,14 +461,14 @@ def test_one_night_of_5_dollars_goes_at_its_pace_and_says_when_it_resumes(tmp_pa
     assert bridge.esc == 1
     record = flag_record(bridge)
     # the hour told is the one of the lift: 13:30 for the line to reach 2.00 $, plus the room of the reload of the team (Captain, Sentinella, a
-    # Scout) and the work after it, three times, at 0.50 $ an hour: 15:21
-    assert record["why"] == "pace" and record["ceiling"] == 1.75 and record["resumes_at"] == "2026-11-09T15:21:36+00:00"
-    assert all("BUDGET PACE" in t and "lifts by itself at 15:21" in t for t in bridge.texts())
-    assert "15:21" in bridge.users[0][0] and "⏸️" in bridge.users[0][0]
-    bridge.clock["now"] = NOON + 3 * HOUR + 20 * 60
+    # Scout) and the work after it, three times, at 0.50 $ an hour: 16:01
+    assert record["why"] == "pace" and record["ceiling"] == 1.75 and record["resumes_at"] == "2026-11-09T16:01:12+00:00"
+    assert all("BUDGET PACE" in t and "lifts by itself at 16:01" in t for t in bridge.texts())
+    assert "16:01" in bridge.users[0][0] and "⏸️" in bridge.users[0][0]
+    bridge.clock["now"] = NOON + 4 * HOUR
     bridge.tick(state=state)
-    assert bridge.flag.exists(), "15:20: not yet"
-    bridge.clock["now"] = NOON + 3 * HOUR + 23 * 60
+    assert bridge.flag.exists(), "16:00: not yet"
+    bridge.clock["now"] = NOON + 4 * HOUR + 3 * 60
     bridge.tick(state=state)
     assert not bridge.flag.exists() and bridge.esc == 1
 
@@ -488,10 +488,10 @@ def test_the_pace_follows_the_working_hours_over_three_days(tmp_path):
     bridge.tick()
     record = flag_record(bridge)
     # 4.5 $ less the 2.5 ahead is 6 worked hours: 5 on Monday, 1 on Tuesday from 08:00
-    assert record["why"] == "pace" and record["resumes_at"] == "2026-11-10T11:47:24+01:00"
+    assert record["why"] == "pace" and record["resumes_at"] == "2026-11-10T12:46:48+01:00"
     text = bridge.users[0][0]
-    assert "11:47" in text and "2026-11-10" not in text and "Europe/Rome" not in text, "the day after: the hour and the word, no date, no zone"
-    assert "11:47 tomorrow" in text or "11:47 di domani" in text
+    assert "12:46" in text and "2026-11-10" not in text and "Europe/Rome" not in text, "the day after: the hour and the word, no date, no zone"
+    assert "12:46 tomorrow" in text or "12:46 di domani" in text
 
 
 def test_the_budget_zone_is_the_one_the_person_lives_in(tmp_path):
@@ -500,7 +500,7 @@ def test_the_budget_zone_is_the_one_the_person_lives_in(tmp_path):
     bridge = Bridge(tmp_path, config)
     bridge.clock["now"] = NOON + HOUR
     bridge.tick()
-    assert flag_record(bridge)["resumes_at"] == "2026-11-09T16:21:36+01:00" and "16:21" in bridge.users[0][0]
+    assert flag_record(bridge)["resumes_at"] == "2026-11-09T17:01:12+01:00" and "17:01" in bridge.users[0][0]
 
 
 def test_raising_the_budget_lifts_a_pause_of_the_pace(tmp_path):
@@ -575,7 +575,7 @@ def test_the_first_roster_of_an_api_key_follows_the_budget(config, tier):
 # --- a budget of a DURATION starts when the team starts working, not when the setup saved it (JHT-T322 P2) ----------
 
 def duration_budget(usd, minutes, saved, hours=None, **extra):
-    team = {"budget": dict({"usd": usd, "duration_minutes": minutes, "saved_at": iso(saved), "timezone": "UTC",
+    team = {"budget": dict({"usd": usd, "duration_minutes": minutes, "saved_at": iso(saved), "timezone": "UTC", "pace": True,
                             "set_by": "setup"}, **extra)}
     if hours is not None:
         team["working_hours"] = hours
@@ -899,7 +899,7 @@ def _paused_at_13_30(tmp_path):
     bridge.clock["now"] = NOON + HOUR
     state: dict = {}
     bridge.tick(state=state)
-    assert flag_record(bridge)["resumes_at"] == "2026-11-09T15:21:36+00:00" and len(bridge.users) == 1
+    assert flag_record(bridge)["resumes_at"] == "2026-11-09T16:01:12+00:00" and len(bridge.users) == 1
     return bridge, state
 
 
@@ -912,14 +912,14 @@ def test_spending_after_the_pause_moves_the_resume_time_in_the_flag_and_the_pers
     bridge.clock["now"] = NOON + HOUR + 120
     bridge.tick(state=state)
     record = flag_record(bridge)
-    assert record["resumes_at"] == "2026-11-09T16:21:36+00:00" and record["resumes_told_at"] == "2026-11-09T15:21:36+00:00"
+    assert record["resumes_at"] == "2026-11-09T17:01:12+00:00" and record["resumes_told_at"] == "2026-11-09T16:01:12+00:00"
     assert bridge.esc == 1, "no second ESC"
-    assert len(bridge.users) == 1, "15:21 is still to come: the hour moved, the person is not told a second time"
-    bridge.clock["now"] = NOON + 3 * HOUR + 22 * 60   # 15:22: the hour the person was given is gone
+    assert len(bridge.users) == 1, "16:01 is still to come: the hour moved, the person is not told a second time"
+    bridge.clock["now"] = NOON + 4 * HOUR + 2 * 60   # 16:02: the hour the person was given is gone
     bridge.tick(state=state)
-    assert len(bridge.users) == 2 and "16:21" in bridge.users[-1][0], "a promise that was broken is told"
-    assert any("lifts by itself at 16:21" in t for t in bridge.texts())
-    bridge.clock["now"] = NOON + 3 * HOUR + 23 * 60
+    assert len(bridge.users) == 2 and "17:01" in bridge.users[-1][0], "a promise that was broken is told"
+    assert any("lifts by itself at 17:01" in t for t in bridge.texts())
+    bridge.clock["now"] = NOON + 4 * HOUR + 3 * 60
     bridge.tick(state=state)
     assert len(bridge.users) == 2, "the same time is not said again"
 
@@ -930,13 +930,13 @@ def test_a_move_is_written_in_the_flag_and_never_said_while_the_hour_told_is_to_
     bridge.clock["now"] = NOON + HOUR + 120
     bridge.tick(state=state)
     record = flag_record(bridge)
-    assert record["resumes_at"] == "2026-11-09T15:24:00+00:00" and record["resumes_told_at"] == "2026-11-09T15:21:36+00:00"
+    assert record["resumes_at"] == "2026-11-09T16:03:36+00:00" and record["resumes_told_at"] == "2026-11-09T16:01:12+00:00"
     assert len(bridge.users) == 1, "a move of two minutes is not a new message"
     pi_calls(tmp_path, [(NOON + HOUR + 150, 0.03, 100)], name="b.jsonl", agent="capitano")    # 6 minutes in all
     bridge.clock["now"] = NOON + HOUR + 240
     bridge.tick(state=state)
-    assert flag_record(bridge)["resumes_at"] == "2026-11-09T15:27:36+00:00" and len(bridge.users) == 1, "six minutes in all: still one message"
-    assert flag_record(bridge)["resumes_told_at"] == "2026-11-09T15:21:36+00:00"
+    assert flag_record(bridge)["resumes_at"] == "2026-11-09T16:07:12+00:00" and len(bridge.users) == 1, "six minutes in all: still one message"
+    assert flag_record(bridge)["resumes_told_at"] == "2026-11-09T16:01:12+00:00"
 
 
 def test_a_pause_that_does_not_move_is_left_alone(tmp_path):
@@ -1442,7 +1442,7 @@ def test_the_queue_of_the_pace_keeps_only_names_of_sessions_that_a_resume_wakes(
 def test_the_first_instant_of_a_new_budget_has_a_line_and_not_an_infinite_room():
     """Retest 19/11: after the unblock the period had not started, the room was infinite, eight sessions started together on 0.91 $ and
     the pause came 48 s later. The line at the first instant is the lead of the pace."""
-    config = {"team": {"budget": {"usd": 0.91, "duration_minutes": 120, "saved_at": iso(NOON), "set_by": "setup"}}}
+    config = {"team": {"budget": {"usd": 0.91, "duration_minutes": 120, "saved_at": iso(NOON), "set_by": "setup", "pace": True}}}
     read = cap.team_budget.read(config)
     assert read["starts"] is None and read["duration"] == 7200.0
     room = cap._stage_room(config, read, {"budget_cost": 0.0, "before_start": 0.0}, NOON + 60)
@@ -1521,7 +1521,7 @@ def test_reserve_the_estimate_of_a_session_is_its_last_real_reload_not_the_whole
     costs = cap.session_costs(tmp_path, NOON + 5000, ["ANALISTA-1", "ANALISTA-9", "SCOUT-1", "SCOUT-9", "CAPITANO"])
     assert costs["ANALISTA-1"] == 0.02, "its first turn after the stop cost 0.02 $"
     assert costs["ANALISTA-9"] == cap.RESTART_COST_PER_SESSION, "no history: the minimum"
-    assert costs["SCOUT-1"] == costs["SCOUT-9"] == 0.11, "a turn of 0.003 $ (a warm cache) and no history are both what a Scout costs by the data"
+    assert costs["SCOUT-1"] == costs["SCOUT-9"] == 0.22, "a turn of 0.003 $ (a warm cache) and no history are both what a Scout costs by the data"
     assert costs["CAPITANO"] == 0.19
 
 
@@ -1646,7 +1646,7 @@ def test_reserve_a_budget_too_small_for_the_whole_room_lowers_the_multiple_and_n
     read = cap.team_budget.read(config)
     at = NOON + HOUR
     slack = cap.team_budget.margin(1.0)
-    est = 0.10
+    est = 0.35   # three times it (1.05 $) never fits in 1 $: the lower multiples are for this
     for used, stays in ((1.0 - slack - 2.5 * est, False), (1.0 - slack - 2.05 * est, False), (1.0 - slack - 1.2 * est, False), (1.0 - slack - 0.5 * est, True)):
         spent = {"budget_cost": used, "before_start": 0.0, "recent_cost": 0.0, "restart_recent": 0.0, "reserve_open": 0.0}
         paused = cap.decide(config, spent, False, at, read, True, est)
@@ -1654,6 +1654,17 @@ def test_reserve_a_budget_too_small_for_the_whole_room_lowers_the_multiple_and_n
         assert bool(paused.get("stays")) is stays, (used, paused)
         if not stays:
             assert paused["resumes"] is not None and paused["resumes"] <= read["ends"], "a true hour, not «until the end of the period»"
+
+
+def test_reserve_in_the_middle_of_a_period_that_could_the_pause_waits_for_three_times_the_reload(tmp_path):
+    """Retest 22b3c6eab: lifted with 2 times the reload, the team worked 59 s. A budget that can give 3 times waits for it, and never lifts
+    at 2: with less left than that it stays (a hour is told only when it is true)."""
+    config = budget(3, NOON, NOON + 10 * HOUR)
+    read = cap.team_budget.read(config)
+    est = 0.31
+    spent = {"budget_cost": 3.0 - cap.team_budget.margin(3.0) - 2.2 * est, "before_start": 0.0, "recent_cost": 0.0, "restart_recent": 0.0, "reserve_open": 0.0}
+    verdict = cap.decide(config, spent, False, NOON + 2 * HOUR, read, True, est)
+    assert verdict["action"] == "halt" and verdict.get("stays") is True, "2.2 times left, 3 needed: it does not lift at 2"
 
 
 def test_reserve_a_stage_leaves_room_to_work_so_the_seven_never_start_together(tmp_path):
@@ -1691,3 +1702,27 @@ def test_the_notice_key_of_a_stop_changes_after_a_resume(tmp_path):
     cap.note_resume(tmp_path, 5000.0)
     second = cap._halt_key(verdict, "d", tmp_path)
     assert first != second, "the team woken in between and stopped again is a new pause for the person"
+
+
+# --- the pace is the person's to ask for: off by default, only the budget and the end of the period stop the team ----------------
+
+def test_the_pace_is_off_unless_the_budget_asks_for_it():
+    assert cap.team_budget.read(budget(3, NOON, NOON + 10 * HOUR))["pace"] is True
+    off = budget(3, NOON, NOON + 10 * HOUR, pace=False)
+    assert cap.team_budget.read(off)["pace"] is False
+    plain = {"team": {"budget": {"usd": 3, "starts_at": iso(NOON), "ends_at": iso(NOON + 10 * HOUR)}}}
+    assert cap.team_budget.read(plain)["pace"] is False, "a budget written without the key: off"
+    assert cap.team_budget.read(budget(3, NOON, NOON + 10 * HOUR, pace="yes"))["pace"] is False, "only a true is on"
+
+
+def test_with_the_pace_off_a_team_ahead_of_the_line_goes_on_until_the_budget_or_the_period_ends():
+    on = budget(3, NOON, NOON + 10 * HOUR)
+    off = budget(3, NOON, NOON + 10 * HOUR, pace=False)
+    spent = {"budget_cost": 1.5, "before_start": 0.0, "recent_cost": 0.0, "restart_recent": 0.0, "reserve_open": 0.0}
+    at = NOON + HOUR
+    assert cap.decide(on, spent, False, at, cap.team_budget.read(on))["why"] == "pace", "on: 1.5 of 3 in the first hour is ahead of the line"
+    assert cap.decide(off, spent, False, at, cap.team_budget.read(off))["action"] != "halt", "off: nothing to stop"
+    spent["budget_cost"] = 2.95
+    assert cap.decide(off, spent, False, at, cap.team_budget.read(off))["why"] == "budget", "the budget spent stops it"
+    spent["budget_cost"] = 1.0
+    assert cap.decide(off, spent, False, NOON + 10 * HOUR - 10, cap.team_budget.read(off))["why"] == "period", "and so does the end of the period"

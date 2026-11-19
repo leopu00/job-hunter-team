@@ -388,7 +388,20 @@ test('the budget in the wizard: «a few days» asks the amount, the days and the
   assert.equal(budget.duration_minutes, 72 * 60);
   assert.deepEqual(hours.windows, [{ days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'], start: '08:00', end: '18:00' }]);
   assert.ok(hours.timezone);
-  assert.ok(events.some((e) => e.kind === 'note' && e.message.startsWith(`The team can spend $10 in all, for 3 days from when it starts working, 10 hours a day (8:00-18:00 ${hours.timezone}), then it stops by itself.`) && e.message.includes('spread over the time')));
+  assert.ok(events.some((e) => e.kind === 'note' && e.message.startsWith(`The team can spend $10 in all, for 3 days from when it starts working, 10 hours a day (8:00-18:00 ${hours.timezone}), then it stops by itself.`) && e.message.includes('works until the budget of the period is spent')));
+  assert.equal(budget.pace, undefined, 'the pace is off unless the person says yes');
+});
+
+test('the budget in the wizard: a yes to the pace saves it in the budget and the note says it is spread over the time', () => {
+  const box = sandbox();
+  const { events, configText } = run(box, {
+    select: { 'AI Provider': 'glm', 'How much should the team work?': 'days', 'For how many days?': 3, 'When does it work?': 'ten_from_8' },
+    text: { 'How many dollars in total?': '10' },
+    confirm: true,
+    keys: [KEY],
+  });
+  assert.equal(JSON.parse(configText).team.budget.pace, true);
+  assert.ok(events.some((e) => e.kind === 'note' && e.message.includes('spread over the time')));
 });
 
 test('the budget in the wizard: «no limit» warns, saves no budget and asks the working hours as before', () => {

@@ -166,9 +166,9 @@ def test_a_worker_started_shortly_before_the_stop_comes_back_even_with_no_messag
     assert ["scout", 2] not in out and ["scout", 4] not in out
 
 
-def _budget_in_config(home, now, usd, hours_gone=1, hours_left=23):
+def _budget_in_config(home, now, usd, hours_gone=1, hours_left=23, pace=True):
     start, end = now - timedelta(hours=hours_gone), now + timedelta(hours=hours_left)
-    (home / "jht.config.json").write_text(json.dumps({"team": {"budget": {"usd": usd, "starts_at": start.isoformat(), "ends_at": end.isoformat()}}}),
+    (home / "jht.config.json").write_text(json.dumps({"team": {"budget": {"usd": usd, "starts_at": start.isoformat(), "ends_at": end.isoformat(), "pace": pace}}}),
                                           encoding="utf-8")
 
 
@@ -191,3 +191,9 @@ def test_the_restore_with_room_to_work_brings_everyone_and_without_a_budget_noth
 def test_a_config_that_is_not_json_is_no_budget_and_holds_nothing(world, tmp_path):
     (tmp_path / "jht.config.json").write_text("[" * 100000, encoding="utf-8")
     assert len(rr.plan()["start"]) == 5
+
+
+def test_the_restore_is_not_held_by_a_pace_the_person_did_not_ask_for(world, tmp_path):
+    _budget_in_config(tmp_path, world["now"], 3.0, pace=False)
+    out = rr.plan()
+    assert len(out["start"]) == 5 and not out.get("pace"), "pace off: the restore is the one without a budget line"

@@ -30,7 +30,7 @@ import {
   showSummary,
 } from './setup-steps.js';
 import { formatSecretForConfig } from './secret-ref.js';
-import { promptBudget, budgetSummary, budgetPaceNote, stampedAt } from './setup-budget.js';
+import { promptBudget, askPace, budgetSummary, budgetPaceNote, stampedAt } from './setup-budget.js';
 import { checkPrerequisites, runHealthCheck } from './setup-checks.js';
 import { t, tf } from './i18n.js';
 import { askLanguage } from './setup-language.js';
@@ -401,10 +401,13 @@ async function runSetupSteps(prompter, state, { diskRefusal = diskLowRefusal } =
   // --- Budget, period and working hours (JHT-T322): how much the team may spend, until when, and when it works ---
   // Asked BEFORE the config is saved, so it lands in jht.config.json at the first write and the brake of pi reads it at
   // the first tick. «No limit» asks the working hours as before.
-  const { kind: budgetKind, budget, workingHours } = await promptBudget(prompter, {
+  const asked = await promptBudget(prompter, {
     t, tf, provider: providerChoice,
     askHours: () => promptWorkingHours(prompter, baseConfig.team?.working_hours),
   });
+  const { kind: budgetKind, workingHours } = asked;
+  // the pace (spreading the spending over the period, with pauses) is the person's to ask for: off unless they say yes
+  const budget = await askPace(prompter, { t, budget: asked.budget });
   const paceNote = budgetPaceNote(t, { budget });
   await prompter.note(budgetSummary(t, tf, { budget, workingHours, kind: budgetKind }) + (paceNote ? `\n\n${paceNote}` : ''), t('wizard.budget.title'));
 
