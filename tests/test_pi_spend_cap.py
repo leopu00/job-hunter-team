@@ -844,6 +844,22 @@ def test_the_captain_is_told_when_the_person_saves_another_budget_and_not_for_th
     assert len([t for _, t in bridge.sent if "BUDGET CHANGED" in t]) == 1, "once"
 
 
+def test_a_budget_notice_that_raises_does_not_cost_the_look_of_the_brake(tmp_path, monkeypatch, capsys):
+    """The notice of a changed budget is outside the look: it raising, the team over the budget is stopped all the same."""
+    saved = NOON - 2 * HOUR
+    pi_calls(tmp_path, [(saved + 600, 1.95, 100)], name="s.jsonl", agent="scout-1")
+    bridge = Bridge(tmp_path, duration_budget(2, 1440, saved))
+    state: dict = {"pi_spend_cap": {"budget_seen": "an older budget"}}
+
+    def broken(*a, **k):
+        raise RuntimeError("clock")
+
+    monkeypatch.setattr(cap, "_tell_budget_changed", broken)
+    bridge.tick(state=state)
+    assert bridge.esc == 1 and flag_record(bridge)["why"] == "budget", "the hard stop is still decided"
+    assert "WARN pi spend cap budget notice: clock" in capsys.readouterr().out
+
+
 def test_a_cheap_onboarding_says_nothing(tmp_path):
     saved = NOON - 2 * HOUR
     pi_calls(tmp_path, [(saved + 600, 0.30, 100)], name="a.jsonl", agent="assistente")

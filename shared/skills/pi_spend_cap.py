@@ -1126,7 +1126,10 @@ def step(api, run, notify_user=None):
         config = api._read_config_json()
         budget = team_budget.read(config, home)
         if budget is not None:
-            _tell_budget_changed(api, run, budget, config, now)
+            try:    # a notice that fails is a notice lost, never a look of the brake lost
+                _tell_budget_changed(api, run, budget, config, now)
+            except Exception as error:  # noqa: BLE001
+                print("[bridge V6] WARN pi spend cap budget notice: %s" % error)
         spent = spend(home, now, budget["counts_from"] if budget else None, budget["starts"] if budget else None)
         if budget is not None and budget["starts"] is None and spent["first_worker"] is not None:
             budget = _start(home, budget, spent["first_worker"], run, api, spent.get("before_start") or 0.0)
