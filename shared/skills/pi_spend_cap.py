@@ -136,7 +136,9 @@ def note_wake(home, moment, estimate):
 def pending_wakes(home):
     try:
         data = json.loads((Path(home) / QUEUE_FILE).read_text(encoding="utf-8"))
-        return [x for x in (data.get("pending") or []) if isinstance(x, str)]
+        # a file the agents can write: only names of sessions of the team that a resume wakes, never the ones kept still on purpose
+        return [x for x in (data.get("pending") or []) if isinstance(x, str) and _AGENT_SESSION.match(x)
+                and x not in NEVER_WAKE and x not in WAKE_ONLY_IF_NEEDED and x not in ALWAYS_WOKEN]
     except (OSError, ValueError, AttributeError):
         return []
 
