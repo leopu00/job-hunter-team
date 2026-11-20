@@ -5603,14 +5603,17 @@ function Write-LocalHelp {
 
 # A help asks nothing and needs no terminal: the container's CLI is run without -i/-t. With -t Podman on Windows tried to size a
 # terminal of a help already over: two «Failed to obtain TTY size» and no help at all (`jht enrichment --help`, retest build13).
+# The function ends the wrapper itself, with the code of the help. What a native command prints inside a function is the value
+# the function returns: called as `exit (Invoke-HelpWithoutDocker ...)`, the help of the container went into that value and
+# never reached the screen, so `jht --help` came out empty with code 0 while the container was up (Windows, new user, build 15).
 function Invoke-HelpWithoutDocker {
   param([Parameter(ValueFromRemainingArguments)] $HelpArgs)
   if ((Test-DockerReachable) -and (Test-ContainerUp)) {
     & { $ErrorActionPreference = 'Continue'; & docker exec -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry @HelpArgs }
-    return $LASTEXITCODE
+    exit $LASTEXITCODE
   }
   Write-LocalHelp
-  return 0
+  exit 0
 }
 
 # `jht tools --help`: its subcommands, as in jht-wrapper.sh (tools_help): a help never starts the container nor loads the helper.
@@ -8002,7 +8005,7 @@ if ($HelpRequested -and $Sub -notin @('game', 'gui', 'agent-control', 'desktop-a
     Write-LocalHelp
     exit 0
   }
-  exit (Invoke-HelpWithoutDocker $Sub @Rest)
+  Invoke-HelpWithoutDocker $Sub @Rest
 }
 
 # the switch of the tools waits for a command that changes the runtime: this one says it is running
@@ -8014,7 +8017,7 @@ Register-JhtRunningCommand $Sub $Rest
 # cioe' il primo comando di chi non ha ancora deciso se installare (P-07).
 switch ($Sub) {
   { $_ -in @('-h', '--help', '') } {
-    exit (Invoke-HelpWithoutDocker '--help')
+    Invoke-HelpWithoutDocker '--help'
   }
 
   # `jht help` is the LONG list: the short help sends the person to it, so it must not answer with the short one.
@@ -8024,7 +8027,7 @@ switch ($Sub) {
       Write-SetupHelp
       exit 0
     }
-    exit (Invoke-HelpWithoutDocker 'help')
+    Invoke-HelpWithoutDocker 'help'
   }
 
   { $_ -in @('-V', '--version', 'version') } {

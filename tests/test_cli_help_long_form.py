@@ -21,8 +21,8 @@ def test_the_bash_wrapper_forwards_help_as_help_and_the_flags_as_the_short_help(
 
 
 def test_the_powershell_wrapper_forwards_help_as_help_and_the_flags_as_the_short_help():
-    assert re.search(r"\$_ -in @\('-h', '--help', ''\) \} \{\n    exit \(Invoke-HelpWithoutDocker '--help'\)", PS1)
-    assert re.search(r"'help' \{\n(?:    #[^\n]*\n)?(?:    if \(\$Rest\.Count -eq 1 -and \$Rest\[0\] -ceq 'setup'\) \{\n      Write-SetupHelp\n      exit 0\n    \}\n)?    exit \(Invoke-HelpWithoutDocker 'help'\)", PS1)
+    assert re.search(r"\$_ -in @\('-h', '--help', ''\) \} \{\n    Invoke-HelpWithoutDocker '--help'\n", PS1)
+    assert re.search(r"'help' \{\n(?:    #[^\n]*\n)?(?:    if \(\$Rest\.Count -eq 1 -and \$Rest\[0\] -ceq 'setup'\) \{\n      Write-SetupHelp\n      exit 0\n    \}\n)?    Invoke-HelpWithoutDocker 'help'\n", PS1)
     assert "'--help', 'help', ''" not in PS1
 
 
