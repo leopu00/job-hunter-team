@@ -819,7 +819,7 @@ def test_tools_help_is_its_own_usage_served_before_the_container_or_the_helper()
     assert sh.index('if [ "$SUB" = tools ]; then\n          tools_help') < sh.index("\n  tools)\n"), "before the tools arm"
     # the .ps1 says the catalogue's text by its key (in every language: tests/test_wrapper_ps1_speaks_the_language_chosen.py)
     assert re.search(r"function Write-ToolsHelp \{\n  \[Console\]::Out\.WriteLine\(\(Get-JhtText 'help\.tools'\)\)\n\}", ps)
-    ps_gate = ps[ps.index("$HelpRequested = "):ps.index("exit (Invoke-HelpWithoutDocker $Sub @Rest)")]
+    ps_gate = ps[ps.index("$HelpRequested = "):ps.index("  Invoke-HelpWithoutDocker $Sub @Rest\n")]
     assert re.search(r"if \(\$Sub -ceq 'tools'\) \{\n\s+Write-ToolsHelp\n\s+exit 0", ps_gate)
     import sys as _sys
     _sys.path.insert(0, str(ROOT / "tests"))
