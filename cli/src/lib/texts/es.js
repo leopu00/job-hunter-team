@@ -1,4 +1,4 @@
-// Texts of the screens in this language: so far the last steps of `jht setup` (the check of pi, `jht team stop`, `jht team start`) `jht team chat` (header, question cards, answers) and `jht team status` / `jht agents`.
+// Texts of the screens in this language: so far the last steps of `jht setup` (the check of pi, `jht team stop`, `jht team start`) `jht team chat` (header, question cards, answers) and `jht team status` / `jht agents`, and the help of `jht --help` and `jht help`.
 // Every other text is said in English (texts.js, PARTIAL).
 export default {
   "credit.gone": "El crédito en {provider} se ha agotado: los agentes no pueden responder. Recárgalo en el sitio del proveedor; el equipo se reanuda solo en media hora.",
@@ -203,4 +203,22 @@ export default {
   "enrichment.cost_cell_unmeasured": "{state}: coste aún no medido",
   "enrichment.remote_too": "también las posiciones en remoto",
   "enrichment.cost_note": "Costes estimados, medidos con los agentes en Haiku: con un modelo más grande cuestan más.",
+  "help.group_every_day": "Cada día",
+  "help.group_team": "Tu equipo",
+  "help.group_data": "Tus datos",
+  "help.group_maintenance": "Mantenimiento",
+  "help.group_other": "Otros",
+  "help.usage": "Uso: jht [opciones] [comando]",
+  "help.options": "Opciones:",
+  "help.version": "muestra el número de versión",
+  "help.help": "muestra la ayuda del comando",
+  "help.host_title": "En tu ordenador, fuera del contenedor:",
+  "help.host_up": "Enciende el equipo",
+  "help.host_down": "Lo apaga",
+  "help.host_restart": "Lo vuelve a encender",
+  "help.host_uninstall": "Quita el entorno local (pide confirmación)",
+  "help.host_integration": "Añade o quita lo que es opcional: google, telegram, mail (list muestra su estado)",
+  "help.one_command": "Ayuda de un comando: jht <comando> --help",
+  "help.essential": "Uso: jht [comando]\n\nJob Hunter Team — CLI\n\nComandos esenciales:\n  setup        Configuración inicial (paso a paso)\n  team         Enciende y apaga los agentes (jht team start)\n  status       Estado del sistema (contenedor, agentes, base de datos)\n  agents       Lista los agentes y lo que están haciendo\n  doctor       Revisa la configuración y las dependencias\n\nLa lista completa de comandos:\n  jht help\n",
+  "help.long_description": "Muestra todos los comandos (lista larga)",
 };

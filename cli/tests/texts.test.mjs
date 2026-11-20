@@ -127,3 +127,21 @@ test('--json is the same in every language', () => {
     assert.equal(normalize(jht(command, box, { JHT_LANG: 'it' }).out), normalize(jht(command, box, { JHT_LANG: 'en' }).out), command.join(' '));
   }
 });
+
+test('the help of jht comes out in every language, not in English', () => {
+  // `jht --help` came out in English for a person who had chosen Spanish: the help texts were only in English and Italian
+  const box = sandbox();
+  const helpKeys = Object.keys(CATALOGS.en).filter((key) => key.startsWith('help.'));
+  assert.ok(helpKeys.length >= 18 && helpKeys.includes('help.essential'));
+  for (const [lang, catalog] of Object.entries(CATALOGS)) {
+    if (lang === 'en') continue;
+    for (const key of helpKeys) {
+      assert.ok(key in catalog, `${lang} misses ${key}`);
+      assert.notEqual(catalog[key], CATALOGS.en[key], `${lang} ${key} is the English text`);
+    }
+    const shown = jht(['--help'], box, { JHT_LANG: lang });
+    assert.equal(shown.status, 0, lang);
+    assert.equal(shown.out, catalog['help.essential'], `${lang}: jht --help is the text of its language`);
+    assert.doesNotMatch(shown.out, /Essential commands|Usage:/, lang);
+  }
+});

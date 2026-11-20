@@ -1,4 +1,4 @@
-// Texts of the screens in this language: so far the last steps of `jht setup` (the check of pi, `jht team stop`, `jht team start`) `jht team chat` (header, question cards, answers) and `jht team status` / `jht agents`.
+// Texts of the screens in this language: so far the last steps of `jht setup` (the check of pi, `jht team stop`, `jht team start`) `jht team chat` (header, question cards, answers) and `jht team status` / `jht agents`, and the help of `jht --help` and `jht help`.
 // Every other text is said in English (texts.js, PARTIAL).
 export default {
   "credit.gone": "A(z) {provider} egyenlege elfogyott: az ügynökök nem tudnak válaszolni. Töltsd fel a szolgáltató oldalán; a csapat fél órán belül magától folytatja.",
@@ -203,4 +203,22 @@ export default {
   "enrichment.cost_cell_unmeasured": "{state}: a költség még nincs mérve",
   "enrichment.remote_too": "a távmunkás pozíciók is",
   "enrichment.cost_note": "Becsült költségek, Haikun futó ügynökökkel mérve: nagyobb modellel többe kerülnek.",
+  "help.group_every_day": "Mindennap",
+  "help.group_team": "A csapatod",
+  "help.group_data": "Az adataid",
+  "help.group_maintenance": "Karbantartás",
+  "help.group_other": "Egyéb",
+  "help.usage": "Használat: jht [opciók] [parancs]",
+  "help.options": "Opciók:",
+  "help.version": "kiírja a verziószámot",
+  "help.help": "kiírja a parancs súgóját",
+  "help.host_title": "A számítógépeden, a konténeren kívül:",
+  "help.host_up": "Elindítja a csapatot",
+  "help.host_down": "Leállítja",
+  "help.host_restart": "Újraindítja",
+  "help.host_uninstall": "Eltávolítja a helyi futtatókörnyezetet (megerősítést kér)",
+  "help.host_integration": "Add hozzá vagy távolítsd el, ami nem kötelező: google, telegram, mail (a list mutatja az állapotukat)",
+  "help.one_command": "Súgó egy parancshoz: jht <parancs> --help",
+  "help.essential": "Használat: jht [parancs]\n\nJob Hunter Team — CLI\n\nFő parancsok:\n  setup        Kezdeti beállítás (lépésről lépésre)\n  team         Elindítja és leállítja az ügynököket (jht team start)\n  status       A rendszer állapota (konténer, ügynökök, adatbázis)\n  agents       Felsorolja az ügynököket és azt, amin dolgoznak\n  doctor       Ellenőrzi a beállítást és a függőségeket\n\nA parancsok teljes listája:\n  jht help\n",
+  "help.long_description": "Megmutatja az összes parancsot (hosszú lista)",
 };

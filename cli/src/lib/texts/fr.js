@@ -1,4 +1,4 @@
-// Texts of the screens in this language: so far the last steps of `jht setup` (the check of pi, `jht team stop`, `jht team start`) `jht team chat` (header, question cards, answers) and `jht team status` / `jht agents`.
+// Texts of the screens in this language: so far the last steps of `jht setup` (the check of pi, `jht team stop`, `jht team start`) `jht team chat` (header, question cards, answers) and `jht team status` / `jht agents`, and the help of `jht --help` and `jht help`.
 // Every other text is said in English (texts.js, PARTIAL).
 export default {
   "credit.gone": "Le crédit chez {provider} est épuisé : les agents ne peuvent pas répondre. Rechargez-le sur le site du fournisseur ; l'équipe reprend d'elle-même dans la demi-heure.",
@@ -203,4 +203,22 @@ export default {
   "enrichment.cost_cell_unmeasured": "{state} : coût pas encore mesuré",
   "enrichment.remote_too": "aussi les positions à distance",
   "enrichment.cost_note": "Coûts estimés, mesurés avec les agents sur Haiku : avec un modèle plus grand, ils coûtent plus.",
+  "help.group_every_day": "Chaque jour",
+  "help.group_team": "Ton équipe",
+  "help.group_data": "Tes données",
+  "help.group_maintenance": "Entretien",
+  "help.group_other": "Autres",
+  "help.usage": "Utilisation : jht [options] [commande]",
+  "help.options": "Options :",
+  "help.version": "affiche le numéro de version",
+  "help.help": "affiche l’aide de la commande",
+  "help.host_title": "Sur ton ordinateur, hors du conteneur :",
+  "help.host_up": "Démarre l’équipe",
+  "help.host_down": "L’arrête",
+  "help.host_restart": "La redémarre",
+  "help.host_uninstall": "Retire l’environnement local (demande confirmation)",
+  "help.host_integration": "Ajoute ou retire ce qui est facultatif : google, telegram, mail (list en montre l’état)",
+  "help.one_command": "Aide d’une commande : jht <commande> --help",
+  "help.essential": "Utilisation : jht [commande]\n\nJob Hunter Team — CLI\n\nCommandes essentielles :\n  setup        Configuration initiale (pas à pas)\n  team         Démarre et arrête les agents (jht team start)\n  status       État du système (conteneur, agents, base de données)\n  agents       Liste les agents et ce qu’ils font\n  doctor       Vérifie la configuration et les dépendances\n\nLa liste complète des commandes :\n  jht help\n",
+  "help.long_description": "Affiche toutes les commandes (liste longue)",
 };
