@@ -16,6 +16,7 @@ export default {
   "budget.paused_budget": "A csapat szünetel: ${spent} összeget költött el a ${budget} keretéből. A folytatáshoz adj meg új keretet: jht setup",
   "budget.paused_period": "A csapat szünetel: a keretének időszaka {end} órakor véget ért (${spent} elköltve ${budget} összegből). A folytatáshoz adj meg új keretet: jht setup",
   "budget.paused_pace": "A csapat szünetel, hogy a keretét elossza az időszakra (${spent} elköltve, eddig ${ceiling} tervezett): {at} órakor magától folytatja.",
+  "budget.paused_day": "A mai rész elfogyott: a csapat {spent} $-t költött a választott {budget} $ keretből (a keretet elosztjuk az időszak napjaira, a mai rész {ceiling} $ volt). Magától folytatja ekkor: {at}.",
   "budget.paused_pace_late": "A csapat szünetel, hogy a keretét elossza az időszakra (${spent} elköltve, eddig ${ceiling} tervezett), és nem folytatja az időszak vége, {end} előtt. A folytatáshoz adj meg új keretet: jht setup",
   "budget.onboarding_spend": "A ${budget} keretedből ${spent} a bevezetésre és a Capitanóra ment, mielőtt a Scoutok keresni kezdtek: ilyen kis kerettel kevés marad a csapatnak a keresésre. Emeld meg: jht setup",
   "alerts.open": "{agent} jelzi: {body}",

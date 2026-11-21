@@ -47,8 +47,20 @@ test('no flag, a flag of another brake (the daily cap, the old ceiling in eur, t
   assert.equal(budgetPause({ home: home('{ not json') }), null);
 });
 
+test('the share of the day is said as such, never as the pace of the hours, in the seven languages', () => {
+  const flag = cap({ why: 'pace', day: true, spent: 0.7, ceiling: 0.67, budget_usd: 2, resumes_at: '2026-11-16T00:00:00+01:00' });
+  assert.equal(text(flag), "Today's share is spent: the team has spent $0.70 of the $2.00 you chose (the budget is divided by the days of the period, "
+    + "today's share was $0.67). It resumes by itself at 16/11 0:00.");
+  for (const language of ['it', 'de', 'es', 'fr', 'hu', 'pt']) {
+    const said = text(flag, language);
+    assert.match(said, /0\.70/, language);
+    assert.notEqual(said, text(cap({ why: 'pace', spent: 0.7, ceiling: 0.67, budget_usd: 2, resumes_at: '2026-11-16T00:00:00+01:00' }), language), language);
+  }
+  assert.doesNotMatch(text(flag), /spread/);
+});
+
 test('every text of the pause is in English and in Italian', () => {
-  for (const key of ['budget.paused_budget', 'budget.paused_period', 'budget.paused_pace', 'budget.paused_pace_late']) {
+  for (const key of ['budget.paused_budget', 'budget.paused_period', 'budget.paused_pace', 'budget.paused_pace_late', 'budget.paused_day']) {
     assert.notEqual(say(key, {}, 'en'), key);
     assert.notEqual(say(key, {}, 'it'), say(key, {}, 'en'), key);
   }

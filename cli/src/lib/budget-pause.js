@@ -1,7 +1,7 @@
 /**
  * Whether the brake of pi (shared/skills/pi_spend_cap.py) paused the team on its budget (JHT-T322): the budget is spent, the
  * period is over, or the team went faster than the budget spread over the working hours of the period. The brake writes it
- * in the daily-halt flag ($JHT_HOME/logs/daily-halt.flag, reason "pi_spend_cap", pi_spend_cap.why = budget | period | pace)
+ * in the daily-halt flag ($JHT_HOME/logs/daily-halt.flag, reason "pi_spend_cap", pi_spend_cap.why = budget | period | pace, and day: true when the pace is the share of the day)
  * and rewrites it when the reason changes: it is read again at every command. `jht team status`, `jht team start` and
  * `jht doctor` say it; none of them lifts it (a new budget from `jht setup` does, at the next tick of the brake).
  */
@@ -62,7 +62,7 @@ export function budgetPause({ home = JHT_HOME } = {}) {
     if (flag?.reason !== 'pi_spend_cap' || !cap || !WHYS.has(cap.why)) return null;
     if (staleForTheSavedBudget(home, flagPath, cap)) return null;
     return { why: cap.why, spent: Number(cap.spent), ceiling: Number(cap.ceiling), budgetUsd: Number(cap.budget_usd ?? cap.ceiling),
-      endsAt: typeof cap.ends_at === 'string' ? cap.ends_at : null, resumesAt: typeof cap.resumes_at === 'string' ? cap.resumes_at : null };
+      day: cap.day === true, endsAt: typeof cap.ends_at === 'string' ? cap.ends_at : null, resumesAt: typeof cap.resumes_at === 'string' ? cap.resumes_at : null };
   } catch {
     return null;
   }
@@ -78,6 +78,7 @@ export function budgetPauseText(options = {}) {
   if (pause.why === 'budget') return later('budget.paused_budget', vars);
   if (pause.why === 'period') return later('budget.paused_period', vars);
   const at = whenOf(pause.resumesAt, now, zone);
+  if (pause.day && at) return later('budget.paused_day', { ...vars, at });
   return at ? later('budget.paused_pace', { ...vars, at }) : later('budget.paused_pace_late', vars);
 }
 

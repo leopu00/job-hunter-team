@@ -232,6 +232,7 @@ export default {
   'budget.paused_budget': 'The team is paused: it spent ${spent} of its budget of ${budget}. To go on, set a new budget with: jht setup',
   'budget.paused_period': 'The team is paused: the period of its budget ended at {end} (${spent} of ${budget} spent). To go on, set a new budget with: jht setup',
   'budget.paused_pace': 'The team is paused to spread its budget over the period (${spent} spent, ${ceiling} planned so far): it resumes by itself at {at}.',
+  'budget.paused_day': 'Today\'s share is spent: the team has spent ${spent} of the ${budget} you chose (the budget is divided by the days of the period, today\'s share was ${ceiling}). It resumes by itself at {at}.',
   'budget.paused_pace_late': 'The team is paused to spread its budget over the period (${spent} spent, ${ceiling} planned so far) and does not resume before the period ends at {end}. To go on, set a new budget with: jht setup',
   'alerts.open': "{agent} says: {body}",
   'alerts.where': "Also in the chat with the Assistente (jht team chat assistente) and in the Messages of the app.",

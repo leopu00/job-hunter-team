@@ -1814,8 +1814,51 @@ def test_a_team_stopped_for_the_day_is_told_so_and_resumes_the_next_day_without_
     state: dict = {}
     bridge.tick(state=state)
     assert bridge.esc == 1 and flag_record(bridge)["why"] == "pace"
-    assert any("fino a domani" in text for text, _ in bridge.users) or any("until tomorrow" in text for text, _ in bridge.users)
+    assert any("domani" in text or "tomorrow" in text for text, _ in bridge.users)
+    assert flag_record(bridge)["day"] is True, "the flag says the pause is the share of the day, for `jht team status`"
     assert any("BUDGET OF THE DAY SPENT" in text for text in bridge.texts())
     bridge.clock["now"] += 86400 + 120
     bridge.tick(state=state)
     assert not bridge.flag.exists(), "the next day of the period lifts it by itself"
+
+
+def test_the_hour_of_a_pause_of_days_away_is_said_in_words_never_as_a_technical_date():
+    """Retest 535a: «until tomorrow … at 2026-11-21 20:32» when it was the day after tomorrow."""
+    i18n = cap.quota_data.shared_i18n()
+    config = _days(3, 3)
+    now = NOON
+    zone = cap.team_budget.timezone_of(config)
+    said = [cap.person_clock(NOON + n * 86400 + 600, config, now, i18n) for n in range(0, 8)]
+    assert "2026-" not in " ".join(said[:7]), said
+    assert said[0] == datetime.fromtimestamp(NOON + 600, zone).strftime("%H:%M")
+    assert said[1] != said[2] != said[3], "tomorrow, the day after tomorrow and a day of the week are three different things"
+    weekday = datetime.fromtimestamp(NOON + 3 * 86400 + 600, zone).weekday()
+    assert i18n.tf("pi_cap.weekday_%d" % weekday, said[3][:5]) == said[3]
+    assert said[7].startswith("2026-"), "a week away and more: the date"
+
+
+def test_the_day_pause_says_the_day_and_the_hour_it_resumes_and_no_longer_says_until_tomorrow(tmp_path):
+    pi_calls(tmp_path, [(NOON + 600, 1.97, 100)])
+    bridge = Bridge(tmp_path, _days(3, 3))
+    bridge.clock["now"] = NOON + HOUR
+    bridge.tick(state={})
+    assert flag_record(bridge)["day"] is True
+    told = [text for text, _ in bridge.users if "2026-" not in text]
+    assert len(told) == len(bridge.users) and bridge.users, "no technical date in what the person reads"
+    assert not any("fino a domani" in text or "until tomorrow" in text for text in told), "it was the day after tomorrow"
+
+
+def test_the_share_of_today_is_written_for_the_assistente(tmp_path):
+    """Retest 535a: «how much budget is left?» was answered without the share of the day."""
+    pi_calls(tmp_path, [(NOON + 600, 0.3, 100)])
+    bridge = Bridge(tmp_path, _days(3, 3))
+    bridge.clock["now"] = NOON + HOUR
+    bridge.tick(state={})
+    seen = json.loads((tmp_path / "state" / "budget-day.json").read_text(encoding="utf-8"))
+    assert seen["day"] == 1 and seen["days"] == 3 and seen["last_day"] is False
+    assert seen["today_ceiling_usd"] == 1.0 and seen["left_today_usd"] == 0.7 and seen["left_total_usd"] == 2.7
+    assert seen["next_day_at"].startswith("2026-11-10")
+    on = Bridge(tmp_path, budget(3, NOON, NOON + 3 * 86400, pace=True))
+    on.clock["now"] = NOON + HOUR
+    on.tick(state={})
+    assert not (tmp_path / "state" / "budget-day.json").exists(), "with the pace on there is no share of the day: the file goes"

@@ -16,6 +16,7 @@ export default {
   "budget.paused_budget": "Das Team ist pausiert: Es hat ${spent} seines Budgets von ${budget} ausgegeben. Um weiterzumachen, lege ein neues Budget fest mit: jht setup",
   "budget.paused_period": "Das Team ist pausiert: Der Zeitraum seines Budgets endete um {end} (${spent} von ${budget} ausgegeben). Um weiterzumachen, lege ein neues Budget fest mit: jht setup",
   "budget.paused_pace": "Das Team ist pausiert, um sein Budget über den Zeitraum zu verteilen (${spent} ausgegeben, bisher ${ceiling} vorgesehen): Es macht um {at} von selbst weiter.",
+  "budget.paused_day": "Der Tagesanteil ist aufgebraucht: Das Team hat {spent} $ von den {budget} $ ausgegeben, die du gewählt hast (das Budget wird auf die Tage des Zeitraums verteilt, heute standen {ceiling} $ zu). Es macht um {at} von selbst weiter.",
   "budget.paused_pace_late": "Das Team ist pausiert, um sein Budget über den Zeitraum zu verteilen (${spent} ausgegeben, bisher ${ceiling} vorgesehen), und macht nicht vor dem Ende des Zeitraums um {end} weiter. Um weiterzumachen, lege ein neues Budget fest mit: jht setup",
   "budget.onboarding_spend": "${spent} deines Budgets von ${budget} gingen in das Onboarding und den Capitano, bevor die Scouts zu suchen begannen: Mit einem so kleinen Budget bleibt dem Team wenig zum Suchen. Erhöhe es mit: jht setup",
   "alerts.open": "{agent} meldet: {body}",

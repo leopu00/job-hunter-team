@@ -607,8 +607,8 @@ def clock(moment, config, today=None):
 
 
 def person_clock(moment, config, today, i18n):
-    """The hour as the person reads it: «03:50» today, «03:50 tomorrow» the day after, the date only further away. No zone name:
-    it is their own."""
+    """The hour as the person reads it: «03:50» today, «03:50 tomorrow», «03:50 the day after tomorrow», then the day of the week, the
+    date only a week away. No zone name: it is their own."""
     zone = team_budget.timezone_of(config)
     local = datetime.fromtimestamp(moment, zone)
     day = datetime.fromtimestamp(today, zone).date() if today is not None else local.date()
@@ -618,6 +618,10 @@ def person_clock(moment, config, today, i18n):
         return hour
     if days == 1:
         return i18n.tf("pi_cap.tomorrow", hour)
+    if days == 2:
+        return i18n.tf("pi_cap.day_after", hour)
+    if 2 < days < 7:   # the day of the week, in words: never the technical date inside a sentence for the person
+        return i18n.tf("pi_cap.weekday_%d" % local.weekday(), hour)
     return local.strftime("%Y-%m-%d ") + hour
 
 
@@ -770,6 +774,8 @@ def _record(verdict, config):
                       counts_from=int(verdict["counts_from"]))
         if verdict.get("stays"):
             record["stays"] = True
+        if verdict.get("day"):
+            record["day"] = True   # the pause is the share of the day, not the pace: `jht team status` says it so
         if verdict.get("before"):
             record["before_work"] = {"spent": verdict["before"], "budget_usd": verdict["usd"]}
     return record
@@ -1167,6 +1173,31 @@ def _tell_budget_changed(api, run, budget, config, now):
            % (_money(budget["usd"]), period, ", with the pace on" if budget.get("pace") else ""))
 
 
+DAY_QUOTA_FILE = Path("state") / "budget-day.json"
+
+
+def _write_day_quota(home, budget, spent, now, config):
+    """What the Assistente reads to answer «how much budget is left?» when the budget is shared by days (pace off, two days or more):
+    the share of today, what is left of it and when the next day begins. The file is removed when it does not apply."""
+    path = Path(home) / DAY_QUOTA_FILE
+    days = int(round((budget["ends"] - budget["starts"]) / DAY_SEC)) if budget and budget.get("starts") and budget.get("ends") else 0
+    if budget is None or budget.get("pace") or days < 2:
+        path.unlink(missing_ok=True)
+        return
+    used = spent.get("budget_cost") or 0.0
+    before = min(spent.get("before_start") or 0.0, used)
+    period_usd = budget["usd"] - before
+    day = min(int(max(0.0, now - budget["starts"]) // DAY_SEC), days - 1)
+    cap = period_usd if day >= days - 1 else (day + 1) * period_usd / days
+    worked = used - before
+    _write_state(path, {
+        "days": days, "day": day + 1, "last_day": day >= days - 1, "budget_usd": round(budget["usd"], 2),
+        "spent_usd": round(used, 2), "share_per_day_usd": round(period_usd / days, 2), "today_ceiling_usd": round(cap, 2),
+        "left_today_usd": round(max(0.0, cap - worked), 2), "left_total_usd": round(max(0.0, budget["usd"] - used), 2),
+        "next_day_at": None if day >= days - 1 else _iso(budget["starts"] + (day + 1) * DAY_SEC, config),
+        "updated_at": _iso(now, config)})
+
+
 def step(api, run, notify_user=None):
     """One tick of the brake. Never raises."""
     try:
@@ -1181,6 +1212,10 @@ def step(api, run, notify_user=None):
             except Exception as error:  # noqa: BLE001
                 print("[bridge V6] WARN pi spend cap budget notice: %s" % error)
         spent = spend(home, now, budget["counts_from"] if budget else None, budget["starts"] if budget else None)
+        try:
+            _write_day_quota(home, budget, spent, now, config)
+        except Exception as error:  # noqa: BLE001 - the file is for the Assistente: never a look of the brake lost
+            print("[bridge V6] WARN pi spend cap day quota: %s" % error)
         if budget is not None and budget["starts"] is None and spent["first_worker"] is not None:
             budget = _start(home, budget, spent["first_worker"], run, api, spent.get("before_start") or 0.0)
         day = datetime.fromtimestamp(now).strftime("%Y-%m-%d")

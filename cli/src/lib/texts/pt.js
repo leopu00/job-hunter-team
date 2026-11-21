@@ -16,6 +16,7 @@ export default {
   "budget.paused_budget": "A equipa está em pausa: gastou ${spent} do teu orçamento de ${budget}. Para continuar, define um novo orçamento com: jht setup",
   "budget.paused_period": "A equipa está em pausa: o período do teu orçamento terminou às {end} (${spent} de ${budget} gastos). Para continuar, define um novo orçamento com: jht setup",
   "budget.paused_pace": "A equipa está em pausa para distribuir o orçamento pelo período (${spent} gastos, ${ceiling} previstos até agora): retoma sozinha às {at}.",
+  "budget.paused_day": "A parte de hoje acabou: a equipa gastou {spent} $ dos {budget} $ que escolheste (o orçamento é dividido pelos dias do período, a parte de hoje era {ceiling} $). Retoma sozinha às {at}.",
   "budget.paused_pace_late": "A equipa está em pausa para distribuir o orçamento pelo período (${spent} gastos, ${ceiling} previstos até agora) e não retoma antes do fim do período, às {end}. Para continuar, define um novo orçamento com: jht setup",
   "budget.onboarding_spend": "${spent} do teu orçamento de ${budget} foram para o onboarding e o Capitano antes de os Scouts começarem a procurar: com um orçamento tão pequeno, sobra pouco à equipa para procurar. Aumenta-o com: jht setup",
   "alerts.open": "{agent} avisa: {body}",

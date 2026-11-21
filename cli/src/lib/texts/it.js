@@ -265,6 +265,7 @@ export default {
   'budget.paused_budget': 'La squadra è in pausa: ha speso {spent} $ del suo budget di {budget} $. Per andare avanti metti un nuovo budget con: jht setup',
   'budget.paused_period': 'La squadra è in pausa: il periodo del suo budget è finito alle {end} (spesi {spent} $ di {budget} $). Per andare avanti metti un nuovo budget con: jht setup',
   'budget.paused_pace': 'La squadra è in pausa per distribuire il budget sul periodo (spesi {spent} $, previsti finora {ceiling} $): riprende da sola alle {at}.',
+  'budget.paused_day': 'La quota di oggi è finita: la squadra ha speso {spent} $ dei {budget} $ che hai scelto (il budget è diviso per i giorni del periodo, oggi toccavano {ceiling} $). Riprende da sola alle {at}.',
   'budget.paused_pace_late': 'La squadra è in pausa per distribuire il budget sul periodo (spesi {spent} $, previsti finora {ceiling} $) e non riprende prima della fine del periodo, alle {end}. Per andare avanti metti un nuovo budget con: jht setup',
   'alerts.open': "{agent} ti avvisa: {body}",
   'alerts.where': "Lo trovi anche nella chat con l'Assistente (jht team chat assistente) e nei Messaggi dell'app.",
