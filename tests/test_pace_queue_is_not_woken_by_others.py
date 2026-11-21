@@ -109,7 +109,9 @@ def test_the_hour_the_person_reads_is_human_and_has_no_date_or_zone_in_it():
     assert today == "23:10"
     tomorrow = pi_spend_cap.person_clock(late + 4 * 3600 + 3000, config, late, i18n)
     assert "03:50" in tomorrow and "2026" not in tomorrow and "Europe/Rome" not in tomorrow and tomorrow != "03:50"
-    assert pi_spend_cap.person_clock(late + 3 * 86400, config, late, i18n).startswith("2026-11-22")
+    assert pi_spend_cap.person_clock(late + 7 * 86400, config, late, i18n).startswith("2026-11-26"), "the date only from a week away"
+    between = pi_spend_cap.person_clock(late + 3 * 86400, config, late, i18n)
+    assert "2026" not in between and "23:00" in between, "three to six days away: the day of the week, in words"
 
 
 def test_the_scan_is_held_while_the_brake_pauses_or_just_woke_the_team(tmp_path, monkeypatch):
