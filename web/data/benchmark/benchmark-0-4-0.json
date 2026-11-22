@@ -345,10 +345,10 @@
     {
       "id": "openaiSubscription",
       "section": "services",
-      "status": "fail",
-      "build": 9,
+      "status": "pending",
+      "build": null,
       "proof": [],
-      "note": "chatgptFreeRefused",
+      "note": "notTried040",
       "provider": "openai"
     },
     {
@@ -375,7 +375,7 @@
       "status": "pending",
       "build": null,
       "proof": [],
-      "note": "codexBetaInUse",
+      "note": "notTried040",
       "provider": "openai"
     },
     {

@@ -297,8 +297,8 @@ export const T: Record<Locale, Copy> = {
       updateWindowsBuild10:
         "build 10: positions, profile and key kept, all in German; after the update the Analyst never started (13 positions waiting)",
       languagePortugueseOk: "build 10: Portuguese all the way on the Mac",
-      codexBetaInUse:
-        "in use in our beta test (chart 6); not yet tried on builds 9 and 10",
+      notTried040:
+        "not tried on the 0.4.0",
       updateLinuxBuild9:
         "build 9: passed (its round is not in the table below)",
       installerBlockedBuild9:
@@ -309,7 +309,6 @@ export const T: Record<Locale, Copy> = {
       benchBricklayer: "6 positions, fewer than 15 (83% relevant)",
       brakeFixedRetry: "fixed in builds 9 and 10: to try again",
       languageGermanOk: "build 9: German all the way on Linux",
-      chatgptFreeRefused: "sign-in refused (Free plan)",
       securityPreTag:
         "review before the tag: the verdict comes on the exact version of the tag; the key-on-disk case is closed",
       cleanLinuxRoundMissing:
@@ -676,8 +675,8 @@ export const T: Record<Locale, Copy> = {
         "build 10: annunci, profilo e chiave tenuti, tutto in tedesco; dopo l'aggiornamento l'Analista non è mai partito (13 annunci in attesa)",
       languagePortugueseOk:
         "build 10: portoghese dall'inizio alla fine sul Mac",
-      codexBetaInUse:
-        "in uso nel nostro beta test (grafico 6); non ancora provato sulle build 9 e 10",
+      notTried040:
+        "non provato sulla 0.4.0",
       updateLinuxBuild9:
         "build 9: superato (il giro non è nella tabella sotto)",
       installerBlockedBuild9:
@@ -688,7 +687,6 @@ export const T: Record<Locale, Copy> = {
       benchBricklayer: "6 posizioni, meno di 15 (83% pertinenti)",
       brakeFixedRetry: "corretto nelle build 9 e 10: da riprovare",
       languageGermanOk: "build 9: tedesco dall'inizio alla fine su Linux",
-      chatgptFreeRefused: "accesso rifiutato (piano Free)",
       securityPreTag:
         "controllo prima del tag: il verdetto arriva sulla versione esatta del tag; il caso della chiave su disco è chiuso",
       cleanLinuxRoundMissing:
@@ -1055,8 +1053,8 @@ export const T: Record<Locale, Copy> = {
       updateWindowsBuild10:
         "Build 10: Stellen, Profil und Schlüssel behalten, alles auf Deutsch; nach dem Update startete der Analyst nie (13 Stellen warten)",
       languagePortugueseOk: "Build 10: durchgehend Portugiesisch auf dem Mac",
-      codexBetaInUse:
-        "im Einsatz in unserem Betatest (Diagramm 6); auf Build 9 und 10 noch nicht geprüft",
+      notTried040:
+        "auf der 0.4.0 nicht geprüft",
       updateLinuxBuild9:
         "Build 9: bestanden (die Runde steht nicht in der Tabelle unten)",
       installerBlockedBuild9:
@@ -1067,7 +1065,6 @@ export const T: Record<Locale, Copy> = {
       benchBricklayer: "6 Stellen, weniger als 15 (83 % passend)",
       brakeFixedRetry: "in Build 9 und 10 korrigiert: erneut zu prüfen",
       languageGermanOk: "Build 9: durchgehend Deutsch auf Linux",
-      chatgptFreeRefused: "Anmeldung abgelehnt (Free-Tarif)",
       securityPreTag:
         "Prüfung vor dem Tag: das Urteil kommt auf die genaue Version des Tags; der Fall des Schlüssels auf der Festplatte ist geschlossen",
       cleanLinuxRoundMissing:
@@ -1437,8 +1434,8 @@ export const T: Record<Locale, Copy> = {
       updateWindowsBuild10:
         "build 10: anuncios, perfil y clave conservados, todo en alemán; tras la actualización el Analista nunca arrancó (13 anuncios en espera)",
       languagePortugueseOk: "build 10: portugués de principio a fin en el Mac",
-      codexBetaInUse:
-        "en uso en nuestra prueba beta (gráfico 6); aún no probado en las builds 9 y 10",
+      notTried040:
+        "no probado en la 0.4.0",
       updateLinuxBuild9:
         "build 9: superada (su ronda no está en la tabla de abajo)",
       installerBlockedBuild9:
@@ -1449,7 +1446,6 @@ export const T: Record<Locale, Copy> = {
       benchBricklayer: "6 puestos, menos de 15 (83 % pertinentes)",
       brakeFixedRetry: "corregido en las builds 9 y 10: por volver a probar",
       languageGermanOk: "build 9: alemán de principio a fin en Linux",
-      chatgptFreeRefused: "acceso rechazado (plan Free)",
       securityPreTag:
         "revisión antes del tag: el veredicto llega sobre la versión exacta del tag; el caso de la clave en disco está cerrado",
       cleanLinuxRoundMissing:
@@ -1823,8 +1819,8 @@ export const T: Record<Locale, Copy> = {
       updateWindowsBuild10:
         "build 10 : annonces, profil et clé gardés, tout en allemand ; après la mise à jour l'Analyste n'a jamais démarré (13 annonces en attente)",
       languagePortugueseOk: "build 10 : portugais du début à la fin sur le Mac",
-      codexBetaInUse:
-        "utilisé dans notre test bêta (graphique 6) ; pas encore essayé sur les builds 9 et 10",
+      notTried040:
+        "non essayé sur la 0.4.0",
       updateLinuxBuild9:
         "build 9 : réussi (son tour n'est pas dans le tableau ci-dessous)",
       installerBlockedBuild9:
@@ -1835,7 +1831,6 @@ export const T: Record<Locale, Copy> = {
       benchBricklayer: "6 postes, moins de 15 (83 % pertinents)",
       brakeFixedRetry: "corrigé dans les builds 9 et 10 : à réessayer",
       languageGermanOk: "build 9 : allemand du début à la fin sous Linux",
-      chatgptFreeRefused: "connexion refusée (forfait Free)",
       securityPreTag:
         "revue avant le tag : le verdict porte sur la version exacte du tag ; le cas de la clé sur disque est clos",
       cleanLinuxRoundMissing:
@@ -2206,8 +2201,8 @@ export const T: Record<Locale, Copy> = {
       updateWindowsBuild10:
         "build 10: anúncios, perfil e chave mantidos, tudo em alemão; depois da atualização o Analista nunca arrancou (13 anúncios à espera)",
       languagePortugueseOk: "build 10: português do início ao fim no Mac",
-      codexBetaInUse:
-        "em uso no nosso teste beta (gráfico 6); ainda não testado nas builds 9 e 10",
+      notTried040:
+        "não testado na 0.4.0",
       updateLinuxBuild9:
         "build 9: aprovado (a rodada não está na tabela abaixo)",
       installerBlockedBuild9:
@@ -2218,7 +2213,6 @@ export const T: Record<Locale, Copy> = {
       benchBricklayer: "6 vagas, menos de 15 (83% pertinentes)",
       brakeFixedRetry: "corrigido nas builds 9 e 10: a voltar a testar",
       languageGermanOk: "build 9: alemão do início ao fim no Linux",
-      chatgptFreeRefused: "acesso recusado (plano Free)",
       securityPreTag:
         "revisão antes da tag: o veredicto chega sobre a versão exata da tag; o caso da chave no disco está fechado",
       cleanLinuxRoundMissing:
@@ -2587,8 +2581,8 @@ export const T: Record<Locale, Copy> = {
       updateWindowsBuild10:
         "10. build: hirdetések, profil és kulcs megmaradt, végig németül; a frissítés után az elemző sosem indult el (13 hirdetés vár)",
       languagePortugueseOk: "10. build: végig portugálul a Macen",
-      codexBetaInUse:
-        "a bétatesztünkben használatban (6. grafikon); a 9. és 10. buildön még nem próbálták",
+      notTried040:
+        "a 0.4.0-n nem próbáltuk",
       updateLinuxBuild9:
         "9. build: sikeres (a köre nincs az alábbi táblázatban)",
       installerBlockedBuild9:
@@ -2599,7 +2593,6 @@ export const T: Record<Locale, Copy> = {
       benchBricklayer: "6 állás, kevesebb mint 15 (83% releváns)",
       brakeFixedRetry: "javítva a 9. és 10. buildben: újra kipróbálandó",
       languageGermanOk: "9. build: végig németül Linuxon",
-      chatgptFreeRefused: "bejelentkezés elutasítva (Free csomag)",
       securityPreTag:
         "átnézés a tag előtt: az ítélet a tag pontos verziójára születik; a lemezen maradt kulcs ügye lezárva",
       cleanLinuxRoundMissing:
