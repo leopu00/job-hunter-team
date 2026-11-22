@@ -35,6 +35,21 @@ class FakeRoster:
         return self.signs.get(session)
 
 
+class FakeCap:
+    """session_cap with the machine of the test: the capacity of the fake plan_registry, eleven sessions in all; 0 when unreadable."""
+
+    @staticmethod
+    def room(live):
+        registry = rr._MODULES.get("plan_registry")
+        try:
+            cap = registry._host_agent_cap()
+        except Exception:  # noqa: BLE001
+            return 0
+        workers = [s for s in live if rr._is_worker(s)]
+        cap = 11 if cap is None else cap
+        return max(0, min(cap - len(workers), 11 - len(live)))
+
+
 @pytest.fixture
 def world(tmp_path, monkeypatch):
     monkeypatch.setenv("JHT_HOME", str(tmp_path))
@@ -45,7 +60,8 @@ def world(tmp_path, monkeypatch):
     queue = type("Q", (), {"brake": staticmethod(lambda t, n: None), "held_back": staticmethod(lambda s: False)})
     registry = type("R", (), {"_host_agent_cap": staticmethod(lambda: None)})
     burst = rr._load("burst_roster")
-    monkeypatch.setattr(rr, "_MODULES", {"team_roster": roster, "queue_demand": queue, "plan_registry": registry, "burst_roster": burst})
+    monkeypatch.setattr(rr, "_MODULES", {"team_roster": roster, "queue_demand": queue, "plan_registry": registry, "burst_roster": burst,
+                                         "session_cap": FakeCap})
     monkeypatch.setattr(rr, "phase", lambda: "steady")
     return {"roster": roster, "queue": queue, "registry": registry, "now": now, "entries": entries}
 

@@ -64,6 +64,21 @@ def test_an_empty_plan_starts_nothing_and_the_look_is_throttled(tmp_path):
     assert calls.read_text().splitlines() == ["plan win=72 src="], "one look, no start, and the next two ticks wait"
 
 
+class FakeCap:
+    """session_cap with the machine of the test: the capacity of the fake plan_registry, eleven sessions in all; 0 when unreadable."""
+
+    @staticmethod
+    def room(live):
+        registry = rr._MODULES.get("plan_registry")
+        try:
+            cap = registry._host_agent_cap()
+        except Exception:  # noqa: BLE001
+            return 0
+        workers = [s for s in live if rr._is_worker(s)]
+        cap = 11 if cap is None else cap
+        return max(0, min(cap - len(workers), 11 - len(live)))
+
+
 # the real plan, with real brakes and a real working window
 def _world(monkeypatch, tmp_path, inside):
     home = tmp_path / "jht"
@@ -83,6 +98,7 @@ def _world(monkeypatch, tmp_path, inside):
     monkeypatch.setattr(queue, "held_back", lambda s: False)
     monkeypatch.setitem(rr._MODULES, "team_roster", roster)
     monkeypatch.setitem(rr._MODULES, "plan_registry", registry)
+    monkeypatch.setitem(rr._MODULES, "session_cap", FakeCap)
     monkeypatch.setattr(rr, "phase", lambda: "steady")
     monkeypatch.setattr(rr, "WINDOW_H", 72.0)
     return home
