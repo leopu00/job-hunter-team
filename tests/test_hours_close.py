@@ -122,3 +122,31 @@ def test_the_schedule_of_the_person_decides_with_a_fake_clock(monkeypatch):
     assert hc._outside(None, run) is False
     clock["now"] = datetime(2026, 11, 18, 18, 0, tzinfo=timezone.utc)
     assert hc._outside(None, run) is True, "the window closed at 18:00 and the bridge's own phase had not said so"
+
+
+# ── the panes of the harnesses as they are drawn: a turn running is never an idle pane (the close would cut it in the middle) ──
+import subprocess  # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import pi_screens  # noqa: E402
+
+CODEX_BUSY = "• Working (16s • esc to interrupt)\n\n› \n\n  gpt-5.6-sol · ~/scout-1\n"
+CODEX_DONE = "• Done: saved 3 positions.\n\n› Ask Codex to do anything\n\n  gpt-5.6-sol · ~/scout-1\n"
+CLAUDE_BUSY = "✻ Pondering… (12s · ↑ 1.2k tokens · esc to interrupt)\n\n❯ \n"
+
+
+def _pane(monkeypatch, text):
+    monkeypatch.setattr(hc.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout=text, stderr=""))
+    return hc._idle("SCOUT-1")
+
+
+def test_a_pi_pane_with_a_turn_running_is_busy_and_a_finished_one_is_idle(monkeypatch):
+    assert _pane(monkeypatch, pi_screens.screen(busy=True)) is None, "«⠹ Working» on the top rule is a turn running"
+    assert _pane(monkeypatch, pi_screens.screen(top=pi_screens.RETRYING)) is None, "a retry is a turn that is not over"
+    assert _pane(monkeypatch, pi_screens.screen(above=["done: 3 positions saved"])), "the composer between two rules, nothing running"
+
+
+def test_a_codex_and_a_claude_pane_with_a_turn_running_are_busy_and_a_finished_one_is_idle(monkeypatch):
+    assert _pane(monkeypatch, CODEX_BUSY) is None
+    assert _pane(monkeypatch, CLAUDE_BUSY) is None
+    assert _pane(monkeypatch, CODEX_DONE)
