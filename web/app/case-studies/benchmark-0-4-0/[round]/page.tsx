@@ -25,6 +25,7 @@ import { ROUND_STORIES } from "../roundStories";
 import {
   TESTS,
   chartRoundOf,
+  benchCommit,
   neighbours,
   testBySlug,
   type RoundCriterion,
@@ -42,6 +43,7 @@ type Criterion = {
   of?: number;
   trade?: string;
   round?: string;
+  bench?: string;
   fix?: string;
 };
 
@@ -84,12 +86,16 @@ export default async function RoundPage({
   const target = x.target
     ? ((data.targets as Target[]).find((y) => y.id === x.target) ?? null)
     : null;
-  const criteria = ((target as { criteria?: Criterion[] } | null)?.criteria ??
-    []) as Criterion[];
+  // a target tried on two benches keeps the criteria of each: this page shows those of its own bench
+  const criteria = (
+    ((target as { criteria?: Criterion[] } | null)?.criteria ??
+      []) as Criterion[]
+  ).filter((c) => !c.bench || c.bench === x.id);
   // where a criterion was measured: the commit of its round, and the correction that came after a red one
   const criterionWhere = (c: Criterion) =>
     [
       c.round ? data.rounds.find((r) => r.id === c.round)?.build : null,
+      c.bench ? benchCommit(c.bench) : null,
       c.fix ? t.targetCriteria.beforeFix.replace("{fix}", c.fix) : null,
     ]
       .filter(Boolean)
@@ -212,7 +218,9 @@ export default async function RoundPage({
 
         <header className="space-y-2">
           <div className="text-[11px] uppercase tracking-wide text-[var(--color-muted)]">
-            {x.kind === "bench" ? p.kindBench : p.kindRound}
+            {x.kind === "bench"
+              ? p.kindBench.replace("{n}", String(x.buildNo ?? ""))
+              : p.kindRound}
           </div>
           <h1 className="text-[26px] font-extrabold leading-tight">
             {`${TRADE_EMOJI[x.profile] ?? ""} ${label(x)}`.trim()}

@@ -227,6 +227,10 @@ export const T: Record<Locale, Copy> = {
         "Full retest, closed early: the stages work, but the estimated reserve of the restart stops the team 10 to 20 seconds after every stage; no new position.",
       retestResumes:
         "Retest, closed early: the unlock now works ten minutes before the first pause, but both resumes stop within the first minute, and after the update the Captain wakes all seven workers outside the stages.",
+      retestResumeBursts:
+        "Retest of the unlock and the resumes after an update: the unlock works 23 minutes before the first pause and finds 6 positions, but the resumes last 79, 59 and 24 seconds, the first goes 0.20 $ over the pace line and the last stops for budget without a notice; 12 new positions, 8 relevant.",
+      retestScoutsNotBack:
+        "Retest with the pace off after an update: the update is clean and the team stays paused for the old budget, but after the setup no Scout starts again for 88 minutes; no new position, 11 old ones scored (1.75 of 2 $).",
       retestDayQuota:
         "Retest of the budget split by day, over two days (41 h) with the pace off: the team works up to its share of the day, stops with one notice and resumes by itself the next day (1.38 of 2 $, never over a share). 4 minor defects; 4 relevant of 5 new.",
       candidateWindowsSpanish:
@@ -303,10 +307,10 @@ export const T: Record<Locale, Copy> = {
         "build 9: passed (its round is not in the table below)",
       installerBlockedBuild9:
         "build 9: stopped by the installer (fix in build 10, round under way)",
-      benchCook: "79% relevant",
-      benchWarehouse: "90% relevant",
-      benchNurse: "1 duplicate (94% relevant)",
-      benchBricklayer: "6 positions, fewer than 15 (83% relevant)",
+      benchCook: "1 duplicate (86% relevant); on build 9: 79% relevant, no duplicate",
+      benchWarehouse: "1 duplicate (90% relevant); on build 9: 90% relevant, no duplicate",
+      benchNurse: "1 duplicate (95% relevant); on build 9: 1 duplicate",
+      benchBricklayer: "14 positions, fewer than 15, and 1 duplicate (71% relevant); on build 9: 6 positions",
       brakeFixedRetry: "fixed in builds 9 and 10: to try again",
       languageGermanOk: "build 9: German all the way on Linux",
       securityPreTag:
@@ -605,6 +609,10 @@ export const T: Record<Locale, Copy> = {
         "Riprova completa, chiusa prima: gli scaglioni funzionano, ma la riserva stimata della ripartenza ferma la squadra 10-20 secondi dopo ogni scaglione; nessun annuncio nuovo.",
       retestResumes:
         "Riprova, chiusa prima: lo sblocco ora lavora dieci minuti prima della prima pausa, ma entrambe le riprese si fermano entro il primo minuto, e dopo l'aggiornamento il Capitano sveglia tutti e sette i lavoratori fuori dagli scaglioni.",
+      retestResumeBursts:
+        "Retest dello sblocco e delle riprese dopo un aggiornamento: lo sblocco lavora 23 minuti prima della prima pausa e trova 6 posizioni, ma le riprese durano 79, 59 e 24 secondi, la prima supera la linea del ritmo di 0,20 $ e l'ultima si ferma per il budget senza avviso; 12 posizioni nuove, 8 pertinenti.",
+      retestScoutsNotBack:
+        "Retest con il ritmo spento dopo un aggiornamento: l'aggiornamento è pulito e la squadra resta in pausa per il vecchio budget, ma dopo il setup nessuno Scout riparte per 88 minuti; nessuna posizione nuova, 11 vecchie valutate (1,75 $ su 2).",
       retestDayQuota:
         "Retest del budget diviso per giorno, su due giorni (41 h) con il ritmo spento: la squadra lavora fino alla quota del giorno, si ferma con un solo avviso e riparte da sola il giorno dopo (1,38 $ su 2, mai sopra una quota). 4 difetti minori; 4 pertinenti su 5 nuove.",
       candidateWindowsSpanish:
@@ -682,10 +690,10 @@ export const T: Record<Locale, Copy> = {
         "build 9: superato (il giro non è nella tabella sotto)",
       installerBlockedBuild9:
         "build 9: fermato dall'installer (correzione in build 10, giro in corso)",
-      benchCook: "79% pertinenti",
-      benchWarehouse: "90% pertinenti",
-      benchNurse: "1 doppione (94% pertinenti)",
-      benchBricklayer: "6 posizioni, meno di 15 (83% pertinenti)",
+      benchCook: "1 doppione (86% pertinenti); sulla build 9: 79% pertinenti, nessun doppione",
+      benchWarehouse: "1 doppione (90% pertinenti); sulla build 9: 90% pertinenti, nessun doppione",
+      benchNurse: "1 doppione (95% pertinenti); sulla build 9: 1 doppione",
+      benchBricklayer: "14 posizioni, meno di 15, e 1 doppione (71% pertinenti); sulla build 9: 6 posizioni",
       brakeFixedRetry: "corretto nelle build 9 e 10: da riprovare",
       languageGermanOk: "build 9: tedesco dall'inizio alla fine su Linux",
       securityPreTag:
@@ -984,6 +992,10 @@ export const T: Record<Locale, Copy> = {
         "Vollständiger erneuter Test, vorzeitig beendet: die Staffeln funktionieren, aber die geschätzte Reserve des Neustarts stoppt das Team 10 bis 20 Sekunden nach jeder Staffel; keine neue Stelle.",
       retestResumes:
         "Erneuter Test, vorzeitig beendet: die Freigabe arbeitet jetzt zehn Minuten bis zur ersten Pause, aber beide Wiederaufnahmen stoppen in der ersten Minute, und nach dem Update weckt der Kapitän alle sieben Arbeiter außerhalb der Staffeln.",
+      retestResumeBursts:
+        "Retest der Freigabe und der Wiederaufnahmen nach einem Update: die Freigabe arbeitet 23 Minuten bis zur ersten Pause und findet 6 Stellen, aber die Wiederaufnahmen dauern 79, 59 und 24 Sekunden, die erste liegt 0,20 $ über der Tempolinie und die letzte hält wegen des Budgets ohne Meldung an; 12 neue Stellen, 8 passende.",
+      retestScoutsNotBack:
+        "Retest mit ausgeschaltetem Tempo nach einem Update: das Update ist sauber und das Team bleibt wegen des alten Budgets pausiert, aber nach dem Setup startet 88 Minuten lang kein Scout wieder; keine neue Stelle, 11 alte bewertet (1,75 $ von 2).",
       retestDayQuota:
         "Retest des nach Tagen aufgeteilten Budgets über zwei Tage (41 Std.) bei ausgeschaltetem Tempo: das Team arbeitet bis zum Tagesanteil, hält mit einer einzigen Meldung an und läuft am nächsten Tag von selbst weiter (1,38 $ von 2, nie über einem Anteil). 4 kleine Mängel; 4 passende von 5 neuen.",
       candidateWindowsSpanish:
@@ -1061,10 +1073,10 @@ export const T: Record<Locale, Copy> = {
         "Build 9: bestanden (die Runde steht nicht in der Tabelle unten)",
       installerBlockedBuild9:
         "Build 9: vom Installer gestoppt (Korrektur in Build 10, Runde läuft)",
-      benchCook: "79 % passend",
-      benchWarehouse: "90 % passend",
-      benchNurse: "1 Duplikat (94 % passend)",
-      benchBricklayer: "6 Stellen, weniger als 15 (83 % passend)",
+      benchCook: "1 Duplikat (86 % passend); in Build 9: 79 % passend, kein Duplikat",
+      benchWarehouse: "1 Duplikat (90 % passend); in Build 9: 90 % passend, kein Duplikat",
+      benchNurse: "1 Duplikat (95 % passend); in Build 9: 1 Duplikat",
+      benchBricklayer: "14 Stellen, weniger als 15, und 1 Duplikat (71 % passend); in Build 9: 6 Stellen",
       brakeFixedRetry: "in Build 9 und 10 korrigiert: erneut zu prüfen",
       languageGermanOk: "Build 9: durchgehend Deutsch auf Linux",
       securityPreTag:
@@ -1366,6 +1378,10 @@ export const T: Record<Locale, Copy> = {
         "Nueva prueba completa, cerrada antes: los escalones funcionan, pero la reserva estimada del reinicio para el equipo 10-20 segundos después de cada escalón; ningún anuncio nuevo.",
       retestResumes:
         "Nueva prueba, cerrada antes: el desbloqueo ya trabaja diez minutos antes de la primera pausa, pero las dos reanudaciones se paran en el primer minuto, y tras la actualización el Capitán despierta a los siete trabajadores fuera de los escalones.",
+      retestResumeBursts:
+        "Retest del desbloqueo y de las reanudaciones tras una actualización: el desbloqueo trabaja 23 minutos antes de la primera pausa y encuentra 6 puestos, pero las reanudaciones duran 79, 59 y 24 segundos, la primera supera la línea del ritmo en 0,20 $ y la última se detiene por el presupuesto sin aviso; 12 puestos nuevos, 8 pertinentes.",
+      retestScoutsNotBack:
+        "Retest con el ritmo apagado tras una actualización: la actualización es limpia y el equipo sigue en pausa por el presupuesto viejo, pero tras el setup ningún Scout vuelve a arrancar durante 88 minutos; ninguna posición nueva, 11 antiguas puntuadas (1,75 $ de 2).",
       retestDayQuota:
         "Retest del presupuesto dividido por día, durante dos días (41 h) con el ritmo apagado: el equipo trabaja hasta la parte del día, se detiene con un solo aviso y reanuda solo al día siguiente (1,38 $ de 2, nunca por encima de una parte). 4 defectos menores; 4 pertinentes de 5 nuevas.",
       candidateWindowsSpanish:
@@ -1443,10 +1459,10 @@ export const T: Record<Locale, Copy> = {
         "build 9: superada (su ronda no está en la tabla de abajo)",
       installerBlockedBuild9:
         "build 9: parada por el instalador (corrección en la build 10, ronda en curso)",
-      benchCook: "79 % pertinentes",
-      benchWarehouse: "90 % pertinentes",
-      benchNurse: "1 duplicado (94 % pertinentes)",
-      benchBricklayer: "6 puestos, menos de 15 (83 % pertinentes)",
+      benchCook: "1 duplicado (86 % pertinentes); en la build 9: 79 % pertinentes, sin duplicados",
+      benchWarehouse: "1 duplicado (90 % pertinentes); en la build 9: 90 % pertinentes, sin duplicados",
+      benchNurse: "1 duplicado (95 % pertinentes); en la build 9: 1 duplicado",
+      benchBricklayer: "14 puestos, menos de 15, y 1 duplicado (71 % pertinentes); en la build 9: 6 puestos",
       brakeFixedRetry: "corregido en las builds 9 y 10: por volver a probar",
       languageGermanOk: "build 9: alemán de principio a fin en Linux",
       securityPreTag:
@@ -1751,6 +1767,10 @@ export const T: Record<Locale, Copy> = {
         "Nouvel essai complet, arrêté plus tôt : les paliers marchent, mais la réserve estimée du redémarrage arrête l'équipe 10 à 20 secondes après chaque palier ; aucune nouvelle annonce.",
       retestResumes:
         "Nouvel essai, arrêté plus tôt : le déblocage travaille maintenant dix minutes avant la première pause, mais les deux reprises s'arrêtent dans la première minute, et après la mise à jour le Capitaine réveille les sept travailleurs hors des paliers.",
+      retestResumeBursts:
+        "Retest du déblocage et des reprises après une mise à jour : le déblocage travaille 23 minutes avant la première pause et trouve 6 postes, mais les reprises durent 79, 59 et 24 secondes, la première dépasse la ligne du rythme de 0,20 $ et la dernière s'arrête pour le budget sans avis ; 12 postes nouveaux, 8 pertinents.",
+      retestScoutsNotBack:
+        "Retest avec le rythme éteint après une mise à jour : la mise à jour est propre et l'équipe reste en pause pour l'ancien budget, mais après le setup aucun Scout ne repart pendant 88 minutes ; aucune nouvelle position, 11 anciennes notées (1,75 $ sur 2).",
       retestDayQuota:
         "Retest du budget réparti par jour, sur deux jours (41 h) avec le rythme éteint : l'équipe travaille jusqu'à la part du jour, s'arrête avec un seul avis et reprend toute seule le lendemain (1,38 $ sur 2, jamais au-dessus d'une part). 4 défauts mineurs ; 4 pertinentes sur 5 nouvelles.",
       candidateWindowsSpanish:
@@ -1829,10 +1849,10 @@ export const T: Record<Locale, Copy> = {
         "build 9 : réussi (son tour n'est pas dans le tableau ci-dessous)",
       installerBlockedBuild9:
         "build 9 : arrêté par l'installeur (correction dans la build 10, tour en cours)",
-      benchCook: "79 % pertinents",
-      benchWarehouse: "90 % pertinents",
-      benchNurse: "1 doublon (94 % pertinents)",
-      benchBricklayer: "6 postes, moins de 15 (83 % pertinents)",
+      benchCook: "1 doublon (86 % pertinents) ; sur la build 9 : 79 % pertinents, aucun doublon",
+      benchWarehouse: "1 doublon (90 % pertinents) ; sur la build 9 : 90 % pertinents, aucun doublon",
+      benchNurse: "1 doublon (95 % pertinents) ; sur la build 9 : 1 doublon",
+      benchBricklayer: "14 postes, moins de 15, et 1 doublon (71 % pertinents) ; sur la build 9 : 6 postes",
       brakeFixedRetry: "corrigé dans les builds 9 et 10 : à réessayer",
       languageGermanOk: "build 9 : allemand du début à la fin sous Linux",
       securityPreTag:
@@ -2135,6 +2155,10 @@ export const T: Record<Locale, Copy> = {
         "Novo teste completo, fechado mais cedo: os escalões funcionam, mas a reserva estimada do reinício para a equipa 10-20 segundos depois de cada escalão; nenhum anúncio novo.",
       retestResumes:
         "Novo teste, fechado mais cedo: o desbloqueio já trabalha dez minutos antes da primeira pausa, mas as duas retomas param no primeiro minuto, e depois da atualização o Capitão acorda os sete trabalhadores fora dos escalões.",
+      retestResumeBursts:
+        "Reteste do desbloqueio e das retomas depois de uma atualização: o desbloqueio trabalha 23 minutos antes da primeira pausa e encontra 6 vagas, mas as retomas duram 79, 59 e 24 segundos, a primeira passa 0,20 $ acima da linha do ritmo e a última para pelo orçamento sem aviso; 12 vagas novas, 8 pertinentes.",
+      retestScoutsNotBack:
+        "Reteste com o ritmo desligado depois de uma atualização: a atualização é limpa e a equipa fica em pausa pelo orçamento antigo, mas depois do setup nenhum Scout volta a arrancar durante 88 minutos; nenhuma vaga nova, 11 antigas pontuadas (1,75 $ de 2).",
       retestDayQuota:
         "Reteste do orçamento dividido por dia, durante dois dias (41 h) com o ritmo desligado: a equipa trabalha até à parte do dia, para com um único aviso e retoma sozinha no dia seguinte (1,38 $ de 2, nunca acima de uma parte). 4 defeitos menores; 4 pertinentes de 5 novas.",
       candidateWindowsSpanish:
@@ -2212,10 +2236,10 @@ export const T: Record<Locale, Copy> = {
         "build 9: aprovado (a rodada não está na tabela abaixo)",
       installerBlockedBuild9:
         "build 9: parado pelo instalador (correção na build 10, rodada em curso)",
-      benchCook: "79% pertinentes",
-      benchWarehouse: "90% pertinentes",
-      benchNurse: "1 duplicado (94% pertinentes)",
-      benchBricklayer: "6 vagas, menos de 15 (83% pertinentes)",
+      benchCook: "1 duplicado (86% pertinentes); na build 9: 79% pertinentes, sem duplicados",
+      benchWarehouse: "1 duplicado (90% pertinentes); na build 9: 90% pertinentes, sem duplicados",
+      benchNurse: "1 duplicado (95% pertinentes); na build 9: 1 duplicado",
+      benchBricklayer: "14 vagas, menos de 15, e 1 duplicado (71% pertinentes); na build 9: 6 vagas",
       brakeFixedRetry: "corrigido nas builds 9 e 10: a voltar a testar",
       languageGermanOk: "build 9: alemão do início ao fim no Linux",
       securityPreTag:
@@ -2517,6 +2541,10 @@ export const T: Record<Locale, Copy> = {
         "Teljes újrapróba, korán lezárva: a lépcsők működnek, de az újraindítás becsült tartaléka minden lépcső után 10–20 másodperccel leállítja a csapatot; nincs új hirdetés.",
       retestResumes:
         "Újrapróba, korán lezárva: a feloldás most tíz percig dolgozik az első szünetig, de mindkét folytatás az első percen belül leáll, és a frissítés után a Kapitány a lépcsőkön kívül mind a hét dolgozót felébreszti.",
+      retestResumeBursts:
+        "A feloldás és a folytatások újratesztje frissítés után: a feloldás 23 percig dolgozik az első szünetig és 6 pozíciót talál, de a folytatások 79, 59 és 24 másodpercig tartanak, az első 0,20 $-lal átlépi a tempóvonalat, az utolsó pedig a költségkeret miatt értesítés nélkül megáll; 12 új pozíció, 8 releváns.",
+      retestScoutsNotBack:
+        "Újrapróba kikapcsolt tempóval frissítés után: a frissítés tiszta, a csapat a régi költségkeret miatt szünetel, de a beállítás után 88 percig egyetlen Scout sem indul újra; nincs új pozíció, 11 régi pontozva (1,75 $ a 2-ből).",
       retestDayQuota:
         "A napokra osztott költségkeret újratesztje két napon át (41 óra), kikapcsolt tempóval: a csapat a napi részéig dolgozik, egyetlen értesítéssel megáll, és másnap magától folytatja (1,38 $ a 2-ből, soha egy rész felett). 4 kisebb hiba; 5 új pozícióból 4 releváns.",
       candidateWindowsSpanish:
@@ -2593,10 +2621,10 @@ export const T: Record<Locale, Copy> = {
         "9. build: sikeres (a köre nincs az alábbi táblázatban)",
       installerBlockedBuild9:
         "9. build: a telepítő megállította (javítás a 10. buildben, a kör folyamatban)",
-      benchCook: "79% releváns",
-      benchWarehouse: "90% releváns",
-      benchNurse: "1 ismétlődés (94% releváns)",
-      benchBricklayer: "6 állás, kevesebb mint 15 (83% releváns)",
+      benchCook: "1 ismétlődés (86% releváns); a 9. buildnél: 79% releváns, ismétlődés nélkül",
+      benchWarehouse: "1 ismétlődés (90% releváns); a 9. buildnél: 90% releváns, ismétlődés nélkül",
+      benchNurse: "1 ismétlődés (95% releváns); a 9. buildnél: 1 ismétlődés",
+      benchBricklayer: "14 állás, kevesebb mint 15, és 1 ismétlődés (71% releváns); a 9. buildnél: 6 állás",
       brakeFixedRetry: "javítva a 9. és 10. buildben: újra kipróbálandó",
       languageGermanOk: "9. build: végig németül Linuxon",
       securityPreTag:

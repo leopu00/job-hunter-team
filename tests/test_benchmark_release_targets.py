@@ -160,3 +160,40 @@ def test_a_red_mark_under_a_target_that_is_met_says_before_which_correction_it_w
             assert c["ok"] or c.get("fix"), (target["id"], c)
     for lang, block in BLOCKS.items():
         assert "{fix}" in re.search(r'beforeFix: "([^"]*)"', block).group(1), lang
+
+
+def test_a_scout_bench_row_keeps_the_criteria_of_each_bench_and_the_numbers_are_those_of_the_bench():
+    bench = {b["id"]: b for b in DATA["bench"]}
+    assert {"b9-cook", "b15-cook", "b15-warehouseWorker", "b15-nurse", "b15-bricklayer"} <= set(bench)
+    for b in bench.values():
+        # every bench says its own day, to tell the benches of two builds apart; the relevance adds up to the positions inserted
+        assert re.fullmatch(r"\d{2}/\d{2}", b["day"]), b["id"]
+        assert sum(b["relevance"].values()) == b["found"], b["id"]
+    for target in DATA["targets"]:
+        by_bench: dict[str, list] = {}
+        for c in target.get("criteria", []):
+            if "bench" in c:
+                assert c["bench"] in bench, (target["id"], c)
+                by_bench.setdefault(c["bench"], []).append(c)
+        if not by_bench:
+            continue
+        # the last bench decides the row: its build, and its criteria give the status
+        last = list(by_bench)[-1]
+        assert target["build"] == bench[last]["buildNo"], target["id"]
+        assert (target["status"] == "pass") == all(c["ok"] for c in by_bench[last]), target["id"]
+        for bid, criteria in by_bench.items():
+            b = bench[bid]
+            got = {c["k"]: c["v"] for c in criteria}
+            assert got["positions"] == b["found"], bid
+            assert got["relevant"] == round(100 * b["relevance"]["P"] / b["found"]), bid
+            for c in criteria:
+                limit = c.get("min", c.get("max"))
+                assert c["ok"] == (c["v"] >= limit if "min" in c else c["v"] <= limit), (bid, c)
+
+
+def test_the_rounds_of_a_build_are_listed_in_the_order_they_ran_and_the_two_retests_of_the_19th_follow_r32():
+    ids = [r["id"] for r in DATA["rounds"]]
+    assert ids.index("r35") == ids.index("r32") + 1 and ids.index("r36") == ids.index("r35") + 1
+    build = next(b for b in DATA["builds"] if b["n"] == 15)
+    assert build["rounds"][build["rounds"].index("r32") + 1 : build["rounds"].index("r32") + 3] == ["r35", "r36"]
+    assert sorted(build["rounds"]) == sorted(r["id"] for r in DATA["rounds"] if r.get("buildNo") == 15)

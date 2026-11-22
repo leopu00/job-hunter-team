@@ -33,7 +33,7 @@ import {
 } from "./benchmarkShared";
 
 import ProviderMark from "./providerMarks";
-import { testHref } from "./roundsData";
+import { benchCommit, testHref } from "./roundsData";
 import BenchmarkFinder, { type CandidateView } from "./BenchmarkFinder";
 import { CASE_STUDIES, localizeCaseStudy } from "@/lib/case-studies";
 
@@ -91,11 +91,16 @@ export default async function BenchmarkPage() {
     of?: number;
     trade?: string;
     round?: string;
+    bench?: string;
     fix?: string;
   };
   // where a criterion was measured: the commit of its round, and the correction that came after a red one
   const criterionWhere = (c: Criterion) => {
-    const commit = c.round ? roundById.get(c.round)?.build : null;
+    const commit = c.round
+      ? roundById.get(c.round)?.build
+      : c.bench
+        ? benchCommit(c.bench)
+        : null;
     return [
       commit,
       c.fix ? t.targetCriteria.beforeFix.replace("{fix}", c.fix) : null,
@@ -133,16 +138,19 @@ export default async function BenchmarkPage() {
     ) + (criterionWhere(c) ? ` · ${criterionWhere(c)}` : "");
   // the test of the Scout bench that proves each bench row of the targets
   const BENCH_TEST: Record<string, string> = {
-    scoutBenchCook: "b9-cook",
-    scoutBenchWarehouse: "b9-warehouseWorker",
-    scoutBenchNurse: "b9-nurse",
-    scoutBenchBricklayer: "b9-bricklayer",
+    scoutBenchCook: "b15-cook",
+    scoutBenchWarehouse: "b15-warehouseWorker",
+    scoutBenchNurse: "b15-nurse",
+    scoutBenchBricklayer: "b15-bricklayer",
   };
   // One cell of the targets table: the status, the build, the rounds that prove it; the note small below and whole in the tooltip.
   const targetCell = (x: Target) => {
     const note = x.note ? t.targetNotes[x.note] : "";
-    const criteria = ((x as { criteria?: Criterion[] }).criteria ??
+    const allCriteria = ((x as { criteria?: Criterion[] }).criteria ??
       []) as Criterion[];
+    // a target tried on two benches keeps the criteria of both on its bench page: the table shows the last one
+    const lastBench = [...allCriteria].reverse().find((c) => c.bench)?.bench;
+    const criteria = allCriteria.filter((c) => !c.bench || c.bench === lastBench);
     return (
       <div className="space-y-0.5" title={note || undefined}>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -193,9 +201,9 @@ export default async function BenchmarkPage() {
                 className="text-[var(--color-base)]"
               >
                 <span aria-hidden="true">{c.ok ? "✅" : "❌"}</span>{" "}
-                {c.round ? (
+                {c.round || c.bench ? (
                   <Link
-                    href={testHref(c.round)}
+                    href={testHref((c.round ?? c.bench) as string)}
                     className="underline decoration-dotted hover:decoration-solid"
                     style={{ color: "inherit" }}
                   >
@@ -290,6 +298,7 @@ export default async function BenchmarkPage() {
           os: string;
           service: string;
           buildNo: number;
+          day: string;
         })[];
       }
     ).bench ?? [];
@@ -321,7 +330,7 @@ export default async function BenchmarkPage() {
     }),
     ...benchRaw.map((b) => ({
       id: b.id,
-      label: `${OS_LABEL[b.os]} · ${cc.benchProfiles[b.profile] ?? b.profile}${b.id.endsWith("bricklayer") ? ` (${cc.second})` : ""}`,
+      label: `${OS_LABEL[b.os]} · ${cc.benchProfiles[b.profile] ?? b.profile}${b.id === "b9-bricklayer" ? ` (${cc.second})` : ""} · ${b.day}`,
       group: "bench" as const,
       os: b.os,
       service: b.service,
@@ -343,7 +352,7 @@ export default async function BenchmarkPage() {
   ];
   const chartBench: BenchProfile[] = benchRaw.map((b) => ({
     id: b.id,
-    label: `${cc.benchProfiles[b.profile] ?? b.profile}${b.id.endsWith("bricklayer") ? ` (${cc.second})` : ""}`,
+    label: `${cc.benchProfiles[b.profile] ?? b.profile}${b.id === "b9-bricklayer" ? ` (${cc.second})` : ""} · ${b.day}`,
     relevance: b.relevance ?? null,
     discarded: b.discarded ?? null,
     bySource: b.bySource
