@@ -7,6 +7,7 @@ from delivery_status import checked, report
 import quota_data
 import pi_spend_cap
 import ram_guard
+import quota_wall
 import hours_close
 
 
@@ -35,6 +36,7 @@ def _before_tick(api, run):
     api._agent_pause_step()
     pi_spend_cap.step(api, run)
     ram_guard.step(api, run)
+    quota_wall.step(api, run)
     hours_close.step(api, run)
     if not run._bi_on:
         api._enforce_daily_halt()

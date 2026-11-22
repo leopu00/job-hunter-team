@@ -83,8 +83,19 @@ def worker_cap(fixed: int = 6):
     return max(0, min(values))
 
 
+def standby_holds() -> bool:
+    """True while a standby or a pause (the quota of the subscription spent, the person's pause) holds the team: no start, whoever asks."""
+    mod = _load("standby")
+    try:
+        return bool(mod is not None and mod.is_active())
+    except Exception:  # noqa: BLE001 — fail-closed in the other direction, as standby.is_active: an unreadable flag does not hold
+        return False
+
+
 def room(live_sessions) -> int:
-    """How many more workers may be started: 0 when a cap is reached or cannot be read."""
+    """How many more workers may be started: 0 when a cap is reached or cannot be read, or while the standby holds the team."""
+    if standby_holds():
+        return 0
     try:
         live = [str(s).strip().upper() for s in live_sessions]
         workers = [s for s in live if WORKER.match(s)]
@@ -95,7 +106,9 @@ def room(live_sessions) -> int:
 
 
 def check(live_sessions):
-    """None when one more worker may start; else the reason: capacity, session-cap, capacity-unreadable."""
+    """None when one more worker may start; else the reason: team-standby, capacity, session-cap, capacity-unreadable."""
+    if standby_holds():
+        return "team-standby"
     try:
         live = [str(s).strip().upper() for s in live_sessions]
         workers = [s for s in live if WORKER.match(s)]

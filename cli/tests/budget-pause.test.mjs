@@ -154,3 +154,24 @@ test('the RAM guard: the last retirement is said in the status for a day, from t
   assert.equal(ramGuardText({ home: root, now: NOW }), null);
   assert.equal(ramGuardText({ home: home(), now: NOW }), null, 'no file, nothing to say');
 });
+
+test('the quota of the subscription: said in the status while the pause stands, with the hour when it is known', async () => {
+  const { quotaWallText } = awaitedModule;
+  const root = home();
+  mkdirSync(join(root, 'state'));
+  const write = (file, body) => writeFileSync(join(root, file), JSON.stringify(body));
+  const until = new Date(NOW.getTime() + 3600 * 1000).toISOString();
+  write('.team-standby.flag', { until, requested_by: 'quota' });
+  write('state/quota-wall.json', { on: true, resumes_at: new Date(NOW.getTime() + 1800 * 1000).toISOString(), probe: false });
+  assert.match(show(quotaWallText({ home: root, now: NOW })), /quota of your subscription is finished.*restarts by itself at \d\d:\d\d/);
+  write('state/quota-wall.json', { on: true, resumes_at: null, probe: true });
+  assert.match(show(quotaWallText({ home: root, now: NOW })), /not known when it comes back.*every 30 minutes/);
+  write('state/quota-wall.json', { on: false });
+  assert.equal(quotaWallText({ home: root, now: NOW }), null, 'a pause that ended says nothing');
+  write('state/quota-wall.json', { on: true, resumes_at: null });
+  write('.team-standby.flag', { until, requested_by: 'user' });
+  assert.equal(quotaWallText({ home: root, now: NOW }), null, 'another pause is not the quota');
+  write('.team-standby.flag', { until: new Date(NOW.getTime() - 1000).toISOString(), requested_by: 'quota' });
+  assert.equal(quotaWallText({ home: root, now: NOW }), null, 'an expired flag says nothing');
+  assert.equal(quotaWallText({ home: home(), now: NOW }), null);
+});

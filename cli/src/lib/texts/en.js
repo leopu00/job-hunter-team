@@ -373,4 +373,6 @@ export default {
   "enrichment.remote_too": "remote positions too",
   "enrichment.cost_note": "Estimated costs, measured with the agents on Haiku: with a larger model they cost more.",
   "agents.ram_guard": "At {at} the computer's memory was nearly full ({free} GiB free of {total}): {n} workers were stopped to protect it. The search goes on with fewer until the memory is back.",
+  "agents.quota_wall": "The quota of your subscription is finished: the team is paused and restarts by itself at {at}.",
+  "agents.quota_wall_unknown": "The quota of your subscription is finished: the team is paused. It is not known when it comes back: the team checks by itself every {min} minutes and restarts as soon as there is quota again.",
 };

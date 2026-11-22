@@ -406,4 +406,6 @@ export default {
   "enrichment.remote_too": "anche le posizioni remote",
   "enrichment.cost_note": "Costi stimati, misurati con gli agenti su Haiku: con un modello più grande costano di più.",
   "agents.ram_guard": "Alle {at} la memoria del computer era quasi piena ({free} GiB liberi su {total}): {n} lavoratori sono stati fermati per proteggerla. La ricerca va avanti con meno lavoratori finché la memoria non torna.",
+  "agents.quota_wall": "La quota del tuo abbonamento è finita: la squadra è in pausa e riprende da sola alle {at}.",
+  "agents.quota_wall_unknown": "La quota del tuo abbonamento è finita: la squadra è in pausa. Non so a che ora torna: controlla da sola ogni {min} minuti e riprende appena c'è di nuovo quota.",
 };

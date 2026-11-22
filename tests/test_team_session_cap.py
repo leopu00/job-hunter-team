@@ -82,3 +82,10 @@ def test_a_cap_that_cannot_be_read_is_a_brake(world, monkeypatch):
     monkeypatch.setattr(sc, "roster_workers", boom)
     monkeypatch.setattr(sc, "host_workers", boom)
     assert sc.check(world["sessions"]) == "capacity-unreadable"
+
+
+def test_a_standby_or_a_pause_holds_every_start(tmp_path, monkeypatch):
+    import session_cap
+    monkeypatch.setattr(session_cap, "_load", lambda name: type("S", (), {"is_active": staticmethod(lambda: True)}) if name == "standby" else None)
+    assert session_cap.room(["CAPITANO"]) == 0
+    assert session_cap.check(["CAPITANO"]) == "team-standby"

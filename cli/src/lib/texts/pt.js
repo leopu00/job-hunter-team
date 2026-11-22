@@ -96,6 +96,8 @@ export default {
   "agents.paused_of": "{running} de {total} em pausa (orçamento)",
   "agents.paused": "em pausa",
   "agents.ram_guard": "Às {at} a memória do computador estava quase cheia ({free} GiB livres de {total}): {n} trabalhadores foram parados para a proteger. A pesquisa continua com menos trabalhadores até a memória voltar.",
+  "agents.quota_wall": "A quota da tua subscrição acabou: a equipa está em pausa e retoma sozinha às {at}.",
+  "agents.quota_wall_unknown": "A quota da tua subscrição acabou: a equipa está em pausa. Não se sabe quando volta: verifica sozinha a cada {min} minutos e retoma assim que houver quota outra vez.",
   "team.title": "Equipa",
   "team.next_start": "Liga a equipa com: jht team start",
   "observation.nd": "N/D",
