@@ -4,7 +4,8 @@ From 08/11 to 13/11 every Codex session of one team answered «usage limit» and
 brought up eight to ten sessions that failed at once, and the person was never told. The brake of the budget reads numbers; here
 there were none to read, only the words of the provider on the screens of the workers.
 
-Every look of the brake (about once a minute) this reads the last lines of the screen of each worker. When most of the workers
+Every look of the brake (about once a minute) this reads the last lines of the screen of each worker, and takes only the line
+the CLI of the provider writes for its limit (never a text a tool or a page printed). When most of the workers
 that are alive say the provider's limit, the team is put on pause (the pause of the person: the Assistente stays awake to answer),
 the person is told in their language with the hour of the return when the screen says it, and the pause is bound to that hour. The
 exit is the same `until` of every pause: the Sentinella removes the flag and sends [RIPRENDI]. When the screen did not say when,
@@ -28,8 +29,17 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 WORKER = re.compile(r"^(SCOUT|ANALISTA|SCORER|SCRITTORE|CLOSER)(-\d+)?$")
-LIMIT = re.compile(r"hit your (usage )?limit|usage limit( reached)?|(5-hour|weekly|session|daily) limit reached|quota exceeded|out of (usage|credits)", re.I)
-LOOK_LINES = 8                 # a limit said higher up is old news: only the last lines of the screen count
+# The line of the limit as each provider's CLI writes it, anchored at the start of the line (a sentence in the middle of a line, or
+# inside the block of a tool, is somebody else's text: an announcement, a web page a Scout read). Codex: «■ You've hit your usage limit.
+# … try again at 6:12 PM.» in the error box, above its composer. Claude: «Usage limit reached · resets at 18:00», «5-hour limit
+# reached ∙ resets 3pm», a line of its own. Pi: « Error: …» above its composer, with the provider's words (usage limit, 429 rate limit,
+# quota). Tool output and quotes are indented or carry a bullet of their own (│ └ ⎿ • ›), and none of those match.
+CODEX_LINE = re.compile(r"^■ You(?:'|\u2019)ve hit your (?:usage )?limit\b")
+CLAUDE_LINE = re.compile(r"^ {0,2}(?:Claude )?(?:usage limit reached|(?:5-hour|weekly|session|daily|opus weekly) limit reached)\b(?:[ \u2219\u00b7.,\u2014-]|$)", re.I)
+PI_LINE = re.compile(r"^ {0,2}Error: .*(?:usage limit|rate.?limit|\b429\b|quota|hit your (?:usage )?limit)", re.I)
+MAX_LINE = 240                 # a line of the CLI is short; a long one is a page
+AFTER_LINES = 8                # after the limit only the footer of the CLI (blank, composer, rules, folder, totals): Pi's is five lines
+LOOK_LINES = 14                # the lines of the screen read: the limit and the footer of the CLI after it
 MIN_WORKERS = 2                # one screen is a worker's trouble; two are the provider's (a team of one worker needs only that one)
 PROBE_SEC = 1800               # no hour on the screen: try again after this long
 MARGIN_SEC = 120               # after the hour the screen gave
@@ -44,10 +54,15 @@ DAY = re.compile(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\
 
 
 def limit_line(tail):
-    """The line of the screen that says the limit, in the last LOOK_LINES lines, or None."""
-    for line in reversed([l for l in tail if str(l).strip()][-LOOK_LINES:]):
-        if LIMIT.search(str(line)):
-            return str(line).strip()
+    """The line the CLI of the provider wrote to say the limit, or None. It must be one of the shapes above and be at the end of the
+    screen: only the footer of the CLI (at most AFTER_LINES lines, with the blanks left out) may follow it. Text a page or a tool
+    printed, or an agent quoted, is neither anchored like that nor last."""
+    lines = [str(l).rstrip() for l in tail if str(l).strip()]
+    for back, line in enumerate(reversed(lines)):
+        if back > AFTER_LINES:
+            break
+        if len(line) <= MAX_LINE and (CODEX_LINE.match(line) or CLAUDE_LINE.match(line) or PI_LINE.match(line)):
+            return line.strip()
     return None
 
 
@@ -97,7 +112,7 @@ def decide(screens, now):
     if not said or len(said) < min(MIN_WORKERS, len(workers)) or len(said) * 2 < len(workers):
         return None
     moments = [m for m in (resume_at(l, now) for l in said.values()) if m]
-    return {"sessions": sorted(said), "line": next(iter(said.values())), "resume": max(moments) if moments else None}
+    return {"sessions": sorted(said), "line": next(iter(said.values())), "resume": min(moments) if moments else None}
 
 
 def _load(name):
@@ -123,7 +138,11 @@ def _write_state(home, data):
     path = Path(home) / STATE_FILE
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(".%s.%d.tmp" % (path.name, os.getpid()))
-    fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        tmp.unlink()
+    except OSError:
+        pass
+    fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
         json.dump(data, handle)
     os.replace(str(tmp), str(path))
