@@ -108,6 +108,8 @@ const SOURCES = {
   linkedin: "LinkedIn",
   publicCompetitions: "concorsipubblici.it",
   jobInTourism: "jobintourism.it",
+  jobsora: "jobsora.it",
+  jobeka: "jobeka.it",
 };
 
 const en: ChartCopy = {
@@ -119,7 +121,7 @@ const en: ChartCopy = {
   s2: "The rounds compared",
   s2Lead:
     "Cost per position and per pertinent position, positions per hour and spend per minute, round by round or pooled by service, system and build.",
-  s3: "Scout bench, build 9",
+  s3: "Scout bench, builds 9 and 15",
   s3Lead:
     "Four synthetic profiles on the same Linux server, with Claude. Pertinence judged by hand: P pertinent, A related, X outside the trade.",
   s4: "How the builds went",
@@ -183,7 +185,7 @@ const en: ChartCopy = {
     teamIdle: "team idle, positions waiting",
   },
   rounds: "Rounds",
-  benchRounds: "Scout bench (build 9)",
+  benchRounds: "Scout bench (builds 9 and 15)",
   minutes: "Minutes",
   onlyTotals:
     "No minute-by-minute series for this round yet: the dashed lines join start and end and show only the average pace.",
@@ -282,7 +284,7 @@ const en: ChartCopy = {
     maintainer: "Maintainer",
     mentor: "Mentor",
   },
-  sources: SOURCES,
+  sources: { ...SOURCES, other: "Other sites" },
   benchProfiles: {
     nurse: "Nurse",
     cook: "Cook",
@@ -304,7 +306,7 @@ const it: ChartCopy = {
   s2: "I giri a confronto",
   s2Lead:
     "Costo per posizione e per posizione pertinente, posizioni all'ora e spesa al minuto, giro per giro o raggruppati per servizio, sistema e build.",
-  s3: "Banco Scout, build 9",
+  s3: "Banco Scout, build 9 e 15",
   s3Lead:
     "Quattro profili sintetici sulla stessa VPS Linux, con Claude. Pertinenza giudicata a mano: P pertinente, A affine, X fuori mestiere.",
   s4: "Come sono andate le build",
@@ -368,7 +370,7 @@ const it: ChartCopy = {
     teamIdle: "squadra ferma, annunci in attesa",
   },
   rounds: "Giri",
-  benchRounds: "Banco Scout (build 9)",
+  benchRounds: "Banco Scout (build 9 e 15)",
   minutes: "Minuti",
   onlyTotals:
     "Per questo giro non c'è ancora la serie al minuto: le linee tratteggiate uniscono inizio e fine e mostrano solo il ritmo medio.",
@@ -475,6 +477,7 @@ const it: ChartCopy = {
   second: "secondo giro",
   seriesMark: "◆ = serie minuto per minuto",
   bench: "Banco",
+  sources: { ...SOURCES, other: "Altri siti" },
 };
 
 const de: ChartCopy = {
@@ -487,7 +490,7 @@ const de: ChartCopy = {
   s2: "Die Runden im Vergleich",
   s2Lead:
     "Kosten pro Stelle und pro passender Stelle, Stellen pro Stunde und Ausgaben pro Minute, je Runde oder zusammengefasst nach Dienst, System und Build.",
-  s3: "Scout-Bank, Build 9",
+  s3: "Scout-Bank, Build 9 und 15",
   s3Lead:
     "Vier synthetische Profile auf demselben Linux-Server, mit Claude. Passung von Hand bewertet: P passend, A verwandt, X fachfremd.",
   s4: "Wie die Builds liefen",
@@ -551,7 +554,7 @@ const de: ChartCopy = {
     teamIdle: "Team steht, Stellen warten",
   },
   rounds: "Runden",
-  benchRounds: "Scout-Bank (Build 9)",
+  benchRounds: "Scout-Bank (Build 9 und 15)",
   minutes: "Minuten",
   onlyTotals:
     "Für diese Runde gibt es noch keine Minutenreihe: Die gestrichelten Linien verbinden Anfang und Ende und zeigen nur das mittlere Tempo.",
@@ -656,6 +659,7 @@ const de: ChartCopy = {
   second: "zweite Runde",
   seriesMark: "◆ = Reihe Minute für Minute",
   bench: "Bank",
+  sources: { ...SOURCES, other: "Andere Seiten" },
 };
 
 const es: ChartCopy = {
@@ -668,7 +672,7 @@ const es: ChartCopy = {
   s2: "Las rondas comparadas",
   s2Lead:
     "Coste por puesto y por puesto pertinente, puestos por hora y gasto por minuto, ronda a ronda o agrupados por servicio, sistema y build.",
-  s3: "Banco de Scouts, build 9",
+  s3: "Banco de Scouts, builds 9 y 15",
   s3Lead:
     "Cuatro perfiles sintéticos en el mismo servidor Linux, con Claude. Pertinencia juzgada a mano: P pertinente, A afín, X fuera del oficio.",
   s4: "Cómo fueron las builds",
@@ -732,7 +736,7 @@ const es: ChartCopy = {
     teamIdle: "equipo parado, anuncios en espera",
   },
   rounds: "Rondas",
-  benchRounds: "Banco de Scouts (build 9)",
+  benchRounds: "Banco de Scouts (builds 9 y 15)",
   minutes: "Minutos",
   onlyTotals:
     "Esta ronda aún no tiene la serie por minuto: las líneas discontinuas unen inicio y fin y muestran solo el ritmo medio.",
@@ -845,6 +849,7 @@ const es: ChartCopy = {
   second: "segunda ronda",
   seriesMark: "◆ = serie minuto a minuto",
   bench: "Banco",
+  sources: { ...SOURCES, other: "Otros sitios" },
 };
 
 const fr: ChartCopy = {
@@ -857,7 +862,7 @@ const fr: ChartCopy = {
   s2: "Les tours comparés",
   s2Lead:
     "Coût par poste et par poste pertinent, postes par heure et dépense par minute, tour par tour ou regroupés par service, système et build.",
-  s3: "Banc des Scouts, build 9",
+  s3: "Banc des Scouts, builds 9 et 15",
   s3Lead:
     "Quatre profils synthétiques sur le même serveur Linux, avec Claude. Pertinence jugée à la main : P pertinent, A proche, X hors métier.",
   s4: "Comment se sont passées les builds",
@@ -921,7 +926,7 @@ const fr: ChartCopy = {
     teamIdle: "équipe à l'arrêt, annonces en attente",
   },
   rounds: "Tours",
-  benchRounds: "Banc des Scouts (build 9)",
+  benchRounds: "Banc des Scouts (builds 9 et 15)",
   minutes: "Minutes",
   onlyTotals:
     "Ce tour n'a pas encore de série par minute : les lignes pointillées relient début et fin et ne montrent que le rythme moyen.",
@@ -1027,6 +1032,7 @@ const fr: ChartCopy = {
   second: "deuxième tour",
   seriesMark: "◆ = série minute par minute",
   bench: "Banc",
+  sources: { ...SOURCES, other: "Autres sites" },
 };
 
 const hu: ChartCopy = {
@@ -1039,7 +1045,7 @@ const hu: ChartCopy = {
   s2: "A körök összehasonlítva",
   s2Lead:
     "Költség állásonként és releváns állásonként, állás óránként és költés percenként, körönként vagy szolgáltatás, rendszer és build szerint összevonva.",
-  s3: "Scout-pad, 9. build",
+  s3: "Scout-pad, 9. és 15. build",
   s3Lead:
     "Négy szintetikus profil ugyanazon a Linux szerveren, Claude-dal. Relevancia kézzel értékelve: P releváns, A rokon, X szakmán kívüli.",
   s4: "Hogyan alakultak a buildek",
@@ -1103,7 +1109,7 @@ const hu: ChartCopy = {
     teamIdle: "a csapat áll, hirdetések várnak",
   },
   rounds: "Körök",
-  benchRounds: "Scout-pad (9. build)",
+  benchRounds: "Scout-pad (9. és 15. build)",
   minutes: "Perc",
   onlyTotals:
     "Ehhez a körhöz még nincs percenkénti sor: a szaggatott vonalak az elejét és a végét kötik össze, csak az átlagos ütemet mutatják.",
@@ -1214,6 +1220,7 @@ const hu: ChartCopy = {
   second: "második kör",
   seriesMark: "◆ = percenkénti sor",
   bench: "Pad",
+  sources: { ...SOURCES, other: "Egyéb oldalak" },
 };
 
 const pt: ChartCopy = {
@@ -1226,7 +1233,7 @@ const pt: ChartCopy = {
   s2: "As rodadas comparadas",
   s2Lead:
     "Custo por vaga e por vaga pertinente, vagas por hora e gasto por minuto, rodada a rodada ou agrupadas por serviço, sistema e build.",
-  s3: "Bancada de Scouts, build 9",
+  s3: "Bancada de Scouts, builds 9 e 15",
   s3Lead:
     "Quatro perfis sintéticos no mesmo servidor Linux, com Claude. Pertinência julgada à mão: P pertinente, A afim, X fora do ofício.",
   s4: "Como correram as builds",
@@ -1290,7 +1297,7 @@ const pt: ChartCopy = {
     teamIdle: "equipa parada, anúncios à espera",
   },
   rounds: "Rodadas",
-  benchRounds: "Bancada de Scouts (build 9)",
+  benchRounds: "Bancada de Scouts (builds 9 e 15)",
   minutes: "Minutos",
   onlyTotals:
     "Esta rodada ainda não tem a série por minuto: as linhas tracejadas ligam início e fim e mostram só o ritmo médio.",
@@ -1402,6 +1409,7 @@ const pt: ChartCopy = {
   second: "segunda rodada",
   seriesMark: "◆ = série minuto a minuto",
   bench: "Bancada",
+  sources: { ...SOURCES, other: "Outros sites" },
 };
 
 export const CHART_COPY: Record<Locale, ChartCopy> = {
