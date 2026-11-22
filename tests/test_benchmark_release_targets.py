@@ -79,7 +79,7 @@ def test_every_word_of_the_targets_and_of_the_rounds_is_there_in_the_seven_langu
     profiles = {r["profile"] for r in DATA["rounds"]}
     round_notes = {r["note"] for r in DATA["rounds"]}
     outcomes = {r["outcome"] for r in DATA["rounds"]}
-    fields = ["targetsTitle", "targetsLead", "targetsCount", "targetsCols", "targetStatus", "targetSections", "targetRows", "buildsTitle", "buildLabel", "previousBuild", "noRound"]
+    fields = ["targetsTitle", "targetsLead", "targetsCount", "targetsCols", "targetStatus", "targetSections", "targetRows", "buildsTitle", "buildLabel", "previousBuild", "paceNote", "noRound"]
     for lang, block in BLOCKS.items():
         missing = [k for k in sorted(keys | notes | sections | rows | profiles | round_notes | outcomes | set(fields) | STATUSES) if not _has_key(block, k)]
         assert missing == [], f"{lang}: {missing}"
@@ -135,3 +135,9 @@ def test_the_criteria_of_a_target_say_what_their_numbers_say_and_come_from_a_rou
                 assert c["ok"] == (c["v"] * 100 >= c["min"] * c["of"]), (target["id"], c)
             if c["k"] == "underCeiling":
                 assert c["ok"] == (c["v"] <= c["max"]), (target["id"], c)
+
+
+def test_the_sentence_on_the_pace_is_drawn_above_the_table_and_on_the_page_of_every_round():
+    # the rounds are short and do not say how long a budget lasts: the page says it where the rounds are read
+    assert "{t.paceNote}" in (HERE / "page.tsx").read_text(encoding="utf-8")
+    assert "{t.paceNote}" in (HERE / "[round]" / "page.tsx").read_text(encoding="utf-8")

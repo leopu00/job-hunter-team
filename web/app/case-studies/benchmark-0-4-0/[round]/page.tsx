@@ -238,6 +238,9 @@ export default async function RoundPage({
               </div>
             ))}
           </dl>
+          <p className="text-[11px] text-[var(--color-dim)] max-w-3xl">
+            {t.paceNote}
+          </p>
           <div className="border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2.5 space-y-1 text-[12px]">
             <div className="text-[10px] uppercase tracking-wide text-[var(--color-muted)]">
               {p.outcome}

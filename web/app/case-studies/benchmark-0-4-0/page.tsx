@@ -645,6 +645,9 @@ export default async function BenchmarkPage() {
 
         <section className="space-y-3">
           <h2 className="section-label">{t.roundsTitle}</h2>
+          <p className="text-[12px] text-[var(--color-muted)] max-w-3xl">
+            {t.paceNote}
+          </p>
           <div className="overflow-x-auto border border-[var(--color-border)] bg-[var(--color-card)]">
             <table className="w-full text-[12px] tabular-nums">
               <thead>

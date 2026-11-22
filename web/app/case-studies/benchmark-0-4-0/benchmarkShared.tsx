@@ -73,6 +73,7 @@ export type Copy = {
   buildsTitle: string;
   buildLabel: string;
   previousBuild: string;
+  paceNote: string;
   noRound: string;
   none: string;
   finder: FinderCopy;
@@ -398,6 +399,8 @@ export const T: Record<Locale, Copy> = {
     buildsTitle: "Rounds of each build",
     buildLabel: "Build {n}",
     previousBuild: "earlier build",
+    paceNote:
+      "The rounds run the team for minutes or hours, not for the days a budget is meant to last: the cost is squeezed into a short time and does not say how long a budget lasts in everyday use. Only round r33 covers two days, with the pace off and the budget split by day.",
     noRound: "no round",
     none: "—",
     finder: {
@@ -775,6 +778,8 @@ export const T: Record<Locale, Copy> = {
     buildsTitle: "Giri di ogni build",
     buildLabel: "Build {n}",
     previousBuild: "build precedente",
+    paceNote:
+      "I giri fanno lavorare la squadra per minuti o ore, non per i giorni che un budget deve coprire: il costo è compresso in poco tempo e non dice quanto dura un budget nell'uso di tutti i giorni. Solo il giro r33 copre due giorni, con il ritmo spento e il budget diviso per giorno.",
     noRound: "nessun giro",
     none: "—",
     finder: {
@@ -1154,6 +1159,8 @@ export const T: Record<Locale, Copy> = {
     buildsTitle: "Läufe jedes Builds",
     buildLabel: "Build {n}",
     previousBuild: "frühere Build",
+    paceNote:
+      "Die Läufe lassen das Team Minuten oder Stunden arbeiten, nicht die Tage, die ein Budget abdecken soll: die Kosten sind auf kurze Zeit zusammengedrängt und sagen nicht, wie lange ein Budget im Alltag reicht. Nur Lauf r33 deckt zwei Tage ab, mit ausgeschaltetem Tempo und nach Tagen aufgeteiltem Budget.",
     noRound: "kein Lauf",
     none: "—",
     finder: {
@@ -1536,6 +1543,8 @@ export const T: Record<Locale, Copy> = {
     buildsTitle: "Rondas de cada build",
     buildLabel: "Build {n}",
     previousBuild: "build anterior",
+    paceNote:
+      "Las rondas hacen trabajar al equipo minutos u horas, no los días que un presupuesto debe cubrir: el coste queda comprimido en poco tiempo y no dice cuánto dura un presupuesto en el uso diario. Solo la ronda r33 cubre dos días, con el ritmo apagado y el presupuesto dividido por día.",
     noRound: "ninguna ronda",
     none: "—",
     finder: {
@@ -1921,6 +1930,8 @@ export const T: Record<Locale, Copy> = {
     buildsTitle: "Tours de chaque build",
     buildLabel: "Build {n}",
     previousBuild: "build précédente",
+    paceNote:
+      "Les tours font travailler l'équipe pendant des minutes ou des heures, pas pendant les jours qu'un budget doit couvrir : le coût est comprimé dans un temps court et ne dit pas combien de temps dure un budget à l'usage de tous les jours. Seul le tour r33 couvre deux jours, avec le rythme éteint et le budget réparti par jour.",
     noRound: "aucun tour",
     none: "—",
     finder: {
@@ -2300,6 +2311,8 @@ export const T: Record<Locale, Copy> = {
     buildsTitle: "Rondas de cada build",
     buildLabel: "Build {n}",
     previousBuild: "build anterior",
+    paceNote:
+      "As rondas põem a equipa a trabalhar minutos ou horas, não os dias que um orçamento deve cobrir: o custo fica comprimido em pouco tempo e não diz quanto dura um orçamento no uso de todos os dias. Só a ronda r33 cobre dois dias, com o ritmo desligado e o orçamento dividido por dia.",
     noRound: "nenhuma ronda",
     none: "—",
     finder: {
@@ -2676,6 +2689,8 @@ export const T: Record<Locale, Copy> = {
     buildsTitle: "Az egyes buildek futásai",
     buildLabel: "{n}. build",
     previousBuild: "korábbi build",
+    paceNote:
+      "A futások percekig vagy óráig dolgoztatják a csapatot, nem annyi napig, amennyit egy költségkeretnek le kell fednie: a költség rövid időbe sűrűsödik, és nem mutatja meg, meddig tart egy költségkeret a mindennapi használatban. Csak az r33 futás fed le két napot, kikapcsolt tempóval és napokra osztott költségkerettel.",
     noRound: "nincs futás",
     none: "—",
     finder: {
