@@ -230,7 +230,7 @@ export const T: Record<Locale, Copy> = {
       retestDayQuota:
         "Retest of the budget split by day, over two days (41 h) with the pace off: the team works up to its share of the day, stops with one notice and resumes by itself the next day (1.38 of 2 $, never over a share). 4 minor defects; 4 relevant of 5 new.",
       candidateWindowsSpanish:
-        "Release candidate on a new Windows user, everything in Spanish: 9 relevant of 10 in 5 minutes (4 also fit hours and contract); the pace brake stops at 1.01 of 1.5 $. Open: empty help from the host, the Scout stopped after its first pass.",
+        "Release candidate on a new Windows user, everything in Spanish: 4 relevant of 10 in 5 minutes (5 more of the right trade, but part time or seasonal); the pace brake stops at 1.01 of 1.5 $. Open: empty help from the host, the Scout stopped after its first pass.",
     },
     osNotes: {
       linux:
@@ -335,7 +335,7 @@ export const T: Record<Locale, Copy> = {
       updateWindowsBuild13:
         "build 13: the update with the chat open ends and the jht command works, all in French",
       relevantBuild15:
-        "build 15: 9 relevant of 10 for the shop assistant profile on a new Windows user (4 also fit hours and contract); 4 of 5 for the electrician on the retest; 20 of 33 (61%) on the first candidate",
+        "build 15: 4 relevant of 10 for the shop assistant profile on a new Windows user (40%; 5 more are part time or seasonal); 4 of 5 for the electrician on the retest; 20 of 33 (61%) on the first candidate. To be proven again on a new install",
       brakeDayQuota:
         "build 15: the day quota and the pace stop the team before every budget (1.38 of 2 $ over two days; 1.04 of 1.5 $ on Windows); minor defects left in the notices and the status",
       languageFrenchGermanOk:
@@ -607,7 +607,7 @@ export const T: Record<Locale, Copy> = {
       retestDayQuota:
         "Retest del budget diviso per giorno, su due giorni (41 h) con il ritmo spento: la squadra lavora fino alla quota del giorno, si ferma con un solo avviso e riparte da sola il giorno dopo (1,38 $ su 2, mai sopra una quota). 4 difetti minori; 4 pertinenti su 5 nuove.",
       candidateWindowsSpanish:
-        "Candidata su un utente nuovo Windows, tutto in spagnolo: 9 pertinenti su 10 in 5 minuti (4 anche per orario e contratto); il freno del ritmo ferma a 1,01 su 1,5 $. Aperti: aiuto vuoto dall'host, Scout fermo dopo la prima passata.",
+        "Candidata su un utente nuovo Windows, tutto in spagnolo: 4 pertinenti su 10 in 5 minuti (altre 5 del mestiere giusto, ma part time o stagionali); il freno del ritmo ferma a 1,01 su 1,5 $. Aperti: aiuto vuoto dall'host, Scout fermo dopo la prima passata.",
     },
     osNotes: {
       linux:
@@ -711,7 +711,7 @@ export const T: Record<Locale, Copy> = {
       updateWindowsBuild13:
         "build 13: l'aggiornamento con la chat aperta arriva in fondo e il comando jht funziona, tutto in francese",
       relevantBuild15:
-        "build 15: 9 pertinenti su 10 per il profilo commesso/a su un utente nuovo Windows (4 anche per orario e contratto); 4 su 5 per l'elettricista nel retest; 20 su 33 (61%) sulla prima candidata",
+        "build 15: 4 pertinenti su 10 per il profilo commesso/a su un utente nuovo Windows (40%; altre 5 part time o stagionali); 4 su 5 per l'elettricista nel retest; 20 su 33 (61%) sulla prima candidata. Da riprovare con un'installazione nuova",
       brakeDayQuota:
         "build 15: la quota del giorno e il ritmo fermano la squadra prima di ogni budget (1,38 $ su 2 in due giorni; 1,04 $ su 1,5 su Windows); restano difetti minori negli avvisi e nello stato",
       languageFrenchGermanOk:
@@ -985,7 +985,7 @@ export const T: Record<Locale, Copy> = {
       retestDayQuota:
         "Retest des nach Tagen aufgeteilten Budgets über zwei Tage (41 Std.) bei ausgeschaltetem Tempo: das Team arbeitet bis zum Tagesanteil, hält mit einer einzigen Meldung an und läuft am nächsten Tag von selbst weiter (1,38 $ von 2, nie über einem Anteil). 4 kleine Mängel; 4 passende von 5 neuen.",
       candidateWindowsSpanish:
-        "Release-Kandidat bei einem neuen Windows-Nutzer, alles auf Spanisch: 9 passende von 10 in 5 Minuten (4 auch bei Arbeitszeit und Vertrag); die Tempobremse stoppt bei 1,01 von 1,5 $. Offen: leere Hilfe vom Host, Scout nach dem ersten Durchgang gestoppt.",
+        "Release-Kandidat bei einem neuen Windows-Nutzer, alles auf Spanisch: 4 passende von 10 in 5 Minuten (5 weitere vom richtigen Beruf, aber Teilzeit oder saisonal); die Tempobremse stoppt bei 1,01 von 1,5 $. Offen: leere Hilfe vom Host, Scout nach dem ersten Durchgang gestoppt.",
     },
     osNotes: {
       linux:
@@ -1091,7 +1091,7 @@ export const T: Record<Locale, Copy> = {
       updateWindowsBuild13:
         "Build 13: das Update bei offenem Chat läuft durch und der Befehl jht funktioniert, alles auf Französisch",
       relevantBuild15:
-        "Build 15: 9 passende von 10 für das Profil Verkäufer/in bei einem neuen Windows-Nutzer (4 auch bei Arbeitszeit und Vertrag); 4 von 5 für den Elektriker im Retest; 20 von 33 (61%) beim ersten Kandidaten",
+        "Build 15: 4 passende von 10 für das Profil Verkäufer/in bei einem neuen Windows-Nutzer (40%; 5 weitere Teilzeit oder saisonal); 4 von 5 für den Elektriker im Retest; 20 von 33 (61%) beim ersten Kandidaten. Mit einer neuen Installation erneut zu prüfen",
       brakeDayQuota:
         "Build 15: Tagesanteil und Tempo halten das Team vor jedem Budget an (1,38 $ von 2 in zwei Tagen; 1,04 $ von 1,5 unter Windows); kleine Mängel bleiben in Meldungen und Status",
       languageFrenchGermanOk:
@@ -1366,7 +1366,7 @@ export const T: Record<Locale, Copy> = {
       retestDayQuota:
         "Retest del presupuesto dividido por día, durante dos días (41 h) con el ritmo apagado: el equipo trabaja hasta la parte del día, se detiene con un solo aviso y reanuda solo al día siguiente (1,38 $ de 2, nunca por encima de una parte). 4 defectos menores; 4 pertinentes de 5 nuevas.",
       candidateWindowsSpanish:
-        "Candidata con un usuario nuevo de Windows, todo en español: 9 pertinentes de 10 en 5 minutos (4 también en horario y contrato); el freno del ritmo se detiene en 1,01 de 1,5 $. Abiertos: ayuda vacía desde el host, Scout parado tras la primera pasada.",
+        "Candidata con un usuario nuevo de Windows, todo en español: 4 pertinentes de 10 en 5 minutos (otras 5 del oficio correcto, pero a tiempo parcial o de temporada); el freno del ritmo se detiene en 1,01 de 1,5 $. Abiertos: ayuda vacía desde el host, Scout parado tras la primera pasada.",
     },
     osNotes: {
       linux:
@@ -1472,7 +1472,7 @@ export const T: Record<Locale, Copy> = {
       updateWindowsBuild13:
         "build 13: la actualización con el chat abierto llega al final y el comando jht funciona, todo en francés",
       relevantBuild15:
-        "build 15: 9 pertinentes de 10 para el perfil dependiente/a con un usuario nuevo de Windows (4 también en horario y contrato); 4 de 5 para el electricista en el retest; 20 de 33 (61%) en la primera candidata",
+        "build 15: 4 pertinentes de 10 para el perfil dependiente/a con un usuario nuevo de Windows (40%; otras 5 a tiempo parcial o de temporada); 4 de 5 para el electricista en el retest; 20 de 33 (61%) en la primera candidata. Por volver a probar con una instalación nueva",
       brakeDayQuota:
         "build 15: la parte del día y el ritmo detienen al equipo antes de cada presupuesto (1,38 $ de 2 en dos días; 1,04 $ de 1,5 en Windows); quedan defectos menores en los avisos y el estado",
       languageFrenchGermanOk:
@@ -1750,7 +1750,7 @@ export const T: Record<Locale, Copy> = {
       retestDayQuota:
         "Retest du budget réparti par jour, sur deux jours (41 h) avec le rythme éteint : l'équipe travaille jusqu'à la part du jour, s'arrête avec un seul avis et reprend toute seule le lendemain (1,38 $ sur 2, jamais au-dessus d'une part). 4 défauts mineurs ; 4 pertinentes sur 5 nouvelles.",
       candidateWindowsSpanish:
-        "Candidate sur un nouvel utilisateur Windows, tout en espagnol : 9 pertinentes sur 10 en 5 minutes (4 aussi pour l'horaire et le contrat) ; le frein du rythme s'arrête à 1,01 sur 1,5 $. Ouverts : aide vide depuis l'hôte, Scout arrêté après sa première passe.",
+        "Candidate sur un nouvel utilisateur Windows, tout en espagnol : 4 pertinentes sur 10 en 5 minutes (5 autres du bon métier, mais à temps partiel ou saisonnières) ; le frein du rythme s'arrête à 1,01 sur 1,5 $. Ouverts : aide vide depuis l'hôte, Scout arrêté après sa première passe.",
     },
     osNotes: {
       linux:
@@ -1858,7 +1858,7 @@ export const T: Record<Locale, Copy> = {
       updateWindowsBuild13:
         "build 13 : la mise à jour avec le chat ouvert va au bout et la commande jht marche, tout en français",
       relevantBuild15:
-        "build 15 : 9 pertinentes sur 10 pour le profil vendeur/vendeuse sur un nouvel utilisateur Windows (4 aussi pour l'horaire et le contrat) ; 4 sur 5 pour l'électricien au retest ; 20 sur 33 (61 %) sur la première candidate",
+        "build 15 : 4 pertinentes sur 10 pour le profil vendeur/vendeuse sur un nouvel utilisateur Windows (40 % ; 5 autres à temps partiel ou saisonnières) ; 4 sur 5 pour l'électricien au retest ; 20 sur 33 (61 %) sur la première candidate. À refaire sur une nouvelle installation",
       brakeDayQuota:
         "build 15 : la part du jour et le rythme arrêtent l'équipe avant chaque budget (1,38 $ sur 2 en deux jours ; 1,04 $ sur 1,5 sous Windows) ; défauts mineurs restants dans les avis et le statut",
       languageFrenchGermanOk:
@@ -2133,7 +2133,7 @@ export const T: Record<Locale, Copy> = {
       retestDayQuota:
         "Reteste do orçamento dividido por dia, durante dois dias (41 h) com o ritmo desligado: a equipa trabalha até à parte do dia, para com um único aviso e retoma sozinha no dia seguinte (1,38 $ de 2, nunca acima de uma parte). 4 defeitos menores; 4 pertinentes de 5 novas.",
       candidateWindowsSpanish:
-        "Candidata com um utilizador novo do Windows, tudo em espanhol: 9 pertinentes de 10 em 5 minutos (4 também em horário e contrato); o travão do ritmo para em 1,01 de 1,5 $. Em aberto: ajuda vazia a partir do host, Scout parado depois da primeira passagem.",
+        "Candidata com um utilizador novo do Windows, tudo em espanhol: 4 pertinentes de 10 em 5 minutos (outras 5 do ofício certo, mas a tempo parcial ou sazonais); o travão do ritmo para em 1,01 de 1,5 $. Em aberto: ajuda vazia a partir do host, Scout parado depois da primeira passagem.",
     },
     osNotes: {
       linux:
@@ -2239,7 +2239,7 @@ export const T: Record<Locale, Copy> = {
       updateWindowsBuild13:
         "build 13: a atualização com o chat aberto chega ao fim e o comando jht funciona, tudo em francês",
       relevantBuild15:
-        "build 15: 9 pertinentes de 10 para o perfil empregado/a de loja com um utilizador novo do Windows (4 também em horário e contrato); 4 de 5 para o eletricista no reteste; 20 de 33 (61%) na primeira candidata",
+        "build 15: 4 pertinentes de 10 para o perfil empregado/a de loja com um utilizador novo do Windows (40%; outras 5 a tempo parcial ou sazonais); 4 de 5 para o eletricista no reteste; 20 de 33 (61%) na primeira candidata. A testar de novo numa instalação nova",
       brakeDayQuota:
         "build 15: a parte do dia e o ritmo param a equipa antes de cada orçamento (1,38 $ de 2 em dois dias; 1,04 $ de 1,5 no Windows); restam defeitos menores nos avisos e no estado",
       languageFrenchGermanOk:
@@ -2514,7 +2514,7 @@ export const T: Record<Locale, Copy> = {
       retestDayQuota:
         "A napokra osztott költségkeret újratesztje két napon át (41 óra), kikapcsolt tempóval: a csapat a napi részéig dolgozik, egyetlen értesítéssel megáll, és másnap magától folytatja (1,38 $ a 2-ből, soha egy rész felett). 4 kisebb hiba; 5 új pozícióból 4 releváns.",
       candidateWindowsSpanish:
-        "Kiadásjelölt új Windows-felhasználón, végig spanyolul: 10-ből 9 releváns 5 perc alatt (4 munkaidőben és szerződésben is megfelel); a tempófék 1,01-nél áll meg az 1,5 $-ból. Nyitott: üres súgó a hosztról, a Scout az első kör után megállt.",
+        "Kiadásjelölt új Windows-felhasználón, végig spanyolul: 10-ből 4 releváns 5 perc alatt (további 5 a megfelelő szakmából, de részmunkaidős vagy szezonális); a tempófék 1,01-nél áll meg az 1,5 $-ból. Nyitott: üres súgó a hosztról, a Scout az első kör után megállt.",
     },
     osNotes: {
       linux:
@@ -2618,7 +2618,7 @@ export const T: Record<Locale, Copy> = {
       updateWindowsBuild13:
         "13. build: a frissítés nyitott csevegéssel végigfut, és a jht parancs működik, végig franciául",
       relevantBuild15:
-        "15. build: új Windows-felhasználónál az eladó profilnál 10-ből 9 releváns (4 munkaidőben és szerződésben is megfelel); a villanyszerelőnél az újratesztben 5-ből 4; az első jelöltnél 33-ból 20 (61%)",
+        "15. build: új Windows-felhasználónál az eladó profilnál 10-ből 4 releváns (40%; további 5 részmunkaidős vagy szezonális); a villanyszerelőnél az újratesztben 5-ből 4; az első jelöltnél 33-ból 20 (61%). Új telepítésen újra bizonyítandó",
       brakeDayQuota:
         "15. build: a napi rész és a tempó minden költségkeret előtt megállítja a csapatot (1,38 $ a 2-ből két nap alatt; 1,04 $ az 1,5-ből Windowson); az értesítésekben és az állapotban kisebb hibák maradtak",
       languageFrenchGermanOk:

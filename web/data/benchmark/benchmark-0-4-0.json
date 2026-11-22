@@ -75,7 +75,7 @@
     {
       "id": "nonItRelevant",
       "section": "realUser",
-      "status": "pass",
+      "status": "fail",
       "build": 15,
       "proof": [
         "r27",
@@ -114,10 +114,10 @@
         {
           "k": "relevantOf",
           "trade": "shopAssistant",
-          "v": 9,
+          "v": 4,
           "of": 10,
           "min": 70,
-          "ok": true,
+          "ok": false,
           "round": "r34"
         }
       ]
@@ -1569,7 +1569,7 @@
       "calls": 416,
       "found": 10,
       "scored": 10,
-      "relevant": 9,
+      "relevant": 4,
       "bestScore": 85,
       "roster": null,
       "outcome": "reservations",
