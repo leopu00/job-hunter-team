@@ -52,9 +52,11 @@ def test_every_target_has_a_status_the_page_draws_and_a_proof_that_exists():
         if "os" in target:
             assert target["os"] in {"windows", "linux", "macos"}, target
         assert set(target["proof"]) <= rounds, target
-        # a target met says on which build
+        # a target met says on which build; one still to try has no build to name
         if target["status"] in {"pass", "fail", "blocked"}:
             assert isinstance(target["build"], int), target
+        else:
+            assert target["build"] is None, target
         # a target without a round below says why, met or not
         assert target["proof"] or target["note"], target
 
@@ -76,9 +78,10 @@ def test_every_word_of_the_targets_and_of_the_rounds_is_there_in_the_seven_langu
     rows = {t["row"] for t in DATA["targets"] if "row" in t}
     profiles = {r["profile"] for r in DATA["rounds"]}
     round_notes = {r["note"] for r in DATA["rounds"]}
-    fields = ["targetsTitle", "targetsLead", "targetsCount", "targetsCols", "targetStatus", "targetSections", "targetRows", "buildsTitle", "buildLabel", "noRound"]
+    outcomes = {r["outcome"] for r in DATA["rounds"]}
+    fields = ["targetsTitle", "targetsLead", "targetsCount", "targetsCols", "targetStatus", "targetSections", "targetRows", "buildsTitle", "buildLabel", "previousBuild", "paceNote", "noRound"]
     for lang, block in BLOCKS.items():
-        missing = [k for k in sorted(keys | notes | sections | rows | profiles | round_notes | set(fields) | STATUSES) if not _has_key(block, k)]
+        missing = [k for k in sorted(keys | notes | sections | rows | profiles | round_notes | outcomes | set(fields) | STATUSES) if not _has_key(block, k)]
         assert missing == [], f"{lang}: {missing}"
         assert "{g}" in re.search(r'targetsCount: "([^"]*)"', block).group(1), lang
         assert "{n}" in re.search(r'buildLabel: "([^"]*)"', block).group(1), lang
@@ -108,3 +111,89 @@ def test_the_page_holds_no_name_of_a_test_person_and_no_machine():
         for word in Path(extra).read_text(encoding="utf-8").split("\n"):
             word = word.strip()
             assert not word or re.search(rf"\b{re.escape(word)}\b", text, re.I) is None, "a word of the private list"
+
+
+def test_a_round_before_the_numbered_builds_says_so_and_no_figure_of_the_page_is_only_an_estimate():
+    # r1-r8 ran before the numbered builds: the table and the page of the round write «earlier build», never a build number
+    assert {r["id"] for r in DATA["rounds"] if r.get("buildNo") is None} == {f"r{i}" for i in range(1, 9)}
+    # the services table shows what the rounds measured: an estimate of the kit is not a measure and is not kept
+    for service in DATA["services"]:
+        assert "kitEstimate30min" not in service, service["id"]
+    assert "kitEstimate30min" not in ALL_FILES
+
+
+def test_the_criteria_of_a_target_say_what_their_numbers_say_and_come_from_a_round_of_the_page():
+    rounds = {r["id"]: r for r in DATA["rounds"]}
+    for target in DATA["targets"]:
+        for c in target.get("criteria", []):
+            # the criteria of the Scout bench come from the bench, not from a round
+            if "round" in c:
+                assert c["round"] in rounds, (target["id"], c)
+            if c["k"] == "relevantOf":
+                # the numbers are the ones of the round, and the mark follows them
+                assert (c["v"], c["of"]) == (rounds[c["round"]]["relevant"], rounds[c["round"]]["found"]), (target["id"], c)
+                assert c["ok"] == (c["v"] * 100 >= c["min"] * c["of"]), (target["id"], c)
+            if c["k"] == "underCeiling":
+                assert c["ok"] == (c["v"] <= c["max"]), (target["id"], c)
+
+
+def test_the_sentence_on_the_pace_is_drawn_above_the_table_and_on_the_page_of_every_round():
+    # the rounds are short and do not say how long a budget lasts: the page says it where the rounds are read
+    assert "{t.paceNote}" in (HERE / "page.tsx").read_text(encoding="utf-8")
+    assert "{t.paceNote}" in (HERE / "[round]" / "page.tsx").read_text(encoding="utf-8")
+
+
+def test_the_title_of_a_section_of_the_targets_is_a_title_and_not_a_sentence_in_every_language():
+    # the rule of a section is a sentence and sits in targetRules; the title of the section next to it must stay a title
+    for lang, block in BLOCKS.items():
+        titles = re.search(r"targetSections: \{(.*?)\n    \},", block, re.S).group(1)
+        values = re.findall(r':\s*"([^"]*)",', titles)
+        assert len(values) >= 10, lang
+        assert not [v for v in values if v.endswith(".") or "build" in v.lower()], (lang, values)
+
+
+def test_a_red_mark_under_a_target_that_is_met_says_before_which_correction_it_was_red():
+    for target in DATA["targets"]:
+        if target["status"] != "pass":
+            continue
+        for c in target.get("criteria", []):
+            assert c["ok"] or c.get("fix"), (target["id"], c)
+    for lang, block in BLOCKS.items():
+        assert "{fix}" in re.search(r'beforeFix: "([^"]*)"', block).group(1), lang
+
+
+def test_a_scout_bench_row_keeps_the_criteria_of_each_bench_and_the_numbers_are_those_of_the_bench():
+    bench = {b["id"]: b for b in DATA["bench"]}
+    assert {"b9-cook", "b15-cook", "b15-warehouseWorker", "b15-nurse", "b15-bricklayer"} <= set(bench)
+    for b in bench.values():
+        # every bench says its own day, to tell the benches of two builds apart; the relevance adds up to the positions inserted
+        assert re.fullmatch(r"\d{2}/\d{2}", b["day"]), b["id"]
+        assert sum(b["relevance"].values()) == b["found"], b["id"]
+    for target in DATA["targets"]:
+        by_bench: dict[str, list] = {}
+        for c in target.get("criteria", []):
+            if "bench" in c:
+                assert c["bench"] in bench, (target["id"], c)
+                by_bench.setdefault(c["bench"], []).append(c)
+        if not by_bench:
+            continue
+        # the last bench decides the row: its build, and its criteria give the status
+        last = list(by_bench)[-1]
+        assert target["build"] == bench[last]["buildNo"], target["id"]
+        assert (target["status"] == "pass") == all(c["ok"] for c in by_bench[last]), target["id"]
+        for bid, criteria in by_bench.items():
+            b = bench[bid]
+            got = {c["k"]: c["v"] for c in criteria}
+            assert got["positions"] == b["found"], bid
+            assert got["relevant"] == round(100 * b["relevance"]["P"] / b["found"]), bid
+            for c in criteria:
+                limit = c.get("min", c.get("max"))
+                assert c["ok"] == (c["v"] >= limit if "min" in c else c["v"] <= limit), (bid, c)
+
+
+def test_the_rounds_of_a_build_are_listed_in_the_order_they_ran_and_the_two_retests_of_the_19th_follow_r32():
+    ids = [r["id"] for r in DATA["rounds"]]
+    assert ids.index("r35") == ids.index("r32") + 1 and ids.index("r36") == ids.index("r35") + 1
+    build = next(b for b in DATA["builds"] if b["n"] == 15)
+    assert build["rounds"][build["rounds"].index("r32") + 1 : build["rounds"].index("r32") + 3] == ["r35", "r36"]
+    assert sorted(build["rounds"]) == sorted(r["id"] for r in DATA["rounds"] if r.get("buildNo") == 15)

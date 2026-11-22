@@ -33,7 +33,7 @@ import {
 } from "./benchmarkShared";
 
 import ProviderMark from "./providerMarks";
-import { testHref } from "./roundsData";
+import { benchCommit, testHref } from "./roundsData";
 import BenchmarkFinder, { type CandidateView } from "./BenchmarkFinder";
 import { CASE_STUDIES, localizeCaseStudy } from "@/lib/case-studies";
 
@@ -75,7 +75,7 @@ export default async function BenchmarkPage() {
       <a
         key={id}
         href={testHref(id)}
-        className="underline decoration-dotted hover:decoration-solid whitespace-nowrap"
+        className="underline decoration-dotted hover:decoration-solid"
       >
         {OS_LABEL[r.os]} · {t.profiles[r.profile]} · {dayLabel(r)}
       </a>
@@ -91,9 +91,26 @@ export default async function BenchmarkPage() {
     of?: number;
     trade?: string;
     round?: string;
+    bench?: string;
+    fix?: string;
+  };
+  // where a criterion was measured: the commit of its round, and the correction that came after a red one
+  const criterionWhere = (c: Criterion) => {
+    const commit = c.round
+      ? roundById.get(c.round)?.build
+      : c.bench
+        ? benchCommit(c.bench)
+        : null;
+    return [
+      commit,
+      c.fix ? t.targetCriteria.beforeFix.replace("{fix}", c.fix) : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
   };
   const criterion = (c: Criterion) =>
-    (t.targetCriteria[c.k] ?? c.k)
+    (
+      (t.targetCriteria[c.k] ?? c.k)
       .replace(
         "{v}",
         c.v == null
@@ -103,26 +120,37 @@ export default async function BenchmarkPage() {
             : String(c.v),
       )
       .replace("{min}", String(c.min ?? ""))
-      .replace("{max}", String(c.max ?? ""))
+      .replace(
+        "{max}",
+        c.max == null
+          ? ""
+          : Number.isInteger(c.max)
+            ? String(c.max)
+            : nf.format(c.max),
+      )
       .replace("{of}", String(c.of ?? ""))
       .replace(
         "{trade}",
         c.trade
           ? `${TRADE_EMOJI[c.trade] ?? ""} ${t.profiles[c.trade] ?? c.trade}`.trim()
           : "",
-      );
+      )
+    ) + (criterionWhere(c) ? ` · ${criterionWhere(c)}` : "");
   // the test of the Scout bench that proves each bench row of the targets
   const BENCH_TEST: Record<string, string> = {
-    scoutBenchCook: "b9-cook",
-    scoutBenchWarehouse: "b9-warehouseWorker",
-    scoutBenchNurse: "b9-nurse",
-    scoutBenchBricklayer: "b9-bricklayer",
+    scoutBenchCook: "b15-cook",
+    scoutBenchWarehouse: "b15-warehouseWorker",
+    scoutBenchNurse: "b15-nurse",
+    scoutBenchBricklayer: "b15-bricklayer",
   };
   // One cell of the targets table: the status, the build, the rounds that prove it; the note small below and whole in the tooltip.
   const targetCell = (x: Target) => {
     const note = x.note ? t.targetNotes[x.note] : "";
-    const criteria = ((x as { criteria?: Criterion[] }).criteria ??
+    const allCriteria = ((x as { criteria?: Criterion[] }).criteria ??
       []) as Criterion[];
+    // a target tried on two benches keeps the criteria of both on its bench page: the table shows the last one
+    const lastBench = [...allCriteria].reverse().find((c) => c.bench)?.bench;
+    const criteria = allCriteria.filter((c) => !c.bench || c.bench === lastBench);
     return (
       <div className="space-y-0.5" title={note || undefined}>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -170,12 +198,12 @@ export default async function BenchmarkPage() {
             {criteria.map((c, i) => (
               <li
                 key={i}
-                className="whitespace-nowrap text-[var(--color-base)]"
+                className="text-[var(--color-base)]"
               >
                 <span aria-hidden="true">{c.ok ? "✅" : "❌"}</span>{" "}
-                {c.round ? (
+                {c.round || c.bench ? (
                   <Link
-                    href={testHref(c.round)}
+                    href={testHref((c.round ?? c.bench) as string)}
                     className="underline decoration-dotted hover:decoration-solid"
                     style={{ color: "inherit" }}
                   >
@@ -270,6 +298,7 @@ export default async function BenchmarkPage() {
           os: string;
           service: string;
           buildNo: number;
+          day: string;
         })[];
       }
     ).bench ?? [];
@@ -301,7 +330,7 @@ export default async function BenchmarkPage() {
     }),
     ...benchRaw.map((b) => ({
       id: b.id,
-      label: `${OS_LABEL[b.os]} · ${cc.benchProfiles[b.profile] ?? b.profile}${b.id.endsWith("bricklayer") ? ` (${cc.second})` : ""}`,
+      label: `${OS_LABEL[b.os]} · ${cc.benchProfiles[b.profile] ?? b.profile}${b.id === "b9-bricklayer" ? ` (${cc.second})` : ""} · ${b.day}`,
       group: "bench" as const,
       os: b.os,
       service: b.service,
@@ -323,7 +352,7 @@ export default async function BenchmarkPage() {
   ];
   const chartBench: BenchProfile[] = benchRaw.map((b) => ({
     id: b.id,
-    label: `${cc.benchProfiles[b.profile] ?? b.profile}${b.id.endsWith("bricklayer") ? ` (${cc.second})` : ""}`,
+    label: `${cc.benchProfiles[b.profile] ?? b.profile}${b.id === "b9-bricklayer" ? ` (${cc.second})` : ""} · ${b.day}`,
     relevance: b.relevance ?? null,
     discarded: b.discarded ?? null,
     bySource: b.bySource
@@ -638,6 +667,9 @@ export default async function BenchmarkPage() {
 
         <section className="space-y-3">
           <h2 className="section-label">{t.roundsTitle}</h2>
+          <p className="text-[12px] text-[var(--color-muted)] max-w-3xl">
+            {t.paceNote}
+          </p>
           <div className="overflow-x-auto border border-[var(--color-border)] bg-[var(--color-card)]">
             <table className="w-full text-[12px] tabular-nums">
               <thead>
@@ -685,7 +717,7 @@ export default async function BenchmarkPage() {
                             {OS_LABEL[r.os]} · {dayLabel(r)}
                             {buildNo(r)
                               ? ` · ${t.buildLabel.replace("{n}", String(buildNo(r)))}`
-                              : ""}
+                              : ` · ${t.previousBuild}`}
                           </span>
                         </span>
                       </span>
@@ -819,10 +851,6 @@ export default async function BenchmarkPage() {
                         <Mark id={s.id} label={t.services[s.id]} />
                         {t.services[s.id]}
                       </span>
-                    </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      {nf.format(s.kitEstimate30min[0])} –{" "}
-                      {nf.format(s.kitEstimate30min[1])} $
                     </td>
                     <td className="px-3 py-2">
                       {s.seen.length === 0

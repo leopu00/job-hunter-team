@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-19",
+  "updated": "2026-11-22",
   "kind": "first-comparison-not-a-clean-benchmark",
   "privacy": "Synthetic profiles only: invented people, generic names, no real names, hosts, addresses or keys.",
   "targets": [
@@ -79,9 +79,10 @@
       "build": 15,
       "proof": [
         "r27",
-        "r30"
+        "r33",
+        "r34"
       ],
-      "note": "relevantCandidate",
+      "note": "relevantBuild15",
       "criteria": [
         {
           "k": "relevantOf",
@@ -100,14 +101,32 @@
           "min": 70,
           "ok": false,
           "round": "r27"
+        },
+        {
+          "k": "relevantOf",
+          "trade": "electrician",
+          "v": 4,
+          "of": 5,
+          "min": 70,
+          "ok": true,
+          "round": "r33"
+        },
+        {
+          "k": "relevantOf",
+          "trade": "shopAssistant",
+          "v": 4,
+          "of": 10,
+          "min": 70,
+          "ok": false,
+          "round": "r34"
         }
       ]
     },
     {
       "id": "scoutBenchCook",
       "section": "scout",
-      "status": "pass",
-      "build": 9,
+      "status": "fail",
+      "build": 15,
       "proof": [],
       "note": "benchCook",
       "emoji": "🍳",
@@ -116,27 +135,51 @@
           "k": "relevant",
           "v": 79,
           "min": 70,
-          "ok": true
+          "ok": true,
+          "bench": "b9-cook"
         },
         {
           "k": "duplicates",
           "v": 0,
           "max": 0,
-          "ok": true
+          "ok": true,
+          "bench": "b9-cook"
         },
         {
           "k": "positions",
           "v": 19,
           "min": 15,
-          "ok": true
+          "ok": true,
+          "bench": "b9-cook"
+        },
+        {
+          "k": "relevant",
+          "v": 86,
+          "min": 70,
+          "ok": true,
+          "bench": "b15-cook"
+        },
+        {
+          "k": "duplicates",
+          "v": 1,
+          "max": 0,
+          "ok": false,
+          "bench": "b15-cook"
+        },
+        {
+          "k": "positions",
+          "v": 29,
+          "min": 15,
+          "ok": true,
+          "bench": "b15-cook"
         }
       ]
     },
     {
       "id": "scoutBenchWarehouse",
       "section": "scout",
-      "status": "pass",
-      "build": 9,
+      "status": "fail",
+      "build": 15,
       "proof": [],
       "note": "benchWarehouse",
       "emoji": "📦",
@@ -145,19 +188,43 @@
           "k": "relevant",
           "v": 90,
           "min": 70,
-          "ok": true
+          "ok": true,
+          "bench": "b9-warehouseWorker"
         },
         {
           "k": "duplicates",
           "v": 0,
           "max": 0,
-          "ok": true
+          "ok": true,
+          "bench": "b9-warehouseWorker"
         },
         {
           "k": "positions",
           "v": 50,
           "min": 15,
-          "ok": true
+          "ok": true,
+          "bench": "b9-warehouseWorker"
+        },
+        {
+          "k": "relevant",
+          "v": 90,
+          "min": 70,
+          "ok": true,
+          "bench": "b15-warehouseWorker"
+        },
+        {
+          "k": "duplicates",
+          "v": 1,
+          "max": 0,
+          "ok": false,
+          "bench": "b15-warehouseWorker"
+        },
+        {
+          "k": "positions",
+          "v": 50,
+          "min": 15,
+          "ok": true,
+          "bench": "b15-warehouseWorker"
         }
       ]
     },
@@ -165,7 +232,7 @@
       "id": "scoutBenchNurse",
       "section": "scout",
       "status": "fail",
-      "build": 9,
+      "build": 15,
       "proof": [],
       "note": "benchNurse",
       "emoji": "🩺",
@@ -174,19 +241,43 @@
           "k": "relevant",
           "v": 94,
           "min": 70,
-          "ok": true
+          "ok": true,
+          "bench": "b9-nurse"
         },
         {
           "k": "duplicates",
           "v": 1,
           "max": 0,
-          "ok": false
+          "ok": false,
+          "bench": "b9-nurse"
         },
         {
           "k": "positions",
           "v": 50,
           "min": 15,
-          "ok": true
+          "ok": true,
+          "bench": "b9-nurse"
+        },
+        {
+          "k": "relevant",
+          "v": 95,
+          "min": 70,
+          "ok": true,
+          "bench": "b15-nurse"
+        },
+        {
+          "k": "duplicates",
+          "v": 1,
+          "max": 0,
+          "ok": false,
+          "bench": "b15-nurse"
+        },
+        {
+          "k": "positions",
+          "v": 39,
+          "min": 15,
+          "ok": true,
+          "bench": "b15-nurse"
         }
       ]
     },
@@ -194,7 +285,7 @@
       "id": "scoutBenchBricklayer",
       "section": "scout",
       "status": "fail",
-      "build": 9,
+      "build": 15,
       "proof": [],
       "note": "benchBricklayer",
       "emoji": "🧱",
@@ -203,47 +294,78 @@
           "k": "relevant",
           "v": 83,
           "min": 70,
-          "ok": true
+          "ok": true,
+          "bench": "b9-bricklayer"
         },
         {
           "k": "duplicates",
           "v": 1,
           "max": 0,
-          "ok": false
+          "ok": false,
+          "bench": "b9-bricklayer"
         },
         {
           "k": "positions",
           "v": 6,
           "min": 15,
-          "ok": false
+          "ok": false,
+          "bench": "b9-bricklayer"
+        },
+        {
+          "k": "relevant",
+          "v": 71,
+          "min": 70,
+          "ok": true,
+          "bench": "b15-bricklayer"
+        },
+        {
+          "k": "duplicates",
+          "v": 1,
+          "max": 0,
+          "ok": false,
+          "bench": "b15-bricklayer"
+        },
+        {
+          "k": "positions",
+          "v": 14,
+          "min": 15,
+          "ok": false,
+          "bench": "b15-bricklayer"
         }
       ]
     },
     {
       "id": "budgetBrake",
       "section": "brake",
-      "status": "fail",
+      "status": "pass",
       "build": 15,
       "proof": [
-        "r27",
-        "r28",
-        "r30"
+        "r33",
+        "r34"
       ],
-      "note": "brakeCandidate",
+      "note": "brakeDayQuota",
       "criteria": [
         {
           "k": "underCeiling",
           "v": 1.13,
           "max": 1,
           "ok": false,
-          "round": "r27"
+          "round": "r27",
+          "fix": "6e8da4974"
         },
         {
           "k": "underCeiling",
-          "v": 2.55,
-          "max": 3,
+          "v": 1.38,
+          "max": 2,
           "ok": true,
-          "round": "r30"
+          "round": "r33"
+        },
+        {
+          "k": "underCeiling",
+          "v": 1.04,
+          "max": 1.5,
+          "ok": true,
+          "round": "r34"
         }
       ]
     },
@@ -311,19 +433,19 @@
     {
       "id": "serviceOpenai",
       "section": "services",
-      "status": "pass",
-      "build": 6,
+      "status": "pending",
+      "build": null,
       "proof": [],
-      "note": "openaiRoundMissing",
+      "note": "openaiBuild6Redo",
       "provider": "openai"
     },
     {
       "id": "openaiSubscription",
       "section": "services",
-      "status": "fail",
-      "build": 9,
+      "status": "pending",
+      "build": null,
       "proof": [],
-      "note": "chatgptFreeRefused",
+      "note": "notTried040",
       "provider": "openai"
     },
     {
@@ -350,7 +472,7 @@
       "status": "pending",
       "build": null,
       "proof": [],
-      "note": "codexBetaInUse",
+      "note": "notTried040",
       "provider": "openai"
     },
     {
@@ -457,14 +579,18 @@
     {
       "n": 15,
       "commit": "e498085c7",
-      "day": "18-19/11",
+      "day": "18-21/11",
       "rounds": [
         "r27",
         "r28",
         "r29",
         "r30",
         "r31",
-        "r32"
+        "r32",
+        "r35",
+        "r36",
+        "r33",
+        "r34"
       ]
     }
   ],
@@ -575,7 +701,7 @@
       "relevant": null,
       "bestScore": null,
       "roster": "1/1/1",
-      "outcome": "reservations",
+      "outcome": "unjudged",
       "note": "minimalTeam",
       "lang": "it",
       "criteria": [
@@ -617,7 +743,7 @@
       "relevant": null,
       "bestScore": null,
       "roster": "1/1/1",
-      "outcome": "reservations",
+      "outcome": "unjudged",
       "note": "ceilingReached",
       "lang": "it",
       "criteria": [
@@ -702,7 +828,7 @@
       "relevant": 10,
       "bestScore": 90,
       "roster": "5/3/2",
-      "outcome": "reservations",
+      "outcome": "unjudged",
       "note": "budgetFromSetup",
       "lang": "es",
       "criteria": [
@@ -746,7 +872,7 @@
       "relevant": null,
       "bestScore": 94,
       "roster": "1/1/1",
-      "outcome": "reservations",
+      "outcome": "unjudged",
       "note": "brakeDidNotTrigger",
       "lang": "de",
       "criteria": [
@@ -1506,15 +1632,95 @@
       "outcome": "fail",
       "note": "retestResumes",
       "lang": "it"
+    },
+    {
+      "id": "r35",
+      "os": "linux",
+      "service": "claude",
+      "day": "19/11",
+      "profile": "electrician",
+      "mode": "onsite",
+      "build": "22b3c6eab",
+      "buildNo": 15,
+      "minutes": 178.2,
+      "cost": 2.84,
+      "calls": 313,
+      "found": 12,
+      "scored": 2,
+      "relevant": 8,
+      "bestScore": 88,
+      "roster": null,
+      "outcome": "fail",
+      "note": "retestResumeBursts",
+      "lang": "it"
+    },
+    {
+      "id": "r36",
+      "os": "linux",
+      "service": "claude",
+      "day": "19/11",
+      "profile": "electrician",
+      "mode": "onsite",
+      "build": "25395266b",
+      "buildNo": 15,
+      "minutes": 105.8,
+      "cost": 1.75,
+      "calls": 232,
+      "found": 0,
+      "scored": 11,
+      "relevant": 0,
+      "bestScore": 86,
+      "roster": null,
+      "outcome": "fail",
+      "note": "retestScoutsNotBack",
+      "lang": "it"
+    },
+    {
+      "id": "r33",
+      "os": "linux",
+      "service": "claude",
+      "day": "19-21/11",
+      "profile": "electrician",
+      "mode": "onsite",
+      "build": "535a89197",
+      "buildNo": 15,
+      "minutes": null,
+      "cost": 1.38,
+      "calls": 250,
+      "found": 5,
+      "scored": 4,
+      "relevant": 4,
+      "bestScore": 77,
+      "roster": null,
+      "outcome": "reservations",
+      "note": "retestDayQuota",
+      "lang": "it"
+    },
+    {
+      "id": "r34",
+      "os": "windows",
+      "service": "claude",
+      "day": "20/11",
+      "profile": "shopAssistant",
+      "mode": "onsite",
+      "build": "e498085c7",
+      "buildNo": 15,
+      "minutes": 156.7,
+      "cost": 2.43,
+      "calls": 416,
+      "found": 10,
+      "scored": 10,
+      "relevant": 4,
+      "bestScore": 85,
+      "roster": null,
+      "outcome": "reservations",
+      "note": "candidateWindowsSpanish",
+      "lang": "es"
     }
   ],
   "services": [
     {
       "id": "glm",
-      "kitEstimate30min": [
-        3.2,
-        5.1
-      ],
       "seen": [
         {
           "cost": 3.41,
@@ -1532,10 +1738,6 @@
     },
     {
       "id": "claude",
-      "kitEstimate30min": [
-        2.2,
-        4.2
-      ],
       "seen": [
         {
           "cost": 2.92,
@@ -1553,10 +1755,6 @@
     },
     {
       "id": "openai",
-      "kitEstimate30min": [
-        3.6,
-        6.3
-      ],
       "seen": [
         {
           "cost": 1.61,
@@ -1570,10 +1768,6 @@
     },
     {
       "id": "kimi",
-      "kitEstimate30min": [
-        10.6,
-        18.7
-      ],
       "seen": [],
       "ratePerMinute": null
     }
@@ -1936,7 +2130,8 @@
         "linkedin": 13,
         "randstad": 13,
         "publicCompetitions": 1
-      }
+      },
+      "day": "17/11"
     },
     {
       "id": "b9-cook",
@@ -2246,7 +2441,8 @@
       "bySource": {
         "talent": 12,
         "randstad": 7
-      }
+      },
+      "day": "17/11"
     },
     {
       "id": "b9-warehouseWorker",
@@ -2742,7 +2938,8 @@
         "randstad": 21,
         "linkedin": 15,
         "talent": 14
-      }
+      },
+      "day": "17/11"
     },
     {
       "id": "b9-bricklayer",
@@ -3089,6 +3286,171 @@
       "bySource": {
         "talent": 5,
         "randstad": 1
+      },
+      "day": "17/11"
+    },
+    {
+      "id": "b15-cook",
+      "profile": "cook",
+      "os": "linux",
+      "service": "claude",
+      "buildNo": 15,
+      "day": "19/11",
+      "commit": "22b3c6eab",
+      "minutes": 12.5,
+      "cost": 3.5514,
+      "calls": 761,
+      "found": 29,
+      "scored": 26,
+      "relevance": {
+        "P": 25,
+        "A": 4,
+        "X": 0
+      },
+      "ceiling": 5.0,
+      "agents": {
+        "scout": 1.6514,
+        "scorer": 1.1801,
+        "captain": 0.313,
+        "analyst": 0.3044,
+        "sentinel": 0.0031
+      },
+      "discarded": {
+        "role": 89,
+        "area": 698,
+        "duplicate": 49,
+        "other": 20
+      },
+      "bySource": {
+        "randstad": 3,
+        "linkedin": 1,
+        "jobInTourism": 2,
+        "talent": 13,
+        "jobsora": 10
+      }
+    },
+    {
+      "id": "b15-warehouseWorker",
+      "profile": "warehouseWorker",
+      "os": "linux",
+      "service": "claude",
+      "buildNo": 15,
+      "day": "19/11",
+      "commit": "22b3c6eab",
+      "minutes": 21.3,
+      "cost": 3.6309,
+      "calls": 799,
+      "found": 50,
+      "scored": 45,
+      "relevance": {
+        "P": 45,
+        "A": 5,
+        "X": 0
+      },
+      "ceiling": 5.0,
+      "agents": {
+        "scorer": 1.6531,
+        "scout": 0.8781,
+        "analyst": 0.5861,
+        "captain": 0.4013,
+        "assistant": 0.0576,
+        "maintainer": 0.0352,
+        "doctor": 0.0166,
+        "sentinel": 0.003
+      },
+      "discarded": {
+        "role": 121,
+        "area": 13,
+        "duplicate": 14,
+        "other": 89
+      },
+      "bySource": {
+        "talent": 25,
+        "linkedin": 8,
+        "randstad": 16,
+        "jobInTourism": 1
+      }
+    },
+    {
+      "id": "b15-nurse",
+      "profile": "nurse",
+      "os": "linux",
+      "service": "claude",
+      "buildNo": 15,
+      "day": "19/11",
+      "commit": "22b3c6eab",
+      "minutes": 13.3,
+      "cost": 3.6479,
+      "calls": 750,
+      "found": 39,
+      "scored": 35,
+      "relevance": {
+        "P": 37,
+        "A": 2,
+        "X": 0
+      },
+      "ceiling": 5.0,
+      "agents": {
+        "scorer": 1.5186,
+        "scout": 1.0355,
+        "captain": 0.5787,
+        "analyst": 0.4608,
+        "sentinel": 0.0029
+      },
+      "discarded": {
+        "role": 82,
+        "area": 268,
+        "duplicate": 36,
+        "domain": 9,
+        "other": 2
+      },
+      "bySource": {
+        "linkedin": 5,
+        "publicCompetitions": 1,
+        "talent": 20,
+        "randstad": 11,
+        "other": 2
+      }
+    },
+    {
+      "id": "b15-bricklayer",
+      "profile": "bricklayer",
+      "os": "linux",
+      "service": "claude",
+      "buildNo": 15,
+      "day": "19/11",
+      "commit": "22b3c6eab",
+      "minutes": 28.6,
+      "cost": 3.0299,
+      "calls": 764,
+      "found": 14,
+      "scored": 10,
+      "relevance": {
+        "P": 10,
+        "A": 1,
+        "X": 3
+      },
+      "ceiling": 5.0,
+      "agents": {
+        "scout": 1.3084,
+        "scorer": 0.6469,
+        "captain": 0.6359,
+        "analyst": 0.2024,
+        "sentinel": 0.0059
+      },
+      "discarded": {
+        "role": 737,
+        "area": 19,
+        "duplicate": 36,
+        "domain": 1,
+        "other": 29
+      },
+      "bySource": {
+        "linkedin": 1,
+        "randstad": 1,
+        "talent": 8,
+        "other": 1,
+        "jobeka": 3
       }
     }
   ],

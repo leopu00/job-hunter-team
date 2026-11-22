@@ -25,6 +25,7 @@ import { ROUND_STORIES } from "../roundStories";
 import {
   TESTS,
   chartRoundOf,
+  benchCommit,
   neighbours,
   testBySlug,
   type RoundCriterion,
@@ -41,6 +42,9 @@ type Criterion = {
   max?: number;
   of?: number;
   trade?: string;
+  round?: string;
+  bench?: string;
+  fix?: string;
 };
 
 export async function generateMetadata({
@@ -82,20 +86,44 @@ export default async function RoundPage({
   const target = x.target
     ? ((data.targets as Target[]).find((y) => y.id === x.target) ?? null)
     : null;
-  const criteria = ((target as { criteria?: Criterion[] } | null)?.criteria ??
-    []) as Criterion[];
+  // a target tried on two benches keeps the criteria of each: this page shows those of its own bench
+  const criteria = (
+    ((target as { criteria?: Criterion[] } | null)?.criteria ??
+      []) as Criterion[]
+  ).filter((c) => !c.bench || c.bench === x.id);
+  // where a criterion was measured: the commit of its round, and the correction that came after a red one
+  const criterionWhere = (c: Criterion) =>
+    [
+      c.round ? data.rounds.find((r) => r.id === c.round)?.build : null,
+      c.bench ? benchCommit(c.bench) : null,
+      c.fix ? t.targetCriteria.beforeFix.replace("{fix}", c.fix) : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
   const criterion = (c: Criterion) =>
-    (t.targetCriteria[c.k] ?? c.k)
-      .replace("{v}", c.v == null ? "" : String(c.v))
+    (
+      (t.targetCriteria[c.k] ?? c.k)
+      .replace(
+        "{v}",
+        c.v == null ? "" : c.k === "underCeiling" ? nf.format(c.v) : String(c.v),
+      )
       .replace("{min}", String(c.min ?? ""))
-      .replace("{max}", String(c.max ?? ""))
+      .replace(
+        "{max}",
+        c.max == null
+          ? ""
+          : Number.isInteger(c.max)
+            ? String(c.max)
+            : nf.format(c.max),
+      )
       .replace("{of}", String(c.of ?? ""))
       .replace(
         "{trade}",
         c.trade
           ? `${TRADE_EMOJI[c.trade] ?? ""} ${profileName(c.trade)}`.trim()
           : "",
-      );
+      )
+    ) + (criterionWhere(c) ? ` · ${criterionWhere(c)}` : "");
   // a criterion of the path of a person, e.g. «2 manual steps (minute 7.7, 10.8)»
   const roundCriterion = (c: RoundCriterion) => {
     const key = c.k === "alone" ? (c.ok ? "alone_ok" : "alone_bad") : c.k;
@@ -146,7 +174,7 @@ export default async function RoundPage({
         </span>
       ),
     },
-    { k: p.build, v: x.buildNo == null ? "—" : String(x.buildNo) },
+    { k: p.build, v: x.buildNo == null ? t.previousBuild : String(x.buildNo) },
     {
       k: p.profile,
       v: `${TRADE_EMOJI[x.profile] ?? "🧑‍💼"} ${profileName(x.profile)}`,
@@ -190,7 +218,9 @@ export default async function RoundPage({
 
         <header className="space-y-2">
           <div className="text-[11px] uppercase tracking-wide text-[var(--color-muted)]">
-            {x.kind === "bench" ? p.kindBench : p.kindRound}
+            {x.kind === "bench"
+              ? p.kindBench.replace("{n}", String(x.buildNo ?? ""))
+              : p.kindRound}
           </div>
           <h1 className="text-[26px] font-extrabold leading-tight">
             {`${TRADE_EMOJI[x.profile] ?? ""} ${label(x)}`.trim()}
@@ -228,6 +258,9 @@ export default async function RoundPage({
               </div>
             ))}
           </dl>
+          <p className="text-[11px] text-[var(--color-dim)] max-w-3xl">
+            {t.paceNote}
+          </p>
           <div className="border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2.5 space-y-1 text-[12px]">
             <div className="text-[10px] uppercase tracking-wide text-[var(--color-muted)]">
               {p.outcome}

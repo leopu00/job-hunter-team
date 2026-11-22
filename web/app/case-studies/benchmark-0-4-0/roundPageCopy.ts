@@ -43,7 +43,7 @@ export type RoundPageCopy = {
 const en: RoundPageCopy = {
   back: "← All the tests of the 0.4.0 benchmark",
   kindRound: "Test round",
-  kindBench: "Scout bench, build 9",
+  kindBench: "Scout bench, build {n}",
   overview: "Overview",
   system: "System",
   service: "Service",
@@ -98,7 +98,7 @@ const en: RoundPageCopy = {
 const it: RoundPageCopy = {
   back: "← Tutti i test del benchmark 0.4.0",
   kindRound: "Giro di prova",
-  kindBench: "Banco Scout, build 9",
+  kindBench: "Banco Scout, build {n}",
   overview: "Panoramica",
   system: "Sistema",
   service: "Servizio",
@@ -154,7 +154,7 @@ const it: RoundPageCopy = {
 const de: RoundPageCopy = {
   back: "← Alle Tests des Benchmarks 0.4.0",
   kindRound: "Testrunde",
-  kindBench: "Scout-Bank, Build 9",
+  kindBench: "Scout-Bank, Build {n}",
   overview: "Überblick",
   system: "System",
   service: "Dienst",
@@ -209,7 +209,7 @@ const de: RoundPageCopy = {
 const es: RoundPageCopy = {
   back: "← Todas las pruebas del benchmark 0.4.0",
   kindRound: "Ronda de prueba",
-  kindBench: "Banco de Scouts, build 9",
+  kindBench: "Banco de Scouts, build {n}",
   overview: "Resumen",
   system: "Sistema",
   service: "Servicio",
@@ -264,7 +264,7 @@ const es: RoundPageCopy = {
 const fr: RoundPageCopy = {
   back: "← Tous les tests du benchmark 0.4.0",
   kindRound: "Tour de test",
-  kindBench: "Banc des Scouts, build 9",
+  kindBench: "Banc des Scouts, build {n}",
   overview: "Aperçu",
   system: "Système",
   service: "Service",
@@ -321,7 +321,7 @@ const fr: RoundPageCopy = {
 const hu: RoundPageCopy = {
   back: "← A 0.4.0 benchmark összes tesztje",
   kindRound: "Tesztkör",
-  kindBench: "Scout-pad, 9. build",
+  kindBench: "Scout-pad, {n}. build",
   overview: "Áttekintés",
   system: "Rendszer",
   service: "Szolgáltatás",
@@ -376,7 +376,7 @@ const hu: RoundPageCopy = {
 const pt: RoundPageCopy = {
   back: "← Todos os testes do benchmark 0.4.0",
   kindRound: "Rodada de teste",
-  kindBench: "Bancada de Scouts, build 9",
+  kindBench: "Bancada de Scouts, build {n}",
   overview: "Visão geral",
   system: "Sistema",
   service: "Serviço",

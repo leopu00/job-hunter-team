@@ -944,7 +944,7 @@ function RoundTimelines({
             .map((g) => (
               <div
                 key={g.key}
-                className="border border-[var(--color-border)] bg-[var(--color-deep)]"
+                className="min-w-0 border border-[var(--color-border)] bg-[var(--color-deep)]"
               >
                 <div className="px-3 py-1.5 text-[12px] font-semibold border-b border-[var(--color-border)]">
                   {g.head}
