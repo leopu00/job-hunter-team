@@ -33,7 +33,6 @@ export type Copy = {
   servicesTitle: string;
   servicesCols: {
     service: string;
-    kit: string;
     seen: string;
     rate: string;
   };
@@ -73,6 +72,8 @@ export type Copy = {
   targetRules: Record<string, string>;
   buildsTitle: string;
   buildLabel: string;
+  previousBuild: string;
+  paceNote: string;
   noRound: string;
   none: string;
   finder: FinderCopy;
@@ -82,7 +83,7 @@ export const T: Record<Locale, Copy> = {
   en: {
     metaTitle: "0.4.0 benchmark · Job Hunter Team",
     title: "0.4.0 benchmark: four services, three systems",
-    lead: "What the team spent and found in the test rounds of 14-19 November 2026, with the API-key services the 0.4.0 harness offers. Numbers come from the test reports and the cost samplers.",
+    lead: "What the team spent and found in the test rounds of 14-21 November 2026, with the API-key services the 0.4.0 harness offers. Numbers come from the test reports and the cost samplers.",
     banner:
       "A first comparison, not a clean benchmark. Machines, profiles, builds, budgets and team sizes differ between rounds, and there is one round per service: read the limits below before comparing.",
     roundsTitle: "Every round",
@@ -97,22 +98,21 @@ export const T: Record<Locale, Copy> = {
       note: "What happened",
     },
     colsHint:
-      "«Relevant» = positions whose title matches the trade, checked on a sample.",
+      "«Relevant» = positions whose title matches the trade, checked on a sample; a dash = not judged. «Earlier build» = a round before the numbered builds of the 0.4.0: it does not prove the 0.4.0.",
     chartTitle: "What a scored position costs",
     chartLead:
       "Dollars spent for each position the team scored. Shorter is better. Rounds with no scored position have no bar.",
     chartNone: "none scored",
     chartCaveat:
       "The two Mac rounds were 6 and 10 minutes with a minimal team, and the cost is mostly onboarding and the Captain: not comparable with rounds of 16-42 minutes.",
-    servicesTitle: "Services: what we saw next to the estimates",
+    servicesTitle: "Services: what we saw in the rounds",
     servicesCols: {
       service: "Service",
-      kit: "Estimate for 30 min",
       seen: "Seen in the rounds",
       rate: "Pace seen",
     },
     servicesCaveat:
-      "The estimates come from GLM's volume re-priced, not from measurements on the other services. Claude on Windows spent more than estimated: the Captain and the Scorer weigh 3.05 $ of 5.28 $.",
+      "Only what the rounds measured; a dash means never tried. These numbers come from rounds on builds before the numbered ones of the 0.4.0 (r1–r8): they say what a service costs, not how the 0.4.0 behaves. Claude on Windows spent 5.28 $: the Captain and the Scorer weigh 3.05 $ of it.",
     osTitle: "By system",
     limitsTitle: "What this comparison is worth, and what it is not",
     limitsLead:
@@ -128,13 +128,14 @@ export const T: Record<Locale, Copy> = {
     need: "Four identical VPSs started together, the same profile for everyone, 30 minutes of work after onboarding, the same build with the budget brake fixed, and credit on all four services.",
     back: "← All case studies",
     footer:
-      "Synthetic profiles, no personal data · numbers from the test reports of 14-19/11/2026.",
+      "Synthetic profiles, no personal data · numbers from the test reports of 14-21/11/2026.",
     marks:
       "The logos only name the service a test used and imply no endorsement. Trademarks and logos belong to their owners.",
     outcome: {
       pass: "pass",
       reservations: "with reservations",
       fail: "fail",
+      unjudged: "not judged",
       running: "running",
     },
     system: {
@@ -153,6 +154,7 @@ export const T: Record<Locale, Copy> = {
       receptionist: "Receptionist",
       truckDriver: "Truck driver",
       electrician: "Electrician",
+      shopAssistant: "Shop assistant",
       careAssistant: "Care assistant",
     },
     modes: { onsite: "on site", unspecified: "" },
@@ -225,6 +227,14 @@ export const T: Record<Locale, Copy> = {
         "Full retest, closed early: the stages work, but the estimated reserve of the restart stops the team 10 to 20 seconds after every stage; no new position.",
       retestResumes:
         "Retest, closed early: the unlock now works ten minutes before the first pause, but both resumes stop within the first minute, and after the update the Captain wakes all seven workers outside the stages.",
+      retestResumeBursts:
+        "Retest of the unlock and the resumes after an update: the unlock works 23 minutes before the first pause and finds 6 positions, but the resumes last 79, 59 and 24 seconds, the first goes 0.20 $ over the pace line and the last stops for budget without a notice; 12 new positions, 8 relevant.",
+      retestScoutsNotBack:
+        "Retest with the pace off after an update: the update is clean and the team stays paused for the old budget, but after the setup no Scout starts again for 88 minutes; no new position, 11 old ones scored (1.75 of 2 $).",
+      retestDayQuota:
+        "Retest of the budget split by day, over two days (41 h) with the pace off: the team works up to its share of the day, stops with one notice and resumes by itself the next day (1.38 of 2 $, never over a share). 4 minor defects; 4 relevant of 5 new.",
+      candidateWindowsSpanish:
+        "Release candidate on a new Windows user, everything in Spanish: 4 relevant of 10 in 5 minutes (5 more of the right trade, but part time or seasonal). The 2.43 $ are two periods: the first (1.5 $ for a day) stopped by the pace brake at 1.04 $, the second (5 $ for 30 minutes) spent the rest. Open: empty help from the host, the Scout stopped after its first pass.",
     },
     osNotes: {
       linux:
@@ -291,25 +301,26 @@ export const T: Record<Locale, Copy> = {
       updateWindowsBuild10:
         "build 10: positions, profile and key kept, all in German; after the update the Analyst never started (13 positions waiting)",
       languagePortugueseOk: "build 10: Portuguese all the way on the Mac",
-      codexBetaInUse:
-        "in use in our beta test (chart 6); not yet tried on builds 9 and 10",
+      notTried040: "not tried on the 0.4.0",
       updateLinuxBuild9:
         "build 9: passed (its round is not in the table below)",
       installerBlockedBuild9:
         "build 9: stopped by the installer (fix in build 10, round under way)",
-      benchCook: "79% relevant",
-      benchWarehouse: "90% relevant",
-      benchNurse: "1 duplicate (94% relevant)",
-      benchBricklayer: "6 positions, fewer than 15 (83% relevant)",
+      benchCook:
+        "1 duplicate (86% relevant); on build 9: 79% relevant, no duplicate",
+      benchWarehouse:
+        "1 duplicate (90% relevant); on build 9: 90% relevant, no duplicate",
+      benchNurse: "1 duplicate (95% relevant); on build 9: 1 duplicate",
+      benchBricklayer:
+        "14 positions, fewer than 15, and 1 duplicate (71% relevant); on build 9: 6 positions",
       brakeFixedRetry: "fixed in builds 9 and 10: to try again",
       languageGermanOk: "build 9: German all the way on Linux",
-      chatgptFreeRefused: "sign-in refused (Free plan)",
       securityPreTag:
         "review before the tag: the verdict comes on the exact version of the tag; the key-on-disk case is closed",
       cleanLinuxRoundMissing:
         "clean install on build 6: its round is not in the table below",
-      openaiRoundMissing:
-        "proved on build 6: its round is not in the table below",
+      openaiBuild6Redo:
+        "tried on build 6 only (1.61 $, 10 minutes): to redo on the 0.4.0",
       redoOnBuild9: "to redo on build 9",
       diskFull: "disk full after the update (fix in progress)",
       neverTried: "never tried",
@@ -329,10 +340,10 @@ export const T: Record<Locale, Copy> = {
         "build 11: positions, scores and key kept, disk space back, all in Portuguese",
       updateWindowsBuild13:
         "build 13: the update with the chat open ends and the jht command works, all in French",
-      relevantCandidate:
-        "release candidate: 20 relevant of 33 for the electrician (61%); 14 of 18 on build 11. To be proven again on a new install",
-      brakeCandidate:
-        "release candidate: the second ceiling passed by 13%; on the test images after it the ceiling always holds, three defects of the pace still open",
+      relevantBuild15:
+        "build 15: 4 relevant of 10 for the shop assistant profile on a new Windows user (40%; 5 more are part time or seasonal); 4 of 5 for the electrician on the retest; 20 of 33 (61%) on the first candidate. To be proven again on a new install",
+      brakeDayQuota:
+        "build 15: the day quota and the pace stop the team before every budget (1.38 of 2 $ over two days; 1.04 of 1.5 $ on Windows). The first candidate went 13% over a 1 $ budget after a resume: fixed since, not seen again on the later test images; minor defects left in the notices and the status",
       languageFrenchGermanOk:
         "builds 11-13: German and French all through the flow; a few lines still in English (help of the command)",
       languageItalianOk:
@@ -376,11 +387,12 @@ export const T: Record<Locale, Copy> = {
       relevantOf: "{trade}: {v} relevant of {of}",
       underCeiling: "spent {v} of {max} $",
       noFalseUnlock: "no false unlock",
+      beforeFix: "before the fix {fix}",
     },
     targetRules: {
       scout:
         "Only the search of the Scouts, on a server already set up, with four trades outside IT. A trade passes when all 3 criteria are green: at least 70% relevant, 0 duplicates, at least 15 positions.",
-      brake: "Criteria of the last try (build 8); fixed since, to try again.",
+      brake: "Criteria of the last tries (build 15).",
       realUser:
         "A person installs the program from zero, answers the setup and lets the team work alone for 30 minutes. It passes when at least 70% of the positions found are of the person's trade.",
     },
@@ -392,6 +404,9 @@ export const T: Record<Locale, Copy> = {
     },
     buildsTitle: "Rounds of each build",
     buildLabel: "Build {n}",
+    previousBuild: "earlier build",
+    paceNote:
+      "The rounds run the team for minutes or hours, not for the days a budget is meant to last: the cost is squeezed into a short time and does not say how long a budget lasts in everyday use. Only round r33 covers two days, with the pace off and the budget split by day.",
     noRound: "no round",
     none: "—",
     finder: {
@@ -452,7 +467,7 @@ export const T: Record<Locale, Copy> = {
   it: {
     metaTitle: "Benchmark 0.4.0 · Job Hunter Team",
     title: "Benchmark 0.4.0: quattro servizi, tre sistemi",
-    lead: "Quanto ha speso e trovato la squadra nei giri di prova del 14-19 novembre 2026, con i servizi a chiave API che l'harness 0.4.0 offre. I numeri vengono dai verbali dei collaudi e dai campionatori dei costi.",
+    lead: "Quanto ha speso e trovato la squadra nei giri di prova del 14-21 novembre 2026, con i servizi a chiave API che l'harness 0.4.0 offre. I numeri vengono dai verbali dei collaudi e dai campionatori dei costi.",
     banner:
       "Un primo confronto, non un benchmark pulito. Macchine, profili, build, budget e dimensioni della squadra cambiano da un giro all'altro, e c'è un giro per servizio: leggi i limiti qui sotto prima di confrontare.",
     roundsTitle: "Ogni giro",
@@ -467,22 +482,21 @@ export const T: Record<Locale, Copy> = {
       note: "Cosa è successo",
     },
     colsHint:
-      "«Pertinenti» = posizioni il cui titolo corrisponde al mestiere, controllate a campione.",
+      "«Pertinenti» = posizioni il cui titolo corrisponde al mestiere, controllate a campione; un trattino = non giudicato. «Build precedente» = giro anteriore alle build numerate della 0.4.0: non prova la 0.4.0.",
     chartTitle: "Quanto costa una posizione valutata",
     chartLead:
       "Dollari spesi per ogni posizione valutata dalla squadra. Più corta è la barra, meglio è. I giri senza posizioni valutate non hanno barra.",
     chartNone: "nessuna valutata",
     chartCaveat:
       "I due giri del Mac sono durati 6 e 10 minuti con una squadra minima, e il costo è quasi tutto onboarding e Capitano: non sono confrontabili con giri di 16-42 minuti.",
-    servicesTitle: "Servizi: quello che abbiamo visto accanto alle stime",
+    servicesTitle: "Servizi: quello che abbiamo visto nei giri",
     servicesCols: {
       service: "Servizio",
-      kit: "Stima per 30 min",
       seen: "Visto nei giri",
       rate: "Ritmo visto",
     },
     servicesCaveat:
-      "Le stime vengono dal volume di GLM riprezzato, non da misure sugli altri servizi. Claude su Windows ha speso più della stima: Capitano e Scorer pesano 3,05 $ su 5,28 $.",
+      "Solo ciò che i giri hanno misurato; un trattino = mai provato. Questi numeri vengono da giri su build precedenti a quelle numerate della 0.4.0 (r1–r8): dicono quanto costa un servizio, non come si comporta la 0.4.0. Claude su Windows ha speso 5,28 $: Capitano e Scorer ne pesano 3,05 $.",
     osTitle: "Per sistema",
     limitsTitle: "Cosa vale e cosa no di questo confronto",
     limitsLead:
@@ -498,13 +512,14 @@ export const T: Record<Locale, Copy> = {
     need: "Quattro VPS uguali accese insieme, lo stesso profilo per tutti, 30 minuti di lavoro dopo l'onboarding, la stessa build con il freno del budget corretto e credito su tutti e quattro i servizi.",
     back: "← Tutti i case study",
     footer:
-      "Profili finti, nessun dato personale · numeri dai verbali dei collaudi del 14-19/11/2026.",
+      "Profili finti, nessun dato personale · numeri dai verbali dei collaudi del 14-21/11/2026.",
     marks:
       "I loghi indicano solo il servizio usato da una prova e non implicano alcuna approvazione. Marchi e loghi appartengono ai rispettivi proprietari.",
     outcome: {
       pass: "passa",
       reservations: "con riserva",
       fail: "non passa",
+      unjudged: "non giudicato",
       running: "in corso",
     },
     system: {
@@ -523,6 +538,7 @@ export const T: Record<Locale, Copy> = {
       receptionist: "Receptionist",
       truckDriver: "Autista C+E",
       electrician: "Elettricista",
+      shopAssistant: "Commesso/a",
       careAssistant: "Operatrice socio-sanitaria",
     },
     modes: { onsite: "in sede", unspecified: "" },
@@ -595,6 +611,14 @@ export const T: Record<Locale, Copy> = {
         "Riprova completa, chiusa prima: gli scaglioni funzionano, ma la riserva stimata della ripartenza ferma la squadra 10-20 secondi dopo ogni scaglione; nessun annuncio nuovo.",
       retestResumes:
         "Riprova, chiusa prima: lo sblocco ora lavora dieci minuti prima della prima pausa, ma entrambe le riprese si fermano entro il primo minuto, e dopo l'aggiornamento il Capitano sveglia tutti e sette i lavoratori fuori dagli scaglioni.",
+      retestResumeBursts:
+        "Retest dello sblocco e delle riprese dopo un aggiornamento: lo sblocco lavora 23 minuti prima della prima pausa e trova 6 posizioni, ma le riprese durano 79, 59 e 24 secondi, la prima supera la linea del ritmo di 0,20 $ e l'ultima si ferma per il budget senza avviso; 12 posizioni nuove, 8 pertinenti.",
+      retestScoutsNotBack:
+        "Retest con il ritmo spento dopo un aggiornamento: l'aggiornamento è pulito e la squadra resta in pausa per il vecchio budget, ma dopo il setup nessuno Scout riparte per 88 minuti; nessuna posizione nuova, 11 vecchie valutate (1,75 $ su 2).",
+      retestDayQuota:
+        "Retest del budget diviso per giorno, su due giorni (41 h) con il ritmo spento: la squadra lavora fino alla quota del giorno, si ferma con un solo avviso e riparte da sola il giorno dopo (1,38 $ su 2, mai sopra una quota). 4 difetti minori; 4 pertinenti su 5 nuove.",
+      candidateWindowsSpanish:
+        "Candidata su un utente nuovo Windows, tutto in spagnolo: 4 pertinenti su 10 in 5 minuti (altre 5 del mestiere giusto, ma part time o stagionali). I 2,43 $ sono due periodi: il primo (1,5 $ per un giorno) fermato dal freno del ritmo a 1,04 $, il secondo (5 $ per 30 minuti) ha speso il resto. Aperti: aiuto vuoto dall'host, Scout fermo dopo la prima passata.",
     },
     osNotes: {
       linux:
@@ -662,25 +686,26 @@ export const T: Record<Locale, Copy> = {
         "build 10: annunci, profilo e chiave tenuti, tutto in tedesco; dopo l'aggiornamento l'Analista non è mai partito (13 annunci in attesa)",
       languagePortugueseOk:
         "build 10: portoghese dall'inizio alla fine sul Mac",
-      codexBetaInUse:
-        "in uso nel nostro beta test (grafico 6); non ancora provato sulle build 9 e 10",
+      notTried040: "non provato sulla 0.4.0",
       updateLinuxBuild9:
         "build 9: superato (il giro non è nella tabella sotto)",
       installerBlockedBuild9:
         "build 9: fermato dall'installer (correzione in build 10, giro in corso)",
-      benchCook: "79% pertinenti",
-      benchWarehouse: "90% pertinenti",
-      benchNurse: "1 doppione (94% pertinenti)",
-      benchBricklayer: "6 posizioni, meno di 15 (83% pertinenti)",
+      benchCook:
+        "1 doppione (86% pertinenti); sulla build 9: 79% pertinenti, nessun doppione",
+      benchWarehouse:
+        "1 doppione (90% pertinenti); sulla build 9: 90% pertinenti, nessun doppione",
+      benchNurse: "1 doppione (95% pertinenti); sulla build 9: 1 doppione",
+      benchBricklayer:
+        "14 posizioni, meno di 15, e 1 doppione (71% pertinenti); sulla build 9: 6 posizioni",
       brakeFixedRetry: "corretto nelle build 9 e 10: da riprovare",
       languageGermanOk: "build 9: tedesco dall'inizio alla fine su Linux",
-      chatgptFreeRefused: "accesso rifiutato (piano Free)",
       securityPreTag:
         "controllo prima del tag: il verdetto arriva sulla versione esatta del tag; il caso della chiave su disco è chiuso",
       cleanLinuxRoundMissing:
         "installazione vergine sulla build 6: il suo giro non è nella tabella qui sotto",
-      openaiRoundMissing:
-        "provato sulla build 6: il suo giro non è nella tabella qui sotto",
+      openaiBuild6Redo:
+        "provato solo sulla build 6 (1,61 $, 10 minuti): da rifare sulla 0.4.0",
       redoOnBuild9: "da rifare sulla build 9",
       diskFull: "disco pieno dopo l'aggiornamento (correzione in corso)",
       neverTried: "mai provato",
@@ -698,10 +723,10 @@ export const T: Record<Locale, Copy> = {
         "build 11: annunci, punteggi e chiave tenuti, spazio su disco tornato, tutto in portoghese",
       updateWindowsBuild13:
         "build 13: l'aggiornamento con la chat aperta arriva in fondo e il comando jht funziona, tutto in francese",
-      relevantCandidate:
-        "candidata del rilascio: 20 pertinenti su 33 per l'elettricista (61%); 14 su 18 sulla build 11. Da riprovare con un'installazione nuova",
-      brakeCandidate:
-        "candidata del rilascio: secondo tetto superato del 13%; sulle immagini di prova dopo il tetto tiene sempre, aperti ancora tre difetti del ritmo",
+      relevantBuild15:
+        "build 15: 4 pertinenti su 10 per il profilo commesso/a su un utente nuovo Windows (40%; altre 5 part time o stagionali); 4 su 5 per l'elettricista nel retest; 20 su 33 (61%) sulla prima candidata. Da riprovare con un'installazione nuova",
+      brakeDayQuota:
+        "build 15: la quota del giorno e il ritmo fermano la squadra prima di ogni budget (1,38 $ su 2 in due giorni; 1,04 $ su 1,5 su Windows). La prima candidata ha superato del 13% un budget da 1 $ dopo una ripresa: corretto, non più visto sulle immagini di prova successive; restano difetti minori negli avvisi e nello stato",
       languageFrenchGermanOk:
         "build 11-13: tedesco e francese in tutto il flusso; restano poche righe in inglese (aiuto del comando)",
       languageItalianOk:
@@ -745,12 +770,12 @@ export const T: Record<Locale, Copy> = {
       relevantOf: "{trade}: {v} pertinenti su {of}",
       underCeiling: "spesi {v} di {max} $",
       noFalseUnlock: "nessuno sblocco falso",
+      beforeFix: "prima della correzione {fix}",
     },
     targetRules: {
       scout:
         "Solo la ricerca degli Scout, su un server già configurato, con quattro mestieri non IT. Un mestiere passa se tutti e 3 i criteri sono verdi: almeno 70% pertinenti, 0 doppioni, almeno 15 annunci.",
-      brake:
-        "Criteri dell'ultima prova (build 8); corretto dopo, da riprovare.",
+      brake: "Criteri delle ultime prove (build 15).",
       realUser:
         "Una persona installa il programma da zero, risponde al setup e lascia lavorare la squadra da sola per 30 minuti. Passa se almeno il 70% degli annunci trovati è del suo mestiere.",
     },
@@ -763,6 +788,9 @@ export const T: Record<Locale, Copy> = {
     },
     buildsTitle: "Giri di ogni build",
     buildLabel: "Build {n}",
+    previousBuild: "build precedente",
+    paceNote:
+      "I giri fanno lavorare la squadra per minuti o ore, non per i giorni che un budget deve coprire: il costo è compresso in poco tempo e non dice quanto dura un budget nell'uso di tutti i giorni. Solo il giro r33 copre due giorni, con il ritmo spento e il budget diviso per giorno.",
     noRound: "nessun giro",
     none: "—",
     finder: {
@@ -823,7 +851,7 @@ export const T: Record<Locale, Copy> = {
   de: {
     metaTitle: "Benchmark 0.4.0 · Job Hunter Team",
     title: "Benchmark 0.4.0: vier Dienste, drei Systeme",
-    lead: "Was das Team in den Testläufen vom 14. bis 19. November 2026 ausgegeben und gefunden hat, mit den API-Schlüssel-Diensten des 0.4.0-Harness. Die Zahlen stammen aus den Testprotokollen und den Kostenmessungen.",
+    lead: "Was das Team in den Testläufen vom 14. bis 21. November 2026 ausgegeben und gefunden hat, mit den API-Schlüssel-Diensten des 0.4.0-Harness. Die Zahlen stammen aus den Testprotokollen und den Kostenmessungen.",
     banner:
       "Ein erster Vergleich, kein sauberer Benchmark. Maschinen, Profile, Builds, Budgets und Teamgrößen unterscheiden sich von Lauf zu Lauf, und es gibt einen Lauf pro Dienst: lies die Grenzen unten, bevor du vergleichst.",
     roundsTitle: "Jeder Lauf",
@@ -838,22 +866,21 @@ export const T: Record<Locale, Copy> = {
       note: "Was passiert ist",
     },
     colsHint:
-      "«Passend» = Stellen, deren Titel zum Beruf passt, stichprobenartig geprüft.",
+      "«Passend» = Stellen, deren Titel zum Beruf passt, stichprobenartig geprüft; ein Strich = nicht bewertet. «Frühere Build» = ein Lauf vor den nummerierten Builds der 0.4.0: er belegt die 0.4.0 nicht.",
     chartTitle: "Was eine bewertete Stelle kostet",
     chartLead:
       "Dollar pro vom Team bewerteter Stelle. Kürzer ist besser. Läufe ohne bewertete Stelle haben keinen Balken.",
     chartNone: "keine bewertet",
     chartCaveat:
       "Die beiden Mac-Läufe dauerten 6 und 10 Minuten mit minimalem Team; die Kosten sind fast nur Onboarding und Capitano: nicht vergleichbar mit Läufen von 16-42 Minuten.",
-    servicesTitle: "Dienste: Beobachtetes neben den Schätzungen",
+    servicesTitle: "Dienste: Beobachtetes in den Läufen",
     servicesCols: {
       service: "Dienst",
-      kit: "Schätzung für 30 Min",
       seen: "In den Läufen gesehen",
       rate: "Beobachtetes Tempo",
     },
     servicesCaveat:
-      "Die Schätzungen stammen aus dem umgerechneten GLM-Volumen, nicht aus Messungen der anderen Dienste. Claude unter Windows gab mehr aus als geschätzt: Capitano und Scorer machen 3,05 $ von 5,28 $ aus.",
+      "Nur, was die Läufe gemessen haben; ein Strich = nie ausprobiert. Diese Zahlen stammen aus Läufen auf Builds vor den nummerierten der 0.4.0 (r1–r8): sie sagen, was ein Dienst kostet, nicht wie sich die 0.4.0 verhält. Claude unter Windows gab 5,28 $ aus: Capitano und Scorer machen davon 3,05 $ aus.",
     osTitle: "Nach System",
     limitsTitle: "Was dieser Vergleich wert ist und was nicht",
     limitsLead:
@@ -869,13 +896,14 @@ export const T: Record<Locale, Copy> = {
     need: "Vier identische VPS gleichzeitig gestartet, dasselbe Profil für alle, 30 Minuten Arbeit nach dem Onboarding, derselbe Build mit korrigierter Budgetbremse und Guthaben bei allen vier Diensten.",
     back: "← Alle Fallstudien",
     footer:
-      "Synthetische Profile, keine personenbezogenen Daten · Zahlen aus den Testprotokollen vom 14.-19.11.2026.",
+      "Synthetische Profile, keine personenbezogenen Daten · Zahlen aus den Testprotokollen vom 14.-21.11.2026.",
     marks:
       "Die Logos nennen nur den Dienst, den ein Test genutzt hat, und bedeuten keine Billigung. Marken und Logos gehören ihren jeweiligen Inhabern.",
     outcome: {
       pass: "bestanden",
       reservations: "mit Vorbehalt",
       fail: "nicht bestanden",
+      unjudged: "nicht bewertet",
       running: "läuft",
     },
     system: {
@@ -894,6 +922,7 @@ export const T: Record<Locale, Copy> = {
       receptionist: "Rezeptionist",
       truckDriver: "Lkw-Fahrer",
       electrician: "Elektriker",
+      shopAssistant: "Verkäufer/in",
       careAssistant: "Pflegehelferin",
     },
     modes: { onsite: "vor Ort", unspecified: "" },
@@ -966,6 +995,14 @@ export const T: Record<Locale, Copy> = {
         "Vollständiger erneuter Test, vorzeitig beendet: die Staffeln funktionieren, aber die geschätzte Reserve des Neustarts stoppt das Team 10 bis 20 Sekunden nach jeder Staffel; keine neue Stelle.",
       retestResumes:
         "Erneuter Test, vorzeitig beendet: die Freigabe arbeitet jetzt zehn Minuten bis zur ersten Pause, aber beide Wiederaufnahmen stoppen in der ersten Minute, und nach dem Update weckt der Kapitän alle sieben Arbeiter außerhalb der Staffeln.",
+      retestResumeBursts:
+        "Retest der Freigabe und der Wiederaufnahmen nach einem Update: die Freigabe arbeitet 23 Minuten bis zur ersten Pause und findet 6 Stellen, aber die Wiederaufnahmen dauern 79, 59 und 24 Sekunden, die erste liegt 0,20 $ über der Tempolinie und die letzte hält wegen des Budgets ohne Meldung an; 12 neue Stellen, 8 passende.",
+      retestScoutsNotBack:
+        "Retest mit ausgeschaltetem Tempo nach einem Update: das Update ist sauber und das Team bleibt wegen des alten Budgets pausiert, aber nach dem Setup startet 88 Minuten lang kein Scout wieder; keine neue Stelle, 11 alte bewertet (1,75 $ von 2).",
+      retestDayQuota:
+        "Retest des nach Tagen aufgeteilten Budgets über zwei Tage (41 Std.) bei ausgeschaltetem Tempo: das Team arbeitet bis zum Tagesanteil, hält mit einer einzigen Meldung an und läuft am nächsten Tag von selbst weiter (1,38 $ von 2, nie über einem Anteil). 4 kleine Mängel; 4 passende von 5 neuen.",
+      candidateWindowsSpanish:
+        "Release-Kandidat bei einem neuen Windows-Nutzer, alles auf Spanisch: 4 passende von 10 in 5 Minuten (5 weitere vom richtigen Beruf, aber Teilzeit oder saisonal). Die 2,43 $ sind zwei Zeiträume: der erste (1,5 $ für einen Tag) von der Tempobremse bei 1,04 $ gestoppt, der zweite (5 $ für 30 Minuten) gab den Rest aus. Offen: leere Hilfe vom Host, Scout nach dem ersten Durchgang gestoppt.",
     },
     osNotes: {
       linux:
@@ -1033,25 +1070,26 @@ export const T: Record<Locale, Copy> = {
       updateWindowsBuild10:
         "Build 10: Stellen, Profil und Schlüssel behalten, alles auf Deutsch; nach dem Update startete der Analyst nie (13 Stellen warten)",
       languagePortugueseOk: "Build 10: durchgehend Portugiesisch auf dem Mac",
-      codexBetaInUse:
-        "im Einsatz in unserem Betatest (Diagramm 6); auf Build 9 und 10 noch nicht geprüft",
+      notTried040: "auf der 0.4.0 nicht geprüft",
       updateLinuxBuild9:
         "Build 9: bestanden (die Runde steht nicht in der Tabelle unten)",
       installerBlockedBuild9:
         "Build 9: vom Installer gestoppt (Korrektur in Build 10, Runde läuft)",
-      benchCook: "79 % passend",
-      benchWarehouse: "90 % passend",
-      benchNurse: "1 Duplikat (94 % passend)",
-      benchBricklayer: "6 Stellen, weniger als 15 (83 % passend)",
+      benchCook:
+        "1 Duplikat (86 % passend); in Build 9: 79 % passend, kein Duplikat",
+      benchWarehouse:
+        "1 Duplikat (90 % passend); in Build 9: 90 % passend, kein Duplikat",
+      benchNurse: "1 Duplikat (95 % passend); in Build 9: 1 Duplikat",
+      benchBricklayer:
+        "14 Stellen, weniger als 15, und 1 Duplikat (71 % passend); in Build 9: 6 Stellen",
       brakeFixedRetry: "in Build 9 und 10 korrigiert: erneut zu prüfen",
       languageGermanOk: "Build 9: durchgehend Deutsch auf Linux",
-      chatgptFreeRefused: "Anmeldung abgelehnt (Free-Tarif)",
       securityPreTag:
         "Prüfung vor dem Tag: das Urteil kommt auf die genaue Version des Tags; der Fall des Schlüssels auf der Festplatte ist geschlossen",
       cleanLinuxRoundMissing:
         "Neuinstallation auf Build 6: ihr Lauf fehlt in der Tabelle unten",
-      openaiRoundMissing:
-        "auf Build 6 geprüft: der Lauf fehlt in der Tabelle unten",
+      openaiBuild6Redo:
+        "nur auf Build 6 geprüft (1,61 $, 10 Minuten): auf der 0.4.0 zu wiederholen",
       redoOnBuild9: "auf Build 9 zu wiederholen",
       diskFull: "Platte voll nach dem Update (Korrektur in Arbeit)",
       neverTried: "nie geprüft",
@@ -1071,10 +1109,10 @@ export const T: Record<Locale, Copy> = {
         "Build 11: Stellen, Scores und Schlüssel behalten, Speicherplatz zurück, alles auf Portugiesisch",
       updateWindowsBuild13:
         "Build 13: das Update bei offenem Chat läuft durch und der Befehl jht funktioniert, alles auf Französisch",
-      relevantCandidate:
-        "Release-Kandidat: 20 passende von 33 für den Elektriker (61%); 14 von 18 auf Build 11. Mit einer neuen Installation erneut zu prüfen",
-      brakeCandidate:
-        "Release-Kandidat: zweites Limit um 13% überschritten; auf den Test-Images danach hält das Limit immer, drei Mängel des Tempos noch offen",
+      relevantBuild15:
+        "Build 15: 4 passende von 10 für das Profil Verkäufer/in bei einem neuen Windows-Nutzer (40%; 5 weitere Teilzeit oder saisonal); 4 von 5 für den Elektriker im Retest; 20 von 33 (61%) beim ersten Kandidaten. Mit einer neuen Installation erneut zu prüfen",
+      brakeDayQuota:
+        "Build 15: Tagesanteil und Tempo halten das Team vor jedem Budget an (1,38 $ von 2 in zwei Tagen; 1,04 $ von 1,5 unter Windows). Der erste Kandidat überschritt ein 1-$-Budget nach einer Wiederaufnahme um 13%: behoben, auf den späteren Test-Images nicht mehr gesehen; kleine Mängel bleiben in Meldungen und Status",
       languageFrenchGermanOk:
         "Builds 11-13: Deutsch und Französisch im ganzen Ablauf; ein paar Zeilen noch auf Englisch (Hilfe des Befehls)",
       languageItalianOk:
@@ -1119,12 +1157,12 @@ export const T: Record<Locale, Copy> = {
       relevantOf: "{trade}: {v} passend von {of}",
       underCeiling: "{v} von {max} $ ausgegeben",
       noFalseUnlock: "keine falsche Freigabe",
+      beforeFix: "vor der Korrektur {fix}",
     },
     targetRules: {
       scout:
         "Nur die Suche der Scouts, auf einem schon eingerichteten Server, mit vier Berufen außerhalb der IT. Ein Beruf besteht, wenn alle 3 Kriterien grün sind: mindestens 70 % passend, 0 Duplikate, mindestens 15 Anzeigen.",
-      brake:
-        "Kriterien des letzten Versuchs (Build 8); seitdem korrigiert, erneut zu prüfen.",
+      brake: "Kriterien der letzten Versuche (Build 15).",
       realUser:
         "Eine Person installiert das Programm von null, beantwortet das Setup und lässt das Team 30 Minuten allein arbeiten. Bestanden, wenn mindestens 70 % der gefundenen Stellen zum Beruf der Person passen.",
     },
@@ -1136,6 +1174,9 @@ export const T: Record<Locale, Copy> = {
     },
     buildsTitle: "Läufe jedes Builds",
     buildLabel: "Build {n}",
+    previousBuild: "frühere Build",
+    paceNote:
+      "Die Läufe lassen das Team Minuten oder Stunden arbeiten, nicht die Tage, die ein Budget abdecken soll: die Kosten sind auf kurze Zeit zusammengedrängt und sagen nicht, wie lange ein Budget im Alltag reicht. Nur Lauf r33 deckt zwei Tage ab, mit ausgeschaltetem Tempo und nach Tagen aufgeteiltem Budget.",
     noRound: "kein Lauf",
     none: "—",
     finder: {
@@ -1196,7 +1237,7 @@ export const T: Record<Locale, Copy> = {
   es: {
     metaTitle: "Benchmark 0.4.0 · Job Hunter Team",
     title: "Benchmark 0.4.0: cuatro servicios, tres sistemas",
-    lead: "Lo que el equipo gastó y encontró en las rondas de prueba del 14 al 19 de noviembre de 2026, con los servicios de clave API que ofrece el harness 0.4.0. Las cifras salen de los informes de las pruebas y de los muestreadores de coste.",
+    lead: "Lo que el equipo gastó y encontró en las rondas de prueba del 14 al 21 de noviembre de 2026, con los servicios de clave API que ofrece el harness 0.4.0. Las cifras salen de los informes de las pruebas y de los muestreadores de coste.",
     banner:
       "Una primera comparación, no un benchmark limpio. Máquinas, perfiles, builds, presupuestos y tamaños del equipo cambian de una ronda a otra, y hay una ronda por servicio: lee los límites de abajo antes de comparar.",
     roundsTitle: "Cada ronda",
@@ -1211,22 +1252,21 @@ export const T: Record<Locale, Copy> = {
       note: "Qué pasó",
     },
     colsHint:
-      "«Pertinentes» = puestos cuyo título corresponde al oficio, comprobados por muestreo.",
+      "«Pertinentes» = puestos cuyo título corresponde al oficio, comprobados por muestreo; un guion = sin juzgar. «Build anterior» = ronda previa a las builds numeradas de la 0.4.0: no prueba la 0.4.0.",
     chartTitle: "Cuánto cuesta un puesto valorado",
     chartLead:
       "Dólares gastados por cada puesto que el equipo valoró. Más corta es mejor. Las rondas sin puestos valorados no tienen barra.",
     chartNone: "ninguna valorada",
     chartCaveat:
       "Las dos rondas del Mac duraron 6 y 10 minutos con un equipo mínimo, y el coste es casi todo onboarding y Capitán: no son comparables con rondas de 16-42 minutos.",
-    servicesTitle: "Servicios: lo visto junto a las estimaciones",
+    servicesTitle: "Servicios: lo visto en las rondas",
     servicesCols: {
       service: "Servicio",
-      kit: "Estimación para 30 min",
       seen: "Visto en las rondas",
       rate: "Ritmo visto",
     },
     servicesCaveat:
-      "Las estimaciones salen del volumen de GLM reevaluado, no de mediciones en los otros servicios. Claude en Windows gastó más de lo estimado: Capitán y Scorer pesan 3,05 $ de 5,28 $.",
+      "Solo lo que midieron las rondas; un guion = nunca probado. Estas cifras salen de rondas en builds anteriores a las numeradas de la 0.4.0 (r1–r8): dicen cuánto cuesta un servicio, no cómo se comporta la 0.4.0. Claude en Windows gastó 5,28 $: Capitán y Scorer pesan 3,05 $.",
     osTitle: "Por sistema",
     limitsTitle: "Qué vale y qué no vale esta comparación",
     limitsLead:
@@ -1242,13 +1282,14 @@ export const T: Record<Locale, Copy> = {
     need: "Cuatro VPS iguales encendidas a la vez, el mismo perfil para todos, 30 minutos de trabajo después del onboarding, la misma build con el freno del presupuesto corregido y crédito en los cuatro servicios.",
     back: "← Todos los casos de estudio",
     footer:
-      "Perfiles ficticios, sin datos personales · cifras de los informes de prueba del 14-19/11/2026.",
+      "Perfiles ficticios, sin datos personales · cifras de los informes de prueba del 14-21/11/2026.",
     marks:
       "Los logotipos solo indican el servicio que usó una prueba y no implican ningún respaldo. Las marcas y los logotipos pertenecen a sus respectivos propietarios.",
     outcome: {
       pass: "pasa",
       reservations: "con reservas",
       fail: "no pasa",
+      unjudged: "sin juzgar",
       running: "en curso",
     },
     system: {
@@ -1267,6 +1308,7 @@ export const T: Record<Locale, Copy> = {
       receptionist: "Recepcionista",
       truckDriver: "Conductor de camión",
       electrician: "Electricista",
+      shopAssistant: "Dependiente/a",
       careAssistant: "Auxiliar de enfermería",
     },
     modes: { onsite: "presencial", unspecified: "" },
@@ -1340,6 +1382,14 @@ export const T: Record<Locale, Copy> = {
         "Nueva prueba completa, cerrada antes: los escalones funcionan, pero la reserva estimada del reinicio para el equipo 10-20 segundos después de cada escalón; ningún anuncio nuevo.",
       retestResumes:
         "Nueva prueba, cerrada antes: el desbloqueo ya trabaja diez minutos antes de la primera pausa, pero las dos reanudaciones se paran en el primer minuto, y tras la actualización el Capitán despierta a los siete trabajadores fuera de los escalones.",
+      retestResumeBursts:
+        "Retest del desbloqueo y de las reanudaciones tras una actualización: el desbloqueo trabaja 23 minutos antes de la primera pausa y encuentra 6 puestos, pero las reanudaciones duran 79, 59 y 24 segundos, la primera supera la línea del ritmo en 0,20 $ y la última se detiene por el presupuesto sin aviso; 12 puestos nuevos, 8 pertinentes.",
+      retestScoutsNotBack:
+        "Retest con el ritmo apagado tras una actualización: la actualización es limpia y el equipo sigue en pausa por el presupuesto viejo, pero tras el setup ningún Scout vuelve a arrancar durante 88 minutos; ninguna posición nueva, 11 antiguas puntuadas (1,75 $ de 2).",
+      retestDayQuota:
+        "Retest del presupuesto dividido por día, durante dos días (41 h) con el ritmo apagado: el equipo trabaja hasta la parte del día, se detiene con un solo aviso y reanuda solo al día siguiente (1,38 $ de 2, nunca por encima de una parte). 4 defectos menores; 4 pertinentes de 5 nuevas.",
+      candidateWindowsSpanish:
+        "Candidata con un usuario nuevo de Windows, todo en español: 4 pertinentes de 10 en 5 minutos (otras 5 del oficio correcto, pero a tiempo parcial o de temporada). Los 2,43 $ son dos periodos: el primero (1,5 $ para un día) detenido por el freno del ritmo en 1,04 $, el segundo (5 $ para 30 minutos) gastó el resto. Abiertos: ayuda vacía desde el host, Scout parado tras la primera pasada.",
     },
     osNotes: {
       linux:
@@ -1407,25 +1457,26 @@ export const T: Record<Locale, Copy> = {
       updateWindowsBuild10:
         "build 10: anuncios, perfil y clave conservados, todo en alemán; tras la actualización el Analista nunca arrancó (13 anuncios en espera)",
       languagePortugueseOk: "build 10: portugués de principio a fin en el Mac",
-      codexBetaInUse:
-        "en uso en nuestra prueba beta (gráfico 6); aún no probado en las builds 9 y 10",
+      notTried040: "no probado en la 0.4.0",
       updateLinuxBuild9:
         "build 9: superada (su ronda no está en la tabla de abajo)",
       installerBlockedBuild9:
         "build 9: parada por el instalador (corrección en la build 10, ronda en curso)",
-      benchCook: "79 % pertinentes",
-      benchWarehouse: "90 % pertinentes",
-      benchNurse: "1 duplicado (94 % pertinentes)",
-      benchBricklayer: "6 puestos, menos de 15 (83 % pertinentes)",
+      benchCook:
+        "1 duplicado (86 % pertinentes); en la build 9: 79 % pertinentes, sin duplicados",
+      benchWarehouse:
+        "1 duplicado (90 % pertinentes); en la build 9: 90 % pertinentes, sin duplicados",
+      benchNurse: "1 duplicado (95 % pertinentes); en la build 9: 1 duplicado",
+      benchBricklayer:
+        "14 puestos, menos de 15, y 1 duplicado (71 % pertinentes); en la build 9: 6 puestos",
       brakeFixedRetry: "corregido en las builds 9 y 10: por volver a probar",
       languageGermanOk: "build 9: alemán de principio a fin en Linux",
-      chatgptFreeRefused: "acceso rechazado (plan Free)",
       securityPreTag:
         "revisión antes del tag: el veredicto llega sobre la versión exacta del tag; el caso de la clave en disco está cerrado",
       cleanLinuxRoundMissing:
         "instalación desde cero en la build 6: su ronda no está en la tabla de abajo",
-      openaiRoundMissing:
-        "probado en la build 6: su ronda no está en la tabla de abajo",
+      openaiBuild6Redo:
+        "probado solo en la build 6 (1,61 $, 10 minutos): por rehacer en la 0.4.0",
       redoOnBuild9: "por repetir en la build 9",
       diskFull: "disco lleno tras la actualización (corrección en curso)",
       neverTried: "nunca probado",
@@ -1445,10 +1496,10 @@ export const T: Record<Locale, Copy> = {
         "build 11: anuncios, puntuaciones y clave conservados, espacio en disco recuperado, todo en portugués",
       updateWindowsBuild13:
         "build 13: la actualización con el chat abierto llega al final y el comando jht funciona, todo en francés",
-      relevantCandidate:
-        "candidata de la versión: 20 pertinentes de 33 para el electricista (61%); 14 de 18 en la build 11. Por volver a probar con una instalación nueva",
-      brakeCandidate:
-        "candidata de la versión: segundo tope superado un 13%; en las imágenes de prueba posteriores el tope aguanta siempre, aún abiertos tres defectos del ritmo",
+      relevantBuild15:
+        "build 15: 4 pertinentes de 10 para el perfil dependiente/a con un usuario nuevo de Windows (40%; otras 5 a tiempo parcial o de temporada); 4 de 5 para el electricista en el retest; 20 de 33 (61%) en la primera candidata. Por volver a probar con una instalación nueva",
+      brakeDayQuota:
+        "build 15: la parte del día y el ritmo detienen al equipo antes de cada presupuesto (1,38 $ de 2 en dos días; 1,04 $ de 1,5 en Windows). La primera candidata superó un 13% un presupuesto de 1 $ tras una reanudación: corregido, no visto de nuevo en las imágenes de prueba posteriores; quedan defectos menores en los avisos y el estado",
       languageFrenchGermanOk:
         "builds 11-13: alemán y francés en todo el flujo; quedan pocas líneas en inglés (ayuda del comando)",
       languageItalianOk:
@@ -1494,12 +1545,12 @@ export const T: Record<Locale, Copy> = {
       relevantOf: "{trade}: {v} pertinentes de {of}",
       underCeiling: "gastados {v} de {max} $",
       noFalseUnlock: "ningún desbloqueo falso",
+      beforeFix: "antes de la corrección {fix}",
     },
     targetRules: {
       scout:
         "Solo la búsqueda de los Scouts, en un servidor ya configurado, con cuatro oficios fuera de la informática. Un oficio pasa si los 3 criterios están en verde: al menos 70 % pertinentes, 0 duplicados, al menos 15 anuncios.",
-      brake:
-        "Criterios de la última prueba (build 8); corregido después, por volver a probar.",
+      brake: "Criterios de las últimas pruebas (build 15).",
       realUser:
         "Una persona instala el programa desde cero, responde a la configuración y deja trabajar al equipo solo durante 30 minutos. Pasa si al menos el 70 % de los anuncios encontrados son de su oficio.",
     },
@@ -1512,6 +1563,9 @@ export const T: Record<Locale, Copy> = {
     },
     buildsTitle: "Rondas de cada build",
     buildLabel: "Build {n}",
+    previousBuild: "build anterior",
+    paceNote:
+      "Las rondas hacen trabajar al equipo minutos u horas, no los días que un presupuesto debe cubrir: el coste queda comprimido en poco tiempo y no dice cuánto dura un presupuesto en el uso diario. Solo la ronda r33 cubre dos días, con el ritmo apagado y el presupuesto dividido por día.",
     noRound: "ninguna ronda",
     none: "—",
     finder: {
@@ -1573,7 +1627,7 @@ export const T: Record<Locale, Copy> = {
   fr: {
     metaTitle: "Benchmark 0.4.0 · Job Hunter Team",
     title: "Benchmark 0.4.0 : quatre services, trois systèmes",
-    lead: "Ce que l'équipe a dépensé et trouvé lors des tours d'essai du 14 au 19 novembre 2026, avec les services à clé API que propose le harness 0.4.0. Les chiffres viennent des procès-verbaux d'essai et des échantillonneurs de coûts.",
+    lead: "Ce que l'équipe a dépensé et trouvé lors des tours d'essai du 14 au 21 novembre 2026, avec les services à clé API que propose le harness 0.4.0. Les chiffres viennent des procès-verbaux d'essai et des échantillonneurs de coûts.",
     banner:
       "Une première comparaison, pas un benchmark propre. Machines, profils, builds, budgets et tailles d'équipe changent d'un tour à l'autre, et il y a un tour par service : lis les limites ci-dessous avant de comparer.",
     roundsTitle: "Chaque tour",
@@ -1588,22 +1642,21 @@ export const T: Record<Locale, Copy> = {
       note: "Ce qui s'est passé",
     },
     colsHint:
-      "« Pertinentes » = postes dont l'intitulé correspond au métier, vérifiés par échantillon.",
+      "« Pertinentes » = postes dont l'intitulé correspond au métier, vérifiés par échantillon ; un tiret = non jugé. « Build précédente » = tour antérieur aux builds numérotées de la 0.4.0 : il ne prouve pas la 0.4.0.",
     chartTitle: "Ce que coûte un poste évalué",
     chartLead:
       "Dollars dépensés pour chaque poste évalué par l'équipe. Plus court, c'est mieux. Les tours sans poste évalué n'ont pas de barre.",
     chartNone: "aucune évaluée",
     chartCaveat:
       "Les deux tours du Mac ont duré 6 et 10 minutes avec une équipe minimale, et le coût est presque tout onboarding et Capitaine : pas comparables avec des tours de 16-42 minutes.",
-    servicesTitle: "Services : ce que nous avons vu à côté des estimations",
+    servicesTitle: "Services : ce que nous avons vu dans les tours",
     servicesCols: {
       service: "Service",
-      kit: "Estimation pour 30 min",
       seen: "Vu dans les tours",
       rate: "Rythme observé",
     },
     servicesCaveat:
-      "Les estimations viennent du volume de GLM retarifé, pas de mesures sur les autres services. Claude sous Windows a dépensé plus que prévu : Capitaine et Scorer pèsent 3,05 $ sur 5,28 $.",
+      "Seulement ce que les tours ont mesuré ; un tiret = jamais essayé. Ces chiffres viennent de tours sur des builds antérieures aux builds numérotées de la 0.4.0 (r1–r8) : ils disent ce que coûte un service, pas comment se comporte la 0.4.0. Claude sous Windows a dépensé 5,28 $ : Capitaine et Scorer en pèsent 3,05 $.",
     osTitle: "Par système",
     limitsTitle: "Ce que vaut cette comparaison, et ce qu'elle ne vaut pas",
     limitsLead:
@@ -1619,13 +1672,14 @@ export const T: Record<Locale, Copy> = {
     need: "Quatre VPS identiques allumés ensemble, le même profil pour tous, 30 minutes de travail après l'onboarding, la même build avec le frein du budget corrigé et du crédit sur les quatre services.",
     back: "← Toutes les études de cas",
     footer:
-      "Profils fictifs, aucune donnée personnelle · chiffres des procès-verbaux d'essai du 14-19/11/2026.",
+      "Profils fictifs, aucune donnée personnelle · chiffres des procès-verbaux d'essai du 14-21/11/2026.",
     marks:
       "Les logos indiquent seulement le service utilisé par un essai et n'impliquent aucune approbation. Les marques et les logos appartiennent à leurs propriétaires respectifs.",
     outcome: {
       pass: "réussi",
       reservations: "avec réserves",
       fail: "échec",
+      unjudged: "non jugé",
       running: "en cours",
     },
     system: {
@@ -1644,6 +1698,7 @@ export const T: Record<Locale, Copy> = {
       receptionist: "Réceptionniste",
       truckDriver: "Chauffeur routier",
       electrician: "Électricien",
+      shopAssistant: "Vendeur/vendeuse",
       careAssistant: "Aide-soignante",
     },
     modes: { onsite: "sur site", unspecified: "" },
@@ -1717,6 +1772,14 @@ export const T: Record<Locale, Copy> = {
         "Nouvel essai complet, arrêté plus tôt : les paliers marchent, mais la réserve estimée du redémarrage arrête l'équipe 10 à 20 secondes après chaque palier ; aucune nouvelle annonce.",
       retestResumes:
         "Nouvel essai, arrêté plus tôt : le déblocage travaille maintenant dix minutes avant la première pause, mais les deux reprises s'arrêtent dans la première minute, et après la mise à jour le Capitaine réveille les sept travailleurs hors des paliers.",
+      retestResumeBursts:
+        "Retest du déblocage et des reprises après une mise à jour : le déblocage travaille 23 minutes avant la première pause et trouve 6 postes, mais les reprises durent 79, 59 et 24 secondes, la première dépasse la ligne du rythme de 0,20 $ et la dernière s'arrête pour le budget sans avis ; 12 postes nouveaux, 8 pertinents.",
+      retestScoutsNotBack:
+        "Retest avec le rythme éteint après une mise à jour : la mise à jour est propre et l'équipe reste en pause pour l'ancien budget, mais après le setup aucun Scout ne repart pendant 88 minutes ; aucune nouvelle position, 11 anciennes notées (1,75 $ sur 2).",
+      retestDayQuota:
+        "Retest du budget réparti par jour, sur deux jours (41 h) avec le rythme éteint : l'équipe travaille jusqu'à la part du jour, s'arrête avec un seul avis et reprend toute seule le lendemain (1,38 $ sur 2, jamais au-dessus d'une part). 4 défauts mineurs ; 4 pertinentes sur 5 nouvelles.",
+      candidateWindowsSpanish:
+        "Candidate sur un nouvel utilisateur Windows, tout en espagnol : 4 pertinentes sur 10 en 5 minutes (5 autres du bon métier, mais à temps partiel ou saisonnières). Les 2,43 $ sont deux périodes : la première (1,5 $ pour un jour) arrêtée par le frein du rythme à 1,04 $, la seconde (5 $ pour 30 minutes) a dépensé le reste. Ouverts : aide vide depuis l'hôte, Scout arrêté après sa première passe.",
     },
     osNotes: {
       linux:
@@ -1785,25 +1848,26 @@ export const T: Record<Locale, Copy> = {
       updateWindowsBuild10:
         "build 10 : annonces, profil et clé gardés, tout en allemand ; après la mise à jour l'Analyste n'a jamais démarré (13 annonces en attente)",
       languagePortugueseOk: "build 10 : portugais du début à la fin sur le Mac",
-      codexBetaInUse:
-        "utilisé dans notre test bêta (graphique 6) ; pas encore essayé sur les builds 9 et 10",
+      notTried040: "non essayé sur la 0.4.0",
       updateLinuxBuild9:
         "build 9 : réussi (son tour n'est pas dans le tableau ci-dessous)",
       installerBlockedBuild9:
         "build 9 : arrêté par l'installeur (correction dans la build 10, tour en cours)",
-      benchCook: "79 % pertinents",
-      benchWarehouse: "90 % pertinents",
-      benchNurse: "1 doublon (94 % pertinents)",
-      benchBricklayer: "6 postes, moins de 15 (83 % pertinents)",
+      benchCook:
+        "1 doublon (86 % pertinents) ; sur la build 9 : 79 % pertinents, aucun doublon",
+      benchWarehouse:
+        "1 doublon (90 % pertinents) ; sur la build 9 : 90 % pertinents, aucun doublon",
+      benchNurse: "1 doublon (95 % pertinents) ; sur la build 9 : 1 doublon",
+      benchBricklayer:
+        "14 postes, moins de 15, et 1 doublon (71 % pertinents) ; sur la build 9 : 6 postes",
       brakeFixedRetry: "corrigé dans les builds 9 et 10 : à réessayer",
       languageGermanOk: "build 9 : allemand du début à la fin sous Linux",
-      chatgptFreeRefused: "connexion refusée (forfait Free)",
       securityPreTag:
         "revue avant le tag : le verdict porte sur la version exacte du tag ; le cas de la clé sur disque est clos",
       cleanLinuxRoundMissing:
         "installation vierge sur la build 6 : son tour n'est pas dans le tableau ci-dessous",
-      openaiRoundMissing:
-        "vérifié sur la build 6 : son tour n'est pas dans le tableau ci-dessous",
+      openaiBuild6Redo:
+        "essayé seulement sur la build 6 (1,61 $, 10 minutes) : à refaire sur la 0.4.0",
       redoOnBuild9: "à refaire sur la build 9",
       diskFull: "disque plein après la mise à jour (correction en cours)",
       neverTried: "jamais essayé",
@@ -1824,10 +1888,10 @@ export const T: Record<Locale, Copy> = {
         "build 11 : annonces, scores et clé gardés, espace disque revenu, tout en portugais",
       updateWindowsBuild13:
         "build 13 : la mise à jour avec le chat ouvert va au bout et la commande jht marche, tout en français",
-      relevantCandidate:
-        "candidate de la version : 20 pertinentes sur 33 pour l'électricien (61 %) ; 14 sur 18 sur la build 11. À refaire sur une nouvelle installation",
-      brakeCandidate:
-        "candidate de la version : second plafond dépassé de 13 % ; sur les images de test suivantes le plafond tient toujours, trois défauts du rythme encore ouverts",
+      relevantBuild15:
+        "build 15 : 4 pertinentes sur 10 pour le profil vendeur/vendeuse sur un nouvel utilisateur Windows (40 % ; 5 autres à temps partiel ou saisonnières) ; 4 sur 5 pour l'électricien au retest ; 20 sur 33 (61 %) sur la première candidate. À refaire sur une nouvelle installation",
+      brakeDayQuota:
+        "build 15 : la part du jour et le rythme arrêtent l'équipe avant chaque budget (1,38 $ sur 2 en deux jours ; 1,04 $ sur 1,5 sous Windows). La première candidate a dépassé de 13 % un budget de 1 $ après une reprise : corrigé, plus revu sur les images de test suivantes ; défauts mineurs restants dans les avis et le statut",
       languageFrenchGermanOk:
         "builds 11-13 : allemand et français dans tout le parcours ; quelques lignes encore en anglais (aide de la commande)",
       languageItalianOk:
@@ -1873,12 +1937,12 @@ export const T: Record<Locale, Copy> = {
       relevantOf: "{trade} : {v} pertinents sur {of}",
       underCeiling: "dépensé {v} sur {max} $",
       noFalseUnlock: "aucun faux déblocage",
+      beforeFix: "avant la correction {fix}",
     },
     targetRules: {
       scout:
         "Seulement la recherche des Scouts, sur un serveur déjà configuré, avec quatre métiers hors informatique. Un métier passe si les 3 critères sont verts : au moins 70 % pertinents, 0 doublon, au moins 15 annonces.",
-      brake:
-        "Critères du dernier essai (build 8) ; corrigé depuis, à réessayer.",
+      brake: "Critères des derniers essais (build 15).",
       realUser:
         "Une personne installe le programme à partir de zéro, répond à la configuration et laisse l'équipe travailler seule pendant 30 minutes. C'est réussi si au moins 70 % des annonces trouvées sont de son métier.",
     },
@@ -1891,6 +1955,9 @@ export const T: Record<Locale, Copy> = {
     },
     buildsTitle: "Tours de chaque build",
     buildLabel: "Build {n}",
+    previousBuild: "build précédente",
+    paceNote:
+      "Les tours font travailler l'équipe pendant des minutes ou des heures, pas pendant les jours qu'un budget doit couvrir : le coût est comprimé dans un temps court et ne dit pas combien de temps dure un budget à l'usage de tous les jours. Seul le tour r33 couvre deux jours, avec le rythme éteint et le budget réparti par jour.",
     noRound: "aucun tour",
     none: "—",
     finder: {
@@ -1951,7 +2018,7 @@ export const T: Record<Locale, Copy> = {
   pt: {
     metaTitle: "Benchmark 0.4.0 · Job Hunter Team",
     title: "Benchmark 0.4.0: quatro serviços, três sistemas",
-    lead: "O que a equipa gastou e encontrou nas rondas de teste de 14 a 19 de novembro de 2026, com os serviços de chave API que o harness 0.4.0 oferece. Os números vêm dos relatórios dos testes e dos amostradores de custo.",
+    lead: "O que a equipa gastou e encontrou nas rondas de teste de 14 a 21 de novembro de 2026, com os serviços de chave API que o harness 0.4.0 oferece. Os números vêm dos relatórios dos testes e dos amostradores de custo.",
     banner:
       "Uma primeira comparação, não um benchmark limpo. Máquinas, perfis, builds, orçamentos e tamanhos da equipa mudam de ronda para ronda, e há uma ronda por serviço: lê os limites abaixo antes de comparar.",
     roundsTitle: "Cada ronda",
@@ -1966,22 +2033,21 @@ export const T: Record<Locale, Copy> = {
       note: "O que aconteceu",
     },
     colsHint:
-      "«Pertinentes» = posições cujo título corresponde ao ofício, verificadas por amostragem.",
+      "«Pertinentes» = posições cujo título corresponde ao ofício, verificadas por amostragem; um traço = não avaliado. «Build anterior» = ronda anterior às builds numeradas da 0.4.0: não prova a 0.4.0.",
     chartTitle: "Quanto custa uma posição avaliada",
     chartLead:
       "Dólares gastos por cada posição avaliada pela equipa. Mais curta é melhor. As rondas sem posições avaliadas não têm barra.",
     chartNone: "nenhuma avaliada",
     chartCaveat:
       "As duas rondas do Mac duraram 6 e 10 minutos com uma equipa mínima, e o custo é quase todo onboarding e Capitano: não são comparáveis com rondas de 16-42 minutos.",
-    servicesTitle: "Serviços: o que vimos ao lado das estimativas",
+    servicesTitle: "Serviços: o que vimos nas rondas",
     servicesCols: {
       service: "Serviço",
-      kit: "Estimativa para 30 min",
       seen: "Visto nas rondas",
       rate: "Ritmo visto",
     },
     servicesCaveat:
-      "As estimativas vêm do volume do GLM reprecificado, não de medições nos outros serviços. O Claude no Windows gastou mais do que o estimado: Capitano e Scorer pesam 3,05 $ de 5,28 $.",
+      "Só o que as rondas mediram; um traço = nunca testado. Estes números vêm de rondas em builds anteriores às numeradas da 0.4.0 (r1–r8): dizem quanto custa um serviço, não como se comporta a 0.4.0. O Claude no Windows gastou 5,28 $: Capitano e Scorer pesam 3,05 $.",
     osTitle: "Por sistema",
     limitsTitle: "O que vale e o que não vale esta comparação",
     limitsLead: "Cada ronda difere das outras em algo que pesa nos números:",
@@ -1996,13 +2062,14 @@ export const T: Record<Locale, Copy> = {
     need: "Quatro VPS iguais ligadas ao mesmo tempo, o mesmo perfil para todos, 30 minutos de trabalho depois do onboarding, a mesma build com o travão do orçamento corrigido e crédito nos quatro serviços.",
     back: "← Todos os estudos de caso",
     footer:
-      "Perfis fictícios, sem dados pessoais · números dos relatórios de teste de 14-19/11/2026.",
+      "Perfis fictícios, sem dados pessoais · números dos relatórios de teste de 14-21/11/2026.",
     marks:
       "Os logótipos indicam só o serviço usado num teste e não implicam qualquer aprovação. As marcas e os logótipos pertencem aos respetivos proprietários.",
     outcome: {
       pass: "passa",
       reservations: "com reservas",
       fail: "falha",
+      unjudged: "não avaliado",
       running: "em curso",
     },
     system: {
@@ -2021,6 +2088,7 @@ export const T: Record<Locale, Copy> = {
       receptionist: "Rececionista",
       truckDriver: "Motorista de pesados",
       electrician: "Eletricista",
+      shopAssistant: "Empregado/a de loja",
       careAssistant: "Auxiliar de saúde",
     },
     modes: { onsite: "presencial", unspecified: "" },
@@ -2093,6 +2161,14 @@ export const T: Record<Locale, Copy> = {
         "Novo teste completo, fechado mais cedo: os escalões funcionam, mas a reserva estimada do reinício para a equipa 10-20 segundos depois de cada escalão; nenhum anúncio novo.",
       retestResumes:
         "Novo teste, fechado mais cedo: o desbloqueio já trabalha dez minutos antes da primeira pausa, mas as duas retomas param no primeiro minuto, e depois da atualização o Capitão acorda os sete trabalhadores fora dos escalões.",
+      retestResumeBursts:
+        "Reteste do desbloqueio e das retomas depois de uma atualização: o desbloqueio trabalha 23 minutos antes da primeira pausa e encontra 6 vagas, mas as retomas duram 79, 59 e 24 segundos, a primeira passa 0,20 $ acima da linha do ritmo e a última para pelo orçamento sem aviso; 12 vagas novas, 8 pertinentes.",
+      retestScoutsNotBack:
+        "Reteste com o ritmo desligado depois de uma atualização: a atualização é limpa e a equipa fica em pausa pelo orçamento antigo, mas depois do setup nenhum Scout volta a arrancar durante 88 minutos; nenhuma vaga nova, 11 antigas pontuadas (1,75 $ de 2).",
+      retestDayQuota:
+        "Reteste do orçamento dividido por dia, durante dois dias (41 h) com o ritmo desligado: a equipa trabalha até à parte do dia, para com um único aviso e retoma sozinha no dia seguinte (1,38 $ de 2, nunca acima de uma parte). 4 defeitos menores; 4 pertinentes de 5 novas.",
+      candidateWindowsSpanish:
+        "Candidata com um utilizador novo do Windows, tudo em espanhol: 4 pertinentes de 10 em 5 minutos (outras 5 do ofício certo, mas a tempo parcial ou sazonais). Os 2,43 $ são dois períodos: o primeiro (1,5 $ para um dia) parado pelo travão do ritmo em 1,04 $, o segundo (5 $ para 30 minutos) gastou o resto. Em aberto: ajuda vazia a partir do host, Scout parado depois da primeira passagem.",
     },
     osNotes: {
       linux:
@@ -2160,25 +2236,26 @@ export const T: Record<Locale, Copy> = {
       updateWindowsBuild10:
         "build 10: anúncios, perfil e chave mantidos, tudo em alemão; depois da atualização o Analista nunca arrancou (13 anúncios à espera)",
       languagePortugueseOk: "build 10: português do início ao fim no Mac",
-      codexBetaInUse:
-        "em uso no nosso teste beta (gráfico 6); ainda não testado nas builds 9 e 10",
+      notTried040: "não testado na 0.4.0",
       updateLinuxBuild9:
         "build 9: aprovado (a rodada não está na tabela abaixo)",
       installerBlockedBuild9:
         "build 9: parado pelo instalador (correção na build 10, rodada em curso)",
-      benchCook: "79% pertinentes",
-      benchWarehouse: "90% pertinentes",
-      benchNurse: "1 duplicado (94% pertinentes)",
-      benchBricklayer: "6 vagas, menos de 15 (83% pertinentes)",
+      benchCook:
+        "1 duplicado (86% pertinentes); na build 9: 79% pertinentes, sem duplicados",
+      benchWarehouse:
+        "1 duplicado (90% pertinentes); na build 9: 90% pertinentes, sem duplicados",
+      benchNurse: "1 duplicado (95% pertinentes); na build 9: 1 duplicado",
+      benchBricklayer:
+        "14 vagas, menos de 15, e 1 duplicado (71% pertinentes); na build 9: 6 vagas",
       brakeFixedRetry: "corrigido nas builds 9 e 10: a voltar a testar",
       languageGermanOk: "build 9: alemão do início ao fim no Linux",
-      chatgptFreeRefused: "acesso recusado (plano Free)",
       securityPreTag:
         "revisão antes da tag: o veredicto chega sobre a versão exata da tag; o caso da chave no disco está fechado",
       cleanLinuxRoundMissing:
         "instalação de raiz na build 6: a sua ronda não está na tabela abaixo",
-      openaiRoundMissing:
-        "provado na build 6: a sua ronda não está na tabela abaixo",
+      openaiBuild6Redo:
+        "testado só na build 6 (1,61 $, 10 minutos): a refazer na 0.4.0",
       redoOnBuild9: "a repetir na build 9",
       diskFull: "disco cheio após a atualização (correção em curso)",
       neverTried: "nunca testado",
@@ -2198,10 +2275,10 @@ export const T: Record<Locale, Copy> = {
         "build 11: anúncios, pontuações e chave mantidos, espaço em disco de volta, tudo em português",
       updateWindowsBuild13:
         "build 13: a atualização com o chat aberto chega ao fim e o comando jht funciona, tudo em francês",
-      relevantCandidate:
-        "candidata da versão: 20 pertinentes de 33 para o eletricista (61%); 14 de 18 na build 11. A testar de novo numa instalação nova",
-      brakeCandidate:
-        "candidata da versão: segundo teto ultrapassado em 13%; nas imagens de teste seguintes o teto aguenta sempre, ainda abertos três defeitos do ritmo",
+      relevantBuild15:
+        "build 15: 4 pertinentes de 10 para o perfil empregado/a de loja com um utilizador novo do Windows (40%; outras 5 a tempo parcial ou sazonais); 4 de 5 para o eletricista no reteste; 20 de 33 (61%) na primeira candidata. A testar de novo numa instalação nova",
+      brakeDayQuota:
+        "build 15: a parte do dia e o ritmo param a equipa antes de cada orçamento (1,38 $ de 2 em dois dias; 1,04 $ de 1,5 no Windows). A primeira candidata ultrapassou em 13% um orçamento de 1 $ depois de uma retoma: corrigido, não voltou a ser visto nas imagens de teste seguintes; restam defeitos menores nos avisos e no estado",
       languageFrenchGermanOk:
         "builds 11-13: alemão e francês em todo o fluxo; ficam poucas linhas em inglês (ajuda do comando)",
       languageItalianOk:
@@ -2246,12 +2323,12 @@ export const T: Record<Locale, Copy> = {
       relevantOf: "{trade}: {v} pertinentes de {of}",
       underCeiling: "gastos {v} de {max} $",
       noFalseUnlock: "nenhum desbloqueio falso",
+      beforeFix: "antes da correção {fix}",
     },
     targetRules: {
       scout:
         "Só a pesquisa dos Scouts, num servidor já configurado, com quatro ofícios fora da informática. Um ofício passa se os 3 critérios estiverem verdes: pelo menos 70% pertinentes, 0 duplicados, pelo menos 15 anúncios.",
-      brake:
-        "Critérios da última tentativa (build 8); corrigido depois, a voltar a testar.",
+      brake: "Critérios das últimas tentativas (build 15).",
       realUser:
         "Uma pessoa instala o programa do zero, responde à configuração e deixa a equipa trabalhar sozinha durante 30 minutos. Passa se pelo menos 70% dos anúncios encontrados forem do seu ofício.",
     },
@@ -2264,6 +2341,9 @@ export const T: Record<Locale, Copy> = {
     },
     buildsTitle: "Rondas de cada build",
     buildLabel: "Build {n}",
+    previousBuild: "build anterior",
+    paceNote:
+      "As rondas põem a equipa a trabalhar minutos ou horas, não os dias que um orçamento deve cobrir: o custo fica comprimido em pouco tempo e não diz quanto dura um orçamento no uso de todos os dias. Só a ronda r33 cobre dois dias, com o ritmo desligado e o orçamento dividido por dia.",
     noRound: "nenhuma ronda",
     none: "—",
     finder: {
@@ -2324,7 +2404,7 @@ export const T: Record<Locale, Copy> = {
   hu: {
     metaTitle: "0.4.0 benchmark · Job Hunter Team",
     title: "0.4.0 benchmark: négy szolgáltatás, három rendszer",
-    lead: "Amit a csapat 2026. november 14–19. próbafutásaiban elköltött és megtalált, a 0.4.0 harness API-kulcsos szolgáltatásaival. A számok a próbák jegyzőkönyveiből és a költségmintavevőkből származnak.",
+    lead: "Amit a csapat 2026. november 14–21. próbafutásaiban elköltött és megtalált, a 0.4.0 harness API-kulcsos szolgáltatásaival. A számok a próbák jegyzőkönyveiből és a költségmintavevőkből származnak.",
     banner:
       "Első összevetés, nem tiszta benchmark. A gépek, profilok, buildek, költségkeretek és csapatméretek futásonként eltérnek, és szolgáltatásonként egy futás van: összehasonlítás előtt olvasd el az alábbi korlátokat.",
     roundsTitle: "Minden futás",
@@ -2339,22 +2419,21 @@ export const T: Record<Locale, Copy> = {
       note: "Mi történt",
     },
     colsHint:
-      "«Releváns» = olyan pozíciók, amelyek címe megfelel a szakmának, mintavétellel ellenőrizve.",
+      "«Releváns» = olyan pozíciók, amelyek címe megfelel a szakmának, mintavétellel ellenőrizve; a kötőjel = nem értékelt. «Korábbi build» = a 0.4.0 számozott buildjei előtti futás: nem bizonyítja a 0.4.0-t.",
     chartTitle: "Mennyibe kerül egy értékelt pozíció",
     chartLead:
       "A csapat által értékelt pozíciónként elköltött dollár. Minél rövidebb, annál jobb. Értékelt pozíció nélküli futásnak nincs oszlopa.",
     chartNone: "nincs értékelt",
     chartCaveat:
       "A két Mac-futás 6 és 10 percig tartott minimális csapattal, a költség szinte csak onboarding és Capitano: nem összevethető a 16–42 perces futásokkal.",
-    servicesTitle: "Szolgáltatások: amit láttunk a becslések mellett",
+    servicesTitle: "Szolgáltatások: amit a futásokban láttunk",
     servicesCols: {
       service: "Szolgáltatás",
-      kit: "Becslés 30 percre",
       seen: "Látott a futásokban",
       rate: "Látott tempó",
     },
     servicesCaveat:
-      "A becslések az újraárazott GLM-volumenből származnak, nem a többi szolgáltatás méréseiből. A Claude Windowson többet költött a becsültnél: a Capitano és a Scorer 3,05 $-t nyom az 5,28 $-ból.",
+      "Csak amit a futások mértek; a kötőjel = soha nem próbáltuk. Ezek a számok a 0.4.0 számozott buildjei előtti buildeken futott körökből származnak (r1–r8): azt mutatják, mennyibe kerül egy szolgáltatás, nem azt, hogyan viselkedik a 0.4.0. A Claude Windowson 5,28 $-t költött: ebből a Capitano és a Scorer 3,05 $-t nyom.",
     osTitle: "Rendszerenként",
     limitsTitle: "Mit ér és mit nem ez az összevetés",
     limitsLead:
@@ -2370,13 +2449,14 @@ export const T: Record<Locale, Copy> = {
     need: "Négy egyforma VPS egyszerre elindítva, mindenkinek ugyanaz a profil, az onboarding után 30 perc munka, ugyanaz a build javított költségfékkel, és egyenleg mind a négy szolgáltatáson.",
     back: "← Minden esettanulmány",
     footer:
-      "Kitalált profilok, személyes adat nélkül · számok a 2026.11.14–19-i próbák jegyzőkönyveiből.",
+      "Kitalált profilok, személyes adat nélkül · számok a 2026.11.14–21-i próbák jegyzőkönyveiből.",
     marks:
       "A logók csak azt a szolgáltatást jelzik, amelyet egy próba használt, és nem jelentenek támogatást. A védjegyek és a logók a tulajdonosaiké.",
     outcome: {
       pass: "megfelelt",
       reservations: "fenntartással",
       fail: "megbukott",
+      unjudged: "nem értékelt",
       running: "folyamatban",
     },
     system: {
@@ -2395,6 +2475,7 @@ export const T: Record<Locale, Copy> = {
       receptionist: "Recepciós",
       truckDriver: "Kamionsofőr",
       electrician: "Villanyszerelő",
+      shopAssistant: "Eladó",
       careAssistant: "Ápolási asszisztens",
     },
     modes: { onsite: "helyszínen", unspecified: "" },
@@ -2467,6 +2548,14 @@ export const T: Record<Locale, Copy> = {
         "Teljes újrapróba, korán lezárva: a lépcsők működnek, de az újraindítás becsült tartaléka minden lépcső után 10–20 másodperccel leállítja a csapatot; nincs új hirdetés.",
       retestResumes:
         "Újrapróba, korán lezárva: a feloldás most tíz percig dolgozik az első szünetig, de mindkét folytatás az első percen belül leáll, és a frissítés után a Kapitány a lépcsőkön kívül mind a hét dolgozót felébreszti.",
+      retestResumeBursts:
+        "A feloldás és a folytatások újratesztje frissítés után: a feloldás 23 percig dolgozik az első szünetig és 6 pozíciót talál, de a folytatások 79, 59 és 24 másodpercig tartanak, az első 0,20 $-lal átlépi a tempóvonalat, az utolsó pedig a költségkeret miatt értesítés nélkül megáll; 12 új pozíció, 8 releváns.",
+      retestScoutsNotBack:
+        "Újrapróba kikapcsolt tempóval frissítés után: a frissítés tiszta, a csapat a régi költségkeret miatt szünetel, de a beállítás után 88 percig egyetlen Scout sem indul újra; nincs új pozíció, 11 régi pontozva (1,75 $ a 2-ből).",
+      retestDayQuota:
+        "A napokra osztott költségkeret újratesztje két napon át (41 óra), kikapcsolt tempóval: a csapat a napi részéig dolgozik, egyetlen értesítéssel megáll, és másnap magától folytatja (1,38 $ a 2-ből, soha egy rész felett). 4 kisebb hiba; 5 új pozícióból 4 releváns.",
+      candidateWindowsSpanish:
+        "Kiadásjelölt új Windows-felhasználón, végig spanyolul: 10-ből 4 releváns 5 perc alatt (további 5 a megfelelő szakmából, de részmunkaidős vagy szezonális). A 2,43 $ két időszak: az elsőt (1,5 $ egy napra) a tempófék 1,04 $-nál megállította, a második (5 $ 30 percre) elköltötte a maradékot. Nyitott: üres súgó a hosztról, a Scout az első kör után megállt.",
     },
     osNotes: {
       linux:
@@ -2533,25 +2622,26 @@ export const T: Record<Locale, Copy> = {
       updateWindowsBuild10:
         "10. build: hirdetések, profil és kulcs megmaradt, végig németül; a frissítés után az elemző sosem indult el (13 hirdetés vár)",
       languagePortugueseOk: "10. build: végig portugálul a Macen",
-      codexBetaInUse:
-        "a bétatesztünkben használatban (6. grafikon); a 9. és 10. buildön még nem próbálták",
+      notTried040: "a 0.4.0-n nem próbáltuk",
       updateLinuxBuild9:
         "9. build: sikeres (a köre nincs az alábbi táblázatban)",
       installerBlockedBuild9:
         "9. build: a telepítő megállította (javítás a 10. buildben, a kör folyamatban)",
-      benchCook: "79% releváns",
-      benchWarehouse: "90% releváns",
-      benchNurse: "1 ismétlődés (94% releváns)",
-      benchBricklayer: "6 állás, kevesebb mint 15 (83% releváns)",
+      benchCook:
+        "1 ismétlődés (86% releváns); a 9. buildnél: 79% releváns, ismétlődés nélkül",
+      benchWarehouse:
+        "1 ismétlődés (90% releváns); a 9. buildnél: 90% releváns, ismétlődés nélkül",
+      benchNurse: "1 ismétlődés (95% releváns); a 9. buildnél: 1 ismétlődés",
+      benchBricklayer:
+        "14 állás, kevesebb mint 15, és 1 ismétlődés (71% releváns); a 9. buildnél: 6 állás",
       brakeFixedRetry: "javítva a 9. és 10. buildben: újra kipróbálandó",
       languageGermanOk: "9. build: végig németül Linuxon",
-      chatgptFreeRefused: "bejelentkezés elutasítva (Free csomag)",
       securityPreTag:
         "átnézés a tag előtt: az ítélet a tag pontos verziójára születik; a lemezen maradt kulcs ügye lezárva",
       cleanLinuxRoundMissing:
         "tiszta telepítés a 6. buildön: a futása nincs a lenti táblázatban",
-      openaiRoundMissing:
-        "a 6. buildön igazolva: a futása nincs a lenti táblázatban",
+      openaiBuild6Redo:
+        "csak a 6. buildön próbáltuk (1,61 $, 10 perc): a 0.4.0-n újra kell csinálni",
       redoOnBuild9: "a 9. buildön megismétlendő",
       diskFull: "megtelt lemez a frissítés után (javítás folyamatban)",
       neverTried: "sosem próbálták",
@@ -2570,10 +2660,10 @@ export const T: Record<Locale, Copy> = {
         "11. build: hirdetések, pontszámok és kulcs megmaradnak, a lemezhely visszajön, végig portugálul",
       updateWindowsBuild13:
         "13. build: a frissítés nyitott csevegéssel végigfut, és a jht parancs működik, végig franciául",
-      relevantCandidate:
-        "kiadásjelölt: a villanyszerelőnél 33-ból 20 releváns (61%); a 11. buildön 18-ból 14. Új telepítésen újra bizonyítandó",
-      brakeCandidate:
-        "kiadásjelölt: a második plafont 13%-kal túllépi; az utána következő tesztképeken a plafon mindig tart, a tempó három hibája még nyitott",
+      relevantBuild15:
+        "15. build: új Windows-felhasználónál az eladó profilnál 10-ből 4 releváns (40%; további 5 részmunkaidős vagy szezonális); a villanyszerelőnél az újratesztben 5-ből 4; az első jelöltnél 33-ból 20 (61%). Új telepítésen újra bizonyítandó",
+      brakeDayQuota:
+        "15. build: a napi rész és a tempó minden költségkeret előtt megállítja a csapatot (1,38 $ a 2-ből két nap alatt; 1,04 $ az 1,5-ből Windowson). Az első jelölt 13%-kal túllépett egy 1 $-os költségkeretet újraindítás után: javítva, a későbbi tesztképeken nem láttuk újra; az értesítésekben és az állapotban kisebb hibák maradtak",
       languageFrenchGermanOk:
         "11–13. build: a német és a francia végig a folyamatban; néhány sor még angolul (a parancs súgója)",
       languageItalianOk:
@@ -2617,12 +2707,12 @@ export const T: Record<Locale, Copy> = {
       relevantOf: "{trade}: {v} releváns / {of}",
       underCeiling: "{v} / {max} $ elköltve",
       noFalseUnlock: "nincs hamis feloldás",
+      beforeFix: "a javítás előtt: {fix}",
     },
     targetRules: {
       scout:
         "Csak a Scoutok keresése, egy már beállított szerveren, négy nem IT szakmával. Egy szakma sikeres, ha mind a 3 feltétel zöld: legalább 70% releváns, 0 ismétlődés, legalább 15 hirdetés.",
-      brake:
-        "Az utolsó próba feltételei (8. build); azóta javítva, újra kipróbálandó.",
+      brake: "Az utolsó próbák feltételei (15. build).",
       realUser:
         "Valaki a nulláról telepíti a programot, kitölti a beállítást, és 30 percig hagyja egyedül dolgozni a csapatot. Sikeres, ha a talált hirdetések legalább 70%-a az ő szakmájába tartozik.",
     },
@@ -2634,6 +2724,9 @@ export const T: Record<Locale, Copy> = {
     },
     buildsTitle: "Az egyes buildek futásai",
     buildLabel: "{n}. build",
+    previousBuild: "korábbi build",
+    paceNote:
+      "A futások percekig vagy óráig dolgoztatják a csapatot, nem annyi napig, amennyit egy költségkeretnek le kell fednie: a költség rövid időbe sűrűsödik, és nem mutatja meg, meddig tart egy költségkeret a mindennapi használatban. Csak az r33 futás fed le két napot, kikapcsolt tempóval és napokra osztott költségkerettel.",
     noRound: "nincs futás",
     none: "—",
     finder: {
@@ -2772,6 +2865,7 @@ export const TRADE_EMOJI: Record<string, string> = {
   receptionist: "🛎️",
   truckDriver: "🚚",
   electrician: "⚡",
+  shopAssistant: "🛍️",
   careAssistant: "🩹",
 };
 export type Build = (typeof data.builds)[number];
@@ -2781,6 +2875,7 @@ export const OUTCOME_COLOR: Record<string, string> = {
   reservations: "#84CC16",
   fail: "#EF4444",
   running: "#F59E0B",
+  unjudged: "#9CA3AF",
 };
 
 // The sector of each profile of the rounds and of the category of a case study (the finder matches on it when the words differ).
@@ -2794,6 +2889,7 @@ export const PROFILE_SECTOR: Record<string, Sector | ""> = {
   bricklayer: "trades",
   officeClerk: "office",
   electrician: "trades",
+  shopAssistant: "",
   careAssistant: "health",
 };
 export const CATEGORY_SECTOR: Record<string, Sector | ""> = {

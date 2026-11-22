@@ -76,10 +76,12 @@ type BenchRaw = Series & {
   os: string;
   service: string;
   buildNo: number;
+  day?: string;
+  commit?: string;
 };
 const benchRaw = ((data as unknown as { bench?: BenchRaw[] }).bench ??
   []) as BenchRaw[];
-// the day of the Scout bench of build 9
+// the day of the Scout bench of build 9, for a bench that does not say its own
 const BENCH_DAY = "17/11";
 const BENCH_TARGET: Record<string, string> = {
   cook: "scoutBenchCook",
@@ -129,14 +131,14 @@ export const TESTS: TestEntry[] = [
   }),
   ...benchRaw.map((b) => ({
     id: b.id,
-    slug: `${isoDay(BENCH_DAY)}-${b.os}-${kebab(b.profile)}-${b.service}-scout-bench`,
+    slug: `${isoDay(b.day ?? BENCH_DAY)}-${b.os}-${kebab(b.profile)}-${b.service}-scout-bench`,
     kind: "bench" as const,
     os: b.os,
     service: b.service,
     profile: b.profile,
     buildNo: b.buildNo,
-    date: isoDay(BENCH_DAY),
-    day: BENCH_DAY,
+    date: isoDay(b.day ?? BENCH_DAY),
+    day: b.day ?? BENCH_DAY,
     minutes: b.minutes ?? null,
     cost: b.cost ?? null,
     found: b.found ?? null,
@@ -154,6 +156,9 @@ export const TESTS: TestEntry[] = [
 
 export const testBySlug = (slug: string) =>
   TESTS.find((x) => x.slug === slug) ?? null;
+/** The commit a Scout bench ran on, when the bench says it. */
+export const benchCommit = (id: string) =>
+  benchRaw.find((b) => b.id === id)?.commit ?? null;
 export const testById = (id: string) => TESTS.find((x) => x.id === id) ?? null;
 export const testHref = (id: string) => {
   const x = testById(id);
