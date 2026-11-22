@@ -36,8 +36,8 @@ def _before_tick(api, run):
     api._agent_pause_step()
     pi_spend_cap.step(api, run)
     ram_guard.step(api, run)
-    quota_wall.step(api, run)
     hours_close.step(api, run)
+    quota_wall.step(api, run)
     if not run._bi_on:
         api._enforce_daily_halt()
 

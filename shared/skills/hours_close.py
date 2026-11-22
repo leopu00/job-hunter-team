@@ -23,7 +23,9 @@ from __future__ import annotations
 import hashlib
 import re
 import subprocess
+import sys
 import time
+from pathlib import Path
 
 WORKER = re.compile(r"^(SCOUT|ANALISTA|SCORER|SCRITTORE|CLOSER)-(\d+)$")
 IDLE_AFTER_SEC = 240        # told at one look, closed at the next one at the soonest (a look is five minutes)
@@ -55,6 +57,19 @@ def _kill(session):
     return subprocess.run(["tmux", "kill-session", "-t", "=%s" % session], capture_output=True, timeout=10).returncode == 0
 
 
+def _stop_mark(names):
+    """Tell the roster these sessions were STOPPED by the close of the hours (not retired): the restore of the opening brings back exactly
+    them. Best effort: a roster without the command (`team_roster.py stop-mark`) or a failing call leaves things as they were."""
+    if not names:
+        return False
+    tool = Path(__file__).resolve().with_name("team_roster.py")
+    try:
+        done = subprocess.run([sys.executable, str(tool), "stop-mark", *names, "--by", "hours"], capture_output=True, timeout=30, check=False)
+        return done.returncode == 0
+    except Exception:  # noqa: BLE001 - the workers are closed all the same
+        return False
+
+
 def _outside(api, run):
     """True when the schedule the person set says closed. The spending override (burn intent) keeps the gate open, as everywhere."""
     if getattr(run, "_bi_on", False):
@@ -68,7 +83,7 @@ def _outside(api, run):
         return False
 
 
-def step(api, run, outside=None, sessions=None, idle=None, send=None, kill=None, now=None):
+def step(api, run, outside=None, sessions=None, idle=None, send=None, kill=None, now=None, mark=None):
     """One look. Returns {"told": [...], "closed": [...], "resumed": [...]}. Never raises."""
     out = {"told": [], "closed": [], "resumed": []}
     try:
@@ -87,6 +102,7 @@ def step(api, run, outside=None, sessions=None, idle=None, send=None, kill=None,
             state["told"] = {}
             return out
         idle = idle or _idle
+        mark = mark or (_stop_mark if kill is None else None)   # a test that injects its own kill never writes the real roster
         kill = kill or _kill
         for name in live:
             if name not in told:
@@ -104,6 +120,11 @@ def step(api, run, outside=None, sessions=None, idle=None, send=None, kill=None,
                 seen["pane"] = token
             elif now - seen["at"] >= RESEND_AFTER_SEC and not seen.get("again") and send(name, CLOSE_TEXT):
                 seen["again"] = True
+        if out["closed"] and mark:
+            try:
+                mark(list(out["closed"]))      # one call for all: they were stopped by the hours, the opening brings them back
+            except Exception as error:  # noqa: BLE001
+                print("[bridge V6] WARN hours close stop-mark: %s" % error)
         for name in [n for n in told if n not in live and n not in out["closed"]]:
             told.pop(name)      # gone by itself (or closed by someone else): nothing to resume
         if out["told"] or out["closed"]:

@@ -150,3 +150,38 @@ def test_a_codex_and_a_claude_pane_with_a_turn_running_are_busy_and_a_finished_o
     assert _pane(monkeypatch, CODEX_BUSY) is None
     assert _pane(monkeypatch, CLAUDE_BUSY) is None
     assert _pane(monkeypatch, CODEX_DONE)
+
+
+def test_the_workers_closed_are_marked_stopped_by_the_hours_in_one_call_and_a_failing_mark_changes_nothing():
+    marked = []
+    world, run = _world(), SimpleNamespace(state={})
+    start = 18 * 3600
+
+    def look(now, mark):
+        return hc.step(SimpleNamespace(), run, outside=True, sessions=list(world.alive), idle=world.idle, send=world.send,
+                       kill=world.kill, now=now, mark=mark)
+    look(start, marked.append)
+    look(start + 300, marked.append)
+    out = look(start + 600, marked.append)
+    assert marked == [sorted(out["closed"])] or marked == [out["closed"]], "one call, with every worker closed at that look"
+    assert sorted(marked[0]) == ["ANALISTA-1", "SCORER-1", "SCOUT-1", "SCOUT-2"]
+    world2, run = _world(), SimpleNamespace(state={})
+    world = world2
+
+    def broken(names):
+        raise OSError("roster unreadable")
+    look(start, broken)
+    look(start + 300, broken)
+    assert sorted(look(start + 600, broken)["closed"]) == ["ANALISTA-1", "SCORER-1", "SCOUT-1", "SCOUT-2"], "the close goes on"
+
+
+def test_the_real_mark_runs_the_roster_tool_and_survives_a_tool_that_is_missing(monkeypatch):
+    calls = []
+    monkeypatch.setattr(hc.subprocess, "run", lambda args, **k: calls.append(args) or SimpleNamespace(returncode=0))
+    assert hc._stop_mark(["SCOUT-1", "SCORER-1"]) is True
+    assert calls[0][1].endswith("team_roster.py") and calls[0][2:] == ["stop-mark", "SCOUT-1", "SCORER-1", "--by", "hours"]
+    assert hc._stop_mark([]) is False
+    monkeypatch.setattr(hc.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=2))
+    assert hc._stop_mark(["SCOUT-1"]) is False, "an older roster without the command: nothing breaks"
+    monkeypatch.setattr(hc.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(OSError("no python")))
+    assert hc._stop_mark(["SCOUT-1"]) is False
